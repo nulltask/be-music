@@ -33,12 +33,12 @@
       "stp": [],
       "wavCmds": [],
       "changeOption": {},
-      "exWav": {},
-      "exBmp": {},
+      "exWAV": {},
+      "exBMP": {},
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBga": {},
+      "swBGA": {},
       "player": 1,
       "lnType": 1,
       "lnMode": 3
@@ -100,7 +100,7 @@
       "randomPatterns": [],
       "title": "LN Mode 3 Test (HCN)",
       "playVariant": "7",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0"
@@ -129,8 +129,8 @@
           "percent": 75
         },
         "noteCount": 12,
-        "chartFingerprint": "bmfp0:ef60ead9a688713586b760f3068093a2fd90e8a2993887ef9c9e7e86e9b8bdde",
-        "playFingerprint": "bmfp0:ef60ead9a688713586b760f3068093a2fd90e8a2993887ef9c9e7e86e9b8bdde",
+        "chartFingerprint": "bmfp0:ea66384275ecc98dcd0b0dea011212c575aa67fed3c54a74fc543b15d8b73f45",
+        "playFingerprint": "bmfp0:ea66384275ecc98dcd0b0dea011212c575aa67fed3c54a74fc543b15d8b73f45",
         "title": "LN Mode 3 Test (HCN)",
         "subtitle": "Hell Charge Note — gauge drains while NOT holding mid-LN",
         "artist": "be-music",

@@ -40,7 +40,7 @@ const DEFAULT_UI_FONT_LOADS: readonly string[] = [
   ...new Set(BE_MUSIC_SKINS.skins.flatMap((skin) => skin.fontLoads)),
 ];
 
-export async function waitForDefaultUiFonts(): Promise<void> {
+export async function waitForDefaultUIFonts(): Promise<void> {
   if (!('fonts' in document)) return;
   try {
     await Promise.race([

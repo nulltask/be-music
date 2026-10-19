@@ -17,9 +17,9 @@ export interface NonstopStageTiming {
   /** The last visible note. */
   lastNote: number;
   /** The header `#BPM`, when the chart has one (FIT needs it). */
-  headerBpm?: number;
+  headerBPM?: number;
   /** The BPM in force at the end of the chart, after its last tempo change. */
-  finalBpm: number;
+  finalBPM: number;
   /** The length of measure 0 (`#00002`), 1 by default. */
   firstMeasureLength: number;
 }
@@ -43,7 +43,7 @@ export interface NonstopStagePlacement {
 export interface NonstopPlanOptions {
   /**
    * `'intended'` (default) places each stage after the previous one as LR2's NONSTOP loader means to. `'lr2'` follows
-   * LR2's loader exactly (`LR2body.exe` 0x4b0690 `ParseBmsFile`), including what looks like a bug: from the third stage
+   * LR2's loader exactly (`LR2body.exe` 0x4b0690 `ParseBMSFile`), including what looks like a bug: from the third stage
    * on, a stage starts at the previous stage's last-measure line before that stage was cut, so its time origin runs on
    * by the previous cut at its own BPM and measure-0 length, and its first note is taken by LR2's file-order rule
    * ({@link NonstopStageTiming.lr2FirstNote}).
@@ -70,7 +70,7 @@ export function resolveNonstopLastMeasure(lastNote: number): number {
 
 /**
  * Places the stages of a NONSTOP course one after another the way LR2's chart loader stitches them
- * (`ParseBmsFile`, `LR2body.exe` 0x4b0690; OpenLR2 `LR2f.cpp` L25880-L27075):
+ * (`ParseBMSFile`, `LR2body.exe` 0x4b0690; OpenLR2 `LR2f.cpp` L25880-L27075):
  *
  * - Each stage hands over at its last-measure line ({@link resolveNonstopLastMeasure}); with `blank2` after it, at the
  *   first bar line more than 5 s later.
@@ -94,7 +94,7 @@ export function planNonstopCourse(
   let lastNoteTime = 0; // lastNoteTime (float): the last-measure line, cut-adjusted
   let realtimeMs = 0; // bpmt_realtime
   let prevPosition = 0; // prevNoteBmstime
-  let nowBpm: number | undefined; // nowBPM, scaled by FIT
+  let nowBPM: number | undefined; // nowBPM, scaled by FIT
   stages.forEach((stage, index) => {
     const connection = index > 0 ? (connections[index - 1] ?? 'fade') : undefined;
     const stageStart = lastMeasure; // stageStartMeasure
@@ -103,13 +103,13 @@ export function planNonstopCourse(
     const carry = stageStart - prevPosition;
     const fit = connection === 'fade-fit' || connection === 'cut-fit';
     const rate =
-      fit && stage.headerBpm !== undefined && stage.headerBpm > 0 && nowBpm !== undefined
-        ? nowBpm / stage.headerBpm
+      fit && stage.headerBPM !== undefined && stage.headerBPM > 0 && nowBPM !== undefined
+        ? nowBPM / stage.headerBPM
         : 1;
-    const startBpm = stage.headerBpm !== undefined ? stage.headerBpm * rate : (nowBpm ?? DEFAULT_BPM);
+    const startBPM = stage.headerBPM !== undefined ? stage.headerBPM * rate : (nowBPM ?? DEFAULT_BPM);
     // The stage's first object sits at `stageStart`; the time from the previous object runs at this stage's BPM and
     // measure-0 length. In the intended placement the previous object is always at `stageStart`, so this is 0.
-    const originMs = realtimeMs + carry * (240_000 / startBpm) * stage.firstMeasureLength;
+    const originMs = realtimeMs + carry * (240_000 / startBPM) * stage.firstMeasureLength;
     const localMs = (position: number): number => originMs + (stage.secondsAt(position) * 1000) / rate;
 
     let lastLine = resolveNonstopLastMeasure(stage.lastNote);
@@ -154,7 +154,7 @@ export function planNonstopCourse(
     prevPosition = shifted ? lineMeasure - cut : lineMeasure;
     // LR2 starts the next stage at the line before this stage was cut; the intended placement at the line as placed.
     lastMeasure = lr2 ? lineMeasure : prevPosition;
-    nowBpm = stage.finalBpm * rate;
+    nowBPM = stage.finalBPM * rate;
     placements.push({
       measureOffset: stageStart - cut,
       offsetSeconds: (originMs - shiftMs) / 1000,

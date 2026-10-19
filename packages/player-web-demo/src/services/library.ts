@@ -26,8 +26,8 @@ import {
   type BeatorajaThemeBundle,
   type SkinFamilyId,
 } from '@be-music/player-web/skin';
-import { summarizeLr2PlaySkins, type Lr2PlaySkinMap, type Lr2Skin } from '@be-music/lr2-skin';
-import { countLr2UnplayedStages, LR2_MAX_PLAYED_STAGES } from '@be-music/player/course';
+import { summarizeLR2PlaySkins, type LR2PlaySkinMap, type LR2Skin } from '@be-music/lr2-skin';
+import { countLR2UnplayedStages, LR2_MAX_PLAYED_STAGES } from '@be-music/player/course';
 import { PLAYLOG_FILE_SUFFIX } from '@be-music/player/playlog';
 import type { BrowseSnapshot, LibraryChart } from '@be-music/scene-model';
 import {
@@ -35,9 +35,9 @@ import {
   importCourseTable,
   isTableHeaderFilePath,
   mergeCourseGroup,
-  readStoredCourseTableUrls,
+  readStoredCourseTableURLs,
   readTableHeaderFile,
-  rememberCourseTableUrl,
+  rememberCourseTableURL,
 } from '../course-table-import.ts';
 import { navigationAfterDrop } from '../drop-navigation.ts';
 import {
@@ -47,7 +47,7 @@ import {
   type LoadingOverlayElements,
 } from '../loading-overlay.ts';
 import type { PlayerWebDemoElements } from '../types.ts';
-import { fetchZipAsFile, fetchZipAsFiles, parseUrlMediaParams } from '../url-load.ts';
+import { fetchZipAsFile, fetchZipAsFiles, parseURLMediaParams } from '../url-load.ts';
 
 const dropLog = logger('drop');
 
@@ -76,11 +76,11 @@ export interface LibraryServiceOptions {
   /** Loads a drop's beatoraja theme files. */
   readonly loadBeatorajaTheme: (files: File[]) => Promise<void>;
   /** The LR2 theme's play skins, per play variant, for the drop's log line. */
-  readonly playSkins: () => Lr2PlaySkinMap;
+  readonly playSkins: () => LR2PlaySkinMap;
   /** The LR2 theme's select skin. */
-  readonly selectSkin: () => Lr2Skin | undefined;
+  readonly selectSkin: () => LR2Skin | undefined;
   /** The LR2 theme's result skin. */
-  readonly resultSkin: () => Lr2Skin | undefined;
+  readonly resultSkin: () => LR2Skin | undefined;
   /** The beatoraja theme. */
   readonly beatorajaTheme: () => BeatorajaThemeBundle | undefined;
   /** Hands the skin families a drop brought to the "Drop a skin" prompt, once its select screen shows. */
@@ -144,11 +144,11 @@ export class LibraryService {
    * Sequenced after the first select screen shows (`ready`).
    */
   public autoLoad(href: string, ready: Promise<void>): Promise<void> {
-    const mediaParams = parseUrlMediaParams(href);
+    const mediaParams = parseURLMediaParams(href);
     // Difficulty tables imported in an earlier visit are imported again, after the URL load so their stages match it.
-    const storedCourseTables = readStoredCourseTableUrls();
+    const storedCourseTables = readStoredCourseTableURLs();
     return ready.then(async () => {
-      if (mediaParams.musicUrl || mediaParams.skinUrl) await this.loadFromUrl(mediaParams);
+      if (mediaParams.musicURL || mediaParams.skinURL) await this.loadFromURL(mediaParams);
       if (storedCourseTables.length > 0) await this.importCourseTables(storedCourseTables, false);
     });
   }
@@ -213,7 +213,7 @@ export class LibraryService {
     const themeFamilies = skinFamilyRegistry.detectThemeFamilies(
       themeFiles.map((file) => file.webkitRelativePath || file.name),
     );
-    const carriesLr2Theme = themeFamilies.has('lr2');
+    const carriesLR2Theme = themeFamilies.has('lr2');
     const carriesBeatorajaTheme = themeFamilies.has('beatoraja');
     const themeMarkers = [...themeFamilies];
     dropLog.info(
@@ -224,7 +224,7 @@ export class LibraryService {
     // The songs already listed, so the select screen can open on what this drop added.
     const previousSongIds = new Set(this.collection.charts.map((song) => song.id));
     const tasks: Array<Promise<unknown>> = [];
-    if (carriesLr2Theme) {
+    if (carriesLR2Theme) {
       tasks.push(this.loadTheme(themeFiles));
     }
     if (carriesBeatorajaTheme) {
@@ -238,7 +238,7 @@ export class LibraryService {
       return;
     }
     await Promise.all(tasks);
-    const playSkinSummary = summarizeLr2PlaySkins(this.playSkins());
+    const playSkinSummary = summarizeLR2PlaySkins(this.playSkins());
     const beatorajaTheme = this.beatorajaTheme();
     const beatorajaSummary = beatorajaTheme
       ? summarizeBeatorajaPlaySkins(beatorajaTheme.theme.playSkins) || 'none'
@@ -329,7 +329,7 @@ export class LibraryService {
         // LR2 plays only the first five stages of a course, so an `.lr2crs` course listing more is read cut short.
         const cutShort = groups
           .flatMap((group) => group.courses)
-          .filter((course) => countLr2UnplayedStages(course) > 0);
+          .filter((course) => countLR2UnplayedStages(course) > 0);
         if (cutShort.length > 0) {
           const names = cutShort.map((course) => course.name || '(untitled)').join(', ');
           dropLog.warn(`course file: ${path} · read as the first ${LR2_MAX_PLAYED_STAGES} stages LR2 plays: ${names}`);
@@ -354,7 +354,7 @@ export class LibraryService {
       try {
         const { group } = await importCourseTable(url);
         this.courseGroups = mergeCourseGroup(this.courseGroups, group);
-        if (remember) rememberCourseTableUrl(url);
+        if (remember) rememberCourseTableURL(url);
         imported += 1;
         dropLog.info(`course table: ${url} · ${group.label} · courses=${group.courses.length}`);
         this.setStatus(`Course table: ${group.label} (${group.courses.length} courses)`);
@@ -410,20 +410,20 @@ export class LibraryService {
    * Skin is loaded first so the select screen that follows is already themed. Failures (bad link, CORS, HTTP error)
    * surface as a status line rather than throwing, so a broken URL never wedges the boot.
    */
-  public async loadFromUrl(params: { musicUrl: string | undefined; skinUrl: string | undefined }): Promise<void> {
-    if (!params.musicUrl && !params.skinUrl) {
+  public async loadFromURL(params: { musicURL: string | undefined; skinURL: string | undefined }): Promise<void> {
+    if (!params.musicURL && !params.skinURL) {
       return;
     }
     showLoadingOverlay(this.elements);
     await this.leaveSelect();
     try {
-      if (params.skinUrl) {
+      if (params.skinURL) {
         this.setStatus('Fetching skin…');
-        await this.processIncomingFiles(await fetchZipAsFiles(params.skinUrl));
+        await this.processIncomingFiles(await fetchZipAsFiles(params.skinURL));
       }
-      if (params.musicUrl) {
+      if (params.musicURL) {
         this.setStatus('Fetching music…');
-        await this.loadSongs([await fetchZipAsFile(params.musicUrl)]);
+        await this.loadSongs([await fetchZipAsFile(params.musicURL)]);
         if (this.courseGroups.length > 0) await this.refreshCourseFolders();
         await this.showSelect();
       }

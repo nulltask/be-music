@@ -1,3 +1,3 @@
-import packageBenchmarkCli from '../../../scripts/bench/package-cli.ts';
+import packageBenchmarkCLI from '../../../scripts/bench/package-cli.ts';
 
-packageBenchmarkCli.runPackageExportsBenchmarkScript('player-tui', import.meta.url);
+packageBenchmarkCLI.runPackageExportsBenchmarkScript('player-tui', import.meta.url);

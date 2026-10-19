@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 // The engine writes to a mocked Node audio sink (shared state in test-support/player-fixtures.ts).
 vi.mock('./audio-sink.ts', async () => (await import('./test-support/player-fixtures.ts')).mockAudioSinkModule());
 
-import { createEmptyJson } from '../../json/src/index.ts';
+import { createEmptyJSON } from '../../json/src/index.ts';
 import { parseChart } from '../../parser/src/index.ts';
 import { type AudioSession, autoPlay, type CreateAudioSessionContext, manualPlay } from './index.ts';
 import { preparePlaybackChartData } from './core/bootstrap.ts';
@@ -16,7 +16,7 @@ import {
 import {
   resetAudioSinkState,
   audioSinkState,
-  createLnobjLongNoteChart,
+  createLNOBJLongNoteChart,
   createLandmineOnlyChart,
   HELD_LANDMINE_INPUT,
   createScheduledInputRuntime,
@@ -27,7 +27,7 @@ beforeEach(resetAudioSinkState);
 
 describe('player', () => {
   test('player: LR2 negative BPM freezes autoplay judging and audio at the reversal', async () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
     json.resources.bpm['02'] = -240;
     json.resources.wav = { '01': 'a.wav', '02': 'b.wav', '03': 'bgm.wav' };
@@ -79,7 +79,7 @@ describe('player', () => {
     // (chart 2 s exactly). LR2 sorts same-tick events by op (`CMP_NotesByRealTimingOp`): the BGM (op 1) fires before
     // the negative BPM (op 8), the lane note (op 11) after it — so the BGM sounds and the boundary note neither
     // sounds nor judges, exactly like a note strictly behind the reversal.
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
     json.resources.bpm['02'] = -240;
     json.resources.wav = { '01': 'a.wav', '02': 'b.wav', '03': 'bgm.wav' };
@@ -130,7 +130,7 @@ describe('player', () => {
     // the mirrored clock t' = 2R - now, which never reaches the tail, so a hold that is never released is never
     // judged: no tail judgment, no POOR, and the run still completes. Replay input keeps the press deterministic
     // (exact chart microseconds) and, with no matching `up`, holds the lane's kitty press state through the end.
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
     json.metadata.rank = 2;
     json.bms.lnObjs = ['AA'];
@@ -167,7 +167,7 @@ describe('player', () => {
     // runtime can plug in a Web Audio backend without forking the engine. The factory's returned `AudioSession`
     // must short-circuit the bundled Node sink path entirely — verified here by asserting the Node sink mock
     // never received a `write()` call while the custom factory's `start` / `triggerEvent` / `finish` did.
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 0, channel: '11', position: [0, 1] as const, value: '01' }];
     json.resources.wav = { '01': 'mock.wav' };
@@ -225,7 +225,7 @@ describe('player', () => {
   test('player: falls back to the bundled Node sink when createAudioSession returns undefined', async () => {
     // Returning `undefined` from the factory must be treated as "no opinion" so a runtime can probe optional
     // backends without forfeiting the default sink. The Node sink mock should still receive writes in this path.
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 0, channel: '11', position: [0, 1] as const, value: '01' }];
 
@@ -313,7 +313,7 @@ describe('player', () => {
   });
 
   test('player: derives long-note end beat from bmson notes.l', () => {
-    const json = createEmptyJson('bmson');
+    const json = createEmptyJSON('bmson');
     json.metadata.bpm = 120;
     json.bmson.info.resolution = 240;
     json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { l: 240 } }];
@@ -328,7 +328,7 @@ describe('player', () => {
   });
 
   test('player: bmson note t overrides info.ln_type, which overrides the LN default', () => {
-    const json = createEmptyJson('bmson');
+    const json = createEmptyJSON('bmson');
     json.metadata.bpm = 120;
     json.bmson.info.resolution = 240;
     json.bmson.info.lnType = 2;
@@ -344,7 +344,7 @@ describe('player', () => {
   });
 
   test('player: derives long-note end beat from bms #LNOBJ', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.bms.lnObjs = ['AA'];
     json.events = [
@@ -364,7 +364,7 @@ describe('player', () => {
   });
 
   test('player: derives long-note end beat from multiple #LNOBJ declarations', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.bms.lnObjs = ['AA', 'BB'];
     const startA = { measure: 0, channel: '11', position: [0, 1] as const, value: '01' };
@@ -379,7 +379,7 @@ describe('player', () => {
   });
 
   test('player: prioritizes 51-69 over LNOBJ when the same lane tick conflicts', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.bms.lnObjs = ['AA'];
     const start = { measure: 0, channel: '11', position: [0, 1] as const, value: '01' };
@@ -392,7 +392,7 @@ describe('player', () => {
   });
 
   test('player: derives long-note end beat from bms LNTYPE=1 channels 51-59/61-69', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.bms.lnType = 1;
     json.events = [
@@ -417,7 +417,7 @@ describe('player', () => {
   });
 
   test('player: derives long-note span from bms LNTYPE=2 continuity channels', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.bms.lnType = 2;
     json.events = [
@@ -448,7 +448,7 @@ describe('player', () => {
   });
 
   test('player: can opt-in to infer LNTYPE=2 when #LNTYPE is omitted', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [
       { measure: 0, channel: '61', position: [0, 4], value: '01' },
@@ -462,7 +462,7 @@ describe('player', () => {
     expect(defaultNotes[1]?.endBeat).toBeUndefined();
 
     const inferredNotes = extractPlayableNotes(json, {
-      inferBmsLnTypeWhenMissing: true,
+      inferBmsLNTypeWhenMissing: true,
     });
     expect(inferredNotes).toHaveLength(1);
     expect(inferredNotes[0]?.channel).toBe('21');
@@ -471,14 +471,14 @@ describe('player', () => {
   });
 
   test('player: keeps a two-event same-value legacy LN pair as LNTYPE=1 when auto inference is enabled', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [
       { measure: 0, channel: '55', position: [0, 4], value: 'AA' },
       { measure: 0, channel: '55', position: [1, 4], value: 'AA' },
     ];
 
-    const notes = extractPlayableNotes(json, { inferBmsLnTypeWhenMissing: true });
+    const notes = extractPlayableNotes(json, { inferBmsLNTypeWhenMissing: true });
 
     expect(notes).toHaveLength(1);
     expect(notes[0]?.channel).toBe('15');
@@ -487,7 +487,7 @@ describe('player', () => {
   });
 
   test('player: extracts landmine objects and maps them to playable lanes', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [
       { measure: 0, channel: 'D1', position: [0, 1], value: '10' },
@@ -503,7 +503,7 @@ describe('player', () => {
   });
 
   test('player: extracts invisible channels and maps them to playable lanes', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [
       { measure: 0, channel: '31', position: [0, 1], value: '10' },
@@ -519,7 +519,7 @@ describe('player', () => {
   });
 
   test('player: extracts extended 24-key lane channels as playable notes, LNs, mines and invisibles', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.bms.lnObjs = ['AA'];
     json.events = [
@@ -622,7 +622,7 @@ describe('player', () => {
   });
 
   test('player: manual play sounds a shadowed duplicate keysound as background and judges one note', async () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
     json.resources.wav = { '01': 'a.wav', '02': 'b.wav' };
     json.events = [
@@ -666,7 +666,7 @@ describe('player', () => {
 
   test('player: FREE ZONE (17 / 27) only applies to the IIDX families', () => {
     const createChart = (channels: string[]) => {
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.events = channels.map((channel) => ({ measure: 0, channel, position: [0, 1] as const, value: '01' }));
       return json;
@@ -687,7 +687,7 @@ describe('player', () => {
   });
 
   test('player: extractTimedNotes matches the individual extraction helpers', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [
       { measure: 0, channel: '31', position: [0, 4], value: '10' },
@@ -746,7 +746,7 @@ describe('player', () => {
   });
 
   test('player: assigns quarter-note length to free-zone notes', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 0, channel: '17', position: [0, 1], value: '01' }];
 
@@ -759,7 +759,7 @@ describe('player', () => {
   });
 
   test('player: defaults BMS long notes to LNMODE=1 in manual play', async () => {
-    const summary = await manualPlay(createLnobjLongNoteChart(), {
+    const summary = await manualPlay(createLNOBJLongNoteChart(), {
       speed: 1,
       leadInMs: 0,
       audio: false,

@@ -15,7 +15,7 @@ import {
 } from '../render-resolution.ts';
 import { readStoredReplayView } from '../replay-view-settings.ts';
 import { readPlayInSilentMode } from '../silent-mode-playback.ts';
-import type { DemoGuiState } from '../types.ts';
+import type { DemoGUIState } from '../types.ts';
 import {
   readDeviceSignals,
   resolveDefaultSkinEffects,
@@ -165,8 +165,8 @@ export function storeVolumes(
   }
 }
 
-/** What {@link createDemoGuiState} reads besides the stored settings: the device, and the Debug Menu's buttons. */
-export interface DemoGuiStateInputs {
+/** What {@link createDemoGUIState} reads besides the stored settings: the device, and the Debug Menu's buttons. */
+export interface DemoGUIStateInputs {
   /** Where the remembered settings are read from; `localStorage` when left out. */
   readonly storage?: SettingStorage;
   /** The device, for the skin effect level it starts with. */
@@ -176,13 +176,13 @@ export interface DemoGuiStateInputs {
   /** The built-in skin to start with for the remembered id (`undefined` when none is stored). */
   readonly builtInSkinId: (stored: string | undefined) => string;
   /** The Debug Menu's buttons. */
-  readonly actions: Pick<DemoGuiState, 'openFolder' | 'openFiles' | 'record' | 'screenshot'>;
+  readonly actions: Pick<DemoGUIState, 'openFolder' | 'openFiles' | 'record' | 'screenshot'>;
 }
 
 /**
  * The state the Debug Menu's controllers read and write, as a visit starts: the remembered settings over the defaults.
  */
-export function createDemoGuiState(inputs: DemoGuiStateInputs): DemoGuiState {
+export function createDemoGUIState(inputs: DemoGUIStateInputs): DemoGUIState {
   const storage = inputs.storage ?? defaultSettingStorage();
   return {
     autoPlay: false,
@@ -195,7 +195,7 @@ export function createDemoGuiState(inputs: DemoGuiStateInputs): DemoGuiState {
     playInSilentMode: readPlayInSilentMode(storage),
     compressor: true,
     compressorKey: true,
-    compressorBgm: true,
+    compressorBGM: true,
     compressorMaster: true,
     // BGA resize is OFF by default — original-resolution transcode is the safe choice for visual parity. Power users
     // hitting long encode times on HD BGA can pick a pixel cap from the GUI dropdown without rebuilding. `0` means
@@ -268,7 +268,7 @@ export interface CompressorStart {
  * The compressor the `?compressor=split|legacy|off` URL flag of `href` asks for. The flag goes through
  * `parseCompressorMode` (the same helper exported from `audio-bus.ts`) so the recognized values stay synced with the
  * runtime API. An unrecognized or missing flag keeps the defaults: the `'split'` architecture, compressor on (see the
- * `compressor: true` seed in {@link createDemoGuiState} for the rationale). `split` and `legacy` are an explicit opt-in
+ * `compressor: true` seed in {@link createDemoGUIState} for the rationale). `split` and `legacy` are an explicit opt-in
  * to that architecture and keep it on; `off` turns it off for an unprocessed-signal A/B comparison.
  */
 export function resolveCompressorMode(href: string): CompressorStart {

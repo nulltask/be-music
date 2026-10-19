@@ -16,7 +16,7 @@
 // Mirrors beatoraja's `Config.flipMode` + `BMSPlayer.applyFlip` semantics. The transform is
 // pure — produces a new chart object without mutating the input.
 
-import type { BeMusicJson, BeMusicEvent } from '@be-music/json';
+import type { BeMusicJSON, BeMusicEvent } from '@be-music/json';
 
 const FLIP_MAP: Readonly<Record<string, string>> = Object.freeze({
   '1': '2',
@@ -33,7 +33,7 @@ const FLIP_MAP: Readonly<Record<string, string>> = Object.freeze({
  * Swap the side digit on a single channel string. Returns the original string when the
  * channel doesn't match any flippable prefix (BPM `03`, BGA `04`, key sound `01`, etc.).
  */
-export function flipDpChannel(channel: string): string {
+export function flipDPChannel(channel: string): string {
   if (channel.length !== 2) return channel;
   const replacement = FLIP_MAP[channel[0]!];
   if (replacement === undefined) return channel;
@@ -46,16 +46,16 @@ export function flipDpChannel(channel: string): string {
  * the unflipped chart for fallback / re-flipping.
  *
  * Both BMS-mode and bmson-mode charts run their note events through the same
- * `BeMusicJson.events[]` channel-string field — the parser unifies channel encoding so we
+ * `BeMusicJSON.events[]` channel-string field — the parser unifies channel encoding so we
  * only need to swap one place. The `measures[]` block carries no per-channel data; same
  * for `bms.events` (which is empty in our parser today — events are on the top-level).
  */
-export function flipDpChart(chart: BeMusicJson): BeMusicJson {
+export function flipDPChart(chart: BeMusicJSON): BeMusicJSON {
   const events = chart.events;
   if (!Array.isArray(events) || events.length === 0) return chart;
   let mutated = false;
   const flippedEvents: BeMusicEvent[] = events.map((event) => {
-    const next = flipDpChannel(event.channel);
+    const next = flipDPChannel(event.channel);
     if (next === event.channel) return event;
     mutated = true;
     return { ...event, channel: next };

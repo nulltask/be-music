@@ -24,16 +24,16 @@ import {
   type BeatorajaSkinCustomOffset,
 } from '@be-music/beatoraja-skin';
 import { withBeatorajaCourseStageOps } from '@be-music/beatoraja-skin/scene';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import type { ChartPlayVariant } from '@be-music/chart';
-import type { PlayerGaugeSummary, PlayerUiFrameNote, PlayerUiFramePayload } from '@be-music/player/signals';
+import type { PlayerGaugeSummary, PlayerUIFrameNote, PlayerUIFramePayload } from '@be-music/player/signals';
 import type { ScoreSummary } from '@be-music/player/ruleset';
 import type { CourseView, HiSpeedTransition, LibraryChart, PlayState } from '@be-music/scene-model';
 import type { BeMusicJudgeWindows } from '@be-music/skin-sdk';
 import { BEATORAJA_HI_SPEED_SCALE } from '@be-music/scene-model';
 import { Container, Text, type Texture } from 'pixi.js';
-import { computeBeatorajaBpmCurve, type BpmCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
-import { flipDpChart } from '../../chart/beatoraja/dp-flip.ts';
+import { computeBeatorajaBPMCurve, type BPMCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
+import { flipDPChart } from '../../chart/beatoraja/dp-flip.ts';
 import { computeBeatorajaChartMarkers } from '../../chart/beatoraja/markers.ts';
 import {
   computeBeatorajaChartNoteDistribution,
@@ -42,7 +42,7 @@ import {
 import type { BrowserSongAssetSource } from '../../collection/types.ts';
 import type { BeatorajaKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
-import type { BgaCue, NonstopBgaStage, NonstopStageBgaTimeline } from '../../chart/bga-timeline.ts';
+import type { BGACue, NonstopBGAStage, NonstopStageBGATimeline } from '../../chart/bga-timeline.ts';
 import { DESIGN_HEIGHT, DESIGN_WIDTH, KEY_ON_FADE_OUT_MS } from '../../stage/design.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
@@ -60,7 +60,7 @@ import type {
   PlayfieldSkin,
 } from '../types.ts';
 import { BeatorajaPlayBridge, type BeatorajaPlayEngineInput } from './play-bridge.ts';
-import { BeatorajaPlayStage, type BeatorajaPlayBga, type BeatorajaPlayChartLayout } from './play-stage.ts';
+import { BeatorajaPlayStage, type BeatorajaPlayBGA, type BeatorajaPlayChartLayout } from './play-stage.ts';
 import { createBeatorajaLaneTimelines, createBeatorajaScrollMapper } from './play/scroll-placement.ts';
 import { readJudgeComboMetrics } from './play/skin-metrics.ts';
 import { BeatorajaViewChartImages, resolveBeatorajaFadeOutMs } from './scene-frame.ts';
@@ -121,12 +121,12 @@ function resolveSkinConfigOps(
 export interface BeatorajaPlayRuntime {
   readonly song: LibraryChart | undefined;
   /** The chart as the play plays it (its `#RANDOM` branches drawn), before DP FLIP. */
-  readonly resolvedChart: BeMusicJson | undefined;
+  readonly resolvedChart: BeMusicJSON | undefined;
   readonly resolvedPlayChart: { readonly reversal?: BeatorajaPlayChartLayout['reversal'] } | undefined;
   readonly chartPlayVariant: ChartPlayVariant;
-  readonly notes: readonly PlayerUiFrameNote[];
+  readonly notes: readonly PlayerUIFrameNote[];
   /** The engine's latest frame; `undefined` before its first. */
-  readonly engineFrame: Readonly<PlayerUiFramePayload> | undefined;
+  readonly engineFrame: Readonly<PlayerUIFramePayload> | undefined;
   /** The engine's counts as the play started (all 0 but the total), for the intro before its first frame. */
   readonly score: ScoreSummary;
   readonly gaugeState: PlayerGaugeSummary;
@@ -134,9 +134,9 @@ export interface BeatorajaPlayRuntime {
   readonly bgaTextures: ReadonlyMap<string, Texture>;
   readonly bgaLayerTextures: ReadonlyMap<string, Texture>;
   readonly bgaVideos: ReadonlyMap<string, { video: HTMLVideoElement }>;
-  readonly bgaTimeline: { base: BgaCue[]; layer: BgaCue[]; poor: BgaCue[] };
-  /** A stitched NONSTOP chart's cues split by stage (`splitNonstopBgaTimeline`), for the BGA's crossfade at a seam. */
-  readonly nonstopBgaTimelines: readonly NonstopStageBgaTimeline[] | undefined;
+  readonly bgaTimeline: { base: BGACue[]; layer: BGACue[]; poor: BGACue[] };
+  /** A stitched NONSTOP chart's cues split by stage (`splitNonstopBGATimeline`), for the BGA's crossfade at a seam. */
+  readonly nonstopBGATimelines: readonly NonstopStageBGATimeline[] | undefined;
   readonly assetsLoading: boolean;
   readonly exiting: boolean;
   readonly exitFadeStartedAt: number | undefined;
@@ -161,7 +161,7 @@ export interface BeatorajaPlayViewOptions {
   /** The course the play is a stage of, with the stage being played. */
   readonly course?: CourseView;
   /** The stages of a stitched NONSTOP chart (`PlaySessionOptions.nonstop`), whose BGA cross-fades at each seam. */
-  readonly nonstop?: { readonly stages: readonly NonstopBgaStage[] };
+  readonly nonstop?: { readonly stages: readonly NonstopBGAStage[] };
   /** Where the chart's files are, for its `#STAGEFILE`, `#BACKBMP` and `#BANNER`. */
   readonly source?: BrowserSongAssetSource;
   /** Where the skin's Lua sounds play (`main_state.audio_*`); they are silent without it. */
@@ -170,9 +170,9 @@ export interface BeatorajaPlayViewOptions {
 
 /** What the view works out of the chart once it is prepared. */
 interface PreparedChart {
-  readonly chart: BeMusicJson;
+  readonly chart: BeMusicJSON;
   readonly analysis: BeatorajaChartNoteDistribution;
-  readonly bpmCurve: readonly BpmCurvePoint[];
+  readonly bpmCurve: readonly BPMCurvePoint[];
   readonly layout: BeatorajaPlayChartLayout;
 }
 
@@ -249,7 +249,7 @@ export class BeatorajaPlayView implements PlayView {
     const play = this.play;
     const resolved = play.resolvedChart ?? play.song?.chart;
     if (resolved === undefined) return;
-    const chart = this.options.dpFlip === true ? flipDpChart(resolved) : resolved;
+    const chart = this.options.dpFlip === true ? flipDPChart(resolved) : resolved;
     const skin = this.kit.kit.skin;
     const scrollMapper = createBeatorajaScrollMapper(chart);
     const laneTimelines = scrollMapper !== undefined ? createBeatorajaLaneTimelines(chart) : undefined;
@@ -257,7 +257,7 @@ export class BeatorajaPlayView implements PlayView {
     this.prepared = {
       chart,
       analysis: computeBeatorajaChartNoteDistribution(chart),
-      bpmCurve: computeBeatorajaBpmCurve(chart),
+      bpmCurve: computeBeatorajaBPMCurve(chart),
       layout: {
         variant: play.chartPlayVariant,
         scrollMapper,
@@ -282,7 +282,7 @@ export class BeatorajaPlayView implements PlayView {
     await this.chartImages.load();
   }
 
-  private createBridge(chart: BeMusicJson): BeatorajaPlayBridge {
+  private createBridge(chart: BeMusicJSON): BeatorajaPlayBridge {
     const { skin, skinConfig } = this.kit.kit;
     // The LIFT and HIDDEN+ move across the lane's height: the skin's lane cover slider range.
     const laneHeight = normalizeBeatorajaSliders((skin as { slider?: unknown }).slider).find(
@@ -327,15 +327,15 @@ export class BeatorajaPlayView implements PlayView {
         resolveGraphPolyline: (type) => bridge.resolveGraphPolyline(type),
         resolveSliderValue: (type) => bridge.resolveSliderValue(type),
         resolveGaugePercent: () => bridge.resolveGaugePercent(),
-        resolveBpmGraphPoints: () => prepared.bpmCurve,
-        resolveBpmGraphData: () =>
+        resolveBPMGraphPoints: () => prepared.bpmCurve,
+        resolveBPMGraphData: () =>
           analysis.bpmSegments.length === 0 || analysis.totalMs <= 0
             ? undefined
             : {
                 segments: analysis.bpmSegments,
-                mainBpm: analysis.mainBpm,
-                minBpm: analysis.minBpm,
-                maxBpm: analysis.maxBpm,
+                mainBPM: analysis.mainBPM,
+                minBPM: analysis.minBPM,
+                maxBPM: analysis.maxBPM,
                 totalMs: analysis.totalMs,
               },
         resolveJudgeGraphBars: (type) => bridge.resolveJudgeGraphBars(type),
@@ -357,14 +357,14 @@ export class BeatorajaPlayView implements PlayView {
     );
     if (previous !== undefined) {
       previous.dispose();
-      if (!this.play.assetsLoading) stage.addBga(this.bgaOf());
+      if (!this.play.assetsLoading) stage.addBGA(this.bgaOf());
     }
     this.stage = stage;
     this.root.addChildAt(stage.root, 0);
   }
 
   /** The session's BGA as the BGA layer draws it: the base track over the base textures, the layer over its own. */
-  private bgaOf(): BeatorajaPlayBga {
+  private bgaOf(): BeatorajaPlayBGA {
     const play = this.play;
     const nonstop = this.options.nonstop;
     return {
@@ -372,8 +372,8 @@ export class BeatorajaPlayView implements PlayView {
       layerTextures: play.bgaLayerTextures,
       videos: new Map([...play.bgaVideos].map(([key, { video }]) => [key, video] as const)),
       cues: play.bgaTimeline,
-      ...(nonstop !== undefined && play.nonstopBgaTimelines !== undefined
-        ? { nonstop: { stages: nonstop.stages, timelines: play.nonstopBgaTimelines } }
+      ...(nonstop !== undefined && play.nonstopBGATimelines !== undefined
+        ? { nonstop: { stages: nonstop.stages, timelines: play.nonstopBGATimelines } }
         : {}),
     };
   }
@@ -407,9 +407,9 @@ export class BeatorajaPlayView implements PlayView {
       else if (event.kind === 'view-setting') this.showViewSetting(event.setting, frame.state);
     }
     // The BGA goes in once it has loaded (before READY), and its video plays on after a pause.
-    if (!stage.hasBga && !play.assetsLoading) stage.addBga(this.bgaOf());
+    if (!stage.hasBGA && !play.assetsLoading) stage.addBGA(this.bgaOf());
     const paused = frame.stage === 'paused';
-    if (this.wasPaused && !paused) stage.resumeBga();
+    if (this.wasPaused && !paused) stage.resumeBGA();
     this.wasPaused = paused;
     const context = bridge.update({
       nowMs: play.playClock(),

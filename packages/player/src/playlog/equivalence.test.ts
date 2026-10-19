@@ -1,4 +1,4 @@
-import { createEmptyJson, type BeMusicJson } from '@be-music/json';
+import { createEmptyJSON, type BeMusicJSON } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import { manualPlay } from '../index.ts';
 import type { PlayerOptions, PlayerSummary } from '../core/engine.ts';
@@ -23,7 +23,7 @@ interface ReplayRun {
 }
 
 async function replay(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   inputs: readonly PlaylogInputEvent[],
   ruleset: PlaylogRulesetId,
   extra: PlayerOptions = {},
@@ -54,8 +54,8 @@ function up(seq: number, timeUs: number, ...channels: string[]): PlaylogInputEve
 }
 
 /** BPM 240, a long note on `11` from 1.0 s to 2.0 s via `#LNOBJ`, plus a plain note that is never pressed. */
-function longNoteChart(lnMode?: 1 | 2 | 3): BeMusicJson {
-  const json = createEmptyJson('bms');
+function longNoteChart(lnMode?: 1 | 2 | 3): BeMusicJSON {
+  const json = createEmptyJSON('bms');
   json.metadata.bpm = 240;
   json.metadata.rank = 2;
   json.bms.lnObjs = ['AA'];
@@ -71,8 +71,8 @@ function longNoteChart(lnMode?: 1 | 2 | 3): BeMusicJson {
 }
 
 /** BPM 240 → one measure per second, so `measure` + `position` read directly as seconds. */
-function chart(events: BeMusicJson['events'], rank = 2): BeMusicJson {
-  const json = createEmptyJson('bms');
+function chart(events: BeMusicJSON['events'], rank = 2): BeMusicJSON {
+  const json = createEmptyJSON('bms');
   json.metadata.bpm = 240;
   json.metadata.rank = rank;
   json.events = events;
@@ -85,7 +85,7 @@ function chart(events: BeMusicJson['events'], rank = 2): BeMusicJson {
  * note on 13 at 2.35 s (R + 100 ms), a note on 14 at 2.75 s, a post-reversal STOP (4.25 s, 1 s long), BPM 240 again
  * at 7.25 s, and a far note on 11 at 8.25 s.
  */
-function reversalScenarioChart(): BeMusicJson {
+function reversalScenarioChart(): BeMusicJSON {
   const json = chart([
     { measure: 1, channel: '09', position: [0, 1], value: '01' },
     { measure: 1, channel: '12', position: [1, 2], value: '01' },

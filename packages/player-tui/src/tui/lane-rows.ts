@@ -1,6 +1,6 @@
 import { PLAY_MODE_LAYOUTS } from '@be-music/chart';
 import { clamp } from '@be-music/utils/core';
-import { DEFAULT_TUI_NOTE_HEIGHT, type TuiNoteHeight } from '@be-music/player/display';
+import { DEFAULT_TUI_NOTE_HEIGHT, type TUINoteHeight } from '@be-music/player/display';
 import { findStackableRowIndex } from './lane-stacking.ts';
 import {
   calculateLaneBlockVisibleWidth,
@@ -8,9 +8,9 @@ import {
   DEFAULT_LANE_WIDTH,
   SPLIT_PANEL_INNER_WIDTH,
 } from './layout.ts';
-import { ANSI_RESET, type RgbColor, BLACK_RGB, centerVisible, colorizeText } from './ansi-text.ts';
+import { ANSI_RESET, type RGBColor, BLACK_RGB, centerVisible, colorizeText } from './ansi-text.ts';
 
-export interface TuiLane {
+export interface TUILane {
   channel: string;
   key: string;
   isScratch?: boolean;
@@ -61,40 +61,40 @@ type StructuredLaneCellRenderer = (
   value: string,
   laneWidth: number,
   sourceChannel: string,
-  noteHeight: TuiNoteHeight,
+  noteHeight: TUINoteHeight,
 ) => string;
 
-type StructuredLaneSectionRenderer = (cells: string[], noteHeight: TuiNoteHeight) => string;
+type StructuredLaneSectionRenderer = (cells: string[], noteHeight: TUINoteHeight) => string;
 
-const WHITE_KEY_LANE_BG_RGB: RgbColor = { r: 24, g: 36, b: 56 };
-const BLACK_KEY_LANE_BG_RGB: RgbColor = { r: 2, g: 4, b: 8 };
-const SCRATCH_LANE_BG_RGB: RgbColor = { r: 5, g: 8, b: 12 };
-const SPLIT_PANEL_BACKGROUND_RGB: RgbColor = { r: 18, g: 18, b: 18 };
-const LANE_DIVIDER_RGB: RgbColor = { r: 148, g: 148, b: 148 };
-const LANE_OUTER_BORDER_RGB: RgbColor = { r: 218, g: 218, b: 218 };
-const LANE_CEILING_RGB: RgbColor = { r: 88, g: 88, b: 88 };
-const JUDGE_LINE_RGB: RgbColor = { r: 255, g: 48, b: 48 };
-const LANE_LABEL_RGB: RgbColor = { r: 198, g: 198, b: 198 };
-const RED_NOTE_RGB: RgbColor = { r: 255, g: 95, b: 95 };
-const BLUE_NOTE_RGB: RgbColor = { r: 95, g: 135, b: 255 };
-const WHITE_NOTE_RGB: RgbColor = { r: 255, g: 255, b: 255 };
-const INVISIBLE_NOTE_RGB: RgbColor = { r: 102, g: 224, b: 161 };
-const MEASURE_LINE_RGB: RgbColor = { r: 158, g: 158, b: 158 };
-const MINE_FOREGROUND_RGB: RgbColor = { r: 255, g: 255, b: 255 };
-const MINE_BACKGROUND_RGB: RgbColor = { r: 205, g: 64, b: 64 };
-const INPUT_KEY_LIGHT_FOREGROUND_RGB: RgbColor = { r: 24, g: 24, b: 24 };
-const INPUT_KEY_LIGHT_BACKGROUND_RGB: RgbColor = { r: 238, g: 238, b: 238 };
-const INPUT_KEY_DARK_FOREGROUND_RGB: RgbColor = { r: 250, g: 250, b: 250 };
-const INPUT_KEY_DARK_BACKGROUND_RGB: RgbColor = { r: 16, g: 16, b: 16 };
-const INPUT_KEY_SCRATCH_BACKGROUND_RGB: RgbColor = { r: 138, g: 138, b: 138 };
-const INPUT_KEY_ACTIVE_BACKGROUND_RGB: RgbColor = { r: 255, g: 135, b: 0 };
+const WHITE_KEY_LANE_BG_RGB: RGBColor = { r: 24, g: 36, b: 56 };
+const BLACK_KEY_LANE_BG_RGB: RGBColor = { r: 2, g: 4, b: 8 };
+const SCRATCH_LANE_BG_RGB: RGBColor = { r: 5, g: 8, b: 12 };
+const SPLIT_PANEL_BACKGROUND_RGB: RGBColor = { r: 18, g: 18, b: 18 };
+const LANE_DIVIDER_RGB: RGBColor = { r: 148, g: 148, b: 148 };
+const LANE_OUTER_BORDER_RGB: RGBColor = { r: 218, g: 218, b: 218 };
+const LANE_CEILING_RGB: RGBColor = { r: 88, g: 88, b: 88 };
+const JUDGE_LINE_RGB: RGBColor = { r: 255, g: 48, b: 48 };
+const LANE_LABEL_RGB: RGBColor = { r: 198, g: 198, b: 198 };
+const RED_NOTE_RGB: RGBColor = { r: 255, g: 95, b: 95 };
+const BLUE_NOTE_RGB: RGBColor = { r: 95, g: 135, b: 255 };
+const WHITE_NOTE_RGB: RGBColor = { r: 255, g: 255, b: 255 };
+const INVISIBLE_NOTE_RGB: RGBColor = { r: 102, g: 224, b: 161 };
+const MEASURE_LINE_RGB: RGBColor = { r: 158, g: 158, b: 158 };
+const MINE_FOREGROUND_RGB: RGBColor = { r: 255, g: 255, b: 255 };
+const MINE_BACKGROUND_RGB: RGBColor = { r: 205, g: 64, b: 64 };
+const INPUT_KEY_LIGHT_FOREGROUND_RGB: RGBColor = { r: 24, g: 24, b: 24 };
+const INPUT_KEY_LIGHT_BACKGROUND_RGB: RGBColor = { r: 238, g: 238, b: 238 };
+const INPUT_KEY_DARK_FOREGROUND_RGB: RGBColor = { r: 250, g: 250, b: 250 };
+const INPUT_KEY_DARK_BACKGROUND_RGB: RGBColor = { r: 16, g: 16, b: 16 };
+const INPUT_KEY_SCRATCH_BACKGROUND_RGB: RGBColor = { r: 138, g: 138, b: 138 };
+const INPUT_KEY_ACTIVE_BACKGROUND_RGB: RGBColor = { r: 255, g: 135, b: 0 };
 
 export function renderLaneRow(
   values: string[],
   channels: string[],
   laneWidths: number[],
   splitAfterIndex = -1,
-  noteHeight: TuiNoteHeight = DEFAULT_TUI_NOTE_HEIGHT,
+  noteHeight: TUINoteHeight = DEFAULT_TUI_NOTE_HEIGHT,
   laneHighlightRatios: Map<number, number> = new Map<number, number>(),
   sourceChannels?: string[],
   applyLaneBackground = true,
@@ -153,7 +153,7 @@ function renderLaneSplitPanel(): string {
 }
 
 export function renderInputKeyRows(
-  lanes: ReadonlyArray<TuiLane>,
+  lanes: ReadonlyArray<TUILane>,
   laneWidths: number[],
   splitAfterIndex = -1,
   activeChannels: Set<string> = new Set<string>(),
@@ -223,7 +223,7 @@ export function renderMeasureRow(
   channels: string[],
   laneWidths: number[],
   splitAfterIndex = -1,
-  noteHeight: TuiNoteHeight = DEFAULT_TUI_NOTE_HEIGHT,
+  noteHeight: TUINoteHeight = DEFAULT_TUI_NOTE_HEIGHT,
   laneHighlightRatios: Map<number, number> = new Map<number, number>(),
   sourceChannels?: string[],
 ): string {
@@ -250,7 +250,7 @@ function renderMeasureLaneCell(
   value: string,
   laneWidth: number,
   sourceChannel: string,
-  noteHeight: TuiNoteHeight = DEFAULT_TUI_NOTE_HEIGHT,
+  noteHeight: TUINoteHeight = DEFAULT_TUI_NOTE_HEIGHT,
 ): string {
   const safeWidth = Math.max(1, laneWidth);
   const noteCell = resolveNoteLikeLaneCell(value);
@@ -273,7 +273,7 @@ export function renderJudgeRow(
   channels: string[],
   laneWidths: number[],
   splitAfterIndex = -1,
-  noteHeight: TuiNoteHeight = DEFAULT_TUI_NOTE_HEIGHT,
+  noteHeight: TUINoteHeight = DEFAULT_TUI_NOTE_HEIGHT,
   laneHighlightRatios: Map<number, number> = new Map<number, number>(),
   sourceChannels?: string[],
 ): string {
@@ -295,7 +295,7 @@ function renderStructuredLaneRow(
   channels: string[],
   laneWidths: number[],
   splitAfterIndex: number,
-  noteHeight: TuiNoteHeight,
+  noteHeight: TUINoteHeight,
   laneHighlightRatios: ReadonlyMap<number, number>,
   sourceChannels: string[] | undefined,
   renderCell: StructuredLaneCellRenderer,
@@ -327,7 +327,7 @@ function renderStructuredLaneRow(
   return `${left}${renderLaneSplitPanel()}${right}`;
 }
 
-function renderJudgeSection(cells: string[], noteHeight: TuiNoteHeight = DEFAULT_TUI_NOTE_HEIGHT): string {
+function renderJudgeSection(cells: string[], noteHeight: TUINoteHeight = DEFAULT_TUI_NOTE_HEIGHT): string {
   const divider = colorizeJudgeLine(resolveJudgeLineSymbol(noteHeight));
   const body = cells.join(divider);
   return `${colorizeLaneOuterBorder(LANE_OUTER_BORDER_SYMBOL)}${body}${colorizeLaneOuterBorder(LANE_OUTER_BORDER_SYMBOL)}`;
@@ -337,7 +337,7 @@ function renderJudgeLaneCell(
   value: string,
   laneWidth: number,
   sourceChannel: string,
-  noteHeight: TuiNoteHeight = DEFAULT_TUI_NOTE_HEIGHT,
+  noteHeight: TUINoteHeight = DEFAULT_TUI_NOTE_HEIGHT,
 ): string {
   const safeWidth = Math.max(1, laneWidth);
   const noteCell = resolveNoteLikeLaneCell(value);
@@ -484,8 +484,8 @@ function center(value: string, width: number): string {
   return `${' '.repeat(leftPadding)}${value}${' '.repeat(rightPadding)}`;
 }
 
-function resolveRegularNoteSymbol(noteHeight: TuiNoteHeight): string {
-  const symbols: Record<TuiNoteHeight, string> = {
+function resolveRegularNoteSymbol(noteHeight: TUINoteHeight): string {
+  const symbols: Record<TUINoteHeight, string> = {
     1: '▁',
     2: '▂',
     3: '▃',
@@ -521,14 +521,14 @@ function resolveNoteLikeLaneCell(value: string): NoteLikeLaneCell | undefined {
   }
 }
 
-function resolveJudgeLineSymbol(noteHeight: TuiNoteHeight): string {
+function resolveJudgeLineSymbol(noteHeight: TUINoteHeight): string {
   return resolveRegularNoteSymbol(noteHeight);
 }
 
 function renderNoteCell(
   width: number,
   kind: 'head' | 'long-head' | 'body' | 'tail',
-  noteHeight: TuiNoteHeight = DEFAULT_TUI_NOTE_HEIGHT,
+  noteHeight: TUINoteHeight = DEFAULT_TUI_NOTE_HEIGHT,
 ): string {
   const safeWidth = Math.max(1, width);
   if (kind === 'head') {
@@ -605,7 +605,7 @@ function colorizeLaneBackground(value: string, channel: string): string {
   return `\u001b[48;2;${color.r};${color.g};${color.b}m${value}${ANSI_RESET}`;
 }
 
-function resolveLaneBackgroundColor(channel: string): RgbColor {
+function resolveLaneBackgroundColor(channel: string): RGBColor {
   const normalized = channel.toUpperCase();
   if (SCRATCH_LANE_CHANNELS.has(normalized)) {
     return SCRATCH_LANE_BG_RGB;
@@ -619,7 +619,7 @@ function resolveLaneBackgroundColor(channel: string): RgbColor {
   return BLACK_RGB;
 }
 
-function resolveLaneHighlightBackgroundColor(channel: string, ratio: number): RgbColor {
+function resolveLaneHighlightBackgroundColor(channel: string, ratio: number): RGBColor {
   const base = resolveLaneBackgroundColor(channel);
   const strength = Math.pow(clamp(ratio, 0, 1), HIGHLIGHT_DECAY_POWER);
   return {
@@ -650,7 +650,7 @@ function colorizeActiveInputKeyLabel(value: string): string {
   return colorizeText(value, INPUT_KEY_LIGHT_FOREGROUND_RGB, INPUT_KEY_ACTIVE_BACKGROUND_RGB);
 }
 
-function resolveInputKeyLaneGroup(lane: TuiLane): 'white' | 'black' {
+function resolveInputKeyLaneGroup(lane: TUILane): 'white' | 'black' {
   const normalized = lane.channel.toUpperCase();
   if (BLUE_NOTE_CHANNELS.has(normalized)) {
     return 'black';
@@ -658,7 +658,7 @@ function resolveInputKeyLaneGroup(lane: TuiLane): 'white' | 'black' {
   return 'white';
 }
 
-function resolveInputKeyLaneStyle(lane: TuiLane): 'white' | 'black' | 'scratch' {
+function resolveInputKeyLaneStyle(lane: TUILane): 'white' | 'black' | 'scratch' {
   if (lane.isScratch) {
     return 'scratch';
   }

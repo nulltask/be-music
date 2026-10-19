@@ -20,7 +20,7 @@ import { crc32, deflateSync } from 'node:zlib';
 const SAMPLE_RATE = 22050;
 
 /** A mono 16-bit PCM WAV of a sine tone; `decay` fades it to silence over its length. */
-export function sineWav(frequency: number, seconds: number, amplitude: number, decay: boolean): Uint8Array {
+export function sineWAV(frequency: number, seconds: number, amplitude: number, decay: boolean): Uint8Array {
   const frames = Math.floor(SAMPLE_RATE * seconds);
   const bytes = new Uint8Array(44 + frames * 2);
   const view = new DataView(bytes.buffer);
@@ -51,7 +51,7 @@ export function sineWav(frequency: number, seconds: number, amplitude: number, d
  * A PNG of horizontal bands of solid colour, `bandHeight` rows each, top to bottom: what the fixture skins cut their
  * images from.
  */
-export function bandsPng(
+export function bandsPNG(
   width: number,
   bandHeight: number,
   colours: ReadonlyArray<readonly [number, number, number]>,
@@ -110,8 +110,8 @@ const SKIN_IMAGE_BANDS: ReadonlyArray<readonly [number, number, number]> = [
  */
 const SKIN_BINARIES: ReadonlyArray<{ path: string; tone?: number }> = [
   { path: 'lr2/LR2files/Theme/E2E/parts.png' },
-  { path: 'lr2/LR2files/Bgm/e2e/select.wav', tone: 330 },
-  { path: 'lr2/LR2files/Bgm/e2e/decide.wav', tone: 392 },
+  { path: 'lr2/LR2files/BGM/e2e/select.wav', tone: 330 },
+  { path: 'lr2/LR2files/BGM/e2e/decide.wav', tone: 392 },
   ...['f-open', 'f-close', 'o-open', 'o-close', 'o-change', 'scratch'].map((name, index) => ({
     path: `lr2/LR2files/Sound/e2e/${name}.wav`,
     tone: 1000 + index * 100,
@@ -135,7 +135,7 @@ export async function writeFixtureSkins(outDir: string): Promise<void> {
   for (const { path, tone } of SKIN_BINARIES) {
     const file = join(skins, path);
     await mkdir(dirname(file), { recursive: true });
-    await writeFile(file, tone === undefined ? bandsPng(256, 64, SKIN_IMAGE_BANDS) : sineWav(tone, 0.3, 6000, true));
+    await writeFile(file, tone === undefined ? bandsPNG(256, 64, SKIN_IMAGE_BANDS) : sineWAV(tone, 0.3, 6000, true));
   }
 }
 
@@ -152,7 +152,7 @@ export interface FixtureChart {
 }
 
 /** The BMS text of a fixture chart: keysounds `k1` / `k2` alternate, `bgm` starts at measure 1. CRLF line ends. */
-export function fixtureBms(chart: FixtureChart): string {
+export function fixtureBMS(chart: FixtureChart): string {
   const lines = [
     '#PLAYER 1',
     '#GENRE FIXTURE',
@@ -253,13 +253,13 @@ export async function writeChecklistFixtures(outDir: string): Promise<void> {
   for (const [id, { folder, chart }] of Object.entries(FIXTURE_CHARTS)) {
     const dir = join(songs, folder);
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'k1.wav'), sineWav(660, 0.12, 9000, true));
-    await writeFile(join(dir, 'k2.wav'), sineWav(880, 0.12, 9000, true));
+    await writeFile(join(dir, 'k1.wav'), sineWAV(660, 0.12, 9000, true));
+    await writeFile(join(dir, 'k2.wav'), sineWAV(880, 0.12, 9000, true));
     await writeFile(
       join(dir, 'bgm.wav'),
-      sineWav(220, (chart.measures * 4 * 60) / (chart.bpm ?? 150) + 1, 3000, false),
+      sineWAV(220, (chart.measures * 4 * 60) / (chart.bpm ?? 150) + 1, 3000, false),
     );
-    const bms = fixtureBms(chart);
+    const bms = fixtureBMS(chart);
     await writeFile(join(dir, `${folder}.bms`), bms);
     md5.set(id, createHash('md5').update(bms).digest('hex'));
   }

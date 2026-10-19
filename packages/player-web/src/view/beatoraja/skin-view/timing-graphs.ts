@@ -104,7 +104,7 @@ export class BeatorajaTimingGraphRenderer {
     if (!props.visible) return;
     const samples = this.resolveTimingSamples() ?? [];
     // Half-width in ms — author-supplied or fallback. ±150 ms covers the BAD window in
-    // upstream's IIDX-NORMAL judge rule; matches `JsonSkin.TimingVisualizer.judgeWidthMillis`
+    // upstream's IIDX-NORMAL judge rule; matches `JSONSkin.TimingVisualizer.judgeWidthMillis`
     // default.
     const halfWidthMs = entry.element.judgeWidthMillis > 0 ? entry.element.judgeWidthMillis : 150;
     const lineWidthPx = entry.element.lineWidth > 0 ? entry.element.lineWidth : 1;
@@ -123,8 +123,8 @@ export class BeatorajaTimingGraphRenderer {
     const centerLineLeft = (props.width - lineWidthPx) / 2;
     // The play's judge windows; IIDX-NORMAL defaults when no host resolver is wired.
     const windows = this.resolveTimingJudgeWindows();
-    // Authored band colours — fall through to upstream `JsonSkin.TimingVisualizer` defaults
-    // when the skin omits a value (matches `JsonSkin.java`'s static initializer values).
+    // Authored band colours — fall through to upstream `JSONSkin.TimingVisualizer` defaults
+    // when the skin omits a value (matches `JSONSkin.java`'s static initializer values).
     const colors = {
       center: parseHexColor(entry.element.centerColor) ?? DEFAULT_TIMING_VISUALIZER_COLORS.center,
       pg: parseHexColor(entry.element.pgColor) ?? DEFAULT_TIMING_VISUALIZER_COLORS.pg,
@@ -481,7 +481,7 @@ const IIDX_NORMAL_JUDGE_WINDOWS: TimingVisualizerWindows = {
 
 /**
  * Default colours for the `timingvisualizer[]` band background, mirroring upstream
- * `JsonSkin.TimingVisualizer`'s static field initializers (`JsonSkin.java`):
+ * `JSONSkin.TimingVisualizer`'s static field initializers (`JSONSkin.java`):
  *
  *   - `centerColor = "FFFFFFFF"` (white)
  *   - `PGColor = "000088FF"` (dark blue, innermost)

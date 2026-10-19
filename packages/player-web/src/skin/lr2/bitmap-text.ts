@@ -1,14 +1,14 @@
 import { Container, Graphics, Sprite, Texture, Rectangle } from 'pixi.js';
-import type { Lr2DestinationRect, Lr2TextElement } from '@be-music/lr2-skin';
-import { stringToLr2CharCodes, type Lr2BitmapFont, type Lr2FontGlyph } from '@be-music/lr2-skin';
+import type { LR2DestinationRect, LR2TextElement } from '@be-music/lr2-skin';
+import { stringToLR2CharCodes, type LR2BitmapFont, type LR2FontGlyph } from '@be-music/lr2-skin';
 import { normalizeRect } from './render.ts';
 
 /**
  * Loaded LR2 font payload — the parsed `.lr2font` metadata plus one Pixi `Texture` per `#T <gr>` image declaration. The
  * renderer samples sub-rects from these textures by glyph and stamps them at the destination position.
  */
-export interface Lr2LoadedFont {
-  font: Lr2BitmapFont;
+export interface LR2LoadedFont {
+  font: LR2BitmapFont;
   /** `#T <gr>` index → loaded texture. */
   textures: Map<number, Texture>;
 }
@@ -20,7 +20,7 @@ export interface Lr2LoadedFont {
  */
 const glyphTextureCache = new WeakMap<Texture, Map<string, Texture>>();
 
-function getGlyphTexture(baseTexture: Texture, glyph: Lr2FontGlyph): Texture {
+function getGlyphTexture(baseTexture: Texture, glyph: LR2FontGlyph): Texture {
   let perBase = glyphTextureCache.get(baseTexture);
   if (!perBase) {
     perBase = new Map();
@@ -38,7 +38,7 @@ function getGlyphTexture(baseTexture: Texture, glyph: Lr2FontGlyph): Texture {
 }
 
 /**
- * Renders `value` into a Pixi `Container` using the supplied LR2 bitmap font. Mirrors `makeLr2TextSprite`'s contract:
+ * Renders `value` into a Pixi `Container` using the supplied LR2 bitmap font. Mirrors `makeLR2TextSprite`'s contract:
  * the returned node is positioned per `dst.x` / `dst.y` and respects the element's alignment (left / center / right).
  *
  * Glyph height is scaled to `dst.h` (which is the LR2 spec's "final size") — the source-side `font.baseSize` is the
@@ -48,11 +48,11 @@ function getGlyphTexture(baseTexture: Texture, glyph: Lr2FontGlyph): Texture {
  * Characters with no glyph entry get a placeholder rectangle (translucent outline) so unmapped text is visibly present
  * rather than silently dropped.
  */
-export function makeLr2BitmapTextSprite(
+export function makeLR2BitmapTextSprite(
   value: string,
-  element: Lr2TextElement,
-  dst: Lr2DestinationRect,
-  loaded: Lr2LoadedFont,
+  element: LR2TextElement,
+  dst: LR2DestinationRect,
+  loaded: LR2LoadedFont,
 ): Container {
   const root = new Container();
   root.label = `lr2-bitmap-text[st=${element.st},font=${element.font}]`;
@@ -62,7 +62,7 @@ export function makeLr2BitmapTextSprite(
   const baseSize = Math.max(1, font.baseSize);
   const targetHeight = rect.h > 0 ? rect.h : baseSize;
   const scale = targetHeight / baseSize;
-  const codes = stringToLr2CharCodes(value);
+  const codes = stringToLR2CharCodes(value);
   // First pass — compute total advance so we can apply alignment. Per-glyph width MUST be measured the same way the
   // render pass below scales the sprite (`targetHeight / glyph.h`), not via the font-level `scale = targetHeight /
   // baseSize`. The two diverge whenever a glyph's source height differs from `#S` (LR2 spec calls this
@@ -71,7 +71,7 @@ export function makeLr2BitmapTextSprite(
   // centered bounding box.
   let totalAdvance = 0;
   const layout: Array<{
-    glyph: Lr2FontGlyph | undefined;
+    glyph: LR2FontGlyph | undefined;
     glyphScale: number;
     advance: number;
     width: number;

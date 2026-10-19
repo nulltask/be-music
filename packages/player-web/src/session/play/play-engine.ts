@@ -8,20 +8,20 @@
  */
 
 import type { RandomDraws, TimingResolver, ChartPlayVariant } from '@be-music/chart';
-import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
+import type { BeMusicEvent, BeMusicJSON } from '@be-music/json';
 import {
   PlayerInterruptedError,
   type PlayerRulesetInfo,
   type PlayerSummary,
   type PreparedPlaybackChartData,
 } from '@be-music/player';
-import { resolveLr2LaneIndex } from '@be-music/player/lanes';
+import { resolveLR2LaneIndex } from '@be-music/player/lanes';
 import type {
   PlayerInputSignalBus,
   PlayerGaugeSummary,
-  PlayerUiCommand,
-  PlayerUiFramePayload,
-  PlayerUiSignalBus,
+  PlayerUICommand,
+  PlayerUIFramePayload,
+  PlayerUISignalBus,
   PlayerJudgeComboSignalState,
   PlayerStateSignals,
 } from '@be-music/player/signals';
@@ -34,13 +34,13 @@ import {
   type LongNoteStyle,
   type ScoreSummary,
 } from '@be-music/player/ruleset';
-import { playEventFromUiCommand, PlaylogViewCursor, type LibraryChart, type PlayResult } from '@be-music/scene-model';
+import { playEventFromUICommand, PlaylogViewCursor, type LibraryChart, type PlayResult } from '@be-music/scene-model';
 import type { BeMusicJudgeWindows, BeMusicLaneKind } from '@be-music/skin-sdk';
 import type { AudioBusHandle } from '../../runtime/audio-bus.ts';
 import { runEngineDriver } from '../../runtime/engine-driver.ts';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { supportsLiveTempoChange, type ReplayTempo } from '../../runtime/play-tempo.ts';
-import { drainWebUiSignals, type WebUiRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
+import { drainWebUISignals, type WebUIRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
 import type { PlaySessionOptions } from './play-options.ts';
 import { toBeMusicJudgeWindows } from './judge-windows.ts';
 import type { LongNoteTracker } from './long-note-tracker.ts';
@@ -69,8 +69,8 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
       | 'autoPlay'
       | 'autoScratch1P'
       | 'autoScratch2P'
-      | 'chartMd5'
-      | 'chartSha256'
+      | 'chartMD5'
+      | 'chartSHA256'
       | 'course'
       | 'dpFlip'
       | 'gauge'
@@ -96,7 +96,7 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
     >
   >;
   readonly song: LibraryChart | undefined;
-  readonly resolvedChart: BeMusicJson | undefined;
+  readonly resolvedChart: BeMusicJSON | undefined;
   readonly randomDraws: RandomDraws | undefined;
   readonly preparedChart: PreparedPlaybackChartData | undefined;
   readonly notes: TimedPlayableNote[];
@@ -117,12 +117,12 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
   chartEndHold: AbortController | undefined;
   onHeldPlayEnded: ((summary: Readonly<PlayerSummary>) => void) | undefined;
   sharedEngineLastJudgeComboTick: number;
-  sharedEngineSignals: { uiSignals: PlayerUiSignalBus; stateSignals?: PlayerStateSignals } | undefined;
+  sharedEngineSignals: { uiSignals: PlayerUISignalBus; stateSignals?: PlayerStateSignals } | undefined;
   sharedEngineInputSignals: PlayerInputSignalBus | undefined;
   sharedEngineInterrupt: 'escape' | 'restart' | undefined;
   sharedEngineChartSettled: boolean;
   sharedEngineClockAnchored: boolean;
-  engineFrame: Readonly<PlayerUiFramePayload> | undefined;
+  engineFrame: Readonly<PlayerUIFramePayload> | undefined;
   chartEnded: boolean;
   chartEndTimeout: number | undefined;
   playlog: BeMusicPlaylog | undefined;
@@ -355,7 +355,7 @@ function noteImpulse(ctx: PlayEngineContext, channel: string): void {
   ctx.lastImpulseAt = ctx.playClock();
   ctx.lastImpulseKind = resolveBeMusicLaneKind(
     channel,
-    resolveLr2LaneIndex(channel, ctx.chartPlayVariant),
+    resolveLR2LaneIndex(channel, ctx.chartPlayVariant),
     ctx.chartPlayVariant,
   );
 }
@@ -376,7 +376,7 @@ function noteImpulse(ctx: PlayEngineContext, channel: string): void {
  * none of which care about the shuffled lane channels. The resolved chart carries no control flow, so the engine
  * plays it as is; {@link randomDraws} travel with it for the RANDOM summary.
  */
-function buildSharedEngineChart(ctx: PlayEngineContext): BeMusicJson {
+function buildSharedEngineChart(ctx: PlayEngineContext): BeMusicJSON {
   return ctx.resolvedChart ?? ctx.song!.chart;
 }
 
@@ -389,15 +389,15 @@ function buildSharedEngineChart(ctx: PlayEngineContext): BeMusicJson {
 export function resolvePlaylogRecording(
   options: Pick<
     PlaySessionOptions,
-    'gauge' | 'chartSha256' | 'chartMd5' | 'playlogRecorder' | 'random1P' | 'random2P' | 'dpFlip'
+    'gauge' | 'chartSHA256' | 'chartMD5' | 'playlogRecorder' | 'random1P' | 'random2P' | 'dpFlip'
   >,
   song: Pick<LibraryChart, 'chart' | 'chartPath'> | undefined,
   view: PlaylogViewState,
 ): PlaylogRecordingOptions {
   return {
     gauge: options.gauge,
-    ...(options.chartSha256 !== undefined ? { chartSha256: options.chartSha256 } : {}),
-    ...(options.chartMd5 !== undefined ? { chartMd5: options.chartMd5 } : {}),
+    ...(options.chartSHA256 !== undefined ? { chartSHA256: options.chartSHA256 } : {}),
+    ...(options.chartMD5 !== undefined ? { chartMD5: options.chartMD5 } : {}),
     ...(options.playlogRecorder !== undefined ? { recorder: options.playlogRecorder } : {}),
     ...(song !== undefined ? { sourceChart: song.chart } : {}),
     ...(options.random1P !== undefined || options.random2P !== undefined
@@ -424,7 +424,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
   // make the chart unplayable. Rebuilding `events` with the post-shuffle channel keeps the engine and the
   // renderer on the same shuffle.
   const chart = buildSharedEngineChart(ctx);
-  const callbacks: WebUiRuntimeCallbacks = {
+  const callbacks: WebUIRuntimeCallbacks = {
     onFrame: (frame) => applyEngineFrame(ctx, frame),
     onCommand: (command) => applyEngineCommand(ctx, command),
     onJudgeCombo: (state) => applyEngineJudgeCombo(ctx, state),
@@ -488,7 +488,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       // (`this.notes` / `this.mineNotes` / `this.invisibleNotes` are references into this bundle). The
       // engine's `autoPlay` / `manualPlay` use it verbatim instead of running their own
       // `preparePlaybackChartData` pass, so the renderer's parallel arrays and the engine's playable note
-      // arrays are guaranteed to be the same instances — no `inferBmsLnTypeWhenMissing` flag to keep in
+      // arrays are guaranteed to be the same instances — no `inferBmsLNTypeWhenMissing` flag to keep in
       // sync, no `laneModeExtension` to forward separately (the bundle already encodes the lane bindings
       // computed under the right extension), no `bms.controlFlow` re-resolve to deduplicate, no
       // `random1P: 'OFF'` truthy-check to fix. Every "view extracted differently than engine" bug is
@@ -605,7 +605,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
  */
 export function drainSharedEngineSignals(ctx: PlayEngineContext): void {
   if (!ctx.sharedEngineSignals) return;
-  const result = drainWebUiSignals(
+  const result = drainWebUISignals(
     ctx.sharedEngineSignals.uiSignals,
     {
       onFrame: (frame) => applyEngineFrame(ctx, frame),
@@ -626,7 +626,7 @@ export function drainSharedEngineSignals(ctx: PlayEngineContext): void {
  * replaced the in-tree judge ladder. The summary's optional `gauge` payload populates `this.gaugeState` so the
  * skin's `#DST_GAUGE` chrome animates against the same value the engine considers authoritative.
  */
-function applyEngineFrame(ctx: PlayEngineContext, frame: Readonly<PlayerUiFramePayload>): void {
+function applyEngineFrame(ctx: PlayEngineContext, frame: Readonly<PlayerUIFramePayload>): void {
   ctx.engineFrame = frame;
   // Re-anchor the view's chart-time clock to the engine's the very first time the engine publishes a frame.
   // The engine's `playbackClock` (and therefore the chart-time it stamps on every judge / sample / ui-signal
@@ -720,7 +720,7 @@ export function applyFinalSummary(ctx: PlayEngineContext, summary: Readonly<Play
  * paths above were removed. Every command is then forwarded to the theme as a `lane-command` event (the LR2 family
  * drives its LN-hold timers and turntable from it).
  */
-function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUiCommand): void {
+function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUICommand): void {
   switch (command.kind) {
     case 'flash-lane':
       noteImpulse(ctx, command.channel);
@@ -757,7 +757,7 @@ function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUiCommand): v
       // An empty POOR (the engine fires `trigger-poor-bga` for real POOR judgments too, and for empty presses and
       // misses past the window) moves the gauge without a judgment: the play state samples its graphs here. A real
       // POOR that also publishes a judgment gets a second sample at almost the same progress.
-      const event = playEventFromUiCommand(command);
+      const event = playEventFromUICommand(command);
       if (event !== undefined) applyPlayEvent(ctx, event);
       break;
     }

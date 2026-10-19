@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import type { NonstopStagePlacement } from './plan.ts';
-import { nonstopBpmAt, resolveNonstopStageRanks, resolveNonstopTempo } from './readouts.ts';
+import { nonstopBPMAt, resolveNonstopStageRanks, resolveNonstopTempo } from './readouts.ts';
 
 const placement = (offsetSeconds: number, boundarySeconds: number, rate = 1): NonstopStagePlacement => ({
   measureOffset: 0,
@@ -20,7 +20,7 @@ const stages = [
       { seconds: 10, bpm: 140 },
       { seconds: 21, bpm: 200 },
     ],
-    headerBpm: 120,
+    headerBPM: 120,
     rank: 3,
   },
   {
@@ -29,7 +29,7 @@ const stages = [
       { seconds: 3, bpm: 110 },
       { seconds: 30, bpm: 90 },
     ],
-    headerBpm: 100,
+    headerBPM: 100,
     rank: 0,
   },
 ];
@@ -62,19 +62,19 @@ describe('resolveNonstopTempo', () => {
   });
 });
 
-describe('nonstopBpmAt', () => {
+describe('nonstopBPMAt', () => {
   const tempo = resolveNonstopTempo(stages, placements);
 
   test('reads the tempo in force', () => {
-    expect(nonstopBpmAt(tempo, -1)).toBe(120);
-    expect(nonstopBpmAt(tempo, 9.9)).toBe(120);
-    expect(nonstopBpmAt(tempo, 10)).toBe(140);
-    expect(nonstopBpmAt(tempo, 25)).toBe(165);
-    expect(nonstopBpmAt(tempo, 100)).toBe(135);
+    expect(nonstopBPMAt(tempo, -1)).toBe(120);
+    expect(nonstopBPMAt(tempo, 9.9)).toBe(120);
+    expect(nonstopBPMAt(tempo, 10)).toBe(140);
+    expect(nonstopBPMAt(tempo, 25)).toBe(165);
+    expect(nonstopBPMAt(tempo, 100)).toBe(135);
   });
 
   test('is undefined without a tempo', () => {
-    expect(nonstopBpmAt([], 1)).toBeUndefined();
+    expect(nonstopBPMAt([], 1)).toBeUndefined();
   });
 });
 

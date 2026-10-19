@@ -22,8 +22,8 @@ describe('createNonstopStageTiming', () => {
     expect(timing).toMatchObject({
       firstNote: 1.5,
       lastNote: 6,
-      headerBpm: 120,
-      finalBpm: 240,
+      headerBPM: 120,
+      finalBPM: 240,
       firstMeasureLength: 0.5,
     });
     // Measure 0 is half a measure at 120 BPM (1 s); measures 1-4 are 2 s each; from measure 5, 1 s each.
@@ -48,7 +48,7 @@ describe('createNonstopStageTiming', () => {
 
   test('falls back to measure 0 for a chart without notes', () => {
     const timing = createNonstopStageTiming(bms('#BPM 150', '#00101:01'));
-    expect(timing).toMatchObject({ firstNote: 0, lastNote: 0, finalBpm: 150 });
+    expect(timing).toMatchObject({ firstNote: 0, lastNote: 0, finalBPM: 150 });
     expect(timing.lr2FirstNote).toBeUndefined();
   });
 });

@@ -31,7 +31,7 @@ const SJIS_RANGE_2_START = 8127;
 const SJIS_RANGE_2_END = 15306;
 
 /** Glyph rect inside a font's source image. */
-export interface Lr2FontGlyph {
+export interface LR2FontGlyph {
   /** Image index (`#T <gr>` declaration order). */
   gr: number;
   x: number;
@@ -41,7 +41,7 @@ export interface Lr2FontGlyph {
 }
 
 /** A parsed `.lr2font` file. */
-export interface Lr2BitmapFont {
+export interface LR2BitmapFont {
   /** Base reference size (`#S`). DST height ÷ this = render scale. */
   baseSize: number;
   /** Per-character spacing in source-pixel units (`#M`). Can be negative. */
@@ -49,15 +49,15 @@ export interface Lr2BitmapFont {
   /** Image index → relative path from the `.lr2font` file. */
   images: Map<number, string>;
   /** LR2 character code → glyph rect. */
-  glyphs: Map<number, Lr2FontGlyph>;
+  glyphs: Map<number, LR2FontGlyph>;
 }
 
 /**
  * Parses a `.lr2font` source text into the structured form. Lines are tokenized on whitespace; unknown directives are
  * silently skipped so future `#X` keywords don't break the parse. Unparseable numeric fields fall back to `0`.
  */
-export function parseLr2Font(source: string): Lr2BitmapFont {
-  const font: Lr2BitmapFont = {
+export function parseLR2Font(source: string): LR2BitmapFont {
+  const font: LR2BitmapFont = {
     baseSize: 22,
     spacing: 0,
     images: new Map(),
@@ -114,14 +114,14 @@ function toIntOrZero(value: string | undefined): number {
  * Lazy-built SJIS encoding table — first call costs ~5-10 ms while we walk every double-byte SJIS sequence and decode
  * it via the platform's `TextDecoder('shift-jis')`. Subsequent calls are O(1) map lookups.
  */
-export function unicodeToLr2CharCode(char: string): number | undefined {
+export function unicodeToLR2CharCode(char: string): number | undefined {
   if (char.length === 0) return undefined;
   const codePoint = char.codePointAt(0)!;
   // ASCII branch — LR2 maps `0..255` straight to ASCII.
   if (codePoint < 0x80) {
     return codePoint;
   }
-  const sjis = unicodeToSjis(codePoint);
+  const sjis = unicodeToSJIS(codePoint);
   if (sjis === undefined) return undefined;
   // SJIS double-byte: split into high/low and decimal-encode as `(high << 8) | low` (i.e. `high * 256 + low` per LR2
   // spec; the original Japanese phrasing translates to "convert the Shift-JIS character code to decimal").
@@ -139,13 +139,13 @@ export function unicodeToLr2CharCode(char: string): number | undefined {
   return undefined;
 }
 
-let unicodeToSjisTable: Map<number, number> | undefined;
+let unicodeToSJISTable: Map<number, number> | undefined;
 
-function unicodeToSjis(codePoint: number): number | undefined {
-  if (!unicodeToSjisTable) {
-    unicodeToSjisTable = buildUnicodeToSjisTable();
+function unicodeToSJIS(codePoint: number): number | undefined {
+  if (!unicodeToSJISTable) {
+    unicodeToSJISTable = buildUnicodeToSJISTable();
   }
-  return unicodeToSjisTable.get(codePoint);
+  return unicodeToSJISTable.get(codePoint);
 }
 
 /**
@@ -155,7 +155,7 @@ function unicodeToSjis(codePoint: number): number | undefined {
  *
  * Built lazily on first use. The cost is bounded — about 7000 valid SJIS pairs total, decoded in two byte loops.
  */
-function buildUnicodeToSjisTable(): Map<number, number> {
+function buildUnicodeToSJISTable(): Map<number, number> {
   const map = new Map<number, number>();
   const decoder = new TextDecoder('shift-jis', { fatal: false });
   const buffer = new Uint8Array(2);
@@ -192,10 +192,10 @@ function buildUnicodeToSjisTable(): Map<number, number> {
  * Converts a string (UTF-16) into an array of LR2 character codes. Characters that don't map to LR2 (no SJIS encoding)
  * are returned as `undefined` slots so the renderer can stamp a placeholder.
  */
-export function stringToLr2CharCodes(value: string): Array<number | undefined> {
+export function stringToLR2CharCodes(value: string): Array<number | undefined> {
   const codes: Array<number | undefined> = [];
   for (const char of value) {
-    codes.push(unicodeToLr2CharCode(char));
+    codes.push(unicodeToLR2CharCode(char));
   }
   return codes;
 }

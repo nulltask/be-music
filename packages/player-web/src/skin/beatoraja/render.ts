@@ -183,7 +183,7 @@ function collectOffsetIdsOnce(group: BeatorajaDestinationGroup): ReadonlyArray<n
  * `canvasHeight` is the skin's authored canvas height — needed to flip beatoraja's libGDX Y-UP
  * dst coordinates (origin at canvas bottom-left) into Pixi Y-DOWN (origin at canvas top-left).
  * Each renderer holds the canvasHeight as state (`view.height` for the play skin view, or the
- * stored `skin.h` for sibling layers like BgaLayer) and passes it through here.
+ * stored `skin.h` for sibling layers like BGALayer) and passes it through here.
  */
 export function destinationToSpriteProps(
   group: BeatorajaDestinationGroup,
@@ -360,7 +360,7 @@ export function destinationToSpriteProps(
     mirrorX,
     mirrorY,
     alpha,
-    tint: packRgbTint(keyframe.r, keyframe.g, keyframe.b),
+    tint: packRGBTint(keyframe.r, keyframe.g, keyframe.b),
     // Negate the authored angle to convert libGDX (Y-UP, CCW-positive) into Pixi (Y-DOWN,
     // CW-positive). The Y-flip of the rect's POSITION (`canvasHeight - yLibgdxBottom -
     // height` above) is just a translation; it doesn't change the handedness of rotations
@@ -549,7 +549,7 @@ function clampUnit(v: number): number {
   return v;
 }
 
-function packRgbTint(r: number, g: number, b: number): number {
+function packRGBTint(r: number, g: number, b: number): number {
   const cr = clamp255(r);
   const cg = clamp255(g);
   const cb = clamp255(b);

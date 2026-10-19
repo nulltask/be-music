@@ -7,7 +7,7 @@ import { RENDER_RESOLUTION_STORAGE_KEY } from '../render-resolution.ts';
 import { PLAY_IN_SILENT_MODE_STORAGE_KEY } from '../silent-mode-playback.ts';
 import {
   BUILT_IN_SKIN_STORAGE_KEY,
-  createDemoGuiState,
+  createDemoGUIState,
   resolveCompressorMode,
   PLAY_LAYOUT_STORAGE_KEY,
   readStoredBuiltInSkinId,
@@ -169,7 +169,7 @@ describe('volumes', () => {
   });
 });
 
-describe('createDemoGuiState', () => {
+describe('createDemoGUIState', () => {
   const actions = {
     openFolder: vi.fn(),
     openFiles: vi.fn(),
@@ -177,7 +177,7 @@ describe('createDemoGuiState', () => {
     screenshot: vi.fn(),
   };
   const create = (storage: SettingStorage, overrides: { devicePixelRatio?: number; signals?: DeviceSignals } = {}) =>
-    createDemoGuiState({
+    createDemoGUIState({
       storage,
       signals: overrides.signals ?? desktop,
       devicePixelRatio: overrides.devicePixelRatio ?? 2,

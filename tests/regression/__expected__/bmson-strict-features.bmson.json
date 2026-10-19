@@ -12,7 +12,7 @@
       "playLevel": 9,
       "rank": 125,
       "total": 340,
-      "backBmp": "back.png",
+      "backBMP": "back.png",
       "banner": "banner.png",
       "stageFile": "eye.png"
     },
@@ -48,7 +48,7 @@
           "Bob"
         ],
         "level": 9,
-        "initBpm": 160,
+        "initBPM": 160,
         "judgeRank": 125,
         "total": 340,
         "resolution": 240
@@ -220,7 +220,7 @@
       "randomPatterns": [],
       "title": "BMSON Strict Test",
       "playVariant": "5",
-      "referenceBpm": 160,
+      "referenceBPM": 160,
       "timing": {
         "tempo": [
           "0 160 0",
@@ -245,8 +245,8 @@
           "sourceExRank": 125
         },
         "noteCount": 2,
-        "chartFingerprint": "bmfp0:0b607be8ea6681f4f95cb53265e2956f32b4a38b40904f6d0eccf0341719660b",
-        "playFingerprint": "bmfp0:0b607be8ea6681f4f95cb53265e2956f32b4a38b40904f6d0eccf0341719660b",
+        "chartFingerprint": "bmfp0:dd03499350662256c9e9b295c67d19eaa88258b4fbb4d0909946bd8ad45509af",
+        "playFingerprint": "bmfp0:dd03499350662256c9e9b295c67d19eaa88258b4fbb4d0909946bd8ad45509af",
         "title": "BMSON Strict Test",
         "subtitle": "Strict",
         "artist": "Codex",

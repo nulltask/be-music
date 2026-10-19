@@ -31,7 +31,7 @@ import {
   loadAssetBytes,
   type BeatorajaSkinFileEntry,
 } from '@be-music/beatoraja-skin';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import type { SystemSound, SystemSoundSet, SystemSoundSlot } from '@be-music/scene-model';
 import { ChartPreviewEngine, type ChartPreviewEngineOptions, type ChartPreviewTarget } from '../chart/preview.ts';
 import { logger } from '../logger.ts';
@@ -48,7 +48,7 @@ export type AudioOwner = object;
 
 /** Where cues and path-only sounds come from: a theme's system sounds and, for a beatoraja theme, its files. */
 export interface AudioTheme {
-  /** The theme's system sounds; a slot passed to `playCue` / `playBgm` / `playJingle` is looked up here. */
+  /** The theme's system sounds; a slot passed to `playCue` / `playBGM` / `playJingle` is looked up here. */
   readonly sounds?: SystemSoundSet;
   /** The theme's files, which path-only sounds and the skin sounds resolve against (case-insensitively). */
   readonly files?: ReadonlyMap<string, BeatorajaSkinFileEntry>;
@@ -64,7 +64,7 @@ export interface AudioPlayOptions {
   readonly volume?: number;
 }
 
-export interface AudioBgmOptions extends AudioPlayOptions {
+export interface AudioBGMOptions extends AudioPlayOptions {
   /** Whether the BGM loops (default `true`). */
   readonly loop?: boolean;
   /** Whether the BGM goes silent while a chart preview is audible (default `true`, as LR2's select BGM does). */
@@ -123,7 +123,7 @@ export interface AudioServiceOptions {
   readonly createContext?: () => AudioContext | undefined;
   /** Builds a play's context and bus. Defaults to {@link createPlayAudioGraph}. */
   readonly createPlayGraph?: (
-    chart: BeMusicJson,
+    chart: BeMusicJSON,
     compressorMode: CompressorMode,
     busOptions?: BuildAudioBusOptions,
   ) => PlayAudioGraph;
@@ -150,9 +150,9 @@ export interface AudioService {
    * Starts the BGM, replacing the one playing. The same sound already playing (or decoding) keeps going: only its
    * owner and level change. Resolves whether it started.
    */
-  playBgm(sound: AudioSoundRef | undefined, options?: AudioBgmOptions): Promise<boolean>;
+  playBGM(sound: AudioSoundRef | undefined, options?: AudioBGMOptions): Promise<boolean>;
   /** Stops the BGM; with `owner`, only when that owner started it. */
-  stopBgm(owner?: AudioOwner): void;
+  stopBGM(owner?: AudioOwner): void;
   /**
    * Plays a cue once on the cue bus (a cursor move, a folder, an option panel): a slot of the theme's sounds, or a
    * resolved `SystemSound` (a scene's own sound set). Resolves whether it started.
@@ -171,7 +171,7 @@ export interface AudioService {
    * {@link createPlayAudioGraph} builds it. Throws where Web Audio is missing, as that does.
    */
   openPlayGraph(
-    chart: BeMusicJson,
+    chart: BeMusicJSON,
     compressorMode: CompressorMode,
     busOptions?: BuildAudioBusOptions,
     options?: { readonly owner?: AudioOwner },
@@ -570,7 +570,7 @@ export function createAudioService(options: AudioServiceOptions = {}): AudioServ
     setTheme(next) {
       theme = next ?? {};
     },
-    playBgm(sound, bgmOptions = {}) {
+    playBGM(sound, bgmOptions = {}) {
       if (disposed) return Promise.resolve(false);
       const loop = bgmOptions.loop ?? true;
       const duck = bgmOptions.duckUnderPreview ?? true;
@@ -590,7 +590,7 @@ export function createAudioService(options: AudioServiceOptions = {}): AudioServ
       applyDuck();
       return voice.started;
     },
-    stopBgm(owner) {
+    stopBGM(owner) {
       if (bgm === undefined) return;
       if (owner !== undefined && bgm.owner !== owner) return;
       stopVoice(bgm);

@@ -33,12 +33,12 @@
       "stp": [],
       "wavCmds": [],
       "changeOption": {},
-      "exWav": {},
-      "exBmp": {},
+      "exWAV": {},
+      "exBMP": {},
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBga": {},
+      "swBGA": {},
       "player": 1,
       "lnType": 1,
       "lnMode": 1
@@ -100,7 +100,7 @@
       "randomPatterns": [],
       "title": "LN Mode 1 Test (LN)",
       "playVariant": "7",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0"
@@ -129,8 +129,8 @@
           "percent": 75
         },
         "noteCount": 12,
-        "chartFingerprint": "bmfp0:d7024a7bef0452229a3dd11c0e1becbbe71e3cb8170524317db3d61b24001de2",
-        "playFingerprint": "bmfp0:d7024a7bef0452229a3dd11c0e1becbbe71e3cb8170524317db3d61b24001de2",
+        "chartFingerprint": "bmfp0:da7eb6342493a5ef5f6505d205679846d7afe5f859f7c47d13362c2060da39d2",
+        "playFingerprint": "bmfp0:da7eb6342493a5ef5f6505d205679846d7afe5f859f7c47d13362c2060da39d2",
         "title": "LN Mode 1 Test (LN)",
         "subtitle": "Traditional Long Note — early release counts as BAD",
         "artist": "be-music",

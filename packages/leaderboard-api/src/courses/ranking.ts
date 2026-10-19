@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, gt, type SQL } from 'drizzle-orm';
 import type { PlaylogRulesetId } from '@be-music/player/playlog';
-import { avatarUrl } from '../avatars.ts';
+import { avatarURL } from '../avatars.ts';
 import type { Database } from '../db/client.ts';
 import { courseBestScore, courseScoreResult, profile, user } from '../db/schema.ts';
 
@@ -105,7 +105,7 @@ export async function loadCourseRanking(
     entries.push({
       ...rest,
       anonymous: row.anonymous === true,
-      avatarUrl: avatarUrl(row.handle, avatarKey),
+      avatarUrl: avatarURL(row.handle, avatarKey),
       achievedAt: row.achievedAt.getTime(),
       rank,
     });

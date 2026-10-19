@@ -1,8 +1,8 @@
 import type {
-  BmsControlFlowCommand,
-  BmsControlFlowEntry,
-  BmsControlFlowHeaderEntry,
-  BmsControlFlowObjectEntry,
+  BMSControlFlowCommand,
+  BMSControlFlowEntry,
+  BMSControlFlowHeaderEntry,
+  BMSControlFlowObjectEntry,
 } from '@be-music/json';
 
 /** The control-flow lines that set a `#RANDOM` / `#SWITCH` value: two that draw it and two that fix it. */
@@ -34,13 +34,13 @@ export interface RandomDraw {
  */
 export type RandomDraws = ReadonlyArray<RandomDraw>;
 
-/** Anything carrying a BMS control-flow list (a `BeMusicJson`, or just its `bms` part). */
+/** Anything carrying a BMS control-flow list (a `BeMusicJSON`, or just its `bms` part). */
 export interface ControlFlowSource {
-  readonly bms: { readonly controlFlow: ReadonlyArray<BmsControlFlowEntry> };
+  readonly bms: { readonly controlFlow: ReadonlyArray<BMSControlFlowEntry> };
 }
 
 /** A captured `#xxx` header or object line that is active under a set of draws. */
-export type ActiveControlFlowEntry = BmsControlFlowHeaderEntry | BmsControlFlowObjectEntry;
+export type ActiveControlFlowEntry = BMSControlFlowHeaderEntry | BMSControlFlowObjectEntry;
 
 /**
  * Draws the outcome of every `#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` line of `source`, in file order.
@@ -150,7 +150,7 @@ export interface SwitchControlFrame extends ControlFrameBase {
 /** One frame of the control-flow stack. */
 export type ControlFlowFrame = RandomControlFrame | IfControlFrame | SwitchControlFrame;
 
-export function isRandomDrawCommand(command: BmsControlFlowCommand): command is RandomDrawCommand {
+export function isRandomDrawCommand(command: BMSControlFlowCommand): command is RandomDrawCommand {
   return command === 'RANDOM' || command === 'SETRANDOM' || command === 'SWITCH' || command === 'SETSWITCH';
 }
 
@@ -216,7 +216,7 @@ export function pushValueFrame(
 /** Applies any other directive (`#IF`, `#ELSE`, `#CASE`, `#ENDSW`, …) to the stack. */
 export function applyBranchCommand(
   stack: ControlFlowFrame[],
-  command: BmsControlFlowCommand,
+  command: BMSControlFlowCommand,
   rawValue: string | undefined,
   origin: number,
 ): void {

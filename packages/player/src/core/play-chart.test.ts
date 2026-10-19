@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { parseChart, resolveBmsControlFlowWithDraws } from '../../../parser/src/index.ts';
+import { parseChart, resolveBMSControlFlowWithDraws } from '../../../parser/src/index.ts';
 import { resolveChartRulesetFacts, resolvePlayChart } from './engine.ts';
 
 const SOURCE = parseChart(
@@ -18,7 +18,7 @@ describe('resolvePlayChart', () => {
       expect(chart.events.map((event) => event.channel)).toEqual([value === 1 ? '11' : '12']);
       expect(chart.bms.controlFlow).toEqual([]);
       // The draws rebuild exactly the chart that plays.
-      expect(resolveBmsControlFlowWithDraws(SOURCE, randomDraws)).toEqual(chart);
+      expect(resolveBMSControlFlowWithDraws(SOURCE, randomDraws)).toEqual(chart);
     }
   });
 

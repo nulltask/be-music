@@ -2,32 +2,32 @@ import { clamp } from '@be-music/utils/core';
 import { PLAY_PROGRESS_INDICATOR_SIDE_WIDTH } from './layout.ts';
 import {
   ANSI_RESET,
-  type RgbColor,
+  type RGBColor,
   BLACK_RGB,
   colorizeText,
-  blendRgb,
+  blendRGB,
   padVisibleWidth,
   clampColorByte,
-  isSameRgb,
+  isSameRGB,
   visibleWidth,
   getCharacterDisplayWidth,
-  findAnsiSgrSequenceEnd,
+  findAnsiSGRSequenceEnd,
 } from './ansi-text.ts';
 
-const PLAY_PROGRESS_GROOVE_RGB: RgbColor = { r: 18, g: 18, b: 18 };
-const PLAY_PROGRESS_HEAD_RGB: RgbColor = { r: 255, g: 186, b: 54 };
+const PLAY_PROGRESS_GROOVE_RGB: RGBColor = { r: 18, g: 18, b: 18 };
+const PLAY_PROGRESS_HEAD_RGB: RGBColor = { r: 255, g: 186, b: 54 };
 
-export function renderLaneBlockWithBga(laneLines: string[], bgaAnsiLines?: string[]): string[] {
-  if (!bgaAnsiLines || bgaAnsiLines.length === 0) {
+export function renderLaneBlockWithBGA(laneLines: string[], bgaANSILines?: string[]): string[] {
+  if (!bgaANSILines || bgaANSILines.length === 0) {
     return laneLines;
   }
 
-  const bgaWidth = Math.max(1, ...bgaAnsiLines.map((line) => visibleWidth(line)));
-  const normalizedBgaLines = fitLinesToHeight(bgaAnsiLines, laneLines.length, bgaWidth).map((line) =>
-    renderBgaLineWithScopedBlackBackground(line, bgaWidth),
+  const bgaWidth = Math.max(1, ...bgaANSILines.map((line) => visibleWidth(line)));
+  const normalizedBGALines = fitLinesToHeight(bgaANSILines, laneLines.length, bgaWidth).map((line) =>
+    renderBGALineWithScopedBlackBackground(line, bgaWidth),
   );
-  const emptyBgaLine = renderBgaLineWithScopedBlackBackground(' '.repeat(bgaWidth), bgaWidth);
-  return laneLines.map((laneLine, index) => `${laneLine}   ${normalizedBgaLines[index] ?? emptyBgaLine}`);
+  const emptyBGALine = renderBGALineWithScopedBlackBackground(' '.repeat(bgaWidth), bgaWidth);
+  return laneLines.map((laneLine, index) => `${laneLine}   ${normalizedBGALines[index] ?? emptyBGALine}`);
 }
 
 export function renderLaneBlockWithKittyPadding(
@@ -37,11 +37,11 @@ export function renderLaneBlockWithKittyPadding(
   lines: string[];
   column: number;
 } {
-  const safeBgaWidth = Math.max(1, Math.floor(bgaWidth));
+  const safeBGAWidth = Math.max(1, Math.floor(bgaWidth));
   const laneBlockWidth = calculateRenderedLineBlockWidth(laneLines);
-  const emptyBgaLine = renderBgaLineWithScopedBlackBackground(' '.repeat(safeBgaWidth), safeBgaWidth);
+  const emptyBGALine = renderBGALineWithScopedBlackBackground(' '.repeat(safeBGAWidth), safeBGAWidth);
   return {
-    lines: laneLines.map((laneLine) => `${padVisibleWidth(laneLine, laneBlockWidth)}   ${emptyBgaLine}`),
+    lines: laneLines.map((laneLine) => `${padVisibleWidth(laneLine, laneBlockWidth)}   ${emptyBGALine}`),
     column: laneBlockWidth + 4,
   };
 }
@@ -108,7 +108,7 @@ function renderProgressIndicatorSide(
   side: 'left' | 'right' = 'left',
 ): string {
   const glow = clamp(1 - Math.abs(markerPosition - rowIndex), 0, 1);
-  const color = blendRgb(PLAY_PROGRESS_GROOVE_RGB, PLAY_PROGRESS_HEAD_RGB, glow);
+  const color = blendRGB(PLAY_PROGRESS_GROOVE_RGB, PLAY_PROGRESS_HEAD_RGB, glow);
   const groove = colorizeText('┃', color);
   if (side === 'right') {
     return groove;
@@ -139,28 +139,28 @@ function fitLinesToHeight(lines: string[], targetHeight: number, width: number):
   ];
 }
 
-function renderBgaLineWithScopedBlackBackground(line: string, width: number): string {
+function renderBGALineWithScopedBlackBackground(line: string, width: number): string {
   const padded = padVisibleWidth(line, width);
   const backgrounds = decodeBackgroundColorsPerColumn(padded, width);
   return composeBackgroundRow(backgrounds, 0, backgrounds.length);
 }
 
-function decodeBackgroundColorsPerColumn(value: string, width: number): Array<RgbColor | undefined> {
+function decodeBackgroundColorsPerColumn(value: string, width: number): Array<RGBColor | undefined> {
   const safeWidth = Math.max(1, Math.floor(width));
-  const colors: Array<RgbColor | undefined> = Array.from({ length: safeWidth }, () => undefined);
+  const colors: Array<RGBColor | undefined> = Array.from({ length: safeWidth }, () => undefined);
   let index = 0;
   let column = 0;
-  let activeBackground: RgbColor | undefined;
+  let activeBackground: RGBColor | undefined;
 
   while (index < value.length && column < safeWidth) {
     if (value.charCodeAt(index) === 0x1b && index + 1 < value.length && value[index + 1] === '[') {
-      const sequenceEnd = findAnsiSgrSequenceEnd(value, index + 2);
+      const sequenceEnd = findAnsiSGRSequenceEnd(value, index + 2);
       if (sequenceEnd < 0) {
         index += 1;
         continue;
       }
-      const params = parseAnsiSgrParams(value, index + 2, sequenceEnd);
-      activeBackground = resolveAnsiBackgroundColor(params, activeBackground);
+      const params = parseAnsiSGRParams(value, index + 2, sequenceEnd);
+      activeBackground = resolveANSIBackgroundColor(params, activeBackground);
       index = sequenceEnd + 1;
       continue;
     }
@@ -181,7 +181,7 @@ function decodeBackgroundColorsPerColumn(value: string, width: number): Array<Rg
   return colors;
 }
 
-function parseAnsiSgrParams(value: string, start: number, end: number): number[] {
+function parseAnsiSGRParams(value: string, start: number, end: number): number[] {
   if (end <= start) {
     return [0];
   }
@@ -197,7 +197,7 @@ function parseAnsiSgrParams(value: string, start: number, end: number): number[]
   return params.length > 0 ? params : [0];
 }
 
-function resolveAnsiBackgroundColor(params: number[], current: RgbColor | undefined): RgbColor | undefined {
+function resolveANSIBackgroundColor(params: number[], current: RGBColor | undefined): RGBColor | undefined {
   let next = current;
   for (let index = 0; index < params.length; index += 1) {
     const code = params[index] ?? 0;
@@ -226,19 +226,19 @@ function resolveAnsiBackgroundColor(params: number[], current: RgbColor | undefi
 }
 
 function composeBackgroundRow(
-  backgrounds: Array<RgbColor | undefined>,
+  backgrounds: Array<RGBColor | undefined>,
   blackStartColumn: number,
   blackEndColumn: number,
 ): string {
   let output = '';
-  let activeBackground: RgbColor | undefined;
+  let activeBackground: RGBColor | undefined;
   const start = Math.max(0, Math.floor(blackStartColumn));
   const end = Math.max(start, Math.floor(blackEndColumn));
 
   for (let column = 0; column < backgrounds.length; column += 1) {
     const color = backgrounds[column];
     const nextBackground = color ?? (column >= start && column < end ? BLACK_RGB : undefined);
-    if (!isSameRgb(activeBackground, nextBackground)) {
+    if (!isSameRGB(activeBackground, nextBackground)) {
       if (nextBackground) {
         output += `\u001b[48;2;${nextBackground.r};${nextBackground.g};${nextBackground.b}m`;
       } else {

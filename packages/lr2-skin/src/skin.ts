@@ -1,22 +1,22 @@
 import { basename } from '@be-music/utils/core';
 import { asLoadedBytes, readFilesIntoBytesMap } from './file-lookup.ts';
-import type { Lr2SkinFileEntry, Lr2SkinInputFile } from './file-lookup.ts';
+import type { LR2SkinFileEntry, LR2SkinInputFile } from './file-lookup.ts';
 import {
   informationTypeToKind,
   isSkinPathOfKind,
-  peekLr2SkinInformationType,
+  peekLR2SkinInformationType,
   scoreSkinPath,
-  type Lr2PlayVariant,
-  type Lr2SkinKind,
+  type LR2PlayVariant,
+  type LR2SkinKind,
 } from './paths.ts';
-import { LR2_SPECIAL_GRAPHIC, type Lr2SpecialGraphic } from './special-graphic.ts';
+import { LR2_SPECIAL_GRAPHIC, type LR2SpecialGraphic } from './special-graphic.ts';
 import { LR2_GR } from './ids/graphics.ts';
 import { LR2_OP } from './ids/ops.ts';
 import { createBarLayout } from './skin/bar-layout.ts';
 import { autoDetectCanvasFromObservedCoordinates } from './skin/canvas.ts';
 import {
   createBarGraphElements,
-  createBgaElements,
+  createBGAElements,
   createButtonElements,
   createGaugeChartElements,
   createGrooveGaugeElements,
@@ -34,24 +34,24 @@ import {
   createTextElements,
 } from './skin/elements.ts';
 import type { ParseContext } from './skin/parse-context.ts';
-import { readLr2Path } from './skin/read.ts';
-import type { Lr2Skin } from './skin/types.ts';
+import { readLR2Path } from './skin/read.ts';
+import type { LR2Skin } from './skin/types.ts';
 
-export { resolveLr2AssetBytes } from './assets.ts';
-export { LR2_SPECIAL_GRAPHIC, isLr2SpecialGraphic } from './special-graphic.ts';
-export type { Lr2SpecialGraphic } from './special-graphic.ts';
-export type { Lr2PlayVariant, Lr2SkinKind } from './paths.ts';
+export { resolveLR2AssetBytes } from './assets.ts';
+export { LR2_SPECIAL_GRAPHIC, isLR2SpecialGraphic } from './special-graphic.ts';
+export type { LR2SpecialGraphic } from './special-graphic.ts';
+export type { LR2PlayVariant, LR2SkinKind } from './paths.ts';
 export { autoDetectCanvasFromObservedCoordinates } from './skin/canvas.ts';
 export type * from './skin/types.ts';
 
-export interface LoadLr2SkinOptions {
+export interface LoadLR2SkinOptions {
   /** Which kind of skin to load. Defaults to `'play'`. */
-  kind?: Lr2SkinKind;
+  kind?: LR2SkinKind;
   /**
    * For `kind: 'play'` only — biases the candidate scoring toward `play_<variant>.lr2skin`. Falls back to the default
    * scoring (7K-preferred) if no file matches the requested variant.
    */
-  playVariant?: Lr2PlayVariant;
+  playVariant?: LR2PlayVariant;
   /**
    * Ops to hold true while the skin's `#IF` / `#ELSEIF` chains are evaluated, on top of the parse-time defaults. LR2
    * reads a skin each time its scene starts, so a scene state that never changes during the scene (a course stage's
@@ -60,21 +60,21 @@ export interface LoadLr2SkinOptions {
   parseOps?: Iterable<number>;
 }
 
-export async function loadLr2SkinFromFiles(
-  files: Iterable<Lr2SkinInputFile>,
-  options: LoadLr2SkinOptions = {},
-): Promise<Lr2Skin | undefined> {
+export async function loadLR2SkinFromFiles(
+  files: Iterable<LR2SkinInputFile>,
+  options: LoadLR2SkinOptions = {},
+): Promise<LR2Skin | undefined> {
   // Pooled parallel read instead of the textbook `for ... await arrayBuffer()` serial loop — the latter idles on disk
-  // between every read on a large theme bundle. The dedicated theme loader already calls `loadLr2SkinFromSourceFiles`
+  // between every read on a large theme bundle. The dedicated theme loader already calls `loadLR2SkinFromSourceFiles`
   // directly with a pre-read map; this path remains for callers (and tests) that hand a file-like array over.
   const sourceFiles = await readFilesIntoBytesMap([...files]);
-  return loadLr2SkinFromSourceFiles(sourceFiles, options);
+  return loadLR2SkinFromSourceFiles(sourceFiles, options);
 }
 
-export function loadLr2SkinFromSourceFiles(
-  sourceFiles: ReadonlyMap<string, Lr2SkinFileEntry>,
-  options: LoadLr2SkinOptions = {},
-): Lr2Skin | undefined {
+export function loadLR2SkinFromSourceFiles(
+  sourceFiles: ReadonlyMap<string, LR2SkinFileEntry>,
+  options: LoadLR2SkinOptions = {},
+): LR2Skin | undefined {
   const kind = options.kind ?? 'play';
   // Index every `.lr2skin` payload's `#INFORMATION,<type>,...` declaration once, up front. The type is the canonical
   // way an authored skin tells LR2 which scene it belongs to (play/select/decide/result/…); filename conventions
@@ -84,7 +84,7 @@ export function loadLr2SkinFromSourceFiles(
   const lr2SkinPaths = [...sourceFiles.keys()].filter((path) => path.toLowerCase().endsWith('.lr2skin'));
   const skinTypeByPath = new Map<string, number>();
   for (const path of lr2SkinPaths) {
-    const type = peekLr2SkinInformationType(asLoadedBytes(sourceFiles.get(path)));
+    const type = peekLR2SkinInformationType(asLoadedBytes(sourceFiles.get(path)));
     if (type !== undefined) skinTypeByPath.set(path, type);
   }
   // Two-tier filter:
@@ -204,7 +204,7 @@ export function loadLr2SkinFromSourceFiles(
     observedDstCorners: [],
     nextDeclarationOrder: 0,
   };
-  readLr2Path(sourceFiles, entryPath, context, new Set());
+  readLR2Path(sourceFiles, entryPath, context, new Set());
   // Auto-detect the design canvas when the skin omits `#RESOLUTION`. LITONE4 (and many other 1280×720 / 1920×1080
   // era LR2 themes) ship the directive empty, leaving the design space at the legacy 640×480 default — at which
   // point every DST coordinate overflows and the chrome appears clipped. The detector ignores aspect-ratio nuance
@@ -258,7 +258,7 @@ export function loadLr2SkinFromSourceFiles(
           imagePath: context.imagePaths[source.gr] ?? '',
         })),
       ]),
-    ) as Lr2Skin['notes'],
+    ) as LR2Skin['notes'],
     judges: createJudgeElements(context),
     judges2P: createJudge2PElements(context),
     numbers: createNumberElements(context),
@@ -266,7 +266,7 @@ export function loadLr2SkinFromSourceFiles(
     nowCombos: createNowComboElements(context),
     judgeLines: createJudgeLineElements(context),
     measureLines: createMeasureLineElements(context),
-    bgas: createBgaElements(context),
+    bgas: createBGAElements(context),
     texts: createTextElements(context),
     bargraphs: createBarGraphElements(context),
     sliders: createSliderElements(context),
@@ -288,7 +288,7 @@ export function loadLr2SkinFromSourceFiles(
   };
 }
 
-function specialGraphicPath(gr: number): Lr2SpecialGraphic | undefined {
+function specialGraphicPath(gr: number): LR2SpecialGraphic | undefined {
   switch (gr) {
     case LR2_GR.STAGEFILE:
       return LR2_SPECIAL_GRAPHIC.STAGEFILE;

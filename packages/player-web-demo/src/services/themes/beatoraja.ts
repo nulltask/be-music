@@ -8,7 +8,7 @@ import type { BeatorajaKit, DecideSceneKit, PlayScene, SelectScene } from '@be-m
 import {
   createBeatorajaSceneKitCaches,
   createBeatorajaSkinLoadContext,
-  findBeatorajaThemeBgm,
+  findBeatorajaThemeBGM,
   loadBeatorajaSceneKit,
   loadBeatorajaThemeFromFiles,
   pickBeatorajaPlayableVariant,
@@ -17,11 +17,11 @@ import {
   summarizeBeatorajaPlaySkins,
   type BeatorajaPlayableVariant,
   type BeatorajaSceneKitCaches,
-  type BeatorajaThemeBgm,
+  type BeatorajaThemeBGM,
   type BeatorajaThemeBundle,
 } from '@be-music/player-web/skin';
 import {
-  discoverBeatorajaSelectBgmPath,
+  discoverBeatorajaSelectBGMPath,
   discoverBeatorajaSystemSoundPaths,
   type BeatorajaSystemSoundPaths,
 } from '@be-music/beatoraja-skin/scene';
@@ -83,7 +83,7 @@ export class BeatorajaThemeService {
    * The decide / result scenes consume these directly — no separate caching layer needed since
    * decoding happens lazily inside each scene's audio context.
    */
-  public beatorajaThemeBgm: BeatorajaThemeBgm = {};
+  public beatorajaThemeBGM: BeatorajaThemeBGM = {};
   /**
    * Owns the skin sounds a beatoraja decide / result skin starts while its `main()` runs at load time
    * (`main_state.audio_*`, e.g. ModernChic's `Root/customsound.lua`). They play through the audio service, which reads
@@ -99,12 +99,12 @@ export class BeatorajaThemeService {
   private beatorajaSystemSoundPaths: BeatorajaSystemSoundPaths = {};
   /**
    * Looping select-scene BGM path discovered from the active theme bundle. Re-probed on
-   * every theme load via {@link discoverBeatorajaSelectBgmPath}; the beatoraja select screen's sound set plays it as its
+   * every theme load via {@link discoverBeatorajaSelectBGMPath}; the beatoraja select screen's sound set plays it as its
    * BGM, started on enter and stopped on exit. `undefined` for themes
    * that don't ship a select BGM (the scene runs silent in the background then, just chart
    * preview clips and navigation cues).
    */
-  private beatorajaSelectBgmPath: string | undefined;
+  private beatorajaSelectBGMPath: string | undefined;
   /**
    * The beatoraja theme's play entry the play on the stage is drawn with, when it plays on a beatoraja theme: the Debug
    * Menu's "Play 7K / Play 5K / …" skin pickers and the skin-options panel apply to it while that play is up. It is
@@ -196,10 +196,10 @@ export class BeatorajaThemeService {
       // engine reads these paths from `config.json`; the web port uses convention-based
       // probing instead since we don't load the user's beatoraja config.
       this.beatorajaSystemSoundPaths = discoverBeatorajaSystemSoundPaths(bundle.files);
-      // Looping select BGM path. Probes the standard `Bgm/select.*` locations plus an LR2-
+      // Looping select BGM path. Probes the standard `BGM/select.*` locations plus an LR2-
       // compatible fallback. Stays `undefined` for themes without a select BGM file (the
       // scene runs silent in the background then).
-      this.beatorajaSelectBgmPath = discoverBeatorajaSelectBgmPath(bundle.files);
+      this.beatorajaSelectBGMPath = discoverBeatorajaSelectBGMPath(bundle.files);
       this.beatorajaTheme = bundle;
       // The skin sounds (`main_state.audio_*`) play through the audio service, which reads them from the theme's files:
       // those of the scenes made with `create*Scene` and those a skin starts at load time.
@@ -214,9 +214,9 @@ export class BeatorajaThemeService {
       // The beatoraja entry just became selectable in the top-level "Skin family" dropdown.
       this.rebuildSkinFamilyPicker();
       // Scan the dropped bundle for decide / clear / fail / result BGM. Heuristic by basename —
-      // see `findBeatorajaThemeBgm` for the rules. Awaited because some entries are read lazily;
+      // see `findBeatorajaThemeBGM` for the rules. Awaited because some entries are read lazily;
       // the load is small (<1 MiB) and serialized so it doesn't add visible latency.
-      this.beatorajaThemeBgm = await findBeatorajaThemeBgm(bundle);
+      this.beatorajaThemeBGM = await findBeatorajaThemeBGM(bundle);
       const summary = summarizeBeatorajaPlaySkins(bundle.theme.playSkins) || 'none';
       const sceneSummary = [
         bundle.theme.selectSkin ? 'select' : null,
@@ -572,7 +572,7 @@ export class BeatorajaThemeService {
   public selectSoundSet(): SystemSoundSet {
     return systemSoundSetFromBeatoraja({
       paths: this.beatorajaSystemSoundPaths,
-      ...(this.beatorajaSelectBgmPath !== undefined ? { selectBgmPath: this.beatorajaSelectBgmPath } : {}),
+      ...(this.beatorajaSelectBGMPath !== undefined ? { selectBGMPath: this.beatorajaSelectBGMPath } : {}),
     });
   }
 }

@@ -5,12 +5,12 @@
 
 import { Rectangle, Texture } from 'pixi.js';
 import { runWithConcurrency } from '@be-music/utils/core';
-import { parseBmsBga } from '@be-music/chart';
-import { normalizeObjectKey, resolveBmsBase, type BeMusicJson } from '@be-music/json';
-import { loadAssetBytes, resolveChartBgaAsset } from '../collection/collection.ts';
+import { parseBmsBGA } from '@be-music/chart';
+import { normalizeObjectKey, resolveBMSBase, type BeMusicJSON } from '@be-music/json';
+import { loadAssetBytes, resolveChartBGAAsset } from '../collection/collection.ts';
 import type { BrowserSongAssetSource } from '../collection/types.ts';
 import { loadTextureFromBytes, loadVideoTextureFromBytes, type VideoTranscodeOptions } from '../media/textures.ts';
-import { collectBgaTextureLoadKeys, isVideoExtension, type BgaCue } from './bga-timeline.ts';
+import { collectBGATextureLoadKeys, isVideoExtension, type BGACue } from './bga-timeline.ts';
 import { logger } from '../logger.ts';
 
 const log = logger('play-bga');
@@ -18,25 +18,25 @@ const log = logger('play-bga');
 /** BGA resources decoded at once: image / video decoders allocate native memory outside the JS heap. */
 const BGA_DECODE_CONCURRENCY = 4;
 
-export interface PlayBgaTimeline {
-  base: readonly BgaCue[];
-  layer: readonly BgaCue[];
-  poor: readonly BgaCue[];
+export interface PlayBGATimeline {
+  base: readonly BGACue[];
+  layer: readonly BGACue[];
+  poor: readonly BGACue[];
 }
 
 /** A video BGA: its `<video>` element and the object URL it plays from (revoke it when the play ends). */
-export interface PlayBgaVideo {
+export interface PlayBGAVideo {
   video: HTMLVideoElement;
-  objectUrl: string;
+  objectURL: string;
 }
 
-/** Where {@link loadPlayBga} puts what it decoded, keyed by the timeline's BMP key. */
-export interface PlayBgaResources {
+/** Where {@link loadPlayBGA} puts what it decoded, keyed by the timeline's BMP key. */
+export interface PlayBGAResources {
   /** Base + POOR track textures (black kept). */
   textures: Map<string, Texture>;
   /** Layer track textures: black keyed out for a BMS chart, kept for bmson (its spec says so). */
   layerTextures: Map<string, Texture>;
-  videos: Map<string, PlayBgaVideo>;
+  videos: Map<string, PlayBGAVideo>;
   /** A `#BGAxx` sub-region slot's `dx dy` placement. */
   subRegionOrigins: Map<string, { x: number; y: number }>;
 }
@@ -46,10 +46,10 @@ export interface PlayBgaResources {
  * layers instead of replacing them, `2` never shows it. A missing value, one that does not parse as an integer, or one
  * outside 0..2 is `0`, which is what LR2 always does (it does not read the header).
  */
-export type PoorBgaMode = 0 | 1 | 2;
+export type PoorBGAMode = 0 | 1 | 2;
 
-/** Parses a chart's `#POORBGA` value into its {@link PoorBgaMode}. */
-export function resolvePoorBgaMode(value: string | undefined): PoorBgaMode {
+/** Parses a chart's `#POORBGA` value into its {@link PoorBGAMode}. */
+export function resolvePoorBGAMode(value: string | undefined): PoorBGAMode {
   if (value === undefined) return 0;
   const parsed = Number.parseInt(value.trim(), 10);
   return parsed === 1 || parsed === 2 ? parsed : 0;
@@ -60,9 +60,9 @@ export function resolvePoorBgaMode(value: string | undefined): PoorBgaMode {
  * BMP00. Only `#POORBGA 2` (no POOR image at all) turns it off. Returns that key (`'00'`), or `undefined` when the
  * convention does not apply.
  */
-export function resolvePoorBgaFallbackKey(chart: BeMusicJson): string | undefined {
-  const poorBmp00 = chart.resources.bmp['00'];
-  return resolvePoorBgaMode(chart.bms.poorBga) !== 2 && typeof poorBmp00 === 'string' && poorBmp00.length > 0
+export function resolvePoorBGAFallbackKey(chart: BeMusicJSON): string | undefined {
+  const poorBMP00 = chart.resources.bmp['00'];
+  return resolvePoorBGAMode(chart.bms.poorBGA) !== 2 && typeof poorBMP00 === 'string' && poorBMP00.length > 0
     ? '00'
     : undefined;
 }
@@ -72,12 +72,12 @@ export function resolvePoorBgaFallbackKey(chart: BeMusicJson): string | undefine
  * BMPs of referenced `#BGAxx` sub-regions, mapped to the file to load — `#BMPxx` paths for BMS, the `bga.header[]`
  * names for bmson. `base` / `layer` tell which track(s) each key is drawn on.
  */
-export function collectPlayBgaResources(
-  chart: BeMusicJson,
-  timeline: PlayBgaTimeline,
+export function collectPlayBGAResources(
+  chart: BeMusicJSON,
+  timeline: PlayBGATimeline,
   poorFallbackKey: string | undefined,
 ): { paths: Map<string, string>; base: Set<string>; layer: Set<string> } {
-  const { base, layer } = collectBgaTextureLoadKeys(chart, timeline, poorFallbackKey);
+  const { base, layer } = collectBGATextureLoadKeys(chart, timeline, poorFallbackKey);
   const referenced = new Set<string>([...base, ...layer]);
   const paths = new Map<string, string>();
   for (const [key, path] of Object.entries(chart.resources.bmp)) {
@@ -89,15 +89,15 @@ export function collectPlayBgaResources(
   return { paths, base, layer };
 }
 
-export interface LoadPlayBgaOptions {
+export interface LoadPlayBGAOptions {
   /** The resolved chart (after `#RANDOM` / `#IF`). */
-  chart: BeMusicJson;
+  chart: BeMusicJSON;
   source: BrowserSongAssetSource;
   chartPath: string;
-  timeline: PlayBgaTimeline;
+  timeline: PlayBGATimeline;
   poorFallbackKey?: string;
   /** Where the decoded resources land (filled in place). */
-  into: PlayBgaResources;
+  into: PlayBGAResources;
   /** How a video the browser can't play is transcoded. */
   transcode?: VideoTranscodeOptions;
   /** The play tempo: videos run at it, so their time stays the chart time since their cue. */
@@ -112,15 +112,15 @@ export interface LoadPlayBgaOptions {
  * `_bga.mp4`), and decoded with bounded parallelism. Videos start paused, muted and at the play tempo; a file that
  * fails to decode is skipped so the rest of the chart still renders.
  */
-export async function loadPlayBga(options: LoadPlayBgaOptions): Promise<void> {
+export async function loadPlayBGA(options: LoadPlayBGAOptions): Promise<void> {
   const { chart, source, chartPath, into } = options;
   const isCancelled = options.isCancelled ?? (() => false);
-  const { paths, base, layer } = collectPlayBgaResources(chart, options.timeline, options.poorFallbackKey);
+  const { paths, base, layer } = collectPlayBGAResources(chart, options.timeline, options.poorFallbackKey);
   // The bmson spec draws layer blacks as black ("Unlike BMS Layer Channel #xxx07"); BMS keys them out.
   const keyOutLayerBlack = chart.sourceFormat !== 'bmson';
   await runWithConcurrency([...paths], BGA_DECODE_CONCURRENCY, async ([key, path]) => {
     if (isCancelled()) return;
-    const resolved = resolveChartBgaAsset(source, chartPath, path);
+    const resolved = resolveChartBGAAsset(source, chartPath, path);
     const bytes = await loadAssetBytes(resolved?.entry);
     if (!bytes || isCancelled()) return;
     try {
@@ -129,7 +129,7 @@ export async function loadPlayBga(options: LoadPlayBgaOptions): Promise<void> {
         const handle = await loadVideoTextureFromBytes(resolved?.path ?? path, bytes, options.transcode);
         if (!handle) return;
         if (isCancelled()) {
-          releaseVideo({ video: handle.video, objectUrl: handle.objectUrl });
+          releaseVideo({ video: handle.video, objectURL: handle.objectURL });
           destroyTexture(handle.texture);
           return;
         }
@@ -138,7 +138,7 @@ export async function loadPlayBga(options: LoadPlayBgaOptions): Promise<void> {
         handle.video.pause();
         handle.video.defaultPlaybackRate = options.tempo;
         handle.video.playbackRate = options.tempo;
-        into.videos.set(key, { video: handle.video, objectUrl: handle.objectUrl });
+        into.videos.set(key, { video: handle.video, objectURL: handle.objectURL });
         if (base.has(key)) into.textures.set(key, handle.texture);
         if (layer.has(key)) into.layerTextures.set(key, handle.texture);
         return;
@@ -157,7 +157,7 @@ export async function loadPlayBga(options: LoadPlayBgaOptions): Promise<void> {
       log.debug('bga decode skipped', { key, path, error });
     }
   });
-  if (!isCancelled()) registerSubRegionBgaTextures(chart, into);
+  if (!isCancelled()) registerSubRegionBGATextures(chart, into);
 }
 
 /**
@@ -165,17 +165,17 @@ export async function loadPlayBga(options: LoadPlayBgaOptions): Promise<void> {
  * the source loaded for), and records the slot's `dx dy` placement. A slot whose source did not load stays empty.
  * The views share their source's `TextureSource`: no extra upload.
  */
-export function registerSubRegionBgaTextures(chart: BeMusicJson, into: PlayBgaResources): void {
-  const base = resolveBmsBase(chart);
+export function registerSubRegionBGATextures(chart: BeMusicJSON, into: PlayBGAResources): void {
+  const base = resolveBMSBase(chart);
   for (const [bgaSlot, raw] of Object.entries(chart.bms.bga)) {
     const slot = normalizeObjectKey(bgaSlot, base);
-    const parsed = parseBmsBga(raw, base);
+    const parsed = parseBmsBGA(raw, base);
     if (!parsed) continue;
     const width = parsed.ex - parsed.sx;
     const height = parsed.ey - parsed.sy;
     if (width <= 0 || height <= 0) continue;
-    const sourceBase = into.textures.get(parsed.sourceBmp);
-    const sourceLayer = into.layerTextures.get(parsed.sourceBmp);
+    const sourceBase = into.textures.get(parsed.sourceBMP);
+    const sourceLayer = into.layerTextures.get(parsed.sourceBMP);
     if (!sourceBase && !sourceLayer) continue;
     const frame = new Rectangle(parsed.sx, parsed.sy, width, height);
     into.subRegionOrigins.set(slot, { x: parsed.dx, y: parsed.dy });
@@ -189,7 +189,7 @@ export function registerSubRegionBgaTextures(chart: BeMusicJson, into: PlayBgaRe
 }
 
 /** Stops a video BGA and frees its object URL. Pause before destroying its texture: in-flight frame callbacks throw. */
-export function releaseVideo({ video, objectUrl }: PlayBgaVideo): void {
+export function releaseVideo({ video, objectURL }: PlayBGAVideo): void {
   try {
     video.pause();
     video.removeAttribute('src');
@@ -197,7 +197,7 @@ export function releaseVideo({ video, objectUrl }: PlayBgaVideo): void {
   } catch {
     // `load()` can throw on a detached video.
   }
-  URL.revokeObjectURL(objectUrl);
+  URL.revokeObjectURL(objectURL);
 }
 
 function destroyTexture(texture: Texture | undefined): void {

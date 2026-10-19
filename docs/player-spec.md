@@ -27,17 +27,17 @@ gauge. Both are options: `PlayerOptions.judgeRuleset` picks the ruleset and `Pla
 
 | Entry              | What it exports                                                                                                                                                                                                                                                                                                                                                   |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@be-music/player` | The engine: `manualPlay`, `autoPlay`, `PlayerOptions` with its five category types, `PlayerSummary`, the load progress, `PlayerInterruptedError`, the runtime contracts (`AudioSession`, `PlayerInputRuntime`, `PlayerUiRuntime` and their `Create*Context` types), `resolvePlayChart`, `preparePlaybackChart`, `resolveChartRulesetFacts` and `createTempoClock` |
+| `@be-music/player` | The engine: `manualPlay`, `autoPlay`, `PlayerOptions` with its five category types, `PlayerSummary`, the load progress, `PlayerInterruptedError`, the runtime contracts (`AudioSession`, `PlayerInputRuntime`, `PlayerUIRuntime` and their `Create*Context` types), `resolvePlayChart`, `preparePlaybackChart`, `resolveChartRulesetFacts` and `createTempoClock` |
 | `./signals`        | What a host's input and UI runtimes exchange with a running play: the input bus and its commands, the UI bus with its frames, commands and `PlayerGaugeSummary`, the state signals, and the high-speed range and actions                                                                                                                                          |
 | `./lanes`          | The lanes of a play mode: the layout and its slots, scratch and wheel lanes, key bindings, FREE ZONE input, and the lanes the lane options permute                                                                                                                                                                                                                |
-| `./display`        | What a host shows: the timed play notes (`extract*`, `toTimed*`), `ScrollDistanceMapper`, the BGA cue on screen (`pickActiveBgaCue`, `pickActiveBgaKey`, `DEFAULT_POOR_BGA_DISPLAY_SECONDS`), the chart facts a song screen shows (`resolveDisplayed*`), `formatSeconds`, `resolveAltModifierLabel`, the TUI note heights and the BGA resize algorithms           |
+| `./display`        | What a host shows: the timed play notes (`extract*`, `toTimed*`), `ScrollDistanceMapper`, the BGA cue on screen (`pickActiveBGACue`, `pickActiveBGAKey`, `DEFAULT_POOR_BGA_DISPLAY_SECONDS`), the chart facts a song screen shows (`resolveDisplayed*`), `formatSeconds`, `resolveAltModifierLabel`, the TUI note heights and the BGA resize algorithms           |
 | `./ruleset`        | The vocabulary hosts, skins and the Leaderboard share: the judge ruleset ids (`PLAYLOG_RULESET_IDS`), the judge windows, gauges, clear lamps, BP and the score                                                                                                                                                                                                    |
 | `./playlog`        | The play-log format, its recorder, simulator and eligibility checks, and the course and NONSTOP logs                                                                                                                                                                                                                                                              |
 | `./records`        | Best records per judge ruleset and the rules that keep them                                                                                                                                                                                                                                                                                                       |
 | `./course`         | Course definitions: LR2 `.lr2crs`, beatoraja courses and table courses, the course maker, and NONSTOP runs                                                                                                                                                                                                                                                        |
 | `./audio-sink`     | The audio sinks for Node (`node-web-audio-api`) and for a Web Audio context                                                                                                                                                                                                                                                                                       |
 
-The chart-layer names come from `@be-music/chart`: `ChartPlayVariant`, `LongNoteMode`, the timelines and their points, `BgaCue` and the BGA timeline builders, the timing resolver and the sample triggers. Everything else in the package is internal.
+The chart-layer names come from `@be-music/chart`: `ChartPlayVariant`, `LongNoteMode`, the timelines and their points, `BGACue` and the BGA timeline builders, the timing resolver and the sample triggers. Everything else in the package is internal.
 
 ## BMS compatible range
 
@@ -79,7 +79,7 @@ Items that are only stored in the IR by the parser and not referenced by the pla
 | `#WAVxx`, `#BMPxx`                                                                                                                      | Used for audio/BGA resource resolution.                                                                                                                                                                                                                                  |
 | `#BASE`                                                                                                                                 | Selects the BMS object ID base. `#BASE 62` keeps lowercase IDs case-sensitive when resolving samples, BGA, BPM/STOP references, long-note ends, and landmine values.                                                                                                     |
 | `#PREVIEW`                                                                                                                              | Used preferentially for preview playback on the song selection screen.                                                                                                                                                                                                   |
-| `#PATH_WAV`                                                                                                                             | Tried as a directory prefix before the bare path when browser gameplay and the offline renderer (`renderJson`) resolve samples; the song selection screen preview also uses it to search for files. The terminal player does not apply it when loading samples for play. |
+| `#PATH_WAV`                                                                                                                             | Tried as a directory prefix before the bare path when browser gameplay and the offline renderer (`renderJSON`) resolve samples; the song selection screen preview also uses it to search for files. The terminal player does not apply it when loading samples for play. |
 | `#LNTYPE`, `#LNMODE`, `#LNOBJ`                                                                                                          | Used to interpret BMS long notes.                                                                                                                                                                                                                                        |
 | `#PLAYER`                                                                                                                               | Used for mode estimation and display player lane metadata.                                                                                                                                                                                                               |
 | `#VOLWAV`                                                                                                                               | Used as a volume multiplier for the entire score.                                                                                                                                                                                                                        |
@@ -150,7 +150,7 @@ The outcome of a play is an explicit value, `RandomDraws` (`@be-music/chart`): o
 - `#RANDOM n` / `#SWITCH n` draw `value` from `1..n`. A missing, zero, negative or non-numeric `n` is a single-outcome line: `range` 1, `value` 1, and it does not consume the random source.
 - `#SETRANDOM n` / `#SETSWITCH n` fix `value` to `n` (1 when `n` is missing or not positive), with `range` 1; they draw nothing.
 
-The single resolution point is the pair `drawRandomOutcomes(chart, random)` → `RandomDraws` and `resolveBmsControlFlowWithDraws(chart, draws)` (`@be-music/parser`) → resolved chart, wrapped for hosts as `resolvePlayChart(chart)` (`@be-music/player`), which returns `{ chart, randomDraws }`.
+The single resolution point is the pair `drawRandomOutcomes(chart, random)` → `RandomDraws` and `resolveBMSControlFlowWithDraws(chart, draws)` (`@be-music/parser`) → resolved chart, wrapped for hosts as `resolvePlayChart(chart)` (`@be-music/player`), which returns `{ chart, randomDraws }`.
 The branch semantics (one shared stack, an open `#IF` outliving `#ENDRANDOM`, definitions in a taken branch applying to the whole chart) live once in `evaluateControlFlow` (`@be-music/chart`).
 The same chart and draws always resolve to the same result, and draws that were not drawn for the chart are rejected with a `RangeError`.
 A resolved chart carries no `bms.controlFlow`, so resolving it again changes nothing.
@@ -162,7 +162,7 @@ flowchart LR
   src["chart with<br/>bms.controlFlow"]
   subgraph rpc["resolvePlayChart (once per play)"]
     draw["drawRandomOutcomes"] --> draws(["RandomDraws"])
-    resolve["resolveBmsControlFlowWithDraws"]
+    resolve["resolveBMSControlFlowWithDraws"]
   end
   log(["play log<br/>randomDraws"])
   src --> draw
@@ -569,8 +569,8 @@ EX-SCORE is IIDX compatible.
   BISTROVER.
 
 The score vocabulary is the ruleset's, exported from `@be-music/player/ruleset`: `ScoreSummary`, `JudgeKind`,
-`createEmptyScore`, `computeScoreRate`, the DJ Ranks (`resolveIidxRankIndexFromScore`, `resolveIidxRankLabel`,
-`IIDX_RANK_LABELS`), `resolveLr2MoneyScore` and `resolveDisplayedPoor`.
+`createEmptyScore`, `computeScoreRate`, the DJ Ranks (`resolveIIDXRankIndexFromScore`, `resolveIIDXRankLabel`,
+`IIDX_RANK_LABELS`), `resolveLR2MoneyScore` and `resolveDisplayedPoor`.
 
 ### Empty POOR
 
@@ -643,7 +643,7 @@ The following deltas describe the `lr2` ruleset's `GROOVE` gauge. `HARD`, `DEATH
 
 The value after gauge update is clamped to the current gauge type's min/max range.
 
-The `HARD` / `EASY` variants follow the LR2 values (beatoraja `GaugeProperty`'s `HARD_LR2` / `EASY_LR2`). `DEATH` follows LR2 itself (OpenLR2 `LR2f.cpp` L27673-L27680, LR2body.exe `ParseBmsFile`), not beatoraja's `HAZARD_LR2`.
+The `HARD` / `EASY` variants follow the LR2 values (beatoraja `GaugeProperty`'s `HARD_LR2` / `EASY_LR2`). `DEATH` follows LR2 itself (OpenLR2 `LR2f.cpp` L27673-L27680, LR2body.exe `ParseBMSFile`), not beatoraja's `HAZARD_LR2`.
 
 - `HARD`: recovery `PGREAT/GREAT +0.1` / `GOOD +0.05` (TOTAL-independent); damage `BAD -6` / `missed POOR -10` / `empty POOR -2`. Damage is multiplied by lr2oraja's `MODIFY_DAMAGE`, the larger of a `#TOTAL` factor (`×1.0` at `TOTAL ≥ 240` up to `×10` below `112`) and a note-count factor (`×10` at 20 notes or fewer down to `×1.0` from 1000 notes), and softened by `×0.6` while the gauge is under `32%` (lr2oraja rounds the gauge down to an even percent before
   the comparison, so "display 30 %" is internal 32 %).
@@ -693,7 +693,7 @@ The modes below are the EFFECTIVE modes the ruleset resolved to, not the chart's
   is not yet a judgment: the player has until the tail's late window closes to let go. Still holding when it
   closes makes the tail a missed `POOR` (beatoraja's `CN end poor`). The lane sound stops on release.
 - Mode `3` (HCN): judged exactly as mode `2` (the tail on the release), plus beatoraja's gauge ticks
-  (`JudgeManager` L289-L340, `HcnTickCounter`). From the later of the start point and the head's judgment (pressed, or
+  (`JudgeManager` L289-L340, `HCNTickCounter`). From the later of the start point and the head's judgment (pressed, or
   missed) until the end point passes, a signed counter runs up while the lane gains — a key on it is down, or the
   tail was released at `GOOD` or better — and down otherwise. Each time it passes +200 ms the gauge gains one tick
   (beatoraja: `GREAT` ×0.5 of the judge table); each time it passes −200 ms it loses one (`BAD` ×0.5). The ticks
@@ -823,13 +823,13 @@ Clamp the playback time so that it does not become negative.
 ### `#VOLWAV`
 
 BMS's `#VOLWAV` is treated as the volume multiplier for the entire score.
-If omitted, the default value is `100`. The effective gain is `bms.volWav / 100` when `0 < bms.volWav < 200` and `1` otherwise, as in beatoraja (LR2 ignores `#VOLWAV`).
+If omitted, the default value is `100`. The effective gain is `bms.volWAV / 100` when `0 < bms.volWAV < 200` and `1` otherwise, as in beatoraja (LR2 ignores `#VOLWAV`).
 
 - `#VOLWAV 100`: Keep the original volume
 - `#VOLWAV 150`: `1.5` times the original volume
 - `#VOLWAV 0`, `#VOLWAV 200` or above: Keep the original volume
 
-This scaling factor applies to keysound for real-time playback, song selection screen preview, and offline audio rendering using `renderJson()`.
+This scaling factor applies to keysound for real-time playback, song selection screen preview, and offline audio rendering using `renderJSON()`.
 The actual device applies only linear gain and does not reproduce player- or hardware-dependent volume differences.
 
 ### `#xxx97` / `#xxx98`

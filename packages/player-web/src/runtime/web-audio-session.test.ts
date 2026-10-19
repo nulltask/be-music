@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vite-plus/test';
-import { createEmptyJson, type BeMusicEvent } from '../../../json/src/index.ts';
+import { createEmptyJSON, type BeMusicEvent } from '../../../json/src/index.ts';
 import type { AudioBusHandle } from './audio-bus.ts';
 import {
   clampSampleDuration,
@@ -109,8 +109,8 @@ function createMocks(): {
   return { audioContext, audioBus, trackedBufferSources, createdGains, keyMixer, bgmMixer };
 }
 
-function makeChartWithSamples(): ReturnType<typeof createEmptyJson> {
-  const json = createEmptyJson('bms');
+function makeChartWithSamples(): ReturnType<typeof createEmptyJSON> {
+  const json = createEmptyJSON('bms');
   json.metadata.bpm = 120;
   json.resources.wav = { '01': 'kick.wav', '02': 'snare.wav', '03': 'bgm.wav' };
   return json;

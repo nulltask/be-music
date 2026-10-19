@@ -1,5 +1,5 @@
 import { resolveChart, type ResolvedChart } from '@be-music/chart';
-import type { BeMusicJson, BeMusicPlayLevel } from '@be-music/json';
+import type { BeMusicJSON, BeMusicPlayLevel } from '@be-music/json';
 
 const BMS_DEFAULT_DISPLAY_RANK = 2;
 const BMS_DEFAULT_DISPLAY_PLAY_LEVEL = 3;
@@ -13,7 +13,7 @@ const BMSON_DEFAULT_DISPLAY_JUDGE_RANK = 100;
  * are the raw chart values, so the format defaults are filled here for display, as each ruleset fills them for play:
  * a play log records only what the chart sets and must replay to the same windows.
  */
-export function resolveDisplayedJudgeRankValue(chart: BeMusicJson | ResolvedChart): number {
+export function resolveDisplayedJudgeRankValue(chart: BeMusicJSON | ResolvedChart): number {
   const resolved = toResolvedChart(chart);
   const { rank, exRank } = resolved.judgeRank;
   if (resolved.sourceFormat === 'bmson') {
@@ -30,7 +30,7 @@ export function resolveDisplayedJudgeRankValue(chart: BeMusicJson | ResolvedChar
 }
 
 /** {@link resolveDisplayedJudgeRankValue} as a label (`NORMAL`, `120` …); `RANDOM` when `#EXRANKxx` changes it mid-play. */
-export function resolveDisplayedJudgeRankLabel(chart: BeMusicJson | ResolvedChart): string {
+export function resolveDisplayedJudgeRankLabel(chart: BeMusicJSON | ResolvedChart): string {
   const resolved = toResolvedChart(chart);
   if (resolved.judgeRank.changes.length > 0) {
     return 'RANDOM';
@@ -38,11 +38,11 @@ export function resolveDisplayedJudgeRankLabel(chart: BeMusicJson | ResolvedChar
   return formatDisplayedJudgeRankValue(resolveDisplayedJudgeRankValue(resolved));
 }
 
-function toResolvedChart(chart: BeMusicJson | ResolvedChart): ResolvedChart {
+function toResolvedChart(chart: BeMusicJSON | ResolvedChart): ResolvedChart {
   return 'judgeRank' in chart ? chart : resolveChart(chart);
 }
 
-export function resolveDisplayedPlayLevelValue(chart: BeMusicJson): BeMusicPlayLevel | undefined {
+export function resolveDisplayedPlayLevelValue(chart: BeMusicJSON): BeMusicPlayLevel | undefined {
   const playLevel = chart.metadata.playLevel;
   if (typeof playLevel === 'number' && Number.isFinite(playLevel) && playLevel >= 0) {
     return playLevel;
@@ -56,7 +56,7 @@ export function resolveDisplayedPlayLevelValue(chart: BeMusicJson): BeMusicPlayL
   return undefined;
 }
 
-export function resolveDisplayedDifficultyValue(chart: BeMusicJson): number | undefined {
+export function resolveDisplayedDifficultyValue(chart: BeMusicJSON): number | undefined {
   const difficulty = chart.metadata.difficulty;
   const normalized =
     typeof difficulty === 'number' && Number.isFinite(difficulty) ? Math.trunc(difficulty) : Number.NaN;

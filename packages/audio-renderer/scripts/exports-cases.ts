@@ -1,16 +1,16 @@
-import * as audioRendererApi from '@be-music/audio-renderer';
+import * as audioRendererAPI from '@be-music/audio-renderer';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
 export function registerAudioRendererExportsCases(define: DefineBenchmarkCase): void {
-  define('audio-renderer.renderJson', {
+  define('audio-renderer.renderJSON', {
     ioBound: true,
     run: async (fixtures) => {
-      await audioRendererApi.renderJson(fixtures.sampleBmsJson, {
+      await audioRendererAPI.renderJSON(fixtures.sampleBmsJSON, {
         baseDir: fixtures.tmpDir,
         normalize: false,
         tailSeconds: 0.05,
         fallbackToneSeconds: 0.03,
-        inferBmsLnTypeWhenMissing: true,
+        inferBmsLNTypeWhenMissing: true,
       });
     },
     timeMs: 12,
@@ -19,7 +19,7 @@ export function registerAudioRendererExportsCases(define: DefineBenchmarkCase): 
   define('audio-renderer.renderSingleSample', {
     ioBound: true,
     run: async (fixtures) => {
-      await audioRendererApi.renderSingleSample('01', undefined, {
+      await audioRendererAPI.renderSingleSample('01', undefined, {
         sampleRate: 22_050,
         gain: 1,
         baseDir: fixtures.tmpDir,
@@ -30,12 +30,12 @@ export function registerAudioRendererExportsCases(define: DefineBenchmarkCase): 
   define('audio-renderer.renderChartFile', {
     ioBound: true,
     run: async (fixtures) => {
-      await audioRendererApi.renderChartFile(fixtures.paths.bmsPath, fixtures.paths.renderOutputPath, {
+      await audioRendererAPI.renderChartFile(fixtures.paths.bmsPath, fixtures.paths.renderOutputPath, {
         baseDir: fixtures.tmpDir,
         normalize: false,
         tailSeconds: 0.05,
         fallbackToneSeconds: 0.03,
-        inferBmsLnTypeWhenMissing: true,
+        inferBmsLNTypeWhenMissing: true,
       });
     },
     timeMs: 12,
@@ -44,7 +44,7 @@ export function registerAudioRendererExportsCases(define: DefineBenchmarkCase): 
   define('audio-renderer.writeAudioFile', {
     ioBound: true,
     run: async (fixtures) => {
-      await audioRendererApi.writeAudioFile(fixtures.paths.audioOutputPath, fixtures.sampleRenderResult);
+      await audioRendererAPI.writeAudioFile(fixtures.paths.audioOutputPath, fixtures.sampleRenderResult);
     },
   });
 }

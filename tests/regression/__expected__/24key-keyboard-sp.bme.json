@@ -33,12 +33,12 @@
       "stp": [],
       "wavCmds": [],
       "changeOption": {},
-      "exWav": {},
-      "exBmp": {},
+      "exWAV": {},
+      "exBMP": {},
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBga": {},
+      "swBGA": {},
       "player": 1,
       "lnType": 1,
       "lnMode": 1
@@ -261,7 +261,7 @@
       "randomPatterns": [],
       "title": "24 KEY Keyboard Test (SP)",
       "playVariant": "24",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0"
@@ -378,8 +378,8 @@
           "percent": 75
         },
         "noteCount": 100,
-        "chartFingerprint": "bmfp0:24bd7abff12bd64d31344d0bf2ab488fea43f34ca2cf4e7d5fff9e9ce61750cf",
-        "playFingerprint": "bmfp0:24bd7abff12bd64d31344d0bf2ab488fea43f34ca2cf4e7d5fff9e9ce61750cf",
+        "chartFingerprint": "bmfp0:1a932840f8b7089dd8fb54234c247a74710131df47634e0a060cadb722e0ca77",
+        "playFingerprint": "bmfp0:1a932840f8b7089dd8fb54234c247a74710131df47634e0a060cadb722e0ca77",
         "title": "24 KEY Keyboard Test (SP)",
         "subtitle": "24 KEY SP — channels 11..19 + 1A..1O",
         "artist": "be-music",

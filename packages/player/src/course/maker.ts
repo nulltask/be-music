@@ -6,7 +6,7 @@ import {
   type NonstopConnection,
   normalizeCourseConstraints,
 } from './definition.ts';
-import { LR2_NONSTOP_CONNECTIONS, parseLr2NonstopConnections } from './lr2crs.ts';
+import { LR2_NONSTOP_CONNECTIONS, parseLR2NonstopConnections } from './lr2crs.ts';
 
 /** LR2's course maker takes at most five songs (OpenLR2 `LR2f.cpp` L12221-L12229: `count <= 4` before adding). */
 export const LR2_COURSE_MAKER_MAX_STAGES = 5;
@@ -39,7 +39,7 @@ export interface CourseDraft {
 
 /**
  * The constraints a made course starts with: a GRADE course reads as an LR2 grade (no lane option, the LR2 gauge;
- * `grade`, `gauge_lr2`, as `parseLr2CourseFile` reads one), and the other kinds have none.
+ * `grade`, `gauge_lr2`, as `parseLR2CourseFile` reads one), and the other kinds have none.
  */
 export function defaultCourseMakerConstraints(kind: CourseKind): CourseConstraint[] {
   return kind === 'grade' ? ['grade', 'gauge_lr2'] : [];
@@ -88,9 +88,9 @@ export function removeLastCourseDraftStage(draft: CourseDraft): CourseDraft {
  * course type (char 10: 0 EXPERT, 1 NONSTOP, 2 GRADE) and zeros. LR2 puts the first four characters of the player's
  * password MD5 at chars 28-31; a browser has no password, so they stay `0`.
  */
-export function buildLr2CourseHash(course: {
+export function buildLR2CourseHash(course: {
   kind: CourseKind;
-  stageMd5s: readonly string[];
+  stageMD5s: readonly string[];
   connections?: readonly NonstopConnection[];
 }): string {
   const keys = Array.from({ length: 10 }, (_, index) => {
@@ -98,11 +98,11 @@ export function buildLr2CourseHash(course: {
     return String(Math.max(0, connection === undefined ? 0 : LR2_NONSTOP_CONNECTIONS.indexOf(connection)));
   }).join('');
   const header = `${keys}${LR2_COURSE_TYPES[course.kind]}${'0'.repeat(21)}`;
-  return `${header}${course.stageMd5s.map((md5) => md5.toLowerCase()).join('')}`;
+  return `${header}${course.stageMD5s.map((md5) => md5.toLowerCase()).join('')}`;
 }
 
 /**
- * The course definition of a set of stages, in the shape `parseLr2CourseFile` reads the same course back in, except
+ * The course definition of a set of stages, in the shape `parseLR2CourseFile` reads the same course back in, except
  * that a made course starts unranked (`release: false`): LR2 inserts it with `ir = 0` (OpenLR2 `WriteCourse`
  * L17588-L17603) and beatoraja's course editor starts a new course with `release = false`, so neither sends a made
  * course to IR until the player opts in.
@@ -114,7 +114,7 @@ function lr2CourseDefinition(
   keyMode: number | undefined,
   connectionKeys: readonly NonstopConnection[],
 ): CourseDefinition {
-  const hash = buildLr2CourseHash({ kind, stageMd5s: stages.map((stage) => stage.md5), connections: connectionKeys });
+  const hash = buildLR2CourseHash({ kind, stageMD5s: stages.map((stage) => stage.md5), connections: connectionKeys });
   const header = hash.slice(0, 32);
   const course: CourseDefinition = {
     name,
@@ -132,7 +132,7 @@ function lr2CourseDefinition(
     source: { format: 'lr2crs', type: LR2_COURSE_TYPES[kind], header, hash },
   };
   if (keyMode !== undefined) course.keyMode = keyMode;
-  if (kind === 'nonstop') course.connections = parseLr2NonstopConnections(header).slice(0, stages.length - 1);
+  if (kind === 'nonstop') course.connections = parseLR2NonstopConnections(header).slice(0, stages.length - 1);
   return course;
 }
 
@@ -156,7 +156,7 @@ export function finishCourseDraft(
  * The connection `delta` steps from `connection` in LR2's order (FADE, FADE+FIT, CUT, CUT+FIT, BLANK1, BLANK2),
  * wrapping around: LR2's buttons 240-248 and 268 step +1 on their right half and -1 on their left half.
  */
-export function stepLr2NonstopConnection(connection: NonstopConnection, delta: number): NonstopConnection {
+export function stepLR2NonstopConnection(connection: NonstopConnection, delta: number): NonstopConnection {
   const count = LR2_NONSTOP_CONNECTIONS.length;
   const index = LR2_NONSTOP_CONNECTIONS.indexOf(connection);
   return LR2_NONSTOP_CONNECTIONS[(((index + delta) % count) + count) % count]!;
@@ -174,7 +174,7 @@ export function withNonstopConnection(
 ): CourseDefinition {
   if (course.kind !== 'nonstop' || course.source.format !== 'lr2crs') return course;
   if (!Number.isInteger(index) || index < 0 || index >= LR2_CONNECTION_SLOTS) return course;
-  const keys = parseLr2NonstopConnections(course.source.header);
+  const keys = parseLR2NonstopConnections(course.source.header);
   keys[index] = connection;
   const stages = course.stages.map((stage) => ({
     md5: stage.md5 ?? '',
@@ -185,18 +185,18 @@ export function withNonstopConnection(
   return { ...course, connections: rebuilt.connections!, source: rebuilt.source };
 }
 
-function escapeXml(text: string): string {
+function escapeXML(text: string): string {
   return text.replace(/[<>&"']/gu, (char) => `&#${char.charCodeAt(0)};`);
 }
 
 /**
- * Writes LR2 courses as a `.lr2crs` file: a UTF-8 `<courselist>` that `parseLr2CourseFile` reads back into the same
+ * Writes LR2 courses as a `.lr2crs` file: a UTF-8 `<courselist>` that `parseLR2CourseFile` reads back into the same
  * courses. Courses that did not come from an LR2 hash (`source.format !== 'lr2crs'`) are rebuilt from their stage
  * MD5s, and skipped when a stage has none. The format has no room for constraints or `release`: LR2 reads a GRADE course
  * back with {@link defaultCourseMakerConstraints} and any other course with none, and every course back as released
  * (`serializeBeatorajaCourseFile` keeps both).
  */
-export function serializeLr2CourseFile(courses: readonly CourseDefinition[]): string {
+export function serializeLR2CourseFile(courses: readonly CourseDefinition[]): string {
   const lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<courselist>'];
   for (const course of courses) {
     let hash: string;
@@ -204,15 +204,15 @@ export function serializeLr2CourseFile(courses: readonly CourseDefinition[]): st
       hash = course.source.hash;
     } else {
       if (course.stages.some((stage) => stage.md5 === undefined)) continue;
-      hash = buildLr2CourseHash({
+      hash = buildLR2CourseHash({
         kind: course.kind,
-        stageMd5s: course.stages.map((stage) => stage.md5!),
+        stageMD5s: course.stages.map((stage) => stage.md5!),
         ...(course.connections !== undefined ? { connections: course.connections } : {}),
       });
     }
     lines.push(
       '  <course>',
-      `    <title>${escapeXml(course.name)}</title>`,
+      `    <title>${escapeXML(course.name)}</title>`,
       `    <line>${course.keyMode ?? 7}</line>`,
       `    <type>${LR2_COURSE_TYPES[course.kind]}</type>`,
       `    <hash>${hash}</hash>`,

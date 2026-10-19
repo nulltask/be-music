@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, test } from 'vite-plus/test';
-import { parseBms, parseBmson, resolveBmsControlFlow } from '../../parser/src/index.ts';
+import { parseBMS, parseBmson, resolveBMSControlFlow } from '../../parser/src/index.ts';
 import { stringifyBmson } from '../../stringifier/src/index.ts';
 import {
   canonicalizeFingerprintDocument,
@@ -31,19 +31,19 @@ function chart(...extra: string[]): string {
 }
 
 function playDocument(text: string, chartPath?: string): BeMusicPlayFingerprintDocument {
-  return createPlayFingerprintDocument(parseBms(text), { chartPath });
+  return createPlayFingerprintDocument(parseBMS(text), { chartPath });
 }
 
 function playFingerprint(text: string, chartPath?: string): string {
-  return computePlayFingerprint(parseBms(text), { chartPath });
+  return computePlayFingerprint(parseBMS(text), { chartPath });
 }
 
 function chartFingerprint(text: string): string {
-  return computeChartFingerprint(parseBms(text), NO_PATH);
+  return computeChartFingerprint(parseBMS(text), NO_PATH);
 }
 
 function chartDocument(text: string): BeMusicChartFingerprintDocument {
-  const document = createChartFingerprintDocument(parseBms(text), NO_PATH);
+  const document = createChartFingerprintDocument(parseBMS(text), NO_PATH);
   expect('random' in document).toBe(true);
   return document as BeMusicChartFingerprintDocument;
 }
@@ -70,7 +70,7 @@ describe('fingerprint document', () => {
       v: 'bmfp0',
       laneMode: '7',
       bpm: '150',
-      baseBpm: null,
+      baseBPM: null,
       judge: { rank: '2' },
       total: { bms: '300' },
       measures: { count: '4', lengths: [['1', '3/4']] },
@@ -96,9 +96,9 @@ describe('fingerprint document', () => {
   });
 
   test('serializes with RFC 8785 and hashes the UTF-8 bytes with SHA-256', () => {
-    const json = parseBms(chart());
+    const json = parseBMS(chart());
     const canonical = canonicalizeFingerprintDocument(createPlayFingerprintDocument(json, NO_PATH));
-    expect(canonical.startsWith('{"baseBpm":null,"bpm":"150","judge":{"rank":"2"},"laneMode":"7","measures":')).toBe(
+    expect(canonical.startsWith('{"baseBPM":null,"bpm":"150","judge":{"rank":"2"},"laneMode":"7","measures":')).toBe(
       true,
     );
     expect(canonical).not.toMatch(/\s/);
@@ -107,7 +107,7 @@ describe('fingerprint document', () => {
   });
 
   test('fingerprints a document built elsewhere like the chart it came from', () => {
-    const json = parseBms(chart('#RANDOM 2', '#IF 1', '#00213:01', '#ENDIF'));
+    const json = parseBMS(chart('#RANDOM 2', '#IF 1', '#00213:01', '#ENDIF'));
     const playDocument = createPlayFingerprintDocument(json, NO_PATH);
     const chartDocument = createChartFingerprintDocument(json, NO_PATH);
     expect(computeFingerprintOfDocument(playDocument)).toBe(computePlayFingerprint(json, NO_PATH));
@@ -308,10 +308,10 @@ describe('fingerprint sensitivity', () => {
     expect(playDocument(fiveKeys, 'dir.v2/song.BME').laneMode).toBe('5');
     // `.bme` is not a lane-mode input, so a chart document records no extension for it.
     const random = ['#BPM 150', '#00111:01', '#RANDOM 2', '#IF 1', '#00218:01', '#ENDIF', '#ENDRANDOM'].join('\n');
-    expect(computeChartFingerprint(parseBms(random), { chartPath: 'song.bme' })).toBe(chartFingerprint(random));
+    expect(computeChartFingerprint(parseBMS(random), { chartPath: 'song.bme' })).toBe(chartFingerprint(random));
     expect(chartDocument(random).lanes.extension).toBeNull();
     expect(
-      (createChartFingerprintDocument(parseBms(random), { chartPath: 'SONG.PMS' }) as BeMusicChartFingerprintDocument)
+      (createChartFingerprintDocument(parseBMS(random), { chartPath: 'SONG.PMS' }) as BeMusicChartFingerprintDocument)
         .lanes.extension,
     ).toBe('.pms');
   });
@@ -381,7 +381,7 @@ describe('keyboard lane mode (bmson keyboard-24k)', () => {
     // A wheel note alone makes a BMS chart 24 KEY, like any other extended lane.
     const bms = ['#BPM 150', '#WAV01 a.wav', '#00111:01', '#0011P:01', '#0021Q:01'].join('\n');
     expect(playDocument(bms).laneMode).toBe('24');
-    expect(playDocument(bms).laneMode).toBe(resolveChartPlayVariant(parseBms(bms)));
+    expect(playDocument(bms).laneMode).toBe(resolveChartPlayVariant(parseBMS(bms)));
     expect(playDocument(bms).notes.map((note) => note.lane)).toEqual(['11', '1P', '1Q']);
     // Moving a wheel note changes the fingerprint.
     expect(playFingerprint(bms)).not.toBe(playFingerprint(bms.replace('#0021Q:01', '#0012P:01')));
@@ -663,7 +663,7 @@ describe('bmson lanes as the parser maps them', () => {
     expect(fiveKeys.notes.map((note) => note.lane)).toEqual(['11', '15', '16']);
     expect(fiveKeys).toEqual(
       createPlayFingerprintDocument(
-        parseBms(['#BPM 150', '#DEFEXRANK 100', '#00111:01', '#00115:01', '#00116:01'].join('\n')),
+        parseBMS(['#BPM 150', '#DEFEXRANK 100', '#00111:01', '#00115:01', '#00116:01'].join('\n')),
         NO_PATH,
       ),
     );
@@ -730,17 +730,17 @@ describe('BMS against bmson', () => {
 
   test('gives the same play fingerprint', () => {
     // bmson `total` 0, absent or 100 all mean 100 % of the ruleset's default TOTAL, like a BMS chart without #TOTAL.
-    const fromBms = createPlayFingerprintDocument(parseBms(bms), NO_PATH);
+    const fromBMS = createPlayFingerprintDocument(parseBMS(bms), NO_PATH);
     const fromBmson = createPlayFingerprintDocument(parseBmson(bmson(0)), NO_PATH);
-    expect(fromBmson).toEqual(fromBms);
-    expect(fromBms.notes).toContainEqual({ m: '1', p: '1/2', lane: '13', end: { m: '2', p: '0' }, ln: '1' });
-    expect(fromBms.mines).toEqual([{ m: '1', p: '0', lane: '14', damage: '10' }]);
-    expect(computePlayFingerprint(parseBmson(bmson(0)), NO_PATH)).toBe(computePlayFingerprint(parseBms(bms), NO_PATH));
-    expect(createPlayFingerprintDocument(parseBmson(bmson()), NO_PATH)).toEqual(fromBms);
-    expect(createPlayFingerprintDocument(parseBmson(bmson(100)), NO_PATH)).toEqual(fromBms);
+    expect(fromBmson).toEqual(fromBMS);
+    expect(fromBMS.notes).toContainEqual({ m: '1', p: '1/2', lane: '13', end: { m: '2', p: '0' }, ln: '1' });
+    expect(fromBMS.mines).toEqual([{ m: '1', p: '0', lane: '14', damage: '10' }]);
+    expect(computePlayFingerprint(parseBmson(bmson(0)), NO_PATH)).toBe(computePlayFingerprint(parseBMS(bms), NO_PATH));
+    expect(createPlayFingerprintDocument(parseBmson(bmson()), NO_PATH)).toEqual(fromBMS);
+    expect(createPlayFingerprintDocument(parseBmson(bmson(100)), NO_PATH)).toEqual(fromBMS);
     // Any other percentage scales the default, which no BMS #TOTAL matches.
     expect(createPlayFingerprintDocument(parseBmson(bmson(150)), NO_PATH)).toEqual({
-      ...fromBms,
+      ...fromBMS,
       total: { bmson: '150' },
     });
   });
@@ -764,7 +764,7 @@ describe('BMS against bmson', () => {
       '#00308:0001',
       '#00311:01',
     ].join('\n');
-    const original = parseBms(text);
+    const original = parseBMS(text);
     const converted = parseBmson(stringifyBmson(original));
     // The stringifier leaves out `total`, which bmson reads as 100 % of the default TOTAL, like a BMS without #TOTAL.
     expect(createPlayFingerprintDocument(converted, NO_PATH)).toEqual(createPlayFingerprintDocument(original, NO_PATH));
@@ -775,15 +775,15 @@ describe('control flow', () => {
   const randomChart = (...blocks: string[]): string => chart('#RANDOM 2', ...blocks, '#ENDRANDOM');
 
   test('a chart without control flow has equal chart and play fingerprints', () => {
-    const json = parseBms(chart());
+    const json = parseBMS(chart());
     expect(createChartFingerprintDocument(json, NO_PATH)).toEqual(createPlayFingerprintDocument(json, NO_PATH));
     expect(computeChartFingerprint(json, NO_PATH)).toBe(computePlayFingerprint(json, NO_PATH));
   });
 
   test('keeps the chart fingerprint across branch selections while the play fingerprint follows the branch', () => {
-    const json = parseBms(randomChart('#IF 1', '#00313:01', '#ENDIF', '#IF 2', '#00314:01', '#ENDIF'));
-    const first = resolveBmsControlFlow(json, { random: () => 0 });
-    const second = resolveBmsControlFlow(json, { random: () => 0.99 });
+    const json = parseBMS(randomChart('#IF 1', '#00313:01', '#ENDIF', '#IF 2', '#00314:01', '#ENDIF'));
+    const first = resolveBMSControlFlow(json, { random: () => 0 });
+    const second = resolveBMSControlFlow(json, { random: () => 0.99 });
     const swapped = randomChart('#IF 2', '#00314:01', '#ENDIF', '#IF 1', '#00313:01', '#ENDIF');
     expect(computeChartFingerprint(json, NO_PATH)).toBe(chartFingerprint(swapped));
     expect(computePlayFingerprint(first, NO_PATH)).not.toBe(computePlayFingerprint(second, NO_PATH));
@@ -811,10 +811,10 @@ describe('control flow', () => {
       chart('#SETRANDOM 2', '#IF 1', '#00313:01', '#ENDIF', '#IF 2', '#00314:01', '#ENDIF', '#ENDRANDOM'),
       chart('#RANDOM 1', '#IF 1', '#00314:01', '#ENDIF', '#IF 2', '#00313:01', '#ENDIF', '#ENDRANDOM'),
     ]) {
-      const json = parseBms(text);
+      const json = parseBMS(text);
       expect('random' in createChartFingerprintDocument(json, NO_PATH)).toBe(false);
       expect(computeChartFingerprint(json, NO_PATH)).toBe(inline);
-      expect(computePlayFingerprint(resolveBmsControlFlow(json), NO_PATH)).toBe(inline);
+      expect(computePlayFingerprint(resolveBMSControlFlow(json), NO_PATH)).toBe(inline);
     }
   });
 

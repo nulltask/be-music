@@ -1,6 +1,6 @@
 // Browser-side wiring for beatoraja themes.
 //
-// Mirrors `loadLr2ThemeSkinsFromFiles` from `@be-music/lr2-skin` so the host UI can keep its LR2 code path and pick
+// Mirrors `loadLR2ThemeSkinsFromFiles` from `@be-music/lr2-skin` so the host UI can keep its LR2 code path and pick
 // up beatoraja themes through a parallel surface. The parser pipeline lives in `@be-music/beatoraja-skin`; this file
 // only wires the dropped-File array up to that pipeline and doesn't open any PixiJS resources.
 
@@ -11,7 +11,7 @@ import {
   pickBeatorajaPlaySkinVariant,
   readFilesIntoBytesMap,
 } from '@be-music/beatoraja-skin';
-import { pickBeatorajaThemeBgmPaths } from '@be-music/beatoraja-skin/scene';
+import { pickBeatorajaThemeBGMPaths } from '@be-music/beatoraja-skin/scene';
 import type {
   BeatorajaPlaySkinMap,
   BeatorajaPlayVariant,
@@ -102,21 +102,21 @@ export function summarizeBeatorajaPlaySkins(playSkins: BeatorajaPlaySkinMap, sep
  * `play24main.lua` uses.
  *
  * If the dropped theme doesn't ship the variant a chart needs, {@link pickBeatorajaPlayableSkinVariant} chains
- * through the closest substitutes — same shape as `pickLr2PlaySkin` on the LR2 side.
+ * through the closest substitutes — same shape as `pickLR2PlaySkin` on the LR2 side.
  */
 const BEATORAJA_PLAYABLE_VARIANTS = ['7', '5', '9', '10', '14', '24', '24d'] as const;
 export type BeatorajaPlayableVariant = (typeof BEATORAJA_PLAYABLE_VARIANTS)[number];
 
 /**
  * Map a chart's key count + double-play flag to the corresponding beatoraja play variant. Mirrors the logic
- * `pickLr2PlaySkin` uses on the LR2 side. Returns `undefined` for chart shapes the renderer doesn't support.
+ * `pickLR2PlaySkin` uses on the LR2 side. Returns `undefined` for chart shapes the renderer doesn't support.
  */
 export function pickBeatorajaPlayableVariant(chart: {
   keys: number;
   isDouble: boolean;
-  isPms: boolean;
+  isPMS: boolean;
 }): BeatorajaPlayableVariant | undefined {
-  if (chart.isPms) return '9';
+  if (chart.isPMS) return '9';
   if (chart.isDouble) {
     if (chart.keys === 24) return '24d';
     if (chart.keys === 14) return '14';
@@ -164,7 +164,7 @@ export type {
  * payload ready to hand to `AudioContext.decodeAudioData`. Slots are `undefined` when no matching
  * file exists in the dropped tree.
  */
-export interface BeatorajaThemeBgm {
+export interface BeatorajaThemeBGM {
   /** Splash audio for the decide scene — typically `decide.wav` / `*decide*.wav`. */
   decide?: Uint8Array;
   /** Result-scene jingle for cleared runs — `clear.wav`. */
@@ -185,19 +185,19 @@ export interface BeatorajaThemeBgm {
 /**
  * Scan a beatoraja theme bundle for BGM files. The lookup is heuristic — beatoraja's spec doesn't
  * pin BGM to a fixed path, so the file stems are matched against the conventional names (see
- * `pickBeatorajaThemeBgmPaths` in `@be-music/beatoraja-skin/scene`).
+ * `pickBeatorajaThemeBGMPaths` in `@be-music/beatoraja-skin/scene`).
  *
  * Returns synchronously when every matched entry was eagerly loaded. When some entries are
  * deferred (lazy file readers), the helper awaits each `loadAssetBytes` call serially — each BGM
  * is small enough (<1 MiB) that the latency is negligible, and serializing avoids spawning a
  * concurrent read storm on the dropped-file IO layer.
  */
-export async function findBeatorajaThemeBgm(bundle: BeatorajaThemeBundle): Promise<BeatorajaThemeBgm> {
-  const out: BeatorajaThemeBgm = {};
-  for (const [slot, path] of Object.entries(pickBeatorajaThemeBgmPaths(bundle.files.keys()))) {
+export async function findBeatorajaThemeBGM(bundle: BeatorajaThemeBundle): Promise<BeatorajaThemeBGM> {
+  const out: BeatorajaThemeBGM = {};
+  for (const [slot, path] of Object.entries(pickBeatorajaThemeBGMPaths(bundle.files.keys()))) {
     const entry = bundle.files.get(path);
     const bytes = asLoadedBytes(entry) ?? (await loadAssetBytes(entry));
-    if (bytes !== undefined) out[slot as keyof BeatorajaThemeBgm] = bytes;
+    if (bytes !== undefined) out[slot as keyof BeatorajaThemeBGM] = bytes;
   }
   return out;
 }

@@ -2,33 +2,33 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createEmptyJson, type BeMusicJson } from '../../json/src/index.ts';
+import { createEmptyJSON, type BeMusicJSON } from '../../json/src/index.ts';
 import { parseChartFile } from '../../parser/src/index.ts';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   addNote,
-  createBlankJson,
+  createBlankJSON,
   deleteNote,
   exportChart,
   importChart,
   listNotes,
-  loadJsonFile,
-  saveJsonFile,
+  loadJSONFile,
+  saveJSONFile,
   setMetadata,
 } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
+const unifiedBMSChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
 describe('editor', () => {
-  test('editor: createBlankJson returns an empty JSON-based chart', () => {
-    const json = createBlankJson();
+  test('editor: createBlankJSON returns an empty JSON-based chart', () => {
+    const json = createBlankJSON();
     expect(json.sourceFormat).toBe('json');
     expect(json.format).toBe('be-music-json/0.1.0');
     expect(json.metadata.bpm).toBe(130);
   });
 
   test('editor: setMetadata handles known keys, extras, and BPM validation', () => {
-    let json = createEmptyJson('json');
+    let json = createEmptyJSON('json');
     json = setMetadata(json, 'title', 'Song');
     json = setMetadata(json, 'subtitle', 'Sub');
     json = setMetadata(json, 'artist', 'Composer');
@@ -53,16 +53,16 @@ describe('editor', () => {
     expect(json.metadata.bpm).toBe(150);
     expect(json.metadata.extras.WAVCMD).toBe('legacy');
 
-    const previousBpm = json.metadata.bpm;
+    const previousBPM = json.metadata.bpm;
     json = setMetadata(json, 'bpm', '-10');
-    expect(json.metadata.bpm).toBe(previousBpm);
+    expect(json.metadata.bpm).toBe(previousBPM);
 
     json = setMetadata(json, 'playlevel', '安心');
     expect(json.metadata.playLevel).toBe('安心');
   });
 
   test('editor: addNote/listNotes/deleteNote support normalization and fractional position comparison', () => {
-    let json = createEmptyJson('json');
+    let json = createEmptyJSON('json');
     json = addNote(json, {
       measure: 2,
       channel: '1a',
@@ -134,14 +134,14 @@ describe('editor', () => {
 
   test('editor: normalizes incomplete JSON to defaults during operations', () => {
     const broken = {
-      ...createEmptyJson('json'),
+      ...createEmptyJSON('json'),
       metadata: undefined,
       resources: undefined,
       measures: [
         { index: 0, length: 1 },
         { index: Number.NaN, length: Number.NaN },
       ],
-    } as unknown as BeMusicJson;
+    } as unknown as BeMusicJSON;
 
     const normalized = setMetadata(broken, 'genre', 'TEST');
     expect(normalized.metadata.bpm).toBe(130);
@@ -154,10 +154,10 @@ describe('editor', () => {
     expect(normalized.measures).toEqual([{ index: 0, length: 1 }]);
   });
 
-  test('editor: saveJsonFile/loadJsonFile round-trip chart files', async () => {
+  test('editor: saveJSONFile/loadJSONFile round-trip chart files', async () => {
     const tempDir = await mkdtemp(resolve(tmpdir(), 'bms-editor-test-'));
     try {
-      let json = createEmptyJson('json');
+      let json = createEmptyJSON('json');
       json = addNote(json, {
         measure: 0,
         channel: '11',
@@ -167,8 +167,8 @@ describe('editor', () => {
       });
 
       const path = resolve(tempDir, 'chart.json');
-      await saveJsonFile(path, json);
-      const loaded = await loadJsonFile(path);
+      await saveJSONFile(path, json);
+      const loaded = await loadJSONFile(path);
 
       expect(loaded.sourceFormat).toBe('json');
       expect(loaded.events).toHaveLength(1);
@@ -182,7 +182,7 @@ describe('editor', () => {
   test('editor: exportChart outputs .bms and .bmson', async () => {
     const tempDir = await mkdtemp(resolve(tmpdir(), 'bms-editor-export-'));
     try {
-      let json = createEmptyJson('json');
+      let json = createEmptyJSON('json');
       json.metadata.title = 'Export Test';
       json.resources.wav['01'] = 'sample.wav';
       json.events.push({ measure: 0, channel: '11', position: [0, 1], value: '01' });
@@ -203,7 +203,7 @@ describe('editor', () => {
   });
 
   test('editor: importChart loads chart files', async () => {
-    const json = await importChart(unifiedBmsChartPath);
+    const json = await importChart(unifiedBMSChartPath);
     expect(json.sourceFormat).toBe('bms');
     expect(json.events.length).toBeGreaterThan(0);
   });
@@ -220,7 +220,7 @@ describe('editor', () => {
     // Checking them against the live pipeline is what keeps them from silently going stale: before this test they
     // still carried a pre-`bms`/`bmson`-extension shape that no current code path can produce.
     const imported = await importChart(resolve(rootDir, 'examples/test/sample.bms'));
-    const expectedImport = await loadJsonFile(resolve(rootDir, 'examples/test/sample.json'));
+    const expectedImport = await loadJSONFile(resolve(rootDir, 'examples/test/sample.json'));
     expect(imported).toEqual(expectedImport);
 
     let edited = setMetadata(imported, 'title', 'Edited Sample');
@@ -231,7 +231,7 @@ describe('editor', () => {
       positionDenominator: 2,
       value: '01',
     });
-    const expectedEdit = await loadJsonFile(resolve(rootDir, 'examples/test/sample.edit.json'));
+    const expectedEdit = await loadJSONFile(resolve(rootDir, 'examples/test/sample.edit.json'));
     expect(edited).toEqual(expectedEdit);
 
     const tempDir = await mkdtemp(resolve(tmpdir(), 'bms-editor-fixture-'));
@@ -241,13 +241,13 @@ describe('editor', () => {
       await exportChart(bmsPath, edited);
       await exportChart(bmsonPath, imported);
 
-      const [writtenBms, expectedBms, writtenBmson, expectedBmson] = await Promise.all([
+      const [writtenBMS, expectedBMS, writtenBmson, expectedBmson] = await Promise.all([
         readFile(bmsPath, 'utf8'),
         readFile(resolve(rootDir, 'examples/test/sample.edited.bms'), 'utf8'),
         readFile(bmsonPath, 'utf8'),
         readFile(resolve(rootDir, 'examples/test/sample.roundtrip.bmson'), 'utf8'),
       ]);
-      expect(writtenBms).toBe(expectedBms);
+      expect(writtenBMS).toBe(expectedBMS);
       expect(writtenBmson).toBe(expectedBmson);
     } finally {
       await rm(tempDir, { recursive: true, force: true });

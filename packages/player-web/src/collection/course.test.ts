@@ -1,4 +1,4 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import { parseChart } from '@be-music/parser';
 import { parseBeatorajaCourseData, parseBeatorajaRandomCourseData } from '@be-music/player/course';
 import { describe, expect, test } from 'vite-plus/test';
@@ -27,7 +27,7 @@ function song(id: string, title: string): LibraryChart {
     fileLabel: `${id}.bms`,
     title,
     totalNotes: 100,
-    chart: createEmptyJson('bms'),
+    chart: createEmptyJSON('bms'),
   };
 }
 

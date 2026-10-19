@@ -10,7 +10,7 @@ import {
 import { logger } from '../../logger.ts';
 import { PIXI_HOST_TARGET, rendersOnPixiHost, type PixiHostTarget } from '../../skins/pixi-kit/host-render.ts';
 import type {
-  BeMusicBgaFrame,
+  BeMusicBGAFrame,
   BeMusicBomb,
   BeMusicDecideFrame,
   BeMusicGameplayFrame,
@@ -254,7 +254,7 @@ export class BeMusicGameplayBinding {
   /** Whether the skin draws measure lines from the frame; when false the scene draws them itself. */
   readonly drawsMeasureLines: boolean;
   /** Whether the skin composites the BGA from the frame; when false the scene shows it behind the skin. */
-  readonly drawsBga: boolean;
+  readonly drawsBGA: boolean;
   private readonly skin: BeMusicSkin;
   private settings: BeMusicSkinSettingValues;
   private readonly songImage: BeMusicSongImageLookup;
@@ -285,7 +285,7 @@ export class BeMusicGameplayBinding {
     this.drawsMines = skin.gameplay.drawsMines === true;
     this.drawsLaneCover = skin.gameplay.drawsLaneCover === true;
     this.drawsMeasureLines = skin.gameplay.drawsMeasureLines === true;
-    this.drawsBga = skin.gameplay.drawsBga === true;
+    this.drawsBGA = skin.gameplay.drawsBGA === true;
     this.settings = resolveBeMusicSkinSettings(skin, options.settings);
   }
 
@@ -318,7 +318,7 @@ export class BeMusicGameplayBinding {
       mines: this.mines,
       bombs: this.bombs,
       measureLines: this.measureLines,
-      // Filled by `setBga` for a skin that sets `drawsBga`.
+      // Filled by `setBGA` for a skin that sets `drawsBGA`.
       bga: undefined,
       beatPhase: runtime.beatPhase ?? 0,
       effects: runtime.effects ?? 'full',
@@ -369,9 +369,9 @@ export class BeMusicGameplayBinding {
     for (const bomb of bombs) this.bombs.push({ ...bomb });
   }
 
-  /** The BGA layers showing this frame; handed over only for a skin that sets `drawsBga`. */
-  setBga(bga: BeMusicBgaFrame | undefined): void {
-    if (this.frame && this.drawsBga) this.frame.bga = bga;
+  /** The BGA layers showing this frame; handed over only for a skin that sets `drawsBGA`. */
+  setBGA(bga: BeMusicBGAFrame | undefined): void {
+    if (this.frame && this.drawsBGA) this.frame.bga = bga;
   }
 
   dispose(): void {

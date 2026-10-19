@@ -34,7 +34,7 @@ describe('normalizeBeatorajaGaugeGraphs', () => {
   });
 
   it('parses 14 named per-gauge color fields with beatoraja defaults (audit 3.3)', () => {
-    // Author-omitted fields fall back to beatoraja's `JsonSkin.GaugeGraph` declaration
+    // Author-omitted fields fall back to beatoraja's `JSONSkin.GaugeGraph` declaration
     // defaults — the renderer can pick the matching pair without checking for undefined.
     const out = normalizeBeatorajaGaugeGraphs([{ id: 'gg' }]);
     expect(out[0]).toMatchObject({

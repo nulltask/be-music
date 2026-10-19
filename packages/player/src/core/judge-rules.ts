@@ -5,14 +5,14 @@ import type { JudgeWindowSetUs } from '../ruleset/definitions.ts';
 import {
   isChargeLongNoteMode,
   resolveEffectiveLongNoteMode,
-  resolveLnEarlyRelease,
-  type LnJudgeIndex,
-  type LnTimedJudge,
+  resolveLNEarlyRelease,
+  type LNJudgeIndex,
+  type LNTimedJudge,
 } from '../ruleset/long-note.ts';
 import type { RulesetConfig } from '../ruleset/definitions.ts';
 import type { TimedPlayableNote } from '../playable-notes.ts';
 import type { JudgeKind } from './scoring.ts';
-import type { PlayerUiLongNoteMode } from './ui-signal-bus.ts';
+import type { PlayerUILongNoteMode } from './ui-signal-bus.ts';
 
 /**
  * Pure judgment rules of the live engine: timing classification, long-note judgment merging and the long-note mode a
@@ -97,7 +97,7 @@ export function combineLongNoteJudges(head: TimedManualJudge, tail: TimedManualJ
 const LN_JUDGE_KINDS: readonly JudgeKind[] = ['PERFECT', 'GREAT', 'GOOD', 'BAD', 'POOR'];
 
 /**
- * The single judgment of an LN released before its tail, by the ruleset's rule ({@link resolveLnEarlyRelease}).
+ * The single judgment of an LN released before its tail, by the ruleset's rule ({@link resolveLNEarlyRelease}).
  * `releaseDeltaMs` is the release against the tail in the engine's convention (negative = before the tail).
  */
 export function resolveLongNoteEarlyReleaseJudge(
@@ -106,12 +106,12 @@ export function resolveLongNoteEarlyReleaseJudge(
   releaseDeltaMs: number,
   endWindows: JudgeWindowSetUs,
 ): TimedManualJudge {
-  const toRuleset = (judge: TimedManualJudge): LnTimedJudge => ({
-    judge: resolveJudgeSeverity(judge.kind) as LnJudgeIndex,
+  const toRuleset = (judge: TimedManualJudge): LNTimedJudge => ({
+    judge: resolveJudgeSeverity(judge.kind) as LNJudgeIndex,
     dmUs: Math.round(-judge.signedDeltaMs * 1000),
   });
   // Whole microseconds, like every other window comparison (see `judgeDeltaUs`).
-  const released = resolveLnEarlyRelease(ruleset, toRuleset(head), Math.round(-releaseDeltaMs * 1000), endWindows);
+  const released = resolveLNEarlyRelease(ruleset, toRuleset(head), Math.round(-releaseDeltaMs * 1000), endWindows);
   return { kind: LN_JUDGE_KINDS[released.judge]!, signedDeltaMs: -released.dmUs / 1000 };
 }
 
@@ -158,7 +158,7 @@ export function resolveLoggedLongNoteMode(note: TimedPlayableNote): 1 | 2 | 3 {
 }
 
 /** The UI-command spelling of an effective long-note mode. */
-export function toUiLongNoteMode(mode: LongNoteMode): PlayerUiLongNoteMode {
+export function toUILongNoteMode(mode: LongNoteMode): PlayerUILongNoteMode {
   return mode === 3 ? 'hcn' : mode === 2 ? 'cn' : 'ln';
 }
 

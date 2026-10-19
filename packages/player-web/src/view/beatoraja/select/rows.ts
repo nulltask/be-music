@@ -20,7 +20,7 @@ import {
   type BeatorajaValueElement,
 } from '@be-music/beatoraja-skin';
 import { joinBeatorajaText } from '@be-music/beatoraja-skin/scene';
-import { resolveLr2ChartFeatures } from '@be-music/lr2-skin/state';
+import { resolveLR2ChartFeatures } from '@be-music/lr2-skin/state';
 import { type Container, type FederatedPointerEvent, Sprite, Text, Texture } from 'pixi.js';
 import type { LibraryEntry } from '@be-music/scene-model';
 import type { BeatorajaFontCache } from '../../../skin/beatoraja/fonts.ts';
@@ -484,7 +484,7 @@ export class BeatorajaSelectRows {
    *   - 0 (no `#DIFFICULTY` authored) → `level-unknown`
    *   - 1..5 → `level-beginner / normal / hyper / another / insane`
    *
-   * Mirrors upstream `JsonSelectSkinObjectLoader.java:148-158` which builds an array of
+   * Mirrors upstream `JSONSelectSkinObjectLoader.java:148-158` which builds an array of
    * SkinNumbers (`barlevel[i]`) and `BarRenderer.java` reads `barlevel[song.difficulty]`
    * per row. Without this, every row painted from the SAME value declaration (= the first
    * entry, typically the grey "unknown" row), so charts with an explicit `#DIFFICULTY`
@@ -965,11 +965,11 @@ export class BeatorajaSelectRows {
    */
   private chartHasLabelFeature(entry: LibraryEntry, labelId: string | number): boolean {
     if (entry.kind !== 'chart') return false;
-    const features = resolveLr2ChartFeatures(entry.chart.chart);
+    const features = resolveLR2ChartFeatures(entry.chart.chart);
     const id = String(labelId).toLowerCase();
     if (id.includes('ln')) return features.longNote;
     if (id.includes('random')) return features.random;
-    // `mine` / `landmine` covered by direct event-channel scan since `resolveLr2ChartFeatures`
+    // `mine` / `landmine` covered by direct event-channel scan since `resolveLR2ChartFeatures`
     // doesn't expose it (it's not in the LR2 dst_option op gate set the LR2 helper was
     // built against). BMS landmine channels are `D1..D9` (1P) and `E1..E9` (2P).
     if (id.includes('mine') || id.includes('landmine')) {
@@ -1019,7 +1019,7 @@ function levelTintForDifficulty(level: number): number {
  * difficulty index used by `chart.metadata.difficulty`. Returns `undefined` when the id
  * doesn't match the upstream `level-*` convention so the caller can skip it.
  *
- * Mapping mirrors upstream `JsonSelectSkinObjectLoader.java`'s level loop where each
+ * Mapping mirrors upstream `JSONSelectSkinObjectLoader.java`'s level loop where each
  * `level[i]` corresponds to one of the difficulty rows in beatoraja's level sprite strip:
  *
  *   level-unknown  → 0 (= no `#DIFFICULTY` authored)

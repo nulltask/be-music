@@ -7,7 +7,7 @@ const log = logger('bga-video');
 
 let ffmpegQueue: Promise<void> = Promise.resolve();
 
-async function withExclusiveFfmpeg<T>(task: () => Promise<T>): Promise<T> {
+async function withExclusiveFFmpeg<T>(task: () => Promise<T>): Promise<T> {
   const previous = ffmpegQueue;
   let release: () => void = () => {};
   ffmpegQueue = new Promise<void>((resolve) => {
@@ -22,8 +22,8 @@ async function withExclusiveFfmpeg<T>(task: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Symbol used to attach a blob `objectUrl` to a `Texture` so that downstream destroy paths
- * (`destroyUniqueTextures`, `Lr2SkinTextureStore.clear()`) can revoke the URL alongside the GPU resource.
+ * Symbol used to attach a blob `objectURL` to a `Texture` so that downstream destroy paths
+ * (`destroyUniqueTextures`, `LR2SkinTextureStore.clear()`) can revoke the URL alongside the GPU resource.
  *
  * Pixi v8 doesn't surface a destroy hook on `TextureSource`, and we can't simply `URL.revokeObjectURL` on the load path
  * — the texture's `<img>` source keeps a reference to the URL for the lifetime of the GPU upload (and for re-decode on
@@ -32,37 +32,37 @@ async function withExclusiveFfmpeg<T>(task: () => Promise<T>): Promise<T> {
  */
 const TEXTURE_BLOB_URL = Symbol.for('be-music-player-web/texture-blob-url');
 
-interface TextureWithBlobUrl extends Texture {
+interface TextureWithBlobURL extends Texture {
   [TEXTURE_BLOB_URL]?: string;
 }
 
 /**
- * Records the blob `objectUrl` the texture was decoded from. The URL is revoked the next time the texture passes
- * through {@link destroyTextureAndRevokeBlobUrl}.
+ * Records the blob `objectURL` the texture was decoded from. The URL is revoked the next time the texture passes
+ * through {@link destroyTextureAndRevokeBlobURL}.
  *
  * Defensively no-op when `texture` is null/undefined: Pixi v8's `Assets.load(url)` occasionally resolves with a
  * falsy value for unsupported payloads (notably when the URL points at bytes that don't match the MIME-implied
  * format — e.g. a `.dds` file blob-loaded as `image/png` falls through every decoder and resolves to null). The
  * defensive branch keeps a stray null from cascading into a `Cannot set properties of null (setting 'Symbol...')`
  * crash and lets the caller route the decode result through its normal "unsupported asset" fallback. Returns the
- * texture unchanged so existing callers can keep using `attachBlobUrlToTexture(t, url)` as a pass-through.
+ * texture unchanged so existing callers can keep using `attachBlobURLToTexture(t, url)` as a pass-through.
  */
-export function attachBlobUrlToTexture(texture: Texture | null | undefined, objectUrl: string): void {
+export function attachBlobURLToTexture(texture: Texture | null | undefined, objectURL: string): void {
   if (texture === null || texture === undefined) return;
-  (texture as TextureWithBlobUrl)[TEXTURE_BLOB_URL] = objectUrl;
+  (texture as TextureWithBlobURL)[TEXTURE_BLOB_URL] = objectURL;
 }
 
 /**
- * Destroys `texture` and, if it was created from a blob via {@link attachBlobUrlToTexture}, revokes the associated
+ * Destroys `texture` and, if it was created from a blob via {@link attachBlobURLToTexture}, revokes the associated
  * object URL. `destroySource` mirrors `Texture.destroy(destroySource)` — pass `true` (the default) to also tear down
  * the underlying `TextureSource`. Errors thrown by Pixi's destroy path are propagated; the URL is still revoked first
  * so a failed destroy doesn't strand the blob in the URL store.
  */
-export function destroyTextureAndRevokeBlobUrl(texture: Texture, destroySource = true): void {
-  const url = (texture as TextureWithBlobUrl)[TEXTURE_BLOB_URL];
+export function destroyTextureAndRevokeBlobURL(texture: Texture, destroySource = true): void {
+  const url = (texture as TextureWithBlobURL)[TEXTURE_BLOB_URL];
   if (typeof url === 'string') {
     URL.revokeObjectURL(url);
-    delete (texture as TextureWithBlobUrl)[TEXTURE_BLOB_URL];
+    delete (texture as TextureWithBlobURL)[TEXTURE_BLOB_URL];
   }
   texture.destroy(destroySource);
 }
@@ -72,13 +72,13 @@ export function destroyTextureAndRevokeBlobUrl(texture: Texture, destroySource =
  * same `<video>` element returned alongside it. Callers seek / play the video element directly to drive frame updates;
  * the Pixi source polls `requestVideoFrameCallback` (or a rAF fallback) to push fresh frames into the GL texture.
  *
- * The associated `objectUrl` is created from the bytes' `Blob` and MUST be revoked (via `URL.revokeObjectURL`) once the
+ * The associated `objectURL` is created from the bytes' `Blob` and MUST be revoked (via `URL.revokeObjectURL`) once the
  * texture is disposed to free the underlying memory.
  */
 export interface VideoTextureHandle {
   texture: Texture;
   video: HTMLVideoElement;
-  objectUrl: string;
+  objectURL: string;
 }
 
 /**
@@ -146,7 +146,7 @@ export async function loadVideoTextureFromBytes(
   }
   if (!transcoded) return undefined;
   // The transcoded payload is always MP4 / H.264 (whether it came out of libx264 or the WebCodecs encoder); pass an
-  // explicit name so `guessVideoMimeType` picks `video/mp4` and the browser's H.264 decoder takes the fast path.
+  // explicit name so `guessVideoMIMEType` picks `video/mp4` and the browser's H.264 decoder takes the fast path.
   return tryLoadVideoTextureFromBytes(`${stripVideoExtension(path)}.transcoded.mp4`, transcoded);
 }
 
@@ -168,10 +168,10 @@ async function tryLoadVideoTextureFromBytes(path: string, bytes: Uint8Array): Pr
   // of megabytes). The `Uint8Array<ArrayBuffer>` cast narrows away the lib's `Uint8Array<ArrayBufferLike>` (which
   // includes `SharedArrayBuffer`) — every caller in this package decodes regular `ArrayBuffer`s through
   // `file.arrayBuffer()` / `entry.arrayBuffer()`, so SAB is unreachable here and the runtime payload is identical.
-  const blob = new Blob([bytes as Uint8Array<ArrayBuffer>], { type: guessVideoMimeType(path) });
-  const objectUrl = URL.createObjectURL(blob);
+  const blob = new Blob([bytes as Uint8Array<ArrayBuffer>], { type: guessVideoMIMEType(path) });
+  const objectURL = URL.createObjectURL(blob);
   const video = document.createElement('video');
-  video.src = objectUrl;
+  video.src = objectURL;
   // BMS BGA video has no soundtrack of its own — audio comes from `#WAV` samples on the chart timeline. Muting also
   // lets some browsers skip the autoplay-policy gating since silent media is exempt.
   video.muted = true;
@@ -195,7 +195,7 @@ async function tryLoadVideoTextureFromBytes(path: string, bytes: Uint8Array): Pr
     await waitForVideoFrameData(video, 5000);
   } catch {
     releaseVideoElement(video);
-    URL.revokeObjectURL(objectUrl);
+    URL.revokeObjectURL(objectURL);
     return undefined;
   }
 
@@ -207,7 +207,7 @@ async function tryLoadVideoTextureFromBytes(path: string, bytes: Uint8Array): Pr
   source.label = path;
   const texture = new Texture({ source });
   texture.label = path;
-  return { texture, video, objectUrl };
+  return { texture, video, objectURL };
 }
 
 /**
@@ -225,7 +225,7 @@ async function transcodeVideoToBrowserCodec(
   path: string,
   options?: VideoTranscodeOptions,
 ): Promise<Uint8Array | undefined> {
-  return withExclusiveFfmpeg(() => transcodeVideoToBrowserCodecLocked(bytes, path, options));
+  return withExclusiveFFmpeg(() => transcodeVideoToBrowserCodecLocked(bytes, path, options));
 }
 
 async function transcodeVideoToBrowserCodecLocked(
@@ -236,7 +236,7 @@ async function transcodeVideoToBrowserCodecLocked(
   const startedAt = performance.now();
   const maxLongEdge = resolveMaxLongEdge(options);
   log.info(`transcode start: ${path} (${bytes.byteLength} bytes${maxLongEdge ? `, resize ≤ ${maxLongEdge}px` : ''})`);
-  const ffmpeg = await loadFfmpeg().catch((error) => {
+  const ffmpeg = await loadFFmpeg().catch((error) => {
     log.warn('failed to load ffmpeg.wasm — BGA video will be skipped', error);
     return undefined;
   });
@@ -261,7 +261,7 @@ async function transcodeVideoToBrowserCodecLocked(
     // `-vf scale=...` is only inserted when the host opted into resizing via `options.maxLongEdgePx`. See {@link
     // buildScaleFilterArg} for the exact filter graph.
     //
-    // No `-threads` override: the wasm core is single-threaded (see `loadFfmpeg` for why we don't use core-mt), so
+    // No `-threads` override: the wasm core is single-threaded (see `loadFFmpeg` for why we don't use core-mt), so
     // libx264 picks 1 by itself.
     const ffmpegArgs: string[] = ['-y', '-i', inputName];
     if (maxLongEdge) {
@@ -312,7 +312,7 @@ async function transcodeVideoToBrowserCodecLocked(
       await ffmpeg.deleteFile(inputName);
     } catch {
       // ignore — the in-memory FS lives only as long as the FFmpeg instance, which we leak between calls (see
-      // `loadFfmpeg` for why) so cleanup just keeps the VFS tidy across calls.
+      // `loadFFmpeg` for why) so cleanup just keeps the VFS tidy across calls.
     }
     try {
       await ffmpeg.deleteFile(outputName);
@@ -372,7 +372,7 @@ async function transcodeViaWebCodecs(
   path: string,
   options: VideoTranscodeOptions,
 ): Promise<Uint8Array | undefined> {
-  return withExclusiveFfmpeg(() => transcodeViaWebCodecsLocked(bytes, path, options));
+  return withExclusiveFFmpeg(() => transcodeViaWebCodecsLocked(bytes, path, options));
 }
 
 async function transcodeViaWebCodecsLocked(
@@ -386,7 +386,7 @@ async function transcodeViaWebCodecsLocked(
   log.info(
     `WebCodecs transcode start: ${path} (${bytes.byteLength} bytes${maxLongEdge ? `, resize ≤ ${maxLongEdge}px` : ''})`,
   );
-  const ffmpeg = await loadFfmpeg().catch((error) => {
+  const ffmpeg = await loadFFmpeg().catch((error) => {
     log.warn('failed to load ffmpeg.wasm — WebCodecs transcode aborted', error);
     return undefined;
   });
@@ -403,7 +403,7 @@ async function transcodeViaWebCodecsLocked(
     // WebCodecs path bails out and the ffmpeg-encode fallback is run with the same buffer.
     await ffmpeg.writeFile(inputName, new Uint8Array(bytes));
     // ffmpeg's stderr log carries the input geometry, frame rate, and total duration we need to drive the WebCodecs
-    // encoder + chunk loop. Hook a parallel listener that doesn't displace `loadFfmpeg`'s diagnostic listener.
+    // encoder + chunk loop. Hook a parallel listener that doesn't displace `loadFFmpeg`'s diagnostic listener.
     probeListener = ({ type, message }) => {
       if (type === 'stderr') {
         probeLines.push(message);
@@ -423,7 +423,7 @@ async function transcodeViaWebCodecsLocked(
       log.warn(`ffmpeg probe (WebCodecs path) exited with code ${probeExit} for ${path}`);
       return undefined;
     }
-    const probe = parseFfmpegProbe(probeLines);
+    const probe = parseFFmpegProbe(probeLines);
     if (!probe) {
       log.warn(`WebCodecs path could not parse ffmpeg probe; falling back: ${path}`);
       return undefined;
@@ -636,7 +636,7 @@ async function transcodeViaWebCodecsLocked(
  * Returns `undefined` if any of geometry / frame rate / duration could not be parsed. The WebCodecs path bails out in
  * that case rather than guessing.
  */
-export function parseFfmpegProbe(
+export function parseFFmpegProbe(
   lines: ReadonlyArray<string>,
 ): { width: number; height: number; frameRate: number; durationSec: number; inputFormat?: string } | undefined {
   let width: number | undefined;
@@ -733,13 +733,13 @@ async function waitForEncoderDrain(encoder: VideoEncoder, target: number): Promi
  * wasm. We keep the loaded instance around between calls so subsequent BGA videos transcode immediately instead of
  * paying the cold- start hit on every chart change.
  */
-let cachedFfmpeg: FfmpegInstance | undefined;
-let cachedFfmpegPromise: Promise<FfmpegInstance> | undefined;
+let cachedFFmpeg: FFmpegInstance | undefined;
+let cachedFFmpegPromise: Promise<FFmpegInstance> | undefined;
 
-async function loadFfmpeg(): Promise<FfmpegInstance> {
-  if (cachedFfmpeg) return cachedFfmpeg;
-  if (cachedFfmpegPromise) return cachedFfmpegPromise;
-  cachedFfmpegPromise = (async () => {
+async function loadFFmpeg(): Promise<FFmpegInstance> {
+  if (cachedFFmpeg) return cachedFFmpeg;
+  if (cachedFFmpegPromise) return cachedFFmpegPromise;
+  cachedFFmpegPromise = (async () => {
     // Lazy ESM imports keep the multi-megabyte wasm + worker bundle out of the initial page load — the user only pays
     // the download cost when they actually pick a chart with an unsupported BGA video.
     const [{ FFmpeg }, { toBlobURL }] = await Promise.all([import('@ffmpeg/ffmpeg'), import('@ffmpeg/util')]);
@@ -757,16 +757,16 @@ async function loadFfmpeg(): Promise<FfmpegInstance> {
     //
     // The demo's Vite config installs a custom plugin (`be-music:ffmpeg-core`) that serves the ESM core
     // (`ffmpeg-core.js` / `.wasm`) at this stable URL prefix in dev and emits them as build assets in production.
-    const baseUrl = '/ffmpeg-core';
-    const coreUrl = `${baseUrl}/ffmpeg-core.js`;
-    const wasmUrl = `${baseUrl}/ffmpeg-core.wasm`;
+    const baseURL = '/ffmpeg-core';
+    const coreURL = `${baseURL}/ffmpeg-core.js`;
+    const wasmURL = `${baseURL}/ffmpeg-core.wasm`;
     const ffmpeg = new FFmpeg();
     // `toBlobURL` re-fetches the core JS / WASM URLs into blob URLs so the spawned module worker's `await
     // import(coreURL)` succeeds even when the page sits behind a different origin (the worker's same-origin policy
     // otherwise blocks the cross-origin file URLs Vite hands out under HMR).
-    const [coreBlobUrl, wasmBlobUrl] = await Promise.all([
-      toBlobURL(coreUrl, 'text/javascript'),
-      toBlobURL(wasmUrl, 'application/wasm'),
+    const [coreBlobURL, wasmBlobURL] = await Promise.all([
+      toBlobURL(coreURL, 'text/javascript'),
+      toBlobURL(wasmURL, 'application/wasm'),
     ]);
     // Surface ffmpeg's own log so we can see *what* the wasm side reports — the core's `exec()` wrapper hides errors
     // without a JS-style `.message` (it only re-throws when the message starts with `"Aborted"` and self-detonates with
@@ -774,18 +774,18 @@ async function loadFfmpeg(): Promise<FfmpegInstance> {
     ffmpeg.on('log', ({ type, message }: { type: string; message: string }) => {
       log.debug(`ffmpeg ${type}: ${message}`);
     });
-    await ffmpeg.load({ coreURL: coreBlobUrl, wasmURL: wasmBlobUrl });
-    cachedFfmpeg = ffmpeg as FfmpegInstance;
-    return cachedFfmpeg;
+    await ffmpeg.load({ coreURL: coreBlobURL, wasmURL: wasmBlobURL });
+    cachedFFmpeg = ffmpeg as FFmpegInstance;
+    return cachedFFmpeg;
   })().catch((error) => {
     // Reset the promise cache on failure so a transient network blip doesn't permanently disable the fallback.
-    cachedFfmpegPromise = undefined;
+    cachedFFmpegPromise = undefined;
     throw error;
   });
-  return cachedFfmpegPromise;
+  return cachedFFmpegPromise;
 }
 
-interface FfmpegInstance {
+interface FFmpegInstance {
   writeFile(path: string, data: Uint8Array): Promise<boolean>;
   readFile(path: string): Promise<Uint8Array | string>;
   exec(args: string[]): Promise<number>;
@@ -793,7 +793,7 @@ interface FfmpegInstance {
   /**
    * `@ffmpeg/ffmpeg` exposes an EventEmitter-style `on` / `off` for the underlying worker's `log` events. The WebCodecs
    * encode path uses this to capture stderr lines mid-decode (input geometry, frame rate) without displacing the
-   * diagnostic listener `loadFfmpeg` already attaches.
+   * diagnostic listener `loadFFmpeg` already attaches.
    */
   on(event: 'log', listener: (event: { type: string; message: string }) => void): void;
   off(event: 'log', listener: (event: { type: string; message: string }) => void): void;
@@ -890,7 +890,7 @@ function waitForVideoFrameData(video: HTMLVideoElement, timeoutMs: number): Prom
   });
 }
 
-function guessVideoMimeType(path: string): string {
+function guessVideoMIMEType(path: string): string {
   const lower = path.toLowerCase();
   if (lower.endsWith('.mp4') || lower.endsWith('.m4v')) return 'video/mp4';
   if (lower.endsWith('.webm')) return 'video/webm';
@@ -962,7 +962,7 @@ export async function loadTextureFromBytes(
   const options = normalizeLoadTextureOptions(transparentColorOrOptions);
   const lower = path.toLowerCase();
   if (lower.endsWith('.tga')) {
-    return decodeTgaTexture(bytes, options, path);
+    return decodeTGATexture(bytes, options, path);
   }
   const decoder = resolveImageDecoder(lower);
   if (decoder) {
@@ -1052,7 +1052,7 @@ export async function loadImageBitmapFromBytes(path: string, bytes: Uint8Array):
   const lower = path.toLowerCase();
   try {
     if (lower.endsWith('.tga')) {
-      const imageData = decodeTgaImageData(bytes);
+      const imageData = decodeTGAImageData(bytes);
       return imageData ? await createImageBitmap(imageData) : undefined;
     }
     const decoded = resolveImageDecoder(lower)?.(bytes);
@@ -1151,12 +1151,12 @@ async function applyChromaKeyToBitmap(
   return createImageBitmap(canvas);
 }
 
-async function decodeTgaTexture(
+async function decodeTGATexture(
   bytes: Uint8Array,
   options: LoadTextureOptions = {},
   label?: string,
 ): Promise<Texture | undefined> {
-  const imageData = decodeTgaImageData(bytes, options);
+  const imageData = decodeTGAImageData(bytes, options);
   if (!imageData) {
     return undefined;
   }
@@ -1180,7 +1180,7 @@ async function decodeTgaTexture(
  * Decodes an uncompressed or RLE true-colour / grayscale TGA into RGBA pixels, applying the chroma keys in `options`.
  * `undefined` for truncated files and variants it doesn't handle (colour-mapped, 15/16-bit).
  */
-function decodeTgaImageData(bytes: Uint8Array, options: LoadTextureOptions = {}): ImageData | undefined {
+function decodeTGAImageData(bytes: Uint8Array, options: LoadTextureOptions = {}): ImageData | undefined {
   const transparentColor = options.transparentColor;
   const keyOutBlack = options.keyOutBlack === true;
   if (bytes.length < 18) {
@@ -1195,7 +1195,7 @@ function decodeTgaImageData(bytes: Uint8Array, options: LoadTextureOptions = {})
   const bitsPerPixel = bytes[16] ?? 0;
   const descriptor = bytes[17] ?? 0;
   const bytesPerPixel = bitsPerPixel / 8;
-  const isRle = imageType === 10 || imageType === 11;
+  const isRLE = imageType === 10 || imageType === 11;
   const isTrueColor = imageType === 2 || imageType === 10;
   const isGrayscale = imageType === 3 || imageType === 11;
 
@@ -1250,7 +1250,7 @@ function decodeTgaImageData(bytes: Uint8Array, options: LoadTextureOptions = {})
     return true;
   };
 
-  if (isRle) {
+  if (isRLE) {
     while (written < pixelCount && sourceOffset < bytes.length) {
       const packet = bytes[sourceOffset++] ?? 0;
       const count = (packet & 0x7f) + 1;

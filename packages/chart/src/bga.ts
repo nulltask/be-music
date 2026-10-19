@@ -1,25 +1,25 @@
 import {
   normalizeChannel,
   normalizeObjectKey,
-  resolveBmsBase,
+  resolveBMSBase,
   type BeMusicEvent,
-  type BeMusicJson,
+  type BeMusicJSON,
 } from '@be-music/json';
 import { sortEvents } from './index.ts';
 
-export interface BgaCue {
+export interface BGACue {
   seconds: number;
   key?: string;
 }
 
-export interface BgaTimelines {
-  base: BgaCue[];
-  layer: BgaCue[];
-  layer2: BgaCue[];
-  poor: BgaCue[];
+export interface BGATimelines {
+  base: BGACue[];
+  layer: BGACue[];
+  layer2: BGACue[];
+  poor: BGACue[];
 }
 
-export interface BgaTimingResolver {
+export interface BGATimingResolver {
   eventToSeconds: (event: BeMusicEvent) => number;
   beatToSeconds: (beat: number) => number;
 }
@@ -29,14 +29,14 @@ const BGA_POOR_CHANNEL = '06';
 const BGA_LAYER_CHANNEL = '07';
 const BGA_LAYER2_CHANNEL = '0A';
 
-export function buildBgaTimelines(chart: BeMusicJson, resolver: BgaTimingResolver): BgaTimelines {
-  const idBase = resolveBmsBase(chart);
+export function buildBGATimelines(chart: BeMusicJSON, resolver: BGATimingResolver): BGATimelines {
+  const idBase = resolveBMSBase(chart);
   const sortedEvents = sortEvents(chart.events);
-  const timelines: BgaTimelines = {
-    base: buildBmsBgaTimeline(sortedEvents, resolver, BGA_BASE_CHANNEL, idBase),
-    poor: buildBmsBgaTimeline(sortedEvents, resolver, BGA_POOR_CHANNEL, idBase),
-    layer: buildBmsBgaTimeline(sortedEvents, resolver, BGA_LAYER_CHANNEL, idBase),
-    layer2: buildBmsBgaTimeline(sortedEvents, resolver, BGA_LAYER2_CHANNEL, idBase),
+  const timelines: BGATimelines = {
+    base: buildBmsBGATimeline(sortedEvents, resolver, BGA_BASE_CHANNEL, idBase),
+    poor: buildBmsBGATimeline(sortedEvents, resolver, BGA_POOR_CHANNEL, idBase),
+    layer: buildBmsBGATimeline(sortedEvents, resolver, BGA_LAYER_CHANNEL, idBase),
+    layer2: buildBmsBGATimeline(sortedEvents, resolver, BGA_LAYER2_CHANNEL, idBase),
   };
 
   const bgaSection = chart.bmson.bga;
@@ -44,7 +44,7 @@ export function buildBgaTimelines(chart: BeMusicJson, resolver: BgaTimingResolve
     const headerById = new Map(bgaSection.header.map((entry) => [entry.id, entry.name]));
     const resolution =
       chart.bmson.info?.resolution && chart.bmson.info.resolution > 0 ? chart.bmson.info.resolution : 240;
-    const toCue = (entry: { y: number; id: number }): BgaCue => {
+    const toCue = (entry: { y: number; id: number }): BGACue => {
       const beat = entry.y / resolution;
       const seconds = resolver.beatToSeconds(beat);
       return { seconds, key: entry.id === 0 ? undefined : headerById.get(entry.id) };
@@ -54,18 +54,18 @@ export function buildBgaTimelines(chart: BeMusicJson, resolver: BgaTimingResolve
     for (const event of bgaSection.poorEvents) timelines.poor.push(toCue(event));
   }
 
-  sortBgaTimelines(timelines);
+  sortBGATimelines(timelines);
   return timelines;
 }
 
-export function buildBmsBgaTimeline(
+export function buildBmsBGATimeline(
   events: ReadonlyArray<BeMusicEvent>,
-  resolver: Pick<BgaTimingResolver, 'eventToSeconds'>,
+  resolver: Pick<BGATimingResolver, 'eventToSeconds'>,
   channel: string,
   base: 36 | 62 = 36,
-): BgaCue[] {
+): BGACue[] {
   const normalized = normalizeChannel(channel);
-  const timeline: BgaCue[] = [];
+  const timeline: BGACue[] = [];
   for (const event of events) {
     if (normalizeChannel(event.channel) !== normalized) {
       continue;
@@ -79,8 +79,8 @@ export function buildBmsBgaTimeline(
   return timeline;
 }
 
-function sortBgaTimelines(timelines: BgaTimelines): void {
-  const sortBySeconds = (left: BgaCue, right: BgaCue): number => left.seconds - right.seconds;
+function sortBGATimelines(timelines: BGATimelines): void {
+  const sortBySeconds = (left: BGACue, right: BGACue): number => left.seconds - right.seconds;
   timelines.base.sort(sortBySeconds);
   timelines.layer.sort(sortBySeconds);
   timelines.layer2.sort(sortBySeconds);

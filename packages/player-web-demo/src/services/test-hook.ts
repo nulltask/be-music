@@ -9,13 +9,13 @@ import type { LibraryChart, LibraryEntry } from '@be-music/scene-model';
 import type { BeMusicSongRecord } from '@be-music/skin-sdk';
 import { lookupCourseRecord } from '../course-result.ts';
 import { describeBar, judgedOf, nameJingle, type TestHookLiveState } from '../test-hook.ts';
-import type { DemoGuiState, DemoScene, PlayerWebDemoElements } from '../types.ts';
+import type { DemoGUIState, DemoScene, PlayerWebDemoElements } from '../types.ts';
 import type { CourseMakerService } from './course-maker.ts';
 import type { CourseRunService } from './courses.ts';
 import type { LibraryService } from './library.ts';
 import type { RecordsService } from './records.ts';
 import type { BeatorajaThemeService } from './themes/beatoraja.ts';
-import type { Lr2ThemeService } from './themes/lr2.ts';
+import type { LR2ThemeService } from './themes/lr2.ts';
 
 /** The scenes the router holds: the one showing, the select scene it keeps, and the play on the stage or loading. */
 export interface TestHookScenes {
@@ -36,7 +36,7 @@ export interface LiveTestHookDeps {
   /** The page: the loading overlay. */
   readonly elements: Pick<PlayerWebDemoElements, 'loadingOverlay'>;
   /** The Debug Menu's state: the status line, and the NONSTOP placement a course bar's record is read for. */
-  readonly guiState: Pick<DemoGuiState, 'status' | 'nonstopPlacement'>;
+  readonly guiState: Pick<DemoGUIState, 'status' | 'nonstopPlacement'>;
   /** The library: its charts and course folders. */
   readonly library: Pick<LibraryService, 'collection'>;
   /** The best records of the current judge ruleset, which the select screen shows, read without hashing a chart. */
@@ -123,14 +123,14 @@ function barRecord(entry: LibraryEntry, deps: LiveTestHookDeps): BeMusicSongReco
 
 /** The themes a result's jingle may come from. */
 export interface ResultJingleThemes {
-  readonly lr2: Pick<Lr2ThemeService, 'resultJingles'>;
-  readonly beatoraja: Pick<BeatorajaThemeService, 'beatorajaThemeBgm'>;
+  readonly lr2: Pick<LR2ThemeService, 'resultJingles'>;
+  readonly beatoraja: Pick<BeatorajaThemeService, 'beatorajaThemeBGM'>;
 }
 
 /** Which theme slot a result jingle came from (`lr2:courseClear`, `beatoraja:fail`, ...), for the test hook. */
 export function nameResultJingle(bytes: Uint8Array | undefined, themes: ResultJingleThemes): string | undefined {
   return nameJingle(bytes, {
     lr2: themes.lr2.resultJingles(),
-    beatoraja: { ...themes.beatoraja.beatorajaThemeBgm },
+    beatoraja: { ...themes.beatoraja.beatorajaThemeBGM },
   });
 }

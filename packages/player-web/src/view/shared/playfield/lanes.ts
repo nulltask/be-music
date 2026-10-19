@@ -4,7 +4,7 @@
  */
 
 import { PLAYFIELD } from '@be-music/skin-sdk';
-import { resolveLr2LaneIndex } from '@be-music/player/lanes';
+import { resolveLR2LaneIndex } from '@be-music/player/lanes';
 import { resolveBeMusicLaneKind } from '../../../skin/be-music/registry.ts';
 import type { BeMusicLaneFrame } from '../../../skin/be-music/types.ts';
 import { renderPhantomLanes } from '../../../skins/phantom/playfield.ts';
@@ -45,7 +45,7 @@ export function renderLanes(ctx: PlayfieldContext, width: number, height: number
       channel,
       kind: resolveBeMusicLaneKind(
         channel,
-        resolveLr2LaneIndex(channel, ctx.play.chartPlayVariant),
+        resolveLR2LaneIndex(channel, ctx.play.chartPlayVariant),
         ctx.play.chartPlayVariant,
       ),
       x,

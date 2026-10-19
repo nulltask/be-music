@@ -1,4 +1,4 @@
-import type { BmsControlFlowEntry } from '@be-music/json';
+import type { BMSControlFlowEntry } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import { drawRandomOutcomes, evaluateControlFlow, hasControlFlow, type RandomDraws } from './control-flow.ts';
 
@@ -22,8 +22,8 @@ const DIRECTIVES = new Set([
  * Builds a control-flow list the way the parser captures it: directives, `#xxx value` headers, and `#mmmcc:data`
  * object lines (kept as a single event so the active lines can be read back as `cc:data`).
  */
-function source(lines: string[]): { bms: { controlFlow: BmsControlFlowEntry[] } } {
-  const controlFlow = lines.map((line): BmsControlFlowEntry => {
+function source(lines: string[]): { bms: { controlFlow: BMSControlFlowEntry[] } } {
+  const controlFlow = lines.map((line): BMSControlFlowEntry => {
     const object = /^#(\d{3})([0-9A-Z]{2}):(.+)$/u.exec(line);
     if (object) {
       const [, measure, channel, value] = object;

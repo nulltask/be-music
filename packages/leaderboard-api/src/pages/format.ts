@@ -1,4 +1,4 @@
-import { clearLampRank, computeScoreRate, resolveIidxRankLabel } from '@be-music/player/ruleset';
+import { clearLampRank, computeScoreRate, resolveIIDXRankLabel } from '@be-music/player/ruleset';
 import { en, type Messages } from './i18n/en.ts';
 
 /** Display name and colour of each clear lamp, LR2 / beatoraja style, by the rank the Leaderboard stores it as. */
@@ -59,7 +59,7 @@ export function formatScoreRate(exScore: number, noteCount: number): string {
 }
 
 /** DJ LEVEL on the IIDX ninths (AAA from 8/9 of the maximum EX score down to F), or `-` without notes. */
-export const djLevel = (exScore: number, noteCount: number): string => resolveIidxRankLabel(exScore, noteCount);
+export const djLevel = (exScore: number, noteCount: number): string => resolveIIDXRankLabel(exScore, noteCount);
 
 /** A length of time for totals: `3h 25m`, `25m 12s`, `48s`. */
 export function formatPlayTime(ms: number, duration: Messages['duration'] = en.duration): string {
@@ -141,7 +141,7 @@ export function formatJudgeRank(
  * How the chart's long notes are judged (`#LNMODE`, or the default LN when the chart names none): 1 LN, 2 CN (charge
  * note), 3 HCN (hell charge note), each with what it means. The mode applies only if the chart has long notes.
  */
-export function formatLnMode(lnMode: number | null): string {
+export function formatLNMode(lnMode: number | null): string {
   return lnMode === 1
     ? 'LN — the start is judged; hold to the end'
     : lnMode === 2

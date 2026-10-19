@@ -1,34 +1,34 @@
 /**
  * The LR2 family's decide screen: an LR2 decide skin (`Decide/decide.lr2skin`) drawn on its canvas over the chart's
  * `#STAGEFILE`, letterboxed into the window. It draws the decide session's frames through the LR2 decide state
- * (`resolveLr2DecideState`) and LR2's scene timers (`resolveLr2DecideTimers`), which it reads off each frame, and
+ * (`resolveLR2DecideState`) and LR2's scene timers (`resolveLR2DecideTimers`), which it reads off each frame, and
  * turns a click into a `continue` intent; the session times the screen from the skin's timing
- * ({@link resolveLr2DecideTiming}).
+ * ({@link resolveLR2DecideTiming}).
  */
 
 import {
   LR2_SPECIAL_GRAPHIC,
-  type Lr2DestinationRect,
-  type Lr2ImageElement,
-  type Lr2Skin,
-  type Lr2SpecialGraphic,
+  type LR2DestinationRect,
+  type LR2ImageElement,
+  type LR2Skin,
+  type LR2SpecialGraphic,
 } from '@be-music/lr2-skin';
 import { LR2_TIMER } from '@be-music/lr2-skin/ids';
-import { resolveLr2DecideState, resolveLr2DecideTimers, type Lr2SceneState } from '@be-music/lr2-skin/state';
+import { resolveLR2DecideState, resolveLR2DecideTimers, type LR2SceneState } from '@be-music/lr2-skin/state';
 import type { LibraryChart } from '@be-music/scene-model';
 import { Color, Container, Graphics, Sprite, type Texture } from 'pixi.js';
 import type { BrowserSongAssetSource } from '../../collection/types.ts';
-import type { Lr2Kit } from '../../host/family-kit.ts';
+import type { LR2Kit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { disposeChildren } from '../../stage/pixi-utils.ts';
-import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
+import type { LR2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
-import { evaluateElementDestination, makeLr2StaticImageSprite } from '../../skin/lr2/render.ts';
-import { isDestinationVisible, makeLr2TextSprite, resolveScaledViewport } from '../../skin/lr2/scene-render.ts';
+import { evaluateElementDestination, makeLR2StaticImageSprite } from '../../skin/lr2/render.ts';
+import { isDestinationVisible, makeLR2TextSprite, resolveScaledViewport } from '../../skin/lr2/scene-render.ts';
 import {
-  Lr2ChartGraphicTextureStore,
-  Lr2SkinTextureStore,
+  LR2ChartGraphicTextureStore,
+  LR2SkinTextureStore,
   collectDecideSkinTexturePaths,
   resolveSolidSpecialGraphicTexture,
 } from '../../skin/lr2/scene-textures.ts';
@@ -55,7 +55,7 @@ export const LR2_DECIDE_AUTO_ADVANCE_AFTER_INPUT_MS = 1200;
  * {@link LR2_DECIDE_AUTO_ADVANCE_AFTER_INPUT_MS} later, and it fades out over its `#FADEOUT` as it leaves (at once
  * without one).
  */
-export function resolveLr2DecideTiming(skin: Pick<Lr2Skin, 'timing'>): SceneViewTiming {
+export function resolveLR2DecideTiming(skin: Pick<LR2Skin, 'timing'>): SceneViewTiming {
   const inputDelayMs = Math.max(0, skin.timing.startInput ?? LR2_DECIDE_DEFAULT_INPUT_DELAY_MS);
   return {
     inputDelayMs,
@@ -64,13 +64,13 @@ export function resolveLr2DecideTiming(skin: Pick<Lr2Skin, 'timing'>): SceneView
   };
 }
 
-export interface Lr2DecideViewOptions {
+export interface LR2DecideViewOptions {
   /** Where the chart's files are, for its `#STAGEFILE`, `*BANNER` and `*BACKBMP`; none load without one. */
   readonly source?: BrowserSongAssetSource;
 }
 
 /** The LR2 decide view. See the module comment. */
-export class Lr2DecideView implements DecideView {
+export class LR2DecideView implements DecideView {
   public readonly family = 'lr2' as const;
   public readonly root: Container = new Container();
   public readonly timing: SceneViewTiming;
@@ -91,12 +91,12 @@ export class Lr2DecideView implements DecideView {
   private cachedScreenHeight = -1;
   private cachedDesignWidth = -1;
   private cachedDesignHeight = -1;
-  private readonly kit: Lr2Kit;
+  private readonly kit: LR2Kit;
   private readonly source: BrowserSongAssetSource | undefined;
-  private readonly skinTextures = new Lr2SkinTextureStore();
-  private readonly chartGraphicTextures = new Lr2ChartGraphicTextureStore();
+  private readonly skinTextures = new LR2SkinTextureStore();
+  private readonly chartGraphicTextures = new LR2ChartGraphicTextureStore();
   /** The skin's `#LR2FONT` bitmap fonts, once loaded. */
-  private bitmapFonts: ReadonlyMap<number, Lr2LoadedFont> = new Map();
+  private bitmapFonts: ReadonlyMap<number, LR2LoadedFont> = new Map();
   /** The frame being drawn: its clock and its running timers. */
   private nowMs = 0;
   private timers: ReadonlyMap<number, number> = new Map();
@@ -105,14 +105,14 @@ export class Lr2DecideView implements DecideView {
   private built = false;
   private disposed = false;
 
-  public constructor(kit: Lr2Kit, options: Lr2DecideViewOptions = {}) {
+  public constructor(kit: LR2Kit, options: LR2DecideViewOptions = {}) {
     this.kit = kit;
     this.source = options.source;
-    this.timing = resolveLr2DecideTiming(kit.skin);
+    this.timing = resolveLR2DecideTiming(kit.skin);
   }
 
   /** An LR2 kit carries nothing but its skin, which the view keeps: another skin needs another view. */
-  public updateKit(kit: Lr2Kit): void {
+  public updateKit(kit: LR2Kit): void {
     if (kit.skin !== this.kit.skin) log.warn('a decide view keeps its skin; ignoring a kit of another skin');
   }
 
@@ -160,7 +160,7 @@ export class Lr2DecideView implements DecideView {
     const host = this.host;
     if (host === undefined || this.disposed) return;
     this.nowMs = frame.clock.nowMs;
-    this.timers = resolveLr2DecideTimers(frame);
+    this.timers = resolveLR2DecideTimers(frame);
     const skin = this.kit.skin;
     const screenWidth = host.app.screen.width || FALLBACK_SCREEN_WIDTH;
     const screenHeight = host.app.screen.height || FALLBACK_SCREEN_HEIGHT;
@@ -187,7 +187,7 @@ export class Lr2DecideView implements DecideView {
     this.drawSkin(
       skin,
       frame.chart,
-      resolveLr2DecideState({ chart: frame.chart, ...(frame.course !== undefined ? { course: frame.course } : {}) }),
+      resolveLR2DecideState({ chart: frame.chart, ...(frame.course !== undefined ? { course: frame.course } : {}) }),
     );
   }
 
@@ -235,7 +235,7 @@ export class Lr2DecideView implements DecideView {
     this.stageFileLayer.addChild(sprite);
   }
 
-  private drawSkin(skin: Lr2Skin, chart: LibraryChart, state: Lr2SceneState): void {
+  private drawSkin(skin: LR2Skin, chart: LibraryChart, state: LR2SceneState): void {
     const { ops } = state;
     for (const image of skin.images) {
       const dst = this.evaluateElementDst(image);
@@ -249,7 +249,7 @@ export class Lr2DecideView implements DecideView {
       const value = state.text(text.st);
       if (value === undefined || value.length === 0) continue;
       this.skinLayer.addChild(
-        makeLr2TextSprite(value, text, dst, {
+        makeLR2TextSprite(value, text, dst, {
           maxFontSize: 22,
           bitmapFonts: this.bitmapFonts,
           systemFontSizes: skin.systemFontSizes,
@@ -259,9 +259,9 @@ export class Lr2DecideView implements DecideView {
   }
 
   private evaluateElementDst(element: {
-    destination: Lr2DestinationRect;
-    keyframes: Lr2DestinationRect[];
-  }): Lr2DestinationRect {
+    destination: LR2DestinationRect;
+    keyframes: LR2DestinationRect[];
+  }): LR2DestinationRect {
     return evaluateElementDestination(element, this.elapsedSinceTimer);
   }
 
@@ -274,8 +274,8 @@ export class Lr2DecideView implements DecideView {
   /** Whether `timer` runs on the frame: timer 0 always does; an element on a timer that has not started stays hidden. */
   private readonly timerActive = (timer: number): boolean => timer === LR2_TIMER.SCENE_START || this.timers.has(timer);
 
-  private makeStaticImageSprite(image: Lr2ImageElement, dst: Lr2DestinationRect, chart: LibraryChart) {
-    return makeLr2StaticImageSprite(image, dst, {
+  private makeStaticImageSprite(image: LR2ImageElement, dst: LR2DestinationRect, chart: LibraryChart) {
+    return makeLR2StaticImageSprite(image, dst, {
       textures: this.skinTextures.asReadonlyMap(),
       elapsedSinceTimer: this.elapsedSinceTimer,
       resolveSpecialGraphicTexture: (path) => this.chartGraphicTexture(chart, path),
@@ -286,7 +286,7 @@ export class Lr2DecideView implements DecideView {
    * The texture of one of LR2's chart-bound images (`*BANNER`, `*STAGEFILE`, `*BACKBMP`, or the solid `*BLACK` /
    * `*WHITE`) for the chart; the first miss starts loading it, and a later frame draws it.
    */
-  private chartGraphicTexture(chart: LibraryChart, path: Lr2SpecialGraphic): Texture | undefined {
+  private chartGraphicTexture(chart: LibraryChart, path: LR2SpecialGraphic): Texture | undefined {
     return (
       resolveSolidSpecialGraphicTexture(path) ??
       this.chartGraphicTextures.resolveFromSource(this.source, chart, path, () => undefined)

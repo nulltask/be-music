@@ -1,5 +1,5 @@
 import { resolveChart } from '@be-music/chart';
-import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
+import type { BeMusicEvent, BeMusicJSON } from '@be-music/json';
 import type { NonstopStageTiming } from './plan.ts';
 
 /**
@@ -29,7 +29,7 @@ function lr2ChannelNumber(channel: string): number | undefined {
 }
 
 /** Whether LR2 keeps an object on `channel` (its converted channel is above 0); `02` / `03` are read apart. */
-function isLr2Object(number: number, pms: boolean): boolean {
+function isLR2Object(number: number, pms: boolean): boolean {
   if (number === 2 || number === 3) return false;
   if (number >= 150) return true;
   if (MINE_DROPPED.has(number)) return false;
@@ -41,11 +41,11 @@ function isLr2Object(number: number, pms: boolean): boolean {
 }
 
 /** Whether an object becomes a visible note (LR2 ops 10-29 / 50-69): the 1P / 2P key lanes and their long notes. */
-function isLr2VisibleNote(number: number, pms: boolean): boolean {
+function isLR2VisibleNote(number: number, pms: boolean): boolean {
   const lane = number % 10;
   const bank = Math.floor(number / 10);
   if (!(bank === 1 || bank === 2 || bank === 5 || bank === 6) || lane === 0) return false;
-  return isLr2Object(number, pms);
+  return isLR2Object(number, pms);
 }
 
 function eventPosition(event: BeMusicEvent): number {
@@ -60,7 +60,7 @@ function eventPosition(event: BeMusicEvent): number {
  * `lr2FirstNote` follows LR2's file order when the chart keeps its object lines (`preservation.bms.objectLines`) for
  * every event; otherwise it reads the events in chart order, which is the same unless a line repeats an earlier measure.
  */
-export function createNonstopStageTiming(json: BeMusicJson, options: { pms?: boolean } = {}): NonstopStageTiming {
+export function createNonstopStageTiming(json: BeMusicJSON, options: { pms?: boolean } = {}): NonstopStageTiming {
   const pms = options.pms === true;
   const resolved = resolveChart(json);
   const { timing, beatResolver } = resolved;
@@ -73,7 +73,7 @@ export function createNonstopStageTiming(json: BeMusicJson, options: { pms?: boo
   let lastNote = 0;
   for (const event of json.events) {
     const number = lr2ChannelNumber(event.channel);
-    if (number === undefined || !isLr2VisibleNote(number, pms)) continue;
+    if (number === undefined || !isLR2VisibleNote(number, pms)) continue;
     const position = eventPosition(event);
     firstNote = Math.min(firstNote, position);
     lastNote = Math.max(lastNote, position);
@@ -89,9 +89,9 @@ export function createNonstopStageTiming(json: BeMusicJson, options: { pms?: boo
   let lr2FirstNote = -1;
   for (const event of fileOrder) {
     const number = lr2ChannelNumber(event.channel);
-    if (number === undefined || !isLr2Object(number, pms)) continue;
+    if (number === undefined || !isLR2Object(number, pms)) continue;
     const position = eventPosition(event);
-    if (isLr2VisibleNote(number, pms) && lr2FirstNote === -1) lr2FirstNote = position;
+    if (isLR2VisibleNote(number, pms) && lr2FirstNote === -1) lr2FirstNote = position;
     else if (position < lr2FirstNote) lr2FirstNote = position;
   }
 
@@ -101,8 +101,8 @@ export function createNonstopStageTiming(json: BeMusicJson, options: { pms?: boo
     firstNote,
     ...(lr2FirstNote >= 0 ? { lr2FirstNote } : {}),
     lastNote,
-    headerBpm: json.metadata.bpm,
-    finalBpm: Math.abs(lastTempo?.bpm ?? json.metadata.bpm),
+    headerBPM: json.metadata.bpm,
+    finalBPM: Math.abs(lastTempo?.bpm ?? json.metadata.bpm),
     firstMeasureLength: (beatResolver.measureToBeat(1) - beatResolver.measureToBeat(0)) / 4,
   };
 }

@@ -1,5 +1,5 @@
 import { PLAY_MODE_LAYOUTS } from '@be-music/chart';
-import { resolveLr2LaneIndex } from '@be-music/player/lanes';
+import { resolveLR2LaneIndex } from '@be-music/player/lanes';
 import { describe, expect, it, test } from 'vite-plus/test';
 import {
   IIDX_DP_SIDE_GAP,
@@ -9,7 +9,7 @@ import {
   resolveFallbackPlayfieldSpan,
   resolveSkinlessLaneLayout,
   shouldPreserveFallbackSideWidth,
-  usesIidxLaneWidths,
+  usesIIDXLaneWidths,
 } from './lane-geometry.ts';
 
 describe('resolveBeMusicLaneKind', () => {
@@ -18,7 +18,7 @@ describe('resolveBeMusicLaneKind', () => {
       for (const lane of layout.lanes) {
         const expected = lane.kind === 'key' ? lane.tone : lane.kind;
         expect(
-          resolveBeMusicLaneKind(lane.channel, resolveLr2LaneIndex(lane.channel, layout.variant), layout.variant),
+          resolveBeMusicLaneKind(lane.channel, resolveLR2LaneIndex(lane.channel, layout.variant), layout.variant),
           `${layout.id} ${lane.channel}`,
         ).toBe(expected);
       }
@@ -249,10 +249,10 @@ describe('resolveSkinlessLaneLayout', () => {
   });
 });
 
-describe('usesIidxLaneWidths', () => {
+describe('usesIIDXLaneWidths', () => {
   it('covers the 5 / 7 / 10 / 14 KEY families only', () => {
-    for (const variant of ['5', '7', '10', '14'] as const) expect(usesIidxLaneWidths(variant)).toBe(true);
-    for (const variant of [undefined, '9', '24', '48'] as const) expect(usesIidxLaneWidths(variant)).toBe(false);
+    for (const variant of ['5', '7', '10', '14'] as const) expect(usesIIDXLaneWidths(variant)).toBe(true);
+    for (const variant of [undefined, '9', '24', '48'] as const) expect(usesIIDXLaneWidths(variant)).toBe(false);
   });
 });
 

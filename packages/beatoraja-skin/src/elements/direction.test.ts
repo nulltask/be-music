@@ -7,7 +7,7 @@
 //     Pixi Y-DOWN flip, the source labels line up with screen-visual direction labels.
 //
 //   - `graph[].angle` (`SkinGraph.java:99-106`): 2 values — `direction == 1` ⇒ vertical (fill
-//     bottom-up), anything else ⇒ horizontal (fill left-right). `JsonSkin.Graph.angle` defaults
+//     bottom-up), anything else ⇒ horizontal (fill left-right). `JSONSkin.Graph.angle` defaults
 //     to 1, so an omitted field renders as VERTICAL.
 //
 // Audit A-5 / B-3: previous TS impl borrowed slider's 4-direction code for graph[] which both
@@ -29,7 +29,7 @@ describe('graph[].angle direction mapping (audit A-5 / B-3 — 2-value semantics
     expect(graphs.map((g) => g.angle)).toEqual(['horizontal', 'vertical', 'horizontal', 'horizontal']);
   });
 
-  it('defaults to vertical when angle is missing (matches `JsonSkin.Graph.angle = 1` default)', () => {
+  it('defaults to vertical when angle is missing (matches `JSONSkin.Graph.angle = 1` default)', () => {
     const graphs = normalizeBeatorajaGraphs([{ id: 'g', src: 0, x: 0, y: 0, w: 1, h: 1, type: 1 }]);
     expect(graphs[0]?.angle).toBe('vertical');
   });

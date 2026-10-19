@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { chargeCloudGpuPrograms } from './charge-cloud-wgsl.ts';
+import { chargeCloudGPUPrograms } from './charge-cloud-wgsl.ts';
 
-describe('chargeCloudGpuPrograms', () => {
-  const programs = Object.entries(chargeCloudGpuPrograms());
+describe('chargeCloudGPUPrograms', () => {
+  const programs = Object.entries(chargeCloudGPUPrograms());
 
   // The orb program reads no textures.
   const texturePrograms = programs.filter(([name]) => name !== 'orb');
@@ -20,7 +20,7 @@ describe('chargeCloudGpuPrograms', () => {
   });
 
   it('names every quad attribute aPosition, so WebGPU binds the right buffer to each quad', () => {
-    const { velocity, position, particles, orb, splat } = chargeCloudGpuPrograms();
+    const { velocity, position, particles, orb, splat } = chargeCloudGPUPrograms();
     for (const program of [velocity, position, particles, orb]) {
       expect(Object.keys(program.attributeData)).toEqual(['aPosition']);
     }

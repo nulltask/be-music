@@ -10,36 +10,36 @@ import {
 } from 'mediabunny';
 import { describe, expect, it } from 'vite-plus/test';
 
-import { makeWebmSeekable, pickRecorderMimeType, resolveCaptureSize, shouldCaptureFrame } from './gameplay-recorder.ts';
+import { makeWebMSeekable, pickRecorderMIMEType, resolveCaptureSize, shouldCaptureFrame } from './gameplay-recorder.ts';
 
-describe('pickRecorderMimeType', () => {
+describe('pickRecorderMIMEType', () => {
   // The picker accepts an injected `isSupported` so the test can exercise every branch without relying on the host
   // browser's `MediaRecorder.isTypeSupported`. Production usage wraps that API directly.
 
   it('returns the highest-priority codec the runtime supports', () => {
     // Modern Chrome / Firefox: VP9 + Opus is universally supported and gives the best quality, so it wins outright.
     const isSupported = (type: string): boolean => type === 'video/webm;codecs=vp9,opus';
-    expect(pickRecorderMimeType(isSupported)).toBe('video/webm;codecs=vp9,opus');
+    expect(pickRecorderMIMEType(isSupported)).toBe('video/webm;codecs=vp9,opus');
   });
 
   it('falls back to VP8 when VP9 is unavailable', () => {
     // Older Safari / Firefox stable channels: VP9 unsupported, VP8 + Opus still works. The picker shouldn't drop
     // straight to bare `video/webm` — the codec hint helps the encoder pick the right pipeline.
     const supported = new Set(['video/webm;codecs=vp8,opus', 'video/webm;codecs=vp8', 'video/webm']);
-    expect(pickRecorderMimeType((type) => supported.has(type))).toBe('video/webm;codecs=vp8,opus');
+    expect(pickRecorderMIMEType((type) => supported.has(type))).toBe('video/webm;codecs=vp8,opus');
   });
 
   it('falls back to bare video/webm when no codec hint matches', () => {
     // Very minimal MediaRecorder implementations (some embedded browsers) advertise only the bare container MIME type.
     // The last entry in the priority list catches that.
     const isSupported = (type: string): boolean => type === 'video/webm';
-    expect(pickRecorderMimeType(isSupported)).toBe('video/webm');
+    expect(pickRecorderMIMEType(isSupported)).toBe('video/webm');
   });
 
   it('returns undefined when nothing in the chain is supported', () => {
     // Older Safari + iOS used to expose `MediaRecorder` but no WebM. Returning undefined lets the caller surface a
     // "recording unavailable on this browser" message rather than guessing at a codec the encoder will reject.
-    expect(pickRecorderMimeType(() => false)).toBeUndefined();
+    expect(pickRecorderMIMEType(() => false)).toBeUndefined();
   });
 
   it('prefers VP9 over VP8 when both are supported', () => {
@@ -47,7 +47,7 @@ describe('pickRecorderMimeType', () => {
     // would silently regress recording quality across upgrades.
     const isSupported = (type: string): boolean =>
       type === 'video/webm;codecs=vp9,opus' || type === 'video/webm;codecs=vp8,opus';
-    expect(pickRecorderMimeType(isSupported)).toBe('video/webm;codecs=vp9,opus');
+    expect(pickRecorderMIMEType(isSupported)).toBe('video/webm;codecs=vp9,opus');
   });
 });
 
@@ -110,7 +110,7 @@ function fakeVp8Frame(keyFrame: boolean): Uint8Array {
  * Writes a WebM the way `MediaRecorder` does: append-only, so it carries neither a `Duration` nor `Cues`. 30 frames at
  * 30 fps starting at `startSec`, a key frame every 10.
  */
-async function writeStreamingWebm(startSec = 0): Promise<Blob> {
+async function writeStreamingWebM(startSec = 0): Promise<Blob> {
   const output = new Output({ format: new WebMOutputFormat({ appendOnly: true }), target: new BufferTarget() });
   const source = new EncodedVideoPacketSource('vp8');
   output.addVideoTrack(source, { frameRate: 30 });
@@ -153,12 +153,12 @@ async function readPackets(blob: Blob): Promise<Array<{ timestamp: number; type:
   }
 }
 
-describe('makeWebmSeekable', () => {
+describe('makeWebMSeekable', () => {
   it('writes the duration and seek index into a streaming WebM and keeps every packet as recorded', async () => {
-    const recorded = await writeStreamingWebm();
+    const recorded = await writeStreamingWebM();
     expect(await readMetadataDuration(recorded)).toBeNull();
 
-    const seekable = await makeWebmSeekable(recorded);
+    const seekable = await makeWebMSeekable(recorded);
 
     expect(seekable).not.toBe(recorded);
     expect(seekable.type).toBe('video/webm;codecs=vp8');
@@ -167,19 +167,19 @@ describe('makeWebmSeekable', () => {
   });
 
   it('keeps the original timestamps when the recording does not start at zero', async () => {
-    const recorded = await writeStreamingWebm(0.5);
-    const packets = await readPackets(await makeWebmSeekable(recorded));
+    const recorded = await writeStreamingWebM(0.5);
+    const packets = await readPackets(await makeWebMSeekable(recorded));
     expect(packets[0]?.timestamp).toBeCloseTo(0.5, 3);
     expect(packets).toHaveLength(30);
   });
 
   it('returns the input unchanged when it is not a WebM', async () => {
-    const notWebm = new Blob([new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])], { type: 'video/webm' });
-    expect(await makeWebmSeekable(notWebm)).toBe(notWebm);
+    const notWebM = new Blob([new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])], { type: 'video/webm' });
+    expect(await makeWebMSeekable(notWebM)).toBe(notWebM);
   });
 
   it('returns an empty blob unchanged', async () => {
     const empty = new Blob([], { type: 'video/webm' });
-    expect(await makeWebmSeekable(empty)).toBe(empty);
+    expect(await makeWebMSeekable(empty)).toBe(empty);
   });
 });

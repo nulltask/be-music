@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { clampFontSize, isDestinationVisible } from './scene-render.ts';
-import type { Lr2DestinationRect } from '@be-music/lr2-skin';
+import type { LR2DestinationRect } from '@be-music/lr2-skin';
 
-function destination(overrides: Partial<Lr2DestinationRect> = {}): Lr2DestinationRect {
+function destination(overrides: Partial<LR2DestinationRect> = {}): LR2DestinationRect {
   return {
     time: 0,
     x: 0,

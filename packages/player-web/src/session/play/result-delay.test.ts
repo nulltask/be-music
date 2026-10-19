@@ -1,5 +1,5 @@
 import type { TimingResolver, TimedSampleTrigger } from '@be-music/chart';
-import { createEmptyJson, type BeMusicEvent } from '@be-music/json';
+import { createEmptyJSON, type BeMusicEvent } from '@be-music/json';
 import type { TimedPlayableNote } from '@be-music/player/display';
 import { describe, expect, it } from 'vite-plus/test';
 import { resolveGameplayAudioTailCleanupDelayMs, resolvePostChartResultDelayMs } from './result-delay.ts';
@@ -55,7 +55,7 @@ describe('resolvePostChartResultDelayMs', () => {
 
 describe('resolveGameplayAudioTailCleanupDelayMs', () => {
   it('keeps the gameplay audio graph alive until the longest known sample tail ends', () => {
-    const chart = createEmptyJson('bms');
+    const chart = createEmptyJSON('bms');
     chart.resources.wav = { '01': 'short.wav', '02': 'tail.wav' };
     const autoEvent = mkEvent('01', '02');
 
@@ -74,7 +74,7 @@ describe('resolveGameplayAudioTailCleanupDelayMs', () => {
   });
 
   it('honors bmson slice duration when estimating the remaining audio tail', () => {
-    const chart = createEmptyJson('bmson');
+    const chart = createEmptyJSON('bmson');
     chart.resources.wav = { '01': 'voice.wav' };
     const event = mkEvent('11', '01');
 

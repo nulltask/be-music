@@ -1,9 +1,9 @@
 import { Rectangle, Texture } from 'pixi.js';
 import { describe, expect, test } from 'vite-plus/test';
-import { makeLr2BitmapTextSprite, type Lr2LoadedFont } from './bitmap-text.ts';
-import type { Lr2DestinationRect, Lr2TextElement } from '@be-music/lr2-skin';
+import { makeLR2BitmapTextSprite, type LR2LoadedFont } from './bitmap-text.ts';
+import type { LR2DestinationRect, LR2TextElement } from '@be-music/lr2-skin';
 
-function destination(overrides: Partial<Lr2DestinationRect> = {}): Lr2DestinationRect {
+function destination(overrides: Partial<LR2DestinationRect> = {}): LR2DestinationRect {
   return {
     time: 0,
     x: 120,
@@ -27,7 +27,7 @@ function destination(overrides: Partial<Lr2DestinationRect> = {}): Lr2Destinatio
   };
 }
 
-function textElement(alignment: Lr2TextElement['alignment']): Lr2TextElement {
+function textElement(alignment: LR2TextElement['alignment']): LR2TextElement {
   return {
     font: 0,
     st: 60,
@@ -40,7 +40,7 @@ function textElement(alignment: Lr2TextElement['alignment']): Lr2TextElement {
   };
 }
 
-function loadedFont(): Lr2LoadedFont {
+function loadedFont(): LR2LoadedFont {
   const source = Texture.EMPTY.source;
   return {
     font: {
@@ -64,9 +64,9 @@ function loadedFont(): Lr2LoadedFont {
   };
 }
 
-describe('makeLr2BitmapTextSprite', () => {
+describe('makeLR2BitmapTextSprite', () => {
   test('anchors right-aligned text at the destination x coordinate', () => {
-    const root = makeLr2BitmapTextSprite('AB', textElement('right'), destination(), loadedFont());
+    const root = makeLR2BitmapTextSprite('AB', textElement('right'), destination(), loadedFont());
     const inner = root.children[0]!;
 
     expect(root.position.x).toBe(120);
@@ -77,7 +77,7 @@ describe('makeLr2BitmapTextSprite', () => {
   });
 
   test('shrinks horizontally when the rendered bitmap text exceeds dst.w', () => {
-    const root = makeLr2BitmapTextSprite('ABAB', textElement('left'), destination({ w: 40 }), loadedFont());
+    const root = makeLR2BitmapTextSprite('ABAB', textElement('left'), destination({ w: 40 }), loadedFont());
     const inner = root.children[0]!;
 
     expect(inner.scale.x).toBeCloseTo(40 / 90);

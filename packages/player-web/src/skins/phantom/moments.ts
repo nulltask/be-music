@@ -26,7 +26,7 @@ import {
   STAGE_WIDTH as DESIGN_WIDTH,
   stageProgress,
 } from '@be-music/skin-sdk';
-import { addHudText, type ChildPool } from '../pixi-kit/index.ts';
+import { addHUDText, type ChildPool } from '../pixi-kit/index.ts';
 
 const MILESTONE_MS = 1100;
 const CLEAR_MS = 1000;
@@ -79,7 +79,7 @@ export function drawPhantomMoments(
   }
   const milestone = momentProgress(moments.milestone?.atMs, nowMs, MILESTONE_MS);
   if (milestone !== undefined && moments.milestone) {
-    drawMilestone(graphics, layer, moments.milestone.value, milestone, runtime.hasBga === true, pool, nowMs, layout);
+    drawMilestone(graphics, layer, moments.milestone.value, milestone, runtime.hasBGA === true, pool, nowMs, layout);
   }
   const clear = momentProgress(moments.clearAtMs, nowMs, CLEAR_MS);
   if (clear !== undefined) {
@@ -124,7 +124,7 @@ function drawCountIn(graphics: Graphics, layer: Container, chartMs: number, pool
   graphics
     .poly(starburstPoints(DESIGN_WIDTH / 2, cy, 150 * scale, 96 * scale, 16, chartMs / 900, 0.18, 7))
     .fill({ color: PHANTOM_RED, alpha: 0.9 });
-  const text = addHudText(
+  const text = addHUDText(
     layer,
     'GO!!',
     DESIGN_WIDTH / 2,
@@ -149,7 +149,7 @@ function drawCountIn(graphics: Graphics, layer: Container, chartMs: number, pool
 /** Pooled (or fresh) HUD glyphs for ransom-note lettering. */
 function hudGlyphs(layer: Container, pool: ChildPool | undefined): GlyphFactory {
   return (char, options) =>
-    addHudText(
+    addHUDText(
       layer,
       char,
       0,
@@ -165,7 +165,7 @@ function drawMilestone(
   layer: Container,
   value: number,
   t: number,
-  hasBga: boolean,
+  hasBGA: boolean,
   pool: ChildPool | undefined,
   nowMs: number,
   layout: BeMusicGameplayLayout,
@@ -174,17 +174,17 @@ function drawMilestone(
   // BGA), or in the band under them when double play leaves no room — and it slides in from the right.
   const area = resolveMilestoneArea(layout.playfield.right, 346, layout.stage.width);
   const bga = layout.bga;
-  if (!bga) hasBga = false;
-  const compact = hasBga || area.mode === 'below';
+  if (!bga) hasBGA = false;
+  const compact = hasBGA || area.mode === 'below';
   const strip: TearStrip =
     area.mode === 'below'
       ? { cx: area.x + area.w / 2, cy: area.y + area.h / 2, angle: -0.03, length: area.w, thickness: 56, seed: value }
       : {
           cx: area.x + area.w / 2,
-          cy: hasBga && bga ? bga.y + bga.h - 14 : area.y + 160,
-          angle: hasBga ? -0.07 : -0.1,
+          cy: hasBGA && bga ? bga.y + bga.h - 14 : area.y + 160,
+          angle: hasBGA ? -0.07 : -0.1,
           length: area.w - 6,
-          thickness: hasBga ? 54 : 80,
+          thickness: hasBGA ? 54 : 80,
           seed: value,
         };
   const open = drawTearStrip(graphics, strip, t, nowMs, 'right');
@@ -209,7 +209,7 @@ function drawMilestone(
     )
     .fill(PHANTOM_GOLD)
     .stroke({ color: PHANTOM_INK, width: 3 });
-  addHudText(
+  addHUDText(
     layer,
     String(value),
     burst.x + 2,
@@ -255,7 +255,7 @@ function drawClear(graphics: Graphics, layer: Container, t: number, pool: ChildP
     .poly(parallelogramPoints(cx - 62 * pop, cy - 14 * pop, 124 * pop, 28 * pop, 8 * pop))
     .fill({ color: PHANTOM_GOLD, alpha })
     .stroke({ color: PHANTOM_INK, width: 2, alpha });
-  const text = addHudText(
+  const text = addHUDText(
     layer,
     'CLEAR LINE',
     cx + 3,

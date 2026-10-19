@@ -730,8 +730,8 @@ describe('BeatorajaPlaySkinView', () => {
 
   describe('gauge entry id matching (string vs number coercion)', () => {
     // ModernChic authors `parts.gauge.id = 2001` (numeric Lua value) but the matching
-    // destination uses `id = "2001"` (string-quoted). Upstream's JsonSkin.Gauge.id is declared
-    // as `String` (`JsonSkin.java:217`), so the JSON deserializer coerces the number to a
+    // destination uses `id = "2001"` (string-quoted). Upstream's JSONSkin.Gauge.id is declared
+    // as `String` (`JSONSkin.java:217`), so the JSON deserializer coerces the number to a
     // string; `dst.id.equals(sk.gauge.id)` then matches both forms. Our Lua-table parser keeps
     // numeric/string ids verbatim, so the matcher must string-coerce both sides explicitly.
     // Without this fix the gauge entry was never built — visible as a pure-black gauge on

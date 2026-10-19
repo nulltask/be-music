@@ -1,16 +1,16 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { parseBms, parseBmson } from '@be-music/parser';
+import { parseBMS, parseBmson } from '@be-music/parser';
 import { compactCollectionChart, PackedEventStrings } from './compact-chart.ts';
 
 const SOURCE = ['#TITLE Compact', '#BPM 150', '#WAV01 kick.wav', '#00111:0101', '#00211:01'].join('\n');
 
 function chartOf(title: string) {
-  return parseBms(SOURCE.replace('Compact', title));
+  return parseBMS(SOURCE.replace('Compact', title));
 }
 
 describe('compactCollectionChart', () => {
   test('drops the preservation layers and keeps playable data intact', () => {
-    const parsed = parseBms(SOURCE);
+    const parsed = parseBMS(SOURCE);
     const snapshot = structuredClone({
       metadata: parsed.metadata,
       resources: parsed.resources,
@@ -73,7 +73,7 @@ describe('compactCollectionChart', () => {
   });
 
   test('copies header objects so they no longer alias the parsed ones', () => {
-    const parsed = parseBms(SOURCE);
+    const parsed = parseBMS(SOURCE);
     const metadata = parsed.metadata;
     const resources = parsed.resources;
     const chart = compactCollectionChart(parsed, new PackedEventStrings());

@@ -76,7 +76,7 @@ export const courseSubmissionBody = v.object({
           stage: described(v.pipe(v.number(), v.integer(), v.minValue(0)), 'The course stage, zero-based.'),
           chart: described(
             v.unknown(),
-            'The stage chart as loaded (`BeMusicJson`, `#RANDOM` still in); it must hash to the stage’s chart fingerprint. Used to verify the run, never stored.',
+            'The stage chart as loaded (`BeMusicJSON`, `#RANDOM` still in); it must hash to the stage’s chart fingerprint. Used to verify the run, never stored.',
           ),
           pms: v.optional(described(v.boolean(), 'Whether the chart is a `.pms` file (a lane-mode input).')),
         }),

@@ -43,7 +43,7 @@ export default defineBeMusicSkin({
       ctx.fillRect(0, 0, width, height);
       // BGA 動画はキャンバスの背後で再生される。上から塗らず、矩形をくり抜く。
       const bga = frame.layout.bga;
-      if (bga && frame.runtime.hasBga) ctx.clearRect(bga.x, bga.y, bga.w, bga.h);
+      if (bga && frame.runtime.hasBGA) ctx.clearRect(bga.x, bga.y, bga.w, bga.h);
       for (const lane of frame.lanes) {
         ctx.fillStyle = lane.kind === 'scratch' ? '#311' : '#111';
         ctx.fillRect(lane.x, lane.top, lane.w, lane.bottom - lane.top);
@@ -192,7 +192,7 @@ export default defineBeMusicSkin({
 
 - **ステージ:** スキンが描くデザインキャンバスです。`wideStage` は組み込みスキンが使う 16:9 のステージ（854×480）で、既定値でもあります。
 - **縦向きステージ:** スキンは `portraitStage` も宣言できます。画面が横より縦に長いあいだ描くキャンバスです。組み込みの `tallStage` は 480×854（9:16）で、`wideStage` を横倒しにしたものなので文字の大きさは変わりません。スマートフォンのブラウザの表示領域（ツールバーを除くと 9:16〜9:19.5 程度）では上下にわずかな余白が、3:4 のタブレットでは左右に余白が出ます。ホストは `resolveBeMusicStage(skin, screen, chart?)` でフレームごとにステージを選びます。スキンが縦向きステージを持ち、画面が縦向きならそちらを、それ以外は `stage` を使います。縦向きのプレイフィールドに収まらない譜面のゲームプレイは `stage` のままです。縦向きにするのは 9 レーンまでの SP（5 / 7 KEY、9 KEY）だけで（`supportsPortraitLayout`）、DP（10 / 14 KEY）と鍵盤モード（24 / 48 KEY）は横向きステージを縮小して描きます（デモはスマートフォンに回転を促します）。`portraitStage` の無いスキンは常に `stage` で描かれます。
-- **BGA の配置:** `BeMusicStage.resolveBgaRect(playfieldRight)` がゲームプレイの BGA の位置を決めます。プレイヤーはそこに動画を合成し、スキンは同じ矩形に枠を描きます。`wideStage` は SP では BGA を大きく取り、幅の広い DP や鍵盤モードの横では縮めます。
+- **BGA の配置:** `BeMusicStage.resolveBGARect(playfieldRight)` がゲームプレイの BGA の位置を決めます。プレイヤーはそこに動画を合成し、スキンは同じ矩形に枠を描きます。`wideStage` は SP では BGA を大きく取り、幅の広い DP や鍵盤モードの横では縮めます。
 - **フレームごとのレイアウト:** ゲームプレイの各フレームには、ホストが解決した `layout`（`BeMusicGameplayLayout`）が付きます。
   - `mode`: `'standard'` または `'touch'`（省略可。無ければ `'standard'`）。下のタッチレイアウトを参照してください。
   - `orientation`: `'landscape'` または `'portrait'`（省略可。無ければ `'landscape'`）。下の縦向きレイアウトを参照してください。
@@ -204,7 +204,7 @@ export default defineBeMusicSkin({
 - **DP の隙間:** 1P と 2P のバンクは、標準レイアウトでは 60 px（`IIDX_DP_SIDE_GAP`）、タッチレイアウトでは 24 px（`TOUCH_PLAYFIELD.sideGap`）離れています。どちらの値もハードコードしないでください。`resolveLaneRuns(lanes)` は連続したバンクごとに `{ left, right }` を 1 つ返します。判定ラインやレーングリッドはラン単位で描き、隙間をまたがないようにします。
 - **レーン幅:** レーン幅はプレイヤーが決めます。スキンはレーンに色を付けますが、大きさや位置は変えません。
 - **タッチレイアウト:** タッチ画面では、ホストが `layoutMode: 'touch'`（`resolveGameplayLayout` の入力）でレイアウトを解決することがあります。このときレーンはステージの左マージンから判定集計の列まで広がり（`TOUCH_PLAYFIELD`）、鍵盤はすべて同じ幅（最大 72 px）、スクラッチは鍵盤 1.4 本分、レーンはヘッダー帯の下の y 48 から下部 HUD 帯の上にある y 330 の判定ラインまでで、`bga` は `undefined` です。24 / 48 KEY は標準レイアウトのままです（`supportsTouchLayout`）。`layout` からクロームを配置しているスキンは変更不要です。`layout.mode` はタッチプレイ向けに見た目を変えたいときだけ読んでください。標準レイアウトでレーンの横に置くクローム（BGA の矩形から配置するもの）は、`bga` が `undefined` でも崩れないようにしてください。
-- **縦向きレイアウト:** 縦向きステージでは、どちらのモードでもレーンがステージの幅いっぱいに下側を占めます（`PORTRAIT_PLAYFIELD`。480×854 の `tallStage` を基準にステージの大きさへ拡縮）。レーンは y 300 から低い位置の判定ラインまでで、BGA と HUD はその上の帯に置きます（`tallStage` では BGA は 40 px のヘッダー帯の下、左上の 206 px 四方）。`'touch'` は左右 12 px のマージンの間に鍵盤をすべて同じ幅（スクラッチは鍵盤 1.4 本分）で並べ、判定ラインを y 740 に置いて、その下に親指を置く帯を残します。`'standard'` は筐体の鍵盤幅（7 KEY で幅 374 px）を保って中央に置き、判定ラインは y 786 です。`bga` はどちらのモードでも縦向きステージの `resolveBgaRect` から来ます。縦向きステージのレーン矩形は `resolvePortraitLaneLayout` で得られます。
+- **縦向きレイアウト:** 縦向きステージでは、どちらのモードでもレーンがステージの幅いっぱいに下側を占めます（`PORTRAIT_PLAYFIELD`。480×854 の `tallStage` を基準にステージの大きさへ拡縮）。レーンは y 300 から低い位置の判定ラインまでで、BGA と HUD はその上の帯に置きます（`tallStage` では BGA は 40 px のヘッダー帯の下、左上の 206 px 四方）。`'touch'` は左右 12 px のマージンの間に鍵盤をすべて同じ幅（スクラッチは鍵盤 1.4 本分）で並べ、判定ラインを y 740 に置いて、その下に親指を置く帯を残します。`'standard'` は筐体の鍵盤幅（7 KEY で幅 374 px）を保って中央に置き、判定ラインは y 786 です。`bga` はどちらのモードでも縦向きステージの `resolveBGARect` から来ます。縦向きステージのレーン矩形は `resolvePortraitLaneLayout` で得られます。
 
 ### 縦向きに対応する
 
@@ -268,7 +268,7 @@ flowchart LR
 - `mines`: 地雷ノーツ `{ kind, x, w, y }`。`y` は下端です。レーンを押したまま判定ラインを通過するか、LR2 ruleset では PGREAT 窓内で押しても地雷が爆発してゲージが減ります（判定にはなりません）。スキンが `gameplay.drawsMines`（後述）を設定したときだけ中身が入ります。
 - `bombs`: 生きているヒットエフェクト。`elapsedMs`、固定の `seed`、発生させた判定 `judge` を持ちます。
 - `measureLines`: 小節線 `{ side, x, w, y }`。横切るレーンランごとに 1 本です。スキンが `gameplay.drawsMeasureLines` を設定したときだけ中身が入ります。
-- `bga`: 合成する BGA のレイヤー（`{ base?, layer?, poor?, poorActive }`）。スキンが `gameplay.drawsBga` を設定したとき以外は `undefined` です。
+- `bga`: 合成する BGA のレイヤー（`{ base?, layer?, poor?, poorActive }`）。スキンが `gameplay.drawsBGA` を設定したとき以外は `undefined` です。
 - `runtime`: HUD の値（下記）。
 - `beatPhase`、`nowMs`、`effects`、`audio`。
 - `settings` と `songImage`: [スキン設定](#スキン設定)と[曲の画像](#曲の画像)を参照。
@@ -286,9 +286,9 @@ flowchart LR
 | `drawsMines`        | `frame.mines`        | プレイヤーが黄色の注意縞入りの赤いバーをキャンバスの上に描きます。     |
 | `drawsLaneCover`    | `runtime.laneCovers` | プレイヤーが SUDDEN+ / HIDDEN+ のカバーをキャンバスの上に描きます。    |
 | `drawsMeasureLines` | `frame.measureLines` | プレイヤーが自前の小節線を描きます。                                   |
-| `drawsBga`          | `frame.bga`          | プレイヤーが BGA をキャンバスの後ろ、`layout.bga` の位置に表示します。 |
+| `drawsBGA`          | `frame.bga`          | プレイヤーが BGA をキャンバスの後ろ、`layout.bga` の位置に表示します。 |
 
-どのフラグも既定は `false` で、解禁されるフレームのフィールドは設定するまで空（または `undefined`）のままです。既存のスキンの見た目は変わりません。`drawsBga` では、`layer` の画像は BMS のレイヤーの慣習どおり純粋な黒が透明になった状態で渡され、`base` と `poor` は不透明です。通常のアルファブレンドで描き、`poorActive` の間は他の代わりに `poor` を表示してください。bmson のレイヤー（仕様で黒は不透明のまま）と動画のレイヤーは作者が作ったとおりに渡されます。画像は `ImageBitmap`、動画の BGA なら再生中の `<video>` 要素です。`#BGA` の部分領域は切り出した画像として渡されます（切り出しが終わるまでの最初の 1〜2 フレームは渡されません）。`#SWBGA` のアニメーションのフレームはプレイヤーが選びますが、スロットの `#ARGB` による色と不透明度はスキンに任されます。
+どのフラグも既定は `false` で、解禁されるフレームのフィールドは設定するまで空（または `undefined`）のままです。既存のスキンの見た目は変わりません。`drawsBGA` では、`layer` の画像は BMS のレイヤーの慣習どおり純粋な黒が透明になった状態で渡され、`base` と `poor` は不透明です。通常のアルファブレンドで描き、`poorActive` の間は他の代わりに `poor` を表示してください。bmson のレイヤー（仕様で黒は不透明のまま）と動画のレイヤーは作者が作ったとおりに渡されます。画像は `ImageBitmap`、動画の BGA なら再生中の `<video>` 要素です。`#BGA` の部分領域は切り出した画像として渡されます（切り出しが終わるまでの最初の 1〜2 フレームは渡されません）。`#SWBGA` のアニメーションのフレームはプレイヤーが選びますが、スロットの `#ARGB` による色と不透明度はスキンに任されます。
 
 `runtime`（`BeMusicGameplayRuntime`）の値:
 
@@ -299,10 +299,10 @@ flowchart LR
   - `rank`、`totalNotes`
 - **ゲージ:** `gauge`、`clearThreshold`、`gaugeLabel`、`gaugeSurvival`
 - **判定:** `lastJudge`、`judgeSides`（サイドごとの直近の判定とコンボ）
-- **プレイ状態:** `rulesetLabel`（有効な互換ルールセット: `lr2` / `beatoraja` / `iidx`）、`autoplay`、`hasBga`、`loading`（音声デコードや BGA 変換の間は NOW LOADING を表示）、`progressRatio`、`chartMs`、`beatPhase`、`nowMs`
+- **プレイ状態:** `rulesetLabel`（有効な互換ルールセット: `lr2` / `beatoraja` / `iidx`）、`autoplay`、`hasBGA`、`loading`（音声デコードや BGA 変換の間は NOW LOADING を表示）、`progressRatio`、`chartMs`、`beatPhase`、`nowMs`
 - **イベント時刻:** `judgeAtMs`、`impulseAtMs`、`impulseKind`（直近の判定とキー入力。パンチやインパルスの演出用）
 - **快適性とサウンド:** `effects`、`audio`
-- **譜面:** `song`（プレイ中の `LibraryChart`。レベル、難易度、`#RANK`、`#TOTAL` は `song.chart.metadata` にあります）、`minBpm`、`maxBpm`、`mainBpm`（最も多くのノートが置かれた BPM。HS-FIX `AVERAGE` とプレイログが使う値）、`playVariant`（5 / 7 / 9 / 10 / 14 / 24 / 48 KEY）、`laneCount`、`laneChannels`（表示順のレーンチャンネル）
+- **譜面:** `song`（プレイ中の `LibraryChart`。レベル、難易度、`#RANK`、`#TOTAL` は `song.chart.metadata` にあります）、`minBPM`、`maxBPM`、`mainBPM`（最も多くのノートが置かれた BPM。HS-FIX `AVERAGE` とプレイログが使う値）、`playVariant`（5 / 7 / 9 / 10 / 14 / 24 / 48 KEY）、`laneCount`、`laneChannels`（表示順のレーンチャンネル）
 - **タイミング:** `lastJudgeDeltaMs` と `judgeTimings`（タイミング付きの直近 64 判定、古い順）。[判定タイミング](#判定タイミング)を参照。`judgeWindows` はルールセットの判定幅をノーツの種類（`note`、`scratch`、`longNoteEnd`）ごとに ms で表します。プレイ開始時に `#RANK` から決まり、途中の `#EXRANK` の変更は反映されません。
 - **レーンカバー:** `laneCovers`（サイドごとの `sudden`、`hidden`、`lift`。レーンの高さに対する割合）、`visibleMs`（現在の BPM・ハイスピード・`#SCROLL` × `#SPEED` でノーツが画面に見えている時間。beatoraja と同じく、逆向きのスクロール中や停止中は 0）、`greenNumber`（`visibleMs × 0.6`）
 - **曲の時計:** `songLengthMs` と `songElapsedMs`。オーディオの時計で、曲の開始とともに 0 から進み、ポーズ中は止まります。残り時間は `songLengthMs - songElapsedMs` です。`chartMs` は譜面の最初の拍から測り、カウントイン中は負になる点が異なります。
@@ -390,7 +390,7 @@ settings: [
 
 ## 曲の画像
 
-`songImage(song, kind)` はすべてのフレーム（選曲、決定、ゲームプレイ、リザルト）にあります。曲の `'stageFile'`、`'banner'`、`'backBmp'` を `ImageBitmap` で返すので、そのまま `drawImage` やテクスチャのアップロードに使えます。
+`songImage(song, kind)` はすべてのフレーム（選曲、決定、ゲームプレイ、リザルト）にあります。曲の `'stageFile'`、`'banner'`、`'backBMP'` を `ImageBitmap` で返すので、そのまま `drawImage` やテクスチャのアップロードに使えます。
 
 - 画像は遅延読み込みです。デコード中の最初の呼び出しは `undefined` を返し、準備ができると画面が描き直されます（選曲では `revision` が進みます）。
 - 曲にその画像がない場合や、ホストが画像を提供しない場合も `undefined` を返すので、必ず代替表示を用意してください。
@@ -401,7 +401,7 @@ settings: [
 
 | 分野         | ヘルパー                                                                                                                                                                                                                                                                                                                                                                             |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| ステージ     | `wideStage`、`resolveStageBgaRect`、`STAGE_WIDTH`、`STAGE_HEIGHT`、`STAGE_MARGIN`、`STAGE_SIDE_COLUMN`、`STAGE_BGA_BAND`、`tallStage`、`TALL_STAGE_WIDTH`、`TALL_STAGE_HEIGHT`、`TALL_STAGE_BGA`、`resolveBeMusicStage`、`resolveStageOrientation`                                                                                                                                   |
+| ステージ     | `wideStage`、`resolveStageBGARect`、`STAGE_WIDTH`、`STAGE_HEIGHT`、`STAGE_MARGIN`、`STAGE_SIDE_COLUMN`、`STAGE_BGA_BAND`、`tallStage`、`TALL_STAGE_WIDTH`、`TALL_STAGE_HEIGHT`、`TALL_STAGE_BGA`、`resolveBeMusicStage`、`resolveStageOrientation`                                                                                                                                   |
 | レイアウト   | `resolveGameplayLayout`、`resolveLaneRuns`、`resolveMilestoneArea`（高さ 480 px のステージを前提にしているため横向きステージ専用）、`MILESTONE_MIN_WIDTH`、`PLAYFIELD`、`resolveGameplayLaneGeometry`、`resolveTouchLaneLayout`、`supportsTouchLayout`、`TOUCH_PLAYFIELD`、`resolvePortraitLaneLayout`、`supportsPortraitLayout`、`PORTRAIT_PLAYFIELD`、`resolveBeMusicSelectLayout` |
 | 判定         | `judgeDisplayWord`（PERFECT は GREAT と表示）、`isFlashingGreat`、`flashingGreatColor`、`FLASHING_GREAT_STEP_MS`                                                                                                                                                                                                                                                                     |
 | 演出         | `trackMoments` / `createMomentState` + `updateMoments`（100 コンボごと、クリアライン、フルコンボ、コンボ切れ。カウントインは `runtime.chartMs` が負かどうかで判定）、`COMBO_MILESTONE`、`COMBO_BREAK_MIN`、`comboTier`、`momentProgress`、`impulse`、`punchScale`、`effectProfile`                                                                                                   |
@@ -412,11 +412,11 @@ settings: [
 | リザルト     | `resolveResultVerdict`、`resolveResultLamp`、`resolveResultTrackRows`                                                                                                                                                                                                                                                                                                                |
 | タイミング   | `binJudgeTimings`。[判定タイミング](#判定タイミング)を参照                                                                                                                                                                                                                                                                                                                           |
 | 設定         | `resolveBeMusicSkinSettings`、`validateBeMusicSkinSettings`。[スキン設定](#スキン設定)を参照                                                                                                                                                                                                                                                                                         |
-| 曲情報       | `resolveSongRowFacts`、`resolveSongStats`、`resolveSongTags`、`formatSongLength`、`formatBpmRange`、`formatPlayVariantLabel`                                                                                                                                                                                                                                                         |
+| 曲情報       | `resolveSongRowFacts`、`resolveSongStats`、`resolveSongTags`、`formatSongLength`、`formatBPMRange`、`formatPlayVariantLabel`                                                                                                                                                                                                                                                         |
 | テキスト     | `DEFAULT_TEXT_FONT`、`layoutTabularRun`（等幅数字の配置）                                                                                                                                                                                                                                                                                                                            |
 | モーション   | `easeOutCubic`、`easeOutBack`、`stageProgress`、`rollUpValue`、`hash01`（決定的なゆらぎ）                                                                                                                                                                                                                                                                                            |
-| スキン       | `defineBeMusicSkin`、`validateBeMusicSkin`、`BE_MUSIC_SKIN_API_VERSION`、`isSupportedBeMusicSkinApiVersion`                                                                                                                                                                                                                                                                          |
-| レーン形状   | player 自身のスキンなしレーン形状: `IIDX_LANE_WIDTHS`、`IIDX_DP_SIDE_GAP`、`resolveSkinlessLaneLayout`、`resolveFallbackLaneLayout`、`resolveFallbackPlayfieldSpan`、`usesIidxLaneWidths`、`isScratchLaneForVariant`、`shouldPreserveFallbackSideWidth`、`resolveBeMusicLaneKind`。スキンは通常 `layout.lanes` を読みます。                                                          |
+| スキン       | `defineBeMusicSkin`、`validateBeMusicSkin`、`BE_MUSIC_SKIN_API_VERSION`、`isSupportedBeMusicSkinAPIVersion`                                                                                                                                                                                                                                                                          |
+| レーン形状   | player 自身のスキンなしレーン形状: `IIDX_LANE_WIDTHS`、`IIDX_DP_SIDE_GAP`、`resolveSkinlessLaneLayout`、`resolveFallbackLaneLayout`、`resolveFallbackPlayfieldSpan`、`usesIIDXLaneWidths`、`isScratchLaneForVariant`、`shouldPreserveFallbackSideWidth`、`resolveBeMusicLaneKind`。スキンは通常 `layout.lanes` を読みます。                                                          |
 
 SDK は、フレームやヘルパーが使う型も export しています。たとえば `BeMusicClearLamp`、`BeMusicSongRecord`、`BeMusicJudgeWindows`、`BeMusicLaneCover`、`GameplayLayoutMode`、`BeMusicPlayOptionChoices`、`AudioDrive`、`MomentInput` / `MomentState`、`MilestoneArea`、`LaneRun`、`GameplayLaneGeometry`、`PortraitLaneGeometry`、`SongStats`、`SongRowFacts`、`ResultLamp`、`ResultTrackRow` です。
 
@@ -567,7 +567,7 @@ SDK は、フレームやヘルパーが使う型も export しています。�
 - [ ] メタデータが `validateBeMusicSkin` を通る。
 - [ ] `setup` で作ったフレームワークのリソースを `teardown` で解放している。
 - [ ] クロームは `layout` から配置し、判定ラインはレーンランごとに描いている。
-- [ ] `runtime.hasBga` のとき BGA の矩形を透明のまま残している。
+- [ ] `runtime.hasBGA` のとき BGA の矩形を透明のまま残している。
 - [ ] `runtime.loading` の間は NOW LOADING を表示している。
 - [ ] 選曲の行が `select.layout` と揃い、ボタンは描画のたびに `frame.hit` で宣言している。
 - [ ] 設定した `draws*` フラグに対応する要素を自分で描いている。

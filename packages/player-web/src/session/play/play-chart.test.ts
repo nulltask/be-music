@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { resolveLaneOptionChannels } from '@be-music/player/lanes';
-import { applyRandomMode, extractChartExtension, flipDpChannel, shuffleArray } from './play-chart.ts';
+import { applyRandomMode, extractChartExtension, flipDPChannel, shuffleArray } from './play-chart.ts';
 
 /** A seeded random (mulberry32), so every draw is the same on every run. */
 function seededRandom(seed: number): () => number {
@@ -107,18 +107,18 @@ describe('applyRandomMode', () => {
   });
 });
 
-describe('flipDpChannel (DP FLIP)', () => {
+describe('flipDPChannel (DP FLIP)', () => {
   test('swaps the 1P and 2P sides of a lane', () => {
-    expect(['11', '16', '19', '21', '26', '29'].map(flipDpChannel)).toEqual(['21', '26', '29', '11', '16', '19']);
+    expect(['11', '16', '19', '21', '26', '29'].map(flipDPChannel)).toEqual(['21', '26', '29', '11', '16', '19']);
   });
 
   test('leaves channels of no side as they are', () => {
-    expect(['01', '04', 'D1', '31', '1', ''].map(flipDpChannel)).toEqual(['01', '04', 'D1', '31', '1', '']);
+    expect(['01', '04', 'D1', '31', '1', ''].map(flipDPChannel)).toEqual(['01', '04', 'D1', '31', '1', '']);
   });
 
   test('flipping twice puts every lane back', () => {
     const channels = ['11', '15', '16', '22', '28', '01'];
-    expect(channels.map(flipDpChannel).map(flipDpChannel)).toEqual(channels);
+    expect(channels.map(flipDPChannel).map(flipDPChannel)).toEqual(channels);
   });
 });
 

@@ -25,7 +25,7 @@ import {
   stat,
   text,
 } from './theme.ts';
-import { resolvePortraitGameplayHud } from './layout.ts';
+import { resolvePortraitGameplayHUD } from './layout.ts';
 
 const NOTE_HEIGHT = 6;
 /** LR2's opacity for a long note missed at the head or let go early (`0x80` of `0xff`). */
@@ -39,7 +39,7 @@ const MARGIN = 16;
 /**
  * The play screen. Landscape: lanes and notes on the left, the BGA beside them, the HUD around them. Portrait: the host
  * puts the lanes across the lower part of the stage and the BGA at the top left; the HUD fills the band above the lanes
- * (see {@link resolvePortraitGameplayHud}). The lanes, notes, bombs and BGA are drawn the same way in both — they come
+ * (see {@link resolvePortraitGameplayHUD}). The lanes, notes, bombs and BGA are drawn the same way in both — they come
  * placed in `frame.layout` — so only the HUD and the judgement's height depend on `layout.orientation`.
  */
 export function drawGameplay({ context: ctx, width, height }: BeMusicSurface<'2d'>, frame: BeMusicGameplayFrame): void {
@@ -51,7 +51,7 @@ export function drawGameplay({ context: ctx, width, height }: BeMusicSurface<'2d
   ctx.fillRect(0, 0, width, height);
   const bga = layout.bga;
   if (bga) {
-    if (runtime.hasBga) {
+    if (runtime.hasBGA) {
       ctx.clearRect(bga.x, bga.y, bga.w, bga.h);
     } else {
       ctx.fillStyle = PANEL;
@@ -67,12 +67,12 @@ export function drawGameplay({ context: ctx, width, height }: BeMusicSurface<'2d
   drawHolds(ctx, frame);
   drawBombs(ctx, frame);
   if (portrait) {
-    const hud = resolvePortraitGameplayHud(layout);
+    const hud = resolvePortraitGameplayHUD(layout);
     drawJudgement(ctx, frame, hud.judgeY);
-    drawPortraitHud(ctx, frame, hud);
+    drawPortraitHUD(ctx, frame, hud);
   } else {
     drawJudgement(ctx, frame, 220);
-    drawHud(ctx, frame, width, height);
+    drawHUD(ctx, frame, width, height);
   }
 }
 
@@ -218,7 +218,7 @@ function judgeColor(judge: string): string {
 }
 
 /** Header (mode, tempo, speed), the gauge under the lanes, the track and the score figures along the bottom. */
-function drawHud(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, width: number, height: number): void {
+function drawHUD(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, width: number, height: number): void {
   const { runtime, nowMs } = frame;
 
   text(ctx, runtime.autoplay ? 'AUTO PLAY' : 'PLAY', MARGIN, 18, { size: 12, weight: 800, color: ACCENT });
@@ -299,10 +299,10 @@ function judgeCounts(runtime: BeMusicGameplayRuntime): Array<[string, number | u
  * host may put its pause button and menu), the column beside the BGA (track, score figures, judgement counts), and the
  * gauge across the stage just above the lanes. Nothing is smaller than 10 px.
  */
-function drawPortraitHud(
+function drawPortraitHUD(
   ctx: CanvasRenderingContext2D,
   frame: BeMusicGameplayFrame,
-  hud: ReturnType<typeof resolvePortraitGameplayHud>,
+  hud: ReturnType<typeof resolvePortraitGameplayHUD>,
 ): void {
   const { runtime, nowMs } = frame;
   const { header, track, scores, counts, gauge } = hud;

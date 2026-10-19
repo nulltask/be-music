@@ -24,7 +24,7 @@ export function resolveGrooveRect(
  * The portrait HUD column right of the BGA monitor (`bga`, or a monitor-sized stand-in when the layout has none), from
  * the monitor's top to its bottom, split into the song plate, the score panel, and the judgement tally.
  */
-export function resolvePortraitHudColumn(
+export function resolvePortraitHUDColumn(
   stage: { width: number },
   bga: BeMusicRect | undefined,
 ): { plate: BeMusicRect; score: BeMusicRect; tally: BeMusicRect } {

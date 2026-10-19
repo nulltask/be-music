@@ -25,14 +25,14 @@ play skin は variant ごとにまとめ、browser player が譜面に合う lay
 
 LR2 には鍵盤モード用の play skin がないため、`24` / `48` KEY の譜面は `7` / `14` の play skin を借ります（`play-skin.ts` の `PLAY_SKIN_FALLBACKS`）。frame、gauge、judge の画像は skin が、レーンはホストのフォールバック playfield が描きます。
 
-parser は select、decide、play、result、course-result data を 1 つの `Lr2Skin` shape に保持します。
+parser は select、decide、play、result、course-result data を 1 つの `LR2Skin` shape に保持します。
 consumer は scene に必要な field だけを読みます。
 
 ## コース
 
-LR2 には、コース全体の結果を出す専用のシーンがあります。`#INFORMATION` の type 15 で、慣例では `CourseResult/` の下に置きます。`loadLr2ThemeSkinsFromFiles` はこれを `courseResultSkin` として読み込み、コース結果用のジングルも読みます。`result` の検索がこのスキンを選ぶことはありません。
+LR2 には、コース全体の結果を出す専用のシーンがあります。`#INFORMATION` の type 15 で、慣例では `CourseResult/` の下に置きます。`loadLR2ThemeSkinsFromFiles` はこれを `courseResultSkin` として読み込み、コース結果用のジングルも読みます。`result` の検索がこのスキンを選ぶことはありません。
 
-LR2 は BGM とシステムサウンドを、各ファイルを名指しするサウンドセット `LR2files/Sound/*.lr2ss` から探します。標準の `lr2.lr2ss` は `#COURSECLEAR` / `#COURSEFAIL` を `Sound/lr2/course_clear.wav` / `course_fail.wav` に割り当てています。`loadLr2ThemeSkinsFromFiles` は、ドロップされたサウンドセット（`lr2.lr2ss` を優先）から選曲 / 決定の BGM、クリア / 失敗 / コースのジングル、カーソル・フォルダ・オプションの音を読みます。`*` のフォルダは `#CUSTOMFILE` の既定値で埋め、名指しされたファイルがなければ別の音声拡張子のものを使います。サウンドセットがないときや、ファイルを名指ししていない（または名指ししたファイルがドロップにない）ときは、`Sound/lr2/` の下をステム名で探し（コースのジングルは `course_clear` か `courseclear`）、選曲 / 決定の BGM は `Bgm/` フォルダの下を探します。汎用の `result` のジングルはサウンドセットにコマンドがなく、いつも `Sound/lr2/` から取ります。
+LR2 は BGM とシステムサウンドを、各ファイルを名指しするサウンドセット `LR2files/Sound/*.lr2ss` から探します。標準の `lr2.lr2ss` は `#COURSECLEAR` / `#COURSEFAIL` を `Sound/lr2/course_clear.wav` / `course_fail.wav` に割り当てています。`loadLR2ThemeSkinsFromFiles` は、ドロップされたサウンドセット（`lr2.lr2ss` を優先）から選曲 / 決定の BGM、クリア / 失敗 / コースのジングル、カーソル・フォルダ・オプションの音を読みます。`*` のフォルダは `#CUSTOMFILE` の既定値で埋め、名指しされたファイルがなければ別の音声拡張子のものを使います。サウンドセットがないときや、ファイルを名指ししていない（または名指ししたファイルがドロップにない）ときは、`Sound/lr2/` の下をステム名で探し（コースのジングルは `course_clear` か `courseclear`）、選曲 / 決定の BGM は `BGM/` フォルダの下を探します。汎用の `result` のジングルはサウンドセットにコマンドがなく、いつも `Sound/lr2/` から取ります。
 
 LR2 はシーンが始まるたびにスキンを読み込むので、`#IF` ブロックはシーンの間ずっと変わらない状態を条件にできます。コースでは、それがコースの op です（OpenLR2 `LR2f.cpp` L5403-L5444）。
 
@@ -43,7 +43,7 @@ LR2 はシーンが始まるたびにスキンを読み込むので、`#IF` ブ�
 | 290             | `COURSE`                                            | コース（選択中のバー、または遊んでいるコース）      |
 | 291 / 292 / 293 | `COURSE_NONSTOP` / `COURSE_EXPERT` / `COURSE_GRADE` | コースの種類：NONSTOP / EXPERT / GRADE              |
 
-テーマは、これらの op をオフにした状態で一度だけ解析します。`Lr2ThemeSkins.loadSkin({ kind, playVariant, parseOps })` は、読み込み済みのファイルからスキンの 1 つを解析し直します。そのとき `#IF` / `#ELSEIF` の評価中は、追加の op を真として扱います（`LoadLr2SkinOptions.parseOps`）。`pickLr2PlaySkinVariant` は譜面を遊ぶプレイスキンの variant を返すので、ホストはコースのステージ用にそのスキンを解析し直せます。
+テーマは、これらの op をオフにした状態で一度だけ解析します。`LR2ThemeSkins.loadSkin({ kind, playVariant, parseOps })` は、読み込み済みのファイルからスキンの 1 つを解析し直します。そのとき `#IF` / `#ELSEIF` の評価中は、追加の op を真として扱います（`LoadLR2SkinOptions.parseOps`）。`pickLR2PlaySkinVariant` は譜面を遊ぶプレイスキンの variant を返すので、ホストはコースのステージ用にそのスキンを解析し直せます。
 
 コース用スキンが読む値（数値 250-259、テキスト 150-170、104 / 105 のコースのコンボ）はシーンの状態です。[`@be-music/lr2-skin/state`](#シーンの状態) がコースの `CourseView` から求めます。`CourseView` はホストが作り（`@be-music/scene-model` の `resolveCourseView`）、`@be-music/player-web` のシーンに渡します。[コースと段位認定](./player-web.ja.md#コースと段位認定) を参照してください。
 
@@ -59,8 +59,8 @@ LR2 はシーンが始まるたびにスキンを読み込むので、`#IF` ブ�
 | `LR2_TEXT`                            | `#SRC_TEXT` の `st`     | 曲の情報、検索語、スキン、オプションパネルの表示、コース                                                                                                     |
 | `LR2_BUTTON`                          | `#SRC_BUTTON` の `type` | パネル、バーの一覧とプレイ、プレイオプション、コースの作成                                                                                                   |
 | `LR2_SLIDER`                          | `#SRC_SLIDER` の `type` | バーの一覧の位置、ハイスピード、レーンカバー、プレイの進み                                                                                                   |
-| `LR2_BAR_BODY` / `LR2_BAR_BODY_KINDS` | `#SRC_BAR_BODY` の番号  | バーの種類と、解析後の `Lr2BarBodyKind`                                                                                                                      |
-| `LR2_BAR_LAMP` / `LR2_BAR_LAMP_KINDS` | `#SRC_BAR_LAMP` の番号  | クリアランプと、解析後の `Lr2BarLampKind`。ランプの op 100-105 も同じ順                                                                                      |
+| `LR2_BAR_BODY` / `LR2_BAR_BODY_KINDS` | `#SRC_BAR_BODY` の番号  | バーの種類と、解析後の `LR2BarBodyKind`                                                                                                                      |
+| `LR2_BAR_LAMP` / `LR2_BAR_LAMP_KINDS` | `#SRC_BAR_LAMP` の番号  | クリアランプと、解析後の `LR2BarLampKind`。ランプの op 100-105 も同じ順                                                                                      |
 | `LR2_GR`                              | `gr`                    | LR2 が実行時に結び付ける画像（STAGEFILE、BACKBMP、BANNER、スキンのサムネイル、黒、白）                                                                       |
 
 短い範囲は番号ごとに名前を付けます（コースのステージ 280-289、パネルの op 20-29 とパネルのボタン 1〜9、NONSTOP のつなぎ）。長い範囲は最初の番号だけを持ちます。レーンのタイマー列（`LR2_TIMER.BOMB_1P`、`LN_HOLD_1P`、`KEY_ON_1P`、`KEY_OFF_1P` とその 2P 側）はスクラッチのタイマーで、`LR2_LANE_TIMER_BANK_SIZE` 本のレーンのうち鍵盤 N は `+ N` です。`LR2_OP.COURSE_STAGES_OVER + N`、`COURSE_SONGS_ADDED + N`、`COURSE_STAGE_DIFFICULTY + 10 × i + 難易度` はコースの作成とステージの難易度の op です。
@@ -84,7 +84,7 @@ beatoraja は LR2 互換の番号を LR2 と同じ値で持つので、`@be-musi
 
 ## シーンの状態
 
-`@be-music/lr2-skin/state` は、`@be-music/scene-model` のシーンモデル（[シーンモデル](./scene-model.ja.md)）を [番号表](#番号表) に写します。画面ごとに、どの op が立つか、各数値とテキストに何を描くか、各スライダーをどこに置くか（`Lr2SceneState`。選曲画面の `Lr2SelectState` は各ボタンのどのセルを描くかも返します）、選曲画面とプレイ画面のある瞬間にどのタイマーを始め、どれを止めるか（`Lr2TimerUpdate`：始めるタイマーとその開始時刻、止めるタイマー）、そして決定画面とリザルト画面のある瞬間にどのタイマーが動いているか（`resolveLr2DecideTimers`、`resolveLr2ResultTimers`：動いている各タイマーとその開始時刻）とリザルトのグラフをどこまで描くか（`resolveLr2GraphReveal`）を返します。スキンファミリーのビューは、スキンが描く番号をこの状態に問い合わせます。ビューが持つのは、自分で刻むタイマーの番号とレーンの番号だけです。
+`@be-music/lr2-skin/state` は、`@be-music/scene-model` のシーンモデル（[シーンモデル](./scene-model.ja.md)）を [番号表](#番号表) に写します。画面ごとに、どの op が立つか、各数値とテキストに何を描くか、各スライダーをどこに置くか（`LR2SceneState`。選曲画面の `LR2SelectState` は各ボタンのどのセルを描くかも返します）、選曲画面とプレイ画面のある瞬間にどのタイマーを始め、どれを止めるか（`LR2TimerUpdate`：始めるタイマーとその開始時刻、止めるタイマー）、そして決定画面とリザルト画面のある瞬間にどのタイマーが動いているか（`resolveLR2DecideTimers`、`resolveLR2ResultTimers`：動いている各タイマーとその開始時刻）とリザルトのグラフをどこまで描くか（`resolveLR2GraphReveal`）を返します。スキンファミリーのビューは、スキンが描く番号をこの状態に問い合わせます。ビューが持つのは、自分で刻むタイマーの番号とレーンの番号だけです。
 
 ```mermaid
 flowchart LR
@@ -95,14 +95,14 @@ flowchart LR
     course["CourseView"]
   end
   subgraph state["@be-music/lr2-skin/state"]
-    select["resolveLr2SelectState"]
-    decide["resolveLr2DecideState"]
-    playing["resolveLr2PlayState"]
-    results["resolveLr2ResultState"]
+    select["resolveLR2SelectState"]
+    decide["resolveLR2DecideState"]
+    playing["resolveLR2PlayState"]
+    results["resolveLR2ResultState"]
     timers["resolveLr2…Timers"]
   end
-  ids["Lr2SceneState<br/>op · 数値 · テキスト<br/>スライダー"]
-  starts["Lr2TimerUpdate<br/>タイマー → 開始時刻"]
+  ids["LR2SceneState<br/>op · 数値 · テキスト<br/>スライダー"]
+  starts["LR2TimerUpdate<br/>タイマー → 開始時刻"]
 
   entry --> select
   play --> playing
@@ -117,19 +117,19 @@ flowchart LR
 
 | 関数                                                        | 受け取るもの                                                                                                                                      | 返すもの                                                                           |
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `resolveLr2SelectState`                                     | カーソルの下のバー（`LibraryEntry`）、`PlayOptions`、記録のランプ、開いているパネル、スキンのカスタムオプション、画面の事実                       | op、数値、テキスト、スライダー、ボタンのセル                                       |
-| `resolveLr2SelectButton`                                    | `#SRC_BUTTON` の type                                                                                                                             | ボタンが求めること：パネル、ハイスピードの増減、オプションの切り替えや設定、プレイ |
-| `resolveLr2SelectTimers`                                    | 画面の表示、カーソルの移動、パネルの開閉、コースの作成の開始と終了                                                                                | タイマー 0、10-13、17 / 18、21-29、31-39                                           |
-| `pickLr2BarBody`、`resolveLr2BarLevel`、`resolveLr2BarLamp` | 一覧のバー、その譜面、記録のランプ                                                                                                                | バーに描くボディ、レベル、ランプ                                                   |
-| `resolveLr2DecideState`                                     | これから遊ぶ譜面と、そのコース                                                                                                                    | op、テキスト、コースの数値                                                         |
-| `resolveLr2PlayState`                                       | プレイの準備（`Lr2PlaySetup`：譜面、レーン、特徴、オプション、ゲージ、コース）と 1 フレーム（`Lr2PlayFrame`：`PlayState` の見え方、スコア、時刻） | op、数値、テキスト、スライダー、バーグラフ                                         |
-| `resolveLr2PlayTimers`、`resolveLr2LaneTimer`               | プレイの瞬間（シーンの段階、判定、フルコンボ、ゲージ、レーン）、レーン                                                                            | タイマー 0、2、3、40-42、44、46-49、レーンのタイマー列 50-139                      |
-| `resolveLr2ResultState`                                     | `PlayResult`、そのコース、遊んだスキンの `#FLIPRESULT`、スキンのカスタムオプション                                                                | op、数値、テキスト、スライダー、バーグラフ                                         |
-| `resolveLr2CourseOps`、`resolveLr2CourseText` など          | `CourseView`、作成中のコース                                                                                                                      | コースの op・数値・テキスト、コース作成の op・テキスト・ボタン                     |
+| `resolveLR2SelectState`                                     | カーソルの下のバー（`LibraryEntry`）、`PlayOptions`、記録のランプ、開いているパネル、スキンのカスタムオプション、画面の事実                       | op、数値、テキスト、スライダー、ボタンのセル                                       |
+| `resolveLR2SelectButton`                                    | `#SRC_BUTTON` の type                                                                                                                             | ボタンが求めること：パネル、ハイスピードの増減、オプションの切り替えや設定、プレイ |
+| `resolveLR2SelectTimers`                                    | 画面の表示、カーソルの移動、パネルの開閉、コースの作成の開始と終了                                                                                | タイマー 0、10-13、17 / 18、21-29、31-39                                           |
+| `pickLR2BarBody`、`resolveLR2BarLevel`、`resolveLR2BarLamp` | 一覧のバー、その譜面、記録のランプ                                                                                                                | バーに描くボディ、レベル、ランプ                                                   |
+| `resolveLR2DecideState`                                     | これから遊ぶ譜面と、そのコース                                                                                                                    | op、テキスト、コースの数値                                                         |
+| `resolveLR2PlayState`                                       | プレイの準備（`LR2PlaySetup`：譜面、レーン、特徴、オプション、ゲージ、コース）と 1 フレーム（`LR2PlayFrame`：`PlayState` の見え方、スコア、時刻） | op、数値、テキスト、スライダー、バーグラフ                                         |
+| `resolveLR2PlayTimers`、`resolveLR2LaneTimer`               | プレイの瞬間（シーンの段階、判定、フルコンボ、ゲージ、レーン）、レーン                                                                            | タイマー 0、2、3、40-42、44、46-49、レーンのタイマー列 50-139                      |
+| `resolveLR2ResultState`                                     | `PlayResult`、そのコース、遊んだスキンの `#FLIPRESULT`、スキンのカスタムオプション                                                                | op、数値、テキスト、スライダー、バーグラフ                                         |
+| `resolveLR2CourseOps`、`resolveLR2CourseText` など          | `CourseView`、作成中のコース                                                                                                                      | コースの op・数値・テキスト、コース作成の op・テキスト・ボタン                     |
 
-これらの関数は純粋で決定的です。時計も DOM もレンダラーも読まず、乱数も引かず、import するのはシーンモデル、エンジンのルール、譜面モデル、番号表、解析したスキンの型だけです。時刻は入力として受け取ります。時計の数値は `Lr2Clock` で、プレイの時刻はフレームで、各タイマーの開始は瞬間の `at` で渡します。`pnpm run check` は `src/state/` に、実行環境に依存しないことと時計を読まないことの lint 規則を課します。Web ランタイムの LR2 ファミリーのビュー（`view/lr2/`。選曲画面、決定画面、プレイ画面、リザルト画面のもの）がこれらを呼びます。
+これらの関数は純粋で決定的です。時計も DOM もレンダラーも読まず、乱数も引かず、import するのはシーンモデル、エンジンのルール、譜面モデル、番号表、解析したスキンの型だけです。時刻は入力として受け取ります。時計の数値は `LR2Clock` で、プレイの時刻はフレームで、各タイマーの開始は瞬間の `at` で渡します。`pnpm run check` は `src/state/` に、実行環境に依存しないことと時計を読まないことの lint 規則を課します。Web ランタイムの LR2 ファミリーのビュー（`view/lr2/`。選曲画面、決定画面、プレイ画面、リザルト画面のもの）がこれらを呼びます。
 
-LR2 のプレイビュー（`@be-music/player-web` の `view/lr2/play-view.ts`）は、プレイの op、数値、テキスト、スライダー、バーグラフを、フレームごとに `resolveLr2PlayState` で読みます。渡すのはフレームの `PlayState`、スコア、時刻、スコアの表示値、BPM、フレームレートです。プレイのタイマーは、フレームごとのきっかけから `resolveLr2PlayTimers` で始めて止め、一度きりのものはビュー自身のタイマー管理が終わらせます。
+LR2 のプレイビュー（`@be-music/player-web` の `view/lr2/play-view.ts`）は、プレイの op、数値、テキスト、スライダー、バーグラフを、フレームごとに `resolveLR2PlayState` で読みます。渡すのはフレームの `PlayState`、スコア、時刻、スコアの表示値、BPM、フレームレートです。プレイのタイマーは、フレームごとのきっかけから `resolveLR2PlayTimers` で始めて止め、一度きりのものはビュー自身のタイマー管理が終わらせます。
 
 | きっかけ                            | タイマー                                                                      |
 | ----------------------------------- | ----------------------------------------------------------------------------- |
@@ -143,7 +143,7 @@ LR2 のプレイビュー（`@be-music/player-web` の `view/lr2/play-view.ts`�
 | レーンのボム                        | そのレーンのボムのタイマー（50-69）。プレイフィールドがボムを消すまで         |
 | レーンでロングノートを押している間  | そのレーンのホールドのタイマー（70-89）。離したあと、その長さでフェードアウト |
 
-キーオンの組（100-119）はプレイのセッションのキービームを映します。セッションはどの種類のキービームもチャンネルごとに持ち（`keyBeamStartedAt`、`keyBeamFadeStartedAt`）、LR2 のビューは点いているチャンネルをそれぞれのキーオンのタイマー（`resolveLr2LaneTimer('key-on', …)`）に対応させます。レーンの番号とタイマーの番号は LR2 のビューの中にとどめ、セッションと共有のプレイフィールドはチャンネルで扱います。
+キーオンの組（100-119）はプレイのセッションのキービームを映します。セッションはどの種類のキービームもチャンネルごとに持ち（`keyBeamStartedAt`、`keyBeamFadeStartedAt`）、LR2 のビューは点いているチャンネルをそれぞれのキーオンのタイマー（`resolveLR2LaneTimer('key-on', …)`）に対応させます。レーンの番号とタイマーの番号は LR2 のビューの中にとどめ、セッションと共有のプレイフィールドはチャンネルで扱います。
 
 ## 解析済み directive
 
@@ -180,7 +180,7 @@ LR2 のプレイビュー（`@be-music/player-web` の `view/lr2/play-view.ts`�
 
 ## アセット解決
 
-`loadLr2SkinFromSourceFiles()` は source file collection を受け取り、現在の skin file から相対 path を解決します。
+`loadLR2SkinFromSourceFiles()` は source file collection を受け取り、現在の skin file から相対 path を解決します。
 resolver は LR2 風の path separator を normalize し、実際の LR2 theme でよくある path casing の揺れに備えて case-insensitive lookup を行います。
 
 resolver は LR2 theme が使う wildcard asset reference も扱います。

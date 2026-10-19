@@ -16,7 +16,7 @@ import { playVariantForSkinType, sceneForSkinType } from './types.ts';
 import type { BeatorajaPlayVariant, BeatorajaSkinConfig, BeatorajaSkinHeader } from './types.ts';
 import { asLoadedBytes, type BeatorajaSkinFileEntry } from './file-lookup.ts';
 import { evaluateBeatorajaLuaSkin } from './lua.ts';
-import { parseBeatorajaSkinJsonHeader } from './json.ts';
+import { parseBeatorajaSkinJSONHeader } from './json.ts';
 
 /**
  * Per-skin entry catalogued during theme discovery. Contains the parsed header (used to populate the selector UI)
@@ -101,9 +101,9 @@ export function discoverBeatorajaTheme(
  *   3. Lexicographically earlier path wins.
  */
 function preferEntry(candidate: BeatorajaSkinEntry, incumbent: BeatorajaSkinEntry): boolean {
-  const candIsJson = candidate.entryPath.toLowerCase().endsWith('.json');
-  const incIsJson = incumbent.entryPath.toLowerCase().endsWith('.json');
-  if (candIsJson !== incIsJson) return candIsJson;
+  const candIsJSON = candidate.entryPath.toLowerCase().endsWith('.json');
+  const incIsJSON = incumbent.entryPath.toLowerCase().endsWith('.json');
+  if (candIsJSON !== incIsJSON) return candIsJSON;
   const candIsDefault = isDefaultThemePath(candidate.entryPath);
   const incIsDefault = isDefaultThemePath(incumbent.entryPath);
   if (candIsDefault !== incIsDefault) return candIsDefault;
@@ -135,7 +135,7 @@ function readHeader(
   files: ReadonlyMap<string, BeatorajaSkinFileEntry>,
 ): BeatorajaSkinHeader {
   if (format === 'json') {
-    return parseBeatorajaSkinJsonHeader(bytes);
+    return parseBeatorajaSkinJSONHeader(bytes);
   }
   const modules = collectBeatorajaLuaModules(files, dirname(normalizePath(entryPath)));
   const result = evaluateBeatorajaLuaSkin({ entry: bytes, entryName: entryPath, modules });

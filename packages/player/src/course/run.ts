@@ -1,4 +1,4 @@
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import { resolveChartRulesetFacts } from '../core/play-chart.ts';
 import { createCoursePlaylog, type BeMusicCoursePlaylog, type PlaylogCourseStageEntry } from '../playlog/course.ts';
 import type { BeMusicPlaylog, PlaylogCourseStage, PlaylogRecorderInfo } from '../playlog/format.ts';
@@ -18,7 +18,7 @@ import {
  */
 export interface CourseRunStage {
   /** The stage chart as loaded (`#RANDOM` / `#SWITCH` still in). */
-  chart: BeMusicJson;
+  chart: BeMusicJSON;
   /** The chart's path, or only its extension: the lane-mode input (a `.pms` chart plays as 9 KEY). */
   chartPath?: string;
 }

@@ -1,12 +1,12 @@
 import { resolveChart } from '@be-music/chart';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 
-export interface ChartBpmRange {
+export interface ChartBPMRange {
   readonly min: number;
   readonly max: number;
 }
 
-const bpmRangeByChart = new WeakMap<BeMusicJson, ChartBpmRange>();
+const bpmRangeByChart = new WeakMap<BeMusicJSON, ChartBPMRange>();
 
 /**
  * The lowest and highest BPM of a chart, as beatoraja's `BMSModel.getMinBPM` / `getMaxBPM` report them: the header
@@ -15,7 +15,7 @@ const bpmRangeByChart = new WeakMap<BeMusicJson, ChartBpmRange>();
  * over `03` at one position, object keys normalized). Cached per chart object, since song select asks again on every
  * cursor move.
  */
-export function resolveChartBpmRange(chart: BeMusicJson): ChartBpmRange {
+export function resolveChartBPMRange(chart: BeMusicJSON): ChartBPMRange {
   const cached = bpmRangeByChart.get(chart);
   if (cached !== undefined) return cached;
   const header = chart.metadata.bpm;
@@ -25,7 +25,7 @@ export function resolveChartBpmRange(chart: BeMusicJson): ChartBpmRange {
     if (point.bpm < min) min = point.bpm;
     if (point.bpm > max) max = point.bpm;
   }
-  const range: ChartBpmRange = Number.isFinite(min) ? { min, max } : { min: 0, max: 0 };
+  const range: ChartBPMRange = Number.isFinite(min) ? { min, max } : { min: 0, max: 0 };
   bpmRangeByChart.set(chart, range);
   return range;
 }

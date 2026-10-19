@@ -33,7 +33,7 @@ export interface BeatorajaGaugeGraphElement {
    */
   colors: ReadonlyArray<string>;
   /**
-   * Per-gauge-mode background and line colors (audit 3.3). Beatoraja's `JsonSkin.GaugeGraph`
+   * Per-gauge-mode background and line colors (audit 3.3). Beatoraja's `JSONSkin.GaugeGraph`
    * declares 14 named color fields plus `borderlineColor` / `borderColor`; defaults below
    * mirror the upstream values. Hex strings without `#` prefix to match beatoraja's
    * convention. The renderer picks the pair matching the player's actual gauge type at draw
@@ -74,7 +74,7 @@ function normalizeOne(entry: NormalizedElement): BeatorajaGaugeGraphElement | un
   return {
     id,
     colors: stringArray(f.color),
-    // Defaults mirror beatoraja's `JsonSkin.GaugeGraph` declarations (audit 3.3).
+    // Defaults mirror beatoraja's `JSONSkin.GaugeGraph` declarations (audit 3.3).
     assistClearBGColor: stringField(f.assistClearBGColor, '440044'),
     assistAndEasyFailBGColor: stringField(f.assistAndEasyFailBGColor, '004444'),
     grooveFailBGColor: stringField(f.grooveFailBGColor, '004400'),

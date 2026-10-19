@@ -1,5 +1,5 @@
 import { resolveChart } from '@be-music/chart';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import type { PlayerOptions } from '../engine-types.ts';
 import type { PlaylogRulesetId } from '../../ruleset/definitions.ts';
@@ -31,7 +31,7 @@ const RULESETS: readonly PlaylogRulesetId[] = ['lr2', 'beatoraja', 'iidx'];
 
 /** Every note pressed `offsetsMs[i]` off its time (cycled), every `skipEvery`th left alone, long notes held to their end. */
 function scriptForNotes(
-  chart: BeMusicJson,
+  chart: BeMusicJSON,
   pattern: { offsetsMs: readonly number[]; skipEvery?: number; releaseOffsetMs?: number; timeScale?: number },
 ): ScriptStep[] {
   const scale = pattern.timeScale ?? 1;
@@ -86,8 +86,8 @@ const MINE_SCRIPT: ScriptStep[] = [
 
 interface ChartCase {
   name: string;
-  chart: () => BeMusicJson;
-  script: (chart: BeMusicJson) => ScriptStep[];
+  chart: () => BeMusicJSON;
+  script: (chart: BeMusicJSON) => ScriptStep[];
   options?: PlayerOptions;
 }
 

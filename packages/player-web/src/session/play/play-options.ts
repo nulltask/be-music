@@ -173,9 +173,9 @@ export interface PlaySessionOptions {
    * SHA-256 (lowercase hex) of the source chart file bytes, when the host computed one. Stamped into the recorded
    * play-log (`chart.sha256`) so a dropped log can be matched back to its chart by content.
    */
-  chartSha256?: string;
+  chartSHA256?: string;
   /** MD5 (lowercase hex) of the same bytes, stamped as `chart.md5` (the key LR2 and LR2IR use). */
-  chartMd5?: string;
+  chartMD5?: string;
   /** Host application stamped into the recorded play-log's `recorder` (the engine adds its own version). */
   playlogRecorder?: PlaylogRecordingOptions['recorder'];
   /**

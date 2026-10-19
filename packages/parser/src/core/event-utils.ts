@@ -3,19 +3,19 @@ import {
   normalizeChannel,
   normalizeObjectKey,
   type BeMusicEvent,
-  type BeMusicJson,
+  type BeMusicJSON,
   type BeMusicPosition,
-  type BmsObjectLineEntry,
+  type BMSObjectLineEntry,
 } from '@be-music/json';
 import {
-  normalizeAsciiBase36Code,
-  normalizeAsciiBase62Code,
+  normalizeASCIIBase36Code,
+  normalizeASCIIBase62Code,
   normalizeFractionNumerator,
   normalizeNonNegativeInt,
   normalizePositiveInt,
 } from '@be-music/utils/core';
 
-type MeasureLengthEntry = BeMusicJson['measures'][number];
+type MeasureLengthEntry = BeMusicJSON['measures'][number];
 
 export function normalizeBmsonNoteLength(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
@@ -45,7 +45,7 @@ export function collectNonZeroObjectTokens(
   tokenCount: number;
   tokens: Array<{ index: number; value: string }>;
 } {
-  const normalize = base === 62 ? normalizeAsciiBase62Code : normalizeAsciiBase36Code;
+  const normalize = base === 62 ? normalizeASCIIBase62Code : normalizeASCIIBase36Code;
   const tokens: Array<{ index: number; value: string }> = [];
   let tokenCount = 0;
   let highCode = -1;
@@ -86,12 +86,12 @@ export function collectNonZeroObjectTokens(
  *
  * Returns `undefined` when the line contributes nothing (invalid measure length / only rests).
  */
-export function buildBmsObjectLineEntry(
+export function buildBMSObjectLineEntry(
   measure: number,
   channel: string,
   data: string,
   base: 36 | 62 = 36,
-): BmsObjectLineEntry | undefined {
+): BMSObjectLineEntry | undefined {
   if (channel === '02') {
     const measureLength = Number.parseFloat(data);
     if (!Number.isFinite(measureLength) || measureLength <= 0) {
@@ -142,7 +142,7 @@ export function sortAndNormalizeEvents(
 }
 
 export function upsertMeasureLength(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   measure: number,
   length: number,
   measureByIndex?: Map<number, MeasureLengthEntry>,

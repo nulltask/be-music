@@ -53,7 +53,7 @@ The definitions follow general BMS/BMSON terminology where possible, but priorit
 - **MANUAL / AUTO SCRATCH / AUTO**: Playback modes. `MANUAL` uses player input, `AUTO SCRATCH` automates scratch lanes only, and `AUTO` automates all playable notes.
 - **control flow**: BMS branch directives such as `#RANDOM`, `#IF`, and `#SWITCH`. The parser retains them; hosts resolve them once per play, before playback or rendering, with explicit `RandomDraws`.
 - **RandomDraws**: The outcome of a chart's control flow for one play: one entry (command, range, value) per `#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` line in file order. Drawn once with `drawRandomOutcomes` and shared by the resolver, the engine and the play log.
-- **Source layer / Resolved layer**: The two layers a chart is read in. The Source layer (`BeMusicJson`) is what the file says; the Resolved layer (`ResolvedChart`, built by `resolveChart` in `@be-music/chart`) is what the player plays, with every format default and de facto rule applied. See [Architecture](./architecture.md).
+- **Source layer / Resolved layer**: The two layers a chart is read in. The Source layer (`BeMusicJSON`) is what the file says; the Resolved layer (`ResolvedChart`, built by `resolveChart` in `@be-music/chart`) is what the player plays, with every format default and de facto rule applied. See [Architecture](./architecture.md).
 
 ## Runtime Packages
 
@@ -87,7 +87,7 @@ The definitions follow general BMS/BMSON terminology where possible, but priorit
 - **candidate note**: Unjudged note searched as the judgment target when an input event arrives for a lane set.
 - **keysound fallback**: LR2-compatible blank-press sound routing. If no note is judged, manual play may retrigger the latest same-lane visible or invisible WAV whose early BAD window has already opened; it never looks ahead to a future pending WAV before that note's window opens.
 - **empty POOR**: LR2-compatible blank-keystroke side effect. It flashes `POOR`, triggers POOR BGA, and applies the `EMPTY_POOR` gauge delta without changing judge counters, combo, EX-SCORE, or score.
-- **stateSignals / uiSignals**: Signal groups that send engine state to UI adapters, including judge, combo, frame, lane flash, and hold state (`createPlayerStateSignals`, `createPlayerUiSignalBus` on `@be-music/player/signals`).
+- **stateSignals / uiSignals**: Signal groups that send engine state to UI adapters, including judge, combo, frame, lane flash, and hold state (`createPlayerStateSignals`, `createPlayerUISignalBus` on `@be-music/player/signals`).
 - **UI runtime**: Runtime display adapter between the player core and a concrete frontend such as TUI or PixiJS.
 - **gameplay worker / UI worker**: Node worker split used by the terminal frontend for heavier gameplay, rendering, and video BGA work.
 - **ANSI rendering**: Terminal image/BGA rendering through character cells and colored strings.

@@ -68,7 +68,7 @@ const RECORDER_AUDIO_CODECS = { aac: 'mp4a.40.2', opus: 'opus' } as const;
  * audio codec, then alone; then the bare container; then the WebM chain, so a browser that records no MP4 (Firefox)
  * still records.
  */
-export function recorderMimeCandidates(format: RecordingFormat = DEFAULT_RECORDING_FORMAT): string[] {
+export function recorderMIMECandidates(format: RecordingFormat = DEFAULT_RECORDING_FORMAT): string[] {
   const forContainer = (target: RecordingFormat): string[] => {
     const base = `video/${target.container}`;
     return [

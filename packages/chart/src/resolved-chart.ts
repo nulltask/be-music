@@ -1,18 +1,18 @@
 import {
   normalizeChannel,
   normalizeObjectKey,
-  resolveBmsBase,
+  resolveBMSBase,
   type BeMusicEvent,
-  type BeMusicJson,
+  type BeMusicJSON,
   type BeMusicSourceFormat,
 } from '@be-music/json';
-import { buildBgaTimelines, type BgaTimelines } from './bga.ts';
+import { buildBGATimelines, type BGATimelines } from './bga.ts';
 import { hasControlFlow, type RandomDraws } from './control-flow.ts';
 import {
-  isBmsBgmVolumeChangeChannel,
-  isBmsDynamicVolumeChangeChannel,
-  isBmsKeyVolumeChangeChannel,
-  parseBmsDynamicVolumeGain,
+  isBmsBGMVolumeChangeChannel,
+  isBMSDynamicVolumeChangeChannel,
+  isBMSKeyVolumeChangeChannel,
+  parseBMSDynamicVolumeGain,
   resolveChartPlayVariant,
   type BeatResolver,
   type ChartPlayVariant,
@@ -47,7 +47,7 @@ export interface ResolveChartOptions {
   /**
    * The `#RANDOM` / `#SWITCH` outcomes the chart was resolved with (`drawRandomOutcomes`), recorded on the result for
    * the play log and the RANDOM summary. `resolveChart` does not apply them: resolve the control flow first
-   * (`resolveBmsControlFlowWithDraws` in `@be-music/parser`, or `resolvePlayChart` in `@be-music/player`).
+   * (`resolveBMSControlFlowWithDraws` in `@be-music/parser`, or `resolvePlayChart` in `@be-music/player`).
    */
   randomDraws?: RandomDraws;
   /** The chart's path or extension (`.pms` names 9 KEY). Only consulted when `playVariant` is omitted. */
@@ -58,7 +58,7 @@ export interface ResolveChartOptions {
    * Infer `#LNTYPE 1` for `5x` / `6x` long notes when the chart declares no `#LNTYPE` (the browser hosts' choice);
    * otherwise such a chart reads `5x` / `6x` the strict way. Defaults to `false`, the engine's default.
    */
-  inferBmsLnTypeWhenMissing?: boolean;
+  inferBmsLNTypeWhenMissing?: boolean;
 }
 
 /** The judge-rank inputs a ruleset turns into judge windows. Raw chart values: each ruleset applies its own defaults. */
@@ -76,7 +76,7 @@ export interface ResolvedVolumeChange {
   readonly seconds: number;
   /** Which bus the change scales: `bgm` (channel `97`) or `play` (channel `98`, the key sounds). */
   readonly bus: 'bgm' | 'play';
-  /** Linear gain (`parseBmsDynamicVolumeGain`). */
+  /** Linear gain (`parseBMSDynamicVolumeGain`). */
   readonly gain: number;
   readonly event: BeMusicEvent;
 }
@@ -91,7 +91,7 @@ export interface ResolvedTotal {
 
 /**
  * A chart ready to play: the Resolved layer every player-side consumer reads, built once from the Source layer
- * (`BeMusicJson`) by {@link resolveChart}. Control flow is decided (the draws are recorded), the lane mode is fixed,
+ * (`BeMusicJSON`) by {@link resolveChart}. Control flow is decided (the draws are recorded), the lane mode is fixed,
  * long notes, mines, invisible objects, FREE ZONE and duplicate notes are resolved, and every time is in seconds after
  * BPM / STOP / `#STP`. Consumers never re-read the format rules from the source chart.
  *
@@ -100,7 +100,7 @@ export interface ResolvedTotal {
  */
 export interface ResolvedChart {
   /** The (control-flow-resolved) source chart this was resolved from: metadata, resources and raw sections. */
-  readonly source: BeMusicJson;
+  readonly source: BeMusicJSON;
   readonly sourceFormat: BeMusicSourceFormat;
   /** The `#RANDOM` / `#SWITCH` outcomes the source was resolved with (`[]` when the chart had none or none were given). */
   readonly randomDraws: RandomDraws;
@@ -116,7 +116,7 @@ export interface ResolvedChart {
   readonly layouts: ReadonlyArray<PlayModeLayout>;
   /** The chart-level long-note mode (`#LNMODE` / bmson `info.ln_type`, otherwise LN). */
   readonly lnMode: LongNoteMode;
-  readonly inferBmsLnTypeWhenMissing: boolean;
+  readonly inferBmsLNTypeWhenMissing: boolean;
   readonly beatResolver: BeatResolver;
   /** The tempo map: BPM points, STOP / `#STP` points, beat → seconds. */
   readonly timing: TimingResolver;
@@ -141,7 +141,7 @@ export interface ResolvedChart {
   /** BMS dynamic volume changes, in chart order (empty for bmson). */
   readonly volumeChanges: ReadonlyArray<ResolvedVolumeChange>;
   /** BGA cues (base / layer / layer 2 / POOR), BMS channels and bmson `bga` alike. */
-  readonly bga: BgaTimelines;
+  readonly bga: BGATimelines;
   readonly scroll: ReadonlyArray<ScrollTimelinePoint>;
   readonly speed: ReadonlyArray<SpeedTimelinePoint>;
   /** Bar-line beats; empty when the chart suppresses them (bmson `lines: []`). */
@@ -156,11 +156,11 @@ export interface ResolvedChart {
 /**
  * The single Source → Resolved step: resolves `chart` for play and returns its {@link ResolvedChart}.
  *
- * `chart` should already carry no control flow (resolve it with `resolveBmsControlFlowWithDraws` or `resolvePlayChart`
+ * `chart` should already carry no control flow (resolve it with `resolveBMSControlFlowWithDraws` or `resolvePlayChart`
  * and pass the draws as `options.randomDraws`); a chart that still does is resolved from its unconditional content
  * only, as a song list sees it.
  */
-export function resolveChart(chart: BeMusicJson, options: ResolveChartOptions = {}): ResolvedChart {
+export function resolveChart(chart: BeMusicJSON, options: ResolveChartOptions = {}): ResolvedChart {
   return new LazyResolvedChart(chart, options);
 }
 
@@ -180,7 +180,7 @@ const NO_SECONDS = { beatToSeconds: () => 0 } as unknown as TimingResolver;
  * without timing every one of them.
  */
 export function countScoredNotes(
-  chart: BeMusicJson,
+  chart: BeMusicJSON,
   options: Omit<ResolveChartOptions, 'randomDraws'> = {},
 ): ScoredNoteCount {
   const playVariant =
@@ -197,9 +197,9 @@ export function countScoredNotes(
     timing: NO_SECONDS,
     beatResolver: context.beatResolver,
     sortedEvents: context.sortedEvents,
-    idBase: resolveBmsBase(chart),
+    idBase: resolveBMSBase(chart),
     resolvePlayVariant: () => playVariant,
-    inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
+    inferBmsLNTypeWhenMissing: options.inferBmsLNTypeWhenMissing === true,
   });
   let count = 0;
   for (const note of notes) {
@@ -211,12 +211,12 @@ export function countScoredNotes(
 }
 
 class LazyResolvedChart implements ResolvedChart {
-  readonly source: BeMusicJson;
+  readonly source: BeMusicJSON;
   readonly sourceFormat: BeMusicSourceFormat;
   readonly randomDraws: RandomDraws;
   readonly hasUnresolvedControlFlow: boolean;
   readonly idBase: 36 | 62;
-  readonly inferBmsLnTypeWhenMissing: boolean;
+  readonly inferBmsLNTypeWhenMissing: boolean;
   readonly beatResolver: BeatResolver;
   readonly sortedEvents: ReadonlyArray<BeMusicEvent>;
   readonly timing: TimingResolver;
@@ -228,22 +228,22 @@ class LazyResolvedChart implements ResolvedChart {
   private minesCache: ResolvedNote[] | undefined;
   private invisibleCache: ResolvedNote[] | undefined;
   private triggersCache: TimedSampleTrigger[] | undefined;
-  private bgaCache: BgaTimelines | undefined;
+  private bgaCache: BGATimelines | undefined;
   private volumeCache: ResolvedVolumeChange[] | undefined;
   private scrollCache: ScrollTimelinePoint[] | undefined;
   private speedCache: SpeedTimelinePoint[] | undefined;
   private barLinesCache: number[] | undefined;
   private judgeRankCache: ResolvedJudgeRank | undefined;
 
-  constructor(chart: BeMusicJson, options: ResolveChartOptions) {
+  constructor(chart: BeMusicJSON, options: ResolveChartOptions) {
     this.source = chart;
     this.sourceFormat = chart.sourceFormat;
     this.randomDraws = options.randomDraws ?? [];
     this.hasUnresolvedControlFlow = hasControlFlow(chart);
-    this.idBase = resolveBmsBase(chart);
+    this.idBase = resolveBMSBase(chart);
     this.playVariantInput = options.playVariant;
     this.chartPath = options.chartPath;
-    this.inferBmsLnTypeWhenMissing = options.inferBmsLnTypeWhenMissing === true;
+    this.inferBmsLNTypeWhenMissing = options.inferBmsLNTypeWhenMissing === true;
     const context = createTimingBuildContext(chart);
     this.beatResolver = context.beatResolver;
     this.sortedEvents = context.sortedEvents;
@@ -294,7 +294,7 @@ class LazyResolvedChart implements ResolvedChart {
       this.source,
       this.timing,
       { sortedEvents: this.sortedEvents as BeMusicEvent[], beatResolver: this.beatResolver },
-      { inferBmsLnTypeWhenMissing: this.inferBmsLnTypeWhenMissing },
+      { inferBmsLNTypeWhenMissing: this.inferBmsLNTypeWhenMissing },
     );
     return this.triggersCache;
   }
@@ -304,8 +304,8 @@ class LazyResolvedChart implements ResolvedChart {
     return this.volumeCache;
   }
 
-  get bga(): BgaTimelines {
-    this.bgaCache ??= buildBgaTimelines(this.source, this.timing);
+  get bga(): BGATimelines {
+    this.bgaCache ??= buildBGATimelines(this.source, this.timing);
     return this.bgaCache;
   }
 
@@ -364,13 +364,13 @@ class LazyResolvedChart implements ResolvedChart {
       sortedEvents: this.sortedEvents,
       idBase: this.idBase,
       resolvePlayVariant: () => this.playVariant,
-      inferBmsLnTypeWhenMissing: this.inferBmsLnTypeWhenMissing,
+      inferBmsLNTypeWhenMissing: this.inferBmsLNTypeWhenMissing,
     };
   }
 }
 
 function resolveVolumeChanges(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   sortedEvents: ReadonlyArray<BeMusicEvent>,
   timing: TimingResolver,
 ): ResolvedVolumeChange[] {
@@ -380,16 +380,16 @@ function resolveVolumeChanges(
   const changes: ResolvedVolumeChange[] = [];
   for (const event of sortedEvents) {
     const channel = normalizeChannel(event.channel);
-    if (!isBmsDynamicVolumeChangeChannel(channel)) {
+    if (!isBMSDynamicVolumeChangeChannel(channel)) {
       continue;
     }
-    const gain = parseBmsDynamicVolumeGain(event.value);
+    const gain = parseBMSDynamicVolumeGain(event.value);
     if (gain === undefined) {
       continue;
     }
     changes.push({
       seconds: timing.eventToSeconds(event),
-      bus: isBmsBgmVolumeChangeChannel(channel) && !isBmsKeyVolumeChangeChannel(channel) ? 'bgm' : 'play',
+      bus: isBmsBGMVolumeChangeChannel(channel) && !isBMSKeyVolumeChangeChannel(channel) ? 'bgm' : 'play',
       gain,
       event,
     });
@@ -398,7 +398,7 @@ function resolveVolumeChanges(
 }
 
 function resolveJudgeRank(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   sortedEvents: ReadonlyArray<BeMusicEvent>,
   timing: TimingResolver,
   idBase: 36 | 62,
@@ -415,7 +415,7 @@ function resolveJudgeRank(
  * the chart has a finite one. Not part of the package API; {@link ResolvedChart.judgeRank} and the chart fingerprint
  * read them.
  */
-export function resolveJudgeRankFacts(json: BeMusicJson): { rank?: number; exRank?: number } {
+export function resolveJudgeRankFacts(json: BeMusicJSON): { rank?: number; exRank?: number } {
   const facts: { rank?: number; exRank?: number } = {};
   const rank = json.metadata.rank;
   if (typeof rank === 'number' && Number.isFinite(rank)) {
@@ -440,7 +440,7 @@ export interface ExRankChange {
  * positive number. Not part of the package API.
  */
 export function collectExRankChanges(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   sortedEvents: ReadonlyArray<BeMusicEvent>,
   idBase: 36 | 62,
 ): ExRankChange[] {
@@ -467,7 +467,7 @@ export function collectExRankChanges(
  * with `value` only when it is finite. Not part of the package API; {@link ResolvedChart.total} and the chart
  * fingerprint read it.
  */
-export function resolveTotalFacts(json: BeMusicJson): ResolvedTotal {
+export function resolveTotalFacts(json: BeMusicJSON): ResolvedTotal {
   const value = json.metadata.total;
   const unit = json.sourceFormat === 'bmson' ? 'percent' : 'absolute';
   return typeof value === 'number' && Number.isFinite(value) ? { value, unit } : { unit };

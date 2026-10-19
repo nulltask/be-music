@@ -1,4 +1,4 @@
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import { makeChartWith } from '../test-support/library.ts';
 import { resolveLibraryChartKeyMode, resolveLibraryChartPlayVariant, seedLibraryChartPlayVariant } from './key-mode.ts';
@@ -35,7 +35,7 @@ describe('resolveLibraryChartPlayVariant', () => {
     const resolved = {
       ...entry.chart,
       events: [...entry.chart.events, { measure: 2, channel: '18', position: [0, 1], value: '01' }],
-    } as BeMusicJson;
+    } as BeMusicJSON;
     expect(resolveLibraryChartPlayVariant(entry, resolved)).toBe('7');
     // The library answer is unaffected (cached per chart object).
     expect(resolveLibraryChartPlayVariant(entry)).toBe('5');

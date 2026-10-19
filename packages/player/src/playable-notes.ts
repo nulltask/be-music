@@ -1,5 +1,5 @@
 import { resolveChart, type ChartPlayVariant, type LongNoteMode, type ResolvedNote } from '@be-music/chart';
-import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
+import type { BeMusicEvent, BeMusicJSON } from '@be-music/json';
 
 /**
  * A judged (or invisible) note as the engine plays it: a {@link ResolvedNote} from `resolveChart` (`@be-music/chart`)
@@ -30,7 +30,7 @@ export interface TimedLandmineNote {
 export interface ExtractTimedNotesOptions {
   includeLandmine?: boolean;
   includeInvisible?: boolean;
-  inferBmsLnTypeWhenMissing?: boolean;
+  inferBmsLNTypeWhenMissing?: boolean;
   /**
    * Host-resolved play variant. Only consulted to decide whether channels `17` / `27` are FREE ZONE — they're real key
    * columns under POPN-9 and the 24-key keyboard modes. Omit it and the chart is classified from its lanes.
@@ -51,7 +51,7 @@ export interface ExtractTimedNotesResult {
 }
 
 export interface ExtractPlayableNotesOptions {
-  inferBmsLnTypeWhenMissing?: boolean;
+  inferBmsLNTypeWhenMissing?: boolean;
   /** See {@link ExtractTimedNotesOptions.playVariant}. */
   playVariant?: ChartPlayVariant;
 }
@@ -62,10 +62,10 @@ export interface ExtractPlayableNotesOptions {
  * over a tap, otherwise the lowest object ID / first bmson sound channel), the others are returned in `shadowedNotes`
  * when their keysound differs, and landmines and invisible objects are not collapsed.
  */
-export function extractTimedNotes(json: BeMusicJson, options: ExtractTimedNotesOptions = {}): ExtractTimedNotesResult {
+export function extractTimedNotes(json: BeMusicJSON, options: ExtractTimedNotesOptions = {}): ExtractTimedNotesResult {
   const resolved = resolveChart(json, {
     playVariant: options.playVariant,
-    inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing,
+    inferBmsLNTypeWhenMissing: options.inferBmsLNTypeWhenMissing,
   });
   return {
     playableNotes: resolved.notes.map(toTimedPlayableNote),
@@ -76,17 +76,17 @@ export function extractTimedNotes(json: BeMusicJson, options: ExtractTimedNotesO
 }
 
 export function extractPlayableNotes(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   options: ExtractPlayableNotesOptions = {},
 ): TimedPlayableNote[] {
   return resolveChart(json, options).notes.map(toTimedPlayableNote);
 }
 
-export function extractLandmineNotes(json: BeMusicJson): TimedLandmineNote[] {
+export function extractLandmineNotes(json: BeMusicJSON): TimedLandmineNote[] {
   return resolveChart(json).mines.map(toTimedLandmineNote);
 }
 
-export function extractInvisiblePlayableNotes(json: BeMusicJson): TimedPlayableNote[] {
+export function extractInvisiblePlayableNotes(json: BeMusicJSON): TimedPlayableNote[] {
   return resolveChart(json).invisibleNotes.map(toTimedInvisibleNote);
 }
 

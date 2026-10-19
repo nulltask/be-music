@@ -11,11 +11,11 @@ export const COURSE_TABLE_URLS_STORAGE_KEY = `${DEMO_STORAGE_PREFIX}course-table
 /** A difficulty table's courses, read as one course group. */
 export interface ImportedCourseTable {
   group: CourseDefinitionGroup;
-  headerUrl: string;
+  headerURL: string;
 }
 
 /** The trimmed URL when it is an absolute http(s) URL, else `undefined`. */
-export function normalizeCourseTableUrl(input: string): string | undefined {
+export function normalizeCourseTableURL(input: string): string | undefined {
   const trimmed = input.trim();
   if (trimmed.length === 0) return undefined;
   try {
@@ -27,14 +27,14 @@ export function normalizeCourseTableUrl(input: string): string | undefined {
 }
 
 /** Stored table URLs, keeping only valid, distinct http(s) URLs in their stored order. */
-export function parseStoredCourseTableUrls(raw: string | null | undefined): string[] {
+export function parseStoredCourseTableURLs(raw: string | null | undefined): string[] {
   if (!raw) return [];
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     const urls: string[] = [];
     for (const value of parsed) {
-      const url = typeof value === 'string' ? normalizeCourseTableUrl(value) : undefined;
+      const url = typeof value === 'string' ? normalizeCourseTableURL(value) : undefined;
       if (url !== undefined && !urls.includes(url)) urls.push(url);
     }
     return urls;
@@ -44,20 +44,20 @@ export function parseStoredCourseTableUrls(raw: string | null | undefined): stri
 }
 
 /** The remembered table URLs; empty when none are stored or storage is blocked. */
-export function readStoredCourseTableUrls(storage: Pick<Storage, 'getItem'> | undefined = defaultStorage()): string[] {
+export function readStoredCourseTableURLs(storage: Pick<Storage, 'getItem'> | undefined = defaultStorage()): string[] {
   try {
-    return parseStoredCourseTableUrls(storage?.getItem(COURSE_TABLE_URLS_STORAGE_KEY));
+    return parseStoredCourseTableURLs(storage?.getItem(COURSE_TABLE_URLS_STORAGE_KEY));
   } catch {
     return [];
   }
 }
 
 /** Adds `url` to the remembered table URLs (once) and returns the new list; blocked storage keeps it for this session. */
-export function rememberCourseTableUrl(
+export function rememberCourseTableURL(
   url: string,
   storage: Pick<Storage, 'getItem' | 'setItem'> | undefined = defaultStorage(),
 ): string[] {
-  const urls = readStoredCourseTableUrls(storage);
+  const urls = readStoredCourseTableURLs(storage);
   if (!urls.includes(url)) urls.push(url);
   try {
     storage?.setItem(COURSE_TABLE_URLS_STORAGE_KEY, JSON.stringify(urls));
@@ -106,7 +106,7 @@ export async function importCourseTable(
 ): Promise<ImportedCourseTable> {
   const table = await fetchTableHeaderCourses(url, fetchText);
   if (table.courses.length === 0) throw new Error(`${table.label} lists no course`);
-  return { group: { label: table.label, courses: table.courses }, headerUrl: table.headerUrl };
+  return { group: { label: table.label, courses: table.courses }, headerURL: table.headerURL };
 }
 
 function defaultStorage(): Storage | undefined {

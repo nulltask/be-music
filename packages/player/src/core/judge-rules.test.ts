@@ -12,7 +12,7 @@ import {
   resolveManualTimedJudge,
   resolvePlayableLongNoteMode,
   resolveRulesetLongNoteMode,
-  toUiLongNoteMode,
+  toUILongNoteMode,
   type PendingAutoLongNoteState,
 } from './judge-rules.ts';
 
@@ -89,8 +89,8 @@ describe('judge rules', () => {
     expect(longNoteScoresTail('charge', note(1))).toBe(false);
   });
 
-  test('toUiLongNoteMode spells the modes for the UI commands', () => {
-    expect([1, 2, 3].map((mode) => toUiLongNoteMode(mode as 1 | 2 | 3))).toEqual(['ln', 'cn', 'hcn']);
+  test('toUILongNoteMode spells the modes for the UI commands', () => {
+    expect([1, 2, 3].map((mode) => toUILongNoteMode(mode as 1 | 2 | 3))).toEqual(['ln', 'cn', 'hcn']);
   });
 
   test('insertPendingAutoLongNote keeps the queue ordered by tail, stable for equal tails', () => {

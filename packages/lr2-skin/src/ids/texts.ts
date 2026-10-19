@@ -169,4 +169,4 @@ export const LR2_TEXT = {
 } as const;
 
 /** One of LR2's texts ({@link LR2_TEXT}). */
-export type Lr2Text = (typeof LR2_TEXT)[keyof typeof LR2_TEXT];
+export type LR2Text = (typeof LR2_TEXT)[keyof typeof LR2_TEXT];

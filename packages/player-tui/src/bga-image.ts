@@ -13,49 +13,49 @@ export interface DecodedImage {
 }
 
 export function decodeImageBuffer(buffer: Buffer, pathHint: string): DecodedImage {
-  if (isPngBuffer(buffer)) {
-    return decodePng(buffer);
+  if (isPNGBuffer(buffer)) {
+    return decodePNG(buffer);
   }
-  if (isJpegBuffer(buffer)) {
-    return decodeJpeg(buffer);
+  if (isJPEGBuffer(buffer)) {
+    return decodeJPEG(buffer);
   }
-  if (isBmpBuffer(buffer)) {
-    return decodeBmp(buffer);
+  if (isBMPBuffer(buffer)) {
+    return decodeBMP(buffer);
   }
 
   const extension = extname(pathHint).toLowerCase();
   if (extension === '.png') {
-    return decodePng(buffer);
+    return decodePNG(buffer);
   }
   if (extension === '.jpg' || extension === '.jpeg') {
-    return decodeJpeg(buffer);
+    return decodeJPEG(buffer);
   }
   if (extension === '.bmp') {
-    return decodeBmp(buffer);
+    return decodeBMP(buffer);
   }
 
   try {
-    return decodePng(buffer);
+    return decodePNG(buffer);
   } catch {
     try {
-      return decodeJpeg(buffer);
+      return decodeJPEG(buffer);
     } catch {
-      return decodeBmp(buffer);
+      return decodeBMP(buffer);
     }
   }
 }
 
-function decodePng(buffer: Buffer): DecodedImage {
+function decodePNG(buffer: Buffer): DecodedImage {
   const decoded = decodePngFast(buffer);
   return {
     width: decoded.width,
     height: decoded.height,
-    data: convertToRgba8(decoded.data, decoded.width, decoded.height, decoded.channels, decoded.depth),
+    data: convertToRGBA8(decoded.data, decoded.width, decoded.height, decoded.channels, decoded.depth),
     format: 'png',
   };
 }
 
-function decodeJpeg(buffer: Buffer): DecodedImage {
+function decodeJPEG(buffer: Buffer): DecodedImage {
   const decoded = jpeg.decode(buffer, {
     useTArray: true,
     formatAsRGBA: true,
@@ -68,16 +68,16 @@ function decodeJpeg(buffer: Buffer): DecodedImage {
   };
 }
 
-function decodeBmp(buffer: Buffer): DecodedImage {
-  const bitsPerPixel = readBmpBitsPerPixel(buffer);
+function decodeBMP(buffer: Buffer): DecodedImage {
+  const bitsPerPixel = readBMPBitsPerPixel(buffer);
   if (bitsPerPixel <= 8) {
-    return decodeIndexedBmp(buffer, bitsPerPixel);
+    return decodeIndexedBMP(buffer, bitsPerPixel);
   }
 
   const decoded = decodeBmpFast(buffer);
   const channels = decoded.channels > 0 ? decoded.channels : 4;
   const depth = Math.max(1, Math.floor(decoded.bitsPerPixel / channels));
-  const rgba = convertToRgba8(toSampleArray(decoded.data), decoded.width, decoded.height, channels, depth);
+  const rgba = convertToRGBA8(toSampleArray(decoded.data), decoded.width, decoded.height, channels, depth);
   return {
     width: decoded.width,
     height: decoded.height,
@@ -86,7 +86,7 @@ function decodeBmp(buffer: Buffer): DecodedImage {
   };
 }
 
-function readBmpBitsPerPixel(buffer: Buffer): number {
+function readBMPBitsPerPixel(buffer: Buffer): number {
   if (buffer.length < 30) {
     throw new Error('invalid bmp header');
   }
@@ -100,7 +100,7 @@ function readBmpBitsPerPixel(buffer: Buffer): number {
   return buffer.readUInt16LE(28);
 }
 
-function decodeIndexedBmp(buffer: Buffer, bitsPerPixel: number): DecodedImage {
+function decodeIndexedBMP(buffer: Buffer, bitsPerPixel: number): DecodedImage {
   if (bitsPerPixel !== 1 && bitsPerPixel !== 4 && bitsPerPixel !== 8) {
     throw new Error(`unsupported indexed bmp bit depth: ${bitsPerPixel}`);
   }
@@ -141,7 +141,7 @@ function decodeIndexedBmp(buffer: Buffer, bitsPerPixel: number): DecodedImage {
     const sourceY = topDown ? y : height - 1 - y;
     const rowOffset = pixelDataOffset + sourceY * rowStride;
     for (let x = 0; x < width; x += 1) {
-      const paletteIndex = readIndexedBmpPaletteIndex(buffer, rowOffset, x, bitsPerPixel);
+      const paletteIndex = readIndexedBMPPaletteIndex(buffer, rowOffset, x, bitsPerPixel);
       const color = palette[paletteIndex] ?? [0, 0, 0, 255];
       const targetOffset = (y * width + x) * 4;
       rgba[targetOffset] = color[0];
@@ -159,7 +159,7 @@ function decodeIndexedBmp(buffer: Buffer, bitsPerPixel: number): DecodedImage {
   };
 }
 
-function readIndexedBmpPaletteIndex(buffer: Buffer, rowOffset: number, x: number, bitsPerPixel: number): number {
+function readIndexedBMPPaletteIndex(buffer: Buffer, rowOffset: number, x: number, bitsPerPixel: number): number {
   if (bitsPerPixel === 8) {
     return buffer[rowOffset + x] ?? 0;
   }
@@ -191,7 +191,7 @@ function toSampleArray(data: unknown): ArrayLike<number> {
   return new Uint8Array(0);
 }
 
-function convertToRgba8(
+function convertToRGBA8(
   data: ArrayLike<number>,
   width: number,
   height: number,
@@ -243,7 +243,7 @@ function toByte(sample: number, sampleMax: number): number {
   return Math.round((normalized * 255) / sampleMax);
 }
 
-function isPngBuffer(buffer: Buffer): boolean {
+function isPNGBuffer(buffer: Buffer): boolean {
   return (
     buffer.length >= 8 &&
     buffer[0] === 0x89 &&
@@ -257,10 +257,10 @@ function isPngBuffer(buffer: Buffer): boolean {
   );
 }
 
-function isJpegBuffer(buffer: Buffer): boolean {
+function isJPEGBuffer(buffer: Buffer): boolean {
   return buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xd8;
 }
 
-function isBmpBuffer(buffer: Buffer): boolean {
+function isBMPBuffer(buffer: Buffer): boolean {
   return buffer.length >= 2 && buffer[0] === 0x42 && buffer[1] === 0x4d;
 }

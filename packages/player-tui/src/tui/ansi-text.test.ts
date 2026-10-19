@@ -1,14 +1,14 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
   ANSI_RESET,
-  blendRgb,
+  blendRGB,
   centerVisible,
   clampColorByte,
   colorizeText,
-  dimRgb,
-  findAnsiSgrSequenceEnd,
+  dimRGB,
+  findAnsiSGRSequenceEnd,
   getCharacterDisplayWidth,
-  isSameRgb,
+  isSameRGB,
   padVisibleWidth,
   visibleWidth,
 } from './ansi-text.ts';
@@ -35,14 +35,14 @@ describe('getCharacterDisplayWidth', () => {
   });
 });
 
-describe('findAnsiSgrSequenceEnd', () => {
+describe('findAnsiSGRSequenceEnd', () => {
   test('finds the closing m of an SGR sequence', () => {
-    expect(findAnsiSgrSequenceEnd('\u001b[38;2;1mX', 2)).toBe(8);
+    expect(findAnsiSGRSequenceEnd('\u001b[38;2;1mX', 2)).toBe(8);
   });
 
   test('is -1 for another command or an unterminated sequence', () => {
-    expect(findAnsiSgrSequenceEnd('\u001b[3Kx', 2)).toBe(-1);
-    expect(findAnsiSgrSequenceEnd('\u001b[31', 2)).toBe(-1);
+    expect(findAnsiSGRSequenceEnd('\u001b[3Kx', 2)).toBe(-1);
+    expect(findAnsiSGRSequenceEnd('\u001b[31', 2)).toBe(-1);
   });
 });
 
@@ -77,14 +77,14 @@ describe('colorizeText', () => {
 });
 
 describe('colour helpers', () => {
-  test('dimRgb scales each channel by a factor clamped to 0..1', () => {
-    expect(dimRgb({ r: 200, g: 100, b: 51 }, 0.5)).toEqual({ r: 100, g: 50, b: 25 });
-    expect(dimRgb({ r: 200, g: 100, b: 51 }, 2)).toEqual({ r: 200, g: 100, b: 51 });
+  test('dimRGB scales each channel by a factor clamped to 0..1', () => {
+    expect(dimRGB({ r: 200, g: 100, b: 51 }, 0.5)).toEqual({ r: 100, g: 50, b: 25 });
+    expect(dimRGB({ r: 200, g: 100, b: 51 }, 2)).toEqual({ r: 200, g: 100, b: 51 });
   });
 
-  test('blendRgb mixes two colours by a ratio clamped to 0..1', () => {
-    expect(blendRgb({ r: 0, g: 0, b: 0 }, { r: 100, g: 200, b: 255 }, 0.5)).toEqual({ r: 50, g: 100, b: 127 });
-    expect(blendRgb({ r: 10, g: 20, b: 30 }, { r: 100, g: 200, b: 255 }, -1)).toEqual({ r: 10, g: 20, b: 30 });
+  test('blendRGB mixes two colours by a ratio clamped to 0..1', () => {
+    expect(blendRGB({ r: 0, g: 0, b: 0 }, { r: 100, g: 200, b: 255 }, 0.5)).toEqual({ r: 50, g: 100, b: 127 });
+    expect(blendRGB({ r: 10, g: 20, b: 30 }, { r: 100, g: 200, b: 255 }, -1)).toEqual({ r: 10, g: 20, b: 30 });
   });
 
   test('clampColorByte truncates into 0..255 and maps a missing value to 0', () => {
@@ -95,10 +95,10 @@ describe('colour helpers', () => {
     expect(clampColorByte(undefined)).toBe(0);
   });
 
-  test('isSameRgb compares by channel', () => {
-    expect(isSameRgb(undefined, undefined)).toBe(true);
-    expect(isSameRgb({ r: 1, g: 2, b: 3 }, { r: 1, g: 2, b: 3 })).toBe(true);
-    expect(isSameRgb({ r: 1, g: 2, b: 3 }, { r: 1, g: 2, b: 4 })).toBe(false);
-    expect(isSameRgb({ r: 1, g: 2, b: 3 }, undefined)).toBe(false);
+  test('isSameRGB compares by channel', () => {
+    expect(isSameRGB(undefined, undefined)).toBe(true);
+    expect(isSameRGB({ r: 1, g: 2, b: 3 }, { r: 1, g: 2, b: 3 })).toBe(true);
+    expect(isSameRGB({ r: 1, g: 2, b: 3 }, { r: 1, g: 2, b: 4 })).toBe(false);
+    expect(isSameRGB({ r: 1, g: 2, b: 3 }, undefined)).toBe(false);
   });
 });

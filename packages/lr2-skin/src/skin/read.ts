@@ -1,7 +1,7 @@
 import { dirname } from '@be-music/utils/core';
 import { asLoadedBytes } from '../file-lookup.ts';
-import type { Lr2SkinFileEntry } from '../file-lookup.ts';
-import { normalizeLr2Path, resolveLr2IncludePath } from '../assets.ts';
+import type { LR2SkinFileEntry } from '../file-lookup.ts';
+import { normalizeLR2Path, resolveLR2IncludePath } from '../assets.ts';
 import { decodeText, parseRows } from '../csv.ts';
 import {
   appendDestinationKeyframe,
@@ -28,7 +28,7 @@ import type {
   BarRivalSourceEntry,
   ParseContext,
 } from './parse-context.ts';
-import type { Lr2Skin } from './types.ts';
+import type { LR2Skin } from './types.ts';
 
 interface ConditionalFrame {
   active: boolean;
@@ -36,7 +36,7 @@ interface ConditionalFrame {
   parentActive: boolean;
 }
 
-const NOTE_COMMANDS: Record<string, keyof Lr2Skin['notes']> = {
+const NOTE_COMMANDS: Record<string, keyof LR2Skin['notes']> = {
   '#SRC_NOTE': 'note',
   '#SRC_LN_START': 'lnstart',
   '#SRC_LN_END': 'lnend',
@@ -51,8 +51,8 @@ const NOTE_COMMANDS: Record<string, keyof Lr2Skin['notes']> = {
   '#SRC_AUTO_MINE': 'automine',
 };
 
-export function readLr2Path(
-  sourceFiles: ReadonlyMap<string, Lr2SkinFileEntry>,
+export function readLR2Path(
+  sourceFiles: ReadonlyMap<string, LR2SkinFileEntry>,
   path: string,
   context: ParseContext,
   visited: Set<string>,
@@ -135,7 +135,7 @@ export function readLr2Path(
       // `#RESOLUTION` is the canonical signal — we always trust it over our heuristic.
       context.explicitResolution = true;
     } else if (command === '#IMAGE') {
-      const normalized = normalizeLr2Path(row[1] ?? '');
+      const normalized = normalizeLR2Path(row[1] ?? '');
       const expanded = context.customFileLookup.get(normalized.toLowerCase()) ?? normalized;
       context.imagePaths.push(expanded);
     } else if (command === '#LR2FONT') {
@@ -158,7 +158,7 @@ export function readLr2Path(
       // theme — its `select.csv` uses `font=4` for the PLAY
       // OPTION text expecting `#LR2FONT[4]` (= optionfont) to
       // render the value, not the 5th global declaration.
-      const normalized = normalizeLr2Path(row[1] ?? '');
+      const normalized = normalizeLR2Path(row[1] ?? '');
       const expanded =
         normalized.length > 0 ? (context.customFileLookup.get(normalized.toLowerCase()) ?? normalized) : '';
       context.lr2FontPaths.push(expanded);
@@ -237,17 +237,17 @@ export function readLr2Path(
     } else if (command === '#INCLUDE') {
       // `#INCLUDE` honors `#CUSTOMFILE` wildcard substitutions the same way `#IMAGE` / `#LR2FONT` do. LITONE4's
       // `Select/select.lr2skin` declares `#CUSTOMFILE,全体色,...¥Select¥csv¥*.csv,blue,` then `#INCLUDE,...¥Select¥csv¥*.csv,`
-      // — without the customFileLookup pre-check the wildcard reaches `resolveLr2IncludePath` literally and the
+      // — without the customFileLookup pre-check the wildcard reaches `resolveLR2IncludePath` literally and the
       // include resolves to nothing (no file in the bundle matches `*.csv` directly). Symptom was an empty select
       // skin (`images.length === 0`, `barLayout.slots === 0`) which fell back to the default-family chrome.
       // Pre-expansion lets the resolver see the real path (`Select/csv/blue.csv`) and the rest of the CSV walk
       // proceeds normally. Falls through to the regular include resolution when the pattern isn't a customFile
       // wildcard (= every LR2 theme that pre-dates LITONE4's wildcard-include trick).
       const rawInclude = row[1] ?? '';
-      const customExpanded = context.customFileLookup.get(normalizeLr2Path(rawInclude).toLowerCase());
-      const includePath = customExpanded ?? resolveLr2IncludePath(sourceFiles, dirname(path), rawInclude);
+      const customExpanded = context.customFileLookup.get(normalizeLR2Path(rawInclude).toLowerCase());
+      const includePath = customExpanded ?? resolveLR2IncludePath(sourceFiles, dirname(path), rawInclude);
       if (includePath) {
-        readLr2Path(sourceFiles, includePath, context, visited);
+        readLR2Path(sourceFiles, includePath, context, visited);
       }
     } else if (command === '#SRC_IMAGE') {
       context.imageSources.push(parseSource(row, context));
@@ -560,7 +560,7 @@ export function readLr2Path(
       // #SRC_BAR_BODY,kind,gr,x,y,w,h,divx,divy,cycle,timer
       const kind = parseBarBodyKind(row[1]);
       if (kind) {
-        // Stamp the FIRST `#SRC_BAR_BODY` we see — that's the anchor `Lr2BarLayout.declarationOrder` ends up at, and
+        // Stamp the FIRST `#SRC_BAR_BODY` we see — that's the anchor `LR2BarLayout.declarationOrder` ends up at, and
         // every chrome element compared against it. Later bar-body declarations (e.g. inside an #IF branch overriding
         // the kind) don't shift the anchor — the bar list as a whole is "declared" at its first slot.
         if (context.barLayoutDeclarationOrder === undefined) {
@@ -668,7 +668,7 @@ function registerCustomOption(context: ParseContext, row: string[]): void {
 
 function registerCustomFile(
   context: ParseContext,
-  sourceFiles: ReadonlyMap<string, Lr2SkinFileEntry>,
+  sourceFiles: ReadonlyMap<string, LR2SkinFileEntry>,
   baseDirectory: string,
   row: string[],
 ): void {
@@ -679,10 +679,10 @@ function registerCustomFile(
     return;
   }
   const expanded = pattern.replaceAll('*', defaultName);
-  const resolvedPath = resolveLr2IncludePath(sourceFiles, baseDirectory, expanded);
+  const resolvedPath = resolveLR2IncludePath(sourceFiles, baseDirectory, expanded);
   if (resolvedPath) {
     context.customFiles.push({ name, path: resolvedPath });
-    context.customFileLookup.set(normalizeLr2Path(pattern).toLowerCase(), resolvedPath);
+    context.customFileLookup.set(normalizeLR2Path(pattern).toLowerCase(), resolvedPath);
   }
 }
 

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { describe, expect, test } from 'vite-plus/test';
 import { sha256Hex, sha256HexOfBytes } from './sha256.ts';
 
-function nodeSha256(input: string | Uint8Array): string {
+function nodeSHA256(input: string | Uint8Array): string {
   return createHash('sha256').update(input).digest('hex');
 }
 
@@ -21,26 +21,26 @@ describe('sha256Hex', () => {
     ['a lone surrogate', 'broken \ud800 pair'],
     ['JSON', '{"notes":[{"l":"1P1","t":{"m":"0","p":"1/2"}}],"v":"bmfp1"}'],
   ])('matches node:crypto for %s', (_label, text) => {
-    expect(sha256Hex(text)).toBe(nodeSha256(text));
+    expect(sha256Hex(text)).toBe(nodeSHA256(text));
   });
 
   test.each([1, 54, 55, 56, 57, 63, 64, 65, 119, 120, 127, 128, 129])(
     'matches node:crypto at %i bytes around the padding boundaries',
     (length) => {
       const text = 'a'.repeat(length);
-      expect(sha256Hex(text)).toBe(nodeSha256(text));
+      expect(sha256Hex(text)).toBe(nodeSHA256(text));
     },
   );
 
   test('matches node:crypto for a large input', () => {
     const text = Array.from({ length: 50_000 }, (_, index) => `${index}:ノーツ;`).join('');
-    expect(sha256Hex(text)).toBe(nodeSha256(text));
+    expect(sha256Hex(text)).toBe(nodeSHA256(text));
   });
 });
 
 describe('sha256HexOfBytes', () => {
   test('matches node:crypto for every byte value', () => {
     const bytes = Uint8Array.from({ length: 1000 }, (_, index) => (index * 31) & 0xff);
-    expect(sha256HexOfBytes(bytes)).toBe(nodeSha256(bytes));
+    expect(sha256HexOfBytes(bytes)).toBe(nodeSHA256(bytes));
   });
 });

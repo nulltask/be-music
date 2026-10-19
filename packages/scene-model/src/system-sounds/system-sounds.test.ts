@@ -27,13 +27,13 @@ describe('systemSoundSetFromBeatoraja', () => {
   test('takes the cues and the select BGM by path, the jingles by bytes', () => {
     const set = systemSoundSetFromBeatoraja({
       paths: { cursor: 'sound/cursor.wav', cancel: 'sound/cancel.wav', decide: '' },
-      selectBgmPath: 'Bgm/select.wav',
+      selectBGMPath: 'BGM/select.wav',
       bgm: { clear: bytes(1), courseFail: bytes(2) },
     });
     expect(set).toEqual({
       cursor: { path: 'sound/cursor.wav' },
       cancel: { path: 'sound/cancel.wav' },
-      selectBgm: { path: 'Bgm/select.wav' },
+      selectBGM: { path: 'BGM/select.wav' },
       clear: { bytes: bytes(1) },
       courseFail: { bytes: bytes(2) },
     });

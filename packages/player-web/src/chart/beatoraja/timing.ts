@@ -1,4 +1,4 @@
-import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
+import type { BeMusicEvent, BeMusicJSON } from '@be-music/json';
 
 /** Standard 4-beat measure baseline. Authors override measure length at the measure boundary. */
 export const BEATS_PER_STANDARD_MEASURE = 4;
@@ -23,11 +23,11 @@ export function hasBeatorajaEventValue(value: string): boolean {
   return value !== '00' && value !== '';
 }
 
-export function resolveBeatorajaInitialBpm(chart: BeMusicJson): number {
+export function resolveBeatorajaInitialBPM(chart: BeMusicJSON): number {
   return chart.metadata.bpm > 0 ? chart.metadata.bpm : 130;
 }
 
-export function isBeatorajaBpmEventChannel(channel: string): boolean {
+export function isBeatorajaBPMEventChannel(channel: string): boolean {
   return channel === '03' || channel === '08';
 }
 
@@ -35,7 +35,7 @@ export function isBeatorajaStopEventChannel(channel: string): boolean {
   return channel === '09';
 }
 
-export function computeBeatorajaMeasureLayout(chart: BeMusicJson): BeatorajaMeasureLayout {
+export function computeBeatorajaMeasureLayout(chart: BeMusicJSON): BeatorajaMeasureLayout {
   const lengths = new Map<number, number>();
   let maxMeasure = 0;
   for (const event of chart.events ?? []) {
@@ -58,7 +58,7 @@ export function computeBeatorajaMeasureLayout(chart: BeMusicJson): BeatorajaMeas
   return { measureBaseBeat, totalBeats: beat };
 }
 
-export function computeBeatorajaMeasureBaseBeats(chart: BeMusicJson): number[] {
+export function computeBeatorajaMeasureBaseBeats(chart: BeMusicJSON): number[] {
   return computeBeatorajaMeasureLayout(chart).measureBaseBeat;
 }
 
@@ -73,7 +73,7 @@ export function beatorajaEventBeat(
   return base + (num / denom) * BEATS_PER_STANDARD_MEASURE;
 }
 
-export function resolveBeatorajaBpmEventValue(
+export function resolveBeatorajaBPMEventValue(
   channel: string,
   value: string,
   table: Readonly<Record<string, unknown>> = {},
@@ -98,7 +98,7 @@ export function resolveBeatorajaStopDurationBeats(
 }
 
 export function collectBeatorajaChartTimingEntries(
-  chart: BeMusicJson,
+  chart: BeMusicJSON,
   measureBaseBeat: readonly number[] = computeBeatorajaMeasureBaseBeats(chart),
 ): BeatorajaChartTimingEntry[] {
   return collectBeatorajaChartTimedEntries<never>(chart, measureBaseBeat, () => undefined).filter(
@@ -107,7 +107,7 @@ export function collectBeatorajaChartTimingEntries(
 }
 
 export function collectBeatorajaChartTimedEntries<TNote>(
-  chart: BeMusicJson,
+  chart: BeMusicJSON,
   measureBaseBeat: readonly number[],
   resolveNote: (event: BeMusicEvent) => TNote | undefined,
 ): BeatorajaChartTimedEntry<TNote>[] {
@@ -120,8 +120,8 @@ export function collectBeatorajaChartTimedEntries<TNote>(
     const beat = beatorajaEventBeat(event, measureBaseBeat);
     if (beat === undefined) continue;
 
-    if (isBeatorajaBpmEventChannel(event.channel)) {
-      const bpm = resolveBeatorajaBpmEventValue(event.channel, event.value, bpmTable);
+    if (isBeatorajaBPMEventChannel(event.channel)) {
+      const bpm = resolveBeatorajaBPMEventValue(event.channel, event.value, bpmTable);
       // Negative `#BPMxx` (channel 08) integrates at |BPM|, matching the LR2-aligned `TimingResolver`: the
       // timeline never runs backwards — the reversal is a presentation / judging gimmick — so the beatoraja
       // prep pipeline's note seconds agree with the resolver. Zero / non-finite slots stay dropped (previous

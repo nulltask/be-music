@@ -9,12 +9,12 @@ import type { BeMusicPlaylog, PlaylogRecorderInfo } from '@be-music/player/playl
 import { resolveCourseView, type PlayOptions } from '@be-music/scene-model';
 import type { ActiveCourse, CourseStagePlay } from '../course-flow.ts';
 import { tempoFromPercent } from '../play-tempo-settings.ts';
-import type { DemoGuiState } from '../types.ts';
+import type { DemoGUIState } from '../types.ts';
 import type { NonstopPlay } from './routes/nonstop.ts';
 
 /** The Debug Menu's state a play is made with: its lane, gauge, tempo, audio and debug options. */
-export type PlaySceneGuiState = Pick<
-  DemoGuiState,
+export type PlaySceneGUIState = Pick<
+  DemoGUIState,
   | 'autoPlay'
   | 'random1P'
   | 'random2P'
@@ -33,7 +33,7 @@ export type PlaySceneGuiState = Pick<
   | 'bgmVolume'
   | 'compressor'
   | 'compressorKey'
-  | 'compressorBgm'
+  | 'compressorBGM'
   | 'compressorMaster'
   | 'bgaResizeMaxEdgePx'
   | 'bgaUseWebCodecs'
@@ -43,7 +43,7 @@ export type PlaySceneGuiState = Pick<
 
 export interface PlaySceneOptionsInput {
   /** The Debug Menu's state. */
-  readonly guiState: PlaySceneGuiState;
+  readonly guiState: PlaySceneGUIState;
   /** The play options in force (`PlayOptionsService.current`): the covers, HS-FIX, BGA and score graph. */
   readonly playOptions: PlayOptions;
   /** The start's AUTO; the Debug Menu's when it set none. */
@@ -150,7 +150,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     tempoStretchAlgorithm: guiState.tempoStretchAlgorithm,
     ...(replay === undefined ? { judgeRuleset: guiState.judgeRuleset } : {}),
     ...(input.chartHashes !== undefined
-      ? { chartSha256: input.chartHashes.sha256, chartMd5: input.chartHashes.md5 }
+      ? { chartSHA256: input.chartHashes.sha256, chartMD5: input.chartHashes.md5 }
       : {}),
     playlogRecorder: input.playlogRecorder,
     // What the replay shows of the recorded view (the Debug Menu's "Replay / ghost" toggles, latched at song start).
@@ -161,7 +161,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     audioCompressorMode: input.audioCompressorMode,
     audioCompressorStages: {
       key: guiState.compressorKey,
-      bgm: guiState.compressorBgm,
+      bgm: guiState.compressorBGM,
       master: guiState.compressorMaster,
     },
     bgaTranscodeMaxLongEdgePx: guiState.bgaResizeMaxEdgePx > 0 ? guiState.bgaResizeMaxEdgePx : undefined,

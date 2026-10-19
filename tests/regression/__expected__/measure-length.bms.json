@@ -30,12 +30,12 @@
       "stp": [],
       "wavCmds": [],
       "changeOption": {},
-      "exWav": {},
-      "exBmp": {},
+      "exWAV": {},
+      "exBMP": {},
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBga": {}
+      "swBGA": {}
     },
     "controlFlow": [],
     "events": [
@@ -63,7 +63,7 @@
       "randomPatterns": [],
       "title": "Measure Length Test",
       "playVariant": "5",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0"
@@ -83,8 +83,8 @@
           "percent": 75
         },
         "noteCount": 3,
-        "chartFingerprint": "bmfp0:e676fb3f1cbbdca1745de66fb4bddeba45cdc84bcbc8af6ed5fe753ba7ed67dc",
-        "playFingerprint": "bmfp0:e676fb3f1cbbdca1745de66fb4bddeba45cdc84bcbc8af6ed5fe753ba7ed67dc",
+        "chartFingerprint": "bmfp0:ff23bb38044a1d05a29e50a72d9fe57bbee0513116fb902b9c98706d36e7add1",
+        "playFingerprint": "bmfp0:ff23bb38044a1d05a29e50a72d9fe57bbee0513116fb902b9c98706d36e7add1",
         "title": "Measure Length Test",
         "artist": "Codex"
       },

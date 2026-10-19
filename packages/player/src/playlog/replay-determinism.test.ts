@@ -1,6 +1,6 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import { parseChartFile } from '../../../parser/src/index.ts';
 import { manualPlay } from '../index.ts';
@@ -22,7 +22,7 @@ interface ReplayRun {
   playlog: BeMusicPlaylog;
 }
 
-async function play(json: BeMusicJson, inputs: readonly PlaylogInputEvent[], speed: number): Promise<ReplayRun> {
+async function play(json: BeMusicJSON, inputs: readonly PlaylogInputEvent[], speed: number): Promise<ReplayRun> {
   let playlog: BeMusicPlaylog | undefined;
   const summary = await manualPlay(structuredClone(json), {
     speed,

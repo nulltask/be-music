@@ -2,7 +2,7 @@ import { and, count, countDistinct, eq, max, min, sql, type SQL } from 'drizzle-
 import {
   computeScoreRate,
   IIDX_RANK_LABELS,
-  type IidxRankLabel,
+  type IIDXRankLabel,
   type PlaylogRulesetId,
 } from '@be-music/player/ruleset';
 import type { Database } from '../db/client.ts';
@@ -23,7 +23,7 @@ const LAMPS_HIGH_TO_LOW = Object.keys(LAMP_STYLES)
   .map(Number)
   .sort((a, b) => b - a);
 
-export type DjRank = IidxRankLabel;
+export type DjRank = IIDXRankLabel;
 
 /** Lamp counts (`{lamp, count}` rows from a GROUP BY) as a distribution over every lamp, highest first. */
 export function lampDistribution(rows: ReadonlyArray<{ lamp: number; count: number }>): Distribution<number> {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { parseChart } from '@be-music/parser';
 import {
-  formatBpmRange,
+  formatBPMRange,
   formatPlayVariantLabel,
   formatSongLength,
   resolveSongRowFacts,
@@ -20,8 +20,8 @@ describe('resolveSongStats', () => {
     const stats = resolveSongStats(song(PLAIN));
     // Two 4/4 measures at 120 BPM: the last note sits on measure 2's downbeat, 4 seconds in.
     expect(stats.lengthSeconds).toBeCloseTo(4, 3);
-    expect(stats.minBpm).toBe(120);
-    expect(stats.maxBpm).toBe(120);
+    expect(stats.minBPM).toBe(120);
+    expect(stats.maxBPM).toBe(120);
     expect(stats.longNotes).toBe(0);
     expect(stats.mines).toBe(0);
     expect(stats.stops).toBe(false);
@@ -45,8 +45,8 @@ describe('resolveSongStats', () => {
         ].join('\n'),
       ),
     );
-    expect(stats.minBpm).toBe(120);
-    expect(stats.maxBpm).toBe(240);
+    expect(stats.minBPM).toBe(120);
+    expect(stats.maxBPM).toBe(240);
     expect(stats.longNotes).toBe(1);
     expect(stats.mines).toBe(1);
     expect(stats.stops).toBe(true);
@@ -86,11 +86,11 @@ describe('formatSongLength', () => {
   });
 });
 
-describe('formatBpmRange', () => {
+describe('formatBPMRange', () => {
   it('prints one tempo or a range', () => {
-    expect(formatBpmRange(150, 150)).toBe('150');
-    expect(formatBpmRange(119.6, 240.2)).toBe('120-240');
-    expect(formatBpmRange(0, 0)).toBe('-');
+    expect(formatBPMRange(150, 150)).toBe('150');
+    expect(formatBPMRange(119.6, 240.2)).toBe('120-240');
+    expect(formatBPMRange(0, 0)).toBe('-');
   });
 });
 

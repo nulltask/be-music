@@ -599,7 +599,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
   - 保存する量は **`duration`**（表示時間 ms、緑数字）です。HS はそこから導き、カバーが動くと導き直します（[play/LaneRenderer.java#L145-L151](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/LaneRenderer.java#L145-L151)、[#L206-L210](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/LaneRenderer.java#L206-L210)）。
 - **種類:** セマンティクス：プレイヤーの数値が何を意味するか。
 - **be-music の現状:**
-  - `resolveHsFixMultiplier`（[`packages/scene-model/src/play-state/hi-speed.ts`](../packages/scene-model/src/play-state/hi-speed.ts)）は譜面基準で、`#BASEBPM` か開始 BPM を使います。
+  - `resolveHSFixMultiplier`（[`packages/scene-model/src/play-state/hi-speed.ts`](../packages/scene-model/src/play-state/hi-speed.ts)）は譜面基準で、`#BASEBPM` か開始 BPM を使います。
   - AVERAGE と CONSTANT はどちらもメイン BPM を使います。
   - 表示時間を保つモードはなく、CONSTANT はアシストではありません。
 - **影響:** C。CONSTANT がアシストでない点で B。
@@ -611,7 +611,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 
 - **LR2:** カバーは 0-100 %（[#L460-L471](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L460-L471)）で、数値 14/15 に表示します。
 - **beatoraja:** 0..1 で、千分率で表示し、LIFT より上の領域を基準にします（[#417](https://github.com/nulltask/be-music/issues/417)）。
-- **be-music の現状:** beatoraja の数値 14/314 は千分率になりました（**[#563](https://github.com/nulltask/be-music/issues/563) で修正済み**）。LR2 の数値 12、14、15 はまだ 0 を返します（[`packages/lr2-skin/src/state/options.ts`](../packages/lr2-skin/src/state/options.ts) の `resolveLr2OptionNumber`）。
+- **be-music の現状:** beatoraja の数値 14/314 は千分率になりました（**[#563](https://github.com/nulltask/be-music/issues/563) で修正済み**）。LR2 の数値 12、14、15 はまだ 0 を返します（[`packages/lr2-skin/src/state/options.ts`](../packages/lr2-skin/src/state/options.ts) の `resolveLR2OptionNumber`）。
 - **影響:** C。
 - **推奨:** LR2 の数値 14/15 に `round(shutter × 100)` を、12 にオフセットを渡す。LIFT の基準は [#417](https://github.com/nulltask/be-music/issues/417) で扱います。
 
@@ -832,7 +832,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 ### 曲リストのランプ（JSON/Lua）と該当なしの数値
 
 - **beatoraja:**
-  - `songlist.lamp[i]` は ClearType 0-10 で添字を取ります（[skin/json/JsonSelectSkinObjectLoader.java#L83-L92](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/json/JsonSelectSkinObjectLoader.java#L83-L92)）。
+  - `songlist.lamp[i]` は ClearType 0-10 で添字を取ります（[skin/json/JSONSelectSkinObjectLoader.java#L83-L92](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/json/JSONSelectSkinObjectLoader.java#L83-L92)）。
   - 当てはまらないプロパティは `Integer.MIN_VALUE` を返し、数値を隠します（[skin/SkinNumber.java#L138-L143](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/SkinNumber.java#L138-L143)）。
 - **be-music の現状:** フォーカス中のバーのランプだけ。ref 370 は 0。該当なしの数値の多くが 0 を返します。
 - **影響:** A/C。

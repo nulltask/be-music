@@ -1,5 +1,5 @@
 import { parseChart } from '@be-music/parser';
-import * as skinSdkApi from '@be-music/skin-sdk';
+import * as skinSdkAPI from '@be-music/skin-sdk';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
 const BENCH_CHART = parseChart(
@@ -19,8 +19,8 @@ const BENCH_SONG = {
   bpm: 150,
   totalNotes: 8,
   chart: BENCH_CHART,
-} satisfies skinSdkApi.LibraryChart;
-const BENCH_STATS = skinSdkApi.resolveSongStats(BENCH_SONG);
+} satisfies skinSdkAPI.LibraryChart;
+const BENCH_STATS = skinSdkAPI.resolveSongStats(BENCH_SONG);
 const BENCH_COURSE_ENTRY = {
   kind: 'course',
   course: {
@@ -37,8 +37,8 @@ const BENCH_COURSE_ENTRY = {
     stages: [{ title: 'Bench', chart: BENCH_SONG }, { title: 'Missing' }],
     playable: false,
   },
-} satisfies skinSdkApi.LibraryEntry;
-const BENCH_BROWSE_ENTRIES: readonly skinSdkApi.LibraryEntry[] = [
+} satisfies skinSdkAPI.LibraryEntry;
+const BENCH_BROWSE_ENTRIES: readonly skinSdkAPI.LibraryEntry[] = [
   { kind: 'chart', chart: BENCH_SONG },
   { kind: 'folder', folder: { label: 'Bench', charts: [BENCH_SONG] } },
   BENCH_COURSE_ENTRY,
@@ -63,11 +63,11 @@ const BENCH_RESULT = {
   song: BENCH_SONG,
   gaugeHistory: [{ progress: 0, value: 20 }],
   scoreHistory: [{ progress: 0, exScore: 0 }],
-} satisfies skinSdkApi.BeMusicResultData;
+} satisfies skinSdkAPI.BeMusicResultData;
 const BENCH_CHANNELS_7K = ['16', '11', '12', '13', '14', '15', '18', '19'];
 const BENCH_SELECT_ENTRIES: readonly number[] = Array.from({ length: 40 }, (_, index) => index);
 const BENCH_LAYOUT_INPUT = { laneChannels: BENCH_CHANNELS_7K, playVariant: '7' } as const;
-const BENCH_LANES = skinSdkApi.resolveGameplayLayout(BENCH_LAYOUT_INPUT, skinSdkApi.wideStage).lanes;
+const BENCH_LANES = skinSdkAPI.resolveGameplayLayout(BENCH_LAYOUT_INPUT, skinSdkAPI.wideStage).lanes;
 const BENCH_MOMENT_INPUT = {
   nowMs: 12_000,
   combo: 120,
@@ -81,10 +81,10 @@ const BENCH_MOMENT_INPUT = {
 };
 const BENCH_MOMENT_KEY = {};
 const BENCH_AUDIO = {
-  ...skinSdkApi.SILENT_AUDIO,
+  ...skinSdkAPI.SILENT_AUDIO,
   level: 0.6,
   bass: 0.7,
-  bands: Array.from({ length: skinSdkApi.AUDIO_BAND_COUNT }, (_, index) => index / skinSdkApi.AUDIO_BAND_COUNT),
+  bands: Array.from({ length: skinSdkAPI.AUDIO_BAND_COUNT }, (_, index) => index / skinSdkAPI.AUDIO_BAND_COUNT),
 };
 const BENCH_PALETTE = [0xffffff, 0xffd84a, 0x4ad8ff];
 const BENCH_SETTINGS = [
@@ -100,15 +100,15 @@ const BENCH_SETTINGS = [
   },
   { kind: 'number', id: 'judgeOffset', label: 'Judge offset', min: -40, max: 40, step: 2, default: 0, unit: 'px' },
   { kind: 'toggle', id: 'glow', label: 'Glow', default: true },
-] satisfies skinSdkApi.BeMusicSkinSetting[];
+] satisfies skinSdkAPI.BeMusicSkinSetting[];
 const BENCH_STORED_SETTINGS = { theme: 'mono', judgeOffset: 72, glow: 'yes', removed: 1 };
 const BENCH_JUDGE_TIMINGS = Array.from({ length: 1000 }, (_, index) => ({
   atMs: index * 120,
   deltaMs: Math.round(Math.sin(index * 1.7) * 60),
   judge: 'GREAT',
-})) satisfies skinSdkApi.BeMusicJudgeTiming[];
+})) satisfies skinSdkAPI.BeMusicJudgeTiming[];
 const BENCH_SKIN = {
-  apiVersion: skinSdkApi.BE_MUSIC_SKIN_API_VERSION,
+  apiVersion: skinSdkAPI.BE_MUSIC_SKIN_API_VERSION,
   id: 'bench',
   label: 'Bench',
   version: '1.0.0',
@@ -118,229 +118,229 @@ const BENCH_SKIN = {
   gameplay: { draw: () => {} },
   select: { layout: { listX: 0, listTop: 0, listBottomInset: 0, rowHeight: 20 }, draw: () => {} },
   result: { draw: () => {} },
-} satisfies skinSdkApi.BeMusicSkin<'2d'>;
+} satisfies skinSdkAPI.BeMusicSkin<'2d'>;
 
-export function registerSkinSdkExportsCases(define: DefineBenchmarkCase): void {
+export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
   define('skin-sdk.audioDrive', {
     run: () => {
-      skinSdkApi.audioDrive(BENCH_AUDIO, 'reduced');
+      skinSdkAPI.audioDrive(BENCH_AUDIO, 'reduced');
     },
   });
   define('skin-sdk.bandAt', {
     run: () => {
-      skinSdkApi.bandAt(BENCH_AUDIO.bands, 5, 24);
+      skinSdkAPI.bandAt(BENCH_AUDIO.bands, 5, 24);
     },
   });
   define('skin-sdk.bandLevel', {
     run: () => {
-      skinSdkApi.bandLevel(BENCH_AUDIO.bands, 5, 24);
+      skinSdkAPI.bandLevel(BENCH_AUDIO.bands, 5, 24);
     },
   });
   define('skin-sdk.binJudgeTimings', {
     run: () => {
-      skinSdkApi.binJudgeTimings(BENCH_JUDGE_TIMINGS, 2, 100);
+      skinSdkAPI.binJudgeTimings(BENCH_JUDGE_TIMINGS, 2, 100);
     },
   });
   define('skin-sdk.describeCourseCard', {
     run: () => {
-      skinSdkApi.describeCourseCard(BENCH_COURSE_ENTRY.course);
+      skinSdkAPI.describeCourseCard(BENCH_COURSE_ENTRY.course);
     },
   });
   define('skin-sdk.comboTier', {
     run: () => {
-      skinSdkApi.comboTier(120);
+      skinSdkAPI.comboTier(120);
     },
   });
   define('skin-sdk.createMomentState', {
     run: () => {
-      skinSdkApi.createMomentState();
+      skinSdkAPI.createMomentState();
     },
   });
   define('skin-sdk.defineBeMusicSkin', {
     run: () => {
-      skinSdkApi.defineBeMusicSkin(BENCH_SKIN);
+      skinSdkAPI.defineBeMusicSkin(BENCH_SKIN);
     },
   });
   define('skin-sdk.easeOutBack', {
     run: () => {
-      skinSdkApi.easeOutBack(0.6);
+      skinSdkAPI.easeOutBack(0.6);
     },
   });
   define('skin-sdk.easeOutCubic', {
     run: () => {
-      skinSdkApi.easeOutCubic(0.6);
+      skinSdkAPI.easeOutCubic(0.6);
     },
   });
   define('skin-sdk.effectProfile', {
     run: () => {
-      skinSdkApi.effectProfile('reduced');
+      skinSdkAPI.effectProfile('reduced');
     },
   });
   define('skin-sdk.flashingGreatColor', {
     run: () => {
-      skinSdkApi.flashingGreatColor(1234, BENCH_PALETTE);
+      skinSdkAPI.flashingGreatColor(1234, BENCH_PALETTE);
     },
   });
-  define('skin-sdk.formatBpmRange', {
+  define('skin-sdk.formatBPMRange', {
     run: () => {
-      skinSdkApi.formatBpmRange(120, 180);
+      skinSdkAPI.formatBPMRange(120, 180);
     },
   });
   define('skin-sdk.formatPlayVariantLabel', {
     run: () => {
-      skinSdkApi.formatPlayVariantLabel(BENCH_SONG);
+      skinSdkAPI.formatPlayVariantLabel(BENCH_SONG);
     },
   });
   define('skin-sdk.formatSongLength', {
     run: () => {
-      skinSdkApi.formatSongLength(125.4);
+      skinSdkAPI.formatSongLength(125.4);
     },
   });
   define('skin-sdk.holdSparks', {
     run: () => {
-      skinSdkApi.holdSparks(5_000, 1234, 40);
+      skinSdkAPI.holdSparks(5_000, 1234, 40);
     },
   });
   define('skin-sdk.holdSeed', {
     run: () => {
-      skinSdkApi.holdSeed('11', 123_456);
+      skinSdkAPI.holdSeed('11', 123_456);
     },
   });
   define('skin-sdk.hash01', {
     run: () => {
-      skinSdkApi.hash01(1234);
+      skinSdkAPI.hash01(1234);
     },
   });
   define('skin-sdk.impulse', {
     run: () => {
-      skinSdkApi.impulse(1000, 1100, 300);
+      skinSdkAPI.impulse(1000, 1100, 300);
     },
   });
   define('skin-sdk.isFlashingGreat', {
     run: () => {
-      skinSdkApi.isFlashingGreat('PERFECT');
+      skinSdkAPI.isFlashingGreat('PERFECT');
     },
   });
   define('skin-sdk.isScratchLaneForVariant', {
     run: () => {
-      skinSdkApi.isScratchLaneForVariant('16', '7');
+      skinSdkAPI.isScratchLaneForVariant('16', '7');
     },
   });
-  define('skin-sdk.isSupportedBeMusicSkinApiVersion', {
+  define('skin-sdk.isSupportedBeMusicSkinAPIVersion', {
     run: () => {
-      skinSdkApi.isSupportedBeMusicSkinApiVersion(skinSdkApi.BE_MUSIC_SKIN_API_VERSION);
+      skinSdkAPI.isSupportedBeMusicSkinAPIVersion(skinSdkAPI.BE_MUSIC_SKIN_API_VERSION);
     },
   });
   define('skin-sdk.judgeDisplayWord', {
     run: () => {
-      skinSdkApi.judgeDisplayWord('PERFECT');
+      skinSdkAPI.judgeDisplayWord('PERFECT');
     },
   });
   define('skin-sdk.layoutTabularRun', {
     run: () => {
-      skinSdkApi.layoutTabularRun('1,234,567', (char) => (char === ',' ? 4 : 8));
+      skinSdkAPI.layoutTabularRun('1,234,567', (char) => (char === ',' ? 4 : 8));
     },
   });
   define('skin-sdk.loadingDots', {
     run: () => {
-      skinSdkApi.loadingDots(1234);
+      skinSdkAPI.loadingDots(1234);
     },
   });
   define('skin-sdk.momentProgress', {
     run: () => {
-      skinSdkApi.momentProgress(1000, 1300, 900);
+      skinSdkAPI.momentProgress(1000, 1300, 900);
     },
   });
   define('skin-sdk.punchScale', {
     run: () => {
-      skinSdkApi.punchScale(1000, 1050, 180, 0.2);
+      skinSdkAPI.punchScale(1000, 1050, 180, 0.2);
     },
   });
   define('skin-sdk.resolveBeMusicLaneKind', {
     run: () => {
-      skinSdkApi.resolveBeMusicLaneKind('12', 2, '7');
+      skinSdkAPI.resolveBeMusicLaneKind('12', 2, '7');
     },
   });
   define('skin-sdk.resolveBeMusicSkinSettings', {
     run: () => {
-      skinSdkApi.resolveBeMusicSkinSettings({ settings: BENCH_SETTINGS }, BENCH_STORED_SETTINGS);
+      skinSdkAPI.resolveBeMusicSkinSettings({ settings: BENCH_SETTINGS }, BENCH_STORED_SETTINGS);
     },
   });
   define('skin-sdk.resolveFallbackLaneLayout', {
     run: () => {
-      skinSdkApi.resolveFallbackLaneLayout({
+      skinSdkAPI.resolveFallbackLaneLayout({
         channels: BENCH_CHANNELS_7K,
         playVariant: '7',
         x: 33,
         w: 194,
-        fixedWidths: skinSdkApi.IIDX_LANE_WIDTHS,
+        fixedWidths: skinSdkAPI.IIDX_LANE_WIDTHS,
       });
     },
   });
   define('skin-sdk.resolveFallbackPlayfieldSpan', {
     run: () => {
-      skinSdkApi.resolveFallbackPlayfieldSpan('24');
+      skinSdkAPI.resolveFallbackPlayfieldSpan('24');
     },
   });
   define('skin-sdk.resolveGameplayLayout', {
     run: () => {
-      skinSdkApi.resolveGameplayLayout(BENCH_LAYOUT_INPUT, skinSdkApi.wideStage);
+      skinSdkAPI.resolveGameplayLayout(BENCH_LAYOUT_INPUT, skinSdkAPI.wideStage);
     },
   });
   define('skin-sdk.resolveLaneRuns', {
     run: () => {
-      skinSdkApi.resolveLaneRuns(BENCH_LANES);
+      skinSdkAPI.resolveLaneRuns(BENCH_LANES);
     },
   });
   define('skin-sdk.resolveMilestoneArea', {
     run: () => {
-      skinSdkApi.resolveMilestoneArea(260);
+      skinSdkAPI.resolveMilestoneArea(260);
     },
   });
   define('skin-sdk.resolveResultLamp', {
     run: () => {
-      skinSdkApi.resolveResultLamp(BENCH_RESULT);
+      skinSdkAPI.resolveResultLamp(BENCH_RESULT);
     },
   });
   define('skin-sdk.resolveResultVerdict', {
     run: () => {
-      skinSdkApi.resolveResultVerdict(BENCH_RESULT);
+      skinSdkAPI.resolveResultVerdict(BENCH_RESULT);
     },
   });
   define('skin-sdk.resolveResultTrackRows', {
     run: () => {
-      skinSdkApi.resolveResultTrackRows(BENCH_RESULT);
+      skinSdkAPI.resolveResultTrackRows(BENCH_RESULT);
     },
   });
   define('skin-sdk.resolveGameplayLaneGeometry', {
     run: () => {
-      skinSdkApi.resolveGameplayLaneGeometry(BENCH_CHANNELS_7K, BENCH_CHANNELS_7K.length, '7', 'touch');
+      skinSdkAPI.resolveGameplayLaneGeometry(BENCH_CHANNELS_7K, BENCH_CHANNELS_7K.length, '7', 'touch');
     },
   });
   define('skin-sdk.resolveTouchLaneLayout', {
     run: () => {
-      skinSdkApi.resolveTouchLaneLayout(BENCH_CHANNELS_7K, BENCH_CHANNELS_7K.length, '7');
+      skinSdkAPI.resolveTouchLaneLayout(BENCH_CHANNELS_7K, BENCH_CHANNELS_7K.length, '7');
     },
   });
   define('skin-sdk.supportsTouchLayout', {
     run: () => {
-      skinSdkApi.supportsTouchLayout('7');
+      skinSdkAPI.supportsTouchLayout('7');
     },
   });
   define('skin-sdk.resolveStageOrientation', {
     run: () => {
-      skinSdkApi.resolveStageOrientation(skinSdkApi.tallStage);
+      skinSdkAPI.resolveStageOrientation(skinSdkAPI.tallStage);
     },
   });
   define('skin-sdk.supportsPortraitLayout', {
     run: () => {
-      skinSdkApi.supportsPortraitLayout(BENCH_CHANNELS_7K, '7');
+      skinSdkAPI.supportsPortraitLayout(BENCH_CHANNELS_7K, '7');
     },
   });
   define('skin-sdk.resolveBeMusicStage', {
     run: () => {
-      skinSdkApi.resolveBeMusicStage(
-        { stage: skinSdkApi.wideStage, portraitStage: skinSdkApi.tallStage },
+      skinSdkAPI.resolveBeMusicStage(
+        { stage: skinSdkAPI.wideStage, portraitStage: skinSdkAPI.tallStage },
         { width: 390, height: 844 },
         { laneChannels: BENCH_CHANNELS_7K, playVariant: '7' },
       );
@@ -348,7 +348,7 @@ export function registerSkinSdkExportsCases(define: DefineBenchmarkCase): void {
   });
   define('skin-sdk.selectListRows', {
     run: () => {
-      skinSdkApi.selectListRows(
+      skinSdkAPI.selectListRows(
         { entries: BENCH_SELECT_ENTRIES, firstVisibleIndex: 10, visibleRows: 14, listScroll: 9 },
         28,
       );
@@ -356,101 +356,101 @@ export function registerSkinSdkExportsCases(define: DefineBenchmarkCase): void {
   });
   define('skin-sdk.resolveBeMusicSelectLayout', {
     run: () => {
-      skinSdkApi.resolveBeMusicSelectLayout(
+      skinSdkAPI.resolveBeMusicSelectLayout(
         { layout: { listX: 322, listTop: 56, listBottomInset: 28, rowHeight: 28 } },
-        skinSdkApi.tallStage,
+        skinSdkAPI.tallStage,
       );
     },
   });
   define('skin-sdk.resolvePortraitLaneLayout', {
     run: () => {
-      skinSdkApi.resolvePortraitLaneLayout(
+      skinSdkAPI.resolvePortraitLaneLayout(
         BENCH_CHANNELS_7K,
         BENCH_CHANNELS_7K.length,
         '7',
         'touch',
-        skinSdkApi.tallStage,
+        skinSdkAPI.tallStage,
       );
     },
   });
   define('skin-sdk.resolveSkinlessLaneLayout', {
     run: () => {
-      skinSdkApi.resolveSkinlessLaneLayout(BENCH_CHANNELS_7K, BENCH_CHANNELS_7K.length, '7');
+      skinSdkAPI.resolveSkinlessLaneLayout(BENCH_CHANNELS_7K, BENCH_CHANNELS_7K.length, '7');
     },
   });
   define('skin-sdk.resolveSongRowFacts', {
     run: () => {
-      skinSdkApi.resolveSongRowFacts(BENCH_SONG);
+      skinSdkAPI.resolveSongRowFacts(BENCH_SONG);
     },
   });
   define('skin-sdk.resolveSongStats', {
     run: () => {
-      skinSdkApi.resolveSongStats(BENCH_SONG);
+      skinSdkAPI.resolveSongStats(BENCH_SONG);
     },
   });
   define('skin-sdk.resolveSongTags', {
     run: () => {
-      skinSdkApi.resolveSongTags(BENCH_STATS);
+      skinSdkAPI.resolveSongTags(BENCH_STATS);
     },
   });
-  define('skin-sdk.resolveStageBgaRect', {
+  define('skin-sdk.resolveStageBGARect', {
     run: () => {
-      skinSdkApi.resolveStageBgaRect(260);
+      skinSdkAPI.resolveStageBGARect(260);
     },
   });
   define('skin-sdk.rollUpValue', {
     run: () => {
-      skinSdkApi.rollUpValue(123_456, 0.4);
+      skinSdkAPI.rollUpValue(123_456, 0.4);
     },
   });
   define('skin-sdk.shouldPreserveFallbackSideWidth', {
     run: () => {
-      skinSdkApi.shouldPreserveFallbackSideWidth(BENCH_CHANNELS_7K, '14');
+      skinSdkAPI.shouldPreserveFallbackSideWidth(BENCH_CHANNELS_7K, '14');
     },
   });
   define('skin-sdk.stageProgress', {
     run: () => {
-      skinSdkApi.stageProgress(400, 100, 600);
+      skinSdkAPI.stageProgress(400, 100, 600);
     },
   });
   define('skin-sdk.trackMoments', {
     run: () => {
-      skinSdkApi.trackMoments(BENCH_MOMENT_KEY, BENCH_MOMENT_INPUT);
+      skinSdkAPI.trackMoments(BENCH_MOMENT_KEY, BENCH_MOMENT_INPUT);
     },
   });
   define('skin-sdk.updateMoments', {
     run: () => {
-      skinSdkApi.updateMoments(skinSdkApi.createMomentState(), BENCH_MOMENT_INPUT);
+      skinSdkAPI.updateMoments(skinSdkAPI.createMomentState(), BENCH_MOMENT_INPUT);
     },
   });
-  define('skin-sdk.usesIidxLaneWidths', {
+  define('skin-sdk.usesIIDXLaneWidths', {
     run: () => {
-      skinSdkApi.usesIidxLaneWidths('7');
+      skinSdkAPI.usesIIDXLaneWidths('7');
     },
   });
   define('skin-sdk.validateBeMusicSkin', {
     run: () => {
-      skinSdkApi.validateBeMusicSkin(BENCH_SKIN);
+      skinSdkAPI.validateBeMusicSkin(BENCH_SKIN);
     },
   });
   define('skin-sdk.validateBeMusicSkinSettings', {
     run: () => {
-      skinSdkApi.validateBeMusicSkinSettings(BENCH_SETTINGS);
+      skinSdkAPI.validateBeMusicSkinSettings(BENCH_SETTINGS);
     },
   });
   define('skin-sdk.browseEntryTitle', {
     run: () => {
-      for (const entry of BENCH_BROWSE_ENTRIES) skinSdkApi.browseEntryTitle(entry);
+      for (const entry of BENCH_BROWSE_ENTRIES) skinSdkAPI.browseEntryTitle(entry);
     },
   });
   define('skin-sdk.browseEntryCount', {
     run: () => {
-      for (const entry of BENCH_BROWSE_ENTRIES) skinSdkApi.browseEntryCount(entry);
+      for (const entry of BENCH_BROWSE_ENTRIES) skinSdkAPI.browseEntryCount(entry);
     },
   });
   define('skin-sdk.browseEntryBadge', {
     run: () => {
-      for (const entry of BENCH_BROWSE_ENTRIES) skinSdkApi.browseEntryBadge(entry);
+      for (const entry of BENCH_BROWSE_ENTRIES) skinSdkAPI.browseEntryBadge(entry);
     },
   });
 }

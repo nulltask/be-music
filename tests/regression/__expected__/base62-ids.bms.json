@@ -37,12 +37,12 @@
       "stp": [],
       "wavCmds": [],
       "changeOption": {},
-      "exWav": {},
-      "exBmp": {},
+      "exWAV": {},
+      "exBMP": {},
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBga": {},
+      "swBGA": {},
       "base": 62,
       "player": 1,
       "lnType": 1,
@@ -130,7 +130,7 @@
       ],
       "title": "Base 62 Object IDs",
       "playVariant": "5",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0"
@@ -161,7 +161,7 @@
           "percent": 75
         },
         "noteCount": 14,
-        "playFingerprint": "bmfp0:49ab7207ecab3ca51bb8b50a1978422c0b52c53cff674c51462611b375ae5778",
+        "playFingerprint": "bmfp0:48738709a3f8362eea345e55948c588dfbf081aa1869104e892287eca1db6f9d",
         "title": "Base 62 Object IDs",
         "subtitle": "#BASE 62 keeps upper and lower case as separate slots",
         "artist": "be-music",
@@ -636,7 +636,7 @@
       ],
       "title": "Base 62 Object IDs",
       "playVariant": "5",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0"
@@ -667,7 +667,7 @@
           "percent": 75
         },
         "noteCount": 14,
-        "playFingerprint": "bmfp0:49ab7207ecab3ca51bb8b50a1978422c0b52c53cff674c51462611b375ae5778",
+        "playFingerprint": "bmfp0:48738709a3f8362eea345e55948c588dfbf081aa1869104e892287eca1db6f9d",
         "title": "Base 62 Object IDs",
         "subtitle": "#BASE 62 keeps upper and lower case as separate slots",
         "artist": "be-music",

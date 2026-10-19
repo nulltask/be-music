@@ -9,12 +9,12 @@ import {
 } from './field.ts';
 import { LAT_ACCENT, LAT_DISPLAY_FONT, LAT_GRAPHITE, LAT_GRID, LAT_INK, LAT_MONO_FONT, LAT_RULE } from './style.ts';
 import {
-  addHudText,
+  addHUDText,
   addSkinText,
   type ChildPool,
   resolveTextSqueeze,
   startMarquee,
-  type HudTextOptions,
+  type HUDTextOptions,
   pointLayerFor,
   type SkinTextOptions,
 } from '../pixi-kit/index.ts';
@@ -161,7 +161,7 @@ export function drawRulerTicks(
   graphics.stroke({ color, width: 1, alpha });
 }
 
-/** Per-letter motion for {@link addStaggeredHudText}: offset, opacity, and scale of letter `index` of `count`. */
+/** Per-letter motion for {@link addStaggeredHUDText}: offset, opacity, and scale of letter `index` of `count`. */
 export type LetterMotion = (
   index: number,
   count: number,
@@ -171,18 +171,18 @@ export type LetterMotion = (
  * Pooled HUD text laid out letter by letter so each glyph can move on its own (kinetic typography). `anchorX` of
  * `options` aligns the whole word; letters keep proportional advances.
  */
-export function addStaggeredHudText(
+export function addStaggeredHUDText(
   layer: Container,
   text: string,
   x: number,
   y: number,
-  options: HudTextOptions,
+  options: HUDTextOptions,
   pool: ChildPool,
   motion: LetterMotion,
 ): void {
   const chars = Array.from(text);
   const nodes = chars.map((char) =>
-    addHudText(layer, char, 0, y, { ...options, anchorX: 0, maxWidth: undefined, scale: undefined }, pool),
+    addHUDText(layer, char, 0, y, { ...options, anchorX: 0, maxWidth: undefined, scale: undefined }, pool),
   );
   const widths = nodes.map((node) => node.width);
   const total = widths.reduce((sum, width) => sum + width, 0);
@@ -210,31 +210,31 @@ export function addOdometer(
   t: number,
   x: number,
   y: number,
-  options: HudTextOptions & { cell: number; travel: number },
+  options: HUDTextOptions & { cell: number; travel: number },
   pool: ChildPool,
 ): void {
   const digits = digitTransitions(previous, value);
   const width = digits.length * options.cell;
   const left = x - width * (options.anchorX ?? 0);
   const roll = springEase(Math.max(0, Math.min(1, t)), 2, 0.5);
-  const base: HudTextOptions = { ...options, anchorX: 0.5, maxWidth: undefined };
+  const base: HUDTextOptions = { ...options, anchorX: 0.5, maxWidth: undefined };
   digits.forEach((digit, index) => {
     const cx = left + options.cell * (index + 0.5);
     if (!digit.changed || t >= 1) {
-      addHudText(layer, digit.char, cx, y, base, pool);
+      addHUDText(layer, digit.char, cx, y, base, pool);
       return;
     }
-    const incoming = addHudText(layer, digit.char, cx, y + options.travel * (1 - roll), base, pool);
+    const incoming = addHUDText(layer, digit.char, cx, y + options.travel * (1 - roll), base, pool);
     incoming.alpha = Math.min(1, roll * 1.4);
     if (digit.previous) {
-      const outgoing = addHudText(layer, digit.previous, cx, y - options.travel * Math.min(1, roll), base, pool);
+      const outgoing = addHUDText(layer, digit.previous, cx, y - options.travel * Math.min(1, roll), base, pool);
       outgoing.alpha = Math.max(0, 1 - roll * 1.6);
     }
   });
 }
 
 /** Small index / label type: Azeret Mono 9 px. */
-export function monoStyle(fill: number = LAT_GRAPHITE): HudTextOptions {
+export function monoStyle(fill: number = LAT_GRAPHITE): HUDTextOptions {
   return { size: 9, weight: '500', fill, fontFamily: LAT_MONO_FONT, letterSpacing: 0.6 };
 }
 
@@ -243,12 +243,12 @@ export function displayStyle(
   size: number,
   fill: number,
   weight: '200' | '300' | '400' | '600' = '300',
-): HudTextOptions {
+): HUDTextOptions {
   return { size, fill, fontFamily: LAT_DISPLAY_FONT, weight };
 }
 
 /**
- * Non-pooled twin of {@link addStaggeredHudText} for scenes rebuilt per render (select / result). A word wider than
+ * Non-pooled twin of {@link addStaggeredHUDText} for scenes rebuilt per render (select / result). A word wider than
  * `options.maxWidth` is squeezed as a whole, letters and advances alike, down to `MIN_TEXT_SQUEEZE`; past that the
  * letters are grouped, clipped to the box, and scrolled as one marquee.
  */

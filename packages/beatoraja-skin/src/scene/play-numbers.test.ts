@@ -6,7 +6,7 @@ import {
   SYNTHETIC_NUM_JUDGE_COMBO_2P,
   SYNTHETIC_NUM_JUDGE_COMBO_3P,
 } from '../runtime-ids.ts';
-import { beatorajaBpmAt, resolveBeatorajaPlayNumber, type BeatorajaPlayNumberInput } from './play-numbers.ts';
+import { beatorajaBPMAt, resolveBeatorajaPlayNumber, type BeatorajaPlayNumberInput } from './play-numbers.ts';
 
 function cover(overrides: Partial<LaneCoverState> = {}): LaneCoverState {
   return { side: '1P', sudden: 0, suddenOn: false, hidden: 0, hiddenOn: false, lift: 0, ...overrides };
@@ -17,7 +17,7 @@ function input(overrides: Partial<BeatorajaPlayNumberInput> = {}): BeatorajaPlay
     combo: 0,
     maxCombo: 0,
     hiSpeed: 1,
-    chart: { bpm: 130, minBpm: 130, maxBpm: 130 },
+    chart: { bpm: 130, minBPM: 130, maxBPM: 130 },
     ...overrides,
   };
 }
@@ -59,7 +59,7 @@ describe('resolveBeatorajaPlayNumber — white and green numbers', () => {
     expect(
       resolveBeatorajaPlayNumber(
         BEATORAJA_NUM.DURATION,
-        input({ hiSpeed: 3.42, chart: { bpm: 140, minBpm: 140, maxBpm: 140 } }),
+        input({ hiSpeed: 3.42, chart: { bpm: 140, minBPM: 140, maxBPM: 140 } }),
       ),
     ).toBe(501);
     const covered = input({ cover: cover({ sudden: 0.5, suddenOn: true, lift: 0.3 }) });
@@ -73,7 +73,7 @@ describe('resolveBeatorajaPlayNumber — white and green numbers', () => {
   });
 
   it('reads the main, lowest and highest BPM for their variants', () => {
-    const numbers = input({ chart: { bpm: 150, mainBpm: 120, minBpm: 60, maxBpm: 240 } });
+    const numbers = input({ chart: { bpm: 150, mainBPM: 120, minBPM: 60, maxBPM: 240 } });
     expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.MAINBPM_DURATION_LANECOVER_OFF, numbers)).toBe(2000);
     expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.MAINBPM_DURATION_GREEN_LANECOVER_OFF, numbers)).toBe(1200);
     expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.MINBPM_DURATION_LANECOVER_OFF, numbers)).toBe(4000);
@@ -90,7 +90,7 @@ describe('resolveBeatorajaPlayNumber — white and green numbers', () => {
   });
 
   it('reads 0 for a BPM or hi-speed that is not positive', () => {
-    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.DURATION, input({ chart: { bpm: 0, minBpm: 0, maxBpm: 0 } }))).toBe(
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.DURATION, input({ chart: { bpm: 0, minBPM: 0, maxBPM: 0 } }))).toBe(
       0,
     );
     expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.DURATION, input({ hiSpeed: 0 }))).toBe(0);
@@ -104,15 +104,15 @@ describe('resolveBeatorajaPlayNumber — BPMs and time', () => {
     { timeMs: 20_000, bpm: 0 },
     { timeMs: 21_000, bpm: 90 },
   ];
-  const chart = { bpm: 120, mainBpm: 150, minBpm: 90, maxBpm: 240, bpmSegments: segments, playLevel: '☆12' };
+  const chart = { bpm: 120, mainBPM: 150, minBPM: 90, maxBPM: 240, bpmSegments: segments, playLevel: '☆12' };
 
   it('reads the chart BPMs and #PLAYLEVEL', () => {
-    const numbers = input({ chart: { ...chart, minBpm: 89.6, maxBpm: 240.4 } });
+    const numbers = input({ chart: { ...chart, minBPM: 89.6, maxBPM: 240.4 } });
     expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.MAXBPM, numbers)).toBe(240);
     expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.MINBPM, numbers)).toBe(90);
     expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.MAINBPM, numbers)).toBe(150);
     // The main BPM falls back on the header BPM.
-    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.MAINBPM, input({ chart: { ...chart, mainBpm: 0 } }))).toBe(120);
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.MAINBPM, input({ chart: { ...chart, mainBPM: 0 } }))).toBe(120);
     expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.PLAYLEVEL, input({ chart: { ...chart, playLevel: '12' } }))).toBe(
       12,
     );
@@ -225,7 +225,7 @@ describe('resolveBeatorajaPlayNumber — judge popup and records', () => {
   });
 });
 
-describe('beatorajaBpmAt', () => {
+describe('beatorajaBPMAt', () => {
   it('walks segments out of time order in their order, up to the first one after the time', () => {
     const unordered = [
       { timeMs: 0, bpm: 100 },
@@ -233,11 +233,11 @@ describe('beatorajaBpmAt', () => {
       { timeMs: 3000, bpm: 150 },
       { timeMs: 9000, bpm: 300 },
     ];
-    expect(beatorajaBpmAt(unordered, 6000, 120)).toBe(150);
-    expect(beatorajaBpmAt([], 1000, 150)).toBe(150);
+    expect(beatorajaBPMAt(unordered, 6000, 120)).toBe(150);
+    expect(beatorajaBPMAt([], 1000, 150)).toBe(150);
     // A chart starting on a STOP reads the header BPM until the first positive one.
     expect(
-      beatorajaBpmAt(
+      beatorajaBPMAt(
         [
           { timeMs: 0, bpm: 0 },
           { timeMs: 500, bpm: 180 },

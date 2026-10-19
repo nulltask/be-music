@@ -64,7 +64,7 @@ export interface BeatorajaSongListRowRect {
    * imageset (audit A-7 keeps `id` aliased to `images[0]` for legacy renderers, but the
    * full list is required for upstream-faithful per-bar-type rendering).
    *
-   * Mirrors `JsonSelectSkinObjectLoader.java:44-77` which constructs a multi-frame
+   * Mirrors `JSONSelectSkinObjectLoader.java:44-77` which constructs a multi-frame
    * `SkinImage(tr[][], timer, cycle, null)` and `BarRenderer.java:269` which calls
    * `si.draw(sprite, time, ba.value, ...)` to pick the frame matching the bar's TYPE
    * (`SongBar` → 0 / `FolderBar` → 1 / `TableBar` → 2 / etc.). ModernChic authors:
@@ -104,7 +104,7 @@ export interface BeatorajaSongListLayout {
    * Index into {@link rows} of the cursor's anchor row. Resolution priority (audit A-8):
    *
    *   1. `songlist.center` (= the authored center index) when supplied — matches upstream
-   *      `JsonSelectSkinObjectLoader.java:79` `((MusicSelectSkin) skin).setCenterBar(sk.songlist.center)`
+   *      `JSONSelectSkinObjectLoader.java:79` `((MusicSelectSkin) skin).setCenterBar(sk.songlist.center)`
    *      which is then read by `BarRenderer.java:124` (`boolean on = (i == skin.getCenterBar())`).
    *      The author's intent for which row should look "focused" — this is what beatoraja
    *      uses verbatim, no heuristic.
@@ -138,7 +138,7 @@ export interface BeatorajaSongListLayout {
    *   - difficulty 4 → `level-another`
    *   - difficulty 5 → `level-insane`
    *
-   * Mirrors upstream `JsonSelectSkinObjectLoader.java:148-158`'s level-instantiation loop:
+   * Mirrors upstream `JSONSelectSkinObjectLoader.java:148-158`'s level-instantiation loop:
    *
    *     for (int i = 0; i < sk.songlist.level.length; i++) { ... new SkinNumber(...) ... }
    *
@@ -201,10 +201,10 @@ export function parseBeatorajaSongList(skin: BeatorajaSkin): BeatorajaSongListLa
   const obj = songlist as Readonly<Record<string, unknown>>;
 
   // Audit A-7 — `liston[i].id` / `listoff[i].id` reference an `imageset[]` entry per
-  // upstream `JsonSelectSkinObjectLoader.java:44-77`:
+  // upstream `JSONSelectSkinObjectLoader.java:44-77`:
   //
   //     for (int i = 0; i < sk.songlist.liston.length; i++) {
-  //         for (JsonSkin.ImageSet imgs : sk.imageset) {
+  //         for (JSONSkin.ImageSet imgs : sk.imageset) {
   //             if (sk.songlist.liston[i].id.equals(imgs.id)) {
   //                 // build TextureRegion[][] from imgs.images[*] looked up in sk.image[]
   //                 ...
@@ -230,7 +230,7 @@ export function parseBeatorajaSongList(skin: BeatorajaSkin): BeatorajaSongListLa
   if (rects === undefined || rects.length === 0) return undefined;
 
   // Audit A-8 — prefer the authored `songlist.center` (= upstream's
-  // `JsonSelectSkinObjectLoader.java:79` `setCenterBar`). Fall back to the geometric
+  // `JSONSelectSkinObjectLoader.java:79` `setCenterBar`). Fall back to the geometric
   // "closest to canvas vertical centre" heuristic only when `center` is omitted (community
   // skins predating the field's introduction).
   const focusedRowIndex = resolveCenterIndex(obj.center, rects, skin);
@@ -367,7 +367,7 @@ function collectListRects(
           ? idValue
           : undefined;
     // Audit A-7: resolve through `imageset[].images[0]` when the row id matches an
-    // imageset entry. Mirrors `JsonSelectSkinObjectLoader.java:44-77` which uses the
+    // imageset entry. Mirrors `JSONSelectSkinObjectLoader.java:44-77` which uses the
     // imageset chain — for legacy single-texture renderers we alias `id` to `images[0]`,
     // but the full `images[]` array is preserved on `imagesetImages` so renderers that
     // support per-bar-type frame selection (matching upstream `BarRenderer.java:269`'s

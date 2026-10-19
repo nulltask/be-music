@@ -81,7 +81,7 @@ const HEADER_H = 40;
 const GAUGE_BAND_H = 36;
 
 /** Where the portrait play screen's HUD goes. Every rect sits above `layout.playfield.top`, clear of the lanes. */
-export interface PortraitGameplayHud {
+export interface PortraitGameplayHUD {
   /** The header band, and the x range its text keeps to (the top corners stay free). */
   header: { height: number; left: number; right: number };
   /** The column beside the BGA: the track (genre, title, artist) on top. */
@@ -103,9 +103,9 @@ export interface PortraitGameplayHud {
  * and the lanes. Without a BGA the column takes the full width in the same band. All of it is placed from
  * `layout.stage`, `layout.bga` and `layout.playfield.top`, so a portrait stage of another size works too.
  */
-export function resolvePortraitGameplayHud(
+export function resolvePortraitGameplayHUD(
   layout: Pick<BeMusicGameplayLayout, 'stage' | 'bga' | 'playfield'>,
-): PortraitGameplayHud {
+): PortraitGameplayHUD {
   const { stage, bga, playfield } = layout;
   const gauge = {
     x: PLAY_MARGIN,

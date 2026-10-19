@@ -1,31 +1,31 @@
 import type { ChartPlayVariant } from '@be-music/chart';
 import {
   computeScoreRate,
-  resolveIidxRankIndexFromScore,
+  resolveIIDXRankIndexFromScore,
   type GaugeType,
   type ScoreSummary,
 } from '@be-music/player/ruleset';
 import type { CourseView, LibraryChart, PlayOptions, PlaySide, PlayState } from '@be-music/scene-model';
 import { LR2_LANE_TIMER_BANK_SIZE, LR2_NUM, LR2_OP, LR2_SLIDER, LR2_TEXT, LR2_TIMER } from '../ids/index.ts';
-import { resolveLr2ChartText } from './chart.ts';
-import { lr2ShowsCourseCombo, resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from './course.ts';
-import { isLr2BgaShown, isLr2RedGauge, lr2HiSpeedSlider } from './options.ts';
-import { notesJudged, resolveLr2RateNumber } from './score.ts';
-import { lr2TimerUpdate, type Lr2SceneState, type Lr2TimerUpdate } from './scene-state.ts';
+import { resolveLR2ChartText } from './chart.ts';
+import { lr2ShowsCourseCombo, resolveLR2CourseNumber, resolveLR2CourseOps, resolveLR2CourseText } from './course.ts';
+import { isLR2BGAShown, isLR2RedGauge, lr2HiSpeedSlider } from './options.ts';
+import { notesJudged, resolveLR2RateNumber } from './score.ts';
+import { lr2TimerUpdate, type LR2SceneState, type LR2TimerUpdate } from './scene-state.ts';
 
 /** The lanes a play is laid out on: its play variant and the lane channels in use. */
-export interface Lr2PlayLanes {
+export interface LR2PlayLanes {
   readonly playVariant: ChartPlayVariant;
   /** The lane channels the chart plays (`11` … `19`, `21` … `29`). */
   readonly channels: readonly string[];
 }
 
 /** What stays the same for a whole LR2 play: the chart, its lanes and features, the options, the gauge, the course. */
-export interface Lr2PlaySetup {
+export interface LR2PlaySetup {
   /** The chart played: the chart texts, the start BPM and the STAGEFILE / BANNER / BACKBMP ops. */
   readonly chart?: LibraryChart;
   /** The lanes played: the key-mode op (160-164). */
-  readonly lanes: Lr2PlayLanes;
+  readonly lanes: LR2PlayLanes;
   /** What the play has, read off the chart resolved for it: long notes, BPM changes and a BGA (ops 170-177). */
   readonly features: { readonly longNote: boolean; readonly bpmChange: boolean; readonly bga: boolean };
   /** The play options the play runs with. */
@@ -47,7 +47,7 @@ export interface Lr2PlaySetup {
  * The running play as an LR2 skin reads it; a `PlayState` fits: the gauge (percent), the combo and max combo, the
  * course combo of a course stage, the chart's length and the player's hi-speed.
  */
-export interface Lr2PlayView {
+export interface LR2PlayView {
   readonly gauge: PlayState['gauge'];
   readonly combo: PlayState['combo'];
   readonly maxCombo: PlayState['maxCombo'];
@@ -57,16 +57,16 @@ export interface Lr2PlayView {
 }
 
 /** One frame of an LR2 play. Time comes in here: the resolvers read no clock. */
-export interface Lr2PlayFrame {
+export interface LR2PlayFrame {
   /** The running play. */
-  readonly play: Lr2PlayView;
+  readonly play: LR2PlayView;
   /** The judgement counts and scores so far. */
   readonly score: ScoreSummary;
   /** Chart time now, in seconds. */
   readonly seconds: number;
   /** Whether the chart has loaded (op 81; op 80 before); loaded when absent. */
   readonly loaded?: boolean;
-  /** The stage a stitched NONSTOP play shows (`resolveLr2NonstopStage`): its stage ops and title from the second on. */
+  /** The stage a stitched NONSTOP play shows (`resolveLR2NonstopStage`): its stage ops and title from the second on. */
   readonly nonstopStage?: number;
   /** The score readout (number 100), easing toward the score; the score when absent. */
   readonly displayedScore?: number;
@@ -76,8 +76,8 @@ export interface Lr2PlayFrame {
   readonly fps?: number;
 }
 
-/** The LR2 play screen's state: a {@link Lr2SceneState} and the fill of each bar graph. */
-export interface Lr2PlayState extends Lr2SceneState {
+/** The LR2 play screen's state: a {@link LR2SceneState} and the fill of each bar graph. */
+export interface LR2PlayState extends LR2SceneState {
   /** How full a `#SRC_BARGRAPH` of this `type` is, 0..1. */
   bargraph(type: number): number;
 }
@@ -102,7 +102,7 @@ const PLAY_BASE_OPS: readonly number[] = [
  * lanes are in use and 5 or 7 KEYS otherwise, by whether keys 6 / 7 are. So a 5-key chart lights 5 KEYS and gets the
  * LR2 default skin's DISABLE LANE overlay on keys 6 and 7.
  */
-export function resolveLr2PlayKeyModeOp(lanes: Lr2PlayLanes): number {
+export function resolveLR2PlayKeyModeOp(lanes: LR2PlayLanes): number {
   if (lanes.playVariant === '9') return LR2_OP.KEYS_9;
   const usesPlayer2 = lanes.channels.some((channel) => channel.startsWith('2'));
   const uses6or7 = lanes.channels.some(
@@ -113,7 +113,7 @@ export function resolveLr2PlayKeyModeOp(lanes: Lr2PlayLanes): number {
 }
 
 /** The ops of a play that hold from its start to its end. */
-function setupOps(setup: Lr2PlaySetup): number[] {
+function setupOps(setup: LR2PlaySetup): number[] {
   const ops: number[] = [];
   for (const op of setup.customOps ?? []) ops.push(op);
   ops.push(...PLAY_BASE_OPS);
@@ -121,18 +121,18 @@ function setupOps(setup: Lr2PlaySetup): number[] {
   ops.push(options.autoScratch1P === true ? LR2_OP.AUTO_SCRATCH_1P_ON : LR2_OP.AUTO_SCRATCH_1P_OFF);
   ops.push(options.autoScratch2P === true ? LR2_OP.AUTO_SCRATCH_2P_ON : LR2_OP.AUTO_SCRATCH_2P_OFF);
   // The gauge type is fixed for the run; a course stage runs on the course gauge, which LR2 reports as the red one.
-  ops.push(...resolveLr2GaugeTypeOps(setup.courseGauge === true ? 'HARD' : setup.gauge));
+  ops.push(...resolveLR2GaugeTypeOps(setup.courseGauge === true ? 'HARD' : setup.gauge));
   ops.push(options.scoreGraph === true ? LR2_OP.SCORE_GRAPH_ON : LR2_OP.SCORE_GRAPH_OFF);
-  ops.push(isLr2BgaShown(options.bga, options.autoPlay === true) ? LR2_OP.BGA_ON : LR2_OP.BGA_OFF);
+  ops.push(isLR2BGAShown(options.bga, options.autoPlay === true) ? LR2_OP.BGA_ON : LR2_OP.BGA_OFF);
   ops.push(options.autoPlay === true ? LR2_OP.AUTOPLAY_ON : LR2_OP.AUTOPLAY_OFF);
-  ops.push(resolveLr2PlayKeyModeOp(setup.lanes));
+  ops.push(resolveLR2PlayKeyModeOp(setup.lanes));
   ops.push(setup.features.longNote ? LR2_OP.HAS_LN : LR2_OP.NO_LN);
   ops.push(setup.features.bpmChange ? LR2_OP.HAS_BPM_CHANGE : LR2_OP.NO_BPM_CHANGE);
   ops.push(setup.features.bga ? LR2_OP.HAS_BGA : LR2_OP.NO_BGA);
   const metadata = setup.chart?.chart.metadata;
   ops.push(metadata?.stageFile ? LR2_OP.HAS_STAGEFILE : LR2_OP.NO_STAGEFILE);
   ops.push(metadata?.banner ? LR2_OP.HAS_BANNER : LR2_OP.NO_BANNER);
-  ops.push(metadata?.backBmp ? LR2_OP.HAS_BACKBMP : LR2_OP.NO_BACKBMP);
+  ops.push(metadata?.backBMP ? LR2_OP.HAS_BACKBMP : LR2_OP.NO_BACKBMP);
   // A skin that declares its own BGA size (a `#CUSTOMOPTION` on op 30 / 31) keeps it; else the player's.
   if (!ops.includes(LR2_OP.BGA_NORMAL) && !ops.includes(LR2_OP.BGA_EXTEND)) {
     ops.push(options.bgaSize === 'EXTEND' ? LR2_OP.BGA_EXTEND : LR2_OP.BGA_NORMAL);
@@ -144,14 +144,14 @@ function setupOps(setup: Lr2PlaySetup): number[] {
  * LR2's gauge-type ops for a gauge, as `[1P, 2P]`: HARD and DEATH light the red gauge ops (43 / 45), GROOVE and EASY
  * the normal ones (42 / 44). Skins gate their gauge frame on them.
  */
-export function resolveLr2GaugeTypeOps(gauge: GaugeType): readonly [number, number] {
-  return isLr2RedGauge(gauge)
+export function resolveLR2GaugeTypeOps(gauge: GaugeType): readonly [number, number] {
+  return isLR2RedGauge(gauge)
     ? [LR2_OP.GAUGE_1P_RED, LR2_OP.GAUGE_2P_RED]
     : [LR2_OP.GAUGE_1P_NORMAL, LR2_OP.GAUGE_2P_NORMAL];
 }
 
 /** LR2's 1P gauge-range op for a gauge in percent: 230 for 0-9 %, 231 for 10-19 %, …, 240 for 100 %. */
-export function resolveLr2GaugeRangeOp(gaugePercent: number): number {
+export function resolveLR2GaugeRangeOp(gaugePercent: number): number {
   return LR2_OP.GAUGE_1P_0_9 + Math.min(10, Math.max(0, Math.floor(gaugePercent / 10)));
 }
 
@@ -159,15 +159,15 @@ export function resolveLr2GaugeRangeOp(gaugePercent: number): number {
  * LR2's 1P rank op (200 AAA … 207 F): the DJ Rank of the EX score over the notes judged so far, not over every note
  * (OpenLR2 `GetOptionFlag_dst` ranks `exscore × 9 / (note_current × 2)`); none before the first note is judged.
  */
-export function resolveLr2RankOp(
+export function resolveLR2RankOp(
   score: Pick<ScoreSummary, 'perfect' | 'great' | 'good' | 'bad' | 'poor' | 'exScore'>,
 ): number | undefined {
-  const rankIndex = resolveIidxRankIndexFromScore({ total: notesJudged(score), exScore: score.exScore });
+  const rankIndex = resolveIIDXRankIndexFromScore({ total: notesJudged(score), exScore: score.exScore });
   return rankIndex === undefined ? undefined : LR2_OP.RANK_1P_AAA + rankIndex;
 }
 
 /** The course a frame shows: a stitched NONSTOP play's course at the stage it shows from the second stage on. */
-function frameCourse(setup: Lr2PlaySetup, frame: Lr2PlayFrame): CourseView | undefined {
+function frameCourse(setup: LR2PlaySetup, frame: LR2PlayFrame): CourseView | undefined {
   const course = setup.course;
   if (course === undefined || frame.nonstopStage === undefined || frame.nonstopStage <= 0) return course;
   return { ...course, stageIndex: frame.nonstopStage };
@@ -186,14 +186,14 @@ function nextRankDiff(score: Pick<ScoreSummary, 'total' | 'exScore'>): number {
   return score.exScore - Math.floor((max * (rank + 1)) / 9);
 }
 
-function playNumber(num: number, setup: Lr2PlaySetup, frame: Lr2PlayFrame): number | undefined {
+function playNumber(num: number, setup: LR2PlaySetup, frame: LR2PlayFrame): number | undefined {
   const { score, play } = frame;
   const course = setup.course;
   if (course !== undefined) {
-    const courseNumber = resolveLr2CourseNumber(num, course);
+    const courseNumber = resolveLR2CourseNumber(num, course);
     if (courseNumber !== undefined) return courseNumber;
   }
-  const rateNumber = resolveLr2RateNumber(num, score);
+  const rateNumber = resolveLR2RateNumber(num, score);
   if (rateNumber !== undefined) return rateNumber;
   // In an expert or grade course the combo numbers count the whole course.
   const courseCombo = course !== undefined && lr2ShowsCourseCombo(course.kind) ? play.courseCombo : undefined;
@@ -253,11 +253,11 @@ function playNumber(num: number, setup: Lr2PlaySetup, frame: Lr2PlayFrame): numb
   }
 }
 
-function playText(st: number, setup: Lr2PlaySetup, frame: Lr2PlayFrame): string | undefined {
+function playText(st: number, setup: LR2PlaySetup, frame: LR2PlayFrame): string | undefined {
   const chart = setup.chart;
   if (chart === undefined) return undefined;
   const course = setup.course;
-  const courseText = course !== undefined ? resolveLr2CourseText(st, course) : undefined;
+  const courseText = course !== undefined ? resolveLR2CourseText(st, course) : undefined;
   if (courseText !== undefined) return courseText;
   // A stitched NONSTOP play titles the stage LR2 last announced (after a BLANK connection); before that, the course.
   if (st === LR2_TEXT.TITLE && frame.nonstopStage !== undefined && frame.nonstopStage > 0) {
@@ -271,10 +271,10 @@ function playText(st: number, setup: Lr2PlaySetup, frame: Lr2PlayFrame): string 
     case LR2_TEXT.PLAYER:
       return 'PLAYER';
   }
-  return resolveLr2ChartText(st, chart);
+  return resolveLR2ChartText(st, chart);
 }
 
-function playSlider(type: number, frame: Lr2PlayFrame): number {
+function playSlider(type: number, frame: LR2PlayFrame): number {
   switch (type) {
     case LR2_SLIDER.HISPEED_1P:
       return lr2HiSpeedSlider(frame.play.view.hiSpeed.player);
@@ -289,7 +289,7 @@ function playSlider(type: number, frame: Lr2PlayFrame): number {
  * How full a play bar graph is: 1 the chart's progress, 2 the loading (always done), 10-13 the 1P EX score rate (the
  * predicted and best ones are not kept apart yet). 0 for any other.
  */
-function playBargraph(type: number, frame: Lr2PlayFrame): number {
+function playBargraph(type: number, frame: LR2PlayFrame): number {
   switch (type) {
     case 1:
       return frame.play.totalSeconds <= 0 ? 0 : Math.max(0, Math.min(1, frame.seconds / frame.play.totalSeconds));
@@ -305,7 +305,7 @@ function playBargraph(type: number, frame: Lr2PlayFrame): number {
   }
 }
 
-const SETUP_OPS = new WeakMap<Lr2PlaySetup, readonly number[]>();
+const SETUP_OPS = new WeakMap<LR2PlaySetup, readonly number[]>();
 
 /**
  * The LR2 play screen's state for a frame: the ops (the play's fixed ops from its setup — options, gauge type, key
@@ -314,7 +314,7 @@ const SETUP_OPS = new WeakMap<Lr2PlaySetup, readonly number[]>();
  * stage levels), the texts (the chart's and the course's), the sliders (hi-speed, progress) and the bar graphs. The
  * setup's ops are kept per setup object, so a scene builds its setup once and passes it every frame.
  */
-export function resolveLr2PlayState(setup: Lr2PlaySetup, frame: Lr2PlayFrame): Lr2PlayState {
+export function resolveLR2PlayState(setup: LR2PlaySetup, frame: LR2PlayFrame): LR2PlayState {
   let fixed = SETUP_OPS.get(setup);
   if (fixed === undefined) {
     fixed = setupOps(setup);
@@ -322,11 +322,11 @@ export function resolveLr2PlayState(setup: Lr2PlaySetup, frame: Lr2PlayFrame): L
   }
   const ops = new Set(fixed);
   ops.add(frame.loaded === false ? LR2_OP.LOADING : LR2_OP.LOADED);
-  const rank = resolveLr2RankOp(frame.score);
+  const rank = resolveLR2RankOp(frame.score);
   if (rank !== undefined) ops.add(rank);
-  ops.add(resolveLr2GaugeRangeOp(frame.play.gauge));
+  ops.add(resolveLR2GaugeRangeOp(frame.play.gauge));
   const course = frameCourse(setup, frame);
-  if (course !== undefined) for (const op of resolveLr2CourseOps(course)) ops.add(op);
+  if (course !== undefined) for (const op of resolveLR2CourseOps(course)) ops.add(op);
   return {
     ops,
     number: (num) => playNumber(num, setup, frame),
@@ -341,21 +341,21 @@ export function resolveLr2PlayState(setup: Lr2PlaySetup, frame: Lr2PlayFrame): L
  * the player's options play by themselves, the 1P scratch (lane 0) while 1P auto scratch is on (op 55). Full AUTOPLAY
  * (op 33) keeps the regular notes, as in LR2. Op 53 is EXTRA MODE, which plays no lane by itself.
  */
-export function isLr2AutoLane(laneIndex: number, ops: ReadonlySet<number>): boolean {
+export function isLR2AutoLane(laneIndex: number, ops: ReadonlySet<number>): boolean {
   return laneIndex === 0 && ops.has(LR2_OP.AUTO_SCRATCH_1P_ON);
 }
 
 /** A timer bank of the lanes: bombs (50 / 60), long-note holds (70 / 80), key on (100 / 110) and key off (120 / 130). */
-export type Lr2LaneTimerBank = 'bomb' | 'ln-hold' | 'key-on' | 'key-off';
+export type LR2LaneTimerBank = 'bomb' | 'ln-hold' | 'key-on' | 'key-off';
 
 /** A lane of a play: its chart channel, its index on its side (0 the scratch, keys from 1) and the play variant. */
-export interface Lr2Lane {
+export interface LR2Lane {
   readonly channel: string;
   readonly laneIndex: number;
   readonly playVariant: ChartPlayVariant;
 }
 
-const LANE_BANKS: Readonly<Record<Lr2LaneTimerBank, readonly [number, number]>> = {
+const LANE_BANKS: Readonly<Record<LR2LaneTimerBank, readonly [number, number]>> = {
   bomb: [LR2_TIMER.BOMB_1P, LR2_TIMER.BOMB_2P],
   'ln-hold': [LR2_TIMER.LN_HOLD_1P, LR2_TIMER.LN_HOLD_2P],
   'key-on': [LR2_TIMER.KEY_ON_1P, LR2_TIMER.KEY_ON_2P],
@@ -368,7 +368,7 @@ const LANE_BANKS: Readonly<Record<Lr2LaneTimerBank, readonly [number, number]>> 
  * lanes) has no timer: `base + lane` would run into the next bank. The key-on bank addresses keys 1-7 (1-9 for PMS),
  * the others keys 1-9.
  */
-export function resolveLr2LaneTimer(bank: Lr2LaneTimerBank, lane: Lr2Lane): number | undefined {
+export function resolveLR2LaneTimer(bank: LR2LaneTimerBank, lane: LR2Lane): number | undefined {
   const pms = lane.playVariant === '9';
   const maxIndex = bank === 'key-on' && !pms ? 7 : LR2_LANE_TIMER_BANK_SIZE - 1;
   if (lane.laneIndex < 0 || lane.laneIndex > maxIndex) return undefined;
@@ -377,7 +377,7 @@ export function resolveLr2LaneTimer(bank: Lr2LaneTimerBank, lane: Lr2Lane): numb
 }
 
 /** A moment of the play screen that starts or stops LR2 timers; `at` is on the clock the scene stamps timers with. */
-export type Lr2PlayTimerEvent =
+export type LR2PlayTimerEvent =
   /** The scene starts: timer 0. (`#STARTINPUT` and the other skin timings are the scene's to schedule.) */
   | { readonly kind: 'scene-start'; readonly at: number }
   /** The chart has loaded: READY (timer 40). */
@@ -394,11 +394,11 @@ export type Lr2PlayTimerEvent =
   | { readonly kind: 'full-combo'; readonly at: number }
   /** The gauge moved from `previous` to `next` percent: up (timer 42), reaching 100 % (timer 44, which stops below). */
   | { readonly kind: 'gauge'; readonly previous: number; readonly next: number; readonly at: number }
-  /** A lane's bomb, long-note hold, key on or key off (`resolveLr2LaneTimer`). */
-  | { readonly kind: 'lane'; readonly bank: Lr2LaneTimerBank; readonly lane: Lr2Lane; readonly at: number };
+  /** A lane's bomb, long-note hold, key on or key off (`resolveLR2LaneTimer`). */
+  | { readonly kind: 'lane'; readonly bank: LR2LaneTimerBank; readonly lane: LR2Lane; readonly at: number };
 
 /** The LR2 timers a moment of the play screen starts and stops. */
-export function resolveLr2PlayTimers(event: Lr2PlayTimerEvent): Lr2TimerUpdate {
+export function resolveLR2PlayTimers(event: LR2PlayTimerEvent): LR2TimerUpdate {
   switch (event.kind) {
     case 'scene-start':
       return lr2TimerUpdate([LR2_TIMER.SCENE_START], event.at);
@@ -423,7 +423,7 @@ export function resolveLr2PlayTimers(event: Lr2PlayTimerEvent): Lr2TimerUpdate {
       return lr2TimerUpdate(start, event.at, stop);
     }
     case 'lane': {
-      const timer = resolveLr2LaneTimer(event.bank, event.lane);
+      const timer = resolveLR2LaneTimer(event.bank, event.lane);
       return lr2TimerUpdate(timer !== undefined ? [timer] : [], event.at);
     }
   }

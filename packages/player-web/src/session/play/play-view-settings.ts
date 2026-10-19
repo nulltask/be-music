@@ -45,9 +45,9 @@ export interface PlayViewSettingsContext extends PlayStateContext {
   readonly audioContext: AudioContext | undefined;
   readonly audioContextStartTime: number;
   readonly nonstopMixer: NonstopStageMixer | undefined;
-  readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectUrl: string }>;
+  readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string }>;
   readonly laneX: Map<string, PlayfieldLaneRect>;
-  readonly chartBpmRange: PlayTempoRange | undefined;
+  readonly chartBPMRange: PlayTempoRange | undefined;
   drawnLaneCovers: { covers: readonly LaneCoverState[]; drawn: LaneCover[] } | undefined;
   playlogViewCoalescer: PlaylogViewCoalescer | undefined;
   readonly replayViewCursor: PlaylogViewCursor | undefined;
@@ -102,13 +102,13 @@ export function resolveLaneCovers(ctx: PlayViewSettingsContext): readonly BeMusi
 
 /** The scale the play log reads the view's hi-speed on, and the main BPM it takes the visible time at. */
 interface PlaylogScale extends PlayPlaylogViewScale {
-  readonly mainBpm?: number;
+  readonly mainBPM?: number;
 }
 
 /**
  * The scale the play log reads the view's hi-speed on: the view's own (`PlaySessionTheme.playlogView`, the beatoraja
  * view's lane of four beats), else the built-in and LR2 scale over the lanes laid out last frame. Every family takes
- * the visible time at the play's main BPM (`chartBpmRange`, the one HS-FIX reads). `undefined` until the lanes are
+ * the visible time at the play's main BPM (`chartBPMRange`, the one HS-FIX reads). `undefined` until the lanes are
  * laid out.
  */
 function resolvePlaylogScale(ctx: PlayViewSettingsContext): PlaylogScale | undefined {
@@ -116,8 +116,8 @@ function resolvePlaylogScale(ctx: PlayViewSettingsContext): PlaylogScale | undef
     ctx.theme.playlogView?.() ??
     (ctx.laneX.size === 0 ? undefined : { scale: BE_MUSIC_HI_SPEED_SCALE, laneBeats: resolveLaneBeats(ctx) });
   if (scale === undefined) return undefined;
-  const mainBpm = ctx.chartBpmRange?.mainBpm;
-  return mainBpm !== undefined ? { ...scale, mainBpm } : scale;
+  const mainBPM = ctx.chartBPMRange?.mainBPM;
+  return mainBPM !== undefined ? { ...scale, mainBPM } : scale;
 }
 
 /**
@@ -131,7 +131,7 @@ function currentPlaylogView(ctx: PlayViewSettingsContext): PlaylogViewState {
   return resolvePlaylogView(ctx.playState.view, {
     scale: scale?.scale ?? BE_MUSIC_HI_SPEED_SCALE,
     laneBeats: scale?.laneBeats ?? 0,
-    ...(scale?.mainBpm !== undefined ? { mainBpm: scale.mainBpm } : {}),
+    ...(scale?.mainBPM !== undefined ? { mainBPM: scale.mainBPM } : {}),
   });
 }
 
@@ -195,14 +195,14 @@ function applyReplayView(ctx: PlayViewSettingsContext, recorded: PlaylogViewStat
   if (!replay.hiSpeed) return;
   const sudden = view.covers?.[0]?.sudden ?? 0;
   const scale = resolvePlaylogScale(ctx);
-  const mainBpm = scale?.mainBpm;
+  const mainBPM = scale?.mainBPM;
   const hiSpeed = resolveReplayHiSpeed(view, scale?.scale ?? BE_MUSIC_HI_SPEED_SCALE, (visibleMs) =>
-    mainBpm === undefined
+    mainBPM === undefined
       ? undefined
       : resolveHiSpeedForWhiteNumber({
           laneBeats: scale?.laneBeats ?? 0,
           sudden,
-          bpm: mainBpm,
+          bpm: mainBPM,
           whiteNumberMs: visibleMs,
         }),
   );

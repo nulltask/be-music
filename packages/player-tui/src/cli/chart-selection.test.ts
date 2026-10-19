@@ -212,7 +212,7 @@ describe('chart selection', () => {
     expect(parseChartSpy).not.toHaveBeenCalled();
 
     const cachePath = join(tempHome, '.be-music', 'chart-selection-cache.json');
-    const cacheJson = JSON.parse(await readFile(cachePath, 'utf8')) as {
+    const cacheJSON = JSON.parse(await readFile(cachePath, 'utf8')) as {
       entries: Record<
         string,
         {
@@ -222,7 +222,7 @@ describe('chart selection', () => {
         }
       >;
     };
-    const [cacheEntry] = Object.values(cacheJson.entries);
+    const [cacheEntry] = Object.values(cacheJSON.entries);
     expect(cacheEntry).toBeDefined();
     expect(cacheEntry?.contentHash).toEqual(expect.any(String));
     expect(cacheEntry?.cacheHash).toEqual(expect.any(String));
@@ -241,7 +241,7 @@ describe('chart selection', () => {
     await buildChartSelectionEntries(tempRoot, [chartPath]);
 
     const cachePath = join(tempHome, '.be-music', 'chart-selection-cache.json');
-    const cacheJson = JSON.parse(await readFile(cachePath, 'utf8')) as {
+    const cacheJSON = JSON.parse(await readFile(cachePath, 'utf8')) as {
       entries: Record<
         string,
         {
@@ -251,9 +251,9 @@ describe('chart selection', () => {
         }
       >;
     };
-    const [contentHash] = Object.keys(cacheJson.entries);
-    cacheJson.entries[contentHash]!.summary.title = 'Tampered';
-    await writeFile(cachePath, `${JSON.stringify(cacheJson, null, 2)}\n`, 'utf8');
+    const [contentHash] = Object.keys(cacheJSON.entries);
+    cacheJSON.entries[contentHash]!.summary.title = 'Tampered';
+    await writeFile(cachePath, `${JSON.stringify(cacheJSON, null, 2)}\n`, 'utf8');
 
     const parser = await import('@be-music/parser');
     const parseChartSpy = vi.spyOn(parser, 'parseChart');
@@ -332,9 +332,9 @@ describe('chart selection', () => {
     expect(parseChartSpy).not.toHaveBeenCalled();
 
     const cachePath = join(tempHome, '.be-music', 'chart-selection-cache.json');
-    const cacheJson = JSON.parse(await readFile(cachePath, 'utf8')) as {
+    const cacheJSON = JSON.parse(await readFile(cachePath, 'utf8')) as {
       entries: Record<string, unknown>;
     };
-    expect(Object.keys(cacheJson.entries)).toHaveLength(1);
+    expect(Object.keys(cacheJSON.entries)).toHaveLength(1);
   });
 });

@@ -18,7 +18,7 @@ export type {
 } from '@be-music/scene-model';
 
 /** A song image a host can hand a skin: the chart's `#STAGEFILE`, `#BANNER`, or `#BACKBMP`. */
-export type BeMusicSongImageKind = 'stageFile' | 'banner' | 'backBmp';
+export type BeMusicSongImageKind = 'stageFile' | 'banner' | 'backBMP';
 
 /**
  * Clear lamp of a play or a best record, worst first: not played, failed, then the gauge the chart was cleared on

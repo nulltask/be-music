@@ -9,7 +9,7 @@ import {
 import { describe, expect, it } from 'vite-plus/test';
 import {
   PORTRAIT_SELECT_LAYOUT,
-  resolvePortraitGameplayHud,
+  resolvePortraitGameplayHUD,
   resolvePortraitResult,
   resolvePortraitSelectCard,
 } from './layout.ts';
@@ -55,7 +55,7 @@ describe('resolvePortraitSelectCard', () => {
   });
 });
 
-describe('resolvePortraitGameplayHud', () => {
+describe('resolvePortraitGameplayHUD', () => {
   const layouts: Array<[string, BeMusicGameplayLayout]> = [
     ['7 KEY touch', resolveGameplayLayout({ laneCount: 8, playVariant: '7', layoutMode: 'touch' }, tallStage)],
     ['5 KEY standard', resolveGameplayLayout({ laneCount: 6, playVariant: '5' }, tallStage)],
@@ -64,7 +64,7 @@ describe('resolvePortraitGameplayHud', () => {
 
   it.each(layouts)('keeps the %s HUD above the lanes, clear of the BGA and of itself', (_, layout) => {
     expect(layout.orientation).toBe('portrait');
-    const hud = resolvePortraitGameplayHud(layout);
+    const hud = resolvePortraitGameplayHUD(layout);
     const rects = [hud.track, ...hud.scores, ...hud.counts, hud.gauge];
     for (const rect of rects) {
       expect(inside(rect, W, H)).toBe(true);
@@ -79,7 +79,7 @@ describe('resolvePortraitGameplayHud', () => {
 
   it('keeps the header text out of the top corners and puts the judgement on the lanes', () => {
     const layout = resolveGameplayLayout({ laneCount: 8, playVariant: '7', layoutMode: 'touch' }, tallStage);
-    const hud = resolvePortraitGameplayHud(layout);
+    const hud = resolvePortraitGameplayHUD(layout);
     expect(hud.header).toEqual({ height: 40, left: 52, right: W - 52 });
     expect(hud.judgeY).toBeGreaterThan(layout.playfield.top + 60);
     expect(hud.judgeY).toBeLessThan(layout.playfield.judgementY - 120);
@@ -87,15 +87,15 @@ describe('resolvePortraitGameplayHud', () => {
 
   it('spreads the column across the stage when there is no BGA', () => {
     const layout = resolveGameplayLayout({ laneCount: 8, playVariant: '7' }, tallStage);
-    const hud = resolvePortraitGameplayHud({ ...layout, bga: undefined });
+    const hud = resolvePortraitGameplayHUD({ ...layout, bga: undefined });
     expect(hud.track).toEqual({ x: 12, y: 46, w: W - 24, h: 56 });
     expect(hud.counts[4].y + hud.counts[4].h).toBeLessThanOrEqual(hud.gauge.y - 14);
   });
 
   it('follows a portrait stage of another size', () => {
-    const stage = { width: 600, height: 1200, resolveBgaRect: () => ({ x: 12, y: 50, w: 280, h: 280 }) };
+    const stage = { width: 600, height: 1200, resolveBGARect: () => ({ x: 12, y: 50, w: 280, h: 280 }) };
     const layout = resolveGameplayLayout({ laneCount: 8, playVariant: '7' }, stage);
-    const hud = resolvePortraitGameplayHud(layout);
+    const hud = resolvePortraitGameplayHUD(layout);
     expect(hud.track.x).toBe(12 + 280 + 12);
     expect(hud.track.x + hud.track.w).toBe(600 - 12);
     expect(hud.gauge.w).toBe(600 - 24);

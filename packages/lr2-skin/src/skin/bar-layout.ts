@@ -1,19 +1,19 @@
 import type { ParseContext } from './parse-context.ts';
 import type {
-  Lr2BarBodySlot,
-  Lr2BarBodySource,
-  Lr2BarFlashElement,
-  Lr2BarLampSource,
-  Lr2BarLayout,
-  Lr2BarLevelSource,
-  Lr2BarRankSource,
-  Lr2BarRivalSource,
-  Lr2BarTitleElement,
-  Lr2NumberSourceRect,
+  LR2BarBodySlot,
+  LR2BarBodySource,
+  LR2BarFlashElement,
+  LR2BarLampSource,
+  LR2BarLayout,
+  LR2BarLevelSource,
+  LR2BarRankSource,
+  LR2BarRivalSource,
+  LR2BarTitleElement,
+  LR2NumberSourceRect,
 } from './types.ts';
 
-export function createBarLayout(context: ParseContext): Lr2BarLayout {
-  const bodies: Lr2BarBodySource[] = context.barBodySources.flatMap((entry) => {
+export function createBarLayout(context: ParseContext): LR2BarLayout {
+  const bodies: LR2BarBodySource[] = context.barBodySources.flatMap((entry) => {
     const imagePath = context.imagePaths[entry.source.gr];
     if (!imagePath) {
       return [];
@@ -22,7 +22,7 @@ export function createBarLayout(context: ParseContext): Lr2BarLayout {
   });
 
   const slotCount = Math.max(context.barBodyOffDstGroups.length, context.barBodyOnDstGroups.length);
-  const slots: Lr2BarBodySlot[] = [];
+  const slots: LR2BarBodySlot[] = [];
   for (let index = 0; index < slotCount; index += 1) {
     const offGroup = context.barBodyOffDstGroups[index];
     const onGroup = context.barBodyOnDstGroups[index];
@@ -38,7 +38,7 @@ export function createBarLayout(context: ParseContext): Lr2BarLayout {
     });
   }
 
-  let title: Lr2BarTitleElement | undefined;
+  let title: LR2BarTitleElement | undefined;
   if (context.barTitleSource && context.barTitleDst.length > 0) {
     const dstGroup = context.barTitleDst;
     title = {
@@ -50,12 +50,12 @@ export function createBarLayout(context: ParseContext): Lr2BarLayout {
 
   // BAR_LEVEL: keep the alignment / padding from each per-difficulty entry so the renderer can use
   // `renderNumberElement` directly.
-  const levels: Lr2BarLevelSource[] = context.barLevelSources.flatMap((entry) => {
+  const levels: LR2BarLevelSource[] = context.barLevelSources.flatMap((entry) => {
     const imagePath = context.imagePaths[entry.source.gr];
     if (!imagePath) {
       return [];
     }
-    const numberSource: Lr2NumberSourceRect = {
+    const numberSource: LR2NumberSourceRect = {
       ...entry.source,
       imagePath,
       num: 0, // unused — BAR_LEVEL pulls its value from the song, not the LR2 num field
@@ -65,7 +65,7 @@ export function createBarLayout(context: ParseContext): Lr2BarLayout {
     return [{ kind: entry.kind, source: numberSource }];
   });
 
-  const lamps: Lr2BarLampSource[] = context.barLampSources.flatMap((entry) => {
+  const lamps: LR2BarLampSource[] = context.barLampSources.flatMap((entry) => {
     const imagePath = context.imagePaths[entry.source.gr];
     if (!imagePath) {
       return [];
@@ -73,7 +73,7 @@ export function createBarLayout(context: ParseContext): Lr2BarLayout {
     return [{ kind: entry.kind, source: { ...entry.source, imagePath } }];
   });
 
-  const ranks: Lr2BarRankSource[] = context.barRankSources.flatMap((entry) => {
+  const ranks: LR2BarRankSource[] = context.barRankSources.flatMap((entry) => {
     const imagePath = context.imagePaths[entry.source.gr];
     if (!imagePath) {
       return [];
@@ -87,7 +87,7 @@ export function createBarLayout(context: ParseContext): Lr2BarLayout {
 
   // BAR_FLASH — focused-bar overlay. Spec only allows one, so we pick the latest source / DST chain and resolve its
   // image path.
-  let flash: Lr2BarFlashElement | undefined;
+  let flash: LR2BarFlashElement | undefined;
   if (context.barFlashSource && context.barFlashDst.length > 0) {
     const imagePath = context.imagePaths[context.barFlashSource.gr];
     if (imagePath) {
@@ -101,7 +101,7 @@ export function createBarLayout(context: ParseContext): Lr2BarLayout {
   }
 
   // BAR_RIVAL — rival-mode WIN/LOSE/DRAW per-bar overlay.
-  const rivalIndicators: Lr2BarRivalSource[] = context.barRivalSources.flatMap((entry) => {
+  const rivalIndicators: LR2BarRivalSource[] = context.barRivalSources.flatMap((entry) => {
     const imagePath = context.imagePaths[entry.source.gr];
     if (!imagePath) {
       return [];
@@ -111,12 +111,12 @@ export function createBarLayout(context: ParseContext): Lr2BarLayout {
   const rivalDestination = context.barRivalDst.at(-1);
 
   // BAR_MY_LAMP / BAR_RIVAL_LAMP — rival-folder lamp variants.
-  const myLamps: Lr2BarLampSource[] = context.barMyLampSources.flatMap((entry) => {
+  const myLamps: LR2BarLampSource[] = context.barMyLampSources.flatMap((entry) => {
     const imagePath = context.imagePaths[entry.source.gr];
     if (!imagePath) return [];
     return [{ kind: entry.kind, source: { ...entry.source, imagePath } }];
   });
-  const rivalLampSprites: Lr2BarLampSource[] = context.barRivalLampSources.flatMap((entry) => {
+  const rivalLampSprites: LR2BarLampSource[] = context.barRivalLampSources.flatMap((entry) => {
     const imagePath = context.imagePaths[entry.source.gr];
     if (!imagePath) return [];
     return [{ kind: entry.kind, source: { ...entry.source, imagePath } }];

@@ -41,7 +41,7 @@ const TEXT = {
   },
 } as const;
 
-export function escapeHtml(value: string): string {
+export function escapeHTML(value: string): string {
   return value
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
@@ -86,7 +86,7 @@ h1{font-size:1.75rem;margin:0 0 .5em}
 <body>
 <main>
 <h1>${t.title}</h1>
-<p class="status" data-state="${input.account === undefined ? 'signed-out' : input.account.anonymous ? 'anonymous' : 'signed-in'}">${escapeHtml(status)}</p>
+<p class="status" data-state="${input.account === undefined ? 'signed-out' : input.account.anonymous ? 'anonymous' : 'signed-in'}">${escapeHTML(status)}</p>
 <nav class="links">
 <a href="${links.play}">${t.play}</a>
 <a href="${links.leaderboard}">${t.leaderboard}</a>

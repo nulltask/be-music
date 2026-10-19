@@ -17,7 +17,7 @@
  * timer: a flash and a long note's tail bomb end when a later frame reaches their end.
  */
 
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import {
   JUDGE_LANE_REF_RANGE,
   TIMER_FADEOUT,
@@ -102,7 +102,7 @@ export interface BeatorajaPlayBridgeOptions {
    * The chart as the play plays it (its `#RANDOM` branches drawn, DP FLIP applied): its texts, BPM, last notes, note
    * kinds and the judge-state graph's seconds. Without it every text renders empty.
    */
-  readonly chart?: BeMusicJson;
+  readonly chart?: BeMusicJSON;
   /** The skin's name and author (texts 50 / 51). */
   readonly skinHeaderName?: string;
   readonly skinHeaderAuthor?: string;
@@ -230,7 +230,7 @@ export class BeatorajaPlayBridge {
   private readonly firedOnce = new Set<number>();
   private readonly renderContext: BeatorajaRenderContext;
   private readonly chartPlayVariant: ChartPlayVariant;
-  private readonly chart: BeMusicJson | undefined;
+  private readonly chart: BeMusicJSON | undefined;
   private readonly startTraits: BeatorajaChartTraits | undefined;
   private readonly texts: BeatorajaPlayTextInput;
   private readonly play: PlayInput;
@@ -675,11 +675,11 @@ export class BeatorajaPlayBridge {
     const now = new Date();
     this.play.wallClock = beatorajaWallClockOf(now);
     this.play.operatingMs = now.getTime() - this.bootMs;
-    this.play.fps = this.currentFps();
+    this.play.fps = this.currentFPS();
   }
 
   /** Frames per second over the frames in the ring (N stamps bracket N - 1 intervals); 0 with fewer than two. */
-  private currentFps(): number {
+  private currentFPS(): number {
     if (this.fpsRingFilled < 2) return 0;
     const length = this.fpsRingMs.length;
     const newest = this.fpsRingMs[(this.fpsRingHead - 1 + length) % length]!;
@@ -768,7 +768,7 @@ export class BeatorajaPlayBridge {
   }
 
   /** Whether the player holds a long note on the lane now: the note layer draws the held body sprite. */
-  public isLaneLnHeld(channel: string): boolean {
+  public isLaneLNHeld(channel: string): boolean {
     return this.lnHoldHeldByChannel.has(channel);
   }
 
@@ -786,7 +786,7 @@ export class BeatorajaPlayBridge {
     });
   }
 
-  private noteBreakdown(chart: BeMusicJson): ReturnType<typeof computeBeatorajaNoteBreakdown> {
+  private noteBreakdown(chart: BeMusicJSON): ReturnType<typeof computeBeatorajaNoteBreakdown> {
     this.cachedNoteBreakdown ??= computeBeatorajaNoteBreakdown(chart);
     return this.cachedNoteBreakdown;
   }
@@ -851,7 +851,7 @@ export class BeatorajaPlayBridge {
    * Whether the POOR image shows at chart time `seconds`: for beatoraja's `misslayerDuration` (500 ms by default) from
    * the last miss, as `BGAProcessor.drawBGA` draws it.
    */
-  public isPoorBgaActive(seconds: number): boolean {
+  public isPoorBGAActive(seconds: number): boolean {
     return isMissLayerShown(this.lastMissSeconds, seconds, DEFAULT_POOR_BGA_DISPLAY_SECONDS);
   }
 

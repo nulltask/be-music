@@ -1,4 +1,4 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import type { PlayerInputCommand } from '@be-music/player/signals';
 import { DEFAULT_PLAY_OPTIONS, type LibraryChart } from '@be-music/scene-model';
 import { describe, expect, test, vi } from 'vite-plus/test';
@@ -15,7 +15,7 @@ const CHART: LibraryChart = {
   fileLabel: 'chart.bms',
   title: 'Chart',
   totalNotes: 0,
-  chart: createEmptyJson('bms'),
+  chart: createEmptyJSON('bms'),
 };
 
 function createSceneSession(options: ConstructorParameters<typeof PlaySession>[0] = {}) {

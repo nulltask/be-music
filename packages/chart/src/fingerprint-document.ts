@@ -50,7 +50,7 @@ export interface BeMusicPlayFingerprintDocument {
   v: typeof FINGERPRINT_VERSION;
   laneMode: ChartPlayVariant;
   bpm: string;
-  baseBpm: string | null;
+  baseBPM: string | null;
   judge: FingerprintJudge;
   total: FingerprintTotal;
   measures: FingerprintMeasures;
@@ -76,7 +76,7 @@ export interface FingerprintDeltaLists {
 
 export interface FingerprintHeaderChange {
   bpm?: string;
-  baseBpm?: string | null;
+  baseBPM?: string | null;
   judge?: FingerprintJudge;
   total?: FingerprintTotal;
   player3?: boolean;
@@ -109,7 +109,7 @@ export interface BeMusicChartFingerprintDocument {
   v: typeof FINGERPRINT_VERSION;
   lanes: FingerprintLaneModeInputs;
   bpm: string;
-  baseBpm: string | null;
+  baseBPM: string | null;
   judge: FingerprintJudge;
   total: FingerprintTotal;
   measures: FingerprintMeasures;
@@ -125,7 +125,7 @@ export type BeMusicFingerprintDocument = BeMusicPlayFingerprintDocument | BeMusi
  * Serializes a JSON value with the JSON Canonicalization Scheme (RFC 8785): object keys sorted by UTF-16 code units,
  * `undefined` fields left out, no whitespace, ECMAScript string and number forms. Fingerprints hash this text.
  */
-export function canonicalizeJsonValue(value: unknown): string {
+export function canonicalizeJSONValue(value: unknown): string {
   if (value === null) {
     return 'null';
   }
@@ -144,7 +144,7 @@ export function canonicalizeJsonValue(value: unknown): string {
       if (index > 0) {
         text += ',';
       }
-      text += canonicalizeJsonValue(value[index]);
+      text += canonicalizeJSONValue(value[index]);
     }
     return `${text}]`;
   }
@@ -159,7 +159,7 @@ export function canonicalizeJsonValue(value: unknown): string {
         continue;
       }
       text += first ? order.quoted[index]! : `,${order.quoted[index]!}`;
-      text += canonicalizeJsonValue(field);
+      text += canonicalizeJSONValue(field);
       first = false;
     }
     return `${text}}`;
@@ -167,7 +167,7 @@ export function canonicalizeJsonValue(value: unknown): string {
   throw new TypeError(`canonical JSON cannot represent a ${typeof value}`);
 }
 
-/** An object's keys in canonical (code unit) order, each quoted with its colon, for `canonicalizeJsonValue`. */
+/** An object's keys in canonical (code unit) order, each quoted with its colon, for `canonicalizeJSONValue`. */
 interface KeyOrder {
   keys: readonly string[];
   sorted: readonly string[];
@@ -223,8 +223,8 @@ export function assemblePlayDocument(items: FlatItems, extension: LaneModeExtens
     v: FINGERPRINT_VERSION,
     laneMode: lists.laneMode,
     bpm: formatRational(header.bpm),
-    baseBpm:
-      header.baseBpm === null || isRationalEqual(header.baseBpm, header.bpm) ? null : formatRational(header.baseBpm),
+    baseBPM:
+      header.baseBPM === null || isRationalEqual(header.baseBPM, header.bpm) ? null : formatRational(header.baseBPM),
     judge: formatJudge(header.judge),
     total: formatTotal(header.total),
     measures,

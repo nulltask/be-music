@@ -1,4 +1,4 @@
-import { normalizeObjectKey, type BeMusicJson } from '@be-music/json';
+import { normalizeObjectKey, type BeMusicJSON } from '@be-music/json';
 
 /**
  * Parsed `#EXBMPxx a,r,g,b,filename` directive.
@@ -8,18 +8,18 @@ import { normalizeObjectKey, type BeMusicJson } from '@be-music/json';
  * transparent (`a = 0` for the keyed color) or to dim a layer image (`a < 255`). The format is a single
  * `a,r,g,b,filename` string (commas separating the four byte channels and the filename).
  *
- * `argbRaw` keeps the AARRGGBB-equivalent string so consumers can pass it straight to {@link parseBmsArgb} — the same
+ * `argbRaw` keeps the AARRGGBB-equivalent string so consumers can pass it straight to {@link parseBmsARGB} — the same
  * parser `#ARGBxx` already uses, no second code path. `argb` is the pre-parsed shortcut for the common case.
  */
-export interface BmsExBmp {
+export interface BMSExBMP {
   /** Filename of the image to load into this `#BMPxx` slot. */
   filename: string;
   /**
    * Decoded ARGB values, or `undefined` when the directive omitted the ARGB tuple (e.g. `#EXBMP01 ,,,,filename.bmp`).
    */
-  argb: BmsArgb | undefined;
+  argb: BmsARGB | undefined;
   /**
-   * Comma-separated AARRGGBB-equivalent text — kept so consumers can roundtrip through the same `parseBmsArgb` pipeline
+   * Comma-separated AARRGGBB-equivalent text — kept so consumers can roundtrip through the same `parseBmsARGB` pipeline
    * that `#ARGBxx` uses, without re-emitting it from the `argb` shortcut.
    */
   argbRaw: string;
@@ -35,7 +35,7 @@ export interface BmsExBmp {
  * present but unparseable (e.g. `xxx,yyy,zzz,www,foo.bmp`), the entry's `argb` is `undefined` while `filename` is still
  * surfaced — so the consumer at least knows which file the slot points at.
  */
-export function parseBmsExBmp(raw: string): BmsExBmp | undefined {
+export function parseBMSExBMP(raw: string): BMSExBMP | undefined {
   if (typeof raw !== 'string') return undefined;
   const trimmed = raw.trim();
   if (trimmed.length === 0) return undefined;
@@ -51,7 +51,7 @@ export function parseBmsExBmp(raw: string): BmsExBmp | undefined {
   // or the image's own alpha channel.
   const argbCandidate = `${aRaw},${rRaw},${gRaw},${bRaw}`;
   const argbValuesAllBlank = [aRaw, rRaw, gRaw, bRaw].every((part) => part.trim().length === 0);
-  const argb = argbValuesAllBlank ? undefined : parseBmsArgb(argbCandidate);
+  const argb = argbValuesAllBlank ? undefined : parseBmsARGB(argbCandidate);
   return {
     filename,
     argb,
@@ -70,15 +70,15 @@ export function parseBmsExBmp(raw: string): BmsExBmp | undefined {
  * Returns `undefined` when neither directive is present (or neither parses), letting the consumer skip the tint stage
  * entirely on the unaffected path.
  */
-export function resolveBmsBmpArgb(chart: BeMusicJson, slot: string): BmsArgb | undefined {
+export function resolveBmsBmpARGB(chart: BeMusicJSON, slot: string): BmsARGB | undefined {
   const argbRaw = chart.bms.argb[slot];
   if (typeof argbRaw === 'string') {
-    const parsed = parseBmsArgb(argbRaw);
+    const parsed = parseBmsARGB(argbRaw);
     if (parsed) return parsed;
   }
-  const exBmpRaw = chart.bms.exBmp[slot];
-  if (typeof exBmpRaw === 'string') {
-    const parsed = parseBmsExBmp(exBmpRaw);
+  const exBMPRaw = chart.bms.exBMP[slot];
+  if (typeof exBMPRaw === 'string') {
+    const parsed = parseBMSExBMP(exBMPRaw);
     if (parsed?.argb) return parsed.argb;
   }
   return undefined;
@@ -97,7 +97,7 @@ export function resolveBmsBmpArgb(chart: BeMusicJson, slot: string): BmsArgb | u
  * once and hold the last frame, non-zero = loop. - `ARGB` (optional): AARRGGBB tint applied to every frame, same format
  * as `#ARGBxx`.
  */
-export interface BmsSwitchingBga {
+export interface BMSSwitchingBGA {
   /** Frame interval in milliseconds (`fr × 10`). */
   frameIntervalMs: number;
   /** Total frames the animation should advance through. */
@@ -122,7 +122,7 @@ export interface BmsSwitchingBga {
  * header, non- positive frame rate / total, empty slot list, etc.) so the consumer can fall through to "no animation"
  * rather than show a stuck or scrambled frame.
  */
-export function parseBmsSwBga(raw: string, idBase: 36 | 62 = 36): BmsSwitchingBga | undefined {
+export function parseBMSSwBGA(raw: string, idBase: 36 | 62 = 36): BMSSwitchingBGA | undefined {
   if (typeof raw !== 'string') return undefined;
   const tokens = raw.trim().split(/\s+/u);
   if (tokens.length < 2) return undefined;
@@ -156,27 +156,27 @@ export function parseBmsSwBga(raw: string, idBase: 36 | 62 = 36): BmsSwitchingBg
  * the directive's `frameIntervalMs`, `totalFrames`, and `loop` fields — when `loop = false` and the cycle has ended,
  * the last authored frame stays on screen ("hold last").
  *
- * Returns `undefined` only when the parsed entry has an empty `frames` list (which {@link parseBmsSwBga} already
+ * Returns `undefined` only when the parsed entry has an empty `frames` list (which {@link parseBMSSwBGA} already
  * filters out for us); included for safety so callers can use a single null check.
  */
-export function pickSwitchingBgaFrame(swBga: BmsSwitchingBga, elapsedMs: number): string | undefined {
-  if (swBga.frames.length === 0) return undefined;
+export function pickSwitchingBGAFrame(swBGA: BMSSwitchingBGA, elapsedMs: number): string | undefined {
+  if (swBGA.frames.length === 0) return undefined;
   if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) {
-    return swBga.frames[0];
+    return swBGA.frames[0];
   }
-  const rawIndex = Math.floor(elapsedMs / swBga.frameIntervalMs);
+  const rawIndex = Math.floor(elapsedMs / swBGA.frameIntervalMs);
   let index: number;
-  if (swBga.loop) {
+  if (swBGA.loop) {
     // Modulo against `frames.length` so a slot list shorter than `totalFrames` keeps cycling within the authored
     // frames.
-    index = ((rawIndex % swBga.totalFrames) + swBga.totalFrames) % swBga.totalFrames;
-    index = index % swBga.frames.length;
+    index = ((rawIndex % swBGA.totalFrames) + swBGA.totalFrames) % swBGA.totalFrames;
+    index = index % swBGA.frames.length;
   } else {
     // Clamp to the last frame so post-end the BGA holds rather than disappearing.
-    const clamped = Math.min(rawIndex, swBga.totalFrames - 1);
-    index = Math.min(clamped, swBga.frames.length - 1);
+    const clamped = Math.min(rawIndex, swBGA.totalFrames - 1);
+    index = Math.min(clamped, swBGA.frames.length - 1);
   }
-  return swBga.frames[index];
+  return swBGA.frames[index];
 }
 
 /**
@@ -188,9 +188,9 @@ export function pickSwitchingBgaFrame(swBga: BmsSwitchingBga, elapsedMs: number)
  * sub-regions of one source BMP into different on-screen positions, e.g. assembling a sprite-sheet animation by
  * aliasing slots `01..09` to different tiles of `#BMP10`.
  */
-export interface BmsSubRegionBga {
+export interface BMSSubRegionBGA {
   /** Source BMP slot id, normalized via `normalizeObjectKey`. */
-  sourceBmp: string;
+  sourceBMP: string;
   /** Top-left X of the source rectangle (pixel coordinates). */
   sx: number;
   /** Top-left Y of the source rectangle. */
@@ -212,7 +212,7 @@ export interface BmsSubRegionBga {
  * Returns `undefined` for malformed lines (fewer than seven tokens, non-integer numerics, empty source slot, or a
  * degenerate rectangle where `ex <= sx` / `ey <= sy`).
  */
-export function parseBmsBga(raw: string, idBase: 36 | 62 = 36): BmsSubRegionBga | undefined {
+export function parseBmsBGA(raw: string, idBase: 36 | 62 = 36): BMSSubRegionBGA | undefined {
   if (typeof raw !== 'string') return undefined;
   const tokens = raw.trim().split(/\s+/u);
   if (tokens.length < 7) return undefined;
@@ -228,8 +228,8 @@ export function parseBmsBga(raw: string, idBase: 36 | 62 = 36): BmsSubRegionBga 
   ) {
     return undefined;
   }
-  const sourceBmp = normalizeObjectKey(sourceRaw, idBase);
-  if (sourceBmp.length === 0) return undefined;
+  const sourceBMP = normalizeObjectKey(sourceRaw, idBase);
+  if (sourceBMP.length === 0) return undefined;
   const sx = Number.parseInt(sxRaw, 10);
   const sy = Number.parseInt(syRaw, 10);
   const ex = Number.parseInt(exRaw, 10);
@@ -240,7 +240,7 @@ export function parseBmsBga(raw: string, idBase: 36 | 62 = 36): BmsSubRegionBga 
   // Degenerate / inverted rectangles are unusable — they'd produce a zero-area frame and a runtime divide-by-zero in
   // the consumer.
   if (ex <= sx || ey <= sy) return undefined;
-  return { sourceBmp, sx, sy, ex, ey, dx, dy };
+  return { sourceBMP, sx, sy, ex, ey, dx, dy };
 }
 
 /**
@@ -249,7 +249,7 @@ export function parseBmsBga(raw: string, idBase: 36 | 62 = 36): BmsSubRegionBga 
  * Each component is clamped to the byte range so callers can blindly feed them into bit-shift / `/255` conversions
  * without re-validating.
  */
-export interface BmsArgb {
+export interface BmsARGB {
   /** Alpha (0 = fully transparent, 255 = fully opaque). */
   a: number;
   r: number;
@@ -272,7 +272,7 @@ const BMS_ARGB_HEX_RE = /^[0-9A-Fa-f]{8}$/;
  * typically use it to chroma-key a backdrop color to transparent, or to dim a layer image — in both cases the consumer
  * applies the parsed values as a tint × alpha at draw time.
  */
-export function parseBmsArgb(raw: string): BmsArgb | undefined {
+export function parseBmsARGB(raw: string): BmsARGB | undefined {
   if (typeof raw !== 'string') return undefined;
   const trimmed = raw.trim();
   if (trimmed.length === 0) return undefined;

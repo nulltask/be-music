@@ -44,7 +44,7 @@ function lr2CourseGauge(id: string, values: GaugeValues): GaugeSpec {
   return { id, min: 0, max: 100, initial: 100, border: 0, survival: true, death: 2, values, guts: LR2_COURSE_GUTS };
 }
 
-function scaleLr2Damage(values: GaugeValues, damage: number): GaugeValues {
+function scaleLR2Damage(values: GaugeValues, damage: number): GaugeValues {
   return values.map((value) => (value < 0 ? value * damage : value)) as unknown as GaugeValues;
 }
 
@@ -53,10 +53,10 @@ function scaleLr2Damage(values: GaugeValues, damage: number): GaugeValues {
  * grade HARD gauge, DEATH the grade DEATH gauge. EXPERT / NONSTOP courses have a GROOVE, EASY, HARD and DEATH line of
  * their own. HARD damage scales by `damage` (LR2's TOTAL / note-count multiplier), as on single charts.
  */
-function resolveLr2CourseGauge(gaugeId: string, damage: number): GaugeSpec {
+function resolveLR2CourseGauge(gaugeId: string, damage: number): GaugeSpec {
   switch (gaugeId) {
     case 'GRADE-HARD':
-      return lr2CourseGauge(gaugeId, scaleLr2Damage([0.1, 0.1, 0.04, -6, -10, -2], damage));
+      return lr2CourseGauge(gaugeId, scaleLR2Damage([0.1, 0.1, 0.04, -6, -10, -2], damage));
     case 'GRADE-DEATH':
     case 'COURSE-DEATH':
       return lr2CourseGauge(gaugeId, [0, 0, 0, -100, -100, 0]);
@@ -65,7 +65,7 @@ function resolveLr2CourseGauge(gaugeId: string, damage: number): GaugeSpec {
     case 'COURSE-EASY':
       return lr2CourseGauge(gaugeId, [0.12, 0.12, 0.048, -1.2, -1.6, -1.2]);
     case 'COURSE-HARD':
-      return lr2CourseGauge(gaugeId, scaleLr2Damage([0.1, 0.1, 0.05, -6, -10, -2], damage));
+      return lr2CourseGauge(gaugeId, scaleLR2Damage([0.1, 0.1, 0.05, -6, -10, -2], damage));
     default:
       return lr2CourseGauge('GRADE', [0.1, 0.1, 0.04, -2, -3, -2]);
   }
@@ -193,7 +193,7 @@ export function resolveCourseGauge(
 ): GaugeSpec {
   const spec =
     rulesetId === 'lr2'
-      ? resolveLr2CourseGauge(gaugeId, damage)
+      ? resolveLR2CourseGauge(gaugeId, damage)
       : resolveClassGauge(gaugeId, course.gaugeSet ?? resolveDefaultCourseGaugeSet(laneMode));
   const initial = course.initialGauge;
   if (initial === undefined || !Number.isFinite(initial)) return spec;

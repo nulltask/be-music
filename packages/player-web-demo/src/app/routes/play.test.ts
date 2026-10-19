@@ -1,4 +1,4 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import type { ResolvedPlayChart } from '@be-music/player';
 import type { AudioService } from '@be-music/player-web/audio';
 import type { BrowserSongCollection, ChartFileHashes } from '@be-music/player-web/collection';
@@ -49,7 +49,7 @@ function song(id: string): LibraryChart {
     title: id,
     artist: 'artist',
     totalNotes: 10,
-    chart: createEmptyJson('bms'),
+    chart: createEmptyJSON('bms'),
   };
 }
 
@@ -144,7 +144,7 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
       getTempo: () => sceneOptions.settings.tempo ?? 1,
       setHiSpeed: vi.fn(),
       waitForPlaylog: vi.fn(async () => undefined),
-      resolved: { chart: createEmptyJson('bms'), draws: [] } as unknown as ResolvedPlayChart,
+      resolved: { chart: createEmptyJSON('bms'), draws: [] } as unknown as ResolvedPlayChart,
       dispose: vi.fn(),
     };
     plays.push(play);
@@ -206,7 +206,7 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
       bgmVolume: 100,
       compressor: true,
       compressorKey: true,
-      compressorBgm: true,
+      compressorBGM: true,
       compressorMaster: true,
       bgaResizeMaxEdgePx: 0,
       bgaUseWebCodecs: false,
@@ -450,7 +450,7 @@ describe('PlayRoute.playSong: a chart played at once', () => {
       audio: h.deps.audio,
       host: h.deps.sceneHost,
       playOptions: h.deps.playOptions.current,
-      settings: { chartSha256: HASHES.sha256, chartMd5: HASHES.md5, layoutMode: 'standard' },
+      settings: { chartSHA256: HASHES.sha256, chartMD5: HASHES.md5, layoutMode: 'standard' },
     });
     expect(play.options).not.toHaveProperty('course');
     expect(play.options).not.toHaveProperty('replay');
@@ -472,7 +472,7 @@ describe('PlayRoute.playSong: a chart played at once', () => {
     expect(h.deps.setPlayStatus).toHaveBeenCalledWith(describePlayingStatus('a', { tempoPercent: 20, replay: true }));
     expect(h.deps.lockPlaylogOptionsForPlay).toHaveBeenCalledWith(false);
     expect(play.options.replay).toBe(REPLAY);
-    expect(play.options.settings).not.toHaveProperty('chartSha256');
+    expect(play.options.settings).not.toHaveProperty('chartSHA256');
   });
 
   test('the LR2 and beatoraja plays take the settings without a touch layout', async () => {

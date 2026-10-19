@@ -10,7 +10,7 @@ import {
   resolveChart,
   type TempoReversalPoint,
 } from '@be-music/chart';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/display';
 import {
   changesScrollRate,
@@ -22,7 +22,7 @@ import {
 } from '../../../chart/note-draw-window.ts';
 
 /** The chart's `#SCROLL` / `#SPEED` distance integrator, or `undefined` when it has neither (or only points at 1). */
-export function createBeatorajaScrollMapper(chart: BeMusicJson): ScrollDistanceMapperLike | undefined {
+export function createBeatorajaScrollMapper(chart: BeMusicJSON): ScrollDistanceMapperLike | undefined {
   const beatResolver = createBeatResolver(chart);
   const scroll = createScrollTimeline(chart, beatResolver);
   const speed = createSpeedTimeline(chart, beatResolver);
@@ -40,7 +40,7 @@ export interface BeatorajaLaneTimelines {
   beatToSeconds: (beat: number) => number;
 }
 
-export function createBeatorajaLaneTimelines(chart: BeMusicJson): BeatorajaLaneTimelines {
+export function createBeatorajaLaneTimelines(chart: BeMusicJSON): BeatorajaLaneTimelines {
   const resolved = resolveChart(chart);
   return { beats: collectResolvedLaneTimelineBeats(resolved), beatToSeconds: resolved.timing.beatToSeconds };
 }

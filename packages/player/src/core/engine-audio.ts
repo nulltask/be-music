@@ -1,18 +1,18 @@
 import {
-  collectLnobjEndEvents,
+  collectLNOBJEndEvents,
   firesBeforeTempoReversal,
-  isBmsBgmVolumeChangeChannel,
-  isBmsDynamicVolumeChangeChannel,
-  isBmsKeyVolumeChangeChannel,
+  isBmsBGMVolumeChangeChannel,
+  isBMSDynamicVolumeChangeChannel,
+  isBMSKeyVolumeChangeChannel,
   isPlayLaneSoundChannel,
-  parseBmsDynamicVolumeGain,
-  usesMonophonicWavPlayback,
-  volWavToLinearGain,
+  parseBMSDynamicVolumeGain,
+  usesMonophonicWAVPlayback,
+  volWAVToLinearGain,
   type ResolvedChart,
   type TimedSampleTrigger,
 } from '@be-music/chart';
 import { floatToInt16, throwIfAborted } from '@be-music/utils/core';
-import { type BeMusicEvent, normalizeChannel, normalizeObjectKey, resolveBmsBase } from '@be-music/json';
+import { type BeMusicEvent, normalizeChannel, normalizeObjectKey, resolveBMSBase } from '@be-music/json';
 import { type RenderResult, renderSingleSample } from '@be-music/audio-renderer';
 import { type TimedPlayableNote } from '../playable-notes.ts';
 import { createNodeAudioSink, type AudioSink } from '../audio-sink.ts';
@@ -123,10 +123,10 @@ export async function createAudioSessionIfEnabled(
 
   const headPaddingMs = options.audioHeadPaddingMs ?? 0;
   const masterVolume = normalizeMasterVolume(options.volume);
-  const bgmVolume = normalizeBgmVolume(options.bgmVolume, masterVolume);
+  const bgmVolume = normalizeBGMVolume(options.bgmVolume, masterVolume);
   const playVolume = normalizePlayVolume(options.playVolume, masterVolume);
-  const chartWavGain = volWavToLinearGain(json.bms.volWav);
-  const lnobjEndEvents = collectLnobjEndEvents(json);
+  const chartWAVGain = volWAVToLinearGain(json.bms.volWAV);
+  const lnobjEndEvents = collectLNOBJEndEvents(json);
   const runtimeSampleRate = RUNTIME_AUDIO_SAMPLE_RATE;
 
   onLoadProgress?.({
@@ -146,12 +146,12 @@ export async function createAudioSessionIfEnabled(
         detail: progress.samplePath ?? progress.sampleKey,
       });
     },
-    chartWavGain,
+    chartWAVGain,
     options.signal,
   );
   // Cache the chart's object-ID radix so the per-event runtime lookup below uses the same case-sensitivity as the keys
   // in `samplesByKey` (which were extracted from `json.resources.wav` and therefore mirror the chart's authored case).
-  const runtimeSampleIdBase = resolveBmsBase(json);
+  const runtimeSampleIdBase = resolveBMSBase(json);
   throwIfAborted(options.signal);
   onLoadProgress?.({
     ratio: 0.82,
@@ -194,7 +194,7 @@ export async function createAudioSessionIfEnabled(
   let paused = false;
   let playbackTask: Promise<void> | undefined;
   const activeVoices: ActiveVoice[] = [];
-  let currentBgmDynamicGain = 1;
+  let currentBGMDynamicGain = 1;
   let currentPlayDynamicGain = 1;
 
   output.onError(() => {
@@ -234,7 +234,7 @@ export async function createAudioSessionIfEnabled(
         return;
       }
 
-      playbackTask = playMixedPcmThroughOutput({
+      playbackTask = playMixedPCMThroughOutput({
         output,
         background,
         activeVoices,
@@ -272,15 +272,15 @@ export async function createAudioSessionIfEnabled(
         return;
       }
       const normalizedChannel = normalizeChannel(event.channel);
-      if (isBmsDynamicVolumeChangeChannel(normalizedChannel)) {
-        const dynamicGain = parseBmsDynamicVolumeGain(event.value);
+      if (isBMSDynamicVolumeChangeChannel(normalizedChannel)) {
+        const dynamicGain = parseBMSDynamicVolumeGain(event.value);
         if (dynamicGain === undefined) {
           return;
         }
-        if (isBmsKeyVolumeChangeChannel(normalizedChannel)) {
+        if (isBMSKeyVolumeChangeChannel(normalizedChannel)) {
           currentPlayDynamicGain = dynamicGain;
-        } else if (isBmsBgmVolumeChangeChannel(normalizedChannel)) {
-          currentBgmDynamicGain = dynamicGain;
+        } else if (isBmsBGMVolumeChangeChannel(normalizedChannel)) {
+          currentBGMDynamicGain = dynamicGain;
         }
         return;
       }
@@ -303,7 +303,7 @@ export async function createAudioSessionIfEnabled(
       if (offsetFrames >= endPosition) {
         return;
       }
-      if (usesMonophonicWavPlayback(json)) {
+      if (usesMonophonicWAVPlayback(json)) {
         removeActiveVoicesInPlace(activeVoices, (voice) => voice.sampleKey === normalized);
       }
       if (playback?.sliceId && activeVoices.some((voice) => voice.sliceId === playback.sliceId)) {
@@ -311,7 +311,7 @@ export async function createAudioSessionIfEnabled(
       }
       const isPlayLaneSound = isPlayLaneSoundChannel(normalizedChannel);
       const voiceGain =
-        (isPlayLaneSound ? playVolume : bgmVolume) * (isPlayLaneSound ? currentPlayDynamicGain : currentBgmDynamicGain);
+        (isPlayLaneSound ? playVolume : bgmVolume) * (isPlayLaneSound ? currentPlayDynamicGain : currentBGMDynamicGain);
       if (voiceGain <= 0) {
         return;
       }
@@ -392,7 +392,7 @@ export async function createDebugActiveAudioEstimator(
     triggers,
     options.baseDir,
     options.signal,
-    resolveBmsBase(json),
+    resolveBMSBase(json),
   );
   throwIfAborted(options.signal);
   const windows: DebugSampleWindow[] = triggers
@@ -416,7 +416,7 @@ export async function createDebugActiveAudioEstimator(
     .filter((window) => window.endSeconds > window.startSeconds)
     .sort((left, right) => left.startSeconds - right.startSeconds);
 
-  if (usesMonophonicWavPlayback(json)) {
+  if (usesMonophonicWAVPlayback(json)) {
     const latestBySampleKey = new Map<string, number>();
     for (let index = 0; index < windows.length; index += 1) {
       const window = windows[index]!;
@@ -549,7 +549,7 @@ function advanceAndPruneActiveVoices(activeVoices: ActiveVoice[], chunkFrames: n
   activeVoices.length = writeIndex;
 }
 
-async function playMixedPcmThroughOutput(params: {
+async function playMixedPCMThroughOutput(params: {
   output: AudioSink;
   background: RenderResult;
   activeVoices: ActiveVoice[];
@@ -847,7 +847,7 @@ function resolvePositiveNumberOption(value: number | undefined, fallback: number
   return value;
 }
 
-export function shouldUseAutoMixBgmHeadroomControl(options: PlayerOptions): boolean {
+export function shouldUseAutoMixBGMHeadroomControl(options: PlayerOptions): boolean {
   return options.limiter === false;
 }
 
@@ -856,7 +856,7 @@ async function buildRuntimeSampleMap(
   options: PlayerOptions,
   sampleRate: number,
   onProgress?: (progress: { loaded: number; total: number; sampleKey: string; samplePath?: string }) => void,
-  chartWavGain = 1,
+  chartWAVGain = 1,
   signal?: AbortSignal,
 ): Promise<Map<string, RenderResult>> {
   throwIfAborted(signal);
@@ -873,7 +873,7 @@ async function buildRuntimeSampleMap(
     });
   }
 
-  const idBase = resolveBmsBase(json);
+  const idBase = resolveBMSBase(json);
   for (let index = 0; index < keys.length; index += 1) {
     throwIfAborted(signal);
     const key = keys[index];
@@ -881,7 +881,7 @@ async function buildRuntimeSampleMap(
     const rendered = await renderSingleSample(key, sourcePath, {
       baseDir: options.audioBaseDir ?? resolveDefaultBaseDir(),
       sampleRate,
-      gain: chartWavGain,
+      gain: chartWAVGain,
       fallbackToneSeconds:
         typeof options.missingSampleToneSeconds === 'number' &&
         Number.isFinite(options.missingSampleToneSeconds) &&
@@ -1014,7 +1014,7 @@ function createSilentRenderResult(sampleRate: number): RenderResult {
   };
 }
 
-function normalizeBgmVolume(value: number | undefined, masterVolume = 1): number {
+function normalizeBGMVolume(value: number | undefined, masterVolume = 1): number {
   return normalizeBusVolume(value, masterVolume);
 }
 
@@ -1033,7 +1033,7 @@ function normalizeBusVolume(value: number | undefined, fallback: number): number
   return Math.max(0, value) * fallback;
 }
 
-export function resolveBgmHeadroomGain(playableResult: RenderResult, bgmResult: RenderResult): number {
+export function resolveBGMHeadroomGain(playableResult: RenderResult, bgmResult: RenderResult): number {
   const playableLeft = playableResult.left;
   const playableRight = playableResult.right;
   const bgmLeft = bgmResult.left;
@@ -1049,15 +1049,15 @@ export function resolveBgmHeadroomGain(playableResult: RenderResult, bgmResult: 
     const bgmRightAbs = Math.abs(bgmRight[frame] ?? 0);
     headroomGain = Math.min(
       headroomGain,
-      resolveBgmHeadroomGainForChannel(playableLeftAbs, bgmLeftAbs),
-      resolveBgmHeadroomGainForChannel(playableRightAbs, bgmRightAbs),
+      resolveBGMHeadroomGainForChannel(playableLeftAbs, bgmLeftAbs),
+      resolveBGMHeadroomGainForChannel(playableRightAbs, bgmRightAbs),
     );
   }
 
   return Math.max(0, Math.min(1, headroomGain));
 }
 
-function resolveBgmHeadroomGainForChannel(playableAbs: number, bgmAbs: number): number {
+function resolveBGMHeadroomGainForChannel(playableAbs: number, bgmAbs: number): number {
   if (bgmAbs <= 1e-9) {
     return 1;
   }

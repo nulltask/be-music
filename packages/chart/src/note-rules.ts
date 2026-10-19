@@ -1,4 +1,4 @@
-import { normalizeObjectKey, type BeMusicEvent, type BeMusicJson, type BeMusicSourceFormat } from '@be-music/json';
+import { normalizeObjectKey, type BeMusicEvent, type BeMusicJSON, type BeMusicSourceFormat } from '@be-music/json';
 
 /** Long-note mode: 1 = LN (no tail judgment), 2 = CN (tail judged), 3 = HCN (held, gauge drains while released). */
 export type LongNoteMode = 1 | 2 | 3;
@@ -10,7 +10,7 @@ export type LongNoteMode = 1 | 2 | 3;
 export const DEFAULT_LONG_NOTE_MODE: LongNoteMode = 1;
 
 /** Chart-level long-note mode after `#LNMODE` / bmson `info.ln_type` resolution. */
-export function resolveChartLongNoteMode(json: BeMusicJson): LongNoteMode {
+export function resolveChartLongNoteMode(json: BeMusicJSON): LongNoteMode {
   if (json.sourceFormat === 'bms') {
     return json.bms.lnMode === 2 || json.bms.lnMode === 3 ? json.bms.lnMode : DEFAULT_LONG_NOTE_MODE;
   }

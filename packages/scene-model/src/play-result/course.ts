@@ -1,4 +1,4 @@
-import { resolveLr2MoneyScore } from '@be-music/player/ruleset';
+import { resolveLR2MoneyScore } from '@be-music/player/ruleset';
 import type { BeMusicCoursePlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
 import { resolveCourseView } from '../course-view/course-view.ts';
 import type { LibraryCourse } from '../library/entries.ts';
@@ -76,7 +76,7 @@ export function playResultFromCourseRun(
   const judgeRuleset = lastStage?.played === true ? (lastStage.playlog.play.judgeRuleset ?? 'lr2') : 'lr2';
   const score =
     judgeRuleset === 'lr2'
-      ? resolveLr2MoneyScore({
+      ? resolveLR2MoneyScore({
           total: result.noteCount,
           perfect: result.judge.pgreat,
           great: result.judge.great,

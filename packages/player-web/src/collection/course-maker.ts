@@ -3,9 +3,9 @@ import {
   createCourseDraft,
   defaultCourseMakerConstraints,
   finishCourseDraft,
-  parseLr2NonstopConnections,
+  parseLR2NonstopConnections,
   removeLastCourseDraftStage,
-  stepLr2NonstopConnection,
+  stepLR2NonstopConnection,
   withCourseConstraints,
   withNonstopConnection,
   type CourseChartLookup,
@@ -184,7 +184,7 @@ export class CourseMaker {
 
   /** Steps the default NONSTOP connection (LR2's button 268). */
   stepDefaultConnection(delta: number): void {
-    this.connection = stepLr2NonstopConnection(this.connection, delta);
+    this.connection = stepLR2NonstopConnection(this.connection, delta);
     this.emit('settings');
   }
 
@@ -199,8 +199,8 @@ export class CourseMaker {
    */
   stepConnection(course: CourseDefinition, slot: number, delta: number): CourseDefinition | undefined {
     if (!this.owns(course) || course.kind !== 'nonstop' || course.source.format !== 'lr2crs') return undefined;
-    const current = parseLr2NonstopConnections(course.source.header)[slot] ?? 'fade';
-    const edited = withNonstopConnection(course, slot, stepLr2NonstopConnection(current, delta));
+    const current = parseLR2NonstopConnections(course.source.header)[slot] ?? 'fade';
+    const edited = withNonstopConnection(course, slot, stepLR2NonstopConnection(current, delta));
     return this.replace(course, edited);
   }
 

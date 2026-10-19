@@ -1,47 +1,47 @@
-import * as jsonApi from '@be-music/json';
+import * as jsonAPI from '@be-music/json';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
-export function registerJsonExportsCases(define: DefineBenchmarkCase): void {
-  define('json.createEmptyJson', {
+export function registerJSONExportsCases(define: DefineBenchmarkCase): void {
+  define('json.createEmptyJSON', {
     run: () => {
-      jsonApi.createEmptyJson('bms');
+      jsonAPI.createEmptyJSON('bms');
     },
   });
-  define('json.cloneJson', {
+  define('json.cloneJSON', {
     run: (fixtures) => {
-      jsonApi.cloneJson(fixtures.sampleBmsJson);
+      jsonAPI.cloneJSON(fixtures.sampleBmsJSON);
     },
   });
   define('json.normalizeObjectKey', {
     run: () => {
-      jsonApi.normalizeObjectKey('aZ');
+      jsonAPI.normalizeObjectKey('aZ');
     },
   });
   define('json.normalizeChannel', {
     run: () => {
-      jsonApi.normalizeChannel('1a');
+      jsonAPI.normalizeChannel('1a');
     },
   });
   define('json.parseBmsonSubartist', {
     run: () => {
-      jsonApi.parseBmsonSubartist('illust:bench');
-      jsonApi.parseBmsonSubartist('Anonymous');
+      jsonAPI.parseBmsonSubartist('illust:bench');
+      jsonAPI.parseBmsonSubartist('Anonymous');
     },
   });
-  define('json.resolveBmsBase', {
+  define('json.resolveBMSBase', {
     run: (fixtures) => {
-      jsonApi.resolveBmsBase(fixtures.sampleBmsJson);
+      jsonAPI.resolveBMSBase(fixtures.sampleBmsJSON);
     },
   });
   define('json.intToBase36', {
     run: () => {
-      jsonApi.intToBase36(12_345, 2);
+      jsonAPI.intToBase36(12_345, 2);
     },
   });
   define('json.ensureMeasure', {
     run: (fixtures) => {
-      const cloned = jsonApi.cloneJson(fixtures.sampleBmsJson);
-      jsonApi.ensureMeasure(cloned, 32);
+      const cloned = jsonAPI.cloneJSON(fixtures.sampleBmsJSON);
+      jsonAPI.ensureMeasure(cloned, 32);
     },
   });
 }

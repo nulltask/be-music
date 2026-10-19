@@ -27,9 +27,9 @@ import { SessionScene, type SessionSceneOptions } from '../session/session-scene
 import { logger } from '../logger.ts';
 import { BeatorajaPlayView } from '../view/beatoraja/play-view.ts';
 import { BuiltInPlayView } from '../view/built-in/play-view.ts';
-import { Lr2PlayView } from '../view/lr2/play-view.ts';
+import { LR2PlayView } from '../view/lr2/play-view.ts';
 import type { PlayFrame, PlayIntent, PlayView, PlayfieldSkin } from '../view/types.ts';
-import type { BeatorajaKit, BuiltInKit, Lr2PlayKit } from './family-kit.ts';
+import type { BeatorajaKit, BuiltInKit, LR2PlayKit } from './family-kit.ts';
 
 const log = logger('gameplay');
 
@@ -37,7 +37,7 @@ const log = logger('gameplay');
  * The kits the play scene takes: a be-music skin, an LR2 play skin (with the 9-keys skin for invisible notes), or a
  * beatoraja theme's play entry.
  */
-export type PlaySceneKit = BuiltInKit | Lr2PlayKit | BeatorajaKit;
+export type PlaySceneKit = BuiltInKit | LR2PlayKit | BeatorajaKit;
 
 /**
  * How a play runs, apart from its chart, its skin and where it leads: the play options it judges and scrolls with
@@ -229,7 +229,7 @@ function createPlayView(
     ...(source !== undefined ? { source } : {}),
   };
   if (kit.family === 'lr2') {
-    const view = new Lr2PlayView(kit, play, {
+    const view = new LR2PlayView(kit, play, {
       ...drawing,
       ...(settings.bgaSize !== undefined ? { bgaSize: settings.bgaSize } : {}),
       ...(settings.autoScratch1P !== undefined ? { autoScratch1P: settings.autoScratch1P } : {}),

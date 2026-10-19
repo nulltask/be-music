@@ -54,12 +54,12 @@ export function longNoteOwesTailMiss(
  * before the press, and `playedMode` is as above.
  */
 export function ignoresLateLongNoteHeadBad(
-  ruleset: Pick<RulesetConfig, 'ignoreLateBadOnLnHead'>,
+  ruleset: Pick<RulesetConfig, 'ignoreLateBadOnLNHead'>,
   judge: number,
   late: boolean,
   playedMode: RulesetLongNoteMode | undefined,
 ): boolean {
-  return ruleset.ignoreLateBadOnLnHead && judge === 3 && late && playedMode === 1;
+  return ruleset.ignoreLateBadOnLNHead && judge === 3 && late && playedMode === 1;
 }
 
 /**
@@ -68,11 +68,11 @@ export function ignoresLateLongNoteHeadBad(
  * `ProcLongnote`, LR2f.cpp:7542); every other note reaches as far as its windows do.
  */
 export function noteLateReachUs(
-  ruleset: Pick<RulesetConfig, 'ignoreLateBadOnLnHead'>,
+  ruleset: Pick<RulesetConfig, 'ignoreLateBadOnLNHead'>,
   set: JudgeWindowSetUs,
   playedMode: RulesetLongNoteMode | undefined,
 ): number {
-  if (!ruleset.ignoreLateBadOnLnHead || playedMode !== 1) {
+  if (!ruleset.ignoreLateBadOnLNHead || playedMode !== 1) {
     return judgeWindowLateReachUs(set);
   }
   let reach = 0;
@@ -83,11 +83,11 @@ export function noteLateReachUs(
 }
 
 /** A judgment index best to worst, 0 PGREAT … 3 BAD, 4 POOR. */
-export type LnJudgeIndex = 0 | 1 | 2 | 3 | 4;
+export type LNJudgeIndex = 0 | 1 | 2 | 3 | 4;
 
 /** An LN judgment and the signed timing it was made at (`dmUs = markTime - inputTime`, positive = EARLY). */
-export interface LnTimedJudge {
-  judge: LnJudgeIndex;
+export interface LNTimedJudge {
+  judge: LNJudgeIndex;
   dmUs: number;
 }
 
@@ -96,18 +96,18 @@ export interface LnTimedJudge {
  * `releaseDmUs` is `tailTime - releaseTime` (positive, the release came first) and `endWindows` the ruleset's
  * long-note-end window set for the lane. See {@link RulesetConfig.lnEarlyRelease} for the two rules.
  */
-export function resolveLnEarlyRelease(
+export function resolveLNEarlyRelease(
   ruleset: Pick<RulesetConfig, 'lnEarlyRelease'>,
-  head: LnTimedJudge,
+  head: LNTimedJudge,
   releaseDmUs: number,
   endWindows: JudgeWindowSetUs,
-): LnTimedJudge {
+): LNTimedJudge {
   if (ruleset.lnEarlyRelease === 'head-unless-beyond-good') {
     return releaseDmUs > endWindows.judges[2][1] ? { judge: 3, dmUs: releaseDmUs } : head;
   }
   const tail = classifyRulesetJudge(releaseDmUs, endWindows);
-  const tailJudge: LnJudgeIndex = tail === RULESET_JUDGE_NONE ? 4 : tail;
-  const judge: LnJudgeIndex = tailJudge > head.judge ? tailJudge : head.judge;
+  const tailJudge: LNJudgeIndex = tail === RULESET_JUDGE_NONE ? 4 : tail;
+  const judge: LNJudgeIndex = tailJudge > head.judge ? tailJudge : head.judge;
   const dmUs = Math.abs(head.dmUs) > Math.abs(releaseDmUs) ? head.dmUs : releaseDmUs;
   return { judge: judge >= 3 && dmUs > 0 ? 3 : judge, dmUs };
 }
@@ -126,7 +126,7 @@ export const HCN_TICK_US = 200_000;
  * Time is whole microseconds; a tick falls on the first microsecond the counter is beyond the period, and like every
  * timed judgment it is reported once time has moved past it.
  */
-export class HcnTickCounter {
+export class HCNTickCounter {
   private counterUs = 0;
   private atUs: number;
   private gaining = false;
@@ -165,7 +165,7 @@ export class HcnTickCounter {
 }
 
 /** A Hell Charge note passing the judge line, chained to the lane's next one judged before this one has passed. */
-export interface HcnPassingLink<T> {
+export interface HCNPassingLink<T> {
   /** The tail's microsecond: the ticks stop there. */
   endUs: number;
   next?: T;
@@ -177,7 +177,7 @@ export interface HcnPassingLink<T> {
  * early queues behind the one still passing, and a head judged only after its tail passed (missed late) never ticks:
  * then the chain comes back unchanged.
  */
-export function addHcnPassing<T extends HcnPassingLink<T>>(
+export function addHCNPassing<T extends HCNPassingLink<T>>(
   head: T | undefined,
   passing: T,
   startUs: number,
@@ -189,7 +189,7 @@ export function addHcnPassing<T extends HcnPassingLink<T>>(
     passing.next = head;
     return passing;
   }
-  head.next = addHcnPassing(head.next, passing, startUs);
+  head.next = addHCNPassing(head.next, passing, startUs);
   return head;
 }
 

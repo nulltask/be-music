@@ -14,7 +14,7 @@
  * run. It plays through the audio service as the screen enters and stops as it leaves the stage.
  */
 
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import {
   playResultRun,
   resolveResultJingle,
@@ -48,7 +48,7 @@ export interface ResultSessionEvents {
 export interface ResultSessionOptions {
   readonly result: PlayResult;
   /** The chart as the play played it, for the skin's chart graphs; the frame carries it. */
-  readonly playChart?: BeMusicJson;
+  readonly playChart?: BeMusicJSON;
   /** Which play the result is of; the result's own `run` without one. Decides the jingles and the quick retry. */
   readonly run?: PlayRunKind;
   /** The theme's sounds: the result jingles are read from them. */

@@ -1,29 +1,29 @@
 /**
  * The LR2 family's result screen: an LR2 result skin (`Result/*.lr2skin`, or the course-result skin for a course run)
  * drawn on its canvas, letterboxed into the window. It draws the result session's frames through the LR2 result state
- * (`resolveLr2ResultState`) and LR2's result timers, which it reads off each frame (`resolveLr2ResultTimers`), and
+ * (`resolveLR2ResultState`) and LR2's result timers, which it reads off each frame (`resolveLR2ResultTimers`), and
  * turns a click into a `continue` intent (a press on, as Enter); the session plays the jingle and steps the screen.
  */
 
 import type {
-  Lr2DestinationRect,
-  Lr2GaugeChartElement,
-  Lr2ImageElement,
-  Lr2ScoreChartElement,
-  Lr2Skin,
-  Lr2SpecialGraphic,
+  LR2DestinationRect,
+  LR2GaugeChartElement,
+  LR2ImageElement,
+  LR2ScoreChartElement,
+  LR2Skin,
+  LR2SpecialGraphic,
 } from '@be-music/lr2-skin';
 import { LR2_TIMER } from '@be-music/lr2-skin/ids';
 import {
-  resolveLr2GraphReveal,
-  resolveLr2ResultState,
-  resolveLr2ResultTimers,
-  type Lr2ResultState,
+  resolveLR2GraphReveal,
+  resolveLR2ResultState,
+  resolveLR2ResultTimers,
+  type LR2ResultState,
 } from '@be-music/lr2-skin/state';
 import type { PlayResult } from '@be-music/scene-model';
 import { Color, Container, Graphics, type Texture } from 'pixi.js';
 import type { BrowserSongAssetSource } from '../../collection/types.ts';
-import type { Lr2Kit } from '../../host/family-kit.ts';
+import type { LR2Kit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import {
   resolveDesignTextResolution,
@@ -33,20 +33,20 @@ import {
 } from '../../stage/viewport.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { disposeChildren } from '../../stage/pixi-utils.ts';
-import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
+import type { LR2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import {
   containerSpriteSink,
   evaluateElementDestination,
-  makeLr2BargraphSprite,
-  makeLr2SliderSprite,
-  makeLr2StaticImageSprite,
+  makeLR2BargraphSprite,
+  makeLR2SliderSprite,
+  makeLR2StaticImageSprite,
   renderNumberElement,
 } from '../../skin/lr2/render.ts';
-import { isDestinationVisible, makeLr2TextSprite } from '../../skin/lr2/scene-render.ts';
+import { isDestinationVisible, makeLR2TextSprite } from '../../skin/lr2/scene-render.ts';
 import {
-  Lr2ChartGraphicTextureStore,
-  Lr2SkinTextureStore,
+  LR2ChartGraphicTextureStore,
+  LR2SkinTextureStore,
   collectResultSkinTexturePaths,
   resolveSolidSpecialGraphicTexture,
 } from '../../skin/lr2/scene-textures.ts';
@@ -63,14 +63,14 @@ const BG = new Color('#05070b');
 export const LR2_RESULT_DEFAULT_INPUT_DELAY_MS = 1500;
 
 /** The result skin's timing: input opens after its `#STARTINPUT` (1500 ms without one); no auto advance or fade-out. */
-export function resolveLr2ResultTiming(skin: Pick<Lr2Skin, 'timing'>): SceneViewTiming {
+export function resolveLR2ResultTiming(skin: Pick<LR2Skin, 'timing'>): SceneViewTiming {
   return {
     inputDelayMs: Math.max(0, skin.timing.startInput ?? LR2_RESULT_DEFAULT_INPUT_DELAY_MS),
     fadeOutMs: 0,
   };
 }
 
-export interface Lr2ResultViewOptions {
+export interface LR2ResultViewOptions {
   /** Where the result's chart files are, for its `*STAGEFILE`, `*BANNER` and `*BACKBMP`; none load without one. */
   readonly source?: BrowserSongAssetSource;
 }
@@ -82,7 +82,7 @@ interface GraphPoint {
 }
 
 /** The LR2 result view. See the module comment. */
-export class Lr2ResultView implements ResultView {
+export class LR2ResultView implements ResultView {
   public readonly family = 'lr2' as const;
   public readonly root: Container = new Container();
   public readonly timing: SceneViewTiming;
@@ -97,12 +97,12 @@ export class Lr2ResultView implements ResultView {
   private cachedScreenHeight = -1;
   private cachedDesignWidth = -1;
   private cachedDesignHeight = -1;
-  private readonly kit: Lr2Kit;
+  private readonly kit: LR2Kit;
   private readonly source: BrowserSongAssetSource | undefined;
-  private readonly skinTextures = new Lr2SkinTextureStore();
-  private readonly chartGraphicTextures = new Lr2ChartGraphicTextureStore();
+  private readonly skinTextures = new LR2SkinTextureStore();
+  private readonly chartGraphicTextures = new LR2ChartGraphicTextureStore();
   /** The skin's `#LR2FONT` bitmap fonts, once loaded. */
-  private bitmapFonts: ReadonlyMap<number, Lr2LoadedFont> = new Map();
+  private bitmapFonts: ReadonlyMap<number, LR2LoadedFont> = new Map();
   /** The frame being drawn: its clock and its running timers. */
   private nowMs = 0;
   private timers: ReadonlyMap<number, number> = new Map();
@@ -111,14 +111,14 @@ export class Lr2ResultView implements ResultView {
   private built = false;
   private disposed = false;
 
-  public constructor(kit: Lr2Kit, options: Lr2ResultViewOptions = {}) {
+  public constructor(kit: LR2Kit, options: LR2ResultViewOptions = {}) {
     this.kit = kit;
     this.source = options.source;
-    this.timing = resolveLr2ResultTiming(kit.skin);
+    this.timing = resolveLR2ResultTiming(kit.skin);
   }
 
   /** An LR2 kit carries nothing but its skin, which the view keeps: another skin needs another view. */
-  public updateKit(kit: Lr2Kit): void {
+  public updateKit(kit: LR2Kit): void {
     if (kit.skin !== this.kit.skin) log.warn('a result view keeps its skin; ignoring a kit of another skin');
   }
 
@@ -166,7 +166,7 @@ export class Lr2ResultView implements ResultView {
     const host = this.host;
     if (host === undefined || this.disposed) return;
     this.nowMs = frame.clock.nowMs;
-    this.timers = resolveLr2ResultTimers(frame);
+    this.timers = resolveLR2ResultTimers(frame);
     const skin = this.kit.skin;
     const screenWidth = host.app.screen.width || FALLBACK_SCREEN_WIDTH;
     const screenHeight = host.app.screen.height || FALLBACK_SCREEN_HEIGHT;
@@ -196,7 +196,7 @@ export class Lr2ResultView implements ResultView {
     this.drawSkin(
       skin,
       result,
-      resolveLr2ResultState({
+      resolveLR2ResultState({
         result,
         ...(result.course !== undefined ? { course: result.course } : {}),
         // The `#FLIPRESULT` of the skin the result is shown on (op 351).
@@ -238,7 +238,7 @@ export class Lr2ResultView implements ResultView {
    * its CSV stream (a later line paints on top): the stock result skin declares its high-score panel after the score
    * numbers and the graphs, and the panel has to cover them once timer 152 shows it.
    */
-  private drawSkin(skin: Lr2Skin, result: PlayResult, state: Lr2ResultState): void {
+  private drawSkin(skin: LR2Skin, result: PlayResult, state: LR2ResultState): void {
     const { ops } = state;
     const work: { readonly order: number; readonly paint: () => void }[] = [];
     const textures = this.skinTextures.asReadonlyMap();
@@ -272,7 +272,7 @@ export class Lr2ResultView implements ResultView {
         order: text.declarationOrder,
         paint: () => {
           this.skinLayer.addChild(
-            makeLr2TextSprite(value, text, dst, {
+            makeLR2TextSprite(value, text, dst, {
               bitmapFonts: this.bitmapFonts,
               systemFontSizes: skin.systemFontSizes,
             }),
@@ -289,7 +289,7 @@ export class Lr2ResultView implements ResultView {
       work.push({
         order: bargraph.declarationOrder,
         paint: () => {
-          const sprite = makeLr2BargraphSprite(bargraph, dst, value, textures);
+          const sprite = makeLR2BargraphSprite(bargraph, dst, value, textures);
           if (sprite) this.skinLayer.addChild(sprite);
         },
       });
@@ -302,7 +302,7 @@ export class Lr2ResultView implements ResultView {
       work.push({
         order: slider.declarationOrder,
         paint: () => {
-          const sprite = makeLr2SliderSprite(slider, dst, value, textures);
+          const sprite = makeLR2SliderSprite(slider, dst, value, textures);
           if (sprite) this.skinLayer.addChild(sprite);
         },
       });
@@ -339,8 +339,8 @@ export class Lr2ResultView implements ResultView {
    * names (`y` grows upward). Only the 1P line draws: a play has one gauge.
    */
   private makeGaugeChartGraphic(
-    chart: Lr2GaugeChartElement,
-    dst: Lr2DestinationRect,
+    chart: LR2GaugeChartElement,
+    dst: LR2DestinationRect,
     result: PlayResult,
   ): Graphics | undefined {
     const { fieldWidth, fieldHeight, start, end } = chart.source;
@@ -368,8 +368,8 @@ export class Lr2ResultView implements ResultView {
    * draws: the best record (1) and the rival (2) do not reach the result.
    */
   private makeScoreChartGraphic(
-    chart: Lr2ScoreChartElement,
-    dst: Lr2DestinationRect,
+    chart: LR2ScoreChartElement,
+    dst: LR2DestinationRect,
     result: PlayResult,
   ): Graphics | undefined {
     if (chart.source.index !== 0) return undefined;
@@ -391,17 +391,17 @@ export class Lr2ResultView implements ResultView {
     });
   }
 
-  /** How much of a graph on `timer` shows this frame (see {@link resolveLr2GraphReveal}). */
+  /** How much of a graph on `timer` shows this frame (see {@link resolveLR2GraphReveal}). */
   private graphReveal(timer: number, start: number, end: number): number {
     const elapsedMs =
       this.timers.has(timer) || timer === LR2_TIMER.SCENE_START ? this.elapsedSinceTimer(timer) : undefined;
-    return resolveLr2GraphReveal(elapsedMs, start, end);
+    return resolveLR2GraphReveal(elapsedMs, start, end);
   }
 
   private evaluateElementDst(element: {
-    destination: Lr2DestinationRect;
-    keyframes: Lr2DestinationRect[];
-  }): Lr2DestinationRect {
+    destination: LR2DestinationRect;
+    keyframes: LR2DestinationRect[];
+  }): LR2DestinationRect {
     return evaluateElementDestination(element, this.elapsedSinceTimer);
   }
 
@@ -414,8 +414,8 @@ export class Lr2ResultView implements ResultView {
   /** Whether `timer` runs on the frame: timer 0 always does; an element on a timer that has not started stays hidden. */
   private readonly timerActive = (timer: number): boolean => timer === LR2_TIMER.SCENE_START || this.timers.has(timer);
 
-  private makeStaticImageSprite(image: Lr2ImageElement, dst: Lr2DestinationRect, result: PlayResult) {
-    return makeLr2StaticImageSprite(image, dst, {
+  private makeStaticImageSprite(image: LR2ImageElement, dst: LR2DestinationRect, result: PlayResult) {
+    return makeLR2StaticImageSprite(image, dst, {
       textures: this.skinTextures.asReadonlyMap(),
       elapsedSinceTimer: this.elapsedSinceTimer,
       resolveSpecialGraphicTexture: (path) => this.chartGraphicTexture(result, path),
@@ -426,7 +426,7 @@ export class Lr2ResultView implements ResultView {
    * The texture of one of LR2's chart-bound images (`*BANNER`, `*STAGEFILE`, `*BACKBMP`, or the solid `*BLACK` /
    * `*WHITE`) for the chart just played; the first miss starts loading it, and a later frame draws it.
    */
-  private chartGraphicTexture(result: PlayResult, path: Lr2SpecialGraphic): Texture | undefined {
+  private chartGraphicTexture(result: PlayResult, path: LR2SpecialGraphic): Texture | undefined {
     return (
       resolveSolidSpecialGraphicTexture(path) ??
       this.chartGraphicTextures.resolveFromSource(this.source, result.song, path, () => undefined)
@@ -451,7 +451,7 @@ function clamp01(value: number): number {
 function drawGraphLine(input: {
   readonly points: readonly GraphPoint[];
   readonly revealRatio: number;
-  readonly dst: Lr2DestinationRect;
+  readonly dst: LR2DestinationRect;
   readonly fieldWidth: number;
   readonly fieldHeight: number;
   readonly label: string;

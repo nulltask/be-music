@@ -4,10 +4,10 @@ import { dirname, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { Bench } from 'tinybench';
-import * as jsonApi from '@be-music/json';
-import * as parserApi from '@be-music/parser';
+import * as jsonAPI from '@be-music/json';
+import * as parserAPI from '@be-music/parser';
 import type { RenderResult } from '@be-music/audio-renderer';
-import { parseNonNegativeCliNumber, parsePositiveCliNumber, resolveCliValue, runCliMain } from './cli-utils.ts';
+import { parseNonNegativeCLINumber, parsePositiveCLINumber, resolveCLIValue, runCLIMain } from './cli-utils.ts';
 import {
   convertTaskResult,
   createSingleIterationStats,
@@ -23,19 +23,19 @@ import {
   type BenchFixtures,
   type BenchmarkCaseDefinition,
   type BenchmarkTaskStats,
-  type ExportsBenchmarkCliOverrides,
+  type ExportsBenchmarkCLIOverrides,
   type ExportsBenchmarkSnapshot,
 } from './exports.types.ts';
 import { PACKAGE_DEFINITIONS, registerAllExportsBenchmarkCases } from './packages/index.ts';
 
-interface CliDefaults {
+interface CLIDefaults {
   outputPath: string;
   timeMs: number;
   warmupTimeMs: number;
   packages: readonly PackageName[];
 }
 
-interface CliOptions {
+interface CLIOptions {
   outputPath: string;
   timeMs: number;
   warmupTimeMs: number;
@@ -116,7 +116,7 @@ const BENCH_BMSON_TEXT = JSON.stringify(
   2,
 );
 
-function createCliDefaults(overrides: ExportsBenchmarkCliOverrides = {}): CliDefaults {
+function createCLIDefaults(overrides: ExportsBenchmarkCLIOverrides = {}): CLIDefaults {
   return {
     outputPath: overrides.defaultOutputPath ?? resolve(repositoryDir, 'tmp/bench/exports.json'),
     timeMs: 30,
@@ -125,7 +125,7 @@ function createCliDefaults(overrides: ExportsBenchmarkCliOverrides = {}): CliDef
   };
 }
 
-export async function runExportsBenchmark(options: CliOptions): Promise<ExportsBenchmarkSnapshot> {
+export async function runExportsBenchmark(options: CLIOptions): Promise<ExportsBenchmarkSnapshot> {
   const fixtures = await createBenchFixtures();
   const benchmarkCases = createBenchmarkCases();
 
@@ -199,16 +199,16 @@ export async function runExportsBenchmark(options: CliOptions): Promise<ExportsB
   return snapshot;
 }
 
-export async function runExportsBenchmarkCli(
+export async function runExportsBenchmarkCLI(
   args: readonly string[] = process.argv.slice(2),
-  overrides: ExportsBenchmarkCliOverrides = {},
+  overrides: ExportsBenchmarkCLIOverrides = {},
 ): Promise<ExportsBenchmarkSnapshot> {
-  const options = parseArgs([...args], createCliDefaults(overrides));
+  const options = parseArgs([...args], createCLIDefaults(overrides));
   return runExportsBenchmark(options);
 }
 
 async function main(): Promise<void> {
-  await runExportsBenchmarkCli();
+  await runExportsBenchmarkCLI();
 }
 
 function resolveSnapshotGitSha(): string | undefined {
@@ -248,7 +248,7 @@ async function runBenchmarkCase(
   key: string,
   benchmarkCase: BenchmarkCaseDefinition,
   fixtures: BenchFixtures,
-  options: CliOptions,
+  options: CLIOptions,
 ): Promise<BenchmarkTaskStats> {
   const bench = new Bench({
     time: benchmarkCase.timeMs ?? options.timeMs,
@@ -331,26 +331,26 @@ async function createBenchFixtures(): Promise<BenchFixtures> {
   const bmsonPath = resolve(tmpDir, 'bench.bmson');
   const jsonPath = resolve(tmpDir, 'bench.json');
   const editorSavePath = resolve(tmpDir, 'editor-saved.json');
-  const editorExportBmsPath = resolve(tmpDir, 'editor-export.bms');
+  const editorExportBMSPath = resolve(tmpDir, 'editor-export.bms');
   const editorExportBmsonPath = resolve(tmpDir, 'editor-export.bmson');
   const audioOutputPath = resolve(tmpDir, 'rendered-audio.wav');
   const renderOutputPath = resolve(tmpDir, 'rendered-chart.wav');
 
-  const sampleBmsJson = parserApi.parseBms(BENCH_BMS_TEXT);
-  const sampleBmsonJson = parserApi.parseBmson(BENCH_BMSON_TEXT);
-  const jsonText = JSON.stringify(sampleBmsJson, null, 2);
-  const sampleJsonIr = parserApi.parseChart(jsonText, 'json');
-  const controlFlowJson = parserApi.parseBms(BENCH_BMS_TEXT);
-  const emptyBmsJson = jsonApi.createEmptyJson('bms');
+  const sampleBmsJSON = parserAPI.parseBMS(BENCH_BMS_TEXT);
+  const sampleBmsonJSON = parserAPI.parseBmson(BENCH_BMSON_TEXT);
+  const jsonText = JSON.stringify(sampleBmsJSON, null, 2);
+  const sampleJsonIR = parserAPI.parseChart(jsonText, 'json');
+  const controlFlowJSON = parserAPI.parseBMS(BENCH_BMS_TEXT);
+  const emptyBmsJSON = jsonAPI.createEmptyJSON('bms');
 
   await writeFile(bmsPath, BENCH_BMS_TEXT, 'utf8');
   await writeFile(bmsonPath, BENCH_BMSON_TEXT, 'utf8');
   await writeFile(jsonPath, `${jsonText}\n`, 'utf8');
 
-  if (sampleBmsJson.events.length < 2) {
+  if (sampleBmsJSON.events.length < 2) {
     throw new Error('Benchmark fixture must contain at least two events.');
   }
-  const [eventA, eventB] = sampleBmsJson.events;
+  const [eventA, eventB] = sampleBmsJSON.events;
 
   const fractionItems = Array.from({ length: 512 }, (_value, index) => ({ value: index * 2 }));
   const fractionValues = fractionItems.map((item) => item.value);
@@ -363,11 +363,11 @@ async function createBenchFixtures(): Promise<BenchFixtures> {
     bmsonText: BENCH_BMSON_TEXT,
     jsonText,
     bmsBuffer: Buffer.from(BENCH_BMS_TEXT, 'utf8'),
-    sampleBmsJson,
-    sampleBmsonJson,
-    sampleJsonIr,
-    controlFlowJson,
-    emptyBmsJson,
+    sampleBmsJSON,
+    sampleBmsonJSON,
+    sampleJsonIR,
+    controlFlowJSON,
+    emptyBmsJSON,
     eventA,
     eventB,
     fractionItems,
@@ -378,7 +378,7 @@ async function createBenchFixtures(): Promise<BenchFixtures> {
       bmsonPath,
       jsonPath,
       editorSavePath,
-      editorExportBmsPath,
+      editorExportBMSPath,
       editorExportBmsonPath,
       audioOutputPath,
       renderOutputPath,
@@ -466,8 +466,8 @@ function isFilterMatch(key: string, filter: string | undefined): boolean {
   return key.toLowerCase().includes(filter.toLowerCase());
 }
 
-function parseArgs(args: string[], defaults: CliDefaults): CliOptions {
-  const options: CliOptions = {
+function parseArgs(args: string[], defaults: CLIDefaults): CLIOptions {
+  const options: CLIOptions = {
     outputPath: defaults.outputPath,
     timeMs: defaults.timeMs,
     warmupTimeMs: defaults.warmupTimeMs,
@@ -487,25 +487,25 @@ function parseArgs(args: string[], defaults: CliDefaults): CliOptions {
     }
 
     if (token === '--output') {
-      options.outputPath = resolveCliValue(args[index + 1], '--output');
+      options.outputPath = resolveCLIValue(args[index + 1], '--output');
       index += 1;
       continue;
     }
 
     if (token === '--time') {
-      options.timeMs = parsePositiveCliNumber(args[index + 1], '--time');
+      options.timeMs = parsePositiveCLINumber(args[index + 1], '--time');
       index += 1;
       continue;
     }
 
     if (token === '--warmup-time') {
-      options.warmupTimeMs = parseNonNegativeCliNumber(args[index + 1], '--warmup-time');
+      options.warmupTimeMs = parseNonNegativeCLINumber(args[index + 1], '--warmup-time');
       index += 1;
       continue;
     }
 
     if (token === '--packages') {
-      options.packages = parsePackageNames(resolveCliValue(args[index + 1], '--packages'));
+      options.packages = parsePackageNames(resolveCLIValue(args[index + 1], '--packages'));
       index += 1;
       continue;
     }
@@ -516,7 +516,7 @@ function parseArgs(args: string[], defaults: CliDefaults): CliOptions {
     }
 
     if (token === '--filter') {
-      options.filter = resolveCliValue(args[index + 1], '--filter');
+      options.filter = resolveCLIValue(args[index + 1], '--filter');
       index += 1;
       continue;
     }
@@ -527,7 +527,7 @@ function parseArgs(args: string[], defaults: CliDefaults): CliOptions {
   return options;
 }
 
-function printUsage(defaults: CliDefaults): void {
+function printUsage(defaults: CLIDefaults): void {
   const lines = [
     'Usage: pnpm run bench [options]',
     '',
@@ -599,4 +599,4 @@ function printSummary(snapshot: ExportsBenchmarkSnapshot, outputPath: string): v
   }
 }
 
-runCliMain(import.meta.url, main);
+runCLIMain(import.meta.url, main);

@@ -1,11 +1,11 @@
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import { normalizePath } from '@be-music/utils/core';
-import { resolveChartAudioAsset, resolveChartBgaAsset } from './collection.ts';
+import { resolveChartAudioAsset, resolveChartBGAAsset } from './collection.ts';
 import type { BrowserSongAssetEntry, BrowserSongAssetSource } from './types.ts';
 
 /** One stage of a NONSTOP course as the host has it: its chart, where it was loaded from, and its chart path. */
 export interface NonstopAssetStage {
-  chart: BeMusicJson;
+  chart: BeMusicJSON;
   source: BrowserSongAssetSource;
   chartPath: string;
 }
@@ -46,16 +46,16 @@ export function createNonstopAssets(stages: readonly NonstopAssetStage[]): {
   const assetPath = (index: number, kind: 'wav' | 'bmp', path: string): string => {
     const stage = stages[index];
     if (stage === undefined) return path;
-    const pathWav = stage.chart.bms.pathWav;
+    const pathWAV = stage.chart.bms.pathWAV;
     const entry =
       kind === 'wav'
         ? resolveChartAudioAsset(
             stage.source,
             stage.chartPath,
             path,
-            typeof pathWav === 'string' ? { pathPrefix: pathWav } : {},
+            typeof pathWAV === 'string' ? { pathPrefix: pathWAV } : {},
           )
-        : resolveChartBgaAsset(stage.source, stage.chartPath, path)?.entry;
+        : resolveChartBGAAsset(stage.source, stage.chartPath, path)?.entry;
     const key = entry !== undefined ? keyIn(index, entry) : undefined;
     if (entry === undefined || key === undefined) {
       const folder = stage.chartPath.includes('/')

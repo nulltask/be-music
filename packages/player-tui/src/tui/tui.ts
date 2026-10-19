@@ -1,41 +1,41 @@
 import { effect, effectScope } from 'alien-signals';
 import type { BeMusicPlayLevel } from '@be-music/json';
 import { clamp } from '@be-music/utils/core';
-import type { BgaKittyImage } from '../bga.ts';
+import type { BGAKittyImage } from '../bga.ts';
 import type { PlayerSummary } from '@be-music/player';
 import {
   DEFAULT_TUI_NOTE_HEIGHT,
   formatSeconds,
   resolveAltModifierLabel,
   ScrollDistanceMapper,
-  type TuiNoteHeight,
+  type TUINoteHeight,
 } from '@be-music/player/display';
 import type { PlayerStateSignals } from '@be-music/player/signals';
 import type { ScrollTimelinePoint, SpeedTimelinePoint } from '@be-music/chart';
 import { buildKittyGraphicsDeleteImageSequence, buildKittyGraphicsRenderSequence } from './kitty-graphics.ts';
-import { normalizeHighSpeed, resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './high-speed.ts';
+import { normalizeHighSpeed, resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTUIGrid } from './high-speed.ts';
 import {
   calculateLaneBlockVisibleWidth,
-  calculateTuiGridRowCount,
+  calculateTUIGridRowCount,
   DEFAULT_LANE_WIDTH,
   resolveLaneWidths,
 } from './layout.ts';
 import { padVisibleWidth } from './ansi-text.ts';
 import {
   type MeasureTimelinePoint,
-  type BpmTimelinePoint,
+  type BPMTimelinePoint,
   type StopWindowPoint,
   IIDX_MEASURE_BEATS,
   findCurrentMeasure,
   findTotalMeasures,
   resolveMeasureLength,
   formatMeasureSignature,
-  findCurrentBpm,
+  findCurrentBPM,
   findCurrentScroll,
   findRemainingStopSeconds,
 } from './timeline.ts';
 import {
-  type TuiLane,
+  type TUILane,
   MEASURE_LINE_SYMBOL,
   LANE_FILL_SYMBOL,
   NOTE_HEAD_SYMBOL,
@@ -67,26 +67,26 @@ import {
   formatNotesProgress,
   formatGrooveGaugeLine,
   formatActiveAudioFiles,
-  formatBpm,
+  formatBPM,
   formatHighSpeed,
   formatScroll,
   formatStopSeconds,
   formatJudgeWindowMs,
   formatAudioBackendLabel,
   formatGenreLabel,
-  formatFps,
+  formatFPS,
 } from './hud.ts';
 import {
-  renderLaneBlockWithBga,
+  renderLaneBlockWithBGA,
   renderLaneBlockWithKittyPadding,
   resolveGrooveGaugeLeftPadding,
   renderLaneLinesWithProgressIndicators,
 } from './lane-block.ts';
-export { resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './high-speed.ts';
+export { resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTUIGrid } from './high-speed.ts';
 export { formatMeasureSignature } from './timeline.ts';
 export { formatJudgeComboDisplay } from './hud.ts';
 
-interface TuiOptions {
+interface TUIOptions {
   mode: 'AUTO' | 'MANUAL' | 'AUTO SCRATCH';
   laneDisplayMode: string;
   title: string;
@@ -96,15 +96,15 @@ interface TuiOptions {
   rank?: number;
   rankLabel?: string;
   playLevel?: BeMusicPlayLevel;
-  lanes: TuiLane[];
+  lanes: TUILane[];
   speed: number;
   highSpeed: number;
   visibleNotesLimit?: number;
-  noteHeight?: TuiNoteHeight;
+  noteHeight?: TUINoteHeight;
   judgeWindowMs: number;
   showLaneChannels?: boolean;
   randomPatternSummary?: string;
-  bpmTimeline?: ReadonlyArray<BpmTimelinePoint>;
+  bpmTimeline?: ReadonlyArray<BPMTimelinePoint>;
   scrollTimeline?: ReadonlyArray<ScrollTimelinePoint>;
   speedTimeline?: ReadonlyArray<SpeedTimelinePoint>;
   stopWindows?: ReadonlyArray<StopWindowPoint>;
@@ -119,7 +119,7 @@ interface TuiOptions {
   terminalImageProtocol?: 'kitty' | 'none';
 }
 
-interface TuiNote {
+interface TUINote {
   channel: string;
   beat: number;
   endBeat?: number;
@@ -130,7 +130,7 @@ interface TuiNote {
   invisible?: boolean;
 }
 
-interface TuiFrame {
+interface TUIFrame {
   currentBeat: number;
   currentSeconds: number;
   /** Mirrored display clock past the LR2 negative-BPM reversal (#134) — the lane grid scrolls from it when set. */
@@ -139,18 +139,18 @@ interface TuiFrame {
   reversalSeconds?: number;
   totalSeconds: number;
   summary: PlayerSummary;
-  notes: TuiNote[];
-  landmineNotes?: TuiNote[];
-  invisibleNotes?: TuiNote[];
+  notes: TUINote[];
+  landmineNotes?: TUINote[];
+  invisibleNotes?: TUINote[];
   audioBackend?: string;
   activeAudioFiles?: string[];
   activeAudioVoiceCount?: number;
-  bgaAnsiLines?: string[];
-  bgaKittyImage?: BgaKittyImage;
+  bgaANSILines?: string[];
+  bgaKittyImage?: BGAKittyImage;
 }
 
 interface NoteWindowState {
-  source?: TuiNote[];
+  source?: TUINote[];
   startIndex: number;
   endIndex: number;
   beat: number;
@@ -170,8 +170,8 @@ const HIGH_SPEED_TRANSITION_MS = 180;
 const FPS_SMOOTHING_FACTOR = 0.2;
 const HIGH_SPEED_MODIFIER_LABEL = resolveAltModifierLabel();
 
-export class PlayerTui {
-  private readonly options: TuiOptions;
+export class PlayerTUI {
+  private readonly options: TUIOptions;
 
   private readonly stateSignals?: PlayerStateSignals;
 
@@ -250,21 +250,21 @@ export class PlayerTui {
 
   private highSpeedTransitionStartMs = 0;
 
-  private smoothedFps = Number.NaN;
+  private smoothedFPS = Number.NaN;
 
   private lastFrameRenderedAtMs = 0;
 
   private lastRenderedBeat = Number.NaN;
 
-  private lastKittyBgaToken = '';
+  private lastKittyBGAToken = '';
 
-  private lastKittyBgaPlacementToken = '';
+  private lastKittyBGAPlacementToken = '';
 
-  private activeKittyBgaImageIndex = 0;
+  private activeKittyBGAImageIndex = 0;
 
-  private kittyBgaVisible = false;
+  private kittyBGAVisible = false;
 
-  constructor(options: TuiOptions) {
+  constructor(options: TUIOptions) {
     const initialHighSpeed = normalizeHighSpeed(options.highSpeed);
     options.highSpeed = initialHighSpeed;
     options.noteHeight = options.noteHeight ?? DEFAULT_TUI_NOTE_HEIGHT;
@@ -318,7 +318,7 @@ export class PlayerTui {
     return this.supported;
   }
 
-  usesKittyGraphicsForBga(): boolean {
+  usesKittyGraphicsForBGA(): boolean {
     return this.terminalImageProtocol === 'kitty';
   }
 
@@ -329,10 +329,10 @@ export class PlayerTui {
     this.active = true;
     this.needsFullRefresh = false;
     this.previousRenderedLines = [];
-    this.lastKittyBgaToken = '';
-    this.lastKittyBgaPlacementToken = '';
-    this.activeKittyBgaImageIndex = 0;
-    this.kittyBgaVisible = false;
+    this.lastKittyBGAToken = '';
+    this.lastKittyBGAPlacementToken = '';
+    this.activeKittyBGAImageIndex = 0;
+    this.kittyBGAVisible = false;
     process.stdout.write(
       this.useAlternateScreen ? '\u001b[?1049h\u001b[2J\u001b[H\u001b[?25l' : '\u001b[2J\u001b[H\u001b[?25l',
     );
@@ -369,20 +369,20 @@ export class PlayerTui {
     this.targetHighSpeed = this.displayedHighSpeed;
     this.highSpeedTransitionFrom = this.displayedHighSpeed;
     this.highSpeedTransitionStartMs = 0;
-    this.smoothedFps = Number.NaN;
+    this.smoothedFPS = Number.NaN;
     this.lastFrameRenderedAtMs = 0;
     this.lastRenderedBeat = Number.NaN;
-    const clearKittyBga = this.kittyBgaVisible
+    const clearKittyBGA = this.kittyBGAVisible
       ? KITTY_BGA_IMAGE_IDS.map((imageId) => buildKittyGraphicsDeleteImageSequence(imageId)).join('')
       : '';
-    this.lastKittyBgaToken = '';
-    this.lastKittyBgaPlacementToken = '';
-    this.activeKittyBgaImageIndex = 0;
-    this.kittyBgaVisible = false;
+    this.lastKittyBGAToken = '';
+    this.lastKittyBGAPlacementToken = '';
+    this.activeKittyBGAImageIndex = 0;
+    this.kittyBGAVisible = false;
     process.stdout.write(
       this.useAlternateScreen
-        ? `${clearKittyBga}\u001b[0m\u001b[?25h\u001b[?1049l`
-        : `${clearKittyBga}\u001b[0m\u001b[?25h\u001b[2J\u001b[H`,
+        ? `${clearKittyBGA}\u001b[0m\u001b[?25h\u001b[?1049l`
+        : `${clearKittyBGA}\u001b[0m\u001b[?25h\u001b[2J\u001b[H`,
     );
   }
 
@@ -465,7 +465,7 @@ export class PlayerTui {
     this.needsFullRefresh = true;
   }
 
-  render(frame: TuiFrame): void {
+  render(frame: TUIFrame): void {
     if (!this.active) {
       return;
     }
@@ -481,16 +481,16 @@ export class PlayerTui {
       typeof this.options.randomPatternSummary === 'string' && this.options.randomPatternSummary.length > 0
         ? this.options.randomPatternSummary
         : undefined;
-    const rowCount = calculateTuiGridRowCount(terminalRows, {
+    const rowCount = calculateTUIGridRowCount(terminalRows, {
       showLaneChannels,
       hasRandomPatternSummary: randomPatternSummary !== undefined,
       hasAudioDebugLine: debugLineCount > 0,
     });
     const laneCount = Math.max(1, this.options.lanes.length);
     const now = Date.now();
-    const currentFps = this.resolveFps(now);
+    const currentFPS = this.resolveFPS(now);
     const displayHighSpeed = this.resolveDisplayHighSpeed(now);
-    const scrollWindowBeats = resolveVisibleBeatsForTuiGrid(rowCount, displayHighSpeed);
+    const scrollWindowBeats = resolveVisibleBeatsForTUIGrid(rowCount, displayHighSpeed);
     const grid = Array.from({ length: rowCount }, () => Array.from({ length: laneCount }, () => LANE_FILL_SYMBOL));
     const gridSourceChannels = Array.from({ length: rowCount }, () => Array.from({ length: laneCount }, () => ''));
     const measureLineRows = new Set<number>();
@@ -516,7 +516,7 @@ export class PlayerTui {
 
     const nextVisibleNoteRows = new Map<string, number>();
     const renderNoteCollection = (
-      notes: TuiNote[],
+      notes: TUINote[],
       keyPrefix: 'main' | 'landmine' | 'invisible',
       state: NoteWindowState,
       visibleNotesLimit: number,
@@ -727,7 +727,7 @@ export class PlayerTui {
     // Tempo events behind the LR2 reversal never fire (the pump is frozen), so the BPM readout holds the value at
     // the reversal instead of stepping through them on the true clock.
     const bpmReadoutSeconds = Math.min(frame.currentSeconds, frame.reversalSeconds ?? Number.POSITIVE_INFINITY);
-    const currentBpm = findCurrentBpm(this.options.bpmTimeline, bpmReadoutSeconds);
+    const currentBPM = findCurrentBPM(this.options.bpmTimeline, bpmReadoutSeconds);
     const currentScroll = findCurrentScroll(this.options.scrollTimeline, scrollBeat);
     const remainingStopSeconds = findRemainingStopSeconds(this.options.stopWindows, frame.currentSeconds);
     const stopLabel = remainingStopSeconds > 0 ? `${formatStopSeconds(remainingStopSeconds)}s` : '-';
@@ -739,7 +739,7 @@ export class PlayerTui {
       `${renderProgress(frame.currentSeconds, frame.totalSeconds)}  ${formatSeconds(frame.currentSeconds)} / ${formatSeconds(frame.totalSeconds)}`,
     );
     lines.push(
-      `TIMING  SPEED x${this.options.speed.toFixed(2)}  HS x${formatHighSpeed(displayHighSpeed)}  BAD ±${formatJudgeWindowMs(this.options.judgeWindowMs)}ms  BPM ${formatBpm(currentBpm)}  SCROLL ${formatScroll(currentScroll)}  STOP ${stopLabel}`,
+      `TIMING  SPEED x${this.options.speed.toFixed(2)}  HS x${formatHighSpeed(displayHighSpeed)}  BAD ±${formatJudgeWindowMs(this.options.judgeWindowMs)}ms  BPM ${formatBPM(currentBPM)}  SCROLL ${formatScroll(currentScroll)}  STOP ${stopLabel}`,
     );
     const currentMeasure = findCurrentMeasure(this.options.measureTimeline, frame.currentSeconds) + 1;
     const totalMeasures = findTotalMeasures(this.options.measureTimeline);
@@ -750,7 +750,7 @@ export class PlayerTui {
     lines.push(
       `CHART   LANE ${this.options.laneDisplayMode}  PLAYER ${formatPlayerLabel(this.options.player)}  RANK ${this.options.rankLabel ?? formatRankLabel(this.options.rank)}  PLAYLEVEL ${formatPlayLevelLabel(this.options.playLevel)}`,
     );
-    lines.push(`PERF    FPS ${formatFps(currentFps)}`);
+    lines.push(`PERF    FPS ${formatFPS(currentFPS)}`);
     if (randomPatternSummary) {
       lines.push(randomPatternSummary);
     }
@@ -850,23 +850,23 @@ export class PlayerTui {
       hasLaneSplit(this.options.splitAfterIndex, this.laneWidths.length),
     );
     const laneBlockStartRow = lines.length + 1;
-    let kittyBgaPlacement:
+    let kittyBGAPlacement:
       | {
           row: number;
           column: number;
-          image: BgaKittyImage;
+          image: BGAKittyImage;
         }
       | undefined;
     if (this.terminalImageProtocol === 'kitty' && frame.bgaKittyImage) {
-      const renderedKittyBga = renderLaneBlockWithKittyPadding(laneLinesWithProgress, frame.bgaKittyImage.cellWidth);
-      lines.push(...renderedKittyBga.lines);
-      kittyBgaPlacement = {
+      const renderedKittyBGA = renderLaneBlockWithKittyPadding(laneLinesWithProgress, frame.bgaKittyImage.cellWidth);
+      lines.push(...renderedKittyBGA.lines);
+      kittyBGAPlacement = {
         row: laneBlockStartRow,
-        column: renderedKittyBga.column,
+        column: renderedKittyBGA.column,
         image: frame.bgaKittyImage,
       };
     } else {
-      lines.push(...renderLaneBlockWithBga(laneLinesWithProgress, frame.bgaAnsiLines));
+      lines.push(...renderLaneBlockWithBGA(laneLinesWithProgress, frame.bgaANSILines));
     }
     lines.push('');
     lines.push(
@@ -893,49 +893,49 @@ export class PlayerTui {
     const needsFullRefresh = this.needsFullRefresh;
     const needsFullFrameWrite = needsFullRefresh || this.previousRenderedLines.length === 0;
     let overlaySequence = '';
-    if (kittyBgaPlacement) {
+    if (kittyBGAPlacement) {
       const placementToken =
-        `${kittyBgaPlacement.row}:${kittyBgaPlacement.column}:` +
-        `${kittyBgaPlacement.image.cellWidth}:${kittyBgaPlacement.image.cellHeight}`;
-      if (needsFullRefresh || !this.kittyBgaVisible || this.lastKittyBgaPlacementToken !== placementToken) {
-        const activeImageId = KITTY_BGA_IMAGE_IDS[this.activeKittyBgaImageIndex]!;
-        const inactiveImageId = KITTY_BGA_IMAGE_IDS[(this.activeKittyBgaImageIndex + 1) % KITTY_BGA_IMAGE_IDS.length]!;
+        `${kittyBGAPlacement.row}:${kittyBGAPlacement.column}:` +
+        `${kittyBGAPlacement.image.cellWidth}:${kittyBGAPlacement.image.cellHeight}`;
+      if (needsFullRefresh || !this.kittyBGAVisible || this.lastKittyBGAPlacementToken !== placementToken) {
+        const activeImageId = KITTY_BGA_IMAGE_IDS[this.activeKittyBGAImageIndex]!;
+        const inactiveImageId = KITTY_BGA_IMAGE_IDS[(this.activeKittyBGAImageIndex + 1) % KITTY_BGA_IMAGE_IDS.length]!;
         overlaySequence = buildKittyGraphicsRenderSequence({
           imageId: activeImageId,
           placementId: 1,
-          row: kittyBgaPlacement.row,
-          column: kittyBgaPlacement.column,
-          image: kittyBgaPlacement.image,
+          row: kittyBGAPlacement.row,
+          column: kittyBGAPlacement.column,
+          image: kittyBGAPlacement.image,
           zIndex: -1,
           doNotMoveCursor: true,
         });
         overlaySequence += buildKittyGraphicsDeleteImageSequence(inactiveImageId);
-        this.lastKittyBgaToken = kittyBgaPlacement.image.token;
-        this.lastKittyBgaPlacementToken = placementToken;
-        this.kittyBgaVisible = true;
-      } else if (this.lastKittyBgaToken !== kittyBgaPlacement.image.token) {
-        const nextImageIndex = (this.activeKittyBgaImageIndex + 1) % KITTY_BGA_IMAGE_IDS.length;
+        this.lastKittyBGAToken = kittyBGAPlacement.image.token;
+        this.lastKittyBGAPlacementToken = placementToken;
+        this.kittyBGAVisible = true;
+      } else if (this.lastKittyBGAToken !== kittyBGAPlacement.image.token) {
+        const nextImageIndex = (this.activeKittyBGAImageIndex + 1) % KITTY_BGA_IMAGE_IDS.length;
         const nextImageId = KITTY_BGA_IMAGE_IDS[nextImageIndex]!;
-        const previousImageId = KITTY_BGA_IMAGE_IDS[this.activeKittyBgaImageIndex]!;
+        const previousImageId = KITTY_BGA_IMAGE_IDS[this.activeKittyBGAImageIndex]!;
         overlaySequence = buildKittyGraphicsRenderSequence({
           imageId: nextImageId,
           placementId: 1,
-          row: kittyBgaPlacement.row,
-          column: kittyBgaPlacement.column,
-          image: kittyBgaPlacement.image,
+          row: kittyBGAPlacement.row,
+          column: kittyBGAPlacement.column,
+          image: kittyBGAPlacement.image,
           zIndex: -1,
           doNotMoveCursor: true,
         });
         overlaySequence += buildKittyGraphicsDeleteImageSequence(previousImageId);
-        this.lastKittyBgaToken = kittyBgaPlacement.image.token;
-        this.activeKittyBgaImageIndex = nextImageIndex;
+        this.lastKittyBGAToken = kittyBGAPlacement.image.token;
+        this.activeKittyBGAImageIndex = nextImageIndex;
       }
-    } else if (this.kittyBgaVisible) {
+    } else if (this.kittyBGAVisible) {
       overlaySequence = KITTY_BGA_IMAGE_IDS.map((imageId) => buildKittyGraphicsDeleteImageSequence(imageId)).join('');
-      this.lastKittyBgaToken = '';
-      this.lastKittyBgaPlacementToken = '';
-      this.activeKittyBgaImageIndex = 0;
-      this.kittyBgaVisible = false;
+      this.lastKittyBGAToken = '';
+      this.lastKittyBGAPlacementToken = '';
+      this.activeKittyBGAImageIndex = 0;
+      this.kittyBGAVisible = false;
     }
     const frameSequence = this.buildFrameWriteSequence(paddedLines, {
       clearBeforeWrite: needsFullRefresh,
@@ -975,7 +975,7 @@ export class PlayerTui {
   }
 
   private resolveNoteWindow(
-    notes: TuiNote[],
+    notes: TUINote[],
     currentBeat: number,
     scrollWindowBeats: number,
     state: NoteWindowState,
@@ -1091,7 +1091,7 @@ export class PlayerTui {
     return this.displayedHighSpeed;
   }
 
-  private resolveFps(nowMs: number): number | undefined {
+  private resolveFPS(nowMs: number): number | undefined {
     if (this.lastFrameRenderedAtMs <= 0) {
       this.lastFrameRenderedAtMs = nowMs;
       return undefined;
@@ -1100,17 +1100,17 @@ export class PlayerTui {
     const elapsedMs = nowMs - this.lastFrameRenderedAtMs;
     this.lastFrameRenderedAtMs = nowMs;
     if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) {
-      return Number.isFinite(this.smoothedFps) ? this.smoothedFps : undefined;
+      return Number.isFinite(this.smoothedFPS) ? this.smoothedFPS : undefined;
     }
 
-    const instantFps = 1000 / elapsedMs;
-    if (!Number.isFinite(this.smoothedFps)) {
-      this.smoothedFps = instantFps;
-      return this.smoothedFps;
+    const instantFPS = 1000 / elapsedMs;
+    if (!Number.isFinite(this.smoothedFPS)) {
+      this.smoothedFPS = instantFPS;
+      return this.smoothedFPS;
     }
 
-    this.smoothedFps += (instantFps - this.smoothedFps) * FPS_SMOOTHING_FACTOR;
-    return this.smoothedFps;
+    this.smoothedFPS += (instantFPS - this.smoothedFPS) * FPS_SMOOTHING_FACTOR;
+    return this.smoothedFPS;
   }
 
   private resolveRenderLaneChannel(channel: string): string {
@@ -1218,7 +1218,7 @@ function normalizeTerminalDimension(value: number | undefined): number | undefin
   return Math.max(1, Math.floor(value));
 }
 
-function canDropNoteFromRenderWindow(note: TuiNote, currentBeat: number, scrollWindowBeats: number): boolean {
+function canDropNoteFromRenderWindow(note: TUINote, currentBeat: number, scrollWindowBeats: number): boolean {
   const keepVisible =
     typeof note.visibleUntilBeat === 'number' &&
     Number.isFinite(note.visibleUntilBeat) &&

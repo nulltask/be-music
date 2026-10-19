@@ -1,7 +1,7 @@
 import { KEYBOARD_MODE_HINT_VARIANTS, resolveKeyboardModeHint } from './keyboard-mode-hint.ts';
 import { normalizeChannel } from '@be-music/json';
 import { PLAY_MODE_LAYOUTS } from './play-modes.ts';
-import { EXTENDED_LANE_CODE_MIN, isPlayableChannel, mapBmsLongNoteChannelToPlayable } from './channels.ts';
+import { EXTENDED_LANE_CODE_MIN, isPlayableChannel, mapBMSLongNoteChannelToPlayable } from './channels.ts';
 
 /**
  * LR2 / beatoraja play-skin lane family. `'24'` / `'48'` are the Keyboardmania-style keyboard modes whose lanes run
@@ -99,7 +99,7 @@ export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlay
       continue;
     }
     // `#LNTYPE` long notes live on `5x` / `6x` but occupy the same lane as `1x` / `2x`, so they count as that lane.
-    const longNoteLane = mapBmsLongNoteChannelToPlayable(channel);
+    const longNoteLane = mapBMSLongNoteChannelToPlayable(channel);
     if (longNoteLane !== undefined) {
       channels.add(longNoteLane);
     }
@@ -114,7 +114,7 @@ export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlay
     return usesPlayer2 ? '48' : '24';
   }
 
-  if (isPmsExtension(chart.chartPath)) {
+  if (isPMSExtension(chart.chartPath)) {
     return '9';
   }
   // `#PLAYER 3` is "DP or 9-key", so the POPN-9 reading needs the IIDX 2P side (`21` / `26..29`) to be absent: a
@@ -137,8 +137,8 @@ export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlay
   // WITHOUT `21` / `26..29` is a reliable PMS-STD signal regardless of 1P-side scratch (`16`) or 6/7K
   // column (`18` / `19`) use. (A chart that combines `22..25` with 1P scratch is a non-standard hybrid
   // — we resolve it as POPN-9 since `22..25` is the POPN-specific signature.)
-  const usesPmsStd2P = PMS_STD_2P_CHANNELS.some((c) => channels.has(c));
-  if (usesPmsStd2P && !usesOther2P) {
+  const usesPMSStd2P = PMS_STD_2P_CHANNELS.some((c) => channels.has(c));
+  if (usesPMSStd2P && !usesOther2P) {
     return '9';
   }
 
@@ -151,7 +151,7 @@ export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlay
   return uses6or7 ? '7' : '5';
 }
 
-function isPmsExtension(chartPath: string | undefined): boolean {
+function isPMSExtension(chartPath: string | undefined): boolean {
   return resolveChartPathExtension(chartPath) === '.pms';
 }
 

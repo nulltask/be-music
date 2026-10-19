@@ -155,7 +155,7 @@ export function resolveSideKeySlot(channel: string, playVariant?: ChartPlayVaria
   return -1;
 }
 
-export function resolveLr2LaneIndex(channel: string, playVariant?: ChartPlayVariant): number {
+export function resolveLR2LaneIndex(channel: string, playVariant?: ChartPlayVariant): number {
   const slot = resolveSideKeySlot(channel, playVariant);
   if (slot < 0) return -1;
   // LR2 skins only define the 20 IIDX lane rects (`0`/`10` scratch + `1..9`/`11..19` keys) — there is no
@@ -478,7 +478,7 @@ function resolveLaneLayout(existing: ReadonlySet<string>, options: LaneModeOptio
   if (variant !== '9') {
     return variant;
   }
-  return resolvePms9KeyLayout(existing, options.chartExtension);
+  return resolvePMS9KeyLayout(existing, options.chartExtension);
 }
 
 function createScratchReverseTokensByChannel(
@@ -513,12 +513,12 @@ function resolveDefaultPlatform(): NodeJS.Platform {
 const PMS_STD_ONLY_CHANNELS = POPN_9KEY_PMS_LANES.filter((channel) => !POPN_9KEY_BME_LANES.includes(channel));
 const PMS_BME_ONLY_CHANNELS = POPN_9KEY_BME_LANES.filter((channel) => !POPN_9KEY_PMS_LANES.includes(channel));
 
-function resolvePms9KeyLayout(existing: ReadonlySet<string>, chartExtension: string | undefined): '9-pms' | '9-bme' {
+function resolvePMS9KeyLayout(existing: ReadonlySet<string>, chartExtension: string | undefined): '9-pms' | '9-bme' {
   const pmsLayoutScore = countExistingChannels(existing, PMS_STD_ONLY_CHANNELS);
   const bmeLayoutScore = countExistingChannels(existing, PMS_BME_ONLY_CHANNELS);
 
   if (pmsLayoutScore === 0 && bmeLayoutScore === 0) {
-    return isPmsExtension(chartExtension) ? '9-pms' : '9-bme';
+    return isPMSExtension(chartExtension) ? '9-pms' : '9-bme';
   }
   return pmsLayoutScore >= bmeLayoutScore ? '9-pms' : '9-bme';
 }
@@ -533,7 +533,7 @@ function countExistingChannels(existing: ReadonlySet<string>, channels: readonly
   return count;
 }
 
-function isPmsExtension(chartExtension: string | undefined): boolean {
+function isPMSExtension(chartExtension: string | undefined): boolean {
   return typeof chartExtension === 'string' && chartExtension.trim().toLowerCase() === '.pms';
 }
 

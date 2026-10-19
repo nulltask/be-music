@@ -474,13 +474,13 @@ describe('node input runtime', () => {
 
     runtime.stop();
     stdin.isTTY = false;
-    const nonTtyRuntime = createNodeInputRuntime({
+    const nonTTYRuntime = createNodeInputRuntime({
       mode: 'manual',
       inputSignals: createPlayerInputSignalBus(),
       inputTokenToChannels: new Map(),
     });
-    nonTtyRuntime.start();
-    nonTtyRuntime.stop();
+    nonTTYRuntime.start();
+    nonTTYRuntime.stop();
     expect(stdin.setRawMode).toHaveBeenCalledTimes(2);
     platformSpy.mockRestore();
   });

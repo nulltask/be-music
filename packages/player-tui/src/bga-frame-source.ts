@@ -1,25 +1,25 @@
-import type { BgaCue } from '@be-music/chart';
+import type { BGACue } from '@be-music/chart';
 import { DEFAULT_IMAGE_RESIZE_ALGORITHM, type ImageResizeAlgorithm } from '@be-music/player/display';
 import {
   TERMINAL_PIXEL_ASPECT_X,
   TERMINAL_PIXEL_ASPECT_Y,
-  type AnsiFrame,
-  resizeAnsiFrameWithAspectMode,
+  type ANSIFrame,
+  resizeANSIFrameWithAspectMode,
 } from './bga-frame.ts';
 
-export interface TimedAnsiFrame {
+export interface TimedANSIFrame {
   seconds: number;
-  frame: AnsiFrame;
+  frame: ANSIFrame;
 }
 
 interface StaticFrameSource {
   kind: 'static';
-  frame: AnsiFrame;
+  frame: ANSIFrame;
 }
 
 export interface VideoFrameSource {
   kind: 'video';
-  frames: TimedAnsiFrame[];
+  frames: TimedANSIFrame[];
   durationSeconds?: number;
   ensureStreaming?: () => void;
 }
@@ -27,7 +27,7 @@ export interface VideoFrameSource {
 export type FrameSource = StaticFrameSource | VideoFrameSource;
 
 export interface FrameSelection {
-  frame?: AnsiFrame;
+  frame?: ANSIFrame;
   index: number;
 }
 
@@ -50,7 +50,7 @@ export function resizeFrameSourceMap(
   return map;
 }
 
-export function createStaticFrameSource(frame: AnsiFrame): FrameSource {
+export function createStaticFrameSource(frame: ANSIFrame): FrameSource {
   return {
     kind: 'static',
     frame,
@@ -59,7 +59,7 @@ export function createStaticFrameSource(frame: AnsiFrame): FrameSource {
 
 export function resolveFrameSelection(
   sourceFramesByKey: ReadonlyMap<string, FrameSource>,
-  missingFrame: AnsiFrame,
+  missingFrame: ANSIFrame,
   key: string,
   seconds: number,
 ): FrameSelection {
@@ -119,11 +119,11 @@ export function resizeFrameSourceWithAspectMode(
   if (source.kind === 'static') {
     return {
       kind: 'static',
-      frame: resizeAnsiFrameWithAspectMode(source.frame, width, height, aspectX, aspectY, mode, resizeAlgorithm),
+      frame: resizeANSIFrameWithAspectMode(source.frame, width, height, aspectX, aspectY, mode, resizeAlgorithm),
     };
   }
 
-  const resizedFrames: TimedAnsiFrame[] = [];
+  const resizedFrames: TimedANSIFrame[] = [];
   return {
     kind: 'video',
     get durationSeconds() {
@@ -137,7 +137,7 @@ export function resizeFrameSourceWithAspectMode(
         const entry = source.frames[index]!;
         resizedFrames.push({
           seconds: entry.seconds,
-          frame: resizeAnsiFrameWithAspectMode(entry.frame, width, height, aspectX, aspectY, mode, resizeAlgorithm),
+          frame: resizeANSIFrameWithAspectMode(entry.frame, width, height, aspectX, aspectY, mode, resizeAlgorithm),
         });
       }
       return resizedFrames;
@@ -188,7 +188,7 @@ export function selectFrameFromSource(source: FrameSource | undefined, seconds: 
 }
 
 export function resolveTimelinePlaybackEndSeconds(
-  timeline: ReadonlyArray<BgaCue>,
+  timeline: ReadonlyArray<BGACue>,
   sourcesByKey: ReadonlyMap<string, FrameSource>,
 ): number {
   const lastCue = timeline.at(-1);

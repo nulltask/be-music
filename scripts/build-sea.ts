@@ -15,8 +15,8 @@ const SEA_WORKER_BANNER = [
   'globalThis.ImageData ??= class ImageData {};',
 ].join('\n');
 
-interface CliArgs {
-  packageName: SeaTargetName;
+interface CLIArgs {
+  packageName: SEATargetName;
   output?: string;
   nodeBinary?: string;
   bundleOnly: boolean;
@@ -31,7 +31,7 @@ interface EmbeddedNodeModuleRoot {
   excludeFilePatterns?: RegExp[];
 }
 
-interface SeaTargetConfig {
+interface SEATargetConfig {
   packageDir: string;
   outputBaseName: string;
   /** Bundle entry relative to `packageDir` (default: `src/cli.ts`). */
@@ -53,12 +53,12 @@ interface SeaTargetConfig {
 }
 
 const TARGET_NAMES = ['player', 'audio-renderer'] as const;
-type SeaTargetName = (typeof TARGET_NAMES)[number];
+type SEATargetName = (typeof TARGET_NAMES)[number];
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repositoryDir = resolve(scriptDir, '..');
 
-const SEA_TARGETS: Record<SeaTargetName, SeaTargetConfig> = {
+const SEA_TARGETS: Record<SEATargetName, SEATargetConfig> = {
   player: {
     packageDir: resolve(repositoryDir, 'packages/player-tui'),
     outputBaseName: 'be-music-player',
@@ -107,8 +107,8 @@ function printUsage() {
   );
 }
 
-function parseArgs(argv: string[]): CliArgs {
-  let packageName: SeaTargetName | undefined;
+function parseArgs(argv: string[]): CLIArgs {
+  let packageName: SEATargetName | undefined;
   let output: string | undefined;
   let nodeBinary: string | undefined;
   let bundleOnly = false;
@@ -130,10 +130,10 @@ function parseArgs(argv: string[]): CliArgs {
       if (!value) {
         throw new Error(`Missing value for ${token}`);
       }
-      if (!TARGET_NAMES.includes(value as SeaTargetName)) {
+      if (!TARGET_NAMES.includes(value as SEATargetName)) {
         throw new Error(`Unknown package: ${value}`);
       }
-      packageName = value as SeaTargetName;
+      packageName = value as SEATargetName;
       index += 1;
       continue;
     }
@@ -189,7 +189,7 @@ function buildExternalModules(optionalExternalModules: string[]): string[] {
   return [...modules];
 }
 
-async function buildSeaBundle(config: SeaTargetConfig, seaDir: string): Promise<void> {
+async function buildSEABundle(config: SEATargetConfig, seaDir: string): Promise<void> {
   await build({
     configFile: false,
     resolve: {
@@ -222,7 +222,7 @@ async function buildSeaBundle(config: SeaTargetConfig, seaDir: string): Promise<
   });
 }
 
-async function inlineSeaRelativeChunks(seaDir: string): Promise<void> {
+async function inlineSEARelativeChunks(seaDir: string): Promise<void> {
   const entryFileName = 'sea-entry.cjs';
   const seaFiles = await readdir(seaDir);
   const localChunkFileNames = seaFiles.filter(
@@ -401,7 +401,7 @@ async function supportsNodeFlag(nodeBinaryPath: string, cwd: string, flag: strin
   }
 }
 
-async function runSeaBuild(nodeBinaryPath: string, cwd: string, configFilePath: string): Promise<void> {
+async function runSEABuild(nodeBinaryPath: string, cwd: string, configFilePath: string): Promise<void> {
   try {
     await execFileAsync(nodeBinaryPath, ['--build-sea', configFilePath], { cwd });
   } catch (error) {
@@ -454,8 +454,8 @@ async function main(): Promise<void> {
   await mkdir(seaDir, { recursive: true });
 
   process.stdout.write('Building SEA bundle...\n');
-  await buildSeaBundle(targetConfig, seaDir);
-  await inlineSeaRelativeChunks(seaDir);
+  await buildSEABundle(targetConfig, seaDir);
+  await inlineSEARelativeChunks(seaDir);
 
   let embeddedModules: EmbeddedModulesBuildResult | undefined;
   const embeddedManifestPath = resolve(seaDir, EMBEDDED_MODULES_MANIFEST_ASSET);
@@ -486,8 +486,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  const hasBuildSea = await supportsNodeFlag(nodeBinaryPath, targetConfig.packageDir, '--build-sea');
-  if (!hasBuildSea) {
+  const hasBuildSEA = await supportsNodeFlag(nodeBinaryPath, targetConfig.packageDir, '--build-sea');
+  if (!hasBuildSEA) {
     throw new Error(
       `The selected Node executable does not support --build-sea: ${nodeBinaryPath}. ` +
         'Use Node.js 26+ with built-in SEA support.',
@@ -495,7 +495,7 @@ async function main(): Promise<void> {
   }
 
   process.stdout.write('Building SEA executable...\n');
-  await runSeaBuild(nodeBinaryPath, targetConfig.packageDir, configPath);
+  await runSEABuild(nodeBinaryPath, targetConfig.packageDir, configPath);
 
   if (process.platform !== 'win32') {
     await chmod(outputPath, 0o755);

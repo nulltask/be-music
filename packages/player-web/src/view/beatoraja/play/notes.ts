@@ -16,7 +16,7 @@
 
 import { Container, Graphics, Sprite, type Texture, TilingSprite } from 'pixi.js';
 import { resolveSideKeySlot } from '@be-music/player/lanes';
-import type { PlayerUiFrameNote, PlayerUiFramePayload } from '@be-music/player/signals';
+import type { PlayerUIFrameNote, PlayerUIFramePayload } from '@be-music/player/signals';
 import type { ScrollDistanceMapperLike } from '@be-music/player/display';
 import type {
   BeatorajaImageElement,
@@ -123,7 +123,7 @@ export function beatorajaPixelsPerBeat(laneHeight: number, hispeed: number): num
  * true clock for judging / audio. Display consumers (note layer, marker layer) fall back to `currentBeat`
  * when no reversal is armed.
  */
-export function beatorajaDisplayScrollBeat(frame: Pick<PlayerUiFramePayload, 'currentBeat' | 'displayBeat'>): number {
+export function beatorajaDisplayScrollBeat(frame: Pick<PlayerUIFramePayload, 'currentBeat' | 'displayBeat'>): number {
   return frame.displayBeat ?? frame.currentBeat;
 }
 
@@ -132,7 +132,7 @@ export function beatorajaDisplayScrollBeat(frame: Pick<PlayerUiFramePayload, 'cu
  * past an LR2 negative-BPM reversal).
  */
 export interface BeatorajaNoteClock {
-  readonly notes: readonly PlayerUiFrameNote[];
+  readonly notes: readonly PlayerUIFrameNote[];
   readonly currentSeconds: number;
   readonly currentBeat: number;
   readonly displayBeat?: number;
@@ -260,7 +260,7 @@ export class BeatorajaNoteLayer {
    * LR2's `draw_count` for the frame's notes under LR2's drawing rules ({@link advanceDrawCursor}), kept between frames
    * so a frame starts past the notes already gone. Rebuilt when the note array changes or the playhead moves back.
    */
-  private drawCursor: { notes: readonly PlayerUiFrameNote[]; seconds: number; index: number } | undefined;
+  private drawCursor: { notes: readonly PlayerUIFrameNote[]; seconds: number; index: number } | undefined;
   /** Pool of generic Graphics nodes for the fallback path. Reused across frames. */
   private readonly graphicsPool: Graphics[] = [];
   /** Pool of skin-sprite nodes (tap notes / mines / LN caps). One sprite per slot — texture swapped per use. */
@@ -299,12 +299,12 @@ export class BeatorajaNoteLayer {
     activeOps: ReadonlySet<number>,
     /**
      * Live "is the player currently holding the LN on this lane?" lookup. Returns the runtime
-     * adapter's `isLaneLnHeld(channel)` so the LN body sprite can flip between the held /
+     * adapter's `isLaneLNHeld(channel)` so the LN body sprite can flip between the held /
      * unheld variants beatoraja's modern-mode skins author. When omitted the layer always
      * paints the held variant — matches the legacy-mode skin behavior where `lnBodyHeld`
      * resolves to the same sprite as `lnBodyUnheld`.
      */
-    isLaneLnHeld?: (channel: string) => boolean,
+    isLaneLNHeld?: (channel: string) => boolean,
   ): void {
     const rects = this.resolveLaneRects(activeOps);
     if (rects.length === 0) {
@@ -370,7 +370,7 @@ export class BeatorajaNoteLayer {
     }
 
     const notes = frame.notes;
-    const firstIndex = this.advanceLr2DrawCursor(frame, drawWindow);
+    const firstIndex = this.advanceLR2DrawCursor(frame, drawWindow);
     const lr2LastBeat = lr2LastWalkedBeat(drawWindow, pixelsPerBeat);
     for (let noteIndex = firstIndex; noteIndex < notes.length; noteIndex += 1) {
       const note = notes[noteIndex]!;
@@ -414,7 +414,7 @@ export class BeatorajaNoteLayer {
         if (scrolling && yEnd >= headY) continue;
         const yStartClipped = Math.min(headY, drawBottom);
         // "Held" = THIS specific LN is the one currently being judged on its lane.
-        // `isLaneLnHeld(channel)` is a channel-level flag (true while ANY LN on the lane is in
+        // `isLaneLNHeld(channel)` is a channel-level flag (true while ANY LN on the lane is in
         // its active judgement window), so a future, not-yet-judged LN on the same lane
         // would also satisfy it.  Pair it with `note.judged` — engine flips this to `true`
         // ONLY for the LN whose head has been judged (mirrors upstream's `state.processing`
@@ -423,7 +423,7 @@ export class BeatorajaNoteLayer {
         // LNs further down the lane render their unheld variant. User-reported symptom:
         // un-judged LNs on the same lane glowed alongside the currently-judged one.
         const isThisNoteBeingJudged = note.judged;
-        const heldChannel = isLaneLnHeld !== undefined ? isLaneLnHeld(note.channel) : true;
+        const heldChannel = isLaneLNHeld !== undefined ? isLaneLNHeld(note.channel) : true;
         const held = isThisNoteBeingJudged && heldChannel;
         const r = this.paintLongNote(usedG, usedS, usedT, rect, lane, yEnd, yStartClipped, held, note.longNoteMode);
         usedG = r.g;
@@ -448,7 +448,7 @@ export class BeatorajaNoteLayer {
    * Under LR2's drawing rules without a negative-BPM reversal, moves {@link drawCursor} past the notes gone by this
    * frame and returns where the walk starts; 0 otherwise, as before.
    */
-  private advanceLr2DrawCursor(frame: BeatorajaNoteClock, drawWindow: NoteDrawWindow): number {
+  private advanceLR2DrawCursor(frame: BeatorajaNoteClock, drawWindow: NoteDrawWindow): number {
     if (drawWindow.rules !== 'lr2' || this.reversal !== undefined) {
       this.drawCursor = undefined;
       return 0;
@@ -573,7 +573,7 @@ export class BeatorajaNoteLayer {
     usedS: number,
     rect: BeatorajaNoteRect,
     lane: number,
-    note: PlayerUiFrameNote,
+    note: PlayerUIFrameNote,
     y: number,
   ): { g: number; s: number } {
     const imageId = note.mine ? this.noteSection.mine[lane] : this.noteSection.note[lane];
@@ -624,7 +624,7 @@ export class BeatorajaNoteLayer {
     yStart: number,
     /**
      * `true` when the player is actively holding this LN's lane (the play bridge's
-     * `isLaneLnHeld` returned true for the note's channel). Drives held-vs-unheld body
+     * `isLaneLNHeld` returned true for the note's channel). Drives held-vs-unheld body
      * sprite switching:
      *
      *   - `lnBodyHeld`   → painted while the player is holding (matches beatoraja's
@@ -695,10 +695,10 @@ export class BeatorajaNoteLayer {
     // `hcnBody*` slots. ModernChic / GdbG / play9.json all author distinct `hcn*`
     // sprites for HCN charts, so HCN LNs rendered with the wrong art. Routing mode 3
     // to the `hcn*` field set restores the upstream-faithful visual.
-    const isHcn = longNoteMode === 3;
-    const bottomCapId = isHcn ? this.noteSection.hcnstart[lane] : this.noteSection.lnstart[lane];
+    const isHCN = longNoteMode === 3;
+    const bottomCapId = isHCN ? this.noteSection.hcnstart[lane] : this.noteSection.lnstart[lane];
     const topCapId =
-      longNoteMode === 1 ? undefined : isHcn ? this.noteSection.hcnend[lane] : this.noteSection.lnend[lane];
+      longNoteMode === 1 ? undefined : isHCN ? this.noteSection.hcnend[lane] : this.noteSection.lnend[lane];
     const bottomCrop = this.resolveLaneSprite(bottomCapId);
     const topCrop = topCapId !== undefined ? this.resolveLaneSprite(topCapId) : undefined;
     // Pick the held / unheld body slot based on the live press state. HCN uses its
@@ -706,8 +706,8 @@ export class BeatorajaNoteLayer {
     // share the regular `lnBodyHeld` / `lnBodyUnheld` slots (`lns[2]` / `lns[3]`).
     // Falls back to the OTHER slot when the chosen one is empty — legacy-mode skins
     // populate only one half so we'd rather paint the wrong-mood body than nothing.
-    const heldBodyField = isHcn ? this.noteSection.hcnBodyHeld : this.noteSection.lnBodyHeld;
-    const unheldBodyField = isHcn ? this.noteSection.hcnBodyUnheld : this.noteSection.lnBodyUnheld;
+    const heldBodyField = isHCN ? this.noteSection.hcnBodyHeld : this.noteSection.lnBodyHeld;
+    const unheldBodyField = isHCN ? this.noteSection.hcnBodyUnheld : this.noteSection.lnBodyUnheld;
     const primaryBodyId = held ? heldBodyField[lane] : unheldBodyField[lane];
     const fallbackBodyId = held ? unheldBodyField[lane] : heldBodyField[lane];
     const bodyId = primaryBodyId !== undefined && primaryBodyId.length > 0 ? primaryBodyId : fallbackBodyId;

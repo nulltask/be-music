@@ -25,12 +25,12 @@
       "stp": [],
       "wavCmds": [],
       "changeOption": {},
-      "exWav": {},
-      "exBmp": {},
+      "exWAV": {},
+      "exBMP": {},
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBga": {}
+      "swBGA": {}
     },
     "controlFlow": [],
     "events": [
@@ -54,7 +54,7 @@
       "randomPatterns": [],
       "title": "OGG TEST",
       "playVariant": "5",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0"
@@ -73,8 +73,8 @@
           "percent": 75
         },
         "noteCount": 2,
-        "chartFingerprint": "bmfp0:7222b0a1206ab444bbc45ec6c3366baaf2a4bc036f74bebe28730ac4165a41de",
-        "playFingerprint": "bmfp0:7222b0a1206ab444bbc45ec6c3366baaf2a4bc036f74bebe28730ac4165a41de",
+        "chartFingerprint": "bmfp0:d9aa4c787699e7aa9bdb22ec49d42ffee9c8631c1d821e7ac916ec3262add63a",
+        "playFingerprint": "bmfp0:d9aa4c787699e7aa9bdb22ec49d42ffee9c8631c1d821e7ac916ec3262add63a",
         "title": "OGG TEST",
         "artist": "codex"
       },

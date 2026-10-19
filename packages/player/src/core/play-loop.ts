@@ -57,7 +57,7 @@ function openPlay(session: PlaySession): void {
   emitPlayerLog(options, 'info', 'ui.start', { mode: strategy.mode });
   session.uiRuntime?.start();
   session.activeStateSignals?.publishJudgeCombo('READY', 0);
-  session.publishUiFrame(0, 0);
+  session.publishUIFrame(0, 0);
   emitPlayerLog(options, 'debug', 'ui.initial-frame.published', { mode: strategy.mode, seconds: 0, beat: 0 });
 }
 
@@ -109,7 +109,7 @@ async function playChart(
   controls: PlayControls,
   wakeUp: InputWakeUp,
 ): Promise<boolean> {
-  const { options, tempoClock, totalSeconds, tracer, publishUiFrame, beatAtSeconds } = session;
+  const { options, tempoClock, totalSeconds, tracer, publishUIFrame, beatAtSeconds } = session;
   const clock = startChart(session);
   controls.chartStarted();
 
@@ -146,7 +146,7 @@ async function playChart(
     const nowMs = clock.nowMs();
     if (clock.isPaused()) {
       const nowSec = tempoClock.chartSecondsAt(nowMs);
-      publishUiFrame(nowSec, beatAtSeconds(nowSec));
+      publishUIFrame(nowSec, beatAtSeconds(nowSec));
       lastFrameSeconds = nowSec;
       // Resume / ESC arrive as input commands; cutting the poll short on their arrival makes resuming immediate.
       await waitPreciseOrInput(PAUSE_POLL_INTERVAL_MS, wakeUp);
@@ -165,7 +165,7 @@ async function playChart(
     session.volumeChanges.triggerUntil(tick.scheduledSec);
     session.backgroundAudio.triggerUntil(tick.scheduledSec);
     judge.judge(tick);
-    publishUiFrame(tick.nowSec, beatAtSeconds(tick.nowSec));
+    publishUIFrame(tick.nowSec, beatAtSeconds(tick.nowSec));
     lastFrameSeconds = tick.nowSec;
 
     // A play that ends on failure stops the moment its gauge empties.
@@ -191,7 +191,7 @@ async function playChart(
   // A closing frame shows the state `finish` left, at the time of the loop's last frame — past the chart's end, or
   // where the play failed — so the time a host is shown never steps back.
   const endSeconds = lastFrameSeconds ?? totalSeconds;
-  publishUiFrame(endSeconds, beatAtSeconds(endSeconds));
+  publishUIFrame(endSeconds, beatAtSeconds(endSeconds));
   return failed;
 }
 

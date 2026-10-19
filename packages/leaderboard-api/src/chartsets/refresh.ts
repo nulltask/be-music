@@ -1,7 +1,7 @@
 import { and, asc, eq, isNotNull, isNull, lt, or } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { chart, chartAlias, chartset } from '../db/schema.ts';
-import { lookupBmsSearchPattern, type BmsSearchPattern } from './bms-search.ts';
+import { lookupBMSSearchPattern, type BMSSearchPattern } from './bms-search.ts';
 
 /** How long a chart's BMS Search answer stands before it is asked again. */
 export const RECHECK_LINKED_MS = 30 * 24 * 60 * 60 * 1000;
@@ -13,13 +13,13 @@ export const REFRESH_BATCH = 20;
 /** Looks a chart up by its file hashes; `undefined` when BMS Search knows none of them. */
 export type ChartsetLookup = (
   aliases: ReadonlyArray<{ kind: 'sha256' | 'md5'; hash: string }>,
-) => Promise<BmsSearchPattern | undefined>;
+) => Promise<BMSSearchPattern | undefined>;
 
 /** The lookup against the live BMS Search API. */
 export const bmsSearchLookup =
   (fetcher: typeof fetch = fetch): ChartsetLookup =>
   (aliases) =>
-    lookupBmsSearchPattern(fetcher, aliases);
+    lookupBMSSearchPattern(fetcher, aliases);
 
 /**
  * Asks BMS Search which work a chart belongs to and files the chart under that chartset (or under none). A chart with
@@ -36,7 +36,7 @@ export async function refreshChartset(
     .select({ kind: chartAlias.kind, hash: chartAlias.hash })
     .from(chartAlias)
     .where(eq(chartAlias.chartFingerprint, chartFingerprint));
-  let found: BmsSearchPattern | undefined;
+  let found: BMSSearchPattern | undefined;
   try {
     found = aliases.length === 0 ? undefined : await lookup(aliases);
   } catch (error) {

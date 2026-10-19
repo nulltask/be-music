@@ -20,12 +20,12 @@ import type { InlineSearch } from '../../inline-search.ts';
 import type { CourseMakerService } from '../../services/course-maker.ts';
 import type { CourseRunService } from '../../services/courses.ts';
 import type { LibraryService } from '../../services/library.ts';
-import { copyPlayOptionsToGui, type GuiPlayOptions, type PlayOptionsService } from '../../services/play-options.ts';
+import { copyPlayOptionsToGUI, type GUIPlayOptions, type PlayOptionsService } from '../../services/play-options.ts';
 import type { RecordsService } from '../../services/records.ts';
 import type { BeatorajaThemeService } from '../../services/themes/beatoraja.ts';
 import type { BuiltInThemeService } from '../../services/themes/built-in.ts';
-import type { Lr2ThemeService } from '../../services/themes/lr2.ts';
-import type { DemoGuiState, DemoScene, PlayerWebDemoElements } from '../../types.ts';
+import type { LR2ThemeService } from '../../services/themes/lr2.ts';
+import type { DemoGUIState, DemoScene, PlayerWebDemoElements } from '../../types.ts';
 import type { BeatorajaSkinOptionsPanel } from '../../ui/beatoraja-skin-options.ts';
 import type { DebugMenu } from '../../ui/debug-menu/index.ts';
 import type { FamilyKits } from '../family-kits.ts';
@@ -50,7 +50,7 @@ export interface SelectRouteDeps {
   /** The family that draws the screen, and its sounds. */
   readonly familyKits: Pick<FamilyKits, 'familyDispatchState' | 'selectSoundSet'>;
   /** The LR2 theme's select skin. */
-  readonly lr2: Pick<Lr2ThemeService, 'selectSkin'>;
+  readonly lr2: Pick<LR2ThemeService, 'selectSkin'>;
   /** The beatoraja theme's select entry (loaded once, and handed again while it stays the same) and its options. */
   readonly beatoraja: Pick<
     BeatorajaThemeService,
@@ -61,7 +61,7 @@ export interface SelectRouteDeps {
   /** The play options in force: every select screen starts from them, and its own edits go back to them. */
   readonly playOptions: Pick<PlayOptionsService, 'current' | 'update'>;
   /** The Debug Menu's state: its play options, which mirror the screen's, and the NONSTOP placement. */
-  readonly guiState: GuiPlayOptions & Pick<DemoGuiState, 'nonstopPlacement'>;
+  readonly guiState: GUIPlayOptions & Pick<DemoGUIState, 'nonstopPlacement'>;
   readonly audio: AudioService;
   /** The search field, which a skin's search box opens. */
   readonly search: Pick<InlineSearch, 'openFromPointer'>;
@@ -218,7 +218,7 @@ export class SelectRoute {
           // Keep the screen's play option edits (an LR2 panel, a skin's buttons) and mirror them into the Debug Menu
           // state so both surfaces always agree, then repaint the lil-gui controllers.
           this.playOptions.update(options);
-          copyPlayOptionsToGui(options, this.guiState);
+          copyPlayOptionsToGUI(options, this.guiState);
           if (options.hiSpeed !== this.guiState.hiSpeed) this.rememberHiSpeed(options.hiSpeed, 'select');
           this.debugMenu.refreshPlayOptionControllers();
         },

@@ -61,7 +61,7 @@ export {
   extractBeatorajaSkinHeader,
   loadBeatorajaSkin,
 } from './skin.ts';
-export { parseBeatorajaSkinJson, parseBeatorajaSkinJsonHeader, relaxBeatorajaJson } from './json.ts';
+export { parseBeatorajaSkinJSON, parseBeatorajaSkinJSONHeader, relaxBeatorajaJSON } from './json.ts';
 export type { NormalizedElement, RawElement } from './elements/base.ts';
 export { buildBaseOpSet, flattenBeatorajaElements, isElementVisible } from './elements/base.ts';
 export type { BeatorajaImageElement, BeatorajaImageId } from './elements/image.ts';
@@ -117,8 +117,8 @@ export type {
 } from './elements/graph.ts';
 export { normalizeBeatorajaGraphs } from './elements/graph.ts';
 
-export type { BeatorajaBpmGraphElement } from './elements/bpm-graph.ts';
-export { normalizeBeatorajaBpmGraphs } from './elements/bpm-graph.ts';
+export type { BeatorajaBPMGraphElement } from './elements/bpm-graph.ts';
+export { normalizeBeatorajaBPMGraphs } from './elements/bpm-graph.ts';
 
 export type { BeatorajaJudgeGraphElement } from './elements/judge-graph.ts';
 export { normalizeBeatorajaJudgeGraphs } from './elements/judge-graph.ts';

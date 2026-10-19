@@ -12,9 +12,9 @@ import {
   DEFAULT_BPM,
   normalizeChannel,
   normalizeObjectKey,
-  resolveBmsBase,
+  resolveBMSBase,
   type BeMusicEvent,
-  type BeMusicJson,
+  type BeMusicJSON,
 } from '@be-music/json';
 import {
   compareEvents,
@@ -24,8 +24,8 @@ import {
   isScrollChannel,
   isStopChannel,
   isTempoChannel,
-  mapBmsLongNoteChannelToPlayable,
-  resolveBmsLongNotes,
+  mapBMSLongNoteChannelToPlayable,
+  resolveBMSLongNotes,
   resolveChartPlayVariant,
   type ChartPlayVariant,
 } from './index.ts';
@@ -108,7 +108,7 @@ export type TotalItem = { kind: 'bms'; v: Rational } | { kind: 'bmson'; v: Ratio
 export interface HeaderItems {
   bpm: Rational;
   /** `#BASEBPM` as written (`null` when absent); it is dropped when it equals `bpm` at canonicalization. */
-  baseBpm: Rational | null;
+  baseBPM: Rational | null;
   judge: JudgeItem;
   total: TotalItem;
   /** `#PLAYER 3`, one of the lane-mode inputs. */
@@ -239,14 +239,14 @@ export const HEADER_BUCKET = 'header';
 
 /**
  * The bucket an event of the given normalized channel feeds, or `undefined` for channels the fingerprint ignores. The
- * channel families are the chart's own (`isPlayableChannel`, `mapBmsLongNoteChannelToPlayable`, `isLandmineChannel`,
+ * channel families are the chart's own (`isPlayableChannel`, `mapBMSLongNoteChannelToPlayable`, `isLandmineChannel`,
  * …), so the fingerprint reads exactly the objects the Resolved layer plays.
  */
 export function bucketOfChannel(channel: string): string | undefined {
   if (isPlayableChannel(channel)) {
     return `lane:${channel}`;
   }
-  const longNoteLane = mapBmsLongNoteChannelToPlayable(channel);
+  const longNoteLane = mapBMSLongNoteChannelToPlayable(channel);
   if (longNoteLane !== undefined) {
     return `lane:${longNoteLane}`;
   }
@@ -332,7 +332,7 @@ const STOP_UNITS_PER_BEAT: Rational = { n: 48n, d: 1n };
 
 /** Context shared by every bucket of one chart. */
 interface ItemContext {
-  json: BeMusicJson;
+  json: BeMusicJSON;
   base: 36 | 62;
   /** `#LNTYPE` as be-music resolves it for the whole chart (explicit, else inferred from the `5x` / `6x` objects). */
   lnType: 1 | 2;
@@ -350,7 +350,7 @@ interface BmsonGeometry {
  * `reuse` (which must be the items of a chart that differs from `json` only in those buckets).
  */
 export function computeChartItems(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   bucketed: Map<string, BeMusicEvent[]>,
   only?: ReadonlySet<string>,
   reuse?: ChartItems,
@@ -387,7 +387,7 @@ export function computeChartItems(
   };
 }
 
-function createItemContext(json: BeMusicJson, bucketed: Map<string, BeMusicEvent[]>): ItemContext {
+function createItemContext(json: BeMusicJSON, bucketed: Map<string, BeMusicEvent[]>): ItemContext {
   let bmson: BmsonGeometry | undefined;
   if (json.sourceFormat === 'bmson') {
     const resolution = Math.max(1, json.bmson.info.resolution || 240);
@@ -397,16 +397,16 @@ function createItemContext(json: BeMusicJson, bucketed: Map<string, BeMusicEvent
       lines: json.preservation.bmson.lines,
     };
   }
-  return { json, base: resolveBmsBase(json), lnType: resolveChartLongNoteType(json, bucketed), bmson };
+  return { json, base: resolveBMSBase(json), lnType: resolveChartLongNoteType(json, bucketed), bmson };
 }
 
 /** `true` when `#LNTYPE` is not set, so the `5x` / `6x` objects of every lane decide it together. */
-export function usesInferredLongNoteType(json: BeMusicJson): boolean {
+export function usesInferredLongNoteType(json: BeMusicJSON): boolean {
   return json.bms.lnType !== 1 && json.bms.lnType !== 2;
 }
 
 /** The chart's `#LNTYPE`: its own, else what be-music infers from every lane's `5x` / `6x` objects. */
-function resolveChartLongNoteType(json: BeMusicJson, bucketed: Map<string, BeMusicEvent[]>): 1 | 2 {
+function resolveChartLongNoteType(json: BeMusicJSON, bucketed: Map<string, BeMusicEvent[]>): 1 | 2 {
   if (!usesInferredLongNoteType(json)) {
     return json.bms.lnType as 1 | 2;
   }
@@ -417,7 +417,7 @@ function resolveChartLongNoteType(json: BeMusicJson, bucketed: Map<string, BeMus
   for (const [bucket, events] of bucketed) {
     if (bucket.startsWith('lane:')) {
       for (const event of events) {
-        if (mapBmsLongNoteChannelToPlayable(event.channel) !== undefined) {
+        if (mapBMSLongNoteChannelToPlayable(event.channel) !== undefined) {
           longNoteEvents.push(event);
         }
       }
@@ -426,11 +426,11 @@ function resolveChartLongNoteType(json: BeMusicJson, bucketed: Map<string, BeMus
   if (longNoteEvents.length === 0) {
     return DEFAULT_LONG_NOTE_TYPE;
   }
-  return resolveBmsLongNotes({ ...json, events: longNoteEvents }, { inferLnTypeWhenMissing: true }).lnType;
+  return resolveBMSLongNotes({ ...json, events: longNoteEvents }, { inferLNTypeWhenMissing: true }).lnType;
 }
 
 /** `json` reduced to `events`, sharing everything else (the resolvers only read it). */
-function withEvents(context: ItemContext, events: BeMusicEvent[]): BeMusicJson {
+function withEvents(context: ItemContext, events: BeMusicEvent[]): BeMusicJSON {
   const { json } = context;
   return { ...json, events, bms: { ...json.bms, lnType: context.lnType } };
 }
@@ -442,19 +442,19 @@ function withEvents(context: ItemContext, events: BeMusicEvent[]): BeMusicJson {
  */
 const NO_SECONDS = { beatToSeconds: () => 0 } as unknown as TimingResolver;
 
-function noteContext(json: BeMusicJson, freeZone: boolean): ResolvedNoteContext {
+function noteContext(json: BeMusicJSON, freeZone: boolean): ResolvedNoteContext {
   const timingContext = createTimingBuildContext(json);
   return {
     json,
     timing: NO_SECONDS,
     beatResolver: timingContext.beatResolver,
     sortedEvents: timingContext.sortedEvents,
-    idBase: resolveBmsBase(json),
+    idBase: resolveBMSBase(json),
     // FREE ZONE depends on the lane mode, which a chart document only knows per outcome: the notes are read without
     // it and `canonicalizeItems` applies it (see `NoteItem.fz`).
     resolvePlayVariant: () => '9',
     freeZone,
-    inferBmsLnTypeWhenMissing: true,
+    inferBmsLNTypeWhenMissing: true,
   };
 }
 
@@ -661,7 +661,7 @@ function computeStops(context: ItemContext, events: BeMusicEvent[]): TimelineIte
 }
 
 /** `#STP xxx.yyy ms` (`parseStpStop`): at position yyy/1000 of measure xxx, in milliseconds; several at one time add up. */
-function computeStp(json: BeMusicJson): TimelineItem[] {
+function computeStp(json: BeMusicJSON): TimelineItem[] {
   const byTime = new Map<string, TimelineItem>();
   for (const raw of json.bms.stp) {
     const stop = parseStpStop(raw);
@@ -723,12 +723,12 @@ function optionalSnapped(value: number | undefined): Rational | undefined {
 }
 
 /** Header values, from the same chart facts the Resolved layer exposes (`judgeRank`, `total`, `barLinesSuppressed`). */
-function computeHeader(json: BeMusicJson): HeaderItems {
+function computeHeader(json: BeMusicJSON): HeaderItems {
   const bpm = optionalSnapped(json.metadata.bpm);
   return {
     bpm: bpm !== undefined && bpm.n > 0n ? bpm : createRational(BigInt(DEFAULT_BPM)),
-    baseBpm:
-      (typeof json.bms.baseBpm === 'number' && json.bms.baseBpm > 0 && optionalSnapped(json.bms.baseBpm)) || null,
+    baseBPM:
+      (typeof json.bms.baseBPM === 'number' && json.bms.baseBPM > 0 && optionalSnapped(json.bms.baseBPM)) || null,
     judge: resolveJudge(json),
     total: resolveTotal(json),
     player3: json.bms.player === 3,
@@ -741,7 +741,7 @@ function computeHeader(json: BeMusicJson): HeaderItems {
  * The judge axis: bmson `judge_rank` (100 when absent or not positive); otherwise a positive `#DEFEXRANK`; otherwise
  * `#RANK` (NORMAL when absent), from `resolveJudgeRankFacts`.
  */
-function resolveJudge(json: BeMusicJson): JudgeItem {
+function resolveJudge(json: BeMusicJSON): JudgeItem {
   const { rank, exRank } = resolveJudgeRankFacts(json);
   const positiveExRank = exRank !== undefined && exRank > 0 ? optionalSnapped(exRank) : undefined;
   if (json.sourceFormat === 'bmson') {
@@ -780,7 +780,7 @@ export function normalizeRank(rank: Rational): Rational {
  * than 100 (a percentage of the ruleset's default). Everything the rulesets read as their default TOTAL is `null`: a
  * BMS chart without a positive `#TOTAL`, and a bmson chart whose `total` is absent, 0 or below, or 100 (100 %).
  */
-function resolveTotal(json: BeMusicJson): TotalItem {
+function resolveTotal(json: BeMusicJSON): TotalItem {
   const { value, unit } = resolveTotalFacts(json);
   const snapped = optionalSnapped(value);
   if (snapped === undefined || snapped.n <= 0n) {
@@ -1032,7 +1032,7 @@ export function resolveFingerprintLaneMode(
 export function dropNoOpChanges(
   type: FingerprintTimelineType,
   items: ReadonlyArray<TimelineItem>,
-  initialBpm: Rational,
+  initialBPM: Rational,
 ): TimelineItem[] {
   const sorted = [...items].sort((left, right) => compareTime(left.t, right.t));
   if (type === 'speed') {
@@ -1041,7 +1041,7 @@ export function dropNoOpChanges(
   if (type !== 'bpm' && type !== 'scroll' && type !== 'exrank') {
     return sorted;
   }
-  let current: Rational | undefined = type === 'bpm' ? initialBpm : type === 'scroll' ? RATIONAL_ONE : undefined;
+  let current: Rational | undefined = type === 'bpm' ? initialBPM : type === 'scroll' ? RATIONAL_ONE : undefined;
   const kept: TimelineItem[] = [];
   for (const item of sorted) {
     if (current !== undefined && isRationalEqual(current, item.v)) {

@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
   isCourseHiSpeedLocked,
-  isLr2GradeCourse,
+  isLR2GradeCourse,
   parseBeatorajaCourseData,
-  parseLr2CourseFile,
+  parseLR2CourseFile,
   resolveCourseLaneOptions,
   resolveCourseStagePlaySettings,
   resolveCourseStageSettings,
-  resolveLr2GradeCoursePlaySettings,
+  resolveLR2GradeCoursePlaySettings,
   type CourseLaneOption,
 } from './index.ts';
 
@@ -57,7 +57,7 @@ describe('course stage settings', () => {
 });
 
 describe('LR2 GRADE course resets', () => {
-  const lr2 = parseLr2CourseFile(
+  const lr2 = parseLR2CourseFile(
     `<courselist><course><title>Dan</title><type>2</type><hash>${'0'.repeat(10)}2${'0'.repeat(21)}${MD5_A}</hash></course></courselist>`,
   )[0]!;
   const picks = {
@@ -72,13 +72,13 @@ describe('LR2 GRADE course resets', () => {
   };
 
   test('tells an LR2 GRADE course from a table or beatoraja grade', () => {
-    expect(isLr2GradeCourse(lr2)).toBe(true);
-    expect(isLr2GradeCourse({ ...lr2, kind: 'expert' })).toBe(false);
-    expect(isLr2GradeCourse({ kind: 'grade', source: { format: 'table', legacyGrade: true } })).toBe(false);
+    expect(isLR2GradeCourse(lr2)).toBe(true);
+    expect(isLR2GradeCourse({ ...lr2, kind: 'expert' })).toBe(false);
+    expect(isLR2GradeCourse({ kind: 'grade', source: { format: 'table', legacyGrade: true } })).toBe(false);
   });
 
   test('turns off what LR2 turns off when a GRADE course starts, keeping the rest', () => {
-    expect(resolveLr2GradeCoursePlaySettings(lr2, picks)).toEqual({
+    expect(resolveLR2GradeCoursePlaySettings(lr2, picks)).toEqual({
       gauge: 'GROOVE',
       hiddenSudden1P: 'OFF',
       hiddenSudden2P: 'OFF',
@@ -89,9 +89,9 @@ describe('LR2 GRADE course resets', () => {
       random1P: 'MIRROR',
     });
     // HARD and DEATH stay.
-    expect(resolveLr2GradeCoursePlaySettings(lr2, { ...picks, gauge: 'HARD' }).gauge).toBe('HARD');
+    expect(resolveLR2GradeCoursePlaySettings(lr2, { ...picks, gauge: 'HARD' }).gauge).toBe('HARD');
     // Another course keeps every pick.
-    expect(resolveLr2GradeCoursePlaySettings({ ...lr2, kind: 'expert' }, picks)).toBe(picks);
+    expect(resolveLR2GradeCoursePlaySettings({ ...lr2, kind: 'expert' }, picks)).toBe(picks);
   });
 });
 
@@ -109,7 +109,7 @@ describe('resolveCourseStagePlaySettings', () => {
   };
 
   test('resets an LR2 GRADE course’s stage to what LR2 allows, lane options included', () => {
-    const definition = parseLr2CourseFile(
+    const definition = parseLR2CourseFile(
       `<courselist><course><title>Dan</title><type>2</type><hash>${'0'.repeat(10)}2${'0'.repeat(21)}${MD5_A}</hash></course></courselist>`,
     )[0]!;
     expect(resolveCourseStagePlaySettings(definition, picks)).toEqual({

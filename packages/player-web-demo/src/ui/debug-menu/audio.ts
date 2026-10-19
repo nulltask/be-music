@@ -81,7 +81,7 @@ export function buildAudioFolder(
       this.gameplayView?.setAudioCompressorStageEnabled('key', value);
     });
   stages
-    .add(this.guiState, 'compressorBgm')
+    .add(this.guiState, 'compressorBGM')
     .name('BGM')
     .onChange((value: boolean) => {
       this.gameplayView?.setAudioCompressorStageEnabled('bgm', value);
@@ -92,5 +92,5 @@ export function buildAudioFolder(
     .onChange((value: boolean) => {
       this.gameplayView?.setAudioCompressorStageEnabled('master', value);
     });
-  this.buildCompressorTuningGui(compressor);
+  this.buildCompressorTuningGUI(compressor);
 }

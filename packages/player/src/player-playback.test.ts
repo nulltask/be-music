@@ -4,9 +4,9 @@ import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 vi.mock('./audio-sink.ts', async () => (await import('./test-support/player-fixtures.ts')).mockAudioSinkModule());
 
 import { computeChartFingerprint, computePlayFingerprint, drawRandomOutcomes, type RandomDraws } from '@be-music/chart';
-import { createEmptyJson, type BeMusicJson } from '../../json/src/index.ts';
-import { parseChart, parseChartFile, resolveBmsControlFlowWithDraws } from '../../parser/src/index.ts';
-import { resolveBeatorajaDefaultTotal, resolveLr2DefaultTotal } from './ruleset/index.ts';
+import { createEmptyJSON, type BeMusicJSON } from '../../json/src/index.ts';
+import { parseChart, parseChartFile, resolveBMSControlFlowWithDraws } from '../../parser/src/index.ts';
+import { resolveBeatorajaDefaultTotal, resolveLR2DefaultTotal } from './ruleset/index.ts';
 import {
   autoPlay,
   type PlayerLoadProgress,
@@ -16,20 +16,20 @@ import {
   resolvePlayChart,
   type PlayerSummary,
 } from './index.ts';
-import { formatRandomPatternSummary, resolveBmsControlFlowForPlayback } from './core/engine-preparation.ts';
+import { formatRandomPatternSummary, resolveBMSControlFlowForPlayback } from './core/engine-preparation.ts';
 import { extractPlayableNotes } from './display.ts';
-import type { PlayerUiCommand } from './core/ui-signal-bus.ts';
+import type { PlayerUICommand } from './core/ui-signal-bus.ts';
 import { simulatePlaylog, type BeMusicPlaylog } from './playlog/index.ts';
 import {
   resetAudioSinkState,
-  unifiedBmsChartPath,
-  createLnobjLongNoteChart,
-  createScratchLnobjLongNoteChart,
+  unifiedBMSChartPath,
+  createLNOBJLongNoteChart,
+  createScratchLNOBJLongNoteChart,
   createInvisibleOnlyChart,
   createPlayableOnlyChart,
-  createBgmOnlyChart,
+  createBGMOnlyChart,
   createTimelineLoggingChart,
-  createPoorBgaLoggingChart,
+  createPoorBGALoggingChart,
   createScheduledInputRuntime,
   type RecordedJudgeCombo,
   createJudgeComboRecorder,
@@ -43,7 +43,7 @@ beforeEach(resetAudioSinkState);
 describe('player', () => {
   test('player: auto play finishes successfully', async () => {
     // The chart has `#RANDOM` blocks; the host resolves it once and hands the engine the result with its draws.
-    const { chart: json, randomDraws } = resolvePlayChart(await parseChartFile(unifiedBmsChartPath));
+    const { chart: json, randomDraws } = resolvePlayChart(await parseChartFile(unifiedBMSChartPath));
 
     const summary = await autoPlay(json, {
       randomDraws,
@@ -67,7 +67,7 @@ describe('player', () => {
   });
 
   test('player: auto play waits for UI BGA playback tail', async () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
 
@@ -77,20 +77,20 @@ describe('player', () => {
       speed: 240,
       leadInMs: 0,
       audio: false,
-      createUiRuntime: createPlaybackEndRecorder(2, frameEndSeconds),
+      createUIRuntime: createPlaybackEndRecorder(2, frameEndSeconds),
     });
 
     expect(frameEndSeconds.at(-1)).toBeGreaterThanOrEqual(2);
   });
 
   test('player: starts audio preparation while UI BGA initialization is still pending', async () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 0, channel: '11', position: [0, 1] as const, value: '01' }];
 
-    let resolveUiInitialization: (() => void) | undefined;
+    let resolveUIInitialization: (() => void) | undefined;
     const uiInitialization = new Promise<void>((resolve) => {
-      resolveUiInitialization = resolve;
+      resolveUIInitialization = resolve;
     });
     const progressUpdates: PlayerLoadProgress[] = [];
 
@@ -102,7 +102,7 @@ describe('player', () => {
       onLoadProgress: (progress) => {
         progressUpdates.push(progress);
       },
-      createUiRuntime: async () => {
+      createUIRuntime: async () => {
         await uiInitialization;
         return undefined;
       },
@@ -118,7 +118,7 @@ describe('player', () => {
       ),
     ).toBe(true);
 
-    resolveUiInitialization?.();
+    resolveUIInitialization?.();
     await playPromise;
   });
 
@@ -158,7 +158,7 @@ describe('player', () => {
   });
 
   test('player: logs real-time triggered events when running without TUI', async () => {
-    const json = createBgmOnlyChart();
+    const json = createBGMOnlyChart();
     const output: string[] = [];
 
     await autoPlay(json, {
@@ -275,7 +275,7 @@ describe('player', () => {
   });
 
   test('player: logs POOR BGA activity when running without TUI', async () => {
-    const json = createPoorBgaLoggingChart();
+    const json = createPoorBGALoggingChart();
     const output: string[] = [];
 
     await manualPlay(json, {
@@ -311,7 +311,7 @@ describe('player', () => {
   });
 
   test('player: global volume 0 mutes BGM sounds', async () => {
-    await autoPlay(createBgmOnlyChart(), {
+    await autoPlay(createBGMOnlyChart(), {
       auto: true,
       speed: 240,
       leadInMs: 0,
@@ -329,7 +329,7 @@ describe('player', () => {
   });
 
   test('player: manual play waits for UI BGA playback tail after notes are judged', async () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
 
@@ -338,14 +338,14 @@ describe('player', () => {
       speed: 240,
       leadInMs: 0,
       audio: false,
-      createUiRuntime: createPlaybackEndRecorder(2, frameEndSeconds),
+      createUIRuntime: createPlaybackEndRecorder(2, frameEndSeconds),
     });
 
     expect(frameEndSeconds.at(-1)).toBeGreaterThanOrEqual(2);
   });
 
   test('player: browser fallback yield does not spin through queueMicrotask during manual play', async () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
 
@@ -385,7 +385,7 @@ describe('player', () => {
   });
 
   test("player: derives the groove gauge TOTAL from LR2's note-count formula when #TOTAL is omitted", async () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
 
@@ -398,8 +398,8 @@ describe('player', () => {
     });
 
     // LR2 `LR2_bmsload.cpp`: `(n / 5 + 200) * 0.8` below 400 notes — one note yields 160.16, not the flat 160 the
-    // engine used to assume. See `resolveLr2DefaultTotal`.
-    expect(summary.gauge?.effectiveTotal).toBeCloseTo(resolveLr2DefaultTotal(1), 9);
+    // engine used to assume. See `resolveLR2DefaultTotal`.
+    expect(summary.gauge?.effectiveTotal).toBeCloseTo(resolveLR2DefaultTotal(1), 9);
     expect(summary.gauge?.current).toBe(100);
     expect(summary.gauge?.cleared).toBe(true);
   });
@@ -407,7 +407,7 @@ describe('player', () => {
   test('player: the selected gauge governs the run, not just its label', async () => {
     // Regression guard for the era when the gauge picker was cosmetic: HARD rendered red but ran GROOVE's numbers
     // and reported CLEARED at 2 %. Every gauge now comes straight out of the active ruleset.
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
 
@@ -434,7 +434,7 @@ describe('player', () => {
   });
 
   test('player: the judge ruleset picks the gauge line-up as well as the windows', async () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
 
@@ -465,8 +465,8 @@ describe('player', () => {
     expect(iidx.gauge?.survival).toBe(true);
   });
 
-  function sixteenMissesChart(): BeMusicJson {
-    const json = createEmptyJson('bms');
+  function sixteenMissesChart(): BeMusicJSON {
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = Array.from({ length: 16 }, (_, index) => ({
       measure: 0,
@@ -512,24 +512,24 @@ describe('player', () => {
   });
 
   test('player: resolves control-flow branches at playback time', async () => {
-    const json = await parseChartFile(unifiedBmsChartPath);
+    const json = await parseChartFile(unifiedBMSChartPath);
 
     expect(extractPlayableNotes(json).some((note) => note.event.measure >= 20 && note.event.measure <= 23)).toBe(false);
 
-    const resolvedWhenRandomIs1 = resolveBmsControlFlowForPlayback(json, () => 0).resolvedJson;
+    const resolvedWhenRandomIs1 = resolveBMSControlFlowForPlayback(json, () => 0).resolvedJSON;
     expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 20 && event.channel === '12')).toBe(true);
     expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 21 && event.channel === '16')).toBe(true);
     expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '22')).toBe(true);
     expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '23')).toBe(true);
     expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '24')).toBe(false);
 
-    const resolvedWhenRandomIs2 = resolveBmsControlFlowForPlayback(json, () => 0.9999999).resolvedJson;
+    const resolvedWhenRandomIs2 = resolveBMSControlFlowForPlayback(json, () => 0.9999999).resolvedJSON;
     expect(resolvedWhenRandomIs2.events.some((event) => event.measure === 23 && event.channel === '23')).toBe(false);
     expect(resolvedWhenRandomIs2.events.some((event) => event.measure === 23 && event.channel === '24')).toBe(true);
   });
 
   test('player: resolves RANDOM pattern summary for control-flow playback', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.bms.controlFlow = [
       { kind: 'directive', command: 'RANDOM', value: '3' },
       { kind: 'directive', command: 'IF', value: '2' },
@@ -543,10 +543,10 @@ describe('player', () => {
       { kind: 'directive', command: 'ENDRANDOM' },
     ];
 
-    const resolved = resolveBmsControlFlowForPlayback(json, () => 0.5);
+    const resolved = resolveBMSControlFlowForPlayback(json, () => 0.5);
     expect(formatRandomPatternSummary(resolved.randomPatterns)).toBe('RANDOM 2/3');
     expect(
-      resolved.resolvedJson.events.some(
+      resolved.resolvedJSON.events.some(
         (event) => event.channel === '11' && event.value === '01' && event.measure === 0 && event.position[0] === 0,
       ),
     ).toBe(true);
@@ -583,13 +583,13 @@ describe('player', () => {
       test(`after ${name}`, () => {
         const json = parseChart(['#BPM 120', ...prefix, ...finalBlock].join('\n'), 'bms');
         let drawn = 0;
-        const resolved = resolveBmsControlFlowForPlayback(json, () => {
+        const resolved = resolveBMSControlFlowForPlayback(json, () => {
           const value = draws[drawn] ?? 0;
           drawn += 1;
           return value;
         });
 
-        const playedBranches = resolved.resolvedJson.events
+        const playedBranches = resolved.resolvedJSON.events
           .filter((event) => event.channel === '11' || event.channel === '12')
           .map((event) => (event.channel === '11' ? 1 : 2));
         expect(playedBranches).toEqual([expected]);
@@ -608,14 +608,14 @@ describe('player', () => {
   });
 
   test('player: keeps SETRANDOM and RANDOM order in pattern summary', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.bms.controlFlow = [
       { kind: 'directive', command: 'SETRANDOM', value: '4' },
       { kind: 'directive', command: 'RANDOM', value: '2' },
       { kind: 'directive', command: 'ENDRANDOM' },
     ];
 
-    const resolved = resolveBmsControlFlowForPlayback(json, () => 0);
+    const resolved = resolveBMSControlFlowForPlayback(json, () => 0);
     expect(formatRandomPatternSummary(resolved.randomPatterns)).toBe('RANDOM #1 4/4  #2 1/2');
   });
 
@@ -625,7 +625,7 @@ describe('player', () => {
   });
 
   test('player: auto play ignores landmine notes in score totals', async () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [
       { measure: 0, channel: '11', position: [0, 1], value: '01' },
@@ -648,12 +648,12 @@ describe('player', () => {
 
   test('player: auto play confirms long note combo at the end', async () => {
     const judgeCombos: RecordedJudgeCombo[] = [];
-    const summary = await autoPlay(createLnobjLongNoteChart(1), {
+    const summary = await autoPlay(createLNOBJLongNoteChart(1), {
       auto: true,
       speed: 4,
       leadInMs: 0,
       audio: false,
-      createUiRuntime: createJudgeComboRecorder(judgeCombos),
+      createUIRuntime: createJudgeComboRecorder(judgeCombos),
     });
 
     expect(summary.total).toBe(1);
@@ -664,7 +664,7 @@ describe('player', () => {
   });
 
   test('player: ignores free-zone channel for score and judgment totals', async () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 0, channel: '17', position: [0, 1], value: '01' }];
 
@@ -687,7 +687,7 @@ describe('player', () => {
   });
 
   test('player: treats channel 17 as regular lane note in 9-key mode', async () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.bms.player = 3;
     json.events = [{ measure: 0, channel: '17', position: [0, 1], value: '01' }];
@@ -707,7 +707,7 @@ describe('player', () => {
   });
 
   test('player: auto scratch judges 16ch/26ch notes in manual play', async () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [
       { measure: 0, channel: '16', position: [0, 1], value: '01' },
@@ -732,12 +732,12 @@ describe('player', () => {
 
   test('player: auto scratch confirms long note combo at the end', async () => {
     const judgeCombos: RecordedJudgeCombo[] = [];
-    const summary = await manualPlay(createScratchLnobjLongNoteChart(), {
+    const summary = await manualPlay(createScratchLNOBJLongNoteChart(), {
       autoScratch: true,
       speed: 4,
       leadInMs: 0,
       audio: false,
-      createUiRuntime: createJudgeComboRecorder(judgeCombos),
+      createUIRuntime: createJudgeComboRecorder(judgeCombos),
     });
 
     expect(summary.total).toBe(1);
@@ -752,12 +752,12 @@ describe('player', () => {
     // must be paired with a `release-lane` at the tail so the LR2 LN-hold timer (70..89) and the lane
     // laser (100..117) fade out instead of staying lit indefinitely after the LN visually clears.
     const commands: { kind: string; channel?: string }[] = [];
-    await autoPlay(createLnobjLongNoteChart(1), {
+    await autoPlay(createLNOBJLongNoteChart(1), {
       auto: true,
       speed: 4,
       leadInMs: 0,
       audio: false,
-      createUiRuntime: async (context) => {
+      createUIRuntime: async (context) => {
         const original = context.uiSignals.pushCommand;
         context.uiSignals.pushCommand = (command) => {
           commands.push({ kind: command.kind, channel: 'channel' in command ? command.channel : undefined });
@@ -785,12 +785,12 @@ describe('player', () => {
     // (`drainPendingAutoScratchLongNotes`). The tail must release the lane state so the scratch streak /
     // LN-hold timer doesn't keep glowing after the LN's visual end.
     const commands: { kind: string; channel?: string }[] = [];
-    await manualPlay(createScratchLnobjLongNoteChart(), {
+    await manualPlay(createScratchLNOBJLongNoteChart(), {
       autoScratch: true,
       speed: 4,
       leadInMs: 0,
       audio: false,
-      createUiRuntime: async (context) => {
+      createUIRuntime: async (context) => {
         const original = context.uiSignals.pushCommand;
         context.uiSignals.pushCommand = (command) => {
           commands.push({ kind: command.kind, channel: 'channel' in command ? command.channel : undefined });
@@ -814,13 +814,13 @@ describe('player', () => {
   });
 
   test('player: auto play announces each long note start and completion with the mode it plays in', async () => {
-    const lr2Commands: PlayerUiCommand[] = [];
-    await autoPlay(createLnobjLongNoteChart(2), {
+    const lr2Commands: PlayerUICommand[] = [];
+    await autoPlay(createLNOBJLongNoteChart(2), {
       auto: true,
       speed: 4,
       leadInMs: 0,
       audio: false,
-      createUiRuntime: createLongNoteCommandRecorder(lr2Commands),
+      createUIRuntime: createLongNoteCommandRecorder(lr2Commands),
     });
     // LR2 plays every long note as an LN, whatever `#LNMODE` says.
     expect(lr2Commands).toEqual([
@@ -828,14 +828,14 @@ describe('player', () => {
       { kind: 'long-note-end', channel: '11', outcome: 'complete' },
     ]);
 
-    const beatorajaCommands: PlayerUiCommand[] = [];
-    await autoPlay(createLnobjLongNoteChart(3), {
+    const beatorajaCommands: PlayerUICommand[] = [];
+    await autoPlay(createLNOBJLongNoteChart(3), {
       auto: true,
       speed: 4,
       leadInMs: 0,
       audio: false,
       judgeRuleset: 'beatoraja',
-      createUiRuntime: createLongNoteCommandRecorder(beatorajaCommands),
+      createUIRuntime: createLongNoteCommandRecorder(beatorajaCommands),
     });
     expect(beatorajaCommands).toEqual([
       { kind: 'long-note-start', channel: '11', beat: 4, mode: 'hcn' },
@@ -844,13 +844,13 @@ describe('player', () => {
   });
 
   test('player: auto scratch announces the scratch long note start and completion', async () => {
-    const commands: PlayerUiCommand[] = [];
-    await manualPlay(createScratchLnobjLongNoteChart(), {
+    const commands: PlayerUICommand[] = [];
+    await manualPlay(createScratchLNOBJLongNoteChart(), {
       autoScratch: true,
       speed: 4,
       leadInMs: 0,
       audio: false,
-      createUiRuntime: createLongNoteCommandRecorder(commands),
+      createUIRuntime: createLongNoteCommandRecorder(commands),
     });
     expect(commands).toEqual([
       { kind: 'long-note-start', channel: '16', beat: 4, mode: 'ln' },
@@ -859,12 +859,12 @@ describe('player', () => {
   });
 
   test('player: a long note held to its end completes', async () => {
-    const commands: PlayerUiCommand[] = [];
-    await manualPlay(createLnobjLongNoteChart(), {
+    const commands: PlayerUICommand[] = [];
+    await manualPlay(createLNOBJLongNoteChart(), {
       speed: 1,
       leadInMs: 0,
       audio: false,
-      createUiRuntime: createLongNoteCommandRecorder(commands),
+      createUIRuntime: createLongNoteCommandRecorder(commands),
       createInputRuntime: createScheduledInputRuntime([
         { delayMs: 520, command: { kind: 'kitty-state', pressTokens: ['z'], repeatTokens: [], releaseTokens: [] } },
         { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
@@ -880,12 +880,12 @@ describe('player', () => {
   });
 
   test('player: a long note released early is dropped', async () => {
-    const commands: PlayerUiCommand[] = [];
-    await manualPlay(createLnobjLongNoteChart(1), {
+    const commands: PlayerUICommand[] = [];
+    await manualPlay(createLNOBJLongNoteChart(1), {
       speed: 1,
       leadInMs: 0,
       audio: false,
-      createUiRuntime: createLongNoteCommandRecorder(commands),
+      createUIRuntime: createLongNoteCommandRecorder(commands),
       createInputRuntime: createScheduledInputRuntime([
         { delayMs: 520, command: { kind: 'kitty-state', pressTokens: ['z'], repeatTokens: [], releaseTokens: [] } },
         { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
@@ -903,7 +903,7 @@ describe('player', () => {
 
   test('player: reports the resolved ruleset and its windows before playback', async () => {
     const manualInfos: PlayerRulesetInfo[] = [];
-    await manualPlay(createLnobjLongNoteChart(), {
+    await manualPlay(createLNOBJLongNoteChart(), {
       speed: 4,
       leadInMs: 0,
       audio: false,
@@ -924,7 +924,7 @@ describe('player', () => {
 
     // The debug BAD-window override (a replay restores it from the log) reaches the reported tables too.
     const autoInfos: PlayerRulesetInfo[] = [];
-    await autoPlay(createLnobjLongNoteChart(), {
+    await autoPlay(createLNOBJLongNoteChart(), {
       auto: true,
       speed: 4,
       leadInMs: 0,
@@ -941,7 +941,7 @@ describe('player', () => {
   test('player: stray key in front of a note fires LR2 empty POOR — gauge -2, counters untouched', async () => {
     // BPM 240 → measure 1 starts at chart 1.0 s. The press lands at ~0.3 s, i.e. ~0.7 s before the note — outside
     // the BAD window but inside LR2's 1-second early 空POOR region.
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
     json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
 
@@ -973,7 +973,7 @@ describe('player', () => {
   test('player: stray key with no note within 1 s is harmless (LR2 — no empty POOR)', async () => {
     // BPM 60 → the only note sits at chart 4.0 s. A press at ~0 s is far outside LR2's 1-second early 空POOR
     // region, so nothing charges: no gauge drain, no POOR.
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 60;
     json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
 
@@ -1030,7 +1030,7 @@ describe('player', () => {
       },
     });
     expect(playlog!.play.randomDraws).toEqual([{ command: 'RANDOM', range: 2, value: 2 }]);
-    const replayed = resolveBmsControlFlowWithDraws(json, playlog!.play.randomDraws!);
+    const replayed = resolveBMSControlFlowWithDraws(json, playlog!.play.randomDraws!);
     expect(playlog!.chart.playFingerprint).toBe(computePlayFingerprint(replayed, { chartPath: '.pms' }));
     expect(playlog!.chart.playFingerprint).not.toBe(computePlayFingerprint(replayed, { chartPath: undefined }));
     // The engine resolved `#RANDOM` itself, so its input is the source chart the chart fingerprint describes.
@@ -1039,7 +1039,7 @@ describe('player', () => {
 
   test('player: onPlaylogRecorded captures the resolved chart, raw inputs, and native result cache', async () => {
     // BPM 240 → measure 1 starts at chart 1.0 s. One press near the note, then natural chart end.
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
     json.metadata.title = 'Playlog Test';
     json.metadata.total = 300;
@@ -1093,7 +1093,7 @@ describe('player', () => {
   test('player: replayInputs re-drives a recorded playlog deterministically', async () => {
     // BPM 240 → notes at 1.0 s ('11') and 1.5 s ('12'). Record a play with two slightly-off presses, then replay
     // the recorded input stream — the judgments must reproduce exactly, even at a different engine speed.
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
     json.metadata.total = 300;
     json.events = [
@@ -1220,7 +1220,7 @@ describe('player', () => {
     // BPM 240 → one note at 1.0 s; the replayed press lands 35 ms LATE. Under the default (LR2, RANK 2 → GREAT
     // ±40 ms) and beatoraja (judgerank 75 % → GREAT ±45 ms) windows that is a GREAT; under IIDX (GREAT ±33.33 ms,
     // GOOD ±116.67 ms) it is a GOOD.
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
     json.metadata.rank = 2;
     json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
@@ -1244,7 +1244,7 @@ describe('player', () => {
     // 250 ms late is inside it; the same press 250 ms early is out of reach entirely, so the note survives and
     // misses on its own deadline. The `19` note is only there to put the chart in 7-key mode — beatoraja's
     // five-key BAD window is symmetric.
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
     json.metadata.rank = 3;
     json.events = [
@@ -1271,8 +1271,8 @@ describe('player', () => {
   test("player: scratch lanes judge on the ruleset's own scratch window", async () => {
     // beatoraja widens the turntable: GREAT is ±60 ms on a key lane but ±70 ms on scratch, so the same 65 ms late
     // press is a GOOD on `11` and a GREAT on `16`.
-    const chart = (): ReturnType<typeof createEmptyJson> => {
-      const json = createEmptyJson('bms');
+    const chart = (): ReturnType<typeof createEmptyJSON> => {
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 240;
       json.metadata.rank = 3;
       json.events = [
@@ -1300,7 +1300,7 @@ describe('player', () => {
     // LR2 (`lowest`) always clears the oldest note in reach, while beatoraja (`combo`) hands the press to the
     // second note once the first has fallen out of the late side of its GOOD window. The `19` note only puts the
     // chart in 7-key mode.
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 240; // one measure = 1 s
     json.metadata.rank = 2;
     json.events = [

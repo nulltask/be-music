@@ -357,7 +357,7 @@ describe('buildDiffMarkdown', () => {
       createSnapshot({ 'utils.kept': 100, 'utils.added': 100 }, { gitSha: 'bbbbbbbb2222' }),
       8,
       12,
-      { repositoryUrl: 'https://github.com/o/r', changedPackages: ['utils'] },
+      { repositoryURL: 'https://github.com/o/r', changedPackages: ['utils'] },
     );
 
     expect(markdown).toContain('[`aaaaaaaa`](https://github.com/o/r/commit/aaaaaaaa1111)');

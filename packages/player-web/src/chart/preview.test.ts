@@ -1,5 +1,5 @@
-import type { BeMusicJson } from '@be-music/json';
-import { createEmptyJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import {
   CHART_PREVIEW_STOP_FADE_OUT_SECONDS,
@@ -24,16 +24,16 @@ vi.mock('../collection/collection.ts', () => collectionMocks);
  * already covered in collection-level tests; here we only need to observe preview scheduling behavior.
  */
 
-function makeBmsChart(preview: string | undefined): BeMusicJson {
-  const json = createEmptyJson('bms');
+function makeBMSChart(preview: string | undefined): BeMusicJSON {
+  const json = createEmptyJSON('bms');
   if (preview !== undefined) {
     json.bms.preview = preview;
   }
   return json;
 }
 
-function makeBmsonChart(previewMusic: string | undefined): BeMusicJson {
-  const json = createEmptyJson('bmson');
+function makeBmsonChart(previewMusic: string | undefined): BeMusicJSON {
+  const json = createEmptyJSON('bmson');
   if (previewMusic !== undefined) {
     json.bmson.info = { ...json.bmson.info, previewMusic };
   }
@@ -86,7 +86,7 @@ function makePreviewAudioMocks(): { audioContext: AudioContext; output: AudioNod
   return { audioContext, output: makeGainNode() as unknown as AudioNode, sources };
 }
 
-function makePreviewTarget(chart: BeMusicJson): ChartPreviewTarget {
+function makePreviewTarget(chart: BeMusicJSON): ChartPreviewTarget {
   return {
     song: {
       id: 'song',
@@ -118,7 +118,7 @@ beforeEach(() => {
 
 describe('resolveChartPreviewPath', () => {
   test('returns `#PREVIEW` from a BMS chart', () => {
-    const chart = makeBmsChart('preview.ogg');
+    const chart = makeBMSChart('preview.ogg');
     expect(resolveChartPreviewPath(chart)).toBe('preview.ogg');
   });
 
@@ -130,21 +130,21 @@ describe('resolveChartPreviewPath', () => {
   test('prefers BMS `#PREVIEW` over bmson `previewMusic` if both fields are populated', () => {
     // Charts can theoretically be re-serialized from one format to another and end up with both populated; pin the
     // priority so the behavior stays predictable.
-    const chart = createEmptyJson('bms');
+    const chart = createEmptyJSON('bms');
     chart.bms.preview = 'bms.wav';
     chart.bmson.info = { ...chart.bmson.info, previewMusic: 'bmson.wav' };
     expect(resolveChartPreviewPath(chart)).toBe('bms.wav');
   });
 
   test('returns undefined when neither field is set', () => {
-    expect(resolveChartPreviewPath(createEmptyJson('bms'))).toBeUndefined();
-    expect(resolveChartPreviewPath(createEmptyJson('bmson'))).toBeUndefined();
+    expect(resolveChartPreviewPath(createEmptyJSON('bms'))).toBeUndefined();
+    expect(resolveChartPreviewPath(createEmptyJSON('bmson'))).toBeUndefined();
   });
 
   test('treats an empty string as "unset"', () => {
     // The parser preserves the literal value; an empty `#PREVIEW` line shouldn't masquerade as a preview path. The
     // engine uses this helper directly so the empty-string check has to live here, not in the engine.
-    const chart = makeBmsChart('');
+    const chart = makeBMSChart('');
     expect(resolveChartPreviewPath(chart)).toBeUndefined();
   });
 });
@@ -153,21 +153,21 @@ describe('collectChartPreviewTriggers', () => {
   test('returns an empty array for a non-positive cutoff', () => {
     // Exposed as a guard so a misconfigured engine (`fallbackDurationSeconds: 0`) silently does no work rather than
     // scheduling every trigger up to t=0.
-    const chart = createEmptyJson('bms');
+    const chart = createEmptyJSON('bms');
     expect(collectChartPreviewTriggers(chart, 0)).toEqual([]);
     expect(collectChartPreviewTriggers(chart, -5)).toEqual([]);
     expect(collectChartPreviewTriggers(chart, Number.NaN)).toEqual([]);
   });
 
   test('returns an empty array for a chart with no events', () => {
-    expect(collectChartPreviewTriggers(createEmptyJson('bms'), 30)).toEqual([]);
+    expect(collectChartPreviewTriggers(createEmptyJSON('bms'), 30)).toEqual([]);
   });
 
   test('filters triggers strictly inside the cutoff window and sorts them by seconds', () => {
     // Build a tiny chart with a few BGM events. We don't need the parser to wire the resolver — `collectSampleTriggers`
     // walks the events array and the timing resolver maps measure positions to seconds. With BPM 120 and the default
     // measure length 1 (= 4 beats = 2 s), each measure adds 2 s.
-    const chart = createEmptyJson('bms');
+    const chart = createEmptyJSON('bms');
     chart.metadata.bpm = 120;
     chart.measures = [
       { index: 0, length: 1 },
@@ -190,7 +190,7 @@ describe('collectChartPreviewTriggers', () => {
   test('includes visible keysounds but excludes invisible objects in fallback preview playback', () => {
     // The fallback is AUTO PLAY-style chart playback: visible keysounds are audible, but invisible objects only update
     // lane keysound state during gameplay and should not directly sound in AUTO/preview.
-    const chart = createEmptyJson('bms');
+    const chart = createEmptyJSON('bms');
     chart.metadata.bpm = 120;
     chart.measures = [{ index: 0, length: 1 }];
     chart.events = [
@@ -212,7 +212,7 @@ describe('collectChartPreviewTriggers', () => {
     // and everything later stay silent — the select-scene preview matches. BPM 120 → each default-length measure =
     // 4 beats = 2 s; timing integrates the negative slot at |BPM| so the measure-2 trigger still resolves to a finite
     // chart-time (t = 4 s) — it is the reversal, not the cutoff, that drops it.
-    const chart = createEmptyJson('bms');
+    const chart = createEmptyJSON('bms');
     chart.metadata.bpm = 120;
     chart.measures = [
       { index: 0, length: 1 },
@@ -237,7 +237,7 @@ describe('collectChartPreviewTriggers', () => {
 
   test('excludes invisible objects on the extended 24-key lanes too', () => {
     // bmson `keyboard-24k` hidden notes (`key_channels`) become invisible objects on `3A`-`3Q` / `4A`-`4Q`.
-    const chart = createEmptyJson('bms');
+    const chart = createEmptyJSON('bms');
     chart.metadata.bpm = 120;
     chart.measures = [{ index: 0, length: 1 }];
     chart.events = [
@@ -253,7 +253,7 @@ describe('collectChartPreviewTriggers', () => {
 
 describe('ChartPreviewEngine', () => {
   test('schedules visible fallback preview keysounds alongside BGM triggers', async () => {
-    const chart = createEmptyJson('bms');
+    const chart = createEmptyJSON('bms');
     chart.metadata.bpm = 120;
     chart.measures = [{ index: 0, length: 1 }];
     chart.events = [
@@ -273,7 +273,7 @@ describe('ChartPreviewEngine', () => {
   });
 
   test('stops the previous BMS source when the same WAV slot retriggers', async () => {
-    const chart = createEmptyJson('bms');
+    const chart = createEmptyJSON('bms');
     chart.metadata.bpm = 120;
     chart.measures = [{ index: 0, length: 1 }];
     chart.events = [

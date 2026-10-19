@@ -1,5 +1,5 @@
 import type { RandomDraws } from '@be-music/chart';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import { resolveChartRulesetFacts, resolvePlayChart } from '../../core/play-chart.ts';
 import { createCoursePlaylog, type BeMusicCoursePlaylog, type PlaylogCourseStageEntry } from '../../playlog/course.ts';
 import type { BeMusicPlaylog, PlaylogRecorderInfo } from '../../playlog/format.ts';
@@ -29,7 +29,7 @@ import {
 /** One stage of a NONSTOP course: its chart as loaded and what its cut-out play log names it by. */
 export interface NonstopCourseStage {
   /** The stage chart as loaded (`#RANDOM` / `#SWITCH` still in). */
-  chart: BeMusicJson;
+  chart: BeMusicJSON;
   /** The chart's path, or only its extension: the lane-mode input (a `.pms` stage stitches and counts as 9 KEY). */
   chartPath?: string;
   /**
@@ -58,13 +58,13 @@ export interface PrepareNonstopCourseOptions {
    * The host's asset plumbing: given every stage chart as played, the path each stitched WAV / BMP loads from
    * (`StitchNonstopOptions.assetPath`). Without it a resource keeps the path its stage chart names.
    */
-  assetPath?: (stageCharts: readonly BeMusicJson[]) => StitchNonstopOptions['assetPath'];
+  assetPath?: (stageCharts: readonly BeMusicJSON[]) => StitchNonstopOptions['assetPath'];
 }
 
 /** A NONSTOP course stitched into one chart, ready to play. */
 export interface PreparedNonstopCourse {
   /** The stitched chart. */
-  chart: BeMusicJson;
+  chart: BeMusicJSON;
   map: NonstopStitchMap;
   connections: NonstopConnection[];
   placement: 'intended' | 'lr2';
@@ -73,7 +73,7 @@ export interface PreparedNonstopCourse {
   /** The stages as given. */
   stages: NonstopCourseStage[];
   /** Each stage chart as played: control flow resolved, the course's long-note constraint applied. */
-  stageCharts: BeMusicJson[];
+  stageCharts: BeMusicJSON[];
   /** The `#RANDOM` / `#SWITCH` draws each stage chart was resolved with. */
   stageDraws: RandomDraws[];
 }
@@ -97,7 +97,7 @@ export function prepareNonstopCourse(
   stages: readonly NonstopCourseStage[],
   options: PrepareNonstopCourseOptions,
 ): PrepareNonstopCourseResult {
-  const stageCharts: BeMusicJson[] = [];
+  const stageCharts: BeMusicJSON[] = [];
   const stageDraws: RandomDraws[] = [];
   for (const [index, stage] of stages.entries()) {
     try {
@@ -116,7 +116,7 @@ export function prepareNonstopCourse(
   const stitch = options.stitch ?? NONSTOP_STITCH_VERSION;
   const assetPath = options.assetPath?.(stageCharts);
   const stitched = stitchNonstopCourse(
-    stageCharts.map((chart, index) => ({ chart, pms: isPmsPath(stages[index]!.chartPath) })),
+    stageCharts.map((chart, index) => ({ chart, pms: isPMSPath(stages[index]!.chartPath) })),
     {
       connections,
       placement,
@@ -203,6 +203,6 @@ function resolveStageChartFacts(stage: NonstopCourseStage): NonstopStageChartFac
   };
 }
 
-function isPmsPath(chartPath: string | undefined): boolean {
+function isPMSPath(chartPath: string | undefined): boolean {
   return chartPath?.toLowerCase().endsWith('.pms') === true;
 }

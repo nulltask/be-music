@@ -32,7 +32,7 @@
         "genre": "",
         "modeHint": "beat-5k",
         "level": 0,
-        "initBpm": 120,
+        "initBPM": 120,
         "resolution": 240
       },
       "bga": {
@@ -184,7 +184,7 @@
       "randomPatterns": [],
       "title": "Sample",
       "playVariant": "5",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0",
@@ -214,8 +214,8 @@
           "percent": 75
         },
         "noteCount": 12,
-        "chartFingerprint": "bmfp0:b85d9de4a4e73c292cd011c7e41be79c2c1e3e7b700cf8189508089d13b33cf7",
-        "playFingerprint": "bmfp0:b85d9de4a4e73c292cd011c7e41be79c2c1e3e7b700cf8189508089d13b33cf7",
+        "chartFingerprint": "bmfp0:f389d618faf2d164642d5a50c999edcf3a68907fbeab7ebe01a52a0fb5859be5",
+        "playFingerprint": "bmfp0:f389d618faf2d164642d5a50c999edcf3a68907fbeab7ebe01a52a0fb5859be5",
         "title": "Sample",
         "artist": "Codex",
         "playLevel": "0",
