@@ -88,7 +88,7 @@ flowchart TD
 
 [Be-Music Fingerprint](./fingerprint-spec.ja.md) は同じモジュールを通して項目を読むので、Resolved 層が遊ぶ内容そのもので譜面を識別します。Resolved 層が拍と秒で持つところを小節内の正確な位置で持つことと、`control-flow.ts` のフレーム操作をすべての結果についてまとめて動かすことだけが違います。
 
-それぞれの読み方の理由と、be-music が意図して仕様から外れている箇所は、[BMS / bmson 互換性ノート](./format-compat.ja.md)（§5 に判断の一覧）と、[BMS](./bms-spec.ja.md)・[bmson](./bmson-spec.ja.md) の仕様書に記録しています。
+それぞれの読み方の理由と、be-music が意図して仕様から外れている箇所は、[BMS / bmson 互換性ノート](./format-compat.ja.md)（§5 に判断の一覧）と、[BMS](./bms-spec.ja.md)・[bmson](./bmson-spec.ja.md) の仕様書に記録しています。譜面フォーマットより上では、be-music は判定 ruleset の外で LR2 を優先します。判定、記録、オプション、スキンで 2 つのエンジンがどう違い、それぞれの違いがどの層に属するかは [LR2 と beatoraja のセマンティクス](./semantics-lr2-beatoraja.ja.md) にまとめています。
 
 ## 層の検証
 
