@@ -1,7 +1,6 @@
 import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
 import { createEmptyJson } from '@be-music/json';
 import type { Lr2Skin } from '@be-music/lr2-skin';
-import { LR2_TIMER } from '@be-music/lr2-skin/ids';
 import type { PlayResult, PlayRunKind, SystemSoundSet } from '@be-music/scene-model';
 import type { Texture } from 'pixi.js';
 import { describe, expect, it, vi } from 'vite-plus/test';
@@ -12,7 +11,7 @@ import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
 import { phantomSkin } from '../skins/phantom/index.ts';
 import { resolveBeatorajaResultTiming } from '../view/beatoraja/result-view.ts';
 import { BUILT_IN_RESULT_TIMING, BuiltInResultView, resolveBuiltInRankLabel } from '../view/built-in/result-view.ts';
-import { resolveLr2GraphReveal, resolveLr2ResultTimers, resolveLr2ResultTiming } from '../view/lr2/result-view.ts';
+import { resolveLr2ResultTiming } from '../view/lr2/result-view.ts';
 import type { BeatorajaKit, Lr2Kit } from './family-kit.ts';
 import { createResultScene } from './result.ts';
 
@@ -162,45 +161,6 @@ describe('resolveLr2ResultTiming', () => {
     expect(resolveLr2ResultTiming({ timing: { startInput: 300 } })).toEqual({ inputDelayMs: 300, fadeOutMs: 0 });
     expect(resolveLr2ResultTiming({ timing: {} })).toEqual({ inputDelayMs: 1500, fadeOutMs: 0 });
     expect(resolveLr2ResultTiming({ timing: { startInput: -1 } }).inputDelayMs).toBe(0);
-  });
-});
-
-describe('resolveLr2ResultTimers', () => {
-  const frame = (nowMs: number, steps: { graphShownAtMs?: number; updateShownAtMs?: number } = {}) => ({
-    clock: { nowMs, enteredAtMs: 1000 },
-    inputOpenAtMs: 1300,
-    ...steps,
-  });
-
-  it('runs timer 0 from the entry, and timers 1 and 150 once input has opened', () => {
-    expect([...resolveLr2ResultTimers(frame(1299))]).toEqual([[LR2_TIMER.SCENE_START, 1000]]);
-    expect([...resolveLr2ResultTimers(frame(1300))]).toEqual([
-      [LR2_TIMER.SCENE_START, 1000],
-      [LR2_TIMER.START_INPUT, 1300],
-      [LR2_TIMER.RESULT_GRAPH_START, 1300],
-    ]);
-  });
-
-  it('runs timer 151 from when the graphs showed and timer 152 from when the record update did', () => {
-    const timers = resolveLr2ResultTimers(frame(5000, { graphShownAtMs: 2000, updateShownAtMs: 4000 }));
-    expect(timers.get(LR2_TIMER.RESULT_GRAPH_END)).toBe(2000);
-    expect(timers.get(LR2_TIMER.RESULT_UPDATE)).toBe(4000);
-    expect(resolveLr2ResultTimers(frame(1500)).has(LR2_TIMER.RESULT_GRAPH_END)).toBe(false);
-  });
-});
-
-describe('resolveLr2GraphReveal', () => {
-  it('shows nothing before its timer or its start, then sweeps to all of it at its end', () => {
-    expect(resolveLr2GraphReveal(undefined, 500, 2000)).toBe(0);
-    expect(resolveLr2GraphReveal(499, 500, 2000)).toBe(0);
-    expect(resolveLr2GraphReveal(1250, 500, 2000)).toBe(0.5);
-    expect(resolveLr2GraphReveal(2000, 500, 2000)).toBe(1);
-    expect(resolveLr2GraphReveal(9000, 500, 2000)).toBe(1);
-  });
-
-  it('shows all of a graph whose end is not after its start, once started', () => {
-    expect(resolveLr2GraphReveal(0, 0, 0)).toBe(1);
-    expect(resolveLr2GraphReveal(100, 200, 200)).toBe(0);
   });
 });
 
