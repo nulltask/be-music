@@ -111,7 +111,7 @@ const sceneSessionSources = ['packages/player-web/src/session/**/*.ts'];
 const familyViewSources = ['packages/player-web/src/view/**/*.ts'];
 const webHostSources = ['packages/player-web/src/host/**/*.ts', 'packages/player-web/src/index.ts'];
 const webDemoSources = ['packages/player-web-demo/src/**/*.ts'];
-/** Import specifiers that reach the named directories of `player-web/src`. */
+/** Import specifiers that reach the named directories of `player-web/src` (or of the web demo's `src`). */
 const webLayerGroup = (...dirs: string[]): string[] => dirs.flatMap((dir) => [`**/${dir}`, `**/${dir}/**`]);
 const lowerLayerMessage =
   'A lower layer of the web runtime knows no scene: it imports no host, session or view module.';
@@ -159,6 +159,18 @@ const webAudioGlobals = audioContextNames.map((name) => ({ name, message: webAud
 const webAudioProperties = ['globalThis', 'window', 'self'].flatMap((object) =>
   audioContextNames.map((property) => ({ object, property, message: webAudioMessage })),
 );
+/**
+ * The web demo's layers (docs/player-web.md, "How the demo is built"): `main.ts` boots the app, `app/` composes it (the
+ * scene router, the routes, the shell), `ui/` is the Debug Menu and the panels, and `services/` hold the state and rules
+ * the others share. A service knows neither the UI nor the wiring: it imports no lil-gui, `ui/` or `app/` module, not
+ * even a type, and reaches the app through the deps it is given.
+ */
+const webDemoServiceSources = ['packages/player-web-demo/src/services/**/*.ts'];
+const webDemoServiceMessage = 'A demo service imports no lil-gui, ui/ or app/ module; it takes what it needs as deps.';
+const webDemoServiceImports = {
+  paths: [...engineTypeImports.paths, { name: 'lil-gui', message: webDemoServiceMessage }],
+  patterns: [{ group: ['lil-gui/*', ...webLayerGroup('ui', 'app')], message: webDemoServiceMessage }],
+};
 
 const workspaceProjects = workspacePackages.map((name) => ({
   extends: true as const,
@@ -444,6 +456,12 @@ export default defineConfig({
           'no-restricted-imports': ['error', engineTypeImports],
           'no-restricted-globals': ['error', ...webAudioGlobals],
           'no-restricted-properties': ['error', ...webAudioProperties],
+        },
+      },
+      {
+        files: webDemoServiceSources,
+        rules: {
+          'no-restricted-imports': ['error', webDemoServiceImports],
         },
       },
       {
