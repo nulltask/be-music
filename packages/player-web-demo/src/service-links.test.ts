@@ -17,15 +17,17 @@ describe('siteOfPlayHost', () => {
 
 describe('leaderboardLink', () => {
   test('points at the Leaderboard host next to a play host', () => {
-    expect(leaderboardLink('/leaderboard/players/abc', 'play.be-music.app')).toBe(
-      'https://leaderboard.be-music.app/leaderboard/players/abc',
-    );
-    expect(leaderboardLink('/leaderboard', 'play.preview.be-music.app')).toBe(
-      'https://leaderboard.preview.be-music.app/leaderboard',
+    expect(leaderboardLink('/players/abc', 'play.be-music.app')).toBe('https://leaderboard.be-music.app/players/abc');
+    expect(leaderboardLink('/', 'play.preview.be-music.app')).toBe('https://leaderboard.preview.be-music.app/');
+  });
+
+  test('a branch Preview URL of the preview Player links the preview Leaderboard', () => {
+    expect(leaderboardLink('/', 'feature-x-play-preview.be-music.workers.dev')).toBe(
+      'https://leaderboard.preview.be-music.app/',
     );
   });
 
-  test('stays relative where the player’s Worker serves the Leaderboard itself', () => {
-    expect(leaderboardLink('/leaderboard', 'localhost')).toBe('/leaderboard');
+  test('anywhere else links production', () => {
+    expect(leaderboardLink('/players/abc', 'localhost')).toBe('https://leaderboard.be-music.app/players/abc');
   });
 });

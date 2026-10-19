@@ -21,10 +21,10 @@ export default defineConfig(({ mode }) => {
       // Static Assets host the built SPA; `single-page-application` returns index.html for any unmatched path. The
       // `runWorkerFirst` entries send `/ffmpeg-core/*` and `/__url-load-proxy` through the Worker (src/index.ts), so
       // the oversized ffmpeg core streams from R2 and URL auto-load archives bypass browser CORS, and send the
-      // Leaderboard's API and pages to it through the Service Binding.
+      // Leaderboard's API to it through the Service Binding.
       assets: {
         notFoundHandling: 'single-page-application',
-        runWorkerFirst: ['/ffmpeg-core/*', '/__url-load-proxy', '/api/*', '/leaderboard', '/leaderboard/*'],
+        runWorkerFirst: ['/ffmpeg-core/*', '/__url-load-proxy', '/api/*'],
       },
       env: {
         ASSETS: bindings.assets(),
