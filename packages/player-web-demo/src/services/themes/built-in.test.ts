@@ -72,6 +72,17 @@ describe('BuiltInThemeService', () => {
     expect(vi.mocked(options.setStatus).mock.calls.at(-1)![0]).toMatch(/^Skin "broken" was not added: /);
   });
 
+  test('a plain JavaScript skin without fontLoads is refused, not added and half-loaded', () => {
+    const { service, options } = harness();
+    const { fontLoads: _, ...rest } = plainSkin;
+    const noFonts = { ...rest, id: 'no-fonts' } as unknown as BeMusicSkin;
+    expect(() => service.addBeMusicSkin(noFonts)).not.toThrow();
+    expect(BE_MUSIC_SKINS.skins).not.toContain(noFonts);
+    expect(document.fonts.load).not.toHaveBeenCalled();
+    expect(options.handleBuiltInSkinChange).not.toHaveBeenCalled();
+    expect(vi.mocked(options.setStatus).mock.calls.at(-1)![0]).toMatch(/^Skin "no-fonts" was not added: fontLoads /);
+  });
+
   test('a skin module is loaded from a URL only once one is given and the player confirms it', async () => {
     const { service, options } = harness();
     await service.addBeMusicSkinFromUrl('  ');
