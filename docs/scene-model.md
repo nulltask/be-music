@@ -23,8 +23,8 @@ flowchart TD
 
 The package is runtime-neutral: it imports no renderer, reads no DOM or Node global and no clock, and draws no random
 number. Time and randomness come in as inputs. `pnpm run check` keeps Node built-ins and DOM / Node globals out with the
-runtime-neutral lint rules (the deterministic judge's clock and `Math.random` rules do not cover the package), and a
-test checks that it builds on `@be-music/chart`, `@be-music/json` and `@be-music/player` only.
+runtime-neutral lint rules, and clocks, timers and `Math.random` with the deterministic judge's, and a test checks that
+it builds on `@be-music/chart`, `@be-music/json` and `@be-music/player` only.
 
 The models are derived from what the scenes did before them. Where the built-in / LR2 scenes and the beatoraja
 scenes differed, the model picks one behaviour, following the compatibility policy: what LR2 does, and beatoraja's
