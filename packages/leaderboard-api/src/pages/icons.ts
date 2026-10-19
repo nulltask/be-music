@@ -4,7 +4,7 @@ import { FONTS } from './fonts.generated.ts';
 import { ICONS } from './icons.generated.ts';
 
 /** The web app manifest's path; the pages link it so a home-screen shortcut gets the icon and the name. */
-export const MANIFEST_PATH = '/leaderboard/manifest.webmanifest';
+export const MANIFEST_PATH = '/manifest.webmanifest';
 
 /** The `<link>` tags every page carries: the tab icon, the iOS home-screen icon, and the manifest. */
 export const ICON_LINKS = {
@@ -18,8 +18,8 @@ export function webManifest() {
   return {
     name: 'be-music Leaderboard',
     short_name: 'Leaderboard',
-    start_url: '/leaderboard',
-    scope: '/leaderboard',
+    start_url: '/',
+    scope: '/',
     display: 'browser',
     background_color: '#0a0e18',
     theme_color: '#0a0e18',

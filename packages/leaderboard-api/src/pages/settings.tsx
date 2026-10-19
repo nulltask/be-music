@@ -20,7 +20,7 @@ function Card(props: { title: string; description?: string; children: Child }) {
  * The signed-in player's settings: handle, display name, icon and passkeys. The forms and buttons are wired by the
  * client script (client/main.ts), which calls the account API; signed out, the page offers the passkey sign-in.
  */
-export async function settingsPage(c: PageContext<'/leaderboard/settings'>) {
+export async function settingsPage(c: PageContext<'/settings'>) {
   const viewer = c.get('viewer');
   c.header('cache-control', PAGE_CACHE);
   const t = pageMessages(c).settings;

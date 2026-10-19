@@ -25,35 +25,32 @@ import { APP_CSS } from './styles.generated.ts';
 import { topPage } from './top.tsx';
 import { loadViewer } from './viewer.ts';
 
-/** Server-rendered Leaderboard pages under `/leaderboard` (docs/leaderboard.md section 10). */
+/** Server-rendered Leaderboard pages, at the root of the Leaderboard's own host (docs/leaderboard.md section 10). */
 export function mountPages(app: Hono<AppEnv>): void {
   // Every page knows who is looking (the header shows the account); assets skip the lookup.
-  app.use('/leaderboard', loadViewer);
-  app.use('/leaderboard/*', loadViewer);
+  app.use('/', loadViewer);
+  app.use('/*', loadViewer);
 
-  // On its own host (`leaderboard.be-music.app`) the pages still live under `/leaderboard`; the bare host leads there.
-  app.get('/', (c) => c.redirect('/leaderboard'));
-  app.get('/leaderboard', topPage);
-  app.get('/leaderboard/', topPage);
-  app.get('/leaderboard/scores/:id', scorePage);
-  app.get('/leaderboard/scores/:id/card', scoreCardImage);
-  app.get('/leaderboard/charts/:chartFingerprint', chartPage);
-  app.get('/leaderboard/courses/:courseFingerprint', coursePage);
-  app.get('/leaderboard/course-scores/:id', courseRunPage);
-  app.get('/leaderboard/players/:handle', playerPage);
-  app.get('/leaderboard/players/:handle/avatar', avatarImage);
-  app.get('/leaderboard/chartsets/:id', chartsetPage);
-  app.get('/leaderboard/settings', settingsPage);
-  app.get('/leaderboard/about', aboutPage);
-  app.get('/leaderboard/help', helpPage);
+  app.get('/', topPage);
+  app.get('/scores/:id', scorePage);
+  app.get('/scores/:id/card', scoreCardImage);
+  app.get('/charts/:chartFingerprint', chartPage);
+  app.get('/courses/:courseFingerprint', coursePage);
+  app.get('/course-scores/:id', courseRunPage);
+  app.get('/players/:handle', playerPage);
+  app.get('/players/:handle/avatar', avatarImage);
+  app.get('/chartsets/:id', chartsetPage);
+  app.get('/settings', settingsPage);
+  app.get('/about', aboutPage);
+  app.get('/help', helpPage);
 
   // Switches the display ruleset and goes back to the page it was switched on. A dedicated URL keeps the setting out of
   // shareable page URLs, so opening someone's link never changes the viewer's setting.
-  app.get('/leaderboard/ruleset/:ruleset', (c) => {
+  app.get('/ruleset/:ruleset', (c) => {
     const ruleset = c.req.param('ruleset');
     if (isRuleset(ruleset)) {
       setCookie(c, RULESET_COOKIE, ruleset, {
-        path: '/leaderboard',
+        path: '/',
         maxAge: RULESET_COOKIE_MAX_AGE,
         sameSite: 'Lax',
         secure: new URL(c.req.url).protocol === 'https:',
@@ -63,11 +60,11 @@ export function mountPages(app: Hono<AppEnv>): void {
   });
 
   // Switches the page language, like the ruleset switch: kept in a cookie, then back to the page it was switched on.
-  app.get('/leaderboard/lang/:locale', (c) => {
+  app.get('/lang/:locale', (c) => {
     const locale = c.req.param('locale');
     if (isLocale(locale)) {
       setCookie(c, LOCALE_COOKIE, locale, {
-        path: '/leaderboard',
+        path: '/',
         maxAge: RULESET_COOKIE_MAX_AGE,
         sameSite: 'Lax',
         secure: new URL(c.req.url).protocol === 'https:',
@@ -79,7 +76,7 @@ export function mountPages(app: Hono<AppEnv>): void {
   // The API reference, rendered by Scalar from the OpenAPI document. Its script is pinned so the page does not change
   // under us.
   app.get(
-    '/leaderboard/api',
+    '/api-reference',
     Scalar({
       url: '/api/v0/openapi.json',
       pageTitle: 'be-music Leaderboard API',
@@ -101,5 +98,5 @@ export function mountPages(app: Hono<AppEnv>): void {
     }),
   );
 
-  app.get('/leaderboard/*', (c) => notFound(c, 'page'));
+  app.get('/*', (c) => notFound(c, 'page'));
 }

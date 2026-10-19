@@ -11,16 +11,18 @@ export function resolveDisplayRuleset(cookieValue: string | undefined): RulesetI
 
 /**
  * Where to go after switching the ruleset: back to the Leaderboard page the switch was made on. Anything that is not a
- * same-site path under `/leaderboard` (another host, `//evil`, a backslash trick) goes to the top page instead, so the
- * switch cannot be used as an open redirect.
+ * page on this site (another host, `//evil`, a backslash trick, the API) goes to the top page instead, so the switch
+ * cannot be used as an open redirect.
  */
 export function safeReturnPath(next: string | undefined): string {
-  if (next === undefined || !next.startsWith('/leaderboard') || next.includes('\\')) return '/leaderboard';
+  if (next === undefined || !next.startsWith('/') || next.includes('\\')) return '/';
   try {
     const url = new URL(next, 'https://leaderboard.invalid');
-    if (url.origin !== 'https://leaderboard.invalid' || !url.pathname.startsWith('/leaderboard')) return '/leaderboard';
+    if (url.origin !== 'https://leaderboard.invalid' || url.pathname === '/api' || url.pathname.startsWith('/api/')) {
+      return '/';
+    }
     return `${url.pathname}${url.search}`;
   } catch {
-    return '/leaderboard';
+    return '/';
   }
 }

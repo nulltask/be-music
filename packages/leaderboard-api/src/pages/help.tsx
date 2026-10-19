@@ -5,7 +5,7 @@ import { Layout, PageHeader } from './layout.tsx';
 import { meta, PAGE_CACHE, pageLocale, pageMessages, type PageContext } from './page.tsx';
 
 /** What the figures and marks on the pages mean: one place for the legend, the terms and the switches. */
-export function helpPage(c: PageContext<'/leaderboard/help'>) {
+export function helpPage(c: PageContext<'/help'>) {
   c.header('cache-control', PAGE_CACHE);
   const content = HELP[pageLocale(c)];
   return c.html(

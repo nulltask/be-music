@@ -17,9 +17,9 @@ be-music の Leaderboard API です。Cloudflare Workers 上の Hono アプリ�
 - `GET /api/v0/scores/:id` と `.../playlog`。
 - コースのプレイ（docs/leaderboard.ja.md 6.1 節）: `POST /api/v0/course-scores`、最新のプレイ、1 プレイ、そのプレイログ、
   プレイの非表示、コース、そのランキングと自分の順位。コースとルールセットごとのベスト（トロフィーのベストを含む）を持ちます。
-- `GET /api/v0/openapi.json`: OpenAPI 3.1 のドキュメント。ルートの valibot スキーマ（`src/api/schemas.ts`）から生成します。リファレンスページは `/leaderboard/api` です。コピーを [`openapi.json`](./openapi.json) としてコミットしており、古くなるとテストが失敗します。API を変えたら `vp test run -u` で更新してください。
+- `GET /api/v0/openapi.json`: OpenAPI 3.1 のドキュメント。ルートの valibot スキーマ（`src/api/schemas.ts`）から生成します。リファレンスページは `/api-reference` です。コピーを [`openapi.json`](./openapi.json) としてコミットしており、古くなるとテストが失敗します。API を変えたら `vp test run -u` で更新してください。
 
-- `/leaderboard` 以下のページ: 新着スコアとコースのプレイ（トップ）、スコア、譜面のランキング、作品、コース、
+- `leaderboard.be-music.app` のルートのページ: 新着スコアとコースのプレイ（トップ）、スコア、譜面のランキング、作品、コース、
   コースのプレイ、プレイヤー。
 
 未実装: 新しい `#RANDOM` の結果に対する L4 と L5、ライバル、OG カード。
@@ -56,7 +56,7 @@ pnpm --filter @be-music/leaderboard-api run build:worker
 `cloudflare.config.ts` とマイグレーションのスクリプトに書いてあります。新しい環境では作成して id を記録します。
 
 ```bash
-pnpm exec cf d1 create --name be-music-leaderboard-preview --primary-location-hint apac
+pnpm exec cf d1 create --name leaderboard-preview --primary-location-hint apac
 ```
 
 ```bash
@@ -107,10 +107,10 @@ pnpm --filter @be-music/leaderboard-api run db:migrate:preview
 
 環境は、どのサービスとも同じく 2 つです（docs/services.ja.md 2 章）。`main` が本番、`devel` がプレビューです。
 
-| 環境       | Worker                | ホスト                             | D1 / R2                        |
-| ---------- | --------------------- | ---------------------------------- | ------------------------------ |
-| 本番       | `leaderboard`         | `leaderboard.be-music.app`         | `be-music-leaderboard`         |
-| プレビュー | `leaderboard-preview` | `leaderboard.preview.be-music.app` | `be-music-leaderboard-preview` |
+| 環境       | Worker                | ホスト                             | D1                    | R2                             |
+| ---------- | --------------------- | ---------------------------------- | --------------------- | ------------------------------ |
+| 本番       | `leaderboard`         | `leaderboard.be-music.app`         | `leaderboard`         | `be-music-leaderboard`         |
+| プレビュー | `leaderboard-preview` | `leaderboard.preview.be-music.app` | `leaderboard-preview` | `be-music-leaderboard-preview` |
 
 `main` か `devel` に push するたびに、Deploy ワークフロー（`.github/workflows/deploy.yml`）が動きます。その環境の D1 に
 マイグレーションを適用してから、ほかの Worker より先にこの Worker をデプロイします。ほかの Worker がこの Worker を
@@ -139,9 +139,9 @@ Cookie は環境の親ドメインで共有します。
 
 ## ページ
 
-`/leaderboard` 以下のページは Hono JSX で、Tailwind CSS v4 と [Basecoat](https://basecoatui.com)（フレームワークの
+ページは Hono JSX で、Tailwind CSS v4 と [Basecoat](https://basecoatui.com)（フレームワークの
 ランタイムなしの shadcn/ui デザイン）でスタイルを付けています。`src/pages/app.css` は `src/pages/styles.generated.ts`
-にコンパイルされ、`/leaderboard/assets/app.<hash>.css` から配信されます。
+にコンパイルされ、`/assets/app.<hash>.css` から配信されます。
 
 スタイルシート、アイコン、シェアカードのフォント、クライアントスクリプト（`src/pages/*.generated.ts`）は生成物で、git には入れません。
 `pnpm install`、`dev`、デプロイ、テストの前に生成されます。`cf dev` の実行中にページのクラス、アイコン、`client/`
@@ -151,7 +151,7 @@ Cookie は環境の親ドメインで共有します。
 pnpm --filter @be-music/leaderboard-api run generate
 ```
 
-`build:css`、`build:icons`、`build:fonts`、`build:client` はそれぞれ 1 つだけ作ります。シェアカードの英数字は [Inter Tight](https://github.com/rsms/inter)（SIL Open Font License 1.1）で、`/leaderboard/assets/` から配信します。
+`build:css`、`build:icons`、`build:fonts`、`build:client` はそれぞれ 1 つだけ作ります。シェアカードの英数字は [Inter Tight](https://github.com/rsms/inter)（SIL Open Font License 1.1）で、`/assets/` から配信します。
 
 ### アイコン
 
@@ -161,7 +161,7 @@ pnpm --filter @be-music/leaderboard-api run generate
 pnpm --filter @be-music/leaderboard-api run build:icons
 ```
 
-アイコンは `src/pages/icons.generated.ts` にまとめられ、`/leaderboard/manifest.webmanifest` と並んで `/leaderboard/assets/<名前>.<hash>.<拡張子>` から配信されます。SVG の隣に手描きの PNG（`apple-touch-icon.png`、`icon-192.png`、`icon-512.png`）を置くと、描画したものの代わりにそちらを使います。
+アイコンは `src/pages/icons.generated.ts` にまとめられ、`/manifest.webmanifest` と並んで `/assets/<名前>.<hash>.<拡張子>` から配信されます。SVG の隣に手描きの PNG（`apple-touch-icon.png`、`icon-192.png`、`icon-512.png`）を置くと、描画したものの代わりにそちらを使います。
 
 ## テスト
 

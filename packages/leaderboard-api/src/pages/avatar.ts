@@ -11,13 +11,13 @@ const AVATAR_CACHE = 'public, max-age=86400';
 /** The same URL with the player's former handle replaced by the current one (query kept). */
 export function movedTo(requestUrl: string, former: string, current: string): string {
   const url = new URL(requestUrl);
-  const from = `/leaderboard/players/${encodeURIComponent(former)}`;
-  const to = `/leaderboard/players/${encodeURIComponent(current)}`;
+  const from = `/players/${encodeURIComponent(former)}`;
+  const to = `/players/${encodeURIComponent(current)}`;
   return `${url.pathname.replace(from, to)}${url.search}`;
 }
 
 /** A player's icon: the uploaded image from R2, or the one generated from the account. */
-export async function avatarImage(c: PageContext<'/leaderboard/players/:handle/avatar'>) {
+export async function avatarImage(c: PageContext<'/players/:handle/avatar'>) {
   const db = openDatabase(c.env.DB);
   const handle = c.req.param('handle');
   const found = await db.query.profile.findFirst({

@@ -34,8 +34,8 @@ export default defineConfig(({ mode }) => {
       // Hourly: ask BMS Search which work new and stale charts belong to (src/chartsets/refresh.ts).
       triggers: [triggers.scheduled({ schedule: '17 * * * *' })],
       env: {
-        // The databases and buckets keep their names from before the services were split.
-        DB: bindings.d1({ name: `be-music-leaderboard${suffix}`, id: databaseId }),
+        DB: bindings.d1({ name: `leaderboard${suffix}`, id: databaseId }),
+        // The buckets keep their names from before the services were split.
         BLOBS: bindings.r2({ name: `be-music-leaderboard${suffix}` }),
         SUBMIT_LIMITER: bindings.rateLimit({ namespace: preview ? '2001' : '1001', simple: { limit: 10, period: 60 } }),
         RIVAL_LIMIT: bindings.text('100'),

@@ -62,12 +62,12 @@ describe('session cookies', () => {
     // Only the session token, as when the five-minute cookie cache has expired: the session comes from D1, and the
     // response hands back a fresh cache so the next request need not ask D1 again.
     const token = cookie.split('; ').find((part) => part.includes('session_token='))!;
-    const response = await fetchApp('/leaderboard', { headers: { cookie: token } });
+    const response = await fetchApp('/', { headers: { cookie: token } });
     expect(response.status).toBe(200);
     expect(await response.text()).toContain('@player_');
     expect(response.headers.getSetCookie().some((set) => set.includes('session_data='))).toBe(true);
     // Signed out, nothing is set.
-    expect((await fetchApp('/leaderboard')).headers.getSetCookie()).toEqual([]);
+    expect((await fetchApp('/')).headers.getSetCookie()).toEqual([]);
   });
 });
 
@@ -75,44 +75,44 @@ describe('page language', () => {
   const html = async (path: string, headers: Record<string, string> = {}) => (await fetchApp(path, { headers })).text();
 
   test('follows Accept-Language, a picked language, and ?lang=, in English otherwise', async () => {
-    const english = await html('/leaderboard');
+    const english = await html('/');
     expect(english).toContain('<html lang="en"');
     expect(english).toContain('>Latest<');
 
-    const japanese = await html('/leaderboard', { 'accept-language': 'ja-JP,ja;q=0.9,en;q=0.8' });
+    const japanese = await html('/', { 'accept-language': 'ja-JP,ja;q=0.9,en;q=0.8' });
     expect(japanese).toContain('<html lang="ja"');
     expect(japanese).toContain('>最新<');
 
-    expect(await html('/leaderboard?lang=ja')).toContain('<html lang="ja"');
-    expect(await html('/leaderboard', { cookie: 'lb-lang=ja' })).toContain('<html lang="ja"');
+    expect(await html('/?lang=ja')).toContain('<html lang="ja"');
+    expect(await html('/', { cookie: 'lb-lang=ja' })).toContain('<html lang="ja"');
     // ?lang= wins over the cookie, so a shared link shows its language.
-    expect(await html('/leaderboard?lang=en', { cookie: 'lb-lang=ja' })).toContain('<html lang="en"');
+    expect(await html('/?lang=en', { cookie: 'lb-lang=ja' })).toContain('<html lang="en"');
   });
 
   test('the language switch keeps the pick in a cookie and goes back to the page', async () => {
-    const response = await fetchApp(`/leaderboard/lang/ja?next=${encodeURIComponent('/leaderboard?anonymous=1')}`);
+    const response = await fetchApp(`/lang/ja?next=${encodeURIComponent('/?anonymous=1')}`);
     expect(response.status).toBe(303);
-    expect(response.headers.get('location')).toBe('/leaderboard?anonymous=1');
+    expect(response.headers.get('location')).toBe('/?anonymous=1');
     expect(response.headers.get('set-cookie')).toContain('lb-lang=ja');
 
-    const unknown = await fetchApp('/leaderboard/lang/xx?next=https://evil.example/');
-    expect(unknown.headers.get('location')).toBe('/leaderboard');
+    const unknown = await fetchApp('/lang/xx?next=https://evil.example/');
+    expect(unknown.headers.get('location')).toBe('/');
     expect(unknown.headers.get('set-cookie')).toBeNull();
   });
 
   test('every page without data reads in Japanese, the About and Help prose included', async () => {
     const ja = { 'accept-language': 'ja' };
-    const about = await html('/leaderboard/about', ja);
+    const about = await html('/about', ja);
     expect(about).toContain('<title>このサイトについて');
     expect(about).toContain('プレイの採点');
     expect(about).toContain('href="#replays"');
     expect(about).toContain('id="replays"');
-    const help = await html('/leaderboard/help', ja);
+    const help = await html('/help', ja);
     expect(help).toContain('>プレイの見方<');
     expect(help).toContain('クリアに届かなかった。');
     expect(help).toContain('id="lamps"');
-    expect(await html('/leaderboard/settings', ja)).toContain('パスキーでログイン');
-    const missing = await fetchApp('/leaderboard/players/nobody-here', { headers: ja });
+    expect(await html('/settings', ja)).toContain('パスキーでログイン');
+    const missing = await fetchApp('/players/nobody-here', { headers: ja });
     expect(missing.status).toBe(404);
     expect(await missing.text()).toContain('このプレイヤーは存在しないか、削除されました。');
   });
@@ -120,7 +120,7 @@ describe('page language', () => {
 
 describe('about and help pages', () => {
   test('explains the scoring and is linked from the header of every page', async () => {
-    const about = await page('/leaderboard/about');
+    const about = await page('/about');
     expect(about.status).toBe(200);
     expect(about.html).toContain('How a play is scored');
     expect(about.html).toContain('What sets it apart');
@@ -128,29 +128,29 @@ describe('about and help pages', () => {
     expect(about.html).toContain('id="replays"');
     expect(about.html).toContain('href="#replays"');
     expect(about.html).toContain('href="https://github.com/nulltask/be-music"');
-    expect((await page('/leaderboard')).html).toContain('href="/leaderboard/about"');
+    expect((await page('/')).html).toContain('href="/about"');
   });
 
   test('the help page gathers the lamp legend and the terms, and is linked from the header', async () => {
-    const help = await page('/leaderboard/help');
+    const help = await page('/help');
     expect(help.status).toBe(200);
     for (const id of ['lamps', 'scores', 'judgments', 'rules', 'verification'])
       expect(help.html).toContain(`id="${id}"`);
     expect(help.html).toContain('EX HARD CLEAR');
-    const top = await page('/leaderboard');
-    expect(top.html).toContain('href="/leaderboard/help"');
+    const top = await page('/');
+    expect(top.html).toContain('href="/help"');
     expect(top.html).not.toContain('What the clear lamps mean');
   });
 });
 
 describe('site icons', () => {
   test('every page links the icons, which are served with their types, and the manifest lists them', async () => {
-    const top = await page('/leaderboard');
+    const top = await page('/');
     const favicon = /<link rel="icon" type="image\/svg\+xml" href="([^"]+)"/.exec(top.html)?.[1];
     const appleTouch = /<link rel="apple-touch-icon" href="([^"]+)"/.exec(top.html)?.[1];
-    expect(favicon).toMatch(/^\/leaderboard\/assets\/icon\.[0-9a-f]{12}\.svg$/);
-    expect(appleTouch).toMatch(/^\/leaderboard\/assets\/apple-touch-icon\.[0-9a-f]{12}\.png$/);
-    expect(top.html).toContain('<link rel="manifest" href="/leaderboard/manifest.webmanifest"');
+    expect(favicon).toMatch(/^\/assets\/icon\.[0-9a-f]{12}\.svg$/);
+    expect(appleTouch).toMatch(/^\/assets\/apple-touch-icon\.[0-9a-f]{12}\.png$/);
+    expect(top.html).toContain('<link rel="manifest" href="/manifest.webmanifest"');
 
     const svg = await fetchApp(favicon!);
     expect(svg.headers.get('content-type')).toBe('image/svg+xml');
@@ -159,11 +159,11 @@ describe('site icons', () => {
     const png = new Uint8Array(await (await fetchApp(appleTouch!)).arrayBuffer());
     expect([...png.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
 
-    const manifest = (await (await fetchApp('/leaderboard/manifest.webmanifest')).json()) as {
+    const manifest = (await (await fetchApp('/manifest.webmanifest')).json()) as {
       start_url: string;
       icons: Array<{ src: string; sizes: string }>;
     };
-    expect(manifest.start_url).toBe('/leaderboard');
+    expect(manifest.start_url).toBe('/');
     expect(manifest.icons.map((icon) => icon.sizes)).toEqual(['192x192', '512x512']);
     expect((await fetchApp(manifest.icons[1]!.src)).status).toBe(200);
   });
@@ -178,7 +178,7 @@ describe('API reference', () => {
     expect(spec.paths).toHaveProperty('/scores');
     expect(spec.paths).not.toHaveProperty('/openapi.json');
 
-    const reference = await page('/leaderboard/api');
+    const reference = await page('/api-reference');
     expect(reference.status).toBe(200);
     expect(reference.html).toContain('/api/v0/openapi.json');
     expect(reference.html).toContain('@scalar/api-reference@1.72.4');
@@ -198,7 +198,7 @@ describe('Leaderboard pages', () => {
     await submit(bob, chart, 4, evil, 3);
 
     // Anonymous plays stay off the default view.
-    const before = await page('/leaderboard');
+    const before = await page('/');
     expect(before.status).toBe(200);
     expect(before.html).toContain('No plays here yet');
     expect(before.cacheControl).toBe('private, max-age=0');
@@ -207,10 +207,10 @@ describe('Leaderboard pages', () => {
     // far): it stays off the public page, and only the player sees their own play, marked as not listed.
     const db = openDatabase(env.DB);
     await claimAccount(db, await userIdOf(alice));
-    expect((await page('/leaderboard')).html).toContain('No plays here yet');
-    const own = await page('/leaderboard', alice);
-    // Links to plays only: the page's speculation rules name /leaderboard/scores/ paths too.
-    expect(own.html.match(/href="\/leaderboard\/scores\//g)).toHaveLength(1);
+    expect((await page('/')).html).toContain('No plays here yet');
+    const own = await page('/', alice);
+    // Links to plays only: the page's speculation rules name /scores/ paths too.
+    expect(own.html.match(/href="\/scores\//g)).toHaveLength(1);
     expect(own.html).toContain('>not public<');
     expect(own.html).toContain('#1 / 1');
     // Its badge's help tip says why: the chart is not listed yet.
@@ -218,8 +218,8 @@ describe('Leaderboard pages', () => {
 
     // A second such player lists the chart: both plays are public, ranked.
     await claimAccount(db, await userIdOf(bob));
-    const listed = await page('/leaderboard/');
-    expect(listed.html.match(/href="\/leaderboard\/scores\//g)).toHaveLength(2);
+    const listed = await page('/');
+    expect(listed.html.match(/href="\/scores\//g)).toHaveLength(2);
     expect(listed.html).toContain('#1 / 2');
     expect(listed.html).toContain('#2 / 2');
     expect(listed.html).toContain('played with LR2 rules');
@@ -238,8 +238,8 @@ describe('Leaderboard pages', () => {
 
     // Carol's chart is not listed (anonymous players do not list one): nobody else sees it, even with anonymous players
     // on; Carol does, marked as not listed.
-    expect((await page('/leaderboard?anonymous=1')).html).not.toContain('Only Carol');
-    const own = await page('/leaderboard', carol);
+    expect((await page('/?anonymous=1')).html).not.toContain('Only Carol');
+    const own = await page('/', carol);
     expect(own.html).toContain('Only Carol');
     expect(own.html).toContain('>not public<');
     // Both reasons: the chart is not listed, and Carol's account is anonymous (with how to change that).
@@ -248,9 +248,9 @@ describe('Leaderboard pages', () => {
     expect(own.html).toContain('Create an account and your earlier plays become public too.');
 
     // On a listed chart, Carol's play is left out by default and comes in with anonymous players on.
-    const carolsPlay = `/leaderboard/scores/${await submit(carol, chart, 7, 'Carol on a listed chart', 2)}`;
-    expect((await page('/leaderboard')).html).not.toContain(carolsPlay);
-    expect((await page('/leaderboard?anonymous=1')).html).toContain(carolsPlay);
+    const carolsPlay = `/scores/${await submit(carol, chart, 7, 'Carol on a listed chart', 2)}`;
+    expect((await page('/')).html).not.toContain(carolsPlay);
+    expect((await page('/?anonymous=1')).html).toContain(carolsPlay);
   });
 
   test('a play shows what it changed on the player’s best, and the chart’s mode and level', async () => {
@@ -269,7 +269,7 @@ describe('Leaderboard pages', () => {
     });
     expect(first.status).toBe(201);
     // Dave is the chart's only player, so it is not listed: he sees his plays on his own view.
-    const firstView = await page('/leaderboard', dave);
+    const firstView = await page('/', dave);
     // The row's text, up to the next row.
     const rowText = (html: string) => {
       const from = html.slice(html.indexOf('Dave Song'));
@@ -282,7 +282,7 @@ describe('Leaderboard pages', () => {
 
     // A better play: its row carries the EX-Score gained over the earlier best.
     await submit(dave, levelled, 8, 'Dave Song');
-    const better = await page('/leaderboard', dave);
+    const better = await page('/', dave);
     expect(rowText(better.html)).toMatch(/\+\d+/);
   });
 
@@ -304,8 +304,7 @@ describe('Leaderboard pages', () => {
       });
       expect(response.status).toBe(201);
     };
-    const chartPage = (target: TestChart) =>
-      page(`/leaderboard/charts/${encodeURIComponent(target.chartFingerprint)}`, heidi);
+    const chartPage = (target: TestChart) => page(`/charts/${encodeURIComponent(target.chartFingerprint)}`, heidi);
     const db = openDatabase(env.DB);
 
     const plain = makeChart(['#00111:01', '#00211:0101', '#00311:010101']);
@@ -340,7 +339,7 @@ describe('Leaderboard pages', () => {
     const erin = await signInAnonymously(fetchApp);
     const scoreId = await submit(erin, lonely, 4, 'Lonely chart');
     const chartPath = new URL(
-      (await page(`/leaderboard/scores/${scoreId}`)).html.match(/href="(\/leaderboard\/charts\/[^"]+)"/)![1]!,
+      (await page(`/scores/${scoreId}`)).html.match(/href="(\/charts\/[^"]+)"/)![1]!,
       'http://x',
     ).pathname;
 
@@ -348,27 +347,27 @@ describe('Leaderboard pages', () => {
     expect(anyone.html).toContain('<meta name="robots" content="noindex"/>');
     expect(anyone.html).toContain('Not listed yet');
     expect(anyone.html).toContain('Sign in to see your own record.');
-    expect(anyone.html).not.toContain(`/leaderboard/scores/${scoreId}`);
+    expect(anyone.html).not.toContain(`/scores/${scoreId}`);
 
     // The play's page says why it is not public; only Erin reads how to change the anonymous part.
-    const playPage = await page(`/leaderboard/scores/${scoreId}`);
+    const playPage = await page(`/scores/${scoreId}`);
     expect(playPage.html).toContain('This play is not public');
     expect(playPage.html).toContain('Its chart is not listed yet');
     expect(playPage.html).toContain('It was played anonymously, before an account was created');
     expect(playPage.html).not.toContain('Create an account and your earlier plays become public too.');
-    expect(playPage.html).toContain('href="/leaderboard/help#visibility"');
-    expect((await page(`/leaderboard/scores/${scoreId}`, erin)).html).toContain(
+    expect(playPage.html).toContain('href="/help#visibility"');
+    expect((await page(`/scores/${scoreId}`, erin)).html).toContain(
       'Create an account and your earlier plays become public too.',
     );
 
     const own = await page(chartPath, erin);
-    expect(own.html).toContain(`/leaderboard/scores/${scoreId}`);
+    expect(own.html).toContain(`/scores/${scoreId}`);
     expect(own.html).not.toContain('Sign in to see your own record.');
 
     // Erin's own player page lists the play; anyone else's view of it does not.
     const me = (await (await fetchApp('/api/v0/me', { headers: { cookie: erin } })).json()) as { handle: string };
-    expect((await page(`/leaderboard/players/${me.handle}`, erin)).html).toContain(`/leaderboard/scores/${scoreId}`);
-    expect((await page(`/leaderboard/players/${me.handle}`)).html).not.toContain(`/leaderboard/scores/${scoreId}`);
+    expect((await page(`/players/${me.handle}`, erin)).html).toContain(`/scores/${scoreId}`);
+    expect((await page(`/players/${me.handle}`)).html).not.toContain(`/scores/${scoreId}`);
   });
 
   test('a player hides a play and shows it again; hidden, only they see it, and it leaves the rankings', async () => {
@@ -412,24 +411,24 @@ describe('Leaderboard pages', () => {
     expect((await fetchApp(`/api/v0/scores/${high}`)).status).toBe(404);
     expect((await fetchApp(`/api/v0/scores/${high}`, { headers: { cookie: grace } })).status).toBe(404);
     expect((await fetchApp(`/api/v0/scores/${high}/playlog`)).status).toBe(404);
-    expect((await page(`/leaderboard/scores/${high}`)).status).toBe(404);
-    expect((await page('/leaderboard')).html).not.toContain(`/leaderboard/scores/${high}`);
-    expect((await page('/leaderboard')).html).toContain(`/leaderboard/scores/${low}`);
-    expect((await page(`/leaderboard/charts/${encodeURIComponent(chartFingerprint)}?every=1`)).html).not.toContain(
-      `/leaderboard/scores/${high}`,
+    expect((await page(`/scores/${high}`)).status).toBe(404);
+    expect((await page('/')).html).not.toContain(`/scores/${high}`);
+    expect((await page('/')).html).toContain(`/scores/${low}`);
+    expect((await page(`/charts/${encodeURIComponent(chartFingerprint)}?every=1`)).html).not.toContain(
+      `/scores/${high}`,
     );
 
     // Frank still sees it: marked hidden on his lists, and on its page with the way back.
     const me = (await (await fetchApp('/api/v0/me', { headers: { cookie: frank } })).json()) as { handle: string };
-    const ownList = await page(`/leaderboard/players/${me.handle}`, frank);
-    expect(ownList.html).toContain(`/leaderboard/scores/${high}`);
+    const ownList = await page(`/players/${me.handle}`, frank);
+    expect(ownList.html).toContain(`/scores/${high}`);
     expect(ownList.html).toContain('>hidden<');
     expect(ownList.html).toContain('You hid it; open it to show it again.');
     // It moved no best and holds no place, so its row shows no rank.
-    const hiddenRow = ownList.html.slice(ownList.html.indexOf(`/leaderboard/scores/${high}`));
+    const hiddenRow = ownList.html.slice(ownList.html.indexOf(`/scores/${high}`));
     expect(hiddenRow.slice(0, hiddenRow.indexOf('</li>'))).not.toMatch(/#\d+ \/ \d+/);
-    expect((await page(`/leaderboard/players/${me.handle}`)).html).not.toContain(`/leaderboard/scores/${high}`);
-    const own = await page(`/leaderboard/scores/${high}`, frank);
+    expect((await page(`/players/${me.handle}`)).html).not.toContain(`/scores/${high}`);
+    const own = await page(`/scores/${high}`, frank);
     expect(own.status).toBe(200);
     expect(own.html).toContain('This play is hidden');
     expect(own.html).toContain('data-account-action="show-score"');
@@ -446,13 +445,13 @@ describe('Leaderboard pages', () => {
     // Shown again, everything is back.
     expect((await setHidden(false, frank)).status).toBe(200);
     expect(await frankBest()).toMatchObject({ exScoreId: high, playCount: 2 });
-    expect((await page(`/leaderboard/scores/${high}`)).status).toBe(200);
-    expect((await page(`/leaderboard/scores/${high}`, frank)).html).toContain('data-account-action="hide-score"');
-    expect((await page(`/leaderboard/scores/${high}`)).html).not.toContain('-score"');
+    expect((await page(`/scores/${high}`)).status).toBe(200);
+    expect((await page(`/scores/${high}`, frank)).html).toContain('data-account-action="hide-score"');
+    expect((await page(`/scores/${high}`)).html).not.toContain('-score"');
   });
 
   test('the score, chart and player pages render with their sharing tags', async () => {
-    const score = await page(`/leaderboard/scores/${firstScore}`);
+    const score = await page(`/scores/${firstScore}`);
     expect(score.status).toBe(200);
     expect(score.html).toContain('property="og:title"');
     expect(score.html).toContain('LR2 rules');
@@ -461,7 +460,7 @@ describe('Leaderboard pages', () => {
     expect(score.html).toContain('IIDX');
     expect(score.html).toContain(`/api/v0/scores/${firstScore}/playlog`);
 
-    const ranking = await page(`/leaderboard/charts/${encodeURIComponent(chart.chartFingerprint)}`);
+    const ranking = await page(`/charts/${encodeURIComponent(chart.chartFingerprint)}`);
     expect(ranking.status).toBe(200);
     expect(ranking.html).toContain('2 players');
     // Ranked by EX score: 18 (nine PGREATs) above 8.
@@ -490,7 +489,7 @@ describe('Leaderboard pages', () => {
     expect(ranking.html).toContain('>First played<');
     expect(ranking.html).toContain('>Clear lamps<');
 
-    const player = await page(`/leaderboard/players/${firstHandle}`);
+    const player = await page(`/players/${firstHandle}`);
     expect(player.status).toBe(200);
     expect(player.html).toContain(`@${firstHandle}`);
     // Player figures: plays, charts, the lamp and DJ Rank spreads of their bests, and the rulesets they played under.
@@ -503,50 +502,45 @@ describe('Leaderboard pages', () => {
     expect(player.html).toContain('>Played under<');
 
     // In Japanese, the player and score pages too.
-    const playerJa = await page(`/leaderboard/players/${firstHandle}`, 'lb-lang=ja');
+    const playerJa = await page(`/players/${firstHandle}`, 'lb-lang=ja');
     expect(playerJa.html).toContain('>平均レート<');
     expect(playerJa.html).toContain('>判定<');
     expect(playerJa.html).toContain('>最新のプレイ<');
-    const scoreJa = await page(`/leaderboard/scores/${firstScore}`, 'lb-lang=ja');
+    const scoreJa = await page(`/scores/${firstScore}`, 'lb-lang=ja');
     expect(scoreJa.html).toContain('>選択中</span>');
     expect(scoreJa.html).toContain('>リンクをコピー<');
   });
 
   test('the display ruleset is one setting for every page, switched without changing page URLs', async () => {
-    const back = `/leaderboard/charts/${encodeURIComponent(chart.chartFingerprint)}?assisted=0`;
-    const switched = await fetchApp(`/leaderboard/ruleset/beatoraja?next=${encodeURIComponent(back)}`);
+    const back = `/charts/${encodeURIComponent(chart.chartFingerprint)}?assisted=0`;
+    const switched = await fetchApp(`/ruleset/beatoraja?next=${encodeURIComponent(back)}`);
     expect(switched.status).toBe(303);
     expect(switched.headers.get('location')).toBe(back);
     const setCookie = switched.headers.get('set-cookie') ?? '';
     expect(setCookie).toMatch(/^lb-ruleset=beatoraja;/);
-    expect(setCookie).toContain('Path=/leaderboard');
+    expect(setCookie).toContain('Path=/');
     const cookie = setCookie.split(';')[0]!;
 
     // Every page now reads beatoraja: the header's ruleset menu names and ticks it, the score page selects it.
-    const top = await page('/leaderboard', cookie);
+    const top = await page('/', cookie);
     expect(top.html).toContain('scored under beatoraja');
     expect(top.html).toContain('aria-label="Scoring rules: beatoraja rules"');
-    expect(top.html).toMatch(/href="\/leaderboard\/ruleset\/beatoraja[^"]*" aria-current="true"/);
-    const score = await page(`/leaderboard/scores/${firstScore}`, cookie);
+    expect(top.html).toMatch(/href="\/ruleset\/beatoraja[^"]*" aria-current="true"/);
+    const score = await page(`/scores/${firstScore}`, cookie);
     expect(score.html).toMatch(/aria-label="beatoraja rules" data-state="selected">.*?>selected<\/span>/);
     expect(score.html).toContain('>played with</span>');
     // Without the cookie, LR2.
-    expect((await page('/leaderboard')).html).toContain('scored under LR2');
+    expect((await page('/')).html).toContain('scored under LR2');
 
     // An unknown ruleset changes nothing, and the switch never redirects off the Leaderboard.
-    const unknown = await fetchApp('/leaderboard/ruleset/popn?next=https://evil.example/');
+    const unknown = await fetchApp('/ruleset/popn?next=https://evil.example/');
     expect(unknown.status).toBe(303);
-    expect(unknown.headers.get('location')).toBe('/leaderboard');
+    expect(unknown.headers.get('location')).toBe('/');
     expect(unknown.headers.get('set-cookie')).toBeNull();
   });
 
   test('unknown pages, scores, charts and players are 404 pages', async () => {
-    for (const path of [
-      '/leaderboard/scores/missing',
-      '/leaderboard/charts/bmfp0%3Amissing',
-      '/leaderboard/players/nobody',
-      '/leaderboard/whatever',
-    ]) {
+    for (const path of ['/scores/missing', '/charts/bmfp0%3Amissing', '/players/nobody', '/whatever']) {
       const response = await page(path);
       expect(response.status).toBe(404);
       expect(response.html).toContain('Not found');

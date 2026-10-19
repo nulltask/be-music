@@ -10,7 +10,7 @@ export type Viewer = AccountSummary & { userId: string };
 /** Paths that never show the viewer (assets, icons, the manifest): no session lookup for them. */
 function needsViewer(path: string): boolean {
   return (
-    !path.startsWith('/leaderboard/assets/') &&
+    !path.startsWith('/assets/') &&
     !path.endsWith('/avatar') &&
     !path.endsWith('/card') &&
     !path.endsWith('.webmanifest')
