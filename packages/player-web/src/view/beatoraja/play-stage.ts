@@ -48,7 +48,10 @@ export interface BeatorajaPlayChartLayout {
  * chart's stages with each stage's own cues.
  */
 export interface BeatorajaPlayBga {
+  /** Base and POOR track textures (black kept). */
   readonly textures: ReadonlyMap<string, Texture>;
+  /** Layer track textures (black keyed out for a BMS chart). */
+  readonly layerTextures: ReadonlyMap<string, Texture>;
   readonly videos: ReadonlyMap<string, HTMLVideoElement>;
   readonly cues: { base: readonly BgaCue[]; layer: readonly BgaCue[]; poor: readonly BgaCue[] };
   readonly nonstop?: {
@@ -145,6 +148,7 @@ export class BeatorajaPlayStage {
     this.bgaLayer = new BeatorajaBgaLayer({
       skin: this.kit.skin,
       textures: bga.textures,
+      layerTextures: bga.layerTextures,
       videoElements: bga.videos,
       cues: bga.cues,
       nonstop: bga.nonstop,
@@ -179,7 +183,7 @@ export class BeatorajaPlayStage {
     context: BeatorajaRenderContext,
     clock: BeatorajaPlayLayerClock | undefined,
     hiSpeed: number,
-    lanes: { isLaneLnHeld(channel: string): boolean; isPoorBgaActive(): boolean },
+    lanes: { isLaneLnHeld(channel: string): boolean; isPoorBgaActive(seconds: number): boolean },
   ): void {
     const view = this.stage.view;
     view.update(context);
@@ -218,7 +222,7 @@ export class BeatorajaPlayStage {
     this.bgaLayer?.update(
       Math.min(clock.currentSeconds, clock.reversalSeconds ?? Number.POSITIVE_INFINITY),
       context,
-      lanes.isPoorBgaActive(),
+      lanes.isPoorBgaActive(clock.currentSeconds),
     );
   }
 

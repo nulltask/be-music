@@ -9,17 +9,12 @@
 // shape the LR2 gameplay path consumes. The host loads those once when the chart is prepared and hands
 // them to the layer alongside the decoded BMP textures keyed by `#BMPxx` slot.
 //
-// Layering rules:
+// Layering rules, as beatoraja's `BGAProcessor.drawBGA` draws them:
 //   - `base` (chart channel `04`) is the always-active BGA.
-//   - `layer` (channels `07` / `0A`) draws on top of base — alpha-blended.
-//   - `poor` (channel `06`) overrides everything while a POOR window is active.
+//   - `layer` (channels `07` / `0A`) draws on top of base, its black keyed out.
+//   - `poor` (channel `06`) replaces both while the miss layer shows (`misslayerDuration` from the last miss).
 //
-// For the MVP we collapse the three layers into a single sprite that paints whichever cue takes
-// precedence (poor > layer > base). Real beatoraja stacks all three on separate sprites, but a single
-// overlay reads correctly for ~95% of charts and dodges the per-cue sprite overhead until profiling
-// shows it matters.
-//
-// A stitched NONSTOP chart draws one such sprite per stage at the opacity of its crossfade
+// A stitched NONSTOP chart draws one such stack per stage at the opacity of its crossfade
 // (`resolveBgaStacks`, the stacks the built-in and LR2 scenes draw too), so the BGA cross-fades over
 // 3 s at a stage seam as LR2 does.
 
@@ -46,6 +41,10 @@ export interface BeatorajaBgaLayerOptions {
    */
   textures: ReadonlyMap<string, Texture>;
   /**
+   * The layer track's textures, black keyed out for a BMS chart. A layer key missing here is looked up in `textures`.
+   */
+  layerTextures?: ReadonlyMap<string, Texture>;
+  /**
    * Chart-time BGA cue lists. Built via `buildBgaTimeline(chart, resolver)` in `chart/bga-timeline.ts`.
    * Pass an empty `{ base: [], layer: [], poor: [] }` if the chart has no BGA — the layer hides itself.
    */
@@ -71,10 +70,11 @@ export interface BeatorajaBgaLayerOptions {
   nonstop?: { stages: readonly NonstopBgaStage[]; timelines: readonly NonstopStageBgaTimeline[] } | undefined;
 }
 
-/** One stack's sprites: the black canvas behind a small image, and the image. */
+/** One stack's sprites: the black canvas behind a small base image, the base (or POOR) image and the layer image. */
 interface BgaSpritePair {
   readonly canvas: Sprite;
   readonly sprite: Sprite;
+  readonly layer: Sprite;
 }
 
 type BgaDestinationProps = ReturnType<typeof destinationToSpriteProps>;
@@ -82,13 +82,14 @@ type BgaDestinationProps = ReturnType<typeof destinationToSpriteProps>;
 export class BeatorajaBgaLayer {
   readonly container: Container = new Container();
   /**
-   * One sprite pair per stack drawn (one, or a NONSTOP chart's stages at a seam), earlier stacks behind. Each pair is a
-   * black fill behind an image smaller than the BGA canvas, which beatoraja leaves black around it, and the image. The
-   * first pair is mounted at construction.
+   * One sprite set per stack drawn (one, or a NONSTOP chart's stages at a seam), earlier stacks behind. Each set is a
+   * black fill behind a base image smaller than the BGA canvas, which beatoraja leaves black around it, the base image
+   * (or the POOR image in its place) and the layer image over it. The first set is mounted at construction.
    */
   private readonly pairs: BgaSpritePair[] = [];
   private readonly group: BeatorajaDestinationGroup | undefined;
   private readonly textures: ReadonlyMap<string, Texture>;
+  private readonly layerTextures: ReadonlyMap<string, Texture>;
   private readonly videoElements: ReadonlyMap<string, HTMLVideoElement>;
   private readonly cues: { base: ReadonlyArray<BgaCue>; layer: ReadonlyArray<BgaCue>; poor: ReadonlyArray<BgaCue> };
   private readonly nonstop: BeatorajaBgaLayerOptions['nonstop'];
@@ -103,6 +104,7 @@ export class BeatorajaBgaLayer {
 
   constructor(options: BeatorajaBgaLayerOptions) {
     this.textures = options.textures;
+    this.layerTextures = options.layerTextures ?? new Map();
     this.videoElements = options.videoElements ?? new Map();
     this.cues = options.cues;
     this.nonstop = options.nonstop;
@@ -124,6 +126,7 @@ export class BeatorajaBgaLayer {
     for (const pair of this.pairs) {
       pair.canvas.visible = false;
       pair.sprite.visible = false;
+      pair.layer.visible = false;
     }
     if (this.group === undefined) return;
     const props = destinationToSpriteProps(this.group, context, this.canvasHeight);
@@ -136,10 +139,23 @@ export class BeatorajaBgaLayer {
     });
     const keys = new Set<string>();
     stacks.forEach((stack, index) => {
-      const key = stack.poorKey ?? stack.layerCue?.bmpKey ?? stack.baseCue?.bmpKey;
-      if (key === undefined) return;
-      keys.add(key);
-      this.drawStack(this.pairAt(index), key, props, stack.alpha);
+      const pair = this.pairAt(index);
+      // The miss layer replaces both the base and the layer; outside it the layer draws over the base.
+      if (stack.poorKey !== undefined) {
+        keys.add(stack.poorKey);
+        this.drawImage(pair.sprite, pair.canvas, stack.poorKey, this.textures, props, stack.alpha);
+        return;
+      }
+      const baseKey = stack.baseCue?.bmpKey;
+      if (baseKey !== undefined) {
+        keys.add(baseKey);
+        this.drawImage(pair.sprite, pair.canvas, baseKey, this.textures, props, stack.alpha);
+      }
+      const layerKey = stack.layerCue?.bmpKey;
+      if (layerKey !== undefined) {
+        keys.add(layerKey);
+        this.drawImage(pair.layer, undefined, layerKey, this.layerTextures, props, stack.alpha);
+      }
     });
     this.syncVideos(keys);
   }
@@ -177,28 +193,39 @@ export class BeatorajaBgaLayer {
     }
   }
 
-  /** The sprite pair of the stack at `index`, mounted on first use. */
+  /** The sprite set of the stack at `index`, mounted on first use. */
   private pairAt(index: number): BgaSpritePair {
     while (this.pairs.length <= index) {
       const pair: BgaSpritePair = {
-        canvas: new Sprite({ texture: Texture.WHITE, tint: 0x000000, visible: false }),
-        sprite: new Sprite({ visible: false }),
+        canvas: new Sprite({ texture: Texture.WHITE, tint: 0x000000, visible: false, label: 'bga/canvas' }),
+        sprite: new Sprite({ visible: false, label: 'bga/base' }),
+        layer: new Sprite({ visible: false, label: 'bga/layer' }),
       };
       this.pairs.push(pair);
-      this.container.addChild(pair.canvas, pair.sprite);
+      this.container.addChild(pair.canvas, pair.sprite, pair.layer);
     }
     return this.pairs[index]!;
   }
 
-  /** Draws `key` on `pair` into the destination `props`, at `alpha` (a NONSTOP stage's crossfade) on top of its own. */
-  private drawStack(pair: BgaSpritePair, key: string, props: BgaDestinationProps, alpha: number): void {
-    const texture = this.textures.get(key);
+  /**
+   * Draws `key` (looked up in `textures`, then the base textures) on `sprite` into the destination `props`, at `alpha`
+   * (a NONSTOP stage's crossfade) on top of its own. `canvas`, given for the base track, fills the rect black behind
+   * an image smaller than it; the layer track's canvas stays transparent.
+   */
+  private drawImage(
+    sprite: Sprite,
+    canvas: Sprite | undefined,
+    key: string,
+    textures: ReadonlyMap<string, Texture>,
+    props: BgaDestinationProps,
+    alpha: number,
+  ): void {
+    const texture = textures.get(key) ?? this.textures.get(key);
     // No decoded texture (or Pixi's source-less EMPTY singleton) must not enter the renderer's
     // batch. Other beatoraja skin paths already skip EMPTY because WebGPU can crash while creating
     // the bind group for that source; BGA cues can hit the same path when a chart references a
     // missing/corrupt BMP slot mid-play.
     if (!props.visible || texture === undefined || texture === Texture.EMPTY) return;
-    const { canvas, sprite } = pair;
     if (sprite.texture !== texture) {
       sprite.texture = texture;
     }
@@ -209,7 +236,7 @@ export class BeatorajaBgaLayer {
     const placed = this.videoElements.has(key)
       ? rect
       : resolveBgaImageRect(texture.frame.width, texture.frame.height, rect);
-    if (placed.w < rect.w || placed.h < rect.h) {
+    if (canvas !== undefined && (placed.w < rect.w || placed.h < rect.h)) {
       canvas.visible = true;
       canvas.x = rect.x;
       canvas.y = rect.y;
