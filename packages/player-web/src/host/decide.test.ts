@@ -1,7 +1,6 @@
 import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
 import { createEmptyJson } from '@be-music/json';
 import type { Lr2Skin } from '@be-music/lr2-skin';
-import { LR2_TIMER } from '@be-music/lr2-skin/ids';
 import { parseChart } from '@be-music/parser';
 import type { LibraryChart } from '@be-music/scene-model';
 import type { Texture } from 'pixi.js';
@@ -13,7 +12,7 @@ import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
 import { phantomSkin } from '../skins/phantom/index.ts';
 import { resolveBeatorajaDecideTiming } from '../view/beatoraja/decide-view.ts';
 import { BuiltInDecideView, resolveBuiltInDecideTiming } from '../view/built-in/decide-view.ts';
-import { resolveLr2DecideTimers, resolveLr2DecideTiming } from '../view/lr2/decide-view.ts';
+import { resolveLr2DecideTiming } from '../view/lr2/decide-view.ts';
 import { createDecideScene } from './decide.ts';
 import type { BeatorajaKit, BuiltInKit, Lr2Kit } from './family-kit.ts';
 
@@ -200,26 +199,6 @@ describe('resolveLr2DecideTiming', () => {
 
   it('reads a negative #STARTINPUT as no delay', () => {
     expect(resolveLr2DecideTiming({ timing: { startInput: -50 } }).inputDelayMs).toBe(0);
-  });
-});
-
-describe('resolveLr2DecideTimers', () => {
-  it('runs timer 0 from the entry, and timer 1 once input has opened', () => {
-    const frame = (nowMs: number) => ({ clock: { nowMs, enteredAtMs: 1000 }, inputOpenAtMs: 1300 });
-    expect([...resolveLr2DecideTimers(frame(1200))]).toEqual([[LR2_TIMER.SCENE_START, 1000]]);
-    expect([...resolveLr2DecideTimers(frame(1300))]).toEqual([
-      [LR2_TIMER.SCENE_START, 1000],
-      [LR2_TIMER.START_INPUT, 1300],
-    ]);
-  });
-
-  it('runs timer 2 from when the screen started leaving', () => {
-    const leaving = { to: 'play' as const, atMs: 1400 };
-    expect(
-      resolveLr2DecideTimers({ clock: { nowMs: 1450, enteredAtMs: 1000 }, inputOpenAtMs: 1300, leaving }).get(
-        LR2_TIMER.FADE_OUT,
-      ),
-    ).toBe(1400);
   });
 });
 

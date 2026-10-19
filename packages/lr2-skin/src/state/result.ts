@@ -1,6 +1,6 @@
 import { resolveClearLamp, resolveIidxRankIndexFromScore } from '@be-music/player/ruleset';
 import type { CourseView, PlayResult } from '@be-music/scene-model';
-import { LR2_NUM, LR2_OP, LR2_TEXT } from '../ids/index.ts';
+import { LR2_NUM, LR2_OP, LR2_TEXT, LR2_TIMER } from '../ids/index.ts';
 import { resolveLr2ChartText, resolveLr2DifficultyOp, resolveLr2KeyModeOp } from './chart.ts';
 import { resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from './course.ts';
 import { resolveLr2LampOp } from './records.ts';
@@ -245,4 +245,46 @@ export function resolveLr2ResultState(input: Lr2ResultInput): Lr2ResultState {
     slider: (type) => resultBargraph(type, result),
     bargraph: (type) => resultBargraph(type, result),
   };
+}
+
+/** A moment of the result screen, as its LR2 timers read it; every time is on the clock the screen stamps timers with. */
+export interface Lr2ResultTimerInput {
+  /** The time now, and when the screen was entered. */
+  readonly clock: { readonly nowMs: number; readonly enteredAtMs: number };
+  /** When input opens: the skin's `#STARTINPUT` after the entry. The graphs start drawing then. */
+  readonly inputOpenAtMs: number;
+  /** When the graphs finished drawing, by themselves or skipped by the player; absent until then. */
+  readonly graphShownAtMs?: number;
+  /** When the player pressed on to the record update; absent until then. */
+  readonly updateShownAtMs?: number;
+}
+
+/**
+ * The LR2 timers running on a moment of the result screen, each with when it started:
+ *
+ * - timer 0 (the scene) from the screen's entry;
+ * - timers 1 (input) and 150 (the graphs start drawing) once input has opened;
+ * - timer 151 (the graphs drawn: the rank and the score show) once the graphs have drawn or been skipped;
+ * - timer 152 (the record update) once the player has pressed on to it.
+ */
+export function resolveLr2ResultTimers(input: Lr2ResultTimerInput): ReadonlyMap<number, number> {
+  const timers = new Map<number, number>([[LR2_TIMER.SCENE_START, input.clock.enteredAtMs]]);
+  if (input.clock.nowMs >= input.inputOpenAtMs) {
+    timers.set(LR2_TIMER.START_INPUT, input.inputOpenAtMs);
+    timers.set(LR2_TIMER.RESULT_GRAPH_START, input.inputOpenAtMs);
+  }
+  if (input.graphShownAtMs !== undefined) timers.set(LR2_TIMER.RESULT_GRAPH_END, input.graphShownAtMs);
+  if (input.updateShownAtMs !== undefined) timers.set(LR2_TIMER.RESULT_UPDATE, input.updateShownAtMs);
+  return timers;
+}
+
+/**
+ * How much of a result graph shows, 0..1, `elapsedMs` after its timer started (`undefined`: not started): nothing before
+ * the graph's `start` ms, then a linear sweep to all of it at `end` ms. LR2's stock result skin sweeps from 500 to
+ * 2000 ms after timer 150.
+ */
+export function resolveLr2GraphReveal(elapsedMs: number | undefined, start: number, end: number): number {
+  if (elapsedMs === undefined || elapsedMs < start) return 0;
+  if (end <= start) return 1;
+  return Math.max(0, Math.min(1, (elapsedMs - start) / (end - start)));
 }
