@@ -21,6 +21,7 @@ import type { BeMusicJson } from '@be-music/json';
 import {
   JUDGE_LANE_REF_RANGE,
   TIMER_FADEOUT,
+  TIMER_FAILED,
   TIMER_PLAY,
   TIMER_PREVIEW,
   TIMER_READY,
@@ -427,6 +428,13 @@ export class BeatorajaPlayBridge {
         if (this.fadeoutStamped) return;
         this.fadeoutStamped = true;
         this.timerStartedAt.set(TIMER_FADEOUT, event.atMs);
+        return;
+      case 'exit-close':
+        // The play failed and stops (beatoraja's `STATE_FAILED`): `TIMER_FAILED` starts, unless the frame that took the
+        // gauge to 0 already started it.
+        if (this.firedOnce.has(TIMER_FAILED)) return;
+        this.firedOnce.add(TIMER_FAILED);
+        this.timerStartedAt.set(TIMER_FAILED, event.atMs);
         return;
       case 'lane':
         this.applyLane(event.channel, event.action);
