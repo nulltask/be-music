@@ -51,7 +51,7 @@ const runtimeAdapterSources = ['packages/parser/src/cli.ts', 'packages/parser/sr
 /**
  * The deterministic judge (`judge-core*.ts`, `auto-judge-core.ts`, the ruleset rules and the play-log simulator): the
  * same inputs must give the same judgments, so these files read no clock, set no timer and draw no random number. The
- * LR2 and beatoraja state resolvers are held to the same rule: a scene's time comes in as an input.
+ * scene models and the LR2 and beatoraja state resolvers are held to the same rule: a scene's time comes in as an input.
  */
 const deterministicJudgeSources = [
   'packages/beatoraja-skin/src/scene/**/*.ts',
@@ -60,6 +60,7 @@ const deterministicJudgeSources = [
   'packages/player/src/core/auto-judge-core.ts',
   'packages/player/src/ruleset/**/*.ts',
   'packages/player/src/playlog/simulate.ts',
+  'packages/scene-model/src/**/*.ts',
 ];
 const nodeBuiltinMessage = 'Runtime-neutral code must not import Node built-ins; use a runtime adapter.';
 const nodeBuiltinImports = {
