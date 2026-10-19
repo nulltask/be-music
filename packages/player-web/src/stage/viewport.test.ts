@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { designRectToCanvas, resolveDesignTextResolution, resolveScaledViewport } from './viewport.ts';
+import {
+  designRectToCanvas,
+  resolveCanvasPixelRatio,
+  resolveDesignTextResolution,
+  resolveScaledViewport,
+} from './viewport.ts';
 
 describe('resolveScaledViewport', () => {
   test('centers the design rectangle inside a wider screen', () => {
@@ -43,5 +48,33 @@ describe('designRectToCanvas', () => {
       width: 290 * 1.875,
       height: 30 * 1.875,
     });
+  });
+});
+
+describe('resolveCanvasPixelRatio', () => {
+  test('gives one canvas pixel per device pixel below the cap', () => {
+    expect(resolveCanvasPixelRatio(1920, 1080, 1.5, 4096)).toBe(1.5);
+    expect(resolveCanvasPixelRatio(1080, 1920, 2, 4096)).toBe(2);
+  });
+
+  test('rounds the width to whole device pixels', () => {
+    expect(resolveCanvasPixelRatio(1000, 500, 1.2345, 4096)).toBe(1.235);
+  });
+
+  test('caps the width of a landscape stage', () => {
+    const ratio = resolveCanvasPixelRatio(1920, 1080, 3, 4096);
+    expect(Math.round(1920 * ratio)).toBe(4096);
+    expect(Math.round(1080 * ratio)).toBeLessThan(4096);
+  });
+
+  test('caps the height of a portrait stage, not only its width', () => {
+    // 1080 × 3 = 3240 is under the cap, but 1920 × 3 = 5760 is not.
+    const ratio = resolveCanvasPixelRatio(1080, 1920, 3, 4096);
+    expect(Math.round(1920 * ratio)).toBe(4096);
+    expect(Math.round(1080 * ratio)).toBe(2304);
+  });
+
+  test('keeps at least one pixel across the width', () => {
+    expect(resolveCanvasPixelRatio(100, 50, 0.001, 4096)).toBe(0.01);
   });
 });

@@ -1,5 +1,5 @@
 import { CanvasSource, Container, RenderTexture, Sprite, Texture, TextureSource, type Renderer } from 'pixi.js';
-import { getDesignPixelRatio } from '../../stage/viewport.ts';
+import { getDesignPixelRatio, resolveCanvasPixelRatio } from '../../stage/viewport.ts';
 import { ChildPool } from '../../stage/pixi-utils.ts';
 import {
   resolveBeMusicSkinSettings,
@@ -182,8 +182,7 @@ class SkinSurface {
    */
   private resize(): void {
     const { width, height } = this.stage;
-    const pixelWidth = Math.max(1, Math.min(MAX_CANVAS_EDGE, Math.round(width * getDesignPixelRatio())));
-    const ratio = pixelWidth / width;
+    const ratio = resolveCanvasPixelRatio(width, height, getDesignPixelRatio(), MAX_CANVAS_EDGE);
     if (
       ratio === this.pixelRatio &&
       this.canvas.width > 0 &&
