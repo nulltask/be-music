@@ -485,7 +485,7 @@ When `POOR` occurs, do the following:
 - Add `summary.poor`.
 - Set combo back to 0.
 - Set groove gauge to `-6`.
-- Fire POOR BGA. The miss layer stays visible for 500 ms — LR2's shipped default (`<poorbga>500</poorbga>` in its `config.xml`).
+- Fire POOR BGA. The miss layer stays visible for 500 ms — the shipped default of LR2 (`<poorbga>500</poorbga>` in its `config.xml`) and of beatoraja (`misslayerDuration`). On a beatoraja skin the window runs from the miss whatever is judged meanwhile, and outside it the layer draws over the base, as `BGAProcessor` does.
 - Update judge/combo display to `POOR`.
 
 ### Blank keystroke (no candidate) — LR2-compatible empty POOR

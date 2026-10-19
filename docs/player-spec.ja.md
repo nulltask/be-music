@@ -471,7 +471,7 @@ bmson の `judgeRank` は `#DEFEXRANK` と同じ「`100` = `NORMAL`」基準の�
 - `summary.poor` を加算する。
 - combo を 0 に戻す。
 - groove gauge を `-6` する。
-- POOR BGA を発火する。miss レイヤーの表示時間は 500ms（LR2 同梱 `config.xml` の既定値 `<poorbga>500</poorbga>` に一致）。
+- POOR BGA を発火する。miss レイヤーの表示時間は 500ms（LR2 同梱 `config.xml` の既定値 `<poorbga>500</poorbga>`、beatoraja の `misslayerDuration` の既定値に一致）。beatoraja スキンでは、その間に何が判定されてもミスから 500ms 表示し、それ以外のときは `BGAProcessor` と同じく base の上に layer を重ねる。
 - judge/combo 表示を `POOR` に更新する。
 
 ### 空打鍵（candidate なし）— LR2 互換 空POOR
