@@ -1,8 +1,8 @@
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import type { CourseView, PlayResult } from '@be-music/scene-model';
 import { describe, expect, it } from 'vite-plus/test';
-import { LR2_NUM, LR2_OP, LR2_TEXT } from '../ids/index.ts';
-import { resolveLr2ResultState } from './result.ts';
+import { LR2_NUM, LR2_OP, LR2_TEXT, LR2_TIMER } from '../ids/index.ts';
+import { resolveLr2GraphReveal, resolveLr2ResultState, resolveLr2ResultTimers } from './result.ts';
 
 /** The facts of the skins a result is shown with: the played skin's `#FLIPRESULT` and the result skin's options. */
 interface SkinFacts {
@@ -399,5 +399,44 @@ describe('resolveLr2ResultState values', () => {
     expect(state.bargraph(7)).toBe(0.25);
     expect(state.slider(9)).toBe(0.25);
     expect(state.bargraph(3)).toBeUndefined();
+  });
+});
+
+describe('resolveLr2ResultTimers', () => {
+  const frame = (nowMs: number, steps: { graphShownAtMs?: number; updateShownAtMs?: number } = {}) => ({
+    clock: { nowMs, enteredAtMs: 1000 },
+    inputOpenAtMs: 1300,
+    ...steps,
+  });
+
+  it('runs timer 0 from the entry, and timers 1 and 150 once input has opened', () => {
+    expect([...resolveLr2ResultTimers(frame(1299))]).toEqual([[LR2_TIMER.SCENE_START, 1000]]);
+    expect([...resolveLr2ResultTimers(frame(1300))]).toEqual([
+      [LR2_TIMER.SCENE_START, 1000],
+      [LR2_TIMER.START_INPUT, 1300],
+      [LR2_TIMER.RESULT_GRAPH_START, 1300],
+    ]);
+  });
+
+  it('runs timer 151 from when the graphs showed and timer 152 from when the record update did', () => {
+    const timers = resolveLr2ResultTimers(frame(5000, { graphShownAtMs: 2000, updateShownAtMs: 4000 }));
+    expect(timers.get(LR2_TIMER.RESULT_GRAPH_END)).toBe(2000);
+    expect(timers.get(LR2_TIMER.RESULT_UPDATE)).toBe(4000);
+    expect(resolveLr2ResultTimers(frame(1500)).has(LR2_TIMER.RESULT_GRAPH_END)).toBe(false);
+  });
+});
+
+describe('resolveLr2GraphReveal', () => {
+  it('shows nothing before its timer or its start, then sweeps to all of it at its end', () => {
+    expect(resolveLr2GraphReveal(undefined, 500, 2000)).toBe(0);
+    expect(resolveLr2GraphReveal(499, 500, 2000)).toBe(0);
+    expect(resolveLr2GraphReveal(1250, 500, 2000)).toBe(0.5);
+    expect(resolveLr2GraphReveal(2000, 500, 2000)).toBe(1);
+    expect(resolveLr2GraphReveal(9000, 500, 2000)).toBe(1);
+  });
+
+  it('shows all of a graph whose end is not after its start, once started', () => {
+    expect(resolveLr2GraphReveal(0, 0, 0)).toBe(1);
+    expect(resolveLr2GraphReveal(100, 200, 200)).toBe(0);
   });
 });

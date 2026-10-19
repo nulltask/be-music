@@ -118,6 +118,15 @@ export function registerLr2SkinStateExportsCases(define: DefineBenchmarkCase): v
       state.text(150);
     },
   });
+  define('lr2-skin.state.resolveLr2DecideTimers', {
+    run: () => {
+      lr2StateApi.resolveLr2DecideTimers({
+        clock: { nowMs: 1450, enteredAtMs: 1000 },
+        inputOpenAtMs: 1300,
+        leaving: { atMs: 1400 },
+      });
+    },
+  });
   define('lr2-skin.state.resolveLr2GaugeRangeOp', {
     run: () => {
       lr2StateApi.resolveLr2GaugeRangeOp(54);
@@ -165,6 +174,21 @@ export function registerLr2SkinStateExportsCases(define: DefineBenchmarkCase): v
       state.number(171);
       state.text(10);
       state.bargraph(2);
+    },
+  });
+  define('lr2-skin.state.resolveLr2ResultTimers', {
+    run: () => {
+      lr2StateApi.resolveLr2ResultTimers({
+        clock: { nowMs: 5000, enteredAtMs: 1000 },
+        inputOpenAtMs: 1300,
+        graphShownAtMs: 2000,
+        updateShownAtMs: 4000,
+      });
+    },
+  });
+  define('lr2-skin.state.resolveLr2GraphReveal', {
+    run: () => {
+      lr2StateApi.resolveLr2GraphReveal(1250, 500, 2000);
     },
   });
   define('lr2-skin.state.resolveLr2RankOp', {
