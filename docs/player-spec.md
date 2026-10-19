@@ -119,6 +119,23 @@ player executes the score in the following order:
 4. Initialize gauges, scores, UI state, input runtime, and audio runtime.
 5. Run the one play loop (`play-loop.ts`) with the play's judge strategy — manual (AUTO SCRATCH included), replay (`replayInputs`) or AUTO — and return `PlayerSummary` at the end.
 
+The same steps as a flow (`play.ts`, `play-session.ts`, `play-loop.ts`, `play-finish.ts`):
+
+```mermaid
+flowchart TD
+  subgraph host["Host"]
+    src["source chart"] --> rpc["resolvePlayChart<br/>(draws once)"]
+  end
+  rpc -->|"chart + randomDraws"| entry["manualPlay / autoPlay"]
+  entry -->|"strategy: manual,<br/>replay or auto"| rc
+  subgraph setup["createPlaySession"]
+    rc["resolveChart<br/>→ ResolvedChart"] --> lane["lane mode,<br/>key assignment"]
+    lane --> init["ruleset, gauge, score,<br/>input / audio / UI"]
+  end
+  init --> loop["runPlayLoop<br/>lead-in, 60 Hz ticks"]
+  loop --> finish["finishPlay"] --> summary(["PlayerSummary"])
+```
+
 In addition to the regular `#STOPxx`, time resolution also treats the BMS extension `#STP` as a stop event.
 Of several `#STOPxx` objects at one position the last one wins, as in LR2 and beatoraja; bmson `stop_events` on one pulse add up, as the bmson spec says.
 `#STP` interprets `xxx[.yyy] zzzz` as a stop of `zzzz ms` at `yyy / 1000` position of `measure xxx`, and multiple definitions at the same position are added together. If `.yyy` is omitted, it is treated as `000`. Malformed `bms.stp` elements are retained in the IR but ignored by the player's time resolution.
@@ -137,6 +154,30 @@ The single resolution point is the pair `drawRandomOutcomes(chart, random)` → 
 The branch semantics (one shared stack, an open `#IF` outliving `#ENDRANDOM`, definitions in a taken branch applying to the whole chart) live once in `evaluateControlFlow` (`@be-music/chart`).
 The same chart and draws always resolve to the same result, and draws that were not drawn for the chart are rejected with a `RangeError`.
 A resolved chart carries no `bms.controlFlow`, so resolving it again changes nothing.
+
+The chart and its draws travel together from the host's single draw to every consumer:
+
+```mermaid
+flowchart LR
+  src["chart with<br/>bms.controlFlow"]
+  subgraph rpc["resolvePlayChart (once per play)"]
+    draw["drawRandomOutcomes"] --> draws(["RandomDraws"])
+    resolve["resolveBmsControlFlowWithDraws"]
+  end
+  log(["play log<br/>randomDraws"])
+  src --> draw
+  src --> resolve
+  draws --> resolve
+  log -.->|"replay: no draw"| resolve
+  resolve --> chart["resolved chart"]
+  subgraph users["Consumers"]
+    screens["decide / play /<br/>result screens"]
+    engine["engine"]
+    record["play log"]
+  end
+  chart --> users
+  draws --> users
+```
 
 Every host draws once and hands the same chart and draws to every consumer of the play: the CLI to the preview render and the gameplay worker, the web player to the decide screen, the play screen, the engine and the result screen.
 A restart draws again, as LR2 and beatoraja re-roll each play.
@@ -227,6 +268,7 @@ switch the beatoraja ruleset between its 5 KEY and 7 KEY judge windows. The dete
 [BMS spec — Player-Specific Behavior](./bms-spec.md#player-specific-behavior). Only `.pms` names a mode; every other
 extension leaves the decision to the lanes in use, so a `.bme` chart without a 6 / 7 key column is `5 KEY SP` /
 `5 KEY DP`, as in beatoraja.
+The decision is drawn as a flowchart in [README — Automatic lane mode determination](../README.md#automatic-lane-mode-determination-and-input-assignment).
 The main modes the current implementation determines automatically are as follows.
 
 - `5 KEY SP`
@@ -450,6 +492,21 @@ When `POOR` occurs, do the following:
 
 If there is an input but no undecided notes inside the `BAD` window for that lane set, fire an LR2-compatible "empty POOR" (空POOR).
 
+A press goes through these steps in the judge core (`judge-core-press.ts`); the rules for each step follow.
+
+```mermaid
+flowchart TD
+  press(["press on lanes"]) --> mines["settle mines<br/>(never consumes the press)"]
+  mines --> held{"lane holds a<br/>long note?"}
+  held -->|"yes, for that lane"| ln["re-press or<br/>pressDuringLongNote"]
+  held -->|no| scan{"unjudged note whose own<br/>windows take the press?"}
+  scan -->|"yes: best by<br/>ruleset selection"| judge["judge the note<br/>(+ multi-BAD)"]
+  scan -->|no| fb["lane fallback<br/>keysound"]
+  fb --> miss{"note within the<br/>ruleset miss window?"}
+  miss -->|yes| empty["empty POOR"]
+  miss -->|no| harmless(["nothing else"])
+```
+
 - The trigger condition is that a note on the same lane falls inside the **ruleset's miss window**. LR2's is `{0, 1 s}` (lr2oraja's `JudgeProperty` LR2 miss window — fixed, independent of rank / EXRANK), so under `lr2` an empty POOR never fires after a note passes and a press with no note within the next second is harmless: only the keysound plays. beatoraja's window reaches 500 ms early and 150 ms late.
 - It fires **repeatedly** for the same note while mashing in front of it (LR2's `MissCondition.ALWAYS`, including in front of already-judged notes).
 
@@ -660,6 +717,30 @@ L355-377), and `iidx` does the same.
 
 A long note the player never touched owes one `POOR` for the head, plus a second for the tail under charge modes —
 except under IIDX, where the cancelled tail owes nothing.
+
+The life of a long note in manual play, by the effective mode:
+
+```mermaid
+stateDiagram-v2
+  state "waiting for the head" as Pending
+  state "held" as Held
+  state "release margin" as Margin
+  state "head missed" as Missed
+  state "settled" as Done
+  [*] --> Pending
+  Pending --> Missed: head window passes
+  Pending --> Held: head pressed
+  Pending --> Done: head BAD / POOR (iidx charge)
+  Held --> Margin: early release under a margin
+  Margin --> Held: pressed again
+  Margin --> Done: margin elapses
+  Held --> Done: LN let go early
+  Held --> Done: LN reaches its tail
+  Held --> Done: CN / HCN released
+  Held --> Done: CN / HCN tail window closes
+  Missed --> [*]
+  Done --> [*]
+```
 
 ### Auto Play
 
