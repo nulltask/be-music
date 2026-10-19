@@ -27,6 +27,22 @@ The be-music Leaderboard API: a Hono app on Cloudflare Workers with D1 and R2. T
 
 Not yet: L4 for new `#RANDOM` outcomes and L5, rivals, and OG cards.
 
+A score submission, in the order the Worker checks it (`src/api/v0.ts`, `src/scores/submit.ts`); the full sequence with the client is in [docs/leaderboard.md section 5.2](../../docs/leaderboard.md#52-sequence):
+
+```mermaid
+flowchart TD
+  post(["POST /api/v0/scores"]) --> gate{"signed in, under the rate limit,<br/>a valid, eligible play log?"}
+  gate -->|no| e4xx["401 / 429 / 400 / 422"]
+  gate -->|yes| dup{"submission id<br/>already stored?"}
+  dup -->|"yes, same player"| r200["200: the stored result"]
+  dup -->|"yes, another account"| e409["409"]
+  dup -->|no| docs{"documents match the<br/>fingerprints (L1–L4)?"}
+  docs -->|no| reject["409 / 422"]
+  docs -->|yes| sim["re-simulate under<br/>lr2 · beatoraja · iidx"]
+  sim --> store["R2: play log<br/>D1: score, results, bests"]
+  store --> r201["201: results and ranks"]
+```
+
 ## Setup
 
 The Worker is bundled by Vite+ into `dist/worker.js` (`build:worker`, configured in `vite.worker.config.ts`), which is
@@ -115,6 +131,21 @@ migrations to the environment's D1, then deploys:
 | ---------------- | ------------------------------ | -------------------------------------------------------- |
 | `devel`          | `be-music-leaderboard`         | `pnpm run db:migrate:production && pnpm run deploy`      |
 | any other branch | `be-music-leaderboard-preview` | `pnpm run db:migrate:preview && pnpm run deploy:preview` |
+
+Each push runs one environment's trigger; `deploy` and `deploy:preview` generate the pages' assets, run `build:worker`, then `cf deploy`:
+
+```mermaid
+flowchart TD
+  push(["push touching the package,<br/>player, chart or the lockfile"]) --> branch{"branch?"}
+  branch -->|devel| prod
+  branch -->|any other| prev
+  subgraph prod["be-music-leaderboard"]
+    i1["install on Node 26.7.0"] --> m1["db:migrate:production"] --> d1["deploy"]
+  end
+  subgraph prev["be-music-leaderboard-preview"]
+    i2["install on Node 26.7.0"] --> m2["db:migrate:preview"] --> d2["deploy:preview"]
+  end
+```
 
 Workers Builds deploys only to the Worker its trigger belongs to, so each environment's Worker has its own trigger.
 The preview Worker is shared by every branch: the last one pushed wins. To deploy by hand, run the same commands in

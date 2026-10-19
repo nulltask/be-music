@@ -24,6 +24,18 @@ Both are computed from two inputs:
 1. the chart as be-music parses it (whose lane-mode inputs are its lanes, `#PLAYER 3`, and the bmson keyboard `mode_hint`; section 3.5), and
 2. the chart's **file extension**, which is a lane-mode input (`.pms` makes a chart 9 KEY; section 3.5). An implementation must take it as an explicit input; any other or unknown extension counts as none.
 
+How each fingerprint is made (sections 3 to 5):
+
+```mermaid
+flowchart TD
+  src["parsed chart<br/>+ file extension"]
+  src --> model["outcomes as deltas,<br/>factors, decision trees"]
+  model --> chartDoc["chart document"]
+  src -->|"resolve with<br/>the play's draws"| playDoc["play document"]
+  chartDoc -->|"RFC 8785, SHA-256"| cfp(["chart fingerprint<br/>bmfp0:…"])
+  playDoc -->|"RFC 8785, SHA-256"| pfp(["play fingerprint<br/>bmfp0:…"])
+```
+
 A chart whose every outcome plays the same — in particular a chart without control flow — has equal chart and play fingerprints.
 
 Lane options such as MIRROR / RANDOM / DP flip are play options, not part of the chart, and are in neither fingerprint. A play log records them separately.

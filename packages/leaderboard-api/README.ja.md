@@ -24,6 +24,22 @@ be-music の Leaderboard API です。Cloudflare Workers 上の Hono アプリ�
 
 未実装: 新しい `#RANDOM` の結果に対する L4 と L5、ライバル、OG カード。
 
+スコアの送信を、Worker が確かめる順に示します（`src/api/v0.ts`、`src/scores/submit.ts`）。クライアントを含む全体のシーケンスは [docs/leaderboard.ja.md 5.2 節](../../docs/leaderboard.ja.md#52-シーケンス) にあります。
+
+```mermaid
+flowchart TD
+  post(["POST /api/v0/scores"]) --> gate{"ログイン済み、レート制限内、<br/>正しく対象のプレイログ?"}
+  gate -->|いいえ| e4xx["401 / 429 / 400 / 422"]
+  gate -->|はい| dup{"submission id が<br/>保存済み?"}
+  dup -->|"はい、同じプレイヤー"| r200["200: 保存済みの結果"]
+  dup -->|"はい、別のアカウント"| e409["409"]
+  dup -->|いいえ| docs{"ドキュメントが fingerprint<br/>と一致（L1〜L4）?"}
+  docs -->|いいえ| reject["409 / 422"]
+  docs -->|はい| sim["lr2・beatoraja・iidx<br/>で再計算"]
+  sim --> store["R2: プレイログ<br/>D1: スコア、結果、ベスト"]
+  store --> r201["201: 結果と順位"]
+```
+
 ## 準備
 
 Worker は Vite+ で `dist/worker.js` にバンドルします（`build:worker`、設定は `vite.worker.config.ts`）。これが
@@ -104,6 +120,21 @@ Workers Builds がデプロイします。ビルドは Node 26.7.0（トリガ�
 | -------- | ------------------------------ | -------------------------------------------------------- |
 | `devel`  | `be-music-leaderboard`         | `pnpm run db:migrate:production && pnpm run deploy`      |
 | それ以外 | `be-music-leaderboard-preview` | `pnpm run db:migrate:preview && pnpm run deploy:preview` |
+
+push ごとに 1 つの環境のトリガーが動きます。`deploy` と `deploy:preview` はページのアセットを生成し、`build:worker` を実行してから `cf deploy` します。
+
+```mermaid
+flowchart TD
+  push(["このパッケージ、player、chart、<br/>lockfile に触れる push"]) --> branch{"ブランチ?"}
+  branch -->|devel| prod
+  branch -->|それ以外| prev
+  subgraph prod["be-music-leaderboard"]
+    i1["Node 26.7.0 でインストール"] --> m1["db:migrate:production"] --> d1["deploy"]
+  end
+  subgraph prev["be-music-leaderboard-preview"]
+    i2["Node 26.7.0 でインストール"] --> m2["db:migrate:preview"] --> d2["deploy:preview"]
+  end
+```
 
 Workers Builds はトリガーを持つ Worker にしかデプロイできないため、環境ごとの Worker にそれぞれトリガーがあります。
 preview の Worker は全ブランチで共有し、最後に push したブランチが反映されます。手動でデプロイするときは、この

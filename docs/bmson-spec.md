@@ -138,6 +138,26 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 
 ## bmson -> BMS/BMSON intermediate representation (`@be-music/json`) conversion
 
+The overall read and write directions are in [JSON spec — Conversion rules](./json-spec.md#conversion-rules). A note's `x` finds its lane by the `mode_hint` rules in the list below:
+
+```mermaid
+flowchart TD
+  note(["a note with x"]) --> pos{"x > 0?"}
+  pos -->|no| bgm(["BGM (01)"])
+  pos -->|yes| hint{"info.mode_hint"}
+  hint -->|"blank or missing<br/>(beat-7k)"| table["the hint's lane table"]
+  hint -->|"beat-*, popn-*,<br/>keyboard-*"| table
+  hint -->|"generic-Nkeys"| gen["x = 1..N<br/>→ 11, 12, …"]
+  hint -->|"any other"| fits{"every positive x<br/>in 1..8?"}
+  fits -->|"yes (beat-7k)"| table
+  fits -->|no| num["unique x, ascending<br/>→ 11, 12, …"]
+  table --> covered{"x in the table?"}
+  gen --> covered
+  covered -->|yes| lane(["lane channel"])
+  covered -->|no| bgm
+  num --> lane
+```
+
 - Keep `version` in `bmson.version`
 - Keep `lines[].y` in `preservation.bmson.lines`
 - Keep `info.resolution` in `bmson.info.resolution`

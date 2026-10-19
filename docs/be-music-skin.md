@@ -79,6 +79,31 @@ export default defineBeMusicSkin({
 
 Create the framework's renderer on the surface's canvas in `setup`, and release it in `teardown`. The player calls `setup` once per surface, before the first draw, and waits for a returned promise. Each screen gets its own surface: one for gameplay, one per select screen, one per decide screen, and one per result screen.
 
+One surface's life, from registering the skin to the screen ending (`skin/be-music/registry.ts` and `binding.ts` in `@be-music/player-web`):
+
+```mermaid
+sequenceDiagram
+  participant Host
+  participant Registry as Skin registry
+  participant Screen as Screen
+  participant Skin
+  Host->>Registry: add(skin)
+  Registry->>Registry: validateBeMusicSkin
+  Host->>Host: load fontLoads
+  Host->>Registry: resolve(id)
+  Registry-->>Host: skin
+  Host->>Screen: create with the kit<br/>{ skin, settings }
+  Screen->>Skin: setup(surface)
+  Skin-->>Screen: returns (or its promise resolves)
+  loop every frame
+    Screen->>Skin: draw(surface, frame)
+  end
+  Host->>Screen: updateKit(kit)
+  Screen->>Skin: next draw: frame.settings updated
+  Host->>Screen: dispose()
+  Screen->>Skin: teardown(surface)
+```
+
 ```ts
 import { WebGLRenderer, Container } from 'pixi.js';
 import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin } from '@be-music/skin-sdk';
@@ -219,6 +244,18 @@ export default defineBeMusicSkin({
 - **Landscape stays:** a skin without `portraitStage` is simply scaled down on portrait screens, and charts that need the landscape stage (double play, 24 / 48 KEY) are drawn on `stage` even when the skin has a portrait one.
 
 ## Screens
+
+A host shows the screens in this order; the decide screen only when the skin has one. [Browser player — Scene lifecycle](./player-web.md#scene-lifecycle) covers how the be-music player hands one screen over to the next.
+
+```mermaid
+flowchart LR
+  select["select"] -->|"chart picked,<br/>skin.decide set"| decide["decide"]
+  select -->|"chart picked,<br/>no decide"| gameplay["gameplay"]
+  decide --> gameplay
+  decide -.->|Escape| select
+  gameplay --> result["result"]
+  result --> select
+```
 
 ### Gameplay
 

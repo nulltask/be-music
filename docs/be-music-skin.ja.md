@@ -79,6 +79,31 @@ export default defineBeMusicSkin({
 
 `setup` でサーフェスのキャンバス上にフレームワークのレンダラーを作り、`teardown` で解放します。`setup` はサーフェスごとに最初の描画前に 1 回呼ばれ、Promise を返すとプレイヤーはその完了を待ちます。サーフェスは画面ごとにあります（ゲームプレイ 1 つ、選曲画面ごと 1 つ、決定画面ごと 1 つ、リザルト画面ごと 1 つ）。
 
+スキンの登録から画面の終わりまでの、1 つのサーフェスの一生です（`@be-music/player-web` の `skin/be-music/registry.ts` と `binding.ts`）。
+
+```mermaid
+sequenceDiagram
+  participant Host as ホスト
+  participant Registry as スキンのレジストリ
+  participant Screen as 画面
+  participant Skin as スキン
+  Host->>Registry: add(skin)
+  Registry->>Registry: validateBeMusicSkin
+  Host->>Host: fontLoads を読み込む
+  Host->>Registry: resolve(id)
+  Registry-->>Host: skin
+  Host->>Screen: キット { skin, settings }<br/>で作る
+  Screen->>Skin: setup(surface)
+  Skin-->>Screen: 戻る（または Promise が解決）
+  loop 毎フレーム
+    Screen->>Skin: draw(surface, frame)
+  end
+  Host->>Screen: updateKit(kit)
+  Screen->>Skin: 次の描画: frame.settings が更新
+  Host->>Screen: dispose()
+  Screen->>Skin: teardown(surface)
+```
+
 ```ts
 import { WebGLRenderer, Container } from 'pixi.js';
 import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin } from '@be-music/skin-sdk';
@@ -219,6 +244,18 @@ export default defineBeMusicSkin({
 - **横向きは残る:** `portraitStage` の無いスキンは縦向きの画面で縮小されるだけです。また、横向きステージが必要な譜面（DP、24 / 48 KEY）は、スキンが縦向きステージを持っていても `stage` で描かれます。
 
 ## 画面
+
+ホストは画面を次の順に表示します。決定画面はスキンが持つ場合だけです。be-music player が画面を次へ引き継ぐ方法は [ブラウザプレイヤー — Scene lifecycle](./player-web.ja.md#scene-lifecycle) にあります。
+
+```mermaid
+flowchart LR
+  select["選曲"] -->|"譜面を選ぶ、<br/>skin.decide あり"| decide["決定"]
+  select -->|"譜面を選ぶ、<br/>decide なし"| gameplay["ゲームプレイ"]
+  decide --> gameplay
+  decide -.->|Escape| select
+  gameplay --> result["リザルト"]
+  result --> select
+```
 
 ### ゲームプレイ
 

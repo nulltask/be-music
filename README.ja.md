@@ -23,6 +23,44 @@ TypeScript + pnpm workspaces で構成した BMS/BMSON ツールチェーンで�
 - `@be-music/leaderboard-api`: Cloudflare Workers で動く private な Leaderboard API。プレイログの投稿、再シミュレーションによる検証、ランキング
 - `@be-music/editor`: CLI エディタ (インポート・編集・エクスポート)
 
+パッケージは層を成して積み上がっています。矢印は、パッケージからそれに依存するパッケージへ向かいます。ほかの矢印を通じて既に届く依存は重ねて描いていません（`@be-music/utils` はほぼすべてのパッケージの下にあります）。パッケージの内側の同じ層は [アーキテクチャ — 目指す構造](./docs/architecture.ja.md#目指す構造) にあります。
+
+```mermaid
+flowchart TD
+  subgraph data["データ"]
+    utils["utils"] --> json["json"] --> chart["chart"] --> parser["parser"]
+    parser --> stringifier["stringifier"]
+    parser --> renderer["audio-renderer"]
+  end
+  subgraph rules["規則と engine"]
+    player["player"]
+  end
+  subgraph models["モデル"]
+    scene["scene-model"]
+    sdk["skin-sdk"]
+    lr2["lr2-skin"]
+    beatoraja["beatoraja-skin"]
+  end
+  subgraph hosts["実行層とホスト"]
+    editor["editor"]
+    tui["player-tui"]
+    lb["leaderboard-api"]
+    web["player-web"]
+    demo["player-web-demo"]
+  end
+
+  stringifier --> editor
+  renderer --> player
+  player --> scene
+  player --> tui
+  player --> lb
+  scene --> sdk
+  scene --> lr2 --> beatoraja
+  sdk --> web
+  beatoraja --> web
+  web --> demo
+```
+
 ## 必要環境
 
 - Node.js `>= 26`
@@ -349,13 +387,26 @@ pnpm run playlog -- /path/to/Song.bmplay.json --ruleset=lr2,beatoraja --json
 - `24 KEY SP`
 - `48 KEY DP`
 
-自動判定が曖昧な場合は拡張子で補完します。
+拡張子で判定に関わるのは `.pms` だけです。`.pms` のファイルはレーンの規則より先に `9 KEY` になります。`.bms`、`.bme`、`.bml` は使っているレーンで決まるので、6 / 7 鍵の列がない `.bme` の譜面は `5 KEY` です。
 
-- `.bms` -> `5 KEY SP/DP`
-- `.bme` -> `7 KEY SP/14 KEY DP`
-- `.pms` -> `9 KEY`
 - `11..19` をすべて使う 1P keyboard、または従来 IIDX 2P channel を含まない PMS-STD `22..25` も `9 KEY` として判定します。
 - 拡張レーンチャンネル (`1A..1O` / `2A..2O`、またはホイールの `1P` / `1Q` / `2P` / `2Q`) があれば、他のどのルールよりも優先して `24 KEY SP` / `48 KEY DP` と判定します。bmson の `mode_hint` が `keyboard-24k` / `keyboard-24k-double` の場合も同じです。
+
+判定規則（`@be-music/chart` の `resolveChartPlayVariant`）は次の順に調べ、最初に当てはまったものを採ります。「9 KEY のレーン配置」は次の 3 つの内容規則のいずれかです。`17` があり `21` / `26..29` がない `#PLAYER 3`、2P のレーンがなく `11..19` をすべて使う譜面、`21` / `26..29` なしで `22..25` を使う譜面です。「2P」は `2x` のレーンを 1 つでも使うことを指します。レーンの使用は `1x` / `2x` のレーンと `5x` / `6x` のロングノートで数え、地雷と不可視オブジェクトは数えません。
+
+```mermaid
+flowchart TD
+  hint{"bmson の keyboard<br/>mode_hint?"} -->|"keyboard-24k(-double)"| kb["24 KEY SP / 48 KEY DP"]
+  hint -->|なし| ext{"拡張レーン<br/>1A..1Q / 2A..2Q?"}
+  ext -->|"あり: 2P ? 48 : 24"| kb
+  ext -->|なし| pms{".pms?"}
+  pms -->|はい| nine["9 KEY"]
+  pms -->|いいえ| sig{"9 KEY の<br/>レーン配置?"}
+  sig -->|はい| nine
+  sig -->|いいえ| iidx{"18 / 19 / 28 / 29<br/>を使う?"}
+  iidx -->|"はい: 2P ? 14 : 7"| seven["7 KEY SP / 14 KEY DP"]
+  iidx -->|"いいえ: 2P ? 10 : 5"| five["5 KEY SP / 5 KEY DP"]
+```
 
 ### 代表モードのチャンネルと入力
 

@@ -419,3 +419,17 @@ runtime と round-trip の扱い:
 - `#SWITCH` チェーンは `#CASE` / `#DEF` を評価し、`#SKIP` で `#ENDSW` まで打ち切る
 - `#SWITCH` では `#SKIP` がない場合、後続 `#CASE` / `#DEF` にフォールスルーする
 - ヘッダ行は LR2 や beatoraja と同じくファイル順に適用する。選ばれた分岐内の定義は、前にある同じヘッダのトップレベル行に勝ち、後にあるものに負ける。パーサは後のトップレベル行に上書きされる分岐内のヘッダに印（`overriddenByLaterHeader`）を付け、解決時にはそれを適用しない。繰り返せるヘッダ（`#STP`、`#WAVCMD`、`#LNOBJ`）は加算する
+
+`evaluateControlFlow` は `#RANDOM` / `#IF` / `#SWITCH` のフレームを積む 1 本のスタックで、`bms.controlFlow` を 1 行ずつ 1 回たどります。各行は次のように扱います。
+
+```mermaid
+flowchart TD
+  line(["ファイル順に各行"]) --> kind{"行の種類"}
+  kind -->|"#RANDOM / #SWITCH<br/>#SETRANDOM / #SETSWITCH"| push["その draw の値で<br/>フレームを積む"]
+  kind -->|"#IF / #ELSEIF / #ELSE"| ifs["最も内側の #IF フレームを<br/>積む、または更新"]
+  kind -->|"#CASE / #DEF / #SKIP"| sw["最も内側の #SWITCH<br/>フレームを更新"]
+  kind -->|"#ENDIF / #ENDRANDOM / #ENDSW"| pop["その種類の最も内側の<br/>フレームを外す"]
+  kind -->|"ヘッダかオブジェクト"| active{"#IF と #SWITCH のフレームが<br/>すべて有効?"}
+  active -->|はい| apply["行を適用"]
+  active -->|いいえ| skip["行を飛ばす"]
+```

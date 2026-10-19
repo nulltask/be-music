@@ -24,6 +24,18 @@ Be-Music Fingerprint は、譜面をファイルのバイト列ではなく **�
 1. be-music がパースした譜面（レーン構成の入力として、レーン、`#PLAYER 3`、bmson のキーボード `mode_hint` を含みます。3.5 節）
 2. 譜面の **拡張子**。レーン構成の入力です（`.pms` なら 9 KEY。3.5 節）。実装はこれを明示的な入力として受け取らなければなりません。ほかの拡張子や不明な拡張子は、ないものとして扱います。
 
+それぞれの fingerprint の作り方です（3〜5 節）。
+
+```mermaid
+flowchart TD
+  src["パースした譜面<br/>+ 拡張子"]
+  src --> model["結果を差分、因子、<br/>決定木にする"]
+  model --> chartDoc["譜面ドキュメント"]
+  src -->|"プレイの draws<br/>で解決"| playDoc["プレイドキュメント"]
+  chartDoc -->|"RFC 8785, SHA-256"| cfp(["譜面 fingerprint<br/>bmfp0:…"])
+  playDoc -->|"RFC 8785, SHA-256"| pfp(["プレイ fingerprint<br/>bmfp0:…"])
+```
+
 どの結果でも同じように遊べる譜面（とくに制御構文のない譜面）では、譜面 fingerprint とプレイ fingerprint は同じ値になります。
 
 MIRROR / RANDOM / DP フリップなどのレーンオプションは譜面ではなくプレイオプションなので、どちらの fingerprint にも含めません。プレイログでは別に記録します。
