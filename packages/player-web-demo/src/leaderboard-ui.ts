@@ -218,7 +218,7 @@ export class LeaderboardPanel {
     const view = describeAccountChip(account);
     chip.dataset.state = view.state;
     chip.title = view.title;
-    chip.href = leaderboardLink(view.href ?? '/leaderboard', location.hostname);
+    chip.href = leaderboardLink(view.href ?? '/', location.hostname);
     chip.setAttribute('aria-label', `Leaderboard account: ${view.label}`);
     const label = chip.querySelector('#account-chip-label');
     if (label !== null) label.textContent = view.label;

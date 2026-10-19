@@ -3,7 +3,8 @@
 // The Player Worker (`play` on `play.be-music.app`, docs/services.md), serving the web player that
 // `@be-music/player-web-demo` builds.
 //
-// `/api/*`, `/leaderboard` and `/leaderboard/*` go to the Leaderboard Worker through the `LEADERBOARD` Service Binding.
+// `/api/*` goes to the Leaderboard Worker through the `LEADERBOARD` Service Binding, so the player's API requests and
+// session cookies stay on its own origin.
 //
 // Almost everything is served straight from Workers Static Assets (`env.ASSETS`; wrangler.config.ts points at the
 // demo's `dist`). The exceptions are the ffmpeg.wasm core under `/ffmpeg-core/` and URL auto-load archives under
@@ -19,7 +20,7 @@ import { isLeaderboardPath } from './leaderboard-paths.ts';
 interface Env {
   ASSETS: Fetcher;
   FFMPEG_CORE: R2Bucket;
-  /** The Leaderboard Worker (`packages/leaderboard-api`), which has no public URL of its own. */
+  /** The Leaderboard Worker (`packages/leaderboard-api`) of the same environment. */
   LEADERBOARD: Fetcher;
 }
 

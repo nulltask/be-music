@@ -62,12 +62,12 @@ describe('describeAccountChip', () => {
     ).toMatchObject({
       state: 'anonymous',
       label: '@player-abc · anonymous',
-      href: '/leaderboard/players/player-abc',
+      href: '/players/player-abc',
     });
     expect(describeAccountChip({ handle: 'a b', displayName: 'Player', anonymous: false, passkeys: 1 })).toMatchObject({
       state: 'signed-in',
       label: '@a b',
-      href: '/leaderboard/players/a%20b',
+      href: '/players/a%20b',
     });
   });
 });
@@ -89,7 +89,7 @@ describe('describeStartAccount', () => {
     ).toEqual({
       state: 'anonymous',
       label: '@player-abc · anonymous',
-      href: '/leaderboard/players/player-abc',
+      href: '/players/player-abc',
       actions: ['keep', 'sign-in'],
       hint: 'This account lives only in this browser, and rankings leave it out. Keep it with a passkey to join them.',
     });
@@ -99,7 +99,7 @@ describe('describeStartAccount', () => {
     expect(describeStartAccount({ handle: 'taro dj', displayName: 'Taro', anonymous: false, passkeys: 1 })).toEqual({
       state: 'signed-in',
       label: 'Taro @taro dj',
-      href: '/leaderboard/players/taro%20dj',
+      href: '/players/taro%20dj',
       actions: ['sign-out'],
       hint: undefined,
     });
