@@ -5,9 +5,16 @@ vi.mock('./audio-sink.ts', async () => (await import('./test-support/player-fixt
 
 import { createEmptyJson } from '../../json/src/index.ts';
 import { manualPlay } from './index.ts';
+import { createVirtualClock } from './core/characterization/virtual-clock.ts';
 import { resetAudioSinkState, createScheduledInputRuntime } from './test-support/player-fixtures.ts';
 
 beforeEach(resetAudioSinkState);
+
+/**
+ * Runs a play on a fresh virtual clock, so the scheduled input lands exactly at its delay. The mine tests hinge on a
+ * tap's distance from the crossing (PGREAT window, press grace), which a late host timer under load could move.
+ */
+const onVirtualClock = <T>(play: () => Promise<T>): Promise<T> => createVirtualClock().run(play);
 
 describe('player', () => {
   test('player: holding a key through a passing mine detonates it (LR2 hold-through)', async () => {
@@ -17,16 +24,18 @@ describe('player', () => {
     json.metadata.bpm = 120;
     json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }]; // raw 10 %
 
-    const summary = await manualPlay(json, {
-      speed: 1,
-      leadInMs: 0,
-      audio: false,
-      tui: false,
-      createInputRuntime: createScheduledInputRuntime([
-        { delayMs: 200, command: { kind: 'kitty-state', pressTokens: ['z'], repeatTokens: [], releaseTokens: [] } },
-        { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
-      ]),
-    });
+    const summary = await onVirtualClock(() =>
+      manualPlay(json, {
+        speed: 1,
+        leadInMs: 0,
+        audio: false,
+        tui: false,
+        createInputRuntime: createScheduledInputRuntime([
+          { delayMs: 200, command: { kind: 'kitty-state', pressTokens: ['z'], repeatTokens: [], releaseTokens: [] } },
+          { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
+        ]),
+      }),
+    );
 
     expect(summary.bad).toBe(0);
     expect(summary.gauge?.current).toBeCloseTo(10, 9); // 20 - 10
@@ -37,15 +46,17 @@ describe('player', () => {
     json.metadata.bpm = 120;
     json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }];
 
-    const summary = await manualPlay(json, {
-      speed: 1,
-      leadInMs: 0,
-      audio: false,
-      tui: false,
-      createInputRuntime: createScheduledInputRuntime([
-        { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
-      ]),
-    });
+    const summary = await onVirtualClock(() =>
+      manualPlay(json, {
+        speed: 1,
+        leadInMs: 0,
+        audio: false,
+        tui: false,
+        createInputRuntime: createScheduledInputRuntime([
+          { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
+        ]),
+      }),
+    );
 
     expect(summary.bad).toBe(0);
     expect(summary.gauge?.current).toBeCloseTo(20, 9);
@@ -58,16 +69,18 @@ describe('player', () => {
     json.metadata.bpm = 120;
     json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }];
 
-    const summary = await manualPlay(json, {
-      speed: 1,
-      leadInMs: 0,
-      audio: false,
-      tui: false,
-      createInputRuntime: createScheduledInputRuntime([
-        { delayMs: 1700, command: { kind: 'lane-input', tokens: ['z'] } },
-        { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
-      ]),
-    });
+    const summary = await onVirtualClock(() =>
+      manualPlay(json, {
+        speed: 1,
+        leadInMs: 0,
+        audio: false,
+        tui: false,
+        createInputRuntime: createScheduledInputRuntime([
+          { delayMs: 1700, command: { kind: 'lane-input', tokens: ['z'] } },
+          { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
+        ]),
+      }),
+    );
 
     expect(summary.bad).toBe(0);
     expect(summary.gauge?.current).toBeCloseTo(20, 9);
@@ -82,16 +95,18 @@ describe('player', () => {
     json.metadata.bpm = 120;
     json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }];
 
-    const summary = await manualPlay(json, {
-      speed: 1,
-      leadInMs: 0,
-      audio: false,
-      tui: false,
-      createInputRuntime: createScheduledInputRuntime([
-        { delayMs: 2040, command: { kind: 'lane-input', tokens: ['z'] } },
-        { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
-      ]),
-    });
+    const summary = await onVirtualClock(() =>
+      manualPlay(json, {
+        speed: 1,
+        leadInMs: 0,
+        audio: false,
+        tui: false,
+        createInputRuntime: createScheduledInputRuntime([
+          { delayMs: 2040, command: { kind: 'lane-input', tokens: ['z'] } },
+          { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
+        ]),
+      }),
+    );
 
     expect(summary.bad).toBe(0);
     expect(summary.gauge?.current).toBeCloseTo(20, 9);
@@ -99,23 +114,25 @@ describe('player', () => {
 
   test('player: a tap shortly before a passing mine detonates it (LR2 hold-through via the press grace)', async () => {
     // Non-kitty input has no release events, so a tap counts as "held" for the LN hold-grace window (120 ms).
-    // A tap at ~1.95 s therefore covers the mine's 2.0 s crossing, and the crossing-anchored hold-through leg
-    // detonates it deterministically once the PGREAT window closes — no positive-coverage dependence on a frame
-    // tick sampling the ±18 ms window itself.
+    // A tap at 1.95 s (exact on the virtual clock) therefore covers the mine's 2.0 s crossing, and the
+    // crossing-anchored hold-through leg detonates it deterministically once the PGREAT window closes — no
+    // positive-coverage dependence on a frame tick sampling the ±18 ms window itself.
     const json = createEmptyJson('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }]; // raw 10 %
 
-    const summary = await manualPlay(json, {
-      speed: 1,
-      leadInMs: 0,
-      audio: false,
-      tui: false,
-      createInputRuntime: createScheduledInputRuntime([
-        { delayMs: 1950, command: { kind: 'lane-input', tokens: ['z'] } },
-        { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
-      ]),
-    });
+    const summary = await onVirtualClock(() =>
+      manualPlay(json, {
+        speed: 1,
+        leadInMs: 0,
+        audio: false,
+        tui: false,
+        createInputRuntime: createScheduledInputRuntime([
+          { delayMs: 1950, command: { kind: 'lane-input', tokens: ['z'] } },
+          { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
+        ]),
+      }),
+    );
 
     expect(summary.bad).toBe(0);
     expect(summary.gauge?.current).toBeCloseTo(10, 9); // 20 - 10
