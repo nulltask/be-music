@@ -50,7 +50,7 @@ export const OPENAPI_DOCUMENTATION = {
     version: '0',
     description:
       'Version 0 is the beta: it may still change incompatibly (docs/leaderboard.md section 8). Requests are ' +
-      'authenticated with the Better Auth session cookie from `/api/auth/*`; reads are public.',
+      'authenticated with a host-only OIDC app session or a resource-bound Accounts access token; reads are public.',
   },
   servers: [{ url: '/api/v0' }],
 };

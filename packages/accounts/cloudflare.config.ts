@@ -1,25 +1,38 @@
 import { bindings, defineConfig } from 'cf/config';
 
-/**
- * The Accounts Worker, one configuration per environment (docs/services.md section 2): the default mode is production
- * (`accounts`, from `main`), `cf deploy --mode preview` the preview (`accounts-preview`, from `devel`). It reaches the
- * Leaderboard Worker of the same environment, which holds Better Auth, through a Service Binding.
- */
 export default defineConfig(({ mode }) => {
   const preview = mode === 'preview';
+  const site = preview ? 'preview.be-music.app' : 'be-music.app';
   const suffix = preview ? '-preview' : '';
   return {
-    // The be-music Cloudflare account. Pinned, so a session signed in to another account cannot deploy here.
     accountId: '<CLOUDFLARE_ACCOUNT_ID>',
     worker: {
       name: `accounts${suffix}`,
-      compatibilityDate: '2026-10-01',
+      compatibilityDate: '2026-10-19',
+      compatibilityFlags: ['nodejs_compat'],
       entrypoint: './src/index.ts',
-      domains: [preview ? 'accounts.preview.be-music.app' : 'accounts.be-music.app'],
+      domains: [`accounts.${site}`],
       workersDev: false,
       observability: { enabled: true },
       env: {
-        LEADERBOARD: bindings.worker({ worker: `leaderboard${suffix}` }),
+        DB: bindings.d1({
+          name: `accounts${suffix}`,
+          id: preview ? '<D1_DATABASE_ID>' : '<D1_DATABASE_ID>',
+        }),
+        AUTH_ORIGIN: bindings.text(`https://accounts.${site}`),
+        PASSKEY_RP_ID: bindings.text(site),
+        API_AUDIENCE: bindings.text(`https://leaderboard.${site}`),
+        OIDC_CLIENTS: bindings.text(
+          JSON.stringify(
+            Object.fromEntries(
+              ['dashboard', 'play', 'leaderboard', 'donate'].map((name) => [
+                name,
+                `https://${name === 'dashboard' ? '' : name + '.'}${site}`,
+              ]),
+            ),
+          ),
+        ),
+        BETTER_AUTH_SECRET: bindings.secret(),
       },
     },
   };

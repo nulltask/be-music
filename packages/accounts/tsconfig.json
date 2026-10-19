@@ -2,7 +2,7 @@
   "extends": "../../tsconfig.typecheck.json",
   "compilerOptions": {
     "noEmit": true,
-    "types": ["@cloudflare/workers-types"]
+    "types": ["@cloudflare/workers-types", "node"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "scripts/**/*.ts"]
 }

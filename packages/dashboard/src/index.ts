@@ -1,49 +1,44 @@
 /// <reference types="@cloudflare/workers-types" />
-
-// The temporary Dashboard Worker on the site's apex (docs/services.md section 1): it shows who is signed in and links
-// to the Player and the Leaderboard. The session cookies are shared on the site's domain, so it asks the Leaderboard
-// (which holds Better Auth) for the account through the `LEADERBOARD` Service Binding.
-
+import { handleAuth, readSession, type OIDCEnv } from '@be-music/auth-client';
 import { pickLocale, renderDashboard, type DashboardAccount } from './page.ts';
 
-interface Env {
+interface Env extends OIDCEnv {
   LEADERBOARD: Fetcher;
-}
-
-async function loadAccount(
-  request: Request,
-  env: Env,
-): Promise<{ account: DashboardAccount | undefined; setCookies: string[] }> {
-  const cookie = request.headers.get('cookie');
-  if (cookie === null) return { account: undefined, setCookies: [] };
-  const url = new URL('/api/v0/me', request.url);
-  const response = await env.LEADERBOARD.fetch(url, { headers: { cookie } });
-  const setCookies = response.headers.getSetCookie();
-  if (!response.ok) return { account: undefined, setCookies };
-  return { account: (await response.json()) as DashboardAccount, setCookies };
+  PLAY_ORIGIN: string;
+  LEADERBOARD_ORIGIN: string;
+  DONATE_ORIGIN: string;
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const auth = await handleAuth(request, env);
+    if (auth) return auth;
     const url = new URL(request.url);
-    if (url.pathname !== '/') {
-      return new Response('Not Found', { status: 404 });
+    if (url.pathname !== '/' || url.origin !== env.PUBLIC_ORIGIN) return new Response('Not Found', { status: 404 });
+    const session = await readSession(request, env);
+    let account: DashboardAccount | undefined;
+    if (session) {
+      const response = await env.LEADERBOARD.fetch(
+        new Request(`${env.API_AUDIENCE}/api/v0/me`, { headers: { authorization: `Bearer ${session.accessToken}` } }),
+      );
+      if (response.ok) account = (await response.json()) as DashboardAccount;
     }
-    const { account, setCookies } = await loadAccount(request, env);
-    const html = renderDashboard({
-      account,
-      hostname: url.hostname,
-      locale: pickLocale(request.headers.get('accept-language')),
-    });
-    const response = new Response(html, {
-      headers: {
-        'content-type': 'text/html; charset=utf-8',
-        'cache-control': 'private, no-store',
-        vary: 'cookie, accept-language',
+    return new Response(
+      renderDashboard({
+        account,
+        hostname: url.hostname,
+        locale: pickLocale(request.headers.get('accept-language')),
+        links: { play: env.PLAY_ORIGIN, leaderboard: env.LEADERBOARD_ORIGIN, donate: env.DONATE_ORIGIN },
+      }),
+      {
+        headers: {
+          'content-type': 'text/html; charset=utf-8',
+          'cache-control': 'private, no-store',
+          vary: 'cookie, accept-language',
+          'content-security-policy':
+            "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+        },
       },
-    });
-    // Better Auth may refresh its cookie cache while reading the session; keep it warm.
-    for (const cookieValue of setCookies) response.headers.append('set-cookie', cookieValue);
-    return response;
+    );
   },
 } satisfies ExportedHandler<Env>;

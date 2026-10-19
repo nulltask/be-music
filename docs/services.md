@@ -2,9 +2,7 @@
 
 # Services and environments
 
-> Status: partly built. The Dashboard, Accounts, Player and Leaderboard run on their own subdomains in both
-> environments, with an interim shared-cookie sign-in (section 3.1). Accounts as an OIDC provider, the Registry and the
-> Editor are planned. Section 6 lists what exists today.
+> Status: Dashboard, Accounts, Player, Leaderboard and Donate have production and preview deployments. Accounts owns authentication and issues OIDC identities; app cookies are host-only. Registry and Editor remain planned.
 
 ## 1. Services
 
@@ -15,8 +13,8 @@ be-music account.
 | ----------- | -------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | Dashboard   | `be-music.app`             | The signed-in user's home, linking to every service                                                        |
 | Accounts    | `accounts.be-music.app`    | Sign-in, accounts, passkeys; the OIDC provider every other service uses                                    |
-| Player      | `play.be-music.app`        | The browser player (today at `be-music.app`)                                                               |
-| Leaderboard | `leaderboard.be-music.app` | Rankings (today at `be-music.app/leaderboard`)                                                             |
+| Player      | `play.be-music.app`        | The browser player                                                                                         |
+| Leaderboard | `leaderboard.be-music.app` | Rankings                                                                                                   |
 | Registry    | `registry.be-music.app`    | Users register charts, songs, courses and dan certifications, each public, private or unlisted (link only) |
 | Editor      | `edit.be-music.app`        | BMS / bmson editor; publishes to the Registry or exports BMS / bmson locally                               |
 | Donate      | `donate.be-music.app`      | Donations toward server and infrastructure costs                                                           |
@@ -61,7 +59,7 @@ secrets and accounts.
 
 - **Worker names** follow `<service>` and `<service>-preview`. Storage resources (D1, R2, KV) may keep their current
   names where they cannot be renamed.
-- **Branches**: every service deploys `main` to production and `devel` to preview, through Workers Builds.
+- **Branches**: every service deploys `main` to production and `devel` to preview, through GitHub Actions.
 
 ```mermaid
 flowchart LR
@@ -70,8 +68,7 @@ flowchart LR
   B[other branches] --> BV[preview versions<br/>*.be-music.workers.dev]
 ```
 
-- **Branch preview URLs**: Workers Builds also uploads every other branch as a preview version of the `-preview`
-  Worker, with a Preview URL on `be-music.workers.dev`. Those versions bind the preview environment, never production.
+- **Branch preview URLs** are not registered OIDC clients. Authentication is supported at the fixed production and preview origins; register another exact client/callback explicitly to add a deployment.
 - **Third-party services** have separate preview credentials: their own Discord and Google OAuth applications, whose
   redirect URIs point at `accounts.preview.be-music.app`, and Stripe test-mode keys for `donate-preview`.
 - **Visibility**: preview hosts are kept out of search engines, and may be put behind Cloudflare Access.
@@ -107,34 +104,25 @@ sequenceDiagram
   services are first-party clients, so there is no consent screen.
 - **Identity**: services store a user as `(issuer, sub)`. Keeping the issuer leaves room for signing in with another
   instance's accounts later.
-- **Sign-in methods** live in Accounts only: Discord, Google and passkeys, plus anonymous sessions and the device
-  authorization flow for the terminal player (as in [Leaderboard design](./leaderboard.md) section 3).
+- **Sign-in methods** live in Accounts only: Discord, Google and passkeys, plus guest sessions. Device authorization for the terminal player remains planned.
 - **Passkeys** are bound to one relying party ID per environment: `be-music.app` in production and
   `preview.be-music.app` in preview. Passkeys are only used on the Accounts host, so this works wherever the other
   services live.
 - **Calls between services** go through the server: the browser talks to its own service, which calls another
   service's API with the user's access token. The callee verifies the token against Accounts' JWKS, so services share
   no database and need no CORS for signed-in calls. Public read-only endpoints may allow CORS.
-- **Sign-out**: each service keeps a short session (about a day) and renews it silently through Accounts, so signing
-  out of Accounts reaches every service within that time. Back-channel logout can be added if that is too slow.
-- **Redirect URIs** are registered per client and matched exactly. The preview Accounts alone also accepts
-  `https://*-<service>-preview.be-music.workers.dev/` patterns, so branch Preview URLs can sign in. Only the be-music
-  account can create hosts under `be-music.workers.dev`.
-- **Not the target**: a session cookie on the parent domain (`.be-music.app`). It would save one redirect on the first
-  visit to each service, but it cannot work across unrelated domains or on `workers.dev`, and it sends the session to
-  every subdomain. It is used only as the interim step below.
+- **Sessions and sign-out**: each app has a separate encrypted `__Host-be-music.session` cookie, valid for at most 10 minutes and never longer than its tokens. Tokens stay in HttpOnly cookies and server-side requests; browser session endpoints expose identity only. There are no refresh tokens. Once an app session expires, use Sign in again; Accounts normally completes the redirect without another credential prompt. App sign-out clears that app's cookie. Accounts sign-out ends SSO; existing app sessions can remain valid for up to 10 minutes. Immediate global logout is not implemented.
+- **Redirect URIs** are registered per client and matched exactly, including in preview. Clients use authorization code + S256 PKCE, `state`, `nonce`, issuer/audience checks and signed ID-token verification. Public first-party clients have no client secret and cannot register other clients. APIs accept resource-bound access tokens with the `be-music:api` scope, not ID tokens.
 
-### 3.1 Interim: one Better Auth and a shared cookie
+### 3.1 Identity ownership and migration
 
-Until Accounts becomes an OIDC provider, Better Auth runs inside the Leaderboard Worker:
+Accounts has its own D1 (`accounts` / `accounts-preview`) for users, provider links, passkeys, sessions, signing keys and OAuth client state. It never calls the Leaderboard during login.
 
-- Its base URL is the Accounts host (`accounts.be-music.app`), whose Worker forwards `/api/auth/*` to the Leaderboard
-  through a Service Binding. OAuth callbacks land there.
-- Its session cookies are shared on the environment's domain (`be-music.app`, or `preview.be-music.app` with the
-  `be-music-preview` cookie prefix, so production's cookies never collide with the preview's).
-- The Player and the Dashboard read the session by asking the Leaderboard through their Service Bindings; the
-  Leaderboard reads it directly. Passkeys use the environment's relying party ID, as planned.
-- User IDs are the ones the OIDC provider will issue as `sub`, so the move changes only how services read the session.
+The Leaderboard owns public profiles and scores. `oidc_identity` maps `(issuer, subject)` to its local player ID. A verified token creates the local mirror/profile lazily; email is never a linking key. Existing mappings keep the original player IDs and score ownership. Signed guest-link claims let the Leaderboard transfer guest plays idempotently when an account is linked, without giving Accounts access to score tables.
+
+Apply the Accounts schema and Leaderboard migration `0013`, then run `packages/accounts/scripts/migrate-identities.ts` before switching authentication. It defaults to a dry run; `--preview --apply` copies preview users/provider links/passkeys and seeds their local mappings; omit `--preview` for production. It does not copy old sessions or challenges and never prints credentials. The source auth tables remain for rollback. Do not rerun the copy after new OIDC players have been provisioned. Users sign in again; migrated passkeys keep their existing RP IDs.
+
+`legacy-auth.ts` is confined to localhost tests/development. Public deployments fail closed without OIDC configuration and cannot accept the old shared session cookie.
 
 ## 4. User content
 
@@ -150,13 +138,16 @@ Until Accounts becomes an OIDC provider, Better Auth runs inside the Leaderboard
 The source is public, and an instance may run its services on any hosts. Everything the official instance pins is
 configuration:
 
-| Setting                                 | Meaning                                                |
-| --------------------------------------- | ------------------------------------------------------ |
-| `PUBLIC_ORIGIN`                         | The service's own origin; callback URLs derive from it |
-| `AUTH_ISSUER`                           | The Accounts origin                                    |
-| `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | The service's client credentials at Accounts           |
-| `PASSKEY_RP_ID`                         | Accounts only; defaults to the Accounts host           |
-| `USER_CONTENT_ORIGIN`                   | Registry only; where uploaded files are served from    |
+| Setting               | Meaning                                                                |
+| --------------------- | ---------------------------------------------------------------------- |
+| `PUBLIC_ORIGIN`       | The service's own origin; callback URLs derive from it                 |
+| `AUTH_ISSUER`         | Exact issuer, e.g. `https://accounts.example/api/auth`                 |
+| `OIDC_CLIENT_ID`      | Registered public PKCE client ID                                       |
+| `SESSION_SECRET`      | A separate random secret of at least 32 characters per app/environment |
+| `API_AUDIENCE`        | Exact protected API resource URI                                       |
+| `OIDC_CLIENTS`        | Accounts JSON map of client ID to exact app origin                     |
+| `PASSKEY_RP_ID`       | Accounts only; defaults to the Accounts host                           |
+| `USER_CONTENT_ORIGIN` | Registry only; where uploaded files are served from                    |
 
 - Accounts reads its list of clients and redirect URIs from configuration.
 - Discord and Google are optional: an instance can start with passkeys and anonymous sessions only.
@@ -170,21 +161,19 @@ configuration:
 | Service     | Today                                                                                  |
 | ----------- | -------------------------------------------------------------------------------------- |
 | Dashboard   | `dashboard` / `dashboard-preview`, a temporary page showing the session and links      |
-| Accounts    | `accounts` / `accounts-preview`, forwarding `/api/auth/*` to the Leaderboard (3.1)     |
+| Accounts    | `accounts` / `accounts-preview`, independent OIDC provider and auth D1                 |
 | Player      | `play` / `play-preview` (`packages/play`, serving `@be-music/player-web-demo`'s build) |
 | Leaderboard | `leaderboard` / `leaderboard-preview`, pages at the root of its host                   |
-| Donate      | `donate-be-music-app` on `donate.be-music.app`, not yet signed in                      |
+| Donate      | `donate` / `donate-preview`, OIDC login and public financial data                      |
 
-Every Worker deploys with `cf` from its `cloudflare.config.ts`; `.github/workflows/deploy.yml` deploys `main` to
+The monorepo Workers deploy with `cf` from `cloudflare.config.ts`; Donate uses Wrangler in its private content repository. `.github/workflows/deploy.yml` deploys `main` to
 production and `devel` to the preview. All of them run in the be-music Cloudflare account, which bills only be-music.
 Its `workers.dev` subdomain is `be-music.workers.dev`.
 
 Next:
 
-1. Split Accounts out as the OIDC provider, with the Leaderboard as its first client, and drop the shared cookie.
-2. Connect the donation site to Accounts.
-3. Build the Registry, with the user content domain, visibility settings and terms of use.
-4. Build the Editor.
+1. Build the Registry, with the user content domain, visibility settings and terms of use.
+2. Build the Editor.
 
 **No redirects** are kept from the old URLs: links to `be-music.app/...` (the old Player) and
 `be-music.app/leaderboard/...` no longer work.

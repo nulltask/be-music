@@ -11,3 +11,5 @@
 - [公開する入口は設計して決める。1.0 までは破壊的変更を許す](./0005-public-entry-points.ja.md)
 - [ホストは画面の切り替えをすべて 1 つのシーンルーターに通す](./0006-scene-router.ja.md)
 - [システム音は 1 つの AudioContext を共有し、プレイは自分の AudioContext を持つ](./0007-one-system-audio-context.ja.md)
+
+- [0008: Accounts の独立と OIDC](./0008-accounts-oidc.ja.md)

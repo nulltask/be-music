@@ -25,6 +25,7 @@
     "build:worker": "vp build --config vite.worker.config.ts"
   },
   "dependencies": {
+    "@be-music/auth-client": "workspace:*",
     "@be-music/chart": "workspace:*",
     "@be-music/player": "workspace:*",
     "@better-auth/passkey": "^1.7.10",
