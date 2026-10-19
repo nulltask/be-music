@@ -183,6 +183,9 @@ export function applyHcnGaugeTick(
   gain: boolean,
   emit: JudgeCoreEffectSink,
 ): void {
+  if (isJudgingClosed(state)) {
+    return;
+  }
   const tick = state.config.ruleset.hcnTick;
   const previousGauge = state.summary.gauge?.current;
   state.applyGaugeTick(
@@ -263,6 +266,15 @@ export function noteOwesTailMiss(ruleset: RulesetConfig, note: TimedPlayableNote
   );
 }
 
+/**
+ * True once judging has stopped: the survival gauge emptied in a play that ends on failure
+ * (`JudgeCoreConfig.endOnFailure`). Nothing after the judgment that emptied it counts — no tally, combo, gauge or
+ * fast / slow — as in the play-log simulator, which checks the same at the same points.
+ */
+export function isJudgingClosed(state: JudgeCoreState): boolean {
+  return state.config.endOnFailure && state.summary.gauge?.failedMidPlay === true;
+}
+
 export function applyResolvedManualJudge(
   state: JudgeCoreState,
   channel: string,
@@ -270,6 +282,9 @@ export function applyResolvedManualJudge(
   atSeconds: number,
   emit: JudgeCoreEffectSink,
 ): void {
+  if (isJudgingClosed(state)) {
+    return;
+  }
   const { summary } = state;
   const deltaMs = Math.abs(judge.signedDeltaMs);
   applyJudgeToSummary(summary, judge.kind, state.scoreTracker);
@@ -325,6 +340,9 @@ export function applyResolvedManualJudge(
 
 /** Charges a POOR (gauge + tally) with no other cue — the second judgment a missed charge note owes. */
 export function applyTailMissPoor(state: JudgeCoreState, seconds: number, emit: JudgeCoreEffectSink): void {
+  if (isJudgingClosed(state)) {
+    return;
+  }
   applyJudgeToSummary(state.summary, 'POOR', state.scoreTracker);
   applyGaugeJudge(state, seconds, 'POOR', emit, 'miss');
 }

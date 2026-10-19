@@ -1,73 +1,45 @@
-import type { BeMusicJson } from '@be-music/json';
-
-/** Where a song came from: a dropped directory, a zip, or loose files. */
-export type BrowserSongSourceKind = 'directory' | 'zip' | 'files';
-
-/** One chart in the song collection: its metadata and the parsed chart. */
-export interface BrowserSongEntry {
-  id: string;
-  sourceId: string;
-  sourceLabel: string;
-  sourceKind: BrowserSongSourceKind;
-  chartPath: string;
-  directoryLabel: string;
-  fileLabel: string;
-  title: string;
-  subtitle?: string;
-  artist?: string;
-  genre?: string;
-  playLevel?: number | string;
-  bpm?: number;
-  /** The notes a play scores: judged notes without FREE ZONE tails; mines and invisible objects are not notes. */
-  totalNotes: number;
-  chart: BeMusicJson;
-}
+import type { BestRecord } from '@be-music/player/records';
+import type { ClearLamp } from '@be-music/player/ruleset';
 
 /**
- * One folder of songs surfaced by `groupSongsByFolder`. The label is the human-readable folder name (top-level
- * directory inside the source, falling back to the source label) and `songs` are all the BMS charts whose
- * `directoryLabel` resolves to it.
+ * The library a select screen browses, as `@be-music/scene-model` defines it: a chart (`LibraryChart`, with where it
+ * came from as `ChartSourceKind`), a folder bar (`LibraryFolder`: a chart folder's `charts`, or a course folder's
+ * `courses`), a course and its stages (`LibraryCourse`, `LibraryCourseStage`, each stage naming the local `chart` it
+ * resolved to), and one bar of the select list (`LibraryEntry`: `{ kind: 'folder', folder }`,
+ * `{ kind: 'chart', chart }` or `{ kind: 'course', course }`).
  */
-export interface BrowserFolderNode {
-  label: string;
-  songs: readonly BrowserSongEntry[];
-}
-
-/**
- * One entry in the bar list when navigating the song collection. A select view either shows folder bars (when at the
- * root) or song bars (when inside a folder).
- */
-export type BrowserBrowseEntry =
-  | { kind: 'folder'; folder: BrowserFolderNode }
-  | { kind: 'song'; song: BrowserSongEntry };
+export type {
+  ChartSourceKind,
+  LibraryChart,
+  LibraryCourse,
+  LibraryCourseStage,
+  LibraryEntry,
+  LibraryFolder,
+} from '@be-music/scene-model';
 
 /** A song image a host can hand a skin: the chart's `#STAGEFILE`, `#BANNER`, or `#BACKBMP`. */
 export type BeMusicSongImageKind = 'stageFile' | 'banner' | 'backBmp';
 
 /**
  * Clear lamp of a play or a best record, worst first: not played, failed, then the gauge the chart was cleared on
- * (ASSIST EASY … EX HARD), FULL COMBO (no BAD / POOR), PERFECT (no GOOD or worse), and MAX (every note a PGREAT).
+ * (ASSIST EASY … EX HARD), FULL COMBO (no BAD / POOR), PERFECT (no GOOD or worse), and MAX (every note a PGREAT). The
+ * clear lamp of `@be-music/player/ruleset` (`ClearLamp`), which ranks them and lamps a play.
  */
-export type BeMusicClearLamp =
-  | 'NO_PLAY'
-  | 'FAILED'
-  | 'ASSIST_EASY'
-  | 'EASY'
-  | 'NORMAL'
-  | 'HARD'
-  | 'EX_HARD'
-  | 'FULL_COMBO'
-  | 'PERFECT'
-  | 'MAX';
+export type BeMusicClearLamp = ClearLamp;
 
-/** The player's best record on one chart, as a host keeps it. */
-export interface BeMusicSongRecord {
-  /** Best clear lamp so far. */
-  lamp: BeMusicClearLamp;
-  exScore?: number;
-  maxCombo?: number;
-  /** Fewest BAD + POOR. */
-  missCount?: number;
-  /** How many times the chart was played. */
-  playCount?: number;
+/**
+ * The player's best record on one chart, as a host keeps it: the best lamp, EX score, max combo and fewest BAD + POOR +
+ * empty POOR, and the play count. The best record of `@be-music/player/records` (`BestRecord`), whose rules a host
+ * keeps it by.
+ */
+export type BeMusicSongRecord = BestRecord;
+
+/**
+ * The player's best record on a course, as a host keeps it: the course's best lamp, EX score, max combo and BP over its
+ * runs, plus the best trophy those bests earn (beatoraja's `GradeBar.getTrophy`, worked out from the best EX score and
+ * the fewest BP, which may come from different runs).
+ */
+export interface BeMusicCourseRecord extends BeMusicSongRecord {
+  /** The best trophy's name (e.g. `goldmedal`), when the course has trophies and the bests earn one. */
+  trophy?: string;
 }

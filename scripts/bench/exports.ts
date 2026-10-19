@@ -356,8 +356,6 @@ async function createBenchFixtures(): Promise<BenchFixtures> {
   const fractionValues = fractionItems.map((item) => item.value);
 
   const sampleRenderResult = createRenderResult([0, 0.2, -0.2, 0.1], [0, -0.1, 0.1, -0.05], 44_100);
-  const playableRenderResult = createRenderResult([0.7, 0.2, 0], [0.68, 0.2, 0], 44_100);
-  const bgmRenderResult = createRenderResult([0.6, 0.2, 0], [0.6, 0.1, 0], 44_100);
 
   return {
     tmpDir,
@@ -374,13 +372,7 @@ async function createBenchFixtures(): Promise<BenchFixtures> {
     eventB,
     fractionItems,
     fractionValues,
-    randomPatterns: [
-      { index: 1, current: 2, total: 4 },
-      { index: 2, current: 1, total: 3 },
-    ],
     sampleRenderResult,
-    playableRenderResult,
-    bgmRenderResult,
     paths: {
       bmsPath,
       bmsonPath,

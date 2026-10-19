@@ -307,6 +307,59 @@ describe('engine / simulator equivalence', () => {
     }
   });
 
+  // A terminal play logged before the engine inferred releases: every press, key repeats included, and no release. A
+  // replay reads it as it is, as the simulator does: each key is down from its first press to the end of the play.
+  test.each(RULESETS)('%s: a log without releases replays as it is and agrees on both sides', async (ruleset) => {
+    const inputs = [
+      down(0, 1_000_000, '11'),
+      down(1, 1_250_000, '12'),
+      down(2, 1_300_000, '12'),
+      down(3, 1_500_000, '11'),
+      down(4, 1_500_000, '12'),
+      down(5, 1_540_000, '11'),
+      down(6, 1_580_000, '11'),
+      down(7, 2_200_000, '13'),
+    ];
+    for (const lnMode of [1, 2, 3] as const) {
+      // A long note on 11 whose key repeats, two notes on 12 with a repeat between them, and a mine crossing 13.
+      const json = chart([
+        { measure: 1, channel: '11', position: [0, 1], value: '01' },
+        { measure: 1, channel: '12', position: [1, 4], value: '01' },
+        { measure: 1, channel: '12', position: [1, 2], value: '01' },
+        { measure: 2, channel: '11', position: [0, 1], value: 'AA' },
+        { measure: 2, channel: '13', position: [1, 5], value: '01' },
+        { measure: 2, channel: 'D3', position: [1, 2], value: '0A' },
+        { measure: 4, channel: '19', position: [0, 1], value: '01' },
+      ]);
+      json.bms.lnObjs = ['AA'];
+      json.bms.lnMode = lnMode;
+      const name = `#LNMODE ${lnMode}`;
+
+      const { summary, playlog } = await replay(json, inputs, ruleset);
+      const simulated = simulatePlaylog(playlog, { ruleset });
+
+      // The replay infers no release: it re-records the presses it was given.
+      expect(
+        playlog.inputs.map(({ timeUs, action, channels }) => ({ timeUs, action, channels })),
+        name,
+      ).toEqual(inputs.map(({ timeUs, action, channels }) => ({ timeUs, action, channels })));
+      expect(
+        [summary.perfect, summary.great, summary.good, summary.bad, summary.poor, summary.emptyPoor],
+        name,
+      ).toEqual([
+        simulated.judge.pgreat,
+        simulated.judge.great,
+        simulated.judge.good,
+        simulated.judge.bad,
+        simulated.judge.poor,
+        simulated.judge.emptyPoor,
+      ]);
+      expect(summary.exScore, name).toBe(simulated.exScore);
+      expect(playlog.results?.native?.maxCombo, name).toBe(simulated.maxCombo);
+      expect(summary.gauge?.current, name).toBeCloseTo(simulated.gauge.final, 2);
+    }
+  });
+
   // Channel 16 is a key, not a scratch, in the BME-type 9 KEY layout and the keyboard modes: AUTO SCRATCH must leave
   // it to the player on both sides.
   test.each(RULESETS)('%s: AUTO SCRATCH leaves channel 16 alone where it is a key', async (ruleset) => {
@@ -824,6 +877,76 @@ describe('engine / simulator equivalence', () => {
     expect(summary.bad).toBe(1);
     expect(summary.emptyPoor).toBe(0);
     expect(simulated.judge).toMatchObject({ bad: summary.bad, poor: summary.poor, emptyPoor: summary.emptyPoor });
+  });
+
+  // A play that ends on failure stops scoring at the judgment that emptied its survival gauge; a press after it counts
+  // for nothing on either side.
+  test.each(RULESETS)('%s: a play ending on failure stops scoring on both sides', async (ruleset) => {
+    const json = chart(
+      Array.from({ length: 24 }, (_, index) => ({
+        measure: 1 + Math.floor(index / 8),
+        channel: '11',
+        position: [index % 8, 8] as const,
+        value: '01',
+      })),
+    );
+    // Every note missed until the last one, pressed on time.
+    const inputs = [down(0, 3_875_000, '11'), up(1, 3_900_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset, { gauge: 'HARD' });
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(playlog.play.endOnFailure).toBe(true);
+    expect(summary.gauge?.failedMidPlay).toBe(true);
+    expect(summary.perfect).toBe(0);
+    expect(summary.poor).toBeLessThan(24);
+    expect(simulated.judge).toMatchObject({ pgreat: summary.perfect, poor: summary.poor });
+    expect(simulated.gauge.final).toBe(summary.gauge?.current);
+    // A log without the flag (or a re-simulation told otherwise) keeps judging to the end: every note gets a verdict.
+    const kept = simulatePlaylog(playlog, { ruleset, endOnFailure: false }).judge;
+    expect(kept.pgreat + kept.great + kept.good + kept.bad + kept.poor).toBe(24);
+  });
+
+  // A course stage starts from the state the previous stage left: its gauge value and the course-wide combo.
+  test.each(RULESETS)('%s: a course stage carries in its gauge and combo on both sides', async (ruleset) => {
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 4], value: '01' },
+      { measure: 1, channel: '12', position: [1, 4], value: '01' },
+      { measure: 1, channel: '13', position: [2, 4], value: '01' },
+      { measure: 2, channel: '14', position: [0, 1], value: '01' },
+    ]);
+    const inputs = [
+      down(0, 1_000_000, '11'),
+      up(1, 1_050_000, '11'),
+      down(2, 1_250_000, '12'),
+      up(3, 1_300_000, '12'),
+      down(4, 2_000_000, '14'),
+      up(5, 2_050_000, '14'),
+    ];
+    const course = { kind: 'grade' as const, carryIn: { gauge: 41.5, combo: 7, maxCombo: 9 } };
+
+    const { summary, playlog } = await replay(json, inputs, ruleset, { course });
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(playlog.play.course).toEqual(course);
+    expect(summary.gauge?.initial).toBe(41.5);
+    // Two hits extend the carried combo to 9, the missed third note breaks it, the fourth starts it again.
+    expect(summary.course).toEqual({ combo: 1, maxCombo: 9 });
+    expect(simulated.course).toEqual(summary.course);
+    expect(playlog.results?.native?.course).toEqual(summary.course);
+    expect(simulated.gauge).toMatchObject({ type: summary.gauge?.type, final: summary.gauge?.current });
+  });
+
+  // beatoraja's NO_GREAT: GREAT and GOOD take the PGREAT window, so a press just outside PGREAT is a BAD.
+  test.each(RULESETS)('%s: a no-great course stage judges outside PGREAT as BAD on both sides', async (ruleset) => {
+    const json = chart([{ measure: 1, channel: '11', position: [0, 1], value: '01' }]);
+    const inputs = [down(0, 1_040_000, '11'), up(1, 1_090_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset, { course: { kind: 'grade', judge: 'no-great' } });
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(summary.bad).toBe(1);
+    expect(simulated.judge.bad).toBe(1);
   });
 
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {

@@ -4,21 +4,20 @@ import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 vi.mock('./audio-sink.ts', async () => (await import('./test-support/player-fixtures.ts')).mockAudioSinkModule());
 
 import { computeChartFingerprint, computePlayFingerprint, drawRandomOutcomes, type RandomDraws } from '@be-music/chart';
-import { createEmptyJson } from '../../json/src/index.ts';
+import { createEmptyJson, type BeMusicJson } from '../../json/src/index.ts';
 import { parseChart, parseChartFile, resolveBmsControlFlowWithDraws } from '../../parser/src/index.ts';
 import { resolveBeatorajaDefaultTotal, resolveLr2DefaultTotal } from './ruleset/index.ts';
 import {
   autoPlay,
   type PlayerLoadProgress,
   type PlayerRulesetInfo,
-  extractPlayableNotes,
   manualPlay,
-  formatRandomPatternSummary,
   PlayerInterruptedError,
-  resolveBmsControlFlowForPlayback,
   resolvePlayChart,
   type PlayerSummary,
 } from './index.ts';
+import { formatRandomPatternSummary, resolveBmsControlFlowForPlayback } from './core/engine-preparation.ts';
+import { extractPlayableNotes } from './display.ts';
 import type { PlayerUiCommand } from './core/ui-signal-bus.ts';
 import { simulatePlaylog, type BeMusicPlaylog } from './playlog/index.ts';
 import {
@@ -466,7 +465,7 @@ describe('player', () => {
     expect(iidx.gauge?.survival).toBe(true);
   });
 
-  test('player: a survival gauge that bottoms out fails the run and stays failed', async () => {
+  function sixteenMissesChart(): BeMusicJson {
     const json = createEmptyJson('bms');
     json.metadata.bpm = 120;
     json.events = Array.from({ length: 16 }, (_, index) => ({
@@ -475,10 +474,36 @@ describe('player', () => {
       position: [index, 16] as [number, number],
       value: '01',
     }));
+    return json;
+  }
 
+  test('player: a survival gauge that bottoms out ends the run there', async () => {
     // No input at all — every note misses. Under LR2 HARD each POOR drains a TOTAL- and note-count-scaled chunk,
-    // so the gauge reaches the death border well before the chart ends.
-    const summary = await manualPlay(json, { speed: 64, leadInMs: 0, audio: false, tui: false, gauge: 'HARD' });
+    // so the gauge reaches the death border well before the chart ends, and the play stops scoring there.
+    const summary = await manualPlay(sixteenMissesChart(), {
+      speed: 64,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      gauge: 'HARD',
+    });
+
+    expect(summary.poor).toBeGreaterThan(0);
+    expect(summary.poor).toBeLessThan(16);
+    expect(summary.gauge?.current).toBe(0);
+    expect(summary.gauge?.failedMidPlay).toBe(true);
+    expect(summary.gauge?.cleared).toBe(false);
+  });
+
+  test('player: with endOnFailure off, a dead survival gauge keeps judging to the end and stays failed', async () => {
+    const summary = await manualPlay(sixteenMissesChart(), {
+      speed: 64,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      gauge: 'HARD',
+      endOnFailure: false,
+    });
 
     expect(summary.poor).toBe(16);
     expect(summary.gauge?.current).toBe(0);
@@ -1091,7 +1116,13 @@ describe('player', () => {
       ]),
     });
     expect(recorded).toBeDefined();
-    expect(recorded!.inputs).toHaveLength(2);
+    // The two presses, and the release the engine inferred for the first (the input reports none); the play is over
+    // before the second key's hold grace lapses.
+    expect(recorded!.inputs.map((input) => `${input.action}${input.inferred === true ? ' inferred' : ''}`)).toEqual([
+      'down',
+      'up inferred',
+      'down',
+    ]);
     const originalJudged = original.perfect + original.great + original.good + original.bad;
     expect(originalJudged).toBeGreaterThan(0);
 

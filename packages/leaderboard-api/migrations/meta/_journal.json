@@ -64,6 +64,34 @@
       "when": 1791967134338,
       "tag": "0008_chart_long_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1792058437206,
+      "tag": "0009_course_rankings",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1792068007220,
+      "tag": "0010_course_trophies_and_stages",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1792068306384,
+      "tag": "0011_course_score_created_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1792075849212,
+      "tag": "0012_lr2_death_lamp",
+      "breakpoints": true
     }
   ]
 }

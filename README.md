@@ -12,13 +12,15 @@ BMS/BMSON toolchain composed of TypeScript + pnpm workspaces.
 - `@be-music/parser`: `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / JSON parser
 - `@be-music/stringifier`: Stringization from JSON to `.bms` / `.bmson`
 - `@be-music/audio-renderer`: Render the music score and output `.wav` / `.aiff`
-- `@be-music/player`: Shared playback engine, timing, judgment, scoring, gauge, BGA timeline, and UI/audio adapter contracts
+- `@be-music/player`: Shared rules and playback engine: one play loop (manual, auto, replay), judgment, scoring, gauges and clear lamps, best records, course runs and NONSTOP, the play-log format, and the runtime contracts hosts plug into
 - `@be-music/player-tui`: Terminal UI and `bms-player` CLI frontend for autoplay, keyboard play, Music Select, BGA, and SEA builds, plus the `bms-playlog` play-log re-simulator
+- `@be-music/scene-model`: Runtime-neutral scene models — library entries, browsing, play options, play state and results, course views, system sounds — shared by every skin family
 - `@be-music/lr2-skin`: Renderer-independent Lunatic Rave 2 skin parser, asset resolver, and theme loader
 - `@be-music/beatoraja-skin`: Renderer-independent beatoraja JSON/Lua skin parser, normalizer, and theme loader
 - `@be-music/skin-sdk`: Framework-free SDK for writing be-music skins for the browser player
-- `@be-music/player-web`: Browser PixiJS player core for song selection, built-in default / LR2 / beatoraja skin rendering, gameplay, result scenes, and recording
-- `@be-music/player-web-demo`: Private Vite demo that wires folder/ZIP drops, LR2/beatoraja themes, debug controls, and browser playback together
+- `@be-music/player-web`: Browser PixiJS runtime: every select, decide, play and result screen as a scene session drawn by a built-in, LR2 or beatoraja family view, behind one host API, plus the audio service, the chart collection, skin loading and gameplay recording
+- `@be-music/player-web-demo`: Private Vite demo that wires folder/ZIP drops, LR2/beatoraja themes, the Debug Menu and browser playback together, as services behind one scene router
+- `@be-music/leaderboard-api`: Private Leaderboard API on Cloudflare Workers: play-log submission, verification by re-simulation, and rankings
 - `@be-music/editor`: CLI editor (import/edit/export)
 
 ## Required environment
@@ -41,7 +43,7 @@ pnpm run check
 pnpm run test
 ```
 
-The toolchain is [Vite+](https://viteplus.dev/) (`vite-plus`), configured from the root `vite.config.ts`. `pnpm run build` runs each workspace's `build` script through the Vite+ task runner (`vp run -r --cache build`) in dependency order, replaying unchanged packages from the task cache; library packages build with `vp pack` (tsdown) from the `pack` block in their `vite.config.ts` and emit the bundle and type definitions (`.d.ts`) together. `pnpm run check` runs formatting, linting, and type checking (Oxfmt, Oxlint, and tsgolint) across the whole workspace in one pass; `pnpm run format` / `pnpm run lint` / `pnpm run typecheck` run the individual steps. Each package's `tsconfig.json` is its type-check project, while `tsconfig.build.json` drives declaration output. Installing dependencies also registers a Vite+ pre-commit hook that runs `vp check --fix` on staged files.
+The toolchain is [Vite+](https://viteplus.dev/) (`vite-plus`), configured from the root `vite.config.ts`. `pnpm run build` runs each workspace's `build` script through the Vite+ task runner (`vp run -r --cache build`) in dependency order, replaying unchanged packages from the task cache; library packages build with `vp pack` (tsdown) from the `pack` block in their `vite.config.ts` and emit the bundle and type definitions (`.d.ts`) together. `pnpm run check` runs formatting, linting, and type checking (Oxfmt, Oxlint, and tsgolint) across the whole workspace in one pass; `pnpm run format` / `pnpm run lint` / `pnpm run typecheck` run the individual steps. Each package's `tsconfig.json` is its type-check project, while `tsconfig.build.json` drives declaration output. Installing dependencies also registers a Vite+ pre-commit hook that runs `vp check --fix` on staged files. `pnpm run test:e2e` plays the course browser checklist in the web demo end to end with Playwright (a few minutes, so `pnpm run test` leaves it out); see [docs/course-checklist.md](docs/course-checklist.md#automated-run).
 
 ## Package Releases
 
@@ -64,13 +66,16 @@ The tag is created in the format `@be-music/package-name@x.y.z`.
 ## Specifications
 
 - [Specification top](./docs/README.md)
+- [Architecture](./docs/architecture.md) and the [architecture decisions](./docs/adr/README.md)
 - [BMS implementation specification](./docs/bms-spec.md)
 - [BMSON implementation specification](./docs/bmson-spec.md)
 - [Bemuse implementation specification](./docs/bemuse-spec.md)
 - [Player implementation specification](./docs/player-spec.md)
 - [Terminal player implementation notes](./docs/player-tui.md)
 - [Browser player implementation notes](./docs/player-web.md)
+- [Scene models (`@be-music/scene-model`)](./docs/scene-model.md)
 - [Play log (play history) specification](./docs/playlog.md)
+- [Courses and dan certification](./docs/course.md)
 - [Writing a be-music skin](./docs/be-music-skin.md)
 - [LR2 skin implementation notes](./docs/lr2-skin.md)
 - [beatoraja skin implementation notes](./docs/beatoraja-skin.md)
@@ -110,11 +115,19 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 
 ### player core (`@be-music/player`)
 
-- Shared `autoPlay()` / `manualPlay()` engine for terminal and browser runtimes
+- Shared `autoPlay()` / `manualPlay()` engine for terminal and browser runtimes: one play loop with manual, auto and replay judge strategies over a deterministic judge core (see [Architecture](./docs/architecture.md#the-engine-judge-core-and-one-play-loop))
 - UI and input signal buses for lane flashes, POOR BGA commands, frame snapshots, pause, restart, and high-speed changes
 - Shared note extraction for playable notes, legacy long notes, `#LNOBJ`, FREE ZONE, mines, and invisible notes
 - Shared judgment windows, dynamic `#EXRANKxx` changes, score, groove gauge, scroll-distance, BGA timelines, and result summaries
-- Browser-safe subpath exports for reusable helpers such as `core/engine`, `core/bga-timeline`, `core/scroll-distance`, `core/groove-gauge`, `playable-notes`, and `playlog`
+- Browser-safe entries next to the engine root: `signals`, `lanes`, `display`, `ruleset`, `playlog`, `records` and `course` (see [Player spec — Entry points](./docs/player-spec.md#entry-points))
+- `ruleset`: the vocabulary hosts, skins and the Leaderboard share: gauges, clear lamps, BP and the score (`ScoreSummary`, `computeScoreRate`, the DJ Ranks, LR2's money score)
+- `course`, `records` and `playlog`: course runs, the NONSTOP pipeline and the course stage rules; best records per judge ruleset; the play-log format, its recorder and its simulator
+
+### scene models (`@be-music/scene-model`)
+
+- Runtime-neutral models of every screen, independent of the skin family: library entries in chart wording (`LibraryChart`, `LibraryFolder`, `LibraryCourse`), the browse model (`reduceBrowse`, `BrowseSnapshot`), play options, the play state (`PlayState`), the play result (`PlayResult`), course views and system sound sets
+- Used by the web runtime, the skin SDK and the LR2 and beatoraja state resolvers
+- See [Scene models](./docs/scene-model.md)
 
 ### terminal player (`@be-music/player-tui`)
 
@@ -169,13 +182,14 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 - Touch play and a touch gameplay layout on touch-first devices, portrait stages for skins that provide one, and per-skin settings
 - LR2 select / decide / gameplay / result skin parsing and rendering on PixiJS
 - beatoraja select / decide / gameplay / result skin parsing and rendering on PixiJS
-- Separated default gameplay chrome injection so default-skin rendering does not depend on LR2 renderer modules
+- One scene session per screen holds its behaviour (browsing, chart preparation, engine, input, sound, endings) for every family; the built-in, LR2 and beatoraja family views only draw it and return intents (see [Scene sessions and family views](./docs/player-web.md#scene-sessions-and-family-views))
+- Designed entries: `@be-music/player-web/host` (`PixiSceneHost`, `createSelectScene` / `createDecideScene` / `createPlayScene` / `createResultScene`), `/skin`, `/collection`, `/audio` and `/recording` (see [Entry points](./docs/player-web.md#entry-points))
 - Shared LR2 Pixi helpers for destination interpolation, sprite transforms, numbers, text, sliders, and bargraphs
 - Shared beatoraja Pixi helpers for destination sampling, source-cell selection, text, values, sliders, gauges, graphs, timing visualizers, notes, markers, BGA, and runtime op/timer wiring
 - Shared playback semantics with the terminal player for notes, timing, scroll distance, BGA cues, score, and results
-- WebAudio preview and gameplay buses with split key/BGM/master compressor controls
-- BGA still/video rendering, browser-side video transcode fallback, and WebM gameplay recording
-- Single PixiJS scene host that owns one renderer context and disposes scene resources on transitions
+- One audio service on one system `AudioContext` for the select BGM, cues, jingles, chart preview and skin sounds, and a WebAudio bus per play with split key/BGM/master compressor controls
+- BGA still/video rendering, browser-side video transcode fallback, and MP4 / WebM gameplay recording
+- Single PixiJS scene host that owns one renderer context and shows one scene at a time; the demo's scene router owns every transition and disposes the scene that left
 - In-scene LR2 and beatoraja PLAY OPTION controls for hi-speed, BGA mode/size, filters, sort, HS-FIX, lane cover, lift, auto-scratch, DP flip, random/mirror modes, gauge variants, and skin options
 
 ### editor (`@be-music/editor`)

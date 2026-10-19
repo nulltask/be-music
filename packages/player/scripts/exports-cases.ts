@@ -1,9 +1,18 @@
 import { resolveChart } from '@be-music/chart';
+import { parseChart } from '@be-music/parser';
 import * as playerApi from '@be-music/player';
-import * as judgingApi from '@be-music/player/judging';
+import * as audioSinkApi from '@be-music/player/audio-sink';
+import * as courseApi from '@be-music/player/course';
+import * as displayApi from '@be-music/player/display';
+import * as lanesApi from '@be-music/player/lanes';
 import * as playlogApi from '@be-music/player/playlog';
+import * as recordsApi from '@be-music/player/records';
+import * as rulesetApi from '@be-music/player/ruleset';
+import * as signalsApi from '@be-music/player/signals';
 import type { PlayerOptions } from '@be-music/player';
+import type { WebAudioContextLike } from '@be-music/player/audio-sink';
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
+import type { PlayerUiFramePayload } from '@be-music/player/signals';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
 const BENCH_PLAYER_OPTIONS: PlayerOptions = {
@@ -16,69 +25,19 @@ const BENCH_PLAYER_OPTIONS: PlayerOptions = {
 };
 
 export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
-  define('player.applyFastSlowForJudge', {
+  define('player.resolveChartRulesetFacts', {
+    run: (fixtures) => {
+      playerApi.resolveChartRulesetFacts(fixtures.sampleBmsJson);
+    },
+  });
+  define('player.createTempoClock', {
     run: () => {
-      const summary = { fast: 0, slow: 0 };
-      playerApi.applyFastSlowForJudge(summary, 'GREAT', -8);
-    },
-  });
-  define('player.applyHighSpeedControlAction', {
-    run: () => {
-      playerApi.applyHighSpeedControlAction(2, 'increase');
-    },
-  });
-  define('player.resolveHighSpeedControlActionFromLaneChannels', {
-    run: () => {
-      playerApi.resolveHighSpeedControlActionFromLaneChannels(['11']);
-    },
-  });
-  define('player.resolveJudgeWindowsMs', {
-    run: (fixtures) => {
-      playerApi.resolveJudgeWindowsMs(fixtures.sampleBmsJson, 250);
-    },
-  });
-  define('player.extractPlayableNotes', {
-    run: (fixtures) => {
-      playerApi.extractPlayableNotes(fixtures.sampleBmsJson, { inferBmsLnTypeWhenMissing: true });
-    },
-  });
-  define('player.extractLandmineNotes', {
-    run: (fixtures) => {
-      playerApi.extractLandmineNotes(fixtures.sampleBmsJson);
-    },
-  });
-  define('player.extractInvisiblePlayableNotes', {
-    run: (fixtures) => {
-      playerApi.extractInvisiblePlayableNotes(fixtures.sampleBmsJson);
-    },
-  });
-  define('player.extractTimedNotes', {
-    run: (fixtures) => {
-      playerApi.extractTimedNotes(fixtures.sampleBmsJson, {
-        includeLandmine: true,
-        includeInvisible: true,
-        inferBmsLnTypeWhenMissing: true,
-      });
-    },
-  });
-  define('player.formatRandomPatternSummary', {
-    run: (fixtures) => {
-      playerApi.formatRandomPatternSummary(fixtures.randomPatterns);
-    },
-  });
-  define('player.shouldUseAutoMixBgmHeadroomControl', {
-    run: () => {
-      playerApi.shouldUseAutoMixBgmHeadroomControl({ limiter: false });
-    },
-  });
-  define('player.resolveBgmHeadroomGain', {
-    run: (fixtures) => {
-      playerApi.resolveBgmHeadroomGain(fixtures.playableRenderResult, fixtures.bgmRenderResult);
-    },
-  });
-  define('player.resolveBmsControlFlowForPlayback', {
-    run: (fixtures) => {
-      playerApi.resolveBmsControlFlowForPlayback(fixtures.controlFlowJson, () => 0.42);
+      const clock = playerApi.createTempoClock(1);
+      clock.setTempoAtClockMs(1000, 1.25);
+      clock.setTempoAtClockMs(2000, 0.75);
+      clock.chartSecondsAt(2500);
+      clock.clockMsAt(2.5);
+      clock.initialTempoMsAt(2500);
     },
   });
   define('player.resolvePlayChart', {
@@ -86,14 +45,14 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playerApi.resolvePlayChart(fixtures.controlFlowJson, { random: () => 0.42 });
     },
   });
-  define('player.preparePlaybackChartData', {
+  define('player.playlog.resolveChartRulesetFacts', {
     run: (fixtures) => {
-      playerApi.preparePlaybackChartData(
-        fixtures.sampleBmsJson,
-        { showInvisibleNotes: true, laneModeExtension: '.bms' },
-        true /* inferBmsLnTypeWhenMissing */,
-        0 /* auxiliaryPlaybackEndSeconds */,
-      );
+      playlogApi.resolveChartRulesetFacts(fixtures.sampleBmsJson);
+    },
+  });
+  define('player.playlog.resolvePlayChart', {
+    run: (fixtures) => {
+      playlogApi.resolvePlayChart(fixtures.controlFlowJson, { random: () => 0.42 });
     },
   });
   define('player.preparePlaybackChart', {
@@ -101,17 +60,6 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playerApi.preparePlaybackChart(
         resolveChart(fixtures.sampleBmsJson, { chartPath: '.bms', inferBmsLnTypeWhenMissing: true }),
         { laneModeExtension: '.bms' },
-      );
-    },
-  });
-  define('player.judging.findClosestCandidateInWindow', {
-    run: () => {
-      judgingApi.findClosestCandidateInWindow(
-        [
-          { channel: '11', seconds: 0.95, hit: false },
-          { channel: '11', seconds: 1.02, hit: false },
-        ],
-        { channel: '11', nowSec: 1, judgeWindowSec: 0.05, isConsumed: (note) => note.hit },
       );
     },
   });
@@ -143,6 +91,407 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       new playerApi.PlayerInterruptedError('escape');
     },
   });
+  const benchMd5 = '0123456789abcdef0123456789abcdef';
+  const benchSha256 = 'a'.repeat(64);
+  const benchLr2Course = `<courselist><course><title>Dan</title><line>7</line><type>2</type><hash>${'0'.repeat(10)}2${'0'.repeat(21)}${benchMd5.repeat(4)}</hash></course></courselist>`;
+  const benchBeatorajaCourse = {
+    name: 'Dan',
+    hash: [{ md5: benchMd5, title: 'one' }, { sha256: benchSha256 }],
+    constraint: ['MIRROR', 'GAUGE_LR2', 'LN'],
+    trophy: [{ name: 'gold', missrate: 2.5, scorerate: 85 }],
+  };
+  const benchTableHeader = {
+    mode: 'beat-7k',
+    course: [
+      [{ name: 'sl0', constraint: ['grade_mirror', 'gauge_lr2'], md5: [benchMd5, benchMd5, benchMd5, benchMd5] }],
+    ],
+  };
+  const benchCourse = courseApi.parseBeatorajaCourseData(benchBeatorajaCourse)!;
+  define('player.course.courseConstraintGroup', {
+    run: () => {
+      courseApi.courseConstraintGroup('gauge_lr2');
+    },
+  });
+  define('player.course.parseCourseConstraint', {
+    run: () => {
+      courseApi.parseCourseConstraint('GAUGE_24KEYS');
+    },
+  });
+  define('player.course.normalizeCourseConstraints', {
+    run: () => {
+      courseApi.normalizeCourseConstraints(['grade_mirror', 'CLASS', 'no_good', 'gauge_lr2', 'ln']);
+    },
+  });
+  define('player.course.isClassCourseConstraints', {
+    run: () => {
+      courseApi.isClassCourseConstraints(['gauge_lr2', 'grade_mirror']);
+    },
+  });
+  define('player.course.normalizeCourseTrophies', {
+    run: () => {
+      courseApi.normalizeCourseTrophies(benchBeatorajaCourse.trophy);
+    },
+  });
+  define('player.course.createCourseStageRef', {
+    run: () => {
+      courseApi.createCourseStageRef({ md5: benchMd5, title: 'one' });
+    },
+  });
+  define('player.course.decodeCourseText', {
+    run: () => {
+      courseApi.decodeCourseText(new TextEncoder().encode(benchLr2Course));
+    },
+  });
+  const benchNonstopHeader = `0125${'0'.repeat(6)}1${'0'.repeat(21)}`;
+  const benchNonstopChart = parseChart(
+    ['#BPM 150', '#BPM01 180', '#00002:0.75', '#00111:01010101', '#00301:01', '#00408:01', '#00512:0001'].join('\n'),
+    'bms',
+  );
+  const benchNonstopStage = courseApi.createNonstopStageTiming(benchNonstopChart);
+  const benchNonstopStages = [benchNonstopStage, benchNonstopStage, benchNonstopStage, benchNonstopStage];
+  define('player.course.parseLr2NonstopConnections', {
+    run: () => {
+      courseApi.parseLr2NonstopConnections(benchNonstopHeader);
+    },
+  });
+  define('player.course.resolveNonstopLastMeasure', {
+    run: () => {
+      courseApi.resolveNonstopLastMeasure(7.25);
+      courseApi.resolveNonstopLastMeasure(7.75);
+    },
+  });
+  define('player.course.createNonstopStageTiming', {
+    run: () => {
+      courseApi.createNonstopStageTiming(benchNonstopChart);
+    },
+  });
+  const benchNonstopInputs = [benchNonstopChart, benchNonstopChart, benchNonstopChart].map((chart) => ({ chart }));
+  define('player.course.stitchNonstopCourse', {
+    run: () => {
+      courseApi.stitchNonstopCourse(benchNonstopInputs, { connections: ['fade', 'cut-fit'] });
+    },
+  });
+  define('player.course.applyCourseLongNoteConstraint', {
+    run: () => {
+      courseApi.applyCourseLongNoteConstraint(benchNonstopChart, ['cn']);
+    },
+  });
+  define('player.course.resolveCourseStageSettings', {
+    run: () => {
+      courseApi.resolveCourseStageSettings(benchCourse);
+    },
+  });
+  define('player.course.resolveCourseLaneOptions', {
+    run: () => {
+      courseApi.resolveCourseLaneOptions(benchCourse.constraints, {
+        random1P: 'RANDOM',
+        random2P: 'MIRROR',
+        dpFlip: true,
+      });
+      courseApi.resolveCourseLaneOptions(['grade_mirror'], { random1P: 'MIRROR', random2P: 'OFF', dpFlip: false });
+    },
+  });
+  const benchLr2GradeDefinition = courseApi.parseLr2CourseFile(benchLr2Course)[0]!;
+  define('player.course.isLr2GradeCourse', {
+    run: () => {
+      courseApi.isLr2GradeCourse(benchLr2GradeDefinition);
+    },
+  });
+  define('player.course.resolveLr2GradeCoursePlaySettings', {
+    run: () => {
+      courseApi.resolveLr2GradeCoursePlaySettings(benchLr2GradeDefinition, {
+        gauge: 'EASY',
+        hiddenSudden1P: 'SUDDEN',
+        hiddenSudden2P: 'OFF',
+        autoScratch1P: true,
+        autoScratch2P: false,
+        dpFlip: true,
+        tempo: 1.1,
+      });
+    },
+  });
+  define('player.course.resolveCourseStagePlaySettings', {
+    run: () => {
+      courseApi.resolveCourseStagePlaySettings(benchLr2GradeDefinition, {
+        random1P: 'RANDOM',
+        random2P: 'OFF',
+        dpFlip: true,
+        gauge: 'EASY',
+        hiddenSudden1P: 'SUDDEN',
+        hiddenSudden2P: 'OFF',
+        autoScratch1P: true,
+        autoScratch2P: false,
+        tempo: 1.1,
+      });
+    },
+  });
+  define('player.course.isCourseHiSpeedLocked', {
+    run: () => {
+      courseApi.isCourseHiSpeedLocked(['no_speed', 'gauge_lr2']);
+    },
+  });
+  const benchStitched = courseApi.stitchNonstopCourse(benchNonstopInputs, { connections: ['fade', 'cut-fit'] });
+  const benchStitchedMap = benchStitched.ok ? benchStitched.map : { stages: [], tempo: [], stageRanks: [] };
+  const benchReadoutPlacements = courseApi.planNonstopCourse(benchNonstopStages.slice(0, 3), ['fade', 'cut-fit']);
+  const benchReadoutStages = [0, 1, 2].map((index) => ({
+    tempo: [
+      { seconds: 0, bpm: 150 },
+      { seconds: 4.8, bpm: 180 },
+    ],
+    headerBpm: 150,
+    rank: index,
+    noteHeads: { first: index * 10 + 1, last: index * 10 + 9 },
+  }));
+  define('player.course.resolveNonstopTempo', {
+    run: () => {
+      courseApi.resolveNonstopTempo(benchReadoutStages, benchReadoutPlacements);
+      courseApi.resolveNonstopTempo(benchReadoutStages, benchReadoutPlacements, { placement: 'lr2' });
+    },
+  });
+  define('player.course.nonstopBpmAt', {
+    run: () => {
+      courseApi.nonstopBpmAt(benchStitchedMap.tempo, 3);
+      courseApi.nonstopBpmAt(benchStitchedMap.tempo, 30);
+    },
+  });
+  define('player.course.resolveNonstopStageRanks', {
+    run: () => {
+      courseApi.resolveNonstopStageRanks(benchReadoutStages, benchReadoutPlacements);
+      courseApi.resolveNonstopStageRanks(benchReadoutStages, benchReadoutPlacements, { placement: 'lr2' });
+    },
+  });
+  const benchStitchedChart = benchStitched.ok ? benchStitched.chart : benchNonstopChart;
+  const benchSplitStages = [
+    { offsetUs: 0, windowStartUs: 0, windowEndUs: 1_500_000, rate: 1 },
+    { offsetUs: 500_000, windowStartUs: 1_500_000, rate: 1 },
+  ];
+  const benchSplitNoteStages = BENCH_PLAYLOG.chart.notes.map((note) => (note.timeUs < 1_500_000 ? 0 : 1));
+  define('player.playlog.resolveNonstopPlaylogStages', {
+    run: () => {
+      playlogApi.resolveNonstopPlaylogStages(benchStitchedMap);
+    },
+  });
+  define('player.playlog.resolveNonstopNoteStages', {
+    run: () => {
+      playlogApi.resolveNonstopNoteStages(benchStitchedChart, benchStitchedMap, BENCH_PLAYLOG.chart.notes);
+    },
+  });
+  define('player.playlog.splitNonstopPlaylog', {
+    run: () => {
+      playlogApi.splitNonstopPlaylog(
+        { playlog: BENCH_PLAYLOG, stages: benchSplitStages, noteStages: benchSplitNoteStages },
+        [{ title: 'A' }, { title: 'B' }],
+        { ruleset: 'lr2' },
+      );
+    },
+  });
+  const benchPipelineStages = benchNonstopInputs.map((input, index) => ({
+    chart: input.chart,
+    chartPath: `stage${index}.bms`,
+    facts: { title: `Stage ${index + 1}` },
+  }));
+  const benchPipelineOptions = { constraints: ['cn' as const], connections: ['fade' as const, 'cut-fit' as const] };
+  define('player.course.prepareNonstopCourse', {
+    run: () => {
+      courseApi.prepareNonstopCourse(benchPipelineStages, { ...benchPipelineOptions, random: () => 0 });
+    },
+  });
+  const benchPrepared = courseApi.prepareNonstopCourse(benchPipelineStages, benchPipelineOptions);
+  if (!benchPrepared.ok) throw new Error(`bench NONSTOP course failed to stitch: ${benchPrepared.reason}`);
+  define('player.course.resolveNonstopRun', {
+    run: () => {
+      courseApi.resolveNonstopRun(benchPrepared.course, BENCH_PLAYLOG);
+    },
+  });
+  define('player.course.buildNonstopCoursePlaylog', {
+    run: () => {
+      courseApi.buildNonstopCoursePlaylog(
+        { name: 'Nonstop', kind: 'nonstop', constraints: ['cn'], trophies: [], release: true },
+        benchPrepared.course,
+        BENCH_PLAYLOG,
+      );
+    },
+  });
+  define('player.course.planNonstopCourse', {
+    run: () => {
+      courseApi.planNonstopCourse(benchNonstopStages, ['fade', 'cut-fit', 'blank1']);
+      courseApi.planNonstopCourse(benchNonstopStages, ['fade', 'cut-fit', 'blank1'], { placement: 'lr2' });
+    },
+  });
+  define('player.course.parseLr2CourseFile', {
+    run: () => {
+      courseApi.parseLr2CourseFile(benchLr2Course);
+    },
+  });
+  const benchLr2Parsed = courseApi.parseLr2CourseFile(benchLr2Course)[0]!;
+  define('player.course.countLr2UnplayedStages', {
+    run: () => {
+      courseApi.countLr2UnplayedStages(benchLr2Parsed);
+    },
+  });
+  const benchDraftStage = { md5: 'a'.repeat(32), keyMode: 7, title: 'Song' };
+  const benchDraft = { kind: 'nonstop' as const, name: 'Bench', stages: [benchDraftStage, benchDraftStage] };
+  const benchMadeCourse = courseApi.finishCourseDraft(benchDraft)!;
+  define('player.course.createCourseDraft', {
+    run: () => {
+      courseApi.createCourseDraft('nonstop', 'Bench');
+    },
+  });
+  define('player.course.appendCourseDraftStage', {
+    run: () => {
+      courseApi.appendCourseDraftStage(benchDraft, benchDraftStage);
+    },
+  });
+  define('player.course.removeLastCourseDraftStage', {
+    run: () => {
+      courseApi.removeLastCourseDraftStage(benchDraft);
+    },
+  });
+  define('player.course.buildLr2CourseHash', {
+    run: () => {
+      courseApi.buildLr2CourseHash({
+        kind: 'nonstop',
+        stageMd5s: ['a'.repeat(32), 'b'.repeat(32)],
+        connections: ['cut'],
+      });
+    },
+  });
+  define('player.course.finishCourseDraft', {
+    run: () => {
+      courseApi.finishCourseDraft(benchDraft, { defaultConnection: 'cut' });
+    },
+  });
+  define('player.course.stepLr2NonstopConnection', {
+    run: () => {
+      courseApi.stepLr2NonstopConnection('fade', 1);
+      courseApi.stepLr2NonstopConnection('fade', -1);
+    },
+  });
+  define('player.course.withNonstopConnection', {
+    run: () => {
+      courseApi.withNonstopConnection(benchMadeCourse, 0, 'blank1');
+    },
+  });
+  define('player.course.defaultCourseMakerConstraints', {
+    run: () => {
+      courseApi.defaultCourseMakerConstraints('grade');
+    },
+  });
+  define('player.course.withCourseConstraints', {
+    run: () => {
+      courseApi.withCourseConstraints(benchMadeCourse, ['grade', 'gauge_7k', 'no_speed']);
+    },
+  });
+  define('player.course.courseConstraintEnumName', {
+    run: () => {
+      courseApi.courseConstraintEnumName('grade_mirror');
+    },
+  });
+  define('player.course.serializeBeatorajaCourseFile', {
+    run: () => {
+      courseApi.serializeBeatorajaCourseFile([benchMadeCourse]);
+    },
+  });
+  define('player.course.serializeLr2CourseFile', {
+    run: () => {
+      courseApi.serializeLr2CourseFile([benchMadeCourse]);
+    },
+  });
+  define('player.course.parseBeatorajaCourseData', {
+    run: () => {
+      courseApi.parseBeatorajaCourseData(benchBeatorajaCourse);
+    },
+  });
+  define('player.course.parseBeatorajaCourseFile', {
+    run: () => {
+      courseApi.parseBeatorajaCourseFile(JSON.stringify([benchBeatorajaCourse]));
+    },
+  });
+  define('player.course.parseBeatorajaRandomCourseData', {
+    run: () => {
+      courseApi.parseBeatorajaRandomCourseData({
+        name: 'R',
+        stage: [{ sql: 'level = 12' }, {}],
+        rconstraint: ['distinct'],
+      });
+    },
+  });
+  define('player.course.parseBeatorajaCommandFolderFile', {
+    run: () => {
+      courseApi.parseBeatorajaCommandFolderFile(
+        JSON.stringify([{ name: 'Random', rcourse: [{ name: 'R', stage: [{ sql: 'level = 12' }, {}] }] }]),
+      );
+    },
+  });
+  const benchFilterSql = "song.level BETWEEN 11 AND 12 AND mode IN (7, 14) AND title NOT LIKE '%HYPER%'";
+  const benchFilter = courseApi.parseCourseSongFilter(benchFilterSql);
+  const benchSongs = Array.from({ length: 200 }, (_, index) => ({
+    md5: index.toString(16).padStart(32, '0'),
+    sha256: index.toString(16).padStart(64, '0'),
+    title: `song ${index}`,
+    level: index % 13,
+    mode: index % 2 === 0 ? 7 : 14,
+  }));
+  define('player.course.parseCourseSongFilter', {
+    run: () => {
+      courseApi.parseCourseSongFilter(benchFilterSql);
+    },
+  });
+  define('player.course.evaluateCourseSongFilter', {
+    run: () => {
+      if (benchFilter.ok) for (const song of benchSongs) courseApi.evaluateCourseSongFilter(benchFilter.filter, song);
+    },
+  });
+  let benchSeed = 1;
+  define('player.course.drawRandomCourse', {
+    run: () => {
+      courseApi.drawRandomCourse(
+        {
+          name: 'R',
+          stages: [{ filter: 'level = 12' }, {}, { filter: 'level >= 10' }, {}],
+          constraints: ['grade_mirror'],
+          trophies: [],
+          distinct: true,
+        },
+        benchSongs,
+        () => {
+          benchSeed = (benchSeed * 16807) % 2147483647;
+          return (benchSeed - 1) / 2147483646;
+        },
+      );
+    },
+  });
+  define('player.course.resolveTableModeKeys', {
+    run: () => {
+      courseApi.resolveTableModeKeys('beat-7k');
+    },
+  });
+  define('player.course.parseTableHeaderCourses', {
+    run: () => {
+      courseApi.parseTableHeaderCourses(benchTableHeader);
+    },
+  });
+  const benchTablePageUrl = 'https://example.com/table/table.html';
+  const benchTablePage = `<html><head><meta charset="utf-8"><meta content="header.json" name="bmstable"></head></html>`;
+  const benchTableHeaderText = JSON.stringify({ name: 'Bench table', ...benchTableHeader });
+  // A stub instead of the network: benchmarks must not fetch.
+  const benchTableFetch = async (url: string): Promise<string> =>
+    url === benchTablePageUrl ? benchTablePage : benchTableHeaderText;
+  define('player.course.resolveTableHeaderUrl', {
+    run: () => {
+      courseApi.resolveTableHeaderUrl(benchTablePageUrl, benchTablePage);
+    },
+  });
+  define('player.course.fetchTableHeaderCourses', {
+    run: async () => {
+      await courseApi.fetchTableHeaderCourses(benchTablePageUrl, benchTableFetch);
+    },
+  });
+  define('player.course.resolveCourseStages', {
+    run: () => {
+      courseApi.resolveCourseStages(benchCourse, { bySha256: () => 'chart', byMd5: () => 'chart' });
+    },
+  });
   define('player.playlog.checkPlaylogEligibility', {
     run: () => {
       playlogApi.checkPlaylogEligibility(BENCH_PLAYLOG);
@@ -151,6 +500,65 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player.playlog.serializePlaylog', {
     run: () => {
       playlogApi.serializePlaylog(BENCH_PLAYLOG);
+    },
+  });
+  define('player.playlog.createPlaylogRecorder', {
+    run: () => {
+      const json = parseChart('#BPM 120\n#00111:01\n');
+      playlogApi
+        .createPlaylogRecorder({
+          json,
+          chart: {
+            notes: [],
+            landmineNotes: [],
+            invisibleNotes: [],
+            activeFreeZoneChannels: new Set<string>(),
+            scorableNotes: [],
+            laneDisplayMode: '7keys',
+          },
+          play: { mode: 'manual', autoScratch: false },
+        })
+        .recordInput('down', 0.5, ['z'], ['11']);
+    },
+  });
+  define('player.playlog.PlaylogParseError', {
+    run: () => {
+      void new playlogApi.PlaylogParseError('bench');
+    },
+  });
+  define('player.playlog.resolvePlaylogFilename', {
+    run: () => {
+      playlogApi.resolvePlaylogFilename(BENCH_PLAYLOG, new Date(0));
+    },
+  });
+  define('player.playlog.resolveRulesetConfig', {
+    run: () => {
+      playlogApi.resolveRulesetConfig(BENCH_PLAYLOG, 'beatoraja');
+    },
+  });
+  define('player.playlog.resolveLr2DefaultTotal', {
+    run: () => {
+      playlogApi.resolveLr2DefaultTotal(1200);
+    },
+  });
+  define('player.playlog.resolveBeatorajaDefaultTotal', {
+    run: () => {
+      playlogApi.resolveBeatorajaDefaultTotal(1200);
+    },
+  });
+  define('player.playlog.resolveIidxGaugeUnit', {
+    run: () => {
+      playlogApi.resolveIidxGaugeUnit(1200);
+    },
+  });
+  define('player.playlog.resolveLr2HardDamageMultiplier', {
+    run: () => {
+      playlogApi.resolveLr2HardDamageMultiplier(300, 1200);
+    },
+  });
+  define('player.playlog.resolveBeatorajaHardRecoverMultiplier', {
+    run: () => {
+      playlogApi.resolveBeatorajaHardRecoverMultiplier(300, 1200);
     },
   });
   define('player.playlog.parsePlaylog', {
@@ -168,16 +576,726 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playlogApi.simulatePlaylogRulesets(BENCH_PLAYLOG);
     },
   });
-  define('player.playlog.computeScoreRate', {
+  const benchCourseInfo = {
+    name: 'Dan',
+    kind: 'grade' as const,
+    constraints: ['grade_mirror', 'gauge_lr2'],
+    trophies: [{ name: 'gold', missRate: 5, scoreRate: 80 }],
+  };
+  const benchCourseLog = playlogApi.createCoursePlaylog({
+    course: benchCourseInfo,
+    stages: [
+      { played: true, playlog: BENCH_PLAYLOG },
+      { played: true, playlog: BENCH_PLAYLOG },
+    ],
+  });
+  const benchCourseText = playlogApi.serializeCoursePlaylog(benchCourseLog);
+  const benchStageResult = playlogApi.simulatePlaylog(BENCH_PLAYLOG, { ruleset: 'lr2' });
+  const benchRunStageLog: BeMusicPlaylog = { ...BENCH_PLAYLOG, results: { native: benchStageResult } };
+  const benchRunStages = [
+    { chart: benchNonstopChart, chartPath: 'a.bms' },
+    { chart: benchNonstopChart, chartPath: 'b.bms' },
+  ];
+  define('player.course.CourseRun', {
     run: () => {
-      playlogApi.computeScoreRate({ total: 1000, exScore: 1650 });
+      const run = new courseApi.CourseRun(benchCourse, benchRunStages);
+      run.nextStage();
+      run.recordStage(benchRunStageLog, { playSeconds: 16 });
+      run.nextStage();
+      run.buildPlaylog();
     },
   });
-  define('player.playlog.resolveIidxRankLabel', {
+  define('player.course.resolveGivenUpPlaySeconds', {
     run: () => {
-      playlogApi.resolveIidxRankLabel(1650, 1000);
+      courseApi.resolveGivenUpPlaySeconds(BENCH_PLAYLOG);
+      courseApi.resolveGivenUpPlaySeconds({ play: { ...BENCH_PLAYLOG.play, aborted: true, abortedAtUs: 4_000_000 } });
     },
   });
+  define('player.playlog.aggregateCourseResult', {
+    run: () => {
+      playlogApi.aggregateCourseResult(
+        'lr2/0',
+        benchCourseInfo,
+        [benchStageResult, benchStageResult],
+        [10, 10],
+        'GROOVE',
+      );
+    },
+  });
+  define('player.playlog.createCoursePlaylog', {
+    run: () => {
+      playlogApi.createCoursePlaylog({ course: benchCourseInfo, stages: [{ played: true, playlog: BENCH_PLAYLOG }] });
+    },
+  });
+  define('player.playlog.extractCourseStage', {
+    run: () => {
+      playlogApi.extractCourseStage(benchCourseLog, 1);
+    },
+  });
+  define('player.playlog.parseCoursePlaylog', {
+    run: () => {
+      playlogApi.parseCoursePlaylog(benchCourseText);
+    },
+  });
+  const benchLampScore = { total: 100, perfect: 90, great: 8, good: 2 };
+  const benchRecordPlay = { lamp: 'HARD' as const, exScore: 1500, maxCombo: 400, missCount: 12 };
+  const benchRecord = { lamp: 'EASY' as const, exScore: 1400, maxCombo: 500, missCount: 20, playCount: 3 };
+  const benchRecordResult = {
+    lamp: 'HARD' as const,
+    cleared: true,
+    maxCombo: 400,
+    score: { total: 1000, perfect: 600, great: 300, good: 60, bad: 20, poor: 10, emptyPoor: 5, exScore: 1500 },
+  };
+  const benchRecordSummary = {
+    ...benchRecordResult.score,
+    gauge: { type: 'HARD', current: 40, max: 100, clearThreshold: 0, initial: 100, effectiveTotal: 300, cleared: true },
+  };
+  const benchRecordKind = { autoPlay: false, replay: false, course: false, tempo: 1 };
+  define('player.records.mergeBestRecord', {
+    run: () => {
+      recordsApi.mergeBestRecord(benchRecord, benchRecordPlay);
+    },
+  });
+  define('player.records.mergeCourseStageRecord', {
+    run: () => {
+      recordsApi.mergeCourseStageRecord(benchRecord, benchRecordPlay);
+    },
+  });
+  define('player.records.recordPlayFromResult', {
+    run: () => {
+      recordsApi.recordPlayFromResult(benchRecordResult);
+    },
+  });
+  define('player.records.recordPlayFromSummary', {
+    run: () => {
+      recordsApi.recordPlayFromSummary(benchRecordSummary, 400, 'lr2');
+    },
+  });
+  define('player.records.courseStageRecordPlayFromResult', {
+    run: () => {
+      recordsApi.courseStageRecordPlayFromResult(benchRecordResult);
+    },
+  });
+  define('player.records.courseStageRecordPlayFromSummary', {
+    run: () => {
+      recordsApi.courseStageRecordPlayFromSummary(benchRecordSummary, 400, 'lr2');
+    },
+  });
+  define('player.records.courseRunRecordPlay', {
+    run: () => {
+      recordsApi.courseRunRecordPlay(benchRecordPlay);
+    },
+  });
+  define('player.records.playKeepsRecord', {
+    run: () => {
+      recordsApi.playKeepsRecord(benchRecordKind);
+    },
+  });
+  define('player.records.courseStageKeepsRecord', {
+    run: () => {
+      recordsApi.courseStageKeepsRecord(benchRecordKind);
+    },
+  });
+  define('player.records.isCourseRunAtAnotherTempo', {
+    run: () => {
+      recordsApi.isCourseRunAtAnotherTempo(benchCourseLog);
+    },
+  });
+  define('player.records.isCourseRunAutoPlayed', {
+    run: () => {
+      recordsApi.isCourseRunAutoPlayed(benchCourseLog);
+    },
+  });
+  define('player.records.courseRunKeepsRecord', {
+    run: () => {
+      recordsApi.courseRunKeepsRecord(benchCourseLog);
+    },
+  });
+  define('player.ruleset.isClearLamp', {
+    run: () => {
+      rulesetApi.isClearLamp('EX_HARD');
+    },
+  });
+  define('player.ruleset.clearLampRank', {
+    run: () => {
+      rulesetApi.clearLampRank('FULL_COMBO');
+    },
+  });
+  define('player.ruleset.clearLampAtRank', {
+    run: () => {
+      rulesetApi.clearLampAtRank(7);
+    },
+  });
+  define('player.ruleset.betterClearLamp', {
+    run: () => {
+      rulesetApi.betterClearLamp('HARD', 'FULL_COMBO');
+    },
+  });
+  define('player.ruleset.topClearLamp', {
+    run: () => {
+      rulesetApi.topClearLamp('lr2');
+    },
+  });
+  define('player.ruleset.isFullCombo', {
+    run: () => {
+      rulesetApi.isFullCombo(benchLampScore);
+    },
+  });
+  define('player.ruleset.resolveClearLamp', {
+    run: () => {
+      rulesetApi.resolveClearLamp({ ruleset: 'beatoraja', cleared: true, gauge: 'HARD', score: benchLampScore });
+    },
+  });
+  define('player.ruleset.resolveCourseClearLamp', {
+    run: () => {
+      rulesetApi.resolveCourseClearLamp({
+        ruleset: 'lr2',
+        cleared: true,
+        gauge: 'GRADE-HARD',
+        gaugeType: 'HARD',
+        noteCount: 1000,
+        maxCombo: 400,
+        judge: { great: 120, good: 12 },
+      });
+    },
+  });
+  define('player.ruleset.resolveMissCount', {
+    run: () => {
+      rulesetApi.resolveMissCount({ bad: 3, poor: 5, emptyPoor: 2 }, 10);
+    },
+  });
+  define('player.ruleset.isGaugeType', {
+    run: () => {
+      rulesetApi.isGaugeType('DEATH');
+    },
+  });
+  define('player.ruleset.createEmptyScore', {
+    run: () => {
+      rulesetApi.createEmptyScore(1000);
+    },
+  });
+  define('player.ruleset.computeScoreRate', {
+    run: () => {
+      rulesetApi.computeScoreRate({ total: 1000, exScore: 1650 });
+    },
+  });
+  define('player.ruleset.resolveIidxRankIndexFromScore', {
+    run: () => {
+      rulesetApi.resolveIidxRankIndexFromScore({ total: 1000, exScore: 1650 });
+    },
+  });
+  define('player.ruleset.resolveIidxRankLabel', {
+    run: () => {
+      rulesetApi.resolveIidxRankLabel(1650, 1000);
+    },
+  });
+  define('player.ruleset.resolveLr2MoneyScore', {
+    run: () => {
+      rulesetApi.resolveLr2MoneyScore({ total: 1000, perfect: 700, great: 250, good: 30 });
+    },
+  });
+  define('player.ruleset.resolveDisplayedPoor', {
+    run: () => {
+      rulesetApi.resolveDisplayedPoor({ poor: 5, emptyPoor: 2 }, true);
+    },
+  });
+  define('player.playlog.resolveCourseLamp', {
+    run: () => {
+      playlogApi.resolveCourseLamp('beatoraja', benchStageResult, 'GROOVE');
+    },
+  });
+  define('player.playlog.resolveCoursePlayedRuleset', {
+    run: () => {
+      playlogApi.resolveCoursePlayedRuleset(benchCourseLog);
+    },
+  });
+  define('player.playlog.resolveRulesetResultLamp', {
+    run: () => {
+      playlogApi.resolveRulesetResultLamp(benchStageResult, 'lr2');
+    },
+  });
+  define('player.playlog.resolveCoursePlaylogFilename', {
+    run: () => {
+      playlogApi.resolveCoursePlaylogFilename(benchCourseLog);
+    },
+  });
+  define('player.playlog.resolveCourseStageStartGauge', {
+    run: () => {
+      playlogApi.resolveCourseStageStartGauge(
+        'lr2',
+        { kind: 'grade', carryIn: { gauge: 64, combo: 0, maxCombo: 0 } },
+        'GROOVE',
+      );
+    },
+  });
+  define('player.playlog.resolveCourseTrophy', {
+    run: () => {
+      playlogApi.resolveCourseTrophy(benchCourseInfo.trophies, { missCount: 4, exScore: 170, noteCount: 100 });
+    },
+  });
+  define('player.playlog.serializeCoursePlaylog', {
+    run: () => {
+      playlogApi.serializeCoursePlaylog(benchCourseLog);
+    },
+  });
+  define('player.playlog.simulateCoursePlaylog', {
+    run: () => {
+      playlogApi.simulateCoursePlaylog(benchCourseLog, { ruleset: 'lr2' });
+    },
+  });
+  const benchKeyedCourseLog = playlogApi.createCoursePlaylog({
+    course: benchCourseInfo,
+    stages: [
+      {
+        played: true,
+        playlog: {
+          ...BENCH_PLAYLOG,
+          chart: {
+            ...BENCH_PLAYLOG.chart,
+            chartFingerprint: 'bmfp0:bench-stage-1',
+            playFingerprint: 'bmfp0:bench-stage-1',
+          },
+          play: { ...BENCH_PLAYLOG.play, course: { kind: 'grade' } },
+        },
+      },
+      {
+        played: false,
+        facts: {
+          sourceFormat: 'bms',
+          laneMode: '7keys',
+          lnMode: 1,
+          judgeRank: { percent: 75 },
+          notes: { normal: 64, long: { 1: 0, 2: 0, 3: 0 } },
+        },
+        chartFingerprint: 'bmfp0:bench-stage-2',
+      },
+    ],
+  });
+  define('player.playlog.createCourseFingerprintDocument', {
+    run: () => {
+      playlogApi.createCourseFingerprintDocument({
+        kind: 'nonstop',
+        constraints: [],
+        stageChartFingerprints: ['bmfp0:a', 'bmfp0:b', 'bmfp0:c'],
+        nonstop: { connections: ['cut'], placement: 'intended' },
+      });
+    },
+  });
+  const benchView = { hiSpeed: 2, hsFix: 'MAIN', covers: [{ side: '1P' as const, sudden: 0.2, hidden: 0, lift: 0.1 }] };
+  const benchViewChanges = [
+    { timeUs: 1_000_000, hiSpeed: 2.5 },
+    { timeUs: 2_000_000, covers: [{ side: '1P' as const, sudden: 0.3, hidden: 0, lift: 0.1 }] },
+  ];
+  const benchTempoChanges = [
+    { timeUs: 1_000_000, tempo: 1.25 },
+    { timeUs: 2_000_000, tempo: 1 },
+  ];
+  define('player.playlog.resolvePlaylogViewAt', {
+    run: () => {
+      playlogApi.resolvePlaylogViewAt(benchView, benchViewChanges, 1_500_000);
+    },
+  });
+  define('player.playlog.resolvePlaylogTempoAt', {
+    run: () => {
+      playlogApi.resolvePlaylogTempoAt(1, benchTempoChanges, 1_500_000);
+    },
+  });
+  define('player.playlog.playedAtAnotherTempo', {
+    run: () => {
+      playlogApi.playedAtAnotherTempo({ tempoChanges: benchTempoChanges });
+    },
+  });
+  define('player.playlog.resolveReplayView', {
+    run: () => {
+      playlogApi.resolveReplayView(benchView, { hiSpeed: 1 }, playlogApi.DEFAULT_PLAYLOG_VIEW_REPLAY);
+    },
+  });
+  define('player.playlog.resolveReplayHiSpeed', {
+    run: () => {
+      playlogApi.resolveReplayHiSpeed(
+        { ...benchView, hiSpeedScale: 'beatoraja', visibleMs: 400 },
+        'be-music',
+        (ms) => 1000 / ms,
+      );
+    },
+  });
+  define('player.playlog.roundPlaylogView', {
+    run: () => {
+      playlogApi.roundPlaylogView({ ...benchView, hiSpeed: 2.5000000000000004 });
+    },
+  });
+  define('player.playlog.diffPlaylogView', {
+    run: () => {
+      playlogApi.diffPlaylogView(benchView, { ...benchView, hiSpeed: 2.5 });
+    },
+  });
+  define('player.playlog.createPlaylogViewCoalescer', {
+    run: () => {
+      const coalescer = playlogApi.createPlaylogViewCoalescer(benchView);
+      coalescer.observe({ ...benchView, hiSpeed: 2.5 }, 0);
+    },
+  });
+  define('player.playlog.parsePlaylogViewState', {
+    run: () => {
+      playlogApi.parsePlaylogViewState(benchView, 'play.view');
+    },
+  });
+  define('player.playlog.parsePlaylogViewChanges', {
+    run: () => {
+      playlogApi.parsePlaylogViewChanges(benchViewChanges, 'play.viewChanges');
+    },
+  });
+  define('player.playlog.parsePlaylogTempoChanges', {
+    run: () => {
+      playlogApi.parsePlaylogTempoChanges(benchTempoChanges, 'play.tempoChanges');
+    },
+  });
+  define('player.playlog.computeCourseFingerprint', {
+    run: () => {
+      playlogApi.computeCourseFingerprint({
+        kind: 'grade',
+        constraints: ['grade_mirror', 'gauge_lr2'],
+        stageChartFingerprints: ['bmfp0:a', 'bmfp0:b', 'bmfp0:c', 'bmfp0:d'],
+      });
+    },
+  });
+  define('player.playlog.resolveCourseStageChartFingerprints', {
+    run: () => {
+      playlogApi.resolveCourseStageChartFingerprints(benchKeyedCourseLog);
+    },
+  });
+  define('player.playlog.computeCoursePlaylogFingerprint', {
+    run: () => {
+      playlogApi.computeCoursePlaylogFingerprint(benchKeyedCourseLog);
+    },
+  });
+  define('player.playlog.checkCoursePlaylogEligibility', {
+    run: () => {
+      playlogApi.checkCoursePlaylogEligibility(benchKeyedCourseLog);
+    },
+  });
+  define('player.ruleset.resolveJudgeWindowsMs', {
+    run: (fixtures) => {
+      rulesetApi.resolveJudgeWindowsMs(fixtures.sampleBmsJson, 250);
+    },
+  });
+  define('player.ruleset.isPlaylogRulesetId', {
+    run: () => {
+      rulesetApi.isPlaylogRulesetId('beatoraja');
+      rulesetApi.isPlaylogRulesetId('popn');
+    },
+  });
+  registerSignalsCases(define);
+  registerLanesCases(define);
+  registerDisplayCases(define);
+  registerAudioSinkCases(define);
+}
+
+/** `@be-music/player/signals`: the buses and state signals a host's runtimes exchange with a play. */
+function registerSignalsCases(define: DefineBenchmarkCase): void {
+  define('player.signals.createPlayerInputSignalBus', {
+    run: () => {
+      const bus = signalsApi.createPlayerInputSignalBus();
+      bus.pushCommand({ kind: 'lane-input', tokens: ['KeyZ'] });
+      bus.pushCommand({ kind: 'high-speed', action: 'increase' });
+      bus.drainCommands();
+    },
+  });
+  define('player.signals.createPlayerUiSignalBus', {
+    run: () => {
+      const bus = signalsApi.createPlayerUiSignalBus(BENCH_UI_FRAME);
+      bus.publishFrame({ ...BENCH_UI_FRAME, currentBeat: 4, currentSeconds: 2 });
+      bus.pushCommand({ kind: 'flash-lane', channel: '11' });
+      bus.drainCommands();
+    },
+  });
+  define('player.signals.createPlayerStateSignals', {
+    run: () => {
+      const signals = signalsApi.createPlayerStateSignals(2);
+      signals.publishJudgeCombo('PERFECT', 1, '11', 0, 3);
+      signals.publishJudgeCombo('GREAT', 2, '12', 1, -8);
+      signals.drainPendingJudgeCombos();
+    },
+  });
+  define('player.signals.resolveHighSpeedControlActionFromLaneChannels', {
+    run: () => {
+      signalsApi.resolveHighSpeedControlActionFromLaneChannels(['12', '14']);
+    },
+  });
+  define('player.signals.resolveHighSpeedMultiplier', {
+    run: () => {
+      signalsApi.resolveHighSpeedMultiplier(3.25);
+    },
+  });
+  define('player.signals.applyHighSpeedControlAction', {
+    run: () => {
+      signalsApi.applyHighSpeedControlAction(2, 'increase');
+    },
+  });
+}
+
+/** `@be-music/player/lanes`: lane layout, key bindings and FREE ZONE input. */
+function registerLanesCases(define: DefineBenchmarkCase): void {
+  define('player.lanes.resolveKeyChannel', {
+    run: () => {
+      lanesApi.resolveKeyChannel({ code: 'KeyS' }, BENCH_7KEY_CHANNELS);
+    },
+  });
+  define('player.lanes.resolveSideKeySlot', {
+    run: () => {
+      lanesApi.resolveSideKeySlot('25', '14');
+    },
+  });
+  define('player.lanes.resolveLr2LaneIndex', {
+    run: () => {
+      lanesApi.resolveLr2LaneIndex('26', '14');
+    },
+  });
+  define('player.lanes.resolveSideRelativeLaneIndex', {
+    run: () => {
+      lanesApi.resolveSideRelativeLaneIndex('23', '14');
+    },
+  });
+  define('player.lanes.isScratch', {
+    run: () => {
+      lanesApi.isScratch('16');
+      lanesApi.isScratch('11');
+    },
+  });
+  define('player.lanes.resolveWheelLaneDirection', {
+    run: () => {
+      lanesApi.resolveWheelLaneDirection('1P', '24');
+    },
+  });
+  define('player.lanes.resolveLaneOptionChannels', {
+    run: () => {
+      lanesApi.resolveLaneOptionChannels('1P', '7');
+    },
+  });
+  define('player.lanes.isPlayableInputChannel', {
+    run: () => {
+      lanesApi.isPlayableInputChannel('17');
+      lanesApi.isPlayableInputChannel('01');
+    },
+  });
+  define('player.lanes.resolveLaneChannels', {
+    run: () => {
+      lanesApi.resolveLaneChannels(BENCH_LANE_NOTES, '7');
+    },
+  });
+  define('player.lanes.resolvePlayVariantLaneChannels', {
+    run: () => {
+      lanesApi.resolvePlayVariantLaneChannels(BENCH_LANE_NOTES, '7');
+    },
+  });
+  define('player.lanes.createLaneBindings', {
+    run: () => {
+      lanesApi.createLaneBindings(BENCH_7KEY_CHANNELS, { playVariant: '7', platform: 'linux' });
+    },
+  });
+  define('player.lanes.appendFreeZoneInputChannels', {
+    run: () => {
+      const channels = [...BENCH_7KEY_CHANNELS, '17'];
+      const bindings = lanesApi.createLaneBindings(BENCH_7KEY_CHANNELS, { playVariant: '7', platform: 'linux' });
+      lanesApi.appendFreeZoneInputChannels(lanesApi.createInputTokenToChannelsMap(bindings), bindings, channels);
+    },
+  });
+  define('player.lanes.resolveLaneDisplayMode', {
+    run: () => {
+      lanesApi.resolveLaneDisplayMode(BENCH_7KEY_CHANNELS, { playVariant: '7' });
+    },
+  });
+  define('player.lanes.createInputTokenToChannelsMap', {
+    run: () => {
+      lanesApi.createInputTokenToChannelsMap(BENCH_7KEY_BINDINGS);
+    },
+  });
+}
+
+/** `@be-music/player/display`: play notes, scrolling, the BGA cue and the chart facts a host shows. */
+function registerDisplayCases(define: DefineBenchmarkCase): void {
+  define('player.display.extractTimedNotes', {
+    run: (fixtures) => {
+      displayApi.extractTimedNotes(fixtures.sampleBmsJson, {
+        includeLandmine: true,
+        includeInvisible: true,
+        inferBmsLnTypeWhenMissing: true,
+      });
+    },
+  });
+  define('player.display.extractPlayableNotes', {
+    run: (fixtures) => {
+      displayApi.extractPlayableNotes(fixtures.sampleBmsJson, { inferBmsLnTypeWhenMissing: true });
+    },
+  });
+  define('player.display.extractLandmineNotes', {
+    run: (fixtures) => {
+      displayApi.extractLandmineNotes(fixtures.sampleBmsJson);
+    },
+  });
+  define('player.display.extractInvisiblePlayableNotes', {
+    run: (fixtures) => {
+      displayApi.extractInvisiblePlayableNotes(fixtures.sampleBmsJson);
+    },
+  });
+  define('player.display.toTimedPlayableNote', {
+    run: (fixtures) => {
+      resolveChart(fixtures.sampleBmsJson).notes.map(displayApi.toTimedPlayableNote);
+    },
+  });
+  define('player.display.toTimedInvisibleNote', {
+    run: (fixtures) => {
+      resolveChart(fixtures.sampleBmsJson).notes.map(displayApi.toTimedInvisibleNote);
+    },
+  });
+  define('player.display.toTimedLandmineNote', {
+    run: (fixtures) => {
+      resolveChart(fixtures.sampleBmsJson).notes.map(displayApi.toTimedLandmineNote);
+    },
+  });
+  define('player.display.ScrollDistanceMapper', {
+    run: () => {
+      const mapper = new displayApi.ScrollDistanceMapper(BENCH_SCROLL_TIMELINE, BENCH_SPEED_TIMELINE);
+      mapper.distanceBetween(1, 9);
+      mapper.maxBeatWithinDistance(1, 6);
+    },
+  });
+  define('player.display.createScrollDistanceMapper', {
+    run: () => {
+      const mapper = displayApi.createScrollDistanceMapper(BENCH_SCROLL_TIMELINE, BENCH_SPEED_TIMELINE);
+      mapper.firstBeatBeyondDistance(2, 6);
+      mapper.hasBidirectionalScrollWithinLookahead(2);
+    },
+  });
+  define('player.display.pickActiveBgaCue', {
+    run: () => {
+      displayApi.pickActiveBgaCue(BENCH_BGA_CUES, 37.3);
+    },
+  });
+  define('player.display.pickActiveBgaKey', {
+    run: () => {
+      displayApi.pickActiveBgaKey(BENCH_BGA_CUES, 37.3);
+    },
+  });
+  define('player.display.resolveDisplayedJudgeRankValue', {
+    run: (fixtures) => {
+      displayApi.resolveDisplayedJudgeRankValue(fixtures.sampleBmsJson);
+    },
+  });
+  define('player.display.resolveDisplayedJudgeRankLabel', {
+    run: (fixtures) => {
+      displayApi.resolveDisplayedJudgeRankLabel(fixtures.sampleBmsonJson);
+    },
+  });
+  define('player.display.resolveDisplayedPlayLevelValue', {
+    run: (fixtures) => {
+      displayApi.resolveDisplayedPlayLevelValue(fixtures.sampleBmsJson);
+    },
+  });
+  define('player.display.resolveDisplayedDifficultyValue', {
+    run: (fixtures) => {
+      displayApi.resolveDisplayedDifficultyValue(fixtures.sampleBmsJson);
+    },
+  });
+  define('player.display.formatSeconds', {
+    run: () => {
+      displayApi.formatSeconds(3725.37);
+    },
+  });
+  define('player.display.resolveAltModifierLabel', {
+    run: () => {
+      displayApi.resolveAltModifierLabel('darwin');
+      displayApi.resolveAltModifierLabel('linux');
+    },
+  });
+  define('player.display.isImageResizeAlgorithm', {
+    run: () => {
+      displayApi.isImageResizeAlgorithm('lanczos');
+      displayApi.isImageResizeAlgorithm('bicubic');
+    },
+  });
+}
+
+/** `@be-music/player/audio-sink`: the PCM sinks over Web Audio. */
+function registerAudioSinkCases(define: DefineBenchmarkCase): void {
+  define('player.audio-sink.createBrowserAudioSink', {
+    run: () => {
+      const sink = audioSinkApi.createBrowserAudioSink(createBenchAudioContext(), {
+        sampleRate: 44_100,
+        channels: 2,
+        samplesPerFrame: 512,
+        mode: 'manual',
+      });
+      sink.write(BENCH_PCM_CHUNK);
+      sink.getClockState();
+    },
+  });
+  define('player.audio-sink.createNodeAudioSink', {
+    // Opens the machine's audio output through node-web-audio-api.
+    run: async () => {
+      const sink = await audioSinkApi.createNodeAudioSink({
+        sampleRate: 44_100,
+        channels: 2,
+        samplesPerFrame: 512,
+        mode: 'manual',
+      });
+      sink?.destroy();
+    },
+    interactive: true,
+  });
+}
+
+const BENCH_UI_FRAME: PlayerUiFramePayload = {
+  currentBeat: 0,
+  currentSeconds: 0,
+  totalSeconds: 120,
+  summary: {
+    total: 64,
+    perfect: 0,
+    fast: 0,
+    slow: 0,
+    great: 0,
+    good: 0,
+    bad: 0,
+    poor: 0,
+    emptyPoor: 0,
+    exScore: 0,
+    score: 0,
+  },
+  notes: Array.from({ length: 32 }, (_, index) => ({
+    channel: `1${(index % 7) + 1}`,
+    beat: index * 0.5,
+    seconds: index * 0.25,
+    judged: false,
+  })),
+};
+const BENCH_7KEY_CHANNELS = ['16', '11', '12', '13', '14', '15', '18', '19'];
+const BENCH_7KEY_BINDINGS = lanesApi.createLaneBindings(BENCH_7KEY_CHANNELS, { playVariant: '7', platform: 'linux' });
+const BENCH_LANE_NOTES = Array.from({ length: 256 }, (_, index) => ({
+  channel: BENCH_7KEY_CHANNELS[index % BENCH_7KEY_CHANNELS.length]!,
+}));
+const BENCH_SCROLL_TIMELINE = [
+  { beat: 0, speed: 1 },
+  { beat: 8, speed: 0.5 },
+  { beat: 16, speed: -1 },
+  { beat: 24, speed: 1 },
+];
+const BENCH_SPEED_TIMELINE = [
+  { beat: 0, speed: 1 },
+  { beat: 12, speed: 2 },
+];
+const BENCH_BGA_CUES = Array.from({ length: 512 }, (_, index) => ({ seconds: index * 0.125, key: `${index}` }));
+const BENCH_PCM_CHUNK = new Uint8Array(new Int16Array(1024).buffer);
+
+function createBenchAudioContext(): WebAudioContextLike {
+  return {
+    currentTime: 0,
+    destination: {},
+    createBuffer: (_channels: number, length: number) => ({ getChannelData: () => new Float32Array(length) }),
+    createBufferSource: () => ({ buffer: null, connect: () => undefined, start: () => undefined }),
+    suspend: async () => undefined,
+    resume: async () => undefined,
+  };
 }
 
 const BENCH_PLAYLOG: BeMusicPlaylog = {

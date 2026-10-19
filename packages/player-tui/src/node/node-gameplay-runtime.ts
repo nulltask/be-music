@@ -4,10 +4,13 @@ import type { LogEntry } from '@be-music/utils/log';
 import type { RandomDraws } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
 import { Worker, type MessagePort } from 'node:worker_threads';
-import { createPlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
-import type { PlayerLoadProgress, PlayerSummary } from '@be-music/player/core/engine';
-import { PlayerInterruptedError } from '@be-music/player/core/engine';
-import { createNodeInputRuntime, type NodeInputRuntime } from './node-input-runtime.ts';
+import { createPlayerInputSignalBus } from '@be-music/player/signals';
+import { PlayerInterruptedError, type PlayerLoadProgress, type PlayerSummary } from '@be-music/player';
+import {
+  createNodeInputRuntime,
+  hasNegotiatedStatefulKeyboardProtocol,
+  type NodeInputRuntime,
+} from './node-input-runtime.ts';
 import { createNodeUiRuntime, type NodeUiRuntime } from './node-ui-runtime.ts';
 import { createSeaWorker, isSeaRuntime } from './sea-worker.ts';
 import type {
@@ -293,6 +296,7 @@ function createWorkerInitData(options: NodeGameplayRuntimeOptions): NodeGameplay
     mode: options.mode,
     autoScratch: options.autoScratch,
     playOptions: options.playOptions,
+    ...(hasNegotiatedStatefulKeyboardProtocol() ? { inputReportsKeyReleases: true } : {}),
   };
 }
 

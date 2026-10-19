@@ -1,7 +1,7 @@
 // Pure helpers for translating beatoraja `destination[]` samples into PixiJS `Sprite` props.
 //
 // Keeping the math pure (no Pixi imports here) means the test suite can exercise every keyframe interaction
-// without touching a GPU. The actual `Sprite` mutation is a one-liner inside `scene/beatoraja/gameplay.ts`:
+// without touching a GPU. The actual `Sprite` mutation is a one-liner in the skin view's draw loop:
 //
 //     sprite.x = props.x;
 //     sprite.y = props.y;
@@ -18,7 +18,7 @@
 // code 3 and `'difference'` for code 9 (audit 2.13). Standard modes ('add' / 'multiply' /
 // 'screen' / 'erase' / 'normal') don't need this import; the registration is idempotent so
 // re-importing from another module is harmless. Requires `useBackBuffer: true` at app init
-// — see `scene/host.ts`.
+// — see `host/scene-host.ts`.
 import 'pixi.js/advanced-blend-modes';
 import { Texture } from 'pixi.js';
 import {

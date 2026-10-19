@@ -3,13 +3,8 @@ import { fileURLToPath } from 'node:url';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { parseChartFile } from '../../parser/src/index.ts';
 import { describe, expect, test } from 'vite-plus/test';
-import {
-  type RenderResult,
-  collectSampleTriggers,
-  createTimingResolver,
-  renderJson,
-  renderSingleSample,
-} from './index.ts';
+import { collectSampleTriggers, createTimingResolver } from '@be-music/chart';
+import { type RenderResult, renderJson, renderSingleSample } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const fixtureDir = resolve(rootDir, 'examples/test');

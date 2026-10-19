@@ -10,9 +10,10 @@ browser 固有の PixiJS / WebAudio 挙動は [Browser player 実装メモ](./pl
 
 `@be-music/player-tui` は、共有 `@be-music/player` engine を使う Node frontend です。
 CLI runner は chart file の parse、directory selection、loading / result screen 描画、1 回の gameplay session 起動を担当します。
-gameplay 本体は worker thread 上で動き、`@be-music/player/core/engine` の `autoPlay()` または `manualPlay()` を呼びます。
+gameplay 本体は worker thread 上で動き、`@be-music/player` の `autoPlay()` または `manualPlay()` を呼びます。
+UI worker が import するのは `@be-music/player/signals` と `@be-music/player/display` だけなので、プレイループや音声レンダラーは読み込みません。
 
-main thread は terminal input を所有し、worker 側の 2 つの surface を調停します。
+main thread は terminal input を所有し、worker 側の 2 つの surface と自身の input runtime を調停します。
 
 - `node-gameplay-worker.ts` は共有 engine を実行し、load progress、log、frame patch、input request、最終 `PlayerSummary` を転送します。
 - `node-ui-worker.ts` は terminal renderer を所有し、compact frame patch、UI command、pause state、high-speed change、judge/combo state を受け取ります。
@@ -66,6 +67,8 @@ input runtime は、共有 engine に渡す前に keyboard input を token strin
 非 Windows terminal では既定で Kitty keyboard protocol へ opt-in し、左右 modifier key を区別できるようにします。
 Windows では Win32 terminal input mode へ opt-in します。
 protocol opt-in を上書きする場合は、`BE_MUSIC_KEYBOARD_PROTOCOLS=kitty`、`win32`、または comma-separated combination を設定します。
+terminal が opt-in にその protocol の key event で応えたあとは、同じ process の以降の play がすべて key の解放を伝えると宣言する（`PlayerInputRuntime.reportsKeyReleases`）ので、engine は最初の key から key-state input として判定します。
+それまでは、最初の `kitty-state` command が来るまで engine が各 key を離した時刻を推定します（[解放のない入力](./playlog.ja.md#解放のない入力)）。
 
 主な command mapping は次のとおりです。
 

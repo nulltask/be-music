@@ -5,17 +5,15 @@ export default defineConfig({
   pack: createPackageConfig({
     packageDir: import.meta.dirname,
     entries: {
-      // Main grab-bag entry that re-exports every per-area subpath. Kept for backwards compatibility with consumers
-      // that import from `@be-music/player-web` directly. New code should prefer the per-area subpaths below.
+      // The union of the entries below, plus `logger` and Pixi's `Rectangle`.
       index: 'src/index.ts',
-      // Per-area subpath entries — surfaced through `package.json#exports`. Each barrel's set of exports is documented
-      // in the corresponding `src/<area>/index.ts` header.
-      scenes: 'src/scene/index.ts',
+      // The designed entries, surfaced through `package.json#exports` (docs/player-web.md, "Entry points"). Each
+      // barrel's header says what it exports.
+      host: 'src/host/index.ts',
       skin: 'src/skin/index.ts',
-      chart: 'src/chart/index.ts',
       collection: 'src/collection/index.ts',
-      runtime: 'src/runtime/index.ts',
-      // Everything a be-music skin is written against (the built-in skins use nothing else).
+      audio: 'src/runtime/index.ts',
+      recording: 'src/recording/index.ts',
     },
   }),
 });

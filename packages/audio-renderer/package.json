@@ -17,11 +17,6 @@
       "source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    },
-    "./triggers": {
-      "source": "./src/core/triggers.ts",
-      "types": "./dist/core/triggers.d.ts",
-      "default": "./dist/core/triggers.js"
     }
   },
   "scripts": {

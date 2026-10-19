@@ -1,0 +1,73 @@
+{
+  "type": 0,
+  "name": "be-music e2e 7keys",
+  "w": 640,
+  "h": 480,
+  "playstart": 300,
+  "scene": 3600000,
+  "input": 0,
+  "close": 300,
+  "fadeout": 300,
+  "source": [{ "id": 0, "path": "parts.png" }],
+  "font": [],
+  "image": [
+    { "id": "bg", "src": 0, "x": 0, "y": 0, "w": 64, "h": 64 },
+    { "id": "note-w", "src": 0, "x": 0, "y": 64, "w": 64, "h": 8 },
+    { "id": "note-b", "src": 0, "x": 0, "y": 192, "w": 64, "h": 8 },
+    { "id": "note-s", "src": 0, "x": 0, "y": 128, "w": 64, "h": 8 },
+    { "id": "gauge-n1", "src": 0, "x": 0, "y": 64, "w": 4, "h": 16 },
+    { "id": "gauge-n2", "src": 0, "x": 0, "y": 0, "w": 4, "h": 16 },
+    { "id": "gauge-n3", "src": 0, "x": 0, "y": 128, "w": 4, "h": 16 },
+    { "id": "gauge-n4", "src": 0, "x": 0, "y": 0, "w": 4, "h": 16 },
+    { "id": "gauge-e1", "src": 0, "x": 0, "y": 192, "w": 4, "h": 16 },
+    { "id": "gauge-e2", "src": 0, "x": 0, "y": 0, "w": 4, "h": 16 },
+    { "id": "gauge-e3", "src": 0, "x": 0, "y": 128, "w": 4, "h": 16 },
+    { "id": "gauge-e4", "src": 0, "x": 0, "y": 0, "w": 4, "h": 16 },
+    { "id": "course-marker", "src": 0, "x": 0, "y": 192, "w": 64, "h": 64 }
+  ],
+  "text": [
+    { "id": "course1", "font": 0, "size": 16, "ref": 150 },
+    { "id": "course2", "font": 0, "size": 16, "ref": 151 },
+    { "id": "course3", "font": 0, "size": 16, "ref": 152 }
+  ],
+  "note": {
+    "id": "notes",
+    "note": ["note-w", "note-b", "note-w", "note-b", "note-w", "note-b", "note-w", "note-s"],
+    "lnend": ["note-w", "note-b", "note-w", "note-b", "note-w", "note-b", "note-w", "note-s"],
+    "lnstart": ["note-w", "note-b", "note-w", "note-b", "note-w", "note-b", "note-w", "note-s"],
+    "lnbody": ["note-w", "note-b", "note-w", "note-b", "note-w", "note-b", "note-w", "note-s"],
+    "lnactive": ["note-w", "note-b", "note-w", "note-b", "note-w", "note-b", "note-w", "note-s"],
+    "hcnend": ["note-w", "note-b", "note-w", "note-b", "note-w", "note-b", "note-w", "note-s"],
+    "hcnstart": ["note-w", "note-b", "note-w", "note-b", "note-w", "note-b", "note-w", "note-s"],
+    "hcnbody": ["note-w", "note-b", "note-w", "note-b", "note-w", "note-b", "note-w", "note-s"],
+    "hcnactive": ["note-w", "note-b", "note-w", "note-b", "note-w", "note-b", "note-w", "note-s"],
+    "hcndamage": ["note-w", "note-b", "note-w", "note-b", "note-w", "note-b", "note-w", "note-s"],
+    "hcnreactive": ["note-w", "note-b", "note-w", "note-b", "note-w", "note-b", "note-w", "note-s"],
+    "mine": ["note-w", "note-b", "note-w", "note-b", "note-w", "note-b", "note-w", "note-s"],
+    "hidden": [],
+    "processed": [],
+    "dst": [
+      { "x": 62, "y": 80, "w": 30, "h": 400 },
+      { "x": 94, "y": 80, "w": 30, "h": 400 },
+      { "x": 126, "y": 80, "w": 30, "h": 400 },
+      { "x": 158, "y": 80, "w": 30, "h": 400 },
+      { "x": 190, "y": 80, "w": 30, "h": 400 },
+      { "x": 222, "y": 80, "w": 30, "h": 400 },
+      { "x": 254, "y": 80, "w": 30, "h": 400 },
+      { "x": 20, "y": 80, "w": 40, "h": 400 }
+    ]
+  },
+  "gauge": {
+    "id": 2001,
+    "nodes": ["gauge-n1", "gauge-n2", "gauge-n3", "gauge-n4", "gauge-e1", "gauge-e2", "gauge-e3", "gauge-e4"]
+  },
+  "destination": [
+    { "id": "bg", "dst": [{ "x": 0, "y": 0, "w": 640, "h": 480 }] },
+    { "id": "notes" },
+    { "id": 2001, "dst": [{ "time": 0, "x": 20, "y": 30, "w": 264, "h": 16 }] },
+    { "id": "course1", "op": [290], "dst": [{ "x": 320, "y": 440, "w": 300, "h": 18 }] },
+    { "id": "course2", "op": [290], "dst": [{ "x": 320, "y": 416, "w": 300, "h": 18 }] },
+    { "id": "course3", "op": [290], "dst": [{ "x": 320, "y": 392, "w": 300, "h": 18 }] },
+    { "id": "course-marker", "op": [289], "dst": [{ "x": 600, "y": 20, "w": 20, "h": 20 }] }
+  ]
+}

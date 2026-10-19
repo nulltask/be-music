@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { ClearLamp } from '../scoring/lamp.ts';
+import { clearLampRank } from '@be-music/player/ruleset';
 import {
   chartTitle,
   difficultyName,
@@ -16,6 +16,7 @@ import {
   formatRecorder,
   formatScoreRate,
   formatTimestamp,
+  LAMP_STYLES,
   lampStyle,
   rulesetName,
   shortLaneMode,
@@ -42,9 +43,16 @@ describe('page formatting', () => {
   });
 
   test('names every lamp and falls back to NO PLAY', () => {
-    expect(lampStyle(ClearLamp.HARD).label).toBe('HARD CLEAR');
-    expect(lampStyle(ClearLamp.MAX).label).toBe('MAX');
+    expect(lampStyle(clearLampRank('HARD')).label).toBe('HARD CLEAR');
+    expect(lampStyle(clearLampRank('MAX')).label).toBe('MAX');
     expect(lampStyle(0).label).toBe('NO PLAY');
+  });
+
+  test('keys lamps by the ranks results are stored with: FAILED 1 up to MAX 9', () => {
+    expect(Object.keys(LAMP_STYLES).map(Number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(lampStyle(1).label).toBe('FAILED');
+    expect(lampStyle(5).label).toBe('HARD CLEAR');
+    expect(lampStyle(9).label).toBe('MAX');
   });
 
   test('formats the score rate and DJ LEVEL from the EX score and note count', () => {
@@ -135,9 +143,9 @@ describe('chart and play labels', () => {
   });
 
   test('showsGauge keeps the gauge for plays that did not clear', () => {
-    expect(showsGauge(ClearLamp.FAILED)).toBe(true);
-    expect(showsGauge(ClearLamp.NORMAL)).toBe(false);
-    expect(showsGauge(ClearLamp.EASY)).toBe(false);
+    expect(showsGauge(clearLampRank('FAILED'))).toBe(true);
+    expect(showsGauge(clearLampRank('NORMAL'))).toBe(false);
+    expect(showsGauge(clearLampRank('EASY'))).toBe(false);
   });
 
   test('verificationMeaning explains L3 and L4 and passes anything else through', () => {

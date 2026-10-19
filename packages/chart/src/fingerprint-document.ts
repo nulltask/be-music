@@ -121,6 +121,10 @@ export interface BeMusicChartFingerprintDocument {
 
 export type BeMusicFingerprintDocument = BeMusicPlayFingerprintDocument | BeMusicChartFingerprintDocument;
 
+/**
+ * Serializes a JSON value with the JSON Canonicalization Scheme (RFC 8785): object keys sorted by UTF-16 code units,
+ * `undefined` fields left out, no whitespace, ECMAScript string and number forms. Fingerprints hash this text.
+ */
 export function canonicalizeJsonValue(value: unknown): string {
   if (value === null) {
     return 'null';

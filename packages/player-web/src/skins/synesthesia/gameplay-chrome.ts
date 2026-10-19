@@ -88,6 +88,11 @@ type Runtime = BeMusicGameplayRuntime;
 const HUD_MARGIN = 16;
 const GAUGE_FRAME = { x: HUD_MARGIN, y: GROOVE.y - 26, w: 256, h: 48 } as const;
 const SONG_PLATE = { x: HUD_MARGIN, y: 420, w: DESIGN_WIDTH - HUD_MARGIN * 2 - 340 - 12, h: 46 } as const;
+/**
+ * The gauge label runs from the groove's left edge up to a gap before the percentage readout (right-aligned at the
+ * frame's inner edge, up to `100%` wide), so a course gauge's long name (`COURSE-EASY GAUGE`) fits without scrolling.
+ */
+const GAUGE_LABEL_MAX_WIDTH = GAUGE_FRAME.x + GAUGE_FRAME.w - 14 - 56 - (GROOVE.x - 2);
 /** The score panel sits on the right margin; the track card runs from the left margin up to a gutter before it. */
 const SCORE_PANEL = { x: DESIGN_WIDTH - HUD_MARGIN - 340, y: GAUGE_FRAME.y, w: 340, h: 466 - GAUGE_FRAME.y } as const;
 /** Score panel's column divider, from its left edge. */
@@ -889,7 +894,7 @@ function drawGauge(graphics: Graphics, layer: Container, runtime: Runtime, accen
     `${(runtime.gaugeLabel ?? 'GROOVE').toUpperCase()} GAUGE`,
     GROOVE.x - 2,
     GROOVE.y - 19,
-    { ...labelStyle(), maxWidth: 130 },
+    { ...labelStyle(), maxWidth: GAUGE_LABEL_MAX_WIDTH },
     pool,
   );
   addHudNumber(

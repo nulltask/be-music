@@ -1,0 +1,432 @@
+import { Application, type ApplicationOptions, Container, RendererType, UPDATE_PRIORITY } from 'pixi.js';
+import type { SceneIdentity } from './family-kit.ts';
+import { logger } from '../logger.ts';
+
+const log = logger('scene-host');
+
+/**
+ * A single PixiJS scene that lives inside a {@link PixiSceneHost}. Each scene owns a `root` Container and builds its
+ * scene graph under it; the host puts that root on the shared `app.stage` while the scene is active and takes it off
+ * when another one takes over. Scenes never add themselves to the stage.
+ *
+ * Lifecycle, driven by {@link PixiSceneHost.setScene}:
+ *
+ * - `enter(host)` runs each time the scene becomes the active one, before the host puts `root` on the stage. The first
+ *   entry builds the scene graph and wires input and ticker work; a later one (a scene kept alive across others, as
+ *   the select screen is across a play) resumes what `exit()` paused and restarts the screen's entrance.
+ * - `exit()` runs when another scene takes over or the stage is cleared, before the host takes `root` off the stage.
+ *   The scene stops its ticker work, its input and the sound it plays as a screen (BGM, previews, jingles); heavy GPU
+ *   resources stay so it can be entered again. It is a no-op on a scene that is not active or already disposed.
+ * - `dispose()` is the permanent cleanup, from any state; the host's owner calls it once the scene is no longer
+ *   wanted. A disposed scene is never entered again.
+ *
+ * Scenes do **not** call `Application.destroy()` — that's the host's job, and only at process / page shutdown. This is
+ * the central idea behind the multi-scene refactor: keeping a single Application (and therefore a single WebGL context)
+ * alive across the whole session avoids Pixi v8's module-shared `batchPool` race that bit us when two `Application`
+ * instances ran side-by-side.
+ */
+export interface PixiScene {
+  /**
+   * Container the host attaches to its `app.stage` when this scene is active. Scenes build their own scene graph as
+   * children of this `root`.
+   */
+  readonly root: Container;
+  /**
+   * Which screen the scene is and which skin family draws it, fixed for the scene's lifetime. Hosts read the scene
+   * showing through it ({@link PixiSceneHost.getCurrentScene}).
+   */
+  readonly identity: SceneIdentity;
+  enter(host: PixiSceneHost): Promise<void> | void;
+  exit(): Promise<void> | void;
+  dispose(): void;
+  /**
+   * Optional capture descriptor for the screenshot pipeline. Returns the SKIN's coordinate-
+   * space root container (= the contents are at native skin pixel coordinates, BEFORE the
+   * fit-to-stage scale) plus the skin's authored width / height. The host's screenshot
+   * helper temporarily resets the container's transform to identity, calls `extract.canvas`
+   * with a `frame: {0, 0, width, height}` rectangle, then restores the transform so the
+   * live view's scale isn't affected. Scenes that don't author a fixed skin canvas (or that
+   * don't want to be screenshot-capturable) leave the method undefined and the helper falls
+   * back to capturing the entire stage at its visible (window) size.
+   */
+  getStageInfo?(): { container: Container; width: number; height: number };
+}
+
+export interface PixiSceneHostMountOptions {
+  /**
+   * Optional override for the underlying `Application.init` options. The host fills in opinionated defaults (no
+   * antialias, nearest sampling, devicePixelRatio resolution, transparent BG) that match the LR2 pixel-art aesthetic;
+   * pass an override to swap any subset for a specific deployment.
+   */
+  appOptions?: Partial<ApplicationOptions>;
+  /**
+   * The render resolution to ask for (canvas pixels per CSS pixel), capped at the display's `devicePixelRatio`. Lower
+   * trades sharpness for fill-rate on GPUs that cannot keep up at full density. `?resolution=` in the URL overrides it;
+   * without either the display's own ratio is used. Change it later with {@link PixiSceneHost.setResolution}.
+   */
+  resolution?: number;
+}
+
+/**
+ * Owns the single PixiJS `Application` (and therefore the single WebGL context) for the whole player session. Scenes
+ * are attached via {@link setScene}; only one scene is "active" (visible + receiving ticker callbacks via its own
+ * scope) at a time.
+ *
+ * Why this exists: PixiJS v8 keeps a module-level `batchPool` that's destroyed when **any** `Application.destroy()` is
+ * called with the `releaseGlobalResources` flag (which the boolean `app.destroy(true, ...)` shorthand sets implicitly).
+ * With two `Application`s alive at once, tearing one of them down nulls out shared `Batch` instances that the other
+ * app's renderer then crashes on at `_DefaultBatcher.break`. Funnelling everything through one `Application` instance
+ * dodges that landmine entirely — and matches the official "use a single Application for the lifetime of your app"
+ * guidance in the PixiJS docs.
+ */
+export class PixiSceneHost {
+  /** The shared `Application`. Scenes read `host.app` for the ticker, screen size, canvas, etc. */
+  public readonly app: Application = new Application();
+  /** The currently-active scene, or `undefined` between transitions. */
+  private current: PixiScene | undefined;
+  /**
+   * Orientation of the design stage the active scene is drawing on: `'portrait'` while a be-music skin draws on its
+   * portrait stage, `'landscape'` otherwise (and for themes). Scenes report it every frame via
+   * {@link setStageOrientation}; hosts read it to decide whether to ask a phone held upright to rotate.
+   */
+  private orientation: 'landscape' | 'portrait' = 'landscape';
+  /** Set after the first `mount` so re-mount calls are a no-op. */
+  private mounted = false;
+  /** Set when {@link dispose} runs so subsequent calls short-circuit. */
+  private disposed = false;
+  /**
+   * Serializes in-flight `setScene` calls. Without it a fast-double-toggle (e.g. ESC-then-immediate-song-pick) could
+   * interleave a new scene's `enter()` with a previous scene's `exit()`, leaving both attached to the stage.
+   */
+  private transitionLock: Promise<void> = Promise.resolve();
+
+  public async mount(container: HTMLElement, options?: PixiSceneHostMountOptions): Promise<void> {
+    if (this.mounted) {
+      return;
+    }
+    this.mounted = true;
+    // Renderer preference. Defaults to WebGPU per the project's perf goals (lower per-frame CPU on dense charts, room
+    // for future compute-shader BGA effects). PixiJS auto-falls-back to WebGL2 when the browser doesn't expose WebGPU,
+    // so this is safe to leave on for old browsers — `app.renderer.type` logged below confirms which path actually came
+    // up.
+    //
+    // The `?renderer=webgl` URL flag forces WebGL2 for A/B testing (regression triage on devices where WebGPU happens
+    // to be slower or buggier). Anything else falls through to the default. `?renderer=webgpu` is accepted as the
+    // explicit form even though it's the default, useful for documenting the intent in deployed URLs.
+    const preference = resolveRendererPreference();
+    // Pre-create the WebGPU device with the adapter's MAX texture-dimension limit when WebGPU is
+    // the requested backend. The default `requestDevice()` call grants only 8192×8192 textures
+    // — too small for some authored beatoraja skins (e.g. GdbG_Skin's `fonts/bitmap/Title_*.png`
+    // is 8000×12000). When the adapter advertises a higher limit (16384 on most modern GPUs),
+    // we ask for it explicitly so those textures upload without the fallback chain emitting a
+    // cascade of "Invalid Texture" / "BindGroup invalid" errors that black out the chrome.
+    // Failures here fall through to Pixi's stock device-creation path so we don't break boot on
+    // older hardware.
+    const gpu = preference === 'webgpu' ? await tryCreateMaxLimitsGpu() : undefined;
+    await this.app.init({
+      preference,
+      backgroundAlpha: 0,
+      resizeTo: container,
+      ...(gpu !== undefined ? { gpu } : {}),
+      // `useBackBuffer: true` would enable Pixi's advanced blend modes (subtract / difference /
+      // etc.) on the WebGL backend, but combined with `backgroundAlpha: 0` (the transparent
+      // canvas we want for compositing the skin chrome over the host page) it broke
+      // every-sprite rendering on at least some hardware (skin chrome / STAGEFILE / BGA all
+      // black). Mode 3 (subtract) and mode 9 (difference) silently fall back to "normal" with
+      // this off; that's an acceptable trade since the only authored uses in our 3 sample
+      // skins are ModernChic's BGA-area overlay (blend=9) which was rendering as 'erase'
+      // (alpha hole-punch) before commit 36f23e0 anyway. The fallback to 'normal' is a
+      // closer visual to "no effect" than the alpha hole-punch was.
+      // LR2 skins and BGA frames are pixel-art; bilinear filtering and MSAA blur them visibly. Combined with
+      // `roundPixels: true` and per-texture nearest sampling on each loaded asset, this gives a fully-crisp
+      // pixel-art-style render.
+      antialias: false,
+      autoDensity: true,
+      // Render at the display's full devicePixelRatio so vector chrome and text land on real device pixels. (This
+      // used to be capped at 2× to save fill-rate on 3× displays, but the built-in skins' vector shapes and text then
+      // rendered visibly soft there.) `options.resolution` or `?resolution=` lowers it, trading that sharpness for
+      // fill-rate on slow GPUs.
+      resolution: resolveRenderResolution(globalThis.devicePixelRatio || 1, undefined, options?.resolution),
+      roundPixels: true,
+      // Force the discrete GPU on hybrid systems (every modern laptop with switchable graphics). Rhythm-game
+      // input-to-display latency is critical, and the integrated-GPU path adds variable frame-time on top of the
+      // base 60 Hz tick. The `'high-performance'` hint makes the browser request the dGPU at context creation,
+      // which on macOS / Windows pins the renderer to the powerful adapter for the rest of the session. Pixi v8
+      // forwards this option to both the WebGPU and WebGL2 backends.
+      powerPreference: 'high-performance',
+      // Keep Pixi's texture GC as a safety net, not an in-song metronome. Scene teardown explicitly destroys BGA and
+      // skin resources, so a frequent full cache walk buys little during gameplay and can show up as a rare frame-time
+      // spike on texture-heavy skins/charts. A slower sweep still catches abandoned resources in long app sessions.
+      gcMaxUnusedTime: 120_000,
+      gcFrequency: 60_000,
+      ...options?.appOptions,
+    });
+    // Surface the actual renderer type — the `preference` field is a *hint*, and the real backend may differ if WebGPU
+    // init failed silently or if the override flag was used.
+    log.info('renderer ready', {
+      requested: preference,
+      actual: rendererTypeLabel(this.app.renderer.type),
+    });
+    this.app.canvas.tabIndex = 0;
+    this.app.canvas.setAttribute('aria-label', 'be-music stage');
+    // Compositor isolation. `contain: content` (= `layout paint style`) tells the browser the canvas's visual
+    // contents can't affect — and aren't affected by — anything outside its box. The compositor can then skip
+    // walking siblings / ancestors when the canvas repaints (= every frame), trimming a few hundred μs of
+    // main-thread work per repaint on dense pages. We deliberately omit the `size` containment that the stricter
+    // `strict` value would add — Pixi sets `<canvas>` width/height explicitly via `resizeTo`, but `contain: size`
+    // ignores intrinsic content size during layout, which can interact poorly with the host's ResizeObserver
+    // path on some browsers. `pointer-events` is intentionally left at `auto` so Pixi's hit-testing
+    // (song-select buttons, debug menu, result-screen actions) keeps working.
+    this.app.canvas.style.contain = 'content';
+    this.app.stage.label = 'host/stage';
+    container.appendChild(this.app.canvas);
+  }
+
+  /**
+   * Replaces the active scene: the previous one exits and its root leaves the stage, then the next one enters and its
+   * root goes on the stage. `undefined` clears the stage. Transitions run one at a time, in call order. The previous
+   * scene is only exited, never disposed — its owner disposes it, or keeps it to enter again later. Awaitable so
+   * callers can chain follow-up work (loading a song, etc.) once the new scene's `enter()` has resolved. Idempotent —
+   * passing the already-active scene returns immediately.
+   */
+  public setScene(scene: PixiScene | undefined): Promise<void> {
+    const next = (async () => {
+      await this.transitionLock;
+      if (this.disposed || this.current === scene) {
+        return;
+      }
+      const previous = this.current;
+      this.current = scene;
+      // Until the next scene reports its stage (themes never do), it is a landscape one.
+      this.orientation = 'landscape';
+      if (previous) {
+        try {
+          await previous.exit();
+        } catch (error) {
+          log.warn('previous scene.exit threw', error);
+        }
+        if (previous.root.parent === this.app.stage) {
+          this.app.stage.removeChild(previous.root);
+        }
+      }
+      if (scene && !this.disposed) {
+        try {
+          await scene.enter(this);
+        } catch (error) {
+          log.warn('next scene.enter threw', error);
+          if (scene.root.parent === this.app.stage) {
+            this.app.stage.removeChild(scene.root);
+          }
+          if (this.current === scene) {
+            this.current = undefined;
+          }
+          try {
+            scene.dispose();
+          } catch (disposeError) {
+            log.warn('failed scene.dispose threw after enter failure', disposeError);
+          }
+          throw error;
+        }
+        if (!this.disposed) {
+          this.app.stage.addChild(scene.root);
+        }
+      }
+    })();
+    this.transitionLock = next.catch(() => undefined);
+    return next;
+  }
+
+  /**
+   * Runs `callback` on every tick after the stage has been rendered (Pixi renders at `UPDATE_PRIORITY.LOW`; this hooks
+   * in at `UTILITY`, below it) and returns the unregister function. Used by the gameplay recorder to read each frame
+   * while it is still in the canvas.
+   */
+  public onAfterRender(callback: () => void): () => void {
+    const ticker = this.app.ticker;
+    ticker.add(callback, undefined, UPDATE_PRIORITY.UTILITY);
+    return () => {
+      ticker.remove(callback);
+    };
+  }
+
+  /** Called by the active scene with the orientation of the stage it draws on (see {@link getStageOrientation}). */
+  public setStageOrientation(orientation: 'landscape' | 'portrait'): void {
+    this.orientation = orientation;
+  }
+
+  /** The orientation of the stage the active scene draws on; `'landscape'` until it reports one. */
+  public getStageOrientation(): 'landscape' | 'portrait' {
+    return this.orientation;
+  }
+
+  /**
+   * The active scene: the one the latest transition switched to (from the moment that transition starts), or
+   * `undefined` when the stage is clear. Its {@link PixiScene.identity} says what is showing.
+   */
+  public getCurrentScene(): PixiScene | undefined {
+    return this.current;
+  }
+
+  /**
+   * Renders at `resolution` canvas pixels per CSS pixel from the next frame, capped at the display's
+   * `devicePixelRatio` and no lower than 0.5. Scenes size their surfaces from the renderer every frame, so they follow.
+   * Returns the resolution applied.
+   */
+  public setResolution(resolution: number): number {
+    const applied = clampRenderResolution(globalThis.devicePixelRatio || 1, resolution);
+    const renderer = this.app.renderer;
+    if (renderer && renderer.resolution !== applied) {
+      // `resize` (rather than the `resolution` setter) keeps the canvas's CSS size while its pixel size changes.
+      renderer.resize(this.app.screen.width, this.app.screen.height, applied);
+    }
+    return applied;
+  }
+
+  public isDisposed(): boolean {
+    return this.disposed;
+  }
+
+  public dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    if (this.current) {
+      try {
+        this.current.dispose();
+      } catch (error) {
+        log.warn('scene.dispose threw', error);
+      }
+      this.current = undefined;
+    }
+    try {
+      // With only ONE Application owned by the process, releasing the module-shared `batchPool` here is safe — no other
+      // live Application can be tripped up by the cleared pool. (See the class doc-block above for the
+      // multi-Application landmine we used to hit.)
+      this.app.destroy({ removeView: true, releaseGlobalResources: true }, { children: true });
+    } catch (error) {
+      log.warn('app.destroy threw', error);
+    }
+  }
+}
+
+/**
+ * Pre-create a `(adapter, device)` pair with the adapter's MAX texture-dimension and texture-
+ * size limits, then hand it to Pixi via `app.init({ gpu })`. Returns `undefined` when WebGPU
+ * isn't available or the request fails — Pixi falls back to its stock device-creation path
+ * with default 8192-px limits in that case.
+ *
+ * Background: WebGPU's default `maxTextureDimension2D` is 8192 even on adapters that advertise
+ * 16384 (or more); the higher limit must be requested explicitly via `requiredLimits`. Some
+ * authored beatoraja skins ship enormous bitmap-font atlases (GdbG_Skin's `Title_*.png` is
+ * 8000×12000), which fail to upload at the default limit and surface as a cascade of
+ * "Invalid Texture" / "BindGroup invalid" errors blacking out the chrome.
+ *
+ * The function asks for the adapter's full advertised limits — the browser clamps to whatever
+ * the GPU actually supports, so this is safe across hardware. Limits requested:
+ *   - `maxTextureDimension1D` / `maxTextureDimension2D` / `maxTextureDimension3D`
+ *   - `maxBufferSize` (some skins ship large atlases that imply correspondingly large buffers)
+ *
+ * Errors are caught and logged so a single oddball adapter doesn't break boot.
+ */
+async function tryCreateMaxLimitsGpu(): Promise<{ adapter: GPUAdapter; device: GPUDevice } | undefined> {
+  if (typeof globalThis === 'undefined') return undefined;
+  const navGpu = (globalThis.navigator as { gpu?: GPU } | undefined)?.gpu;
+  if (navGpu === undefined) return undefined;
+  try {
+    const adapter = await navGpu.requestAdapter({ powerPreference: 'high-performance' });
+    if (adapter === null) return undefined;
+    // Pixi's own `_createDeviceAndAdaptor` path requests these features iff the adapter has
+    // them. Mirror that here so we don't downgrade compression-format support when we take
+    // over device creation.
+    const requiredFeatures = (
+      ['texture-compression-bc', 'texture-compression-astc', 'texture-compression-etc2'] as GPUFeatureName[]
+    ).filter((feature) => adapter.features.has(feature));
+    const limits: Record<string, number> = {};
+    const maxDim2D = adapter.limits.maxTextureDimension2D;
+    const maxDim1D = adapter.limits.maxTextureDimension1D;
+    const maxDim3D = adapter.limits.maxTextureDimension3D;
+    const maxBuf = adapter.limits.maxBufferSize;
+    if (Number.isFinite(maxDim2D) && maxDim2D > 0) limits.maxTextureDimension2D = maxDim2D;
+    if (Number.isFinite(maxDim1D) && maxDim1D > 0) limits.maxTextureDimension1D = maxDim1D;
+    if (Number.isFinite(maxDim3D) && maxDim3D > 0) limits.maxTextureDimension3D = maxDim3D;
+    if (Number.isFinite(maxBuf) && maxBuf > 0) limits.maxBufferSize = maxBuf;
+    const device = await adapter.requestDevice({ requiredFeatures, requiredLimits: limits });
+    log.info('webgpu device requested with adapter-max limits', {
+      maxTextureDimension2D: maxDim2D,
+      maxBufferSize: maxBuf,
+      features: requiredFeatures,
+    });
+    return { adapter, device };
+  } catch (error) {
+    log.warn('failed to pre-create webgpu device with adapter-max limits — falling back to defaults', error);
+    return undefined;
+  }
+}
+
+/**
+ * Reads `?renderer=...` from `window.location.search` and maps it onto a PixiJS `preference` value. Defaults to
+ * `'webgpu'`; only the explicit `webgl` form opts out (any other value, missing window object, or unrecognized input
+ * falls through to the default). PixiJS auto-falls-back to WebGL2 if WebGPU isn't available, so the default is safe
+ * across the entire browser matrix.
+ *
+ * Exported for testability — callers should normally let {@link PixiSceneHost.mount} resolve this internally.
+ */
+export function resolveRendererPreference(rawSearch?: string): 'webgl' | 'webgpu' {
+  const search =
+    rawSearch ??
+    (typeof globalThis !== 'undefined' && typeof globalThis.location !== 'undefined' ? globalThis.location.search : '');
+  if (!search) return 'webgpu';
+  const params = new URLSearchParams(search);
+  const flag = params.get('renderer');
+  if (flag === 'webgl') return 'webgl';
+  return 'webgpu';
+}
+
+/** Lowest render resolution `?resolution=` may ask for. */
+const MIN_RENDER_RESOLUTION = 0.5;
+
+/**
+ * The render resolution (canvas pixels per CSS pixel) for a display of `devicePixelRatio`: `?resolution=<number>` (e.g.
+ * `1` or `1.5`) from `window.location.search` when given, else `requested`, else the display's own ratio. Either one
+ * is capped at the display's ratio and goes no lower than 0.5; anything that isn't a positive number is ignored. Every
+ * surface follows the renderer's resolution, so this sets the pixel count the GPU fills each frame.
+ */
+export function resolveRenderResolution(devicePixelRatio: number, rawSearch?: string, requested?: number): number {
+  const search =
+    rawSearch ??
+    (typeof globalThis !== 'undefined' && typeof globalThis.location !== 'undefined' ? globalThis.location.search : '');
+  const raw = search ? new URLSearchParams(search).get('resolution') : null;
+  const fromUrl = raw === null || raw.trim() === '' ? Number.NaN : Number(raw);
+  return clampRenderResolution(devicePixelRatio, isPositive(fromUrl) ? fromUrl : requested);
+}
+
+/** `requested` held between 0.5 and the display's ratio; the display's ratio when `requested` isn't a positive number. */
+function clampRenderResolution(devicePixelRatio: number, requested: number | undefined): number {
+  const native = isPositive(devicePixelRatio) ? devicePixelRatio : 1;
+  if (!isPositive(requested)) return native;
+  return Math.min(native, Math.max(MIN_RENDER_RESOLUTION, requested));
+}
+
+function isPositive(value: number | undefined): value is number {
+  return value !== undefined && Number.isFinite(value) && value > 0;
+}
+
+/**
+ * Maps a PixiJS `RendererType` enum value to a human-readable label for the post-init console log. Falls back to the
+ * numeric tag if the enum gets a new variant we haven't accounted for.
+ */
+function rendererTypeLabel(type: RendererType): string {
+  switch (type) {
+    case RendererType.WEBGL:
+      return 'webgl';
+    case RendererType.WEBGPU:
+      return 'webgpu';
+    case RendererType.CANVAS:
+      return 'canvas';
+    case RendererType.BOTH:
+      return 'both';
+    default:
+      return `unknown(${String(type)})`;
+  }
+}

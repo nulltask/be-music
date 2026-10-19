@@ -33,13 +33,30 @@ LR2 / beatoraja / IIDX のリザルトを再現するツールについて説明
    スコア対象ノートを未判定のまま残したプレイはゲージ 0 で終えます（[`bms-spec.ja.md`](./bms-spec.ja.md)「負の BPM」
    を参照）。
 2. **`inputs`** — プレイアブルレーンに届いた全ての生のキー押下・解放
-   （`{ seq, timeUs, action: 'down' | 'up', channels }`）。入力は判定へ変換せず、ノート ID への割り当ても
+   （`{ seq, timeUs, action: 'down' | 'up', channels }`。ホストがキーを名付けたときは `tokens`、入力が解放を
+   伝えないため（kitty キーボードプロトコルのない端末）エンジンが推定した `up` には `inferred: true` が付きます。
+   これはエンジンがキーを離したとみなした瞬間です。`inferred` は診断用で、リプレイとシミュレータは他の `up` と
+   同じに読みます）。入力は判定へ変換せず、ノート ID への割り当ても
    行わず、空 POOR の原因になる「ノートに対応しない入力」もすべて残します。ソートキーは常に
    `(timeUs, seq)` で、`seq` が同時刻イベントの順序を確定します。
 3. **`play`** — スコアに影響する設定。モード（manual / auto）、オートスクラッチ、選択ゲージ、最終配置を
    生んだレーンオプションのラベル、ライブ判定幅ルールセット（`judgeRuleset`、省略時 `'lr2'`）、デバッグ用
    判定幅オーバーライド、ESC 中断フラグ（`aborted`。`abortedAtUs` は中断時に判定が済んでいた譜面時刻で、
-   再シミュレーションは残りの譜面をミスにせずそこで止まります）、`randomDraws` です。`randomDraws` はこのプレイの `#RANDOM` /
+   再シミュレーションとリプレイは残りの譜面をミスにせずそこで止まります）、`endOnFailure`（サバイバル系ゲージが尽きた時点で
+   プレイを終えたこと。これがなかった頃のログには付かず、最後まで判定を続けます）、`tempo`（プレイテンポ
+   `PlayerOptions.speed`。1 以外のときだけ記録。譜面・音・時計が `tempo` 倍の速さで進みます。判定と入力時刻は
+   譜面時刻のままなので再シミュレーションには影響せず、リプレイはこのテンポで再生します。省略時 1。リプレイ
+   （`replayInputs`）から記録し直したログにも付きません。その速さは再生の速さにすぎないためです。この練習用
+   プレイはランキング対象外。これは開始時のテンポで、プレイ中の変更は `tempoChanges` に `{ timeUs, tempo }` として
+   並びます。1 以外への変更が 1 つでもあれば練習用プレイです。ホストは入力コマンド `{ kind: 'tempo' }` でテンポを
+   変え、エンジンが適用した譜面時刻で記録されます。リプレイはホストが変更を `PlayerOptions.replayTempoChanges` で
+   渡すとそれに従います）、`view` と `viewChanges`（プレイヤーが見ていたもの。
+   ハイスピード、ハイスピード固定、表示時間 ms、各サイドのレーンカバーをレーンの高さに対する割合で表した
+   `sudden`・`hidden`・`lift` の開始時の値と、プレイ中の変更を譜面時刻で並べたもの。ホストは変更を
+   `{ kind: 'view' }` の入力コマンドで送ります。判定はこれに依存せず、リプレイとゴーストは見る人が選んだ範囲を
+   再現します。`PlaylogViewReplay`）、コースのステージなら `course`
+   （コースの種類、ゲージ表と判定の制約、前のステージが残したゲージ値・コースのコンボ・コースの最大コンボを表す
+   `carryIn`）、`randomDraws` です。`randomDraws` はこのプレイの `#RANDOM` /
    `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` の結果を `RandomDraws`（`@be-music/chart`）として表したもので、
    譜面のそうした行ごとにファイル順で `{ command, range, value }` を 1 つ持ちます。これはエンジンが遊んだ
    `PlayerOptions.randomDraws` です。どのホストもプレイごとに 1 回だけ引き（`@be-music/player` の
@@ -65,12 +82,19 @@ TypeScript 型・シリアライザ・防御的パーサは
 
 記録はエンジン側が担い、全ホスト（ブラウザの LR2 / beatoraja シーン、将来の TUI 採用）が 1 つの実装を共有
 します。`PlayerOptions.onPlaylogRecorded` を設定すると記録が有効になり、エンジンは prepared chart を
-スナップショットし、判定対象の押下（`lane-input`）と解放（`kitty-state` release）を `pressedAt` 補正済みの
-譜面相対時刻で記録し、空 POOR を native キャッシュ用にカウントし、`autoPlay` / `manualPlay` の解決直前
+スナップショットし、判定対象の押下（`lane-input`）と解放（`kitty-state` release。解放を伝えない入力では
+エンジンが推定した解放、[解放のない入力](#解放のない入力)）を `pressedAt` 補正済みの譜面相対時刻で記録し、空 POOR を native キャッシュ用にカウントし、`autoPlay` / `manualPlay` の解決直前
 （ESC 中断時を含む）に組み上がった `BeMusicPlaylog` をコールバックへ渡します。エンジンが知り得ない
 ホスト側設定（選択ゲージ、レーンオプションのラベル、DP FLIP、自由形式の `native` 追加情報、fingerprint の
 計算元になる元の譜面）は `PlayerOptions.recordPlaylog` で渡します。`#RANDOM` / `#SWITCH` の draws は、エンジンが
 もともと必要とする `PlayerOptions.randomDraws` から取ります。
+
+エンジンは押下と解放を、取り出したときに時刻づけします。そのときに読んだプレイクロックから、イベントの `pressedAt`
+がウォールクロックでどれだけ前かを差し引いた時刻で、直前に取り出した入力より前にはしません。プレイクロックは
+オーディオクロックに従い、オーディオクロックはレンダリングの単位ごとに進みますが、ウォールクロックはなめらかに
+進みます。そのため、ある入力のすぐあとに取り出した入力が、それより古く読めることがありました。入力は起きた順に
+エンジンへ届くので、この下限が取り除くのはそのずれだけです。短いタップが押下より前に解放を記録することは
+なくなりました。
 
 各ログはトップレベルに、記録したソフトウェアを表す **`recorder`**（`{ name, version, build, engine, platform }`）
 を持ちます。アプリ側の項目はホストが `recordPlaylog.recorder` で宣言し（ブラウザプレイヤーは
@@ -81,15 +105,51 @@ TypeScript 型・シリアライザ・防御的パーサは
 
 ブラウザプレイヤーでは:
 
-- LR2 / default ゲームプレイシーンは `PixiGameplayResultData.playlog` として公開します。
-- beatoraja ゲームプレイシーンは `PixiBeatorajaGameplayView.getPlaylog()` として公開します。
+- どのプレイ画面（`createPlayScene`）も、記録したログを `on.finish(result, playlog)` に渡します。途中で抜けたプレイのログは
+  `waitForPlaylog()` で待ちます。
 - デモはリザルトシーンのマウント時に `<タイトル>-<タイムスタンプ>.bmplay.json` を自動ダウンロードします。
   Debug Menu の **Library & records** フォルダにある **Auto-save play history** チェックボックス（デフォルト OFF）で制御します。プレイログ関連
   オプションは曲の開始時にラッチされ、曲の途中では変更できません — プレイ中はコントロールが disabled
   になり、曲開始時点の値がそのプレイに適用されます。
-- Debug Menu の **Play options** フォルダが記録対象のプレイ設定（オートプレイ、判定幅
-  LR2 / beatoraja / IIDX、ゲージ、Random 1P/2P、DP FLIP、オートスクラッチ）を持ちます。LR2 セレクトシーンの
-  PLAY OPTION パネルに対応項目がある設定は双方向に同期します。
+- Debug Menu の **Play options** フォルダが記録対象のプレイ設定（オートプレイ、ゲージ、Random 1P/2P、DP FLIP、
+  オートスクラッチ）を持ちます。判定幅（LR2 / beatoraja / IIDX）は **Developer** フォルダにあります。LR2 の選曲画面の
+  PLAY OPTION パネルに対応項目がある設定は双方向に同期します。その中の **Replay / ghost** フォルダで、リプレイが
+  記録された見え方のどこまでを再現するかを選びます（[プレイヤーが見ていたもの](#プレイヤーが見ていたもの)）。
+
+### 解放のない入力
+
+kitty キーボードプロトコルのない端末は、キーを 1 回の押下として送り、押し続けているあいだは押下を繰り返し送ります。
+解放は伝えません。入力が解放を伝えるかどうかは、入力ランタイムがプレイの前に宣言します
+（`PlayerInputRuntime.reportsKeyReleases`）。
+
+- ブラウザの入力ランタイムは、常に宣言します。
+- TUI は、同じプロセスの以前のプレイで端末が kitty キーボードプロトコル（Windows では win32-input-mode）に応えていれば
+  宣言します。
+- それ以外では、エンジンが最初の `kitty-state` コマンドから判断します。
+
+解放を伝えると宣言した入力のプレイは、最初のキーからキー状態の入力として判定します。それ以外では、入力が解放を
+伝えるまで（`kitty-state` コマンドが来るまで）、エンジンは各キーを離した時刻を推定し、判定とプレイログに通常の
+押下と解放を渡します。
+
+- 離されているレーンへの押下は、キーが押されたことです（`down`）。
+- レーンは押下のたびに猶予のあいだ押されたままです。ロングノートの始点を叩いた押下のあとは 380 ms（端末の
+  リピートが始まるまでの遅れ）、それ以外は 120 ms で、プレイの開始時のテンポでの時計で数えます。
+- 押されているレーンへの押下は、そのレーンのロングノートを押し続けているとき、または離したロングノートの
+  終わりより前で届くノートがないときは、押し続けているキーの繰り返しです。レーンは押されたままで、記録しません。
+  それ以外は新しい押下（猶予より速い連打）で、`down` として記録します。
+- 離されているレーンへの押下で、離したロングノートのキーの繰り返しであるものは、押下ではありません。
+- レーンの猶予が繰り返しなしで切れると、その瞬間にキーが離されたことになります。`inferred: true` の付いた `up` で、
+  エンジンがいつ気づいても、その時刻で判定します（ルールセットの解放の規則。beatoraja の解放の猶予も含みます）。
+
+判定はログに記録したのと同じ入力を受けるので、リプレイとプレイのルールセットでの再シミュレーションはライブの
+プレイと同じ結果になります（`driver-drift.test.ts` が、各ルールセットでロングノートの各モード、キーの繰り返し、
+連打、地雷について確かめます）。判定そのものはキー状態の入力だけを受けます。レーンは押下から解放まで押されています。
+
+エンジンが解放を推定するようになる前のログは、そうしたプレイのすべての押下（キーの繰り返しを含みます）を持ち、
+解放をひとつも持ちません。リプレイはシミュレータと同じく、そうしたログをそのまま読みます。各キーは押下からプレイの
+終わりまで押されたままで、キーの繰り返しはそれぞれ別の押下です。リプレイとシミュレータはそうしたログで一致しますが、
+プレイしたときと判定が変わることがあります（[再現度に関する注意](#再現度に関する注意)）。いま記録するログは解放を
+持つので、ライブのプレイ、リプレイ、シミュレータは一致します。
 
 ## 互換ルールセット
 
@@ -128,12 +188,55 @@ TypeScript 型・シリアライザ・防御的パーサは
 有効）、リプレイ実行では新しいプレイログを記録しません。ログは解決済みの最終配置を保存しているため、譜面準備
 では RANDOM / MIRROR を引き直す代わりに記録済みチャンネルを再適用します（`applyPlaylogArrangement`）— つまり
 シャッフルされたプレイも正確にリプレイできます。譜面の `#RANDOM` / `#SWITCH` 行はログの
-`play.randomDraws` で解決するので、リプレイは記録時の枝を遊びます。ブラウザのコアゲームプレイシーンは自分で
+`play.randomDraws` で解決するので、リプレイは記録時の枝を遊びます。ブラウザのプレイセッション（`session/play/play-chart.ts`）は自分で
 その draws を使って解決し（`resolvePlayChart(chart, { randomDraws })`）、元の譜面をエンジンに解決させるホストは
 `replayInputs` と一緒に `PlayerOptions.randomDraws` として渡します。読み込んだ譜面のために引かれていない draws や、
 draws のないログで新しく引いた分岐が記録時と異なる場合は再整列できないため、食い違った譜面を遊ぶ代わりに
-ステータス表示でエラーになります。リプレイは記録時のスキンファミリーに関わらず常に LR2 / default の
-ゲームプレイパスで実行されます。
+ステータス表示でエラーになります。リプレイは記録時のスキンファミリーに関わらず、
+そのときのゲームプレイのファミリー自身のプレイ画面で再生されます。
+
+ESC で中断したログのリプレイは、再シミュレーションと同じく中断した所で止まります。ホストは `play.abortedAtUs` を
+`PlayerOptions.replayAbortedAtUs` として渡し、エンジンはその譜面時刻まで判定してから、ESC としてリプレイを
+終えます。結果はライブのプレイと同じです。AUTO で遊んだログのリプレイも（空の）入力を `replayInputs` として渡すので、
+これもリプレイです。`replayTempoChanges` に従い、どちらのリプレイも再生したテンポを記録しません。
+
+## プレイヤーが見ていたもの
+
+`play.view` と `play.viewChanges` は判定とは別に、どのシーンでも共通の単位で見え方を記録します。
+
+| フィールド     | 単位                                                                                                                                                                                                 |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hiSpeed`      | シーンが描画に使ったスクロール倍率。そのシーン自身のスケールで、HS-FIX を掛けた値で表します。                                                                                                        |
+| `hiSpeedScale` | `hiSpeed` のスケール。`be-music`（組み込みと LR2 のシーン。1 拍あたり `PIXELS_PER_BEAT × hiSpeed` デザインピクセル）か `beatoraja`（1 のときレーンが 4 拍）。省略時は見る人のスケール。              |
+| `hsFix`        | シーンがスクロールに使った HS-FIX モード（`OFF`、`MAXBPM` など）。どのシーンも記録します。                                                                                                           |
+| `visibleMs`    | ノートが SUDDEN+ の下に見えている時間（整数 ms。白数字で、× 0.6 が緑数字）。譜面のメイン BPM（後述）で、`#SCROLL` / `#SPEED` を除いた値です。                                                        |
+| `covers`       | レーンのあるプレイサイドごとに、レーンの高さに対する割合（0〜1）。`sudden` は上から、`hidden` は判定ラインのすぐ上、`lift` は判定ラインを持ち上げる量。組み込みと LR2 のシーンは LIFT を描きません。 |
+
+beatoraja のシーンの HIDDEN カバーはリフトより上のレーンに対する比率なので、`比率 × (1 − lift)` を記録します。
+
+**`visibleMs` と LIFT。** どのシーンも `visibleMs` を beatoraja の白数字として記録し、LIFT は差し引きません。LR2 には LIFT がないため、beatoraja に従います。beatoraja の [`LaneRenderer`](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/play/LaneRenderer.java#L321-L330) は、持ち上げた判定ラインより上のレーンを、そのレーンに合わせた速さでノートが流れるように描きます（`rxhs = (hu - hl) * hispeed * speed`。`hl` はリフトの分だけ上がります）。そのため LIFT はレーンを短くしますが、ノートがレーンを流れきる時間は変えません。表示する白数字は `region * (1 - lanecover)` で、`region = 240000 / nbpm / hispeed / speed / nscroll` です。リフトの項はありません（`currentduration`、321〜330 行）。ハイスピード固定のモードも同じ式をハイスピードについて解きます（`resetHispeed`、[206〜210 行](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/play/LaneRenderer.java#L206-L210)）。シーンモデルはこれを一か所で計算します。`resolveWhiteNumber` はハイスピード 1 で指定した拍数の長さのレーンについて求め（beatoraja のシーンでは 4 拍、組み込みと LR2 のシーンでは配置したレーンを `PIXELS_PER_BEAT` で割った拍数）、`resolveHiSpeedForWhiteNumber` はその逆です。組み込みと LR2 のシーンは LIFT を描かないので、その白数字はノートが見えている時間そのものです。
+
+**メイン BPM。** `visibleMs` は譜面のメイン BPM、つまり判定するノートが最も多く置かれた BPM（`@be-music/chart` の `resolveChartMainBpm`）で求めます。これは beatoraja の値です。[`LaneRenderer.init`](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/play/LaneRenderer.java#L130-L152) はタイムラインの BPM ごとに [`TimeLine.getTotalNotes()`](https://github.com/exch-bms2/jbms-parser/blob/8108cd54a19275810e1f5d2c9586f008eb6db95e/src/bms/model/TimeLine.java#L139-L156)（通常ノート、ロングノートの始点、CN / HCN の終点。地雷と不可視ノートは数えない）を足し合わせ、最も多い BPM を HS-FIX `MAINBPM` の基準にします。メイン BPM での白数字と緑数字も同じ値を読みます（[`IntegerPropertyFactory`](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/skin/property/IntegerPropertyFactory.java#L541-L560)、541〜560 行）。LR2 には従うべきメイン BPM の定義がない（スキンの数値は最高・最低・現在の BPM だけ）ため、beatoraja に従います。どの種類のプレイ画面も、HS-FIX `AVERAGE` がハイスピードを合わせるのと同じメイン BPM を使うので、ログの `visibleMs` を求める BPM は遊んだ種類によって変わりません。同数のときは先に現れる BPM を選びます（beatoraja はハッシュマップの順序）。ノートのない譜面は開始 BPM を使います。
+
+**古いログ。** この規則より前は、組み込みと LR2 の画面は最も長く続いた BPM を使い、beatoraja の画面は地雷とロングノートの終点もすべて数えていました。これらが食い違う譜面（BPM のギミックや、ノートの少ない別の BPM が長く続く譜面）では、古いログの `visibleMs` は今のプレイが記録する値と異なります。そのため別のハイスピードの尺度で再生すると、わずかに違うハイスピードで流れることがあります。記録したときと同じ尺度での再生は記録した `hiSpeed` で描くので影響を受けず、判定にも影響はありません。
+
+シーンは見え方を決まった精度で記録します（`roundPlaylogView`）。`hiSpeed` は 1/1000 刻み、`visibleMs` は整数 ms、カバーの各値は小数 4 桁です。浮動小数点の誤差（0.1 のカバーが `0.09999999999999999` になるなど）はログに残らず、変更にも数えません。
+
+**記録。** すべてのプレイ画面（組み込み、LR2、beatoraja）は開始時の見え方を `recordPlaylog.view` として渡し、毎フレーム見え方を読み取ります。`createPlaylogViewCoalescer` がそれを変更にまとめます。変わったフィールドだけを持ち（`diffPlaylogView`。カバーが変わったサイドはそのカバー全体）、100 ms に高々 1 回なので、ホイールを回したりキーを押し続けたりしても、フレームごとではなく数件の変更になります。シーンは変更を `{ kind: 'view', change }` の入力コマンドとして送り、エンジンはそのコマンドを取り出した譜面時刻を付けます。組み込みと LR2 のシーンでプレイ中に変わるのはハイスピード（矢印キー、ホストの `setHiSpeed`）です。カバーはプレイごとに固定で、レーンが配置されると最初の変更が `visibleMs` を運びます。beatoraja のシーンではハイスピード、レーンカバー、リフト、HIDDEN カバーのすべてが変わります（矢印キー、PageUp / PageDown、ホイール、Home / End、譜面のレーンが使わないときの H / J / K、スキンのカバーボタン 330〜332）。開始時のカバーはプレイオプションのとおりです。
+
+**リプレイ。** リプレイは記録された見え方を再生位置に沿って表示します。再生位置の譜面時刻で `resolvePlaylogViewAt` を引き、見る人の `PlaylogViewReplay`（`tempo`、`hiSpeed`、SUDDEN+ / HIDDEN+ の `covers`、`lift`。既定ですべてオン）で見る人自身の設定と `resolveReplayView` を合わせます。オフにした項目は見る人自身の設定のままです。ハイスピードは `resolveReplayHiSpeed` に従います。
+
+```mermaid
+flowchart TD
+  toggle{hiSpeed オン?} -->|いいえ| own[見る人のもの]
+  toggle -->|はい| scale{同じスケール?}
+  scale -->|はい| recorded[記録された hiSpeed]
+  scale -->|いいえ| visible{visibleMs あり?}
+  visible -->|はい| match[visibleMs になるハイスピード]
+  visible -->|いいえ| recorded
+```
+
+同じスケール（または `hiSpeedScale` のないログ）なら、記録されたハイスピードを HS-FIX 込みで描かれたとおりに使い、見る人の HS-FIX は重ねません。スケールが違うと同じ数値でも速さが違うため、記録された表示時間になるハイスピードを、自分のレーンと表示している SUDDEN+ から求めます（`resolveHiSpeedForWhiteNumber`。組み込みと LR2 では配置したレーン、beatoraja では 4 拍のレーン）。リプレイはどの種類のプレイ画面でも再生されます。beatoraja の画面は LIFT を描くので記録された LIFT を見せます（HIDDEN+ はその上のレーンに対して設定し、カバーは記録されたレーンの割合で描かれます）。組み込みと LR2 の画面は LIFT を描かないので、`lift` の切り替えはそこでは何も変えません。`tempo` の切り替えは記録されたテンポ（`play.tempo`、`play.tempoChanges`）を扱います。ブラウザプレイヤーにはまだゴースト表示がありません。ゴーストも同じように見え方を読みます。
 
 ## LR2 / beatoraja / IIDX リザルトの再現
 
@@ -166,10 +269,56 @@ EX スコアは全ルールセットで PGREAT × 2 + GREAT × 1、DJ LEVEL は 
   空 POOR 窓と CN 終端窓は未測定のため beatoraja の値を代用、HCN のゲージ tick は実測されている
   16 分音符間隔の代わりに固定 200 ms を使用しています。「ほぼ一致」は期待できますが、ビット単位の
   完全一致は保証されません。
-- beatoraja の未モデル化要素: PMS の「1 ノートにつき空 POOR 1 回」規則、PMS の 200 ms チャージ解放
-  マージン、SEVENKEYS 以外のモード別ゲージ表（全モードで 7K のゲージ定数を使用）。
+- beatoraja の未モデル化要素: PMS の「1 ノートにつき空 POOR 1 回」規則、SEVENKEYS 以外のモード別ゲージ表（全モードで 7K のゲージ定数を使用）。
 - プレイログは解決済み譜面を保存するため、プレイヤー間の `#RANDOM` やレーンシャッフルの実装差は
   再シミュレーションに影響しません。
+- 解放のない入力のプレイは、エンジンが推定した解放を記録するので（[解放のない入力](#解放のない入力)）、判定した
+  とおりにリプレイ・再シミュレーションできます。それより前に記録したログには `down` しかないため、リプレイと
+  再シミュレーションは各キーを押してからずっと押されたままとし、繰り返しをすべて新しい押下とみなすので、
+  プレイしたときと判定が変わることがあります。
+- エンジンが各入力を直前の入力より前に時刻づけしないようになる前に記録したログには、解放が押下より数百 µs 前に
+  ある短いタップ（多くはタッチのタップ）が含まれることがあります。リプレイと再シミュレーションは解放を先に読み、
+  そのレーンを押下から次の解放まで押したままとするので、その間にそのレーンを通る地雷は爆発し、そうしてタップした
+  ロングノートは押し続けたことになります。
+
+## コースのプレイログ
+
+コース 1 回分は **コースのプレイログ**（`format: 'be-music-course-playlog'`、`*.bmcourse.json`）1 つに記録します。コース（`name`、`kind`、`constraints`、`trophies`。順位付けしてはいけないコースには `release: false`）と、ステージごとのエントリを順に持ちます。
+
+- 到達したステージは `{ played: true, playlog }` で、そのステージ自身の完全なプレイログです。その `play.course` はコースの種類と制約、前のステージが残した状態 `carryIn` を持つので、`extractCourseStage(log, index)` が返すログは単体で再生・再シミュレーションできます。
+- 到達しなかったステージ（失敗したステージより後）は `{ played: false, facts }` で、ルールセットがノート数を数えるのに必要な譜面の事実と、わかる場合は譜面ファイルのハッシュ（`sha256`、`md5`）と譜面フィンガープリント（`chartFingerprint`。遊んだステージの `chart.chartFingerprint` と同じもの）を持ちます。フィンガープリントは省略できるので古いログも読めますが、それがないプレイはコースを特定できず、ランキングに載りません。
+
+```mermaid
+flowchart TD
+  log["コースのプレイログ"] --> s1["stages[0]: 到達<br/>ステージのプレイログ"]
+  log --> s2["stages[1]: 到達<br/>ステージのプレイログ (carryIn)"]
+  log --> s3["stages[2]: 未到達<br/>譜面の事実"]
+  s2 -->|extractCourseStage| single["単曲のプレイログ"]
+```
+
+`simulateCoursePlaylog(log, { ruleset })` はコースの結果を導き直します。2 ステージ目以降は、記録された `carryIn` ではなく、**シミュレーションした**前のステージが残した状態から始め、ライブのプレイと同じく、ゲージが尽きた最初のステージでコースを止めます。ESC で投げたステージ（`play.aborted`）は、LR2 がコースの途中で投げたプレイを記録するのと同じく、ゲージにかかわらずコースを落ちたものにします。結果（`PlaylogCourseResult`）は、遊んだステージの判定・FAST / SLOW・EX スコアを合計します。ノート数は全ステージで数え、判定されなかったノートはすべて BP（`missCount`）に加え、コース全体の最大コンボと最後のステージのゲージを取り、コースのランプとトロフィーを決めます（[コースと段位認定](./course.ja.md) を参照）。`createCoursePlaylog` は、ホストが記録したステージのログからコースのログを組み立て、エンジン自身のコース結果を `results.native` としてキャッシュします。このランプは、ステージを判定したルールセットで決めます。`resolveCoursePlayedRuleset(log)` はそのルールセットを返し（NONSTOP では結合したプレイのもの）、ステージごとに違えば `undefined` を返します。リーダーボードはそのルールセットで順位を付け、ホストはそのルールセットの自己ベストに記録します。1 つの結果のランプは `resolveRulesetResultLamp(result, ruleset)` で、ランプ、コースのランプの規則、BP は `@be-music/player/ruleset` の語彙です（`resolveClearLamp`、`resolveCourseClearLamp`、`resolveMissCount`）。
+
+**コースの識別。** `computeCourseFingerprint({ kind, constraints, stageChartFingerprints })` は、コースの種類、制約（`normalizeCourseConstraints` の読み方で正規化して並べ替えたもの）、各ステージの譜面フィンガープリントを順に並べたものから、コースを `bmcourse0:<sha256>` で表します（[fingerprint-spec.ja.md 8 章](./fingerprint-spec.ja.md#8-コース-fingerprint)）。NONSTOP コースは、ステージ間のつなぎ方（最後のステージの後に書かれたものは何もつながないので除きます）と配置モード（`intended` または `lr2`）も含めます。これらが実際に遊ぶ結合譜面を決めるからです。名前とトロフィーは含めません。そのため `.lr2crs`、beatoraja のコースファイル、難易度表のどれから読んだコースでも、譜面が同じなら同じキーになり、ランダムコースも抽選後は固定のコースと同じように扱われます。`computeCoursePlaylogFingerprint(log)` はログからステージのフィンガープリントを読み（遊んだステージも到達しなかったステージも読むので、失敗したプレイにもキーがつきます）、1 つでも欠けていれば `undefined` を返します。`checkCoursePlaylogEligibility(log)` は `checkPlaylogEligibility` のコース版です。遊んだステージはそれぞれ単曲と同じ確認を通る必要があり（ここではこのコースの種類のステージであることが拒否理由ではなく条件です）、遊んだステージが先に並び、どのステージのアシストもそのプレイの印になります。中断してよいのは最後に遊んだステージだけです。これは ESC で投げたプレイで、落ちたプレイとして数えます。
+
+**NONSTOP のプレイ。** LR2 の NONSTOP コースは、つないだ 1 本の譜面として遊びます（[コースと段位認定](./course.ja.md#nonstop-コース) を参照）。そのため、コースのプレイログに `nonstop` を加えます。このログは `buildNonstopCoursePlaylog`（`@be-music/player/course`）がつないだプレイから書きます。
+
+- `nonstop.playlog`：つないだ譜面のプレイの記録そのものです。判定されたのはこのプレイなので、`simulateCoursePlaylog` はコースの結果をここから出します。判定、ゲージ、最大コンボはこのプレイのもので、BP には判定されなかったノーツをすべて数えます。
+- `nonstop.connections` と `nonstop.placement`：譜面をどうつないだか。
+- `nonstop.stitch`：譜面をつないだ結合規則の版（`NONSTOP_STITCH_VERSION`）。結合規則が変わっても、つないだ譜面を同じように作り直せるようにするためのものです。記録する前のログにはなく、版 1 として読みます。コースのフィンガープリントには含めないので、結合処理を直してもそのコースのランキングは変わりません。
+- `nonstop.stages`：各ステージがプレイのどこにあったか（`offsetUs`、担当区間 `windowStartUs` / `windowEndUs`、FIT の `rate`）と、つなぐ前にそのステージの譜面を解決した `#RANDOM` / `#SWITCH` の抽選結果（`randomDraws`。単曲の `play.randomDraws` と同じ形で、制御構文のない譜面では省きます）。ステージの譜面とこの抽選結果があれば、つないだ譜面を作り直せます。
+- `nonstop.noteStages`：プレイの各ノーツがどのステージのものか（ノーツ id ごと）。`resolveNonstopNoteStages` が、つないだ譜面のステージ別のキーから求めます。
+
+`stages` には、これまでどおりステージごとに 1 件ずつ入ります。到達したステージは、`splitNonstopPlaylog` がプレイから切り出します。
+
+- ノーツはステージ自身の 0 からの時刻にし、遊んだときの FIT で変速した速さのままにします（`play.course.rate` に変速率を記録します）。
+- 打鍵は同じレーンで最も近いノーツのステージに、離鍵はその打鍵と同じステージに振り分けます。
+- `play.course.carryIn` は、そのステージが始まったときのプレイの状態です（ステージの担当区間の始まりまでプレイをシミュレーションして求めます）。
+
+- `chart.chartFingerprint` にステージの譜面を記録します。到達しなかったステージの `chartFingerprint` と同じく、これでほかのコースと同じようにコースを特定できます。
+
+このため `extractCourseStage` は、これまでどおり単体で再生できる単曲のログを返します。ただし、つなぎ目では判定がつないだプレイと違うことがあります。
+
+`checkCoursePlaylogEligibility` は、NONSTOP のプレイをつないだプレイで確かめます。つないだプレイは単曲と同じ確認を通り（オートプレイは拒否し、ESC で投げたプレイは落ちたプレイとします）、`play.course.kind: 'nonstop'` を持ち、`nonstop.stages` がコースの全ステージを覆っている必要があります。各ステージは譜面を記録している必要があります。結果は、つないだプレイのフィンガープリントを `nonstop` に持ち、`stages` は空です。ステージは単体で遊んだものではないので、検証する側はステージの譜面から作り直します（記録した抽選結果、コースの制約、記録したつなぎ方・配置・結合規則で `prepareNonstopCourse` し、`resolveNonstopRun` を求めます。[コースと段位認定](./course.ja.md#nonstop-コース) と [リーダーボードの設計](./leaderboard.ja.md#61-コースのランキング) を参照）。
 
 ## CLI
 

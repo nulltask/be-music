@@ -1,6 +1,5 @@
 import { effect, effectScope, signal } from 'alien-signals';
-import type { PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
-import type { PlayerJudgeComboSignalState } from '@be-music/player/state-signals';
+import type { PlayerJudgeComboSignalState, PlayerUiFramePayload } from '@be-music/player/signals';
 import type { PlayerUiFramePatch } from './ui-frame-patch.ts';
 
 type WritableSignal<T> = {

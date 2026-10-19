@@ -1,10 +1,9 @@
-import { PLAY_MODE_LAYOUTS, findPlayModeLane, type PlayKeyTone } from '@be-music/chart';
-import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
+import { PLAY_MODE_LAYOUTS, findPlayModeLane, type ChartPlayVariant, type PlayKeyTone } from '@be-music/chart';
 import {
   resolveSideKeySlot as resolveCoreSideKeySlot,
   resolveSideRelativeLaneIndex,
   resolveWheelLaneDirection,
-} from '@be-music/player/core/lane-layout';
+} from '@be-music/player/lanes';
 import type { BeMusicLaneKind } from './types.ts';
 
 /** Lanes sit edge to edge, and in double play the 2P bank butts straight onto the 1P bank. */

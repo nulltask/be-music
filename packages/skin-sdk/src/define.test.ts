@@ -104,6 +104,30 @@ describe('validateBeMusicSkin', () => {
     expect(problems.join('\n')).toMatch(/author\.url/u);
     expect(problems.join('\n')).toMatch(/homepage/u);
   });
+
+  it('reports a missing or malformed fontLoads', () => {
+    const { fontLoads: _, ...withoutFontLoads } = skin();
+    const message = 'fontLoads must be an array of CSS font shorthands (empty when the skin loads no web fonts)';
+    expect(validateBeMusicSkin(withoutFontLoads as BeMusicSkin)).toEqual([message]);
+    expect(validateBeMusicSkin(skin({ fontLoads: '400 24px "Anton"' as unknown as string[] }))).toEqual([message]);
+    expect(validateBeMusicSkin(skin({ fontLoads: ['400 24px "Anton"', 400 as unknown as string] }))).toEqual([message]);
+    expect(validateBeMusicSkin(skin({ fontLoads: ['400 24px "Anton"'] }))).toEqual([]);
+  });
+
+  it('reports the fields a plain JavaScript skin left out instead of throwing', () => {
+    const bare = { apiVersion: BE_MUSIC_SKIN_API_VERSION, context: '2d' } as unknown as BeMusicSkin;
+    const problems = validateBeMusicSkin(bare);
+    expect(problems).toEqual(
+      expect.arrayContaining([
+        'id "undefined" must be lowercase letters, digits, and hyphens',
+        'label must not be empty',
+        'version "undefined" is not a semantic version (e.g. 1.0.0)',
+        'author.name must not be empty',
+        'fontLoads must be an array of CSS font shorthands (empty when the skin loads no web fonts)',
+        'gameplay.draw must be a function',
+      ]),
+    );
+  });
 });
 
 describe('defineBeMusicSkin', () => {

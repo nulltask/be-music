@@ -1,0 +1,318 @@
+import { Texture } from 'pixi.js';
+import {
+  type Lr2DestinationRect,
+  type Lr2GrooveGaugeElement,
+  type Lr2ImageElement,
+  type Lr2NowComboElement,
+  type Lr2NowComboKind,
+  type Lr2Skin,
+} from '@be-music/lr2-skin';
+import { LR2_LANE_TIMER_BANK_SIZE, LR2_TIMER } from '@be-music/lr2-skin/ids';
+import { applyDestinationToSprite, createCroppedTexture, type SpriteSink } from '../../skin/lr2/render.ts';
+
+export function isLr2OverlayImage(image: Lr2ImageElement): boolean {
+  const t = image.destination.timer;
+  // Bombs and long-note holds (50-89), key on / off (100-139).
+  return (
+    (t >= LR2_TIMER.BOMB_1P && t < LR2_TIMER.LN_HOLD_2P + LR2_LANE_TIMER_BANK_SIZE) ||
+    (t >= LR2_TIMER.KEY_ON_1P && t < LR2_TIMER.KEY_OFF_2P + LR2_LANE_TIMER_BANK_SIZE)
+  );
+}
+
+export function lastJudgeToNowComboKind(lastJudge: string): Lr2NowComboKind | undefined {
+  switch (lastJudge) {
+    case 'PERFECT':
+      return 'perfect';
+    case 'GREAT':
+      return 'great';
+    case 'GOOD':
+      return 'good';
+    default:
+      return undefined;
+  }
+}
+
+export function renderNowComboElement(
+  sink: SpriteSink,
+  element: Lr2NowComboElement,
+  combo: number,
+  judgeAnchor: Lr2DestinationRect,
+  textures: ReadonlyMap<string, Texture>,
+  elapsedMs: number,
+  offsetX: number,
+  dst: Lr2DestinationRect,
+): void {
+  if (dst.w === 0 || dst.h === 0) {
+    return;
+  }
+  const baseTexture = textures.get(element.source.imagePath);
+  if (!baseTexture) {
+    return;
+  }
+  const divx = Math.max(1, element.source.divx);
+  const divy = Math.max(1, element.source.divy);
+  const cellWidth = element.source.w / divx;
+  const cellHeight = element.source.h / divy;
+  if (cellWidth <= 0 || cellHeight <= 0) {
+    return;
+  }
+  const display = Math.max(0, Math.trunc(combo)).toString().split('');
+  const dstWidth = dst.w;
+  const absX = judgeAnchor.x + dst.x + offsetX;
+  const absY = judgeAnchor.y + dst.y;
+  let startX = absX;
+  if (element.source.alignment === 'center') {
+    startX = absX - (dstWidth * display.length) / 2;
+  } else if (element.source.alignment === 'right') {
+    startX = absX - dstWidth * display.length;
+  }
+
+  const cycle = element.source.cycle;
+  let animRow = 0;
+  if (divy > 1 && cycle > 0) {
+    const frameMs = cycle / divy;
+    animRow = Math.floor((Math.max(0, elapsedMs) % cycle) / Math.max(1, frameMs)) % divy;
+  }
+  for (let index = 0; index < display.length; index += 1) {
+    const digit = Number.parseInt(display[index]!, 10);
+    if (!Number.isFinite(digit) || digit < 0 || digit >= divx) {
+      continue;
+    }
+    const cellTexture = createCroppedTexture(baseTexture, {
+      x: element.source.x + cellWidth * digit,
+      y: element.source.y + cellHeight * animRow,
+      w: cellWidth,
+      h: cellHeight,
+    });
+    if (!cellTexture) {
+      continue;
+    }
+    const sprite = sink.acquireSprite();
+    sprite.texture = cellTexture;
+    sprite.label = `nowcombo[digit=${digit}]`;
+    sprite.position.set(startX + dstWidth * index, absY);
+    sprite.width = dstWidth;
+    sprite.height = dst.h;
+    applyDestinationToSprite(sprite, dst);
+  }
+}
+
+/** LR2 groove gauge is drawn as 50 beads (2 % each). */
+export const LR2_GROOVE_GAUGE_UNITS = 50;
+/** GROOVE / EASY clear border — beads at or above this percentage render in the green cell. */
+export const LR2_GROOVE_GAUGE_CLEAR_ZONE_PERCENT = 80;
+
+export interface GrooveGaugeBead {
+  unitIndex: number;
+  /** Offset within the SRC's 4-cell frame: 0 = lit-red, 1 = lit-green, 2 = unlit-red, 3 = unlit-green. */
+  cellOffset: number;
+}
+
+/**
+ * Resolves the per-bead cell selection for the LR2 groove gauge, matching LR2's own cell order
+ * (`表赤,表緑,裏赤,裏緑` = lit-red, lit-green, unlit-red, unlit-green; see the LR2 default 7K skin comment in
+ * `7keys/7_LL0.csv`).
+ *
+ * - Beads `0..activeUnits-1` are lit; the rest are the unlit track.
+ * - For GROOVE / EASY, beads at or above the 80 % clear border use the green cell (the "you reached clear" cue);
+ *   below it they use the red cell.
+ * - Survival gauges (HARD / DEATH) have NO clear border in LR2 — the whole bar renders red, so the green zone is
+ *   suppressed. (LR2 reuses the single `#SRC_GROOVEGAUGE` and lets the binary pick the red cells throughout; the
+ *   red-gauge ops 42/43 signal the type.)
+ *
+ * Pure function (no Pixi binding) so the cell-selection logic is unit-tested directly.
+ */
+export function resolveGrooveGaugeBeads(percent: number, options: { survivalGauge?: boolean } = {}): GrooveGaugeBead[] {
+  const clampedPercent = Math.max(0, Math.min(100, Number.isFinite(percent) ? percent : 0));
+  const activeUnits = Math.round((clampedPercent / 100) * LR2_GROOVE_GAUGE_UNITS);
+  const clearZoneUnit = Math.round((LR2_GROOVE_GAUGE_CLEAR_ZONE_PERCENT / 100) * LR2_GROOVE_GAUGE_UNITS);
+  const beads: GrooveGaugeBead[] = [];
+  for (let unitIndex = 0; unitIndex < LR2_GROOVE_GAUGE_UNITS; unitIndex += 1) {
+    const isActive = unitIndex < activeUnits;
+    const isClearZone = !options.survivalGauge && unitIndex >= clearZoneUnit;
+    beads.push({ unitIndex, cellOffset: (isActive ? 0 : 2) + (isClearZone ? 1 : 0) });
+  }
+  return beads;
+}
+
+export function renderGrooveGaugeElement(
+  sink: SpriteSink,
+  gauge: Lr2GrooveGaugeElement,
+  percent: number,
+  textures: ReadonlyMap<string, Texture>,
+  dst: Lr2DestinationRect,
+  options: { survivalGauge?: boolean; elapsedMs?: number } = {},
+): void {
+  if (dst.w === 0 || dst.h === 0) {
+    return;
+  }
+  const baseTexture = textures.get(gauge.source.imagePath);
+  if (!baseTexture) {
+    return;
+  }
+  // LR2 spec (`docs/LR2SkinHelp.md` 8975 / 9012), translated from Japanese:
+  //
+  //   "Lay out the src cells in this order: gauge-lit red, gauge-lit green, gauge-unlit red,
+  //    gauge-unlit green. When the total cell count is a multiple of 4 and cycle > 0 it animates correctly."
+  //
+  // So `divx × divy` cells decompose into `frames = N / 4` animation frames; each frame is a contiguous group of 4
+  // cells in declaration order (active-red / active-green / inactive-red / inactive-green). The frame index advances by
+  // one every `cycle` ms relative to the SRC's `timer`. For LR2 default 7K (`divx=4, divy=1, cycle=0`) this is a single
+  // static 4-cell frame; for skins with multi-frame gauges (Quinine, etc.) the renderer cycles over time so the lit-tip
+  // "highlight" animation reaches every bead.
+  const divx = Math.max(1, gauge.source.divx);
+  const divy = Math.max(1, gauge.source.divy);
+  const totalCells = divx * divy;
+  if (totalCells < 4) {
+    return;
+  }
+  const frames = Math.max(1, Math.floor(totalCells / 4));
+  const cycleMs = Math.max(0, gauge.source.cycle);
+  const elapsed = Math.max(0, options.elapsedMs ?? 0);
+  const frameIndex = cycleMs > 0 && frames > 1 ? Math.floor(elapsed / cycleMs) % frames : 0;
+  const cellWidth = gauge.source.w / divx;
+  const cellHeight = gauge.source.h / divy;
+  if (cellWidth <= 0 || cellHeight <= 0) {
+    return;
+  }
+
+  const beads = resolveGrooveGaugeBeads(percent, { survivalGauge: options.survivalGauge });
+  for (const { unitIndex, cellOffset } of beads) {
+    const cellIndex = frameIndex * 4 + cellOffset;
+    const cellX = cellIndex % divx;
+    const cellY = Math.floor(cellIndex / divx);
+    const cellTexture = createCroppedTexture(baseTexture, {
+      x: gauge.source.x + cellWidth * cellX,
+      y: gauge.source.y + cellHeight * cellY,
+      w: cellWidth,
+      h: cellHeight,
+    });
+    if (!cellTexture) {
+      continue;
+    }
+    const sprite = sink.acquireSprite();
+    sprite.texture = cellTexture;
+    sprite.label = `gauge-bead[idx=${unitIndex},frame=${frameIndex},cell=${cellIndex}]`;
+    sprite.position.set(dst.x + gauge.addX * unitIndex, dst.y + gauge.addY * unitIndex);
+    sprite.width = dst.w;
+    sprite.height = dst.h;
+    applyDestinationToSprite(sprite, dst);
+  }
+}
+
+export function resolveJudgeSkinKind(judge: string): keyof Lr2Skin['judges'] | undefined {
+  switch (judge) {
+    case 'PERFECT':
+      return 'perfect';
+    case 'GREAT':
+      return 'great';
+    case 'GOOD':
+      return 'good';
+    case 'BAD':
+      return 'bad';
+    case 'POOR':
+      return 'poor';
+    default:
+      return undefined;
+  }
+}
+
+export function computeFullComboDurationMs(skin: Lr2Skin): number {
+  let max = 0;
+  const visit = (entry: { destination?: Lr2DestinationRect; keyframes?: Lr2DestinationRect[] }): void => {
+    const dst = entry.destination;
+    if (!dst) return;
+    if (dst.timer !== LR2_TIMER.FULL_COMBO_1P && dst.timer !== LR2_TIMER.FULL_COMBO_2P) return;
+    const frames = entry.keyframes && entry.keyframes.length > 0 ? entry.keyframes : [dst];
+    for (const frame of frames) {
+      if (Number.isFinite(frame.time) && frame.time > max) {
+        max = frame.time;
+      }
+    }
+  };
+  for (const image of skin.images) visit(image);
+  for (const number of skin.numbers) visit(number);
+  for (const text of skin.texts) visit(text);
+  for (const bargraph of skin.bargraphs) visit(bargraph);
+  for (const slider of skin.sliders) visit(slider);
+  return max > 0 ? max : 3000;
+}
+
+/**
+ * Walks the skin's elements and returns the longest keyframe `time` (in ms) attached to each LR2 key-on timer
+ * (100..117). The value is used as the lane-laser release fade duration so the decay matches the skin's authored
+ * animation length instead of a hard- coded fallback. Timers without any element default to the caller's fallback
+ * (typically `KEY_ON_FADE_OUT_MS`).
+ *
+ * Mirrors the {@link computeFullComboDurationMs} pattern: visits every keyframe-bearing element type, picks the maximum
+ * `time` per timer slot, and reuses `destination` when `keyframes` is empty so static (single-keyframe) elements still
+ * report a span.
+ */
+export function computeKeyOnFadeDurationsMs(skin: Lr2Skin): Map<number, number> {
+  // Through 2P key 7.
+  return collectMaxKeyframeTimePerTimer(skin, LR2_TIMER.KEY_ON_1P, LR2_TIMER.KEY_ON_2P + 7);
+}
+
+/**
+ * Walks the skin's elements and returns the longest keyframe `time` (in ms) attached to each LR2 bomb timer (50..69 —
+ * 1P 50..59 / 2P 60..69, per the LR2 default 7-keys layout). The playfield uses the value to retire the lane's
+ * `bombStartedAt` entry and its bomb timer once the skin's authored explosion animation has finished,
+ * instead of pinning every chart to a hard-coded "LR2 default 150 ms" cycle.
+ */
+export function computeBombDurationsMs(skin: Lr2Skin): Map<number, number> {
+  return collectMaxKeyframeTimePerTimer(skin, LR2_TIMER.BOMB_1P, LR2_TIMER.BOMB_2P + LR2_LANE_TIMER_BANK_SIZE - 1);
+}
+
+/**
+ * LR2 LN-hold-effect timers (`70..89` — 1P 70..79 / 2P 80..89). These fire while a long note is being held and stop on
+ * release; `releaseLnHoldTimer` consults the returned span to fade out any sustain-glow / hold-sparkle elements gated
+ * on the timer.
+ */
+export function computeLnHoldDurationsMs(skin: Lr2Skin): Map<number, number> {
+  return collectMaxKeyframeTimePerTimer(
+    skin,
+    LR2_TIMER.LN_HOLD_1P,
+    LR2_TIMER.LN_HOLD_2P + LR2_LANE_TIMER_BANK_SIZE - 1,
+  );
+}
+
+/**
+ * LR2 gauge-rise / gauge-max timers (`42` 1P up, `43` 2P up, `44` 1P max, `45` 2P max). The "up" timers are flash-style
+ * one-shots fired every time the gauge increases; the gameplay code retires them after the returned span via
+ * `setTimeout`. Max timers stay active for as long as the gauge sits at 100 %; they never auto- retire so this duration
+ * map is only consulted for the rise variants in practice — but we expose all four for symmetry with the bomb / FC /
+ * key-on / LN-hold helpers.
+ */
+export function computeGaugeTimerDurationsMs(skin: Lr2Skin): Map<number, number> {
+  return collectMaxKeyframeTimePerTimer(skin, LR2_TIMER.GAUGE_UP_1P, LR2_TIMER.GAUGE_MAX_2P);
+}
+
+/**
+ * Internal helper for {@link computeKeyOnFadeDurationsMs} / {@link computeBombDurationsMs}: scan every keyframe-bearing
+ * element type and report the longest `time` per timer id within the given inclusive range. Single-keyframe elements
+ * report `destination.time` so static authored placements still produce a span (otherwise the caller would never see
+ * them).
+ */
+function collectMaxKeyframeTimePerTimer(skin: Lr2Skin, minTimer: number, maxTimer: number): Map<number, number> {
+  const result = new Map<number, number>();
+  const visit = (entry: { destination?: Lr2DestinationRect; keyframes?: Lr2DestinationRect[] }): void => {
+    const dst = entry.destination;
+    if (!dst) return;
+    const t = dst.timer;
+    if (t < minTimer || t > maxTimer) return;
+    const frames = entry.keyframes && entry.keyframes.length > 0 ? entry.keyframes : [dst];
+    let span = result.get(t) ?? 0;
+    for (const frame of frames) {
+      if (Number.isFinite(frame.time) && frame.time > span) {
+        span = frame.time;
+      }
+    }
+    if (span > 0) result.set(t, span);
+  };
+  for (const image of skin.images) visit(image);
+  for (const number of skin.numbers) visit(number);
+  for (const text of skin.texts) visit(text);
+  for (const bargraph of skin.bargraphs) visit(bargraph);
+  for (const slider of skin.sliders) visit(slider);
+  return result;
+}

@@ -1,75 +1,14 @@
 import { describe, expect, it } from 'vite-plus/test';
-import type { PixiGameplayResultData } from '@be-music/player-web/scenes';
 import {
-  CLEAR_LAMP_ORDER,
-  clearLampRank,
-  mergeSongRecord,
+  courseStageRecordKey,
   parseSongRecords,
+  playRecordKey,
+  rulesetRecordKey,
+  rulesetRecords,
   serializeSongRecords,
   songRecordKey,
-  songRecordPlayFromResult,
+  toLr2RecordLamp,
 } from './song-records.ts';
-
-describe('clearLampRank', () => {
-  it('ranks lamps from NO_PLAY up to MAX', () => {
-    expect(clearLampRank('NO_PLAY')).toBe(0);
-    expect(clearLampRank('FAILED')).toBeLessThan(clearLampRank('ASSIST_EASY'));
-    expect(clearLampRank('EX_HARD')).toBeLessThan(clearLampRank('FULL_COMBO'));
-    expect(clearLampRank('MAX')).toBe(CLEAR_LAMP_ORDER.length - 1);
-  });
-});
-
-describe('mergeSongRecord', () => {
-  const play = { lamp: 'HARD' as const, exScore: 1500, maxCombo: 400, missCount: 12 };
-
-  it('starts a record from the first play', () => {
-    expect(mergeSongRecord(undefined, play)).toEqual({ ...play, playCount: 1 });
-  });
-
-  it('keeps each best independently and counts the play', () => {
-    const previous = { lamp: 'EX_HARD' as const, exScore: 1400, maxCombo: 500, missCount: 20, playCount: 3 };
-    expect(mergeSongRecord(previous, play)).toEqual({
-      lamp: 'EX_HARD',
-      exScore: 1500,
-      maxCombo: 500,
-      missCount: 12,
-      playCount: 4,
-    });
-  });
-
-  it('upgrades the lamp when the play is better', () => {
-    expect(mergeSongRecord({ lamp: 'FAILED', playCount: 1 }, play).lamp).toBe('HARD');
-    expect(mergeSongRecord({ lamp: 'HARD', playCount: 1 }, { ...play, lamp: 'FAILED' }).lamp).toBe('HARD');
-  });
-
-  it('fills fields a stored record lacks', () => {
-    expect(mergeSongRecord({ lamp: 'NORMAL' }, play)).toEqual({
-      lamp: 'HARD',
-      exScore: 1500,
-      maxCombo: 400,
-      missCount: 12,
-      playCount: 1,
-    });
-  });
-});
-
-describe('songRecordPlayFromResult', () => {
-  const score = { total: 10, perfect: 5, great: 2, good: 1, bad: 1, poor: 1, emptyPoor: 4, exScore: 12, score: 0 };
-
-  it('reads the lamp, EX score, max combo, and BAD + POOR', () => {
-    const data = { score, maxCombo: 6, cleared: true, lamp: 'EASY' } as PixiGameplayResultData;
-    expect(songRecordPlayFromResult(data)).toEqual({ lamp: 'EASY', exScore: 12, maxCombo: 6, missCount: 2 });
-  });
-
-  it('falls back to the gauge verdict without a lamp', () => {
-    expect(songRecordPlayFromResult({ score, maxCombo: 0, cleared: false } as PixiGameplayResultData).lamp).toBe(
-      'FAILED',
-    );
-    expect(songRecordPlayFromResult({ score, maxCombo: 0, cleared: true } as PixiGameplayResultData).lamp).toBe(
-      'NORMAL',
-    );
-  });
-});
 
 describe('songRecordKey', () => {
   it('prefers the chart SHA-256 and falls back to the chart path', () => {
@@ -79,12 +18,31 @@ describe('songRecordKey', () => {
   });
 });
 
-describe('parseSongRecords / serializeSongRecords', () => {
-  it('round-trips records', () => {
+describe('rulesetRecordKey / rulesetRecords', () => {
+  it('keys a chart’s or course’s record by the judge ruleset first', () => {
+    expect(rulesetRecordKey('lr2', 'sha256:abc')).toBe('lr2:sha256:abc');
+    expect(rulesetRecordKey('beatoraja', 'course:grade::a,b')).toBe('beatoraja:course:grade::a,b');
+  });
+
+  it('reads one ruleset’s records by the chart’s or course’s own key', () => {
     const records = new Map([
-      ['sha256:abc', { lamp: 'FULL_COMBO' as const, exScore: 900, maxCombo: 450, missCount: 0, playCount: 2 }],
-      ['path:x.bms', { lamp: 'FAILED' as const, playCount: 1 }],
+      ['lr2:sha256:abc', { lamp: 'FULL_COMBO' as const }],
+      ['beatoraja:sha256:abc', { lamp: 'MAX' as const }],
     ]);
+    expect(rulesetRecords(records, 'lr2').get('sha256:abc')?.lamp).toBe('FULL_COMBO');
+    expect(rulesetRecords(records, 'beatoraja').get('sha256:abc')?.lamp).toBe('MAX');
+    expect(rulesetRecords(records, 'iidx').get('sha256:abc')).toBeUndefined();
+  });
+});
+
+describe('parseSongRecords / serializeSongRecords', () => {
+  it('round-trips records of every ruleset', () => {
+    const records = new Map([
+      ['lr2:sha256:abc', { lamp: 'FULL_COMBO' as const, exScore: 900, maxCombo: 450, missCount: 0, playCount: 2 }],
+      ['beatoraja:sha256:abc', { lamp: 'MAX' as const, exScore: 910, playCount: 1 }],
+      ['iidx:path:x.bms', { lamp: 'FAILED' as const, playCount: 1 }],
+    ]);
+    expect(JSON.parse(serializeSongRecords(records)).version).toBe(3);
     expect(parseSongRecords(serializeSongRecords(records))).toEqual(records);
   });
 
@@ -92,7 +50,47 @@ describe('parseSongRecords / serializeSongRecords', () => {
     expect(parseSongRecords(null).size).toBe(0);
     expect(parseSongRecords('{not json').size).toBe(0);
     expect(parseSongRecords('[]').size).toBe(0);
-    expect(parseSongRecords(JSON.stringify({ version: 2, records: { a: { lamp: 'MAX' } } })).size).toBe(0);
+    expect(parseSongRecords(JSON.stringify({ version: 4, records: { 'lr2:a': { lamp: 'MAX' } } })).size).toBe(0);
+  });
+
+  it('drops version-3 records whose key names no judge ruleset', () => {
+    const raw = JSON.stringify({ version: 3, records: { 'sha256:abc': { lamp: 'HARD' }, 'lr2:a': { lamp: 'EASY' } } });
+    expect([...parseSongRecords(raw)]).toEqual([['lr2:a', { lamp: 'EASY' }]]);
+  });
+
+  it('reads version-2 records as LR2 records', () => {
+    const raw = JSON.stringify({
+      version: 2,
+      records: {
+        'sha256:abc': { lamp: 'EX_HARD', exScore: 10, playCount: 3 },
+        'course:grade::a,b': { lamp: 'MAX' },
+      },
+    });
+    expect(Object.fromEntries(parseSongRecords(raw))).toEqual({
+      'lr2:sha256:abc': { lamp: 'EX_HARD', exScore: 10, playCount: 3 },
+      'lr2:course:grade::a,b': { lamp: 'MAX' },
+    });
+  });
+
+  it('reads version-1 records as LR2 records, with the lamps LR2 awards', () => {
+    const raw = JSON.stringify({
+      version: 1,
+      records: {
+        max: { lamp: 'MAX' },
+        perfect: { lamp: 'PERFECT' },
+        death: { lamp: 'EX_HARD', exScore: 10 },
+        hard: { lamp: 'HARD' },
+      },
+    });
+    expect(Object.fromEntries(parseSongRecords(raw))).toEqual({
+      'lr2:max': { lamp: 'FULL_COMBO' },
+      'lr2:perfect': { lamp: 'FULL_COMBO' },
+      'lr2:death': { lamp: 'NORMAL', exScore: 10 },
+      'lr2:hard': { lamp: 'HARD' },
+    });
+    // Records written now keep their lamps as they are.
+    const current = new Map([['beatoraja:a', { lamp: 'EX_HARD' as const }]]);
+    expect(parseSongRecords(serializeSongRecords(current))).toEqual(current);
   });
 
   it('drops entries with an unknown lamp and leaves out malformed counts', () => {
@@ -103,6 +101,46 @@ describe('parseSongRecords / serializeSongRecords', () => {
         ok: { lamp: 'HARD', exScore: -1, maxCombo: 1.5, missCount: '3', playCount: 4 },
       },
     });
-    expect([...parseSongRecords(raw)]).toEqual([['ok', { lamp: 'HARD', playCount: 4 }]]);
+    expect([...parseSongRecords(raw)]).toEqual([['lr2:ok', { lamp: 'HARD', playCount: 4 }]]);
+  });
+});
+
+describe('toLr2RecordLamp', () => {
+  it('keeps LR2’s own lamps and maps the ones LR2 does not award', () => {
+    expect(
+      ['FAILED', 'EASY', 'NORMAL', 'HARD', 'FULL_COMBO', 'ASSIST_EASY'].map((lamp) => toLr2RecordLamp(lamp as never)),
+    ).toEqual(['FAILED', 'EASY', 'NORMAL', 'HARD', 'FULL_COMBO', 'ASSIST_EASY']);
+    expect(toLr2RecordLamp('MAX')).toBe('FULL_COMBO');
+    expect(toLr2RecordLamp('EX_HARD')).toBe('NORMAL');
+  });
+});
+
+describe('playRecordKey', () => {
+  const song = { chartPath: 'Songs/a/main.bms' };
+  const played = { autoPlay: false, replay: false, course: false, tempo: 1, judgeRuleset: 'lr2' as const };
+
+  it('records a played chart under its hash and the judge ruleset it ran under', () => {
+    expect(playRecordKey(song, 'abc', played)).toBe('lr2:sha256:abc');
+    expect(playRecordKey(song, undefined, played)).toBe('lr2:path:Songs/a/main.bms');
+    expect(playRecordKey(song, 'abc', { ...played, judgeRuleset: 'iidx' })).toBe('iidx:sha256:abc');
+  });
+
+  it('leaves the records alone for auto play, a replay, a course stage and another tempo', () => {
+    expect(playRecordKey(song, 'abc', { ...played, autoPlay: true })).toBeUndefined();
+    expect(playRecordKey(song, 'abc', { ...played, replay: true })).toBeUndefined();
+    expect(playRecordKey(song, 'abc', { ...played, course: true })).toBeUndefined();
+    expect(playRecordKey(song, 'abc', { ...played, tempo: 1.1 })).toBeUndefined();
+  });
+});
+
+describe('course stage records', () => {
+  const song = { chartPath: 'Songs/a/main.bms' };
+
+  it('keys an EXPERT / GRADE stage under its chart, not when auto-played, replayed or at another tempo', () => {
+    const played = { autoPlay: false, replay: false, tempo: 1, judgeRuleset: 'beatoraja' as const };
+    expect(courseStageRecordKey(song, 'abc', played)).toBe('beatoraja:sha256:abc');
+    expect(courseStageRecordKey(song, 'abc', { ...played, autoPlay: true })).toBeUndefined();
+    expect(courseStageRecordKey(song, 'abc', { ...played, replay: true })).toBeUndefined();
+    expect(courseStageRecordKey(song, 'abc', { ...played, tempo: 0.9 })).toBeUndefined();
   });
 });

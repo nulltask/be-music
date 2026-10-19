@@ -74,7 +74,7 @@ export function stepChain(chain: Chain, dt: number, options: ChainStep): void {
 }
 
 /** Kicks bead `index` with a velocity of (`vx`, `vy`) px/s — e.g. a key press striking the pendulum. */
-export function kickChain(chain: Chain, index: number, vx: number, vy: number, dt = 1 / 60): void {
+export function kickChain(chain: Chain, index: number, vx: number, vy: number, dt: number = 1 / 60): void {
   const bead = Math.max(1, Math.min(chain.count - 1, index));
   chain.px[bead] = chain.px[bead]! - vx * dt;
   chain.py[bead] = chain.py[bead]! - vy * dt;

@@ -16,7 +16,9 @@ import {
  * Everything that decides a judgment — note selection, the ruleset windows, long-note holds and tails, the HCN gauge
  * ticks, mines, auto-scratch, misses, combo, score and gauge — lives in a {@link JudgeCoreState} that only
  * {@link runJudgeCoreStep} changes. A step takes one {@link JudgeCoreInput} stamped with chart time (and the
- * millisecond domain the hold-grace windows run in) and reports what happened as {@link JudgeCoreEffect}s, in order.
+ * millisecond domain the release margins run in) and reports what happened as {@link JudgeCoreEffect}s, in order.
+ * It takes key-state input only: lanes are down exactly between their `hold` and `release`. A driver whose input
+ * reports no key releases infers them before they reach the core (`play-key-inference.ts`).
  * The core never reads a clock, never touches audio, the UI or the log, and never schedules anything: the same
  * state and the same inputs always produce the same effects. Drivers own the rest:
  *
@@ -29,8 +31,15 @@ import {
  */
 
 export * from './judge-core-types.ts';
-export { clampToReversal, maxJudgeReachSeconds, noteOwesTailMiss, toJudgeClock } from './judge-core-score.ts';
+export {
+  clampToReversal,
+  isJudgingClosed,
+  maxJudgeReachSeconds,
+  noteOwesTailMiss,
+  toJudgeClock,
+} from './judge-core-score.ts';
 export { resolveLandmineExplosionEvent } from './judge-core-advance.ts';
+export { hasPressCandidate } from './judge-core-press.ts';
 
 /** Builds the initial judge state of a play. */
 export function createJudgeCoreState(config: JudgeCoreConfig, score: JudgeCoreScore): JudgeCoreState {
@@ -54,11 +63,9 @@ export function createJudgeCoreState(config: JudgeCoreConfig, score: JudgeCoreSc
     combo: 0,
     heldChannels: new Set(),
     activeLongNotes: new Map(),
-    longHoldUntilMs: new Map(),
+    longNoteSettleMs: new Map(),
     longHoldReleaseSeconds: new Map(),
-    longNoteSuppressUntilSeconds: new Map(),
     laneHolds: new Map(),
-    keyStateInput: false,
     advancedThroughSeconds: 0,
     pendingAutoScratchLongNotes: [],
     autoScratchNotes: config.autoScratch
@@ -87,10 +94,11 @@ export function runJudgeCoreStep(state: JudgeCoreState, input: JudgeCoreInput, e
       handleLanePress(state, input.channels, input.tokens, input.nowMs, input.nowSec, emit);
       return;
     case 'hold':
-      state.keyStateInput = true;
       for (const channel of input.channels) {
         state.heldChannels.add(channel);
-        emit({ kind: 'ui', command: { kind: 'press-lane', channel } });
+        if (input.inferred !== true) {
+          emit({ kind: 'ui', command: { kind: 'press-lane', channel } });
+        }
       }
       return;
     case 'release':
@@ -219,6 +227,7 @@ function processReplayEventsUntil(
           nowSec: eventSec,
           nowMs: eventMs,
           recordSec: eventSec,
+          ...(event.inferred === true ? { inferred: true } : {}),
         },
         emit,
       );

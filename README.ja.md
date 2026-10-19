@@ -12,13 +12,15 @@ TypeScript + pnpm workspaces で構成した BMS/BMSON ツールチェーンで�
 - `@be-music/parser`: `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / JSON のパーサ
 - `@be-music/stringifier`: JSON から `.bms` / `.bmson` への文字列化
 - `@be-music/audio-renderer`: 譜面をレンダリングして `.wav` / `.aiff` を出力
-- `@be-music/player`: 再生 engine、timing、判定、score、gauge、BGA timeline、UI/audio adapter 契約を共有する core package
+- `@be-music/player`: 規則と再生 engine を共有する package。1 つのプレイループ（手動・AUTO・リプレイ）、判定、score、gauge とクリアランプ、自己ベスト、コースの実行と NONSTOP、プレイログの形式、ホストが差し込む runtime 契約
 - `@be-music/player-tui`: autoplay、keyboard play、Music Select、BGA、SEA build を扱う terminal UI と `bms-player` CLI frontend、およびプレイログ再シミュレータ `bms-playlog`
+- `@be-music/scene-model`: ライブラリの項目・一覧・プレイオプション・プレイ状態と結果・コース・効果音など、スキンの種類によらず共有する実行環境非依存のシーンモデル
 - `@be-music/lr2-skin`: Lunatic Rave 2 skin parser、asset resolver、theme loader を renderer 非依存で提供する package
 - `@be-music/beatoraja-skin`: beatoraja JSON/Lua skin parser、normalizer、theme loader を renderer 非依存で提供する package
 - `@be-music/skin-sdk`: browser player 向け be-music スキンを書くための描画フレームワーク非依存の SDK
-- `@be-music/player-web`: 選曲、built-in default / LR2 / beatoraja skin 描画、gameplay、result scene、録画を扱う browser PixiJS player core
-- `@be-music/player-web-demo`: folder / ZIP drop、LR2 / beatoraja theme、debug control、browser 再生を接続する private Vite demo
+- `@be-music/player-web`: browser の PixiJS 実行層。選曲・決定・プレイ・リザルトの各画面を、built-in・LR2・beatoraja のファミリービューが描くシーンセッションとして 1 つのホスト向け API から作る。音のサービス、譜面のコレクション、スキンの読み込み、gameplay の録画も持つ
+- `@be-music/player-web-demo`: folder / ZIP drop、LR2 / beatoraja theme、Debug Menu、browser 再生を、1 つのシーンルーターの下のサービスとして接続する private Vite demo
+- `@be-music/leaderboard-api`: Cloudflare Workers で動く private な Leaderboard API。プレイログの投稿、再シミュレーションによる検証、ランキング
 - `@be-music/editor`: CLI エディタ (インポート・編集・エクスポート)
 
 ## 必要環境
@@ -41,7 +43,7 @@ pnpm run check
 pnpm run test
 ```
 
-ツールチェーンは [Vite+](https://viteplus.dev/) (`vite-plus`) で、ルートの `vite.config.ts` に設定を集約しています。`pnpm run build` は Vite+ のタスクランナー (`vp run -r --cache build`) で各ワークスペースの `build` スクリプトを依存順に実行し、変更のない package はタスクキャッシュから再生します。ライブラリ package は各 `vite.config.ts` の `pack` ブロックから `vp pack` (tsdown) でビルドし、bundle と型定義 (`.d.ts`) をまとめて出力します。`pnpm run check` はフォーマット・lint・型チェック (Oxfmt / Oxlint / tsgolint) をワークスペース全体に対して一度に実行し、`pnpm run format` / `pnpm run lint` / `pnpm run typecheck` で個別に実行できます。各 package の `tsconfig.json` は型チェック用のプロジェクトで、型定義の出力には `tsconfig.build.json` を使います。依存関係をインストールすると、ステージされたファイルに `vp check --fix` を実行する Vite+ の pre-commit フックも登録されます。
+ツールチェーンは [Vite+](https://viteplus.dev/) (`vite-plus`) で、ルートの `vite.config.ts` に設定を集約しています。`pnpm run build` は Vite+ のタスクランナー (`vp run -r --cache build`) で各ワークスペースの `build` スクリプトを依存順に実行し、変更のない package はタスクキャッシュから再生します。ライブラリ package は各 `vite.config.ts` の `pack` ブロックから `vp pack` (tsdown) でビルドし、bundle と型定義 (`.d.ts`) をまとめて出力します。`pnpm run check` はフォーマット・lint・型チェック (Oxfmt / Oxlint / tsgolint) をワークスペース全体に対して一度に実行し、`pnpm run format` / `pnpm run lint` / `pnpm run typecheck` で個別に実行できます。各 package の `tsconfig.json` は型チェック用のプロジェクトで、型定義の出力には `tsconfig.build.json` を使います。依存関係をインストールすると、ステージされたファイルに `vp check --fix` を実行する Vite+ の pre-commit フックも登録されます。`pnpm run test:e2e` は Web デモでコースのブラウザ確認を Playwright で端から端まで実行します（数分かかるため `pnpm run test` には含めていません）。[docs/course-checklist.ja.md](docs/course-checklist.ja.md#自動実行) を参照してください。
 
 ## package ごとの release
 
@@ -64,13 +66,16 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 ## 仕様書
 
 - [仕様書トップ](docs/README.ja.md)
+- [アーキテクチャ](docs/architecture.ja.md)と[設計判断の記録](docs/adr/README.ja.md)
 - [BMS 実装仕様](docs/bms-spec.ja.md)
 - [BMSON 実装仕様](docs/bmson-spec.ja.md)
 - [Bemuse 実装仕様](docs/bemuse-spec.ja.md)
 - [Player 実装仕様](docs/player-spec.ja.md)
 - [Terminal player 実装メモ](docs/player-tui.ja.md)
 - [Browser player 実装メモ](docs/player-web.ja.md)
+- [シーンモデル（`@be-music/scene-model`）](docs/scene-model.ja.md)
 - [プレイログ（プレイ履歴）仕様](docs/playlog.ja.md)
+- [コースと段位認定](docs/course.ja.md)
 - [be-music スキンの作り方](docs/be-music-skin.ja.md)
 - [LR2 skin 実装メモ](docs/lr2-skin.ja.md)
 - [beatoraja skin 実装メモ](docs/beatoraja-skin.ja.md)
@@ -110,11 +115,19 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 
 ### player core (`@be-music/player`)
 
-- terminal と browser runtime が共有する `autoPlay()` / `manualPlay()` engine
+- terminal と browser runtime が共有する `autoPlay()` / `manualPlay()` engine。決定的な判定コアの上の 1 つのプレイループに、手動・AUTO・リプレイの判定の戦略を差し込む（[アーキテクチャ](./docs/architecture.ja.md#エンジン-判定コアと-1-つのプレイループ)）
 - lane flash、POOR BGA command、frame snapshot、pause、restart、high-speed change を流す UI / input signal bus
 - playable note、legacy long note、`#LNOBJ`、FREE ZONE、mine、invisible note の共通抽出
 - 判定幅、動的 `#EXRANKxx`、score、groove gauge、scroll distance、BGA timeline、result summary の共通意味論
-- `core/engine`、`core/bga-timeline`、`core/scroll-distance`、`core/groove-gauge`、`playable-notes`、`playlog` などの browser-safe subpath export
+- エンジンのルートと並ぶ browser-safe な入口：`signals`、`lanes`、`display`、`ruleset`、`playlog`、`records`、`course`（[Player 実装仕様 — 公開する入口](./docs/player-spec.ja.md#公開する入口)）
+- `ruleset`: ホスト・スキン・リーダーボードが共有する語彙。ゲージ、クリアランプ、BP、スコア（`ScoreSummary`、`computeScoreRate`、DJ ランク、LR2 のマネースコア）
+- `course`、`records`、`playlog`: コースの実行、NONSTOP の流れ、コースのステージの規則、判定ルールセットごとの自己ベスト、プレイログの形式とその記録・シミュレータ
+
+### scene models (`@be-music/scene-model`)
+
+- スキンの種類によらない、実行環境非依存の各画面のモデル。譜面の言葉で表したライブラリの項目（`LibraryChart`、`LibraryFolder`、`LibraryCourse`）、一覧のモデル（`reduceBrowse`、`BrowseSnapshot`）、プレイオプション、プレイ状態（`PlayState`）、プレイ結果（`PlayResult`）、コースの表示用モデル、効果音セット
+- Web 実行層、スキン SDK、LR2 と beatoraja の状態を求める関数が使う
+- [シーンモデル](docs/scene-model.ja.md) を参照
 
 ### terminal player (`@be-music/player-tui`)
 
@@ -169,13 +182,14 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - タッチ主体の端末でのタッチ操作とタッチ用 gameplay layout、縦向きステージを持つスキンの縦画面表示、スキンごとの設定
 - LR2 の select / decide / gameplay / result skin を parse して PixiJS で描画
 - beatoraja の select / decide / gameplay / result skin を parse して PixiJS で描画
-- default gameplay chrome injection を分離し、default skin 描画が LR2 renderer module に依存しない構成
+- 画面ごとに 1 つのシーンセッションが振る舞い（一覧の操作、譜面の準備、エンジン、入力、音、終わり方）をすべてのファミリーに共通に持ち、built-in・LR2・beatoraja のファミリービューは描いてインテントを返すだけ（[シーンセッションとファミリービュー](./docs/player-web.ja.md#シーンセッションとファミリービュー)）
+- 設計した入口：`@be-music/player-web/host`（`PixiSceneHost`、`createSelectScene` / `createDecideScene` / `createPlayScene` / `createResultScene`）、`/skin`、`/collection`、`/audio`、`/recording`（[公開する入口](./docs/player-web.ja.md#公開する入口)）
 - destination 補間、sprite transform、number、text、slider、bargraph を扱う共通 LR2 Pixi helper
 - destination sampling、source cell selection、text、value、slider、gauge、graph、timing visualizer、note、marker、BGA、runtime op/timer wiring を扱う共通 beatoraja Pixi helper
 - note、timing、scroll distance、BGA cue、score、result は terminal player と共通の再生意味論を使用
-- key / BGM / master を分けた compressor control 付き WebAudio preview / gameplay bus
-- BGA still / video 描画、browser-side video transcode fallback、WebM gameplay recording
-- 1 つの renderer context を所有する PixiJS scene host と scene transition 時の resource dispose
+- 選曲 BGM・効果音・ジングル・譜面のプレビュー・スキンの音を 1 つのシステム `AudioContext` で鳴らす音のサービスと、key / BGM / master を分けた compressor control 付きのプレイごとの WebAudio bus
+- BGA still / video 描画、browser-side video transcode fallback、MP4 / WebM gameplay recording
+- 1 つの renderer context を所有し、一度に 1 つの scene を表示する PixiJS scene host。demo ではシーンルーターがすべての切り替えを受け持ち、去った scene を dispose する
 - hi-speed、BGA mode/size、filter、sort、HS-FIX、lane cover、lift、auto-scratch、DP flip、random/mirror、gauge variant、skin option を扱う LR2 / beatoraja PLAY OPTION control
 
 ### editor (`@be-music/editor`)

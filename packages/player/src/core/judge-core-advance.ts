@@ -37,6 +37,7 @@ import {
   toJudgeClock,
   toJudgeUs,
   windowTablesAt,
+  isJudgingClosed,
 } from './judge-core-score.ts';
 import {
   type ActiveLongNoteState,
@@ -44,9 +45,8 @@ import {
   type JudgeCoreEffectSink,
   type JudgeCoreState,
   LANDMINE_EXPLOSION_SAMPLE_KEY,
-  LONG_NOTE_REPEAT_HOLD_GRACE_MS,
 } from './judge-core-types.ts';
-import { createLaneHoldHistory, type LaneHoldHistory, wasLaneDownAt, wasLanePressedWithin } from './lane-hold.ts';
+import { createLaneHoldHistory, type LaneHoldHistory, wasLaneDownAt } from './lane-hold.ts';
 
 /**
  * Judge-core time steps: long-note holds and tails, HCN ticks, mines, auto-scratch, misses
@@ -66,19 +66,15 @@ export function laneHoldHistory(state: JudgeCoreState, channel: string): LaneHol
 }
 
 /**
- * Whether `channel`'s key was down at `atMs`. With release events (key-state input, replays) that is read off the
- * recorded presses and releases, so it does not matter when the question is asked or in what order the driver applied
- * the inputs around `atMs`; an input at `atMs` itself comes first. Without them a press counts as held for the same
- * short grace window the long-note hold logic uses for terminal key repeat.
+ * Whether `channel`'s key was down at `atMs`, read off the recorded presses and releases, so it does not matter when
+ * the question is asked or in what order the driver applied the inputs around `atMs`; an input at `atMs` itself comes
+ * first.
  */
 function wasLaneDownAtMs(state: JudgeCoreState, channel: string, atMs: number): boolean {
   const history = state.laneHolds.get(channel);
-  if (state.keyStateInput) {
-    // A key-state hold that came without a press is only known to be down now.
-    if (history === undefined || history.spans.length === 0) return state.heldChannels.has(channel);
-    return wasLaneDownAt(history, atMs);
-  }
-  return history !== undefined && wasLanePressedWithin(history, atMs - LONG_NOTE_REPEAT_HOLD_GRACE_MS, atMs);
+  // A key-state hold that came without a press is only known to be down now.
+  if (history === undefined || history.spans.length === 0) return state.heldChannels.has(channel);
+  return wasLaneDownAt(history, atMs);
 }
 
 /** The explosion sample event of a mine, or `undefined` when the chart has no `#WAV00`. */
@@ -106,6 +102,9 @@ function detonateLandmine(
     return;
   }
   const { config } = state;
+  if (isJudgingClosed(state)) {
+    return;
+  }
   const landmineGaugeEffect = resolveLandmineGaugeEffect(landmine.event, config.idBase, config.sourceFormat);
   const landmineExplosionEvent = resolveLandmineExplosionEvent(landmine.event, config.wavResources);
   if (landmineExplosionEvent) {
@@ -380,6 +379,9 @@ function startAutoScratchNote(
 }
 
 function applyAutoPerfect(state: JudgeCoreState, channel: string, seconds: number, emit: JudgeCoreEffectSink): void {
+  if (isJudgingClosed(state)) {
+    return;
+  }
   applyJudgeToSummary(state.summary, 'PERFECT', state.scoreTracker);
   applyGaugeJudge(state, seconds, 'PERFECT', emit);
   emit({ kind: 'poor-bga', action: 'clear', seconds });
@@ -458,6 +460,9 @@ function applyExpiredScorableJudgements(
     if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
       note.visibleUntilBeat = note.endBeat;
     }
+    if (isJudgingClosed(state)) {
+      continue;
+    }
     applyJudgeToSummary(state.summary, 'POOR', state.scoreTracker);
     applyGaugeJudge(state, referenceSeconds, 'POOR', emit, 'miss');
     emit({ kind: 'poor-bga', action: 'trigger', seconds: referenceSeconds });
@@ -520,7 +525,7 @@ function finalizeActiveLongNote(
     passing.tailGood = true;
   }
   state.activeLongNotes.delete(channel);
-  state.longHoldUntilMs.delete(channel);
+  state.longNoteSettleMs.delete(channel);
   state.longHoldReleaseSeconds.delete(channel);
   if (passing !== undefined) {
     setHcnGaining(state, channel, toJudgeUs(atSeconds), emit);
@@ -585,10 +590,6 @@ export function setHcnGaining(state: JudgeCoreState, channel: string, atUs: numb
 }
 
 function isLaneDown(state: JudgeCoreState, channel: string): boolean {
-  if (!state.keyStateInput) {
-    // Without release events a key is only known to be down while the long note it holds is unreleased.
-    return state.activeLongNotes.has(channel);
-  }
   return (state.laneHolds.get(channel)?.activeTokens.size ?? 0) > 0;
 }
 
@@ -664,12 +665,6 @@ export function advanceJudgeState(
 ): void {
   const { config } = state;
   state.advancedThroughSeconds = Math.max(state.advancedThroughSeconds, nowSec);
-  for (const channel of state.heldChannels) {
-    if (!state.activeLongNotes.has(channel)) {
-      continue;
-    }
-    state.longHoldUntilMs.set(channel, nowMs + LONG_NOTE_REPEAT_HOLD_GRACE_MS);
-  }
 
   // Holds are judged on the judge clock: past an LR2 reversal it is the mirrored `t' = 2R - now`, which never reaches
   // a tail beyond R — a hold spanning the reversal stays open while held and BADs on release, as in LR2
@@ -679,15 +674,16 @@ export function advanceJudgeState(
   // Tails reached at one instant settle in channel order, the tie-break the play-log simulator uses.
   const holds = [...state.activeLongNotes.entries()].sort(([left], [right]) => compareJudgeChannels(left, right));
   for (const [channel, hold] of holds) {
-    const holdUntilMs = state.longHoldUntilMs.get(channel);
-    const isHolding = holdUntilMs !== undefined && nowMs <= holdUntilMs;
+    // A long note is held while its lane is down, and while a let-go one waits out the ruleset's release margin.
+    const settleMs = state.heldChannels.has(channel) ? undefined : state.longNoteSettleMs.get(channel);
+    const isHolding = state.heldChannels.has(channel) || (settleMs !== undefined && nowMs <= settleMs);
     // The tail is judged against the release instant when there was one — a frame can be hundreds of chart
     // milliseconds wide at high `speed`, and quantizing to it would turn a clean release into a GOOD.
     const releaseSeconds = state.longHoldReleaseSeconds.get(channel);
     const tailJudgeSeconds = releaseSeconds === undefined ? judgeSec : toJudgeClock(config, releaseSeconds);
     // When the tail resolves on the true clock (the release instant, or this step).
     const tailAtSeconds = releaseSeconds ?? nowSec;
-    if (hold.mode === 1 && holdUntilMs !== undefined && nowMs > holdUntilMs && tailJudgeSeconds < hold.endSeconds) {
+    if (hold.mode === 1 && !isHolding && tailJudgeSeconds < hold.endSeconds) {
       if (!hold.audioStopped) {
         stopLongNoteSound(hold, channel, nowSec, 'release', emit);
       }
@@ -755,7 +751,7 @@ export function advanceJudgeState(
       continue;
     }
 
-    if (isChargeLongNoteMode(hold.mode) && holdUntilMs !== undefined && nowMs > holdUntilMs) {
+    if (isChargeLongNoteMode(hold.mode) && !isHolding) {
       if (!hold.audioStopped) {
         stopLongNoteSound(hold, channel, nowSec, 'release', emit);
       }
@@ -776,12 +772,6 @@ export function advanceJudgeState(
   }
 
   advanceHcnPassing(state, toJudgeUs(nowSec), emit);
-
-  for (const [channel, suppressUntil] of state.longNoteSuppressUntilSeconds.entries()) {
-    if (nowSec >= suppressUntil) {
-      state.longNoteSuppressUntilSeconds.delete(channel);
-    }
-  }
 
   // Clamped to the reversal: notes whose miss deadline falls before it are still missed on time, while everything past
   // it stays unjudged forever — matching LR2's frozen judge pump.
@@ -809,9 +799,9 @@ export function nextTimedJudgmentUs(state: JudgeCoreState, afterUs: number): num
     }
   };
   for (const [channel, hold] of state.activeLongNotes) {
-    const holdUntilMs = state.longHoldUntilMs.get(channel);
-    if (!state.heldChannels.has(channel) && holdUntilMs !== undefined && Number.isFinite(holdUntilMs)) {
-      consider(toJudgeUs(holdUntilMs / config.judgeMsPerChartSecond));
+    const settleMs = state.longNoteSettleMs.get(channel);
+    if (!state.heldChannels.has(channel) && settleMs !== undefined && Number.isFinite(settleMs)) {
+      consider(toJudgeUs(settleMs / config.judgeMsPerChartSecond));
     }
     if (toJudgeUs(hold.endSeconds) >= reversalUs) {
       // The mirrored judge clock never reaches a tail past the LR2 reversal.
@@ -876,6 +866,10 @@ export function nextTimedJudgmentUs(state: JudgeCoreState, afterUs: number): num
  */
 export function finishJudgeState(state: JudgeCoreState, totalSeconds: number, emit: JudgeCoreEffectSink): void {
   const { config } = state;
+  if (isJudgingClosed(state)) {
+    // A play that ended on failure leaves the rest of the chart unjudged; no end-of-play rule applies.
+    return;
+  }
   const { ruleset, reversalSeconds } = config;
   // Settle every timed judgment still pending — misses, tails, AUTO SCRATCH, mines, Hell Charge ticks — each at its
   // own instant, as the play-log simulator does when its clock runs out.

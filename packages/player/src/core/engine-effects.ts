@@ -53,7 +53,7 @@ export function createJudgeEffectHandler(host: JudgeEffectHost): JudgeCoreEffect
   return (effect) => {
     switch (effect.kind) {
       case 'record-input':
-        playlogRecorder?.recordInput(effect.action, effect.seconds, effect.tokens, effect.channels);
+        playlogRecorder?.recordInput(effect.action, effect.seconds, effect.tokens, effect.channels, effect.inferred);
         return;
       case 'record-empty-poor':
         playlogRecorder?.recordEmptyPoor();

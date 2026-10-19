@@ -4,9 +4,10 @@ import {
   IIDX_RANK_LABELS,
   type IidxRankLabel,
   type PlaylogRulesetId,
-} from '@be-music/player/playlog';
+} from '@be-music/player/ruleset';
 import type { Database } from '../db/client.ts';
-import { bestScore, chart, score, scoreResult, user } from '../db/schema.ts';
+import { courseFilterConditions, type CourseRankingFilter } from '../courses/ranking.ts';
+import { bestScore, chart, courseBestScore, courseScore, score, scoreResult, user } from '../db/schema.ts';
 import { filterConditions, type RankingFilter } from '../ranking.ts';
 import { RULESET_IDS } from '../rulesets.ts';
 import { djLevel, LAMP_STYLES } from './format.ts';
@@ -99,6 +100,41 @@ export async function loadChartStats(db: Database, filter: RankingFilter): Promi
     players: plays?.players ?? 0,
     firstPlayedAt: epochMs(plays?.first),
     lastPlayedAt: epochMs(plays?.last),
+    lamps: lampDistribution(lampRows),
+  };
+}
+
+/** A course's run counts and lamp spread, for the players its ranking shows, as {@link loadChartStats} for a chart. */
+export async function loadCourseStats(db: Database, filter: CourseRankingFilter): Promise<ChartStats> {
+  const runConditions: SQL[] = [
+    eq(courseScore.courseFingerprint, filter.courseFingerprint),
+    eq(courseScore.assisted, filter.assisted),
+    eq(courseScore.hidden, false),
+  ];
+  if (!filter.includeAnonymous) runConditions.push(eq(user.isAnonymous, false));
+  const [[runs], lampRows] = await Promise.all([
+    db
+      .select({
+        plays: count(),
+        players: countDistinct(courseScore.userId),
+        first: min(courseScore.createdAt),
+        last: max(courseScore.createdAt),
+      })
+      .from(courseScore)
+      .innerJoin(user, eq(user.id, courseScore.userId))
+      .where(and(...runConditions)),
+    db
+      .select({ lamp: courseBestScore.bestLamp, count: count() })
+      .from(courseBestScore)
+      .innerJoin(user, eq(user.id, courseBestScore.userId))
+      .where(and(...courseFilterConditions(filter)))
+      .groupBy(courseBestScore.bestLamp),
+  ]);
+  return {
+    plays: runs?.plays ?? 0,
+    players: runs?.players ?? 0,
+    firstPlayedAt: epochMs(runs?.first),
+    lastPlayedAt: epochMs(runs?.last),
     lamps: lampDistribution(lampRows),
   };
 }

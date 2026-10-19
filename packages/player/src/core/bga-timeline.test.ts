@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
+import { buildBgaTimelines } from '@be-music/chart';
 import { createEmptyJson } from '@be-music/json';
-import { buildBgaTimelines, pickActiveBgaCue, pickActiveBgaKey } from './bga-timeline.ts';
+import { pickActiveBgaCue, pickActiveBgaKey } from './bga-timeline.ts';
 
 const resolver = {
   eventToSeconds: (event: { measure: number }): number => event.measure,

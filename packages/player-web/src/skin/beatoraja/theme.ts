@@ -4,7 +4,14 @@
 // up beatoraja themes through a parallel surface. The parser pipeline lives in `@be-music/beatoraja-skin`; this file
 // only wires the dropped-File array up to that pipeline and doesn't open any PixiJS resources.
 
-import { asLoadedBytes, discoverBeatorajaTheme, loadAssetBytes, readFilesIntoBytesMap } from '@be-music/beatoraja-skin';
+import {
+  asLoadedBytes,
+  discoverBeatorajaTheme,
+  loadAssetBytes,
+  pickBeatorajaPlaySkinVariant,
+  readFilesIntoBytesMap,
+} from '@be-music/beatoraja-skin';
+import { pickBeatorajaThemeBgmPaths } from '@be-music/beatoraja-skin/scene';
 import type {
   BeatorajaPlaySkinMap,
   BeatorajaPlayVariant,
@@ -91,7 +98,7 @@ export function summarizeBeatorajaPlaySkins(playSkins: BeatorajaPlaySkinMap, sep
 /**
  * Play variants the renderer is willing to mount — every variant beatoraja themes author, including the 24-key
  * keyboard modes. Charts reach those through the extended `1A..1O` / `2A..2O` lane channels (`ChartPlayVariant`
- * `'24'` / `'48'`), and the runtime adapter addresses their lanes via the `1000`-block timer bases upstream's
+ * `'24'` / `'48'`), and the play bridge addresses their lanes via the `1000`-block timer bases upstream's
  * `play24main.lua` uses.
  *
  * If the dropped theme doesn't ship the variant a chart needs, {@link pickBeatorajaPlayableSkinVariant} chains
@@ -123,25 +130,6 @@ export function pickBeatorajaPlayableVariant(chart: {
 }
 
 /**
- * Per-variant fallback chain limited to {@link BEATORAJA_PLAYABLE_VARIANTS}. When the user's theme doesn't
- * ship the desired variant (very common — many themes only author the 7-keys variant and let smaller charts
- * re-use it), this picks the closest playable substitute. Mirrors {@link pickBeatorajaPlaySkin}'s fallback
- * ordering. The keyboard modes prefer each other before falling back to the IIDX chains, because a 24-lane chart
- * mounted on a 7-key skin renders its extra lanes through the host's fallback playfield.
- *
- * Returns `undefined` when the theme has no playable variant at all.
- */
-const PLAYABLE_FALLBACKS: Record<BeatorajaPlayableVariant, ReadonlyArray<BeatorajaPlayableVariant>> = {
-  '7': ['7', '14', '5', '10', '9', '24', '24d'],
-  '5': ['5', '7', '14', '10', '9', '24', '24d'],
-  '14': ['14', '7', '10', '5', '9', '24d', '24'],
-  '10': ['10', '14', '7', '5', '9', '24d', '24'],
-  '9': ['9', '7', '14', '5', '10', '24', '24d'],
-  '24': ['24', '24d', '9', '7', '14', '5', '10'],
-  '24d': ['24d', '24', '9', '14', '7', '10', '5'],
-};
-
-/**
  * Beatoraja play-skin variant → `ChartPlayVariant` (the engine / lane-layout vocabulary). The two spellings differ
  * only for the keyboard DP mode: beatoraja names its skin `'24d'` (24 keys, double), while the chart classifier
  * reports the total lane count as `'48'`.
@@ -150,14 +138,17 @@ export function chartPlayVariantForBeatorajaVariant(variant: BeatorajaPlayableVa
   return variant === '24d' ? '48' : variant;
 }
 
+/**
+ * The variant whose skin plays a `desired` chart: `desired` when the theme ships it, otherwise the closest substitute
+ * down the fallback list of `pickBeatorajaPlaySkinVariant` (`@be-music/beatoraja-skin`), which this calls. Many themes
+ * ship only the 7-keys variant and let the other charts re-use it. Returns `undefined` when the theme has no play skin
+ * at all.
+ */
 export function pickBeatorajaPlayableSkinVariant(
   playSkins: BeatorajaPlaySkinMap,
   desired: BeatorajaPlayableVariant,
 ): BeatorajaPlayableVariant | undefined {
-  for (const v of PLAYABLE_FALLBACKS[desired]) {
-    if (playSkins[v] !== undefined) return v;
-  }
-  return undefined;
+  return pickBeatorajaPlaySkinVariant(playSkins, desired);
 }
 
 export type {
@@ -182,15 +173,19 @@ export interface BeatorajaThemeBgm {
   fail?: Uint8Array;
   /** Generic result jingle — `result.wav`. Used when neither `clear` nor `fail` matched the outcome. */
   result?: Uint8Array;
+  /**
+   * Course-result jingle for a cleared course — `course_clear.wav` (beatoraja `SystemSoundManager.COURSE_CLEAR`).
+   * beatoraja falls back to the {@link clear} one without it.
+   */
+  courseClear?: Uint8Array;
+  /** Course-result jingle for a failed course — `course_fail.wav`, falling back to {@link fail}. */
+  courseFail?: Uint8Array;
 }
-
-const BGM_AUDIO_EXTENSIONS = ['.wav', '.ogg', '.mp3', '.flac'] as const;
 
 /**
  * Scan a beatoraja theme bundle for BGM files. The lookup is heuristic — beatoraja's spec doesn't
- * pin BGM to a fixed path, so we search every entry in `bundle.files` for a basename matching one
- * of the conventional names (`decide`, `clear`, `fail`, `result`) followed by a recognized audio
- * extension. The first match wins per slot; subsequent matches are ignored.
+ * pin BGM to a fixed path, so the file stems are matched against the conventional names (see
+ * `pickBeatorajaThemeBgmPaths` in `@be-music/beatoraja-skin/scene`).
  *
  * Returns synchronously when every matched entry was eagerly loaded. When some entries are
  * deferred (lazy file readers), the helper awaits each `loadAssetBytes` call serially — each BGM
@@ -198,42 +193,11 @@ const BGM_AUDIO_EXTENSIONS = ['.wav', '.ogg', '.mp3', '.flac'] as const;
  * concurrent read storm on the dropped-file IO layer.
  */
 export async function findBeatorajaThemeBgm(bundle: BeatorajaThemeBundle): Promise<BeatorajaThemeBgm> {
-  // Track only the FIRST match per slot. The bundle is iterated in `Map` insertion order, which
-  // gives a stable result on re-runs.
-  const slots: Record<keyof BeatorajaThemeBgm, string | undefined> = {
-    decide: undefined,
-    clear: undefined,
-    fail: undefined,
-    result: undefined,
-  };
-  for (const path of bundle.files.keys()) {
-    const lower = path.toLowerCase();
-    if (!BGM_AUDIO_EXTENSIONS.some((ext) => lower.endsWith(ext))) continue;
-    // Match on the file's basename — `sound/decide.wav` and `<theme-root>/decide.wav` and
-    // `LR2files/Sound/<theme>/decide.wav` all count. Stricter matching (e.g. requiring a
-    // `sound/` prefix) would miss themes that use unusual layouts.
-    const slash = lower.lastIndexOf('/');
-    const base = slash >= 0 ? lower.slice(slash + 1) : lower;
-    // Strip the extension before comparing to the slot name. `decide.wav` → `decide`.
-    const dot = base.lastIndexOf('.');
-    const stem = dot >= 0 ? base.slice(0, dot) : base;
-    // Match exact stem first (most precise), then fall back to substring match (`decide_v2`,
-    // `clear_loop`, etc.). The exact match wins via the early `slots[k] === undefined` gate.
-    for (const slot of ['decide', 'clear', 'fail', 'result'] as const) {
-      if (slots[slot] !== undefined) continue;
-      if (stem === slot || stem.includes(slot)) {
-        slots[slot] = path;
-        break;
-      }
-    }
-  }
   const out: BeatorajaThemeBgm = {};
-  for (const slot of ['decide', 'clear', 'fail', 'result'] as const) {
-    const path = slots[slot];
-    if (path === undefined) continue;
+  for (const [slot, path] of Object.entries(pickBeatorajaThemeBgmPaths(bundle.files.keys()))) {
     const entry = bundle.files.get(path);
     const bytes = asLoadedBytes(entry) ?? (await loadAssetBytes(entry));
-    if (bytes !== undefined) out[slot] = bytes;
+    if (bytes !== undefined) out[slot as keyof BeatorajaThemeBgm] = bytes;
   }
   return out;
 }

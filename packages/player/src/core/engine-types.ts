@@ -1,18 +1,18 @@
-import { type RandomDraws } from '@be-music/chart';
+import { type ChartPlayVariant, type RandomDraws } from '@be-music/chart';
 import type { LogEntry } from '@be-music/utils/log';
 import { type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { type PlayerStateSignals } from '../state-signals.ts';
-import { type ChartPlayVariant, type LaneBinding } from './lane-layout.ts';
+import { type LaneBinding } from './lane-layout.ts';
 import { type ImageResizeAlgorithm } from '../image-resize-algorithm.ts';
 import { type TuiNoteHeight } from './ui-options.ts';
 import { type AudioSinkClockState } from '../audio-sink.ts';
 import { type PlayerGaugeSummary, type PlayerUiSignalBus } from './ui-signal-bus.ts';
 import { type PlayerInputSignalBus } from './input-signal-bus.ts';
-import { type GrooveGaugeType } from './groove-gauge.ts';
-import { type JudgeWindowRuleset } from './judge-window.ts';
+import type { GaugeType } from '../ruleset/gauge-type.ts';
 import { type LongNoteStyle, type PlaylogRulesetId, type RulesetWindowTables } from '../ruleset/index.ts';
 import { type PlaylogRecordingOptions } from '../playlog/recorder.ts';
-import type { BeMusicPlaylog, PlaylogInputEvent } from '../playlog/format.ts';
+import type { BeMusicPlaylog, PlaylogCourseStage, PlaylogInputEvent } from '../playlog/format.ts';
+import type { PlaylogTempoChange } from '../playlog/view.ts';
 import { type PreparedPlaybackChartData } from './bootstrap.ts';
 
 /**
@@ -31,6 +31,14 @@ export interface PlayerUiRuntime {
 export interface PlayerInputRuntime {
   start: () => void;
   stop: () => void;
+  /**
+   * Whether the input reports its key releases (`kitty-state` releases), declared before the play starts. `true`: a
+   * manual play judges it as key-state input from its first key, so even its first press is judged as it comes, with
+   * no inferred hold. Absent (or `false`): the engine detects it, inferring when each key came up
+   * (`play-key-inference.ts`) until the first `kitty-state` command arrives. A browser always reports releases; a
+   * terminal does only under the kitty keyboard protocol (or Windows' win32-input-mode).
+   */
+  reportsKeyReleases?: boolean;
 }
 
 export interface CreatePlayerUiRuntimeContext {
@@ -75,16 +83,16 @@ export interface PlayerPlaySettings {
    * active ruleset's own line-up — `'GROOVE'` is beatoraja's `NORMAL`, `'DEATH'` is its `HAZARD`, and so on.
    * Defaults to `recordPlaylog.gauge`, then `'GROOVE'`. The play log records the gauge the play ran on.
    */
-  gauge?: GrooveGaugeType;
+  gauge?: GaugeType;
   /**
-   * Judge-window ruleset for manual play: `'lr2'` (default — the engine's LR2-aligned windows), `'beatoraja'`
-   * (SEVENKEYS windows scaled by beatoraja's judgerank), or `'iidx'` (fixed ±16.67/±33.33/±116.67/±250 ms).
-   * Only the WINDOW WIDTHS switch — note selection, empty-POOR, long-note mechanics, and the gauge stay on the
-   * engine's LR2-aligned semantics (the playlog simulators are the full per-ruleset reproduction). Dynamic
-   * `#EXRANKxx` changes are an LR2 concept and only apply under `'lr2'`. Recorded into the playlog
-   * (`play.judgeRuleset`) so replays re-apply the same windows.
+   * The compat ruleset the play is judged under: `'lr2'` (default), `'beatoraja'` or `'iidx'`. It owns every judge
+   * rule — the windows (beatoraja's SEVENKEYS windows scaled by its judgerank, IIDX's fixed ±16.67 / ±33.33 /
+   * ±116.67 / ±250 ms), which note a press resolves against, the long-note style, the empty-POOR rule, mines, the gauge
+   * line-up and its curve, and the score — and the play-log simulator plays by the same tables. Dynamic `#EXRANKxx`
+   * changes are an LR2 concept and only apply under `'lr2'`. Recorded into the play log (`play.judgeRuleset`) so
+   * replays and re-simulations judge under the same ruleset.
    */
-  judgeRuleset?: JudgeWindowRuleset;
+  judgeRuleset?: PlaylogRulesetId;
   /**
    * The `#RANDOM` / `#SWITCH` outcomes of this play (`resolvePlayChart`, or `drawRandomOutcomes` from
    * `@be-music/chart`). With a chart the host already resolved, these are the draws it was resolved with and only feed
@@ -114,6 +122,32 @@ export interface PlayerPlaySettings {
    * which long-note notation the chart uses.
    */
   playVariant?: ChartPlayVariant;
+  /**
+   * End the play the moment a survival gauge empties, as LR2 and beatoraja do: nothing after the judgment that emptied
+   * it counts, and the play stops there. Default `true`; `false` keeps judging to the end of the chart with the gauge
+   * dead (`failedMidPlay`). Recorded into the play log (`play.endOnFailure`) so re-simulations stop at the same point.
+   */
+  endOnFailure?: boolean;
+  /**
+   * This play is one stage of a course: the stage runs on the ruleset's course gauge under the course's judge
+   * constraint, starting from the state the previous stage left (`carryIn`; absent for the first stage). Recorded into
+   * the play log (`play.course`), so the stage replays on its own.
+   */
+  course?: PlaylogCourseStage;
+  /**
+   * The judge rank changes of a stitched LR2 NONSTOP chart's later stages (`NonstopStitchMap.stageRanks` from
+   * `@be-music/player/course`), in chart seconds: from each change on, the windows of that stage's `#RANK`. Applied under
+   * the LR2 ruleset only (as `#EXRANKxx`) and recorded into the play log (`chart.judgeRank.stageRanks`), so a replay
+   * and a re-simulation judge with them.
+   */
+  stageRanks?: ReadonlyArray<PlayerStageRank>;
+}
+
+/** One judge rank change of {@link PlayerPlaySettings.stageRanks}. */
+export interface PlayerStageRank {
+  seconds: number;
+  rank: number;
+  table: 'chart' | 'lr2-nonstop';
 }
 
 /**
@@ -162,17 +196,24 @@ export interface PlayerPlayRuntime {
   createAudioSession?: (context: CreateAudioSessionContext) => Promise<AudioSession | undefined>;
   signal?: AbortSignal;
   /**
-   * Keeps a manual play open after its chart is over, so the player's keys still light the lanes (and the chart's
-   * remaining background sounds still play) while the host shows its outro. When the chart is over — every note judged
-   * and the judge windows passed — `onSettled` runs once; the play then carries on until `signal` aborts, and only then
-   * ends normally (its summary and play log as usual; aborting this signal is not an interrupt). Without it a play ends
-   * as soon as its chart is over. Auto play ignores it.
+   * Keeps a play open after its chart is over, so the player's keys still light the lanes (and the chart's remaining
+   * background sounds still play) while the host shows its outro. When the chart is over — every note judged and the
+   * judge windows passed — `onSettled` runs once; the play then carries on until `signal` aborts, and only then ends
+   * normally (its summary and play log as usual; aborting this signal is not an interrupt). Without it a play ends as
+   * soon as its chart is over. Manual, replay and AUTO play alike.
    */
   holdAfterChart?: { signal: AbortSignal; onSettled?: () => void };
   audioBaseDir?: string;
   onLoadProgress?: (progress: PlayerLoadProgress) => void;
   onLoadComplete?: () => void;
   onHighSpeedChange?: (highSpeed: number) => void;
+  /**
+   * Called when the play tempo changes during the play (a `{ kind: 'tempo' }` input command, or a replay following
+   * {@link PlayerPlayRecording.replayTempoChanges}), with the new tempo and the chart second it took effect at. Chart time
+   * stays continuous across the change and runs at the new tempo from then on; a host with its own clock follows it
+   * from that chart second.
+   */
+  onTempoChange?: (change: PlayerTempoChange) => void;
   onResolvedChart?: (json: BeMusicJson) => void;
   /**
    * Called once, before playback starts, with the ruleset the play is judged under — after `judgeRuleset`,
@@ -266,9 +307,24 @@ export interface PlayerPlayRecording {
    * is the recorded one), so replaying a log against the same resolved chart reproduces the original judgments.
    * While a replay is active, live lane / kitty input commands are ignored; pause, high-speed, and interrupt
    * commands keep working. The caller is responsible for mounting the SAME resolved chart the log was recorded
-   * against (`preparedChart`, or a chart remapped to the log's note arrangement).
+   * against (`preparedChart`, or a chart remapped to the log's note arrangement). `autoPlay` has no inputs to
+   * re-drive, but a replay of an AUTO-played log passes its (empty) inputs too: either way the play is a replay, so
+   * its `speed` and tempo changes only set how fast it is re-driven and a re-recorded log carries neither.
    */
   replayInputs?: readonly PlaylogInputEvent[];
+  /**
+   * The tempo changes a replay follows (`play.tempoChanges` of its log, in chart time), on top of `speed` as the tempo
+   * at the start (`play.tempo`). Each takes effect once the replay's chart time reaches it, as a live `{ kind: 'tempo' }`
+   * command would. Read only in a replay ({@link replayInputs} set), by `manualPlay` and `autoPlay` alike; it changes no
+   * judgment.
+   */
+  replayTempoChanges?: readonly PlaylogTempoChange[];
+  /**
+   * Where the replayed play was aborted (`play.abortedAtUs` of a log with `play.aborted`), in chart microseconds: the
+   * replay judges up to it and stops there, as an ESC, as the play-log simulators stop there, instead of missing the
+   * rest of the chart. Read only in a replay ({@link replayInputs} set).
+   */
+  replayAbortedAtUs?: number;
 }
 
 /**
@@ -277,6 +333,14 @@ export interface PlayerPlayRecording {
  */
 export interface PlayerOptions
   extends PlayerPlaySettings, PlayerPlayRuntime, PlayerPlayTuning, PlayerPlayDebug, PlayerPlayRecording {}
+
+/** A tempo change during a play; see {@link PlayerOptions.onTempoChange}. */
+export interface PlayerTempoChange {
+  /** The new tempo (chart seconds per clock second). */
+  tempo: number;
+  /** The chart second the change took effect at. */
+  seconds: number;
+}
 
 /** The judging setup a play resolved to; see {@link PlayerOptions.onRulesetResolved}. */
 export interface PlayerRulesetInfo {
@@ -315,11 +379,10 @@ export interface PlayerSummary {
   emptyPoor: number;
   exScore: number;
   score: number;
-  gauge?: PlayerGrooveGaugeSummary;
+  gauge?: PlayerGaugeSummary;
+  /** For a course stage: the course-wide combo running now and the course-wide max combo (carried across stages). */
+  course?: { combo: number; maxCombo: number };
 }
-
-/** @see {@link PlayerGaugeSummary} — the canonical declaration lives beside the UI frame payload. */
-export type PlayerGrooveGaugeSummary = PlayerGaugeSummary;
 
 export interface PlayerLoadProgress {
   ratio: number;
@@ -378,6 +441,12 @@ export interface AudioSession {
   getActiveAudioVoiceCount?: () => number;
   triggerEvent?: (event: BeMusicEvent) => void;
   stopChannel?: (channel: string) => void;
+  /**
+   * The play tempo changed during the play (see {@link PlayerOptions.onTempoChange}): samples started from now on, and
+   * the ones still playing, follow the new tempo as far as the backend can. The engine's clock re-anchors itself, so a
+   * backend without it keeps playing at the tempo it started with.
+   */
+  setTempo?: (tempo: number) => void;
 }
 
 /**

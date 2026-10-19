@@ -1,6 +1,5 @@
 import type { RenderResult } from '@be-music/audio-renderer';
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
-import type { RandomPatternSelection } from '@be-music/player';
 
 export const PACKAGE_NAMES = [
   'utils',
@@ -11,8 +10,10 @@ export const PACKAGE_NAMES = [
   'editor',
   'audio-renderer',
   'player',
+  'scene-model',
   'player-tui',
   'lr2-skin',
+  'beatoraja-skin',
   'skin-sdk',
   'player-web',
 ] as const;
@@ -109,10 +110,7 @@ export interface BenchFixtures {
   eventB: BeMusicEvent;
   fractionItems: ReadonlyArray<{ value: number }>;
   fractionValues: ReadonlyArray<number>;
-  randomPatterns: ReadonlyArray<RandomPatternSelection>;
   sampleRenderResult: RenderResult;
-  playableRenderResult: RenderResult;
-  bgmRenderResult: RenderResult;
   paths: {
     bmsPath: string;
     bmsonPath: string;

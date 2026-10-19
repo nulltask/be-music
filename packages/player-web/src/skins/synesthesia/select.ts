@@ -52,14 +52,18 @@ import {
   audioDrive,
   type BeMusicAudioFrame,
   type BeMusicSelectLayout,
-  type BrowserBrowseEntry,
-  type BrowserSongEntry,
+  type LibraryEntry,
+  type LibraryChart,
+  describeCourseCard,
   formatPlayVariantLabel,
   resolveSongStats,
   hash01,
   resolveSongRowFacts,
   stageProgress,
   selectListRows,
+  browseEntryBadge,
+  browseEntryCount,
+  browseEntryTitle,
 } from '@be-music/skin-sdk';
 import {
   addHitArea,
@@ -83,6 +87,11 @@ const PORTRAIT_CARD = { x: 12, y: 52, w: 456, h: 248 } as const;
 const ROW_BPM_W = 76;
 const ROW_LENGTH_W = 30;
 const ROW_NOTES_W = 84;
+/**
+ * The widest a folder or course row's count may run (`12 charts`, `4 stages · 1 missing`): such a row has no fact
+ * columns, so its count takes what it needs up to this and the title gets the rest.
+ */
+const ROW_COUNT_MAX_W = 150;
 const SLIDE_MS = 320;
 const OUTRO_MS = 700;
 const INTRO_STAGGER_MS = 45;
@@ -147,7 +156,7 @@ function labelStyle(fill: number = SYN_DIM): SkinTextOptions {
  */
 function drawJudgeRank(
   addText: (text: string, x: number, y: number, options?: SkinTextOptions) => Container,
-  song: BrowserSongEntry | undefined,
+  song: LibraryChart | undefined,
   left: number,
   centerY: number,
 ): void {
@@ -304,7 +313,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
 
   public tick(
     nowMs: number,
-    focusedSong: BrowserSongEntry | undefined,
+    focusedSong: LibraryChart | undefined,
     launchAt?: number,
     audio?: BeMusicAudioFrame,
   ): void {
@@ -591,8 +600,13 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const addText = (text: string, x: number, y: number, options: SkinTextOptions = {}) =>
       addSkinText(layer, text, x, y, options);
 
-    const songTitle = song?.title ?? 'No chart selected';
-    const songArtist = song?.artist || song?.subtitle || '';
+    // A focused course takes the song's place: its name, then its kind and stage count.
+    const course =
+      song === undefined && frame.focusedCourse !== undefined
+        ? describeCourseCard(frame.focusedCourse, frame.courseRecord?.(frame.focusedCourse))
+        : undefined;
+    const songTitle = song?.title ?? course?.title ?? 'No chart selected';
+    const songArtist = song?.artist || song?.subtitle || course?.detail || '';
     const playLevel = song?.playLevel !== undefined ? String(song.playLevel) : '-';
     const playLevelNumber =
       song?.playLevel !== undefined ? Number.parseFloat(String(song.playLevel).replace(/^[^\d.]+/u, '')) : NaN;
@@ -782,7 +796,11 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       addSkinText(layer, text, x, y, options);
     const label = (fill: number = SYN_DIM): SkinTextOptions => ({ ...labelStyle(fill), size: 10 });
 
-    const songArtist = song?.artist || song?.subtitle || '';
+    const course =
+      song === undefined && frame.focusedCourse !== undefined
+        ? describeCourseCard(frame.focusedCourse, frame.courseRecord?.(frame.focusedCourse))
+        : undefined;
+    const songArtist = song?.artist || song?.subtitle || course?.detail || '';
     const playLevel = song?.playLevel !== undefined ? String(song.playLevel) : '-';
     const playLevelNumber =
       song?.playLevel !== undefined ? Number.parseFloat(String(song.playLevel).replace(/^[^\d.]+/u, '')) : NaN;
@@ -829,7 +847,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         alpha: 1 - slide,
       });
     }
-    addText(song?.title ?? 'No chart selected', left + slide * 24, card.y + 30, {
+    addText(song?.title ?? course?.title ?? 'No chart selected', left + slide * 24, card.y + 30, {
       size: 18,
       weight: '500',
       fill: SYN_WHITE,
@@ -976,7 +994,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
    */
   private renderPortraitRow(
     frame: PixiSelectFrame,
-    entry: BrowserBrowseEntry,
+    entry: LibraryEntry,
     entryIndex: number,
     visibleIndex: number,
     listWidth: number,
@@ -985,8 +1003,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const y = listTop + visibleIndex * rowHeight;
     const rowH = rowHeight - 4;
     const active = entryIndex === frame.selectedIndex;
-    const song = entry.kind === 'song' ? entry.song : undefined;
-    const folder = entry.kind === 'folder' ? entry.folder : undefined;
+    const song = entry.kind === 'chart' ? entry.chart : undefined;
     const accent = hsvToHex(sceneHue(frame.nowMs / 1000), 0.6, 1);
     const slide = active ? 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS)) : 0;
     const intro =
@@ -1010,7 +1027,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       row.rect(rowX, y, rowW, rowH).stroke({ color: accent, width: 1, alpha: 0.16 });
     }
     const midY = y + rowH / 2;
-    const level = song?.playLevel !== undefined ? String(song.playLevel) : folder ? 'DIR' : '-';
+    const level = browseEntryBadge(entry);
     const orbColor = song ? levelColor(Math.min(1, Number.parseFloat(level) / 12 || 0)) : SYN_MIST;
     row.circle(rowX + 18, midY, 12).fill({ color: orbColor, alpha: active ? 0.35 : 0.18 });
     frame.layer.addChild(row);
@@ -1024,9 +1041,9 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       maxWidth: 22,
     });
     const facts = song ? resolveSongRowFacts(song) : undefined;
-    const factsW = 84;
+    let factsW = 84;
     const factsRight = rowX + rowW - 10;
-    const factStyle = (fill: number): SkinTextOptions => ({
+    const factStyle = (fill: number, maxWidth: number = factsW): SkinTextOptions => ({
       size: 10,
       fill,
       fontFamily: SYN_DISPLAY_FONT,
@@ -1034,20 +1051,22 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       anchorX: 1,
       anchorY: 0.5,
       alpha,
-      maxWidth: factsW,
+      maxWidth,
       marquee: active,
     });
     if (facts) {
       addSkinText(frame.layer, `${facts.bpm} BPM`, factsRight, midY - 7, factStyle(active ? SYN_WHITE : SYN_MIST));
       addSkinText(frame.layer, `${facts.notes} NOTES`, factsRight, midY + 8, factStyle(SYN_DIM));
     } else {
-      const count = folder?.songs.length ?? 0;
-      addSkinText(frame.layer, `${count} chart${count === 1 ? '' : 's'}`, factsRight, midY, factStyle(SYN_MIST));
+      // A folder or course count takes what it needs (`4 stages · 1 missing`), up to ROW_COUNT_MAX_W.
+      const count = browseEntryCount(entry) ?? '';
+      const countNode = addSkinText(frame.layer, count, factsRight, midY, factStyle(SYN_MIST, ROW_COUNT_MAX_W));
+      factsW = count ? Math.max(factsW, Math.min(ROW_COUNT_MAX_W, countNode.width)) : factsW;
     }
     const textX = rowX + 38;
     const textW = Math.max(24, factsRight - factsW - 10 - textX);
     const artist = song?.artist?.trim();
-    const title = addSkinText(frame.layer, song?.title ?? folder?.label ?? '', textX, artist ? midY - 7 : midY, {
+    const title = addSkinText(frame.layer, browseEntryTitle(entry), textX, artist ? midY - 7 : midY, {
       size: 12,
       weight: active ? '500' : '300',
       fill: SYN_WHITE,
@@ -1076,7 +1095,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
 
   private renderRow(
     frame: PixiSelectFrame,
-    entry: BrowserBrowseEntry,
+    entry: LibraryEntry,
     entryIndex: number,
     visibleIndex: number,
     listWidth: number,
@@ -1084,8 +1103,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const { listX, listTop, rowHeight } = LAYOUT;
     const y = listTop + visibleIndex * rowHeight;
     const active = entryIndex === frame.selectedIndex;
-    const song = entry.kind === 'song' ? entry.song : undefined;
-    const folder = entry.kind === 'folder' ? entry.folder : undefined;
+    const song = entry.kind === 'chart' ? entry.chart : undefined;
     const hue = sceneHue(frame.nowMs / 1000);
     const accent = hsvToHex(hue, 0.6, 1);
     const slide = active ? 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS)) : 0;
@@ -1109,7 +1127,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       row.rect(rowX, y, rowW, rowHeight - 4).stroke({ color: accent, width: 1, alpha: 0.16 });
     }
     // Level as a glowing orb on the leading edge.
-    const level = song?.playLevel !== undefined ? String(song.playLevel) : folder ? 'DIR' : '-';
+    const level = browseEntryBadge(entry);
     const orbColor = song ? levelColor(Math.min(1, Number.parseFloat(level) / 12 || 0)) : SYN_MIST;
     row.circle(rowX + 16, y + (rowHeight - 4) / 2, 9).fill({ color: orbColor, alpha: active ? 0.35 : 0.18 });
     frame.layer.addChild(row);
@@ -1126,9 +1144,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     // On the right, the facts a player checks before picking — gimmick tags, note count, length and tempo range — in
     // fixed columns so they line up down the list. Folders show their size instead.
     const facts = song ? resolveSongRowFacts(song) : undefined;
-    const meta = facts
-      ? `${facts.bpm} BPM`
-      : `${folder?.songs.length ?? 0} chart${folder?.songs.length === 1 ? '' : 's'}`;
+    const meta = facts ? `${facts.bpm} BPM` : (browseEntryCount(entry) ?? '');
     const metaNode = addSkinText(frame.layer, meta, rowX + rowW - 14, midY, {
       size: 9,
       fill: active ? SYN_WHITE : SYN_DIM,
@@ -1137,11 +1153,11 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       anchorX: 1,
       anchorY: 0.5,
       alpha,
-      maxWidth: facts ? ROW_BPM_W : 70,
+      maxWidth: facts ? ROW_BPM_W : ROW_COUNT_MAX_W,
       marquee: active,
     });
     metaNode.label = `fallback-meta[idx=${entryIndex}]`;
-    let factsLeft = rowX + rowW - 14 - (facts ? ROW_BPM_W : meta ? Math.min(70, metaNode.width) : 0) - 12;
+    let factsLeft = rowX + rowW - 14 - (facts ? ROW_BPM_W : meta ? Math.min(ROW_COUNT_MAX_W, metaNode.width) : 0) - 12;
     if (facts) {
       const factStyle = (fill: number) => ({
         size: 9,
@@ -1180,7 +1196,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       }
       factsLeft -= 6;
     }
-    const title = addSkinText(frame.layer, song?.title ?? folder?.label ?? '', rowX + 34, midY, {
+    const title = addSkinText(frame.layer, browseEntryTitle(entry), rowX + 34, midY, {
       size: 11,
       weight: active ? '500' : '300',
       fill: SYN_WHITE,

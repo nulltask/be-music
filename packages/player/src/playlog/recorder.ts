@@ -1,3 +1,4 @@
+import type { PlaylogTempoChange, PlaylogViewChange, PlaylogViewState } from './view.ts';
 import {
   computeChartFingerprint,
   computePlayFingerprint,
@@ -11,14 +12,16 @@ import type { PlayerSummary } from '../core/engine.ts';
 import type { PreparedPlaybackChartData } from '../core/bootstrap.ts';
 import { resolveChartJudgeRankFacts } from '../ruleset/index.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
-import { resolveIidxRankLabel } from '../core/scoring.ts';
-import type { GrooveGaugeType } from '../core/groove-gauge.ts';
+import { resolveIidxRankLabel } from '../ruleset/score.ts';
+import type { GaugeType } from '../ruleset/gauge-type.ts';
+import type { PlaylogRulesetId } from '../ruleset/definitions.ts';
 import packageJson from '../../package.json' with { type: 'json' };
 import {
   BE_MUSIC_PLAYLOG_FORMAT,
   BE_MUSIC_PLAYLOG_VERSION,
   type BeMusicPlaylog,
   type PlaylogChart,
+  type PlaylogCourseStage,
   type PlaylogInputAction,
   type PlaylogInputEvent,
   type PlaylogNote,
@@ -48,14 +51,22 @@ export interface PlaylogRecorderPlaySettings {
   mode: 'manual' | 'auto';
   autoScratch: boolean;
   /** The gauge the engine ran (`PlayerOptions.gauge`, else `recordPlaylog.gauge`); `GROOVE` when neither is set. */
-  gauge?: GrooveGaugeType;
+  gauge?: GaugeType;
   randomLane?: { p1?: string; p2?: string };
   dpFlip?: boolean;
   judgeWindowOverrideMs?: number;
   /** Judge-window ruleset the engine ran (`PlayerOptions.judgeRuleset`). Absent = `'lr2'`. */
-  judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
+  judgeRuleset?: PlaylogRulesetId;
   /** The play's `#RANDOM` / `#SWITCH` outcomes (`PlayerOptions.randomDraws`). Recorded when non-empty. */
   randomDraws?: RandomDraws;
+  /** The play ended the moment its survival gauge emptied (`PlayerOptions.endOnFailure`). Recorded when true. */
+  endOnFailure?: boolean;
+  /** The course stage the play was (`PlayerOptions.course`). */
+  course?: PlaylogCourseStage;
+  /** The play tempo (`PlayerOptions.speed`). Recorded when it is not 1. */
+  tempo?: number;
+  /** What the player sees at the start (`PlayerOptions.recordPlaylog.view`): hi-speed, covers and lift. */
+  view?: PlaylogViewState;
   native?: Record<string, string | number | boolean | null>;
 }
 
@@ -71,7 +82,7 @@ export interface PlaylogRecorderPlaySettings {
  */
 export type PlaylogRecordingOptions = Pick<
   PlaylogRecorderPlaySettings,
-  'gauge' | 'randomLane' | 'dpFlip' | 'native'
+  'gauge' | 'randomLane' | 'dpFlip' | 'view' | 'native'
 > & {
   chartSha256?: string;
   chartMd5?: string;
@@ -104,6 +115,8 @@ export interface PlaylogRecorderOptions {
   recorder?: Omit<PlaylogRecorderInfo, 'engine'>;
   /** Dynamic `#EXRANKxx` changes the engine collected (chart order). */
   dynamicJudgeRankChanges?: ReadonlyArray<{ seconds: number; exRankValue: number }>;
+  /** A stitched NONSTOP chart's later stages taking over the judge rank (`PlayerPlaySettings.stageRanks`). */
+  stageRanks?: ReadonlyArray<{ seconds: number; rank: number; table: 'chart' | 'lr2-nonstop' }>;
   /** LR2 negative-BPM reversal (chart seconds, #134) — recorded so re-simulations freeze judging at the same point. */
   reversalSeconds?: number;
   /** Clock source for `createdAt` — injectable for tests. Defaults to `Date`. */
@@ -119,14 +132,20 @@ export interface PlaylogRecorderFinalizeInput {
 }
 
 export interface PlaylogRecorder {
+  /** Records a press or release; `inferred` marks a release the engine inferred from input without releases. */
   recordInput(
     action: PlaylogInputAction,
     timeSeconds: number,
     tokens: readonly string[],
     channels: Iterable<string>,
+    inferred?: boolean,
   ): void;
   /** Counts an LR2-style empty POOR — cached into the native result for diagnostics. */
   recordEmptyPoor(): void;
+  /** Records a view change (hi-speed, covers, lift) at a chart time. An empty change is dropped. */
+  recordViewChange(timeSeconds: number, change: PlaylogViewState): void;
+  /** Records a tempo change at a chart time. A change to the tempo already in force is dropped. */
+  recordTempoChange(timeSeconds: number, tempo: number): void;
   finalize(input: PlaylogRecorderFinalizeInput): BeMusicPlaylog;
 }
 
@@ -135,9 +154,12 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
   const inputs: PlaylogInputEvent[] = [];
   let seq = 0;
   let emptyPoorCount = 0;
+  const viewChanges: PlaylogViewChange[] = [];
+  const tempoChanges: PlaylogTempoChange[] = [];
+  let currentTempo = options.play.tempo ?? 1;
 
   return {
-    recordInput: (action, timeSeconds, tokens, channels): void => {
+    recordInput: (action, timeSeconds, tokens, channels, inferred): void => {
       const channelList = [...channels];
       if (channelList.length === 0) {
         return;
@@ -151,10 +173,25 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
       if (tokens.length > 0) {
         event.tokens = [...tokens];
       }
+      if (inferred === true && action === 'up') {
+        event.inferred = true;
+      }
       inputs.push(event);
     },
     recordEmptyPoor: (): void => {
       emptyPoorCount += 1;
+    },
+    recordViewChange: (timeSeconds, change): void => {
+      const entries = Object.entries(change).filter(([, value]) => value !== undefined);
+      if (entries.length === 0) return;
+      const recorded: PlaylogViewChange = { timeUs: secondsToMicroseconds(timeSeconds), ...change };
+      if (change.covers !== undefined) recorded.covers = change.covers.map((cover) => ({ ...cover }));
+      viewChanges.push(recorded);
+    },
+    recordTempoChange: (timeSeconds, tempo): void => {
+      if (!(tempo > 0) || tempo === currentTempo) return;
+      currentTempo = tempo;
+      tempoChanges.push({ timeUs: secondsToMicroseconds(timeSeconds), tempo });
     },
     finalize: ({ summary, maxCombo, aborted, abortedAtSeconds }): BeMusicPlaylog => {
       const play: PlaylogPlay = {
@@ -175,6 +212,12 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
         play.aborted = true;
         if (abortedAtSeconds !== undefined) play.abortedAtUs = secondsToMicroseconds(abortedAtSeconds);
       }
+      if (options.play.endOnFailure === true) play.endOnFailure = true;
+      if (options.play.course !== undefined) play.course = structuredClone(options.play.course);
+      if (options.play.tempo !== undefined && options.play.tempo !== 1) play.tempo = options.play.tempo;
+      if (tempoChanges.length > 0) play.tempoChanges = tempoChanges.map((change) => ({ ...change }));
+      if (options.play.view !== undefined) play.view = structuredClone(options.play.view);
+      if (viewChanges.length > 0) play.viewChanges = structuredClone(viewChanges);
       if (options.play.native !== undefined) play.native = options.play.native;
 
       const createdAt = (options.now?.() ?? new Date()).toISOString();
@@ -248,6 +291,13 @@ function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
     judgeRank.timeline = timelineSource.map((change) => ({
       timeUs: secondsToMicroseconds(change.seconds),
       exRankValue: change.exRankValue,
+    }));
+  }
+  if (options.stageRanks !== undefined && options.stageRanks.length > 0) {
+    judgeRank.stageRanks = options.stageRanks.map((change) => ({
+      timeUs: secondsToMicroseconds(change.seconds),
+      rank: change.rank,
+      table: change.table,
     }));
   }
 
@@ -347,7 +397,7 @@ function buildNativeResult(
   summary: PlayerSummary,
   maxCombo: number | undefined,
   emptyPoorCount: number,
-  declaredGauge: GrooveGaugeType,
+  declaredGauge: GaugeType,
   moneyScore: boolean,
 ): PlaylogRulesetResult {
   // Reported the way the simulators report a ruleset result: the judgment count as `noteCount`, the DJ LEVEL, a money
@@ -379,6 +429,9 @@ function buildNativeResult(
   }
   if (moneyScore) {
     result.score = summary.score;
+  }
+  if (summary.course !== undefined) {
+    result.course = { combo: summary.course.combo, maxCombo: summary.course.maxCombo };
   }
   return result;
 }

@@ -25,7 +25,8 @@
   "dependencies": {
     "@be-music/chart": "workspace:*",
     "@be-music/json": "workspace:*",
-    "@be-music/player": "workspace:*"
+    "@be-music/player": "workspace:*",
+    "@be-music/scene-model": "workspace:*"
   },
   "devDependencies": {
     "@be-music/parser": "workspace:*"

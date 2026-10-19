@@ -1,14 +1,14 @@
 import type { SkinFamilyId } from '@be-music/player-web/skin';
 import type { BeatorajaThemeBundle } from '@be-music/player-web/skin';
-import type { BrowserSongEntry } from '@be-music/player-web/collection';
+import type { LibraryChart } from '@be-music/scene-model';
 import { pickLr2PlaySkin, type Lr2PlaySkinMap, type Lr2Skin } from '@be-music/lr2-skin';
 import type { SkinFamilyOverride, SkinFamilySceneKind } from './types.ts';
 import { canPlaySongBeatoraja } from './chart-shape.ts';
 
 /**
- * Read-only state snapshot the family-dispatch helpers operate on. The demo's `PlayerWebDemoApp` builds one of these
- * inline (see its `familyDispatchState()` helper) so its private theme / skin fields stay private — these functions
- * stay pure and easy to unit-test in isolation.
+ * Read-only state snapshot the family-dispatch helpers operate on. The demo's `FamilyKits` (`app/family-kits.ts`) builds
+ * one of these from the theme services (see its `familyDispatchState()`) — these functions stay pure and easy to
+ * unit-test in isolation.
  */
 export interface FamilyDispatchState {
   readonly beatorajaTheme: BeatorajaThemeBundle | undefined;
@@ -30,7 +30,7 @@ export interface FamilyDispatchState {
 export function availableFamiliesForScene(
   state: FamilyDispatchState,
   scene: SkinFamilySceneKind,
-  song?: BrowserSongEntry,
+  song?: LibraryChart,
 ): Set<SkinFamilyId> {
   const available = new Set<SkinFamilyId>(['default']);
   // Beatoraja availability per scene. The play scene additionally needs a chart so we can check whether the
@@ -72,7 +72,7 @@ export function availableFamiliesForScene(
 export function pickActiveFamilyForScene(
   state: FamilyDispatchState,
   scene: SkinFamilySceneKind,
-  song?: BrowserSongEntry,
+  song?: LibraryChart,
 ): SkinFamilyId {
   const available = availableFamiliesForScene(state, scene, song);
   const override = state.skinFamilyOverride;

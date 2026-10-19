@@ -60,7 +60,7 @@ const LONG_AND_MINE = chart(
 function createCore(
   json: BeMusicJson,
   ruleset: PlaylogRulesetId = 'lr2',
-  options: { autoScratch?: boolean; judgeMsPerChartSecond?: number } = {},
+  options: { autoScratch?: boolean; judgeMsPerChartSecond?: number; endOnFailure?: boolean } = {},
 ): JudgeCoreState {
   const source = structuredClone(json);
   const resolved = resolveChart(source);
@@ -78,6 +78,7 @@ function createCore(
       ),
       autoScratch: options.autoScratch ?? false,
       judgeMsPerChartSecond: options.judgeMsPerChartSecond ?? 1000,
+      endOnFailure: options.endOnFailure ?? false,
       wavResources: source.resources.wav,
       idBase: resolveBmsBase(source),
       sourceFormat: source.sourceFormat,
@@ -273,7 +274,7 @@ describe('judge core', () => {
     const isMineHit = (effect: JudgeCoreEffect): boolean => effect.kind === 'trace' && effect.name === 'mine-hit';
 
     /** Live play: each 60 Hz frame first applies the key events up to it (at their own instants), then advances. */
-    function liveMineHits(ruleset: PlaylogRulesetId, events: readonly KeyEvent[], keyState = true): number {
+    function liveMineHits(ruleset: PlaylogRulesetId, events: readonly KeyEvent[]): number {
       const state = createCore(MINE_LANE, ruleset);
       let hits = 0;
       const sink = (effect: JudgeCoreEffect): void => {
@@ -288,9 +289,9 @@ describe('judge core', () => {
           cursor += 1;
           const channels = new Set(['12']);
           if (action === 'down') {
-            if (keyState) runJudgeCoreStep(state, { kind: 'hold', channels }, sink);
+            runJudgeCoreStep(state, { kind: 'hold', channels }, sink);
             runJudgeCoreStep(state, { kind: 'press', channels, tokens, nowSec: ms / 1000, nowMs: ms }, sink);
-          } else if (keyState) {
+          } else {
             // A release is drained at the frame; the play log keeps its own instant.
             const release = { kind: 'release', channels, tokens, nowSec: frameMs / 1000, nowMs: frameMs } as const;
             runJudgeCoreStep(state, { ...release, recordSec: ms / 1000 }, sink);
@@ -412,30 +413,6 @@ describe('judge core', () => {
         [2700, 'up', 'a'],
       ];
       expect(mineHits(ruleset, events)).toEqual([1, 1, 1]);
-    });
-
-    test('beatoraja without release events: a repeat press after the crossing keeps a press inside the grace', () => {
-      // Hosts that send no releases count a lane as held for 120 ms after a press.
-      expect(
-        liveMineHits(
-          'beatoraja',
-          [
-            [2400, 'down'],
-            [2505, 'down'],
-          ],
-          false,
-        ),
-      ).toBe(1);
-      expect(
-        liveMineHits(
-          'beatoraja',
-          [
-            [2300, 'down'],
-            [2505, 'down'],
-          ],
-          false,
-        ),
-      ).toBe(0);
     });
   });
 

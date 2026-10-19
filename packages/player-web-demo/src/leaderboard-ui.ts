@@ -1,5 +1,5 @@
-import type { BeMusicPlaylog, PlaylogRecorderInfo } from '@be-music/player-web/runtime';
-import type { BrowserSongEntry } from '@be-music/player-web/collection';
+import type { BeMusicPlaylog, PlaylogRecorderInfo } from '@be-music/player/playlog';
+import type { LibraryChart } from '@be-music/scene-model';
 import type GUI from 'lil-gui';
 import type { Controller } from 'lil-gui';
 import {
@@ -15,10 +15,15 @@ import {
   type AccountActionResult,
 } from './account.ts';
 import { wireAccountDialogs } from './account-dialogs.ts';
+import type { BeMusicCoursePlaylog } from '@be-music/player/playlog';
 import {
+  describeCourseLeaderboardResult,
   describeLeaderboardResult,
+  describeSkippedCourseSubmission,
   describeSkippedSubmission,
+  prepareCourseLeaderboardSubmission,
   prepareLeaderboardSubmission,
+  submitCourseToLeaderboard,
   submitToLeaderboard,
 } from './leaderboard.ts';
 
@@ -59,7 +64,11 @@ export class LeaderboardPanel {
   /** The toggle as it was when the current play started: a play is sent only if it was on at song start. */
   private submitThisPlay = false;
 
-  constructor(private readonly host: LeaderboardPanelHost) {}
+  private readonly host: LeaderboardPanelHost;
+
+  constructor(host: LeaderboardPanelHost) {
+    this.host = host;
+  }
 
   /** Fills the Debug Menu's Leaderboard folder and wires the account chip. */
   buildFolder(folder: GUI): void {
@@ -141,7 +150,7 @@ export class LeaderboardPanel {
    * Sends the play to the Leaderboard when "Submit to Leaderboard" was on at song start. Runs in the background: the
    * result screen never waits for it, and its outcome (rank, or why it was not sent) goes to the status line.
    */
-  maybeSubmit(playlog: BeMusicPlaylog | undefined, song: BrowserSongEntry): void {
+  maybeSubmit(playlog: BeMusicPlaylog | undefined, song: LibraryChart): void {
     if (!this.submitThisPlay || playlog === undefined) return;
     const prepared = prepareLeaderboardSubmission(playlog, song.chart, song.chartPath);
     if (!prepared.ok) {
@@ -158,6 +167,37 @@ export class LeaderboardPanel {
       .catch((error: unknown) => {
         this.host.warn('leaderboard submission failed', error);
         this.host.setStatus('Leaderboard: not submitted (network error)');
+      });
+  }
+
+  /**
+   * Sends a finished course run to the Leaderboard when "Submit to Leaderboard" was on when its last stage started, as
+   * {@link maybeSubmit} does for one play. `stageSongs` are the course's stages as it played them, in order (their
+   * charts rebuild each played stage's fingerprint documents, and go to the server for the stages it rebuilds: the
+   * unreached ones, and all of a NONSTOP run). The course rank goes to the status line.
+   */
+  maybeSubmitCourse(coursePlaylog: BeMusicCoursePlaylog, stageSongs: readonly LibraryChart[]): void {
+    if (!this.submitThisPlay) return;
+    const prepared = prepareCourseLeaderboardSubmission(
+      coursePlaylog,
+      stageSongs.map((song) => ({ chart: song.chart, chartPath: song.chartPath })),
+    );
+    if (!prepared.ok) {
+      this.host.setStatus(describeSkippedCourseSubmission(prepared.reason));
+      return;
+    }
+    const firstStage = coursePlaylog.stages[0];
+    // Every stage of a ranked run is judged under one ruleset (the server refuses mixed ones); a NONSTOP run was one play.
+    const judged = coursePlaylog.nonstop?.playlog ?? (firstStage?.played === true ? firstStage.playlog : undefined);
+    const playedRuleset = judged?.play.judgeRuleset ?? 'lr2';
+    void submitCourseToLeaderboard(prepared.submission, { client: describeSubmittingClient(this.host.recorder) })
+      .then((result) => {
+        this.host.setStatus(describeCourseLeaderboardResult(result, playedRuleset));
+        void this.refreshAccount();
+      })
+      .catch((error: unknown) => {
+        this.host.warn('leaderboard course submission failed', error);
+        this.host.setStatus('Leaderboard: course not submitted (network error)');
       });
   }
 

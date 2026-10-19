@@ -19,6 +19,7 @@ import {
   resolveResultTrackRows,
   rollUpValue,
   stageProgress,
+  resolveResultVerdict,
 } from '@be-music/skin-sdk';
 import { addSkinText, type PixiResultFrame, type PixiResultSkin, type SkinTextOptions } from '../pixi-kit/index.ts';
 
@@ -101,7 +102,7 @@ export function renderLatticeResult(frame: PixiResultFrame): void {
   rule(0, 43, designWidth, 0);
   addStaggeredSkinText(
     layer,
-    decode(cleared ? 'STAGE CLEAR' : 'FAILED', 60, 1, 620),
+    decode(resolveResultVerdict(result), 60, 1, 620),
     20,
     10,
     { ...display(20, verdictColor, '200'), letterSpacing: 5 },
@@ -181,7 +182,10 @@ export function renderLatticeResult(frame: PixiResultFrame): void {
 
   // Graphs as ruled lines.
   rule(326, 244, 294, 600);
-  text(decode('09 GROOVE GAUGE', 600, 5), 326, 252, { ...mono(), alpha: fadeIn(600) });
+  text(decode(`09 ${(result.gaugeType ?? 'GROOVE').toUpperCase()} GAUGE`, 600, 5), 326, 252, {
+    ...mono(),
+    alpha: fadeIn(600),
+  });
   text(decode('10 EX SCORE', 640, 6), 326, 338, { ...mono(), alpha: fadeIn(640) });
   const draw = easeOutCubic(stageProgress(elapsed, ROLL_DELAY_MS + 150, ROLL_MS + 300));
   plot(

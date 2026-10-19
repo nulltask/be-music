@@ -1,8 +1,11 @@
+import type { PlaylogViewState } from '../playlog/view.ts';
 import { mirrorBeatAtTempoReversal, type TempoReversalPoint } from '@be-music/chart';
 import { type PlayerStateSignals } from '../state-signals.ts';
 import { applyHighSpeedControlAction, type HighSpeedControlAction } from './high-speed-control.ts';
 import { type PlayerInputCommand, type PlayerInputSignalBus } from './input-signal-bus.ts';
 import { type PlayerUiFramePayload, type PlayerUiSignalBus } from './ui-signal-bus.ts';
+import { type TempoClock } from './tempo-clock.ts';
+import type { PlayerTempoChange } from './engine-types.ts';
 
 type PauseablePlaybackClock = {
   nowMs: () => number;
@@ -165,12 +168,38 @@ export function applyPlaybackHighSpeedAction(params: {
   return nextHighSpeed;
 }
 
+/**
+ * Changes the play tempo at play-clock time `nowMs`: re-anchors `tempoClock` there (chart time stays continuous and
+ * runs at `tempo` from then on), then tells the audio backend, the play log and the host, each with the chart second
+ * the change took effect at. A change to an unusable tempo or the one in force does nothing. Returns whether it did.
+ */
+export function applyPlaybackTempoChange(params: {
+  tempoClock: TempoClock;
+  nowMs: number;
+  tempo: number;
+  setAudioTempo?: (tempo: number) => void;
+  recordTempoChange?: (seconds: number, tempo: number) => void;
+  onTempoChange?: (change: PlayerTempoChange) => void;
+}): boolean {
+  const { tempoClock, tempo } = params;
+  if (!(Number.isFinite(tempo) && tempo > 0) || tempo === tempoClock.tempo) return false;
+  const seconds = tempoClock.setTempoAtClockMs(params.nowMs, tempo);
+  params.setAudioTempo?.(tempo);
+  params.recordTempoChange?.(seconds, tempo);
+  params.onTempoChange?.({ tempo, seconds });
+  return true;
+}
+
 export function consumePlaybackInputCommands(params: {
   inputSignals: PlayerInputSignalBus;
   isInterrupted: () => boolean;
   setInterruptedReason: (reason: InterruptCommand['reason']) => void;
   onTogglePause: () => void;
   onHighSpeedAction: (action: HighSpeedControlAction | undefined) => void;
+  /** A view change to record (`{ kind: 'view' }`). */
+  onViewChange?: (change: PlaylogViewState) => void;
+  /** A tempo change (`{ kind: 'tempo' }`). */
+  onTempoChange?: (tempo: number) => void;
   onUnhandledCommand?: (command: PlayerInputCommand) => void;
   logInterrupt?: (reason: InterruptCommand['reason']) => void;
 }): void {
@@ -180,6 +209,8 @@ export function consumePlaybackInputCommands(params: {
     setInterruptedReason,
     onTogglePause,
     onHighSpeedAction,
+    onViewChange,
+    onTempoChange,
     onUnhandledCommand,
     logInterrupt,
   } = params;
@@ -201,6 +232,28 @@ export function consumePlaybackInputCommands(params: {
       onHighSpeedAction(command.action);
       continue;
     }
+    if (command.kind === 'view') {
+      onViewChange?.(command.change);
+      continue;
+    }
+    if (command.kind === 'tempo') {
+      onTempoChange?.(command.tempo);
+      continue;
+    }
     onUnhandledCommand?.(command);
+  }
+}
+
+/**
+ * Records the view changes left on the input bus once a play's loop has ended (`{ kind: 'view' }`, sent by the host as
+ * the play ends, after the loop's last drain), at `chartSeconds`; other commands left there no longer matter.
+ */
+export function recordPendingViewChanges(
+  inputSignals: PlayerInputSignalBus,
+  recorder: { recordViewChange(timeSeconds: number, change: PlaylogViewState): void } | undefined,
+  chartSeconds: number,
+): void {
+  for (const command of inputSignals.drainCommands()) {
+    if (command.kind === 'view') recorder?.recordViewChange(chartSeconds, command.change);
   }
 }

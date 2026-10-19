@@ -1,19 +1,19 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { ClearLamp } from '../scoring/lamp.ts';
+import { clearLampRank } from '@be-music/player/ruleset';
 import { averageRate, djRankDistribution, lampDistribution } from './stats.ts';
 
 describe('lampDistribution', () => {
   test('lists every lamp, highest first, and totals the counts', () => {
     const distribution = lampDistribution([
-      { lamp: ClearLamp.NORMAL, count: 3 },
-      { lamp: ClearLamp.FAILED, count: 1 },
-      { lamp: ClearLamp.NORMAL, count: 1 },
+      { lamp: clearLampRank('NORMAL'), count: 3 },
+      { lamp: clearLampRank('FAILED'), count: 1 },
+      { lamp: clearLampRank('NORMAL'), count: 1 },
     ]);
     expect(distribution.total).toBe(5);
-    expect(distribution.buckets[0]!.key).toBe(ClearLamp.MAX);
-    expect(distribution.buckets.at(-1)!.key).toBe(ClearLamp.FAILED);
-    expect(distribution.buckets.find((bucket) => bucket.key === ClearLamp.NORMAL)!.count).toBe(4);
-    expect(distribution.buckets.find((bucket) => bucket.key === ClearLamp.HARD)!.count).toBe(0);
+    expect(distribution.buckets[0]!.key).toBe(clearLampRank('MAX'));
+    expect(distribution.buckets.at(-1)!.key).toBe(clearLampRank('FAILED'));
+    expect(distribution.buckets.find((bucket) => bucket.key === clearLampRank('NORMAL'))!.count).toBe(4);
+    expect(distribution.buckets.find((bucket) => bucket.key === clearLampRank('HARD'))!.count).toBe(0);
   });
 
   test('is empty without rows', () => {

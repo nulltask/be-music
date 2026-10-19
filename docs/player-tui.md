@@ -10,9 +10,10 @@ Browser-specific PixiJS and WebAudio behavior is documented in [Browser player i
 
 `@be-music/player-tui` is a Node frontend around the shared `@be-music/player` engine.
 The CLI runner parses chart files, manages directory selection, renders loading/result screens, and starts one gameplay session.
-Gameplay itself runs in a worker thread that calls `autoPlay()` or `manualPlay()` from `@be-music/player/core/engine`.
+Gameplay itself runs in a worker thread that calls `autoPlay()` or `manualPlay()` from `@be-music/player`.
+The UI worker imports only `@be-music/player/signals` and `@be-music/player/display`, so it does not load the play loop or the audio renderer.
 
-The main thread owns terminal input and coordinates two worker-side surfaces:
+The main thread owns terminal input and coordinates two worker-side surfaces and its own input runtime:
 
 - `node-gameplay-worker.ts` runs the shared engine and forwards load progress, logs, frame patches, input requests, and final `PlayerSummary` values.
 - `node-ui-worker.ts` owns the terminal renderer and receives compact frame patches, UI commands, pause state, high-speed changes, and judge/combo state.
@@ -66,6 +67,8 @@ The input runtime normalizes keyboard input into token strings before the shared
 On non-Windows terminals, it opts into the Kitty keyboard protocol by default so left/right modifier keys can be distinguished.
 On Windows, it opts into the Win32 terminal input mode.
 Set `BE_MUSIC_KEYBOARD_PROTOCOLS=kitty`, `win32`, or a comma-separated combination to override protocol opt-in.
+Once the terminal has answered the opt-in with a key event in that protocol, every later play of the process declares that its keys report their releases (`PlayerInputRuntime.reportsKeyReleases`), so the engine judges the play as key-state input from its first key.
+Before that, the engine infers when each key came up until the first `kitty-state` command arrives ([Input without key releases](./playlog.md#input-without-key-releases)).
 
 Important command mappings:
 
