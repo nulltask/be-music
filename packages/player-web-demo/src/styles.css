@@ -2152,9 +2152,10 @@ textarea {
 
 /*
  * During play the select-screen overlays step aside so they never cover the skin's track plate; the Help button stays
- * reachable by hovering where it sits.
+ * reachable by hovering where it sits. The search field shows on the select screen only (`off-select` elsewhere).
  */
-.shell.in-gameplay .search-input {
+.shell.in-gameplay .search-input,
+.shell.off-select .search-input {
   visibility: hidden;
 }
 

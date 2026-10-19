@@ -3,7 +3,7 @@
 // app wires it once the scene host is mounted (`PlayerWebDemoApp.mountStage`).
 
 import { logger } from '@be-music/player-web';
-import type { PixiSceneHost, PlayScene } from '@be-music/player-web/host';
+import type { PixiSceneHost, PlayScene, SceneKind } from '@be-music/player-web/host';
 import type { DeviceProfile } from '../device-profile.ts';
 import {
   enterTouchFullscreen,
@@ -16,6 +16,7 @@ import {
 } from '../fullscreen.ts';
 import type { InlineSearch } from '../inline-search.ts';
 import type { PlayerWebDemoElements } from '../types.ts';
+import { resolveShellState, shellStateKey } from './shell-state.ts';
 
 const fullscreenLog = logger('fullscreen');
 
@@ -27,6 +28,8 @@ export interface DemoShellDeps {
   readonly deviceProfile: Pick<DeviceProfile, 'phone'>;
   /** The play, whichever family draws it: loading behind a decide screen, or on the stage. */
   readonly gameplayView: () => PlayScene | undefined;
+  /** The kind of scene on stage, `undefined` between scenes. */
+  readonly showing: () => SceneKind | undefined;
 }
 
 /** The demo shell around the stage: its gameplay state, fullscreen and touch controls. */
@@ -36,6 +39,7 @@ export class DemoShell {
   private readonly search: DemoShellDeps['search'];
   private readonly deviceProfile: DemoShellDeps['deviceProfile'];
   private readonly readGameplayView: DemoShellDeps['gameplayView'];
+  private readonly readShowing: DemoShellDeps['showing'];
 
   public constructor(deps: DemoShellDeps) {
     this.sceneHost = deps.sceneHost;
@@ -43,6 +47,7 @@ export class DemoShell {
     this.search = deps.search;
     this.deviceProfile = deps.deviceProfile;
     this.readGameplayView = deps.gameplayView;
+    this.readShowing = deps.showing;
   }
 
   /** The play (`createPlayScene`), whichever family draws it: loading behind a decide screen, or on the stage. */
@@ -74,23 +79,28 @@ export class DemoShell {
    * Marks the shell `in-gameplay` while a play screen is up, so the select-screen overlays (the floating Help button and
    * the search box) step aside instead of covering the skin's track plate. Checked every frame because the gameplay
    * views are created and torn down along many paths; a play being prepared behind a decide splash counts already.
+   * Off the select screen (a result, say) the shell is `off-select`, which hides the search field for every family.
    */
   public readonly syncGameplayShellState = (): void => {
-    const inGameplay = this.gameplayView !== undefined;
-    // The built-in / LR2 play views take touch input and expose pause / exit for the touch controls; a beatoraja skin
-    // draws its own lanes and takes no touch.
-    const touchPlay = this.gameplayView !== undefined && this.gameplayView.identity.family !== 'beatoraja';
-    const paused = this.gameplayView?.isPaused() === true;
-    // A skin drawing on its portrait stage needs no rotate prompt on a phone held upright.
-    const portraitStage = this.sceneHost.getStageOrientation() === 'portrait';
-    const searchInSkin = !inGameplay && this.search.skinHasBox;
-    const state = `${inGameplay}/${touchPlay}/${paused}/${portraitStage}/${searchInSkin}`;
+    const view = this.gameplayView;
+    const resolved = resolveShellState({
+      playFamily: view?.identity.family,
+      paused: view?.isPaused() === true,
+      showing: this.readShowing(),
+      // A skin drawing on its portrait stage needs no rotate prompt on a phone held upright.
+      portraitStage: this.sceneHost.getStageOrientation() === 'portrait',
+      skinHasBox: this.search.skinHasBox,
+    });
+    const state = shellStateKey(resolved);
     if (state === this.shellGameplayState) return;
     this.shellGameplayState = state;
+    const { inGameplay, touchPlay, paused, portraitStage, searchInSkin, offSelect } = resolved;
     const { shell } = this.elements;
     shell.classList.toggle('in-gameplay', inGameplay);
     // A skin with its own search box hides the field at the foot of the screen; the box opens it in place.
     shell.classList.toggle('search-in-skin', searchInSkin);
+    shell.classList.toggle('off-select', offSelect);
+    // The built-in / LR2 play views take touch input and expose pause / exit for the touch controls.
     shell.classList.toggle('touch-play', touchPlay);
     shell.classList.toggle('play-paused', paused);
     document.documentElement.classList.toggle('portrait-stage', portraitStage);
