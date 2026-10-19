@@ -12,7 +12,7 @@ import {
   loadBeatorajaSkin,
 } from './skin.ts';
 import type { LoadBeatorajaSkinResult } from './skin.ts';
-import { BEATORAJA_PLAY_VARIANTS, playVariantForSkinType, sceneForSkinType } from './types.ts';
+import { playVariantForSkinType, sceneForSkinType } from './types.ts';
 import type { BeatorajaPlayVariant, BeatorajaSkinConfig, BeatorajaSkinHeader } from './types.ts';
 import { asLoadedBytes, type BeatorajaSkinFileEntry } from './file-lookup.ts';
 import { evaluateBeatorajaLuaSkin } from './lua.ts';
@@ -183,34 +183,45 @@ function buildTheme(entries: ReadonlyArray<BeatorajaSkinEntry>): BeatorajaTheme 
 }
 
 /**
- * Order of variants the play scene should fall back through when the chart's native variant is missing. Mirrors
- * LR2's fallback chain so song-select can switch into a playable layout even if the user shipped a single variant.
+ * The variants a play falls back through, in order, when the theme has no skin for the chart's own (first in each
+ * list). Every list names all seven variants, so any theme with a play skin yields one.
+ *
+ * beatoraja itself never falls back across play modes: a play loads the skin configured for its mode's `SkinType`, or
+ * that type's built-in default (`SkinLoader.load`, `SkinConfig.Default`). The one reuse across modes it has is offering
+ * an LR2 7 KEY / 14 KEY skin for 5 KEY / 10 KEY (`SkinConfigurationView` and `SkinConfiguration`), so 5 falls back to 7
+ * and 10 to 14 first. A theme dropped into be-music has no built-in default behind it, so the rest of each list picks
+ * the closest shape: the IIDX and POPN variants keep to themselves before trying the keyboard ones, and the keyboard
+ * variants try each other first, since a keyboard chart on an IIDX skin draws its extra lanes on the host's fallback
+ * playfield.
  */
-const PLAY_SKIN_FALLBACKS: Record<BeatorajaPlayVariant, ReadonlyArray<BeatorajaPlayVariant>> = {
+const PLAY_SKIN_FALLBACKS: Readonly<Record<BeatorajaPlayVariant, ReadonlyArray<BeatorajaPlayVariant>>> = {
   '7': ['7', '14', '5', '10', '9', '24', '24d'],
   '5': ['5', '7', '14', '10', '9', '24', '24d'],
-  '14': ['14', '24d', '7', '10', '5', '9', '24'],
-  '10': ['10', '14', '7', '5', '9', '24', '24d'],
+  '14': ['14', '7', '10', '5', '9', '24d', '24'],
+  '10': ['10', '14', '7', '5', '9', '24d', '24'],
   '9': ['9', '7', '14', '5', '10', '24', '24d'],
-  '24': ['24', '24d', '14', '7', '10', '5', '9'],
-  '24d': ['24d', '24', '14', '7', '10', '5', '9'],
+  '24': ['24', '24d', '9', '7', '14', '5', '10'],
+  '24d': ['24d', '24', '9', '14', '7', '10', '5'],
 };
 
+/**
+ * The variant whose skin plays a `desired` chart: `desired` when the theme has it, otherwise the first variant down its
+ * fallback list the theme ships. `undefined` only when the theme has no play skin at all.
+ */
+export function pickBeatorajaPlaySkinVariant(
+  playSkins: BeatorajaPlaySkinMap,
+  desired: BeatorajaPlayVariant,
+): BeatorajaPlayVariant | undefined {
+  return PLAY_SKIN_FALLBACKS[desired].find((variant) => playSkins[variant] !== undefined);
+}
+
+/** The play skin entry for a `desired` chart (see {@link pickBeatorajaPlaySkinVariant}). */
 export function pickBeatorajaPlaySkin(
   playSkins: BeatorajaPlaySkinMap,
   desired: BeatorajaPlayVariant,
 ): BeatorajaSkinEntry | undefined {
-  const order = PLAY_SKIN_FALLBACKS[desired];
-  for (const v of order) {
-    const skin = playSkins[v];
-    if (skin) return skin;
-  }
-  // As a last resort, return any present skin.
-  for (const v of BEATORAJA_PLAY_VARIANTS) {
-    const skin = playSkins[v];
-    if (skin) return skin;
-  }
-  return undefined;
+  const variant = pickBeatorajaPlaySkinVariant(playSkins, desired);
+  return variant === undefined ? undefined : playSkins[variant];
 }
 
 /**
