@@ -108,6 +108,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - [BMS 実装仕様](docs/bms-spec.ja.md)
 - [BMSON 実装仕様](docs/bmson-spec.ja.md)
 - [Bemuse 実装仕様](docs/bemuse-spec.ja.md)
+- [LR2 と beatoraja のセマンティクス](docs/semantics-lr2-beatoraja.ja.md)
 - [Player 実装仕様](docs/player-spec.ja.md)
 - [Terminal player 実装メモ](docs/player-tui.ja.md)
 - [Browser player 実装メモ](docs/player-web.ja.md)
