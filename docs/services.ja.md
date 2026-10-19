@@ -173,7 +173,7 @@ Accounts が OIDC プロバイダーになるまでは、Better Auth を Leaderb
 | Dashboard   | `dashboard` / `dashboard-preview`。セッションとリンクを表示する仮のページ              |
 | Accounts    | `accounts` / `accounts-preview`。`/api/auth/*` を Leaderboard へ転送する（3.1 節）     |
 | Player      | `play` / `play-preview`（`packages/play`。`@be-music/player-web-demo` のビルドを配信） |
-| Leaderboard | `leaderboard` / `leaderboard-preview`。ページは今も `/leaderboard` の下                |
+| Leaderboard | `leaderboard` / `leaderboard-preview`。ページはホストのルートに置く                    |
 | Donate      | `donate.be-music.app` の `donate-be-music-app`。まだログインとはつながっていない       |
 
 どの Worker も、`cloudflare.config.ts` から `cf` でデプロイします。`.github/workflows/deploy.yml` が `main` を本番に、

@@ -172,7 +172,7 @@ configuration:
 | Dashboard   | `dashboard` / `dashboard-preview`, a temporary page showing the session and links      |
 | Accounts    | `accounts` / `accounts-preview`, forwarding `/api/auth/*` to the Leaderboard (3.1)     |
 | Player      | `play` / `play-preview` (`packages/play`, serving `@be-music/player-web-demo`'s build) |
-| Leaderboard | `leaderboard` / `leaderboard-preview`, pages still under `/leaderboard`                |
+| Leaderboard | `leaderboard` / `leaderboard-preview`, pages at the root of its host                   |
 | Donate      | `donate-be-music-app` on `donate.be-music.app`, not yet signed in                      |
 
 Every Worker deploys with `cf` from its `cloudflare.config.ts`; `.github/workflows/deploy.yml` deploys `main` to
