@@ -19,6 +19,23 @@ The main thread owns terminal input and coordinates two worker-side surfaces and
 - `node-ui-worker.ts` owns the terminal renderer and receives compact frame patches, UI commands, pause state, high-speed changes, and judge/combo state.
 - `node-input-runtime.ts` captures raw keyboard input on the main thread and forwards normalized input commands to the gameplay worker.
 
+```mermaid
+flowchart LR
+  term(["terminal"])
+  subgraph main["main thread"]
+    runner["CLI runner"]
+    input["node-input-runtime"]
+  end
+  gw["gameplay worker<br/>autoPlay / manualPlay"]
+  uw["UI worker<br/>terminal renderer"]
+  term -->|"raw keys"| input
+  input -->|"input commands"| gw
+  runner -->|"start a play"| gw
+  gw -->|"progress, logs,<br/>PlayerSummary"| runner
+  gw -->|"frame patches,<br/>UI commands"| uw
+  uw -->|"draws"| term
+```
+
 When TTY support or TUI initialization is unavailable, the player falls back to text output.
 Passing `--no-tui` also disables the TUI path; in that mode the effective play mode is `AUTO`.
 
@@ -34,6 +51,21 @@ It builds a Music Select list, then moves through a small state machine:
 - `play`: run one chart with the selected play mode and high-speed.
 - `result`: show the last play result and accept replay, return-to-select, or exit.
 - `exit`: finish with the appropriate process exit code.
+
+```mermaid
+stateDiagram-v2
+  [*] --> select
+  select --> play: chart picked
+  select --> exit: Esc / Ctrl+C
+  play --> result: play ends
+  play --> play: restart
+  play --> select: Esc
+  play --> exit: Ctrl+C
+  result --> play: replay (r)
+  result --> select: Enter / Esc
+  result --> exit: Ctrl+C
+  exit --> [*]
+```
 
 `Esc` from gameplay returns to Music Select in directory mode.
 `Ctrl+C` exits with code `130`.
