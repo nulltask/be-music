@@ -19,6 +19,23 @@ main thread は terminal input を所有し、worker 側の 2 つの surface と
 - `node-ui-worker.ts` は terminal renderer を所有し、compact frame patch、UI command、pause state、high-speed change、judge/combo state を受け取ります。
 - `node-input-runtime.ts` は main thread で raw keyboard input を捕捉し、正規化した input command を gameplay worker へ送ります。
 
+```mermaid
+flowchart LR
+  term(["端末"])
+  subgraph main["main thread"]
+    runner["CLI runner"]
+    input["node-input-runtime"]
+  end
+  gw["gameplay worker<br/>autoPlay / manualPlay"]
+  uw["UI worker<br/>terminal renderer"]
+  term -->|"raw なキー入力"| input
+  input -->|"input command"| gw
+  runner -->|"プレイを開始"| gw
+  gw -->|"load progress、log、<br/>PlayerSummary"| runner
+  gw -->|"frame patch、<br/>UI command"| uw
+  uw -->|"描画"| term
+```
+
 TTY support がない場合や TUI 初期化に失敗した場合、player は text output へ fallback します。
 `--no-tui` を渡した場合も TUI 経路を無効化します。この mode では実効 play mode は `AUTO` です。
 
@@ -34,6 +51,21 @@ Music Select list を構築し、次の小さな state machine で遷移しま�
 - `play`: 選択した play mode と high-speed で 1 chart を再生します。
 - `result`: 直前の play result を表示し、replay、select へ戻る、exit を受け付けます。
 - `exit`: 適切な process exit code で終了します。
+
+```mermaid
+stateDiagram-v2
+  [*] --> select
+  select --> play: chart を選ぶ
+  select --> exit: Esc / Ctrl+C
+  play --> result: play が終わる
+  play --> play: restart
+  play --> select: Esc
+  play --> exit: Ctrl+C
+  result --> play: replay (r)
+  result --> select: Enter / Esc
+  result --> exit: Ctrl+C
+  exit --> [*]
+```
 
 directory mode では gameplay 中の `Esc` は Music Select へ戻ります。
 `Ctrl+C` は exit code `130` で終了します。
