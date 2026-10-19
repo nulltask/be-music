@@ -171,7 +171,7 @@ export interface CourseLeaderboardSubmission {
 
 export type CourseSubmissionPreparation =
   | { ok: true; submission: CourseLeaderboardSubmission }
-  | { ok: false; reason: 'not-rankable' | 'tempo' | 'missing-fingerprint' | 'fingerprint-mismatch' };
+  | { ok: false; reason: 'not-rankable' | 'tempo' | 'unreleased' | 'missing-fingerprint' | 'fingerprint-mismatch' };
 
 /**
  * Builds the submission of a finished course run: the course play log, with the fingerprint documents of each played
@@ -188,7 +188,10 @@ export function prepareCourseLeaderboardSubmission(
 ): CourseSubmissionPreparation {
   const eligibility = checkCoursePlaylogEligibility(coursePlaylog);
   if (!eligibility.eligible) {
-    return { ok: false, reason: skippedReason(eligibility.reason) };
+    return {
+      ok: false,
+      reason: eligibility.reason === 'unreleased' ? 'unreleased' : skippedReason(eligibility.reason),
+    };
   }
   const nonstop = eligibility.nonstop !== undefined;
   const stages: CourseLeaderboardSubmission['stages'] = [];
@@ -326,6 +329,8 @@ export function describeSkippedCourseSubmission(
       return 'Leaderboard: course not submitted (auto play and aborted stages are not ranked)';
     case 'tempo':
       return 'Leaderboard: course not submitted (a run at another tempo is practice and is not ranked)';
+    case 'unreleased':
+      return 'Leaderboard: course not submitted (this course is unranked: made and random courses are not ranked)';
     case 'missing-fingerprint':
       return 'Leaderboard: course not submitted (a stage chart has no fingerprint)';
     case 'fingerprint-mismatch':

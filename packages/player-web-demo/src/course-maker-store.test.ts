@@ -27,6 +27,19 @@ describe('made courses storage', () => {
     expect(read.courses).toEqual([nonstop, grade]);
   });
 
+  test('keeps each course unranked or ranked across a reload', () => {
+    const unranked = made('nonstop', 'Mine');
+    const ranked = { ...made('grade', 'Dan'), release: true };
+    expect(unranked.release).toBe(false);
+    const stored = JSON.parse(
+      JSON.stringify(serializeMadeCourses({ courses: [unranked, ranked], defaultConnection: 'fade' })),
+    );
+    expect(parseMadeCourses(stored).courses.map((course) => course.release)).toEqual([false, true]);
+    // A record saved before the flag was kept reads its courses back released, as they were made then.
+    const { release: _release, ...older } = stored;
+    expect(parseMadeCourses(older).courses.map((course) => course.release)).toEqual([true, true]);
+  });
+
   test('reads nothing from a missing, foreign or older record', () => {
     const empty = { courses: [], defaultConnection: 'fade' };
     expect(parseMadeCourses(undefined)).toEqual(empty);

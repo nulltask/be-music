@@ -254,6 +254,10 @@ describe('course submissions', () => {
       ok: false,
       reason: 'fingerprint-mismatch',
     });
+    // A made or random course is unranked (`release: false`): skipped, and said so.
+    const unranked = courseLog();
+    unranked.course.release = false;
+    expect(prepareCourseLeaderboardSubmission(unranked, stageCharts)).toEqual({ ok: false, reason: 'unreleased' });
   });
 
   test('submitCourseToLeaderboard resends with every stage’s chart document when asked', async () => {
@@ -308,6 +312,7 @@ describe('course submissions', () => {
   test('describeSkippedCourseSubmission names why a run was not sent', () => {
     expect(describeSkippedCourseSubmission('not-rankable')).toMatch(/auto play and aborted stages/);
     expect(describeSkippedCourseSubmission('tempo')).toMatch(/another tempo is practice/);
+    expect(describeSkippedCourseSubmission('unreleased')).toMatch(/this course is unranked/);
     expect(describeSkippedCourseSubmission('missing-fingerprint')).toMatch(/no fingerprint/);
     expect(describeSkippedCourseSubmission('fingerprint-mismatch')).toMatch(/does not match/);
   });

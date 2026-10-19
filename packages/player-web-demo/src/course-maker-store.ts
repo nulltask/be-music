@@ -1,6 +1,6 @@
 // The player's own courses (made on the select screen) kept across reloads in IndexedDB, as LR2 keeps them in its
-// database: the courses as `.lr2crs` text plus the stage titles that format has no room for, and the default NONSTOP
-// connection.
+// database: the courses as `.lr2crs` text plus what that format has no room for (the stage titles, the constraints and
+// whether each course is ranked), and the default NONSTOP connection.
 
 import {
   LR2_NONSTOP_CONNECTIONS,
@@ -32,6 +32,11 @@ interface StoredMadeCourses {
   titles: string[][];
   /** Each course's constraints, which `.lr2crs` has no room for (absent in records saved before they were kept). */
   constraints?: string[][];
+  /**
+   * Each course's `release` flag, which `.lr2crs` has no room for either (absent in records saved before it was kept;
+   * those courses read back released, as they were made).
+   */
+  release?: boolean[];
   defaultConnection: string;
 }
 
@@ -42,6 +47,7 @@ export function serializeMadeCourses(made: MadeCourses): StoredMadeCourses {
     lr2crs: serializeLr2CourseFile(made.courses),
     titles: made.courses.map((course) => course.stages.map((stage) => stage.title ?? '')),
     constraints: made.courses.map((course) => [...course.constraints]),
+    release: made.courses.map((course) => course.release),
     defaultConnection: made.defaultConnection,
   };
 }
@@ -57,12 +63,15 @@ export function parseMadeCourses(value: unknown): MadeCourses {
     : 'fade';
   const titles = Array.isArray(stored.titles) ? stored.titles : [];
   const constraints = Array.isArray(stored.constraints) ? stored.constraints : [];
+  const releases: unknown[] = Array.isArray(stored.release) ? stored.release : [];
   const courses = parseLr2CourseFile(stored.lr2crs).map((course, index) => {
     const names = titles[index];
     const kept = constraints[index];
+    const release = releases[index];
     return {
       ...course,
       ...(Array.isArray(kept) ? { constraints: normalizeCourseConstraints(kept) } : {}),
+      ...(typeof release === 'boolean' ? { release } : {}),
       stages: course.stages.map((stage, stageIndex) => {
         const title = Array.isArray(names) ? names[stageIndex] : undefined;
         return typeof title === 'string' && title.length > 0 ? { ...stage, title } : stage;
