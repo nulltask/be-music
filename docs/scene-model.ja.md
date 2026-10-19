@@ -23,8 +23,8 @@ flowchart TD
 
 このパッケージは実行環境に依存しません。レンダラーを import せず、DOM や Node のグローバルも時計も読まず、乱数も
 引きません。時刻と乱数は入力として受け取ります。`pnpm run check` が実行環境に依存しないコードの lint 規則で Node の
-組み込みモジュールと DOM や Node のグローバルを禁じ（決定的な判定の時計と `Math.random` の規則はこのパッケージには
-掛かりません）、テストが `@be-music/chart`・`@be-music/json`・`@be-music/player` 以外に依存していないことを確かめます。
+組み込みモジュールと DOM や Node のグローバルを、決定的な判定の lint 規則で時計、タイマー、`Math.random` を禁じ、
+テストが `@be-music/chart`・`@be-music/json`・`@be-music/player` 以外に依存していないことを確かめます。
 
 モデルは、これまでの各シーンの振る舞いから導いています。標準 / LR2 のシーンと beatoraja のシーンで違っていた
 ところは、互換性の方針に従って一つを選びました。LR2 の振る舞い、LR2 にない機能は beatoraja の振る舞いです。
