@@ -138,6 +138,26 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 
 ## bmson -> BMS/BMSON 中間表現 (`@be-music/json`) 変換
 
+読み込みと書き出しの全体の向きは [JSON 仕様 — 変換規則](./json-spec.ja.md#変換規則) にあります。ノートの `x` は、下の一覧の `mode_hint` の規則でレーンを決めます。
+
+```mermaid
+flowchart TD
+  note(["x を持つノート"]) --> pos{"x > 0?"}
+  pos -->|いいえ| bgm(["BGM (01)"])
+  pos -->|はい| hint{"info.mode_hint"}
+  hint -->|"空か欠落<br/>(beat-7k)"| table["hint のレーン表"]
+  hint -->|"beat-*、popn-*、<br/>keyboard-*"| table
+  hint -->|"generic-Nkeys"| gen["x = 1..N<br/>→ 11, 12, …"]
+  hint -->|"それ以外"| fits{"正の x がすべて<br/>1..8?"}
+  fits -->|"はい (beat-7k)"| table
+  fits -->|いいえ| num["異なる x を昇順に<br/>→ 11, 12, …"]
+  table --> covered{"x が表にある?"}
+  gen --> covered
+  covered -->|はい| lane(["レーンのチャンネル"])
+  covered -->|いいえ| bgm
+  num --> lane
+```
+
 - `version` を `bmson.version` に保持
 - `lines[].y` を `preservation.bmson.lines` に保持
 - `info.resolution` を `bmson.info.resolution` に保持
