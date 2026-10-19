@@ -286,8 +286,8 @@ with its own rankings per ruleset, and never as single-chart plays.
 - **Runs at another tempo are not ranked.** A course may be played at another tempo, as a single chart may, and the
   run is then refused as `tempo` (naming the first such stage; for a NONSTOP run, its stitched play), like a single
   play at another tempo.
-- **Unreleased courses are not ranked.** A course with beatoraja's `release: false`, which a drawn random course also
-  has, is recorded so in the course log (`course.release: false`), and its runs are refused as `unreleased`, as
+- **Unreleased courses are not ranked.** A course with beatoraja's `release: false`, which a drawn random course and a
+  course made in the course maker also have, is recorded so in the course log (`course.release: false`), and its runs are refused as `unreleased`, as
   beatoraja keeps them off IR.
 - **NONSTOP runs.** A NONSTOP course is played as one stitched chart, and that play (`nonstop.playlog`) is what is
   judged and ranked. The server rebuilds the stitched chart from the stage charts exactly as the client built it: both

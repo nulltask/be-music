@@ -101,7 +101,12 @@ export function buildLr2CourseHash(course: {
   return `${header}${course.stageMd5s.map((md5) => md5.toLowerCase()).join('')}`;
 }
 
-/** The course definition of a set of stages, in the shape `parseLr2CourseFile` reads the same course back in. */
+/**
+ * The course definition of a set of stages, in the shape `parseLr2CourseFile` reads the same course back in, except
+ * that a made course starts unranked (`release: false`): LR2 inserts it with `ir = 0` (OpenLR2 `WriteCourse`
+ * L17588-L17603) and beatoraja's course editor starts a new course with `release = false`, so neither sends a made
+ * course to IR until the player opts in.
+ */
 function lr2CourseDefinition(
   name: string,
   kind: CourseKind,
@@ -123,7 +128,7 @@ function lr2CourseDefinition(
     ),
     constraints: defaultCourseMakerConstraints(kind),
     trophies: [],
-    release: true,
+    release: false,
     source: { format: 'lr2crs', type: LR2_COURSE_TYPES[kind], header, hash },
   };
   if (keyMode !== undefined) course.keyMode = keyMode;
@@ -133,7 +138,7 @@ function lr2CourseDefinition(
 
 /**
  * Turns a course being made into a course, as LR2's finish (button 230) saves it: `undefined` for a course with no
- * song. A NONSTOP course gets `defaultConnection` (LR2's `config.course.defaultconnection`, button 268) after each of
+ * song. The course starts unranked (`release: false`), as LR2's and beatoraja's made courses do. A NONSTOP course gets `defaultConnection` (LR2's `config.course.defaultconnection`, button 268) after each of
  * stages 1-5; the per-stage connections are edited afterwards ({@link withNonstopConnection}).
  */
 export function finishCourseDraft(
@@ -187,8 +192,9 @@ function escapeXml(text: string): string {
 /**
  * Writes LR2 courses as a `.lr2crs` file: a UTF-8 `<courselist>` that `parseLr2CourseFile` reads back into the same
  * courses. Courses that did not come from an LR2 hash (`source.format !== 'lr2crs'`) are rebuilt from their stage
- * MD5s, and skipped when a stage has none. The format has no room for constraints: LR2 reads a GRADE course back with
- * {@link defaultCourseMakerConstraints} and any other course with none (`serializeBeatorajaCourseFile` keeps them).
+ * MD5s, and skipped when a stage has none. The format has no room for constraints or `release`: LR2 reads a GRADE course
+ * back with {@link defaultCourseMakerConstraints} and any other course with none, and every course back as released
+ * (`serializeBeatorajaCourseFile` keeps both).
  */
 export function serializeLr2CourseFile(courses: readonly CourseDefinition[]): string {
   const lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<courselist>'];
