@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { createEmptyJson } from '../../../json/src/index.ts';
 import { vi } from 'vite-plus/test';
 import type { CreatePlayerUiRuntimeContext } from '../index.ts';
+import { getEngineScheduler } from '../core/engine-clock.ts';
 import type { PlayerInputCommand } from '../core/input-signal-bus.ts';
 import type { PlayerUiCommand } from '../core/ui-signal-bus.ts';
 
@@ -222,22 +223,28 @@ export const HELD_LANDMINE_INPUT: Array<{ delayMs: number; command: PlayerInputC
   { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
 ];
 
+/**
+ * An input runtime that pushes `commands` after their delays from `start()`. The delays run on the engine's scheduler,
+ * so they are host timers by default and exact when the play runs on a virtual clock (`core/characterization/
+ * virtual-clock.ts`), which keeps timing-sensitive input off the wall clock.
+ */
 export function createScheduledInputRuntime(commands: Array<{ delayMs: number; command: PlayerInputCommand }>) {
   return ({ inputSignals }: { inputSignals: { pushCommand: (command: PlayerInputCommand) => void } }) => {
-    const timers: ReturnType<typeof setTimeout>[] = [];
+    const cancels: Array<() => void> = [];
     return {
       start: () => {
+        const scheduler = getEngineScheduler();
         for (const { delayMs, command } of commands) {
-          timers.push(
-            setTimeout(() => {
+          cancels.push(
+            scheduler.setTimeout(() => {
               inputSignals.pushCommand(command);
             }, delayMs),
           );
         }
       },
       stop: () => {
-        for (const timer of timers) {
-          clearTimeout(timer);
+        for (const cancel of cancels) {
+          cancel();
         }
       },
     };
