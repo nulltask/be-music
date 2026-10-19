@@ -11,7 +11,7 @@ updates:
       interval: 'weekly'
     groups:
       # `vite-plus` and the `vite` -> `@voidzero-dev/vite-plus-core` alias must move in lockstep. Dependabot does not
-      # bump the alias, so .github/workflows/dependabot-vite-plus.yml runs `vp migrate` on the PR to align it.
+      # bump the alias, so .github/workflows/dependabot-npm.yml runs `vp migrate` on the PR to align it.
       vite-plus:
         patterns:
           - 'vite-plus'
