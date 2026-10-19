@@ -119,6 +119,23 @@ player は次の順序で譜面を実行します。
 4. ゲージ、スコア、UI state、入力 runtime、音声 runtime を初期化します。
 5. 1 つのプレイループ（`play-loop.ts`）を、そのプレイの判定の戦略（手動（AUTO SCRATCH を含む）、リプレイ（`replayInputs`）、AUTO）で実行し、最後に `PlayerSummary` を返します。
 
+同じ手順を流れで示します（`play.ts`、`play-session.ts`、`play-loop.ts`、`play-finish.ts`）。
+
+```mermaid
+flowchart TD
+  subgraph host["ホスト"]
+    src["元の譜面"] --> rpc["resolvePlayChart<br/>（1 回だけ引く）"]
+  end
+  rpc -->|"譜面 + randomDraws"| entry["manualPlay / autoPlay"]
+  entry -->|"戦略: 手動、<br/>リプレイ、AUTO"| rc
+  subgraph setup["createPlaySession"]
+    rc["resolveChart<br/>→ ResolvedChart"] --> lane["レーンモード、<br/>キー割り当て"]
+    lane --> init["ルールセット、ゲージ、スコア、<br/>入力 / 音声 / UI"]
+  end
+  init --> loop["runPlayLoop<br/>リードイン、60 Hz の tick"]
+  loop --> finish["finishPlay"] --> summary(["PlayerSummary"])
+```
+
 時間解決では、通常の `#STOPxx` に加えて、BMS 拡張 `#STP` も停止イベントとして扱います。
 同じ位置に `#STOPxx` のオブジェクトが複数あれば、LR2 や beatoraja と同じく最後のものが勝ちます。bmson の同じパルスの `stop_events` は、bmson 仕様のとおり加算します。
 `#STP` は `xxx[.yyy] zzzz` を `measure xxx` の `yyy / 1000` 位置にある `zzzz ms` の停止として解釈し、同位置の複数定義は加算します。`.yyy` が省略された場合は `000` として扱います。書式に合わない `bms.stp` 要素は IR には保持されますが、player の時間解決では無視します。
@@ -137,6 +154,30 @@ BMS の `#RANDOM` / `#SETRANDOM` / `#SWITCH` 系制御構文は、再生開始�
 分岐の意味（スタックは 1 本で共有する、閉じていない `#IF` は `#ENDRANDOM` の後も残る、選ばれた分岐の中の定義は譜面全体に効く）は、`evaluateControlFlow`（`@be-music/chart`）の 1 か所だけにあります。
 同じ譜面と draws からは常に同じ結果が得られ、その譜面のために引かれていない draws は `RangeError` で拒否します。
 解決済みの譜面は `bms.controlFlow` を持たないので、もう一度解決しても何も変わりません。
+
+譜面とその draws は、ホストが 1 回だけ引いたところから、すべての利用者へ一緒に渡ります。
+
+```mermaid
+flowchart LR
+  src["bms.controlFlow を<br/>持つ譜面"]
+  subgraph rpc["resolvePlayChart（プレイごとに 1 回）"]
+    draw["drawRandomOutcomes"] --> draws(["RandomDraws"])
+    resolve["resolveBmsControlFlowWithDraws"]
+  end
+  log(["プレイログの<br/>randomDraws"])
+  src --> draw
+  src --> resolve
+  draws --> resolve
+  log -.->|"リプレイ: 引かない"| resolve
+  resolve --> chart["解決済みの譜面"]
+  subgraph users["利用者"]
+    screens["決定 / プレイ /<br/>リザルト画面"]
+    engine["エンジン"]
+    record["プレイログ"]
+  end
+  chart --> users
+  draws --> users
+```
 
 どのホストも 1 回だけ引き、同じ譜面と draws をそのプレイのすべての利用者に渡します。CLI はプレビューの描画とゲームプレイ worker に、web player は決定画面、プレイ画面、エンジン、リザルト画面に渡します。
 リスタートでは引き直します。LR2 や beatoraja もプレイごとに引き直すためです。
@@ -226,6 +267,7 @@ ruleset の 5 KEY / 7 KEY 判定幅を切り替えることもありません。
 [BMS 仕様 — player 固有挙動](./bms-spec.ja.md#player-固有挙動) にあります。モードを表す拡張子は `.pms` だけで、それ以外の
 拡張子では使われているレーンで決めます。そのため 6 / 7 鍵の列がない `.bme` 譜面は、beatoraja と同じく `5 KEY SP` /
 `5 KEY DP` です。
+判定の流れは [README — レーンモード自動判定](../README.ja.md#レーンモード自動判定と入力割り当て) にフローチャートで示しています。
 現実装で自動判定できる主なモードは次のとおりです。
 
 - `5 KEY SP`
@@ -436,6 +478,21 @@ bmson の `judgeRank` は `#DEFEXRANK` と同じ「`100` = `NORMAL`」基準の�
 
 入力はあったが、そのレーン集合に対して `BAD` 窓内の未判定ノートが存在しない場合、 LR2 互換の "空POOR" を発火します。
 
+押下は判定コア（`judge-core-press.ts`）で次の手順をたどります。各手順の規則は後に続きます。
+
+```mermaid
+flowchart TD
+  press(["レーンへの押下"]) --> mines["地雷を確定<br/>（押下は消費しない）"]
+  mines --> held{"レーンでロングノートを<br/>押している?"}
+  held -->|"はい（そのレーン）"| ln["押し直し、または<br/>pressDuringLongNote"]
+  held -->|いいえ| scan{"自身の窓に押下が入る<br/>未判定ノートがある?"}
+  scan -->|"はい: ルールセットの<br/>選び方で最良"| judge["そのノートを判定<br/>（+ multi-BAD）"]
+  scan -->|いいえ| fb["レーンの<br/>代替 keysound"]
+  fb --> miss{"ルールセットの miss 窓に<br/>ノートがある?"}
+  miss -->|はい| empty["空 POOR"]
+  miss -->|いいえ| harmless(["ほかは何もしない"])
+```
+
 - 発生条件は **同レーンのノートが「そのルールセットの miss 窓」の中にあること** です。LR2 の miss 窓は `{0, 1 s}`（lr2oraja の `JudgeProperty` LR2 ミス窓。rank / EXRANK に依存しない固定窓）なので、`lr2` ではノート通過後（遅い側）に空POOR は発生せず、1 秒以内に次のノートが無いレーンの空打鍵は keysound 再生のみで無害です。beatoraja の窓は早側 500 ms・遅側 150 ms です。
 - 同一ノートの手前であれば連打で **何度でも** 発生します（LR2 の `MissCondition.ALWAYS`。判定済みノートの手前でも発生）。
 
@@ -632,6 +689,30 @@ FREE ZONE は `#LNMODE` の対象外で、終端を持つノートとして扱�
 
 一度も触れなかったロングノートは始点分の `POOR` 1 つに加え、チャージ系ではさらに終点分の `POOR` を負います。
 ただし IIDX は終点判定が取り消されるため、負いません。
+
+手動演奏でのロングノートの一生を、実効モードごとに示します。
+
+```mermaid
+stateDiagram-v2
+  state "始点待ち" as Pending
+  state "押下中" as Held
+  state "離鍵マージン" as Margin
+  state "始点を見逃し" as Missed
+  state "確定" as Done
+  [*] --> Pending
+  Pending --> Missed: 始点の窓を過ぎる
+  Pending --> Held: 始点を押す
+  Pending --> Done: 始点 BAD / POOR（iidx のチャージ）
+  Held --> Margin: マージンのある早い離鍵
+  Margin --> Held: 押し直す
+  Margin --> Done: マージンが過ぎる
+  Held --> Done: LN を早く離す
+  Held --> Done: LN が終点に届く
+  Held --> Done: CN / HCN を離す
+  Held --> Done: CN / HCN の終点の窓が閉じる
+  Missed --> [*]
+  Done --> [*]
+```
 
 ### Auto Play
 

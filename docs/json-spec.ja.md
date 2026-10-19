@@ -27,6 +27,72 @@
 
 ## ルート構造
 
+ルートオブジェクトとその部分です（フィールドの型は `packages/json/src/index.ts` にあります）。
+
+```mermaid
+classDiagram
+  direction LR
+  class BeMusicJson {
+    format
+    sourceFormat
+  }
+  class BeMusicMetadata {
+    title
+    bpm
+    rank
+    total
+    extras
+  }
+  class BmsResources {
+    wav
+    bmp
+    bpm
+    stop
+    text
+  }
+  class BeMusicMeasure {
+    index
+    length
+  }
+  class BeMusicEvent {
+    measure
+    channel
+    position
+    value
+    bmson?
+  }
+  class BmsExtensions {
+    controlFlow
+    …
+  }
+  class BmsonExtensions {
+    version?
+    info
+    bga
+  }
+  class BmsPreservation {
+    sourceLines
+    objectLines
+  }
+  class BmsonPreservation {
+    lines
+    bpmEvents
+    stopEvents
+    soundChannels
+  }
+  BeMusicJson *-- BeMusicMetadata : metadata
+  BeMusicJson *-- BmsResources : resources
+  BeMusicJson *-- "*" BeMusicMeasure : measures
+  BeMusicJson *-- "*" BeMusicEvent : events
+  BeMusicJson *-- BmsExtensions : bms
+  BeMusicJson *-- BmsonExtensions : bmson
+  BeMusicJson *-- BeMusicPreservation : preservation
+  BeMusicPreservation *-- BmsPreservation : bms
+  BeMusicPreservation *-- BmsonPreservation : bmson
+```
+
+全体の例です。
+
 ```json
 {
   "format": "be-music-json/0.1.0",
@@ -322,6 +388,29 @@ interface BeMusicEvent {
 分数比較は浮動小数を使わず、クロス積で判定します。
 
 ## 変換規則
+
+どの形式も IR に読み込み、IR から書き出します。BMS と bmson を直接変換することはありません（途中で何が変わるかは [BMS / bmson 互換性ノート §4](./format-compat.ja.md#4-bms-と-bmson-の相互変換) にあります）。`parseChart` は形式のヒントか内容から読み込み方を選びます（`be-music-json` でない `{` の文書は bmson として読みます）。
+
+```mermaid
+flowchart LR
+  subgraph in["読み込み"]
+    bmsIn[".bms / .bme / .bml / .pms"]
+    bmsonIn[".bmson"]
+    jsonIn[".json"]
+  end
+  ir["BeMusicJson<br/>(@be-music/json)"]
+  subgraph out["書き出し"]
+    bmsOut[".bms"]
+    bmsonOut[".bmson"]
+    jsonOut[".json"]
+  end
+  bmsIn -->|parseBms| ir
+  bmsonIn -->|parseBmson| ir
+  jsonIn -->|"parseChart(…, 'json')"| ir
+  ir -->|stringifyBms| bmsOut
+  ir -->|stringifyBmson| bmsonOut
+  ir -->|"parser CLI: JSON.stringify"| jsonOut
+```
 
 - `stringifier` は `position` 分母情報を使って小節内解像度を決定します
 - `parseJson` は `position` タプルを必須とし、欠損イベントはエラー扱いにします

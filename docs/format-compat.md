@@ -352,6 +352,16 @@ The spec's `bga` (L765-806) has `bga_header`, `bga_events`, `layer_events` and `
 
 be-music's [`@be-music/stringifier`](../packages/stringifier/src/index.ts) writes both formats from one IR. The two formats disagree on units, so several values do not carry over as they are. The table states what the stringifier does today; [BMSON spec — Converting between BMS and bmson](./bmson-spec.md#converting-between-bms-and-bmson) has the details.
 
+A round trip goes through the IR both ways (the readers and writers are drawn in [JSON spec — Conversion rules](./json-spec.md#conversion-rules)). What each writer leaves out:
+
+```mermaid
+flowchart LR
+  bms["BMS chart"] -->|parseBms| ir1["IR"]
+  ir1 -->|"stringifyBmson<br/>drops SPEED, #STP,<br/>#EXRANK, #TOTAL"| bmson["bmson"]
+  bmson -->|parseBmson| ir2["IR"]
+  ir2 -->|"stringifyBms<br/>drops c, up, total"| back["BMS chart<br/>LNs as #LNTYPE 1 pairs"]
+```
+
 | Value                      | BMS → bmson                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | bmson → BMS                                                                                                                                                                                                              |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Judge rank                 | A positive `#DEFEXRANK` is written as is (the same `100` = NORMAL unit); otherwise `#RANK 0`–`4` becomes `33` / `67` / `100` / `133` / `167`, the `#DEFEXRANK` value that judges like that rank; any other `#RANK` leaves `judge_rank` out (default `100`). This follows the NORMAL reading, so the converted chart judges about 4/3 wider in beatoraja ([§3.6](#36-judge_rank))                                                                                                                                                                             | A positive `judge_rank` is written as `#DEFEXRANK` (same unit) unless the chart already has one; no `#RANK` is written                                                                                                   |

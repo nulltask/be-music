@@ -27,6 +27,72 @@ Also, as it is still in the early stages of development, backward compatibility 
 
 ## Root structure
 
+The root object and its parts (field types are in `packages/json/src/index.ts`):
+
+```mermaid
+classDiagram
+  direction LR
+  class BeMusicJson {
+    format
+    sourceFormat
+  }
+  class BeMusicMetadata {
+    title
+    bpm
+    rank
+    total
+    extras
+  }
+  class BmsResources {
+    wav
+    bmp
+    bpm
+    stop
+    text
+  }
+  class BeMusicMeasure {
+    index
+    length
+  }
+  class BeMusicEvent {
+    measure
+    channel
+    position
+    value
+    bmson?
+  }
+  class BmsExtensions {
+    controlFlow
+    …
+  }
+  class BmsonExtensions {
+    version?
+    info
+    bga
+  }
+  class BmsPreservation {
+    sourceLines
+    objectLines
+  }
+  class BmsonPreservation {
+    lines
+    bpmEvents
+    stopEvents
+    soundChannels
+  }
+  BeMusicJson *-- BeMusicMetadata : metadata
+  BeMusicJson *-- BmsResources : resources
+  BeMusicJson *-- "*" BeMusicMeasure : measures
+  BeMusicJson *-- "*" BeMusicEvent : events
+  BeMusicJson *-- BmsExtensions : bms
+  BeMusicJson *-- BmsonExtensions : bmson
+  BeMusicJson *-- BeMusicPreservation : preservation
+  BeMusicPreservation *-- BmsPreservation : bms
+  BeMusicPreservation *-- BmsonPreservation : bmson
+```
+
+A full example:
+
 ```json
 {
   "format": "be-music-json/0.1.0",
@@ -322,6 +388,29 @@ Event comparison order:
 Fraction comparisons do not use floating point numbers and are determined by cross products.
 
 ## Conversion rules
+
+Every format is read into the IR and written from it; nothing converts between BMS and bmson directly ([BMS / bmson compatibility notes §4](./format-compat.md#4-converting-between-bms-and-bmson) lists what changes on the way). `parseChart` picks the reader from the format hint or the content (a `{` document that is not `be-music-json` is read as bmson).
+
+```mermaid
+flowchart LR
+  subgraph in["Read"]
+    bmsIn[".bms / .bme / .bml / .pms"]
+    bmsonIn[".bmson"]
+    jsonIn[".json"]
+  end
+  ir["BeMusicJson<br/>(@be-music/json)"]
+  subgraph out["Written"]
+    bmsOut[".bms"]
+    bmsonOut[".bmson"]
+    jsonOut[".json"]
+  end
+  bmsIn -->|parseBms| ir
+  bmsonIn -->|parseBmson| ir
+  jsonIn -->|"parseChart(…, 'json')"| ir
+  ir -->|stringifyBms| bmsOut
+  ir -->|stringifyBmson| bmsonOut
+  ir -->|"parser CLI: JSON.stringify"| jsonOut
+```
 
 - `stringifier` uses `position` denominator information to determine intra-bar resolution
 - `parseJson` requires `position` tuple and treats missing events as errors

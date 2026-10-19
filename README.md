@@ -23,6 +23,44 @@ BMS/BMSON toolchain composed of TypeScript + pnpm workspaces.
 - `@be-music/leaderboard-api`: Private Leaderboard API on Cloudflare Workers: play-log submission, verification by re-simulation, and rankings
 - `@be-music/editor`: CLI editor (import/edit/export)
 
+The packages build on each other in layers. An arrow points from a package to a package that depends on it; a dependency already reached through another arrow is not drawn again (`@be-music/utils` sits under almost every package). [Architecture — Target architecture](./docs/architecture.md#target-architecture) shows the same layers inside the packages.
+
+```mermaid
+flowchart TD
+  subgraph data["Data"]
+    utils["utils"] --> json["json"] --> chart["chart"] --> parser["parser"]
+    parser --> stringifier["stringifier"]
+    parser --> renderer["audio-renderer"]
+  end
+  subgraph rules["Rules and engine"]
+    player["player"]
+  end
+  subgraph models["Models"]
+    scene["scene-model"]
+    sdk["skin-sdk"]
+    lr2["lr2-skin"]
+    beatoraja["beatoraja-skin"]
+  end
+  subgraph hosts["Runtimes and hosts"]
+    editor["editor"]
+    tui["player-tui"]
+    lb["leaderboard-api"]
+    web["player-web"]
+    demo["player-web-demo"]
+  end
+
+  stringifier --> editor
+  renderer --> player
+  player --> scene
+  player --> tui
+  player --> lb
+  scene --> sdk
+  scene --> lr2 --> beatoraja
+  sdk --> web
+  beatoraja --> web
+  web --> demo
+```
+
 ## Required environment
 
 - Node.js `>= 26`
@@ -349,13 +387,26 @@ Automatically determines the next mode based on the channel used.
 - `24 KEY SP`
 - `48 KEY DP`
 
-If the automatic judgment is ambiguous, it will be supplemented with an extension.
+Only the `.pms` extension takes part: a `.pms` file is `9 KEY` ahead of the lane rules. `.bms`, `.bme` and `.bml` files are decided by the lanes in use, so a `.bme` chart without the 6 / 7 key columns is `5 KEY`.
 
-- `.bms` -> `5 KEY SP/DP`
-- `.bme` -> `7 KEY SP/14 KEY DP`
-- `.pms` -> `9 KEY`
 - A full `11..19` one-player keyboard or PMS-STD `22..25` without traditional IIDX 2P channels also resolves to `9 KEY`.
 - Any extended lane channel (`1A..1O` / `2A..2O`, or the wheel `1P` / `1Q` / `2P` / `2Q`) resolves to `24 KEY SP` / `48 KEY DP` ahead of every other rule, and so does a bmson `keyboard-24k` / `keyboard-24k-double` `mode_hint`.
+
+The rule (`resolveChartPlayVariant` in `@be-music/chart`) checks in this order, and the first match wins. The 9 KEY lane pattern is any of three content rules: `#PLAYER 3` with `17` and without `21` / `26..29`, all of `11..19` without a 2P lane, or `22..25` without `21` / `26..29`. "2P" means any `2x` lane in use; lane usage counts the `1x` / `2x` lanes and the `5x` / `6x` long notes, never mines or invisible objects.
+
+```mermaid
+flowchart TD
+  hint{"bmson keyboard<br/>mode_hint?"} -->|"keyboard-24k(-double)"| kb["24 KEY SP / 48 KEY DP"]
+  hint -->|no| ext{"extended lane<br/>1A..1Q / 2A..2Q?"}
+  ext -->|"yes: 2P ? 48 : 24"| kb
+  ext -->|no| pms{".pms?"}
+  pms -->|yes| nine["9 KEY"]
+  pms -->|no| sig{"9 KEY lane<br/>pattern?"}
+  sig -->|yes| nine
+  sig -->|no| iidx{"18 / 19 / 28 / 29<br/>in use?"}
+  iidx -->|"yes: 2P ? 14 : 7"| seven["7 KEY SP / 14 KEY DP"]
+  iidx -->|"no: 2P ? 10 : 5"| five["5 KEY SP / 5 KEY DP"]
+```
 
 ### Representative mode channels and inputs
 
