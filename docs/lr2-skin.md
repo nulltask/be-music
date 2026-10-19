@@ -135,7 +135,8 @@ The LR2 play view (`view/lr2/play-view.ts` in `@be-music/player-web`) reads the 
 | ------------------------------ | ------------------------------------------------------------------------ |
 | The scene starts               | 0, and 1 (`#STARTINPUT` later)                                           |
 | Loading ends, the chart starts | 40 (READY), 41                                                           |
-| The play ends                  | 2 (`#FADEOUT`), 3 (`#CLOSE`)                                             |
+| The play ends (end, ESC, F5)   | 2 (`#FADEOUT`)                                                           |
+| The play fails (gauge emptied) | 3 (`#CLOSE`), alone                                                      |
 | A judgment on a side           | 46 / 47, restarted on each one                                           |
 | A full combo                   | 48 and 49, until the skin's animation on them has played out             |
 | The gauge rises, reaches 100 % | 42, until the skin's rise flash has played out; 44, until it drops       |

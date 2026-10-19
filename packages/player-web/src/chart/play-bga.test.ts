@@ -7,6 +7,7 @@ import {
   loadPlayBga,
   registerSubRegionBgaTextures,
   resolvePoorBgaFallbackKey,
+  resolvePoorBgaMode,
   type PlayBgaResources,
 } from './play-bga.ts';
 
@@ -39,13 +40,32 @@ function emptyResources(): PlayBgaResources {
   return { textures: new Map(), layerTextures: new Map(), videos: new Map(), subRegionOrigins: new Map() };
 }
 
+describe('resolvePoorBgaMode', () => {
+  test('parses 0..2 and treats a missing, unparsable or out-of-range value as 0', () => {
+    expect(resolvePoorBgaMode(undefined)).toBe(0);
+    expect(resolvePoorBgaMode('0')).toBe(0);
+    expect(resolvePoorBgaMode('1')).toBe(1);
+    expect(resolvePoorBgaMode(' 2 ')).toBe(2);
+    expect(resolvePoorBgaMode('02')).toBe(2);
+    expect(resolvePoorBgaMode('3')).toBe(0);
+    expect(resolvePoorBgaMode('-1')).toBe(0);
+    expect(resolvePoorBgaMode('abc')).toBe(0);
+    expect(resolvePoorBgaMode('')).toBe(0);
+  });
+});
+
 describe('resolvePoorBgaFallbackKey', () => {
-  test('uses #BMP00 as the POOR image only when the chart declares no #POORBGA', () => {
+  test('uses #BMP00 as the POOR image unless #POORBGA is 2', () => {
     expect(resolvePoorBgaFallbackKey(bmsChart({ '00': 'miss.bmp' }))).toBe('00');
     expect(resolvePoorBgaFallbackKey(bmsChart({ '01': 'a.bmp' }))).toBeUndefined();
-    const withPoorBga = bmsChart({ '00': 'miss.bmp' });
-    withPoorBga.bms.poorBga = '1';
-    expect(resolvePoorBgaFallbackKey(withPoorBga)).toBeUndefined();
+    for (const value of ['0', '1', 'x', '5']) {
+      const chart = bmsChart({ '00': 'miss.bmp' });
+      chart.bms.poorBga = value;
+      expect(resolvePoorBgaFallbackKey(chart)).toBe('00');
+    }
+    const hidden = bmsChart({ '00': 'miss.bmp' });
+    hidden.bms.poorBga = '2';
+    expect(resolvePoorBgaFallbackKey(hidden)).toBeUndefined();
   });
 });
 

@@ -496,7 +496,8 @@ function resolveLr2Gauge(gaugeId: string, total: number, noteCount: number): Gau
       };
     }
     case 'DEATH':
-      // lr2oraja HAZARD_LR2 (beatoraja-derived values — LR2's own G-ATTACK/P-ATTACK family has no exact analog).
+      // LR2's own DEATH table (OpenLR2 LR2f.cpp L27673-L27680; LR2body.exe `ParseBmsFile` case 2 at 0x4b5c2e):
+      // no gain at all, BAD / POOR kill, and an empty POOR costs nothing. beatoraja's HAZARD_LR2 differs.
       return {
         id: 'DEATH',
         min: 0,
@@ -505,7 +506,7 @@ function resolveLr2Gauge(gaugeId: string, total: number, noteCount: number): Gau
         border: 0,
         survival: true,
         death: 2,
-        values: [0.15, 0.06, 0, -100, -100, -10],
+        values: [0, 0, 0, -100, -100, 0],
         guts: [],
       };
     default:

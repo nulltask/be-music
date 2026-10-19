@@ -5,7 +5,7 @@ import {
   isClassCourseConstraints,
   type RandomCourseDefinition,
 } from './definition.ts';
-import { type CourseSongRecord, evaluateCourseSongFilter, parseCourseSongFilter } from './filter.ts';
+import { type CourseSongRecord, parseCourseSongFilter, selectCourseSongs } from './filter.ts';
 
 /** A drawn random course: the fixed course to play and the candidate drawn for each stage. */
 export interface RandomCourseDrawSuccess<T> {
@@ -42,8 +42,9 @@ function songKey(record: CourseSongRecord): string {
  * Draws one chart per stage of a random course, as beatoraja's `RandomCourseData.lotterySongDatas` does, and returns
  * the fixed course to play.
  *
- * - Each stage draws uniformly from the candidates its filter selects. A stage without a filter draws from every
- *   candidate when it is the first stage, and from the previous filter's selection otherwise.
+ * - Each stage draws uniformly from the candidates its filter selects, after the filter's own `ORDER BY` / `LIMIT`
+ *   ({@link selectCourseSongs}; `ORDER BY RANDOM()` draws from `random` first). A stage without a filter draws from
+ *   every candidate when it is the first stage, and from the previous filter's selection otherwise.
  * - With `distinct`, a chart already drawn for an earlier stage is redrawn; when every candidate of the stage is taken,
  *   the stage falls back to any of them, so a chart can repeat (beatoraja does the same).
  * - A candidate without a valid `md5` / `sha256` cannot be a course stage and is never drawn.
@@ -71,7 +72,7 @@ export function drawRandomCourse<T extends CourseSongRecord>(
       } else {
         const parsed = parseCourseSongFilter(stage.filter);
         if (!parsed.ok) return { ok: false, stage: index, reason: 'invalid-filter', error: parsed.error };
-        lots = usable.filter(({ song }) => evaluateCourseSongFilter(parsed.filter, song));
+        lots = selectCourseSongs(parsed.query, usable, ({ song }) => song, random);
       }
     }
     if (lots.length === 0) return { ok: false, stage: index, reason: 'no-candidates' };

@@ -21,6 +21,7 @@ import type { BeMusicJson } from '@be-music/json';
 import {
   JUDGE_LANE_REF_RANGE,
   TIMER_FADEOUT,
+  TIMER_FAILED,
   TIMER_PLAY,
   TIMER_PREVIEW,
   TIMER_READY,
@@ -67,6 +68,7 @@ import {
   type BeatorajaTimerChanges,
 } from '@be-music/beatoraja-skin/scene';
 import type { ChartPlayVariant } from '@be-music/chart';
+import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player/display';
 import { resolveSideKeySlot } from '@be-music/player/lanes';
 import {
   recentJudgeTimings,
@@ -76,6 +78,7 @@ import {
   type PlayState,
 } from '@be-music/scene-model';
 import type { BeMusicJudgeWindows, BeMusicJudgeWindowSet } from '@be-music/skin-sdk';
+import { isMissLayerShown } from '../../chart/bga-timeline.ts';
 import { extractChartSubartist } from '../../chart/beatoraja/meta.ts';
 import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
 import { computeBeatorajaChartNoteDistribution } from '../../chart/beatoraja/note-distribution.ts';
@@ -253,7 +256,8 @@ export class BeatorajaPlayBridge {
     3: createEmptyLaneJudgeRing(),
   };
   private readonly placements = new Map<string, BeatorajaLanePlacement>();
-  private poorBgaActive = false;
+  /** Chart seconds of the last miss (the engine's `trigger-poor-bga`), which starts the miss layer's window. */
+  private lastMissSeconds: number | undefined;
   /** Lanes whose long note the player holds now: the note layer draws the held body sprite. */
   private readonly lnHoldHeldByChannel = new Set<string>();
   /**
@@ -425,6 +429,13 @@ export class BeatorajaPlayBridge {
         this.fadeoutStamped = true;
         this.timerStartedAt.set(TIMER_FADEOUT, event.atMs);
         return;
+      case 'exit-close':
+        // The play failed and stops (beatoraja's `STATE_FAILED`): `TIMER_FAILED` starts, unless the frame that took the
+        // gauge to 0 already started it.
+        if (this.firedOnce.has(TIMER_FAILED)) return;
+        this.firedOnce.add(TIMER_FAILED);
+        this.timerStartedAt.set(TIMER_FAILED, event.atMs);
+        return;
       case 'lane':
         this.applyLane(event.channel, event.action);
         return;
@@ -434,7 +445,8 @@ export class BeatorajaPlayBridge {
         this.lnTailVerdictLatch.add(event.channel);
         return;
       case 'poor-bga':
-        this.poorBgaActive = event.shown;
+        // beatoraja times its miss layer from the miss alone: a later judgment (`clear-poor-bga`) does not end it.
+        if (event.shown && event.seconds !== undefined) this.lastMissSeconds = event.seconds;
         return;
       case 'judge':
         this.applyJudge(event);
@@ -835,9 +847,12 @@ export class BeatorajaPlayBridge {
     this.baseOps = next;
   }
 
-  /** Whether the POOR image shows (between the engine's `trigger-poor-bga` and `clear-poor-bga`). */
-  public isPoorBgaActive(): boolean {
-    return this.poorBgaActive;
+  /**
+   * Whether the POOR image shows at chart time `seconds`: for beatoraja's `misslayerDuration` (500 ms by default) from
+   * the last miss, as `BGAProcessor.drawBGA` draws it.
+   */
+  public isPoorBgaActive(seconds: number): boolean {
+    return isMissLayerShown(this.lastMissSeconds, seconds, DEFAULT_POOR_BGA_DISPLAY_SECONDS);
   }
 
   /** Whether `op` is lit (diagnostics, tests). */

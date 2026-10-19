@@ -570,8 +570,9 @@ export async function createBgaAnsiRenderer(
   const poorKeys = new Set(poorTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const layerKeys = new Set(layerTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const layer2Keys = new Set(layer2Timeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
+  // LR2 starts its miss layer from `#BMP00`; only `#POORBGA 2` (no POOR image) turns that off.
   const shouldUsePoorBmp00Fallback =
-    typeof json.bms.poorBga !== 'string' &&
+    !isPoorBgaHidden(json.bms.poorBga) &&
     typeof json.resources.bmp['00'] === 'string' &&
     json.resources.bmp['00'].length > 0;
   const poorFallbackKey = shouldUsePoorBmp00Fallback ? '00' : undefined;
@@ -772,6 +773,14 @@ async function loadFramesByKeys(params: {
   );
 
   return map;
+}
+
+/**
+ * Whether `#POORBGA` is `2`, which never shows a POOR image (hitkey's command memo). A missing, unparsable or
+ * out-of-range value is `0`, the usual behaviour.
+ */
+function isPoorBgaHidden(value: string | undefined): boolean {
+  return value !== undefined && Number.parseInt(value.trim(), 10) === 2;
 }
 
 function countMappedBmpResourceTargets(keys: ReadonlySet<string>, resources: Record<string, string>): number {

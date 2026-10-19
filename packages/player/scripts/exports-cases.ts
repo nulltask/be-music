@@ -423,7 +423,8 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       );
     },
   });
-  const benchFilterSql = "song.level BETWEEN 11 AND 12 AND mode IN (7, 14) AND title NOT LIKE '%HYPER%'";
+  const benchFilterSql =
+    "song.level BETWEEN 11 AND 12 AND song.mode IN (7, 14) AND title NOT LIKE '%HYPER%' ORDER BY level DESC LIMIT 50";
   const benchFilter = courseApi.parseCourseSongFilter(benchFilterSql);
   const benchSongs = Array.from({ length: 200 }, (_, index) => ({
     md5: index.toString(16).padStart(32, '0'),
@@ -440,6 +441,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player.course.evaluateCourseSongFilter', {
     run: () => {
       if (benchFilter.ok) for (const song of benchSongs) courseApi.evaluateCourseSongFilter(benchFilter.filter, song);
+    },
+  });
+  define('player.course.selectCourseSongs', {
+    run: () => {
+      if (benchFilter.ok) courseApi.selectCourseSongs(benchFilter.query, benchSongs, (song) => song);
     },
   });
   let benchSeed = 1;

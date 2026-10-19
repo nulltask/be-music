@@ -5,6 +5,7 @@ import {
   buildBgaTimeline,
   buildSkinBgaFrame,
   collectBgaTextureLoadKeys,
+  isMissLayerShown,
   isVideoExtension,
   pickActiveBgaCue,
   pickActiveBgaKey,
@@ -328,5 +329,15 @@ describe('resolveBgaStacks', () => {
   it('leaves out the base or layer the BGA rect hides', () => {
     const [stack] = resolveBgaStacks({ timeline, seconds: 1, noBase: true, noLayer: true, inPoorWindow: false });
     expect(stack).toEqual({ alpha: 1, baseCue: undefined, layerCue: undefined });
+  });
+});
+
+describe('isMissLayerShown', () => {
+  it('shows from the miss for the duration, and never before a miss', () => {
+    expect(isMissLayerShown(undefined, 1, 0.5)).toBe(false);
+    expect(isMissLayerShown(10, 9.9, 0.5)).toBe(false);
+    expect(isMissLayerShown(10, 10, 0.5)).toBe(true);
+    expect(isMissLayerShown(10, 10.49, 0.5)).toBe(true);
+    expect(isMissLayerShown(10, 10.5, 0.5)).toBe(false);
   });
 });

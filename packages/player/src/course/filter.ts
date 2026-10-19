@@ -1,11 +1,13 @@
 /**
  * The SQL `WHERE` subset beatoraja random-course stages are written in, parsed and evaluated against a neutral song
- * record. beatoraja runs each stage's clause against its song database (`SQLiteSongDatabaseAccessor.getSongDatas`);
- * be-music has no database, so the clause is evaluated per candidate with SQLite's comparison rules.
+ * record. beatoraja runs each stage's clause against its song database (`SQLiteSongDatabaseAccessor.getSongDatas`),
+ * appending it to `... WHERE ` over `song` joined with the player's `score` and `scorelog` (and `information` when song
+ * information is on); be-music has no database, so the clause is evaluated per candidate with SQLite's comparison
+ * rules, and a trailing `ORDER BY … LIMIT …` orders and cuts the selection ({@link selectCourseSongs}).
  *
- * Anything outside the subset — an unknown column, a function call, a sub-query — is a parse error, so a stage with
- * such a filter selects nothing (beatoraja's query fails and returns no song the same way) instead of throwing at play
- * time.
+ * Anything outside the subset — an unknown column, a column the joined tables make ambiguous, a function call, a
+ * sub-query — is a parse error, so a stage with such a filter selects nothing (beatoraja's query fails and returns no
+ * song the same way) instead of throwing at play time.
  */
 
 /**
@@ -71,6 +73,24 @@ const COLUMN_TYPES: Readonly<Record<CourseSongColumn, 'text' | 'integer'>> = {
   content: 'integer',
 } satisfies Record<CourseSongTextColumn, 'text'> & Record<CourseSongIntegerColumn, 'integer'>;
 
+/**
+ * The columns that more than one of the tables beatoraja joins has (`song`, `score`, `scorelog`, `information`), so
+ * SQLite refuses them unqualified (`ambiguous column name`) and the stage selects nothing: write `song.mode`, not
+ * `mode`. `song` / `score` share `sha256`, `mode`, `notes` and `date`; `score` / `scorelog` share `sha256`, `mode`,
+ * `clear`, `combo`, `minbp`, `avgjudge` and `date`; `information` has `sha256` too (`SQLiteSongDatabaseAccessor`,
+ * `ScoreDatabaseAccessor`, `ScoreLogDatabaseAccessor`, `SongInformationAccessor` at beatoraja 8320241d).
+ */
+const AMBIGUOUS_COLUMNS: ReadonlySet<string> = new Set([
+  'sha256',
+  'mode',
+  'notes',
+  'date',
+  'clear',
+  'combo',
+  'minbp',
+  'avgjudge',
+]);
+
 /** An SQL value: SQLite's INTEGER / REAL (`number`), TEXT (`string`) or NULL. */
 export type CourseSqlValue = number | string | null;
 
@@ -106,7 +126,37 @@ export type CourseSongFilterExpr =
     }
   | { type: 'isNull'; operand: CourseSongFilterExpr; negated: boolean };
 
-export type CourseSongFilterParseResult = { ok: true; filter: CourseSongFilterExpr } | { ok: false; error: string };
+/** What an `ORDER BY` term sorts by: an expression, or SQLite's `RANDOM()`, which takes the injected random source. */
+export type CourseSongOrderKey = CourseSongFilterExpr | { type: 'random' };
+
+/** One `ORDER BY` term. */
+export interface CourseSongOrderTerm {
+  key: CourseSongOrderKey;
+  descending: boolean;
+  /** `NULLS FIRST` / `NULLS LAST`; absent, SQLite's default: NULL sorts first ascending and last descending. */
+  nulls?: 'first' | 'last';
+}
+
+/** A whole stage filter: the `WHERE` clause and the trailing `ORDER BY` / `LIMIT` / `OFFSET` it may carry. */
+export interface CourseSongQuery {
+  where: CourseSongFilterExpr;
+  /** Empty without `ORDER BY`: the selection keeps the candidates' order. */
+  orderBy: CourseSongOrderTerm[];
+  /** `LIMIT`; absent (or negative in the SQL) for none. */
+  limit?: number;
+  /** `OFFSET` (or the first number of `LIMIT m, n`); 0 without one, a negative one reading as 0, as in SQLite. */
+  offset: number;
+}
+
+export type CourseSongFilterParseResult =
+  | {
+      ok: true;
+      /** The `WHERE` clause alone ({@link evaluateCourseSongFilter}). */
+      filter: CourseSongFilterExpr;
+      /** The whole filter, ordering and limit included ({@link selectCourseSongs}). */
+      query: CourseSongQuery;
+    }
+  | { ok: false; error: string };
 
 type Token =
   | { kind: 'number'; value: number; real: boolean; at: number }
@@ -202,7 +252,7 @@ function tokenize(sql: string): Token[] {
   return tokens;
 }
 
-const RESERVED = new Set(['and', 'or', 'not', 'in', 'like', 'between', 'is', 'null', 'escape']);
+const RESERVED = new Set(['and', 'or', 'not', 'in', 'like', 'between', 'is', 'null', 'escape', 'order', 'limit']);
 
 class Parser {
   private index = 0;
@@ -213,11 +263,74 @@ class Parser {
     this.tokens = tokens;
   }
 
-  parse(): CourseSongFilterExpr {
-    const expr = this.or();
+  parse(): CourseSongQuery {
+    const where = this.or();
+    const orderBy = this.orderBy();
+    let limit: number | undefined;
+    let offset = 0;
+    if (this.acceptKeyword('limit')) {
+      const first = this.integer('LIMIT');
+      if (this.acceptOp(',') !== undefined) {
+        // `LIMIT m, n`: SQLite reads the first number as the offset.
+        offset = first;
+        limit = this.integer('LIMIT');
+      } else {
+        limit = first;
+        if (this.acceptKeyword('offset')) offset = this.integer('OFFSET');
+      }
+    }
     const next = this.peek();
     if (next.kind !== 'end') throw new FilterSyntaxError(`unexpected ${describe(next)} at ${next.at}`);
-    return expr;
+    return {
+      where,
+      orderBy,
+      ...(limit !== undefined && limit >= 0 ? { limit } : {}),
+      offset: Math.max(0, offset),
+    };
+  }
+
+  /** `ORDER BY term [ASC | DESC] [NULLS FIRST | LAST], …`, or nothing. */
+  private orderBy(): CourseSongOrderTerm[] {
+    if (!this.acceptKeyword('order')) return [];
+    this.expectKeyword('by');
+    const terms: CourseSongOrderTerm[] = [];
+    do {
+      let key: CourseSongOrderKey;
+      const at = this.peek().at;
+      const after = this.peek(1);
+      if (this.isKeyword('random') && after.kind === 'op' && after.value === '(') {
+        this.index += 2;
+        this.expectOp(')');
+        key = { type: 'random' };
+      } else {
+        key = this.or();
+        // SQLite reads a bare integer as a result-column number, which depends on beatoraja's column list.
+        if (key.type === 'literal' && typeof key.value === 'number') {
+          throw new FilterSyntaxError(`ORDER BY a column number is not supported at ${at}`);
+        }
+      }
+      let descending = false;
+      if (this.acceptKeyword('desc')) descending = true;
+      else this.acceptKeyword('asc');
+      let nulls: 'first' | 'last' | undefined;
+      if (this.acceptKeyword('nulls')) {
+        if (this.acceptKeyword('first')) nulls = 'first';
+        else if (this.acceptKeyword('last')) nulls = 'last';
+        else throw new FilterSyntaxError(`expected FIRST or LAST at ${this.peek().at}`);
+      }
+      terms.push({ key, descending, ...(nulls !== undefined ? { nulls } : {}) });
+    } while (this.acceptOp(',') !== undefined);
+    return terms;
+  }
+
+  /** A `LIMIT` / `OFFSET` count: an integer literal, optionally signed. */
+  private integer(clause: string): number {
+    const sign = this.acceptOp('-', '+');
+    const token = this.next();
+    if (token.kind !== 'number' || token.real || !Number.isSafeInteger(token.value)) {
+      throw new FilterSyntaxError(`${clause} takes an integer at ${token.at}`);
+    }
+    return sign === '-' ? -token.value : token.value;
   }
 
   private peek(offset = 0): Token {
@@ -390,7 +503,9 @@ class Parser {
         throw new FilterSyntaxError(`unexpected ${token.value.toUpperCase()} at ${token.at}`);
       }
       let name = token.value;
+      let qualified = false;
       if (this.acceptOp('.') !== undefined) {
+        qualified = true;
         // Only the `song` table is modelled; `score.clear`, `scorelog.*` and `information.*` are not.
         if (name.toLowerCase() !== 'song') throw new FilterSyntaxError(`unsupported table '${name}'`);
         const column = this.next();
@@ -403,6 +518,7 @@ class Parser {
         throw new FilterSyntaxError(`functions are not supported: ${name}`);
       }
       const column = name.toLowerCase();
+      if (!qualified && AMBIGUOUS_COLUMNS.has(column)) throw new FilterSyntaxError(`ambiguous column name: ${name}`);
       if (!Object.hasOwn(COLUMN_TYPES, column)) throw new FilterSyntaxError(`unknown column '${name}'`);
       return { type: 'column', column: column as CourseSongColumn };
     }
@@ -418,12 +534,15 @@ function describe(token: Token): string {
 /**
  * Parses a random-course stage filter. Supported: column names (optionally `song.`-qualified, quoted with `"`, `` ` ``
  * or `[]`), string / number / `NULL` literals, `=` `==` `!=` `<>` `<` `<=` `>` `>=`, `AND` `OR` `NOT`, parentheses,
- * `[NOT] IN (…)`, `[NOT] LIKE … [ESCAPE …]`, `[NOT] BETWEEN … AND …`, `IS [NOT] NULL`, `+ - * / %`, `& |` and `||`.
- * Anything else — an unknown column, another table, a function, a sub-query — gives `{ ok: false }` with the reason.
+ * `[NOT] IN (…)`, `[NOT] LIKE … [ESCAPE …]`, `[NOT] BETWEEN … AND …`, `IS [NOT] NULL`, `+ - * / %`, `& |` and `||`,
+ * then an optional `ORDER BY expr | RANDOM() [ASC | DESC] [NULLS FIRST | LAST], …` and `LIMIT n [OFFSET m]` /
+ * `LIMIT m, n`. Anything else — an unknown column, an unqualified column beatoraja's joined tables share (`mode`,
+ * `notes`, `sha256`, …), another table, a function, a sub-query — gives `{ ok: false }` with the reason.
  */
 export function parseCourseSongFilter(sql: string): CourseSongFilterParseResult {
   try {
-    return { ok: true, filter: new Parser(tokenize(sql)).parse() };
+    const query = new Parser(tokenize(sql)).parse();
+    return { ok: true, filter: query.where, query };
   } catch (error) {
     if (error instanceof FilterSyntaxError) return { ok: false, error: error.message };
     throw error;
@@ -657,4 +776,52 @@ function evaluate(expr: CourseSongFilterExpr, record: CourseSongRecord): CourseS
 /** Whether a record passes a parsed filter: the clause is true (an unknown / NULL result does not pass, as in SQL). */
 export function evaluateCourseSongFilter(filter: CourseSongFilterExpr, record: CourseSongRecord): boolean {
   return truth(evaluate(filter, record)) === true;
+}
+
+/** SQLite's `ORDER BY` order of two values for one term: NULL first ascending, last descending, unless `nulls` says. */
+function compareOrderValues(a: CourseSqlValue, b: CourseSqlValue, term: CourseSongOrderTerm): number {
+  if (a === null || b === null) {
+    if (a === b) return 0;
+    const nullsFirst = term.nulls !== undefined ? term.nulls === 'first' : !term.descending;
+    return (a === null) === nullsFirst ? -1 : 1;
+  }
+  const order = compareValues(a, b);
+  return term.descending ? -order : order;
+}
+
+/**
+ * The candidates a whole stage filter selects, in its order: those its `WHERE` clause passes, sorted by its
+ * `ORDER BY` (ties keep the candidates' order, so the result is deterministic), then cut by its `OFFSET` / `LIMIT`.
+ * `recordOf` gives each candidate's {@link CourseSongRecord}. `ORDER BY RANDOM()` draws one value per selected
+ * candidate, in the candidates' order, from `random` (values in `[0, 1)` like `Math.random`), and throws without it.
+ */
+export function selectCourseSongs<T>(
+  query: CourseSongQuery,
+  candidates: readonly T[],
+  recordOf: (candidate: T) => CourseSongRecord,
+  random?: () => number,
+): T[] {
+  const selected = candidates.filter((candidate) => evaluateCourseSongFilter(query.where, recordOf(candidate)));
+  let ordered = selected;
+  if (query.orderBy.length > 0) {
+    const keyed = selected.map((candidate) => {
+      const record = recordOf(candidate);
+      const keys = query.orderBy.map(({ key }): CourseSqlValue => {
+        if (key.type !== 'random') return evaluate(key, record);
+        if (random === undefined) throw new Error('ORDER BY RANDOM() needs a random source');
+        return random();
+      });
+      return { candidate, keys };
+    });
+    keyed.sort((a, b) => {
+      for (const [index, term] of query.orderBy.entries()) {
+        const order = compareOrderValues(a.keys[index]!, b.keys[index]!, term);
+        if (order !== 0) return order;
+      }
+      return 0;
+    });
+    ordered = keyed.map(({ candidate }) => candidate);
+  }
+  const end = query.limit !== undefined ? query.offset + query.limit : undefined;
+  return ordered.slice(query.offset, end);
 }

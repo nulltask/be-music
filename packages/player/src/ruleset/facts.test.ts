@@ -2,6 +2,7 @@ import { createEmptyJson } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import type { BeMusicPlaylog } from '../playlog/format.ts';
 import { rulesetChartFactsFromPlaylog } from '../playlog/rulesets.ts';
+import { GAUGE_JUDGE_BAD, GAUGE_JUDGE_EMPTY_POOR, RulesetGauge } from './gauge.ts';
 import {
   countBaseNotes,
   createEmptyRulesetNoteCounts,
@@ -47,6 +48,27 @@ describe('ruleset/facts', () => {
     expect(resolveRuleset(chart, 'beatoraja', { selectedGauge: 'DEATH' }).gauge.id).toBe('HAZARD');
     // An explicit ruleset-scoped id wins over the mapping.
     expect(resolveRuleset(chart, 'beatoraja', { selectedGauge: 'GROOVE', gauge: 'EX-HARD' }).gauge.id).toBe('EX-HARD');
+  });
+
+  test("LR2's DEATH gauge never gains and lets empty POORs through; BAD kills (OpenLR2 L27673-L27680)", () => {
+    const spec = resolveRuleset(facts(), 'lr2', { selectedGauge: 'DEATH' }).gauge;
+    expect(spec.id).toBe('DEATH');
+    expect(spec.values).toEqual([0, 0, 0, -100, -100, 0]);
+
+    const gauge = new RulesetGauge(spec);
+    for (let index = 0; index < 50; index += 1) {
+      gauge.applyJudge(GAUGE_JUDGE_EMPTY_POOR);
+    }
+    expect(gauge.value).toBe(100);
+    expect(gauge.failedMidPlay).toBe(false);
+    gauge.applyJudge(GAUGE_JUDGE_BAD);
+    expect(gauge.value).toBe(0);
+    expect(gauge.cleared()).toBe(false);
+  });
+
+  test("beatoraja's HAZARD keeps its own table", () => {
+    const spec = resolveRuleset(facts(), 'beatoraja', { selectedGauge: 'DEATH' }).gauge;
+    expect(spec.values).toEqual([0.15, 0.06, 0, -100, -100, -10]);
   });
 
   test('the debug judge-window override reaches the ruleset window tables', () => {
