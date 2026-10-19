@@ -30,11 +30,25 @@ Non-goals:
 
 ## 2. Architecture
 
-```
-player-web (browser) ─┐                       ┌─ D1: users / charts / scores / best_scores / rivals ...
-player-tui (CLI) ─────┼─ HTTPS ─→ be-music-player-demo Worker ─(Service Binding)→ be-music-leaderboard Worker
-                      │            /api/*          → Hono API     └─ R2: play logs, chart documents, ghosts, OG images
-                      │            /leaderboard/*  → Hono JSX pages
+```mermaid
+flowchart LR
+  subgraph clients[Clients]
+    W[player-web]
+    T[player-tui]
+  end
+  subgraph workers[Workers]
+    P[play]
+    A[accounts]
+    D[dashboard]
+    L[leaderboard]
+  end
+  W --> P
+  T --> L
+  P -->|/api/*| L
+  A -->|/api/auth/*| L
+  D -->|session| L
+  L --> DB[(D1)]
+  L --> R2[(R2)]
 ```
 
 - **Runtime**: Cloudflare Workers with D1 and R2. There is no plan to leave Cloudflare.
@@ -45,26 +59,25 @@ player-tui (CLI) ─────┼─ HTTPS ─→ be-music-player-demo Worker 
 - **Validation**: Valibot through `@hono/standard-validator`.
 - **ORM**: Drizzle. drizzle-kit generates SQL migrations into the package; Better Auth's tables use the same
   migrations.
-- **Same origin**: the player demo's Worker (`be-music-player-demo`) forwards `/api/*` and `/leaderboard/*` to the
-  leaderboard Worker through a Service Binding. The leaderboard Worker has no public URL of its own
-  (`workers_dev: false`, `preview_urls: false`), so pages, API and session cookies share the player's origin and no
-  CORS is needed.
+- **Hosts** (docs/services.md): the Leaderboard serves its pages and API on `leaderboard.be-music.app` (pages still
+  under `/leaderboard`). The Player Worker (`play`) forwards `/api/*` to it through a Service Binding, so the player's
+  requests stay on its own origin. Better Auth lives here until Accounts is split out; its base URL is
+  `accounts.be-music.app`, whose Worker forwards `/api/auth/*` here, and its session cookies are shared on
+  `be-music.app`, so every service reads the same session.
 
 ### 2.1 Environments and deployment
 
-| Branches        | Leaderboard Worker             | D1 / R2                  | Player demo                                            |
-| --------------- | ------------------------------ | ------------------------ | ------------------------------------------------------ |
-| `devel`         | `be-music-leaderboard`         | production               | `be-music-player-demo`, deployed                       |
-| every other one | `be-music-leaderboard-preview` | preview database, bucket | a preview version of `be-music-player-demo` per branch |
+| Branch  | Leaderboard Worker    | D1 / R2                  | Host                               |
+| ------- | --------------------- | ------------------------ | ---------------------------------- |
+| `main`  | `leaderboard`         | production               | `leaderboard.be-music.app`         |
+| `devel` | `leaderboard-preview` | preview database, bucket | `leaderboard.preview.be-music.app` |
 
-- **CI/CD**: Workers Builds, following the player demo, whose production branch is `devel`. Every other branch is
-  uploaded as a preview version with its own Preview URL (`wrangler versions upload --env preview`). A version carries
-  its own bindings, so the previews talk to the preview Leaderboard. The preview Leaderboard is one Worker shared by all
-  branches; the last deploy wins.
+- **CI/CD**: the Deploy workflow (`.github/workflows/deploy.yml`) deploys every service on pushes to `main` and
+  `devel` (docs/services.md section 2).
 - **Migrations run before the deploy**, so every migration must work with the code that is still running
   (expand → switch → contract). D1 has no rollback.
-- **Previews must never reach production data.** The demo's previews bind the preview Leaderboard, and the Leaderboard
-  Workers keep their own Preview URLs off.
+- **Previews must never reach production data.** The preview Workers bind the preview Leaderboard, and the
+  Leaderboard Workers keep their Preview URLs off.
 - **Secrets** (`BETTER_AUTH_SECRET`, OAuth client secrets) are set per environment. Their values live in 1Password; the
   repository holds `op://` references, and a script sets them with `cf` (package README, "Secrets").
 - **Configuration and tooling**: the `cf` CLI is the primary tool (`cloudflare.config.ts`); Wrangler fills the gaps

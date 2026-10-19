@@ -29,11 +29,25 @@ Leaderboard は be-music のオンラインのスコアランキングで、LR2 
 
 ## 2. 構成
 
-```
-player-web（ブラウザ）─┐                      ┌─ D1: users / charts / scores / best_scores / rivals ...
-player-tui（CLI）─────┼─ HTTPS ─→ be-music-player-demo Worker ─(Service Binding)→ be-music-leaderboard Worker
-                      │            /api/*          → Hono の API      └─ R2: プレイログ、譜面ドキュメント、ゴースト、OG 画像
-                      │            /leaderboard/*  → Hono JSX のページ
+```mermaid
+flowchart LR
+  subgraph clients[クライアント]
+    W[player-web]
+    T[player-tui]
+  end
+  subgraph workers[Workers]
+    P[play]
+    A[accounts]
+    D[dashboard]
+    L[leaderboard]
+  end
+  W --> P
+  T --> L
+  P -->|/api/*| L
+  A -->|/api/auth/*| L
+  D -->|セッション| L
+  L --> DB[(D1)]
+  L --> R2[(R2)]
 ```
 
 - **実行環境**: Cloudflare Workers と D1・R2。Cloudflare から移る予定はありません。
@@ -45,21 +59,24 @@ player-tui（CLI）─────┼─ HTTPS ─→ be-music-player-demo Worke
 - **入力検証**: Valibot と `@hono/standard-validator`。
 - **ORM**: Drizzle。drizzle-kit で SQL のマイグレーションをパッケージ内に生成し、Better Auth のテーブルも同じ
   マイグレーションで管理します。
-- **同一オリジン**: プレイヤーのデモの Worker（`be-music-player-demo`） が `/api/*` と `/leaderboard/*` を Service Binding で
-  leaderboard Worker に転送します。leaderboard Worker は自分の公開 URL を持たない（`workers_dev: false`、
-  `preview_urls: false`）ので、ページ・API・セッションの Cookie はプレイヤーと同じオリジンになり、CORS は不要です。
+- **ホスト**（docs/services.ja.md）: Leaderboard は、ページと API を `leaderboard.be-music.app` で配信します（ページは
+  今も `/leaderboard` の下）。Player の Worker（`play`）が `/api/*` を Service Binding で転送するので、プレイヤーからの
+  リクエストはプレイヤー自身のオリジンのままです。Better Auth は、Accounts を切り出すまでここに置きます。base URL は
+  `accounts.be-music.app` で、その Worker が `/api/auth/*` をここへ転送します。セッション Cookie は `be-music.app` で共有
+  するので、どのサービスも同じセッションを読みます。
 
 ### 2.1 環境とデプロイ
 
-| ブランチ         | Leaderboard の Worker          | D1 / R2                            | プレイヤーのデモ                                     |
-| ---------------- | ------------------------------ | ---------------------------------- | ---------------------------------------------------- |
-| `devel`          | `be-music-leaderboard`         | 本番                               | `be-music-player-demo` にデプロイ                    |
-| それ以外のすべて | `be-music-leaderboard-preview` | preview 用のデータベースとバケット | ブランチごとに `be-music-player-demo` のプレビュー版 |
+| ブランチ | Leaderboard の Worker | D1 / R2                            | ホスト                             |
+| -------- | --------------------- | ---------------------------------- | ---------------------------------- |
+| `main`   | `leaderboard`         | 本番                               | `leaderboard.be-music.app`         |
+| `devel`  | `leaderboard-preview` | preview 用のデータベースとバケット | `leaderboard.preview.be-music.app` |
 
-- **CI/CD**: Workers Builds。本番ブランチが `devel` のプレイヤーのデモに合わせます。それ以外のブランチは、それぞれのプレビュー URL を持つプレビュー版としてアップロードします（`wrangler versions upload --env preview`）。プレビュー版はバージョンごとに binding を持つので、preview の Leaderboard につながります。preview の Leaderboard は全ブランチで共有する 1 つの Worker で、最後のデプロイが反映されます。
+- **CI/CD**: Deploy ワークフロー（`.github/workflows/deploy.yml`）が、`main` と `devel` への push で全サービスをデプロイ
+  します（docs/services.ja.md 2 章）。
 - **マイグレーションはデプロイより先に実行する**ので、どのマイグレーションも動いている旧コードと両立させます
   （追加 → 切り替え → 削除）。D1 にはロールバックがありません。
-- **プレビューを本番データに触れさせない。** デモのプレビュー版は preview の Leaderboard につなぎ、Leaderboard の Worker 自身のプレビュー URL は無効にします。
+- **プレビューを本番データに触れさせない。** プレビューの Worker は preview の Leaderboard につなぎ、Leaderboard の Worker 自身のプレビュー URL は無効にします。
 - **secrets**（`BETTER_AUTH_SECRET`、OAuth のクライアントシークレット）は環境ごとに設定します。値は 1Password に置き、リポジトリには `op://` の参照だけを置いて、スクリプトが `cf` で設定します（パッケージの README の「Secrets」）。
 - **構成管理とツール**: `cf` CLI（`cloudflare.config.ts`）を基本にし、`cf` がまだ対応していない部分を Wrangler で
   補います。Terraform は使いません。`cf` は beta なのでバージョンを固定し、上げるときは preview で確かめてから
