@@ -1,5 +1,16 @@
+import {
+  BlobSource,
+  BufferTarget,
+  EncodedPacket,
+  EncodedVideoPacketSource,
+  Input,
+  Output,
+  WEBM,
+  WebMOutputFormat,
+} from 'mediabunny';
 import { describe, expect, it } from 'vite-plus/test';
-import { pickRecorderMimeType, resolveCaptureSize, shouldCaptureFrame } from './gameplay-recorder.ts';
+
+import { makeWebmSeekable, pickRecorderMimeType, resolveCaptureSize, shouldCaptureFrame } from './gameplay-recorder.ts';
 
 describe('pickRecorderMimeType', () => {
   // The picker accepts an injected `isSupported` so the test can exercise every branch without relying on the host
@@ -85,5 +96,90 @@ describe('resolveCaptureSize', () => {
     expect(size.width % 2).toBe(0);
     expect(size.height % 2).toBe(0);
     expect(size.height).toBeLessThanOrEqual(1080);
+  });
+});
+
+/** A VP8 key-frame header (frame tag, start code, 16×16) padded with filler — enough for the muxers, never decoded. */
+function fakeVp8Frame(keyFrame: boolean): Uint8Array {
+  const data = new Uint8Array(64).fill(0x5a);
+  data.set([keyFrame ? 0x10 : 0x11, 0x02, 0x00, 0x9d, 0x01, 0x2a, 16, 0, 16, 0]);
+  return data;
+}
+
+/**
+ * Writes a WebM the way `MediaRecorder` does: append-only, so it carries neither a `Duration` nor `Cues`. 30 frames at
+ * 30 fps starting at `startSec`, a key frame every 10.
+ */
+async function writeStreamingWebm(startSec = 0): Promise<Blob> {
+  const output = new Output({ format: new WebMOutputFormat({ appendOnly: true }), target: new BufferTarget() });
+  const source = new EncodedVideoPacketSource('vp8');
+  output.addVideoTrack(source, { frameRate: 30 });
+  await output.start();
+  for (let i = 0; i < 30; i++) {
+    const keyFrame = i % 10 === 0;
+    const packet = new EncodedPacket(fakeVp8Frame(keyFrame), keyFrame ? 'key' : 'delta', startSec + i / 30, 1 / 30);
+    await source.add(
+      packet,
+      i === 0 ? { decoderConfig: { codec: 'vp8', codedWidth: 16, codedHeight: 16 } } : undefined,
+    );
+  }
+  await output.finalize();
+  return new Blob([output.target.buffer!], { type: 'video/webm;codecs=vp8' });
+}
+
+/** The `Duration` the file's header states, or `null` when it has none (as in a `MediaRecorder` capture). */
+async function readMetadataDuration(blob: Blob): Promise<number | null> {
+  const input = new Input({ source: new BlobSource(blob), formats: [WEBM] });
+  try {
+    return await input.getDurationFromMetadata();
+  } finally {
+    input.dispose();
+  }
+}
+
+async function readPackets(blob: Blob): Promise<Array<{ timestamp: number; type: string; size: number }>> {
+  const input = new Input({ source: new BlobSource(blob), formats: [WEBM] });
+  try {
+    const track = await input.getPrimaryVideoTrack();
+    if (!track) throw new Error('no video track');
+    const { EncodedPacketSink } = await import('mediabunny');
+    const packets: Array<{ timestamp: number; type: string; size: number }> = [];
+    for await (const packet of new EncodedPacketSink(track).packets()) {
+      packets.push({ timestamp: packet.timestamp, type: packet.type, size: packet.byteLength });
+    }
+    return packets;
+  } finally {
+    input.dispose();
+  }
+}
+
+describe('makeWebmSeekable', () => {
+  it('writes the duration and seek index into a streaming WebM and keeps every packet as recorded', async () => {
+    const recorded = await writeStreamingWebm();
+    expect(await readMetadataDuration(recorded)).toBeNull();
+
+    const seekable = await makeWebmSeekable(recorded);
+
+    expect(seekable).not.toBe(recorded);
+    expect(seekable.type).toBe('video/webm;codecs=vp8');
+    expect(await readMetadataDuration(seekable)).toBeCloseTo(1, 3);
+    expect(await readPackets(seekable)).toEqual(await readPackets(recorded));
+  });
+
+  it('keeps the original timestamps when the recording does not start at zero', async () => {
+    const recorded = await writeStreamingWebm(0.5);
+    const packets = await readPackets(await makeWebmSeekable(recorded));
+    expect(packets[0]?.timestamp).toBeCloseTo(0.5, 3);
+    expect(packets).toHaveLength(30);
+  });
+
+  it('returns the input unchanged when it is not a WebM', async () => {
+    const notWebm = new Blob([new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])], { type: 'video/webm' });
+    expect(await makeWebmSeekable(notWebm)).toBe(notWebm);
+  });
+
+  it('returns an empty blob unchanged', async () => {
+    const empty = new Blob([], { type: 'video/webm' });
+    expect(await makeWebmSeekable(empty)).toBe(empty);
   });
 });

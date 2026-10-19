@@ -29,9 +29,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261015.1",
-    "ts-ebml": "^3.0.2",
     "vite": "catalog:",
-    "vite-plugin-node-polyfills": "^0.28.0",
     "vite-plus": "catalog:",
     "wrangler": "^4.151.0"
   }
