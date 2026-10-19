@@ -371,8 +371,8 @@ Web のデモを 1 つのシーンルーター（[ADR 0006](./adr/0006-scene-rou
 | EP6            | player のファイル名の subpath（`core/*` と `core/scoring`、`utils`、`judging` など）と、audio-renderer の `./triggers` の廃止                                                 | [#501](https://github.com/nulltask/be-music/pull/501) | 完了 |
 | EP7            | 任意：すべての入口のベンチマーク（beatoraja-skin のルート、utils の Node 専用の subpath）                                                                                     | [#498](https://github.com/nulltask/be-music/pull/498) | 完了 |
 | ドキュメント   | ドキュメントと用語集を、目指す構造の語彙にそろえる                                                                                                                            | [#531](https://github.com/nulltask/be-music/pull/531) | 完了 |
-| changeset      | changeset を、パッケージと変更ごとにまとめる                                                                                                                                  | —                                                     | 予定 |
-| 実在のスキン   | 実在のスキン（LR2 の標準のテーマ、ModernChic）で、ブラウザ確認を手で行う                                                                                                      | —                                                     | 予定 |
+| changeset      | changeset を、パッケージと変更ごとにまとめる                                                                                                                                  | [#528](https://github.com/nulltask/be-music/pull/528) | 完了 |
+| 実在のスキン   | 実在のスキン（LR2 の標準のテーマ、ModernChic）で、ブラウザ確認を手で行う                                                                                                      | —                                                     | 完了 |
 | `devel`        | `feat/course-definitions` を `devel` へマージ                                                                                                                                 | —                                                     | 予定 |
 
 ## 層の規則とサイズの上限
