@@ -635,8 +635,8 @@ FREE ZONE は `#LNMODE` の対象外で、終端を持つノートとして扱�
 
 ### Auto Play
 
-ロングノートは始点で keysound 再生とレーン保持表示を開始し、終点で確定します。
-LN 系スタイルは `PGREAT` を 1 回、チャージ系は始点・終点の 2 回です。
+ロングノートは始点で keysound 再生とレーン保持表示を開始します。
+LN 系スタイルは 1 回の `PGREAT` を終点で付けます。チャージ系は beatoraja のオートプレイと同じく、始点の `PGREAT` を始点で、終点の `PGREAT` を終点で付けます。`AUTO` と `AUTO SCRATCH` で同じです。
 
 ### AUTO SCRATCH
 
@@ -648,7 +648,7 @@ LN 方式のロングノートは 1 つの `PGREAT` を終点で付けます。�
 ### `AUTO`
 
 `AUTO` は演奏対象ノートをすべて自動で処理します。
-通常ノートは時刻到達時に `PERFECT` を 1 回確定し、long note は終点で `PERFECT` を確定します。
+通常ノートは時刻到達時に `PERFECT` を 1 回確定します。LN 方式の long note は 1 回の `PERFECT` を終点で、チャージノートは始点の `PERFECT` を始点で、終点の `PERFECT` を終点で確定します（上の Auto Play を参照）。
 
 `AUTO` は pause/resume、restart、high-speed 変更を受け付けます。
 判定窓や手動入力候補探索は使いません。

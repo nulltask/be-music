@@ -663,8 +663,9 @@ except under IIDX, where the cancelled tail owes nothing.
 
 ### Auto Play
 
-A long note starts keysound playback and lane holding display at the start point, and is cleared at the end point:
-one `PGREAT` under LN styles, two (head and tail) under charge styles.
+A long note starts keysound playback and lane holding display at the start point. Under LN styles it scores its one
+`PGREAT` at the end point; under charge styles it scores the head's `PGREAT` at the start point and the tail's at the
+end point, as beatoraja's autoplay does. `AUTO` and `AUTO SCRATCH` score them alike.
 
 ### AUTO SCRATCH
 
@@ -676,7 +677,9 @@ An LN-style long note scores its one `PGREAT` at the end point; a charge note sc
 ### `AUTO`
 
 `AUTO` automatically processes all notes to be played.
-A normal note confirms `PERFECT` once when the time is reached, and a long note confirms `PERFECT` at the end point.
+A normal note confirms `PERFECT` once when the time is reached. An LN-style long note confirms its one `PERFECT` at the
+end point; a charge note confirms its head's `PERFECT` at the start point and its tail's at the end point (see Auto
+Play above).
 
 `AUTO` accepts pause/resume, restart, and high-speed changes.
 No judgment window or manual input candidate search is used.
