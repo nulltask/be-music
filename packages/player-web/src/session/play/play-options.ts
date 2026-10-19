@@ -61,7 +61,8 @@ export interface PlaySessionOptions {
   /**
    * Initial visual scroll-speed multiplier. Mirrors the live runtime hotkey (`ArrowUp` / `ArrowDown` adjusts this value
    * during play); the option lets the host seed it from the select-screen play-options panel so the user doesn't have
-   * to re-dial their preferred HS at every song. Clamped to [`HISPEED_MIN`, `HISPEED_MAX`] internally; defaults to 1.5.
+   * to re-dial their preferred HS at every song. Clamped to [`HISPEED_MIN`, `HISPEED_MAX`] internally; defaults to
+   * `DEFAULT_HISPEED` (2.0).
    */
   initialHiSpeed?: number;
   /**
