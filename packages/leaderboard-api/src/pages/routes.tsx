@@ -31,6 +31,8 @@ export function mountPages(app: Hono<AppEnv>): void {
   app.use('/leaderboard', loadViewer);
   app.use('/leaderboard/*', loadViewer);
 
+  // On its own host (`leaderboard.be-music.app`) the pages still live under `/leaderboard`; the bare host leads there.
+  app.get('/', (c) => c.redirect('/leaderboard'));
   app.get('/leaderboard', topPage);
   app.get('/leaderboard/', topPage);
   app.get('/leaderboard/scores/:id', scorePage);
