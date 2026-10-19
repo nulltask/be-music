@@ -97,7 +97,7 @@ export interface LeaderboardClientOptions {
 }
 
 /**
- * Sends one play to the Leaderboard: signs in anonymously when there is no session yet, posts the play log gzipped
+ * Sends one play to the Leaderboard: requires an Accounts session, posts the play log gzipped
  * with its play document, and resends with the chart document when the server does not know the chart (409).
  */
 export async function submitToLeaderboard(
@@ -118,7 +118,7 @@ export async function submitToLeaderboard(
 }
 
 /**
- * Signs in anonymously when there is no session yet, then posts `body(false)` gzipped, and resends `body(true)` (with
+ * Requires a session, posts `body(false)` gzipped, and resends `body(true)` (with
  * the chart documents) when the server does not know a chart (409 `chart-document-required`).
  */
 async function postWithChartDocuments(
@@ -129,15 +129,7 @@ async function postWithChartDocuments(
   const doFetch = options.fetch ?? fetch.bind(globalThis);
   const session = await doFetch('/api/auth/get-session', { credentials: 'same-origin' });
   const signedIn = session.ok && (await session.json().catch(() => null)) !== null;
-  if (!signedIn) {
-    const signIn = await doFetch('/api/auth/sign-in/anonymous', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'content-type': 'application/json' },
-      body: '{}',
-    });
-    if (!signIn.ok) return { status: 'failed', httpStatus: signIn.status, error: 'sign-in-failed' };
-  }
+  if (!signedIn) return { status: 'failed', httpStatus: 401, error: 'sign-in-required' };
 
   const post = async (withChartDocuments: boolean): Promise<Response> =>
     doFetch(path, {
@@ -247,7 +239,7 @@ export type CourseLeaderboardSubmitResult =
   | { status: 'failed'; httpStatus: number; error: string };
 
 /**
- * Sends one course run to the Leaderboard (`POST /api/v0/course-scores`), signing in anonymously when needed and
+ * Sends one course run to the Leaderboard (`POST /api/v0/course-scores`), using the existing Accounts session and
  * resending with every stage's chart document when the server does not know a stage chart. The stage charts the server
  * rebuilds go with every request.
  */

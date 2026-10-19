@@ -15,6 +15,7 @@ export default defineConfig(({ mode }) => {
     worker: {
       name: `play${suffix}`,
       compatibilityDate: '2026-06-02',
+      compatibilityFlags: ['global_fetch_strictly_public'],
       entrypoint: './src/index.ts',
       domains: [preview ? 'play.preview.be-music.app' : 'play.be-music.app'],
       observability: { enabled: true },
@@ -28,10 +29,15 @@ export default defineConfig(({ mode }) => {
       },
       env: {
         ASSETS: bindings.assets(),
+        AUTH_ISSUER: bindings.text(`https://accounts.${preview ? 'preview.be-music.app' : 'be-music.app'}/api/auth`),
+        PUBLIC_ORIGIN: bindings.text(`https://play.${preview ? 'preview.be-music.app' : 'be-music.app'}`),
+        OIDC_CLIENT_ID: bindings.text('play'),
+        API_AUDIENCE: bindings.text(`https://leaderboard.${preview ? 'preview.be-music.app' : 'be-music.app'}`),
+        SESSION_SECRET: bindings.secret(),
         // Holds `ffmpeg-core.wasm` (~31 MB, over the 25 MiB Static Assets per-file limit) and its `ffmpeg-core.js`
         // loader. Upload them with `pnpm cf:r2:push`.
         FFMPEG_CORE: bindings.r2({ name: 'be-music-ffmpeg-core' }),
-        // The Leaderboard Worker of the same environment, which also holds Better Auth until Accounts is split out.
+        // The Leaderboard API of the same environment; authenticated calls use an access token.
         LEADERBOARD: bindings.worker({ worker: `leaderboard${suffix}` }),
       },
     },

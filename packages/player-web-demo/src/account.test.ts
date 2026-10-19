@@ -79,7 +79,7 @@ describe('describeStartAccount', () => {
       label: 'Not signed in',
       href: undefined,
       actions: ['sign-in', 'sign-up'],
-      hint: 'Plays are recorded anonymously in this browser. Sign up to show them in the rankings.',
+      hint: 'Sign in through Accounts before submitting plays. You can start with a guest account.',
     });
   });
 

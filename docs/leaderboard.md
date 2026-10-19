@@ -61,17 +61,7 @@ flowchart LR
   migrations.
 - **Hosts** (docs/services.md): the Leaderboard serves its pages and API on `leaderboard.be-music.app` (pages at the
   root). The Player Worker (`play`) forwards `/api/*` to it through a Service Binding, so the player's
-  requests stay on its own origin. Better Auth lives here until Accounts is split out; its base URL is
-  `accounts.be-music.app`, whose Worker forwards `/api/auth/*` here, and its session cookies are shared on
-  `be-music.app`, so every service reads the same session.
-
-### 2.1 Environments and deployment
-
-| Branch  | Leaderboard Worker    | D1 / R2                  | Host                               |
-| ------- | --------------------- | ------------------------ | ---------------------------------- |
-| `main`  | `leaderboard`         | production               | `leaderboard.be-music.app`         |
-| `devel` | `leaderboard-preview` | preview database, bucket | `leaderboard.preview.be-music.app` |
-
+  requests stay on its own origin. Each app has a host-only OIDC session and forwards API calls with a resource-bound token. Accounts owns authentication in a separate Worker and D1; the Leaderboard owns public profiles and scores.
 - **CI/CD**: the Deploy workflow (`.github/workflows/deploy.yml`) deploys every service on pushes to `main` and
   `devel` (docs/services.md section 2).
 - **Migrations run before the deploy**, so every migration must work with the code that is still running
@@ -101,16 +91,11 @@ queue does not give it more CPU on Free. The CPU limit shapes two decisions:
 
 ## 3. Authentication and accounts
 
-- **Library**: Better Auth on Hono and D1.
-- **Sign-in methods**: Discord and Google OAuth, and passkeys as a provider-independent way back in. More providers
-  may be added later; GitHub was considered and rejected.
-- **Sessions**: an HttpOnly same-origin cookie for the browser. The terminal player uses the device authorization flow
-  (RFC 8628) and stores a bearer token.
-- **Anonymous play**: a player can submit without signing in. Better Auth's anonymous session creates an anonymous
-  user, which can later be linked to a Discord or Google account. Anonymous scores are stored like any other; whether a
-  ranking lists them is a viewer-side filter. Registering a passkey turns the account into a regular one (it has a way
-  back in now), and signing in with a passkey while an anonymous session is open moves that session's plays into the
-  passkey's account.
+- **Authentication**: the independent Accounts Worker owns Better Auth and its D1. The Leaderboard is an OIDC client and API resource server; see [Services §3](./services.md#3-sign-in).
+- **Sign-in methods**: Accounts supports passkeys, guest accounts and configured Discord/Google providers. All passkey ceremonies take place on Accounts.
+- **Sessions**: the browser uses a host-only encrypted HttpOnly app cookie, valid for at most ten minutes. Server-to-server API calls carry an access token bound to this API and the `be-music:api` scope. Device authorization for the terminal player remains planned.
+- **Guest play**: start a guest account at Accounts before submitting; the player no longer silently creates an account after a finished play. Guest scores remain stored and filtered as before. Registering a passkey upgrades the account. Linking a guest to another account records a signed link claim; the Leaderboard transfers its plays idempotently on the target's next authenticated request.
+- **Identity**: `(issuer, sub)` maps through `oidc_identity` to the local player ID. Migration preserves existing player IDs and score ownership; new accounts create local mirrors lazily. Email never links accounts. Old auth tables are retained only for rollback and localhost tests; public requests cannot use their shared cookies.
 - **Handles**: every account has a unique, changeable `handle` (used in URLs) and a `display_name`; OAuth profile names
   and emails are never shown. A changed handle keeps redirecting from the old URL, and a released handle cannot be
   claimed by someone else for a while (section 15).
@@ -408,7 +393,7 @@ course_best_score (user_id, course_fp, ruleset, assisted,     -- PK, as best_sco
                  best_ex, best_ex_score_id, best_lamp, best_lamp_score_id,
                  min_miss, min_miss_score_id, best_trophy, best_trophy_rank, best_trophy_score_id,
                  play_count, played_here, updated_at)
--- plus Better Auth's own tables (user, session, account, verification, passkey)
+-- plus local user mirrors and oidc_identity (old auth tables remain for rollback)
 ```
 
 - Ranking queries use an index on `best_scores (chart_fp, ruleset, assisted, best_ex DESC)`.
@@ -452,7 +437,7 @@ drift from the validation the routes run.
 | `GET`                    | `/players/:handle/versus/:rival?ruleset=`                                | win / loss / draw against a rival                                                    |
 | `GET` / `PUT` / `DELETE` | `/me/rivals`, `/me/rivals/:handle`                                       | rivals                                                                               |
 | `PUT` / `DELETE`         | `/me/blocks/:handle`                                                     | blocks                                                                               |
-| `*`                      | `/api/auth/*`                                                            | Better Auth                                                                          |
+| `*`                      | `/api/auth/*`                                                            | OIDC app sign-in, callback, session and sign-out                                     |
 
 Reads are public and cached briefly with the Cache API; a submission purges the affected rankings.
 
@@ -469,8 +454,7 @@ Reads are public and cached briefly with the Cache API; a submission purges the 
   `410 Gone`. The play log's `recorder` and the `be-music-client` header show who still calls it.
 - **Unknown paths**: anything else under `/api`, an unknown version included, answers `404` with
   `{"error": "not-found"}`.
-- **Not versioned**: `/api/auth/*` is Better Auth's own protocol, and the OAuth callback URLs registered with Discord and
-  Google point at it.
+- **Not versioned**: `/api/auth/*` is the app's OIDC session protocol. Discord and Google callbacks belong to Accounts, not the Leaderboard.
 
 **Rate limits** (proposed): submissions 10 per minute per signed-in user and 5 per minute per anonymous device; reads
 120 per minute per IP. Workers' rate-limiting binding only counts over 10 or 60 seconds, so longer windows would be

@@ -2,9 +2,7 @@
 
 # サービスと環境
 
-> ステータス: 一部実装済み。Dashboard、Accounts、Player、Leaderboard は、両方の環境でそれぞれのサブドメインに置き、
-> ログインは当面 Cookie を共有する方式です（3.1 節）。Accounts の OIDC プロバイダー化、Registry、Editor は計画中です。
-> 今あるものは 6 章にあります。
+> ステータス: Dashboard・Accounts・Player・Leaderboard・Donate に本番とプレビューがあります。認証は Accounts が所有し、OIDC を使います。アプリの Cookie はホスト専用です。Registry と Editor は未実装です。
 
 ## 1. サービス
 
@@ -60,7 +58,7 @@ flowchart LR
 
 - **Worker の名前**は `<service>` と `<service>-preview` の形にします。ストレージ（D1、R2、KV）は、名前を変えられない
   ものは今の名前のままで構いません。
-- **ブランチ**: どのサービスも、Workers Builds で `main` を本番に、`devel` をプレビューにデプロイします。
+- **ブランチ**: どのサービスも、GitHub Actions で `main` を本番に、`devel` をプレビューにデプロイします。
 
 ```mermaid
 flowchart LR
@@ -69,9 +67,8 @@ flowchart LR
   B[ほかのブランチ] --> BV[プレビューバージョン<br/>*.be-music.workers.dev]
 ```
 
-- **ブランチごとのプレビュー URL**: Workers Builds は、ほかのブランチも `-preview` の Worker のプレビューバージョンと
-  してアップロードし、`be-music.workers.dev` にプレビュー URL を作ります。これらのバージョンはプレビュー環境につながり、
-  本番にはつながりません。
+- **ブランチごとのプレビュー URL** は OIDC クライアントに登録しません。本番とプレビューの固定 URL でログインできます。追加する場合は、クライアントと戻り先を完全一致で登録します。
+
 - **外部サービス**は、プレビュー用の認証情報を別に持ちます。Discord と Google の OAuth アプリはプレビュー用を作り、
   リダイレクト URI を `accounts.preview.be-music.app` に向けます。`donate-preview` は Stripe のテストモードの鍵を使います。
 - **公開範囲**: プレビューのホストは検索エンジンに載らないようにし、必要なら Cloudflare Access で保護します。
@@ -107,35 +104,25 @@ sequenceDiagram
   自分たちのクライアントなので、同意画面も出しません。
 - **ユーザーの識別**: 各サービスは、ユーザーを `(issuer, sub)` の組で持ちます。issuer を残しておくと、あとでほかの
   インスタンスのアカウントでログインできるようにする余地が残ります。
-- **ログイン方法**は Accounts だけが持ちます。Discord、Google、パスキーに加えて、匿名セッションと、ターミナルの
-  プレイヤー向けのデバイス認可フローです（[Leaderboard 設計](./leaderboard.ja.md) 3 章と同じ）。
+- **ログイン方法**は Accounts だけが持ちます。設定済みの Discord・Google、パスキー、ゲストセッションに対応します。ターミナル向けのデバイス認可フローは今後の実装です。
 - **パスキー**は、環境ごとに 1 つの relying party ID に結び付けます。本番は `be-music.app`、プレビューは
   `preview.be-music.app` です。パスキーは Accounts のホストでしか使わないので、ほかのサービスがどこにあっても動きます。
 - **サービス同士の呼び出し**はサーバーを通します。ブラウザは自分のサービスだけと通信し、そのサービスがユーザーのアクセス
   トークンを付けて、ほかのサービスの API を呼びます。呼ばれた側は Accounts の JWKS でトークンを検証するので、サービス
   同士でデータベースを共有せず、ログインが必要な呼び出しに CORS も要りません。誰でも読める読み取り専用の API は、CORS を
   許可して構いません。
-- **ログアウト**: 各サービスのセッションは短め（1 日程度）にし、Accounts を通して画面を出さずに更新します。Accounts で
-  ログアウトすれば、その時間のうちに全サービスに伝わります。遅すぎる場合は、バックチャネルログアウトを足します。
-- **リダイレクト URI** はクライアントごとに登録し、完全一致で照合します。プレビューの Accounts だけは、ブランチごとの
-  プレビュー URL でもログインできるように、`https://*-<service>-preview.be-music.workers.dev/` の形のパターンも受け付け
-  ます。`be-music.workers.dev` の下にホストを作れるのは be-music のアカウントだけです。
-- **目指す形ではないもの**: 親ドメイン（`.be-music.app`）のセッション Cookie。各サービスに初めて来たときのリダイレクトを
-  1 回減らせますが、無関係なドメインどうしや `workers.dev` では使えず、セッションを全サブドメインに送ってしまいます。
-  下の当面の構成でだけ使います。
+- **セッションとログアウト**: 各アプリの暗号化された `__Host-be-music.session` Cookie は最大 10 分で、トークンの期限を超えません。トークンは HttpOnly Cookie とサーバー間通信だけで扱い、ブラウザのセッション API には識別情報だけを返します。リフレッシュトークンは使いません。期限切れ後は再びログインを選ぶと、Accounts のセッションがあれば通常は資格情報の再入力なしで戻れます。アプリのログアウトはそのアプリだけに適用し、Accounts のログアウト後も各アプリのセッションは最大 10 分残ります。即時の全サービスログアウトは未実装です。
+- **リダイレクト URI** は、プレビューを含めて完全一致で登録します。認可コードと S256 PKCE、`state`、`nonce`、issuer／audience の照合と ID トークンの署名検証を行います。自前の公開クライアントにはクライアントシークレットを持たせず、ほかのクライアントの登録も許可しません。API は送信先を限定した `be-music:api` スコープのアクセストークンを検証します。ID トークンは API の認証に使いません。
 
-### 3.1 当面の構成: Better Auth は 1 つ、Cookie は共有
+### 3.1 ユーザーの所有と移行
 
-Accounts が OIDC プロバイダーになるまでは、Better Auth を Leaderboard の Worker の中で動かします。
+Accounts は専用の D1（`accounts`／`accounts-preview`）にユーザー、外部サービス連携、パスキー、セッション、署名鍵、OAuth クライアントの状態を持ちます。ログイン中に Leaderboard を呼びません。
 
-- base URL は Accounts のホスト（`accounts.be-music.app`）で、その Worker が `/api/auth/*` を Service Binding で
-  Leaderboard へ転送します。OAuth のコールバックもここに届きます。
-- セッション Cookie は環境のドメインで共有します（`be-music.app`、またはプレビューでは `preview.be-music.app` で、
-  Cookie の接頭辞を `be-music-preview` にして、本番の Cookie と混ざらないようにします）。
-- Player と Dashboard は、Service Binding で Leaderboard に問い合わせてセッションを読みます。Leaderboard は直接読みます。
-  パスキーは計画どおり、環境ごとの relying party ID を使います。
-- ユーザー ID は、OIDC プロバイダーが `sub` として発行するものと同じです。移行で変わるのは、各サービスがセッションを
-  読む方法だけです。
+Leaderboard は公開プロフィールとスコアを所有し、`oidc_identity` で `(issuer, subject)` とローカルのプレイヤー ID を対応させます。検証済みトークンから初回アクセス時に必要な行を作り、メールでは紐付けません。既存の対応付けは元のプレイヤー ID とスコアの所有者を維持します。アカウント連携時は、署名されたゲスト連携情報からプレイを冪等に移し、Accounts にスコア DB へのアクセスを与えません。
+
+Accounts のスキーマと Leaderboard の `0013` を適用し、認証の切り替え前に `packages/accounts/scripts/migrate-identities.ts` を実行します。既定はドライランです。`--preview --apply` はプレビューのユーザー・外部連携・パスキーをコピーし、対応付けを登録します。本番は `--preview` を外します。古いセッションとチャレンジはコピーせず、資格情報を出力しません。元の認証テーブルはロールバック用に残します。新しい OIDC ユーザーが作られた後は再実行しません。再ログインは必要ですが、移行したパスキーの RP ID は維持します。
+
+`legacy-auth.ts` は localhost のテスト・開発専用です。公開ホストでは OIDC 設定がなければ認証を拒否し、以前の共有 Cookie も受け付けません。
 
 ## 4. ユーザーのファイル
 
@@ -151,13 +138,13 @@ Accounts が OIDC プロバイダーになるまでは、Better Auth を Leaderb
 ソースは公開していて、インスタンスはサービスを好きなホストで動かせます。公式のインスタンスが固定している値は、すべて
 設定に出します。
 
-| 設定                                    | 意味                                                        |
-| --------------------------------------- | ----------------------------------------------------------- |
-| `PUBLIC_ORIGIN`                         | そのサービス自身のオリジン。コールバック URL もここから作る |
-| `AUTH_ISSUER`                           | Accounts のオリジン                                         |
-| `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | Accounts に登録したそのサービスのクライアント情報           |
-| `PASSKEY_RP_ID`                         | Accounts のみ。既定は Accounts のホスト                     |
-| `USER_CONTENT_ORIGIN`                   | Registry のみ。アップロードされたファイルの配信元           |
+| 設定                  | 意味                                                        |
+| --------------------- | ----------------------------------------------------------- |
+| `PUBLIC_ORIGIN`       | そのサービス自身のオリジン。コールバック URL もここから作る |
+| `AUTH_ISSUER`         | Accounts のオリジン                                         |
+| `OIDC_CLIENT_ID`      | Accounts に登録したそのサービスのクライアント情報           |
+| `PASSKEY_RP_ID`       | Accounts のみ。既定は Accounts のホスト                     |
+| `USER_CONTENT_ORIGIN` | Registry のみ。アップロードされたファイルの配信元           |
 
 - Accounts は、クライアントとリダイレクト URI の一覧を設定から読みます。
 - Discord と Google は任意です。パスキーと匿名セッションだけで始められます。
@@ -166,26 +153,26 @@ Accounts が OIDC プロバイダーになるまでは、Better Auth を Leaderb
 - 寄付、寄付サイト、be-music という名前とロゴは公式のインスタンスのものです。プレイヤーからのそれらへのリンクは設定で
   変えられます。
 
+実装済みの追加設定は、`SESSION_SECRET`（アプリ・環境ごとに異なる 32 文字以上の秘密値）、`API_AUDIENCE`（API リソースの完全な URI）、`OIDC_CLIENTS`（Accounts が持つクライアント ID とオリジンの JSON 対応表）です。`AUTH_ISSUER` はオリジンだけでなく `/api/auth` を含む完全な issuer を指定します。クライアントは公開 PKCE 方式なのでシークレットは不要です。
+
 ## 6. 現状と移行
 
 | サービス    | 今                                                                                     |
 | ----------- | -------------------------------------------------------------------------------------- |
 | Dashboard   | `dashboard` / `dashboard-preview`。セッションとリンクを表示する仮のページ              |
-| Accounts    | `accounts` / `accounts-preview`。`/api/auth/*` を Leaderboard へ転送する（3.1 節）     |
+| Accounts    | `accounts` / `accounts-preview`。専用 D1 を持つ独立した OIDC プロバイダー              |
 | Player      | `play` / `play-preview`（`packages/play`。`@be-music/player-web-demo` のビルドを配信） |
 | Leaderboard | `leaderboard` / `leaderboard-preview`。ページはホストのルートに置く                    |
-| Donate      | `donate.be-music.app` の `donate-be-music-app`。まだログインとはつながっていない       |
+| Donate      | `donate` / `donate-preview`。OIDC ログインと公開の収支データ                           |
 
-どの Worker も、`cloudflare.config.ts` から `cf` でデプロイします。`.github/workflows/deploy.yml` が `main` を本番に、
+モノレポの Worker は `cloudflare.config.ts` から `cf` でデプロイします。Donate は非公開のコンテンツリポジトリで Wrangler を使います。`.github/workflows/deploy.yml` が `main` を本番に、
 `devel` をプレビューにデプロイします。どれも be-music の Cloudflare アカウントで動いていて、このアカウントの請求は
 be-music の分だけです。`workers.dev` のサブドメインは `be-music.workers.dev` です。
 
 この先:
 
-1. Accounts を OIDC プロバイダーとして切り出し、Leaderboard を最初のクライアントにして、Cookie の共有をやめる。
-2. 寄付サイトを Accounts とつなぐ。
-3. Registry を作る。ユーザーのファイル用ドメイン、公開設定、利用規約を含める。
-4. Editor を作る。
+1. Registry を作る。ユーザーのファイル用ドメイン、公開設定、利用規約を含める。
+2. Editor を作る。
 
 古い URL からの**転送は作りません**。`be-music.app/...`（以前の Player）と `be-music.app/leaderboard/...` への
 リンクは、もう使えません。

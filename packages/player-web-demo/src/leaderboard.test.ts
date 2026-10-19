@@ -114,33 +114,37 @@ describe('submitToLeaderboard', () => {
 
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 
-  test('signs in anonymously, then resends with the chart document when the server asks for it', async () => {
+  test('resends with the chart document when the server asks for it', async () => {
     const { calls, fetchImpl } = fakeFetch([
-      () => json(null),
       () => json({ user: { id: 'u' } }),
       () => json({ error: 'chart-document-required' }, 409),
       () => json(accepted, 201),
     ]);
     const result = await submitToLeaderboard(submission, { fetch: fetchImpl, client: 'be-music-web/test' });
     expect(result).toEqual({ status: 'accepted', ...accepted });
-    expect(calls.map((call) => call.url)).toEqual([
-      '/api/auth/get-session',
-      '/api/auth/sign-in/anonymous',
-      '/api/v0/scores',
-      '/api/v0/scores',
-    ]);
-    const headers = calls[2]!.init!.headers as Record<string, string>;
+    expect(calls.map((call) => call.url)).toEqual(['/api/auth/get-session', '/api/v0/scores', '/api/v0/scores']);
+    const headers = calls[1]!.init!.headers as Record<string, string>;
     expect(headers['content-encoding']).toBe('gzip');
     expect(headers['be-music-client']).toBe('be-music-web/test');
 
     const bodies = await Promise.all(
-      [calls[2]!, calls[3]!].map(async (call) => {
+      [calls[1]!, calls[2]!].map(async (call) => {
         const stream = (call.init!.body as Blob).stream().pipeThrough(new DecompressionStream('gzip'));
         return JSON.parse(await new Response(stream).text()) as Record<string, unknown>;
       }),
     );
     expect(bodies[0]).not.toHaveProperty('chartDocument');
     expect(bodies[1]).toHaveProperty('chartDocument');
+  });
+
+  test('requires explicit Accounts sign-in instead of creating another anonymous identity', async () => {
+    const { calls, fetchImpl } = fakeFetch([() => json(null)]);
+    expect(await submitToLeaderboard(submission, { fetch: fetchImpl })).toEqual({
+      status: 'failed',
+      httpStatus: 401,
+      error: 'sign-in-required',
+    });
+    expect(calls.map((call) => call.url)).toEqual(['/api/auth/get-session']);
   });
 
   test('reuses an existing session and reports failures', async () => {

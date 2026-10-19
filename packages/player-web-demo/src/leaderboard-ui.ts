@@ -255,7 +255,8 @@ export class LeaderboardPanel {
         button.addEventListener('click', () => {
           // Signing out needs nothing more; the rest open the dialogs the Leaderboard's own pages use.
           if (action === 'sign-out') void this.runAccountAction('Sign out', signOutOfLeaderboard);
-          else this.openDialog(action);
+          else if (action === 'keep') void this.runAccountAction('Manage account', createLeaderboardPasskey);
+          else void this.runAccountAction('Sign in', signInWithLeaderboardPasskey);
         });
         return button;
       }),

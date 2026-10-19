@@ -24,6 +24,7 @@ export const user = sqliteTable('user', {
   emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
   image: text('image'),
   isAnonymous: integer('is_anonymous', { mode: 'boolean' }).default(false),
+  passkeyCount: integer('passkey_count'),
   ...timestamps,
 });
 
@@ -456,4 +457,17 @@ export const courseBestScore = sqliteTable(
     primaryKey({ columns: [table.userId, table.courseFingerprint, table.ruleset, table.assisted] }),
     index('course_best_score_ranking_idx').on(table.courseFingerprint, table.ruleset, table.assisted, table.bestEx),
   ],
+);
+
+/** External subjects are scoped to their issuer; never link users by email. */
+export const oidcIdentity = sqliteTable(
+  'oidc_identity',
+  {
+    issuer: text('issuer').notNull(),
+    subject: text('subject').notNull(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id),
+  },
+  (table) => [primaryKey({ columns: [table.issuer, table.subject] })],
 );

@@ -7,7 +7,7 @@ be-music の Leaderboard API です。Cloudflare Workers 上の Hono アプリ�
 
 ## 実装済みのもの
 
-- Better Auth によるログイン: 匿名セッション、passkey、secret が設定されていれば Discord / Google の OAuth。
+- 独立した Accounts に OIDC でログイン。ゲスト、パスキー、設定済みの Discord／Google に対応。
 - `POST /api/v0/scores`: プレイログ（gzip）を送信します。サーバーは対象かどうかの判定と、play / chart fingerprint の
   ドキュメントの確認（検証の層 L1〜L3、`#RANDOM` のない譜面では L4 も）を行い、`lr2`・`beatoraja`・`iidx` で再計算し、
   ログを R2 に保存して自己ベストを更新します。再送された同じプレイはそれと分かり、別のアカウントからの同じプレイは
@@ -65,15 +65,11 @@ pnpm exec cf r2 buckets create --name be-music-leaderboard-preview --location-hi
 
 ### Secrets
 
-secrets は 1Password の `my.1password.com` アカウントの `be-music` Vault に、Worker ごとに 1 アイテム（`be-music-leaderboard-preview`、`be-music-leaderboard`。それぞれ `leaderboard-preview` と `leaderboard` の secret）で保存しています。リポジトリには参照だけを置きます。`secrets/<環境>.env.tpl` が各 secret と 1Password のフィールドを対応づけます（`KEY={{ op://… }}`）。[1Password CLI](https://developer.1password.com/docs/cli/) にサインインした状態で、Worker に設定します。
+本番の認証は [Accounts](../../docs/services.ja.md#3-ログイン) が所有します。この Worker に必要なのは、ホスト専用の OIDC Cookie を暗号化する `SESSION_SECRET` です。外部ログインの秘密値と署名鍵は Accounts に置き、古い Better Auth は localhost のテスト・開発だけで使います。
 
-```bash
-pnpm --filter @be-music/leaderboard-api run secrets:preview
-```
+1Password の `my.1password.com` にある `be-music` Vault の `cloudflare-leaderboard-oidc/credential`（本番）と `cloudflare-leaderboard-preview-oidc/credential`（プレビュー）に保存します。`secrets/<環境>.env.tpl` は参照だけです。CLI にサインインした状態で `pnpm --filter @be-music/leaderboard-api run secrets:preview` を実行すると、値を表示せずに設定します。`SESSION_SECRET` の変更で切れるのは、このアプリのログインだけです。
 
-`scripts/put-secrets.ts` は各値を `op read` で読み、`cf workers secrets update` に渡します。ディスクにも画面にも値は出ません。別の 1Password アカウントを使うときは `OP_ACCOUNT` を指定します。secret を入れ替えるときは 1Password で生成し直してスクリプトを再実行します（`BETTER_AUTH_SECRET` を入れ替えると全員のログインが切れます。パスキーは残ります）。
-
-アカウントに触れる操作は Wrangler ではなく `cf` で行います。Wrangler は独自にログイン情報を持っていて、別の Cloudflare アカウントを指していることがあります。
+アカウントに触る操作は、対象アカウントを明示して `cf` で行います。
 
 `cloudflare.config.ts` で宣言した secret はデプロイのたびに必須です。新しい Worker の最初のデプロイではファイルで渡す必要があります（`cf deploy --secrets-file`）。名前付きパイプを使えば値をディスクに書かずに済みます。
 
@@ -83,11 +79,9 @@ d=$(mktemp -d) && mkfifo -m 600 "$d/secrets" && (op inject -i secrets/preview.en
 
 以降のデプロイでは設定済みの secret が引き継がれます。
 
-| Secret                                       | 用途                                                           |
-| -------------------------------------------- | -------------------------------------------------------------- |
-| `BETTER_AUTH_SECRET`                         | セッションの署名。長いランダムな文字列                         |
-| `DISCORD_CLIENT_ID`、`DISCORD_CLIENT_SECRET` | Discord でのログイン（任意。未設定なら無効。追加時に宣言する） |
-| `GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`   | Google でのログイン（任意。未設定なら無効。追加時に宣言する）  |
+| Secret           | 用途                                                                         |
+| ---------------- | ---------------------------------------------------------------------------- |
+| `SESSION_SECRET` | アプリ・環境ごとに異なる 32 文字以上のランダムな値。OIDC Cookie を暗号化する |
 
 ## データベース
 
