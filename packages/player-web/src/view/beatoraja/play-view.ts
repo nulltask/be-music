@@ -42,7 +42,7 @@ import {
 import type { BrowserSongAssetSource } from '../../collection/types.ts';
 import type { BeatorajaKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
-import type { BgaCue } from '../../chart/bga-timeline.ts';
+import type { BgaCue, NonstopBgaStage, NonstopStageBgaTimeline } from '../../chart/bga-timeline.ts';
 import { DESIGN_HEIGHT, DESIGN_WIDTH, KEY_ON_FADE_OUT_MS } from '../../stage/design.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
@@ -134,6 +134,8 @@ export interface BeatorajaPlayRuntime {
   readonly bgaLayerTextures: ReadonlyMap<string, Texture>;
   readonly bgaVideos: ReadonlyMap<string, { video: HTMLVideoElement }>;
   readonly bgaTimeline: { base: BgaCue[]; layer: BgaCue[]; poor: BgaCue[] };
+  /** A stitched NONSTOP chart's cues split by stage (`splitNonstopBgaTimeline`), for the BGA's crossfade at a seam. */
+  readonly nonstopBgaTimelines: readonly NonstopStageBgaTimeline[] | undefined;
   readonly assetsLoading: boolean;
   readonly exiting: boolean;
   readonly exitFadeStartedAt: number | undefined;
@@ -157,6 +159,8 @@ export interface BeatorajaPlayViewOptions {
   readonly dpFlip?: boolean;
   /** The course the play is a stage of, with the stage being played. */
   readonly course?: CourseView;
+  /** The stages of a stitched NONSTOP chart (`PlaySessionOptions.nonstop`), whose BGA cross-fades at each seam. */
+  readonly nonstop?: { readonly stages: readonly NonstopBgaStage[] };
   /** Where the chart's files are, for its `#STAGEFILE`, `#BACKBMP` and `#BANNER`. */
   readonly source?: BrowserSongAssetSource;
   /** Where the skin's Lua sounds play (`main_state.audio_*`); they are silent without it. */
@@ -361,10 +365,14 @@ export class BeatorajaPlayView implements PlayView {
   /** The session's BGA as the BGA layer draws it; a key drawn only on the layer track uses its layer texture. */
   private bgaOf(): BeatorajaPlayBga {
     const play = this.play;
+    const nonstop = this.options.nonstop;
     return {
       textures: new Map<string, Texture>([...play.bgaLayerTextures, ...play.bgaTextures]),
       videos: new Map([...play.bgaVideos].map(([key, { video }]) => [key, video] as const)),
       cues: play.bgaTimeline,
+      ...(nonstop !== undefined && play.nonstopBgaTimelines !== undefined
+        ? { nonstop: { stages: nonstop.stages, timelines: play.nonstopBgaTimelines } }
+        : {}),
     };
   }
 
