@@ -15,17 +15,15 @@
  * dropped frame (overloaded encoder, busy main thread) only lowers the frame rate — it can never shift the picture
  * against the sound. Encoded packets are muxed into MP4 or WebM by Mediabunny, which also writes the seek index.
  */
-import {
-  AudioSample,
+// Types only: the runtime module is imported on demand in `prepare`, so it stays out of the main bundle.
+import type * as Mediabunny from 'mediabunny';
+import type {
   AudioSampleSource,
   BufferTarget,
   CanvasSource,
   Mp4OutputFormat,
   Output,
-  Quality,
   WebMOutputFormat,
-  getFirstEncodableAudioCodec,
-  getFirstEncodableVideoCodec,
 } from 'mediabunny';
 
 import {
@@ -160,6 +158,8 @@ export class WebCodecsCapture {
   private output: Output<WebMOutputFormat | Mp4OutputFormat, BufferTarget> | undefined;
   private videoSource: CanvasSource | undefined;
   private audioSource: AudioSampleSource | undefined;
+  /** Mediabunny, loaded by {@link prepare}. */
+  private mediabunny: typeof Mediabunny | undefined;
   private tap: AudioWorkletNode | undefined;
   private sink: GainNode | undefined;
   /** Encode of the previous frame, still in flight; frames arriving meanwhile are dropped instead of queued. */
@@ -179,6 +179,18 @@ export class WebCodecsCapture {
 
   public async prepare(): Promise<void> {
     const { canvas, audioContext, fps } = this.options;
+    const mediabunny = await import('mediabunny');
+    const {
+      AudioSampleSource,
+      BufferTarget,
+      CanvasSource,
+      Mp4OutputFormat,
+      Output,
+      Quality,
+      WebMOutputFormat,
+      getFirstEncodableAudioCodec,
+      getFirstEncodableVideoCodec,
+    } = mediabunny;
     const videoQuality = new Quality({ bitrate: Math.round(this.options.videoBitsPerSecond) });
     const audioQuality = new Quality({ bitrate: Math.round(this.options.audioBitsPerSecond) });
     const format = this.options.format ?? DEFAULT_RECORDING_FORMAT;
@@ -225,6 +237,7 @@ export class WebCodecsCapture {
       await output.cancel();
       return;
     }
+    this.mediabunny = mediabunny;
     this.output = output;
     this.videoSource = videoSource;
     this.audioSource = audioSource;
@@ -304,7 +317,8 @@ export class WebCodecsCapture {
 
   private pushAudio(startFrame: number, left: Float32Array, right: Float32Array): void {
     const source = this.audioSource;
-    if (!source || this.failure !== undefined) return;
+    const mediabunny = this.mediabunny;
+    if (!source || !mediabunny || this.failure !== undefined) return;
     const { sampleRate } = this.options.audioContext;
     const placement = alignAudioChunk(startFrame, left.length, this.originFrame, sampleRate);
     if (!placement) return;
@@ -312,7 +326,7 @@ export class WebCodecsCapture {
     const planar = new Float32Array(frames * 2);
     planar.set(left.subarray(placement.skip), 0);
     planar.set(right.subarray(placement.skip), frames);
-    const sample = new AudioSample({
+    const sample = new mediabunny.AudioSample({
       data: planar,
       format: 'f32-planar',
       numberOfChannels: 2,
