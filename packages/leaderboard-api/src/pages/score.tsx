@@ -149,7 +149,7 @@ async function loadCardExcerpt(c: PageContext, documentKey: string, laneMode: st
 }
 
 /** One play under every ruleset, with how it was played. */
-export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
+export async function scorePage(c: PageContext<'/scores/:id'>) {
   const db = openDatabase(c.env.DB);
   const detail = await loadScoreDetail(db, c.req.param('id'));
   const viewer = c.get('viewer');

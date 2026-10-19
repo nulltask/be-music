@@ -6,14 +6,21 @@ import { HelpTip } from './help-tip.tsx';
 import { formatTimestamp, lampStyle } from '../format.ts';
 import { useMessages } from '../i18n/index.ts';
 
-export const scoreHref = (scoreId: string): string => `/leaderboard/scores/${encodeURIComponent(scoreId)}`;
-export const chartHref = (chartFingerprint: string): string =>
-  `/leaderboard/charts/${encodeURIComponent(chartFingerprint)}`;
-export const playerHref = (handle: string): string => `/leaderboard/players/${encodeURIComponent(handle)}`;
-export const courseHref = (courseFingerprint: string): string =>
-  `/leaderboard/courses/${encodeURIComponent(courseFingerprint)}`;
-export const courseRunHref = (courseScoreId: string): string =>
-  `/leaderboard/course-scores/${encodeURIComponent(courseScoreId)}`;
+export const scoreHref = (scoreId: string): string => `/scores/${encodeURIComponent(scoreId)}`;
+export const chartHref = (chartFingerprint: string): string => `/charts/${encodeURIComponent(chartFingerprint)}`;
+export const playerHref = (handle: string): string => `/players/${encodeURIComponent(handle)}`;
+
+/**
+ * The web player next to this Leaderboard (docs/services.md section 1): `https://play.be-music.app/` from
+ * `leaderboard.be-music.app`, `https://play.preview.be-music.app/` from its preview, and the production player from
+ * anywhere else (a local dev server).
+ */
+export function playerAppHref(pageUrl: string): string {
+  const match = /^leaderboard\.(.+)$/.exec(new URL(pageUrl).hostname.toLowerCase());
+  return `https://play.${match?.[1] ?? 'be-music.app'}/`;
+}
+export const courseHref = (courseFingerprint: string): string => `/courses/${encodeURIComponent(courseFingerprint)}`;
+export const courseRunHref = (courseScoreId: string): string => `/course-scores/${encodeURIComponent(courseScoreId)}`;
 
 export const LINK = 'font-medium underline-offset-4 hover:underline';
 export const NUM = 'text-end tabular-nums';
@@ -138,7 +145,7 @@ export function RowLink(props: { href: string; label: string }) {
 export const ROW = 'relative cursor-pointer';
 export const ABOVE = 'relative z-10';
 
-export const chartsetHref = (id: string): string => `/leaderboard/chartsets/${encodeURIComponent(id)}`;
+export const chartsetHref = (id: string): string => `/chartsets/${encodeURIComponent(id)}`;
 
 /** A player's icon, round; the name next to it says who it is, so it is decorative to screen readers. */
 export function Avatar(props: { src: string; size: number; class?: string }) {

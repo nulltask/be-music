@@ -21,22 +21,22 @@ afterAll(async () => {
 
 describe('signing in on the site', () => {
   test('signed out, the header offers the passkey sign-in, and the settings page asks for it', async () => {
-    const top = await html('/leaderboard');
+    const top = await html('/');
     expect(top).toContain('data-account-action="sign-in"');
-    expect(top).not.toContain('href="/leaderboard/settings"');
+    expect(top).not.toContain('href="/settings"');
     // Sign in and Sign up open dialogs; Google and Discord are shown but disabled, in development.
     expect(top).toContain('data-account-action="open-sign-in"');
     expect(top).toContain('data-account-action="open-sign-up"');
     expect(top).toMatch(/<button[^>]*disabled[^>]*title="Sign in with Google is coming soon"/);
     expect(top).toMatch(/<button[^>]*disabled[^>]*title="Sign up with Discord is coming soon"/);
-    const settings = await html('/leaderboard/settings');
+    const settings = await html('/settings');
     expect(settings).toContain('Sign in with a passkey');
     expect(settings).not.toContain('data-profile-form');
   });
 
   test('the client script is linked and served', async () => {
-    const top = await html('/leaderboard');
-    const src = /<script src="(\/leaderboard\/assets\/client\.[0-9a-f]{12}\.js)" defer/.exec(top)?.[1];
+    const top = await html('/');
+    const src = /<script src="(\/assets\/client\.[0-9a-f]{12}\.js)" defer/.exec(top)?.[1];
     expect(src).toBeDefined();
     const script = await fetchApp(src!);
     expect(script.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
@@ -47,11 +47,11 @@ describe('signing in on the site', () => {
   test('signed in, the header shows the account and the settings page its profile', async () => {
     const cookie = await signInAnonymously(fetchApp);
     const me = (await (await fetchApp('/api/v0/me', { headers: { cookie } })).json()) as { handle: string };
-    const top = await html('/leaderboard', cookie);
+    const top = await html('/', cookie);
     expect(top).toContain(`@${me.handle}`);
-    expect(top).toContain('href="/leaderboard/settings"');
+    expect(top).toContain('href="/settings"');
     expect(top).toContain('data-account-action="sign-out"');
-    const settings = await html('/leaderboard/settings', cookie);
+    const settings = await html('/settings', cookie);
     expect(settings).toContain('data-profile-form');
     expect(settings).toContain(`value="${me.handle}"`);
     // An anonymous player is offered a passkey to save the account; it has no upload to remove yet.

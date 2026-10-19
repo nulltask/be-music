@@ -18,11 +18,11 @@ The be-music Leaderboard API: a Hono app on Cloudflare Workers with D1 and R2. T
 - Course runs (docs/leaderboard.md section 6.1): `POST /api/v0/course-scores`, the latest runs, one run, its play log,
   hiding a run, a course, its ranking and my rank on it, with bests (the trophy best included) per course and ruleset.
 - `GET /api/v0/openapi.json`: the OpenAPI 3.1 document, generated from the routes' valibot schemas
-  (`src/api/schemas.ts`), and its reference page at `/leaderboard/api`. A copy is committed as
+  (`src/api/schemas.ts`), and its reference page at `/api-reference`. A copy is committed as
   [`openapi.json`](./openapi.json); the test fails when it is out of date, so refresh it with `vp test run -u` after
   changing the API.
 
-- Pages under `/leaderboard`: new scores and course runs (top), a score, a chart's rankings, a chartset, a course, a
+- Pages at the root of `leaderboard.be-music.app`: new scores and course runs (top), a score, a chart's rankings, a chartset, a course, a
   course run, and a player.
 
 Not yet: L4 for new `#RANDOM` outcomes and L5, rivals, and OG cards.
@@ -59,7 +59,7 @@ The resources already exist in the be-music account (D1 and R2 in APAC, one of e
 are in `cloudflare.config.ts` and the migrate scripts. For a new environment, create them and record the new id:
 
 ```bash
-pnpm exec cf d1 create --name be-music-leaderboard-preview --primary-location-hint apac
+pnpm exec cf d1 create --name leaderboard-preview --primary-location-hint apac
 ```
 
 ```bash
@@ -118,10 +118,10 @@ pnpm --filter @be-music/leaderboard-api run db:migrate:preview
 
 Two environments, like every service (docs/services.md section 2): `main` is production, `devel` the preview.
 
-| Environment | Worker                | Host                               | D1 / R2                        |
-| ----------- | --------------------- | ---------------------------------- | ------------------------------ |
-| production  | `leaderboard`         | `leaderboard.be-music.app`         | `be-music-leaderboard`         |
-| preview     | `leaderboard-preview` | `leaderboard.preview.be-music.app` | `be-music-leaderboard-preview` |
+| Environment | Worker                | Host                               | D1                    | R2                             |
+| ----------- | --------------------- | ---------------------------------- | --------------------- | ------------------------------ |
+| production  | `leaderboard`         | `leaderboard.be-music.app`         | `leaderboard`         | `be-music-leaderboard`         |
+| preview     | `leaderboard-preview` | `leaderboard.preview.be-music.app` | `leaderboard-preview` | `be-music-leaderboard-preview` |
 
 The Deploy workflow (`.github/workflows/deploy.yml`) runs on every push to `main` or `devel`. It applies the migrations
 to the environment's D1, then deploys this Worker before the others, since they bind it:
@@ -149,9 +149,9 @@ session cookies are shared on the environment's parent domain.
 
 ## Pages
 
-The pages under `/leaderboard` are Hono JSX styled with Tailwind CSS v4 and [Basecoat](https://basecoatui.com) (the
+The pages are Hono JSX styled with Tailwind CSS v4 and [Basecoat](https://basecoatui.com) (the
 shadcn/ui design without a framework runtime). `src/pages/app.css` compiles into `src/pages/styles.generated.ts`,
-served from `/leaderboard/assets/app.<hash>.css`.
+served from `/assets/app.<hash>.css`.
 
 The stylesheet, the icons, the share card's font and the client script (`src/pages/*.generated.ts`) are generated, not kept in git.
 `pnpm install`, `dev`, the deploys and the tests generate them; after changing the pages' classes, the icons or
@@ -161,7 +161,7 @@ The stylesheet, the icons, the share card's font and the client script (`src/pag
 pnpm --filter @be-music/leaderboard-api run generate
 ```
 
-`build:css`, `build:icons`, `build:fonts` and `build:client` run one step each. The share card sets Latin letters and figures in [Inter Tight](https://github.com/rsms/inter) (SIL Open Font License 1.1), served from `/leaderboard/assets/`.
+`build:css`, `build:icons`, `build:fonts` and `build:client` run one step each. The share card sets Latin letters and figures in [Inter Tight](https://github.com/rsms/inter) (SIL Open Font License 1.1), served from `/assets/`.
 
 ### Icons
 
@@ -173,7 +173,7 @@ pnpm --filter @be-music/leaderboard-api run build:icons
 ```
 
 The icons are compiled into `src/pages/icons.generated.ts` and served from
-`/leaderboard/assets/<name>.<hash>.<ext>`, next to `/leaderboard/manifest.webmanifest`. A hand-made PNG placed next to
+`/assets/<name>.<hash>.<ext>`, next to `/manifest.webmanifest`. A hand-made PNG placed next to
 the SVG (`apple-touch-icon.png`, `icon-192.png`, `icon-512.png`) is used instead of its rendered one.
 
 ## Tests

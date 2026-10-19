@@ -20,7 +20,7 @@ const EXTENSIONS = { 'image/webp': 'webp', 'image/png': 'png', 'image/jpeg': 'jp
 /** The URL of a play's card; the version (the upload's hash, or `d` for the default card) busts caches. */
 export function cardUrl(scoreId: string, cardKey: string | null): string {
   const version = cardKey === null ? 'd' : (/\/([0-9a-f]{16})[0-9a-f]*\.\w+$/.exec(cardKey)?.[1] ?? 'u');
-  return `/leaderboard/scores/${encodeURIComponent(scoreId)}/card?v=${version}`;
+  return `/scores/${encodeURIComponent(scoreId)}/card?v=${version}`;
 }
 
 export type CardUpload =

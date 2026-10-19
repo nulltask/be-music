@@ -60,7 +60,7 @@ flowchart LR
 - **ORM**: Drizzle。drizzle-kit で SQL のマイグレーションをパッケージ内に生成し、Better Auth のテーブルも同じ
   マイグレーションで管理します。
 - **ホスト**（docs/services.ja.md）: Leaderboard は、ページと API を `leaderboard.be-music.app` で配信します（ページは
-  今も `/leaderboard` の下）。Player の Worker（`play`）が `/api/*` を Service Binding で転送するので、プレイヤーからの
+  ルートに置きます）。Player の Worker（`play`）が `/api/*` を Service Binding で転送するので、プレイヤーからの
   リクエストはプレイヤー自身のオリジンのままです。Better Auth は、Accounts を切り出すまでここに置きます。base URL は
   `accounts.be-music.app` で、その Worker が `/api/auth/*` をここへ転送します。セッション Cookie は `be-music.app` で共有
   するので、どのサービスも同じセッションを読みます。
@@ -422,7 +422,7 @@ course_best_score (user_id, course_fp, ruleset, assisted,     -- PK、best_score
 
 ## 8. API（`/api/v0`）
 
-ルートは自分自身を記述します。valibot スキーマがリクエストを検証し、同じスキーマから OpenAPI 3.1 のドキュメントを生成します（`GET /api/v0/openapi.json`、リファレンスページは `/leaderboard/api`）。TypeSpec も検討しましたが、別に書いた仕様は、ルートが実際に行う検証とずれていきます。
+ルートは自分自身を記述します。valibot スキーマがリクエストを検証し、同じスキーマから OpenAPI 3.1 のドキュメントを生成します（`GET /api/v0/openapi.json`、リファレンスページは `/api-reference`）。TypeSpec も検討しましたが、別に書いた仕様は、ルートが実際に行う検証とずれていきます。
 
 | メソッド                 | パス                                                                     | 用途                                                                               |
 | ------------------------ | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
@@ -475,23 +475,23 @@ course_best_score (user_id, course_fp, ruleset, assisted,     -- PK、best_score
   今は仮の値（`NO TARGET`、ターゲットのスコア 0）を読んでいます。これをここで得た値に置き換えます。ゴーストの
   推移の計算と対応付けは、`@be-music/player` の純粋関数にします。
 
-## 10. ページ（`/leaderboard/*`）
+## 10. ページ（`leaderboard.be-music.app`）
 
 leaderboard Worker の中で Hono JSX によってサーバーレンダリングし、D1 を直接読みます。見た目は情報サイトとして、
 Tailwind CSS v4 と Basecoat（フレームワークのランタイムなしの shadcn/ui デザイン）で整え、OS の配色に従います。
 
-- `/leaderboard` — トップページ。新着のプレイを、それぞれプレイしたルールセットの結果で並べます。匿名でない
+- `/` — トップページ。新着のプレイを、それぞれプレイしたルールセットの結果で並べます。匿名でない
   プレイヤーのプレイは譜面に関わらずすべて表示し、まだ公開一覧に載っていない譜面には「new chart」の印を付けます。
   匿名のプレイはフィルタで含めます。架空の譜面がこのページに出るには、passkey を持つアカウントが必要です。
-- `/leaderboard/scores/:id` — スコア
-- `/leaderboard/chartsets/:id` — 1 作品の譜面一覧（同梱譜面、次に差分）
-- `/leaderboard/charts/:chartFp` — 譜面のランキング、プレイ数とランプの分布、譜面の詳細（モード、TOTAL、判定ランク、LN モード、ファイルハッシュ）
-- `/leaderboard/players/:handle` — プロフィールとプレイヤーの統計（プレイ数、譜面数、平均スコアレート、自己ベストのランプと DJ Rank の分布）、最新のプレイとコースのプレイ。ライバル比較は `/leaderboard/players/:handle/versus/:rival`
-- `/leaderboard/courses/:courseFp` — コースのランキング（各プレイヤーのベスト EX スコア、ランプ、BP、トロフィー。アシストありのプレイと匿名プレイヤーは譜面のページと同じスイッチで切り替え）、譜面のページへリンクしたステージ、プレイ数とランプの分布、詳細（種類、制約）。アカウントを持つプレイヤーが誰も遊んでいないコースは検索エンジンに載せません
-- `/leaderboard/course-scores/:id` — コースのプレイをすべてのルールセットで（到達したステージ数、トロフィー）、表示ルールセットでステージごとに（判定、BP、各ステージが引き継いだゲージ、到達しなかったステージ）表示し、プレイログと、本人には非表示にするスイッチを付けます。トップページはプレイの下に最新のコースのプレイを並べます
+- `/scores/:id` — スコア
+- `/chartsets/:id` — 1 作品の譜面一覧（同梱譜面、次に差分）
+- `/charts/:chartFp` — 譜面のランキング、プレイ数とランプの分布、譜面の詳細（モード、TOTAL、判定ランク、LN モード、ファイルハッシュ）
+- `/players/:handle` — プロフィールとプレイヤーの統計（プレイ数、譜面数、平均スコアレート、自己ベストのランプと DJ Rank の分布）、最新のプレイとコースのプレイ。ライバル比較は `/players/:handle/versus/:rival`
+- `/courses/:courseFp` — コースのランキング（各プレイヤーのベスト EX スコア、ランプ、BP、トロフィー。アシストありのプレイと匿名プレイヤーは譜面のページと同じスイッチで切り替え）、譜面のページへリンクしたステージ、プレイ数とランプの分布、詳細（種類、制約）。アカウントを持つプレイヤーが誰も遊んでいないコースは検索エンジンに載せません
+- `/course-scores/:id` — コースのプレイをすべてのルールセットで（到達したステージ数、トロフィー）、表示ルールセットでステージごとに（判定、BP、各ステージが引き継いだゲージ、到達しなかったステージ）表示し、プレイログと、本人には非表示にするスイッチを付けます。トップページはプレイの下に最新のコースのプレイを並べます
 
 どのページも、ヘッダーで選んで Cookie に保存する 1 つの**表示ルールセット**（LR2、beatoraja、IIDX）で値を表示し、
-プレイ自体のルールセットは「played with」として併記します。切り替えは専用の URL（`/leaderboard/ruleset/:id?next=…`。
+プレイ自体のルールセットは「played with」として併記します。切り替えは専用の URL（`/ruleset/:id?next=…`。
 戻り先は Leaderboard のページに限る）で行うので、ページの URL を共有しても、開いた人の設定は変わりません。ページが
 Cookie に依存するので、`Cache-Control: private, max-age=0` を返します。譜面のページには、既知のファイルごとに、BMS Search 自身が使う形式で他のサイトへのリンクを置きます。ファイルの
 SHA-256 で Mocha-Repository、MinIR、BMS Search（`/patterns/{sha256}`）を、MD5 を記録するようになれば LR2IR を

@@ -21,7 +21,7 @@ writeFileSync(
     'export const FONTS = {',
     '  interTight: {',
     "    family: 'Inter Tight',",
-    `    path: '/leaderboard/assets/inter-tight.${hash}.woff2',`,
+    `    path: '/assets/inter-tight.${hash}.woff2',`,
     "    contentType: 'font/woff2',",
     `    base64: '${bytes.toString('base64')}',`,
     '  },',

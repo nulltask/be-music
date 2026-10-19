@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => {
   // `be-music.app` for production, `preview.be-music.app` for the preview.
   const site = preview ? 'preview.be-music.app' : 'be-music.app';
   // Created with `cf d1 create` (primary location APAC); the ids are not secret.
-  const databaseId = preview ? 'f4f59881-e902-450c-892b-d764c481eb46' : 'd3791c87-75f0-4d6b-8fd9-9013f0492006';
+  const databaseId = preview ? '046723a8-244b-42ca-ad49-01c1914333f1' : '2cb01ebf-4a70-4582-bb38-4e2e925bff61';
   return {
     worker: {
       name: `leaderboard${suffix}`,
@@ -34,8 +34,8 @@ export default defineConfig(({ mode }) => {
       // Hourly: ask BMS Search which work new and stale charts belong to (src/chartsets/refresh.ts).
       triggers: [triggers.scheduled({ schedule: '17 * * * *' })],
       env: {
-        // The databases and buckets keep their names from before the services were split.
-        DB: bindings.d1({ name: `be-music-leaderboard${suffix}`, id: databaseId }),
+        DB: bindings.d1({ name: `leaderboard${suffix}`, id: databaseId }),
+        // The buckets keep their names from before the services were split.
         BLOBS: bindings.r2({ name: `be-music-leaderboard${suffix}` }),
         SUBMIT_LIMITER: bindings.rateLimit({ namespace: preview ? '2001' : '1001', simple: { limit: 10, period: 60 } }),
         RIVAL_LIMIT: bindings.text('100'),

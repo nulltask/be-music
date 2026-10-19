@@ -6,7 +6,7 @@ import { Layout, PageHeader } from './layout.tsx';
 import { meta, notFound, PAGE_CACHE, pageMessages, type PageContext } from './page.tsx';
 
 /** A chartset: the charts of one work, the original package's and the add-ons, as BMS Search files them. */
-export async function chartsetPage(c: PageContext<'/leaderboard/chartsets/:id'>) {
+export async function chartsetPage(c: PageContext<'/chartsets/:id'>) {
   const db = openDatabase(c.env.DB);
   const [found, charts] = await Promise.all([
     loadChartset(db, c.req.param('id')),

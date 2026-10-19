@@ -42,7 +42,7 @@ function RunVisibilityCard(props: { courseScoreId: string; hidden: boolean }) {
 }
 
 /** One course run under every ruleset, broken down by stage under the display ruleset, with how it was played. */
-export async function courseRunPage(c: PageContext<'/leaderboard/course-scores/:id'>) {
+export async function courseRunPage(c: PageContext<'/course-scores/:id'>) {
   const db = openDatabase(c.env.DB);
   const found = await loadCourseRun(db, c.req.param('id'));
   const viewer = c.get('viewer');

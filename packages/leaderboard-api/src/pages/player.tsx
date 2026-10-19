@@ -25,7 +25,7 @@ import { resolveFormerHandle } from '../profiles.ts';
 import { movedTo } from './avatar.ts';
 
 /** A player's figures and newest plays. */
-export async function playerPage(c: PageContext<'/leaderboard/players/:handle'>) {
+export async function playerPage(c: PageContext<'/players/:handle'>) {
   const db = openDatabase(c.env.DB);
   const player = await loadPlayer(db, c.req.param('handle'));
   if (player === undefined) {
