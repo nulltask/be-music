@@ -1,7 +1,7 @@
 // The demo's lil-gui "Debug Menu": its folders, the controllers the app reaches after building them, and the locks a
 // play puts on them. Each folder is built in a module of its own (`play-options.ts`, `tempo.ts`, …) with the menu as
 // `this`; the folder titles and the remembered open states are `folders.ts`'. The menu reaches the app only through
-// `DebugMenuDeps`, which `main.ts` builds.
+// `DebugMenuDeps`, which the app (`app/app.ts`) builds.
 
 import type { BeatorajaSkinConfig, BeatorajaSkinHeader } from '@be-music/beatoraja-skin';
 import type { Lr2DiscoveredTheme } from '@be-music/lr2-skin';
