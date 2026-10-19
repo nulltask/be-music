@@ -1,115 +1,160 @@
-// Note-density readouts for a parsed BMS chart.
+// Note-density readouts for a parsed chart: beatoraja's skin numbers 360-365.
 //
-// ModernChic's `info.lua` authors `value[]` displays for the chart's note density:
-// `DENSITY_PEAK=360 (+afterdot 361)` / `DENSITY_END=362 (+afterdot 363)` /
-// `DENSITY_AVERAGE=364 (+afterdot 365)`. Notes are bucketed into 1-second wallclock windows;
-// peak = max bucket count, end = the bucket containing the chart's last note, average =
-// total notes / chart duration.
-//
-// The afterdot values give the first decimal place — beatoraja's value digits split a float
-// into two separate readouts (integer part + first decimal), so authors can render "12.4 NPS"
-// as a 2-cell + dot + 1-cell layout. We compute the integer + decimal parts directly to match.
+// beatoraja reads these from the chart's `SongInformation` (`IntegerPropertyFactory.java` L347-L386 at 8320241d):
+// `DENSITY_PEAK=360 (+afterdot 361)` / `DENSITY_END=362 (+afterdot 363)` / `DENSITY_AVERAGE=364 (+afterdot 365)`,
+// each the whole part `(int) x` and two decimal digits `(int) (x * 100) % 100`. The densities follow
+// `SongInformation(BMSModel)` (`SongInformation.java` L86-L176): notes are counted per second of the chart, a long note
+// counting in every second it is held, and
+// - peak is the busiest second;
+// - average is the mean of the seconds holding at least `totalNotes / seconds / 4` notes;
+// - end is the busiest 5-second average from the second where the notes left fit inside the TOTAL-based border.
 
-import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
-import {
-  collectBeatorajaChartTimedEntries,
-  computeBeatorajaMeasureBaseBeats,
-  resolveBeatorajaInitialBpm,
-} from './timing.ts';
+import { resolveChart, type ResolvedChart } from '@be-music/chart';
+import type { BeMusicJson } from '@be-music/json';
 
-/** Density readout in notes-per-second. Integer part + first decimal. */
+/** A density readout: its whole part and its two decimal digits, as beatoraja's numbers show them. */
+export interface DensityReadout {
+  whole: number;
+  /** `(int) (x * 100) % 100`: `12.345` gives `34`. */
+  afterDot: number;
+}
+
+/** Density readouts in notes per second. */
 export interface ChartDensity {
-  /** Peak NPS — the highest count of any 1-second window. */
-  peak: { whole: number; afterDot: number };
-  /** End NPS — the count of the window containing the chart's last note. */
-  end: { whole: number; afterDot: number };
-  /** Average NPS — total playable notes / chart duration in seconds. */
-  average: { whole: number; afterDot: number };
+  /** The busiest second. */
+  peak: DensityReadout;
+  /** The busiest 5-second average from the TOTAL border on. */
+  end: DensityReadout;
+  /** The mean of the seconds that hold at least a quarter of the chart's mean. */
+  average: DensityReadout;
+}
+
+/** The raw densities of a chart, as beatoraja's `SongInformation` stores them. */
+export interface ChartDensityValues {
+  peak: number;
+  end: number;
+  average: number;
+}
+
+/** beatoraja analyses at most six hours (`MAX_ANALYSIS_DURATION_MILLIS`); a longer chart has no song information. */
+const MAX_ANALYSIS_DURATION_MS = 6 * 60 * 60 * 1000;
+
+/** The seconds `SongInformation` averages the end density over (`Math.min(5, ...)`). */
+const END_DENSITY_WINDOW_SECONDS = 5;
+
+/** A timeline time in whole milliseconds, truncated as jbms-parser's `TimeLine.getTime()` does (microseconds / 1000). */
+function toTimelineMs(seconds: number): number {
+  return Math.floor(Math.floor(seconds * 1_000_000 + 1e-3) / 1000);
+}
+
+/** A lane object `SongInformation` walks: a tap, a long note's start (held through `heldUntilMs`), or another object. */
+interface CountedObject {
+  ms: number;
+  /** What it adds to its own second: 1 for a tap; 0 for a counted LN end (it swaps the hold for the end) or a mine. */
+  notes: number;
+  /** A long note's start: the time of its end. It counts once in every second from its own through its end's. */
+  heldUntilMs?: number;
 }
 
 /**
- * Compute the chart's note-density readouts. Returns zeros when the chart has no playable
- * notes (degenerate / metadata-only chart).
- *
- * Algorithm:
- *   1. Sort events by chart-beat.
- *   2. Walk segments, accumulating wallclock seconds across BPM changes + STOP events.
- *   3. Whenever a playable note event fires, record its wallclock-seconds offset.
- *   4. Bucket the note-time list into 1-second windows.
- *   5. Peak = max bucket, end = bucket containing the last note, avg = total / duration.
+ * The densities beatoraja's `SongInformation(BMSModel)` computes for `chart` (`SongInformation.java` L86-L176), from the
+ * chart's resolved notes. All zero for a chart without timelines or longer than beatoraja analyses.
  */
-export function computeBeatorajaChartDensity(chart: BeMusicJson): ChartDensity {
-  const empty = { whole: 0, afterDot: 0 };
-  const measureBaseBeat = computeBeatorajaMeasureBaseBeats(chart);
-  if (measureBaseBeat.length === 0) {
-    return { peak: empty, end: empty, average: empty };
+export function computeBeatorajaChartDensityValues(chart: BeMusicJson | ResolvedChart): ChartDensityValues {
+  const resolved = 'sortedEvents' in chart ? chart : resolveChart(chart);
+  const zero = { peak: 0, end: 0, average: 0 };
+
+  // `BMSModel.getLastMilliTime`: the last timeline with a lane object (judged, mine or hidden), a BGM, or a BGA / layer.
+  const laneObjects = resolved.notes.length + resolved.mines.length + resolved.invisibleNotes.length;
+  let hasTimeline = laneObjects > 0;
+  let lastSeconds = hasTimeline ? resolved.lastNoteSeconds : 0;
+  const others = [
+    ...resolved.sampleTriggers.filter((trigger) => trigger.channel === '01'),
+    ...resolved.bga.base,
+    ...resolved.bga.layer,
+  ];
+  for (const other of others) {
+    hasTimeline = true;
+    lastSeconds = Math.max(lastSeconds, other.seconds);
   }
+  const lastTime = toTimelineMs(lastSeconds);
+  if (!hasTimeline || lastTime < 0 || lastTime > MAX_ANALYSIS_DURATION_MS) return zero;
 
-  // Build a unified timeline: every event with its computed beat. Sort by beat. Walk in beat
-  // order, applying BPM transitions and STOP durations to derive wallclock seconds.
-  const entries = collectBeatorajaChartTimedEntries(chart, measureBaseBeat, (event) =>
-    isPlayableNote(event) ? true : undefined,
-  );
-
-  // Walk and convert to wallclock seconds. Note events get their seconds-stamp pushed into a
-  // sorted list (entries are already in beat order, so the seconds list comes out sorted).
-  const initialBpm = resolveBeatorajaInitialBpm(chart);
-  let bpm = initialBpm;
-  let seconds = 0;
-  let cursorBeat = 0;
-  const noteSeconds: number[] = [];
-  for (const e of entries) {
-    if (e.beat > cursorBeat) {
-      seconds += ((e.beat - cursorBeat) * 60) / bpm;
-      cursorBeat = e.beat;
+  // `SongInformation` walks a long note's end only outside LN mode (`#LNMODE` 1, or none with the LN type the song
+  // database reads with); `BMSModel.getTotalNotes` counts the end of a CN / HCN note.
+  const chartLnMode = resolved.lnMode;
+  const objects: CountedObject[] = [];
+  let totalNotes = 0;
+  for (const note of resolved.notes) {
+    const ms = toTimelineMs(note.seconds);
+    if (note.kind === 'ln' && note.endSeconds !== undefined) {
+      const endMs = toTimelineMs(note.endSeconds);
+      objects.push({ ms, notes: 0, heldUntilMs: endMs });
+      totalNotes += (note.lnMode ?? chartLnMode) === 1 ? 1 : 2;
+      if (chartLnMode !== 1) objects.push({ ms: endMs, notes: 0 });
+    } else {
+      objects.push({ ms, notes: 1 });
+      totalNotes += 1;
     }
-    if (e.kind === 'bpm') {
-      bpm = e.bpm;
-    } else if (e.kind === 'stop') {
-      seconds += (e.durationBeats * 60) / bpm;
-    } else if (e.kind === 'note') {
-      noteSeconds.push(seconds);
+  }
+  // A mine lands in a column of its own, outside the counts, but still steps the border down.
+  for (const mine of resolved.mines) objects.push({ ms: toTimelineMs(mine.seconds), notes: 0 });
+  objects.sort((a, b) => a.ms - b.ms);
+
+  const seconds = Math.floor(lastTime / 1000) + 2;
+  const counts = Array.from({ length: seconds }, () => 0);
+  const total = resolved.total.value !== undefined && resolved.total.value > 0 ? resolved.total.value : 100;
+  let border = Math.trunc(totalNotes * (1 - 100 / total));
+  let borderSecond = 0;
+  for (const object of objects) {
+    const second = Math.floor(object.ms / 1000);
+    if (second < 0 || second >= seconds) continue;
+    if (object.heldUntilMs !== undefined) {
+      const endSecond = Math.min(Math.floor(object.heldUntilMs / 1000), seconds - 1);
+      for (let index = second; index <= endSecond; index += 1) counts[index]! += 1;
+    }
+    counts[second]! += object.notes;
+    border -= 1;
+    if (border === 0) borderSecond = second;
+  }
+
+  const floor = Math.trunc(Math.trunc(totalNotes / seconds) / 4);
+  let peak = 0;
+  let sum = 0;
+  let counted = 0;
+  for (const notes of counts) {
+    peak = Math.max(peak, notes);
+    if (notes >= floor) {
+      sum += notes;
+      counted += 1;
     }
   }
+  const average = counted > 0 ? sum / counted : 0;
 
-  if (noteSeconds.length === 0 || seconds <= 0) {
-    return { peak: empty, end: empty, average: empty };
+  const window = Math.min(END_DENSITY_WINDOW_SECONDS, seconds - borderSecond - 1);
+  let end = 0;
+  if (window > 0) {
+    for (let start = borderSecond; start < seconds - window; start += 1) {
+      let notes = 0;
+      for (let offset = 0; offset < window; offset += 1) notes += counts[start + offset]!;
+      end = Math.max(end, notes / window);
+    }
   }
-
-  // Bucket into 1-second windows.
-  const totalDurationSec = seconds;
-  const lastNoteSec = noteSeconds[noteSeconds.length - 1]!;
-  const bucketCount = Math.max(1, Math.ceil(lastNoteSec) + 1);
-  const buckets = Array.from({ length: bucketCount }, () => 0);
-  for (const s of noteSeconds) {
-    const idx = Math.min(bucketCount - 1, Math.floor(s));
-    buckets[idx] += 1;
-  }
-  let peakNPS = 0;
-  for (const b of buckets) {
-    if (b > peakNPS) peakNPS = b;
-  }
-  const endNPS = buckets[Math.min(bucketCount - 1, Math.floor(lastNoteSec))]!;
-  const averageNPS = noteSeconds.length / totalDurationSec;
-
-  return {
-    peak: splitDecimal(peakNPS),
-    end: splitDecimal(endNPS),
-    average: splitDecimal(averageNPS),
-  };
+  return { peak, end, average };
 }
 
-/** Split `12.345` into `{ whole: 12, afterDot: 3 }` (first decimal digit). */
-function splitDecimal(value: number): { whole: number; afterDot: number } {
+/** beatoraja's readout of a density: `(int) x` and `(int) (x * 100) % 100`. */
+export function toBeatorajaDensityReadout(value: number): DensityReadout {
   if (!Number.isFinite(value) || value < 0) return { whole: 0, afterDot: 0 };
-  const whole = Math.floor(value);
-  const afterDot = Math.floor((value - whole) * 10);
-  return { whole, afterDot };
+  return { whole: Math.trunc(value), afterDot: Math.trunc(value * 100) % 100 };
 }
 
-function isPlayableNote(event: BeMusicEvent): boolean {
-  const ch = event.channel;
-  if (ch.length !== 2) return false;
-  const lead = ch[0]!;
-  return lead === '1' || lead === '2' || lead === '5' || lead === '6';
+/** The chart's note-density readouts for beatoraja's numbers 360-365 ({@link computeBeatorajaChartDensityValues}). */
+export function computeBeatorajaChartDensity(chart: BeMusicJson | ResolvedChart): ChartDensity {
+  const values = computeBeatorajaChartDensityValues(chart);
+  return {
+    peak: toBeatorajaDensityReadout(values.peak),
+    end: toBeatorajaDensityReadout(values.end),
+    average: toBeatorajaDensityReadout(values.average),
+  };
 }
