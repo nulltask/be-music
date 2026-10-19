@@ -84,7 +84,7 @@ beatoraja は LR2 互換の番号を LR2 と同じ値で持つので、`@be-musi
 
 ## シーンの状態
 
-`@be-music/lr2-skin/state` は、`@be-music/scene-model` のシーンモデル（[シーンモデル](./scene-model.ja.md)）を [番号表](#番号表) に写します。画面ごとに、どの op が立つか、各数値とテキストに何を描くか、各スライダーをどこに置くか（`Lr2SceneState`。選曲画面の `Lr2SelectState` は各ボタンのどのセルを描くかも返します）、そして選曲画面とプレイ画面のある瞬間にどのタイマーを始め、どれを止めるか（`Lr2TimerUpdate`：始めるタイマーとその開始時刻、止めるタイマー）を返します。スキンファミリーのビューは、スキンが描く番号をこの状態に問い合わせます。ビューが持つのは、自分で刻むタイマーの番号とレーンの番号だけで、決定画面とリザルト画面のわずかなタイマーは自分で求めます（`view/lr2/` の `resolveLr2DecideTimers`、`resolveLr2ResultTimers`）。
+`@be-music/lr2-skin/state` は、`@be-music/scene-model` のシーンモデル（[シーンモデル](./scene-model.ja.md)）を [番号表](#番号表) に写します。画面ごとに、どの op が立つか、各数値とテキストに何を描くか、各スライダーをどこに置くか（`Lr2SceneState`。選曲画面の `Lr2SelectState` は各ボタンのどのセルを描くかも返します）、選曲画面とプレイ画面のある瞬間にどのタイマーを始め、どれを止めるか（`Lr2TimerUpdate`：始めるタイマーとその開始時刻、止めるタイマー）、そして決定画面とリザルト画面のある瞬間にどのタイマーが動いているか（`resolveLr2DecideTimers`、`resolveLr2ResultTimers`：動いている各タイマーとその開始時刻）とリザルトのグラフをどこまで描くか（`resolveLr2GraphReveal`）を返します。スキンファミリーのビューは、スキンが描く番号をこの状態に問い合わせます。ビューが持つのは、自分で刻むタイマーの番号とレーンの番号だけです。
 
 ```mermaid
 flowchart LR
