@@ -1,0 +1,16 @@
+{
+  "name": "@be-music/play",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "pnpm --filter @be-music/player-web-demo run build:cf && cf deploy",
+    "deploy:preview": "pnpm --filter @be-music/player-web-demo run build:cf && cf deploy --mode preview"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261015.1",
+    "cf": "1.0.0-beta.17",
+    "vite-plus": "catalog:",
+    "wrangler": "^4.151.0"
+  }
+}

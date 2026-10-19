@@ -318,14 +318,15 @@ demo は Vite dev server を起動します。BMS/BMSON の楽曲 folder、LR2 t
 
 URL から archive を読み込むこともできます。`?music=<zip の URL>&skin=<zip の URL>`（どちらか一方だけでも可）を付けると、drop と同じ経路で archive を読み込みます。cross-origin の `https` URL は同一オリジンの proxy route `/__url-load-proxy` 経由で取得します。この route は Vite dev server と Cloudflare Worker の両方が提供します。
 
-demo を Cloudflare Workers（Static Assets と Worker。`packages/player-web-demo/wrangler.jsonc` を参照）へ deploy するには次を実行します。
+demo は Player の Worker（`packages/play`）が配信します。build した demo を Static Assets で配信し、ffmpeg core を R2 から返す処理と、Leaderboard の API への転送を Worker が受け持ちます。`main` と `devel` に push すると、すべてのサービスが本番とプレビューにデプロイされます（`.github/workflows/deploy.yml`、[サービスと環境](./docs/services.ja.md)）。Player を手でデプロイするには次を実行します。
 
 ```bash
-pnpm --filter @be-music/player-web-demo run cf:r2:create # 初回のみ: ffmpeg-core 用の R2 bucket を作成
-pnpm --filter @be-music/player-web-demo run deploy:cf
+pnpm --filter @be-music/player-web-demo run cf:r2:push # 固定している @ffmpeg/core が変わったとき: core を R2 へ upload
+pnpm --filter @be-music/play run deploy                # 本番、play.be-music.app
+pnpm --filter @be-music/play run deploy:preview        # プレビュー、play.preview.be-music.app
 ```
 
-`deploy:cf` は demo を build し、`ffmpeg-core.wasm` / `ffmpeg-core.js` を変更があったときだけ R2 へ upload して（Static Assets の 1 file あたりの上限を超えるため、Worker 経由で R2 から配信します）、`wrangler deploy` を実行します。`cf:r2:push` は ffmpeg core を強制的に upload します。
+`deploy` は demo を build して `cf deploy` を実行します。ffmpeg core（`ffmpeg-core.wasm` / `ffmpeg-core.js`）は Static Assets の 1 file あたりの上限を超えるので、R2 に置いて Worker 経由で配信します。
 
 ### 6. エディタ
 
