@@ -167,8 +167,8 @@ export interface DemoGuiState extends PlayTempoSettings {
    */
   submitToLeaderboard: boolean;
   /**
-   * Judge-window ruleset for the shared engine (`PlayerOptions.judgeRuleset`): LR2 (default) / beatoraja / IIDX.
-   * Only the window widths switch — note selection, empty POOR, LN mechanics, and the gauge stay LR2-aligned.
+   * The compat ruleset the shared engine judges under (`PlayerOptions.judgeRuleset`): LR2 (default) / beatoraja / IIDX.
+   * It owns every judge rule: the windows, note selection, empty POOR, the long-note style, the gauge and the score.
    * Latched at song start (the Play options folder is disabled during a play) and recorded into the play-log.
    */
   judgeRuleset: PlaylogRulesetId;

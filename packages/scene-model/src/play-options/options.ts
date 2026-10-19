@@ -16,14 +16,14 @@ export interface PlayOptions {
   hiSpeed: number;
   /**
    * When `true`, every note auto-judges as PERFECT at its scheduled time. Mirrors the LR2 AUTOPLAY skin button
-   * (`#SRC_BUTTON type=16`); the dedicated `onSongAutoPlay` callback also forces this on for that single launch
-   * regardless of what's stored here.
+   * (`#SRC_BUTTON type=16`). Starting a chart in AUTO from the select screen (its `start` with `autoPlay`, such as a
+   * be-music skin's `autoPlay` action) also forces this on for that one play, whatever is stored here.
    */
   autoPlay: boolean;
   /**
    * BGA (background animation) display mode. Mirrors the LR2 `#SRC_BUTTON,type=72` cycle (OFF / ON / AUTOPLAY ONLY).
-   * When `'AUTOPLAY_ONLY'` the BGA renders only when {@link autoPlay} (or the AUTOPLAY skin-button override) is also
-   * active — matches LR2 behavior where AUTOPLAY ONLY hides BGA during regular human-played sessions.
+   * When `'AUTOPLAY_ONLY'` the BGA renders only when {@link autoPlay} (or a start in AUTO) is also active — matches
+   * LR2 behavior where AUTOPLAY ONLY hides BGA during regular human-played sessions.
    */
   bga: BgaMode;
   /**

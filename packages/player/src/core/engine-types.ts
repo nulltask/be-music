@@ -85,12 +85,12 @@ export interface PlayerPlaySettings {
    */
   gauge?: GaugeType;
   /**
-   * Judge-window ruleset for manual play: `'lr2'` (default — the engine's LR2-aligned windows), `'beatoraja'`
-   * (SEVENKEYS windows scaled by beatoraja's judgerank), or `'iidx'` (fixed ±16.67/±33.33/±116.67/±250 ms).
-   * Only the WINDOW WIDTHS switch — note selection, empty-POOR, long-note mechanics, and the gauge stay on the
-   * engine's LR2-aligned semantics (the playlog simulators are the full per-ruleset reproduction). Dynamic
-   * `#EXRANKxx` changes are an LR2 concept and only apply under `'lr2'`. Recorded into the playlog
-   * (`play.judgeRuleset`) so replays re-apply the same windows.
+   * The compat ruleset the play is judged under: `'lr2'` (default), `'beatoraja'` or `'iidx'`. It owns every judge
+   * rule — the windows (beatoraja's SEVENKEYS windows scaled by its judgerank, IIDX's fixed ±16.67 / ±33.33 /
+   * ±116.67 / ±250 ms), which note a press resolves against, the long-note style, the empty-POOR rule, mines, the gauge
+   * line-up and its curve, and the score — and the play-log simulator plays by the same tables. Dynamic `#EXRANKxx`
+   * changes are an LR2 concept and only apply under `'lr2'`. Recorded into the play log (`play.judgeRuleset`) so
+   * replays and re-simulations judge under the same ruleset.
    */
   judgeRuleset?: PlaylogRulesetId;
   /**

@@ -6,8 +6,8 @@ import type { DebugMenu } from './index.ts';
 
 /** Diagnostics and session behaviour most players never touch, plus the reset for every remembered setting. */
 export function buildDeveloperFolder(this: DebugMenu, developer: GUI): void {
-  // Judge-window ruleset — no in-skin counterpart; the Debug Menu is its only surface. Window widths only (note
-  // selection / empty POOR / LN mechanics / gauge stay LR2-aligned — see docs/playlog.md).
+  // The judge ruleset — no in-skin counterpart; the Debug Menu is its only surface. It switches every judge rule
+  // (windows, note selection, empty POOR, long notes, gauge, score — see docs/playlog.md).
   this.trackPlayOption(
     developer
       .add(this.guiState, 'judgeRuleset', { LR2: 'lr2', beatoraja: 'beatoraja', IIDX: 'iidx' })
