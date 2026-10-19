@@ -290,8 +290,9 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 `optionChange`）、選曲の BGM と決定のジングル、結果のジングル（`clear`・`fail`・`result`・`courseClear`・`courseFail`）
 です。
 
-- `systemSoundSetFromLr2Theme` は LR2 テーマの読み込みで得た音（バイト列）を読みます。`LR2_SOUND_SET_SLOTS` は LR2 の
-  サウンドセットの各コマンドをスロットに対応させます（`SCRATCH` はカーソル、`PANEL_*` はオプションパネル）。
+- LR2 テーマの音はテーマの読み込みで得たバイト列で、鳴らすスロットはホストが埋めます（Web のデモは LR2 テーマの
+  サービスが選曲のスロットを埋めます）。`LR2_SOUND_SET_SLOTS` は LR2 のサウンドセットの各コマンドをスロットに
+  対応させます（`SCRATCH` はカーソル、`PANEL_*` はオプションパネル）。
 - `systemSoundSetFromBeatoraja` は beatoraja テーマの効果音のパスと選曲 BGM のパス（テーマの音声で鳴らす）、
   ジングル（バイト列）を読みます。beatoraja にはオプションパネルの効果音がなく、LR2 にはキャンセルの効果音がありません。
 - `resolveResultJingles` は、ジングルを持つ最初のセット（結果スキンを見せているテーマ、次にほかのテーマ）から結果の
@@ -318,8 +319,8 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 | ハイスピードの範囲と刻み                                                          | `player-web` の `scene/hi-speed.ts`          | 同じ名前（再 export は削除）                                                       |
 | `SceneCourseInfo`・`resolveSceneCourseInfo`                                       | `player-web` の `scene/course-info.ts`       | `CourseView`・`resolveCourseView`（旧名は削除）                                    |
 | `PixiPlayOptions` などの `Pixi*` のプレイオプションの型・`PixiGameplayResultData` | `player-web` の scene                        | `PlayOptions` など・`PlayResult`（旧名は削除）                                     |
-| `CourseComboState`・`createCourseCombo`・`advanceCourseCombo`                     | `player-web` の `scene/core/course-combo.ts` | 同じ名前。`reduceCourseCombo` を追加                                               |
-| `PlaylogViewCursor`・`resolveBeatorajaPlaylogView`                                | `player-web` の `scene/playlog-view.ts`      | 同じ名前（再 export は削除）。`resolvePlaylogView` の上に実装                      |
+| `CourseComboState`・`createCourseCombo`・`advanceCourseCombo`                     | `player-web` の `scene/core/course-combo.ts` | 同じ名前。ただし `advanceCourseCombo` は純粋な `reduceCourseCombo` に置き換え      |
+| `PlaylogViewCursor`・`resolveBeatorajaPlaylogView`                                | `player-web` の `scene/playlog-view.ts`      | `PlaylogViewCursor`。どのプレイのビューも `resolvePlaylogView` で見え方を求める    |
 | `buildCourseResultData`・`joinCourseStageHistories`・`resolveResultPresentation`  | `player-web-demo` の `course-result.ts`      | `playResultFromCourseRun` など（旧名で再 export）                                  |
 | `resolveResultViewJingles`                                                        | `player-web-demo` の `result-jingles.ts`     | そのまま。`resolveResultJingles` の上に実装                                        |
 

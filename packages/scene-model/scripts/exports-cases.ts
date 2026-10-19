@@ -363,19 +363,6 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       });
     },
   });
-  define('scene-model.resolveBeatorajaPlaylogView', {
-    run: () => {
-      sceneModelApi.resolveBeatorajaPlaylogView({
-        hiSpeed: 2,
-        lanecover: 0.25,
-        lift: 0.1,
-        hiddenRatio: 0.5,
-        hiddenEnabled: true,
-        mainBpm: 150,
-        sides: ['1P'],
-      });
-    },
-  });
   define('scene-model.PlaylogViewCursor', {
     run: () => {
       const cursor = new sceneModelApi.PlaylogViewCursor({ hiSpeed: 2 }, [{ timeUs: 1_000_000, hiSpeed: 2.5 }]);
@@ -432,18 +419,8 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelApi.reduceCourseCombo({ combo: 12, maxCombo: 30, stageCombo: 4 }, 5);
     },
   });
-  define('scene-model.advanceCourseCombo', {
-    run: () => {
-      sceneModelApi.advanceCourseCombo({ combo: 12, maxCombo: 30, stageCombo: 4 }, 5);
-    },
-  });
 
   // System sounds
-  define('scene-model.systemSoundSetFromLr2Theme', {
-    run: () => {
-      sceneModelApi.systemSoundSetFromLr2Theme(BENCH_LR2_THEME_SOUNDS);
-    },
-  });
   define('scene-model.systemSoundSetFromBeatoraja', {
     run: () => {
       sceneModelApi.systemSoundSetFromBeatoraja({
@@ -547,9 +524,8 @@ const BENCH_COURSE_RESULT: Parameters<typeof sceneModelApi.playResultFromCourseR
 const BENCH_COURSE_LOG = {
   stages: [{ played: true, playlog: { play: { judgeRuleset: 'lr2' } } }],
 } as unknown as Parameters<typeof sceneModelApi.playResultFromCourseRun>[2];
-const BENCH_LR2_THEME_SOUNDS: sceneModelApi.Lr2ThemeSounds = {
-  selectBgm: { path: 'LR2files/Bgm/x/select.wav', bytes: BENCH_BYTES },
-  clearBgm: { path: 'LR2files/Sound/lr2/clear.wav', bytes: BENCH_BYTES },
-  systemSounds: { cursorMove: { path: 'LR2files/Sound/lr2/scratch.wav', bytes: BENCH_BYTES } },
+const BENCH_SOUND_SET: sceneModelApi.SystemSoundSet = {
+  selectBgm: { bytes: BENCH_BYTES },
+  clear: { bytes: BENCH_BYTES },
+  cursor: { bytes: BENCH_BYTES },
 };
-const BENCH_SOUND_SET = sceneModelApi.systemSoundSetFromLr2Theme(BENCH_LR2_THEME_SOUNDS);
