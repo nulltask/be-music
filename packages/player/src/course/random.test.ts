@@ -97,9 +97,41 @@ describe('drawRandomCourse', () => {
       ok: false,
       stage: 0,
       reason: 'invalid-filter',
-      error: "unknown column 'clear'",
+      error: 'ambiguous column name: clear',
     });
     expect(drawRandomCourse(definition([{}]), [], () => 0)).toEqual({ ok: false, stage: 0, reason: 'no-candidates' });
+  });
+
+  test("draws from what a filter's ORDER BY / LIMIT leaves, as beatoraja's MY BEST folder writes it", () => {
+    // `level DESC LIMIT 2` keeps songs 3 and 4 (ties keep the library order); 0.99 picks the second.
+    const top = drawRandomCourse(
+      definition([{ filter: 'level >= 11 ORDER BY level DESC LIMIT 2' }]),
+      LIBRARY,
+      () => 0.99,
+    );
+    expect(top.ok && top.songs.map((entry) => entry.id)).toEqual([4]);
+    // A later stage without a filter reuses the cut selection.
+    const reuse = drawRandomCourse(definition([{ filter: '1 ORDER BY level LIMIT 1' }, {}]), LIBRARY, () => 0.5);
+    expect(reuse.ok && reuse.songs.map((entry) => entry.id)).toEqual([1, 1]);
+  });
+
+  test('ORDER BY RANDOM() draws its sort keys from the injected random source, before the pick', () => {
+    // Keys for songs 3, 4, 5 come first (0.7, 0.2, 0.9 → order 4, 3, 5), LIMIT 1 keeps song 4, then the pick reads 0.
+    const result = drawRandomCourse(
+      definition([{ filter: 'level = 12 ORDER BY RANDOM() LIMIT 1' }]),
+      LIBRARY,
+      sequence(0.7, 0.2, 0.9, 0),
+    );
+    expect(result.ok && result.songs.map((entry) => entry.id)).toEqual([4]);
+  });
+
+  test('a filter with an unqualified ambiguous column is invalid, as it selects nothing in beatoraja', () => {
+    expect(drawRandomCourse(definition([{ filter: 'mode = 7' }]), LIBRARY, () => 0)).toEqual({
+      ok: false,
+      stage: 0,
+      reason: 'invalid-filter',
+      error: 'ambiguous column name: mode',
+    });
   });
 
   test('never draws a candidate without a chart hash, and clamps a random value of 1', () => {
