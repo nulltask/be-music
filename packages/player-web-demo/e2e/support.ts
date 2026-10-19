@@ -191,13 +191,18 @@ export class Demo {
   ): Promise<{ value: boolean | number | string; enabled: boolean }> {
     return this.page.evaluate(
       ({ folder, name, action }) => {
-        let gui = document.querySelector<HTMLElement>('.lil-gui.lil-root');
+        // A beatoraja theme adds its Skin Config panel as another lil-gui root, so pick the Debug Menu's by its title.
+        const titleOf = (candidate: Element): string | undefined =>
+          candidate.querySelector(':scope > .lil-title')?.textContent?.trim();
+        let gui: HTMLElement | undefined = [...document.querySelectorAll<HTMLElement>('.lil-gui.lil-root')].find(
+          (candidate) => titleOf(candidate) === 'Debug Menu',
+        );
+        if (gui === undefined) throw new Error('no Debug Menu');
         for (const title of folder) {
-          const children = gui?.querySelector(':scope > .lil-children');
-          gui =
-            [...(children?.querySelectorAll<HTMLElement>(':scope > .lil-gui') ?? [])].find(
-              (candidate) => candidate.querySelector(':scope > .lil-title')?.textContent?.trim() === title,
-            ) ?? null;
+          const children: Element | null | undefined = gui?.querySelector(':scope > .lil-children');
+          gui = [...(children?.querySelectorAll<HTMLElement>(':scope > .lil-gui') ?? [])].find(
+            (candidate) => titleOf(candidate) === title,
+          );
         }
         const controller = [
           ...(gui?.querySelectorAll<HTMLElement>(':scope > .lil-children > .lil-controller') ?? []),

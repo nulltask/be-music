@@ -6,6 +6,15 @@
   "fadeout": 200,
   "scene": 3600000,
   "input": 0,
+  "property": [
+    {
+      "name": "E2E option",
+      "item": [
+        { "name": "On", "op": 900 },
+        { "name": "Off", "op": 901 }
+      ]
+    }
+  ],
   "source": [{ "id": 0, "path": "parts.png" }],
   "font": [],
   "image": [
