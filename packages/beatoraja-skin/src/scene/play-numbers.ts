@@ -136,6 +136,29 @@ function duration(input: BeatorajaPlayNumberInput, bpm: number, withCover: boole
   return green ? resolveGreenNumber(white) : white;
 }
 
+function clampUnit(value: number): number {
+  return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
+}
+
+/**
+ * beatoraja's lane cover (`PlayConfig.lanecover`): the SUDDEN+ height as a fraction of the part of the lane above the
+ * LIFT, kept while the cover is off. be-music keeps SUDDEN+ as a fraction of the whole lane, so the same drawn height
+ * is `sudden / (1 - lift)`.
+ */
+function beatorajaLaneCover(cover: LaneCoverState): number {
+  const sudden = clampUnit(cover.sudden);
+  const above = 1 - clampUnit(cover.lift);
+  return above > 0 ? Math.min(1, sudden / above) : 0;
+}
+
+/**
+ * `(int) (value * 1000)` on beatoraja's `float`s (`IntegerPropertyFactory` 14 / 314), so a cover moved up ten 0.01
+ * steps (0.09999999999999999 as a double) reads 100, not 99.
+ */
+function beatorajaPerMille(value: number): number {
+  return Math.trunc(Math.fround(Math.fround(value) * 1000));
+}
+
 function mainBpm(chart: BeatorajaPlayChartFacts): number {
   return chart.mainBpm !== undefined && chart.mainBpm > 0 ? chart.mainBpm : chart.bpm;
 }
@@ -157,7 +180,7 @@ function playLevelNumber(level: number | string | undefined): number {
  * - the score rate (102 / 103) over the notes judged so far, 100 % before the first (beatoraja's `nowrate`; 115 / 116
  *   are over every note);
  * - the hi-speed (310 its integer part, 311 two decimals, 10 times 100, all truncated as beatoraja's `(int)` casts),
- *   the lane cover and LIFT in percent (14, 314);
+ *   the lane cover (of the lane above the LIFT, kept while it is off) and the LIFT in per mille (14, 314);
  * - the white and green numbers (312 / 313, and 1312-1327 at the main, lowest and highest BPM, with and without the
  *   lane cover) from {@link resolveWhiteNumber};
  * - the BPMs (90-92, and 160 at the playhead, held at an LR2 negative-BPM reversal), `#PLAYLEVEL` (96);
@@ -184,9 +207,9 @@ export function resolveBeatorajaPlayNumber(id: number, input: BeatorajaPlayNumbe
     case BEATORAJA_NUM.HISPEED_AFTERDOT:
       return Math.trunc(hiSpeed * 100) % 100;
     case BEATORAJA_NUM.LANECOVER1:
-      return Math.round((input.cover !== undefined ? resolveLaneCover(input.cover).sudden : 0) * 100);
+      return input.cover !== undefined ? beatorajaPerMille(beatorajaLaneCover(input.cover)) : 0;
     case BEATORAJA_NUM.LIFT1:
-      return Math.round((input.cover !== undefined ? resolveLaneCover(input.cover).lift : 0) * 100);
+      return input.cover !== undefined ? beatorajaPerMille(clampUnit(input.cover.lift)) : 0;
     case BEATORAJA_NUM.JUDGETIMING:
     case BEATORAJA_NUM.HIDDEN1:
       return 0;

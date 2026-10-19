@@ -678,7 +678,7 @@ describe('BeatorajaPlayBridge — lane cover (the play state’s 1P cover)', () 
     expect(harness.bridge.resolveNumberValue(14)).toBe(0);
     harness.play(setCover({ sudden: 0.6, suddenOn: true }));
     expect(harness.bridge.resolveSliderValue(4)).toBeCloseTo(0.6, 6);
-    expect(harness.bridge.resolveNumberValue(14)).toBe(60);
+    expect(harness.bridge.resolveNumberValue(14)).toBe(600);
     // 2P reads the same cover in single-side play (`type = 5` == `type = 4`).
     expect(harness.bridge.resolveSliderValue(5)).toBeCloseTo(0.6, 6);
   });
@@ -882,21 +882,21 @@ describe('BeatorajaPlayBridge — lift and HIDDEN+', () => {
     expect(lift?.y).toBeCloseTo(-290, 6);
     expect(lift?.x).toBe(0);
     expect(lift?.a).toBe(0);
-    expect(harness.bridge.resolveNumberValue(314)).toBe(50);
+    expect(harness.bridge.resolveNumberValue(314)).toBe(500);
   });
 
   it('clamps LIFT moves to [0, 1] and ignores NaN', () => {
     const harness = createHarness();
     harness.play({ type: 'cover-adjust', part: 'lift', delta: 2 });
-    expect(harness.bridge.resolveNumberValue(314)).toBe(100);
+    expect(harness.bridge.resolveNumberValue(314)).toBe(1000);
     harness.play({ type: 'cover-adjust', part: 'lift', delta: -2 });
     expect(harness.bridge.resolveNumberValue(314)).toBe(0);
     harness.play({ type: 'cover-adjust', part: 'lift', delta: 0.6 });
     harness.play({ type: 'cover-adjust', part: 'lift', delta: 0.5 });
-    expect(harness.bridge.resolveNumberValue(314)).toBe(100);
+    expect(harness.bridge.resolveNumberValue(314)).toBe(1000);
     harness.play({ type: 'cover-adjust', part: 'lift', delta: -0.7 });
     harness.play({ type: 'cover-adjust', part: 'lift', delta: Number.NaN });
-    expect(harness.bridge.resolveNumberValue(314)).toBe(30);
+    expect(harness.bridge.resolveNumberValue(314)).toBe(300);
   });
 
   it('drives OFFSET_HIDDEN_COVER (id 5) per LaneRenderer formulas', () => {

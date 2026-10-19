@@ -32,11 +32,21 @@ describe('resolveBeatorajaPlayNumber — hi-speed and covers', () => {
     expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.HISPEED_AFTERDOT, input({ hiSpeed: 1.555 }))).toBe(55);
   });
 
-  it('reads the lane cover and LIFT in percent, the lane cover only while it is on', () => {
+  it('reads the lane cover and LIFT in per mille, the lane cover of the lane above the LIFT', () => {
+    // IntegerPropertyFactory: (int) (lanecover * 1000) and (int) (lift * 1000).
     const numbers = input({ cover: cover({ sudden: 0.25, suddenOn: true, lift: 0.104 }) });
-    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.LANECOVER1, numbers)).toBe(25);
-    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.LIFT1, numbers)).toBe(10);
-    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.LANECOVER1, input({ cover: cover({ sudden: 0.25 }) }))).toBe(0);
+    // 0.25 of the whole lane is 0.25 / 0.896 = 0.2790... of the lane above the LIFT.
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.LANECOVER1, numbers)).toBe(279);
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.LIFT1, numbers)).toBe(104);
+    // Ten 0.01 steps add up to 0.09999999999999999: on beatoraja's floats that reads 100, not the 99 a double gives.
+    const noLift = input({ cover: cover({ sudden: 0.09999999999999999, suddenOn: true }) });
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.LANECOVER1, noLift)).toBe(100);
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.LIFT1, noLift)).toBe(0);
+    // beatoraja reads the stored lane cover while it is off.
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.LANECOVER1, input({ cover: cover({ sudden: 0.25 }) }))).toBe(250);
+    expect(
+      resolveBeatorajaPlayNumber(BEATORAJA_NUM.LANECOVER1, input({ cover: cover({ sudden: 0.8, lift: 0.5 }) })),
+    ).toBe(1000);
     expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.LANECOVER1, input())).toBe(0);
     expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.HIDDEN1, numbers)).toBe(0);
     expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.JUDGETIMING, numbers)).toBe(0);
