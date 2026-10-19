@@ -5,10 +5,11 @@ import { type BgaCue } from '@be-music/chart';
 
 /**
  * How long a POOR / miss BGA layer stays visible after a miss before the normal base/layer composite returns.
- * 500 ms is LR2's shipped default (`<poorbga>500</poorbga>` in its `config.xml`; LR2 exposes it as a per-user
- * setting, this implementation does not yet). Shared by the renderers that time the miss layer out (TUI
- * compositor, web LR2 scene) so the miss-layer feel is identical across them — change it here, not per frontend.
- * The beatoraja web scene instead holds its miss layer until the next non-POOR judge, as beatoraja skins expect.
+ * 500 ms is the shipped default of both LR2 (`<poorbga>500</poorbga>` in its `config.xml`) and beatoraja
+ * (`PlayerConfig.misslayerDuration`, which `BGAProcessor.drawBGA` shows the miss layer for from the miss); both expose
+ * it as a per-user setting, this implementation does not yet. Shared by the renderers that time the miss layer out
+ * (TUI compositor, web built-in / LR2 scene, web beatoraja scene) so the miss-layer feel is identical across them —
+ * change it here, not per frontend.
  */
 export const DEFAULT_POOR_BGA_DISPLAY_SECONDS = 0.5;
 

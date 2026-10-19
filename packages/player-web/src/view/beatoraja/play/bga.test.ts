@@ -103,7 +103,7 @@ describe('BeatorajaBgaLayer', () => {
     const context = { activeOps: new Set<number>(), getTimerStart: () => 0, nowMs: 0 };
     const shown = () =>
       (layer.container.children as Sprite[])
-        .filter((sprite, index) => index % 2 === 1 && sprite.visible)
+        .filter((sprite) => sprite.label === 'bga/base' && sprite.visible)
         .map((sprite) => ({ texture: sprite.texture, alpha: sprite.alpha }));
 
     layer.update(10, context, false);
@@ -123,6 +123,41 @@ describe('BeatorajaBgaLayer', () => {
 
     layer.update(24, context, false);
     expect(shown()).toEqual([{ texture: blue, alpha: 1 }]);
+
+    layer.dispose();
+  });
+
+  it('draws the layer over the base, and the POOR image in place of both during a miss', () => {
+    const base = fakeTexture();
+    const layerImage = fakeTexture();
+    const poor = fakeTexture();
+    const layer = new BeatorajaBgaLayer({
+      skin: skin(),
+      textures: new Map([
+        ['01', base],
+        ['03', poor],
+      ]),
+      layerTextures: new Map([['02', layerImage]]),
+      cues: {
+        base: [{ seconds: 0, bmpKey: '01' }],
+        layer: [{ seconds: 0, bmpKey: '02' }],
+        poor: [{ seconds: 0, bmpKey: '03' }],
+      },
+    });
+    const context = { activeOps: new Set<number>(), getTimerStart: () => 0, nowMs: 0 };
+    const shown = () =>
+      (layer.container.children as Sprite[])
+        .filter((sprite) => sprite.label !== 'bga/canvas' && sprite.visible)
+        .map((sprite) => [sprite.label, sprite.texture]);
+
+    layer.update(1, context, false);
+    expect(shown()).toEqual([
+      ['bga/base', base],
+      ['bga/layer', layerImage],
+    ]);
+
+    layer.update(1, context, true);
+    expect(shown()).toEqual([['bga/base', poor]]);
 
     layer.dispose();
   });

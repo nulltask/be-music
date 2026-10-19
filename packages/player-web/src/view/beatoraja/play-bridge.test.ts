@@ -1163,13 +1163,18 @@ describe('BeatorajaPlayBridge — TIMER_FAILED (3)', () => {
 });
 
 describe('BeatorajaPlayBridge — POOR BGA tracking', () => {
-  it('flips between trigger-poor-bga and clear-poor-bga commands', () => {
+  it("shows the POOR image for beatoraja's 500 ms miss layer from the miss, whatever is judged meanwhile", () => {
     const harness = createHarness();
-    expect(harness.bridge.isPoorBgaActive()).toBe(false);
+    expect(harness.bridge.isPoorBgaActive(12)).toBe(false);
     harness.command({ kind: 'trigger-poor-bga', seconds: 12 });
-    expect(harness.bridge.isPoorBgaActive()).toBe(true);
+    expect(harness.bridge.isPoorBgaActive(12)).toBe(true);
+    // The next judgment's `clear-poor-bga` does not end it.
     harness.command({ kind: 'clear-poor-bga' });
-    expect(harness.bridge.isPoorBgaActive()).toBe(false);
+    expect(harness.bridge.isPoorBgaActive(12.2)).toBe(true);
+    expect(harness.bridge.isPoorBgaActive(12.5)).toBe(false);
+    // A later miss restarts the window.
+    harness.command({ kind: 'trigger-poor-bga', seconds: 13 });
+    expect(harness.bridge.isPoorBgaActive(13.4)).toBe(true);
   });
 });
 
