@@ -16,6 +16,11 @@ updates:
         patterns:
           - 'vite-plus'
           - '@voidzero-dev/vite-plus-core'
+      # `better-auth` and its `@better-auth/*` plugins are released together at one version and expect each other's.
+      better-auth:
+        patterns:
+          - 'better-auth'
+          - '@better-auth/*'
     ignore:
       - dependency-name: '@types/node'
         update-types:
