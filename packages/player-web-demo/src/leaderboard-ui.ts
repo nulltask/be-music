@@ -15,6 +15,7 @@ import {
   type AccountActionResult,
 } from './account.ts';
 import { wireAccountDialogs } from './account-dialogs.ts';
+import { leaderboardLink } from './service-links.ts';
 import type { BeMusicCoursePlaylog } from '@be-music/player/playlog';
 import {
   describeCourseLeaderboardResult,
@@ -217,7 +218,7 @@ export class LeaderboardPanel {
     const view = describeAccountChip(account);
     chip.dataset.state = view.state;
     chip.title = view.title;
-    chip.href = view.href ?? '/leaderboard';
+    chip.href = leaderboardLink(view.href ?? '/', location.hostname);
     chip.setAttribute('aria-label', `Leaderboard account: ${view.label}`);
     const label = chip.querySelector('#account-chip-label');
     if (label !== null) label.textContent = view.label;
@@ -235,7 +236,7 @@ export class LeaderboardPanel {
     if (hint !== null) hint.textContent = view.hint ?? '';
     if (view.href !== undefined) {
       const link = document.createElement('a');
-      link.href = view.href;
+      link.href = leaderboardLink(view.href, location.hostname);
       link.target = '_blank';
       link.rel = 'noopener';
       link.title = 'Your Leaderboard page (opens in a new tab)';

@@ -71,7 +71,39 @@ export function passOnSetCookies(response: Response, setCookies: readonly string
   }
 }
 
+/** How Better Auth is reached and where its cookies go, for a request's bindings and origin. */
+export interface AuthSettings {
+  baseURL: string;
+  /** Origins allowed to call Better Auth and to run passkey ceremonies; the base URL's origin comes first. */
+  trustedOrigins: string[];
+  cookieDomain: string | undefined;
+  cookiePrefix: string | undefined;
+  rpID: string;
+}
+
+/**
+ * Better Auth's settings from the bindings (docs/services.md section 3). With `AUTH_ORIGIN` set, every service reaches
+ * one Better Auth at that origin and shares its cookies on `COOKIE_DOMAIN`; without it (local runs, tests), the
+ * request's own origin serves as before.
+ */
+export function authSettings(env: Env, requestOrigin: string): AuthSettings {
+  const baseURL = env.AUTH_ORIGIN?.trim() || requestOrigin;
+  const extra = (env.TRUSTED_ORIGINS ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+  const trustedOrigins = [...new Set([new URL(baseURL).origin, ...extra])];
+  return {
+    baseURL,
+    trustedOrigins,
+    cookieDomain: env.COOKIE_DOMAIN?.trim() || undefined,
+    cookiePrefix: env.COOKIE_PREFIX?.trim() || undefined,
+    rpID: env.PASSKEY_RP_ID?.trim() || new URL(baseURL).hostname,
+  };
+}
+
 function buildAuth(env: Env, origin: string) {
+  const settings = authSettings(env, origin);
   const db = drizzle(env.DB, { schema });
   const socialProviders: Parameters<typeof betterAuth>[0]['socialProviders'] = {};
   if (env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET) {
@@ -81,9 +113,14 @@ function buildAuth(env: Env, origin: string) {
     socialProviders.google = { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET };
   }
   return betterAuth({
-    baseURL: origin,
+    baseURL: settings.baseURL,
     basePath: '/api/auth',
     secret: env.BETTER_AUTH_SECRET,
+    trustedOrigins: settings.trustedOrigins,
+    advanced: {
+      ...(settings.cookiePrefix ? { cookiePrefix: settings.cookiePrefix } : {}),
+      ...(settings.cookieDomain ? { crossSubDomainCookies: { enabled: true, domain: settings.cookieDomain } } : {}),
+    },
     database: drizzleAdapter(db, {
       provider: 'sqlite',
       schema: {
@@ -105,7 +142,7 @@ function buildAuth(env: Env, origin: string) {
           await reassignScores(db, anonymousUser.user.id, newUser.user.id);
         },
       }),
-      passkey({ rpID: new URL(origin).hostname, rpName: 'be-music', origin }),
+      passkey({ rpID: settings.rpID, rpName: 'be-music', origin: settings.trustedOrigins }),
     ],
     databaseHooks: {
       user: {

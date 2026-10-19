@@ -32,7 +32,7 @@ import {
 import { loadChartStats } from './stats.ts';
 
 /** A chart's ranking, figures and details under the display ruleset. */
-export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFingerprint'>) {
+export async function chartPage(c: PageContext<'/charts/:chartFingerprint'>) {
   const db = openDatabase(c.env.DB);
   const chartFingerprint = c.req.param('chartFingerprint');
   const found = await loadChart(db, chartFingerprint);

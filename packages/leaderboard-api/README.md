@@ -18,11 +18,11 @@ The be-music Leaderboard API: a Hono app on Cloudflare Workers with D1 and R2. T
 - Course runs (docs/leaderboard.md section 6.1): `POST /api/v0/course-scores`, the latest runs, one run, its play log,
   hiding a run, a course, its ranking and my rank on it, with bests (the trophy best included) per course and ruleset.
 - `GET /api/v0/openapi.json`: the OpenAPI 3.1 document, generated from the routes' valibot schemas
-  (`src/api/schemas.ts`), and its reference page at `/leaderboard/api`. A copy is committed as
+  (`src/api/schemas.ts`), and its reference page at `/api-reference`. A copy is committed as
   [`openapi.json`](./openapi.json); the test fails when it is out of date, so refresh it with `vp test run -u` after
   changing the API.
 
-- Pages under `/leaderboard`: new scores and course runs (top), a score, a chart's rankings, a chartset, a course, a
+- Pages at the root of `leaderboard.be-music.app`: new scores and course runs (top), a score, a chart's rankings, a chartset, a course, a
   course run, and a player.
 
 Not yet: L4 for new `#RANDOM` outcomes and L5, rivals, and OG cards.
@@ -59,7 +59,7 @@ The resources already exist in the be-music account (D1 and R2 in APAC, one of e
 are in `cloudflare.config.ts` and the migrate scripts. For a new environment, create them and record the new id:
 
 ```bash
-pnpm exec cf d1 create --name be-music-leaderboard-preview --primary-location-hint apac
+pnpm exec cf d1 create --name leaderboard-preview --primary-location-hint apac
 ```
 
 ```bash
@@ -69,7 +69,8 @@ pnpm exec cf r2 buckets create --name be-music-leaderboard-preview --location-hi
 ### Secrets
 
 Secrets live in 1Password, in the `be-music` vault of the `my.1password.com` account, one item per Worker
-(`be-music-leaderboard-preview`, `be-music-leaderboard`). The repository holds only references:
+(`be-music-leaderboard-preview`, `be-music-leaderboard`; they hold the secrets of `leaderboard-preview` and
+`leaderboard`). The repository holds only references:
 `secrets/<environment>.env.tpl` maps each secret to its 1Password field (`KEY={{ op://… }}`). Set them on the Worker
 with the [1Password CLI](https://developer.1password.com/docs/cli/) signed in:
 
@@ -115,50 +116,42 @@ pnpm --filter @be-music/leaderboard-api run db:migrate:preview
 
 ## Deploy
 
-Two environments, following the player demo's Workers Builds: `devel` is production, and every other branch is
-preview.
+Two environments, like every service (docs/services.md section 2): `main` is production, `devel` the preview.
 
-| Environment | Worker                         | D1 / R2                        | Player demo                                    |
-| ----------- | ------------------------------ | ------------------------------ | ---------------------------------------------- |
-| production  | `be-music-leaderboard`         | `be-music-leaderboard`         | `be-music-player-demo` (deployed from `devel`) |
-| preview     | `be-music-leaderboard-preview` | `be-music-leaderboard-preview` | preview versions of every other branch         |
+| Environment | Worker                | Host                               | D1                    | R2                             |
+| ----------- | --------------------- | ---------------------------------- | --------------------- | ------------------------------ |
+| production  | `leaderboard`         | `leaderboard.be-music.app`         | `leaderboard`         | `be-music-leaderboard`         |
+| preview     | `leaderboard-preview` | `leaderboard.preview.be-music.app` | `leaderboard-preview` | `be-music-leaderboard-preview` |
 
-Workers Builds deploys on every push that touches `packages/leaderboard-api/`, `packages/player/`, `packages/chart/` or
-`pnpm-lock.yaml`. Each build installs the workspace on Node 26.7.0 (the trigger's `NODE_VERSION`), applies the
-migrations to the environment's D1, then deploys:
-
-| Branch           | Worker the trigger belongs to  | Deploy command                                           |
-| ---------------- | ------------------------------ | -------------------------------------------------------- |
-| `devel`          | `be-music-leaderboard`         | `pnpm run db:migrate:production && pnpm run deploy`      |
-| any other branch | `be-music-leaderboard-preview` | `pnpm run db:migrate:preview && pnpm run deploy:preview` |
-
-Each push runs one environment's trigger; `deploy` and `deploy:preview` generate the pages' assets, run `build:worker`, then `cf deploy`:
+The Deploy workflow (`.github/workflows/deploy.yml`) runs on every push to `main` or `devel`. It applies the migrations
+to the environment's D1, then deploys this Worker before the others, since they bind it:
 
 ```mermaid
 flowchart TD
-  push(["push touching the package,<br/>player, chart or the lockfile"]) --> branch{"branch?"}
-  branch -->|devel| prod
-  branch -->|any other| prev
-  subgraph prod["be-music-leaderboard"]
-    i1["install on Node 26.7.0"] --> m1["db:migrate:production"] --> d1["deploy"]
+  push([push]) --> branch{branch?}
+  branch -->|main| prod
+  branch -->|devel| prev
+  subgraph prod[leaderboard]
+    m1[db:migrate:production] --> d1[deploy]
   end
-  subgraph prev["be-music-leaderboard-preview"]
-    i2["install on Node 26.7.0"] --> m2["db:migrate:preview"] --> d2["deploy:preview"]
+  subgraph prev[leaderboard-preview]
+    m2[db:migrate:preview] --> d2[deploy:preview]
   end
 ```
 
-Workers Builds deploys only to the Worker its trigger belongs to, so each environment's Worker has its own trigger.
-The preview Worker is shared by every branch: the last one pushed wins. To deploy by hand, run the same commands in
-this package.
+`deploy` and `deploy:preview` generate the pages' assets, run `build:worker`, then `cf deploy`. To deploy by hand, run
+the same commands in this package. A new Worker has no secrets yet, so its first deploy passes them with
+`--secrets-file` (for example `cf deploy --secrets-file <(op inject -i secrets/production.env.tpl)`).
 
-The Worker has no public URL; the player's Worker forwards `/api/*` and `/leaderboard/*` to it through a Service
-Binding.
+The Worker serves its pages and API on its own host, and holds Better Auth for every service until Accounts is split
+out (docs/services.md section 3): the Accounts, Player and Dashboard Workers reach it through Service Bindings, and its
+session cookies are shared on the environment's parent domain.
 
 ## Pages
 
-The pages under `/leaderboard` are Hono JSX styled with Tailwind CSS v4 and [Basecoat](https://basecoatui.com) (the
+The pages are Hono JSX styled with Tailwind CSS v4 and [Basecoat](https://basecoatui.com) (the
 shadcn/ui design without a framework runtime). `src/pages/app.css` compiles into `src/pages/styles.generated.ts`,
-served from `/leaderboard/assets/app.<hash>.css`.
+served from `/assets/app.<hash>.css`.
 
 The stylesheet, the icons, the share card's font and the client script (`src/pages/*.generated.ts`) are generated, not kept in git.
 `pnpm install`, `dev`, the deploys and the tests generate them; after changing the pages' classes, the icons or
@@ -168,7 +161,7 @@ The stylesheet, the icons, the share card's font and the client script (`src/pag
 pnpm --filter @be-music/leaderboard-api run generate
 ```
 
-`build:css`, `build:icons`, `build:fonts` and `build:client` run one step each. The share card sets Latin letters and figures in [Inter Tight](https://github.com/rsms/inter) (SIL Open Font License 1.1), served from `/leaderboard/assets/`.
+`build:css`, `build:icons`, `build:fonts` and `build:client` run one step each. The share card sets Latin letters and figures in [Inter Tight](https://github.com/rsms/inter) (SIL Open Font License 1.1), served from `/assets/`.
 
 ### Icons
 
@@ -180,7 +173,7 @@ pnpm --filter @be-music/leaderboard-api run build:icons
 ```
 
 The icons are compiled into `src/pages/icons.generated.ts` and served from
-`/leaderboard/assets/<name>.<hash>.<ext>`, next to `/leaderboard/manifest.webmanifest`. A hand-made PNG placed next to
+`/assets/<name>.<hash>.<ext>`, next to `/manifest.webmanifest`. A hand-made PNG placed next to
 the SVG (`apple-touch-icon.png`, `icon-192.png`, `icon-512.png`) is used instead of its rendered one.
 
 ## Tests

@@ -1,0 +1,62 @@
+name: Deploy
+
+# Deploys every service (docs/services.md section 2): `main` to production, `devel` to the preview.
+on:
+  push:
+    branches:
+      - main
+      - devel
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy per environment at a time, and never cancelled halfway: a later push waits for the running one.
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref_name == 'main' || github.ref_name == 'devel'
+    runs-on: ubuntu-24.04-arm
+    environment: ${{ github.ref_name == 'main' && 'production' || 'preview' }}
+    env:
+      # An API token for the be-music account that can edit Workers, their custom domains and D1.
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 80d4b5fd75f07e61a637b6bb9774186e
+      # `deploy` scripts for production, `deploy:preview` for the preview.
+      SUFFIX: ${{ github.ref_name == 'main' && '' || ':preview' }}
+      DB_ENV: ${{ github.ref_name == 'main' && 'production' || 'preview' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
+        with:
+          node-version-file: .node-version
+          cache: true
+          run-install: false
+
+      - name: Install dependencies
+        run: vp install
+
+      # Migrations run before the Leaderboard deploys, so each must work with the code still running (expand →
+      # switch → contract; docs/leaderboard.md section 2.1).
+      - name: Migrate the Leaderboard database
+        run: pnpm --filter @be-music/leaderboard-api run "db:migrate:$DB_ENV"
+
+      # The Leaderboard first: every other Worker binds it.
+      - name: Deploy the Leaderboard
+        run: pnpm --filter @be-music/leaderboard-api run "deploy$SUFFIX"
+
+      - name: Deploy Accounts
+        run: pnpm --filter @be-music/accounts run "deploy$SUFFIX"
+
+      - name: Deploy the Player
+        run: pnpm --filter @be-music/play run "deploy$SUFFIX"
+
+      - name: Deploy the Dashboard
+        run: pnpm --filter @be-music/dashboard run "deploy$SUFFIX"

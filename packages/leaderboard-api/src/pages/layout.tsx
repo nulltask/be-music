@@ -6,7 +6,7 @@ import { LOCALE_NAMES, LOCALES, MessagesContext, messagesFor, useMessages, type 
 import { helpHref } from './help-topics.ts';
 import { RULESET_IDS } from '../rulesets.ts';
 import { CLIENT_SCRIPT_PATH } from './client-script.ts';
-import { Avatar, playerHref } from './components/basics.tsx';
+import { Avatar, playerAppHref, playerHref } from './components/basics.tsx';
 import { EntityIcon, type EntityKind } from './components/entity-icon.tsx';
 import { Icon } from './components/icon.tsx';
 import {
@@ -30,7 +30,7 @@ import { APP_CSS_HASH } from './styles.generated.ts';
 import { speculationRules } from './speculation.ts';
 
 /** Where the compiled stylesheet is served; the hash in the name lets browsers keep it forever. */
-export const STYLESHEET_PATH = `/leaderboard/assets/app.${APP_CSS_HASH}.css`;
+export const STYLESHEET_PATH = `/assets/app.${APP_CSS_HASH}.css`;
 
 /**
  * Follows the system colour scheme. Basecoat switches its tokens on `html.dark`, so the class is set before the first
@@ -229,7 +229,7 @@ function AccountMenu(props: { viewer: Viewer | null }) {
           <EntityIcon kind="player" size="md" class="text-current" />
           {t.account.yourPage}
         </a>
-        <a class="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5" href="/leaderboard/settings">
+        <a class="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5" href="/settings">
           <EntityIcon kind="settings" size="md" class="text-current" />
           {t.account.settings}
         </a>
@@ -399,7 +399,7 @@ const FOOTER_LINK = 'hover:text-foreground inline-flex items-center gap-1 underl
 /**
  * The scoring rules every figure on the pages is shown under, as a menu in the header next to the account: the
  * current ruleset on the button, the three to pick from in its popover. A choice is kept in a cookie
- * (`/leaderboard/ruleset/:id`) and brings the viewer back to the page.
+ * (`/ruleset/:id`) and brings the viewer back to the page.
  */
 function RulesetMenu(props: { current: PlaylogRulesetId; path: string }) {
   const t = useMessages();
@@ -431,7 +431,7 @@ function RulesetMenu(props: { current: PlaylogRulesetId; path: string }) {
         {RULESET_IDS.map((id) => (
           <a
             class="hover:bg-muted flex items-start gap-2 rounded-md px-2 py-1.5"
-            href={`/leaderboard/ruleset/${id}?next=${encodeURIComponent(props.path)}`}
+            href={`/ruleset/${id}?next=${encodeURIComponent(props.path)}`}
             aria-current={id === props.current ? 'true' : undefined}
           >
             <span class={`mt-0.5 ${id === props.current ? '' : 'invisible'}`}>
@@ -456,7 +456,7 @@ function RulesetMenu(props: { current: PlaylogRulesetId; path: string }) {
 
 /**
  * The language menu next to the ruleset menu: the page's language on the button, the others in its popover. A choice is
- * kept in a cookie (`/leaderboard/lang/:locale`) and brings the viewer back to the page.
+ * kept in a cookie (`/lang/:locale`) and brings the viewer back to the page.
  */
 function LanguageMenu(props: { current: Locale; path: string }) {
   const t = useMessages();
@@ -494,7 +494,7 @@ function LanguageLinks(props: { current: Locale; path: string }) {
       {LOCALES.map((locale) => (
         <a
           class="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5"
-          href={`/leaderboard/lang/${locale}?next=${encodeURIComponent(withoutLang(props.path))}`}
+          href={`/lang/${locale}?next=${encodeURIComponent(withoutLang(props.path))}`}
           aria-current={locale === props.current ? 'true' : undefined}
           lang={locale}
         >
@@ -532,11 +532,11 @@ function NavMenu(props: { current: Locale; path: string; signedIn: boolean }) {
       </button>
       <div id="nav-menu" popover="auto" class={`${HEADER_MENU_CLASS} w-56`} style={headerMenuStyle('--nav-menu')}>
         <nav aria-label={t.nav.label}>
-          <a class={item} href="/leaderboard">
+          <a class={item} href="/">
             <EntityIcon kind="latest" size="md" class="text-current" />
             {t.nav.latestTitle}
           </a>
-          <a class={item} href="/leaderboard/help">
+          <a class={item} href="/help">
             <EntityIcon kind="help" size="md" class="text-current" />
             {t.nav.help}
           </a>
@@ -675,13 +675,13 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
             through. Named for the cross-page view transition (app.css): it stays put while the page below it changes. */}
           <header class="bg-background/90 sticky top-0 z-40 border-b backdrop-blur [view-transition-name:site-header]">
             <div class="mx-auto flex max-w-5xl items-center gap-x-3 px-4 py-2.5 sm:gap-x-6">
-              <a href="/leaderboard" class="shrink-0 font-semibold tracking-tight">
+              <a href="/" class="shrink-0 font-semibold tracking-tight">
                 be-music <span class="text-muted-foreground hidden font-normal md:inline">Leaderboard</span>
               </a>
               <nav class="text-muted-foreground hidden items-center gap-4 text-sm sm:flex" aria-label={t.nav.label}>
                 <a
                   class="hover:text-foreground inline-flex items-center gap-1.5 whitespace-nowrap"
-                  href="/leaderboard"
+                  href="/"
                   title={t.nav.latestTitle}
                 >
                   <EntityIcon kind="latest" size="md" class="text-current" />
@@ -695,14 +695,20 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
                   class="btn hidden sm:inline-flex"
                   data-size="sm"
                   data-variant="ghost"
-                  href="/leaderboard/help"
+                  href="/help"
                   title={t.nav.helpTitle}
                   aria-label={t.nav.help}
                 >
                   <EntityIcon kind="help" size="md" class="text-current" />
                 </a>
                 <AccountMenu viewer={props.meta.viewer} />
-                <a class="btn" data-size="sm" href="/" title={t.nav.playTitle} aria-label={t.nav.play}>
+                <a
+                  class="btn"
+                  data-size="sm"
+                  href={playerAppHref(props.meta.url)}
+                  title={t.nav.playTitle}
+                  aria-label={t.nav.play}
+                >
                   <Icon svg={Play} />
                   <span class="hidden md:inline">{t.nav.play}</span>
                 </a>
@@ -728,13 +734,13 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
             {/* What is about the site rather than in it: its story, help, the API (a tool page of its own, so it opens
               beside the Leaderboard) and the source. */}
             <nav class="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label={t.footer.label}>
-              <a class={FOOTER_LINK} href="/leaderboard/about">
+              <a class={FOOTER_LINK} href="/about">
                 {t.footer.about}
               </a>
-              <a class={FOOTER_LINK} href="/leaderboard/help">
+              <a class={FOOTER_LINK} href="/help">
                 {t.footer.help}
               </a>
-              <a class={FOOTER_LINK} href="/leaderboard/api" target="_blank" rel="noopener" title={t.footer.apiTitle}>
+              <a class={FOOTER_LINK} href="/api-reference" target="_blank" rel="noopener" title={t.footer.apiTitle}>
                 {t.footer.api}
                 <Icon svg={ExternalLink} class="[&>svg]:size-3" />
               </a>

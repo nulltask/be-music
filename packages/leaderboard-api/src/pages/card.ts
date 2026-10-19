@@ -18,7 +18,7 @@ function defaultCardBytes(): Uint8Array<ArrayBuffer> {
 }
 
 /** A play's share card (og:image): the one its player's browser drew, or the site's default card. */
-export async function scoreCardImage(c: PageContext<'/leaderboard/scores/:id/card'>) {
+export async function scoreCardImage(c: PageContext<'/scores/:id/card'>) {
   const found = await openDatabase(c.env.DB).query.score.findFirst({
     where: eq(score.id, c.req.param('id')),
     columns: { cardKey: true },

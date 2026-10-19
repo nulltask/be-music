@@ -30,7 +30,7 @@ export function detectAvatarType(bytes: Uint8Array): AvatarType | undefined {
 /** The URL of a player's icon; the version (the upload's hash, or `g` for the generated one) busts caches on change. */
 export function avatarUrl(handle: string, avatarKey: string | null): string {
   const version = avatarKey === null ? 'g' : (/\/([0-9a-f]{16})[0-9a-f]*\.\w+$/.exec(avatarKey)?.[1] ?? 'u');
-  return `/leaderboard/players/${encodeURIComponent(handle)}/avatar?v=${version}`;
+  return `/players/${encodeURIComponent(handle)}/avatar?v=${version}`;
 }
 
 /** FNV-1a, 32 bits: a small stable hash to draw the generated icon from. */

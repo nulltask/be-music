@@ -1,6 +1,6 @@
 /** The Help page's sections, so other pages can point into them (`helpHref`) and the page can list them. */
 
-/** Where each part of the help lives, for the contents and for links from other pages (`/leaderboard/help#lamps`). */
+/** Where each part of the help lives, for the contents and for links from other pages (`/help#lamps`). */
 export const HELP_SECTIONS = [
   { id: 'rows', title: 'Reading a play' },
   { id: 'lamps', title: 'Clear lamps' },
@@ -17,4 +17,4 @@ export const HELP_SECTIONS = [
 export type HelpId = (typeof HELP_SECTIONS)[number]['id'];
 
 /** A link into the help, for the pages' own hints. */
-export const helpHref = (id: HelpId): string => `/leaderboard/help#${id}`;
+export const helpHref = (id: HelpId): string => `/help#${id}`;

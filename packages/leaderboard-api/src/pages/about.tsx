@@ -4,7 +4,7 @@ import { Layout, PageHeader } from './layout.tsx';
 import { meta, PAGE_CACHE, pageLocale, type PageContext } from './page.tsx';
 
 /** What the Leaderboard is and how it counts a play: scoring, charts, accounts, checks, and its beta state. */
-export function aboutPage(c: PageContext<'/leaderboard/about'>) {
+export function aboutPage(c: PageContext<'/about'>) {
   c.header('cache-control', PAGE_CACHE);
   const content = ABOUT[pageLocale(c)];
   return c.html(

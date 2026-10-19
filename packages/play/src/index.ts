@@ -1,14 +1,17 @@
 /// <reference types="@cloudflare/workers-types" />
 
-// Worker entry for the Cloudflare deployment of the be-music web player.
+// The Player Worker (`play` on `play.be-music.app`, docs/services.md), serving the web player that
+// `@be-music/player-web-demo` builds.
 //
-// `/api/*`, `/leaderboard` and `/leaderboard/*` go to the Leaderboard Worker through the `LEADERBOARD` Service Binding.
+// `/api/*` goes to the Leaderboard Worker through the `LEADERBOARD` Service Binding, so the player's API requests and
+// session cookies stay on its own origin.
 //
-// Almost everything is served straight from Workers Static Assets (`env.ASSETS`, configured via `assets.directory` in
-// wrangler.jsonc). The exceptions are the ffmpeg.wasm core under `/ffmpeg-core/` and URL auto-load archives under
+// Almost everything is served straight from Workers Static Assets (`env.ASSETS`; wrangler.config.ts points at the
+// demo's `dist`). The exceptions are the ffmpeg.wasm core under `/ffmpeg-core/` and URL auto-load archives under
 // `/__url-load-proxy`. The core lives in R2 because `ffmpeg-core.wasm` is ~31 MB, which blows past the 25 MiB per-file
 // limit for Static Assets. The URL proxy lets shared demo links load cross-origin archive URLs even when the host does
-// not send browser CORS headers. `assets.run_worker_first` routes both paths here before asset matching.
+// not send browser CORS headers. `assets.runWorkerFirst` (cloudflare.config.ts) routes both paths here before asset
+// matching.
 //
 // The core files only change when the pinned `@ffmpeg/core` version changes — upload them with the `cf:r2:push` script.
 
@@ -17,7 +20,7 @@ import { isLeaderboardPath } from './leaderboard-paths.ts';
 interface Env {
   ASSETS: Fetcher;
   FFMPEG_CORE: R2Bucket;
-  /** The Leaderboard Worker (`packages/leaderboard-api`), which has no public URL of its own. */
+  /** The Leaderboard Worker (`packages/leaderboard-api`) of the same environment. */
   LEADERBOARD: Fetcher;
 }
 

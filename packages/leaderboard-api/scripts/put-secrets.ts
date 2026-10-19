@@ -10,7 +10,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-const WORKERS = { preview: 'be-music-leaderboard-preview', production: 'be-music-leaderboard' } as const;
+const WORKERS = { preview: 'leaderboard-preview', production: 'leaderboard' } as const;
 
 const environment = process.argv[2];
 if (environment !== 'preview' && environment !== 'production') {
