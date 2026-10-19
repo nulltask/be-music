@@ -86,12 +86,41 @@ describe('auto judge core', () => {
     });
   });
 
-  test('a long note scores at its tail — twice when the ruleset judges head and tail', () => {
+  test('a long note scores once under an LN style, twice (head and tail) under a charge style', () => {
     const lr2 = run('lr2', [1.6, 2.4, 2.6]).state;
     const iidx = run('iidx', [1.6, 2.4, 2.6]).state;
     expect(lr2.summary.perfect).toBe(2);
     expect(iidx.summary.perfect).toBe(3);
     expect(isAutoJudgeSettled(lr2)).toBe(true);
+  });
+
+  test("an LN's one judgment lands at the tail; a charge note's head at the head and its tail at the tail", () => {
+    // LR2 plays the long note as an LN, IIDX as a CN.
+    const perfectsAfter = (ruleset: PlaylogRulesetId, ticks: readonly number[]): number[] => {
+      const state = createAuto(ruleset);
+      return ticks.map((nowSec) => {
+        stepAutoJudge(state, { kind: 'advance', nowSec });
+        return state.summary.perfect;
+      });
+    };
+    // The tap at 1 s, the head at 1.5 s, the tail at 2.5 s.
+    expect(perfectsAfter('lr2', [1, 1.5, 2.4, 2.5])).toEqual([1, 1, 1, 2]);
+    expect(perfectsAfter('iidx', [1, 1.5, 2.4, 2.5])).toEqual([1, 2, 2, 3]);
+  });
+
+  test("a charge note's head takes its combo at the head time and its tail at the tail time", () => {
+    const { effects } = run('iidx', [1, 1.5, 2.5]);
+    const combos = effects.flatMap((effect) =>
+      effect.kind === 'combo' ? [[effect.seconds, effect.value, effect.channel]] : [],
+    );
+    expect(combos).toEqual([
+      [1, 1, '11'],
+      [1.5, 2, '12'],
+      [2.5, 3, '12'],
+    ]);
+    // One frame per judgment instant: the head's comes with the long-note start, the tail's with its PGREAT.
+    const frames = effects.flatMap((effect) => (effect.kind === 'frame' ? [effect.seconds] : []));
+    expect(frames).toEqual([1, 1.5, 2.5]);
   });
 
   test("'reach' judges due heads without resolving tails", () => {
