@@ -11,11 +11,11 @@ import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player/display';
 import { Texture } from 'pixi.js';
 import {
   buildSkinBgaFrame,
-  pickActiveBgaCue,
   pickActiveBgaKey,
   resolveBgaImageRect,
-  resolveNonstopBgaAlpha,
+  resolveBgaStacks as resolveBgaStacksOf,
   type BgaCue,
+  type BgaStack,
 } from '../../chart/bga-timeline.ts';
 import type { PlaySessionOptions } from '../../session/play/play-options.ts';
 import type { ChildPool } from '../../stage/pixi-utils.ts';
@@ -222,9 +222,8 @@ export function renderBga(ctx: BgaRendererContext, seconds: number, cueSeconds: 
 }
 
 /**
- * The BGA stacks to draw at `cueSeconds`: the chart's base and layer cues at full opacity, or for a stitched NONSTOP
- * chart each stage's own cues (and, during a POOR, its own POOR image) at the opacity of its crossfade, earlier
- * stages first.
+ * The BGA stacks to draw at `cueSeconds` ({@link resolveBgaStacksOf}). The chart's own POOR cue (with its `#BMP00`
+ * fallback) is resolved by the caller, so a chart that is not stitched passes no POOR cues.
  */
 function resolveBgaStacks(
   ctx: BgaRendererContext,
@@ -232,25 +231,16 @@ function resolveBgaStacks(
   noBase: boolean,
   noLayer: boolean,
   inPoorWindow: boolean,
-): Array<{ alpha: number; baseCue: BgaCue | undefined; layerCue: BgaCue | undefined; poorKey?: string }> {
-  const pick = (
-    timeline: { base: readonly BgaCue[]; layer: readonly BgaCue[]; poor?: readonly BgaCue[] },
-    alpha: number,
-  ) => ({
-    alpha,
-    baseCue: noBase ? undefined : pickActiveBgaCue(timeline.base, cueSeconds),
-    layerCue: noLayer ? undefined : pickActiveBgaCue(timeline.layer, cueSeconds),
-    ...(inPoorWindow && timeline.poor !== undefined ? { poorKey: pickActiveBgaKey(timeline.poor, cueSeconds) } : {}),
-  });
+): BgaStack[] {
   const stages = ctx.options.nonstop?.stages;
   const timelines = ctx.play.nonstopBgaTimelines;
-  if (stages === undefined || timelines === undefined) {
-    // The chart's own POOR cue (with its `#BMP00` fallback) is resolved by the caller.
-    return [pick({ base: ctx.play.bgaTimeline.base, layer: ctx.play.bgaTimeline.layer }, 1)];
-  }
-  return stages.flatMap((stage, index) => {
-    const alpha = resolveNonstopBgaAlpha(stage, cueSeconds);
-    return alpha > 0 ? [pick(timelines[index]!, alpha)] : [];
+  return resolveBgaStacksOf({
+    timeline: { base: ctx.play.bgaTimeline.base, layer: ctx.play.bgaTimeline.layer },
+    nonstop: stages !== undefined && timelines !== undefined ? { stages, timelines } : undefined,
+    seconds: cueSeconds,
+    noBase,
+    noLayer,
+    inPoorWindow,
   });
 }
 
