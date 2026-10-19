@@ -2,9 +2,9 @@
 
 # Services and environments
 
-> Status: plan. Today the player and the Leaderboard share `be-music.app` (see [Leaderboard design](./leaderboard.md)
-> section 2) and the donation site runs on its own. This document describes where they are going and the decisions
-> taken so far; section 6 lists what exists today.
+> Status: partly built. The Dashboard, Accounts, Player and Leaderboard run on their own subdomains in both
+> environments, with an interim shared-cookie sign-in (section 3.1). Accounts as an OIDC provider, the Registry and the
+> Editor are planned. Section 6 lists what exists today.
 
 ## 1. Services
 
@@ -120,9 +120,21 @@ sequenceDiagram
 - **Redirect URIs** are registered per client and matched exactly. The preview Accounts alone also accepts
   `https://*-<service>-preview.be-music.workers.dev/` patterns, so branch Preview URLs can sign in. Only the be-music
   account can create hosts under `be-music.workers.dev`.
-- **Not used**: a session cookie on the parent domain (`.be-music.app`). It would save one redirect on the first visit
-  to each service, but it cannot work across unrelated domains or on `workers.dev`, and it sends the session to every
-  subdomain.
+- **Not the target**: a session cookie on the parent domain (`.be-music.app`). It would save one redirect on the first
+  visit to each service, but it cannot work across unrelated domains or on `workers.dev`, and it sends the session to
+  every subdomain. It is used only as the interim step below.
+
+### 3.1 Interim: one Better Auth and a shared cookie
+
+Until Accounts becomes an OIDC provider, Better Auth runs inside the Leaderboard Worker:
+
+- Its base URL is the Accounts host (`accounts.be-music.app`), whose Worker forwards `/api/auth/*` to the Leaderboard
+  through a Service Binding. OAuth callbacks land there.
+- Its session cookies are shared on the environment's domain (`be-music.app`, or `preview.be-music.app` with the
+  `be-music-preview` cookie prefix, so production's cookies never collide with the preview's).
+- The Player and the Dashboard read the session by asking the Leaderboard through their Service Bindings; the
+  Leaderboard reads it directly. Passkeys use the environment's relying party ID, as planned.
+- User IDs are the ones the OIDC provider will issue as `sub`, so the move changes only how services read the session.
 
 ## 4. User content
 
@@ -155,28 +167,27 @@ configuration:
 
 ## 6. Today and migration
 
-| Today                                                              | Planned                                     |
-| ------------------------------------------------------------------ | ------------------------------------------- |
-| `be-music-player-demo` on `be-music.app`                           | `play` on `play.be-music.app`               |
-| `be-music-leaderboard`, reached through `be-music.app/leaderboard` | `leaderboard` on `leaderboard.be-music.app` |
-| Better Auth inside the Leaderboard Worker                          | `accounts` on `accounts.be-music.app`       |
-| `donate-be-music-app` on `donate.be-music.app`                     | `donate`                                    |
-| `devel` deploys production; other branches preview                 | `main` production, `devel` preview          |
+| Service     | Today                                                                                  |
+| ----------- | -------------------------------------------------------------------------------------- |
+| Dashboard   | `dashboard` / `dashboard-preview`, a temporary page showing the session and links      |
+| Accounts    | `accounts` / `accounts-preview`, forwarding `/api/auth/*` to the Leaderboard (3.1)     |
+| Player      | `play` / `play-preview` (`packages/play`, serving `@be-music/player-web-demo`'s build) |
+| Leaderboard | `leaderboard` / `leaderboard-preview`, pages still under `/leaderboard`                |
+| Donate      | `donate-be-music-app` on `donate.be-music.app`, not yet signed in                      |
 
-All of these run in the be-music Cloudflare account, which bills only be-music. Its `workers.dev` subdomain is
-`be-music.workers.dev`.
+Every Worker deploys with `cf` from its `cloudflare.config.ts`; `.github/workflows/deploy.yml` deploys `main` to
+production and `devel` to the preview. All of them run in the be-music Cloudflare account, which bills only be-music.
+Its `workers.dev` subdomain is `be-music.workers.dev`.
 
-Order:
+Next:
 
-1. Split Accounts out as the OIDC provider, with the Leaderboard as its first client.
-2. Move the Player and the Leaderboard to their own subdomains.
-3. Turn `be-music.app` into the dashboard.
-4. Connect the donation site to Accounts.
-5. Build the Registry, with the user content domain, visibility settings and terms of use.
-6. Build the Editor.
+1. Split Accounts out as the OIDC provider, with the Leaderboard as its first client, and drop the shared cookie.
+2. Connect the donation site to Accounts.
+3. Build the Registry, with the user content domain, visibility settings and terms of use.
+4. Build the Editor.
 
-**No redirects** are kept from the old URLs. When the Player and the Leaderboard move, links to `be-music.app/...` and
-`be-music.app/leaderboard/...` stop working.
+**No redirects** are kept from the old URLs: links to `be-music.app/...` (the old Player) and
+`be-music.app/leaderboard/...` no longer work.
 
 ## 7. Open questions
 
