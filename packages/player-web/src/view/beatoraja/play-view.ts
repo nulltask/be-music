@@ -12,7 +12,7 @@
  * The skin's cover buttons and the mouse wheel come back as cover intents; the cover keys and the hi-speed keys are the
  * session's (`PlaySessionOptions.coverKeys`), and the view shows what they set for a moment. The session times the
  * play from the view's timing ({@link resolveBeatorajaPlayTiming}): the loading ends at once, the chart starts
- * {@link BEATORAJA_PLAY_LEAD_IN_MS} later, and the play ends over the skin's `fadeout`.
+ * {@link BEATORAJA_PLAY_LEAD_IN_MS} later, and the play ends over the skin's `fadeout`, or, failed, after its `close`.
  */
 
 import {
@@ -94,14 +94,15 @@ const BEATORAJA_PLAYLOG_VIEW: PlayPlaylogViewScale = { scale: BEATORAJA_HI_SPEED
 
 /**
  * The beatoraja play skin's timing: the play has loaded once it shows (READY and the play timers start then), the chart
- * starts {@link BEATORAJA_PLAY_LEAD_IN_MS} later, and the play ends over the skin's `fadeout` (500 ms without one).
+ * starts {@link BEATORAJA_PLAY_LEAD_IN_MS} later, and the play ends over the skin's `fadeout` (500 ms without one) or,
+ * failed, after its `close` (`BMSPlayer` opens the result once `TIMER_FAILED` passes it; 0 without one).
  */
-export function resolveBeatorajaPlayTiming(skin: Pick<BeatorajaSkin, 'fadeout'>): PlayViewTiming {
+export function resolveBeatorajaPlayTiming(skin: Pick<BeatorajaSkin, 'fadeout' | 'close'>): PlayViewTiming {
   return {
     loadEndOffsetMs: 0,
     playStartOffsetMs: BEATORAJA_PLAY_LEAD_IN_MS,
     fadeOutMs: resolveBeatorajaFadeOutMs(skin.fadeout),
-    closeMs: 0,
+    closeMs: typeof skin.close === 'number' && Number.isFinite(skin.close) && skin.close > 0 ? skin.close : 0,
   };
 }
 
