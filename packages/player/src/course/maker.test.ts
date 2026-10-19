@@ -83,6 +83,15 @@ describe('finishCourseDraft', () => {
     expect(course.stages.map((stage) => stage.title)).toEqual(['Song 1', 'Song 2', 'Song 3']);
   });
 
+  it("starts every kind unranked, as LR2 (`ir = 0`) and beatoraja's editor do, and editing keeps it so", () => {
+    for (const kind of ['expert', 'nonstop', 'grade'] as const) {
+      expect(finishCourseDraft(draftOf(kind, 2))?.release).toBe(false);
+    }
+    const nonstop = finishCourseDraft(draftOf('nonstop', 2))!;
+    expect(withNonstopConnection(nonstop, 0, 'cut').release).toBe(false);
+    expect(withNonstopConnection({ ...nonstop, release: true }, 0, 'cut').release).toBe(true);
+  });
+
   it('reads like an LR2 grade course, and refuses an empty course', () => {
     expect(finishCourseDraft(draftOf('grade', 1))?.constraints).toEqual(['grade', 'gauge_lr2']);
     expect(finishCourseDraft(draftOf('expert', 0))).toBeUndefined();
@@ -122,9 +131,14 @@ describe('serializeLr2CourseFile', () => {
     const grade = finishCourseDraft({ ...draftOf('grade', 2), name: 'A & <B>' })!;
     const text = serializeLr2CourseFile([nonstop, grade]);
     const [readNonstop, readGrade] = parseLr2CourseFile(text);
-    const strip = ({ stages, ...rest }: typeof nonstop) => ({ ...rest, stages: stages.map(({ md5 }) => ({ md5 })) });
+    const strip = ({ stages, release: _release, ...rest }: typeof nonstop) => ({
+      ...rest,
+      stages: stages.map(({ md5 }) => ({ md5 })),
+    });
     expect(strip(readNonstop!)).toEqual(strip(nonstop));
     expect(strip(readGrade!)).toEqual(strip(grade));
+    // The format has no room for `release`: every course reads back released.
+    expect([readNonstop?.release, readGrade?.release]).toEqual([true, true]);
   });
 
   it('rebuilds the hash of a course from another format, and skips one without MD5s', () => {

@@ -187,11 +187,11 @@ stateDiagram-v2
 ```
 
 - **曲の追加。** `appendCourseDraftStage` は `CourseDraft` の末尾に曲を足します。曲は 5 曲まで（`LR2_COURSE_MAKER_MAX_STAGES`）で、すべて 1 曲目と同じキーモードである必要があり、譜面の MD5 で記録します。同じ曲を 2 回入れても構いません。`removeLastCourseDraftStage` は、LR2 の右クリックと同じく最後の曲を外します。
-- **保存。** `finishCourseDraft` は、作成中のコースを `parseLr2CourseFile` が読み戻すのと同じ形の `CourseDefinition` にします。NONSTOP コースには、ステージ 1-5 の後ろに既定のつなぎ方（LR2 のボタン 268）が入ります。GRADE コースは LR2 の段位として読みます（`grade`、`gauge_lr2`）。
+- **保存。** `finishCourseDraft` は、作成中のコースを `parseLr2CourseFile` が読み戻すのと同じ形の `CourseDefinition` にします。NONSTOP コースには、ステージ 1-5 の後ろに既定のつなぎ方（LR2 のボタン 268）が入ります。GRADE コースは LR2 の段位として読みます（`grade`、`gauge_lr2`）。作ったコースはランキング対象外（`release: false`）で始まります。LR2 は `ir = 0` で登録し（[L17588-L17603](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L17588-L17603)）、beatoraja のコースエディタも新しいコースを `release = false` で始めるため、プレイヤーが有効にするまでそのプレイは Leaderboard に載りません（LR2 の IR フラグ、ボタン 253 はまだ作っていません）。
 - **ハッシュ。** `buildLr2CourseHash` は、LR2 の 32 文字のヘッダー（ステージ 1-10 それぞれの後のつなぎ方を `0`-`5` で、10 文字目に種類、残りは 0）と各ステージの MD5 を書きます。LR2 は 28-31 文字目にプレイヤーのパスワードの MD5 の先頭 4 文字を入れますが、ブラウザにはパスワードがないので `0` のままです。
 - **編集。** `withNonstopConnection` は、あるステージの後のつなぎ方を変えます（LR2 のボタン 240-248。`stepLr2NonstopConnection` の順に、右半分で +1、左半分で -1 進みます）。LR2 はコースの長さにかかわらず、ステージ 1-9 のつなぎ方を持ちます。
 - **縛り。** LR2 のコース作成には縛りを設定する手段がありません（オプション禁止のボタンは実装されませんでした）。そのため、作ったコースは `defaultCourseMakerConstraints` の縛りになります（GRADE は LR2 の段位としてレーンオプションなし・LR2 ゲージ、ほかは縛りなし）。ホストが beatoraja のコースエディタのように縛りを設定することもできます。作成中は `CourseDraft.constraints`、作った後は `withCourseConstraints` で、グループごとに 1 つに正規化します。
-- **共有。** `serializeLr2CourseFile` は、コースを UTF-8 の `.lr2crs` に書きます。`parseLr2CourseFile` で読み戻すと同じコースになりますが、この形式には縛りを書く場所がありません。`serializeBeatorajaCourseFile` は縛りを残したまま beatoraja の `course/*.json` を書きます（beatoraja にない NONSTOP コースは含めません）。
+- **共有。** `serializeLr2CourseFile` は、コースを UTF-8 の `.lr2crs` に書きます。`parseLr2CourseFile` で読み戻すと同じコースになりますが、この形式には縛りと `release` を書く場所がありません（どのコースもランキング対象として読み戻されます）。`serializeBeatorajaCourseFile` は両方を残したまま beatoraja の `course/*.json` を書きます（beatoraja にない NONSTOP コースは含めません）。
 
 `CourseMaker`（`@be-music/player-web/collection`）は、ホストのためにプレイヤーのコースと作成中のコースを持ちます。`resolveCourseMakerFolders` は、LR2 と同じくそれらを並べます。種類ごとにコースフォルダが 1 つあり、その中にコースが並んで、最後に NEW COURSE バーが来ます。
 
