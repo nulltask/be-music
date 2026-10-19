@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { createHiSpeedState } from './hi-speed.ts';
+import type { PlaySide } from './types.ts';
 import {
   BE_MUSIC_HI_SPEED_SCALE,
+  BEATORAJA_HI_SPEED_SCALE,
   PlaylogViewCursor,
-  resolveBeatorajaPlaylogView,
   resolveGreenNumber,
   resolveHiSpeedForWhiteNumber,
   resolvePlaylogView,
@@ -42,7 +43,30 @@ describe('PlaylogViewCursor', () => {
   });
 });
 
-describe('resolveBeatorajaPlaylogView', () => {
+describe('resolvePlaylogView on the beatoraja scale', () => {
+  /** A beatoraja view: one cover state on every side, a lane four beats long, the visible time at the main BPM. */
+  function beatorajaView(view: {
+    hiSpeed: number;
+    lanecover: number;
+    lift: number;
+    hiddenRatio: number;
+    hiddenEnabled: boolean;
+    mainBpm: number;
+    sides: readonly PlaySide[];
+  }) {
+    const covers = view.sides.map((side) => ({
+      side,
+      sudden: view.lanecover,
+      suddenOn: true,
+      hidden: view.hiddenRatio,
+      hiddenOn: view.hiddenEnabled,
+      lift: view.lift,
+    }));
+    return resolvePlaylogView(
+      { hiSpeed: createHiSpeedState({ hiSpeed: view.hiSpeed }), covers },
+      { scale: BEATORAJA_HI_SPEED_SCALE, laneBeats: 4, ...(view.mainBpm > 0 ? { mainBpm: view.mainBpm } : {}) },
+    );
+  }
   const input = {
     hiSpeed: 2,
     lanecover: 0.25,
@@ -53,8 +77,8 @@ describe('resolveBeatorajaPlaylogView', () => {
     sides: ['1P'] as const,
   };
 
-  test('converts the adapter state to fractions of the lane and the visible time at the main BPM', () => {
-    expect(resolveBeatorajaPlaylogView(input)).toEqual({
+  test('records the covers as fractions of the lane and the visible time at the main BPM', () => {
+    expect(beatorajaView(input)).toEqual({
       hiSpeed: 2,
       hiSpeedScale: 'beatoraja',
       // 240000 / 150 / 2 × 0.75
@@ -64,7 +88,7 @@ describe('resolveBeatorajaPlaylogView', () => {
   });
 
   test('a disabled HIDDEN cover is 0, every side gets the cover, and an unknown BPM leaves the visible time out', () => {
-    const view = resolveBeatorajaPlaylogView({ ...input, hiddenEnabled: false, mainBpm: 0, sides: ['1P', '2P'] });
+    const view = beatorajaView({ ...input, hiddenEnabled: false, mainBpm: 0, sides: ['1P', '2P'] });
     expect(view.visibleMs).toBeUndefined();
     expect(view.covers).toEqual([
       { side: '1P', sudden: 0.25, hidden: 0, lift: 0.2 },
@@ -74,7 +98,7 @@ describe('resolveBeatorajaPlaylogView', () => {
 
   test('records without float noise', () => {
     // 0.5 × (1 - 0.8) is 0.09999999999999998 in floating point; 240000 / 150 / 3 × 0.9 is 479.99999999999994.
-    const view = resolveBeatorajaPlaylogView({ ...input, hiSpeed: 3, lanecover: 0.1, lift: 0.8 });
+    const view = beatorajaView({ ...input, hiSpeed: 3, lanecover: 0.1, lift: 0.8 });
     expect(view.visibleMs).toBe(480);
     expect(view.covers).toEqual([{ side: '1P', sudden: 0.1, hidden: 0.1, lift: 0.8 }]);
   });

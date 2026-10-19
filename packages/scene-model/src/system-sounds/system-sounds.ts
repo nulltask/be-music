@@ -53,31 +53,6 @@ export type SystemSound =
 /** A theme's system sounds, by slot; a slot the theme does not fill stays silent. */
 export type SystemSoundSet = { readonly [S in SystemSoundSlot]?: SystemSound };
 
-/** A theme audio file read up front: its path in the theme and its bytes (`Lr2ThemeBgm`). */
-export interface ThemeAudioFile {
-  readonly path: string;
-  readonly bytes: Uint8Array;
-}
-
-/** The audio an LR2 theme load reads (`Lr2ThemeSkins` of `@be-music/lr2-skin`). */
-export interface Lr2ThemeSounds {
-  readonly selectBgm?: ThemeAudioFile;
-  readonly decideBgm?: ThemeAudioFile;
-  readonly clearBgm?: ThemeAudioFile;
-  readonly failBgm?: ThemeAudioFile;
-  readonly resultBgm?: ThemeAudioFile;
-  readonly courseClearBgm?: ThemeAudioFile;
-  readonly courseFailBgm?: ThemeAudioFile;
-  readonly systemSounds?: {
-    readonly cursorMove?: ThemeAudioFile;
-    readonly folderOpen?: ThemeAudioFile;
-    readonly folderClose?: ThemeAudioFile;
-    readonly optionOpen?: ThemeAudioFile;
-    readonly optionClose?: ThemeAudioFile;
-    readonly optionChange?: ThemeAudioFile;
-  };
-}
-
 /**
  * The slot each command of an LR2 sound set (`LR2files/Sound/*.lr2ss`) fills: `SCRATCH` is the cursor cue, `PANEL_*`
  * the option panel ones, `SELECT` / `DECIDE` the select BGM and the decide jingle. LR2 has no cancel cue and no
@@ -98,36 +73,12 @@ export const LR2_SOUND_SET_SLOTS: Readonly<Record<string, SystemSoundSlot>> = {
   COURSEFAIL: 'courseFail',
 };
 
-function fromFile(file: ThemeAudioFile | undefined): SystemSound | undefined {
-  return file === undefined ? undefined : { bytes: file.bytes, path: file.path };
-}
-
 function compact(entries: ReadonlyArray<readonly [SystemSoundSlot, SystemSound | undefined]>): SystemSoundSet {
   const set: { [S in SystemSoundSlot]?: SystemSound } = {};
   for (const [slot, sound] of entries) {
     if (sound !== undefined) set[slot] = sound;
   }
   return set;
-}
-
-/** An LR2 theme's sounds as a system sound set: each file the theme load read, by bytes. */
-export function systemSoundSetFromLr2Theme(theme: Lr2ThemeSounds): SystemSoundSet {
-  const cues = theme.systemSounds ?? {};
-  return compact([
-    ['cursor', fromFile(cues.cursorMove)],
-    ['folderOpen', fromFile(cues.folderOpen)],
-    ['folderClose', fromFile(cues.folderClose)],
-    ['optionOpen', fromFile(cues.optionOpen)],
-    ['optionClose', fromFile(cues.optionClose)],
-    ['optionChange', fromFile(cues.optionChange)],
-    ['selectBgm', fromFile(theme.selectBgm)],
-    ['decideBgm', fromFile(theme.decideBgm)],
-    ['clear', fromFile(theme.clearBgm)],
-    ['fail', fromFile(theme.failBgm)],
-    ['result', fromFile(theme.resultBgm)],
-    ['courseClear', fromFile(theme.courseClearBgm)],
-    ['courseFail', fromFile(theme.courseFailBgm)],
-  ]);
 }
 
 /** What a beatoraja theme gives: its cue paths, its select BGM path and its jingles (`BeatorajaThemeBgm`). */

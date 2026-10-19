@@ -25,8 +25,3 @@ export function reduceCourseCombo(state: Readonly<CourseComboState>, stageCombo:
   const combo = stageCombo >= state.stageCombo ? state.combo + (stageCombo - state.stageCombo) : stageCombo;
   return { combo, stageCombo, maxCombo: Math.max(state.maxCombo, combo) };
 }
-
-/** {@link reduceCourseCombo} in place, for a screen that keeps one state object across frames. */
-export function advanceCourseCombo(state: CourseComboState, stageCombo: number): void {
-  Object.assign(state, reduceCourseCombo(state, stageCombo));
-}

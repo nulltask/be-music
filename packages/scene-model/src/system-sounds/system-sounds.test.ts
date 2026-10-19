@@ -9,25 +9,12 @@ import {
   startSystemSound,
   SYSTEM_SOUND_SLOTS,
   systemSoundSetFromBeatoraja,
-  systemSoundSetFromLr2Theme,
   type SystemSoundSet,
 } from './system-sounds.ts';
 
 const bytes = (value: number): Uint8Array => new Uint8Array([value]);
-const file = (path: string, value: number) => ({ path, bytes: bytes(value) });
 
-describe('systemSoundSetFromLr2Theme', () => {
-  test('fills a slot for each file the theme load read, by bytes', () => {
-    const set = systemSoundSetFromLr2Theme({
-      selectBgm: file('LR2files/Bgm/x/select.wav', 1),
-      clearBgm: file('LR2files/Sound/lr2/clear.wav', 2),
-      courseClearBgm: file('LR2files/Sound/lr2/course_clear.wav', 3),
-      systemSounds: { cursorMove: file('LR2files/Sound/lr2/scratch.wav', 4), optionOpen: file('o-open.wav', 5) },
-    });
-    expect(Object.keys(set).sort()).toEqual(['clear', 'courseClear', 'cursor', 'optionOpen', 'selectBgm']);
-    expect(set.cursor).toEqual({ bytes: bytes(4), path: 'LR2files/Sound/lr2/scratch.wav' });
-  });
-
+describe('LR2_SOUND_SET_SLOTS', () => {
   test('maps each LR2 sound set command to a slot', () => {
     expect(LR2_SOUND_SET_SLOTS.SCRATCH).toBe('cursor');
     expect(LR2_SOUND_SET_SLOTS.PANEL_OPEN).toBe('optionOpen');
