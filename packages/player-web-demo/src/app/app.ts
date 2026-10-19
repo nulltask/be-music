@@ -610,10 +610,7 @@ export class PlayerWebDemoApp {
   private async applyLr2ThemeByName(name: string): Promise<void> {
     const theme = this.lr2.availableLr2Themes.find((entry) => entry.name === name);
     if (theme === undefined) return;
-    if (this.lastSelectNavigation === undefined && this.selectView !== undefined) {
-      this.lastSelectNavigation = this.selectView.snapshot();
-    }
-    await this.router.dropSelect();
+    await this.selectRoute.dropSelect();
     await this.lr2.mountLr2Theme(theme.files, theme.name);
     await this.showSelect();
   }
@@ -650,11 +647,8 @@ export class PlayerWebDemoApp {
   private handleSkinFamilyOverrideChange(value: SkinFamilyOverride): void {
     this.guiState.skinFamilyOverride = value;
     this.debugMenu.showSkinSystem(value);
-    if (this.lastSelectNavigation === undefined && this.selectView !== undefined) {
-      this.lastSelectNavigation = this.selectView.snapshot();
-    }
     // The select scene is made again for the family the pick gives.
-    void this.router.dropSelect().then(() => this.showSelect());
+    void this.selectRoute.dropSelect().then(() => this.showSelect());
   }
 
   /** Shows the select screen (`SelectRoute.showSelect`): at start-up, and on every way back to it. */

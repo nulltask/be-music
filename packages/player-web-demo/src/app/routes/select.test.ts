@@ -56,6 +56,9 @@ function course(playable = true): LibraryCourse {
 /** Where the select screen was left, and where a course was started from. */
 const AT_FOLDER = { folderPath: ['pack'] } as unknown as BrowseSnapshot;
 const AT_COURSE_BAR = { folderPath: ['courses'] } as unknown as BrowseSnapshot;
+/** Where the player browsed to after coming back, and where a drop opens what it brought. */
+const AT_FIXTURE = { folderPath: ['fixtures'] } as unknown as BrowseSnapshot;
+const AT_DROPPED = { folderPath: ['dropped'] } as unknown as BrowseSnapshot;
 
 const BUILT_IN_KIT = { family: 'built-in' } as unknown as SelectSceneKit;
 const LR2_SKIN = { barLayout: { slots: [{}] } } as unknown as Lr2Skin;
@@ -319,7 +322,8 @@ describe('SelectRoute: coming back to the select screen', () => {
     await h.router.leave();
     await h.route.showSelect();
     expect(lastMade(h).restore).toHaveBeenLastCalledWith(AT_COURSE_BAR);
-    expect(h.route.lastSelectNavigation).toBe(AT_COURSE_BAR);
+    // Neither the route nor the course run holds on to it: the screen's own cursor is the place from now on.
+    expect(h.route.lastSelectNavigation).toBeUndefined();
     expect(h.courses.takeReturnNavigation()).toBeUndefined();
   });
 
@@ -358,6 +362,77 @@ describe('SelectRoute: coming back to the select screen', () => {
     expect(lastMade(h).options.browse).toBe(AT_FOLDER);
   });
 
+  test('the cursor kept for a return is taken once: the next showing leaves the screen’s own cursor alone', async () => {
+    const h = harness();
+    await h.route.showSelect();
+    const scene = lastMade(h);
+    // A play started on the folder and came back to it.
+    h.route.lastSelectNavigation = AT_FOLDER;
+    await h.router.leave();
+    await h.route.showSelect();
+    expect(scene.restore).toHaveBeenCalledExactlyOnceWith(AT_FOLDER);
+    expect(h.route.lastSelectNavigation).toBeUndefined();
+    // Files loading take the screen off the stage and bring it back, the cursor where the player left it.
+    await h.router.leave();
+    await h.route.showSelect();
+    expect(scene.restore).toHaveBeenCalledOnce();
+  });
+
+  test('after a play, another family’s screen opens on the cursor as it is now, not where the play started', async () => {
+    const h = harness();
+    await h.route.showSelect();
+    const builtIn = lastMade(h);
+    h.route.lastSelectNavigation = AT_FOLDER;
+    await h.router.leave();
+    await h.route.showSelect();
+    // The player browses on, then a theme of another family is dropped.
+    builtIn.snapshot.mockReturnValue(AT_FIXTURE);
+    h.setFamily('beatoraja');
+    await h.route.showSelect();
+    expect(lastMade(h).kit).toBe(BEATORAJA_KIT);
+    expect(lastMade(h).options.browse).toBe(AT_FIXTURE);
+  });
+
+  test('after a course, another family’s screen opens on the cursor as it is now, not on the course bar', async () => {
+    const h = harness();
+    h.setFamily('lr2');
+    await h.route.showSelect();
+    const lr2 = lastMade(h);
+    // A course started on its bar and was given up.
+    h.courses.leaveSelect(AT_COURSE_BAR);
+    await h.router.leave();
+    await h.route.showSelect();
+    expect(lr2.restore).toHaveBeenLastCalledWith(AT_COURSE_BAR);
+    lr2.snapshot.mockReturnValue(AT_FIXTURE);
+    h.setFamily('beatoraja');
+    await h.route.showSelect();
+    expect(lastMade(h).options.browse).toBe(AT_FIXTURE);
+  });
+
+  test('after a return, what a drop brought still wins over the cursor when another family takes the screen over', async () => {
+    const h = harness();
+    await h.route.showSelect();
+    h.route.lastSelectNavigation = AT_FOLDER;
+    await h.router.leave();
+    await h.route.showSelect();
+    // A drop of charts and another family's theme opens what it brought (`LibraryService` → `browseTo`).
+    h.route.lastSelectNavigation = AT_DROPPED;
+    h.setFamily('lr2');
+    await h.route.showSelect();
+    expect(lastMade(h).options.browse).toBe(AT_DROPPED);
+    expect(h.route.lastSelectNavigation).toBeUndefined();
+  });
+
+  test('back from a course as another family takes the screen over, the new screen opens on the course bar', async () => {
+    const h = harness();
+    await h.route.showSelect();
+    h.courses.leaveSelect(AT_COURSE_BAR);
+    await h.router.leave();
+    h.setFamily('lr2');
+    await h.route.showSelect();
+    expect(lastMade(h).options.browse).toBe(AT_COURSE_BAR);
+  });
+
   test('a beatoraja theme’s select entry goes onto the kept screen on every return, and its skin options follow', async () => {
     const h = harness();
     h.setFamily('beatoraja');
@@ -374,6 +449,43 @@ describe('SelectRoute: coming back to the select screen', () => {
     expect(h.made).toHaveLength(1);
     expect(scene.updateKit).toHaveBeenCalledWith(BEATORAJA_KIT);
     expect(h.deps.beatorajaSkinOptions.refreshBeatorajaSelectSkinOptions).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('SelectRoute: dropping the screen for another skin system or LR2 theme', () => {
+  test('the next screen opens on the cursor as it is now, not where the last play started', async () => {
+    const h = harness();
+    await h.route.showSelect();
+    const builtIn = lastMade(h);
+    h.route.lastSelectNavigation = AT_FOLDER;
+    await h.router.leave();
+    await h.route.showSelect();
+    // The player browses on, then picks another skin system in the Debug Menu.
+    builtIn.snapshot.mockReturnValue(AT_FIXTURE);
+    await h.route.dropSelect();
+    expect(builtIn.dispose).toHaveBeenCalledOnce();
+    expect(h.router.select).toBeUndefined();
+    h.setFamily('lr2');
+    await h.route.showSelect();
+    expect(lastMade(h).options.browse).toBe(AT_FIXTURE);
+  });
+
+  test('a place a drop or a course has put the cursor already wins over the dropped screen’s own', async () => {
+    const h = harness();
+    await h.route.showSelect();
+    h.route.lastSelectNavigation = AT_DROPPED;
+    await h.route.dropSelect();
+    await h.route.showSelect();
+    expect(lastMade(h).options.browse).toBe(AT_DROPPED);
+  });
+
+  test('with no screen up, it keeps only what it had', async () => {
+    const h = harness();
+    await h.route.dropSelect();
+    expect(h.route.lastSelectNavigation).toBeUndefined();
+    h.route.lastSelectNavigation = AT_DROPPED;
+    await h.route.dropSelect();
+    expect(h.route.lastSelectNavigation).toBe(AT_DROPPED);
   });
 });
 
