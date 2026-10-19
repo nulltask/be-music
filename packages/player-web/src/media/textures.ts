@@ -1,5 +1,7 @@
 import { Texture, VideoSource } from 'pixi.js';
 import { logger } from '../logger.ts';
+// Types only: the runtime module is imported on demand in `transcodeViaWebCodecsLocked`.
+import type { BufferTarget, Mp4OutputFormat, Output } from 'mediabunny';
 
 const log = logger('bga-video');
 
@@ -348,8 +350,8 @@ function buildScaleFilterArg(maxLongEdge: number): string {
  *   `VideoDecoder` doesn't speak the legacy MPEG-1 / VC-1 / WMV codecs typical BMS BGA ships in. 2. JS wraps each
  *   decoded frame in a `VideoFrame` and feeds it to `VideoEncoder` (H.264 / avc1 baseline). On most platforms this hits
  *   the GPU / ASIC video encoder, taking encode time from ~1× realtime down to 5–20× realtime. 3. Encoded chunks land
- *   in `mp4-muxer`'s in-memory MP4 writer; once the encoder flushes, we hand the muxer's `ArrayBufferTarget` bytes back
- *   to the caller — same shape as the ffmpeg-encode path returns, so the downstream `<video>` blob plumbing is
+ *   in Mediabunny's in-memory MP4 writer; once the encoder flushes and the output is finalized, we hand its
+ *   `BufferTarget` bytes back to the caller — same shape as the ffmpeg-encode path returns, so the downstream `<video>` blob plumbing is
  *   unchanged.
  *
  * Memory: decode and encode are interleaved in chunks rather than buffering the whole video as raw YUV. We can't get
@@ -394,6 +396,8 @@ async function transcodeViaWebCodecsLocked(
   let probeListener: ((event: { type: string; message: string }) => void) | undefined;
   const probeLines: string[] = [];
   let encoder: VideoEncoder | undefined;
+  let output: Output<Mp4OutputFormat, BufferTarget> | undefined;
+  let muxing: Promise<void> = Promise.resolve();
   try {
     // Clone before writeFile — see the libx264 path for why. We need the caller's `bytes` to survive intact in case the
     // WebCodecs path bails out and the ffmpeg-encode fallback is run with the same buffer.
@@ -463,23 +467,23 @@ async function transcodeViaWebCodecsLocked(
     const negotiated = support.config ?? encoderConfig;
     const accelerationLabel = negotiated.hardwareAcceleration ?? 'no-preference';
     log.info(`WebCodecs encoder negotiated: ${negotiated.codec} (${accelerationLabel})`);
-    const { Muxer, ArrayBufferTarget } = await import('mp4-muxer');
-    const target = new ArrayBufferTarget();
-    const muxer = new Muxer({
-      target,
-      video: {
-        codec: 'avc',
-        width,
-        height,
-        frameRate,
-      },
-      // 'in-memory' fastStart keeps everything buffered until `finalize()` writes a moov-at-front MP4 — same as
-      // libx264's `+faststart`.
-      fastStart: 'in-memory',
+    // Loaded on demand so the muxer stays out of the main bundle; most BGA never reach this path.
+    const mediabunny = await import('mediabunny');
+    // 'in-memory' fastStart keeps everything buffered until `finalize()` writes a moov-at-front MP4 — same as libx264's
+    // `+faststart`.
+    output = new mediabunny.Output({
+      format: new mediabunny.Mp4OutputFormat({ fastStart: 'in-memory' }),
+      target: new mediabunny.BufferTarget(),
     });
+    const videoSource = new mediabunny.EncodedVideoPacketSource('avc');
+    output.addVideoTrack(videoSource, { frameRate });
+    await output.start();
+    // The encoder's `output` callback is synchronous while `add` is async: chain the adds so packets reach the muxer in
+    // decode order, and keep the first failure to rethrow once the encoder has flushed.
     encoder = new VideoEncoder({
       output: (chunk, metadata) => {
-        muxer.addVideoChunk(chunk, metadata);
+        const packet = mediabunny.EncodedPacket.fromEncodedChunk(chunk);
+        muxing = muxing.then(() => videoSource.add(packet, metadata));
       },
       error: (error) => {
         log.warn(`WebCodecs encoder error for ${path}`, error);
@@ -568,8 +572,12 @@ async function transcodeViaWebCodecsLocked(
     await encoder.flush();
     encoder.close();
     encoder = undefined;
-    muxer.finalize();
-    const outBytes = new Uint8Array(target.buffer);
+    await muxing;
+    await output.finalize();
+    const muxed = output.target.buffer;
+    output = undefined;
+    if (!muxed) return undefined;
+    const outBytes = new Uint8Array(muxed);
     const elapsed = ((performance.now() - startedAt) / 1000).toFixed(2);
     log.info(
       `WebCodecs transcode ok: ${path} → ${outBytes.byteLength} bytes (${elapsed}s, ${frameIndex} frames @ ${width}×${height}, ${chunkCount} chunks of ≤${chunkSeconds}s)`,
@@ -591,6 +599,15 @@ async function transcodeViaWebCodecsLocked(
         encoder.close();
       } catch {
         // ignore — encoder.close() throws if already closed
+      }
+    }
+    // An early return leaves a failed add unobserved; mark it handled (the transcode already reports undefined).
+    muxing.catch(() => {});
+    if (output) {
+      try {
+        await output.cancel();
+      } catch {
+        // ignore
       }
     }
     try {
