@@ -2,9 +2,9 @@
 
 # サービスと環境
 
-> ステータス: 計画。今はプレイヤーと Leaderboard が `be-music.app` を共有していて（[Leaderboard 設計](./leaderboard.ja.md)
-> 2 章）、寄付サイトは単独で動いています。この文書は、これからの構成とこれまでに決めたことをまとめたものです。今ある
-> ものは 6 章にあります。
+> ステータス: 一部実装済み。Dashboard、Accounts、Player、Leaderboard は、両方の環境でそれぞれのサブドメインに置き、
+> ログインは当面 Cookie を共有する方式です（3.1 節）。Accounts の OIDC プロバイダー化、Registry、Editor は計画中です。
+> 今あるものは 6 章にあります。
 
 ## 1. サービス
 
@@ -120,8 +120,22 @@ sequenceDiagram
 - **リダイレクト URI** はクライアントごとに登録し、完全一致で照合します。プレビューの Accounts だけは、ブランチごとの
   プレビュー URL でもログインできるように、`https://*-<service>-preview.be-music.workers.dev/` の形のパターンも受け付け
   ます。`be-music.workers.dev` の下にホストを作れるのは be-music のアカウントだけです。
-- **使わないもの**: 親ドメイン（`.be-music.app`）のセッション Cookie。各サービスに初めて来たときのリダイレクトを 1 回
-  減らせますが、無関係なドメインどうしや `workers.dev` では使えず、セッションを全サブドメインに送ってしまいます。
+- **目指す形ではないもの**: 親ドメイン（`.be-music.app`）のセッション Cookie。各サービスに初めて来たときのリダイレクトを
+  1 回減らせますが、無関係なドメインどうしや `workers.dev` では使えず、セッションを全サブドメインに送ってしまいます。
+  下の当面の構成でだけ使います。
+
+### 3.1 当面の構成: Better Auth は 1 つ、Cookie は共有
+
+Accounts が OIDC プロバイダーになるまでは、Better Auth を Leaderboard の Worker の中で動かします。
+
+- base URL は Accounts のホスト（`accounts.be-music.app`）で、その Worker が `/api/auth/*` を Service Binding で
+  Leaderboard へ転送します。OAuth のコールバックもここに届きます。
+- セッション Cookie は環境のドメインで共有します（`be-music.app`、またはプレビューでは `preview.be-music.app` で、
+  Cookie の接頭辞を `be-music-preview` にして、本番の Cookie と混ざらないようにします）。
+- Player と Dashboard は、Service Binding で Leaderboard に問い合わせてセッションを読みます。Leaderboard は直接読みます。
+  パスキーは計画どおり、環境ごとの relying party ID を使います。
+- ユーザー ID は、OIDC プロバイダーが `sub` として発行するものと同じです。移行で変わるのは、各サービスがセッションを
+  読む方法だけです。
 
 ## 4. ユーザーのファイル
 
@@ -154,28 +168,27 @@ sequenceDiagram
 
 ## 6. 現状と移行
 
-| 今                                                         | 計画                                        |
-| ---------------------------------------------------------- | ------------------------------------------- |
-| `be-music.app` の `be-music-player-demo`                   | `play.be-music.app` の `play`               |
-| `be-music.app/leaderboard` から使う `be-music-leaderboard` | `leaderboard.be-music.app` の `leaderboard` |
-| Leaderboard の Worker の中の Better Auth                   | `accounts.be-music.app` の `accounts`       |
-| `donate.be-music.app` の `donate-be-music-app`             | `donate`                                    |
-| `devel` が本番、ほかのブランチがプレビュー                 | `main` が本番、`devel` がプレビュー         |
+| サービス    | 今                                                                                     |
+| ----------- | -------------------------------------------------------------------------------------- |
+| Dashboard   | `dashboard` / `dashboard-preview`。セッションとリンクを表示する仮のページ              |
+| Accounts    | `accounts` / `accounts-preview`。`/api/auth/*` を Leaderboard へ転送する（3.1 節）     |
+| Player      | `play` / `play-preview`（`packages/play`。`@be-music/player-web-demo` のビルドを配信） |
+| Leaderboard | `leaderboard` / `leaderboard-preview`。ページは今も `/leaderboard` の下                |
+| Donate      | `donate.be-music.app` の `donate-be-music-app`。まだログインとはつながっていない       |
 
-どれも be-music の Cloudflare アカウントで動いていて、このアカウントの請求は be-music の分だけです。`workers.dev` の
-サブドメインは `be-music.workers.dev` です。
+どの Worker も、`cloudflare.config.ts` から `cf` でデプロイします。`.github/workflows/deploy.yml` が `main` を本番に、
+`devel` をプレビューにデプロイします。どれも be-music の Cloudflare アカウントで動いていて、このアカウントの請求は
+be-music の分だけです。`workers.dev` のサブドメインは `be-music.workers.dev` です。
 
-進める順番:
+この先:
 
-1. Accounts を OIDC プロバイダーとして切り出し、Leaderboard を最初のクライアントにする。
-2. Player と Leaderboard を、それぞれのサブドメインに移す。
-3. `be-music.app` をダッシュボードにする。
-4. 寄付サイトを Accounts とつなぐ。
-5. Registry を作る。ユーザーのファイル用ドメイン、公開設定、利用規約を含める。
-6. Editor を作る。
+1. Accounts を OIDC プロバイダーとして切り出し、Leaderboard を最初のクライアントにして、Cookie の共有をやめる。
+2. 寄付サイトを Accounts とつなぐ。
+3. Registry を作る。ユーザーのファイル用ドメイン、公開設定、利用規約を含める。
+4. Editor を作る。
 
-古い URL からの**転送は作りません**。Player と Leaderboard を移した時点で、`be-music.app/...` と
-`be-music.app/leaderboard/...` へのリンクは使えなくなります。
+古い URL からの**転送は作りません**。`be-music.app/...`（以前の Player）と `be-music.app/leaderboard/...` への
+リンクは、もう使えません。
 
 ## 7. 未決事項
 
