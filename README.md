@@ -387,11 +387,8 @@ Automatically determines the next mode based on the channel used.
 - `24 KEY SP`
 - `48 KEY DP`
 
-If the automatic judgment is ambiguous, it will be supplemented with an extension.
+Only the `.pms` extension takes part: a `.pms` file is `9 KEY` ahead of the lane rules. `.bms`, `.bme` and `.bml` files are decided by the lanes in use, so a `.bme` chart without the 6 / 7 key columns is `5 KEY`.
 
-- `.bms` -> `5 KEY SP/DP`
-- `.bme` -> `7 KEY SP/14 KEY DP`
-- `.pms` -> `9 KEY`
 - A full `11..19` one-player keyboard or PMS-STD `22..25` without traditional IIDX 2P channels also resolves to `9 KEY`.
 - Any extended lane channel (`1A..1O` / `2A..2O`, or the wheel `1P` / `1Q` / `2P` / `2Q`) resolves to `24 KEY SP` / `48 KEY DP` ahead of every other rule, and so does a bmson `keyboard-24k` / `keyboard-24k-double` `mode_hint`.
 

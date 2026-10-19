@@ -387,11 +387,8 @@ pnpm run playlog -- /path/to/Song.bmplay.json --ruleset=lr2,beatoraja --json
 - `24 KEY SP`
 - `48 KEY DP`
 
-自動判定が曖昧な場合は拡張子で補完します。
+拡張子で判定に関わるのは `.pms` だけです。`.pms` のファイルはレーンの規則より先に `9 KEY` になります。`.bms`、`.bme`、`.bml` は使っているレーンで決まるので、6 / 7 鍵の列がない `.bme` の譜面は `5 KEY` です。
 
-- `.bms` -> `5 KEY SP/DP`
-- `.bme` -> `7 KEY SP/14 KEY DP`
-- `.pms` -> `9 KEY`
 - `11..19` をすべて使う 1P keyboard、または従来 IIDX 2P channel を含まない PMS-STD `22..25` も `9 KEY` として判定します。
 - 拡張レーンチャンネル (`1A..1O` / `2A..2O`、またはホイールの `1P` / `1Q` / `2P` / `2Q`) があれば、他のどのルールよりも優先して `24 KEY SP` / `48 KEY DP` と判定します。bmson の `mode_hint` が `keyboard-24k` / `keyboard-24k-double` の場合も同じです。
 
