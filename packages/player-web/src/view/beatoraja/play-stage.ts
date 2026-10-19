@@ -15,7 +15,7 @@ import type { TempoReversalPoint, ChartPlayVariant } from '@be-music/chart';
 import type { ScrollDistanceMapperLike } from '@be-music/player/display';
 import type { Container, Texture } from 'pixi.js';
 import type { BeatorajaSceneKit } from '../../skin/beatoraja/scene-kit.ts';
-import type { BgaCue } from '../../chart/bga-timeline.ts';
+import type { BgaCue, NonstopBgaStage, NonstopStageBgaTimeline } from '../../chart/bga-timeline.ts';
 import { BeatorajaPlaySkinView, type BeatorajaPlaySkinViewOptions } from './skin-view.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { BeatorajaRenderContext } from '../../skin/beatoraja/render.ts';
@@ -43,11 +43,18 @@ export interface BeatorajaPlayChartLayout {
   readonly autoPlay: boolean;
 }
 
-/** The chart's BGA as the BGA layer draws it: its textures and videos by `#BMPxx` key and its cues. */
+/**
+ * The chart's BGA as the BGA layer draws it: its textures and videos by `#BMPxx` key and its cues, and a stitched NONSTOP
+ * chart's stages with each stage's own cues.
+ */
 export interface BeatorajaPlayBga {
   readonly textures: ReadonlyMap<string, Texture>;
   readonly videos: ReadonlyMap<string, HTMLVideoElement>;
   readonly cues: { base: readonly BgaCue[]; layer: readonly BgaCue[]; poor: readonly BgaCue[] };
+  readonly nonstop?: {
+    readonly stages: readonly NonstopBgaStage[];
+    readonly timelines: readonly NonstopStageBgaTimeline[];
+  };
 }
 
 /** Where the engine is, as the layers scroll: its notes, chart time and beat. */
@@ -140,6 +147,7 @@ export class BeatorajaPlayStage {
       textures: bga.textures,
       videoElements: bga.videos,
       cues: bga.cues,
+      nonstop: bga.nonstop,
       skinConfigOps: this.skinConfigOps,
     });
     view.container.addChildAt(this.bgaLayer.container, view.bgaLayerInsertIndex);
