@@ -19,6 +19,7 @@
 - [コースのブラウザ確認](course-checklist.ja.md)
 - [Be-Music Fingerprint 仕様](fingerprint-spec.ja.md)
 - [Leaderboard 設計](leaderboard.ja.md)
+- [サービスと環境](services.ja.md)
 - [LR2 skin 実装メモ](lr2-skin.ja.md)
 - [beatoraja skin 実装メモ](beatoraja-skin.ja.md)
 - [be-music スキンの作り方](be-music-skin.ja.md)
