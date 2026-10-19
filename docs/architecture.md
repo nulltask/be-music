@@ -332,23 +332,23 @@ One scene lifecycle, scene sessions, family views (built-in, then LR2, then beat
 
 The web demo split into services behind one scene router ([ADR 0006](./adr/0006-scene-router.md)), on the new host API, keeping the end-to-end test hook (`window.__beMusicTest`). The F steps are behaviour fixes, each in a pull request of its own.
 
-| Step  | Scope                                                                                         | PR                                                    | Status  |
-| ----- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ------- |
-| P5.1a | The scene router module (`app/scene-router.ts`) with its unit tests, before `main.ts` uses it | [#492](https://github.com/nulltask/be-music/pull/492) | done    |
-| P5.1b | Every scene transition through the scene router                                               | [#502](https://github.com/nulltask/be-music/pull/502) | done    |
-| P5.2  | The settings service and a play-options service holding the full `PlayOptions`                | [#510](https://github.com/nulltask/be-music/pull/510) | done    |
-| P5.3  | The Debug Menu in `ui/debug-menu/`                                                            | [#516](https://github.com/nulltask/be-music/pull/516) | done    |
-| P5.4  | The library, records and course-maker services, and the drop target                           | [#514](https://github.com/nulltask/be-music/pull/514) | done    |
-| P5.5  | The LR2, beatoraja and built-in theme services, and the family kits                           | [#519](https://github.com/nulltask/be-music/pull/519) | done    |
-| P5.6  | The course service, and the course and NONSTOP routes                                         | [#522](https://github.com/nulltask/be-music/pull/522) | done    |
-| P5.7a | The select and decide routes                                                                  | [#525](https://github.com/nulltask/be-music/pull/525) | done    |
-| P5.7b | The play, result and replay routes                                                            | [#529](https://github.com/nulltask/be-music/pull/529) | done    |
-| P5.8  | The play-log, video recording and status services                                             | [#530](https://github.com/nulltask/be-music/pull/530) | done    |
-| P5.9  | The test hook's state as a service; contract v1 unchanged                                     | [#534](https://github.com/nulltask/be-music/pull/534) | done    |
-| P5.10 | `main.ts` down to the bootstrap, the app in `app/app.ts` and `app/shell.ts`, a services lint  | —                                                     | planned |
-| P5.F1 | A NONSTOP placement change redraws the select screen                                          | [#517](https://github.com/nulltask/be-music/pull/517) | done    |
-| P5.F2 | F5 restarts an AUTO play as AUTO and a replay as a replay                                     | [#490](https://github.com/nulltask/be-music/pull/490) | done    |
-| P5.F3 | A transition during a play ends the course run and finalizes its video recording              | [#507](https://github.com/nulltask/be-music/pull/507) | done    |
+| Step  | Scope                                                                                         | PR                                                    | Status |
+| ----- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ------ |
+| P5.1a | The scene router module (`app/scene-router.ts`) with its unit tests, before `main.ts` uses it | [#492](https://github.com/nulltask/be-music/pull/492) | done   |
+| P5.1b | Every scene transition through the scene router                                               | [#502](https://github.com/nulltask/be-music/pull/502) | done   |
+| P5.2  | The settings service and a play-options service holding the full `PlayOptions`                | [#510](https://github.com/nulltask/be-music/pull/510) | done   |
+| P5.3  | The Debug Menu in `ui/debug-menu/`                                                            | [#516](https://github.com/nulltask/be-music/pull/516) | done   |
+| P5.4  | The library, records and course-maker services, and the drop target                           | [#514](https://github.com/nulltask/be-music/pull/514) | done   |
+| P5.5  | The LR2, beatoraja and built-in theme services, and the family kits                           | [#519](https://github.com/nulltask/be-music/pull/519) | done   |
+| P5.6  | The course service, and the course and NONSTOP routes                                         | [#522](https://github.com/nulltask/be-music/pull/522) | done   |
+| P5.7a | The select and decide routes                                                                  | [#525](https://github.com/nulltask/be-music/pull/525) | done   |
+| P5.7b | The play, result and replay routes                                                            | [#529](https://github.com/nulltask/be-music/pull/529) | done   |
+| P5.8  | The play-log, video recording and status services                                             | [#530](https://github.com/nulltask/be-music/pull/530) | done   |
+| P5.9  | The test hook's state as a service; contract v1 unchanged                                     | [#534](https://github.com/nulltask/be-music/pull/534) | done   |
+| P5.10 | `main.ts` down to the bootstrap, the app in `app/app.ts` and `app/shell.ts`, a services lint  | [#539](https://github.com/nulltask/be-music/pull/539) | done   |
+| P5.F1 | A NONSTOP placement change redraws the select screen                                          | [#517](https://github.com/nulltask/be-music/pull/517) | done   |
+| P5.F2 | F5 restarts an AUTO play as AUTO and a replay as a replay                                     | [#490](https://github.com/nulltask/be-music/pull/490) | done   |
+| P5.F3 | A transition during a play ends the course run and finalizes its video recording              | [#507](https://github.com/nulltask/be-music/pull/507) | done   |
 
 #### P6: ready for devel
 
