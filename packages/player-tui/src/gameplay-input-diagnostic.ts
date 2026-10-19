@@ -1,4 +1,4 @@
-import { createPlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
+import { createPlayerInputSignalBus } from '@be-music/player/signals';
 import { createInputTokenToChannelsMap, createLaneBindings } from './manual-input.ts';
 import { createNodeInputRuntime } from './node/node-input-runtime.ts';
 

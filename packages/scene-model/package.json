@@ -1,0 +1,33 @@
+{
+  "name": "@be-music/scene-model",
+  "version": "0.0.0",
+  "description": "Runtime-neutral scene models for be-music: what every screen shows and how it behaves, whatever skin family draws it",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build:bundle": "vp pack",
+    "build": "vp pack",
+    "clean": "rimraf dist",
+    "bench": "node --conditions=source scripts/bench.ts"
+  },
+  "dependencies": {
+    "@be-music/chart": "workspace:*",
+    "@be-music/json": "workspace:*",
+    "@be-music/player": "workspace:*"
+  },
+  "devDependencies": {
+    "@be-music/parser": "workspace:*"
+  }
+}

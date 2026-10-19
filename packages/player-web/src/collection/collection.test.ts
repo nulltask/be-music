@@ -7,14 +7,12 @@ import {
   resolveChartAudioAsset,
   resolveChartBgaAsset,
   resolveChartImageAsset,
-  resolveChartPlayVariant,
 } from './collection.ts';
 import { resolveChart } from '@be-music/chart';
 import { parseChart } from '@be-music/parser';
-import { preparePlaybackChart } from '@be-music/player/core/engine';
+import { preparePlaybackChart } from '@be-music/player';
 import { DeferredDroppedFile } from './dropped-file.ts';
-import type { BeMusicEvent, BeMusicJson } from '../../../json/src/index.ts';
-import type { BrowserSongAssetEntry, BrowserSongAssetSource, BrowserSongEntry, LoadProgress } from './types.ts';
+import type { BrowserSongAssetEntry, BrowserSongAssetSource, LoadProgress } from './types.ts';
 
 /**
  * The drag-drop loader fires `LoadProgress` events as it walks the `reading` and `parsing` phases so the host UI can
@@ -76,7 +74,7 @@ describe('loadSongCollectionFromFiles with deferred drop handles', () => {
     );
     const collection = await loadSongCollectionFromFiles([...charts].reverse().concat(deferred('Pack/S00/kick.wav')));
     expect(collection.errors).toEqual([]);
-    expect(collection.songs.map((song) => song.title)).toEqual(charts.map((_, index) => `Song ${index}`));
+    expect(collection.charts.map((song) => song.title)).toEqual(charts.map((_, index) => `Song ${index}`));
     expect(opened).not.toContain('Pack/S00/kick.wav');
   });
 });
@@ -107,7 +105,7 @@ describe('loadSongCollectionFromFiles note counts', () => {
     },
   ])('$name', async ({ path, text, expected }) => {
     const collection = await loadSongCollectionFromFiles([makeFile(path, text)]);
-    expect(collection.songs[0]!.totalNotes).toBe(expected);
+    expect(collection.charts[0]!.totalNotes).toBe(expected);
     expect(engineScorableNotes(path, text)).toBe(expected);
   });
 });
@@ -163,7 +161,7 @@ describe('loadSongCollectionFromFiles progress events', () => {
     // The progress hook is optional; supplying no options must not throw. Acts as a safety net so existing callers (and
     // tests) that haven't migrated keep working.
     const collection = await loadSongCollectionFromFiles([makeFile('Song/main.bms', MINIMAL_BMS)]);
-    expect(collection.songs.length).toBe(1);
+    expect(collection.charts.length).toBe(1);
   });
 
   test('calls scheduler.yield with the scheduler receiver during large parse batches', async () => {
@@ -183,7 +181,7 @@ describe('loadSongCollectionFromFiles progress events', () => {
 
     const collection = await loadSongCollectionFromFiles(files);
 
-    expect(collection.songs).toHaveLength(32);
+    expect(collection.charts).toHaveLength(32);
     expect(scheduler.yield).toHaveBeenCalledTimes(1);
   });
 
@@ -192,7 +190,7 @@ describe('loadSongCollectionFromFiles progress events', () => {
 
     expect(collection.sources).toHaveLength(1);
     expect(collection.sources[0]?.kind).toBe('zip');
-    expect(collection.songs.map((song) => song.chartPath)).toEqual(['Song/main.bms']);
+    expect(collection.charts.map((song) => song.chartPath)).toEqual(['Song/main.bms']);
   });
 
   test('rejects oversized zip archives before reading their bytes', async () => {
@@ -222,17 +220,17 @@ describe('BrowserSongCollectionStore', () => {
     const first = await store.appendFromFiles([makeFile('PackA/main.bms', MINIMAL_BMS)]);
     expect(first).toBe(store.collection);
     expect(first.sources).toHaveLength(1);
-    expect(first.songs).toHaveLength(1);
+    expect(first.charts).toHaveLength(1);
     expect(first.sources[0]?.id).toMatch(/^drop1-/u);
-    expect(first.songs[0]?.id).toMatch(/^drop1-/u);
-    expect(first.songs[0]?.sourceId).toBe(first.sources[0]?.id);
+    expect(first.charts[0]?.id).toMatch(/^drop1-/u);
+    expect(first.charts[0]?.sourceId).toBe(first.sources[0]?.id);
 
     const second = await store.appendFromFiles([makeFile('PackB/main.bms', MINIMAL_BMS)]);
     expect(second).toBe(store.collection);
     expect(second.sources).toHaveLength(2);
-    expect(second.songs).toHaveLength(2);
+    expect(second.charts).toHaveLength(2);
     expect(second.sources.map((source) => source.id)).toEqual(['drop1-files:0', 'drop2-files:0']);
-    expect(second.songs.map((song) => song.sourceId)).toEqual(['drop1-files:0', 'drop2-files:0']);
+    expect(second.charts.map((song) => song.sourceId)).toEqual(['drop1-files:0', 'drop2-files:0']);
   });
 
   test('loadFromFiles replaces the collection and resets the next append prefix', async () => {
@@ -242,11 +240,11 @@ describe('BrowserSongCollectionStore', () => {
     const replaced = await store.loadFromFiles([makeFile('PackB/main.bms', MINIMAL_BMS)]);
     expect(replaced).toBe(store.collection);
     expect(replaced.sources.map((source) => source.id)).toEqual(['files:0']);
-    expect(replaced.songs.map((song) => song.sourceId)).toEqual(['files:0']);
+    expect(replaced.charts.map((song) => song.sourceId)).toEqual(['files:0']);
 
     const appended = await store.appendFromFiles([makeFile('PackC/main.bms', MINIMAL_BMS)]);
     expect(appended.sources.map((source) => source.id)).toEqual(['files:0', 'drop1-files:0']);
-    expect(appended.songs.map((song) => song.sourceId)).toEqual(['files:0', 'drop1-files:0']);
+    expect(appended.charts.map((song) => song.sourceId)).toEqual(['files:0', 'drop1-files:0']);
   });
 
   test('loadFromDrop replaces the collection from DataTransfer files', async () => {
@@ -258,136 +256,7 @@ describe('BrowserSongCollectionStore', () => {
     } as unknown as DataTransfer);
     expect(loaded).toBe(store.collection);
     expect(loaded.sources.map((source) => source.id)).toEqual(['files:0']);
-    expect(loaded.songs.map((song) => song.sourceId)).toEqual(['files:0']);
-  });
-});
-
-/**
- * Minimal `BrowserSongEntry` factory for `resolveChartPlayVariant` tests. Only the fields the resolver consults
- * (`chartPath` for the `.pms` extension hint, `chart.events[*].channel` for lane usage, `chart.bms.player` for the
- * legacy `#PLAYER=3` 9K marker) are populated — everything else is left at minimal defaults.
- */
-function makeSong(params: { chartPath: string; channels?: ReadonlyArray<string>; player?: number }): BrowserSongEntry {
-  const events: BeMusicEvent[] = (params.channels ?? []).map((channel, index) => ({
-    measure: 1,
-    channel,
-    position: [index, Math.max(1, params.channels?.length ?? 1)],
-    value: '01',
-  }));
-  const chart = {
-    events,
-    bms: { player: params.player } as BeMusicJson['bms'],
-    bmson: { info: { modeHint: undefined } } as BeMusicJson['bmson'],
-  } as BeMusicJson;
-  return {
-    chartPath: params.chartPath,
-    chart,
-  } as BrowserSongEntry;
-}
-
-describe('resolveChartPlayVariant', () => {
-  test('classifies SP 5K (channels 11..15 only)', () => {
-    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bms', channels: ['11', '12', '15'] }))).toBe('5');
-  });
-
-  test('classifies SP 7K (channel 18 / 19 present)', () => {
-    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '15', '18', '19'] }))).toBe(
-      '7',
-    );
-  });
-
-  test('classifies DP 14K (2P-side keyboard 6 / 7)', () => {
-    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '18', '21', '28'] }))).toBe(
-      '14',
-    );
-  });
-
-  test('classifies DP 10K (2P-side keyboard, no 6 / 7)', () => {
-    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bms', channels: ['11', '21', '25'] }))).toBe('10');
-  });
-
-  test('a `.bme` chart without a 6 / 7 key column is 5 / 10 KEY, as the engine and CLI read it', () => {
-    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '21', '25'] }))).toBe('10');
-    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '16'] }))).toBe('5');
-  });
-
-  test('classifies the play from the resolved chart when one is given (lanes added by a `#RANDOM` branch count)', () => {
-    const song = makeSong({ chartPath: 'Song/main.bms', channels: ['11', '15'] });
-    // Lanes 8 / 9 live only in a `#RANDOM` branch, so the unresolved chart's top-level events are 5 KEY.
-    expect(resolveChartPlayVariant(song)).toBe('5');
-    const resolved = {
-      ...song.chart,
-      events: [...song.chart.events, { measure: 2, channel: '18', position: [0, 1], value: '01' }],
-    } as BeMusicJson;
-    expect(resolveChartPlayVariant(song, resolved)).toBe('7');
-    // The song-level answer is unaffected (cached per chart object).
-    expect(resolveChartPlayVariant(song)).toBe('5');
-  });
-
-  test('PMS / 9 KEY: `.pms` extension wins regardless of channel layout', () => {
-    // A `.pms` chart can use either the BME-COMPAT channel layout (`16..19`) or the PMS-STD layout (`22..25`). The
-    // extension alone is enough to commit to `play_9.lr2skin`.
-    expect(
-      resolveChartPlayVariant(
-        makeSong({ chartPath: 'Song/main.pms', channels: ['11', '12', '13', '14', '15', '16', '17', '18', '19'] }),
-      ),
-    ).toBe('9');
-    expect(
-      resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.PMS', channels: ['11', '15', '22', '23', '24', '25'] })),
-    ).toBe('9');
-  });
-
-  test('PMS / 9 KEY: `#PLAYER=3` paired with channel 17 is the legacy `.bms` marker', () => {
-    expect(
-      resolveChartPlayVariant(
-        makeSong({ chartPath: 'Song/main.bms', channels: ['11', '15', '17', '18', '19'], player: 3 }),
-      ),
-    ).toBe('9');
-  });
-
-  test('PMS / 9 KEY: any of `22..25` (without traditional IIDX 2P channels `21`/`26..29`) routes to 9', () => {
-    // PMS-STD detection: presence of any POPN-specific channel (`22..25`) combined with the ABSENCE
-    // of `21` / `26..29` (the genuine IIDX 2P-side channels). Holds across `.bme` / `.bms` extensions
-    // and across various 1P-side configurations (with / without scratch, with / without 6-7K). User-
-    // reported symptom: charts that author PMS-STD content under a non-`.pms` extension were silently
-    // classified as IIDX `'10'` / `'14'` and the engine's POPN-9 lane bindings on `22..25` were lost.
-    expect(
-      resolveChartPlayVariant(
-        makeSong({ chartPath: 'Song/main.bme', channels: ['11', '12', '13', '14', '15', '22', '23', '24', '25'] }),
-      ),
-    ).toBe('9');
-    // Hybrid PMS-STD with 1P scratch — non-standard authoring but `22..25` is the POPN-specific
-    // discriminator, so still POPN-9.
-    expect(
-      resolveChartPlayVariant(
-        makeSong({
-          chartPath: 'Song/main.bme',
-          channels: ['11', '12', '13', '14', '15', '16', '22', '23', '24', '25'],
-        }),
-      ),
-    ).toBe('9');
-    // Sparse — single POPN-side channel use.
-    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bms', channels: ['11', '15', '22'] }))).toBe('9');
-    // Genuine IIDX 5K DP — has scratch on both sides AND channel `21`. PMS-STD detection requires the
-    // ABSENCE of `21`/`26..29`, so this stays at `'10'`.
-    expect(
-      resolveChartPlayVariant(
-        makeSong({ chartPath: 'Song/main.bms', channels: ['11', '15', '16', '21', '22', '25', '26'] }),
-      ),
-    ).toBe('10');
-  });
-
-  test('PMS / 9 KEY: a `.bme` chart that authors all of `11..19` on `#PLAYER 1` is BME POPN-9', () => {
-    // POPN-9 charts authored as `.bme` (the BME-COMPAT layout — `16`/`17`/`18`/`19` as POPN keys 6-9
-    // instead of IIDX scratch / FREE-ZONE / 6 / 7) typically populate every one of `11..19`. IIDX 7K
-    // uses at most 8 of those (`11..15 + 16 + 18 + 19`), so a full 1P keyboard is a strong POPN-9 signal.
-    // Without this detection the chart fell through to `'7'` and the engine bound `16` as scratch and
-    // `17` as FREE-ZONE.
-    expect(
-      resolveChartPlayVariant(
-        makeSong({ chartPath: 'Song/main.bme', channels: ['11', '12', '13', '14', '15', '16', '17', '18', '19'] }),
-      ),
-    ).toBe('9');
+    expect(loaded.charts.map((song) => song.sourceId)).toEqual(['files:0']);
   });
 });
 

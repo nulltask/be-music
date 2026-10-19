@@ -1,4 +1,6 @@
 import * as utilsApi from '@be-music/utils';
+import * as optionalNodeModuleApi from '@be-music/utils/optional-node-module';
+import * as workerizeApi from '@be-music/utils/workerize';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
 const caseInsensitiveFiles = new Map<string, Uint8Array>([['Song/Kick.WAV', new Uint8Array([1, 2, 3])]]);
@@ -8,6 +10,19 @@ const lazyEntry = {
   webkitRelativePath: 'Song/chart.bms',
   arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
 };
+// What `import()` throws for a bare specifier inside a Node single executable application.
+const seaImportError = Object.assign(new Error('No such built-in module: node-web-audio-api'), {
+  code: 'ERR_UNKNOWN_BUILTIN_MODULE',
+});
+const failSeaImport = (): Promise<never> => Promise.reject(seaImportError);
+// A worker that answers in the calling thread, so the case measures the promise and abort wiring, not a thread hop.
+const inlineWorker = Object.assign(
+  (value: number, callback: (error: unknown, result: number) => void) => {
+    callback(undefined, value + 1);
+  },
+  { close: () => {} },
+);
+const workerAbortController = new AbortController();
 
 export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
   define('utils.resolveCliPath', {
@@ -208,6 +223,38 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
     run: (fixtures) => {
       const buffer = Buffer.allocUnsafe(16);
       utilsApi.writeStereoPcm16Be(buffer, 0, fixtures.sampleRenderResult.left, fixtures.sampleRenderResult.right, 0, 4);
+    },
+  });
+
+  // `@be-music/utils/optional-node-module` (Node only)
+  define('utils.optional-node-module.loadOptionalNodeModule', {
+    run: async () => {
+      // The import succeeds; then the SEA path, where it fails and `createRequire` finds the module instead. A built-in
+      // stands in for the optional package so the fallback resolves without touching the disk.
+      await optionalNodeModuleApi.loadOptionalNodeModule('node:path', () => import('node:path'));
+      await optionalNodeModuleApi.loadOptionalNodeModule('node:path', failSeaImport);
+    },
+  });
+
+  // `@be-music/utils/workerize` (Node only)
+  define('utils.workerize.workerize', {
+    // Starts a worker thread, runs one call on it and stops it: the time follows the thread start-up more than the code.
+    ioBound: true,
+    run: async () => {
+      const worker = workerizeApi.workerize(
+        (value: number) => value + 1,
+        () => [],
+      );
+      try {
+        await workerizeApi.invokeWorkerizedFunction(worker, [41]);
+      } finally {
+        worker.close();
+      }
+    },
+  });
+  define('utils.workerize.invokeWorkerizedFunction', {
+    run: async () => {
+      await workerizeApi.invokeWorkerizedFunction(inlineWorker, [41], { signal: workerAbortController.signal });
     },
   });
 }

@@ -1,19 +1,12 @@
 import { unzipSync } from 'fflate';
-import {
-  type ChartPlayVariant,
-  countScoredNotes,
-  resolveChartPlayVariant as resolveChartPlayVariantForChart,
-} from '@be-music/chart';
+import { countScoredNotes } from '@be-music/chart';
 import { decodeBmsText, decodeUtf8Text, parseBms, parseBmson } from '@be-music/parser';
-import type { BeMusicJson } from '@be-music/json';
+import { seedLibraryChartPlayVariant, type ChartSourceKind, type LibraryChart } from '@be-music/scene-model';
 import { basename, dirname, normalizePath, readFilesIntoEntryMap, runWithConcurrency } from '@be-music/utils/core';
 import type {
-  BrowserFolderNode,
   BrowserSongAssetEntry,
   BrowserSongAssetSource,
   BrowserSongCollection,
-  BrowserSongEntry,
-  BrowserSongSourceKind,
   LoadProgressCallback,
 } from './types.ts';
 import { createEagerDropPathPredicate, isChartFilePath } from '../browser/drop.ts';
@@ -29,8 +22,6 @@ import { logger } from '../logger.ts';
 
 export { loadAssetBytes, asLoadedBytes } from './file-lookup.ts';
 export { type BrowserDroppedFile, DeferredDroppedFile, materializeDroppedFiles } from './dropped-file.ts';
-
-export { basename, dirname, normalizePath } from '@be-music/utils/core';
 
 const log = logger('drop');
 const MAX_ZIP_ARCHIVE_BYTES = 512 * 1024 * 1024;
@@ -48,7 +39,7 @@ export interface LoadProgressOptions {
 }
 
 export class BrowserSongCollectionStore {
-  public collection: BrowserSongCollection = { sources: [], songs: [], errors: [] };
+  public collection: BrowserSongCollection = { sources: [], charts: [], errors: [] };
   /**
    * Monotonic counter that prefixes every appended drop's source ids so subsequent drops don't collide with the
    * previous one's `files:0` / `bundle:0` ids. The counter is incremented every time a drop produces at least one new
@@ -83,7 +74,7 @@ export class BrowserSongCollectionStore {
     options: LoadProgressOptions = {},
   ): Promise<BrowserSongCollection> {
     const incoming = await loadSongCollectionFromFiles(files, options);
-    if (incoming.sources.length === 0 && incoming.songs.length === 0 && incoming.errors.length === 0) {
+    if (incoming.sources.length === 0 && incoming.charts.length === 0 && incoming.errors.length === 0) {
       return this.collection;
     }
     this.dropSeq += 1;
@@ -92,10 +83,10 @@ export class BrowserSongCollectionStore {
       ...source,
       id: prefix + source.id,
     }));
-    const remappedSongs: BrowserSongEntry[] = incoming.songs.map((song) => ({
-      ...song,
-      sourceId: prefix + song.sourceId,
-      id: prefix + song.id,
+    const remappedCharts: LibraryChart[] = incoming.charts.map((chart) => ({
+      ...chart,
+      sourceId: prefix + chart.sourceId,
+      id: prefix + chart.id,
     }));
     const remappedErrors = incoming.errors.map((error) => ({
       ...error,
@@ -103,7 +94,7 @@ export class BrowserSongCollectionStore {
     }));
     this.collection = {
       sources: [...this.collection.sources, ...remappedSources],
-      songs: [...this.collection.songs, ...remappedSongs],
+      charts: [...this.collection.charts, ...remappedCharts],
       errors: [...this.collection.errors, ...remappedErrors],
     };
     return this.collection;
@@ -422,7 +413,7 @@ export async function loadSongCollectionFromFiles(
     });
   }
 
-  const songs: BrowserSongEntry[] = [];
+  const charts: LibraryChart[] = [];
   const eventStrings = new PackedEventStrings();
   // Build the chart-path lists in one pass per source so we don't sort + filter the full path table twice (once for the
   // count, once for the parse loop). Sort the chart paths only — the non-chart paths don't need ordering since they're
@@ -475,7 +466,7 @@ export async function loadSongCollectionFromFiles(
         const chart = parseChart(path, chartBytes);
         // The scored notes and the play variant they were read under, without timing every note: the list shows a count.
         const scored = countScoredNotes(chart, { chartPath: path, inferBmsLnTypeWhenMissing: true });
-        const song: BrowserSongEntry = {
+        const libraryChart: LibraryChart = {
           id: `${source.id}:${path}`,
           sourceId: source.id,
           sourceLabel: source.label,
@@ -494,12 +485,12 @@ export async function loadSongCollectionFromFiles(
           totalNotes: scored.notes,
           chart,
         };
-        songs.push(song);
+        charts.push(libraryChart);
         // Every parsed chart stays resident for as long as the song is in the collection, so trim it before keeping
         // it. Keep the play variant first, while the events are still plain objects: select screens filter the whole
         // list by it, and a cached answer spares them from unpacking every chart's events. Counting the notes already
         // worked it out (`resolveChartPlayVariant` over the same chart and path).
-        playVariantByChart.set(chart, { chartPath: song.chartPath, variant: scored.playVariant });
+        seedLibraryChartPlayVariant(libraryChart, scored.playVariant);
         compactCollectionChart(chart, eventStrings);
       } catch (error) {
         errors.push({
@@ -520,7 +511,7 @@ export async function loadSongCollectionFromFiles(
     onProgress?.({ phase: 'parsing', current: chartCount, total: chartCount });
   }
 
-  return { sources, songs, errors };
+  return { sources, charts, errors };
 }
 
 /**
@@ -539,7 +530,7 @@ function yieldToEventLoop(): Promise<void> {
 }
 
 export function describeSongCollection(collection: BrowserSongCollection): string {
-  return `${collection.songs.length} charts loaded${
+  return `${collection.charts.length} charts loaded${
     collection.errors.length > 0 ? `, ${collection.errors.length} errors` : ''
   }`;
 }
@@ -593,42 +584,12 @@ function parseChart(path: string, bytes: Uint8Array) {
 }
 
 /**
- * Reports a song's play variant (`5` / `7` / `9` / `10` / `14` / `24` / `48`), which picks the play skin and lane
- * layout. A thin cached wrapper over `@be-music/chart`'s `resolveChartPlayVariant` — the lane-mode rule the engine and
- * the CLI use too — fed with the song's chart path (for the `.pms` extension rule), events, and `#PLAYER`.
- *
- * `chart` defaults to the song's parsed chart, which is what song select sees before any `#RANDOM` roll. A gameplay
- * scene passes the chart it resolved for the play instead, so lanes added by the chosen `#RANDOM` / `#SWITCH` branch
- * count toward the variant.
- */
-export function resolveChartPlayVariant(song: BrowserSongEntry, chart: BeMusicJson = song.chart): ChartPlayVariant {
-  const cached = playVariantByChart.get(chart);
-  if (cached !== undefined && cached.chartPath === song.chartPath) return cached.variant;
-  const variant = resolveChartPlayVariantForChart({
-    chartPath: song.chartPath,
-    events: chart.events,
-    bms: chart.bms,
-    bmson: chart.bmson,
-  });
-  playVariantByChart.set(chart, { chartPath: song.chartPath, variant });
-  return variant;
-}
-
-/**
- * Play variant per chart object. Select screens filter the whole song list by key mode, and collection charts keep
- * their events packed (see `compactCollectionChart`), so recomputing the variant would unpack every chart on each
- * filter pass. Keyed by chart identity plus the path the answer was computed for, since the variant also depends on
- * the file extension.
- */
-const playVariantByChart = new WeakMap<BeMusicJson, { chartPath: string; variant: ChartPlayVariant }>();
-
-/**
  * `localeCompare(…, 'ja')` as one collator: the same order, without setting up a collator for each of the thousands of
  * comparisons a large drop's path sort makes.
  */
 const JAPANESE_COLLATOR = new Intl.Collator('ja');
 
-function inferSourceKind(files: ReadonlyMap<string, BrowserSongAssetEntry>): BrowserSongSourceKind {
+function inferSourceKind(files: ReadonlyMap<string, BrowserSongAssetEntry>): ChartSourceKind {
   for (const path of files.keys()) {
     if (path.includes('/')) return 'directory';
   }
@@ -637,7 +598,7 @@ function inferSourceKind(files: ReadonlyMap<string, BrowserSongAssetEntry>): Bro
 
 export function resolveSongSource(
   collection: BrowserSongCollection,
-  song: BrowserSongEntry,
+  song: LibraryChart,
 ): BrowserSongAssetSource | undefined {
   return collection.sources.find((source) => source.id === song.sourceId);
 }
@@ -870,44 +831,12 @@ function imageFallbackPaths(path: string): string[] {
 }
 
 /**
- * Local copy of `isVideoExtension` from `scene/core/gameplay-bga`. Pulled inline rather than imported so
- * `collection.ts` (the data-layer entry point) doesn't take a dependency on the Pixi-side BGA helpers; the patterns are
+ * Local copy of `isVideoExtension` from `chart/bga-timeline.ts`. Pulled inline rather than imported so
+ * `collection.ts` (the data-layer entry point) doesn't take a dependency on the play's BGA helpers; the patterns are
  * tiny and trivially kept in sync.
  */
 function isVideoExtensionPath(path: string): boolean {
   return /\.(mpg|mpeg|mp4|m4v|avi|mov|wmv|webm|mkv)$/iu.test(path);
-}
-
-/**
- * Groups a flat song list into top-level folders for the select-screen bar list. The grouping key is the **first
- * segment** of each song's `directoryLabel` (relative to its source) — so a song at `LunaticCrave/SongA/song.bms` lands
- * in the `LunaticCrave` folder. Songs without a directory (e.g. dropped a single file) fall back to their source label
- * so they still appear under a sensible group.
- *
- * The result is sorted by label using Japanese-aware locale ordering, matching how LR2 sorts folders alphabetically.
- * Each folder's songs preserve their original order, which keeps the chart-difficulty sequence stable when iterating
- * inside a folder.
- */
-export function groupSongsByFolder(songs: readonly BrowserSongEntry[]): BrowserFolderNode[] {
-  const buckets = new Map<string, BrowserSongEntry[]>();
-  for (const song of songs) {
-    const label = topLevelFolderLabel(song);
-    const bucket = buckets.get(label) ?? [];
-    bucket.push(song);
-    buckets.set(label, bucket);
-  }
-  return [...buckets.entries()]
-    .map(([label, entries]): BrowserFolderNode => ({ label, songs: entries }))
-    .sort((left, right) => JAPANESE_COLLATOR.compare(left.label, right.label));
-}
-
-function topLevelFolderLabel(song: BrowserSongEntry): string {
-  const dir = song.directoryLabel;
-  if (!dir) {
-    return song.sourceLabel;
-  }
-  const slash = dir.indexOf('/');
-  return slash >= 0 ? dir.slice(0, slash) : dir;
 }
 
 function basenameWithoutExtension(path: string): string {

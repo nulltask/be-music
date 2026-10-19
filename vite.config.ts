@@ -9,6 +9,7 @@ const workspacePackages = [
   'stringifier',
   'audio-renderer',
   'player',
+  'scene-model',
   'player-tui',
   'lr2-skin',
   'beatoraja-skin',
@@ -18,30 +19,48 @@ const workspacePackages = [
 ] as const;
 
 /**
- * Layering (docs/architecture.md): the chart model, the IR, the parser and the engine's core / play-log / ruleset
- * code run unchanged in the browser and in Node, so they import no Node built-in and read no DOM or Node-only global.
- * Runtime services reach them through adapters (`PlayerOptions.createAudioSession`, `createUiRuntime`, the parser's
- * `node-file.ts`) instead.
+ * Layering (docs/architecture.md): the chart model, the IR, the parser, the engine's core / play-log / ruleset code
+ * with the player entries a browser host imports (signals, lanes, display), the scene models and the LR2 and beatoraja
+ * state resolvers run unchanged in the browser and in Node, so they import no
+ * Node built-in and read no DOM or Node-only global. Runtime services reach them through adapters
+ * (`PlayerOptions.createAudioSession`, `createUiRuntime`, the parser's `node-file.ts`) instead.
  */
 const runtimeNeutralSources = [
+  'packages/beatoraja-skin/src/scene/**/*.ts',
   'packages/chart/src/**/*.ts',
   'packages/json/src/**/*.ts',
+  'packages/lr2-skin/src/state/**/*.ts',
   'packages/parser/src/**/*.ts',
   'packages/player/src/core/**/*.ts',
+  'packages/player/src/course/**/*.ts',
+  'packages/player/src/display.ts',
+  'packages/player/src/image-resize-algorithm.ts',
+  'packages/player/src/judging.ts',
+  'packages/player/src/lanes.ts',
+  'packages/player/src/playable-notes.ts',
   'packages/player/src/playlog/**/*.ts',
+  'packages/player/src/records/**/*.ts',
   'packages/player/src/ruleset/**/*.ts',
+  'packages/player/src/signals.ts',
+  'packages/player/src/state-signals.ts',
+  'packages/player/src/utils.ts',
+  'packages/scene-model/src/**/*.ts',
 ];
 /** Node / CLI entry points inside those trees: the runtime adapters the rule above points to. */
 const runtimeAdapterSources = ['packages/parser/src/cli.ts', 'packages/parser/src/node-file.ts'];
 /**
  * The deterministic judge (`judge-core*.ts`, `auto-judge-core.ts`, the ruleset rules and the play-log simulator): the
- * same inputs must give the same judgments, so these files read no clock, set no timer and draw no random number.
+ * same inputs must give the same judgments, so these files read no clock, set no timer and draw no random number. The
+ * scene models and the LR2 and beatoraja state resolvers are held to the same rule: a scene's time comes in as an input.
  */
 const deterministicJudgeSources = [
+  'packages/beatoraja-skin/src/scene/**/*.ts',
+  'packages/lr2-skin/src/state/**/*.ts',
   'packages/player/src/core/judge-*.ts',
   'packages/player/src/core/auto-judge-core.ts',
   'packages/player/src/ruleset/**/*.ts',
   'packages/player/src/playlog/simulate.ts',
+  'packages/scene-model/src/**/*.ts',
 ];
 const nodeBuiltinMessage = 'Runtime-neutral code must not import Node built-ins; use a runtime adapter.';
 const nodeBuiltinImports = {
@@ -65,8 +84,94 @@ const runtimeGlobals = [
   '__filename',
 ].map((name) => ({ name, message: 'Runtime-neutral code must not read DOM or Node globals; use a runtime adapter.' }));
 const clockGlobals = ['Date', 'performance', 'setTimeout', 'setInterval', 'setImmediate', 'queueMicrotask'].map(
-  (name) => ({ name, message: 'The judge core is deterministic: take time as an input instead of reading a clock.' }),
+  (name) => ({ name, message: 'Deterministic code takes time as an input instead of reading a clock.' }),
 );
+
+/**
+ * The web runtime's layers (docs/player-web.md, "Layering"; ADR 0001). From the top: the host API (`host/` and the
+ * package barrel), the scene sessions (`session/`) and the family views (`view/`). Every other directory is a lower
+ * layer: the audio and input runtimes, chart and media preparation, the collection, the Pixi stage helpers, the skin
+ * loaders, the built-in skins and the recorder. Every file starts out as a lower layer, so a new directory is one too.
+ *
+ * - A lower layer knows no scene: it imports no host, session or view module, not even a type.
+ * - A session holds a screen's behaviour and is tested in Node with a fake view, so it uses Pixi only for types: the
+ *   view owns everything drawn. It reaches its view and the host only for types.
+ * - A view only draws frames and returns intents, so it reaches neither the engine nor its web runtimes, and its session
+ *   and the host only for types.
+ * - Only a session and the engine driver run the engine; every other file imports its types only.
+ * - Only the audio layer (`runtime/`) creates an audio context; the rest of the runtime and the web demo play through
+ *   the audio service.
+ *
+ * Oxlint does not merge the options of two overrides that set the same rule: the last one wins. So each file group
+ * below gets one complete `no-restricted-imports` object, and a group comes after the wider one it narrows.
+ */
+const playerWebSources = ['packages/player-web/src/**/*.ts'];
+const engineDriverSources = ['packages/player-web/src/runtime/engine-driver.ts'];
+const webAudioLayerSources = ['packages/player-web/src/runtime/**/*.ts'];
+const sceneSessionSources = ['packages/player-web/src/session/**/*.ts'];
+const familyViewSources = ['packages/player-web/src/view/**/*.ts'];
+const webHostSources = ['packages/player-web/src/host/**/*.ts', 'packages/player-web/src/index.ts'];
+const webDemoSources = ['packages/player-web-demo/src/**/*.ts'];
+/** Import specifiers that reach the named directories of `player-web/src` (or of the web demo's `src`). */
+const webLayerGroup = (...dirs: string[]): string[] => dirs.flatMap((dir) => [`**/${dir}`, `**/${dir}/**`]);
+const lowerLayerMessage =
+  'A lower layer of the web runtime knows no scene: it imports no host, session or view module.';
+const lowerLayerPatterns = [{ group: webLayerGroup('host', 'session', 'view'), message: lowerLayerMessage }];
+/**
+ * The engine is the root of `@be-music/player`. Its other entries (`./signals`, `./lanes`, `./display`, `./ruleset`, …)
+ * are the vocabulary a host shares with a play, not the engine, so any layer may import them.
+ */
+const engineModule = '@be-music/player';
+const engineMessage = `Only a scene session (and runtime/engine-driver.ts) runs the engine (${engineModule}); import its types only.`;
+const engineTypeImports = {
+  paths: [{ name: engineModule, allowTypeImports: true, message: engineMessage }],
+};
+const lowerLayerImports = { ...engineTypeImports, patterns: lowerLayerPatterns };
+const engineDriverImports = { patterns: lowerLayerPatterns };
+const sceneSessionPixiMessage = 'A scene session uses Pixi only for types; the family view draws.';
+const sceneSessionImports = {
+  paths: [{ name: 'pixi.js', allowTypeImports: true, message: sceneSessionPixiMessage }],
+  patterns: [
+    { group: ['pixi.js/*', '@pixi/*'], allowTypeImports: true, message: sceneSessionPixiMessage },
+    {
+      group: webLayerGroup('view', 'host'),
+      allowTypeImports: true,
+      message: 'A scene session reaches its family view and the host only for types.',
+    },
+  ],
+};
+const familyViewEngineMessage = 'A family view draws frames and returns intents; the scene session drives the engine.';
+const familyViewImports = {
+  paths: [
+    { name: engineModule, message: `${familyViewEngineMessage} Import nothing from ${engineModule}, not even a type.` },
+  ],
+  patterns: [
+    { group: ['**/runtime/engine-driver*', '**/runtime/web-*-runtime*'], message: familyViewEngineMessage },
+    {
+      group: webLayerGroup('session', 'host'),
+      allowTypeImports: true,
+      message: 'A family view reaches its scene session and the host only for types.',
+    },
+  ],
+};
+const audioContextNames = ['AudioContext', 'OfflineAudioContext', 'webkitAudioContext', 'webkitOfflineAudioContext'];
+const webAudioMessage = 'Only the audio layer (runtime/) creates an audio context; play through the audio service.';
+const webAudioGlobals = audioContextNames.map((name) => ({ name, message: webAudioMessage }));
+const webAudioProperties = ['globalThis', 'window', 'self'].flatMap((object) =>
+  audioContextNames.map((property) => ({ object, property, message: webAudioMessage })),
+);
+/**
+ * The web demo's layers (docs/player-web.md, "How the demo is built"): `main.ts` boots the app, `app/` composes it (the
+ * scene router, the routes, the shell), `ui/` is the Debug Menu and the panels, and `services/` hold the state and rules
+ * the others share. A service knows neither the UI nor the wiring: it imports no lil-gui, `ui/` or `app/` module, not
+ * even a type, and reaches the app through the deps it is given.
+ */
+const webDemoServiceSources = ['packages/player-web-demo/src/services/**/*.ts'];
+const webDemoServiceMessage = 'A demo service imports no lil-gui, ui/ or app/ module; it takes what it needs as deps.';
+const webDemoServiceImports = {
+  paths: [...engineTypeImports.paths, { name: 'lil-gui', message: webDemoServiceMessage }],
+  patterns: [{ group: ['lil-gui/*', ...webLayerGroup('ui', 'app')], message: webDemoServiceMessage }],
+};
 
 const workspaceProjects = workspacePackages.map((name) => ({
   extends: true as const,
@@ -127,7 +232,12 @@ export default defineConfig({
         extends: true as const,
         test: {
           name: 'benchmark-scripts',
-          include: ['scripts/bench/**/*.test.ts', 'scripts/lint/**/*.test.ts', 'scripts/release/**/*.test.ts'],
+          include: [
+            'scripts/bench/**/*.test.ts',
+            'scripts/course-checklist/**/*.test.ts',
+            'scripts/lint/**/*.test.ts',
+            'scripts/release/**/*.test.ts',
+          ],
         },
       },
     ],
@@ -228,6 +338,8 @@ export default defineConfig({
       'packages/*/src/__fixtures__/**',
       // Regression snapshots are compared byte-for-byte by `toMatchFileSnapshot`; reformatting them would fail the suite.
       'tests/regression/__expected__/**',
+      // So are the engine characterization snapshots.
+      'packages/player/src/core/characterization/__expected__/**',
       // Generated by Changesets on every release; reformatting them would churn each version bump.
       '**/CHANGELOG.md',
       // Generated by the Leaderboard's `build:css`; it is rewritten whole on every rebuild.
@@ -294,9 +406,63 @@ export default defineConfig({
             {
               object: 'Math',
               property: 'random',
-              message: 'The judge core is deterministic: take randomness as an input.',
+              message: 'Deterministic code takes randomness as an input.',
             },
           ],
+        },
+      },
+      {
+        // Every web runtime file starts out as a lower layer; the groups below narrow it.
+        files: playerWebSources,
+        rules: {
+          'no-restricted-imports': ['error', lowerLayerImports],
+          'no-restricted-globals': ['error', ...webAudioGlobals],
+          'no-restricted-properties': ['error', ...webAudioProperties],
+        },
+      },
+      {
+        files: engineDriverSources,
+        rules: {
+          'no-restricted-imports': ['error', engineDriverImports],
+        },
+      },
+      {
+        files: webAudioLayerSources,
+        rules: {
+          'no-restricted-globals': 'off',
+          'no-restricted-properties': 'off',
+        },
+      },
+      {
+        files: sceneSessionSources,
+        rules: {
+          'no-restricted-imports': ['error', sceneSessionImports],
+        },
+      },
+      {
+        files: familyViewSources,
+        rules: {
+          'no-restricted-imports': ['error', familyViewImports],
+        },
+      },
+      {
+        files: webHostSources,
+        rules: {
+          'no-restricted-imports': ['error', engineTypeImports],
+        },
+      },
+      {
+        files: webDemoSources,
+        rules: {
+          'no-restricted-imports': ['error', engineTypeImports],
+          'no-restricted-globals': ['error', ...webAudioGlobals],
+          'no-restricted-properties': ['error', ...webAudioProperties],
+        },
+      },
+      {
+        files: webDemoServiceSources,
+        rules: {
+          'no-restricted-imports': ['error', webDemoServiceImports],
         },
       },
       {

@@ -1,0 +1,86 @@
+// be-music course checklist fixture skin (LR2): the select screen.
+// It only has to exercise behaviour: the bar list, the PLAY / AUTO buttons (15 / 16), the filter and sort buttons
+// (10 / 11 / 12, 91-96), the course maker's finish / cancel buttons (230 / 231) and the course texts behind op 290. parts.png is four bands of colour,
+// 64 pixels each: grey, blue, orange, green (written by scripts/course-checklist/fixtures.ts).
+#INFORMATION,5,BE-MUSIC E2E,be-music,
+#ENDOFHEADER
+#STARTINPUT,0
+#IMAGE,LR2files\Theme\E2E\parts.png
+#FONT,16,1,0,sans-serif
+#FONT,12,1,0,sans-serif
+
+// Background.
+#SRC_IMAGE,0,0,0,0,64,64,1,1,0,0
+#DST_IMAGE,0,0,0,0,640,480,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+
+// Bars: one body per bar kind (song, folder, custom, new songs, rival, rival song, course folder, NEW COURSE,
+// course, random course), eleven slots with the cursor on slot 5.
+#SRC_BAR_BODY,0,0,0,64,64,32,1,1,0,0
+#SRC_BAR_BODY,1,0,0,128,64,32,1,1,0,0
+#SRC_BAR_BODY,2,0,0,128,64,32,1,1,0,0
+#SRC_BAR_BODY,3,0,0,128,64,32,1,1,0,0
+#SRC_BAR_BODY,4,0,0,128,64,32,1,1,0,0
+#SRC_BAR_BODY,5,0,0,64,64,32,1,1,0,0
+#SRC_BAR_BODY,6,0,0,192,64,32,1,1,0,0
+#SRC_BAR_BODY,7,0,0,192,64,32,1,1,0,0
+#SRC_BAR_BODY,8,0,0,192,64,32,1,1,0,0
+#SRC_BAR_BODY,9,0,0,192,64,32,1,1,0,0
+#DST_BAR_BODY_OFF,0,0,320,20,300,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#DST_BAR_BODY_OFF,1,0,320,52,300,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#DST_BAR_BODY_OFF,2,0,320,84,300,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#DST_BAR_BODY_OFF,3,0,320,116,300,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#DST_BAR_BODY_OFF,4,0,320,148,300,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#DST_BAR_BODY_OFF,5,0,320,180,300,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#DST_BAR_BODY_OFF,6,0,320,212,300,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#DST_BAR_BODY_OFF,7,0,320,244,300,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#DST_BAR_BODY_OFF,8,0,320,276,300,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#DST_BAR_BODY_OFF,9,0,320,308,300,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#DST_BAR_BODY_OFF,10,0,320,340,300,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#DST_BAR_BODY_ON,5,0,300,180,320,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#BAR_CENTER,5
+#BAR_AVAILABLE,0,10
+#SRC_BAR_TITLE,0,0
+#DST_BAR_TITLE,0,0,8,6,280,18,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+
+// PLAY (15) and AUTO (16): they start the song or the course under the cursor.
+#SRC_BUTTON,0,0,0,128,64,32,1,1,0,0,15,1,0,0
+#DST_BUTTON,0,0,10,390,140,80,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_BUTTON,0,0,0,192,64,32,1,1,0,0,16,1,0,0
+#DST_BUTTON,0,0,160,390,140,80,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+
+// The difficulty filter (10), the key filter (11) and the sort (12): each click steps to the next choice.
+#SRC_BUTTON,0,0,0,0,64,32,1,1,0,0,10,1,0,0
+#DST_BUTTON,0,0,10,100,80,40,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_BUTTON,0,0,0,0,64,32,1,1,0,0,11,1,0,0
+#DST_BUTTON,0,0,110,100,80,40,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_BUTTON,0,0,0,0,64,32,1,1,0,0,12,1,0,0
+#DST_BUTTON,0,0,210,100,80,40,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+// The difficulty filter set at once (91 ALL, 92 BEGINNER … 96 INSANE).
+#SRC_BUTTON,0,0,0,64,64,32,1,1,0,0,91,1,0,0
+#DST_BUTTON,0,0,10,150,40,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_BUTTON,0,0,0,64,64,32,1,1,0,0,92,1,0,0
+#DST_BUTTON,0,0,56,150,40,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_BUTTON,0,0,0,64,64,32,1,1,0,0,93,1,0,0
+#DST_BUTTON,0,0,102,150,40,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_BUTTON,0,0,0,64,64,32,1,1,0,0,94,1,0,0
+#DST_BUTTON,0,0,148,150,40,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_BUTTON,0,0,0,64,64,32,1,1,0,0,95,1,0,0
+#DST_BUTTON,0,0,194,150,40,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_BUTTON,0,0,0,64,64,32,1,1,0,0,96,1,0,0
+#DST_BUTTON,0,0,240,150,40,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+
+// Course maker: finish (230) and cancel (231) while a course is being made.
+#SRC_BUTTON,0,0,0,64,64,32,1,1,0,0,230,1,0,0
+#DST_BUTTON,0,0,10,300,140,60,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_BUTTON,0,0,0,0,64,32,1,1,0,0,231,1,0,0
+#DST_BUTTON,0,0,160,300,140,60,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+
+// A course bar under the cursor (op 290): its first stages' titles (texts 150-152).
+#IF,290
+#SRC_TEXT,0,1,150,0,0,0
+#DST_TEXT,0,0,10,20,300,14,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_TEXT,0,1,151,0,0,0
+#DST_TEXT,0,0,10,40,300,14,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_TEXT,0,1,152,0,0,0
+#DST_TEXT,0,0,10,60,300,14,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#ENDIF

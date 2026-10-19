@@ -1,10 +1,13 @@
 import {
+  describeCourseCard,
   formatPlayVariantLabel,
   resolveStageOrientation,
   resolveSongRowFacts,
   resolveSongStats,
   type BeMusicSelectLayout,
-  type BrowserBrowseEntry,
+  type LibraryEntry,
+  type LibraryCourse,
+  type LibraryFolder,
   type BeMusicSelectFrame,
   type BeMusicSurface,
   selectListRows,
@@ -82,6 +85,12 @@ function drawFocusedSong(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFram
   ctx.fillStyle = PANEL;
   ctx.fillRect(x, y, PANEL_W, 300);
   if (!song) {
+    if (frame.focusedCourse !== undefined) {
+      drawCourse(ctx, frame, frame.focusedCourse, x + 16, y, PANEL_W - 32);
+      button(ctx, frame, 'PLAY', x + 16, y + 236, 160, frame.actions.play, true);
+      button(ctx, frame, 'AUTO', x + 186, y + 236, 88, frame.actions.autoPlay, false);
+      return;
+    }
     text(ctx, 'Pick a folder', x + 16, y + 28, { size: 14, color: MUTED });
     return;
   }
@@ -128,6 +137,12 @@ function drawPortraitCard(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFra
   const song = frame.focusedSong;
   const left = card.x + 16;
   if (!song) {
+    if (frame.focusedCourse !== undefined) {
+      drawCourse(ctx, frame, frame.focusedCourse, left, card.y, card.w - 32);
+      button(ctx, frame, 'PLAY', play.x, play.y, play.w, frame.actions.play, true, play.h);
+      button(ctx, frame, 'AUTO', auto.x, auto.y, auto.w, frame.actions.autoPlay, false, auto.h);
+      return;
+    }
     text(ctx, 'Pick a folder', left, card.y + 28, { size: 14, color: MUTED });
     return;
   }
@@ -164,6 +179,24 @@ function drawPortraitCard(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFra
   button(ctx, frame, 'AUTO', auto.x, auto.y, auto.w, frame.actions.autoPlay, false, auto.h);
 }
 
+/** A focused course in place of a song: its name, its kind and stage count, and its stages (as many as fit). */
+function drawCourse(
+  ctx: CanvasRenderingContext2D,
+  frame: BeMusicSelectFrame,
+  course: NonNullable<BeMusicSelectFrame['focusedCourse']>,
+  x: number,
+  y: number,
+  width: number,
+): void {
+  const { nowMs } = frame;
+  const card = describeCourseCard(course, frame.courseRecord?.(course));
+  text(ctx, card.title, x, y + 28, { size: 18, weight: 800, maxWidth: width, nowMs });
+  text(ctx, card.detail, x, y + 52, { size: 11, color: MUTED, maxWidth: width, nowMs });
+  card.stages.slice(0, 6).forEach((stage, index) => {
+    text(ctx, `${index + 1}. ${stage}`, x, y + 86 + index * 22, { size: 12, maxWidth: width, nowMs });
+  });
+}
+
 function button(
   ctx: CanvasRenderingContext2D,
   frame: BeMusicSelectFrame,
@@ -186,7 +219,7 @@ function button(
 /** Draws one list row, its text centred on `midY`. */
 type RowDrawer = (
   ctx: CanvasRenderingContext2D,
-  entry: BrowserBrowseEntry,
+  entry: LibraryEntry,
   x: number,
   midY: number,
   w: number,
@@ -222,7 +255,7 @@ function drawList(
 
 function drawRow(
   ctx: CanvasRenderingContext2D,
-  entry: BrowserBrowseEntry,
+  entry: LibraryEntry,
   x: number,
   midY: number,
   w: number,
@@ -232,10 +265,15 @@ function drawRow(
   const dim = nowMs !== undefined ? TEXT : MUTED;
   if (entry.kind === 'folder') {
     text(ctx, `▸ ${entry.folder.label}`, x + 12, midY, { size: 12, weight: 700, maxWidth: w - 120, nowMs });
-    text(ctx, `${entry.folder.songs.length} charts`, x + w - 12, midY, { size: 11, color: dim, align: 'right' });
+    text(ctx, describeFolderSize(entry.folder), x + w - 12, midY, { size: 11, color: dim, align: 'right' });
     return;
   }
-  const song = entry.song;
+  if (entry.kind === 'course') {
+    text(ctx, entry.course.definition.name, x + 44, midY, { size: 12, weight: 700, maxWidth: w - 300, nowMs });
+    text(ctx, describeCourse(entry.course), x + w - 12, midY, { size: 11, color: dim, align: 'right', maxWidth: 236 });
+    return;
+  }
+  const song = entry.chart;
   const facts = resolveSongRowFacts(song);
   text(ctx, String(song.playLevel ?? '-'), x + 22, midY, { size: 12, weight: 800, align: 'center' });
   text(ctx, song.title, x + 44, midY, { size: 12, weight: 700, maxWidth: w - 300, nowMs });
@@ -254,7 +292,7 @@ function drawRow(
  */
 function drawPortraitRow(
   ctx: CanvasRenderingContext2D,
-  entry: BrowserBrowseEntry,
+  entry: LibraryEntry,
   x: number,
   midY: number,
   w: number,
@@ -264,10 +302,15 @@ function drawPortraitRow(
   const textW = w - 56;
   if (entry.kind === 'folder') {
     text(ctx, `▸ ${entry.folder.label}`, x + 12, midY - 8, { size: 13, weight: 700, maxWidth: w - 24, nowMs });
-    text(ctx, `${entry.folder.songs.length} charts`, x + 12, midY + 9, { size: 10, color: dim });
+    text(ctx, describeFolderSize(entry.folder), x + 12, midY + 9, { size: 10, color: dim });
     return;
   }
-  const song = entry.song;
+  if (entry.kind === 'course') {
+    text(ctx, entry.course.definition.name, x + 44, midY - 8, { size: 13, weight: 700, maxWidth: textW, nowMs });
+    text(ctx, describeCourse(entry.course), x + 44, midY + 9, { size: 10, color: dim, maxWidth: textW });
+    return;
+  }
+  const song = entry.chart;
   const facts = resolveSongRowFacts(song);
   text(ctx, String(song.playLevel ?? '-'), x + 22, midY, { size: 13, weight: 800, align: 'center' });
   text(ctx, song.title, x + 44, midY - 8, { size: 13, weight: 700, maxWidth: textW, nowMs });
@@ -277,4 +320,16 @@ function drawPortraitRow(
     maxWidth: textW,
     nowMs,
   });
+}
+
+/** A folder bar's size: its charts, or its courses for a course folder. */
+function describeFolderSize(folder: LibraryFolder): string {
+  return folder.courses !== undefined ? `${folder.courses.length} courses` : `${folder.charts.length} charts`;
+}
+
+/** A course bar's facts: its kind, its stage count, and how many stages are missing from the collection. */
+function describeCourse(course: LibraryCourse): string {
+  const missing = course.stages.filter((stage) => stage.chart === undefined).length;
+  const kind = course.definition.kind === 'grade' ? 'DAN' : course.definition.kind.toUpperCase();
+  return `${kind}   ${course.stages.length} STAGES${missing > 0 ? `   ${missing} MISSING` : ''}`;
 }

@@ -10,6 +10,7 @@
 // and `bpmgraph` destinations. Caches at the host level keyed by `song.id` — the analysis
 // is pure-data and stable for the chart's lifetime.
 
+import { resolveChart, resolveChartMainBpm } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
 import {
   collectBeatorajaChartTimedEntries,
@@ -81,9 +82,10 @@ export interface BeatorajaChartNoteDistribution {
   /** BPM transitions in playback time order. First entry is at `timeMs = 0`. */
   bpmSegments: ReadonlyArray<BeatorajaBpmSegment>;
   /**
-   * "Main" BPM — the BPM at which the most notes are played. Beatoraja's BPM graph
-   * normalises the y axis around this value, so segments at `mainBpm` paint at the
-   * vertical centre and segments at half / double map to the bottom / top edges.
+   * The chart's main BPM, the BPM the most judged notes sit at (`resolveChartMainBpm`, the one
+   * rule HS-FIX and the play log read too), else the initial BPM for a chart without notes.
+   * Beatoraja's BPM graph normalises the y axis around this value, so segments at `mainBpm`
+   * paint at the vertical centre and segments at half / double map to the bottom / top edges.
    */
   mainBpm: number;
   /** Minimum positive BPM observed (excluding stops). */
@@ -98,7 +100,8 @@ export interface BeatorajaChartNoteDistribution {
  * category. Returns the analysis bundle the bpmgraph + notes-graph renderers need.
  *
  * Mirrors `SkinNoteDistributionGraph.updateData()` for the per-bucket categorisation and
- * `SkinBPMGraph.updateGraph(BMSModel)` for the BPM segment + mainbpm computation.
+ * `SkinBPMGraph.updateGraph(BMSModel)` for the BPM segments. The main BPM is the chart's
+ * (`resolveChartMainBpm`), which `SkinBPMGraph` counts the same way.
  */
 export function computeBeatorajaChartNoteDistribution(chart: BeMusicJson): BeatorajaChartNoteDistribution {
   const measureBaseBeat = computeBeatorajaMeasureBaseBeats(chart);
@@ -128,7 +131,6 @@ export function computeBeatorajaChartNoteDistribution(chart: BeMusicJson): Beato
   // Walk and convert to wallclock ms. Track:
   //   - `bpmSegments`: list of (timeMs, bpm) BPM transitions. Stops emit `(stopStart, 0)`
   //     and `(stopEnd, prevBpm)` so the bpm-graph can render the magenta stop line.
-  //   - `bpmNoteCount`: per-BPM total note count for `mainBpm` resolution.
   //   - LN body span: per-lane (channel) tracking of open LNs so each bucket the LN
   //     covers gets its body cell incremented.
   const initialBpm = resolveBeatorajaInitialBpm(chart);
@@ -136,8 +138,6 @@ export function computeBeatorajaChartNoteDistribution(chart: BeMusicJson): Beato
   let timeMs = 0;
   let cursorBeat = 0;
   const bpmSegments: BeatorajaBpmSegment[] = [{ timeMs: 0, bpm: initialBpm }];
-  const bpmNoteCount = new Map<number, number>();
-  bpmNoteCount.set(initialBpm, 0);
   // Per-lane LN open state — `key = channel` (e.g. '11'), `value = startTimeMs`. Channel
   // mapping: BMS uses `1X` / `2X` for visible notes and `5X` / `6X` for LN-channel-style
   // longs; we treat both, plus `#LNOBJ`-marker LN closures on the visible channels.
@@ -156,7 +156,6 @@ export function computeBeatorajaChartNoteDistribution(chart: BeMusicJson): Beato
       // pre-stop time, then this branch installs the new BPM for forward time.
       bpm = e.bpm;
       bpmSegments.push({ timeMs, bpm });
-      if (!bpmNoteCount.has(bpm)) bpmNoteCount.set(bpm, 0);
     } else if (e.kind === 'stop') {
       // Stop emits a `(stopStart, 0)` then `(stopEnd, prevBpm)` segment pair so the bpm
       // graph can render a magenta horizontal at the stop region.
@@ -168,8 +167,6 @@ export function computeBeatorajaChartNoteDistribution(chart: BeMusicJson): Beato
       const isScratch = isScratchChannel(channel);
       const isLnChannel = channel[0] === '5' || channel[0] === '6';
       const isMine = channel[0] === 'D' || channel[0] === 'E' || channel[0] === 'd' || channel[0] === 'e';
-      // Tally for mainbpm computation.
-      bpmNoteCount.set(bpm, (bpmNoteCount.get(bpm) ?? 0) + 1);
       if (isMine) {
         noteEvents.push({ timeMs, category: NOTE_DISTRIBUTION_CATEGORIES.MINE });
         continue;
@@ -248,16 +245,9 @@ export function computeBeatorajaChartNoteDistribution(chart: BeMusicJson): Beato
   }
   const maxCount = Math.max(20, Math.min(100, Math.ceil(densest / 10) * 10));
 
-  // mainBpm = BPM with the most notes. Tied / no-notes case falls back to initialBpm.
-  let mainBpm = initialBpm;
-  let mainCount = -1;
-  for (const [b, count] of bpmNoteCount) {
-    if (b <= 0) continue;
-    if (count > mainCount) {
-      mainCount = count;
-      mainBpm = b;
-    }
-  }
+  // The chart's main BPM: one rule for the graph, the skin's main-BPM numbers, HS-FIX and the play log. A chart
+  // the walk found no notes in has none, so it skips resolving the chart.
+  const mainBpm = (noteEvents.length > 0 ? resolveChartMainBpm(resolveChart(chart)) : undefined) ?? initialBpm;
 
   // Min / max BPM — exclude stops (bpm = 0).
   let minBpm = Number.POSITIVE_INFINITY;

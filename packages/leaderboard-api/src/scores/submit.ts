@@ -3,6 +3,7 @@ import type { BatchItem } from 'drizzle-orm/batch';
 import {
   checkPlaylogEligibility,
   PLAYLOG_ENGINE_VERSION,
+  resolveRulesetResultLamp,
   simulatePlaylog,
   type BeMusicPlaylog,
   type PlaylogRulesetId,
@@ -10,16 +11,15 @@ import {
 } from '@be-music/player/playlog';
 import { refreshChartListing } from '../charts.ts';
 import type { Database } from '../db/client.ts';
-import { bestScore, chart, chartAlias, score, scoreResult } from '../db/schema.ts';
+import { bestScore, score, scoreResult } from '../db/schema.ts';
 import { rankOfExScore, countPlayers } from '../ranking.ts';
 import { mergeBestScores } from '../scoring/best.ts';
-import { resolveClearLamp, resolveMissCount, type ClearLamp } from '../scoring/lamp.ts';
-import { checkFingerprintDocument } from '../submission/documents.ts';
+import { clearLampRank, resolveMissCount } from '@be-music/player/ruleset';
 import { sha256Hex } from '../hash.ts';
-import { fileHashAliases, playedFileOf } from './played-file.ts';
+import { playedFileOf } from './played-file.ts';
+import { checkPlayedChart, gzipText, playedChartStatements, putChartDocument } from './played-chart.ts';
 import { byRulesetOrder, RULESET_IDS } from '../rulesets.ts';
 import { loadBestScores, toBestScoreRow } from './bests.ts';
-import { nextHasLongNotes, playlogHasLongNotes } from './long-notes.ts';
 
 export interface SubmissionInput {
   userId: string;
@@ -44,7 +44,8 @@ export interface RulesetOutcome {
   rulesetRevision: string;
   exScore: number;
   noteCount: number;
-  clearLamp: ClearLamp;
+  /** The clear lamp, by its rank (`clearLampRank`). */
+  clearLamp: number;
   missCount: number;
   rank: number;
   players: number;
@@ -83,30 +84,16 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
     };
   }
 
-  // L3: the play document must hash to the claimed play fingerprint.
-  const playCheck = checkFingerprintDocument(input.playDocument, playFingerprint);
-  if (!playCheck.ok) {
-    return { status: 'rejected', httpStatus: 422, reason: `play-document-${playCheck.reason}` };
+  const played = await checkPlayedChart(db, {
+    chartFingerprint,
+    playFingerprint,
+    playDocument: input.playDocument,
+    chartDocument: input.chartDocument,
+  });
+  if (!played.ok) {
+    return { status: 'rejected', httpStatus: played.httpStatus, reason: played.reason };
   }
-
-  const known = await db.query.chart.findFirst({ where: eq(chart.chartFingerprint, chartFingerprint) });
-  let chartRegistration: ChartRegistration | undefined;
-  if (known === undefined) {
-    if (input.chartDocument === undefined) {
-      return { status: 'rejected', httpStatus: 409, reason: 'chart-document-required' };
-    }
-    const chartCheck = checkFingerprintDocument(input.chartDocument, chartFingerprint);
-    if (!chartCheck.ok) {
-      return { status: 'rejected', httpStatus: 422, reason: `chart-document-${chartCheck.reason}` };
-    }
-    chartRegistration = { document: input.chartDocument };
-  }
-
-  // L4 holds trivially when the chart has no control flow (both fingerprints equal) or the play fingerprint was seen
-  // before; composing a chart document's outcomes for a new play fingerprint is not implemented yet.
-  const knownPlayFingerprints = known?.playFingerprints ?? [];
-  const verification =
-    chartFingerprint === playFingerprint || knownPlayFingerprints.includes(playFingerprint) ? 'L4' : 'L3';
+  const { verification } = played;
 
   const simulated = RULESET_IDS.map((ruleset) => ({ ruleset, result: simulatePlaylog(input.playlog, { ruleset }) }));
 
@@ -117,81 +104,25 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
   // written only once every file is stored, as before.
   const [currentBests] = await Promise.all([
     loadBestScores(db, input.userId, chartFingerprint, assisted),
-    gzip(input.playlogText).then((compressed) =>
+    gzipText(input.playlogText).then((compressed) =>
       blobs.put(playlogKey, compressed, {
         httpMetadata: { contentType: 'application/json', contentEncoding: 'gzip' },
       }),
     ),
-    chartRegistration === undefined
-      ? undefined
-      : blobs.put(documentKey(chartFingerprint), JSON.stringify(chartRegistration.document), {
-          httpMetadata: { contentType: 'application/json' },
-        }),
+    putChartDocument(blobs, played),
   ]);
   const playedRuleset = input.playlog.play.judgeRuleset ?? 'lr2';
   const figures = simulated.map(({ ruleset, result }) => {
-    const lamp = resolveClearLamp(result, ruleset);
-    const missCount = resolveMissCount(result);
+    const lamp = clearLampRank(resolveRulesetResultLamp(result, ruleset));
+    const missCount = resolveMissCount(result.judge);
     const current = currentBests.get(ruleset);
     const update = mergeBestScores(current, { scoreId, playedAt: now, exScore: result.exScore, lamp, missCount });
     const playedHere = (current?.playedHere ?? false) || playedRuleset === ruleset;
     return { ruleset, result, lamp, missCount, update, playedHere };
   });
 
-  const playedLongNotes = playlogHasLongNotes(input.playlog.chart);
-  const chartValues = chartRegistration
-    ? [
-        db
-          .insert(chart)
-          .values({
-            chartFingerprint,
-            title: input.playlog.chart.title ?? null,
-            artist: input.playlog.chart.artist ?? null,
-            subtitle: input.playlog.chart.subtitle ?? null,
-            genre: input.playlog.chart.genre ?? null,
-            playLevel: input.playlog.chart.playLevel ?? null,
-            difficulty: input.playlog.chart.difficulty ?? null,
-            sourceFormat: input.playlog.chart.sourceFormat,
-            laneMode: input.playlog.chart.laneMode,
-            total: input.playlog.chart.total ?? null,
-            lnMode: input.playlog.chart.lnMode,
-            hasLongNotes: playedLongNotes,
-            judgeRank: chartJudgeRank(input.playlog.chart.judgeRank),
-            noteCount: input.playlog.chart.noteCount,
-            playFingerprints: verification === 'L4' ? [playFingerprint] : [],
-            documentKey: documentKey(chartFingerprint),
-            createdAt: new Date(now),
-            updatedAt: new Date(now),
-          })
-          // A concurrent first submission of the same chart may have registered it already.
-          .onConflictDoNothing(),
-      ]
-    : [];
-  // What a known chart learns from this play, in one statement: charts registered before play logs carried the level
-  // take it from the first play that does, and whether the chart has long notes (see `nextHasLongNotes`).
-  const learned: Partial<typeof chart.$inferInsert> = {};
-  if (known !== undefined && known.playLevel === null && input.playlog.chart.playLevel !== undefined) {
-    learned.playLevel = input.playlog.chart.playLevel;
-    learned.difficulty = input.playlog.chart.difficulty ?? null;
-  }
-  const hasLongNotes = known === undefined ? undefined : nextHasLongNotes(known.hasLongNotes, playedLongNotes);
-  if (hasLongNotes !== undefined) learned.hasLongNotes = hasLongNotes;
-  const learnedValues =
-    Object.keys(learned).length > 0
-      ? [db.update(chart).set(learned).where(eq(chart.chartFingerprint, chartFingerprint))]
-      : [];
-  // The file hashes the client claims (`chart.sha256`, `chart.md5`). The server cannot check them without the file, so
-  // they only name the chart on other sites; well-formed ones are kept, lowercased.
-  const aliasValues = fileHashAliases(input.playlog.chart).map((alias) =>
-    db
-      .insert(chartAlias)
-      .values({ ...alias, chartFingerprint })
-      .onConflictDoNothing(),
-  );
   const statements: BatchItem<'sqlite'>[] = [
-    ...chartValues,
-    ...learnedValues,
-    ...aliasValues,
+    ...playedChartStatements(db, input.playlog, played, now),
     db.insert(score).values({
       id: scoreId,
       submissionId,
@@ -270,19 +201,11 @@ export function identifyPlay(playlog: BeMusicPlaylog, playFingerprint: string): 
   return JSON.stringify({ playFingerprint, play, inputs: playlog.inputs });
 }
 
-interface ChartRegistration {
-  document: unknown;
-}
-
-function documentKey(chartFingerprint: string): string {
-  return `charts/${chartFingerprint}.json`;
-}
-
 function toScoreResultRow(
   scoreId: string,
   ruleset: PlaylogRulesetId,
   result: PlaylogRulesetResult,
-  lamp: ClearLamp,
+  lamp: number,
   missCount: number,
 ): typeof scoreResult.$inferInsert {
   return {
@@ -323,7 +246,7 @@ async function loadOutcomes(
         rulesetRevision: row.rulesetRevision,
         exScore: row.exScore,
         noteCount: row.noteCount,
-        clearLamp: row.clearLamp as ClearLamp,
+        clearLamp: row.clearLamp,
         missCount: row.missCount,
         rank,
         players,
@@ -332,18 +255,4 @@ async function loadOutcomes(
     }),
   );
   return outcomes.sort(byRulesetOrder);
-}
-
-/** The chart's own judge rank, without the in-play changes (`timeline`). */
-function chartJudgeRank(judgeRank: { percent: number; sourceRank?: number; sourceExRank?: number }) {
-  return {
-    percent: judgeRank.percent,
-    ...(judgeRank.sourceRank !== undefined ? { sourceRank: judgeRank.sourceRank } : {}),
-    ...(judgeRank.sourceExRank !== undefined ? { sourceExRank: judgeRank.sourceExRank } : {}),
-  };
-}
-
-async function gzip(text: string): Promise<ArrayBuffer> {
-  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
-  return await new Response(stream).arrayBuffer();
 }

@@ -1,8 +1,8 @@
-import { createTimingResolver } from '@be-music/audio-renderer/triggers';
+import { createBeatAtSecondsResolverFromTimingResolver, createTimingResolver } from '@be-music/chart';
 import { createEmptyJson } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
-import { createUiFramePublisher } from './playback-support.ts';
-import { createBeatAtSecondsResolverFromTimingResolver } from './timeline.ts';
+import { createPlayerInputSignalBus } from './input-signal-bus.ts';
+import { createUiFramePublisher, recordPendingViewChanges } from './playback-support.ts';
 import type { PlayerUiFramePayload, PlayerUiSignalBus } from './ui-signal-bus.ts';
 
 function createCapturingUiSignals(): { uiSignals: PlayerUiSignalBus; frames: PlayerUiFramePayload[] } {
@@ -140,5 +140,21 @@ describe('createUiFramePublisher', () => {
     expect(frames).toHaveLength(1);
     expect(frames[0]?.displayBeat).toBeUndefined();
     expect(frames[0]?.reversalSeconds).toBeUndefined();
+  });
+});
+
+describe('recordPendingViewChanges', () => {
+  test('records the view changes left on the bus once the play ended, and drops the rest', () => {
+    const bus = createPlayerInputSignalBus();
+    bus.pushCommand({ kind: 'view', change: { hiSpeed: 3 } });
+    bus.pushCommand({ kind: 'toggle-pause' });
+    bus.pushCommand({ kind: 'view', change: { hiSpeed: 3.5 } });
+    const recorded: Array<[number, unknown]> = [];
+    recordPendingViewChanges(bus, { recordViewChange: (seconds, change) => recorded.push([seconds, change]) }, 42.5);
+    expect(recorded).toEqual([
+      [42.5, { hiSpeed: 3 }],
+      [42.5, { hiSpeed: 3.5 }],
+    ]);
+    expect(bus.drainCommands()).toEqual([]);
   });
 });

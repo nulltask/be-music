@@ -1,12 +1,18 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { computeChartFingerprint, computePlayFingerprint, drawRandomOutcomes } from '@be-music/chart';
 import { parseBms, resolveBmsControlFlowWithDraws } from '@be-music/parser';
-import type { BeMusicPlaylog } from '@be-music/player-web/runtime';
+import type { BeMusicCoursePlaylog, BeMusicPlaylog } from '@be-music/player/playlog';
 import {
+  courseStageChartFingerprint,
+  describeCourseLeaderboardResult,
   describeLeaderboardResult,
+  describeSkippedCourseSubmission,
   describeSkippedSubmission,
+  prepareCourseLeaderboardSubmission,
   prepareLeaderboardSubmission,
+  submitCourseToLeaderboard,
   submitToLeaderboard,
+  type CourseLeaderboardSubmission,
   type LeaderboardSubmission,
 } from './leaderboard.ts';
 
@@ -54,6 +60,11 @@ describe('prepareLeaderboardSubmission', () => {
     expect(prepareLeaderboardSubmission(recordedPlaylog({ aborted: true }), SOURCE, CHART_PATH)).toEqual({
       ok: false,
       reason: 'not-rankable',
+    });
+    // A play at another tempo is practice: skipped, with its own reason for the status line.
+    expect(prepareLeaderboardSubmission(recordedPlaylog({ tempo: 0.8 }), SOURCE, CHART_PATH)).toEqual({
+      ok: false,
+      reason: 'tempo',
     });
     const withoutFingerprint = recordedPlaylog();
     delete withoutFingerprint.chart.playFingerprint;
@@ -173,9 +184,131 @@ describe('describeLeaderboardResult', () => {
 describe('describeSkippedSubmission', () => {
   test('names why a play was not sent', () => {
     expect(describeSkippedSubmission('not-rankable')).toBe(
-      'Leaderboard: not submitted (auto play and aborted runs are not ranked)',
+      'Leaderboard: not submitted (auto play, aborted runs and course stages are not ranked)',
     );
+    expect(describeSkippedSubmission('tempo')).toMatch(/another tempo is practice/);
     expect(describeSkippedSubmission('missing-fingerprint')).toMatch(/no chart fingerprint/);
     expect(describeSkippedSubmission('fingerprint-mismatch')).toMatch(/does not match/);
+  });
+});
+
+describe('course submissions', () => {
+  const OTHER = parseBms(['#BPM 150', '#00112:01010101'].join('\n'));
+  const stageCharts = [
+    { chart: SOURCE, chartPath: CHART_PATH },
+    { chart: OTHER, chartPath: 'song/other.bms' },
+  ];
+
+  function courseLog(
+    play: Partial<BeMusicPlaylog['play']> = {},
+    withUnreachedFingerprint = true,
+  ): BeMusicCoursePlaylog {
+    const unreachedFingerprint = courseStageChartFingerprint(stageCharts[1]!);
+    return {
+      format: 'be-music-course-playlog',
+      version: 0,
+      course: { name: 'Dan', kind: 'grade', constraints: [], trophies: [] },
+      stages: [
+        { played: true, playlog: recordedPlaylog({ course: { kind: 'grade' }, ...play }) },
+        {
+          played: false,
+          facts: {
+            sourceFormat: 'bms',
+            laneMode: '7keys',
+            lnMode: 1,
+            judgeRank: { percent: 75 },
+            notes: { normal: 4, long: { 1: 0, 2: 0, 3: 0 } },
+          },
+          ...(withUnreachedFingerprint && unreachedFingerprint !== undefined
+            ? { chartFingerprint: unreachedFingerprint }
+            : {}),
+        },
+      ],
+    };
+  }
+
+  test('courseStageChartFingerprint fingerprints a stage chart as the recorder would', () => {
+    expect(courseStageChartFingerprint(stageCharts[0]!)).toBe(recordedPlaylog().chart.chartFingerprint);
+  });
+
+  test('prepareCourseLeaderboardSubmission rebuilds each played stage’s documents and sends each unreached chart', () => {
+    const prepared = prepareCourseLeaderboardSubmission(courseLog(), stageCharts);
+    expect(prepared.ok).toBe(true);
+    const { submission } = prepared as { ok: true; submission: CourseLeaderboardSubmission };
+    expect(submission.stages).toHaveLength(1);
+    // The server counts the unreached stage's notes from its chart.
+    expect(submission.stageCharts).toEqual([{ stage: 1, chart: OTHER }]);
+    expect(prepareCourseLeaderboardSubmission(courseLog(), [stageCharts[0]!, stageCharts[0]!])).toEqual({
+      ok: false,
+      reason: 'fingerprint-mismatch',
+    });
+    expect(prepareCourseLeaderboardSubmission(courseLog({ mode: 'auto' }), stageCharts)).toEqual({
+      ok: false,
+      reason: 'not-rankable',
+    });
+    expect(prepareCourseLeaderboardSubmission(courseLog({}, false), stageCharts)).toEqual({
+      ok: false,
+      reason: 'missing-fingerprint',
+    });
+    expect(prepareCourseLeaderboardSubmission(courseLog(), [{ chart: SOURCE, chartPath: 'song/chart.pms' }])).toEqual({
+      ok: false,
+      reason: 'fingerprint-mismatch',
+    });
+  });
+
+  test('submitCourseToLeaderboard resends with every stage’s chart document when asked', async () => {
+    const prepared = prepareCourseLeaderboardSubmission(courseLog(), stageCharts) as {
+      ok: true;
+      submission: CourseLeaderboardSubmission;
+    };
+    const accepted = {
+      courseScoreId: 'c1',
+      results: [
+        {
+          ruleset: 'beatoraja',
+          exScore: 8,
+          clearLamp: 1,
+          missCount: 4,
+          stagesPlayed: 1,
+          trophy: null,
+          rank: 3,
+          players: 7,
+          improved: { exScore: true, lamp: false, missCount: false },
+        },
+      ],
+    };
+    const responses = [
+      () => new Response(JSON.stringify({ user: { id: 'u' } })),
+      () => new Response(JSON.stringify({ error: 'chart-document-required' }), { status: 409 }),
+      () => new Response(JSON.stringify(accepted), { status: 201 }),
+    ];
+    const bodies: unknown[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === '/api/v0/course-scores') {
+        const stream = (init!.body as Blob).stream().pipeThrough(new DecompressionStream('gzip'));
+        bodies.push(JSON.parse(await new Response(stream).text()));
+      }
+      return responses.shift()!();
+    }) as typeof fetch;
+    const result = await submitCourseToLeaderboard(prepared.submission, { fetch: fetchImpl });
+    expect(result).toEqual({ status: 'accepted', ...accepted });
+    expect(bodies).toMatchObject([
+      { stages: [{}], stageCharts: [{ stage: 1 }] },
+      { stages: [{ chartDocument: {} }], stageCharts: [{ stage: 1 }] },
+    ]);
+    expect((bodies[0] as { stages: object[] }).stages[0]).not.toHaveProperty('chartDocument');
+    expect(describeCourseLeaderboardResult(result, 'beatoraja')).toBe(
+      'Leaderboard course beatoraja: #3 / 7 · EX 8 · new best EX',
+    );
+    expect(describeCourseLeaderboardResult({ status: 'failed', httpStatus: 422, error: 'aborted' }, 'lr2')).toBe(
+      'Leaderboard: course not submitted (aborted)',
+    );
+  });
+
+  test('describeSkippedCourseSubmission names why a run was not sent', () => {
+    expect(describeSkippedCourseSubmission('not-rankable')).toMatch(/auto play and aborted stages/);
+    expect(describeSkippedCourseSubmission('tempo')).toMatch(/another tempo is practice/);
+    expect(describeSkippedCourseSubmission('missing-fingerprint')).toMatch(/no fingerprint/);
+    expect(describeSkippedCourseSubmission('fingerprint-mismatch')).toMatch(/does not match/);
   });
 });

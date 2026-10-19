@@ -21,8 +21,9 @@ import { clampToReversal } from './judge-core-score.ts';
 import { applyJudgeToSummary } from './scoring.ts';
 
 /**
- * The judge core of AUTO play: every note resolves as a PGREAT when chart time reaches it (long notes at the head
- * and, for charge modes, again at the tail), and mines / invisible notes retire once their window has passed.
+ * The judge core of AUTO play: every judgment resolves as a PGREAT when chart time reaches it — a tap note and a charge
+ * note's head at the note, an LN's one judgment and a charge note's tail at the tail, as AUTO SCRATCH and beatoraja's
+ * autoplay do — and mines / invisible notes retire once their window has passed.
  *
  * Like the manual judge core it holds its state in an explicit object, changes it only through
  * {@link runAutoJudgeStep}, reads no clock and reports what happened as {@link JudgeCoreEffect}s. The `autoPlay`
@@ -169,11 +170,13 @@ function autoBadWindowSeconds(config: AutoJudgeConfig): number {
   return judgeWindowLateReachUs(config.ruleset.windows.note) / 1e6;
 }
 
+/** Scores a PGREAT for `note` at `seconds`; `publishFrame` false leaves the frame to the caller. */
 function applyAutoPerfect(
   state: AutoJudgeState,
   note: TimedPlayableNote,
   seconds: number,
   emit: JudgeCoreEffectSink,
+  publishFrame = true,
 ): void {
   applyJudgeToSummary(state.summary, 'PERFECT', state.scoreTracker);
   const previousGauge = state.summary.gauge?.current;
@@ -199,7 +202,7 @@ function applyAutoPerfect(
     ],
   });
   emit({ kind: 'judge-combo', judge: 'PERFECT', combo: state.combo, channel: note.channel });
-  emit({ kind: 'frame', seconds });
+  if (publishFrame) emit({ kind: 'frame', seconds });
 }
 
 function applyDueJudgements(state: AutoJudgeState, referenceSeconds: number, emit: JudgeCoreEffectSink): void {
@@ -230,6 +233,11 @@ function applyDueJudgements(state: AutoJudgeState, referenceSeconds: number, emi
         endSeconds,
       });
       insertPendingAutoLongNote(state.pendingLongNotes, note, endSeconds);
+      if (longNoteScoresTail(ruleset.longNoteStyle, note)) {
+        // Charge modes judge the head and the tail separately: AUTO clears the head now and the tail at the tail, as
+        // AUTO SCRATCH and beatoraja's autoplay do. The frame below publishes it.
+        applyAutoPerfect(state, note, note.seconds, emit, false);
+      }
       emit({
         kind: 'ui',
         command: {
@@ -267,11 +275,8 @@ function drainPendingLongNotes(state: AutoJudgeState, referenceSeconds: number, 
       event: pending.note.event,
       endSeconds: pending.endSeconds,
     });
+    // The LN's one judgment, or a charge note's tail (its head was cleared at the head).
     applyAutoPerfect(state, pending.note, pending.endSeconds, emit);
-    if (longNoteScoresTail(state.config.ruleset.longNoteStyle, pending.note)) {
-      // Charge modes judge the head and the tail separately; auto play clears both as PGREAT.
-      applyAutoPerfect(state, pending.note, pending.endSeconds, emit);
-    }
     // Pair the head's `hold-lane-until-beat` so the LN-hold timer and the lane laser fade out at the tail.
     emit({ kind: 'ui', command: { kind: 'long-note-end', channel: pending.note.channel, outcome: 'complete' } });
     emit({ kind: 'ui', command: { kind: 'release-lane', channel: pending.note.channel } });

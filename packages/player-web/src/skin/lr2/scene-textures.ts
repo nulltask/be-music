@@ -2,7 +2,8 @@ import { Texture } from 'pixi.js';
 import { type Lr2Skin, type Lr2SpecialGraphic, LR2_SPECIAL_GRAPHIC, isLr2SpecialGraphic } from '@be-music/lr2-skin';
 import { destroyTextureAndRevokeBlobUrl, loadSkinAssetTexture, loadTextureFromBytes } from './textures.ts';
 import { loadAssetBytes, resolveChartImageAsset, resolveSongSource } from '../../collection/collection.ts';
-import type { BrowserSongCollection, BrowserSongEntry } from '../../collection/types.ts';
+import type { LibraryChart } from '@be-music/scene-model';
+import type { BrowserSongAssetSource, BrowserSongCollection } from '../../collection/types.ts';
 
 type TextureLoadValidity = () => boolean;
 type SkinTexturePathCollector = (paths: Set<string>, skin: Lr2Skin) => void;
@@ -64,7 +65,29 @@ export class Lr2ChartGraphicTextureStore {
 
   public resolve(
     collection: BrowserSongCollection,
-    song: BrowserSongEntry,
+    song: LibraryChart,
+    path: Lr2SpecialGraphic,
+    onLoaded: () => void,
+  ): Texture | undefined {
+    return this.resolveWith(() => resolveSongSource(collection, song), song, path, onLoaded);
+  }
+
+  /**
+   * As {@link resolve}, for a chart whose files are `source`: the texture of `path` for `song` once loaded, the solid
+   * one for `*BLACK` / `*WHITE`. Without a source nothing loads.
+   */
+  public resolveFromSource(
+    source: BrowserSongAssetSource | undefined,
+    song: LibraryChart,
+    path: Lr2SpecialGraphic,
+    onLoaded: () => void,
+  ): Texture | undefined {
+    return this.resolveWith(() => source, song, path, onLoaded);
+  }
+
+  private resolveWith(
+    resolveSource: () => BrowserSongAssetSource | undefined,
+    song: LibraryChart,
     path: Lr2SpecialGraphic,
     onLoaded: () => void,
   ): Texture | undefined {
@@ -79,7 +102,7 @@ export class Lr2ChartGraphicTextureStore {
     }
     if (!this.pending.has(cacheKey)) {
       this.pending.add(cacheKey);
-      void this.load(collection, song, path, cacheKey, onLoaded);
+      void this.load(resolveSource, song, path, cacheKey, onLoaded);
     }
     return undefined;
   }
@@ -94,8 +117,8 @@ export class Lr2ChartGraphicTextureStore {
   }
 
   private async load(
-    collection: BrowserSongCollection,
-    song: BrowserSongEntry,
+    resolveSource: () => BrowserSongAssetSource | undefined,
+    song: LibraryChart,
     path: Lr2SpecialGraphic,
     cacheKey: string,
     onLoaded: () => void,
@@ -105,7 +128,7 @@ export class Lr2ChartGraphicTextureStore {
       if (!assetPath) {
         return;
       }
-      const source = resolveSongSource(collection, song);
+      const source = resolveSource();
       if (!source) {
         return;
       }
@@ -158,7 +181,7 @@ export function collectDecideSkinTexturePaths(skin: Lr2Skin): Set<string> {
   return collectSkinTexturePaths(skin, [addImageTexturePaths, addNumberTexturePaths]);
 }
 
-function resolveSpecialGraphicAssetPath(song: BrowserSongEntry, path: Lr2SpecialGraphic): string | undefined {
+function resolveSpecialGraphicAssetPath(song: LibraryChart, path: Lr2SpecialGraphic): string | undefined {
   const meta = song.chart.metadata;
   return path === LR2_SPECIAL_GRAPHIC.BACKBMP
     ? meta.backBmp
@@ -252,7 +275,7 @@ export function resolveSolidSpecialGraphicTexture(path: Lr2SpecialGraphic): Text
   return path === LR2_SPECIAL_GRAPHIC.BLACK || path === LR2_SPECIAL_GRAPHIC.WHITE ? Texture.WHITE : undefined;
 }
 
-function chartGraphicCacheKey(song: BrowserSongEntry, path: Lr2SpecialGraphic): string {
+function chartGraphicCacheKey(song: LibraryChart, path: Lr2SpecialGraphic): string {
   return `${song.id}:${path}`;
 }
 

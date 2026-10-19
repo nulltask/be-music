@@ -1,6 +1,29 @@
-import type { RandomDraw } from '@be-music/chart';
-import type { GrooveGaugeType } from '../core/groove-gauge.ts';
-import type { LongNoteMode } from '../playable-notes.ts';
+import type { LongNoteMode, RandomDraw } from '@be-music/chart';
+import { GAUGE_TYPES, isGaugeType, type GaugeType } from '../ruleset/gauge-type.ts';
+import type { CourseGaugeSet, CourseJudgeConstraint, RulesetCourseKind } from '../ruleset/course.ts';
+import type { PlaylogRulesetId } from '../ruleset/definitions.ts';
+import {
+  parsePlaylogTempoChanges,
+  parsePlaylogViewChanges,
+  parsePlaylogViewState,
+  type PlaylogTempoChange,
+  type PlaylogViewChange,
+  type PlaylogViewState,
+} from './view.ts';
+import {
+  expectFiniteNumber,
+  expectNonNegativeInteger,
+  expectRecord,
+  expectString,
+  optionalFiniteNumber,
+  optionalString,
+  parseRandomDraws,
+  parseRecorder,
+  parseResults,
+  PlaylogParseError,
+} from './parse.ts';
+
+export { PlaylogParseError } from './parse.ts';
 
 /**
  * be-music play-log ("playlog") format.
@@ -62,6 +85,12 @@ export interface PlaylogInputEvent {
   channels: string[];
   /** Raw input tokens (`'z'`, `'shift-left'`, ...) — diagnostic only; simulators use `channels`. */
   tokens?: string[];
+  /**
+   * An `up` the engine inferred: the input reported no key releases (a terminal without the kitty keyboard protocol),
+   * so this is the instant the engine took the key as let go — when its repeats stopped for longer than the hold
+   * grace. Diagnostic only: replays and simulators read it as any release.
+   */
+  inferred?: true;
 }
 
 export interface PlaylogJudgeRank {
@@ -76,6 +105,12 @@ export interface PlaylogJudgeRank {
   sourceExRank?: number;
   /** Dynamic `#EXRANKxx` changes (channel `A0`), in chart order. Values share the `100 = NORMAL` unit. */
   timeline?: Array<{ timeUs: number; exRankValue: number }>;
+  /**
+   * A stitched LR2 NONSTOP play's later stages taking over the judge rank with their `#RANK`, in time order: from
+   * `timeUs` on, the windows a chart opening with `rank` gets (`'chart'`) or LR2's NONSTOP rank table
+   * (`'lr2-nonstop'`). Absent in logs recorded before it existed, which played with the first stage's rank throughout.
+   */
+  stageRanks?: Array<{ timeUs: number; rank: number; table: 'chart' | 'lr2-nonstop' }>;
 }
 
 export interface PlaylogChart {
@@ -128,14 +163,14 @@ export interface PlaylogPlay {
   mode: 'manual' | 'auto';
   autoScratch: boolean;
   /** Gauge the player selected for the session (declared by the host; LR2-family gauge id). */
-  gauge: GrooveGaugeType;
+  gauge: GaugeType;
   /** Lane-arrangement option per side, when the host applied one (`'OFF'` / `'MIRROR'` / `'RANDOM'` / ...). */
   randomLane?: { p1?: string; p2?: string };
   dpFlip?: boolean;
   /** Debug BAD-window override (`PlayerOptions.judgeWindowMs`) — simulations of such plays are non-standard. */
   judgeWindowOverrideMs?: number;
   /** Judge-window ruleset the live engine ran (`PlayerOptions.judgeRuleset`). Absent = `'lr2'` (the default). */
-  judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
+  judgeRuleset?: PlaylogRulesetId;
   /**
    * The play's `#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` outcomes (`RandomDraws` from `@be-music/chart`): one
    * entry per such line of the chart, in file order. With the chart file, `resolveBmsControlFlowWithDraws(json,
@@ -150,8 +185,55 @@ export interface PlaylogPlay {
    * nothing from it on. Re-simulations stop there instead of missing the rest of the chart. Absent on older logs.
    */
   abortedAtUs?: number;
+  /**
+   * True when the play ended the moment its survival gauge emptied (`PlayerOptions.endOnFailure`): nothing after the
+   * judgment that emptied it counts. Absent on older logs, which kept judging to the end.
+   */
+  endOnFailure?: boolean;
+  /** Set when the play was one stage of a course: what the stage's rules and starting state were. */
+  course?: PlaylogCourseStage;
+  /**
+   * The play tempo (`PlayerOptions.speed`): the chart, its audio and the play clock ran `tempo` times as fast (0.5 to
+   * 1.5 in the web player). Judgments and input times stay in chart time, so a re-simulation is unaffected; a replay
+   * plays back at the same tempo. Absent = 1, and on a log re-recorded from a replay (`replayInputs`), whose speed only
+   * sets how fast it is re-driven. A play at another tempo is a practice play and is not ranked. This is the tempo at
+   * the start; {@link tempoChanges} lists the changes during the play.
+   */
+  tempo?: number;
+  /** Tempo changes during the play, in chart-time order (the web player lets the tempo change mid-play). */
+  tempoChanges?: PlaylogTempoChange[];
+  /** What the player saw at the start: hi-speed, hi-speed fix, lane covers and lift. Judgments do not depend on it. */
+  view?: PlaylogViewState;
+  /** Changes to {@link view} during the play, in chart-time order. */
+  viewChanges?: PlaylogViewChange[];
   /** Lossless bag for host-specific settings that don't affect simulation (hi-speed, skin, ...). */
   native?: Record<string, string | number | boolean | null>;
+}
+
+/** The course context a stage was played in. A stage log replays on its own with it. */
+export interface PlaylogCourseStage {
+  kind: RulesetCourseKind;
+  /** The course's `gauge_*` constraint (beatoraja's class-gauge set), when it named one. */
+  gaugeSet?: CourseGaugeSet;
+  /** The course's `no_good` / `no_great` constraint. */
+  judge?: CourseJudgeConstraint;
+  /** The state the previous stage left. Absent for the first stage, which starts on a full gauge and no combo. */
+  carryIn?: PlaylogCourseCarry;
+  /**
+   * A stage cut out of a NONSTOP play: the FIT time-stretch it was played at (its notes keep the stretched times; 1
+   * without FIT). Display only; the log replays as recorded.
+   */
+  rate?: number;
+}
+
+/** The state carried from one course stage into the next. */
+export interface PlaylogCourseCarry {
+  /** Gauge value in percent. */
+  gauge: number;
+  /** The course-wide combo running into the stage. */
+  combo: number;
+  /** The course-wide max combo so far. */
+  maxCombo: number;
 }
 
 export interface PlaylogJudgeCounts {
@@ -192,6 +274,8 @@ export interface PlaylogRulesetResult {
   /** IIDX DJ LEVEL label (`'AAA'`..`'F'`) where the ruleset defines one. */
   djLevel?: string;
   gauge: PlaylogGaugeResult;
+  /** For a course stage: the course-wide combo and max combo the stage left, which the next stage carries in. */
+  course?: { combo: number; maxCombo: number };
 }
 
 /**
@@ -251,13 +335,6 @@ export function resolvePlaylogFilename(playlog: BeMusicPlaylog, when?: Date): st
   return `${stem}-${timestamp}${PLAYLOG_FILE_SUFFIX}`;
 }
 
-export class PlaylogParseError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'PlaylogParseError';
-  }
-}
-
 /**
  * Parses (and defensively validates) a serialized playlog. Accepts either the JSON text or an already-parsed
  * value. Throws {@link PlaylogParseError} with a field-path message on structural problems; unknown extra fields
@@ -303,17 +380,6 @@ export function parsePlaylog(source: unknown): BeMusicPlaylog {
   };
 }
 
-const RECORDER_KEYS = ['name', 'version', 'build', 'engine', 'platform'] as const;
-
-function parseRecorder(recorder: Record<string, unknown>): PlaylogRecorderInfo {
-  const parsed: PlaylogRecorderInfo = {};
-  for (const key of RECORDER_KEYS) {
-    const value = optionalString(recorder[key], `recorder.${key}`);
-    if (value !== undefined) parsed[key] = value;
-  }
-  return parsed;
-}
-
 function parseChart(chart: Record<string, unknown>): PlaylogChart {
   const sourceFormat = chart.sourceFormat;
   if (sourceFormat !== 'bms' && sourceFormat !== 'bmson') {
@@ -325,10 +391,12 @@ function parseChart(chart: Record<string, unknown>): PlaylogChart {
     sourceRank: optionalFiniteNumber(judgeRankRaw.sourceRank, 'chart.judgeRank.sourceRank'),
     sourceExRank: optionalFiniteNumber(judgeRankRaw.sourceExRank, 'chart.judgeRank.sourceExRank'),
     timeline: parseJudgeRankTimeline(judgeRankRaw.timeline),
+    stageRanks: parseStageRanks(judgeRankRaw.stageRanks),
   };
   if (judgeRank.sourceRank === undefined) delete judgeRank.sourceRank;
   if (judgeRank.sourceExRank === undefined) delete judgeRank.sourceExRank;
   if (judgeRank.timeline === undefined) delete judgeRank.timeline;
+  if (judgeRank.stageRanks === undefined) delete judgeRank.stageRanks;
 
   const notesRaw = chart.notes;
   if (!Array.isArray(notesRaw)) {
@@ -394,6 +462,26 @@ function parseJudgeRankTimeline(value: unknown): PlaylogJudgeRank['timeline'] {
   });
 }
 
+function parseStageRanks(value: unknown): PlaylogJudgeRank['stageRanks'] {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw new PlaylogParseError('chart.judgeRank.stageRanks: expected an array');
+  }
+  return value.map((entry, index) => {
+    const path = `chart.judgeRank.stageRanks[${index}]`;
+    const record = expectRecord(entry, path);
+    const table = record.table;
+    if (table !== 'chart' && table !== 'lr2-nonstop') {
+      throw new PlaylogParseError(`${path}.table: expected 'chart' or 'lr2-nonstop'`);
+    }
+    return {
+      timeUs: expectFiniteNumber(record.timeUs, `${path}.timeUs`),
+      rank: expectFiniteNumber(record.rank, `${path}.rank`),
+      table,
+    };
+  });
+}
+
 const PLAYLOG_NOTE_TYPES: ReadonlySet<string> = new Set(['normal', 'long', 'mine', 'invisible', 'freezone']);
 
 function parseNote(value: unknown, index: number): PlaylogNote {
@@ -447,11 +535,15 @@ function parseInputs(value: unknown): PlaylogInputEvent[] {
       }
       event.tokens = record.tokens as string[];
     }
+    if (record.inferred !== undefined) {
+      if (record.inferred !== true || action !== 'up') {
+        throw new PlaylogParseError(`inputs[${index}].inferred: expected true on an 'up'`);
+      }
+      event.inferred = true;
+    }
     return event;
   });
 }
-
-const GAUGE_TYPES: ReadonlySet<string> = new Set(['GROOVE', 'HARD', 'DEATH', 'EASY']);
 
 function parsePlay(play: Record<string, unknown>): PlaylogPlay {
   const mode = play.mode;
@@ -459,13 +551,13 @@ function parsePlay(play: Record<string, unknown>): PlaylogPlay {
     throw new PlaylogParseError(`play.mode: expected 'manual' | 'auto'`);
   }
   const gauge = play.gauge;
-  if (typeof gauge !== 'string' || !GAUGE_TYPES.has(gauge)) {
-    throw new PlaylogParseError(`play.gauge: expected one of ${[...GAUGE_TYPES].join(' | ')}`);
+  if (!isGaugeType(gauge)) {
+    throw new PlaylogParseError(`play.gauge: expected one of ${GAUGE_TYPES.join(' | ')}`);
   }
   const parsed: PlaylogPlay = {
     mode,
     autoScratch: play.autoScratch === true,
-    gauge: gauge as GrooveGaugeType,
+    gauge,
   };
   if (play.randomLane !== undefined) {
     const randomLane = expectRecord(play.randomLane, 'play.randomLane');
@@ -485,10 +577,26 @@ function parsePlay(play: Record<string, unknown>): PlaylogPlay {
     parsed.judgeRuleset = play.judgeRuleset;
   }
   if (play.randomDraws !== undefined) {
-    parsed.randomDraws = parseRandomDraws(play.randomDraws);
+    parsed.randomDraws = parseRandomDraws(play.randomDraws, 'play.randomDraws');
   }
   if (play.aborted !== undefined) parsed.aborted = play.aborted === true;
   if (play.abortedAtUs !== undefined) parsed.abortedAtUs = expectFiniteNumber(play.abortedAtUs, 'play.abortedAtUs');
+  if (play.endOnFailure !== undefined) parsed.endOnFailure = play.endOnFailure === true;
+  if (play.course !== undefined) parsed.course = parseCourseStage(expectRecord(play.course, 'play.course'));
+  if (play.tempo !== undefined) {
+    const tempo = expectFiniteNumber(play.tempo, 'play.tempo');
+    if (!(tempo > 0)) throw new PlaylogParseError('play.tempo: expected a positive number');
+    if (tempo !== 1) parsed.tempo = tempo;
+  }
+  if (play.tempoChanges !== undefined) {
+    const changes = parsePlaylogTempoChanges(play.tempoChanges, 'play.tempoChanges');
+    if (changes.length > 0) parsed.tempoChanges = changes;
+  }
+  if (play.view !== undefined) parsed.view = parsePlaylogViewState(expectRecord(play.view, 'play.view'), 'play.view');
+  if (play.viewChanges !== undefined) {
+    const changes = parsePlaylogViewChanges(play.viewChanges, 'play.viewChanges');
+    if (changes.length > 0) parsed.viewChanges = changes;
+  }
   if (play.native !== undefined) {
     const native = expectRecord(play.native, 'play.native');
     const copied: Record<string, string | number | boolean | null> = {};
@@ -502,94 +610,35 @@ function parsePlay(play: Record<string, unknown>): PlaylogPlay {
   return parsed;
 }
 
-const RANDOM_DRAW_COMMANDS: ReadonlySet<string> = new Set(['RANDOM', 'SETRANDOM', 'SWITCH', 'SETSWITCH']);
+const COURSE_KINDS: ReadonlySet<string> = new Set(['grade', 'expert', 'nonstop']);
+const COURSE_GAUGE_SETS: ReadonlySet<string> = new Set(['lr2', '5k', '7k', '9k', '24k']);
+const COURSE_JUDGE_CONSTRAINTS: ReadonlySet<string> = new Set(['no-good', 'no-great']);
 
-function parseRandomDraws(value: unknown): RandomDraw[] {
-  if (!Array.isArray(value)) {
-    throw new PlaylogParseError('play.randomDraws: expected an array');
+function parseCourseStage(course: Record<string, unknown>): PlaylogCourseStage {
+  if (typeof course.kind !== 'string' || !COURSE_KINDS.has(course.kind)) {
+    throw new PlaylogParseError(`play.course.kind: expected 'grade' | 'expert' | 'nonstop'`);
   }
-  return value.map((entry: unknown, index): RandomDraw => {
-    const path = `play.randomDraws[${index}]`;
-    const draw = expectRecord(entry, path);
-    const { command, range, value: drawn } = draw;
-    if (typeof command !== 'string' || !RANDOM_DRAW_COMMANDS.has(command)) {
-      throw new PlaylogParseError(`${path}.command: expected 'RANDOM' | 'SETRANDOM' | 'SWITCH' | 'SETSWITCH'`);
+  const parsed: PlaylogCourseStage = { kind: course.kind as RulesetCourseKind };
+  if (course.gaugeSet !== undefined) {
+    if (typeof course.gaugeSet !== 'string' || !COURSE_GAUGE_SETS.has(course.gaugeSet)) {
+      throw new PlaylogParseError(`play.course.gaugeSet: expected 'lr2' | '5k' | '7k' | '9k' | '24k'`);
     }
-    if (typeof range !== 'number' || !Number.isInteger(range) || range < 1) {
-      throw new PlaylogParseError(`${path}.range: expected a positive integer`);
+    parsed.gaugeSet = course.gaugeSet as CourseGaugeSet;
+  }
+  if (course.judge !== undefined) {
+    if (typeof course.judge !== 'string' || !COURSE_JUDGE_CONSTRAINTS.has(course.judge)) {
+      throw new PlaylogParseError(`play.course.judge: expected 'no-good' | 'no-great'`);
     }
-    const fixed = command === 'SETRANDOM' || command === 'SETSWITCH';
-    if (typeof drawn !== 'number' || !Number.isInteger(drawn) || drawn < 1 || (fixed ? range !== 1 : drawn > range)) {
-      throw new PlaylogParseError(`${path}.value: expected an integer in 1..range (range 1 for a #SET… line)`);
-    }
-    return { command: command as RandomDraw['command'], range, value: drawn };
-  });
-}
-
-function parseResults(results: Record<string, unknown>): Record<string, PlaylogRulesetResult> {
-  const parsed: Record<string, PlaylogRulesetResult> = {};
-  for (const [key, raw] of Object.entries(results)) {
-    const record = expectRecord(raw, `results.${key}`);
-    const judge = expectRecord(record.judge, `results.${key}.judge`);
-    const gauge = expectRecord(record.gauge, `results.${key}.gauge`);
-    const result: PlaylogRulesetResult = {
-      ruleset: expectString(record.ruleset, `results.${key}.ruleset`),
-      judge: {
-        pgreat: expectFiniteNumber(judge.pgreat, `results.${key}.judge.pgreat`),
-        great: expectFiniteNumber(judge.great, `results.${key}.judge.great`),
-        good: expectFiniteNumber(judge.good, `results.${key}.judge.good`),
-        bad: expectFiniteNumber(judge.bad, `results.${key}.judge.bad`),
-        poor: expectFiniteNumber(judge.poor, `results.${key}.judge.poor`),
-        emptyPoor: expectFiniteNumber(judge.emptyPoor, `results.${key}.judge.emptyPoor`),
-      },
-      fast: expectFiniteNumber(record.fast, `results.${key}.fast`),
-      slow: expectFiniteNumber(record.slow, `results.${key}.slow`),
-      exScore: expectFiniteNumber(record.exScore, `results.${key}.exScore`),
-      noteCount: expectFiniteNumber(record.noteCount, `results.${key}.noteCount`),
-      maxCombo: expectFiniteNumber(record.maxCombo, `results.${key}.maxCombo`),
-      gauge: {
-        type: expectString(gauge.type, `results.${key}.gauge.type`),
-        final: expectFiniteNumber(gauge.final, `results.${key}.gauge.final`),
-        cleared: gauge.cleared === true,
-      },
+    parsed.judge = course.judge as CourseJudgeConstraint;
+  }
+  if (course.carryIn !== undefined) {
+    const carry = expectRecord(course.carryIn, 'play.course.carryIn');
+    parsed.carryIn = {
+      gauge: expectFiniteNumber(carry.gauge, 'play.course.carryIn.gauge'),
+      combo: expectNonNegativeInteger(carry.combo, 'play.course.carryIn.combo'),
+      maxCombo: expectNonNegativeInteger(carry.maxCombo, 'play.course.carryIn.maxCombo'),
     };
-    if (gauge.failedMidPlay !== undefined) result.gauge.failedMidPlay = gauge.failedMidPlay === true;
-    const score = optionalFiniteNumber(record.score, `results.${key}.score`);
-    if (score !== undefined) result.score = score;
-    const djLevel = optionalString(record.djLevel, `results.${key}.djLevel`);
-    if (djLevel !== undefined) result.djLevel = djLevel;
-    parsed[key] = result;
   }
+  if (course.rate !== undefined) parsed.rate = expectFiniteNumber(course.rate, 'play.course.rate');
   return parsed;
-}
-
-function expectRecord(value: unknown, path: string): Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new PlaylogParseError(`${path}: expected an object`);
-  }
-  return value as Record<string, unknown>;
-}
-
-function expectString(value: unknown, path: string): string {
-  if (typeof value !== 'string') {
-    throw new PlaylogParseError(`${path}: expected a string`);
-  }
-  return value;
-}
-
-function optionalString(value: unknown, path: string): string | undefined {
-  if (value === undefined) return undefined;
-  return expectString(value, path);
-}
-
-function expectFiniteNumber(value: unknown, path: string): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new PlaylogParseError(`${path}: expected a finite number`);
-  }
-  return value;
-}
-
-function optionalFiniteNumber(value: unknown, path: string): number | undefined {
-  if (value === undefined) return undefined;
-  return expectFiniteNumber(value, path);
 }

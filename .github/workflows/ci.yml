@@ -51,7 +51,8 @@ jobs:
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           filters: |
-            # The packages scripts/bench measures (PACKAGE_NAMES in scripts/bench/exports.types.ts) and the bench itself.
+            # The packages scripts/bench measures (PACKAGE_NAMES in scripts/bench/exports.types.ts; a test in
+            # scripts/bench/affected-packages.test.ts checks this list against it) and the bench itself.
             bench:
               - 'packages/utils/**'
               - 'packages/json/**'
@@ -61,8 +62,10 @@ jobs:
               - 'packages/editor/**'
               - 'packages/audio-renderer/**'
               - 'packages/player/**'
+              - 'packages/scene-model/**'
               - 'packages/player-tui/**'
               - 'packages/lr2-skin/**'
+              - 'packages/beatoraja-skin/**'
               - 'packages/skin-sdk/**'
               - 'packages/player-web/**'
               - 'scripts/bench/**'

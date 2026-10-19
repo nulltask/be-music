@@ -33,11 +33,9 @@ import {
   isFlashingGreat,
   judgeDisplayWord,
   loadingDots,
-  resolveGameplayLayout,
   type BeMusicGameplayRuntime,
   type BeMusicGameplayLayout,
   type BeMusicLayoutLane,
-  wideStage,
   STAGE_BGA_BAND,
   STAGE_HEIGHT as DESIGN_HEIGHT,
   STAGE_SIDE_COLUMN,
@@ -111,17 +109,8 @@ export function renderPhantomChrome({
  * Built-in gameplay chrome for the default skin family, drawn in the "Phantom" poster style (see `style.ts`): ink-black
  * ground, blood-red slabs and a halftone floor wedge, slanted paper plates, and condensed italic type. It is
  * intentionally not an LR2 atlas facsimile: this path is the skinless experience, so it keeps only the information a
- * player can act on while playing. Lays the frame out on the 16:9 stage itself; skins receive the layout from the host
- * instead (see {@link renderPhantomChrome}).
+ * player can act on while playing. Draws on the layout the host resolved (see {@link renderPhantomChrome}).
  */
-export function renderDefaultGameplayFrame(
-  layer: Container,
-  runtime: FallbackGameplayRuntime = {},
-  options: FallbackGameplayRenderOptions = {},
-): void {
-  renderChromeFrame(layer, runtime, resolveGameplayLayout(runtime, wideStage), options);
-}
-
 function renderChromeFrame(
   layer: Container,
   runtime: FallbackGameplayRuntime,
@@ -184,15 +173,6 @@ function renderChromeFrame(
   if (runtime.loading) drawLoading(frontLayer, runtime.nowMs ?? 0, playfield, frontPool);
   else if (!covered) drawJudgements(frontLayer, runtime, playfield, frontPool, effects.amount);
 }
-
-/**
- * Compatibility alias for older callers. New code should use {@link renderDefaultGameplayFrame}.
- *
- * The explicit `typeof` annotation keeps `--isolatedDeclarations` happy — without it the d.ts generator
- * (`rolldown-plugin-dts`) can't infer the exported binding's type from the right-hand expression, which fails
- * the build with `TS9010: Variable must have an explicit type annotation`.
- */
-export const renderFallbackLr2Frame: typeof renderDefaultGameplayFrame = renderDefaultGameplayFrame;
 
 /** Steps the audio-driven halftone radius is quantized to — well under a pixel, so the swell still reads smooth. */
 const HALFTONE_LEVELS = 32;

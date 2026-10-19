@@ -4,14 +4,14 @@ import {
   type BeatorajaPlayableVariant,
   type BeatorajaThemeBundle,
 } from '@be-music/player-web/skin';
-import { resolveChartPlayVariant, type BrowserSongEntry } from '@be-music/player-web/collection';
+import { resolveLibraryChartPlayVariant, type LibraryChart } from '@be-music/scene-model';
 
 /**
  * Maps a song's parsed chart variant onto the `{ keys, isDouble, isPms }` shape `pickBeatorajaPlayableVariant`
  * expects. Pure derivation — no state, no side effects.
  */
-export function chartShapeFor(song: BrowserSongEntry): { keys: number; isDouble: boolean; isPms: boolean } {
-  const variant = resolveChartPlayVariant(song);
+export function chartShapeFor(song: LibraryChart): { keys: number; isDouble: boolean; isPms: boolean } {
+  const variant = resolveLibraryChartPlayVariant(song);
   // `'48'` is the DP form of the 24-key keyboard mode, so it reports 24 keys per side plus `isDouble` — the same
   // per-side convention the IIDX `'14'` / `'10'` variants use.
   const keys =
@@ -40,7 +40,7 @@ export function chartShapeFor(song: BrowserSongEntry): { keys: number; isDouble:
  */
 export function resolveBeatorajaSkinVariant(
   bundle: BeatorajaThemeBundle | undefined,
-  song: BrowserSongEntry,
+  song: LibraryChart,
 ): BeatorajaPlayableVariant | undefined {
   if (!bundle) return undefined;
   const desired = pickBeatorajaPlayableVariant(chartShapeFor(song));
@@ -52,6 +52,6 @@ export function resolveBeatorajaSkinVariant(
  * Quick predicate — `true` when the loaded beatoraja theme can render this song's gameplay scene. Threads through
  * {@link resolveBeatorajaSkinVariant} so the answer matches what the play path would actually mount.
  */
-export function canPlaySongBeatoraja(bundle: BeatorajaThemeBundle | undefined, song: BrowserSongEntry): boolean {
+export function canPlaySongBeatoraja(bundle: BeatorajaThemeBundle | undefined, song: LibraryChart): boolean {
   return resolveBeatorajaSkinVariant(bundle, song) !== undefined;
 }

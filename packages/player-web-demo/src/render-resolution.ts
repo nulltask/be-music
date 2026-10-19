@@ -45,9 +45,11 @@ export function parseStoredRenderResolution(stored: string | null): number | und
 }
 
 /** The resolution the player picked (by hand or by auto-detect), or `undefined` before any pick. */
-export function readStoredRenderResolution(): number | undefined {
+export function readStoredRenderResolution(
+  storage: Pick<Storage, 'getItem'> | undefined = defaultStorage(),
+): number | undefined {
   try {
-    return parseStoredRenderResolution(window.localStorage.getItem(RENDER_RESOLUTION_STORAGE_KEY));
+    return parseStoredRenderResolution(storage?.getItem(RENDER_RESOLUTION_STORAGE_KEY) ?? null);
   } catch {
     // Storage blocked — treat as not picked.
     return undefined;
@@ -59,6 +61,14 @@ export function storeRenderResolution(value: number): void {
     window.localStorage.setItem(RENDER_RESOLUTION_STORAGE_KEY, String(value));
   } catch {
     // Private windows / blocked storage: the pick still applies for this session.
+  }
+}
+
+function defaultStorage(): Storage | undefined {
+  try {
+    return typeof window === 'undefined' ? undefined : window.localStorage;
+  } catch {
+    return undefined;
   }
 }
 

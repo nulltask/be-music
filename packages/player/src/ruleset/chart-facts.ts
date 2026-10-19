@@ -1,7 +1,7 @@
-import { resolveChart, resolveChartLongNoteMode, type ResolvedChart } from '@be-music/chart';
+import { resolveChart, resolveChartLongNoteMode, type LongNoteMode, type ResolvedChart } from '@be-music/chart';
 import { type BeMusicJson } from '@be-music/json';
 import { resolveJudgeRankPercent } from '../core/judge-window.ts';
-import type { LongNoteMode, TimedPlayableNote } from '../playable-notes.ts';
+import type { TimedPlayableNote } from '../playable-notes.ts';
 import { createEmptyRulesetNoteCounts, type RulesetChartFacts } from './facts.ts';
 
 /**
@@ -49,6 +49,7 @@ export function rulesetChartFactsFromChart(
   json: BeMusicJson,
   chart: EngineRulesetChartInput,
   dynamicJudgeRankChanges: ReadonlyArray<{ seconds: number; exRankValue: number }> = [],
+  stageRanks: ReadonlyArray<{ seconds: number; rank: number; table: 'chart' | 'lr2-nonstop' }> = [],
 ): RulesetChartFacts {
   const resolved = chart.resolvedChart ?? resolveChart(json);
   const chartLnMode = resolved.lnMode;
@@ -70,6 +71,13 @@ export function rulesetChartFactsFromChart(
     judgeRank.timeline = dynamicJudgeRankChanges.map((change) => ({
       timeUs: Math.round(change.seconds * 1_000_000),
       exRankValue: change.exRankValue,
+    }));
+  }
+  if (stageRanks.length > 0) {
+    judgeRank.stageRanks = stageRanks.map((change) => ({
+      timeUs: Math.round(change.seconds * 1_000_000),
+      rank: change.rank,
+      table: change.table,
     }));
   }
 

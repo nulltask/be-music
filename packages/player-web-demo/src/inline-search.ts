@@ -64,7 +64,10 @@ export class InlineSearch {
   private following = 0;
   private inline = false;
 
-  constructor(private readonly host: InlineSearchHost) {
+  private readonly host: InlineSearchHost;
+
+  constructor(host: InlineSearchHost) {
+    this.host = host;
     const { input } = host;
     input.addEventListener('input', (event) => {
       if ((event as InputEvent).isComposing) return;

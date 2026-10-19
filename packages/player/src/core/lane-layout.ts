@@ -9,8 +9,6 @@ import {
 } from '@be-music/chart';
 import { normalizeChannel } from '@be-music/json';
 
-export type { ChartPlayVariant };
-
 export interface ChannelLike {
   channel: string;
 }

@@ -1,0 +1,92 @@
+{
+  "type": 5,
+  "name": "be-music e2e select",
+  "w": 640,
+  "h": 480,
+  "fadeout": 200,
+  "scene": 3600000,
+  "input": 0,
+  "source": [{ "id": 0, "path": "parts.png" }],
+  "font": [],
+  "image": [
+    { "id": "bg", "src": 0, "x": 0, "y": 0, "w": 64, "h": 64 },
+    { "id": "bar-song", "src": 0, "x": 0, "y": 64, "w": 64, "h": 32 },
+    { "id": "bar-folder", "src": 0, "x": 0, "y": 128, "w": 64, "h": 32 },
+    { "id": "bar-table", "src": 0, "x": 0, "y": 128, "w": 64, "h": 32 },
+    { "id": "bar-grade", "src": 0, "x": 0, "y": 192, "w": 64, "h": 32 },
+    { "id": "bar-nograde", "src": 0, "x": 0, "y": 192, "w": 64, "h": 32 },
+    { "id": "bar-command", "src": 0, "x": 0, "y": 128, "w": 64, "h": 32 },
+    { "id": "bar-search", "src": 0, "x": 0, "y": 128, "w": 64, "h": 32 },
+    { "id": "bar-nosong", "src": 0, "x": 0, "y": 0, "w": 64, "h": 32 },
+    { "id": "button_play", "src": 0, "x": 0, "y": 128, "w": 64, "h": 32, "act": 15 },
+    { "id": "button_autoplay", "src": 0, "x": 0, "y": 192, "w": 64, "h": 32, "act": 16 },
+    { "id": "button_mode", "src": 0, "x": 0, "y": 128, "w": 64, "h": 32, "act": 11 },
+    { "id": "button_sort", "src": 0, "x": 0, "y": 192, "w": 64, "h": 32, "act": 12 },
+    { "id": "course-marker", "src": 0, "x": 0, "y": 192, "w": 64, "h": 64 }
+  ],
+  "imageset": [
+    {
+      "id": "bar",
+      "images": [
+        "bar-song",
+        "bar-folder",
+        "bar-table",
+        "bar-grade",
+        "bar-nograde",
+        "bar-command",
+        "bar-search",
+        "bar-nosong"
+      ]
+    }
+  ],
+  "text": [
+    { "id": "bartext", "font": 0, "size": 16 },
+    { "id": "course1", "font": 0, "size": 16, "ref": 150 },
+    { "id": "course2", "font": 0, "size": 16, "ref": 151 },
+    { "id": "course3", "font": 0, "size": 16, "ref": 152 }
+  ],
+  "songlist": {
+    "id": "songlist",
+    "center": 5,
+    "clickable": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    "listoff": [
+      { "id": "bar", "dst": [{ "x": 320, "y": 440, "w": 300, "h": 30 }] },
+      { "id": "bar", "dst": [{ "x": 320, "y": 408, "w": 300, "h": 30 }] },
+      { "id": "bar", "dst": [{ "x": 320, "y": 376, "w": 300, "h": 30 }] },
+      { "id": "bar", "dst": [{ "x": 320, "y": 344, "w": 300, "h": 30 }] },
+      { "id": "bar", "dst": [{ "x": 320, "y": 312, "w": 300, "h": 30 }] },
+      { "id": "bar", "dst": [{ "x": 320, "y": 280, "w": 300, "h": 30 }] },
+      { "id": "bar", "dst": [{ "x": 320, "y": 248, "w": 300, "h": 30 }] },
+      { "id": "bar", "dst": [{ "x": 320, "y": 216, "w": 300, "h": 30 }] },
+      { "id": "bar", "dst": [{ "x": 320, "y": 184, "w": 300, "h": 30 }] },
+      { "id": "bar", "dst": [{ "x": 320, "y": 152, "w": 300, "h": 30 }] },
+      { "id": "bar", "dst": [{ "x": 320, "y": 120, "w": 300, "h": 30 }] }
+    ],
+    "liston": [
+      { "id": "bar", "dst": [{ "x": 320, "y": 440, "w": 300, "h": 30 }] },
+      { "id": "bar", "dst": [{ "x": 320, "y": 408, "w": 300, "h": 30 }] },
+      { "id": "bar", "dst": [{ "x": 320, "y": 376, "w": 300, "h": 30 }] },
+      { "id": "bar", "dst": [{ "x": 320, "y": 344, "w": 300, "h": 30 }] },
+      { "id": "bar", "dst": [{ "x": 320, "y": 312, "w": 300, "h": 30 }] },
+      { "id": "bar", "dst": [{ "x": 300, "y": 280, "w": 320, "h": 30 }] },
+      { "id": "bar", "dst": [{ "x": 320, "y": 248, "w": 300, "h": 30 }] },
+      { "id": "bar", "dst": [{ "x": 320, "y": 216, "w": 300, "h": 30 }] },
+      { "id": "bar", "dst": [{ "x": 320, "y": 184, "w": 300, "h": 30 }] },
+      { "id": "bar", "dst": [{ "x": 320, "y": 152, "w": 300, "h": 30 }] },
+      { "id": "bar", "dst": [{ "x": 320, "y": 120, "w": 300, "h": 30 }] }
+    ],
+    "text": [{ "id": "bartext", "dst": [{ "x": 8, "y": 6, "w": 16, "h": 18 }] }]
+  },
+  "destination": [
+    { "id": "bg", "dst": [{ "x": 0, "y": 0, "w": 640, "h": 480 }] },
+    { "id": "songlist" },
+    { "id": "button_play", "dst": [{ "x": 10, "y": 10, "w": 140, "h": 80 }] },
+    { "id": "button_autoplay", "dst": [{ "x": 160, "y": 10, "w": 140, "h": 80 }] },
+    { "id": "button_mode", "dst": [{ "x": 10, "y": 430, "w": 140, "h": 40 }] },
+    { "id": "button_sort", "dst": [{ "x": 160, "y": 430, "w": 140, "h": 40 }] },
+    { "id": "course-marker", "op": [3], "dst": [{ "x": 10, "y": 380, "w": 20, "h": 20 }] },
+    { "id": "course1", "op": [3], "dst": [{ "x": 40, "y": 380, "w": 260, "h": 16 }] },
+    { "id": "course2", "op": [3], "dst": [{ "x": 40, "y": 356, "w": 260, "h": 16 }] },
+    { "id": "course3", "op": [3], "dst": [{ "x": 40, "y": 332, "w": 260, "h": 16 }] }
+  ]
+}

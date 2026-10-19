@@ -5,7 +5,8 @@ vi.mock('./audio-sink.ts', async () => (await import('./test-support/player-fixt
 
 import { createEmptyJson } from '../../json/src/index.ts';
 import { parseChart } from '../../parser/src/index.ts';
-import { autoPlay, manualPlay, preparePlaybackChartData } from './index.ts';
+import { autoPlay, manualPlay } from './index.ts';
+import { preparePlaybackChartData } from './core/bootstrap.ts';
 import { parsePlaylog, serializePlaylog, type BeMusicPlaylog } from './playlog/index.ts';
 import {
   resetAudioSinkState,

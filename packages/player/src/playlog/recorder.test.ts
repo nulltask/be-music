@@ -196,11 +196,16 @@ describe('playlog recorder', () => {
     recorder.recordInput('down', 1.234567, ['z'], sourceChannels);
     sourceChannels.push('19'); // later mutation must not leak into the recorded event
     recorder.recordInput('up', 1.3, [], new Set(['11', '12']));
+    // A release the engine inferred is marked; the mark means nothing on a press.
+    recorder.recordInput('down', 1.4, ['x'], ['13'], true);
+    recorder.recordInput('up', 1.52, ['x'], ['13'], true);
 
     const playlog = recorder.finalize({ summary: makeSummary() });
     expect(playlog.inputs).toEqual([
       { seq: 0, timeUs: 1_234_567, action: 'down', channels: ['11'], tokens: ['z'] },
       { seq: 1, timeUs: 1_300_000, action: 'up', channels: ['11', '12'] },
+      { seq: 2, timeUs: 1_400_000, action: 'down', channels: ['13'], tokens: ['x'] },
+      { seq: 3, timeUs: 1_520_000, action: 'up', channels: ['13'], tokens: ['x'], inferred: true },
     ]);
   });
 
@@ -258,6 +263,23 @@ describe('playlog recorder', () => {
         gauge: { type: 'GROOVE', final: 88.5, cleared: true },
       },
     });
+  });
+
+  test('finalize records a course stage, the end-on-failure flag and the course combo the stage left', () => {
+    const course = { kind: 'grade', carryIn: { gauge: 55, combo: 3, maxCombo: 40 } } as const;
+    const recorder = createPlaylogRecorder(
+      makeRecorderOptions({ play: { mode: 'manual', autoScratch: false, endOnFailure: true, course } }),
+    );
+    const playlog = recorder.finalize({ summary: makeSummary({ course: { combo: 8, maxCombo: 40 } }) });
+
+    expect(playlog.play).toMatchObject({ endOnFailure: true, course });
+    expect(playlog.play.course).not.toBe(course);
+    expect(playlog.results?.native?.course).toEqual({ combo: 8, maxCombo: 40 });
+    // Without the flag nothing is written: older logs read as "kept judging".
+    const plain = createPlaylogRecorder(
+      makeRecorderOptions({ play: { mode: 'manual', autoScratch: false, endOnFailure: false } }),
+    );
+    expect(plain.finalize({ summary: makeSummary() }).play.endOnFailure).toBeUndefined();
   });
 
   test('finalize defaults: GROOVE gauge, maxCombo 0, declared gauge when the summary has none', () => {
@@ -428,5 +450,34 @@ describe('playlog recorder', () => {
     expect(playlog.chart).not.toHaveProperty('chartFingerprint');
     expect(playlog.chart).not.toHaveProperty('playFingerprint');
     expect(playlog.chart.title).toBe('My Song');
+  });
+});
+
+describe('view and tempo changes', () => {
+  test('records the starting view, view changes and tempo changes in chart time, and parses them back', async () => {
+    const { parsePlaylog, serializePlaylog } = await import('./format.ts');
+    const recorder = createPlaylogRecorder(
+      makeRecorderOptions({
+        play: {
+          mode: 'manual',
+          autoScratch: false,
+          tempo: 0.9,
+          view: { hiSpeed: 2, covers: [{ side: '1P', sudden: 0.2, hidden: 0, lift: 0 }] },
+        },
+      }),
+    );
+    recorder.recordViewChange(1.5, { hiSpeed: 2.5 });
+    recorder.recordViewChange(2, {});
+    recorder.recordTempoChange(1, 0.9);
+    recorder.recordTempoChange(2.25, 1.1);
+    const playlog = recorder.finalize({ summary: makeSummary() });
+    expect(playlog.play).toMatchObject({
+      tempo: 0.9,
+      view: { hiSpeed: 2, covers: [{ side: '1P', sudden: 0.2, hidden: 0, lift: 0 }] },
+      // An empty change and a change to the tempo already in force are dropped.
+      viewChanges: [{ timeUs: 1_500_000, hiSpeed: 2.5 }],
+      tempoChanges: [{ timeUs: 2_250_000, tempo: 1.1 }],
+    });
+    expect(parsePlaylog(serializePlaylog(playlog)).play).toEqual(playlog.play);
   });
 });

@@ -6,6 +6,8 @@ export default defineConfig({
     packageDir: import.meta.dirname,
     entries: {
       index: 'src/index.ts',
+      ids: 'src/ids/index.ts',
+      state: 'src/state/index.ts',
     },
   }),
 });

@@ -32,7 +32,7 @@ export interface NoteBreakdown {
 
 /**
  * Compute the chart's per-kind note breakdown. Returns a fresh `NoteBreakdown` — caller is
- * expected to cache by `BrowserSongEntry` reference (see select scene's WeakMap).
+ * expected to cache by `LibraryChart` reference (see select scene's WeakMap).
  */
 export function computeBeatorajaNoteBreakdown(chart: BeMusicJson): NoteBreakdown {
   const result: NoteBreakdown = { normal: 0, ln: 0, scratch: 0, bss: 0 };

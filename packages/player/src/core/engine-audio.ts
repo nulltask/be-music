@@ -7,13 +7,14 @@ import {
   isPlayLaneSoundChannel,
   parseBmsDynamicVolumeGain,
   usesMonophonicWavPlayback,
+  volWavToLinearGain,
   type ResolvedChart,
+  type TimedSampleTrigger,
 } from '@be-music/chart';
 import { floatToInt16, throwIfAborted } from '@be-music/utils/core';
 import { type BeMusicEvent, normalizeChannel, normalizeObjectKey, resolveBmsBase } from '@be-music/json';
-import { type RenderResult, type TimedSampleTrigger, renderSingleSample } from '@be-music/audio-renderer';
+import { type RenderResult, renderSingleSample } from '@be-music/audio-renderer';
 import { type TimedPlayableNote } from '../playable-notes.ts';
-import { resolveChartVolWavGain } from '../utils.ts';
 import { createNodeAudioSink, type AudioSink } from '../audio-sink.ts';
 import { LANDMINE_EXPLOSION_SAMPLE_KEY } from './judge-core.ts';
 import { delay, PAUSE_POLL_INTERVAL_MS } from './engine-clock.ts';
@@ -124,7 +125,7 @@ export async function createAudioSessionIfEnabled(
   const masterVolume = normalizeMasterVolume(options.volume);
   const bgmVolume = normalizeBgmVolume(options.bgmVolume, masterVolume);
   const playVolume = normalizePlayVolume(options.playVolume, masterVolume);
-  const chartWavGain = resolveChartVolWavGain(json);
+  const chartWavGain = volWavToLinearGain(json.bms.volWav);
   const lnobjEndEvents = collectLnobjEndEvents(json);
   const runtimeSampleRate = RUNTIME_AUDIO_SAMPLE_RATE;
 

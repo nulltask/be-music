@@ -2,15 +2,16 @@ import type { MessagePort } from 'node:worker_threads';
 import type { LogEntry } from '@be-music/utils/log';
 import type { RandomDraws } from '@be-music/chart';
 import type { BeMusicJson, BeMusicPlayLevel } from '@be-music/json';
-import type { PlayerInputCommand } from '@be-music/player/core/input-signal-bus';
-import type { PlayerInterruptReason, PlayerLoadProgress, PlayerSummary } from '@be-music/player/core/engine';
-import type { PlayerUiCommand, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
+import type {
+  PlayerInputCommand,
+  PlayerJudgeComboSignalState,
+  PlayerUiCommand,
+  PlayerUiFramePayload,
+} from '@be-music/player/signals';
+import type { PlayerInterruptReason, PlayerLoadProgress, PlayerSummary } from '@be-music/player';
 import type { LaneBinding } from '../manual-input.ts';
-import type { PlayerJudgeComboSignalState } from '@be-music/player/state-signals';
-import type { ImageResizeAlgorithm } from '@be-music/player/image-resize-algorithm';
-import type { TuiNoteHeight } from '@be-music/player/core/ui-options';
-import type { JudgeWindowRuleset } from '@be-music/player/core/judge-window';
-import type { GrooveGaugeType } from '@be-music/player/core/groove-gauge';
+import type { ImageResizeAlgorithm, TuiNoteHeight } from '@be-music/player/display';
+import type { GaugeType, PlaylogRulesetId } from '@be-music/player/ruleset';
 
 export interface NodeGameplayWorkerPlayOptions {
   inferBmsLnTypeWhenMissing?: boolean;
@@ -31,8 +32,8 @@ export interface NodeGameplayWorkerPlayOptions {
   imageResizeAlgorithm?: ImageResizeAlgorithm;
   highSpeed?: number;
   judgeWindowMs?: number;
-  judgeRuleset?: JudgeWindowRuleset;
-  gauge?: GrooveGaugeType;
+  judgeRuleset?: PlaylogRulesetId;
+  gauge?: GaugeType;
   debugActiveAudio?: boolean;
   leadInMs?: number;
   audio?: boolean;
@@ -60,6 +61,11 @@ export interface NodeGameplayWorkerInitData {
   mode: 'auto' | 'manual';
   autoScratch?: boolean;
   playOptions: NodeGameplayWorkerPlayOptions;
+  /**
+   * The terminal had negotiated a stateful keyboard protocol before the play (`hasNegotiatedStatefulKeyboardProtocol`):
+   * the worker's input runtime declares that its keys report their releases (`PlayerInputRuntime.reportsKeyReleases`).
+   */
+  inputReportsKeyReleases?: boolean;
 }
 
 export interface NodeGameplayUiRuntimeInit {

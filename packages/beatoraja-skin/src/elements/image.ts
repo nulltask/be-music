@@ -70,7 +70,7 @@ export interface BeatorajaImageElement {
    *   - `308` LN_MODE_CYCLE, `11` KEYS_FILTER, `12` SORT.
    *
    * Default `0` = "no action" (decorative sprite). The host scene resolves the code into its
-   * real action — see `scene/beatoraja/select.ts handleButtonAction` for the mapping.
+   * real action — see `@be-music/player-web`'s `view/beatoraja/select-view.ts` (`handleButtonAction`) for the mapping.
    */
   act: number;
   /**

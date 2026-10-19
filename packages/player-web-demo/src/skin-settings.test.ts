@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import type { BeMusicSkinSetting } from '@be-music/player-web/skin';
+import type { BeMusicSkinSetting } from '@be-music/skin-sdk';
 import {
   describeSkinSettingControllers,
   parseStoredSkinSettings,

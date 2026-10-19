@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import type { BeMusicJson } from '@be-music/json';
+import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { computeBeatorajaChartNoteDistribution, NOTE_DISTRIBUTION_CATEGORIES } from './note-distribution.ts';
 
 function makeChart(
@@ -8,18 +8,19 @@ function makeChart(
   resources?: { bpm?: Record<string, number>; stop?: Record<string, number> },
   lnObjs?: string[],
 ): BeMusicJson {
-  return {
-    metadata: { bpm, title: 'test' } as unknown as BeMusicJson['metadata'],
-    events: events.map((e) => ({
-      measure: e.measure ?? 0,
-      channel: e.channel,
-      position: (e.pos ?? [0, 1]) as unknown as BeMusicJson['events'][0]['position'],
-      value: e.value ?? '01',
-    })),
-    measures: [],
-    bms: { lnObjs: lnObjs ?? [] } as unknown as BeMusicJson['bms'],
-    resources: { bpm: resources?.bpm ?? {}, stop: resources?.stop ?? {} } as unknown as BeMusicJson['resources'],
-  } as unknown as BeMusicJson;
+  const chart = createEmptyJson('bms');
+  chart.metadata.bpm = bpm;
+  chart.metadata.title = 'test';
+  chart.events = events.map((e) => ({
+    measure: e.measure ?? 0,
+    channel: e.channel,
+    position: e.pos ?? [0, 1],
+    value: e.value ?? '01',
+  }));
+  chart.bms.lnObjs = lnObjs ?? [];
+  chart.resources.bpm = resources?.bpm ?? {};
+  chart.resources.stop = resources?.stop ?? {};
+  return chart;
 }
 
 describe('computeBeatorajaChartNoteDistribution', () => {
@@ -110,6 +111,28 @@ describe('computeBeatorajaChartNoteDistribution', () => {
     expect(out.mainBpm).toBe(180);
     expect(out.minBpm).toBe(120);
     expect(out.maxBpm).toBe(180);
+  });
+
+  it("counts only the judged notes toward mainBpm, as beatoraja's TimeLine.getTotalNotes does", () => {
+    // At 120: two taps and a long note's head. At 180: the long note's end (not judged under LN) and three mines.
+    const chart = makeChart(
+      [
+        { channel: '11', pos: [0, 1] },
+        { channel: '12', pos: [0, 1] },
+        { channel: '51', pos: [1, 2] },
+        { channel: '08', value: 'XX', measure: 1 },
+        { channel: '51', pos: [1, 2], measure: 1 },
+        { channel: 'D1', pos: [1, 4], measure: 1 },
+        { channel: 'D2', pos: [1, 4], measure: 1 },
+        { channel: 'D3', pos: [1, 4], measure: 1 },
+      ],
+      120,
+      { bpm: { XX: 180 } },
+    );
+    const out = computeBeatorajaChartNoteDistribution(chart);
+    expect(out.mainBpm).toBe(120);
+    // The distribution still shows the mines.
+    expect(out.buckets.reduce((sum, bucket) => sum + bucket[NOTE_DISTRIBUTION_CATEGORIES.MINE]!, 0)).toBe(3);
   });
 
   it('emits stop pairs as `(stopStart, 0)` and `(stopEnd, prevBpm)` segments', () => {

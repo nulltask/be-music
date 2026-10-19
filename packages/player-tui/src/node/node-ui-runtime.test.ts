@@ -3,8 +3,7 @@ import { isAbortError } from '@be-music/utils/core';
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { WorkerOptions } from 'node:worker_threads';
 import { createEmptyJson } from '../../../json/src/index.ts';
-import { createPlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
-import { createPlayerStateSignals } from '@be-music/player/state-signals';
+import { createPlayerStateSignals, createPlayerUiSignalBus } from '@be-music/player/signals';
 
 type MockWorker = EventEmitter & {
   postMessage: ReturnType<typeof vi.fn>;

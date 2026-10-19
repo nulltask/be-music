@@ -9,6 +9,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    "erasableSyntaxOnly": true,
     "types": ["node"]
   }
 }

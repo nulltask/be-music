@@ -25,7 +25,7 @@ export class SpectrumHistory {
   /** Fraction of a tick carried over between pushes. */
   private carry = 0;
 
-  public constructor(bands = AUDIO_BAND_COUNT, capacity = 4 * SPECTRUM_HISTORY_HZ) {
+  public constructor(bands: number = AUDIO_BAND_COUNT, capacity: number = 4 * SPECTRUM_HISTORY_HZ) {
     this.bands = bands;
     this.capacity = capacity;
     this.frames = new Float32Array(bands * capacity);

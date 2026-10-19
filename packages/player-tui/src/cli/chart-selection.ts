@@ -12,7 +12,7 @@ import {
   resolveDisplayedJudgeRankLabel,
   resolveDisplayedJudgeRankValue,
   resolveDisplayedPlayLevelValue,
-} from '@be-music/player/utils';
+} from '@be-music/player/display';
 import { resolvePreviewContinueKeyFromChart } from './chart-preview.ts';
 
 interface ChartSummaryItem {

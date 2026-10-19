@@ -32,6 +32,7 @@ import {
   resolveResultTrackRows,
   rollUpValue,
   stageProgress,
+  resolveResultVerdict,
 } from '@be-music/skin-sdk';
 import { resolveResultGrid } from './result-grid.ts';
 import { addSkinText, type PixiResultFrame, type PixiResultSkin, type SkinTextOptions } from '../pixi-kit/index.ts';
@@ -147,7 +148,7 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
   const verdict = group('verdict');
   const verdictT = easeOutCubic(stageProgress(elapsed, 100, 900));
   verdict.g.rect(0, 44, designWidth, 1).fill({ color: verdictColor, alpha: 0.5 * verdictT });
-  text(verdict.root, cleared ? 'STAGE CLEAR' : 'FAILED', margin, 14, {
+  text(verdict.root, resolveResultVerdict(result), margin, 14, {
     ...display(15, SYN_WHITE),
     letterSpacing: 6 + 22 * (1 - verdictT),
     alpha: verdictT,
@@ -282,7 +283,7 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
   const graphW = graphBox.x + graphBox.w - 14 - graphX;
   const graphH = (grid.graphsBottom - grid.graphsTop - 24) / 2;
   glass(graphs.g, graphBox.x, graphBox.y, graphBox.w, graphBox.h, accent);
-  label('GROOVE GAUGE', graphX, graphBox.y + 12, graphs.root);
+  label(`${(result.gaugeType ?? 'GROOVE').toUpperCase()} GAUGE`, graphX, graphBox.y + 12, graphs.root);
   label('EX SCORE', graphX, grid.graphsTop + graphH + 12, graphs.root);
   const draw = easeOutCubic(stageProgress(elapsed, ROLL_DELAY_MS + 150, ROLL_MS + 300));
   filament(

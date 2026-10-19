@@ -250,6 +250,17 @@ textarea {
 }
 
 /*
+ * The canvas takes keyboard focus (tabindex 0) so the scenes get their keys, but it is the whole play surface: a focus
+ * ring would frame the screen, most visibly in fullscreen. The fullscreen shell gets none either.
+ */
+.stage canvas:focus,
+.stage canvas:focus-visible,
+.shell:fullscreen,
+.shell:-webkit-full-screen {
+  outline: none;
+}
+
+/*
  * Fullscreen target is `.shell` (not the canvas itself) so Pixi's
  * `resizeTo: #stage` still sees a 100%-of-viewport container after
  * the browser chrome disappears, and so the floating debug / help /
@@ -2601,15 +2612,6 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   text-underline-offset: 3px;
 }
 
-.skin-offer-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.skin-offer-buttons > button {
-  width: 100%;
-}
-
 /*
  * "Drop a skin" prompt: the drop card's look, as a modal over the page.
  * Drops on it bubble to the window's drop handler like any other.
@@ -2695,4 +2697,129 @@ html.touch-first .search-input.search-inline:focus {
 }
 .start-account[data-state='loading'] .start-account-label {
   color: rgb(170 180 194 / 0.7);
+}
+
+/* Course maker (course-maker-panel.ts): the card shown while a course is being made, and the saved-course dialog. */
+.course-maker-card {
+  position: fixed;
+  left: 16px;
+  bottom: 64px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(320px, calc(100vw - 32px));
+  padding: 16px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 14px;
+  background: rgb(14 18 27 / 0.95);
+  color: #f8fafc;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.5);
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+}
+.course-maker-card[hidden] {
+  display: none;
+}
+.course-maker-card h2 {
+  margin: 0 0 2px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.course-maker-card header p {
+  margin: 0;
+  color: #aab4c2;
+  line-height: 1.4;
+}
+.course-maker-name {
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.04);
+  color: inherit;
+  font: inherit;
+}
+.course-maker-stages {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 22px;
+  color: #d2d9e4;
+}
+.course-maker-stages:empty {
+  display: none;
+}
+.course-maker-stages li {
+  overflow-wrap: anywhere;
+}
+.course-maker-stages .course-maker-select {
+  display: block;
+  margin-top: 4px;
+}
+.course-maker-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #aab4c2;
+}
+.course-maker-select {
+  padding: 4px 6px;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 6px;
+  background: #151b27;
+  color: #f8fafc;
+  font: inherit;
+  font-size: 12px;
+}
+.course-maker-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.course-maker-buttons > button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.course-maker-dialog {
+  width: min(480px, calc(100vw - 32px));
+}
+.course-maker-list {
+  display: grid;
+  gap: 12px;
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+  font-size: 13px;
+}
+.course-maker-list > p {
+  margin: 0;
+  color: #aab4c2;
+}
+.course-maker-course {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.02);
+}
+.course-maker-course-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.course-maker-course-head .course-maker-name {
+  flex: 1;
+}
+.course-maker-kind {
+  color: #ffd166;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.course-maker-constraints {
+  display: grid;
+  gap: 6px;
 }

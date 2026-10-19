@@ -16,7 +16,7 @@ import { bestScore, score } from './db/schema.ts';
 import { loadChartFiles, loadPlayRanking } from './ranking-plays.ts';
 import { backfillPlayedFiles } from './scores/backfill.ts';
 import type { Env } from './env.ts';
-import { ClearLamp } from './scoring/lamp.ts';
+import { clearLampRank } from '@be-music/player/ruleset';
 
 // Tests never reach BMS Search: a submission's background chartset lookup finds nothing.
 const noChartsets = async () => undefined;
@@ -127,8 +127,8 @@ describe('POST /api/v0/scores', () => {
       expect(result.rank).toBe(1);
       expect(result.rulesetRevision).toMatch(/\/0$/);
     }
-    expect(body.results.find((result) => result.ruleset === 'beatoraja')?.clearLamp).toBe(ClearLamp.MAX);
-    expect(body.results.find((result) => result.ruleset === 'lr2')?.clearLamp).toBe(ClearLamp.FULL_COMBO);
+    expect(body.results.find((result) => result.ruleset === 'beatoraja')?.clearLamp).toBe(clearLampRank('MAX'));
+    expect(body.results.find((result) => result.ruleset === 'lr2')?.clearLamp).toBe(clearLampRank('FULL_COMBO'));
 
     // The play log and the chart document are stored in R2.
     const stored = await env.BLOBS.get(`playlogs/${body.scoreId}.bmplay.json.gz`);
@@ -180,6 +180,12 @@ describe('POST /api/v0/scores', () => {
     const autoResponse = await submit(cookie, submissionBody(auto, chart.playDocument, chart.chartDocument));
     expect(autoResponse.status).toBe(422);
     expect(await autoResponse.json()).toEqual({ error: 'auto-play' });
+
+    // A play at another tempo is practice: refused, like beatoraja's frequency trainer leaves its scores unsaved.
+    const slowed = makePlaylog(chart, { noteCount: 10, hits: 10, play: { tempo: 0.8 } });
+    const slowedResponse = await submit(cookie, submissionBody(slowed, chart.playDocument, chart.chartDocument));
+    expect(slowedResponse.status).toBe(422);
+    expect(await slowedResponse.json()).toEqual({ error: 'tempo' });
 
     const malformed = await submit(cookie, submissionBody({ format: 'nope' }, chart.playDocument));
     expect(malformed.status).toBe(422);

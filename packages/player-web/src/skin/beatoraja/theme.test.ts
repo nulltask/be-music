@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
+import { pickBeatorajaPlaySkin } from '@be-music/beatoraja-skin';
 import {
   chartPlayVariantForBeatorajaVariant,
   loadBeatorajaThemeFromFiles,
@@ -8,10 +9,12 @@ import {
 } from './theme.ts';
 
 class FakeFile {
-  constructor(
-    public readonly webkitRelativePath: string,
-    private readonly bytes: Uint8Array,
-  ) {}
+  public readonly webkitRelativePath: string;
+  private readonly bytes: Uint8Array;
+  constructor(webkitRelativePath: string, bytes: Uint8Array) {
+    this.webkitRelativePath = webkitRelativePath;
+    this.bytes = bytes;
+  }
   get name(): string {
     return this.webkitRelativePath.split('/').at(-1) ?? this.webkitRelativePath;
   }
@@ -101,5 +104,19 @@ describe('24-key keyboard play variants', () => {
     expect(pickBeatorajaPlayableSkinVariant({}, '24')).toBeUndefined();
     // A theme that only ships play24 can still render an IIDX chart.
     expect(pickBeatorajaPlayableSkinVariant({ '24': {} as never }, '7')).toBe('24');
+  });
+
+  it('picks the play skin beatoraja-skin picks, for every chart and theme', () => {
+    const variants = ['7', '5', '9', '10', '14', '24', '24d'] as const;
+    const entry = (variant: string) => ({ entryPath: `play${variant}.json`, header: { type: 0, w: 1, h: 1 } });
+    // Every theme shipping one or two of the variants.
+    const themes = variants.flatMap((a, i) => variants.slice(i).map((b) => [...new Set([a, b])]));
+    for (const theme of themes) {
+      const playSkins = Object.fromEntries(theme.map((variant) => [variant, entry(variant)]));
+      for (const desired of variants) {
+        const variant = pickBeatorajaPlayableSkinVariant(playSkins, desired);
+        expect(variant === undefined ? undefined : playSkins[variant]).toBe(pickBeatorajaPlaySkin(playSkins, desired));
+      }
+    }
   });
 });
