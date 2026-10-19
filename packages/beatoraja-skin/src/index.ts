@@ -178,7 +178,12 @@ export type {
   BeatorajaThemeDiscoveryWarning,
   DiscoverBeatorajaThemeResult,
 } from './play-skin.ts';
-export { discoverBeatorajaTheme, loadBeatorajaPlaySkin, pickBeatorajaPlaySkin } from './play-skin.ts';
+export {
+  discoverBeatorajaTheme,
+  loadBeatorajaPlaySkin,
+  pickBeatorajaPlaySkin,
+  pickBeatorajaPlaySkinVariant,
+} from './play-skin.ts';
 export type { BeatorajaButtonCode, BeatorajaSide } from './runtime-ids.ts';
 export {
   BEATORAJA_BUTTON,

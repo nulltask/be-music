@@ -725,6 +725,11 @@ export function registerBeatorajaSkinExportsCases(define: DefineBenchmarkCase): 
       skinApi.pickBeatorajaPlaySkin(fixtures().playSkins, '7');
     },
   });
+  define('beatoraja-skin.pickBeatorajaPlaySkinVariant', {
+    run: () => {
+      skinApi.pickBeatorajaPlaySkinVariant(fixtures().playSkins, '7');
+    },
+  });
   define('beatoraja-skin.loadBeatorajaPlaySkin', {
     run: () => {
       const { files, play5Entry, defaultOptions } = fixtures();

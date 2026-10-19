@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { discoverBeatorajaTheme, loadBeatorajaPlaySkin, pickBeatorajaPlaySkin } from './play-skin.ts';
+import {
+  discoverBeatorajaTheme,
+  loadBeatorajaPlaySkin,
+  pickBeatorajaPlaySkin,
+  pickBeatorajaPlaySkinVariant,
+} from './play-skin.ts';
 import type { BeatorajaSkinFileEntry } from './file-lookup.ts';
 import type { BeatorajaPlaySkinMap, BeatorajaSkinEntry } from './play-skin.ts';
+import { BEATORAJA_PLAY_VARIANTS, type BeatorajaPlayVariant } from './types.ts';
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 
@@ -128,6 +134,67 @@ describe('pickBeatorajaPlaySkin', () => {
   it('returns undefined when no play skins are available', () => {
     expect(pickBeatorajaPlaySkin({}, '7')).toBeUndefined();
   });
+});
+
+describe('pickBeatorajaPlaySkinVariant', () => {
+  const present = {} as BeatorajaSkinEntry;
+  function themeWith(...variants: BeatorajaPlayVariant[]): BeatorajaPlaySkinMap {
+    return Object.fromEntries(variants.map((variant) => [variant, present]));
+  }
+  /** The whole fallback list for `desired`: what it picks as each pick is taken away in turn. */
+  function fallbackList(desired: BeatorajaPlayVariant): BeatorajaPlayVariant[] {
+    const remaining = new Set<BeatorajaPlayVariant>(BEATORAJA_PLAY_VARIANTS);
+    const list: BeatorajaPlayVariant[] = [];
+    for (;;) {
+      const picked = pickBeatorajaPlaySkinVariant(themeWith(...remaining), desired);
+      if (picked === undefined) return list;
+      list.push(picked);
+      remaining.delete(picked);
+    }
+  }
+
+  it.each([
+    ['7', ['7', '14', '5', '10', '9', '24', '24d']],
+    ['5', ['5', '7', '14', '10', '9', '24', '24d']],
+    ['14', ['14', '7', '10', '5', '9', '24d', '24']],
+    ['10', ['10', '14', '7', '5', '9', '24d', '24']],
+    ['9', ['9', '7', '14', '5', '10', '24', '24d']],
+    ['24', ['24', '24d', '9', '7', '14', '5', '10']],
+    ['24d', ['24d', '24', '9', '14', '7', '10', '5']],
+  ] as const)('falls back for %s through %j', (desired, list) => {
+    expect(fallbackList(desired)).toEqual(list);
+  });
+
+  it('reaches every variant from every chart, so any theme with a play skin plays any chart', () => {
+    for (const desired of BEATORAJA_PLAY_VARIANTS) {
+      expect([...fallbackList(desired)].sort()).toEqual([...BEATORAJA_PLAY_VARIANTS].sort());
+    }
+  });
+
+  it('plays 5 KEY on a 7 KEY skin and 10 KEY on a 14 KEY skin first, as beatoraja offers LR2 ones', () => {
+    expect(pickBeatorajaPlaySkinVariant(themeWith('7', '14', '9'), '5')).toBe('7');
+    expect(pickBeatorajaPlaySkinVariant(themeWith('7', '14', '9'), '10')).toBe('14');
+  });
+
+  it('keeps a 14 KEY chart on an IIDX skin before the keyboard ones', () => {
+    expect(pickBeatorajaPlaySkinVariant(themeWith('24d', '7'), '14')).toBe('7');
+  });
+
+  it('returns the variant pickBeatorajaPlaySkin returns the entry of', () => {
+    const skins: BeatorajaPlaySkinMap = { '9': entry('p9'), '24d': entry('p24d') };
+    for (const desired of BEATORAJA_PLAY_VARIANTS) {
+      const variant = pickBeatorajaPlaySkinVariant(skins, desired);
+      expect(pickBeatorajaPlaySkin(skins, desired)).toBe(variant === undefined ? undefined : skins[variant]);
+    }
+  });
+
+  it('returns undefined for a theme without play skins', () => {
+    expect(pickBeatorajaPlaySkinVariant({}, '24')).toBeUndefined();
+  });
+
+  function entry(name: string): BeatorajaSkinEntry {
+    return { entryPath: `${name}.json`, header: { type: 0, w: 1, h: 1, name } };
+  }
 });
 
 describe('loadBeatorajaPlaySkin', () => {
