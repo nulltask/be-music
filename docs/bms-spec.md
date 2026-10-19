@@ -422,3 +422,17 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - `#SWITCH` chain evaluates `#CASE` / `#DEF` and aborts at `#SKIP` until `#ENDSW`
 - `#SWITCH` falls through to subsequent `#CASE` / `#DEF` if `#SKIP` is missing
 - Header lines apply in file order, as in LR2 and beatoraja: a definition in a taken branch beats an earlier top-level line of the same header and loses to a later one. The parser marks a branch header that a later top-level line overrides (`overriddenByLaterHeader`) and resolution skips it; repeatable headers (`#STP`, `#WAVCMD`, `#LNOBJ`) add up
+
+`evaluateControlFlow` walks `bms.controlFlow` once, line by line, over one stack of `#RANDOM` / `#IF` / `#SWITCH` frames. Each line is handled like this:
+
+```mermaid
+flowchart TD
+  line(["each line, in file order"]) --> kind{"line kind"}
+  kind -->|"#RANDOM / #SWITCH<br/>#SETRANDOM / #SETSWITCH"| push["push a frame with<br/>its draw's value"]
+  kind -->|"#IF / #ELSEIF / #ELSE"| ifs["push or update the<br/>innermost #IF frame"]
+  kind -->|"#CASE / #DEF / #SKIP"| sw["update the innermost<br/>#SWITCH frame"]
+  kind -->|"#ENDIF / #ENDRANDOM / #ENDSW"| pop["remove the innermost<br/>frame of its kind"]
+  kind -->|"header or object"| active{"every #IF and #SWITCH<br/>frame active?"}
+  active -->|yes| apply["apply the line"]
+  active -->|no| skip["skip the line"]
+```
