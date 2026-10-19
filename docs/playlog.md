@@ -264,8 +264,9 @@ long note's head and tail as two judgment notes (`result.noteCount` reports each
 
 ### Fidelity notes
 
-- The LR2 ruleset follows lr2oraja, cross-checked against the OpenLR2 transcription; where the two disagree
-  (missed-POOR threshold for LN heads, HAZARD table) the lr2oraja behavior is used.
+- The LR2 ruleset follows lr2oraja, cross-checked against the OpenLR2 transcription; where the two disagree on the
+  missed-POOR threshold for LN heads, the lr2oraja behavior is used. The DEATH gauge follows LR2 itself (no recovery,
+  an empty POOR costs nothing), not lr2oraja's beatoraja-derived `HAZARD_LR2` table.
 - IIDX internals are not public. The judge windows, gauge tables, and DJ LEVEL boundaries are current community
   consensus; the empty-POOR window and CN release windows are unmeasured and use beatoraja's values as stand-ins,
   and the HCN gauge tick uses a fixed 200 ms interval instead of IIDX's measured 16th-note interval. Expect
@@ -357,6 +358,6 @@ Only the current revision of each ruleset is implemented. A log whose cached `re
 (the ids are kept as written), and re-simulating or replaying it applies the current rules; there is no compatibility path that
 replays the old ones, so its numbers can change. The cache is never authoritative, so such entries are simply stale.
 
-| Revision                         | Change                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lr2/0`, `beatoraja/0`, `iidx/0` | Development revision (see above). Since `/1`, mines follow the ruleset's rule: the `lr2` / `iidx` simulators add LR2's press-inside-PGREAT and window-entry legs; under `beatoraja` only a key down as the mine crosses detonates it (engine). Negative-BPM charts follow LR2's reverse scroll: inputs past the reversal are judged on the mirrored clock, mines there stay frozen, and a run left with notes unjudged is FAILED. |
+| Revision                         | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `lr2/0`, `beatoraja/0`, `iidx/0` | Development revision (see above). Since `/1`, mines follow the ruleset's rule: the `lr2` / `iidx` simulators add LR2's press-inside-PGREAT and window-entry legs; under `beatoraja` only a key down as the mine crosses detonates it (engine). Negative-BPM charts follow LR2's reverse scroll: inputs past the reversal are judged on the mirrored clock, mines there stay frozen, and a run left with notes unjudged is FAILED. Under `lr2` the DEATH gauge follows LR2: no recovery, and an empty POOR costs nothing. |

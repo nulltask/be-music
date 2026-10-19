@@ -206,6 +206,17 @@ describe('BeatorajaPlayBridge — built-in timers', () => {
     update([{ kind: 'exit-fade-out', atMs: 62_000 }]);
     expect(bridge.getTimerStart(TIMER_FADEOUT)).toBe(61_420);
   });
+
+  it('starts `TIMER_FAILED` (3), not `fadeout`, as a failed play stops', () => {
+    const { bridge, advance, update } = createHarness();
+    advance(5000);
+    update([{ kind: 'exit-close', atMs: 5000 }]);
+    expect(bridge.getTimerStart(3)).toBe(5000);
+    expect(bridge.getTimerStart(TIMER_FADEOUT)).toBeUndefined();
+    // Started once: a later stop moment does not restart it.
+    update([{ kind: 'exit-close', atMs: 6000 }]);
+    expect(bridge.getTimerStart(3)).toBe(5000);
+  });
 });
 
 describe('BeatorajaPlayBridge — lane events', () => {
@@ -678,7 +689,7 @@ describe('BeatorajaPlayBridge — lane cover (the play state’s 1P cover)', () 
     expect(harness.bridge.resolveNumberValue(14)).toBe(0);
     harness.play(setCover({ sudden: 0.6, suddenOn: true }));
     expect(harness.bridge.resolveSliderValue(4)).toBeCloseTo(0.6, 6);
-    expect(harness.bridge.resolveNumberValue(14)).toBe(60);
+    expect(harness.bridge.resolveNumberValue(14)).toBe(600);
     // 2P reads the same cover in single-side play (`type = 5` == `type = 4`).
     expect(harness.bridge.resolveSliderValue(5)).toBeCloseTo(0.6, 6);
   });
@@ -882,21 +893,21 @@ describe('BeatorajaPlayBridge — lift and HIDDEN+', () => {
     expect(lift?.y).toBeCloseTo(-290, 6);
     expect(lift?.x).toBe(0);
     expect(lift?.a).toBe(0);
-    expect(harness.bridge.resolveNumberValue(314)).toBe(50);
+    expect(harness.bridge.resolveNumberValue(314)).toBe(500);
   });
 
   it('clamps LIFT moves to [0, 1] and ignores NaN', () => {
     const harness = createHarness();
     harness.play({ type: 'cover-adjust', part: 'lift', delta: 2 });
-    expect(harness.bridge.resolveNumberValue(314)).toBe(100);
+    expect(harness.bridge.resolveNumberValue(314)).toBe(1000);
     harness.play({ type: 'cover-adjust', part: 'lift', delta: -2 });
     expect(harness.bridge.resolveNumberValue(314)).toBe(0);
     harness.play({ type: 'cover-adjust', part: 'lift', delta: 0.6 });
     harness.play({ type: 'cover-adjust', part: 'lift', delta: 0.5 });
-    expect(harness.bridge.resolveNumberValue(314)).toBe(100);
+    expect(harness.bridge.resolveNumberValue(314)).toBe(1000);
     harness.play({ type: 'cover-adjust', part: 'lift', delta: -0.7 });
     harness.play({ type: 'cover-adjust', part: 'lift', delta: Number.NaN });
-    expect(harness.bridge.resolveNumberValue(314)).toBe(30);
+    expect(harness.bridge.resolveNumberValue(314)).toBe(300);
   });
 
   it('drives OFFSET_HIDDEN_COVER (id 5) per LaneRenderer formulas', () => {
@@ -1163,13 +1174,18 @@ describe('BeatorajaPlayBridge — TIMER_FAILED (3)', () => {
 });
 
 describe('BeatorajaPlayBridge — POOR BGA tracking', () => {
-  it('flips between trigger-poor-bga and clear-poor-bga commands', () => {
+  it("shows the POOR image for beatoraja's 500 ms miss layer from the miss, whatever is judged meanwhile", () => {
     const harness = createHarness();
-    expect(harness.bridge.isPoorBgaActive()).toBe(false);
+    expect(harness.bridge.isPoorBgaActive(12)).toBe(false);
     harness.command({ kind: 'trigger-poor-bga', seconds: 12 });
-    expect(harness.bridge.isPoorBgaActive()).toBe(true);
+    expect(harness.bridge.isPoorBgaActive(12)).toBe(true);
+    // The next judgment's `clear-poor-bga` does not end it.
     harness.command({ kind: 'clear-poor-bga' });
-    expect(harness.bridge.isPoorBgaActive()).toBe(false);
+    expect(harness.bridge.isPoorBgaActive(12.2)).toBe(true);
+    expect(harness.bridge.isPoorBgaActive(12.5)).toBe(false);
+    // A later miss restarts the window.
+    harness.command({ kind: 'trigger-poor-bga', seconds: 13 });
+    expect(harness.bridge.isPoorBgaActive(13.4)).toBe(true);
   });
 });
 

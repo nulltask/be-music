@@ -121,8 +121,8 @@ export class Lr2PlayTimers {
     switch (event.kind) {
       case 'scene-start':
         // Timer 0 at once and timer 1 after `#STARTINPUT`; timers 40 (READY) and 41 (play start) follow with their own
-        // moments. Timers 2 (FADEOUT) and 3 (CLOSE) start only as the play ends, so the LR2 default 7-keys STAGE
-        // FAILED plate (timer 3) paints during the exit and not over the whole play.
+        // moments. Timer 2 (FADEOUT) starts only as the play ends normally, and timer 3 (FAILED) only as it fails, so the
+        // LR2 default 7-keys shutters and FAILED plate (timer 3) paint on a failure alone.
         this.sceneStartAt = event.atMs;
         this.apply(resolveLr2PlayTimers({ kind: 'scene-start', at: event.atMs }));
         this.seedStartInput(event.atMs, startInputMs);

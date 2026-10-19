@@ -208,6 +208,15 @@ export function resolveNonstopBgaAlpha(stage: NonstopBgaStage, seconds: number):
   return 1;
 }
 
+/**
+ * Whether beatoraja's miss layer shows at `seconds`: from the last miss (`missSeconds`, chart seconds) for
+ * `durationSeconds`, whatever is judged in between, as `BGAProcessor.drawBGA` draws it for `misslayerDuration` ms from
+ * `misslayertime`. A later miss restarts the window.
+ */
+export function isMissLayerShown(missSeconds: number | undefined, seconds: number, durationSeconds: number): boolean {
+  return missSeconds !== undefined && seconds >= missSeconds && seconds - missSeconds < durationSeconds;
+}
+
 /** One BGA stack to draw: its base and layer cues (and a POOR image in place of them) at `alpha`. */
 export interface BgaStack {
   alpha: number;

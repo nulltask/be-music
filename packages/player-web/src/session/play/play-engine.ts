@@ -808,9 +808,9 @@ function applyEngineJudgeCombo(ctx: PlayEngineContext, state: Readonly<PlayerJud
 
 /**
  * Fires when the engine driver's `manualPlay` / `autoPlay` promise resolves cleanly (= chart played to its end
- * without an interrupt). The host's `onChartFinished` callback receives a `PlayResult` snapshot and
- * the LR2 `#FADEOUT` → `#CLOSE` exit timeline runs before the result-screen transition. The engine's resolution
- * is the authoritative end-of-chart signal — the view's `currentSeconds` clock lags slightly behind the engine's
+ * without an interrupt). The host's `onChartFinished` callback receives a `PlayResult` snapshot and the theme's exit
+ * (its fade-out, or a failed play's stop) runs before the result-screen transition. The engine's resolution is the
+ * authoritative end-of-chart signal — the view's `currentSeconds` clock lags slightly behind the engine's
  * own bookkeeping, so we don't gate on it.
  */
 /**
@@ -825,15 +825,14 @@ function handleSharedEngineChartFinished(
   if (ctx.disposed || ctx.chartEnded) return;
   ctx.chartEnded = true;
   ctx.playMoments.outroAtMs ??= ctx.playClock();
-  // The end-of-play policy both gameplay families share (`resolvePlayEnding`): a lead-out after the last note, or —
-  // for a play cut short by its gauge emptying — no lead-out and a sound + picture fade-out before the result.
+  // The end-of-play policy every gameplay family shares (`resolvePlayEnding`): a lead-out after the last note, then the
+  // fade-out, or — for a play cut short by its gauge emptying — a stop at once (`beginExitSequence`).
   const ending = resolvePlayEnding({
     summary: finalSummary,
     notes: ctx.notes,
     timing: ctx.timingResolver,
     currentSeconds: ctx.currentSeconds(),
     tempo: ctx.tempo,
-    themeFadeOutMs: ctx.theme.timing().fadeOutMs,
   });
   // Hold the play scene for roughly two measures after the final note. This keeps the last hit / final keysound from
   // being swallowed by an immediate result transition while still falling back to a one-frame defer on empty charts or
@@ -865,7 +864,8 @@ function handleSharedEngineChartFinished(
         flushPlaylogView(ctx);
         ctx.chartEndHold?.abort();
       },
-      { fadeAudio: ending.fadeAudio, minFadeOutMs: ending.fadeOutMs },
+      // A normal end lets its last keysounds ring through the fade-out; a failure cuts them.
+      { failed: ending.failed, fadeAudio: false },
     );
   }, ending.leadOutMs);
 }

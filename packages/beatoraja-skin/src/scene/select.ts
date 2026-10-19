@@ -121,7 +121,7 @@ export function beatorajaJudgeRankOp(rank: number | undefined): number {
   }
 }
 
-/** Notes per second, as a whole number and its first decimal (numbers 360-365). */
+/** Notes per second, as a whole number and its two decimal digits (numbers 360-365, beatoraja `SongInformation`). */
 export interface BeatorajaDensityReadout {
   readonly whole: number;
   readonly afterDot: number;

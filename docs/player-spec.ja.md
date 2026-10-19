@@ -53,7 +53,7 @@ parser が IR へ保持するだけで、player が実行時に参照しない�
 | `#xxx02`                                                            | 小節長として時間解決と beat 解決に反映します。                                                                                                                                                                                                           |
 | `#xxx03`, `#xxx08`                                                  | BPM change として時間解決に反映します。                                                                                                                                                                                                                  |
 | `#xxx04`, `#xxx07`, `#xxx0A`                                        | BGA base / layer / layer2 として描画します。                                                                                                                                                                                                             |
-| `#xxx06`                                                            | POOR BGA cue として扱います。`#POORBGA` 未指定時は `#BMP00` を fallback に使います。                                                                                                                                                                     |
+| `#xxx06`                                                            | POOR BGA cue として扱います。`#POORBGA` が `2` でなければ `#BMP00` を fallback に使います。                                                                                                                                                              |
 | `#xxx09`                                                            | STOP として時間解決に反映します。                                                                                                                                                                                                                        |
 | `#xxx11-19`, `#xxx21-29`                                            | 可視演奏ノートとして扱います。`16` / `26` は scratch、`17` / `27` は 9KEY / 24KEY 以外では FREE ZONE、9KEY / 24KEY では通常ノートです。                                                                                                                  |
 | `#xxx1A-1O`, `#xxx2A-2O`                                            | 可視演奏ノートとして扱います。24 key (Keyboardmania) バンクのレーン 10..24 です。これらのチャンネルが 1 つでもあれば `24 KEY SP` / `48 KEY DP` と判定します。                                                                                            |
@@ -83,7 +83,7 @@ parser が IR へ保持するだけで、player が実行時に参照しない�
 | `#LNTYPE`, `#LNMODE`, `#LNOBJ`                                                                                                          | BMS long note の解釈に使います。                                                                                                                                                                                                                     |
 | `#PLAYER`                                                                                                                               | レーンモード推定と表示上の player metadata に使います。                                                                                                                                                                                              |
 | `#VOLWAV`                                                                                                                               | 譜面全体の音量倍率として使います。                                                                                                                                                                                                                   |
-| `#POORBGA`                                                                                                                              | POOR 画像の既定値上書きに使います。                                                                                                                                                                                                                  |
+| `#POORBGA`                                                                                                                              | `2` のとき `#BMP00` の POOR fallback を止めます。それ以外の値（または指定なし）では止めません。                                                                                                                                                      |
 | `#SCROLLxx`, `#SPEEDxx`                                                                                                                 | ノート描画距離の計算に使います。                                                                                                                                                                                                                     |
 | `#RANDOM`, `#SETRANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#ENDRANDOM`, `#SWITCH`, `#SETSWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#ENDSW` | 再生開始前に制御構文として解決します。                                                                                                                                                                                                               |
 
@@ -471,7 +471,7 @@ bmson の `judgeRank` は `#DEFEXRANK` と同じ「`100` = `NORMAL`」基準の�
 - `summary.poor` を加算する。
 - combo を 0 に戻す。
 - groove gauge を `-6` する。
-- POOR BGA を発火する。miss レイヤーの表示時間は 500ms（LR2 同梱 `config.xml` の既定値 `<poorbga>500</poorbga>` に一致）。
+- POOR BGA を発火する。miss レイヤーの表示時間は 500ms（LR2 同梱 `config.xml` の既定値 `<poorbga>500</poorbga>`、beatoraja の `misslayerDuration` の既定値に一致）。beatoraja スキンでは、その間に何が判定されてもミスから 500ms 表示し、それ以外のときは `BGAProcessor` と同じく base の上に layer を重ねる。
 - judge/combo 表示を `POOR` に更新する。
 
 ### 空打鍵（candidate なし）— LR2 互換 空POOR
@@ -627,12 +627,12 @@ FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めませ�
 
 ゲージ更新後の値は、現在の gauge type の min/max range に clamp します。
 
-`HARD` / `EASY` / `DEATH` の variant は LR2 の値（beatoraja `GaugeProperty` の `HARD_LR2` / `EASY_LR2` / `HAZARD_LR2`）に合わせます。
+`HARD` / `EASY` の variant は LR2 の値（beatoraja `GaugeProperty` の `HARD_LR2` / `EASY_LR2`）に合わせます。`DEATH` は beatoraja の `HAZARD_LR2` ではなく LR2 本体（OpenLR2 `LR2f.cpp` L27673-L27680、LR2body.exe `ParseBmsFile`）に合わせます。
 
 - `HARD`: 回復 `PGREAT/GREAT +0.1` / `GOOD +0.05`（TOTAL 非依存）、減少 `BAD -6` / `見逃しPOOR -10` / `空POOR -2`。減少には lr2oraja の `MODIFY_DAMAGE`、つまり `#TOTAL` の係数（`TOTAL ≥240` で `×1.0` から `<112` で `×10` まで）とノーツ数の係数（20 ノーツ以下で `×10` から 1000 ノーツ以上で `×1.0` まで）の大きい方を掛け、ゲージが `32%` 未満のときはさらに `×0.6` に緩和します（lr2oraja は比較前にゲージを偶数パーセントへ切り捨てるため、
   「表示 30 %」は内部 32 % に相当します）。
 - `EASY`: 増加は GROOVE の `1.2` 倍、減少は `0.8` 倍（`BAD -3.2` / `POOR -4.8` / `空POOR -1.6`）。クリア閾値は GROOVE と同じ `80%` です。
-- `DEATH`（LR2 HAZARD 相当）: `PGREAT +0.15` / `GREAT +0.06` / `GOOD 0`、`BAD` / `見逃しPOOR` は `-100`（即死）、`空POOR -10`。
+- `DEATH`: 回復なし（`PGREAT` / `GREAT` / `GOOD` は `0`）、`BAD` / `見逃しPOOR` は `-100`（即死）、`空POOR` は減少なし（`0`）。beatoraja の `HAZARD` は独自の `+0.15` / `+0.06` の回復と `空POOR -10` のままです。
 - `HARD` / `DEATH` は `2%` 未満になった時点で `0%` に落ちて FAILED 確定（以後回復しません）。地雷ダメージなどの生デルタは guts・TOTAL 補正の対象外です。
 
 ## ロングノート

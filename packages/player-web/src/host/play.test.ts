@@ -329,7 +329,7 @@ describe('createPlayScene with an LR2 kit', () => {
     scene.dispose();
   });
 
-  it("draws its frames once started and leaves through the skin's #FADEOUT and #CLOSE", async () => {
+  it("draws its frames once started and leaves through the skin's #FADEOUT, not its #CLOSE (a failure's)", async () => {
     vi.useFakeTimers();
     const fake = createFakeHost();
     const { scene, on } = createLr2({ fadeOut: 300, close: 200 }, { host: fake.host });
@@ -341,9 +341,10 @@ describe('createPlayScene with an LR2 kit', () => {
     expect(scene.root.visible).toBe(true);
     scene.requestExit();
     fake.tick();
-    vi.advanceTimersByTime(300);
+    vi.advanceTimersByTime(299);
     expect(on.exit).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(200);
+    // Escape starts timer 2 alone, as in LR2: the scene leaves once `#FADEOUT` is over.
+    vi.advanceTimersByTime(1);
     expect(on.exit).toHaveBeenCalledTimes(1);
     scene.exit();
     expect(fake.ticking()).toBe(0);
@@ -417,6 +418,9 @@ describe('createPlayScene with a beatoraja kit', () => {
       closeMs: 0,
     });
     expect(resolveBeatorajaPlayTiming({}).fadeOutMs).toBe(500);
+    // A failed play waits for the skin's `close` (1500 ms on beatoraja's default skins).
+    expect(resolveBeatorajaPlayTiming({ close: 1500 }).closeMs).toBe(1500);
+    expect(resolveBeatorajaPlayTiming({ close: -1 }).closeMs).toBe(0);
     scene.dispose();
   });
 

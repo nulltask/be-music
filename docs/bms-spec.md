@@ -191,7 +191,7 @@ The original BM98-era core BMS specifications do not define landmine damage as p
 - [x] Where `51-69` and `#LNOBJ` long notes start on the same lane and position, the `51-69` long note wins
 - [x] The player keeps one note per lane and position: a long note wins over a tap, otherwise the lowest object ID; the other notes' keysounds play as background ([player spec — Duplicate notes](./player-spec.md#duplicate-notes))
 - [x] Play channel `06` as the POOR BGA: it is shown on a miss and takes priority over `04` / `07` / `0A` while shown
-- [x] When `#POORBGA` is not specified, use `#BMP00` as the POOR image until the first `06` object
+- [x] Unless `#POORBGA` is `2`, use `#BMP00` as the POOR image until the first `06` object (a missing, unparsable or out-of-range `#POORBGA` is `0`)
 - [x] Apply `#STP xxx[.yyy] zzzz` (and the short form `xxx zzzz`, read as `.000`) as a `zzzz` ms stop in timing; stops at one position add up
 
 ### Negative BPM (`#BPMxx` via channel 08) basis

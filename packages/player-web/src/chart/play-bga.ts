@@ -42,12 +42,27 @@ export interface PlayBgaResources {
 }
 
 /**
- * BMS: with no `#POORBGA` but a `#BMP00`, BMP00 is the implicit POOR image until an explicit `#xxx06` cue fires.
- * Returns that key (`'00'`), or `undefined` when the convention does not apply.
+ * The `#POORBGA` mode (hitkey's command memo): `0` shows the POOR image on a miss as usual, `1` draws it over the BGA
+ * layers instead of replacing them, `2` never shows it. A missing value, one that does not parse as an integer, or one
+ * outside 0..2 is `0`, which is what LR2 always does (it does not read the header).
+ */
+export type PoorBgaMode = 0 | 1 | 2;
+
+/** Parses a chart's `#POORBGA` value into its {@link PoorBgaMode}. */
+export function resolvePoorBgaMode(value: string | undefined): PoorBgaMode {
+  if (value === undefined) return 0;
+  const parsed = Number.parseInt(value.trim(), 10);
+  return parsed === 1 || parsed === 2 ? parsed : 0;
+}
+
+/**
+ * BMS: a `#BMP00` is the implicit POOR image until an explicit `#xxx06` cue fires, as LR2 starts its miss layer from
+ * BMP00. Only `#POORBGA 2` (no POOR image at all) turns it off. Returns that key (`'00'`), or `undefined` when the
+ * convention does not apply.
  */
 export function resolvePoorBgaFallbackKey(chart: BeMusicJson): string | undefined {
   const poorBmp00 = chart.resources.bmp['00'];
-  return typeof chart.bms.poorBga !== 'string' && typeof poorBmp00 === 'string' && poorBmp00.length > 0
+  return resolvePoorBgaMode(chart.bms.poorBga) !== 2 && typeof poorBmp00 === 'string' && poorBmp00.length > 0
     ? '00'
     : undefined;
 }
