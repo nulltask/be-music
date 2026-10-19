@@ -140,7 +140,7 @@ The built-in Pixi skins do exactly this through `skins/pixi-kit/define-pixi-skin
 
 ## Skin metadata
 
-Every skin declares these fields. `defineBeMusicSkin` checks the rules it can test (the API version, the id, label, version, author and URLs, the context, each screen's `draw`, `decide` and `settings`) and throws when one is broken, so a broken skin fails where it is defined.
+Every skin declares these fields. `defineBeMusicSkin` checks the rules it can test (the API version, the id, label, version, author and URLs, `fontLoads`, the context, each screen's `draw`, `decide` and `settings`) and throws when one is broken, so a broken skin fails where it is defined.
 
 | Field                                    | Required | Rule                                                                                                                                  |
 | ---------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -161,7 +161,7 @@ Every skin declares these fields. `defineBeMusicSkin` checks the rules it can te
 | `decide`                                 | no       | The decide screen between select and play; see [Decide](#decide).                                                                     |
 | `settings`                               | no       | Options the player can tune for the skin; see [Skin settings](#skin-settings).                                                        |
 
-`validateBeMusicSkin(skin)` returns the same problems as a list of messages without throwing.
+`validateBeMusicSkin(skin)` returns the same problems as a list of messages without throwing, also for a skin written in plain JavaScript that leaves a required field out. A host checks an added skin with it (the be-music skin registry does), so a skin module without `fontLoads`, say, is refused with the reason instead of breaking the page.
 
 ## Stage and layout
 
