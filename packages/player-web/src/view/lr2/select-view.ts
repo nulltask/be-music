@@ -2,8 +2,8 @@
  * The LR2 family's select view: an LR2 select skin's `#SRC_*` / `#DST_*` frame, its bar list (`#SRC_BAR_BODY` slots
  * around `#BAR_CENTER`, drawn by `select-bars.ts`), buttons, panels, sliders, numbers, texts and mouse cursor, over the
  * select session's frames.
- * The skin's ops, numbers, texts, button cells and sliders come from `resolveLr2SelectState`, its buttons' actions from
- * `resolveLr2SelectButton` / `resolveLr2CourseMakerAction`, and its timers from `resolveLr2SelectTimers`, started by
+ * The skin's ops, numbers, texts, button cells and sliders come from `resolveLR2SelectState`, its buttons' actions from
+ * `resolveLR2SelectButton` / `resolveLR2CourseMakerAction`, and its timers from `resolveLR2SelectTimers`, started by
  * what the frames report (the screen's entry, cursor moves, option panels, the course being made). The LR2 ids stay in
  * this view: the session sees intents.
  */
@@ -11,34 +11,34 @@
 import { resolveBeMusicSelectLayout, type BeMusicSelectLayout } from '@be-music/skin-sdk';
 import { Color, Container, Graphics, Sprite, Texture } from 'pixi.js';
 import type {
-  Lr2ButtonElement,
-  Lr2DestinationRect,
-  Lr2ImageElement,
-  Lr2ImageRect,
-  Lr2MouseCursorElement,
-  Lr2NumberElement,
-  Lr2OnMouseElement,
-  Lr2Skin,
-  Lr2SliderElement,
-  Lr2SpecialGraphic,
-  Lr2TextElement,
+  LR2ButtonElement,
+  LR2DestinationRect,
+  LR2ImageElement,
+  LR2ImageRect,
+  LR2MouseCursorElement,
+  LR2NumberElement,
+  LR2OnMouseElement,
+  LR2Skin,
+  LR2SliderElement,
+  LR2SpecialGraphic,
+  LR2TextElement,
 } from '@be-music/lr2-skin';
 import { LR2_TEXT, LR2_TIMER } from '@be-music/lr2-skin/ids';
 import {
-  resolveLr2CourseMakerAction,
-  resolveLr2SelectButton,
-  resolveLr2SelectState,
-  resolveLr2SelectTimers,
-  type Lr2Clock,
-  type Lr2SelectState,
-  type Lr2TimerUpdate,
+  resolveLR2CourseMakerAction,
+  resolveLR2SelectButton,
+  resolveLR2SelectState,
+  resolveLR2SelectTimers,
+  type LR2Clock,
+  type LR2SelectState,
+  type LR2TimerUpdate,
 } from '@be-music/lr2-skin/state';
 import type { LibraryChart, LibraryEntry } from '@be-music/scene-model';
 import type { BrowserSongCollection } from '../../collection/types.ts';
 import { COURSE_NAME_PROMPT } from '../../collection/course-maker.ts';
 import { hasReadtextForSong } from '../../collection/readtext.ts';
-import { resolveChartBpmRange } from '../../chart/bpm-range.ts';
-import type { Lr2Kit } from '../../host/family-kit.ts';
+import { resolveChartBPMRange } from '../../chart/bpm-range.ts';
+import type { LR2Kit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import {
   designRectToCanvas,
@@ -51,7 +51,7 @@ import {
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { PerfTracker } from '../shared/perf.ts';
 import { disposeChildren } from '../../stage/pixi-utils.ts';
-import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
+import type { LR2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 import { resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import {
@@ -59,17 +59,17 @@ import {
   containerSpriteSink,
   createCroppedTexture,
   evaluateElementDestination,
-  makeLr2SliderSprite,
-  makeLr2StaticImageSprite,
+  makeLR2SliderSprite,
+  makeLR2StaticImageSprite,
   normalizeRect,
   pickAnimatedCell,
   renderNumberElement,
 } from '../../skin/lr2/render.ts';
-import { isDestinationVisible, makeLr2TextSprite } from '../../skin/lr2/scene-render.ts';
+import { isDestinationVisible, makeLR2TextSprite } from '../../skin/lr2/scene-render.ts';
 import {
   collectSelectSkinTexturePaths,
-  Lr2ChartGraphicTextureStore,
-  Lr2SkinTextureStore,
+  LR2ChartGraphicTextureStore,
+  LR2SkinTextureStore,
   resolveSolidSpecialGraphicTexture,
 } from '../../skin/lr2/scene-textures.ts';
 import { phantomSkin } from '../../skins/phantom/index.ts';
@@ -77,7 +77,7 @@ import { renderEmptyStateHint } from '../built-in/select-empty-hint.ts';
 import { SelectReadTextOverlay } from '../built-in/select-readtext.ts';
 import { SelectPointer, type SelectDesignSize, type SelectPointerContext } from '../shared/select-pointer.ts';
 import type { IntentSink, SelectFrame, SelectIntent, SelectView } from '../types.ts';
-import { clampSlot, renderLr2SelectBars, wrapIndex, type Lr2SelectBarsContext } from './select-bars.ts';
+import { clampSlot, renderLR2SelectBars, wrapIndex, type LR2SelectBarsContext } from './select-bars.ts';
 
 const log = logger('select');
 
@@ -89,18 +89,18 @@ const BG = new Color('#050912');
  * whether it was declared after the bar list.
  */
 type SortedSelectChromeEntry =
-  | { kind: 'image'; order: number; layerIsForeground: boolean; element: Lr2ImageElement }
-  | { kind: 'number'; order: number; layerIsForeground: boolean; element: Lr2NumberElement }
-  | { kind: 'text'; order: number; layerIsForeground: boolean; element: Lr2TextElement }
-  | { kind: 'button'; order: number; layerIsForeground: boolean; element: Lr2ButtonElement }
-  | { kind: 'onMouse'; order: number; layerIsForeground: boolean; element: Lr2OnMouseElement }
-  | { kind: 'slider'; order: number; layerIsForeground: boolean; element: Lr2SliderElement };
+  | { kind: 'image'; order: number; layerIsForeground: boolean; element: LR2ImageElement }
+  | { kind: 'number'; order: number; layerIsForeground: boolean; element: LR2NumberElement }
+  | { kind: 'text'; order: number; layerIsForeground: boolean; element: LR2TextElement }
+  | { kind: 'button'; order: number; layerIsForeground: boolean; element: LR2ButtonElement }
+  | { kind: 'onMouse'; order: number; layerIsForeground: boolean; element: LR2OnMouseElement }
+  | { kind: 'slider'; order: number; layerIsForeground: boolean; element: LR2SliderElement };
 
 const NO_ENTRIES: readonly LibraryEntry[] = [];
 const EMPTY_LIBRARY: BrowserSongCollection = { sources: [], charts: [], errors: [] };
 
 /** The LR2 select view. See the module comment. */
-export class Lr2SelectView implements SelectView {
+export class LR2SelectView implements SelectView {
   public readonly family = 'lr2' as const;
   /** An LR2 skin has no launch outro: a started chart is handed on at once. */
   public readonly launchOutroMs = 0;
@@ -119,11 +119,11 @@ export class Lr2SelectView implements SelectView {
   private readonly skinForegroundLayer: Container = new Container();
   private readonly readText: SelectReadTextOverlay = new SelectReadTextOverlay();
   private readonly pointer: SelectPointer;
-  /** What the bar list reads and draws into ({@link renderLr2SelectBars}). */
-  private readonly bars: Lr2SelectBarsContext;
+  /** What the bar list reads and draws into ({@link renderLR2SelectBars}). */
+  private readonly bars: LR2SelectBarsContext;
   /** Per-frame timing, logged every second with `?perf` or `globalThis.__BE_MUSIC_PERF__ = true`. */
   private readonly perf: PerfTracker = new PerfTracker('select');
-  private kit: Lr2Kit;
+  private kit: LR2Kit;
   private host: PixiSceneHost | undefined;
   private emit: IntentSink<SelectIntent> | undefined;
   private attached = false;
@@ -160,22 +160,22 @@ export class Lr2SelectView implements SelectView {
   private mouseY = -1;
   /** The skin's chrome in declaration order, built once per skin ({@link ensureSortedChromeEntries}). */
   private sortedChromeEntries: SortedSelectChromeEntry[] = [];
-  private sortedChromeSkinRef: Lr2Skin | undefined;
+  private sortedChromeSkinRef: LR2Skin | undefined;
   /** The skin's images, loaded on the first attach; a frame skips what is still loading. */
-  private readonly skinTextures = new Lr2SkinTextureStore();
+  private readonly skinTextures = new LR2SkinTextureStore();
   /** The skin's `#LR2FONT` fonts by index, once loaded; text draws with a system font until then. */
-  private bitmapFonts: Map<number, Lr2LoadedFont> = new Map();
+  private bitmapFonts: Map<number, LR2LoadedFont> = new Map();
   /** The focused chart's STAGEFILE / BACKBMP / BANNER (`#SRC_IMAGE` gr 100-102), by chart. */
-  private readonly chartGraphicTextures = new Lr2ChartGraphicTextureStore();
+  private readonly chartGraphicTextures = new LR2ChartGraphicTextureStore();
 
-  public constructor(kit: Lr2Kit) {
+  public constructor(kit: LR2Kit) {
     this.kit = kit;
-    this.pointer = new SelectPointer(Lr2SelectView.createPointerContext(this));
-    this.bars = Lr2SelectView.createBarsContext(this);
+    this.pointer = new SelectPointer(LR2SelectView.createPointerContext(this));
+    this.bars = LR2SelectView.createBarsContext(this);
   }
 
   /** Takes another LR2 select skin: its images and fonts load again, and the next frame draws with it. */
-  public updateKit(kit: Lr2Kit): void {
+  public updateKit(kit: LR2Kit): void {
     if (kit.skin === this.kit.skin) return;
     this.kit = kit;
     this.skinTextures.clear();
@@ -262,8 +262,8 @@ export class Lr2SelectView implements SelectView {
                 : 0;
         if (delta !== 0) this.noteCursorChange(delta, event.atMs);
       } else if (event.kind === 'panel') {
-        this.applyLr2Timers(
-          resolveLr2SelectTimers({ kind: 'panel', panel: event.panel, open: event.open, at: event.atMs }),
+        this.applyLR2Timers(
+          resolveLR2SelectTimers({ kind: 'panel', panel: event.panel, open: event.open, at: event.atMs }),
         );
       } else {
         this.readText.scrollBy(event.delta);
@@ -401,7 +401,7 @@ export class Lr2SelectView implements SelectView {
     // notes, BPM changes, BACKBMP, …) onto the frame's static elements, which LR2 skins gate with ops 70-195.
     const state = this.perf.time('computeOps', () => this.computeState(skin, frame));
     this.perf.time('renderSkinFrame', () => this.renderSkinFrame(skin, state));
-    this.perf.time('renderSkinBars', () => renderLr2SelectBars(this.bars, skin, state.ops));
+    this.perf.time('renderSkinBars', () => renderLR2SelectBars(this.bars, skin, state.ops));
     // With nothing loaded, a hint over the skin says what to drop.
     if (frame.library.charts.length === 0) {
       renderEmptyStateHint({ skinLayer: this.skinLayer, collection: frame.library }, skin.width, skin.height);
@@ -410,15 +410,15 @@ export class Lr2SelectView implements SelectView {
   }
 
   /**
-   * The LR2 state of the select screen for the bar under the cursor (`resolveLr2SelectState`): its ops, numbers, texts,
+   * The LR2 state of the select screen for the bar under the cursor (`resolveLR2SelectState`): its ops, numbers, texts,
    * button cells and sliders. A course bar lights the course-bar op (3), the playable op (5) when every stage is in the
    * library, its best lamp (100-105), its stages' difficulties (700-745) and the course ops (290 and its kind's op).
    */
-  private computeState(skin: Lr2Skin, frame: SelectFrame): Lr2SelectState {
+  private computeState(skin: LR2Skin, frame: SelectFrame): LR2SelectState {
     const focused = frame.entries[frame.cursor];
     const song = focused?.kind === 'chart' ? focused.chart : undefined;
     const maker = frame.courseMaker;
-    return resolveLr2SelectState({
+    return resolveLR2SelectState({
       ...(focused !== undefined ? { focused } : {}),
       options: frame.playOptions,
       record:
@@ -430,7 +430,7 @@ export class Lr2SelectView implements SelectView {
       openPanels: frame.panel !== undefined ? [frame.panel] : [],
       customOps: skin.customOptions.map((option) => option.defaultOp),
       readme: song !== undefined && hasReadtextForSong(frame.library, song),
-      ...(song !== undefined ? { bpmRange: resolveChartBpmRange(song.chart) } : {}),
+      ...(song !== undefined ? { bpmRange: resolveChartBPMRange(song.chart) } : {}),
       // The search word is the typed query, left to the host's field while the player types in it.
       searchText: frame.searchEditing ? '' : frame.browse.searchText,
       listPosition: this.resolveListPosition(frame.entries.length),
@@ -453,8 +453,8 @@ export class Lr2SelectView implements SelectView {
   // Timers
   // ---------------------------------------------------------------------------------------------------------------------
 
-  /** Starts and stops the LR2 timers a moment of the screen changes (`resolveLr2SelectTimers`). */
-  private applyLr2Timers(update: Lr2TimerUpdate): void {
+  /** Starts and stops the LR2 timers a moment of the screen changes (`resolveLR2SelectTimers`). */
+  private applyLR2Timers(update: LR2TimerUpdate): void {
     for (const timer of update.stop) this.timerStartedAt.delete(timer);
     for (const [timer, at] of update.start) this.timerStartedAt.set(timer, at);
   }
@@ -466,7 +466,7 @@ export class Lr2SelectView implements SelectView {
   private startScene(atMs: number): void {
     this.enteredAtMs = atMs;
     this.timerStartedAt.clear();
-    this.applyLr2Timers(resolveLr2SelectTimers({ kind: 'scene-start', at: atMs }));
+    this.applyLR2Timers(resolveLR2SelectTimers({ kind: 'scene-start', at: atMs }));
     this.listScrollOffset = 0;
     this.lastScrollUpdate = 0;
   }
@@ -476,7 +476,7 @@ export class Lr2SelectView implements SelectView {
    * keyframes anchored to them replay, and the bars slide from where they were.
    */
   private noteCursorChange(delta: number, atMs: number): void {
-    this.applyLr2Timers(resolveLr2SelectTimers({ kind: 'cursor', delta, at: atMs }));
+    this.applyLR2Timers(resolveLR2SelectTimers({ kind: 'cursor', delta, at: atMs }));
     this.listScrollOffset += delta * this.estimateSlotHeight();
   }
 
@@ -485,7 +485,7 @@ export class Lr2SelectView implements SelectView {
     const making = frame.courseMaker?.draft !== undefined;
     if (making === this.makingCourse) return;
     this.makingCourse = making;
-    this.applyLr2Timers(resolveLr2SelectTimers({ kind: 'course-making', making, at: this.nowMs }));
+    this.applyLR2Timers(resolveLR2SelectTimers({ kind: 'course-making', making, at: this.nowMs }));
   }
 
   /**
@@ -493,9 +493,9 @@ export class Lr2SelectView implements SelectView {
    * one destination.
    */
   private evaluateElementDst(element: {
-    destination: Lr2DestinationRect;
-    keyframes: Lr2DestinationRect[];
-  }): Lr2DestinationRect {
+    destination: LR2DestinationRect;
+    keyframes: LR2DestinationRect[];
+  }): LR2DestinationRect {
     return evaluateElementDestination(element, (timer) => this.elapsedSinceTimer(timer));
   }
 
@@ -533,7 +533,7 @@ export class Lr2SelectView implements SelectView {
   // ---------------------------------------------------------------------------------------------------------------------
 
   /** Loads the skin's images and fonts; frames draw what has loaded. */
-  private loadSkin(skin: Lr2Skin): void {
+  private loadSkin(skin: LR2Skin): void {
     void this.skinTextures
       .preload(skin, collectSelectSkinTexturePaths(skin), () => !this.disposed && this.kit.skin === skin)
       .catch((error: unknown) => log.warn('skin textures failed to load', error));
@@ -622,7 +622,7 @@ export class Lr2SelectView implements SelectView {
    * type a search. Elements count only where they draw (their panel open, their DST visible, interpolated so a click
    * during a slide-in hits what the player sees). Returns whether the click was taken.
    */
-  private handleSkinHitTest(skin: Lr2Skin, x: number, y: number): boolean {
+  private handleSkinHitTest(skin: LR2Skin, x: number, y: number): boolean {
     const ops = this.computeState(skin, this.frame!).ops;
     for (const button of skin.buttons) {
       if (button.click !== 1 || !this.isPanelOpen(button.panel)) continue;
@@ -646,7 +646,7 @@ export class Lr2SelectView implements SelectView {
       this.emit?.({ type: 'search' });
       return true;
     }
-    if (isInsideLr2DefaultSearchBox({ width: skin.width, height: skin.height, x, y })) {
+    if (isInsideLR2DefaultSearchBox({ width: skin.width, height: skin.height, x, y })) {
       this.emit?.({ type: 'search' });
       return true;
     }
@@ -654,14 +654,14 @@ export class Lr2SelectView implements SelectView {
   }
 
   /**
-   * Runs a clicked `#SRC_BUTTON` as an intent: a course-maker button (`resolveLr2CourseMakerAction`), or its LR2 action
-   * (`resolveLr2SelectButton`): toggle a panel, step the hi-speed (`plusOnly` picks the direction), step or set a play
+   * Runs a clicked `#SRC_BUTTON` as an intent: a course-maker button (`resolveLR2CourseMakerAction`), or its LR2 action
+   * (`resolveLR2SelectButton`): toggle a panel, step the hi-speed (`plusOnly` picks the direction), step or set a play
    * option, play the focused bar (PLAY / AUTOPLAY on a course bar start the course) or show its text file. The key
    * config, skin select and replay buttons are not implemented: a click does nothing rather than the wrong thing.
    */
-  private dispatchButtonClick(button: Lr2ButtonElement, direction: 1 | -1): void {
+  private dispatchButtonClick(button: LR2ButtonElement, direction: 1 | -1): void {
     const emit = (intent: SelectIntent): void => this.emit?.(intent);
-    const maker = resolveLr2CourseMakerAction(button.type);
+    const maker = resolveLR2CourseMakerAction(button.type);
     if (maker !== undefined && this.frame?.courseMaker !== undefined) {
       if (maker.kind === 'connection') emit({ type: 'course-maker', action: { ...maker, step: direction } });
       else if (maker.kind === 'default-connection')
@@ -669,7 +669,7 @@ export class Lr2SelectView implements SelectView {
       else emit({ type: 'course-maker', action: maker });
       return;
     }
-    const action = resolveLr2SelectButton(button.type);
+    const action = resolveLR2SelectButton(button.type);
     if (action === undefined) return;
     switch (action.kind) {
       case 'panel':
@@ -701,7 +701,7 @@ export class Lr2SelectView implements SelectView {
   }
 
   /** Whether a click lands on the course name (text 170) while it can be edited: making a course, or on one's own. */
-  private hitsCourseName(skin: Lr2Skin, ops: ReadonlySet<number>, x: number, y: number): boolean {
+  private hitsCourseName(skin: LR2Skin, ops: ReadonlySet<number>, x: number, y: number): boolean {
     if (this.frame?.courseMaker?.draft === undefined && this.focusedCourse()?.editable !== true) return false;
     return skin.texts.some((text) => {
       if (text.st !== LR2_TEXT.COURSE_TITLE || !this.isPanelOpen(text.panel)) return false;
@@ -711,7 +711,7 @@ export class Lr2SelectView implements SelectView {
   }
 
   /** What the pointer input reads and drives: the last frame, the skin's canvas, and intents for what is asked. */
-  private static createPointerContext(view: Lr2SelectView): SelectPointerContext {
+  private static createPointerContext(view: LR2SelectView): SelectPointerContext {
     const emit = (intent: SelectIntent): void => view.emit?.(intent);
     const size = (): SelectDesignSize => ({ width: view.kit.skin.width, height: view.kit.skin.height });
     return {
@@ -771,7 +771,7 @@ export class Lr2SelectView implements SelectView {
       jumpCursor: (index) => emit({ type: 'browse', command: { type: 'jump', index } }),
       activateFocused: () => emit({ type: 'activate' }),
       handleThemePointerDown: (x, y) => view.handlePointerDown(x, y),
-      startSelectBgm: async () => emit({ type: 'gesture' }),
+      startSelectBGM: async () => emit({ type: 'gesture' }),
     };
   }
 
@@ -805,7 +805,7 @@ export class Lr2SelectView implements SelectView {
    * {@link pickChromeLayer}, and stable-sorts by `declarationOrder` so the final paint order on each Pixi container
    * matches the CSV's left-to-right declaration sequence.
    */
-  private ensureSortedChromeEntries(skin: Lr2Skin): readonly SortedSelectChromeEntry[] {
+  private ensureSortedChromeEntries(skin: LR2Skin): readonly SortedSelectChromeEntry[] {
     if (this.sortedChromeSkinRef === skin) {
       return this.sortedChromeEntries;
     }
@@ -870,7 +870,7 @@ export class Lr2SelectView implements SelectView {
    * Renders the skin's static `#IMAGE` decorations (background, frame panels, banner area, etc.) plus the song-info
    * NUMBER / TEXT panels that depend on the currently-selected bar, from the select screen's LR2 state.
    */
-  private renderSkinFrame(skin: Lr2Skin, state: Lr2SelectState): void {
+  private renderSkinFrame(skin: LR2Skin, state: LR2SelectState): void {
     const ops = state.ops;
     // Walk the pre-sorted chrome entry list and dispatch by kind. The order, layer choice, and the entry list itself
     // are all static for a given skin (skin shape doesn't change between frames), so we cache the merged sorted list in
@@ -910,7 +910,7 @@ export class Lr2SelectView implements SelectView {
           const value = state.text(entry.element.st);
           if (value === undefined || value.length === 0) break;
           layer.addChild(
-            makeLr2TextSprite(value, entry.element, dst, {
+            makeLR2TextSprite(value, entry.element, dst, {
               bitmapFonts: this.bitmapFonts,
               systemFontSizes: skin.systemFontSizes,
             }),
@@ -942,7 +942,7 @@ export class Lr2SelectView implements SelectView {
           if (!isDestinationVisible(dst, ops, this.timerActive)) break;
           const value = state.slider(entry.element.type);
           if (value === undefined) break;
-          const sprite = makeLr2SliderSprite(entry.element, dst, value, skinTextures);
+          const sprite = makeLR2SliderSprite(entry.element, dst, value, skinTextures);
           if (sprite) layer.addChild(sprite);
           break;
         }
@@ -987,7 +987,7 @@ export class Lr2SelectView implements SelectView {
    * Tests whether the current pointer position lies inside the `#SRC_ONMOUSE` hit-test rectangle. The hit rect is
    * anchored at the DST top-left with `(x2, y2)` as the offset, per LR2 spec.
    */
-  private isPointerInHitRect(dst: Lr2DestinationRect, onMouse: Lr2OnMouseElement): boolean {
+  private isPointerInHitRect(dst: LR2DestinationRect, onMouse: LR2OnMouseElement): boolean {
     if (this.mouseX < 0 || this.mouseY < 0) {
       return false;
     }
@@ -1003,7 +1003,7 @@ export class Lr2SelectView implements SelectView {
    * Animation cells (`source.cycle > 0`) are picked via `pickAnimatedCell` so spinner / pulse sprites animate
    * correctly.
    */
-  private makeSlicedSprite(source: Lr2ImageRect, dst: Lr2DestinationRect, label?: string): Sprite | undefined {
+  private makeSlicedSprite(source: LR2ImageRect, dst: LR2DestinationRect, label?: string): Sprite | undefined {
     const baseTexture = this.skinTextures.get(source.imagePath);
     if (!baseTexture) {
       return undefined;
@@ -1033,7 +1033,7 @@ export class Lr2SelectView implements SelectView {
    * Renders the skin's custom cursor at the live pointer position. The DST `(x, y)` is the offset from the actual mouse
    * (typically `(0, 0)` so the cursor's top-left tracks the pointer exactly).
    */
-  private makeMouseCursorSprite(cursor: Lr2MouseCursorElement, dst: Lr2DestinationRect): Sprite | undefined {
+  private makeMouseCursorSprite(cursor: LR2MouseCursorElement, dst: LR2DestinationRect): Sprite | undefined {
     const baseTexture = this.skinTextures.get(cursor.source.imagePath);
     if (!baseTexture) {
       return undefined;
@@ -1061,9 +1061,9 @@ export class Lr2SelectView implements SelectView {
 
   /**
    * Renders a single `#SRC_BUTTON` element by cropping its cell sheet to the cell of the value it shows
-   * (`Lr2SelectState.button`; 0 for a button without one), clamped to its cells.
+   * (`LR2SelectState.button`; 0 for a button without one), clamped to its cells.
    */
-  private renderButtonElement(button: Lr2ButtonElement, target: Container, state: Lr2SelectState): void {
+  private renderButtonElement(button: LR2ButtonElement, target: Container, state: LR2SelectState): void {
     const baseTexture = this.skinTextures.get(button.source.imagePath);
     if (!baseTexture) {
       return;
@@ -1107,8 +1107,8 @@ export class Lr2SelectView implements SelectView {
     target.addChild(sprite);
   }
 
-  private makeStaticImageSprite(image: Lr2ImageElement) {
-    return makeLr2StaticImageSprite(image, this.evaluateElementDst(image), {
+  private makeStaticImageSprite(image: LR2ImageElement) {
+    return makeLR2StaticImageSprite(image, this.evaluateElementDst(image), {
       textures: this.skinTextures.asReadonlyMap(),
       elapsedSinceTimer: (timer) => this.elapsedSinceTimer(timer),
       resolveSpecialGraphicTexture: (path) => this.resolveSpecialGraphicTexture(path),
@@ -1120,7 +1120,7 @@ export class Lr2SelectView implements SelectView {
    * / white). Triggers an async load on first miss, returning `undefined` until the asset is decoded; the next
    * `render()` tick will pick up the cached texture.
    */
-  private resolveSpecialGraphicTexture(path: Lr2SpecialGraphic): Texture | undefined {
+  private resolveSpecialGraphicTexture(path: LR2SpecialGraphic): Texture | undefined {
     const solidTexture = resolveSolidSpecialGraphicTexture(path);
     if (solidTexture) {
       return solidTexture;
@@ -1133,11 +1133,11 @@ export class Lr2SelectView implements SelectView {
   }
 
   /** What the bar list reads and draws into: the list layer, the skin's images and fonts, the frame and its timers. */
-  private static createBarsContext(view: Lr2SelectView): Lr2SelectBarsContext {
+  private static createBarsContext(view: LR2SelectView): LR2SelectBarsContext {
     return {
       listLayer: view.listLayer,
       skinTextures: view.skinTextures,
-      get bitmapFonts(): ReadonlyMap<number, Lr2LoadedFont> {
+      get bitmapFonts(): ReadonlyMap<number, LR2LoadedFont> {
         return view.bitmapFonts;
       },
       get entries(): readonly LibraryEntry[] {
@@ -1157,7 +1157,7 @@ export class Lr2SelectView implements SelectView {
   }
 }
 
-export interface Lr2DefaultSearchBoxHitTestInput {
+export interface LR2DefaultSearchBoxHitTestInput {
   width: number;
   height: number;
   x: number;
@@ -1173,18 +1173,18 @@ export interface Lr2DefaultSearchBoxHitTestInput {
  *
  * To avoid hijacking custom layouts, the fallback is gated to the canonical 1280×720 LR2-default design size.
  */
-export function isInsideLr2DefaultSearchBox(input: Lr2DefaultSearchBoxHitTestInput): boolean {
+export function isInsideLR2DefaultSearchBox(input: LR2DefaultSearchBoxHitTestInput): boolean {
   if (input.width !== 1280 || input.height !== 720) return false;
   return input.x >= 0 && input.x <= 920 && input.y >= 540 && input.y <= 582;
 }
 
-function containsPoint(rect: Lr2DestinationRect, x: number, y: number): boolean {
+function containsPoint(rect: LR2DestinationRect, x: number, y: number): boolean {
   const r = normalizeRect(rect);
   return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
 }
 
 /** The time now on the local clock, for the clock numbers (21-26). */
-function lr2ClockNow(): Lr2Clock {
+function lr2ClockNow(): LR2Clock {
   const now = new Date();
   return {
     year: now.getFullYear(),

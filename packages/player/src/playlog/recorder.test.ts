@@ -1,7 +1,7 @@
 import { computeChartFingerprint, computePlayFingerprint, resolveChart, type RandomDraws } from '@be-music/chart';
-import packageJson from '../../package.json' with { type: 'json' };
-import { createEmptyJson, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
-import { parseBms, resolveBmsControlFlowWithDraws } from '@be-music/parser';
+import packageJSON from '../../package.json' with { type: 'json' };
+import { createEmptyJSON, type BeMusicEvent, type BeMusicJSON } from '@be-music/json';
+import { parseBMS, resolveBMSControlFlowWithDraws } from '@be-music/parser';
 import { describe, expect, test } from 'vite-plus/test';
 import type { PlayerSummary } from '../core/engine.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
@@ -27,8 +27,8 @@ function landmine(channel: string, seconds: number, value: string): TimedLandmin
   return { event: makeEvent(channel, value), channel, beat: 0, seconds, judged: false, mine: true };
 }
 
-function makeJson(): BeMusicJson {
-  const json = createEmptyJson('bms');
+function makeJSON(): BeMusicJSON {
+  const json = createEmptyJSON('bms');
   json.metadata.title = 'My Song';
   json.metadata.artist = 'composer';
   json.metadata.total = 300;
@@ -75,7 +75,7 @@ function makeSummary(overrides: Partial<PlayerSummary> = {}): PlayerSummary {
 
 function makeRecorderOptions(overrides: Partial<PlaylogRecorderOptions> = {}): PlaylogRecorderOptions {
   return {
-    json: makeJson(),
+    json: makeJSON(),
     chart: makeChartData(),
     play: { mode: 'manual', autoScratch: false },
     now: () => new Date('2026-08-17T00:00:00.000Z'),
@@ -111,7 +111,7 @@ describe('playlog recorder', () => {
 
   test('stamps the engine version and keeps the host-declared recorder fields', () => {
     const bare = createPlaylogRecorder(makeRecorderOptions()).finalize({ summary: makeSummary() });
-    expect(bare.recorder).toEqual({ engine: packageJson.version });
+    expect(bare.recorder).toEqual({ engine: packageJSON.version });
 
     const declared = createPlaylogRecorder(
       makeRecorderOptions({
@@ -122,7 +122,7 @@ describe('playlog recorder', () => {
       name: 'be-music-web',
       version: '0.5.0',
       build: '6471cd16',
-      engine: packageJson.version,
+      engine: packageJSON.version,
       platform: 'web',
     });
   });
@@ -133,7 +133,7 @@ describe('playlog recorder', () => {
     expect(bare.chart).not.toHaveProperty('md5');
 
     const hashed = createPlaylogRecorder(
-      makeRecorderOptions({ chartSha256: 'A'.repeat(64), chartMd5: 'B'.repeat(32) }),
+      makeRecorderOptions({ chartSHA256: 'A'.repeat(64), chartMD5: 'B'.repeat(32) }),
     ).finalize({ summary: makeSummary() });
     expect(hashed.chart.sha256).toBe('a'.repeat(64));
     expect(hashed.chart.md5).toBe('b'.repeat(32));
@@ -146,7 +146,7 @@ describe('playlog recorder', () => {
         recorder: { name: 'host', engine: '9.9.9' } as PlaylogRecorderOptions['recorder'],
       }),
     ).finalize({ summary: makeSummary() });
-    expect(playlog.recorder?.engine).toBe(packageJson.version);
+    expect(playlog.recorder?.engine).toBe(packageJSON.version);
   });
 
   test('captures chart metadata, noteCount, TOTAL, judge rank, and lnMode from the JSON', () => {
@@ -167,7 +167,7 @@ describe('playlog recorder', () => {
   });
 
   test('captures #DEFEXRANK and dynamic #EXRANK changes into judgeRank', () => {
-    const json = makeJson();
+    const json = makeJSON();
     json.metadata.rank = 1;
     json.bms.defExRank = 120;
     const recorder = createPlaylogRecorder(
@@ -319,7 +319,7 @@ describe('playlog recorder', () => {
   });
 
   test('records the play fingerprint of the resolved chart', () => {
-    const json = parseBms(
+    const json = parseBMS(
       ['#PLAYER 3', '#BPM 150', '#TITLE fingerprint', '#00111:01000100', '#00113:0001', '#00219:01'].join('\n'),
     );
     const playlog = createPlaylogRecorder(makeRecorderOptions({ json })).finalize({ summary: makeSummary() });
@@ -329,7 +329,7 @@ describe('playlog recorder', () => {
   });
 
   test('records one fingerprint as both chart and play fingerprint for a chart without control flow', () => {
-    const json = parseBms(['#BPM 150', '#00111:01', '#00113:01'].join('\n'));
+    const json = parseBMS(['#BPM 150', '#00111:01', '#00113:01'].join('\n'));
     const playlog = createPlaylogRecorder(makeRecorderOptions({ json, sourceChart: json })).finalize({
       summary: makeSummary(),
     });
@@ -339,12 +339,12 @@ describe('playlog recorder', () => {
   });
 
   test('fingerprints a #RANDOM chart from its source chart and the recorded draws', () => {
-    const source = parseBms(
+    const source = parseBMS(
       ['#BPM 150', '#00111:01', '#RANDOM 2', '#IF 1', '#00113:01', '#ENDIF', '#IF 2', '#00114:01', '#ENDIF'].join('\n'),
     );
     const draw = (value: number): RandomDraws => [{ command: 'RANDOM', range: 2, value }];
-    const played = resolveBmsControlFlowWithDraws(source, draw(2));
-    const record = (sourceChart: BeMusicJson | undefined, randomDraws?: RandomDraws) =>
+    const played = resolveBMSControlFlowWithDraws(source, draw(2));
+    const record = (sourceChart: BeMusicJSON | undefined, randomDraws?: RandomDraws) =>
       createPlaylogRecorder(
         makeRecorderOptions({
           json: played,
@@ -362,7 +362,7 @@ describe('playlog recorder', () => {
     const other = record(source, draw(1));
     expect(other.chart.chartFingerprint).toBe(playlog.chart.chartFingerprint);
     expect(other.chart.playFingerprint).toBe(
-      computePlayFingerprint(resolveBmsControlFlowWithDraws(source, draw(1)), { chartPath: undefined }),
+      computePlayFingerprint(resolveBMSControlFlowWithDraws(source, draw(1)), { chartPath: undefined }),
     );
 
     // Draws that do not belong to the source chart fall back to the engine's chart.
@@ -372,9 +372,9 @@ describe('playlog recorder', () => {
   });
 
   test('takes the fingerprints from the source chart, not a working copy whose lanes the host rewrote', () => {
-    const source = parseBms(['#BPM 150', '#00111:01', '#00122:01'].join('\n'));
+    const source = parseBMS(['#BPM 150', '#00111:01', '#00122:01'].join('\n'));
     // A DP flip baked into the chart the engine plays (`1x` ↔ `2x`) — a lane option, part of neither fingerprint.
-    const flipped = parseBms(['#BPM 150', '#00121:01', '#00112:01'].join('\n'));
+    const flipped = parseBMS(['#BPM 150', '#00121:01', '#00112:01'].join('\n'));
     const playlog = createPlaylogRecorder(makeRecorderOptions({ json: flipped, sourceChart: source })).finalize({
       summary: makeSummary(),
     });
@@ -385,10 +385,10 @@ describe('playlog recorder', () => {
   });
 
   test('omits the chart fingerprint when draws were recorded but no source chart can be resolved with them', () => {
-    const source = parseBms(['#BPM 150', '#RANDOM 2', '#IF 1', '#00113:01', '#ENDIF'].join('\n'));
+    const source = parseBMS(['#BPM 150', '#RANDOM 2', '#IF 1', '#00113:01', '#ENDIF'].join('\n'));
     const randomDraws: RandomDraws = [{ command: 'RANDOM', range: 2, value: 1 }];
     // A host resolved `#RANDOM` itself and handed the engine the result, which carries no control flow.
-    const engineChart = resolveBmsControlFlowWithDraws(source, randomDraws);
+    const engineChart = resolveBMSControlFlowWithDraws(source, randomDraws);
     const playlog = createPlaylogRecorder(
       makeRecorderOptions({
         json: engineChart,
@@ -402,7 +402,7 @@ describe('playlog recorder', () => {
   });
 
   test('fingerprints a chart played as 9 KEY with the .pms lane mode', () => {
-    const json = parseBms(['#BPM 150', '#00111:01', '#00115:01'].join('\n'));
+    const json = parseBMS(['#BPM 150', '#00111:01', '#00115:01'].join('\n'));
     const keysLog = createPlaylogRecorder(makeRecorderOptions({ json })).finalize({ summary: makeSummary() });
     // The lane mode the engine reports when it plays the same chart from a `.pms` file.
     const laneDisplayMode = resolveLaneDisplayMode(['11', '15'], { chartExtension: '.pms' });
@@ -416,7 +416,7 @@ describe('playlog recorder', () => {
   });
 
   test('fingerprints with the chart extension the engine passes', () => {
-    const json = parseBms(['#BPM 150', '#00111:01', '#00115:01'].join('\n'));
+    const json = parseBMS(['#BPM 150', '#00111:01', '#00115:01'].join('\n'));
     const pmsLog = createPlaylogRecorder(makeRecorderOptions({ json, laneModeExtension: '.pms' })).finalize({
       summary: makeSummary(),
     });
@@ -437,9 +437,9 @@ describe('playlog recorder', () => {
   });
 
   test('omits the fingerprint instead of failing when it cannot be computed', () => {
-    const json = makeJson();
+    const json = makeJSON();
     // The engine hands over its Resolved layer, so only the fingerprints read the broken source events.
-    const chart = { ...makeChartData(), resolvedChart: resolveChart(makeJson()) };
+    const chart = { ...makeChartData(), resolvedChart: resolveChart(makeJSON()) };
     Object.defineProperty(json, 'events', {
       get: () => {
         throw new Error('broken chart');

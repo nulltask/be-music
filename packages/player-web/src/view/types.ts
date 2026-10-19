@@ -7,7 +7,7 @@
  * Keys do not pass through the view: the scene (`SessionScene`) hands them to the session.
  */
 
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import type { CourseDraft, NonstopConnection } from '@be-music/player/course';
 import type { BeMusicAudioFrame, BeMusicCourseRecord, BeMusicSongRecord } from '@be-music/skin-sdk';
 import type {
@@ -221,7 +221,7 @@ export interface DecideFrame {
    * The chart as the play will play it: its `#RANDOM` / `#SWITCH` branches drawn once for this screen, which the play
    * plays too. A skin's graphs (beatoraja's BPM graph) read it.
    */
-  readonly playChart: BeMusicJson;
+  readonly playChart: BeMusicJSON;
   /** The course and the stage about to be played, for a course stage. */
   readonly course?: CourseView;
   readonly playOptions: PlayOptions;
@@ -402,7 +402,7 @@ export interface ResultFrame {
    * The chart as the play played it (its `#RANDOM` branches drawn), when the host has it: a skin's chart graphs read it
    * (beatoraja's BPM graph and note kinds, and its TOTAL readout).
    */
-  readonly playChart?: BeMusicJson;
+  readonly playChart?: BeMusicJSON;
   /** How the run is presented: the course-result skin, the course jingles, quick retry. */
   readonly presentation: ResultPresentation;
   /** The player's best record on the chart (or the course) before this play, for the best and difference figures. */
@@ -481,7 +481,7 @@ export interface PlayfieldMeasureLine {
 }
 
 /** A rect the chart's BGA is composited into, in design pixels. */
-export interface PlayfieldBgaTarget {
+export interface PlayfieldBGATarget {
   readonly x: number;
   readonly y: number;
   readonly w: number;
@@ -517,7 +517,7 @@ export interface PlayfieldSkin {
   /** The measure lines this frame, or `undefined` for the playfield's own line. */
   measureLines(): readonly PlayfieldMeasureLine[] | undefined;
   /** Pushes this frame's BGA rects; pushing none hides the BGA. */
-  bgaTargets(out: PlayfieldBgaTarget[]): void;
+  bgaTargets(out: PlayfieldBGATarget[]): void;
   /**
    * The cell of `channel`'s bomb `elapsedMs` after it went off, drawn centred on the lane's judgement line, or
    * `undefined` for the playfield's own bomb. Not asked when the skin {@link ownsLanes}.

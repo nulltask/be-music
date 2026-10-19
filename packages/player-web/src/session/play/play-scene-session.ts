@@ -122,7 +122,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
     const events = this.pending;
     this.pending = [];
     const stage = resolvePlayStage(play);
-    const bpm = play.displayBpm(seconds);
+    const bpm = play.displayBPM(seconds);
     return {
       clock: { nowMs, enteredAtMs: this.enteredAtMs },
       chart: play.song ?? this.facts.chart,

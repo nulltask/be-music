@@ -174,10 +174,10 @@ export function applyGaugeDelta(
 }
 
 /**
- * One Hell Charge tick on the gauge (see `HcnTickCounter`): the ruleset's held tick while the lane gains, its released
+ * One Hell Charge tick on the gauge (see `HCNTickCounter`): the ruleset's held tick while the lane gains, its released
  * tick while it loses (beatoraja: GREAT ×0.5 and BAD ×0.5 of the judge table).
  */
-export function applyHcnGaugeTick(
+export function applyHCNGaugeTick(
   state: JudgeCoreState,
   seconds: number,
   gain: boolean,

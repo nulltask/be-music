@@ -1,3 +1,13 @@
+# Naming Rules
+
+- Spell abbreviations in code identifiers and Be-Music's own JSON keys in uppercase (`BeMusicJSON`, `parseBMS`, `backBMP`, `poorBGA`). Keep the first segment of lowerCamelCase lowercase (`bpm`, `bgaMode`, `jsonPath`).
+- When abbreviations are consecutive, uppercase only the last one; spell earlier abbreviations as UpperCamelCase segments (`BmsJSON`, `inferBmsLNTypeWhenMissing`). The first segment of lowerCamelCase still starts lowercase (`bmsJSON`).
+- Treat protected proper names as indivisible units and preserve their official capitalization, even next to abbreviations (`LR2BGAElement`, `LR2JSON`, `FFmpegAPI`, `WebGLAPI`). This rule takes precedence over the consecutive-abbreviation rule. Protected names are `FFmpeg`, `LR2`, `WebGL`, `WebGPU`, `WebCodecs`, `WebM`, `WebP`, `LibAV`, `sRGB`, `GitHub`, `SQLite`, `IndexedDB`, `JavaScript`, `TypeScript`, `WebAssembly`, `Pixi`, and `PixiJS`. Ordinary format abbreviations such as `BMS` and `JSON` still follow the consecutive-abbreviation rule (`BmsJSON`).
+- At the start of lowerCamelCase, use the conventional leading form of a proper name (`ffmpegQueue`, `lr2Skin`, `webGLContext`, `libavFactory`). Keep the distinctive lowercase prefix of `sRGB` (`sRGBChannelToLinear`). Official short names such as `Pixi` do not need expansion to `PixiJS`.
+- Preserve the conventional spellings `Id` / `Ids` and `bmson` / `Bmson` (`chartId`, `sampleIds`, `parseBmson`, `BmsonBGAEvent`).
+- Keep keys and spellings required by external specifications (including BMS and bmson), database schemas, external tools, and API contracts unchanged. Translate between external keys and internal names at the boundary.
+- Unit symbols and shortened words are not initialisms: keep names such as `durationMs`, `thresholdDb`, `command`, and `exRank` in their conventional form.
+
 # Commit Rules
 
 - Write commit messages in English.

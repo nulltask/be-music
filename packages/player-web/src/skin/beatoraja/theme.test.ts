@@ -85,11 +85,11 @@ describe('summarizeBeatorajaPlaySkins', () => {
 
 describe('24-key keyboard play variants', () => {
   it('maps the keyboard chart shapes onto beatorajas play24 / play24d skins', () => {
-    expect(pickBeatorajaPlayableVariant({ keys: 24, isDouble: false, isPms: false })).toBe('24');
-    expect(pickBeatorajaPlayableVariant({ keys: 24, isDouble: true, isPms: false })).toBe('24d');
+    expect(pickBeatorajaPlayableVariant({ keys: 24, isDouble: false, isPMS: false })).toBe('24');
+    expect(pickBeatorajaPlayableVariant({ keys: 24, isDouble: true, isPMS: false })).toBe('24d');
     // The IIDX shapes are untouched.
-    expect(pickBeatorajaPlayableVariant({ keys: 7, isDouble: false, isPms: false })).toBe('7');
-    expect(pickBeatorajaPlayableVariant({ keys: 14, isDouble: true, isPms: false })).toBe('14');
+    expect(pickBeatorajaPlayableVariant({ keys: 7, isDouble: false, isPMS: false })).toBe('7');
+    expect(pickBeatorajaPlayableVariant({ keys: 14, isDouble: true, isPMS: false })).toBe('14');
   });
 
   it('translates the skin variant spelling into the engines ChartPlayVariant', () => {

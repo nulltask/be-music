@@ -94,7 +94,7 @@ export function resolveSelectKeyAction(
   map: SelectKeyMap = 'lr2',
 ): SelectKeyAction | undefined {
   if (event.type !== 'down') return undefined;
-  return map === 'beatoraja' ? resolveBeatorajaKey(event, state) : resolveLr2Key(event, state);
+  return map === 'beatoraja' ? resolveBeatorajaKey(event, state) : resolveLR2Key(event, state);
 }
 
 /**
@@ -107,7 +107,7 @@ function resolveReadTextKey(event: SessionKeyEvent): SelectKeyAction {
   return delta === undefined ? { type: 'swallow' } : { type: 'readtext-scroll', delta };
 }
 
-function resolveLr2Key(event: SessionKeyEvent, state: SelectKeyState): SelectKeyAction | undefined {
+function resolveLR2Key(event: SessionKeyEvent, state: SelectKeyState): SelectKeyAction | undefined {
   // Space toggles the play-options panel (LR2's START key opens panel 1); Enter already takes the bar.
   if (event.code === 'Space') return { type: 'panel', panel: 1 };
   if (state.readTextOpen) return resolveReadTextKey(event);

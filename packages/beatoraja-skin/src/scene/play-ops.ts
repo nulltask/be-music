@@ -15,7 +15,7 @@ export interface BeatorajaChartTraits {
   readonly random?: boolean;
   readonly stageFile?: boolean;
   readonly banner?: boolean;
-  readonly backBmp?: boolean;
+  readonly backBMP?: boolean;
 }
 
 function pick(ops: number[], value: boolean | undefined, has: number, none: number | undefined): void {
@@ -38,7 +38,7 @@ export function resolveBeatorajaChartTraitOps(traits: BeatorajaChartTraits): num
   pick(ops, traits.random, BEATORAJA_OP.HAS_RANDOMSEQUENCE, BEATORAJA_OP.NO_RANDOMSEQUENCE);
   pick(ops, traits.stageFile, BEATORAJA_OP.HAS_STAGEFILE, BEATORAJA_OP.NO_STAGEFILE);
   pick(ops, traits.banner, BEATORAJA_OP.HAS_BANNER, BEATORAJA_OP.NO_BANNER);
-  pick(ops, traits.backBmp, BEATORAJA_OP.HAS_BACKBMP, BEATORAJA_OP.NO_BACKBMP);
+  pick(ops, traits.backBMP, BEATORAJA_OP.HAS_BACKBMP, BEATORAJA_OP.NO_BACKBMP);
   return ops;
 }
 

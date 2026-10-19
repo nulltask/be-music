@@ -1,12 +1,12 @@
 import { type ChartPlayVariant, type RandomDraws } from '@be-music/chart';
 import type { LogEntry } from '@be-music/utils/log';
-import { type BeMusicEvent, type BeMusicJson } from '@be-music/json';
+import { type BeMusicEvent, type BeMusicJSON } from '@be-music/json';
 import { type PlayerStateSignals } from '../state-signals.ts';
 import { type LaneBinding } from './lane-layout.ts';
 import { type ImageResizeAlgorithm } from '../image-resize-algorithm.ts';
-import { type TuiNoteHeight } from './ui-options.ts';
+import { type TUINoteHeight } from './ui-options.ts';
 import { type AudioSinkClockState } from '../audio-sink.ts';
-import { type PlayerGaugeSummary, type PlayerUiSignalBus } from './ui-signal-bus.ts';
+import { type PlayerGaugeSummary, type PlayerUISignalBus } from './ui-signal-bus.ts';
 import { type PlayerInputSignalBus } from './input-signal-bus.ts';
 import type { GaugeType } from '../ruleset/gauge-type.ts';
 import { type LongNoteStyle, type PlaylogRulesetId, type RulesetWindowTables } from '../ruleset/index.ts';
@@ -18,7 +18,7 @@ import { type PreparedPlaybackChartData } from './bootstrap.ts';
 /**
  * Public types of the playback engine: options, runtimes, the audio-session contract and the summary.
  */
-export interface PlayerUiRuntime {
+export interface PlayerUIRuntime {
   readonly tuiEnabled: boolean;
   readonly playbackEndSeconds?: number;
   start: () => void;
@@ -41,26 +41,26 @@ export interface PlayerInputRuntime {
   reportsKeyReleases?: boolean;
 }
 
-export interface CreatePlayerUiRuntimeContext {
-  json: BeMusicJson;
+export interface CreatePlayerUIRuntimeContext {
+  json: BeMusicJSON;
   mode: 'AUTO' | 'MANUAL' | 'AUTO SCRATCH';
   laneDisplayMode: string;
   laneBindings: LaneBinding[];
   speed: number;
-  uiFps?: number;
+  uiFPS?: number;
   tuiVisibleNotesLimit?: number;
-  tuiNoteHeight: TuiNoteHeight;
+  tuiNoteHeight: TUINoteHeight;
   judgeWindowMs: number;
   highSpeed: number;
   imageResizeAlgorithm: ImageResizeAlgorithm;
-  videoBgaStreaming?: boolean;
+  videoBGAStreaming?: boolean;
   showLaneChannels: boolean;
   randomPatternSummary?: string;
   stateSignals: PlayerStateSignals;
-  uiSignals: PlayerUiSignalBus;
+  uiSignals: PlayerUISignalBus;
   baseDir: string;
   loadSignal?: AbortSignal;
-  onBgaLoadProgress: (progress: { ratio: number; detail?: string }) => void;
+  onBGALoadProgress: (progress: { ratio: number; detail?: string }) => void;
 }
 
 export interface CreatePlayerInputRuntimeContext {
@@ -102,7 +102,7 @@ export interface PlayerPlaySettings {
    */
   randomDraws?: RandomDraws;
   speed?: number;
-  inferBmsLnTypeWhenMissing?: boolean;
+  inferBmsLNTypeWhenMissing?: boolean;
   /**
    * The chart file's extension (`.bms` / `.bme` / `.pms` / ...). Feeds the extension rules of the shared lane-mode rule
    * (`resolveChartPlayVariant` from `@be-music/chart`): `.pms` is 9 KEY. Every other extension leaves the decision to the
@@ -164,7 +164,7 @@ export interface PlayerPlayRuntime {
    * Why this exists: the web renderer used to call `extractTimedNotes` independently of the engine to build its
    * own `notes` / `mineNotes` / `invisibleNotes` arrays, and `applyEngineFrame` then synced the engine's
    * per-note `judged` flag onto the renderer's parallel arrays by **shared array index**. Any divergence
-   * between the two extract calls (a different `inferBmsLnTypeWhenMissing` flag, a different
+   * between the two extract calls (a different `inferBmsLNTypeWhenMissing` flag, a different
    * `laneModeExtension`, a stale `bms.controlFlow` array re-resolved on the engine side, a `random1P: 'OFF'`
    * truthy-check evaluating to `false` because `'OFF'` is a non-empty string, …) shifted the index alignment
    * and the renderer ended up applying judge flags to the wrong notes — symptoms ranged from notes vanishing
@@ -181,7 +181,7 @@ export interface PlayerPlayRuntime {
    * runs its own `preparePlaybackChartData` internally, just like before.
    */
   preparedChart?: PreparedPlaybackChartData;
-  createUiRuntime?: (context: CreatePlayerUiRuntimeContext) => Promise<PlayerUiRuntime | undefined>;
+  createUIRuntime?: (context: CreatePlayerUIRuntimeContext) => Promise<PlayerUIRuntime | undefined>;
   createInputRuntime?: (context: CreatePlayerInputRuntimeContext) => PlayerInputRuntime | undefined;
   /**
    * Optional override for the audio playback backend. When provided, the engine routes every sample trigger / channel
@@ -214,7 +214,7 @@ export interface PlayerPlayRuntime {
    * from that chart second.
    */
   onTempoChange?: (change: PlayerTempoChange) => void;
-  onResolvedChart?: (json: BeMusicJson) => void;
+  onResolvedChart?: (json: BeMusicJSON) => void;
   /**
    * Called once, before playback starts, with the ruleset the play is judged under — after `judgeRuleset`,
    * `judgeWindowMs`, and (for a replay) the recorded settings were applied. Lets a host show the windows the engine
@@ -254,12 +254,12 @@ export interface PlayerPlayTuning {
   audioLeadStepUpMs?: number;
   audioLeadStepDownMs?: number;
   highSpeed?: number;
-  uiFps?: number;
+  uiFPS?: number;
   tui?: boolean;
   tuiVisibleNotesLimit?: number;
-  tuiNoteHeight?: TuiNoteHeight;
+  tuiNoteHeight?: TUINoteHeight;
   imageResizeAlgorithm?: ImageResizeAlgorithm;
-  videoBgaStreaming?: boolean;
+  videoBGAStreaming?: boolean;
 }
 
 /**
@@ -455,7 +455,7 @@ export interface AudioSession {
  * compatible: backends should ignore unrecognized fields.
  */
 export interface CreateAudioSessionContext {
-  json: BeMusicJson;
+  json: BeMusicJSON;
   options: PlayerOptions;
   mode: 'auto' | 'manual';
   onLoadProgress?: (progress: AudioSessionLoadProgress) => void;
@@ -482,7 +482,7 @@ export interface AudioSessionLoadProgress {
 /** A chart resolved for one play, with the `#RANDOM` / `#SWITCH` draws it was resolved with. */
 export interface ResolvedPlayChart {
   /** The chart with the drawn branches applied; it carries no control flow. */
-  chart: BeMusicJson;
+  chart: BeMusicJSON;
   /** The draws `chart` was resolved with: hand them to the engine (`PlayerOptions.randomDraws`) and the play log. */
   randomDraws: RandomDraws;
 }

@@ -89,7 +89,7 @@ export function rebuildBeatorajaSkinPickers(this: DebugMenu): void {
 /**
  * If the active scene's type-code matches `typeCode`, re-mount it against `entryPath`. Invoked
  * by the Debug Menu's skin-picker dropdown (the canonical surface for switching skins —
- * the bottom-centre `BeatorajaSkinOptionsGui` only exposes the picked skin's authored
+ * the bottom-centre `BeatorajaSkinOptionsGUI` only exposes the picked skin's authored
  * `property[]` / `filepath[]` schema, not the picker itself). No-op when no matching scene is
  * active (e.g., user picks a Decide skin while the Select scene is on screen — the override
  * still gets recorded by the caller for the next mount, but nothing visible changes now).

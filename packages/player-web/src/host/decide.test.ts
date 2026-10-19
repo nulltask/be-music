@@ -1,6 +1,6 @@
 import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
-import { createEmptyJson } from '@be-music/json';
-import type { Lr2Skin } from '@be-music/lr2-skin';
+import { createEmptyJSON } from '@be-music/json';
+import type { LR2Skin } from '@be-music/lr2-skin';
 import { parseChart } from '@be-music/parser';
 import type { LibraryChart } from '@be-music/scene-model';
 import type { Texture } from 'pixi.js';
@@ -12,9 +12,9 @@ import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
 import { phantomSkin } from '../skins/phantom/index.ts';
 import { resolveBeatorajaDecideTiming } from '../view/beatoraja/decide-view.ts';
 import { BuiltInDecideView, resolveBuiltInDecideTiming } from '../view/built-in/decide-view.ts';
-import { resolveLr2DecideTiming } from '../view/lr2/decide-view.ts';
+import { resolveLR2DecideTiming } from '../view/lr2/decide-view.ts';
 import { createDecideScene } from './decide.ts';
-import type { BeatorajaKit, BuiltInKit, Lr2Kit } from './family-kit.ts';
+import type { BeatorajaKit, BuiltInKit, LR2Kit } from './family-kit.ts';
 
 const CHART: LibraryChart = {
   id: 'chart',
@@ -26,7 +26,7 @@ const CHART: LibraryChart = {
   fileLabel: 'chart.bms',
   title: 'Chart',
   totalNotes: 0,
-  chart: createEmptyJson('bms'),
+  chart: createEmptyJSON('bms'),
 };
 
 /** A host with a ticker the test fires and a canvas whose pointer listeners it keeps. */
@@ -98,7 +98,7 @@ describe('createDecideScene', () => {
     const jingle = { bytes: new Uint8Array([1]) };
     const scene = createDecideScene(kit, {
       chart: CHART,
-      sounds: { decideBgm: jingle },
+      sounds: { decideBGM: jingle },
       audio: service,
       on,
       keyTarget: NO_KEYS,
@@ -165,7 +165,7 @@ describe('createDecideScene', () => {
 });
 
 /** An LR2 decide skin with nothing to draw, and its scene timing. */
-function lr2DecideSkin(timing: Lr2Skin['timing'] = {}): Lr2Skin {
+function lr2DecideSkin(timing: LR2Skin['timing'] = {}): LR2Skin {
   return {
     width: 640,
     height: 480,
@@ -176,12 +176,12 @@ function lr2DecideSkin(timing: Lr2Skin['timing'] = {}): Lr2Skin {
     lr2FontPaths: [],
     systemFontSizes: [],
     files: new Map(),
-  } as unknown as Lr2Skin;
+  } as unknown as LR2Skin;
 }
 
-describe('resolveLr2DecideTiming', () => {
+describe('resolveLR2DecideTiming', () => {
   it("opens input after the skin's #STARTINPUT and moves on 1200 ms later, with no fade-out without #FADEOUT", () => {
-    expect(resolveLr2DecideTiming({ timing: { startInput: 300 } })).toEqual({
+    expect(resolveLR2DecideTiming({ timing: { startInput: 300 } })).toEqual({
       inputDelayMs: 300,
       autoAdvanceMs: 1500,
       fadeOutMs: 0,
@@ -189,25 +189,25 @@ describe('resolveLr2DecideTiming', () => {
   });
 
   it("fades out over the skin's #FADEOUT", () => {
-    expect(resolveLr2DecideTiming({ timing: { startInput: 300, fadeOut: 200 } }).fadeOutMs).toBe(200);
-    expect(resolveLr2DecideTiming({ timing: { fadeOut: -1 } }).fadeOutMs).toBe(0);
+    expect(resolveLR2DecideTiming({ timing: { startInput: 300, fadeOut: 200 } }).fadeOutMs).toBe(200);
+    expect(resolveLR2DecideTiming({ timing: { fadeOut: -1 } }).fadeOutMs).toBe(0);
   });
 
   it('opens input after 1500 ms without #STARTINPUT, as the stock decide skin does', () => {
-    expect(resolveLr2DecideTiming({ timing: {} })).toEqual({ inputDelayMs: 1500, autoAdvanceMs: 2700, fadeOutMs: 0 });
+    expect(resolveLR2DecideTiming({ timing: {} })).toEqual({ inputDelayMs: 1500, autoAdvanceMs: 2700, fadeOutMs: 0 });
   });
 
   it('reads a negative #STARTINPUT as no delay', () => {
-    expect(resolveLr2DecideTiming({ timing: { startInput: -50 } }).inputDelayMs).toBe(0);
+    expect(resolveLR2DecideTiming({ timing: { startInput: -50 } }).inputDelayMs).toBe(0);
   });
 });
 
 describe('createDecideScene with an LR2 kit', () => {
-  function create(timing: Lr2Skin['timing'] = { startInput: 300 }) {
+  function create(timing: LR2Skin['timing'] = { startInput: 300 }) {
     const { audio, service } = createFakeAudio();
     const on = { continue: vi.fn(), cancel: vi.fn() };
     const clock = { now: 1000 };
-    const kit: Lr2Kit = { family: 'lr2', skin: lr2DecideSkin(timing) };
+    const kit: LR2Kit = { family: 'lr2', skin: lr2DecideSkin(timing) };
     const scene = createDecideScene(kit, {
       chart: CHART,
       sounds: {},
@@ -386,7 +386,7 @@ describe('createDecideScene with a beatoraja kit', () => {
     const jingle = { bytes: new Uint8Array([1]) };
     const scene = createDecideScene(beatorajaDecideKit(timing), {
       chart: CHART,
-      sounds: { decideBgm: jingle },
+      sounds: { decideBGM: jingle },
       audio: service,
       on,
       keyTarget,

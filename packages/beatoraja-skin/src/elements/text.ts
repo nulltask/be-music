@@ -51,14 +51,14 @@ export interface BeatorajaTextElement {
    */
   overflow: number;
   /**
-   * Outline / drop-shadow styling (audit 2.10). Beatoraja's JsonSkin.Text serializes colors as
+   * Outline / drop-shadow styling (audit 2.10). Beatoraja's JSONSkin.Text serializes colors as
    * 8-char `RRGGBBAA` hex strings (e.g. `"165423ff"` = beginner green). When the outline / shadow
    * is "off" the alpha byte is `00` so the renderer can gate on `alpha > 0` instead of needing a
    * separate enabled flag.
    */
-  outlineColor: BeatorajaTextRgba;
+  outlineColor: BeatorajaTextRGBA;
   outlineWidth: number;
-  shadowColor: BeatorajaTextRgba;
+  shadowColor: BeatorajaTextRGBA;
   shadowOffsetX: number;
   shadowOffsetY: number;
   shadowSmoothness: number;
@@ -72,7 +72,7 @@ export interface BeatorajaTextElement {
 }
 
 /** Parsed `RRGGBBAA` hex color split into Pixi-friendly components. */
-export interface BeatorajaTextRgba {
+export interface BeatorajaTextRGBA {
   /** 24-bit RGB packed `0xRRGGBB`. */
   rgb: number;
   /** Alpha 0..1 (so it can be passed straight into Pixi `style.dropShadow.alpha`). */
@@ -113,9 +113,9 @@ function normalizeOne(entry: NormalizedElement): BeatorajaTextElement | undefine
     // Outline / shadow styling (audit 2.10). The default `RRGGBBAA = "ffffff00"` is white with
     // 0% alpha — same sentinel beatoraja uses for "feature disabled". The renderer should gate
     // its stroke / dropShadow application on `alpha > 0`.
-    outlineColor: parseBeatorajaTextRgba(f.outlineColor, 0xffffff, 0),
+    outlineColor: parseBeatorajaTextRGBA(f.outlineColor, 0xffffff, 0),
     outlineWidth: numberField(f, 'outlineWidth', 0),
-    shadowColor: parseBeatorajaTextRgba(f.shadowColor, 0xffffff, 0),
+    shadowColor: parseBeatorajaTextRGBA(f.shadowColor, 0xffffff, 0),
     shadowOffsetX: numberField(f, 'shadowOffsetX', 0),
     shadowOffsetY: numberField(f, 'shadowOffsetY', 0),
     shadowSmoothness: numberField(f, 'shadowSmoothness', 0),
@@ -130,24 +130,24 @@ function normalizeOne(entry: NormalizedElement): BeatorajaTextElement | undefine
  * missing / malformed. Used by both the runtime parser (for `text[]` outline / shadow) and
  * future bpmgraph / gaugegraph color fields.
  */
-function parseBeatorajaTextRgba(value: unknown, fallbackRgb: number, fallbackAlpha: number): BeatorajaTextRgba {
-  if (typeof value !== 'string') return { rgb: fallbackRgb, alpha: fallbackAlpha };
+function parseBeatorajaTextRGBA(value: unknown, fallbackRGB: number, fallbackAlpha: number): BeatorajaTextRGBA {
+  if (typeof value !== 'string') return { rgb: fallbackRGB, alpha: fallbackAlpha };
   const trimmed = value.startsWith('#') ? value.slice(1) : value;
   if (trimmed.length === 8) {
     // RRGGBBAA. Parse as base-16; if any byte is invalid, the integer fall back to NaN and
     // we drop to the default. The alpha byte gets normalized to 0..1.
     const num = Number.parseInt(trimmed, 16);
-    if (!Number.isFinite(num)) return { rgb: fallbackRgb, alpha: fallbackAlpha };
+    if (!Number.isFinite(num)) return { rgb: fallbackRGB, alpha: fallbackAlpha };
     const rgb = (num >>> 8) & 0xffffff;
     const alpha = (num & 0xff) / 255;
     return { rgb, alpha };
   }
   if (trimmed.length === 6) {
     const num = Number.parseInt(trimmed, 16);
-    if (!Number.isFinite(num)) return { rgb: fallbackRgb, alpha: fallbackAlpha };
+    if (!Number.isFinite(num)) return { rgb: fallbackRGB, alpha: fallbackAlpha };
     return { rgb: num & 0xffffff, alpha: 1 };
   }
-  return { rgb: fallbackRgb, alpha: fallbackAlpha };
+  return { rgb: fallbackRGB, alpha: fallbackAlpha };
 }
 
 function alignField(value: unknown): BeatorajaTextAlign {

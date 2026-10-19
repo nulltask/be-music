@@ -5,7 +5,7 @@
  * intents.
  */
 
-import type { PlayerUiCommand } from '@be-music/player/signals';
+import type { PlayerUICommand } from '@be-music/player/signals';
 import type { Texture } from 'pixi.js';
 import type { PlayViewSetting, PlayViewTiming } from '../../view/types.ts';
 
@@ -35,7 +35,7 @@ export type PlayMoment =
   | { readonly kind: 'full-combo'; readonly at: number }
   | { readonly kind: 'gauge'; readonly previous: number; readonly next: number; readonly at: number }
   | { readonly kind: 'bomb'; readonly channel: string; readonly at: number }
-  | { readonly kind: 'lane-command'; readonly command: PlayerUiCommand }
+  | { readonly kind: 'lane-command'; readonly command: PlayerUICommand }
   /** The player's keys changed a view setting (the hi-speed, a lane cover). */
   | { readonly kind: 'view-setting'; readonly setting: PlayViewSetting; readonly at: number };
 

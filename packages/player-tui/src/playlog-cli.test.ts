@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import type { BeMusicPlaylog, PlaylogRulesetResult } from '@be-music/player/playlog';
-import { buildPlaylogReport, parsePlaylogCliArgs } from './playlog-cli.ts';
+import { buildPlaylogReport, parsePlaylogCLIArgs } from './playlog-cli.ts';
 
 function makePlaylog(): BeMusicPlaylog {
   return {
@@ -41,8 +41,8 @@ function makeResult(overrides: Partial<PlaylogRulesetResult> = {}): PlaylogRules
 }
 
 describe('playlog-cli', () => {
-  test('parsePlaylogCliArgs: defaults to all rulesets and collects files', () => {
-    const args = parsePlaylogCliArgs(['a.bmplay.json', 'b.bmplay.json']);
+  test('parsePlaylogCLIArgs: defaults to all rulesets and collects files', () => {
+    const args = parsePlaylogCLIArgs(['a.bmplay.json', 'b.bmplay.json']);
     expect(args.files).toEqual(['a.bmplay.json', 'b.bmplay.json']);
     expect(args.rulesets).toEqual(['lr2', 'beatoraja', 'iidx']);
     expect(args.json).toBe(false);
@@ -51,8 +51,8 @@ describe('playlog-cli', () => {
     expect(args.judgeAlgorithm).toBeUndefined();
   });
 
-  test('parsePlaylogCliArgs: parses ruleset list, gauge, algorithm, and flags', () => {
-    const args = parsePlaylogCliArgs([
+  test('parsePlaylogCLIArgs: parses ruleset list, gauge, algorithm, and flags', () => {
+    const args = parsePlaylogCLIArgs([
       '--ruleset=lr2,iidx',
       '--gauge=hard',
       '--algorithm=lowest',
@@ -66,27 +66,27 @@ describe('playlog-cli', () => {
     expect(args.files).toEqual(['file.bmplay.json']);
   });
 
-  test('parsePlaylogCliArgs: --ruleset=all restores every simulator', () => {
-    expect(parsePlaylogCliArgs(['--ruleset=all']).rulesets).toEqual(['lr2', 'beatoraja', 'iidx']);
+  test('parsePlaylogCLIArgs: --ruleset=all restores every simulator', () => {
+    expect(parsePlaylogCLIArgs(['--ruleset=all']).rulesets).toEqual(['lr2', 'beatoraja', 'iidx']);
   });
 
-  test('parsePlaylogCliArgs: rejects unknown rulesets, algorithms, and options', () => {
-    expect(() => parsePlaylogCliArgs(['--ruleset=osu'])).toThrow(/unknown ruleset 'osu'/);
-    expect(() => parsePlaylogCliArgs(['--algorithm=psychic'])).toThrow(/unknown judge algorithm/);
-    expect(() => parsePlaylogCliArgs(['--frobnicate'])).toThrow(/unknown option '--frobnicate'/);
+  test('parsePlaylogCLIArgs: rejects unknown rulesets, algorithms, and options', () => {
+    expect(() => parsePlaylogCLIArgs(['--ruleset=osu'])).toThrow(/unknown ruleset 'osu'/);
+    expect(() => parsePlaylogCLIArgs(['--algorithm=psychic'])).toThrow(/unknown judge algorithm/);
+    expect(() => parsePlaylogCLIArgs(['--frobnicate'])).toThrow(/unknown option '--frobnicate'/);
   });
 
-  test('parsePlaylogCliArgs: `--` ends the options and everything after it is a file', () => {
-    expect(parsePlaylogCliArgs(['--', 'a.bmplay.json']).files).toEqual(['a.bmplay.json']);
+  test('parsePlaylogCLIArgs: `--` ends the options and everything after it is a file', () => {
+    expect(parsePlaylogCLIArgs(['--', 'a.bmplay.json']).files).toEqual(['a.bmplay.json']);
 
-    const args = parsePlaylogCliArgs(['--json', '--', '--weird.bmplay.json', '--', 'b.bmplay.json']);
+    const args = parsePlaylogCLIArgs(['--json', '--', '--weird.bmplay.json', '--', 'b.bmplay.json']);
     expect(args.json).toBe(true);
     expect(args.files).toEqual(['--weird.bmplay.json', '--', 'b.bmplay.json']);
   });
 
-  test('parsePlaylogCliArgs: --help and -h set the help flag', () => {
-    expect(parsePlaylogCliArgs(['--help']).help).toBe(true);
-    expect(parsePlaylogCliArgs(['-h']).help).toBe(true);
+  test('parsePlaylogCLIArgs: --help and -h set the help flag', () => {
+    expect(parsePlaylogCLIArgs(['--help']).help).toBe(true);
+    expect(parsePlaylogCLIArgs(['-h']).help).toBe(true);
   });
 
   test('buildPlaylogReport: renders the chart header and one row per result', () => {

@@ -1,4 +1,4 @@
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import { parseChart } from '@be-music/parser';
 import { stitchNonstopCourse, type NonstopStitchMap } from '../../course/index.ts';
 
@@ -8,7 +8,7 @@ import { stitchNonstopCourse, type NonstopStitchMap } from '../../course/index.t
  * times the scripts in `engine-characterization.test.ts` aim at.
  */
 
-const bms = (...lines: string[]): BeMusicJson => parseChart(lines.join('\n'), 'bms');
+const bms = (...lines: string[]): BeMusicJSON => parseChart(lines.join('\n'), 'bms');
 
 const header = (title: string, ...extra: string[]): string[] => [
   '#PLAYER 1',
@@ -28,7 +28,7 @@ const header = (title: string, ...extra: string[]): string[] => [
  * Taps on every lane kind of 7 KEY: 11 @ 0.5, 12 @ 0.75, 13 @ 1.0, scratch 16 @ 1.25, chord 14 + 15 @ 1.5, 18 @ 1.75,
  * 19 @ 2.0, 11 @ 2.5, 12 @ 3.0, 11 @ 3.5. BGM at 0 and 2.0, a BGM volume change at 1.0 and a key volume change at 2.0.
  */
-export function basicChart(): BeMusicJson {
+export function basicChart(): BeMusicJSON {
   return bms(
     ...header('basic', '#TOTAL 160'),
     '#00001:01',
@@ -52,7 +52,7 @@ export function basicChart(): BeMusicJson {
  * Long notes (`#LNTYPE 1`) under `#LNMODE lnMode` (none: the chart leaves it to the ruleset): 11 from 0.5 to 1.5,
  * 12 from 1.0 to 2.0, a tap on 13 @ 1.25, scratch 16 from 2.0 to 2.5, 14 from 2.5 to 3.5 and a tap on 15 @ 3.5.
  */
-export function longNoteChart(lnMode?: 1 | 2 | 3): BeMusicJson {
+export function longNoteChart(lnMode?: 1 | 2 | 3): BeMusicJSON {
   return bms(
     ...header(`long notes${lnMode === undefined ? '' : ` LNMODE ${lnMode}`}`, '#LNTYPE 1'),
     ...(lnMode === undefined ? [] : [`#LNMODE ${lnMode}`]),
@@ -71,7 +71,7 @@ export function longNoteChart(lnMode?: 1 | 2 | 3): BeMusicJson {
  * Mines: taps on 11 @ 0.5 and 12 @ 2.0, mines on 11 @ 1.0 and 1.5, on 12 @ 1.25 and on scratch 16 @ 2.5, with the
  * explosion sample `#WAV00`.
  */
-export function mineChart(): BeMusicJson {
+export function mineChart(): BeMusicJSON {
   return bms(
     ...header('mines', '#WAV00 explode.wav'),
     '#00001:01',
@@ -87,7 +87,7 @@ export function mineChart(): BeMusicJson {
  * Tempo gimmicks: BPM 120, then 180 (channel 03) at 1.0, 240 (`#BPM01`, channel 08) at 2.0, a STOP of a half note
  * (`#STOP01 96`) at measure 1's middle, SCROLL 0.5 from 0.5 and SPEED 1.5 at measure 1. Notes on every quarter.
  */
-export function tempoChart(): BeMusicJson {
+export function tempoChart(): BeMusicJSON {
   return bms(
     ...header('tempo', '#BPM01 240', '#STOP01 96', '#SCROLL01 0.5', '#SPEED01 1.5'),
     '#00001:01',
@@ -106,7 +106,7 @@ export function tempoChart(): BeMusicJson {
  * Judge rank changes: `#RANK 2` (NORMAL), `#EXRANK01 25` (narrower) from 1.0 and `#EXRANK02 200` (wider) from 2.0.
  * Taps on 11 @ 0.5, 12 @ 1.5, 13 @ 2.5 and 14 @ 3.0; mines on 15 @ 1.75 and 3.25 and an invisible note on 16 @ 2.25.
  */
-export function exRankChart(withChanges = true): BeMusicJson {
+export function exRankChart(withChanges = true): BeMusicJSON {
   return bms(
     ...header('exrank', '#EXRANK01 25', '#EXRANK02 200'),
     '#00001:01',
@@ -122,7 +122,7 @@ export function exRankChart(withChanges = true): BeMusicJson {
 }
 
 /** Sixteenth notes over four lanes from 0.5 to 4.375: 32 notes, enough misses to empty any survival gauge. */
-export function denseChart(): BeMusicJson {
+export function denseChart(): BeMusicJSON {
   const lanes = ['11', '12', '13', '14'];
   const rows = lanes.map((lane, offset) => {
     const measure0 = Array.from({ length: 16 }, (_, slot) => (slot >= 4 && slot % 4 === offset ? '02' : '00'));
@@ -134,7 +134,7 @@ export function denseChart(): BeMusicJson {
 }
 
 /** The two stages of {@link nonstopCourse}: stage A at 120 BPM (`#RANK 3`), stage B at 150 BPM (`#RANK 0`). */
-function nonstopStages(): BeMusicJson[] {
+function nonstopStages(): BeMusicJSON[] {
   const stageA = bms(
     '#PLAYER 1',
     '#TITLE stage A',
@@ -162,7 +162,7 @@ function nonstopStages(): BeMusicJson[] {
 }
 
 /** A two-stage LR2 NONSTOP course stitched into one chart (`stitchNonstopCourse`, CUT connection). */
-export function nonstopCourse(): { chart: BeMusicJson; map: NonstopStitchMap } {
+export function nonstopCourse(): { chart: BeMusicJSON; map: NonstopStitchMap } {
   const stitched = stitchNonstopCourse(
     nonstopStages().map((chart) => ({ chart })),
     { connections: ['cut'], title: 'nonstop' },

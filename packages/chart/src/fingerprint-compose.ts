@@ -2,7 +2,7 @@
  * Composition of play documents from a chart model or a chart document: the play document of one outcome. Not part of
  * the package API; the differential tests use it to check the chart model against the parser.
  */
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import type { RandomDraws } from './control-flow.ts';
 import type { Rational } from './fingerprint-rational.ts';
 import { classOfDraws } from './fingerprint-control-flow.ts';
@@ -36,7 +36,7 @@ import { buildChartModel } from './fingerprint-chart-model.ts';
  * part of the package API; used to check the model against the parser.
  */
 export function createOutcomeComposer(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   options: BeMusicFingerprintOptions,
 ): (draws: RandomDraws) => BeMusicPlayFingerprintDocument {
   const model = buildChartModel(json, resolveLaneModeExtension(options.chartPath));
@@ -79,7 +79,7 @@ export function expandChartFingerprintDocument(
     lengths: new Map(document.measures.lengths.map(([measure, length]) => [Number(measure), parseRational(length)])),
     header: {
       bpm: parseRational(document.bpm),
-      baseBpm: document.baseBpm === null ? null : parseRational(document.baseBpm),
+      baseBPM: document.baseBPM === null ? null : parseRational(document.baseBPM),
       judge: parseJudge(document.judge),
       total: parseTotal(document.total),
       player3: document.lanes.player3,

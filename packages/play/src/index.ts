@@ -34,7 +34,7 @@ const CONTENT_TYPES: Record<string, string> = {
   wasm: 'application/wasm',
 };
 
-async function serveFfmpegCore(request: Request, env: Env, pathname: string): Promise<Response> {
+async function serveFFmpegCore(request: Request, env: Env, pathname: string): Promise<Response> {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
   }
@@ -67,11 +67,11 @@ async function serveFfmpegCore(request: Request, env: Env, pathname: string): Pr
   return new Response(request.method === 'HEAD' ? null : object.body, { headers });
 }
 
-function resolveUrlLoadProxyTarget(rawUrl: string | null): URL {
-  if (!rawUrl) {
+function resolveURLLoadProxyTarget(rawURL: string | null): URL {
+  if (!rawURL) {
     throw new Error('missing url query parameter');
   }
-  const target = new URL(rawUrl);
+  const target = new URL(rawURL);
   if (target.protocol !== 'https:') {
     throw new Error('only https proxy targets are allowed');
   }
@@ -81,14 +81,14 @@ function resolveUrlLoadProxyTarget(rawUrl: string | null): URL {
   return target;
 }
 
-async function serveUrlLoadProxy(request: Request): Promise<Response> {
+async function serveURLLoadProxy(request: Request): Promise<Response> {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
   }
 
   let target: URL;
   try {
-    target = resolveUrlLoadProxyTarget(new URL(request.url).searchParams.get('url'));
+    target = resolveURLLoadProxyTarget(new URL(request.url).searchParams.get('url'));
   } catch (error) {
     return new Response(error instanceof Error ? error.message : 'invalid proxy target', { status: 400 });
   }
@@ -121,10 +121,10 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const { pathname } = new URL(request.url);
     if (pathname.startsWith(FFMPEG_PREFIX)) {
-      return serveFfmpegCore(request, env, pathname);
+      return serveFFmpegCore(request, env, pathname);
     }
     if (pathname === URL_LOAD_PROXY_PATH) {
-      return serveUrlLoadProxy(request);
+      return serveURLLoadProxy(request);
     }
     // The request goes over as is, so the Leaderboard sees this origin: its session cookies and sign-in callbacks stay
     // first-party, and no CORS is involved.

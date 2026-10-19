@@ -70,10 +70,10 @@ describe('share cards', () => {
     expect((await put(owner, new Uint8Array(600 * 1024))).status).toBe(413);
     const stored = await put(owner, PNG);
     expect(stored.status).toBe(200);
-    const { cardUrl } = (await stored.json()) as { cardUrl: string };
-    expect(cardUrl).toMatch(new RegExp(`^/scores/${scoreId}/card\\?v=[0-9a-f]{16}$`));
-    expect(new Uint8Array(await (await fetchApp(cardUrl)).arrayBuffer())).toEqual(PNG);
-    expect(await (await fetchApp(`/scores/${scoreId}`)).text()).toContain(`${ORIGIN}${cardUrl}`);
+    const { cardUrl: cardURL } = (await stored.json()) as { cardUrl: string };
+    expect(cardURL).toMatch(new RegExp(`^/scores/${scoreId}/card\\?v=[0-9a-f]{16}$`));
+    expect(new Uint8Array(await (await fetchApp(cardURL)).arrayBuffer())).toEqual(PNG);
+    expect(await (await fetchApp(`/scores/${scoreId}`)).text()).toContain(`${ORIGIN}${cardURL}`);
   });
 
   test('other pages preview as the site card', async () => {

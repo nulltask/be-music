@@ -11,9 +11,9 @@ import {
 import {
   resolveBeatorajaDefaultTotal,
   resolveBeatorajaHardRecoverMultiplier,
-  resolveIidxGaugeUnit,
-  resolveLr2DefaultTotal,
-  resolveLr2HardDamageMultiplier,
+  resolveIIDXGaugeUnit,
+  resolveLR2DefaultTotal,
+  resolveLR2HardDamageMultiplier,
   simulatePlaylog,
   simulatePlaylogRulesets,
   type PlaylogRulesetId,
@@ -385,10 +385,10 @@ describe('simulatePlaylog', () => {
 });
 
 describe('ruleset helpers', () => {
-  test('resolveLr2DefaultTotal follows the OpenLR2 piecewise formula (×0.8)', () => {
-    expect(resolveLr2DefaultTotal(0)).toBeCloseTo(160, 9);
-    expect(resolveLr2DefaultTotal(500)).toBeCloseTo(256, 9); // ((500 − 400) / 2.5 + 280) × 0.8
-    expect(resolveLr2DefaultTotal(1000)).toBeCloseTo(352, 9); // ((1000 − 600) / 5 + 360) × 0.8
+  test('resolveLR2DefaultTotal follows the OpenLR2 piecewise formula (×0.8)', () => {
+    expect(resolveLR2DefaultTotal(0)).toBeCloseTo(160, 9);
+    expect(resolveLR2DefaultTotal(500)).toBeCloseTo(256, 9); // ((500 − 400) / 2.5 + 280) × 0.8
+    expect(resolveLR2DefaultTotal(1000)).toBeCloseTo(352, 9); // ((1000 − 600) / 5 + 360) × 0.8
   });
 
   test('resolveBeatorajaDefaultTotal floors at 260', () => {
@@ -396,15 +396,15 @@ describe('ruleset helpers', () => {
     expect(resolveBeatorajaDefaultTotal(2000)).toBeCloseTo((7.605 * 2000) / (0.01 * 2000 + 6.5), 9); // ≈ 573.96
   });
 
-  test('resolveIidxGaugeUnit rounds to the nearest 0.02 %', () => {
-    expect(resolveIidxGaugeUnit(100)).toBeCloseTo(2.6, 9); // 260 / 100
-    expect(resolveIidxGaugeUnit(338)).toBeCloseTo(0.76, 9); // 260 / 338 ≈ 0.769 → 0.76
-    expect(resolveIidxGaugeUnit(1000)).toBeCloseTo(0.46, 9); // 760.5 / 1650 ≈ 0.461 → 0.46
+  test('resolveIIDXGaugeUnit rounds to the nearest 0.02 %', () => {
+    expect(resolveIIDXGaugeUnit(100)).toBeCloseTo(2.6, 9); // 260 / 100
+    expect(resolveIIDXGaugeUnit(338)).toBeCloseTo(0.76, 9); // 260 / 338 ≈ 0.769 → 0.76
+    expect(resolveIIDXGaugeUnit(1000)).toBeCloseTo(0.46, 9); // 760.5 / 1650 ≈ 0.461 → 0.46
   });
 
   test('LR2 hard damage / beatoraja hard recovery multipliers', () => {
-    expect(resolveLr2HardDamageMultiplier(240, 1000)).toBe(1); // fix1 = 1, fix2 = 1
-    expect(resolveLr2HardDamageMultiplier(160, 2)).toBe(10); // tiny charts hit the fix2 = 10 cap
+    expect(resolveLR2HardDamageMultiplier(240, 1000)).toBe(1); // fix1 = 1, fix2 = 1
+    expect(resolveLR2HardDamageMultiplier(160, 2)).toBe(10); // tiny charts hit the fix2 = 10 cap
     expect(resolveBeatorajaHardRecoverMultiplier(300, 2000)).toBeCloseTo(0.14 / 0.15, 9);
     expect(resolveBeatorajaHardRecoverMultiplier(160, 100)).toBe(0); // 2 × TOTAL − 320 = 0
   });

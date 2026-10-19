@@ -7,7 +7,7 @@ import {
   rulesetRecords,
   serializeSongRecords,
   songRecordKey,
-  toLr2RecordLamp,
+  toLR2RecordLamp,
 } from './song-records.ts';
 
 describe('songRecordKey', () => {
@@ -105,13 +105,13 @@ describe('parseSongRecords / serializeSongRecords', () => {
   });
 });
 
-describe('toLr2RecordLamp', () => {
+describe('toLR2RecordLamp', () => {
   it('keeps LR2’s own lamps and maps the ones LR2 does not award', () => {
     expect(
-      ['FAILED', 'EASY', 'NORMAL', 'HARD', 'FULL_COMBO', 'ASSIST_EASY'].map((lamp) => toLr2RecordLamp(lamp as never)),
+      ['FAILED', 'EASY', 'NORMAL', 'HARD', 'FULL_COMBO', 'ASSIST_EASY'].map((lamp) => toLR2RecordLamp(lamp as never)),
     ).toEqual(['FAILED', 'EASY', 'NORMAL', 'HARD', 'FULL_COMBO', 'ASSIST_EASY']);
-    expect(toLr2RecordLamp('MAX')).toBe('FULL_COMBO');
-    expect(toLr2RecordLamp('EX_HARD')).toBe('NORMAL');
+    expect(toLR2RecordLamp('MAX')).toBe('FULL_COMBO');
+    expect(toLR2RecordLamp('EX_HARD')).toBe('NORMAL');
   });
 });
 

@@ -45,7 +45,7 @@ export function shareText(
 export const SHARE_HASHTAG = 'bemusic';
 
 /** A post on X with the text, the page and the hashtag filled in. */
-export function xIntentUrl(text: string, url: string): string {
+export function xIntentURL(text: string, url: string): string {
   const params = new URLSearchParams({ text, url, hashtags: SHARE_HASHTAG });
   return `https://x.com/intent/post?${params.toString()}`;
 }

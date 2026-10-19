@@ -2,33 +2,33 @@ import {
   createBeatResolver,
   isLandmineChannel,
   isSampleTriggerChannel,
-  mapBmsLongNoteChannelToPlayable,
-  parseBpmFrom03Token,
-  resolveBmsLongNotes,
+  mapBMSLongNoteChannelToPlayable,
+  parseBPMFrom03Token,
+  resolveBMSLongNotes,
   resolveChartPlayVariant,
   BMSON_MODE_HINT_LAYOUTS,
   getPlayModeLayouts,
   resolveBmsonModeHintLayout,
-  resolveLnobjLongNotes,
+  resolveLNOBJLongNotes,
   sortEvents,
 } from '@be-music/chart';
 import { parseBmson } from '@be-music/parser';
 import {
   normalizeChannel,
   normalizeObjectKey,
-  resolveBmsBase,
-  type BmsonBpmEventEntry,
+  resolveBMSBase,
+  type BmsonBPMEventEntry,
   type BmsonScrollEventEntry,
   type BmsonSoundChannelEntry,
   type BmsonStopEventEntry,
   type BeMusicEvent,
-  type BeMusicJson,
+  type BeMusicJSON,
 } from '@be-music/json';
 import { normalizeSortedUniqueNonNegativeIntegers } from '@be-music/utils/core';
 import { areBmsonChartsEquivalent } from './equivalence.ts';
 import type { BmsonStringifyOptions } from './options.ts';
 
-export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions = {}): string {
+export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions = {}): string {
   const resolution = resolveBmsonResolutionForOutput(json, options);
   const indent = options.indent ?? 2;
   const skipValidation = options.skipPreservationValidation === true;
@@ -41,7 +41,7 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
   }
   const sortedEvents = sortEvents(json.events);
   const beatResolver = createBeatResolver(json);
-  const bmsLongNotes = resolveBmsLongNotesForBmsonOutput(json);
+  const bmsLongNotes = resolveBMSLongNotesForBmsonOutput(json);
 
   // Lanes get bmson `x` numbers from every playable channel in use, plus the lanes mines and invisible objects sit on (a
   // mine on `D3` or a hidden note on `33` sits on lane `13`), so they keep their lane even where no playable note
@@ -52,7 +52,7 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
     if (channel === '01' || !isSampleTriggerChannel(channel)) {
       continue;
     }
-    const lane = laneExtensionChannelToPlayableChannel(channel) ?? mapBmsLongNoteChannelToPlayable(channel) ?? channel;
+    const lane = laneExtensionChannelToPlayableChannel(channel) ?? mapBMSLongNoteChannelToPlayable(channel) ?? channel;
     playableChannelSet.add(lane);
   }
   const playableChannels = [...playableChannelSet].sort();
@@ -73,7 +73,7 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
   const scrollEvents: Array<{ y: number; rate: number }> = [];
   // Honor `#BASE 62` so a chart whose `event.value` is a case-sensitive lowercase ID resolves to the right sample /
   // BPM / STOP slot when re-emitted as bmson.
-  const idBase = resolveBmsBase(json);
+  const idBase = resolveBMSBase(json);
 
   for (const event of sortedEvents) {
     const channel = normalizeChannel(event.channel);
@@ -117,7 +117,7 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
       }
       const key = normalizeObjectKey(event.value, idBase);
       const fileName = json.resources.wav[key] ?? key;
-      const lane = mapBmsLongNoteChannelToPlayable(channel) ?? channel;
+      const lane = mapBMSLongNoteChannelToPlayable(channel) ?? channel;
       const x = channel === '01' ? 0 : (xMap.get(lane) ?? 0);
       const longNoteEndBeat = bmsLongNotes.startToEndBeat.get(event);
       const length =
@@ -139,7 +139,7 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
     }
 
     if (channel === '03') {
-      const bpm = parseBpmFrom03Token(event.value);
+      const bpm = parseBPMFrom03Token(event.value);
       if (bpm > 0) {
         bpmEvents.push({ y, bpm });
       }
@@ -184,7 +184,7 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
   if (mineChannels.size > 0) {
     bmson.mine_channels = [...mineChannels.values()];
   }
-  const bga = createBmsonBgaForOutput(json);
+  const bga = createBmsonBGAForOutput(json);
   if (bga) {
     bmson.bga = bga;
   }
@@ -193,7 +193,7 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
 }
 
 function resolvePreservedBmsonDocumentForOutput(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   resolution: number,
   skipValidation: boolean,
 ): Record<string, unknown> | undefined {
@@ -227,7 +227,7 @@ function resolvePreservedBmsonDocumentForOutput(
   return doPreservedBmsonDocumentMatchChart(json, document) ? document : undefined;
 }
 
-function createPreservedBmsonDocumentForOutput(json: BeMusicJson, resolution: number): Record<string, unknown> {
+function createPreservedBmsonDocumentForOutput(json: BeMusicJSON, resolution: number): Record<string, unknown> {
   const document: Record<string, unknown> = {
     info: createPreservedBmsonInfoForOutput(json, resolution),
   };
@@ -238,7 +238,7 @@ function createPreservedBmsonDocumentForOutput(json: BeMusicJson, resolution: nu
     document.lines = mapBmsonLineValues(json.preservation.bmson.lines);
   }
   if (json.preservation.bmson.bpmEvents.length > 0) {
-    document.bpm_events = json.preservation.bmson.bpmEvents.map(mapBmsonBpmEventForOutput);
+    document.bpm_events = json.preservation.bmson.bpmEvents.map(mapBmsonBPMEventForOutput);
   }
   if (json.preservation.bmson.stopEvents.length > 0) {
     document.stop_events = json.preservation.bmson.stopEvents.map(mapBmsonStopEventForOutput);
@@ -250,14 +250,14 @@ function createPreservedBmsonDocumentForOutput(json: BeMusicJson, resolution: nu
   if (json.preservation.bmson.soundChannels.length > 0) {
     document.sound_channels = json.preservation.bmson.soundChannels.map(mapBmsonSoundChannelForOutput);
   }
-  const bga = createBmsonBgaForOutput(json);
+  const bga = createBmsonBGAForOutput(json);
   if (bga) {
     document.bga = bga;
   }
   return document;
 }
 
-function createPreservedBmsonInfoForOutput(json: BeMusicJson, resolution: number): Record<string, unknown> {
+function createPreservedBmsonInfoForOutput(json: BeMusicJSON, resolution: number): Record<string, unknown> {
   const info = json.bmson.info;
   const output: Record<string, unknown> = {};
 
@@ -282,8 +282,8 @@ function createPreservedBmsonInfoForOutput(json: BeMusicJson, resolution: number
   if (typeof info.level === 'number') {
     output.level = info.level;
   }
-  if (typeof info.initBpm === 'number') {
-    output.init_bpm = info.initBpm;
+  if (typeof info.initBPM === 'number') {
+    output.init_bpm = info.initBPM;
   }
   if (typeof info.modeHint === 'string') {
     output.mode_hint = info.modeHint;
@@ -318,12 +318,12 @@ function createPreservedBmsonInfoForOutput(json: BeMusicJson, resolution: number
   return output;
 }
 
-function doPreservedBmsonDocumentMatchChart(json: BeMusicJson, document: Record<string, unknown>): boolean {
+function doPreservedBmsonDocumentMatchChart(json: BeMusicJSON, document: Record<string, unknown>): boolean {
   const reparsed = parseBmson(JSON.stringify(document));
   return areBmsonChartsEquivalent(json, reparsed);
 }
 
-function mapBmsonBpmEventForOutput(event: BmsonBpmEventEntry): { y: number; bpm: number } {
+function mapBmsonBPMEventForOutput(event: BmsonBPMEventEntry): { y: number; bpm: number } {
   return {
     y: Math.max(0, Math.floor(event.y)),
     bpm: event.bpm,
@@ -359,7 +359,7 @@ function mapBmsonSoundChannelForOutput(channel: BmsonSoundChannelEntry): {
   };
 }
 
-function resolveBmsonResolutionForOutput(json: BeMusicJson, options: BmsonStringifyOptions): number {
+function resolveBmsonResolutionForOutput(json: BeMusicJSON, options: BmsonStringifyOptions): number {
   if (typeof options.resolution === 'number' && Number.isFinite(options.resolution) && options.resolution > 0) {
     return Math.floor(options.resolution);
   }
@@ -372,14 +372,14 @@ function resolveBmsonResolutionForOutput(json: BeMusicJson, options: BmsonString
   return 240;
 }
 
-function resolveBmsonVersionForOutput(json: BeMusicJson): string {
+function resolveBmsonVersionForOutput(json: BeMusicJSON): string {
   if (typeof json.bmson.version === 'string' && json.bmson.version.length > 0) {
     return json.bmson.version;
   }
   return '1.0.0';
 }
 
-function createBmsonInfoForOutput(json: BeMusicJson, resolution: number, modeHint: string): Record<string, unknown> {
+function createBmsonInfoForOutput(json: BeMusicJSON, resolution: number, modeHint: string): Record<string, unknown> {
   const info = json.bmson.info;
   const metadataPlayLevel = resolveBmsonCompatiblePlayLevel(json.metadata.playLevel);
   const output: Record<string, unknown> = {
@@ -388,7 +388,7 @@ function createBmsonInfoForOutput(json: BeMusicJson, resolution: number, modeHin
     artist: info.artist ?? json.metadata.artist ?? '',
     genre: info.genre ?? json.metadata.genre ?? '',
     level: typeof info.level === 'number' ? info.level : (metadataPlayLevel ?? 0),
-    init_bpm: typeof info.initBpm === 'number' ? info.initBpm : json.metadata.bpm,
+    init_bpm: typeof info.initBPM === 'number' ? info.initBPM : json.metadata.bpm,
     mode_hint: modeHint,
     resolution,
   };
@@ -400,7 +400,7 @@ function createBmsonInfoForOutput(json: BeMusicJson, resolution: number, modeHin
   if (typeof info.chartName === 'string') {
     output.chart_name = info.chartName;
   }
-  const lnType = resolveBmsonLnTypeForOutput(json);
+  const lnType = resolveBmsonLNTypeForOutput(json);
   if (lnType !== undefined) {
     output.ln_type = lnType;
   }
@@ -451,7 +451,7 @@ const BMS_RANK_TO_BMSON_JUDGE_RANK = [33, 67, 100, 133, 167] as const;
  * {@link BMS_RANK_TO_BMSON_JUDGE_RANK}. beatoraja judges any other `#RANK` (out of range or fractional) as NORMAL, so
  * the field is left out and the bmson default (100 = NORMAL) applies.
  */
-function resolveBmsonJudgeRankForOutput(json: BeMusicJson): number | undefined {
+function resolveBmsonJudgeRankForOutput(json: BeMusicJSON): number | undefined {
   const authored = json.bmson.info.judgeRank;
   if (typeof authored === 'number' && Number.isFinite(authored)) {
     return authored;
@@ -478,7 +478,7 @@ function resolveBmsonJudgeRankForOutput(json: BeMusicJson): number | undefined {
  * `bmson.info.total`, or `metadata.total` of a bmson source (the parser mirrors `info.total` there) — and a BMS / JSON
  * chart's absolute TOTAL is left out, letting the bmson default (100%) apply.
  */
-function resolveBmsonTotalForOutput(json: BeMusicJson): number | undefined {
+function resolveBmsonTotalForOutput(json: BeMusicJSON): number | undefined {
   const authored = json.bmson.info.total;
   if (typeof authored === 'number' && Number.isFinite(authored)) {
     return authored;
@@ -490,7 +490,7 @@ function resolveBmsonTotalForOutput(json: BeMusicJson): number | undefined {
   return undefined;
 }
 
-function resolveBmsonCompatiblePlayLevel(value: BeMusicJson['metadata']['playLevel']): number | undefined {
+function resolveBmsonCompatiblePlayLevel(value: BeMusicJSON['metadata']['playLevel']): number | undefined {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
   }
@@ -505,7 +505,7 @@ function resolveBmsonCompatiblePlayLevel(value: BeMusicJson['metadata']['playLev
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function createBmsonBgaForOutput(json: BeMusicJson):
+function createBmsonBGAForOutput(json: BeMusicJSON):
   | {
       bga_header: Array<{ id: number; name: string }>;
       bga_events: Array<{ y: number; id: number }>;
@@ -520,9 +520,9 @@ function createBmsonBgaForOutput(json: BeMusicJson):
       name: entry.name,
     });
   }
-  const events = normalizeBmsonBgaEventEntries(json.bmson.bga.events ?? []);
-  const layerEvents = normalizeBmsonBgaEventEntries(json.bmson.bga.layerEvents ?? []);
-  const poorEvents = normalizeBmsonBgaEventEntries(json.bmson.bga.poorEvents ?? []);
+  const events = normalizeBmsonBGAEventEntries(json.bmson.bga.events ?? []);
+  const layerEvents = normalizeBmsonBGAEventEntries(json.bmson.bga.layerEvents ?? []);
+  const poorEvents = normalizeBmsonBGAEventEntries(json.bmson.bga.poorEvents ?? []);
 
   if (header.length === 0 && events.length === 0 && layerEvents.length === 0 && poorEvents.length === 0) {
     return undefined;
@@ -543,7 +543,7 @@ function normalizeBmsonSubartistsForOutput(value: string[] | undefined): string[
   return value.filter((item) => typeof item === 'string');
 }
 
-function resolveBmsonLinesForOutput(json: BeMusicJson, resolution: number): number[] {
+function resolveBmsonLinesForOutput(json: BeMusicJSON, resolution: number): number[] {
   if (json.preservation.bmson.lines.length > 0) {
     return normalizeBmsonLines(
       rescaleBmsonLines(json.preservation.bmson.lines, json.bmson.info.resolution, resolution),
@@ -577,7 +577,7 @@ function normalizeBmsonLines(lines: number[]): number[] {
   return sorted;
 }
 
-function createDefaultBmsonLines(json: BeMusicJson, resolution: number): number[] {
+function createDefaultBmsonLines(json: BeMusicJSON, resolution: number): number[] {
   const ticksPerMeasure = Math.max(1, Math.floor(resolution * 4));
   let lastEventMeasure = 0;
   for (const event of json.events) {
@@ -615,7 +615,7 @@ function mapBmsonLineValues(lines: ReadonlyArray<number>): Array<{ y: number }> 
   return mapped;
 }
 
-function normalizeBmsonBgaEventEntries(
+function normalizeBmsonBGAEventEntries(
   entries: ReadonlyArray<{ y: number; id: number }>,
 ): Array<{ y: number; id: number }> {
   const normalized: Array<{ y: number; id: number }> = [];
@@ -635,7 +635,7 @@ function normalizeBmsonBgaEventEntries(
  * hint's table — else the spec's `generic-<lanes>keys`, a layout ordered left to right. (A made-up `beat-<lanes>k` would be
  * an unknown hint, which beatoraja, Qwilight, Bemuse and the be-music parser read as `beat-7k`.)
  */
-function resolveBmsonModeHintForOutput(json: BeMusicJson, playableChannels: readonly string[]): string {
+function resolveBmsonModeHintForOutput(json: BeMusicJSON, playableChannels: readonly string[]): string {
   if (json.bmson.info.modeHint !== undefined) {
     return json.bmson.info.modeHint;
   }
@@ -705,7 +705,7 @@ export const BMS_MINE_SAMPLE_KEY = '00';
 const BASE36_MINE_VALUE_PATTERN = /^[0-9A-Z]{2}$/;
 export const BMSON_LONG_NOTE_TYPES: ReadonlySet<number> = new Set([1, 2, 3]);
 
-interface BmsLongNotesForBmsonOutput {
+interface BMSLongNotesForBmsonOutput {
   /** Start event → beat of its end. */
   startToEndBeat: Map<BeMusicEvent, number>;
   /** End objects and `#LNTYPE 2` continuations, which belong to the note that starts them. */
@@ -716,11 +716,11 @@ interface BmsLongNotesForBmsonOutput {
  * The long notes of a BMS chart as be-music plays them — `#LNOBJ` pairs and `5x` / `6x` long notes (`#LNTYPE 1` /
  * `2`, inferred like the web player when `#LNTYPE` is missing) — so bmson can write each as one note with `l`.
  */
-function resolveBmsLongNotesForBmsonOutput(json: BeMusicJson): BmsLongNotesForBmsonOutput {
-  const lnobj = resolveLnobjLongNotes(json);
+function resolveBMSLongNotesForBmsonOutput(json: BeMusicJSON): BMSLongNotesForBmsonOutput {
+  const lnobj = resolveLNOBJLongNotes(json);
   const startToEndBeat = new Map(lnobj.startToEndBeat);
   const endEvents = new Set(lnobj.endEvents);
-  const legacy = resolveBmsLongNotes(json, { inferLnTypeWhenMissing: true });
+  const legacy = resolveBMSLongNotes(json, { inferLNTypeWhenMissing: true });
   for (const note of legacy.notes) {
     if (note.endBeat !== undefined) {
       startToEndBeat.set(note.event, note.endBeat);
@@ -737,7 +737,7 @@ function resolveBmsLongNotesForBmsonOutput(json: BeMusicJson): BmsLongNotesForBm
  * mine's value is its damage read in base 36 (LR2 / beatoraja, no halving); otherwise `damage` is left out, which
  * deals the same default as an invalid BMS value.
  */
-function resolveMineDamageForBmsonOutput(json: BeMusicJson, event: BeMusicEvent, idBase: 36 | 62): number | undefined {
+function resolveMineDamageForBmsonOutput(json: BeMusicJSON, event: BeMusicEvent, idBase: 36 | 62): number | undefined {
   const authored = event.bmson?.damage;
   if (typeof authored === 'number' && Number.isFinite(authored) && authored >= 0) {
     return authored;
@@ -756,7 +756,7 @@ function resolveMineDamageForBmsonOutput(json: BeMusicJson, event: BeMusicEvent,
 /**
  * bmson `info.ln_type`: the authored `bmson.info.lnType`, else BMS `#LNMODE` — both use 1 = LN, 2 = CN, 3 = HCN.
  */
-function resolveBmsonLnTypeForOutput(json: BeMusicJson): number | undefined {
+function resolveBmsonLNTypeForOutput(json: BeMusicJSON): number | undefined {
   const authored = json.bmson.info.lnType;
   if (typeof authored === 'number' && BMSON_LONG_NOTE_TYPES.has(authored)) {
     return authored;

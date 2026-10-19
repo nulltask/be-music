@@ -30,12 +30,12 @@
       "stp": [],
       "wavCmds": [],
       "changeOption": {},
-      "exWav": {},
-      "exBmp": {},
+      "exWAV": {},
+      "exBMP": {},
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBga": {},
+      "swBGA": {},
       "player": 1,
       "lnType": 1
     },
@@ -245,7 +245,7 @@
       "randomPatterns": [],
       "title": "9 KEY All-Lane Quarter Chord",
       "playVariant": "9",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0"
@@ -406,8 +406,8 @@
           "percent": 75
         },
         "noteCount": 144,
-        "chartFingerprint": "bmfp0:a866633b7948ed7b7698f38d77fbbb22c8f2cc67f3fe58f299e1a4bede459309",
-        "playFingerprint": "bmfp0:a866633b7948ed7b7698f38d77fbbb22c8f2cc67f3fe58f299e1a4bede459309",
+        "chartFingerprint": "bmfp0:70e9321c6cdbbd5a2d8b8a1e4d0059b5b78e556ca65a807007cf24888c462b89",
+        "playFingerprint": "bmfp0:70e9321c6cdbbd5a2d8b8a1e4d0059b5b78e556ca65a807007cf24888c462b89",
         "title": "9 KEY All-Lane Quarter Chord",
         "subtitle": "PMS-STD — simultaneous 9-key chord on every quarter note",
         "artist": "be-music",

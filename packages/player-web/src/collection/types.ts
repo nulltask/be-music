@@ -40,7 +40,7 @@ export interface BrowserSongCollection {
  *   walking, so `total` is `-1` and `current` ticks upward.
  * - `reading` — slurping each collected `File` into a `Uint8Array`. This is the dominant cost for large zip / folder
  *   drops.
- * - `parsing` — running `parseBms` / `parseBmson` on each chart file inside the source, building `LibraryChart`s.
+ * - `parsing` — running `parseBMS` / `parseBmson` on each chart file inside the source, building `LibraryChart`s.
  * - `theme` — loading the LR2 theme bundle (skins + BGM + system sounds). Theme work happens in parallel internally;
  *   events fire as each sub-task lands so the bar still moves.
  */

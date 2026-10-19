@@ -122,7 +122,7 @@ export class PixiSceneHost {
     // cascade of "Invalid Texture" / "BindGroup invalid" errors that black out the chrome.
     // Failures here fall through to Pixi's stock device-creation path so we don't break boot on
     // older hardware.
-    const gpu = preference === 'webgpu' ? await tryCreateMaxLimitsGpu() : undefined;
+    const gpu = preference === 'webgpu' ? await tryCreateMaxLimitsGPU() : undefined;
     await this.app.init({
       preference,
       backgroundAlpha: 0,
@@ -329,12 +329,12 @@ export class PixiSceneHost {
  *
  * Errors are caught and logged so a single oddball adapter doesn't break boot.
  */
-async function tryCreateMaxLimitsGpu(): Promise<{ adapter: GPUAdapter; device: GPUDevice } | undefined> {
+async function tryCreateMaxLimitsGPU(): Promise<{ adapter: GPUAdapter; device: GPUDevice } | undefined> {
   if (typeof globalThis === 'undefined') return undefined;
-  const navGpu = (globalThis.navigator as { gpu?: GPU } | undefined)?.gpu;
-  if (navGpu === undefined) return undefined;
+  const navGPU = (globalThis.navigator as { gpu?: GPU } | undefined)?.gpu;
+  if (navGPU === undefined) return undefined;
   try {
-    const adapter = await navGpu.requestAdapter({ powerPreference: 'high-performance' });
+    const adapter = await navGPU.requestAdapter({ powerPreference: 'high-performance' });
     if (adapter === null) return undefined;
     // Pixi's own `_createDeviceAndAdaptor` path requests these features iff the adapter has
     // them. Mirror that here so we don't downgrade compression-format support when we take
@@ -397,8 +397,8 @@ export function resolveRenderResolution(devicePixelRatio: number, rawSearch?: st
     rawSearch ??
     (typeof globalThis !== 'undefined' && typeof globalThis.location !== 'undefined' ? globalThis.location.search : '');
   const raw = search ? new URLSearchParams(search).get('resolution') : null;
-  const fromUrl = raw === null || raw.trim() === '' ? Number.NaN : Number(raw);
-  return clampRenderResolution(devicePixelRatio, isPositive(fromUrl) ? fromUrl : requested);
+  const fromURL = raw === null || raw.trim() === '' ? Number.NaN : Number(raw);
+  return clampRenderResolution(devicePixelRatio, isPositive(fromURL) ? fromURL : requested);
 }
 
 /** `requested` held between 0.5 and the display's ratio; the display's ratio when `requested` isn't a positive number. */

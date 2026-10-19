@@ -20,7 +20,7 @@ import {
  * long-note semantics, and gauge tables — so one play yields the score it would have earned in each player.
  */
 
-export interface PlaylogCliArgs {
+export interface PlaylogCLIArgs {
   files: string[];
   rulesets: PlaylogRulesetId[];
   gauge?: string;
@@ -41,8 +41,8 @@ Options:
   --help              Show this help
 `;
 
-export function parsePlaylogCliArgs(argv: readonly string[]): PlaylogCliArgs {
-  const args: PlaylogCliArgs = { files: [], rulesets: [...PLAYLOG_SIMULATOR_RULESETS], json: false, help: false };
+export function parsePlaylogCLIArgs(argv: readonly string[]): PlaylogCLIArgs {
+  const args: PlaylogCLIArgs = { files: [], rulesets: [...PLAYLOG_SIMULATOR_RULESETS], json: false, help: false };
   // `--` ends the options, as with other CLIs: `pnpm playlog -- <file>` forwards it, and anything after it is a file
   // even when its name starts with `--`.
   let optionsEnded = false;
@@ -162,10 +162,10 @@ function pad(value: string, width: number): string {
   return value.length >= width ? value : value + ' '.repeat(width - value.length);
 }
 
-export async function runPlaylogCli(argv: readonly string[] = process.argv.slice(2)): Promise<number> {
-  let args: PlaylogCliArgs;
+export async function runPlaylogCLI(argv: readonly string[] = process.argv.slice(2)): Promise<number> {
+  let args: PlaylogCLIArgs;
   try {
-    args = parsePlaylogCliArgs(argv);
+    args = parsePlaylogCLIArgs(argv);
   } catch (error) {
     process.stderr.write(`${(error as Error).message}\n\n${USAGE}`);
     return 2;
@@ -213,7 +213,7 @@ export async function runPlaylogCli(argv: readonly string[] = process.argv.slice
   return failures > 0 ? 1 : 0;
 }
 
-function isCliEntryPoint(): boolean {
+function isCLIEntryPoint(): boolean {
   if (!isMainThread) {
     return false;
   }
@@ -222,9 +222,9 @@ function isCliEntryPoint(): boolean {
     return false;
   }
   try {
-    const moduleUrl = (import.meta as { url?: unknown }).url;
-    if (typeof moduleUrl === 'string' && moduleUrl.length > 0) {
-      return resolve(entry) === fileURLToPath(moduleUrl);
+    const moduleURL = (import.meta as { url?: unknown }).url;
+    if (typeof moduleURL === 'string' && moduleURL.length > 0) {
+      return resolve(entry) === fileURLToPath(moduleURL);
     }
   } catch {
     // SEA/CJS bundles may not provide import.meta.url.
@@ -232,8 +232,8 @@ function isCliEntryPoint(): boolean {
   return resolve(entry) === resolve(process.execPath);
 }
 
-if (isCliEntryPoint()) {
-  void runPlaylogCli()
+if (isCLIEntryPoint()) {
+  void runPlaylogCLI()
     .then((code) => {
       process.exit(code);
     })

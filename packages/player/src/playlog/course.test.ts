@@ -1,4 +1,4 @@
-import { createEmptyJson, type BeMusicJson } from '@be-music/json';
+import { createEmptyJSON, type BeMusicJSON } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import { manualPlay } from '../index.ts';
 import type { PlayerOptions } from '../core/engine.ts';
@@ -113,8 +113,8 @@ describe('course results', () => {
 });
 
 /** BPM 240: eight notes on `11`, one per quarter of measures 1 and 2 (1.0 s to 2.75 s). */
-function stageChart(): BeMusicJson {
-  const json = createEmptyJson('bms');
+function stageChart(): BeMusicJSON {
+  const json = createEmptyJSON('bms');
   json.metadata.bpm = 240;
   json.metadata.rank = 2;
   json.events = Array.from({ length: 8 }, (_, index) => ({

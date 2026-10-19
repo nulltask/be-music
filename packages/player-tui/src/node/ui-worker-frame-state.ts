@@ -1,6 +1,6 @@
 import { effect, effectScope, signal } from 'alien-signals';
-import type { PlayerJudgeComboSignalState, PlayerUiFramePayload } from '@be-music/player/signals';
-import type { PlayerUiFramePatch } from './ui-frame-patch.ts';
+import type { PlayerJudgeComboSignalState, PlayerUIFramePayload } from '@be-music/player/signals';
+import type { PlayerUIFramePatch } from './ui-frame-patch.ts';
 
 type WritableSignal<T> = {
   (): T;
@@ -12,7 +12,7 @@ interface TerminalSizeState {
   rows: number | undefined;
 }
 
-export interface CreateUiWorkerFrameStateOptions {
+export interface CreateUIWorkerFrameStateOptions {
   initialPaused: boolean;
   initialHighSpeed: number;
   initialJudgeCombo: PlayerJudgeComboSignalState;
@@ -21,16 +21,16 @@ export interface CreateUiWorkerFrameStateOptions {
   applyJudgeCombo: (state: Readonly<PlayerJudgeComboSignalState>) => void;
   applyTerminalSize: (columns: number | undefined, rows: number | undefined) => void;
   syncFrameLayout: (
-    frame: PlayerUiFramePayload | undefined,
+    frame: PlayerUIFramePayload | undefined,
     columns: number | undefined,
     rows: number | undefined,
   ) => void;
   requestFrameRender: () => void;
 }
 
-export interface UiWorkerFrameState {
-  getFrame: () => PlayerUiFramePayload | undefined;
-  setFrame: (frame: PlayerUiFramePatch) => void;
+export interface UIWorkerFrameState {
+  getFrame: () => PlayerUIFramePayload | undefined;
+  setFrame: (frame: PlayerUIFramePatch) => void;
   setPaused: (value: boolean) => void;
   setHighSpeed: (value: number) => void;
   setJudgeCombo: (state: PlayerJudgeComboSignalState) => void;
@@ -39,8 +39,8 @@ export interface UiWorkerFrameState {
   dispose: () => void;
 }
 
-export function createUiWorkerFrameState(options: CreateUiWorkerFrameStateOptions): UiWorkerFrameState {
-  const frame = signal<PlayerUiFramePayload | undefined>(undefined);
+export function createUIWorkerFrameState(options: CreateUIWorkerFrameStateOptions): UIWorkerFrameState {
+  const frame = signal<PlayerUIFramePayload | undefined>(undefined);
   const paused = signal(options.initialPaused);
   const highSpeed = signal(options.initialHighSpeed);
   const judgeCombo = signal(options.initialJudgeCombo);
@@ -88,7 +88,7 @@ export function createUiWorkerFrameState(options: CreateUiWorkerFrameStateOption
     setFrame: (nextFrame) => {
       const current = frame();
       if (!current) {
-        frame(nextFrame as PlayerUiFramePayload);
+        frame(nextFrame as PlayerUIFramePayload);
         return;
       }
       let nextNotes = nextFrame.notes ?? current.notes;

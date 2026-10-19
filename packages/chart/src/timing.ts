@@ -3,11 +3,11 @@ import {
   DEFAULT_BPM,
   normalizeChannel,
   normalizeObjectKey,
-  resolveBmsBase,
+  resolveBMSBase,
   type BeMusicEvent,
-  type BeMusicJson,
+  type BeMusicJSON,
 } from '@be-music/json';
-import { createBeatResolver, isStopChannel, parseBpmFrom03Token, sortEvents, type BeatResolver } from './index.ts';
+import { createBeatResolver, isStopChannel, parseBPMFrom03Token, sortEvents, type BeatResolver } from './index.ts';
 
 export interface TempoPoint {
   beat: number;
@@ -17,7 +17,7 @@ export interface TempoPoint {
    * BPM the readouts show when it differs from `bpm`. Set for negative `#BPMxx` events: timing integrates the full
    * |BPM|, but LR2 converts the value to int first (LR2body.exe 0x42b960 `__ftol`), so NOWBPM shows |trunc(BPM)|.
    */
-  displayBpm?: number;
+  displayBPM?: number;
 }
 
 export interface StopPoint {
@@ -98,8 +98,8 @@ export interface TimingResolver {
   beatToSeconds: (beat: number) => number;
   eventToSeconds: (event: BeMusicEvent) => number;
   bpmAtBeat: (beat: number) => number;
-  /** BPM the readouts show at `beat` — `bpmAtBeat` except where a {@link TempoPoint.displayBpm} overrides it. */
-  displayBpmAtBeat: (beat: number) => number;
+  /** BPM the readouts show at `beat` — `bpmAtBeat` except where a {@link TempoPoint.displayBPM} overrides it. */
+  displayBPMAtBeat: (beat: number) => number;
 }
 
 export interface TimingBuildContext {
@@ -107,18 +107,18 @@ export interface TimingBuildContext {
   beatResolver: BeatResolver;
 }
 
-export function createTimingBuildContext(json: BeMusicJson): TimingBuildContext {
+export function createTimingBuildContext(json: BeMusicJSON): TimingBuildContext {
   return {
     sortedEvents: sortEvents(json.events),
     beatResolver: createBeatResolver(json),
   };
 }
 
-export function createTimingResolver(json: BeMusicJson): TimingResolver {
+export function createTimingResolver(json: BeMusicJSON): TimingResolver {
   return createTimingResolverWithContext(json, createTimingBuildContext(json));
 }
 
-export function createTimingResolverWithContext(json: BeMusicJson, context: TimingBuildContext): TimingResolver {
+export function createTimingResolverWithContext(json: BeMusicJSON, context: TimingBuildContext): TimingResolver {
   const { sortedEvents, beatResolver } = context;
   const { points: tempoPoints, reversalBeat } = createTempoPoints(json, sortedEvents, beatResolver);
   const stopPoints = createStopPoints(json, tempoPoints, sortedEvents, beatResolver);
@@ -141,13 +141,13 @@ export function createTimingResolverWithContext(json: BeMusicJson, context: Timi
     return tempoPoints[Math.max(0, index)]!.bpm;
   };
 
-  const displayBpmAtBeat = (beat: number): number => {
+  const displayBPMAtBeat = (beat: number): number => {
     if (tempoPoints.length === 0) {
       return json.metadata.bpm > 0 ? json.metadata.bpm : DEFAULT_BPM;
     }
     const index = findLastIndexAtOrBefore(tempoPoints, beat, (point) => point.beat);
     const point = tempoPoints[Math.max(0, index)]!;
-    return point.displayBpm ?? point.bpm;
+    return point.displayBPM ?? point.bpm;
   };
 
   const beatToSeconds = (beat: number): number => {
@@ -167,7 +167,7 @@ export function createTimingResolverWithContext(json: BeMusicJson, context: Timi
     stopPoints,
     reversal: reversalBeat === undefined ? undefined : { beat: reversalBeat, seconds: beatToSeconds(reversalBeat) },
     bpmAtBeat,
-    displayBpmAtBeat,
+    displayBPMAtBeat,
     beatToSeconds,
     eventToSeconds: (event) => beatToSeconds(beatResolver.eventToBeat(event)),
   };
@@ -180,12 +180,12 @@ interface TempoIntegration {
 }
 
 function createTempoPoints(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   sortedEvents: BeMusicEvent[],
   beatResolver: BeatResolver,
 ): TempoIntegration {
-  const baseBpm = json.metadata.bpm > 0 ? json.metadata.bpm : DEFAULT_BPM;
-  const points: TempoPoint[] = [{ beat: 0, bpm: baseBpm, seconds: 0 }];
+  const baseBPM = json.metadata.bpm > 0 ? json.metadata.bpm : DEFAULT_BPM;
+  const points: TempoPoint[] = [{ beat: 0, bpm: baseBPM, seconds: 0 }];
   let reversalBeat: number | undefined;
   for (const { event, bpm } of collectTempoChanges(json, sortedEvents)) {
     const beat = beatResolver.eventToBeat(event);
@@ -215,16 +215,16 @@ export interface TempoChange {
  * engine plays it as LR2's reverse scroll. Several at one position all appear; the last one wins. Not part of the
  * package API (the chart fingerprint reads exact positions from the events).
  */
-export function collectTempoChanges(json: BeMusicJson, sortedEvents: ReadonlyArray<BeMusicEvent>): TempoChange[] {
+export function collectTempoChanges(json: BeMusicJSON, sortedEvents: ReadonlyArray<BeMusicEvent>): TempoChange[] {
   const changes: TempoChange[] = [];
-  const idBase = resolveBmsBase(json);
+  const idBase = resolveBMSBase(json);
   for (const event of sortedEvents) {
     const channel = normalizeChannel(event.channel);
     if (channel !== '03' && channel !== '08') {
       continue;
     }
     if (channel === '03') {
-      const bpm = parseBpmFrom03Token(event.value);
+      const bpm = parseBPMFrom03Token(event.value);
       if (bpm > 0) {
         changes.push({ event, bpm });
       }
@@ -255,11 +255,11 @@ export interface StopChange {
  * as its spec says. Not part of the package API (the chart fingerprint reads exact positions from the events).
  */
 export function collectStopChanges(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   sortedEvents: ReadonlyArray<BeMusicEvent>,
   beatResolver: BeatResolver,
 ): StopChange[] {
-  const idBase = resolveBmsBase(json);
+  const idBase = resolveBMSBase(json);
   const lastStopWins = json.sourceFormat === 'bms';
   const changes: StopChange[] = [];
   const indexByBeat = new Map<number, number>();
@@ -313,7 +313,7 @@ export function parseStpStop(rawValue: string): StpStop | undefined {
 }
 
 function createStopPoints(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   tempoPoints: TempoPoint[],
   sortedEvents: BeMusicEvent[],
   beatResolver: BeatResolver,
@@ -384,25 +384,25 @@ function bpmAtBeatFromTempoPoints(tempoPoints: TempoPoint[], beat: number): numb
   return tempoPoints[Math.max(0, index)]!.bpm;
 }
 
-function integrateTempoPoint(points: TempoPoint[], beat: number, bpm: number, displayBpm?: number): void {
+function integrateTempoPoint(points: TempoPoint[], beat: number, bpm: number, displayBPM?: number): void {
   const last = points[points.length - 1]!;
   if (beat < last.beat) {
     return;
   }
   if (Math.abs(beat - last.beat) < 1e-9) {
     last.bpm = bpm;
-    if (displayBpm === undefined) {
-      delete last.displayBpm;
+    if (displayBPM === undefined) {
+      delete last.displayBPM;
     } else {
-      last.displayBpm = displayBpm;
+      last.displayBPM = displayBPM;
     }
     return;
   }
 
   const seconds = last.seconds + ((beat - last.beat) * 60) / last.bpm;
   const point: TempoPoint = { beat, bpm, seconds };
-  if (displayBpm !== undefined) {
-    point.displayBpm = displayBpm;
+  if (displayBPM !== undefined) {
+    point.displayBPM = displayBPM;
   }
   points.push(point);
 }

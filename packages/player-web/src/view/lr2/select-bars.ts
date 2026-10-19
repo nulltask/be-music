@@ -3,24 +3,24 @@
  * with its `#SRC_BAR_BODY`, title (`#SRC_BAR_TITLE`, or a system-font fallback), level (`#SRC_BAR_LEVEL`), lamp
  * (`#SRC_BAR_LAMP`) and, on the focused bar, `#SRC_BAR_FLASH`.
  *
- * The functions read the view through {@link Lr2SelectBarsContext}; the LR2 select view passes its members.
+ * The functions read the view through {@link LR2SelectBarsContext}; the LR2 select view passes its members.
  */
 
 import type {
-  Lr2BarFlashElement,
-  Lr2BarLampSource,
-  Lr2BarLevelSource,
-  Lr2BarTitleElement,
-  Lr2DestinationRect,
-  Lr2ImageRect,
-  Lr2NumberElement,
-  Lr2Skin,
-  Lr2TextElement,
+  LR2BarFlashElement,
+  LR2BarLampSource,
+  LR2BarLevelSource,
+  LR2BarTitleElement,
+  LR2DestinationRect,
+  LR2ImageRect,
+  LR2NumberElement,
+  LR2Skin,
+  LR2TextElement,
 } from '@be-music/lr2-skin';
-import { pickLr2BarBody, resolveLr2BarLamp, resolveLr2BarLevel } from '@be-music/lr2-skin/state';
+import { pickLR2BarBody, resolveLR2BarLamp, resolveLR2BarLevel } from '@be-music/lr2-skin/state';
 import type { LibraryChart, LibraryEntry } from '@be-music/scene-model';
 import { Color, Sprite, Text, TextStyle, type Container, type Texture } from 'pixi.js';
-import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
+import type { LR2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 import {
   applyDestinationToSprite,
   containerSpriteSink,
@@ -30,20 +30,20 @@ import {
   pickAnimatedCell,
   renderNumberElement,
 } from '../../skin/lr2/render.ts';
-import { clampFontSize, isDestinationVisible, makeLr2TextSprite } from '../../skin/lr2/scene-render.ts';
-import type { Lr2SkinTextureStore } from '../../skin/lr2/scene-textures.ts';
+import { clampFontSize, isDestinationVisible, makeLR2TextSprite } from '../../skin/lr2/scene-render.ts';
+import type { LR2SkinTextureStore } from '../../skin/lr2/scene-textures.ts';
 import { LR2_TEXT_FALLBACK_FONT } from '../shared/fonts.ts';
 import type { SelectFrame } from '../types.ts';
 
 const TEXT = new Color('#f6f2e8');
 
 /** What the bars read and draw into: the LR2 select view's members of these names. */
-export interface Lr2SelectBarsContext {
+export interface LR2SelectBarsContext {
   /** The layer the bars are drawn into. */
   readonly listLayer: Container;
-  readonly skinTextures: Lr2SkinTextureStore;
+  readonly skinTextures: LR2SkinTextureStore;
   /** The skin's `#LR2FONT` fonts by index, once loaded. */
-  readonly bitmapFonts: ReadonlyMap<number, Lr2LoadedFont>;
+  readonly bitmapFonts: ReadonlyMap<number, LR2LoadedFont>;
   readonly entries: readonly LibraryEntry[];
   readonly cursor: number;
   /** The last frame drawn, for the player's records. */
@@ -51,11 +51,11 @@ export interface Lr2SelectBarsContext {
   /** How long ago `timer` started, in ms. */
   elapsedSinceTimer(timer: number): number;
   /** The DST of an element at this moment. */
-  evaluateElementDst(element: { destination: Lr2DestinationRect; keyframes: Lr2DestinationRect[] }): Lr2DestinationRect;
+  evaluateElementDst(element: { destination: LR2DestinationRect; keyframes: LR2DestinationRect[] }): LR2DestinationRect;
   /** Whether `timer` runs, so the elements anchored to it draw. An arrow, so it can be handed on unbound. */
   readonly timerActive: (timer: number) => boolean;
   /** A sprite of `source`'s current cell at `dst`. */
-  makeSlicedSprite(source: Lr2ImageRect, dst: Lr2DestinationRect, label?: string): Sprite | undefined;
+  makeSlicedSprite(source: LR2ImageRect, dst: LR2DestinationRect, label?: string): Sprite | undefined;
 }
 
 /**
@@ -63,7 +63,7 @@ export interface Lr2SelectBarsContext {
  * `selectedIndex` song landing at the `BAR_CENTER` slot. Slots outside `BAR_AVAILABLE` still render (LR2 spec: they
  * decorate the scroll edges) but no song is mapped to them.
  */
-export function renderLr2SelectBars(ctx: Lr2SelectBarsContext, skin: Lr2Skin, ops: ReadonlySet<number>): void {
+export function renderLR2SelectBars(ctx: LR2SelectBarsContext, skin: LR2Skin, ops: ReadonlySet<number>): void {
   const layout = skin.barLayout;
   if (layout.slots.length === 0) {
     return;
@@ -90,7 +90,7 @@ export function renderLr2SelectBars(ctx: Lr2SelectBarsContext, skin: Lr2Skin, op
     if (!isDestinationVisible(dst, ops, ctx.timerActive)) {
       continue;
     }
-    const body = pickLr2BarBody(layout.bodies, entry);
+    const body = pickLR2BarBody(layout.bodies, entry);
     if (body) {
       const texture = ctx.skinTextures.get(body.source.imagePath);
       if (texture) {
@@ -128,19 +128,19 @@ export function renderLr2SelectBars(ctx: Lr2SelectBarsContext, skin: Lr2Skin, op
  * without that lamp's art draws nothing; folder bars have no lamp here.
  */
 function drawBarLamp(
-  ctx: Lr2SelectBarsContext,
+  ctx: LR2SelectBarsContext,
   entry: LibraryEntry,
-  bar: Lr2DestinationRect,
-  lamps: ReadonlyArray<Lr2BarLampSource>,
-  lampDst: Lr2DestinationRect,
+  bar: LR2DestinationRect,
+  lamps: ReadonlyArray<LR2BarLampSource>,
+  lampDst: LR2DestinationRect,
 ): void {
   if (entry.kind === 'folder') return;
   const record =
     entry.kind === 'chart' ? ctx.frame?.records.chart(entry.chart) : ctx.frame?.records.course(entry.course);
-  const kind = resolveLr2BarLamp(record?.lamp);
+  const kind = resolveLR2BarLamp(record?.lamp);
   const lamp = lamps.find((source) => source.kind === kind);
   if (lamp === undefined) return;
-  const absoluteDst: Lr2DestinationRect = { ...lampDst, x: bar.x + lampDst.x, y: bar.y + lampDst.y };
+  const absoluteDst: LR2DestinationRect = { ...lampDst, x: bar.x + lampDst.x, y: bar.y + lampDst.y };
   const sprite = ctx.makeSlicedSprite(lamp.source, absoluteDst, `bar-lamp[${kind}]`);
   if (sprite) ctx.listLayer.addChild(sprite);
 }
@@ -150,9 +150,9 @@ function drawBarLamp(
  * to the focused bar's `BAR_BODY_ON` rect, mirroring how BAR_TITLE / BAR_LEVEL place themselves. We compose the
  * absolute DST and then delegate to `makeSlicedSprite` so any animation cycle / cell cycling is honored.
  */
-function drawBarFlash(ctx: Lr2SelectBarsContext, flash: Lr2BarFlashElement, bar: Lr2DestinationRect): void {
+function drawBarFlash(ctx: LR2SelectBarsContext, flash: LR2BarFlashElement, bar: LR2DestinationRect): void {
   const flashDst = ctx.evaluateElementDst(flash);
-  const absoluteDst: Lr2DestinationRect = {
+  const absoluteDst: LR2DestinationRect = {
     ...flashDst,
     x: bar.x + flashDst.x,
     y: bar.y + flashDst.y,
@@ -170,13 +170,13 @@ function drawBarFlash(ctx: Lr2SelectBarsContext, flash: Lr2BarFlashElement, bar:
  * top-left.
  */
 function drawBarLevel(
-  ctx: Lr2SelectBarsContext,
+  ctx: LR2SelectBarsContext,
   song: LibraryChart,
-  bar: Lr2DestinationRect,
-  levels: ReadonlyArray<Lr2BarLevelSource>,
-  levelDst: Lr2DestinationRect,
+  bar: LR2DestinationRect,
+  levels: ReadonlyArray<LR2BarLevelSource>,
+  levelDst: LR2DestinationRect,
 ): void {
-  const barLevel = resolveLr2BarLevel(song);
+  const barLevel = resolveLR2BarLevel(song);
   if (barLevel === undefined) {
     return;
   }
@@ -189,12 +189,12 @@ function drawBarLevel(
     return;
   }
   // Translate the relative DST into absolute coordinates on the bar.
-  const absoluteDst: Lr2DestinationRect = {
+  const absoluteDst: LR2DestinationRect = {
     ...levelDst,
     x: bar.x + levelDst.x,
     y: bar.y + levelDst.y,
   };
-  const fakeNumberElement: Lr2NumberElement = {
+  const fakeNumberElement: LR2NumberElement = {
     source: level.source,
     destination: absoluteDst,
     keyframes: [absoluteDst],
@@ -219,10 +219,10 @@ function drawBarLevel(
 }
 
 function makeBarBodySprite(
-  ctx: Lr2SelectBarsContext,
+  ctx: LR2SelectBarsContext,
   texture: Texture,
-  source: Lr2ImageRect,
-  destination: Lr2DestinationRect,
+  source: LR2ImageRect,
+  destination: LR2DestinationRect,
   label?: string,
 ): Sprite | undefined {
   const rect = normalizeRect(destination);
@@ -247,7 +247,7 @@ function makeBarBodySprite(
  * Draws the song title at the `BAR_TITLE` destination (xy relative to the bar's top-left).
  *
  * When the skin defines `#SRC_BAR_TITLE` and the matching `#LR2FONT` payload has decoded, we route through
- * `makeLr2TextSprite` so the title renders with the skin's authored bitmap font (the LR2 default's 14 px pixel-art
+ * `makeLR2TextSprite` so the title renders with the skin's authored bitmap font (the LR2 default's 14 px pixel-art
  * face for the bar list, glyph-tinted per `#DST_BAR_TITLE`'s RGBA). Otherwise we fall back to a system-font `Text` —
  * either while fonts are still loading, or for skins that omit `#SRC_BAR_TITLE` entirely.
  *
@@ -255,11 +255,11 @@ function makeBarBodySprite(
  * dedicated info panel populated by the skin's `#SRC_TEXT` slots — not the bar list itself.
  */
 function drawBarTitleText(
-  ctx: Lr2SelectBarsContext,
+  ctx: LR2SelectBarsContext,
   entry: LibraryEntry,
-  bar: Lr2DestinationRect,
-  titleElement: Lr2BarTitleElement | undefined,
-  skin: Lr2Skin,
+  bar: LR2DestinationRect,
+  titleElement: LR2BarTitleElement | undefined,
+  skin: LR2Skin,
 ): void {
   const titleRect = titleElement?.destination ?? { x: 12, y: 8, w: bar.w - 24, h: 20 };
   const x = bar.x + titleRect.x;
@@ -273,14 +273,14 @@ function drawBarTitleText(
         ? entry.course.definition.name
         : entry.folder.label;
   if (titleElement) {
-    // Build a synthetic `Lr2TextElement` carrying just the fields `makeLr2TextSprite` reads — font index, alignment
+    // Build a synthetic `LR2TextElement` carrying just the fields `makeLR2TextSprite` reads — font index, alignment
     // (BAR_TITLE has no LR2-spec alignment field, so left-anchor is the conventional rendering), and the absolute
-    // `destination` on the bar's coordinate frame. Going through `makeLr2TextSprite` means the bitmap-font path
+    // `destination` on the bar's coordinate frame. Going through `makeLR2TextSprite` means the bitmap-font path
     // automatically engages once `#LR2FONT` payloads finish decoding, mirroring how the chrome-text path works.
-    const synthetic: Lr2TextElement = {
+    const synthetic: LR2TextElement = {
       font: titleElement.font,
       // 0 = freeform string. The bar list never queries `st` for text resolution since we pass the value directly,
-      // and `makeLr2BitmapTextSprite` only uses it for a debug label — any non-clashing value is fine.
+      // and `makeLR2BitmapTextSprite` only uses it for a debug label — any non-clashing value is fine.
       st: 0,
       alignment: 'left',
       edit: 0,
@@ -289,7 +289,7 @@ function drawBarTitleText(
       keyframes: [],
       declarationOrder: 0,
     };
-    const sprite = makeLr2TextSprite(primaryText, synthetic, synthetic.destination, {
+    const sprite = makeLR2TextSprite(primaryText, synthetic, synthetic.destination, {
       bitmapFonts: ctx.bitmapFonts,
       systemFontSizes: skin.systemFontSizes,
     });

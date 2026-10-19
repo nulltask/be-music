@@ -1,4 +1,4 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import { resolveChartAudioAsset, resolveChartImageAsset } from './collection.ts';
 import { createNonstopAssets, NONSTOP_CHART_PATH } from './nonstop.ts';
@@ -15,10 +15,10 @@ describe('createNonstopAssets', () => {
     const first = source('a', { 'Pack/Song A/kick.ogg': bytes(1), 'Pack/Song A/bg.png': bytes(2) });
     // Stage 2 is a sub-folder chart whose keysound sits one folder up, as LR2 looks for it.
     const second = source('b', { 'Song B/snare.wav': bytes(3), 'Song B/another/x.bme': bytes(0) });
-    const withPathWav = createEmptyJson('bms');
+    const withPathWAV = createEmptyJSON('bms');
     const { source: stitched, assetPath } = createNonstopAssets([
-      { chart: createEmptyJson('bms'), source: first, chartPath: 'Pack/Song A/a.bms' },
-      { chart: withPathWav, source: second, chartPath: 'Song B/another/x.bme' },
+      { chart: createEmptyJSON('bms'), source: first, chartPath: 'Pack/Song A/a.bms' },
+      { chart: withPathWAV, source: second, chartPath: 'Song B/another/x.bme' },
     ]);
     // The chart declares `.wav`; the stage has an `.ogg`.
     expect(assetPath(0, 'wav', 'kick.wav')).toBe('s0/Pack/Song A/kick.ogg');
@@ -40,8 +40,8 @@ describe('createNonstopAssets', () => {
   });
 
   test("follows a stage chart's #PATH_WAV", () => {
-    const chart = createEmptyJson('bms');
-    chart.bms.pathWav = 'wav/';
+    const chart = createEmptyJSON('bms');
+    chart.bms.pathWAV = 'wav/';
     const files = source('c', { 'Song C/wav/hat.wav': bytes(4) });
     const { assetPath } = createNonstopAssets([{ chart, source: files, chartPath: 'Song C/c.bms' }]);
     expect(assetPath(0, 'wav', 'hat.wav')).toBe('s0/Song C/wav/hat.wav');

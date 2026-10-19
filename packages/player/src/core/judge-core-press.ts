@@ -12,15 +12,15 @@ import {
   resolveLongNoteEarlyReleaseJudge,
   resolveManualTimedJudge,
   resolveRulesetLongNoteMode,
-  toUiLongNoteMode,
+  toUILongNoteMode,
 } from './judge-rules.ts';
 import {
   advanceJudgeState,
   detonateLandminesOnPress,
   laneHoldHistory,
   processLandminePassage,
-  setHcnGaining,
-  startHcnPassing,
+  setHCNGaining,
+  startHCNPassing,
 } from './judge-core-advance.ts';
 import { recordLaneDown, recordLaneUp } from './lane-hold.ts';
 import {
@@ -259,7 +259,7 @@ export function handleLanePress(
   detonateLandminesOnPress(state, candidateChannels, nowSec, emit);
   // A key going down on a lane with a passing Hell Charge note makes it gain.
   for (const channel of candidateChannels) {
-    setHcnGaining(state, channel, toJudgeUs(nowSec), emit);
+    setHCNGaining(state, channel, toJudgeUs(nowSec), emit);
   }
 
   // Past an LR2 negative-BPM reversal the press is judged on the mirrored clock (#134; see `toJudgeClock`): note
@@ -349,14 +349,14 @@ export function handleLanePress(
       });
       emit({
         kind: 'ui',
-        command: { kind: 'long-note-start', channel, beat: candidate.beat, mode: toUiLongNoteMode(longNoteMode) },
+        command: { kind: 'long-note-start', channel, beat: candidate.beat, mode: toUILongNoteMode(longNoteMode) },
       });
     }
     const headJudge = resolveManualTimedJudge(signedDeltaMs, judgeWindowsFor(config, channel, judgeSec));
     if (longNoteMode !== undefined && isChargeLongNoteMode(longNoteMode)) {
       // Charge modes score the head right here — it is a judgment of its own, not half of a deferred one.
       applyResolvedManualJudge(state, channel, headJudge, nowSec, emit);
-      startHcnPassing(state, candidate, toJudgeUs(nowSec));
+      startHCNPassing(state, candidate, toJudgeUs(nowSec));
       if (ruleset.headBadSkipsTail && (headJudge.kind === 'BAD' || headJudge.kind === 'POOR')) {
         // IIDX: a broken charge-note head cancels the tail; the note is finished with a single judgment.
         state.activeLongNotes.delete(channel);
@@ -490,7 +490,7 @@ export function handleLaneRelease(
   let settleNow = false;
   for (const channel of input.channels) {
     recordLaneUp(laneHoldHistory(state, channel), input.tokens, releaseMs);
-    setHcnGaining(state, channel, toJudgeUs(input.nowSec), emit);
+    setHCNGaining(state, channel, toJudgeUs(input.nowSec), emit);
     state.heldChannels.delete(channel);
     if (input.inferred !== true) {
       emit({ kind: 'ui', command: { kind: 'release-lane', channel } });

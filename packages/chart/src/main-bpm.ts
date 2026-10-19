@@ -1,7 +1,7 @@
 import type { ResolvedChart } from './resolved-chart.ts';
 
-/** What {@link resolveChartMainBpm} reads of a resolved chart. */
-export interface MainBpmChart {
+/** What {@link resolveChartMainBPM} reads of a resolved chart. */
+export interface MainBPMChart {
   readonly notes: ReadonlyArray<Pick<ResolvedChart['notes'][number], 'kind' | 'beat' | 'endBeat' | 'lnMode'>>;
   readonly timing: Pick<ResolvedChart['timing'], 'bpmAtBeat'>;
 }
@@ -18,7 +18,7 @@ export interface MainBpmChart {
  * The browser player reads the main BPM only from here: HS-FIX `AVERAGE`, the play log's `visibleMs`, the HUD and the
  * beatoraja skins' main-BPM numbers and BPM graph.
  */
-export function resolveChartMainBpm(chart: MainBpmChart): number | undefined {
+export function resolveChartMainBPM(chart: MainBPMChart): number | undefined {
   const counts = new Map<number, { count: number; firstBeat: number }>();
   const add = (beat: number): void => {
     const bpm = chart.timing.bpmAtBeat(beat);

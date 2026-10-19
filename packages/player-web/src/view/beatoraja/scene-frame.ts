@@ -22,7 +22,7 @@ import type { LibraryChart } from '@be-music/scene-model';
 import { Container, Graphics, type Texture } from 'pixi.js';
 import { extractChartSubartist } from '../../chart/beatoraja/meta.ts';
 import type { BrowserSongAssetSource } from '../../collection/types.ts';
-import { destroyTextureAndRevokeBlobUrl } from '../../media/textures.ts';
+import { destroyTextureAndRevokeBlobURL } from '../../media/textures.ts';
 import type { BeatorajaPlaySkinView } from './skin-view.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import {
@@ -248,7 +248,7 @@ export class BeatorajaViewChartImages {
 }
 
 function destroyChartImages(images: BeatorajaChartImages): void {
-  for (const texture of [images.stageFile, images.backBmp, images.banner]) {
-    if (texture !== undefined) destroyTextureAndRevokeBlobUrl(texture, true);
+  for (const texture of [images.stageFile, images.backBMP, images.banner]) {
+    if (texture !== undefined) destroyTextureAndRevokeBlobURL(texture, true);
   }
 }

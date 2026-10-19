@@ -1,5 +1,5 @@
 import type { LongNoteStyle } from '@be-music/player/ruleset';
-import type { PlayerUiLongNoteMode, PlayerUiLongNoteOutcome } from '@be-music/player/signals';
+import type { PlayerUILongNoteMode, PlayerUILongNoteOutcome } from '@be-music/player/signals';
 import type { BeMusicLongNoteMode, BeMusicLongNoteState } from '@be-music/skin-sdk';
 
 /**
@@ -25,10 +25,10 @@ export function resolveBeMusicLongNoteMode(
 interface LaneLongNotes {
   /** Head beat of the long note held on the lane, or `undefined` when none is. */
   activeBeat: number | undefined;
-  activeMode: PlayerUiLongNoteMode;
+  activeMode: PlayerUILongNoteMode;
   activeStartedAtMs: number;
   /** How each long note that finished on the lane ended, by head beat. */
-  readonly outcomes: Map<number, PlayerUiLongNoteOutcome>;
+  readonly outcomes: Map<number, PlayerUILongNoteOutcome>;
 }
 
 /**
@@ -40,7 +40,7 @@ export class LongNoteTracker {
   private readonly lanes = new Map<string, LaneLongNotes>();
 
   /** A long note with its head at `beat` started being held on `channel` at play-clock `atMs`. */
-  start(channel: string, beat: number, mode: PlayerUiLongNoteMode, atMs: number): void {
+  start(channel: string, beat: number, mode: PlayerUILongNoteMode, atMs: number): void {
     let lane = this.lanes.get(channel);
     if (!lane) {
       lane = { activeBeat: undefined, activeMode: mode, activeStartedAtMs: 0, outcomes: new Map() };
@@ -52,7 +52,7 @@ export class LongNoteTracker {
   }
 
   /** The long note held on `channel` finished. Ignored when none is held there. */
-  end(channel: string, outcome: PlayerUiLongNoteOutcome): void {
+  end(channel: string, outcome: PlayerUILongNoteOutcome): void {
     const lane = this.lanes.get(channel);
     if (!lane || lane.activeBeat === undefined) return;
     lane.outcomes.set(lane.activeBeat, outcome);
@@ -75,7 +75,7 @@ export class LongNoteTracker {
   }
 
   /** The mode the engine announced for the long note at `beat` on `channel`, while it is held. */
-  heldMode(channel: string, beat: number): PlayerUiLongNoteMode | undefined {
+  heldMode(channel: string, beat: number): PlayerUILongNoteMode | undefined {
     const lane = this.lanes.get(channel);
     return lane?.activeBeat === beat ? lane.activeMode : undefined;
   }

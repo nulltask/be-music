@@ -22,7 +22,7 @@ describe('resolveBeatorajaChartTraitOps', () => {
         bga: true,
         stageFile: true,
         banner: false,
-        backBmp: false,
+        backBMP: false,
       }),
     ).toEqual([
       BEATORAJA_OP.HAS_LN,

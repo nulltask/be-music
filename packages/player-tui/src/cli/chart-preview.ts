@@ -1,12 +1,12 @@
-import { isPlayLaneSoundChannel, resolveChart, volWavToLinearGain } from '@be-music/chart';
+import { isPlayLaneSoundChannel, resolveChart, volWAVToLinearGain } from '@be-music/chart';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { isAbortError, throwIfAborted } from '@be-music/utils/core';
 import { resolveFirstExistingPath } from '@be-music/utils/path';
-import { writeStereoPcm16Le } from '@be-music/utils/pcm';
-import { createEmptyJson, type BeMusicJson } from '@be-music/json';
-import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
-import { type RenderResult, renderJson } from '@be-music/audio-renderer';
+import { writeStereoPcm16LE } from '@be-music/utils/pcm';
+import { createEmptyJSON, type BeMusicJSON } from '@be-music/json';
+import { parseChartFile, resolveBMSControlFlow } from '@be-music/parser';
+import { type RenderResult, renderJSON } from '@be-music/audio-renderer';
 import { createNodeAudioSink } from '@be-music/player/audio-sink';
 
 interface PreviewPlaybackHandle {
@@ -32,7 +32,7 @@ interface FallbackPreviewIdentity {
 
 interface FallbackSignaturePayload {
   sourceFormat: string;
-  baseBpm: number;
+  baseBPM: number;
   tempoPoints: Array<[beat: number, bpm: number, seconds: number]>;
   stopPoints: Array<[beat: number, seconds: number]>;
   triggers: Array<
@@ -275,7 +275,7 @@ export function createChartPreviewController(options: ChartPreviewAudioOptions =
 }
 
 export async function resolvePreviewContinueKeyFromChart(
-  chart: BeMusicJson,
+  chart: BeMusicJSON,
   chartPath: string,
   signal?: AbortSignal,
 ): Promise<string | undefined> {
@@ -314,12 +314,12 @@ async function renderChartPreview(
   throwIfAborted(signal);
   const chart = await parseChartFile(filePath, { signal });
   throwIfAborted(signal);
-  const resolved = resolveBmsControlFlow(chart, { random: () => 0 });
-  const chartWavGain = volWavToLinearGain(resolved.bms.volWav);
+  const resolved = resolveBMSControlFlow(chart, { random: () => 0 });
+  const chartWAVGain = volWAVToLinearGain(resolved.bms.volWAV);
   const gains = resolvePreviewAudioGains(options);
   const previewPath = resolved.bms.preview;
   if (typeof previewPath === 'string' && previewPath.trim().length > 0) {
-    const previewSample = await renderPreviewSampleFile(resolved, filePath, previewPath, chartWavGain, gains, signal);
+    const previewSample = await renderPreviewSampleFile(resolved, filePath, previewPath, chartWAVGain, gains, signal);
     if (previewSample) {
       return {
         continueKey: previewSample.continueKey,
@@ -338,7 +338,7 @@ async function renderChartPreview(
 }
 
 async function renderPreviewSampleFile(
-  chart: BeMusicJson,
+  chart: BeMusicJSON,
   chartPath: string,
   previewPath: string,
   gain: number,
@@ -351,15 +351,15 @@ async function renderPreviewSampleFile(
     throwIfAborted(signal);
     let fellBack = false;
     let loadedPreviewPath: string | undefined;
-    const sampleJson = createEmptyJson('json');
-    sampleJson.metadata.bpm = chart.metadata.bpm;
-    sampleJson.resources.wav['01'] = candidate;
-    sampleJson.events = [{ measure: 0, channel: '01', position: [0, 1], value: '01' }];
+    const sampleJSON = createEmptyJSON('json');
+    sampleJSON.metadata.bpm = chart.metadata.bpm;
+    sampleJSON.resources.wav['01'] = candidate;
+    sampleJSON.events = [{ measure: 0, channel: '01', position: [0, 1], value: '01' }];
 
-    const rendered = await renderJson(sampleJson, {
+    const rendered = await renderJSON(sampleJSON, {
       baseDir,
       tailSeconds: 0,
-      gain: gain * gains.effectiveBgm,
+      gain: gain * gains.effectiveBGM,
       fallbackToneSeconds: 0.05,
       signal,
       onSampleLoadProgress: (progress) => {
@@ -387,7 +387,7 @@ async function renderPreviewSampleFile(
 }
 
 async function renderFallbackChartPreview(
-  chart: BeMusicJson,
+  chart: BeMusicJSON,
   chartPath: string,
   gains: PreviewAudioGains,
   signal?: AbortSignal,
@@ -396,7 +396,7 @@ async function renderFallbackChartPreview(
   if (!fallbackIdentity) {
     return undefined;
   }
-  const rendered = await renderJson(chart, {
+  const rendered = await renderJSON(chart, {
     baseDir: dirname(chartPath),
     tailSeconds: 0,
     startSeconds: fallbackIdentity.startSeconds,
@@ -426,7 +426,7 @@ interface PreviewAudioGains {
   master: number;
   bgm: number;
   play: number;
-  effectiveBgm: number;
+  effectiveBGM: number;
 }
 
 function resolvePreviewAudioGains(options: ChartPreviewAudioOptions | undefined): PreviewAudioGains {
@@ -437,7 +437,7 @@ function resolvePreviewAudioGains(options: ChartPreviewAudioOptions | undefined)
     master,
     bgm,
     play,
-    effectiveBgm: master * bgm,
+    effectiveBGM: master * bgm,
   };
 }
 
@@ -456,7 +456,7 @@ function normalizePreviewSettleDelay(value: number | undefined): number {
 }
 
 async function resolveFallbackPreviewIdentity(
-  chart: BeMusicJson,
+  chart: BeMusicJSON,
   signal?: AbortSignal,
 ): Promise<FallbackPreviewIdentity | undefined> {
   throwIfAborted(signal);
@@ -476,7 +476,7 @@ async function resolveFallbackPreviewIdentity(
   }
   const payload: FallbackSignaturePayload = {
     sourceFormat: chart.sourceFormat,
-    baseBpm: chart.metadata.bpm,
+    baseBPM: chart.metadata.bpm,
     tempoPoints: resolver.tempoPoints.map((point) => [point.beat, point.bpm, point.seconds]),
     stopPoints: resolver.stopPoints.map((point) => [point.beat, point.seconds]),
     triggers: triggers.map((trigger) => [
@@ -518,7 +518,7 @@ function computeFallbackContinueKey(payload: FallbackSignaturePayload): string {
   const lines: string[] = [];
   lines.push('fallback-preview-signature-v4');
   lines.push(`source:${payload.sourceFormat}`);
-  lines.push(`baseBpm:${encodeSignatureNumber(payload.baseBpm)}`);
+  lines.push(`baseBPM:${encodeSignatureNumber(payload.baseBPM)}`);
   for (const [beat, bpm, seconds] of payload.tempoPoints) {
     lines.push(`tempo:${encodeSignatureNumber(beat)}:${encodeSignatureNumber(bpm)}:${encodeSignatureNumber(seconds)}`);
   }
@@ -540,16 +540,16 @@ function computeFallbackContinueKey(payload: FallbackSignaturePayload): string {
   return `fallback:${`${primary}${secondary}`.slice(0, 24)}`;
 }
 
-function createPreviewPathCandidates(chart: BeMusicJson, previewPath: string): string[] {
+function createPreviewPathCandidates(chart: BeMusicJSON, previewPath: string): string[] {
   const normalizedPreview = previewPath.trim();
   if (normalizedPreview.length === 0) {
     return [];
   }
 
-  const normalizedPathWav = typeof chart.bms.pathWav === 'string' ? chart.bms.pathWav.trim() : '';
+  const normalizedPathWAV = typeof chart.bms.pathWAV === 'string' ? chart.bms.pathWAV.trim() : '';
   const candidates = new Set<string>([normalizedPreview]);
-  if (!isAbsolute(normalizedPreview) && normalizedPathWav.length > 0) {
-    const joined = `${normalizedPathWav.replace(/[\\/]+$/, '')}/${normalizedPreview.replace(/^[\\/]+/, '')}`;
+  if (!isAbsolute(normalizedPreview) && normalizedPathWAV.length > 0) {
+    const joined = `${normalizedPathWAV.replace(/[\\/]+$/, '')}/${normalizedPreview.replace(/^[\\/]+/, '')}`;
     candidates.add(joined);
   }
   return [...candidates];
@@ -610,7 +610,7 @@ async function startPreviewPlayback(rendered: RenderResult): Promise<PreviewPlay
 
   // Write the first chunk eagerly so that any immediate startup failure surfaces synchronously,
   // before we enter the streaming loop.
-  playhead = writeLoopedPreviewPcmChunk(chunk, rendered, playhead);
+  playhead = writeLoopedPreviewPCMChunk(chunk, rendered, playhead);
   const firstWritable = output.write(chunk);
   if (!firstWritable) {
     const becameWritable = await waitPreviewWritableWithTimeout(output, () => stopRequested);
@@ -626,7 +626,7 @@ async function startPreviewPlayback(rendered: RenderResult): Promise<PreviewPlay
 
   const done = (async () => {
     while (!stopRequested) {
-      playhead = writeLoopedPreviewPcmChunk(chunk, rendered, playhead);
+      playhead = writeLoopedPreviewPCMChunk(chunk, rendered, playhead);
 
       const writable = output.write(chunk);
       if (!writable) {
@@ -668,21 +668,21 @@ async function waitPreviewWritableWithTimeout(
   return writable && !shouldStop();
 }
 
-function writeLoopedPreviewPcmChunk(chunk: Buffer, rendered: RenderResult, startFrame: number): number {
+function writeLoopedPreviewPCMChunk(chunk: Buffer, rendered: RenderResult, startFrame: number): number {
   const totalFrames = Math.max(1, Math.min(rendered.left.length, rendered.right.length));
   let source = startFrame;
   if (source >= totalFrames) {
     source %= totalFrames;
   }
   const firstChunkFrames = Math.min(PREVIEW_CHUNK_FRAMES, totalFrames - source);
-  writeStereoPcm16Le(chunk, 0, rendered.left, rendered.right, source, firstChunkFrames);
+  writeStereoPcm16LE(chunk, 0, rendered.left, rendered.right, source, firstChunkFrames);
   source += firstChunkFrames;
   if (source >= totalFrames) {
     source = 0;
   }
   const remainingFrames = PREVIEW_CHUNK_FRAMES - firstChunkFrames;
   if (remainingFrames > 0) {
-    writeStereoPcm16Le(chunk, firstChunkFrames * 4, rendered.left, rendered.right, 0, remainingFrames);
+    writeStereoPcm16LE(chunk, firstChunkFrames * 4, rendered.left, rendered.right, 0, remainingFrames);
     source = remainingFrames % totalFrames;
   }
   return source;

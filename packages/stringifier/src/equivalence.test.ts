@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { parseBms, parseBmson } from '../../parser/src/index.ts';
-import { areBmsChartsEquivalent, areBmsonChartsEquivalent, areEventBmsonExtensionsEqual } from './equivalence.ts';
+import { parseBMS, parseBmson } from '../../parser/src/index.ts';
+import { areBMSChartsEquivalent, areBmsonChartsEquivalent, areEventBmsonExtensionsEqual } from './equivalence.ts';
 
 const bms = (title: string): string => [`#TITLE ${title}`, '#BPM 150', '#WAV01 kick.wav', '#00111:01'].join('\n');
 
-const bmson = (initBpm: number): string =>
+const bmson = (initBPM: number): string =>
   JSON.stringify({
     version: '1.0.0',
-    info: { title: 'Doc', init_bpm: initBpm, resolution: 240 },
+    info: { title: 'Doc', init_bpm: initBPM, resolution: 240 },
     lines: [{ y: 0 }, { y: 960 }],
     sound_channels: [{ name: 'kick.wav', notes: [{ x: 1, y: 0, l: 0, c: false }] }],
   });
@@ -21,10 +21,10 @@ describe('areEventBmsonExtensionsEqual', () => {
   });
 });
 
-describe('areBmsChartsEquivalent', () => {
+describe('areBMSChartsEquivalent', () => {
   test('holds for the same BMS source and fails when a header differs', () => {
-    expect(areBmsChartsEquivalent(parseBms(bms('A')), parseBms(bms('A')))).toBe(true);
-    expect(areBmsChartsEquivalent(parseBms(bms('A')), parseBms(bms('B')))).toBe(false);
+    expect(areBMSChartsEquivalent(parseBMS(bms('A')), parseBMS(bms('A')))).toBe(true);
+    expect(areBMSChartsEquivalent(parseBMS(bms('A')), parseBMS(bms('B')))).toBe(false);
   });
 });
 

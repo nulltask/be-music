@@ -5,8 +5,8 @@
 import {
   LR2_NONSTOP_CONNECTIONS,
   normalizeCourseConstraints,
-  parseLr2CourseFile,
-  serializeLr2CourseFile,
+  parseLR2CourseFile,
+  serializeLR2CourseFile,
   type CourseDefinition,
   type NonstopConnection,
 } from '@be-music/player/course';
@@ -44,7 +44,7 @@ interface StoredMadeCourses {
 export function serializeMadeCourses(made: MadeCourses): StoredMadeCourses {
   return {
     version: STORE_VERSION,
-    lr2crs: serializeLr2CourseFile(made.courses),
+    lr2crs: serializeLR2CourseFile(made.courses),
     titles: made.courses.map((course) => course.stages.map((stage) => stage.title ?? '')),
     constraints: made.courses.map((course) => [...course.constraints]),
     release: made.courses.map((course) => course.release),
@@ -64,7 +64,7 @@ export function parseMadeCourses(value: unknown): MadeCourses {
   const titles = Array.isArray(stored.titles) ? stored.titles : [];
   const constraints = Array.isArray(stored.constraints) ? stored.constraints : [];
   const releases: unknown[] = Array.isArray(stored.release) ? stored.release : [];
-  const courses = parseLr2CourseFile(stored.lr2crs).map((course, index) => {
+  const courses = parseLR2CourseFile(stored.lr2crs).map((course, index) => {
     const names = titles[index];
     const kept = constraints[index];
     const release = releases[index];

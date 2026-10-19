@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { STAGE_BGA_BAND, STAGE_SIDE_COLUMN, STAGE_WIDTH, resolveStageBgaRect } from './stage.ts';
+import { STAGE_BGA_BAND, STAGE_SIDE_COLUMN, STAGE_WIDTH, resolveStageBGARect } from './stage.ts';
 
-describe('resolveStageBgaRect', () => {
+describe('resolveStageBGARect', () => {
   it('gives single play the full band, centred between the lanes and the side column', () => {
-    const rect = resolveStageBgaRect(227);
+    const rect = resolveStageBGARect(227);
     expect(rect.w).toBe(STAGE_BGA_BAND.bottom - STAGE_BGA_BAND.top);
     expect(rect.h).toBe(rect.w);
     expect(rect.y).toBe(STAGE_BGA_BAND.top);
@@ -15,7 +15,7 @@ describe('resolveStageBgaRect', () => {
   });
 
   it('shrinks beside a double-play field instead of covering its lanes', () => {
-    const rect = resolveStageBgaRect(421);
+    const rect = resolveStageBGARect(421);
     expect(rect.w).toBeGreaterThan(200);
     expect(rect.w).toBeLessThan(STAGE_BGA_BAND.bottom - STAGE_BGA_BAND.top);
     expect(rect.x).toBeGreaterThanOrEqual(421 + 32);
@@ -25,7 +25,7 @@ describe('resolveStageBgaRect', () => {
   });
 
   it('hides the BGA when a page-wide keyboard field leaves no usable room', () => {
-    const rect = resolveStageBgaRect(628);
+    const rect = resolveStageBGARect(628);
     expect(rect.w).toBe(0);
     expect(rect.h).toBe(0);
   });

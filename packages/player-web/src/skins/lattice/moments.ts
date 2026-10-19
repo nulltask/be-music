@@ -1,6 +1,6 @@
 import type { Container, Graphics } from 'pixi.js';
 import { GROOVE } from './layout.ts';
-import { addStaggeredHudText, displayStyle, monoStyle } from './draw.ts';
+import { addStaggeredHUDText, displayStyle, monoStyle } from './draw.ts';
 import { countInStep, scrambleText, scrambleTick, springEase, tileFlipPhase } from './field.ts';
 import { LAT_ACCENT, LAT_INK, LAT_PAPER, LAT_WHITE } from './style.ts';
 import {
@@ -17,7 +17,7 @@ import {
   STAGE_HEIGHT as DESIGN_HEIGHT,
   STAGE_WIDTH as DESIGN_WIDTH,
 } from '@be-music/skin-sdk';
-import { addHudText, type ChildPool } from '../pixi-kit/index.ts';
+import { addHUDText, type ChildPool } from '../pixi-kit/index.ts';
 
 /** Stand-in for a layout without a BGA (a page-wide keyboard field): milestones then play in their area. */
 const NO_MONITOR: BeMusicRect = { x: 0, y: 0, w: 0, h: 0 };
@@ -63,7 +63,7 @@ export function drawLatticeMoments(
       layer,
       moments.milestone.value,
       milestone,
-      runtime.hasBga === true,
+      runtime.hasBGA === true,
       resolveMilestoneArea(layout.playfield.right, 346, layout.stage.width),
       layout.bga ?? NO_MONITOR,
       pool,
@@ -102,7 +102,7 @@ function drawCountIn(
         .stroke({ color: LAT_ACCENT, width: 2 });
     }
     const drop = springEase(Math.min(1, step.progress * 2.4), 2.2, 0.5);
-    const digit = addHudText(
+    const digit = addHUDText(
       layer,
       step.label,
       cx,
@@ -111,7 +111,7 @@ function drawCountIn(
       pool,
     );
     digit.alpha = Math.min(1, step.progress * 6) * (1 - Math.max(0, (step.progress - 0.85) / 0.15));
-    addHudText(
+    addHUDText(
       layer,
       scrambleText('READY', step.progress * 2.5, scrambleTick(chartMs), 1),
       cx,
@@ -127,7 +127,7 @@ function drawCountIn(
   graphics
     .rect(cx - size / 2, cy - size / 2, size, size)
     .stroke({ color: LAT_ACCENT, width: 2 * (1 - t), alpha: 1 - t });
-  addStaggeredHudText(
+  addStaggeredHUDText(
     layer,
     'GO',
     cx,
@@ -146,17 +146,17 @@ function drawMilestone(
   layer: Container,
   value: number,
   t: number,
-  hasBga: boolean,
+  hasBGA: boolean,
   area: MilestoneArea,
   bga: BeMusicRect,
   pool: ChildPool,
 ): void {
   // Over the monitor beside the lanes, or in the band below them when no monitor fits — never over the notes.
   const below = area.mode === 'below' || bga.w === 0;
-  hasBga = hasBga && bga.w > 0;
-  const compact = hasBga || below;
+  hasBGA = hasBGA && bga.w > 0;
+  const compact = hasBGA || below;
   const cx = below ? area.x + area.w / 2 : bga.x + bga.w / 2;
-  const cy = below ? area.y + area.h / 2 - 8 : hasBga ? bga.y + 36 : bga.y + bga.h / 2 - 12;
+  const cy = below ? area.y + area.h / 2 - 8 : hasBGA ? bga.y + 36 : bga.y + bga.h / 2 - 12;
   const out = Math.max(0, (t - 0.78) / 0.22);
   const size = compact ? 32 : 64;
   // A paper label under the figures, so neither the live video nor the monitor's EQ tiles run through the type.
@@ -164,7 +164,7 @@ function drawMilestone(
   const plateTop = cy - (compact ? 26 : 46);
   const plateH = compact ? 62 : 104;
   graphics.rect(cx - plateW / 2, plateTop, plateW, plateH).fill({ color: LAT_PAPER, alpha: 0.95 * (1 - out) });
-  addStaggeredHudText(
+  addStaggeredHUDText(
     layer,
     String(value),
     cx,
@@ -181,7 +181,7 @@ function drawMilestone(
   );
   const rule = 120 * easeOutCubic(Math.min(1, Math.max(0, (t - 0.15) / 0.3)));
   graphics.rect(cx - rule / 2, cy + size * 0.42, rule, 1).fill({ color: LAT_INK, alpha: 1 - out });
-  const label = addHudText(
+  const label = addHUDText(
     layer,
     scrambleText('COMBO', (t - 0.18) / 0.3, scrambleTick(t * MILESTONE_MS), value),
     cx,
@@ -198,7 +198,7 @@ function drawClear(graphics: Graphics, layer: Container, t: number, pool: ChildP
   const x = GROOVE.x + GROOVE.w + 12;
   const y = GROOVE.y - 38;
   graphics.rect(x - reach, y + 14, reach, 1).fill({ color: LAT_ACCENT, alpha: 1 - out });
-  addStaggeredHudText(
+  addStaggeredHUDText(
     layer,
     scrambleText('CLEAR LINE', t / 0.35, scrambleTick(t * CLEAR_MS, 35), 3),
     x,
@@ -241,7 +241,7 @@ function drawFullCombo(graphics: Graphics, layer: Container, t: number, screenWi
     graphics.rect(0, cy - band / 2, DESIGN_WIDTH, band).fill(LAT_INK);
   }
   const textIn = Math.max(0, (t - 0.18) / 0.3);
-  addStaggeredHudText(
+  addStaggeredHUDText(
     layer,
     scrambleText('FULL COMBO', textIn * 1.3, scrambleTick(t * FULL_COMBO_MS, 40), 7),
     cx,
@@ -256,7 +256,7 @@ function drawFullCombo(graphics: Graphics, layer: Container, t: number, screenWi
       };
     },
   );
-  const label = addHudText(
+  const label = addHUDText(
     layer,
     scrambleText('ALL NOTES CONNECTED', (t - 0.42) / 0.25, scrambleTick(t * FULL_COMBO_MS), 8),
     cx,

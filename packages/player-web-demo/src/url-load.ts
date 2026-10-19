@@ -18,42 +18,42 @@ import { unzipSync } from 'fflate';
 const MAX_SKIN_UNZIP_BYTES = 512 * 1024 * 1024;
 export const URL_LOAD_PROXY_PATH = '/__url-load-proxy';
 
-export interface UrlMediaParams {
-  musicUrl: string | undefined;
-  skinUrl: string | undefined;
+export interface URLMediaParams {
+  musicURL: string | undefined;
+  skinURL: string | undefined;
 }
 
 /** Reads the `?music=` / `?skin=` query parameters out of a full page URL. Missing params come back as `undefined`. */
-export function parseUrlMediaParams(href: string): UrlMediaParams {
+export function parseURLMediaParams(href: string): URLMediaParams {
   const params = new URL(href).searchParams;
   return {
-    musicUrl: params.get('music') ?? undefined,
-    skinUrl: params.get('skin') ?? undefined,
+    musicURL: params.get('music') ?? undefined,
+    skinURL: params.get('skin') ?? undefined,
   };
 }
 
-export function resolveUrlLoadFetchUrl(url: string, baseHref = globalThis.location?.href): string {
-  const baseUrl = new URL(baseHref ?? 'http://localhost/');
-  const target = new URL(url, baseUrl);
+export function resolveURLLoadFetchURL(url: string, baseHref = globalThis.location?.href): string {
+  const baseURL = new URL(baseHref ?? 'http://localhost/');
+  const target = new URL(url, baseURL);
   if (target.protocol !== 'https:' && target.protocol !== 'http:') {
     throw new Error(`URL auto-load only supports http(s) URLs: ${url}`);
   }
-  if (target.origin === baseUrl.origin) {
+  if (target.origin === baseURL.origin) {
     return target.href;
   }
   if (target.protocol !== 'https:') {
     throw new Error(`cross-origin URL auto-load only supports https URLs: ${url}`);
   }
-  const proxy = new URL(URL_LOAD_PROXY_PATH, baseUrl);
+  const proxy = new URL(URL_LOAD_PROXY_PATH, baseURL);
   proxy.searchParams.set('url', target.href);
   return proxy.href;
 }
 
 async function fetchBytes(url: string): Promise<Uint8Array<ArrayBuffer>> {
-  const fetchUrl = resolveUrlLoadFetchUrl(url);
+  const fetchURL = resolveURLLoadFetchURL(url);
   let response: Response;
   try {
-    response = await fetch(fetchUrl, { redirect: 'follow' });
+    response = await fetch(fetchURL, { redirect: 'follow' });
   } catch (error) {
     throw new Error(`could not fetch ${url} — network error`, {
       cause: error,
@@ -65,7 +65,7 @@ async function fetchBytes(url: string): Promise<Uint8Array<ArrayBuffer>> {
   return new Uint8Array(await response.arrayBuffer());
 }
 
-function basenameFromUrl(url: string, fallback: string): string {
+function basenameFromURL(url: string, fallback: string): string {
   try {
     const last = new URL(url).pathname.split('/').filter(Boolean).pop();
     return last ? decodeURIComponent(last) : fallback;
@@ -137,7 +137,7 @@ export async function fetchZipAsFiles(url: string): Promise<File[]> {
  */
 export async function fetchZipAsFile(url: string): Promise<File> {
   const bytes = await fetchBytes(url);
-  const base = basenameFromUrl(url, 'music.zip');
+  const base = basenameFromURL(url, 'music.zip');
   const name = base.toLowerCase().endsWith('.zip') ? base : `${base}.zip`;
   return new File([bytes], name);
 }

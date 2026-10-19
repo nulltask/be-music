@@ -1,9 +1,9 @@
-import { createEmptyJson, type BeMusicEvent } from '../../json/src/index.ts';
+import { createEmptyJSON, type BeMusicEvent } from '../../json/src/index.ts';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   createBeatAtSecondsResolver,
   createBeatAtSecondsResolverFromTimingResolver,
-  createBpmTimeline,
+  createBPMTimeline,
   createMeasureBoundariesBeats,
   createMeasureTimeline,
   createScrollTimeline,
@@ -24,7 +24,7 @@ function createStopEvent(measure: number, numerator: number, denominator: number
 
 describe('timeline', () => {
   test('createBeatAtSecondsResolver: keeps beat fixed while a stop window is active', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.resources.stop['01'] = 192;
     json.events = [createStopEvent(0, 2, 4, '01')];
@@ -38,7 +38,7 @@ describe('timeline', () => {
   });
 
   test('createBeatAtSecondsResolver: works for non-monotonic queries', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.resources.stop['01'] = 192;
     json.events = [createStopEvent(0, 2, 4, '01')];
@@ -50,7 +50,7 @@ describe('timeline', () => {
   });
 
   test('createBeatAtSecondsResolver: keeps beat fixed during bemaniaDX-style STP windows', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.bms.stp = ['001.500 500', '001.500 4000'];
 
@@ -62,10 +62,10 @@ describe('timeline', () => {
   });
 
   test('SCROLL/BPM/STOP: keeps zero and negative scroll with LR2-style stop compensation', () => {
-    const json = createEmptyJson('bms');
-    const baseBpm = 150;
-    json.metadata.bpm = baseBpm;
-    json.resources.bpm['01'] = baseBpm * 100001;
+    const json = createEmptyJSON('bms');
+    const baseBPM = 150;
+    json.metadata.bpm = baseBPM;
+    json.resources.bpm['01'] = baseBPM * 100001;
     json.resources.stop['01'] = 30000;
     json.bms.scroll['01'] = 0;
     json.bms.scroll['02'] = -1;
@@ -84,17 +84,17 @@ describe('timeline', () => {
       { beat: 2, speed: -1 },
     ]);
 
-    const bpmTimeline = createBpmTimeline(json, resolver);
+    const bpmTimeline = createBPMTimeline(json, resolver);
     expect(bpmTimeline).toHaveLength(1);
-    expect(bpmTimeline[0]).toEqual({ bpm: baseBpm * 100001, seconds: 0 });
+    expect(bpmTimeline[0]).toEqual({ bpm: baseBPM * 100001, seconds: 0 });
 
     const stopWindows = createStopBeatWindows(resolver);
     expect(stopWindows).toHaveLength(1);
-    expect(stopWindows[0]?.durationSeconds).toBeCloseTo((3 / 1920) * (240 / baseBpm), 6);
+    expect(stopWindows[0]?.durationSeconds).toBeCloseTo((3 / 1920) * (240 / baseBPM), 6);
   });
 
   test('SPEED: extracts visual speed keyframes from SP channel references', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.bms.speed['01'] = 1;
     json.bms.speed['02'] = 0.5;
     json.events = [
@@ -110,7 +110,7 @@ describe('timeline', () => {
   });
 
   test('createMeasureTimeline includes the trailing boundary, bar lines stop at the last measure, invalid points skipped', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.events = [{ measure: 2, channel: '11', position: [0, 1], value: '01' }];
     json.measures = [
       { index: 3, length: 0 },
@@ -141,15 +141,15 @@ describe('timeline', () => {
   });
 
   test('createMeasureBoundariesBeats draws exactly the lines a bmson chart authors', () => {
-    const json = createEmptyJson('bmson');
+    const json = createEmptyJSON('bmson');
     json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
     json.preservation.bmson.lines = [0, 960, 1920, 2880];
     const beatResolver = { measureToBeat: (measure: number) => measure * 4 } as never;
     expect(createMeasureBoundariesBeats(json, beatResolver)).toEqual([0, 4, 8, 12]);
   });
 
-  test('createBpmTimeline deduplicates identical points and falls back to metadata/default BPM', () => {
-    const json = createEmptyJson('bms');
+  test('createBPMTimeline deduplicates identical points and falls back to metadata/default BPM', () => {
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 144;
     const resolver = {
       tempoPoints: [
@@ -161,7 +161,7 @@ describe('timeline', () => {
       beatToSeconds: (beat: number) => beat / 2,
     } as unknown as ReturnType<typeof createTimingResolver>;
 
-    expect(createBpmTimeline(json, resolver)).toEqual([
+    expect(createBPMTimeline(json, resolver)).toEqual([
       { bpm: 144, seconds: 0 },
       { bpm: 180, seconds: 2 },
     ]);
@@ -173,12 +173,12 @@ describe('timeline', () => {
       eventToSeconds: () => 0,
       bpmAtBeat: () => 0,
     } as unknown as ReturnType<typeof createTimingResolver>;
-    expect(createBpmTimeline(json, emptyResolver)).toEqual([{ bpm: 144, seconds: 0 }]);
-    expect(createBpmTimeline(createEmptyJson('bms'), emptyResolver)).toEqual([{ bpm: 130, seconds: 0 }]);
+    expect(createBPMTimeline(json, emptyResolver)).toEqual([{ bpm: 144, seconds: 0 }]);
+    expect(createBPMTimeline(createEmptyJSON('bms'), emptyResolver)).toEqual([{ bpm: 130, seconds: 0 }]);
   });
 
-  test('createBpmTimeline shows negative #BPMxx as |trunc(BPM)| (LR2 NOWBPM)', () => {
-    const json = createEmptyJson('bms');
+  test('createBPMTimeline shows negative #BPMxx as |trunc(BPM)| (LR2 NOWBPM)', () => {
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.resources.bpm['02'] = -65.5;
     json.resources.bpm['03'] = -0.5;
@@ -188,7 +188,7 @@ describe('timeline', () => {
     ];
 
     // Timing still runs at the full |BPM| (measure 1 lasts 240 / 65.5 s); only the readout truncates.
-    expect(createBpmTimeline(json, createTimingResolver(json))).toEqual([
+    expect(createBPMTimeline(json, createTimingResolver(json))).toEqual([
       { bpm: 120, seconds: 0 },
       { bpm: 65, seconds: 2 },
       { bpm: 0, seconds: expect.closeTo(2 + 240 / 65.5, 9) },
@@ -196,7 +196,7 @@ describe('timeline', () => {
   });
 
   test('createScrollTimeline and createSpeedTimeline ignore missing, invalid, and negative values', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.bms.scroll['01'] = 1.5;
     json.bms.scroll['02'] = Number.NaN;
     json.bms.speed['01'] = 1;

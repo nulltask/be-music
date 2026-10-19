@@ -1,4 +1,4 @@
-import { createEmptyJson, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
+import { createEmptyJSON, type BeMusicEvent, type BeMusicJSON } from '@be-music/json';
 import type { CourseDefinition } from '@be-music/player/course';
 import type { LibraryChart, LibraryCourse } from '@be-music/scene-model';
 
@@ -14,7 +14,7 @@ export function makeChart(overrides: Partial<LibraryChart> = {}): LibraryChart {
     fileLabel: 'song.bms',
     title: 'Untitled',
     totalNotes: 0,
-    chart: createEmptyJson(),
+    chart: createEmptyJSON(),
     ...overrides,
   };
 }
@@ -24,7 +24,7 @@ export function makeChartWith(
   options: { channels?: readonly string[]; difficulty?: number; rank?: number; modeHint?: string },
   overrides: Partial<LibraryChart> = {},
 ): LibraryChart {
-  const chart: BeMusicJson = createEmptyJson();
+  const chart: BeMusicJSON = createEmptyJSON();
   chart.events = (options.channels ?? []).map((channel, index): BeMusicEvent => ({
     measure: 1,
     channel,

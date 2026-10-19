@@ -2057,7 +2057,7 @@
                           "description": "The course stage, zero-based."
                         },
                         "chart": {
-                          "description": "The stage chart as loaded (`BeMusicJson`, `#RANDOM` still in); it must hash to the stage’s chart fingerprint. Used to verify the run, never stored."
+                          "description": "The stage chart as loaded (`BeMusicJSON`, `#RANDOM` still in); it must hash to the stage’s chart fingerprint. Used to verify the run, never stored."
                         },
                         "pms": {
                           "type": "boolean",

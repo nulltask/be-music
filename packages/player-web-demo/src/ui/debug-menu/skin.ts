@@ -5,7 +5,7 @@ import type { GUI } from 'lil-gui';
 import { latticeSkin } from '@be-music/player-web/skin';
 import { resolveBeMusicSkinSettings } from '@be-music/skin-sdk';
 import type { PlayLayoutChoice } from '../../device-profile.ts';
-import { hasAnyLr2Skin } from '../../family-dispatch.ts';
+import { hasAnyLR2Skin } from '../../family-dispatch.ts';
 import { toggleFullscreen } from '../../fullscreen.ts';
 import { renderResolutionLabel, renderResolutionSteps, storeRenderResolution } from '../../render-resolution.ts';
 import { BE_MUSIC_SKINS, EXTRA_BUILT_IN_SKINS_ENABLED } from '../../services/built-in-skins.ts';
@@ -86,7 +86,7 @@ export function buildSkinFolder(
     });
   // The same toggle as double-clicking the playfield, for pointers where a double click is awkward.
   skin.add({ fullscreen: () => void toggleFullscreen(this.deps.shell) }, 'fullscreen').name('Toggle fullscreen');
-  // "LR2 theme" (see `rebuildLr2ThemePicker`) slots in here, above the beatoraja pickers, once a drop carries themes.
+  // "LR2 theme" (see `rebuildLR2ThemePicker`) slots in here, above the beatoraja pickers, once a drop carries themes.
   // Per-scene beatoraja skin picker, hidden until a beatoraja theme is dropped — `rebuildBeatorajaSkinPickers()`
   // re-populates it on each load. Selecting a non-default entry for a scene records it on
   // `beatorajaSkinOverridesByType`; the next mount picks it up via `pickBeatorajaSkinEntryWithOverride`.
@@ -94,24 +94,24 @@ export function buildSkinFolder(
   // The active be-music skin's own settings, built from its `settings` schema (rebuilt when the skin changes).
   this.skinSettingsFolder = addFolder(skin, DEBUG_MENU_FOLDERS.skinSettings);
   this.rebuildSkinSettingsFolder();
-  // LR2 theme picker — added once a drop discovers a theme (see `rebuildLr2ThemePicker`).
-  this.rebuildLr2ThemePicker();
+  // LR2 theme picker — added once a drop discovers a theme (see `rebuildLR2ThemePicker`).
+  this.rebuildLR2ThemePicker();
   // Add skins: the bundled Lattice, or a skin module from a URL (its default export, built with the skin SDK).
   if (!EXTRA_BUILT_IN_SKINS_ENABLED) return;
   const addSkins = addFolder(skin, DEBUG_MENU_FOLDERS.addSkin);
   const skinSource = {
     url: '',
     addLattice: () => this.deps.addBeMusicSkin(latticeSkin),
-    addFromUrl: () => void this.deps.addBeMusicSkinFromUrl(skinSource.url),
+    addFromURL: () => void this.deps.addBeMusicSkinFromURL(skinSource.url),
   };
   // Adding a skin switches to it, which makes the select screen again: the buttons wait for the play to end.
   this.skinControllers.push(addSkins.add(skinSource, 'addLattice').name('Add Lattice'));
   addSkins.add(skinSource, 'url').name('Skin module URL');
-  this.skinControllers.push(addSkins.add(skinSource, 'addFromUrl').name('Add from URL'));
+  this.skinControllers.push(addSkins.add(skinSource, 'addFromURL').name('Add from URL'));
 }
 
 /**
- * Rebuilds (or first-builds) the Debug Menu's "Skin family" dropdown. Called once during `buildGui` and again
+ * Rebuilds (or first-builds) the Debug Menu's "Skin family" dropdown. Called once during `buildGUI` and again
  * after every theme load / wipe so the available options track the loaded asset state. When the user's
  * previously-selected override becomes unavailable, silently resets to `'auto'` before swapping options in so
  * the dropdown never displays a value that wouldn't actually be honoured.
@@ -119,12 +119,12 @@ export function buildSkinFolder(
  * Implementation detail: lil-gui's `Controller#options(values)` destroys the underlying controller and
  * recreates it in place — same approach the beatoraja per-scene skin picker uses, see
  * `rebuildBeatorajaSkinPickers`. The replacement preserves insertion order, so the dropdown stays where
- * `buildGui` parked it (right after the `Open files` button).
+ * `buildGUI` parked it (right after the `Open files` button).
  */
 export function rebuildSkinFamilyPicker(this: DebugMenu): void {
   const gui = this.gui;
   if (gui === undefined) return;
-  const lr2Available = hasAnyLr2Skin(this.deps.familyDispatchState());
+  const lr2Available = hasAnyLR2Skin(this.deps.familyDispatchState());
   const beatorajaAvailable = this.deps.beatorajaTheme() !== undefined;
   // Snap back to 'auto' BEFORE rebuilding options so the freshly-built controller initialises to a valid value.
   // Without this guard a user-picked LR2 / beatoraja override that became unavailable mid-session would render
@@ -149,14 +149,14 @@ export function rebuildSkinFamilyPicker(this: DebugMenu): void {
     this.skinFamilyController.options(options).updateDisplay();
     return;
   }
-  // First-time build (called from `buildGui` before any theme has been loaded).
+  // First-time build (called from `buildGUI` before any theme has been loaded).
   this.skinFamilyController = (this.skinFolder ?? gui)
     .add(this.guiState, 'skinFamilyOverride', options)
     .name('Skin system')
     .onChange((value: SkinFamilyOverride) => {
       const loaded =
         value === 'lr2'
-          ? hasAnyLr2Skin(this.deps.familyDispatchState())
+          ? hasAnyLR2Skin(this.deps.familyDispatchState())
           : value === 'beatoraja'
             ? this.deps.beatorajaTheme() !== undefined
             : true;
@@ -226,10 +226,10 @@ export function rebuildSkinSettingsFolder(this: DebugMenu): void {
  * existing option controller (returns the same instance, preserves the attached `onChange` listener). Same
  * pattern the skin-family picker uses — keeps the controller's position in the panel stable across rebuilds.
  */
-export function rebuildLr2ThemePicker(this: DebugMenu): void {
+export function rebuildLR2ThemePicker(this: DebugMenu): void {
   const folder = this.skinFolder;
   if (folder === undefined) return;
-  const themes = this.deps.availableLr2Themes();
+  const themes = this.deps.availableLR2Themes();
   if (themes.length === 0) {
     // No discovered theme (drop didn't carry an `LR2files/Theme/<name>/` shape, OR LR2 isn't loaded at all).
     // Tear the controller down so the panel doesn't show a stale picker with options that no longer resolve.
@@ -237,8 +237,8 @@ export function rebuildLr2ThemePicker(this: DebugMenu): void {
     this.lr2ThemeController = undefined;
     return;
   }
-  // `themes` is already alphabetised by `discoverLr2Themes`. Use the theme name as both the dropdown label and
-  // the bound value — the picker proxy stores the name and `applyLr2ThemeByName` resolves it back to the files.
+  // `themes` is already alphabetised by `discoverLR2Themes`. Use the theme name as both the dropdown label and
+  // the bound value — the picker proxy stores the name and `applyLR2ThemeByName` resolves it back to the files.
   const options: Record<string, string> = {};
   for (const theme of themes) {
     options[theme.name] = theme.name;
@@ -247,17 +247,17 @@ export function rebuildLr2ThemePicker(this: DebugMenu): void {
     this.lr2ThemeController.options(options).updateDisplay();
     return;
   }
-  const proxy = { lr2Theme: this.deps.activeLr2ThemeName() ?? themes[0]!.name };
+  const proxy = { lr2Theme: this.deps.activeLR2ThemeName() ?? themes[0]!.name };
   this.lr2ThemeController = folder
     .add(proxy, 'lr2Theme', options)
     .name('LR2 theme')
     .onChange((value: string) => {
       // Hosting the proxy on a literal lets us re-read the picked name without leaking a separate `guiState`
-      // field — the theme name is fully redundant with `activeLr2ThemeName`, which `mountLr2Theme` writes.
-      // No-op when the user "picks" the already-active theme — `applyLr2ThemeByName` early-returns inside
-      // `mountLr2Theme` since the same files re-mount to the same slots, but we still call through so a
+      // field — the theme name is fully redundant with `activeLR2ThemeName`, which `mountLR2Theme` writes.
+      // No-op when the user "picks" the already-active theme — `applyLR2ThemeByName` early-returns inside
+      // `mountLR2Theme` since the same files re-mount to the same slots, but we still call through so a
       // hypothetical future code path that observes the picker change has a single chokepoint to subscribe to.
-      void this.deps.applyLr2ThemeByName(value);
+      void this.deps.applyLR2ThemeByName(value);
     });
   // A theme dropped during a play brings the picker in disabled, as the other skin controls are then.
   this.lr2ThemeController.enable(!this.playLock.skinControlsLocked);

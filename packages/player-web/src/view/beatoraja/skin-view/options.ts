@@ -88,12 +88,12 @@ export interface BeatorajaPlaySkinViewOptions {
   resolveGaugePercent?: () => number | undefined;
   /**
    * Resolve the chart's BPM curve as a polyline in `[0, 1]²`. Each `{x, y}` is a normalized
-   * point inside the bpmgraph's destination box (x = chart progress, y = (bpm − minBpm) /
-   * (maxBpm − minBpm)). The renderer maps these onto the dst rect with `y` inverted (high BPM
+   * point inside the bpmgraph's destination box (x = chart progress, y = (bpm − minBPM) /
+   * (maxBPM − minBPM)). The renderer maps these onto the dst rect with `y` inverted (high BPM
    * paints toward the top of the box). Hosts compute this once per chart and hand it back from
    * the resolver. Returning `undefined` or an empty array hides every bpmgraph element.
    */
-  resolveBpmGraphPoints?: () => ReadonlyArray<{ x: number; y: number }> | undefined;
+  resolveBPMGraphPoints?: () => ReadonlyArray<{ x: number; y: number }> | undefined;
   /**
    * Resolve a `judgegraph[].type` code into per-bar values for histogram rendering. The renderer
    * normalizes the returned array to `[0, 1]` against its own max and paints equal-width bars
@@ -126,19 +126,19 @@ export interface BeatorajaPlaySkinViewOptions {
     | undefined;
   /**
    * Resolve the BPM curve segments + mainbpm reference for `bpmgraph` destinations. Replaces
-   * the legacy `{x, y}` polyline ({@link resolveBpmGraphPoints}); the new shape carries the
+   * the legacy `{x, y}` polyline ({@link resolveBPMGraphPoints}); the new shape carries the
    * raw `(timeMs, bpm)` segments so the renderer can apply upstream's log-scaled,
    * mainbpm-relative y projection AND color-code segments by BPM identity (mainbpm = green,
    * minbpm = blue, maxbpm = red, others = yellow, stop = magenta).
    *
-   * Returning `undefined` falls back to {@link resolveBpmGraphPoints}.
+   * Returning `undefined` falls back to {@link resolveBPMGraphPoints}.
    */
-  resolveBpmGraphData?: () =>
+  resolveBPMGraphData?: () =>
     | {
         segments: ReadonlyArray<{ timeMs: number; bpm: number }>;
-        mainBpm: number;
-        minBpm: number;
-        maxBpm: number;
+        mainBPM: number;
+        minBPM: number;
+        maxBPM: number;
         totalMs: number;
       }
     | undefined;

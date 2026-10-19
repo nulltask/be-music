@@ -129,7 +129,7 @@ function buildAcknowledgementCard(entry: (typeof acknowledgements)[number]): HTM
 
   const meta = document.createElement('div');
   meta.className = 'ack-card-meta';
-  const link = entry.homepage ?? cleanRepositoryUrl(entry.repository);
+  const link = entry.homepage ?? cleanRepositoryURL(entry.repository);
   if (link) {
     const a = document.createElement('a');
     a.href = link;
@@ -164,7 +164,7 @@ function buildAcknowledgementCard(entry: (typeof acknowledgements)[number]): HTM
   return card;
 }
 
-function cleanRepositoryUrl(raw: string | undefined): string | undefined {
+function cleanRepositoryURL(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
   return raw
     .replace(/^git\+/u, '')

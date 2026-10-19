@@ -19,7 +19,7 @@ import {
   resolveReversedDrawClock,
 } from '../../../chart/note-draw-window.ts';
 import { PIXELS_PER_BEAT } from '../../../stage/design.ts';
-import { resolveLr2LaneIndex } from '@be-music/player/lanes';
+import { resolveLR2LaneIndex } from '@be-music/player/lanes';
 import { resolveBeMusicLaneKind } from '../../../skin/be-music/registry.ts';
 import { renderPhantomNote } from '../../../skins/phantom/playfield.ts';
 import type { PlayfieldLaneRect } from '../../types.ts';
@@ -132,7 +132,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
     }
     const y = resolveDrawY(drawWindow, lane.bottom - beatDistance(note.beat) * pixelsPerBeat, lane.bottom);
     // The LR2-spec lane index (LR2 `#SRC_NOTE,...,index`), for the lane kind a be-music skin draws and the labels.
-    const laneIndex = resolveLr2LaneIndex(note.channel, ctx.play.chartPlayVariant);
+    const laneIndex = resolveLR2LaneIndex(note.channel, ctx.play.chartPlayVariant);
     // Long-note render: draw LN_BODY between start and end beats, capped with LN_START / LN_END sprites. Falls
     // through to single-note render if the chart has no long-note end-beat for this entry.
     if (note.endBeat !== undefined) {
@@ -193,7 +193,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
     if (!lane) continue;
     const y = resolveDrawY(drawWindow, lane.bottom - beatDistance(mine.beat) * pixelsPerBeat, lane.bottom);
     if (y < lane.top - overscan || y > resolveDrawBottom(drawWindow, lane.bottom)) continue;
-    const laneIndex = resolveLr2LaneIndex(mine.channel, ctx.play.chartPlayVariant);
+    const laneIndex = resolveLR2LaneIndex(mine.channel, ctx.play.chartPlayVariant);
     renderMineNote(ctx, laneIndex, mine.channel, lane, y);
   }
   ctx.noteLayerPool.end();

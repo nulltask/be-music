@@ -16,7 +16,7 @@ export const BMS_SEARCH_USER_AGENT = 'be-music-leaderboard (+https://github.com/
 export type PackType = 'included' | 'additional';
 
 /** What BMS Search knows about one chart file. */
-export interface BmsSearchPattern {
+export interface BMSSearchPattern {
   /** The work the chart is filed under, or null while nobody has linked it. */
   chartset: { id: string; title: string; event: string | null } | null;
   packType: PackType | null;
@@ -32,7 +32,7 @@ const text = (value: unknown): string | null =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 
 /** Reads a pattern response (`GET /patterns/...`), keeping only the fields the Leaderboard uses. */
-export function parseBmsSearchPattern(json: unknown): BmsSearchPattern {
+export function parseBMSSearchPattern(json: unknown): BMSSearchPattern {
   const pattern = record(json) ?? {};
   const bms = record(pattern.bms);
   const id = text(bms?.id);
@@ -46,7 +46,7 @@ export function parseBmsSearchPattern(json: unknown): BmsSearchPattern {
 }
 
 /** The pattern URLs to try for a chart's file hashes: SHA-256 first, then MD5. */
-export function bmsSearchPatternUrls(aliases: ReadonlyArray<{ kind: 'sha256' | 'md5'; hash: string }>): string[] {
+export function bmsSearchPatternURLs(aliases: ReadonlyArray<{ kind: 'sha256' | 'md5'; hash: string }>): string[] {
   const ordered = [...aliases].sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'sha256' ? -1 : 1));
   return ordered.map((alias) =>
     alias.kind === 'sha256'
@@ -59,17 +59,17 @@ export function bmsSearchPatternUrls(aliases: ReadonlyArray<{ kind: 'sha256' | '
  * Looks a chart up by its file hashes. The first file BMS Search knows decides; `undefined` when it knows none of them.
  * Throws when BMS Search cannot be reached or answers with an error, so the caller tries again later.
  */
-export async function lookupBmsSearchPattern(
+export async function lookupBMSSearchPattern(
   fetcher: typeof fetch,
   aliases: ReadonlyArray<{ kind: 'sha256' | 'md5'; hash: string }>,
-): Promise<BmsSearchPattern | undefined> {
-  for (const url of bmsSearchPatternUrls(aliases)) {
+): Promise<BMSSearchPattern | undefined> {
+  for (const url of bmsSearchPatternURLs(aliases)) {
     const response = await fetcher(url, {
       headers: { accept: 'application/json', 'user-agent': BMS_SEARCH_USER_AGENT },
     });
     if (response.status === 404) continue;
     if (!response.ok) throw new Error(`BMS Search answered ${response.status} for ${url}`);
-    return parseBmsSearchPattern(await response.json());
+    return parseBMSSearchPattern(await response.json());
   }
   return undefined;
 }

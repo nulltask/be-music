@@ -142,7 +142,7 @@ export interface BeMusicStage {
    * The gameplay BGA rect for a playfield whose rightmost lane ends at `playfieldRight`. The scene composites the BGA
    * here and the skin frames the same rect, so the BGA can make room for wide (double play / keyboard) playfields.
    */
-  resolveBgaRect(playfieldRight: number): BeMusicRect;
+  resolveBGARect(playfieldRight: number): BeMusicRect;
 }
 
 /**
@@ -259,7 +259,7 @@ export interface BeMusicGameplayRuntime {
   /** AAA / AA / A / B / C / D / E / F. */
   rank?: string;
   autoplay?: boolean;
-  hasBga?: boolean;
+  hasBGA?: boolean;
   /** Monotonic play clock (ms) for animation. */
   nowMs?: number;
   /** Song progress in [0, 1] — drives a progress track. */
@@ -324,9 +324,9 @@ export interface BeMusicGameplayRuntime {
    * Lowest, highest, and main BPM of the chart. The main BPM is the BPM the most notes sit at (beatoraja's), the one
    * HS-FIX `'AVERAGE'` pegs the hi-speed to and the play log's `visibleMs` is taken at.
    */
-  minBpm?: number;
-  maxBpm?: number;
-  mainBpm?: number;
+  minBPM?: number;
+  maxBPM?: number;
+  mainBPM?: number;
   /**
    * Length of the song (ms) and how far the audio has played (ms), on the audio clock: it stops while paused and
    * starts at 0 when the song starts. Remaining time is `songLengthMs - songElapsedMs`. Unlike {@link chartMs}, which is
@@ -491,7 +491,7 @@ export interface BeMusicMeasureLine {
 }
 
 /**
- * The BGA layers showing this frame, for a skin that composites the BGA itself ({@link BeMusicGameplaySkin.drawsBga}).
+ * The BGA layers showing this frame, for a skin that composites the BGA itself ({@link BeMusicGameplaySkin.drawsBGA}).
  * Following the BMS convention, the host hands {@link layer} with pure black (`#000000`) already turned transparent,
  * while {@link base} and {@link poor} are opaque: draw all three with plain alpha blending, without keying them again.
  * A bmson layer (whose spec keeps black opaque) and a video layer come as authored. `#SWBGA` animation frames are
@@ -501,7 +501,7 @@ export interface BeMusicMeasureLine {
  * still image whose long edge is at most 256 px at its own size on that canvas, centered horizontally and against the
  * top edge, and stretch a larger image or a video over the whole rect.
  */
-export interface BeMusicBgaFrame {
+export interface BeMusicBGAFrame {
   /** The base layer (`#BMP` on channel 04), or a video frame. */
   base?: BeMusicImage;
   /** The layer drawn over the base (channel 07). */
@@ -540,8 +540,8 @@ export interface BeMusicGameplayFrame {
    * {@link BeMusicGameplaySkin.drawsMeasureLines}.
    */
   measureLines: readonly BeMusicMeasureLine[];
-  /** The BGA layers to composite. Always `undefined` unless the skin sets {@link BeMusicGameplaySkin.drawsBga}. */
-  bga: BeMusicBgaFrame | undefined;
+  /** The BGA layers to composite. Always `undefined` unless the skin sets {@link BeMusicGameplaySkin.drawsBGA}. */
+  bga: BeMusicBGAFrame | undefined;
   /** Fractional beat position in [0, 1). */
   beatPhase: number;
   effects: BeMusicEffectLevel;
@@ -575,7 +575,7 @@ export interface BeMusicGameplaySkin<K extends BeMusicSurfaceContextKind = BeMus
    * Set to `true` when the skin composites the BGA itself from `frame.bga`. Otherwise the player shows the BGA behind
    * the skin's canvas, in {@link BeMusicGameplayLayout.bga}.
    */
-  readonly drawsBga?: boolean;
+  readonly drawsBGA?: boolean;
 }
 
 /** Song-list geometry shared by the skin (drawing) and the scene (row hit-testing). */

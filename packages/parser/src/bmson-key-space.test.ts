@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '../../json/src/index.ts';
+import { normalizeObjectKey, resolveBMSBase, type BeMusicEvent, type BeMusicJSON } from '../../json/src/index.ts';
 import { createTimingResolver } from '../../chart/src/index.ts';
 import { parseBmson } from './index.ts';
 
@@ -10,15 +10,15 @@ function eventPulse(event: BeMusicEvent): number {
   return Math.round((event.measure + event.position[0] / event.position[1]) * 4 * RESOLUTION);
 }
 
-function lookup<T>(json: BeMusicJson, table: Record<string, T>, event: BeMusicEvent): T | undefined {
-  return table[normalizeObjectKey(event.value, resolveBmsBase(json))];
+function lookup<T>(json: BeMusicJSON, table: Record<string, T>, event: BeMusicEvent): T | undefined {
+  return table[normalizeObjectKey(event.value, resolveBMSBase(json))];
 }
 
-function eventsOn(json: BeMusicJson, channel: string): BeMusicEvent[] {
+function eventsOn(json: BeMusicJSON, channel: string): BeMusicEvent[] {
   return json.events.filter((event) => event.channel === channel);
 }
 
-function parse(document: Record<string, unknown>): BeMusicJson {
+function parse(document: Record<string, unknown>): BeMusicJSON {
   return parseBmson(
     JSON.stringify({
       version: '1.0.0',

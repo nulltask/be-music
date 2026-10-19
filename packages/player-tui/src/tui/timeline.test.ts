@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
-  findCurrentBpm,
+  findCurrentBPM,
   findCurrentMeasure,
   findCurrentScroll,
   findRemainingStopSeconds,
@@ -43,21 +43,21 @@ describe('measure lookups', () => {
   });
 });
 
-describe('findCurrentBpm', () => {
+describe('findCurrentBPM', () => {
   const timeline = [
     { bpm: 120, seconds: 0 },
     { bpm: 180, seconds: 10 },
   ];
 
   test('finds the BPM in effect, and the first one before the chart starts', () => {
-    expect(findCurrentBpm(timeline, 5)).toBe(120);
-    expect(findCurrentBpm(timeline, 10)).toBe(180);
-    expect(findCurrentBpm(timeline, -1)).toBe(120);
+    expect(findCurrentBPM(timeline, 5)).toBe(120);
+    expect(findCurrentBPM(timeline, 10)).toBe(180);
+    expect(findCurrentBPM(timeline, -1)).toBe(120);
   });
 
   test('is 0 without a timeline', () => {
-    expect(findCurrentBpm(undefined, 5)).toBe(0);
-    expect(findCurrentBpm([], 5)).toBe(0);
+    expect(findCurrentBPM(undefined, 5)).toBe(0);
+    expect(findCurrentBPM([], 5)).toBe(0);
   });
 });
 

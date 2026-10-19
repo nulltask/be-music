@@ -4,12 +4,12 @@ import {
   type ResolvedChart,
 } from '@be-music/chart';
 import { throwIfAborted } from '@be-music/utils/core';
-import { type BeMusicJson, resolveBmsBase } from '@be-music/json';
+import { type BeMusicJSON, resolveBMSBase } from '@be-music/json';
 import { createPlayerStateSignals, type PlayerStateSignals } from '../state-signals.ts';
 import { resolveHighSpeedMultiplier } from './high-speed-control.ts';
-import { createPlayerUiSignalBus, type PlayerUiSignalBus } from './ui-signal-bus.ts';
+import { createPlayerUISignalBus, type PlayerUISignalBus } from './ui-signal-bus.ts';
 import { createPlayerInputSignalBus, type PlayerInputSignalBus } from './input-signal-bus.ts';
-import { createNoopPlaybackStateLogger, createUiFramePublisher, type PlaybackStateLogger } from './playback-support.ts';
+import { createNoopPlaybackStateLogger, createUIFramePublisher, type PlaybackStateLogger } from './playback-support.ts';
 import { createScoreTracker } from './scoring.ts';
 import {
   judgeWindowLateReachUs,
@@ -41,21 +41,21 @@ import {
 } from './engine-preparation.ts';
 import {
   createNoopPlaybackEventTracer,
-  createNoTuiPlaybackEventTracer,
-  createNoTuiPlaybackStateLogger,
+  createNoTUIPlaybackEventTracer,
+  createNoTUIPlaybackStateLogger,
   emitPlayerLog,
   resolveOutputWriter,
   writeRealtimeTriggeredEventLog,
   writeRealtimeVolumeEventLog,
-  type NoTuiPlaybackEventTracer,
+  type NoTUIPlaybackEventTracer,
 } from './engine-trace.ts';
 import type {
   AudioSession,
-  CreatePlayerUiRuntimeContext,
+  CreatePlayerUIRuntimeContext,
   PlayerInputRuntime,
   PlayerOptions,
   PlayerSummary,
-  PlayerUiRuntime,
+  PlayerUIRuntime,
 } from './engine-types.ts';
 import { createRealtimeAudioCursor, type RealtimeAudioCursor } from './play-audio-cursor.ts';
 import type { JudgeStrategy } from './play-strategy.ts';
@@ -70,7 +70,7 @@ export interface PlaySession {
   readonly strategy: JudgeStrategy;
   readonly writeOutput: (text: string) => void;
   /** The chart after control flow, as the engine plays it. */
-  readonly resolvedJson: BeMusicJson;
+  readonly resolvedJSON: BeMusicJSON;
   readonly resolvedChart: ResolvedChart;
   readonly playbackChart: PreparedPlaybackChartData;
   readonly randomPatternSummary: string | undefined;
@@ -97,17 +97,17 @@ export interface PlaySession {
   readonly replay: boolean;
   readonly playlogRecorder: PlaylogRecorder | undefined;
   readonly stateSignals: PlayerStateSignals;
-  readonly uiSignals: PlayerUiSignalBus;
+  readonly uiSignals: PlayerUISignalBus;
   readonly inputSignals: PlayerInputSignalBus;
-  readonly uiRuntime: PlayerUiRuntime | undefined;
+  readonly uiRuntime: PlayerUIRuntime | undefined;
   readonly uiEnabled: boolean;
   /** The state signals while a UI runtime shows them. */
   readonly activeStateSignals: PlayerStateSignals | undefined;
   readonly audioSession: AudioSession | undefined;
   readonly inputRuntime: PlayerInputRuntime | undefined;
-  readonly tracer: NoTuiPlaybackEventTracer;
+  readonly tracer: NoTUIPlaybackEventTracer;
   readonly stateLogger: PlaybackStateLogger;
-  readonly publishUiFrame: (seconds: number, beat: number) => void;
+  readonly publishUIFrame: (seconds: number, beat: number) => void;
   /** Maps the judge's effects onto audio, the UI buses, the play log and the trace. */
   readonly applyJudgeEffect: JudgeCoreEffectSink;
   /** The chart's volume changes (`#97` / `#98`), queued against the audio write head. */
@@ -119,14 +119,14 @@ export interface PlaySession {
 }
 
 /** The UI runtime's label for the mode. */
-function uiModeLabel(strategy: JudgeStrategy, autoScratch: boolean): CreatePlayerUiRuntimeContext['mode'] {
+function uiModeLabel(strategy: JudgeStrategy, autoScratch: boolean): CreatePlayerUIRuntimeContext['mode'] {
   if (strategy.mode === 'auto') return 'AUTO';
   return autoScratch ? 'AUTO SCRATCH' : 'MANUAL';
 }
 
 /** Sets a play up: resolves its chart, builds its judging setup and starts its runtimes (not the play itself). */
 export async function createPlaySession(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   options: PlayerOptions,
   strategy: JudgeStrategy,
 ): Promise<PlaySession> {
@@ -135,8 +135,8 @@ export async function createPlaySession(
   const writeOutput = resolveOutputWriter(options);
   reportLoadProgress(options, 0.02, 'Resolving chart...');
   const controlFlowResolution = resolvePlayerChart(json, options);
-  const resolvedJson = controlFlowResolution.resolvedJson;
-  options.onResolvedChart?.(resolvedJson);
+  const resolvedJSON = controlFlowResolution.resolvedJSON;
+  options.onResolvedChart?.(resolvedJSON);
   const randomPatternSummary = formatRandomPatternSummary(controlFlowResolution.randomPatterns);
   const autoScratch = mode === 'manual' && options.autoScratch === true;
   const speed = options.speed ?? 1;
@@ -144,7 +144,7 @@ export async function createPlaySession(
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const replay = options.replayInputs !== undefined;
-  const resolvedChart = resolveEngineChart(resolvedJson, options);
+  const resolvedChart = resolveEngineChart(resolvedJSON, options);
   const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(resolvedChart.timing);
   // Dynamic `#EXRANKxx` changes are a chart fact, recorded whatever the ruleset: LR2 applies them, while beatoraja and
   // IIDX keep their initial windows (their `windowsAt` ignores the timeline). A log played under one ruleset can then
@@ -167,14 +167,14 @@ export async function createPlaySession(
   // background audio at its own time.
   appendShadowedNoteTriggers(backgroundTriggers, resolvedChart, playbackChart.shadowedNotes);
   // Constant for the whole play and read on every tick and judgment: hoisted out of the hot paths.
-  const idBase = resolveBmsBase(resolvedJson);
-  const wavResources = resolvedJson.resources.wav;
+  const idBase = resolveBMSBase(resolvedJSON);
+  const wavResources = resolvedJSON.resources.wav;
 
   // The gauge the play runs on and the play log records: one value, so a re-simulation runs the same gauge. A host that
   // only declared it for the log (`recordPlaylog.gauge`) gets it played too.
   const selectedGauge = options.gauge ?? options.recordPlaylog?.gauge;
   const ruleset = resolveRuleset(
-    rulesetChartFactsFromChart(resolvedJson, playbackChart, judgeRankChanges, options.stageRanks),
+    rulesetChartFactsFromChart(resolvedJSON, playbackChart, judgeRankChanges, options.stageRanks),
     options.judgeRuleset ?? 'lr2',
     {
       ...(selectedGauge !== undefined ? { selectedGauge } : {}),
@@ -199,13 +199,13 @@ export async function createPlaySession(
   }
   const playlogRecorder = options.onPlaylogRecorded
     ? (() => {
-        const { chartSha256, chartMd5, recorder, sourceChart, ...hostPlaySettings } = options.recordPlaylog ?? {};
+        const { chartSHA256, chartMD5, recorder, sourceChart, ...hostPlaySettings } = options.recordPlaylog ?? {};
         return createPlaylogRecorder({
-          json: resolvedJson,
+          json: resolvedJSON,
           moneyScore: ruleset.moneyScore,
           chart: playbackChart,
-          chartSha256,
-          chartMd5,
+          chartSHA256,
+          chartMD5,
           recorder,
           laneModeExtension: options.laneModeExtension,
           // The chart the engine was handed is the source when it resolved the control flow itself.
@@ -235,7 +235,7 @@ export async function createPlaySession(
   const stateSignals = createPlayerStateSignals(highSpeed);
   const { landmineNotes, invisibleNotes, renderNotes, laneBindings, laneDisplayMode, inputTokenToChannels } =
     playbackChart;
-  const uiSignals = createPlayerUiSignalBus({
+  const uiSignals = createPlayerUISignalBus({
     currentBeat: 0,
     currentSeconds: 0,
     totalSeconds: playbackChart.totalSeconds,
@@ -247,7 +247,7 @@ export async function createPlaySession(
   const inputSignals = createPlayerInputSignalBus();
   const { uiRuntime, totalSeconds, uiEnabled, activeStateSignals, audioSession } =
     await initializePlaybackRuntimeResources({
-      resolvedJson,
+      resolvedJSON,
       resolvedChart,
       options,
       mode: uiModeLabel(strategy, autoScratch),
@@ -267,14 +267,14 @@ export async function createPlaySession(
   const inputRuntime = options.createInputRuntime?.({ mode, inputSignals, inputTokenToChannels });
   const tracer = uiEnabled
     ? createNoopPlaybackEventTracer()
-    : createNoTuiPlaybackEventTracer({
+    : createNoTUIPlaybackEventTracer({
         resolved: resolvedChart,
         writeOutput,
         judgeWindowMs: options.judgeWindowMs,
       });
   const stateLogger = uiEnabled
     ? createNoopPlaybackStateLogger()
-    : createNoTuiPlaybackStateLogger({ writeOutput, summary, base: idBase });
+    : createNoTUIPlaybackStateLogger({ writeOutput, summary, base: idBase });
 
   throwIfAborted(options.signal);
   const audioBackendLabel = resolveAudioBackendLabel(options, audioSession);
@@ -293,7 +293,7 @@ export async function createPlaySession(
     audioEnabled: audioSession !== undefined,
     totalSeconds,
   });
-  const publishUiFrame = createUiFramePublisher({
+  const publishUIFrame = createUIFramePublisher({
     uiEnabled,
     uiSignals,
     totalSeconds,
@@ -330,7 +330,7 @@ export async function createPlaySession(
     uiSignals,
     activeStateSignals,
     playlogRecorder,
-    publishUiFrame,
+    publishUIFrame,
     beatAtSeconds,
   });
 
@@ -353,7 +353,7 @@ export async function createPlaySession(
     options,
     strategy,
     writeOutput,
-    resolvedJson,
+    resolvedJSON,
     resolvedChart,
     playbackChart,
     randomPatternSummary,
@@ -383,7 +383,7 @@ export async function createPlaySession(
     inputRuntime,
     tracer,
     stateLogger,
-    publishUiFrame,
+    publishUIFrame,
     applyJudgeEffect,
     volumeChanges,
     backgroundAudio,

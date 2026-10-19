@@ -1,7 +1,7 @@
 import { resolveChart } from '@be-music/chart';
 import { parseChart } from '@be-music/parser';
 import { manualPlay } from '@be-music/player';
-import { buildNonstopCoursePlaylog, parseLr2CourseFile } from '@be-music/player/course';
+import { buildNonstopCoursePlaylog, parseLR2CourseFile } from '@be-music/player/course';
 import type { BeMusicPlaylog, PlaylogInputEvent } from '@be-music/player/playlog';
 import { simulatePlaylog } from '@be-music/player/playlog';
 import type { LibraryChart, LibraryCourse } from '@be-music/scene-model';
@@ -42,7 +42,7 @@ const STAGE_B = song('b', ['#BPM 240', '#WAV01 b.wav', '#00211:00010000', '#0031
 function course(): LibraryCourse {
   // A NONSTOP course (type 1) with a CUT connection after stage 1.
   const header = `2${'0'.repeat(9)}1${'0'.repeat(21)}`;
-  const [definition] = parseLr2CourseFile(
+  const [definition] = parseLR2CourseFile(
     `<courselist><course><title>Nonstop</title><type>1</type><hash>${header}${MD5.join('')}</hash></course></courselist>`,
   );
   return {

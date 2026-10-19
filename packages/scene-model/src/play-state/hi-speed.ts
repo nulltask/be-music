@@ -1,5 +1,5 @@
 import { DEFAULT_HISPEED, snapHiSpeed, stepPlayerHiSpeed } from '../play-options/hi-speed.ts';
-import type { HsFix } from '../play-options/options.ts';
+import type { HSFix } from '../play-options/options.ts';
 
 /**
  * The hi-speed of a play: the player's, on their own scale (what the select panel, the readouts and the host show and
@@ -9,19 +9,19 @@ import type { HsFix } from '../play-options/options.ts';
 export interface HiSpeedState {
   readonly player: number;
   readonly drawn: number;
-  /** The chart's HS-FIX multiplier ({@link resolveHsFixMultiplier}); 1 without HS-FIX. */
+  /** The chart's HS-FIX multiplier ({@link resolveHSFixMultiplier}); 1 without HS-FIX. */
   readonly multiplier: number;
   readonly locked: boolean;
 }
 
 /** The tempo facts HS-FIX reads off a chart. */
-export interface HsFixTempo {
+export interface HSFixTempo {
   /** The BPM the player's hi-speed is meant at: the chart's `#BASEBPM`, else its start BPM. */
-  readonly referenceBpm?: number;
+  readonly referenceBPM?: number;
   /** Every BPM of the chart's tempo map (negative ones count at their magnitude). */
   readonly bpms: readonly number[];
   /** The BPM most notes sit at (beatoraja's MAINBPM). */
-  readonly mainBpm?: number;
+  readonly mainBPM?: number;
 }
 
 /**
@@ -31,15 +31,15 @@ export interface HsFixTempo {
  * + STOP gimmicks do not skew the way a time average is), and `CONSTANT`, until the scroll can follow every BPM change,
  * the main BPM too. 1 without HS-FIX, without a reference BPM or without a positive BPM.
  */
-export function resolveHsFixMultiplier(mode: HsFix, tempo: HsFixTempo): number {
+export function resolveHSFixMultiplier(mode: HSFix, tempo: HSFixTempo): number {
   if (mode === 'OFF') return 1;
-  const referenceBpm = tempo.referenceBpm !== undefined && tempo.referenceBpm > 0 ? tempo.referenceBpm : undefined;
-  if (referenceBpm === undefined) return 1;
+  const referenceBPM = tempo.referenceBPM !== undefined && tempo.referenceBPM > 0 ? tempo.referenceBPM : undefined;
+  if (referenceBPM === undefined) return 1;
   const bpms = tempo.bpms.map((bpm) => Math.abs(bpm)).filter((bpm) => Number.isFinite(bpm) && bpm > 0);
   if (bpms.length === 0) return 1;
   const target =
-    mode === 'MAXBPM' ? Math.max(...bpms) : mode === 'MINBPM' ? Math.min(...bpms) : (tempo.mainBpm ?? referenceBpm);
-  const multiplier = referenceBpm / target;
+    mode === 'MAXBPM' ? Math.max(...bpms) : mode === 'MINBPM' ? Math.min(...bpms) : (tempo.mainBPM ?? referenceBPM);
+  const multiplier = referenceBPM / target;
   return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1;
 }
 

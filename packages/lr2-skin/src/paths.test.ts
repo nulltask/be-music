@@ -4,7 +4,7 @@ import {
   informationTypeToKind,
   informationTypeToPlayVariant,
   isSkinPathOfKind,
-  peekLr2SkinInformationType,
+  peekLR2SkinInformationType,
   scoreSkinPath,
 } from './paths.ts';
 
@@ -162,7 +162,7 @@ describe('informationTypeToKind / informationTypeToPlayVariant', () => {
   });
 });
 
-describe('peekLr2SkinInformationType', () => {
+describe('peekLR2SkinInformationType', () => {
   function sjis(text: string): Uint8Array {
     // Helper that encodes test fixtures as SJIS bytes — same encoding the loader sees on real `.lr2skin` files.
     // We only need a Node-side fallback; the strings in these tests are ASCII so SJIS / UTF-8 byte sequences
@@ -172,36 +172,36 @@ describe('peekLr2SkinInformationType', () => {
 
   it('returns the parsed type for a canonical #INFORMATION row', () => {
     const bytes = sjis('//comment\n#INFORMATION,0,LR2 default play 7K,LR2 staff,thumbnail.bmp,\n');
-    expect(peekLr2SkinInformationType(bytes)).toBe(0);
+    expect(peekLR2SkinInformationType(bytes)).toBe(0);
   });
 
   it('parses each of the recognized type codes', () => {
     for (const type of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) {
-      expect(peekLr2SkinInformationType(sjis(`#INFORMATION,${type},name,author,thumb.bmp,\n`))).toBe(type);
+      expect(peekLR2SkinInformationType(sjis(`#INFORMATION,${type},name,author,thumb.bmp,\n`))).toBe(type);
     }
   });
 
   it('ignores commented-out information rows', () => {
     const bytes = sjis('//#INFORMATION,99,fake,\n#INFORMATION,5,real select,author,t.bmp,\n');
-    expect(peekLr2SkinInformationType(bytes)).toBe(5);
+    expect(peekLR2SkinInformationType(bytes)).toBe(5);
   });
 
   it('accepts tab-delimited rows (LR2 CSV parser quirk)', () => {
     const bytes = sjis('#INFORMATION\t7\treal result\tauthor\tthumb.bmp\t\n');
-    expect(peekLr2SkinInformationType(bytes)).toBe(7);
+    expect(peekLR2SkinInformationType(bytes)).toBe(7);
   });
 
   it('returns undefined when no #INFORMATION line is present', () => {
-    expect(peekLr2SkinInformationType(sjis('//comment only\n#IMAGE,foo.bmp,\n'))).toBeUndefined();
+    expect(peekLR2SkinInformationType(sjis('//comment only\n#IMAGE,foo.bmp,\n'))).toBeUndefined();
   });
 
   it('returns undefined for empty or undefined input', () => {
-    expect(peekLr2SkinInformationType(undefined)).toBeUndefined();
-    expect(peekLr2SkinInformationType(new Uint8Array())).toBeUndefined();
+    expect(peekLR2SkinInformationType(undefined)).toBeUndefined();
+    expect(peekLR2SkinInformationType(new Uint8Array())).toBeUndefined();
   });
 
   it('returns undefined when the type field is not a finite integer', () => {
-    expect(peekLr2SkinInformationType(sjis('#INFORMATION,abc,name,author,thumb.bmp,\n'))).toBeUndefined();
+    expect(peekLR2SkinInformationType(sjis('#INFORMATION,abc,name,author,thumb.bmp,\n'))).toBeUndefined();
   });
 
   it('handles a BOM-prefixed file', () => {
@@ -211,7 +211,7 @@ describe('peekLr2SkinInformationType', () => {
     const bytes = new Uint8Array(head.length + rest.length);
     bytes.set(head, 0);
     bytes.set(rest, head.length);
-    expect(peekLr2SkinInformationType(bytes)).toBe(6);
+    expect(peekLR2SkinInformationType(bytes)).toBe(6);
   });
 
   it('skips a line longer than 4 KiB at the top of the file', () => {
@@ -219,6 +219,6 @@ describe('peekLr2SkinInformationType', () => {
     // cheap. Authored themes never have payloads this large before the header in practice.
     const filler = '//' + 'x'.repeat(5000) + '\n';
     const bytes = sjis(filler + '#INFORMATION,5,buried,\n');
-    expect(peekLr2SkinInformationType(bytes)).toBeUndefined();
+    expect(peekLR2SkinInformationType(bytes)).toBeUndefined();
   });
 });

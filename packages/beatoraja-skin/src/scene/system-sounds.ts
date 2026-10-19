@@ -40,7 +40,7 @@ const CUE_CANDIDATES: Readonly<Record<keyof BeatorajaSystemSoundPaths, readonly 
     'sound/select.ogg',
     'sound/start.wav',
     'sound/start.ogg',
-    'LR2files/Bgm/_common/decide.wav',
+    'LR2files/BGM/_common/decide.wav',
   ],
   cancel: ['sound/cancel.wav', 'sound/cancel.ogg', 'sound/back.wav', 'sound/back.ogg', 'LR2files/Sound/lr2/back.wav'],
   folderOpen: [
@@ -90,9 +90,9 @@ export function discoverBeatorajaSystemSoundPaths(
 }
 
 const SELECT_BGM_CANDIDATES: readonly string[] = [
-  'Bgm/select.wav',
-  'Bgm/select.ogg',
-  'Bgm/select.mp3',
+  'BGM/select.wav',
+  'BGM/select.ogg',
+  'BGM/select.mp3',
   'bgm/select.wav',
   'bgm/select.ogg',
   'bgm/select.mp3',
@@ -100,14 +100,14 @@ const SELECT_BGM_CANDIDATES: readonly string[] = [
   'sound/select_loop.ogg',
   'sound/bgm_select.wav',
   'sound/bgm_select.ogg',
-  'LR2files/Bgm/_common/select.wav',
+  'LR2files/BGM/_common/select.wav',
 ];
 
 /**
- * The select screen's looping BGM in a theme's files (beatoraja's `bgm_select`): `Bgm/select.*`, a `sound/` loop, or
- * LR2's `LR2files/Bgm/_common/select.wav`. `undefined` when the theme has none.
+ * The select screen's looping BGM in a theme's files (beatoraja's `bgm_select`): `BGM/select.*`, a `sound/` loop, or
+ * LR2's `LR2files/BGM/_common/select.wav`. `undefined` when the theme has none.
  */
-export function discoverBeatorajaSelectBgmPath(files: ReadonlyMap<string, BeatorajaSkinFileEntry>): string | undefined {
+export function discoverBeatorajaSelectBGMPath(files: ReadonlyMap<string, BeatorajaSkinFileEntry>): string | undefined {
   for (const candidate of SELECT_BGM_CANDIDATES) {
     const found = findCaseInsensitivePath(files, candidate);
     if (found !== undefined) return found;
@@ -138,7 +138,7 @@ const JINGLE_STEMS: Readonly<Record<BeatorajaThemeJingle, string>> = {
  * (`SystemSoundManager`), so a stem that turns up in several folders goes to the one holding the most of the jingles'
  * files, then to the shallowest.
  */
-export function pickBeatorajaThemeBgmPaths(paths: Iterable<string>): Partial<Record<BeatorajaThemeJingle, string>> {
+export function pickBeatorajaThemeBGMPaths(paths: Iterable<string>): Partial<Record<BeatorajaThemeJingle, string>> {
   const audio: { path: string; stem: string; dir: string; depth: number }[] = [];
   for (const path of paths) {
     const lower = path.toLowerCase();

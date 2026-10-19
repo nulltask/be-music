@@ -1,6 +1,6 @@
 import type { GUI } from 'lil-gui';
 import { describe, expect, test, vi } from 'vite-plus/test';
-import type { DemoGuiState } from '../../types.ts';
+import type { DemoGUIState } from '../../types.ts';
 import { applyNonstopPlacement, buildCourseFolder } from './course.ts';
 import type { DebugMenu } from './index.ts';
 
@@ -50,8 +50,8 @@ class FakeFolder {
   }
 }
 
-function courseSettings(): DemoGuiState {
-  return { courseAutoAdvance: false, nonstopPlacement: 'intended' } as DemoGuiState;
+function courseSettings(): DemoGUIState {
+  return { courseAutoAdvance: false, nonstopPlacement: 'intended' } as DemoGUIState;
 }
 
 /** Builds the Course folder into a fake folder, with the menu's members it reaches stubbed. */

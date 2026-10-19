@@ -422,4 +422,4 @@ export const LR2_OP = {
 } as const;
 
 /** One of LR2's ops ({@link LR2_OP}). */
-export type Lr2Op = (typeof LR2_OP)[keyof typeof LR2_OP];
+export type LR2Op = (typeof LR2_OP)[keyof typeof LR2_OP];

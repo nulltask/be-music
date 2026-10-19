@@ -2,13 +2,13 @@ import { clamp } from '@be-music/utils/core';
 
 export const ANSI_RESET = '\u001b[0m';
 
-export interface RgbColor {
+export interface RGBColor {
   r: number;
   g: number;
   b: number;
 }
 
-export const BLACK_RGB: RgbColor = { r: 0, g: 0, b: 0 };
+export const BLACK_RGB: RGBColor = { r: 0, g: 0, b: 0 };
 
 export function centerVisible(value: string, width: number): string {
   const safeWidth = Math.max(1, Math.floor(width));
@@ -23,7 +23,7 @@ export function centerVisible(value: string, width: number): string {
   return `${' '.repeat(leftPadding)}${clipped}${' '.repeat(rightPadding)}`;
 }
 
-export function colorizeText(value: string, foreground: RgbColor, background?: RgbColor, underline = false): string {
+export function colorizeText(value: string, foreground: RGBColor, background?: RGBColor, underline = false): string {
   const sgr = [`38;2;${foreground.r};${foreground.g};${foreground.b}`];
   if (background) {
     sgr.push(`48;2;${background.r};${background.g};${background.b}`);
@@ -34,7 +34,7 @@ export function colorizeText(value: string, foreground: RgbColor, background?: R
   return `\u001b[${sgr.join(';')}m${value}${ANSI_RESET}`;
 }
 
-export function dimRgb(color: RgbColor, factor: number): RgbColor {
+export function dimRGB(color: RGBColor, factor: number): RGBColor {
   const safeFactor = clamp(factor, 0, 1);
   return {
     r: clampColorByte(color.r * safeFactor),
@@ -43,7 +43,7 @@ export function dimRgb(color: RgbColor, factor: number): RgbColor {
   };
 }
 
-export function blendRgb(from: RgbColor, to: RgbColor, ratio: number): RgbColor {
+export function blendRGB(from: RGBColor, to: RGBColor, ratio: number): RGBColor {
   const safeRatio = clamp(ratio, 0, 1);
   return {
     r: clampColorByte(from.r + (to.r - from.r) * safeRatio),
@@ -68,7 +68,7 @@ export function clampColorByte(value: number | undefined): number {
   return clamp(Math.floor(value), 0, 255);
 }
 
-export function isSameRgb(left: RgbColor | undefined, right: RgbColor | undefined): boolean {
+export function isSameRGB(left: RGBColor | undefined, right: RGBColor | undefined): boolean {
   if (left === right) {
     return true;
   }
@@ -93,7 +93,7 @@ export function visibleWidth(value: string): number {
       continue;
     }
 
-    const sequenceEnd = findAnsiSgrSequenceEnd(value, index + 2);
+    const sequenceEnd = findAnsiSGRSequenceEnd(value, index + 2);
     if (sequenceEnd < 0) {
       width += 1;
       index += 1;
@@ -116,7 +116,7 @@ function truncateVisibleWidth(value: string, width: number): string {
 
   while (index < value.length) {
     if (value.charCodeAt(index) === 0x1b && index + 1 < value.length && value[index + 1] === '[') {
-      const sequenceEnd = findAnsiSgrSequenceEnd(value, index + 2);
+      const sequenceEnd = findAnsiSGRSequenceEnd(value, index + 2);
       if (sequenceEnd < 0) {
         break;
       }
@@ -182,7 +182,7 @@ function isWideCharacter(codePoint: number): boolean {
   );
 }
 
-export function findAnsiSgrSequenceEnd(value: string, start: number): number {
+export function findAnsiSGRSequenceEnd(value: string, start: number): number {
   let index = start;
   while (index < value.length) {
     const code = value.charCodeAt(index);

@@ -3,7 +3,7 @@
  * bytes. The normative definition is `docs/fingerprint-spec.md`; this module is its public API and the modules
  * `fingerprint-*.ts` its reference implementation.
  */
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import {
   bucketEvents,
   computeChartItems,
@@ -18,7 +18,7 @@ import {
   type BeMusicPlayFingerprintDocument,
   FINGERPRINT_VERSION,
   assemblePlayDocument,
-  canonicalizeJsonValue,
+  canonicalizeJSONValue,
 } from './fingerprint-document.ts';
 import { buildChartModel } from './fingerprint-chart-model.ts';
 
@@ -54,10 +54,10 @@ export { FINGERPRINT_FACTOR_OUTCOME_LIMIT } from './fingerprint-document.ts';
 
 /**
  * Builds the canonical document of the **play fingerprint**: the chart exactly as given, i.e. after
- * `resolveBmsControlFlow` chose every `#RANDOM` / `#SWITCH` branch. `json.bms.controlFlow` is ignored.
+ * `resolveBMSControlFlow` chose every `#RANDOM` / `#SWITCH` branch. `json.bms.controlFlow` is ignored.
  */
 export function createPlayFingerprintDocument(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   options: BeMusicFingerprintOptions,
 ): BeMusicPlayFingerprintDocument {
   return withEventTimes(() => {
@@ -67,12 +67,12 @@ export function createPlayFingerprintDocument(
 }
 
 /**
- * Builds the canonical document of the **chart fingerprint** from the parser's unresolved output (`parseBms` /
+ * Builds the canonical document of the **chart fingerprint** from the parser's unresolved output (`parseBMS` /
  * `parseChart`), whose `events` hold only the content outside control flow and whose `bms.controlFlow` holds the rest.
  * A chart whose every outcome plays the same (in particular one without control flow) gets its play document.
  */
 export function createChartFingerprintDocument(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   options: BeMusicFingerprintOptions,
 ): BeMusicFingerprintDocument {
   return withEventTimes(() => buildChartModel(json, resolveLaneModeExtension(options.chartPath)).document);
@@ -83,16 +83,16 @@ export function createChartFingerprintDocument(
  * code units, no whitespace, ECMAScript string escaping. The fingerprint is the SHA-256 of this text's UTF-8 bytes.
  */
 export function canonicalizeFingerprintDocument(document: BeMusicFingerprintDocument): string {
-  return canonicalizeJsonValue(document);
+  return canonicalizeJSONValue(document);
 }
 
 /** `bmfp0:<sha256>` of the chart fingerprint document. Synchronous and dependency-free, in Node and browsers alike. */
-export function computeChartFingerprint(json: BeMusicJson, options: BeMusicFingerprintOptions): string {
+export function computeChartFingerprint(json: BeMusicJSON, options: BeMusicFingerprintOptions): string {
   return hashFingerprintDocument(createChartFingerprintDocument(json, options));
 }
 
 /** `bmfp0:<sha256>` of the play fingerprint document. Synchronous and dependency-free, in Node and browsers alike. */
-export function computePlayFingerprint(json: BeMusicJson, options: BeMusicFingerprintOptions): string {
+export function computePlayFingerprint(json: BeMusicJSON, options: BeMusicFingerprintOptions): string {
   return hashFingerprintDocument(createPlayFingerprintDocument(json, options));
 }
 

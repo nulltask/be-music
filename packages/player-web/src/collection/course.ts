@@ -1,12 +1,12 @@
 import { resolveChart } from '@be-music/chart';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import {
   drawRandomCourse,
   isClassCourseConstraints,
   parseBeatorajaCommandFolderFile,
   parseBeatorajaCourseFile,
   parseCourseSongFilter,
-  parseLr2CourseFile,
+  parseLR2CourseFile,
   resolveCourseStages,
   type CourseChartLookup,
   type CourseDefinition,
@@ -20,7 +20,7 @@ import {
   type LibraryCourse,
   type LibraryFolder,
 } from '@be-music/scene-model';
-import { resolveChartBpmRange } from '../chart/bpm-range.ts';
+import { resolveChartBPMRange } from '../chart/bpm-range.ts';
 
 /** A course file's courses, under the label its folder bar shows. */
 export interface CourseDefinitionGroup {
@@ -67,8 +67,8 @@ export function readCourseFile(path: string, bytes: Uint8Array): CourseDefinitio
     }));
   }
   const name = normalized.split('/').at(-1) ?? normalized;
-  const isLr2 = name.toLowerCase().endsWith('.lr2crs');
-  const courses = isLr2 ? parseLr2CourseFile(bytes) : parseBeatorajaCourseFile(bytes);
+  const isLR2 = name.toLowerCase().endsWith('.lr2crs');
+  const courses = isLR2 ? parseLR2CourseFile(bytes) : parseBeatorajaCourseFile(bytes);
   if (courses.length === 0) return [];
   return [{ label: name.replace(/\.(lr2crs|json)$/iu, ''), courses }];
 }
@@ -77,16 +77,16 @@ export function readCourseFile(path: string, bytes: Uint8Array): CourseDefinitio
 export function createSongHashLookup(
   songs: Iterable<{ song: LibraryChart; sha256?: string; md5?: string }>,
 ): CourseChartLookup<LibraryChart> {
-  const bySha256 = new Map<string, LibraryChart>();
-  const byMd5 = new Map<string, LibraryChart>();
+  const bySHA256 = new Map<string, LibraryChart>();
+  const byMD5 = new Map<string, LibraryChart>();
   // The first song with a hash wins, so a chart dropped twice resolves to the copy loaded first.
   for (const { song, sha256, md5 } of songs) {
     const sha = sha256?.toLowerCase();
     const md = md5?.toLowerCase();
-    if (sha !== undefined && !bySha256.has(sha)) bySha256.set(sha, song);
-    if (md !== undefined && !byMd5.has(md)) byMd5.set(md, song);
+    if (sha !== undefined && !bySHA256.has(sha)) bySHA256.set(sha, song);
+    if (md !== undefined && !byMD5.has(md)) byMD5.set(md, song);
   }
-  return { bySha256: (hash) => bySha256.get(hash), byMd5: (hash) => byMd5.get(hash) };
+  return { bySHA256: (hash) => bySHA256.get(hash), byMD5: (hash) => byMD5.get(hash) };
 }
 
 /**
@@ -200,8 +200,8 @@ export function createCourseSongRecord(
     Object.defineProperty(record, key, { enumerable: true, get: () => (value ??= read()) });
   };
   lazy('mode', () => MODE_IDS[resolveLibraryChartPlayVariant(song)]);
-  lazy('minbpm', () => Math.trunc(resolveChartBpmRange(chart).min));
-  lazy('maxbpm', () => Math.trunc(resolveChartBpmRange(chart).max));
+  lazy('minbpm', () => Math.trunc(resolveChartBPMRange(chart).min));
+  lazy('maxbpm', () => Math.trunc(resolveChartBPMRange(chart).max));
   lazy('length', () => {
     const last = resolve().sortedEvents.at(-1);
     return last === undefined ? 0 : Math.trunc(resolve().timing.eventToSeconds(last) * 1000);
@@ -211,7 +211,7 @@ export function createCourseSongRecord(
 }
 
 /** beatoraja's `SongData.FEATURE_*` bits that the resolved chart shows. */
-function songFeatureBits(chart: BeMusicJson, resolved: ResolvedChart): number {
+function songFeatureBits(chart: BeMusicJSON, resolved: ResolvedChart): number {
   let feature = 0;
   if (resolved.notes.some((note) => note.kind === 'ln')) {
     const named = chart.sourceFormat === 'bms' ? chart.bms.lnMode : chart.bmson.info.lnType || undefined;

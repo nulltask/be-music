@@ -88,7 +88,7 @@ export interface SelectSessionEvents {
 /** The part of the audio service the select screen uses. */
 export type SelectAudio = Pick<
   AudioService,
-  'playBgm' | 'stopBgm' | 'playCue' | 'playJingle' | 'stopOwned' | 'resume' | 'preview' | 'analyzer'
+  'playBGM' | 'stopBGM' | 'playCue' | 'playJingle' | 'stopOwned' | 'resume' | 'preview' | 'analyzer'
 >;
 
 export interface SelectSessionOptions {
@@ -100,7 +100,7 @@ export interface SelectSessionOptions {
   readonly playOptions?: Partial<PlayOptions>;
   /** The player's best records, for the bars and panels. */
   readonly records?: SelectRecords;
-  /** The theme's sounds: the select BGM, the cues and the decide jingle (`decideBgm`). */
+  /** The theme's sounds: the select BGM, the cues and the decide jingle (`decideBGM`). */
   readonly sounds: SystemSoundSet;
   readonly audio: SelectAudio;
   /** What the browse model leaves to the screen. Defaults to LR2's (the built-in and LR2 families). */
@@ -273,7 +273,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   /** Takes the theme's new sounds; a BGM playing changes to the new one. */
   public setSounds(sounds: SystemSoundSet): void {
     this.sounds = sounds;
-    if (this.entered) this.playBgm();
+    if (this.entered) this.playBGM();
   }
 
   // ---------------------------------------------------------------------------------------------------------------------
@@ -287,7 +287,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     this.nowMs = nowMs;
     this.events = [];
     this.changed();
-    this.playBgm();
+    this.playBGM();
     this.refreshPreview();
   }
 
@@ -556,7 +556,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     }
     if (!started) return;
     if (cue !== undefined) this.playCue(cue);
-    const jingle = this.sounds.decideBgm;
+    const jingle = this.sounds.decideBGM;
     if (jingle !== undefined) void this.options.audio.playJingle(jingle);
   }
 
@@ -707,13 +707,13 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   }
 
   /** Starts the theme's select BGM, as the session's own, or stops the one playing when the theme has none. */
-  private playBgm(): void {
-    const bgm = this.sounds.selectBgm;
+  private playBGM(): void {
+    const bgm = this.sounds.selectBGM;
     if (bgm === undefined) {
-      this.options.audio.stopBgm(this);
+      this.options.audio.stopBGM(this);
       return;
     }
-    void this.options.audio.playBgm(bgm, { owner: this, volume: SELECT_BGM_VOLUME });
+    void this.options.audio.playBGM(bgm, { owner: this, volume: SELECT_BGM_VOLUME });
   }
 
   /** Points the chart preview at the chart under the cursor, when that changed since it was last pointed. */

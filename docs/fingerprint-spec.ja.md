@@ -4,6 +4,8 @@
 
 > ステータス: `@be-music/chart` に実装済みで、プレイログにも記録します（7 章）。アルゴリズムのバージョン: `bmfp0`。
 
+略語の命名移行により、正規ドキュメントとヘッダ差分のキー `baseBpm` を `baseBPM` に変更します。譜面の再生内容が同じでも既存の `bmfp0` 値は変わり、それを含むコースフィンガープリントも変わります。保存データを移行する際は、譜面からフィンガープリントと正規ドキュメントを再生成してください。開発版のバージョンは `bmfp0` のままです。
+
 Be-Music Fingerprint は、譜面をファイルのバイト列ではなく **プレイヤーが遊ぶもの、レーン上に見えるもの** で識別します。次のような違いがあっても、遊んだ内容が同じなら 2 つの譜面ファイルは同じ fingerprint になります。
 
 - 片方に BGA がない、BGM やキー音、メタデータが違う
@@ -140,7 +142,7 @@ fingerprint は **be-music による譜面の解釈** の上で定義します�
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `laneMode` | 解決後の譜面でノーツのあるレーン（`5x` / `6x` のロングノーツを含む）、拡張子（`.pms`）、`#PLAYER 3`、bmson のキーボード `mode_hint`（`keyboard-24k` ならどのレーンを使っていても 24 KEY、`keyboard-24k-double` なら 48 KEY。そのため x ≤ 9 だけのキーボード譜面も 24 KEY です。`resolveChartPlayVariant` と同じく、ほかのヒントは無視します）に対する `resolveChartPlayVariant`（エンジンのレーン構成の規則）。IIDX のモードは拡張子にかかわらず使うレーンで決まるので、6 / 7 鍵の列がない `.bme` 譜面は 5 / 10 KEY です。プレイドキュメントごとに決まります。譜面ドキュメントは 3.6 節 |
 | `bpm`      | 初期 BPM（`#BPM` の最後の正の値。なければ 130。bmson は `init_bpm`）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `baseBpm`  | `#BASEBPM`、なければ `null`。`bpm` と等しい `#BASEBPM` は `null` です。`#BASEBPM` がないとき be-music は初期 BPM を基準にするからです                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `baseBPM`  | `#BASEBPM`、なければ `null`。`bpm` と等しい `#BASEBPM` は `null` です。`#BASEBPM` がないとき be-music は初期 BPM を基準にするからです                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `judge`    | `#DEFEXRANK`（BMS、正の値のとき）または `judge_rank`（bmson。ないときや正でないときは `100`）があれば `{"exRank": v}`、そうでなければ `#RANK` による `{"rank": n}`（ないときは `2` = NORMAL）                                                                                                                                                                                                                                                                                                                                                                                           |
 | `total`    | 正の `#TOTAL` なら `{"bms": v}`。100 以外の正の bmson `total` なら `{"bmson": v}`。それ以外は `null` で、ルールセットはそれぞれの既定の TOTAL を使います（正の `#TOTAL` がない BMS 譜面と、`total` がない、0 以下、または 100（既定値の 100 %）の bmson 譜面）                                                                                                                                                                                                                                                                                                                          |
 
@@ -156,7 +158,7 @@ fingerprint は **be-music による譜面の解釈** の上で定義します�
 
 #### 3.6.1 評価
 
-行は be-music の制御構文の唯一の評価器（`@be-music/chart` の `evaluateControlFlow`。パーサーは `resolveBmsControlFlowWithDraws` でその結果を適用します）で評価します。ファイル全体でフレームのスタックは 1 つです。`#RANDOM` / `#SWITCH` 行は、有効な分岐の中にあるかどうかに関係なく値を引きます。`#IF` / `#ELSEIF` はスタック上で最も内側の random フレームと比べます。`#ELSEIF` / `#ELSE` / `#ENDIF` は、スタック上のどこにあっても最も内側の `#IF` フレームに作用します。`#CASE` / `#DEF` / `#SKIP` は最も内側の switch フレームに作用します。`#ENDIF` / `#ENDRANDOM` / `#ENDSW` はその種類の最も内側のフレームを取り除きます（パーサーと同じく、`#ENDIF` が抜けているとそのフレームは `#ENDRANDOM` の後も残ります）。ヘッダ行やオブジェクト行は、スタック上のすべての `#IF` フレームと switch フレームが有効なときに適用します。ある結果の譜面は、制御構文の外の内容に、適用した行をファイル順に加えたものです。したがってパーサーと同じく、分岐の中で行った定義（`#BPMxx`、`#STOPxx`、`#LNOBJ`、`#BPM` など）は分岐の外のオブジェクトにも効きます。ただし、後のトップレベルの行が同じヘッダを定義し直す分岐内のヘッダ行（`overriddenByLaterHeader`）は適用しません。LR2 や beatoraja と同じく、ヘッダ行はファイル順に効くためです。
+行は be-music の制御構文の唯一の評価器（`@be-music/chart` の `evaluateControlFlow`。パーサーは `resolveBMSControlFlowWithDraws` でその結果を適用します）で評価します。ファイル全体でフレームのスタックは 1 つです。`#RANDOM` / `#SWITCH` 行は、有効な分岐の中にあるかどうかに関係なく値を引きます。`#IF` / `#ELSEIF` はスタック上で最も内側の random フレームと比べます。`#ELSEIF` / `#ELSE` / `#ENDIF` は、スタック上のどこにあっても最も内側の `#IF` フレームに作用します。`#CASE` / `#DEF` / `#SKIP` は最も内側の switch フレームに作用します。`#ENDIF` / `#ENDRANDOM` / `#ENDSW` はその種類の最も内側のフレームを取り除きます（パーサーと同じく、`#ENDIF` が抜けているとそのフレームは `#ENDRANDOM` の後も残ります）。ヘッダ行やオブジェクト行は、スタック上のすべての `#IF` フレームと switch フレームが有効なときに適用します。ある結果の譜面は、制御構文の外の内容に、適用した行をファイル順に加えたものです。したがってパーサーと同じく、分岐の中で行った定義（`#BPMxx`、`#STOPxx`、`#LNOBJ`、`#BPM` など）は分岐の外のオブジェクトにも効きます。ただし、後のトップレベルの行が同じヘッダを定義し直す分岐内のヘッダ行（`overriddenByLaterHeader`）は適用しません。LR2 や beatoraja と同じく、ヘッダ行はファイル順に効くためです。
 
 変数の値は **値クラス** に分かれます。ある `#IF` / `#ELSEIF`（`#RANDOM` の場合）または `#CASE`（`#SWITCH` の場合）の行が比べる `1..n` のラベルごとに 1 つと、どの行も名指ししない値すべてで 1 つです。同じクラスの値は同じように振る舞います。
 
@@ -164,7 +166,7 @@ fingerprint は **be-music による譜面の解釈** の上で定義します�
 
 #### 3.6.2 差分
 
-制御構文の外の内容はどの結果でも遊ばれます。いくつかのセグメントのある結果に対する **差分** とは、その結果が外の内容に加える変更です。追加するノーツ、地雷、タイムラインイベント、`1` でない小節の長さ、取り除くそれら、変更するヘッダの値（`bpm`、`baseBpm`、`judge`、`total`、`player3`）からなります。差分はその結果の譜面全体から計算するので、`#BPM01` を定義し直す分岐は、古い値を使っていた外の `bpm` イベントを取り除いて新しい値のものを加えます。分岐の中のロングノーツの片割れは、どこにあるもう一方とも対になります。差分はイベントをすべて残します。3.4 節のうちその時点の状態に依存する削除は、結果のプレイドキュメントを組み立てるときにだけ適用します。
+制御構文の外の内容はどの結果でも遊ばれます。いくつかのセグメントのある結果に対する **差分** とは、その結果が外の内容に加える変更です。追加するノーツ、地雷、タイムラインイベント、`1` でない小節の長さ、取り除くそれら、変更するヘッダの値（`bpm`、`baseBPM`、`judge`、`total`、`player3`）からなります。差分はその結果の譜面全体から計算するので、`#BPM01` を定義し直す分岐は、古い値を使っていた外の `bpm` イベントを取り除いて新しい値のものを加えます。分岐の中のロングノーツの片割れは、どこにあるもう一方とも対になります。差分はイベントをすべて残します。3.4 節のうちその時点の状態に依存する削除は、結果のプレイドキュメントを組み立てるときにだけ適用します。
 
 #### 3.6.3 因子
 
@@ -194,7 +196,7 @@ fingerprint は **be-music による譜面の解釈** の上で定義します�
 - レーン構成は結果によって変わるので、`laneMode` の代わりにレーン構成の入力 `"lanes": {"extension": ".pms" | null, "player3": bool}` を持ちます（それ以外の拡張子は `null`）。キーボードの `mode_hint` を持つ譜面ではここに `"modeHint": "keyboard-24k" | "keyboard-24k-double"` も入り、それ以外ではこのキーはありません。
 - `1x` / `2x` からのレーン `17` / `27` のノーツはロングノーツの終点を保ち、結果のレーン構成が FREE ZONE を使う場合のモード `"fz": "<モード>"` を持ちます。
 - 3.4 節の削除は、どの因子も変更しない種類のイベントにだけ適用します（因子がヘッダの `bpm` を変えるときも `bpm` は変更されるものとして扱います）。
-- `baseBpm` が `null` になるのは、ないとき、または `bpm` と等しくどちらもどの因子も変えないときだけです。
+- `baseBPM` が `null` になるのは、ないとき、または `bpm` と等しくどちらもどの因子も変えないときだけです。
 - `measures.count` は、どれかの結果で含めるイベントがありうる最後の小節に 1 を足したものです。制御構文の外のイベント、制御構文の行にある含めるチャンネルのオブジェクトと `#STP` すべて、`5x` / `6x` のオブジェクトの次の小節（`#LNTYPE 2` の連続が終わりうる）を数えます。`measures.lengths` と差分は、それより前の長さだけを列挙します。
 
 譜面ドキュメントから 1 つの結果のプレイドキュメントを組み立てるには、そのリストから始めて、各節点のその結果の葉の差分を適用し（削除してから追加。ヘッダのフィールドは上書き）、プレイドキュメントとして正規化します（結果のレーンからのレーン構成、FREE ZONE、3.4 節の削除、小節数）。
@@ -214,7 +216,7 @@ fingerprint は **be-music による譜面の解釈** の上で定義します�
   "v": "bmfp0",
   "laneMode": "7",
   "bpm": "150",
-  "baseBpm": null,
+  "baseBPM": null,
   "judge": { "rank": "2" },
   "total": { "bms": "300" },
   "measures": { "count": "64", "lengths": [["12", "3/4"]] },
@@ -238,7 +240,7 @@ fingerprint は **be-music による譜面の解釈** の上で定義します�
   "v": "bmfp0",
   "lanes": { "extension": null, "player3": false },
   "bpm": "150",
-  "baseBpm": null,
+  "baseBPM": null,
   "judge": { "rank": "2" },
   "total": null,
   "measures": { "count": "3", "lengths": [] },
@@ -263,7 +265,7 @@ fingerprint は **be-music による譜面の解釈** の上で定義します�
 
 - 個数や番号も含め、数値はすべて文字列です。整数は `"n"`、それ以外の有理数は分母が正の既約分数 `"p/q"` で、符号は分子に付けます（`"-3/4"`）。浮動小数点、指数表記、`+` 記号は使いません。フラグ（プレイドキュメントの `fz`、`player3`、`barLines`）は JSON の真偽値です。
 - `notes` は `(m, p, lane)`、次に `end`（ないものが先）、`ln`、`fz` の順、`mines` は `(m, p, lane, damage)` の順、`timeline` は `(m, p, type, v)` の順、`lengths` は小節の順に並べます。`lane` と `type` は文字列として比較し、数値のフィールドはテキストではなく値で並べます。差分のリストも同じように並べます。
-- 値のないフィールドは省略します（通常ノーツの `end` / `ln`、空の差分リスト）。ただし `baseBpm` と `total` は常に存在し、`null` になることがあります。
+- 値のないフィールドは省略します（通常ノーツの `end` / `ln`、空の差分リスト）。ただし `baseBPM` と `total` は常に存在し、`null` になることがあります。
 - ドキュメントは JSON Canonicalization Scheme（[RFC 8785](https://www.rfc-editor.org/rfc/rfc8785)）でシリアライズします。オブジェクトのキーはソートし、空白は入れず、UTF-8 です。
 
 ## 5. 出力とバージョン
@@ -283,14 +285,14 @@ bmfp0:<正規 JSON のバイト列の SHA-256 を小文字 16 進で表したも
 - `@be-music/chart` がこの仕様を実装しています（`packages/chart/src/fingerprint*.ts`）。
   - `computeChartFingerprint(json, { chartPath })` / `computePlayFingerprint(json, { chartPath })` は同期的に `string`（`bmfp0:…`）を返します。`chartPath`（パス、ファイル名、拡張子だけでもよい）は 1 章のレーン構成の入力で、必須のオプションです（不明なら `undefined` を渡します）。小さな組み込みの SHA-256（`packages/chart/src/sha256.ts`）でハッシュするので、Node でもブラウザでも動き、同期的な呼び出し元からも使えます。
   - `createChartFingerprintDocument` / `createPlayFingerprintDocument` は正規化ドキュメントを作り、`canonicalizeFingerprintDocument(document)` はその RFC 8785 テキストを返します。
-  - `computePlayFingerprint` は、`resolveBmsControlFlowWithDraws`（または `@be-music/player` の `resolvePlayChart`）が返すような制御構文のない譜面を受け取ります。`computeChartFingerprint` はパーサーの未解決の出力を受け取ります。その `events` には制御構文の外の内容だけが、`bms.controlFlow` には残りが入っています。解決済みの譜面は制御構文を持たないので、そのプレイドキュメントになります。
+  - `computePlayFingerprint` は、`resolveBMSControlFlowWithDraws`（または `@be-music/player` の `resolvePlayChart`）が返すような制御構文のない譜面を受け取ります。`computeChartFingerprint` はパーサーの未解決の出力を受け取ります。その `events` には制御構文の外の内容だけが、`bms.controlFlow` には残りが入っています。解決済みの譜面は制御構文を持たないので、そのプレイドキュメントになります。
   - 項目は Resolved 層のリゾルバ（`resolved-notes.ts`、`note-rules.ts`、`timing.ts`、`timelines.ts`、`resolved-chart.ts`）、つまり `resolveChart` が使うものと同じリゾルバで読みます。`fingerprint-items.ts` が加えるのは、正確な座標、スナップ、譜面ドキュメントでの FREE ZONE の先送り、譜面モデルが必要とするバケットごとの再計算だけです。
-  - 結果は、`evaluateControlFlow`（`control-flow.ts`）のフレーム操作を 1 組の draws ではなくすべての値クラスについてまとめて動かして列挙し（`fingerprint-control-flow.ts`）、差分、因子、決定木にします（`fingerprint-delta.ts`、`fingerprint-chart-model.ts`）。差分テストは、入れ子や不正な制御構文を含む数千のランダムな譜面について、譜面モデルから組み立てたすべての結果が、同じ draws で `resolveBmsControlFlowWithDraws` が解決した譜面のプレイドキュメントと一致すること、そしてすべての譜面ドキュメントの結果の分布がパーサーのものと一致することを確かめます。
+  - 結果は、`evaluateControlFlow`（`control-flow.ts`）のフレーム操作を 1 組の draws ではなくすべての値クラスについてまとめて動かして列挙し（`fingerprint-control-flow.ts`）、差分、因子、決定木にします（`fingerprint-delta.ts`、`fingerprint-chart-model.ts`）。差分テストは、入れ子や不正な制御構文を含む数千のランダムな譜面について、譜面モデルから組み立てたすべての結果が、同じ draws で `resolveBMSControlFlowWithDraws` が解決した譜面のプレイドキュメントと一致すること、そしてすべての譜面ドキュメントの結果の分布がパーサーのものと一致することを確かめます。
 - パーサーは BMS の値を数値として保持するので、保持された double の最短往復表現のテキストを小数表記の代わりにします（3.1 節）。パーサーが生の文字列で保持するもの（`#EXRANKxx`、`#STP`）は数字の並びから読みます。
 
 ## 7. プレイログ
 
-プレイログは、譜面の譜面 fingerprint を `chart.chartFingerprint` に、遊んだ内容のプレイ fingerprint を `chart.playFingerprint` に、このプレイの `#RANDOM` / `#SWITCH` の結果を `RandomDraws` として `play.randomDraws` に記録します（[playlog.ja.md](./playlog.ja.md) を参照）。プレイを譜面ごとにまとめるには譜面 fingerprint を使います。`#RANDOM` 行が何を引いても、同じ譜面のプレイはすべて同じ値を持ちます。譜面ファイルを持つ検証者は、その draws で譜面を解決し直し（`resolveBmsControlFlowWithDraws(json, randomDraws)`。その譜面のために引かれていない draws は拒否します）、譜面の拡張子でプレイ fingerprint を計算し直せます。`@be-music/player` の `createPlaylogRecorder` は、どちらも元の譜面（読み込んだままの譜面。`#RANDOM` を自分で解決したりレーンを書き換えたりするホストは `recordPlaylog.sourceChart` で渡し、渡さなければエンジンが受け取った譜面です）から計算し、プレイ fingerprint はプレイの draws で解決した譜面から求めるので、レーンオプション（RANDOM / MIRROR / DP FLIP）はどちらも変えません。draws がその譜面のために引かれたものでない、または元の譜面が無いときは、プレイ fingerprint はエンジンが遊んだ譜面から求め、譜面 fingerprint はプレイが draws を持たない場合を除いて省きます。レーン構成の入力にはエンジンの `laneModeExtension` を使い、それがなければ 9 KEY のプレイを `.pms` の代わりとします。draws はエンジンの `PlayerOptions.randomDraws` です。どのホストもプレイごとに 1 回だけ引き（`resolvePlayChart`）、同じ draws をエンジンに渡してエンジンが記録し、リプレイはログの draws を同じように渡し直します。
+プレイログは、譜面の譜面 fingerprint を `chart.chartFingerprint` に、遊んだ内容のプレイ fingerprint を `chart.playFingerprint` に、このプレイの `#RANDOM` / `#SWITCH` の結果を `RandomDraws` として `play.randomDraws` に記録します（[playlog.ja.md](./playlog.ja.md) を参照）。プレイを譜面ごとにまとめるには譜面 fingerprint を使います。`#RANDOM` 行が何を引いても、同じ譜面のプレイはすべて同じ値を持ちます。譜面ファイルを持つ検証者は、その draws で譜面を解決し直し（`resolveBMSControlFlowWithDraws(json, randomDraws)`。その譜面のために引かれていない draws は拒否します）、譜面の拡張子でプレイ fingerprint を計算し直せます。`@be-music/player` の `createPlaylogRecorder` は、どちらも元の譜面（読み込んだままの譜面。`#RANDOM` を自分で解決したりレーンを書き換えたりするホストは `recordPlaylog.sourceChart` で渡し、渡さなければエンジンが受け取った譜面です）から計算し、プレイ fingerprint はプレイの draws で解決した譜面から求めるので、レーンオプション（RANDOM / MIRROR / DP FLIP）はどちらも変えません。draws がその譜面のために引かれたものでない、または元の譜面が無いときは、プレイ fingerprint はエンジンが遊んだ譜面から求め、譜面 fingerprint はプレイが draws を持たない場合を除いて省きます。レーン構成の入力にはエンジンの `laneModeExtension` を使い、それがなければ 9 KEY のプレイを `.pms` の代わりとします。draws はエンジンの `PlayerOptions.randomDraws` です。どのホストもプレイごとに 1 回だけ引き（`resolvePlayChart`）、同じ draws をエンジンに渡してエンジンが記録し、リプレイはログの draws を同じように渡し直します。
 
 ## 8. コース fingerprint
 
@@ -333,4 +335,4 @@ bmcourse0:<ドキュメントの RFC 8785 テキストの SHA-256（小文字 16
 
 値はすべて文字列か文字列のリストなので、RFC 8785 のテキストは、キーを並べ替えて空白をなくしたドキュメントになります。`bmfp0` と同じく `bmcourse0` は開発版で、バージョンを上げずに変わることがあります。ステージの譜面 fingerprint が変われば、コース fingerprint も変わります。最初の安定版からは、既存のコースのドキュメントを変える変更には新しいバージョンが必要です。`packages/player/src/playlog/course-fingerprint.test.ts` で golden の値を固定しています。
 
-この章は `@be-music/player/playlog` の `createCourseFingerprintDocument(input)` と `computeCourseFingerprint(input)` が実装し、`@be-music/chart` の `canonicalizeJsonValue` と `sha256Hex` を使います。`computeCoursePlaylogFingerprint(log)` はコースのプレイログから入力を読みます。
+この章は `@be-music/player/playlog` の `createCourseFingerprintDocument(input)` と `computeCourseFingerprint(input)` が実装し、`@be-music/chart` の `canonicalizeJSONValue` と `sha256Hex` を使います。`computeCoursePlaylogFingerprint(log)` はコースのプレイログから入力を読みます。

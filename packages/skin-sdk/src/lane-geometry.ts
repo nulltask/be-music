@@ -99,7 +99,7 @@ export function resolveSkinlessLaneLayout(
   playVariant?: ChartPlayVariant,
 ): SkinlessLaneLayout {
   const span = resolveFallbackPlayfieldSpan(playVariant);
-  const fixedWidths = usesIidxLaneWidths(playVariant) ? IIDX_LANE_WIDTHS : undefined;
+  const fixedWidths = usesIIDXLaneWidths(playVariant) ? IIDX_LANE_WIDTHS : undefined;
   const lanes = resolveFallbackLaneLayout({
     channels,
     laneCount,
@@ -117,7 +117,7 @@ export function resolveSkinlessLaneLayout(
 }
 
 /** Whether `playVariant` is an IIDX family (5 / 7 / 10 / 14 KEY), whose lanes use {@link IIDX_LANE_WIDTHS}. */
-export function usesIidxLaneWidths(playVariant?: ChartPlayVariant): boolean {
+export function usesIIDXLaneWidths(playVariant?: ChartPlayVariant): boolean {
   return playVariant === '5' || playVariant === '7' || playVariant === '10' || playVariant === '14';
 }
 

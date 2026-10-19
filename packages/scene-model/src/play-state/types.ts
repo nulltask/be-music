@@ -61,7 +61,7 @@ export interface PlayGaugeInput {
   readonly type?: string;
 }
 
-/** What a play state reads of an engine frame (`PlayerUiFramePayload`): the chart's length and the running score. */
+/** What a play state reads of an engine frame (`PlayerUIFramePayload`): the chart's length and the running score. */
 export interface PlayFrameInput {
   readonly totalSeconds: number;
   readonly summary: {

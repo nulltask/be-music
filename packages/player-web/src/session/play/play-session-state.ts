@@ -12,8 +12,8 @@ import type {
   PlayerInputSignalBus,
   PlayerStateSignals,
   PlayerGaugeSummary,
-  PlayerUiFramePayload,
-  PlayerUiSignalBus,
+  PlayerUIFramePayload,
+  PlayerUISignalBus,
 } from '@be-music/player/signals';
 import type { ScrollDistanceMapperLike, TimedPlayableNote } from '@be-music/player/display';
 import type { BeMusicPlaylog, PlaylogViewCoalescer } from '@be-music/player/playlog';
@@ -44,16 +44,16 @@ import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
 import type { WebAudioSession } from '../../runtime/web-audio-session.ts';
 import type { PlayAudioHandle } from '../../runtime/audio-service.ts';
-import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
+import type { BeMusicEvent, BeMusicJSON } from '@be-music/json';
 import type {
-  BmsSwitchingBga,
+  BMSSwitchingBGA,
   RandomDraws,
   ResolvedChart,
   TimedSampleTrigger,
   TimingResolver,
   ChartPlayVariant,
 } from '@be-music/chart';
-import type { BgaCue, NonstopStageBgaTimeline } from '../../chart/bga-timeline.ts';
+import type { BGACue, NonstopStageBGATimeline } from '../../chart/bga-timeline.ts';
 import type { BeMusicJudge } from '../../skin/be-music/types.ts';
 import type { BeMusicJudgeWindows, BeMusicLaneKind } from '@be-music/skin-sdk';
 import type { RuntimeMineNote, RuntimeNote } from '../../view/shared/playfield/context.ts';
@@ -74,7 +74,7 @@ export class PlaySessionState {
    * Without this step BMS charts using `#RANDOM` / `#SETRANDOM` / `#SWITCH` either omit every conditional section or
    * include them all (depending on parser default), neither of which matches LR2 behavior.
    */
-  resolvedChart: BeMusicJson | undefined;
+  resolvedChart: BeMusicJSON | undefined;
   /**
    * The Resolved layer of {@link resolvedChart} (`resolveChart`): its notes, tempo map, triggers, SCROLL / SPEED
    * keyframes, bar lines and BGA cues are what this scene and the engine play.
@@ -235,13 +235,13 @@ export class PlaySessionState {
   /** Set while the outro waits for the held play to end: receives its final summary. */
   onHeldPlayEnded: ((summary: Readonly<PlayerSummary>) => void) | undefined;
   /**
-   * Latch for the engine's `stateSignals.judgeComboTick`. {@link drainWebUiSignals} compares the current tick
+   * Latch for the engine's `stateSignals.judgeComboTick`. {@link drainWebUISignals} compares the current tick
    * value against this latch on every poll and only fires the host's `onJudgeCombo` callback when a fresh
    * judge / combo update has landed since the last drain.
    */
   sharedEngineLastJudgeComboTick = 0;
   /** Bus references handed back from the engine via `onSignalsReady`. Drained per-frame from {@link tick}. */
-  sharedEngineSignals: { uiSignals: PlayerUiSignalBus; stateSignals?: PlayerStateSignals } | undefined;
+  sharedEngineSignals: { uiSignals: PlayerUISignalBus; stateSignals?: PlayerStateSignals } | undefined;
   /**
    * Engine-side `inputSignals` bus captured during the input runtime's `onReady` hook. The view's own
    * \`togglePause\` (Space-key handler + visibility/blur auto-pause) pushes \`{ kind: 'toggle-pause' }\` here so
@@ -280,7 +280,7 @@ export class PlaySessionState {
    * the play state; `undefined` before the engine's first frame. A view that draws the engine's own clock (the beatoraja
    * play view) reads it.
    */
-  engineFrame: Readonly<PlayerUiFramePayload> | undefined;
+  engineFrame: Readonly<PlayerUIFramePayload> | undefined;
   decodedSamples: Map<string, AudioBuffer> = new Map<string, AudioBuffer>();
   /**
    * Per-`#WAVxx` slot volume multipliers from `#WAVCMD 01 xx vv` lines, expressed as 0..1 linear gain. Built once per
@@ -295,11 +295,11 @@ export class PlaySessionState {
   wavCmdVolumeMultipliers: Map<string, number> = new Map<string, number>();
   /**
    * Parsed `#SWBGAxx` directives keyed by slot id. Built once per chart by {@link prepareSong}, looked up on every BGA
-   * frame draw — `pickSwitchingBgaFrame(entry, elapsedMs)` resolves the currently-visible source `#BMPxx` key to swap
+   * frame draw — `pickSwitchingBGAFrame(entry, elapsedMs)` resolves the currently-visible source `#BMPxx` key to swap
    * into the layer draw. Slots without a `#SWBGAxx` declaration stay absent so the fast path (single texture lookup)
    * takes over.
    */
-  switchingBgas: Map<string, BmsSwitchingBga> = new Map<string, BmsSwitchingBga>();
+  switchingBGAs: Map<string, BMSSwitchingBGA> = new Map<string, BMSSwitchingBGA>();
   /** `#BGAxx` sub-region slot → its authored `dx dy` on the 256x256 BGA canvas. */
   readonly bgaSubRegionOrigins: Map<string, { x: number; y: number }> = new Map<string, { x: number; y: number }>();
   /**
@@ -344,7 +344,7 @@ export class PlaySessionState {
   longNoteStyle: LongNoteStyle | undefined;
   judgeWindows: BeMusicJudgeWindows | undefined;
   /** The chart's BPM range, worked out once per {@link prepareSong}. */
-  chartBpmRange: PlayTempoRange | undefined;
+  chartBPMRange: PlayTempoRange | undefined;
   /**
    * Scratch lanes the engine plays itself under auto-scratch (empty when it is off), resolved per {@link prepareSong}.
    * See {@link isAutoplayedChannel}.
@@ -469,14 +469,14 @@ export class PlaySessionState {
    * "clear / hide" command (BMS `00`).
    */
   /** A stitched NONSTOP chart's base / layer cues split by stage (`options.nonstop`). */
-  nonstopBgaTimelines: NonstopStageBgaTimeline[] | undefined;
-  bgaTimeline: { base: BgaCue[]; layer: BgaCue[]; poor: BgaCue[] } = {
+  nonstopBGATimelines: NonstopStageBGATimeline[] | undefined;
+  bgaTimeline: { base: BGACue[]; layer: BGACue[]; poor: BGACue[] } = {
     base: [],
     layer: [],
     poor: [],
   };
   /**
-   * BMP-resource → decoded `Texture` cache for the **base** + **POOR** tracks. Loaded lazily during `prepareBga()` so
+   * BMP-resource → decoded `Texture` cache for the **base** + **POOR** tracks. Loaded lazily during `prepareBGA()` so
    * the playfield can start displaying samples while background images keep streaming in. Black pixels are preserved
    * (this is the bottommost BGA layer).
    */
@@ -489,20 +489,20 @@ export class PlaySessionState {
    */
   bgaLayerTextures: Map<string, Texture> = new Map<string, Texture>();
   /**
-   * BMP-key → `<video>` element for video BGA cues (`.mp4` / `.webm` / etc.). `renderBga` seeks + plays these on cue
+   * BMP-key → `<video>` element for video BGA cues (`.mp4` / `.webm` / etc.). `renderBGA` seeks + plays these on cue
    * transitions; `dispose` revokes their object URLs.
    *
    * Stored separately from {@link bgaTextures} only because the sync logic needs the underlying media element — the
    * texture itself is also added to `bgaTextures` / `bgaLayerTextures` so the existing renderer paths pick it up
    * unchanged.
    */
-  bgaVideos: Map<string, { video: HTMLVideoElement; objectUrl: string }> = new Map<
+  bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string }> = new Map<
     string,
-    { video: HTMLVideoElement; objectUrl: string }
+    { video: HTMLVideoElement; objectURL: string }
   >();
   /**
    * Tracks which video is currently associated with each BGA layer and the chart-time it was seeded at. We use this to
-   * detect cue transitions in `renderBga` (start the new cue's video, pause the previous one) and to compute the
+   * detect cue transitions in `renderBGA` (start the new cue's video, pause the previous one) and to compute the
    * `currentTime` offset relative to the cue's start seconds.
    */
   bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } } = {};
@@ -514,15 +514,15 @@ export class PlaySessionState {
    * paint BMP00 on a miss before any authored POOR event fires; left `undefined` when the chart already authors a
    * proper POOR track or doesn't ship a BMP00 fallback. Mirrors the TUI BGA renderer's `poorFallbackKey` plumbing.
    */
-  poorBgaFallbackKey: string | undefined;
+  poorBGAFallbackKey: string | undefined;
   /**
    * Chart-time after which the BMP00 POOR fallback yields to the explicit POOR timeline. Equal to the first authored
    * POOR cue's `seconds` (or `Infinity` when no POOR cues exist). The renderer compares the chart playhead against this
    * so a chart that authors POOR mid-song falls back to BMP00 only during the pre-roll.
    */
-  poorBgaFallbackUntilSeconds: number = Number.POSITIVE_INFINITY;
+  poorBGAFallbackUntilSeconds: number = Number.POSITIVE_INFINITY;
   /** Whether the chart actually carries any BGA events (drives LR2 op 170/171). */
-  hasBga = false;
+  hasBGA = false;
   /** Smoothed score for the count-up animation. Lerps toward `score.score`. */
   displayedScore = 0;
   /** True iff we paused because the tab/window backgrounded itself. */
@@ -540,7 +540,7 @@ export class PlaySessionState {
   /** `setInterval` handle for the visibility/focus poll loop. */
   visibilityPollHandle: number | undefined;
   /**
-   * Resolves when {@link prepareBga} has loaded every BGA texture. Set in {@link prepare} (without `await`) so the PLAY
+   * Resolves when {@link prepareBGA} has loaded every BGA texture. Set in {@link prepare} (without `await`) so the PLAY
    * scene can be revealed immediately and the LR2 LOADING phase keeps painting while a long-running ffmpeg.wasm video
    * transcode finishes in the background. {@link start} gates the LOAD END timer / chart-start scheduling on this
    * promise so the chart itself doesn't begin until the BGA is actually ready.

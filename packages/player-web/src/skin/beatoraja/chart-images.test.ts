@@ -1,4 +1,4 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import { Texture } from 'pixi.js';
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import type { BrowserSongAssetSource } from '../../collection/types.ts';
@@ -23,8 +23,8 @@ function source(paths: Record<string, number>): BrowserSongAssetSource {
   };
 }
 
-function chart(chartPath: string, images: { stageFile?: string; backBmp?: string; banner?: string }) {
-  const json = createEmptyJson('bms');
+function chart(chartPath: string, images: { stageFile?: string; backBMP?: string; banner?: string }) {
+  const json = createEmptyJSON('bms');
   Object.assign(json.metadata, images);
   return { chart: json, chartPath };
 }
@@ -34,12 +34,12 @@ const labelOf = (texture: Texture | undefined): string | undefined => texture?.l
 describe('resolveBeatorajaChartImage', () => {
   it('maps synthetic chart image ids to supplied textures', () => {
     const stageFile = Texture.EMPTY;
-    const backBmp = Texture.WHITE;
+    const backBMP = Texture.WHITE;
     const banner = Texture.EMPTY;
 
-    expect(resolveBeatorajaChartImage({ stageFile, backBmp, banner }, -100)).toBe(stageFile);
-    expect(resolveBeatorajaChartImage({ stageFile, backBmp, banner }, -101)).toBe(backBmp);
-    expect(resolveBeatorajaChartImage({ stageFile, backBmp, banner }, -102)).toBe(banner);
+    expect(resolveBeatorajaChartImage({ stageFile, backBMP, banner }, -100)).toBe(stageFile);
+    expect(resolveBeatorajaChartImage({ stageFile, backBMP, banner }, -101)).toBe(backBMP);
+    expect(resolveBeatorajaChartImage({ stageFile, backBMP, banner }, -102)).toBe(banner);
     expect(resolveBeatorajaChartImage({ stageFile }, -999)).toBeUndefined();
     expect(resolveBeatorajaChartImage(undefined, -100)).toBeUndefined();
   });
@@ -52,21 +52,21 @@ describe('loadBeatorajaChartImages', () => {
 
   it("decodes the stage file, back image and banner from the chart's folder", async () => {
     const images = await loadBeatorajaChartImages(
-      chart('song/chart.bms', { stageFile: 'stage.png', backBmp: '/back.png', banner: 'banner.png' }),
+      chart('song/chart.bms', { stageFile: 'stage.png', backBMP: '/back.png', banner: 'banner.png' }),
       source({ 'song/stage.png': 1, 'song/back.png': 1, 'song/banner.png': 1 }),
     );
     expect(labelOf(images.stageFile)).toBe('song/stage.png');
-    expect(labelOf(images.backBmp)).toBe('song/back.png');
+    expect(labelOf(images.backBMP)).toBe('song/back.png');
     expect(labelOf(images.banner)).toBe('song/banner.png');
   });
 
   it("falls back to the source's root, and leaves out an image it lacks or cannot decode", async () => {
     const images = await loadBeatorajaChartImages(
-      chart('song/chart.bms', { stageFile: 'stage.png', backBmp: 'broken.png', banner: 'missing.png' }),
+      chart('song/chart.bms', { stageFile: 'stage.png', backBMP: 'broken.png', banner: 'missing.png' }),
       source({ 'stage.png': 1, 'song/broken.png': 0 }),
     );
     expect(labelOf(images.stageFile)).toBe('stage.png');
-    expect(images).not.toHaveProperty('backBmp');
+    expect(images).not.toHaveProperty('backBMP');
     expect(images).not.toHaveProperty('banner');
     expect(decoded).toEqual(['stage.png', 'song/broken.png']);
   });

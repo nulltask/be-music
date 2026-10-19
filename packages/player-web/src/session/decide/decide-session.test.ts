@@ -1,4 +1,4 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import { parseChart } from '@be-music/parser';
 import { DEFAULT_PLAY_OPTIONS, type LibraryChart, type SystemSoundSet } from '@be-music/scene-model';
 import { describe, expect, it, vi } from 'vite-plus/test';
@@ -16,7 +16,7 @@ const CHART: LibraryChart = {
   fileLabel: 'chart.bms',
   title: 'Chart',
   totalNotes: 0,
-  chart: createEmptyJson('bms'),
+  chart: createEmptyJSON('bms'),
 };
 
 const JINGLE = { bytes: new Uint8Array([1, 2, 3]) };
@@ -206,7 +206,7 @@ describe('DecideSession', () => {
   });
 
   it('plays the decide jingle as its own and stops it on exit and dispose', () => {
-    const { session, audio } = createSession({ sounds: { decideBgm: JINGLE, decide: { path: 'decide.wav' } } });
+    const { session, audio } = createSession({ sounds: { decideBGM: JINGLE, decide: { path: 'decide.wav' } } });
     session.enter(0);
     expect(audio.playJingle).toHaveBeenCalledTimes(1);
     expect(audio.playJingle).toHaveBeenCalledWith(JINGLE, { owner: session });

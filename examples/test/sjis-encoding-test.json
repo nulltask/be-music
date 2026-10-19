@@ -36,12 +36,12 @@
     "stp": [],
     "wavCmds": [],
     "changeOption": {},
-    "exWav": {},
-    "exBmp": {},
+    "exWAV": {},
+    "exBMP": {},
     "bga": {},
     "scroll": {},
     "speed": {},
-    "swBga": {}
+    "swBGA": {}
   },
   "bmson": {
     "info": {},

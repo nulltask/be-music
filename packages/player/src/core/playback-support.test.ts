@@ -1,18 +1,18 @@
 import { createBeatAtSecondsResolverFromTimingResolver, createTimingResolver } from '@be-music/chart';
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import { createPlayerInputSignalBus } from './input-signal-bus.ts';
-import { createUiFramePublisher, recordPendingViewChanges } from './playback-support.ts';
-import type { PlayerUiFramePayload, PlayerUiSignalBus } from './ui-signal-bus.ts';
+import { createUIFramePublisher, recordPendingViewChanges } from './playback-support.ts';
+import type { PlayerUIFramePayload, PlayerUISignalBus } from './ui-signal-bus.ts';
 
-function createCapturingUiSignals(): { uiSignals: PlayerUiSignalBus; frames: PlayerUiFramePayload[] } {
-  const frames: PlayerUiFramePayload[] = [];
-  const noopTick: PlayerUiSignalBus['frameTick'] = (value?: number): number => value ?? 0;
-  const uiSignals: PlayerUiSignalBus = {
+function createCapturingUISignals(): { uiSignals: PlayerUISignalBus; frames: PlayerUIFramePayload[] } {
+  const frames: PlayerUIFramePayload[] = [];
+  const noopTick: PlayerUISignalBus['frameTick'] = (value?: number): number => value ?? 0;
+  const uiSignals: PlayerUISignalBus = {
     frameTick: noopTick,
     commandTick: noopTick,
     getFrame: () => {
-      throw new Error('not used by createUiFramePublisher');
+      throw new Error('not used by createUIFramePublisher');
     },
     publishFrame: (frame) => {
       frames.push(frame);
@@ -23,7 +23,7 @@ function createCapturingUiSignals(): { uiSignals: PlayerUiSignalBus; frames: Pla
   return { uiSignals, frames };
 }
 
-const SUMMARY: PlayerUiFramePayload['summary'] = {
+const SUMMARY: PlayerUIFramePayload['summary'] = {
   total: 0,
   perfect: 0,
   fast: 0,
@@ -37,10 +37,10 @@ const SUMMARY: PlayerUiFramePayload['summary'] = {
   score: 0,
 };
 
-describe('createUiFramePublisher', () => {
+describe('createUIFramePublisher', () => {
   test('mirrors the display beat in chart-position space past the LR2 reversal and pins it at the chart head', () => {
-    const { uiSignals, frames } = createCapturingUiSignals();
-    const publish = createUiFramePublisher({
+    const { uiSignals, frames } = createCapturingUISignals();
+    const publish = createUIFramePublisher({
       uiEnabled: true,
       uiSignals,
       totalSeconds: 10,
@@ -84,7 +84,7 @@ describe('createUiFramePublisher', () => {
     // beat 10 (4.25 s, 1 s long), and BPM 240 again at beat 12 (7.25 s). LR2 mirrors the chart position, so past R
     // the display recedes 1 beat/s (|-60|), holds through the STOP, then recedes 4 beats/s — it does NOT retrace the
     // pre-reversal 4 beats/s or the pre-reversal STOP.
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
     json.resources.bpm['02'] = -60;
     json.resources.stop['01'] = 48;
@@ -96,8 +96,8 @@ describe('createUiFramePublisher', () => {
     ];
     const resolver = createTimingResolver(json);
     const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(resolver);
-    const { uiSignals, frames } = createCapturingUiSignals();
-    const publish = createUiFramePublisher({
+    const { uiSignals, frames } = createCapturingUISignals();
+    const publish = createUIFramePublisher({
       uiEnabled: true,
       uiSignals,
       totalSeconds: 20,
@@ -124,8 +124,8 @@ describe('createUiFramePublisher', () => {
   });
 
   test('publishes no display fields and no reversal anchor when the chart has no reversal', () => {
-    const { uiSignals, frames } = createCapturingUiSignals();
-    const publish = createUiFramePublisher({
+    const { uiSignals, frames } = createCapturingUISignals();
+    const publish = createUIFramePublisher({
       uiEnabled: true,
       uiSignals,
       totalSeconds: 10,

@@ -33,12 +33,12 @@
       "stp": [],
       "wavCmds": [],
       "changeOption": {},
-      "exWav": {},
-      "exBmp": {},
+      "exWAV": {},
+      "exBMP": {},
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBga": {},
+      "swBGA": {},
       "player": 1
     },
     "controlFlow": [],
@@ -109,7 +109,7 @@
       "randomPatterns": [],
       "title": "negative BPM test 3 (ch08 -> undefined #BPMZZ)",
       "playVariant": "5",
-      "referenceBpm": 130,
+      "referenceBPM": 130,
       "timing": {
         "tempo": [
           "0 130 0"
@@ -155,8 +155,8 @@
           "sourceRank": 2
         },
         "noteCount": 23,
-        "chartFingerprint": "bmfp0:e25731b3670937e8a5cc25e3353830c691c39696c8d81dea4b2a65f6c5159f0b",
-        "playFingerprint": "bmfp0:e25731b3670937e8a5cc25e3353830c691c39696c8d81dea4b2a65f6c5159f0b",
+        "chartFingerprint": "bmfp0:1f1b14a8cdf7f03557762f98feb82f6becd54fbb6dea71e012a4b73085d324dd",
+        "playFingerprint": "bmfp0:1f1b14a8cdf7f03557762f98feb82f6becd54fbb6dea71e012a4b73085d324dd",
         "title": "negative BPM test 3 (ch08 -> undefined #BPMZZ)",
         "artist": "be-music #134",
         "genre": "TEST",

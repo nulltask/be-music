@@ -29,7 +29,7 @@ const MIN_BGA_SIZE = 120;
  * The square stays vertically centred in the band. A playfield too wide for a {@link MIN_BGA_SIZE} square
  * gets an empty rect (no BGA).
  */
-export function resolveStageBgaRect(playfieldRight: number): BeMusicRect {
+export function resolveStageBGARect(playfieldRight: number): BeMusicRect {
   const left = playfieldRight + BGA_GUTTER_LEFT;
   const right = STAGE_SIDE_COLUMN.x - BGA_GUTTER_RIGHT;
   const band = STAGE_BGA_BAND.bottom - STAGE_BGA_BAND.top;
@@ -47,5 +47,5 @@ export function resolveStageBgaRect(playfieldRight: number): BeMusicRect {
 export const wideStage: BeMusicStage = {
   width: STAGE_WIDTH,
   height: STAGE_HEIGHT,
-  resolveBgaRect: resolveStageBgaRect,
+  resolveBGARect: resolveStageBGARect,
 };

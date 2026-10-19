@@ -6,10 +6,10 @@
 import {
   normalizeChannel,
   normalizeObjectKey,
-  resolveBmsBase,
+  resolveBMSBase,
   type BeMusicEvent,
-  type BeMusicJson,
-  type BmsControlFlowEntry,
+  type BeMusicJSON,
+  type BMSControlFlowEntry,
 } from '@be-music/json';
 import { formatRational, isRationalEqual } from './fingerprint-rational.ts';
 import {
@@ -56,7 +56,7 @@ import {
   type FingerprintControlFlowNode,
   type FingerprintRandomNode,
   assemblePlayDocument,
-  canonicalizeJsonValue,
+  canonicalizeJSONValue,
 } from './fingerprint-document.ts';
 import {
   HEADER_FIELDS,
@@ -119,7 +119,7 @@ interface ChartModel {
   extension: LaneModeExtension;
 }
 
-export function buildChartModel(json: BeMusicJson, extension: LaneModeExtension): ChartModel {
+export function buildChartModel(json: BeMusicJSON, extension: LaneModeExtension): ChartModel {
   const entries = json.bms.controlFlow;
   const topBuckets = bucketEvents(json.events);
   const topItems = computeChartItems(json, topBuckets);
@@ -133,7 +133,7 @@ export function buildChartModel(json: BeMusicJson, extension: LaneModeExtension)
     top: json,
     topBuckets,
     topItems,
-    base: resolveBmsBase(json),
+    base: resolveBMSBase(json),
   };
   const pairing = resolvePairingStreams(json, entries, topBuckets);
   const segments: SegmentModel[] = [];
@@ -224,7 +224,7 @@ const STP_MEASURE_PATTERN = /^\s*(\d{3})/;
  * object of an included channel and every `#STP` in control-flow lines (plus the measure after a `5x` / `6x` object,
  * where an `#LNTYPE 2` run can end). Spec 3.6.6.
  */
-function resolveMeasureLimit(top: ChartItems, entries: ReadonlyArray<BmsControlFlowEntry>, json: BeMusicJson): number {
+function resolveMeasureLimit(top: ChartItems, entries: ReadonlyArray<BMSControlFlowEntry>, json: BeMusicJSON): number {
   let last = -1;
   const flat = flattenItems(top);
   for (const note of flat.notes) {
@@ -285,8 +285,8 @@ function streamOfChannel(channel: string): { stream: string; legacy: boolean } |
 }
 
 function resolvePairingStreams(
-  json: BeMusicJson,
-  entries: ReadonlyArray<BmsControlFlowEntry>,
+  json: BeMusicJSON,
+  entries: ReadonlyArray<BMSControlFlowEntry>,
   topBuckets: Map<string, BeMusicEvent[]>,
 ): PairingStreams {
   let obj = json.sourceFormat === 'bms' && (json.bms.lnObjs ?? []).length > 0;
@@ -331,9 +331,9 @@ function resolvePairingStreams(
 /** Definitions a segment sets and uses, from every line it holds (whatever the outcome). */
 function collectStaticKeys(
   model: SegmentModel,
-  entries: ReadonlyArray<BmsControlFlowEntry>,
+  entries: ReadonlyArray<BMSControlFlowEntry>,
   base: 36 | 62,
-  inferredLnType: boolean,
+  inferredLNType: boolean,
 ): void {
   for (let index = model.start; index < model.end; index += 1) {
     const entry = entries[index]!;
@@ -383,7 +383,7 @@ function collectStaticKeys(
     if (bucket.startsWith('lane:')) {
       model.uses.add('D:LN');
       const side = channel.charCodeAt(0);
-      if (inferredLnType && (side === 0x35 || side === 0x36)) {
+      if (inferredLNType && (side === 0x35 || side === 0x36)) {
         model.sets.add('D:LNTYPE?');
       }
       // A lane keeps one judged note per position, so notes of two segments at one position compete.
@@ -425,7 +425,7 @@ function collectStaticKeys(
  */
 function collectDynamicKeys(
   model: SegmentModel,
-  entries: ReadonlyArray<BmsControlFlowEntry>,
+  entries: ReadonlyArray<BMSControlFlowEntry>,
   pairing: PairingStreams,
 ): void {
   const raw = new Map<string, [FpTime, FpTime]>();
@@ -568,16 +568,16 @@ function enumeratePaths(root: OutcomeNode): SegmentPath[] {
 
 function buildFactor(
   segments: SegmentModel[],
-  entries: ReadonlyArray<BmsControlFlowEntry>,
+  entries: ReadonlyArray<BMSControlFlowEntry>,
   context: ReplayContext,
   analysis: ControlFlowAnalysis,
 ): FactorModel {
   const opaque = (): FactorModel => {
-    const lines: BmsControlFlowEntry[] = [];
+    const lines: BMSControlFlowEntry[] = [];
     for (const segment of segments) {
       lines.push(...entries.slice(segment.start, segment.end));
     }
-    return { segments, opaque: sha256Hex(canonicalizeJsonValue(lines)) };
+    return { segments, opaque: sha256Hex(canonicalizeJSONValue(lines)) };
   };
   if (segments.some((segment) => segment.paths === undefined)) {
     return opaque();
@@ -640,7 +640,7 @@ function buildDeltaTree(
       throw new Error('fingerprint: control-flow paths do not partition the outcomes');
     }
     const delta = paths[indices[0]!]!.delta;
-    tree = { kind: 'leaf', delta, text: canonicalizeJsonValue(formatDelta(delta)) };
+    tree = { kind: 'leaf', delta, text: canonicalizeJSONValue(formatDelta(delta)) };
   } else {
     const variable = variables[level]!;
     const groups = new Map<string, { classes: number[]; tree: DeltaTree }>();
@@ -763,7 +763,7 @@ function hoistCommon(tree: DeltaTree, top: FlatItems): DeltaTree {
 function mapTree(tree: DeltaTree, transform: (delta: ItemDelta) => ItemDelta): DeltaTree {
   if (tree.kind === 'leaf') {
     const delta = transform(tree.delta);
-    return { kind: 'leaf', delta, text: canonicalizeJsonValue(formatDelta(delta)) };
+    return { kind: 'leaf', delta, text: canonicalizeJSONValue(formatDelta(delta)) };
   }
   const groups = new Map<string, { classes: number[]; tree: DeltaTree }>();
   for (const branch of tree.branches) {
@@ -792,7 +792,7 @@ function formatTree(tree: DeltaTree & { kind: 'node' }, analysis: ControlFlowAna
   for (const branch of tree.branches) {
     const content: Omit<FingerprintBranch, 'values'> =
       branch.tree.kind === 'node' ? { next: formatTree(branch.tree, analysis) } : formatDelta(branch.tree.delta);
-    const text = canonicalizeJsonValue(content);
+    const text = canonicalizeJSONValue(content);
     const group = groups.get(text);
     if (group) {
       group.classes.push(...branch.classes);
@@ -838,8 +838,8 @@ function assembleChartDocument(
       if ('bpm' in leaf.header) {
         touched.add('bpm');
       }
-      if ('bpm' in leaf.header || 'baseBpm' in leaf.header) {
-        touched.add('baseBpm');
+      if ('bpm' in leaf.header || 'baseBPM' in leaf.header) {
+        touched.add('baseBPM');
       }
     }
   }
@@ -858,15 +858,15 @@ function assembleChartDocument(
     return formatTree(factor.tree, analysis);
   });
   const { header } = top;
-  const baseBpmIsBpm = header.baseBpm !== null && isRationalEqual(header.baseBpm, header.bpm);
+  const baseBPMIsBPM = header.baseBPM !== null && isRationalEqual(header.baseBPM, header.bpm);
   return {
     v: FINGERPRINT_VERSION,
     lanes: { extension, player3: header.player3, ...(header.modeHint !== null ? { modeHint: header.modeHint } : {}) },
     bpm: formatRational(header.bpm),
-    baseBpm:
-      header.baseBpm === null || (baseBpmIsBpm && !anyOpaque && !touched.has('baseBpm'))
+    baseBPM:
+      header.baseBPM === null || (baseBPMIsBPM && !anyOpaque && !touched.has('baseBPM'))
         ? null
-        : formatRational(header.baseBpm),
+        : formatRational(header.baseBPM),
     judge: formatJudge(header.judge),
     total: formatTotal(header.total),
     measures: { count: String(count), lengths: formatLengths(top.lengths, count) },
@@ -879,7 +879,7 @@ function assembleChartDocument(
 
 function sortByCanonicalText<T>(values: T[]): T[] {
   return values
-    .map((value) => ({ value, text: canonicalizeJsonValue(value) }))
+    .map((value) => ({ value, text: canonicalizeJSONValue(value) }))
     .sort((left, right) => (left.text < right.text ? -1 : left.text > right.text ? 1 : 0))
     .map((entry) => entry.value);
 }

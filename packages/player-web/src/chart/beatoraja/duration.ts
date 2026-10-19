@@ -11,20 +11,20 @@
 //
 // Cached per-chart; the result is stable for the chart's lifetime.
 
-import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
+import type { BeMusicEvent, BeMusicJSON } from '@be-music/json';
 import {
   beatorajaEventBeat,
   collectBeatorajaChartTimingEntries,
   computeBeatorajaMeasureBaseBeats,
   hasBeatorajaEventValue,
-  resolveBeatorajaInitialBpm,
+  resolveBeatorajaInitialBPM,
 } from './timing.ts';
 
 /**
  * Compute the chart's wallclock duration in seconds. Returns 0 when the chart has no sound
  * events (no audible content → length 0).
  */
-export function computeBeatorajaChartTotalSeconds(chart: BeMusicJson): number {
+export function computeBeatorajaChartTotalSeconds(chart: BeMusicJSON): number {
   const measureBaseBeat = computeBeatorajaMeasureBaseBeats(chart);
   if (measureBaseBeat.length === 0) return 0;
 
@@ -42,17 +42,17 @@ export function computeBeatorajaChartTotalSeconds(chart: BeMusicJson): number {
 
   // Build the BPM segment list — beat → bpm transitions. Initial BPM is `metadata.bpm` (fall
   // back to 130 — beatoraja's default for malformed headers).
-  const initialBpm = resolveBeatorajaInitialBpm(chart);
+  const initialBPM = resolveBeatorajaInitialBPM(chart);
   const transitions = collectBeatorajaChartTimingEntries(chart, measureBaseBeat);
 
   // Walk the segment list. `seconds` accumulates wallclock duration; `beat` is the running
   // chart-beat cursor; `bpm` is the active tempo.
   let seconds = 0;
   let cursorBeat = 0;
-  let bpm = initialBpm;
-  const beatsToSeconds = (beats: number, atBpm: number): number => {
-    if (atBpm <= 0) return 0;
-    return (beats * 60) / atBpm;
+  let bpm = initialBPM;
+  const beatsToSeconds = (beats: number, atBPM: number): number => {
+    if (atBPM <= 0) return 0;
+    return (beats * 60) / atBPM;
   };
   for (const t of transitions) {
     if (t.beat >= endBeat) break;

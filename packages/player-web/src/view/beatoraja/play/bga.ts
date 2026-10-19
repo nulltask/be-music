@@ -5,7 +5,7 @@
 // skins like the play24 reference can place the BGA differently for the Half / Hybrid / Separate Lane
 // layouts).
 //
-// The BGA cue lists (`base` / `layer` / `poor`) come from the chart's BGA timeline — same `BgaCue[]`
+// The BGA cue lists (`base` / `layer` / `poor`) come from the chart's BGA timeline — same `BGACue[]`
 // shape the LR2 gameplay path consumes. The host loads those once when the chart is prepared and hands
 // them to the layer alongside the decoded BMP textures keyed by `#BMPxx` slot.
 //
@@ -15,7 +15,7 @@
 //   - `poor` (channel `06`) replaces both while the miss layer shows (`misslayerDuration` from the last miss).
 //
 // A stitched NONSTOP chart draws one such stack per stage at the opacity of its crossfade
-// (`resolveBgaStacks`, the stacks the built-in and LR2 scenes draw too), so the BGA cross-fades over
+// (`resolveBGAStacks`, the stacks the built-in and LR2 scenes draw too), so the BGA cross-fades over
 // 3 s at a stage seam as LR2 does.
 
 import { Container, Sprite, Texture } from 'pixi.js';
@@ -26,14 +26,14 @@ import {
   type BeatorajaSkin,
 } from '@be-music/beatoraja-skin';
 import {
-  resolveBgaImageRect,
-  resolveBgaStacks,
-  type BgaCue,
-  type NonstopBgaStage,
-  type NonstopStageBgaTimeline,
+  resolveBGAImageRect,
+  resolveBGAStacks,
+  type BGACue,
+  type NonstopBGAStage,
+  type NonstopStageBGATimeline,
 } from '../../../chart/bga-timeline.ts';
 
-export interface BeatorajaBgaLayerOptions {
+export interface BeatorajaBGALayerOptions {
   skin: BeatorajaSkin;
   /**
    * Decoded BGA textures keyed by `#BMPxx` slot label (`'00'`..`'ZZ'`). Same map the LR2 path's BGA
@@ -45,10 +45,10 @@ export interface BeatorajaBgaLayerOptions {
    */
   layerTextures?: ReadonlyMap<string, Texture>;
   /**
-   * Chart-time BGA cue lists. Built via `buildBgaTimeline(chart, resolver)` in `chart/bga-timeline.ts`.
+   * Chart-time BGA cue lists. Built via `buildBGATimeline(chart, resolver)` in `chart/bga-timeline.ts`.
    * Pass an empty `{ base: [], layer: [], poor: [] }` if the chart has no BGA — the layer hides itself.
    */
-  cues: { base: ReadonlyArray<BgaCue>; layer: ReadonlyArray<BgaCue>; poor: ReadonlyArray<BgaCue> };
+  cues: { base: ReadonlyArray<BGACue>; layer: ReadonlyArray<BGACue>; poor: ReadonlyArray<BGACue> };
   /**
    * Optional video-element map for keys whose BMPxx resolves to a video file. The layer
    * pauses / plays / seeks these elements when their texture becomes the active cue.
@@ -64,35 +64,35 @@ export interface BeatorajaBgaLayerOptions {
    */
   skinConfigOps?: ReadonlySet<number>;
   /**
-   * A stitched NONSTOP chart's stages and each stage's own cues (`splitNonstopBgaTimeline`): the layer draws each
+   * A stitched NONSTOP chart's stages and each stage's own cues (`splitNonstopBGATimeline`): the layer draws each
    * stage's BGA at the opacity of its crossfade instead of `cues`.
    */
-  nonstop?: { stages: readonly NonstopBgaStage[]; timelines: readonly NonstopStageBgaTimeline[] } | undefined;
+  nonstop?: { stages: readonly NonstopBGAStage[]; timelines: readonly NonstopStageBGATimeline[] } | undefined;
 }
 
 /** One stack's sprites: the black canvas behind a small base image, the base (or POOR) image and the layer image. */
-interface BgaSpritePair {
+interface BGASpritePair {
   readonly canvas: Sprite;
   readonly sprite: Sprite;
   readonly layer: Sprite;
 }
 
-type BgaDestinationProps = ReturnType<typeof destinationToSpriteProps>;
+type BGADestinationProps = ReturnType<typeof destinationToSpriteProps>;
 
-export class BeatorajaBgaLayer {
+export class BeatorajaBGALayer {
   readonly container: Container = new Container();
   /**
    * One sprite set per stack drawn (one, or a NONSTOP chart's stages at a seam), earlier stacks behind. Each set is a
    * black fill behind a base image smaller than the BGA canvas, which beatoraja leaves black around it, the base image
    * (or the POOR image in its place) and the layer image over it. The first set is mounted at construction.
    */
-  private readonly pairs: BgaSpritePair[] = [];
+  private readonly pairs: BGASpritePair[] = [];
   private readonly group: BeatorajaDestinationGroup | undefined;
   private readonly textures: ReadonlyMap<string, Texture>;
   private readonly layerTextures: ReadonlyMap<string, Texture>;
   private readonly videoElements: ReadonlyMap<string, HTMLVideoElement>;
-  private readonly cues: { base: ReadonlyArray<BgaCue>; layer: ReadonlyArray<BgaCue>; poor: ReadonlyArray<BgaCue> };
-  private readonly nonstop: BeatorajaBgaLayerOptions['nonstop'];
+  private readonly cues: { base: ReadonlyArray<BGACue>; layer: ReadonlyArray<BGACue>; poor: ReadonlyArray<BGACue> };
+  private readonly nonstop: BeatorajaBGALayerOptions['nonstop'];
   /**
    * Skin canvas height in skin-pixel units. Read from `skin.h` at construction so we can flip
    * the BGA's Y-UP dst rect into Pixi Y-DOWN — same convention the play skin view uses.
@@ -102,13 +102,13 @@ export class BeatorajaBgaLayer {
   private currentKeys = new Set<string>();
   private disposed = false;
 
-  constructor(options: BeatorajaBgaLayerOptions) {
+  constructor(options: BeatorajaBGALayerOptions) {
     this.textures = options.textures;
     this.layerTextures = options.layerTextures ?? new Map();
     this.videoElements = options.videoElements ?? new Map();
     this.cues = options.cues;
     this.nonstop = options.nonstop;
-    this.group = resolveBgaDestinationGroup(options.skin, options.skinConfigOps);
+    this.group = resolveBGADestinationGroup(options.skin, options.skinConfigOps);
     const rawH = (options.skin as { h?: unknown }).h;
     this.canvasHeight = typeof rawH === 'number' && Number.isFinite(rawH) && rawH > 0 ? rawH : 720;
     // Mounted with no texture — `update()` swaps in the active BGA texture per frame. Kept invisible
@@ -121,7 +121,7 @@ export class BeatorajaBgaLayer {
    * after `view.update(context)` has run, so the BGA layer reads the same activeOps / nowMs the skin
    * view used.
    */
-  update(seconds: number, context: BeatorajaRenderContext, poorBgaActive: boolean): void {
+  update(seconds: number, context: BeatorajaRenderContext, poorBGAActive: boolean): void {
     if (this.disposed) return;
     for (const pair of this.pairs) {
       pair.canvas.visible = false;
@@ -131,11 +131,11 @@ export class BeatorajaBgaLayer {
     if (this.group === undefined) return;
     const props = destinationToSpriteProps(this.group, context, this.canvasHeight);
     // One stack, or a NONSTOP chart's stages at their crossfade opacity, earlier stages behind.
-    const stacks = resolveBgaStacks({
+    const stacks = resolveBGAStacks({
       timeline: this.cues,
       nonstop: this.nonstop,
       seconds,
-      inPoorWindow: poorBgaActive,
+      inPoorWindow: poorBGAActive,
     });
     const keys = new Set<string>();
     stacks.forEach((stack, index) => {
@@ -194,9 +194,9 @@ export class BeatorajaBgaLayer {
   }
 
   /** The sprite set of the stack at `index`, mounted on first use. */
-  private pairAt(index: number): BgaSpritePair {
+  private pairAt(index: number): BGASpritePair {
     while (this.pairs.length <= index) {
-      const pair: BgaSpritePair = {
+      const pair: BGASpritePair = {
         canvas: new Sprite({ texture: Texture.WHITE, tint: 0x000000, visible: false, label: 'bga/canvas' }),
         sprite: new Sprite({ visible: false, label: 'bga/base' }),
         layer: new Sprite({ visible: false, label: 'bga/layer' }),
@@ -217,7 +217,7 @@ export class BeatorajaBgaLayer {
     canvas: Sprite | undefined,
     key: string,
     textures: ReadonlyMap<string, Texture>,
-    props: BgaDestinationProps,
+    props: BGADestinationProps,
     alpha: number,
   ): void {
     const texture = textures.get(key) ?? this.textures.get(key);
@@ -235,7 +235,7 @@ export class BeatorajaBgaLayer {
     const rect = { x: props.x, y: props.y, w: props.width, h: props.height };
     const placed = this.videoElements.has(key)
       ? rect
-      : resolveBgaImageRect(texture.frame.width, texture.frame.height, rect);
+      : resolveBGAImageRect(texture.frame.width, texture.frame.height, rect);
     if (canvas !== undefined && (placed.w < rect.w || placed.h < rect.h)) {
       canvas.visible = true;
       canvas.x = rect.x;
@@ -304,7 +304,7 @@ function playVideo(video: HTMLVideoElement): void {
  * `bga` block (some custom themes ship a chart-area-only play layout without BGA support) or when the
  * destination[] doesn't carry a matching id.
  */
-function resolveBgaDestinationGroup(
+function resolveBGADestinationGroup(
   skin: BeatorajaSkin,
   skinConfigOps: ReadonlySet<number> | undefined,
 ): BeatorajaDestinationGroup | undefined {

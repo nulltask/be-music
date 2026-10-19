@@ -12,7 +12,7 @@ import {
   expandBeatorajaJudgeDestinations,
   flattenBeatorajaElements,
   imageFrameRect,
-  normalizeBeatorajaBpmGraphs,
+  normalizeBeatorajaBPMGraphs,
   normalizeBeatorajaDestinations,
   normalizeBeatorajaGaugeGraphs,
   normalizeBeatorajaJudgeGraphs,
@@ -31,7 +31,7 @@ import {
   normalizeBeatorajaValues,
   OFFSET_HIDDEN_COVER,
   OFFSET_LIFT,
-  type BeatorajaBpmGraphElement,
+  type BeatorajaBPMGraphElement,
   type BeatorajaCustomEvent,
   type BeatorajaCustomEventState,
   type BeatorajaCustomTimer,
@@ -55,7 +55,7 @@ import {
   destinationToSpriteProps,
   type BeatorajaRenderContext,
 } from '../../skin/beatoraja/render.ts';
-import { BeatorajaChartGraphRenderer, type BpmGraphEntry, type JudgeGraphEntry } from './skin-view/chart-graphs.ts';
+import { BeatorajaChartGraphRenderer, type BPMGraphEntry, type JudgeGraphEntry } from './skin-view/chart-graphs.ts';
 import { applyTextureFilterMode, destroyTextureView } from './skin-view/common.ts';
 import { BeatorajaGaugeRenderer, type GaugeEntry } from './skin-view/gauge.ts';
 import {
@@ -97,7 +97,7 @@ type ViewEntry =
   | TextEntry
   | GraphEntry
   | PolylineGraphEntry
-  | BpmGraphEntry
+  | BPMGraphEntry
   | JudgeGraphEntry
   | GaugeGraphEntry
   | TimingVisualizerEntry
@@ -260,7 +260,7 @@ export class BeatorajaPlaySkinView {
       if (!imageById.has(cover.id)) imageById.set(cover.id, cover);
       liftCoverIds.add(cover.id);
     }
-    // Element-kind resolution priority follows beatoraja's `JsonSkinObjectLoader.loadSkinObject`
+    // Element-kind resolution priority follows beatoraja's `JSONSkinObjectLoader.loadSkinObject`
     // which walks `sk.image -> sk.imageset -> sk.value -> sk.floatvalue -> sk.text -> sk.slider
     // -> sk.graph` with an early-return on each match. Earlier kinds claim id collisions ahead
     // of later ones — most importantly `imageset[]` outranks `value/text/graph/slider`. Our
@@ -295,7 +295,7 @@ export class BeatorajaPlaySkinView {
         floatValueById.set(fv.id, fv);
       }
     }
-    // `text[]` — font / size / ref pairs the runtime resolves into strings. Skin TTFs aren't
+    // `text[]` — font / size / ref pairs the runtime resolves into strings. Skin TTFS aren't
     // loaded yet (engine integration handles that); placeholders use the browser's default
     // sans-serif so positions and sizes are visible.
     const textById = new Map<BeatorajaImageId, BeatorajaTextElement>();
@@ -348,8 +348,8 @@ export class BeatorajaPlaySkinView {
       graphById.has(id);
 
     // `bpmgraph[]` — chart's BPM curve plotted across a destination box.
-    const bpmGraphById = new Map<BeatorajaImageId, BeatorajaBpmGraphElement>();
-    for (const bpmGraph of normalizeBeatorajaBpmGraphs((options.skin as { bpmgraph?: unknown }).bpmgraph)) {
+    const bpmGraphById = new Map<BeatorajaImageId, BeatorajaBPMGraphElement>();
+    for (const bpmGraph of normalizeBeatorajaBPMGraphs((options.skin as { bpmgraph?: unknown }).bpmgraph)) {
       if (!claimedBy(bpmGraph.id)) bpmGraphById.set(bpmGraph.id, bpmGraph);
     }
     // `judgegraph[]` — judgement / early-late histogram.
@@ -437,7 +437,7 @@ export class BeatorajaPlaySkinView {
     // actually referenced by `parts.destination` get expanded. Mirrors upstream's
     // `JsonPlaySkinObjectLoader.java:220-221`:
     //
-    //     for (JsonSkin.Judge judge : sk.judge) {
+    //     for (JSONSkin.Judge judge : sk.judge) {
     //         if (dst.id.equals(judge.id)) { ... instantiate ... }
     //     }
     //
@@ -501,7 +501,7 @@ export class BeatorajaPlaySkinView {
     const allDestinations: ReadonlyArray<unknown> = [...rawDestinations, ...expandedJudgeDestinations];
     const groups = normalizeBeatorajaDestinations(allDestinations, options.skinConfigOps);
 
-    // Render order: PURELY by author declaration order. Beatoraja's `JSONSkinLoader.loadJsonSkin`
+    // Render order: PURELY by author declaration order. Beatoraja's `JSONSkinLoader.loadJSONSkin`
     // walks `sk.destination` in source order and `Skin.drawAllObjects` iterates without sorting,
     // so the JSON's array index IS the z-order. Earlier drafts of this code sorted by `offset`
     // first, mistaking it for a z-layer — but the singular `offset` field is just a convenience
@@ -556,7 +556,7 @@ export class BeatorajaPlaySkinView {
       // BGA anchor: same pattern as the notes anchor. The skin authors `bga = {id = "bga"}`
       // and a matching `destination[]` entry whose dst rect / `if[]` keyframes describe
       // where the BGA should sit. We capture the index now so the host can splice in its
-      // chart-time-driven `BeatorajaBgaLayer` exactly there — matching upstream's
+      // chart-time-driven `BeatorajaBGALayer` exactly there — matching upstream's
       // destination[]-array-order render priority. Falling through to a generic match
       // would have the BGA-id destination silently drop (no image / value / text element
       // matches that id), and the host's BGA layer mounted at index 0 would land behind
@@ -622,7 +622,7 @@ export class BeatorajaPlaySkinView {
       }
       const image = imageById.get(group.id);
       if (image === undefined) {
-        // Resolution priority mirrors `JsonSkinObjectLoader.loadSkinObject`:
+        // Resolution priority mirrors `JSONSkinObjectLoader.loadSkinObject`:
         //   image -> imageset -> value -> floatvalue -> text -> slider -> graph
         // The registration phase above already deduped ids by this priority, so each
         // `*ById.get(id)` here only returns truthy for the WINNING kind. The order is still
@@ -665,7 +665,7 @@ export class BeatorajaPlaySkinView {
         }
         const bpmGraphElement = bpmGraphById.get(group.id);
         if (bpmGraphElement !== undefined) {
-          this.entries.push(this.chartGraphs.buildBpmGraphEntry(group, bpmGraphElement));
+          this.entries.push(this.chartGraphs.buildBPMGraphEntry(group, bpmGraphElement));
           continue;
         }
         const judgeGraphElement = judgeGraphById.get(group.id);
@@ -693,8 +693,8 @@ export class BeatorajaPlaySkinView {
           this.entries.push(this.images.buildPmCharaEntry(group, pmcharaElement, options.textures));
           continue;
         }
-        // Gauge id matching uses string-coerced equality. Upstream's `JsonSkin.Gauge.id` is
-        // declared as `String` (`JsonSkin.java:217`), so when the JSON authoring uses a numeric
+        // Gauge id matching uses string-coerced equality. Upstream's `JSONSkin.Gauge.id` is
+        // declared as `String` (`JSONSkin.java:217`), so when the JSON authoring uses a numeric
         // literal (`"id": 2001`) the JSON deserializer coerces it to the string "2001" — and
         // `dst.id.equals(sk.gauge.id)` then matches against destinations whose id was authored
         // either as `2001` or `"2001"`. Our Lua-table parser preserves both numeric and string
@@ -904,7 +904,7 @@ export class BeatorajaPlaySkinView {
           this.graphs.updatePolylineGraphEntry(entry, props);
           break;
         case 'bpmgraph':
-          this.chartGraphs.updateBpmGraphEntry(entry, props);
+          this.chartGraphs.updateBPMGraphEntry(entry, props);
           break;
         case 'judgegraph':
           this.chartGraphs.updateJudgeGraphEntry(entry, props);

@@ -1,6 +1,6 @@
 import type { BeMusicCoursePlaylog, BeMusicPlaylog } from '@be-music/player/playlog';
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
-import demoPackageJson from '../../package.json' with { type: 'json' };
+import demoPackageJSON from '../../package.json' with { type: 'json' };
 import { PLAYLOG_RECORDER, PlaylogAutoSave } from './playlogs.ts';
 
 // The build's commit is a define of the demo's Vite build, which the test run does not have.
@@ -18,7 +18,7 @@ describe('PLAYLOG_RECORDER', () => {
   test('names the web app, its version and the commit it was built from', () => {
     expect(PLAYLOG_RECORDER).toEqual({
       name: 'be-music-web',
-      version: demoPackageJson.version,
+      version: demoPackageJSON.version,
       build: '5760628d',
       platform: 'web',
     });
@@ -28,7 +28,7 @@ describe('PLAYLOG_RECORDER', () => {
     vi.stubGlobal('__BE_MUSIC_BUILD__', '');
     vi.resetModules();
     const { PLAYLOG_RECORDER: recorder } = await import('./playlogs.ts');
-    expect(recorder).toEqual({ name: 'be-music-web', version: demoPackageJson.version, platform: 'web' });
+    expect(recorder).toEqual({ name: 'be-music-web', version: demoPackageJSON.version, platform: 'web' });
   });
 });
 

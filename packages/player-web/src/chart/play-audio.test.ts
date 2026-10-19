@@ -1,4 +1,4 @@
-import { createEmptyJson, type BeMusicJson } from '@be-music/json';
+import { createEmptyJSON, type BeMusicJSON } from '@be-music/json';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { BrowserSongAssetSource } from '../collection/types.ts';
 import { collectChartVolumeMultipliers, loadPlaySamples } from './play-audio.ts';
@@ -19,8 +19,8 @@ vi.mock('../runtime/play-tempo.ts', async (importOriginal) => ({
   stretchDecodedSamples: mocks.stretchDecodedSamples,
 }));
 
-function chartWithWavs(wav: Record<string, string>): BeMusicJson {
-  const chart = createEmptyJson('bms');
+function chartWithWAVs(wav: Record<string, string>): BeMusicJSON {
+  const chart = createEmptyJSON('bms');
   chart.resources.wav = wav;
   return chart;
 }
@@ -42,9 +42,9 @@ const SOURCE = {} as BrowserSongAssetSource;
 
 describe('collectChartVolumeMultipliers', () => {
   test('multiplies #WAVCMD and #EXWAV volumes of the same slot', () => {
-    const chart = createEmptyJson('bms');
+    const chart = createEmptyJSON('bms');
     chart.bms.wavCmds = ['01 01 127', '01 02 0'];
-    chart.bms.exWav = { '01': 'v -2000 quiet.wav', '03': 'v 0 unity.wav' };
+    chart.bms.exWAV = { '01': 'v -2000 quiet.wav', '03': 'v 0 unity.wav' };
     const multipliers = collectChartVolumeMultipliers(chart);
     expect(multipliers.get('01')).toBeCloseTo(0.1, 3);
     expect(multipliers.get('02')).toBe(0);
@@ -68,7 +68,7 @@ describe('loadPlaySamples', () => {
     const samples = new Map<string, AudioBuffer>();
     const stretched = await loadPlaySamples({
       audioContext: fakeAudioContext(),
-      chart: chartWithWavs({ '01': 'Sub\\Kick.WAV', '02': 'missing.wav', '03': 'broken.ogg' }),
+      chart: chartWithWAVs({ '01': 'Sub\\Kick.WAV', '02': 'missing.wav', '03': 'broken.ogg' }),
       source: SOURCE,
       chartPath: 'Songs/a/main.bms',
       samples,
@@ -82,8 +82,8 @@ describe('loadPlaySamples', () => {
   });
 
   test('resolves each sample under #PATH_WAV', async () => {
-    const chart = chartWithWavs({ '01': 'kick.wav' });
-    chart.bms.pathWav = 'wav/';
+    const chart = chartWithWAVs({ '01': 'kick.wav' });
+    chart.bms.pathWAV = 'wav/';
     await loadPlaySamples({
       audioContext: fakeAudioContext(),
       chart,
@@ -102,7 +102,7 @@ describe('loadPlaySamples', () => {
   test('stretches the samples only for keep pitch at another tempo', async () => {
     const options = {
       audioContext: fakeAudioContext(),
-      chart: chartWithWavs({ '01': 'kick.wav' }),
+      chart: chartWithWAVs({ '01': 'kick.wav' }),
       source: SOURCE,
       chartPath: 'Songs/a/main.bms',
       samples: new Map<string, AudioBuffer>(),
@@ -126,7 +126,7 @@ describe('loadPlaySamples', () => {
     const samples = new Map<string, AudioBuffer>();
     await loadPlaySamples({
       audioContext,
-      chart: chartWithWavs({ '01': 'kick.wav', '02': 'snare.wav' }),
+      chart: chartWithWAVs({ '01': 'kick.wav', '02': 'snare.wav' }),
       source: SOURCE,
       chartPath: 'Songs/a/main.bms',
       samples,

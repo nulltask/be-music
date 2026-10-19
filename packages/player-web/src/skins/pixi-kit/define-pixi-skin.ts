@@ -1,5 +1,5 @@
 import { Container, Graphics, WebGLRenderer, type Renderer, type Texture } from 'pixi.js';
-import { runGpuPasses } from './gpu-pass.ts';
+import { runGPUPasses } from './gpu-pass.ts';
 import { PIXI_HOST_RENDER, pixiHostTarget } from './host-render.ts';
 import {
   defineBeMusicSkin,
@@ -129,7 +129,7 @@ class PixiSurface {
     root.eventMode = 'none';
     root.interactiveChildren = false;
     // GPU work the frame asked for while it was built (simulation steps into render textures) runs first.
-    runGpuPasses(renderer);
+    runGPUPasses(renderer);
     if (this.target) {
       // The player rounds its own sprites to device pixels; the skin's vector shapes were drawn unrounded on their own
       // renderer, and keep that.

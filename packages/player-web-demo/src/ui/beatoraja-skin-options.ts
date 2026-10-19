@@ -1,11 +1,11 @@
-// The skin-options panel for the beatoraja screen showing (`BeatorajaSkinOptionsGui`, bottom centre): its skin's
+// The skin-options panel for the beatoraja screen showing (`BeatorajaSkinOptionsGUI`, bottom centre): its skin's
 // `property[]` / `filepath[]`. A change is kept for the entry and handed back to the app, which loads the skin again
 // with it.
 
 import type { BeatorajaSkinConfig, BeatorajaSkinHeader } from '@be-music/beatoraja-skin';
 import type { PlayScene } from '@be-music/player-web/host';
 import type { BeatorajaPlayableVariant, BeatorajaSceneKitCaches } from '@be-music/player-web/skin';
-import { BeatorajaSkinOptionsGui } from '../beatoraja-skin-options-gui.ts';
+import { BeatorajaSkinOptionsGUI } from '../beatoraja-skin-options-gui.ts';
 
 /** The beatoraja theme's play entry a play on the stage is drawn with. */
 export interface ActiveBeatorajaPlay {
@@ -46,7 +46,7 @@ export class BeatorajaSkinOptionsPanel {
    * note-offset for live editing. Lazily constructed once `start()` mounts the host (the panel is
    * absolute-positioned inside the demo shell so the shell needs to exist first).
    */
-  private beatorajaSkinOptionsGui: BeatorajaSkinOptionsGui | undefined;
+  private beatorajaSkinOptionsGUI: BeatorajaSkinOptionsGUI | undefined;
   private readonly deps: BeatorajaSkinOptionsPanelDeps;
 
   public constructor(deps: BeatorajaSkinOptionsPanelDeps) {
@@ -60,7 +60,7 @@ export class BeatorajaSkinOptionsPanel {
   public refreshBeatorajaPlaySkinOptions(): void {
     const active = this.deps.activeBeatorajaPlay();
     if (active === undefined || this.deps.gameplayView()?.identity.family !== 'beatoraja') return;
-    this.refreshBeatorajaSkinOptionsGui({
+    this.refreshBeatorajaSkinOptionsGUI({
       title: `Skin Config (Play ${active.variant}K)`,
       entryPath: active.entryPath,
       header: active.header,
@@ -74,7 +74,7 @@ export class BeatorajaSkinOptionsPanel {
   public refreshBeatorajaSelectSkinOptions(): void {
     const shown = this.deps.beatorajaSelectKit();
     if (shown === undefined) return;
-    this.refreshBeatorajaSkinOptionsGui({
+    this.refreshBeatorajaSkinOptionsGUI({
       title: 'Skin Config (Select)',
       entryPath: shown.entryPath,
       header: shown.header,
@@ -88,11 +88,11 @@ export class BeatorajaSkinOptionsPanel {
    * Lazily instantiate the skin-options panel. Deferred from the constructor because the demo shell
    * (the parent the panel attaches to) doesn't exist until `app.innerHTML` materializes.
    */
-  private ensureBeatorajaSkinOptionsGui(): BeatorajaSkinOptionsGui {
-    if (this.beatorajaSkinOptionsGui === undefined) {
-      this.beatorajaSkinOptionsGui = new BeatorajaSkinOptionsGui({ container: this.deps.container });
+  private ensureBeatorajaSkinOptionsGUI(): BeatorajaSkinOptionsGUI {
+    if (this.beatorajaSkinOptionsGUI === undefined) {
+      this.beatorajaSkinOptionsGUI = new BeatorajaSkinOptionsGUI({ container: this.deps.container });
     }
-    return this.beatorajaSkinOptionsGui;
+    return this.beatorajaSkinOptionsGUI;
   }
 
   /**
@@ -102,7 +102,7 @@ export class BeatorajaSkinOptionsPanel {
    * Skin selection itself is handled by the Debug Menu, not this panel — its skin pickers record the override and
    * apply it to the scene showing (`applyBeatorajaSkinSwitchIfActive`).
    */
-  private refreshBeatorajaSkinOptionsGui(args: {
+  private refreshBeatorajaSkinOptionsGUI(args: {
     title: string;
     entryPath: string;
     header: BeatorajaSkinHeader;
@@ -110,7 +110,7 @@ export class BeatorajaSkinOptionsPanel {
   }): void {
     const config = this.deps.beatorajaSkinConfig(args.entryPath, args.header);
     const candidates = this.deps.collectBeatorajaFileCandidates(args.entryPath, args.header);
-    const gui = this.ensureBeatorajaSkinOptionsGui();
+    const gui = this.ensureBeatorajaSkinOptionsGUI();
     gui.setSkin({
       title: args.title,
       // Forward the entry's stable path so `setSkin` can short-circuit when the same skin entry
@@ -131,6 +131,6 @@ export class BeatorajaSkinOptionsPanel {
 
   /** Takes the panel down: the beatoraja screen it was for has gone. */
   public clear(): void {
-    this.beatorajaSkinOptionsGui?.clear();
+    this.beatorajaSkinOptionsGUI?.clear();
   }
 }

@@ -26,7 +26,7 @@ const workspacePackages = [
  * with the player entries a browser host imports (signals, lanes, display), the scene models and the LR2 and beatoraja
  * state resolvers run unchanged in the browser and in Node, so they import no
  * Node built-in and read no DOM or Node-only global. Runtime services reach them through adapters
- * (`PlayerOptions.createAudioSession`, `createUiRuntime`, the parser's `node-file.ts`) instead.
+ * (`PlayerOptions.createAudioSession`, `createUIRuntime`, the parser's `node-file.ts`) instead.
  */
 const runtimeNeutralSources = [
   'packages/beatoraja-skin/src/scene/**/*.ts',

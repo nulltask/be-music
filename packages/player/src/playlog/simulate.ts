@@ -1,25 +1,25 @@
 import { PLAY_MODE_LAYOUTS, type PlayModeLayoutId } from '@be-music/chart';
-import { resolveIidxRankLabel } from '../ruleset/score.ts';
+import { resolveIIDXRankLabel } from '../ruleset/score.ts';
 import type { BeMusicPlaylog, PlaylogInputEvent, PlaylogRulesetResult } from './format.ts';
 import {
   classifyRulesetJudge,
   ignoresLateLongNoteHeadBad,
   noteLateReachUs,
-  addHcnPassing,
+  addHCNPassing,
   isMultiBadCollectorTarget,
   judgeWindowLateReachUs,
   longNoteOwesTailMiss,
   pgreatWindowReachUs,
   preferJudgeCandidate,
   resolveEffectiveLongNoteMode,
-  HcnTickCounter,
-  resolveLnEarlyRelease,
+  HCNTickCounter,
+  resolveLNEarlyRelease,
   RULESET_JUDGE_NONE,
   RulesetGauge,
   selectJudgeWindowSet,
   type GaugeJudgeIndex,
   type JudgeSelectionCandidate,
-  type LnJudgeIndex,
+  type LNJudgeIndex,
   type RulesetJudgeIndex,
 } from '../ruleset/index.ts';
 import {
@@ -35,10 +35,10 @@ import {
 export type { PlaylogRulesetId, BeatorajaJudgeAlgorithm, ResolveRulesetOptions } from './rulesets.ts';
 export {
   resolveRulesetConfig,
-  resolveLr2DefaultTotal,
+  resolveLR2DefaultTotal,
   resolveBeatorajaDefaultTotal,
-  resolveIidxGaugeUnit,
-  resolveLr2HardDamageMultiplier,
+  resolveIIDXGaugeUnit,
+  resolveLR2HardDamageMultiplier,
   resolveBeatorajaHardRecoverMultiplier,
 } from './rulesets.ts';
 
@@ -108,13 +108,13 @@ type JudgeClassification = GaugeJudgeIndex | typeof JUDGE_NONE;
 
 type SimLongStyle = 1 | 2 | 3;
 
-interface SimHcnPassing {
+interface SimHCNPassing {
   note: SimNote;
   endUs: number;
-  counter: HcnTickCounter;
+  counter: HCNTickCounter;
   tailGood: boolean;
   /** The lane's next Hell Charge note, judged before this one has passed. */
-  next?: SimHcnPassing;
+  next?: SimHCNPassing;
 }
 
 interface SimNote {
@@ -167,8 +167,8 @@ interface SimLane {
    * lane is down, so a second key keeps the lane down while the first is released, as the engine's lane history does.
    */
   downTokens: Set<string>;
-  /** The Hell Charge notes passing the lane, in tail order, while their gauge ticks run (see `HcnTickCounter`). */
-  passing?: SimHcnPassing;
+  /** The Hell Charge notes passing the lane, in tail order, while their gauge ticks run (see `HCNTickCounter`). */
+  passing?: SimHCNPassing;
   hold?: ActiveHold;
   /** Auto-played lane (AUTO mode or AUTO SCRATCH): every note resolves PGREAT on schedule. */
   auto: boolean;
@@ -256,7 +256,7 @@ class PlaylogSimulation {
       exScore: this.exScore,
       noteCount: this.config.noteCount,
       maxCombo: this.maxCombo,
-      djLevel: resolveIidxRankLabel(this.exScore, this.config.noteCount),
+      djLevel: resolveIIDXRankLabel(this.exScore, this.config.noteCount),
       gauge: {
         type: this.config.gauge.id,
         final: this.gauge.value,
@@ -446,7 +446,7 @@ class PlaylogSimulation {
           note.missDeadlineUs >= this.lastAdvanceUs &&
           note.missDeadlineUs < untilUs
         ) {
-          this.startHcnPassing(lane, note, note.missDeadlineUs);
+          this.startHCNPassing(lane, note, note.missDeadlineUs);
         }
       }
       for (let passing = lane.passing; passing !== undefined; passing = passing.next) {
@@ -493,7 +493,7 @@ class PlaylogSimulation {
       } else if (event.kind === 'mine-settle') {
         event.mine!.applied = true;
       } else if (event.kind === 'hcn-tick') {
-        this.applyHcnTick(event.gain!);
+        this.applyHCNTick(event.gain!);
       } else if (event.kind === 'release-settle') {
         const lane = event.lane;
         const hold = lane.hold;
@@ -577,27 +577,27 @@ class PlaylogSimulation {
    * Starts the gauge ticks of a Hell Charge note whose head was judged at `judgedUs` (pressed, or missed at its
    * deadline), as the engine does: from the later of the head and that instant until the tail passes.
    */
-  private startHcnPassing(lane: SimLane, note: SimNote, judgedUs: number): void {
+  private startHCNPassing(lane: SimLane, note: SimNote, judgedUs: number): void {
     if (lane.auto || !note.isLong || note.longStyle !== 3) return;
     for (let passing = lane.passing; passing !== undefined; passing = passing.next) {
       if (passing.note === note) return;
     }
     const startUs = Math.max(note.timeUs, judgedUs);
-    const counter = new HcnTickCounter(startUs);
+    const counter = new HCNTickCounter(startUs);
     counter.setGaining(lane.downTokens.size > 0, startUs, () => undefined);
-    lane.passing = addHcnPassing(lane.passing, { note, endUs: note.endTimeUs!, counter, tailGood: false }, startUs);
+    lane.passing = addHCNPassing(lane.passing, { note, endUs: note.endTimeUs!, counter, tailGood: false }, startUs);
   }
 
   /** Re-reads whether a lane's passing Hell Charge note gains: a key on it is down, or its tail went well. */
-  private setHcnGaining(lane: SimLane, atUs: number): void {
+  private setHCNGaining(lane: SimLane, atUs: number): void {
     for (let passing = lane.passing; passing !== undefined; passing = passing.next) {
       passing.counter.setGaining(passing.tailGood || lane.downTokens.size > 0, Math.min(atUs, passing.endUs), (gain) =>
-        this.applyHcnTick(gain),
+        this.applyHCNTick(gain),
       );
     }
   }
 
-  private applyHcnTick(gain: boolean): void {
+  private applyHCNTick(gain: boolean): void {
     if (this.closed()) return;
     const tick = this.config.hcnTick;
     this.gauge.applyJudge(
@@ -619,7 +619,7 @@ class PlaylogSimulation {
       } else {
         for (const token of input.tokens) lane.downTokens.add(token);
       }
-      this.setHcnGaining(lane, timeUs);
+      this.setHCNGaining(lane, timeUs);
     }
     // Pressing a lane whose release is waiting out the margin resumes its hold: that press judges nothing else. A lane
     // whose long note is held (pressed by another key bound to it) judges no other note either: its current note is
@@ -654,7 +654,7 @@ class PlaylogSimulation {
     const { note, lane, dmUs } = selected;
     if (note.isLong) {
       this.startLongNote(lane, note, selected.judge, dmUs);
-      this.startHcnPassing(lane, note, timeUs);
+      this.startHCNPassing(lane, note, timeUs);
     } else {
       note.judged = true;
       this.applyJudge(selected.judge, dmUs);
@@ -695,7 +695,7 @@ class PlaylogSimulation {
       }
       const hold = lane.hold;
       if (!hold) {
-        this.setHcnGaining(lane, timeUs);
+        this.setHCNGaining(lane, timeUs);
         continue;
       }
       const note = hold.note;
@@ -708,10 +708,10 @@ class PlaylogSimulation {
       if (note.longStyle === 1) {
         // LN: the ruleset decides how a release before the tail combines with the deferred head judgment.
         const headJudge = hold.headJudge ?? JUDGE_BAD;
-        released = resolveLnEarlyRelease(
+        released = resolveLNEarlyRelease(
           this.config,
           {
-            judge: (headJudge > JUDGE_MISS_POOR ? JUDGE_MISS_POOR : headJudge) as LnJudgeIndex,
+            judge: (headJudge > JUDGE_MISS_POOR ? JUDGE_MISS_POOR : headJudge) as LNJudgeIndex,
             dmUs: hold.headDmUs ?? 0,
           },
           dmUs,
@@ -728,7 +728,7 @@ class PlaylogSimulation {
       if (marginUs > 0 && released.judge >= JUDGE_BAD && released.dmUs > 0) {
         // beatoraja: a release that would score BAD or worse before the tail waits out the margin (`releasetime`).
         hold.pendingRelease = { atUs: timeUs + marginUs, ...released };
-        this.setHcnGaining(lane, timeUs);
+        this.setHCNGaining(lane, timeUs);
         continue;
       }
       lane.hold = undefined;
@@ -741,7 +741,7 @@ class PlaylogSimulation {
           passing.tailGood = true;
         }
       }
-      this.setHcnGaining(lane, timeUs);
+      this.setHCNGaining(lane, timeUs);
     }
   }
 

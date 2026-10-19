@@ -1,8 +1,8 @@
 import { hasResultJingle, resolveResultJingles, type SystemSound, type SystemSoundSet } from '@be-music/scene-model';
-import type { BeatorajaThemeBgm, SkinFamilyId } from '@be-music/player-web/skin';
+import type { BeatorajaThemeBGM, SkinFamilyId } from '@be-music/player-web/skin';
 
 /** An LR2 theme's result jingles (`Sound/<theme>/clear.wav` and the rest). */
-export interface Lr2ResultJingles {
+export interface LR2ResultJingles {
   clear?: Uint8Array | undefined;
   fail?: Uint8Array | undefined;
   result?: Uint8Array | undefined;
@@ -10,15 +10,15 @@ export interface Lr2ResultJingles {
   courseFail?: Uint8Array | undefined;
 }
 
-/** A result's jingles by slot (`clearBgm` / `failBgm` / `resultBgm`), as the test hook names the one played. */
+/** A result's jingles by slot (`clearBGM` / `failBGM` / `resultBGM`), as the test hook names the one played. */
 export interface ResultViewJingles {
-  clearBgm?: Uint8Array;
-  failBgm?: Uint8Array;
-  resultBgm?: Uint8Array;
+  clearBGM?: Uint8Array;
+  failBGM?: Uint8Array;
+  resultBGM?: Uint8Array;
 }
 
 /** A theme's result jingles as the result slots of a system sound set. */
-function resultJingleSet(jingles: Lr2ResultJingles | BeatorajaThemeBgm): SystemSoundSet {
+function resultJingleSet(jingles: LR2ResultJingles | BeatorajaThemeBGM): SystemSoundSet {
   const set: { -readonly [S in keyof SystemSoundSet]: SystemSound } = {};
   if (jingles.clear !== undefined) set.clear = { bytes: jingles.clear };
   if (jingles.fail !== undefined) set.fail = { bytes: jingles.fail };
@@ -37,7 +37,7 @@ function resultJingleSet(jingles: Lr2ResultJingles | BeatorajaThemeBgm): SystemS
  */
 export function resolveResultSoundSet(
   family: SkinFamilyId,
-  sets: { lr2: Lr2ResultJingles; beatoraja: BeatorajaThemeBgm },
+  sets: { lr2: LR2ResultJingles; beatoraja: BeatorajaThemeBGM },
 ): SystemSoundSet {
   const lr2 = resultJingleSet(sets.lr2);
   if (family !== 'beatoraja') return lr2;
@@ -53,12 +53,12 @@ export function resolveResultSoundSet(
 export function resolveResultViewJingles(
   family: SkinFamilyId,
   courseJingles: boolean,
-  sets: { lr2: Lr2ResultJingles; beatoraja: BeatorajaThemeBgm },
+  sets: { lr2: LR2ResultJingles; beatoraja: BeatorajaThemeBGM },
 ): ResultViewJingles {
   const jingles = resolveResultJingles([resolveResultSoundSet(family, sets)], courseJingles);
   const out: ResultViewJingles = {};
-  if (jingles.clear?.bytes !== undefined) out.clearBgm = jingles.clear.bytes;
-  if (jingles.fail?.bytes !== undefined) out.failBgm = jingles.fail.bytes;
-  if (jingles.result?.bytes !== undefined) out.resultBgm = jingles.result.bytes;
+  if (jingles.clear?.bytes !== undefined) out.clearBGM = jingles.clear.bytes;
+  if (jingles.fail?.bytes !== undefined) out.failBGM = jingles.fail.bytes;
+  if (jingles.result?.bytes !== undefined) out.resultBGM = jingles.result.bytes;
   return out;
 }

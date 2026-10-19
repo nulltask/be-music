@@ -25,12 +25,12 @@
       "stp": [],
       "wavCmds": [],
       "changeOption": {},
-      "exWav": {},
-      "exBmp": {},
+      "exWAV": {},
+      "exBMP": {},
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBga": {}
+      "swBGA": {}
     },
     "controlFlow": [],
     "events": [
@@ -70,7 +70,7 @@
       "randomPatterns": [],
       "title": "Edited Sample",
       "playVariant": "5",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0",
@@ -101,8 +101,8 @@
           "percent": 75
         },
         "noteCount": 13,
-        "chartFingerprint": "bmfp0:c349930fbcdd1bd22bb33341aa99e31ac475d3aec5130f223e2aa7d2bb43a5fa",
-        "playFingerprint": "bmfp0:c349930fbcdd1bd22bb33341aa99e31ac475d3aec5130f223e2aa7d2bb43a5fa",
+        "chartFingerprint": "bmfp0:886d08d1c547dd000c0d4434b6cf8cfcbeb543cc683367d208cb7bf36a35c6b4",
+        "playFingerprint": "bmfp0:886d08d1c547dd000c0d4434b6cf8cfcbeb543cc683367d208cb7bf36a35c6b4",
         "title": "Edited Sample",
         "artist": "Codex"
       },

@@ -10,7 +10,7 @@ import {
   formatGauge,
   formatJudgeRank,
   formatLaneMode,
-  formatLnMode,
+  formatLNMode,
   formatPercent,
   formatPlayTime,
   formatRecorder,
@@ -108,8 +108,8 @@ describe('chart metadata', () => {
     expect(formatJudgeRank(null)).toBe('-');
   });
 
-  test('formatLnMode and formatPercent', () => {
-    expect([1, 2, 3, null].map((mode) => formatLnMode(mode).split(' ')[0])).toEqual(['LN', 'CN', 'HCN', '-']);
+  test('formatLNMode and formatPercent', () => {
+    expect([1, 2, 3, null].map((mode) => formatLNMode(mode).split(' ')[0])).toEqual(['LN', 'CN', 'HCN', '-']);
     expect(formatPercent(0.77884)).toBe('77.88%');
     expect(formatPercent(null)).toBe('-');
   });

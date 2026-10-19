@@ -1,5 +1,5 @@
 import { BEATORAJA_OP, TIMER_FADEOUT, TIMER_STARTINPUT, type BeatorajaSkin } from '@be-music/beatoraja-skin';
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import { DEFAULT_PLAY_OPTIONS, type LibraryChart } from '@be-music/scene-model';
 import type { Texture } from 'pixi.js';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
@@ -10,7 +10,7 @@ import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import type { DecideFrame } from '../types.ts';
 import { BeatorajaDecideView } from './decide-view.ts';
 
-const chart = createEmptyJson('bms');
+const chart = createEmptyJSON('bms');
 chart.metadata.difficulty = 3;
 
 const CHART: LibraryChart = {

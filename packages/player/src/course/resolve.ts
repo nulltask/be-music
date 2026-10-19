@@ -2,8 +2,8 @@ import type { CourseDefinition, CourseStageRef } from './definition.ts';
 
 /** Finds a local chart by file hash. Implementations return `undefined` when they hold no such chart. */
 export interface CourseChartLookup<T> {
-  bySha256(sha256: string): T | undefined;
-  byMd5(md5: string): T | undefined;
+  bySHA256(sha256: string): T | undefined;
+  byMD5(md5: string): T | undefined;
 }
 
 export interface ResolvedCourseStage<T> {
@@ -27,8 +27,8 @@ export function resolveCourseStages<T>(course: CourseDefinition, lookup: CourseC
   const stages = course.stages.map((ref) => ({
     ref,
     chart:
-      (ref.sha256 !== undefined ? lookup.bySha256(ref.sha256) : undefined) ??
-      (ref.md5 !== undefined ? lookup.byMd5(ref.md5) : undefined),
+      (ref.sha256 !== undefined ? lookup.bySHA256(ref.sha256) : undefined) ??
+      (ref.md5 !== undefined ? lookup.byMD5(ref.md5) : undefined),
   }));
   return { course, stages, playable: stages.every((stage) => stage.chart !== undefined) };
 }

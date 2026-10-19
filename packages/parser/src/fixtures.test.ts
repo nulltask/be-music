@@ -4,24 +4,24 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   eventToBeat,
-  isBmsBgmVolumeChangeChannel,
-  isBmsKeyVolumeChangeChannel,
+  isBmsBGMVolumeChangeChannel,
+  isBMSKeyVolumeChangeChannel,
   isPlayLaneSoundChannel,
   isPlayableChannel,
   isSampleTriggerChannel,
-  parseBmsArgb,
-  parseBmsBga,
-  parseBmsDynamicVolumeGain,
-  parseBmsExBmp,
-  parseBmsExWav,
-  parseBmsSwBga,
-  parseBmsWavCmd,
-  resolveBmsLongNotes,
+  parseBmsARGB,
+  parseBmsBGA,
+  parseBMSDynamicVolumeGain,
+  parseBMSExBMP,
+  parseBMSExWAV,
+  parseBMSSwBGA,
+  parseBmsWAVCmd,
+  resolveBMSLongNotes,
   resolveChartPlayVariant,
-  resolveLnobjLongNotes,
+  resolveLNOBJLongNotes,
   type ChartPlayVariant,
 } from '../../chart/src/index.ts';
-import { parseChartFile, resolveBmsControlFlow } from './index.ts';
+import { parseChartFile, resolveBMSControlFlow } from './index.ts';
 
 /**
  * Tests for the shared chart corpus in `examples/test`.
@@ -59,7 +59,7 @@ describe('examples/test corpus', () => {
       // it, which leaves a chart that parses cleanly and plays nothing.
       const resolved =
         json.sourceFormat === 'bms' && json.bms.controlFlow.length > 0
-          ? resolveBmsControlFlow(json, { random: () => 0 })
+          ? resolveBMSControlFlow(json, { random: () => 0 })
           : json;
       expect(resolved.events.length, name).toBeGreaterThan(0);
     }
@@ -95,36 +95,36 @@ describe('examples/test corpus', () => {
     const json = await parseChartFile(fixture('extended-directives.bms'));
 
     // `#EXWAVxx <flags> <params> <filename>` — flags are matched positionally, in any order.
-    expect(parseBmsExWav(json.bms.exWav['01'] ?? '')).toEqual({
+    expect(parseBMSExWAV(json.bms.exWAV['01'] ?? '')).toEqual({
       pan: 1024,
       volumeCentibels: -200,
       frequencyHz: 48_000,
       filename: 'sample.wav',
     });
-    expect(parseBmsExWav(json.bms.exWav['02'] ?? '')).toMatchObject({
+    expect(parseBMSExWAV(json.bms.exWAV['02'] ?? '')).toMatchObject({
       volumeCentibels: -600,
       pan: -500,
       filename: 'branch.wav',
     });
     // An explicitly authored 0 cB is unity, and must stay distinguishable from an unauthored flag.
-    const unity = parseBmsExWav(json.bms.exWav['03'] ?? '');
+    const unity = parseBMSExWAV(json.bms.exWAV['03'] ?? '');
     expect(unity?.volumeCentibels).toBe(0);
     expect(unity?.pan).toBeUndefined();
 
     // `#EXBMPxx a,r,g,b,filename`
-    expect(parseBmsExBmp(json.bms.exBmp['01'] ?? '')).toMatchObject({
+    expect(parseBMSExBMP(json.bms.exBMP['01'] ?? '')).toMatchObject({
       filename: 'bga-base.bmp',
       argb: { a: 255, r: 0, g: 0, b: 0 },
     });
-    expect(parseBmsExBmp(json.bms.exBmp['02'] ?? '')?.argb).toEqual({ a: 128, r: 255, g: 255, b: 255 });
+    expect(parseBMSExBMP(json.bms.exBMP['02'] ?? '')?.argb).toEqual({ a: 128, r: 255, g: 255, b: 255 });
 
     // `#ARGBxx` in both accepted spellings — AARRGGBB hex and comma-separated decimal.
-    expect(parseBmsArgb(json.bms.argb['01'] ?? '')).toEqual({ a: 255, r: 0, g: 0, b: 0 });
-    expect(parseBmsArgb(json.bms.argb['02'] ?? '')).toEqual({ a: 128, r: 255, g: 0, b: 0 });
+    expect(parseBmsARGB(json.bms.argb['01'] ?? '')).toEqual({ a: 255, r: 0, g: 0, b: 0 });
+    expect(parseBmsARGB(json.bms.argb['02'] ?? '')).toEqual({ a: 128, r: 255, g: 0, b: 0 });
 
     // `#BGAxx YY x1 y1 x2 y2 dx dy` sub-region crops.
-    expect(parseBmsBga(json.bms.bga['05'] ?? '')).toEqual({
-      sourceBmp: '01',
+    expect(parseBmsBGA(json.bms.bga['05'] ?? '')).toEqual({
+      sourceBMP: '01',
       sx: 0,
       sy: 0,
       ex: 256,
@@ -132,22 +132,22 @@ describe('examples/test corpus', () => {
       dx: 0,
       dy: 0,
     });
-    expect(parseBmsBga(json.bms.bga['06'] ?? '')).toMatchObject({ sourceBmp: '02', sx: 64, sy: 32, dx: 16, dy: 8 });
+    expect(parseBmsBGA(json.bms.bga['06'] ?? '')).toMatchObject({ sourceBMP: '02', sx: 64, sy: 32, dx: 16, dy: 8 });
 
     // `#SWBGAxx fr:tot:lp[:ARGB] N1 N2 …` — `fr` is in 1/100 s, so 10 is a 100 ms frame interval.
-    expect(parseBmsSwBga(json.bms.swBga['01'] ?? '')).toEqual({
+    expect(parseBMSSwBGA(json.bms.swBGA['01'] ?? '')).toEqual({
       frameIntervalMs: 100,
       totalFrames: 5,
       loop: true,
       argbRaw: 'FF000000',
       frames: ['01', '02', '03', '04', '05'],
     });
-    const holdLast = parseBmsSwBga(json.bms.swBga['02'] ?? '');
+    const holdLast = parseBMSSwBGA(json.bms.swBGA['02'] ?? '');
     expect(holdLast?.loop).toBe(false);
     expect(holdLast?.argbRaw).toBeUndefined();
 
     // One `#WAVCMD pp xx vv` line per parameter byte.
-    const wavCmds = json.bms.wavCmds.map((line) => parseBmsWavCmd(line));
+    const wavCmds = json.bms.wavCmds.map((line) => parseBmsWAVCmd(line));
     expect(wavCmds).toEqual([
       { param: 'volume', slot: '01', value: 64 },
       { param: 'pitch', slot: '02', value: 12 },
@@ -197,19 +197,19 @@ describe('examples/test corpus', () => {
   test('bus-volume-channels.bms drives the 97 / 98 volume buses without triggering samples', async () => {
     const json = await parseChartFile(fixture('bus-volume-channels.bms'));
 
-    const bgm = json.events.filter((event) => isBmsBgmVolumeChangeChannel(event.channel));
-    const key = json.events.filter((event) => isBmsKeyVolumeChangeChannel(event.channel));
+    const bgm = json.events.filter((event) => isBmsBGMVolumeChangeChannel(event.channel));
+    const key = json.events.filter((event) => isBMSKeyVolumeChangeChannel(event.channel));
     expect(bgm.length).toBeGreaterThan(0);
     expect(key.length).toBeGreaterThan(0);
 
     for (const event of [...bgm, ...key]) {
       // A volume change must not sound, and every authored token must decode to a usable gain.
       expect(isSampleTriggerChannel(event.channel), event.channel).toBe(false);
-      expect(parseBmsDynamicVolumeGain(event.value), `${event.channel}:${event.value}`).toBeGreaterThan(0);
+      expect(parseBMSDynamicVolumeGain(event.value), `${event.channel}:${event.value}`).toBeGreaterThan(0);
     }
 
     // `FF` is unity and `01` is the quietest audible step, so the authored range spans the whole bus.
-    const gains = bgm.map((event) => parseBmsDynamicVolumeGain(event.value) ?? Number.NaN);
+    const gains = bgm.map((event) => parseBMSDynamicVolumeGain(event.value) ?? Number.NaN);
     expect(Math.max(...gains)).toBeCloseTo(1, 9);
     expect(Math.min(...gains)).toBeCloseTo(0x01 / 0xff, 9);
 
@@ -240,7 +240,7 @@ describe('examples/test corpus', () => {
     // preserving path has to survive the control-flow replay too.
     const captured = json.bms.controlFlow.find((entry) => entry.kind === 'header' && entry.commandRaw === 'WAV0b');
     expect(captured).toBeDefined();
-    const resolved = resolveBmsControlFlow(json, { random: () => 0 });
+    const resolved = resolveBMSControlFlow(json, { random: () => 0 });
     expect(resolved.resources.wav['0b']).toBe('wrong.wav');
     expect(resolved.events.some((event) => event.measure === 3 && event.value === '0b')).toBe(true);
   });
@@ -276,7 +276,7 @@ describe('examples/test corpus', () => {
     const json = await parseChartFile(fixture('lntype2-long-note.bms'));
     expect(json.bms.lnType).toBe(2);
 
-    const resolved = resolveBmsLongNotes(json);
+    const resolved = resolveBMSLongNotes(json);
     const byLane = new Map<string, typeof resolved.notes>();
     for (const note of resolved.notes) {
       byLane.set(note.channel, [...(byLane.get(note.channel) ?? []), note]);
@@ -369,7 +369,7 @@ describe('examples/test corpus', () => {
 
     // The long notes are real head/tail pairs, not stray markers: every head maps to an end beat, and every `ZZ`
     // object is claimed as the end of one of them.
-    const resolved = resolveLnobjLongNotes(json);
+    const resolved = resolveLNOBJLongNotes(json);
     expect(resolved.startToEndBeat.size).toBeGreaterThan(0);
     expect(resolved.endEvents.size).toBe(resolved.startToEndBeat.size);
     for (const [head, endBeat] of resolved.startToEndBeat) {
@@ -392,12 +392,12 @@ describe('examples/test corpus', () => {
     expect(parsed.bms.controlFlow.length).toBeGreaterThan(0);
 
     // `#RANDOM 1` / `#SWITCH 1` — the lowest branch of every block.
-    const first = resolveBmsControlFlow(parsed, { random: () => 0 });
+    const first = resolveBMSControlFlow(parsed, { random: () => 0 });
     expect(first.metadata.title).toBe('Control Flow Random Demo [A]');
     expect(first.events.some((event) => event.measure === 4 && event.channel === '11')).toBe(true);
 
     // The top branch of every block. `#RANDOM 2` selects the `#ELSE` body, which retitles the chart.
-    const last = resolveBmsControlFlow(parsed, { random: () => 0.999_999_9 });
+    const last = resolveBMSControlFlow(parsed, { random: () => 0.999_999_9 });
     expect(last.metadata.title).toBe('Control Flow Random Demo [B]');
     expect(last.events.some((event) => event.measure === 0 && event.channel === '29')).toBe(true);
     expect(last.events.some((event) => event.measure === 12 && event.channel === '16')).toBe(true);

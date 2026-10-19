@@ -1,30 +1,30 @@
 import {
-  collectBmsExWavVolumeMultipliers,
-  collectBmsWavCmdVolumeMultipliers,
+  collectBMSExWAVVolumeMultipliers,
+  collectBmsWAVCmdVolumeMultipliers,
   firesBeforeTempoReversal,
   isPlayLaneSoundChannel,
   resolveChart,
-  usesMonophonicWavPlayback,
+  usesMonophonicWAVPlayback,
   type ResolvedVolumeChange,
   type TimedSampleTrigger,
-  volWavToLinearGain,
+  volWAVToLinearGain,
 } from '@be-music/chart';
 // `node:fs/promises` and `node:path` are loaded lazily inside the Node-only entry points (`renderChartFile`,
 // `writeAudioFile`, `getOrCreateSample`) so that bundling this module into a browser build doesn't statically
 // pull the Node built-ins into the browser bundle. Vite externalises `node:`-prefixed imports for browser
 // targets but emits a runtime error if any code path actually reaches them — keeping the imports dynamic
-// confines that error to the Node-specific paths the browser never executes (renderJson / renderSingleSample
+// confines that error to the Node-specific paths the browser never executes (renderJSON / renderSingleSample
 // stay browser-safe because they don't touch disk).
-type NodeFsPromises = typeof import('node:fs/promises');
+type NodeFSPromises = typeof import('node:fs/promises');
 type NodePath = typeof import('node:path');
-let nodeFsPromisesPromise: Promise<NodeFsPromises> | undefined;
+let nodeFSPromisesPromise: Promise<NodeFSPromises> | undefined;
 let nodePathPromise: Promise<NodePath> | undefined;
-const loadNodeFsPromises = (): Promise<NodeFsPromises> => (nodeFsPromisesPromise ??= import('node:fs/promises'));
+const loadNodeFSPromises = (): Promise<NodeFSPromises> => (nodeFSPromisesPromise ??= import('node:fs/promises'));
 const loadNodePath = (): Promise<NodePath> => (nodePathPromise ??= import('node:path'));
-import { normalizeObjectKey, resolveBmsBase, type BeMusicJson } from '@be-music/json';
+import { normalizeObjectKey, resolveBMSBase, type BeMusicJSON } from '@be-music/json';
 import { isAbortError, throwIfAborted } from '@be-music/utils/core';
-import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
-import { detectAudioFormat, encodeAiff16, encodeWav16 } from './file-codec.ts';
+import { parseChartFile, resolveBMSControlFlow } from '@be-music/parser';
+import { detectAudioFormat, encodeAIFF16, encodeWAV16 } from './file-codec.ts';
 import { createFallbackTone, decodeAudioSample, resampleLinear } from './decode.ts';
 import { resolveSamplePath } from './sample-path.ts';
 export interface RenderOptions {
@@ -38,7 +38,7 @@ export interface RenderOptions {
   signal?: AbortSignal;
   resolveTriggerGain?: (trigger: TimedSampleTrigger) => number;
   onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
-  inferBmsLnTypeWhenMissing?: boolean;
+  inferBmsLNTypeWhenMissing?: boolean;
 }
 
 export interface RenderSampleLoadProgress {
@@ -119,11 +119,11 @@ function advanceDynamicVolumeGain(
   return state.gain;
 }
 
-export async function renderJson(json: BeMusicJson, options: RenderOptions = {}): Promise<RenderResult> {
+export async function renderJSON(json: BeMusicJSON, options: RenderOptions = {}): Promise<RenderResult> {
   const sampleRate = options.sampleRate ?? DEFAULT_SAMPLE_RATE;
   const normalize = options.normalize ?? true;
   const tailSeconds = options.tailSeconds ?? DEFAULT_TAIL_SECONDS;
-  const gain = (options.gain ?? DEFAULT_GAIN) * volWavToLinearGain(json.bms.volWav);
+  const gain = (options.gain ?? DEFAULT_GAIN) * volWAVToLinearGain(json.bms.volWAV);
   const startSeconds = Number.isFinite(options.startSeconds) ? Math.max(0, options.startSeconds ?? 0) : 0;
   // BMS spec — an undefined / missing / undecodable `#WAVxx` reference is SILENT (LR2 / beatoraja both skip it).
   // `fallbackToneSeconds` exists as an opt-in debug aid; 0 renders a 1-frame silent placeholder so every downstream
@@ -135,7 +135,7 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
   const onSampleLoadProgress = options.onSampleLoadProgress;
   throwIfAborted(signal);
 
-  const resolved = resolveChart(json, { inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true });
+  const resolved = resolveChart(json, { inferBmsLNTypeWhenMissing: options.inferBmsLNTypeWhenMissing === true });
   const dynamicVolumeChanges = splitDynamicVolumeChangesByBus(resolved.volumeChanges);
   // LR2's event pump freezes at a negative-BPM reversal: nothing behind the reversal ever sounds, and on the reversal
   // tick only the BGM ordered before the negative BPM does (Scene04_Play.cpp:1267-1269). Match that audibility in the
@@ -173,8 +173,8 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
   const peak = measurePeak(left, right);
   if (normalize && peak > 1) {
     const scale = 1 / peak;
-    scalePcm(left, scale);
-    scalePcm(right, scale);
+    scalePCM(left, scale);
+    scalePCM(right, scale);
   }
 
   return {
@@ -198,7 +198,7 @@ function splitDynamicVolumeChangesByBus(changes: ReadonlyArray<DynamicVolumeChan
 }
 
 async function scheduleSampleRenders(params: {
-  json: BeMusicJson;
+  json: BeMusicJSON;
   triggers: ReadonlyArray<TimedSampleTrigger>;
   sampleRate: number;
   tailSeconds: number;
@@ -229,7 +229,7 @@ async function scheduleSampleRenders(params: {
   } = params;
   const scheduled: ScheduledSampleRender[] = [];
   const bmsonScheduledSlices = new Set<string>();
-  const latestBmsScheduleBySampleKey = new Map<string, number>();
+  const latestBMSScheduleBySampleKey = new Map<string, number>();
   const bgmVolumeState: DynamicVolumeState = { index: 0, gain: 1 };
   const playVolumeState: DynamicVolumeState = { index: 0, gain: 1 };
   let maxFrame = Math.max(1, Math.round(tailSeconds * sampleRate));
@@ -237,17 +237,17 @@ async function scheduleSampleRenders(params: {
   // BMS spec — `#PATH_WAV` declares a directory prefix the chart's WAVs live under. The sample-path resolver tries
   // `pathPrefix + samplePath` before the bare path so charts that organize their WAVs under a sub-folder (e.g.
   // `wav/kick.wav` reachable via `#PATH_WAV wav/`) resolve correctly.
-  const pathWavPrefix = typeof json.bms.pathWav === 'string' ? json.bms.pathWav : undefined;
+  const pathWAVPrefix = typeof json.bms.pathWAV === 'string' ? json.bms.pathWAV : undefined;
   // BMS spec — `#WAVCMD 01 xx vv` declares per-slot volume overrides as a 0..127 byte. Pre-collect into a Map<slotKey,
   // 0..1 multiplier> so the per-trigger lookup is O(1); slots without a `#WAVCMD 01` line stay absent and skip the
   // multiplication. Pitch / loop bytes (`pp = 00` / `02`) are intentionally not collected here — applying them would
   // require resampling / loop-aware mixing that this offline renderer doesn't yet implement.
-  const wavCmdVolumeMultipliers = collectBmsWavCmdVolumeMultipliers(json.bms.wavCmds, resolveBmsBase(json));
+  const wavCmdVolumeMultipliers = collectBmsWAVCmdVolumeMultipliers(json.bms.wavCmds, resolveBMSBase(json));
   // BMS spec — `#EXWAVxx [flags] params filename` extended WAV declarations include an optional `v` (centibel) volume
   // that composes multiplicatively with `#WAVCMD 01 xx vv`. Fold the extracted multipliers into the same Map so the
   // per-trigger gain math stays a single lookup. Pan / freq fall to a future patch since they require resampling /
   // stereo splitting in this offline renderer.
-  for (const [slot, multiplier] of collectBmsExWavVolumeMultipliers(json.bms.exWav)) {
+  for (const [slot, multiplier] of collectBMSExWAVVolumeMultipliers(json.bms.exWAV)) {
     const previous = wavCmdVolumeMultipliers.get(slot) ?? 1;
     wavCmdVolumeMultipliers.set(slot, previous * multiplier);
   }
@@ -263,7 +263,7 @@ async function scheduleSampleRenders(params: {
       resolvedPathCache,
       signal,
       onSampleLoadProgress,
-      pathPrefix: pathWavPrefix,
+      pathPrefix: pathWAVPrefix,
     });
     const frameWindow = resolveScheduledSampleFrameWindow(trigger, sampleRate, sample);
     if (!frameWindow) {
@@ -282,7 +282,7 @@ async function scheduleSampleRenders(params: {
     if (!shouldScheduleTrigger(json, trigger, start, bmsonScheduledSlices)) {
       continue;
     }
-    trimPreviousBmsRetrigger(json, trigger, start, scheduled, latestBmsScheduleBySampleKey);
+    trimPreviousBMSRetrigger(json, trigger, start, scheduled, latestBMSScheduleBySampleKey);
 
     const scheduleIndex =
       scheduled.push({
@@ -292,8 +292,8 @@ async function scheduleSampleRenders(params: {
         sampleOffsetFrames: frameWindow.sampleOffsetFrames,
         sampleMaxFrames: frameWindow.sampleMaxFrames,
       }) - 1;
-    if (usesMonophonicWavPlayback(json)) {
-      latestBmsScheduleBySampleKey.set(trigger.sampleKey, scheduleIndex);
+    if (usesMonophonicWAVPlayback(json)) {
+      latestBMSScheduleBySampleKey.set(trigger.sampleKey, scheduleIndex);
     }
     if (triggerGain > 0) {
       maxFrame = Math.max(maxFrame, start + frameWindow.sampleMaxFrames + Math.round(tailSeconds * sampleRate));
@@ -346,7 +346,7 @@ function resolveScheduledTriggerGain(
 }
 
 function shouldScheduleTrigger(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   trigger: TimedSampleTrigger,
   start: number,
   bmsonScheduledSlices: Set<string>,
@@ -374,17 +374,17 @@ function shouldScheduleTrigger(
   return true;
 }
 
-function trimPreviousBmsRetrigger(
-  json: BeMusicJson,
+function trimPreviousBMSRetrigger(
+  json: BeMusicJSON,
   trigger: TimedSampleTrigger,
   start: number,
   scheduled: ScheduledSampleRender[],
-  latestBmsScheduleBySampleKey: Map<string, number>,
+  latestBMSScheduleBySampleKey: Map<string, number>,
 ): void {
-  if (!usesMonophonicWavPlayback(json)) {
+  if (!usesMonophonicWAVPlayback(json)) {
     return;
   }
-  const previousIndex = latestBmsScheduleBySampleKey.get(trigger.sampleKey);
+  const previousIndex = latestBMSScheduleBySampleKey.get(trigger.sampleKey);
   if (previousIndex === undefined) {
     return;
   }
@@ -458,8 +458,8 @@ export async function renderChartFile(
 ): Promise<RenderResult> {
   const { resolve, dirname } = await loadNodePath();
   const chartPath = resolve(inputPath);
-  const json = resolveBmsControlFlow(await parseChartFile(chartPath, { signal: options.signal }));
-  const audioRendered = await renderJson(json, {
+  const json = resolveBMSControlFlow(await parseChartFile(chartPath, { signal: options.signal }));
+  const audioRendered = await renderJSON(json, {
     ...options,
     baseDir: options.baseDir ?? dirname(chartPath),
   });
@@ -468,10 +468,10 @@ export async function renderChartFile(
 }
 
 export async function writeAudioFile(outputPath: string, result: RenderResult): Promise<void> {
-  const [{ resolve }, { writeFile }] = await Promise.all([loadNodePath(), loadNodeFsPromises()]);
+  const [{ resolve }, { writeFile }] = await Promise.all([loadNodePath(), loadNodeFSPromises()]);
   const destination = resolve(outputPath);
   const format = detectAudioFormat(destination);
-  const encoded = format === 'aiff' ? encodeAiff16(result) : encodeWav16(result);
+  const encoded = format === 'aiff' ? encodeAIFF16(result) : encodeWAV16(result);
   await writeFile(destination, encoded);
 }
 
@@ -552,7 +552,7 @@ async function getOrCreateSample(params: {
       samplePath,
       resolvedPath,
     });
-    const { readFile } = await loadNodeFsPromises();
+    const { readFile } = await loadNodeFSPromises();
     const buffer = await readFile(resolvedPath, { signal });
     throwIfAborted(signal);
     const decoded = await decodeAudioSample(buffer, resolvedPath, signal);
@@ -686,7 +686,7 @@ function measurePeak(left: Float32Array, right: Float32Array): number {
   return peak;
 }
 
-function scalePcm(channel: Float32Array, scale: number): void {
+function scalePCM(channel: Float32Array, scale: number): void {
   for (let index = 0; index < channel.length; index += 1) {
     channel[index] *= scale;
   }

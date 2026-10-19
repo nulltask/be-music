@@ -1,4 +1,4 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import { parseBeatorajaCourseData, type NonstopConnection } from '@be-music/player/course';
 import type { LibraryChart, LibraryCourse } from '@be-music/scene-model';
 import type { BeMusicSongRecord } from '@be-music/skin-sdk';
@@ -18,7 +18,7 @@ function song(id: string): LibraryChart {
     fileLabel: `${id}.bms`,
     title: id,
     totalNotes: 10,
-    chart: createEmptyJson('bms'),
+    chart: createEmptyJSON('bms'),
   };
 }
 

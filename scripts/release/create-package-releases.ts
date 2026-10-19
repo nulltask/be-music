@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 interface CreateReleaseOptions {
   repo: string;
   releaseTarget: string;
-  releasesJsonPath: string;
+  releasesJSONPath: string;
   assetsDir: string;
 }
 
@@ -18,7 +18,7 @@ interface PackageRelease {
   tagName: string;
   releaseTitle: string;
   notes: string;
-  isSeaPackage: boolean;
+  isSEAPackage: boolean;
   archiveBaseName: string;
 }
 
@@ -26,7 +26,7 @@ function parseArgs(argv: string[]): CreateReleaseOptions {
   const options: CreateReleaseOptions = {
     repo: '',
     releaseTarget: '',
-    releasesJsonPath: '',
+    releasesJSONPath: '',
     assetsDir: '',
   };
 
@@ -42,7 +42,7 @@ function parseArgs(argv: string[]): CreateReleaseOptions {
     } else if (token === '--release-target') {
       options.releaseTarget = value;
     } else if (token === '--releases-json') {
-      options.releasesJsonPath = value;
+      options.releasesJSONPath = value;
     } else if (token === '--assets-dir') {
       options.assetsDir = value;
     } else {
@@ -57,7 +57,7 @@ function parseArgs(argv: string[]): CreateReleaseOptions {
   if (!options.releaseTarget) {
     throw new Error('Missing required argument: --release-target <ref>');
   }
-  if (!options.releasesJsonPath) {
+  if (!options.releasesJSONPath) {
     throw new Error('Missing required argument: --releases-json <path>');
   }
   if (!options.assetsDir) {
@@ -82,7 +82,7 @@ function runGh(args: string[], allowFailure = false): string | null {
 }
 
 async function resolveAssets(assetsDir: string, release: PackageRelease): Promise<string[]> {
-  if (!release.isSeaPackage) {
+  if (!release.isSEAPackage) {
     return [];
   }
 
@@ -113,7 +113,7 @@ async function resolveAssets(assetsDir: string, release: PackageRelease): Promis
 
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
-  const releases = JSON.parse(await readFile(options.releasesJsonPath, 'utf8')) as unknown;
+  const releases = JSON.parse(await readFile(options.releasesJSONPath, 'utf8')) as unknown;
   if (!Array.isArray(releases) || releases.length === 0) {
     process.stdout.write('No package releases to publish.\n');
     return;

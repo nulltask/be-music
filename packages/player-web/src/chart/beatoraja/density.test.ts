@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { createEmptyJson, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
+import { createEmptyJSON, type BeMusicEvent, type BeMusicJSON } from '@be-music/json';
 import {
   computeBeatorajaChartDensity,
   computeBeatorajaChartDensityValues,
@@ -10,8 +10,8 @@ import {
 function chart(
   events: BeMusicEvent[],
   options: { total?: number; lnObj?: string; lnMode?: 1 | 2 | 3 } = {},
-): BeMusicJson {
-  const json = createEmptyJson('bms');
+): BeMusicJSON {
+  const json = createEmptyJSON('bms');
   json.metadata.bpm = 240;
   if (options.total !== undefined) json.metadata.total = options.total;
   if (options.lnObj !== undefined) json.bms.lnObjs = [options.lnObj];

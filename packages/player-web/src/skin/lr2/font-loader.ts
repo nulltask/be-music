@@ -1,22 +1,22 @@
 import { Texture, Assets } from 'pixi.js';
 import {
-  decodeDdsImageData,
-  decodeTga,
-  isTgaImage,
-  parseLr2Font,
+  decodeDDSImageData,
+  decodeTGA,
+  isTGAImage,
+  parseLR2Font,
   readDxaArchive,
-  type Lr2BitmapFont,
-  type Lr2SkinFileEntry,
+  type LR2BitmapFont,
+  type LR2SkinFileEntry,
 } from '@be-music/lr2-skin';
 import { normalizePath } from '@be-music/utils/core';
-import type { Lr2LoadedFont } from './bitmap-text.ts';
-import { attachBlobUrlToTexture } from '../../media/textures.ts';
+import type { LR2LoadedFont } from './bitmap-text.ts';
+import { attachBlobURLToTexture } from '../../media/textures.ts';
 import { logger } from '../../logger.ts';
 
 const log = logger('lr2-font');
 
 /**
- * Loads every `#LR2FONT,n,path` declared by a parsed skin into runtime `Lr2LoadedFont` payloads.
+ * Loads every `#LR2FONT,n,path` declared by a parsed skin into runtime `LR2LoadedFont` payloads.
  *
  * Each declared path can resolve to either:
  *
@@ -27,15 +27,15 @@ const log = logger('lr2-font');
  *   path.
  *
  * Failures are non-fatal: the returned map only contains fonts that loaded successfully. Missing entries make
- * `makeLr2TextSprite` use the system-font fallback for that font index, which still produces readable text.
+ * `makeLR2TextSprite` use the system-font fallback for that font index, which still produces readable text.
  */
 export async function loadSkinBitmapFonts(
   fontPaths: ReadonlyArray<string>,
-  files: ReadonlyMap<string, Lr2SkinFileEntry>,
-): Promise<Map<number, Lr2LoadedFont>> {
+  files: ReadonlyMap<string, LR2SkinFileEntry>,
+): Promise<Map<number, LR2LoadedFont>> {
   const declared = fontPaths.filter((path) => path.length > 0).length;
   log.info(`start: ${declared}/${fontPaths.length} non-empty font slots, ${files.size} files in source`);
-  const out = new Map<number, Lr2LoadedFont>();
+  const out = new Map<number, LR2LoadedFont>();
   await Promise.all(
     fontPaths.map(async (path, index) => {
       if (path.length === 0) return;
@@ -49,8 +49,8 @@ export async function loadSkinBitmapFonts(
 
 async function tryLoadFont(
   declaredPath: string,
-  files: ReadonlyMap<string, Lr2SkinFileEntry>,
-): Promise<Lr2LoadedFont | undefined> {
+  files: ReadonlyMap<string, LR2SkinFileEntry>,
+): Promise<LR2LoadedFont | undefined> {
   const lower = declaredPath.toLowerCase();
   const direct = lookupCaseInsensitive(files, declaredPath);
   // Direct hit on a `.dxa` declaration.
@@ -69,7 +69,7 @@ async function tryLoadFont(
   // directory exists — the actual content sits inside `Select/optionfont.dxa`. LR2 strips the trailing
   // `<basename>/<basename>.lr2font` suffix and tries the `.dxa` next to it. We mirror that here.
   if (lower.endsWith('.lr2font')) {
-    const archivePath = collapseLr2FontDirectoryToDxa(declaredPath);
+    const archivePath = collapseLR2FontDirectoryToDxa(declaredPath);
     if (archivePath) {
       const archiveBytes = lookupCaseInsensitive(files, archivePath);
       if (archiveBytes) return loadFontFromDxa(archiveBytes, archivePath);
@@ -97,7 +97,7 @@ async function tryLoadFont(
  * `Select/optionfont.dxa` (the parent directory's name becomes the archive name; the leaf `.lr2font` filename is
  * whatever the archive packs internally).
  */
-function collapseLr2FontDirectoryToDxa(declaredPath: string): string | undefined {
+function collapseLR2FontDirectoryToDxa(declaredPath: string): string | undefined {
   const normalized = declaredPath.replace(/\\/g, '/');
   const lastSlash = normalized.lastIndexOf('/');
   if (lastSlash <= 0) return undefined;
@@ -107,11 +107,11 @@ function collapseLr2FontDirectoryToDxa(declaredPath: string): string | undefined
 async function loadFontFromBareFile(
   bytes: Uint8Array,
   fontPath: string,
-  files: ReadonlyMap<string, Lr2SkinFileEntry>,
-): Promise<Lr2LoadedFont | undefined> {
+  files: ReadonlyMap<string, LR2SkinFileEntry>,
+): Promise<LR2LoadedFont | undefined> {
   const text = decodeText(bytes);
   if (!text) return undefined;
-  const font = parseLr2Font(text);
+  const font = parseLR2Font(text);
   const fontDir = directoryOf(fontPath);
   const textures = await loadFontTextures(font, (relPath) => {
     const resolved = joinRelative(fontDir, relPath);
@@ -120,7 +120,7 @@ async function loadFontFromBareFile(
   return { font, textures };
 }
 
-async function loadFontFromDxa(bytes: Uint8Array, fontPath: string): Promise<Lr2LoadedFont | undefined> {
+async function loadFontFromDxa(bytes: Uint8Array, fontPath: string): Promise<LR2LoadedFont | undefined> {
   const archive = readDxaArchive(bytes);
   if (!archive) {
     // Decode failed — most often because the archive is encrypted (the LR2 default theme bundles use a non-default key
@@ -145,7 +145,7 @@ async function loadFontFromDxa(bytes: Uint8Array, fontPath: string): Promise<Lr2
     log.info(`DXA .lr2font text decode failed: ${fontPath}`);
     return undefined;
   }
-  const font = parseLr2Font(text);
+  const font = parseLR2Font(text);
   const textures = await loadFontTextures(font, (relPath) => {
     const normalized = normalizePath(relPath).toLowerCase();
     return archiveFiles.get(normalized);
@@ -158,7 +158,7 @@ async function loadFontFromDxa(bytes: Uint8Array, fontPath: string): Promise<Lr2
 }
 
 async function loadFontTextures(
-  font: Lr2BitmapFont,
+  font: LR2BitmapFont,
   resolver: (relativePath: string) => Uint8Array | undefined,
 ): Promise<Map<number, Texture>> {
   const out = new Map<number, Texture>();
@@ -178,23 +178,23 @@ async function loadTextureFromBytes(bytes: Uint8Array, relPath: string): Promise
   // TGA branch — browsers don't natively decode TrueVision Targa, so we run our own decoder and upload the raw RGBA
   // pixels via `createImageBitmap`. The LR2 default theme ships every font texture as `.tga`, so this is the hot path
   // for that bundle.
-  if (ext === 'tga' || isTgaImage(bytes)) {
-    return loadTgaTexture(bytes, relPath);
+  if (ext === 'tga' || isTGAImage(bytes)) {
+    return loadTGATexture(bytes, relPath);
   }
   // DDS branch — modern LR2 themes (LITONE4 etc.) ship bitmap-font textures as `.dds` (typically uncompressed
-  // 32-bit BGRA inside a DXA archive). Browsers don't decode DDS natively; running it through `Assets.load(blobUrl)`
+  // 32-bit BGRA inside a DXA archive). Browsers don't decode DDS natively; running it through `Assets.load(blobURL)`
   // makes Pixi resolve the URL with a null texture (the loader treats unrecognised payloads as a soft failure),
-  // which then crashed `attachBlobUrlToTexture(null, url)` with `Cannot set properties of null (...)`. Pre-decode via
-  // {@link decodeDdsImageData} bypasses Pixi's URL pipeline entirely and produces the same texture shape as the TGA
+  // which then crashed `attachBlobURLToTexture(null, url)` with `Cannot set properties of null (...)`. Pre-decode via
+  // {@link decodeDDSImageData} bypasses Pixi's URL pipeline entirely and produces the same texture shape as the TGA
   // branch — same canvas → `Texture.from(canvas)` chain so chroma keying / nearest sampling stays consistent.
   if (ext === 'dds') {
-    return loadDdsTexture(bytes, relPath);
+    return loadDDSTexture(bytes, relPath);
   }
   // Pixi v8 `Assets.load` accepts a URL — we mint an in-memory blob URL so the loader's WebGL upload pipeline is
   // reused. The URL is *not* revoked synchronously after the upload because the texture's `<img>` source keeps a
   // reference to it for the lifetime of the GPU upload (and for re-decode on a WebGL context-loss event); revoking
-  // here would break those redirects. Instead we stamp the URL onto the texture via `attachBlobUrlToTexture` so
-  // `destroyTextureAndRevokeBlobUrl` (used by `destroyUniqueTextures` and the LR2 texture stores) can revoke the URL
+  // here would break those redirects. Instead we stamp the URL onto the texture via `attachBlobURLToTexture` so
+  // `destroyTextureAndRevokeBlobURL` (used by `destroyUniqueTextures` and the LR2 texture stores) can revoke the URL
   // when the texture is finally torn down.
   const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'bmp' ? 'image/bmp' : 'image/png';
   // Copy into a fresh `ArrayBuffer` — `bytes.buffer` may be a `SharedArrayBuffer` view (when the bytes came through a
@@ -207,7 +207,7 @@ async function loadTextureFromBytes(bytes: Uint8Array, relPath: string): Promise
     const texture = await Assets.load<Texture>(url);
     // Pixi v8 occasionally resolves `Assets.load` with a falsy value for unsupported payloads (notably when the URL
     // points at bytes that don't match the MIME-implied format — Pixi probes a few decoders and returns null when
-    // every one rejects). Guard so the `attachBlobUrlToTexture` call below doesn't blow up on null; return undefined
+    // every one rejects). Guard so the `attachBlobURLToTexture` call below doesn't blow up on null; return undefined
     // so the caller falls back to the system-font / placeholder text path. Earlier this surfaced as a crashing
     // `Cannot set properties of null (setting 'Symbol...')` whenever a DDS bitmap-font slipped past the extension
     // dispatch above.
@@ -216,7 +216,7 @@ async function loadTextureFromBytes(bytes: Uint8Array, relPath: string): Promise
       log.info(`decoder returned no texture for ${relPath} — falling back to system font`);
       return undefined;
     }
-    attachBlobUrlToTexture(texture, url);
+    attachBlobURLToTexture(texture, url);
     return texture;
   } catch (error) {
     log.warn(`failed to decode ${relPath}`, error);
@@ -226,15 +226,15 @@ async function loadTextureFromBytes(bytes: Uint8Array, relPath: string): Promise
 }
 
 /**
- * Decodes a DDS font sheet into a Pixi `Texture` via the OffscreenCanvas path. Mirrors {@link loadTgaTexture}'s
+ * Decodes a DDS font sheet into a Pixi `Texture` via the OffscreenCanvas path. Mirrors {@link loadTGATexture}'s
  * shape so the two pre-decoded branches stay symmetric; the only differences are the DDS decoder call and the
  * (compressed) DDS variants that aren't supported yet returning `undefined` (a soft failure — the renderer falls
  * back to system-font placeholder rendering for that font slot).
  */
-async function loadDdsTexture(bytes: Uint8Array, relPath: string): Promise<Texture | undefined> {
-  const decoded = decodeDdsImageData(bytes);
+async function loadDDSTexture(bytes: Uint8Array, relPath: string): Promise<Texture | undefined> {
+  const decoded = decodeDDSImageData(bytes);
   if (!decoded) {
-    // `decodeDdsImageData` returns undefined for DXT-compressed / non-32-bit / DX10-header DDS variants. Logged at
+    // `decodeDDSImageData` returns undefined for DXT-compressed / non-32-bit / DX10-header DDS variants. Logged at
     // INFO since "unsupported variant" is expected for some themes and the chrome stays usable via system-font
     // fallback.
     log.info(`unsupported DDS variant: ${relPath} (compressed or non-BGRA32) — falling back`);
@@ -253,8 +253,8 @@ async function loadDdsTexture(bytes: Uint8Array, relPath: string): Promise<Textu
   return Texture.from(canvas as unknown as HTMLCanvasElement);
 }
 
-async function loadTgaTexture(bytes: Uint8Array, relPath: string): Promise<Texture | undefined> {
-  const decoded = decodeTga(bytes);
+async function loadTGATexture(bytes: Uint8Array, relPath: string): Promise<Texture | undefined> {
+  const decoded = decodeTGA(bytes);
   if (!decoded) {
     log.warn(`failed to decode TGA ${relPath}`);
     return undefined;
@@ -317,7 +317,7 @@ function joinRelative(base: string, rel: string): string {
   return stack.join('/');
 }
 
-function lookupCaseInsensitive(files: ReadonlyMap<string, Lr2SkinFileEntry>, path: string): Uint8Array | undefined {
+function lookupCaseInsensitive(files: ReadonlyMap<string, LR2SkinFileEntry>, path: string): Uint8Array | undefined {
   const direct = asLoadedBytes(files.get(path));
   if (direct) return direct;
   const target = normalizePath(path).toLowerCase();
@@ -347,6 +347,6 @@ function lookupCaseInsensitive(files: ReadonlyMap<string, Lr2SkinFileEntry>, pat
   return bestValue;
 }
 
-function asLoadedBytes(entry: Lr2SkinFileEntry | undefined): Uint8Array | undefined {
+function asLoadedBytes(entry: LR2SkinFileEntry | undefined): Uint8Array | undefined {
   return entry instanceof Uint8Array ? entry : undefined;
 }

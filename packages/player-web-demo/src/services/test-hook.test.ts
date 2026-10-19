@@ -1,4 +1,4 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import { computeChartFileHashes, type BrowserSongCollection } from '@be-music/player-web/collection';
 import type { PlayScene, SelectScene } from '@be-music/player-web/host';
 import { parseBeatorajaCourseData } from '@be-music/player/course';
@@ -32,7 +32,7 @@ function song(id: string): LibraryChart {
     fileLabel: `${id}.bms`,
     title: id.toUpperCase(),
     totalNotes: 10,
-    chart: createEmptyJson('bms'),
+    chart: createEmptyJSON('bms'),
   };
 }
 
@@ -278,7 +278,7 @@ describe('nameResultJingle', () => {
     const fail = new Uint8Array([2]);
     const themes = {
       lr2: { resultJingles: () => ({ courseClear }) },
-      beatoraja: { beatorajaThemeBgm: { fail } },
+      beatoraja: { beatorajaThemeBGM: { fail } },
     } as unknown as Parameters<typeof nameResultJingle>[1];
     expect(nameResultJingle(courseClear, themes)).toBe('lr2:courseClear');
     expect(nameResultJingle(fail, themes)).toBe('beatoraja:fail');

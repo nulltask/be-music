@@ -1,5 +1,5 @@
 import { computeChartFingerprint } from '@be-music/chart';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import type { PlaylogCourseInfo } from '../playlog/course.ts';
 import type { CourseDefinition } from './definition.ts';
 
@@ -26,7 +26,7 @@ export function resolvePlaylogCourseInfo(
  * the stage in the course play log and keys the course on the Leaderboard. `undefined` when the chart cannot be
  * fingerprinted.
  */
-export function computeStageChartFingerprint(chart: BeMusicJson, chartPath: string | undefined): string | undefined {
+export function computeStageChartFingerprint(chart: BeMusicJSON, chartPath: string | undefined): string | undefined {
   try {
     return computeChartFingerprint(chart, { chartPath });
   } catch {

@@ -22,7 +22,7 @@ function mirrored(channel: string): string {
   return key < 0 ? channel : KEYS_1P[KEYS_1P.length - 1 - key]!;
 }
 
-/** The channels of Fixture A's notes in time order, as `fixtureBms` writes them (one note per row). */
+/** The channels of Fixture A's notes in time order, as `fixtureBMS` writes them (one note per row). */
 function fixtureAChannels(): string[] {
   const { measures, perMeasure, lanes } = FIXTURE_CHARTS.A!.chart;
   const channels: string[] = [];

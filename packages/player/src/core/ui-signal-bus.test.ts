@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { createPlayerUiSignalBus } from './ui-signal-bus.ts';
+import { createPlayerUISignalBus } from './ui-signal-bus.ts';
 
 describe('player ui signal bus', () => {
   test('publishes latest frame and drains commands in order', () => {
-    const uiBus = createPlayerUiSignalBus({
+    const uiBus = createPlayerUISignalBus({
       currentBeat: 0,
       currentSeconds: 0,
       totalSeconds: 10,
@@ -67,7 +67,7 @@ describe('player ui signal bus', () => {
       exScore: 0,
       score: 0,
     };
-    const uiBus = createPlayerUiSignalBus({ currentBeat: 0, currentSeconds: 0, totalSeconds: 10, summary, notes: [] });
+    const uiBus = createPlayerUISignalBus({ currentBeat: 0, currentSeconds: 0, totalSeconds: 10, summary, notes: [] });
 
     uiBus.publishFrame({
       currentBeat: 12,

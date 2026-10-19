@@ -24,7 +24,7 @@ describe('normalizeBeatorajaJudgeGraphs', () => {
   });
 
   it('parses delay / orderReverse / noGap / noGapX styling fields with beatoraja defaults (audit 3.4)', () => {
-    // Author-omitted fields fall back to beatoraja's `JsonSkin.JudgeGraph` defaults
+    // Author-omitted fields fall back to beatoraja's `JSONSkin.JudgeGraph` defaults
     // (delay=500, others=0). Entry-animation timing AND bar layout (gap, order) are now
     // surfaced for renderers that animate the histogram fill.
     const out = normalizeBeatorajaJudgeGraphs([{ id: 'jg', type: 1 }]);

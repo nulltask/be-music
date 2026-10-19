@@ -3,7 +3,7 @@
  * times them, the scroll-distance mapper, the BGA cue on screen, the chart facts a song screen shows, time and key
  * labels, and the TUI's note-height and BGA resize options.
  *
- * The chart-side types these read (`LongNoteMode`, `ScrollTimelinePoint`, `SpeedTimelinePoint`, `BgaCue`, the BGA
+ * The chart-side types these read (`LongNoteMode`, `ScrollTimelinePoint`, `SpeedTimelinePoint`, `BGACue`, the BGA
  * timeline builders) come from `@be-music/chart`.
  */
 export {
@@ -26,7 +26,7 @@ export {
   type ScrollDistanceMapperLike,
   type ScrollDistanceMapperOptions,
 } from './core/scroll-distance.ts';
-export { DEFAULT_POOR_BGA_DISPLAY_SECONDS, pickActiveBgaCue, pickActiveBgaKey } from './core/bga-timeline.ts';
+export { DEFAULT_POOR_BGA_DISPLAY_SECONDS, pickActiveBGACue, pickActiveBGAKey } from './core/bga-timeline.ts';
 export {
   formatSeconds,
   resolveAltModifierLabel,
@@ -40,7 +40,7 @@ export {
   MAX_TUI_NOTE_HEIGHT,
   MIN_TUI_NOTE_HEIGHT,
   TUI_NOTE_HEIGHT_HALF,
-  type TuiNoteHeight,
+  type TUINoteHeight,
 } from './core/ui-options.ts';
 export {
   DEFAULT_IMAGE_RESIZE_ALGORITHM,

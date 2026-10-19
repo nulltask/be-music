@@ -11,7 +11,7 @@ import {
   SORT_CYCLE,
 } from '@be-music/scene-model';
 import { storeReplayView } from '../../replay-view-settings.ts';
-import type { DemoGuiState } from '../../types.ts';
+import type { DemoGUIState } from '../../types.ts';
 import type { DebugMenu } from './index.ts';
 
 /**
@@ -36,7 +36,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: GUI): void {
     folder
       .add(this.guiState, 'gauge', ['GROOVE', 'EASY', 'HARD', 'DEATH'])
       .name('Gauge')
-      .onChange((value: DemoGuiState['gauge']) => {
+      .onChange((value: DemoGUIState['gauge']) => {
         this.setPlayOptions({ gauge1P: value });
       }),
   );
@@ -44,7 +44,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: GUI): void {
     folder
       .add(this.guiState, 'random1P', ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'])
       .name('Random 1P')
-      .onChange((value: DemoGuiState['random1P']) => {
+      .onChange((value: DemoGUIState['random1P']) => {
         this.setPlayOptions({ random1P: value });
       }),
   );
@@ -52,7 +52,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: GUI): void {
     folder
       .add(this.guiState, 'random2P', ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'])
       .name('Random 2P')
-      .onChange((value: DemoGuiState['random2P']) => {
+      .onChange((value: DemoGUIState['random2P']) => {
         this.setPlayOptions({ random2P: value });
       }),
   );
@@ -86,7 +86,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: GUI): void {
     folder
       .add(this.guiState, 'sort', [...SORT_CYCLE])
       .name('Sort')
-      .onChange((value: DemoGuiState['sort']) => {
+      .onChange((value: DemoGUIState['sort']) => {
         this.setPlayOptions({ sort: value });
       }),
   );
@@ -94,7 +94,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: GUI): void {
     folder
       .add(this.guiState, 'keysFilter', [...KEYS_FILTER_CYCLE])
       .name('Key filter')
-      .onChange((value: DemoGuiState['keysFilter']) => {
+      .onChange((value: DemoGUIState['keysFilter']) => {
         this.setPlayOptions({ keysFilter: value });
       }),
   );
@@ -102,7 +102,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: GUI): void {
     folder
       .add(this.guiState, 'difficultyFilter', [...DIFFICULTY_FILTER_CYCLE])
       .name('Difficulty filter')
-      .onChange((value: DemoGuiState['difficultyFilter']) => {
+      .onChange((value: DemoGUIState['difficultyFilter']) => {
         this.setPlayOptions({ difficultyFilter: value });
       }),
   );

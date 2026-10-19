@@ -3,12 +3,12 @@ import { stripComment } from './csv.ts';
 /**
  * Which screen's `.lr2skin` to pick when a theme bundle ships multiple (play, select, result, decide, etc.).
  */
-export type Lr2SkinKind = 'play' | 'select' | 'result' | 'decide' | 'courseResult';
+export type LR2SkinKind = 'play' | 'select' | 'result' | 'decide' | 'courseResult';
 
 /**
  * `play_N.lr2skin` variant hint for the play-skin loader.
  */
-export type Lr2PlayVariant = '5' | '7' | '9' | '10' | '14';
+export type LR2PlayVariant = '5' | '7' | '9' | '10' | '14';
 
 /**
  * Numeric type code declared by each `.lr2skin`'s `#INFORMATION,<type>,<title>,<author>,<thumbnail>` header.
@@ -40,15 +40,15 @@ export const LR2_SKIN_INFORMATION_TYPE = {
   COURSE_RESULT: 15,
 } as const;
 
-export type Lr2SkinInformationType = (typeof LR2_SKIN_INFORMATION_TYPE)[keyof typeof LR2_SKIN_INFORMATION_TYPE];
+export type LR2SkinInformationType = (typeof LR2_SKIN_INFORMATION_TYPE)[keyof typeof LR2_SKIN_INFORMATION_TYPE];
 
 /**
- * Maps an `#INFORMATION,<type>` code onto our internal {@link Lr2SkinKind}. Returns `undefined` for codes we don't
+ * Maps an `#INFORMATION,<type>` code onto our internal {@link LR2SkinKind}. Returns `undefined` for codes we don't
  * (yet) consume — namely key-config (8) and skin-select (9). Play codes 0..4 all map to `'play'`; the key-mode
  * subdivision is recovered separately via {@link informationTypeToPlayVariant} when the caller needs it (typically
  * for variant-aware play-skin scoring).
  */
-export function informationTypeToKind(type: number): Lr2SkinKind | undefined {
+export function informationTypeToKind(type: number): LR2SkinKind | undefined {
   if (type >= 0 && type <= 4) return 'play';
   if (type === 5) return 'select';
   if (type === 6) return 'decide';
@@ -58,10 +58,10 @@ export function informationTypeToKind(type: number): Lr2SkinKind | undefined {
 }
 
 /**
- * Maps a play-kind `#INFORMATION` type (0..4) onto its canonical {@link Lr2PlayVariant}. Returns `undefined` for
+ * Maps a play-kind `#INFORMATION` type (0..4) onto its canonical {@link LR2PlayVariant}. Returns `undefined` for
  * non-play codes — callers that need the play variant should branch on {@link informationTypeToKind} first.
  */
-export function informationTypeToPlayVariant(type: number): Lr2PlayVariant | undefined {
+export function informationTypeToPlayVariant(type: number): LR2PlayVariant | undefined {
   switch (type) {
     case LR2_SKIN_INFORMATION_TYPE.PLAY_7KEYS:
       return '7';
@@ -90,7 +90,7 @@ export function informationTypeToPlayVariant(type: number): Lr2PlayVariant | und
  * The decoder is permissive (`fatal: false`) and the comment-stripping mirrors {@link stripComment} so commented-out
  * `// #INFORMATION,...` lines don't leak into the result.
  */
-export function peekLr2SkinInformationType(bytes: Uint8Array | undefined): number | undefined {
+export function peekLR2SkinInformationType(bytes: Uint8Array | undefined): number | undefined {
   if (!bytes || bytes.length === 0) return undefined;
   // Strip a leading UTF-8 BOM (`0xEF 0xBB 0xBF`) at the byte level before handing the prefix to the SJIS decoder.
   // The raw BOM bytes aren't valid SJIS, so leaving them in produces undefined garbage chars at the start of the
@@ -121,7 +121,7 @@ export function peekLr2SkinInformationType(bytes: Uint8Array | undefined): numbe
   return undefined;
 }
 
-export function isSkinPathOfKind(path: string, kind: Lr2SkinKind): boolean {
+export function isSkinPathOfKind(path: string, kind: LR2SkinKind): boolean {
   const lower = path.toLowerCase();
   if (kind === 'play') {
     return lower.includes('/play') || lower.includes('\\play');
@@ -144,10 +144,10 @@ export function isSkinPathOfKind(path: string, kind: Lr2SkinKind): boolean {
  */
 export interface ScoreSkinPathOptions {
   /** Bias the play-kind scoring toward `play_<variant>.lr2skin`. Ignored for non-play kinds. */
-  variant?: Lr2PlayVariant;
+  variant?: LR2PlayVariant;
   /**
-   * Parsed `#INFORMATION,<type>` code (see {@link peekLr2SkinInformationType}). When present, candidates whose
-   * declared type matches the requested {@link Lr2SkinKind} are awarded a "mid-range" score that ranks **below** the
+   * Parsed `#INFORMATION,<type>` code (see {@link peekLR2SkinInformationType}). When present, candidates whose
+   * declared type matches the requested {@link LR2SkinKind} are awarded a "mid-range" score that ranks **below** the
    * canonical filenames (`select.lr2skin` = 0, `play_7.lr2skin` = 0, etc.) but **above** the catch-all 100.
    *
    * This lets type-honest themes that don't follow the canonical filename convention (LITONE4's `AC7.lr2skin` for
@@ -161,12 +161,12 @@ export interface ScoreSkinPathOptions {
  * Backward-compatible legacy signature for the play-skin variant bias. Newer callers should prefer the options-object
  * overload so `type` can be threaded in as well.
  */
-export function scoreSkinPath(path: string, kind: Lr2SkinKind, variant?: Lr2PlayVariant): number;
-export function scoreSkinPath(path: string, kind: Lr2SkinKind, options: ScoreSkinPathOptions): number;
+export function scoreSkinPath(path: string, kind: LR2SkinKind, variant?: LR2PlayVariant): number;
+export function scoreSkinPath(path: string, kind: LR2SkinKind, options: ScoreSkinPathOptions): number;
 export function scoreSkinPath(
   path: string,
-  kind: Lr2SkinKind,
-  variantOrOptions?: Lr2PlayVariant | ScoreSkinPathOptions,
+  kind: LR2SkinKind,
+  variantOrOptions?: LR2PlayVariant | ScoreSkinPathOptions,
 ): number {
   const options =
     typeof variantOrOptions === 'string' || variantOrOptions === undefined
@@ -214,7 +214,7 @@ export function scoreSkinPath(
   return 100;
 }
 
-function informationTypeMatches(type: number | undefined, kind: Lr2SkinKind): boolean {
+function informationTypeMatches(type: number | undefined, kind: LR2SkinKind): boolean {
   if (type === undefined) return false;
   return informationTypeToKind(type) === kind;
 }

@@ -157,7 +157,7 @@ const KETAMAX = 8; // max combined int+frac digit count per `FloatFormatter.java
  * 4. Post-walk: if `nowketa == 1`, write SIGNSYMBOL (signed positive) or the final digit.
  * 5. Slots with `digits[i] == -1` map to `hidden: true` (= upstream's null currentImages).
  *
- * Cell index translation (per `JsonSkinObjectLoader.java:173-300`):
+ * Cell index translation (per `JSONSkinObjectLoader.java:173-300`):
  *   - 0..9 → digit cells in active half.
  *   - 10 (REVERSEZERO) → cell 10 of active half.
  *   - 11 (DECIMALPOINT) → cell 11 of active half.

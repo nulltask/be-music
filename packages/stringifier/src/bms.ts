@@ -1,14 +1,14 @@
 import { compareEvents, createBeatResolver, isLandmineChannel, isPlayableChannel, sortEvents } from '@be-music/chart';
-import { parseBms } from '@be-music/parser';
+import { parseBMS } from '@be-music/parser';
 import {
   intToBase36,
   normalizeChannel,
   normalizeObjectKey,
-  resolveBmsBase,
-  type BmsObjectLineEntry,
-  type BmsSourceLineEntry,
+  resolveBMSBase,
+  type BMSObjectLineEntry,
+  type BMSSourceLineEntry,
   type BeMusicEvent,
-  type BeMusicJson,
+  type BeMusicJSON,
 } from '@be-music/json';
 import {
   gcd,
@@ -18,60 +18,60 @@ import {
   normalizePositiveInt,
 } from '@be-music/utils/core';
 import { BMS_MINE_SAMPLE_KEY, BMSON_LONG_NOTE_TYPES } from './bmson.ts';
-import { areBmsChartsEquivalent, areEventBmsonExtensionsEqual } from './equivalence.ts';
-import type { BmsStringifyOptions } from './options.ts';
+import { areBMSChartsEquivalent, areEventBmsonExtensionsEqual } from './equivalence.ts';
+import type { BMSStringifyOptions } from './options.ts';
 
-export function stringifyBms(json: BeMusicJson, options: BmsStringifyOptions = {}): string {
+export function stringifyBMS(json: BeMusicJSON, options: BMSStringifyOptions = {}): string {
   const eol = options.eol ?? '\n';
   const maxResolution = options.maxResolution;
   const skipValidation = options.skipPreservationValidation === true;
   const preservedSourceLines =
-    maxResolution === undefined ? resolvePreservedBmsSourceLinesForOutput(json, skipValidation) : undefined;
+    maxResolution === undefined ? resolvePreservedBMSSourceLinesForOutput(json, skipValidation) : undefined;
   if (preservedSourceLines) {
     return preservedSourceLines.join(eol);
   }
   const preservedObjectLines =
     maxResolution === undefined ? resolvePreservedObjectLinesForOutput(json, skipValidation) : undefined;
   if (!preservedObjectLines) {
-    json = convertChartForBmsOutput(json);
+    json = convertChartForBMSOutput(json);
   }
   const lines: string[] = [];
 
-  pushBmsSectionComment(lines, 'METADATA');
+  pushBMSSectionComment(lines, 'METADATA');
   pushMetadataLines(lines, json);
-  pushBmsSectionComment(lines, 'EXTENDED HEADER');
-  pushBmsExtensionLines(lines, json);
-  pushBmsSectionComment(lines, 'RESOURCES');
+  pushBMSSectionComment(lines, 'EXTENDED HEADER');
+  pushBMSExtensionLines(lines, json);
+  pushBMSSectionComment(lines, 'RESOURCES');
   pushResourceLines(lines, json);
-  pushBmsSectionComment(lines, 'MEASURE LENGTH');
+  pushBMSSectionComment(lines, 'MEASURE LENGTH');
   pushMeasureLines(lines, json, preservedObjectLines);
-  pushBmsSectionComment(lines, 'OBJECT DATA');
+  pushBMSSectionComment(lines, 'OBJECT DATA');
   pushEventLines(lines, json, maxResolution, preservedObjectLines);
-  pushBmsSectionComment(lines, 'CONTROL FLOW');
+  pushBMSSectionComment(lines, 'CONTROL FLOW');
   pushControlFlowLines(lines, json);
 
   return lines.join(eol);
 }
 
-function resolvePreservedBmsSourceLinesForOutput(json: BeMusicJson, skipValidation: boolean): string[] | undefined {
+function resolvePreservedBMSSourceLinesForOutput(json: BeMusicJSON, skipValidation: boolean): string[] | undefined {
   const sourceLines = json.preservation.bms.sourceLines;
   if (!Array.isArray(sourceLines) || sourceLines.length === 0) {
     return undefined;
   }
 
-  const lines = renderPreservedBmsSourceLines(sourceLines);
+  const lines = renderPreservedBMSSourceLines(sourceLines);
   if (lines.length === 0) {
     return undefined;
   }
   // `skipValidation` halves stringify time on large charts (the re-parse below dominates), but trusts the caller to
-  // have left the JSON untouched between parse and stringify. See `BmsStringifyOptions.skipPreservationValidation`.
+  // have left the JSON untouched between parse and stringify. See `BMSStringifyOptions.skipPreservationValidation`.
   if (skipValidation) {
     return lines;
   }
-  return doPreservedBmsSourceLinesMatchChart(json, lines) ? lines : undefined;
+  return doPreservedBMSSourceLinesMatchChart(json, lines) ? lines : undefined;
 }
 
-function renderPreservedBmsSourceLines(sourceLines: BmsSourceLineEntry[]): string[] {
+function renderPreservedBMSSourceLines(sourceLines: BMSSourceLineEntry[]): string[] {
   const lines: string[] = [];
   for (const entry of sourceLines) {
     if (entry.kind === 'directive') {
@@ -89,7 +89,7 @@ function renderPreservedBmsSourceLines(sourceLines: BmsSourceLineEntry[]): strin
       lines.push(`#${toMeasure(entry.measure)}${normalizeChannel(entry.channel)}:${formatNumber(entry.measureLength)}`);
       continue;
     }
-    const serialized = serializeBmsObjectLineEvents(entry.measure, entry.channel, entry.events);
+    const serialized = serializeBMSObjectLineEvents(entry.measure, entry.channel, entry.events);
     if (serialized) {
       lines.push(serialized);
     }
@@ -97,12 +97,12 @@ function renderPreservedBmsSourceLines(sourceLines: BmsSourceLineEntry[]): strin
   return lines;
 }
 
-function doPreservedBmsSourceLinesMatchChart(json: BeMusicJson, lines: string[]): boolean {
-  const reparsed = parseBms(lines.join('\n'));
-  return areBmsChartsEquivalent(json, reparsed);
+function doPreservedBMSSourceLinesMatchChart(json: BeMusicJSON, lines: string[]): boolean {
+  const reparsed = parseBMS(lines.join('\n'));
+  return areBMSChartsEquivalent(json, reparsed);
 }
 
-function pushMetadataLines(lines: string[], json: BeMusicJson): void {
+function pushMetadataLines(lines: string[], json: BeMusicJSON): void {
   lines.push(`#TITLE ${json.metadata.title ?? ''}`);
   if (json.metadata.subtitle) {
     lines.push(`#SUBTITLE ${json.metadata.subtitle}`);
@@ -134,15 +134,15 @@ function pushMetadataLines(lines: string[], json: BeMusicJson): void {
   }
 
   const extras = Object.entries(json.metadata.extras ?? {})
-    .filter(([command]) => !isDedicatedBmsExtensionCommand(command))
+    .filter(([command]) => !isDedicatedBMSExtensionCommand(command))
     .sort(([left], [right]) => left.localeCompare(right));
   for (const [command, value] of extras) {
     lines.push(`#${command} ${value}`);
   }
 }
 
-function pushBmsExtensionLines(lines: string[], json: BeMusicJson): void {
-  const base = resolveJsonBase(json);
+function pushBMSExtensionLines(lines: string[], json: BeMusicJSON): void {
+  const base = resolveJSONBase(json);
   // `#BASE 62` opts the whole chart into the beatoraja base-62 ID extension, which affects every subsequent
   // indexed-header / channel-stream token's case-sensitivity. Emit it FIRST so it takes effect before any `#WAVxx` /
   // `#BMPxx` etc. lines below.
@@ -155,11 +155,11 @@ function pushBmsExtensionLines(lines: string[], json: BeMusicJson): void {
   if (typeof json.bms.player === 'number') {
     lines.push(`#PLAYER ${formatNumber(json.bms.player)}`);
   }
-  if (typeof json.bms.pathWav === 'string' && json.bms.pathWav.length > 0) {
-    lines.push(`#PATH_WAV ${json.bms.pathWav}`);
+  if (typeof json.bms.pathWAV === 'string' && json.bms.pathWAV.length > 0) {
+    lines.push(`#PATH_WAV ${json.bms.pathWAV}`);
   }
-  if (typeof json.bms.baseBpm === 'number') {
-    lines.push(`#BASEBPM ${formatNumber(json.bms.baseBpm)}`);
+  if (typeof json.bms.baseBPM === 'number') {
+    lines.push(`#BASEBPM ${formatNumber(json.bms.baseBPM)}`);
   }
 
   for (const stp of json.bms.stp ?? []) {
@@ -195,8 +195,8 @@ function pushBmsExtensionLines(lines: string[], json: BeMusicJson): void {
       }
     }
   }
-  if (typeof json.bms.volWav === 'number') {
-    lines.push(`#VOLWAV ${formatNumber(json.bms.volWav)}`);
+  if (typeof json.bms.volWAV === 'number') {
+    lines.push(`#VOLWAV ${formatNumber(json.bms.volWAV)}`);
   }
   if (typeof json.bms.defExRank === 'number') {
     lines.push(`#DEFEXRANK ${formatNumber(json.bms.defExRank)}`);
@@ -204,15 +204,15 @@ function pushBmsExtensionLines(lines: string[], json: BeMusicJson): void {
 
   pushIndexedStringLines(lines, 'EXRANK', json.bms.exRank, base);
   pushIndexedStringLines(lines, 'ARGB', json.bms.argb, base);
-  pushIndexedStringLines(lines, 'EXWAV', json.bms.exWav, base);
-  pushIndexedStringLines(lines, 'EXBMP', json.bms.exBmp, base);
+  pushIndexedStringLines(lines, 'EXWAV', json.bms.exWAV, base);
+  pushIndexedStringLines(lines, 'EXBMP', json.bms.exBMP, base);
   pushIndexedStringLines(lines, 'BGA', json.bms.bga, base);
   pushIndexedNumberLines(lines, 'SCROLL', json.bms.scroll, base);
   pushIndexedNumberLines(lines, 'SPEED', json.bms.speed, base);
-  if (typeof json.bms.poorBga === 'string' && json.bms.poorBga.length > 0) {
-    lines.push(`#POORBGA ${json.bms.poorBga}`);
+  if (typeof json.bms.poorBGA === 'string' && json.bms.poorBGA.length > 0) {
+    lines.push(`#POORBGA ${json.bms.poorBGA}`);
   }
-  pushIndexedStringLines(lines, 'SWBGA', json.bms.swBga, base);
+  pushIndexedStringLines(lines, 'SWBGA', json.bms.swBGA, base);
 
   if (typeof json.bms.videoFile === 'string' && json.bms.videoFile.length > 0) {
     lines.push(`#VIDEOFILE ${json.bms.videoFile}`);
@@ -231,8 +231,8 @@ function pushBmsExtensionLines(lines: string[], json: BeMusicJson): void {
   }
 }
 
-function pushResourceLines(lines: string[], json: BeMusicJson): void {
-  const base = resolveJsonBase(json);
+function pushResourceLines(lines: string[], json: BeMusicJSON): void {
+  const base = resolveJSONBase(json);
   pushIndexedStringLines(lines, 'WAV', json.resources.wav, base);
   pushIndexedStringLines(lines, 'BMP', json.resources.bmp, base);
   pushIndexedNumberLines(lines, 'BPM', json.resources.bpm, base);
@@ -240,7 +240,7 @@ function pushResourceLines(lines: string[], json: BeMusicJson): void {
   pushIndexedStringLines(lines, 'TEXT', json.resources.text, base);
 }
 
-function resolveJsonBase(json: BeMusicJson): 36 | 62 {
+function resolveJSONBase(json: BeMusicJSON): 36 | 62 {
   return json.bms.base === 62 ? 62 : 36;
 }
 
@@ -272,7 +272,7 @@ function pushIndexedNumberLines(
   }
 }
 
-function pushMeasureLines(lines: string[], json: BeMusicJson, preservedObjectLines?: BmsObjectLineEntry[]): void {
+function pushMeasureLines(lines: string[], json: BeMusicJSON, preservedObjectLines?: BMSObjectLineEntry[]): void {
   if (preservedObjectLines) {
     for (const objectLine of preservedObjectLines) {
       if (typeof objectLine.measureLength === 'number' && objectLine.measureLength > 0) {
@@ -293,17 +293,17 @@ function pushMeasureLines(lines: string[], json: BeMusicJson, preservedObjectLin
 
 function pushEventLines(
   lines: string[],
-  json: BeMusicJson,
+  json: BeMusicJSON,
   maxResolution?: number,
-  preservedObjectLines?: BmsObjectLineEntry[],
+  preservedObjectLines?: BMSObjectLineEntry[],
 ): void {
   if (preservedObjectLines) {
     for (const objectLine of preservedObjectLines) {
-      const serialized = serializeBmsObjectLineEvents(
+      const serialized = serializeBMSObjectLineEvents(
         objectLine.measure,
         objectLine.channel,
         objectLine.events,
-        resolveJsonBase(json),
+        resolveJSONBase(json),
       );
       if (serialized) {
         lines.push(serialized);
@@ -312,7 +312,7 @@ function pushEventLines(
     return;
   }
 
-  const base = resolveJsonBase(json);
+  const base = resolveJSONBase(json);
   const grouped = groupEvents(sortEvents(json.events), base);
   for (const group of grouped) {
     const { measure, channel, events } = group;
@@ -331,9 +331,9 @@ function pushEventLines(
 }
 
 function resolvePreservedObjectLinesForOutput(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   skipValidation: boolean,
-): BmsObjectLineEntry[] | undefined {
+): BMSObjectLineEntry[] | undefined {
   const objectLines = json.preservation.bms.objectLines;
   if (!Array.isArray(objectLines) || objectLines.length === 0) {
     return undefined;
@@ -344,13 +344,13 @@ function resolvePreservedObjectLinesForOutput(
   return doPreservedObjectLinesMatchChart(json, objectLines) ? objectLines : undefined;
 }
 
-function doPreservedObjectLinesMatchChart(json: BeMusicJson, objectLines: BmsObjectLineEntry[]): boolean {
+function doPreservedObjectLinesMatchChart(json: BeMusicJSON, objectLines: BMSObjectLineEntry[]): boolean {
   const flattenedEvents: BeMusicEvent[] = [];
   const preservedMeasureLengths = new Map<number, number>();
   // Compare values under the chart's authored radix so a base-62 chart's lowercase IDs aren't folded to uppercase
   // before the event comparison below — that would falsely trigger a mismatch and force the stringifier to regenerate
   // object lines even when the preserved entries are still consistent.
-  const idBase = resolveBmsBase(json);
+  const idBase = resolveBMSBase(json);
 
   for (const objectLine of objectLines) {
     if (typeof objectLine.measureLength === 'number' && objectLine.measureLength > 0) {
@@ -400,8 +400,8 @@ function doPreservedObjectLinesMatchChart(json: BeMusicJson, objectLines: BmsObj
   return true;
 }
 
-function pushControlFlowLines(lines: string[], json: BeMusicJson): void {
-  const base = resolveJsonBase(json);
+function pushControlFlowLines(lines: string[], json: BeMusicJSON): void {
+  const base = resolveJSONBase(json);
   for (const entry of json.bms.controlFlow) {
     if (entry.kind === 'directive') {
       lines.push(entry.value ? `#${entry.command} ${entry.value}` : `#${entry.command}`);
@@ -430,7 +430,7 @@ function pushControlFlowLines(lines: string[], json: BeMusicJson): void {
   }
 }
 
-function pushBmsSectionComment(lines: string[], section: string): void {
+function pushBMSSectionComment(lines: string[], section: string): void {
   if (lines.length > 0 && lines[lines.length - 1] !== '') {
     lines.push('');
   }
@@ -444,10 +444,10 @@ function serializeControlFlowObjectEvents(
   events: BeMusicEvent[],
   base: 36 | 62 = 36,
 ): string | undefined {
-  return serializeBmsObjectLineEvents(measure, channel, events, base);
+  return serializeBMSObjectLineEvents(measure, channel, events, base);
 }
 
-function serializeBmsObjectLineEvents(
+function serializeBMSObjectLineEvents(
   measure: number,
   channel: string,
   events: BeMusicEvent[],
@@ -563,7 +563,7 @@ function formatNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
 }
 
-function isDedicatedBmsExtensionCommand(command: string): boolean {
+function isDedicatedBMSExtensionCommand(command: string): boolean {
   const upper = command.toUpperCase();
   if (
     upper === 'PREVIEW' ||
@@ -627,13 +627,13 @@ const MAX_BMS_MINE_DAMAGE = 36 * 36 - 1;
  * - bmson `total` is a percentage of the player's default TOTAL, which depends on the note count and the player, so it
  *   is not written as an absolute `#TOTAL`; the BMS default applies, which equals bmson's default `100`.
  */
-function convertChartForBmsOutput(json: BeMusicJson): BeMusicJson {
+function convertChartForBMSOutput(json: BeMusicJSON): BeMusicJSON {
   const isBmsonSource = json.sourceFormat === 'bmson';
   const events: BeMusicEvent[] = [];
   const longNoteTypes: Array<number | undefined> = [];
   let mineSample: string | undefined;
-  const chartLnType = json.bmson.info.lnType;
-  const endPositionResolver = createBmsPositionResolver(json);
+  const chartLNType = json.bmson.info.lnType;
+  const endPositionResolver = createBMSPositionResolver(json);
   let changed = false;
 
   for (const event of json.events) {
@@ -644,7 +644,7 @@ function convertChartForBmsOutput(json: BeMusicJson): BeMusicJson {
       events.push({ measure: event.measure, position: event.position, channel: longNoteChannel, value: event.value });
       events.push({ ...endPositionResolver(event, length), channel: longNoteChannel, value: event.value });
       const type = event.bmson?.t;
-      longNoteTypes.push(typeof type === 'number' && BMSON_LONG_NOTE_TYPES.has(type) ? type : chartLnType);
+      longNoteTypes.push(typeof type === 'number' && BMSON_LONG_NOTE_TYPES.has(type) ? type : chartLNType);
       changed = true;
       continue;
     }
@@ -652,7 +652,7 @@ function convertChartForBmsOutput(json: BeMusicJson): BeMusicJson {
       const damage = event.bmson?.damage;
       const hasDamage = typeof damage === 'number' && Number.isFinite(damage) && damage >= 0;
       if (hasDamage || isBmsonSource) {
-        mineSample ??= json.resources.wav[normalizeObjectKey(event.value, resolveBmsBase(json))];
+        mineSample ??= json.resources.wav[normalizeObjectKey(event.value, resolveBMSBase(json))];
         const value = Math.min(MAX_BMS_MINE_DAMAGE, Math.max(1, Math.round(hasDamage ? damage : DEFAULT_MINE_DAMAGE)));
         events.push({ measure: event.measure, position: event.position, channel, value: intToBase36(value, 2) });
         changed = true;
@@ -672,7 +672,7 @@ function convertChartForBmsOutput(json: BeMusicJson): BeMusicJson {
   }
   if (bms.lnMode === undefined) {
     const uniformType = longNoteTypes.length > 0 && longNoteTypes.every((type) => type === longNoteTypes[0]);
-    const lnMode = uniformType ? longNoteTypes[0] : chartLnType;
+    const lnMode = uniformType ? longNoteTypes[0] : chartLNType;
     if (typeof lnMode === 'number' && BMSON_LONG_NOTE_TYPES.has(lnMode)) {
       bms.lnMode = lnMode;
     }
@@ -698,8 +698,8 @@ function convertChartForBmsOutput(json: BeMusicJson): BeMusicJson {
  * Places the end of a bmson long note: `l` pulses (at the chart's bmson resolution) after `event`, as a measure and an
  * exact pulse fraction of that measure, so a long note crossing measures or uneven `lines` ends where it did.
  */
-function createBmsPositionResolver(
-  json: BeMusicJson,
+function createBMSPositionResolver(
+  json: BeMusicJSON,
 ): (event: BeMusicEvent, pulses: number) => Pick<BeMusicEvent, 'measure' | 'position'> {
   const beatResolver = createBeatResolver(json);
   const resolution = normalizePositiveInt(json.bmson.info.resolution ?? 240, 240);

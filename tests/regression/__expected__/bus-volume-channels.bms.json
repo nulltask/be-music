@@ -31,15 +31,15 @@
       "stp": [],
       "wavCmds": [],
       "changeOption": {},
-      "exWav": {},
-      "exBmp": {},
+      "exWAV": {},
+      "exBMP": {},
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBga": {},
+      "swBGA": {},
       "player": 1,
       "lnType": 1,
-      "volWav": 100
+      "volWAV": 100
     },
     "controlFlow": [],
     "events": [
@@ -123,7 +123,7 @@
       "randomPatterns": [],
       "title": "Dynamic Bus Volume Channels",
       "playVariant": "5",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0"
@@ -172,8 +172,8 @@
           "percent": 75
         },
         "noteCount": 16,
-        "chartFingerprint": "bmfp0:4d23f5b722e538812894e165256d63c5f50dbb772d31c88c09b53a4b43ab985f",
-        "playFingerprint": "bmfp0:4d23f5b722e538812894e165256d63c5f50dbb772d31c88c09b53a4b43ab985f",
+        "chartFingerprint": "bmfp0:c0f576db9f132bf0b3b30e8e7b13aa3cb1884f29855c15b16c7f929d09795c26",
+        "playFingerprint": "bmfp0:c0f576db9f132bf0b3b30e8e7b13aa3cb1884f29855c15b16c7f929d09795c26",
         "title": "Dynamic Bus Volume Channels",
         "subtitle": "Channel 97 (BGM bus) and channel 98 (key bus)",
         "artist": "be-music",

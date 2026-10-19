@@ -77,7 +77,7 @@ describe('RecordsService chart hashes', () => {
     expect(first).toEqual({ sha256: ABC_SHA256, md5: ABC_MD5 });
     expect(second).toEqual(first);
     expect(third).toEqual(first);
-    expect(await service.resolveChartSha256(song)).toBe(ABC_SHA256);
+    expect(await service.resolveChartSHA256(song)).toBe(ABC_SHA256);
     expect(hashChart).toHaveBeenCalledTimes(1);
   });
 

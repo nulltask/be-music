@@ -6,11 +6,11 @@ import {
   importCourseTable,
   isTableHeaderFilePath,
   mergeCourseGroup,
-  normalizeCourseTableUrl,
-  parseStoredCourseTableUrls,
-  readStoredCourseTableUrls,
+  normalizeCourseTableURL,
+  parseStoredCourseTableURLs,
+  readStoredCourseTableURLs,
   readTableHeaderFile,
-  rememberCourseTableUrl,
+  rememberCourseTableURL,
 } from './course-table-import.ts';
 
 const MD5_A = '0123456789abcdef0123456789abcdef';
@@ -26,29 +26,29 @@ function memoryStorage(): Pick<Storage, 'getItem' | 'setItem'> {
 }
 
 describe('course table URLs', () => {
-  test('normalizeCourseTableUrl accepts absolute http(s) URLs only', () => {
-    expect(normalizeCourseTableUrl('  https://example.com/sl/table.html ')).toBe('https://example.com/sl/table.html');
-    expect(normalizeCourseTableUrl('http://example.com')).toBe('http://example.com/');
-    expect(normalizeCourseTableUrl('')).toBeUndefined();
-    expect(normalizeCourseTableUrl('table.html')).toBeUndefined();
-    expect(normalizeCourseTableUrl('javascript:alert(1)')).toBeUndefined();
+  test('normalizeCourseTableURL accepts absolute http(s) URLs only', () => {
+    expect(normalizeCourseTableURL('  https://example.com/sl/table.html ')).toBe('https://example.com/sl/table.html');
+    expect(normalizeCourseTableURL('http://example.com')).toBe('http://example.com/');
+    expect(normalizeCourseTableURL('')).toBeUndefined();
+    expect(normalizeCourseTableURL('table.html')).toBeUndefined();
+    expect(normalizeCourseTableURL('javascript:alert(1)')).toBeUndefined();
   });
 
-  test('parseStoredCourseTableUrls keeps valid, distinct URLs', () => {
-    expect(parseStoredCourseTableUrls(null)).toEqual([]);
-    expect(parseStoredCourseTableUrls('{')).toEqual([]);
-    expect(parseStoredCourseTableUrls('{"a":1}')).toEqual([]);
-    expect(parseStoredCourseTableUrls('["https://a.example/t.html", 1, "nope", "https://a.example/t.html"]')).toEqual([
+  test('parseStoredCourseTableURLs keeps valid, distinct URLs', () => {
+    expect(parseStoredCourseTableURLs(null)).toEqual([]);
+    expect(parseStoredCourseTableURLs('{')).toEqual([]);
+    expect(parseStoredCourseTableURLs('{"a":1}')).toEqual([]);
+    expect(parseStoredCourseTableURLs('["https://a.example/t.html", 1, "nope", "https://a.example/t.html"]')).toEqual([
       'https://a.example/t.html',
     ]);
   });
 
-  test('rememberCourseTableUrl stores each URL once', () => {
+  test('rememberCourseTableURL stores each URL once', () => {
     const storage = memoryStorage();
-    expect(readStoredCourseTableUrls(storage)).toEqual([]);
-    rememberCourseTableUrl('https://a.example/t.html', storage);
-    expect(rememberCourseTableUrl('https://a.example/t.html', storage)).toEqual(['https://a.example/t.html']);
-    rememberCourseTableUrl('https://b.example/h.json', storage);
+    expect(readStoredCourseTableURLs(storage)).toEqual([]);
+    rememberCourseTableURL('https://a.example/t.html', storage);
+    expect(rememberCourseTableURL('https://a.example/t.html', storage)).toEqual(['https://a.example/t.html']);
+    rememberCourseTableURL('https://b.example/h.json', storage);
     expect(JSON.parse(storage.getItem(COURSE_TABLE_URLS_STORAGE_KEY)!)).toEqual([
       'https://a.example/t.html',
       'https://b.example/h.json',
@@ -64,8 +64,8 @@ describe('course table URLs', () => {
         throw new Error('blocked');
       },
     };
-    expect(readStoredCourseTableUrls(blocked)).toEqual([]);
-    expect(rememberCourseTableUrl('https://a.example/t.html', blocked)).toEqual(['https://a.example/t.html']);
+    expect(readStoredCourseTableURLs(blocked)).toEqual([]);
+    expect(rememberCourseTableURL('https://a.example/t.html', blocked)).toEqual(['https://a.example/t.html']);
   });
 });
 
@@ -107,7 +107,7 @@ describe('importCourseTable', () => {
       }),
     };
     const imported = await importCourseTable('https://example.com/t/table.html', async (url) => pages[url]!);
-    expect(imported.headerUrl).toBe('https://example.com/t/header.json');
+    expect(imported.headerURL).toBe('https://example.com/t/header.json');
     expect(imported.group.label).toBe('Example');
     expect(imported.group.courses.map((course) => course.name)).toEqual(['ex0']);
   });

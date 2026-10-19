@@ -28,7 +28,7 @@ describe('findCaseInsensitivePath', () => {
       ['kick.wav', BYTES_A],
       ['KICK.WAV', BYTES_B],
     ]);
-    expect(findCaseInsensitivePath(files, 'Kick.Wav')).toBe('kick.wav');
+    expect(findCaseInsensitivePath(files, 'Kick.WAV')).toBe('kick.wav');
   });
 });
 

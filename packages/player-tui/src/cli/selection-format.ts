@@ -46,7 +46,7 @@ export function createSelectionColumnLayout(
     difficultyWidth = Math.max(difficultyWidth, formatDifficultyLabel(entry.difficulty).length);
     rankWidth = Math.max(rankWidth, formatRankCellValue(entry).length);
     playLevelWidth = Math.max(playLevelWidth, measureDisplayWidth(formatPlayLevelCellValue(entry.playLevel)));
-    bpmWidth = Math.max(bpmWidth, formatBpmLabel(entry.bpmMin, entry.bpmInitial, entry.bpmMax).length);
+    bpmWidth = Math.max(bpmWidth, formatBPMLabel(entry.bpmMin, entry.bpmInitial, entry.bpmMax).length);
     notesWidth = Math.max(notesWidth, formatTotalNotesLabel(entry.totalNotes).length);
   }
 
@@ -101,7 +101,7 @@ export function formatSelectionEntryLabel(entry: SelectionDisplayEntry, layout: 
     layout.playLevelWidth,
     resolvePlayLevelCellAlign(entry.playLevel),
   );
-  const bpm = formatColumnCell(formatBpmLabel(entry.bpmMin, entry.bpmInitial, entry.bpmMax), layout.bpmWidth, 'right');
+  const bpm = formatColumnCell(formatBPMLabel(entry.bpmMin, entry.bpmInitial, entry.bpmMax), layout.bpmWidth, 'right');
   const notes = formatColumnCell(formatTotalNotesLabel(entry.totalNotes), layout.notesWidth, 'right');
   return `${file}  ${player}  ${difficulty}  ${rank}  ${playLevel}  ${bpm}  ${notes}`;
 }
@@ -213,7 +213,7 @@ function formatTotalNotesLabel(value: number | undefined): string {
   return String(Math.floor(value));
 }
 
-function formatBpmLabel(min: number | undefined, initial: number | undefined, max: number | undefined): string {
+function formatBPMLabel(min: number | undefined, initial: number | undefined, max: number | undefined): string {
   if (
     typeof min !== 'number' ||
     typeof initial !== 'number' ||
@@ -228,7 +228,7 @@ function formatBpmLabel(min: number | undefined, initial: number | undefined, ma
     return '-';
   }
 
-  const values = [formatBpmValue(min), formatBpmValue(initial), formatBpmValue(max)];
+  const values = [formatBPMValue(min), formatBPMValue(initial), formatBPMValue(max)];
   const collapsed = values.filter((value, index) => index === 0 || value !== values[index - 1]);
   if (collapsed.length <= 1) {
     return collapsed[0] ?? '-';
@@ -236,7 +236,7 @@ function formatBpmLabel(min: number | undefined, initial: number | undefined, ma
   return collapsed.join('-');
 }
 
-function formatBpmValue(value: number): string {
+function formatBPMValue(value: number): string {
   const rounded = Math.round(value * 100) / 100;
   return rounded.toFixed(2).replace(/(?:\.0+|(\.\d+?)0+)$/, '$1');
 }

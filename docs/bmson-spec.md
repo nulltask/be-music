@@ -47,7 +47,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - [x] `measure` / `position` resolution using `lines`
 - [x] Interpret `x <= 0` or omitted `x` as background music (`01`)
 - [x] Read the beatoraja extensions as beatoraja does: `mine_channels` as landmine channels keeping per-note `damage`, and `key_channels` as hidden (invisible) notes
-- [x] Mirror `info.back_image`, `info.banner_image`, and `info.eyecatch_image` into unified `metadata.backBmp`, `metadata.banner`, and `metadata.stageFile`
+- [x] Mirror `info.back_image`, `info.banner_image`, and `info.eyecatch_image` into unified `metadata.backBMP`, `metadata.banner`, and `metadata.stageFile`
 - [x] Treat an explicit `lines: []` as barline suppression and keep it in `bmson.barlinesSuppressed`
 - [x] Treat missing `lines` as the bmson 4/4 default model
 - [x] Treat missing / non-numeric `info.total` as the bmson default `100`, take the absolute value of a negative one, and keep `0` as written
@@ -236,7 +236,7 @@ flowchart TD
 
 ### Converting between BMS and bmson
 
-`stringifyBms` writes a bmson-sourced chart with these conversions (an ordinary BMS chart is written as it is):
+`stringifyBMS` writes a bmson-sourced chart with these conversions (an ordinary BMS chart is written as it is):
 
 | bmson                | BMS                                                                                                                                                                                                                                                                                                                             |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

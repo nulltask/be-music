@@ -11,8 +11,8 @@ import {
   type TextureSource,
 } from 'pixi.js';
 import { type AudioDrive, bandLevel } from '@be-music/skin-sdk';
-import { queueGpuPass } from '../pixi-kit/index.ts';
-import { chargeCloudGpuPrograms } from './charge-cloud-wgsl.ts';
+import { queueGPUPass } from '../pixi-kit/index.ts';
+import { chargeCloudGPUPrograms } from './charge-cloud-wgsl.ts';
 
 /**
  * Charge cloud — a classic music-visualizer idea: a handful of small, dark, charged orbs hang in a dense fluid
@@ -774,7 +774,7 @@ export class ChargeCloud {
     this.positions = [stateTexture(side), stateTexture(side)];
     this.velocities = [stateTexture(side), stateTexture(side)];
     const { velocity, position, particles, orb, splat } = cloudPrograms();
-    const gpu = chargeCloudGpuPrograms();
+    const gpu = chargeCloudGPUPrograms();
     const stepQuad = quad();
     const step = (glProgram: GlProgram, gpuProgram: (typeof gpu)['velocity']) => {
       const mesh = new Mesh({
@@ -891,7 +891,7 @@ export class ChargeCloud {
     order.forEach(({ index }, slot) => this.view.setChildIndex(this.orbs[index]!, slot));
 
     if (dt > 0 || !this.initialised) {
-      queueGpuPass((renderer) => this.step(renderer));
+      queueGPUPass((renderer) => this.step(renderer));
     }
   }
 

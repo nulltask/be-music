@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { parseLr2CourseFile } from './lr2crs.ts';
+import { parseLR2CourseFile } from './lr2crs.ts';
 import { parseBeatorajaCourseFile, serializeBeatorajaCourseFile } from './beatoraja.ts';
 import {
   appendCourseDraftStage,
   defaultCourseMakerConstraints,
   withCourseConstraints,
-  buildLr2CourseHash,
+  buildLR2CourseHash,
   createCourseDraft,
   finishCourseDraft,
   LR2_COURSE_MAKER_MAX_STAGES,
   removeLastCourseDraftStage,
-  serializeLr2CourseFile,
-  stepLr2NonstopConnection,
+  serializeLR2CourseFile,
+  stepLR2NonstopConnection,
   withNonstopConnection,
   type CourseDraft,
 } from './maker.ts';
@@ -61,11 +61,11 @@ describe('appendCourseDraftStage', () => {
   });
 });
 
-describe('buildLr2CourseHash', () => {
+describe('buildLR2CourseHash', () => {
   it('writes the connections, the type and the stage MD5s', () => {
-    const hash = buildLr2CourseHash({ kind: 'nonstop', stageMd5s: MD5.slice(0, 2), connections: ['cut', 'blank2'] });
+    const hash = buildLR2CourseHash({ kind: 'nonstop', stageMD5s: MD5.slice(0, 2), connections: ['cut', 'blank2'] });
     expect(hash).toBe(`25${'0'.repeat(8)}1${'0'.repeat(21)}${MD5[0]}${MD5[1]}`);
-    expect(buildLr2CourseHash({ kind: 'grade', stageMd5s: [MD5[0]!], connections: ['cut'] }).slice(0, 11)).toBe(
+    expect(buildLR2CourseHash({ kind: 'grade', stageMD5s: [MD5[0]!], connections: ['cut'] }).slice(0, 11)).toBe(
       `${'0'.repeat(10)}2`,
     );
   });
@@ -98,11 +98,11 @@ describe('finishCourseDraft', () => {
   });
 });
 
-describe('stepLr2NonstopConnection', () => {
+describe('stepLR2NonstopConnection', () => {
   it("steps through LR2's order, wrapping both ways", () => {
-    expect(stepLr2NonstopConnection('fade', 1)).toBe('fade-fit');
-    expect(stepLr2NonstopConnection('blank2', 1)).toBe('fade');
-    expect(stepLr2NonstopConnection('fade', -1)).toBe('blank2');
+    expect(stepLR2NonstopConnection('fade', 1)).toBe('fade-fit');
+    expect(stepLR2NonstopConnection('blank2', 1)).toBe('fade');
+    expect(stepLR2NonstopConnection('fade', -1)).toBe('blank2');
   });
 });
 
@@ -125,12 +125,12 @@ describe('withNonstopConnection', () => {
   });
 });
 
-describe('serializeLr2CourseFile', () => {
-  it('writes courses parseLr2CourseFile reads back', () => {
+describe('serializeLR2CourseFile', () => {
+  it('writes courses parseLR2CourseFile reads back', () => {
     const nonstop = withNonstopConnection(finishCourseDraft(draftOf('nonstop', 3))!, 0, 'cut');
     const grade = finishCourseDraft({ ...draftOf('grade', 2), name: 'A & <B>' })!;
-    const text = serializeLr2CourseFile([nonstop, grade]);
-    const [readNonstop, readGrade] = parseLr2CourseFile(text);
+    const text = serializeLR2CourseFile([nonstop, grade]);
+    const [readNonstop, readGrade] = parseLR2CourseFile(text);
     const strip = ({ stages, release: _release, ...rest }: typeof nonstop) => ({
       ...rest,
       stages: stages.map(({ md5 }) => ({ md5 })),
@@ -142,7 +142,7 @@ describe('serializeLr2CourseFile', () => {
   });
 
   it('rebuilds the hash of a course from another format, and skips one without MD5s', () => {
-    const text = serializeLr2CourseFile([
+    const text = serializeLR2CourseFile([
       {
         name: 'Table',
         kind: 'expert',
@@ -162,7 +162,7 @@ describe('serializeLr2CourseFile', () => {
         source: { format: 'beatoraja-json' },
       },
     ]);
-    expect(parseLr2CourseFile(text).map((course) => course.name)).toEqual(['Table']);
+    expect(parseLR2CourseFile(text).map((course) => course.name)).toEqual(['Table']);
   });
 });
 

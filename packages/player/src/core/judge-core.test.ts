@@ -1,5 +1,5 @@
 import { resolveChart } from '@be-music/chart';
-import { createEmptyJson, resolveBmsBase, type BeMusicJson } from '@be-music/json';
+import { createEmptyJSON, resolveBMSBase, type BeMusicJSON } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   BE_MUSIC_PLAYLOG_FORMAT,
@@ -27,8 +27,8 @@ import {
 import { createScoreTracker } from './scoring.ts';
 
 /** BPM 240 → one measure per second, so `measure` + `position` read directly as seconds. */
-function chart(events: BeMusicJson['events'], setup: (json: BeMusicJson) => void = () => {}): BeMusicJson {
-  const json = createEmptyJson('bms');
+function chart(events: BeMusicJSON['events'], setup: (json: BeMusicJSON) => void = () => {}): BeMusicJSON {
+  const json = createEmptyJSON('bms');
   json.metadata.bpm = 240;
   json.metadata.rank = 2;
   json.events = events;
@@ -58,7 +58,7 @@ const LONG_AND_MINE = chart(
 );
 
 function createCore(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   ruleset: PlaylogRulesetId = 'lr2',
   options: { autoScratch?: boolean; judgeMsPerChartSecond?: number; endOnFailure?: boolean } = {},
 ): JudgeCoreState {
@@ -80,7 +80,7 @@ function createCore(
       judgeMsPerChartSecond: options.judgeMsPerChartSecond ?? 1000,
       endOnFailure: options.endOnFailure ?? false,
       wavResources: source.resources.wav,
-      idBase: resolveBmsBase(source),
+      idBase: resolveBMSBase(source),
       sourceFormat: source.sourceFormat,
       reversalSeconds: resolved.reversal?.seconds,
     },
@@ -127,7 +127,7 @@ function snapshot(effect: JudgeCoreEffect): unknown {
 }
 
 /** Replays `inputs` through a fresh core, advancing it at the given chart-time ticks, and returns everything seen. */
-function replay(json: BeMusicJson, inputs: PlaylogInputEvent[], ticks: readonly number[], ruleset: PlaylogRulesetId) {
+function replay(json: BeMusicJSON, inputs: PlaylogInputEvent[], ticks: readonly number[], ruleset: PlaylogRulesetId) {
   const state = createCore(json, ruleset);
   const run = createJudgeCoreReplay(inputs);
   const effects: unknown[] = [];

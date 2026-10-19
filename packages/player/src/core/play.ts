@@ -1,4 +1,4 @@
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import type { PlayerOptions, PlayerSummary } from './engine-types.ts';
 import { autoStrategy } from './play-auto.ts';
 import { createPlayControls } from './play-controls.ts';
@@ -13,7 +13,7 @@ import type { JudgeStrategy } from './play-strategy.ts';
  * Plays `json` with the judge `strategy` through the one play loop: sets the session up, runs the loop and finishes
  * the play. Internal: hosts call {@link manualPlay} or {@link autoPlay}.
  */
-export async function play(json: BeMusicJson, options: PlayerOptions, strategy: JudgeStrategy): Promise<PlayerSummary> {
+export async function play(json: BeMusicJSON, options: PlayerOptions, strategy: JudgeStrategy): Promise<PlayerSummary> {
   const session = await createPlaySession(json, options, strategy);
   const judge = strategy.createJudge(session);
   const controls = createPlayControls(session, judge);
@@ -24,11 +24,11 @@ export async function play(json: BeMusicJson, options: PlayerOptions, strategy: 
 /**
  * Manual play: judges the player's keys, or re-drives a recorded play log when `options.replayInputs` is set.
  */
-export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
+export async function manualPlay(json: BeMusicJSON, options: PlayerOptions = {}): Promise<PlayerSummary> {
   return play(json, options, options.replayInputs !== undefined ? replayStrategy : manualStrategy);
 }
 
 /** AUTO play: plays and judges every note itself. */
-export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
+export async function autoPlay(json: BeMusicJSON, options: PlayerOptions = {}): Promise<PlayerSummary> {
   return play(json, options, autoStrategy);
 }

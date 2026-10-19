@@ -16,7 +16,7 @@ export const DEFAULT_SONG_IMAGE_CAPACITY = 32;
 /** The chart-relative path of `song`'s `kind` image (`#STAGEFILE`, `#BANNER`, `#BACKBMP`), when the chart names one. */
 export function resolveSongImagePath(song: LibraryChart, kind: BeMusicSongImageKind): string | undefined {
   const metadata = song.chart.metadata;
-  const path = kind === 'stageFile' ? metadata.stageFile : kind === 'banner' ? metadata.banner : metadata.backBmp;
+  const path = kind === 'stageFile' ? metadata.stageFile : kind === 'banner' ? metadata.banner : metadata.backBMP;
   return path !== undefined && path.trim().length > 0 ? path : undefined;
 }
 

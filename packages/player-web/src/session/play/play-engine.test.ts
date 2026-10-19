@@ -1,8 +1,8 @@
 import {
-  createPlayerUiSignalBus,
-  type PlayerUiCommand,
+  createPlayerUISignalBus,
+  type PlayerUICommand,
   type PlayerGaugeSummary,
-  type PlayerUiFramePayload,
+  type PlayerUIFramePayload,
   createPlayerStateSignals,
 } from '@be-music/player/signals';
 import type { PlayerSummary } from '@be-music/player';
@@ -35,7 +35,7 @@ function createPlay(options: {
 }) {
   const judgeRuleset = options.judgeRuleset ?? 'lr2';
   const gauge = createPlaceholderGaugeState('GROOVE');
-  const uiSignals = createPlayerUiSignalBus(frameAt(0, { gauge }));
+  const uiSignals = createPlayerUISignalBus(frameAt(0, { gauge }));
   const stateSignals = createPlayerStateSignals(2);
   const clock = { seconds: 0, ms: 0 };
   const events: string[] = [];
@@ -99,7 +99,7 @@ function createPlay(options: {
     seconds: number,
     frame: { exScore?: number; gauge?: number; counts?: Partial<PlayerSummary> },
     judgments: readonly { judge: string; combo: number; channel?: string; deltaMs?: number }[] = [],
-    commands: readonly PlayerUiCommand[] = [],
+    commands: readonly PlayerUICommand[] = [],
   ): void => {
     clock.seconds = seconds;
     clock.ms = seconds * 1000;
@@ -122,7 +122,7 @@ function createPlay(options: {
 function frameAt(
   seconds: number,
   input: { gauge: PlayerGaugeSummary; exScore?: number; counts?: Partial<PlayerSummary> },
-): PlayerUiFramePayload {
+): PlayerUIFramePayload {
   return {
     currentBeat: seconds * 2,
     currentSeconds: seconds,
@@ -143,7 +143,7 @@ function frameAt(
       ...input.counts,
       gauge: input.gauge,
     },
-  } as PlayerUiFramePayload;
+  } as PlayerUIFramePayload;
 }
 
 function summary(counts: Partial<PlayerSummary>, gauge: number): PlayerSummary {

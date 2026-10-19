@@ -25,14 +25,14 @@ Play skins are grouped by variant so the browser player can choose the layout th
 
 LR2 never shipped keyboard-mode play skins, so `24` / `48` KEY charts borrow a `7` / `14` play skin (`PLAY_SKIN_FALLBACKS` in `play-skin.ts`): the skin supplies the frame, gauge, and judge graphics, and the lanes fall back to the host's playfield.
 
-The parser keeps select, decide, play, result and course-result data in one `Lr2Skin` shape.
+The parser keeps select, decide, play, result and course-result data in one `LR2Skin` shape.
 Consumers read only the fields that make sense for their scene.
 
 ## Courses
 
-LR2 has a scene of its own for the result of a whole course: `#INFORMATION` type 15, conventionally under `CourseResult/`. `loadLr2ThemeSkinsFromFiles` loads it as `courseResultSkin`, along with the course-result jingles. A `result` lookup never picks it.
+LR2 has a scene of its own for the result of a whole course: `#INFORMATION` type 15, conventionally under `CourseResult/`. `loadLR2ThemeSkinsFromFiles` loads it as `courseResultSkin`, along with the course-result jingles. A `result` lookup never picks it.
 
-LR2 finds its BGM and system sounds through the sound set, `LR2files/Sound/*.lr2ss`, which names each file: the stock `lr2.lr2ss` maps `#COURSECLEAR` / `#COURSEFAIL` to `Sound/lr2/course_clear.wav` / `course_fail.wav`. `loadLr2ThemeSkinsFromFiles` reads the dropped sound set (`lr2.lr2ss` first) for the select / decide BGM, the clear / fail / course jingles and the cursor, folder and option sounds, filling a `*` folder with its `#CUSTOMFILE` default and taking another audio extension when the named file is missing. Without a sound set, or when it names no file (or the named file is not in the drop), it looks the stem up under `Sound/lr2/` (`course_clear` or `courseclear` for the course jingles), and the select / decide BGM under a `Bgm/` folder. The generic `result` jingle has no sound-set command and always comes from `Sound/lr2/`.
+LR2 finds its BGM and system sounds through the sound set, `LR2files/Sound/*.lr2ss`, which names each file: the stock `lr2.lr2ss` maps `#COURSECLEAR` / `#COURSEFAIL` to `Sound/lr2/course_clear.wav` / `course_fail.wav`. `loadLR2ThemeSkinsFromFiles` reads the dropped sound set (`lr2.lr2ss` first) for the select / decide BGM, the clear / fail / course jingles and the cursor, folder and option sounds, filling a `*` folder with its `#CUSTOMFILE` default and taking another audio extension when the named file is missing. Without a sound set, or when it names no file (or the named file is not in the drop), it looks the stem up under `Sound/lr2/` (`course_clear` or `courseclear` for the course jingles), and the select / decide BGM under a `BGM/` folder. The generic `result` jingle has no sound-set command and always comes from `Sound/lr2/`.
 
 LR2 reads a skin each time its scene starts, so an `#IF` block can test state that holds for the whole scene. In a course that means the course ops (OpenLR2 `LR2f.cpp` L5403-L5444):
 
@@ -43,7 +43,7 @@ LR2 reads a skin each time its scene starts, so an `#IF` block can test state th
 | 290             | `COURSE`                                            | A course: the selected bar, or the running course |
 | 291 / 292 / 293 | `COURSE_NONSTOP` / `COURSE_EXPERT` / `COURSE_GRADE` | Its kind: NONSTOP / EXPERT / GRADE                |
 
-The theme is parsed once, with these ops off. `Lr2ThemeSkins.loadSkin({ kind, playVariant, parseOps })` parses one of its skins again from the files already read, with extra ops held true while `#IF` / `#ELSEIF` are evaluated (`LoadLr2SkinOptions.parseOps`). `pickLr2PlaySkinVariant` names the play-skin variant a chart plays on, so a host can parse that skin again for a course stage.
+The theme is parsed once, with these ops off. `LR2ThemeSkins.loadSkin({ kind, playVariant, parseOps })` parses one of its skins again from the files already read, with extra ops held true while `#IF` / `#ELSEIF` are evaluated (`LoadLR2SkinOptions.parseOps`). `pickLR2PlaySkinVariant` names the play-skin variant a chart plays on, so a host can parse that skin again for a course stage.
 
 The values a course skin reads (numbers 250-259, texts 150-170, the course combo on 104 / 105) are scene state: [`@be-music/lr2-skin/state`](#scene-state) resolves them from the course's `CourseView`, which the host builds (`resolveCourseView`, `@be-music/scene-model`) and hands to `@be-music/player-web`'s scenes. See [Courses and dan certification](./player-web.md#courses-and-dan-certification).
 
@@ -59,8 +59,8 @@ A skin refers to the engine's state by number: the ops of a `#DST_*` row or an `
 | `LR2_TEXT`                            | `#SRC_TEXT` `st`      | song info, search word, skin, option panel labels, courses                                                                                                   |
 | `LR2_BUTTON`                          | `#SRC_BUTTON` `type`  | panels, bar list and play, play options, making courses                                                                                                      |
 | `LR2_SLIDER`                          | `#SRC_SLIDER` `type`  | bar-list position, hi-speed, lane cover, play progress                                                                                                       |
-| `LR2_BAR_BODY` / `LR2_BAR_BODY_KINDS` | `#SRC_BAR_BODY` index | each bar kind and the parsed `Lr2BarBodyKind`                                                                                                                |
-| `LR2_BAR_LAMP` / `LR2_BAR_LAMP_KINDS` | `#SRC_BAR_LAMP` index | each clear lamp and the parsed `Lr2BarLampKind`; the lamp ops 100-105 follow the same order                                                                  |
+| `LR2_BAR_BODY` / `LR2_BAR_BODY_KINDS` | `#SRC_BAR_BODY` index | each bar kind and the parsed `LR2BarBodyKind`                                                                                                                |
+| `LR2_BAR_LAMP` / `LR2_BAR_LAMP_KINDS` | `#SRC_BAR_LAMP` index | each clear lamp and the parsed `LR2BarLampKind`; the lamp ops 100-105 follow the same order                                                                  |
 | `LR2_GR`                              | `gr`                  | the images LR2 binds at run time (STAGEFILE, BACKBMP, BANNER, skin thumbnail, black, white)                                                                  |
 
 A short range is named id by id (course stages 280-289, the panel ops 20-29 and panel buttons 1-9, NONSTOP connections). A long one keeps its first id: a lane bank (`LR2_TIMER.BOMB_1P`, `LN_HOLD_1P`, `KEY_ON_1P`, `KEY_OFF_1P` and their 2P banks) is the scratch timer, with key N at `+ N` for the `LR2_LANE_TIMER_BANK_SIZE` lanes; `LR2_OP.COURSE_STAGES_OVER + N`, `COURSE_SONGS_ADDED + N` and `COURSE_STAGE_DIFFICULTY + 10 × i + difficulty` are the course-maker and stage-difficulty ops.
@@ -84,7 +84,7 @@ Not named here: ops 900-999 (the skin's own `#CUSTOMOPTION`s), the `#SRC_BARGRAP
 
 ## Scene state
 
-`@be-music/lr2-skin/state` maps the scene models of `@be-music/scene-model` ([Scene models](./scene-model.md)) to the [id tables](#id-tables): for each screen, which ops hold, which value each number and text draws and where each slider sits (an `Lr2SceneState`; the select screen's `Lr2SelectState` adds the cell each button draws), which timers a moment of the select or play screen starts and stops (an `Lr2TimerUpdate`: each timer with the time it starts at, and the timers that stop), and which timers run on a moment of the decide or result screen (`resolveLr2DecideTimers`, `resolveLr2ResultTimers`: each running timer with the time it started at), with how much of a result graph shows (`resolveLr2GraphReveal`). The skin family's view asks the state for the ids its skin draws; it keeps only the timer ids and the lane index it stamps.
+`@be-music/lr2-skin/state` maps the scene models of `@be-music/scene-model` ([Scene models](./scene-model.md)) to the [id tables](#id-tables): for each screen, which ops hold, which value each number and text draws and where each slider sits (an `LR2SceneState`; the select screen's `LR2SelectState` adds the cell each button draws), which timers a moment of the select or play screen starts and stops (an `LR2TimerUpdate`: each timer with the time it starts at, and the timers that stop), and which timers run on a moment of the decide or result screen (`resolveLR2DecideTimers`, `resolveLR2ResultTimers`: each running timer with the time it started at), with how much of a result graph shows (`resolveLR2GraphReveal`). The skin family's view asks the state for the ids its skin draws; it keeps only the timer ids and the lane index it stamps.
 
 ```mermaid
 flowchart LR
@@ -95,14 +95,14 @@ flowchart LR
     course["CourseView"]
   end
   subgraph state["@be-music/lr2-skin/state"]
-    select["resolveLr2SelectState"]
-    decide["resolveLr2DecideState"]
-    playing["resolveLr2PlayState"]
-    results["resolveLr2ResultState"]
+    select["resolveLR2SelectState"]
+    decide["resolveLR2DecideState"]
+    playing["resolveLR2PlayState"]
+    results["resolveLR2ResultState"]
     timers["resolveLr2…Timers"]
   end
-  ids["Lr2SceneState<br/>ops · numbers · texts<br/>sliders"]
-  starts["Lr2TimerUpdate<br/>timer → start time"]
+  ids["LR2SceneState<br/>ops · numbers · texts<br/>sliders"]
+  starts["LR2TimerUpdate<br/>timer → start time"]
 
   entry --> select
   play --> playing
@@ -117,19 +117,19 @@ flowchart LR
 
 | Resolver                                                    | Takes                                                                                                                                                   | Gives                                                                         |
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `resolveLr2SelectState`                                     | The bar under the cursor (`LibraryEntry`), the `PlayOptions`, the record's lamp, the open panels, the skin's custom options and the screen's facts      | Ops, numbers, texts, sliders, button cells                                    |
-| `resolveLr2SelectButton`                                    | A `#SRC_BUTTON` type                                                                                                                                    | What it asks for: a panel, a hi-speed step, an option to cycle or set, a play |
-| `resolveLr2SelectTimers`                                    | The screen appearing, the cursor moving, a panel opening or closing, making a course starting or ending                                                 | Timers 0, 10-13, 17 / 18, 21-29 and 31-39                                     |
-| `pickLr2BarBody`, `resolveLr2BarLevel`, `resolveLr2BarLamp` | A bar of the list, its chart, its record's lamp                                                                                                         | The bar body, level and lamp it draws                                         |
-| `resolveLr2DecideState`                                     | The chart about to be played, and its course                                                                                                            | Ops, texts, the course's numbers                                              |
-| `resolveLr2PlayState`                                       | The play's setup (`Lr2PlaySetup`: chart, lanes, features, options, gauge, course) and a frame (`Lr2PlayFrame`: a `PlayState` view, the score, the time) | Ops, numbers, texts, sliders, bar graphs                                      |
-| `resolveLr2PlayTimers`, `resolveLr2LaneTimer`               | A moment of the play (scene stages, a judgement, a full combo, the gauge, a lane), a lane                                                               | Timers 0, 2, 3, 40-42, 44, 46-49 and the lane banks 50-139                    |
-| `resolveLr2ResultState`                                     | A `PlayResult`, its course, the played skin's `#FLIPRESULT`, the skin's custom options                                                                  | Ops, numbers, texts, sliders, bar graphs                                      |
-| `resolveLr2CourseOps`, `resolveLr2CourseText`, …            | A `CourseView`, a course being made                                                                                                                     | The course ops, numbers and texts, the course maker's ops, texts and buttons  |
+| `resolveLR2SelectState`                                     | The bar under the cursor (`LibraryEntry`), the `PlayOptions`, the record's lamp, the open panels, the skin's custom options and the screen's facts      | Ops, numbers, texts, sliders, button cells                                    |
+| `resolveLR2SelectButton`                                    | A `#SRC_BUTTON` type                                                                                                                                    | What it asks for: a panel, a hi-speed step, an option to cycle or set, a play |
+| `resolveLR2SelectTimers`                                    | The screen appearing, the cursor moving, a panel opening or closing, making a course starting or ending                                                 | Timers 0, 10-13, 17 / 18, 21-29 and 31-39                                     |
+| `pickLR2BarBody`, `resolveLR2BarLevel`, `resolveLR2BarLamp` | A bar of the list, its chart, its record's lamp                                                                                                         | The bar body, level and lamp it draws                                         |
+| `resolveLR2DecideState`                                     | The chart about to be played, and its course                                                                                                            | Ops, texts, the course's numbers                                              |
+| `resolveLR2PlayState`                                       | The play's setup (`LR2PlaySetup`: chart, lanes, features, options, gauge, course) and a frame (`LR2PlayFrame`: a `PlayState` view, the score, the time) | Ops, numbers, texts, sliders, bar graphs                                      |
+| `resolveLR2PlayTimers`, `resolveLR2LaneTimer`               | A moment of the play (scene stages, a judgement, a full combo, the gauge, a lane), a lane                                                               | Timers 0, 2, 3, 40-42, 44, 46-49 and the lane banks 50-139                    |
+| `resolveLR2ResultState`                                     | A `PlayResult`, its course, the played skin's `#FLIPRESULT`, the skin's custom options                                                                  | Ops, numbers, texts, sliders, bar graphs                                      |
+| `resolveLR2CourseOps`, `resolveLR2CourseText`, …            | A `CourseView`, a course being made                                                                                                                     | The course ops, numbers and texts, the course maker's ops, texts and buttons  |
 
-The resolvers are pure and deterministic: they read no clock, no DOM and no renderer, draw no random number, and import only the scene models, the engine's rules, the chart model, the id tables and the parsed skin's types. Time comes in as an input — the clock numbers through an `Lr2Clock`, a play's time through its frame, each timer's start through the moment's `at` — and `pnpm run check` holds `src/state/` to the runtime-neutral and clock-free lint rules. The LR2 family views of the web runtime (`view/lr2/`: the select, decide, play and result screens) call them.
+The resolvers are pure and deterministic: they read no clock, no DOM and no renderer, draw no random number, and import only the scene models, the engine's rules, the chart model, the id tables and the parsed skin's types. Time comes in as an input — the clock numbers through an `LR2Clock`, a play's time through its frame, each timer's start through the moment's `at` — and `pnpm run check` holds `src/state/` to the runtime-neutral and clock-free lint rules. The LR2 family views of the web runtime (`view/lr2/`: the select, decide, play and result screens) call them.
 
-The LR2 play view (`view/lr2/play-view.ts` in `@be-music/player-web`) reads the play's ops, numbers, texts, sliders and bar graphs off each frame with `resolveLr2PlayState`: the frame's `PlayState`, the score, the time, the score readout, the BPM and the frame rate. It starts and stops the play's timers from each frame's moments with `resolveLr2PlayTimers`, and the view's own timer keeping retires the one-shot ones:
+The LR2 play view (`view/lr2/play-view.ts` in `@be-music/player-web`) reads the play's ops, numbers, texts, sliders and bar graphs off each frame with `resolveLR2PlayState`: the frame's `PlayState`, the score, the time, the score readout, the BPM and the frame rate. It starts and stops the play's timers from each frame's moments with `resolveLR2PlayTimers`, and the view's own timer keeping retires the one-shot ones:
 
 | Moment                         | Timers                                                                   |
 | ------------------------------ | ------------------------------------------------------------------------ |
@@ -143,7 +143,7 @@ The LR2 play view (`view/lr2/play-view.ts` in `@be-music/player-web`) reads the 
 | A bomb on a lane               | the lane's bomb timer (50-69), until the playfield retires the bomb      |
 | A long note held on a lane     | the lane's hold timer (70-89), faded out over its span after the release |
 
-The key-on bank (100-119) shows the play session's key beams. The session keeps them by channel, for every family (`keyBeamStartedAt`, `keyBeamFadeStartedAt`), and the LR2 view maps each lit channel onto its key-on timer (`resolveLr2LaneTimer('key-on', …)`). The lane index and the timer ids stay in the LR2 view; the session and the shared playfield go by channel.
+The key-on bank (100-119) shows the play session's key beams. The session keeps them by channel, for every family (`keyBeamStartedAt`, `keyBeamFadeStartedAt`), and the LR2 view maps each lit channel onto its key-on timer (`resolveLR2LaneTimer('key-on', …)`). The lane index and the timer ids stay in the LR2 view; the session and the shared playfield go by channel.
 
 ## Parsed directives
 
@@ -180,7 +180,7 @@ Implemented element families include:
 
 ## Asset resolution
 
-`loadLr2SkinFromSourceFiles()` receives a collection of source files and resolves paths relative to the current skin file.
+`loadLR2SkinFromSourceFiles()` receives a collection of source files and resolves paths relative to the current skin file.
 The resolver normalizes LR2-style path separators and performs case-insensitive lookup because real LR2 themes often mix path casing.
 
 The resolver also supports wildcard asset references used by LR2 themes.

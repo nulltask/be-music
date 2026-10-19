@@ -8,7 +8,7 @@
  * - `beatoraja`: one entry of a beatoraja theme, loaded (skin, textures, fonts, the player's options, the theme files).
  */
 
-import type { Lr2Skin } from '@be-music/lr2-skin';
+import type { LR2Skin } from '@be-music/lr2-skin';
 import type { BeMusicEffectLevel, BeMusicSkin } from '@be-music/skin-sdk';
 import type { BeatorajaSceneKit } from '../skin/beatoraja/scene-kit.ts';
 
@@ -41,18 +41,18 @@ export interface BuiltInKit {
 }
 
 /** The LR2 skin for one screen. */
-export interface Lr2Kit {
+export interface LR2Kit {
   readonly family: 'lr2';
-  readonly skin: Lr2Skin;
+  readonly skin: LR2Skin;
 }
 
 /** The LR2 play skin, with the skin that draws invisible notes. */
-export interface Lr2PlayKit extends Lr2Kit {
+export interface LR2PlayKit extends LR2Kit {
   /**
    * The 9-keys play skin whose `notes.note[3]` (the green wide note of LR2's POP layout) is drawn over each invisible
    * note when they are shown; a flat green bar without it.
    */
-  readonly invisibleNoteSkin?: Lr2Skin;
+  readonly invisibleNoteSkin?: LR2Skin;
 }
 
 /** A beatoraja theme entry, loaded. */
@@ -62,16 +62,16 @@ export interface BeatorajaKit {
 }
 
 /** What the select screen is drawn with. */
-export type SelectKit = BuiltInKit | Lr2Kit | BeatorajaKit;
+export type SelectKit = BuiltInKit | LR2Kit | BeatorajaKit;
 
 /** What the decide screen is drawn with. */
-export type DecideKit = BuiltInKit | Lr2Kit | BeatorajaKit;
+export type DecideKit = BuiltInKit | LR2Kit | BeatorajaKit;
 
 /** What the play screen is drawn with. */
-export type PlayKit = BuiltInKit | Lr2PlayKit | BeatorajaKit;
+export type PlayKit = BuiltInKit | LR2PlayKit | BeatorajaKit;
 
 /** What the result screen is drawn with. */
-export type ResultKit = BuiltInKit | Lr2Kit | BeatorajaKit;
+export type ResultKit = BuiltInKit | LR2Kit | BeatorajaKit;
 
 /** Any scene's kit. */
 export type FamilyKit = SelectKit | DecideKit | PlayKit | ResultKit;

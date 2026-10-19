@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 
-async function loadWorkerizeModuleWithSeaMock(isSeaRuntime: boolean) {
+async function loadWorkerizeModuleWithSEAMock(isSEARuntime: boolean) {
   vi.resetModules();
 
   const workerizeUntyped = vi.fn(() =>
@@ -13,7 +13,7 @@ async function loadWorkerizeModuleWithSeaMock(isSeaRuntime: boolean) {
   );
 
   vi.doMock('node:sea', () => ({
-    isSea: () => isSeaRuntime,
+    isSea: () => isSEARuntime,
   }));
   vi.doMock('isoworker', () => ({
     workerize: workerizeUntyped,
@@ -31,7 +31,7 @@ afterEach(() => {
 
 describe('workerize SEA fallback', () => {
   test('uses inline execution when running inside SEA', async () => {
-    const { workerize, workerizeUntyped } = await loadWorkerizeModuleWithSeaMock(true);
+    const { workerize, workerizeUntyped } = await loadWorkerizeModuleWithSEAMock(true);
 
     const worker = workerize(
       (value: number) => value + 1,
@@ -57,7 +57,7 @@ describe('workerize SEA fallback', () => {
   });
 
   test('uses isoworker outside SEA', async () => {
-    const { workerize, workerizeUntyped } = await loadWorkerizeModuleWithSeaMock(false);
+    const { workerize, workerizeUntyped } = await loadWorkerizeModuleWithSEAMock(false);
 
     const worker = workerize(
       (value: number) => value + 1,

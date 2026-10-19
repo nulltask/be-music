@@ -18,7 +18,7 @@ export function notesJudged(score: Pick<ScoreSummary, 'perfect' | 'great' | 'goo
  * notes judged so far (102, with its digits after the dot on 103; LR2's running `rate`, 0 before the first note) and
  * over every note of the chart (115 / 116), each truncated as LR2 draws them. `undefined` for any other number.
  */
-export function resolveLr2RateNumber(
+export function resolveLR2RateNumber(
   num: number,
   score: Pick<ScoreSummary, 'total' | 'perfect' | 'great' | 'good' | 'bad' | 'poor' | 'exScore'>,
 ): number | undefined {

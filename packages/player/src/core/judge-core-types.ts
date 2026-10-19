@@ -3,12 +3,12 @@ import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts'
 import type { PlaylogInputEvent } from '../playlog/format.ts';
 import type { RulesetConfig } from '../ruleset/definitions.ts';
 import type { GaugeJudgeIndex } from '../ruleset/gauge.ts';
-import type { HcnTickCounter } from '../ruleset/long-note.ts';
+import type { HCNTickCounter } from '../ruleset/long-note.ts';
 import type { GrooveGaugeJudgeKind } from './groove-gauge.ts';
 import type { LaneHoldHistory } from './lane-hold.ts';
 import { type PendingAutoLongNoteState, type TimedManualJudge } from './judge-rules.ts';
 import { type ScoreSummary, type ScoreTracker } from './scoring.ts';
-import type { PlayerGaugeSummary, PlayerUiCommand } from './ui-signal-bus.ts';
+import type { PlayerGaugeSummary, PlayerUICommand } from './ui-signal-bus.ts';
 
 /**
  * The judge core's state, inputs, effects and tuning constants (see `judge-core.ts`).
@@ -77,15 +77,15 @@ export interface JudgeCoreScore {
 }
 
 /** A Hell Charge note passing the judge line: its gauge ticks run from its judged head until its tail passes. */
-export interface HcnPassingState {
+export interface HCNPassingState {
   note: TimedPlayableNote;
   /** The tail's microsecond: the counter stops there. */
   endUs: number;
-  counter: HcnTickCounter;
+  counter: HCNTickCounter;
   /** The tail was released at GOOD or better: the lane gains until the tail passes, held or not. */
   tailGood: boolean;
   /** The lane's next Hell Charge note, judged before this one has passed: it ticks once this one's tail passes. */
-  next?: HcnPassingState;
+  next?: HCNPassingState;
 }
 
 /** A long note whose head was hit and whose tail is not resolved yet. */
@@ -142,7 +142,7 @@ export interface JudgeCoreState {
    */
   readonly landminePhases: Map<TimedLandmineNote, number>;
   /** The Hell Charge note passing each lane, while its gauge ticks run. */
-  readonly hcnPassing: Map<string, HcnPassingState>;
+  readonly hcnPassing: Map<string, HCNPassingState>;
   invisibleExpireCursor: number;
   remainingScorableNotes: number;
   remainingLandmineNotes: number;
@@ -228,7 +228,7 @@ export type JudgeCoreEffect =
       endSeconds: number;
     }
   /** A presentation cue for the gameplay UI (lane flashes, holds, long-note bars). */
-  | { kind: 'ui'; command: PlayerUiCommand }
+  | { kind: 'ui'; command: PlayerUICommand }
   /** The POOR BGA was triggered / cleared — delivered to every host, UI or not. */
   | { kind: 'poor-bga'; action: 'trigger' | 'clear'; seconds: number }
   /** The no-TUI trace's POOR BGA marker at this point of the output. */

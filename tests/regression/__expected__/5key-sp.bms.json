@@ -31,12 +31,12 @@
       "stp": [],
       "wavCmds": [],
       "changeOption": {},
-      "exWav": {},
-      "exBmp": {},
+      "exWAV": {},
+      "exBMP": {},
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBga": {},
+      "swBGA": {},
       "player": 1,
       "lnType": 1
     },
@@ -107,7 +107,7 @@
       "randomPatterns": [],
       "title": "5 KEY SP Lane Mode",
       "playVariant": "5",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0"
@@ -152,8 +152,8 @@
           "percent": 75
         },
         "noteCount": 28,
-        "chartFingerprint": "bmfp0:6d80f9cb7c7592e823ad41807795bace07b7fcc55a84f0b27a66a09a06eccf82",
-        "playFingerprint": "bmfp0:6d80f9cb7c7592e823ad41807795bace07b7fcc55a84f0b27a66a09a06eccf82",
+        "chartFingerprint": "bmfp0:0fc3ef5d2193f07be2f3424a732a7c9e6c027b5c206ce8e21f29939cd1e70d20",
+        "playFingerprint": "bmfp0:0fc3ef5d2193f07be2f3424a732a7c9e6c027b5c206ce8e21f29939cd1e70d20",
         "title": "5 KEY SP Lane Mode",
         "subtitle": "IIDX 5-key single play - channels 11..16, no 18 / 19",
         "artist": "be-music",

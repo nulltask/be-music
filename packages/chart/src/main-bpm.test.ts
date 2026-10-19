@@ -1,19 +1,19 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { createEmptyJson, type BeMusicEvent } from '../../json/src/index.ts';
-import { resolveChartMainBpm, type MainBpmChart } from './main-bpm.ts';
+import { createEmptyJSON, type BeMusicEvent } from '../../json/src/index.ts';
+import { resolveChartMainBPM, type MainBPMChart } from './main-bpm.ts';
 import { resolveChart } from './resolved-chart.ts';
 
 /** A chart whose tempo map is a list of `[beat, bpm]` steps. */
 function chart(
   steps: ReadonlyArray<readonly [number, number]>,
-  notes: MainBpmChart['notes'],
-  fallbackBpm = steps[0]?.[1] ?? 130,
-): MainBpmChart {
+  notes: MainBPMChart['notes'],
+  fallbackBPM = steps[0]?.[1] ?? 130,
+): MainBPMChart {
   return {
     notes,
     timing: {
       bpmAtBeat: (beat) => {
-        let bpm = fallbackBpm;
+        let bpm = fallbackBPM;
         for (const [at, value] of steps) if (at <= beat) bpm = value;
         return bpm;
       },
@@ -23,7 +23,7 @@ function chart(
 
 const tap = (beat: number) => ({ kind: 'tap' as const, beat });
 
-describe('resolveChartMainBpm', () => {
+describe('resolveChartMainBPM', () => {
   test('is the BPM the most notes sit at, not a time average (beatoraja MAINBPM)', () => {
     // A BPM×100001 + STOP gimmick: a few notes at the huge BPM, most at the base 145.
     const value = chart(
@@ -34,7 +34,7 @@ describe('resolveChartMainBpm', () => {
       ],
       [tap(1), tap(2), tap(3), tap(8.5), tap(10)],
     );
-    expect(resolveChartMainBpm(value)).toBe(145);
+    expect(resolveChartMainBPM(value)).toBe(145);
   });
 
   test('counts a long note once at its head, and its tail too when the mode judges it (CN / HCN)', () => {
@@ -44,15 +44,15 @@ describe('resolveChartMainBpm', () => {
     ] as const;
     const ln = (lnMode: 1 | 2 | 3) => ({ kind: 'ln' as const, beat: 1, endBeat: 5, lnMode });
     // LN: head at 120, tap at 180 → a tie, broken by the BPM reached first.
-    expect(resolveChartMainBpm(chart(steps, [ln(1), tap(6)]))).toBe(120);
+    expect(resolveChartMainBPM(chart(steps, [ln(1), tap(6)]))).toBe(120);
     // CN: the tail at 180 counts too.
-    expect(resolveChartMainBpm(chart(steps, [ln(2), tap(6)]))).toBe(180);
-    expect(resolveChartMainBpm(chart(steps, [ln(3), tap(6)]))).toBe(180);
+    expect(resolveChartMainBPM(chart(steps, [ln(2), tap(6)]))).toBe(180);
+    expect(resolveChartMainBPM(chart(steps, [ln(3), tap(6)]))).toBe(180);
   });
 
   test('breaks ties by the BPM reached first and ignores non-positive values', () => {
     expect(
-      resolveChartMainBpm(
+      resolveChartMainBPM(
         chart(
           [
             [0, 150],
@@ -65,13 +65,13 @@ describe('resolveChartMainBpm', () => {
   });
 
   test('is undefined for a chart without notes', () => {
-    expect(resolveChartMainBpm(chart([[0, 150]], []))).toBeUndefined();
+    expect(resolveChartMainBPM(chart([[0, 150]], []))).toBeUndefined();
   });
 
   test('counts a resolved chart as beatoraja counts its timelines: judged notes only, at the BPM of their position', () => {
     const event = (measure: number, channel: string, value: string, position: [number, number] = [0, 1]) =>
       ({ measure, channel, position, value }) satisfies BeMusicEvent;
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [
       // Two taps at 120, with three mines and two invisible notes that do not count.
@@ -91,6 +91,6 @@ describe('resolveChartMainBpm', () => {
       event(4, '03', 'F0'),
       event(20, '15', '01'),
     ];
-    expect(resolveChartMainBpm(resolveChart(json))).toBe(60);
+    expect(resolveChartMainBPM(resolveChart(json))).toBe(60);
   });
 });

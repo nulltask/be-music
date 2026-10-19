@@ -1,5 +1,5 @@
 import { resolveChartPlayVariant, type ChartPlayVariant } from '@be-music/chart';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import type { LibraryChart } from './entries.ts';
 
 /**
@@ -7,7 +7,7 @@ import type { LibraryChart } from './entries.ts';
  * events packed, so recomputing the variant would unpack every chart on each filter pass. Keyed by chart identity plus
  * the path the answer was computed for, since the variant also depends on the file extension.
  */
-const PLAY_VARIANT_BY_CHART = new WeakMap<BeMusicJson, { chartPath: string; variant: ChartPlayVariant }>();
+const PLAY_VARIANT_BY_CHART = new WeakMap<BeMusicJSON, { chartPath: string; variant: ChartPlayVariant }>();
 
 /**
  * A library chart's play variant (`5` / `7` / `9` / `10` / `14` / `24` / `48`), which picks the play skin and lane
@@ -20,7 +20,7 @@ const PLAY_VARIANT_BY_CHART = new WeakMap<BeMusicJson, { chartPath: string; vari
  */
 export function resolveLibraryChartPlayVariant(
   entry: LibraryChart,
-  chart: BeMusicJson = entry.chart,
+  chart: BeMusicJSON = entry.chart,
 ): ChartPlayVariant {
   const cached = PLAY_VARIANT_BY_CHART.get(chart);
   if (cached !== undefined && cached.chartPath === entry.chartPath) return cached.variant;

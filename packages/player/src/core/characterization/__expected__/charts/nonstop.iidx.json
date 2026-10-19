@@ -44,8 +44,8 @@
           {"id":3,"channel":"14","type":"normal","timeUs":2000000},
           {"id":4,"channel":"14","type":"normal","timeUs":2800000}
         ],
-        "chartFingerprint": "bmfp0:544c6aac7ab1187e1e904f1f9f1f41fd6c5656e3ae406cb55b58f15b911be1ea",
-        "playFingerprint": "bmfp0:544c6aac7ab1187e1e904f1f9f1f41fd6c5656e3ae406cb55b58f15b911be1ea",
+        "chartFingerprint": "bmfp0:7e6cddcede0041c686f4b26a50933f409257967fefe616bac02ba00a2a3e5535",
+        "playFingerprint": "bmfp0:7e6cddcede0041c686f4b26a50933f409257967fefe616bac02ba00a2a3e5535",
         "title": "nonstop"
       },
       "inputs": [

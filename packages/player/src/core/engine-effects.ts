@@ -1,11 +1,11 @@
 import { type PlayerStateSignals } from '../state-signals.ts';
 import { formatSeconds } from '../utils.ts';
-import { type PlayerUiSignalBus } from './ui-signal-bus.ts';
+import { type PlayerUISignalBus } from './ui-signal-bus.ts';
 import { type PlaybackStateLogger } from './playback-support.ts';
 import { type JudgeCoreEffectSink } from './judge-core.ts';
 import { type PlaylogRecorder } from '../playlog/recorder.ts';
 import {
-  type NoTuiPlaybackEventTracer,
+  type NoTUIPlaybackEventTracer,
   writePlayableSampleTriggerEventLog,
   writeRuntimeEventLog,
   writeSampleStopEventLog,
@@ -23,11 +23,11 @@ interface JudgeEffectHost {
   idBase: 36 | 62;
   audioSession: AudioSession | undefined;
   playbackStateLogger: PlaybackStateLogger;
-  playbackEventTracer: NoTuiPlaybackEventTracer;
-  uiSignals: PlayerUiSignalBus;
+  playbackEventTracer: NoTUIPlaybackEventTracer;
+  uiSignals: PlayerUISignalBus;
   activeStateSignals: PlayerStateSignals | undefined;
   playlogRecorder: PlaylogRecorder | undefined;
-  publishUiFrame: (seconds: number, beat: number) => void;
+  publishUIFrame: (seconds: number, beat: number) => void;
   beatAtSeconds: (seconds: number) => number;
 }
 
@@ -47,7 +47,7 @@ export function createJudgeEffectHandler(host: JudgeEffectHost): JudgeCoreEffect
     uiSignals,
     activeStateSignals,
     playlogRecorder,
-    publishUiFrame,
+    publishUIFrame,
     beatAtSeconds,
   } = host;
   return (effect) => {
@@ -151,7 +151,7 @@ export function createJudgeEffectHandler(host: JudgeEffectHost): JudgeCoreEffect
         return;
       case 'frame':
         if (uiEnabled) {
-          publishUiFrame(effect.seconds, effect.beat ?? beatAtSeconds(effect.seconds));
+          publishUIFrame(effect.seconds, effect.beat ?? beatAtSeconds(effect.seconds));
         }
         return;
     }

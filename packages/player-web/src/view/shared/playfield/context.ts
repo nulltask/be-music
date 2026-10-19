@@ -5,8 +5,8 @@
  * bombs). A play view passes itself.
  */
 
-import type { BmsSwitchingBga, ResolvedChart, TimingResolver, ChartPlayVariant } from '@be-music/chart';
-import type { BeMusicJson } from '@be-music/json';
+import type { BMSSwitchingBGA, ResolvedChart, TimingResolver, ChartPlayVariant } from '@be-music/chart';
+import type { BeMusicJSON } from '@be-music/json';
 import type { ScrollDistanceMapperLike, TimedLandmineNote, TimedPlayableNote } from '@be-music/player/display';
 import type { PlayerGaugeSummary } from '@be-music/player/signals';
 import type { JudgeKind, ScoreSummary } from '@be-music/player/ruleset';
@@ -14,7 +14,7 @@ import type { HiSpeedTransition, LibraryChart, PlayState } from '@be-music/scene
 import type { BeMusicJudgeWindows, BeMusicLaneKind, BeMusicLongNote } from '@be-music/skin-sdk';
 import type { Graphics, Text, Texture } from 'pixi.js';
 import type { AudioAnalyzer, AudioFeatures } from '../../../runtime/audio-analysis.ts';
-import type { BgaCue, NonstopStageBgaTimeline } from '../../../chart/bga-timeline.ts';
+import type { BGACue, NonstopStageBGATimeline } from '../../../chart/bga-timeline.ts';
 import type { PlayTempoRange } from '../../../session/play/tempo-range.ts';
 import type { PlaySessionOptions } from '../../../session/play/play-options.ts';
 import type { LongNoteTracker } from '../../../session/play/long-note-tracker.ts';
@@ -54,7 +54,7 @@ export type RuntimeMineNote = TimedLandmineNote;
  */
 export interface PlayfieldRuntime {
   readonly song: LibraryChart | undefined;
-  readonly resolvedChart: BeMusicJson | undefined;
+  readonly resolvedChart: BeMusicJSON | undefined;
   readonly resolvedPlayChart: ResolvedChart | undefined;
   readonly laneChannels: string[];
   readonly chartPlayVariant: ChartPlayVariant;
@@ -85,7 +85,7 @@ export interface PlayfieldRuntime {
   readonly judgeWindows: BeMusicJudgeWindows | undefined;
   readonly lastImpulseAt: number | undefined;
   readonly lastImpulseKind: BeMusicLaneKind | undefined;
-  readonly chartBpmRange: PlayTempoRange | undefined;
+  readonly chartBPMRange: PlayTempoRange | undefined;
   readonly playMoments: {
     failedAtMs?: number;
     allNotesDoneAtMs?: number;
@@ -112,16 +112,16 @@ export interface PlayfieldRuntime {
   readonly touchLiftCount: number;
   readonly bombStartedAt: Map<string, number>;
   readonly bombJudge: Map<string, BeMusicJudge>;
-  readonly hasBga: boolean;
-  readonly bgaTimeline: { base: BgaCue[]; layer: BgaCue[]; poor: BgaCue[] };
-  readonly nonstopBgaTimelines: NonstopStageBgaTimeline[] | undefined;
-  readonly poorBgaFallbackKey: string | undefined;
-  readonly poorBgaFallbackUntilSeconds: number;
+  readonly hasBGA: boolean;
+  readonly bgaTimeline: { base: BGACue[]; layer: BGACue[]; poor: BGACue[] };
+  readonly nonstopBGATimelines: NonstopStageBGATimeline[] | undefined;
+  readonly poorBGAFallbackKey: string | undefined;
+  readonly poorBGAFallbackUntilSeconds: number;
   readonly lastPoorAt: number;
-  readonly switchingBgas: Map<string, BmsSwitchingBga>;
+  readonly switchingBGAs: Map<string, BMSSwitchingBGA>;
   readonly bgaTextures: Map<string, Texture>;
   readonly bgaLayerTextures: Map<string, Texture>;
-  readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectUrl: string }>;
+  readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string }>;
   readonly bgaSubRegionOrigins: Map<string, { x: number; y: number }>;
   bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } };
   readonly audioAnalyzer: AudioAnalyzer | undefined;
@@ -134,8 +134,8 @@ export interface PlayfieldRuntime {
   playClock(): number;
   currentSeconds(): number;
   currentBeat(seconds: number): number;
-  nowBpm(seconds: number): number | undefined;
-  displayBpm(seconds: number): number | undefined;
+  nowBPM(seconds: number): number | undefined;
+  displayBPM(seconds: number): number | undefined;
   isIntroPlaying(): boolean;
   isAutoplayedChannel(channel: string): boolean;
   resolveLaneCovers(): readonly BeMusicLaneCover[];

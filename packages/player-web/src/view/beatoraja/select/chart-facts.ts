@@ -6,13 +6,13 @@
 
 import type { ChartPlayVariant } from '@be-music/chart';
 import type { BeatorajaChartTraits, BeatorajaSelectChartFacts } from '@be-music/beatoraja-skin/scene';
-import { resolveLr2ChartFeatures } from '@be-music/lr2-skin/state';
+import { resolveLR2ChartFeatures } from '@be-music/lr2-skin/state';
 import { resolveLibraryChartPlayVariant, type LibraryChart } from '@be-music/scene-model';
 import { computeBeatorajaChartDensity, type ChartDensity } from '../../../chart/beatoraja/density.ts';
 import { computeBeatorajaChartTotalSeconds } from '../../../chart/beatoraja/duration.ts';
 import { extractChartSubartist } from '../../../chart/beatoraja/meta.ts';
 import { computeBeatorajaNoteBreakdown, type NoteBreakdown } from '../../../chart/beatoraja/note-counts.ts';
-import { resolveShownChartMainBpm } from '../../../chart/main-bpm.ts';
+import { resolveShownChartMainBPM } from '../../../chart/main-bpm.ts';
 
 /**
  * `resolveLibraryChartPlayVariant` walks the chart's events / metadata to classify keys mode. On a
@@ -72,27 +72,27 @@ const NOTE_DENSITY_CACHE = new WeakMap<LibraryChart, ChartDensity>();
  *
  * Cached per song via WeakMap — the events array is iterated once and reused across frames.
  */
-function resolveBpmRange(song: LibraryChart): { min: number; max: number } | undefined {
+function resolveBPMRange(song: LibraryChart): { min: number; max: number } | undefined {
   const cached = BPM_RANGE_CACHE.get(song);
   if (cached !== undefined) return cached === null ? undefined : cached;
   let min = Number.POSITIVE_INFINITY;
   let max = 0;
-  const considerBpm = (bpm: number): void => {
+  const considerBPM = (bpm: number): void => {
     if (!Number.isFinite(bpm) || bpm <= 0) return;
     if (bpm < min) min = bpm;
     if (bpm > max) max = bpm;
   };
-  considerBpm(song.chart.metadata.bpm);
+  considerBPM(song.chart.metadata.bpm);
   const bpmTable = song.chart.resources?.bpm ?? {};
   for (const event of song.chart.events ?? []) {
     if (event.value === '00' || event.value === '') continue;
     if (event.channel === '03') {
-      considerBpm(parseInt(event.value, 16));
+      considerBPM(parseInt(event.value, 16));
     } else if (event.channel === '08') {
       const looked =
         bpmTable[event.value] ?? bpmTable[event.value.toLowerCase()] ?? bpmTable[event.value.toUpperCase()];
-      if (typeof looked === 'number') considerBpm(looked);
-      else if (typeof looked === 'string') considerBpm(Number.parseFloat(looked));
+      if (typeof looked === 'number') considerBPM(looked);
+      else if (typeof looked === 'string') considerBPM(Number.parseFloat(looked));
     }
   }
   if (!Number.isFinite(min) || max <= 0) {
@@ -120,7 +120,7 @@ export function selectChartFacts(song: LibraryChart): BeatorajaSelectChartFacts 
       ...(playVariant !== undefined ? { playVariant } : {}),
       get traits(): BeatorajaChartTraits {
         if (traits === undefined) {
-          const features = resolveLr2ChartFeatures(song.chart);
+          const features = resolveLR2ChartFeatures(song.chart);
           traits = {
             longNote: features.longNote,
             bga: features.bga,
@@ -129,7 +129,7 @@ export function selectChartFacts(song: LibraryChart): BeatorajaSelectChartFacts 
             stop: chartHasStop(song),
             stageFile: Boolean(meta.stageFile),
             banner: Boolean(meta.banner),
-            backBmp: Boolean(meta.backBmp),
+            backBMP: Boolean(meta.backBMP),
           };
         }
         return traits;
@@ -151,10 +151,10 @@ export function selectChartFacts(song: LibraryChart): BeatorajaSelectChartFacts 
         return resolveSongLengthSeconds(song);
       },
       get bpmRange(): { min: number; max: number } | undefined {
-        return resolveBpmRange(song);
+        return resolveBPMRange(song);
       },
-      get mainBpm(): number | undefined {
-        return resolveShownChartMainBpm(song.chart, song.chartPath);
+      get mainBPM(): number | undefined {
+        return resolveShownChartMainBPM(song.chart, song.chartPath);
       },
     };
     SELECT_CHART_FACTS.set(song, facts);
@@ -166,7 +166,7 @@ const SELECT_CHART_FACTS = new WeakMap<LibraryChart, BeatorajaSelectChartFacts>(
 /**
  * `true` when the chart authored at least one stop event (channel `09` in BMS, scaled stop in
  * bmson). Used to fire `HAS_BPMSTOP` (1177). Iterates events linearly — at typical chart sizes
- * (a few thousand events) this is microseconds; the WeakMap-cached `resolveLr2ChartFeatures` next to
+ * (a few thousand events) this is microseconds; the WeakMap-cached `resolveLR2ChartFeatures` next to
  * it amortises any worst-case cost across the same select-scene tick.
  */
 function chartHasStop(song: LibraryChart): boolean {

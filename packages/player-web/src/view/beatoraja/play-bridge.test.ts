@@ -4,8 +4,8 @@
  * come in as `engine`. Ported from the removed `BeatorajaRuntimeAdapter` tests (`skin/beatoraja/runtime-adapter.test.ts`).
  */
 
-import { createEmptyJson, type BeMusicJson } from '@be-music/json';
-import type { PlayerUiCommand } from '@be-music/player/signals';
+import { createEmptyJSON, type BeMusicJSON } from '@be-music/json';
+import type { PlayerUICommand } from '@be-music/player/signals';
 import {
   createPlayState,
   reducePlayState,
@@ -96,7 +96,7 @@ function createHarness(options: Partial<BeatorajaPlayBridgeOptions> = {}) {
     },
     update,
     /** An engine lane command, as the session hands it on (`lane-command` moment). */
-    command(command: PlayerUiCommand): void {
+    command(command: PlayerUICommand): void {
       const event = playViewEventFromMoment({ kind: 'lane-command', command });
       update(event !== undefined ? [event] : []);
     },
@@ -336,18 +336,18 @@ describe('BeatorajaPlayBridge — lane events', () => {
     expect(harness.bridge.getTimerStart(lnHoldTimerId(1, 7)!)).toBeUndefined();
   });
 
-  it('isLaneLnHeld flips on hold-lane-until-beat and clears on release-lane', () => {
+  it('isLaneLNHeld flips on hold-lane-until-beat and clears on release-lane', () => {
     // Drives the modern-mode `lnBodyHeld` / `lnBodyUnheld` sprites.
     const harness = createHarness();
-    expect(harness.bridge.isLaneLnHeld('19')).toBe(false);
+    expect(harness.bridge.isLaneLNHeld('19')).toBe(false);
     harness.advance(1000);
     harness.command({ kind: 'hold-lane-until-beat', channel: '19', beat: 64 });
-    expect(harness.bridge.isLaneLnHeld('19')).toBe(true);
+    expect(harness.bridge.isLaneLNHeld('19')).toBe(true);
     expect(harness.bridge.getTimerStart(lnHoldTimerId(1, 7)!)).toBe(1000);
-    expect(harness.bridge.isLaneLnHeld('11')).toBe(false);
+    expect(harness.bridge.isLaneLNHeld('11')).toBe(false);
     harness.advance(500);
     harness.command({ kind: 'release-lane', channel: '19' });
-    expect(harness.bridge.isLaneLnHeld('19')).toBe(false);
+    expect(harness.bridge.isLaneLNHeld('19')).toBe(false);
     // The timer goes off on release, as upstream `JudgeManager.java:546-547` switches it off once the sustain ends.
     expect(harness.bridge.getTimerStart(lnHoldTimerId(1, 7)!)).toBeUndefined();
   });
@@ -357,12 +357,12 @@ describe('BeatorajaPlayBridge — lane events', () => {
     harness.advance(1000);
     harness.command({ kind: 'hold-lane-until-beat', channel: '11', beat: 64 });
     harness.command({ kind: 'long-note-start', channel: '11', beat: 32, mode: 'cn' });
-    expect(harness.bridge.isLaneLnHeld('11')).toBe(true);
+    expect(harness.bridge.isLaneLNHeld('11')).toBe(true);
     harness.command({ kind: 'long-note-end', channel: '11', outcome: 'dropped' });
-    expect(harness.bridge.isLaneLnHeld('11')).toBe(true);
+    expect(harness.bridge.isLaneLNHeld('11')).toBe(true);
     expect(harness.bridge.getTimerStart(lnHoldTimerId(1, 1)!)).toBe(1000);
     harness.command({ kind: 'long-note-start', channel: '12', beat: 32, mode: 'ln' });
-    expect(harness.bridge.isLaneLnHeld('12')).toBe(false);
+    expect(harness.bridge.isLaneLNHeld('12')).toBe(false);
   });
 
   it('routes scratch (16 / 26) onto lane 0 → timer 100 (1P) / 110 (2P)', () => {
@@ -1053,8 +1053,8 @@ describe('BeatorajaPlayBridge — TIMER_ENDOFNOTE (143 / 144)', () => {
   function makeChartWithEvents(
     events: Array<{ channel: string; measure: number; position?: readonly [number, number] }>,
     measureLength = 1,
-  ): BeMusicJson {
-    const chart = createEmptyJson('bms');
+  ): BeMusicJSON {
+    const chart = createEmptyJSON('bms');
     chart.metadata.bpm = 120;
     chart.measures = events.map((e) => ({ index: e.measure, length: measureLength }));
     chart.events = events.map((e) => ({
@@ -1176,16 +1176,16 @@ describe('BeatorajaPlayBridge — TIMER_FAILED (3)', () => {
 describe('BeatorajaPlayBridge — POOR BGA tracking', () => {
   it("shows the POOR image for beatoraja's 500 ms miss layer from the miss, whatever is judged meanwhile", () => {
     const harness = createHarness();
-    expect(harness.bridge.isPoorBgaActive(12)).toBe(false);
+    expect(harness.bridge.isPoorBGAActive(12)).toBe(false);
     harness.command({ kind: 'trigger-poor-bga', seconds: 12 });
-    expect(harness.bridge.isPoorBgaActive(12)).toBe(true);
+    expect(harness.bridge.isPoorBGAActive(12)).toBe(true);
     // The next judgment's `clear-poor-bga` does not end it.
     harness.command({ kind: 'clear-poor-bga' });
-    expect(harness.bridge.isPoorBgaActive(12.2)).toBe(true);
-    expect(harness.bridge.isPoorBgaActive(12.5)).toBe(false);
+    expect(harness.bridge.isPoorBGAActive(12.2)).toBe(true);
+    expect(harness.bridge.isPoorBGAActive(12.5)).toBe(false);
     // A later miss restarts the window.
     harness.command({ kind: 'trigger-poor-bga', seconds: 13 });
-    expect(harness.bridge.isPoorBgaActive(13.4)).toBe(true);
+    expect(harness.bridge.isPoorBGAActive(13.4)).toBe(true);
   });
 });
 
@@ -1195,7 +1195,7 @@ describe('BeatorajaPlayBridge — resolveTextContent', () => {
       chart: {
         metadata: { title: 'Demo Title', subtitle: '[ANOTHER]', genre: 'Electro', artist: 'me' },
         bmson: { info: { subartists: ['obj:and you'] } },
-      } as unknown as BeMusicJson,
+      } as unknown as BeMusicJSON,
     });
     expect(bridge.resolveTextContent(10)).toBe('Demo Title');
     expect(bridge.resolveTextContent(11)).toBe('[ANOTHER]');
@@ -1207,7 +1207,7 @@ describe('BeatorajaPlayBridge — resolveTextContent', () => {
   });
 
   it('returns undefined for unknown refs (the text node renders empty)', () => {
-    const { bridge } = createHarness({ chart: { metadata: { title: 'X' } } as unknown as BeMusicJson });
+    const { bridge } = createHarness({ chart: { metadata: { title: 'X' } } as unknown as BeMusicJSON });
     expect(bridge.resolveTextContent(9999)).toBeUndefined();
   });
 });
@@ -1247,8 +1247,8 @@ describe("BeatorajaPlayBridge — the play state's graphs", () => {
 describe('BeatorajaPlayBridge — judgegraph type=1 (per-second judge state)', () => {
   function makeJudgeChart(
     events: ReadonlyArray<{ channel: string; pos?: [number, number]; measure?: number }>,
-  ): BeMusicJson {
-    const chart = createEmptyJson('bms');
+  ): BeMusicJSON {
+    const chart = createEmptyJSON('bms');
     chart.metadata.bpm = 120;
     chart.metadata.title = 'judge-state';
     chart.metadata.rank = 2;
@@ -1363,13 +1363,13 @@ describe('BeatorajaPlayBridge — resolveNumberValue HISPEED', () => {
 describe('BeatorajaPlayBridge — resolveNumberValue DURATION', () => {
   it('matches upstream `LaneRenderer.getCurrentDuration()` for the no-cover case', () => {
     // BPM 140, hi-speed 3.42: 240000 / 140 / 3.42 = 501.05 → 501.
-    const harness = createHarness({ chart: { metadata: { bpm: 140 } } as unknown as BeMusicJson });
+    const harness = createHarness({ chart: { metadata: { bpm: 140 } } as unknown as BeMusicJSON });
     harness.play({ type: 'hi-speed-set', value: 3.42 });
     expect(harness.bridge.resolveNumberValue(312)).toBe(501);
   });
 
   it('shrinks proportionally to lanecover for the LANECOVER_ON variant', () => {
-    const harness = createHarness({ chart: { metadata: { bpm: 130 } } as unknown as BeMusicJson });
+    const harness = createHarness({ chart: { metadata: { bpm: 130 } } as unknown as BeMusicJSON });
     harness.play({ type: 'hi-speed-set', value: 1.0 });
     harness.play(setCover({ sudden: 0.5, suddenOn: true }));
     expect(harness.bridge.resolveNumberValue(312)).toBe(923);
@@ -1377,7 +1377,7 @@ describe('BeatorajaPlayBridge — resolveNumberValue DURATION', () => {
   });
 
   it('does NOT factor lift into the DURATION readout (mirrors upstream)', () => {
-    const harness = createHarness({ chart: { metadata: { bpm: 130 } } as unknown as BeMusicJson });
+    const harness = createHarness({ chart: { metadata: { bpm: 130 } } as unknown as BeMusicJSON });
     harness.play({ type: 'hi-speed-set', value: 1.0 });
     const before = harness.bridge.resolveNumberValue(312);
     harness.play(setCover({ lift: 0.5 }));
@@ -1385,7 +1385,7 @@ describe('BeatorajaPlayBridge — resolveNumberValue DURATION', () => {
   });
 
   it('returns 60% of the white duration for DURATION_GREEN (313)', () => {
-    const harness = createHarness({ chart: { metadata: { bpm: 130 } } as unknown as BeMusicJson });
+    const harness = createHarness({ chart: { metadata: { bpm: 130 } } as unknown as BeMusicJSON });
     harness.play({ type: 'hi-speed-set', value: 1.0 });
     const white = harness.bridge.resolveNumberValue(312);
     const green = harness.bridge.resolveNumberValue(313);
@@ -1394,25 +1394,25 @@ describe('BeatorajaPlayBridge — resolveNumberValue DURATION', () => {
   });
 
   it("returns 0 when the chart's BPM is 0 / missing (defensive guard)", () => {
-    const { bridge } = createHarness({ chart: { metadata: { bpm: 0 } } as unknown as BeMusicJson });
+    const { bridge } = createHarness({ chart: { metadata: { bpm: 0 } } as unknown as BeMusicJSON });
     expect(bridge.resolveNumberValue(312)).toBe(0);
   });
 });
 
 // BPM (90 / 91 / 92 / 160), upstream `IntegerPropertyFactory` `maxbpm` / `minbpm` / `mainbpm` / `nowbpm`.
 describe('BeatorajaPlayBridge — resolveNumberValue BPM', () => {
-  function makeBpmChart(opts: {
+  function makeBPMChart(opts: {
     bpm: number;
     bpmTable?: Record<string, number>;
     events?: ReadonlyArray<{ measure?: number; channel: string; value?: string; pos?: [number, number] }>;
-  }): BeMusicJson {
-    const chart = createEmptyJson();
+  }): BeMusicJSON {
+    const chart = createEmptyJSON();
     chart.metadata.bpm = opts.bpm;
     chart.metadata.title = 'bpm-test';
     chart.events = (opts.events ?? []).map((e) => ({
       measure: e.measure ?? 0,
       channel: e.channel,
-      position: (e.pos ?? [0, 1]) as unknown as BeMusicJson['events'][0]['position'],
+      position: (e.pos ?? [0, 1]) as unknown as BeMusicJSON['events'][0]['position'],
       value: e.value ?? '01',
     }));
     chart.resources.bpm = opts.bpmTable ?? {};
@@ -1420,7 +1420,7 @@ describe('BeatorajaPlayBridge — resolveNumberValue BPM', () => {
   }
 
   it("returns the chart's BPM for all variants on a constant-tempo chart", () => {
-    const { bridge } = createHarness({ chart: makeBpmChart({ bpm: 140 }) });
+    const { bridge } = createHarness({ chart: makeBPMChart({ bpm: 140 }) });
     expect(bridge.resolveNumberValue(90)).toBe(140);
     expect(bridge.resolveNumberValue(91)).toBe(140);
     expect(bridge.resolveNumberValue(92)).toBe(140);
@@ -1429,7 +1429,7 @@ describe('BeatorajaPlayBridge — resolveNumberValue BPM', () => {
 
   it('reports the chart-wide max / min on a SOFLAN chart with channel-03 BPM events', () => {
     const { bridge } = createHarness({
-      chart: makeBpmChart({
+      chart: makeBPMChart({
         bpm: 140,
         events: [
           { channel: '03', value: 'F0', pos: [0, 1] },
@@ -1445,7 +1445,7 @@ describe('BeatorajaPlayBridge — resolveNumberValue BPM', () => {
   it('tracks live BPM at the playhead via NOWBPM (160) — SOFLAN-aware', () => {
     // 140 BPM, then 240 at beat 4 (1714 ms in).
     const harness = createHarness({
-      chart: makeBpmChart({
+      chart: makeBPMChart({
         bpm: 140,
         events: [
           { channel: '11', pos: [0, 1] },
@@ -1463,7 +1463,7 @@ describe('BeatorajaPlayBridge — resolveNumberValue BPM', () => {
 
   it('holds NOWBPM (160) at the reversal value past an LR2 negative-BPM reversal', () => {
     const harness = createHarness({
-      chart: makeBpmChart({
+      chart: makeBPMChart({
         bpm: 140,
         events: [
           { channel: '11', pos: [0, 1] },
@@ -1478,7 +1478,7 @@ describe('BeatorajaPlayBridge — resolveNumberValue BPM', () => {
 
   it('uses the most-frequent (note-weighted) BPM for MAINBPM (92)', () => {
     const { bridge } = createHarness({
-      chart: makeBpmChart({
+      chart: makeBPMChart({
         bpm: 140,
         events: [
           { channel: '11', pos: [0, 1] },
@@ -1505,7 +1505,7 @@ describe('BeatorajaPlayBridge — timing visualizer windows', () => {
   const SCRATCH = { perfect: window(30, 30), great: window(70, 70), good: window(160, 160), bad: window(230, 290) };
 
   it("shows the play's own key-lane windows, which the frames carry, and none before the engine reports them", () => {
-    const { bridge } = createHarness({ chart: createEmptyJson('bms') });
+    const { bridge } = createHarness({ chart: createEmptyJSON('bms') });
     expect(bridge.resolveTimingJudgeWindows()).toBeUndefined();
     const judgeWindows = { note: BEATORAJA_7K_NORMAL, scratch: SCRATCH, longNoteEnd: BEATORAJA_7K_NORMAL };
     bridge.update({ nowMs: 0, state: createPlayState(), events: [], judgeWindows });
@@ -1519,7 +1519,7 @@ describe('BeatorajaPlayBridge — timing visualizer windows', () => {
 describe('BeatorajaPlayBridge — chart TOTAL (368)', () => {
   it('reports the effective TOTAL the gauge runs on once a frame arrives', () => {
     // beatoraja's ref 368 reads the TOTAL after `BMSPlayerRule.validate`: a bmson `total: 100` shows the resolved one.
-    const harness = createHarness({ chart: { metadata: { total: 100 } } as unknown as BeMusicJson });
+    const harness = createHarness({ chart: { metadata: { total: 100 } } as unknown as BeMusicJSON });
     harness.frame({
       summary: { gauge: { current: 20, max: 100, clearThreshold: 80, effectiveTotal: 260.5 } },
     });
@@ -1527,7 +1527,7 @@ describe('BeatorajaPlayBridge — chart TOTAL (368)', () => {
   });
 
   it('falls back to the chart header before the first frame', () => {
-    const { bridge } = createHarness({ chart: { metadata: { total: 320 } } as unknown as BeMusicJson });
+    const { bridge } = createHarness({ chart: { metadata: { total: 320 } } as unknown as BeMusicJSON });
     expect(bridge.resolveNumberValue(368)).toBe(320);
   });
 });

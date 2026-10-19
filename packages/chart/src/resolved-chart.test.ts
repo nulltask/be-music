@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { createEmptyJson, type BeMusicEvent, type BeMusicJson } from '../../json/src/index.ts';
+import { createEmptyJSON, type BeMusicEvent, type BeMusicJSON } from '../../json/src/index.ts';
 import { countScoredNotes, isInvisibleNoteChannel, resolveChart } from './index.ts';
 
 function event(measure: number, channel: string, value: string, position: [number, number] = [0, 1]): BeMusicEvent {
   return { measure, channel, position, value };
 }
 
-function bmsChart(events: BeMusicEvent[]): BeMusicJson {
-  const json = createEmptyJson('bms');
+function bmsChart(events: BeMusicEvent[]): BeMusicJSON {
+  const json = createEmptyJSON('bms');
   json.metadata.bpm = 120;
   json.events = events;
   return json;
@@ -69,12 +69,12 @@ describe('resolveChart', () => {
       };
     };
     // IIDX 7 KEY: `17` is FREE ZONE and not scored; the `51` pair is one long note.
-    expect(countScoredNotes(json, { inferBmsLnTypeWhenMissing: true })).toEqual(
-      scored({ inferBmsLnTypeWhenMissing: true }),
+    expect(countScoredNotes(json, { inferBmsLNTypeWhenMissing: true })).toEqual(
+      scored({ inferBmsLNTypeWhenMissing: true }),
     );
-    expect(countScoredNotes(json, { inferBmsLnTypeWhenMissing: true }).notes).toBe(3);
+    expect(countScoredNotes(json, { inferBmsLNTypeWhenMissing: true }).notes).toBe(3);
     // POPN 9 (`.pms`): `17` is an ordinary key and counts.
-    expect(countScoredNotes(json, { chartPath: 'chart.pms', inferBmsLnTypeWhenMissing: true })).toEqual({
+    expect(countScoredNotes(json, { chartPath: 'chart.pms', inferBmsLNTypeWhenMissing: true })).toEqual({
       notes: 4,
       playVariant: '9',
     });
@@ -89,7 +89,7 @@ describe('resolveChart', () => {
   });
 
   test('reads bmson long notes with the per-note type over info.ln_type', () => {
-    const json = createEmptyJson('bmson');
+    const json = createEmptyJSON('bmson');
     json.metadata.bpm = 120;
     json.bmson.info.resolution = 240;
     json.bmson.info.lnType = 2;

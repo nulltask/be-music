@@ -13,7 +13,7 @@ import {
 } from '../../../chart/beatoraja/note-distribution.ts';
 import type { LibraryChart, LibraryEntry } from '@be-music/scene-model';
 import { logger } from '../../../logger.ts';
-import { destroyTextureAndRevokeBlobUrl } from '../../../media/textures.ts';
+import { destroyTextureAndRevokeBlobURL } from '../../../media/textures.ts';
 import type { BeatorajaChartImages } from '../../../skin/beatoraja/chart-images.ts';
 
 const log = logger('beatoraja-select');
@@ -96,7 +96,7 @@ export class BeatorajaSelectChartImages {
     const cached = this.chartImageCache.get(entry.chart.id);
     if (cached === null || cached === undefined) return undefined;
     if (syntheticId === -100) return cached.stageFile;
-    if (syntheticId === -101) return cached.backBmp;
+    if (syntheticId === -101) return cached.backBMP;
     if (syntheticId === -102) return cached.banner;
     return undefined;
   }
@@ -120,12 +120,12 @@ export class BeatorajaSelectChartImages {
    * Per-frame resolver for the focused chart's BPM segment data (consumed by `bpmgraph`
    * destinations under the spec-faithful renderer path).
    */
-  resolveBpmGraphDataForFocus():
+  resolveBPMGraphDataForFocus():
     | {
         segments: ReadonlyArray<{ timeMs: number; bpm: number }>;
-        mainBpm: number;
-        minBpm: number;
-        maxBpm: number;
+        mainBPM: number;
+        minBPM: number;
+        maxBPM: number;
         totalMs: number;
       }
     | undefined {
@@ -135,9 +135,9 @@ export class BeatorajaSelectChartImages {
     if (analysis.bpmSegments.length === 0 || analysis.totalMs <= 0) return undefined;
     return {
       segments: analysis.bpmSegments,
-      mainBpm: analysis.mainBpm,
-      minBpm: analysis.minBpm,
-      maxBpm: analysis.maxBpm,
+      mainBPM: analysis.mainBPM,
+      minBPM: analysis.minBPM,
+      maxBPM: analysis.maxBPM,
       totalMs: analysis.totalMs,
     };
   }
@@ -159,7 +159,7 @@ export class BeatorajaSelectChartImages {
 }
 
 function destroyChartImages(images: BeatorajaChartImages): void {
-  for (const texture of [images.stageFile, images.backBmp, images.banner]) {
-    if (texture !== undefined) destroyTextureAndRevokeBlobUrl(texture, true);
+  for (const texture of [images.stageFile, images.backBMP, images.banner]) {
+    if (texture !== undefined) destroyTextureAndRevokeBlobURL(texture, true);
   }
 }

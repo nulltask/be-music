@@ -49,8 +49,8 @@
           {"id":5,"channel":"14","type":"normal","timeUs":3000000},
           {"id":6,"channel":"15","type":"mine","timeUs":3250000,"damage":10}
         ],
-        "chartFingerprint": "bmfp0:f19cc35d18b8a529d219c87551646f2e265b959ef782f57ed8ec535f23289bfa",
-        "playFingerprint": "bmfp0:f19cc35d18b8a529d219c87551646f2e265b959ef782f57ed8ec535f23289bfa",
+        "chartFingerprint": "bmfp0:c25adf8213019e5c2284cf6b436f55ebcb77f1ef746d8eb79232909cd4e69dfa",
+        "playFingerprint": "bmfp0:c25adf8213019e5c2284cf6b436f55ebcb77f1ef746d8eb79232909cd4e69dfa",
         "title": "exrank",
         "artist": "characterization"
       },

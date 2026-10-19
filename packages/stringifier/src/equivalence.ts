@@ -1,32 +1,32 @@
 import { compareEvents, sortEvents } from '@be-music/chart';
 import {
   normalizeChannel,
-  resolveBmsBase,
-  type BmsObjectLineEntry,
-  type BmsonBpmEventEntry,
+  resolveBMSBase,
+  type BMSObjectLineEntry,
+  type BmsonBPMEventEntry,
   type BmsonScrollEventEntry,
   type BmsonSoundChannelEntry,
   type BmsonStopEventEntry,
   type BeMusicEvent,
-  type BeMusicJson,
+  type BeMusicJSON,
 } from '@be-music/json';
 
 export function areEventBmsonExtensionsEqual(left: BeMusicEvent['bmson'], right: BeMusicEvent['bmson']): boolean {
   return left?.l === right?.l && left?.c === right?.c;
 }
 
-export function areBmsChartsEquivalent(left: BeMusicJson, right: BeMusicJson): boolean {
+export function areBMSChartsEquivalent(left: BeMusicJSON, right: BeMusicJSON): boolean {
   return (
     areMetadataEqual(left.metadata, right.metadata) &&
     areResourcesEqual(left.resources, right.resources) &&
     areMeasuresEqual(left.measures, right.measures) &&
     areEventsEqual(left.events, right.events) &&
-    areBmsExtensionsEqual(left.bms, right.bms) &&
-    areBmsPreservationEqual(left.preservation.bms, right.preservation.bms)
+    areBMSExtensionsEqual(left.bms, right.bms) &&
+    areBMSPreservationEqual(left.preservation.bms, right.preservation.bms)
   );
 }
 
-export function areBmsonChartsEquivalent(left: BeMusicJson, right: BeMusicJson): boolean {
+export function areBmsonChartsEquivalent(left: BeMusicJSON, right: BeMusicJSON): boolean {
   return (
     areMetadataEqual(left.metadata, right.metadata) &&
     areResourcesEqual(left.resources, right.resources) &&
@@ -34,13 +34,13 @@ export function areBmsonChartsEquivalent(left: BeMusicJson, right: BeMusicJson):
     areEventsEqual(left.events, right.events) &&
     areBmsonExtensionsEqual(left.bmson, right.bmson) &&
     // bmson `scroll_events` live in the BMS `#SCROLL` table, and many keys move the chart to base-62 IDs.
-    resolveBmsBase(left) === resolveBmsBase(right) &&
+    resolveBMSBase(left) === resolveBMSBase(right) &&
     areNumberMapsEqual(left.bms.scroll, right.bms.scroll) &&
     areBmsonPreservationEqual(left.preservation.bmson, right.preservation.bmson)
   );
 }
 
-function areMetadataEqual(left: BeMusicJson['metadata'], right: BeMusicJson['metadata']): boolean {
+function areMetadataEqual(left: BeMusicJSON['metadata'], right: BeMusicJSON['metadata']): boolean {
   return (
     left.title === right.title &&
     left.subtitle === right.subtitle &&
@@ -57,7 +57,7 @@ function areMetadataEqual(left: BeMusicJson['metadata'], right: BeMusicJson['met
   );
 }
 
-function areResourcesEqual(left: BeMusicJson['resources'], right: BeMusicJson['resources']): boolean {
+function areResourcesEqual(left: BeMusicJSON['resources'], right: BeMusicJSON['resources']): boolean {
   return (
     areStringMapsEqual(left.wav, right.wav) &&
     areStringMapsEqual(left.bmp, right.bmp) &&
@@ -67,7 +67,7 @@ function areResourcesEqual(left: BeMusicJson['resources'], right: BeMusicJson['r
   );
 }
 
-function areMeasuresEqual(left: BeMusicJson['measures'], right: BeMusicJson['measures']): boolean {
+function areMeasuresEqual(left: BeMusicJSON['measures'], right: BeMusicJSON['measures']): boolean {
   const sortedLeft = [...left].sort((a, b) => a.index - b.index);
   const sortedRight = [...right].sort((a, b) => a.index - b.index);
   if (sortedLeft.length !== sortedRight.length) {
@@ -101,32 +101,32 @@ function areEventsEqual(left: BeMusicEvent[], right: BeMusicEvent[]): boolean {
   return true;
 }
 
-function areBmsExtensionsEqual(left: BeMusicJson['bms'], right: BeMusicJson['bms']): boolean {
+function areBMSExtensionsEqual(left: BeMusicJSON['bms'], right: BeMusicJSON['bms']): boolean {
   return (
     areControlFlowEntriesEqual(left.controlFlow, right.controlFlow) &&
     left.preview === right.preview &&
     left.lnType === right.lnType &&
     left.lnMode === right.lnMode &&
     areStringArraysEqual(left.lnObjs, right.lnObjs) &&
-    left.volWav === right.volWav &&
+    left.volWAV === right.volWAV &&
     left.defExRank === right.defExRank &&
     areStringMapsEqual(left.exRank, right.exRank) &&
     areStringMapsEqual(left.argb, right.argb) &&
     left.player === right.player &&
-    left.pathWav === right.pathWav &&
-    left.baseBpm === right.baseBpm &&
+    left.pathWAV === right.pathWAV &&
+    left.baseBPM === right.baseBPM &&
     areStringArraysEqual(left.stp, right.stp) &&
     left.option === right.option &&
     areStringMapsEqual(left.changeOption, right.changeOption) &&
     left.wavCmd === right.wavCmd &&
     areStringArraysEqual(left.wavCmds, right.wavCmds) &&
-    areStringMapsEqual(left.exWav, right.exWav) &&
-    areStringMapsEqual(left.exBmp, right.exBmp) &&
+    areStringMapsEqual(left.exWAV, right.exWAV) &&
+    areStringMapsEqual(left.exBMP, right.exBMP) &&
     areStringMapsEqual(left.bga, right.bga) &&
     areNumberMapsEqual(left.scroll, right.scroll) &&
     areNumberMapsEqual(left.speed, right.speed) &&
-    left.poorBga === right.poorBga &&
-    areStringMapsEqual(left.swBga, right.swBga) &&
+    left.poorBGA === right.poorBGA &&
+    areStringMapsEqual(left.swBGA, right.swBGA) &&
     left.videoFile === right.videoFile &&
     left.midiFile === right.midiFile &&
     left.materials === right.materials &&
@@ -135,29 +135,29 @@ function areBmsExtensionsEqual(left: BeMusicJson['bms'], right: BeMusicJson['bms
   );
 }
 
-function areBmsonExtensionsEqual(left: BeMusicJson['bmson'], right: BeMusicJson['bmson']): boolean {
+function areBmsonExtensionsEqual(left: BeMusicJSON['bmson'], right: BeMusicJSON['bmson']): boolean {
   return (
-    left.version === right.version && areBmsonInfoEqual(left.info, right.info) && areBmsonBgaEqual(left.bga, right.bga)
+    left.version === right.version && areBmsonInfoEqual(left.info, right.info) && areBmsonBGAEqual(left.bga, right.bga)
   );
 }
 
-function areBmsPreservationEqual(
-  left: BeMusicJson['preservation']['bms'],
-  right: BeMusicJson['preservation']['bms'],
+function areBMSPreservationEqual(
+  left: BeMusicJSON['preservation']['bms'],
+  right: BeMusicJSON['preservation']['bms'],
 ): boolean {
   return (
     areControlFlowEntriesEqual(left.sourceLines, right.sourceLines) &&
-    areBmsObjectLinesEqual(left.objectLines, right.objectLines)
+    areBMSObjectLinesEqual(left.objectLines, right.objectLines)
   );
 }
 
 function areBmsonPreservationEqual(
-  left: BeMusicJson['preservation']['bmson'],
-  right: BeMusicJson['preservation']['bmson'],
+  left: BeMusicJSON['preservation']['bmson'],
+  right: BeMusicJSON['preservation']['bmson'],
 ): boolean {
   return (
     areNumberArraysEqual(left.lines, right.lines) &&
-    areBmsonBpmEventsEqual(left.bpmEvents, right.bpmEvents) &&
+    areBmsonBPMEventsEqual(left.bpmEvents, right.bpmEvents) &&
     areBmsonStopEventsEqual(left.stopEvents, right.stopEvents) &&
     areBmsonScrollEventsEqual(left.scrollEvents ?? [], right.scrollEvents ?? []) &&
     areBmsonSoundChannelsEqual(left.soundChannels, right.soundChannels)
@@ -165,8 +165,8 @@ function areBmsonPreservationEqual(
 }
 
 function areControlFlowEntriesEqual(
-  left: BeMusicJson['bms']['controlFlow'],
-  right: BeMusicJson['bms']['controlFlow'],
+  left: BeMusicJSON['bms']['controlFlow'],
+  right: BeMusicJSON['bms']['controlFlow'],
 ): boolean {
   if (left.length !== right.length) {
     return false;
@@ -196,26 +196,26 @@ function areControlFlowEntriesEqual(
     if (leftEntry.kind !== 'object' || rightEntry.kind !== 'object') {
       return false;
     }
-    if (!areBmsObjectLineEqual(leftEntry, rightEntry)) {
+    if (!areBMSObjectLineEqual(leftEntry, rightEntry)) {
       return false;
     }
   }
   return true;
 }
 
-function areBmsObjectLinesEqual(left: BmsObjectLineEntry[], right: BmsObjectLineEntry[]): boolean {
+function areBMSObjectLinesEqual(left: BMSObjectLineEntry[], right: BMSObjectLineEntry[]): boolean {
   if (left.length !== right.length) {
     return false;
   }
   for (let index = 0; index < left.length; index += 1) {
-    if (!areBmsObjectLineEqual(left[index]!, right[index]!)) {
+    if (!areBMSObjectLineEqual(left[index]!, right[index]!)) {
       return false;
     }
   }
   return true;
 }
 
-function areBmsObjectLineEqual(left: BmsObjectLineEntry, right: BmsObjectLineEntry): boolean {
+function areBMSObjectLineEqual(left: BMSObjectLineEntry, right: BMSObjectLineEntry): boolean {
   return (
     left.measure === right.measure &&
     normalizeChannel(left.channel) === normalizeChannel(right.channel) &&
@@ -224,7 +224,7 @@ function areBmsObjectLineEqual(left: BmsObjectLineEntry, right: BmsObjectLineEnt
   );
 }
 
-function areBmsonInfoEqual(left: BeMusicJson['bmson']['info'], right: BeMusicJson['bmson']['info']): boolean {
+function areBmsonInfoEqual(left: BeMusicJSON['bmson']['info'], right: BeMusicJSON['bmson']['info']): boolean {
   return (
     left.title === right.title &&
     left.subtitle === right.subtitle &&
@@ -233,7 +233,7 @@ function areBmsonInfoEqual(left: BeMusicJson['bmson']['info'], right: BeMusicJso
     areStringArraysEqual(left.subartists, right.subartists) &&
     left.chartName === right.chartName &&
     left.level === right.level &&
-    left.initBpm === right.initBpm &&
+    left.initBPM === right.initBPM &&
     left.resolution === right.resolution &&
     left.modeHint === right.modeHint &&
     left.judgeRank === right.judgeRank &&
@@ -245,18 +245,18 @@ function areBmsonInfoEqual(left: BeMusicJson['bmson']['info'], right: BeMusicJso
   );
 }
 
-function areBmsonBgaEqual(left: BeMusicJson['bmson']['bga'], right: BeMusicJson['bmson']['bga']): boolean {
+function areBmsonBGAEqual(left: BeMusicJSON['bmson']['bga'], right: BeMusicJSON['bmson']['bga']): boolean {
   return (
-    areBmsonBgaHeadersEqual(left.header, right.header) &&
-    areBmsonBgaEventsEqual(left.events, right.events) &&
-    areBmsonBgaEventsEqual(left.layerEvents, right.layerEvents) &&
-    areBmsonBgaEventsEqual(left.poorEvents, right.poorEvents)
+    areBmsonBGAHeadersEqual(left.header, right.header) &&
+    areBmsonBGAEventsEqual(left.events, right.events) &&
+    areBmsonBGAEventsEqual(left.layerEvents, right.layerEvents) &&
+    areBmsonBGAEventsEqual(left.poorEvents, right.poorEvents)
   );
 }
 
-function areBmsonBgaHeadersEqual(
-  left: BeMusicJson['bmson']['bga']['header'],
-  right: BeMusicJson['bmson']['bga']['header'],
+function areBmsonBGAHeadersEqual(
+  left: BeMusicJSON['bmson']['bga']['header'],
+  right: BeMusicJSON['bmson']['bga']['header'],
 ): boolean {
   if (left.length !== right.length) {
     return false;
@@ -269,9 +269,9 @@ function areBmsonBgaHeadersEqual(
   return true;
 }
 
-function areBmsonBgaEventsEqual(
-  left: BeMusicJson['bmson']['bga']['events'],
-  right: BeMusicJson['bmson']['bga']['events'],
+function areBmsonBGAEventsEqual(
+  left: BeMusicJSON['bmson']['bga']['events'],
+  right: BeMusicJSON['bmson']['bga']['events'],
 ): boolean {
   if (left.length !== right.length) {
     return false;
@@ -284,7 +284,7 @@ function areBmsonBgaEventsEqual(
   return true;
 }
 
-function areBmsonBpmEventsEqual(left: BmsonBpmEventEntry[], right: BmsonBpmEventEntry[]): boolean {
+function areBmsonBPMEventsEqual(left: BmsonBPMEventEntry[], right: BmsonBPMEventEntry[]): boolean {
   if (left.length !== right.length) {
     return false;
   }

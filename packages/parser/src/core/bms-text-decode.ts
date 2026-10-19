@@ -22,35 +22,35 @@
  *
  * Built exclusively on the WHATWG `TextDecoder` so the same code runs in Node and the browser.
  */
-import { extractDeclaredBmsCharset } from './bms-charset.ts';
+import { extractDeclaredBMSCharset } from './bms-charset.ts';
 
 const OBJECT_DATA_LINE = /^#(\d{3})([0-9A-Z]{2})\s*:\s*(.+)\s*$/i;
 const HEADER_LINE = /^#([A-Z][A-Z0-9_]*)(?:\s+(.+))?$/i;
 const BMS_KNOWN_COMMAND_LINE =
   /^#(?:TITLE|SUBTITLE|ARTIST|GENRE|COMMENT|BPM|PLAYLEVEL|RANK|TOTAL|DIFFICULTY|STAGEFILE|BACKBMP|BANNER|PREVIEW|LNTYPE|LNMODE|LNOBJ|VOLWAV|DEFEXRANK|PLAYER|PATH_WAV|BASEBPM|STP|OPTION|WAVCMD|POORBGA|VIDEOFILE|MIDIFILE|MATERIALS|DIVIDEPROP|CHARSET|WAV[0-9A-Z]{2}|BMP[0-9A-Z]{2}|BPM[0-9A-Z]{2}|STOP[0-9A-Z]{2}|TEXT[0-9A-Z]{2}|EXRANK[0-9A-Z]{2}|ARGB[0-9A-Z]{2}|CHANGEOPTION[0-9A-Z]{2}|EXWAV[0-9A-Z]{2}|EXBMP[0-9A-Z]{2}|BGA[0-9A-Z]{2}|SCROLL[0-9A-Z]{2}|SPEED[0-9A-Z]{2}|SWBGA[0-9A-Z]{2}|RANDOM\s+\d+|SETRANDOM\s+\d+|ENDRANDOM|IF\s+\d+|ELSEIF\s+\d+|ELSE|ENDIF|SWITCH\s+\d+|SETSWITCH\s+\d+|CASE\s+\d+|DEF|SKIP|ENDSW|[0-9]{3}[0-9A-Z]{2}\s*:)/i;
 
-/** How much of the file the `#CHARSET` scan reads: `extractDeclaredBmsCharset` looks at the first 4 KB only. */
+/** How much of the file the `#CHARSET` scan reads: `extractDeclaredBMSCharset` looks at the first 4 KB only. */
 const CHARSET_SCAN_BYTES = 4096;
 
-export interface DecodedBmsText {
+export interface DecodedBMSText {
   encoding: 'utf8' | 'shift_jis' | 'euc-jp' | 'euc-kr' | 'utf-16le' | 'utf-16be' | 'iso-8859-1';
   text: string;
 }
 
-export function decodeBmsText(buffer: Uint8Array): DecodedBmsText {
-  if (hasUtf8Bom(buffer)) {
+export function decodeBMSText(buffer: Uint8Array): DecodedBMSText {
+  if (hasUtf8BOM(buffer)) {
     return {
       encoding: 'utf8',
-      text: decodeUtf8Text(buffer),
+      text: decodeUTF8Text(buffer),
     };
   }
-  if (hasUtf16LeBom(buffer)) {
+  if (hasUtf16LeBOM(buffer)) {
     return {
       encoding: 'utf-16le',
       text: new TextDecoder('utf-16le').decode(buffer).replace(/^\ufeff/u, ''),
     };
   }
-  if (hasUtf16BeBom(buffer)) {
+  if (hasUTF16BeBOM(buffer)) {
     return {
       encoding: 'utf-16be',
       text: new TextDecoder('utf-16be').decode(buffer).replace(/^\ufeff/u, ''),
@@ -58,32 +58,32 @@ export function decodeBmsText(buffer: Uint8Array): DecodedBmsText {
   }
   // BMS spec — honor `#CHARSET <name>` at the top of the file before any automatic detection. The directive is
   // authored before any non-ASCII text, so a latin1 first-pass (every byte → its 0..255 code point) always surfaces
-  // it. The web `TextDecoder` accepts the same canonical encoding names `canonicalizeBmsCharset` produces
+  // it. The web `TextDecoder` accepts the same canonical encoding names `canonicalizeBMSCharset` produces
   // (utf-8 / shift_jis / euc-jp / utf-16le / utf-16be / iso-8859-1), so we can route directly through it without an
   // intermediate library.
-  const declaredCharset = extractDeclaredBmsCharset(decodeLatin1Text(buffer.subarray(0, CHARSET_SCAN_BYTES)));
+  const declaredCharset = extractDeclaredBMSCharset(decodeLatin1Text(buffer.subarray(0, CHARSET_SCAN_BYTES)));
   if (declaredCharset) {
     const decoded = decodeWithDeclaredCharset(buffer, declaredCharset);
     if (decoded) return decoded;
   }
-  if (isAsciiBuffer(buffer)) {
+  if (isASCIIBuffer(buffer)) {
     return {
       encoding: 'utf8',
-      text: decodeUtf8Text(buffer),
+      text: decodeUTF8Text(buffer),
     };
   }
   // A buffer that strictly validates as UTF-8 while containing multibyte sequences is UTF-8: legacy Japanese
   // encodings essentially never produce byte streams that survive a fatal UTF-8 decode. This catches the common
   // modern case (BOM-less UTF-8 charts) that the relative-scoring walk below can misattribute to shift_jis when the
   // non-ASCII payload is short.
-  const strictUtf8 = tryDecodeStrictUtf8(buffer);
-  if (strictUtf8 !== undefined) {
+  const strictUTF8 = tryDecodeStrictUTF8(buffer);
+  if (strictUTF8 !== undefined) {
     return {
       encoding: 'utf8',
-      text: strictUtf8,
+      text: strictUTF8,
     };
   }
-  const eucKr = tryDecodeKoreanEucKr(buffer);
+  const eucKr = tryDecodeKoreanEUCKr(buffer);
   if (eucKr !== undefined) {
     return {
       encoding: 'euc-kr',
@@ -102,7 +102,7 @@ const KOREAN_HANGUL_SHARE = 0.9;
  * {@link KOREAN_HANGUL_SHARE} of the decoded non-ASCII characters are Hangul syllables. The share keeps out Shift_JIS
  * half-width katakana, whose byte pairs also fit KS X 1001 but land on symbols and Hanja as often as on Hangul.
  */
-function tryDecodeKoreanEucKr(buffer: Uint8Array): string | undefined {
+function tryDecodeKoreanEUCKr(buffer: Uint8Array): string | undefined {
   let index = 0;
   while (index < buffer.length) {
     const lead = buffer[index]!;
@@ -122,17 +122,17 @@ function tryDecodeKoreanEucKr(buffer: Uint8Array): string | undefined {
   } catch {
     return undefined;
   }
-  let nonAscii = 0;
+  let nonASCII = 0;
   let hangul = 0;
   for (let position = 0; position < text.length; position += 1) {
     const code = text.charCodeAt(position);
     if (code < 0x80) continue;
-    nonAscii += 1;
+    nonASCII += 1;
     if (code >= 0xac00 && code <= 0xd7a3) {
       hangul += 1;
     }
   }
-  return nonAscii > 0 && hangul >= nonAscii * KOREAN_HANGUL_SHARE ? text : undefined;
+  return nonASCII > 0 && hangul >= nonASCII * KOREAN_HANGUL_SHARE ? text : undefined;
 }
 
 function decodeLatin1Text(buffer: Uint8Array): string {
@@ -142,14 +142,14 @@ function decodeLatin1Text(buffer: Uint8Array): string {
   return new TextDecoder('iso-8859-1').decode(buffer);
 }
 
-function decodeWithDeclaredCharset(buffer: Uint8Array, charset: string): DecodedBmsText | undefined {
+function decodeWithDeclaredCharset(buffer: Uint8Array, charset: string): DecodedBMSText | undefined {
   // BMS `#CHARSET` declares the encoding for the file. We map the canonicalized name onto a `TextDecoder` label and
   // strip a leading BOM where applicable. `TextDecoder` throws synchronously for unrecognized labels, which we treat as
   // "fall back to autodetection" — same as a value that didn't canonicalize.
   try {
     switch (charset) {
       case 'utf-8':
-        return { encoding: 'utf8', text: decodeUtf8Text(buffer) };
+        return { encoding: 'utf8', text: decodeUTF8Text(buffer) };
       case 'shift_jis':
         return { encoding: 'shift_jis', text: new TextDecoder('shift_jis').decode(buffer) };
       case 'euc-jp':
@@ -170,7 +170,7 @@ function decodeWithDeclaredCharset(buffer: Uint8Array, charset: string): Decoded
   }
 }
 
-const SCORING_CANDIDATES: ReadonlyArray<{ encoding: DecodedBmsText['encoding']; label: string; bias: number }> = [
+const SCORING_CANDIDATES: ReadonlyArray<{ encoding: DecodedBMSText['encoding']; label: string; bias: number }> = [
   { encoding: 'shift_jis', label: 'shift_jis', bias: 5 },
   { encoding: 'utf8', label: 'utf-8', bias: 4 },
   { encoding: 'euc-jp', label: 'euc-jp', bias: 3 },
@@ -213,7 +213,7 @@ function emptyScoreCounts(): ScoreCounts {
  * holding a byte `>= 0x80` are decoded and counted per candidate. The counts are integers summed exactly, and the score
  * is formed from them in the same order as before, so the choice is the one a whole-text pass would make.
  */
-function decodeByScoring(buffer: Uint8Array): DecodedBmsText {
+function decodeByScoring(buffer: Uint8Array): DecodedBMSText {
   // Latin-1 maps each byte to the code point of the same value, so an ASCII line reads straight out of it.
   const latin1 = decodeLatin1Text(buffer);
   const shared = emptyScoreCounts();
@@ -258,7 +258,7 @@ function decodeByScoring(buffer: Uint8Array): DecodedBmsText {
     offset += line.length;
   }
 
-  let best: { encoding: DecodedBmsText['encoding']; label: string } | undefined;
+  let best: { encoding: DecodedBMSText['encoding']; label: string } | undefined;
   let bestScore = Number.NEGATIVE_INFINITY;
   for (const candidate of SCORING_CANDIDATES) {
     let decoded: string;
@@ -284,7 +284,7 @@ function decodeByScoring(buffer: Uint8Array): DecodedBmsText {
   }
 
   if (best === undefined) {
-    return { encoding: 'utf8', text: decodeUtf8Text(buffer) };
+    return { encoding: 'utf8', text: decodeUTF8Text(buffer) };
   }
   return { encoding: best.encoding, text: new TextDecoder(best.label).decode(buffer) };
 }
@@ -361,7 +361,7 @@ function scoreCounts(counts: ScoreCounts, bias: number): number {
   return score;
 }
 
-function tryDecodeStrictUtf8(buffer: Uint8Array): string | undefined {
+function tryDecodeStrictUTF8(buffer: Uint8Array): string | undefined {
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(buffer);
   } catch {
@@ -369,23 +369,23 @@ function tryDecodeStrictUtf8(buffer: Uint8Array): string | undefined {
   }
 }
 
-export function decodeUtf8Text(buffer: Uint8Array): string {
+export function decodeUTF8Text(buffer: Uint8Array): string {
   return new TextDecoder('utf-8').decode(buffer).replace(/^\ufeff/u, '');
 }
 
-function hasUtf8Bom(buffer: Uint8Array): boolean {
+function hasUtf8BOM(buffer: Uint8Array): boolean {
   return buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf;
 }
 
-function hasUtf16LeBom(buffer: Uint8Array): boolean {
+function hasUtf16LeBOM(buffer: Uint8Array): boolean {
   return buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe;
 }
 
-function hasUtf16BeBom(buffer: Uint8Array): boolean {
+function hasUTF16BeBOM(buffer: Uint8Array): boolean {
   return buffer.length >= 2 && buffer[0] === 0xfe && buffer[1] === 0xff;
 }
 
-function isAsciiBuffer(buffer: Uint8Array): boolean {
+function isASCIIBuffer(buffer: Uint8Array): boolean {
   for (let index = 0; index < buffer.length; index += 1) {
     if (buffer[index]! >= 0x80) {
       return false;

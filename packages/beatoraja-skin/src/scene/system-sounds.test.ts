@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test';
 import {
-  discoverBeatorajaSelectBgmPath,
+  discoverBeatorajaSelectBGMPath,
   discoverBeatorajaSystemSoundPaths,
-  pickBeatorajaThemeBgmPaths,
+  pickBeatorajaThemeBGMPaths,
 } from './system-sounds.ts';
 
 function fakeFiles(paths: ReadonlyArray<string>): Map<string, Uint8Array> {
@@ -63,15 +63,15 @@ describe('discoverBeatorajaSystemSoundPaths', () => {
     expect(discoverBeatorajaSystemSoundPaths(files)).toEqual({});
   });
 
-  it('discovers a looping select BGM at the canonical Bgm/select.* path', () => {
-    expect(discoverBeatorajaSelectBgmPath(fakeFiles(['Bgm/select.wav']))).toBe('Bgm/select.wav');
-    expect(discoverBeatorajaSelectBgmPath(fakeFiles(['bgm/select.ogg']))).toBe('bgm/select.ogg');
+  it('discovers a looping select BGM at the canonical BGM/select.* path', () => {
+    expect(discoverBeatorajaSelectBGMPath(fakeFiles(['BGM/select.wav']))).toBe('BGM/select.wav');
+    expect(discoverBeatorajaSelectBGMPath(fakeFiles(['bgm/select.ogg']))).toBe('bgm/select.ogg');
     // Falls back to LR2-derived layout
-    expect(discoverBeatorajaSelectBgmPath(fakeFiles(['LR2files/Bgm/_common/select.wav']))).toBe(
-      'LR2files/Bgm/_common/select.wav',
+    expect(discoverBeatorajaSelectBGMPath(fakeFiles(['LR2files/BGM/_common/select.wav']))).toBe(
+      'LR2files/BGM/_common/select.wav',
     );
     // Returns undefined when no candidate matches
-    expect(discoverBeatorajaSelectBgmPath(fakeFiles(['random/file.png']))).toBeUndefined();
+    expect(discoverBeatorajaSelectBGMPath(fakeFiles(['random/file.png']))).toBeUndefined();
   });
 
   it('falls back to LR2-compatible Sound/lr2 paths when the theme is LR2-derived', () => {
@@ -92,10 +92,10 @@ describe('discoverBeatorajaSystemSoundPaths', () => {
   });
 });
 
-describe('pickBeatorajaThemeBgmPaths', () => {
+describe('pickBeatorajaThemeBGMPaths', () => {
   it('lets exact stems win over loose matches listed earlier', () => {
     expect(
-      pickBeatorajaThemeBgmPaths([
+      pickBeatorajaThemeBGMPaths([
         'sound/course_clear.wav',
         'sound/course_fail.ogg',
         'sound/resultclose.wav',
@@ -114,18 +114,18 @@ describe('pickBeatorajaThemeBgmPaths', () => {
   });
 
   it('falls back to a stem containing the name, but never a course stem for the plain slots', () => {
-    expect(pickBeatorajaThemeBgmPaths(['bgm/course_clear.wav', 'bgm/clear_loop.wav', 'bgm/decide_v2.mp3'])).toEqual({
+    expect(pickBeatorajaThemeBGMPaths(['bgm/course_clear.wav', 'bgm/clear_loop.wav', 'bgm/decide_v2.mp3'])).toEqual({
       decide: 'bgm/decide_v2.mp3',
       clear: 'bgm/clear_loop.wav',
       courseClear: 'bgm/course_clear.wav',
     });
-    expect(pickBeatorajaThemeBgmPaths(['bgm/course_clear.wav'])).toEqual({ courseClear: 'bgm/course_clear.wav' });
+    expect(pickBeatorajaThemeBGMPaths(['bgm/course_clear.wav'])).toEqual({ courseClear: 'bgm/course_clear.wav' });
   });
 
   it('takes a stem from the sound set folder over the same stem elsewhere', () => {
     // ModernChic: a voice clip named clear.ogg sorts before the sound set's own clear.ogg.
     expect(
-      pickBeatorajaThemeBgmPaths([
+      pickBeatorajaThemeBGMPaths([
         'ModernChic/Root/sounds/vo/tsumugi/clear/clear.ogg',
         'ModernChic/Root/sounds/vo/tsumugi/clear/failed.ogg',
         'ModernChic/Sound/clear.ogg',
@@ -133,10 +133,10 @@ describe('pickBeatorajaThemeBgmPaths', () => {
       ]),
     ).toEqual({ clear: 'ModernChic/Sound/clear.ogg', fail: 'ModernChic/Sound/fail.ogg' });
     // With no folder holding more of the slots, the shallowest file wins.
-    expect(pickBeatorajaThemeBgmPaths(['a/b/c/clear.wav', 'a/clear.wav'])).toEqual({ clear: 'a/clear.wav' });
+    expect(pickBeatorajaThemeBGMPaths(['a/b/c/clear.wav', 'a/clear.wav'])).toEqual({ clear: 'a/clear.wav' });
   });
 
   it('does not reuse one file for two slots', () => {
-    expect(pickBeatorajaThemeBgmPaths(['sound/resultclose.wav'])).toEqual({ result: 'sound/resultclose.wav' });
+    expect(pickBeatorajaThemeBGMPaths(['sound/resultclose.wav'])).toEqual({ result: 'sound/resultclose.wav' });
   });
 });

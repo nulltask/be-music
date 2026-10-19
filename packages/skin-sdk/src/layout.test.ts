@@ -23,7 +23,7 @@ describe('resolveGameplayLayout', () => {
     expect(layout.playfield.right - layout.playfield.left).toBe(194);
     expect(layout.playfield.centerX).toBe((layout.playfield.left + layout.playfield.right) / 2);
     expect(layout.playfield.sides['2P']).toBeUndefined();
-    expect(layout.bga).toEqual(wideStage.resolveBgaRect(layout.playfield.right));
+    expect(layout.bga).toEqual(wideStage.resolveBGARect(layout.playfield.right));
   });
 
   it('reports both sides in double play and keeps the BGA clear of them', () => {
@@ -61,7 +61,7 @@ describe('resolveGameplayLayout', () => {
   it('leaves the BGA out when the stage has no room for it', () => {
     const layout = resolveGameplayLayout(
       { laneChannels: SP, playVariant: '7' },
-      { width: 640, height: 480, resolveBgaRect: () => ({ x: 0, y: 0, w: 0, h: 0 }) },
+      { width: 640, height: 480, resolveBGARect: () => ({ x: 0, y: 0, w: 0, h: 0 }) },
     );
     expect(layout.bga).toBeUndefined();
   });

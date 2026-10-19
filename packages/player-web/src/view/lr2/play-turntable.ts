@@ -12,7 +12,7 @@
  */
 
 /** A side's scratch: `'1'` for 1P (channel 16), `'2'` for 2P (channel 26). */
-export type Lr2TurntableSide = '1' | '2';
+export type LR2TurntableSide = '1' | '2';
 
 const TURNTABLE_BASELINE_RAD_PER_SEC = 2 * Math.PI;
 /** Snap on each press; larger than the baseline so a brake genuinely reverses the disc. */
@@ -25,23 +25,23 @@ const TURNTABLE_RECOVERY_PER_SEC = 3;
 const TURNTABLE_STREAK_GAP_MS = 250;
 
 /** The turntable's motion. See the module comment. */
-export class Lr2Turntable {
-  private angle: Record<Lr2TurntableSide, number> = { '1': 0, '2': 0 };
-  private velocity: Record<Lr2TurntableSide, number> = {
+export class LR2Turntable {
+  private angle: Record<LR2TurntableSide, number> = { '1': 0, '2': 0 };
+  private velocity: Record<LR2TurntableSide, number> = {
     '1': TURNTABLE_BASELINE_RAD_PER_SEC,
     '2': TURNTABLE_BASELINE_RAD_PER_SEC,
   };
   /** The direction the next press pushes the disc: `-1` brakes, `+1` pushes forward. */
-  private nextSign: Record<Lr2TurntableSide, -1 | 1> = { '1': -1, '2': -1 };
+  private nextSign: Record<LR2TurntableSide, -1 | 1> = { '1': -1, '2': -1 };
   /** The last press per side, on the play clock, for the streak. */
-  private lastImpulseAt: Record<Lr2TurntableSide, number> = {
+  private lastImpulseAt: Record<LR2TurntableSide, number> = {
     '1': Number.NEGATIVE_INFINITY,
     '2': Number.NEGATIVE_INFINITY,
   };
   private lastUpdateAt = 0;
 
   /** The disc's angle on `side`, in radians. */
-  public angleOf(side: Lr2TurntableSide): number {
+  public angleOf(side: LR2TurntableSide): number {
     return this.angle[side];
   }
 
@@ -60,7 +60,7 @@ export class Lr2Turntable {
    */
   public impulse(channel: string, now: number): void {
     if (channel !== '16' && channel !== '26') return;
-    const side: Lr2TurntableSide = channel === '16' ? '1' : '2';
+    const side: LR2TurntableSide = channel === '16' ? '1' : '2';
     if (now - this.lastImpulseAt[side] > TURNTABLE_STREAK_GAP_MS) {
       this.nextSign[side] = -1;
     }

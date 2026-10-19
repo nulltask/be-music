@@ -9,21 +9,21 @@
 //
 // The declaration shape is just `{ id }` — no `src`, no `(x,y,w,h)` (the dst rect carries the
 // box), no `type` (BPM is the only data source). The renderer pulls the actual BPM points from a
-// host callback (`resolveBpmGraphPoints()`); without that callback the graph hides itself.
+// host callback (`resolveBPMGraphPoints()`); without that callback the graph hides itself.
 
 import { flattenBeatorajaElements, type NormalizedElement } from './base.ts';
 import type { BeatorajaImageId } from './image.ts';
 
-export interface BeatorajaBpmGraphElement {
+export interface BeatorajaBPMGraphElement {
   /** Destination id this bpmgraph targets. Same id space as `image[]` / `graph[]` / `text[]`. */
   id: BeatorajaImageId;
   /** `if` codes that gate visibility (AND-merged with the destination's `op[]`). */
   ifCodes: ReadonlyArray<number>;
 }
 
-export function normalizeBeatorajaBpmGraphs(input: unknown): BeatorajaBpmGraphElement[] {
+export function normalizeBeatorajaBPMGraphs(input: unknown): BeatorajaBPMGraphElement[] {
   const flattened = flattenBeatorajaElements(input);
-  const out: BeatorajaBpmGraphElement[] = [];
+  const out: BeatorajaBPMGraphElement[] = [];
   for (const entry of flattened) {
     const normalized = normalizeOne(entry);
     if (normalized !== undefined) out.push(normalized);
@@ -31,7 +31,7 @@ export function normalizeBeatorajaBpmGraphs(input: unknown): BeatorajaBpmGraphEl
   return out;
 }
 
-function normalizeOne(entry: NormalizedElement): BeatorajaBpmGraphElement | undefined {
+function normalizeOne(entry: NormalizedElement): BeatorajaBPMGraphElement | undefined {
   const f = entry.fields;
   const id = f.id;
   if (typeof id !== 'string' && typeof id !== 'number') return undefined;

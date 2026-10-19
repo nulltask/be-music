@@ -41,8 +41,8 @@ function beatorajaSelectKit(skinConfig?: BeatorajaSkinConfig): BeatorajaKit {
 
 function createAudio(): SelectAudio {
   return {
-    playBgm: vi.fn(async () => true),
-    stopBgm: vi.fn(),
+    playBGM: vi.fn(async () => true),
+    stopBGM: vi.fn(),
     playCue: vi.fn(async () => true),
     playJingle: vi.fn(async () => true),
     stopOwned: vi.fn(),

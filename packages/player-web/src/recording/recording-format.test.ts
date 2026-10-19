@@ -3,7 +3,7 @@ import {
   DEFAULT_RECORDING_FORMAT,
   RECORDING_FORMATS,
   describeRecordingFormat,
-  recorderMimeCandidates,
+  recorderMIMECandidates,
   recordingAudioCodecs,
   recordingFileExtension,
   recordingVideoCodecs,
@@ -34,7 +34,7 @@ describe('recording formats', () => {
   });
 
   it('lists MediaRecorder types for the format, then falls back to WebM', () => {
-    const mp4 = recorderMimeCandidates({ container: 'mp4', videoCodec: 'avc' });
+    const mp4 = recorderMIMECandidates({ container: 'mp4', videoCodec: 'avc' });
     expect(mp4.slice(0, 3)).toEqual([
       'video/mp4;codecs=avc1,mp4a.40.2',
       'video/mp4;codecs=avc1,opus',
@@ -43,7 +43,7 @@ describe('recording formats', () => {
     expect(mp4).toContain('video/mp4');
     expect(mp4.indexOf('video/mp4')).toBeLessThan(mp4.indexOf('video/webm;codecs=vp9,opus'));
     expect(mp4.at(-1)).toBe('video/webm');
-    const webm = recorderMimeCandidates({ container: 'webm', videoCodec: 'vp9' });
+    const webm = recorderMIMECandidates({ container: 'webm', videoCodec: 'vp9' });
     expect(webm[0]).toBe('video/webm;codecs=vp9,opus');
     expect(webm.some((type) => type.startsWith('video/mp4'))).toBe(false);
   });

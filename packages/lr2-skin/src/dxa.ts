@@ -105,7 +105,7 @@ export function readDxaArchive(
  * the directory the DXA lives in, plus the DXA's basename minus extension, plus the inner file's path. This matches
  * how LR2 transparently treats DXAs as folders during asset lookup.
  *
- * Designed for use during {@link loadLr2ThemeSkinsFromFiles}'s shared-files preparation step: callers pass the file
+ * Designed for use during {@link loadLR2ThemeSkinsFromFiles}'s shared-files preparation step: callers pass the file
  * map (with on-disk entries) and add the yielded `(path, bytes)` pairs back into the SAME map, taking care to skip
  * paths that already exist on disk (= prefer the real file when both are present). The function itself doesn't write
  * to the map — it just yields candidates so the caller can apply its own write-vs-skip policy.

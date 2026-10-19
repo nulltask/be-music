@@ -48,8 +48,8 @@ export interface PlayInputContext extends PlayEngineContext {
   readonly handleWindowFocus: () => void;
   requestExit(): void;
   requestRestart(): void;
-  pauseAllBgaVideos(): void;
-  resumeActiveBgaVideos(): void;
+  pauseAllBGAVideos(): void;
+  resumeActiveBGAVideos(): void;
 }
 
 /** Wires the play's own input as the play goes on the stage (`PlaySession.attachInput`); {@link detachPlayInput} undoes it. */
@@ -322,12 +322,12 @@ export function togglePause(ctx: PlayInputContext): void {
     ctx.paused = false;
     ctx.pauseTotal += performance.now() - ctx.pauseTime;
     void ctx.audioContext?.resume();
-    ctx.resumeActiveBgaVideos();
+    ctx.resumeActiveBGAVideos();
   } else {
     ctx.paused = true;
     ctx.pauseTime = performance.now();
     void ctx.audioContext?.suspend();
-    ctx.pauseAllBgaVideos();
+    ctx.pauseAllBGAVideos();
   }
   // In shared-engine mode the engine maintains its own playback clock + per-tick scheduling; without flipping
   // its pause flag the engine would keep advancing chart-time while the view sits paused, then fast-forward a

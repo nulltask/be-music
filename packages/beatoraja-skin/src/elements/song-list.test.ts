@@ -76,7 +76,7 @@ describe('parseBeatorajaSongList', () => {
   });
 
   it('honors `songlist.center` verbatim when authored (audit A-8)', () => {
-    // Mirrors `JsonSelectSkinObjectLoader.java:79` — `setCenterBar(sk.songlist.center)`.
+    // Mirrors `JSONSelectSkinObjectLoader.java:79` — `setCenterBar(sk.songlist.center)`.
     // The author's intent for which row should look "focused" wins over the geometric
     // heuristic that's used as the fallback. Test setup: 3 rows with the geometric centre
     // landing on row 1 (closest to canvas-vertical-centre), but author says `center: 2`.
@@ -258,7 +258,7 @@ describe('parseBeatorajaSongList', () => {
   });
 
   describe('audit A-7 — imageset[] chain resolution for liston[].id', () => {
-    // Mirrors `JsonSelectSkinObjectLoader.java:44-77`: `liston[i].id` references an
+    // Mirrors `JSONSelectSkinObjectLoader.java:44-77`: `liston[i].id` references an
     // `imageset[]` entry, NOT `image[]` directly. The renderer needs the underlying
     // `image[].id` (= `imageset[id].images[0]`) for its bar-texture lookup. The parser
     // resolves the chain at parse time, replacing the row's `id` with the resolved value.
@@ -446,7 +446,7 @@ describe('parseBeatorajaSongList', () => {
     });
 
     it('accepts `songlist.center` values up to 59 even when `liston.length` is smaller', () => {
-      // Upstream `JsonSelectSkinObjectLoader.java:79` calls `setCenterBar(sk.songlist.center)`
+      // Upstream `JSONSelectSkinObjectLoader.java:79` calls `setCenterBar(sk.songlist.center)`
       // verbatim, and `BarRenderer.java:124` loops `i ∈ [0, 60)` testing `i == centerBar`.
       // A skin authoring `center: 25` with only 21 authored rows is legal — the focused
       // slot just renders nothing in upstream (`barimageon[25] == null`). Our parser must

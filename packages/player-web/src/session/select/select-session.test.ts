@@ -13,8 +13,8 @@ import { SelectSession, type SelectSessionEvents, type SelectSessionOptions } fr
 import { makeChart, makeCollection, makeCourse, makeCourseFolder } from './test-support.ts';
 
 const SLOTS: readonly SystemSoundSlot[] = [
-  'selectBgm',
-  'decideBgm',
+  'selectBGM',
+  'decideBGM',
   'cursor',
   'decide',
   'cancel',
@@ -39,8 +39,8 @@ function slotOf(sound: SystemSound | string | undefined): string {
 /** An audio service that records what the session asks of it. */
 function createAudio() {
   return {
-    playBgm: vi.fn(async (..._args: unknown[]) => true),
-    stopBgm: vi.fn(),
+    playBGM: vi.fn(async (..._args: unknown[]) => true),
+    stopBGM: vi.fn(),
     playCue: vi.fn(async (..._args: unknown[]) => true),
     playJingle: vi.fn(async (..._args: unknown[]) => true),
     stopOwned: vi.fn(),
@@ -274,7 +274,7 @@ describe('SelectSession starting', () => {
     key('Enter');
     expect(started).toEqual([{ entry: 'a', autoPlay: false }]);
     expect(cues()).toEqual(['decide']);
-    expect(audio.playJingle).toHaveBeenCalledWith(SOUNDS.decideBgm);
+    expect(audio.playJingle).toHaveBeenCalledWith(SOUNDS.decideBGM);
     expect(audio.playCue.mock.calls.every((call) => call.length === 1)).toBe(true);
   });
 
@@ -321,7 +321,7 @@ describe('SelectSession starting', () => {
 describe('SelectSession sound', () => {
   it('plays the select BGM as its own, under the cues, and stops it and the preview as the screen leaves', () => {
     const { session, audio } = createSession();
-    expect(audio.playBgm).toHaveBeenCalledWith(SOUNDS.selectBgm, { owner: session, volume: 0.5 });
+    expect(audio.playBGM).toHaveBeenCalledWith(SOUNDS.selectBGM, { owner: session, volume: 0.5 });
     session.exit();
     expect(audio.stopOwned).toHaveBeenCalledWith(session);
   });

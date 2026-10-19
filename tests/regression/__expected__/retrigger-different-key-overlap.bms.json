@@ -27,12 +27,12 @@
       "stp": [],
       "wavCmds": [],
       "changeOption": {},
-      "exWav": {},
-      "exBmp": {},
+      "exWAV": {},
+      "exBMP": {},
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBga": {}
+      "swBGA": {}
     },
     "controlFlow": [],
     "events": [
@@ -61,7 +61,7 @@
       "randomPatterns": [],
       "title": "Retrigger Different Key Overlap",
       "playVariant": "5",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0"
@@ -81,8 +81,8 @@
           "percent": 75
         },
         "noteCount": 3,
-        "chartFingerprint": "bmfp0:8c8fab99c9260583524c41d84ac8dc4daca3a39e8b49f9804a06288d6a8ceea8",
-        "playFingerprint": "bmfp0:8c8fab99c9260583524c41d84ac8dc4daca3a39e8b49f9804a06288d6a8ceea8",
+        "chartFingerprint": "bmfp0:32d86d2ce0191068cbd426227681428b930037aa3d5497e18df90d8d912ed890",
+        "playFingerprint": "bmfp0:32d86d2ce0191068cbd426227681428b930037aa3d5497e18df90d8d912ed890",
         "title": "Retrigger Different Key Overlap",
         "artist": "Codex"
       },
