@@ -232,7 +232,7 @@ export class PlaySession extends PlaySessionState {
     this.startTime = Number.POSITIVE_INFINITY;
     // Scene start fires immediately; load-end and play-start — the events that drive "READY" / chart-start cues — fire
     // later via the `Promise.all` gates below so they wait for the BGA preload too. Exit-phase events are deliberately
-    // NOT raised here: `beginExitSequence` raises them at the actual transition moment (ESC / chart end).
+    // NOT raised here: `beginExitSequence` raises them at the actual transition moment (ESC / chart end / failure).
     this.theme.moment({ kind: 'scene-start', at: now });
     // The `start()` invocation we belong to — captured so the gate handlers below can detect a dispose-and-re-mount and
     // bail out instead of mutating a fresh play's state.

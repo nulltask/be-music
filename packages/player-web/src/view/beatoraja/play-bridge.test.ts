@@ -206,6 +206,17 @@ describe('BeatorajaPlayBridge — built-in timers', () => {
     update([{ kind: 'exit-fade-out', atMs: 62_000 }]);
     expect(bridge.getTimerStart(TIMER_FADEOUT)).toBe(61_420);
   });
+
+  it('starts `TIMER_FAILED` (3), not `fadeout`, as a failed play stops', () => {
+    const { bridge, advance, update } = createHarness();
+    advance(5000);
+    update([{ kind: 'exit-close', atMs: 5000 }]);
+    expect(bridge.getTimerStart(3)).toBe(5000);
+    expect(bridge.getTimerStart(TIMER_FADEOUT)).toBeUndefined();
+    // Started once: a later stop moment does not restart it.
+    update([{ kind: 'exit-close', atMs: 6000 }]);
+    expect(bridge.getTimerStart(3)).toBe(5000);
+  });
 });
 
 describe('BeatorajaPlayBridge — lane events', () => {

@@ -400,7 +400,7 @@ export class PlaySessionState {
   exitCloseHandle: number | undefined;
   /** `playClock()` at which the exit fade-out began; drives {@link applyExitFadeAlpha}. */
   exitFadeStartedAt: number | undefined;
-  /** The fade-out the running exit sequence uses: the theme's, or longer for a failed play. */
+  /** The picture fade the running exit sequence uses: the theme's fade-out, a failed play's hold on a theme without a close time, or 0. */
   exitFadeOutMs = 0;
   /**
    * Intro / scene-stage timers that gate the load-end / play-start stages (and theme stages such as LR2
@@ -409,8 +409,9 @@ export class PlaySessionState {
    */
   readonly sceneStageTimeouts: Set<number> = new Set<number>();
   /**
-   * True once {@link beginExitSequence} starts the FADEOUT → CLOSE → host-callback chain. Re-entry is suppressed so a
-   * frantic second ESC press while the fade is animating doesn't leak a second callback or restart the timeline.
+   * True once {@link beginExitSequence} starts the exit (the fade-out, or a failed play's stop) before the host
+   * callback. Re-entry is suppressed so a frantic second ESC press while the fade is animating doesn't leak a second
+   * callback or restart the timeline.
    */
   exiting = false;
   readonly keyFlashTimeouts: Set<number> = new Set();

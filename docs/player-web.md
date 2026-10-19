@@ -415,7 +415,16 @@ flowchart TD
 - `runtime/play-audio-graph.ts` builds the play's AudioContext and bus (with `#VOLWAV`); the audio service opens it for the play ([Audio service](#audio-service)).
 - `chart/play-audio.ts` decodes the `#WAV` samples into it under the key the audio session looks them up by, stretches them for a keep-pitch tempo, and folds the `#WAVCMD` / `#EXWAV` volumes.
 - `chart/play-bga.ts` picks the BGA resources a play needs (`#BMPxx`, bmson `bga.header`, the sources of `#BGAxx` sub-regions, the implicit `#BMP00` POOR image for the LR2 view), decodes stills through the shared texture loader and videos through the video loader, keys the BMS layer track's black out, and cuts the sub-region views.
-- `session/play/play-ending.ts` times the end of a play: a lead-out of about two measures after the last note, in chart time, then the theme or skin fade-out; a play cut short by its gauge emptying skips the lead-out and fades its sound and picture for at least 1.5 s. The views fade the picture with `playEndingFadeAlpha` (`view/shared/play-frame.ts`).
+- `session/play/play-ending.ts` times the end of a play (`resolvePlayEnding`, `beginExitSequence`). A play that reaches its end holds a lead-out of about two measures after the last note, in chart time, then raises `exit-fade-out` (LR2 timer 2, beatoraja `TIMER_FADEOUT`) and leaves after the theme or skin fade-out (LR2 `#FADEOUT`, beatoraja `fadeout`); Escape and F5 run the same fade-out. A play cut short by its gauge emptying stops at once, as LR2 and beatoraja do: it raises `exit-close` (LR2 timer 3, beatoraja `TIMER_FAILED`) and no fade-out, cuts the sound, and shows the result after the skin's close time (LR2 `#CLOSE`, beatoraja `close`); a theme without one (the built-in skins) holds 1.5 s and fades its picture. The views fade the picture with `playEndingFadeAlpha` (`view/shared/play-frame.ts`).
+
+  ```mermaid
+  flowchart TD
+    how{How the play ends} -->|chart end, ESC, F5| fade[exit-fade-out: timer 2]
+    fade --> next[Next screen after the fade-out]
+    how -->|gauge emptied| stop[exit-close: timer 3, sound cut]
+    stop --> result[Result after the close time]
+  ```
+
 - `resolveClearLamp` (`@be-music/player/ruleset`) is the one clear-lamp rule. Every result lamps a play with it: the LR2 / default result (and the LR2 result's lamp ops 101-105, on LR2's lamps), and the beatoraja result and select through `beatorajaClearLampOp`; the demo records every family's plays with it, and the Leaderboard ranks them with it. It keeps the lamp to the judge ruleset's own set: under LR2 and IIDX a full combo is the top lamp (no PERFECT or MAX), and under LR2 a DEATH clear is NORMAL.
 
 ## Scene sessions and family views
@@ -617,7 +626,7 @@ flowchart LR
 - **beatoraja view.** `BeatorajaPlayView` draws a beatoraja play skin through `BeatorajaPlaySkinView`, with its note, marker and BGA layers (`view/beatoraja/play/*`) put where the skin places them (`BeatorajaPlayStage`):
   - `BeatorajaPlayBridge` (`view/beatoraja/play-bridge.ts`) turns each frame into the skin's render context: its ops, numbers, texts, gauge and graphs come from the [scene mapping](./beatoraja-skin.md#scene-mapping) over the frame's `PlayState` and the engine's latest frame, and the frame's moments start its timers (a judgment, a lane's flash and hold, load-end, the fade-out). It keeps the judge-state graph and ends the lane flashes itself;
   - the notes scroll on beatoraja's scale over the chart's `#SCROLL` / `#SPEED` timelines, with the frame's drawn hi-speed and the play state's lane covers; the play log records the view on that scale (`PlaySessionTheme.playlogView`);
-  - the session times the play from load-end: READY, PLAY and STARTINPUT start then, the chart 1.5 s later (`resolveBeatorajaPlayTiming`), and a leaving play fades over the skin's `fadeout`;
+  - the session times the play from load-end: READY, PLAY and STARTINPUT start then, the chart 1.5 s later (`resolveBeatorajaPlayTiming`), a leaving play fades over the skin's `fadeout`, and a failed one moves on after its `close`;
   - a beatoraja kit plays the host's lane options (RANDOM, MIRROR, S-RANDOM, SCATTER, DP FLIP), [HS-FIX](#hs-fix) and starting lane covers (HIDDEN / SUDDEN, the lane cover height and switch; no LIFT) as every family does, recorded in the play log's `play.randomLane` and `play.view`. It turns on the cover keys (`coverKeys`): PageUp / PageDown move SUDDEN+, Home / End the lift, H toggles HIDDEN+ and J / K move it (Shift for larger steps); a key one of the chart's lanes takes plays the lane instead (H / J / K are 2P lanes of a 14-key DP chart). The wheel and the skin's cover buttons (acts 330-332) send cover intents;
   - the skin's `main_state.audio_*` calls play through the audio service's skin sounds, owned by the scene's `PlaySceneSession`, which stops them (its loops included) as the scene leaves the stage; the play's audio graph keeps its own owner, so a play that ended rings out.
 - **Input.** The play's keys (ESC, F5, Space, the arrows, the Backspace hold, a beatoraja play's cover keys) stay the play's own listeners on the window; the scene listens for no keys.

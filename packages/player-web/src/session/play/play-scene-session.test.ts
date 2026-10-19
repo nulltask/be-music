@@ -78,6 +78,34 @@ describe('PlaySceneSession', () => {
     expect(onExit).toHaveBeenCalledTimes(1);
   });
 
+  test('a quit on an LR2 view fades out on timer 2 alone and leaves after #FADEOUT, without timer 3', () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('window', globalThis);
+    try {
+      const onExit = vi.fn();
+      const moments: string[] = [];
+      // A fake view with the stock LR2 play skin's ending: `#FADEOUT,550`, `#CLOSE,2050`.
+      const play = new PlaySession(
+        { onExit },
+        {
+          timing: () => ({ loadEndOffsetMs: 0, playStartOffsetMs: 0, fadeOutMs: 550, closeMs: 2050 }),
+          moment: (moment) => moments.push(moment.kind),
+          keyOnFadeMs: () => 100,
+        },
+      );
+      const session = new PlaySceneSession(play, { chart: CHART, playOptions: DEFAULT_PLAY_OPTIONS });
+      session.dispatch({ type: 'quit' });
+      expect(moments).toEqual(['exit-fade-out']);
+      vi.advanceTimersByTime(550);
+      expect(onExit).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(3000);
+      expect(moments).toEqual(['exit-fade-out']);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
   test('keys are the play’s own: the scene does not take them', () => {
     const { session } = createSceneSession();
     expect(
