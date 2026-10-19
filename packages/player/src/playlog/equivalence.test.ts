@@ -981,6 +981,28 @@ describe('engine / simulator equivalence', () => {
     expect(summary.poor).toBe(simulated.judge.poor);
   });
 
+  // LR2's DEATH gauge charges nothing for an empty POOR (OpenLR2 LR2f.cpp L27673-L27680), so a dozen of them leave
+  // the run alive and the gauge full on both sides.
+  test('lr2: empty POORs leave a DEATH gauge untouched on both sides', async () => {
+    const json = chart([{ measure: 2, channel: '11', position: [0, 1], value: '01' }]);
+    const inputs: PlaylogInputEvent[] = [];
+    for (let index = 0; index < 12; index += 1) {
+      const timeUs = 1_100_000 + index * 50_000;
+      inputs.push(down(index * 2, timeUs, '11'), up(index * 2 + 1, timeUs + 20_000, '11'));
+    }
+    inputs.push(down(24, 2_000_000, '11'), up(25, 2_050_000, '11'));
+
+    const { summary, playlog } = await replay(json, inputs, 'lr2', { gauge: 'DEATH' });
+    const simulated = simulatePlaylog(playlog, { ruleset: 'lr2' });
+
+    expect(summary.emptyPoor).toBe(12);
+    expect(simulated.judge.emptyPoor).toBe(12);
+    expect(summary.perfect).toBe(1);
+    expect(simulated.judge.pgreat).toBe(1);
+    expect(summary.gauge).toMatchObject({ type: 'DEATH', current: 100, cleared: true, failedMidPlay: false });
+    expect(simulated.gauge).toMatchObject({ type: 'DEATH', final: 100, cleared: true });
+  });
+
   test('lr2: the empty POOR window is early-only', async () => {
     // LR2's miss window is `{0, 1 s}` — a press up to a second BEFORE a note charges one, a press after never does.
     const json = chart([{ measure: 2, channel: '11', position: [0, 1], value: '01' }]);
