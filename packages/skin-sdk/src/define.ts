@@ -35,9 +35,14 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
 /**
- * Problems with a skin's declaration — an unsupported API revision, a malformed id or version, missing author, bad
- * URLs, an invalid `settings` schema — as human-readable messages. Empty when the skin is fine.
+ * Problems with a skin's declaration — an unsupported API revision, a malformed id or version, missing author or
+ * `fontLoads`, bad URLs, an invalid `settings` schema — as human-readable messages. Empty when the skin is fine. A skin
+ * written in plain JavaScript can leave out what the type requires, so a missing field is reported, never thrown on.
  */
 export function validateBeMusicSkin(skin: BeMusicSkin): string[] {
   const problems: string[] = [];
@@ -46,15 +51,22 @@ export function validateBeMusicSkin(skin: BeMusicSkin): string[] {
       `apiVersion ${String(skin.apiVersion)} is not supported (this player runs ${[...SUPPORTED_API_VERSIONS].join(', ')})`,
     );
   }
-  if (!SKIN_ID.test(skin.id)) problems.push(`id "${skin.id}" must be lowercase letters, digits, and hyphens`);
-  if (skin.label.trim() === '') problems.push('label must not be empty');
-  if (!SEMVER.test(skin.version)) problems.push(`version "${skin.version}" is not a semantic version (e.g. 1.0.0)`);
-  if (skin.author.name.trim() === '') problems.push('author.name must not be empty');
-  if (skin.author.url !== undefined && !isHttpUrl(skin.author.url)) {
+  if (typeof skin.id !== 'string' || !SKIN_ID.test(skin.id)) {
+    problems.push(`id "${String(skin.id)}" must be lowercase letters, digits, and hyphens`);
+  }
+  if (!isNonEmptyString(skin.label)) problems.push('label must not be empty');
+  if (typeof skin.version !== 'string' || !SEMVER.test(skin.version)) {
+    problems.push(`version "${String(skin.version)}" is not a semantic version (e.g. 1.0.0)`);
+  }
+  if (!isNonEmptyString(skin.author?.name)) problems.push('author.name must not be empty');
+  if (skin.author?.url !== undefined && !isHttpUrl(skin.author.url)) {
     problems.push(`author.url "${skin.author.url}" must be an http(s) URL`);
   }
   if (skin.homepage !== undefined && !isHttpUrl(skin.homepage)) {
     problems.push(`homepage "${skin.homepage}" must be an http(s) URL`);
+  }
+  if (!Array.isArray(skin.fontLoads) || skin.fontLoads.some((font) => typeof font !== 'string')) {
+    problems.push('fontLoads must be an array of CSS font shorthands (empty when the skin loads no web fonts)');
   }
   if (!CONTEXT_KINDS.has(skin.context)) {
     problems.push(`context "${String(skin.context)}" must be one of ${[...CONTEXT_KINDS].join(', ')}`);
