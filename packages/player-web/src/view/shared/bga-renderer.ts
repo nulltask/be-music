@@ -102,7 +102,7 @@ export function renderBga(ctx: BgaRendererContext, seconds: number, cueSeconds: 
   if (inPoorWindow && ctx.play.nonstopBgaTimelines === undefined) {
     poorKey = pickActiveBgaKey(ctx.play.bgaTimeline.poor, cueSeconds);
   }
-  // BMP00 fallback: when no explicit POOR cue is active but the chart left `#POORBGA` blank with a `#BMP00` defined,
+  // BMP00 fallback: when no explicit POOR cue is active but the chart has a `#BMP00` (and no `#POORBGA 2`),
   // paint BMP00 during the miss window. Capped at the first authored POOR cue's chart-time so a chart that does
   // eventually author POOR isn't permanently stuck on the placeholder.
   if (
