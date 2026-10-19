@@ -20,6 +20,7 @@ This directory is a Markdown collection of specifications used in the `be-music`
 - [Course browser checklist](./course-checklist.md)
 - [Be-Music Fingerprint specification](./fingerprint-spec.md)
 - [Leaderboard design](./leaderboard.md)
+- [Services and environments](./services.md)
 - [LR2 skin implementation notes](./lr2-skin.md)
 - [beatoraja skin implementation notes](./beatoraja-skin.md)
 - [Writing a be-music skin](./be-music-skin.md)
