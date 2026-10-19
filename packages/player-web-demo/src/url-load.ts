@@ -5,8 +5,9 @@ import { unzipSync } from 'fflate';
  *
  *   ?music=https://host/song.zip&skin=https://host/theme.zip
  *
- * Both archives are funneled into the exact same pipeline as a drag-drop (see `processIncomingFiles` in `main.ts`), so
- * the select screen lists the archive's charts and any skin is applied — no bespoke rendering path.
+ * Both archives are funneled into the exact same pipeline as a drag-drop (see `processIncomingFiles` in
+ * `services/library.ts`), so the select screen lists the archive's charts and any skin is applied — no bespoke rendering
+ * path.
  *
  * Cross-origin URLs are fetched through the demo's same-origin proxy route so archive links still work when the remote
  * host does not send `Access-Control-Allow-Origin`.

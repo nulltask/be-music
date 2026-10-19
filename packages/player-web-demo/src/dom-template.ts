@@ -8,11 +8,11 @@
  *
  * Sub-elements wired up elsewhere:
  *  - `#help-button` / `#help-modal` — `help-modal.ts` (`wireHelpModal`)
- *  - `#account-chip` — `main.ts` (`refreshLeaderboardAccount`)
+ *  - `#account-chip` — `leaderboard-ui.ts` (`LeaderboardPanel.refreshAccount`)
  *  - `#compat-panel*` — `compat-panel.ts` (`renderBrowserCompatPanel`), folded inside the drop card
  *  - `#start-leaderboard` / `#start-*` — `leaderboard-ui.ts` (`LeaderboardPanel.bindStartCard`)
- *  - `#start-silent-mode` — `silent-mode-playback.ts` (`mountStartSilentModeOption`), wired from `main.ts`
- *  - `#songs` / `#search` / `#stage` / `#loading-*` / `.shell` — referenced via `PlayerWebDemoElements` in `main.ts`
+ *  - `#start-silent-mode` — `silent-mode-playback.ts` (`mountStartSilentModeOption`), from `services/silent-mode.ts`
+ *  - `#songs` / `#search` / `#stage` / `#loading-*` / `.shell` — looked up in `main.ts` as `PlayerWebDemoElements`
  */
 export const DEMO_APP_HTML = `
   <div class="shell empty">
@@ -253,7 +253,7 @@ export const DEMO_APP_HTML = `
       "Drop a skin" — shown when the Debug Menu's Skin system is set to LR2 or
       beatoraja with none of that system loaded. A drop anywhere closes it, and
       a skin of the asked-for system is then used without asking. Filled by
-      \`promptSkinDrop\` (main.ts).
+      \`promptSkinDrop\` (ui/skin-drop-prompt.ts).
     -->
     <dialog class="skin-drop" id="skin-drop" aria-labelledby="skin-drop-title">
       <svg class="drop-icon" viewBox="0 0 48 48" aria-hidden="true">
@@ -308,7 +308,7 @@ export const DEMO_APP_HTML = `
       Bottom-right Leaderboard account chip: the sign-in state at a glance
       (a green dot when signed in, amber when anonymous, grey when signed
       out). Signed in, it opens the player's Leaderboard page; signed out,
-      it opens the Debug Menu's Leaderboard folder. Wired in \`main.ts\`.
+      it opens the Debug Menu's Leaderboard folder. Wired in \`leaderboard-ui.ts\`.
     -->
     <a class="account-chip" id="account-chip" data-state="loading" href="/leaderboard" target="_blank" rel="noopener">
       <span class="account-chip-dot" aria-hidden="true"></span>
