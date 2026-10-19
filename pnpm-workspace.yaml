@@ -5,7 +5,7 @@ onlyBuiltDependencies:
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@1.2.0
   vitest: 5.0.4
-  vite-plus: 1.2.0
+  vite-plus: 1.3.0
   '@vitest/coverage-v8': 5.0.4
 overrides:
   vite@*: 'catalog:'
