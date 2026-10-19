@@ -1,0 +1,70 @@
+name: Tidy Dependabot npm PRs
+
+# Dependabot's npm PRs need two fixes before CI can pass or before they are safe to merge:
+#
+# - Its lockfile resolution ignores the `vite@*` override, so it adds a second, unused `vite` (and `rolldown`) next to
+#   the `@voidzero-dev/vite-plus-core` alias. `vp dedupe` takes them out again.
+# - It bumps the `vite-plus` catalog entry but not the `vite` -> `@voidzero-dev/vite-plus-core` alias or the `vitest` /
+#   `@vitest/*` pins, which must match the Vite+ release (`vp` refuses to plan tasks otherwise). `vp migrate` aligns them.
+#
+# The job pushes the result to the Dependabot branch and starts CI on the new commit: a push made with GITHUB_TOKEN
+# triggers no `pull_request` run, but a `workflow_dispatch` does.
+
+on:
+  pull_request:
+    paths:
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-npm-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  tidy:
+    if: github.actor == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/npm_and_yarn/')
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
+      actions: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.head_ref }}
+
+      # Installs vp at the version the `vite-plus` catalog entry names.
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
+        with:
+          node-version-file: .node-version
+          cache: false
+          run-install: false
+
+      - name: Align the vite alias and the Vitest pins
+        if: startsWith(github.head_ref, 'dependabot/npm_and_yarn/vite-plus')
+        run: vp migrate --no-interactive --no-agent --no-editor --no-hooks
+
+      - name: Dedupe the lockfile
+        run: |
+          vp install
+          vp dedupe
+
+      - name: Push the result and start CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          if git diff --quiet; then
+            echo "Nothing to change."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit --no-verify -am 'chore(deps): dedupe the lockfile and align Vite+'
+          git push origin "HEAD:${BRANCH}"
+          gh workflow run ci.yml --ref "${BRANCH}"
