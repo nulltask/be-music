@@ -1,0 +1,58 @@
+name: Align Vite+ on Dependabot PRs
+
+# Dependabot bumps the `vite-plus` catalog entry but not the `vite` -> `@voidzero-dev/vite-plus-core` alias or the
+# `vitest` / `@vitest/*` pins, which must match the Vite+ release (`vp` refuses to plan tasks otherwise). This job runs
+# `vp migrate` on the Dependabot branch to align them, pushes the result, and starts CI on the new commit: a push made
+# with GITHUB_TOKEN triggers no `pull_request` run, but a `workflow_dispatch` does.
+
+on:
+  pull_request:
+    paths:
+      - pnpm-workspace.yaml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-vite-plus-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  align:
+    if: github.actor == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/npm_and_yarn/vite-plus')
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
+      actions: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.head_ref }}
+
+      # Installs vp at the version the bumped `vite-plus` catalog entry names.
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
+        with:
+          node-version-file: .node-version
+          cache: false
+          run-install: false
+
+      - name: Align the alias and the Vitest pins
+        run: vp migrate --no-interactive --no-agent --no-editor --no-hooks
+
+      - name: Push the alignment and start CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          if git diff --quiet; then
+            echo "Already aligned."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit --no-verify -am 'chore(deps): align the vite alias and Vitest pins with vite-plus'
+          git push origin "HEAD:${BRANCH}"
+          gh workflow run ci.yml --ref "${BRANCH}"
