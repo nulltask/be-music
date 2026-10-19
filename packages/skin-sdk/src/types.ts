@@ -22,8 +22,8 @@ import type {
  *
  * Nothing here depends on a rendering framework. Skins are written against the `@be-music/skin-sdk` package
  * and declared with its `defineBeMusicSkin`, which checks {@link BeMusicSkin.apiVersion} and the metadata.
- * Hosts pick one with {@link BeMusicSkin.id} from a registry (`createBeMusicSkinRegistry`) and pass it to the default
- * scene classes via their `beMusicSkin` option.
+ * Hosts pick one with {@link BeMusicSkin.id} from a registry (`createBeMusicSkinRegistry`) and hand it to the scenes in
+ * the built-in family's kit (`{ family: 'built-in', skin }`).
  */
 export interface BeMusicSkin<K extends BeMusicSurfaceContextKind = BeMusicSurfaceContextKind> {
   /**
