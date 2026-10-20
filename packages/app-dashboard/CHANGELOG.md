@@ -1,5 +1,17 @@
 # @be-music/app-dashboard
 
+## 0.1.1
+
+### Patch Changes
+
+- ebff0e7: Display the fixed build timestamp and source revision in the service footer.
+  
+  Rename the package from `@be-music/dashboard` to `@be-music/app-dashboard` to identify its role consistently. Update imports and package filters to the new name.
+- Updated dependencies [325e7bb]
+- Updated dependencies [ebff0e7]
+  - @be-music/service-auth-client@0.1.1
+  - @be-music/service-web-theme@0.2.0
+
 ## 0.1.0
 
 ### Minor Changes

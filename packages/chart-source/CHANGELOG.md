@@ -1,5 +1,16 @@
 # @be-music/chart-source
 
+## 0.4.0
+
+### Minor Changes
+
+- dca9a2f: Rename the package from `@be-music/json` to `@be-music/chart-source` to identify its role consistently. Update imports and package filters to the new name.
+
+### Patch Changes
+
+- Updated dependencies [dca9a2f]
+  - @be-music/shared-utils@0.5.0
+
 ## 0.3.0
 
 ### Minor Changes

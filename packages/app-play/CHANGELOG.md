@@ -1,5 +1,36 @@
 # @be-music/app-play
 
+## 0.6.1
+
+### Patch Changes
+
+- ebff0e7: Display the build timestamp and source revision in the start-card and help footers without covering the playfield.
+  
+  Rename the package from `@be-music/player-web-demo` to `@be-music/app-play` to identify its role consistently. Update imports and package filters to the new name.
+- 9a0c3f9: Use chart-based navigation, image, and best-record names, and replay terminology for saved recording data and controls. Update the test hook to expose chart bars and chart counts consistently.
+  
+  Align help, course messages, loading statuses, and replay controls with the chart and replay vocabulary.
+- Updated dependencies [9a0c3f9]
+- Updated dependencies [dca9a2f]
+- Updated dependencies [dca9a2f]
+- Updated dependencies [dca9a2f]
+- Updated dependencies [9a0c3f9]
+- Updated dependencies [9a0c3f9]
+- Updated dependencies [9a0c3f9]
+- Updated dependencies [9a0c3f9]
+- Updated dependencies [9a0c3f9]
+- Updated dependencies [ebff0e7]
+  - @be-music/skin-beatoraja@0.4.0
+  - @be-music/chart-model@0.6.0
+  - @be-music/chart-parser@0.4.0
+  - @be-music/chart-source@0.4.0
+  - @be-music/skin-lr2@0.3.0
+  - @be-music/player-engine@0.10.0
+  - @be-music/player-browser@0.11.0
+  - @be-music/player-scene-model@0.2.0
+  - @be-music/player-skin-sdk@0.4.0
+  - @be-music/service-web-theme@0.2.0
+
 ## 0.6.0
 
 ### Minor Changes

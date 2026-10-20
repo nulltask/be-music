@@ -1,5 +1,24 @@
 # @be-music/chart-editor
 
+## 0.4.0
+
+### Minor Changes
+
+- dca9a2f: Rename the package from `@be-music/editor` to `@be-music/chart-editor` to identify its role consistently. Update imports and package filters to the new name.
+
+### Patch Changes
+
+- Updated dependencies [dca9a2f]
+- Updated dependencies [dca9a2f]
+- Updated dependencies [dca9a2f]
+- Updated dependencies [dca9a2f]
+- Updated dependencies [dca9a2f]
+  - @be-music/chart-model@0.6.0
+  - @be-music/chart-parser@0.4.0
+  - @be-music/chart-source@0.4.0
+  - @be-music/chart-writer@0.5.0
+  - @be-music/shared-utils@0.5.0
+
 ## 0.3.0
 
 ### Minor Changes

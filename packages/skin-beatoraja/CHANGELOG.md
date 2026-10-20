@@ -1,5 +1,24 @@
 # @be-music/skin-beatoraja
 
+## 0.4.0
+
+### Minor Changes
+
+- 9a0c3f9: Use `BeatorajaChartTextInput`, `resolveBeatorajaChartText`, and chart fields for scene text inputs. Adopt canonical replay and judgment models while preserving beatoraja format keys and operation identifiers.
+  
+  Rename the package from `@be-music/beatoraja-skin` to `@be-music/skin-beatoraja` to identify its role consistently. Update imports and package filters to the new name.
+
+### Patch Changes
+
+- Updated dependencies [9a0c3f9]
+- Updated dependencies [9a0c3f9]
+- Updated dependencies [9a0c3f9]
+- Updated dependencies [dca9a2f]
+  - @be-music/skin-lr2@0.3.0
+  - @be-music/player-engine@0.10.0
+  - @be-music/player-scene-model@0.2.0
+  - @be-music/shared-utils@0.5.0
+
 ## 0.3.0
 
 ### Minor Changes

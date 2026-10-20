@@ -1,5 +1,28 @@
 # @be-music/player-terminal
 
+## 0.7.0
+
+### Minor Changes
+
+- 9a0c3f9: Rename the replay inspection command to `bms-replay` and the recording APIs and modules to replay terminology. Adopt canonical chart and judgment types; the previous command and API spellings are removed.
+  
+  Rename the package from `@be-music/player-tui` to `@be-music/player-terminal` to identify its role consistently. Update imports and package filters to the new name.
+
+### Patch Changes
+
+- Updated dependencies [dca9a2f]
+- Updated dependencies [dca9a2f]
+- Updated dependencies [dca9a2f]
+- Updated dependencies [dca9a2f]
+- Updated dependencies [9a0c3f9]
+- Updated dependencies [dca9a2f]
+  - @be-music/chart-audio-renderer@0.4.0
+  - @be-music/chart-model@0.6.0
+  - @be-music/chart-parser@0.4.0
+  - @be-music/chart-source@0.4.0
+  - @be-music/player-engine@0.10.0
+  - @be-music/shared-utils@0.5.0
+
 ## 0.6.0
 
 ### Minor Changes

@@ -1,5 +1,24 @@
 # @be-music/player-skin-sdk
 
+## 0.4.0
+
+### Minor Changes
+
+- 9a0c3f9: Use chart-based names for chart facts, images, and best records, including `ChartStats`, `BeMusicChartBestRecord`, `chartBestRecord`, and `courseBestRecord`. Rename judgment types and consume result data through `chart` and `replay`. Keep `BeMusicStage` unchanged; previous renamed API spellings are removed.
+  
+  Rename the package from `@be-music/skin-sdk` to `@be-music/player-skin-sdk` to identify its role consistently. Update imports and package filters to the new name.
+
+### Patch Changes
+
+- Updated dependencies [dca9a2f]
+- Updated dependencies [dca9a2f]
+- Updated dependencies [9a0c3f9]
+- Updated dependencies [9a0c3f9]
+  - @be-music/chart-model@0.6.0
+  - @be-music/chart-source@0.4.0
+  - @be-music/player-engine@0.10.0
+  - @be-music/player-scene-model@0.2.0
+
 ## 0.3.0
 
 ### Minor Changes

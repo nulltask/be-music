@@ -1,5 +1,28 @@
 # @be-music/app-leaderboard
 
+## 0.2.0
+
+### Minor Changes
+
+- 9a0c3f9: Use replay terminology for submission payloads, download endpoints, recording helpers, and stored references. Apply migration 0015 to rename the chart/course recording reference columns to `replay_key`; the previous payload fields and endpoint names are removed.
+  
+  Use judgment terminology consistently in ranking explanations and help text.
+  
+  Rename the package from `@be-music/leaderboard-api` to `@be-music/app-leaderboard` to identify its role consistently. Update imports and package filters to the new name.
+
+### Patch Changes
+
+- 325e7bb: Automatically reuse an existing Accounts login when opening Leaderboard pages, without requiring a separate sign-in click.
+- ebff0e7: Display the fixed build timestamp and source revision in the service footer.
+- Updated dependencies [325e7bb]
+- Updated dependencies [dca9a2f]
+- Updated dependencies [9a0c3f9]
+- Updated dependencies [ebff0e7]
+  - @be-music/service-auth-client@0.1.1
+  - @be-music/chart-model@0.6.0
+  - @be-music/player-engine@0.10.0
+  - @be-music/service-web-theme@0.2.0
+
 ## 0.1.0
 
 ### Minor Changes
