@@ -210,6 +210,11 @@ export async function handleAuth(request: Request, env: OIDCEnv): Promise<Respon
     headers.append('set-cookie', cookie(TRANSACTION_COOKIE, '', 0));
     // Respect an explicit app sign-out until the user starts sign-in again.
     headers.append('set-cookie', cookie(SSO_CHECK_COOKIE, 'signed-out', 86400));
+    // Native forms can return to a local page without requiring browser JavaScript.
+    if (url.searchParams.has('returnTo')) {
+      headers.set('location', returnPath(url.searchParams.get('returnTo')));
+      return new Response(null, { status: 303, headers });
+    }
     return reply({ success: true });
   }
   if (url.pathname === '/api/auth/manage' && request.method === 'GET') {

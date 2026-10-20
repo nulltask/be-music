@@ -41,6 +41,49 @@ describe('relying-party boundaries', () => {
     );
     expect(response?.headers.getSetCookie()).toHaveLength(3);
     expect(response?.headers.get('set-cookie')).toContain('Max-Age=0');
+    expect(await response?.json()).toEqual({ success: true });
+  });
+
+  test.each([
+    ['/', '/'],
+    ['/scores?mode=lr2', '/scores?mode=lr2'],
+    ['https://attacker.example', '/'],
+    ['//attacker.example', '/'],
+  ])('returns native sign-out forms to a safe local page: %s', async (returnTo, destination) => {
+    const url = new URL('/api/auth/sign-out', env.PUBLIC_ORIGIN);
+    url.searchParams.set('returnTo', returnTo);
+    const response = await handleAuth(
+      new Request(url, {
+        method: 'POST',
+        headers: { origin: env.PUBLIC_ORIGIN, 'content-type': 'application/x-www-form-urlencoded' },
+      }),
+      env,
+    );
+    expect(response?.status).toBe(303);
+    expect(response?.headers.get('location')).toBe(destination);
+    const cookies = response!.headers.getSetCookie();
+    expect(cookies).toContainEqual(expect.stringContaining('__Host-be-music.session=;'));
+    expect(cookies).toContainEqual(expect.stringContaining('__Host-be-music.oidc=;'));
+    expect(cookies).toContainEqual(expect.stringContaining('__Host-be-music.sso-check=signed-out;'));
+    const cookie = cookies.map((value) => value.split(';')[0]).join('; ');
+    const signedOut = new Request(new URL(destination, env.PUBLIC_ORIGIN), {
+      headers: { cookie, 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document', accept: 'text/html' },
+    });
+    expect(await readSession(signedOut, env)).toBeNull();
+    expect(await handleAuth(signedOut, env)).toBeNull();
+  });
+
+  test.each([undefined, 'https://attacker.example'])('rejects sign-out forms from origin %s', async (origin) => {
+    const response = await handleAuth(
+      new Request(`${env.PUBLIC_ORIGIN}/api/auth/sign-out?returnTo=/`, {
+        method: 'POST',
+        headers: origin ? { origin } : {},
+      }),
+      env,
+    );
+    expect(response?.status).toBe(403);
+    expect(response?.headers.getSetCookie()).toEqual([]);
+    expect(response?.headers.get('location')).toBeNull();
   });
 });
 
