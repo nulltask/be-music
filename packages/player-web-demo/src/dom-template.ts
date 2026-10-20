@@ -1,3 +1,5 @@
+import { renderBuildInfo } from '@be-music/web-theme';
+
 /**
  * Static HTML for the demo shell — injected once into `#app` at boot via `app.innerHTML = DEMO_APP_HTML`.
  *
@@ -162,6 +164,11 @@ export const DEMO_APP_HTML = `
               </section>
             </div>
           </details>
+          <footer class="service-build-footer">${renderBuildInfo(
+            typeof __BE_MUSIC_BUILD_TIME__ === 'string'
+              ? { builtAt: __BE_MUSIC_BUILD_TIME__, revision: __BE_MUSIC_BUILD_REVISION__ }
+              : undefined,
+          )}</footer>
         </div>
       </div>
     </div>
@@ -676,6 +683,11 @@ export const DEMO_APP_HTML = `
           <ol class="help-oss-list" id="help-oss-list"></ol>
         </section>
       </div>
+      <footer class="service-build-footer">${renderBuildInfo(
+        typeof __BE_MUSIC_BUILD_TIME__ === 'string'
+          ? { builtAt: __BE_MUSIC_BUILD_TIME__, revision: __BE_MUSIC_BUILD_REVISION__ }
+          : undefined,
+      )}</footer>
     </div>
   </div>
 `;

@@ -23,3 +23,6 @@ declare module 'virtual:acknowledgements' {
   const acknowledgements: ReadonlyArray<Acknowledgement>;
   export default acknowledgements;
 }
+
+declare const __BE_MUSIC_BUILD_TIME__: string;
+declare const __BE_MUSIC_BUILD_REVISION__: string;

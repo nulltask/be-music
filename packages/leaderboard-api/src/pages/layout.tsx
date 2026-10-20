@@ -1,5 +1,7 @@
 /** @jsxImportSource hono/jsx */
 import type { Child } from 'hono/jsx';
+import { raw } from 'hono/html';
+import { renderBuildInfo, type BuildInfo } from '@be-music/web-theme';
 import type { PlaylogRulesetId } from '@be-music/player/playlog';
 import { RULESET_LABELS } from './format.ts';
 import { LOCALE_NAMES, LOCALES, MessagesContext, messagesFor, useMessages, type Locale } from './i18n/index.ts';
@@ -137,6 +139,7 @@ export interface Crumb {
 }
 
 export interface PageMeta {
+  buildInfo?: BuildInfo;
   title: string;
   description: string;
   /** The trail below "Leaderboard", ending with this page. */
@@ -760,6 +763,7 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
               {/* The holder and licence of the be-music repository (LICENSE). */}
               <span>{t.footer.copyright}</span>
             </div>
+            {raw(renderBuildInfo(props.meta.buildInfo))}
           </footer>
         </MessagesContext.Provider>
       </body>

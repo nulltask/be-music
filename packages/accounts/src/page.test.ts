@@ -50,3 +50,17 @@ describe('Accounts page', () => {
     expect(page).not.toContain('data-action="guest"');
   });
 });
+
+test('includes stable build information in the account footer', () => {
+  const page = renderAccountPage({
+    signedIn: false,
+    anonymous: false,
+    name: '',
+    login: true,
+    discord: false,
+    google: false,
+    buildInfo: { builtAt: '2026-10-20T08:00:00Z', revision: '0123456789abcdef' },
+  });
+  expect(page.split('</main>')[1]).toContain('2026-10-20 08:00:00 UTC');
+  expect(page).toContain('>01234567</code>');
+});

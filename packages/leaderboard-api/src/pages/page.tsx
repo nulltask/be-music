@@ -71,9 +71,13 @@ export function pageMessages(c: Context): Messages {
 
 export function meta(c: Context, title: string, description: string, crumbs: Crumb[] = []): PageMeta {
   const url = new URL(c.req.url);
+  const env = (c as Context<AppEnv>).env;
   return {
     title,
     description,
+    buildInfo: env?.BUILD_TIMESTAMP
+      ? { builtAt: env.BUILD_TIMESTAMP, revision: env.BUILD_REVISION ?? 'unknown' }
+      : undefined,
     crumbs,
     url: c.req.url,
     path: `${url.pathname}${url.search}`,
