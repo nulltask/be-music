@@ -1,44 +1,44 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runCliMain } from './cli-utils.ts';
-import type { ExportsBenchmarkCliOverrides, ExportsBenchmarkSnapshot, PackageName } from './exports.types.ts';
+import { runCLIMain } from './cli-utils.ts';
+import type { ExportsBenchmarkCLIOverrides, ExportsBenchmarkSnapshot, PackageName } from './exports.types.ts';
 
-type RunExportsBenchmarkCli = (
+type RunExportsBenchmarkCLI = (
   args?: readonly string[],
-  overrides?: ExportsBenchmarkCliOverrides,
+  overrides?: ExportsBenchmarkCLIOverrides,
 ) => Promise<ExportsBenchmarkSnapshot>;
 
-export function resolvePackageBenchmarkOutputPath(packageScriptUrl: string, packageName: PackageName): string {
-  const packageScriptDir = dirname(fileURLToPath(packageScriptUrl));
+export function resolvePackageBenchmarkOutputPath(packageScriptURL: string, packageName: PackageName): string {
+  const packageScriptDir = dirname(fileURLToPath(packageScriptURL));
   const repositoryDir = resolve(packageScriptDir, '../../..');
   return resolve(repositoryDir, `tmp/bench/exports-${packageName}.json`);
 }
 
-export async function runPackageExportsBenchmarkCli(
+export async function runPackageExportsBenchmarkCLI(
   packageName: PackageName,
-  packageScriptUrl: string,
+  packageScriptURL: string,
   args: readonly string[] = process.argv.slice(2),
 ): Promise<ExportsBenchmarkSnapshot> {
   const benchModule = await import('./exports.ts');
-  const runExportsBenchmarkCli = (benchModule as { runExportsBenchmarkCli?: RunExportsBenchmarkCli })
-    .runExportsBenchmarkCli;
+  const runExportsBenchmarkCLI = (benchModule as { runExportsBenchmarkCLI?: RunExportsBenchmarkCLI })
+    .runExportsBenchmarkCLI;
 
-  if (typeof runExportsBenchmarkCli !== 'function') {
-    throw new Error('runExportsBenchmarkCli is not available in scripts/bench/exports.ts');
+  if (typeof runExportsBenchmarkCLI !== 'function') {
+    throw new Error('runExportsBenchmarkCLI is not available in scripts/bench/exports.ts');
   }
 
-  return runExportsBenchmarkCli(args, {
+  return runExportsBenchmarkCLI(args, {
     defaultPackages: [packageName],
-    defaultOutputPath: resolvePackageBenchmarkOutputPath(packageScriptUrl, packageName),
+    defaultOutputPath: resolvePackageBenchmarkOutputPath(packageScriptURL, packageName),
   });
 }
 
-export function runPackageExportsBenchmarkScript(packageName: PackageName, packageScriptUrl: string): void {
-  runCliMain(packageScriptUrl, () => runPackageExportsBenchmarkCli(packageName, packageScriptUrl));
+export function runPackageExportsBenchmarkScript(packageName: PackageName, packageScriptURL: string): void {
+  runCLIMain(packageScriptURL, () => runPackageExportsBenchmarkCLI(packageName, packageScriptURL));
 }
 
 export default {
   resolvePackageBenchmarkOutputPath,
-  runPackageExportsBenchmarkCli,
+  runPackageExportsBenchmarkCLI,
   runPackageExportsBenchmarkScript,
 };

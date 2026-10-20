@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vite-plus/test';
 import { createBeMusicSkinRegistry, resolveBeMusicLaneKind, resolveSelectListWindow } from './registry.ts';
 import type { BeMusicSkin } from './types.ts';
 
-function stubSkin(id: string, apiVersion = 1): BeMusicSkin {
+function stubSkin(id: string, apiVersion = 0): BeMusicSkin {
   return {
     apiVersion,
     id,

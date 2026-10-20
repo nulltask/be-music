@@ -13,15 +13,26 @@
 // measures' lengths × 4. Within a measure, `event.position = [num, denom]` becomes a fractional
 // position multiplied by the measure's length.
 
-import type { BeMusicJson } from '@be-music/json';
-import type { BeatorajaMarkerBeats } from '../../scene/beatoraja/markers.ts';
+import type { BeMusicJSON } from '@be-music/json';
 import {
   beatorajaEventBeat,
   computeBeatorajaMeasureBaseBeats,
   hasBeatorajaEventValue,
-  isBeatorajaBpmEventChannel,
+  isBeatorajaBPMEventChannel,
   isBeatorajaStopEventChannel,
 } from './timing.ts';
+
+/** Beat positions per marker kind. Caller computes these from the chart once per play. */
+export interface BeatorajaMarkerBeats {
+  /** Section-line beats — one per measure boundary. */
+  group: ReadonlyArray<number>;
+  /** BPM-change event beats. */
+  bpm: ReadonlyArray<number>;
+  /** STOP event beats. */
+  stop: ReadonlyArray<number>;
+  /** Time-tick beats — typically every 1 / 4 / 8 measures depending on the skin's authored style. */
+  time: ReadonlyArray<number>;
+}
 
 /**
  * Compute marker beat lists for the given chart. `time` markers are spaced at `timeIntervalSec`
@@ -29,7 +40,7 @@ import {
  * a `time` destination).
  */
 export function computeBeatorajaChartMarkers(
-  chart: BeMusicJson,
+  chart: BeMusicJSON,
   options: { timeIntervalSec?: number; totalSeconds?: number; beatToSeconds?: (beat: number) => number } = {},
 ): BeatorajaMarkerBeats {
   // 1. Build per-measure base beats. We need this for BPM / STOP event positions too, so it's
@@ -52,7 +63,7 @@ export function computeBeatorajaChartMarkers(
     if (!hasBeatorajaEventValue(event.value)) continue;
     const beat = beatorajaEventBeat(event, measureBaseBeat);
     if (beat === undefined) continue;
-    if (isBeatorajaBpmEventChannel(event.channel)) {
+    if (isBeatorajaBPMEventChannel(event.channel)) {
       bpm.push(beat);
     } else if (isBeatorajaStopEventChannel(event.channel)) {
       stop.push(beat);

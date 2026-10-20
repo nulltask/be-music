@@ -1,14 +1,18 @@
 import { effect } from 'alien-signals';
 import { createAbortError } from '@be-music/utils/core';
 import type { LogEntry } from '@be-music/utils/log';
-import type { BeMusicJson } from '@be-music/json';
+import type { RandomDraws } from '@be-music/chart';
+import type { BeMusicJSON } from '@be-music/json';
 import { Worker, type MessagePort } from 'node:worker_threads';
-import { createPlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
-import type { PlayerLoadProgress, PlayerSummary } from '@be-music/player/core/engine';
-import { PlayerInterruptedError } from '@be-music/player/core/engine';
-import { createNodeInputRuntime, type NodeInputRuntime } from './node-input-runtime.ts';
-import { createNodeUiRuntime, type NodeUiRuntime } from './node-ui-runtime.ts';
-import { createSeaWorker, isSeaRuntime } from './sea-worker.ts';
+import { createPlayerInputSignalBus } from '@be-music/player/signals';
+import { PlayerInterruptedError, type PlayerLoadProgress, type PlayerSummary } from '@be-music/player';
+import {
+  createNodeInputRuntime,
+  hasNegotiatedStatefulKeyboardProtocol,
+  type NodeInputRuntime,
+} from './node-input-runtime.ts';
+import { createNodeUIRuntime, type NodeUIRuntime } from './node-ui-runtime.ts';
+import { createSEAWorker, isSEARuntime } from './sea-worker.ts';
 import type {
   NodeGameplayWorkerInboundMessage,
   NodeGameplayWorkerInitData,
@@ -18,7 +22,10 @@ import type {
 } from './node-gameplay-worker-protocol.ts';
 
 export interface NodeGameplayRuntimeOptions {
-  json: BeMusicJson;
+  /** The chart to play, already resolved (`resolveBMSControlFlowWithDraws`). */
+  json: BeMusicJSON;
+  /** The `#RANDOM` / `#SWITCH` draws `json` was resolved with, for the engine's RANDOM summary. */
+  randomDraws?: RandomDraws;
   mode: 'auto' | 'manual';
   autoScratch?: boolean;
   playOptions: NodeGameplayWorkerPlayOptions;
@@ -36,9 +43,9 @@ export async function runNodeGameplayRuntime(options: NodeGameplayRuntimeOptions
     throw createAbortError();
   }
 
-  const worker = isSeaRuntime()
-    ? createSeaWorker('node-gameplay-worker', createWorkerInitData(options))
-    : new Worker(resolveNodeGameplayWorkerUrl(), {
+  const worker = isSEARuntime()
+    ? createSEAWorker('node-gameplay-worker', createWorkerInitData(options))
+    : new Worker(resolveNodeGameplayWorkerURL(), {
         workerData: createWorkerInitData(options),
         execArgv: resolveNodeGameplayWorkerExecArgv(),
       });
@@ -46,7 +53,7 @@ export async function runNodeGameplayRuntime(options: NodeGameplayRuntimeOptions
 
   let inputRuntime: NodeInputRuntime | undefined;
   let stopInputEffect = (): void => undefined;
-  let uiRuntime: NodeUiRuntime | undefined;
+  let uiRuntime: NodeUIRuntime | undefined;
   let settled = false;
 
   const cleanup = async (): Promise<void> => {
@@ -147,7 +154,7 @@ export async function runNodeGameplayRuntime(options: NodeGameplayRuntimeOptions
         return;
       }
       if (message.kind === 'ui-init') {
-        void handleUiInit(worker, message, {
+        void handleUIInit(worker, message, {
           setRuntime: (runtime) => {
             uiRuntime = runtime;
           },
@@ -157,11 +164,11 @@ export async function runNodeGameplayRuntime(options: NodeGameplayRuntimeOptions
         return;
       }
       if (message.kind === 'ui-stop') {
-        void handleUiLifecycleAck(worker, message.requestId, 'ui-stop-result', () => uiRuntime?.stop());
+        void handleUILifecycleAck(worker, message.requestId, 'ui-stop-result', () => uiRuntime?.stop());
         return;
       }
       if (message.kind === 'ui-dispose') {
-        void handleUiLifecycleAck(worker, message.requestId, 'ui-dispose-result', async () => {
+        void handleUILifecycleAck(worker, message.requestId, 'ui-dispose-result', async () => {
           await uiRuntime?.dispose();
           uiRuntime = undefined;
         });
@@ -199,23 +206,23 @@ export async function runNodeGameplayRuntime(options: NodeGameplayRuntimeOptions
   });
 }
 
-async function handleUiInit(
+async function handleUIInit(
   worker: Worker,
   message: Extract<NodeGameplayWorkerOutboundMessage, { kind: 'ui-init' }>,
   runtimeStore: {
-    setRuntime: (runtime: NodeUiRuntime | undefined) => void;
+    setRuntime: (runtime: NodeUIRuntime | undefined) => void;
     loadSignal?: AbortSignal;
     onLog?: (entry: LogEntry) => void;
   },
 ): Promise<void> {
   try {
-    const runtime = await createNodeUiRuntime({
+    const runtime = await createNodeUIRuntime({
       json: message.runtime.json,
       mode: message.runtime.mode,
       laneDisplayMode: message.runtime.laneDisplayMode,
       laneBindings: message.runtime.laneBindings,
       speed: message.runtime.speed,
-      uiFps: message.runtime.uiFps,
+      uiFPS: message.runtime.uiFPS,
       tuiVisibleNotesLimit: message.runtime.tuiVisibleNotesLimit,
       tuiNoteHeight: message.runtime.tuiNoteHeight,
       judgeWindowMs: message.runtime.judgeWindowMs,
@@ -225,13 +232,13 @@ async function handleUiInit(
       randomPatternSummary: message.runtime.randomPatternSummary,
       baseDir: message.runtime.baseDir,
       kittyGraphics: message.runtime.kittyGraphics,
-      videoBgaStreaming: message.runtime.videoBgaStreaming,
+      videoBGAStreaming: message.runtime.videoBGAStreaming,
       initialFrame: message.runtime.initialFrame,
       initialPaused: message.runtime.initialPaused,
       initialJudgeCombo: message.runtime.initialJudgeCombo,
       loadSignal: runtimeStore.loadSignal,
       onLog: runtimeStore.onLog,
-      onBgaLoadProgress: (progress) => {
+      onBGALoadProgress: (progress) => {
         postWorkerMessage(worker, {
           kind: 'ui-bga-load-progress',
           requestId: message.requestId,
@@ -264,7 +271,7 @@ async function handleUiInit(
   }
 }
 
-async function handleUiLifecycleAck(
+async function handleUILifecycleAck(
   worker: Worker,
   requestId: number,
   kind: 'ui-stop-result' | 'ui-dispose-result',
@@ -285,13 +292,15 @@ async function handleUiLifecycleAck(
 function createWorkerInitData(options: NodeGameplayRuntimeOptions): NodeGameplayWorkerInitData {
   return {
     json: options.json,
+    ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),
     mode: options.mode,
     autoScratch: options.autoScratch,
     playOptions: options.playOptions,
+    ...(hasNegotiatedStatefulKeyboardProtocol() ? { inputReportsKeyReleases: true } : {}),
   };
 }
 
-function resolveNodeGameplayWorkerUrl(): URL {
+function resolveNodeGameplayWorkerURL(): URL {
   return new URL(
     import.meta.url.endsWith('.ts') ? './node-gameplay-worker.ts' : './node-gameplay-worker.js',
     import.meta.url,

@@ -1,0 +1,569 @@
+[English version](./leaderboard.md)
+
+# Leaderboard 設計
+
+> ステータス: P0 の中核は [`packages/leaderboard-api`](../packages/leaderboard-api/README.ja.md) に実装済みです（認証、
+> 検証の層 L1〜L3 付きの送信（`#RANDOM` のない譜面では L4 も）、3 つのルールセットでの再計算、ランキングの API）。
+> それ以外はまだ設計段階です。このドキュメントは、これまでに決めたことと、まだ決まっていないこと（15 章）を記録します。
+
+Leaderboard は be-music のオンラインのスコアランキングで、LR2 や beatoraja が「IR」（Internet Ranking）と呼ぶ
+ものにあたります。このリポジトリでは「IR」を JSON の中間表現（`@be-music/json`）の意味で使っているので、
+ランキングはコード・ドキュメント・UI のどこでも **Leaderboard** と呼びます。外部のものの名前（LR2IR、beatoraja
+スキンの IR 系 op）はそのままの表記を使います。
+
+## 1. 目的と対象外
+
+目的:
+
+- 譜面ごとに、3 つの互換ルールセット（`lr2`、`beatoraja`、`iidx`）それぞれでプレイを順位付けする。
+- クライアントではなくサーバーを信頼する。クライアントはプレイログを送り、結果はサーバーが計算し直す。
+- 譜面を内容で識別し（Be-Music Fingerprint）、保存し直したもの・文字コードを変えたもの・変換したものが同じ
+  ランキングを共有するようにする。
+- 選曲・プレイ・リザルト画面でのライバル、ターゲット、ゴースト。OG 画像付きで共有できるスコアページ。
+
+対象外:
+
+- あらゆる不正を防ぐこと。捏造した入力（bot や TAS）は人間の入力と確実には区別できません。これはプロトコルでは
+  なく、異常検知とモデレーション（12 章）で扱います。
+- 譜面や音声ファイルの配信。サーバーが保存するのは、正規化した fingerprint のドキュメントとプレイログだけです。
+
+## 2. 構成
+
+```mermaid
+flowchart LR
+  subgraph clients[クライアント]
+    W[player-web]
+    T[player-tui]
+  end
+  subgraph workers[Workers]
+    P[play]
+    A[accounts]
+    D[dashboard]
+    L[leaderboard]
+  end
+  W --> P
+  T --> L
+  P -->|/api/*| L
+  A -->|/api/auth/*| L
+  D -->|セッション| L
+  L --> DB[(D1)]
+  L --> R2[(R2)]
+```
+
+- **実行環境**: Cloudflare Workers と D1・R2。Cloudflare から移る予定はありません。
+- **フレームワーク**: Hono。API とサーバーレンダリングするページを 1 つの Worker に置き、データアクセスの関数を
+  共有します。
+- **パッケージ**: `packages/leaderboard-api`（private）。プレイの再計算と fingerprint の検証のために
+  `@be-music/player/playlog` と `@be-music/chart` を import します。
+- **型付きクライアント**: Hono RPC（`hc<AppType>`）で、`player-web` と `player-tui` に API の型をそのまま渡します。
+- **入力検証**: Valibot と `@hono/standard-validator`。
+- **ORM**: Drizzle。drizzle-kit で SQL のマイグレーションをパッケージ内に生成し、Better Auth のテーブルも同じ
+  マイグレーションで管理します。
+- **ホスト**（docs/services.ja.md）: Leaderboard は、ページと API を `leaderboard.be-music.app` で配信します（ページは
+  ルートに置きます）。Player の Worker（`play`）が `/api/*` を Service Binding で転送するので、プレイヤーからの
+  リクエストはプレイヤー自身のオリジンのままです。各アプリはホスト専用の OIDC セッションを持ち、API 向けのアクセストークンで転送します。Accounts が独立した Worker と D1 に認証を所有し、Leaderboard は公開プロフィールとスコアを所有します。
+- **CI/CD**: Deploy ワークフロー（`.github/workflows/deploy.yml`）が、`main` と `devel` への push で全サービスをデプロイ
+  します（docs/services.ja.md 2 章）。
+- **マイグレーションはデプロイより先に実行する**ので、どのマイグレーションも動いている旧コードと両立させます
+  （追加 → 切り替え → 削除）。D1 にはロールバックがありません。
+- **プレビューを本番データに触れさせない。** プレビューの Worker は preview の Leaderboard につなぎ、Leaderboard の Worker 自身のプレビュー URL は無効にします。
+- **secrets**（`BETTER_AUTH_SECRET`、OAuth のクライアントシークレット）は環境ごとに設定します。値は 1Password に置き、リポジトリには `op://` の参照だけを置いて、スクリプトが `cf` で設定します（パッケージの README の「Secrets」）。
+- **構成管理とツール**: `cf` CLI（`cloudflare.config.ts`）を基本にし、`cf` がまだ対応していない部分を Wrangler で
+  補います。Terraform は使いません。`cf` は beta なのでバージョンを固定し、上げるときは preview で確かめてから
+  にします。`cloudflare.config.ts` と並べて `wrangler d1 migrations apply` が使えるかは検証が要ります（15 章）。
+
+### 2.2 プランの制限
+
+公式環境は **Workers Paid** を使います。以前の無料プランの CPU 枠は、現在の設計の前提ではありません。セルフホストでは、選んだプランと実行環境の制限を確認してください。
+
+- **再計算**はリクエスト内で行います。検証の処理を変更するときは、gzip の展開、`parsePlaylog`、`simulatePlaylog` 3 回を regression corpus で計測します。
+- **共有カードは現在ブラウザで描画**し、R2 にアップロードします（11 章）。これは現在の実装であり、公式環境のプランから必須となる制約ではありません。サーバー側での生成は、設定した CPU 枠、メモリ使用量、フォントの読み込み、描画コストを計測して検討できます。
+
+## 3. 認証とアカウント
+
+- **認証**: 独立した Accounts Worker が Better Auth と専用 D1 を所有します。Leaderboard は OIDC クライアント兼 API のリソースサーバーです。[サービス構成の 3 章](./services.ja.md#3-ログイン)を参照してください。
+- **ログイン手段**: Accounts がパスキー・ゲスト・設定済みの Discord／Google を提供します。パスキーの操作は Accounts のホストで行います。
+- **セッション**: ブラウザはホスト専用・暗号化・HttpOnly のアプリ Cookie を使い、期限は最大 10 分です。サーバー間の API 呼び出しは、この API 向けの audience と `be-music:api` スコープを持つアクセストークンを使います。ターミナル向けのデバイス認可は今後の実装です。
+- **ゲストのプレイ**: スコア送信前に Accounts でゲストアカウントを作ります。プレイ終了時に暗黙には作成しません。保存と表示フィルタは従来どおりです。パスキーの登録で通常のアカウントになり、別アカウントへの連携時は署名された連携情報から、移動先の次のアクセスでプレイを冪等に移します。
+- **識別**: `oidc_identity` が `(issuer, sub)` とローカルのプレイヤー ID を対応させます。移行では既存の ID とスコアの所有者を保ち、新規ユーザーは初回アクセス時に必要な行を作ります。メールでは紐付けません。旧認証データは削除済みです。テーブル定義は localhost の単独開発とテスト用に残し、公開リクエストでは Accounts の OIDC を使います。
+- **handle**: すべてのアカウントが、一意で変更できる `handle`（URL に使う）と `display_name` を持ちます。OAuth の
+  プロフィール名やメールアドレスは表示しません。変更した handle は旧 URL からのリダイレクトを残し、手放された
+  handle はしばらくのあいだ他人が取れないようにします（15 章）。
+- **退会**するとスコアは削除せず匿名化します。匿名のスコアと同じく、閲覧する側が含めたときだけランキングに
+  出ます。
+- OAuth のメールアドレスを預かるので、**利用規約とプライバシーポリシー**が必要です。
+
+## 4. 譜面の識別
+
+譜面は **Be-Music Fingerprint**（[fingerprint-spec.ja.md](./fingerprint-spec.ja.md)）で識別します。
+
+- **`chart.chartFingerprint`** はすべての `#RANDOM` / `#SWITCH` の枝を含むので、同じ譜面のプレイはすべて同じ値を
+  持ちます。譜面のランキングのキーです。
+- **`chart.playFingerprint`** は 1 回のプレイで引いた枝を表します。何を遊んだかを識別し、検証とゴーストの対応付けに
+  使います。
+- **別名**: 譜面ファイルの SHA-256 と MD5 を、chart fingerprint への多対一の別名として持ちます（`chart_aliases`）。
+  LR2IR と難易度表が使うキーです。Web Crypto には MD5 がないので、`@be-music/chart` の SHA-256 の隣に、テスト付きの
+  小さな MD5 を追加します。
+
+**開発用のバージョン。** fingerprint のバージョンは `bmfp0`、ルールセットの結果 ID は `lr2/0`、`beatoraja/0`、
+`iidx/0` です。`0` は定義がまだリリース間で変わりうることを表します。そのため `bmfp0` をキーにするランキングは
+すべて暫定です。UI では Leaderboard をリセットされうるベータ版と表示し、`bmfp1` に移るときはデータを捨てることが
+あります（15 章）。
+
+## 5. スコアの送信
+
+### 5.1 クライアントが送るもの
+
+クライアントは、すでに記録しているプレイログ（[playlog.ja.md](./playlog.ja.md)）を gzip して、play fingerprint の
+正規化した **play document** と一緒に送ります。サーバーがまだその譜面を知らないときだけ **chart document** を
+加えます。どちらのドキュメントもキー音・メタデータ・BGA を含まない正規化した JSON なので小さく、譜面ファイルその
+ものでもありません。
+
+プレイログの `recorder` フィールド（アプリ、バージョン、ビルド、エンジンのバージョン、プラットフォーム）は、それを
+記録したソフトウェアを表します。さらに API のリクエストにはすべて `Be-Music-Client` ヘッダー
+（`be-music-web/0.5.0 (engine 0.8.0; build 6471cd16)`）を付け、送信したソフトウェアを示します。どちらも自己申告
+なので、互換性の確認と障害調査に使い、信頼の根拠にはしません。クライアントの最低バージョンは、後から
+`client_policies` テーブルで強制できます（`426 Upgrade Required`）。公開時点では設けません。
+
+### 5.2 シーケンス
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor P as プレイヤー
+    participant C as クライアント
+    participant A as Leaderboard Worker
+    participant RL as レートリミッター
+    participant D as D1
+    participant R as R2
+
+    P->>C: プレイ終了
+    C->>C: プレイログ (chartFingerprint, playFingerprint, randomOutcomes)<br/>+ play document、OG カードの PNG
+    C->>C: プレイログを IndexedDB のキューに保存
+    C->>A: POST /api/v0/scores (gzip)<br/>セッション Cookie か bearer、Idempotency-Key
+    A->>A: セッションを確認 (ログイン済みか匿名)
+    A->>RL: limit(ユーザーか端末)
+    alt 上限超過
+        A-->>C: 429 Retry-After
+    end
+    A->>A: サイズ上限 → gunzip → parsePlaylog / Valibot
+    A->>D: submission_id = sha256(play fingerprint、スコアに効く設定、入力列) は保存済み?
+    alt 同じプレイヤーの再送
+        A-->>C: 200 保存済みの結果を返す
+    else 別のアカウントからの同じプレイ
+        A-->>C: 409 play_already_submitted
+    end
+    A->>A: 対象判定: オートプレイ・ESC 中断・テンポ変更・コースのステージ → 422、アシスト → フラグ
+    A->>A: sha256(canonicalize(play document)) == playFingerprint ?
+    A->>D: 既知の譜面?
+    alt 未知の譜面
+        A-->>C: 409 chart_document_required
+        C->>A: chart document を付けて再送
+        A->>A: sha256(canonicalize(chart document)) == chartFingerprint ?
+        A->>R: PUT charts/{chartFp}.json
+        A->>D: 譜面を INSERT (暫定)
+    end
+    alt この譜面で初めて見る playFingerprint
+        A->>A: chart document の各結果を組み立て、どれかが play document と一致するか
+        A->>D: play fingerprint を記録
+    end
+    A->>A: play document → ノーツの時刻、プレイログのノーツと照合 (レーンオプションは許容)
+    alt 不一致
+        A-->>C: 422 chart_mismatch
+    end
+    A->>A: lr2、beatoraja、iidx で simulatePlaylog
+    A->>R: PUT プレイログ、ゴースト、OG カード
+    A->>D: バッチ: スコアと結果を INSERT、自己ベストを UPSERT
+    A->>D: ルールセットごとの順位と参加人数
+    A-->>C: 201 { scoreId, results, ranks, improved }
+    C->>C: キューから削除
+    C->>P: リザルト画面に順位と自己ベスト更新を表示
+```
+
+- **冪等性。** 送信 ID はログ全体ではなく、プレイを特定するもの（play fingerprint、スコアに効く設定、入力列）の
+  ハッシュです。ログの日時を書き換えて再送しても、同じプレイが二重に保存されることはありません。同じプレイが別の
+  アカウントから届いたら、コピーされたリプレイとして拒否します。送信に失敗した分は IndexedDB に残り、次の起動時か
+  ログイン時に送り直します。
+- **chart document は譜面ごとに 1 回だけ送ります。** 2 人目以降は play document だけを送ります。
+- **結果の組み立ては play fingerprint ごとに 1 回だけです。** 制御構文のない譜面は chart fingerprint と play
+  fingerprint が等しいので、この手順を省きます。
+- **R2 を D1 より先に書きます。** D1 のバッチが失敗しても残るのは参照されないオブジェクトだけで、定期的な掃除で
+  消えます。逆の順だと、プレイログのないスコアが残りえます。
+
+### 5.3 検証の層
+
+| 層  | 確認すること                                                                              | 防げるもの                                         |
+| --- | ----------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| L1  | サーバーが入力から計算し直す。プレイログの `results` のキャッシュは無視する               | 数値の改ざん                                       |
+| L2  | オートプレイと ESC 中断は拒否し、アシストにはフラグを付ける                               | アシスト付きのスコアが通常のランキングに混ざること |
+| L3  | 2 つの fingerprint ドキュメントのハッシュが申告された fingerprint と一致する              | ドキュメントの改ざん                               |
+| L4  | play document が chart document の結果の 1 つである                                       | 別の譜面のプレイ                                   |
+| L5  | プレイログのノーツが、レーンオプションの差を除いて play document のノーツの時刻と一致する | プレイログ内の譜面の改変                           |
+| L6  | 異常検知と通報（12 章）                                                                   | bot と TAS                                         |
+
+chart document をでっち上げることはできます。ただしそれは新しい fingerprint を持つので、誰も遊ばないランキングが
+できるだけで、本物のランキングは汚せません。譜面が公開一覧に載るのは条件を満たしてからです（7 章）。
+
+L4 と L5 には、`@be-music/chart` にテスト付きの純粋関数が 2 つ必要です。chart document の各結果を組み立てる関数と、
+play document の位置とタイムラインから、エンジンと一致するノーツの時刻を求める関数です。
+
+## 6. スコアのルール
+
+- **3 つのルールセット。** すべてのプレイを `lr2`、`beatoraja`、`iidx` で計算し直し、3 つのランキングすべてに
+  載せます。実際にプレイしたルールセット（`play.judgeRuleset`）を保存して印として表示し、「このルールセットで
+  プレイしたもの」だけに絞り込めるようにします。
+- **ゲージ**はプレイログと同じ規則でルールセット間を対応させます（`GROOVE` は beatoraja の `NORMAL`、`DEATH` は
+  `HAZARD`、など）。
+- **アシスト**（オートスクラッチ、デバッグ用の判定幅の上書きなど）はフラグを付けて保存し、アシストなしのプレイとは
+  別に順位付けします。
+- **ESC 中断とコースのステージは拒否します**。ステージは前のステージが残した状態から始まるので、単曲のプレイでは
+  ありません。代わりにコースのプレイの一部としてランキングに載ります（6.1 節）。**テンポを変えたプレイ**
+  （`play.tempo` が 1 以外。Web プレイヤーのテンポスライダー）は `tempo` として拒否します。beatoraja の周波数
+  トレーナーがスコアを保存しないのと同じく、練習として扱います。**落ちたプレイ**（ゲージが尽きたもの）
+  は保存し、プレイ回数に数えます。
+- **ランプと BP はルールセットごとに各ゲームに従います**: `lr2` では DEATH でのクリアは NORMAL です（LR2body.exe の
+  `CheckClear`）。beatoraja と IIDX では DEATH（`HAZARD`）のクリアは EX HARD です。BP には LR2 も含めどのルールセットでも
+  空 POOR を数えます。この規則より前に保存された `lr2` の結果は、マイグレーション `0012` で書き直しました。
+  ランプと BP はどのクライアントとも同じ規則で決めます（`@be-music/player/playlog` の `resolveRulesetResultLamp`、`@be-music/player/ruleset` の `resolveClearLamp` と `resolveMissCount`）。フルコンボにはすべてのノートが GOOD 以上である必要があるので、ノートのない譜面はゲージのランプになります。ランプはその順位（`clearLampRank`）で保存します。1 FAILED、2 ASSIST EASY、3 EASY、4 NORMAL、5 HARD、6 EX HARD、7 FULL COMBO、8 PERFECT、9 MAX です。
+- **自己ベストは beatoraja 方式**: EX スコア、クリアランプ、ミス数のベストを別々に持ち、それぞれ達成したスコアを
+  指します。各ベストのリプレイとゴーストにすぐたどれます。ミス数は、中断していないプレイならクリアの有無に関係なく
+  対象にします。
+- **スコアの履歴**: 送信はすべて保存するので、推移のグラフや「伸びた譜面」の一覧はそのまま作れます。
+- **プレイの非表示**: プレイヤーは自分のプレイを非表示にでき（`PATCH /api/v0/scores/:id`）、表示に戻すこともできます。
+  非表示のプレイは保存したまま、ランキング・自己ベスト（表示中のプレイから作り直します）・集計・すべてのリストから外れ、
+  開けるのはそのプレイヤーだけです。
+- **並べ替え**: ランキングは EX スコア、クリアランプ、ミス数のどれでも並べ替えられます。
+- **同点**は同じ順位にします（1 位、1 位、3 位）。同順位の中では先に達成した人を上に表示しますが、順位の数字は
+  同じです（提案。15 章）。
+
+### 6.1 コースのランキング
+
+コースのプレイ（段位認定、EXPERT / NONSTOP コース、beatoraja のコース、難易度表のコース）は、1 回のプレイとして
+ルールセットごとのランキングに載せます。単曲のプレイとしては扱いません。
+
+- **コースの識別。** コースは **コースのフィンガープリント**（`bmcourse0:<sha256>`、`@be-music/player/playlog` の
+  `computeCourseFingerprint`）で表します。コースの種類、制約（正規化して並べ替えたもの）、各ステージの譜面
+  フィンガープリントを順に並べたもの、NONSTOP コースではさらに結合譜面を決めるつなぎ方と配置モードから作ります。名前とトロフィーは含めないので、`.lr2crs`、beatoraja の
+  コースファイル、難易度表のどれから読んだコースでも、譜面が同じならランキングは 1 つです。ランダムコースは抽選した
+  ステージで表します。落ちたプレイにもキーがつきます。コースのプレイログは、到達しなかったステージの譜面
+  フィンガープリントも持つからです（[playlog.ja.md](./playlog.ja.md#コースのプレイログ)）。
+- **クライアントが送るもの。** コースのプレイログ（`be-music-course-playlog`）を gzip し、遊んだステージごとのプレイ
+  ドキュメント（サーバーがまだ知らない譜面なら譜面ドキュメントも）と一緒に `POST /api/v0/course-scores` へ送ります。
+  さらに、サーバーが自分で作り直すステージの **ステージの譜面**（`stageCharts`。読み込んだままの解析済みの譜面で
+  `#RANDOM` を含み、`.pms` かどうかも添える）を送ります。対象は到達しなかったステージすべてと、NONSTOP のプレイの
+  全ステージ（NONSTOP ではドキュメントを送らない）です。フィンガープリントのドキュメントからはノート数を数えられず、
+  つなぐこともできないので、これらのステージには譜面そのものが要ります。サーバーはプレイの検証に読むだけで、保存
+  しません。冪等性、レート制限、サインイン、サイズの上限は単曲と同じです。送信 ID は、コースのフィンガープリントと、
+  遊んだステージそれぞれを単曲の送信 ID と同じ方法で表したもののハッシュです（NONSTOP ではつないだプレイを使う）。
+- **検証。** 遊んだステージはそれぞれ単曲と同じ確認を通ります（5.2 節と 5.3 節: オートプレイと ESC 中断の拒否、
+  フィンガープリントのドキュメント、譜面の登録、outcome の合成）。ここではコースのステージであることが条件で、拒否の
+  理由にはなりません。ステージはすべて同じルールセットで判定され、コースの制約（ゲージ表、判定の制約、コースが許す
+  レーンオプション）に従い、前のステージを計算し直して残った状態（ゲージ、コースのコンボ、コースの最大コンボ。最初の
+  ステージは何も引き継がない）をそのまま引き継いでいる必要があります。プレイは `simulateCoursePlaylog` で `lr2`、
+  `beatoraja`、`iidx` の下で計算し直し、クライアントがキャッシュした結果は使いません。
+- **到達しなかったステージ。** そのノートは BP に数えるので、ノート数をクライアントの申告に任せません。到達しなかった
+  ステージの譜面は必須で（`stage-chart-required`）、ログがそのステージに記録した譜面フィンガープリントになる必要が
+  あり（`stage-chart-fingerprint-mismatch`。これがコースのキーにもなる）、クライアント自身が使う
+  `resolveChartRulesetFacts` で求めた事実（ノートの内訳、LN モード、レーンモード、形式）が、ログの事実と一致する必要が
+  あります（`course-stage-facts-mismatch`）。サーバーが譜面を知っているかどうかにかかわらず同じ規則です。サーバーが
+  持つのはフィンガープリントのドキュメントで譜面ではなく、ドキュメントからはエンジンと同じようにノートを数えられない
+  からです。
+- **落ちたプレイと投げたプレイ。** ステージで落ちたプレイは、単曲の落ちたプレイと同じく保存してランキングに載せます。
+  到達しなかったステージのノートは BP に数えます。ESC で投げたプレイも、LR2 の記録と同じく落ちたプレイとして扱います。
+  最後に遊んだステージは `play.aborted` を持っていてよく、ゲージにかかわらず落ちたことになり、そのステージの残りと
+  到達しなかったステージのノートを BP に数えます。それより前のステージの ESC 中断は、これまでどおり `aborted` として
+  拒否します。
+- **テンポを変えたプレイは順位付けしません。** コースも単曲と同じくテンポを変えて遊べますが、そのプレイは単曲と
+  同じく `tempo` として拒否します（最初のそうしたステージを示します。NONSTOP ではつないだプレイを見ます）。
+- **公開されていないコースは順位付けしません。** beatoraja の `release: false` のコース（抽選したランダムコースと
+  コースメーカーで作ったコースもこれに当たります）は、コースのログにそのことを記録し（`course.release: false`）、beatoraja が IR に送らないのと
+  同じく `unreleased` として拒否します。
+- **NONSTOP のプレイ。** NONSTOP コースはつないだ 1 本の譜面として遊び、判定して順位を付けるのはそのプレイ
+  （`nonstop.playlog`）です。サーバーはステージの譜面から、クライアントとまったく同じようにつないだ譜面を作り直し
+  ます。両者は同じ決定的な処理（`@be-music/player/course` の `prepareNonstopCourse`。
+  [コースと段位認定](./course.ja.md#nonstop-コース) を参照）を使います。各ステージの譜面はそのステージの譜面
+  フィンガープリントになる必要があり、ステージが記録した `#RANDOM` の抽選結果（`nonstop.stages[].randomDraws`）で
+  解決し、コースの LN 制約を当て、記録したつなぎ方・配置・結合規則の版（`nonstop.stitch`。ないときは版 1。
+  サーバーの知らない版は `nonstop-stitch-unsupported`）でつなぎます。つないだプレイはその譜面で記録されたもの
+  でなければならず（プレイフィンガープリントが作り直した譜面のものと一致する。`nonstop-chart-mismatch`）、ステージの
+  対応も作り直したもの（`resolveNonstopRun`）と一致する必要があります。ステージの配置、各ノーツのステージ、プレイが
+  到達したステージ数です（`nonstop-stage-mismatch`）。つないだプレイは単曲と同じ対象確認を通り、コースの制約に従う必要があります。すべての
+  ルールセットで計算し直し、ESC で投げたプレイは落ちたプレイとします。ほかのコースと同じくコースのフィンガープリント
+  でランキングに載せます。NONSTOP のプレイはステージの譜面を登録しません。切り出したステージが持つ判定ランクと TOTAL
+  はつないだプレイのもので、各譜面のものではないからです。
+- **数値とベスト。** ルールセットごとに EX スコア、ランプ（コースのランプを譜面のランプと同じ尺度にしたもの）、BP、
+  コース全体の最大コンボ、到達したステージ数、トロフィーを持ちます。到達したステージごとの数値（EX スコア、ノーツ数、
+  BP、最大コンボ、判定、次のステージに引き継いだゲージ、クリアしたかどうか）も持ち、プレイのページはこれでステージ
+  ごとに分けて表示します。ベストは譜面と同じく beatoraja 方式（EX スコア、ランプ、BP のベストを別々に持ち、それぞれ
+  達成したプレイを指す）で、アシストありのプレイは別に持ちます。コースのプレイは譜面のスコアも譜面のベストも作りません。
+- **トロフィーのベスト。** ほかのベストと一緒にトロフィーのベストを持ち、獲得したプレイを指します。コースの定義は
+  トロフィーを易しい順に並べ、プレイは条件を満たす最後のトロフィーを獲得します。そこで各プレイのトロフィーを、その
+  一覧での位置（`trophy_rank`。先頭が 1、なしは 0）と一緒に保存し、位置が真に上回ったときだけベストを置き換えます。
+  同じ位置なら先のプレイを残します。名前とトロフィーはコースのフィンガープリントに含まれないため、同じコースの二つの
+  定義が違うトロフィーを並べることもありえますが、位置はそのまま比べます。
+- **非表示のプレイ。** プレイヤーは自分のコースのプレイを非表示にでき（`PATCH /api/v0/course-scores/:id`）、表示に
+  戻せます。単曲のプレイと同じく、非表示のプレイは保存したまま、コースのランキング・ベスト（表示中のプレイから作り
+  直し、トロフィーのベストも含む）・集計・すべてのリストから外れ、プレイヤー本人だけがそのプレイとプレイログを開けます。
+- **プレイログ。** `GET /api/v0/course-scores/:id/playlog` は保存したコースのプレイログを、保存したとおり gzip 圧縮で
+  返します。コースのプレイには独自のリプレイ設定がなく、表示中のプレイのログは誰でも、非表示のプレイのログは本人だけが
+  読めます。
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as クライアント
+    participant A as Leaderboard Worker
+    participant D as D1
+    participant R as R2
+
+    C->>A: POST /api/v0/course-scores (gzip)<br/>コースのプレイログ + 遊んだステージごとのドキュメント<br/>+ 到達しなかったステージの譜面
+    A->>A: checkCoursePlaylogEligibility<br/>(オート、中断、フィンガープリント、1 回のプレイか)
+    A->>D: 送信 ID は保存済みか
+    loop 遊んだステージごと
+        A->>A: プレイドキュメントが playFingerprint になるか (L3)
+        A->>D: 譜面は既知か。未知なら 409 chart_document_required
+    end
+    loop 到達しなかったステージごと
+        A->>A: 譜面が chartFingerprint になるか
+        A->>A: resolveChartRulesetFacts がログの事実と一致するか
+    end
+    A->>A: プレイしたルールセットで simulateCoursePlaylog
+    A->>A: 制約、引き継ぎ、落ちたか投げたか
+    A->>A: lr2、beatoraja、iidx で simulateCoursePlaylog
+    A->>R: PUT コースのプレイログ、新しい譜面ドキュメント
+    A->>D: batch: 譜面、コース、コースのスコアと結果、コースのベスト
+    A-->>C: 201 { courseScoreId, courseFingerprint, results, ranks }
+```
+
+NONSTOP のプレイでは、ステージごとのループの代わりに、つないだ譜面を 1 回作り直します。
+
+```mermaid
+flowchart TD
+  charts["ステージの譜面"] --> fp{"それぞれ chartFingerprint<br/>になるか"}
+  fp -->|はい| prepare
+  subgraph prepare["prepareNonstopCourse"]
+    resolve["記録した抽選結果で<br/>解決"] --> ln["ロングノート制約"]
+    ln --> stitch["つなぐ：つなぎ方、<br/>配置、版"]
+  end
+  prepare --> same{"プレイフィンガープリントが<br/>nonstop.playlog と一致するか"}
+  same -->|はい| map{"ステージの対応が<br/>resolveNonstopRun と一致するか"}
+  map -->|はい| sim["つないだプレイで<br/>simulateCoursePlaylog"]
+  fp -->|いいえ| refuse["422"]
+  same -->|いいえ| refuse
+  map -->|いいえ| refuse
+```
+
+## 7. データモデル（D1）
+
+```sql
+charts          (chart_fp PK, title, artist, note_count, play_fps JSON, status, first_seen_at)
+chart_aliases   (kind, hash, chart_fp)                         -- kind: sha256 | md5
+scores          (id PK, submission_id UNIQUE, user_id, chart_fp, play_fp, played_ruleset, gauge,
+                 assist_flags, failed, recorded_by JSON, submitted_by, server_engine, playlog_key,
+                 ghost_key, og_key, replay_visibility, created_at)
+score_results   (score_id, ruleset, ruleset_revision, ex_score, clear_lamp, miss_count,
+                 max_combo, judges JSON)                       -- PK(score_id, ruleset)
+best_scores     (user_id, chart_fp, ruleset, assisted,         -- PK
+                 best_ex, best_ex_score_id, best_lamp, best_lamp_score_id,
+                 min_miss, min_miss_score_id, play_count, updated_at)
+rivals          (follower_id, rival_id, created_at)            -- PK(follower_id, rival_id)
+blocks          (blocker_id, blocked_id, created_at)
+user_settings   (user_id PK, allow_rival, default_replay_visibility, ...)
+handle_history  (handle, user_id, released_at)
+reports         (id, reporter_id, target_kind, target_id, reason, status, created_at)
+client_policies (name, min_version, blocked_versions JSON)
+course          (course_fp PK, name, kind, constraints JSON, stage_chart_fps JSON, created_at)
+course_score    (id PK, submission_id UNIQUE, user_id, course_fp, played_ruleset, gauge, assisted,
+                 assist_flags, verification, stages_played, recorded_by JSON, submitted_by,
+                 server_engine, playlog_key, hidden, created_at)
+course_score_result (course_score_id, ruleset, ruleset_revision, ex_score, note_count, clear_lamp,
+                 miss_count, max_combo, stages_played, trophy, trophy_rank, gauge_type, gauge_final,
+                 judges JSON, stages JSON)
+course_best_score (user_id, course_fp, ruleset, assisted,     -- PK、best_scores と同じ
+                 best_ex, best_ex_score_id, best_lamp, best_lamp_score_id,
+                 min_miss, min_miss_score_id, best_trophy, best_trophy_rank, best_trophy_score_id,
+                 play_count, played_here, updated_at)
+-- ほかにローカルのユーザーと oidc_identity（旧認証データは削除し、テーブル定義は localhost の開発用に残す）
+```
+
+- ランキングの取得には `best_scores (chart_fp, ruleset, assisted, best_ex DESC)` のインデックスを使います。
+- 譜面は、匿名でないプレイヤー 2 人以上がプレイしたか（匿名アカウントはいくらでも作れるので数えません）、難易度表に
+  載った時点で**公開一覧に載ります**。
+- **chartset** は 1 作品の譜面（同梱譜面と差分）をまとめる単位です。まとめ方は BMS Search（https://bmssearch.net）に従います。BMS Search では運営者が譜面を、ファイルの SHA-256 か MD5 で、作品へ手作業で紐付けています。`chartset.id` は BMS Search の作品 ID です。結果は `chart.chartset_id` と `chart.pack_type`（同梱か差分か）に、問い合わせた時刻は `chart.chartset_checked_at` に保存します。
+  - 初めて見た譜面は、送信の直後に問い合わせます（`waitUntil`）。
+  - 1 時間ごとの Cron Trigger で、最大 20 譜面を問い合わせます。未確認の譜面を先に、次に紐付けのない譜面を前回から 1 週間後、紐付け済みの譜面を 1 か月後に確認し直します。紐付けは後から追加・変更されることがあるためです。
+  - BMS Search が知らない譜面や、まだ紐付けのない譜面は単独のままです。問い合わせの `User-Agent` で Leaderboard からのアクセスだと分かるようにしています。
+- R2 のキー: `playlogs/{scoreId}.bmplay.json.gz`、`course-playlogs/{courseScoreId}.bmcourse.json.gz`、
+  `charts/{chartFp}.json`、`ghosts/{scoreId}.bin`、`og/scores/{scoreId}.png`。
+- **リプレイ**: プレイログを誰がダウンロードできるかは、各ユーザーが選びます（ユーザーごとの既定値を、スコアごとに
+  上書きできる）。ゴーストは常に公開します。判定の並びから分かることはわずかだからです（提案。15 章）。
+
+## 8. API（`/api/v0`）
+
+ルートは自分自身を記述します。valibot スキーマがリクエストを検証し、同じスキーマから OpenAPI 3.1 のドキュメントを生成します（`GET /api/v0/openapi.json`、リファレンスページは `/api-reference`）。TypeSpec も検討しましたが、別に書いた仕様は、ルートが実際に行う検証とずれていきます。
+
+| メソッド                 | パス                                                                     | 用途                                                                               |
+| ------------------------ | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `POST`                   | `/scores`                                                                | プレイの送信（5 章）                                                               |
+| `GET`                    | `/scores/:id`、`/scores/:id/playlog`、`/scores/:id/ghost`                | スコアの詳細、プレイログ（公開範囲に従う）、ゴースト（不変）                       |
+| `GET`                    | `/charts/:chartFp/leaderboard?ruleset=&sort=&anonymous=&played=&cursor=` | ランキング                                                                         |
+| `GET`                    | `/charts/:chartFp/leaderboard/me?ruleset=`                               | 自分の順位と前後のプレイヤー                                                       |
+| `POST`                   | `/charts/lookup?include=rivals`                                          | 多数の譜面の順位・参加人数・ライバルのベスト（fingerprint、SHA-256、MD5 で引ける） |
+| `GET`                    | `/charts/:chartFp/targets?ruleset=&kind=`                                | ターゲットのスコアとゴースト（9 章）                                               |
+| `POST`                   | `/course-scores`                                                         | コースのプレイの送信（6.1 節）                                                     |
+| `GET`                    | `/course-scores?ruleset=&player=&anonymous=&limit=`                      | 最新のコースのプレイ                                                               |
+| `GET` / `PATCH`          | `/course-scores/:id`, `/course-scores/:id/playlog`                       | コースのプレイ（`PATCH` で非表示・表示）、そのプレイログ                           |
+| `GET`                    | `/courses/:courseFp`                                                     | コース: 種類、制約、ステージの譜面                                                 |
+| `GET`                    | `/courses/:courseFp/leaderboard?ruleset=&anonymous=&played=&offset=`     | コースのランキング                                                                 |
+| `GET`                    | `/courses/:courseFp/leaderboard/me?ruleset=`                             | コースでの自分の順位                                                               |
+| `GET`                    | `/players/:handle`、`/players/:handle/scores`                            | プロフィール                                                                       |
+| `GET`                    | `/players/:handle/versus/:rival?ruleset=`                                | ライバルとの勝ち・負け・引き分け                                                   |
+| `GET` / `PUT` / `DELETE` | `/me/rivals`、`/me/rivals/:handle`                                       | ライバル                                                                           |
+| `PUT` / `DELETE`         | `/me/blocks/:handle`                                                     | ブロック                                                                           |
+| `*`                      | `/api/auth/*`                                                            | OIDC のログイン・コールバック・セッション・ログアウト                              |
+
+読み取りは公開で、Cache API で短時間キャッシュします。送信があると、影響するランキングのキャッシュを消します。
+
+**バージョニング**: メジャーバージョンをパスに入れます。各バージョンはサブアプリとして並べてマウントします。
+
+- **`v0` はベータ**: Leaderboard は `/api/v0` から始めます（`bmfp0` の fingerprint や、ルールセットのリビジョン `/0` と同じ考え方）。`v0` の間は互換性を壊す変更もありえ、クライアントは be-music のプレイヤーだけです。API が安定したら `/api/v1` にし、それ以降は下のルールに従います。
+
+- **同じバージョンのまま**: 追加はそのバージョンに入れます。新しいエンドポイント、レスポンスのフィールド追加、省略可能なパラメータの追加がこれに当たります。クライアントは知らないフィールドを無視します。
+- **新しいバージョン**: 互換性を壊す変更は新しいバージョンに入れます。たとえばフィールドの削除・改名、値の意味の変更、リクエストの検証を厳しくすることです。
+- **古いバージョンの廃止**: 旧バージョンは、使っているクライアントがいなくなるまで動かし続け、その後 `410 Gone` を返します。まだ呼んでいるクライアントは、play log の `recorder` と `be-music-client` ヘッダで分かります。
+- **未知のパス**: `/api` 以下のそれ以外のパス（未知のバージョンを含む）は `404` と `{"error": "not-found"}` を返します。
+- **バージョンを付けないもの**: `/api/auth/*` はアプリの OIDC セッション用プロトコルです。Discord と Google のコールバックは Leaderboard ではなく Accounts を指します。
+
+**レート制限**（提案）: 送信はログインユーザー 1 分あたり 10 回、匿名の端末 1 分あたり 5 回。読み取りは IP ごとに
+1 分あたり 120 回。Workers のレート制限機能は 10 秒か 60 秒の単位でしか数えられないので、もっと長い期間は D1 で
+数えます。
+
+## 9. ライバル、ターゲット、ゴースト
+
+- **一方向のフォロー**で、承認も通知もありません。スコアはもともと公開なので、`allow_rival` で追加されるのを拒否
+  でき、ブロックで外して以後の追加も防げます。
+- **ライバルは最大 100 人**で、設定で変えられます（`RIVAL_LIMIT`）。上限を下げても既存のライバルは残し、新規の
+  追加だけを止めます。`GET /me/rivals` が上限を返すので、クライアントに数字を埋め込みません。
+- **アクティブなライバル**は beatoraja と同じく、クライアントで 1 人選びます。
+- **ターゲット**は公開時点で、ライバル、自己ベスト、次の順位、固定のランク（AAA、AA など）。
+- **ゴースト**: 送信時に、サーバーがそのプレイの判定の並び（1 ノーツ 1 バイト、2,000 ノーツで約 2 KB）を R2 に
+  書きます。クライアントはそれを累積 EX スコアの推移に変えます。play fingerprint が違う（`#RANDOM` で別の結果を
+  引いた）場合は、ノーツ数に対する割合の位置でノーツを対応付けます。
+- **クライアントへの組み込み**: LR2 と beatoraja のスキンには、ライバル・ターゲット・ゴーストの枠がすでにあり、
+  今は仮の値（`NO TARGET`、ターゲットのスコア 0）を読んでいます。これをここで得た値に置き換えます。ゴーストの
+  推移の計算と対応付けは、`@be-music/player` の純粋関数にします。
+
+## 10. ページ（`leaderboard.be-music.app`）
+
+leaderboard Worker の中で Hono JSX によってサーバーレンダリングし、D1 を直接読みます。見た目は情報サイトとして、
+Tailwind CSS v4 と Basecoat（フレームワークのランタイムなしの shadcn/ui デザイン）で整え、OS の配色に従います。
+
+- `/` — トップページ。新着のプレイを、それぞれプレイしたルールセットの結果で並べます。匿名でない
+  プレイヤーのプレイは譜面に関わらずすべて表示し、まだ公開一覧に載っていない譜面には「new chart」の印を付けます。
+  匿名のプレイはフィルタで含めます。架空の譜面がこのページに出るには、passkey を持つアカウントが必要です。
+- `/scores/:id` — スコア
+- `/chartsets/:id` — 1 作品の譜面一覧（同梱譜面、次に差分）
+- `/charts/:chartFp` — 譜面のランキング、プレイ数とランプの分布、譜面の詳細（モード、TOTAL、判定ランク、LN モード、ファイルハッシュ）
+- `/players/:handle` — プロフィールとプレイヤーの統計（プレイ数、譜面数、平均スコアレート、自己ベストのランプと DJ Rank の分布）、最新のプレイとコースのプレイ。ライバル比較は `/players/:handle/versus/:rival`
+- `/courses/:courseFp` — コースのランキング（各プレイヤーのベスト EX スコア、ランプ、BP、トロフィー。アシストありのプレイと匿名プレイヤーは譜面のページと同じスイッチで切り替え）、譜面のページへリンクしたステージ、プレイ数とランプの分布、詳細（種類、制約）。アカウントを持つプレイヤーが誰も遊んでいないコースは検索エンジンに載せません
+- `/course-scores/:id` — コースのプレイをすべてのルールセットで（到達したステージ数、トロフィー）、表示ルールセットでステージごとに（判定、BP、各ステージが引き継いだゲージ、到達しなかったステージ）表示し、プレイログと、本人には非表示にするスイッチを付けます。トップページはプレイの下に最新のコースのプレイを並べます
+
+どのページも、ヘッダーで選んで Cookie に保存する 1 つの**表示ルールセット**（LR2、beatoraja、IIDX）で値を表示し、
+プレイ自体のルールセットは「played with」として併記します。切り替えは専用の URL（`/ruleset/:id?next=…`。
+戻り先は Leaderboard のページに限る）で行うので、ページの URL を共有しても、開いた人の設定は変わりません。ページが
+Cookie に依存するので、`Cache-Control: private, max-age=0` を返します。譜面のページには、既知のファイルごとに、BMS Search 自身が使う形式で他のサイトへのリンクを置きます。ファイルの
+SHA-256 で Mocha-Repository、MinIR、BMS Search（`/patterns/{sha256}`）を、MD5 を記録するようになれば LR2IR を
+引きます。ハッシュが 1 つも分からない譜面には、BMS Search での曲名検索を置きます。操作が必要な部分（ライバル登録ボタンなど）は、小さな
+`hono/jsx/dom` の island にします。サイトが Web アプリと
+呼べる規模になったら HonoX か Nuxt に移れます。データアクセスの関数を共有しておけば、その移行は軽く済みます。
+
+## 11. OG 画像と共有
+
+- **スコアのカードはブラウザで描画します。** 送信が成功すると、リザルト画面が Pixi で 1200 × 630 のカードを描画し、
+  PNG をアップロードします。サーバーはサイズと形式を確認して `og/scores/{scoreId}.png` に保存し、不変のものとして
+  配信します。ブラウザにはフォントがあるので、どの文字の曲名でもサーバー側のフォントなしで描けます。
+- クライアントが描くので、カードの中身は偽れます。カードはそのプレイヤー自身のスコアページにしか使わず、画像も
+  通報の対象にします（12 章）。
+- **最初のカード**はスコア用の 1 種類です。曲名、アーティスト、レベル、クリアランプの帯、EX スコア、レート、
+  DJ LEVEL、判定数、順位と参加人数、ルールセットのバッジ、プレイヤー名、日付。ランキング・プロフィール・ライバル
+  比較のカードは後で作ります。
+- **スコアのカードのプレイフィールドに譜面を描きます。** プレイした本人がカードのないスコアページを開くと、ページは
+  譜面のノーツが最も密な区間（`src/pages/chart-excerpt.ts`）をクライアントに渡します。R2 の譜面のフィンガープリント
+  文書から読み、レーンモードのレーンに並べたものです（`src/pages/score-card-excerpt.ts`）。カードはそれを右側の
+  プレイフィールドに、Synesthesia スキンを HIGH SPEED 2.0 で遊んだときの見た目で描きます。レーン幅はスキンと同じ
+  比率（皿 41、白鍵 24、青鍵 19 デザイン px、DP の左右の間 60 px。9 KEY は 194 px の片側を均等割り）で、7 KEY の
+  片側がパネルの幅になるよう拡大します。スクロール速度もスキンと同じ（2.0 倍で 1 拍 72 × 2 px、321 px の
+  プレイフィールドに 2.23 拍）なので、区間は拍の頭から 2.23 拍のうちノーツが最も多いもの（同数なら早いほう）です。
+  いつもの色（白鍵と青鍵、赤の皿、ロングノーツは帯、小節線）で、ランプ色の判定ラインの上に、セーフエリアの内側かつ
+  サイト名の下に描きます。文書が
+  ない、レーンモードがわからない、レーンが 16 本を超える（24 / 48 KEY）ときは、これまでの飾りのノーツのままです。
+  `#RANDOM` のある譜面はどの分岐にも共通するノーツを描き、プレイのレーンオプションにかかわらず譜面どおりに描きます。
+- **メタタグ**をすべてのページに出します。絶対 URL の `og:image`、`og:image:width` / `height`、
+  `twitter:card=summary_large_image`。
+- **セーフエリア**（`src/pages/share-card-safe-area.ts`）: リンクプレビューはカードの上に描き、端を切り落とすので、
+  曲名・スコア・プレイヤー・サイト名はその内側に置き、左下には大事なものを置きません。2026 年 10 月時点で:
+  - X は `summary_large_image` を 2:1 で表示し（1200 × 630 のカードなら上下 15 px が切れます）、角を丸め、
+    2023 年 10 月からリンクのドメインを左下に重ねます。表示上で端から 12 px、高さ 20 px です
+    （[Polypane, 2023-10-09](https://polypane.app/blog/where-to-put-text-so-it-doesnt-overlap-in-the-new-x-twitter-preview/)。
+    下 20 % を空けることを勧めています。[TechCrunch, 2023-11-22](https://techcrunch.com/2023/11/22/elon-musk-says-x-will-show-headlines-on-the-platform-again/)）。
+    カードが約 300 px 幅になるスマートフォンでは下 5 分の 1、20 文字ほどのドメインなら左半分にあたります
+    （`X_DOMAIN_LABEL_ZONE`）。
+  - Bluesky はリンクカードを 1200 / 630 で角を丸めて表示します（bluesky-social/social-app の `CARD_ASPECT_RATIO`）。
+    Mastodon は 1.91:1・角丸 8 px、大きなカードでないときは本文横の 1:1 サムネイルです（mastodon/mastodon の
+    `card.tsx`）。Facebook、Threads、Slack、Discord は 1.91:1 で、タイトルは画像の外に出します。画像に文字を
+    重ねるのは X だけです。
+  - そこで、内容は各辺から 24 px（`SAFE_EDGE`）離し、四隅の 48 px 四方（`SAFE_CORNER`）と X のラベルを避けます。
+    スコアのカードはプレイヤーをフッターの右半分に、サイト名を右上に置き、各ブロックの枠がセーフエリアに収まることを
+    テストで確かめます。
+- **共有**: 「X で共有」ボタンが X の投稿用 URL を開きます。X の API も X でのログインも要りません。
+
+  ```
+  {曲名} [{レベル}] {クリアランプ} EX {EX スコア} ({レート}% {DJ LEVEL}) {順位}/{人数} #bemusic
+  {スコアページの URL}
+  ```
+
+- 有料プランに移れば、サーバーでカードを描く方式（satori + resvg、実行時にフォントを必要な文字だけ取得）も
+  使えます。
+
+## 12. モデレーション
+
+- **管理画面**は Cloudflare Access で保護します。
+- スコア、プレイヤー、画像に対する**通報**。
+- 送信された入力に対する**異常検知**。例えば、人間には出せない判定タイミングの分布。
+- 表示名、handle、曲名は、描画する前に長さを制限し、制御文字を取り除きます。
+
+## 13. テスト
+
+- **純粋関数**（検証、順位付け、ゴーストの対応付け、カードのレイアウト用のデータ）は通常どおりテストします
+  （AGENTS.md を参照）。
+- **API**: Hono の `app.request()` で、サーバーを起動せずにリクエストを最初から最後まで通します。D1 と R2 の
+  binding は **Miniflare**（`getD1Database()` / `getR2Bucket()`）から渡すので、マイグレーションとクエリは workerd の
+  本物の SQLite で動きます。これは通常の `vp test` の中で動きます。
+- `@cloudflare/vitest-pool-workers` はまだ使えません。0.23.0 が対応するのは Vitest `^4.1` で、このワークスペースは
+  catalog と overrides で Vitest 5 に固定しているからです。Vitest 5 対応版か `cf` のテスト連携が出たら見直します。
+- Workers にだけある挙動と CPU の制限は、これらのテストでは確かめられません。CPU 時間は別に計測します。
+
+## 14. フェーズ
+
+- **P0** — パッケージの土台、環境、D1 のスキーマとマイグレーション、認証、L1〜L5 付きの `POST /scores`、
+  ランキング、Web のリザルト画面からの送信と共有、スコアページとそのカード。
+- **P1** — `/charts/lookup` と選曲画面、ライバル・ターゲット・ゴースト、リプレイのダウンロード、プロフィール。
+- **P2** — ターミナル版のプレイヤーからのログイン、通報、異常検知と管理画面、難易度表、ほかのカード。
+
+## 15. 未決事項
+
+- **描画と検証の処理予算**: 検証処理と、今後検討するサーバー側のカード生成を、設定した Workers Paid の CPU 枠に対して計測する。
+- **`cf` での D1 マイグレーション**: `cloudflare.config.ts` と並べて `wrangler d1 migrations apply` が動くか、
+  最小限の Wrangler の設定を横に置く必要があるか。
+- **`bmfp0` から `bmfp1` への移行**: ベータのデータを捨てるか、古いキーのまま残すか。捨てるのが現実的な既定。
+- **同点**: 同じ順位にして先に達成した人を上に表示する案は、提案であって確定ではない。
+- **handle の変更**: 変更できる頻度（例: 30 日に 1 回）と、手放された handle を予約しておく期間。
+- **レート制限**: 8 章の数値は提案。
+- **ゴーストの公開範囲**: 常に公開とする案は提案。
+- **アップロードされる OG カード**: サイズの上限と検証の詳細。
+- **コース**: 到達しなかったステージと NONSTOP のプレイは、クライアントが送る解析済みのステージの譜面で確かめる。
+  事実の導出とつなぎ直しは、そうした送信のたびに CPU を使う（上の Free プランの問題を参照）。ステージの譜面のうち
+  フィンガープリントに含まれない部分（キー音、BGM のオブジェクト、ファイル上のオブジェクト行の順序）は信用する
+  しかない。BGM と行の順序は NONSTOP のステージの配置を動かすので、偽れば、つないだ譜面の間隔を変えられる（ただし、
+  その譜面でプレイを記録している必要がある）。単曲（L5）と同じく、つないだプレイのノーツは、プレイフィンガープリント
+  以上には作り直した譜面と比べない。コースのプレイの共有カードはまだない。

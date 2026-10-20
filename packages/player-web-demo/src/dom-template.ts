@@ -8,20 +8,25 @@
  *
  * Sub-elements wired up elsewhere:
  *  - `#help-button` / `#help-modal` — `help-modal.ts` (`wireHelpModal`)
- *  - `#compat-panel*` — `compat-panel.ts` (`renderBrowserCompatPanel`)
- *  - `#songs` / `#search` / `#stage` / `#loading-*` / `.shell` — referenced via `PlayerWebDemoElements` in `main.ts`
+ *  - `#account-chip` — `leaderboard-ui.ts` (`LeaderboardPanel.refreshAccount`)
+ *  - `#compat-panel*` — `compat-panel.ts` (`renderBrowserCompatPanel`), folded inside the drop card
+ *  - `#start-leaderboard` / `#start-*` — `leaderboard-ui.ts` (`LeaderboardPanel.bindStartCard`)
+ *  - `#start-silent-mode` — `silent-mode-playback.ts` (`mountStartSilentModeOption`), from `services/silent-mode.ts`
+ *  - `#songs` / `#search` / `#stage` / `#loading-*` / `.shell` — looked up in `main.ts` as `PlayerWebDemoElements`
  */
 export const DEMO_APP_HTML = `
   <div class="shell empty">
     <!--
-      Hidden file input — triggered by the GUI's "Open folder /
-      ZIP" button. lil-gui has no native file controller, so we
+      Hidden file input — triggered by the GUI's "Open folder"
+      button. lil-gui has no native file controller, so we
       forward a synthetic click to this hidden input from the
       function controller's handler. \`webkitdirectory\` makes the
-      browser show a folder picker on Chromium / Safari; multiple
-      ZIPs / charts can also be selected via the same input.
+      browser show a folder picker on Chromium / Safari. ZIPs and
+      play logs go through the "Open files" picker below.
     -->
     <input id="songs" type="file" webkitdirectory multiple class="hidden-file-input" />
+    <!-- The "Open files" button's picker: ZIP archives and play logs (\`*.bmplay.json\`). -->
+    <input id="files" type="file" multiple accept=".zip,.json" class="hidden-file-input" />
     <input id="search" class="search-input" type="search" placeholder="Search title / artist / genre..." />
     <div class="stage" id="stage">
       <!--
@@ -77,68 +82,189 @@ export const DEMO_APP_HTML = `
           <div class="drop-title">Drop to load</div>
           <div class="drop-subtitle">
             <span>BMS folder</span>
-            <span class="drop-subtitle-sep">·</span>
-            <span>LR2 Files</span>
           </div>
+          <!--
+            Leaderboard: whether this browser's plays are sent, and the
+            account they go to. Rendered by \`LeaderboardPanel\`
+            (leaderboard-ui.ts) from the account state; the checkbox is
+            the Debug Menu's "Submit to Leaderboard" setting.
+          -->
+          <section class="start-leaderboard" id="start-leaderboard" aria-label="Leaderboard">
+            <label class="start-check">
+              <input type="checkbox" id="start-submit" />
+              <span>Submit my plays to the Leaderboard</span>
+            </label>
+            <!-- \`loading\` until the account has been read, so a signed-in player never sees "Not signed in". -->
+            <div class="start-account" id="start-account" data-state="loading">
+              <span class="start-account-label" id="start-account-label">Checking account…</span>
+              <div class="start-account-actions" id="start-account-actions"></div>
+            </div>
+            <p class="start-account-hint" id="start-account-hint"></p>
+            <div class="start-account-status" id="start-account-status" role="status" aria-live="polite"></div>
+          </section>
+          <!--
+            Sound in silent mode: Safari / iOS only (\`navigator.audioSession\`),
+            so hidden until \`mountStartSilentModeOption\`
+            (silent-mode-playback.ts) fills the label and note in the
+            browser's language and shows it. The checkbox is the Debug
+            Menu's "Play in silent mode" setting.
+          -->
+          <section class="start-audio" id="start-silent-mode" aria-label="Sound" hidden>
+            <label class="start-check">
+              <input type="checkbox" id="start-silent-mode-input" checked />
+              <span data-silent-mode-label>Play in silent mode</span>
+            </label>
+            <p class="start-audio-note" data-silent-mode-note></p>
+          </section>
+          <!--
+            Browser-compatibility check, folded: the summary gives the
+            verdict at a glance, opening it lists every probed feature
+            split into Required / Optional. Opened up front when a
+            required feature is missing. Populated once at boot from
+            \`checkBrowserCompat()\` (compat-panel.ts).
+          -->
+          <details class="compat-panel" id="compat-panel">
+            <summary class="compat-panel-header">
+              <span class="compat-panel-badge" id="compat-panel-badge" aria-hidden="true">
+                <svg viewBox="0 0 24 24" class="compat-panel-badge-icon" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" />
+                  <path
+                    class="compat-panel-badge-mark compat-panel-badge-mark--check"
+                    d="M7 12 L11 16 L17 9"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.4"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                  <path
+                    class="compat-panel-badge-mark compat-panel-badge-mark--cross"
+                    d="M8 8 L16 16 M16 8 L8 16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.4"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </span>
+              <span class="compat-panel-eyebrow">System check</span>
+              <span class="compat-panel-status" id="compat-panel-status">Browser ready</span>
+              <span class="compat-panel-chevron" aria-hidden="true"></span>
+            </summary>
+            <div class="compat-panel-sections">
+              <section class="compat-panel-section">
+                <h3 class="compat-panel-section-title">Required</h3>
+                <ul class="compat-panel-list" id="compat-panel-required"></ul>
+              </section>
+              <section class="compat-panel-section">
+                <h3 class="compat-panel-section-title">Optional</h3>
+                <ul class="compat-panel-list" id="compat-panel-optional"></ul>
+              </section>
+            </div>
+          </details>
         </div>
       </div>
     </div>
     <!--
-      Browser-compatibility panel. Lives at the shell level — NOT
-      inside the drop card — so it reads as a separate diagnostic
-      widget rather than as decoration on the call-to-action.
-      Header (icon + eyebrow + status) communicates at-a-glance
-      readiness; the body lists every probed feature split into
-      \`Required\` / \`Optional\` sections so the user can see
-      exactly which feature is responsible for an unsupported
-      verdict. Populated once at boot from \`checkBrowserCompat()\`.
+      Leaderboard sign-in and sign-up, as on the Leaderboard's own pages:
+      a passkey now, Google and Discord shown but in development. Opened
+      from the start card's account row; wired by \`wireAccountDialogs\`
+      (account-dialogs.ts).
     -->
-    <aside class="compat-panel" id="compat-panel" aria-label="Browser compatibility check">
-      <header class="compat-panel-header">
-        <div class="compat-panel-badge" id="compat-panel-badge" aria-hidden="true">
-          <!--
-            Status mark. The default check arc paints when the
-            browser is fully supported; the JS swaps in a cross
-            path for the unsupported state by toggling a class on
-            the panel root.
-          -->
-          <svg viewBox="0 0 24 24" class="compat-panel-badge-icon" aria-hidden="true">
-            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" />
-            <path
-              class="compat-panel-badge-mark compat-panel-badge-mark--check"
-              d="M7 12 L11 16 L17 9"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.4"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <path
-              class="compat-panel-badge-mark compat-panel-badge-mark--cross"
-              d="M8 8 L16 16 M16 8 L8 16"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.4"
-              stroke-linecap="round"
-            />
-          </svg>
+    <dialog class="account-dialog" id="leaderboard-sign-in" aria-labelledby="leaderboard-sign-in-title">
+      <div class="account-dialog-body">
+        <header>
+          <h2 id="leaderboard-sign-in-title">Sign in</h2>
+          <p>Use the passkey of your Leaderboard account.</p>
+        </header>
+        <button type="button" class="account-dialog-primary" data-account-dialog-action="sign-in">
+          Sign in with a passkey
+        </button>
+        <div class="account-dialog-or" role="separator">or</div>
+        <div class="account-providers">
+          <button type="button" class="account-provider" disabled title="Sign in with Google is coming soon">
+            <span class="account-provider-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg></span>
+            Sign in with Google
+            <span class="account-provider-badge">Coming soon</span>
+          </button>
+          <button type="button" class="account-provider" disabled title="Sign in with Discord is coming soon">
+            <span class="account-provider-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg></span>
+            Sign in with Discord
+            <span class="account-provider-badge">Coming soon</span>
+          </button>
         </div>
-        <div class="compat-panel-heading">
-          <div class="compat-panel-eyebrow">System check</div>
-          <div class="compat-panel-status" id="compat-panel-status">Browser ready</div>
-        </div>
-      </header>
-      <div class="compat-panel-sections">
-        <section class="compat-panel-section">
-          <h3 class="compat-panel-section-title">Required</h3>
-          <ul class="compat-panel-list" id="compat-panel-required"></ul>
-        </section>
-        <section class="compat-panel-section">
-          <h3 class="compat-panel-section-title">Optional</h3>
-          <ul class="compat-panel-list" id="compat-panel-optional"></ul>
-        </section>
+        <p class="account-dialog-status" data-account-dialog-status role="status" hidden></p>
+        <footer>
+          <button type="button" class="account-dialog-link" data-account-dialog-action="open-sign-up">
+            No account yet? Sign up
+          </button>
+          <button type="button" class="account-dialog-quiet" data-account-dialog-action="close">Cancel</button>
+        </footer>
       </div>
-    </aside>
+    </dialog>
+    <dialog class="account-dialog" id="leaderboard-sign-up" aria-labelledby="leaderboard-sign-up-title">
+      <form class="account-dialog-body" method="dialog" data-account-sign-up-form>
+        <header>
+          <h2 id="leaderboard-sign-up-title">Create your account</h2>
+          <p data-account-sign-up-lead>Pick a handle and a name. Your browser then makes a passkey for it.</p>
+        </header>
+        <div class="account-providers">
+          <button type="button" class="account-provider" disabled title="Sign up with Google is coming soon">
+            <span class="account-provider-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg></span>
+            Sign up with Google
+            <span class="account-provider-badge">Coming soon</span>
+          </button>
+          <button type="button" class="account-provider" disabled title="Sign up with Discord is coming soon">
+            <span class="account-provider-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg></span>
+            Sign up with Discord
+            <span class="account-provider-badge">Coming soon</span>
+          </button>
+        </div>
+        <div class="account-dialog-or" role="separator">or with a passkey</div>
+        <label class="account-field">
+          <span>Handle</span>
+          <input
+            name="handle"
+            required
+            minlength="3"
+            maxlength="15"
+            pattern="[A-Za-z0-9_]{3,15}"
+            autocomplete="username"
+            spellcheck="false"
+          />
+          <small>3 to 15 letters, digits or _. It names your page.</small>
+        </label>
+        <label class="account-field">
+          <span>Name</span>
+          <input name="displayName" required maxlength="64" autocomplete="nickname" />
+          <small>Up to 32 characters, in any script. The rankings show it.</small>
+        </label>
+        <p class="account-dialog-status" data-account-dialog-status role="status" hidden></p>
+        <footer>
+          <span></span>
+          <span class="account-dialog-buttons">
+            <button type="button" class="account-dialog-quiet" data-account-dialog-action="close">Cancel</button>
+            <button type="submit" class="account-dialog-primary">Create passkey</button>
+          </span>
+        </footer>
+      </form>
+    </dialog>
+    <!--
+      "Drop a skin" — shown when the Debug Menu's Skin system is set to LR2 or
+      beatoraja with none of that system loaded. A drop anywhere closes it, and
+      a skin of the asked-for system is then used without asking. Filled by
+      \`promptSkinDrop\` (ui/skin-drop-prompt.ts).
+    -->
+    <dialog class="skin-drop" id="skin-drop" aria-labelledby="skin-drop-title">
+      <svg class="drop-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M24 6 L24 30" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+        <path d="M14 22 L24 32 L34 22" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M10 38 L38 38" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.55" />
+      </svg>
+      <h2 class="drop-title" id="skin-drop-title">Drop an LR2 skin</h2>
+      <p class="skin-drop-hint" data-skin-drop-hint></p>
+      <button type="button" class="account-dialog-quiet" data-skin-drop-cancel>Cancel</button>
+    </dialog>
     <!--
       Loading overlay. Hidden by default; revealed via the
       "visible" class while a folder / ZIP drop is mid-load. The
@@ -178,6 +304,16 @@ export const DEMO_APP_HTML = `
       </svg>
       <span class="help-button-label">Help</span>
     </button>
+    <!--
+      Bottom-right Leaderboard account chip: the sign-in state at a glance
+      (a green dot when signed in, amber when anonymous, grey when signed
+      out). Signed in, it opens the player's Leaderboard page; signed out,
+      it opens the Debug Menu's Leaderboard folder. Wired in \`leaderboard-ui.ts\`.
+    -->
+    <a class="account-chip" id="account-chip" data-state="loading" href="https://leaderboard.be-music.app/" target="_blank" rel="noopener">
+      <span class="account-chip-dot" aria-hidden="true"></span>
+      <span class="account-chip-label" id="account-chip-label"></span>
+    </a>
     <!--
       Touch play controls. Phones and tablets have no Space / Esc key, so
       during play a pause button sits in the top-left corner; while paused
@@ -289,7 +425,8 @@ export const DEMO_APP_HTML = `
             <section class="help-about">
               <p class="help-about-summary">
                 A browser-based BMS player. Drop in a folder containing BMS / BMSON charts and
-                play them straight from the page. Reads <strong>Lunatic Rave 2</strong> skins
+                play them straight from the page. It comes with two skins, Synesthesia and Plain
+                (Debug Menu → Built-in skin), and reads <strong>Lunatic Rave 2</strong> skins
                 (<code>.lr2skin</code>) and <strong>beatoraja</strong> skins
                 (<code>.json</code> / <code>.luaskin</code>) — drop your
                 <code>LR2files</code> folder, or your beatoraja <code>skin/</code> folder, onto
@@ -315,12 +452,15 @@ export const DEMO_APP_HTML = `
               <ul class="help-about-notes">
                 <li>
                   Dropped files stay entirely in your browser. Charts, audio, and BGA assets are
-                  <strong>never uploaded to any server</strong>.
+                  <strong>never uploaded to any server</strong>. Only with
+                  <strong>Submit to Leaderboard</strong> on does a finished play send its play log
+                  (your key presses and the chart's note layout) and a fingerprint of the chart to
+                  the Leaderboard.
                 </li>
                 <li>Some features are still missing or incomplete — expect rough edges.</li>
                 <li>
-                  <strong>Scores are not saved.</strong> There is no persistence or leaderboard
-                  yet — refreshing the page or revisiting later loses every result.
+                  <strong>Best records stay in this browser.</strong> The Leaderboard (off by
+                  default, Debug Menu → Leaderboard) is a beta: its rankings may be reset.
                 </li>
                 <li>
                   <strong>Verified skins:</strong> the Lunatic Rave 2 default skin, plus the
@@ -341,9 +481,10 @@ export const DEMO_APP_HTML = `
                 (or their contents), to apply a skin theme.
               </li>
               <li>
-                Or click <strong>Open Folder</strong> in the lil-gui panel (top-right) to use the native
-                file picker — same handling as a drag-drop, so a folder containing both an LR2 / beatoraja
+                Or click <strong>Open folder</strong> in the Debug Menu (top-right) to use the native
+                folder picker — same handling as a drag-drop, so a folder containing both an LR2 / beatoraja
                 theme and BMS charts loads both in one shot. Press the button again to add another folder.
+                <strong>Open files</strong> picks ZIP archives or a play log (<code>*.bmplay.json</code>) to replay.
               </li>
               <li>Subsequent drops add to the library and keep the current theme.</li>
               <li>
@@ -385,14 +526,24 @@ export const DEMO_APP_HTML = `
               <li><kbd>Space</kbd> pauses / resumes.</li>
               <li><kbd>F5</kbd> restarts the current chart.</li>
               <li><kbd>Esc</kbd> exits to the result screen (or back to song select).</li>
-              <li>Double-click the playfield to enter or leave fullscreen. <kbd>Esc</kbd> leaves fullscreen first, then repeats the usual scene action.</li>
+              <li>Hold <kbd>Backspace</kbd> for 0.5 s to quit the play the same way (works in fullscreen on every browser).</li>
+              <li>Double-click the playfield to enter or leave fullscreen. <kbd>Esc</kbd> leaves fullscreen first, then repeats the usual scene action. On Chrome / Edge, <kbd>Esc</kbd> keeps its usual scene action in fullscreen; hold <kbd>Esc</kbd> to leave fullscreen.</li>
+            </ul>
+
+            <h3 class="help-section-title">Result</h3>
+            <ul class="help-list">
+              <li><kbd>Enter</kbd> / <kbd>Space</kbd> / <kbd>Esc</kbd> returns to song select.</li>
+              <li><kbd>R</kbd> plays the same chart again right away with the same options.</li>
             </ul>
 
             <h3 class="help-section-title">Options &amp; recording</h3>
             <ul class="help-list">
-              <li>The lil-gui panel (top-right) holds auto-play, compressor, BGA transcode, and recording controls.</li>
               <li>
-                Click <strong>Record</strong> to capture the next play as a downloadable WebM (requires
+                The Debug Menu (top-right) holds loading, skin, play option, audio, and recording controls; rarely used
+                and developer settings sit in its collapsed folders, which remember whether you left them open.
+              </li>
+              <li>
+                Click <strong>Record gameplay video</strong> to capture the next play as a downloadable video (MP4 · H.264 unless <strong>Video format</strong> says otherwise) (requires
                 MediaRecorder support — see Open source / browser checks).
               </li>
               <li>
@@ -405,7 +556,8 @@ export const DEMO_APP_HTML = `
             <section class="help-about">
               <p class="help-about-summary">
                 ブラウザ上で動作する BMS プレイヤーです。BMS / BMSON が入ったフォルダをドロップするだけでそのまま再生できます。
-                <strong>Lunatic Rave 2</strong> のスキン (<code>.lr2skin</code>) と <strong>beatoraja</strong> のスキン (<code>.json</code> / <code>.luaskin</code>) を解釈するので、<code>LR2files</code> フォルダや beatoraja の <code>skin/</code> フォルダをページにドロップすれば既存のスキンをそのまま適用できます。
+                内蔵スキンはシナスタジア (Synesthesia) とプレーン (Plain) の 2 種類です (Debug Menu → Built-in skin)。
+                <strong>Lunatic Rave 2</strong> のスキン (<code>.lr2skin</code>) と <strong>beatoraja</strong> のスキン (<code>.json</code> / <code>.luaskin</code>) も解釈するので、<code>LR2files</code> フォルダや beatoraja の <code>skin/</code> フォルダをページにドロップすれば既存のスキンをそのまま適用できます。
               </p>
               <ul class="help-about-meta">
                 <li>
@@ -427,11 +579,12 @@ export const DEMO_APP_HTML = `
                 <li>
                   ドロップしたファイルはブラウザ内でのみ処理され、譜面・音声・BGA データを
                   <strong>サーバへ送信することは一切ありません</strong>。
+                  <strong>Submit to Leaderboard</strong> をオンにしたときだけ、プレイ終了時にプレイログ (キー入力と譜面のノーツ配置) と譜面のフィンガープリントを Leaderboard に送ります。
                 </li>
                 <li>一部の機能はまだ実装されていません。動作が不完全な箇所があります。</li>
                 <li>
-                  <strong>スコアは保存されません。</strong>
-                  永続化やランキング機能は未実装で、ページをリロード / 再訪するとリザルトはすべて失われます。
+                  <strong>ベスト記録はこのブラウザに保存されます。</strong>
+                  Leaderboard (初期状態はオフ、Debug Menu → Leaderboard) はベータ版で、ランキングはリセットされることがあります。
                 </li>
                 <li>
                   <strong>動作確認済みのスキン:</strong> Lunatic Rave 2 デフォルトスキンに加え、beatoraja デフォルトスキン (<code>skin/default</code>)、<code>ModernChic</code>、<code>GdbG Original Skin</code> の四種類です。
@@ -445,9 +598,10 @@ export const DEMO_APP_HTML = `
               <li>BMS フォルダをページ上にドロップすると、その中のチャートが登録されます。</li>
               <li><code>LR2files</code> フォルダか beatoraja の <code>skin/</code> フォルダ (またはその中身) をドロップするとスキンが適用されます。</li>
               <li>
-                右上 lil-gui パネルの <strong>Open Folder</strong> ボタンからネイティブのファイル選択ダイアログも使えます。
+                右上 Debug Menu の <strong>Open folder</strong> ボタンからネイティブのフォルダ選択ダイアログも使えます。
                 ドラッグ&ドロップと同じ処理経路を通るので、LR2 / beatoraja のテーマとチャートが同居したフォルダもまとめて読み込めます。
                 ボタンを押し直せば別フォルダを追加で読み込めます。
+                <strong>Open files</strong> では ZIP アーカイブやリプレイするプレイログ (<code>*.bmplay.json</code>) を選べます。
               </li>
               <li>追加でドロップした場合、既存のライブラリに追加され、テーマも維持されます。</li>
             </ul>
@@ -483,14 +637,23 @@ export const DEMO_APP_HTML = `
               <li><kbd>Space</kbd> でポーズ / 再開。</li>
               <li><kbd>F5</kbd> で現在のチャートをリスタート。</li>
               <li><kbd>Esc</kbd> でリザルト画面 (または選曲画面) へ戻ります。</li>
-              <li>プレイフィールドをダブルクリックするとフルスクリーンに入り / 解除します。<kbd>Esc</kbd> は先にフルスクリーンを解除し、もう一度押すと通常のシーン操作になります。</li>
+              <li><kbd>Backspace</kbd> を 0.5 秒長押しでも同じようにプレイを中断します (どのブラウザでもフルスクリーン中に使えます)。</li>
+              <li>プレイフィールドをダブルクリックするとフルスクリーンに入り / 解除します。<kbd>Esc</kbd> は先にフルスクリーンを解除し、もう一度押すと通常のシーン操作になります。Chrome / Edge ではフルスクリーン中も <kbd>Esc</kbd> は通常のシーン操作のままで、<kbd>Esc</kbd> 長押しでフルスクリーンを解除します。</li>
+            </ul>
+
+            <h3 class="help-section-title">リザルト</h3>
+            <ul class="help-list">
+              <li><kbd>Enter</kbd> / <kbd>Space</kbd> / <kbd>Esc</kbd> で選曲画面へ戻ります。</li>
+              <li><kbd>R</kbd> で同じオプションのまま同じチャートをすぐにもう一度プレイします。</li>
             </ul>
 
             <h3 class="help-section-title">オプションと録画</h3>
             <ul class="help-list">
-              <li>右上 lil-gui パネルにオートプレイ / コンプレッサー / BGA トランスコード / 録画コントロールがあります。</li>
               <li>
-                <strong>Record</strong> ボタンを押すと、次の再生を WebM として録画してダウンロードできます (ブラウザが MediaRecorder に対応している必要があります — Open source / Browser checks を参照)。
+                右上 Debug Menu に読み込み / スキン / プレイオプション / オーディオ / 録画のコントロールがあります。あまり使わない設定や開発者向けの設定は折りたたまれたフォルダにあり、フォルダの開閉状態は記憶されます。
+              </li>
+              <li>
+                <strong>Record gameplay video</strong> ボタンを押すと、次の再生を動画（<strong>Video format</strong> で選んだ形式、既定は MP4 · H.264）として録画してダウンロードできます (ブラウザが MediaRecorder に対応している必要があります — Open source / Browser checks を参照)。
               </li>
               <li>
                 選曲画面で現在のスキンの <strong>PLAY OPTION</strong> パネルを開くと、Random / Mirror / Auto-scratch / hi-speed などのプレイヤー側モディファイアを設定できます。

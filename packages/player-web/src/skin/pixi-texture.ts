@@ -16,7 +16,13 @@ export interface CreateCachedCroppedTextureOptions {
   requireFiniteFrame?: boolean;
 }
 
-const cropCache = new WeakMap<Texture, Map<string, Texture>>();
+/**
+ * Crops per base texture, keyed by the frame's numbers in turn (x, then y, w, h). Looked up for every sprite of every
+ * frame, so no key string is built: numeric `Map` keys compare as the old `${x}|${y}|${w}|${h}` text did (`-0` and `0`
+ * alike, `NaN` with itself).
+ */
+type CropsByFrame = Map<number, Map<number, Map<number, Map<number, Texture>>>>;
+const cropCache = new WeakMap<Texture, CropsByFrame>();
 
 /**
  * Returns a cached `Texture` view that crops `texture` to `rect` while reusing the same
@@ -43,12 +49,25 @@ export function createCachedCroppedTexture(
     bySource = new Map();
     cropCache.set(texture, bySource);
   }
-
-  const key = `${rect.x}|${rect.y}|${rect.w}|${rect.h}`;
-  let cached = bySource.get(key);
+  let byY = bySource.get(rect.x);
+  if (!byY) {
+    byY = new Map();
+    bySource.set(rect.x, byY);
+  }
+  let byW = byY.get(rect.y);
+  if (!byW) {
+    byW = new Map();
+    byY.set(rect.y, byW);
+  }
+  let byH = byW.get(rect.w);
+  if (!byH) {
+    byH = new Map();
+    byW.set(rect.w, byH);
+  }
+  let cached = byH.get(rect.h);
   if (!cached) {
     cached = new Texture({ source: texture.source, frame: new Rectangle(rect.x, rect.y, rect.w, rect.h) });
-    bySource.set(key, cached);
+    byH.set(rect.h, cached);
   }
   return cached;
 }

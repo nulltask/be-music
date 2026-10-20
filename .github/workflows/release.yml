@@ -1,11 +1,11 @@
 name: Release
 
+# `main` only moves by merging the `devel -> main` release pull request, so a push to it is a release. Running on the
+# push (rather than on the closed pull request) checks out and releases the same commit, `github.sha`.
 on:
-  pull_request:
+  push:
     branches:
       - main
-    types:
-      - closed
   workflow_dispatch:
     inputs:
       release_target:
@@ -22,13 +22,12 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_target || github.event.pull_request.merge_commit_sha || github.run_id }}
+  group: release-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_target || github.sha }}
   cancel-in-progress: false
 
 jobs:
   prepare:
     name: Prepare Releases
-    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'devel')
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 10
     outputs:
@@ -45,7 +44,7 @@ jobs:
 
     steps:
       - name: Checkout workflow sources
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
@@ -53,7 +52,7 @@ jobs:
       # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
       # `pnpm`, and caches the package store.
       - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1.21.1
+        uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
         with:
           node-version-file: .node-version
           cache: true
@@ -74,7 +73,8 @@ jobs:
             echo "release_target=$MANUAL_RELEASE_TARGET" >> "$GITHUB_OUTPUT"
             echo "release_base=$MANUAL_RELEASE_BASE" >> "$GITHUB_OUTPUT"
           else
-            release_target="${{ github.event.pull_request.merge_commit_sha }}"
+            release_target="${{ github.sha }}"
+            # The release pull request's merge commit: its first parent is `main` before the merge.
             release_base="$(git rev-parse "${release_target}^1")"
             echo "release_target=$release_target" >> "$GITHUB_OUTPUT"
             echo "release_base=$release_base" >> "$GITHUB_OUTPUT"
@@ -107,14 +107,14 @@ jobs:
 
     steps:
       - name: Checkout release target
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.prepare.outputs.release_target }}
 
       # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
       # `pnpm`, and caches the package store.
       - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1.21.1
+        uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
         with:
           node-version-file: .node-version
           cache: true
@@ -272,7 +272,7 @@ jobs:
           }
 
       - name: Upload SEA archives
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sea-release-assets-${{ steps.meta.outputs.archive_suffix }}
           path: tmp/release-assets/*
@@ -289,14 +289,14 @@ jobs:
 
     steps:
       - name: Checkout workflow sources
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
 
       # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
       # `pnpm`, and caches the package store.
       - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1.21.1
+        uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
         with:
           node-version-file: .node-version
           cache: true
@@ -316,7 +316,7 @@ jobs:
 
       - name: Download SEA archives
         if: needs.prepare.outputs.has_sea_releases == 'true'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: sea-release-assets-*
           merge-multiple: true

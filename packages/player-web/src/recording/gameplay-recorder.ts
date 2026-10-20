@@ -9,7 +9,7 @@
  * - **`MediaRecorder`** fallback for browsers without `VideoEncoder` / `AudioEncoder` / `AudioWorklet`, or without a
  *   WebM-compatible encoder. It records `canvas.captureStream` + a `MediaStreamAudioDestinationNode`; the browser
  *   stamps both on arrival, which leaves the picture a few tens of milliseconds ahead of the sound, and its output
- *   needs {@link makeWebmSeekable} before external players can seek in it.
+ *   needs {@link makeWebMSeekable} before external players can seek in it.
  *
  * Both capture in real time, so the recording reflects what the player saw (frame skips and all) rather than an offline
  * re-render.
@@ -21,11 +21,17 @@
  * recorder.start();
  * // ... gameplay runs ...
  * const result = await recorder.stop();
- * downloadBlob(result.seekable ? result.blob : await makeWebmSeekable(result.blob), 'song.webm');
+ * downloadBlob(result.seekable ? result.blob : await makeWebMSeekable(result.blob), 'song.webm');
  * ```
  *
  * Disposed instances throw on further calls; the host should construct a fresh recorder per recording session.
  */
+import {
+  DEFAULT_RECORDING_FORMAT,
+  recorderMIMECandidates,
+  recordingFileExtension,
+  type RecordingFormat,
+} from './recording-format.ts';
 import { WebCodecsCapture, supportsWebCodecsRecording } from './webcodecs-recorder.ts';
 
 export interface GameplayRecorderOptions {
@@ -85,6 +91,11 @@ export interface GameplayRecorderOptions {
    * {@link mimeType} implies `'media-recorder'`.
    */
   backend?: 'auto' | 'webcodecs' | 'media-recorder';
+  /**
+   * The container and video codec to record in. Defaults to {@link DEFAULT_RECORDING_FORMAT} (MP4 with H.264). When the
+   * browser cannot encode that codec the recorder takes the next one the container can carry, then any it can record.
+   */
+  format?: RecordingFormat;
 }
 
 /**
@@ -96,36 +107,28 @@ export interface GameplayRecorderResult {
   blob: Blob;
   mimeType: string;
   durationMs: number;
-  /** Whether the file already carries its seek index (WebCodecs backend); otherwise run {@link makeWebmSeekable}. */
+  /**
+   * Whether the file already carries its seek index (the WebCodecs backend, and MP4 from `MediaRecorder`); otherwise
+   * (WebM from `MediaRecorder`) run {@link makeWebMSeekable}.
+   */
   seekable: boolean;
 }
 
 /**
- * Codec / container preference list, tried in order. The last entry is the bare `video/webm` MIME with no codec hint —
- * every `MediaRecorder` implementation that supports webm at all also supports this form, so it's the safety net.
- */
-const PREFERRED_RECORDER_MIME_TYPES: readonly string[] = [
-  'video/webm;codecs=vp9,opus',
-  'video/webm;codecs=vp8,opus',
-  'video/webm;codecs=vp9',
-  'video/webm;codecs=vp8',
-  'video/webm',
-];
-
-/**
- * Picks the highest-priority MIME type from {@link PREFERRED_RECORDER_MIME_TYPES} that the runtime `MediaRecorder`
- * claims to support. Returns `undefined` when no candidate is available (e.g. older Safari that lacks
+ * Picks the first MIME type of `candidates` (by default the WebM chain: VP9 / VP8 with Opus, then without, then bare
+ * `video/webm`) that the runtime `MediaRecorder` claims to support. Returns `undefined` when no candidate is available (e.g. older Safari that lacks
  * `MediaRecorder.isTypeSupported`); callers should treat that as "recording unavailable" rather than guessing.
  *
  * Exported for testing — production callers go through {@link GameplayRecorder.start} which calls this internally.
  */
-export function pickRecorderMimeType(
+export function pickRecorderMIMEType(
   isSupported: (type: string) => boolean = (type) =>
     typeof MediaRecorder !== 'undefined' &&
     typeof MediaRecorder.isTypeSupported === 'function' &&
     MediaRecorder.isTypeSupported(type),
+  candidates: readonly string[] = recorderMIMECandidates({ container: 'webm', videoCodec: 'vp9' }),
 ): string | undefined {
-  for (const candidate of PREFERRED_RECORDER_MIME_TYPES) {
+  for (const candidate of candidates) {
     if (isSupported(candidate)) return candidate;
   }
   return undefined;
@@ -168,10 +171,11 @@ export class GameplayRecorder {
   private readonly fps: number;
   private readonly videoBitsPerSecond: number;
   private readonly audioBitsPerSecond: number;
-  private readonly explicitMimeType: string | undefined;
+  private readonly explicitMIMEType: string | undefined;
   private readonly maxVideoSize: { width: number; height: number };
   private readonly subscribeFrame: ((onFrame: () => void) => () => void) | undefined;
   private readonly backend: 'auto' | 'webcodecs' | 'media-recorder';
+  private readonly format: RecordingFormat;
   /** The canvas frames are encoded from, and the copy that refreshes it (when the scene canvas is scaled down). */
   private source: { canvas: HTMLCanvasElement; copy?: () => void } | undefined;
   /** Active WebCodecs session, when that backend is in use. */
@@ -199,10 +203,11 @@ export class GameplayRecorder {
     this.fps = options.fps ?? 60;
     this.videoBitsPerSecond = options.videoBitsPerSecond ?? 5_000_000;
     this.audioBitsPerSecond = options.audioBitsPerSecond ?? 192_000;
-    this.explicitMimeType = options.mimeType;
+    this.explicitMIMEType = options.mimeType;
     this.maxVideoSize = options.maxVideoSize ?? { width: 1920, height: 1080 };
     this.subscribeFrame = options.subscribeFrame;
     this.backend = options.mimeType !== undefined ? 'media-recorder' : (options.backend ?? 'auto');
+    this.format = options.format ?? DEFAULT_RECORDING_FORMAT;
   }
 
   public isActive(): boolean {
@@ -258,7 +263,7 @@ export class GameplayRecorder {
       this.capture = undefined;
       try {
         const blob = await capture.finish();
-        return blob ? { blob, mimeType: 'video/webm', durationMs, seekable: true } : undefined;
+        return blob ? { blob, mimeType: blob.type, durationMs, seekable: true } : undefined;
       } finally {
         this.release();
       }
@@ -276,7 +281,7 @@ export class GameplayRecorder {
     const mimeType = recorder.mimeType || 'video/webm';
     const blob = new Blob(this.chunks, { type: mimeType });
     this.release();
-    return { blob, mimeType, durationMs, seekable: false };
+    return { blob, mimeType, durationMs, seekable: recordingFileExtension(mimeType) === 'mp4' };
   }
 
   /**
@@ -308,6 +313,7 @@ export class GameplayRecorder {
       fps: this.fps,
       videoBitsPerSecond: this.videoBitsPerSecond,
       audioBitsPerSecond: this.audioBitsPerSecond,
+      format: this.format,
     });
     this.capture = capture;
     this.startFrameLoop(() => {
@@ -334,7 +340,7 @@ export class GameplayRecorder {
   }
 
   private startMediaRecorder(source: { canvas: HTMLCanvasElement; copy?: () => void }): void {
-    const mimeType = this.explicitMimeType ?? pickRecorderMimeType();
+    const mimeType = this.explicitMIMEType ?? pickRecorderMIMEType(undefined, recorderMIMECandidates(this.format));
     if (!mimeType) {
       throw new Error('GameplayRecorder.start: browser exposes no supported MediaRecorder MIME type');
     }
@@ -478,11 +484,6 @@ export class GameplayRecorder {
   }
 }
 
-// Static import of `ts-ebml` so Vite handles its CJS interop during the initial pre-bundle pass. The previous dynamic
-// import deferred the resolution to a second optimization pass where the named-export re-export `tools.readVint` would
-// land as `undefined` and crash the recording-stop flow.
-import { Decoder, Reader, tools } from 'ts-ebml';
-
 /**
  * Rewrites a `MediaRecorder`-produced WebM blob so external video players can seek inside it.
  *
@@ -492,35 +493,43 @@ import { Decoder, Reader, tools } from 'ts-ebml';
  * playhead snaps back to wherever the next cluster boundary happens to be. The user-visible symptom is exactly what was
  * reported — the saved `.webm` plays, but you can't jump around inside it.
  *
- * The fix is to walk the EBML tree once, collect the cluster timestamps + their byte offsets, then splice a fresh
- * `SeekHead` + `Cues` + `Duration` block in front of the original body. `ts-ebml` is the canonical browser-side library
- * for this dance — it ships a `Decoder` that emits typed EBML elements, an `EBMLReader` that accumulates the metadata
- * we need, and a `tools.makeMetadataSeekable` that builds the patched header buffer.
+ * The fix is to re-mux the file: Mediabunny reads the recorded packets and writes them into a fresh WebM, whose writer
+ * fills in `Duration`, `SeekHead` and `Cues`. Packets are copied as they are — never re-encoded (`copy.mode: 'forced'`)
+ * — and keep their timestamps (`trim.start: 0`), so picture, sound and sync stay exactly as recorded.
  *
  * Returns a fresh `Blob` of the same MIME type with seekable metadata. Falls back to the original blob (and logs a
- * warning) when the input isn't a recognizable WebM container or the patch fails — better to hand the user the
- * play-only file than to lose the recording outright.
+ * warning) when the input isn't a recognizable WebM container, a track could only be kept by re-encoding it, or the
+ * re-mux fails — better to hand the user the play-only file than to lose the recording outright.
  */
-export async function makeWebmSeekable(blob: Blob): Promise<Blob> {
+export async function makeWebMSeekable(blob: Blob): Promise<Blob> {
   if (blob.size === 0) return blob;
-  const buffer = await blob.arrayBuffer();
+  // Loaded on demand (as in the WebCodecs backend) so Mediabunny stays out of the main bundle.
+  const { BlobSource, BufferTarget, Conversion, Input, MATROSKA, Output, WEBM, WebMOutputFormat } =
+    await import('mediabunny');
+  const input = new Input({ source: new BlobSource(blob), formats: [WEBM, MATROSKA] });
   try {
-    const decoder = new Decoder();
-    const reader = new Reader();
-    reader.logging = false;
-    reader.drop_default_duration = false;
-    const elements = decoder.decode(buffer);
-    for (const element of elements) {
-      reader.read(element);
+    const output = new Output({ format: new WebMOutputFormat(), target: new BufferTarget() });
+    const conversion = await Conversion.init({
+      input,
+      output,
+      copy: { mode: 'forced' },
+      trim: { start: 0 },
+      showWarnings: false,
+    });
+    if (!conversion.isValid || conversion.discardedTracks.length > 0) {
+      // eslint-disable-next-line no-console
+      console.warn('[recorder] cannot re-mux the recording without re-encoding; downloading raw blob');
+      return blob;
     }
-    reader.stop();
-    const refinedMetadata = tools.makeMetadataSeekable(reader.metadatas, reader.duration, reader.cues);
-    const body = buffer.slice(reader.metadataSize);
-    return new Blob([refinedMetadata, body], { type: blob.type });
+    await conversion.execute();
+    const buffer = output.target.buffer;
+    return buffer ? new Blob([buffer], { type: blob.type }) : blob;
   } catch (error) {
     // eslint-disable-next-line no-console
     console.warn('[recorder] failed to inject seekable metadata; downloading raw blob', error);
     return blob;
+  } finally {
+    input.dispose();
   }
 }
 

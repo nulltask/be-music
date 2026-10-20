@@ -29,7 +29,9 @@ function createSnapshot(
       'audio-renderer': [],
       player: [],
       'player-tui': [],
+      'scene-model': [],
       'lr2-skin': [],
+      'beatoraja-skin': [],
       'skin-sdk': [],
       'player-web': [],
     },
@@ -76,6 +78,19 @@ describe('aggregateBenchmarkSnapshots', () => {
     expect(aggregated.results['utils.clamp'].meanMs).toBe(9);
     expect(aggregated.results['utils.clamp'].p50Ms).toBe(9);
     expect(aggregated.results['utils.clamp'].p99Ms).toBe(11);
+    // Every run's figure is kept, for the comparison's noise check.
+    expect(aggregated.results['utils.clamp'].runMedianHz).toEqual([100, 140, 120]);
+    expect(aggregated.results['utils.clamp'].iterationsPerSample).toBeUndefined();
+  });
+
+  it('keeps the median batch size of batched runs', () => {
+    const batched = (hz: number, iterations: number) => {
+      const snapshot = createSnapshot(hz, 1000 / hz);
+      snapshot.results['utils.clamp']!.iterationsPerSample = iterations;
+      return snapshot;
+    };
+    const aggregated = aggregateBenchmarkSnapshots([batched(100, 400), batched(110, 500), batched(90, 450)]);
+    expect(aggregated.results['utils.clamp'].iterationsPerSample).toBe(450);
   });
 
   it('aggregates medianHz independently from mean hz', () => {

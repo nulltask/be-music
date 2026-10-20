@@ -99,7 +99,7 @@
 - [ ] 参照不正（index 範囲外、`start > end`、payload 範囲外）をエラー化
 - [ ] `SongMetadata` の拡張項目（`replaygain`, `preview_start`, `preview_url`, `video_url`, `video_offset`, `readme`, `chart_names`）を保持
 - [ ] `charts[]` の付帯情報（`md5`, `noteCount`, `bpm`, `duration`, `keys`, `scratch`, `bga`）を保持
-- [ ] 取得した譜面文字列を既存 `parseBms` / `parseBmson` に委譲
+- [ ] 取得した譜面文字列を既存 `parseBMS` / `parseBmson` に委譲
 
 ### stringifier (`@be-music/json` -> bemuse assets)
 

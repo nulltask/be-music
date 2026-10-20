@@ -2,9 +2,9 @@ import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import { MessageChannel, type MessagePort, type WorkerOptions } from 'node:worker_threads';
 import { createAbortError, isAbortError } from '@be-music/utils/core';
-import { createEmptyJson } from '../../../json/src/index.ts';
+import { createEmptyJSON } from '../../../json/src/index.ts';
 import type { NodeInputRuntime } from './node-input-runtime.ts';
-import type { NodeUiRuntime } from './node-ui-runtime.ts';
+import type { NodeUIRuntime } from './node-ui-runtime.ts';
 
 type MockWorker = EventEmitter & {
   postMessage: ReturnType<typeof vi.fn>;
@@ -21,11 +21,12 @@ const inputRuntimeState = vi.hoisted(() => ({
   runtime: undefined as NodeInputRuntime | undefined,
   start: vi.fn(),
   stop: vi.fn(),
+  negotiated: false,
 }));
 
 const uiRuntimeState = vi.hoisted(() => ({
-  context: undefined as Parameters<(typeof import('./node-ui-runtime.ts'))['createNodeUiRuntime']>[0] | undefined,
-  runtime: undefined as NodeUiRuntime | undefined,
+  context: undefined as Parameters<(typeof import('./node-ui-runtime.ts'))['createNodeUIRuntime']>[0] | undefined,
+  runtime: undefined as NodeUIRuntime | undefined,
   bridgePort: undefined as MessagePort | undefined,
   createError: undefined as Error | undefined,
   start: vi.fn(),
@@ -56,6 +57,7 @@ vi.mock('node:worker_threads', async () => {
 });
 
 vi.mock('./node-input-runtime.ts', () => ({
+  hasNegotiatedStatefulKeyboardProtocol: vi.fn(() => inputRuntimeState.negotiated),
   createNodeInputRuntime: vi.fn((context) => {
     inputRuntimeState.context = context;
     inputRuntimeState.runtime = {
@@ -67,7 +69,7 @@ vi.mock('./node-input-runtime.ts', () => ({
 }));
 
 vi.mock('./node-ui-runtime.ts', () => ({
-  createNodeUiRuntime: vi.fn(async (context) => {
+  createNodeUIRuntime: vi.fn(async (context) => {
     uiRuntimeState.context = context;
     if (uiRuntimeState.createError) {
       throw uiRuntimeState.createError;
@@ -102,6 +104,7 @@ afterEach(() => {
   inputRuntimeState.runtime = undefined;
   inputRuntimeState.start.mockReset();
   inputRuntimeState.stop.mockReset();
+  inputRuntimeState.negotiated = false;
   uiRuntimeState.context = undefined;
   uiRuntimeState.runtime = undefined;
   uiRuntimeState.bridgePort = undefined;
@@ -116,6 +119,31 @@ afterEach(() => {
 });
 
 describe('node gameplay runtime', () => {
+  test('hands the gameplay worker the resolved chart together with the draws it was resolved with', async () => {
+    const json = createEmptyJSON('bms');
+    const randomDraws = [{ command: 'RANDOM' as const, range: 2, value: 2 }];
+    const promise = runNodeGameplayRuntime(createOptions({ json, randomDraws }));
+
+    expect(workerState.lastWorkerOptions?.workerData).toMatchObject({ json, randomDraws });
+
+    getLastWorker().emit('message', { kind: 'result', summary: createSummary() });
+    await promise;
+  });
+
+  test('tells the gameplay worker whether the terminal negotiated key releases before the play', async () => {
+    const play = async (): Promise<unknown> => {
+      const promise = runNodeGameplayRuntime(createOptions());
+      const workerData = workerState.lastWorkerOptions?.workerData;
+      getLastWorker().emit('message', { kind: 'result', summary: createSummary() });
+      await promise;
+      return workerData;
+    };
+
+    expect(await play()).not.toHaveProperty('inputReportsKeyReleases');
+    inputRuntimeState.negotiated = true;
+    expect(await play()).toMatchObject({ inputReportsKeyReleases: true });
+  });
+
   test('passes source resolution condition to the gameplay worker in source runs', async () => {
     const promise = runNodeGameplayRuntime(createOptions());
     const workerExecArgv = workerState.lastWorkerOptions?.execArgv;
@@ -166,16 +194,16 @@ describe('node gameplay runtime', () => {
     worker.emit('message', {
       kind: 'ui-init',
       requestId: 3,
-      runtime: createUiInit(),
+      runtime: createUIInit(),
     });
     await Promise.resolve();
 
     expect(uiRuntimeState.context?.laneDisplayMode).toBe('7 KEY');
-    expect(uiRuntimeState.context?.uiFps).toBe(60);
+    expect(uiRuntimeState.context?.uiFPS).toBe(60);
     expect(uiRuntimeState.context?.tuiVisibleNotesLimit).toBe(8192);
     expect(uiRuntimeState.context?.tuiNoteHeight).toBe(8);
     expect(uiRuntimeState.context?.imageResizeAlgorithm).toBe('nearest');
-    expect(uiRuntimeState.context?.videoBgaStreaming).toBe(true);
+    expect(uiRuntimeState.context?.videoBGAStreaming).toBe(true);
     expect(uiRuntimeState.context?.initialFrame).toMatchObject({
       currentBeat: 0,
       currentSeconds: 0,
@@ -214,7 +242,7 @@ describe('node gameplay runtime', () => {
     worker.emit('message', {
       kind: 'ui-init',
       requestId: 7,
-      runtime: createUiInit(),
+      runtime: createUIInit(),
     });
     await Promise.resolve();
 
@@ -241,7 +269,7 @@ describe('node gameplay runtime', () => {
     worker.emit('message', {
       kind: 'ui-init',
       requestId: 9,
-      runtime: createUiInit(),
+      runtime: createUIInit(),
     });
     await Promise.resolve();
 
@@ -292,7 +320,7 @@ describe('node gameplay runtime', () => {
     worker.emit('message', {
       kind: 'ui-init',
       requestId: 8,
-      runtime: createUiInit(),
+      runtime: createUIInit(),
     });
     await Promise.resolve();
     await Promise.resolve();
@@ -314,7 +342,7 @@ function createOptions(
   overrides: Partial<Parameters<typeof runNodeGameplayRuntime>[0]> = {},
 ): Parameters<typeof runNodeGameplayRuntime>[0] {
   return {
-    json: createEmptyJson('bms'),
+    json: createEmptyJSON('bms'),
     mode: 'manual',
     playOptions: {
       tui: true,
@@ -323,20 +351,20 @@ function createOptions(
       tuiNoteHeight: 8,
       imageResizeAlgorithm: 'nearest' as const,
       audioBaseDir: process.cwd(),
-      videoBgaStreaming: true,
+      videoBGAStreaming: true,
     },
     ...overrides,
   };
 }
 
-function createUiInit() {
+function createUIInit() {
   return {
-    json: createEmptyJson('bms'),
+    json: createEmptyJSON('bms'),
     mode: 'MANUAL' as const,
     laneDisplayMode: '7 KEY',
     laneBindings: [{ channel: '11', keyLabel: 'A', inputTokens: ['a'], isScratch: false, side: '1P' as const }],
     speed: 1,
-    uiFps: 60,
+    uiFPS: 60,
     tuiVisibleNotesLimit: 8192,
     tuiNoteHeight: 8,
     judgeWindowMs: 16.67,
@@ -344,7 +372,7 @@ function createUiInit() {
     imageResizeAlgorithm: 'nearest' as const,
     showLaneChannels: false,
     baseDir: process.cwd(),
-    videoBgaStreaming: true,
+    videoBGAStreaming: true,
     initialFrame: {
       currentBeat: 0,
       currentSeconds: 0,

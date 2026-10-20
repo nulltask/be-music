@@ -17,7 +17,7 @@
 // Each note is counted ONCE per LN-pair (the start event), so the breakdown reports note
 // COUNTS, not raw event counts. LN-end events are skipped.
 
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 
 export interface NoteBreakdown {
   /** Regular key taps. */
@@ -32,11 +32,11 @@ export interface NoteBreakdown {
 
 /**
  * Compute the chart's per-kind note breakdown. Returns a fresh `NoteBreakdown` — caller is
- * expected to cache by `BrowserSongEntry` reference (see select scene's WeakMap).
+ * expected to cache by `LibraryChart` reference (see select scene's WeakMap).
  */
-export function computeBeatorajaNoteBreakdown(chart: BeMusicJson): NoteBreakdown {
+export function computeBeatorajaNoteBreakdown(chart: BeMusicJSON): NoteBreakdown {
   const result: NoteBreakdown = { normal: 0, ln: 0, scratch: 0, bss: 0 };
-  const lnObjValues = collectLnObjValues(chart);
+  const lnObjValues = collectLNObjValues(chart);
   // For LNTYPE=2 (channel 5X/6X), we count START events only — half the events on those
   // channels are start, half end. Pair them per channel per measure×position via a bookkeeping
   // map: even-index occurrences (0, 2, ...) are starts, odd are ends. Beatoraja's standard
@@ -48,10 +48,10 @@ export function computeBeatorajaNoteBreakdown(chart: BeMusicJson): NoteBreakdown
     if (!isPlayableLane(event.channel)) continue;
 
     const isScratch = isScratchChannel(event.channel);
-    const isLnPairChannel = isLnPairChannel_(event.channel);
-    const isLnObjMatch = lnObjValues.has(event.value) || lnObjValues.has(event.value.toUpperCase());
+    const isLNPairChannel = isLnPairChannel_(event.channel);
+    const isLNObjMatch = lnObjValues.has(event.value) || lnObjValues.has(event.value.toUpperCase());
 
-    if (isLnPairChannel) {
+    if (isLNPairChannel) {
       // Channel 5X/6X — count only the START half of each pair. Track a per-channel counter so
       // start = 0,2,4,…  ; end = 1,3,5,….
       const key = event.channel;
@@ -63,7 +63,7 @@ export function computeBeatorajaNoteBreakdown(chart: BeMusicJson): NoteBreakdown
       continue;
     }
 
-    if (isLnObjMatch) {
+    if (isLNObjMatch) {
       // LNTYPE=1 inline LN — channel 1X/2X with value === lnObj. The matching end (same value
       // re-appearing later in the chart) is also lnObj-matched, so we'd double-count. We can't
       // disambiguate start vs end without the chart's pairing logic, so under-count by halving.
@@ -108,7 +108,7 @@ function isLnPairChannel_(channel: string): boolean {
  * boundaries on regular `1X`/`2X` channels. Empty when the chart uses LNTYPE=2 (channel-based)
  * or no LN at all.
  */
-function collectLnObjValues(chart: BeMusicJson): Set<string> {
+function collectLNObjValues(chart: BeMusicJSON): Set<string> {
   const out = new Set<string>();
   const lnObjs = chart.bms?.lnObjs;
   if (!Array.isArray(lnObjs)) return out;

@@ -12,14 +12,54 @@ BMS/BMSON toolchain composed of TypeScript + pnpm workspaces.
 - `@be-music/parser`: `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / JSON parser
 - `@be-music/stringifier`: Stringization from JSON to `.bms` / `.bmson`
 - `@be-music/audio-renderer`: Render the music score and output `.wav` / `.aiff`
-- `@be-music/player`: Shared playback engine, timing, judgment, scoring, gauge, BGA timeline, and UI/audio adapter contracts
+- `@be-music/player`: Shared rules and playback engine: one play loop (manual, auto, replay), judgment, scoring, gauges and clear lamps, best records, course runs and NONSTOP, the play-log format, and the runtime contracts hosts plug into
 - `@be-music/player-tui`: Terminal UI and `bms-player` CLI frontend for autoplay, keyboard play, Music Select, BGA, and SEA builds, plus the `bms-playlog` play-log re-simulator
+- `@be-music/scene-model`: Runtime-neutral scene models — library entries, browsing, play options, play state and results, course views, system sounds — shared by every skin family
 - `@be-music/lr2-skin`: Renderer-independent Lunatic Rave 2 skin parser, asset resolver, and theme loader
 - `@be-music/beatoraja-skin`: Renderer-independent beatoraja JSON/Lua skin parser, normalizer, and theme loader
 - `@be-music/skin-sdk`: Framework-free SDK for writing be-music skins for the browser player
-- `@be-music/player-web`: Browser PixiJS player core for song selection, built-in default / LR2 / beatoraja skin rendering, gameplay, result scenes, and recording
-- `@be-music/player-web-demo`: Private Vite demo that wires folder/ZIP drops, LR2/beatoraja themes, debug controls, and browser playback together
+- `@be-music/player-web`: Browser PixiJS runtime: every select, decide, play and result screen as a scene session drawn by a built-in, LR2 or beatoraja family view, behind one host API, plus the audio service, the chart collection, skin loading and gameplay recording
+- `@be-music/player-web-demo`: Private Vite demo that wires folder/ZIP drops, LR2/beatoraja themes, the Debug Menu and browser playback together, as services behind one scene router
+- `@be-music/leaderboard-api`: Private Leaderboard API on Cloudflare Workers: play-log submission, verification by re-simulation, and rankings
 - `@be-music/editor`: CLI editor (import/edit/export)
+
+The packages build on each other in layers. An arrow points from a package to a package that depends on it; a dependency already reached through another arrow is not drawn again (`@be-music/utils` sits under almost every package). [Architecture — Target architecture](./docs/architecture.md#target-architecture) shows the same layers inside the packages.
+
+```mermaid
+flowchart TD
+  subgraph data["Data"]
+    utils["utils"] --> json["json"] --> chart["chart"] --> parser["parser"]
+    parser --> stringifier["stringifier"]
+    parser --> renderer["audio-renderer"]
+  end
+  subgraph rules["Rules and engine"]
+    player["player"]
+  end
+  subgraph models["Models"]
+    scene["scene-model"]
+    sdk["skin-sdk"]
+    lr2["lr2-skin"]
+    beatoraja["beatoraja-skin"]
+  end
+  subgraph hosts["Runtimes and hosts"]
+    editor["editor"]
+    tui["player-tui"]
+    lb["leaderboard-api"]
+    web["player-web"]
+    demo["player-web-demo"]
+  end
+
+  stringifier --> editor
+  renderer --> player
+  player --> scene
+  player --> tui
+  player --> lb
+  scene --> sdk
+  scene --> lr2 --> beatoraja
+  sdk --> web
+  beatoraja --> web
+  web --> demo
+```
 
 ## Required environment
 
@@ -41,7 +81,7 @@ pnpm run check
 pnpm run test
 ```
 
-The toolchain is [Vite+](https://viteplus.dev/) (`vite-plus`), configured from the root `vite.config.ts`. `pnpm run build` runs each workspace's `build` script through the Vite+ task runner (`vp run -r --cache build`) in dependency order, replaying unchanged packages from the task cache; library packages build with `vp pack` (tsdown) from the `pack` block in their `vite.config.ts` and emit the bundle and type definitions (`.d.ts`) together. `pnpm run check` runs formatting, linting, and type checking (Oxfmt, Oxlint, and tsgolint) across the whole workspace in one pass; `pnpm run format` / `pnpm run lint` / `pnpm run typecheck` run the individual steps. Each package's `tsconfig.json` is its type-check project, while `tsconfig.build.json` drives declaration output. Installing dependencies also registers a Vite+ pre-commit hook that runs `vp check --fix` on staged files.
+The toolchain is [Vite+](https://viteplus.dev/) (`vite-plus`), configured from the root `vite.config.ts`. `pnpm run build` runs each workspace's `build` script through the Vite+ task runner (`vp run -r --cache build`) in dependency order, replaying unchanged packages from the task cache; library packages build with `vp pack` (tsdown) from the `pack` block in their `vite.config.ts` and emit the bundle and type definitions (`.d.ts`) together. `pnpm run check` runs formatting, linting, and type checking (Oxfmt, Oxlint, and tsgolint) across the whole workspace in one pass; `pnpm run format` / `pnpm run lint` / `pnpm run typecheck` run the individual steps. Each package's `tsconfig.json` is its type-check project, while `tsconfig.build.json` drives declaration output. Installing dependencies also registers a Vite+ pre-commit hook that runs `vp check --fix` on staged files. `pnpm run test:e2e` plays the course browser checklist in the web demo end to end with Playwright (a few minutes, so `pnpm run test` leaves it out); see [docs/course-checklist.md](docs/course-checklist.md#automated-run).
 
 ## Package Releases
 
@@ -55,7 +95,7 @@ pnpm run release:version
 
 - Normal feature PR adds `.changeset/*.md` for the changed package
 - When you want to release, run `pnpm run release:version` on `devel` and commit the generated `packages/*/package.json` and `packages/*/CHANGELOG.md` updates together.
-- In that state, if you merge the release PR of `devel -> main`, a separate GitHub Release will be created only for the package whose version has increased.
+- In that state, merging the release PR of `devel -> main` creates a separate GitHub Release for each public package whose version has increased (private packages such as the player demo and the Leaderboard get none).
 - The player SEA executable is built from `@be-music/player-tui` and attached to the `@be-music/player-tui` release; `@be-music/audio-renderer` also ships a SEA zip
 - The private repository root `package.json` stays at `0.0.0`; releasable versions are tracked in `packages/*/package.json`.
 
@@ -64,13 +104,17 @@ The tag is created in the format `@be-music/package-name@x.y.z`.
 ## Specifications
 
 - [Specification top](./docs/README.md)
+- [Architecture](./docs/architecture.md) and the [architecture decisions](./docs/adr/README.md)
 - [BMS implementation specification](./docs/bms-spec.md)
 - [BMSON implementation specification](./docs/bmson-spec.md)
 - [Bemuse implementation specification](./docs/bemuse-spec.md)
+- [LR2 and beatoraja semantics](./docs/semantics-lr2-beatoraja.md)
 - [Player implementation specification](./docs/player-spec.md)
 - [Terminal player implementation notes](./docs/player-tui.md)
 - [Browser player implementation notes](./docs/player-web.md)
+- [Scene models (`@be-music/scene-model`)](./docs/scene-model.md)
 - [Play log (play history) specification](./docs/playlog.md)
+- [Courses and dan certification](./docs/course.md)
 - [Writing a be-music skin](./docs/be-music-skin.md)
 - [LR2 skin implementation notes](./docs/lr2-skin.md)
 - [beatoraja skin implementation notes](./docs/beatoraja-skin.md)
@@ -87,10 +131,10 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 - Preserves BMS header/object lines/control syntax
 - Interpret `#WAVxx` / `#BMPxx` / `#BPMxx` / `#STOPxx` / `#TEXTxx`
 - Contains BMS extension headers (`#PREVIEW`, `#LNTYPE`, `#LNMODE`, `#LNOBJ`, `#VOLWAV`, `#SCROLLxx`, `#VIDEOFILE`, etc.)
-- Interpret BMSON's `info` / `lines` / `sound_channels` / `bpm_events` / `stop_events` / `bga`
+- Interpret BMSON's `info` / `lines` / `sound_channels` / `bpm_events` / `stop_events` / `bga`, and beatoraja's `scroll_events` / `key_channels` / `mine_channels` extensions
 - BMS text character code guessing (`Shift_JIS`, `UTF-8`, `EUC-JP`, `latin1`, etc.)
 - BMSON `info.init_bpm` is required by the parser; missing or invalid values fail early instead of falling back to `130`
-- BMSON `key_channels` mine notes are mapped through the `mode_hint` lane resolver and preserve per-mine `damage`
+- The beatoraja BMSON extensions are mapped through the `mode_hint` lane resolver as beatoraja reads them: `mine_channels` become mines that preserve per-mine `damage`, and `key_channels` become hidden (invisible) notes
 
 ### stringifier (`@be-music/stringifier`)
 
@@ -110,11 +154,19 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 
 ### player core (`@be-music/player`)
 
-- Shared `autoPlay()` / `manualPlay()` engine for terminal and browser runtimes
+- Shared `autoPlay()` / `manualPlay()` engine for terminal and browser runtimes: one play loop with manual, auto and replay judge strategies over a deterministic judge core (see [Architecture](./docs/architecture.md#the-engine-judge-core-and-one-play-loop))
 - UI and input signal buses for lane flashes, POOR BGA commands, frame snapshots, pause, restart, and high-speed changes
 - Shared note extraction for playable notes, legacy long notes, `#LNOBJ`, FREE ZONE, mines, and invisible notes
 - Shared judgment windows, dynamic `#EXRANKxx` changes, score, groove gauge, scroll-distance, BGA timelines, and result summaries
-- Browser-safe subpath exports for reusable helpers such as `core/engine`, `core/bga-timeline`, `core/scroll-distance`, `core/groove-gauge`, `playable-notes`, and `playlog`
+- Browser-safe entries next to the engine root: `signals`, `lanes`, `display`, `ruleset`, `playlog`, `records` and `course` (see [Player spec — Entry points](./docs/player-spec.md#entry-points))
+- `ruleset`: the vocabulary hosts, skins and the Leaderboard share: gauges, clear lamps, BP and the score (`ScoreSummary`, `computeScoreRate`, the DJ Ranks, LR2's money score)
+- `course`, `records` and `playlog`: course runs, the NONSTOP pipeline and the course stage rules; best records per judge ruleset; the play-log format, its recorder and its simulator
+
+### scene models (`@be-music/scene-model`)
+
+- Runtime-neutral models of every screen, independent of the skin family: library entries in chart wording (`LibraryChart`, `LibraryFolder`, `LibraryCourse`), the browse model (`reduceBrowse`, `BrowseSnapshot`), play options, the play state (`PlayState`), the play result (`PlayResult`), course views and system sound sets
+- Used by the web runtime, the skin SDK and the LR2 and beatoraja state resolvers
+- See [Scene models](./docs/scene-model.md)
 
 ### terminal player (`@be-music/player-tui`)
 
@@ -169,13 +221,14 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 - Touch play and a touch gameplay layout on touch-first devices, portrait stages for skins that provide one, and per-skin settings
 - LR2 select / decide / gameplay / result skin parsing and rendering on PixiJS
 - beatoraja select / decide / gameplay / result skin parsing and rendering on PixiJS
-- Separated default gameplay chrome injection so default-skin rendering does not depend on LR2 renderer modules
+- One scene session per screen holds its behaviour (browsing, chart preparation, engine, input, sound, endings) for every family; the built-in, LR2 and beatoraja family views only draw it and return intents (see [Scene sessions and family views](./docs/player-web.md#scene-sessions-and-family-views))
+- Designed entries: `@be-music/player-web/host` (`PixiSceneHost`, `createSelectScene` / `createDecideScene` / `createPlayScene` / `createResultScene`), `/skin`, `/collection`, `/audio` and `/recording` (see [Entry points](./docs/player-web.md#entry-points))
 - Shared LR2 Pixi helpers for destination interpolation, sprite transforms, numbers, text, sliders, and bargraphs
 - Shared beatoraja Pixi helpers for destination sampling, source-cell selection, text, values, sliders, gauges, graphs, timing visualizers, notes, markers, BGA, and runtime op/timer wiring
 - Shared playback semantics with the terminal player for notes, timing, scroll distance, BGA cues, score, and results
-- WebAudio preview and gameplay buses with split key/BGM/master compressor controls
-- BGA still/video rendering, browser-side video transcode fallback, and WebM gameplay recording
-- Single PixiJS scene host that owns one renderer context and disposes scene resources on transitions
+- One audio service on one system `AudioContext` for the select BGM, cues, jingles, chart preview and skin sounds, and a WebAudio bus per play with split key/BGM/master compressor controls
+- BGA still/video rendering, browser-side video transcode fallback, and MP4 / WebM gameplay recording
+- Single PixiJS scene host that owns one renderer context and shows one scene at a time; the demo's scene router owns every transition and disposes the scene that left
 - In-scene LR2 and beatoraja PLAY OPTION controls for hi-speed, BGA mode/size, filters, sort, HS-FIX, lane cover, lift, auto-scratch, DP flip, random/mirror modes, gauge variants, and skin options
 
 ### editor (`@be-music/editor`)
@@ -266,14 +319,15 @@ The demo starts a Vite dev server. Drop a BMS/BMSON song folder, an LR2 theme fo
 
 The demo can also load archives from a URL: `?music=<zip URL>&skin=<zip URL>` (either parameter may be omitted) feeds the archives into the same pipeline as a drop. Cross-origin `https` URLs are fetched through the same-origin proxy route `/__url-load-proxy`, served by the Vite dev server and by the Cloudflare Worker.
 
-To deploy the demo to Cloudflare Workers (Static Assets plus a Worker, see `packages/player-web-demo/wrangler.jsonc`):
+The demo is served by the Player Worker (`packages/play`): Static Assets for the built demo plus a Worker that streams the ffmpeg core from R2 and forwards the Leaderboard's API. Pushes to `main` and `devel` deploy every service to production and the preview (`.github/workflows/deploy.yml`, [Services and environments](./docs/services.md)). To deploy the Player by hand:
 
 ```bash
-pnpm --filter @be-music/player-web-demo run cf:r2:create # once: create the R2 bucket for ffmpeg-core
-pnpm --filter @be-music/player-web-demo run deploy:cf
+pnpm --filter @be-music/player-web-demo run cf:r2:push # when the pinned @ffmpeg/core changes: upload the core to R2
+pnpm --filter @be-music/play run deploy                # production, play.be-music.app
+pnpm --filter @be-music/play run deploy:preview        # preview, play.preview.be-music.app
 ```
 
-`deploy:cf` builds the demo, uploads `ffmpeg-core.wasm` / `ffmpeg-core.js` to R2 only when they changed (they exceed the Static Assets per-file limit and are served from R2 through the Worker), and runs `wrangler deploy`. `cf:r2:push` force-uploads the ffmpeg core.
+`deploy` builds the demo and runs `cf deploy`. The ffmpeg core (`ffmpeg-core.wasm` / `ffmpeg-core.js`) exceeds the Static Assets per-file limit, so it lives in R2 and is served through the Worker.
 
 ### 6. Editor
 
@@ -335,26 +389,39 @@ Automatically determines the next mode based on the channel used.
 - `24 KEY SP`
 - `48 KEY DP`
 
-If the automatic judgment is ambiguous, it will be supplemented with an extension.
+Only the `.pms` extension takes part: a `.pms` file is `9 KEY` ahead of the lane rules. `.bms`, `.bme` and `.bml` files are decided by the lanes in use, so a `.bme` chart without the 6 / 7 key columns is `5 KEY`.
 
-- `.bms` -> `5 KEY SP/DP`
-- `.bme` -> `7 KEY SP/14 KEY DP`
-- `.pms` -> `9 KEY`
 - A full `11..19` one-player keyboard or PMS-STD `22..25` without traditional IIDX 2P channels also resolves to `9 KEY`.
-- Any extended lane channel (`1A..1O` / `2A..2O`) resolves to `24 KEY SP` / `48 KEY DP` ahead of every other rule.
+- Any extended lane channel (`1A..1O` / `2A..2O`, or the wheel `1P` / `1Q` / `2P` / `2Q`) resolves to `24 KEY SP` / `48 KEY DP` ahead of every other rule, and so does a bmson `keyboard-24k` / `keyboard-24k-double` `mode_hint`.
+
+The rule (`resolveChartPlayVariant` in `@be-music/chart`) checks in this order, and the first match wins. The 9 KEY lane pattern is any of three content rules: `#PLAYER 3` with `17` and without `21` / `26..29`, all of `11..19` without a 2P lane, or `22..25` without `21` / `26..29`. "2P" means any `2x` lane in use; lane usage counts the `1x` / `2x` lanes and the `5x` / `6x` long notes, never mines or invisible objects.
+
+```mermaid
+flowchart TD
+  hint{"bmson keyboard<br/>mode_hint?"} -->|"keyboard-24k(-double)"| kb["24 KEY SP / 48 KEY DP"]
+  hint -->|no| ext{"extended lane<br/>1A..1Q / 2A..2Q?"}
+  ext -->|"yes: 2P ? 48 : 24"| kb
+  ext -->|no| pms{".pms?"}
+  pms -->|yes| nine["9 KEY"]
+  pms -->|no| sig{"9 KEY lane<br/>pattern?"}
+  sig -->|yes| nine
+  sig -->|no| iidx{"18 / 19 / 28 / 29<br/>in use?"}
+  iidx -->|"yes: 2P ? 14 : 7"| seven["7 KEY SP / 14 KEY DP"]
+  iidx -->|"no: 2P ? 10 : 5"| five["5 KEY SP / 5 KEY DP"]
+```
 
 ### Representative mode channels and inputs
 
-| Mode                     | Channel -> Input                                                                                                                             |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `5 KEY SP`               | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`                                                                        |
-| `5 KEY DP`               | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `26 -> RShift` |
-| `7 KEY SP`               | `5 KEY SP` + `18 -> f`, `19 -> v`                                                                                                            |
-| `14 KEY DP`              | `7 KEY SP` + `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `28 -> k`, `29 -> ,`, `26 -> RShift`                                     |
-| `9 KEY (BME-compatible)` | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `16 -> f`, `17 -> v`, `18 -> g`, `19 -> b`                                            |
-| `9 KEY (PMS-STD)`        | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `22 -> f`, `23 -> v`, `24 -> g`, `25 -> b`                                            |
-| `24 KEY SP`              | `11..19` + `1A..1O` (24 lanes, no scratch) -> `a s d f g h j k l ; q w e r u i o p z x c v b n`                                              |
-| `48 KEY DP`              | `24 KEY SP` + `21..29` + `2A..2O`; the 2P bank runs past the printable-key pool and lands on function keys                                   |
+| Mode                     | Channel -> Input                                                                                                                              |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `5 KEY SP`               | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`                                                                         |
+| `5 KEY DP`               | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `26 -> RShift`  |
+| `7 KEY SP`               | `5 KEY SP` + `18 -> f`, `19 -> v`                                                                                                             |
+| `14 KEY DP`              | `7 KEY SP` + `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `28 -> k`, `29 -> ,`, `26 -> RShift`                                      |
+| `9 KEY (BME-compatible)` | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `16 -> f`, `17 -> v`, `18 -> g`, `19 -> b`                                             |
+| `9 KEY (PMS-STD)`        | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `22 -> f`, `23 -> v`, `24 -> g`, `25 -> b`                                             |
+| `24 KEY SP`              | `11..19` + `1A..1O` (24 keys, no scratch) -> `a s d f g h j k l ; q w e r u i o p z x c v b n`; wheel `1P -> Tab` (up), `1Q -> LShift` (down) |
+| `48 KEY DP`              | `24 KEY SP` + `21..29` + `2A..2O`, the 2P keys running past the printable-key pool onto function keys; 2P wheel `2P -> Enter`, `2Q -> RShift` |
 
 ## FREE ZONE (`17` / `27`)
 
@@ -459,5 +526,8 @@ pnpm run bench:compare -- --head tmp/bench/head.json --base tmp/bench/base.json 
 - compare output: arbitrary Markdown and summary JSON
 - In GitHub Actions, post base/head comparison as PR comment in PR for `devel` / `main`
 - GitHub Actions also performs the previous revision comparison when pushing to `devel` / `main` and posts a commit comment to the target commit.
-- CI measures base and head on the same runner before comparing, so host-to-host noise does not dominate the delta.
-- CI uses a longer per-case time than the local default, and treats the median change as the comparison signal. Per-case lists compare median ops/s, not mean.
+- CI measures base and head on the same runner, taking turns (head, base, head, base, …) for 5 runs each, so host-to-host noise and slow stretches hit both sides alike.
+- Fast functions are called many times per timed sample (about 50 µs a sample), so cases that take nanoseconds are measured rather than lost in the timer's resolution. Times are reported per call.
+- A case counts as a regression or an improvement only when its median changes past the threshold (8% in CI) and the runs of the two sides do not overlap; a change past the threshold with overlapping runs is listed as "within noise".
+- Cases marked `ioBound` (they touch the filesystem) are listed apart and never judged, since their time follows the OS cache and the disk.
+- The comment leads with the verdict, links the base and head commits, lists the changed packages' cases and new or removed exports, and folds noise, exclusions and run details into collapsible sections.

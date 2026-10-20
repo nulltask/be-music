@@ -5,15 +5,17 @@ import {
   type PackageName,
 } from '../exports.types.ts';
 import { audioRendererBenchmarkPackage } from './audio-renderer.ts';
+import { beatorajaSkinBenchmarkPackage } from './beatoraja-skin.ts';
 import { chartBenchmarkPackage } from './chart.ts';
 import { editorBenchmarkPackage } from './editor.ts';
 import { jsonBenchmarkPackage } from './json.ts';
 import { parserBenchmarkPackage } from './parser.ts';
 import { lr2SkinBenchmarkPackage } from './lr2-skin.ts';
 import { playerBenchmarkPackage } from './player.ts';
-import { playerTuiBenchmarkPackage } from './player-tui.ts';
+import { playerTUIBenchmarkPackage } from './player-tui.ts';
+import { sceneModelBenchmarkPackage } from './scene-model.ts';
 import { playerWebCoreBenchmarkPackage } from './player-web.ts';
-import { skinSdkBenchmarkPackage } from './skin-sdk.ts';
+import { skinSDKBenchmarkPackage } from './skin-sdk.ts';
 import { stringifierBenchmarkPackage } from './stringifier.ts';
 import { utilsBenchmarkPackage } from './utils.ts';
 
@@ -26,9 +28,11 @@ export const PACKAGE_DEFINITIONS: Record<PackageName, BenchmarkPackageDefinition
   editor: editorBenchmarkPackage,
   'audio-renderer': audioRendererBenchmarkPackage,
   player: playerBenchmarkPackage,
-  'player-tui': playerTuiBenchmarkPackage,
+  'scene-model': sceneModelBenchmarkPackage,
+  'player-tui': playerTUIBenchmarkPackage,
   'lr2-skin': lr2SkinBenchmarkPackage,
-  'skin-sdk': skinSdkBenchmarkPackage,
+  'beatoraja-skin': beatorajaSkinBenchmarkPackage,
+  'skin-sdk': skinSDKBenchmarkPackage,
   'player-web': playerWebCoreBenchmarkPackage,
 };
 

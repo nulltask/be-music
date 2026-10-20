@@ -1,14 +1,11 @@
+import type { PlaylogViewState } from '../playlog/view.ts';
+import { mirrorBeatAtTempoReversal, type TempoReversalPoint } from '@be-music/chart';
 import { type PlayerStateSignals } from '../state-signals.ts';
 import { applyHighSpeedControlAction, type HighSpeedControlAction } from './high-speed-control.ts';
 import { type PlayerInputCommand, type PlayerInputSignalBus } from './input-signal-bus.ts';
-import { type GrooveGaugeJudgeKind } from './groove-gauge.ts';
-import { type PlayerUiFramePayload, type PlayerUiSignalBus } from './ui-signal-bus.ts';
-
-type GaugeBearingSummary = {
-  gauge?: {
-    current: number;
-  };
-};
+import { type PlayerUIFramePayload, type PlayerUISignalBus } from './ui-signal-bus.ts';
+import { type TempoClock } from './tempo-clock.ts';
+import type { PlayerTempoChange } from './engine-types.ts';
 
 type PauseablePlaybackClock = {
   nowMs: () => number;
@@ -53,7 +50,7 @@ export interface PlaybackStateLogger {
       endSeconds?: number;
     },
   ) => void;
-  logResult: (seconds: number, params: { reason: string; summary: PlayerUiFramePayload['summary'] }) => void;
+  logResult: (seconds: number, params: { reason: string; summary: PlayerUIFramePayload['summary'] }) => void;
 }
 
 export function createNoopPlaybackStateLogger(): PlaybackStateLogger {
@@ -65,75 +62,25 @@ export function createNoopPlaybackStateLogger(): PlaybackStateLogger {
   };
 }
 
-export function applyGaugeJudgeWithLogging(params: {
-  summary: GaugeBearingSummary;
-  applyGaugeJudge: (judge: GrooveGaugeJudgeKind) => void;
-  playbackStateLogger: PlaybackStateLogger;
-  seconds: number;
-  judge: GrooveGaugeJudgeKind;
-  reason?: string;
-}): void {
-  const { summary, applyGaugeJudge, playbackStateLogger, seconds, judge, reason = 'judge' } = params;
-  const previousGauge = summary.gauge?.current;
-  applyGaugeJudge(judge);
-  const nextGauge = summary.gauge?.current;
-  playbackStateLogger.logGaugeChange(seconds, {
-    reason,
-    judge,
-    delta: previousGauge !== undefined && nextGauge !== undefined ? nextGauge - previousGauge : undefined,
-  });
-}
-
-export function applyGaugeDeltaWithLogging(params: {
-  summary: GaugeBearingSummary;
-  applyGaugeDelta: (delta: number) => void;
-  playbackStateLogger: PlaybackStateLogger;
-  seconds: number;
-  delta: number;
-  reason: string;
-}): void {
-  const { summary, applyGaugeDelta, playbackStateLogger, seconds, delta, reason } = params;
-  const previousGauge = summary.gauge?.current;
-  applyGaugeDelta(delta);
-  const nextGauge = summary.gauge?.current;
-  if (previousGauge === nextGauge) {
-    return;
-  }
-  playbackStateLogger.logGaugeChange(seconds, {
-    reason,
-    delta: previousGauge !== undefined && nextGauge !== undefined ? nextGauge - previousGauge : undefined,
-  });
-}
-
-export function setLoggedComboValue(
-  playbackStateLogger: PlaybackStateLogger,
-  seconds: number,
-  value: number,
-  reason: string,
-  judge?: string,
-  channel?: string,
-): number {
-  playbackStateLogger.logComboChange(seconds, {
-    value,
-    reason,
-    judge,
-    channel,
-  });
-  return value;
-}
-
-export function createUiFramePublisher(params: {
+export function createUIFramePublisher(params: {
   uiEnabled: boolean;
-  uiSignals: PlayerUiSignalBus;
+  uiSignals: PlayerUISignalBus;
   totalSeconds: number;
-  summary: PlayerUiFramePayload['summary'];
-  notes: PlayerUiFramePayload['notes'];
-  landmineNotes?: PlayerUiFramePayload['landmineNotes'];
-  invisibleNotes?: PlayerUiFramePayload['invisibleNotes'];
+  summary: PlayerUIFramePayload['summary'];
+  notes: PlayerUIFramePayload['notes'];
+  landmineNotes?: PlayerUIFramePayload['landmineNotes'];
+  invisibleNotes?: PlayerUIFramePayload['invisibleNotes'];
   audioBackend: string;
   resolveDebugActiveAudioState: (
     seconds: number,
-  ) => Pick<PlayerUiFramePayload, 'activeAudioFiles' | 'activeAudioVoiceCount'>;
+  ) => Pick<PlayerUIFramePayload, 'activeAudioFiles' | 'activeAudioVoiceCount'>;
+  /**
+   * LR2 negative-BPM reversal anchor. Past `seconds`, frames carry a display beat mirrored in chart-POSITION space —
+   * `displayBeat = 2 * beat - currentBeat` — exactly like LR2's `songtimer = 2 * bpmChangedBmstime - songtimer`
+   * (LR2body.exe 0x406d81). The forward beat keeps following the tempo map past the reversal, so the reverse scroll
+   * runs at the post-reversal |BPM| and a post-reversal STOP pauses it.
+   */
+  reversal?: TempoReversalPoint;
 }): (seconds: number, beat: number) => void {
   const {
     uiEnabled,
@@ -145,15 +92,22 @@ export function createUiFramePublisher(params: {
     invisibleNotes,
     audioBackend,
     resolveDebugActiveAudioState,
+    reversal,
   } = params;
   return (seconds: number, beat: number): void => {
     if (!uiEnabled) {
       return;
     }
     const debugState = resolveDebugActiveAudioState(seconds);
+    const displayBeat =
+      reversal !== undefined && seconds > reversal.seconds
+        ? mirrorBeatAtTempoReversal(reversal, seconds, beat)
+        : undefined;
     uiSignals.publishFrame({
       currentBeat: beat,
       currentSeconds: seconds,
+      displayBeat,
+      reversalSeconds: reversal?.seconds,
       totalSeconds,
       summary,
       notes,
@@ -214,12 +168,38 @@ export function applyPlaybackHighSpeedAction(params: {
   return nextHighSpeed;
 }
 
+/**
+ * Changes the play tempo at play-clock time `nowMs`: re-anchors `tempoClock` there (chart time stays continuous and
+ * runs at `tempo` from then on), then tells the audio backend, the play log and the host, each with the chart second
+ * the change took effect at. A change to an unusable tempo or the one in force does nothing. Returns whether it did.
+ */
+export function applyPlaybackTempoChange(params: {
+  tempoClock: TempoClock;
+  nowMs: number;
+  tempo: number;
+  setAudioTempo?: (tempo: number) => void;
+  recordTempoChange?: (seconds: number, tempo: number) => void;
+  onTempoChange?: (change: PlayerTempoChange) => void;
+}): boolean {
+  const { tempoClock, tempo } = params;
+  if (!(Number.isFinite(tempo) && tempo > 0) || tempo === tempoClock.tempo) return false;
+  const seconds = tempoClock.setTempoAtClockMs(params.nowMs, tempo);
+  params.setAudioTempo?.(tempo);
+  params.recordTempoChange?.(seconds, tempo);
+  params.onTempoChange?.({ tempo, seconds });
+  return true;
+}
+
 export function consumePlaybackInputCommands(params: {
   inputSignals: PlayerInputSignalBus;
   isInterrupted: () => boolean;
   setInterruptedReason: (reason: InterruptCommand['reason']) => void;
   onTogglePause: () => void;
   onHighSpeedAction: (action: HighSpeedControlAction | undefined) => void;
+  /** A view change to record (`{ kind: 'view' }`). */
+  onViewChange?: (change: PlaylogViewState) => void;
+  /** A tempo change (`{ kind: 'tempo' }`). */
+  onTempoChange?: (tempo: number) => void;
   onUnhandledCommand?: (command: PlayerInputCommand) => void;
   logInterrupt?: (reason: InterruptCommand['reason']) => void;
 }): void {
@@ -229,6 +209,8 @@ export function consumePlaybackInputCommands(params: {
     setInterruptedReason,
     onTogglePause,
     onHighSpeedAction,
+    onViewChange,
+    onTempoChange,
     onUnhandledCommand,
     logInterrupt,
   } = params;
@@ -250,6 +232,28 @@ export function consumePlaybackInputCommands(params: {
       onHighSpeedAction(command.action);
       continue;
     }
+    if (command.kind === 'view') {
+      onViewChange?.(command.change);
+      continue;
+    }
+    if (command.kind === 'tempo') {
+      onTempoChange?.(command.tempo);
+      continue;
+    }
     onUnhandledCommand?.(command);
+  }
+}
+
+/**
+ * Records the view changes left on the input bus once a play's loop has ended (`{ kind: 'view' }`, sent by the host as
+ * the play ends, after the loop's last drain), at `chartSeconds`; other commands left there no longer matter.
+ */
+export function recordPendingViewChanges(
+  inputSignals: PlayerInputSignalBus,
+  recorder: { recordViewChange(timeSeconds: number, change: PlaylogViewState): void } | undefined,
+  chartSeconds: number,
+): void {
+  for (const command of inputSignals.drainCommands()) {
+    if (command.kind === 'view') recorder?.recordViewChange(chartSeconds, command.change);
   }
 }

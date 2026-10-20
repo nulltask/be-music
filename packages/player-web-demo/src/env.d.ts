@@ -1,5 +1,8 @@
 /// <reference types="vite/client" />
 
+/** Short source commit of this build (`vite.config.ts` `define`); empty when it could not be resolved. */
+declare const __BE_MUSIC_BUILD__: string;
+
 /**
  * Virtual module produced by the `be-music:acknowledgements` Vite plugin (see `vite.config.ts`). Walks the production
  * dependency tree at build start and exposes one entry per third-party package shipped in the bundle.

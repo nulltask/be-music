@@ -1,5 +1,5 @@
-import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
-import { resolveLr2LaneIndex } from '@be-music/player/core/lane-layout';
+import type { ChartPlayVariant } from '@be-music/chart';
+import { resolveLR2LaneIndex } from '@be-music/player/lanes';
 import { resolveBeMusicLaneKind } from './lane-geometry.ts';
 import { resolveGameplayLaneGeometry } from './touch-layout.ts';
 import type { BeMusicGameplayLayout, BeMusicStage, GameplayLayoutMode } from './types.ts';
@@ -41,7 +41,7 @@ export function resolveGameplayLayout(input: GameplayLayoutInput, stage: BeMusic
     return {
       channel,
       kind: channel
-        ? resolveBeMusicLaneKind(channel, resolveLr2LaneIndex(channel, variant), variant)
+        ? resolveBeMusicLaneKind(channel, resolveLR2LaneIndex(channel, variant), variant)
         : index === 0
           ? ('scratch' as const)
           : ('white' as const),
@@ -51,7 +51,7 @@ export function resolveGameplayLayout(input: GameplayLayoutInput, stage: BeMusic
     };
   });
   // The landscape touch layout gives the BGA's room to the lanes; a portrait stage keeps it above them.
-  const bga = mode === 'touch' && orientation === 'landscape' ? undefined : stage.resolveBgaRect(right);
+  const bga = mode === 'touch' && orientation === 'landscape' ? undefined : stage.resolveBGARect(right);
   return {
     mode,
     orientation,

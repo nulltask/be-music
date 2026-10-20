@@ -46,11 +46,26 @@ describe('gaugeExBase', () => {
 });
 
 describe('beatorajaGaugeModeFromString', () => {
-  it('maps the engine GrooveGaugeType strings to GrooveGauge ints', () => {
+  it('maps the engine gauge ids to GrooveGauge ints', () => {
     expect(beatorajaGaugeModeFromString('GROOVE')).toBe(BEATORAJA_GAUGE_MODE.NORMAL);
     expect(beatorajaGaugeModeFromString('EASY')).toBe(BEATORAJA_GAUGE_MODE.EASY);
     expect(beatorajaGaugeModeFromString('HARD')).toBe(BEATORAJA_GAUGE_MODE.HARD);
     expect(beatorajaGaugeModeFromString('DEATH')).toBe(BEATORAJA_GAUGE_MODE.HAZARD);
+  });
+  it("maps a course stage's gauge onto the class gauges", () => {
+    expect(beatorajaGaugeModeFromString('CLASS')).toBe(BEATORAJA_GAUGE_MODE.CLASS);
+    expect(beatorajaGaugeModeFromString('EXCLASS')).toBe(BEATORAJA_GAUGE_MODE.EXCLASS);
+    expect(beatorajaGaugeModeFromString('EXHARDCLASS')).toBe(BEATORAJA_GAUGE_MODE.EXHARDCLASS);
+    // LR2's course gauges, by their line.
+    for (const id of ['GRADE', 'COURSE', 'COURSE-EASY']) {
+      expect(beatorajaGaugeModeFromString(id)).toBe(BEATORAJA_GAUGE_MODE.CLASS);
+    }
+    for (const id of ['GRADE-HARD', 'COURSE-HARD']) {
+      expect(beatorajaGaugeModeFromString(id)).toBe(BEATORAJA_GAUGE_MODE.EXCLASS);
+    }
+    for (const id of ['GRADE-DEATH', 'COURSE-DEATH']) {
+      expect(beatorajaGaugeModeFromString(id)).toBe(BEATORAJA_GAUGE_MODE.EXHARDCLASS);
+    }
   });
   it('defaults to NORMAL when undefined', () => {
     expect(beatorajaGaugeModeFromString(undefined)).toBe(BEATORAJA_GAUGE_MODE.NORMAL);

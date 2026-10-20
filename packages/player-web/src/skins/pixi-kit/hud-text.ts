@@ -7,13 +7,13 @@ import { alignCapCenter } from './text-metrics.ts';
 
 /**
  * Per-frame HUD text for built-in skins. Nodes come from a {@link ChildPool} when one is given (so a 60 fps redraw
- * reuses parented `Text` objects), styles are cached by value, and {@link addHudNumber} lays numerals out with tabular
+ * reuses parented `Text` objects), styles are cached by value, and {@link addHUDNumber} lays numerals out with tabular
  * figures.
  */
 
 type TextWeight = '200' | '300' | '400' | '500' | '600' | '700' | '800' | '900';
 
-export interface HudTextOptions {
+export interface HUDTextOptions {
   size?: number;
   weight?: TextWeight;
   fill?: number;
@@ -34,12 +34,12 @@ export interface HudTextOptions {
   scale?: number;
 }
 
-export function addHudText(
+export function addHUDText(
   layer: Container,
   text: string,
   x: number,
   y: number,
-  opts: HudTextOptions = {},
+  opts: HUDTextOptions = {},
   pool?: ChildPool,
 ): Text {
   const node = pool?.acquireText() ?? new Text();
@@ -87,12 +87,12 @@ export function addHudText(
  * Numeric readout with tabular figures: each glyph is its own pooled text centred in a fixed-width cell (see
  * `layoutTabularRun`), so a changing score or combo never shifts sideways as its digits change.
  */
-export function addHudNumber(
+export function addHUDNumber(
   layer: Container,
   text: string,
   x: number,
   y: number,
-  opts: HudTextOptions = {},
+  opts: HUDTextOptions = {},
   pool?: ChildPool,
 ): void {
   const style = resolveTextStyle(opts, isTintable(opts));
@@ -102,7 +102,7 @@ export function addHudNumber(
   const left = x - run.width * squeeze * scale * (opts.anchorX ?? 0);
   for (const glyph of run.glyphs) {
     if (glyph.char === ' ') continue;
-    const node = addHudText(
+    const node = addHUDText(
       layer,
       glyph.char,
       left + (glyph.x + glyph.w / 2) * squeeze * scale,
@@ -131,12 +131,12 @@ function measureGlyph(char: string, style: TextStyle): number {
   return width;
 }
 
-/** Whether `opts` paints a plain fill, which {@link addHudText} applies as a tint over a white raster. */
-function isTintable(opts: HudTextOptions): boolean {
+/** Whether `opts` paints a plain fill, which {@link addHUDText} applies as a tint over a white raster. */
+function isTintable(opts: HUDTextOptions): boolean {
   return opts.stroke === undefined && opts.dropShadow === undefined;
 }
 
-function resolveTextStyle(opts: HudTextOptions, whiteFill = false): TextStyle {
+function resolveTextStyle(opts: HUDTextOptions, whiteFill = false): TextStyle {
   const stroke = opts.stroke;
   const shadow = opts.dropShadow;
   const fill = whiteFill ? 0xffffff : (opts.fill ?? 0xffffff);

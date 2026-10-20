@@ -1,3 +1,3 @@
-import packageBenchmarkCli from '../../../scripts/bench/package-cli.ts';
+import packageBenchmarkCLI from '../../../scripts/bench/package-cli.ts';
 
-packageBenchmarkCli.runPackageExportsBenchmarkScript('player', import.meta.url);
+packageBenchmarkCLI.runPackageExportsBenchmarkScript('player', import.meta.url);

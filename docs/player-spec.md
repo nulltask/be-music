@@ -21,6 +21,24 @@ The core engine defaults to the `lr2` compat ruleset and its `GROOVE` gauge, whi
 gauge. Both are options: `PlayerOptions.judgeRuleset` picks the ruleset and `PlayerOptions.gauge` the gauge, and
 `bms-player` exposes them as `--ruleset` and `--gauge`.
 
+## Entry points
+
+`@be-music/player` exports designed entries, not its file layout ([ADR 0005](./adr/0005-public-entry-points.md)):
+
+| Entry              | What it exports                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@be-music/player` | The engine: `manualPlay`, `autoPlay`, `PlayerOptions` with its five category types, `PlayerSummary`, the load progress, `PlayerInterruptedError`, the runtime contracts (`AudioSession`, `PlayerInputRuntime`, `PlayerUIRuntime` and their `Create*Context` types), `resolvePlayChart`, `preparePlaybackChart`, `resolveChartRulesetFacts` and `createTempoClock` |
+| `./signals`        | What a host's input and UI runtimes exchange with a running play: the input bus and its commands, the UI bus with its frames, commands and `PlayerGaugeSummary`, the state signals, and the high-speed range and actions                                                                                                                                          |
+| `./lanes`          | The lanes of a play mode: the layout and its slots, scratch and wheel lanes, key bindings, FREE ZONE input, and the lanes the lane options permute                                                                                                                                                                                                                |
+| `./display`        | What a host shows: the timed play notes (`extract*`, `toTimed*`), `ScrollDistanceMapper`, the BGA cue on screen (`pickActiveBGACue`, `pickActiveBGAKey`, `DEFAULT_POOR_BGA_DISPLAY_SECONDS`), the chart facts a song screen shows (`resolveDisplayed*`), `formatSeconds`, `resolveAltModifierLabel`, the TUI note heights and the BGA resize algorithms           |
+| `./ruleset`        | The vocabulary hosts, skins and the Leaderboard share: the judge ruleset ids (`PLAYLOG_RULESET_IDS`), the judge windows, gauges, clear lamps, BP and the score                                                                                                                                                                                                    |
+| `./playlog`        | The play-log format, its recorder, simulator and eligibility checks, and the course and NONSTOP logs                                                                                                                                                                                                                                                              |
+| `./records`        | Best records per judge ruleset and the rules that keep them                                                                                                                                                                                                                                                                                                       |
+| `./course`         | Course definitions: LR2 `.lr2crs`, beatoraja courses and table courses, the course maker, and NONSTOP runs                                                                                                                                                                                                                                                        |
+| `./audio-sink`     | The audio sinks for Node (`node-web-audio-api`) and for a Web Audio context                                                                                                                                                                                                                                                                                       |
+
+The chart-layer names come from `@be-music/chart`: `ChartPlayVariant`, `LongNoteMode`, the timelines and their points, `BGACue` and the BGA timeline builders, the timing resolver and the sample triggers. Everything else in the package is internal.
+
 ## BMS compatible range
 
 This section classifies the BMS commands and channels that appear in the primary reference in [`bms-spec.md`](./bms-spec.md) relative to the current `player` implementation.
@@ -29,23 +47,24 @@ Items that are only stored in the IR by the parser and not referenced by the pla
 
 ### Supported channels
 
-| channel                                                               | Handling in player                                                                                                                                                                                                     |
-| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `#xxx01`                                                              | Play as BGM / sample trigger.                                                                                                                                                                                          |
-| `#xxx02`                                                              | Reflected in time resolution and beat resolution as bar length.                                                                                                                                                        |
-| `#xxx03`, `#xxx08`                                                    | Reflected in time resolution as BPM change.                                                                                                                                                                            |
-| `#xxx04`, `#xxx07`, `#xxx0A`                                          | Render as BGA base / layer / layer2.                                                                                                                                                                                   |
-| `#xxx06`                                                              | Treated as POOR BGA cue. If `#POORBGA` is not specified, `#BMP00` is used as fallback.                                                                                                                                 |
-| `#xxx09`                                                              | Reflects in time resolution as STOP.                                                                                                                                                                                   |
-| `#xxx11-19`, `#xxx21-29`                                              | Treated as visible performance notes. `16` / `26` is scratch, `17` / `27` is FREE ZONE except for 9KEY / 24KEY, and normal note for 9KEY / 24KEY.                                                                      |
-| `#xxx1A-1O`, `#xxx2A-2O`                                              | Treated as visible performance notes — lanes 10..24 of the 24-key (Keyboardmania) bank. A single one of these channels classifies the chart as `24 KEY SP` / `48 KEY DP`.                                              |
-| `#xxx31-39`, `#xxx41-49` (and the extended `#xxx3A-3O` / `#xxx4A-4O`) | Treated as invisible notes. They update the corresponding lane's manual keysound state like visible notes, and may be used for display aids, but are not included in `summary.total`. `AUTO` does not produce a sound. |
-| `#xxx51-59`, `#xxx61-69` (and the extended `#xxx5A-5O` / `#xxx6A-6O`) | Treated as BMS legacy long note.                                                                                                                                                                                       |
-| `#xxx97`, `#xxx98`                                                    | Treated as a dynamic volume change that changes the initial gain of the BGM/playable sound that plays after that.                                                                                                      |
-| `#xxxA0`                                                              | Treated as a dynamic judgment width change that refers to `#EXRANKxx`.                                                                                                                                                 |
-| `#xxxSC`                                                              | Reflects in the drawing distance as a scroll segment of the `#SCROLLxx` reference.                                                                                                                                     |
-| `#xxxSP`                                                              | Reflects in the drawing distance as a speed keyframe of `#SPEEDxx` reference.                                                                                                                                          |
-| `#xxxD1-D9`, `#xxxE1-E9` (and the extended `#xxxDA-DO` / `#xxxEA-EO`) | Treated as a landmine.                                                                                                                                                                                                 |
+| channel                                                               | Handling in player                                                                                                                                                                                                                                                            |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `#xxx01`                                                              | Play as BGM / sample trigger.                                                                                                                                                                                                                                                 |
+| `#xxx02`                                                              | Reflected in time resolution and beat resolution as bar length.                                                                                                                                                                                                               |
+| `#xxx03`, `#xxx08`                                                    | Reflected in time resolution as BPM change.                                                                                                                                                                                                                                   |
+| `#xxx04`, `#xxx07`, `#xxx0A`                                          | Render as BGA base / layer / layer2.                                                                                                                                                                                                                                          |
+| `#xxx06`                                                              | Treated as POOR BGA cue. Unless `#POORBGA` is `2`, `#BMP00` is used as fallback.                                                                                                                                                                                              |
+| `#xxx09`                                                              | Reflects in time resolution as STOP.                                                                                                                                                                                                                                          |
+| `#xxx11-19`, `#xxx21-29`                                              | Treated as visible performance notes. `16` / `26` is scratch, `17` / `27` is FREE ZONE except for 9KEY / 24KEY, and normal note for 9KEY / 24KEY.                                                                                                                             |
+| `#xxx1A-1O`, `#xxx2A-2O`                                              | Treated as visible performance notes — lanes 10..24 of the 24-key (Keyboardmania) bank. A single one of these channels classifies the chart as `24 KEY SP` / `48 KEY DP`.                                                                                                     |
+| `#xxx1P`, `#xxx1Q`, `#xxx2P`, `#xxx2Q`                                | Treated as visible performance notes on the 24 / 48 KEY wheel: `1P` / `2P` turn it up, `1Q` / `2Q` down (be-music's BMS convention for the bmson `keyboard-24k` wheel, `x` = 25 / 26). They classify the chart as `24 KEY SP` / `48 KEY DP` like the other extended channels. |
+| `#xxx31-39`, `#xxx41-49` (and the extended `#xxx3A-3O` / `#xxx4A-4O`) | Treated as invisible notes. They update the corresponding lane's manual keysound state like visible notes, and may be used for display aids, but are not included in `summary.total`. `AUTO` does not produce a sound.                                                        |
+| `#xxx51-59`, `#xxx61-69` (and the extended `#xxx5A-5O` / `#xxx6A-6O`) | Treated as BMS legacy long note.                                                                                                                                                                                                                                              |
+| `#xxx97`, `#xxx98`                                                    | Treated as a dynamic volume change that changes the initial gain of the BGM/playable sound that plays after that.                                                                                                                                                             |
+| `#xxxA0`                                                              | Treated as a dynamic judgment width change that refers to `#EXRANKxx`.                                                                                                                                                                                                        |
+| `#xxxSC`                                                              | Reflects in the drawing distance as a scroll segment of the `#SCROLLxx` reference.                                                                                                                                                                                            |
+| `#xxxSP`                                                              | Reflects in the drawing distance as a speed keyframe of `#SPEEDxx` reference.                                                                                                                                                                                                 |
+| `#xxxD1-D9`, `#xxxE1-E9` (and the extended `#xxxDA-DO` / `#xxxEA-EO`) | Treated as a landmine.                                                                                                                                                                                                                                                        |
 
 ### Supported commands
 
@@ -60,11 +79,11 @@ Items that are only stored in the IR by the parser and not referenced by the pla
 | `#WAVxx`, `#BMPxx`                                                                                                                      | Used for audio/BGA resource resolution.                                                                                                                                                                                                                                  |
 | `#BASE`                                                                                                                                 | Selects the BMS object ID base. `#BASE 62` keeps lowercase IDs case-sensitive when resolving samples, BGA, BPM/STOP references, long-note ends, and landmine values.                                                                                                     |
 | `#PREVIEW`                                                                                                                              | Used preferentially for preview playback on the song selection screen.                                                                                                                                                                                                   |
-| `#PATH_WAV`                                                                                                                             | Tried as a directory prefix before the bare path when browser gameplay and the offline renderer (`renderJson`) resolve samples; the song selection screen preview also uses it to search for files. The terminal player does not apply it when loading samples for play. |
+| `#PATH_WAV`                                                                                                                             | Tried as a directory prefix before the bare path when browser gameplay and the offline renderer (`renderJSON`) resolve samples; the song selection screen preview also uses it to search for files. The terminal player does not apply it when loading samples for play. |
 | `#LNTYPE`, `#LNMODE`, `#LNOBJ`                                                                                                          | Used to interpret BMS long notes.                                                                                                                                                                                                                                        |
 | `#PLAYER`                                                                                                                               | Used for mode estimation and display player lane metadata.                                                                                                                                                                                                               |
 | `#VOLWAV`                                                                                                                               | Used as a volume multiplier for the entire score.                                                                                                                                                                                                                        |
-| `#POORBGA`                                                                                                                              | Used to override the default value of POOR images.                                                                                                                                                                                                                       |
+| `#POORBGA`                                                                                                                              | `2` turns off the `#BMP00` POOR fallback; any other value (or none) keeps it.                                                                                                                                                                                            |
 | `#SCROLLxx`, `#SPEEDxx`                                                                                                                 | Used to calculate note drawing distance.                                                                                                                                                                                                                                 |
 | `#RANDOM`, `#SETRANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#ENDRANDOM`, `#SWITCH`, `#SETSWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#ENDSW` | Resolved as control syntax before playback starts.                                                                                                                                                                                                                       |
 
@@ -94,28 +113,87 @@ Items that are only stored in the IR by the parser and not referenced by the pla
 
 player executes the score in the following order:
 
-1. Resolve the BMS control syntax at runtime and create a branched score to be used for the current playback.
-2. Extract performance notes, mines, invisible notes, and real-time audio triggers from the branched score.
-3. Confirm the mode, key assignment, and lane FREE ZONE alias from the actual channels.
+1. Take the chart the host resolved for this play (`resolvePlayChart`); a chart that still carries control flow is resolved once with `PlayerOptions.randomDraws`.
+2. Resolve the branched score once with `resolveChart` (`@be-music/chart`, see [Architecture](./architecture.md)) and take the performance notes, mines, invisible notes, real-time audio triggers, tempo map and chart facts from the resulting `ResolvedChart`.
+3. Confirm the lane mode from the branched score (see [Lane mode and input](#lane-mode-and-input)), then the key assignment and lane FREE ZONE alias from the actual channels.
 4. Initialize gauges, scores, UI state, input runtime, and audio runtime.
-5. Execute either `AUTO` / `MANUAL` / `AUTO SCRATCH` main loop and return `PlayerSummary` at the end.
+5. Run the one play loop (`play-loop.ts`) with the play's judge strategy — manual (AUTO SCRATCH included), replay (`replayInputs`) or AUTO — and return `PlayerSummary` at the end.
+
+The same steps as a flow (`play.ts`, `play-session.ts`, `play-loop.ts`, `play-finish.ts`):
+
+```mermaid
+flowchart TD
+  subgraph host["Host"]
+    src["source chart"] --> rpc["resolvePlayChart<br/>(draws once)"]
+  end
+  rpc -->|"chart + randomDraws"| entry["manualPlay / autoPlay"]
+  entry -->|"strategy: manual,<br/>replay or auto"| rc
+  subgraph setup["createPlaySession"]
+    rc["resolveChart<br/>→ ResolvedChart"] --> lane["lane mode,<br/>key assignment"]
+    lane --> init["ruleset, gauge, score,<br/>input / audio / UI"]
+  end
+  init --> loop["runPlayLoop<br/>lead-in, 60 Hz ticks"]
+  loop --> finish["finishPlay"] --> summary(["PlayerSummary"])
+```
 
 In addition to the regular `#STOPxx`, time resolution also treats the BMS extension `#STP` as a stop event.
+Of several `#STOPxx` objects at one position the last one wins, as in LR2 and beatoraja; bmson `stop_events` on one pulse add up, as the bmson spec says.
 `#STP` interprets `xxx[.yyy] zzzz` as a stop of `zzzz ms` at `yyy / 1000` position of `measure xxx`, and multiple definitions at the same position are added together. If `.yyy` is omitted, it is treated as `000`. Malformed `bms.stp` elements are retained in the IR but ignored by the player's time resolution.
 
 ## Handling control syntax
 
-BMS's `#RANDOM` / `#SETRANDOM` / `#SWITCH` control syntax is resolved before playback starts.
-`#RANDOM` draws a random number once at runtime and reinjects that value into `resolveBmsControlFlow()` to reproduce the branch.
+BMS's `#RANDOM` / `#SETRANDOM` / `#SWITCH` control syntax is resolved once per play, by the host, before playback starts.
 
-The player also maintains the RANDOM pattern selected for this playback for UI display.
-`#SETRANDOM` is recorded as a fixed value, and if there are multiple RANDOM types, they are formatted as `RANDOM #1 2/3 #2 1/2` in the order of declaration.
+The outcome of a play is an explicit value, `RandomDraws` (`@be-music/chart`): one entry per `#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` line in file order, each with the line's command, its `range` (the number of outcomes) and the `value` in force after it.
+
+- Every such line has an entry, including the ones nested in a branch that is not taken: the evaluator walks every directive whatever the branch state.
+- `#RANDOM n` / `#SWITCH n` draw `value` from `1..n`. A missing, zero, negative or non-numeric `n` is a single-outcome line: `range` 1, `value` 1, and it does not consume the random source.
+- `#SETRANDOM n` / `#SETSWITCH n` fix `value` to `n` (1 when `n` is missing or not positive), with `range` 1; they draw nothing.
+
+The single resolution point is the pair `drawRandomOutcomes(chart, random)` → `RandomDraws` and `resolveBMSControlFlowWithDraws(chart, draws)` (`@be-music/parser`) → resolved chart, wrapped for hosts as `resolvePlayChart(chart)` (`@be-music/player`), which returns `{ chart, randomDraws }`.
+The branch semantics (one shared stack, an open `#IF` outliving `#ENDRANDOM`, definitions in a taken branch applying to the whole chart) live once in `evaluateControlFlow` (`@be-music/chart`).
+The same chart and draws always resolve to the same result, and draws that were not drawn for the chart are rejected with a `RangeError`.
+A resolved chart carries no `bms.controlFlow`, so resolving it again changes nothing.
+
+The chart and its draws travel together from the host's single draw to every consumer:
+
+```mermaid
+flowchart LR
+  src["chart with<br/>bms.controlFlow"]
+  subgraph rpc["resolvePlayChart (once per play)"]
+    draw["drawRandomOutcomes"] --> draws(["RandomDraws"])
+    resolve["resolveBMSControlFlowWithDraws"]
+  end
+  log(["play log<br/>randomDraws"])
+  src --> draw
+  src --> resolve
+  draws --> resolve
+  log -.->|"replay: no draw"| resolve
+  resolve --> chart["resolved chart"]
+  subgraph users["Consumers"]
+    screens["decide / play /<br/>result screens"]
+    engine["engine"]
+    record["play log"]
+  end
+  chart --> users
+  draws --> users
+```
+
+Every host draws once and hands the same chart and draws to every consumer of the play: the CLI to the preview render and the gameplay worker, the web player to the decide screen, the play screen, the engine and the result screen.
+A restart draws again, as LR2 and beatoraja re-roll each play.
+The engine (`autoPlay` / `manualPlay`) never draws: it plays a resolved chart as is, taking `PlayerOptions.randomDraws` only for the RANDOM summary.
+Handed a chart that still carries control flow together with `randomDraws` (for example a play log's draws against the source chart), it resolves the chart exactly once with them; handed one without draws, it throws a `TypeError` instead of rolling branches nobody outside the engine knows about.
+
+A play log records the draws as `play.randomDraws`, and a replay hands them back as `PlayerOptions.randomDraws` (see [Playlog](./playlog.md)).
+
+The RANDOM summary is derived from the draws.
+`#SETRANDOM` is shown as a fixed value, and if there are multiple RANDOM types, they are formatted as `RANDOM #1 2/3  #2 1/2` in the order of declaration.
 
 ## Note model
 
 ### Notes to be played
 
-The player first normalizes the IR `events` into a sequence of performance notes with beats/seconds.
+The notes come from the resolved chart (`ResolvedChart.notes`, `resolveChart` in `@be-music/chart`), which normalizes the IR `events` into a sequence of notes with beats/seconds; the engine copies them into play notes (`preparePlaybackChart`) that carry the per-play state.
 Only the playable channel is included, and each note has at least the following information:
 
 - `channel`
@@ -132,37 +210,66 @@ bmson's `l`, FREE ZONE (`17` / `27`), BMS's `#LNOBJ`, and BMS legacy LN (`#mmm51
 The terminal object of `#LNOBJ` itself is not left in the performance note string.
 Therefore, both LNs derived from `#LNOBJ` and LNs derived from `#mmm51-69` are worth 1 note per book on the player.
 
+### Duplicate notes
+
+A lane holds at most one note per position, as in beatoraja, whose timeline keeps one note per lane.
+When several notes start on the same lane and position (two BMS object lines writing the same cell, a tap on the start of a `#mmm51-69` / `#LNOBJ` long note, or layered bmson notes with the same `x` and `y`), only one is played and judged:
+
+- A long note wins over a tap. beatoraja also replaces a tap with a `5x` / `6x` long note that starts on it.
+- Otherwise the first note in event order wins: the lowest object ID for BMS, the first sound channel for bmson. For bmson this is the note beatoraja judges. For BMS, beatoraja keeps the later line of the file instead, but the IR does not record line order. LR2's choice is not known.
+
+The other notes are not judged, drawn, or counted in `summary.total`. Their keysound still plays, at their own time, as background audio in manual play (auto play already sounds every play-lane object), unless it is the same `#WAVxx` / sound channel as the kept note's.
+The resolved chart returns these notes as `shadowedNotes` (`extractTimedNotes` too).
+Landmines and invisible notes are not collapsed.
+
 ### Landmines
 
 Mine channels are mapped to their corresponding playable lane and kept in a separate array.
 Mines are not included in `summary.total`.
 
-Mines follow the LR2 detonation model (LR2's own changelog; the damage model is confirmed against beatoraja's `JudgeManager`).
+When a mine detonates belongs to the judge ruleset (`mineTrigger` in [`definitions.ts`](../packages/player/src/ruleset/definitions.ts)); the engine and the play-log simulators apply the same rule. The damage model is the same everywhere (confirmed against beatoraja's `JudgeManager`).
 
-- A mine explodes on either of LR2's two conditions: **holding the lane's key as the mine crosses the judge line**, or **pressing while the mine is within the `PGREAT` window** of the judge line. A mine passing with the key up is harmless, and a press that lands after the crossing but outside `PGREAT` is too. (losak's writeup claims the `GOOD` window, but LR2's changelog — the primary source — says the PGREAT range; see [`bms-spec.md`](./bms-spec.md).)
+- `lr2` ruleset — LR2's model (its own changelog): a mine explodes on either of two conditions: **holding the lane's key as the mine crosses the judge line**, or **pressing while the mine is within the `PGREAT` window** of the judge line. A mine passing with the key up is harmless, and a press that lands after the crossing but outside `PGREAT` is too.
+- `beatoraja` ruleset — beatoraja's model (`JudgeManager` L244): a mine explodes only when **the lane's key is down at the moment the mine crosses the judge line**. A press shortly before (released before the crossing) or after does nothing.
+- "Held" is read off each lane's recorded presses and releases, so live play, replays and the simulators agree however late the mine is settled; a lane held by two keys stays held while either is down. An input at the very instant of a crossing counts before the crossing: a key pressed at that µs is down, one released at that µs is up. For input that sends no releases the engine infers them before the judge sees the press, holding the lane for 120 ms after each press (380 ms after one that hits a long note's head) ([Input without key releases](./playlog.md#input-without-key-releases)).
+- `iidx` ruleset — IIDX has no mines, so LR2's model stands in until there is evidence otherwise. (losak's writeup claims the `GOOD` window, but LR2's changelog — the primary source — says the PGREAT range; see [`bms-spec.md`](./bms-spec.md).)
 - An explosion only drains the gauge and plays the `#WAV00` explosion sample — **no verdict, no combo break, no score change**. Regular note judgment runs independently of detonation (a mine never swallows the input aimed at a nearby note).
-- Damage interprets the mine object value (upper-case base36) **directly as a percentage** (LR2 / beatoraja behavior; this differs from the nanasi-lineage `value / 2` rule). A bmson mine with `key_channels[].notes[].damage` uses that value instead.
+- Damage interprets the mine object value (upper-case base36) **directly as a percentage** (LR2 / beatoraja behavior; this differs from the nanasi-lineage `value / 2` rule). A bmson mine with `mine_channels[].notes[].damage` uses that value instead; a bmson mine without `damage` deals the default `4%` (its object value is the WAV slot the parser assigned, not a damage encoding, so it is never read as damage).
 - Mine damage bypasses the HARD sub-30% softening and the `#TOTAL` damage multiplier (same as beatoraja's direct `gauge.addValue()`).
 - `ZZ` (= 1295 %) instantly FAILs survival gauges (HARD / DEATH); GROOVE / EASY stop at the `2%` floor.
-- kitty keyboard protocol input uses the real press/release state; release-less fallback input approximates "held" with the same short grace window the LN hold logic uses.
+- kitty keyboard protocol input uses the real press/release state; release-less input has its releases inferred first (`play-key-inference.ts`), so the judge always reads a press/release state.
 
 ### Invisible Note
 
 Invisible notes are kept separate from the normal playing target.
 They update the same-lane keysound fallback state using the same timing rule as visible notes: once the invisible object's early `BAD` window opens, that WAV becomes the lane's current fallback sound until a later visible or invisible object takes over.
 They are included in the UI drawing target only when `showInvisibleNotes` is enabled, but are not included in the number of judgments or `summary.total`.
+bmson `key_channels` (beatoraja's hidden notes) are read as invisible notes, and `AUTO` and the select-screen preview stay silent on them on every lane, the extended 24 / 48 KEY lanes included.
 
 ### FREE ZONE
 
 FREE ZONE (`17` / `27`) is treated as a note with a 1 beat ending.
 It is excluded from the normal score/gauge target and treated as a keysound fallback and a drawing aid target.
+It has no judging effect: a scratch press during it is judged as any other press and can charge an empty `POOR`, as in
+LR2 and beatoraja (both drop channel `17` / `27` from 7-key and 14-key charts) and IIDX (which never had FREE ZONE; it
+belongs to beatmania 1st / 2ndMIX).
 This only applies to the IIDX families — under `9 KEY` and the `24 KEY` / `48 KEY` keyboard modes those channels are
 ordinary key columns, so they keep whatever length the chart authored (a plain tap stays a tap).
 
 ## Lane mode and input
 
-The lane mode is estimated from the actual channels in the music score, `bms.player`, and `chartExtension`.
-The main modes that can be automatically determined with real equipment are as follows.
+The lane mode comes from one rule shared by every host: `resolveChartPlayVariant` in `@be-music/chart`, run over the
+branched score's events, `bms.player`, the bmson `mode_hint`, and the chart extension (`PlayerOptions.laneModeExtension`).
+A bmson `keyboard-24k` / `keyboard-24k-double` hint selects `24 KEY SP` / `48 KEY DP` outright, so a keyboard chart that
+only uses its first nine keys is not read as 7 / 9 KEY; every other hint leaves the decision to the lanes. A host that already
+knows the variant can declare it with `PlayerOptions.playVariant`. Lane usage counts the `1x` / `2x` lane channels and
+the `5x` / `6x` `#LNTYPE` long-note channels; mines and invisible objects never change the lane mode, so they cannot
+switch the beatoraja ruleset between its 5 KEY and 7 KEY judge windows. The detection order is listed in
+[BMS spec — Player-Specific Behavior](./bms-spec.md#player-specific-behavior). Only `.pms` names a mode; every other
+extension leaves the decision to the lanes in use, so a `.bme` chart without a 6 / 7 key column is `5 KEY SP` /
+`5 KEY DP`, as in beatoraja.
+The decision is drawn as a flowchart in [README — Automatic lane mode determination](../README.md#automatic-lane-mode-determination-and-input-assignment).
+The main modes the current implementation determines automatically are as follows.
 
 - `5 KEY SP`
 - `5 KEY DP`
@@ -175,20 +282,49 @@ The main modes that can be automatically determined with real equipment are as f
 Channels that do not exist in a known fixed layout will fallback to unused keys in order.
 FREE ZONE also shares the input tokens of the corresponding scratch lanes (`17 -> 16`, `27 -> 26`).
 
-`24 KEY SP` / `48 KEY DP` are the Keyboardmania-style keyboard modes. Their 24 lanes per side live on channels
-`11..19` + `1A..1O` (and `21..29` + `2A..2O` for the 2P side), they have no scratch column, and lanes are laid out
-left to right in ascending channel order. Detection is content-based: one extended lane channel selects the mode
-ahead of every other rule, including the `.pms` extension and the `#PLAYER 3` + `17` POPN-9 signature. The 24 SP
-lanes take the fallback key layout in order (`a s d f g h j k l ; q w e r u i o p z x c v b n`); a 48-lane DP chart
-runs past the printable-key pool and the tail lands on function keys, which is a deliberate trade — 48 lanes are an
-AUTO PLAY / rendering target, not a hand-playable one.
+`24 KEY SP` / `48 KEY DP` are the Keyboardmania-style keyboard modes. Each side has 26 lanes: 24 keys on channels
+`11..19` + `1A..1O` (`21..29` + `2A..2O` for the 2P side) and the wheel, up on `1P` and down on `1Q` (`2P` / `2Q`).
+There is no scratch column. The keys are laid out left to right in ascending channel order, and the wheel sits on the
+side's outer edge where the IIDX modes keep their scratch: left of the 1P keys, right of the 2P keys. Detection is
+content-based: one extended lane channel (the wheel included) selects the mode ahead of every other rule, including the
+`.pms` extension and the `#PLAYER 3` + `17` POPN-9 signature, and a bmson keyboard `mode_hint` selects it outright.
 
-The default keyboard layout for the IIDX series is 1P as `Z S X D C F V` and 2P as `B H N J M K,`.
+The wheel is judged exactly like a key (the beatoraja ruleset's keyboard judge windows, no scratch-specific handling),
+it is not FREE ZONE, and the lane options (MIRROR / RANDOM / S-RANDOM) move the 24 keys of a side but leave the wheel in
+place, as they do the scratch. The 24 SP keys take the fallback key layout in order
+(`a s d f g h j k l ; q w e r u i o p z x c v b n`); the wheel has its own keys on the keyboard's edges, off that pool
+and off the arrow keys the web player uses for hi-speed: `Tab` / left `Shift` turn the 1P wheel up / down, `Enter` /
+right `Shift` the 2P wheel. (beatoraja plays the wheel from a MIDI controller's pitch bend; be-music has no MIDI input.)
+A 48-key DP chart runs past the printable-key pool and the tail of its keys lands on function keys, which is a
+deliberate trade — 48 keys are an AUTO PLAY / rendering target, not a hand-playable one.
+
+The default keyboard layout for the IIDX series is 1P as `Z S X D C F V` and 2P as `B H N J M K ,`.
 For scratch, 1P is left `Shift`, 2P is right `Shift`.
 For reverse scratch, 1P uses left `Ctrl` and 2P uses right `Ctrl`. On macOS, use left/right `Option` instead of `Ctrl`.
 
 Distinguishing between left/right `Ctrl` and left/right `Option` is done using the kitty keyboard protocol.
 If you fall back to a terminal that does not support kitty, side-specific input of reverse scratch is not guaranteed.
+
+### Play-mode table
+
+Every play mode is declared once, in `PLAY_MODE_LAYOUTS` ([`chart/src/play-modes.ts`](../packages/chart/src/play-modes.ts),
+exported by `@be-music/chart`). For each layout it lists the lanes left to right, each with its kind (key, scratch, wheel
+up / down), side, slot (key number, `0` for the scratch, `25` / `26` for the wheel), colour class, and the BMS channels of
+every object family on it (visible `1x` / `2x`, invisible `3x` / `4x`, `#LNTYPE` `5x` / `6x`, mine `Dx` / `Ex`, the
+extended `A`..`Q` lanes included), plus the FREE ZONE channels it plays on its scratch. The bmson `mode_hint` lane tables
+(`BMSON_MODE_HINT_LAYOUTS`) are built from the same layouts. The parser, the stringifier, `resolveChartPlayVariant`, the
+player's lane layout and lane options, the CLI's lane colours, and the skin SDK's lane kinds all derive from it.
+
+| Layout  | Label                | Lanes, left to right                                                         | bmson `mode_hint`     |
+| ------- | -------------------- | ---------------------------------------------------------------------------- | --------------------- |
+| `5`     | `5 KEY SP`           | `16` (scratch), `11`-`15`                                                    | `beat-5k`             |
+| `7`     | `7 KEY SP`           | `16` (scratch), `11`-`15`, `18`, `19`                                        | `beat-7k`             |
+| `9-pms` | `9 KEY (PMS-STD)`    | `11`-`15`, `22`-`25`                                                         | `popn-9k`             |
+| `9-bme` | `9 KEY (PMS-COMPAT)` | `11`-`19`                                                                    | —                     |
+| `10`    | `5 KEY DP`           | `16` (scratch), `11`-`15`, `21`-`25`, `26` (scratch)                         | `beat-10k`            |
+| `14`    | `14 KEY DP`          | `16` (scratch), `11`-`15`, `18`, `19`, `21`-`25`, `28`, `29`, `26` (scratch) | `beat-14k`            |
+| `24`    | `24 KEY SP`          | `1P` / `1Q` (wheel), `11`-`19`, `1A`-`1O`                                    | `keyboard-24k`        |
+| `48`    | `48 KEY DP`          | as `24`, then `21`-`29`, `2A`-`2O`, `2P` / `2Q` (wheel)                      | `keyboard-24k-double` |
 
 ## Compat rulesets
 
@@ -270,6 +406,12 @@ After changing the dynamic judgment width, use the new `BAD` width for the next 
 - Determination of expiration of mines/invisible notes
 - Determining the end point of a long note
 
+Each judgment reads the width in force at its own instant, as LR2 reads its one global `judgetime[]`: a press (the
+candidate search, its classification, the multi-BAD collector, a mine's press leg, a press on a held long note) uses the
+width at the press, and a release (an LN's early release, a charge note's tail) the width at the release. A note's miss
+deadline and a charge tail's late window use the width at the note and at the tail, and a mine's entry and settling
+the width at the mine. The engine and the play-log simulator read the same instants.
+
 ### bmson initial judgment width
 
 bmson determines the judgment width using the following priority order.
@@ -280,6 +422,8 @@ bmson determines the judgment width using the following priority order.
 
 bmson's `judgeRank` shares the `100 = NORMAL` percentage unit with `#DEFEXRANK` and converts through the same LR2 anchor interpolation.
 Therefore `judgeRank=100` is exactly `NORMAL` (`±18/±40/±100/±200ms`).
+The `beatoraja` ruleset uses `judge_rank` as the judgerank directly, and a bmson chart without it judges like
+`judge_rank: 100` (the bmson default; PGREAT `±20ms` in 7 KEY), never like BMS `#RANK 2`.
 
 In the current implementation, bmson does not have dynamic judgment width change equivalent to BMS's `#EXRANKxx`.
 
@@ -303,7 +447,7 @@ A BMS that has dynamic changes using `#EXRANKxx` will have a displayed rank of `
 This is because the judgment range changes midway through the score, and it cannot be expressed with a single fixed label.
 
 However, there is still no ability to dynamically update the TUI's `BAD` width display after play has started.
-The `Judge window: ...` line that appears on the current TUI/standard output only displays the width at the start of playback.
+The `Judge window (<ruleset id>): ...` line that appears on the current TUI/standard output only displays the width at the start of playback.
 
 ## Judgment words and side effects
 
@@ -341,12 +485,27 @@ When `POOR` occurs, do the following:
 - Add `summary.poor`.
 - Set combo back to 0.
 - Set groove gauge to `-6`.
-- Fire POOR BGA. The miss layer stays visible for 500 ms — LR2's shipped default (`<poorbga>500</poorbga>` in its `config.xml`).
+- Fire POOR BGA. The miss layer stays visible for 500 ms — the shipped default of LR2 (`<poorbga>500</poorbga>` in its `config.xml`) and of beatoraja (`misslayerDuration`). On a beatoraja skin the window runs from the miss whatever is judged meanwhile, and outside it the layer draws over the base, as `BGAProcessor` does.
 - Update judge/combo display to `POOR`.
 
 ### Blank keystroke (no candidate) — LR2-compatible empty POOR
 
 If there is an input but no undecided notes inside the `BAD` window for that lane set, fire an LR2-compatible "empty POOR" (空POOR).
+
+A press goes through these steps in the judge core (`judge-core-press.ts`); the rules for each step follow.
+
+```mermaid
+flowchart TD
+  press(["press on lanes"]) --> mines["settle mines<br/>(never consumes the press)"]
+  mines --> held{"lane holds a<br/>long note?"}
+  held -->|"yes, for that lane"| ln["re-press or<br/>pressDuringLongNote"]
+  held -->|no| scan{"unjudged note whose own<br/>windows take the press?"}
+  scan -->|"yes: best by<br/>ruleset selection"| judge["judge the note<br/>(+ multi-BAD)"]
+  scan -->|no| fb["lane fallback<br/>keysound"]
+  fb --> miss{"note within the<br/>ruleset miss window?"}
+  miss -->|yes| empty["empty POOR"]
+  miss -->|no| harmless(["nothing else"])
+```
 
 - The trigger condition is that a note on the same lane falls inside the **ruleset's miss window**. LR2's is `{0, 1 s}` (lr2oraja's `JudgeProperty` LR2 miss window — fixed, independent of rank / EXRANK), so under `lr2` an empty POOR never fires after a note passes and a press with no note within the next second is harmless: only the keysound plays. beatoraja's window reaches 500 ms early and 150 ms late.
 - It fires **repeatedly** for the same note while mashing in front of it (LR2's `MissCondition.ALWAYS`, including in front of already-judged notes).
@@ -363,14 +522,13 @@ Empty POOR mirrors LR2's phantom-press behaviour:
 If a keysound fallback exists, play it first.
 The fallback is the latest same-lane WAV whose early `BAD` window has already opened, so a blank press between two notes keeps playing the previous WAV until the next note's judgment window begins.
 The next note's WAV is never used before that window opens.
-After the fallback, if the channel sits in a FREE ZONE, suppress empty POOR and return — FREE ZONE is the author's explicit "press here for ambience" region, not a phantom press.
-The LN repeat-suppress window after a long-note release is treated the same way (the input is the intended tail re-tap, not phantom).
+Without key-state input (a terminal that sends no release events, so key repeat re-sends the key that played a long note), a note-less press on a lane before the tail of a long note it played is taken as a key repeat: it judges nothing and fires no empty POOR. With key-state input (kitty keyboard protocol, browsers, replays) there is no such window: every press is a real press and is judged as LR2 and beatoraja judge it.
 
 ### Landmine
 
 A mine explosion is not a judgment word: it does not produce `BAD` / `POOR`, does not touch the judge counters, combo, EX-SCORE, or score, and never takes priority over a nearby note candidate.
 It only applies the mine damage to the gauge and triggers `#WAV00` when defined. See [Landmines](#landmines) for the detonation conditions and the damage rule.
-An object value that is not a two-character upper-case base36 ID (or is `00`) falls back to the default damage of `4%`; under `#BASE 62` this also covers lower-case values.
+An object value that is not a two-character upper-case base36 ID (or is `00`) falls back to the default damage of `4%`; under `#BASE 62` this also covers lower-case values. A bmson mine without `damage` uses the same `4%`.
 
 The basis for this rule is documented in [`bms-spec.md`](./bms-spec.md).
 
@@ -410,6 +568,10 @@ EX-SCORE is IIDX compatible.
 - `beatoraja` and `iidx` report EX-SCORE, which is what they display. IIDX retired its own money score in
   BISTROVER.
 
+The score vocabulary is the ruleset's, exported from `@be-music/player/ruleset`: `ScoreSummary`, `JudgeKind`,
+`createEmptyScore`, `computeScoreRate`, the DJ Ranks (`resolveIIDXRankIndexFromScore`, `resolveIIDXRankLabel`,
+`IIDX_RANK_LABELS`), `resolveLR2MoneyScore` and `resolveDisplayedPoor`.
+
 ### Empty POOR
 
 An empty POOR (空POOR) is a press with no note in reach but one inside the ruleset's miss window. It costs gauge
@@ -420,8 +582,8 @@ Whether it breaks the combo is the ruleset's call: beatoraja's five-key and PMS 
 
 Whether a player's POOR counter displays `poor` and `emptyPoor` summed is a presentation choice, carried by the
 ruleset as `emptyPoorCountsInPoorDisplay`. LR2's counter does sum them (OpenLR2 `ApplyJudgeNote` increments
-`playerstat.poor` for the empty-POOR branch, and LR2 exposes no separate stat), so the LR2 gameplay scene folds
-them into its display copy — the POOR row, BP, and the per-judge rates all follow. beatoraja shows an empty-POOR
+`playerstat.poor` for the empty-POOR branch, and LR2 exposes no separate stat), so the web play session folds
+them into its display copy under `lr2` — the POOR row, BP, and the per-judge rates all follow. beatoraja shows an empty-POOR
 figure of its own and IIDX's counter is unmeasured, so both keep them apart. `PlayerSummary` always reports the
 split.
 
@@ -436,6 +598,12 @@ split.
   rule (a threshold for the recovery gauges, "never bottomed out" for the survival gauges).
 - The selected gauge governs the run. It is not a colour: HARD really drains, and a HARD run that bottoms out
   reports `failedMidPlay` and can no longer clear.
+- A survival gauge that empties ends the play there, as in LR2 and beatoraja (`PlayerOptions.endOnFailure`, default
+  `true`): the judgment that emptied it is the last one counted, and the play stops. With `endOnFailure: false` the run
+  keeps judging to the end of the chart on a dead gauge. The play log records the flag, so re-simulations stop at the
+  same judgment; logs from before it existed keep judging to the end.
+- A course stage (`PlayerOptions.course`) runs on the ruleset's course gauge instead, starting from the value the
+  previous stage left. See [Courses and dan certification](./course.md#playing-a-course-stage).
 - The tables live in [`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts)
   and are applied through `RulesetGauge`. The shared engine is the authority for final score and summary values;
   browser scenes mirror `summary.gauge`.
@@ -446,10 +614,16 @@ split.
 - `EASY` starts at `20%`, floors at `2%`, and clears at `80%` with gentler numbers
 - `HARD` / `EX-HARD` / `DEATH` start at `100%` and fail the moment they drop below `2%`
 - Upper limit is `100%`
-- When `#TOTAL` is specified, use that value as is
-- When `#TOTAL` is absent, LR2's note-count formula supplies it (`LR2_bmsload.cpp`): `(n / 5 + 200) × 0.8` below
-  400 notes, `((n - 400) / 2.5 + 280) × 0.8` below 600, `((n - 600) / 5 + 360) × 0.8` above. beatoraja and IIDX
-  use their own defaults.
+- When `#TOTAL` is specified (and above 0), use that value as is
+- When `#TOTAL` is absent or ≤ 0, LR2's note-count formula supplies it (`LR2_bmsload.cpp`): `(n / 5 + 200) × 0.8` below
+  400 notes, `((n - 400) / 2.5 + 280) × 0.8` below 600, `((n - 600) / 5 + 360) × 0.8` above. beatoraja uses its own
+  default (`max(260, 7.605 n / (0.01 n + 6.5))`); the IIDX gauge does not read TOTAL at all (its recovery comes from
+  the note count), and the TOTAL it reports follows the LR2 curve.
+- bmson `info.total` is not an absolute TOTAL but a percentage of the ruleset's default: every ruleset plays it as
+  `total / 100 ×` its own default, and a value ≤ 0 means 100 % (beatoraja `BMSPlayerRule.validate`). A bmson chart
+  without `total` therefore plays at the ruleset default, not at TOTAL 100.
+- `summary.gauge.effectiveTotal` reports the resolved value, and beatoraja skins' TOTAL readout (ref 368) shows it during
+  play and on the result screen. Play-logs record the chart's raw value and resolve it again on replay.
 
 ### Increase/Decrease
 
@@ -465,16 +639,16 @@ The following deltas describe the `lr2` ruleset's `GROOVE` gauge. `HARD`, `DEATH
 - `GOOD`: `+baseGain / 2`
 - `BAD`: `-4`
 - `POOR`: `-6`
-- Landmine explosion: `-mineValue(base36)` (or the bmson `damage`), applied as a raw delta
+- Landmine explosion: `-mineValue(base36)` (or the bmson `damage`, `4` when a bmson mine has none), applied as a raw delta
 
 The value after gauge update is clamped to the current gauge type's min/max range.
 
-The `HARD` / `EASY` / `DEATH` variants follow the LR2 values (beatoraja `GaugeProperty`'s `HARD_LR2` / `EASY_LR2` / `HAZARD_LR2`).
+The `HARD` / `EASY` variants follow the LR2 values (beatoraja `GaugeProperty`'s `HARD_LR2` / `EASY_LR2`). `DEATH` follows LR2 itself (OpenLR2 `LR2f.cpp` L27673-L27680, LR2body.exe `ParseBMSFile`), not beatoraja's `HAZARD_LR2`.
 
-- `HARD`: recovery `PGREAT/GREAT +0.1` / `GOOD +0.05` (TOTAL-independent); damage `BAD -6` / `missed POOR -10` / `empty POOR -2`. Damage is multiplied by the `#TOTAL` table (`×1.0` at `TOTAL ≥ 240` up to `×10` below `120`) and softened by `×0.6` while the gauge is under `32%` (lr2oraja rounds the gauge down to an even percent before
+- `HARD`: recovery `PGREAT/GREAT +0.1` / `GOOD +0.05` (TOTAL-independent); damage `BAD -6` / `missed POOR -10` / `empty POOR -2`. Damage is multiplied by lr2oraja's `MODIFY_DAMAGE`, the larger of a `#TOTAL` factor (`×1.0` at `TOTAL ≥ 240` up to `×10` below `112`) and a note-count factor (`×10` at 20 notes or fewer down to `×1.0` from 1000 notes), and softened by `×0.6` while the gauge is under `32%` (lr2oraja rounds the gauge down to an even percent before
   the comparison, so "display 30 %" is internal 32 %).
 - `EASY`: gains are `1.2×` GROOVE, damage is `0.8×` GROOVE (`BAD -3.2` / `POOR -4.8` / `empty POOR -1.6`). The clear threshold stays at `80%`, same as GROOVE.
-- `DEATH` (LR2 HAZARD equivalent): `PGREAT +0.15` / `GREAT +0.06` / `GOOD 0`; `BAD` / missed `POOR` are `-100` (instant death); `empty POOR -10`.
+- `DEATH`: no recovery (`PGREAT` / `GREAT` / `GOOD` `0`); `BAD` / missed `POOR` are `-100` (instant death); an `empty POOR` costs nothing (`0`). beatoraja's `HAZARD` keeps its own `+0.15` / `+0.06` recovery and `empty POOR -10`.
 - `HARD` / `DEATH` collapse to `0%` (FAILED, no recovery) the moment they drop below `2%`. Raw deltas such as mine damage bypass the guts softening and the TOTAL multiplier.
 
 ## Long Note
@@ -491,7 +665,7 @@ Long notes derived from `#mmm51-69` are counted the same way as `#LNOBJ` ones.
 
 The chart's `#LNMODE` is a request, not a decision — the ruleset maps it to what it actually plays:
 
-- `lr2` (`ln`): every long note is an LN, whatever `#LNMODE` says. One deferred judgment, early release is a `BAD`.
+- `lr2` (`ln`): every long note is an LN, whatever `#LNMODE` says. One deferred judgment; a release more than the `GOOD` window before the tail is a `BAD`.
 - `beatoraja` (`per-note`): honours the chart — `1` is an LN, `2` a CN, `3` an HCN.
 - `iidx` (`charge`): every long note is a charge note, an HCN where the chart says `3`. A `BAD` or `POOR` on the
   head cancels the tail judgment entirely.
@@ -503,38 +677,90 @@ FREE ZONE is not subject to `#LNMODE` and is treated as a note with a terminal.
 ### Manual Play
 
 In manual performance, the start point side judgment is calculated when inputting the long note start point.
-However, the final decision timing depends on `#LNMODE`.
+However, the final decision timing depends on the effective long-note mode.
 
 The modes below are the EFFECTIVE modes the ruleset resolved to, not the chart's raw `#LNMODE`.
 
-- Mode `1` (LN): the head judgment is held and confirmed once, at the end point. Releasing midway makes it a `BAD`
-  at that point and stops the lane sound.
+- Mode `1` (LN): the head judgment is held and confirmed once, at the end point. Releasing before the end point
+  stops the lane sound and settles the LN at once, by the ruleset (`lnEarlyRelease`): `lr2` makes a release more than
+  the `GOOD` window before the tail a `BAD` and otherwise keeps the head judgment (OpenLR2 `ProcLongnote`);
+  `beatoraja` takes the worse of the head and the release judged against the long-note-end windows, and makes it a
+  `BAD` when that is `BAD` or worse (`JudgeManager` L533-545). Under `lr2` the head has no late `BAD`: it is missed
+  once time moves past its late `GOOD` leg, and a press after that judges whatever else is in reach (OpenLR2
+  `ProcLongnote`, LR2f.cpp:7542).
 - Mode `2` (CN): the head scores immediately on the press. The tail is judged on the RELEASE — against the exact
   release instant, not the frame that noticed it — and contributes a second judgment. Holding past the end point
-  is not yet a judgment: the player has until the tail's late window closes to let go. The lane sound stops on
-  release.
-- Mode `3` (HCN): as mode `2`, plus the gauge keeps draining while the hold is broken. Reaching the end point with
-  the hold broken makes the tail a `POOR`.
+  is not yet a judgment: the player has until the tail's late window closes to let go. Still holding when it
+  closes makes the tail a missed `POOR` (beatoraja's `CN end poor`). The lane sound stops on release.
+- Mode `3` (HCN): judged exactly as mode `2` (the tail on the release), plus beatoraja's gauge ticks
+  (`JudgeManager` L289-L340, `HCNTickCounter`). From the later of the start point and the head's judgment (pressed, or
+  missed) until the end point passes, a signed counter runs up while the lane gains — a key on it is down, or the
+  tail was released at `GOOD` or better — and down otherwise. Each time it passes +200 ms the gauge gains one tick
+  (beatoraja: `GREAT` ×0.5 of the judge table); each time it passes −200 ms it loses one (`BAD` ×0.5). The ticks
+  keep running after an early release, so pressing the lane again before the end point gains once more. Only the note
+  crossing the judge line ticks (`JudgeManager` L235-L242): one judged early waits until the one ahead of it on the
+  lane has passed, and a head missed only after its end point passed has no ticks. AUTO SCRATCH lanes have none.
+
+A release is settled at its own instant. The one exception is the ruleset's long-note release margin
+(`longNoteReleaseMarginUs`, beatoraja's `longnoteMargin` / `longscratchMargin`): under beatoraja's PMS rule a release
+that would score an early `BAD` or worse before the tail waits 200 ms (for an LN the timing is the head's when the head
+was further off than the release, so a late `BAD` head settles at once), and pressing the lane again inside it resumes the hold as
+if it had never been let go. LR2, IIDX and beatoraja's other modes have no margin. For input without release events (a terminal without the kitty
+keyboard protocol) the engine infers the release: 120 ms after the key's last repeat, or 380 ms after the press that
+hit the long note's head when no repeat followed.
+
+A press on a lane whose long note is held (a second key bound to the lane, such as the turntable's other direction)
+never judges another note on that lane: the lane's current note is the long note. What it does instead is the
+ruleset's (`pressDuringLongNote`): `lr2` judges the LN's head again when the press falls within its `BAD` window and
+charges an empty `POOR` otherwise (OpenLR2 `ProcLongnote`); `beatoraja` ignores it as a re-press (`JudgeManager`
+L355-377), and `iidx` does the same.
 
 A long note the player never touched owes one `POOR` for the head, plus a second for the tail under charge modes —
 except under IIDX, where the cancelled tail owes nothing.
 
+The life of a long note in manual play, by the effective mode:
+
+```mermaid
+stateDiagram-v2
+  state "waiting for the head" as Pending
+  state "held" as Held
+  state "release margin" as Margin
+  state "head missed" as Missed
+  state "settled" as Done
+  [*] --> Pending
+  Pending --> Missed: head window passes
+  Pending --> Held: head pressed
+  Pending --> Done: head BAD / POOR (iidx charge)
+  Held --> Margin: early release under a margin
+  Margin --> Held: pressed again
+  Margin --> Done: margin elapses
+  Held --> Done: LN let go early
+  Held --> Done: LN reaches its tail
+  Held --> Done: CN / HCN released
+  Held --> Done: CN / HCN tail window closes
+  Missed --> [*]
+  Done --> [*]
+```
+
 ### Auto Play
 
-A long note starts keysound playback and lane holding display at the start point, and is cleared at the end point:
-one `PGREAT` under LN styles, two (head and tail) under charge styles.
+A long note starts keysound playback and lane holding display at the start point. Under LN styles it scores its one
+`PGREAT` at the end point; under charge styles it scores the head's `PGREAT` at the start point and the tail's at the
+end point, as beatoraja's autoplay does. `AUTO` and `AUTO SCRATCH` score them alike.
 
 ### AUTO SCRATCH
 
-`AUTO SCRATCH` is a mode that automatically processes only the scratch lane (`16` / `26`) on the manual loop.
-The confirmation timing of long note is the end point, same as `AUTO`.
+`AUTO SCRATCH` is a mode that automatically processes only the scratch lane (`16` / `26`) with the manual judge strategy.
+An LN-style long note scores its one `PGREAT` at the end point; a charge note scores its head's `PGREAT` at the start point and its tail's at the end point, as beatoraja's autoplay does. The scratch lanes are the play mode's (`scratch` lanes of the play-mode table), so channel `16` / `26` is an ordinary key in the 9 KEY BME-type layout and the keyboard modes.
 
 ## Behavior by mode
 
 ### `AUTO`
 
 `AUTO` automatically processes all notes to be played.
-A normal note confirms `PERFECT` once when the time is reached, and a long note confirms `PERFECT` at the end point.
+A normal note confirms `PERFECT` once when the time is reached. An LN-style long note confirms its one `PERFECT` at the
+end point; a charge note confirms its head's `PERFECT` at the start point and its tail's at the end point (see Auto
+Play above).
 
 `AUTO` accepts pause/resume, restart, and high-speed changes.
 No judgment window or manual input candidate search is used.
@@ -542,7 +768,7 @@ No judgment window or manual input candidate search is used.
 ### `MANUAL`
 
 `MANUAL` selects the most appropriate candidate note within the `BAD` window from the set of lanes corresponding to the input token.
-If there are no candidates, the runtime may play the latest same-lane keysound whose early `BAD` window has already opened, then applies LR2-compatible empty POOR unless the channel is FREE ZONE or the input falls inside the long-note repeat-suppress window.
+If there are no candidates, the runtime may play the latest same-lane keysound whose early `BAD` window has already opened, then applies LR2-compatible empty POOR unless, without key-state input, the press falls before the tail of a long note played on that lane.
 It does not play the next pending lane keysound before that note's judgment window opens.
 
 In manual input, objects that pass the `BAD` window without any note input are automatically set to `POOR`.
@@ -560,11 +786,18 @@ Only the notes on the scratch playable channel are automatically processed, and 
 `speed` is the speed at which in-game time progresses.
 Both `AUTO` and `MANUAL` are used to convert seconds on the musical score to real time.
 
+`speed` is the tempo at the start. A host can change it during the play with the `{ kind: 'tempo', tempo }` input command.
+The engine re-anchors its clock at the chart time it drains the command (`createTempoClock`), so chart time stays continuous and runs at the new tempo from then on.
+It records the change in the play log (`play.tempoChanges`), calls `AudioSession.setTempo` and reports the change through `onTempoChange`.
+Judgments and recorded inputs stay in chart time, so a re-simulation is unaffected.
+A replay follows its log's changes when the host passes them as `replayTempoChanges`.
+The built-in Node audio session renders its audio for the starting tempo and does not follow a change.
+
 ### `highSpeed`
 
 `highSpeed` is a display parameter that primarily changes the visible range and scrolling density of the TUI.
 The judgment window itself cannot be changed.
-The runtime normalizes high-speed values through `@be-music/player/core/high-speed-control`.
+The runtime normalizes high-speed values with `resolveHighSpeedMultiplier` from `@be-music/player/signals`.
 Valid values range from `0.5` to `10.0` and snap to `0.5` increments.
 
 ### pause / restart / interrupt
@@ -579,7 +812,7 @@ During pause, the playback clock and audio session are stopped at the same time,
 
 ### Play timing
 
-Real-time playback uses the trigger sequence generated by `collectSampleTriggers()` from the score after branch resolution.
+Real-time playback uses the resolved chart's trigger sequence (`ResolvedChart.sampleTriggers`, built by `collectSampleTriggers()`) from the score after branch resolution.
 Clamp the playback time so that it does not become negative.
 
 ### Volume separation
@@ -590,13 +823,13 @@ Clamp the playback time so that it does not become negative.
 ### `#VOLWAV`
 
 BMS's `#VOLWAV` is treated as the volume multiplier for the entire score.
-If omitted, the default value is `100`, and the effective gain is `bms.volWav / 100`.
+If omitted, the default value is `100`. The effective gain is `bms.volWAV / 100` when `0 < bms.volWAV < 200` and `1` otherwise, as in beatoraja (LR2 ignores `#VOLWAV`).
 
 - `#VOLWAV 100`: Keep the original volume
-- `#VOLWAV 200`: `2` times the original volume
-- `#VOLWAV 0`: Silence
+- `#VOLWAV 150`: `1.5` times the original volume
+- `#VOLWAV 0`, `#VOLWAV 200` or above: Keep the original volume
 
-This scaling factor applies to keysound for real-time playback, song selection screen preview, and offline audio rendering using `renderJson()`.
+This scaling factor applies to keysound for real-time playback, song selection screen preview, and offline audio rendering using `renderJSON()`.
 The actual device applies only linear gain and does not reproduce player- or hardware-dependent volume differences.
 
 ### `#xxx97` / `#xxx98`
@@ -694,7 +927,17 @@ A playback progress indicator is displayed outside the lane, and the line closes
 
 Even on judged notes, drawing will remain until the judge line is crossed or the `visibleUntilBeat` expires.
 A long note is drawn as a single note with a body and tail lane, and the highlight continues while being held.
-The visual distance of a note is determined by the integral of the piecewise-constant coefficient of `#SCROLLxx` / `#xxxSC` multiplied by the piecewise-linear interpolation coefficient of `#SPEEDxx` / `#xxxSP`. If there is no `#SPEEDxx`, it is always `1`, and multiple keyframes with the same beat are the last to win. Before the first keyframe, the first keyframe's value holds flat (matching the Bemuse reference implementation). If the value of `#SPEEDxx` is a negative number, a non-number, or an undefined reference, that keyframe will be ignored from drawing calculations.
+The visual distance of a note is determined by the integral of the piecewise-constant coefficient of `#SCROLLxx` / `#xxxSC` multiplied by the piecewise-linear interpolation coefficient of `#SPEEDxx` / `#xxxSP`. If there is no `#SPEEDxx`, it is always `1`, and multiple keyframes with the same beat are the last to win. Before the first keyframe, the coefficient ramps linearly from `1` at beat 0 to the first keyframe's value, as beatoraja ramps from 1.0 at time 0 (a keyframe at beat 0 applies at once; Bemuse instead holds the first value). If the value of `#SPEEDxx` is a negative number, a non-number, or an undefined reference, that keyframe will be ignored from drawing calculations.
+
+### Negative BPM — LR2 reverse scroll
+
+A negative `#BPMxx` referenced through channel 08 (truncated to an integer first, so `-1 < BPM < 0` does not count) arms LR2's one-way reverse-scroll gimmick (issue #134; the LR2 basis and the documented deviations live in [`bms-spec.md`](./bms-spec.md)):
+
+- Timing stays monotonic: the resolver integrates |BPM|, so every note keeps a forward `seconds` and audio scheduling is unaffected before the reversal.
+- From the reversal on, the engine publishes `displayBeat = 2 × beat(reversal) − beat(now)` on the UI frame — a mirror in chart-position space, as LR2 draws it. The TUI grid and the web scenes scroll from it, so the chart visibly runs backwards at the post-reversal tempo (pausing through post-reversal STOPs, following later BPM changes, pinning at the chart head if it rewinds past the start) while the status clock and summary stay on the true clock.
+- Presses keep being judged on the mirrored clock `t' = 2 × reversal − now`: notes around the reversal stay hittable just after it, empty POORs fire while the lane's next note is within the ruleset's empty-POOR reach of `t'`, and there is no miss sweep past the reversal. A hold spanning the reversal BADs on release and stays open otherwise. Mines freeze at the reversal; a press at the reversal instant itself still detonates a mine within its PGREAT reach.
+- Realtime audio freezes with LR2's event pump: BGM / keysound triggers behind the reversal never fire, while BGM and BGA on the reversal tick itself still do (LR2's op order). BGA cues stop changing; a movie that is already playing keeps running. NOWBPM holds `|trunc(BPM)|` of the negative value.
+- The run ends at the chart's precomputed end time (a documented deviation — real LR2 soft-locks until ESC). If scorable notes are left unjudged — post-reversal notes, open holds, an AUTO SCRATCH long note whose tail lies past the reversal — the gauge drops to 0 and the run is FAILED, as LR2 zeroes HP when such a play is left. Playlogs record `chart.reversalTimeUs` so re-simulations apply the same mirrored clock and result.
 
 ### Non-TUI output
 

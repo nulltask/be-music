@@ -1,6 +1,7 @@
-import { type BeMusicJson } from '@be-music/json';
+import { resolveChart, resolveChartLongNoteMode, type LongNoteMode, type ResolvedChart } from '@be-music/chart';
+import { type BeMusicJSON } from '@be-music/json';
 import { resolveJudgeRankPercent } from '../core/judge-window.ts';
-import type { LongNoteMode, TimedPlayableNote } from '../playable-notes.ts';
+import type { TimedPlayableNote } from '../playable-notes.ts';
 import { createEmptyRulesetNoteCounts, type RulesetChartFacts } from './facts.ts';
 
 /**
@@ -12,16 +13,32 @@ export interface EngineRulesetChartInput {
   scorableNotes: ReadonlyArray<TimedPlayableNote>;
   /** `resolveLaneDisplayMode` output — picks beatoraja's per-mode window tables. */
   laneDisplayMode: string;
+  /** The resolved chart the notes came from (`PreparedPlaybackChartData.resolvedChart`); resolved from `json` if absent. */
+  resolvedChart?: ResolvedChart;
 }
 
-/** Chart-level long-note mode after `#LNMODE` / bmson `info.ln_type` resolution. */
-export function resolveChartLongNoteMode(json: BeMusicJson): LongNoteMode {
-  if (json.sourceFormat === 'bms') {
-    return json.bms.lnMode === 2 || json.bms.lnMode === 3 ? json.bms.lnMode : 1;
+/**
+ * The judge-rank inputs a ruleset reads, as `RulesetChartFacts` / `PlaylogChart` record them: the LR2-axis percent and
+ * the chart's own `#RANK` / `#DEFEXRANK` (bmson `judge_rank`) from the resolved chart.
+ */
+export function resolveChartJudgeRankFacts(
+  json: BeMusicJSON,
+  resolved: ResolvedChart,
+): { percent: number; sourceRank?: number; sourceExRank?: number } {
+  const judgeRank: { percent: number; sourceRank?: number; sourceExRank?: number } = {
+    percent: resolveJudgeRankPercent(json),
+  };
+  if (resolved.judgeRank.rank !== undefined) {
+    judgeRank.sourceRank = resolved.judgeRank.rank;
   }
-  const lnType = json.bmson.info.lnType;
-  return lnType === 2 || lnType === 3 ? lnType : 1;
+  if (resolved.judgeRank.exRank !== undefined) {
+    judgeRank.sourceExRank = resolved.judgeRank.exRank;
+  }
+  return judgeRank;
 }
+
+/** Chart-level long-note mode after `#LNMODE` / bmson `info.ln_type` resolution (`@be-music/chart`). */
+export { resolveChartLongNoteMode };
 
 /**
  * Derives the ruleset's chart facts from the engine's own representation. The play-log side has a matching adapter
@@ -29,11 +46,13 @@ export function resolveChartLongNoteMode(json: BeMusicJson): LongNoteMode {
  * rulesets from the same chart.
  */
 export function rulesetChartFactsFromChart(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   chart: EngineRulesetChartInput,
   dynamicJudgeRankChanges: ReadonlyArray<{ seconds: number; exRankValue: number }> = [],
+  stageRanks: ReadonlyArray<{ seconds: number; rank: number; table: 'chart' | 'lr2-nonstop' }> = [],
 ): RulesetChartFacts {
-  const chartLnMode = resolveChartLongNoteMode(json);
+  const resolved = chart.resolvedChart ?? resolveChart(json);
+  const chartLNMode = resolved.lnMode;
   const notes = createEmptyRulesetNoteCounts();
   const long: Record<LongNoteMode, number> = { 1: 0, 2: 0, 3: 0 };
   let normal = 0;
@@ -41,37 +60,36 @@ export function rulesetChartFactsFromChart(
     const hasTail =
       typeof note.endSeconds === 'number' && Number.isFinite(note.endSeconds) && note.endSeconds > note.seconds;
     if (hasTail) {
-      long[note.longNoteMode ?? chartLnMode] += 1;
+      long[note.longNoteMode ?? chartLNMode] += 1;
     } else {
       normal += 1;
     }
   }
 
-  const judgeRank: RulesetChartFacts['judgeRank'] = { percent: resolveJudgeRankPercent(json) };
-  const sourceRank = json.metadata.rank;
-  if (typeof sourceRank === 'number' && Number.isFinite(sourceRank)) {
-    judgeRank.sourceRank = sourceRank;
-  }
-  const sourceExRank = json.sourceFormat === 'bmson' ? json.bmson.info.judgeRank : json.bms.defExRank;
-  if (typeof sourceExRank === 'number' && Number.isFinite(sourceExRank)) {
-    judgeRank.sourceExRank = sourceExRank;
-  }
+  const judgeRank: RulesetChartFacts['judgeRank'] = resolveChartJudgeRankFacts(json, resolved);
   if (dynamicJudgeRankChanges.length > 0) {
     judgeRank.timeline = dynamicJudgeRankChanges.map((change) => ({
       timeUs: Math.round(change.seconds * 1_000_000),
       exRankValue: change.exRankValue,
     }));
   }
+  if (stageRanks.length > 0) {
+    judgeRank.stageRanks = stageRanks.map((change) => ({
+      timeUs: Math.round(change.seconds * 1_000_000),
+      rank: change.rank,
+      table: change.table,
+    }));
+  }
 
   const facts: RulesetChartFacts = {
     sourceFormat: json.sourceFormat === 'bmson' ? 'bmson' : 'bms',
     laneMode: chart.laneDisplayMode,
-    lnMode: chartLnMode,
+    lnMode: chartLNMode,
     judgeRank,
     notes: { ...notes, normal, long },
   };
-  if (typeof json.metadata.total === 'number' && Number.isFinite(json.metadata.total)) {
-    facts.total = json.metadata.total;
+  if (resolved.total.value !== undefined) {
+    facts.total = resolved.total.value;
   }
   return facts;
 }

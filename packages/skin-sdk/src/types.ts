@@ -1,9 +1,17 @@
-import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
+import type { ChartPlayVariant } from '@be-music/chart';
+import type { Judge, JudgeTiming, LaneCover, PlayOptionChoices, PlaySide } from '@be-music/scene-model';
 import type { BeMusicAudioFrame } from './audio.ts';
 import type { BeMusicPlayOptions } from './play-options.ts';
 import type { BeMusicResultData, GaugeHistorySample, ScoreHistorySample } from './result-data.ts';
 import type { BeMusicSkinSetting, BeMusicSkinSettingValues } from './settings.ts';
-import type { BeMusicSongImageKind, BeMusicSongRecord, BrowserBrowseEntry, BrowserSongEntry } from './song.ts';
+import type {
+  BeMusicCourseRecord,
+  BeMusicSongImageKind,
+  BeMusicSongRecord,
+  LibraryChart,
+  LibraryCourse,
+  LibraryEntry,
+} from './song.ts';
 
 /**
  * be-music skin format — the code-defined skins the built-in (default) family renders with when no LR2 / beatoraja
@@ -14,8 +22,8 @@ import type { BeMusicSongImageKind, BeMusicSongRecord, BrowserBrowseEntry, Brows
  *
  * Nothing here depends on a rendering framework. Skins are written against the `@be-music/skin-sdk` package
  * and declared with its `defineBeMusicSkin`, which checks {@link BeMusicSkin.apiVersion} and the metadata.
- * Hosts pick one with {@link BeMusicSkin.id} from a registry (`createBeMusicSkinRegistry`) and pass it to the default
- * scene classes via their `beMusicSkin` option.
+ * Hosts pick one with {@link BeMusicSkin.id} from a registry (`createBeMusicSkinRegistry`) and hand it to the scenes in
+ * the built-in family's kit (`{ family: 'built-in', skin }`).
  */
 export interface BeMusicSkin<K extends BeMusicSurfaceContextKind = BeMusicSurfaceContextKind> {
   /**
@@ -134,7 +142,7 @@ export interface BeMusicStage {
    * The gameplay BGA rect for a playfield whose rightmost lane ends at `playfieldRight`. The scene composites the BGA
    * here and the skin frames the same rect, so the BGA can make room for wide (double play / keyboard) playfields.
    */
-  resolveBgaRect(playfieldRight: number): BeMusicRect;
+  resolveBGARect(playfieldRight: number): BeMusicRect;
 }
 
 /**
@@ -144,17 +152,21 @@ export interface BeMusicStage {
  */
 export type BeMusicEffectLevel = 'full' | 'reduced' | 'off';
 
-/** A judgement grade, best first. */
-export type BeMusicJudge = 'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'POOR';
+/** A judgement grade, best first (`Judge` of `@be-music/scene-model`). */
+export type BeMusicJudge = Judge;
 
-/** A play side. `'2P'` only exists in double play. */
-export type BeMusicSide = '1P' | '2P';
+/** A play side. `'2P'` only exists in double play (`PlaySide` of `@be-music/scene-model`). */
+export type BeMusicSide = PlaySide;
 
 /** An image the host hands a skin (song images, BGA layers): anything `drawImage` / `texImage2D` accepts. */
 export type BeMusicImage = CanvasImageSource;
 
-/** Visual class of a lane, resolved from its channel — skins pick colours per class. */
-export type BeMusicLaneKind = 'white' | 'black' | 'scratch';
+/**
+ * Visual class of a lane, resolved from its channel — skins pick colours per class. `'wheel-up'` / `'wheel-down'` are
+ * the 24 / 48 KEY modes' wheel lanes, on the outer edge of each side where the IIDX modes keep their scratch: draw them
+ * apart from the keys (like a scratch) and show which way each one turns.
+ */
+export type BeMusicLaneKind = 'white' | 'black' | 'scratch' | 'wheel-up' | 'wheel-down';
 
 /** One lane of the gameplay layout, in design pixels. */
 export interface BeMusicLayoutLane {
@@ -247,7 +259,7 @@ export interface BeMusicGameplayRuntime {
   /** AAA / AA / A / B / C / D / E / F. */
   rank?: string;
   autoplay?: boolean;
-  hasBga?: boolean;
+  hasBGA?: boolean;
   /** Monotonic play clock (ms) for animation. */
   nowMs?: number;
   /** Song progress in [0, 1] — drives a progress track. */
@@ -286,7 +298,7 @@ export interface BeMusicGameplayRuntime {
    * The chart being played — level, difficulty, `#RANK`, `#TOTAL` and the rest of its header via
    * `song.chart.metadata`, plus the same images {@link BeMusicGameplayFrame.songImage} resolves.
    */
-  song?: BrowserSongEntry;
+  song?: LibraryChart;
   /**
    * Signed timing offset (ms) of the most recent timed judgement: positive when the press was late (SLOW), negative
    * when early (FAST), 0 dead on. Only judgements with a timing carry one — autoplay hits, mine BADs and missed notes
@@ -301,15 +313,20 @@ export interface BeMusicGameplayRuntime {
   /** SUDDEN+ / HIDDEN+ / LIFT per play side, as fractions of the lane height. */
   laneCovers?: readonly BeMusicLaneCover[];
   /**
-   * How long (ms) a note stays on screen, from the edge of the lane cover to the judgement line, at the current speed.
+   * How long (ms) a note stays on screen, from the edge of the lane cover to the judgement line, at the current speed —
+   * BPM, hi-speed and the chart's `#SCROLL` × `#SPEED` at the playhead. 0 while the chart scrolls backwards or stands
+   * still, as beatoraja shows it.
    */
   visibleMs?: number;
   /** IIDX-style green number (`visibleMs × 0.6`): the note's on-screen time in frames at 60 Hz. */
   greenNumber?: number;
-  /** Lowest, highest, and main (longest-held) BPM of the chart. */
-  minBpm?: number;
-  maxBpm?: number;
-  mainBpm?: number;
+  /**
+   * Lowest, highest, and main BPM of the chart. The main BPM is the BPM the most notes sit at (beatoraja's), the one
+   * HS-FIX `'AVERAGE'` pegs the hi-speed to and the play log's `visibleMs` is taken at.
+   */
+  minBPM?: number;
+  maxBPM?: number;
+  mainBPM?: number;
   /**
    * Length of the song (ms) and how far the audio has played (ms), on the audio clock: it stops while paused and
    * starts at 0 when the song starts. Remaining time is `songLengthMs - songElapsedMs`. Unlike {@link chartMs}, which is
@@ -346,28 +363,12 @@ export interface BeMusicGameplayRuntime {
 
 /**
  * One timed judgement: when it happened and how far off the press was. `deltaMs` is positive when late (SLOW) and
- * negative when early (FAST). See {@link binJudgeTimings} for a histogram.
+ * negative when early (FAST). See {@link binJudgeTimings} for a histogram. `JudgeTiming` of `@be-music/scene-model`.
  */
-export interface BeMusicJudgeTiming {
-  /** Play-clock ms of the judgement. */
-  atMs: number;
-  /** Signed offset (ms): > 0 late, < 0 early. */
-  deltaMs: number;
-  judge: BeMusicJudge;
-  /** Lane channel of the judged note. */
-  channel?: string;
-}
+export type BeMusicJudgeTiming = JudgeTiming;
 
-/** One play side's lane covers, as fractions (0..1) of the lane height. */
-export interface BeMusicLaneCover {
-  side: BeMusicSide;
-  /** SUDDEN+: the cover over the top of the lanes. */
-  sudden: number;
-  /** HIDDEN+: the cover just above the judgement line. */
-  hidden: number;
-  /** LIFT: how far the judgement line is raised. */
-  lift: number;
-}
+/** One play side's lane covers, as fractions (0..1) of the lane height (`LaneCover` of `@be-music/scene-model`). */
+export type BeMusicLaneCover = LaneCover;
 
 /** One judge window: how early and how late (both positive ms) a press still earns the grade. */
 export interface BeMusicJudgeWindow {
@@ -406,7 +407,11 @@ export interface BeMusicLaneFrame {
   holdStartedAtMs?: number;
 }
 
-/** A tap note as drawn this frame: its lane rect and the y its bottom edge sits at. */
+/**
+ * A tap note as drawn this frame: its lane rect and the y its bottom edge sits at. In a chart with a negative `#SCROLL`
+ * a note still ahead can sit below the judgement line, down to the bottom of the stage (the player draws such charts
+ * the way beatoraja does); clip to the lane's `bottom` to keep nothing below the line.
+ */
 export interface BeMusicNote {
   kind: BeMusicLaneKind;
   x: number;
@@ -417,8 +422,10 @@ export interface BeMusicNote {
 }
 
 /**
- * A mine (landmine) note as drawn this frame: its lane rect and the y its bottom edge sits at. Pressing the lane as it
- * passes the judgement line costs a BAD, so draw it as something to avoid. Only handed to skins that set
+ * A mine (landmine) note as drawn this frame: its lane rect and the y its bottom edge sits at (below the judgement line
+ * when a negative `#SCROLL` puts it there, as for {@link BeMusicNote}). A mine detonates when its lane
+ * is held as it crosses the judgement line (under the LR2 ruleset also on a press inside the PGREAT window) and drains
+ * the gauge, so draw it as something to avoid. Only handed to skins that set
  * {@link BeMusicGameplaySkin.drawsMines}.
  */
 export interface BeMusicMine {
@@ -428,7 +435,10 @@ export interface BeMusicMine {
   y: number;
 }
 
-/** A long note as drawn this frame: its lane rect, tail (top) and head (bottom, clamped to the line while held). */
+/**
+ * A long note as drawn this frame: its lane rect, tail (top) and head (bottom, held on the line once passed). Like
+ * {@link BeMusicNote}, it can reach below the judgement line when a negative `#SCROLL` puts it there.
+ */
 export interface BeMusicLongNote {
   kind: BeMusicLaneKind;
   x: number;
@@ -440,7 +450,10 @@ export interface BeMusicLongNote {
    * `'hcn'` (hell charge note: the gauge drains while it isn't held).
    */
   mode?: BeMusicLongNoteMode;
-  /** Where the long note is in its life: not yet reached, being held, let go early, or completed. */
+  /**
+   * Where the long note is in its life: not yet reached, being held, dropped (missed at the head or let go early), or
+   * completed. LR2 draws a dropped long note at half alpha until it goes; the built-in skins do the same.
+   */
   state?: BeMusicLongNoteState;
   /** True when autoplay (or auto-scratch) plays this long note. */
   autoplay?: boolean;
@@ -465,7 +478,10 @@ export interface BeMusicBomb {
   judge?: BeMusicJudge;
 }
 
-/** A measure (bar) line crossing one lane run, as drawn this frame. */
+/**
+ * A measure (bar) line crossing one lane run, as drawn this frame. Like {@link BeMusicNote}, it can sit below the
+ * judgement line when a negative `#SCROLL` puts it there.
+ */
 export interface BeMusicMeasureLine {
   side: BeMusicSide;
   /** Left edge and width of the lane run it crosses. */
@@ -475,13 +491,17 @@ export interface BeMusicMeasureLine {
 }
 
 /**
- * The BGA layers showing this frame, for a skin that composites the BGA itself ({@link BeMusicGameplaySkin.drawsBga}).
+ * The BGA layers showing this frame, for a skin that composites the BGA itself ({@link BeMusicGameplaySkin.drawsBGA}).
  * Following the BMS convention, the host hands {@link layer} with pure black (`#000000`) already turned transparent,
  * while {@link base} and {@link poor} are opaque: draw all three with plain alpha blending, without keying them again.
  * A bmson layer (whose spec keeps black opaque) and a video layer come as authored. `#SWBGA` animation frames are
  * already picked; a slot's `#ARGB` tint and opacity are left to the skin.
+ *
+ * Images come at their authored size. The BGA rect stands for a 256x256 canvas: to match other BMS players, draw a
+ * still image whose long edge is at most 256 px at its own size on that canvas, centered horizontally and against the
+ * top edge, and stretch a larger image or a video over the whole rect.
  */
-export interface BeMusicBgaFrame {
+export interface BeMusicBGAFrame {
   /** The base layer (`#BMP` on channel 04), or a video frame. */
   base?: BeMusicImage;
   /** The layer drawn over the base (channel 07). */
@@ -498,7 +518,7 @@ export interface BeMusicBgaFrame {
  * `undefined` when the song has no such image or the host doesn't provide images. Look the image up on every draw rather
  * than keeping it: hosts cache a bounded number and may close the least recently used one.
  */
-export type BeMusicSongImageLookup = (song: BrowserSongEntry, kind: BeMusicSongImageKind) => ImageBitmap | undefined;
+export type BeMusicSongImageLookup = (song: LibraryChart, kind: BeMusicSongImageKind) => ImageBitmap | undefined;
 
 /** Everything on the gameplay screen this frame. */
 export interface BeMusicGameplayFrame {
@@ -520,8 +540,8 @@ export interface BeMusicGameplayFrame {
    * {@link BeMusicGameplaySkin.drawsMeasureLines}.
    */
   measureLines: readonly BeMusicMeasureLine[];
-  /** The BGA layers to composite. Always `undefined` unless the skin sets {@link BeMusicGameplaySkin.drawsBga}. */
-  bga: BeMusicBgaFrame | undefined;
+  /** The BGA layers to composite. Always `undefined` unless the skin sets {@link BeMusicGameplaySkin.drawsBGA}. */
+  bga: BeMusicBGAFrame | undefined;
   /** Fractional beat position in [0, 1). */
   beatPhase: number;
   effects: BeMusicEffectLevel;
@@ -555,7 +575,7 @@ export interface BeMusicGameplaySkin<K extends BeMusicSurfaceContextKind = BeMus
    * Set to `true` when the skin composites the BGA itself from `frame.bga`. Otherwise the player shows the BGA behind
    * the skin's canvas, in {@link BeMusicGameplayLayout.bga}.
    */
-  readonly drawsBga?: boolean;
+  readonly drawsBGA?: boolean;
 }
 
 /** Song-list geometry shared by the skin (drawing) and the scene (row hit-testing). */
@@ -579,10 +599,11 @@ export interface BeMusicSelectActions {
   toggleReadme(): void;
 }
 
-/** The values each play option can take, for options with a fixed set of choices (numeric ones are left out). */
-export type BeMusicPlayOptionChoices = {
-  readonly [K in keyof BeMusicPlayOptions]?: readonly BeMusicPlayOptions[K][];
-};
+/**
+ * The values each play option can take, for options with a fixed set of choices (numeric ones are left out):
+ * `PlayOptionChoices` of `@be-music/scene-model`.
+ */
+export type BeMusicPlayOptionChoices = PlayOptionChoices;
 
 /** Everything on the select screen this frame. */
 export interface BeMusicSelectFrame {
@@ -598,15 +619,33 @@ export interface BeMusicSelectFrame {
   sceneStartedAt: number;
   /** `performance.now()` of the last cursor move — drives focus transitions. */
   cursorChangedAt: number;
-  entries: readonly BrowserBrowseEntry[];
+  entries: readonly LibraryEntry[];
   selectedIndex: number;
   /** First entry index drawn in the list window, and how many rows fit (see `resolveSelectListWindow`). */
   firstVisibleIndex: number;
   visibleRows: number;
-  focusedSong: BrowserSongEntry | undefined;
+  /**
+   * Design pixels the list is pulled past its resting place toward later entries (negative: toward earlier ones), less
+   * than one row: a finger dragging it, a list gliding after a swipe, or a trackpad mid-scroll. Each whole row turns
+   * into a cursor step, so it stays under a row either way, and it is 0 at rest and where the window can't move (the
+   * list's ends). Draw the rows that much higher, as `selectListRows` lays them out, and the list follows the finger;
+   * a skin that ignores it scrolls a row at a time.
+   */
+  listScroll: number;
+  focusedSong: LibraryChart | undefined;
+  /**
+   * The course bar under the cursor (`undefined` on a chart or folder bar, and from hosts that predate it). PLAY and
+   * AUTO start it; {@link describeCourseCard} gives the lines a card shows for it.
+   */
+  focusedCourse?: LibraryCourse;
   /** Current folder label (or search label), `undefined` at the library root. */
   folderLabel: string | undefined;
   searchQuery: string;
+  /**
+   * True while the host's text field sits over the search box (the box the skin bound to `actions.activateSearch`):
+   * the player is typing there, so draw the box but not its text or placeholder. Absent or false otherwise.
+   */
+  searchEditing?: boolean;
   totalCharts: number;
   actions: BeMusicSelectActions;
   effects: BeMusicEffectLevel;
@@ -621,7 +660,12 @@ export interface BeMusicSelectFrame {
   /** The pointer in design pixels, or `undefined` when it is outside the screen (or there is none). */
   pointer: { x: number; y: number } | undefined;
   /** The player's best record on `song`, or `undefined` when the host keeps none (or it was never played). */
-  songRecord(song: BrowserSongEntry): BeMusicSongRecord | undefined;
+  songRecord(song: LibraryChart): BeMusicSongRecord | undefined;
+  /**
+   * The player's best record on `course` (a course bar), or `undefined` when the host keeps none, the course was never
+   * played, or it is a random course or a NEW COURSE bar. Absent from hosts that predate it.
+   */
+  courseRecord?(course: LibraryCourse): BeMusicCourseRecord | undefined;
   songImage: BeMusicSongImageLookup;
   /** The player's values for the skin's {@link BeMusicSkin.settings}. */
   settings: BeMusicSkinSettingValues;
@@ -678,7 +722,7 @@ export interface BeMusicDecideFrame {
   /** Milliseconds since the screen mounted. */
   elapsedMs: number;
   /** The chart about to be played. */
-  song: BrowserSongEntry;
+  song: LibraryChart;
   /** The options the play will run with. */
   playOptions: Readonly<BeMusicPlayOptions>;
   songImage: BeMusicSongImageLookup;

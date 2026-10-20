@@ -1,14 +1,29 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   bmsExRankValueToJudgeRankPercent,
-  resolveBmsJudgeWindowsMsForExRankValue,
-  resolveBmsJudgeWindowsMsForPercent,
+  resolveBMSJudgeWindowsMsForExRankValue,
+  resolveBMSJudgeWindowsMsForPercent,
+  resolveBMSRankJudgeRankPercent,
   resolveJudgeRankPercent,
+  resolveLR2NonstopRankWindowsMs,
   resolveJudgeWindowsMs,
 } from './judge-window.ts';
 
 describe('judge-window', () => {
+  test('resolveBMSRankJudgeRankPercent maps #RANK onto the percent axis, NORMAL outside 0-3', () => {
+    expect([0, 1, 2, 3, 4, 5, -1, 1.7].map(resolveBMSRankJudgeRankPercent)).toEqual([25, 50, 75, 100, 75, 75, 75, 50]);
+  });
+
+  test("resolveLR2NonstopRankWindowsMs reads LR2's NONSTOP rank table", () => {
+    expect(resolveLR2NonstopRankWindowsMs(0)).toEqual({ pgreat: 12, great: 24, good: 60, bad: 200 });
+    expect(resolveLR2NonstopRankWindowsMs(1)).toEqual({ pgreat: 15, great: 30, good: 80, bad: 200 });
+    expect(resolveLR2NonstopRankWindowsMs(2)).toEqual({ pgreat: 18, great: 40, good: 100, bad: 200 });
+    expect(resolveLR2NonstopRankWindowsMs(3)).toEqual({ pgreat: 21, great: 60, good: 120, bad: 200 });
+    expect(resolveLR2NonstopRankWindowsMs(4)).toEqual({ pgreat: 18, great: 40, good: 100, bad: 200 });
+    expect(resolveLR2NonstopRankWindowsMs(3, 50)).toEqual({ pgreat: 21, great: 50, good: 50, bad: 50 });
+  });
+
   test('BMS: #RANK maps onto the measured LR2 windows with a fixed ±200ms BAD gate', () => {
     const expectations: Array<[number, number, number, number]> = [
       [0, 8, 24, 40], // VERY HARD
@@ -18,7 +33,7 @@ describe('judge-window', () => {
       [4, 18, 40, 100], // VERY EASY — LR2 treats #RANK 4 as NORMAL
     ];
     for (const [rank, pgreat, great, good] of expectations) {
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.rank = rank;
       const windows = resolveJudgeWindowsMs(json);
       expect(windows.pgreat, `rank ${rank}`).toBeCloseTo(pgreat, 6);
@@ -29,15 +44,15 @@ describe('judge-window', () => {
   });
 
   test('BMS: out-of-range #RANK falls back to NORMAL', () => {
-    const fallbackJson = createEmptyJson('bms');
-    fallbackJson.metadata.rank = 99;
-    const windows = resolveJudgeWindowsMs(fallbackJson);
+    const fallbackJSON = createEmptyJSON('bms');
+    fallbackJSON.metadata.rank = 99;
+    const windows = resolveJudgeWindowsMs(fallbackJSON);
     expect(windows.pgreat).toBeCloseTo(18, 6);
     expect(windows.bad).toBe(200);
   });
 
   test('BMS: #DEFEXRANK interpolates between the LR2 rank anchors and overrides #RANK', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.rank = 0;
     json.bms.defExRank = 120; // → percent 90, between NORMAL (75) and EASY (100)
 
@@ -49,7 +64,7 @@ describe('judge-window', () => {
   });
 
   test('BMS: #DEFEXRANK beyond EASY extrapolates but never exceeds the BAD gate', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.bms.defExRank = 1000; // percent 750 — GOOD would extrapolate to 620ms without the clamp
 
     const windows = resolveJudgeWindowsMs(json);
@@ -59,21 +74,21 @@ describe('judge-window', () => {
   });
 
   test('BMSON: judge rank prefers bmson info, then metadata, then the NORMAL default', () => {
-    const bmsonJson = createEmptyJson('bmson');
-    bmsonJson.bmson.info.judgeRank = 140; // percent 105
-    bmsonJson.metadata.rank = 60;
-    expect(resolveJudgeWindowsMs(bmsonJson).great).toBeCloseTo(40 + 30 * ((60 - 40) / 25), 6); // 64
+    const bmsonJSON = createEmptyJSON('bmson');
+    bmsonJSON.bmson.info.judgeRank = 140; // percent 105
+    bmsonJSON.metadata.rank = 60;
+    expect(resolveJudgeWindowsMs(bmsonJSON).great).toBeCloseTo(40 + 30 * ((60 - 40) / 25), 6); // 64
 
-    bmsonJson.bmson.info.judgeRank = 0; // invalid → metadata rank 60 → percent 45
-    expect(resolveJudgeWindowsMs(bmsonJson).pgreat).toBeCloseTo(8 + 20 * ((15 - 8) / 25), 6); // 13.6
+    bmsonJSON.bmson.info.judgeRank = 0; // invalid → metadata rank 60 → percent 45
+    expect(resolveJudgeWindowsMs(bmsonJSON).pgreat).toBeCloseTo(8 + 20 * ((15 - 8) / 25), 6); // 13.6
 
-    bmsonJson.metadata.rank = 0; // invalid → spec default 100 → percent 75 (NORMAL)
-    expect(resolveJudgeWindowsMs(bmsonJson).good).toBeCloseTo(100, 6);
-    expect(resolveJudgeWindowsMs(bmsonJson).bad).toBe(200);
+    bmsonJSON.metadata.rank = 0; // invalid → spec default 100 → percent 75 (NORMAL)
+    expect(resolveJudgeWindowsMs(bmsonJSON).good).toBeCloseTo(100, 6);
+    expect(resolveJudgeWindowsMs(bmsonJSON).bad).toBe(200);
   });
 
-  test('resolveBmsJudgeWindowsMsForPercent honors the debug bad window override only for BAD', () => {
-    const windows = resolveBmsJudgeWindowsMsForPercent(75, 310);
+  test('resolveBMSJudgeWindowsMsForPercent honors the debug bad window override only for BAD', () => {
+    const windows = resolveBMSJudgeWindowsMsForPercent(75, 310);
 
     expect(windows.pgreat).toBeCloseTo(18, 6);
     expect(windows.great).toBeCloseTo(40, 6);
@@ -96,23 +111,23 @@ describe('judge-window', () => {
       [4, 75], // VERY EASY — LR2 treats #RANK 4 as NORMAL
     ];
     for (const [rank, percent] of expectations) {
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.rank = rank;
       expect(resolveJudgeRankPercent(json), `rank ${rank}`).toBe(percent);
     }
   });
 
   test('resolveJudgeRankPercent: #DEFEXRANK wins over #RANK, and NORMAL is the default', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.rank = 0;
     json.bms.defExRank = 120; // 120 × 75 / 100
     expect(resolveJudgeRankPercent(json)).toBeCloseTo(90, 9);
 
-    expect(resolveJudgeRankPercent(createEmptyJson('bms'))).toBe(75);
+    expect(resolveJudgeRankPercent(createEmptyJSON('bms'))).toBe(75);
   });
 
   test('resolveJudgeRankPercent: bmson prefers info.judge_rank, then metadata, then the spec default', () => {
-    const json = createEmptyJson('bmson');
+    const json = createEmptyJSON('bmson');
     json.bmson.info.judgeRank = 140;
     json.metadata.rank = 60;
     expect(resolveJudgeRankPercent(json)).toBeCloseTo(105, 9); // 140 × 75 / 100
@@ -120,16 +135,16 @@ describe('judge-window', () => {
     json.bmson.info.judgeRank = 0; // invalid → metadata rank 60 → 45
     expect(resolveJudgeRankPercent(json)).toBeCloseTo(45, 9);
 
-    expect(resolveJudgeRankPercent(createEmptyJson('bmson'))).toBe(75); // judge_rank 100 default
+    expect(resolveJudgeRankPercent(createEmptyJSON('bmson'))).toBe(75); // judge_rank 100 default
   });
 
-  test('resolveBmsJudgeWindowsMsForExRankValue shares the RANK 2 = 100 unit with #DEFEXRANK', () => {
-    const dynamic = resolveBmsJudgeWindowsMsForExRankValue(100);
-    expect(dynamic).toEqual(resolveBmsJudgeWindowsMsForPercent(bmsExRankValueToJudgeRankPercent(100)));
+  test('resolveBMSJudgeWindowsMsForExRankValue shares the RANK 2 = 100 unit with #DEFEXRANK', () => {
+    const dynamic = resolveBMSJudgeWindowsMsForExRankValue(100);
+    expect(dynamic).toEqual(resolveBMSJudgeWindowsMsForPercent(bmsExRankValueToJudgeRankPercent(100)));
     expect(dynamic.pgreat).toBeCloseTo(18, 6);
     expect(dynamic.bad).toBe(200);
 
     // `#EXRANK 120` matches the documented `#DEFEXRANK 120` interpolation.
-    expect(resolveBmsJudgeWindowsMsForExRankValue(120).great).toBeCloseTo(52, 6);
+    expect(resolveBMSJudgeWindowsMsForExRankValue(120).great).toBeCloseTo(52, 6);
   });
 });

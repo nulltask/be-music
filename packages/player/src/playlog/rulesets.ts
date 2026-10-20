@@ -11,9 +11,9 @@ import {
   type RulesetChartFacts,
   type RulesetConfig,
 } from '../ruleset/index.ts';
-import type { LongNoteMode } from '../playable-notes.ts';
-import type { BeMusicPlaylog } from './format.ts';
-import type { PlaylogRulesetId, ResolveRulesetOptions } from '../ruleset/index.ts';
+import type { LongNoteMode } from '@be-music/chart';
+import type { BeMusicPlaylog, PlaylogCourseStage } from './format.ts';
+import type { PlaylogRulesetId, ResolveRulesetOptions, RulesetCourseOptions } from '../ruleset/index.ts';
 
 export * from '../ruleset/index.ts';
 
@@ -50,11 +50,28 @@ export function resolveRulesetConfig(
   rulesetId: PlaylogRulesetId,
   options: ResolveRulesetOptions = {},
 ): RulesetConfig {
+  const { course } = playlog.play;
   return resolveRuleset(rulesetChartFactsFromPlaylog(playlog), rulesetId, {
     selectedGauge: playlog.play.gauge,
     ...(playlog.play.judgeWindowOverrideMs !== undefined
       ? { judgeWindowOverrideMs: playlog.play.judgeWindowOverrideMs }
       : {}),
+    ...(course === undefined ? {} : { course: courseStageRulesetOptions(course) }),
     ...options,
   });
+}
+
+/** The ruleset course options a recorded course stage was played under. */
+export function courseStageRulesetOptions(course: PlaylogCourseStage): RulesetCourseOptions {
+  const options: RulesetCourseOptions = { kind: course.kind };
+  if (course.gaugeSet !== undefined) options.gaugeSet = course.gaugeSet;
+  if (course.judge !== undefined) options.judge = course.judge;
+  if (course.carryIn !== undefined) options.initialGauge = course.carryIn.gauge;
+  return options;
+}
+
+/** The course-wide combo and max combo a recorded course stage starts from (0 / 0 for the first stage). */
+export function courseStageCarryCombo(course: PlaylogCourseStage): { combo: number; maxCombo: number } {
+  const combo = course.carryIn?.combo ?? 0;
+  return { combo, maxCombo: Math.max(course.carryIn?.maxCombo ?? 0, combo) };
 }

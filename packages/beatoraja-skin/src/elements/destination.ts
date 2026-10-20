@@ -49,7 +49,7 @@ export interface BeatorajaDestinationGroup {
   timerFunction?: BeatorajaLuaFunctionValue;
   /**
    * Loop offset in milliseconds. `-1` hides the element after the last keyframe; `0` (the
-   * default — matches beatoraja's `JsonSkin.Destination.loop` Java int default) loops back to
+   * default — matches beatoraja's `JSONSkin.Destination.loop` Java int default) loops back to
    * keyframe 0 once the last keyframe's time elapses; positive values loop to that time-stamp.
    *
    * Beatoraja's default of `0` matters for static (length-1) destinations: with `loop = 0`
@@ -149,7 +149,7 @@ export interface BeatorajaDestinationGroup {
    */
   stretch: number;
   /**
-   * Custom mouse-hover rectangle (audit C-12). Beatoraja's `JsonSkinObjectLoader.java:723-725`
+   * Custom mouse-hover rectangle (audit C-12). Beatoraja's `JSONSkinObjectLoader.java:723-725`
    * parses `dst.mouseRect` as a `{x, y, w, h}` Rect object (NOT an integer index — the
    * previous TS impl read it as `numberField(f, 'mouseRect', -1)` which silently dropped the
    * authored coords).
@@ -574,7 +574,7 @@ function normalizeKeyframes(
     if (rawItem === null || rawItem === undefined || typeof rawItem !== 'object') continue;
     const obj = rawItem as Readonly<Record<string, unknown>>;
     // Conditional `{if, value}` / `{if, values}` wrapper: upstream
-    // `JsonSkinSerializer.ArraySerializer.read` (lines 222-252) expands these inline at
+    // `JSONSkinSerializer.ArraySerializer.read` (lines 222-252) expands these inline at
     // JSON-load time. The wrapper conditionally inserts ONE keyframe (`value`) or MANY
     // (`values`) into the dst[] array iff its `if` codes are satisfied; otherwise the wrapper
     // drops entirely. Default play5.json's judge popup (`judgef-*`) declares per-side rects
@@ -623,7 +623,7 @@ function applyKeyframeFields(obj: Readonly<Record<string, unknown>>, state: Beat
 }
 
 /**
- * Mirror of upstream `JsonSkinSerializer.ArraySerializer.read` (lines 222-252) operating at the
+ * Mirror of upstream `JSONSkinSerializer.ArraySerializer.read` (lines 222-252) operating at the
  * single-element granularity. The upstream loader, while reading an array of objects, treats any
  * element shaped `{"if": ..., "value": {...}}` or `{"if": ..., "values": [{...}, ...]}` as a
  * conditional INSERT: when the `if` test passes, the wrapper expands to its `value` (single
@@ -675,7 +675,7 @@ function isPlainObject(v: unknown): v is Readonly<Record<string, unknown>> {
 
 /**
  * Evaluate an `if` condition value the same way upstream's `testOption` does
- * (`JsonSkinSerializer.java:120-150`):
+ * (`JSONSkinSerializer.java:120-150`):
  *
  * - missing / undefined → match (caller already short-circuited this branch)
  * - bare number `n` → AND-singleton: `n` must be active (or `-n` must NOT be active)
@@ -740,8 +740,8 @@ function booleanPropertyField(value: unknown): BeatorajaBooleanPropertyRef | und
 }
 
 /**
- * Parse `dst.mouseRect` per `JsonSkinObjectLoader.java:723-725`. The JSON shape is the same
- * `{x, y, w, h}` Rect object used by `JsonSkin.Rect` (`JsonSkin.java:444-449`). Defaults to
+ * Parse `dst.mouseRect` per `JSONSkinObjectLoader.java:723-725`. The JSON shape is the same
+ * `{x, y, w, h}` Rect object used by `JSONSkin.Rect` (`JSONSkin.java:444-449`). Defaults to
  * `0` for any missing component — matches Java's `int` field initialization.
  */
 function parseMouseRectField(value: unknown): { x: number; y: number; w: number; h: number } | undefined {

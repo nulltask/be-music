@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { formatJudgeComboDisplay, PlayerTui } from './tui.ts';
-import type { TuiNoteHeight } from '@be-music/player/core/ui-options';
+import { formatJudgeComboDisplay, PlayerTUI } from './tui.ts';
+import type { TUINoteHeight } from '@be-music/player/display';
 
-function stripAnsi(value: string): string {
+function stripANSI(value: string): string {
   // eslint-disable-next-line no-control-regex
   return value.replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '');
 }
@@ -23,7 +23,7 @@ function renderOutputRaw(
     splitAfterIndex?: number;
     highSpeed?: number;
     visibleNotesLimit?: number;
-    noteHeight?: TuiNoteHeight;
+    noteHeight?: TUINoteHeight;
     scrollTimeline?: Array<{ beat: number; speed: number }>;
     speedTimeline?: Array<{ beat: number; speed: number }>;
   } = {},
@@ -36,7 +36,7 @@ function renderOutputRaw(
   }) as typeof process.stdout.write;
 
   try {
-    const tui = new PlayerTui({
+    const tui = new PlayerTUI({
       mode: 'AUTO',
       laneDisplayMode: options.laneDisplayMode ?? '5 KEY SP',
       title: 'test',
@@ -107,12 +107,12 @@ function renderOutput(
     splitAfterIndex?: number;
     highSpeed?: number;
     visibleNotesLimit?: number;
-    noteHeight?: TuiNoteHeight;
+    noteHeight?: TUINoteHeight;
     scrollTimeline?: Array<{ beat: number; speed: number }>;
     speedTimeline?: Array<{ beat: number; speed: number }>;
   } = {},
 ): string[] {
-  return stripAnsi(renderOutputRaw(notes, options).join('\n')).split('\n');
+  return stripANSI(renderOutputRaw(notes, options).join('\n')).split('\n');
 }
 
 function renderRowsContaining(
@@ -123,7 +123,7 @@ function renderRowsContaining(
     landmineNotes?: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>;
     invisibleNotes?: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>;
     highSpeed?: number;
-    noteHeight?: TuiNoteHeight;
+    noteHeight?: TUINoteHeight;
     lanes?: Array<{ channel: string; key: string; isScratch?: boolean }>;
     visibleNotesLimit?: number;
     scrollTimeline?: Array<{ beat: number; speed: number }>;
@@ -268,6 +268,21 @@ describe('player-tui', () => {
     expect(rows.length).toBeGreaterThan(0);
   });
 
+  test('hides notes a negative scroll brings back once the chart has run past the top of the grid', () => {
+    // Plain scroll for 40 beats (far past the grid), then #SCROLL -10 pulls the chart back: the note at beat 43.9 sits
+    // one beat above the judge line, but beatoraja stops walking the chart at the first object past the lane top.
+    const scrollTimeline = [{ beat: 40, speed: -10 }];
+
+    // The bottom row of the grid carries its own `███` (the beat-0 measure line), so compare against an empty chart.
+    const empty = renderRowsContaining([], '███', 0, { scrollTimeline });
+    expect(renderRowsContaining([{ channel: '11', beat: 43.9, seconds: 22 }], '███', 0, { scrollTimeline })).toEqual(
+      empty,
+    );
+    expect(
+      renderRowsContaining([{ channel: '11', beat: 1, seconds: 0.5 }], '███', 0, { scrollTimeline }).length,
+    ).toBeGreaterThan(empty.length);
+  });
+
   test('keeps rendering visible notes when invisible notes saturate their own window', () => {
     const invisibleNotes = Array.from({ length: 64 }, (_, index) => ({
       channel: '12',
@@ -408,7 +423,7 @@ describe('player-tui', () => {
     }) as typeof process.stdout.write;
 
     try {
-      const tui = new PlayerTui({
+      const tui = new PlayerTUI({
         mode: 'AUTO',
         laneDisplayMode: '5 KEY SP',
         title: 'test',
@@ -465,7 +480,7 @@ describe('player-tui', () => {
     }) as typeof process.stdout.write;
 
     try {
-      const tui = new PlayerTui({
+      const tui = new PlayerTUI({
         mode: 'AUTO',
         laneDisplayMode: '5 KEY SP',
         title: 'test',
@@ -523,32 +538,32 @@ describe('player-tui', () => {
 
     test('PERFECT shows the running combo', () => {
       // PERFECT renders as a rainbow blink — strip the ANSI to assert on the visible text.
-      expect(stripAnsi(formatJudgeComboDisplay('PERFECT', 153, NOW_MS, false))).toContain('GREAT 153');
+      expect(stripANSI(formatJudgeComboDisplay('PERFECT', 153, NOW_MS, false))).toContain('GREAT 153');
     });
 
     test('GREAT shows the running combo', () => {
-      expect(stripAnsi(formatJudgeComboDisplay('GREAT', 50, NOW_MS, false))).toContain('GREAT 50');
+      expect(stripANSI(formatJudgeComboDisplay('GREAT', 50, NOW_MS, false))).toContain('GREAT 50');
     });
 
     test('GOOD shows the running combo', () => {
-      expect(stripAnsi(formatJudgeComboDisplay('GOOD', 5, NOW_MS, false))).toContain('GOOD 5');
+      expect(stripANSI(formatJudgeComboDisplay('GOOD', 5, NOW_MS, false))).toContain('GOOD 5');
     });
 
     test('POOR omits the combo number even when the engine preserves combo through EMPTY POOR', () => {
-      const visible = stripAnsi(formatJudgeComboDisplay('POOR', 5, NOW_MS, false));
+      const visible = stripANSI(formatJudgeComboDisplay('POOR', 5, NOW_MS, false));
       expect(visible).toContain('POOR');
       expect(visible).not.toMatch(/POOR\s+\d/);
     });
 
     test('BAD omits the combo number for the same reason', () => {
-      const visible = stripAnsi(formatJudgeComboDisplay('BAD', 3, NOW_MS, false));
+      const visible = stripANSI(formatJudgeComboDisplay('BAD', 3, NOW_MS, false));
       expect(visible).toContain('BAD');
       expect(visible).not.toMatch(/BAD\s+\d/);
     });
 
     test('combo of 0 produces a bare verdict for any judge', () => {
-      expect(stripAnsi(formatJudgeComboDisplay('GREAT', 0, NOW_MS, false))).toContain('GREAT');
-      expect(stripAnsi(formatJudgeComboDisplay('GREAT', 0, NOW_MS, false))).not.toMatch(/GREAT\s+\d/);
+      expect(stripANSI(formatJudgeComboDisplay('GREAT', 0, NOW_MS, false))).toContain('GREAT');
+      expect(stripANSI(formatJudgeComboDisplay('GREAT', 0, NOW_MS, false))).not.toMatch(/GREAT\s+\d/);
     });
   });
 });

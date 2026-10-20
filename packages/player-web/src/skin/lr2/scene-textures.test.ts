@@ -1,4 +1,4 @@
-import { LR2_SPECIAL_GRAPHIC, type Lr2ImageRect, type Lr2Skin } from '@be-music/lr2-skin';
+import { LR2_SPECIAL_GRAPHIC, type LR2ImageRect, type LR2Skin } from '@be-music/lr2-skin';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   collectDecideSkinTexturePaths,
@@ -6,7 +6,7 @@ import {
   collectSelectSkinTexturePaths,
 } from './scene-textures.ts';
 
-function source(imagePath: string): Lr2ImageRect {
+function source(imagePath: string): LR2ImageRect {
   return {
     imagePath,
     x: 0,
@@ -20,11 +20,11 @@ function source(imagePath: string): Lr2ImageRect {
   };
 }
 
-function element(imagePath: string): { source: Lr2ImageRect } {
+function element(imagePath: string): { source: LR2ImageRect } {
   return { source: source(imagePath) };
 }
 
-function skinWith(overrides: { barLayout?: Record<string, unknown>; [key: string]: unknown } = {}): Lr2Skin {
+function skinWith(overrides: { barLayout?: Record<string, unknown>; [key: string]: unknown } = {}): LR2Skin {
   const { barLayout, ...skinOverrides } = overrides;
   return {
     images: [],
@@ -57,7 +57,7 @@ function skinWith(overrides: { barLayout?: Record<string, unknown>; [key: string
       declarationOrder: undefined,
       ...barLayout,
     },
-  } as unknown as Lr2Skin;
+  } as unknown as LR2Skin;
 }
 
 function expectTexturePaths(paths: Set<string>, expected: string[]): void {

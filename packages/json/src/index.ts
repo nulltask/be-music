@@ -1,4 +1,4 @@
-import { normalizeAsciiBase36Code, normalizeAsciiBase62Code } from '@be-music/utils/core';
+import { normalizeASCIIBase36Code, normalizeASCIIBase62Code } from '@be-music/utils/core';
 
 export const BMS_JSON_FORMAT = 'be-music-json/0.1.0' as const;
 
@@ -15,7 +15,7 @@ export interface BeMusicMetadata {
   /** `#STAGEFILE`: full-size loading screen image. */
   stageFile?: string;
   /** `#BACKBMP`: select-screen banner / preview image (typically 256×256). */
-  backBmp?: string;
+  backBMP?: string;
   /** `#BANNER`: small banner image (typically 300×80). */
   banner?: string;
   playLevel?: BeMusicPlayLevel;
@@ -26,7 +26,7 @@ export interface BeMusicMetadata {
   extras: Record<string, string>;
 }
 
-export interface BmsResources {
+export interface BMSResources {
   wav: Record<string, string>;
   bmp: Record<string, string>;
   bpm: Record<string, number>;
@@ -50,10 +50,10 @@ export interface BmsonEventExtensions {
    */
   t?: number;
   /**
-   * Per-mine gauge damage in 0..100, sourced from a bmson `key_channels[].notes[].damage` entry. Only set on mine
-   * events emitted from `key_channels`; absent on regular `sound_channels`-derived note events. Consumers that don't
-   * read this field fall through to the BMS-side rule: the object value read in base 36 is the damage, and 4 stands in
-   * when the value is not a non-zero base-36 pair.
+   * Per-mine gauge damage in 0..100, sourced from a bmson `mine_channels[].notes[].damage` entry (beatoraja
+   * extension). Only set on mine events emitted from `mine_channels`; absent on every other event. A bmson mine without
+   * it deals the default 4: its object value is the parser-assigned WAV slot, so the BMS-side rule (the object value
+   * read in base 36 is the damage) does not apply to it.
    */
   damage?: number;
 }
@@ -79,7 +79,7 @@ export interface BmsonInfoExtensions {
   subartists?: string[];
   chartName?: string;
   level?: number;
-  initBpm?: number;
+  initBPM?: number;
   resolution?: number;
   modeHint?: string;
   judgeRank?: number;
@@ -95,24 +95,24 @@ export interface BmsonInfoExtensions {
   previewMusic?: string;
 }
 
-export interface BmsonBgaHeaderEntry {
+export interface BmsonBGAHeaderEntry {
   id: number;
   name: string;
 }
 
-export interface BmsonBgaEvent {
+export interface BmsonBGAEvent {
   y: number;
   id: number;
 }
 
-export interface BmsonBgaExtensions {
-  header: BmsonBgaHeaderEntry[];
-  events: BmsonBgaEvent[];
-  layerEvents: BmsonBgaEvent[];
-  poorEvents: BmsonBgaEvent[];
+export interface BmsonBGAExtensions {
+  header: BmsonBGAHeaderEntry[];
+  events: BmsonBGAEvent[];
+  layerEvents: BmsonBGAEvent[];
+  poorEvents: BmsonBGAEvent[];
 }
 
-export interface BmsonBpmEventEntry {
+export interface BmsonBPMEventEntry {
   y: number;
   bpm: number;
 }
@@ -120,6 +120,15 @@ export interface BmsonBpmEventEntry {
 export interface BmsonStopEventEntry {
   y: number;
   duration: number;
+}
+
+/**
+ * beatoraja extension — `scroll_events[]` shape. From pulse `y` on, the lane scrolls at `rate` times its normal speed
+ * (BMS `#SCROLLxx`), until the next scroll event.
+ */
+export interface BmsonScrollEventEntry {
+  y: number;
+  rate: number;
 }
 
 export interface BmsonSoundNoteEntry {
@@ -137,14 +146,21 @@ export interface BmsonSoundChannelEntry {
 }
 
 /**
- * beatoraja extension — `key_channels[].notes[]` shape. Same timing / lane / continuation fields as a regular
- * sound-channel note, plus a `damage` value (0..100 gauge percent) that carries the per-mine damage authoring intent.
+ * beatoraja extension — `key_channels[].notes[]` shape. `key_channels` hold hidden (invisible) notes: keysounds placed
+ * on a lane that are never judged, which the parser turns into BMS invisible objects (`3x` / `4x`). beatoraja reads
+ * only `x` and `y` from them.
  */
 export interface BmsonKeyNoteEntry {
   x?: number;
   y: number;
+  /** @deprecated Not read: hidden notes have no length. Kept so older IR producers still type-check. */
   l?: number;
+  /** @deprecated Not read: hidden notes do not slice their sample. Kept so older IR producers still type-check. */
   c?: boolean;
+  /**
+   * @deprecated Not read: `key_channels` are hidden notes, not mines. Mine damage lives on
+   * {@link BmsonMineNoteEntry.damage}.
+   */
   damage?: number;
 }
 
@@ -153,10 +169,25 @@ export interface BmsonKeyChannelEntry {
   notes: BmsonKeyNoteEntry[];
 }
 
+/**
+ * beatoraja extension — `mine_channels[].notes[]` shape. Each note is a mine on lane `x` at pulse `y`, with a gauge
+ * `damage` (0..100 percent). The channel `name` is the sample played when the mine explodes.
+ */
+export interface BmsonMineNoteEntry {
+  x?: number;
+  y: number;
+  damage?: number;
+}
+
+export interface BmsonMineChannelEntry {
+  name: string;
+  notes: BmsonMineNoteEntry[];
+}
+
 export interface BmsonExtensions {
   version?: string;
   info: BmsonInfoExtensions;
-  bga: BmsonBgaExtensions;
+  bga: BmsonBGAExtensions;
   /**
    * `true` when the bmson source authored an explicit `lines: []` (intentionally barline-less, the bmson 1.0.0 spec's
    * "100 % minimoo-G effect"). Distinct from "lines missing" (`undefined` / not present), which the spec treats as
@@ -168,7 +199,7 @@ export interface BmsonExtensions {
   barlinesSuppressed?: boolean;
 }
 
-export type BmsControlFlowCommand =
+export type BMSControlFlowCommand =
   | 'RANDOM'
   | 'SETRANDOM'
   | 'IF'
@@ -183,13 +214,13 @@ export type BmsControlFlowCommand =
   | 'DEF'
   | 'ENDSW';
 
-export interface BmsControlFlowDirectiveEntry {
+export interface BMSControlFlowDirectiveEntry {
   kind: 'directive';
-  command: BmsControlFlowCommand;
+  command: BMSControlFlowCommand;
   value?: string;
 }
 
-export interface BmsControlFlowHeaderEntry {
+export interface BMSControlFlowHeaderEntry {
   kind: 'header';
   command: string;
   value: string;
@@ -200,9 +231,15 @@ export interface BmsControlFlowHeaderEntry {
    * absent, callers fall back to `command` (= upper-cased) for case-insensitive base-36 charts.
    */
   commandRaw?: string;
+  /**
+   * `true` when a top-level line later in the file defines the same header. LR2 and beatoraja apply header lines in
+   * file order, so that later line wins even when this branch is taken, and resolving the control flow skips this
+   * entry. Never set on repeatable headers (`#STP`, `#WAVCMD`, `#LNOBJ`), which add up instead.
+   */
+  overriddenByLaterHeader?: true;
 }
 
-export interface BmsControlFlowObjectEntry {
+export interface BMSControlFlowObjectEntry {
   kind: 'object';
   measure: number;
   channel: string;
@@ -210,30 +247,30 @@ export interface BmsControlFlowObjectEntry {
   measureLength?: number;
 }
 
-export type BmsControlFlowEntry = BmsControlFlowDirectiveEntry | BmsControlFlowHeaderEntry | BmsControlFlowObjectEntry;
+export type BMSControlFlowEntry = BMSControlFlowDirectiveEntry | BMSControlFlowHeaderEntry | BMSControlFlowObjectEntry;
 
-export interface BmsObjectLineEntry {
+export interface BMSObjectLineEntry {
   measure: number;
   channel: string;
   events: BeMusicEvent[];
   measureLength?: number;
 }
 
-export type BmsSourceLineEntry = BmsControlFlowEntry;
+export type BMSSourceLineEntry = BMSControlFlowEntry;
 
-export interface BmsExtensions {
-  controlFlow: BmsControlFlowEntry[];
+export interface BMSExtensions {
+  controlFlow: BMSControlFlowEntry[];
   preview?: string;
   lnType?: number;
   lnMode?: number;
   lnObjs?: string[];
-  volWav?: number;
+  volWAV?: number;
   defExRank?: number;
   exRank: Record<string, string>;
   argb: Record<string, string>;
   player?: number;
-  pathWav?: string;
-  baseBpm?: number;
+  pathWAV?: string;
+  baseBPM?: number;
   stp: string[];
   option?: string;
   changeOption: Record<string, string>;
@@ -242,16 +279,16 @@ export interface BmsExtensions {
    * Every `#WAVCMD pp xx vv` line as the raw post-directive text (one entry per source line, in declaration order). The
    * legacy `wavCmd` field above retains the FIRST value only for backward compatibility — `wavCmds` is the
    * spec-faithful representation, since real-world charts emit one line per `(parameter, slot)` pair. Consumers should
-   * iterate `wavCmds` and parse via `@be-music/chart`'s `parseBmsWavCmd` helper.
+   * iterate `wavCmds` and parse via `@be-music/chart`'s `parseBmsWAVCmd` helper.
    */
   wavCmds: string[];
-  exWav: Record<string, string>;
-  exBmp: Record<string, string>;
+  exWAV: Record<string, string>;
+  exBMP: Record<string, string>;
   bga: Record<string, string>;
   scroll: Record<string, number>;
   speed: Record<string, number>;
-  poorBga?: string;
-  swBga: Record<string, string>;
+  poorBGA?: string;
+  swBGA: Record<string, string>;
   videoFile?: string;
   midiFile?: string;
   materials?: string;
@@ -266,31 +303,33 @@ export interface BmsExtensions {
   base?: 62;
 }
 
-export interface BmsPreservation {
-  sourceLines: BmsSourceLineEntry[];
-  objectLines: BmsObjectLineEntry[];
+export interface BMSPreservation {
+  sourceLines: BMSSourceLineEntry[];
+  objectLines: BMSObjectLineEntry[];
 }
 
 export interface BmsonPreservation {
   lines: number[];
-  bpmEvents: BmsonBpmEventEntry[];
+  bpmEvents: BmsonBPMEventEntry[];
   stopEvents: BmsonStopEventEntry[];
+  /** The beatoraja extension `scroll_events`, as authored; left out when the chart has none. */
+  scrollEvents?: BmsonScrollEventEntry[];
   soundChannels: BmsonSoundChannelEntry[];
 }
 
 export interface BeMusicPreservation {
-  bms: BmsPreservation;
+  bms: BMSPreservation;
   bmson: BmsonPreservation;
 }
 
-export interface BeMusicJson {
+export interface BeMusicJSON {
   format: typeof BMS_JSON_FORMAT;
   sourceFormat: BeMusicSourceFormat;
   metadata: BeMusicMetadata;
-  resources: BmsResources;
+  resources: BMSResources;
   measures: BeMusicMeasure[];
   events: BeMusicEvent[];
-  bms: BmsExtensions;
+  bms: BMSExtensions;
   bmson: BmsonExtensions;
   preservation: BeMusicPreservation;
 }
@@ -306,7 +345,7 @@ const BASE36_PAD_2_TABLE = Array.from({ length: BASE36_PAD_2_DIVISOR }, (_value,
   return `${BASE36_UPPER_DIGITS[high]}${BASE36_UPPER_DIGITS[low]}`;
 });
 
-export function createEmptyJson(sourceFormat: BeMusicSourceFormat = 'bms'): BeMusicJson {
+export function createEmptyJSON(sourceFormat: BeMusicSourceFormat = 'bms'): BeMusicJSON {
   return {
     format: BMS_JSON_FORMAT,
     sourceFormat,
@@ -331,12 +370,12 @@ export function createEmptyJson(sourceFormat: BeMusicSourceFormat = 'bms'): BeMu
       stp: [],
       wavCmds: [],
       changeOption: {},
-      exWav: {},
-      exBmp: {},
+      exWAV: {},
+      exBMP: {},
       bga: {},
       scroll: {},
       speed: {},
-      swBga: {},
+      swBGA: {},
     },
     bmson: {
       info: {},
@@ -362,15 +401,16 @@ export function createEmptyJson(sourceFormat: BeMusicSourceFormat = 'bms'): BeMu
   };
 }
 
-export function cloneJson(json: BeMusicJson): BeMusicJson {
+export function cloneJSON(json: BeMusicJSON): BeMusicJSON {
   const measures = json.measures.map((measure) => ({ index: measure.index, length: measure.length }));
   const events = json.events.map(cloneEvent);
   const controlFlow = json.bms.controlFlow.map(cloneControlFlowEntry);
   const bmsSourceLines = json.preservation.bms.sourceLines.map(cloneControlFlowEntry);
-  const objectLines = json.preservation.bms.objectLines.map(cloneBmsObjectLineEntry);
+  const objectLines = json.preservation.bms.objectLines.map(cloneBMSObjectLineEntry);
   const lines = [...json.preservation.bmson.lines];
   const bpmEvents = json.preservation.bmson.bpmEvents.map((event) => ({ y: event.y, bpm: event.bpm }));
   const stopEvents = json.preservation.bmson.stopEvents.map((event) => ({ y: event.y, duration: event.duration }));
+  const scrollEvents = json.preservation.bmson.scrollEvents?.map((event) => ({ y: event.y, rate: event.rate }));
   const soundChannels = json.preservation.bmson.soundChannels.map((channel) => ({
     name: channel.name,
     notes: channel.notes.map((note) => ({ ...note })),
@@ -405,12 +445,12 @@ export function cloneJson(json: BeMusicJson): BeMusicJson {
       stp: [...json.bms.stp],
       wavCmds: [...json.bms.wavCmds],
       changeOption: { ...json.bms.changeOption },
-      exWav: { ...json.bms.exWav },
-      exBmp: { ...json.bms.exBmp },
+      exWAV: { ...json.bms.exWAV },
+      exBMP: { ...json.bms.exBMP },
       bga: { ...json.bms.bga },
       scroll: { ...json.bms.scroll },
       speed: { ...json.bms.speed },
-      swBga: { ...json.bms.swBga },
+      swBGA: { ...json.bms.swBGA },
     },
     bmson: {
       ...json.bmson,
@@ -434,6 +474,7 @@ export function cloneJson(json: BeMusicJson): BeMusicJson {
         lines,
         bpmEvents,
         stopEvents,
+        ...(scrollEvents ? { scrollEvents } : {}),
         soundChannels,
       },
     },
@@ -488,14 +529,17 @@ export function normalizeObjectKey(value: string, base: 36 | 62 = 36): string {
     return normalizeObjectKeyBase62(value);
   }
   if (value.length === 2) {
-    const code0 = normalizeAsciiBase36CodeFast(value.charCodeAt(0));
-    const code1 = normalizeAsciiBase36CodeFast(value.charCodeAt(1));
+    const raw0 = value.charCodeAt(0);
+    const raw1 = value.charCodeAt(1);
+    const code0 = normalizeASCIIBase36CodeFast(raw0);
+    const code1 = normalizeASCIIBase36CodeFast(raw1);
     if (code0 >= 0 && code1 >= 0) {
-      return String.fromCharCode(code0, code1);
+      // Already normalized (the common case, called per event in every hot loop): no new string.
+      return code0 === raw0 && code1 === raw1 ? value : String.fromCharCode(code0, code1);
     }
   }
   if (value.length === 1) {
-    const code = normalizeAsciiBase36CodeFast(value.charCodeAt(0));
+    const code = normalizeASCIIBase36CodeFast(value.charCodeAt(0));
     if (code >= 0) {
       return String.fromCharCode(0x30, code);
     }
@@ -506,7 +550,7 @@ export function normalizeObjectKey(value: string, base: 36 | 62 = 36): string {
   }
   if (trimmed.length === 1) {
     const sourceCode = trimmed.charCodeAt(0);
-    const code = normalizeAsciiBase36Code(sourceCode);
+    const code = normalizeASCIIBase36Code(sourceCode);
     if (code >= 0) {
       return code === sourceCode ? `0${trimmed}` : `0${String.fromCharCode(code)}`;
     }
@@ -515,8 +559,8 @@ export function normalizeObjectKey(value: string, base: 36 | 62 = 36): string {
   if (trimmed.length === 2) {
     const sourceCode0 = trimmed.charCodeAt(0);
     const sourceCode1 = trimmed.charCodeAt(1);
-    const code0 = normalizeAsciiBase36Code(sourceCode0);
-    const code1 = normalizeAsciiBase36Code(sourceCode1);
+    const code0 = normalizeASCIIBase36Code(sourceCode0);
+    const code1 = normalizeASCIIBase36Code(sourceCode1);
     if (code0 >= 0 && code1 >= 0) {
       if (code0 === sourceCode0 && code1 === sourceCode1) {
         return trimmed;
@@ -531,14 +575,14 @@ export function normalizeObjectKey(value: string, base: 36 | 62 = 36): string {
 function normalizeObjectKeyBase62(value: string): string {
   // Fast path: already 2 ASCII chars in `[0-9A-Za-z]`. Returned verbatim — no case folding in base-62 mode.
   if (value.length === 2) {
-    const code0 = normalizeAsciiBase62Code(value.charCodeAt(0));
-    const code1 = normalizeAsciiBase62Code(value.charCodeAt(1));
+    const code0 = normalizeASCIIBase62Code(value.charCodeAt(0));
+    const code1 = normalizeASCIIBase62Code(value.charCodeAt(1));
     if (code0 >= 0 && code1 >= 0) {
       return value;
     }
   }
   if (value.length === 1) {
-    const code = normalizeAsciiBase62Code(value.charCodeAt(0));
+    const code = normalizeASCIIBase62Code(value.charCodeAt(0));
     if (code >= 0) {
       return `0${value}`;
     }
@@ -548,7 +592,7 @@ function normalizeObjectKeyBase62(value: string): string {
     return '00';
   }
   if (trimmed.length === 1) {
-    const code = normalizeAsciiBase62Code(trimmed.charCodeAt(0));
+    const code = normalizeASCIIBase62Code(trimmed.charCodeAt(0));
     if (code >= 0) {
       return `0${trimmed}`;
     }
@@ -556,8 +600,8 @@ function normalizeObjectKeyBase62(value: string): string {
     return `0${trimmed.slice(0, 1).toUpperCase()}`;
   }
   if (trimmed.length === 2) {
-    const code0 = normalizeAsciiBase62Code(trimmed.charCodeAt(0));
-    const code1 = normalizeAsciiBase62Code(trimmed.charCodeAt(1));
+    const code0 = normalizeASCIIBase62Code(trimmed.charCodeAt(0));
+    const code1 = normalizeASCIIBase62Code(trimmed.charCodeAt(1));
     if (code0 >= 0 && code1 >= 0) {
       return trimmed;
     }
@@ -569,10 +613,13 @@ function normalizeObjectKeyBase62(value: string): string {
 
 export function normalizeChannel(value: string): string {
   if (value.length === 2) {
-    const code0 = normalizeAsciiBase36CodeFast(value.charCodeAt(0));
-    const code1 = normalizeAsciiBase36CodeFast(value.charCodeAt(1));
+    const raw0 = value.charCodeAt(0);
+    const raw1 = value.charCodeAt(1);
+    const code0 = normalizeASCIIBase36CodeFast(raw0);
+    const code1 = normalizeASCIIBase36CodeFast(raw1);
     if (code0 >= 0 && code1 >= 0) {
-      return String.fromCharCode(code0, code1);
+      // Already normalized (the common case, called per event in every hot loop): no new string.
+      return code0 === raw0 && code1 === raw1 ? value : String.fromCharCode(code0, code1);
     }
   }
   return normalizeObjectKey(value);
@@ -589,7 +636,7 @@ export function normalizeChannel(value: string): string {
  * Accepts a partial (`Pick<...>`) chart so callers that only have a `bms` slice (e.g. preservation walks) can use the
  * same helper without rebuilding the full JSON.
  */
-export function resolveBmsBase(json: { bms?: { base?: 36 | 62 } } | undefined): 36 | 62 {
+export function resolveBMSBase(json: { bms?: { base?: 36 | 62 } } | undefined): 36 | 62 {
   return json?.bms?.base === 62 ? 62 : 36;
 }
 
@@ -608,7 +655,7 @@ export function intToBase36(value: number, pad = 2): string {
   return encoded.padStart(pad, '0').slice(-pad);
 }
 
-export function ensureMeasure(json: BeMusicJson, index: number): BeMusicMeasure {
+export function ensureMeasure(json: BeMusicJSON, index: number): BeMusicMeasure {
   const measureCount = json.measures.length;
   if (measureCount > 0) {
     const lastMeasure = json.measures[measureCount - 1]!;
@@ -648,7 +695,7 @@ function cloneEvent(event: BeMusicEvent): BeMusicEvent {
   };
 }
 
-function cloneControlFlowEntry(entry: BmsControlFlowEntry): BmsControlFlowEntry {
+function cloneControlFlowEntry(entry: BMSControlFlowEntry): BMSControlFlowEntry {
   if (entry.kind === 'object') {
     return {
       ...entry,
@@ -658,14 +705,14 @@ function cloneControlFlowEntry(entry: BmsControlFlowEntry): BmsControlFlowEntry 
   return { ...entry };
 }
 
-function cloneBmsObjectLineEntry(entry: BmsObjectLineEntry): BmsObjectLineEntry {
+function cloneBMSObjectLineEntry(entry: BMSObjectLineEntry): BMSObjectLineEntry {
   return {
     ...entry,
     events: entry.events.map(cloneEvent),
   };
 }
 
-function normalizeAsciiBase36CodeFast(code: number): number {
+function normalizeASCIIBase36CodeFast(code: number): number {
   if (code >= 0x30 && code <= 0x39) {
     return code;
   }

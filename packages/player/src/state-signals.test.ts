@@ -35,7 +35,7 @@ describe('player state signals', () => {
   test('drainPendingJudgeCombos returns every publish in order, then clears', () => {
     // Regression cover for the AUTO PLAY simultaneous-press bomb bug: when several `publishJudgeCombo` calls
     // fired inside the same engine tick (= an AUTO chord resolves N notes at once), the renderer's
-    // `getJudgeCombo()` peek inside `drainWebUiSignals` only saw the LAST publish — the others got overwritten
+    // `getJudgeCombo()` peek inside `drainWebUISignals` only saw the LAST publish — the others got overwritten
     // on the latch — so only the right-most lane's bomb / FC update fired. The queue must surface every publish
     // verbatim and in publish order so the host can fan one bomb sprite per chord note.
     const signals = createPlayerStateSignals(1);

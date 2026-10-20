@@ -1,94 +1,19 @@
-import { sortEvents } from '@be-music/chart';
-import {
-  normalizeChannel,
-  normalizeObjectKey,
-  resolveBmsBase,
-  type BeMusicEvent,
-  type BeMusicJson,
-} from '@be-music/json';
+import { type BGACue } from '@be-music/chart';
+
+// The BGA cue builders (`buildBGATimelines`, `buildBmsBGATimeline`) live in `@be-music/chart`; this module only picks
+// the cue on screen, for `@be-music/player/display`.
 
 /**
  * How long a POOR / miss BGA layer stays visible after a miss before the normal base/layer composite returns.
- * 500 ms is LR2's shipped default (`<poorbga>500</poorbga>` in its `config.xml`; LR2 exposes it as a per-user
- * setting, this implementation does not yet). Shared by the renderers that time the miss layer out (TUI
- * compositor, web LR2 scene) so the miss-layer feel is identical across them — change it here, not per frontend.
- * The beatoraja web scene instead holds its miss layer until the next non-POOR judge, as beatoraja skins expect.
+ * 500 ms is the shipped default of both LR2 (`<poorbga>500</poorbga>` in its `config.xml`) and beatoraja
+ * (`PlayerConfig.misslayerDuration`, which `BGAProcessor.drawBGA` shows the miss layer for from the miss); both expose
+ * it as a per-user setting, this implementation does not yet. Shared by the renderers that time the miss layer out
+ * (TUI compositor, web built-in / LR2 scene, web beatoraja scene) so the miss-layer feel is identical across them —
+ * change it here, not per frontend.
  */
 export const DEFAULT_POOR_BGA_DISPLAY_SECONDS = 0.5;
 
-export interface BgaCue {
-  seconds: number;
-  key?: string;
-}
-
-export interface BgaTimelines {
-  base: BgaCue[];
-  layer: BgaCue[];
-  layer2: BgaCue[];
-  poor: BgaCue[];
-}
-
-export interface BgaTimingResolver {
-  eventToSeconds: (event: BeMusicEvent) => number;
-  beatToSeconds: (beat: number) => number;
-}
-
-const BGA_BASE_CHANNEL = '04';
-const BGA_POOR_CHANNEL = '06';
-const BGA_LAYER_CHANNEL = '07';
-const BGA_LAYER2_CHANNEL = '0A';
-
-export function buildBgaTimelines(chart: BeMusicJson, resolver: BgaTimingResolver): BgaTimelines {
-  const idBase = resolveBmsBase(chart);
-  const sortedEvents = sortEvents(chart.events);
-  const timelines: BgaTimelines = {
-    base: buildBmsBgaTimeline(sortedEvents, resolver, BGA_BASE_CHANNEL, idBase),
-    poor: buildBmsBgaTimeline(sortedEvents, resolver, BGA_POOR_CHANNEL, idBase),
-    layer: buildBmsBgaTimeline(sortedEvents, resolver, BGA_LAYER_CHANNEL, idBase),
-    layer2: buildBmsBgaTimeline(sortedEvents, resolver, BGA_LAYER2_CHANNEL, idBase),
-  };
-
-  const bgaSection = chart.bmson.bga;
-  if (bgaSection.events.length > 0 || bgaSection.layerEvents.length > 0 || bgaSection.poorEvents.length > 0) {
-    const headerById = new Map(bgaSection.header.map((entry) => [entry.id, entry.name]));
-    const resolution =
-      chart.bmson.info?.resolution && chart.bmson.info.resolution > 0 ? chart.bmson.info.resolution : 240;
-    const toCue = (entry: { y: number; id: number }): BgaCue => {
-      const beat = entry.y / resolution;
-      const seconds = resolver.beatToSeconds(beat);
-      return { seconds, key: entry.id === 0 ? undefined : headerById.get(entry.id) };
-    };
-    for (const event of bgaSection.events) timelines.base.push(toCue(event));
-    for (const event of bgaSection.layerEvents) timelines.layer.push(toCue(event));
-    for (const event of bgaSection.poorEvents) timelines.poor.push(toCue(event));
-  }
-
-  sortBgaTimelines(timelines);
-  return timelines;
-}
-
-export function buildBmsBgaTimeline(
-  events: ReadonlyArray<BeMusicEvent>,
-  resolver: Pick<BgaTimingResolver, 'eventToSeconds'>,
-  channel: string,
-  base: 36 | 62 = 36,
-): BgaCue[] {
-  const normalized = normalizeChannel(channel);
-  const timeline: BgaCue[] = [];
-  for (const event of events) {
-    if (normalizeChannel(event.channel) !== normalized) {
-      continue;
-    }
-    const key = normalizeObjectKey(event.value, base);
-    timeline.push({
-      seconds: resolver.eventToSeconds(event),
-      key: key === '00' ? undefined : key,
-    });
-  }
-  return timeline;
-}
-
-export function pickActiveBgaCue<T extends { seconds: number }>(
+export function pickActiveBGACue<T extends { seconds: number }>(
   cues: ReadonlyArray<T>,
   seconds: number,
 ): T | undefined {
@@ -109,14 +34,6 @@ export function pickActiveBgaCue<T extends { seconds: number }>(
   return answer < 0 ? undefined : cues[answer];
 }
 
-export function pickActiveBgaKey(cues: ReadonlyArray<BgaCue>, seconds: number): string | undefined {
-  return pickActiveBgaCue(cues, seconds)?.key;
-}
-
-function sortBgaTimelines(timelines: BgaTimelines): void {
-  const sortBySeconds = (left: BgaCue, right: BgaCue): number => left.seconds - right.seconds;
-  timelines.base.sort(sortBySeconds);
-  timelines.layer.sort(sortBySeconds);
-  timelines.layer2.sort(sortBySeconds);
-  timelines.poor.sort(sortBySeconds);
+export function pickActiveBGAKey(cues: ReadonlyArray<BGACue>, seconds: number): string | undefined {
+  return pickActiveBGACue(cues, seconds)?.key;
 }

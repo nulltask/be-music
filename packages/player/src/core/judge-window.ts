@@ -1,7 +1,11 @@
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 
 /**
  * LR2 judge windows.
+ *
+ * Each compat ruleset owns its judge windows (signed, per lane kind and per note context; the tables live in
+ * `src/ruleset/definitions.ts`). This module only resolves LR2's own `#RANK` / `#DEFEXRANK` / `#EXRANKxx` axis, which
+ * the LR2 ruleset reads.
  *
  * Source of truth: LR2 measurements collected on hitkey's diary (2015-01-19 "Memo: LR2 timegates",
  * https://hitkey.nekokan.dyndns.info/diary1501.php#D150119) and the machine-readable LR2-compat tables in lr2oraja
@@ -34,6 +38,7 @@ const LR2_NORMAL_JUDGERANK_PERCENT = LR2_BMS_RANK_JUDGERANK_PERCENTS[2];
 /** bmson `judge_rank` default per the 1.0.0 spec (100 = the player's default width, i.e. NORMAL here). */
 const BMSON_DEFAULT_JUDGERANK = 100;
 
+/** LR2's judge windows in milliseconds: each judgment's half-width, the same early and late. */
 export interface JudgeWindowsMs {
   pgreat: number;
   great: number;
@@ -54,7 +59,7 @@ export function bmsExRankValueToJudgeRankPercent(value: number): number {
   return (value * LR2_NORMAL_JUDGERANK_PERCENT) / 100;
 }
 
-function resolveBmsJudgeRankPercent(json: BeMusicJson): number {
+function resolveBMSJudgeRankPercent(json: BeMusicJSON): number {
   const defExRank = json.bms.defExRank;
   if (typeof defExRank === 'number' && Number.isFinite(defExRank) && defExRank > 0) {
     return bmsExRankValueToJudgeRankPercent(defExRank);
@@ -68,7 +73,7 @@ function resolveBmsJudgeRankPercent(json: BeMusicJson): number {
   return LR2_NORMAL_JUDGERANK_PERCENT;
 }
 
-function resolveBmsonJudgeRankPercent(json: BeMusicJson): number {
+function resolveBmsonJudgeRankPercent(json: BeMusicJSON): number {
   const judgeRank = json.bmson.info.judgeRank;
   if (Number.isFinite(judgeRank) && (judgeRank ?? 0) > 0) {
     return bmsExRankValueToJudgeRankPercent(judgeRank!);
@@ -80,7 +85,52 @@ function resolveBmsonJudgeRankPercent(json: BeMusicJson): number {
   return bmsExRankValueToJudgeRankPercent(BMSON_DEFAULT_JUDGERANK);
 }
 
-export function resolveBmsJudgeWindowsMsForPercent(
+/** A BMS `#RANK` on the internal judgerank percent axis; `#RANK 4` and anything outside 0-4 read as NORMAL, as in LR2. */
+export function resolveBMSRankJudgeRankPercent(rank: number): number {
+  const value = Number.isFinite(rank) ? Math.trunc(rank) : Number.NaN;
+  return value >= 0 && value < LR2_BMS_RANK_JUDGERANK_PERCENTS.length
+    ? LR2_BMS_RANK_JUDGERANK_PERCENTS[value as 0 | 1 | 2 | 3 | 4]
+    : LR2_NORMAL_JUDGERANK_PERCENT;
+}
+
+/**
+ * LR2's NONSTOP rank table: the windows its rank object (op 1001) sets when a later NONSTOP stage's `#RANK` takes over
+ * (`LR2body.exe` 0x42be2f, jump table 0x42cb34; OpenLR2 `LR2f.cpp` L12831-L12877). It differs from the table a chart
+ * opens with (0x4b5835) for VERY HARD and HARD:
+ *
+ * | `#RANK`     | PGREAT | GREAT | GOOD   |
+ * | ----------- | ------ | ----- | ------ |
+ * | 0 VERY HARD | ±12ms  | ±24ms | ±60ms  |
+ * | 1 HARD      | ±15ms  | ±30ms | ±80ms  |
+ * | 2 NORMAL    | ±18ms  | ±40ms | ±100ms |
+ * | 3 EASY      | ±21ms  | ±60ms | ±120ms |
+ *
+ * Any other `#RANK` reads as NORMAL; BAD stays ±200 ms.
+ */
+const LR2_NONSTOP_RANK_WINDOWS_MS: Readonly<Record<number, readonly [number, number, number]>> = {
+  0: [12, 24, 60],
+  1: [15, 30, 80],
+  2: [18, 40, 100],
+  3: [21, 60, 120],
+};
+
+/** The windows LR2's NONSTOP rank object sets for a later stage's `#RANK` (see `LR2_NONSTOP_RANK_WINDOWS_MS`). */
+export function resolveLR2NonstopRankWindowsMs(rank: number, debugBadWindowMs?: number): JudgeWindowsMs {
+  const bad =
+    typeof debugBadWindowMs === 'number' && Number.isFinite(debugBadWindowMs) && debugBadWindowMs > 0
+      ? debugBadWindowMs
+      : LR2_BAD_WINDOW_MS;
+  const [pgreat, great, good] =
+    LR2_NONSTOP_RANK_WINDOWS_MS[Number.isFinite(rank) ? Math.trunc(rank) : 2] ?? LR2_NONSTOP_RANK_WINDOWS_MS[2]!;
+  return {
+    pgreat: clampWindow(pgreat, bad),
+    great: clampWindow(great, bad),
+    good: clampWindow(good, bad),
+    bad,
+  };
+}
+
+export function resolveBMSJudgeWindowsMsForPercent(
   judgeRankPercent: number,
   debugBadWindowMs?: number,
 ): JudgeWindowsMs {
@@ -94,8 +144,8 @@ export function resolveBmsJudgeWindowsMsForPercent(
  * {@link bmsExRankValueToJudgeRankPercent} before scaling — `#EXRANK 100` lands on exactly the same windows as
  * `#DEFEXRANK 100` (NORMAL).
  */
-export function resolveBmsJudgeWindowsMsForExRankValue(exRankValue: number, debugBadWindowMs?: number): JudgeWindowsMs {
-  return resolveBmsJudgeWindowsMsForPercent(bmsExRankValueToJudgeRankPercent(exRankValue), debugBadWindowMs);
+export function resolveBMSJudgeWindowsMsForExRankValue(exRankValue: number, debugBadWindowMs?: number): JudgeWindowsMs {
+  return resolveBMSJudgeWindowsMsForPercent(bmsExRankValueToJudgeRankPercent(exRankValue), debugBadWindowMs);
 }
 
 /**
@@ -104,23 +154,17 @@ export function resolveBmsJudgeWindowsMsForExRankValue(exRankValue: number, debu
  * persist the resolved rank (e.g. the play-log recorder) share the exact resolution chain (`#DEFEXRANK` →
  * `metadata.rank` → default for BMS; `info.judge_rank` → `metadata.rank` → default for bmson).
  */
-export function resolveJudgeRankPercent(json: BeMusicJson): number {
-  return json.sourceFormat === 'bmson' ? resolveBmsonJudgeRankPercent(json) : resolveBmsJudgeRankPercent(json);
-}
-
-export function resolveJudgeWindowsMs(json: BeMusicJson, debugBadWindowMs?: number): JudgeWindowsMs {
-  return scaleJudgeWindowsMs(resolveJudgeRankPercent(json), debugBadWindowMs);
+export function resolveJudgeRankPercent(json: BeMusicJSON): number {
+  return json.sourceFormat === 'bmson' ? resolveBmsonJudgeRankPercent(json) : resolveBMSJudgeRankPercent(json);
 }
 
 /**
- * Which compat ruleset the engine plays under. The ruleset owns everything: judge windows (signed, per lane kind
- * and per note context), note selection, empty POOR, long-note mechanics, gauges, and scoring. The tables live in
- * `src/ruleset/definitions.ts`; this module only still resolves LR2's own `#RANK` / `#DEFEXRANK` / `#EXRANKxx`
- * axis, which the LR2 ruleset reads.
+ * The LR2 judge windows a chart opens with: its judgerank ({@link resolveJudgeRankPercent}) scaled over LR2's measured
+ * anchors. `debugBadWindowMs` replaces the fixed ±200 ms BAD window, and no other window grows past it.
  */
-export type JudgeWindowRuleset = 'lr2' | 'beatoraja' | 'iidx';
-
-export const JUDGE_WINDOW_RULESETS: readonly JudgeWindowRuleset[] = ['lr2', 'beatoraja', 'iidx'];
+export function resolveJudgeWindowsMs(json: BeMusicJSON, debugBadWindowMs?: number): JudgeWindowsMs {
+  return scaleJudgeWindowsMs(resolveJudgeRankPercent(json), debugBadWindowMs);
+}
 
 function scaleJudgeWindowsMs(judgeRankPercent: number, debugBadWindowMs?: number): JudgeWindowsMs {
   const bad =

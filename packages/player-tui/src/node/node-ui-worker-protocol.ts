@@ -1,22 +1,20 @@
 import type { MessagePort } from 'node:worker_threads';
 import type { LogEntry } from '@be-music/utils/log';
-import type { BeMusicJson } from '@be-music/json';
-import type { PlayerUiCommand } from '@be-music/player/core/ui-signal-bus';
+import type { BeMusicJSON } from '@be-music/json';
+import type { PlayerJudgeComboSignalState, PlayerUICommand } from '@be-music/player/signals';
 import type { LaneBinding } from '../manual-input.ts';
-import type { PlayerJudgeComboSignalState } from '@be-music/player/state-signals';
-import type { ImageResizeAlgorithm } from '@be-music/player/image-resize-algorithm';
-import type { TuiNoteHeight } from '@be-music/player/core/ui-options';
-import type { PlayerUiFramePatch } from './ui-frame-patch.ts';
+import type { ImageResizeAlgorithm, TUINoteHeight } from '@be-music/player/display';
+import type { PlayerUIFramePatch } from './ui-frame-patch.ts';
 
-export interface NodeUiWorkerInitData {
-  json: BeMusicJson;
+export interface NodeUIWorkerInitData {
+  json: BeMusicJSON;
   mode: 'AUTO' | 'MANUAL' | 'AUTO SCRATCH';
   laneDisplayMode: string;
   laneBindings: LaneBinding[];
   speed: number;
-  uiFps?: number;
+  uiFPS?: number;
   tuiVisibleNotesLimit?: number;
-  tuiNoteHeight: TuiNoteHeight;
+  tuiNoteHeight: TUINoteHeight;
   judgeWindowMs: number;
   highSpeed: number;
   imageResizeAlgorithm: ImageResizeAlgorithm;
@@ -24,7 +22,7 @@ export interface NodeUiWorkerInitData {
   randomPatternSummary?: string;
   baseDir: string;
   kittyGraphics?: boolean;
-  videoBgaStreaming?: boolean;
+  videoBGAStreaming?: boolean;
   useAlternateScreen?: boolean;
   stdinIsTTY: boolean;
   stdoutIsTTY: boolean;
@@ -32,14 +30,14 @@ export interface NodeUiWorkerInitData {
   initialJudgeCombo: PlayerJudgeComboSignalState;
 }
 
-export type NodeUiWorkerInboundMessage =
+export type NodeUIWorkerInboundMessage =
   | { kind: 'attach-bridge-port'; port: MessagePort }
   | { kind: 'abort'; reason?: string }
   | { kind: 'start' }
   | { kind: 'stop' }
   | { kind: 'dispose' }
-  | { kind: 'frame'; frame: PlayerUiFramePatch }
-  | { kind: 'commands'; commands: PlayerUiCommand[] }
+  | { kind: 'frame'; frame: PlayerUIFramePatch }
+  | { kind: 'commands'; commands: PlayerUICommand[] }
   | { kind: 'set-paused'; value: boolean }
   | { kind: 'set-high-speed'; value: number }
   | { kind: 'set-judge-combo'; state: PlayerJudgeComboSignalState }
@@ -47,7 +45,7 @@ export type NodeUiWorkerInboundMessage =
   | { kind: 'clear-poor' }
   | { kind: 'resize'; columns?: number; rows?: number };
 
-export type NodeUiWorkerOutboundMessage =
+export type NodeUIWorkerOutboundMessage =
   | { kind: 'ready'; bgaPlaybackEndSeconds?: number }
   | { kind: 'log'; entry: LogEntry }
   | { kind: 'unsupported' }

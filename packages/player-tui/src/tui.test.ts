@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
-import { formatMeasureSignature, resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './tui.ts';
-import { PlayerTui } from './tui.ts';
-import { createPlayerStateSignals } from '@be-music/player/state-signals';
-import { estimateBgaAnsiDisplaySize, resolveLaneWidths } from './tui/layout.ts';
+import { formatMeasureSignature, resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTUIGrid } from './tui.ts';
+import { PlayerTUI } from './tui.ts';
+import { createPlayerStateSignals } from '@be-music/player/signals';
+import { estimateBgaANSIDisplaySize, resolveLaneWidths } from './tui/layout.ts';
 
 const STDOUT_IS_TTY_DESCRIPTOR = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');
 const STDIN_IS_TTY_DESCRIPTOR = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
@@ -21,8 +21,8 @@ describe('player tui', () => {
   test('tui: keeps rows-per-beat constant across different terminal heights', () => {
     const shortRows = 14;
     const tallRows = 28;
-    const shortWindowBeats = resolveVisibleBeatsForTuiGrid(shortRows, 1);
-    const tallWindowBeats = resolveVisibleBeatsForTuiGrid(tallRows, 1);
+    const shortWindowBeats = resolveVisibleBeatsForTUIGrid(shortRows, 1);
+    const tallWindowBeats = resolveVisibleBeatsForTUIGrid(tallRows, 1);
 
     const shortRowsPerBeat = shortRows / shortWindowBeats;
     const tallRowsPerBeat = tallRows / tallWindowBeats;
@@ -31,17 +31,17 @@ describe('player tui', () => {
 
   test('tui: makes visible beat range smaller as HIGH-SPEED increases', () => {
     const rows = 24;
-    const normal = resolveVisibleBeatsForTuiGrid(rows, 1);
-    const fast = resolveVisibleBeatsForTuiGrid(rows, 2);
+    const normal = resolveVisibleBeatsForTUIGrid(rows, 1);
+    const fast = resolveVisibleBeatsForTUIGrid(rows, 2);
     expect(fast).toBeCloseTo(normal / 2, 9);
   });
 
   test('tui: clamps invalid HIGH-SPEED to supported range', () => {
     const rows = 24;
-    const belowMin = resolveVisibleBeatsForTuiGrid(rows, 0.1);
-    const atMin = resolveVisibleBeatsForTuiGrid(rows, 0.5);
-    const aboveMax = resolveVisibleBeatsForTuiGrid(rows, 100);
-    const atMax = resolveVisibleBeatsForTuiGrid(rows, 10);
+    const belowMin = resolveVisibleBeatsForTUIGrid(rows, 0.1);
+    const atMin = resolveVisibleBeatsForTUIGrid(rows, 0.5);
+    const aboveMax = resolveVisibleBeatsForTUIGrid(rows, 100);
+    const atMax = resolveVisibleBeatsForTUIGrid(rows, 10);
     expect(belowMin).toBeCloseTo(atMin, 9);
     expect(aboveMax).toBeCloseTo(atMax, 9);
   });
@@ -78,7 +78,7 @@ describe('player tui', () => {
       value: false,
     });
 
-    const tui = new PlayerTui({
+    const tui = new PlayerTUI({
       mode: 'MANUAL',
       laneDisplayMode: '7 KEY',
       title: 'Test Music',
@@ -103,7 +103,7 @@ describe('player tui', () => {
     mockTerminal({ columns: 120, rows: 32 });
     const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
     const stateSignals = createPlayerStateSignals(1);
-    const tui = new PlayerTui({
+    const tui = new PlayerTUI({
       mode: 'MANUAL',
       laneDisplayMode: '7 KEY',
       title: 'Test Music',
@@ -119,7 +119,7 @@ describe('player tui', () => {
       stdinIsTTY: true,
       stdoutIsTTY: true,
     });
-    const frame: Parameters<PlayerTui['render']>[0] = {
+    const frame: Parameters<PlayerTUI['render']>[0] = {
       currentBeat: 0,
       currentSeconds: 0,
       totalSeconds: 120,
@@ -166,7 +166,7 @@ describe('player tui', () => {
     vi.setSystemTime(0);
     mockTerminal({ columns: 120, rows: 32 });
     const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
-    const tui = new PlayerTui({
+    const tui = new PlayerTUI({
       mode: 'AUTO',
       laneDisplayMode: '5 KEY SP',
       title: 'Test Music',
@@ -195,7 +195,7 @@ describe('player tui', () => {
         score: 0,
       },
       notes: [],
-    } satisfies Parameters<PlayerTui['render']>[0];
+    } satisfies Parameters<PlayerTUI['render']>[0];
 
     tui.start();
     tui.holdLaneUntilBeat('11', 1);
@@ -219,7 +219,7 @@ describe('player tui', () => {
   test('tui: clears and relayouts the frame after terminal resize', () => {
     mockTerminal({ columns: 120, rows: 32 });
     const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
-    const tui = new PlayerTui({
+    const tui = new PlayerTUI({
       mode: 'MANUAL',
       laneDisplayMode: '7 KEY',
       title: 'Test Music',
@@ -234,7 +234,7 @@ describe('player tui', () => {
       stdinIsTTY: true,
       stdoutIsTTY: true,
     });
-    const frame: Parameters<PlayerTui['render']>[0] = {
+    const frame: Parameters<PlayerTUI['render']>[0] = {
       currentBeat: 0,
       currentSeconds: 0,
       totalSeconds: 120,
@@ -274,7 +274,7 @@ describe('player tui', () => {
   test('tui: renders BGA with kitty graphics protocol when enabled', () => {
     mockTerminal({ columns: 120, rows: 32 });
     const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
-    const tui = new PlayerTui({
+    const tui = new PlayerTUI({
       mode: 'MANUAL',
       laneDisplayMode: '7 KEY',
       title: 'Test Music',
@@ -363,7 +363,7 @@ describe('player tui', () => {
   test('tui: clears kitty BGA image on stop', () => {
     mockTerminal({ columns: 120, rows: 32 });
     const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
-    const tui = new PlayerTui({
+    const tui = new PlayerTUI({
       mode: 'MANUAL',
       laneDisplayMode: '7 KEY',
       title: 'Test Music',
@@ -429,7 +429,7 @@ describe('player tui', () => {
     ]);
 
     expect(
-      estimateBgaAnsiDisplaySize({
+      estimateBgaANSIDisplaySize({
         laneWidths,
         splitAfterIndex: -1,
         columns: 120,
@@ -447,7 +447,7 @@ describe('player tui', () => {
   test('tui: renders groove gauge line when gauge summary is present', () => {
     mockTerminal({ columns: 120, rows: 32 });
     const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
-    const tui = new PlayerTui({
+    const tui = new PlayerTUI({
       mode: 'MANUAL',
       laneDisplayMode: '7 KEY',
       title: 'Test Music',
@@ -501,7 +501,7 @@ describe('player tui', () => {
   test('tui: aligns the groove gauge start and width with the lane block', () => {
     mockTerminal({ columns: 120, rows: 32 });
     const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
-    const tui = new PlayerTui({
+    const tui = new PlayerTUI({
       mode: 'MANUAL',
       laneDisplayMode: '7 KEY',
       title: 'Test Music',
@@ -570,7 +570,7 @@ describe('player tui', () => {
   test('tui: renders long-note head and tail in the correct order', () => {
     mockTerminal({ columns: 60, rows: 24 });
     const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
-    const tui = new PlayerTui({
+    const tui = new PlayerTUI({
       mode: 'MANUAL',
       laneDisplayMode: '5 KEY SP',
       title: 'Long Note Test',
@@ -634,7 +634,7 @@ describe('player tui', () => {
   test('tui: keeps rendered lines within terminal height when optional rows are enabled', () => {
     mockTerminal({ columns: 120, rows: 32 });
     const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
-    const tui = new PlayerTui({
+    const tui = new PlayerTUI({
       mode: 'MANUAL',
       laneDisplayMode: '7 KEY',
       title: 'Test Music',
@@ -651,7 +651,7 @@ describe('player tui', () => {
       stdinIsTTY: true,
       stdoutIsTTY: true,
     });
-    const frame: Parameters<PlayerTui['render']>[0] = {
+    const frame: Parameters<PlayerTUI['render']>[0] = {
       currentBeat: 0,
       currentSeconds: 0,
       totalSeconds: 120,
@@ -692,7 +692,7 @@ describe('player tui', () => {
   test('tui: can render without alternate screen', () => {
     mockTerminal({ columns: 120, rows: 32 });
     const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
-    const tui = new PlayerTui({
+    const tui = new PlayerTUI({
       mode: 'MANUAL',
       laneDisplayMode: '7 KEY',
       title: 'Test Music',

@@ -1,7 +1,5 @@
 import { clamp, findLastIndexAtOrBefore } from '@be-music/utils/core';
-import type { ScrollTimelinePoint, SpeedTimelinePoint } from './timeline.ts';
-
-export type { ScrollTimelinePoint, SpeedTimelinePoint } from './timeline.ts';
+import type { ScrollTimelinePoint, SpeedTimelinePoint } from '@be-music/chart';
 
 export interface ScrollDistanceMapperOptions {
   lookaheadBeats?: number;
@@ -12,6 +10,16 @@ export interface ScrollDistanceMapperLike {
   distanceBetween: (fromBeat: number, toBeat: number) => number;
   hasBidirectionalScrollWithinLookahead: (fromBeat: number) => boolean;
   maxBeatWithinDistance: (fromBeat: number, distance: number) => number;
+  /**
+   * Where the chart first runs past a lane `distance` beats tall ({@link ScrollDistanceMapper.firstBeatBeyondDistance}).
+   * Optional so implementations written before it keep type-checking; callers then walk without an early exit.
+   */
+  firstBeatBeyondDistance?: (fromBeat: number, distance: number) => number;
+  /**
+   * The scroll distance per beat at a beat ({@link ScrollDistanceMapper.rateAt}). Optional so implementations written
+   * before it keep type-checking; callers then assume a rate of 1.
+   */
+  rateAt?: (beat: number) => number;
 }
 
 interface ScrollSegment {
@@ -30,13 +38,6 @@ interface SegmentDistanceTerms {
 interface TimelinePointNormalizerOptions {
   allowNegativeSpeed: boolean;
   dropConsecutiveSameSpeed: boolean;
-  /**
-   * Seeds the synthesized beat-0 head point with the FIRST keyframe's speed instead of `1`. `#SPEEDxx` semantics
-   * (Bemuse reference implementation) hold the first keyframe's value before its beat — without this, the span before
-   * the first keyframe would ramp linearly from 1.0. `#SCROLLxx` keeps the `1` head: scroll is piecewise-constant and
-   * the factor genuinely is 1 until the first `SC` event.
-   */
-  headSpeedFromFirstPoint: boolean;
 }
 
 const DEFAULT_SCROLL_LOOKAHEAD_BEATS = 4 * 64;
@@ -46,6 +47,12 @@ export class ScrollDistanceMapper implements ScrollDistanceMapperLike {
   private readonly segments: ScrollSegment[];
   private readonly lookaheadBeats: number;
   private readonly invalidDistance: number;
+  /**
+   * The last `fromBeat` {@link distanceBetween} measured from, and its distance: a frame measures every note and bar
+   * line from the same playhead, so its distance is worked out once per frame instead of once per object.
+   */
+  private lastFromBeat = Number.NaN;
+  private lastFromDistance = 0;
 
   constructor(
     scrollTimeline?: ReadonlyArray<ScrollTimelinePoint>,
@@ -61,7 +68,11 @@ export class ScrollDistanceMapper implements ScrollDistanceMapperLike {
     if (!Number.isFinite(fromBeat) || !Number.isFinite(toBeat)) {
       return this.invalidDistance;
     }
-    return this.distanceAt(toBeat) - this.distanceAt(fromBeat);
+    if (fromBeat !== this.lastFromBeat) {
+      this.lastFromDistance = this.distanceAt(fromBeat);
+      this.lastFromBeat = fromBeat;
+    }
+    return this.distanceAt(toBeat) - this.lastFromDistance;
   }
 
   hasBidirectionalScrollWithinLookahead(fromBeat: number): boolean {
@@ -143,6 +154,53 @@ export class ScrollDistanceMapper implements ScrollDistanceMapperLike {
     return capBeat;
   }
 
+  /**
+   * The first beat at or after `fromBeat` whose signed scroll distance from `fromBeat` exceeds `distance` — where the
+   * chart first runs past a lane `distance` beats tall — or `+Infinity` when it never does. Negative and zero
+   * `#SCROLL` segments only bring the distance down or hold it, so the walk carries on through them; unlike
+   * {@link maxBeatWithinDistance} it neither takes absolute distances nor stops at the lookahead cap.
+   *
+   * beatoraja's `LaneRenderer` walks the chart's timelines from the playhead and stops after the first one past the lane
+   * top, so nothing beyond this beat is drawn, even what a later negative `#SCROLL` brings back into the lane.
+   */
+  firstBeatBeyondDistance(fromBeat: number, distance: number): number {
+    const safeFromBeat = Number.isFinite(fromBeat) ? Math.max(0, fromBeat) : 0;
+    const limit = Number.isFinite(distance) ? Math.max(0, distance) : 0;
+    let beat = safeFromBeat;
+    let travelled = 0;
+    for (let index = findLastSegmentIndexByBeat(this.segments, beat); index < this.segments.length; index += 1) {
+      const segment = this.segments[index]!;
+      const nextStartBeat = this.segments[index + 1]?.startBeat ?? Number.POSITIVE_INFINITY;
+      if (segment.scrollSpeed > 0) {
+        // The last segment runs forever: it overruns any lane unless `#SPEED` holds it at 0.
+        const segmentDistance = Number.isFinite(nextStartBeat)
+          ? integratedSignedSegmentDistance(segment, beat, nextStartBeat)
+          : segmentDistanceTerms(segment, beat, segment.scrollSpeed).linear > BEAT_EPSILON
+            ? Number.POSITIVE_INFINITY
+            : 0;
+        if (travelled + segmentDistance > limit) {
+          const delta = solveBeatDeltaWithinSegment(segment, beat, limit - travelled);
+          return Number.isFinite(nextStartBeat) ? Math.min(nextStartBeat, beat + delta) : beat + delta;
+        }
+        travelled += segmentDistance;
+      } else if (Number.isFinite(nextStartBeat)) {
+        travelled += integratedSignedSegmentDistance(segment, beat, nextStartBeat);
+      }
+      beat = Math.max(beat, nextStartBeat);
+    }
+    return Number.POSITIVE_INFINITY;
+  }
+
+  /**
+   * The scroll distance per beat at `beat`: the `#SCROLL` multiplier times the interpolated `#SPEED`. Negative while the
+   * chart scrolls backwards, 0 while it stands still.
+   */
+  rateAt(beat: number): number {
+    const safeBeat = Number.isFinite(beat) ? Math.max(0, beat) : 0;
+    const segment = this.segments[findLastSegmentIndexByBeat(this.segments, safeBeat)]!;
+    return segmentDistanceTerms(segment, safeBeat, segment.scrollSpeed).linear;
+  }
+
   private distanceAt(beat: number): number {
     const safeBeat = Number.isFinite(beat) ? Math.max(0, beat) : 0;
     const segment = this.segments[findLastSegmentIndexByBeat(this.segments, safeBeat)]!;
@@ -204,15 +262,18 @@ function normalizeScrollPoints(timeline?: ReadonlyArray<ScrollTimelinePoint>): S
   return normalizeTimelinePoints(timeline, {
     allowNegativeSpeed: true,
     dropConsecutiveSameSpeed: true,
-    headSpeedFromFirstPoint: false,
   });
 }
 
+/**
+ * `#SPEEDxx` keyframes behind a beat-0 head of `1`, so the speed ramps linearly from 1 at beat 0 to the first keyframe,
+ * as beatoraja's `LaneRenderer.getCurrentSpeed` ramps from 1.0 at time 0 (a keyframe on beat 0 applies at once).
+ * be-music interpolates in beats where beatoraja interpolates in time; see docs/format-compat.md §2.10.
+ */
 function normalizeSpeedPoints(timeline?: ReadonlyArray<SpeedTimelinePoint>): SpeedTimelinePoint[] {
   return normalizeTimelinePoints(timeline, {
     allowNegativeSpeed: false,
     dropConsecutiveSameSpeed: false,
-    headSpeedFromFirstPoint: true,
   });
 }
 
@@ -236,8 +297,7 @@ function normalizeTimelinePoints<T extends ScrollTimelinePoint | SpeedTimelinePo
     });
   }
   collected.sort((left, right) => left.beat - right.beat);
-  const headSpeed = options.headSpeedFromFirstPoint && collected.length > 0 ? collected[0]!.speed : 1;
-  const points: Array<{ beat: number; speed: number }> = [{ beat: 0, speed: headSpeed }, ...collected];
+  const points: Array<{ beat: number; speed: number }> = [{ beat: 0, speed: 1 }, ...collected];
 
   const merged: Array<{ beat: number; speed: number }> = [];
   for (const point of points) {
@@ -329,8 +389,10 @@ function integrateSegmentDistanceTerms({ linear, quadratic }: SegmentDistanceTer
   return linear * deltaBeats + quadratic * deltaBeats * deltaBeats;
 }
 
+const segmentStartBeat = (segment: ScrollSegment): number => segment.startBeat;
+
 function findLastSegmentIndexByBeat(segments: ScrollSegment[], beat: number): number {
-  const index = findLastIndexAtOrBefore(segments, beat, (segment) => segment.startBeat);
+  const index = findLastIndexAtOrBefore(segments, beat, segmentStartBeat);
   return Math.max(0, index);
 }
 

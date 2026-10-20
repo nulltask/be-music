@@ -1,15 +1,15 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadExportsBenchmarkSnapshot, resolveCliValue, runCliMain } from './cli-utils.ts';
+import { loadExportsBenchmarkSnapshot, resolveCLIValue, runCLIMain } from './cli-utils.ts';
 import type { BenchmarkTaskStats, ExportsBenchmarkSnapshot } from './exports.types.ts';
-import { median } from './task-stats.ts';
+import { median, resolveComparisonHz } from './task-stats.ts';
 
-interface CliDefaults {
+interface CLIDefaults {
   outputPath: string;
 }
 
-interface CliOptions {
+interface CLIOptions {
   inputPaths: string[];
   outputPath: string;
 }
@@ -17,7 +17,7 @@ interface CliOptions {
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repositoryDir = resolve(scriptDir, '../..');
 
-const DEFAULTS: CliDefaults = {
+const DEFAULTS: CLIDefaults = {
   outputPath: resolve(repositoryDir, 'tmp/bench/exports-aggregated.json'),
 };
 
@@ -71,7 +71,7 @@ export function aggregateBenchmarkSnapshots(snapshots: readonly ExportsBenchmark
   };
 }
 
-export async function runAggregateBenchmarkSnapshotsCli(
+export async function runAggregateBenchmarkSnapshotsCLI(
   args: readonly string[] = process.argv.slice(2),
 ): Promise<ExportsBenchmarkSnapshot> {
   const options = parseArgs([...args], DEFAULTS);
@@ -120,11 +120,17 @@ function aggregateTaskStats(values: readonly BenchmarkTaskStats[]): BenchmarkTas
     const aggregatedValue = median(values.map((value) => value[field]));
     aggregated[field] = field === 'sampleCount' ? Math.round(aggregatedValue) : aggregatedValue;
   }
+  const iterations = values.map((value) => value.iterationsPerSample ?? 1);
+  if (values.some((value) => value.iterationsPerSample !== undefined)) {
+    aggregated.iterationsPerSample = Math.round(median(iterations));
+  }
+  // Keep every run's figure: the comparison reads their spread to tell a change from run-to-run noise.
+  aggregated.runMedianHz = values.map((value) => resolveComparisonHz(value));
   return aggregated;
 }
 
-function parseArgs(args: string[], defaults: CliDefaults): CliOptions {
-  const options: CliOptions = {
+function parseArgs(args: string[], defaults: CLIDefaults): CLIOptions {
+  const options: CLIOptions = {
     inputPaths: [],
     outputPath: defaults.outputPath,
   };
@@ -140,13 +146,13 @@ function parseArgs(args: string[], defaults: CliDefaults): CliOptions {
     }
 
     if (token === '--output') {
-      options.outputPath = resolveCliValue(args[index + 1], '--output');
+      options.outputPath = resolveCLIValue(args[index + 1], '--output');
       index += 1;
       continue;
     }
 
     if (token === '--input') {
-      options.inputPaths.push(resolveCliValue(args[index + 1], '--input'));
+      options.inputPaths.push(resolveCLIValue(args[index + 1], '--input'));
       index += 1;
       continue;
     }
@@ -165,7 +171,7 @@ function parseArgs(args: string[], defaults: CliDefaults): CliOptions {
   return options;
 }
 
-function printUsage(defaults: CliDefaults): void {
+function printUsage(defaults: CLIDefaults): void {
   const lines = [
     'Usage: pnpm run bench:aggregate -- [options] <input...>',
     '',
@@ -182,4 +188,4 @@ function printUsage(defaults: CliDefaults): void {
   process.stdout.write(`${lines.join('\n')}\n`);
 }
 
-runCliMain(import.meta.url, () => runAggregateBenchmarkSnapshotsCli());
+runCLIMain(import.meta.url, () => runAggregateBenchmarkSnapshotsCLI());

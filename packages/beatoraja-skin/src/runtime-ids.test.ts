@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test';
+import { LR2_BUTTON, LR2_LANE_INDEX_MAX, LR2_NUM, LR2_OP, LR2_TEXT, LR2_TIMER } from '@be-music/lr2-skin/ids';
 import {
+  BEATORAJA_BUTTON,
+  BEATORAJA_NUM,
   BEATORAJA_OP,
   BEATORAJA_TEXT,
   bombTimerId,
@@ -10,6 +13,7 @@ import {
   keyOffTimerId,
   keyOnTimerId,
   lnHoldTimerId,
+  LR2_LANE_INDEX_MAX as BEATORAJA_LR2_LANE_INDEX_MAX,
   TIMER_BOMB_1P_BASE,
   TIMER_BOMB_2P_BASE,
   TIMER_BOMB_EXT_BASE,
@@ -29,6 +33,9 @@ import {
   TIMER_LN_HOLD_2P_BASE,
   TIMER_PLAY,
   TIMER_READY,
+  TIMER_RHYTHM,
+  TIMER_SCENE_START,
+  TIMER_SONGBAR_CHANGE,
   TIMER_STARTINPUT,
 } from './runtime-ids.ts';
 
@@ -66,10 +73,17 @@ describe('bombTimerId — scratch is lane 0', () => {
     expect(bombTimerId(2, 7)).toBe(TIMER_BOMB_2P_BASE + 7);
   });
 
-  it('switches to the 1000-block extension for lanes > 9 regardless of side', () => {
+  it('switches to the 1000-block extension for lanes > 9, the 2P bank 100 above the 1P one', () => {
     expect(bombTimerId(1, 10)).toBe(TIMER_BOMB_EXT_BASE + 10);
+    // 24 KEY wheel up / down (lanes 25 / 26).
+    expect(bombTimerId(1, 25)).toBe(1025);
     expect(bombTimerId(1, 26)).toBe(TIMER_BOMB_EXT_BASE + 26);
-    expect(bombTimerId(2, 24)).toBe(TIMER_BOMB_EXT_BASE + 24);
+    // Upstream `SkinPropertyMapper.bombTimerId`: `TIMER_BOMB_1P_KEY10 + key - 10 + player * 100`.
+    expect(bombTimerId(2, 24)).toBe(TIMER_BOMB_EXT_BASE + 100 + 24);
+    expect(bombTimerId(2, 26)).toBe(1126);
+    expect(lnHoldTimerId(2, 25)).toBe(1325);
+    expect(keyOnTimerId(2, 10)).toBe(1510);
+    expect(keyOffTimerId(1, 25)).toBe(1625);
   });
 
   it('returns undefined for negative / non-integer lanes', () => {
@@ -188,5 +202,59 @@ describe('BEATORAJA_TEXT — chart info refs match prop.lua', () => {
     expect(BEATORAJA_TEXT.ARTIST).toBe(14);
     expect(BEATORAJA_TEXT.SUBARTIST).toBe(15);
     expect(BEATORAJA_TEXT.FULLARTIST).toBe(16);
+  });
+});
+
+describe('LR2-compatible ids — taken from @be-music/lr2-skin/ids', () => {
+  it('names LR2 ops under beatoraja names', () => {
+    expect(BEATORAJA_OP.FOLDERBAR).toBe(LR2_OP.FOLDER_BAR);
+    expect(BEATORAJA_OP.GRADEBAR).toBe(LR2_OP.COURSE_BAR);
+    expect(BEATORAJA_OP.PLAYABLEBAR).toBe(LR2_OP.PLAYABLE_BAR);
+    expect(BEATORAJA_OP.AUTOPLAY_ON).toBe(LR2_OP.AUTOPLAY_ON);
+    expect(BEATORAJA_OP.GAUGE_HARD).toBe(LR2_OP.GAUGE_1P_RED);
+    expect(BEATORAJA_OP.CLEAR_LAMP_FULLCOMBO).toBe(LR2_OP.LAMP_FULL_COMBO);
+    expect(BEATORAJA_OP.DIFFICULTY_INSANE).toBe(LR2_OP.DIFFICULTY_INSANE);
+    expect(BEATORAJA_OP.KEYSONG_9K).toBe(LR2_OP.KEYS_9);
+    expect(BEATORAJA_OP.HAS_RANDOMSEQUENCE).toBe(LR2_OP.HAS_RANDOM);
+    expect(BEATORAJA_OP.P1_JUDGE_MISS).toBe(LR2_OP.JUDGE_1P_MISS);
+    expect(BEATORAJA_OP.P2_RANK_F).toBe(LR2_OP.RANK_2P_F);
+    expect(BEATORAJA_OP.P1_BAND_100).toBe(LR2_OP.GAUGE_1P_100);
+    expect(BEATORAJA_OP.COURSE_STAGE4).toBe(LR2_OP.COURSE_STAGE4);
+    expect(BEATORAJA_OP.COURSE_STAGE_FINAL).toBe(LR2_OP.COURSE_STAGE_FINAL);
+    expect(BEATORAJA_OP.MODE_COURSE).toBe(LR2_OP.COURSE);
+    expect(BEATORAJA_OP.RESULT_RANK_ZERO_1P).toBe(LR2_OP.RESULT_RANK_0);
+    expect(BEATORAJA_OP.NOW_F_1P).toBe(LR2_OP.UPDATED_RANK_F);
+  });
+
+  it('keeps beatoraja-only ops out of the LR2 table', () => {
+    const lr2Ops = new Set<number>(Object.values(LR2_OP));
+    for (const op of [
+      BEATORAJA_OP.LEVEL_BEGINNER,
+      BEATORAJA_OP.JUDGE_VERYEASY,
+      BEATORAJA_OP.RANK_AAA,
+      BEATORAJA_OP.GRADEBAR_CLASS,
+      BEATORAJA_OP.P1_BAND_BORDER_OR_MORE,
+      BEATORAJA_OP.GAUGE_NOW_AT_MAX_1P,
+    ]) {
+      expect(lr2Ops.has(op)).toBe(false);
+    }
+  });
+
+  it('names LR2 timers, numbers, texts and buttons under beatoraja names', () => {
+    expect(TIMER_SCENE_START).toBe(LR2_TIMER.SCENE_START);
+    expect(TIMER_FAILED).toBe(LR2_TIMER.FAILED);
+    expect(TIMER_SONGBAR_CHANGE).toBe(LR2_TIMER.SONG_BAR_CHANGE);
+    expect(TIMER_RHYTHM).toBe(LR2_TIMER.RHYTHM);
+    expect(TIMER_KEY_OFF_2P_BASE).toBe(LR2_TIMER.KEY_OFF_2P);
+    expect(BEATORAJA_LR2_LANE_INDEX_MAX).toBe(LR2_LANE_INDEX_MAX);
+    expect(BEATORAJA_NUM.POINT).toBe(LR2_NUM.SCORE);
+    expect(BEATORAJA_NUM.SCORE2).toBe(LR2_NUM.EXSCORE);
+    expect(BEATORAJA_NUM.BEST_SCORE).toBe(LR2_NUM.BEST_EXSCORE);
+    expect(BEATORAJA_NUM.GROOVEGAUGE).toBe(LR2_NUM.GAUGE);
+    expect(BEATORAJA_NUM.LOADING_PROGRESS).toBe(LR2_NUM.LOADING_PROGRESS);
+    expect(BEATORAJA_TEXT.FULLARTIST).toBe(16);
+    expect(BEATORAJA_TEXT.COURSE1_TITLE).toBe(LR2_TEXT.COURSE_STAGE1_TITLE);
+    expect(BEATORAJA_BUTTON.MODE).toBe(LR2_BUTTON.KEY_MODE_FILTER);
+    expect(BEATORAJA_BUTTON.HSFIX).toBe(LR2_BUTTON.HS_FIX);
   });
 });

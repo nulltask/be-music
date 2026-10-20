@@ -1,13 +1,13 @@
-import { resolveCliPath } from '@be-music/utils/cli-path';
+import { resolveCLIPath } from '@be-music/utils/cli-path';
 import {
   addNote,
-  createBlankJson,
+  createBlankJSON,
   deleteNote,
   exportChart,
   importChart,
   listNotes,
-  loadJsonFile,
-  saveJsonFile,
+  loadJSONFile,
+  saveJSONFile,
   setMetadata,
 } from './index.ts';
 
@@ -20,59 +20,59 @@ async function main(): Promise<void> {
       if (!output) {
         return printUsage(1);
       }
-      const outputPath = resolveCliPath(output);
-      await saveJsonFile(outputPath, createBlankJson());
+      const outputPath = resolveCLIPath(output);
+      await saveJSONFile(outputPath, createBlankJSON());
       process.stdout.write(`Created JSON: ${outputPath}\n`);
       return;
     }
 
     case 'import': {
-      const [inputChart, outputJson] = args;
-      if (!inputChart || !outputJson) {
+      const [inputChart, outputJSON] = args;
+      if (!inputChart || !outputJSON) {
         return printUsage(1);
       }
-      const inputChartPath = resolveCliPath(inputChart);
-      const outputJsonPath = resolveCliPath(outputJson);
+      const inputChartPath = resolveCLIPath(inputChart);
+      const outputJSONPath = resolveCLIPath(outputJSON);
       const json = await importChart(inputChartPath);
-      await saveJsonFile(outputJsonPath, json);
-      process.stdout.write(`Imported chart to JSON: ${outputJsonPath}\n`);
+      await saveJSONFile(outputJSONPath, json);
+      process.stdout.write(`Imported chart to JSON: ${outputJSONPath}\n`);
       return;
     }
 
     case 'export': {
-      const [inputJson, outputChart] = args;
-      if (!inputJson || !outputChart) {
+      const [inputJSON, outputChart] = args;
+      if (!inputJSON || !outputChart) {
         return printUsage(1);
       }
-      const inputJsonPath = resolveCliPath(inputJson);
-      const outputChartPath = resolveCliPath(outputChart);
-      const json = await loadJsonFile(inputJsonPath);
+      const inputJSONPath = resolveCLIPath(inputJSON);
+      const outputChartPath = resolveCLIPath(outputChart);
+      const json = await loadJSONFile(inputJSONPath);
       await exportChart(outputChartPath, json);
       process.stdout.write(`Exported chart: ${outputChartPath}\n`);
       return;
     }
 
     case 'set-meta': {
-      const [inputJson, key, ...valueTokens] = args;
-      if (!inputJson || !key || valueTokens.length === 0) {
+      const [inputJSON, key, ...valueTokens] = args;
+      if (!inputJSON || !key || valueTokens.length === 0) {
         return printUsage(1);
       }
       const value = valueTokens.join(' ');
-      const inputJsonPath = resolveCliPath(inputJson);
-      const json = await loadJsonFile(inputJsonPath);
+      const inputJSONPath = resolveCLIPath(inputJSON);
+      const json = await loadJSONFile(inputJSONPath);
       const next = setMetadata(json, key, value);
-      await saveJsonFile(inputJsonPath, next);
+      await saveJSONFile(inputJSONPath, next);
       process.stdout.write(`Updated metadata ${key}\n`);
       return;
     }
 
     case 'add-note': {
-      const [inputJson, measureText, channel, numeratorText, denominatorText, value] = args;
-      if (!inputJson || !measureText || !channel || !numeratorText || !denominatorText || !value) {
+      const [inputJSON, measureText, channel, numeratorText, denominatorText, value] = args;
+      if (!inputJSON || !measureText || !channel || !numeratorText || !denominatorText || !value) {
         return printUsage(1);
       }
-      const inputJsonPath = resolveCliPath(inputJson);
-      const json = await loadJsonFile(inputJsonPath);
+      const inputJSONPath = resolveCLIPath(inputJSON);
+      const json = await loadJSONFile(inputJSONPath);
       const next = addNote(json, {
         measure: Number.parseInt(measureText, 10),
         channel,
@@ -80,7 +80,7 @@ async function main(): Promise<void> {
         positionDenominator: Number.parseInt(denominatorText, 10),
         value,
       });
-      await saveJsonFile(inputJsonPath, next);
+      await saveJSONFile(inputJSONPath, next);
       process.stdout.write(
         `Added note m${measureText} ch${channel} pos${numeratorText}/${denominatorText} val${value}\n`,
       );
@@ -88,12 +88,12 @@ async function main(): Promise<void> {
     }
 
     case 'delete-note': {
-      const [inputJson, measureText, channel, numeratorText, denominatorText, value] = args;
-      if (!inputJson || !measureText || !channel || !numeratorText || !denominatorText) {
+      const [inputJSON, measureText, channel, numeratorText, denominatorText, value] = args;
+      if (!inputJSON || !measureText || !channel || !numeratorText || !denominatorText) {
         return printUsage(1);
       }
-      const inputJsonPath = resolveCliPath(inputJson);
-      const json = await loadJsonFile(inputJsonPath);
+      const inputJSONPath = resolveCLIPath(inputJSON);
+      const json = await loadJSONFile(inputJSONPath);
       const next = deleteNote(json, {
         measure: Number.parseInt(measureText, 10),
         channel,
@@ -101,18 +101,18 @@ async function main(): Promise<void> {
         positionDenominator: Number.parseInt(denominatorText, 10),
         value,
       });
-      await saveJsonFile(inputJsonPath, next);
+      await saveJSONFile(inputJSONPath, next);
       process.stdout.write(`Deleted note(s) at m${measureText} ch${channel} pos${numeratorText}/${denominatorText}\n`);
       return;
     }
 
     case 'list-notes': {
-      const [inputJson, measureText] = args;
-      if (!inputJson) {
+      const [inputJSON, measureText] = args;
+      if (!inputJSON) {
         return printUsage(1);
       }
-      const inputJsonPath = resolveCliPath(inputJson);
-      const json = await loadJsonFile(inputJsonPath);
+      const inputJSONPath = resolveCLIPath(inputJSON);
+      const json = await loadJSONFile(inputJSONPath);
       const measure = measureText ? Number.parseInt(measureText, 10) : undefined;
       const notes = listNotes(json, measure);
       process.stdout.write(`${JSON.stringify(notes, null, 2)}\n`);

@@ -1,4 +1,12 @@
-import type { SkinFamilyId, loadTextureFromBytes } from '@be-music/player-web/skin';
+import type { DecideScene, PlayScene, ResultScene, SelectScene } from '@be-music/player-web/host';
+import type { SkinFamilyId } from '@be-music/player-web/skin';
+import type { PlaylogViewReplay } from '@be-music/player/playlog';
+import type { GaugeType, PlaylogRulesetId } from '@be-music/player/ruleset';
+import type { BrowseSort, DifficultyFilter, KeysFilter } from '@be-music/scene-model';
+import type { PlayTempoSettings } from './play-tempo-settings.ts';
+
+/** Every screen the demo shows, each made by its `create*Scene`. */
+export type DemoScene = SelectScene | DecideScene | PlayScene | ResultScene;
 
 /**
  * DOM handles passed into the `PlayerWebDemoApp` constructor. The lookups happen once at boot in `main.ts`; the app
@@ -13,9 +21,14 @@ export interface PlayerWebDemoElements {
    */
   songInput: HTMLInputElement;
   /**
+   * Hidden `<input type="file" multiple>` behind the Debug Menu's "Open files" button: ZIP archives and play logs, which
+   * the folder picker (`songInput`) can't select.
+   */
+  filesInput: HTMLInputElement;
+  /**
    * Floating DOM `<input>` overlay positioned near the LR2 default skin's search-text rect. Focus is given to it when
    * the user clicks the skin's `#SRC_TEXT,st=30,edit=1` region or hits the `/` shortcut; typing into it filters the
-   * song list via `PixiSongSelectView.setSearchQuery`.
+   * song list via the select scene's `setSearch`.
    */
   searchInput: HTMLInputElement;
   /**
@@ -49,12 +62,17 @@ export type SkinFamilySceneKind = 'select' | 'decide' | 'gameplay' | 'result';
  * `controller.updateDisplay()` and the GUI reflects the new value. Function members are bound to the host so `this`
  * keeps its meaning when lil-gui invokes them.
  */
-export interface DemoGuiState {
+export interface DemoGUIState extends PlayTempoSettings {
   autoPlay: boolean;
   /** Id of the be-music skin the default (no-theme) family renders with. Persisted in `localStorage`. */
   builtInSkin: string;
   /** Showmanship level for the built-in skins. Persisted in `localStorage`. */
   skinEffects: 'full' | 'reduced' | 'off';
+  /**
+   * Render resolution (canvas pixels per CSS pixel), one of 1× up to the display's `devicePixelRatio` in 0.5 steps;
+   * 1.5× until picked. Persisted in `localStorage`.
+   */
+  renderResolution: number;
   /** Gameplay layout pick: `'auto'` follows the device (touch layout on phones / tablets). Persisted in `localStorage`. */
   playLayout: 'auto' | 'standard' | 'touch';
   /**
@@ -69,9 +87,14 @@ export interface DemoGuiState {
   keyVolume: number;
   /** BGM bus volume in percent (0..100), pushed live to gameplay and remembered across reloads. */
   bgmVolume: number;
+  /**
+   * Ask the platform audio session for `'playback'` so sound plays with the iPhone / iPad silent switch on (pausing other
+   * apps' music). Off by default; only offered where `navigator.audioSession` exists. Remembered across reloads.
+   */
+  playInSilentMode: boolean;
   compressor: boolean;
   compressorKey: boolean;
-  compressorBgm: boolean;
+  compressorBGM: boolean;
   compressorMaster: boolean;
   /**
    * Pixel cap for the longest edge of BGA videos that need the ffmpeg.wasm transcode fallback. Single-threaded libx264
@@ -107,10 +130,11 @@ export interface DemoGuiState {
   /**
    * Single-note visibility after a judgement lands.
    *
-   * - `'HIDE'` (default) — judged notes disappear at the judgement instant, matching the LR2 / beatoraja default.
-   * - `'KEEP_SCROLLING'` — judged notes keep scrolling past the judgement line (≈ beatoraja's `LANEEFFECT ON`).
+   * - `'KEEP_SCROLLING'` (default) — a judged note stays until its own time, so one hit early keeps scrolling down to
+   *   the judgement line, as in LR2 and beatoraja.
+   * - `'HIDE'` — a judged note disappears the moment it is judged.
    *
-   * Long-note bodies are unaffected — they always persist until the tail crosses the line.
+   * Long notes are unaffected — they stay until their end.
    */
   judgedNoteDisplay: 'KEEP_SCROLLING' | 'HIDE';
   /**
@@ -120,13 +144,42 @@ export interface DemoGuiState {
    */
   autoSavePlaylog: boolean;
   /**
-   * Judge-window ruleset for the shared engine (`PlayerOptions.judgeRuleset`): LR2 (default) / beatoraja / IIDX.
-   * Only the window widths switch — note selection, empty POOR, LN mechanics, and the gauge stay LR2-aligned.
+   * In a course, go straight on to the next stage instead of showing each stage's result (the course result still
+   * shows at the end). False (the default) shows every stage's result, as LR2 and beatoraja do.
+   */
+  courseAutoAdvance: boolean;
+  /**
+   * How a NONSTOP course places its stages: `'intended'` (the default) as LR2's loader means to, `'lr2'` exactly as
+   * LR2's binary does, including its third-stage start offset (`planNonstopCourse`).
+   */
+  nonstopPlacement: 'intended' | 'lr2';
+  /**
+   * Which of what a play log recorded the player seeing a replay or ghost reproduces (tempo, hi-speed, SUDDEN+ /
+   * HIDDEN+, LIFT), the rest staying the viewer's own: the Debug Menu's "Play options / Replay / ghost" toggles, all on
+   * by default, remembered across visits and latched at song start.
+   */
+  replayView: PlaylogViewReplay;
+  /** `tempoPercent` / `tempoPitchMode` / `tempoStretchAlgorithm`: see {@link PlayTempoSettings}. */
+  /**
+   * When true (off by default), every finished play is sent to the Leaderboard when the result scene mounts — signing
+   * in anonymously the first time (docs/leaderboard.md). Toggled from the Debug Menu's "Submit to Leaderboard"
+   * checkbox and latched at song start like the auto-save.
+   */
+  submitToLeaderboard: boolean;
+  /**
+   * The compat ruleset the shared engine judges under (`PlayerOptions.judgeRuleset`): LR2 (default) / beatoraja / IIDX.
+   * It owns every judge rule: the windows, note selection, empty POOR, the long-note style, the gauge and the score.
    * Latched at song start (the Play options folder is disabled during a play) and recorded into the play-log.
    */
-  judgeRuleset: 'lr2' | 'beatoraja' | 'iidx';
+  judgeRuleset: PlaylogRulesetId;
+  /**
+   * Hi-speed (note scroll multiplier) the next play starts at. Two-way synced with the LR2 select panel's HS and the
+   * in-game `ArrowUp` / `ArrowDown` keys, applied live to a running play when changed here, and remembered across
+   * reloads.
+   */
+  hiSpeed: number;
   /** Gauge variant for the next play. Two-way synced with the LR2 select scene's PLAY OPTION panel. */
-  gauge: 'GROOVE' | 'HARD' | 'DEATH' | 'EASY';
+  gauge: GaugeType;
   /** 1P lane arrangement for the next play. Two-way synced with the LR2 select panel. */
   random1P: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
   /** 2P lane arrangement for the next play. Two-way synced with the LR2 select panel. */
@@ -137,6 +190,13 @@ export interface DemoGuiState {
   autoScratch1P: boolean;
   /** 2P auto scratch for the next play. Two-way synced with the LR2 select panel. */
   autoScratch2P: boolean;
+  /**
+   * The built-in and LR2 select screens' sort, key filter and difficulty filter. Two-way synced with an LR2 select
+   * skin's sort and filter buttons; the beatoraja select screen has its own MODE and SORT buttons.
+   */
+  sort: BrowseSort;
+  keysFilter: KeysFilter;
+  difficultyFilter: DifficultyFilter;
   /**
    * Explicit skin-family override picked from the Debug Menu dropdown. `'auto'` (default) keeps the legacy
    * priority — beatoraja if a beatoraja theme is loaded and covers the chart, otherwise LR2 (which itself falls
@@ -156,18 +216,14 @@ export interface DemoGuiState {
    * which also pushes the new value into the controller.
    */
   status: string;
-  /** Triggered by clicking the GUI's "Open Folder" button. */
+  /** Triggered by clicking the GUI's "Open folder" button. */
   openFolder: () => void;
+  /** Triggered by clicking the GUI's "Open files" button (ZIP archives / play logs). */
+  openFiles: () => void;
+  /** "Video format": the container and codec of recordings, as `mp4/avc` / `webm/vp9` (`recording-format-choice.ts`). */
+  recordingFormat: string;
   /** Triggered by clicking the GUI's record toggle. */
   record: () => void;
   /** Triggered by clicking the GUI's "Screenshot" button. Captures the Pixi stage at its native size. */
   screenshot: () => void;
 }
-
-/**
- * Pixi `Texture` type as exposed by player-web's re-exported `loadTextureFromBytes`. Derived
- * from the function's return type so the demo doesn't need a direct `pixi.js` dependency for
- * the chart-image plumbing. `Awaited<…>` strips the `Promise` wrapper; `NonNullable<…>` strips
- * the `| undefined` so callers can branch on presence.
- */
-export type ChartImageTexture = NonNullable<Awaited<ReturnType<typeof loadTextureFromBytes>>>;

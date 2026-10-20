@@ -11,16 +11,16 @@
  */
 
 /**
- * Browser-shaped file descriptor — same shape as `Lr2SkinInputFile`'s `name` + `webkitRelativePath`. Re-typed here
+ * Browser-shaped file descriptor — same shape as `LR2SkinInputFile`'s `name` + `webkitRelativePath`. Re-typed here
  * to keep the discovery helper independent of `file-lookup.ts`'s `arrayBuffer()` requirement (we only need the
  * paths, not the bytes).
  */
-export interface Lr2ThemeDiscoveryFile {
+export interface LR2ThemeDiscoveryFile {
   readonly name: string;
   readonly webkitRelativePath?: string;
 }
 
-export interface Lr2DiscoveredTheme<TFile extends Lr2ThemeDiscoveryFile = Lr2ThemeDiscoveryFile> {
+export interface LR2DiscoveredTheme<TFile extends LR2ThemeDiscoveryFile = LR2ThemeDiscoveryFile> {
   /** Human-readable theme name — the subdirectory name (e.g. `"LITONE4"`, `"default"`). */
   readonly name: string;
   /** All files that belong to this theme's subtree (= every entry whose path starts with `LR2files/Theme/<name>/`). */
@@ -38,15 +38,15 @@ const THEME_ROOT_PREFIX = 'lr2files/theme/';
  * theme, sorted alphabetically by name.
  *
  * Each entry's `files` array is a strict subset of the input — the same File instances, not copies — so callers can
- * hand them straight to {@link loadLr2ThemeSkinsFromFiles}.
+ * hand them straight to {@link loadLR2ThemeSkinsFromFiles}.
  *
  * Files that don't live under `LR2files/Theme/<name>/` at all (chart packs, song audio, etc.) are silently dropped.
  * That's the right behaviour for the picker UI: the caller already separated theme files from song files via
  * `splitDroppedSongAndThemeFiles` before invoking this.
  */
-export function discoverLr2Themes<TFile extends Lr2ThemeDiscoveryFile>(
+export function discoverLR2Themes<TFile extends LR2ThemeDiscoveryFile>(
   files: Iterable<TFile>,
-): ReadonlyArray<Lr2DiscoveredTheme<TFile>> {
+): ReadonlyArray<LR2DiscoveredTheme<TFile>> {
   const themesByName = new Map<string, TFile[]>();
   // Tracks themes that contain at least one `.lr2skin`. A subdirectory with only `Screenshot/*.bmp` and no
   // `.lr2skin` isn't a theme — exclude it from the picker so the user doesn't see decorative-only folders as
@@ -81,7 +81,7 @@ export function discoverLr2Themes<TFile extends Lr2ThemeDiscoveryFile>(
       themesWithSkin.add(key);
     }
   }
-  const result: Array<Lr2DiscoveredTheme<TFile>> = [];
+  const result: Array<LR2DiscoveredTheme<TFile>> = [];
   // Iterate in alphabetical order so the picker dropdown is stable across drops.
   const orderedNames = [...themesWithSkin].sort((a, b) => a.localeCompare(b));
   for (const key of orderedNames) {

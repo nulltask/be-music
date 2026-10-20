@@ -1,10 +1,24 @@
+import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { readFile, realpath } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { defineConfig, type Plugin } from 'vite-plus';
-import { nodePolyfills } from 'vite-plugin-node-polyfills';
+import { defaultClientConditions, defineConfig, type Plugin } from 'vite-plus';
 
 const repositoryDir = resolve(import.meta.dirname, '../..');
+
+/**
+ * Short source commit stamped into recorded play-logs (`recorder.build`). Workers Builds exposes the commit as
+ * `WORKERS_CI_COMMIT_SHA`; local builds ask git. Empty when neither is available (e.g. a source tarball).
+ */
+function resolveBuildCommit(): string {
+  const fromCi = process.env.WORKERS_CI_COMMIT_SHA;
+  if (fromCi !== undefined && fromCi.length > 0) return fromCi.slice(0, 8);
+  try {
+    return execFileSync('git', ['rev-parse', '--short=8', 'HEAD'], { cwd: repositoryDir, encoding: 'utf8' }).trim();
+  } catch {
+    return '';
+  }
+}
 
 // `@ffmpeg/core` is a transitive dep of `@be-music/player-web`, so pnpm doesn't hoist it to the workspace root. Resolve
 // via the consumer package's `require` so we always find the real on-disk path regardless of pnpm's virtual-store
@@ -24,15 +38,8 @@ const repositoryDir = resolve(import.meta.dirname, '../..');
 // single-threaded.
 const playerWebCoreRequire = createRequire(resolve(repositoryDir, 'packages/player-web/package.json'));
 const ffmpegCorePackageRoot = dirname(dirname(dirname(playerWebCoreRequire.resolve('@ffmpeg/core'))));
-const ffmpegCoreEsmDir = resolve(ffmpegCorePackageRoot, 'dist/esm');
+const ffmpegCoreESMDir = resolve(ffmpegCorePackageRoot, 'dist/esm');
 const URL_LOAD_PROXY_PATH = '/__url-load-proxy';
-
-// `ebml` v3 ships a `"browser": "lib/ebml.iife.js"` field that Vite picks for browser builds — but the IIFE wraps
-// everything in a private closure and never assigns to the outer `module.exports`, so `ts-ebml`'s downstream `const {
-// tools: _tools } = require("ebml")` ends up with `_tools === undefined` and crashes with `Cannot read properties of
-// undefined (reading 'readVint')` the moment we try to patch a recorded WebM. Force-resolve to the ESM bundle, which
-// exports `tools` / `schema` / `Decoder` / `Encoder` properly.
-const ebmlEsmPath = resolve(repositoryDir, 'node_modules/.pnpm/ebml@3.0.0/node_modules/ebml/lib/ebml.esm.js');
 
 /**
  * Stages the single-threaded ffmpeg.wasm core (ESM bundle) under `/ffmpeg-core/` so the runtime can load it via stable
@@ -96,11 +103,11 @@ function ffmpegCorePlugin(sourceDir: string): Plugin {
   };
 }
 
-function resolveUrlLoadProxyTarget(rawUrl: string | null): URL {
-  if (!rawUrl) {
+function resolveURLLoadProxyTarget(rawURL: string | null): URL {
+  if (!rawURL) {
     throw new Error('missing url query parameter');
   }
-  const target = new URL(rawUrl);
+  const target = new URL(rawURL);
   if (target.protocol !== 'https:') {
     throw new Error('only https proxy targets are allowed');
   }
@@ -125,8 +132,8 @@ function urlLoadProxyPlugin(): Plugin {
 
           let target: URL;
           try {
-            const requestUrl = new URL(req.url ?? '/', 'http://localhost');
-            target = resolveUrlLoadProxyTarget(requestUrl.searchParams.get('url'));
+            const requestURL = new URL(req.url ?? '/', 'http://localhost');
+            target = resolveURLLoadProxyTarget(requestURL.searchParams.get('url'));
           } catch (error) {
             res.statusCode = 400;
             res.end(error instanceof Error ? error.message : 'invalid proxy target');
@@ -188,8 +195,8 @@ async function collectAcknowledgements(roots: string[]): Promise<
   }>
 > {
   const seen = new Map<string, Awaited<ReturnType<typeof readPackageMeta>>>();
-  const queue: Array<{ pkgJsonPath: string; basePath: string }> = roots.map((p) => ({
-    pkgJsonPath: p,
+  const queue: Array<{ pkgJSONPath: string; basePath: string }> = roots.map((p) => ({
+    pkgJSONPath: p,
     basePath: dirname(p),
   }));
 
@@ -197,7 +204,7 @@ async function collectAcknowledgements(roots: string[]): Promise<
     const item = queue.shift()!;
     let pkg: { dependencies?: Record<string, string> };
     try {
-      pkg = JSON.parse(await readFile(item.pkgJsonPath, 'utf8'));
+      pkg = JSON.parse(await readFile(item.pkgJSONPath, 'utf8'));
     } catch {
       continue;
     }
@@ -209,16 +216,16 @@ async function collectAcknowledgements(roots: string[]): Promise<
       if (depName.startsWith('@be-music/')) continue;
       if (seen.has(depName)) continue;
 
-      const resolved = await resolveDependencyPackageJson(depName, item.basePath);
+      const resolved = await resolveDependencyPackageJSON(depName, item.basePath);
       if (!resolved) continue;
-      const meta = await readPackageMeta(resolved.pkgJsonPath, resolved.pkgDir);
+      const meta = await readPackageMeta(resolved.pkgJSONPath, resolved.pkgDir);
       if (!meta) continue;
       seen.set(depName, meta);
       // pnpm symlinks each package's `node_modules/<name>` to a location inside `.pnpm/...`. Walking from the symlinked
       // path finds nothing because the package's own siblings live next to its `realpath` target. Resolving the symlink
       // here lets the next iteration find transitive deps in the pnpm virtual store.
       const realPkgDir = await realpath(resolved.pkgDir).catch(() => resolved.pkgDir);
-      queue.push({ pkgJsonPath: resolved.pkgJsonPath, basePath: realPkgDir });
+      queue.push({ pkgJSONPath: resolved.pkgJSONPath, basePath: realPkgDir });
     }
   }
 
@@ -239,10 +246,10 @@ async function collectAcknowledgements(roots: string[]): Promise<
  *
  * Returns `undefined` when no resolution path succeeds.
  */
-async function resolveDependencyPackageJson(
+async function resolveDependencyPackageJSON(
   depName: string,
   basePath: string,
-): Promise<{ pkgJsonPath: string; pkgDir: string } | undefined> {
+): Promise<{ pkgJSONPath: string; pkgDir: string } | undefined> {
   // Strategy 1: walk parent `node_modules` directories. This mirrors Node's resolution algorithm and works for both
   // hoisted and non-hoisted layouts. Avoids the `exports` gating that blocks `require.resolve(pkg/package.json)`.
   let dir = basePath;
@@ -250,7 +257,7 @@ async function resolveDependencyPackageJson(
     const candidate = resolve(dir, 'node_modules', depName, 'package.json');
     try {
       await readFile(candidate, 'utf8');
-      return { pkgJsonPath: candidate, pkgDir: dirname(candidate) };
+      return { pkgJSONPath: candidate, pkgDir: dirname(candidate) };
     } catch {
       // Not in this `node_modules`; walk up.
     }
@@ -270,7 +277,7 @@ async function resolveDependencyPackageJson(
         const text = await readFile(candidate, 'utf8');
         const json = JSON.parse(text) as { name?: string };
         if (json.name === depName) {
-          return { pkgJsonPath: candidate, pkgDir: cursor };
+          return { pkgJSONPath: candidate, pkgDir: cursor };
         }
       } catch {
         // Not here; walk up.
@@ -286,7 +293,7 @@ async function resolveDependencyPackageJson(
 }
 
 async function readPackageMeta(
-  pkgJsonPath: string,
+  pkgJSONPath: string,
   pkgDir: string,
 ): Promise<
   | {
@@ -302,7 +309,7 @@ async function readPackageMeta(
 > {
   let raw: Record<string, unknown>;
   try {
-    raw = JSON.parse(await readFile(pkgJsonPath, 'utf8'));
+    raw = JSON.parse(await readFile(pkgJSONPath, 'utf8'));
   } catch {
     return undefined;
   }
@@ -406,133 +413,9 @@ function acknowledgementsPlugin(roots: string[]): Plugin {
   };
 }
 
-interface WorkspaceAlias {
-  find: string;
-  replacement: string;
-}
-
-function workspaceRootAliasPlugin(entries: readonly WorkspaceAlias[]): Plugin {
-  return {
-    name: 'be-music:resolve-workspace-root-aliases',
-    enforce: 'pre',
-    resolveId(source) {
-      const entry = entries.find((candidate) => candidate.find === source);
-      return entry?.replacement ?? null;
-    },
-  };
-}
-
-// Vite/Rolldown string aliases are prefix matches, so root package aliases must stay out of `resolve.alias`; otherwise
-// `@be-music/utils` can shadow `@be-music/utils/optional-node-module` and resolve to `src/index.ts/optional-node-module`.
-//
-// `@be-music/utils` / `@be-music/audio-renderer` / `@be-music/player` keep Node-facing code behind subpath exports or
-// lazy dynamic imports. Browser imports stay on the browser-safe paths below; disk-facing functions such as
-// `renderChartFile` are not called from the demo runtime.
-const workspaceSubpathAliases: WorkspaceAlias[] = [
-  {
-    find: '@be-music/audio-renderer/triggers',
-    replacement: resolve(repositoryDir, 'packages/audio-renderer/src/core/triggers.ts'),
-  },
-  {
-    find: '@be-music/player/playable-notes',
-    replacement: resolve(repositoryDir, 'packages/player/src/playable-notes.ts'),
-  },
-  {
-    find: '@be-music/player/judging',
-    replacement: resolve(repositoryDir, 'packages/player/src/judging.ts'),
-  },
-  {
-    find: '@be-music/player/playlog',
-    replacement: resolve(repositoryDir, 'packages/player/src/playlog/index.ts'),
-  },
-  {
-    find: '@be-music/player/state-signals',
-    replacement: resolve(repositoryDir, 'packages/player/src/state-signals.ts'),
-  },
-  { find: '@be-music/player/core', replacement: resolve(repositoryDir, 'packages/player/src/core') },
-  { find: '@be-music/utils/core', replacement: resolve(repositoryDir, 'packages/utils/src/core.ts') },
-  { find: '@be-music/utils/cli-path', replacement: resolve(repositoryDir, 'packages/utils/src/cli-path.ts') },
-  { find: '@be-music/utils/log', replacement: resolve(repositoryDir, 'packages/utils/src/log.ts') },
-  // Browser-safe by design: Node built-ins load lazily inside the fallback path only (see the module header).
-  {
-    find: '@be-music/utils/optional-node-module',
-    replacement: resolve(repositoryDir, 'packages/utils/src/optional-node-module.ts'),
-  },
-  { find: '@be-music/utils/path', replacement: resolve(repositoryDir, 'packages/utils/src/path.ts') },
-  { find: '@be-music/utils/pcm', replacement: resolve(repositoryDir, 'packages/utils/src/pcm.ts') },
-  // Longer subpaths must precede the main `@be-music/player-web` alias — Vite resolves aliases via `startsWith`, so a
-  // shorter prefix match would shadow them and try to load e.g. `packages/player-web/src/index.ts/scenes` as a file.
-  {
-    find: '@be-music/player-web/scenes',
-    replacement: resolve(repositoryDir, 'packages/player-web/src/scene/index.ts'),
-  },
-  {
-    find: '@be-music/player-web/skin',
-    replacement: resolve(repositoryDir, 'packages/player-web/src/skin/index.ts'),
-  },
-  {
-    find: '@be-music/player-web/chart',
-    replacement: resolve(repositoryDir, 'packages/player-web/src/chart/index.ts'),
-  },
-  {
-    find: '@be-music/player-web/collection',
-    replacement: resolve(repositoryDir, 'packages/player-web/src/collection/index.ts'),
-  },
-  {
-    find: '@be-music/player-web/runtime',
-    replacement: resolve(repositoryDir, 'packages/player-web/src/runtime/index.ts'),
-  },
-];
-
-const workspaceRootAliases: WorkspaceAlias[] = [
-  { find: '@be-music/player', replacement: resolve(repositoryDir, 'packages/player/src/index.ts') },
-  { find: '@be-music/utils', replacement: resolve(repositoryDir, 'packages/utils/src/index.ts') },
-  { find: '@be-music/audio-renderer', replacement: resolve(repositoryDir, 'packages/audio-renderer/src/index.ts') },
-  { find: '@be-music/beatoraja-skin', replacement: resolve(repositoryDir, 'packages/beatoraja-skin/src/index.ts') },
-  { find: '@be-music/chart', replacement: resolve(repositoryDir, 'packages/chart/src/index.ts') },
-  { find: '@be-music/json', replacement: resolve(repositoryDir, 'packages/json/src/index.ts') },
-  { find: '@be-music/lr2-skin', replacement: resolve(repositoryDir, 'packages/lr2-skin/src/index.ts') },
-  { find: '@be-music/parser', replacement: resolve(repositoryDir, 'packages/parser/src/index.ts') },
-  { find: '@be-music/player-web', replacement: resolve(repositoryDir, 'packages/player-web/src/index.ts') },
-  { find: '@be-music/skin-sdk', replacement: resolve(repositoryDir, 'packages/skin-sdk/src/index.ts') },
-];
-
-const workspaceAliases = [...workspaceSubpathAliases, ...workspaceRootAliases];
-
 export default defineConfig({
   plugins: [
-    workspaceRootAliasPlugin(workspaceRootAliases),
-    // ts-ebml (used by `makeWebmSeekable` for the recording post-process) reaches into Node's `Buffer` and `events`
-    // module from its CJS dependency chain (`ebml`, `ebml-block`, `int64-buffer`). Vite leaves those unpolyfilled by
-    // default, which surfaces in the browser as `Cannot read properties of undefined (reading 'readVint')` the moment
-    // we try to decode the recorded WebM. The plugin shims just enough of the Node API surface (`Buffer`, `events`,
-    // `process`, etc.) for ts-ebml to run, with `protocolImports` off so the `node:` prefix imports we use elsewhere
-    // stay native.
-    nodePolyfills({
-      include: ['buffer', 'events', 'util'],
-      globals: {
-        Buffer: true,
-        global: false,
-        process: false,
-      },
-      protocolImports: false,
-    }),
-    // Rewrite the bare `ebml` import to the package's ESM bundle. The package ships `"browser": "lib/ebml.iife.js"` and
-    // Vite happily picks that for browser builds — but the IIFE wraps everything in a private closure and never assigns
-    // to the outer `module.exports`, so ts-ebml's downstream `require("ebml")` ends up with `tools === undefined` and
-    // crashes the recording-stop flow with `Cannot read properties of undefined (reading 'readVint')`. A plain string
-    // `resolve.alias` would also match `ebml-block` / `ebml-iterator` (Vite alias is prefix-based); a regex alias makes
-    // Vite's CJS optimizer throw inside `escapeRegex`. A bespoke `resolveId` hook is both narrow enough to skip the
-    // prefix collisions and simple enough to dodge the optimizer's regex bug.
-    {
-      name: 'be-music:resolve-ebml-esm',
-      enforce: 'pre',
-      resolveId(source) {
-        if (source === 'ebml') return ebmlEsmPath;
-        return null;
-      },
-    },
-    ffmpegCorePlugin(ffmpegCoreEsmDir),
+    ffmpegCorePlugin(ffmpegCoreESMDir),
     urlLoadProxyPlugin(),
     // Build-time acknowledgement collector. Walks the runtime dep tree from the demo + `player-web` package.json entry
     // points so every npm dependency that ships in the bundle (direct or transitive) ends up listed in the about modal
@@ -542,12 +425,18 @@ export default defineConfig({
       resolve(repositoryDir, 'packages/player-web/package.json'),
     ]),
   ],
+  define: {
+    __BE_MUSIC_BUILD__: JSON.stringify(resolveBuildCommit()),
+  },
+  // Workspace packages resolve to their TypeScript sources through the `source` condition in each `package.json`
+  // `exports`, the same way as the root config. They are linked rather than installed, so the dependency optimizer
+  // leaves them alone. Browser imports stay on browser-safe entry points: Node-facing code in `@be-music/utils` /
+  // `@be-music/audio-renderer` / `@be-music/player` sits behind subpath exports or lazy dynamic imports.
   resolve: {
-    alias: workspaceSubpathAliases,
+    conditions: ['source', ...defaultClientConditions],
   },
   optimizeDeps: {
     exclude: [
-      ...workspaceAliases.map((entry) => entry.find),
       // ffmpeg.wasm (BGA-video transcode fallback) ships a Worker its `FFmpeg` class spawns via `new Worker(new
       // URL("./worker.js", import.meta.url))`. Vite's pre-bundler would rewrite the package into
       // `.vite/deps/@ffmpeg_ffmpeg.js`, which makes that relative `./worker.js` URL miss because the worker file
@@ -556,27 +445,6 @@ export default defineConfig({
       '@ffmpeg/ffmpeg',
       '@ffmpeg/util',
     ],
-    // Pre-bundle `ts-ebml` up-front so Vite's CJS-named-export interop runs at boot rather than the second pass a
-    // dynamic import would trigger. Listed explicitly because we no longer dynamic-import it from
-    // `gameplay-recorder.ts`; without this pin, the static import is still detected, but the explicit listing makes the
-    // optimization deterministic across cache-cleared dev sessions.
-    include: ['ts-ebml'],
-    // The pre-bundle phase resolves bare imports through Rolldown, which runs SEPARATELY from Vite's plugin pipeline —
-    // so the `resolve-ebml-esm` plugin below isn't consulted while ts-ebml is being optimized, and Rolldown would once
-    // again pick `ebml`'s `"browser"` field (`lib/ebml.iife.js`) and inline a private-closure module that exports
-    // nothing usable. Steering the pre-bundler at the ESM bundle here is what actually makes the runtime
-    // `tools.readVint` non-undefined.
-    rollupOptions: {
-      plugins: [
-        {
-          name: 'be-music:optimize-ebml-esm',
-          resolveId(source: string) {
-            if (source === 'ebml') return ebmlEsmPath;
-            return null;
-          },
-        },
-      ],
-    },
   },
   server: {
     fs: {
@@ -594,5 +462,14 @@ export default defineConfig({
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp',
     },
+    // The deployed Worker forwards `/api/*` to the Leaderboard Worker; in development it goes to a
+    // local one (`pnpm --filter @be-music/leaderboard-api run dev`, port 8787 unless LEADERBOARD_DEV_ORIGIN says
+    // otherwise). The Host header is kept, so the Leaderboard sees this dev origin like it sees the real one.
+    proxy: Object.fromEntries(
+      ['/api'].map((prefix) => [
+        prefix,
+        { target: process.env.LEADERBOARD_DEV_ORIGIN ?? 'http://localhost:8787', changeOrigin: false },
+      ]),
+    ),
   },
 });

@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { shouldReleasePackage, type ReleasablePackageJSON } from './package-release.ts';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repositoryDir = resolve(scriptDir, '..', '..');
@@ -23,10 +24,7 @@ interface ResolveReleaseOptions {
   jsonOutput: string;
 }
 
-interface PackageJsonLike {
-  name: string;
-  version: string;
-}
+type PackageJSONLike = ReleasablePackageJSON;
 
 interface PackageRelease {
   packageSlug: string;
@@ -36,7 +34,7 @@ interface PackageRelease {
   tagName: string;
   releaseTitle: string;
   notes: string;
-  isSeaPackage: boolean;
+  isSEAPackage: boolean;
   archiveBaseName: string;
 }
 
@@ -160,17 +158,17 @@ async function main(): Promise<void> {
   const releases: PackageRelease[] = [];
 
   for (const packageSlug of packageDirs) {
-    const packageJsonPath = resolve(packagesDir, packageSlug, 'package.json');
-    const relativePackageJsonPath = relative(repositoryDir, packageJsonPath);
-    const currentPackageJsonText = gitShow(options.head, relativePackageJsonPath);
-    if (!currentPackageJsonText) {
+    const packageJSONPath = resolve(packagesDir, packageSlug, 'package.json');
+    const relativePackageJSONPath = relative(repositoryDir, packageJSONPath);
+    const currentPackageJSONText = gitShow(options.head, relativePackageJSONPath);
+    if (!currentPackageJSONText) {
       continue;
     }
 
-    const currentPackage = JSON.parse(currentPackageJsonText) as PackageJsonLike;
-    const basePackageJsonText = gitShow(options.base, relativePackageJsonPath);
-    const basePackage = basePackageJsonText ? (JSON.parse(basePackageJsonText) as PackageJsonLike) : null;
-    if (basePackage?.version === currentPackage.version) {
+    const currentPackage = JSON.parse(currentPackageJSONText) as PackageJSONLike;
+    const basePackageJSONText = gitShow(options.base, relativePackageJSONPath);
+    const basePackage = basePackageJSONText ? (JSON.parse(basePackageJSONText) as PackageJSONLike) : null;
+    if (!shouldReleasePackage(currentPackage, basePackage)) {
       continue;
     }
 
@@ -190,13 +188,13 @@ async function main(): Promise<void> {
       tagName: `${currentPackage.name}@${currentPackage.version}`,
       releaseTitle: `${currentPackage.name}@${currentPackage.version}`,
       notes,
-      isSeaPackage: Boolean(seaConfig),
+      isSEAPackage: Boolean(seaConfig),
       archiveBaseName: seaConfig?.archiveBaseName ?? '',
     });
   }
 
-  const seaReleases = releases.filter((release) => release.isSeaPackage);
-  const playerTuiRelease = seaReleases.find((release) => release.packageSlug === 'player-tui');
+  const seaReleases = releases.filter((release) => release.isSEAPackage);
+  const playerTUIRelease = seaReleases.find((release) => release.packageSlug === 'player-tui');
   const audioRendererRelease = seaReleases.find((release) => release.packageSlug === 'audio-renderer');
 
   if (options.jsonOutput) {
@@ -207,9 +205,9 @@ async function main(): Promise<void> {
     const outputLines: string[] = [];
     setGitHubOutput(outputLines, 'has_releases', releases.length > 0 ? 'true' : 'false');
     setGitHubOutput(outputLines, 'has_sea_releases', seaReleases.length > 0 ? 'true' : 'false');
-    setGitHubOutput(outputLines, 'release_player_tui', playerTuiRelease ? 'true' : 'false');
+    setGitHubOutput(outputLines, 'release_player_tui', playerTUIRelease ? 'true' : 'false');
     setGitHubOutput(outputLines, 'release_audio_renderer', audioRendererRelease ? 'true' : 'false');
-    setGitHubOutput(outputLines, 'player_tui_version', playerTuiRelease?.version ?? '');
+    setGitHubOutput(outputLines, 'player_tui_version', playerTUIRelease?.version ?? '');
     setGitHubOutput(outputLines, 'audio_renderer_version', audioRendererRelease?.version ?? '');
     setGitHubOutput(outputLines, 'releases_json', JSON.stringify(releases));
     setGitHubOutput(outputLines, 'sea_releases_json', JSON.stringify(seaReleases));

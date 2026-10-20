@@ -4,21 +4,21 @@ import { fileURLToPath } from 'node:url';
 import {
   loadExportsBenchmarkSnapshot,
   loadExportsBenchmarkSnapshotOrUndefined,
-  parseNonNegativeCliNumber,
-  parsePositiveCliInteger,
-  resolveCliValue,
-  runCliMain,
+  parseNonNegativeCLINumber,
+  parsePositiveCLIInteger,
+  resolveCLIValue,
+  runCLIMain,
 } from './cli-utils.ts';
 import type { BenchmarkTaskStats, ExportsBenchmarkSnapshot } from './exports.types.ts';
-import { resolveComparisonHz } from './task-stats.ts';
+import { resolveComparisonHz, resolveSampleMs } from './task-stats.ts';
 
-interface CliDefaults {
+interface CLIDefaults {
   outputPath: string;
   thresholdPercent: number;
   topCount: number;
 }
 
-interface CliOptions {
+interface CLIOptions {
   headPath: string;
   basePath?: string;
   outputPath: string;
@@ -26,28 +26,58 @@ interface CliOptions {
   topCount: number;
   summaryPath?: string;
   failOnRegression: boolean;
+  repositoryURL?: string;
+  changedPackages: string[];
 }
 
 export type BenchmarkOverallVerdict = 'improved' | 'regressed' | 'unchanged';
+
+/**
+ * How one case moved: past the threshold with the runs apart (improved / regressed), past it with the runs overlapping
+ * (noisy), within it (unchanged), or not judged because it is I/O-bound.
+ */
+export type RowClass = 'improved' | 'regressed' | 'noisy' | 'unchanged' | 'io';
 
 export interface ComparedRow {
   key: string;
   baseHz: number;
   headHz: number;
+  /** Change in median ops/s; positive is faster. */
   deltaPercent: number;
+  /** Spread of the runs on each side, `(max - min) / median` in percent; 0 with a single run. */
+  baseSpreadPercent: number;
+  headSpreadPercent: number;
+  /**
+   * True when the two sides' runs do not overlap (every head run beats, or trails, every base run), so the change is
+   * not run-to-run noise. True when either side has a single run, since there is no spread to judge by.
+   */
+  significant: boolean;
+  /** The case is marked `ioBound`: listed apart, never judged. */
+  ioBound: boolean;
 }
 
 export interface ComparisonSummary {
   comparableCaseCount: number;
   improvedCount: number;
   regressedCount: number;
+  /** Cases past the threshold whose runs overlap: reported apart, not as regressions or improvements. */
+  noisyCount: number;
+  /** I/O-bound cases, compared but not judged. */
+  ioBoundCount: number;
   unchangedCount: number;
   medianDeltaPercent: number;
   meanDeltaPercent: number;
   thresholdPercent: number;
   overallVerdict: BenchmarkOverallVerdict;
-  /** Cases whose base or head p50 latency was at/below MIN_RELIABLE_LATENCY_MS — excluded, not just unchanged. */
+  /** Cases whose timed sample on either side lasted at/below MIN_RELIABLE_SAMPLE_MS — excluded, not just unchanged. */
   unreliableCaseCount: number;
+}
+
+export interface DiffMarkdownOptions {
+  /** `https://github.com/owner/repo`, to link the commits. */
+  repositoryURL?: string;
+  /** Packages the pull request touches; their cases are listed first. */
+  changedPackages?: readonly string[];
 }
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -55,16 +85,14 @@ const repositoryDir = resolve(scriptDir, '../..');
 const COMMENT_MARKER = '<!-- be-music-exports-benchmark -->';
 
 /**
- * Below this per-call latency (median, in ms), a case's timing is dominated by measurement noise rather than the
- * benchmarked function's own cost — a single call is cheap enough that the system timer can't resolve it reliably.
- * Percent deltas computed from two noise floors can legitimately swing by 10-30x between independent runs of
- * *identical* code (see issue #202: verified the same ~15-250ns closure-allocation case reproduces this under both
- * tsx and node, with no change to the benchmarked code). Such cases are excluded from the regression/improvement
- * lists rather than folded into "unchanged", since a percent computed from noise isn't a real "no change" either.
+ * Below this, one timed sample is dominated by the timer's resolution rather than the benchmarked function's own
+ * cost, and percent deltas between two such samples swing by 10-30x on identical code (issue #202). The runner now
+ * batches fast calls so a sample lasts TARGET_SAMPLE_MS, which clears this easily; the floor still guards snapshots
+ * from before batching (a base commit's own runner), whose samples were single calls.
  */
-const MIN_RELIABLE_LATENCY_MS = 0.001;
+const MIN_RELIABLE_SAMPLE_MS = 0.001;
 
-const DEFAULTS: CliDefaults = {
+const DEFAULTS: CLIDefaults = {
   outputPath: resolve(repositoryDir, 'tmp/bench/exports-pr-comment.md'),
   thresholdPercent: 5,
   topCount: 10,
@@ -74,22 +102,28 @@ async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2), DEFAULTS);
   const headSnapshot = await loadExportsBenchmarkSnapshot(options.headPath);
   const baseSnapshot = options.basePath ? await loadExportsBenchmarkSnapshotOrUndefined(options.basePath) : undefined;
+  const markdownOptions: DiffMarkdownOptions = {
+    repositoryURL: options.repositoryURL,
+    changedPackages: options.changedPackages,
+  };
 
   const markdown =
     baseSnapshot !== undefined
-      ? buildDiffMarkdown(baseSnapshot, headSnapshot, options.thresholdPercent, options.topCount)
-      : buildHeadOnlyMarkdown(headSnapshot, options.topCount, options.basePath);
+      ? buildDiffMarkdown(baseSnapshot, headSnapshot, options.thresholdPercent, options.topCount, markdownOptions)
+      : buildHeadOnlyMarkdown(headSnapshot, options.topCount, options.basePath, markdownOptions);
 
   await mkdir(dirname(options.outputPath), { recursive: true });
   await writeFile(options.outputPath, `${markdown}\n`, 'utf8');
 
-  const summary =
+  const summary: ComparisonSummary =
     baseSnapshot !== undefined
       ? summarizeComparison(baseSnapshot, headSnapshot, options.thresholdPercent)
       : {
           comparableCaseCount: 0,
           improvedCount: 0,
           regressedCount: 0,
+          noisyCount: 0,
+          ioBoundCount: 0,
           unchangedCount: 0,
           medianDeltaPercent: 0,
           meanDeltaPercent: 0,
@@ -106,7 +140,7 @@ async function main(): Promise<void> {
   process.stdout.write(`Benchmark comparison markdown: ${options.outputPath}\n`);
   if (baseSnapshot !== undefined) {
     process.stdout.write(
-      `Comparable=${summary.comparableCaseCount} overall=${summary.overallVerdict} median=${formatPercent(summary.medianDeltaPercent)} improved=${summary.improvedCount} regressed=${summary.regressedCount} threshold=${summary.thresholdPercent.toFixed(2)}%\n`,
+      `Comparable=${summary.comparableCaseCount} overall=${summary.overallVerdict} median=${formatPercent(summary.medianDeltaPercent)} improved=${summary.improvedCount} regressed=${summary.regressedCount} noisy=${summary.noisyCount} threshold=${summary.thresholdPercent.toFixed(2)}%\n`,
     );
   } else {
     process.stdout.write('Base snapshot is unavailable. Generated head-only report.\n');
@@ -117,156 +151,200 @@ async function main(): Promise<void> {
   }
 }
 
+/**
+ * The pull request comment. It leads with the verdict, then lists what needs a look (regressions, improvements, the
+ * changed packages' cases, new and removed exports) and folds the rest (noise, exclusions, run details) away.
+ */
 export function buildDiffMarkdown(
   baseSnapshot: ExportsBenchmarkSnapshot,
   headSnapshot: ExportsBenchmarkSnapshot,
   thresholdPercent: number,
   topCount: number,
+  options: DiffMarkdownOptions = {},
 ): string {
   const rows = compareSnapshots(baseSnapshot, headSnapshot);
   const summary = {
     ...summarizeRows(rows, thresholdPercent),
     unreliableCaseCount: countUnreliableCases(baseSnapshot, headSnapshot),
   };
+  const byClass = (rowClass: RowClass) => rows.filter((row) => classifyRow(row, thresholdPercent) === rowClass);
+  const regressions = byClass('regressed').sort((left, right) => left.deltaPercent - right.deltaPercent);
+  const improvements = byClass('improved').sort((left, right) => right.deltaPercent - left.deltaPercent);
+  const noisy = byClass('noisy').sort((left, right) => Math.abs(right.deltaPercent) - Math.abs(left.deltaPercent));
+  const ioRows = byClass('io');
 
-  const regressions = rows
-    .filter((row) => row.deltaPercent <= -thresholdPercent)
-    .sort((left, right) => left.deltaPercent - right.deltaPercent)
-    .slice(0, topCount);
-
-  const improvements = rows
-    .filter((row) => row.deltaPercent >= thresholdPercent)
-    .sort((left, right) => right.deltaPercent - left.deltaPercent)
-    .slice(0, topCount);
-
-  const lines: string[] = [];
-  lines.push(COMMENT_MARKER);
-  lines.push('## Exports Benchmark');
+  const lines: string[] = [COMMENT_MARKER, '## Exports Benchmark', ''];
+  lines.push(formatHeadline(summary));
   lines.push('');
-  lines.push(`- Base SHA: \`${formatSha(baseSnapshot.gitSha)}\``);
-  lines.push(`- Head SHA: \`${formatSha(headSnapshot.gitSha)}\``);
-  lines.push(`- Comparable cases: \`${summary.comparableCaseCount}\``);
-  lines.push(`- Regression threshold: \`${thresholdPercent.toFixed(2)}%\``);
-  lines.push(`- Overall verdict uses the median change across cases.`);
-  lines.push(`- Per-case lists compare median ops/s, not mean.`);
-  lines.push(`- Base runs: \`${formatRunCount(baseSnapshot)}\``);
-  lines.push(`- Head runs: \`${formatRunCount(headSnapshot)}\``);
-  lines.push('');
-  lines.push('### Summary');
-  lines.push('| Metric | Value |');
-  lines.push('| --- | ---: |');
-  lines.push(`| Overall | ${summary.overallVerdict} |`);
-  lines.push(`| Median change | ${formatPercent(summary.medianDeltaPercent)} |`);
-  lines.push(`| Mean change | ${formatPercent(summary.meanDeltaPercent)} |`);
-  lines.push(`| Cases improved (>= threshold) | ${summary.improvedCount} |`);
-  lines.push(`| Cases regressed (<= -threshold) | ${summary.regressedCount} |`);
-  lines.push(`| Cases unchanged | ${summary.unchangedCount} |`);
-  lines.push(`| Cases excluded (sub-timer-resolution) | ${summary.unreliableCaseCount} |`);
-  lines.push(`| Head benchmarked cases | ${headSnapshot.totals.benchmarked} |`);
-  lines.push(`| Head skipped cases | ${headSnapshot.totals.skipped} |`);
+  lines.push(
+    `<sub>${formatShaLink(baseSnapshot.gitSha, options.repositoryURL)} → ${formatShaLink(headSnapshot.gitSha, options.repositoryURL)} · ${formatRunCount(baseSnapshot)} base / ${formatRunCount(headSnapshot)} head · a regression or improvement is a change past ±${thresholdPercent.toFixed(0)}% whose runs do not overlap · times are per call (median)</sub>`,
+  );
 
-  lines.push('');
-  lines.push('### Top Regressions');
-  if (regressions.length === 0) {
-    lines.push('No regression over threshold.');
-  } else {
-    lines.push('| API | Base median ops/s | Head median ops/s | Change |');
-    lines.push('| --- | ---: | ---: | ---: |');
-    for (const row of regressions) {
-      lines.push(
-        `| \`${row.key}\` | ${formatOps(row.baseHz)} | ${formatOps(row.headHz)} | ${formatPercent(row.deltaPercent)} |`,
-      );
-    }
+  if (regressions.length > 0) {
+    lines.push('', `### Regressions (${regressions.length})`, ...rowTable(regressions.slice(0, topCount)));
+    lines.push(...moreLine(regressions.length, topCount));
+  }
+  if (improvements.length > 0) {
+    lines.push('', `### Improvements (${improvements.length})`, ...rowTable(improvements.slice(0, topCount)));
+    lines.push(...moreLine(improvements.length, topCount));
   }
 
-  lines.push('');
-  lines.push('### Top Improvements');
-  if (improvements.length === 0) {
-    lines.push('No improvement over threshold.');
-  } else {
-    lines.push('| API | Base median ops/s | Head median ops/s | Change |');
-    lines.push('| --- | ---: | ---: | ---: |');
-    for (const row of improvements) {
-      lines.push(
-        `| \`${row.key}\` | ${formatOps(row.baseHz)} | ${formatOps(row.headHz)} | ${formatPercent(row.deltaPercent)} |`,
-      );
-    }
-  }
-
-  const unreliableKeys = resolveUnreliableCaseKeys(baseSnapshot, headSnapshot).slice(0, topCount);
-  if (unreliableKeys.length > 0) {
-    lines.push('');
-    lines.push('### Excluded (sub-timer-resolution)');
+  const changedPackages = [...new Set(options.changedPackages ?? [])].sort();
+  const changedRows = rows.filter((row) => changedPackages.includes(packageOf(row.key)));
+  if (changedRows.length > 0) {
+    const changedDeltas = changedRows.map((row) => row.deltaPercent).sort((left, right) => left - right);
+    lines.push('', '### Changed packages');
     lines.push(
-      `Per-call latency at or below ${MIN_RELIABLE_LATENCY_MS}ms on at least one side — the reported time is measurement noise, not the case's real cost, so no percent change is shown.`,
+      `${changedPackages.map((name) => `\`${name}\``).join(', ')}: ${changedRows.length} case${changedRows.length === 1 ? '' : 's'} compared, median ${formatTimeChange(percentile(changedDeltas, 0.5))}.`,
     );
-    lines.push('| API | Base median ops/s | Head median ops/s |');
-    lines.push('| --- | ---: | ---: |');
-    for (const key of unreliableKeys) {
-      const baseResult = baseSnapshot.results[key];
-      const headResult = headSnapshot.results[key];
-      lines.push(`| \`${key}\` | ${formatOps(baseResult?.medianHz ?? 0)} | ${formatOps(headResult?.medianHz ?? 0)} |`);
-    }
+    lines.push('', `<details><summary>All ${changedRows.length} cases</summary>`, '');
+    lines.push(...rowTable(changedRows, thresholdPercent), '', '</details>');
   }
 
-  const newlySkipped = resolveNewlySkippedKeys(baseSnapshot, headSnapshot).slice(0, topCount);
-  if (newlySkipped.length > 0) {
-    lines.push('');
-    lines.push('### Newly Skipped');
-    for (const key of newlySkipped) {
-      lines.push(`- \`${key}\`: ${headSnapshot.skipped[key]}`);
+  const added = Object.keys(headSnapshot.results)
+    .filter((key) => !(key in baseSnapshot.results))
+    .sort();
+  const removed = Object.keys(baseSnapshot.results)
+    .filter((key) => !(key in headSnapshot.results))
+    .sort();
+  if (added.length > 0) {
+    lines.push('', `### New exports (${added.length})`, '| API | Head |', '| --- | ---: |');
+    for (const key of added) {
+      lines.push(`| \`${key}\` | ${formatDuration(perCallMs(headSnapshot.results[key]))} |`);
     }
   }
+  if (removed.length > 0) {
+    lines.push('', `### Removed exports (${removed.length})`, ...removed.map((key) => `- \`${key}\``));
+  }
+
+  if (noisy.length > 0) {
+    lines.push(
+      '',
+      `<details><summary>Within noise (${noisy.length}): past the threshold, but the runs overlap</summary>`,
+    );
+    lines.push('', ...rowTable(noisy.slice(0, topCount)), ...moreLine(noisy.length, topCount), '', '</details>');
+  }
+
+  if (ioRows.length > 0) {
+    lines.push('', `<details><summary>I/O-bound, not judged (${ioRows.length})</summary>`, '');
+    lines.push('These cases touch the filesystem, so their time follows the OS cache and the disk more than the code.');
+    lines.push('', ...rowTable(ioRows), '', '</details>');
+  }
+
+  const unreliableKeys = resolveUnreliableCaseKeys(baseSnapshot, headSnapshot);
+  if (unreliableKeys.length > 0) {
+    lines.push('', `<details><summary>Excluded: too fast to time (${unreliableKeys.length})</summary>`, '');
+    lines.push(
+      `A timed sample lasted ${MIN_RELIABLE_SAMPLE_MS * 1000} µs or less on at least one side (usually a base commit from before calls were batched), so its time is timer noise and no change is shown.`,
+    );
+    lines.push('', '| API | Base | Head |', '| --- | ---: | ---: |');
+    for (const key of unreliableKeys.slice(0, topCount)) {
+      lines.push(
+        `| \`${key}\` | ${formatDuration(perCallMs(baseSnapshot.results[key]))} | ${formatDuration(perCallMs(headSnapshot.results[key]))} |`,
+      );
+    }
+    lines.push(...moreLine(unreliableKeys.length, topCount), '', '</details>');
+  }
+
+  const newlySkipped = resolveNewlySkippedKeys(baseSnapshot, headSnapshot);
+  if (newlySkipped.length > 0) {
+    lines.push('', `<details><summary>Newly skipped (${newlySkipped.length})</summary>`, '');
+    lines.push(...newlySkipped.map((key) => `- \`${key}\`: ${headSnapshot.skipped[key]}`), '', '</details>');
+  }
+
+  lines.push('', '<details><summary>Run details</summary>', '', '| Measure | Value |', '| --- | ---: |');
+  lines.push(`| Median change (all compared cases) | ${formatPercent(summary.medianDeltaPercent)} |`);
+  lines.push(`| Mean change | ${formatPercent(summary.meanDeltaPercent)} |`);
+  lines.push(`| Overall verdict (median vs. threshold) | ${summary.overallVerdict} |`);
+  lines.push(
+    `| Compared / within noise / I/O-bound / unchanged | ${rows.length} / ${summary.noisyCount} / ${summary.ioBoundCount} / ${summary.unchangedCount} |`,
+  );
+  lines.push(`| Benchmarked / skipped (head) | ${headSnapshot.totals.benchmarked} / ${headSnapshot.totals.skipped} |`);
+  lines.push(
+    `| Time / warmup per case | ${headSnapshot.options.timeMs} ms / ${headSnapshot.options.warmupTimeMs} ms |`,
+  );
+  lines.push(`| Node / platform | ${headSnapshot.nodeVersion} / ${headSnapshot.platform} |`);
+  lines.push('', '</details>');
 
   return lines.join('\n');
 }
 
-function buildHeadOnlyMarkdown(headSnapshot: ExportsBenchmarkSnapshot, topCount: number, basePath?: string): string {
+function buildHeadOnlyMarkdown(
+  headSnapshot: ExportsBenchmarkSnapshot,
+  topCount: number,
+  basePath: string | undefined,
+  options: DiffMarkdownOptions,
+): string {
   const slowest = Object.entries(headSnapshot.results)
-    .map(([key, value]) => ({
-      key,
-      hz: resolveComparisonHz(value),
-      meanMs: value.p50Ms ?? value.meanMs,
-    }))
-    .sort((left, right) => left.hz - right.hz)
+    .map(([key, value]) => ({ key, ms: perCallMs(value) }))
+    .sort((left, right) => right.ms - left.ms)
     .slice(0, topCount);
 
-  const lines: string[] = [];
-  lines.push(COMMENT_MARKER);
-  lines.push('## Exports Benchmark');
+  const lines: string[] = [COMMENT_MARKER, '## Exports Benchmark', ''];
+  lines.push('**No baseline**: the base commit could not be benchmarked, so this report shows the head only.');
   lines.push('');
-  lines.push('Baseline snapshot is unavailable, so this report is head-only.');
-  if (basePath) {
-    lines.push(`Attempted base snapshot path: \`${basePath}\``);
-  }
-  lines.push(`- Head SHA: \`${formatSha(headSnapshot.gitSha)}\``);
-  lines.push(`- Head benchmarked cases: \`${headSnapshot.totals.benchmarked}\``);
-  lines.push(`- Head skipped cases: \`${headSnapshot.totals.skipped}\``);
-  lines.push(`- Head runs: \`${formatRunCount(headSnapshot)}\``);
-  lines.push('');
-  lines.push('### Slowest Cases In Head');
+  lines.push(
+    `<sub>${formatShaLink(headSnapshot.gitSha, options.repositoryURL)} · ${formatRunCount(headSnapshot)} · ${headSnapshot.totals.benchmarked} benchmarked, ${headSnapshot.totals.skipped} skipped${basePath ? ` · tried base snapshot \`${basePath}\`` : ''}</sub>`,
+  );
+  lines.push('', '### Slowest cases');
   if (slowest.length === 0) {
     lines.push('No benchmark result found.');
   } else {
-    lines.push('| API | median ops/s | median (ms) |');
-    lines.push('| --- | ---: | ---: |');
+    lines.push('| API | Per call |', '| --- | ---: |');
     for (const row of slowest) {
-      lines.push(`| \`${row.key}\` | ${formatOps(row.hz)} | ${row.meanMs.toFixed(4)} |`);
+      lines.push(`| \`${row.key}\` | ${formatDuration(row.ms)} |`);
     }
   }
   return lines.join('\n');
 }
 
 /**
- * True when either side's per-call latency is at/below MIN_RELIABLE_LATENCY_MS — the case's timing is noise, not
+ * True when either side's timed sample lasted at/below MIN_RELIABLE_SAMPLE_MS — the case's timing is noise, not
  * signal, so it must not be reported as a regression, an improvement, or "unchanged" (all three imply the percent
  * means something).
  */
 function isUnreliableCase(
-  baseResult: Pick<BenchmarkTaskStats, 'p50Ms'>,
-  headResult: Pick<BenchmarkTaskStats, 'p50Ms'>,
+  baseResult: Pick<BenchmarkTaskStats, 'p50Ms' | 'iterationsPerSample'>,
+  headResult: Pick<BenchmarkTaskStats, 'p50Ms' | 'iterationsPerSample'>,
 ): boolean {
-  return !(baseResult.p50Ms > MIN_RELIABLE_LATENCY_MS) || !(headResult.p50Ms > MIN_RELIABLE_LATENCY_MS);
+  return (
+    !(resolveSampleMs(baseResult) > MIN_RELIABLE_SAMPLE_MS) || !(resolveSampleMs(headResult) > MIN_RELIABLE_SAMPLE_MS)
+  );
+}
+
+/** `(max - min) / median` of the runs, in percent; 0 without at least two runs. */
+export function runSpreadPercent(runs: readonly number[] | undefined, medianHz: number): number {
+  if (runs === undefined || runs.length < 2 || !(medianHz > 0)) {
+    return 0;
+  }
+  return ((Math.max(...runs) - Math.min(...runs)) / medianHz) * 100;
+}
+
+/** Whether every head run is apart from every base run in the direction of the change. */
+export function runsAreApart(
+  baseRuns: readonly number[] | undefined,
+  headRuns: readonly number[] | undefined,
+  deltaPercent: number,
+): boolean {
+  if (baseRuns === undefined || headRuns === undefined || baseRuns.length < 2 || headRuns.length < 2) {
+    return true;
+  }
+  return deltaPercent < 0
+    ? Math.max(...headRuns) < Math.min(...baseRuns)
+    : Math.min(...headRuns) > Math.max(...baseRuns);
+}
+
+export function classifyRow(row: ComparedRow, thresholdPercent: number): RowClass {
+  if (row.ioBound) {
+    return 'io';
+  }
+  if (Math.abs(row.deltaPercent) < thresholdPercent) {
+    return 'unchanged';
+  }
+  if (!row.significant) {
+    return 'noisy';
+  }
+  return row.deltaPercent > 0 ? 'improved' : 'regressed';
 }
 
 export function compareSnapshots(
@@ -274,6 +352,8 @@ export function compareSnapshots(
   headSnapshot: ExportsBenchmarkSnapshot,
 ): ComparedRow[] {
   const rows: ComparedRow[] = [];
+  // The head's marks decide: a base commit from before the mark has none.
+  const ioBound = new Set(headSnapshot.ioBound ?? []);
   for (const [key, headResult] of Object.entries(headSnapshot.results)) {
     const baseResult = baseSnapshot.results[key];
     if (!baseResult) {
@@ -293,6 +373,10 @@ export function compareSnapshots(
       baseHz,
       headHz,
       deltaPercent,
+      baseSpreadPercent: runSpreadPercent(baseResult.runMedianHz, baseHz),
+      headSpreadPercent: runSpreadPercent(headResult.runMedianHz, headHz),
+      significant: runsAreApart(baseResult.runMedianHz, headResult.runMedianHz, deltaPercent),
+      ioBound: ioBound.has(key),
     });
   }
   rows.sort((left, right) => left.key.localeCompare(right.key));
@@ -304,17 +388,7 @@ export function countUnreliableCases(
   baseSnapshot: ExportsBenchmarkSnapshot,
   headSnapshot: ExportsBenchmarkSnapshot,
 ): number {
-  let count = 0;
-  for (const [key, headResult] of Object.entries(headSnapshot.results)) {
-    const baseResult = baseSnapshot.results[key];
-    if (!baseResult) {
-      continue;
-    }
-    if (isUnreliableCase(baseResult, headResult)) {
-      count += 1;
-    }
-  }
-  return count;
+  return resolveUnreliableCaseKeys(baseSnapshot, headSnapshot).length;
 }
 
 export function resolveOverallVerdict(medianDeltaPercent: number, thresholdPercent: number): BenchmarkOverallVerdict {
@@ -328,18 +402,19 @@ export function resolveOverallVerdict(medianDeltaPercent: number, thresholdPerce
 }
 
 export function summarizeRows(rows: ComparedRow[], thresholdPercent: number): ComparisonSummary {
-  const improvedCount = rows.filter((row) => row.deltaPercent >= thresholdPercent).length;
-  const regressedCount = rows.filter((row) => row.deltaPercent <= -thresholdPercent).length;
-  const unchangedCount = rows.length - improvedCount - regressedCount;
+  const classes = rows.map((row) => classifyRow(row, thresholdPercent));
+  const countOf = (rowClass: RowClass) => classes.filter((value) => value === rowClass).length;
   const deltas = rows.map((row) => row.deltaPercent).sort((left, right) => left - right);
   const medianDeltaPercent = deltas.length === 0 ? 0 : percentile(deltas, 0.5);
   const meanDeltaPercent = deltas.length === 0 ? 0 : deltas.reduce((total, value) => total + value, 0) / deltas.length;
 
   return {
     comparableCaseCount: rows.length,
-    improvedCount,
-    regressedCount,
-    unchangedCount,
+    improvedCount: countOf('improved'),
+    regressedCount: countOf('regressed'),
+    noisyCount: countOf('noisy'),
+    ioBoundCount: countOf('io'),
+    unchangedCount: countOf('unchanged'),
     medianDeltaPercent,
     meanDeltaPercent,
     thresholdPercent,
@@ -358,6 +433,12 @@ export function summarizeComparison(
     ...summarizeRows(rows, thresholdPercent),
     unreliableCaseCount: countUnreliableCases(baseSnapshot, headSnapshot),
   };
+}
+
+/** The package a case key belongs to: `player.playlog.parsePlaylog` → `player`. */
+export function packageOf(key: string): string {
+  const dot = key.indexOf('.');
+  return dot === -1 ? key : key.slice(0, dot);
 }
 
 function resolveUnreliableCaseKeys(
@@ -403,7 +484,72 @@ function percentile(sorted: number[], ratio: number): number {
   return sorted[lower] * (1 - weight) + sorted[upper] * weight;
 }
 
-function parseArgs(args: string[], defaults: CliDefaults): CliOptions {
+/** One-line verdict that opens the comment. */
+export function formatHeadline(summary: ComparisonSummary): string {
+  const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
+  const details = [
+    plural(summary.improvedCount, 'improvement'),
+    `${summary.noisyCount} within noise`,
+    `${summary.comparableCaseCount} compared`,
+  ];
+  if (summary.regressedCount > 0) {
+    return `**🔴 ${plural(summary.regressedCount, 'regression')}** · ${details.join(' · ')}`;
+  }
+  if (summary.improvedCount > 0) {
+    return `**🟢 ${plural(summary.improvedCount, 'improvement')}, no regression** · ${details.slice(1).join(' · ')}`;
+  }
+  return `**✅ No significant change** · ${details.slice(1).join(' · ')}`;
+}
+
+function rowTable(rows: readonly ComparedRow[], thresholdPercent?: number): string[] {
+  const lines = ['| API | Base | Head | Change | Run spread (base / head) |', '| --- | ---: | ---: | ---: | ---: |'];
+  for (const row of rows) {
+    const marks = { regressed: ' 🔴', improved: ' 🟢', noisy: ' ·', unchanged: '', io: ' (I/O)' } as const;
+    const mark = thresholdPercent === undefined ? '' : marks[classifyRow(row, thresholdPercent)];
+    lines.push(
+      `| \`${row.key}\` | ${formatDuration(1000 / row.baseHz)} | ${formatDuration(1000 / row.headHz)} | ${formatTimeChange(row.deltaPercent)}${mark} | ±${(row.baseSpreadPercent / 2).toFixed(1)}% / ±${(row.headSpreadPercent / 2).toFixed(1)}% |`,
+    );
+  }
+  return lines;
+}
+
+function moreLine(total: number, shown: number): string[] {
+  return total > shown ? ['', `_…and ${total - shown} more._`] : [];
+}
+
+function perCallMs(result: BenchmarkTaskStats | undefined): number {
+  if (result === undefined) {
+    return Number.NaN;
+  }
+  const hz = resolveComparisonHz(result);
+  return hz > 0 ? 1000 / hz : result.p50Ms;
+}
+
+/** A per-call time with three significant figures in the unit that fits: `41.2 ns`, `3.08 µs`, `12.5 ms`. */
+export function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) {
+    return 'n/a';
+  }
+  const [value, unit] =
+    ms >= 1000 ? [ms / 1000, 's'] : ms >= 1 ? [ms, 'ms'] : ms >= 0.001 ? [ms * 1000, 'µs'] : [ms * 1e6, 'ns'];
+  const text = value.toPrecision(3);
+  return `${text.includes('e') ? value.toFixed(0) : text} ${unit}`;
+}
+
+/** An ops/s change put as the time per call: `12.1% slower`, `9.0% faster`, `±0.0%`. */
+export function formatTimeChange(deltaPercent: number): string {
+  if (!Number.isFinite(deltaPercent)) {
+    return 'n/a';
+  }
+  // Time per call is the inverse of ops/s.
+  const timePercent = (1 / (1 + deltaPercent / 100) - 1) * 100;
+  if (Math.abs(timePercent) < 0.05) {
+    return '±0.0%';
+  }
+  return `${Math.abs(timePercent).toFixed(1)}% ${timePercent > 0 ? 'slower' : 'faster'}`;
+}
+
+function parseArgs(args: string[], defaults: CLIDefaults): CLIOptions {
   let headPath: string | undefined;
   let basePath: string | undefined;
   let outputPath = defaults.outputPath;
@@ -411,6 +557,8 @@ function parseArgs(args: string[], defaults: CliDefaults): CliOptions {
   let topCount = defaults.topCount;
   let summaryPath: string | undefined;
   let failOnRegression = false;
+  let repositoryURL: string | undefined;
+  let changedPackages: string[] = [];
 
   for (let index = 0; index < args.length; index += 1) {
     const token = args[index];
@@ -423,32 +571,46 @@ function parseArgs(args: string[], defaults: CliDefaults): CliOptions {
       process.exit(0);
     }
     if (token === '--head') {
-      headPath = resolveCliValue(args[index + 1], '--head');
+      headPath = resolveCLIValue(args[index + 1], '--head');
       index += 1;
       continue;
     }
     if (token === '--base') {
-      basePath = resolveCliValue(args[index + 1], '--base');
+      basePath = resolveCLIValue(args[index + 1], '--base');
       index += 1;
       continue;
     }
     if (token === '--output') {
-      outputPath = resolveCliValue(args[index + 1], '--output');
+      outputPath = resolveCLIValue(args[index + 1], '--output');
       index += 1;
       continue;
     }
     if (token === '--threshold') {
-      thresholdPercent = parseNonNegativeCliNumber(args[index + 1], '--threshold');
+      thresholdPercent = parseNonNegativeCLINumber(args[index + 1], '--threshold');
       index += 1;
       continue;
     }
     if (token === '--top') {
-      topCount = parsePositiveCliInteger(args[index + 1], '--top');
+      topCount = parsePositiveCLIInteger(args[index + 1], '--top');
       index += 1;
       continue;
     }
     if (token === '--summary') {
-      summaryPath = resolveCliValue(args[index + 1], '--summary');
+      summaryPath = resolveCLIValue(args[index + 1], '--summary');
+      index += 1;
+      continue;
+    }
+    if (token === '--repository-url') {
+      repositoryURL = resolveCLIValue(args[index + 1], '--repository-url');
+      index += 1;
+      continue;
+    }
+    if (token === '--changed-packages') {
+      // Allowed to be empty: a pull request may touch no benchmarked package.
+      changedPackages = (args[index + 1] ?? '')
+        .split(',')
+        .map((name) => name.trim())
+        .filter((name) => name.length > 0);
       index += 1;
       continue;
     }
@@ -472,10 +634,12 @@ function parseArgs(args: string[], defaults: CliDefaults): CliOptions {
     topCount,
     summaryPath,
     failOnRegression,
+    repositoryURL,
+    changedPackages,
   };
 }
 
-function printUsage(defaults: CliDefaults): void {
+function printUsage(defaults: CLIDefaults): void {
   const lines = [
     'Usage: pnpm run bench:compare --head <path> [options]',
     '',
@@ -488,6 +652,8 @@ function printUsage(defaults: CliDefaults): void {
     `  --threshold <percent>    Improvement/regression threshold percent (default: ${defaults.thresholdPercent})`,
     `  --top <count>            Number of rows for top lists (default: ${defaults.topCount})`,
     '  --summary <path>         Optional JSON summary output path',
+    '  --repository-url <url>   Repository URL, to link the base and head commits',
+    '  --changed-packages <a,b> Packages the change touches; their cases are listed first',
     '  --fail-on-regression     Exit non-zero if the median change is a regression',
     '',
     'Developer options:',
@@ -496,18 +662,12 @@ function printUsage(defaults: CliDefaults): void {
   process.stdout.write(`${lines.join('\n')}\n`);
 }
 
-function formatSha(sha: string | undefined): string {
+function formatShaLink(sha: string | undefined, repositoryURL: string | undefined): string {
   if (!sha || sha.length === 0) {
-    return 'unknown';
+    return '`unknown`';
   }
-  return sha.slice(0, 12);
-}
-
-function formatOps(value: number): string {
-  if (!Number.isFinite(value)) {
-    return 'n/a';
-  }
-  return value.toFixed(2);
+  const short = `\`${sha.slice(0, 8)}\``;
+  return repositoryURL ? `[${short}](${repositoryURL}/commit/${sha})` : short;
 }
 
 function formatPercent(value: number): string {
@@ -519,10 +679,7 @@ function formatPercent(value: number): string {
 
 function formatRunCount(snapshot: ExportsBenchmarkSnapshot): string {
   const runCount = snapshot.aggregation?.runCount ?? 1;
-  if (snapshot.aggregation?.strategy === 'median') {
-    return `median of ${runCount}`;
-  }
-  return `${runCount}`;
+  return `${runCount} run${runCount === 1 ? '' : 's'}`;
 }
 
-runCliMain(import.meta.url, main);
+runCLIMain(import.meta.url, main);

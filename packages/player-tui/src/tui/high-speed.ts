@@ -1,4 +1,4 @@
-import { DEFAULT_HIGH_SPEED, MAX_HIGH_SPEED, MIN_HIGH_SPEED } from '@be-music/player/core/high-speed-control';
+import { DEFAULT_HIGH_SPEED, MAX_HIGH_SPEED, MIN_HIGH_SPEED } from '@be-music/player/signals';
 import { clamp } from '@be-music/utils/core';
 
 const IIDX_MEASURE_BEATS = 4;
@@ -13,7 +13,7 @@ export function normalizeHighSpeed(value: number): number {
   return Math.min(MAX_HIGH_SPEED, Math.max(MIN_HIGH_SPEED, value));
 }
 
-export function resolveVisibleBeatsForTuiGrid(rowCount: number, highSpeed: number): number {
+export function resolveVisibleBeatsForTUIGrid(rowCount: number, highSpeed: number): number {
   const safeRows = Number.isFinite(rowCount) ? Math.max(MIN_GRID_ROWS, Math.floor(rowCount)) : MIN_GRID_ROWS;
   const safeHighSpeed = normalizeHighSpeed(highSpeed);
   const visibleMeasures = safeRows / (IIDX_MEASURE_ROWS_AT_HS1 * safeHighSpeed);

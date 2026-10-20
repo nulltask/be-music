@@ -6,7 +6,7 @@ interface CreatePackageConfigOptions {
   entries: Record<string, string>;
 }
 
-function createCliShebangPlugin() {
+function createCLIShebangPlugin() {
   return {
     name: 'be-music-cli-shebang',
     generateBundle(_options: unknown, bundle: Record<string, { type?: string; code?: string }>) {
@@ -37,8 +37,8 @@ export function createPackageConfig(options: CreatePackageConfigOptions): PackUs
 
   return {
     entry,
-    // `tsconfig.json` is the package's type-check project (tests, `paths` into sibling sources); declarations are
-    // emitted from the narrower build project instead.
+    // `tsconfig.json` is the package's type-check project (tests, sibling sources through the `source` export
+    // condition); declarations are emitted from the narrower build project, which resolves siblings to their `dist`.
     tsconfig: resolve(options.packageDir, 'tsconfig.build.json'),
     clean: true,
     dts: true,
@@ -48,6 +48,6 @@ export function createPackageConfig(options: CreatePackageConfigOptions): PackUs
     platform: 'node',
     sourcemap: true,
     target: 'node26',
-    plugins: Object.hasOwn(entry, 'cli') ? [createCliShebangPlugin()] : undefined,
+    plugins: Object.hasOwn(entry, 'cli') ? [createCLIShebangPlugin()] : undefined,
   };
 }

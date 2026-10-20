@@ -5,13 +5,15 @@ import {
   type BeMusicPlaylog,
   type PlaylogInputEvent,
   type PlaylogNote,
+  parsePlaylog,
+  serializePlaylog,
 } from './format.ts';
 import {
   resolveBeatorajaDefaultTotal,
   resolveBeatorajaHardRecoverMultiplier,
-  resolveIidxGaugeUnit,
-  resolveLr2DefaultTotal,
-  resolveLr2HardDamageMultiplier,
+  resolveIIDXGaugeUnit,
+  resolveLR2DefaultTotal,
+  resolveLR2HardDamageMultiplier,
   simulatePlaylog,
   simulatePlaylogRulesets,
   type PlaylogRulesetId,
@@ -62,6 +64,66 @@ function simulateSingleNote(ruleset: PlaylogRulesetId, dmUs: number) {
   return simulatePlaylog(makePlaylog({ notes: [note(1_000_000)], inputs: [down(1_000_000 - dmUs)] }), { ruleset });
 }
 
+describe('simulatePlaylog mines', () => {
+  // A note at 0.5 s (its PGREAT fills the gauge), then a mine at 1 s on the same lane.
+  const filler = note(500_000);
+  const mine = note(1_000_000, { type: 'mine', damage: 10 });
+  /** How much the mine took off the final gauge: the run with it against the same run without it. */
+  function mineDamage(
+    ruleset: PlaylogRulesetId,
+    inputs: Array<Omit<PlaylogInputEvent, 'seq'>>,
+    chart: Partial<BeMusicPlaylog['chart']> = {},
+  ): number {
+    const all = [down(500_000), up(510_000), ...inputs];
+    const withMine = simulatePlaylog(makePlaylog({ notes: [filler, mine], inputs: all, chart }), { ruleset });
+    const without = simulatePlaylog(makePlaylog({ notes: [filler], inputs: all, chart }), { ruleset });
+    return Math.round((without.gauge.final - withMine.gauge.final) * 1000) / 1000;
+  }
+
+  test('a press inside the PGREAT window detonates a mine under LR2 (and IIDX), not under beatoraja', () => {
+    // Pressed 3 ms after the crossing: beatoraja damages only a key that is down as the mine crosses the line.
+    const late = [down(1_003_000), up(1_020_000)];
+    expect(mineDamage('lr2', late)).toBe(10);
+    expect(mineDamage('iidx', late)).toBeGreaterThan(0);
+    expect(mineDamage('beatoraja', late)).toBe(0);
+    // Pressed 3 ms before and let go before the crossing: the same.
+    const early = [down(997_000), up(999_000)];
+    expect(mineDamage('lr2', early)).toBe(10);
+    expect(mineDamage('beatoraja', early)).toBe(0);
+  });
+
+  test('a key held through the crossing detonates a mine under every ruleset, once', () => {
+    const held = [down(900_000), up(1_100_000)];
+    expect(mineDamage('lr2', held)).toBe(10);
+    expect(mineDamage('beatoraja', held)).toBe(10);
+    expect(mineDamage('iidx', held)).toBeGreaterThan(0);
+  });
+
+  test('at the same µs the input comes before the crossing', () => {
+    // Down at the crossing's very µs is down as the mine crosses; up at that µs is not (beatoraja's hold-only rule).
+    expect(mineDamage('beatoraja', [down(1_000_000), up(1_100_000)])).toBe(10);
+    expect(mineDamage('beatoraja', [down(900_000), up(1_000_000)])).toBe(0);
+  });
+
+  test('a press outside the PGREAT window leaves the mine alone', () => {
+    expect(mineDamage('lr2', [down(1_100_000), up(1_120_000)])).toBe(0);
+  });
+
+  test('a mine behind an LR2 negative-BPM reversal is frozen, even inside the PGREAT reach', () => {
+    // The reversal at 0.998 s, 2 ms before the mine: neither a press nor a key held as the window opens sets it off.
+    const chart = { reversalTimeUs: 998_000 };
+    expect(mineDamage('lr2', [down(997_000), up(997_500)], chart)).toBe(0);
+    expect(mineDamage('lr2', [down(970_000), up(1_100_000)], chart)).toBe(0);
+    expect(mineDamage('beatoraja', [down(970_000), up(1_100_000)], chart)).toBe(0);
+  });
+
+  test('a press past an LR2 negative-BPM reversal does not detonate a mine on the mirrored clock', () => {
+    // The reversal at 1.01 s: a press at 1.025 s reads 0.995 s on the mirrored judge clock, inside the mine's PGREAT
+    // window, but the press leg is dead past the reversal.
+    expect(mineDamage('lr2', [down(1_025_000), up(1_030_000)], { reversalTimeUs: 1_010_000 })).toBe(0);
+  });
+});
+
 describe('simulatePlaylog', () => {
   test('a single note hit dead-on scores PGREAT on every ruleset', () => {
     const playlog = makePlaylog({ notes: [note(1_000_000)], inputs: [down(1_000_000)] });
@@ -76,12 +138,21 @@ describe('simulatePlaylog', () => {
       expect(result.gauge.final, ruleset).toBe(100);
       expect(result.gauge.cleared, ruleset).toBe(true);
     }
-    expect(results.lr2!.ruleset).toBe('lr2/1');
-    expect(results.beatoraja!.ruleset).toBe('beatoraja/1');
-    expect(results.iidx!.ruleset).toBe('iidx/1');
+    // Revision 2: the mine rules changed (LR2's press and window-entry legs, beatoraja's hold-only rule).
+    expect(results.lr2!.ruleset).toBe('lr2/0');
+    expect(results.beatoraja!.ruleset).toBe('beatoraja/0');
+    expect(results.iidx!.ruleset).toBe('iidx/0');
     expect(results.lr2!.score).toBe(200000); // (4 PG × 50000) / 1 note
     expect(results.lr2!.djLevel).toBe('AAA');
     expect(results.beatoraja!.score).toBeUndefined(); // money score is LR2-only
+  });
+
+  test('a log whose cached results carry another revision still parses and re-simulates under the current one', () => {
+    const playlog = makePlaylog({ notes: [note(1_000_000)], inputs: [down(1_000_000)] });
+    const stale = { ...simulatePlaylog(playlog, { ruleset: 'lr2' }), ruleset: 'lr2/1' };
+    const parsed = parsePlaylog(serializePlaylog({ ...playlog, results: { lr2: stale } }));
+    expect(parsed.results!.lr2!.ruleset).toBe('lr2/1');
+    expect(simulatePlaylog(parsed, { ruleset: 'lr2' }).ruleset).toBe('lr2/0');
   });
 
   test('LR2 RANK 2 windows: PGREAT ±18ms / GREAT ±40ms / GOOD ±100ms / BAD ±200ms, inclusive', () => {
@@ -314,10 +385,10 @@ describe('simulatePlaylog', () => {
 });
 
 describe('ruleset helpers', () => {
-  test('resolveLr2DefaultTotal follows the OpenLR2 piecewise formula (×0.8)', () => {
-    expect(resolveLr2DefaultTotal(0)).toBeCloseTo(160, 9);
-    expect(resolveLr2DefaultTotal(500)).toBeCloseTo(256, 9); // ((500 − 400) / 2.5 + 280) × 0.8
-    expect(resolveLr2DefaultTotal(1000)).toBeCloseTo(352, 9); // ((1000 − 600) / 5 + 360) × 0.8
+  test('resolveLR2DefaultTotal follows the OpenLR2 piecewise formula (×0.8)', () => {
+    expect(resolveLR2DefaultTotal(0)).toBeCloseTo(160, 9);
+    expect(resolveLR2DefaultTotal(500)).toBeCloseTo(256, 9); // ((500 − 400) / 2.5 + 280) × 0.8
+    expect(resolveLR2DefaultTotal(1000)).toBeCloseTo(352, 9); // ((1000 − 600) / 5 + 360) × 0.8
   });
 
   test('resolveBeatorajaDefaultTotal floors at 260', () => {
@@ -325,15 +396,15 @@ describe('ruleset helpers', () => {
     expect(resolveBeatorajaDefaultTotal(2000)).toBeCloseTo((7.605 * 2000) / (0.01 * 2000 + 6.5), 9); // ≈ 573.96
   });
 
-  test('resolveIidxGaugeUnit rounds to the nearest 0.02 %', () => {
-    expect(resolveIidxGaugeUnit(100)).toBeCloseTo(2.6, 9); // 260 / 100
-    expect(resolveIidxGaugeUnit(338)).toBeCloseTo(0.76, 9); // 260 / 338 ≈ 0.769 → 0.76
-    expect(resolveIidxGaugeUnit(1000)).toBeCloseTo(0.46, 9); // 760.5 / 1650 ≈ 0.461 → 0.46
+  test('resolveIIDXGaugeUnit rounds to the nearest 0.02 %', () => {
+    expect(resolveIIDXGaugeUnit(100)).toBeCloseTo(2.6, 9); // 260 / 100
+    expect(resolveIIDXGaugeUnit(338)).toBeCloseTo(0.76, 9); // 260 / 338 ≈ 0.769 → 0.76
+    expect(resolveIIDXGaugeUnit(1000)).toBeCloseTo(0.46, 9); // 760.5 / 1650 ≈ 0.461 → 0.46
   });
 
   test('LR2 hard damage / beatoraja hard recovery multipliers', () => {
-    expect(resolveLr2HardDamageMultiplier(240, 1000)).toBe(1); // fix1 = 1, fix2 = 1
-    expect(resolveLr2HardDamageMultiplier(160, 2)).toBe(10); // tiny charts hit the fix2 = 10 cap
+    expect(resolveLR2HardDamageMultiplier(240, 1000)).toBe(1); // fix1 = 1, fix2 = 1
+    expect(resolveLR2HardDamageMultiplier(160, 2)).toBe(10); // tiny charts hit the fix2 = 10 cap
     expect(resolveBeatorajaHardRecoverMultiplier(300, 2000)).toBeCloseTo(0.14 / 0.15, 9);
     expect(resolveBeatorajaHardRecoverMultiplier(160, 100)).toBe(0); // 2 × TOTAL − 320 = 0
   });

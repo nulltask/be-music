@@ -205,7 +205,7 @@ export interface BeatorajaValueDigitCell {
  * sign cell at the leftmost slot when `zeropadding > 0`, matching upstream's
  * `if (mimage != null && zeropadding > 0)` branch.
  *
- * ─── Pad-mode dispatch (per `JsonSkinObjectLoader.java:103-167`) ────────────────────────────
+ * ─── Pad-mode dispatch (per `JSONSkinObjectLoader.java:103-167`) ────────────────────────────
  *   - **24-cell** (`divx % 24 == 0`): SkinNumber's `zeropadding` param ← `value.zeropadding`.
  *   - **11-cell** (`divx == 11` after %10!=0 fallback): forced to `2` (blank pad).
  *   - **10-cell** (`divx == 10`): SkinNumber's `zeropadding` param ← `value.padding`.
@@ -256,7 +256,7 @@ export function composeBeatorajaValueCells(
   // halfDivx: the per-half cell count (12 for 24-cell, divx for single-strip).
   const halfDivx = isSignedDualStrip ? divx / 2 : divx;
 
-  // Pad-mode dispatch (mirrors `JsonSkinObjectLoader.java:103-167`).
+  // Pad-mode dispatch (mirrors `JSONSkinObjectLoader.java:103-167`).
   let zeropaddingMode: number;
   if (isSignedDualStrip) {
     zeropaddingMode = Math.trunc(element.zeropadding);

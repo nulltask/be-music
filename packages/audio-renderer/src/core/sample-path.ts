@@ -10,13 +10,24 @@ export interface ResolveSamplePathOptions {
   pathPrefix?: string;
 }
 
+/**
+ * The file a chart's sample resolves to under `baseDir` (the chart's folder): the {@link createSamplePathCandidates}
+ * walk there, then the same walk one folder up. Absolute path, or `undefined` when nothing matches.
+ */
 export async function resolveSamplePath(
   baseDir: string,
   samplePath: string,
   signal?: AbortSignal,
   options: ResolveSamplePathOptions = {},
 ): Promise<string | undefined> {
-  return resolveFirstExistingPath(baseDir, createSamplePathCandidates(samplePath, options), signal);
+  const candidates = createSamplePathCandidates(samplePath, options);
+  const found = await resolveFirstExistingPath(baseDir, candidates, signal);
+  if (found !== undefined) return found;
+  // As LR2: every candidate once more one folder up, so a 差分 (alternate difficulty) chart shipped in a sub-folder finds
+  // the keysounds beside its parent.
+  // `..` rather than a string `dirname`: `baseDir` is a file-system path (absolute, maybe Windows), which the resolver
+  // normalises with Node's `path.resolve`.
+  return resolveFirstExistingPath(`${baseDir.replace(/[\\/]+$/u, '')}/..`, candidates, signal);
 }
 
 /**
@@ -24,7 +35,7 @@ export async function resolveSamplePath(
  * inspect the walk order — the bmson 1.0.0 spec mandates that `.m4a` is part of the chain, and lock-in tests pin the
  * sequencing to prevent regressions.
  *
- * When `options.pathPrefix` is set (typically `chart.bms.pathWav`), the prefixed candidates are tried *before* the bare
+ * When `options.pathPrefix` is set (typically `chart.bms.pathWAV`), the prefixed candidates are tried *before* the bare
  * ones so a chart that authors `#PATH_WAV wav/` with `#WAV01 kick.wav` resolves to `wav/kick.wav` first, falling
  * through to `kick.wav` when the chart's path-wav layout doesn't match.
  */
@@ -46,7 +57,7 @@ export function createSamplePathCandidates(samplePath: string, options: ResolveS
   // `#PATH_WAV` prefix-joined variants come first so a chart with `wav/` layout resolves through its declared directory
   // before the bare-name fallback. Skip the prefix entirely when blank / null-safe — empty `#PATH_WAV` is treated as
   // "no prefix" by hitkey BMS Memo.
-  const prefixed = joinPathWavPrefix(options.pathPrefix, samplePath);
+  const prefixed = joinPathWAVPrefix(options.pathPrefix, samplePath);
   if (prefixed !== undefined) {
     basePaths.push(prefixed);
     const slashNormalized = prefixed.replaceAll('\\', '/');
@@ -66,7 +77,7 @@ export function createSamplePathCandidates(samplePath: string, options: ResolveS
   return candidates;
 }
 
-function joinPathWavPrefix(prefix: string | undefined, samplePath: string): string | undefined {
+function joinPathWAVPrefix(prefix: string | undefined, samplePath: string): string | undefined {
   if (typeof prefix !== 'string') return undefined;
   const trimmedPrefix = prefix.trim();
   if (trimmedPrefix.length === 0) return undefined;

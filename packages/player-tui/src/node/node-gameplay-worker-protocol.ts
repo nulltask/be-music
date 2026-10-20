@@ -1,18 +1,20 @@
 import type { MessagePort } from 'node:worker_threads';
 import type { LogEntry } from '@be-music/utils/log';
-import type { BeMusicJson, BeMusicPlayLevel } from '@be-music/json';
-import type { PlayerInputCommand } from '@be-music/player/core/input-signal-bus';
-import type { PlayerInterruptReason, PlayerLoadProgress, PlayerSummary } from '@be-music/player/core/engine';
-import type { PlayerUiCommand, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
+import type { RandomDraws } from '@be-music/chart';
+import type { BeMusicJSON, BeMusicPlayLevel } from '@be-music/json';
+import type {
+  PlayerInputCommand,
+  PlayerJudgeComboSignalState,
+  PlayerUICommand,
+  PlayerUIFramePayload,
+} from '@be-music/player/signals';
+import type { PlayerInterruptReason, PlayerLoadProgress, PlayerSummary } from '@be-music/player';
 import type { LaneBinding } from '../manual-input.ts';
-import type { PlayerJudgeComboSignalState } from '@be-music/player/state-signals';
-import type { ImageResizeAlgorithm } from '@be-music/player/image-resize-algorithm';
-import type { TuiNoteHeight } from '@be-music/player/core/ui-options';
-import type { JudgeWindowRuleset } from '@be-music/player/core/judge-window';
-import type { GrooveGaugeType } from '@be-music/player/core/groove-gauge';
+import type { ImageResizeAlgorithm, TUINoteHeight } from '@be-music/player/display';
+import type { GaugeType, PlaylogRulesetId } from '@be-music/player/ruleset';
 
 export interface NodeGameplayWorkerPlayOptions {
-  inferBmsLnTypeWhenMissing?: boolean;
+  inferBmsLNTypeWhenMissing?: boolean;
   showInvisibleNotes?: boolean;
   compressor?: boolean;
   compressorThresholdDb?: number;
@@ -24,14 +26,14 @@ export interface NodeGameplayWorkerPlayOptions {
   limiterCeilingDb?: number;
   limiterReleaseMs?: number;
   speed?: number;
-  uiFps?: number;
+  uiFPS?: number;
   tuiVisibleNotesLimit?: number;
-  tuiNoteHeight?: TuiNoteHeight;
+  tuiNoteHeight?: TUINoteHeight;
   imageResizeAlgorithm?: ImageResizeAlgorithm;
   highSpeed?: number;
   judgeWindowMs?: number;
-  judgeRuleset?: JudgeWindowRuleset;
-  gauge?: GrooveGaugeType;
+  judgeRuleset?: PlaylogRulesetId;
+  gauge?: GaugeType;
   debugActiveAudio?: boolean;
   leadInMs?: number;
   audio?: boolean;
@@ -48,25 +50,33 @@ export interface NodeGameplayWorkerPlayOptions {
   laneModeExtension?: string;
   tui?: boolean;
   kittyGraphics?: boolean;
-  videoBgaStreaming?: boolean;
+  videoBGAStreaming?: boolean;
 }
 
 export interface NodeGameplayWorkerInitData {
-  json: BeMusicJson;
+  /** The chart to play, already resolved. */
+  json: BeMusicJSON;
+  /** The `#RANDOM` / `#SWITCH` draws `json` was resolved with. */
+  randomDraws?: RandomDraws;
   mode: 'auto' | 'manual';
   autoScratch?: boolean;
   playOptions: NodeGameplayWorkerPlayOptions;
+  /**
+   * The terminal had negotiated a stateful keyboard protocol before the play (`hasNegotiatedStatefulKeyboardProtocol`):
+   * the worker's input runtime declares that its keys report their releases (`PlayerInputRuntime.reportsKeyReleases`).
+   */
+  inputReportsKeyReleases?: boolean;
 }
 
-export interface NodeGameplayUiRuntimeInit {
-  json: BeMusicJson;
+export interface NodeGameplayUIRuntimeInit {
+  json: BeMusicJSON;
   mode: 'AUTO' | 'MANUAL' | 'AUTO SCRATCH';
   laneDisplayMode: string;
   laneBindings: LaneBinding[];
   speed: number;
-  uiFps?: number;
+  uiFPS?: number;
   tuiVisibleNotesLimit?: number;
-  tuiNoteHeight: TuiNoteHeight;
+  tuiNoteHeight: TUINoteHeight;
   judgeWindowMs: number;
   highSpeed: number;
   imageResizeAlgorithm: ImageResizeAlgorithm;
@@ -74,8 +84,8 @@ export interface NodeGameplayUiRuntimeInit {
   randomPatternSummary?: string;
   baseDir: string;
   kittyGraphics?: boolean;
-  videoBgaStreaming?: boolean;
-  initialFrame: PlayerUiFramePayload;
+  videoBGAStreaming?: boolean;
+  initialFrame: PlayerUIFramePayload;
   initialPaused: boolean;
   initialJudgeCombo: PlayerJudgeComboSignalState;
 }
@@ -120,10 +130,10 @@ export type NodeGameplayWorkerOutboundMessage =
   | { kind: 'input-init'; runtime: NodeGameplayInputRuntimeInit }
   | { kind: 'input-start' }
   | { kind: 'input-stop' }
-  | { kind: 'ui-init'; requestId: number; runtime: NodeGameplayUiRuntimeInit }
+  | { kind: 'ui-init'; requestId: number; runtime: NodeGameplayUIRuntimeInit }
   | { kind: 'ui-start' }
-  | { kind: 'ui-frame'; frame: PlayerUiFramePayload }
-  | { kind: 'ui-commands'; commands: PlayerUiCommand[] }
+  | { kind: 'ui-frame'; frame: PlayerUIFramePayload }
+  | { kind: 'ui-commands'; commands: PlayerUICommand[] }
   | { kind: 'ui-set-paused'; value: boolean }
   | { kind: 'ui-set-high-speed'; value: number }
   | { kind: 'ui-set-judge-combo'; state: PlayerJudgeComboSignalState }

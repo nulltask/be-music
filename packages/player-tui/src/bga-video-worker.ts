@@ -13,7 +13,7 @@ interface VideoDecodeWorkerInitData {
   stopAfterFirstFrame: boolean;
 }
 
-interface AnsiFrame {
+interface ANSIFrame {
   width: number;
   height: number;
   rgb: Uint8Array;
@@ -106,10 +106,10 @@ function postMessage(message: unknown, transferList?: ArrayBuffer[]): void {
   port?.postMessage(message, transferList ?? []);
 }
 
-function convertDecodedVideoFrameToSourceFrame(frame: DecodedVideoFrame, mode: FrameMode): AnsiFrame {
+function convertDecodedVideoFrameToSourceFrame(frame: DecodedVideoFrame, mode: FrameMode): ANSIFrame {
   const safeWidth = Math.max(1, Math.floor(frame.width));
   const safeHeight = Math.max(1, Math.floor(frame.height));
-  const sourceFrame = createSolidAnsiFrame(safeWidth, safeHeight, 0, 0, 0, 0);
+  const sourceFrame = createSolidANSIFrame(safeWidth, safeHeight, 0, 0, 0, 0);
 
   for (let y = 0; y < safeHeight; y += 1) {
     for (let x = 0; x < safeWidth; x += 1) {
@@ -123,10 +123,10 @@ function convertDecodedVideoFrameToSourceFrame(frame: DecodedVideoFrame, mode: F
       }
 
       const targetPixelOffset = y * safeWidth + x;
-      const targetRgbOffset = targetPixelOffset * 3;
-      sourceFrame.rgb[targetRgbOffset] = r;
-      sourceFrame.rgb[targetRgbOffset + 1] = g;
-      sourceFrame.rgb[targetRgbOffset + 2] = b;
+      const targetRGBOffset = targetPixelOffset * 3;
+      sourceFrame.rgb[targetRGBOffset] = r;
+      sourceFrame.rgb[targetRGBOffset + 1] = g;
+      sourceFrame.rgb[targetRGBOffset + 2] = b;
       sourceFrame.opaqueMask[targetPixelOffset] = 1;
     }
   }
@@ -134,14 +134,14 @@ function convertDecodedVideoFrameToSourceFrame(frame: DecodedVideoFrame, mode: F
   return trimBlackVideoFrameBorders(sourceFrame);
 }
 
-function createSolidAnsiFrame(
+function createSolidANSIFrame(
   width: number,
   height: number,
   r: number,
   g: number,
   b: number,
   maskFill: 0 | 1,
-): AnsiFrame {
+): ANSIFrame {
   const safeWidth = Math.max(1, width);
   const safeHeight = Math.max(1, height);
   const rgb = new Uint8Array(safeWidth * safeHeight * 3);
@@ -181,7 +181,7 @@ function isOpaqueVideoPixel(r: number, g: number, b: number, a: number, mode: Fr
   return !(r === 0 && g === 0 && b === 0);
 }
 
-function trimBlackVideoFrameBorders(source: AnsiFrame): AnsiFrame {
+function trimBlackVideoFrameBorders(source: ANSIFrame): ANSIFrame {
   let minX = source.width;
   let minY = source.height;
   let maxX = -1;
@@ -216,7 +216,7 @@ function trimBlackVideoFrameBorders(source: AnsiFrame): AnsiFrame {
 
   const width = maxX - minX + 1;
   const height = maxY - minY + 1;
-  const trimmed = createSolidAnsiFrame(width, height, 0, 0, 0, 0);
+  const trimmed = createSolidANSIFrame(width, height, 0, 0, 0, 0);
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -227,11 +227,11 @@ function trimBlackVideoFrameBorders(source: AnsiFrame): AnsiFrame {
         continue;
       }
       const targetPixelOffset = y * width + x;
-      const sourceRgbOffset = sourcePixelOffset * 3;
-      const targetRgbOffset = targetPixelOffset * 3;
-      trimmed.rgb[targetRgbOffset] = source.rgb[sourceRgbOffset] ?? 0;
-      trimmed.rgb[targetRgbOffset + 1] = source.rgb[sourceRgbOffset + 1] ?? 0;
-      trimmed.rgb[targetRgbOffset + 2] = source.rgb[sourceRgbOffset + 2] ?? 0;
+      const sourceRGBOffset = sourcePixelOffset * 3;
+      const targetRGBOffset = targetPixelOffset * 3;
+      trimmed.rgb[targetRGBOffset] = source.rgb[sourceRGBOffset] ?? 0;
+      trimmed.rgb[targetRGBOffset + 1] = source.rgb[sourceRGBOffset + 1] ?? 0;
+      trimmed.rgb[targetRGBOffset + 2] = source.rgb[sourceRGBOffset + 2] ?? 0;
       trimmed.opaqueMask[targetPixelOffset] = 1;
     }
   }

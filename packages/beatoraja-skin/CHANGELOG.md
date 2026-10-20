@@ -1,5 +1,25 @@
 # @be-music/beatoraja-skin
 
+## 0.3.0
+
+### Minor Changes
+
+- b2818d0: Provide `@be-music/beatoraja-skin/scene` with deterministic resolvers for select, decide, play, result and course screens, including numbers, text, options, timers, graphs, offsets and system sounds.
+  
+  - Extend named skin IDs for course constraints, stages, random-course bars, folder statistics and note density.
+  - Resolve skin fallback consistently across IIDX, PMS and keyboard modes, and expose the selected fallback variant.
+  - Match beatoraja's rank, main BPM, lane-cover and LIFT values, including per-mille cover readouts.
+  - Load Lua skins without unnecessary console output.
+  
+  Migration: use the canonical uppercase-abbreviation API names. Resolve clear lamps with `@be-music/player/ruleset` and map them with `beatorajaClearLampOp`; `computeClearLampOp` is removed.
+
+### Patch Changes
+
+- Updated dependencies [b2818d0]
+  - @be-music/lr2-skin@0.2.0
+  - @be-music/player@0.9.0
+  - @be-music/scene-model@0.1.0
+  - @be-music/utils@0.4.0
 ## 0.2.0
 
 ### Minor Changes

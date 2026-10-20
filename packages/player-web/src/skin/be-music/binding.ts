@@ -1,6 +1,6 @@
-import { CanvasSource, Container, Sprite, Texture } from 'pixi.js';
-import { getDesignPixelRatio } from '../../scene/core/viewport.ts';
-import { ChildPool } from '../../scene/pixi-utils.ts';
+import { CanvasSource, Container, RenderTexture, Sprite, Texture, TextureSource, type Renderer } from 'pixi.js';
+import { getDesignPixelRatio, resolveCanvasPixelRatio } from '../../stage/viewport.ts';
+import { ChildPool } from '../../stage/pixi-utils.ts';
 import {
   resolveBeMusicSkinSettings,
   resolveBeMusicStage,
@@ -8,8 +8,9 @@ import {
   wideStage,
 } from '@be-music/skin-sdk';
 import { logger } from '../../logger.ts';
+import { PIXI_HOST_TARGET, rendersOnPixiHost, type PixiHostTarget } from '../../skins/pixi-kit/host-render.ts';
 import type {
-  BeMusicBgaFrame,
+  BeMusicBGAFrame,
   BeMusicBomb,
   BeMusicDecideFrame,
   BeMusicGameplayFrame,
@@ -26,6 +27,7 @@ import type {
   BeMusicSkinSettingValues,
   BeMusicSongImageLookup,
   BeMusicSongRecord,
+  BeMusicCourseRecord,
   BeMusicStage,
   BeMusicSurface,
   BeMusicSurfaceContextMap,
@@ -33,7 +35,9 @@ import type {
 
 /**
  * The player's side of a be-music skin: each screen gets a canvas sized to the screen pixels the stage covers, the skin
- * draws it with whatever it likes, and the canvas is shown in the Pixi scene as one texture. Skins never see Pixi.
+ * draws it with whatever it likes, and the canvas is shown in the Pixi scene as one texture. Skins never see Pixi —
+ * except Pixi-kit skins, which draw through the player's own renderer into the texture (see `PIXI_HOST_RENDER`),
+ * so the frame stays on the GPU.
  */
 
 const log = logger('be-music-skin');
@@ -43,6 +47,7 @@ const NO_SONG_IMAGE: BeMusicSongImageLookup = () => undefined;
 
 /** Hosts that keep no play records report every song as never played. */
 const NO_SONG_RECORD = (): BeMusicSongRecord | undefined => undefined;
+const NO_COURSE_RECORD = (): BeMusicCourseRecord | undefined => undefined;
 
 /**
  * The player's stored values for a skin's settings, keyed by setting id, as a host persisted them. Bindings check them
@@ -52,6 +57,11 @@ export type BeMusicStoredSkinSettings = Readonly<Record<string, unknown>>;
 
 /** How long the decide screen shows when the skin doesn't say (`BeMusicDecideSkin.durationMs`). */
 const DEFAULT_DECIDE_DURATION_MS = 2000;
+
+/** How long `skin`'s decide screen shows before the play starts: its `decide.durationMs`, 2000 ms by default. */
+export function resolveBeMusicDecideDurationMs(skin: BeMusicSkin): number {
+  return Math.max(0, skin.decide?.durationMs ?? DEFAULT_DECIDE_DURATION_MS);
+}
 
 /** Largest canvas edge a surface allocates, whatever the window size. */
 const MAX_CANVAS_EDGE = 4096;
@@ -72,11 +82,17 @@ export function resolveBeMusicSkinStage(
 /** The size of the stage a surface draws one frame on. */
 type SurfaceSize = { width: number; height: number };
 
-/** One canvas + the texture showing it, sized to the screen pixels the stage covers (dot by dot). */
+/**
+ * One canvas + the texture showing it, sized to the screen pixels the stage covers (dot by dot). For a skin that draws
+ * through the player's renderer the texture is a render texture the skin renders into, and the canvas only identifies
+ * the surface (it never gets a context).
+ */
 class SkinSurface {
   private readonly canvas = document.createElement('canvas');
-  private readonly source: CanvasSource;
+  private readonly source: TextureSource;
   readonly texture: Texture;
+  /** The player's renderer when the skin draws through it; `undefined` when the skin draws on the canvas. */
+  private readonly hostRenderer: Renderer | undefined;
   private context: BeMusicSurfaceContextMap[keyof BeMusicSurfaceContextMap] | undefined;
   private state: 'new' | 'pending' | 'ready' | 'failed' | 'destroyed' = 'new';
   private pixelRatio = 1;
@@ -84,14 +100,27 @@ class SkinSurface {
   /** The stage size of the frame being drawn; follows the screen when the host switches between the skin's stages. */
   private stage: SurfaceSize;
 
-  constructor(skin: BeMusicSkin) {
+  /** `renderer` is the player's; a Pixi-kit skin draws through it instead of on the canvas. */
+  constructor(skin: BeMusicSkin, renderer: Renderer | undefined) {
     this.skin = skin;
     this.stage = resolveBeMusicSkinStage(skin);
+    this.hostRenderer = renderer !== undefined && rendersOnPixiHost(skin) ? renderer : undefined;
     // Nearest sampling: the canvas is sized to the screen pixels it covers, so it is shown dot by dot, never filtered.
-    this.source = new CanvasSource({ resource: this.canvas, scaleMode: 'nearest' });
     // Dynamic: sprites showing the texture follow its size when the stage changes (a rotation between the skin's
     // landscape and portrait stages).
-    this.texture = new Texture({ source: this.source, dynamic: true });
+    if (this.hostRenderer) {
+      // Multisampled, like the antialiased WebGL context the skin would otherwise draw on.
+      this.source = new TextureSource({ scaleMode: 'nearest', antialias: true, autoGenerateMipmaps: false });
+      this.texture = new RenderTexture({ source: this.source, dynamic: true });
+    } else {
+      this.source = new CanvasSource({ resource: this.canvas, scaleMode: 'nearest' });
+      this.texture = new Texture({ source: this.source, dynamic: true });
+    }
+  }
+
+  /** Whether the skin draws through the player's renderer, so a frame must be drawn outside the player's render. */
+  get rendersOnHost(): boolean {
+    return this.hostRenderer !== undefined;
   }
 
   /** Runs `paint` on the surface (once it is set up) sized to the stage `size`, and uploads the result. */
@@ -113,7 +142,8 @@ class SkinSurface {
     } catch (error) {
       log.warn(`"${this.skin.id}": draw failed`, error);
     }
-    this.source.update();
+    // A render texture already holds the frame; a canvas is uploaded.
+    if (!this.hostRenderer) this.source.update();
   }
 
   destroy(): void {
@@ -131,7 +161,7 @@ class SkinSurface {
   }
 
   private surface(): BeMusicSurface {
-    return {
+    const surface: BeMusicSurface = {
       canvas: this.canvas,
       context: this.context!,
       width: this.stage.width,
@@ -139,6 +169,11 @@ class SkinSurface {
       orientation: resolveStageOrientation(this.stage),
       pixelRatio: this.pixelRatio,
     };
+    if (this.hostRenderer) {
+      const target: PixiHostTarget = { renderer: this.hostRenderer, texture: this.texture };
+      Object.defineProperty(surface, PIXI_HOST_TARGET, { value: target });
+    }
+    return surface;
   }
 
   /**
@@ -147,8 +182,7 @@ class SkinSurface {
    */
   private resize(): void {
     const { width, height } = this.stage;
-    const pixelWidth = Math.max(1, Math.min(MAX_CANVAS_EDGE, Math.round(width * getDesignPixelRatio())));
-    const ratio = pixelWidth / width;
+    const ratio = resolveCanvasPixelRatio(width, height, getDesignPixelRatio(), MAX_CANVAS_EDGE);
     if (
       ratio === this.pixelRatio &&
       this.canvas.width > 0 &&
@@ -163,6 +197,7 @@ class SkinSurface {
 
   private ensureContext(): boolean {
     if (this.state === 'new') {
+      if (this.hostRenderer) return this.setup();
       const context = this.canvas.getContext(this.skin.context, this.skin.contextAttributes) as
         | BeMusicSurfaceContextMap[keyof BeMusicSurfaceContextMap]
         | null;
@@ -172,36 +207,43 @@ class SkinSurface {
         return false;
       }
       this.context = context;
-      this.state = 'pending';
-      let setup: void | Promise<void>;
-      try {
-        setup = this.skin.setup?.(this.surface());
-      } catch (error) {
-        log.warn(`"${this.skin.id}": setup failed`, error);
-        this.state = 'failed';
-        return false;
-      }
-      if (setup instanceof Promise) {
-        setup.then(
-          () => {
-            if (this.state === 'pending') this.state = 'ready';
-          },
-          (error: unknown) => {
-            log.warn(`"${this.skin.id}": setup failed`, error);
-            if (this.state === 'pending') this.state = 'failed';
-          },
-        );
-      } else {
-        this.state = 'ready';
-      }
+      return this.setup();
     }
     return this.state !== 'failed' && this.state !== 'destroyed';
+  }
+
+  /** Hands the surface to the skin's `setup`; the surface is ready once it returns (or its promise resolves). */
+  private setup(): boolean {
+    this.state = 'pending';
+    let setup: void | Promise<void>;
+    try {
+      setup = this.skin.setup?.(this.surface());
+    } catch (error) {
+      log.warn(`"${this.skin.id}": setup failed`, error);
+      this.state = 'failed';
+      return false;
+    }
+    if (setup instanceof Promise) {
+      setup.then(
+        () => {
+          if (this.state === 'pending') this.state = 'ready';
+        },
+        (error: unknown) => {
+          log.warn(`"${this.skin.id}": setup failed`, error);
+          if (this.state === 'pending') this.state = 'failed';
+        },
+      );
+    } else {
+      this.state = 'ready';
+    }
+    return true;
   }
 }
 
 /**
  * Gameplay for one scene: the scene reports lanes, notes, long notes, and hit effects as it walks them, and
- * {@link renderChrome} places the skin's canvas, which is drawn once — with everything collected — when Pixi renders.
+ * {@link renderChrome} places the skin's canvas, which is drawn once — with everything collected — when Pixi renders,
+ * or, for a skin drawing through the player's renderer, when the scene calls {@link flush}.
  */
 export class BeMusicGameplayBinding {
   readonly bombDurationMs: number;
@@ -212,7 +254,7 @@ export class BeMusicGameplayBinding {
   /** Whether the skin draws measure lines from the frame; when false the scene draws them itself. */
   readonly drawsMeasureLines: boolean;
   /** Whether the skin composites the BGA from the frame; when false the scene shows it behind the skin. */
-  readonly drawsBga: boolean;
+  readonly drawsBGA: boolean;
   private readonly skin: BeMusicSkin;
   private settings: BeMusicSkinSettingValues;
   private readonly songImage: BeMusicSongImageLookup;
@@ -230,19 +272,20 @@ export class BeMusicGameplayBinding {
   /**
    * `songImage` resolves the song's images for `frame.songImage`; without one every image reads as unavailable.
    * `settings` are the player's stored values for the skin's settings; without them the skin draws with its defaults.
+   * `renderer` is the player's Pixi renderer: a Pixi-kit skin draws through it.
    */
   constructor(
     skin: BeMusicSkin,
-    options: { songImage?: BeMusicSongImageLookup; settings?: BeMusicStoredSkinSettings } = {},
+    options: { songImage?: BeMusicSongImageLookup; settings?: BeMusicStoredSkinSettings; renderer?: Renderer } = {},
   ) {
     this.skin = skin;
-    this.surface = new SkinSurface(skin);
+    this.surface = new SkinSurface(skin, options.renderer);
     this.songImage = options.songImage ?? NO_SONG_IMAGE;
     this.bombDurationMs = skin.gameplay.bombDurationMs ?? 300;
     this.drawsMines = skin.gameplay.drawsMines === true;
     this.drawsLaneCover = skin.gameplay.drawsLaneCover === true;
     this.drawsMeasureLines = skin.gameplay.drawsMeasureLines === true;
-    this.drawsBga = skin.gameplay.drawsBga === true;
+    this.drawsBGA = skin.gameplay.drawsBGA === true;
     this.settings = resolveBeMusicSkinSettings(skin, options.settings);
   }
 
@@ -275,7 +318,7 @@ export class BeMusicGameplayBinding {
       mines: this.mines,
       bombs: this.bombs,
       measureLines: this.measureLines,
-      // Filled by `setBga` for a skin that sets `drawsBga`.
+      // Filled by `setBGA` for a skin that sets `drawsBGA`.
       bga: undefined,
       beatPhase: runtime.beatPhase ?? 0,
       effects: runtime.effects ?? 'full',
@@ -289,7 +332,16 @@ export class BeMusicGameplayBinding {
     sprite.position.set(0, 0);
     sprite.scale.set(1);
     sprite.roundPixels = true;
-    sprite.onRender = this.drawFrame;
+    // A skin drawing through the player's renderer can't render inside the player's render; the scene flushes it.
+    sprite.onRender = this.surface.rendersOnHost ? null : this.drawFrame;
+  }
+
+  /**
+   * Draws the frame collected since {@link renderChrome} when the skin draws through the player's renderer; call it once
+   * the frame is collected, before the player renders. A no-op for a canvas skin, which draws when its sprite renders.
+   */
+  flush(): void {
+    if (this.surface.rendersOnHost) this.drawFrame();
   }
 
   addLanes(lanes: readonly BeMusicLaneFrame[]): void {
@@ -317,9 +369,9 @@ export class BeMusicGameplayBinding {
     for (const bomb of bombs) this.bombs.push({ ...bomb });
   }
 
-  /** The BGA layers showing this frame; handed over only for a skin that sets `drawsBga`. */
-  setBga(bga: BeMusicBgaFrame | undefined): void {
-    if (this.frame && this.drawsBga) this.frame.bga = bga;
+  /** The BGA layers showing this frame; handed over only for a skin that sets `drawsBGA`. */
+  setBGA(bga: BeMusicBGAFrame | undefined): void {
+    if (this.frame && this.drawsBGA) this.frame.bga = bga;
   }
 
   dispose(): void {
@@ -340,7 +392,7 @@ export class BeMusicGameplayBinding {
  */
 export type BeMusicSelectSceneFrame = Omit<
   BeMusicSelectFrame,
-  'revision' | 'audio' | 'hit' | 'pointer' | 'songRecord' | 'songImage' | 'settings'
+  'revision' | 'audio' | 'hit' | 'pointer' | 'songRecord' | 'courseRecord' | 'songImage' | 'settings' | 'listScroll'
 >;
 
 /**
@@ -350,38 +402,50 @@ export type BeMusicSelectSceneFrame = Omit<
 export class BeMusicSelectBinding {
   readonly outroMs: number;
   /** Shows the skin's canvas, behind the scene's list layer. */
-  readonly backLayer = new Container();
+  readonly backLayer: Container = new Container();
   /** Holds the hit areas, in front of everything. */
-  readonly frontLayer = new Container();
+  readonly frontLayer: Container = new Container();
   private readonly skin: BeMusicSkin;
   private readonly surface: SkinSurface;
   private readonly hitPool: ChildPool;
   private settings: BeMusicSkinSettingValues;
   private readonly songRecord: BeMusicSelectFrame['songRecord'];
+  private readonly courseRecord: NonNullable<BeMusicSelectFrame['courseRecord']>;
   private readonly songImage: BeMusicSongImageLookup;
+  /** `frame.listScroll`: how far the list is pulled past its resting place, in design pixels (see `setListScroll`). */
+  private listScroll = 0;
   /** The pointer in design pixels, replaced (not mutated) when it moves so a skin may keep last frame's. */
   private pointer: BeMusicSelectFrame['pointer'] = undefined;
   private frame: BeMusicSelectSceneFrame | undefined;
   private revision = 0;
+  /**
+   * Where the skin's search box was on the last drawn frame, in design pixels: the hit area it bound to
+   * `actions.activateSearch`. Undefined when the skin has none. The host lays its text field over it.
+   */
+  searchFieldRect: { x: number; y: number; width: number; height: number } | undefined;
 
   /**
    * `resolveSongRecord` looks up the player's best record on a song for `frame.songRecord`; without one every song
-   * reads as never played. `songImage` resolves song images for `frame.songImage` (call {@link invalidate} when one
+   * reads as never played; `resolveCourseRecord` does the same for a course bar (`frame.courseRecord`). `songImage` resolves song images for `frame.songImage` (call {@link invalidate} when one
    * arrives); without one every image reads as unavailable. `settings` are the player's stored values for the skin's
    * settings; without them the skin draws with its defaults.
+   * `renderer` is the player's Pixi renderer: a Pixi-kit skin draws through it.
    */
   constructor(
     skin: BeMusicSkin,
     options: {
       resolveSongRecord?: BeMusicSelectFrame['songRecord'];
+      resolveCourseRecord?: BeMusicSelectFrame['courseRecord'];
       songImage?: BeMusicSongImageLookup;
       settings?: BeMusicStoredSkinSettings;
+      renderer?: Renderer;
     } = {},
   ) {
     this.skin = skin;
-    this.surface = new SkinSurface(skin);
+    this.surface = new SkinSurface(skin, options.renderer);
     this.outroMs = skin.select.outroMs ?? 0;
     this.songRecord = options.resolveSongRecord ?? NO_SONG_RECORD;
+    this.courseRecord = options.resolveCourseRecord ?? NO_COURSE_RECORD;
     this.songImage = options.songImage ?? NO_SONG_IMAGE;
     this.settings = resolveBeMusicSkinSettings(skin, options.settings);
     this.backLayer.addChild(new Sprite({ texture: this.surface.texture, roundPixels: true }));
@@ -420,6 +484,14 @@ export class BeMusicSelectBinding {
     }
   }
 
+  /**
+   * Records how far the list is pulled past its resting place (design pixels, positive toward later entries), read by
+   * the next {@link tick} as `frame.listScroll`. Changes every frame of a drag without moving `frame.revision`.
+   */
+  setListScroll(value: number): void {
+    this.listScroll = value;
+  }
+
   /** Draws the skin with the latest state, the current time, and what is playing. */
   tick(
     nowMs: number,
@@ -432,6 +504,7 @@ export class BeMusicSelectBinding {
     const pool = this.hitPool;
     pool.begin();
     const pointer = this.pointer;
+    let searchFieldRect: BeMusicSelectBinding['searchFieldRect'];
     const frame: BeMusicSelectFrame = {
       ...base,
       nowMs,
@@ -439,8 +512,10 @@ export class BeMusicSelectBinding {
       launchAt,
       audio,
       revision: this.revision,
+      listScroll: this.listScroll,
       pointer,
       songRecord: this.songRecord,
+      courseRecord: this.courseRecord,
       songImage: this.songImage,
       settings: this.settings,
       hit: (x, y, w, h, action, cursor = 'pointer') => {
@@ -450,6 +525,7 @@ export class BeMusicSelectBinding {
         area.cursor = cursor;
         area.removeAllListeners('pointerdown');
         area.on('pointerdown', action);
+        if (action === base.actions.activateSearch) searchFieldRect = { x, y, width: w, height: h };
         return pointer !== undefined && pointer.x >= x && pointer.x < x + w && pointer.y >= y && pointer.y < y + h;
       },
     };
@@ -459,6 +535,7 @@ export class BeMusicSelectBinding {
       );
     } finally {
       pool.end();
+      this.searchFieldRect = searchFieldRect;
     }
   }
 
@@ -476,7 +553,7 @@ export type BeMusicResultSceneFrame = Omit<BeMusicResultFrame, 'songImage' | 'se
 /** Result for one scene: draws the skin every frame onto a canvas shown by {@link view}. */
 export class BeMusicResultBinding {
   /** Persistent container showing the skin's canvas; the scene mounts it once. */
-  readonly view = new Container();
+  readonly view: Container = new Container();
   private readonly skin: BeMusicSkin;
   private readonly surface: SkinSurface;
   private settings: BeMusicSkinSettingValues;
@@ -485,13 +562,14 @@ export class BeMusicResultBinding {
   /**
    * `songImage` resolves song images for `frame.songImage`; without one every image reads as unavailable. `settings`
    * are the player's stored values for the skin's settings; without them the skin draws with its defaults.
+   * `renderer` is the player's Pixi renderer: a Pixi-kit skin draws through it.
    */
   constructor(
     skin: BeMusicSkin,
-    options: { songImage?: BeMusicSongImageLookup; settings?: BeMusicStoredSkinSettings } = {},
+    options: { songImage?: BeMusicSongImageLookup; settings?: BeMusicStoredSkinSettings; renderer?: Renderer } = {},
   ) {
     this.skin = skin;
-    this.surface = new SkinSurface(skin);
+    this.surface = new SkinSurface(skin, options.renderer);
     this.settings = resolveBeMusicSkinSettings(skin, options.settings);
     this.songImage = options.songImage ?? NO_SONG_IMAGE;
     this.view.addChild(new Sprite({ texture: this.surface.texture, roundPixels: true }));
@@ -521,9 +599,7 @@ export type BeMusicDecideSceneFrame = Omit<BeMusicDecideFrame, 'songImage' | 'se
 /** Decide for one scene: draws the skin's `decide` every frame onto a canvas shown by {@link view}. */
 export class BeMusicDecideBinding {
   /** Persistent container showing the skin's canvas; the scene mounts it once. */
-  readonly view = new Container();
-  /** How long (ms) the screen shows before the play starts (the skin's `decide.durationMs`, default 2000). */
-  readonly durationMs: number;
+  readonly view: Container = new Container();
   private readonly skin: BeMusicSkin;
   private readonly surface: SkinSurface;
   private settings: BeMusicSkinSettingValues;
@@ -532,16 +608,16 @@ export class BeMusicDecideBinding {
   /**
    * `songImage` resolves song images for `frame.songImage`; without one every image reads as unavailable. `settings`
    * are the player's stored values for the skin's settings; without them the skin draws with its defaults.
+   * `renderer` is the player's Pixi renderer: a Pixi-kit skin draws through it.
    */
   constructor(
     skin: BeMusicSkin,
-    options: { songImage?: BeMusicSongImageLookup; settings?: BeMusicStoredSkinSettings } = {},
+    options: { songImage?: BeMusicSongImageLookup; settings?: BeMusicStoredSkinSettings; renderer?: Renderer } = {},
   ) {
     this.skin = skin;
-    this.surface = new SkinSurface(skin);
+    this.surface = new SkinSurface(skin, options.renderer);
     this.settings = resolveBeMusicSkinSettings(skin, options.settings);
     this.songImage = options.songImage ?? NO_SONG_IMAGE;
-    this.durationMs = Math.max(0, skin.decide?.durationMs ?? DEFAULT_DECIDE_DURATION_MS);
     this.view.addChild(new Sprite({ texture: this.surface.texture, roundPixels: true }));
   }
 

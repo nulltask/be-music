@@ -85,7 +85,7 @@ export class ChildPool {
     this.textHost = new Container();
     // Z-order matches LR2 visual layering: Graphics (measure lines, LN body, fallback rects) → Sprite (notes,
     // skin chrome) → Text (in-skin labels, fallback HUD). The hosts inherit the parent layer's `eventMode` so
-    // setting `layer.eventMode = 'none'` (as `scene/lr2/gameplay.ts` does for render-only layers) propagates here too.
+    // setting `layer.eventMode = 'none'` (as the play frame (`view/shared/play-frame.ts`) does for render-only layers) propagates here too.
     this.layer.addChild(this.graphicsHost, this.spriteHost, this.textHost);
   }
 
@@ -290,4 +290,14 @@ function trimIdleBucket<T extends Sprite | Graphics | Text>(bucket: T[], cursor:
     }
   }
   return 0;
+}
+
+/**
+ * Multiplies the alpha of `layer`'s children from index `from` on by `alpha` — what a draw call added since `from` was
+ * the child count. Used to fade a select-list row by how much of it is inside the list window (`selectListRows`).
+ */
+export function fadeChildrenFrom(layer: Container, from: number, alpha: number): void {
+  if (alpha >= 1) return;
+  const children = layer.children;
+  for (let index = from; index < children.length; index += 1) children[index]!.alpha *= alpha;
 }

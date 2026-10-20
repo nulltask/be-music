@@ -1,5 +1,7 @@
 import {
   flashingGreatColor,
+  holdSeed,
+  holdSparks,
   isFlashingGreat,
   judgeDisplayWord,
   loadingDots,
@@ -23,9 +25,13 @@ import {
   stat,
   text,
 } from './theme.ts';
-import { resolvePortraitGameplayHud } from './layout.ts';
+import { resolvePortraitGameplayHUD } from './layout.ts';
 
 const NOTE_HEIGHT = 6;
+/** LR2's opacity for a long note missed at the head or let go early (`0x80` of `0xff`). */
+const DROPPED_LONG_NOTE_ALPHA = 0x80 / 0xff;
+/** How opaque an LN's tail cap is: clearly the end of the note, but quieter than a cap to hit. */
+const LN_TAIL_ALPHA = 0.4;
 /** Top of the right-hand judgement column: level with the BGA band's top, whatever size the BGA takes. */
 const COLUMN_TOP = 66;
 const MARGIN = 16;
@@ -33,7 +39,7 @@ const MARGIN = 16;
 /**
  * The play screen. Landscape: lanes and notes on the left, the BGA beside them, the HUD around them. Portrait: the host
  * puts the lanes across the lower part of the stage and the BGA at the top left; the HUD fills the band above the lanes
- * (see {@link resolvePortraitGameplayHud}). The lanes, notes, bombs and BGA are drawn the same way in both — they come
+ * (see {@link resolvePortraitGameplayHUD}). The lanes, notes, bombs and BGA are drawn the same way in both — they come
  * placed in `frame.layout` — so only the HUD and the judgement's height depend on `layout.orientation`.
  */
 export function drawGameplay({ context: ctx, width, height }: BeMusicSurface<'2d'>, frame: BeMusicGameplayFrame): void {
@@ -45,7 +51,7 @@ export function drawGameplay({ context: ctx, width, height }: BeMusicSurface<'2d
   ctx.fillRect(0, 0, width, height);
   const bga = layout.bga;
   if (bga) {
-    if (runtime.hasBga) {
+    if (runtime.hasBGA) {
       ctx.clearRect(bga.x, bga.y, bga.w, bga.h);
     } else {
       ctx.fillStyle = PANEL;
@@ -58,14 +64,15 @@ export function drawGameplay({ context: ctx, width, height }: BeMusicSurface<'2d
 
   drawLanes(ctx, frame);
   drawNotes(ctx, frame);
+  drawHolds(ctx, frame);
   drawBombs(ctx, frame);
   if (portrait) {
-    const hud = resolvePortraitGameplayHud(layout);
+    const hud = resolvePortraitGameplayHUD(layout);
     drawJudgement(ctx, frame, hud.judgeY);
-    drawPortraitHud(ctx, frame, hud);
+    drawPortraitHUD(ctx, frame, hud);
   } else {
     drawJudgement(ctx, frame, 220);
-    drawHud(ctx, frame, width, height);
+    drawHUD(ctx, frame, width, height);
   }
 }
 
@@ -81,12 +88,27 @@ function drawLanes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
       ctx.fillRect(lane.x, lane.top, lane.w, lane.bottom - lane.top);
       ctx.globalAlpha = 1;
     }
+    if (lane.kind === 'wheel-up' || lane.kind === 'wheel-down') {
+      drawWheelArrow(ctx, lane.x + lane.w / 2, lane.bottom - 12, Math.min(4, lane.w / 3), lane.kind === 'wheel-up');
+    }
   }
   // One judgement line per play side, so it never crosses the gap between the double-play banks.
   ctx.fillStyle = DANGER;
   for (const run of resolveLaneRuns(frame.lanes)) {
     ctx.fillRect(run.left, frame.layout.playfield.judgementY, run.right - run.left, 2);
   }
+}
+
+/** A small triangle under a wheel lane's notes, pointing the way that lane turns the wheel. */
+function drawWheelArrow(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, up: boolean): void {
+  const tip = up ? -size : size;
+  ctx.fillStyle = MUTED;
+  ctx.beginPath();
+  ctx.moveTo(x, y + tip);
+  ctx.lineTo(x - size, y - tip);
+  ctx.lineTo(x + size, y - tip);
+  ctx.closePath();
+  ctx.fill();
 }
 
 const BEAM_GRADIENTS = new WeakMap<
@@ -106,29 +128,57 @@ function beamGradient(ctx: CanvasRenderingContext2D, top: number, bottom: number
 }
 
 /**
- * Tap notes as flat bars. Long notes: a translucent body with a white centre line between the head and tail bars, the
- * shape every built-in skin uses.
+ * Tap notes as flat bars. Long notes: a translucent body between the head and tail bars; an LN's tail (not judged)
+ * is translucent, a CN / HCN tail (judged on release) solid. A long note missed at the head or let go early draws at
+ * LR2's half alpha.
  */
 function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
   for (const note of frame.longNotes) {
+    const alpha = note.state === 'dropped' ? DROPPED_LONG_NOTE_ALPHA : 1;
     const bodyTop = note.top - NOTE_HEIGHT;
     const bodyHeight = Math.max(1, note.bottom - note.top);
     ctx.fillStyle = NOTE_FILL[note.kind];
-    ctx.globalAlpha = 0.25;
+    ctx.globalAlpha = 0.25 * alpha;
     ctx.fillRect(note.x + 1, bodyTop, note.w - 2, bodyHeight);
-    ctx.fillStyle = '#ffffff';
-    ctx.globalAlpha = 0.6;
-    ctx.fillRect(note.x + note.w / 2 - 1, bodyTop, 2, bodyHeight);
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = alpha;
     ctx.fillStyle = NOTE_FILL[note.kind];
-    ctx.fillRect(note.x, note.top - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
     ctx.fillRect(note.x, note.bottom - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
+    // An LN's tail is not judged: drawn translucent, where to let go. A CN / HCN tail is judged and stays solid.
+    if (note.mode === 'ln') ctx.globalAlpha = alpha * LN_TAIL_ALPHA;
+    ctx.fillRect(note.x, note.top - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
+    ctx.globalAlpha = 1;
   }
   for (const note of frame.notes) {
     ctx.fillStyle = NOTE_FILL[note.kind];
     ctx.fillRect(note.x, note.y - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
   }
 }
+
+/**
+ * While a long note is held, its lane's stretch of the judgement line glows (a slow pulse) and sparks keep rising
+ * from it, so a held note reads as held at a glance. Drawn from the hold's age alone, like every effect here.
+ */
+function drawHolds(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
+  const y = frame.layout.playfield.judgementY;
+  for (const lane of frame.lanes) {
+    if (lane.holding !== true || lane.holdStartedAtMs === undefined) continue;
+    const ageMs = frame.nowMs - lane.holdStartedAtMs;
+    const centerX = lane.x + lane.w / 2;
+    ctx.fillStyle = HOLD_GLOW;
+    ctx.globalAlpha = 0.55 + 0.25 * Math.sin(ageMs / 90);
+    ctx.fillRect(lane.x, y - 3, lane.w, 6);
+    ctx.fillStyle = '#ffffff';
+    for (const spark of holdSparks(ageMs, holdSeed(lane.channel, lane.holdStartedAtMs), lane.w)) {
+      ctx.globalAlpha = spark.alpha;
+      const size = spark.size * 1.6;
+      ctx.fillRect(centerX + spark.offsetX - size / 2, y - spark.rise - size / 2, size, size);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+/** The held lane's glow on the judgement line: the key beam's blue, brighter. */
+const HOLD_GLOW = 'rgb(120, 170, 255)';
 
 /** Each hit draws a ring that widens and fades over the effect's lifetime. */
 function drawBombs(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
@@ -168,7 +218,7 @@ function judgeColor(judge: string): string {
 }
 
 /** Header (mode, tempo, speed), the gauge under the lanes, the track and the score figures along the bottom. */
-function drawHud(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, width: number, height: number): void {
+function drawHUD(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, width: number, height: number): void {
   const { runtime, nowMs } = frame;
 
   text(ctx, runtime.autoplay ? 'AUTO PLAY' : 'PLAY', MARGIN, 18, { size: 12, weight: 800, color: ACCENT });
@@ -249,10 +299,10 @@ function judgeCounts(runtime: BeMusicGameplayRuntime): Array<[string, number | u
  * host may put its pause button and menu), the column beside the BGA (track, score figures, judgement counts), and the
  * gauge across the stage just above the lanes. Nothing is smaller than 10 px.
  */
-function drawPortraitHud(
+function drawPortraitHUD(
   ctx: CanvasRenderingContext2D,
   frame: BeMusicGameplayFrame,
-  hud: ReturnType<typeof resolvePortraitGameplayHud>,
+  hud: ReturnType<typeof resolvePortraitGameplayHUD>,
 ): void {
   const { runtime, nowMs } = frame;
   const { header, track, scores, counts, gauge } = hud;

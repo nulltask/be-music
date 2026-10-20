@@ -2,6 +2,23 @@ import { describe, expect, test } from 'vite-plus/test';
 import { createScrollDistanceMapper } from './scroll-distance.ts';
 
 describe('scroll distance', () => {
+  test('measures from a remembered start exactly as from a fresh one', () => {
+    const timeline = [
+      { beat: 0, speed: 1 },
+      { beat: 4, speed: -0.5 },
+      { beat: 8, speed: 2 },
+    ];
+    const speeds = [{ beat: 2, speed: 1.5 }];
+    const reused = createScrollDistanceMapper(timeline, speeds);
+    // A frame measures many objects from one playhead, then the playhead moves on (and back, after a reversal).
+    for (const from of [3, 3, 3, 6.5, 6.5, 3, Number.NaN, 10]) {
+      for (const to of [0, 3.5, 5, 9, 12]) {
+        const fresh = createScrollDistanceMapper(timeline, speeds).distanceBetween(from, to);
+        expect(Object.is(reused.distanceBetween(from, to), fresh)).toBe(true);
+      }
+    }
+  });
+
   test('distanceBetween integrates plain beat distance', () => {
     const mapper = createScrollDistanceMapper();
     expect(mapper.distanceBetween(2, 6)).toBeCloseTo(4, 6);
@@ -18,17 +35,21 @@ describe('scroll distance', () => {
       ],
     );
 
-    // Before the first #SPEED keyframe its value (3) holds flat — Bemuse semantics — while #SCROLL stays at the
-    // implicit 1 until its first event: 3 × 1 × 4 beats.
-    expect(mapper.distanceBetween(0, 4)).toBeCloseTo(12, 6);
+    // Before the first #SPEED keyframe the speed ramps from 1 at beat 0 to its value (3), as beatoraja ramps from 1.0
+    // at time 0, while #SCROLL stays at the implicit 1 until its first event: (1 + 3) / 2 × 4 beats.
+    expect(mapper.distanceBetween(0, 4)).toBeCloseTo(8, 6);
     expect(mapper.distanceBetween(4, 8)).toBeCloseTo(16, 6);
   });
 
-  test('#SPEED holds the first keyframe value before its beat instead of ramping from 1', () => {
+  test('#SPEED ramps from 1 at beat 0 to the first keyframe, as beatoraja does', () => {
     const mapper = createScrollDistanceMapper(undefined, [{ beat: 4, speed: 2 }]);
 
-    expect(mapper.distanceBetween(0, 4)).toBeCloseTo(8, 6);
-    // #SCROLL is genuinely 1 before its first event — the head seeding only applies to #SPEED.
+    // Speed 1 → 2 across beats 0..4: (1 + 2) / 2 × 4 beats; the value holds after the last keyframe.
+    expect(mapper.distanceBetween(0, 4)).toBeCloseTo(6, 6);
+    expect(mapper.distanceBetween(4, 6)).toBeCloseTo(4, 6);
+    // A keyframe on beat 0 applies from the start, with no ramp.
+    expect(createScrollDistanceMapper(undefined, [{ beat: 0, speed: 2 }]).distanceBetween(0, 4)).toBeCloseTo(8, 6);
+    // #SCROLL is a step: 1 until its first event.
     const scrollOnly = createScrollDistanceMapper([{ beat: 4, speed: 2 }], undefined);
     expect(scrollOnly.distanceBetween(0, 4)).toBeCloseTo(4, 6);
   });
@@ -61,6 +82,64 @@ describe('scroll distance', () => {
     // Speed holds 1 until beat 4, then ramps 1 → 3 toward beat 8: distance(4..t) = (t - 4) + (t - 4)² / 4.
     // distance(0, t) = 8 → solve 4 + (t-4) + (t-4)²/4 = 8 → t = 4 + (-2 + 2√5).
     expect(mapper.maxBeatWithinDistance(0, 8)).toBeCloseTo(4 + (-2 + 2 * Math.sqrt(5)), 6);
+  });
+
+  test('firstBeatBeyondDistance finds where the lane is first overrun, through negative and zero scroll', () => {
+    // Up 2 beats of distance, back down with SCROLL -1, flat with SCROLL 0, then up again.
+    const mapper = createScrollDistanceMapper([
+      { beat: 2, speed: -1 },
+      { beat: 4, speed: 0 },
+      { beat: 6, speed: 1 },
+    ]);
+
+    // A 3-beat lane is never overrun before beat 6 (peak distance 2), then at beat 6 + 3.
+    expect(mapper.firstBeatBeyondDistance(0, 3)).toBeCloseTo(9, 6);
+    // A 1.5-beat lane is overrun on the way up: everything after beat 1.5 lies beyond the lane top, even the notes the
+    // negative scroll brings back down — beatoraja stops walking the chart there.
+    expect(mapper.firstBeatBeyondDistance(0, 1.5)).toBeCloseTo(1.5, 6);
+    // From inside the falling segment the distance first goes negative, so the overrun comes after the climb.
+    expect(mapper.firstBeatBeyondDistance(3, 1)).toBeCloseTo(6 + 2, 6);
+  });
+
+  test('firstBeatBeyondDistance is infinite when the lane is never overrun', () => {
+    expect(createScrollDistanceMapper([{ beat: 2, speed: 0 }]).firstBeatBeyondDistance(0, 4)).toBe(
+      Number.POSITIVE_INFINITY,
+    );
+    expect(createScrollDistanceMapper([{ beat: 2, speed: -1 }]).firstBeatBeyondDistance(0, 4)).toBe(
+      Number.POSITIVE_INFINITY,
+    );
+    // #SPEED 0 holds the notes still for good.
+    expect(createScrollDistanceMapper(undefined, [{ beat: 0, speed: 0 }]).firstBeatBeyondDistance(0, 4)).toBe(
+      Number.POSITIVE_INFINITY,
+    );
+    // Plain scroll: the lane ends `distance` beats ahead.
+    expect(createScrollDistanceMapper().firstBeatBeyondDistance(5, 4)).toBeCloseTo(9, 6);
+  });
+
+  test('firstBeatBeyondDistance solves within interpolated #SPEED segments', () => {
+    const mapper = createScrollDistanceMapper(undefined, [
+      { beat: 4, speed: 1 },
+      { beat: 8, speed: 3 },
+    ]);
+    expect(mapper.firstBeatBeyondDistance(0, 8)).toBeCloseTo(mapper.maxBeatWithinDistance(0, 8), 6);
+  });
+
+  test('rateAt is the scroll distance per beat at a beat: #SCROLL times the interpolated #SPEED', () => {
+    const mapper = createScrollDistanceMapper(
+      [
+        { beat: 4, speed: -2 },
+        { beat: 8, speed: 0 },
+      ],
+      [
+        { beat: 0, speed: 1 },
+        { beat: 4, speed: 3 },
+      ],
+    );
+    expect(mapper.rateAt(0)).toBeCloseTo(1, 9);
+    expect(mapper.rateAt(2)).toBeCloseTo(2, 9);
+    expect(mapper.rateAt(5)).toBeCloseTo(-6, 9);
+    expect(mapper.rateAt(9)).toBe(0);
+    expect(createScrollDistanceMapper().rateAt(3)).toBe(1);
   });
 
   test('invalidDistance option customizes invalid input fallback', () => {

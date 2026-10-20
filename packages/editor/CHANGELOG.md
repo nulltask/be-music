@@ -1,5 +1,19 @@
 # @be-music/editor
 
+## 0.3.0
+
+### Minor Changes
+
+- b2818d0: Use the canonical Be-Music JSON types and keys. Rename the JSON file helpers to `loadJSONFile`, `saveJSONFile` and `createBlankJSON`; update callers of the former names.
+
+### Patch Changes
+
+- Updated dependencies [b2818d0]
+  - @be-music/chart@0.5.0
+  - @be-music/json@0.3.0
+  - @be-music/parser@0.3.0
+  - @be-music/stringifier@0.4.0
+  - @be-music/utils@0.4.0
 ## 0.2.5
 
 ### Patch Changes

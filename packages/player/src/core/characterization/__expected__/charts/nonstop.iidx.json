@@ -1,0 +1,500 @@
+{
+  "manual": {
+    "outcome": "completed",
+    "endedAtMs": 4086.667,
+    "summary": {
+      "total": 5,
+      "perfect": 1,
+      "fast": 2,
+      "slow": 2,
+      "great": 4,
+      "good": 0,
+      "bad": 0,
+      "poor": 0,
+      "emptyPoor": 0,
+      "exScore": 6,
+      "score": 6,
+      "gauge": {
+        "current": 100,
+        "max": 100,
+        "clearThreshold": 0,
+        "initial": 100,
+        "effectiveTotal": 160.8,
+        "cleared": true,
+        "type": "CLASS",
+        "survival": true,
+        "failedMidPlay": false
+      },
+      "course": {"combo":5,"maxCombo":5}
+    },
+    "playlog": {
+      "format": "be-music-playlog",
+      "version": 0,
+      "clock": {"unit":"us","origin":"chart-zero"},
+      "chart": {
+        "sourceFormat": "bms",
+        "laneMode": "5 KEY SP",
+        "lnMode": 1,
+        "judgeRank": {"percent":100,"sourceRank":3,"stageRanks":[{"timeUs":2000000,"rank":0,"table":"chart"}]},
+        "noteCount": 5,
+        "notes": [
+          {"id":0,"channel":"11","type":"normal","timeUs":1000000},
+          {"id":1,"channel":"12","type":"normal","timeUs":1500000},
+          {"id":2,"channel":"11","type":"normal","timeUs":2000000},
+          {"id":3,"channel":"14","type":"normal","timeUs":2000000},
+          {"id":4,"channel":"14","type":"normal","timeUs":2800000}
+        ],
+        "chartFingerprint": "bmfp0:7e6cddcede0041c686f4b26a50933f409257967fefe616bac02ba00a2a3e5535",
+        "playFingerprint": "bmfp0:7e6cddcede0041c686f4b26a50933f409257967fefe616bac02ba00a2a3e5535",
+        "title": "nonstop"
+      },
+      "inputs": [
+        {"seq":0,"timeUs":1030000,"action":"down","channels":["11"],"tokens":["z"]},
+        {"seq":1,"timeUs":1080000,"action":"up","channels":["11"],"tokens":["z"]},
+        {"seq":2,"timeUs":1470000,"action":"down","channels":["12"],"tokens":["s"]},
+        {"seq":3,"timeUs":1520000,"action":"up","channels":["12"],"tokens":["s"]},
+        {"seq":4,"timeUs":2000000,"action":"down","channels":["11"],"tokens":["z"]},
+        {"seq":5,"timeUs":2030000,"action":"down","channels":["14"],"tokens":["d"]},
+        {"seq":6,"timeUs":2050000,"action":"up","channels":["11"],"tokens":["z"]},
+        {"seq":7,"timeUs":2080000,"action":"up","channels":["14"],"tokens":["d"]},
+        {"seq":8,"timeUs":2770000,"action":"down","channels":["14"],"tokens":["d"]},
+        {"seq":9,"timeUs":2820000,"action":"up","channels":["14"],"tokens":["d"]}
+      ],
+      "play": {
+        "mode": "manual",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "judgeRuleset": "iidx",
+        "endOnFailure": true,
+        "course": {"kind":"nonstop"}
+      },
+      "results": {
+        "native": {
+          "ruleset": "be-music/native",
+          "judge": {"pgreat":1,"great":4,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+          "fast": 2,
+          "slow": 2,
+          "exScore": 6,
+          "noteCount": 5,
+          "maxCombo": 5,
+          "djLevel": "B",
+          "gauge": {"type":"CLASS","final":100,"cleared":true},
+          "course": {"combo":5,"maxCombo":5}
+        }
+      }
+    },
+    "simulated": {
+      "lr2": {
+        "ruleset": "lr2/0",
+        "judge": {"pgreat":1,"great":2,"good":2,"bad":0,"poor":0,"emptyPoor":0},
+        "fast": 2,
+        "slow": 2,
+        "exScore": 4,
+        "noteCount": 5,
+        "maxCombo": 5,
+        "djLevel": "D",
+        "gauge": {"type":"COURSE","final":100,"cleared":true},
+        "course": {"combo":5,"maxCombo":5},
+        "score": 100000
+      },
+      "beatoraja": {
+        "ruleset": "beatoraja/0",
+        "judge": {"pgreat":1,"great":4,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+        "fast": 2,
+        "slow": 2,
+        "exScore": 6,
+        "noteCount": 5,
+        "maxCombo": 5,
+        "djLevel": "B",
+        "gauge": {"type":"CLASS","final":100,"cleared":true},
+        "course": {"combo":5,"maxCombo":5}
+      },
+      "iidx": {
+        "ruleset": "iidx/0",
+        "judge": {"pgreat":1,"great":4,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+        "fast": 2,
+        "slow": 2,
+        "exScore": 6,
+        "noteCount": 5,
+        "maxCombo": 5,
+        "djLevel": "B",
+        "gauge": {"type":"CLASS","final":100,"cleared":true},
+        "course": {"combo":5,"maxCombo":5}
+      }
+    },
+    "audio": [
+      "0.000 start",
+      "0.000 trigger 01:02@0+0/1",
+      "400.000 trigger 01:04@0+1/5",
+      "1030.000 trigger 11:01@0+1/2",
+      "1213.333 trigger 01:03@0+3/5",
+      "1470.000 trigger 12:01@0+3/4",
+      "2000.000 trigger 11:01@1+0/1",
+      "2030.000 trigger 14:03@1+0/1",
+      "2770.000 trigger 14:03@1+1/2",
+      "4086.667 finish",
+      "4086.667 dispose"
+    ],
+    "judges": [
+      "0.000 READY combo=0 gauge=100",
+      "1030.000 GREAT combo=1 ch=11 delta=30 gauge=100",
+      "1470.000 GREAT combo=2 ch=12 delta=-30 gauge=100",
+      "2000.000 PERFECT combo=3 ch=11 delta=0 gauge=100",
+      "2030.000 GREAT combo=4 ch=14 delta=30 gauge=100",
+      "2770.000 GREAT combo=5 ch=14 delta=-30 gauge=100"
+    ],
+    "ui": [
+      "1030.000 flash-lane 11",
+      "1030.000 flash-lane 11",
+      "1030.000 clear-poor-bga",
+      "1030.000 press-lane 11",
+      "1080.000 release-lane 11",
+      "1470.000 flash-lane 12",
+      "1470.000 flash-lane 12",
+      "1470.000 clear-poor-bga",
+      "1470.000 press-lane 12",
+      "1520.000 release-lane 12",
+      "2000.000 flash-lane 11",
+      "2000.000 flash-lane 11",
+      "2000.000 clear-poor-bga",
+      "2000.000 press-lane 11",
+      "2030.000 flash-lane 14",
+      "2030.000 flash-lane 14",
+      "2030.000 clear-poor-bga",
+      "2030.000 press-lane 14",
+      "2050.000 release-lane 11",
+      "2080.000 release-lane 14",
+      "2770.000 flash-lane 14",
+      "2770.000 flash-lane 14",
+      "2770.000 clear-poor-bga",
+      "2770.000 press-lane 14",
+      "2820.000 release-lane 14"
+    ],
+    "frames": {
+      "count": 256,
+      "judged": [
+        "1030.000 seconds=1.03 note 11@1",
+        "1470.000 seconds=1.47 note 12@1.5",
+        "2000.000 seconds=2 note 11@2",
+        "2030.000 seconds=2.03 note 14@2",
+        "2770.000 seconds=2.77 note 14@2.8"
+      ],
+      "last": "4086.667 seconds=4.07 beat=10.175"
+    },
+    "host": [
+      "0.000 ruleset iidx/0 charge note={\"judges\":[[-16667,16667],[-33333,33333],[-116667,116667],[-250000,250000]],\"ms\":[-150000,500000]}",
+      "0.000 input-runtime create manual",
+      "0.000 load-complete",
+      "0.000 ui start",
+      "0.000 input-runtime start",
+      "4086.667 input-runtime stop",
+      "4086.667 ui stop",
+      "4086.667 ui dispose"
+    ],
+    "log": [
+      "0.000 info playback.prepared {\"mode\":\"manual\",\"uiEnabled\":true,\"audioEnabled\":true,\"totalSeconds\":2.8}",
+      "0.000 info ui.start {\"mode\":\"manual\"}",
+      "0.000 debug ui.initial-frame.published {\"mode\":\"manual\",\"seconds\":0,\"beat\":0}",
+      "0.000 info audio.start {\"mode\":\"manual\"}"
+    ],
+    "output": [
+      "Audio backend: characterization",
+      "--- Result ---",
+      "TOTAL  : 5",
+      "GAUGE  : 100.00 / 100.00 CLEAR (TOTAL 160.80)",
+      "PGREAT : 1",
+      "GREAT  : 4",
+      "GOOD   : 0",
+      "BAD    : 0",
+      "POOR   : 0",
+      "EMPTY  : 0",
+      "FAST   : 2",
+      "SLOW   : 2",
+      "EX-SCORE: 6 / 10 (60.00%)"
+    ]
+  },
+  "replay": {
+    "outcome": "completed",
+    "endedAtMs": 4083.333,
+    "summary": {
+      "total": 5,
+      "perfect": 1,
+      "fast": 2,
+      "slow": 2,
+      "great": 4,
+      "good": 0,
+      "bad": 0,
+      "poor": 0,
+      "emptyPoor": 0,
+      "exScore": 6,
+      "score": 6,
+      "gauge": {
+        "current": 100,
+        "max": 100,
+        "clearThreshold": 0,
+        "initial": 100,
+        "effectiveTotal": 160.8,
+        "cleared": true,
+        "type": "CLASS",
+        "survival": true,
+        "failedMidPlay": false
+      },
+      "course": {"combo":5,"maxCombo":5}
+    },
+    "playlog": {
+      "format": "be-music-playlog",
+      "version": 0,
+      "clock": {"unit":"us","origin":"chart-zero"},
+      "chart": "(same as manual)",
+      "inputs": "(same as manual)",
+      "play": {
+        "mode": "manual",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "judgeRuleset": "iidx",
+        "endOnFailure": true,
+        "course": {"kind":"nonstop"}
+      },
+      "results": "(same as manual)"
+    },
+    "simulated": "(same as manual)",
+    "audio": [
+      "0.000 start",
+      "0.000 trigger 01:02@0+0/1",
+      "400.000 trigger 01:04@0+1/5",
+      "1033.333 trigger 11:01@0+1/2",
+      "1200.000 trigger 01:03@0+3/5",
+      "1483.333 trigger 12:01@0+3/4",
+      "2000.000 trigger 11:01@1+0/1",
+      "2033.333 trigger 14:03@1+0/1",
+      "2783.333 trigger 14:03@1+1/2",
+      "4083.333 finish",
+      "4083.333 dispose"
+    ],
+    "judges": [
+      "0.000 READY combo=0 gauge=100",
+      "1033.333 GREAT combo=1 ch=11 delta=30 gauge=100",
+      "1483.333 GREAT combo=2 ch=12 delta=-30 gauge=100",
+      "2000.000 PERFECT combo=3 ch=11 delta=0 gauge=100",
+      "2033.333 GREAT combo=4 ch=14 delta=30 gauge=100",
+      "2783.333 GREAT combo=5 ch=14 delta=-30 gauge=100"
+    ],
+    "ui": [
+      "1033.333 press-lane 11",
+      "1033.333 flash-lane 11",
+      "1033.333 flash-lane 11",
+      "1033.333 clear-poor-bga",
+      "1083.333 release-lane 11",
+      "1483.333 press-lane 12",
+      "1483.333 flash-lane 12",
+      "1483.333 flash-lane 12",
+      "1483.333 clear-poor-bga",
+      "1533.333 release-lane 12",
+      "2000.000 press-lane 11",
+      "2000.000 flash-lane 11",
+      "2000.000 flash-lane 11",
+      "2000.000 clear-poor-bga",
+      "2033.333 press-lane 14",
+      "2033.333 flash-lane 14",
+      "2033.333 flash-lane 14",
+      "2033.333 clear-poor-bga",
+      "2050.000 release-lane 11",
+      "2083.333 release-lane 14",
+      "2783.333 press-lane 14",
+      "2783.333 flash-lane 14",
+      "2783.333 flash-lane 14",
+      "2783.333 clear-poor-bga",
+      "2833.333 release-lane 14"
+    ],
+    "frames": {
+      "count": 247,
+      "judged": [
+        "1033.333 seconds=1.033333 note 11@1",
+        "1483.333 seconds=1.483333 note 12@1.5",
+        "2000.000 seconds=2 note 11@2",
+        "2033.333 seconds=2.033333 note 14@2",
+        "2783.333 seconds=2.783333 note 14@2.8"
+      ],
+      "last": "4083.333 seconds=4.066667 beat=10.166667"
+    },
+    "host": [
+      "0.000 ruleset iidx/0 charge note={\"judges\":[[-16667,16667],[-33333,33333],[-116667,116667],[-250000,250000]],\"ms\":[-150000,500000]}",
+      "0.000 input-runtime create manual",
+      "0.000 load-complete",
+      "0.000 ui start",
+      "0.000 input-runtime start",
+      "4083.333 input-runtime stop",
+      "4083.333 ui stop",
+      "4083.333 ui dispose"
+    ],
+    "log": "(same as manual)",
+    "output": "(same as manual)"
+  },
+  "auto": {
+    "outcome": "completed",
+    "endedAtMs": 4083.333,
+    "summary": {
+      "total": 5,
+      "perfect": 5,
+      "fast": 0,
+      "slow": 0,
+      "great": 0,
+      "good": 0,
+      "bad": 0,
+      "poor": 0,
+      "emptyPoor": 0,
+      "exScore": 10,
+      "score": 10,
+      "gauge": {
+        "current": 100,
+        "max": 100,
+        "clearThreshold": 0,
+        "initial": 100,
+        "effectiveTotal": 160.8,
+        "cleared": true,
+        "type": "CLASS",
+        "survival": true,
+        "failedMidPlay": false
+      },
+      "course": {"combo":5,"maxCombo":5}
+    },
+    "playlog": {
+      "format": "be-music-playlog",
+      "version": 0,
+      "clock": {"unit":"us","origin":"chart-zero"},
+      "chart": "(same as manual)",
+      "inputs": [],
+      "play": {
+        "mode": "auto",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "judgeRuleset": "iidx",
+        "endOnFailure": true,
+        "course": {"kind":"nonstop"}
+      },
+      "results": {
+        "native": {
+          "ruleset": "be-music/native",
+          "judge": {"pgreat":5,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+          "fast": 0,
+          "slow": 0,
+          "exScore": 10,
+          "noteCount": 5,
+          "maxCombo": 5,
+          "djLevel": "AAA",
+          "gauge": {"type":"CLASS","final":100,"cleared":true},
+          "course": {"combo":5,"maxCombo":5}
+        }
+      }
+    },
+    "simulated": {
+      "lr2": {
+        "ruleset": "lr2/0",
+        "judge": {"pgreat":5,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+        "fast": 0,
+        "slow": 0,
+        "exScore": 10,
+        "noteCount": 5,
+        "maxCombo": 5,
+        "djLevel": "AAA",
+        "gauge": {"type":"COURSE","final":100,"cleared":true},
+        "course": {"combo":5,"maxCombo":5},
+        "score": 200000
+      },
+      "beatoraja": {
+        "ruleset": "beatoraja/0",
+        "judge": {"pgreat":5,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+        "fast": 0,
+        "slow": 0,
+        "exScore": 10,
+        "noteCount": 5,
+        "maxCombo": 5,
+        "djLevel": "AAA",
+        "gauge": {"type":"CLASS","final":100,"cleared":true},
+        "course": {"combo":5,"maxCombo":5}
+      },
+      "iidx": {
+        "ruleset": "iidx/0",
+        "judge": {"pgreat":5,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+        "fast": 0,
+        "slow": 0,
+        "exScore": 10,
+        "noteCount": 5,
+        "maxCombo": 5,
+        "djLevel": "AAA",
+        "gauge": {"type":"CLASS","final":100,"cleared":true},
+        "course": {"combo":5,"maxCombo":5}
+      }
+    },
+    "audio": [
+      "0.000 start",
+      "0.000 trigger 01:02@0+0/1",
+      "400.000 trigger 01:04@0+1/5",
+      "1000.000 trigger 11:01@0+1/2",
+      "1200.000 trigger 01:03@0+3/5",
+      "1500.000 trigger 12:01@0+3/4",
+      "2000.000 trigger 11:01@1+0/1",
+      "2000.000 trigger 14:03@1+0/1",
+      "2800.000 trigger 14:03@1+1/2",
+      "4083.333 finish",
+      "4083.333 dispose"
+    ],
+    "judges": [
+      "0.000 READY combo=0 gauge=100",
+      "1000.000 PERFECT combo=1 ch=11 gauge=100",
+      "1500.000 PERFECT combo=2 ch=12 gauge=100",
+      "2000.000 PERFECT combo=3 ch=11 gauge=100",
+      "2000.000 PERFECT combo=4 ch=14 gauge=100",
+      "2800.000 PERFECT combo=5 ch=14 gauge=100"
+    ],
+    "ui": [
+      "1000.000 flash-lane 11",
+      "1500.000 flash-lane 12",
+      "2000.000 flash-lane 11",
+      "2000.000 flash-lane 14",
+      "2800.000 flash-lane 14"
+    ],
+    "frames": {
+      "count": 252,
+      "judged": [
+        "1000.000 seconds=1 note 11@1",
+        "1500.000 seconds=1.5 note 12@1.5",
+        "2000.000 seconds=2 note 11@2",
+        "2000.000 seconds=2 note 14@2",
+        "2800.000 seconds=2.8 note 14@2.8"
+      ],
+      "last": "4083.333 seconds=4.066667 beat=10.166667"
+    },
+    "host": [
+      "0.000 ruleset iidx/0 charge note={\"judges\":[[-16667,16667],[-33333,33333],[-116667,116667],[-250000,250000]],\"ms\":[-150000,500000]}",
+      "0.000 input-runtime create auto",
+      "0.000 load-complete",
+      "0.000 ui start",
+      "0.000 input-runtime start",
+      "4083.333 input-runtime stop",
+      "4083.333 ui stop",
+      "4083.333 ui dispose"
+    ],
+    "log": [
+      "0.000 info playback.prepared {\"mode\":\"auto\",\"uiEnabled\":true,\"audioEnabled\":true,\"totalSeconds\":2.8}",
+      "0.000 info ui.start {\"mode\":\"auto\"}",
+      "0.000 debug ui.initial-frame.published {\"mode\":\"auto\",\"seconds\":0,\"beat\":0}",
+      "0.000 info audio.start {\"mode\":\"auto\"}"
+    ],
+    "output": [
+      "Audio backend: characterization",
+      "--- Result ---",
+      "TOTAL  : 5",
+      "GAUGE  : 100.00 / 100.00 CLEAR (TOTAL 160.80)",
+      "PGREAT : 5",
+      "GREAT  : 0",
+      "GOOD   : 0",
+      "BAD    : 0",
+      "POOR   : 0",
+      "EMPTY  : 0",
+      "FAST   : 0",
+      "SLOW   : 0",
+      "EX-SCORE: 10 / 10 (100.00%)"
+    ]
+  }
+}

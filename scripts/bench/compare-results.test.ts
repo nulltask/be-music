@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'vite-plus/test';
 import {
   buildDiffMarkdown,
+  classifyRow,
   compareSnapshots,
   countUnreliableCases,
+  formatDuration,
+  formatHeadline,
+  formatTimeChange,
+  packageOf,
   resolveOverallVerdict,
+  runsAreApart,
+  runSpreadPercent,
   summarizeComparison,
   summarizeRows,
+  type ComparedRow,
 } from './compare-results.ts';
 import type { ExportsBenchmarkSnapshot } from './exports.types.ts';
 
@@ -35,7 +43,9 @@ function createSnapshot(
       'audio-renderer': [],
       player: [],
       'player-tui': [],
+      'scene-model': [],
       'lr2-skin': [],
+      'beatoraja-skin': [],
       'skin-sdk': [],
       'player-web': [],
     },
@@ -166,20 +176,33 @@ describe('countUnreliableCases', () => {
   });
 });
 
+function row(key: string, deltaPercent: number, significant = true): ComparedRow {
+  return {
+    key,
+    baseHz: 100,
+    headHz: 100 * (1 + deltaPercent / 100),
+    deltaPercent,
+    baseSpreadPercent: 0,
+    headSpreadPercent: 0,
+    significant,
+    ioBound: false,
+  };
+}
+
 describe('summarizeRows', () => {
   it('keeps overall unchanged when only a minority of cases cross the threshold', () => {
     const summary = summarizeRows(
       [
-        { key: 'a', baseHz: 100, headHz: 80, deltaPercent: -20 },
-        { key: 'b', baseHz: 100, headHz: 80, deltaPercent: -20 },
-        { key: 'c', baseHz: 100, headHz: 80, deltaPercent: -20 },
-        { key: 'd', baseHz: 100, headHz: 101, deltaPercent: 1 },
-        { key: 'e', baseHz: 100, headHz: 101, deltaPercent: 1 },
-        { key: 'f', baseHz: 100, headHz: 101, deltaPercent: 1 },
-        { key: 'g', baseHz: 100, headHz: 101, deltaPercent: 1 },
-        { key: 'h', baseHz: 100, headHz: 101, deltaPercent: 1 },
-        { key: 'i', baseHz: 100, headHz: 101, deltaPercent: 1 },
-        { key: 'j', baseHz: 100, headHz: 101, deltaPercent: 1 },
+        row('a', -20),
+        row('b', -20),
+        row('c', -20),
+        row('d', 1),
+        row('e', 1),
+        row('f', 1),
+        row('g', 1),
+        row('h', 1),
+        row('i', 1),
+        row('j', 1),
       ],
       8,
     );
@@ -215,94 +238,133 @@ describe('summarizeRows', () => {
   });
 });
 
-describe('buildDiffMarkdown', () => {
-  it('leads the summary with the median verdict', () => {
-    const markdown = buildDiffMarkdown(
-      createSnapshot({
-        'utils.noisy': 100,
-        'utils.stable': 100,
-        'utils.other': 100,
-      }),
-      createSnapshot({
-        'utils.noisy': 70,
-        'utils.stable': 101,
-        'utils.other': 101,
-      }),
-      8,
-      12,
-    );
-
-    expect(markdown).toContain('| Overall | unchanged |');
-    expect(markdown).toContain('| Median change | +1.00% |');
-    expect(markdown).toContain('| Cases regressed (<= -threshold) | 1 |');
-    expect(markdown).toContain('Overall verdict uses the median change');
-    expect(markdown).toContain('Per-case lists compare median ops/s, not mean.');
-    expect(markdown).toContain('`utils.noisy`');
+describe('run spread and significance', () => {
+  it('measures the spread of the runs against the median', () => {
+    expect(runSpreadPercent([90, 100, 110], 100)).toBeCloseTo(20);
+    expect(runSpreadPercent([100], 100)).toBe(0);
+    expect(runSpreadPercent(undefined, 100)).toBe(0);
   });
 
-  it('ranks top lists by median ops/s, not mean hz', () => {
+  it('calls a change significant only when the two sides do not overlap', () => {
+    expect(runsAreApart([100, 102, 104], [80, 82, 84], -20)).toBe(true);
+    expect(runsAreApart([100, 102, 104], [80, 82, 101], -20)).toBe(false);
+    expect(runsAreApart([100, 102, 104], [110, 112, 114], 10)).toBe(true);
+    expect(runsAreApart([100, 102, 104], [103, 112, 114], 10)).toBe(false);
+    // A single run has no spread to judge by.
+    expect(runsAreApart([100], [80], -20)).toBe(true);
+  });
+
+  it('classifies a change past the threshold with overlapping runs as noise', () => {
+    expect(classifyRow(row('a', -12), 8)).toBe('regressed');
+    expect(classifyRow(row('a', 12), 8)).toBe('improved');
+    expect(classifyRow(row('a', -12, false), 8)).toBe('noisy');
+    expect(classifyRow(row('a', -3, false), 8)).toBe('unchanged');
+    expect(classifyRow({ ...row('a', -55), ioBound: true }, 8)).toBe('io');
+  });
+
+  it('never judges a case the head marks I/O-bound', () => {
+    const base = createSnapshot({ 'utils.readFile': 100 });
+    const head = createSnapshot({ 'utils.readFile': 50 }, { ioBound: ['utils.readFile'] });
+    const summary = summarizeComparison(base, head, 8);
+    expect(summary.regressedCount).toBe(0);
+    expect(summary.ioBoundCount).toBe(1);
+    expect(buildDiffMarkdown(base, head, 8, 12)).toContain('I/O-bound, not judged (1)');
+  });
+
+  it('reads the runs from aggregated snapshots', () => {
+    const base = createSnapshot({ 'utils.a': 100, 'utils.b': 100 });
+    const head = createSnapshot({ 'utils.a': 80, 'utils.b': 80 });
+    base.results['utils.a']!.runMedianHz = [98, 100, 102];
+    head.results['utils.a']!.runMedianHz = [79, 80, 81];
+    base.results['utils.b']!.runMedianHz = [70, 100, 130];
+    head.results['utils.b']!.runMedianHz = [60, 80, 101];
+    const summary = summarizeComparison(base, head, 8);
+    expect(summary.regressedCount).toBe(1);
+    expect(summary.noisyCount).toBe(1);
+  });
+});
+
+describe('formatting', () => {
+  it('formats per-call times with three significant figures', () => {
+    expect(formatDuration(0.0000412)).toBe('41.2 ns');
+    expect(formatDuration(0.00308)).toBe('3.08 µs');
+    expect(formatDuration(12.5)).toBe('12.5 ms');
+    expect(formatDuration(2500)).toBe('2.50 s');
+    expect(formatDuration(0)).toBe('n/a');
+  });
+
+  it('puts an ops/s change as time per call', () => {
+    // Half the ops/s is twice the time.
+    expect(formatTimeChange(-50)).toBe('100.0% slower');
+    expect(formatTimeChange(25)).toBe('20.0% faster');
+    expect(formatTimeChange(0)).toBe('±0.0%');
+  });
+
+  it('names a case by its package', () => {
+    expect(packageOf('player.playlog.parsePlaylog')).toBe('player');
+    expect(packageOf('player-web.serializePlaylog')).toBe('player-web');
+  });
+
+  it('opens with the verdict', () => {
+    const summary = summarizeRows([row('a', -20), row('b', 1)], 8);
+    expect(formatHeadline(summary)).toBe('**🔴 1 regression** · 0 improvements · 0 within noise · 2 compared');
+    expect(formatHeadline(summarizeRows([row('a', 1)], 8))).toBe(
+      '**✅ No significant change** · 0 within noise · 1 compared',
+    );
+    expect(formatHeadline(summarizeRows([row('a', 20)], 8))).toBe(
+      '**🟢 1 improvement, no regression** · 0 within noise · 1 compared',
+    );
+  });
+});
+
+describe('buildDiffMarkdown', () => {
+  it('leads with the verdict and lists regressions in time per call', () => {
     const markdown = buildDiffMarkdown(
-      createSnapshot({
-        'utils.meanOnly': 100,
-        'utils.medianReal': 100,
-        'utils.stable': 100,
-      }),
-      createSnapshot(
-        {
-          'utils.meanOnly': 100,
-          'utils.medianReal': 100,
-          'utils.stable': 100,
-        },
-        {
-          results: {
-            'utils.meanOnly': {
-              hz: 50,
-              medianHz: 99,
-              meanMs: 20,
-              p50Ms: 10.101,
-              p75Ms: 11,
-              p99Ms: 12,
-              minMs: 9,
-              maxMs: 40,
-              rmePercent: 1,
-              sampleCount: 100,
-              totalTimeMs: 200,
-            },
-            'utils.medianReal': {
-              hz: 99,
-              medianHz: 50,
-              meanMs: 10.101,
-              p50Ms: 20,
-              p75Ms: 21,
-              p99Ms: 22,
-              minMs: 9,
-              maxMs: 40,
-              rmePercent: 1,
-              sampleCount: 100,
-              totalTimeMs: 200,
-            },
-            'utils.stable': {
-              hz: 101,
-              medianHz: 101,
-              meanMs: 9.901,
-              p50Ms: 9.901,
-              p75Ms: 11,
-              p99Ms: 12,
-              minMs: 9,
-              maxMs: 13,
-              rmePercent: 1,
-              sampleCount: 100,
-              totalTimeMs: 200,
-            },
-          },
-        },
-      ),
+      createSnapshot({ 'utils.noisy': 100, 'utils.stable': 100, 'utils.other': 100 }),
+      createSnapshot({ 'utils.noisy': 70, 'utils.stable': 101, 'utils.other': 101 }),
       8,
       12,
     );
 
-    expect(markdown).toContain('`utils.medianReal`');
-    expect(markdown).toContain('| `utils.medianReal` | 100.00 | 50.00 | -50.00% |');
-    expect(markdown).not.toContain('`utils.meanOnly`');
+    expect(markdown.split('\n')[3]).toBe('**🔴 1 regression** · 0 improvements · 0 within noise · 3 compared');
+    expect(markdown).toContain('### Regressions (1)');
+    expect(markdown).toContain('| `utils.noisy` | 10.0 ms | 14.3 ms | 42.9% slower | ±0.0% / ±0.0% |');
+    expect(markdown).toContain('<details><summary>Run details</summary>');
+    // The table names its columns rather than leaving an empty header row.
+    expect(markdown).toContain('| Measure | Value |');
+    expect(markdown).not.toContain('| | |');
+    expect(markdown).toContain('| Median change (all compared cases) | +1.00% |');
+  });
+
+  it('ranks by median ops/s, not mean hz', () => {
+    const head = createSnapshot({ 'utils.meanOnly': 100, 'utils.medianReal': 100, 'utils.stable': 100 });
+    head.results['utils.meanOnly'] = { ...head.results['utils.meanOnly']!, hz: 50, medianHz: 99 };
+    head.results['utils.medianReal'] = { ...head.results['utils.medianReal']!, hz: 99, medianHz: 50, p50Ms: 20 };
+    const markdown = buildDiffMarkdown(
+      createSnapshot({ 'utils.meanOnly': 100, 'utils.medianReal': 100, 'utils.stable': 100 }),
+      head,
+      8,
+      12,
+    );
+
+    expect(markdown).toContain('| `utils.medianReal` | 10.0 ms | 20.0 ms | 100.0% slower |');
+    expect(markdown).not.toContain('`utils.meanOnly` |');
+  });
+
+  it('links the commits, lists the changed packages first, and names new and removed exports', () => {
+    const markdown = buildDiffMarkdown(
+      createSnapshot({ 'utils.kept': 100, 'utils.gone': 100 }, { gitSha: 'aaaaaaaa1111' }),
+      createSnapshot({ 'utils.kept': 100, 'utils.added': 100 }, { gitSha: 'bbbbbbbb2222' }),
+      8,
+      12,
+      { repositoryURL: 'https://github.com/o/r', changedPackages: ['utils'] },
+    );
+
+    expect(markdown).toContain('[`aaaaaaaa`](https://github.com/o/r/commit/aaaaaaaa1111)');
+    expect(markdown).toContain('`utils`: 1 case compared, median ±0.0%.');
+    expect(markdown).toContain('### New exports (1)');
+    expect(markdown).toContain('| `utils.added` | 10.0 ms |');
+    expect(markdown).toContain('### Removed exports (1)');
+    expect(markdown).toContain('- `utils.gone`');
   });
 });

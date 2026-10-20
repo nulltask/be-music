@@ -61,7 +61,7 @@ export interface BeatorajaImageElement {
    */
   len: number;
   /**
-   * Click-event code (audit 2.5). Mirrors beatoraja's `Event act` field on `JsonSkin.Image`.
+   * Click-event code (audit 2.5). Mirrors beatoraja's `Event act` field on `JSONSkin.Image`.
    * When non-zero, the renderer makes the sprite interactive and forwards this code to the
    * host's `onButtonAction` callback on tap. Beatoraja's reference theme uses
    *
@@ -70,11 +70,11 @@ export interface BeatorajaImageElement {
    *   - `308` LN_MODE_CYCLE, `11` KEYS_FILTER, `12` SORT.
    *
    * Default `0` = "no action" (decorative sprite). The host scene resolves the code into its
-   * real action — see `scene/beatoraja/select.ts handleButtonAction` for the mapping.
+   * real action — see `@be-music/player-web`'s `view/beatoraja/select-view.ts` (`handleButtonAction`) for the mapping.
    */
   act: number;
   /**
-   * Click mode tag (`int click = 0` in beatoraja's `JsonSkin.Image`). Distinguishes the
+   * Click mode tag (`int click = 0` in beatoraja's `JSONSkin.Image`). Distinguishes the
    * action variant the host should interpret on the click — typical values are `0` (regular
    * tap) and `1` (long-press / hold). Forwarded verbatim alongside {@link act} to the host.
    */

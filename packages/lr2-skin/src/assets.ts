@@ -1,7 +1,7 @@
 import { basename, dirname, normalizePath } from '@be-music/utils/core';
 import { asLoadedBytes, findCaseInsensitivePath, lookupBytesCaseInsensitive } from './file-lookup.ts';
-import type { Lr2SkinFileEntry } from './file-lookup.ts';
-import type { Lr2Skin } from './skin.ts';
+import type { LR2SkinFileEntry } from './file-lookup.ts';
+import type { LR2Skin } from './skin.ts';
 
 /**
  * One pre-decomposed entry in a basename-keyed file index. Building these once per source map removes the per-call
@@ -31,7 +31,7 @@ interface BasenameIndex {
  * the LR2 skin's `files` map is built fresh per drop / per `readFilesIntoBytesMap` call, so cache invalidation falls
  * out naturally when the user re-imports a different theme.
  *
- * The previous resolver paths in `resolveLr2IncludePath` / `resolveLr2AssetBytes` did `[...sourceFiles.keys()]` 1–3
+ * The previous resolver paths in `resolveLR2IncludePath` / `resolveLR2AssetBytes` did `[...sourceFiles.keys()]` 1–3
  * times per call, spreading the entire keys iterator into a fresh array and then re-running `path.toLowerCase()` on
  * every entry inside the `.find()` predicate. The LR2 default theme ships hundreds of files; that scan dominated theme
  * load + every per-frame `#CUSTOMFILE` wildcard resolution.
@@ -106,12 +106,12 @@ function findMatchingBasenameBuckets<T>(
   return matches;
 }
 
-export function resolveLr2IncludePath(
-  sourceFiles: ReadonlyMap<string, Lr2SkinFileEntry>,
+export function resolveLR2IncludePath(
+  sourceFiles: ReadonlyMap<string, LR2SkinFileEntry>,
   baseDirectory: string,
   rawPath: string,
 ): string | undefined {
-  const normalized = normalizeLr2Path(rawPath);
+  const normalized = normalizeLR2Path(rawPath);
   const fileName = basename(normalized).toLowerCase();
   const parentDir = dirname(normalized);
   const parentName = basename(parentDir).toLowerCase();
@@ -123,7 +123,7 @@ export function resolveLr2IncludePath(
   ];
   // Case-insensitive exact-match: real LR2 themes reference paths like `LR2files\Theme\LR2\Result\result_normal.csv`
   // while the dropped directory layout might be `LR2files/theme/lr2/Result/...`. `findCaseInsensitivePath` returns the
-  // original key (so the recursive `readLr2Path(sourceFiles.get(returnedKey))` lookup hits a real entry), or undefined
+  // original key (so the recursive `readLR2Path(sourceFiles.get(returnedKey))` lookup hits a real entry), or undefined
   // to fall through to the partial-path walks below.
   for (const candidate of candidates) {
     const matched = findCaseInsensitivePath(sourceFiles, candidate);
@@ -157,8 +157,8 @@ export function resolveLr2IncludePath(
   return bucket[0]?.originalKey;
 }
 
-export function resolveLr2AssetBytes(skin: Lr2Skin, rawPath: string): Uint8Array | undefined {
-  const normalized = normalizeLr2Path(rawPath);
+export function resolveLR2AssetBytes(skin: LR2Skin, rawPath: string): Uint8Array | undefined {
+  const normalized = normalizeLR2Path(rawPath);
   const candidates = [normalized, basename(normalized)];
   // Skin assets (TGA / PNG / BMP / DXA / .lr2font) are non-audio and stored eagerly in the skin's files map, so the
   // `asLoadedBytes` narrowing here is just a type guard. Case-insensitive exact-match: skin elements that reference
@@ -216,7 +216,7 @@ export function resolveLr2AssetBytes(skin: Lr2Skin, rawPath: string): Uint8Array
   return undefined;
 }
 
-export function normalizeLr2Path(path: string): string {
+export function normalizeLR2Path(path: string): string {
   return normalizePath(path.replace(/^\.\\?/u, ''));
 }
 

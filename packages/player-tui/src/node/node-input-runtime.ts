@@ -4,8 +4,8 @@ import { beginStatefulKeyboardProtocolOptIn, resolveInputTokenEvent } from '../m
 import {
   resolveHighSpeedControlActionFromLaneChannels,
   type HighSpeedControlAction,
-} from '@be-music/player/core/high-speed-control';
-import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
+  type PlayerInputSignalBus,
+} from '@be-music/player/signals';
 import { beginSharedRawInputCapture, type RawInputCapture } from '../raw-input-capture.ts';
 
 export interface NodeInputRuntimeOptions {
@@ -18,9 +18,31 @@ export interface NodeInputRuntimeOptions {
 export interface NodeInputRuntime {
   start: () => void;
   stop: () => void;
+  /**
+   * `true` when the terminal had already negotiated a stateful keyboard protocol when the runtime was created
+   * ({@link hasNegotiatedStatefulKeyboardProtocol}), so the play's keys report their releases from the first one
+   * (`PlayerInputRuntime.reportsKeyReleases`). Absent otherwise: the engine detects it from the first `kitty-state`.
+   */
+  reportsKeyReleases?: true;
+}
+
+/**
+ * Whether the terminal has answered the stateful keyboard protocol opt-in (the kitty keyboard protocol, or Windows'
+ * win32-input-mode) with a key event in that protocol since the process started. The runtime opts in again at every
+ * play's start, so from then on each play's keys report their releases.
+ */
+let statefulKeyboardProtocolNegotiated = false;
+
+/**
+ * True once the terminal has sent a key event in a stateful keyboard protocol (kitty, or win32-input-mode) during an
+ * earlier play of this process: a play started now can declare that its input reports key releases.
+ */
+export function hasNegotiatedStatefulKeyboardProtocol(): boolean {
+  return statefulKeyboardProtocolNegotiated;
 }
 
 export function createNodeInputRuntime(options: NodeInputRuntimeOptions): NodeInputRuntime {
+  const reportsKeyReleases = statefulKeyboardProtocolNegotiated;
   const stdin = process.stdin as NodeJS.ReadStream & { isRaw?: boolean };
   const canCaptureInput = process.stdin.isTTY;
   let started = false;
@@ -104,6 +126,7 @@ export function createNodeInputRuntime(options: NodeInputRuntimeOptions): NodeIn
     }
 
     if (isStatefulProtocol && (pressTokens.length > 0 || repeatTokens.length > 0 || releaseTokens.length > 0)) {
+      statefulKeyboardProtocolNegotiated = true;
       options.inputSignals.pushCommand({
         kind: 'kitty-state',
         pressTokens: [...pressTokens],
@@ -306,6 +329,7 @@ export function createNodeInputRuntime(options: NodeInputRuntimeOptions): NodeIn
   return {
     start,
     stop,
+    ...(reportsKeyReleases ? { reportsKeyReleases: true as const } : {}),
   };
 
   function resolveKeyPressInputEvents(

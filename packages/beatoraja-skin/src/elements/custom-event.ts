@@ -1,6 +1,6 @@
 // `customEvents[]` / `customTimers[]` parser + per-frame evaluator (audit 2.2).
 //
-// Beatoraja's `JsonSkin.CustomEvent` pairs a `condition` (BooleanProperty — Lua function or
+// Beatoraja's `JSONSkin.CustomEvent` pairs a `condition` (BooleanProperty — Lua function or
 // numeric op id) with an `action` (Event / Lua function fired when condition flips true)
 // and a `minInterval` rate-limiter. The reference renderer iterates `skin.customEvents` each
 // frame: when a condition just turned `false → true` AND enough ms have passed since the

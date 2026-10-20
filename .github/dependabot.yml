@@ -10,18 +10,24 @@ updates:
     schedule:
       interval: 'weekly'
     groups:
-      # `vite-plus` and the `vite` -> `@voidzero-dev/vite-plus-core` alias must move in lockstep.
+      # `vite-plus` and the `vite` -> `@voidzero-dev/vite-plus-core` alias must move in lockstep. Dependabot does not
+      # bump the alias, so .github/workflows/dependabot-npm.yml runs `vp migrate` on the PR to align it.
       vite-plus:
         patterns:
           - 'vite-plus'
           - '@voidzero-dev/vite-plus-core'
+      # `better-auth` and its `@better-auth/*` plugins are released together at one version and expect each other's.
+      better-auth:
+        patterns:
+          - 'better-auth'
+          - '@better-auth/*'
     ignore:
       - dependency-name: '@types/node'
         update-types:
           - 'version-update:semver-major'
           - 'version-update:semver-patch'
       # The `vitest` pin and `@vitest/*` must match the Vitest that `vite-plus` bundles; bumping them on their own
-      # splits the runner. After a `vite-plus` bump, run `pnpm exec vp migrate` to re-align them instead.
+      # splits the runner. The `vp migrate` run on a `vite-plus` PR re-aligns them instead.
       - dependency-name: 'vitest'
       - dependency-name: '@vitest/*'
 

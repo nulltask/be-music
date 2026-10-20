@@ -2,9 +2,8 @@ import { EventEmitter } from 'node:events';
 import { isAbortError } from '@be-music/utils/core';
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { WorkerOptions } from 'node:worker_threads';
-import { createEmptyJson } from '../../../json/src/index.ts';
-import { createPlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
-import { createPlayerStateSignals } from '@be-music/player/state-signals';
+import { createEmptyJSON } from '../../../json/src/index.ts';
+import { createPlayerStateSignals, createPlayerUISignalBus } from '@be-music/player/signals';
 
 type MockWorker = EventEmitter & {
   postMessage: ReturnType<typeof vi.fn>;
@@ -57,7 +56,7 @@ vi.mock('node:worker_threads', async () => {
   };
 });
 
-import { createNodeUiRuntime } from './node-ui-runtime.ts';
+import { createNodeUIRuntime } from './node-ui-runtime.ts';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -72,8 +71,8 @@ afterEach(() => {
 describe('node ui runtime', () => {
   test('coalesces frames before posting them to the UI worker', async () => {
     vi.useFakeTimers();
-    const uiSignals = createPlayerUiSignalBus(createFrame());
-    const runtime = await createNodeUiRuntime(createContext(uiSignals));
+    const uiSignals = createPlayerUISignalBus(createFrame());
+    const runtime = await createNodeUIRuntime(createContext(uiSignals));
     const worker = getLastWorker();
 
     worker.postMessage.mockClear();
@@ -99,13 +98,13 @@ describe('node ui runtime', () => {
 
   test('posts static landmine and invisible note collections only once', async () => {
     vi.useFakeTimers();
-    const uiSignals = createPlayerUiSignalBus(
+    const uiSignals = createPlayerUISignalBus(
       createFrame({
         landmineNotes: [{ channel: 'D1', beat: 1, seconds: 0.5, judged: false, mine: true }],
         invisibleNotes: [{ channel: '11', beat: 2, seconds: 1, judged: false, invisible: true }],
       }),
     );
-    const runtime = await createNodeUiRuntime(createContext(uiSignals));
+    const runtime = await createNodeUIRuntime(createContext(uiSignals));
     const worker = getLastWorker();
 
     const initialFrameMessages = messagesOfKind(worker, 'frame');
@@ -149,8 +148,8 @@ describe('node ui runtime', () => {
       judged: boolean;
       visibleUntilBeat?: number;
     }> = [{ channel: '11', beat: 1, seconds: 0.5, judged: false }];
-    const uiSignals = createPlayerUiSignalBus(createFrame({ notes }));
-    const runtime = await createNodeUiRuntime(createContext(uiSignals));
+    const uiSignals = createPlayerUISignalBus(createFrame({ notes }));
+    const runtime = await createNodeUIRuntime(createContext(uiSignals));
     const worker = getLastWorker();
 
     worker.postMessage.mockClear();
@@ -182,8 +181,8 @@ describe('node ui runtime', () => {
   test('posts lifecycle and state updates to the UI worker', async () => {
     vi.useFakeTimers();
     const stateSignals = createPlayerStateSignals(1);
-    const uiSignals = createPlayerUiSignalBus(createFrame());
-    const runtime = await createNodeUiRuntime(createContext(uiSignals, stateSignals));
+    const uiSignals = createPlayerUISignalBus(createFrame());
+    const runtime = await createNodeUIRuntime(createContext(uiSignals, stateSignals));
     const worker = getLastWorker();
 
     worker.postMessage.mockClear();
@@ -218,18 +217,18 @@ describe('node ui runtime', () => {
   });
 
   test('passes the source-conditions exec flag to the UI worker in source runs', async () => {
-    const uiSignals = createPlayerUiSignalBus(createFrame());
-    const runtime = await createNodeUiRuntime(createContext(uiSignals));
+    const uiSignals = createPlayerUISignalBus(createFrame());
+    const runtime = await createNodeUIRuntime(createContext(uiSignals));
     const workerExecArgv = workerState.lastWorkerOptions?.execArgv;
     const workerData = workerState.lastWorkerOptions?.workerData as
       | {
           stdinIsTTY?: boolean;
           stdoutIsTTY?: boolean;
-          uiFps?: number;
+          uiFPS?: number;
           tuiVisibleNotesLimit?: number;
           tuiNoteHeight?: string;
           imageResizeAlgorithm?: string;
-          videoBgaStreaming?: boolean;
+          videoBGAStreaming?: boolean;
         }
       | undefined;
 
@@ -238,11 +237,11 @@ describe('node ui runtime', () => {
       stdinIsTTY: Boolean(process.stdin.isTTY),
       stdoutIsTTY: Boolean(process.stdout.isTTY),
       useAlternateScreen: true,
-      uiFps: 60,
+      uiFPS: 60,
       tuiVisibleNotesLimit: 8192,
       tuiNoteHeight: 8,
       imageResizeAlgorithm: 'nearest',
-      videoBgaStreaming: true,
+      videoBGAStreaming: true,
     });
 
     await runtime.dispose();
@@ -250,8 +249,8 @@ describe('node ui runtime', () => {
 
   test('disables alternate screen for Windows worker init', async () => {
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32');
-    const uiSignals = createPlayerUiSignalBus(createFrame());
-    const runtime = await createNodeUiRuntime(createContext(uiSignals));
+    const uiSignals = createPlayerUISignalBus(createFrame());
+    const runtime = await createNodeUIRuntime(createContext(uiSignals));
     const workerData = workerState.lastWorkerOptions?.workerData as { useAlternateScreen?: boolean } | undefined;
 
     expect(workerData?.useAlternateScreen).toBe(false);
@@ -262,8 +261,8 @@ describe('node ui runtime', () => {
 
   test('waits for stop acknowledgement before resolving lifecycle cleanup', async () => {
     workerState.autoAckLifecycle = false;
-    const uiSignals = createPlayerUiSignalBus(createFrame());
-    const runtime = await createNodeUiRuntime(createContext(uiSignals));
+    const uiSignals = createPlayerUISignalBus(createFrame());
+    const runtime = await createNodeUIRuntime(createContext(uiSignals));
     const worker = getLastWorker();
 
     let resolved = false;
@@ -285,8 +284,8 @@ describe('node ui runtime', () => {
   });
 
   test('creates a dedicated bridge port for direct UI IPC', async () => {
-    const uiSignals = createPlayerUiSignalBus(createFrame());
-    const runtime = await createNodeUiRuntime(createContext(uiSignals));
+    const uiSignals = createPlayerUISignalBus(createFrame());
+    const runtime = await createNodeUIRuntime(createContext(uiSignals));
     const worker = getLastWorker();
 
     worker.postMessage.mockClear();
@@ -300,8 +299,8 @@ describe('node ui runtime', () => {
 
   test('captures BGA playback end seconds from the UI worker ready message', async () => {
     workerState.readyMessage = { kind: 'ready', bgaPlaybackEndSeconds: 3.25 };
-    const uiSignals = createPlayerUiSignalBus(createFrame());
-    const runtime = await createNodeUiRuntime(createContext(uiSignals));
+    const uiSignals = createPlayerUISignalBus(createFrame());
+    const runtime = await createNodeUIRuntime(createContext(uiSignals));
 
     expect(runtime.playbackEndSeconds).toBe(3.25);
 
@@ -310,8 +309,8 @@ describe('node ui runtime', () => {
 
   test('forwards UI worker log messages to the caller', async () => {
     const onLog = vi.fn();
-    const uiSignals = createPlayerUiSignalBus(createFrame());
-    const runtime = await createNodeUiRuntime({
+    const uiSignals = createPlayerUISignalBus(createFrame());
+    const runtime = await createNodeUIRuntime({
       ...createContext(uiSignals),
       onLog,
     });
@@ -323,7 +322,7 @@ describe('node ui runtime', () => {
         source: 'ui-worker',
         level: 'info',
         event: 'ui-worker.ready',
-        fields: { hasBgaRenderer: true },
+        fields: { hasBGARenderer: true },
       },
     });
 
@@ -331,7 +330,7 @@ describe('node ui runtime', () => {
       source: 'ui-worker',
       level: 'info',
       event: 'ui-worker.ready',
-      fields: { hasBgaRenderer: true },
+      fields: { hasBGARenderer: true },
     });
 
     await runtime.dispose();
@@ -340,8 +339,8 @@ describe('node ui runtime', () => {
   test('aborts UI worker initialization cooperatively through an abort message', async () => {
     workerState.autoReadyOnConstruct = false;
     const controller = new AbortController();
-    const uiSignals = createPlayerUiSignalBus(createFrame());
-    const promise = createNodeUiRuntime({
+    const uiSignals = createPlayerUISignalBus(createFrame());
+    const promise = createNodeUIRuntime({
       ...createContext(uiSignals),
       loadSignal: controller.signal,
     });
@@ -357,11 +356,11 @@ describe('node ui runtime', () => {
 });
 
 function createContext(
-  uiSignals: ReturnType<typeof createPlayerUiSignalBus>,
+  uiSignals: ReturnType<typeof createPlayerUISignalBus>,
   stateSignals = createPlayerStateSignals(1),
-): Parameters<typeof createNodeUiRuntime>[0] {
+): Parameters<typeof createNodeUIRuntime>[0] {
   return {
-    json: createEmptyJson('bms'),
+    json: createEmptyJSON('bms'),
     mode: 'MANUAL',
     laneDisplayMode: '7 KEY',
     laneBindings: [
@@ -370,23 +369,23 @@ function createContext(
       { channel: '12', keyLabel: 'D', inputTokens: ['d'], isScratch: false, side: '1P' },
     ],
     speed: 1,
-    uiFps: 60,
+    uiFPS: 60,
     tuiVisibleNotesLimit: 8192,
     tuiNoteHeight: 8,
     imageResizeAlgorithm: 'nearest',
     judgeWindowMs: 16.67,
     highSpeed: 1,
-    videoBgaStreaming: true,
+    videoBGAStreaming: true,
     stateSignals,
     uiSignals,
     baseDir: process.cwd(),
-    onBgaLoadProgress: () => undefined,
+    onBGALoadProgress: () => undefined,
   };
 }
 
 function createFrame(
-  overrides: Partial<Parameters<ReturnType<typeof createPlayerUiSignalBus>['publishFrame']>[0]> = {},
-): Parameters<ReturnType<typeof createPlayerUiSignalBus>['publishFrame']>[0] {
+  overrides: Partial<Parameters<ReturnType<typeof createPlayerUISignalBus>['publishFrame']>[0]> = {},
+): Parameters<ReturnType<typeof createPlayerUISignalBus>['publishFrame']>[0] {
   return {
     currentBeat: 0,
     currentSeconds: 0,

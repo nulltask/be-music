@@ -1,17 +1,27 @@
-import type { PixiSceneHost } from '@be-music/player-web/scenes';
+import type { PixiSceneHost } from '@be-music/player-web/host';
 import { Rectangle, logger } from '@be-music/player-web';
-import { downloadBlob, makeWebmSeekable } from '@be-music/player-web/runtime';
+import {
+  downloadBlob,
+  makeWebMSeekable,
+  recordingFileExtension,
+  type RecordingFormat,
+} from '@be-music/player-web/recording';
 import type { Controller } from 'lil-gui';
+
+/** The Debug Menu button that records the play screen (gameplay) as a video. */
+export const RECORD_LABEL = '● Record gameplay video';
+/** The same button while a recording runs. */
+export const STOP_RECORDING_LABEL = '■ Stop recording';
 
 const recordLog = logger('record');
 
 /**
- * Common recording-API surface both gameplay views (LR2 `PixiGameplayView` and beatoraja `PixiBeatorajaGameplayView`)
- * expose. Narrowed type so {@link activeGameplayRecorder} can return a path-agnostic value the rest of the controller
+ * Common recording-API surface both gameplay paths (a built-in or LR2 play scene's `recording` and beatoraja's
+ * `PixiBeatorajaGameplayView`) expose. Narrowed type so {@link activeGameplayRecorder} can return a path-agnostic value the rest of the controller
  * acts on without branching by family.
  */
 export interface GameplayRecorder {
-  startRecording(): void;
+  startRecording(options?: { format?: RecordingFormat }): void;
   stopRecording(): Promise<{ blob: Blob; mimeType: string; durationMs: number; seekable: boolean } | undefined>;
   isRecording(): boolean;
 }
@@ -19,20 +29,20 @@ export interface GameplayRecorder {
 /**
  * Dependencies the recording controller's free functions read from / write to. Modelled as explicit getters /
  * setters / callbacks (rather than `this` references) so the demo class can pass them in without having to drop its
- * private modifier on every backing field. Each call site builds one of these inline from the demo's `PlayerWebDemoApp`
- * fields — see `makeRecordingDeps` in `main.ts`.
+ * private modifier on every backing field. Each call site builds one of these from the demo's recording service — see
+ * `RecordingService.deps` in `services/recording.ts`.
  */
 export interface RecordingDeps {
   readonly sceneHost: PixiSceneHost;
   readonly recordController: Controller | undefined;
   /** Whichever gameplay view is mounted right now, or `undefined` when neither family is active. */
   getActiveGameplay(): GameplayRecorder | undefined;
-  /** LR2-only probe for `finalizeRecordingIfActive` — preserves the historical asymmetry (audit later). */
-  isLr2GameplayRecording(): boolean;
   getAutoRecordArmed(): boolean;
   setAutoRecordArmed(value: boolean): void;
   /** Snapshot of the recording filename stem at call time; the demo updates it per chart in `playSong`. */
   getRecordingFilenameBase(): string;
+  /** The Debug Menu's "Video format": the container and codec a new recording is written in. */
+  getRecordingFormat(): RecordingFormat;
   setStatus(text: string): void;
 }
 
@@ -143,11 +153,11 @@ export async function toggleRecording(deps: RecordingDeps): Promise<void> {
     deps.setAutoRecordArmed(next);
     if (next) {
       controller?.domElement.classList.add('arming');
-      controller?.name('◉ Recording on next song');
+      controller?.name('◉ Records the next play');
       deps.setStatus('Recording armed — pick a song to start capturing');
     } else {
       controller?.domElement.classList.remove('arming');
-      controller?.name('● Record');
+      controller?.name(RECORD_LABEL);
       deps.setStatus('Recording disarmed');
     }
     return;
@@ -158,11 +168,12 @@ export async function toggleRecording(deps: RecordingDeps): Promise<void> {
     try {
       const result = await gameplay.stopRecording();
       if (result) {
-        // The `MediaRecorder` fallback writes a play-only WebM stream — post-process it to inject `Duration` + `Cues`
-        // so external players can seek inside it. Falls back to the raw blob if the patch fails, so a take is never
-        // silently lost. The WebCodecs backend writes the seek index itself.
-        const seekable = result.seekable ? result.blob : await makeWebmSeekable(result.blob);
-        const filename = `${deps.getRecordingFilenameBase()}.webm`;
+        // A WebM from the `MediaRecorder` fallback has no seek index — post-process it to inject `Duration` + `Cues` so
+        // external players can seek inside it. Falls back to the raw blob if the patch fails, so a take is never
+        // silently lost. The WebCodecs backend, and MP4 from either, carry the index already.
+        const seekable = result.seekable ? result.blob : await makeWebMSeekable(result.blob);
+        // Named after what was written: the browser may have fallen back to another container.
+        const filename = `${deps.getRecordingFilenameBase()}.${recordingFileExtension(result.mimeType)}`;
         downloadBlob(seekable, filename);
         const seconds = (result.durationMs / 1000).toFixed(1);
         const sizeMb = (seekable.size / (1024 * 1024)).toFixed(1);
@@ -170,15 +181,15 @@ export async function toggleRecording(deps: RecordingDeps): Promise<void> {
       }
     } finally {
       controller?.domElement.classList.remove('recording');
-      controller?.name('● Record');
+      controller?.name(RECORD_LABEL);
       controller?.enable();
     }
     return;
   }
   try {
-    gameplay.startRecording();
+    gameplay.startRecording({ format: deps.getRecordingFormat() });
     controller?.domElement.classList.add('recording');
-    controller?.name('■ Stop');
+    controller?.name(STOP_RECORDING_LABEL);
     deps.setStatus('Recording…');
   } catch (error) {
     recordLog.warn('start failed', error);
@@ -190,13 +201,34 @@ export async function toggleRecording(deps: RecordingDeps): Promise<void> {
  * Stop the in-flight recording (if any) before a gameplay-view dispose. Sequencing matters: `MediaRecorder.stop()`
  * waits for a `'stop'` event from its source stream — disposing the gameplay view first kills the AudioContext that
  * feeds it, so the recorder never sees the event and the save never finalizes. Caller-side: invoke this BEFORE
- * disposing the gameplay view.
- *
- * Note (preserved from the original method): only checks the LR2 gameplay view via `isLr2GameplayRecording`, not the
- * beatoraja one — preserves the historical asymmetry. Audit later when consolidating the two recording paths.
+ * disposing the gameplay view, whichever family it belongs to.
  */
 export async function finalizeRecordingIfActive(deps: RecordingDeps): Promise<void> {
-  if (deps.isLr2GameplayRecording()) {
+  if (deps.getActiveGameplay()?.isRecording() === true) {
     await toggleRecording(deps);
+  }
+}
+
+/**
+ * Starts the recording armed from song select (the Record button pressed with no play up) on the gameplay view that just
+ * mounted, whichever family it belongs to. Call it once the view's AudioContext exists. A failure is not fatal: the
+ * play goes on and the status says why nothing is recorded.
+ */
+export function startArmedRecording(deps: RecordingDeps): void {
+  if (!deps.getAutoRecordArmed()) return;
+  const gameplay = deps.getActiveGameplay();
+  if (gameplay === undefined) return;
+  deps.setAutoRecordArmed(false);
+  const controller = deps.recordController;
+  controller?.domElement.classList.remove('arming');
+  try {
+    gameplay.startRecording({ format: deps.getRecordingFormat() });
+    controller?.domElement.classList.add('recording');
+    controller?.name(STOP_RECORDING_LABEL);
+    deps.setStatus('Recording…');
+  } catch (error) {
+    controller?.name(RECORD_LABEL);
+    recordLog.warn('auto-start failed', error);
+    deps.setStatus(`Recording unavailable: ${(error as Error).message}`);
   }
 }

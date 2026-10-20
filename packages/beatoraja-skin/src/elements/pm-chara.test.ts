@@ -35,8 +35,8 @@ describe('normalizeBeatorajaPmCharas', () => {
     expect(normalizeBeatorajaPmCharas([{ id: 'x', src: 's', side: 2 }])[0]?.side).toBe(2);
   });
 
-  it('defaults color to 1 when omitted (audit 3.1 — matches Java JsonSkin.PmChara)', () => {
-    // Java's `JsonSkin.PmChara.color = 1` declaration plus the loader's `color == 2 ? 2 : 1`
+  it('defaults color to 1 when omitted (audit 3.1 — matches Java JSONSkin.PmChara)', () => {
+    // Java's `JSONSkin.PmChara.color = 1` declaration plus the loader's `color == 2 ? 2 : 1`
     // clamp means any sparse pmchara entry without `color` should resolve to 1, not 0.
     expect(normalizeBeatorajaPmCharas([{ id: 'x', src: 's' }])[0]?.color).toBe(1);
   });

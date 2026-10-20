@@ -1,13 +1,13 @@
 import { summarizeBrowserCompat, type BrowserCompatReport } from '@be-music/player-web/collection';
 
 /**
- * Renders the browser-compatibility diagnostic panel that lives alongside (not inside) the drop card. Feature support
+ * Renders the browser-compatibility check, folded inside the drop card under the Leaderboard row. Feature support
  * doesn't change at runtime so this is a one-shot side-effect — call once at boot and the DOM stays in sync for the
  * session.
  *
- * The panel is the *only* place the compat verdict surfaces; the drop card stays focused on its call-to-action. When
- * required features are missing the panel flips into a red "Browser not supported" mode and lists each missing item
- * with its dependency note, so the user can identify exactly what's blocking them.
+ * The panel is the *only* place the compat verdict surfaces. When required features are missing it flips into a red
+ * "Browser not supported" mode, opens, and lists each missing item with its dependency note, so the user can identify
+ * exactly what's blocking them.
  */
 export function renderBrowserCompatPanel(report: BrowserCompatReport): void {
   const panel = document.querySelector<HTMLElement>('#compat-panel');
@@ -20,6 +20,8 @@ export function renderBrowserCompatPanel(report: BrowserCompatReport): void {
   // the SVG, only one is shown at a time per CSS).
   panel.classList.toggle('compat-panel--ok', report.ok);
   panel.classList.toggle('compat-panel--fail', !report.ok);
+  // Folded while everything required works; a missing feature opens it, since that is what the player needs to see.
+  if (panel instanceof HTMLDetailsElement) panel.open = !report.ok;
 
   if (report.ok) {
     // Distinguish "everything works" from "core works but you're missing some optional niceties" — the latter is still

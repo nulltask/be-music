@@ -13,8 +13,16 @@ body,
 body {
   background: #08090d;
   color: #f8fafc;
-  font-family: 'LINE Seed JP', system-ui, sans-serif;
+  font-family: system-ui, sans-serif;
   overflow: hidden;
+}
+
+/* Form controls don't inherit the page font by default; keep them on the UI font too. */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 .shell {
@@ -45,31 +53,69 @@ body {
  * background colours therefore drop to fairly low alpha values;
  * widget / row backgrounds keep slightly more opacity for
  * legibility against busy chart graphics. `-webkit-backdrop-filter`
- * is paired in for Safari / iOS WebKit support.
+ * is paired in for Safari / iOS WebKit support. Declare the prefixed form FIRST everywhere in this file: the build's
+ * CSS minifier folds a prefixed declaration that follows the standard one into the prefixed form only, which Chromium
+ * ignores, so the blur silently disappeared in production.
  */
-.lil-gui.root {
-  --background-color: rgb(17 22 32 / 0.45);
+.lil-gui.lil-root {
+  --background-color: rgb(17 22 32 / 0.62);
   --text-color: #f8fafc;
-  --title-background-color: rgb(11 14 22 / 0.55);
+  --title-background-color: rgb(11 14 22 / 0.72);
   --title-text-color: #f8fafc;
-  --widget-color: rgb(27 34 48 / 0.7);
+  --widget-color: rgb(52 63 84 / 0.85);
   --hover-color: #ffd166;
   --focus-color: #ffd166;
   --number-color: #ffd166;
   --string-color: #ffd166;
-  --font-family: 'LINE Seed JP', system-ui, sans-serif;
+  --font-family: system-ui, sans-serif;
   z-index: 10;
-  backdrop-filter: blur(10px) saturate(140%);
   -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: blur(10px) saturate(140%);
+}
+
+/*
+ * Widgets have to stand off the panel: checkboxes and drop-downs take a
+ * hairline edge, and a ticked checkbox fills with the accent. The hover
+ * fill of a drop-down is a tint of the accent, not the accent itself,
+ * which white text cannot be read on.
+ */
+.lil-gui.lil-root input[type='checkbox'],
+.lil-gui.lil-root .lil-controller.lil-option .lil-display {
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.24);
+}
+.lil-gui.lil-root input[type='checkbox']:checked {
+  background: #ffd166;
+  color: #11161f;
+  box-shadow: none;
+}
+@media (hover: hover) {
+  .lil-gui.lil-root .lil-controller.lil-option .lil-widget:hover .lil-display {
+    background: rgb(255 209 102 / 0.22);
+  }
 }
 
 /*
  * Folder children inherit the root's `--background-color` (transparent),
- * so blur applied to .lil-gui.root covers the whole panel. We
+ * so blur applied to .lil-gui.lil-root covers the whole panel. We
  * deliberately don't add a separate `backdrop-filter` to the
  * folder, otherwise stacked filters would re-blur an already
  * blurred image and over-soften the chart visuals.
+ *
+ * lil-gui's own stylesheet re-declares its palette on every
+ * `.lil-gui`, folders included, so without this rule only the
+ * root's own rows would pick up the demo palette.
  */
+.lil-gui.lil-root .lil-gui {
+  --text-color: inherit;
+  --title-background-color: inherit;
+  --title-text-color: inherit;
+  --widget-color: inherit;
+  --hover-color: inherit;
+  --focus-color: inherit;
+  --number-color: inherit;
+  --string-color: inherit;
+  --font-family: inherit;
+}
 
 /*
  * Record-button accent. lil-gui paints function controllers as
@@ -78,13 +124,13 @@ body {
  * and pulse the box-shadow so it stays visible without dominating
  * gameplay rendered behind it.
  */
-.lil-gui .controller.recording {
+.lil-gui .lil-controller.recording {
   background: #c33b3b;
   animation: record-pulse 1.4s ease-in-out infinite;
 }
 
-.lil-gui .controller.recording .name,
-.lil-gui .controller.recording .widget {
+.lil-gui .lil-controller.recording .lil-name,
+.lil-gui .lil-controller.recording .lil-widget {
   color: #fff;
 }
 
@@ -95,13 +141,13 @@ body {
  * takes over. We use a softer amber + slower pulse so it reads
  * as "ready, but not yet capturing".
  */
-.lil-gui .controller.arming {
+.lil-gui .lil-controller.arming {
   background: #b8841d;
   animation: record-arming 2s ease-in-out infinite;
 }
 
-.lil-gui .controller.arming .name,
-.lil-gui .controller.arming .widget {
+.lil-gui .lil-controller.arming .lil-name,
+.lil-gui .lil-controller.arming .lil-widget {
   color: #fff;
 }
 
@@ -152,7 +198,7 @@ body {
   background: rgb(11 14 22 / 0.85);
   color: #f8fafc;
   font-size: 13px;
-  font-family: 'LINE Seed JP', system-ui, sans-serif;
+  font-family: system-ui, sans-serif;
   outline: none;
 }
 
@@ -201,6 +247,17 @@ body {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/*
+ * The canvas takes keyboard focus (tabindex 0) so the scenes get their keys, but it is the whole play surface: a focus
+ * ring would frame the screen, most visibly in fullscreen. The fullscreen shell gets none either.
+ */
+.stage canvas:focus,
+.stage canvas:focus-visible,
+.shell:fullscreen,
+.shell:-webkit-full-screen {
+  outline: none;
 }
 
 /*
@@ -307,8 +364,8 @@ body {
   border: 1px solid rgb(255 255 255 / 0.08);
   border-radius: 18px;
   background: linear-gradient(180deg, rgb(20 24 34 / 0.78), rgb(11 14 22 / 0.78));
-  backdrop-filter: blur(18px) saturate(160%);
   -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
   box-shadow:
     0 24px 60px rgb(0 0 0 / 0.45),
     0 0 0 1px rgb(255 255 255 / 0.04) inset;
@@ -418,66 +475,230 @@ body {
 }
 
 /*
- * Browser-compatibility diagnostic panel. Standalone widget that
- * lives at the shell level — DELIBERATELY not inside the drop
- * card so it reads as "system check" rather than as decoration
- * on the call-to-action.
- *
- * Pinned top-left because:
- *   - top-right is taken by lil-gui (settings)
- *   - bottom-left is taken by the search input (when songs load)
- *   - centre is the drop card
- * That leaves top-left as the natural home for a status-bar-
- * style diagnostic widget. It only shows up alongside the empty-
- * state UI (i.e. before songs are loaded); once gameplay /
- * select / result mounts, it gets out of the way.
+ * Leaderboard row of the start card: the submission checkbox, then the
+ * account the plays go to with its sign-in / sign-up buttons. Only on the
+ * empty shell; a drag over loaded songs shows the bare drop hint.
+ * `.drop` ignores the pointer (drops land on the stage), so the
+ * interactive parts take it back.
+ */
+.start-leaderboard,
+.start-audio,
+.compat-panel {
+  width: min(360px, calc(100vw - 96px));
+  pointer-events: auto;
+  text-align: left;
+}
+
+.shell:not(.empty) .start-leaderboard,
+.shell:not(.empty) .start-audio,
+.shell:not(.empty) .compat-panel {
+  display: none;
+}
+
+.start-leaderboard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid rgb(255 255 255 / 0.08);
+}
+
+.start-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #f8fafc;
+  cursor: pointer;
+}
+
+.start-check input {
+  appearance: none;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: 1.5px solid rgb(255 255 255 / 0.4);
+  border-radius: 4px;
+  background: transparent center / 12px no-repeat;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out;
+}
+.start-check input:hover {
+  border-color: rgb(255 255 255 / 0.7);
+}
+.start-check input:checked {
+  border-color: #ffd166;
+  background-color: #ffd166;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2 5 8.5 9.5 3.5' fill='none' stroke='%2311161f' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.start-check input:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 2px;
+}
+
+.start-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-left: 26px;
+  font-size: 12px;
+  color: #aab4c2;
+}
+
+.start-account-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* The same state dot as the account chip: green signed in, amber anonymous, grey signed out. */
+.start-account-label::before {
+  content: '';
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #6b7280;
+}
+.start-account[data-state='signed-in'] .start-account-label::before {
+  background: #4ade80;
+}
+.start-account[data-state='anonymous'] .start-account-label::before {
+  background: #facc15;
+}
+
+.start-account-label a {
+  color: #f8fafc;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.start-account-label a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.start-account-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.start-button {
+  padding: 5px 12px;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.04);
+  color: #f8fafc;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 160ms ease-out,
+    border-color 160ms ease-out;
+}
+.start-button:hover {
+  background: rgb(255 255 255 / 0.1);
+  border-color: rgb(255 255 255 / 0.28);
+}
+.start-button--primary {
+  border-color: #ffd166;
+  background: #ffd166;
+  color: #11161f;
+}
+.start-button--primary:hover {
+  background: #ffe08f;
+  border-color: #ffe08f;
+}
+
+.start-account-hint {
+  margin: 0;
+  padding-left: 26px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgb(170 180 194 / 0.85);
+}
+.start-account-hint:empty {
+  display: none;
+}
+
+/*
+ * "Play in silent mode" row of the start card (Safari / iOS only): the same
+ * checkbox as the Leaderboard's, with a note on what it costs underneath.
+ */
+.start-audio {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 16px;
+  border-top: 1px solid rgb(255 255 255 / 0.08);
+}
+.start-audio[hidden] {
+  display: none;
+}
+
+.start-audio-note {
+  margin: 0;
+  padding-left: 26px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgb(170 180 194 / 0.85);
+}
+
+.start-account-status {
+  padding-left: 26px;
+  font-size: 11px;
+  color: #fda4af;
+}
+.start-account-status:empty {
+  display: none;
+}
+
+/*
+ * Browser-compatibility check, folded at the foot of the start card:
+ * the summary carries the verdict (a check or a cross, "Browser ready"),
+ * opening it lists every probed feature. It opens by itself when a
+ * required feature is missing.
  */
 .compat-panel {
-  position: absolute;
-  top: 14px;
-  left: 14px;
-  z-index: 6;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  width: 280px;
-  padding: 14px 16px 16px;
-  border: 1px solid rgb(255 255 255 / 0.08);
-  border-radius: 14px;
-  background: rgb(11 14 22 / 0.7);
-  backdrop-filter: blur(14px) saturate(150%);
-  -webkit-backdrop-filter: blur(14px) saturate(150%);
-  box-shadow:
-    0 18px 36px rgb(0 0 0 / 0.4),
-    0 0 0 1px rgb(255 255 255 / 0.03) inset;
-  /*
-   * Visible only on the empty / dragging shell — once the user
-   * loads songs (select / gameplay / result scenes) the panel
-   * has done its job and gets out of the way. Mirrors the
-   * `.drop` overlay's own visibility logic.
-   */
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-6px);
-  transition:
-    opacity 220ms ease-out,
-    transform 220ms ease-out,
-    border-color 220ms ease-out,
-    box-shadow 220ms ease-out,
-    background 220ms ease-out;
-}
-
-.shell.empty .compat-panel,
-.dragging .compat-panel {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
+  padding-top: 14px;
+  border-top: 1px solid rgb(255 255 255 / 0.08);
 }
 
 .compat-panel-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  cursor: pointer;
+  list-style: none;
+}
+.compat-panel-header::-webkit-details-marker {
+  display: none;
+}
+
+/* A chevron that turns when the check opens. */
+.compat-panel-chevron {
+  margin-left: auto;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid #aab4c2;
+  border-bottom: 1.5px solid #aab4c2;
+  transform: rotate(-45deg);
+  transition: transform 160ms ease-out;
+}
+.compat-panel[open] .compat-panel-chevron {
+  transform: rotate(45deg);
 }
 
 /*
@@ -491,8 +712,8 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: rgb(74 222 128 / 0.16);
   color: #4ade80;
@@ -503,8 +724,8 @@ body {
 }
 
 .compat-panel-badge-icon {
-  width: 24px;
-  height: 24px;
+  width: 14px;
+  height: 14px;
 }
 
 .compat-panel-badge-mark {
@@ -544,7 +765,7 @@ body {
 }
 
 .compat-panel-status {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: #f8fafc;
@@ -566,17 +787,8 @@ body {
 }
 
 .compat-panel--fail {
-  /*
-   * Border + shadow shift to the warning palette so the panel
-   * doesn't quietly look "off" — when the player isn't going
-   * to run, the user should see a clearly red diagnostic card.
-   */
-  border-color: rgb(251 113 133 / 0.55);
-  background: rgb(40 18 22 / 0.78);
-  box-shadow:
-    0 18px 36px rgb(0 0 0 / 0.45),
-    0 0 0 1px rgb(251 113 133 / 0.18) inset,
-    0 0 32px rgb(251 113 133 / 0.18);
+  /* The divider turns red too: when the player cannot run, the check should not look quiet. */
+  border-top-color: rgb(251 113 133 / 0.55);
 }
 
 .compat-panel-sections {
@@ -963,7 +1175,7 @@ body {
   border-radius: 10px;
   background: rgb(17 22 32 / 0.94);
   color: #f8fafc;
-  font-family: 'LINE Seed JP', system-ui, sans-serif;
+  font-family: system-ui, sans-serif;
   /*
    * Card has its own pointer-events so a future "Cancel" button
    * inside it would be clickable; the parent overlay stays
@@ -1095,10 +1307,10 @@ body {
   border: 1px solid rgb(255 255 255 / 0.08);
   border-radius: 999px;
   background: rgb(11 14 22 / 0.7);
-  backdrop-filter: blur(10px) saturate(140%);
   -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: blur(10px) saturate(140%);
   color: #d2d9e4;
-  font-family: 'LINE Seed JP', system-ui, sans-serif;
+  font-family: system-ui, sans-serif;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.14em;
@@ -1188,8 +1400,8 @@ body {
   position: absolute;
   inset: 0;
   background: rgb(4 6 10 / 0.65);
-  backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
 .help-modal-card {
@@ -1203,8 +1415,8 @@ body {
   border: 1px solid rgb(255 255 255 / 0.08);
   border-radius: 18px;
   background: rgb(11 14 22 / 0.96);
-  backdrop-filter: blur(20px) saturate(150%);
   -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
   box-shadow: 0 28px 80px rgb(0 0 0 / 0.55);
   /*
    * Slide-in entry that reads as "the dialog rose into focus"
@@ -1305,7 +1517,7 @@ body {
   padding: 6px 14px;
   border-radius: 8px;
   color: rgb(151 163 179 / 0.85);
-  font-family: 'LINE Seed JP', system-ui, sans-serif;
+  font-family: system-ui, sans-serif;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.12em;
@@ -1505,7 +1717,7 @@ body {
   padding: 5px 14px;
   border-radius: 999px;
   color: rgb(151 163 179 / 0.85);
-  font-family: 'LINE Seed JP', system-ui, sans-serif;
+  font-family: system-ui, sans-serif;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -1864,10 +2076,86 @@ body {
 }
 
 /*
- * During play the select-screen overlays step aside so they never cover the skin's track plate; the Help button stays
- * reachable by hovering where it sits.
+ * Leaderboard account chip, bottom-right. Same glass pill as the Help button; the dot carries the state (green signed
+ * in, amber anonymous, grey signed out) so it reads at a glance without the label.
  */
-.shell.in-gameplay .search-input {
+.account-chip {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(40vw, 260px);
+  padding: 8px 14px 8px 12px;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 999px;
+  background: rgb(11 14 22 / 0.7);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: blur(10px) saturate(140%);
+  color: #d2d9e4;
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.35);
+  transition:
+    color 180ms ease-out,
+    border-color 180ms ease-out,
+    opacity 180ms ease-out;
+}
+
+.account-chip:hover,
+.account-chip:focus-visible {
+  color: #ffd166;
+  border-color: rgb(255 209 102 / 0.4);
+  outline: none;
+}
+
+.account-chip-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6b7280;
+}
+
+.account-chip[data-state='signed-in'] .account-chip-dot {
+  background: #3fb950;
+  box-shadow: 0 0 6px rgb(63 185 80 / 0.7);
+}
+
+.account-chip[data-state='anonymous'] .account-chip-dot {
+  background: #f5a524;
+}
+
+.account-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .account-chip-label {
+    display: none;
+  }
+  .account-chip {
+    padding: 11px;
+  }
+}
+
+.shell.in-gameplay .account-chip {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/*
+ * During play the select-screen overlays step aside so they never cover the skin's track plate; the Help button stays
+ * reachable by hovering where it sits. The search field shows on the select screen only (`off-select` elsewhere).
+ */
+.shell.in-gameplay .search-input,
+.shell.off-select .search-input {
   visibility: hidden;
 }
 
@@ -1983,7 +2271,7 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   border-radius: 999px;
   background: rgb(11 14 22 / 0.55);
   color: rgb(248 250 252 / 0.75);
-  font-family: 'LINE Seed JP', system-ui, sans-serif;
+  font-family: system-ui, sans-serif;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -2067,4 +2355,472 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   .rotate-hint-icon {
     animation: none;
   }
+}
+
+/* One-line explanation under a Debug Menu setting (e.g. "Play in silent mode"). */
+.lil-gui .gui-note {
+  padding: 0 var(--padding) 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgb(210 217 228 / 0.75);
+}
+
+/*
+ * "No sound?" hint, shown once on an iPhone / iPad when sound first starts. Top-centre, clear of the Debug Menu
+ * (top-right), the search box (bottom-left) and Help (bottom-right); it never blocks the stage and leaves by itself.
+ */
+.silent-mode-hint {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top, 0px));
+  left: 50%;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 6px 6px 6px 12px;
+  border: 1px solid rgb(255 209 102 / 0.35);
+  border-radius: 10px;
+  background: rgb(11 14 22 / 0.85);
+  color: #f8fafc;
+  font-size: 12px;
+  line-height: 1.35;
+  transform: translateX(-50%);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  animation: silent-mode-hint-in 0.25s ease-out;
+}
+
+.silent-mode-hint-text {
+  flex: 1 1 auto;
+}
+
+.silent-mode-hint-action,
+.silent-mode-hint-dismiss {
+  flex: none;
+  min-height: 32px;
+  border: 1px solid rgb(255 209 102 / 0.5);
+  border-radius: 7px;
+  background: transparent;
+  color: #ffd166;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.silent-mode-hint-action {
+  padding: 0 10px;
+}
+
+.silent-mode-hint-dismiss {
+  width: 32px;
+  border-color: transparent;
+  color: rgb(210 217 228 / 0.85);
+  font-size: 16px;
+}
+
+@keyframes silent-mode-hint-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .silent-mode-hint {
+    animation: none;
+  }
+}
+
+/*
+ * Leaderboard sign-in / sign-up dialogs (account-dialogs.ts): the same
+ * steps as the Leaderboard's own dialogs, in the demo's palette — a
+ * dark card over a dimmed page, the accent on the main button, Google
+ * and Discord shown greyed out with an "Coming soon" badge.
+ */
+.account-dialog {
+  width: min(380px, calc(100vw - 32px));
+  margin: auto;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 16px;
+  background: rgb(14 18 27 / 0.97);
+  color: #f8fafc;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.55);
+  font-family: system-ui, sans-serif;
+}
+.account-dialog::backdrop {
+  background: rgb(0 0 0 / 0.55);
+}
+
+.account-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px;
+}
+
+.account-dialog header h2 {
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 600;
+}
+.account-dialog header p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #aab4c2;
+}
+
+.account-dialog-primary,
+.account-dialog-quiet,
+.account-provider {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.account-dialog-primary {
+  border: 1px solid #ffd166;
+  background: #ffd166;
+  color: #11161f;
+}
+.account-dialog-primary:hover {
+  background: #ffe08f;
+}
+.account-dialog-primary:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.account-dialog-quiet {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #d2d9e4;
+}
+.account-dialog-quiet:hover {
+  background: rgb(255 255 255 / 0.06);
+}
+
+.account-providers {
+  display: grid;
+  gap: 8px;
+}
+.account-provider {
+  justify-content: flex-start;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: rgb(255 255 255 / 0.03);
+  color: #f8fafc;
+}
+.account-provider:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.account-provider-logo {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+}
+.account-provider-logo svg {
+  width: 16px;
+  height: 16px;
+}
+.account-provider-badge {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.1);
+  font-size: 10px;
+  font-weight: 600;
+  color: #d2d9e4;
+}
+
+.account-dialog-or {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: #8b95a5;
+}
+.account-dialog-or::before,
+.account-dialog-or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgb(255 255 255 / 0.1);
+}
+
+.account-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.account-field input {
+  padding: 8px 10px;
+  border: 1px solid rgb(255 255 255 / 0.18);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.04);
+  color: #f8fafc;
+  font: inherit;
+  font-size: 14px;
+}
+.account-field input:focus {
+  outline: none;
+  border-color: #ffd166;
+  box-shadow: 0 0 0 3px rgb(255 209 102 / 0.2);
+}
+.account-field small {
+  font-size: 11px;
+  font-weight: 400;
+  color: #8b95a5;
+}
+
+.account-dialog-status {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #fda4af;
+}
+
+.account-dialog footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.account-dialog-buttons {
+  display: flex;
+  gap: 8px;
+}
+.account-dialog-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #ffd166;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.account-dialog-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/*
+ * "Drop a skin" prompt: the drop card's look, as a modal over the page.
+ * Drops on it bubble to the window's drop handler like any other.
+ */
+.skin-drop {
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: min(420px, calc(100vw - 32px));
+  margin: auto;
+  padding: 38px 40px 24px;
+  border: 1px dashed rgb(255 209 102 / 0.45);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgb(20 24 34 / 0.96), rgb(11 14 22 / 0.96));
+  color: #f8fafc;
+  text-align: center;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.55);
+  font-family: system-ui, sans-serif;
+}
+.skin-drop[open] {
+  display: flex;
+}
+.skin-drop::backdrop {
+  background: rgb(0 0 0 / 0.6);
+}
+.skin-drop .drop-title {
+  margin: 0;
+}
+.skin-drop-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #aab4c2;
+}
+.skin-drop-hint code {
+  color: #d2d9e4;
+}
+
+/*
+ * The search field over a skin's own search box (inline-search.ts): positioned
+ * and sized by script to the box, it shows only the typed text and caret, so
+ * the skin's box shows through around it. A skin with a box hides the field
+ * at the foot of the screen until the box is clicked (or `/` is pressed).
+ */
+.shell.search-in-skin .search-input:not(.search-inline) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.search-input.search-inline {
+  bottom: auto;
+  right: auto;
+  z-index: 12;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 0.3em;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+  color: #f8fafc;
+  caret-color: #ffd166;
+  opacity: 1;
+  transform: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.search-input.search-inline::placeholder {
+  color: rgb(248 250 252 / 0.45);
+}
+.search-input.search-inline::-webkit-search-cancel-button {
+  display: none;
+}
+/* Over the skin's box on a touch screen too: the box, not the top of the screen, places it. */
+html.touch-first .search-input.search-inline:focus {
+  transform: none;
+}
+
+/* Until the account has been read, the chip stays out of sight and the start card says it is checking. */
+.account-chip[data-state='loading'] {
+  visibility: hidden;
+}
+.start-account[data-state='loading'] .start-account-label {
+  color: rgb(170 180 194 / 0.7);
+}
+
+/* Course maker (course-maker-panel.ts): the card shown while a course is being made, and the saved-course dialog. */
+.course-maker-card {
+  position: fixed;
+  left: 16px;
+  bottom: 64px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(320px, calc(100vw - 32px));
+  padding: 16px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 14px;
+  background: rgb(14 18 27 / 0.95);
+  color: #f8fafc;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.5);
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+}
+.course-maker-card[hidden] {
+  display: none;
+}
+.course-maker-card h2 {
+  margin: 0 0 2px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.course-maker-card header p {
+  margin: 0;
+  color: #aab4c2;
+  line-height: 1.4;
+}
+.course-maker-name {
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.04);
+  color: inherit;
+  font: inherit;
+}
+.course-maker-stages {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 22px;
+  color: #d2d9e4;
+}
+.course-maker-stages:empty {
+  display: none;
+}
+.course-maker-stages li {
+  overflow-wrap: anywhere;
+}
+.course-maker-stages .course-maker-select {
+  display: block;
+  margin-top: 4px;
+}
+.course-maker-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #aab4c2;
+}
+.course-maker-select {
+  padding: 4px 6px;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 6px;
+  background: #151b27;
+  color: #f8fafc;
+  font: inherit;
+  font-size: 12px;
+}
+.course-maker-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.course-maker-buttons > button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.course-maker-dialog {
+  width: min(480px, calc(100vw - 32px));
+}
+.course-maker-list {
+  display: grid;
+  gap: 12px;
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+  font-size: 13px;
+}
+.course-maker-list > p {
+  margin: 0;
+  color: #aab4c2;
+}
+.course-maker-course {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.02);
+}
+.course-maker-course-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.course-maker-course-head .course-maker-name {
+  flex: 1;
+}
+.course-maker-kind {
+  color: #ffd166;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.course-maker-constraints {
+  display: grid;
+  gap: 6px;
 }

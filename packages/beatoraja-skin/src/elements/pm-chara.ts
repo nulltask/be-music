@@ -34,8 +34,8 @@ import type { BeatorajaSkinSourceId } from '../types.ts';
 export type BeatorajaPmCharaType = number;
 
 /**
- * 1P or 2P side the character is bound to. Beatoraja's `JsonSkin.PmChara.side` defaults to
- * `1` (per `JsonSkin.java`) and the play loader normalizes `chara.side == 2 ? 2 : 1` —
+ * 1P or 2P side the character is bound to. Beatoraja's `JSONSkin.PmChara.side` defaults to
+ * `1` (per `JSONSkin.java`) and the play loader normalizes `chara.side == 2 ? 2 : 1` —
  * effectively "0 / unset → 1P, 2 → 2P". Our type union keeps `0` for backward compatibility
  * with already-parsed records, but the parser now emits `1` as the default per audit 3.1.
  */
@@ -85,7 +85,7 @@ function normalizeOne(entry: NormalizedElement): BeatorajaPmCharaElement | undef
   return {
     id,
     src,
-    // Default `color = 1` matches beatoraja's `JsonSkin.PmChara.color = 1` declaration
+    // Default `color = 1` matches beatoraja's `JSONSkin.PmChara.color = 1` declaration
     // (audit 3.1). The play loader further clamps `chara.color == 2 ? 2 : 1` — the only
     // valid runtime values are 1 and 2. The previous default of 0 was non-portable; a skin
     // omitting `color` would lose its character coloring entirely in our impl while showing

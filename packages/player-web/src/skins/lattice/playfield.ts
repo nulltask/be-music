@@ -16,17 +16,29 @@ import {
   type PixiLongNoteContext,
   type PixiNoteContext,
   keyBeamGradient,
+  wheelArrowPoints,
 } from '../pixi-kit/index.ts';
 
-/** Lane-class colour: white keys print in ink, black keys in cobalt, the scratch in vermilion. */
+/**
+ * Lane-class colour: white keys print in ink, black keys in cobalt, the scratch — and the 24 / 48 KEY wheel in its
+ * place — in vermilion.
+ */
 const LANE_COLORS: Record<BeMusicLaneKind, number> = {
   white: LAT_INK,
   black: LAT_ACCENT,
   scratch: LAT_SIGNAL,
+  'wheel-up': LAT_SIGNAL,
+  'wheel-down': LAT_SIGNAL,
 };
 
 /** Beam inks: the note colours, with the white keys' ink lifted to graphite so its beam doesn't swallow the notes. */
-const BEAM_INKS: Record<BeMusicLaneKind, number> = { white: 0x55544f, black: LAT_ACCENT, scratch: LAT_SIGNAL };
+const BEAM_INKS: Record<BeMusicLaneKind, number> = {
+  white: 0x55544f,
+  black: LAT_ACCENT,
+  scratch: LAT_SIGNAL,
+  'wheel-up': LAT_SIGNAL,
+  'wheel-down': LAT_SIGNAL,
+};
 
 const NOTE_HEIGHT = 6;
 const LANE_BED = 0xfbfaf7;
@@ -74,6 +86,9 @@ export function renderLatticeLanes({ graphics, lanes, beatPhase, combo, effects 
     } else {
       graphics.rect(capX + 0.5, lane.bottom + 7.5, cap - 1, cap - 1).stroke({ color: LAT_INK, width: 1, alpha: 0.55 });
     }
+    // A wheel lane's cap carries the way it turns, printed in the lane colour (paper while the cap is filled).
+    const arrow = wheelArrowPoints(lane.kind, capX + cap / 2, lane.bottom + 7 + cap / 2, Math.max(1.5, cap / 2 - 2));
+    if (arrow) graphics.poly(arrow).fill(lane.beam > 0.6 ? LANE_BED : LANE_COLORS[lane.kind]);
   }
   // Lane hairlines.
   for (const lane of lanes) {

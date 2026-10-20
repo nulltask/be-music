@@ -43,7 +43,7 @@ export default defineBeMusicSkin({
       ctx.fillRect(0, 0, width, height);
       // BGA 動画はキャンバスの背後で再生される。上から塗らず、矩形をくり抜く。
       const bga = frame.layout.bga;
-      if (bga && frame.runtime.hasBga) ctx.clearRect(bga.x, bga.y, bga.w, bga.h);
+      if (bga && frame.runtime.hasBGA) ctx.clearRect(bga.x, bga.y, bga.w, bga.h);
       for (const lane of frame.lanes) {
         ctx.fillStyle = lane.kind === 'scratch' ? '#311' : '#111';
         ctx.fillRect(lane.x, lane.top, lane.w, lane.bottom - lane.top);
@@ -77,7 +77,32 @@ export default defineBeMusicSkin({
 
 ## フレームワークを使う
 
-`setup` でサーフェスのキャンバス上にフレームワークのレンダラーを作り、`teardown` で解放します。`setup` はサーフェスごとに最初の描画前に 1 回呼ばれ、Promise を返すとプレイヤーはその完了を待ちます。サーフェスは画面ごとにあります（ゲームプレイ 1 つ、選曲画面ごと 1 つ、リザルト画面ごと 1 つ）。
+`setup` でサーフェスのキャンバス上にフレームワークのレンダラーを作り、`teardown` で解放します。`setup` はサーフェスごとに最初の描画前に 1 回呼ばれ、Promise を返すとプレイヤーはその完了を待ちます。サーフェスは画面ごとにあります（ゲームプレイ 1 つ、選曲画面ごと 1 つ、決定画面ごと 1 つ、リザルト画面ごと 1 つ）。
+
+スキンの登録から画面の終わりまでの、1 つのサーフェスの一生です（`@be-music/player-web` の `skin/be-music/registry.ts` と `binding.ts`）。
+
+```mermaid
+sequenceDiagram
+  participant Host as ホスト
+  participant Registry as スキンのレジストリ
+  participant Screen as 画面
+  participant Skin as スキン
+  Host->>Registry: add(skin)
+  Registry->>Registry: validateBeMusicSkin
+  Host->>Host: fontLoads を読み込む
+  Host->>Registry: resolve(id)
+  Registry-->>Host: skin
+  Host->>Screen: キット { skin, settings }<br/>で作る
+  Screen->>Skin: setup(surface)
+  Skin-->>Screen: 戻る（または Promise が解決）
+  loop 毎フレーム
+    Screen->>Skin: draw(surface, frame)
+  end
+  Host->>Screen: updateKit(kit)
+  Screen->>Skin: 次の描画: frame.settings が更新
+  Host->>Screen: dispose()
+  Screen->>Skin: teardown(surface)
+```
 
 ```ts
 import { WebGLRenderer, Container } from 'pixi.js';
@@ -88,8 +113,15 @@ const renderers = new WeakMap<HTMLCanvasElement, WebGLRenderer>();
 export default defineBeMusicSkin({
   // …メタデータ…
   context: 'webgl2',
-  // マスクにはステンシルバッファが必要。キャンバスは BGA の上に重なるのでアルファを保つ。
-  contextAttributes: { alpha: true, premultipliedAlpha: true, stencil: true, preserveDrawingBuffer: true },
+  // マスクにはステンシルバッファが必要。キャンバスは BGA の上に重なるのでアルファを保つ。プレイヤーは描いた
+  // フレームのうちにキャンバスを取り込むので、描画バッファを保つ必要はない。
+  contextAttributes: {
+    alpha: true,
+    premultipliedAlpha: true,
+    antialias: true,
+    stencil: true,
+    preserveDrawingBuffer: false,
+  },
   async setup(surface) {
     const renderer = new WebGLRenderer();
     await renderer.init({
@@ -117,7 +149,7 @@ export default defineBeMusicSkin({
 });
 ```
 
-組み込みの Pixi スキンは、`skins/pixi-kit/define-pixi-skin.ts` を通してまさにこれを行っています。このファイルは、プレイヤーのフレームデータを保持型の Pixi シーンに流し込む作例として読めます。選曲シーンを保持しておき、`frame.revision` が変わったときだけ作り直す方法も示しています。
+組み込みの Pixi スキンは、`skins/pixi-kit/define-pixi-skin.ts` を通してまさにこれを行っています。このファイルは、プレイヤーのフレームデータを保持型の Pixi シーンに流し込む作例として読めます。選曲シーンを保持しておき、`frame.revision` が変わったときだけ作り直す方法も示しています。ブラウザプレイヤー自身も Pixi で描画しているため、プレイヤー内ではこのキットのスキンは自前のレンダラーを使いません。プレイヤーのレンダラーでシーンをテクスチャに描かせるので、別の canvas からフレームをコピーすることがありません。この近道は組み込みキット専用で、独自のスキンは上のとおり canvas に描きます。
 
 ## サーフェス
 
@@ -133,7 +165,7 @@ export default defineBeMusicSkin({
 
 ## スキンのメタデータ
 
-すべてのスキンが以下を宣言します。`defineBeMusicSkin` は内容を検査し、不正なら例外を投げます。壊れたスキンは定義した場所で失敗します。
+すべてのスキンが以下を宣言します。`defineBeMusicSkin` は検査できる規則（API バージョン、id、label、version、author と URL、`fontLoads`、context、各画面の `draw`、`decide`、`settings`）を確かめ、破っていれば例外を投げます。壊れたスキンは定義した場所で失敗します。
 
 | フィールド                               | 必須 | ルール                                                                                                         |
 | ---------------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------- |
@@ -154,25 +186,25 @@ export default defineBeMusicSkin({
 | `decide`                                 | —    | 選曲とプレイの間の決定画面。[決定画面](#決定画面)を参照。                                                      |
 | `settings`                               | —    | プレイヤーが調整できるスキンのオプション。[スキン設定](#スキン設定)を参照。                                    |
 
-`validateBeMusicSkin(skin)` は、例外を投げずに同じ問題をメッセージの配列で返します。
+`validateBeMusicSkin(skin)` は、例外を投げずに同じ問題をメッセージの配列で返します。必須のフィールドを書き忘れた素の JavaScript のスキンでも同じです。ホストは追加されたスキンをこれで確かめる（be-music スキンのレジストリが確かめます）ので、たとえば `fontLoads` のないスキンのモジュールは、ページを壊さずに理由を添えて拒否されます。
 
 ## ステージとレイアウト
 
 - **ステージ:** スキンが描くデザインキャンバスです。`wideStage` は組み込みスキンが使う 16:9 のステージ（854×480）で、既定値でもあります。
 - **縦向きステージ:** スキンは `portraitStage` も宣言できます。画面が横より縦に長いあいだ描くキャンバスです。組み込みの `tallStage` は 480×854（9:16）で、`wideStage` を横倒しにしたものなので文字の大きさは変わりません。スマートフォンのブラウザの表示領域（ツールバーを除くと 9:16〜9:19.5 程度）では上下にわずかな余白が、3:4 のタブレットでは左右に余白が出ます。ホストは `resolveBeMusicStage(skin, screen, chart?)` でフレームごとにステージを選びます。スキンが縦向きステージを持ち、画面が縦向きならそちらを、それ以外は `stage` を使います。縦向きのプレイフィールドに収まらない譜面のゲームプレイは `stage` のままです。縦向きにするのは 9 レーンまでの SP（5 / 7 KEY、9 KEY）だけで（`supportsPortraitLayout`）、DP（10 / 14 KEY）と鍵盤モード（24 / 48 KEY）は横向きステージを縮小して描きます（デモはスマートフォンに回転を促します）。`portraitStage` の無いスキンは常に `stage` で描かれます。
-- **BGA の配置:** `BeMusicStage.resolveBgaRect(playfieldRight)` がゲームプレイの BGA の位置を決めます。プレイヤーはそこに動画を合成し、スキンは同じ矩形に枠を描きます。`wideStage` は SP では BGA を大きく取り、幅の広い DP や鍵盤モードの横では縮めます。
+- **BGA の配置:** `BeMusicStage.resolveBGARect(playfieldRight)` がゲームプレイの BGA の位置を決めます。プレイヤーはそこに動画を合成し、スキンは同じ矩形に枠を描きます。`wideStage` は SP では BGA を大きく取り、幅の広い DP や鍵盤モードの横では縮めます。
 - **フレームごとのレイアウト:** ゲームプレイの各フレームには、ホストが解決した `layout`（`BeMusicGameplayLayout`）が付きます。
   - `mode`: `'standard'` または `'touch'`（省略可。無ければ `'standard'`）。下のタッチレイアウトを参照してください。
   - `orientation`: `'landscape'` または `'portrait'`（省略可。無ければ `'landscape'`）。下の縦向きレイアウトを参照してください。
   - `stage`: 幅と高さ。
-  - `lanes`: 全レーン。チャンネル、種類（`white` / `black` / `scratch`）、サイド、x、幅を持ちます。譜面のプレイバリアント（5 / 7 / 9 / 10 / 14 / 24 / 48 KEY）の全レーンが、譜面で使われないレーンも含めて常に並びます。
+  - `lanes`: 全レーン。チャンネル、種類（`white` / `black` / `scratch`、24 / 48 KEY で各サイドの外側に置くホイールレーンは `wheel-up` / `wheel-down`）、サイド、x、幅を持ちます。譜面のプレイバリアント（5 / 7 / 9 / 10 / 14 / 24 / 48 KEY）の全レーンが、譜面で使われないレーンも含めて常に並びます。
   - `playfield`: `left`、`right`、`centerX`、`top`、`judgementY`、`sides`（1P と、DP なら 2P の水平範囲）。
   - `bga`: BGA の矩形。プレイフィールドに余地がなければ `undefined`。
 - **クロームの配置:** ジオメトリをハードコードせず、これらの値から配置してください。DP、鍵盤モード、新しいアスペクト比などホスト側のレイアウト変更が、そのままスキンにも反映されます。
 - **DP の隙間:** 1P と 2P のバンクは、標準レイアウトでは 60 px（`IIDX_DP_SIDE_GAP`）、タッチレイアウトでは 24 px（`TOUCH_PLAYFIELD.sideGap`）離れています。どちらの値もハードコードしないでください。`resolveLaneRuns(lanes)` は連続したバンクごとに `{ left, right }` を 1 つ返します。判定ラインやレーングリッドはラン単位で描き、隙間をまたがないようにします。
 - **レーン幅:** レーン幅はプレイヤーが決めます。スキンはレーンに色を付けますが、大きさや位置は変えません。
 - **タッチレイアウト:** タッチ画面では、ホストが `layoutMode: 'touch'`（`resolveGameplayLayout` の入力）でレイアウトを解決することがあります。このときレーンはステージの左マージンから判定集計の列まで広がり（`TOUCH_PLAYFIELD`）、鍵盤はすべて同じ幅（最大 72 px）、スクラッチは鍵盤 1.4 本分、レーンはヘッダー帯の下の y 48 から下部 HUD 帯の上にある y 330 の判定ラインまでで、`bga` は `undefined` です。24 / 48 KEY は標準レイアウトのままです（`supportsTouchLayout`）。`layout` からクロームを配置しているスキンは変更不要です。`layout.mode` はタッチプレイ向けに見た目を変えたいときだけ読んでください。標準レイアウトでレーンの横に置くクローム（BGA の矩形から配置するもの）は、`bga` が `undefined` でも崩れないようにしてください。
-- **縦向きレイアウト:** 縦向きステージでは、どちらのモードでもレーンがステージの幅いっぱいに下側を占めます（`PORTRAIT_PLAYFIELD`。480×854 の `tallStage` を基準にステージの大きさへ拡縮）。レーンは y 300 から低い位置の判定ラインまでで、BGA と HUD はその上の帯に置きます（`tallStage` では BGA は 40 px のヘッダー帯の下、左上の 206 px 四方）。`'touch'` は左右 12 px のマージンの間に鍵盤をすべて同じ幅（スクラッチは鍵盤 1.4 本分）で並べ、判定ラインを y 740 に置いて、その下に親指を置く帯を残します。`'standard'` は筐体の鍵盤幅（7 KEY で幅 374 px）を保って中央に置き、判定ラインは y 786 です。`bga` はどちらのモードでも縦向きステージの `resolveBgaRect` から来ます。縦向きステージのレーン矩形は `resolvePortraitLaneLayout` で得られます。
+- **縦向きレイアウト:** 縦向きステージでは、どちらのモードでもレーンがステージの幅いっぱいに下側を占めます（`PORTRAIT_PLAYFIELD`。480×854 の `tallStage` を基準にステージの大きさへ拡縮）。レーンは y 300 から低い位置の判定ラインまでで、BGA と HUD はその上の帯に置きます（`tallStage` では BGA は 40 px のヘッダー帯の下、左上の 206 px 四方）。`'touch'` は左右 12 px のマージンの間に鍵盤をすべて同じ幅（スクラッチは鍵盤 1.4 本分）で並べ、判定ラインを y 740 に置いて、その下に親指を置く帯を残します。`'standard'` は筐体の鍵盤幅（7 KEY で幅 374 px）を保って中央に置き、判定ラインは y 786 です。`bga` はどちらのモードでも縦向きステージの `resolveBGARect` から来ます。縦向きステージのレーン矩形は `resolvePortraitLaneLayout` で得られます。
 
 ### 縦向きに対応する
 
@@ -213,21 +245,35 @@ export default defineBeMusicSkin({
 
 ## 画面
 
+ホストは画面を次の順に表示します。決定画面はスキンが持つ場合だけです。be-music player が画面を次へ引き継ぐ方法は [ブラウザプレイヤー — Scene lifecycle](./player-web.ja.md#scene-lifecycle) にあります。
+
+```mermaid
+flowchart LR
+  select["選曲"] -->|"譜面を選ぶ、<br/>skin.decide あり"| decide["決定"]
+  select -->|"譜面を選ぶ、<br/>decide なし"| gameplay["ゲームプレイ"]
+  decide --> gameplay
+  decide -.->|Escape| select
+  gameplay --> result["リザルト"]
+  result --> select
+```
+
 ### ゲームプレイ
 
 `gameplay.draw(surface, frame)` は `BeMusicGameplayFrame` を受け取ります。
 
 - `layout`: [ステージとレイアウト](#ステージとレイアウト)を参照。
 - `lanes`: 各レーンの矩形（`x`、`w`、`top`、判定ライン位置の `bottom`）、`kind`、`beam`（キービーム強度。押下中は 1、離すと減衰）。`pressedAtMs` / `releasedAtMs` はそのレーンを最後に押した・離したプレイクロック時刻、`holding` と `holdStartedAtMs` はそのレーンでロングノーツを押し続けているかと、その開始時刻です。
-- `notes`: タップノーツ `{ kind, x, w, y }`。`y` はノーツの下端です。オートプレイやオートスクラッチが叩くノーツには `autoplay` が付きます。
-- `longNotes`: ロングノーツ `{ kind, x, w, top, bottom }`。`top` が終端、`bottom` が始端で、押下中は判定ラインに張り付きます。`mode`（`'ln'` / `'cn'` / `'hcn'`）は判定方式、`state`（`'pending'` / `'held'` / `'dropped'` / `'done'`）は進行状態、`autoplay` はオートプレイが処理するかを表します。
-- `mines`: 地雷ノーツ `{ kind, x, w, y }`。`y` は下端です。レーンを押したまま判定ラインを通過するか、PGREAT 窓内で押すと地雷が爆発してゲージが減ります（判定にはなりません）。スキンが `gameplay.drawsMines`（後述）を設定したときだけ中身が入ります。
+- `notes`: タップノーツ `{ kind, x, w, y }`。`y` はノーツの下端です。オートプレイやオートスクラッチが叩くノーツには `autoplay` が付きます。LR2 と同じく、まだ打っていないノーツは見逃しと判定されるまで判定ライン上（`y` がレーンの `bottom`）で待ち、早く打ったノーツもその時刻までは渡されます。
+- `longNotes`: ロングノーツ `{ kind, x, w, top, bottom }`。`top` が終端、`bottom` が始端で、始端の時刻を過ぎると判定ラインに張り付きます。`mode`（`'ln'` / `'cn'` / `'hcn'`）は判定方式、`state`（`'pending'` / `'held'` / `'dropped'` / `'done'`）は進行状態、`autoplay` はオートプレイが処理するかを表します。LR2 と組み込みスキンは、`'dropped'`（始端を見逃した、または早く離した）のロングノーツを消えるまで半透明で描きます。
+- `mines`: 地雷ノーツ `{ kind, x, w, y }`。`y` は下端です。レーンを押したまま判定ラインを通過するか、LR2 ruleset では PGREAT 窓内で押しても地雷が爆発してゲージが減ります（判定にはなりません）。スキンが `gameplay.drawsMines`（後述）を設定したときだけ中身が入ります。
 - `bombs`: 生きているヒットエフェクト。`elapsedMs`、固定の `seed`、発生させた判定 `judge` を持ちます。
 - `measureLines`: 小節線 `{ side, x, w, y }`。横切るレーンランごとに 1 本です。スキンが `gameplay.drawsMeasureLines` を設定したときだけ中身が入ります。
-- `bga`: 合成する BGA のレイヤー（`{ base?, layer?, poor?, poorActive }`）。スキンが `gameplay.drawsBga` を設定したとき以外は `undefined` です。
+- `bga`: 合成する BGA のレイヤー（`{ base?, layer?, poor?, poorActive }`）。スキンが `gameplay.drawsBGA` を設定したとき以外は `undefined` です。
 - `runtime`: HUD の値（下記）。
 - `beatPhase`、`nowMs`、`effects`、`audio`。
 - `settings` と `songImage`: [スキン設定](#スキン設定)と[曲の画像](#曲の画像)を参照。
+
+負の `#SCROLL` を含む譜面では、まだ先にあるノーツ・地雷・ロングノート・小節線が判定ラインより下（ステージの下端まで）に来ることがあります。プレイヤーはそうした譜面を beatoraja と同じように描くためです。それ以外の譜面ではラインより下に来ません（[ブラウザプレイヤー — ノートの表示範囲](./player-web.ja.md#ノートの表示範囲)）。その位置に描くか、ライン下に何も描きたくないスキンはレーンの `bottom` で切り取ってください。
 
 `gameplay.bombDurationMs`（既定 300）でヒットエフェクトの寿命を指定します。
 
@@ -240,9 +286,9 @@ export default defineBeMusicSkin({
 | `drawsMines`        | `frame.mines`        | プレイヤーが黄色の注意縞入りの赤いバーをキャンバスの上に描きます。     |
 | `drawsLaneCover`    | `runtime.laneCovers` | プレイヤーが SUDDEN+ / HIDDEN+ のカバーをキャンバスの上に描きます。    |
 | `drawsMeasureLines` | `frame.measureLines` | プレイヤーが自前の小節線を描きます。                                   |
-| `drawsBga`          | `frame.bga`          | プレイヤーが BGA をキャンバスの後ろ、`layout.bga` の位置に表示します。 |
+| `drawsBGA`          | `frame.bga`          | プレイヤーが BGA をキャンバスの後ろ、`layout.bga` の位置に表示します。 |
 
-どのフラグも既定は `false` で、解禁されるフレームのフィールドは設定するまで空（または `undefined`）のままです。既存のスキンの見た目は変わりません。`drawsBga` では、`layer` の画像は BMS のレイヤーの慣習どおり純粋な黒が透明になった状態で渡され、`base` と `poor` は不透明です。通常のアルファブレンドで描き、`poorActive` の間は他の代わりに `poor` を表示してください。bmson のレイヤー（仕様で黒は不透明のまま）と動画のレイヤーは作者が作ったとおりに渡されます。画像は `ImageBitmap`、動画の BGA なら再生中の `<video>` 要素です。`#BGA` の部分領域は切り出した画像として渡されます（切り出しが終わるまでの最初の 1〜2 フレームは渡されません）。`#SWBGA` のアニメーションのフレームはプレイヤーが選びますが、スロットの `#ARGB` による色と不透明度はスキンに任されます。
+どのフラグも既定は `false` で、解禁されるフレームのフィールドは設定するまで空（または `undefined`）のままです。既存のスキンの見た目は変わりません。`drawsBGA` では、`layer` の画像は BMS のレイヤーの慣習どおり純粋な黒が透明になった状態で渡され、`base` と `poor` は不透明です。通常のアルファブレンドで描き、`poorActive` の間は他の代わりに `poor` を表示してください。bmson のレイヤー（仕様で黒は不透明のまま）と動画のレイヤーは作者が作ったとおりに渡されます。画像は `ImageBitmap`、動画の BGA なら再生中の `<video>` 要素です。`#BGA` の部分領域は切り出した画像として渡されます（切り出しが終わるまでの最初の 1〜2 フレームは渡されません）。`#SWBGA` のアニメーションのフレームはプレイヤーが選びますが、スロットの `#ARGB` による色と不透明度はスキンに任されます。
 
 `runtime`（`BeMusicGameplayRuntime`）の値:
 
@@ -253,12 +299,12 @@ export default defineBeMusicSkin({
   - `rank`、`totalNotes`
 - **ゲージ:** `gauge`、`clearThreshold`、`gaugeLabel`、`gaugeSurvival`
 - **判定:** `lastJudge`、`judgeSides`（サイドごとの直近の判定とコンボ）
-- **プレイ状態:** `rulesetLabel`（有効な互換ルールセット: `lr2` / `beatoraja` / `iidx`）、`autoplay`、`hasBga`、`loading`（音声デコードや BGA 変換の間は NOW LOADING を表示）、`progressRatio`、`chartMs`、`beatPhase`、`nowMs`
+- **プレイ状態:** `rulesetLabel`（有効な互換ルールセット: `lr2` / `beatoraja` / `iidx`）、`autoplay`、`hasBGA`、`loading`（音声デコードや BGA 変換の間は NOW LOADING を表示）、`progressRatio`、`chartMs`、`beatPhase`、`nowMs`
 - **イベント時刻:** `judgeAtMs`、`impulseAtMs`、`impulseKind`（直近の判定とキー入力。パンチやインパルスの演出用）
 - **快適性とサウンド:** `effects`、`audio`
-- **譜面:** `song`（プレイ中の `BrowserSongEntry`。レベル、難易度、`#RANK`、`#TOTAL` は `song.chart.metadata` にあります）、`minBpm`、`maxBpm`、`mainBpm`、`playVariant`（5 / 7 / 9 / 10 / 14 / 24 / 48 KEY）、`laneCount`、`laneChannels`（表示順のレーンチャンネル）
+- **譜面:** `song`（プレイ中の `LibraryChart`。レベル、難易度、`#RANK`、`#TOTAL` は `song.chart.metadata` にあります）、`minBPM`、`maxBPM`、`mainBPM`（最も多くのノートが置かれた BPM。HS-FIX `AVERAGE` とプレイログが使う値）、`playVariant`（5 / 7 / 9 / 10 / 14 / 24 / 48 KEY）、`laneCount`、`laneChannels`（表示順のレーンチャンネル）
 - **タイミング:** `lastJudgeDeltaMs` と `judgeTimings`（タイミング付きの直近 64 判定、古い順）。[判定タイミング](#判定タイミング)を参照。`judgeWindows` はルールセットの判定幅をノーツの種類（`note`、`scratch`、`longNoteEnd`）ごとに ms で表します。プレイ開始時に `#RANK` から決まり、途中の `#EXRANK` の変更は反映されません。
-- **レーンカバー:** `laneCovers`（サイドごとの `sudden`、`hidden`、`lift`。レーンの高さに対する割合）、`visibleMs`（ノーツが画面に見えている時間）、`greenNumber`（`visibleMs × 0.6`）
+- **レーンカバー:** `laneCovers`（サイドごとの `sudden`、`hidden`、`lift`。レーンの高さに対する割合）、`visibleMs`（現在の BPM・ハイスピード・`#SCROLL` × `#SPEED` でノーツが画面に見えている時間。beatoraja と同じく、逆向きのスクロール中や停止中は 0）、`greenNumber`（`visibleMs × 0.6`）
 - **曲の時計:** `songLengthMs` と `songElapsedMs`。オーディオの時計で、曲の開始とともに 0 から進み、ポーズ中は止まります。残り時間は `songLengthMs - songElapsedMs` です。`chartMs` は譜面の最初の拍から測り、カウントイン中は負になる点が異なります。
 - **1 プレイに 1 度の瞬間:** `failedAtMs`（プレイ中にゲージが尽きた）、`allNotesDoneAtMs`（最後のノーツが判定された）、`outroAtMs`（譜面が終わった）、`gaugeRiseAtMs`（ゲージが初めて上がった）、`gaugeMaxAtMs`（初めて最大に達した）。どれもその瞬間に固定されるプレイクロック時刻で、それまでは `undefined` です。
 - **推移:** `scoreHistory` と `gaugeHistory`。リザルト画面が受け取るのと同じサンプルです。ホストが更新中の配列そのものなので、読むだけにして変更しないでください。
@@ -271,11 +317,15 @@ runtime のフィールドはすべて省略可能です。ホストが提供で
 - **`select.portraitLayout`:** スキンの `portraitStage` での同じ値（省略可。無ければ `layout`）。ステージに合うほうは `resolveBeMusicSelectLayout(select, stage)` で選べます。
 - **`select.outroMs`:** 曲決定後のアウトロの長さ。終わるまで `frame.launchAt` を設定したまま描画が続き、その間の入力は無視されます。
 - **`select.draw(surface, frame)`** は `BeMusicSelectFrame` を受け取ります。
-  - `entries`、`selectedIndex`、`firstVisibleIndex`、`visibleRows`、`focusedSong`
-  - `folderLabel`、`searchQuery`、`totalCharts`
+  - `entries`、`selectedIndex`、`firstVisibleIndex`、`visibleRows`、`focusedSong`（カーソル位置の譜面のバー）、`focusedCourse`
+  - `entries` の各要素は `LibraryEntry` です（`@be-music/scene-model` の型で、SDK が `LibraryChart`・`LibraryFolder`・`LibraryCourse`・`LibraryCourseStage`・`ChartSourceKind` とともに再 export します）。`{ kind: 'folder', folder }`（譜面フォルダは `folder.charts`、コースフォルダは `folder.courses` を並べます）、`{ kind: 'chart', chart }`、`{ kind: 'course', course }`（`course.stages` の各ステージは、見つかった譜面を `chart` に持ちます）のいずれかです。行の文言は `browseEntryTitle`・`browseEntryCount`・`browseEntryBadge` で、フォーカス中のコースのカードは `describeCourseCard` で得られます。
+  - 以前の SDK からの移行: 譜面のバーの種類は `'song'` から `'chart'` になりました。`entry.song` は `entry.chart`、`folder.songs` は `folder.charts`、`stage.song` は `stage.chart` で読みます。`Browser*` の型の別名は削除しました。`BrowserSongEntry` は `LibraryChart`、`BrowserFolderNode` は `LibraryFolder`、`BrowserCourseEntry` は `LibraryCourse`、`BrowserCourseStage` は `LibraryCourseStage`、`BrowserBrowseEntry` は `LibraryEntry`、`BrowserSongSourceKind` は `ChartSourceKind` です。
+  - `listScroll`: リストが後ろのエントリ側へ引かれている量（デザインピクセル、1 行未満）。指でドラッグしている間、スワイプ後に慣性で流れている間、トラックパッドでスクロールしている途中は 0 以外になり、静止時とリストの端では 0 です。行を `selectListRows(frame, rowHeight)` で並べると、リストが指に追随します。各行の小数の `slot`（上端は `listTop + slot * rowHeight`）と、表示範囲の端にかかった行を薄くする `alpha` が得られます。無視したスキンは 1 行ずつスクロールします。
+  - `folderLabel`、`searchQuery`、`searchEditing`（検索ボックスの上のホストの入力欄でプレイヤーが入力中。ボックスは描き、文字は描かない）、`totalCharts`
   - `actions`: `play`、`autoPlay`、`activateSearch`、`setPlayOption(key, value)`、`cyclePlayOption(key, step?)`（step は 1 か -1、端で折り返し）、`toggleReadme()`（フォーカス中の曲の `.txt` を開閉）
   - `playOptions`（`BeMusicPlayOptions`: ハイスピード、ランダム、ゲージ、HIDDEN / SUDDEN、レーンカバー、BGA、リストのフィルタなど）と `playOptionChoices`（列挙型・オンオフのオプションが取りうる値）。選択肢にない値は無視されます。`hiSpeed` と `shutter` は任意の数値を受け付けて範囲内に丸められ、`cyclePlayOption` では変わりません。
-  - `songRecord(song)`: その譜面でのプレイヤーのベスト記録（`BeMusicSongRecord`: `{ lamp, exScore?, maxCombo?, missCount?, playCount? }`）。ホストが記録を持たなければ `undefined`。`lamp` は `BeMusicClearLamp` で、悪い順に `NO_PLAY`、`FAILED`、`ASSIST_EASY`、`EASY`、`NORMAL`、`HARD`、`EX_HARD`、`FULL_COMBO`、`PERFECT`、`MAX`
+  - `songRecord(song)`: ホストが遊ぶ判定ルールセットでの、その譜面のプレイヤーのベスト記録（`BeMusicSongRecord`。`@be-music/player/records` の `BestRecord`: `{ lamp, exScore?, maxCombo?, missCount?, playCount? }`）。ホストが記録を持たなければ `undefined`。`lamp` は `BeMusicClearLamp`（`@be-music/player/ruleset` の `ClearLamp`）で、悪い順に `NO_PLAY`、`FAILED`、`ASSIST_EASY`、`EASY`、`NORMAL`、`HARD`、`EX_HARD`、`FULL_COMBO`、`PERFECT`、`MAX`
+  - `courseRecord?(course)`: コースバーでのプレイヤーのベスト記録（`BeMusicCourseRecord`: `BeMusicSongRecord` に、ベストの値で取れる最高のトロフィー `trophy?` を加えたもの）。遊んだことのないコース、ランダムコース、NEW COURSE バーでは `undefined`。これより古いホストにはありません。`describeCourseCard(course, record)` は、コースカードの説明行にベストのランプとトロフィーを加えます
   - `pointer`: デザインピクセルでのポインタ位置。なければ `undefined`
   - `settings` と `songImage`: [スキン設定](#スキン設定)と[曲の画像](#曲の画像)を参照
   - `revision`: 選曲の状態（カーソル、フォルダ、検索、リスト内容、プレイオプション、readme の開閉）が変わるたびに増えます。保持型のシーングラフは、これが変わったときだけ作り直せば済みます。
@@ -287,13 +337,13 @@ runtime のフィールドはすべて省略可能です。ホストが提供で
 
 `result.draw(surface, frame)` は `BeMusicResultFrame` を受け取ります。
 
-- `result`（`BeMusicResultData`）: スコア、判定数、ゲージとスコアの推移、プレイログ。ホストが提供する場合は、`lamp`（クリアランプ: `FAILED`、クリアしたゲージ、`FULL_COMBO`、`PERFECT`、`MAX`）、`gaugeType`、`judgeRuleset`、`fast` / `slow`、`judgeTimings`（プレイ中のタイミング付き判定すべて）も入ります。
+- `result`（`BeMusicResultData`）: スコア、判定数、ゲージとスコアの推移、プレイログ。ホストが提供する場合は、`lamp`（クリアランプ: `FAILED`、クリアしたゲージ、`FULL_COMBO`、`PERFECT`、`MAX`）、`gaugeType`、`judgeRuleset`、`fast` / `slow`、`judgeTimings`（プレイ中のタイミング付き判定すべて）、`run`（`'single'`、コースのステージなら `'stage'`、ステージを合計した EXPERT / GRADE コース全体なら `'course'`、`'nonstop'`）、`course`（ステージやコースの実行が属するコース）、`courseRun`（コースの実行で遊んだステージ数とトロフィー）も入ります。
 - `rankLabel`（IIDX の DJ LEVEL）、`ratePercent`。
 - `elapsedMs`: シーン開始からの経過。登場演出をスキップした後は `Infinity`。
 - `nowMs`、`effects`。
 - `settings` と `songImage`: [スキン設定](#スキン設定)と[曲の画像](#曲の画像)を参照。
 
-`resolveResultLamp` と `resolveResultTrackRows` が、組み込みスキンの表示するクリアランプとトラック行を返します。`binJudgeTimings(result.judgeTimings, binMs, rangeMs?)` でタイミングをヒストグラムにできます。
+`resolveResultVerdict`（`STAGE CLEAR` / `FAILED`、コースの実行なら `COURSE CLEAR` / `COURSE FAILED`）、`resolveResultLamp`、`resolveResultTrackRows` が、組み込みスキンの表示する見出し、クリアランプ（唯一のクリアランプの規則で、beatoraja のランプで決めたもの）、トラック行を返します。`binJudgeTimings(result.judgeTimings, binMs, rangeMs?)` でタイミングをヒストグラムにできます。
 
 ### 決定画面
 
@@ -336,11 +386,11 @@ settings: [
 - **検査:** `validateBeMusicSkin` がスキーマを検査します。id は重複不可、ラベルは空不可で、`default` は選択肢のいずれか、または範囲内でなければなりません。choice の option 値は重複不可、number の `step` は正の値、`unit` は上の 3 つのいずれかでなければなりません。
 - **値:** すべてのフレームが `settings`（id をキーにしたプレイヤーの値）を持ちます。ホストは値をスキンごとに保存し、`resolveBeMusicSkinSettings(skin, stored)` で解決します。欠けている値、古い値、型の違う値は既定値に戻り、数値は範囲内に収められ、スキンが宣言しなくなった id は捨てられます。宣言した id はすべて正しい型で揃っていると考えて構いません。
 - **その場での変更:** 画面の表示中にプレイヤーが値を変えることがあります。変更は次のフレームから反映され、選曲画面では `revision` も進みます。最初のフレームの値をキャッシュせず、`frame.settings` を毎フレーム読んでください（そこから導いた値をキャッシュするなら `revision` をキーにします）。
-- **be-music プレイヤーでは:** ホストは保存した値を `beMusicSkinSettings` オプションでシーンに渡し、`setBeMusicSkinSettings` で更新します。デモは Debug Menu にスキーマから「Skin settings」フォルダを作り（`choice` はドロップダウン、`number` は単位を名前に添えたスライダー、`toggle` はチェックボックス）、設定を宣言しないスキンでは隠し、値をスキン id ごとにブラウザへ保存します。
+- **be-music プレイヤーでは:** ホストは保存した値を built-in のキット（`{ family: 'built-in', skin, settings }`）で渡し、値が変わったら表示中のシーンに `scene.updateKit(kit)` で新しいキットを渡します。デモは Debug Menu にスキーマから「Skin settings」フォルダを作り（`choice` はドロップダウン、`number` は単位を名前に添えたスライダー、`toggle` はチェックボックス）、設定を宣言しないスキンでは隠し、値をスキン id ごとにブラウザへ保存します。
 
 ## 曲の画像
 
-`songImage(song, kind)` はすべてのフレーム（選曲、決定、ゲームプレイ、リザルト）にあります。曲の `'stageFile'`、`'banner'`、`'backBmp'` を `ImageBitmap` で返すので、そのまま `drawImage` やテクスチャのアップロードに使えます。
+`songImage(song, kind)` はすべてのフレーム（選曲、決定、ゲームプレイ、リザルト）にあります。曲の `'stageFile'`、`'banner'`、`'backBMP'` を `ImageBitmap` で返すので、そのまま `drawImage` やテクスチャのアップロードに使えます。
 
 - 画像は遅延読み込みです。デコード中の最初の呼び出しは `undefined` を返し、準備ができると画面が描き直されます（選曲では `revision` が進みます）。
 - 曲にその画像がない場合や、ホストが画像を提供しない場合も `undefined` を返すので、必ず代替表示を用意してください。
@@ -349,22 +399,24 @@ settings: [
 
 ## SDK ヘルパー
 
-| 分野       | ヘルパー                                                                                                                                                                                                                                                                                                                                                                             |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| ステージ   | `wideStage`、`resolveStageBgaRect`、`STAGE_WIDTH`、`STAGE_HEIGHT`、`STAGE_MARGIN`、`STAGE_SIDE_COLUMN`、`STAGE_BGA_BAND`、`tallStage`、`TALL_STAGE_WIDTH`、`TALL_STAGE_HEIGHT`、`TALL_STAGE_BGA`、`resolveBeMusicStage`、`resolveStageOrientation`                                                                                                                                   |
-| レイアウト | `resolveGameplayLayout`、`resolveLaneRuns`、`resolveMilestoneArea`（高さ 480 px のステージを前提にしているため横向きステージ専用）、`MILESTONE_MIN_WIDTH`、`PLAYFIELD`、`resolveGameplayLaneGeometry`、`resolveTouchLaneLayout`、`supportsTouchLayout`、`TOUCH_PLAYFIELD`、`resolvePortraitLaneLayout`、`supportsPortraitLayout`、`PORTRAIT_PLAYFIELD`、`resolveBeMusicSelectLayout` |
-| 判定       | `judgeDisplayWord`（PERFECT は GREAT と表示）、`isFlashingGreat`、`flashingGreatColor`、`FLASHING_GREAT_STEP_MS`                                                                                                                                                                                                                                                                     |
-| 演出       | `trackMoments` / `createMomentState` + `updateMoments`（100 コンボごと、クリアライン、フルコンボ、コンボ切れ。カウントインは `runtime.chartMs` が負かどうかで判定）、`COMBO_MILESTONE`、`COMBO_BREAK_MIN`、`comboTier`、`momentProgress`、`impulse`、`punchScale`、`effectProfile`                                                                                                   |
-| ロード中   | `LOADING_WORD`、`loadingDots(nowMs)`、`LOADING_DOT_MS`                                                                                                                                                                                                                                                                                                                               |
-| サウンド   | `audioDrive`、`bandAt`、`bandLevel`、`AUDIO_BAND_COUNT`、`SILENT_AUDIO`。[音楽に反応させる](#音楽に反応させる)を参照                                                                                                                                                                                                                                                                 |
-| リザルト   | `resolveResultLamp`、`resolveResultTrackRows`                                                                                                                                                                                                                                                                                                                                        |
-| タイミング | `binJudgeTimings`。[判定タイミング](#判定タイミング)を参照                                                                                                                                                                                                                                                                                                                           |
-| 設定       | `resolveBeMusicSkinSettings`、`validateBeMusicSkinSettings`。[スキン設定](#スキン設定)を参照                                                                                                                                                                                                                                                                                         |
-| 曲情報     | `resolveSongRowFacts`、`resolveSongStats`、`resolveSongTags`、`formatSongLength`、`formatBpmRange`、`formatPlayVariantLabel`                                                                                                                                                                                                                                                         |
-| テキスト   | `DEFAULT_TEXT_FONT`、`layoutTabularRun`（等幅数字の配置）                                                                                                                                                                                                                                                                                                                            |
-| モーション | `easeOutCubic`、`easeOutBack`、`stageProgress`、`rollUpValue`、`hash01`（決定的なゆらぎ）                                                                                                                                                                                                                                                                                            |
-| スキン     | `defineBeMusicSkin`、`validateBeMusicSkin`、`BE_MUSIC_SKIN_API_VERSION`、`isSupportedBeMusicSkinApiVersion`                                                                                                                                                                                                                                                                          |
-| レーン形状 | player 自身のスキンなしレーン形状: `IIDX_LANE_WIDTHS`、`IIDX_DP_SIDE_GAP`、`resolveSkinlessLaneLayout`、`resolveFallbackLaneLayout`、`resolveFallbackPlayfieldSpan`、`usesIidxLaneWidths`、`isScratchLaneForVariant`、`shouldPreserveFallbackSideWidth`、`resolveBeMusicLaneKind`。スキンは通常 `layout.lanes` を読みます。                                                          |
+| 分野         | ヘルパー                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ステージ     | `wideStage`、`resolveStageBGARect`、`STAGE_WIDTH`、`STAGE_HEIGHT`、`STAGE_MARGIN`、`STAGE_SIDE_COLUMN`、`STAGE_BGA_BAND`、`tallStage`、`TALL_STAGE_WIDTH`、`TALL_STAGE_HEIGHT`、`TALL_STAGE_BGA`、`resolveBeMusicStage`、`resolveStageOrientation`                                                                                                                                   |
+| レイアウト   | `resolveGameplayLayout`、`resolveLaneRuns`、`resolveMilestoneArea`（高さ 480 px のステージを前提にしているため横向きステージ専用）、`MILESTONE_MIN_WIDTH`、`PLAYFIELD`、`resolveGameplayLaneGeometry`、`resolveTouchLaneLayout`、`supportsTouchLayout`、`TOUCH_PLAYFIELD`、`resolvePortraitLaneLayout`、`supportsPortraitLayout`、`PORTRAIT_PLAYFIELD`、`resolveBeMusicSelectLayout` |
+| 判定         | `judgeDisplayWord`（PERFECT は GREAT と表示）、`isFlashingGreat`、`flashingGreatColor`、`FLASHING_GREAT_STEP_MS`                                                                                                                                                                                                                                                                     |
+| 演出         | `trackMoments` / `createMomentState` + `updateMoments`（100 コンボごと、クリアライン、フルコンボ、コンボ切れ。カウントインは `runtime.chartMs` が負かどうかで判定）、`COMBO_MILESTONE`、`COMBO_BREAK_MIN`、`comboTier`、`momentProgress`、`impulse`、`punchScale`、`effectProfile`                                                                                                   |
+| ホールド演出 | `holdSparks`、`holdSeed`（押し続けているロングノートの火花）                                                                                                                                                                                                                                                                                                                         |
+| ロード中     | `LOADING_WORD`、`loadingDots(nowMs)`、`LOADING_DOT_MS`                                                                                                                                                                                                                                                                                                                               |
+| 選曲リスト   | `selectListRows`、`browseEntryTitle`、`browseEntryCount`、`browseEntryBadge`、`describeCourseCard`                                                                                                                                                                                                                                                                                   |
+| サウンド     | `audioDrive`、`bandAt`、`bandLevel`、`AUDIO_BAND_COUNT`、`SILENT_AUDIO`。[音楽に反応させる](#音楽に反応させる)を参照                                                                                                                                                                                                                                                                 |
+| リザルト     | `resolveResultVerdict`、`resolveResultLamp`、`resolveResultTrackRows`                                                                                                                                                                                                                                                                                                                |
+| タイミング   | `binJudgeTimings`。[判定タイミング](#判定タイミング)を参照                                                                                                                                                                                                                                                                                                                           |
+| 設定         | `resolveBeMusicSkinSettings`、`validateBeMusicSkinSettings`。[スキン設定](#スキン設定)を参照                                                                                                                                                                                                                                                                                         |
+| 曲情報       | `resolveSongRowFacts`、`resolveSongStats`、`resolveSongTags`、`formatSongLength`、`formatBPMRange`、`formatPlayVariantLabel`                                                                                                                                                                                                                                                         |
+| テキスト     | `DEFAULT_TEXT_FONT`、`layoutTabularRun`（等幅数字の配置）                                                                                                                                                                                                                                                                                                                            |
+| モーション   | `easeOutCubic`、`easeOutBack`、`stageProgress`、`rollUpValue`、`hash01`（決定的なゆらぎ）                                                                                                                                                                                                                                                                                            |
+| スキン       | `defineBeMusicSkin`、`validateBeMusicSkin`、`BE_MUSIC_SKIN_API_VERSION`、`isSupportedBeMusicSkinAPIVersion`                                                                                                                                                                                                                                                                          |
+| レーン形状   | player 自身のスキンなしレーン形状: `IIDX_LANE_WIDTHS`、`IIDX_DP_SIDE_GAP`、`resolveSkinlessLaneLayout`、`resolveFallbackLaneLayout`、`resolveFallbackPlayfieldSpan`、`usesIIDXLaneWidths`、`isScratchLaneForVariant`、`shouldPreserveFallbackSideWidth`、`resolveBeMusicLaneKind`。スキンは通常 `layout.lanes` を読みます。                                                          |
 
 SDK は、フレームやヘルパーが使う型も export しています。たとえば `BeMusicClearLamp`、`BeMusicSongRecord`、`BeMusicJudgeWindows`、`BeMusicLaneCover`、`GameplayLayoutMode`、`BeMusicPlayOptionChoices`、`AudioDrive`、`MomentInput` / `MomentState`、`MilestoneArea`、`LaneRun`、`GameplayLaneGeometry`、`PortraitLaneGeometry`、`SongStats`、`SongRowFacts`、`ResultLamp`、`ResultTrackRow` です。
 
@@ -379,7 +431,7 @@ SDK は、フレームやヘルパーが使う型も export しています。�
 
 各バンドと bass / mid / high は、直近数秒に取った範囲の中での位置に正規化されています。そのため、音圧の高いコンプレッションの効いたミックスでも、上に張り付かずヒットの合間に上下します。
 
-使う前に `audioDrive(audio, effects)` を通してください。エフェクトレベルに応じて値をスケールする（`'reduced'` で半分、`'off'` で無音）ので、プレイヤーの快適性設定に自動で従います。`bandLevel(drive.bands, index, count)` はバンドを任意の本数に再サンプリングし、そのままスペアナに使えます。
+使う前に `audioDrive(audio, effects)` を通してください。エフェクトレベルに応じてレベル、帯域ごとのエネルギー、バンド、オンセットをスケールする（`'reduced'` で半分、`'off'` で無音。`db` と `onsetAtMs` はそのまま）ので、プレイヤーの快適性設定に自動で従います。`bandLevel(drive.bands, index, count)` はバンドを任意の本数に再サンプリングし、そのままスペアナに使えます。
 
 反応は読み取れる大きさにしてください。数 % の脈動は 60 fps では見えません。組み込みスキンは bass に応じて形状をおよそ 0.8〜1.6 倍に変えています。
 
@@ -477,7 +529,7 @@ SDK は、フレームやヘルパーが使う型も export しています。�
 
 ## フォント
 
-描画に使うフェイスはすべて `fontLoads` に挙げてください。ホストはマウント前に `document.fonts.load` で読み込むので、最初のフレームが代替フォントでラスタライズされることを防げます。フェイス自体をホストが入手できるようにもしてください（フォントサービス経由、またはスキンに同梱）。
+描画に使うフェイスはすべて `fontLoads` に挙げてください。ホストは `document.fonts.load` で読み込む（Web のデモは登録済みのスキンのフェイスを起動時に待ち、追加したスキンのフェイスは裏で読み込みます）ので、最初のフレームが代替フォントでラスタライズされることを防げます。フェイス自体をホストが入手できるようにもしてください（フォントサービス経由、またはスキンに同梱）。
 
 ## パッケージングと読み込み
 
@@ -487,14 +539,14 @@ SDK は、フレームやヘルパーが使う型も export しています。�
 - **ホスト側:** ホストはスキンをレジストリに登録します。
 
   ```ts
-  import { BUILT_IN_BE_MUSIC_SKINS, DefaultPixiGameplayView } from '@be-music/player-web/scenes';
-  import { createBeMusicSkinRegistry } from '@be-music/player-web/skin';
+  import { createPlayScene } from '@be-music/player-web/host';
+  import { BUILT_IN_BE_MUSIC_SKINS, createBeMusicSkinRegistry } from '@be-music/player-web/skin';
   import mySkin from 'my-be-music-skin';
 
   const skins = createBeMusicSkinRegistry(BUILT_IN_BE_MUSIC_SKINS);
   const problems = skins.add(mySkin); // 追加できれば []、拒否されたらその理由
   const skin = skins.resolve('my-skin'); // 未知の id なら最初のスキンにフォールバック
-  // デフォルトファミリーのビューに渡す: new DefaultPixiGameplayView({ …, beMusicSkin: skin })
+  // 組み込みのシーンにキットとして渡す: createPlayScene({ family: 'built-in', skin, settings }, { … })
   ```
 
   - `add` はスキンを検査します。同じ id が登録済みなら置き換えるので、開発中の再読み込みに便利です。
@@ -502,12 +554,12 @@ SDK は、フレームやヘルパーが使う型も export しています。�
   - 検査に通らないスキン（未対応の `apiVersion` など）は、ホストを壊さずに除外されます。
 
 - **組み込みスキン:** `BUILT_IN_BE_MUSIC_SKINS` には Synesthesia（既定）、Phantom、Plain が入っています。Lattice は `latticeSkin` として同梱されており、ホストが追加します。
-- **デモ:** デモの Debug Menu から、モジュール URL でスキンを追加できます（_Add skin_ → _Skin module URL_）。スキンはページの全権限で動くため、デモは先に確認を求めます。信頼できるスキンだけを読み込んでください。
+- **デモ:** デモの Debug Menu から、モジュール URL でスキンを追加できます（_Skin & display_ → _Add skin_ → _Skin module URL_）。スキンはページの全権限で動くため、デモは先に確認を求めます。信頼できるスキンだけを読み込んでください。いまのデモは `EXTRA_BUILT_IN_SKINS_ENABLED` が off の間、_Add skin_ を Phantom・Lattice とともに隠しています（`services/built-in-skins.ts`）。
 
 ## バージョニング
 
 - **`version` を上げるとき:** スキンをリリースするたびに上げます。プレイヤーから見たセマンティックバージョニングに従い、見た目の追加はマイナー、修正はパッチにします。
-- **`apiVersion`:** ビルドに使った SDK の定数にします。スキン API に互換性のない変更が入ると、プレイヤーは `BE_MUSIC_SKIN_API_VERSION` を上げます。古いリビジョン向けのスキンは、新しい SDK で再ビルドするまで拒否されます。
+- **`apiVersion`:** ビルドに使った SDK の定数にします。スキン API はまだ定義中で、リビジョンは `0` です。番号を変えずに互換性のない変更が入ることがあるため、SDK が新しくなるたびにスキンを再ビルドしてください。最初の安定リビジョンは `1` になり、それ以降は互換性のない変更で `BE_MUSIC_SKIN_API_VERSION` が上がり、古いリビジョン向けのスキンは再ビルドするまで拒否されます。API を不安定と位置づける前に `1` を宣言していたスキンは引き続き動きます。
 - **`id` を固定する:** ホストは選択中のスキンを `id` で保存します。
 
 ## チェックリスト
@@ -515,7 +567,7 @@ SDK は、フレームやヘルパーが使う型も export しています。�
 - [ ] メタデータが `validateBeMusicSkin` を通る。
 - [ ] `setup` で作ったフレームワークのリソースを `teardown` で解放している。
 - [ ] クロームは `layout` から配置し、判定ラインはレーンランごとに描いている。
-- [ ] `runtime.hasBga` のとき BGA の矩形を透明のまま残している。
+- [ ] `runtime.hasBGA` のとき BGA の矩形を透明のまま残している。
 - [ ] `runtime.loading` の間は NOW LOADING を表示している。
 - [ ] 選曲の行が `select.layout` と揃い、ボタンは描画のたびに `frame.hit` で宣言している。
 - [ ] 設定した `draws*` フラグに対応する要素を自分で描いている。

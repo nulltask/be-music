@@ -1,0 +1,112 @@
+import { FIXTURE_CHARTS } from '../../../scripts/course-checklist/fixtures.ts';
+import type { TestHookFamily } from '../src/test-hook.ts';
+import { type Demo, expect, openWithLibrary, SONGS, test } from './support.ts';
+
+/**
+ * The lane options apply on every family (ADR 0001): an AUTO play of Fixture A with the Debug Menu's Random 1P on
+ * MIRROR plays the chart's keys mirrored, and its play log records the option and the arrangement played.
+ */
+
+const PLAY_OPTIONS = ['Play options'];
+
+/** The fixture skins' select screens (640 × 480) put AUTO at (230, 430): `scripts/course-checklist/skins`. */
+const SELECT_SKIN = { width: 640, height: 480 };
+const AUTO_BUTTON = { x: 230, y: 430 };
+
+/** The 1P keys of a 7-key chart, key 1 to key 7; the scratch (`16`) is no key and stays put. */
+const KEYS_1P = ['11', '12', '13', '14', '15', '18', '19'];
+
+/** MIRROR on a side that uses all seven keys: key 1 ↔ key 7, 2 ↔ 6, 3 ↔ 5, 4 stays. */
+function mirrored(channel: string): string {
+  const key = KEYS_1P.indexOf(channel);
+  return key < 0 ? channel : KEYS_1P[KEYS_1P.length - 1 - key]!;
+}
+
+/** The channels of Fixture A's notes in time order, as `fixtureBMS` writes them (one note per row). */
+function fixtureAChannels(): string[] {
+  const { measures, perMeasure, lanes } = FIXTURE_CHARTS.A!.chart;
+  const channels: string[] = [];
+  for (let measure = 1; measure <= measures; measure += 1) {
+    for (let index = 0; index < perMeasure; index += 1) {
+      channels.push(lanes[(measure * perMeasure + index) % lanes.length]!);
+    }
+  }
+  return channels;
+}
+
+/** How a family opens with the fixture library and starts the chart under the cursor with AUTO. */
+interface FamilyCase {
+  name: string;
+  family: TestHookFamily;
+  open(demo: Demo): Promise<void>;
+  startAuto(demo: Demo): Promise<void>;
+}
+
+const clickAuto = (demo: Demo) => demo.clickSkin(AUTO_BUTTON.x, AUTO_BUTTON.y, SELECT_SKIN.width, SELECT_SKIN.height);
+
+const FAMILIES: readonly FamilyCase[] = [
+  {
+    name: 'built-in',
+    family: 'built-in',
+    open: (demo) => openWithLibrary(demo),
+    async startAuto(demo) {
+      await demo.setOption(PLAY_OPTIONS, 'Auto play', true);
+      await demo.key('Enter');
+    },
+  },
+  {
+    name: 'LR2',
+    family: 'lr2',
+    async open(demo) {
+      await openWithLibrary(demo);
+      await demo.drop('skins/lr2');
+      await demo.waitFor((state) => state.scene.kind === 'select' && state.scene.family === 'lr2', 'the LR2 select');
+    },
+    startAuto: clickAuto,
+  },
+  {
+    name: 'beatoraja',
+    family: 'beatoraja',
+    async open(demo) {
+      await openWithLibrary(demo);
+      await demo.drop('skins/beatoraja');
+      await demo.waitFor(
+        (state) => state.scene.kind === 'select' && state.scene.family === 'beatoraja',
+        'the beatoraja select',
+      );
+    },
+    startAuto: clickAuto,
+  },
+];
+
+for (const setup of FAMILIES) {
+  test(`MIRROR plays the keys mirrored and is recorded on the ${setup.name} family`, async ({ demo }) => {
+    await setup.open(demo);
+    await demo.setOption(PLAY_OPTIONS, 'Random 1P', 'MIRROR');
+    await demo.browseTo(SONGS, 'Fixture A');
+    await setup.startAuto(demo);
+    const playing = await demo.waitFor(
+      (state) => state.scene.kind === 'play' && state.play?.title === 'Fixture A',
+      'Fixture A to play',
+    );
+    expect(playing.scene.family).toBe(setup.family);
+    expect(playing.play?.autoPlay).toBe(true);
+    const state = await demo.waitForResult(0);
+    expect(state.results[0]).toMatchObject({ run: 'single', family: setup.family, title: 'Fixture A' });
+
+    const playlog = await demo.lastPlaylog();
+    if (playlog === undefined) throw new Error('the play recorded no log');
+    expect(playlog.play.mode).toBe('auto');
+    expect(playlog.play.randomLane?.p1).toBe('MIRROR');
+    // The log's notes are the lanes the chart played on: every key mirrored, the scratch where it was.
+    const played = playlog.chart.notes
+      .filter((note) => note.type === 'normal')
+      .sort((left, right) => left.timeUs - right.timeUs)
+      .map((note) => note.channel);
+    const written = fixtureAChannels();
+    expect(played).toEqual(written.map(mirrored));
+    expect(played).not.toEqual(written);
+    // Every note was played where it fell: AUTO judges each one PGREAT on the mirrored lane.
+    expect(state.results[0]!.judged).toMatchObject({ pgreat: written.length, poor: 0 });
+  });
+}

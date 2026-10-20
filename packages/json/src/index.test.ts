@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
-  cloneJson,
-  createEmptyJson,
+  cloneJSON,
+  createEmptyJSON,
   DEFAULT_BPM,
   ensureMeasure,
   intToBase36,
@@ -11,8 +11,8 @@ import {
 } from './index.ts';
 
 describe('json', () => {
-  test('json: createEmptyJson initializes defaults and preservation layers', () => {
-    const json = createEmptyJson();
+  test('json: createEmptyJSON initializes defaults and preservation layers', () => {
+    const json = createEmptyJSON();
     expect(json.sourceFormat).toBe('bms');
     expect(json.metadata.bpm).toBe(DEFAULT_BPM);
     expect(json.events).toEqual([]);
@@ -21,13 +21,13 @@ describe('json', () => {
     expect(json.preservation.bmson.soundChannels).toEqual([]);
   });
 
-  test('json: createEmptyJson accepts sourceFormat', () => {
-    const json = createEmptyJson('bmson');
+  test('json: createEmptyJSON accepts sourceFormat', () => {
+    const json = createEmptyJSON('bmson');
     expect(json.sourceFormat).toBe('bmson');
   });
 
-  test('json: cloneJson returns a deep copy', () => {
-    const source = createEmptyJson('json');
+  test('json: cloneJSON returns a deep copy', () => {
+    const source = createEmptyJSON('json');
     source.metadata.title = 'original';
     source.events.push({
       measure: 0,
@@ -47,7 +47,7 @@ describe('json', () => {
     });
     source.bms.speed['01'] = 1.5;
 
-    const cloned = cloneJson(source);
+    const cloned = cloneJSON(source);
     cloned.metadata.title = 'changed';
     cloned.events[0]!.value = '02';
     cloned.preservation.bms.objectLines[0]!.events[0]!.value = '03';
@@ -63,14 +63,24 @@ describe('json', () => {
     expect(source.bms.speed['01']).toBe(1.5);
   });
 
-  test('json: cloneJson preserves omitted optional fields', () => {
-    const source = createEmptyJson('bms');
+  test('json: cloneJSON preserves omitted optional fields', () => {
+    const source = createEmptyJSON('bms');
     source.bms.lnObjs = undefined;
     source.bmson.info.subartists = undefined;
 
-    const cloned = cloneJson(source);
+    const cloned = cloneJSON(source);
     expect(cloned.bms.lnObjs).toBeUndefined();
     expect(cloned.bmson.info.subartists).toBeUndefined();
+  });
+
+  test('json: cloneJSON deep-copies preserved bmson scroll_events and leaves them out when absent', () => {
+    const source = createEmptyJSON('bmson');
+    expect(cloneJSON(source).preservation.bmson.scrollEvents).toBeUndefined();
+
+    source.preservation.bmson.scrollEvents = [{ y: 240, rate: 0.5 }];
+    const cloned = cloneJSON(source);
+    cloned.preservation.bmson.scrollEvents![0]!.rate = 2;
+    expect(source.preservation.bmson.scrollEvents).toEqual([{ y: 240, rate: 0.5 }]);
   });
 
   test('json: normalizeObjectKey / normalizeChannel', () => {
@@ -97,7 +107,7 @@ describe('json', () => {
   });
 
   test('json: ensureMeasure creates and reuses measures', () => {
-    const json = createEmptyJson();
+    const json = createEmptyJSON();
     const created = ensureMeasure(json, 2);
     created.length = 0.75;
     const found = ensureMeasure(json, 2);
@@ -106,7 +116,7 @@ describe('json', () => {
   });
 
   test('json: ensureMeasure appends after the last measure and finds earlier entries', () => {
-    const json = createEmptyJson();
+    const json = createEmptyJSON();
     const early = { index: 1, length: 0.75 };
     const late = { index: 4, length: 1.5 };
     json.measures.push(early, late);

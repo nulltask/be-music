@@ -1,51 +1,69 @@
-import * as parserApi from '@be-music/parser';
+import { drawRandomOutcomes, type RandomDraws } from '@be-music/chart';
+import * as parserAPI from '@be-music/parser';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
+const BENCH_RANDOM_DRAWS_CACHE = new WeakMap<object, RandomDraws>();
+
+function benchRandomDraws(source: Parameters<typeof drawRandomOutcomes>[0]): RandomDraws {
+  let draws = BENCH_RANDOM_DRAWS_CACHE.get(source);
+  if (draws === undefined) {
+    draws = drawRandomOutcomes(source, () => 0.25);
+    BENCH_RANDOM_DRAWS_CACHE.set(source, draws);
+  }
+  return draws;
+}
+
 export function registerParserExportsCases(define: DefineBenchmarkCase): void {
-  define('parser.canonicalizeBmsCharset', {
+  define('parser.canonicalizeBMSCharset', {
     run: () => {
-      parserApi.canonicalizeBmsCharset('Shift-JIS');
-      parserApi.canonicalizeBmsCharset('utf8');
+      parserAPI.canonicalizeBMSCharset('Shift-JIS');
+      parserAPI.canonicalizeBMSCharset('utf8');
     },
   });
-  define('parser.decodeBmsText', {
+  define('parser.decodeBMSText', {
     run: (fixtures) => {
-      parserApi.decodeBmsText(fixtures.bmsBuffer);
+      parserAPI.decodeBMSText(fixtures.bmsBuffer);
     },
   });
-  define('parser.decodeUtf8Text', {
+  define('parser.decodeUTF8Text', {
     run: (fixtures) => {
-      parserApi.decodeUtf8Text(fixtures.bmsBuffer);
+      parserAPI.decodeUTF8Text(fixtures.bmsBuffer);
     },
   });
-  define('parser.extractDeclaredBmsCharset', {
+  define('parser.extractDeclaredBMSCharset', {
     run: () => {
-      parserApi.extractDeclaredBmsCharset('#CHARSET Shift_JIS\n#TITLE Bench\n');
+      parserAPI.extractDeclaredBMSCharset('#CHARSET Shift_JIS\n#TITLE Bench\n');
     },
   });
-  define('parser.parseBms', {
+  define('parser.parseBMS', {
     run: (fixtures) => {
-      parserApi.parseBms(fixtures.bmsText);
+      parserAPI.parseBMS(fixtures.bmsText);
     },
   });
   define('parser.parseBmson', {
     run: (fixtures) => {
-      parserApi.parseBmson(fixtures.bmsonText);
+      parserAPI.parseBmson(fixtures.bmsonText);
     },
   });
   define('parser.parseChart', {
     run: (fixtures) => {
-      parserApi.parseChart(fixtures.bmsText);
+      parserAPI.parseChart(fixtures.bmsText);
     },
   });
   define('parser.parseChartFile', {
+    ioBound: true,
     run: async (fixtures) => {
-      await parserApi.parseChartFile(fixtures.paths.bmsPath);
+      await parserAPI.parseChartFile(fixtures.paths.bmsPath);
     },
   });
-  define('parser.resolveBmsControlFlow', {
+  define('parser.resolveBMSControlFlow', {
     run: (fixtures) => {
-      parserApi.resolveBmsControlFlow(fixtures.controlFlowJson, { random: () => 0.25 });
+      parserAPI.resolveBMSControlFlow(fixtures.controlFlowJSON, { random: () => 0.25 });
+    },
+  });
+  define('parser.resolveBMSControlFlowWithDraws', {
+    run: (fixtures) => {
+      parserAPI.resolveBMSControlFlowWithDraws(fixtures.controlFlowJSON, benchRandomDraws(fixtures.controlFlowJSON));
     },
   });
 }

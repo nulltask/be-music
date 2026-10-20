@@ -1,20 +1,20 @@
 import { Container, Text, TextStyle } from 'pixi.js';
 import { normalizeRect } from './render.ts';
-import type { Lr2DestinationRect, Lr2TextElement } from '@be-music/lr2-skin';
-import { makeLr2BitmapTextSprite, type Lr2LoadedFont } from './bitmap-text.ts';
+import type { LR2DestinationRect, LR2TextElement } from '@be-music/lr2-skin';
+import { makeLR2BitmapTextSprite, type LR2LoadedFont } from './bitmap-text.ts';
 
 const FALLBACK_TEXT_FONT = 'LINE Seed JP, system-ui, sans-serif';
 
-export { resolveScaledViewport, type ScaledViewport } from '../../scene/core/viewport.ts';
+export { resolveScaledViewport, type ScaledViewport } from '../../stage/viewport.ts';
 
-export interface Lr2TextSpriteOptions {
+export interface LR2TextSpriteOptions {
   maxFontSize?: number;
   /**
    * Loaded LR2 bitmap fonts keyed by font index (`#LR2FONT` declaration order). When the element's `font` field hits a
-   * loaded entry, `makeLr2TextSprite` returns a bitmap-text `Container` instead of the system-font `Text` fallback —
+   * loaded entry, `makeLR2TextSprite` returns a bitmap-text `Container` instead of the system-font `Text` fallback —
    * matching what real LR2 paints with `#SRC_TEXT`.
    */
-  bitmapFonts?: ReadonlyMap<number, Lr2LoadedFont>;
+  bitmapFonts?: ReadonlyMap<number, LR2LoadedFont>;
   /**
    * `#FONT,size,...` declarations indexed by the same global font slot as `bitmapFonts`. Used by the system-font
    * fallback branch to pick the size the skin actually asked for — without this, every system-font label collapses to
@@ -25,7 +25,7 @@ export interface Lr2TextSpriteOptions {
 }
 
 export function isDestinationVisible(
-  destination: Lr2DestinationRect,
+  destination: LR2DestinationRect,
   ops: ReadonlySet<number>,
   timerActive: (timer: number) => boolean,
 ): boolean {
@@ -52,18 +52,18 @@ export function isDestinationVisible(
  * Returning a `Container` (instead of `Text` specifically) is the union of both paths; callers attach the result with
  * `addChild` either way, which is the only API contract the scene renderers rely on.
  */
-export function makeLr2TextSprite(
+export function makeLR2TextSprite(
   value: string,
-  element: Lr2TextElement,
-  dst: Lr2DestinationRect = element.destination,
-  options: Lr2TextSpriteOptions = {},
+  element: LR2TextElement,
+  dst: LR2DestinationRect = element.destination,
+  options: LR2TextSpriteOptions = {},
 ): Container {
   // Bitmap path — chosen when the host loaded the matching `#LR2FONT` payload. Empty strings are still painted as an
   // empty Container so the caller's `addChild` doesn't need to null-check; the visible result is just nothing, same as
   // the text fallback would produce for "".
   const loaded = options.bitmapFonts?.get(element.font);
   if (loaded) {
-    return makeLr2BitmapTextSprite(value, element, dst, loaded);
+    return makeLR2BitmapTextSprite(value, element, dst, loaded);
   }
   const rect = normalizeRect(dst);
   // Prefer the size declared by the skin's `#FONT` for this slot. Falls back to the rect-height heuristic only when
