@@ -23,7 +23,7 @@
 | 複数の譜面が共有する音楽作品     | music                | 楽曲                  | `music`                                          |
 | JSON ベースの譜面形式            | bmson                | bmson                 | `bmson` / `Bmson`。既存の `BMSON_*` 定数は維持   |
 | ノートを評価した結果             | judgment             | 判定                  | 既存 API の `judge` は維持                       |
-| 入力を記録したリプレイ           | play log             | プレイログ            | `playlog` / `Playlog`                            |
+| 入力を記録したリプレイ           | play log             | プレイログ            | `playLog` / `PlayLog`                            |
 | プロフィール画像                 | avatar               | アバター              | `avatar`                                         |
 | 一意な公開ユーザー名             | handle               | ユーザー名            | `handle`                                         |
 | アバターの横に表示する名前       | display name         | 表示名                | `displayName`                                    |
@@ -31,6 +31,8 @@
 | デプロイ先の環境                 | production / preview | 本番 / プレビュー     | `production` / `preview`                         |
 
 **プレイ履歴（play history）** はプレイの集合や一覧、**プレイログ（play log）** は 1 回分の入力リプレイを指し、区別します。英語では修飾語・名詞に **sign-in / sign-out**、動詞に **sign in / sign out** を使います。UI の操作や対象を表す記号は **アイコン（icon）**、ユーザーのプロフィール画像は **アバター（avatar）** です。
+
+新しい識別子では語を分けて `playLog` / `PlayLog` と書きます。プレイログを扱う文脈が明確なローカル変数・引数は `log` とします。既存の `BeMusicPlaylog` などの公開名・import パス・コマンド名・保存データのキーは、明示的な移行まで互換表記として維持します。
 
 `CourseSongRecord`、`RandomCourseDrawSuccess.songs`、`PlayResult.song` などの既存名は、譜面を指す互換性維持のための名前です。その説明と新しい名前には **chart（譜面）** を使います。beatoraja の `song` テーブルや `BMSONDecoder` などの外部名は原文を維持します。
 
@@ -136,7 +138,7 @@
 - **Sound / Visual status**: loading screen で audio 側と visual 側の進捗を別々に表示する状態です。
 - **structured log**: TUI 出力とは分離して書き出す NDJSON 実行ログです。通常は `~/.be-music/logs/player.ndjson` に出力します。
 - **video BGA streaming**: gameplay 開始前には動画 BGA の最初の frame だけを確保し、残りを gameplay 開始後に段階的に decode する方針です。
-- **プレイログ（play log / playlog）**: 1 回のプレイを決定的に再現するための記録（`*.bmplay.json`）です。解決済み譜面・入力イベント・プレイ設定を持ち、プレイ結果の集計や、複数のプレイからなるプレイ履歴とは区別します。`bms-playlog` は LR2、beatoraja、IIDX のルールセットでこれを再シミュレーションします。
+- **プレイログ（play log）**: 1 回のプレイを決定的に再現するための記録（`*.bmplay.json`）です。解決済み譜面・入力イベント・プレイ設定を持ち、プレイ結果の集計や、複数のプレイからなるプレイ履歴とは区別します。`bms-playlog` は LR2、beatoraja、IIDX のルールセットでこれを再シミュレーションします。
 - **PlayerSummary**: 再生終了後の集計結果です。判定数、FAST/SLOW、EX-SCORE、SCORE、gauge、clear state などを含みます。
 
 ## コース・記録・表示
