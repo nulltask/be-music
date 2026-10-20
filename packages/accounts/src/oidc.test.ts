@@ -148,6 +148,82 @@ describe('Accounts OIDC across unrelated domains', () => {
       SESSION_SECRET: 'donate-session-secret-with-at-least-32-characters',
     });
   });
+
+  test('automatically signs in browser visits and falls back safely when Accounts is signed out', async () => {
+    const navigation = { 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document', accept: 'text/html' };
+    const entry = app.PUBLIC_ORIGIN + '/scores?mode=lr2';
+    const start = (await handleAuth(new Request(entry, { headers: navigation }), app))!;
+    const target = new URL(start.headers.get('location')!);
+    expect(target.searchParams.get('prompt')).toBe('none');
+    const anonymousAuthorization = await worker.fetch(new Request(target), env);
+    const rejectedURL = new URL(anonymousAuthorization.headers.get('location')!);
+    expect(rejectedURL.origin).toBe(app.PUBLIC_ORIGIN);
+    expect(rejectedURL.searchParams.get('error')).toBe('login_required');
+    const fallback = (await handleAuth(new Request(rejectedURL, { headers: { cookie: cookies(start) } }), app))!;
+    expect(fallback.status).toBe(302);
+    expect(fallback.headers.get('location')).toBe('/scores?mode=lr2');
+    expect(fallback.headers.get('set-cookie')).not.toContain('__Host-be-music.session=');
+    expect(
+      await handleAuth(new Request(entry, { headers: { ...navigation, cookie: cookies(start) } }), app),
+    ).toBeNull();
+    rejectedURL.searchParams.set('state', 'wrong-state');
+    expect((await handleAuth(new Request(rejectedURL, { headers: { cookie: cookies(start) } }), app))?.status).toBe(
+      400,
+    );
+
+    const login = await worker.fetch(
+      new Request(env.AUTH_ORIGIN + '/api/auth/sign-in/anonymous', {
+        method: 'POST',
+        headers: { origin: env.AUTH_ORIGIN, 'content-type': 'application/json' },
+        body: '{}',
+      }),
+      env,
+    );
+    const subject = ((await login.json()) as { user: { id: string } }).user.id;
+    for (const client of [
+      app,
+      {
+        ...app,
+        PUBLIC_ORIGIN: 'https://support.another.net',
+        OIDC_CLIENT_ID: 'donate',
+        SESSION_SECRET: 'donate-session-secret-with-at-least-32-characters',
+      },
+    ]) {
+      const begin = (await handleAuth(new Request(client.PUBLIC_ORIGIN + '/', { headers: navigation }), client))!;
+      const authorization = await worker.fetch(
+        new Request(begin.headers.get('location')!, {
+          headers: { cookie: cookies(login) },
+        }),
+        env,
+      );
+      const finish = (await handleAuth(
+        new Request(authorization.headers.get('location')!, {
+          headers: { cookie: cookies(begin) },
+        }),
+        client,
+      ))!;
+      expect(finish.status, await finish.clone().text()).toBe(302);
+      const request = new Request(client.PUBLIC_ORIGIN + '/', { headers: { ...navigation, cookie: cookies(finish) } });
+      expect((await readSession(request, client))?.identity.sub).toBe(subject);
+      expect(await handleAuth(request, client)).toBeNull();
+      expect(finish.headers.get('set-cookie')).not.toMatch(/Domain=/i);
+    }
+    const logout = (await handleAuth(
+      new Request(app.PUBLIC_ORIGIN + '/api/auth/sign-out', {
+        method: 'POST',
+        headers: { origin: app.PUBLIC_ORIGIN },
+      }),
+      app,
+    ))!;
+    expect(
+      await handleAuth(
+        new Request(entry, {
+          headers: { ...navigation, cookie: cookies(logout) },
+        }),
+        app,
+      ),
+    ).toBeNull();
+  });
   test('rejects unregistered redirect URIs and public client registration', async () => {
     const metadata = (await (
       await worker.fetch(new Request(`${env.AUTH_ORIGIN}/api/auth/.well-known/openid-configuration`), env)
