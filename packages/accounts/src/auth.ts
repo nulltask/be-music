@@ -6,10 +6,13 @@ import { passkey } from '@better-auth/passkey';
 import { oauthProvider } from '@better-auth/oauth-provider';
 import { drizzle } from 'drizzle-orm/d1';
 import { eq, count, notInArray } from 'drizzle-orm';
+import { createProfile } from './profiles.ts';
 import * as schema from './schema.ts';
 
 export interface Env {
   DB: D1Database;
+  BLOBS: R2Bucket;
+  LEADERBOARD?: { syncProfile(subject: string): Promise<void> };
   AUTH_ORIGIN: string;
   PASSKEY_RP_ID: string;
   /** JSON map of first-party client IDs to exact origins. */
@@ -38,18 +41,24 @@ function buildAuth(env: Env) {
     socialProviders.discord = { clientId: env.DISCORD_CLIENT_ID, clientSecret: env.DISCORD_CLIENT_SECRET };
   if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET)
     socialProviders.google = { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET };
-  const claims = async (user: { id: string; name?: string; isAnonymous?: unknown } | null | undefined) => ({
-    'https://be-music.app/passkeys': user
-      ? (await db.select({ n: count() }).from(schema.passkey).where(eq(schema.passkey.userId, user.id)))[0].n
-      : 0,
-    'https://be-music.app/anonymous': user?.isAnonymous === true,
-    'https://be-music.app/linked-guests': user
-      ? (await db.select().from(schema.identityLink).where(eq(schema.identityLink.toUserId, user.id))).map(
-          (row) => row.fromUserId,
-        )
-      : [],
-    ...(user ? { name: user.name } : {}),
-  });
+  const claims = async (user: { id: string; name?: string; isAnonymous?: unknown } | null | undefined) => {
+    if (user) await createProfile(db, user.id, user.isAnonymous === true);
+    const publicProfile = user
+      ? await db.query.profile.findFirst({ where: eq(schema.profile.userId, user.id) })
+      : undefined;
+    return {
+      'https://be-music.app/passkeys': user
+        ? (await db.select({ n: count() }).from(schema.passkey).where(eq(schema.passkey.userId, user.id)))[0].n
+        : 0,
+      'https://be-music.app/anonymous': user?.isAnonymous === true,
+      'https://be-music.app/linked-guests': user
+        ? (await db.select().from(schema.identityLink).where(eq(schema.identityLink.toUserId, user.id))).map(
+            (row) => row.fromUserId,
+          )
+        : [],
+      ...(user ? { name: publicProfile?.displayName ?? user.name } : {}),
+    };
+  };
   return betterAuth({
     baseURL: env.AUTH_ORIGIN,
     basePath: '/api/auth',
@@ -61,7 +70,7 @@ function buildAuth(env: Env) {
     },
     database: drizzleAdapter(db, { provider: 'sqlite', schema }),
     socialProviders,
-    disabledPaths: ['/token'],
+    disabledPaths: ['/token', '/update-user'],
     plugins: [
       anonymous({
         onLinkAccount: async ({ anonymousUser, newUser }) => {

@@ -4,6 +4,7 @@ import type { Env } from './env.ts';
 import { loadSession as loadLegacySession } from './legacy-auth.ts';
 import { openDatabase } from './db/client.ts';
 import { oidcIdentity, user } from './db/schema.ts';
+import { syncAccountProfile } from './profile-sync.ts';
 import { claimAccount } from './accounts.ts';
 import { createProfile } from './profiles.ts';
 import { reassignScores } from './scores/reassign.ts';
@@ -80,6 +81,7 @@ export async function syncIdentity(env: Env, identity: Identity): Promise<string
       .where(and(eq(oidcIdentity.issuer, identity.issuer), eq(oidcIdentity.subject, subject)));
     await db.delete(user).where(eq(user.id, guest.userId));
   }
+  await syncAccountProfile(env, identity.sub, mapped.userId);
   return mapped.userId;
 }
 

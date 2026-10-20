@@ -40,6 +40,7 @@ export async function settingsPage(c: PageContext<'/settings'>) {
       </Layout>,
     );
   }
+  if (c.env.AUTH_ISSUER) return c.redirect(new URL('/account', c.env.AUTH_ISSUER).href, 302);
   const hasUpload = !viewer.avatarUrl.endsWith('?v=g');
   return c.html(
     <Layout meta={pageMeta}>

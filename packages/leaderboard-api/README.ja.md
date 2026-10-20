@@ -60,7 +60,7 @@ pnpm exec cf d1 create --name leaderboard-preview --primary-location-hint apac
 ```
 
 ```bash
-pnpm exec cf r2 buckets create --name be-music-leaderboard-preview --location-hint apac
+pnpm exec cf r2 buckets create --name leaderboard-preview --location-hint apac
 ```
 
 ### Secrets
@@ -101,10 +101,10 @@ pnpm --filter @be-music/leaderboard-api run db:migrate:preview
 
 環境は、どのサービスとも同じく 2 つです（docs/services.ja.md 2 章）。`main` が本番、`devel` がプレビューです。
 
-| 環境       | Worker                | ホスト                             | D1                    | R2                             |
-| ---------- | --------------------- | ---------------------------------- | --------------------- | ------------------------------ |
-| 本番       | `leaderboard`         | `leaderboard.be-music.app`         | `leaderboard`         | `be-music-leaderboard`         |
-| プレビュー | `leaderboard-preview` | `leaderboard.preview.be-music.app` | `leaderboard-preview` | `be-music-leaderboard-preview` |
+| 環境       | Worker                | ホスト                             | D1                    | R2                    |
+| ---------- | --------------------- | ---------------------------------- | --------------------- | --------------------- |
+| 本番       | `leaderboard`         | `leaderboard.be-music.app`         | `leaderboard`         | `leaderboard`         |
+| プレビュー | `leaderboard-preview` | `leaderboard.preview.be-music.app` | `leaderboard-preview` | `leaderboard-preview` |
 
 `main` か `devel` に push するたびに、Deploy ワークフロー（`.github/workflows/deploy.yml`）が動きます。その環境の D1 に
 マイグレーションを適用してから、ほかの Worker より先にこの Worker をデプロイします。ほかの Worker がこの Worker を

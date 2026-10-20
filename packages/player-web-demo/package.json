@@ -7,8 +7,9 @@
     "dev": "vp dev --host 0.0.0.0",
     "build": "vp build",
     "build:cf": "vp build && printf 'ffmpeg-core/\\n.DS_Store\\n' > dist/.assetsignore",
-    "cf:r2:create": "wrangler r2 bucket create be-music-ffmpeg-core",
+    "cf:r2:create": "wrangler r2 bucket create play && wrangler r2 bucket create play-preview",
     "cf:r2:push": "pnpm run build:cf && node scripts/sync-ffmpeg-core.mjs --force",
+    "cf:r2:push:preview": "pnpm run build:cf && node scripts/sync-ffmpeg-core.mjs --force --preview",
     "clean": "rimraf dist node_modules/.vite"
   },
   "dependencies": {

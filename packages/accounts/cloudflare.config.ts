@@ -1,4 +1,4 @@
-import { bindings, defineConfig } from 'cf/config';
+import { bindings, defineConfig, triggers } from 'cf/config';
 
 export default defineConfig(({ mode }) => {
   const preview = mode === 'preview';
@@ -13,12 +13,15 @@ export default defineConfig(({ mode }) => {
       entrypoint: './src/index.ts',
       domains: [`accounts.${site}`],
       workersDev: false,
+      triggers: [triggers.scheduled({ schedule: '*/5 * * * *' })],
       observability: { enabled: true },
       env: {
         DB: bindings.d1({
           name: `accounts${suffix}`,
           id: preview ? '<D1_DATABASE_ID>' : '<D1_DATABASE_ID>',
         }),
+        BLOBS: bindings.r2({ name: `accounts${suffix}` }),
+        LEADERBOARD: bindings.worker({ worker: `leaderboard${suffix}`, exportName: 'ProfileSync' }),
         AUTH_ORIGIN: bindings.text(`https://accounts.${site}`),
         PASSKEY_RP_ID: bindings.text(site),
         API_AUDIENCE: bindings.text(`https://leaderboard.${site}`),

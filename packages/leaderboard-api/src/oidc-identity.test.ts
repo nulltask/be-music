@@ -99,3 +99,34 @@ describe('OIDC player identities', () => {
     ).toBeNull();
   });
 });
+
+test('refreshes the local public projection from Accounts', async () => {
+  const issuer = 'https://accounts.example/api/auth';
+  const settings = {
+    ...env,
+    AUTH_ISSUER: issuer,
+    ACCOUNTS: {
+      fetch: async () =>
+        Response.json({
+          handle: 'central_profile',
+          displayName: 'Central Name',
+          avatarURL: 'https://accounts.example/profiles/central_profile/avatar?v=g',
+        }),
+    },
+  };
+  const id = await syncIdentity(settings, { issuer, sub: 'central-profile', name: 'Ignored', anonymous: true });
+  const row = await openDatabase(env.DB).query.profile.findFirst({ where: eq(profile.userId, id) });
+  expect(row?.displayName).toBe('Central Name');
+  expect(row?.handle).toBe('central_profile');
+  expect(row?.avatarKey).toBe('https://accounts.example/profiles/central_profile/avatar?v=g');
+  const bad = {
+    ...settings,
+    ACCOUNTS: {
+      fetch: async () =>
+        Response.json({ handle: 'central_profile', displayName: 'Forged', avatarURL: 'https://evil.example/avatar' }),
+    },
+  };
+  await expect(syncIdentity(bad, { issuer, sub: 'central-profile', name: 'Ignored', anonymous: true })).rejects.toThrow(
+    'Invalid Accounts avatar',
+  );
+});
