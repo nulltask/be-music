@@ -263,6 +263,13 @@ describe('Accounts-owned profiles and avatars', () => {
     const image = await worker.fetch(new Request(`${env.AUTH_ORIGIN}/profiles/profile_owner/avatar`), profileEnv);
     expect(image.headers.get('content-type')).toBe('image/png');
     expect(image.headers.get('access-control-allow-origin')).toBe('*');
+    const imageHead = await worker.fetch(
+      new Request(`${env.AUTH_ORIGIN}/profiles/profile_owner/avatar`, { method: 'HEAD' }),
+      profileEnv,
+    );
+    expect(imageHead.status).toBe(200);
+    expect(await imageHead.text()).toBe('');
+    expect(imageHead.headers.get('content-type')).toBe('image/png');
     const uploadedPage = await call('/account');
     expect(await uploadedPage.text()).toMatch(/src="\/profiles\/profile_owner\/avatar\?v=[a-f0-9]{16}"/);
     expect(new Uint8Array(await image.arrayBuffer())).toEqual(png);
