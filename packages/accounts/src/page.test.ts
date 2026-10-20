@@ -22,4 +22,13 @@ describe('Accounts page', () => {
     expect(page).toContain('href="https://play.example/api/auth/sign-in"');
     expect(page).not.toContain('data-action="guest"');
   });
+  test('keeps continuation and account actions available in the shared shell', () => {
+    const page = renderAccountPage({ ...input, signedIn: true, anonymous: true, name: 'Guest' });
+    expect(page).toContain('href="#main"');
+    expect(page).toContain('id="main"');
+    expect(page).toContain('data-action="continue"');
+    expect(page).toContain('data-action="sign-out"');
+    expect(page).toContain('aria-live="polite"');
+    expect(page).not.toContain('data-action="guest"');
+  });
 });
