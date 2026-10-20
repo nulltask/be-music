@@ -2,13 +2,13 @@
 
 # Leaderboard design
 
-> Status: the core of P0 is implemented in [`packages/leaderboard-api`](../packages/leaderboard-api/README.md):
+> Status: the core of P0 is implemented in [`packages/app-leaderboard`](../packages/app-leaderboard/README.md):
 > authentication, submission with verification layers L1–L3 (L4 for charts without `#RANDOM`), re-simulation under
 > the three rulesets, and the ranking API. Everything else is still design. This document records the decisions made
 > so far and the questions that are still open (section 15).
 
 The Leaderboard is be-music's online score ranking — what LR2 and beatoraja call an "IR" (Internet Ranking). This
-repository uses "IR" for the JSON intermediate representation (`@be-music/json`), so the ranking is called the
+repository uses "IR" for the JSON intermediate representation (`@be-music/chart-source`), so the ranking is called the
 **Leaderboard** everywhere: in code, in docs, and in the UI. Third-party names keep their own spelling (LR2IR, the
 beatoraja skin's IR ops).
 
@@ -17,7 +17,7 @@ beatoraja skin's IR ops).
 Goals:
 
 - Rank plays per chart, under each of the three compat rulesets (`lr2`, `beatoraja`, `iidx`).
-- Trust the server, not the client: the client sends its play log, and the server re-derives the result.
+- Trust the server, not the client: the client sends its replay, and the server re-derives the result.
 - Identify charts by content (the Be-Music Fingerprint), so re-saved, re-encoded or converted copies of a chart share
   one ranking.
 - Rivals, targets and ghosts in the select, gameplay and result scenes; shareable score pages with OG images.
@@ -26,15 +26,15 @@ Non-goals:
 
 - Preventing every form of cheating. A fabricated input stream (a bot or a TAS) cannot be told apart from a human one
   with certainty; it is handled by anomaly detection and moderation (section 12), not by the protocol.
-- Hosting chart or audio files. The server stores canonical fingerprint documents and play logs only.
+- Hosting chart or audio files. The server stores canonical fingerprint documents and replays only.
 
 ## 2. Architecture
 
 ```mermaid
 flowchart LR
   subgraph clients[Clients]
-    W[player-web]
-    T[player-tui]
+    W[player-browser]
+    T[player-terminal]
   end
   subgraph workers[Workers]
     P[play]
@@ -53,9 +53,9 @@ flowchart LR
 
 - **Runtime**: Cloudflare Workers with D1 and R2. There is no plan to leave Cloudflare.
 - **Framework**: Hono. The API and the server-rendered pages live in one Worker and share the data-access functions.
-- **Package**: `packages/leaderboard-api` (private). It imports `@be-music/player/playlog` and `@be-music/chart` to
+- **Package**: `packages/app-leaderboard` (private). It imports `@be-music/player-engine/replay` and `@be-music/chart-model` to
   re-simulate plays and verify fingerprints.
-- **Typed client**: Hono RPC (`hc<AppType>`) gives `player-web` and `player-tui` the API types directly.
+- **Typed client**: Hono RPC (`hc<AppType>`) gives `player-browser` and `player-terminal` the API types directly.
 - **Validation**: Valibot through `@hono/standard-validator`.
 - **ORM**: Drizzle. drizzle-kit generates SQL migrations into the package; Better Auth's tables use the same
   migrations.
@@ -78,7 +78,7 @@ flowchart LR
 
 The official deployment uses **Workers Paid**. The former Free-plan CPU budget is no longer the basis for the service's architecture. Self-hosted installations must still check the limits of their chosen plan and runtime.
 
-- **Re-simulation** remains inline. Measure gunzip, `parsePlaylog` and the three `simulatePlaylog` runs on the regression corpus when changing verification behavior.
+- **Re-simulation** remains inline. Measure gunzip, `parseReplay` and the three `simulateReplay` runs on the regression corpus when changing verification behavior.
 - **Share cards are currently drawn in the browser** and uploaded to R2 (section 11). This describes the current implementation, not a requirement imposed by the official plan. Server-side generation can be evaluated against the configured CPU budget, memory usage, font loading and rendering cost.
 
 ## 3. Authentication and accounts
@@ -104,7 +104,7 @@ Charts are identified by the **Be-Music Fingerprint** ([fingerprint-spec.md](./f
 - **`chart.playFingerprint`** covers the branches one play rolled. It identifies what was played and is used for
   verification and ghost matching.
 - **Aliases**: the chart file's SHA-256 and MD5 map many-to-one onto a chart fingerprint (`chart_aliases`). They are
-  the keys LR2IR and difficulty tables use. Web Crypto has no MD5, so `@be-music/chart` gains a small tested MD5 next to
+  the keys LR2IR and difficulty tables use. Web Crypto has no MD5, so `@be-music/chart-model` gains a small tested MD5 next to
   its SHA-256.
 
 **Development versions.** The fingerprint is versioned `bmfp0` and the ruleset result ids are `lr2/0`, `beatoraja/0`
@@ -116,11 +116,11 @@ data (section 15).
 
 ### 5.1 What the client sends
 
-The client sends the play log it already records ([playlog.md](./playlog.md)), gzipped, with the canonical **play
+The client sends the replay it already records ([replay.md](./replay.md)), gzipped, with the canonical **play
 document** of its play fingerprint. It adds the **chart document** only when the server does not know the chart yet.
 Both documents are canonical JSON without keysounds, metadata or BGA, so they are small and are not the chart file.
 
-The play log's `recorder` field (application, version, build, engine version, platform) says which software recorded
+The replay's `recorder` field (application, version, build, engine version, platform) says which software recorded
 it. Every API request also carries a `Be-Music-Client` header (`be-music-web/0.5.0 (engine 0.8.0; build 6471cd16)`)
 naming the software that sends it. Both are self-reported: they serve compatibility checks and bug triage, never
 trust. A minimum client version can be enforced later through a `client_policies` table (`426 Upgrade Required`);
@@ -139,15 +139,15 @@ sequenceDiagram
     participant R as R2
 
     P->>C: finish the play
-    C->>C: play log (chartFingerprint, playFingerprint, randomOutcomes)<br/>+ play document, OG card PNG
-    C->>C: queue the play log in IndexedDB
+    C->>C: replay (chartFingerprint, playFingerprint, randomOutcomes)<br/>+ play document, OG card PNG
+    C->>C: queue the replay in IndexedDB
     C->>A: POST /api/v0/scores (gzip)<br/>session cookie or bearer, Idempotency-Key
     A->>A: resolve the session (signed-in or anonymous)
     A->>RL: limit(user or device)
     alt over the limit
         A-->>C: 429 Retry-After
     end
-    A->>A: size limit → gunzip → parsePlaylog / Valibot
+    A->>A: size limit → gunzip → parseReplay / Valibot
     A->>D: submission_id = sha256(play fingerprint, scoring settings, inputs) already stored?
     alt resubmission by the same player
         A-->>C: 200 with the stored result
@@ -168,12 +168,12 @@ sequenceDiagram
         A->>A: compose the chart document's outcomes, one must equal the play document
         A->>D: remember the play fingerprint
     end
-    A->>A: play document → note times, compare with the play log's notes (lane options allowed)
+    A->>A: play document → note times, compare with the replay's notes (lane options allowed)
     alt mismatch
         A-->>C: 422 chart_mismatch
     end
-    A->>A: simulatePlaylog under lr2, beatoraja, iidx
-    A->>R: PUT play log, ghost, OG card
+    A->>A: simulateReplay under lr2, beatoraja, iidx
+    A->>R: PUT replay, ghost, OG card
     A->>D: batch: INSERT score + results, UPSERT best scores
     A->>D: rank and player count per ruleset
     A-->>C: 201 { scoreId, results, ranks, improved }
@@ -189,23 +189,23 @@ sequenceDiagram
 - **Outcome composition runs once per play fingerprint.** A chart without control flow has equal chart and play
   fingerprints and skips it.
 - **R2 is written before D1.** A failed D1 batch leaves only an unreferenced object, which a periodic sweep removes; the
-  reverse order could leave a score whose play log is missing.
+  reverse order could leave a score whose replay is missing.
 
 ### 5.3 Verification layers
 
-| Layer | Check                                                                         | Stops                               |
-| ----- | ----------------------------------------------------------------------------- | ----------------------------------- |
-| L1    | The server re-simulates the inputs; the play log's `results` cache is ignored | editing the numbers                 |
-| L2    | Auto play and ESC aborts are rejected; assists are flagged                    | assisted scores in the main ranking |
-| L3    | Both fingerprint documents hash to the claimed fingerprints                   | a tampered document                 |
-| L4    | The play document is one outcome of the chart document                        | a play of a different chart         |
-| L5    | The play log's notes equal the play document's note times, up to lane options | an edited chart inside the play log |
-| L6    | Anomaly detection and reports (section 12)                                    | bots and TAS                        |
+| Layer | Check                                                                       | Stops                               |
+| ----- | --------------------------------------------------------------------------- | ----------------------------------- |
+| L1    | The server re-simulates the inputs; the replay's `results` cache is ignored | editing the numbers                 |
+| L2    | Auto play and ESC aborts are rejected; assists are flagged                  | assisted scores in the main ranking |
+| L3    | Both fingerprint documents hash to the claimed fingerprints                 | a tampered document                 |
+| L4    | The play document is one outcome of the chart document                      | a play of a different chart         |
+| L5    | The replay's notes equal the play document's note times, up to lane options | an edited chart inside the replay   |
+| L6    | Anomaly detection and reports (section 12)                                  | bots and TAS                        |
 
 Someone can still invent a chart document. It gets its own new fingerprint, so it creates a ranking nobody else
 plays and cannot pollute a real one; a chart is listed publicly only once it qualifies (section 7).
 
-L4 and L5 need two new pure functions in `@be-music/chart`, with tests: composing a chart document's outcomes, and
+L4 and L5 need two new pure functions in `@be-music/chart-model`, with tests: composing a chart document's outcomes, and
 turning a play document's positions and timeline into note times that match the engine's.
 
 ## 6. Scoring rules
@@ -213,7 +213,7 @@ turning a play document's positions and timeline into note times that match the 
 - **Three rulesets.** Every play is re-simulated under `lr2`, `beatoraja` and `iidx`, and appears in all three
   rankings. The ruleset the player actually played (`play.judgeRuleset`) is stored and shown as a mark, and a ranking
   can be filtered to "played under this ruleset" only.
-- **Gauges** map across rulesets as the play log already does (`GROOVE` is beatoraja's `NORMAL`, `DEATH` its
+- **Gauges** map across rulesets as the replay already does (`GROOVE` is beatoraja's `NORMAL`, `DEATH` its
   `HAZARD`, and so on).
 - **Assists** (auto scratch, a debug judge-window override, ...) are stored with flags and ranked separately from
   unassisted plays.
@@ -224,7 +224,7 @@ turning a play document's positions and timeline into note times that match the 
   emptied) are stored and count as plays.
 - **Lamps and BP per ruleset** follow each game: under `lr2` a DEATH clear is a NORMAL clear (LR2body.exe `CheckClear`);
   beatoraja and IIDX give DEATH (`HAZARD`) an EX HARD lamp. Every ruleset counts empty POORs in BP, LR2 included. Migration `0012` rewrote the `lr2` results stored before this rule.
-  The lamp and BP come from the rules every client uses (`resolveRulesetResultLamp` in `@be-music/player/playlog`, `resolveClearLamp` and `resolveMissCount` in `@be-music/player/ruleset`): a full combo needs every note judged GOOD or better, so a chart without notes takes its gauge's lamp. Lamps are stored as their rank (`clearLampRank`): 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 NORMAL, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX.
+  The lamp and BP come from the rules every client uses (`resolveRulesetResultLamp` in `@be-music/player-engine/replay`, `resolveClearLamp` and `resolveMissCount` in `@be-music/player-engine/ruleset`): a full combo needs every note judged GOOD or better, so a chart without notes takes its gauge's lamp. Lamps are stored as their rank (`clearLampRank`): 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 NORMAL, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX.
 - **Personal bests, beatoraja style**: the best EX score, the best clear lamp and the fewest misses are kept separately,
   each pointing at the score that set it, so each best's replay and ghost are one click away. Misses count for every
   play that was not aborted, cleared or not.
@@ -242,13 +242,13 @@ A course run (a dan course, an expert or nonstop course, a beatoraja course or a
 with its own rankings per ruleset, and never as single-chart plays.
 
 - **Course identity.** A course is keyed by its **course fingerprint** (`bmcourse0:<sha256>`,
-  `computeCourseFingerprint` in `@be-music/player/playlog`): its kind, its constraints (normalized and sorted) and its
+  `computeCourseFingerprint` in `@be-music/player-engine/replay`): its kind, its constraints (normalized and sorted) and its
   stages' chart fingerprints in order, and for a NONSTOP course its connections and placement mode, which decide the
   stitched chart. The name and trophies are left out, so the same course read from a `.lr2crs`,
   a beatoraja course file or a table shares one board whenever its charts match. A random course is keyed by the
-  stages it drew. A failed run is keyed too: the course play log carries the chart fingerprint of every stage it never
-  reached ([playlog.md](./playlog.md#course-play-logs)).
-- **What the client sends.** The course play log (`be-music-course-playlog`), gzipped, with the play document (and,
+  stages it drew. A failed run is keyed too: the course replay carries the chart fingerprint of every stage it never
+  reached ([replay.md](./replay.md#course-replays)).
+- **What the client sends.** The course replay (`be-music-course-replay`), gzipped, with the play document (and,
   for a chart the server does not know yet, the chart document) of each stage it played, to
   `POST /api/v0/course-scores`. It adds the **stage chart** (`stageCharts`: the parsed chart as loaded, `#RANDOM` still
   in, and whether it is a `.pms` file) of every stage the server rebuilds itself: each stage the run never reached,
@@ -261,7 +261,7 @@ with its own rankings per ruleset, and never as single-chart plays.
   be here, not a reason to refuse it. The stages must be judged under one ruleset, play under the course's constraints
   (its gauge set and judge constraint, and a lane option the course allows), and carry in exactly what the previous
   stage left once re-simulated (gauge, course combo and course max combo; the first stage carries in nothing). The run
-  is re-simulated under `lr2`, `beatoraja` and `iidx` with `simulateCoursePlaylog`; the client's cached results are
+  is re-simulated under `lr2`, `beatoraja` and `iidx` with `simulateCourseReplay`; the client's cached results are
   ignored.
 - **Unreached stages.** Their notes count as BP, so their note counts must not be the client's word. Every unreached
   stage's chart is required (`stage-chart-required`), must hash to the chart fingerprint the log names for the stage
@@ -279,9 +279,9 @@ with its own rankings per ruleset, and never as single-chart plays.
 - **Unreleased courses are not ranked.** A course with beatoraja's `release: false`, which a drawn random course and a
   course made in the course maker also have, is recorded so in the course log (`course.release: false`), and its runs are refused as `unreleased`, as
   beatoraja keeps them off IR.
-- **NONSTOP runs.** A NONSTOP course is played as one stitched chart, and that play (`nonstop.playlog`) is what is
+- **NONSTOP runs.** A NONSTOP course is played as one stitched chart, and that play (`nonstop.replay`) is what is
   judged and ranked. The server rebuilds the stitched chart from the stage charts exactly as the client built it: both
-  take the same deterministic pipeline (`prepareNonstopCourse` in `@be-music/player/course`, see
+  take the same deterministic pipeline (`prepareNonstopCourse` in `@be-music/player-engine/course`, see
   [Courses and dan certification](./course.md#nonstop-courses)). Each stage chart must hash to its stage's chart
   fingerprint, is resolved with the `#RANDOM` draws its stage recorded (`nonstop.stages[].randomDraws`), gets the
   course's long-note constraint, and the stages are stitched with the recorded connections, placement and stitching
@@ -305,8 +305,8 @@ with its own rankings per ruleset, and never as single-chart plays.
   definitions of one course could list different trophies: their places are compared as they are.
 - **Hidden runs.** A player can hide one of their course runs (`PATCH /api/v0/course-scores/:id`) and show it again,
   as a play. A hidden run is kept but leaves the course rankings, the bests (rebuilt from the runs still shown, the
-  trophy best included), the figures and every list, and only its player can open it or its play log.
-- **Play logs.** `GET /api/v0/course-scores/:id/playlog` answers the stored course play log, gzip-compressed as it is
+  trophy best included), the figures and every list, and only its player can open it or its replay.
+- **Replays.** `GET /api/v0/course-scores/:id/replay` answers the stored course replay, gzip-compressed as it is
   kept. Course runs have no replay setting of their own: anyone reads a shown run's log, only its player a hidden
   run's.
 
@@ -318,8 +318,8 @@ sequenceDiagram
     participant D as D1
     participant R as R2
 
-    C->>A: POST /api/v0/course-scores (gzip)<br/>course play log + documents per played stage<br/>+ unreached stage charts
-    A->>A: checkCoursePlaylogEligibility<br/>(auto, aborted, fingerprints, one run)
+    C->>A: POST /api/v0/course-scores (gzip)<br/>course replay + documents per played stage<br/>+ unreached stage charts
+    A->>A: checkCourseReplayEligibility<br/>(auto, aborted, fingerprints, one run)
     A->>D: submission id already stored?
     loop each played stage
         A->>A: play document hashes to playFingerprint (L3)
@@ -329,10 +329,10 @@ sequenceDiagram
         A->>A: chart hashes to its chartFingerprint
         A->>A: resolveChartRulesetFacts == the logged facts
     end
-    A->>A: simulateCoursePlaylog under the played ruleset
+    A->>A: simulateCourseReplay under the played ruleset
     A->>A: constraints, carry-in, failed vs given up
-    A->>A: simulateCoursePlaylog under lr2, beatoraja, iidx
-    A->>R: PUT course play log, new chart documents
+    A->>A: simulateCourseReplay under lr2, beatoraja, iidx
+    A->>R: PUT course replay, new chart documents
     A->>D: batch: charts, course, course score + results, course bests
     A-->>C: 201 { courseScoreId, courseFingerprint, results, ranks }
 ```
@@ -347,9 +347,9 @@ flowchart TD
     resolve["resolve with<br/>the recorded draws"] --> ln["long-note constraint"]
     ln --> stitch["stitch: connections,<br/>placement, stitch"]
   end
-  prepare --> same{"play fingerprint ==<br/>nonstop.playlog's?"}
+  prepare --> same{"play fingerprint ==<br/>nonstop.replay's?"}
   same -->|yes| map{"stage map ==<br/>resolveNonstopRun's?"}
-  map -->|yes| sim["simulateCoursePlaylog<br/>on the stitched play"]
+  map -->|yes| sim["simulateCourseReplay<br/>on the stitched play"]
   fp -->|no| refuse["422"]
   same -->|no| refuse
   map -->|no| refuse
@@ -361,7 +361,7 @@ flowchart TD
 charts          (chart_fp PK, title, artist, note_count, play_fps JSON, status, first_seen_at)
 chart_aliases   (kind, hash, chart_fp)                         -- kind: sha256 | md5
 scores          (id PK, submission_id UNIQUE, user_id, chart_fp, play_fp, played_ruleset, gauge,
-                 assist_flags, failed, recorded_by JSON, submitted_by, server_engine, playlog_key,
+                 assist_flags, failed, recorded_by JSON, submitted_by, server_engine, replay_key,
                  ghost_key, og_key, replay_visibility, created_at)
 score_results   (score_id, ruleset, ruleset_revision, ex_score, clear_lamp, miss_count,
                  max_combo, judges JSON)                       -- PK(score_id, ruleset)
@@ -377,7 +377,7 @@ client_policies (name, min_version, blocked_versions JSON)
 course          (course_fp PK, name, kind, constraints JSON, stage_chart_fps JSON, created_at)
 course_score    (id PK, submission_id UNIQUE, user_id, course_fp, played_ruleset, gauge, assisted,
                  assist_flags, verification, stages_played, recorded_by JSON, submitted_by,
-                 server_engine, playlog_key, hidden, created_at)
+                 server_engine, replay_key, hidden, created_at)
 course_score_result (course_score_id, ruleset, ruleset_revision, ex_score, note_count, clear_lamp,
                  miss_count, max_combo, stages_played, trophy, trophy_rank, gauge_type, gauge_final,
                  judges JSON, stages JSON)
@@ -400,9 +400,9 @@ course_best_score (user_id, course_fp, ruleset, assisted,     -- PK, as best_sco
     after their last check and linked charts a month after theirs, since a link may be added or changed.
   - A chart BMS Search does not know, or has not linked, stays on its own. Calls identify the Leaderboard in their
     `User-Agent`.
-- R2 keys: `playlogs/{scoreId}.bmplay.json.gz`, `course-playlogs/{courseScoreId}.bmcourse.json.gz`,
+- R2 keys: `replays/{scoreId}.bmplay.json.gz`, `course-replays/{courseScoreId}.bmcourse.json.gz`,
   `charts/{chartFp}.json`, `ghosts/{scoreId}.bin`, `og/scores/{scoreId}.png`.
-- **Replays**: each user chooses who can download their play logs (a per-user default, overridable per score).
+- **Replays**: each user chooses who can download their replays (a per-user default, overridable per score).
   Ghosts are always public: a judgment sequence reveals little (proposed; section 15).
 
 ## 8. API (`/api/v0`)
@@ -414,14 +414,14 @@ drift from the validation the routes run.
 | Method                   | Path                                                                     | Purpose                                                                              |
 | ------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
 | `POST`                   | `/scores`                                                                | submit a play (section 5)                                                            |
-| `GET`                    | `/scores/:id`, `/scores/:id/playlog`, `/scores/:id/ghost`                | score details, play log (per visibility), ghost (immutable)                          |
+| `GET`                    | `/scores/:id`, `/scores/:id/replay`, `/scores/:id/ghost`                 | score details, replay (per visibility), ghost (immutable)                            |
 | `GET`                    | `/charts/:chartFp/leaderboard?ruleset=&sort=&anonymous=&played=&cursor=` | a ranking                                                                            |
 | `GET`                    | `/charts/:chartFp/leaderboard/me?ruleset=`                               | my rank and the players around me                                                    |
 | `POST`                   | `/charts/lookup?include=rivals`                                          | ranks, player counts and rivals' bests for many charts (fingerprint, SHA-256 or MD5) |
 | `GET`                    | `/charts/:chartFp/targets?ruleset=&kind=`                                | a target score and its ghost (section 9)                                             |
 | `POST`                   | `/course-scores`                                                         | submit a course run (section 6.1)                                                    |
 | `GET`                    | `/course-scores?ruleset=&player=&anonymous=&limit=`                      | the latest course runs                                                               |
-| `GET` / `PATCH`          | `/course-scores/:id`, `/course-scores/:id/playlog`                       | a course run (`PATCH` hides or shows it), its play log                               |
+| `GET` / `PATCH`          | `/course-scores/:id`, `/course-scores/:id/replay`                        | a course run (`PATCH` hides or shows it), its replay                                 |
 | `GET`                    | `/courses/:courseFp`                                                     | a course: kind, constraints, stage charts                                            |
 | `GET`                    | `/courses/:courseFp/leaderboard?ruleset=&anonymous=&played=&offset=`     | a course ranking                                                                     |
 | `GET`                    | `/courses/:courseFp/leaderboard/me?ruleset=`                             | my rank on a course                                                                  |
@@ -443,7 +443,7 @@ Reads are public and cached briefly with the Cache API; a submission purges the 
 - **New version**: a breaking change goes into one. Examples: removing or renaming a field, changing what a value means,
   or making a request stricter.
 - **Retiring a version**: the old one keeps serving until the clients that use it are gone, then answers
-  `410 Gone`. The play log's `recorder` and the `be-music-client` header show who still calls it.
+  `410 Gone`. The replay's `recorder` and the `be-music-client` header show who still calls it.
 - **Unknown paths**: anything else under `/api`, an unknown version included, answers `404` with
   `{"error": "not-found"}`.
 - **Not versioned**: `/api/auth/*` is the app's OIDC session protocol. Discord and Google callbacks belong to Accounts, not the Leaderboard.
@@ -465,7 +465,7 @@ counted in D1.
   `#RANDOM` outcome), notes are matched by their position as a fraction of the note count.
 - **Client wiring**: the LR2 and beatoraja skins already have rival, target and ghost slots that read placeholders
   today (`NO TARGET`, zero target scores); they read these values instead. The ghost-curve and matching helpers are pure
-  functions in `@be-music/player`.
+  functions in `@be-music/player-engine`.
 
 ## 10. Pages (`leaderboard.be-music.app`)
 
@@ -486,7 +486,7 @@ Tailwind CSS v4 and Basecoat (the shadcn/ui design without a framework runtime),
   lamp spread and details (kind, constraints). A course no player with an account has run stays out of search engines.
 - `/course-scores/:id` — a course run under every ruleset (stages reached, trophy), broken down stage by
   stage under the display ruleset (judgments, BP, the gauge each stage handed on, the stages never reached), with its
-  play log and, for its player, the switch that hides it. The top page lists the latest course runs below the plays.
+  replay and, for its player, the switch that hides it. The top page lists the latest course runs below the plays.
 
 Every page shows its figures under one **display ruleset** (LR2, beatoraja or IIDX), chosen in the header and kept in a
 cookie; a play's own ruleset is shown alongside as "played with". The switch is its own URL

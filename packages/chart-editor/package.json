@@ -1,0 +1,36 @@
+{
+  "name": "@be-music/chart-editor",
+  "version": "0.4.0",
+  "description": "Chart editing library and CLI for importing, modifying, and exporting BMS, bmson, and be-music JSON charts",
+  "license": "MIT",
+  "bin": {
+    "bms-editor": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build:bundle": "vp pack",
+    "build": "vp pack",
+    "clean": "rimraf dist",
+    "dev": "node --conditions=source src/cli.ts",
+    "bench": "node --conditions=source scripts/bench.ts"
+  },
+  "dependencies": {
+    "@be-music/chart-model": "workspace:*",
+    "@be-music/chart-parser": "workspace:*",
+    "@be-music/chart-source": "workspace:*",
+    "@be-music/chart-writer": "workspace:*",
+    "@be-music/shared-utils": "workspace:*"
+  }
+}

@@ -1,0 +1,260 @@
+import { describe, expect, it } from 'vite-plus/test';
+import { LR2_BUTTON, LR2_LANE_INDEX_MAX, LR2_NUM, LR2_OP, LR2_TEXT, LR2_TIMER } from '@be-music/skin-lr2/ids';
+import {
+  BEATORAJA_BUTTON,
+  BEATORAJA_NUM,
+  BEATORAJA_OP,
+  BEATORAJA_TEXT,
+  bombTimerId,
+  comboTimerId,
+  endOfNoteTimerId,
+  judgeOpForKind,
+  judgeTimerId,
+  keyOffTimerId,
+  keyOnTimerId,
+  lnHoldTimerId,
+  LR2_LANE_INDEX_MAX as BEATORAJA_LR2_LANE_INDEX_MAX,
+  TIMER_BOMB_1P_BASE,
+  TIMER_BOMB_2P_BASE,
+  TIMER_BOMB_EXT_BASE,
+  TIMER_COMBO_1P,
+  TIMER_COMBO_2P,
+  TIMER_ENDOFNOTE_1P,
+  TIMER_ENDOFNOTE_2P,
+  TIMER_FADEOUT,
+  TIMER_FAILED,
+  TIMER_JUDGE_1P,
+  TIMER_JUDGE_2P,
+  TIMER_KEY_OFF_1P_BASE,
+  TIMER_KEY_OFF_2P_BASE,
+  TIMER_KEY_ON_1P_BASE,
+  TIMER_KEY_ON_2P_BASE,
+  TIMER_LN_HOLD_1P_BASE,
+  TIMER_LN_HOLD_2P_BASE,
+  TIMER_PLAY,
+  TIMER_READY,
+  TIMER_RHYTHM,
+  TIMER_SCENE_START,
+  TIMER_SONGBAR_CHANGE,
+  TIMER_STARTINPUT,
+} from './runtime-ids.ts';
+
+describe('built-in timer constants — match prop.lua', () => {
+  it('uses prop.lua names verbatim (startinput=1 / fadeout=2 / failed=3 / ready=40 / play=41)', () => {
+    expect(TIMER_STARTINPUT).toBe(1);
+    expect(TIMER_FADEOUT).toBe(2);
+    expect(TIMER_FAILED).toBe(3);
+    expect(TIMER_READY).toBe(40);
+    expect(TIMER_PLAY).toBe(41);
+  });
+
+  it('judge timer matches prop.lua (judge_1p=46, judge_2p=47)', () => {
+    expect(TIMER_JUDGE_1P).toBe(46);
+    expect(TIMER_JUDGE_2P).toBe(47);
+  });
+});
+
+describe('bombTimerId — scratch is lane 0', () => {
+  it('returns 50 for 1P scratch (prop.lua bomb_1p_scratch)', () => {
+    expect(bombTimerId(1, 0)).toBe(50);
+  });
+
+  it('returns 60 for 2P scratch (prop.lua bomb_2p_scratch)', () => {
+    expect(bombTimerId(2, 0)).toBe(60);
+  });
+
+  it('uses 1P base for lanes 1..9 on side 1', () => {
+    expect(bombTimerId(1, 1)).toBe(TIMER_BOMB_1P_BASE + 1);
+    expect(bombTimerId(1, 9)).toBe(TIMER_BOMB_1P_BASE + 9);
+  });
+
+  it('uses 2P base for lanes 1..9 on side 2', () => {
+    expect(bombTimerId(2, 1)).toBe(TIMER_BOMB_2P_BASE + 1);
+    expect(bombTimerId(2, 7)).toBe(TIMER_BOMB_2P_BASE + 7);
+  });
+
+  it('switches to the 1000-block extension for lanes > 9, the 2P bank 100 above the 1P one', () => {
+    expect(bombTimerId(1, 10)).toBe(TIMER_BOMB_EXT_BASE + 10);
+    // 24 KEY wheel up / down (lanes 25 / 26).
+    expect(bombTimerId(1, 25)).toBe(1025);
+    expect(bombTimerId(1, 26)).toBe(TIMER_BOMB_EXT_BASE + 26);
+    // Upstream `SkinPropertyMapper.bombTimerId`: `TIMER_BOMB_1P_KEY10 + key - 10 + player * 100`.
+    expect(bombTimerId(2, 24)).toBe(TIMER_BOMB_EXT_BASE + 100 + 24);
+    expect(bombTimerId(2, 26)).toBe(1126);
+    expect(lnHoldTimerId(2, 25)).toBe(1325);
+    expect(keyOnTimerId(2, 10)).toBe(1510);
+    expect(keyOffTimerId(1, 25)).toBe(1625);
+  });
+
+  it('returns undefined for negative / non-integer lanes', () => {
+    expect(bombTimerId(1, -3)).toBeUndefined();
+    expect(bombTimerId(1, 1.5)).toBeUndefined();
+  });
+});
+
+describe('lnHoldTimerId / keyOnTimerId / keyOffTimerId', () => {
+  it('match prop.lua bases (scratch=lane 0, keys 1..9)', () => {
+    // hold_1p_scratch = 70, hold_2p_scratch = 80
+    expect(lnHoldTimerId(1, 0)).toBe(70);
+    expect(lnHoldTimerId(2, 0)).toBe(80);
+    expect(lnHoldTimerId(1, 5)).toBe(TIMER_LN_HOLD_1P_BASE + 5);
+    expect(lnHoldTimerId(2, 5)).toBe(TIMER_LN_HOLD_2P_BASE + 5);
+
+    // keyon_1p_scratch = 100, keyon_2p_scratch = 110
+    expect(keyOnTimerId(1, 0)).toBe(100);
+    expect(keyOnTimerId(2, 0)).toBe(110);
+    expect(keyOnTimerId(1, 7)).toBe(TIMER_KEY_ON_1P_BASE + 7);
+    expect(keyOnTimerId(2, 3)).toBe(TIMER_KEY_ON_2P_BASE + 3);
+
+    // keyoff_1p_scratch = 120, keyoff_2p_scratch = 130
+    expect(keyOffTimerId(1, 0)).toBe(120);
+    expect(keyOffTimerId(2, 0)).toBe(130);
+    expect(keyOffTimerId(1, 4)).toBe(TIMER_KEY_OFF_1P_BASE + 4);
+    expect(keyOffTimerId(2, 6)).toBe(TIMER_KEY_OFF_2P_BASE + 6);
+
+    // Extension space (24-key lanes 10..26)
+    expect(lnHoldTimerId(1, 24)).toBe(1200 + 24);
+    expect(keyOnTimerId(1, 18)).toBe(1400 + 18);
+    expect(keyOffTimerId(1, 26)).toBe(1600 + 26);
+  });
+});
+
+describe('judgeTimerId', () => {
+  it('returns the side-specific judge timer base', () => {
+    expect(judgeTimerId(1)).toBe(TIMER_JUDGE_1P);
+    expect(judgeTimerId(2)).toBe(TIMER_JUDGE_2P);
+  });
+});
+
+describe('comboTimerId / endOfNoteTimerId — side-relative built-in timers', () => {
+  it('comboTimerId picks combo_1p / combo_2p (prop.lua 446 / 447)', () => {
+    expect(comboTimerId(1)).toBe(TIMER_COMBO_1P);
+    expect(comboTimerId(1)).toBe(446);
+    expect(comboTimerId(2)).toBe(TIMER_COMBO_2P);
+    expect(comboTimerId(2)).toBe(447);
+  });
+
+  it('endOfNoteTimerId picks endofnote_1p / endofnote_2p (prop.lua 143 / 144)', () => {
+    expect(endOfNoteTimerId(1)).toBe(TIMER_ENDOFNOTE_1P);
+    expect(endOfNoteTimerId(1)).toBe(143);
+    expect(endOfNoteTimerId(2)).toBe(TIMER_ENDOFNOTE_2P);
+    expect(endOfNoteTimerId(2)).toBe(144);
+  });
+});
+
+describe('judgeOpForKind — match prop.lua _1p_* / _2p_*', () => {
+  it('maps engine judge kinds onto the matching per-side op-code (1P)', () => {
+    // prop.lua: _1p_perfect=241, _1p_great=242, _1p_good=243, _1p_bad=244, _1p_poor=245, _1p_miss=246
+    expect(judgeOpForKind(1, 'PERFECT')).toBe(241);
+    expect(judgeOpForKind(1, 'GREAT')).toBe(242);
+    expect(judgeOpForKind(1, 'GOOD')).toBe(243);
+    expect(judgeOpForKind(1, 'BAD')).toBe(244);
+    expect(judgeOpForKind(1, 'POOR')).toBe(245);
+    expect(judgeOpForKind(1, 'MISS')).toBe(246);
+  });
+
+  it('maps the 2P side to the prop.lua _2p_* range (261..266)', () => {
+    expect(judgeOpForKind(2, 'PERFECT')).toBe(261);
+    expect(judgeOpForKind(2, 'GREAT')).toBe(262);
+    expect(judgeOpForKind(2, 'GOOD')).toBe(263);
+    expect(judgeOpForKind(2, 'BAD')).toBe(264);
+    expect(judgeOpForKind(2, 'POOR')).toBe(265);
+    expect(judgeOpForKind(2, 'MISS')).toBe(266);
+  });
+
+  it('is case-insensitive', () => {
+    expect(judgeOpForKind(1, 'perfect')).toBe(BEATORAJA_OP.P1_JUDGE_PERFECT);
+    expect(judgeOpForKind(1, 'GreaT')).toBe(BEATORAJA_OP.P1_JUDGE_GREAT);
+  });
+
+  it('returns undefined for FAST / SLOW (those use the separate _early / _late ops)', () => {
+    expect(judgeOpForKind(1, 'FAST')).toBeUndefined();
+    expect(judgeOpForKind(1, 'SLOW')).toBeUndefined();
+    expect(judgeOpForKind(1, '')).toBeUndefined();
+  });
+});
+
+describe('BEATORAJA_OP — runtime ops match prop.lua', () => {
+  it('autoplay flags', () => {
+    expect(BEATORAJA_OP.AUTOPLAY_OFF).toBe(32);
+    expect(BEATORAJA_OP.AUTOPLAY_ON).toBe(33);
+  });
+
+  it('loading flags', () => {
+    expect(BEATORAJA_OP.NOW_LOADING).toBe(80);
+    expect(BEATORAJA_OP.LOADED).toBe(81);
+  });
+
+  it('FAST / SLOW judge readout', () => {
+    expect(BEATORAJA_OP.P1_JUDGE_EARLY).toBe(1242);
+    expect(BEATORAJA_OP.P1_JUDGE_LATE).toBe(1243);
+    expect(BEATORAJA_OP.P2_JUDGE_EARLY).toBe(1262);
+    expect(BEATORAJA_OP.P2_JUDGE_LATE).toBe(1263);
+  });
+});
+
+describe('BEATORAJA_TEXT — chart info refs match prop.lua', () => {
+  it('exposes title / artist / genre / subtitle / fulltitle / fullartist', () => {
+    expect(BEATORAJA_TEXT.TITLE).toBe(10);
+    expect(BEATORAJA_TEXT.SUBTITLE).toBe(11);
+    expect(BEATORAJA_TEXT.FULLTITLE).toBe(12);
+    expect(BEATORAJA_TEXT.GENRE).toBe(13);
+    expect(BEATORAJA_TEXT.ARTIST).toBe(14);
+    expect(BEATORAJA_TEXT.SUBARTIST).toBe(15);
+    expect(BEATORAJA_TEXT.FULLARTIST).toBe(16);
+  });
+});
+
+describe('LR2-compatible ids — taken from @be-music/skin-lr2/ids', () => {
+  it('names LR2 ops under beatoraja names', () => {
+    expect(BEATORAJA_OP.FOLDERBAR).toBe(LR2_OP.FOLDER_BAR);
+    expect(BEATORAJA_OP.GRADEBAR).toBe(LR2_OP.COURSE_BAR);
+    expect(BEATORAJA_OP.PLAYABLEBAR).toBe(LR2_OP.PLAYABLE_BAR);
+    expect(BEATORAJA_OP.AUTOPLAY_ON).toBe(LR2_OP.AUTOPLAY_ON);
+    expect(BEATORAJA_OP.GAUGE_HARD).toBe(LR2_OP.GAUGE_1P_RED);
+    expect(BEATORAJA_OP.CLEAR_LAMP_FULLCOMBO).toBe(LR2_OP.LAMP_FULL_COMBO);
+    expect(BEATORAJA_OP.DIFFICULTY_INSANE).toBe(LR2_OP.DIFFICULTY_INSANE);
+    expect(BEATORAJA_OP.KEYSONG_9K).toBe(LR2_OP.KEYS_9);
+    expect(BEATORAJA_OP.HAS_RANDOMSEQUENCE).toBe(LR2_OP.HAS_RANDOM);
+    expect(BEATORAJA_OP.P1_JUDGE_MISS).toBe(LR2_OP.JUDGE_1P_MISS);
+    expect(BEATORAJA_OP.P2_RANK_F).toBe(LR2_OP.RANK_2P_F);
+    expect(BEATORAJA_OP.P1_BAND_100).toBe(LR2_OP.GAUGE_1P_100);
+    expect(BEATORAJA_OP.COURSE_STAGE4).toBe(LR2_OP.COURSE_STAGE4);
+    expect(BEATORAJA_OP.COURSE_STAGE_FINAL).toBe(LR2_OP.COURSE_STAGE_FINAL);
+    expect(BEATORAJA_OP.MODE_COURSE).toBe(LR2_OP.COURSE);
+    expect(BEATORAJA_OP.RESULT_RANK_ZERO_1P).toBe(LR2_OP.RESULT_RANK_0);
+    expect(BEATORAJA_OP.NOW_F_1P).toBe(LR2_OP.UPDATED_RANK_F);
+  });
+
+  it('keeps beatoraja-only ops out of the LR2 table', () => {
+    const lr2Ops = new Set<number>(Object.values(LR2_OP));
+    for (const op of [
+      BEATORAJA_OP.LEVEL_BEGINNER,
+      BEATORAJA_OP.JUDGE_VERYEASY,
+      BEATORAJA_OP.RANK_AAA,
+      BEATORAJA_OP.GRADEBAR_CLASS,
+      BEATORAJA_OP.P1_BAND_BORDER_OR_MORE,
+      BEATORAJA_OP.GAUGE_NOW_AT_MAX_1P,
+    ]) {
+      expect(lr2Ops.has(op)).toBe(false);
+    }
+  });
+
+  it('names LR2 timers, numbers, texts and buttons under beatoraja names', () => {
+    expect(TIMER_SCENE_START).toBe(LR2_TIMER.SCENE_START);
+    expect(TIMER_FAILED).toBe(LR2_TIMER.FAILED);
+    expect(TIMER_SONGBAR_CHANGE).toBe(LR2_TIMER.SONG_BAR_CHANGE);
+    expect(TIMER_RHYTHM).toBe(LR2_TIMER.RHYTHM);
+    expect(TIMER_KEY_OFF_2P_BASE).toBe(LR2_TIMER.KEY_OFF_2P);
+    expect(BEATORAJA_LR2_LANE_INDEX_MAX).toBe(LR2_LANE_INDEX_MAX);
+    expect(BEATORAJA_NUM.POINT).toBe(LR2_NUM.SCORE);
+    expect(BEATORAJA_NUM.SCORE2).toBe(LR2_NUM.EXSCORE);
+    expect(BEATORAJA_NUM.BEST_SCORE).toBe(LR2_NUM.BEST_EXSCORE);
+    expect(BEATORAJA_NUM.GROOVEGAUGE).toBe(LR2_NUM.GAUGE);
+    expect(BEATORAJA_NUM.LOADING_PROGRESS).toBe(LR2_NUM.LOADING_PROGRESS);
+    expect(BEATORAJA_TEXT.FULLARTIST).toBe(16);
+    expect(BEATORAJA_TEXT.COURSE1_TITLE).toBe(LR2_TEXT.COURSE_STAGE1_TITLE);
+    expect(BEATORAJA_BUTTON.MODE).toBe(LR2_BUTTON.KEY_MODE_FILTER);
+    expect(BEATORAJA_BUTTON.HSFIX).toBe(LR2_BUTTON.HS_FIX);
+  });
+});

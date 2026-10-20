@@ -1,21 +1,21 @@
-import type { RenderResult } from '@be-music/audio-renderer';
-import type { BeMusicEvent, BeMusicJSON } from '@be-music/json';
+import type { RenderResult } from '@be-music/chart-audio-renderer';
+import type { BeMusicEvent, BeMusicJSON } from '@be-music/chart-source';
 
 export const PACKAGE_NAMES = [
-  'utils',
-  'json',
-  'chart',
-  'parser',
-  'stringifier',
-  'editor',
-  'audio-renderer',
-  'player',
-  'scene-model',
-  'player-tui',
-  'lr2-skin',
-  'beatoraja-skin',
-  'skin-sdk',
-  'player-web',
+  'shared-utils',
+  'chart-source',
+  'chart-model',
+  'chart-parser',
+  'chart-writer',
+  'chart-editor',
+  'chart-audio-renderer',
+  'player-engine',
+  'player-scene-model',
+  'player-terminal',
+  'skin-lr2',
+  'skin-beatoraja',
+  'player-skin-sdk',
+  'player-browser',
 ] as const;
 
 export type PackageName = (typeof PACKAGE_NAMES)[number];

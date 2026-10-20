@@ -1,13 +1,13 @@
-import * as playerAPI from '@be-music/player';
-import * as audioSinkAPI from '@be-music/player/audio-sink';
-import * as courseAPI from '@be-music/player/course';
-import * as displayAPI from '@be-music/player/display';
-import * as lanesAPI from '@be-music/player/lanes';
-import * as playlogAPI from '@be-music/player/playlog';
-import * as recordsAPI from '@be-music/player/records';
-import * as rulesetAPI from '@be-music/player/ruleset';
-import * as signalsAPI from '@be-music/player/signals';
-import { registerPlayerExportsCases } from '../../../packages/player/scripts/exports-cases.ts';
+import * as playerAPI from '@be-music/player-engine';
+import * as audioSinkAPI from '@be-music/player-engine/audio-sink';
+import * as courseAPI from '@be-music/player-engine/course';
+import * as displayAPI from '@be-music/player-engine/display';
+import * as lanesAPI from '@be-music/player-engine/lanes';
+import * as replayAPI from '@be-music/player-engine/replay';
+import * as recordsAPI from '@be-music/player-engine/records';
+import * as rulesetAPI from '@be-music/player-engine/ruleset';
+import * as signalsAPI from '@be-music/player-engine/signals';
+import { registerPlayerExportsCases } from '../../../packages/player-engine/scripts/exports-cases.ts';
 import type { BenchmarkPackageDefinition } from '../exports.types.ts';
 
 /** Every export of `entry`, keyed `<prefix>.<name>`: a new export needs a case, and a removed one drops its case. */
@@ -25,7 +25,7 @@ export const playerBenchmarkPackage: BenchmarkPackageDefinition = {
     ...prefixed('course', courseAPI),
     ...prefixed('records', recordsAPI),
     ...prefixed('ruleset', rulesetAPI),
-    ...prefixed('playlog', playlogAPI),
+    ...prefixed('replay', replayAPI),
   },
   registerCases: registerPlayerExportsCases,
 };

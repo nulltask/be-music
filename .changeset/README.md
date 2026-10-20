@@ -15,6 +15,6 @@ Since `be-music` is released individually for each package, add `.changeset/*.md
 3. Create release PR for `devel -> main`
 4. When merging PRs, GitHub Releases are created individually for packages whose versions have increased.
 
-`@be-music/player` and `@be-music/audio-renderer` have SEA zips attached to individual releases, and only changelog-based GitHub releases are created for other packages.
+`@be-music/player-engine` and `@be-music/chart-audio-renderer` have SEA zips attached to individual releases, and only changelog-based GitHub releases are created for other packages.
 
 The private repository root `package.json` remains at `0.0.0`; releasable versions are tracked in `packages/*/package.json`.

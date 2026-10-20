@@ -1,0 +1,84 @@
+// Compute the wallclock duration of a parsed BMS chart.
+//
+// "Chart duration" is the time from beat 0 to the last sound-emitting event in the chart
+// (audible notes + BGM autoplay channel). The select scene exposes this through beatoraja's
+// `value[]` resolver as `SONGLENGTH_MINUTE` / `SONGLENGTH_SECOND` (refs 1163 / 1164) — without
+// it, ModernChic's left-pane info panel sits at "00:00".
+//
+// The math walks events in beat order and accumulates time across BPM segments, with channel
+// `09` STOP events adding their resolved stop duration. Returns 0 for charts that contain no
+// sound events at all (degenerate / metadata-only chart).
+//
+// Cached per-chart; the result is stable for the chart's lifetime.
+
+import type { BeMusicEvent, BeMusicJSON } from '@be-music/chart-source';
+import {
+  beatorajaEventBeat,
+  collectBeatorajaChartTimingEntries,
+  computeBeatorajaMeasureBaseBeats,
+  hasBeatorajaEventValue,
+  resolveBeatorajaInitialBPM,
+} from './timing.ts';
+
+/**
+ * Compute the chart's wallclock duration in seconds. Returns 0 when the chart has no sound
+ * events (no audible content → length 0).
+ */
+export function computeBeatorajaChartTotalSeconds(chart: BeMusicJSON): number {
+  const measureBaseBeat = computeBeatorajaMeasureBaseBeats(chart);
+  if (measureBaseBeat.length === 0) return 0;
+
+  // Find the latest sound-emitting event's beat — that's where the audible chart ends. We
+  // include BGM autoplay (`01`) in addition to playable / scratch / LN notes so charts that end
+  // on a long BGM tail (= no playable notes near the end) still report the right length.
+  let endBeat = 0;
+  for (const event of chart.events ?? []) {
+    if (!isSoundEmittingEvent(event)) continue;
+    if (!hasBeatorajaEventValue(event.value)) continue;
+    const beat = beatorajaEventBeat(event, measureBaseBeat);
+    if (beat !== undefined && beat > endBeat) endBeat = beat;
+  }
+  if (endBeat <= 0) return 0;
+
+  // Build the BPM segment list — beat → bpm transitions. Initial BPM is `metadata.bpm` (fall
+  // back to 130 — beatoraja's default for malformed headers).
+  const initialBPM = resolveBeatorajaInitialBPM(chart);
+  const transitions = collectBeatorajaChartTimingEntries(chart, measureBaseBeat);
+
+  // Walk the segment list. `seconds` accumulates wallclock duration; `beat` is the running
+  // chart-beat cursor; `bpm` is the active tempo.
+  let seconds = 0;
+  let cursorBeat = 0;
+  let bpm = initialBPM;
+  const beatsToSeconds = (beats: number, atBPM: number): number => {
+    if (atBPM <= 0) return 0;
+    return (beats * 60) / atBPM;
+  };
+  for (const t of transitions) {
+    if (t.beat >= endBeat) break;
+    if (t.beat > cursorBeat) {
+      seconds += beatsToSeconds(t.beat - cursorBeat, bpm);
+      cursorBeat = t.beat;
+    }
+    if (t.kind === 'bpm') {
+      bpm = t.bpm;
+    } else {
+      seconds += beatsToSeconds(t.durationBeats, bpm);
+    }
+  }
+  // Tail — from the last transition beat up to the chart end.
+  if (endBeat > cursorBeat) {
+    seconds += beatsToSeconds(endBeat - cursorBeat, bpm);
+  }
+  return seconds;
+}
+
+/** Channels whose events emit audible sound — playable / scratch / LN / BGM. */
+function isSoundEmittingEvent(event: BeMusicEvent): boolean {
+  const ch = event.channel;
+  if (ch.length !== 2) return false;
+  const lead = ch[0]!;
+  // BGM autoplay = `01`; playable + LN = leading 1/2/5/6.
+  if (ch === '01') return true;
+  return lead === '1' || lead === '2' || lead === '5' || lead === '6';
+}

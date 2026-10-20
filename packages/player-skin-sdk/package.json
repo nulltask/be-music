@@ -1,0 +1,34 @@
+{
+  "name": "@be-music/player-skin-sdk",
+  "version": "0.4.0",
+  "description": "Framework-free types and helpers for authoring be-music browser player skins",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build:bundle": "vp pack",
+    "build": "vp pack",
+    "clean": "rimraf dist",
+    "bench": "node --conditions=source scripts/bench.ts"
+  },
+  "dependencies": {
+    "@be-music/chart-model": "workspace:*",
+    "@be-music/chart-source": "workspace:*",
+    "@be-music/player-engine": "workspace:*",
+    "@be-music/player-scene-model": "workspace:*"
+  },
+  "devDependencies": {
+    "@be-music/chart-parser": "workspace:*"
+  }
+}

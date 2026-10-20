@@ -1,7 +1,7 @@
-import * as utilsAPI from '@be-music/utils';
-import * as optionalNodeModuleAPI from '@be-music/utils/optional-node-module';
-import * as workerizeAPI from '@be-music/utils/workerize';
-import { registerUtilsExportsCases } from '../../../packages/utils/scripts/exports-cases.ts';
+import * as utilsAPI from '@be-music/shared-utils';
+import * as optionalNodeModuleAPI from '@be-music/shared-utils/optional-node-module';
+import * as workerizeAPI from '@be-music/shared-utils/workerize';
+import { registerUtilsExportsCases } from '../../../packages/shared-utils/scripts/exports-cases.ts';
 import type { BenchmarkPackageDefinition } from '../exports.types.ts';
 
 export const utilsBenchmarkPackage: BenchmarkPackageDefinition = {

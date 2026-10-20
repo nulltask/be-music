@@ -1,0 +1,483 @@
+import { computeChartFingerprint, computePlayFingerprint, resolveChart, type RandomDraws } from '@be-music/chart-model';
+import packageJSON from '../../package.json' with { type: 'json' };
+import { createEmptyJSON, type BeMusicEvent, type BeMusicJSON } from '@be-music/chart-source';
+import { parseBMS, resolveBMSControlFlowWithDraws } from '@be-music/chart-parser';
+import { describe, expect, test } from 'vite-plus/test';
+import type { PlayerSummary } from '../core/engine.ts';
+import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
+import { resolveLaneDisplayMode } from '../core/lane-layout.ts';
+import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts';
+import { BE_MUSIC_REPLAY_FORMAT, BE_MUSIC_REPLAY_VERSION } from './format.ts';
+import {
+  createReplayRecorder,
+  REPLAY_NATIVE_RULESET_ID,
+  type ReplayRecorderChartData,
+  type ReplayRecorderOptions,
+} from './recorder.ts';
+
+function makeEvent(channel: string, value = '01'): BeMusicEvent {
+  return { measure: 0, channel, position: [0, 1], value };
+}
+
+function playable(channel: string, seconds: number, overrides: Partial<TimedPlayableNote> = {}): TimedPlayableNote {
+  return { event: makeEvent(channel), channel, beat: 0, seconds, judged: false, ...overrides };
+}
+
+function landmine(channel: string, seconds: number, value: string): TimedLandmineNote {
+  return { event: makeEvent(channel, value), channel, beat: 0, seconds, judged: false, mine: true };
+}
+
+function makeJSON(): BeMusicJSON {
+  const json = createEmptyJSON('bms');
+  json.metadata.title = 'My Song';
+  json.metadata.artist = 'composer';
+  json.metadata.total = 300;
+  json.metadata.rank = 2;
+  json.metadata.playLevel = 12;
+  json.metadata.difficulty = 3;
+  json.bms.lnMode = 2;
+  return json;
+}
+
+function makeChartData(): ReplayRecorderChartData {
+  const scorable = [
+    playable('13', 0.25),
+    playable('11', 0.5),
+    playable('12', 1, { endSeconds: 2 }),
+    playable('18', 3, { endSeconds: 4, longNoteMode: 3 }),
+  ];
+  return {
+    notes: [...scorable, playable('17', 1.5, { endSeconds: 2.5 })],
+    landmineNotes: [landmine('14', 0.75, '0A')],
+    invisibleNotes: [playable('15', 0.5, { invisible: true })],
+    activeFreeZoneChannels: new Set(['17']),
+    scorableNotes: scorable,
+    laneDisplayMode: '7keys',
+  };
+}
+
+function makeSummary(overrides: Partial<PlayerSummary> = {}): PlayerSummary {
+  return {
+    total: 4,
+    perfect: 2,
+    fast: 1,
+    slow: 1,
+    great: 1,
+    good: 1,
+    bad: 0,
+    poor: 0,
+    emptyPoor: 0,
+    exScore: 5,
+    score: 123456,
+    ...overrides,
+  };
+}
+
+function makeRecorderOptions(overrides: Partial<ReplayRecorderOptions> = {}): ReplayRecorderOptions {
+  return {
+    json: makeJSON(),
+    chart: makeChartData(),
+    play: { mode: 'manual', autoScratch: false },
+    now: () => new Date('2026-08-17T00:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+describe('replay recorder', () => {
+  test('snapshots chart notes in (timeUs, channel, type) order with stable ids and resolved types', () => {
+    const recorder = createReplayRecorder(makeRecorderOptions());
+    const replay = recorder.finalize({ summary: makeSummary() });
+
+    expect(replay.format).toBe(BE_MUSIC_REPLAY_FORMAT);
+    expect(replay.version).toBe(BE_MUSIC_REPLAY_VERSION);
+    expect(replay.createdAt).toBe('2026-08-17T00:00:00.000Z');
+    expect(replay.clock).toEqual({ unit: 'us', origin: 'chart-zero' });
+
+    expect(replay.chart.notes).toEqual([
+      { id: 0, channel: '13', type: 'normal', timeUs: 250_000 },
+      { id: 1, channel: '11', type: 'normal', timeUs: 500_000 },
+      { id: 2, channel: '15', type: 'invisible', timeUs: 500_000 },
+      { id: 3, channel: '14', type: 'mine', timeUs: 750_000, damage: 10 },
+      // The chart-level #LNMODE 2 fills in when the note has no own long-note mode.
+      { id: 4, channel: '12', type: 'long', timeUs: 1_000_000, endTimeUs: 2_000_000, lnMode: 2 },
+      // Free-zone notes keep their tail but never carry an lnMode.
+      { id: 5, channel: '17', type: 'freezone', timeUs: 1_500_000, endTimeUs: 2_500_000 },
+      { id: 6, channel: '18', type: 'long', timeUs: 3_000_000, endTimeUs: 4_000_000, lnMode: 3 },
+    ]);
+
+    const mineNote = replay.chart.notes.find((note) => note.type === 'mine');
+    expect(mineNote?.damage).toBe(resolveLandmineGaugeEffect({ value: '0A' }).damage);
+  });
+
+  test('stamps the engine version and keeps the host-declared recorder fields', () => {
+    const bare = createReplayRecorder(makeRecorderOptions()).finalize({ summary: makeSummary() });
+    expect(bare.recorder).toEqual({ engine: packageJSON.version });
+
+    const declared = createReplayRecorder(
+      makeRecorderOptions({
+        recorder: { name: 'be-music-web', version: '0.5.0', build: '6471cd16', platform: 'web' },
+      }),
+    ).finalize({ summary: makeSummary() });
+    expect(declared.recorder).toEqual({
+      name: 'be-music-web',
+      version: '0.5.0',
+      build: '6471cd16',
+      engine: packageJSON.version,
+      platform: 'web',
+    });
+  });
+
+  test('stamps the chart file hashes in lowercase, and omits them when the host has none', () => {
+    const bare = createReplayRecorder(makeRecorderOptions()).finalize({ summary: makeSummary() });
+    expect(bare.chart).not.toHaveProperty('sha256');
+    expect(bare.chart).not.toHaveProperty('md5');
+
+    const hashed = createReplayRecorder(
+      makeRecorderOptions({ chartSHA256: 'A'.repeat(64), chartMD5: 'B'.repeat(32) }),
+    ).finalize({ summary: makeSummary() });
+    expect(hashed.chart.sha256).toBe('a'.repeat(64));
+    expect(hashed.chart.md5).toBe('b'.repeat(32));
+  });
+
+  test('never lets the host override the engine version', () => {
+    const replay = createReplayRecorder(
+      makeRecorderOptions({
+        // Untyped hosts (plain JS) can still smuggle the field in; the recorder's own value wins.
+        recorder: { name: 'host', engine: '9.9.9' } as ReplayRecorderOptions['recorder'],
+      }),
+    ).finalize({ summary: makeSummary() });
+    expect(replay.recorder?.engine).toBe(packageJSON.version);
+  });
+
+  test('captures chart metadata, noteCount, TOTAL, judge rank, and lnMode from the JSON', () => {
+    const recorder = createReplayRecorder(makeRecorderOptions());
+    const replay = recorder.finalize({ summary: makeSummary() });
+
+    expect(replay.chart.sourceFormat).toBe('bms');
+    expect(replay.chart.laneMode).toBe('7keys');
+    expect(replay.chart.title).toBe('My Song');
+    expect(replay.chart.artist).toBe('composer');
+    expect(replay.chart.subtitle).toBeUndefined();
+    expect(replay.chart.playLevel).toBe('12');
+    expect(replay.chart.difficulty).toBe(3);
+    expect(replay.chart.total).toBe(300);
+    expect(replay.chart.lnMode).toBe(2);
+    expect(replay.chart.noteCount).toBe(4); // scorableNotes.length — mines / invisibles / freezones excluded
+    expect(replay.chart.judgeRank).toEqual({ percent: 75, sourceRank: 2 });
+  });
+
+  test('captures #DEFEXRANK and dynamic #EXRANK changes into judgeRank', () => {
+    const json = makeJSON();
+    json.metadata.rank = 1;
+    json.bms.defExRank = 120;
+    const recorder = createReplayRecorder(
+      makeRecorderOptions({
+        json,
+        dynamicJudgeRankChanges: [{ seconds: 12.5, exRankValue: 48 }],
+      }),
+    );
+    const replay = recorder.finalize({ summary: makeSummary() });
+
+    expect(replay.chart.judgeRank).toEqual({
+      percent: 90, // #DEFEXRANK 120 × 75 / 100 — wins over #RANK 1
+      sourceRank: 1,
+      sourceExRank: 120,
+      timeline: [{ timeUs: 12_500_000, exRankValue: 48 }],
+    });
+  });
+
+  test('records inputs with microsecond timestamps, sequential seq, and copied channels', () => {
+    const recorder = createReplayRecorder(makeRecorderOptions());
+
+    // Inputs that resolve to no playable channel are not recorded (and consume no seq).
+    recorder.recordInput('down', 0.5, ['q'], new Set());
+
+    const sourceChannels = ['11'];
+    recorder.recordInput('down', 1.234567, ['z'], sourceChannels);
+    sourceChannels.push('19'); // later mutation must not leak into the recorded event
+    recorder.recordInput('up', 1.3, [], new Set(['11', '12']));
+    // A release the engine inferred is marked; the mark means nothing on a press.
+    recorder.recordInput('down', 1.4, ['x'], ['13'], true);
+    recorder.recordInput('up', 1.52, ['x'], ['13'], true);
+
+    const replay = recorder.finalize({ summary: makeSummary() });
+    expect(replay.inputs).toEqual([
+      { seq: 0, timeUs: 1_234_567, action: 'down', channels: ['11'], tokens: ['z'] },
+      { seq: 1, timeUs: 1_300_000, action: 'up', channels: ['11', '12'] },
+      { seq: 2, timeUs: 1_400_000, action: 'down', channels: ['13'], tokens: ['x'] },
+      { seq: 3, timeUs: 1_520_000, action: 'up', channels: ['13'], tokens: ['x'], inferred: true },
+    ]);
+  });
+
+  test('finalize caches the native result with judge counts, empty POORs, maxCombo, and gauge', () => {
+    const recorder = createReplayRecorder(
+      makeRecorderOptions({
+        moneyScore: true,
+        play: {
+          mode: 'manual',
+          autoScratch: true,
+          gauge: 'HARD',
+          randomLane: { p1: 'MIRROR' },
+          dpFlip: true,
+          native: { hiSpeed: 2 },
+        },
+      }),
+    );
+    recorder.recordEmptyPoor();
+    recorder.recordEmptyPoor();
+
+    const summary = makeSummary({
+      gauge: {
+        current: 88.5,
+        max: 100,
+        clearThreshold: 80,
+        initial: 20,
+        effectiveTotal: 300,
+        cleared: true,
+        type: 'GROOVE',
+      },
+    });
+    const replay = recorder.finalize({ summary, maxCombo: 5, aborted: true, abortedAtSeconds: 1.2345674 });
+
+    expect(replay.play).toEqual({
+      mode: 'manual',
+      autoScratch: true,
+      gauge: 'HARD',
+      randomLane: { p1: 'MIRROR' },
+      dpFlip: true,
+      aborted: true,
+      abortedAtUs: 1_234_567,
+      native: { hiSpeed: 2 },
+    });
+    expect(replay.results).toEqual({
+      native: {
+        ruleset: REPLAY_NATIVE_RULESET_ID,
+        judge: { pgreat: 2, great: 1, good: 1, bad: 0, poor: 0, emptyPoor: 2 },
+        fast: 1,
+        slow: 1,
+        exScore: 5,
+        noteCount: 4,
+        maxCombo: 5,
+        djLevel: 'B',
+        score: 123456,
+        gauge: { type: 'GROOVE', final: 88.5, cleared: true },
+      },
+    });
+  });
+
+  test('finalize records a course stage, the end-on-failure flag and the course combo the stage left', () => {
+    const course = { kind: 'grade', carryIn: { gauge: 55, combo: 3, maxCombo: 40 } } as const;
+    const recorder = createReplayRecorder(
+      makeRecorderOptions({ play: { mode: 'manual', autoScratch: false, endOnFailure: true, course } }),
+    );
+    const replay = recorder.finalize({ summary: makeSummary({ course: { combo: 8, maxCombo: 40 } }) });
+
+    expect(replay.play).toMatchObject({ endOnFailure: true, course });
+    expect(replay.play.course).not.toBe(course);
+    expect(replay.results?.native?.course).toEqual({ combo: 8, maxCombo: 40 });
+    // Without the flag nothing is written: older logs read as "kept judging".
+    const plain = createReplayRecorder(
+      makeRecorderOptions({ play: { mode: 'manual', autoScratch: false, endOnFailure: false } }),
+    );
+    expect(plain.finalize({ summary: makeSummary() }).play.endOnFailure).toBeUndefined();
+  });
+
+  test('finalize defaults: GROOVE gauge, maxCombo 0, declared gauge when the summary has none', () => {
+    const recorder = createReplayRecorder(makeRecorderOptions());
+    const replay = recorder.finalize({ summary: makeSummary() });
+
+    expect(replay.play).toEqual({ mode: 'manual', autoScratch: false, gauge: 'GROOVE' });
+    expect(replay.play.aborted).toBeUndefined();
+    expect(replay.results?.native).toMatchObject({
+      maxCombo: 0,
+      gauge: { type: 'GROOVE', final: 0, cleared: false },
+    });
+    // Like the simulators, a ruleset without a money score reports none.
+    expect(replay.results?.native?.score).toBeUndefined();
+  });
+
+  test('the native result counts judgments as the ruleset does and flags a mid-play death', () => {
+    const recorder = createReplayRecorder(makeRecorderOptions());
+    const summary = makeSummary({
+      total: 6,
+      gauge: {
+        current: 0,
+        max: 100,
+        clearThreshold: 0,
+        initial: 100,
+        effectiveTotal: 300,
+        cleared: false,
+        type: 'HARD',
+        survival: true,
+        failedMidPlay: true,
+      },
+    });
+    const native = recorder.finalize({ summary }).results?.native;
+
+    expect(native?.noteCount).toBe(6);
+    expect(native?.gauge.failedMidPlay).toBe(true);
+  });
+
+  test('records the play fingerprint of the resolved chart', () => {
+    const json = parseBMS(
+      ['#PLAYER 3', '#BPM 150', '#TITLE fingerprint', '#00111:01000100', '#00113:0001', '#00219:01'].join('\n'),
+    );
+    const replay = createReplayRecorder(makeRecorderOptions({ json })).finalize({ summary: makeSummary() });
+
+    expect(replay.chart.playFingerprint).toBe(computePlayFingerprint(json, { chartPath: undefined }));
+    expect(replay.chart.playFingerprint).toMatch(/^bmfp0:[0-9a-f]{64}$/);
+  });
+
+  test('records one fingerprint as both chart and play fingerprint for a chart without control flow', () => {
+    const json = parseBMS(['#BPM 150', '#00111:01', '#00113:01'].join('\n'));
+    const replay = createReplayRecorder(makeRecorderOptions({ json, sourceChart: json })).finalize({
+      summary: makeSummary(),
+    });
+
+    expect(replay.chart.chartFingerprint).toBe(computeChartFingerprint(json, { chartPath: undefined }));
+    expect(replay.chart.chartFingerprint).toBe(replay.chart.playFingerprint);
+  });
+
+  test('fingerprints a #RANDOM chart from its source chart and the recorded draws', () => {
+    const source = parseBMS(
+      ['#BPM 150', '#00111:01', '#RANDOM 2', '#IF 1', '#00113:01', '#ENDIF', '#IF 2', '#00114:01', '#ENDIF'].join('\n'),
+    );
+    const draw = (value: number): RandomDraws => [{ command: 'RANDOM', range: 2, value }];
+    const played = resolveBMSControlFlowWithDraws(source, draw(2));
+    const record = (sourceChart: BeMusicJSON | undefined, randomDraws?: RandomDraws) =>
+      createReplayRecorder(
+        makeRecorderOptions({
+          json: played,
+          ...(sourceChart !== undefined ? { sourceChart } : {}),
+          play: { mode: 'manual', autoScratch: false, ...(randomDraws !== undefined ? { randomDraws } : {}) },
+        }),
+      ).finalize({ summary: makeSummary() });
+
+    const replay = record(source, draw(2));
+    expect(replay.chart.chartFingerprint).toBe(computeChartFingerprint(source, { chartPath: undefined }));
+    expect(replay.chart.playFingerprint).toBe(computePlayFingerprint(played, { chartPath: undefined }));
+    expect(replay.chart.chartFingerprint).not.toBe(replay.chart.playFingerprint);
+
+    // Both branches belong to one chart: the chart fingerprint does not depend on the outcome.
+    const other = record(source, draw(1));
+    expect(other.chart.chartFingerprint).toBe(replay.chart.chartFingerprint);
+    expect(other.chart.playFingerprint).toBe(
+      computePlayFingerprint(resolveBMSControlFlowWithDraws(source, draw(1)), { chartPath: undefined }),
+    );
+
+    // Draws that do not belong to the source chart fall back to the engine's chart.
+    const mismatched = record(source, [{ command: 'RANDOM', range: 3, value: 1 }]);
+    expect(mismatched.chart.chartFingerprint).toBeUndefined();
+    expect(mismatched.chart.playFingerprint).toBe(computePlayFingerprint(played, { chartPath: undefined }));
+  });
+
+  test('takes the fingerprints from the source chart, not a working copy whose lanes the host rewrote', () => {
+    const source = parseBMS(['#BPM 150', '#00111:01', '#00122:01'].join('\n'));
+    // A DP flip baked into the chart the engine plays (`1x` ↔ `2x`) — a lane option, part of neither fingerprint.
+    const flipped = parseBMS(['#BPM 150', '#00121:01', '#00112:01'].join('\n'));
+    const replay = createReplayRecorder(makeRecorderOptions({ json: flipped, sourceChart: source })).finalize({
+      summary: makeSummary(),
+    });
+
+    expect(replay.chart.playFingerprint).toBe(computePlayFingerprint(source, { chartPath: undefined }));
+    expect(replay.chart.chartFingerprint).toBe(computeChartFingerprint(source, { chartPath: undefined }));
+    expect(replay.chart.playFingerprint).not.toBe(computePlayFingerprint(flipped, { chartPath: undefined }));
+  });
+
+  test('omits the chart fingerprint when draws were recorded but no source chart can be resolved with them', () => {
+    const source = parseBMS(['#BPM 150', '#RANDOM 2', '#IF 1', '#00113:01', '#ENDIF'].join('\n'));
+    const randomDraws: RandomDraws = [{ command: 'RANDOM', range: 2, value: 1 }];
+    // A host resolved `#RANDOM` itself and handed the engine the result, which carries no control flow.
+    const engineChart = resolveBMSControlFlowWithDraws(source, randomDraws);
+    const replay = createReplayRecorder(
+      makeRecorderOptions({
+        json: engineChart,
+        sourceChart: engineChart,
+        play: { mode: 'manual', autoScratch: false, randomDraws },
+      }),
+    ).finalize({ summary: makeSummary() });
+
+    expect(replay.chart.chartFingerprint).toBeUndefined();
+    expect(replay.chart.playFingerprint).toBe(computePlayFingerprint(engineChart, { chartPath: undefined }));
+  });
+
+  test('fingerprints a chart played as 9 KEY with the .pms lane mode', () => {
+    const json = parseBMS(['#BPM 150', '#00111:01', '#00115:01'].join('\n'));
+    const keysLog = createReplayRecorder(makeRecorderOptions({ json })).finalize({ summary: makeSummary() });
+    // The lane mode the engine reports when it plays the same chart from a `.pms` file.
+    const laneDisplayMode = resolveLaneDisplayMode(['11', '15'], { chartExtension: '.pms' });
+    const pmsLog = createReplayRecorder(
+      makeRecorderOptions({ json, chart: { ...makeChartData(), laneDisplayMode } }),
+    ).finalize({ summary: makeSummary() });
+
+    expect(keysLog.chart.playFingerprint).toBe(computePlayFingerprint(json, { chartPath: undefined }));
+    expect(pmsLog.chart.playFingerprint).toBe(computePlayFingerprint(json, { chartPath: 'song.pms' }));
+    expect(pmsLog.chart.playFingerprint).not.toBe(keysLog.chart.playFingerprint);
+  });
+
+  test('fingerprints with the chart extension the engine passes', () => {
+    const json = parseBMS(['#BPM 150', '#00111:01', '#00115:01'].join('\n'));
+    const pmsLog = createReplayRecorder(makeRecorderOptions({ json, laneModeExtension: '.pms' })).finalize({
+      summary: makeSummary(),
+    });
+    expect(pmsLog.chart.playFingerprint).toBe(computePlayFingerprint(json, { chartPath: 'song.pms' }));
+    expect(pmsLog.chart.playFingerprint).not.toBe(computePlayFingerprint(json, { chartPath: undefined }));
+  });
+
+  test('records the #RANDOM draws it is given', () => {
+    const options = makeRecorderOptions();
+    const randomDraws: RandomDraws = [
+      { command: 'RANDOM', range: 3, value: 2 },
+      { command: 'SETSWITCH', range: 1, value: 1 },
+    ];
+    const withDraws = createReplayRecorder({ ...options, play: { ...options.play, randomDraws } });
+    expect(withDraws.finalize({ summary: makeSummary() }).play.randomDraws).toEqual(randomDraws);
+    const empty = createReplayRecorder({ ...options, play: { ...options.play, randomDraws: [] } });
+    expect(empty.finalize({ summary: makeSummary() }).play).not.toHaveProperty('randomDraws');
+  });
+
+  test('omits the fingerprint instead of failing when it cannot be computed', () => {
+    const json = makeJSON();
+    // The engine hands over its Resolved layer, so only the fingerprints read the broken source events.
+    const chart = { ...makeChartData(), resolvedChart: resolveChart(makeJSON()) };
+    Object.defineProperty(json, 'events', {
+      get: () => {
+        throw new Error('broken chart');
+      },
+    });
+    const replay = createReplayRecorder(makeRecorderOptions({ json, chart })).finalize({ summary: makeSummary() });
+
+    expect(replay.chart).not.toHaveProperty('chartFingerprint');
+    expect(replay.chart).not.toHaveProperty('playFingerprint');
+    expect(replay.chart.title).toBe('My Song');
+  });
+});
+
+describe('view and tempo changes', () => {
+  test('records the starting view, view changes and tempo changes in chart time, and parses them back', async () => {
+    const { parseReplay, serializeReplay } = await import('./format.ts');
+    const recorder = createReplayRecorder(
+      makeRecorderOptions({
+        play: {
+          mode: 'manual',
+          autoScratch: false,
+          tempo: 0.9,
+          view: { hiSpeed: 2, covers: [{ side: '1P', sudden: 0.2, hidden: 0, lift: 0 }] },
+        },
+      }),
+    );
+    recorder.recordViewChange(1.5, { hiSpeed: 2.5 });
+    recorder.recordViewChange(2, {});
+    recorder.recordTempoChange(1, 0.9);
+    recorder.recordTempoChange(2.25, 1.1);
+    const replay = recorder.finalize({ summary: makeSummary() });
+    expect(replay.play).toMatchObject({
+      tempo: 0.9,
+      view: { hiSpeed: 2, covers: [{ side: '1P', sudden: 0.2, hidden: 0, lift: 0 }] },
+      // An empty change and a change to the tempo already in force are dropped.
+      viewChanges: [{ timeUs: 1_500_000, hiSpeed: 2.5 }],
+      tempoChanges: [{ timeUs: 2_250_000, tempo: 1.1 }],
+    });
+    expect(parseReplay(serializeReplay(replay)).play).toEqual(replay.play);
+  });
+});

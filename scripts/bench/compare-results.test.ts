@@ -30,24 +30,24 @@ function createSnapshot(
     options: {
       timeMs: 30,
       warmupTimeMs: 15,
-      packages: ['utils'],
+      packages: ['shared-utils'],
       includeInteractive: false,
     },
     exports: {
-      utils: Object.keys(results),
-      json: [],
-      chart: [],
-      parser: [],
-      stringifier: [],
-      editor: [],
-      'audio-renderer': [],
-      player: [],
-      'player-tui': [],
-      'scene-model': [],
-      'lr2-skin': [],
-      'beatoraja-skin': [],
-      'skin-sdk': [],
-      'player-web': [],
+      'shared-utils': Object.keys(results),
+      'chart-source': [],
+      'chart-model': [],
+      'chart-parser': [],
+      'chart-writer': [],
+      'chart-editor': [],
+      'chart-audio-renderer': [],
+      'player-engine': [],
+      'player-terminal': [],
+      'player-scene-model': [],
+      'skin-lr2': [],
+      'skin-beatoraja': [],
+      'player-skin-sdk': [],
+      'player-browser': [],
     },
     totals: {
       exported: Object.keys(results).length,
@@ -91,18 +91,18 @@ describe('compareSnapshots', () => {
   it('computes ops/s deltas and skips non-positive base hz', () => {
     const rows = compareSnapshots(
       createSnapshot({
-        'utils.fast': 100,
-        'utils.dead': 0,
+        'shared-utils.fast': 100,
+        'shared-utils.dead': 0,
       }),
       createSnapshot({
-        'utils.fast': 110,
-        'utils.dead': 50,
-        'utils.new': 80,
+        'shared-utils.fast': 110,
+        'shared-utils.dead': 50,
+        'shared-utils.new': 80,
       }),
     );
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.key).toBe('utils.fast');
+    expect(rows[0]?.key).toBe('shared-utils.fast');
     expect(rows[0]?.baseHz).toBe(100);
     expect(rows[0]?.headHz).toBe(110);
     expect(rows[0]?.deltaPercent).toBeCloseTo(10);
@@ -110,12 +110,12 @@ describe('compareSnapshots', () => {
 
   it('compares median ops/s when mean hz disagrees', () => {
     const rows = compareSnapshots(
-      createSnapshot({ 'utils.case': 100 }),
+      createSnapshot({ 'shared-utils.case': 100 }),
       createSnapshot(
-        { 'utils.case': 100 },
+        { 'shared-utils.case': 100 },
         {
           results: {
-            'utils.case': {
+            'shared-utils.case': {
               hz: 50,
               medianHz: 110,
               meanMs: 20,
@@ -142,8 +142,8 @@ describe('compareSnapshots', () => {
   it('excludes a case whose head p50 latency is at/below the reliability floor, however large its hz delta', () => {
     // A case this cheap (p50 <= 0.001ms) is timer-resolution noise, not a real 10,000% speedup — issue #202.
     const rows = compareSnapshots(
-      createSnapshot({ 'chart.createBeatResolver': 1_000_000 }),
-      createSnapshot({ 'chart.createBeatResolver': 100_000_000 }),
+      createSnapshot({ 'chart-model.createBeatResolver': 1_000_000 }),
+      createSnapshot({ 'chart-model.createBeatResolver': 100_000_000 }),
     );
 
     expect(rows).toHaveLength(0);
@@ -151,15 +151,18 @@ describe('compareSnapshots', () => {
 
   it('excludes a case whose base p50 latency is at/below the reliability floor', () => {
     const rows = compareSnapshots(
-      createSnapshot({ 'chart.createBeatResolver': 100_000_000 }),
-      createSnapshot({ 'chart.createBeatResolver': 1_000_000 }),
+      createSnapshot({ 'chart-model.createBeatResolver': 100_000_000 }),
+      createSnapshot({ 'chart-model.createBeatResolver': 1_000_000 }),
     );
 
     expect(rows).toHaveLength(0);
   });
 
   it('keeps a case whose p50 latency sits just above the reliability floor', () => {
-    const rows = compareSnapshots(createSnapshot({ 'utils.stable': 1000 }), createSnapshot({ 'utils.stable': 1000 }));
+    const rows = compareSnapshots(
+      createSnapshot({ 'shared-utils.stable': 1000 }),
+      createSnapshot({ 'shared-utils.stable': 1000 }),
+    );
 
     expect(rows).toHaveLength(1);
   });
@@ -168,8 +171,16 @@ describe('compareSnapshots', () => {
 describe('countUnreliableCases', () => {
   it('counts only comparable keys excluded for sub-timer-resolution latency', () => {
     const count = countUnreliableCases(
-      createSnapshot({ 'chart.createBeatResolver': 1_000_000, 'utils.stable': 1000, 'utils.baseOnly': 500 }),
-      createSnapshot({ 'chart.createBeatResolver': 100_000_000, 'utils.stable': 1000, 'utils.headOnly': 500 }),
+      createSnapshot({
+        'chart-model.createBeatResolver': 1_000_000,
+        'shared-utils.stable': 1000,
+        'shared-utils.baseOnly': 500,
+      }),
+      createSnapshot({
+        'chart-model.createBeatResolver': 100_000_000,
+        'shared-utils.stable': 1000,
+        'shared-utils.headOnly': 500,
+      }),
     );
 
     expect(count).toBe(1);
@@ -216,18 +227,18 @@ describe('summarizeRows', () => {
   it('marks overall regressed when the median itself crosses the threshold', () => {
     const summary = summarizeComparison(
       createSnapshot({
-        'utils.a': 100,
-        'utils.b': 100,
-        'utils.c': 100,
-        'utils.d': 100,
-        'utils.e': 100,
+        'shared-utils.a': 100,
+        'shared-utils.b': 100,
+        'shared-utils.c': 100,
+        'shared-utils.d': 100,
+        'shared-utils.e': 100,
       }),
       createSnapshot({
-        'utils.a': 89,
-        'utils.b': 89,
-        'utils.c': 89,
-        'utils.d': 89,
-        'utils.e': 89,
+        'shared-utils.a': 89,
+        'shared-utils.b': 89,
+        'shared-utils.c': 89,
+        'shared-utils.d': 89,
+        'shared-utils.e': 89,
       }),
       8,
     );
@@ -263,8 +274,8 @@ describe('run spread and significance', () => {
   });
 
   it('never judges a case the head marks I/O-bound', () => {
-    const base = createSnapshot({ 'utils.readFile': 100 });
-    const head = createSnapshot({ 'utils.readFile': 50 }, { ioBound: ['utils.readFile'] });
+    const base = createSnapshot({ 'shared-utils.readFile': 100 });
+    const head = createSnapshot({ 'shared-utils.readFile': 50 }, { ioBound: ['shared-utils.readFile'] });
     const summary = summarizeComparison(base, head, 8);
     expect(summary.regressedCount).toBe(0);
     expect(summary.ioBoundCount).toBe(1);
@@ -272,12 +283,12 @@ describe('run spread and significance', () => {
   });
 
   it('reads the runs from aggregated snapshots', () => {
-    const base = createSnapshot({ 'utils.a': 100, 'utils.b': 100 });
-    const head = createSnapshot({ 'utils.a': 80, 'utils.b': 80 });
-    base.results['utils.a']!.runMedianHz = [98, 100, 102];
-    head.results['utils.a']!.runMedianHz = [79, 80, 81];
-    base.results['utils.b']!.runMedianHz = [70, 100, 130];
-    head.results['utils.b']!.runMedianHz = [60, 80, 101];
+    const base = createSnapshot({ 'shared-utils.a': 100, 'shared-utils.b': 100 });
+    const head = createSnapshot({ 'shared-utils.a': 80, 'shared-utils.b': 80 });
+    base.results['shared-utils.a']!.runMedianHz = [98, 100, 102];
+    head.results['shared-utils.a']!.runMedianHz = [79, 80, 81];
+    base.results['shared-utils.b']!.runMedianHz = [70, 100, 130];
+    head.results['shared-utils.b']!.runMedianHz = [60, 80, 101];
     const summary = summarizeComparison(base, head, 8);
     expect(summary.regressedCount).toBe(1);
     expect(summary.noisyCount).toBe(1);
@@ -301,8 +312,8 @@ describe('formatting', () => {
   });
 
   it('names a case by its package', () => {
-    expect(packageOf('player.playlog.parsePlaylog')).toBe('player');
-    expect(packageOf('player-web.serializePlaylog')).toBe('player-web');
+    expect(packageOf('player-engine.replay.parseReplay')).toBe('player-engine');
+    expect(packageOf('player-browser.serializeReplay')).toBe('player-browser');
   });
 
   it('opens with the verdict', () => {
@@ -320,15 +331,15 @@ describe('formatting', () => {
 describe('buildDiffMarkdown', () => {
   it('leads with the verdict and lists regressions in time per call', () => {
     const markdown = buildDiffMarkdown(
-      createSnapshot({ 'utils.noisy': 100, 'utils.stable': 100, 'utils.other': 100 }),
-      createSnapshot({ 'utils.noisy': 70, 'utils.stable': 101, 'utils.other': 101 }),
+      createSnapshot({ 'shared-utils.noisy': 100, 'shared-utils.stable': 100, 'shared-utils.other': 100 }),
+      createSnapshot({ 'shared-utils.noisy': 70, 'shared-utils.stable': 101, 'shared-utils.other': 101 }),
       8,
       12,
     );
 
     expect(markdown.split('\n')[3]).toBe('**🔴 1 regression** · 0 improvements · 0 within noise · 3 compared');
     expect(markdown).toContain('### Regressions (1)');
-    expect(markdown).toContain('| `utils.noisy` | 10.0 ms | 14.3 ms | 42.9% slower | ±0.0% / ±0.0% |');
+    expect(markdown).toContain('| `shared-utils.noisy` | 10.0 ms | 14.3 ms | 42.9% slower | ±0.0% / ±0.0% |');
     expect(markdown).toContain('<details><summary>Run details</summary>');
     // The table names its columns rather than leaving an empty header row.
     expect(markdown).toContain('| Measure | Value |');
@@ -337,34 +348,43 @@ describe('buildDiffMarkdown', () => {
   });
 
   it('ranks by median ops/s, not mean hz', () => {
-    const head = createSnapshot({ 'utils.meanOnly': 100, 'utils.medianReal': 100, 'utils.stable': 100 });
-    head.results['utils.meanOnly'] = { ...head.results['utils.meanOnly']!, hz: 50, medianHz: 99 };
-    head.results['utils.medianReal'] = { ...head.results['utils.medianReal']!, hz: 99, medianHz: 50, p50Ms: 20 };
+    const head = createSnapshot({
+      'shared-utils.meanOnly': 100,
+      'shared-utils.medianReal': 100,
+      'shared-utils.stable': 100,
+    });
+    head.results['shared-utils.meanOnly'] = { ...head.results['shared-utils.meanOnly']!, hz: 50, medianHz: 99 };
+    head.results['shared-utils.medianReal'] = {
+      ...head.results['shared-utils.medianReal']!,
+      hz: 99,
+      medianHz: 50,
+      p50Ms: 20,
+    };
     const markdown = buildDiffMarkdown(
-      createSnapshot({ 'utils.meanOnly': 100, 'utils.medianReal': 100, 'utils.stable': 100 }),
+      createSnapshot({ 'shared-utils.meanOnly': 100, 'shared-utils.medianReal': 100, 'shared-utils.stable': 100 }),
       head,
       8,
       12,
     );
 
-    expect(markdown).toContain('| `utils.medianReal` | 10.0 ms | 20.0 ms | 100.0% slower |');
-    expect(markdown).not.toContain('`utils.meanOnly` |');
+    expect(markdown).toContain('| `shared-utils.medianReal` | 10.0 ms | 20.0 ms | 100.0% slower |');
+    expect(markdown).not.toContain('`shared-utils.meanOnly` |');
   });
 
   it('links the commits, lists the changed packages first, and names new and removed exports', () => {
     const markdown = buildDiffMarkdown(
-      createSnapshot({ 'utils.kept': 100, 'utils.gone': 100 }, { gitSha: 'aaaaaaaa1111' }),
-      createSnapshot({ 'utils.kept': 100, 'utils.added': 100 }, { gitSha: 'bbbbbbbb2222' }),
+      createSnapshot({ 'shared-utils.kept': 100, 'shared-utils.gone': 100 }, { gitSha: 'aaaaaaaa1111' }),
+      createSnapshot({ 'shared-utils.kept': 100, 'shared-utils.added': 100 }, { gitSha: 'bbbbbbbb2222' }),
       8,
       12,
-      { repositoryURL: 'https://github.com/o/r', changedPackages: ['utils'] },
+      { repositoryURL: 'https://github.com/o/r', changedPackages: ['shared-utils'] },
     );
 
     expect(markdown).toContain('[`aaaaaaaa`](https://github.com/o/r/commit/aaaaaaaa1111)');
-    expect(markdown).toContain('`utils`: 1 case compared, median ±0.0%.');
+    expect(markdown).toContain('`shared-utils`: 1 case compared, median ±0.0%.');
     expect(markdown).toContain('### New exports (1)');
-    expect(markdown).toContain('| `utils.added` | 10.0 ms |');
+    expect(markdown).toContain('| `shared-utils.added` | 10.0 ms |');
     expect(markdown).toContain('### Removed exports (1)');
-    expect(markdown).toContain('- `utils.gone`');
+    expect(markdown).toContain('- `shared-utils.gone`');
   });
 });

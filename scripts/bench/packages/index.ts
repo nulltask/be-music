@@ -20,20 +20,20 @@ import { stringifierBenchmarkPackage } from './stringifier.ts';
 import { utilsBenchmarkPackage } from './utils.ts';
 
 export const PACKAGE_DEFINITIONS: Record<PackageName, BenchmarkPackageDefinition> = {
-  utils: utilsBenchmarkPackage,
-  json: jsonBenchmarkPackage,
-  chart: chartBenchmarkPackage,
-  parser: parserBenchmarkPackage,
-  stringifier: stringifierBenchmarkPackage,
-  editor: editorBenchmarkPackage,
-  'audio-renderer': audioRendererBenchmarkPackage,
-  player: playerBenchmarkPackage,
-  'scene-model': sceneModelBenchmarkPackage,
-  'player-tui': playerTUIBenchmarkPackage,
-  'lr2-skin': lr2SkinBenchmarkPackage,
-  'beatoraja-skin': beatorajaSkinBenchmarkPackage,
-  'skin-sdk': skinSDKBenchmarkPackage,
-  'player-web': playerWebCoreBenchmarkPackage,
+  'shared-utils': utilsBenchmarkPackage,
+  'chart-source': jsonBenchmarkPackage,
+  'chart-model': chartBenchmarkPackage,
+  'chart-parser': parserBenchmarkPackage,
+  'chart-writer': stringifierBenchmarkPackage,
+  'chart-editor': editorBenchmarkPackage,
+  'chart-audio-renderer': audioRendererBenchmarkPackage,
+  'player-engine': playerBenchmarkPackage,
+  'player-scene-model': sceneModelBenchmarkPackage,
+  'player-terminal': playerTUIBenchmarkPackage,
+  'skin-lr2': lr2SkinBenchmarkPackage,
+  'skin-beatoraja': beatorajaSkinBenchmarkPackage,
+  'player-skin-sdk': skinSDKBenchmarkPackage,
+  'player-browser': playerWebCoreBenchmarkPackage,
 };
 
 export function registerAllExportsBenchmarkCases(define: DefineBenchmarkCase): void {

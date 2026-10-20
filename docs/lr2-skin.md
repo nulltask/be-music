@@ -2,12 +2,12 @@
 
 # LR2 skin implementation notes
 
-This document summarizes the current `@be-music/lr2-skin` implementation.
-The package parses Lunatic Rave 2 skin files into renderer-independent data structures; PixiJS rendering belongs to `@be-music/player-web`, and CLI/TUI rendering belongs to `@be-music/player-tui`, which does not consume LR2 skins.
+This document summarizes the current `@be-music/skin-lr2` implementation.
+The package parses Lunatic Rave 2 skin files into renderer-independent data structures; PixiJS rendering belongs to `@be-music/player-browser`, and CLI/TUI rendering belongs to `@be-music/player-terminal`, which does not consume LR2 skins.
 
 ## Scope
 
-- `@be-music/lr2-skin` reads `.lr2skin` CSV files for select, decide, play, result and course-result scenes.
+- `@be-music/skin-lr2` reads `.lr2skin` CSV files for select, decide, play, result and course-result scenes.
 - The package resolves theme assets from dropped folders or in-memory file maps, including case-insensitive paths, wildcard file references, TGA and DDS images, and DXA archives.
 - The package keeps skin timing, op conditions, source rectangles, destination keyframes, and scene-specific element groups in plain TypeScript objects.
 - The package does not create PixiJS objects, WebAudio nodes, or browser DOM UI.
@@ -45,11 +45,11 @@ LR2 reads a skin each time its scene starts, so an `#IF` block can test state th
 
 The theme is parsed once, with these ops off. `LR2ThemeSkins.loadSkin({ kind, playVariant, parseOps })` parses one of its skins again from the files already read, with extra ops held true while `#IF` / `#ELSEIF` are evaluated (`LoadLR2SkinOptions.parseOps`). `pickLR2PlaySkinVariant` names the play-skin variant a chart plays on, so a host can parse that skin again for a course stage.
 
-The values a course skin reads (numbers 250-259, texts 150-170, the course combo on 104 / 105) are scene state: [`@be-music/lr2-skin/state`](#scene-state) resolves them from the course's `CourseView`, which the host builds (`resolveCourseView`, `@be-music/scene-model`) and hands to `@be-music/player-web`'s scenes. See [Courses and dan certification](./player-web.md#courses-and-dan-certification).
+The values a course skin reads (numbers 250-259, texts 150-170, the course combo on 104 / 105) are scene state: [`@be-music/skin-lr2/state`](#scene-state) resolves them from the course's `CourseView`, which the host builds (`resolveCourseView`, `@be-music/player-scene-model`) and hands to `@be-music/player-browser`'s scenes. See [Courses and dan certification](./player-web.md#courses-and-dan-certification).
 
 ## Id tables
 
-A skin refers to the engine's state by number: the ops of a `#DST_*` row or an `#IF`, the `timer` it runs on, the `num` of a `#SRC_NUMBER`, the `st` of a `#SRC_TEXT`, the `type` of a `#SRC_BUTTON` or `#SRC_SLIDER`, the index of a `#SRC_BAR_BODY` or `#SRC_BAR_LAMP`, and the `gr` of a runtime-bound image. `@be-music/lr2-skin/ids` names them in one table per kind, each entry documented with what it means and, by its section, the screen that sets or reads it:
+A skin refers to the engine's state by number: the ops of a `#DST_*` row or an `#IF`, the `timer` it runs on, the `num` of a `#SRC_NUMBER`, the `st` of a `#SRC_TEXT`, the `type` of a `#SRC_BUTTON` or `#SRC_SLIDER`, the index of a `#SRC_BAR_BODY` or `#SRC_BAR_LAMP`, and the `gr` of a runtime-bound image. `@be-music/skin-lr2/ids` names them in one table per kind, each entry documented with what it means and, by its section, the screen that sets or reads it:
 
 | Table                                 | Names                 | Sections                                                                                                                                                     |
 | ------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -78,23 +78,23 @@ The ids [#430](https://github.com/nulltask/be-music/issues/430) named with less 
 - The best record's rates (73, 85-89) are whole percents, truncated.
 - Texts 20-29 are the fields LR2's tag editor edits: 20-28 repeat 10-18 on every screen but the result, where LR2 reuses text 20 for the internet ranking's message. Texts 18 / 28 are the `#DIFFICULTY` number (0-5), which the ops 150-155 name. Text 29 is LR2's ex level, a level a player sets in its song database; LR2 sets texts 10-29 on the select screen and keeps them through decide, play and result.
 
-beatoraja keeps LR2's numbers for its LR2-compatible ids, so `@be-music/beatoraja-skin` takes those from these tables under its own names (`BEATORAJA_OP.FOLDERBAR` is `LR2_OP.FOLDER_BAR`, `TIMER_READY` is `LR2_TIMER.READY`) and numbers only beatoraja's own ids. A few LR2 ids mean something else to beatoraja, which its own table names: number 92 is the main BPM (`BEATORAJA_NUM.MAINBPM`) and op 400 the CONSTANT option (which its table leaves unnamed: nothing lights it), and beatoraja defines no numbers 38-41 or 93-94 and no texts 17-29. The parser's parse-time ops and `@be-music/player-web`'s LR2 family views (`view/lr2/`) use the tables too.
+beatoraja keeps LR2's numbers for its LR2-compatible ids, so `@be-music/skin-beatoraja` takes those from these tables under its own names (`BEATORAJA_OP.FOLDERBAR` is `LR2_OP.FOLDER_BAR`, `TIMER_READY` is `LR2_TIMER.READY`) and numbers only beatoraja's own ids. A few LR2 ids mean something else to beatoraja, which its own table names: number 92 is the main BPM (`BEATORAJA_NUM.MAINBPM`) and op 400 the CONSTANT option (which its table leaves unnamed: nothing lights it), and beatoraja defines no numbers 38-41 or 93-94 and no texts 17-29. The parser's parse-time ops and `@be-music/player-browser`'s LR2 family views (`view/lr2/`) use the tables too.
 
 Not named here: ops 900-999 (the skin's own `#CUSTOMOPTION`s), the `#SRC_BARGRAPH` types, and the small enums of the `#DST_*` fields (`blend`, `center`, `acc`), which `skin/lr2/render.ts` maps where it reads them.
 
 ## Scene state
 
-`@be-music/lr2-skin/state` maps the scene models of `@be-music/scene-model` ([Scene models](./scene-model.md)) to the [id tables](#id-tables): for each screen, which ops hold, which value each number and text draws and where each slider sits (an `LR2SceneState`; the select screen's `LR2SelectState` adds the cell each button draws), which timers a moment of the select or play screen starts and stops (an `LR2TimerUpdate`: each timer with the time it starts at, and the timers that stop), and which timers run on a moment of the decide or result screen (`resolveLR2DecideTimers`, `resolveLR2ResultTimers`: each running timer with the time it started at), with how much of a result graph shows (`resolveLR2GraphReveal`). The skin family's view asks the state for the ids its skin draws; it keeps only the timer ids and the lane index it stamps.
+`@be-music/skin-lr2/state` maps the scene models of `@be-music/player-scene-model` ([Scene models](./scene-model.md)) to the [id tables](#id-tables): for each screen, which ops hold, which value each number and text draws and where each slider sits (an `LR2SceneState`; the select screen's `LR2SelectState` adds the cell each button draws), which timers a moment of the select or play screen starts and stops (an `LR2TimerUpdate`: each timer with the time it starts at, and the timers that stop), and which timers run on a moment of the decide or result screen (`resolveLR2DecideTimers`, `resolveLR2ResultTimers`: each running timer with the time it started at), with how much of a result graph shows (`resolveLR2GraphReveal`). The skin family's view asks the state for the ids its skin draws; it keeps only the timer ids and the lane index it stamps.
 
 ```mermaid
 flowchart LR
-  subgraph models["@be-music/scene-model"]
+  subgraph models["@be-music/player-scene-model"]
     entry["LibraryEntry<br/>PlayOptions"]
     play["PlayState"]
     result["PlayResult"]
     course["CourseView"]
   end
-  subgraph state["@be-music/lr2-skin/state"]
+  subgraph state["@be-music/skin-lr2/state"]
     select["resolveLR2SelectState"]
     decide["resolveLR2DecideState"]
     playing["resolveLR2PlayState"]
@@ -129,7 +129,7 @@ flowchart LR
 
 The resolvers are pure and deterministic: they read no clock, no DOM and no renderer, draw no random number, and import only the scene models, the engine's rules, the chart model, the id tables and the parsed skin's types. Time comes in as an input — the clock numbers through an `LR2Clock`, a play's time through its frame, each timer's start through the moment's `at` — and `pnpm run check` holds `src/state/` to the runtime-neutral and clock-free lint rules. The LR2 family views of the web runtime (`view/lr2/`: the select, decide, play and result screens) call them.
 
-The LR2 play view (`view/lr2/play-view.ts` in `@be-music/player-web`) reads the play's ops, numbers, texts, sliders and bar graphs off each frame with `resolveLR2PlayState`: the frame's `PlayState`, the score, the time, the score readout, the BPM and the frame rate. It starts and stops the play's timers from each frame's moments with `resolveLR2PlayTimers`, and the view's own timer keeping retires the one-shot ones:
+The LR2 play view (`view/lr2/play-view.ts` in `@be-music/player-browser`) reads the play's ops, numbers, texts, sliders and bar graphs off each frame with `resolveLR2PlayState`: the frame's `PlayState`, the score, the time, the score readout, the BPM and the frame rate. It starts and stops the play's timers from each frame's moments with `resolveLR2PlayTimers`, and the view's own timer keeping retires the one-shot ones:
 
 | Moment                         | Timers                                                                   |
 | ------------------------------ | ------------------------------------------------------------------------ |
@@ -189,7 +189,7 @@ TGA images are decoded by `tga.ts` and DDS images by `dds.ts` (the browser playe
 
 ## Browser player usage
 
-`@be-music/player-web` consumes the parsed skin model in these family views:
+`@be-music/player-browser` consumes the parsed skin model in these family views:
 
 - `view/lr2/select-view.ts` (with `select-bars.ts`)
 - `view/lr2/decide-view.ts`
@@ -213,7 +213,7 @@ Other LR2 skins may load, but small layout differences, missing animation detail
 
 - The parser does not implement every LR2 directive or every `button_type`.
 - `#CUSTOMOPTION` and `#CUSTOMFILE` are parsed and surfaced, but full user-facing option persistence belongs to the host application.
-- System font rendering is a browser-renderer concern; `@be-music/lr2-skin` only preserves the declared font metadata.
+- System font rendering is a browser-renderer concern; `@be-music/skin-lr2` only preserves the declared font metadata.
 - Renderer-specific behavior such as PixiJS texture upload, video BGA playback, WebAudio system sounds, and DOM text input overlays lives outside this package.
 - Where the scene state still differs from LR2 (OpenLR2), each for want of data or a screen be-music does not have yet:
   - The player's totals (numbers 30-41) read 0: no play history is kept.

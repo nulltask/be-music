@@ -1,0 +1,376 @@
+import type { BeMusicJSON } from '@be-music/chart-source';
+import { createEmptyJSON } from '@be-music/chart-source';
+import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
+import {
+  CHART_PREVIEW_STOP_FADE_OUT_SECONDS,
+  ChartPreviewEngine,
+  type ChartPreviewTarget,
+  collectChartPreviewTriggers,
+  DEFAULT_CHART_PREVIEW_FALLBACK_DURATION_SECONDS,
+  findFirstAudibleOffsetSeconds,
+  LR2_PREVIEW_FOCUS_DELAY_MS,
+  resolveChartPreviewPath,
+} from './preview.ts';
+
+const collectionMocks = vi.hoisted(() => ({
+  loadAssetBytes: vi.fn(),
+  resolveChartAudioAsset: vi.fn(),
+}));
+
+vi.mock('../collection/collection.ts', () => collectionMocks);
+
+/**
+ * Pure helpers plus a tiny fake-AudioContext harness for the chart-preview engine. The real asset lookup wiring is
+ * already covered in collection-level tests; here we only need to observe preview scheduling behavior.
+ */
+
+function makeBMSChart(preview: string | undefined): BeMusicJSON {
+  const json = createEmptyJSON('bms');
+  if (preview !== undefined) {
+    json.bms.preview = preview;
+  }
+  return json;
+}
+
+function makeBmsonChart(previewMusic: string | undefined): BeMusicJSON {
+  const json = createEmptyJSON('bmson');
+  if (previewMusic !== undefined) {
+    json.bmson.info = { ...json.bmson.info, previewMusic };
+  }
+  return json;
+}
+
+interface FakeBufferSource {
+  buffer: AudioBuffer | null;
+  onended: (() => void) | null;
+  connect: ReturnType<typeof vi.fn>;
+  disconnect: ReturnType<typeof vi.fn>;
+  start: ReturnType<typeof vi.fn>;
+  stop: ReturnType<typeof vi.fn>;
+}
+
+function makeMockAudioBuffer(durationSeconds = 1): AudioBuffer {
+  return { duration: durationSeconds, length: 44_100, numberOfChannels: 2, sampleRate: 44_100 } as AudioBuffer;
+}
+
+function makePreviewAudioMocks(): { audioContext: AudioContext; output: AudioNode; sources: FakeBufferSource[] } {
+  const sources: FakeBufferSource[] = [];
+  const makeGainNode = (): GainNode =>
+    ({
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      gain: {
+        value: 1,
+        cancelScheduledValues: vi.fn(),
+        setValueAtTime: vi.fn(),
+        linearRampToValueAtTime: vi.fn(),
+      },
+    }) as unknown as GainNode;
+  const audioContext = {
+    currentTime: 0,
+    createBufferSource: vi.fn(() => {
+      const source: FakeBufferSource = {
+        buffer: null,
+        onended: null,
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        start: vi.fn(),
+        stop: vi.fn(),
+      };
+      sources.push(source);
+      return source as unknown as AudioBufferSourceNode;
+    }),
+    createGain: vi.fn(makeGainNode),
+    decodeAudioData: vi.fn(async () => makeMockAudioBuffer()),
+  } as unknown as AudioContext;
+  return { audioContext, output: makeGainNode() as unknown as AudioNode, sources };
+}
+
+function makePreviewTarget(chart: BeMusicJSON): ChartPreviewTarget {
+  return {
+    chart: {
+      id: 'song',
+      sourceId: 'source',
+      sourceLabel: 'source',
+      sourceKind: 'files',
+      chartPath: 'song/test.bms',
+      directoryLabel: 'song',
+      fileLabel: 'test.bms',
+      title: 'test',
+      totalNotes: 0,
+      chart,
+    },
+    source: {
+      id: 'source',
+      kind: 'files',
+      label: 'source',
+      files: new Map(),
+    },
+  };
+}
+
+beforeEach(() => {
+  collectionMocks.loadAssetBytes.mockReset();
+  collectionMocks.resolveChartAudioAsset.mockReset();
+  collectionMocks.loadAssetBytes.mockResolvedValue(new Uint8Array([1, 2, 3]));
+  collectionMocks.resolveChartAudioAsset.mockImplementation((_source, _chartPath, path) => ({ path }));
+});
+
+describe('resolveChartPreviewPath', () => {
+  test('returns `#PREVIEW` from a BMS chart', () => {
+    const chart = makeBMSChart('preview.ogg');
+    expect(resolveChartPreviewPath(chart)).toBe('preview.ogg');
+  });
+
+  test('returns `info.preview_music` from a bmson chart', () => {
+    const chart = makeBmsonChart('preview/intro.wav');
+    expect(resolveChartPreviewPath(chart)).toBe('preview/intro.wav');
+  });
+
+  test('prefers BMS `#PREVIEW` over bmson `previewMusic` if both fields are populated', () => {
+    // Charts can theoretically be re-serialized from one format to another and end up with both populated; pin the
+    // priority so the behavior stays predictable.
+    const chart = createEmptyJSON('bms');
+    chart.bms.preview = 'bms.wav';
+    chart.bmson.info = { ...chart.bmson.info, previewMusic: 'bmson.wav' };
+    expect(resolveChartPreviewPath(chart)).toBe('bms.wav');
+  });
+
+  test('returns undefined when neither field is set', () => {
+    expect(resolveChartPreviewPath(createEmptyJSON('bms'))).toBeUndefined();
+    expect(resolveChartPreviewPath(createEmptyJSON('bmson'))).toBeUndefined();
+  });
+
+  test('treats an empty string as "unset"', () => {
+    // The parser preserves the literal value; an empty `#PREVIEW` line shouldn't masquerade as a preview path. The
+    // engine uses this helper directly so the empty-string check has to live here, not in the engine.
+    const chart = makeBMSChart('');
+    expect(resolveChartPreviewPath(chart)).toBeUndefined();
+  });
+});
+
+describe('collectChartPreviewTriggers', () => {
+  test('returns an empty array for a non-positive cutoff', () => {
+    // Exposed as a guard so a misconfigured engine (`fallbackDurationSeconds: 0`) silently does no work rather than
+    // scheduling every trigger up to t=0.
+    const chart = createEmptyJSON('bms');
+    expect(collectChartPreviewTriggers(chart, 0)).toEqual([]);
+    expect(collectChartPreviewTriggers(chart, -5)).toEqual([]);
+    expect(collectChartPreviewTriggers(chart, Number.NaN)).toEqual([]);
+  });
+
+  test('returns an empty array for a chart with no events', () => {
+    expect(collectChartPreviewTriggers(createEmptyJSON('bms'), 30)).toEqual([]);
+  });
+
+  test('filters triggers strictly inside the cutoff window and sorts them by seconds', () => {
+    // Build a tiny chart with a few BGM events. We don't need the parser to wire the resolver — `collectSampleTriggers`
+    // walks the events array and the timing resolver maps measure positions to seconds. With BPM 120 and the default
+    // measure length 1 (= 4 beats = 2 s), each measure adds 2 s.
+    const chart = createEmptyJSON('bms');
+    chart.metadata.bpm = 120;
+    chart.measures = [
+      { index: 0, length: 1 },
+      { index: 1, length: 1 },
+      { index: 2, length: 1 },
+    ];
+    chart.events = [
+      { measure: 0, channel: '01', position: [0, 1], value: 'AA' },
+      { measure: 1, channel: '01', position: [0, 1], value: 'BB' },
+      { measure: 2, channel: '01', position: [0, 1], value: 'CC' },
+    ];
+    chart.resources.wav = { AA: 'a.wav', BB: 'b.wav', CC: 'c.wav' };
+    // Cutoff at 3 s = first two triggers (t=0, t=2). The third trigger sits at t=4 s which is outside the window.
+    const triggers = collectChartPreviewTriggers(chart, 3);
+    expect(triggers.map((trigger) => trigger.sampleKey)).toEqual(['AA', 'BB']);
+    // Sorted by seconds ascending.
+    expect(triggers[0]!.seconds).toBeLessThan(triggers[1]!.seconds);
+  });
+
+  test('includes visible keysounds but excludes invisible objects in fallback preview playback', () => {
+    // The fallback is AUTO PLAY-style chart playback: visible keysounds are audible, but invisible objects only update
+    // lane keysound state during gameplay and should not directly sound in AUTO/preview.
+    const chart = createEmptyJSON('bms');
+    chart.metadata.bpm = 120;
+    chart.measures = [{ index: 0, length: 1 }];
+    chart.events = [
+      { measure: 0, channel: '01', position: [0, 1], value: 'AA' },
+      { measure: 0, channel: '11', position: [1, 4], value: 'BB' },
+      { measure: 0, channel: '31', position: [1, 2], value: 'CC' },
+      { measure: 0, channel: '51', position: [3, 4], value: 'DD' },
+    ];
+    chart.resources.wav = { AA: 'bgm.wav', BB: 'visible.wav', CC: 'invisible.wav', DD: 'long-note.wav' };
+
+    const triggers = collectChartPreviewTriggers(chart, 3);
+    expect(triggers.map((trigger) => trigger.channel)).toEqual(['01', '11', '51']);
+    expect(triggers.map((trigger) => trigger.sampleKey)).toEqual(['AA', 'BB', 'DD']);
+  });
+
+  test('drops triggers past a negative-BPM reversal but keeps BGM on the reversal tick (LR2 op order)', () => {
+    // A negative `#BPMxx` (channel 08) arms `TimingResolver.reversal`; gameplay's event pump freezes there. LR2 sorts
+    // same-tick events by op, so the BGM (op 1) on the reversal tick still fires while a lane sound (op 11) beside it
+    // and everything later stay silent — the select-scene preview matches. BPM 120 → each default-length measure =
+    // 4 beats = 2 s; timing integrates the negative slot at |BPM| so the measure-2 trigger still resolves to a finite
+    // chart-time (t = 4 s) — it is the reversal, not the cutoff, that drops it.
+    const chart = createEmptyJSON('bms');
+    chart.metadata.bpm = 120;
+    chart.measures = [
+      { index: 0, length: 1 },
+      { index: 1, length: 1 },
+      { index: 2, length: 1 },
+    ];
+    chart.events = [
+      { measure: 0, channel: '01', position: [0, 1], value: 'AA' }, // t = 0 — audible.
+      { measure: 0, channel: '01', position: [1, 2], value: 'BB' }, // t = 1 — audible.
+      { measure: 1, channel: '08', position: [0, 1], value: 'NB' }, // reversal at t = 2 (beat 4).
+      { measure: 1, channel: '01', position: [0, 1], value: 'CC' }, // t = 2 — BGM ON the reversal tick: audible.
+      { measure: 1, channel: '11', position: [0, 1], value: 'EE' }, // t = 2 — lane sound on the tick: dropped.
+      { measure: 2, channel: '01', position: [0, 1], value: 'DD' }, // t = 4 (|BPM| integration) — dropped.
+    ];
+    chart.resources.wav = { AA: 'a.wav', BB: 'b.wav', CC: 'c.wav', DD: 'd.wav', EE: 'e.wav' };
+    chart.resources.bpm = { NB: -120 };
+
+    // Cutoff well past every trigger — only the reversal filter can be responsible for the exclusions.
+    const triggers = collectChartPreviewTriggers(chart, 30);
+    expect(triggers.map((trigger) => trigger.sampleKey)).toEqual(['AA', 'BB', 'CC']);
+  });
+
+  test('excludes invisible objects on the extended 24-key lanes too', () => {
+    // bmson `keyboard-24k` hidden notes (`key_channels`) become invisible objects on `3A`-`3Q` / `4A`-`4Q`.
+    const chart = createEmptyJSON('bms');
+    chart.metadata.bpm = 120;
+    chart.measures = [{ index: 0, length: 1 }];
+    chart.events = [
+      { measure: 0, channel: '1A', position: [0, 1], value: 'BB' },
+      { measure: 0, channel: '3A', position: [1, 4], value: 'CC' },
+      { measure: 0, channel: '4Q', position: [1, 2], value: 'CC' },
+    ];
+    chart.resources.wav = { BB: 'visible.wav', CC: 'invisible.wav' };
+
+    expect(collectChartPreviewTriggers(chart, 3).map((trigger) => trigger.channel)).toEqual(['1A']);
+  });
+});
+
+describe('ChartPreviewEngine', () => {
+  test('schedules visible fallback preview keysounds alongside BGM triggers', async () => {
+    const chart = createEmptyJSON('bms');
+    chart.metadata.bpm = 120;
+    chart.measures = [{ index: 0, length: 1 }];
+    chart.events = [
+      { measure: 0, channel: '01', position: [0, 1], value: 'AA' },
+      { measure: 0, channel: '11', position: [1, 4], value: 'BB' },
+      { measure: 0, channel: '31', position: [1, 2], value: 'CC' },
+    ];
+    chart.resources.wav = { AA: 'bgm.wav', BB: 'visible.wav', CC: 'invisible.wav' };
+    const { audioContext, output, sources } = makePreviewAudioMocks();
+    const engine = new ChartPreviewEngine(audioContext, output, { focusDelayMs: 0, fallbackDurationSeconds: 3 });
+
+    engine.focus(makePreviewTarget(chart));
+
+    await vi.waitFor(() => expect(sources).toHaveLength(2));
+    expect(sources.map((source) => source.start.mock.calls[0]?.[0])).toEqual([0, 0.5]);
+    expect(collectionMocks.resolveChartAudioAsset.mock.calls.map((call) => call[2])).not.toContain('invisible.wav');
+  });
+
+  test('stops the previous BMS source when the same WAV slot retriggers', async () => {
+    const chart = createEmptyJSON('bms');
+    chart.metadata.bpm = 120;
+    chart.measures = [{ index: 0, length: 1 }];
+    chart.events = [
+      { measure: 0, channel: '11', position: [0, 1], value: 'AA' },
+      { measure: 0, channel: '12', position: [1, 2], value: 'AA' },
+    ];
+    chart.resources.wav = { AA: 'same.wav' };
+    const { audioContext, output, sources } = makePreviewAudioMocks();
+    const engine = new ChartPreviewEngine(audioContext, output, { focusDelayMs: 0, fallbackDurationSeconds: 3 });
+
+    engine.focus(makePreviewTarget(chart));
+
+    await vi.waitFor(() => expect(sources).toHaveLength(2));
+    expect(sources[0]!.start).toHaveBeenCalledWith(0, 0);
+    expect(sources[0]!.stop).toHaveBeenCalledWith(1);
+    expect(sources[1]!.start).toHaveBeenCalledWith(1, 0);
+    expect(sources[1]!.stop).not.toHaveBeenCalled();
+  });
+});
+
+describe('findFirstAudibleOffsetSeconds', () => {
+  // Mini stand-in for the parts of `AudioBuffer` the helper actually consults. Web Audio's real buffer isn't available
+  // in the node test env, so we feed in a duck-typed stub.
+  function makeBuffer(
+    channels: Float32Array[],
+    sampleRate: number,
+  ): Parameters<typeof findFirstAudibleOffsetSeconds>[0] {
+    return {
+      numberOfChannels: channels.length,
+      sampleRate,
+      length: channels[0]?.length ?? 0,
+      getChannelData: (channel) => channels[channel]!,
+    };
+  }
+
+  test('returns 0 when the buffer starts above the silence threshold', () => {
+    // No leading silence to skip — playback should begin at sample 0.
+    const buffer = makeBuffer([new Float32Array([0.5, 0.5, 0.5, 0])], 44_100);
+    expect(findFirstAudibleOffsetSeconds(buffer)).toBe(0);
+  });
+
+  test('returns the time of the first sample above threshold (mono)', () => {
+    // 100 silent samples at 1 kHz → 0.1 s of leading silence.
+    const data = new Float32Array(200);
+    data[100] = 0.7;
+    const buffer = makeBuffer([data], 1000);
+    expect(findFirstAudibleOffsetSeconds(buffer)).toBeCloseTo(0.1);
+  });
+
+  test('treats either channel crossing threshold as audible (stereo)', () => {
+    // Left silent throughout, right audible at frame 50 → trim to 50 / sampleRate. Real charts often have one-sided
+    // "intro tone" hits we still want to hear.
+    const left = new Float32Array(200);
+    const right = new Float32Array(200);
+    right[50] = 0.3;
+    const buffer = makeBuffer([left, right], 1000);
+    expect(findFirstAudibleOffsetSeconds(buffer)).toBeCloseTo(0.05);
+  });
+
+  test('returns 0 when the entire buffer is below threshold', () => {
+    // Nothing to skip — the helper falls back to `0` so the engine still plays whatever (silent) buffer the source gave
+    // it. Avoids an infinite "no audio at all" loop where we keep advancing the offset past the end.
+    const data = new Float32Array(100);
+    const buffer = makeBuffer([data], 1000);
+    expect(findFirstAudibleOffsetSeconds(buffer)).toBe(0);
+  });
+
+  test('returns 0 for a 0-channel or 0-length buffer', () => {
+    expect(findFirstAudibleOffsetSeconds(makeBuffer([], 1000))).toBe(0);
+    expect(findFirstAudibleOffsetSeconds(makeBuffer([new Float32Array(0)], 1000))).toBe(0);
+  });
+
+  test('uses the supplied threshold to filter quiet noise', () => {
+    // A `0.0005` peak qualifies under the default `0.0001` threshold but should be ignored at `0.001`.
+    const data = new Float32Array(100);
+    data[10] = 0.0005;
+    data[20] = 0.5;
+    const buffer = makeBuffer([data], 1000);
+    expect(findFirstAudibleOffsetSeconds(buffer)).toBeCloseTo(0.01);
+    expect(findFirstAudibleOffsetSeconds(buffer, 0.001)).toBeCloseTo(0.02);
+  });
+});
+
+describe('exported constants', () => {
+  test('LR2 focus delay defaults to 1000 ms', () => {
+    // The constant ships with this default to match LR2's song-select preview wait. Lock the value so a future
+    // accidental tweak surfaces in code review rather than silently changing UX feel for every demo deploy.
+    expect(LR2_PREVIEW_FOCUS_DELAY_MS).toBe(1000);
+  });
+
+  test('fallback preview cap defaults to 30 s', () => {
+    // Same rationale as above — used for the in-place chart playback when a chart didn't ship `#PREVIEW`. 30 s gives
+    // intro + first verse without scheduling thousands of triggers up-front.
+    expect(DEFAULT_CHART_PREVIEW_FALLBACK_DURATION_SECONDS).toBe(30);
+  });
+
+  test('preview stop fade defaults to 250 ms', () => {
+    expect(CHART_PREVIEW_STOP_FADE_OUT_SECONDS).toBe(0.25);
+  });
+});

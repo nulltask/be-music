@@ -3,7 +3,7 @@
 # BMS / bmson 互換性ノート
 
 この文書は、BMS と bmson の仕様が定めていること（de jure）と既存のプレイヤーが実際にしていること（de facto）を比べ、どの仕様も定めていない挙動を洗い出し、be-music がどうしているか・なぜそうしたかを記録します。
-実装をまたいだ比較のための資料です。be-music 自身が各フォーマットをどう扱うかは [BMS 実装仕様](./bms-spec.ja.md)、[BMSON 実装仕様](./bmson-spec.ja.md)、[Player 実装仕様](./player-spec.ja.md)、[`@be-music/json`](./json-spec.ja.md) に定めてあり、ここでは繰り返さずにリンクします。
+実装をまたいだ比較のための資料です。be-music 自身が各フォーマットをどう扱うかは [BMS 実装仕様](./bms-spec.ja.md)、[bmson 実装仕様](./bmson-spec.ja.md)、[Player 実装仕様](./player-spec.ja.md)、[`@be-music/chart-source`](./json-spec.ja.md) に定めてあり、ここでは繰り返さずにリンクします。
 
 ## 1. この文書の読み方
 
@@ -257,13 +257,13 @@ beatoraja は読みません [V]。be-music は IR に保持しますが適用�
 
 仕様（L238-249）が定める値は `"1.0.0"` だけです。`version` がなければ 1.0 より前の旧形式で、プレイヤーは拒否するか v0.21 として読みます。`null` はエラーです。
 jbms-parser はこのフィールドを読みません [V]（[Bmson.java L8][j-bmson-model]）。
-be-music は往復変換のために保持しますが検証はしないので、旧形式のファイルも 1.0.0 として読みます（[BMSON 実装仕様のチェックリスト](./bmson-spec.ja.md#parser-bmson---be-musicjson)）。
+be-music は往復変換のために保持しますが検証はしないので、旧形式のファイルも 1.0.0 として読みます（[bmson 実装仕様のチェックリスト](./bmson-spec.ja.md#parser-bmson---be-musicjson)）。
 
 ### 3.2 `mode_hint` と `x`
 
 | 項目                             | de jure                                                                                                                                                                                                | beatoraja                                                                                                                                         | be-music                                                                                                                                                                                                                                                                                                                                                            |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 正式な hint                      | `beat-5k`、`beat-7k`、`beat-10k`、`beat-14k`、`popn-5k`、`popn-9k`（L815-838）。既定値は `beat-7k`（L298-300）。`generic-nkeys` は本文にのみある（L304）。新しい配置には新しい hint を使う（L306-308） | 正式な 6 つと `keyboard-24k` / `keyboard-24k-double` [V]（[Mode L10-17][j-mode-enum]）                                                            | 同じ 8 つ（それぞれ固定のレーン表）と `generic-Nkeys`（[BMSON 実装仕様 — 変換](./bmson-spec.ja.md#bmson---bmsbmson-中間表現-be-musicjson-変換)）。表は仕様（L825、L827）と beatoraja（[BMSONDecoder L117-127][j-bmson-x]）に従い、`beat-5k` / `beat-10k` もスクラッチを `x` 8 に置き（2P の鍵は `x` 9〜13、2P のスクラッチは `x` 16）、`x` 6 / 7 / 14 / 15 は空ける |
+| 正式な hint                      | `beat-5k`、`beat-7k`、`beat-10k`、`beat-14k`、`popn-5k`、`popn-9k`（L815-838）。既定値は `beat-7k`（L298-300）。`generic-nkeys` は本文にのみある（L304）。新しい配置には新しい hint を使う（L306-308） | 正式な 6 つと `keyboard-24k` / `keyboard-24k-double` [V]（[Mode L10-17][j-mode-enum]）                                                            | 同じ 8 つ（それぞれ固定のレーン表）と `generic-Nkeys`（[bmson 実装仕様 — 変換](./bmson-spec.ja.md#bmson---bmsbmson-中間表現-be-musicjson-変換)）。表は仕様（L825、L827）と beatoraja（[BMSONDecoder L117-127][j-bmson-x]）に従い、`beat-5k` / `beat-10k` もスクラッチを `x` 8 に置き（2P の鍵は `x` 9〜13、2P のスクラッチは `x` 16）、`x` 6 / 7 / 14 / 15 は空ける |
 | `keyboard-24k(-double)`          | 仕様にはない。BmsONE 由来の事実上の hint                                                                                                                                                               | `x` 1〜24 が鍵、25 / 26 がホイールの上 / 下。ダブルは `x` 27 から繰り返す。ホイールのレーンは鍵と同じく判定され、RANDOM / MIRROR でも動かない [V] | 同じレーン（チャンネル `11`〜`19`、`1A`〜`1O`、ホイール `1P` / `1Q`。2P は `x` 27 から）。hint だけで 24 / 48 KEY を選ぶ                                                                                                                                                                                                                                            |
 | BmsONE の `keyboard-36k/48k/60k` | 仕様にはない                                                                                                                                                                                           | 未知の hint [V]                                                                                                                                   | 未知の hint。`keyboard-48k` は 1 人用の配置なので `keyboard-24k-double` とはみなさない                                                                                                                                                                                                                                                                              |
 | 未知の hint                      | 遊べるかどうかはプレイヤーが判断する（L306-308）                                                                                                                                                       | 警告を出し、`beat-7k` として遊ぶ [V]（[BMSONDecoder L107-113][j-bmson-mode]）                                                                     | 使われている正の `x`（`key_channels` と `mine_channels` を含む）がすべて表に収まれば、beatoraja と同じく `beat-7k`。`x` 8 より先のレーンがある譜面（BmsONE のキーボード系 hint）はそれを残し、使われている `x` の値を昇順に `11`、`12`、… へ割り当てる。beatoraja ではそれらは BGM になる                                                                           |
@@ -315,7 +315,7 @@ be-music も beatoraja と同じく読みます。`mine_channels` は `damage` �
 - jbms-parser は `judge_rank` 0〜4 を警告付きで BMS の `#RANK` として読み、負の値は `#RANK 2` にする [V]（[BMSONDecoder L87-96][j-bmson-rank]）。beatoraja のルールは 0 以下を 100 にする。
 - be-music は 0 以下の値を捨てて `100` を使う。0〜4 の特別扱いはない（[`bmson.ts`][bm-bmson]、[`judge-window.ts`][bm-judge-window]）。`beatoraja` ルールセットでは、`judge_rank` のない譜面は `100` として判定し、BMS の `#RANK 2` にはしない（[`definitions.ts`][bm-ruleset]）。
 - 配布されている bmson 譜面は、ほぼすべて既定値の `100` を持つ。
-- BMS から bmson への変換では、be-music は `#DEFEXRANK` をそのまま書き、`#RANK 0`〜`4` を `33` / `67` / `100` / `133` / `167` へ写し、逆向きの変換では `judge_rank` を `#DEFEXRANK` として書く。BmsONE は `40` / `60` / `80` / `100` / `120` を書き、bms2bmson-python は何も書かない。変換ツールの比較は [BMSON 実装仕様 — プレイヤーと変換ツールでの `judge_rank` の扱い](./bmson-spec.ja.md#プレイヤーと変換ツールでの-judge_rank-の扱い) にある。
+- BMS から bmson への変換では、be-music は `#DEFEXRANK` をそのまま書き、`#RANK 0`〜`4` を `33` / `67` / `100` / `133` / `167` へ写し、逆向きの変換では `judge_rank` を `#DEFEXRANK` として書く。BmsONE は `40` / `60` / `80` / `100` / `120` を書き、bms2bmson-python は何も書かない。変換ツールの比較は [bmson 実装仕様 — プレイヤーと変換ツールでの `judge_rank` の扱い](./bmson-spec.ja.md#プレイヤーと変換ツールでの-judge_rank-の扱い) にある。
 
 ### 3.7 `total`
 
@@ -346,11 +346,11 @@ be-music も beatoraja と同じく読みます。`mine_channels` は `damage` �
 - be-music：`bga_events` をベース、`layer_events` をレイヤー、`poor_events` を POOR とし、`y` で時刻を決める（[`bga.ts`][bm-bga]）。web プレイヤーは描くが、ターミナルプレイヤーは bmson の BGA ファイルを読み込まない。
 - BGA、画像、音声の名前からのファイルの探し方は [§2.19](#219-アセットファイルの探し方) に従う。
 - 画像：どちらも `back_image`、`eyecatch_image`、`banner_image`、`preview_music` を読む。仕様が本文でしか説明していない `title_image`（L401-405）はどちらも読まない。be-music はそれぞれ `#BACKBMP`、`#STAGEFILE`（未設定のとき）、`#BANNER` に相当する欄へ写す。
-- テキスト：beatoraja は `chart_name` を `[name]` としてサブタイトルに付け加え、`subartists` をカンマでつなぐ [V]。be-music はどちらも構造を保ったまま持つ（[BMSON 実装仕様](./bmson-spec.ja.md#実装が読み込むフィールド-parser)）。
+- テキスト：beatoraja は `chart_name` を `[name]` としてサブタイトルに付け加え、`subartists` をカンマでつなぐ [V]。be-music はどちらも構造を保ったまま持つ（[bmson 実装仕様](./bmson-spec.ja.md#実装が読み込むフィールド-parser)）。
 
 ## 4. BMS と bmson の相互変換
 
-be-music の [`@be-music/stringifier`](../packages/stringifier/src/index.ts) は 1 つの IR から両方のフォーマットを書き出します。2 つのフォーマットは単位が食い違うため、そのままでは引き継げない値がいくつかあります。下の表は現在の stringifier の挙動です。詳細は [BMSON 実装仕様 — BMS と bmson の相互変換](./bmson-spec.ja.md#bms-と-bmson-の相互変換) にあります。
+be-music の [`@be-music/chart-writer`](../packages/chart-writer/src/index.ts) は 1 つの IR から両方のフォーマットを書き出します。2 つのフォーマットは単位が食い違うため、そのままでは引き継げない値がいくつかあります。下の表は現在の chart-writer の挙動です。詳細は [bmson 実装仕様 — BMS と bmson の相互変換](./bmson-spec.ja.md#bms-と-bmson-の相互変換) にあります。
 
 往復の変換はどちら向きも IR を通ります（読み込みと書き出しの関数は [JSON 仕様 — 変換規則](./json-spec.ja.md#変換規則) にあります）。それぞれの書き出しが落とすものです。
 
@@ -412,31 +412,31 @@ be-music が de facto の実装と理由を記録しないまま食い違って�
 1. **地雷と不可視ノートによるレーンモード**：beatoraja は 5K / 7K / 10K / 14K の判定にこれらも数え、be-music は数えない（[§2.4](#24-レーンモードとチャンネル配置)）。beatoraja の規則は確かめたが、LR2 の規則は確かめられていない。OpenLR2 の再現コードには、キーモードを記録する曲の走査処理がない。beatoraja に合わせると、2P 側に不可視のキー音しかない SP 譜面（`examples/test/invisible-notes.bms`）が 2P 側の空いた DP 譜面になり、作者の意図と違う。LR2 の規則が分かるまで未解決とする。
 2. **LR2 の根拠の不足**：負の STOP、0 の BPM、重複したオブジェクト行、`#TOTAL ≤ 0`、地雷の正確な爆発窓は、コミュニティの報告か再現コードに頼っており、情報源どうしも一部食い違う。ソースコードだけでは決められず、LR2 そのもので確かめる必要がある（負の `#BPMxx` は OpenLR2 に加えて LR2body.exe でも確認済み。[§2.8](#28-bpm) 参照）。
 
-[bm-parser]: ../packages/parser/src/core/parser.ts
-[bm-bmson-document]: ../packages/parser/src/core/bmson-document.ts
-[bm-event-utils]: ../packages/parser/src/core/event-utils.ts
-[bm-control-flow]: ../packages/parser/src/core/control-flow.ts
-[bm-decode]: ../packages/parser/src/core/bms-text-decode.ts
-[bm-charset]: ../packages/parser/src/core/bms-charset.ts
-[bm-bmson]: ../packages/parser/src/core/bmson.ts
-[bm-bmson-keys]: ../packages/parser/src/core/bmson-keys.ts
-[bm-play-variant]: ../packages/chart/src/play-variant.ts
-[bm-channels]: ../packages/chart/src/channels.ts
-[bm-reference-bpm]: ../packages/chart/src/reference-bpm.ts
-[bm-wav-directives]: ../packages/chart/src/wav-directives.ts
-[bm-long-notes]: ../packages/chart/src/long-notes.ts
-[bm-timing]: ../packages/chart/src/timing.ts
-[bm-timelines]: ../packages/chart/src/timelines.ts
-[bm-sample-triggers]: ../packages/chart/src/sample-triggers.ts
-[bm-resolved-notes]: ../packages/chart/src/resolved-notes.ts
-[bm-note-rules]: ../packages/chart/src/note-rules.ts
-[bm-judge-window]: ../packages/player/src/core/judge-window.ts
-[bm-ruleset]: ../packages/player/src/ruleset/definitions.ts
-[bm-scroll]: ../packages/player/src/core/scroll-distance.ts
-[bm-note-draw]: ../packages/player-web/src/chart/note-draw-window.ts
-[bm-bga]: ../packages/chart/src/bga.ts
-[bm-web-bga]: ../packages/player-web/src/chart/bga-timeline.ts
-[bm-play-bga]: ../packages/player-web/src/chart/play-bga.ts
+[bm-parser]: ../packages/chart-parser/src/core/parser.ts
+[bm-bmson-document]: ../packages/chart-parser/src/core/bmson-document.ts
+[bm-event-utils]: ../packages/chart-parser/src/core/event-utils.ts
+[bm-control-flow]: ../packages/chart-parser/src/core/control-flow.ts
+[bm-decode]: ../packages/chart-parser/src/core/bms-text-decode.ts
+[bm-charset]: ../packages/chart-parser/src/core/bms-charset.ts
+[bm-bmson]: ../packages/chart-parser/src/core/bmson.ts
+[bm-bmson-keys]: ../packages/chart-parser/src/core/bmson-keys.ts
+[bm-play-variant]: ../packages/chart-model/src/play-variant.ts
+[bm-channels]: ../packages/chart-model/src/channels.ts
+[bm-reference-bpm]: ../packages/chart-model/src/reference-bpm.ts
+[bm-wav-directives]: ../packages/chart-model/src/wav-directives.ts
+[bm-long-notes]: ../packages/chart-model/src/long-notes.ts
+[bm-timing]: ../packages/chart-model/src/timing.ts
+[bm-timelines]: ../packages/chart-model/src/timelines.ts
+[bm-sample-triggers]: ../packages/chart-model/src/sample-triggers.ts
+[bm-resolved-notes]: ../packages/chart-model/src/resolved-notes.ts
+[bm-note-rules]: ../packages/chart-model/src/note-rules.ts
+[bm-judge-window]: ../packages/player-engine/src/core/judge-window.ts
+[bm-ruleset]: ../packages/player-engine/src/ruleset/definitions.ts
+[bm-scroll]: ../packages/player-engine/src/core/scroll-distance.ts
+[bm-note-draw]: ../packages/player-browser/src/chart/note-draw-window.ts
+[bm-bga]: ../packages/chart-model/src/bga.ts
+[bm-web-bga]: ../packages/player-browser/src/chart/bga-timeline.ts
+[bm-play-bga]: ../packages/player-browser/src/chart/play-bga.ts
 [cmds-indent]: https://hitkey.nekokan.dyndns.info/cmdsJP.htm#INDENT-STYLE
 [cmds-comment]: https://hitkey.nekokan.dyndns.info/cmdsJP.htm#COMMENT-SYNTAX
 [cmds-general]: https://hitkey.nekokan.dyndns.info/cmdsJP.htm#BEHAVIOR-IN-GENERAL-IMPLEMENTATION
@@ -561,6 +561,6 @@ be-music が de facto の実装と理由を記録しないまま食い違って�
 [b-bms-resource]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/BMSResource.java#L72-L87
 [b-bar-banner]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/select/BarManager.java#L712-L725
 [b-song-resources]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/song/SongResources.java#L107-L108
-[bm-collection]: ../packages/player-web/src/collection/collection.ts
-[bm-file-lookup]: ../packages/player-web/src/collection/file-lookup.ts
-[bm-sample-path]: ../packages/audio-renderer/src/core/sample-path.ts
+[bm-collection]: ../packages/player-browser/src/collection/collection.ts
+[bm-file-lookup]: ../packages/player-browser/src/collection/file-lookup.ts
+[bm-sample-path]: ../packages/chart-audio-renderer/src/core/sample-path.ts

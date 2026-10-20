@@ -10,7 +10,7 @@ import { crc32, deflateSync } from 'node:zlib';
  * every LR2 kind, a GRADE course with a dense stage that empties the gauge, a course with a stage missing from the
  * library, and a seven-stage file for the five-stage warning. It also writes two minimal skins made for the checklist
  * (`skins/`, no third-party assets): an LR2 theme with its sound set and a beatoraja JSON skin, each with the
- * course scenes, PLAY / AUTO buttons and solid-colour images. The end-to-end suite (`packages/player-web-demo/e2e`)
+ * course scenes, PLAY / AUTO buttons and solid-colour images. The end-to-end suite (`packages/app-play/e2e`)
  * writes the same files with {@link writeChecklistFixtures}.
  *
  * Usage: `node scripts/course-checklist/fixtures.ts <out-dir>` writes `<out-dir>/songs/…`,
@@ -248,10 +248,10 @@ export const FIXTURE_CHARTS: Readonly<Record<string, { folder: string; chart: Fi
  */
 export async function writeChecklistFixtures(outDir: string): Promise<void> {
   await writeFixtureSkins(outDir);
-  const songs = join(outDir, 'songs');
+  const chartEntries = join(outDir, 'songs');
   const md5 = new Map<string, string>();
   for (const [id, { folder, chart }] of Object.entries(FIXTURE_CHARTS)) {
-    const dir = join(songs, folder);
+    const dir = join(chartEntries, folder);
     await mkdir(dir, { recursive: true });
     await writeFile(join(dir, 'k1.wav'), sineWAV(660, 0.12, 9000, true));
     await writeFile(join(dir, 'k2.wav'), sineWAV(880, 0.12, 9000, true));
@@ -264,9 +264,9 @@ export async function writeChecklistFixtures(outDir: string): Promise<void> {
     md5.set(id, createHash('md5').update(bms).digest('hex'));
   }
   const stages = (ids: string) => ids.split('').map((id) => md5.get(id)!);
-  await mkdir(join(songs, 'courses'), { recursive: true });
+  await mkdir(join(chartEntries, 'courses'), { recursive: true });
   await writeFile(
-    join(songs, 'courses', 'fixture-courses.lr2crs'),
+    join(chartEntries, 'courses', 'fixture-courses.lr2crs'),
     lr2CourseList([
       { title: 'FIX GRADE', type: 2, md5s: stages('ABC') },
       { title: 'FIX EXPERT', type: 0, md5s: stages('ABC') },
