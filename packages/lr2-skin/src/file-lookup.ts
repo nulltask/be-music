@@ -8,39 +8,39 @@ import {
   type ReadFilesIntoEntryMapOptions,
 } from '@be-music/utils/core';
 
-export interface Lr2SkinInputFile {
+export interface LR2SkinInputFile {
   readonly name: string;
   readonly webkitRelativePath?: string;
   arrayBuffer(): Promise<ArrayBuffer>;
 }
 
-export type Lr2SkinFileEntry = AssetFileEntry<Lr2SkinInputFile>;
+export type LR2SkinFileEntry = AssetFileEntry<LR2SkinInputFile>;
 
 export function findCaseInsensitivePath(
-  files: ReadonlyMap<string, Lr2SkinFileEntry>,
+  files: ReadonlyMap<string, LR2SkinFileEntry>,
   candidate: string,
 ): string | undefined {
   return findCaseInsensitiveMapPath(files, candidate);
 }
 
 export function lookupBytesCaseInsensitive(
-  files: ReadonlyMap<string, Lr2SkinFileEntry>,
+  files: ReadonlyMap<string, LR2SkinFileEntry>,
   candidate: string,
-): Lr2SkinFileEntry | undefined {
+): LR2SkinFileEntry | undefined {
   return lookupCaseInsensitiveMapEntry(files, candidate);
 }
 
-export async function loadAssetBytes(entry: Lr2SkinFileEntry | undefined): Promise<Uint8Array | undefined> {
+export async function loadAssetBytes(entry: LR2SkinFileEntry | undefined): Promise<Uint8Array | undefined> {
   return loadFileEntryBytes(entry);
 }
 
-export function asLoadedBytes(entry: Lr2SkinFileEntry | undefined): Uint8Array | undefined {
+export function asLoadedBytes(entry: LR2SkinFileEntry | undefined): Uint8Array | undefined {
   return asLoadedFileEntryBytes(entry);
 }
 
 export async function readFilesIntoBytesMap(
-  files: ReadonlyArray<Lr2SkinInputFile>,
+  files: ReadonlyArray<LR2SkinInputFile>,
   options: ReadFilesIntoEntryMapOptions = {},
-): Promise<Map<string, Lr2SkinFileEntry>> {
+): Promise<Map<string, LR2SkinFileEntry>> {
   return readFilesIntoEntryMap(files, options);
 }

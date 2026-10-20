@@ -1,7 +1,7 @@
 const HOST_IS_LITTLE_ENDIAN = new Uint8Array(new Uint16Array([0x00ff]).buffer)[0] === 0xff;
-type Pcm16ByteOrder = 'le' | 'be';
+type PCM16ByteOrder = 'le' | 'be';
 
-export function writeStereoPcm16Le(
+export function writeStereoPcm16LE(
   destination: Buffer,
   byteOffset: number,
   left: ArrayLike<number>,
@@ -9,10 +9,10 @@ export function writeStereoPcm16Le(
   startFrame = 0,
   frameCount: number = Math.min(left.length, right.length) - startFrame,
 ): void {
-  writeStereoPcm16(destination, byteOffset, left, right, startFrame, frameCount, 'le');
+  writeStereoPCM16(destination, byteOffset, left, right, startFrame, frameCount, 'le');
 }
 
-export function writeStereoPcm16Be(
+export function writeStereoPcm16BE(
   destination: Buffer,
   byteOffset: number,
   left: ArrayLike<number>,
@@ -20,27 +20,27 @@ export function writeStereoPcm16Be(
   startFrame = 0,
   frameCount: number = Math.min(left.length, right.length) - startFrame,
 ): void {
-  writeStereoPcm16(destination, byteOffset, left, right, startFrame, frameCount, 'be');
+  writeStereoPCM16(destination, byteOffset, left, right, startFrame, frameCount, 'be');
 }
 
-function writeStereoPcm16(
+function writeStereoPCM16(
   destination: Buffer,
   byteOffset: number,
   left: ArrayLike<number>,
   right: ArrayLike<number>,
   startFrame: number,
   frameCount: number,
-  byteOrder: Pcm16ByteOrder,
+  byteOrder: PCM16ByteOrder,
 ): void {
   const safeStartFrame = normalizeStartFrame(startFrame);
   const framesToWrite = resolveFrameCount(destination, byteOffset, left, right, safeStartFrame, frameCount);
   if (framesToWrite <= 0) {
     return;
   }
-  if (tryWriteStereoPcm16Aligned(destination, byteOffset, left, right, safeStartFrame, framesToWrite, byteOrder)) {
+  if (tryWriteStereoPCM16Aligned(destination, byteOffset, left, right, safeStartFrame, framesToWrite, byteOrder)) {
     return;
   }
-  writeStereoPcm16Fallback(destination, byteOffset, left, right, safeStartFrame, framesToWrite, byteOrder === 'be');
+  writeStereoPCM16Fallback(destination, byteOffset, left, right, safeStartFrame, framesToWrite, byteOrder === 'be');
 }
 
 function normalizeStartFrame(startFrame: number): number {
@@ -88,14 +88,14 @@ function fillInterleavedInt16(
   }
 }
 
-function tryWriteStereoPcm16Aligned(
+function tryWriteStereoPCM16Aligned(
   destination: Buffer,
   byteOffset: number,
   left: ArrayLike<number>,
   right: ArrayLike<number>,
   startFrame: number,
   frameCount: number,
-  byteOrder: Pcm16ByteOrder,
+  byteOrder: PCM16ByteOrder,
 ): boolean {
   if ((byteOffset & 1) !== 0) {
     return false;
@@ -112,7 +112,7 @@ function tryWriteStereoPcm16Aligned(
   return true;
 }
 
-function writeStereoPcm16Fallback(
+function writeStereoPCM16Fallback(
   destination: Buffer,
   byteOffset: number,
   left: ArrayLike<number>,

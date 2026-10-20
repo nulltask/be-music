@@ -1,10 +1,10 @@
-import type { LongNoteMode } from '../playable-notes.ts';
+import type { LongNoteMode } from '@be-music/chart';
 
 /**
  * The chart-side inputs a ruleset needs, in a form both the live engine and the play-log simulator can produce.
  *
  * The rulesets used to read a `PlaylogChart` directly, which tied them to the offline replay path. The live engine
- * has the same facts available (a resolved `BeMusicJson` plus its prepared note arrays) but in a different shape,
+ * has the same facts available (a resolved `BeMusicJSON` plus its prepared note arrays) but in a different shape,
  * so the ruleset tables now take this neutral record and each caller supplies an adapter. Everything here is
  * chart-derived and fixed for the whole play — per-play choices (gauge, judge algorithm) travel separately in
  * `ResolveRulesetOptions`.
@@ -13,7 +13,10 @@ export interface RulesetChartFacts {
   sourceFormat: 'bms' | 'bmson';
   /** Engine lane display mode (`resolveLaneDisplayMode` output) — picks beatoraja's per-mode window tables. */
   laneMode: string;
-  /** Raw `#TOTAL` / bmson `info.total`. Absent when the chart specified none; each ruleset applies its own default. */
+  /**
+   * Raw `#TOTAL` (absolute) / bmson `info.total` (a percentage of the ruleset's default TOTAL). Absent when the chart
+   * specified none; each ruleset applies its own default.
+   */
   total?: number;
   /** Chart-level long-note mode after `#LNMODE` / `info.ln_type` resolution. */
   lnMode: LongNoteMode;
@@ -30,6 +33,19 @@ export interface RulesetJudgeRankFacts {
   sourceExRank?: number;
   /** Dynamic `#EXRANKxx` changes (channel `A0`) in chart order, in the same unit as `sourceExRank`. */
   timeline?: ReadonlyArray<{ timeUs: number; exRankValue: number }>;
+  /** A stitched LR2 NONSTOP chart's later stages taking over the judge rank with their `#RANK`, in time order. */
+  stageRanks?: ReadonlyArray<RulesetStageRank>;
+}
+
+/**
+ * A later NONSTOP stage's `#RANK` setting the judge windows from `timeUs` on: as a chart opening with it does
+ * (`'chart'`), or by LR2's NONSTOP rank table (`'lr2-nonstop'`, `resolveLR2NonstopRankWindowsMs`). Only the LR2 ruleset
+ * applies it, as with `#EXRANKxx`.
+ */
+export interface RulesetStageRank {
+  timeUs: number;
+  rank: number;
+  table: 'chart' | 'lr2-nonstop';
 }
 
 /**

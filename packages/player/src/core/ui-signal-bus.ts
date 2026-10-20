@@ -5,7 +5,7 @@ type WritableSignal<T> = {
   (value: T): void;
 };
 
-export interface PlayerUiFrameSummary {
+export interface PlayerUIFrameSummary {
   total: number;
   perfect: number;
   fast: number;
@@ -23,7 +23,7 @@ export interface PlayerUiFrameSummary {
 
 /**
  * Gauge state carried on every summary. Shared by the UI frame payload and the engine's own
- * `PlayerSummary` so the two can never drift; the engine re-exports it as `PlayerGrooveGaugeSummary`.
+ * `PlayerSummary` (`PlayerSummary.gauge`) so the two can never drift.
  */
 export interface PlayerGaugeSummary {
   current: number;
@@ -44,7 +44,7 @@ export interface PlayerGaugeSummary {
   failedMidPlay?: boolean;
 }
 
-export interface PlayerUiFrameNote {
+export interface PlayerUIFrameNote {
   channel: string;
   beat: number;
   endBeat?: number;
@@ -75,14 +75,22 @@ export interface PlayerUiFrameNote {
   longNoteMode?: 1 | 2 | 3;
 }
 
-export interface PlayerUiFramePayload {
+export interface PlayerUIFramePayload {
   currentBeat: number;
   currentSeconds: number;
+  /**
+   * Display beat mirrored in chart-position space around the LR2 negative-BPM reversal
+   * (`2 * reversalBeat - currentBeat`) — set only once the chart is past the reversal point. Renderers scroll from it
+   * (falling back to `currentBeat`); the true clock keeps driving audio, BGA, and the forward judge-state sweep.
+   */
+  displayBeat?: number;
+  /** Chart time of the LR2 negative-BPM reversal, when the chart has one — BGA compositors freeze there. */
+  reversalSeconds?: number;
   totalSeconds: number;
-  summary: PlayerUiFrameSummary;
-  notes: PlayerUiFrameNote[];
-  landmineNotes?: PlayerUiFrameNote[];
-  invisibleNotes?: PlayerUiFrameNote[];
+  summary: PlayerUIFrameSummary;
+  notes: PlayerUIFrameNote[];
+  landmineNotes?: PlayerUIFrameNote[];
+  invisibleNotes?: PlayerUIFrameNote[];
   audioBackend?: string;
   activeAudioFiles?: string[];
   activeAudioVoiceCount?: number;
@@ -90,18 +98,18 @@ export interface PlayerUiFramePayload {
 
 /**
  * How the active ruleset plays a long note — which is not always the chart's `#LNMODE`: LR2 plays every long note as
- * an `'ln'`, IIDX plays them as charge notes. `'ln'` judges once (the start, early release = BAD), `'cn'` judges the
+ * an `'ln'`, IIDX plays them as charge notes. `'ln'` judges once (the start; an early release follows the ruleset's `lnEarlyRelease`), `'cn'` judges the
  * start and the release, `'hcn'` additionally drains the gauge while it isn't held.
  */
-export type PlayerUiLongNoteMode = 'ln' | 'cn' | 'hcn';
+export type PlayerUILongNoteMode = 'ln' | 'cn' | 'hcn';
 
 /**
  * How a held long note finished: `'complete'` when its end was judged a hit, `'dropped'` when it ended in a BAD / POOR
  * (released early, or a broken charge-note head under IIDX).
  */
-export type PlayerUiLongNoteOutcome = 'complete' | 'dropped';
+export type PlayerUILongNoteOutcome = 'complete' | 'dropped';
 
-export type PlayerUiCommand =
+export type PlayerUICommand =
   | { kind: 'flash-lane'; channel: string }
   | { kind: 'hold-lane-until-beat'; channel: string; beat: number }
   | { kind: 'press-lane'; channel: string }
@@ -112,28 +120,30 @@ export type PlayerUiCommand =
    * A long note's head was hit (or autoplayed) and the hold began. `beat` is the head's beat, which identifies the long
    * note on its lane; `mode` is the mode the engine actually plays it in. At most one long note is held per channel.
    */
-  | { kind: 'long-note-start'; channel: string; beat: number; mode: PlayerUiLongNoteMode }
+  | { kind: 'long-note-start'; channel: string; beat: number; mode: PlayerUILongNoteMode }
   /** The long note held on `channel` (announced by the last `long-note-start` there) finished. */
-  | { kind: 'long-note-end'; channel: string; outcome: PlayerUiLongNoteOutcome };
+  | { kind: 'long-note-end'; channel: string; outcome: PlayerUILongNoteOutcome };
 
-export interface PlayerUiSignalBus {
+export interface PlayerUISignalBus {
   readonly frameTick: WritableSignal<number>;
   readonly commandTick: WritableSignal<number>;
-  getFrame: () => Readonly<PlayerUiFramePayload>;
-  publishFrame: (frame: PlayerUiFramePayload) => void;
-  pushCommand: (command: PlayerUiCommand) => void;
-  drainCommands: () => PlayerUiCommand[];
+  getFrame: () => Readonly<PlayerUIFramePayload>;
+  publishFrame: (frame: PlayerUIFramePayload) => void;
+  pushCommand: (command: PlayerUICommand) => void;
+  drainCommands: () => PlayerUICommand[];
 }
 
-export function createPlayerUiSignalBus(initialFrame: PlayerUiFramePayload): PlayerUiSignalBus {
+export function createPlayerUISignalBus(initialFrame: PlayerUIFramePayload): PlayerUISignalBus {
   const frameTick = signal(0);
   const commandTick = signal(0);
-  const frameState: PlayerUiFramePayload = initialFrame;
-  const commandQueue: PlayerUiCommand[] = [];
+  const frameState: PlayerUIFramePayload = initialFrame;
+  const commandQueue: PlayerUICommand[] = [];
 
-  const publishFrame = (frame: PlayerUiFramePayload): void => {
+  const publishFrame = (frame: PlayerUIFramePayload): void => {
     frameState.currentBeat = frame.currentBeat;
     frameState.currentSeconds = frame.currentSeconds;
+    frameState.displayBeat = frame.displayBeat;
+    frameState.reversalSeconds = frame.reversalSeconds;
     frameState.totalSeconds = frame.totalSeconds;
     frameState.summary = frame.summary;
     frameState.notes = frame.notes;
@@ -145,12 +155,12 @@ export function createPlayerUiSignalBus(initialFrame: PlayerUiFramePayload): Pla
     frameTick(frameTick() + 1);
   };
 
-  const pushCommand = (command: PlayerUiCommand): void => {
+  const pushCommand = (command: PlayerUICommand): void => {
     commandQueue.push(command);
     commandTick(commandTick() + 1);
   };
 
-  const drainCommands = (): PlayerUiCommand[] => commandQueue.splice(0, commandQueue.length);
+  const drainCommands = (): PlayerUICommand[] => commandQueue.splice(0, commandQueue.length);
 
   return {
     frameTick,

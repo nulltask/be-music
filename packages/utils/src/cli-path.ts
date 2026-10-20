@@ -11,7 +11,7 @@
  * `process.env.INIT_CWD` / `process.cwd()` are read off `globalThis` so this module's static type signature
  * doesn't pin it to a Node-only `process` global.
  */
-export function resolveCliPath(path: string, cwd: string = resolveDefaultCwd()): string {
+export function resolveCLIPath(path: string, cwd: string = resolveDefaultCwd()): string {
   if (path.length === 0 || path === '.') {
     return cwd;
   }

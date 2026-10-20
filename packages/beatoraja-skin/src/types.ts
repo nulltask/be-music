@@ -35,7 +35,7 @@ export const BEATORAJA_SKIN_TYPE = {
 export type BeatorajaSkinTypeName = keyof typeof BEATORAJA_SKIN_TYPE;
 export type BeatorajaSkinTypeCode = (typeof BEATORAJA_SKIN_TYPE)[BeatorajaSkinTypeName];
 
-/** Variants the play scene cares about. Mirrors LR2's `Lr2PlayVariant` so call sites can switch on either skin format. */
+/** Variants the play scene cares about. Mirrors LR2's `LR2PlayVariant` so call sites can switch on either skin format. */
 export const BEATORAJA_PLAY_VARIANTS = ['7', '5', '9', '10', '14', '24', '24d'] as const;
 export type BeatorajaPlayVariant = (typeof BEATORAJA_PLAY_VARIANTS)[number];
 
@@ -244,7 +244,7 @@ export interface BeatorajaSkin extends BeatorajaSkinHeader {
   imageset?: ReadonlyArray<Readonly<Record<string, unknown>>>;
   value?: ReadonlyArray<Readonly<Record<string, unknown>>>;
   /**
-   * Decimal-number declarations. Mirrors `JsonSkin.FloatValue[]`. Same digit-strip layout as
+   * Decimal-number declarations. Mirrors `JSONSkin.FloatValue[]`. Same digit-strip layout as
    * `value[]` plus `iketa` / `fketa` / `gain` / `isSignvisible` for the formatted output. The
    * result and decide scenes use these for BPM (`123.4`), accuracy percentages (`98.76 %`),
    * and timing deltas (`+5.23 ms`). Renderer: integer half + decimal-point glyph + fractional

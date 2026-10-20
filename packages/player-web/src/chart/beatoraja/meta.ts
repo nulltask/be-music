@@ -15,7 +15,7 @@
 // `FULLARTIST`. Hosts that want the structured `{ role, name }` form can post-process via
 // {@link parseBmsonSubartist} from `@be-music/json` directly on `bmson.info.subartists`.
 
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 
 /**
  * Resolve the chart's sub-artist line as a single joined string. Returns `''` when neither
@@ -24,7 +24,7 @@ import type { BeMusicJson } from '@be-music/json';
  * BMS-flavoured tool) fall back on the structured field rather than the duplicate extras
  * entry.
  */
-export function extractChartSubartist(chart: BeMusicJson | undefined): string {
+export function extractChartSubartist(chart: BeMusicJSON | undefined): string {
   if (chart === undefined) return '';
   const bmsonList = chart.bmson?.info?.subartists;
   if (bmsonList !== undefined && bmsonList.length > 0) {

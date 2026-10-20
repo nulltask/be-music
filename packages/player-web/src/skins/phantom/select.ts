@@ -25,12 +25,17 @@ import {
   bandLevel,
   type BeMusicAudioFrame,
   type BeMusicSelectLayout,
-  type BrowserBrowseEntry,
-  type BrowserSongEntry,
+  type LibraryEntry,
+  type LibraryChart,
+  describeCourseCard,
   formatPlayVariantLabel,
   hash01,
   resolveSongRowFacts,
   stageProgress,
+  selectListRows,
+  browseEntryBadge,
+  browseEntryCount,
+  browseEntryTitle,
 } from '@be-music/skin-sdk';
 import {
   addHitArea,
@@ -39,6 +44,7 @@ import {
   type PixiSelectRenderer,
   type PixiSelectSkin,
   type SkinTextOptions,
+  fadeChildrenFrom,
 } from '../pixi-kit/index.ts';
 
 const LAYOUT: BeMusicSelectLayout = { listX: 320, listTop: 60, listBottomInset: 26, rowHeight: 28 };
@@ -47,6 +53,8 @@ const OUTRO_MS = 860;
 const INTRO_STAGGER_MS = 40;
 /** Fixed widths of a song row's fact columns (right to left: tempo, length, note count), so they align down the list. */
 const ROW_BPM_W = 78;
+/** The widest a folder or course row's count may run (`4 stages · 1 missing`); the title gets the rest. */
+const ROW_COUNT_MAX_W = 170;
 const ROW_LENGTH_W = 30;
 const ROW_NOTES_W = 74;
 const KICKER_PITCH = 20;
@@ -115,11 +123,12 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
     this.activeCard = undefined;
     let needsFrame = this.renderChrome(frame);
     const listWidth = frame.designWidth - LAYOUT.listX - 16;
-    for (let visibleIndex = 0; visibleIndex < frame.visibleRows; visibleIndex += 1) {
-      const entryIndex = frame.firstVisibleIndex + visibleIndex;
-      const entry = frame.entries[entryIndex];
-      if (!entry) break;
-      needsFrame = this.renderRow(frame, entry, entryIndex, visibleIndex, listWidth) || needsFrame;
+    // Rows follow the list's pull (`frame.listScroll`): fractional slots, faded where they slide past the window's edge.
+    for (const { entryIndex, slot, alpha } of selectListRows(frame, LAYOUT.rowHeight)) {
+      const entry = frame.entries[entryIndex]!;
+      const from = frame.layer.children.length;
+      needsFrame = this.renderRow(frame, entry, entryIndex, slot, listWidth) || needsFrame;
+      fadeChildrenFrom(frame.layer, from, alpha);
     }
     this.pointer.visible = this.activeRowY !== undefined;
     this.glint.visible = this.activeCard !== undefined;
@@ -234,7 +243,7 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
 
   public tick(
     nowMs: number,
-    focusedSong: BrowserSongEntry | undefined,
+    focusedSong: LibraryChart | undefined,
     _launchAt?: number,
     audio?: BeMusicAudioFrame,
   ): void {
@@ -380,12 +389,16 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
     const addText = (text: string, x: number, y: number, options: SkinTextOptions = {}) =>
       addSkinText(layer, text, x, y, options);
 
-    const songTitle = song?.title ?? 'No chart selected';
-    const songArtist = song?.artist || song?.subtitle || '';
+    const course =
+      song === undefined && frame.focusedCourse !== undefined
+        ? describeCourseCard(frame.focusedCourse, frame.courseRecord?.(frame.focusedCourse))
+        : undefined;
+    const songTitle = song?.title ?? course?.title ?? 'No chart selected';
+    const songArtist = song?.artist || song?.subtitle || course?.detail || '';
     const playLevel = song?.playLevel !== undefined ? String(song.playLevel) : '-';
     const playLevelNumber =
       song?.playLevel !== undefined ? Number.parseFloat(String(song.playLevel).replace(/^[^\d.]+/u, '')) : NaN;
-    const songBpm = song?.bpm !== undefined ? String(Math.round(song.bpm)) : '-';
+    const songBPM = song?.bpm !== undefined ? String(Math.round(song.bpm)) : '-';
     const fileLabel = song?.fileLabel ?? '';
     const modeLabel = song ? formatPlayVariantLabel(song) : '- KEYS';
     const categoryName = frame.searchQuery ? `Search: ${frame.searchQuery}` : (frame.folderLabel ?? 'Library');
@@ -459,7 +472,7 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
       readonly [x: number, w: number, label: string, value: string, fill: number, size: number]
     > = [
       [24, 76, 'MODE', modeLabel, PHANTOM_WHITE, 16],
-      [112, 76, 'BPM', songBpm, PHANTOM_WHITE, 22],
+      [112, 76, 'BPM', songBPM, PHANTOM_WHITE, 22],
       [200, 92, 'LEVEL', playLevel, PHANTOM_GOLD, 24],
     ];
     for (const [x, w, label, value, fill, size] of chips) {
@@ -534,13 +547,18 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
       .fill(PHANTOM_INK)
       .stroke({ color: PHANTOM_WHITE, width: 1.5, join: 'miter' });
     addText('SEARCH', 24, 377, tagStyle(PHANTOM_RED));
-    addText(frame.searchQuery || 'Title / artist / genre', 82, 376, {
-      size: 10,
-      weight: '600',
-      fill: frame.searchQuery ? PHANTOM_WHITE : PHANTOM_ASH,
-      maxWidth: 210,
-    });
-    addHitArea(12, 368, 292, 28, 'text', frame.actions.activateSearch);
+    // While the player types in the host's field laid over the box, the field shows the text.
+    if (!frame.searchEditing) {
+      addText(frame.searchQuery || 'Title / artist / genre', 82, 376, {
+        size: 10,
+        weight: '600',
+        fill: frame.searchQuery ? PHANTOM_WHITE : PHANTOM_ASH,
+        maxWidth: 210,
+      });
+    }
+    // The label and the text strip both start typing; the strip comes last, so the host lays its field over the text.
+    addHitArea(12, 368, 66, 28, 'text', frame.actions.activateSearch);
+    addHitArea(78, 368, 226, 28, 'text', frame.actions.activateSearch);
     addHitArea(24, 298, 176, 36, 'pointer', frame.actions.play);
     addHitArea(206, 302, 86, 30, 'pointer', frame.actions.autoPlay);
 
@@ -560,7 +578,7 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
   /** One list row; returns true while it is still flying in or sliding out. */
   private renderRow(
     frame: PixiSelectFrame,
-    entry: BrowserBrowseEntry,
+    entry: LibraryEntry,
     entryIndex: number,
     visibleIndex: number,
     listWidth: number,
@@ -569,24 +587,29 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
     const y = listTop + visibleIndex * rowHeight;
     const row = new Graphics();
     const active = entryIndex === frame.selectedIndex;
-    const song = entry.kind === 'song' ? entry.song : undefined;
+    const song = entry.kind === 'chart' ? entry.chart : undefined;
     const folder = entry.kind === 'folder' ? entry.folder : undefined;
-    const titleText = song?.title ?? folder?.label ?? '';
+    const titleText = browseEntryTitle(entry);
     const keyText = song ? formatPlayVariantLabel(song).replace(' KEYS', '') : 'DIR';
     // One line per row: the title (and artist) on the left; on the right the facts a player checks before picking —
     // gimmick tags, note count, length and tempo range in fixed columns, so they line up down the list. Folders show
     // their size instead.
     const facts = song ? resolveSongRowFacts(song) : undefined;
-    const metaText = facts
-      ? `${facts.bpm} BPM`
-      : `${folder?.songs.length ?? 0} chart${folder?.songs.length === 1 ? '' : 's'}`;
+    const metaText = facts ? `${facts.bpm} BPM` : (browseEntryCount(entry) ?? '');
     const playLevelText =
-      song?.playLevel !== undefined ? String(song.playLevel) : folder ? String(folder.songs.length) : '-';
+      song?.playLevel !== undefined
+        ? String(song.playLevel)
+        : folder
+          ? String(folder.courses?.length ?? folder.charts.length)
+          : browseEntryBadge(entry);
     // The focused row slides out to the left like a pulled card; the rest stay racked against the well. On entry the
     // rows fly in from the right one after another.
     const slide = active ? 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS)) : 0;
     const intro =
-      1 - easeOutCubic(stageProgress(frame.nowMs - frame.sceneStartedAt, visibleIndex * INTRO_STAGGER_MS, SLIDE_MS));
+      1 -
+      easeOutCubic(
+        stageProgress(frame.nowMs - frame.sceneStartedAt, Math.max(0, visibleIndex) * INTRO_STAGGER_MS, SLIDE_MS),
+      );
     const rowX = (active ? listX - 6 : listX + 4) + slide * 30 + intro * 260;
     const rowW = active ? listWidth + 2 : listWidth - 8;
     const keyPillX = rowX + 8;
@@ -606,7 +629,7 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
     } else {
       row
         .poly(parallelogramPoints(rowX, y, rowW, rowHeight - 4, 6))
-        .fill(visibleIndex % 2 === 0 ? PHANTOM_CHARCOAL : PHANTOM_BLACK)
+        .fill(entryIndex % 2 === 0 ? PHANTOM_CHARCOAL : PHANTOM_BLACK)
         .stroke({ color: PHANTOM_SLATE, width: 1 });
     }
     row
@@ -636,11 +659,11 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
       skewX: -0.18,
       anchorX: 1,
       anchorY: 0.5,
-      maxWidth: facts ? ROW_BPM_W : 64,
+      maxWidth: facts ? ROW_BPM_W : ROW_COUNT_MAX_W,
       marquee: active,
     });
     meta.label = `fallback-meta[idx=${entryIndex}]`;
-    let factsLeft = rowX + rowW - 12 - (facts ? ROW_BPM_W : metaText ? Math.min(64, meta.width) : 0) - 10;
+    let factsLeft = rowX + rowW - 12 - (facts ? ROW_BPM_W : metaText ? Math.min(ROW_COUNT_MAX_W, meta.width) : 0) - 10;
     if (facts) {
       const factStyle = (fill: number): SkinTextOptions => ({
         size: 11,

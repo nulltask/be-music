@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { createEmptyJson } from '../../json/src/index.ts';
+import { createEmptyJSON } from '../../json/src/index.ts';
 import { resolveAltModifierLabel, resolveDisplayedDifficultyValue, resolveDisplayedPlayLevelValue } from './utils.ts';
 
 describe('player utils', () => {
@@ -13,29 +13,29 @@ describe('player utils', () => {
   });
 
   test('player-utils: defaults missing BMS PLAYLEVEL to 3 for display', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     expect(resolveDisplayedPlayLevelValue(json)).toBe(3);
   });
 
   test('player-utils: preserves explicit PLAYLEVEL values for display', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.playLevel = 7.5;
     expect(resolveDisplayedPlayLevelValue(json)).toBe(7.5);
   });
 
   test('player-utils: preserves string PLAYLEVEL values for display', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.playLevel = '安心';
     expect(resolveDisplayedPlayLevelValue(json)).toBe('安心');
   });
 
   test('player-utils: does not synthesize a bmson PLAYLEVEL when missing', () => {
-    const json = createEmptyJson('bmson');
+    const json = createEmptyJSON('bmson');
     expect(resolveDisplayedPlayLevelValue(json)).toBeUndefined();
   });
 
   test('player-utils: resolves BMS DIFFICULTY values only in the supported 1-5 range', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.difficulty = 3.9;
     expect(resolveDisplayedDifficultyValue(json)).toBe(3);
 

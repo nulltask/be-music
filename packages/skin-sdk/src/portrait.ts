@@ -1,9 +1,9 @@
-import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
+import type { ChartPlayVariant } from '@be-music/chart';
 import {
   IIDX_LANE_WIDTHS,
   isScratchLaneForVariant,
   resolveFallbackLaneLayout,
-  usesIidxLaneWidths,
+  usesIIDXLaneWidths,
   type FallbackLaneLayoutRect,
 } from './lane-geometry.ts';
 import { wideStage } from './stage.ts';
@@ -56,7 +56,7 @@ export const TALL_STAGE_BGA: BeMusicRect = { x: 12, y: 46, w: 206, h: 206 };
 export const tallStage: BeMusicStage = {
   width: TALL_STAGE_WIDTH,
   height: TALL_STAGE_HEIGHT,
-  resolveBgaRect: () => ({ ...TALL_STAGE_BGA }),
+  resolveBGARect: () => ({ ...TALL_STAGE_BGA }),
 };
 
 /** `'portrait'` for a size taller than wide, `'landscape'` otherwise (a square counts as landscape). */
@@ -157,7 +157,7 @@ export function resolvePortraitLaneLayout(
       playVariant,
       x: 0,
       w: span,
-      fixedWidths: usesIidxLaneWidths(playVariant)
+      fixedWidths: usesIIDXLaneWidths(playVariant)
         ? {
             scratch: IIDX_LANE_WIDTHS.scratch * k,
             white: IIDX_LANE_WIDTHS.white * k,

@@ -1,7 +1,7 @@
 // Pure helpers for translating beatoraja `destination[]` samples into PixiJS `Sprite` props.
 //
 // Keeping the math pure (no Pixi imports here) means the test suite can exercise every keyframe interaction
-// without touching a GPU. The actual `Sprite` mutation is a one-liner inside `scene/beatoraja/gameplay.ts`:
+// without touching a GPU. The actual `Sprite` mutation is a one-liner in the skin view's draw loop:
 //
 //     sprite.x = props.x;
 //     sprite.y = props.y;
@@ -18,7 +18,7 @@
 // code 3 and `'difference'` for code 9 (audit 2.13). Standard modes ('add' / 'multiply' /
 // 'screen' / 'erase' / 'normal') don't need this import; the registration is idempotent so
 // re-importing from another module is harmless. Requires `useBackBuffer: true` at app init
-// — see `scene/host.ts`.
+// — see `host/scene-host.ts`.
 import 'pixi.js/advanced-blend-modes';
 import { Texture } from 'pixi.js';
 import {
@@ -150,6 +150,18 @@ export interface BeatorajaRenderContext {
  * to handle out-of-range entries.
  */
 function collectOffsetIds(group: BeatorajaDestinationGroup): ReadonlyArray<number> | undefined {
+  // A destination group does not change once the skin is loaded, and this runs for every element every frame: its ids
+  // are worked out once (`null` records "none").
+  const cached = OFFSET_IDS_BY_GROUP.get(group);
+  if (cached !== undefined) return cached ?? undefined;
+  const ids = collectOffsetIdsOnce(group);
+  OFFSET_IDS_BY_GROUP.set(group, ids ?? null);
+  return ids;
+}
+
+const OFFSET_IDS_BY_GROUP = new WeakMap<BeatorajaDestinationGroup, ReadonlyArray<number> | null>();
+
+function collectOffsetIdsOnce(group: BeatorajaDestinationGroup): ReadonlyArray<number> | undefined {
   const hasPlural = group.offsets.length > 0;
   const hasSingular = group.offset !== 0;
   if (!hasPlural && !hasSingular) return undefined;
@@ -171,7 +183,7 @@ function collectOffsetIds(group: BeatorajaDestinationGroup): ReadonlyArray<numbe
  * `canvasHeight` is the skin's authored canvas height — needed to flip beatoraja's libGDX Y-UP
  * dst coordinates (origin at canvas bottom-left) into Pixi Y-DOWN (origin at canvas top-left).
  * Each renderer holds the canvasHeight as state (`view.height` for the play skin view, or the
- * stored `skin.h` for sibling layers like BgaLayer) and passes it through here.
+ * stored `skin.h` for sibling layers like BGALayer) and passes it through here.
  */
 export function destinationToSpriteProps(
   group: BeatorajaDestinationGroup,
@@ -348,7 +360,7 @@ export function destinationToSpriteProps(
     mirrorX,
     mirrorY,
     alpha,
-    tint: packRgbTint(keyframe.r, keyframe.g, keyframe.b),
+    tint: packRGBTint(keyframe.r, keyframe.g, keyframe.b),
     // Negate the authored angle to convert libGDX (Y-UP, CCW-positive) into Pixi (Y-DOWN,
     // CW-positive). The Y-flip of the rect's POSITION (`canvasHeight - yLibgdxBottom -
     // height` above) is just a translation; it doesn't change the handedness of rotations
@@ -537,7 +549,7 @@ function clampUnit(v: number): number {
   return v;
 }
 
-function packRgbTint(r: number, g: number, b: number): number {
+function packRGBTint(r: number, g: number, b: number): number {
   const cr = clamp255(r);
   const cg = clamp255(g);
   const cb = clamp255(b);

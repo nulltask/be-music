@@ -25,6 +25,7 @@ This document defines how `packages/parser` / `packages/stringifier` / `packages
 - `bms benchmark` (implementation comparison): https://hitkey.nekokan.dyndns.info/bmsbench.shtml
 - `bmsplayer data` (compatibility check): https://hitkey.nekokan.dyndns.info/bmsplayer_data2010.shtml
 - Numuther: BMS Scroll gimmick explanation (SCROLL/BPM/STOP example): https://note.com/numuther/n/n57bf895e7969
+- How LR2, beatoraja and other players treat the same commands, and where be-music departs from them: [BMS / bmson compatibility notes](./format-compat.md)
 
 ## Compliance Status Summary
 
@@ -42,6 +43,8 @@ This document defines how `packages/parser` / `packages/stringifier` / `packages
 - [x] `CR` Accept single newline as line end
 - [x] Keep unknown header in `metadata.extras`
 - [x] Keep `#mmmcc` as an event, whether known or unknown
+- [x] Trim leading and trailing whitespace from every line, so indented commands are accepted
+- [x] Accept the alternative spellings `#ELSE IF n` / `#END IF` / bare `#END` as `#ELSEIF n` / `#ENDIF` (normalized to the canonical form on save / output; `#END <other value>` remains an unknown header)
 
 ### line end
 
@@ -59,7 +62,7 @@ However, the exact specification of control syntax compatibility for files conta
 - [x] Interpret meta header `#GENRE`
 - [x] Interpret meta header `#COMMENT`
 - [x] Keep `#SUBARTIST` as `metadata.extras.SUBARTIST` and use it for player's music selection screen metadata
-- [x] Keep `#BACKBMP` as `metadata.backBmp` for browser LR2 special graphics
+- [x] Keep `#BACKBMP` as `metadata.backBMP` for browser LR2 special graphics
 - [x] Keep `#BANNER` as `metadata.banner` and use it for the player's song selection screen banner
 - [x] Interpret meta header `#STAGEFILE`
 - [x] Display `#STAGEFILE` as a loading screen exclusive image after song selection
@@ -94,7 +97,7 @@ However, the exact specification of control syntax compatibility for files conta
 - [x] `#PLAYER=4` (BATTLE) will be retained as meta information, and dedicated two-player competitive play will not be implemented at this time.
 - [x] Interpret channel `D1-D9` (mine)
 - [x] Interpret channel `E1-E9` (mine)
-- [x] Detonate mines in MANUAL mode on a held crossing of the judge line or a press within the `PGREAT` window (LR2 behavior)
+- [x] Detonate mines in MANUAL mode on a held crossing of the judge line or a press within the `PGREAT` window (LR2 behavior; the `lr2` and `iidx` rulesets), or on a held crossing only (beatoraja behavior; the `beatoraja` ruleset)
 - [x] Apply the mine object value (upper-case base36) directly as the gauge-damage percentage, with no effect on judgments or combo (LR2 / beatoraja behavior)
 - [x] Fall back to a default damage of `4%` when the mine object value is not a two-character upper-case base36 ID or is `00` (under `#BASE 62`, lower-case values also take this default)
 - [x] When `#WAV00` is defined, use it as the landmine explosion sound on manual mine hit
@@ -124,6 +127,9 @@ The original BM98-era core BMS specifications do not define landmine damage as p
 - [x] Handle BGA images assuming a 256x256 canvas
 - [x] Do not normally scale BGA images
 - [x] Images smaller than 256x256 aligned on the center of the X axis / top aligned on the Y axis
+- [x] Images larger than 256x256 (long edge over 256) and videos are stretched over the BGA frame, as in LR2 and beatoraja
+- [x] The base / POOR canvas around a smaller image is black (a 1x1 black `#BMPxx` blanks the BGA); the layer canvas is transparent
+- [x] `#BGAxx` crops are placed at their `dx dy` on the 256x256 canvas (browser player)
 - [x] Undefined in `04` / `07` / `0A` Treated as 256x256 black when referencing `#BMPxx`
 - [x] Play BGA video by drawing (`mpeg1video` / `h264` / `mjpeg`, ignore audio)
 - [x] Preserve control construct `#RANDOM` and evaluate at runtime
@@ -180,6 +186,32 @@ The original BM98-era core BMS specifications do not define landmine damage as p
 - [x] Parse `#EXWAVxx` and apply its `v` volume parameter in audio-renderer and browser WebAudio
 - [x] Use `#BASEBPM` as the chart reference BPM for browser HS-FIX calibration through `@be-music/chart`
 - [x] Browser player reflects `#BGAxx` sub-region BGA, `#SWBGAxx` switching BGA, and `#ARGBxx` / `#EXBMPxx` tint and alpha
+- [x] Interpret channels `51-59` / `61-69` (and the extended `5A-5O` / `6A-6O`) as long notes. `#LNTYPE 1`, the default when `#LNTYPE` is omitted, pairs objects as start / end; `#LNTYPE 2` (MGQ) makes a run of consecutive non-`00` cells one long note
+- [x] `#LNOBJ`: every declaration is active and kept in declaration order in `bms.lnObjs`; the object ends the long note started by the previous note on its lane and is not sounded (the HDX key-up sound is not adopted). A `#LNOBJ` object with no note before it becomes an ordinary note
+- [x] Where `51-69` and `#LNOBJ` long notes start on the same lane and position, the `51-69` long note wins
+- [x] The player keeps one note per lane and position: a long note wins over a tap, otherwise the lowest object ID; the other notes' keysounds play as background ([player spec — Duplicate notes](./player-spec.md#duplicate-notes))
+- [x] Play channel `06` as the POOR BGA: it is shown on a miss and takes priority over `04` / `07` / `0A` while shown
+- [x] Unless `#POORBGA` is `2`, use `#BMP00` as the POOR image until the first `06` object (a missing, unparsable or out-of-range `#POORBGA` is `0`)
+- [x] Apply `#STP xxx[.yyy] zzzz` (and the short form `xxx zzzz`, read as `.000`) as a `zzzz` ms stop in timing; stops at one position add up
+
+### Negative BPM (`#BPMxx` via channel 08) basis
+
+LR2 is the baseline (issue #134; verified against OpenLR2's reconstruction of LR2 beta3 100201 — branch `LR2Beta3-v100201` at `583a385`, `LR2f.cpp` — and the matching code in LR2body.exe, plus hitkey's command memo and LR2's own `history.txt`):
+
+- **Timing.** LR2 parses `#BPMxx` sign-preserving and integrates note times at **|BPM|** when it precomputes timing at load (`LR2_bmsload.cpp:2841-2843`) — the timeline never runs backwards. The timing resolver (`@be-music/chart`, `timing.ts`) does the same: it integrates `Math.abs(bpm)` and exposes the first reversing event's position as `TimingResolver.reversal` (beat and seconds), which the Resolved Chart carries as `ResolvedChart.reversal`.
+- **Truncation.** LR2 converts the BPM to int before its `< 0` check (LR2body.exe 0x42b960 `__ftol`): only `trunc(BPM) < 0` arms the reversal, so `-1 < BPM < 0` never reverses — it just crawls at |BPM|. NOWBPM shows `|trunc(BPM)|` for a negative value (0 for `-0.5`, 65 for `-65.5`) while timing keeps the full |BPM| (`TempoPoint.displayBPM`, `TimingResolver.displayBPMAtBeat`).
+- **Event pump.** When the negative BPM fires, LR2's event pump freezes for good: no later BGM keysound, BGA cue, BPM, or STOP event fires, autoplay stops, and NOWBPM holds `|trunc(BPM)|`. On the reversal tick itself LR2 orders events by op (`CMP_NotesByRealTimingOp`, `LR2f.cpp:24013`): BGM (op 1), BPM (op 3) and the BGA layers (ops 4 / 6 / 7) fire **before** the negative BPM (op 8); STOP (op 9), lane sounds (10–29) and invisible objects (30+) on that tick are frozen. The engine, the offline renderer and the select-scene preview filter with `firesBeforeTempoReversal` (`0A` is grouped with the BGA layers). A movie BGA that is already playing keeps running; only cue changes stop.
+- **Display.** LR2 mirrors the chart **position**, not the clock: past the reversal R it draws from `2·pos(R) − pos(now)`, where `pos(now)` keeps advancing through the |BPM| tempo map (`LR2f.cpp:2185-2188`; LR2body.exe 0x406d81). The reverse scroll therefore runs at the post-reversal tempo — at the |BPM| of the negative value, following later BPM changes in the timing table, and pausing during post-reversal STOPs — rather than retracing the pre-reversal tempo. The engine publishes `displayBeat = 2·beat(R) − beat(now)` on the UI frame (`mirrorBeatAtTempoReversal`); the TUI grid, the beatoraja layers and the web scene's `currentBeat` scroll from it. be-music has no time-based ("constant") HS-FIX scroll, so no time-space mirror is needed anywhere. LR2's note-drawing rules carry on through the reversal: its `draw_count` never moves back, so a note, mine or bar line that went before the reversal stays gone as the scroll recedes, while the notes charted after the reversal, never judged, rise away from the line; under beatoraja's drawing rules (charts with SCROLL or SPEED) object times are compared with the mirrored judge clock (`resolveReversedDrawClock`).
+- **Judging.** LR2 keeps judging presses on the mirrored clock `t' = 2R − now` (`LR2f.cpp:12624`, `:12931`; LR2body.exe 0x42c25b / 0x42c788). Notes within roughly R ± the BAD window stay hittable just after R, a press still fires an empty POOR while the lane's next note is within reach of `t'` (LR2's 1 s early reach, so for about a second past R), and because `t'` never passes R nothing is swept into a miss past it. An LN spanning R BADs when released (`LR2f.cpp:7613-7616`) and stays open if it never is. The engine's judge core gets the reversal as chart data (`reversalSeconds`) and judges presses, releases, and hold checks on that mirrored clock (logs, gauge history, and UI cues keep the true time), and the play-log simulator mirrors post-reversal inputs the same way, so replays and re-simulations reproduce the run. Mines freeze at the reversal.
+- **Result.** LR2 never ends the stage on its own after a reversal; leaving it (ESC etc.) sets HP = 0 whenever a scorable note is still unjudged (`LR2f.cpp:12980-12982`; LR2body.exe 0x42c525), so such a run is always FAILED. be-music ends the song at its precomputed end (deviation 1 below) and reports the same result: a reversed run that leaves scorable notes outstanding — open holds included — ends with the gauge at 0 and not cleared, in manual play, autoplay, and the simulator.
+- **Deliberate deviations from LR2**, all in the degenerate corners: (1) the run ends at the chart's precomputed end instead of soft-locking until ESC; (2) `#BPMxx 0` stays dropped (previous tempo continues) — real LR2 divides by zero and degenerates (+inf times, scroll stops); (3) an undefined `#BPMxx` reference stays dropped — real LR2 hits its `-1.0` slot sentinel and behaves as if `#BPMxx -1` were defined (reverse at 1 BPM); (4) a negative initial `#BPM` header falls back to the 130 default — real LR2 leaves it unguarded and its timing table degenerates; (5) the mirrored display pins at the chart head once it rewinds past the start — real LR2 keeps receding into negative positions; (6) the reversal sits exactly at the negative event's chart time, whereas LR2 arms it at the frame its pump reaches the event.
+- **Ruleset scope:** the LR2 model applies under every judge ruleset (`lr2` / `beatoraja` / `iidx`), deliberately. Negative `#BPMxx` is an LR2-ism — the charts that use it (Sofa $15 → $1, U9, …) were authored and tuned against LR2's reverse scroll, so that is the presentation their authors intended. beatoraja itself rejects negative `#BPMxx` definitions at parse time (`BMSDecoder`: "#negative BPMはサポートされていません"), which would silently turn the gimmick into a plain tempo-continuation; we prefer the de facto behavior the charts were made for over that. The judge ruleset only picks windows, gauge, and scoring — chart timing interpretation, the mirrored judge clock, and the FAILED result are shared, and the offline renderer and the select-scene preview (which have no ruleset) agree with gameplay.
+- Channel 03 (inline hex `01`–`FF`) can express neither zero nor negative values; a `00` pair is a rest.
+
+Fixtures: [`examples/test/negative-bpm-reverse.bms`](../examples/test/negative-bpm-reverse.bms), [`negative-bpm-zero.bms`](../examples/test/negative-bpm-zero.bms), [`negative-bpm-undefined-slot.bms`](../examples/test/negative-bpm-undefined-slot.bms).
+
+- [x] Timing interpretation of `#STP` format `xxx[.yyy] zzzz` and abbreviation `xxx zzzz`
+- [x] Browser player: `#BGAxx` interpretation of sub-region cutting and placement parameters
 
 ### `#BASE`
 
@@ -188,8 +220,9 @@ The default is `36`, which uses `0-9A-Z` and folds lowercase ASCII letters to up
 `#BASE 62` switches indexed headers and object-stream tokens to case-sensitive `0-9A-Za-z`, so `0a` and `0A` are different IDs.
 
 The parser pre-scans the BMS source for `#BASE 36` / `#BASE 62` before normal parsing starts.
-The scan stops at the first object line (`#mmmcc:data`), so a late `#BASE 62` after object data is ignored for compatibility with players that require `#BASE` to be declared before objects.
-Unsupported values are ignored and fall back to the current/default base.
+The scan covers the whole file, as beatoraja's does, so `#BASE` may appear anywhere, even after object data, and control-flow blocks are not evaluated for it.
+When the file has several `#BASE 36` / `#BASE 62` lines, the last one wins.
+Unsupported values are ignored.
 
 Runtime and round-trip behavior:
 
@@ -197,7 +230,7 @@ Runtime and round-trip behavior:
 - `stringifier` emits `#BASE 62` when `bms.base` is `62`.
 - `#WAVxx`, `#BMPxx`, `#BPMxx`, `#STOPxx`, `#TEXTxx`, `#LNOBJ`, BGA-related indexed maps, and object-stream values are normalized with the active base.
 - Control-flow contents (`#RANDOM` / `#IF` / `#SWITCH` blocks) use the same base as normal lines, so lowercase IDs inside branches survive parsing and branch resolution.
-- `player`, `audio-renderer`, `chart`, and `player-web` resolve sample, BGA, BPM/STOP, LN, mine, and timing references through `resolveBmsBase()` so base-62 lowercase IDs remain distinct at runtime.
+- `player`, `audio-renderer`, `chart`, and `player-web` resolve sample, BGA, BPM/STOP, LN, mine, and timing references through `resolveBMSBase()` so base-62 lowercase IDs remain distinct at runtime.
 
 Example:
 
@@ -213,17 +246,20 @@ Without `#BASE 62`, both keys fold into the same base-36 ID and the later defini
 
 ### `#VOLWAV`
 
-`parser` holds `#VOLWAV` as a non-negative number in `bms.volWav`.
-`stringifier` outputs the value of `bms.volWav` as is if it exists, as `#VOLWAV n`.
+`parser` holds `#VOLWAV` as a non-negative number in `bms.volWAV`.
+`stringifier` outputs the value of `bms.volWAV` as is if it exists, as `#VOLWAV n`.
 
 During playback and rendering, `#VOLWAV` is treated as a linear gain applied to the entire score.
-If omitted, the default value is `100` and the effective magnification is `n / 100`.
+If omitted, the default value is `100`. A value with `0 < n < 200` gives the magnification `n / 100`; any other value plays at the original volume.
 
 - `#VOLWAV 100`: Original volume
-- `#VOLWAV 200`: `2` times the original volume
-- `#VOLWAV 0`: Silence
+- `#VOLWAV 50`: Half the original volume
+- `#VOLWAV 150`: `1.5` times the original volume
+- `#VOLWAV 0`, `#VOLWAV 200` or above: Original volume
 
-This magnification applies to real-time playback of `player`, song selection screen preview, and `renderJson()` / `renderChartFile()` of `audio-renderer`.
+The range is beatoraja's (it applies `#VOLWAV` only for `0 < n < 200`); LR2 ignores `#VOLWAV`. Following beatoraja keeps `#VOLWAV 0` from muting a chart and large values from amplifying it into clipping. `@be-music/chart`'s `volWAVToLinearGain` implements the rule.
+
+This magnification applies to real-time playback of `player`, song selection screen preview, and `renderJSON()` / `renderChartFile()` of `audio-renderer`.
 It does not reproduce player- or hardware-specific volume differences, and is treated as a simple gain multiplication factor in actual equipment.
 
 ### `#xxx97` / `#xxx98`
@@ -243,17 +279,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 
 ## Not supported (difference to primary reference)
 
-- [x] Dedicated behavior of extended channel `#mmm51-59` (LN: `LNTYPE=1`)
-- [x] Dedicated behavior of extended channel `#mmm61-69` (LN: `LNTYPE=2`)
-- [x] Dedicated interpretation of header `#MIDIFILE` (kept in `bms.midiFile`; not played)
-- [x] Playback behavior of channel `06` (POOR-BMP/BGA switching)
-- [x] Default behavior of treating `#BMP00` as a POOR image when `#POORBGA` is not specified
-- [x] `#BPM` Default value when not specified `130` is treated as compatible behavior (unified to IR default value `130`)
-- [x] Clarification of compatibility policy for `#PLAYER` specification value `1-4` (especially `2` / `4`)
-- [x] Definition of LN interpretation rules based on the default value `1` when `#LNTYPE` is not specified (when `51-69` is implemented)
-- [x] `#LNOBJ` Handling when multiple declarations are made (declaration order maintained in `bms.lnObjs`)
-- [x] `#LNOBJ` Compatibility policy for Keyup pronunciation extension at the end (HDX Keyup is not adopted, end trigger is suppressed)
-- [x] Priority definition in a score where `#xxx51-69` and `#LNOBJ` conflict (`#xxx51-69` takes precedence in the same lane and position)
+- [ ] Playback of `#MIDIFILE` (kept in `bms.midiFile`; not played)
 - [ ] Dedicated interpretation of header `#MAKER`
 - [ ] Interpretation of multiple line definition (Multiplex) of `#SUBTITLE` / `#SUBARTIST` / `#COMMENT`
 - [ ] Rules for treating the old-style compatible header `#SONGxx` as equivalent to `#TEXTxx`
@@ -262,7 +288,6 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - [ ] Handling of header `#CDDA` (policy of ignoring, retaining, and replaying)
 - [ ] Handling of old video headers `#VIDEOFPS` / `#VIDEODLY` / `#VIDEOCOLORS` / `#SEEK`
 - [ ] Handling of material separation header `#MATERIALSBMP` / `#MATERIALSWAV`
-- [x] Real-time reflection of `#STP`
 - [ ] `#WAVCMD` pitch and loop execution. Current runtime support only applies the `01` volume parameter in audio-renderer and browser WebAudio.
 - [ ] `#OPTION` Simultaneous application rule for multiple lines (currently holds a single value)
 - [ ] Runtime reflection of object channel `#xxxA6` (`#CHANGEOPTIONxx`)
@@ -273,19 +298,12 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - [ ] Index range of `#WAVxx` / `#BMPxx` (operational difference including `01-FF` / `01-ZZ` / `00`) and case handling
 - [ ] Conflict priority between `#xxx03` and `#xxx08` on the same timeline
 - [ ] Conflict priority between `#xxx08` and `#xxx09` on the same timeline
-- [ ] Compatibility behavior when inputting invalid values ​​(negative numbers/zero/character strings/exponential notation, etc.) for `#BPMxx`
-- [x] Timing interpretation of `#STP` format `xxx[.yyy] zzzz` and abbreviation `xxx zzzz`
-- [x] Browser player: `#BGAxx` interpretation of sub-region cutting and placement parameters
 - [ ] Runtime reflection of `#@BGAxx` (branch/conditional BGA definition)
-- [x] Browser player: `#SWBGAxx` runtime reflection for switching BGA animations
-- [x] Browser player: `#ARGBxx` / `#EXBMPxx` runtime reflection for transparency and tint parameters
 - [ ] CLI/TUI reflection of `#BGAxx`, `#SWBGAxx`, `#ARGBxx`, and `#EXBMPxx`
 - [ ] Decision width interpretation of boundary values ​​including `#DEFEXRANK 0`
-- [ ] Apply `#PATH_WAV` to real file resolution during playback/rendering.
-- [x] Support for drawing channel `0A` (BGA LAYER2)
+- [ ] Apply `#PATH_WAV` when the terminal player loads samples for play (browser gameplay, the offline renderer and the song selection preview already try it as a directory prefix)
 - [ ] Acceptance policy for compatible directives `#RONDAM` / `#SETRONDAM` / `#IFEND`
 - [ ] Acceptance policy for mixed input of full-width commands and full-width spaces
-- [ ] End token processing policy when object data string has odd length
 - [ ] Compatible with control syntax evaluation for CRLF+LF mixed files (line end shaking)
 - [ ] Strict compatibility for files without trailing newlines (parser/control syntax)
 - [ ] Evaluation stability of scores containing large numbers/nested `#RANDOM` and `#SWITCH`
@@ -293,23 +311,14 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - [ ] `#000` Time/judgment compatibility for musical scores containing measure performance objects
 - [ ] Accuracy verification and upper limit policy for high-resolution musical scores (e.g. measure resolution 4032 or higher)
 - [ ] Upper limit of measure number (near `#999`) and handling when inputting after `#1000`
-- [x] When `#STOPxx` / `#BPMxx` are multi-defined, the line on the EOF side is adopted.
-- [x] When `#WAVxx` / `#BMPxx` are multi-defined, the line on the EOF side is adopted.
-- [x] Duplicate definitions of general headers, indexed extension headers, and `#mmm02` are generally prioritized on the EOF side.
 - [ ] Policy for audio format compatibility (μ-law WAV, etc.)
 - [ ] Compatibility policy for treating `00` object tokens as ordinary `#WAV00` references outside landmine playback
-- [ ] Search for alternative files when extension omitted/mismatches for `#WAVxx` (extension fallback)
-- [ ] Search for alternative files when extension omitted/mismatches for `#BMPxx` (extension fallback)
+- [x] Search for alternative files when extension omitted/mismatches for `#WAVxx` (extension fallback; see [BMS / bmson compatibility notes §2.19](./format-compat.md#219-asset-file-lookup))
+- [x] Search for alternative files when extension omitted/mismatches for `#BMPxx` (extension fallback; see [BMS / bmson compatibility notes §2.19](./format-compat.md#219-asset-file-lookup))
 - [ ] Compatible behavior when referencing undefined `#BPMxx` / `#STOPxx` (ignored, default value, error)
 - [ ] `#STOPxx` Compatibility behavior when empty definition reference (e.g. undefined token of `#05209:`)
-- [x] Acceptance policy for commands with leading indentation (leading blank + `#COMMAND`): leading and trailing whitespace is trimmed and the command is accepted
-- [x] Accept the alternative spellings `#ELSE IF n` / `#END IF` / bare `#END` as `#ELSEIF n` / `#ENDIF` (normalized to the canonical form on save / output; `#END <other value>` remains an unknown header)
 - [ ] EOF completion rules when `#IF` / `#SWITCH` block is unterminated (`#ENDIF` / `#ENDSW` is missing)
-- [x] Acceptance of Bemuse extension header `#SPEEDxx` and reflection in note drawing distance
-- [x] Bemuse expansion channel `#xxxSP` (spacing factor) acceptance and drawing reflection
 - [ ] Acceptance rules for Bemuse extension line `#EXT #xxxyy:...` (differences from normal objects)
-- [ ] 256x256 Oversize BGA drawing policy (cropping, reduction, placement)
-- [x] Maximum number of layers and priority for BGA composition (normally 3 layers: `04` < `07` < `0A`, while POOR is displayed, POOR has the highest priority)
 - [ ] Whether to apply `#ARGBxx` / `#BGAxx` parameters to video BGA
 - [ ] `#BASEBPM` core time-resolution reflection policy. Browser HS-FIX uses it as a visual reference BPM, but internal chart timing still follows BPM events.
 - [ ] player: `#PLAYER` When not specified, the default value `1` is reflected on the song selection screen, TUI, and result display.
@@ -321,22 +330,25 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 
 ### TODO (SCROLL/BPM/STOP) from reference materials
 
-| TODO                                                                                                                                       | current situation | remarks                                                                                                                                                                |
-| ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [x] `#SCROLL 0` Specify the display priority of notes that overlap in the same lane in the section before and after.                       | correspondence    | If they overlap in the same cell, place the note that comes first on the reference line, and stack subsequent notes in the direction away from the judgment line.      |
-| [x] `#SCROLL < 0`'s reverse running display (direction, near the judgment line, off-screen) is fixed as a compatible specification.        | correspondence    | The current implementation policy is "proximity display priority", and the drawing distance is treated as an absolute value (reverse scrolling will not be reproduced) |
-| [x] `#SCROLL 0` Specify the upper limit of lookahead and visible range in long intervals                                                   | correspondence    | Read-ahead is discontinued at `MAX_SCROLL_LOOKAHEAD_BEATS` (= 64 measures), and notes outside the visible range are excluded from drawing.                             |
-| [x] BPM×`100001` + `#STOPxx` Clarified "display BPM" compatibility policy when correcting                                                  | correspondence    | The same BPM value as the time resolution is displayed as is, and LR2 compatible display replacement and rounding are not performed.                                   |
-| [x] SCROLL/BPM/STOP Added regression test for complex gimmicks (partial warp, blank keystroke, reverse run)                                | correspondence    | Add complex cases to `timeline` and continue to verify POOR system with existing `bga` test group                                                                      |
-| [x] Determined the handling of beatoraja-specific appearance/disappearance bug-dependent scores (unsupported clearly or reproduction mode) | correspondence    | Specify that it is not compatible and consider reproducing mode with another option if necessary in the future.                                                        |
+| TODO                                                                                                                                       | current situation | remarks                                                                                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [x] `#SCROLL 0` Specify the display priority of notes that overlap in the same lane in the section before and after.                       | correspondence    | If they overlap in the same cell, place the note that comes first on the reference line, and stack subsequent notes in the direction away from the judgment line.                                                                    |
+| [x] `#SCROLL < 0`'s reverse running display (direction, near the judgment line, off-screen) is fixed as a compatible specification.        | correspondence    | The web player runs notes backwards as beatoraja does, drawing them below the judgement line while they are still ahead; the terminal player keeps "proximity display priority" and treats the drawing distance as an absolute value |
+| [x] `#SCROLL 0` Specify the upper limit of lookahead and visible range in long intervals                                                   | correspondence    | Read-ahead is discontinued at `MAX_SCROLL_LOOKAHEAD_BEATS` (= 64 measures), and notes outside the visible range are excluded from drawing.                                                                                           |
+| [x] BPM×`100001` + `#STOPxx` Clarified "display BPM" compatibility policy when correcting                                                  | correspondence    | The same BPM value as the time resolution is displayed as is, and LR2 compatible display replacement and rounding are not performed.                                                                                                 |
+| [x] SCROLL/BPM/STOP Added regression test for complex gimmicks (partial warp, blank keystroke, reverse run)                                | correspondence    | Add complex cases to `timeline` and continue to verify POOR system with existing `bga` test group                                                                                                                                    |
+| [x] Determined the handling of beatoraja-specific appearance/disappearance bug-dependent scores (unsupported clearly or reproduction mode) | correspondence    | Specify that it is not compatible and consider reproducing mode with another option if necessary in the future.                                                                                                                      |
 
 ## Player-Specific Behavior
 
 - Automatically determine lane mode from used channel (`5 KEY SP`, `5 KEY DP`, `7 KEY SP`, `14 KEY DP`, `9 KEY`, `24 KEY SP`, `48 KEY DP`)
+- Every host (the engine, the CLI, and the web player) decides the lane mode with one shared rule, `resolveChartPlayVariant` in `@be-music/chart`, unless the host declares the variant explicitly. For a play it runs over the chart after `#RANDOM` / `#SWITCH` are resolved, so lanes a chosen branch adds count
+- Lane usage counts the `1x` / `2x` lane channels and the `5x` / `6x` `#LNTYPE` long-note channels on the lanes they map to (so `#LNOBJ` and `#LNTYPE` spellings of a chart agree). Mines (`Dx` / `Ex`) and invisible objects (`3x` / `4x`) never decide the lane mode
 - Extended lane channels (`1A..1O` / `2A..2O`) select `24 KEY SP` / `48 KEY DP` ahead of every other rule
+- be-music-specific: channels `1P` / `1Q` (`2P` / `2Q` on the 2P side) are the 24 / 48 KEY wheel, up / down — the BMS spelling of the bmson `keyboard-24k` wheel lanes (`x` = 25 / 26). Other BMS players do not define these channels. They count as extended lanes, so they select the keyboard modes too
 - A `.pms` chart is `9 KEY` regardless of its channels; this is checked right after the extended-lane rule, before the content rules
-- `9 KEY` is also detected from content: `#PLAYER 3` with channel `17`, a 1P chart that uses every channel `11..19`, and a chart that uses `22..25` without `21` / `26..29` (PMS-STD written as `.bms` / `.bme`)
-- If lane mode cannot be determined from the channels, complete with the extension (`.bms -> 5 KEY`, `.bme -> 7 KEY`)
+- `9 KEY` is also detected from content: `#PLAYER 3` with channel `17` (when the IIDX 2P side `21` / `26..29` is absent; with it the chart is IIDX DP with a FREE ZONE), a 1P chart that uses every channel `11..19`, and a chart that uses `22..25` without `21` / `26..29` (PMS-STD written as `.bms` / `.bme`)
+- Otherwise the IIDX families apply: a 6 / 7 key column (`18` / `19` / `28` / `29`) means `7 KEY SP` / `14 KEY DP`, otherwise `5 KEY SP` / `5 KEY DP`. The lanes in use decide, whatever the extension: a `.bme` chart without a 6 / 7 key column is `5 KEY SP` / `5 KEY DP`, as in beatoraja (be-music decision; see [format-compat §5](./format-compat.md#5-be-music-decisions-in-short))
 - `.pms` The 9KEY of the musical score is estimated from the standard array (`PMS-STD`) / compatible array (`PMS-COMPAT`) from the channel distribution and reflected in the `LANE` display.
 - FREE ZONE (`17` / `27`) does not create an independent lane and draws on the scratch lane (`16` / `26`); under `9 KEY` and the `24 KEY` / `48 KEY` keyboard modes those channels are ordinary lanes instead
 - FREE ZONE Note length is fixed at quarter note
@@ -366,16 +378,19 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 ### SCROLL/BPM/STOP compatibility policy
 
 - In `SCROLL 0`, when multiple notes overlap in the same lane and same drawing cell, the preceding note is placed at the reference position, and the subsequent notes are stacked in order toward the side (upward) away from the judgment line.
-- `SCROLL < 0` prioritizes "maintaining note approach display" rather than "faithful reproduction of backward running display", and drawing distance is handled by `abs(distance)`
+- Web player: `SCROLL < 0` runs notes backwards as beatoraja does; a note still ahead that ends up below the judgement line is drawn there, down to the bottom of the stage ([Browser player — Note visibility](./player-web.md#note-visibility))
+- Terminal player: `SCROLL < 0` prioritizes "maintaining note approach display" rather than "faithful reproduction of backward running display", and drawing distance is handled by `abs(distance)`
 - Visible search for `SCROLL` is capped at `MAX_SCROLL_LOOKAHEAD_BEATS` (`4 * 64` beat, in `packages/player-tui/src/tui/tui.ts`)
+- As in beatoraja's `LaneRenderer`, the search ends at the first point where the chart runs past the top of the lane: notes a later negative `SCROLL` brings back into the lane are not drawn until the playhead reaches them (web player and terminal player; see [Browser player — Note visibility](./player-web.md#note-visibility))
 - Even with gimmicks that include BPM×`100001` + `STOP` correction, the BPM display uses the value used in internal time calculation as is.
 - Beatoraja-specific drawing bug-dependent scores are not compatible, and a reproduction mode is not implemented at this time.
-- Verify regression of the above policy with `packages/player-tui/src/tui/lane-stacking.test.ts`, `packages/player/src/core/timeline.test.ts`, `packages/player-tui/src/bga.test.ts`
+- Verify regression of the above policy with `packages/player-tui/src/tui/lane-stacking.test.ts`, `packages/chart/src/timelines.test.ts`, `packages/player-tui/src/bga.test.ts`
 
 ## Handling of event location
 
 - `data` splits by two characters, `00` is empty event
 - `data` is truncated at the first whitespace character; everything after it is ignored
+- Characters outside the object ID alphabet are skipped without taking a slot, and a trailing odd character is dropped
 - Position is kept as `position: [numerator, denominator]`
 - `denominator = number of tokens`
 - `numerator = zero-based token index`
@@ -386,21 +401,38 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - If there is no BOM, resolve the `#CHARSET` declaration (only when it canonicalizes to a supported encoding)
 - ASCII-only files are treated as UTF-8
 - A buffer that passes strict UTF-8 validation (fatal decode succeeds with multibyte sequences present) is UTF-8
+- A buffer whose every non-ASCII byte pairs up as KS X 1001 (`0xA1`–`0xFE` lead and trail, beatoraja's EUC-KR probe) and whose non-ASCII text is at least 90 % Hangul syllables is Korean `euc-kr`
 - Otherwise infer by scoring `shift_jis`, `utf8`, `euc-jp`, `latin1`
-- This detection is unified in `@be-music/parser`'s `decodeBmsText`, so CLI / TUI / Web all produce the same result
+- This detection is unified in `@be-music/parser`'s `decodeBMSText`, so CLI / TUI / Web all produce the same result
 
 ## stringifier rules
 
 - Determine intra-measure resolution from denominator information of `position`
 - For the same measure and same channel, the least common multiple of the denominator is used.
 - If `--maxResolution` is specified, it will be aborted at the upper limit.
+- A chart read from bmson is converted where BMS spells things differently: long notes become `#LNTYPE 1` pairs on `5x` / `6x` with `#LNMODE` from `ln_type` / `t`, a mine's value becomes its damage in base 36 (its sample becomes `#WAV00`), `judge_rank` becomes `#DEFEXRANK`, and the percentage `total` is not written as `#TOTAL`. Details: [BMSON spec — Converting between BMS and bmson](./bmson-spec.md#converting-between-bms-and-bmson)
 
 ## Evaluation rules for control constructs
 
 - `parser` retains control syntax as `bms.controlFlow` and does not commit branches when parsing
-- `player` / `audio-renderer` evaluate `bms.controlFlow` and expand valid blocks at runtime
+- Branches are decided once per play by explicit draws (`RandomDraws`, drawn with `drawRandomOutcomes`); `evaluateControlFlow` in `@be-music/chart` is the only evaluator, and the parser's `resolveBMSControlFlowWithDraws` expands the active blocks into a resolved chart without `bms.controlFlow`. Hosts resolve before playback or rendering and hand the engine the resolved chart with its draws ([Player spec — Handling control syntax](./player-spec.md#handling-control-syntax))
 - `#RANDOM n` / `#SWITCH n` generate integers of `1..n` and use them as selection values
 - `#SETRANDOM n` / `#SETSWITCH n` fix the selection value
 - `#IF` chain branches at the current RANDOM selection value, `#ELSEIF` / `#ELSE` are invalid if there is a previously established branch
 - `#SWITCH` chain evaluates `#CASE` / `#DEF` and aborts at `#SKIP` until `#ENDSW`
 - `#SWITCH` falls through to subsequent `#CASE` / `#DEF` if `#SKIP` is missing
+- Header lines apply in file order, as in LR2 and beatoraja: a definition in a taken branch beats an earlier top-level line of the same header and loses to a later one. The parser marks a branch header that a later top-level line overrides (`overriddenByLaterHeader`) and resolution skips it; repeatable headers (`#STP`, `#WAVCMD`, `#LNOBJ`) add up
+
+`evaluateControlFlow` walks `bms.controlFlow` once, line by line, over one stack of `#RANDOM` / `#IF` / `#SWITCH` frames. Each line is handled like this:
+
+```mermaid
+flowchart TD
+  line(["each line, in file order"]) --> kind{"line kind"}
+  kind -->|"#RANDOM / #SWITCH<br/>#SETRANDOM / #SETSWITCH"| push["push a frame with<br/>its draw's value"]
+  kind -->|"#IF / #ELSEIF / #ELSE"| ifs["push or update the<br/>innermost #IF frame"]
+  kind -->|"#CASE / #DEF / #SKIP"| sw["update the innermost<br/>#SWITCH frame"]
+  kind -->|"#ENDIF / #ENDRANDOM / #ENDSW"| pop["remove the innermost<br/>frame of its kind"]
+  kind -->|"header or object"| active{"every #IF and #SWITCH<br/>frame active?"}
+  active -->|yes| apply["apply the line"]
+  active -->|no| skip["skip the line"]
+```

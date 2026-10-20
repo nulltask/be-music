@@ -8,7 +8,7 @@
  * onto an offscreen canvas.
  */
 
-interface TgaHeader {
+interface TGAHeader {
   idLength: number;
   colorMapType: number;
   imageType: number;
@@ -18,7 +18,7 @@ interface TgaHeader {
   imageDescriptor: number;
 }
 
-function readHeader(bytes: Uint8Array): TgaHeader | undefined {
+function readHeader(bytes: Uint8Array): TGAHeader | undefined {
   if (bytes.length < 18) return undefined;
   return {
     idLength: bytes[0]!,
@@ -37,7 +37,7 @@ function readHeader(bytes: Uint8Array): TgaHeader | undefined {
  * Returns whether the supplied bytes look like a TGA we can decode. Detects the (somewhat ambiguous) TGA-V2 footer
  * "TRUEVISION-XFILE.\0" or otherwise sanity-checks the header.
  */
-export function isTgaImage(bytes: Uint8Array): boolean {
+export function isTGAImage(bytes: Uint8Array): boolean {
   if (bytes.length >= 26) {
     const tail = bytes.subarray(bytes.length - 18);
     if (
@@ -68,7 +68,7 @@ export function isTgaImage(bytes: Uint8Array): boolean {
  * `new ImageData(data, width, height)` or passes it to `ctx.putImageData` after constructing a fresh one. This keeps
  * the decoder usable in Node tests where `ImageData` isn't a global.
  */
-export function decodeTga(bytes: Uint8Array): { width: number; height: number; data: Uint8ClampedArray } | undefined {
+export function decodeTGA(bytes: Uint8Array): { width: number; height: number; data: Uint8ClampedArray } | undefined {
   const header = readHeader(bytes);
   if (!header) return undefined;
   if (header.colorMapType !== 0) return undefined; // No paletted support
@@ -83,15 +83,15 @@ export function decodeTga(bytes: Uint8Array): { width: number; height: number; d
 
   // Image type values: 2 = uncompressed TrueColor RGB / RGBA 3 = uncompressed grayscale 10 = RLE TrueColor RGB / RGBA
   // 11 = RLE grayscale
-  const isRle = header.imageType === 10 || header.imageType === 11;
+  const isRLE = header.imageType === 10 || header.imageType === 11;
   const isGrayscale = header.imageType === 3 || header.imageType === 11;
-  if (!isRle && header.imageType !== 2 && header.imageType !== 3) {
+  if (!isRLE && header.imageType !== 2 && header.imageType !== 3) {
     return undefined;
   }
 
   const pixels = new Uint8ClampedArray(totalPixels * 4);
-  if (isRle) {
-    if (!decodeRle(bytes.subarray(pixelDataStart), bytesPerPixel, pixels, totalPixels, isGrayscale)) {
+  if (isRLE) {
+    if (!decodeRLE(bytes.subarray(pixelDataStart), bytesPerPixel, pixels, totalPixels, isGrayscale)) {
       return undefined;
     }
   } else {
@@ -127,7 +127,7 @@ function decodeUncompressed(
  *
  * Returns `false` on truncation.
  */
-function decodeRle(
+function decodeRLE(
   src: Uint8Array,
   bytesPerPixel: number,
   dest: Uint8ClampedArray,

@@ -6,7 +6,7 @@ import {
   mergeCompressorParams,
   type CompressorParams,
   type TunableCompressor,
-} from '@be-music/player-web/runtime';
+} from '@be-music/player-web/audio';
 
 /** One compressor's parameters as the sliders show them. */
 export interface CompressorTuning {

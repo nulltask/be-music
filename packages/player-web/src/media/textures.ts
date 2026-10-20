@@ -1,11 +1,13 @@
 import { Texture, VideoSource } from 'pixi.js';
 import { logger } from '../logger.ts';
+// Types only: the runtime module is imported on demand in `transcodeViaWebCodecsLocked`.
+import type { BufferTarget, Mp4OutputFormat, Output } from 'mediabunny';
 
 const log = logger('bga-video');
 
 let ffmpegQueue: Promise<void> = Promise.resolve();
 
-async function withExclusiveFfmpeg<T>(task: () => Promise<T>): Promise<T> {
+async function withExclusiveFFmpeg<T>(task: () => Promise<T>): Promise<T> {
   const previous = ffmpegQueue;
   let release: () => void = () => {};
   ffmpegQueue = new Promise<void>((resolve) => {
@@ -20,8 +22,8 @@ async function withExclusiveFfmpeg<T>(task: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Symbol used to attach a blob `objectUrl` to a `Texture` so that downstream destroy paths
- * (`destroyUniqueTextures`, `Lr2SkinTextureStore.clear()`) can revoke the URL alongside the GPU resource.
+ * Symbol used to attach a blob `objectURL` to a `Texture` so that downstream destroy paths
+ * (`destroyUniqueTextures`, `LR2SkinTextureStore.clear()`) can revoke the URL alongside the GPU resource.
  *
  * Pixi v8 doesn't surface a destroy hook on `TextureSource`, and we can't simply `URL.revokeObjectURL` on the load path
  * — the texture's `<img>` source keeps a reference to the URL for the lifetime of the GPU upload (and for re-decode on
@@ -30,37 +32,37 @@ async function withExclusiveFfmpeg<T>(task: () => Promise<T>): Promise<T> {
  */
 const TEXTURE_BLOB_URL = Symbol.for('be-music-player-web/texture-blob-url');
 
-interface TextureWithBlobUrl extends Texture {
+interface TextureWithBlobURL extends Texture {
   [TEXTURE_BLOB_URL]?: string;
 }
 
 /**
- * Records the blob `objectUrl` the texture was decoded from. The URL is revoked the next time the texture passes
- * through {@link destroyTextureAndRevokeBlobUrl}.
+ * Records the blob `objectURL` the texture was decoded from. The URL is revoked the next time the texture passes
+ * through {@link destroyTextureAndRevokeBlobURL}.
  *
  * Defensively no-op when `texture` is null/undefined: Pixi v8's `Assets.load(url)` occasionally resolves with a
  * falsy value for unsupported payloads (notably when the URL points at bytes that don't match the MIME-implied
  * format — e.g. a `.dds` file blob-loaded as `image/png` falls through every decoder and resolves to null). The
  * defensive branch keeps a stray null from cascading into a `Cannot set properties of null (setting 'Symbol...')`
  * crash and lets the caller route the decode result through its normal "unsupported asset" fallback. Returns the
- * texture unchanged so existing callers can keep using `attachBlobUrlToTexture(t, url)` as a pass-through.
+ * texture unchanged so existing callers can keep using `attachBlobURLToTexture(t, url)` as a pass-through.
  */
-export function attachBlobUrlToTexture(texture: Texture | null | undefined, objectUrl: string): void {
+export function attachBlobURLToTexture(texture: Texture | null | undefined, objectURL: string): void {
   if (texture === null || texture === undefined) return;
-  (texture as TextureWithBlobUrl)[TEXTURE_BLOB_URL] = objectUrl;
+  (texture as TextureWithBlobURL)[TEXTURE_BLOB_URL] = objectURL;
 }
 
 /**
- * Destroys `texture` and, if it was created from a blob via {@link attachBlobUrlToTexture}, revokes the associated
+ * Destroys `texture` and, if it was created from a blob via {@link attachBlobURLToTexture}, revokes the associated
  * object URL. `destroySource` mirrors `Texture.destroy(destroySource)` — pass `true` (the default) to also tear down
  * the underlying `TextureSource`. Errors thrown by Pixi's destroy path are propagated; the URL is still revoked first
  * so a failed destroy doesn't strand the blob in the URL store.
  */
-export function destroyTextureAndRevokeBlobUrl(texture: Texture, destroySource = true): void {
-  const url = (texture as TextureWithBlobUrl)[TEXTURE_BLOB_URL];
+export function destroyTextureAndRevokeBlobURL(texture: Texture, destroySource = true): void {
+  const url = (texture as TextureWithBlobURL)[TEXTURE_BLOB_URL];
   if (typeof url === 'string') {
     URL.revokeObjectURL(url);
-    delete (texture as TextureWithBlobUrl)[TEXTURE_BLOB_URL];
+    delete (texture as TextureWithBlobURL)[TEXTURE_BLOB_URL];
   }
   texture.destroy(destroySource);
 }
@@ -70,13 +72,13 @@ export function destroyTextureAndRevokeBlobUrl(texture: Texture, destroySource =
  * same `<video>` element returned alongside it. Callers seek / play the video element directly to drive frame updates;
  * the Pixi source polls `requestVideoFrameCallback` (or a rAF fallback) to push fresh frames into the GL texture.
  *
- * The associated `objectUrl` is created from the bytes' `Blob` and MUST be revoked (via `URL.revokeObjectURL`) once the
+ * The associated `objectURL` is created from the bytes' `Blob` and MUST be revoked (via `URL.revokeObjectURL`) once the
  * texture is disposed to free the underlying memory.
  */
 export interface VideoTextureHandle {
   texture: Texture;
   video: HTMLVideoElement;
-  objectUrl: string;
+  objectURL: string;
 }
 
 /**
@@ -144,7 +146,7 @@ export async function loadVideoTextureFromBytes(
   }
   if (!transcoded) return undefined;
   // The transcoded payload is always MP4 / H.264 (whether it came out of libx264 or the WebCodecs encoder); pass an
-  // explicit name so `guessVideoMimeType` picks `video/mp4` and the browser's H.264 decoder takes the fast path.
+  // explicit name so `guessVideoMIMEType` picks `video/mp4` and the browser's H.264 decoder takes the fast path.
   return tryLoadVideoTextureFromBytes(`${stripVideoExtension(path)}.transcoded.mp4`, transcoded);
 }
 
@@ -166,10 +168,10 @@ async function tryLoadVideoTextureFromBytes(path: string, bytes: Uint8Array): Pr
   // of megabytes). The `Uint8Array<ArrayBuffer>` cast narrows away the lib's `Uint8Array<ArrayBufferLike>` (which
   // includes `SharedArrayBuffer`) — every caller in this package decodes regular `ArrayBuffer`s through
   // `file.arrayBuffer()` / `entry.arrayBuffer()`, so SAB is unreachable here and the runtime payload is identical.
-  const blob = new Blob([bytes as Uint8Array<ArrayBuffer>], { type: guessVideoMimeType(path) });
-  const objectUrl = URL.createObjectURL(blob);
+  const blob = new Blob([bytes as Uint8Array<ArrayBuffer>], { type: guessVideoMIMEType(path) });
+  const objectURL = URL.createObjectURL(blob);
   const video = document.createElement('video');
-  video.src = objectUrl;
+  video.src = objectURL;
   // BMS BGA video has no soundtrack of its own — audio comes from `#WAV` samples on the chart timeline. Muting also
   // lets some browsers skip the autoplay-policy gating since silent media is exempt.
   video.muted = true;
@@ -193,7 +195,7 @@ async function tryLoadVideoTextureFromBytes(path: string, bytes: Uint8Array): Pr
     await waitForVideoFrameData(video, 5000);
   } catch {
     releaseVideoElement(video);
-    URL.revokeObjectURL(objectUrl);
+    URL.revokeObjectURL(objectURL);
     return undefined;
   }
 
@@ -205,7 +207,7 @@ async function tryLoadVideoTextureFromBytes(path: string, bytes: Uint8Array): Pr
   source.label = path;
   const texture = new Texture({ source });
   texture.label = path;
-  return { texture, video, objectUrl };
+  return { texture, video, objectURL };
 }
 
 /**
@@ -223,7 +225,7 @@ async function transcodeVideoToBrowserCodec(
   path: string,
   options?: VideoTranscodeOptions,
 ): Promise<Uint8Array | undefined> {
-  return withExclusiveFfmpeg(() => transcodeVideoToBrowserCodecLocked(bytes, path, options));
+  return withExclusiveFFmpeg(() => transcodeVideoToBrowserCodecLocked(bytes, path, options));
 }
 
 async function transcodeVideoToBrowserCodecLocked(
@@ -234,7 +236,7 @@ async function transcodeVideoToBrowserCodecLocked(
   const startedAt = performance.now();
   const maxLongEdge = resolveMaxLongEdge(options);
   log.info(`transcode start: ${path} (${bytes.byteLength} bytes${maxLongEdge ? `, resize ≤ ${maxLongEdge}px` : ''})`);
-  const ffmpeg = await loadFfmpeg().catch((error) => {
+  const ffmpeg = await loadFFmpeg().catch((error) => {
     log.warn('failed to load ffmpeg.wasm — BGA video will be skipped', error);
     return undefined;
   });
@@ -259,7 +261,7 @@ async function transcodeVideoToBrowserCodecLocked(
     // `-vf scale=...` is only inserted when the host opted into resizing via `options.maxLongEdgePx`. See {@link
     // buildScaleFilterArg} for the exact filter graph.
     //
-    // No `-threads` override: the wasm core is single-threaded (see `loadFfmpeg` for why we don't use core-mt), so
+    // No `-threads` override: the wasm core is single-threaded (see `loadFFmpeg` for why we don't use core-mt), so
     // libx264 picks 1 by itself.
     const ffmpegArgs: string[] = ['-y', '-i', inputName];
     if (maxLongEdge) {
@@ -310,7 +312,7 @@ async function transcodeVideoToBrowserCodecLocked(
       await ffmpeg.deleteFile(inputName);
     } catch {
       // ignore — the in-memory FS lives only as long as the FFmpeg instance, which we leak between calls (see
-      // `loadFfmpeg` for why) so cleanup just keeps the VFS tidy across calls.
+      // `loadFFmpeg` for why) so cleanup just keeps the VFS tidy across calls.
     }
     try {
       await ffmpeg.deleteFile(outputName);
@@ -348,8 +350,8 @@ function buildScaleFilterArg(maxLongEdge: number): string {
  *   `VideoDecoder` doesn't speak the legacy MPEG-1 / VC-1 / WMV codecs typical BMS BGA ships in. 2. JS wraps each
  *   decoded frame in a `VideoFrame` and feeds it to `VideoEncoder` (H.264 / avc1 baseline). On most platforms this hits
  *   the GPU / ASIC video encoder, taking encode time from ~1× realtime down to 5–20× realtime. 3. Encoded chunks land
- *   in `mp4-muxer`'s in-memory MP4 writer; once the encoder flushes, we hand the muxer's `ArrayBufferTarget` bytes back
- *   to the caller — same shape as the ffmpeg-encode path returns, so the downstream `<video>` blob plumbing is
+ *   in Mediabunny's in-memory MP4 writer; once the encoder flushes and the output is finalized, we hand its
+ *   `BufferTarget` bytes back to the caller — same shape as the ffmpeg-encode path returns, so the downstream `<video>` blob plumbing is
  *   unchanged.
  *
  * Memory: decode and encode are interleaved in chunks rather than buffering the whole video as raw YUV. We can't get
@@ -370,7 +372,7 @@ async function transcodeViaWebCodecs(
   path: string,
   options: VideoTranscodeOptions,
 ): Promise<Uint8Array | undefined> {
-  return withExclusiveFfmpeg(() => transcodeViaWebCodecsLocked(bytes, path, options));
+  return withExclusiveFFmpeg(() => transcodeViaWebCodecsLocked(bytes, path, options));
 }
 
 async function transcodeViaWebCodecsLocked(
@@ -384,7 +386,7 @@ async function transcodeViaWebCodecsLocked(
   log.info(
     `WebCodecs transcode start: ${path} (${bytes.byteLength} bytes${maxLongEdge ? `, resize ≤ ${maxLongEdge}px` : ''})`,
   );
-  const ffmpeg = await loadFfmpeg().catch((error) => {
+  const ffmpeg = await loadFFmpeg().catch((error) => {
     log.warn('failed to load ffmpeg.wasm — WebCodecs transcode aborted', error);
     return undefined;
   });
@@ -394,12 +396,14 @@ async function transcodeViaWebCodecsLocked(
   let probeListener: ((event: { type: string; message: string }) => void) | undefined;
   const probeLines: string[] = [];
   let encoder: VideoEncoder | undefined;
+  let output: Output<Mp4OutputFormat, BufferTarget> | undefined;
+  let muxing: Promise<void> = Promise.resolve();
   try {
     // Clone before writeFile — see the libx264 path for why. We need the caller's `bytes` to survive intact in case the
     // WebCodecs path bails out and the ffmpeg-encode fallback is run with the same buffer.
     await ffmpeg.writeFile(inputName, new Uint8Array(bytes));
     // ffmpeg's stderr log carries the input geometry, frame rate, and total duration we need to drive the WebCodecs
-    // encoder + chunk loop. Hook a parallel listener that doesn't displace `loadFfmpeg`'s diagnostic listener.
+    // encoder + chunk loop. Hook a parallel listener that doesn't displace `loadFFmpeg`'s diagnostic listener.
     probeListener = ({ type, message }) => {
       if (type === 'stderr') {
         probeLines.push(message);
@@ -419,12 +423,18 @@ async function transcodeViaWebCodecsLocked(
       log.warn(`ffmpeg probe (WebCodecs path) exited with code ${probeExit} for ${path}`);
       return undefined;
     }
-    const probe = parseFfmpegProbe(probeLines);
+    const probe = parseFFmpegProbe(probeLines);
     if (!probe) {
       log.warn(`WebCodecs path could not parse ffmpeg probe; falling back: ${path}`);
       return undefined;
     }
-    const { width, height, frameRate, durationSec } = probe;
+    const { width, height, frameRate, durationSec, inputFormat } = probe;
+    if (isRawVideoStreamFormat(inputFormat)) {
+      log.info(
+        `WebCodecs path skipped for a bare ${inputFormat} stream (no reliable duration / seek); falling back: ${path}`,
+      );
+      return undefined;
+    }
     if (!durationSec || durationSec <= 0) {
       log.warn(`WebCodecs path could not determine duration; falling back: ${path}`);
       return undefined;
@@ -457,23 +467,23 @@ async function transcodeViaWebCodecsLocked(
     const negotiated = support.config ?? encoderConfig;
     const accelerationLabel = negotiated.hardwareAcceleration ?? 'no-preference';
     log.info(`WebCodecs encoder negotiated: ${negotiated.codec} (${accelerationLabel})`);
-    const { Muxer, ArrayBufferTarget } = await import('mp4-muxer');
-    const target = new ArrayBufferTarget();
-    const muxer = new Muxer({
-      target,
-      video: {
-        codec: 'avc',
-        width,
-        height,
-        frameRate,
-      },
-      // 'in-memory' fastStart keeps everything buffered until `finalize()` writes a moov-at-front MP4 — same as
-      // libx264's `+faststart`.
-      fastStart: 'in-memory',
+    // Loaded on demand so the muxer stays out of the main bundle; most BGA never reach this path.
+    const mediabunny = await import('mediabunny');
+    // 'in-memory' fastStart keeps everything buffered until `finalize()` writes a moov-at-front MP4 — same as libx264's
+    // `+faststart`.
+    output = new mediabunny.Output({
+      format: new mediabunny.Mp4OutputFormat({ fastStart: 'in-memory' }),
+      target: new mediabunny.BufferTarget(),
     });
+    const videoSource = new mediabunny.EncodedVideoPacketSource('avc');
+    output.addVideoTrack(videoSource, { frameRate });
+    await output.start();
+    // The encoder's `output` callback is synchronous while `add` is async: chain the adds so packets reach the muxer in
+    // decode order, and keep the first failure to rethrow once the encoder has flushed.
     encoder = new VideoEncoder({
       output: (chunk, metadata) => {
-        muxer.addVideoChunk(chunk, metadata);
+        const packet = mediabunny.EncodedPacket.fromEncodedChunk(chunk);
+        muxing = muxing.then(() => videoSource.add(packet, metadata));
       },
       error: (error) => {
         log.warn(`WebCodecs encoder error for ${path}`, error);
@@ -491,9 +501,12 @@ async function transcodeViaWebCodecsLocked(
 
     let frameIndex = 0;
     let chunkCount = 0;
-    for (let chunkStartSec = 0; chunkStartSec < durationSec; chunkStartSec += chunkSeconds) {
-      const remainingSec = durationSec - chunkStartSec;
-      const thisChunkSec = Math.min(chunkSeconds, remainingSec);
+    // The reported duration only sizes the first guess: a container can understate it (a header written before the
+    // encode finished), so chunks keep coming until ffmpeg returns an empty one, capped at twice the reported length
+    // plus a minute so a demuxer that never runs dry can't loop forever.
+    const lastStartSec = durationSec * 2 + 60;
+    for (let chunkStartSec = 0; chunkStartSec < lastStartSec; chunkStartSec += chunkSeconds) {
+      const thisChunkSec = chunkSeconds;
 
       // `-ss BEFORE -i` does input-level seek and is accurate by default in modern ffmpeg (decode-and-discard between
       // the prior keyframe and the seek target). For the first chunk we omit `-ss` entirely — some demuxers re-parse
@@ -504,6 +517,8 @@ async function transcodeViaWebCodecsLocked(
       if (maxLongEdge) chunkArgs.push('-vf', buildScaleFilterArg(maxLongEdge));
       chunkArgs.push('-c:v', 'rawvideo', '-pix_fmt', 'yuv420p', '-f', 'rawvideo', '-an', '-sn', '-dn', chunkName);
       const chunkExit = await ffmpeg.exec(chunkArgs);
+      // Past the reported end, a demuxer may fail the seek rather than return nothing: that is the end too.
+      if (chunkExit !== 0 && chunkStartSec >= durationSec) break;
       if (chunkExit !== 0) {
         log.warn(
           `ffmpeg chunk decode (WebCodecs path) exited with code ${chunkExit} at ${chunkStartSec.toFixed(2)}s for ${path}`,
@@ -557,8 +572,12 @@ async function transcodeViaWebCodecsLocked(
     await encoder.flush();
     encoder.close();
     encoder = undefined;
-    muxer.finalize();
-    const outBytes = new Uint8Array(target.buffer);
+    await muxing;
+    await output.finalize();
+    const muxed = output.target.buffer;
+    output = undefined;
+    if (!muxed) return undefined;
+    const outBytes = new Uint8Array(muxed);
     const elapsed = ((performance.now() - startedAt) / 1000).toFixed(2);
     log.info(
       `WebCodecs transcode ok: ${path} → ${outBytes.byteLength} bytes (${elapsed}s, ${frameIndex} frames @ ${width}×${height}, ${chunkCount} chunks of ≤${chunkSeconds}s)`,
@@ -580,6 +599,15 @@ async function transcodeViaWebCodecsLocked(
         encoder.close();
       } catch {
         // ignore — encoder.close() throws if already closed
+      }
+    }
+    // An early return leaves a failed add unobserved; mark it handled (the transcode already reports undefined).
+    muxing.catch(() => {});
+    if (output) {
+      try {
+        await output.cancel();
+      } catch {
+        // ignore
       }
     }
     try {
@@ -608,14 +636,19 @@ async function transcodeViaWebCodecsLocked(
  * Returns `undefined` if any of geometry / frame rate / duration could not be parsed. The WebCodecs path bails out in
  * that case rather than guessing.
  */
-function parseFfmpegProbe(
+export function parseFFmpegProbe(
   lines: ReadonlyArray<string>,
-): { width: number; height: number; frameRate: number; durationSec: number } | undefined {
+): { width: number; height: number; frameRate: number; durationSec: number; inputFormat?: string } | undefined {
   let width: number | undefined;
   let height: number | undefined;
   let frameRate: number | undefined;
   let durationSec: number | undefined;
+  let inputFormat: string | undefined;
   for (const line of lines) {
+    if (inputFormat === undefined) {
+      const input = line.match(/Input #0, ([\w,]+), from/u);
+      if (input) inputFormat = input[1];
+    }
     if (durationSec === undefined) {
       const duration = line.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/u);
       if (duration) {
@@ -642,7 +675,33 @@ function parseFfmpegProbe(
     }
   }
   if (!width || !height || !frameRate || !durationSec) return undefined;
-  return { width, height, frameRate, durationSec };
+  return { width, height, frameRate, durationSec, ...(inputFormat !== undefined ? { inputFormat } : {}) };
+}
+
+/**
+ * ffmpeg's names for bare video elementary streams — a codec's bitstream with no container around it (`.mpg` files
+ * that are just an MPEG-1 sequence, raw H.264 / HEVC / MPEG-4 Part 2 / VC-1). They carry no timestamps or index:
+ * ffmpeg guesses their duration from a bitrate field and their frame rate from heuristics, and a seek lands wherever
+ * the bitrate guess says. A BMS BGA like that can report 1.2 s for a 113 s clip.
+ */
+const RAW_VIDEO_STREAM_FORMATS = new Set([
+  'mpegvideo',
+  'mpeg1video',
+  'mpeg2video',
+  'h264',
+  'hevc',
+  'm4v',
+  'vc1',
+  'cavsvideo',
+]);
+
+/**
+ * Whether ffmpeg read the input as a bare elementary stream (see {@link RAW_VIDEO_STREAM_FORMATS}). The chunked
+ * WebCodecs path depends on the reported duration, frame rate and on seeking, so such inputs take the single-pass
+ * libx264 transcode instead, which decodes every frame in order with the stream's own timing.
+ */
+export function isRawVideoStreamFormat(inputFormat: string | undefined): boolean {
+  return inputFormat !== undefined && inputFormat.split(',').some((name) => RAW_VIDEO_STREAM_FORMATS.has(name));
 }
 
 /**
@@ -674,13 +733,13 @@ async function waitForEncoderDrain(encoder: VideoEncoder, target: number): Promi
  * wasm. We keep the loaded instance around between calls so subsequent BGA videos transcode immediately instead of
  * paying the cold- start hit on every chart change.
  */
-let cachedFfmpeg: FfmpegInstance | undefined;
-let cachedFfmpegPromise: Promise<FfmpegInstance> | undefined;
+let cachedFFmpeg: FFmpegInstance | undefined;
+let cachedFFmpegPromise: Promise<FFmpegInstance> | undefined;
 
-async function loadFfmpeg(): Promise<FfmpegInstance> {
-  if (cachedFfmpeg) return cachedFfmpeg;
-  if (cachedFfmpegPromise) return cachedFfmpegPromise;
-  cachedFfmpegPromise = (async () => {
+async function loadFFmpeg(): Promise<FFmpegInstance> {
+  if (cachedFFmpeg) return cachedFFmpeg;
+  if (cachedFFmpegPromise) return cachedFFmpegPromise;
+  cachedFFmpegPromise = (async () => {
     // Lazy ESM imports keep the multi-megabyte wasm + worker bundle out of the initial page load — the user only pays
     // the download cost when they actually pick a chart with an unsupported BGA video.
     const [{ FFmpeg }, { toBlobURL }] = await Promise.all([import('@ffmpeg/ffmpeg'), import('@ffmpeg/util')]);
@@ -698,16 +757,16 @@ async function loadFfmpeg(): Promise<FfmpegInstance> {
     //
     // The demo's Vite config installs a custom plugin (`be-music:ffmpeg-core`) that serves the ESM core
     // (`ffmpeg-core.js` / `.wasm`) at this stable URL prefix in dev and emits them as build assets in production.
-    const baseUrl = '/ffmpeg-core';
-    const coreUrl = `${baseUrl}/ffmpeg-core.js`;
-    const wasmUrl = `${baseUrl}/ffmpeg-core.wasm`;
+    const baseURL = '/ffmpeg-core';
+    const coreURL = `${baseURL}/ffmpeg-core.js`;
+    const wasmURL = `${baseURL}/ffmpeg-core.wasm`;
     const ffmpeg = new FFmpeg();
     // `toBlobURL` re-fetches the core JS / WASM URLs into blob URLs so the spawned module worker's `await
     // import(coreURL)` succeeds even when the page sits behind a different origin (the worker's same-origin policy
     // otherwise blocks the cross-origin file URLs Vite hands out under HMR).
-    const [coreBlobUrl, wasmBlobUrl] = await Promise.all([
-      toBlobURL(coreUrl, 'text/javascript'),
-      toBlobURL(wasmUrl, 'application/wasm'),
+    const [coreBlobURL, wasmBlobURL] = await Promise.all([
+      toBlobURL(coreURL, 'text/javascript'),
+      toBlobURL(wasmURL, 'application/wasm'),
     ]);
     // Surface ffmpeg's own log so we can see *what* the wasm side reports — the core's `exec()` wrapper hides errors
     // without a JS-style `.message` (it only re-throws when the message starts with `"Aborted"` and self-detonates with
@@ -715,18 +774,18 @@ async function loadFfmpeg(): Promise<FfmpegInstance> {
     ffmpeg.on('log', ({ type, message }: { type: string; message: string }) => {
       log.debug(`ffmpeg ${type}: ${message}`);
     });
-    await ffmpeg.load({ coreURL: coreBlobUrl, wasmURL: wasmBlobUrl });
-    cachedFfmpeg = ffmpeg as FfmpegInstance;
-    return cachedFfmpeg;
+    await ffmpeg.load({ coreURL: coreBlobURL, wasmURL: wasmBlobURL });
+    cachedFFmpeg = ffmpeg as FFmpegInstance;
+    return cachedFFmpeg;
   })().catch((error) => {
     // Reset the promise cache on failure so a transient network blip doesn't permanently disable the fallback.
-    cachedFfmpegPromise = undefined;
+    cachedFFmpegPromise = undefined;
     throw error;
   });
-  return cachedFfmpegPromise;
+  return cachedFFmpegPromise;
 }
 
-interface FfmpegInstance {
+interface FFmpegInstance {
   writeFile(path: string, data: Uint8Array): Promise<boolean>;
   readFile(path: string): Promise<Uint8Array | string>;
   exec(args: string[]): Promise<number>;
@@ -734,7 +793,7 @@ interface FfmpegInstance {
   /**
    * `@ffmpeg/ffmpeg` exposes an EventEmitter-style `on` / `off` for the underlying worker's `log` events. The WebCodecs
    * encode path uses this to capture stderr lines mid-decode (input geometry, frame rate) without displacing the
-   * diagnostic listener `loadFfmpeg` already attaches.
+   * diagnostic listener `loadFFmpeg` already attaches.
    */
   on(event: 'log', listener: (event: { type: string; message: string }) => void): void;
   off(event: 'log', listener: (event: { type: string; message: string }) => void): void;
@@ -831,7 +890,7 @@ function waitForVideoFrameData(video: HTMLVideoElement, timeoutMs: number): Prom
   });
 }
 
-function guessVideoMimeType(path: string): string {
+function guessVideoMIMEType(path: string): string {
   const lower = path.toLowerCase();
   if (lower.endsWith('.mp4') || lower.endsWith('.m4v')) return 'video/mp4';
   if (lower.endsWith('.webm')) return 'video/webm';
@@ -880,9 +939,9 @@ export interface LoadTextureOptions {
   /** Skin-declared `#TRANSCOLOR` chroma key (rare on BGA assets, common on UI sprites). */
   transparentColor?: { r: number; g: number; b: number };
   /**
-   * Treat pure-black pixels as transparent. Mirrors the BMS BGA "layer" convention (`packages/player/src/bga.ts`'s
-   * `isOpaquePixel` for `mode === 'layer'`): the foreground BGA layer is composited over the base with `(0, 0, 0)`
-   * acting as a chroma-key. Only enabled for layer-track decodes — base / POOR retain their black pixels because
+   * Treat pure-black pixels as transparent. Mirrors the BMS BGA "layer" convention
+   * (`packages/player-tui/src/bga-frame.ts`'s `isOpaquePixel` for `mode === 'layer'`): the foreground BGA layer is
+   * composited over the base with `(0, 0, 0)` acting as a chroma-key. Only enabled for layer-track decodes — base / POOR retain their black pixels because
    * they're the bottommost BGA layer (nothing visible behind them).
    */
   keyOutBlack?: boolean;
@@ -903,7 +962,7 @@ export async function loadTextureFromBytes(
   const options = normalizeLoadTextureOptions(transparentColorOrOptions);
   const lower = path.toLowerCase();
   if (lower.endsWith('.tga')) {
-    return decodeTgaTexture(bytes, options, path);
+    return decodeTGATexture(bytes, options, path);
   }
   const decoder = resolveImageDecoder(lower);
   if (decoder) {
@@ -993,7 +1052,7 @@ export async function loadImageBitmapFromBytes(path: string, bytes: Uint8Array):
   const lower = path.toLowerCase();
   try {
     if (lower.endsWith('.tga')) {
-      const imageData = decodeTgaImageData(bytes);
+      const imageData = decodeTGAImageData(bytes);
       return imageData ? await createImageBitmap(imageData) : undefined;
     }
     const decoded = resolveImageDecoder(lower)?.(bytes);
@@ -1092,12 +1151,12 @@ async function applyChromaKeyToBitmap(
   return createImageBitmap(canvas);
 }
 
-async function decodeTgaTexture(
+async function decodeTGATexture(
   bytes: Uint8Array,
   options: LoadTextureOptions = {},
   label?: string,
 ): Promise<Texture | undefined> {
-  const imageData = decodeTgaImageData(bytes, options);
+  const imageData = decodeTGAImageData(bytes, options);
   if (!imageData) {
     return undefined;
   }
@@ -1121,7 +1180,7 @@ async function decodeTgaTexture(
  * Decodes an uncompressed or RLE true-colour / grayscale TGA into RGBA pixels, applying the chroma keys in `options`.
  * `undefined` for truncated files and variants it doesn't handle (colour-mapped, 15/16-bit).
  */
-function decodeTgaImageData(bytes: Uint8Array, options: LoadTextureOptions = {}): ImageData | undefined {
+function decodeTGAImageData(bytes: Uint8Array, options: LoadTextureOptions = {}): ImageData | undefined {
   const transparentColor = options.transparentColor;
   const keyOutBlack = options.keyOutBlack === true;
   if (bytes.length < 18) {
@@ -1136,7 +1195,7 @@ function decodeTgaImageData(bytes: Uint8Array, options: LoadTextureOptions = {})
   const bitsPerPixel = bytes[16] ?? 0;
   const descriptor = bytes[17] ?? 0;
   const bytesPerPixel = bitsPerPixel / 8;
-  const isRle = imageType === 10 || imageType === 11;
+  const isRLE = imageType === 10 || imageType === 11;
   const isTrueColor = imageType === 2 || imageType === 10;
   const isGrayscale = imageType === 3 || imageType === 11;
 
@@ -1191,7 +1250,7 @@ function decodeTgaImageData(bytes: Uint8Array, options: LoadTextureOptions = {})
     return true;
   };
 
-  if (isRle) {
+  if (isRLE) {
     while (written < pixelCount && sourceOffset < bytes.length) {
       const packet = bytes[sourceOffset++] ?? 0;
       const count = (packet & 0x7f) + 1;

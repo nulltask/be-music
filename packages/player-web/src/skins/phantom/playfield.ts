@@ -6,6 +6,7 @@ import {
   type PixiLongNoteContext,
   type PixiNoteContext,
   keyBeamGradient,
+  wheelArrowPoints,
 } from '../pixi-kit/index.ts';
 
 /** Colours for one lane class: note highlight / body / shade, and the key cap at rest / pressed. */
@@ -17,19 +18,29 @@ interface LaneTone {
   capLit: number;
 }
 
-// IIDX-convention tones: white keys white, black keys blue, scratch red. Notes stay plain so reading is never traded
-// for style; the poster styling lives in the surrounding chrome.
+// IIDX-convention tones: white keys white, black keys blue, scratch red — and the 24 / 48 KEY wheel, which stands where
+// the scratch would, red too. Notes stay plain so reading is never traded for style; the poster styling lives in the
+// surrounding chrome.
+const SCRATCH_TONE: LaneTone = { top: 0xff9aa6, body: 0xe60019, bottom: 0x7a0010, cap: 0x24090d, capLit: 0xff2b45 };
 const TONES: Record<BeMusicLaneKind, LaneTone> = {
   white: { top: 0xffffff, body: 0xecebf0, bottom: 0xa9a7b0, cap: 0x1a1a1d, capLit: 0xf4f1ea },
   black: { top: 0xa8d8ff, body: 0x3d8bff, bottom: 0x1a4fa8, cap: 0x0e1626, capLit: 0x6fa8ff },
-  scratch: { top: 0xff9aa6, body: 0xe60019, bottom: 0x7a0010, cap: 0x24090d, capLit: 0xff2b45 },
+  scratch: SCRATCH_TONE,
+  'wheel-up': SCRATCH_TONE,
+  'wheel-down': SCRATCH_TONE,
 };
 
 const NOTE_HEIGHT = 10;
 export const PHANTOM_BOMB_DURATION_MS = 150;
 
 /** Laser colour per lane: a cool white, an electric blue, and the poster red. */
-const BEAM_COLORS: Record<BeMusicLaneKind, number> = { white: 0xe8ecff, black: 0x2f7bff, scratch: 0xff1430 };
+const BEAM_COLORS: Record<BeMusicLaneKind, number> = {
+  white: 0xe8ecff,
+  black: 0x2f7bff,
+  scratch: 0xff1430,
+  'wheel-up': 0xff1430,
+  'wheel-down': 0xff1430,
+};
 
 /** Bed of the white-key lanes, a step lighter than the ink well the other lanes show. */
 const WHITE_LANE_BED = 0x18181d;
@@ -80,6 +91,9 @@ export function renderPhantomLanes({ graphics, lanes, beatPhase }: PixiLanesCont
     if (pressed) {
       graphics.rect(x + 1, capTop - 2, capW, 2).fill({ color: 0xffffff, alpha: 0.95 });
     }
+    // A wheel lane's cap carries the way it turns.
+    const arrow = wheelArrowPoints(lane.kind, x + w / 2, capTop + 8, Math.min(4, capW / 3));
+    if (arrow) graphics.poly(arrow).fill(pressed ? 0x000000 : 0xffffff);
   }
   // Close each play side's grid on its right edge — each lane only draws its LEFT hairline.
   for (const run of resolveLaneRuns(lanes)) {

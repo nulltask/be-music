@@ -2,46 +2,46 @@ import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import type { ExportsBenchmarkSnapshot } from './exports.types.ts';
 
-export function resolveCliValue(value: string | undefined, optionName: string): string {
+export function resolveCLIValue(value: string | undefined, optionName: string): string {
   if (!value) {
     throw new Error(`Missing value for ${optionName}`);
   }
   return value;
 }
 
-export function parsePositiveCliNumber(value: string | undefined, optionName: string): number {
-  const parsed = Number.parseFloat(resolveCliValue(value, optionName));
+export function parsePositiveCLINumber(value: string | undefined, optionName: string): number {
+  const parsed = Number.parseFloat(resolveCLIValue(value, optionName));
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new Error(`${optionName} must be a positive number`);
   }
   return parsed;
 }
 
-export function parseNonNegativeCliNumber(value: string | undefined, optionName: string): number {
-  const parsed = Number.parseFloat(resolveCliValue(value, optionName));
+export function parseNonNegativeCLINumber(value: string | undefined, optionName: string): number {
+  const parsed = Number.parseFloat(resolveCLIValue(value, optionName));
   if (!Number.isFinite(parsed) || parsed < 0) {
     throw new Error(`${optionName} must be a non-negative number`);
   }
   return parsed;
 }
 
-export function parsePositiveCliInteger(value: string | undefined, optionName: string): number {
-  const parsed = Number.parseInt(resolveCliValue(value, optionName), 10);
+export function parsePositiveCLIInteger(value: string | undefined, optionName: string): number {
+  const parsed = Number.parseInt(resolveCLIValue(value, optionName), 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new Error(`${optionName} must be a positive integer`);
   }
   return parsed;
 }
 
-export function isExecutedAsScript(importMetaUrl: string, entryPath: string | undefined = process.argv[1]): boolean {
+export function isExecutedAsScript(importMetaURL: string, entryPath: string | undefined = process.argv[1]): boolean {
   if (!entryPath) {
     return false;
   }
-  return importMetaUrl === pathToFileURL(entryPath).href;
+  return importMetaURL === pathToFileURL(entryPath).href;
 }
 
-export function runCliMain(importMetaUrl: string, main: () => Promise<unknown>): void {
-  if (!isExecutedAsScript(importMetaUrl)) {
+export function runCLIMain(importMetaURL: string, main: () => Promise<unknown>): void {
+  if (!isExecutedAsScript(importMetaURL)) {
     return;
   }
 

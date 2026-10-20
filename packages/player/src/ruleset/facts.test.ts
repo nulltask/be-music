@@ -1,10 +1,13 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import type { BeMusicPlaylog } from '../playlog/format.ts';
 import { rulesetChartFactsFromPlaylog } from '../playlog/rulesets.ts';
+import { GAUGE_JUDGE_BAD, GAUGE_JUDGE_EMPTY_POOR, RulesetGauge } from './gauge.ts';
 import {
   countBaseNotes,
   createEmptyRulesetNoteCounts,
+  resolveBeatorajaDefaultTotal,
+  resolveLR2DefaultTotal,
   resolveRuleset,
   rulesetChartFactsFromChart,
   type RulesetChartFacts,
@@ -47,6 +50,27 @@ describe('ruleset/facts', () => {
     expect(resolveRuleset(chart, 'beatoraja', { selectedGauge: 'GROOVE', gauge: 'EX-HARD' }).gauge.id).toBe('EX-HARD');
   });
 
+  test("LR2's DEATH gauge never gains and lets empty POORs through; BAD kills (OpenLR2 L27673-L27680)", () => {
+    const spec = resolveRuleset(facts(), 'lr2', { selectedGauge: 'DEATH' }).gauge;
+    expect(spec.id).toBe('DEATH');
+    expect(spec.values).toEqual([0, 0, 0, -100, -100, 0]);
+
+    const gauge = new RulesetGauge(spec);
+    for (let index = 0; index < 50; index += 1) {
+      gauge.applyJudge(GAUGE_JUDGE_EMPTY_POOR);
+    }
+    expect(gauge.value).toBe(100);
+    expect(gauge.failedMidPlay).toBe(false);
+    gauge.applyJudge(GAUGE_JUDGE_BAD);
+    expect(gauge.value).toBe(0);
+    expect(gauge.cleared()).toBe(false);
+  });
+
+  test("beatoraja's HAZARD keeps its own table", () => {
+    const spec = resolveRuleset(facts(), 'beatoraja', { selectedGauge: 'DEATH' }).gauge;
+    expect(spec.values).toEqual([0.15, 0.06, 0, -100, -100, -10]);
+  });
+
   test('the debug judge-window override reaches the ruleset window tables', () => {
     const chart = facts();
     const base = resolveRuleset(chart, 'lr2');
@@ -69,10 +93,87 @@ describe('ruleset/facts', () => {
   });
 });
 
+describe('ruleset/beatoraja bmson judge_rank default', () => {
+  test('a bmson chart without `judge_rank` judges like `judge_rank: 100` (the bmson default), not like #RANK 2', () => {
+    const json = createEmptyJSON('bmson');
+    expect(json.bmson.info.judgeRank).toBeUndefined();
+    const chart = { scorableNotes: [], laneDisplayMode: '7 KEY SP' };
+    const absent = resolveRuleset(rulesetChartFactsFromChart(json, chart), 'beatoraja').windows;
+    json.bmson.info.judgeRank = 100;
+    const explicit = resolveRuleset(rulesetChartFactsFromChart(json, chart), 'beatoraja').windows;
+    expect(absent).toEqual(explicit);
+    // beatoraja 7 KEY PGREAT at judgerank 100 is ±20 ms (it was ±15 ms, the NORMAL-rule rank-2 value of 75).
+    expect(absent.note.judges[0]).toEqual([-20_000, 20_000]);
+  });
+
+  test('the play-log adapter, which records `sourceExRank` only when the chart sets it, resolves the same default', () => {
+    const recorded = resolveRuleset(facts({ sourceFormat: 'bmson', judgeRank: { percent: 75 } }), 'beatoraja');
+    const explicit = resolveRuleset(
+      facts({ sourceFormat: 'bmson', judgeRank: { percent: 75, sourceExRank: 100 } }),
+      'beatoraja',
+    );
+    expect(recorded.windows).toEqual(explicit.windows);
+    // A BMS chart without #DEFEXRANK / #RANK still falls back to beatoraja's rank-2 judgerank.
+    const bms = resolveRuleset(facts({ judgeRank: { percent: 75 } }), 'beatoraja');
+    expect(bms.windows.note.judges[0]).toEqual([-15_000, 15_000]);
+  });
+});
+
+describe('effective TOTAL', () => {
+  // 100 base notes: LR2 default (100 / 5 + 200) × 0.8 = 176; beatoraja default max(260, 760.5 / 7.5) = 260.
+  const lr2Default = resolveLR2DefaultTotal(100);
+  const beatorajaDefault = resolveBeatorajaDefaultTotal(100);
+  const defaults = { lr2: lr2Default, beatoraja: beatorajaDefault, iidx: lr2Default } as const;
+
+  test('the default formulas give the expected values for 100 notes', () => {
+    expect(lr2Default).toBeCloseTo(176, 9);
+    expect(beatorajaDefault).toBe(260);
+  });
+
+  for (const id of ['lr2', 'beatoraja', 'iidx'] as const) {
+    describe(id, () => {
+      test('BMS #TOTAL is an absolute TOTAL', () => {
+        expect(resolveRuleset(facts({ total: 300 }), id).effectiveTotal).toBe(300);
+      });
+
+      test('BMS without #TOTAL (or with #TOTAL <= 0) uses the ruleset default', () => {
+        expect(resolveRuleset(facts(), id).effectiveTotal).toBeCloseTo(defaults[id], 9);
+        expect(resolveRuleset(facts({ total: 0 }), id).effectiveTotal).toBeCloseTo(defaults[id], 9);
+      });
+
+      test('bmson total is a percentage of the ruleset default', () => {
+        // The parser pins an absent bmson `total` to the spec default 100, so 100 and "absent" must agree.
+        expect(resolveRuleset(facts({ sourceFormat: 'bmson' }), id).effectiveTotal).toBeCloseTo(defaults[id], 9);
+        expect(resolveRuleset(facts({ sourceFormat: 'bmson', total: 100 }), id).effectiveTotal).toBeCloseTo(
+          defaults[id],
+          9,
+        );
+        expect(resolveRuleset(facts({ sourceFormat: 'bmson', total: 150 }), id).effectiveTotal).toBeCloseTo(
+          defaults[id] * 1.5,
+          9,
+        );
+      });
+
+      test('bmson total 0 falls back to 100 % of the ruleset default (beatoraja BMSPlayerRule)', () => {
+        expect(resolveRuleset(facts({ sourceFormat: 'bmson', total: 0 }), id).effectiveTotal).toBeCloseTo(
+          defaults[id],
+          9,
+        );
+      });
+    });
+  }
+
+  test('the lr2 GROOVE gauge recovers from the effective TOTAL of a bmson chart', () => {
+    // 100 % of the LR2 default over 100 notes: +1.76 per PGREAT, not +1.00 (an absolute TOTAL 100).
+    const gauge = resolveRuleset(facts({ sourceFormat: 'bmson', total: 100 }), 'lr2').gauge;
+    expect(gauge.values[0]).toBeCloseTo(lr2Default / 100, 9);
+  });
+});
+
 describe('ruleset chart-facts adapters agree', () => {
   test('the engine adapter and the play-log adapter derive the same facts from one chart', () => {
     // A live play and a replay of that same play must resolve the SAME ruleset, so the two adapters have to agree.
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.rank = 2;
     json.metadata.total = 300;
     json.bms.lnMode = 2;
@@ -85,7 +186,7 @@ describe('ruleset chart-facts adapters agree', () => {
 
     const playlog: BeMusicPlaylog = {
       format: 'be-music-playlog',
-      version: 1,
+      version: 0,
       clock: { unit: 'us', origin: 'chart-zero' },
       chart: {
         sourceFormat: 'bms',
@@ -109,6 +210,38 @@ describe('ruleset chart-facts adapters agree', () => {
     for (const id of ['lr2', 'beatoraja', 'iidx'] as const) {
       expect(resolveRuleset(fromChart, id).noteCount).toBe(resolveRuleset(fromPlaylog, id).noteCount);
       expect(resolveRuleset(fromChart, id).effectiveTotal).toBe(resolveRuleset(fromPlaylog, id).effectiveTotal);
+    }
+  });
+
+  test('a bmson play and its replay resolve the same effective TOTAL', () => {
+    const json = createEmptyJSON('bmson');
+    json.metadata.total = 150;
+    const scorableNotes = [{ channel: '11', seconds: 1, beat: 0, judged: false, event: {} as never }] as never;
+    const fromChart = rulesetChartFactsFromChart(json, { scorableNotes, laneDisplayMode: '7keys' });
+    const playlog: BeMusicPlaylog = {
+      format: 'be-music-playlog',
+      version: 0,
+      clock: { unit: 'us', origin: 'chart-zero' },
+      chart: {
+        sourceFormat: 'bmson',
+        laneMode: '7keys',
+        total: 150,
+        lnMode: 1,
+        judgeRank: { percent: fromChart.judgeRank.percent },
+        noteCount: 1,
+        notes: [{ id: 0, channel: '11', type: 'normal', timeUs: 1_000_000 }],
+      },
+      inputs: [],
+      play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
+    };
+    const fromPlaylog = rulesetChartFactsFromPlaylog(playlog);
+    expect(fromChart).toEqual(fromPlaylog);
+    for (const id of ['lr2', 'beatoraja', 'iidx'] as const) {
+      const live = resolveRuleset(fromChart, id).effectiveTotal;
+      expect(resolveRuleset(fromPlaylog, id).effectiveTotal).toBe(live);
+      // 150 % of the ruleset's default for one note, never an absolute TOTAL 150.
+      const fallback = id === 'beatoraja' ? resolveBeatorajaDefaultTotal(1) : resolveLR2DefaultTotal(1);
+      expect(live).toBeCloseTo(fallback * 1.5, 9);
     }
   });
 });

@@ -7,7 +7,7 @@ import {
   MAX_HIGH_SPEED,
   MIN_HIGH_SPEED,
   resolveHighSpeedMultiplier,
-} from '@be-music/player/core/high-speed-control';
+} from '@be-music/player/signals';
 
 export { DEFAULT_HIGH_SPEED, HIGH_SPEED_STEP, MAX_HIGH_SPEED, MIN_HIGH_SPEED };
 
@@ -29,7 +29,7 @@ export interface PersistedPlayerConfig {
   lastMusicSelectFocusKeyByDirectory?: Record<string, string>;
 }
 
-export interface CliConfigOverrideFlags {
+export interface CLIConfigOverrideFlags {
   playMode: boolean;
   highSpeed: boolean;
 }
@@ -131,7 +131,7 @@ export function createDefaultPersistedPlayerConfig(): PersistedPlayerConfig {
   };
 }
 
-export function resolveCliConfigOverrideFlags(rawArgs: string[]): CliConfigOverrideFlags {
+export function resolveCLIConfigOverrideFlags(rawArgs: string[]): CLIConfigOverrideFlags {
   let playMode = false;
   let highSpeed = false;
   for (const token of rawArgs) {
@@ -151,7 +151,7 @@ export function resolveCliConfigOverrideFlags(rawArgs: string[]): CliConfigOverr
 export function applyPersistedPlayerConfigToArgs<T extends PlayerConfigArgs>(
   args: T,
   persisted: PersistedPlayerConfig,
-  overrides: CliConfigOverrideFlags,
+  overrides: CLIConfigOverrideFlags,
 ): T {
   let merged = args;
   if (!overrides.playMode) {

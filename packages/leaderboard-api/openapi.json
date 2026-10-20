@@ -1,0 +1,3879 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "be-music Leaderboard API",
+    "description": "Version 0 is the beta: it may still change incompatibly (docs/leaderboard.md section 8). Requests are authenticated with a host-only OIDC app session or a resource-bound Accounts access token; reads are public.",
+    "version": "0"
+  },
+  "servers": [
+    {
+      "url": "/api/v0"
+    }
+  ],
+  "components": {},
+  "paths": {
+    "/me": {
+      "get": {
+        "operationId": "getMe",
+        "tags": [
+          "Account"
+        ],
+        "summary": "My account",
+        "responses": {
+          "200": {
+            "description": "The signed-in account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "handle": {
+                      "type": "string"
+                    },
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "anonymous": {
+                      "type": "boolean",
+                      "description": "True until the account has a way back in (a passkey)."
+                    },
+                    "passkeys": {
+                      "type": "integer"
+                    },
+                    "avatarUrl": {
+                      "type": "string",
+                      "description": "The player icon: the uploaded one, or one generated from the account."
+                    }
+                  },
+                  "required": [
+                    "handle",
+                    "displayName",
+                    "anonymous",
+                    "passkeys",
+                    "avatarUrl"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session: sign in first (anonymously is enough).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "sign-in-required"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The account does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-found"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "patchMe",
+        "tags": [
+          "Account"
+        ],
+        "summary": "Change my handle or display name",
+        "description": "Fields left out stay as they are. The old handle stays reserved for the player, and its pages redirect to the new one.",
+        "responses": {
+          "200": {
+            "description": "The account after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "handle": {
+                      "type": "string"
+                    },
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "anonymous": {
+                      "type": "boolean",
+                      "description": "True until the account has a way back in (a passkey)."
+                    },
+                    "passkeys": {
+                      "type": "integer"
+                    },
+                    "avatarUrl": {
+                      "type": "string",
+                      "description": "The player icon: the uploaded one, or one generated from the account."
+                    }
+                  },
+                  "required": [
+                    "handle",
+                    "displayName",
+                    "anonymous",
+                    "passkeys",
+                    "avatarUrl"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The handle or the display name breaks a rule (`detail`: format, reserved, empty, length, characters).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "invalid-handle",
+                        "invalid-display-name"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session: sign in first (anonymously is enough).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "sign-in-required"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The account does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-found"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Another player holds this handle, now or formerly.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "handle-taken"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "handle": {
+                    "type": "string",
+                    "description": "New handle: letters, digits and `_`, 3 to 15 characters, case-insensitive. The old handle stays reserved for the player and its pages redirect."
+                  },
+                  "displayName": {
+                    "type": "string",
+                    "description": "New display name: 1 to 32 characters, no line breaks or control characters."
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/avatar": {
+      "put": {
+        "operationId": "putMeAvatar",
+        "tags": [
+          "Account"
+        ],
+        "summary": "Upload my icon",
+        "description": "The image itself as the body: WebP, PNG or JPEG (recognized by its signature), at most 128 KB. Clients shrink it to a 256 px square first.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "image/webp": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The account with its new icon.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "handle": {
+                      "type": "string"
+                    },
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "anonymous": {
+                      "type": "boolean",
+                      "description": "True until the account has a way back in (a passkey)."
+                    },
+                    "passkeys": {
+                      "type": "integer"
+                    },
+                    "avatarUrl": {
+                      "type": "string",
+                      "description": "The player icon: the uploaded one, or one generated from the account."
+                    }
+                  },
+                  "required": [
+                    "handle",
+                    "displayName",
+                    "anonymous",
+                    "passkeys",
+                    "avatarUrl"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No image was sent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "empty-body"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session: sign in first (anonymously is enough).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "sign-in-required"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The image is too large.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "avatar-too-large"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Not a WebP, PNG or JPEG image.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "unsupported-image"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteMeAvatar",
+        "tags": [
+          "Account"
+        ],
+        "summary": "Remove my icon",
+        "description": "Goes back to the icon generated from the account.",
+        "responses": {
+          "200": {
+            "description": "The account with the generated icon.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "handle": {
+                      "type": "string"
+                    },
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "anonymous": {
+                      "type": "boolean",
+                      "description": "True until the account has a way back in (a passkey)."
+                    },
+                    "passkeys": {
+                      "type": "integer"
+                    },
+                    "avatarUrl": {
+                      "type": "string",
+                      "description": "The player icon: the uploaded one, or one generated from the account."
+                    }
+                  },
+                  "required": [
+                    "handle",
+                    "displayName",
+                    "anonymous",
+                    "passkeys",
+                    "avatarUrl"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session: sign in first (anonymously is enough).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "sign-in-required"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scores": {
+      "post": {
+        "operationId": "postScores",
+        "tags": [
+          "Scores"
+        ],
+        "summary": "Submit a play",
+        "description": "Submits a play log with its fingerprint documents. The body is JSON, gzip-compressed (`Content-Encoding: gzip`). The server re-simulates the play under every ruleset and answers its figures and ranks. The same play submitted again by the same account answers 200 with the stored result.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "playlog": {
+                    "description": "The play log (`be-music-playlog`, docs/playlog.md)."
+                  },
+                  "playDocument": {
+                    "description": "Fingerprint document of the played chart (the rolled branches); it must hash to `chart.playFingerprint`."
+                  },
+                  "chartDocument": {
+                    "description": "Fingerprint document of the whole chart (every branch). Required the first time the server sees the chart."
+                  }
+                },
+                "required": [
+                  "playlog",
+                  "playDocument"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Already submitted by this account: the stored result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "scoreId": {
+                      "type": "string"
+                    },
+                    "chartFingerprint": {
+                      "type": "string",
+                      "description": "Chart fingerprint (`bmfp0:…`), the ranking key."
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "ruleset": {
+                            "enum": [
+                              "lr2",
+                              "beatoraja",
+                              "iidx"
+                            ],
+                            "type": "string",
+                            "description": "Ruleset the figures are simulated under."
+                          },
+                          "rulesetRevision": {
+                            "type": "string",
+                            "description": "Revision of the ruleset the play was simulated under (`lr2/0`, ...)."
+                          },
+                          "exScore": {
+                            "type": "integer"
+                          },
+                          "noteCount": {
+                            "type": "integer"
+                          },
+                          "clearLamp": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                          },
+                          "missCount": {
+                            "type": "integer",
+                            "description": "BP: BADs plus POORs."
+                          },
+                          "rank": {
+                            "type": "integer",
+                            "description": "The player’s rank on the chart after this play."
+                          },
+                          "players": {
+                            "type": "integer"
+                          },
+                          "improved": {
+                            "type": "object",
+                            "properties": {
+                              "exScore": {
+                                "type": "boolean"
+                              },
+                              "lamp": {
+                                "type": "boolean"
+                              },
+                              "missCount": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "exScore",
+                              "lamp",
+                              "missCount"
+                            ],
+                            "description": "Which personal bests this play improved."
+                          }
+                        },
+                        "required": [
+                          "ruleset",
+                          "rulesetRevision",
+                          "exScore",
+                          "noteCount",
+                          "clearLamp",
+                          "missCount",
+                          "rank",
+                          "players",
+                          "improved"
+                        ]
+                      },
+                      "description": "The play under every ruleset."
+                    }
+                  },
+                  "required": [
+                    "scoreId",
+                    "chartFingerprint",
+                    "results"
+                  ]
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Accepted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "scoreId": {
+                      "type": "string"
+                    },
+                    "chartFingerprint": {
+                      "type": "string",
+                      "description": "Chart fingerprint (`bmfp0:…`), the ranking key."
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "ruleset": {
+                            "enum": [
+                              "lr2",
+                              "beatoraja",
+                              "iidx"
+                            ],
+                            "type": "string",
+                            "description": "Ruleset the figures are simulated under."
+                          },
+                          "rulesetRevision": {
+                            "type": "string",
+                            "description": "Revision of the ruleset the play was simulated under (`lr2/0`, ...)."
+                          },
+                          "exScore": {
+                            "type": "integer"
+                          },
+                          "noteCount": {
+                            "type": "integer"
+                          },
+                          "clearLamp": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                          },
+                          "missCount": {
+                            "type": "integer",
+                            "description": "BP: BADs plus POORs."
+                          },
+                          "rank": {
+                            "type": "integer",
+                            "description": "The player’s rank on the chart after this play."
+                          },
+                          "players": {
+                            "type": "integer"
+                          },
+                          "improved": {
+                            "type": "object",
+                            "properties": {
+                              "exScore": {
+                                "type": "boolean"
+                              },
+                              "lamp": {
+                                "type": "boolean"
+                              },
+                              "missCount": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "exScore",
+                              "lamp",
+                              "missCount"
+                            ],
+                            "description": "Which personal bests this play improved."
+                          }
+                        },
+                        "required": [
+                          "ruleset",
+                          "rulesetRevision",
+                          "exScore",
+                          "noteCount",
+                          "clearLamp",
+                          "missCount",
+                          "rank",
+                          "players",
+                          "improved"
+                        ]
+                      },
+                      "description": "The play under every ruleset."
+                    }
+                  },
+                  "required": [
+                    "scoreId",
+                    "chartFingerprint",
+                    "results"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not a submission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "invalid-submission",
+                        "empty-body",
+                        "invalid-encoding",
+                        "invalid-json"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session: sign in first (anonymously is enough).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "sign-in-required"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`chart-document-required`: send `chartDocument` too. `play-already-submitted`: another account sent it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "chart-document-required",
+                        "play-already-submitted"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The body is too large.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "body-too-large"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Not gzip-compressed JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "expected-json",
+                        "unsupported-encoding"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The play cannot be ranked: an auto or aborted play, a play at another tempo, a course stage, a malformed play log, or a fingerprint document that does not hash to the play log’s fingerprint.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "invalid-playlog",
+                        "auto-play",
+                        "aborted",
+                        "tempo",
+                        "course-stage",
+                        "missing-fingerprint",
+                        "play-document-not-a-document",
+                        "play-document-fingerprint-mismatch",
+                        "chart-document-not-a-document",
+                        "chart-document-fingerprint-mismatch"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many submissions; retry after `Retry-After` seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "rate-limited"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scores/{id}": {
+      "get": {
+        "operationId": "getScoresById",
+        "tags": [
+          "Scores"
+        ],
+        "summary": "A play",
+        "description": "A hidden play answers only its player; to anyone else it does not exist.",
+        "responses": {
+          "200": {
+            "description": "The play under every ruleset.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "chartFingerprint": {
+                      "type": "string"
+                    },
+                    "playFingerprint": {
+                      "type": "string",
+                      "description": "Fingerprint of the branches this play rolled."
+                    },
+                    "player": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "handle": {
+                              "type": "string"
+                            },
+                            "displayName": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "handle",
+                            "displayName"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "playedRuleset": {
+                      "enum": [
+                        "lr2",
+                        "beatoraja",
+                        "iidx"
+                      ],
+                      "type": "string",
+                      "description": "Ruleset the figures are simulated under."
+                    },
+                    "gauge": {
+                      "type": "string"
+                    },
+                    "assisted": {
+                      "type": "boolean"
+                    },
+                    "assistFlags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "verification": {
+                      "type": "string",
+                      "description": "Highest verification layer passed (`L3`, `L4`, ...)."
+                    },
+                    "createdAt": {
+                      "type": "integer",
+                      "description": "When the play was accepted (epoch ms)."
+                    },
+                    "hidden": {
+                      "type": "boolean",
+                      "description": "Hidden by its player: only the player sees a hidden play."
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "ruleset": {
+                            "enum": [
+                              "lr2",
+                              "beatoraja",
+                              "iidx"
+                            ],
+                            "type": "string",
+                            "description": "Ruleset the figures are simulated under."
+                          },
+                          "rulesetRevision": {
+                            "type": "string"
+                          },
+                          "exScore": {
+                            "type": "integer"
+                          },
+                          "noteCount": {
+                            "type": "integer"
+                          },
+                          "clearLamp": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                          },
+                          "missCount": {
+                            "type": "integer"
+                          },
+                          "maxCombo": {
+                            "type": "integer"
+                          },
+                          "gaugeType": {
+                            "type": "string"
+                          },
+                          "gaugeFinal": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Gauge at the end of the play, in percent."
+                          },
+                          "judges": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": "number"
+                            },
+                            "description": "Judgment counts."
+                          }
+                        },
+                        "required": [
+                          "ruleset",
+                          "rulesetRevision",
+                          "exScore",
+                          "noteCount",
+                          "clearLamp",
+                          "missCount",
+                          "maxCombo",
+                          "gaugeType",
+                          "gaugeFinal",
+                          "judges"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "chartFingerprint",
+                    "playFingerprint",
+                    "player",
+                    "playedRuleset",
+                    "gauge",
+                    "assisted",
+                    "assistFlags",
+                    "verification",
+                    "createdAt",
+                    "hidden",
+                    "results"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The score does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-found"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "patchScoresById",
+        "tags": [
+          "Scores"
+        ],
+        "summary": "Hide or show my play",
+        "description": "A hidden play is kept, but leaves the rankings, the personal bests, the figures and every list, and only its player can open it. The player’s bests on the chart are rebuilt from the plays still shown.",
+        "responses": {
+          "200": {
+            "description": "The play’s visibility after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "hidden": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "hidden"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "data": {}
+                  },
+                  "required": [
+                    "success",
+                    "error",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session: sign in first (anonymously is enough).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "sign-in-required"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Someone else played it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-your-score"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The score does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-found"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "hidden": {
+                    "type": "boolean",
+                    "description": "Hide the play (`true`): it leaves the rankings, the personal bests, the figures and every list, and only its player can open it. `false` shows it again."
+                  }
+                },
+                "required": [
+                  "hidden"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/scores/{id}/card": {
+      "put": {
+        "operationId": "putScoresByIdCard",
+        "tags": [
+          "Scores"
+        ],
+        "summary": "Upload a play’s share card",
+        "description": "The 1200 x 630 picture link previews of the score page show (og:image), drawn by the player’s browser: PNG, WebP or JPEG, at most 512 KB. Only the play’s player can upload it.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/webp": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stored.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "cardUrl": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "cardUrl"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No image was sent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "empty-body"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session: sign in first (anonymously is enough).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "sign-in-required"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Someone else played it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-your-score"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The score does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-found"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The image is too large.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "card-too-large"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Not a PNG, WebP or JPEG image.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "unsupported-image"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/scores/{id}/playlog": {
+      "get": {
+        "operationId": "getScoresByIdPlaylog",
+        "tags": [
+          "Scores"
+        ],
+        "summary": "A play’s play log",
+        "description": "The stored play log, gzip-compressed. Only its player can read a private one.",
+        "responses": {
+          "200": {
+            "description": "The play log (docs/playlog.md).",
+            "content": {
+              "application/json": {}
+            }
+          },
+          "404": {
+            "description": "The score or its play log does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-found"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/charts/{chartFingerprint}/leaderboard": {
+      "get": {
+        "operationId": "getChartsByChartFingerprintLeaderboard",
+        "tags": [
+          "Rankings"
+        ],
+        "summary": "A chart’s ranking",
+        "description": "Players by best EX-Score under one ruleset; ties share a rank.",
+        "responses": {
+          "200": {
+            "description": "A page of the ranking.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "rank": {
+                            "type": "integer",
+                            "description": "Competition rank: ties share a rank."
+                          },
+                          "handle": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "anonymous": {
+                            "type": "boolean"
+                          },
+                          "avatarUrl": {
+                            "type": "string"
+                          },
+                          "exScore": {
+                            "type": "integer"
+                          },
+                          "exScoreId": {
+                            "type": "string",
+                            "description": "The score that set the best EX-Score."
+                          },
+                          "clearLamp": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                          },
+                          "missCount": {
+                            "type": "integer"
+                          },
+                          "playCount": {
+                            "type": "integer"
+                          },
+                          "playedHere": {
+                            "type": "boolean",
+                            "description": "Played under this ruleset at least once."
+                          },
+                          "achievedAt": {
+                            "type": "integer",
+                            "description": "When the best EX-Score was set (epoch ms)."
+                          }
+                        },
+                        "required": [
+                          "rank",
+                          "handle",
+                          "displayName",
+                          "anonymous",
+                          "avatarUrl",
+                          "exScore",
+                          "exScoreId",
+                          "clearLamp",
+                          "missCount",
+                          "playCount",
+                          "playedHere",
+                          "achievedAt"
+                        ]
+                      }
+                    },
+                    "players": {
+                      "type": "integer",
+                      "description": "Players matching the filters."
+                    },
+                    "offset": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "entries",
+                    "players",
+                    "offset",
+                    "limit"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "data": {}
+                  },
+                  "required": [
+                    "success",
+                    "error",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ruleset",
+            "schema": {
+              "enum": [
+                "lr2",
+                "beatoraja",
+                "iidx"
+              ],
+              "type": "string"
+            },
+            "required": true,
+            "description": "Ruleset the figures are simulated under."
+          },
+          {
+            "in": "query",
+            "name": "assisted",
+            "schema": {
+              "enum": [
+                "0",
+                "1",
+                "true",
+                "false"
+              ],
+              "type": "string",
+              "default": "0"
+            },
+            "description": "Rank assisted plays (their own ranking) instead of unassisted ones."
+          },
+          {
+            "in": "query",
+            "name": "anonymous",
+            "schema": {
+              "enum": [
+                "0",
+                "1",
+                "true",
+                "false"
+              ],
+              "type": "string",
+              "default": "0"
+            },
+            "description": "Include anonymous players."
+          },
+          {
+            "in": "query",
+            "name": "played",
+            "schema": {
+              "enum": [
+                "0",
+                "1",
+                "true",
+                "false"
+              ],
+              "type": "string",
+              "default": "0"
+            },
+            "description": "Only players who played the chart under this ruleset at least once."
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": "0"
+            },
+            "description": "Entries to skip."
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": "50"
+            },
+            "description": "Entries to return."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "chartFingerprint",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/charts/{chartFingerprint}/leaderboard/me": {
+      "get": {
+        "operationId": "getChartsByChartFingerprintLeaderboardMe",
+        "tags": [
+          "Rankings"
+        ],
+        "summary": "My rank on a chart",
+        "description": "My best on the chart and my rank among every player, anonymous ones included.",
+        "responses": {
+          "200": {
+            "description": "My rank.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rank": {
+                      "type": "integer"
+                    },
+                    "players": {
+                      "type": "integer"
+                    },
+                    "exScore": {
+                      "type": "integer"
+                    },
+                    "exScoreId": {
+                      "type": "string"
+                    },
+                    "clearLamp": {
+                      "type": "integer",
+                      "description": "Best clear lamp (see the score results)."
+                    },
+                    "missCount": {
+                      "type": "integer",
+                      "description": "Fewest BP."
+                    },
+                    "playCount": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "rank",
+                    "players",
+                    "exScore",
+                    "exScoreId",
+                    "clearLamp",
+                    "missCount",
+                    "playCount"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "data": {}
+                  },
+                  "required": [
+                    "success",
+                    "error",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session: sign in first (anonymously is enough).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "sign-in-required"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "I have not played the chart under these filters.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-played"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ruleset",
+            "schema": {
+              "enum": [
+                "lr2",
+                "beatoraja",
+                "iidx"
+              ],
+              "type": "string"
+            },
+            "required": true,
+            "description": "Ruleset the figures are simulated under."
+          },
+          {
+            "in": "query",
+            "name": "assisted",
+            "schema": {
+              "enum": [
+                "0",
+                "1",
+                "true",
+                "false"
+              ],
+              "type": "string",
+              "default": "0"
+            },
+            "description": "My rank among assisted plays instead of unassisted ones."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "chartFingerprint",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/course-scores": {
+      "post": {
+        "operationId": "postCourseScores",
+        "tags": [
+          "Courses"
+        ],
+        "summary": "Submit a course run",
+        "description": "Submits a course play log with the fingerprint documents of each played stage and the charts of the stages it never reached. The body is JSON, gzip-compressed (`Content-Encoding: gzip`). Every played stage is checked like a single play, every unreached stage’s facts must be its chart’s, the run is re-simulated under every ruleset, and each stage’s carry-in must be the state the previous stage, re-simulated, left. A run given up with ESC on its last stage played is a failed run; one that stopped before the last stage otherwise must have failed there, or it is refused as `aborted`. A NONSTOP run sends every stage chart instead of documents: the server stitches them again, the stitched play must have been recorded on that chart, and the stitched play is re-simulated (given up with ESC, it is a failed run). A course run creates no chart scores. The same run submitted again by the same account answers 200 with the stored result. Rejections name the stage at fault in `detail` when there is one.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "coursePlaylog": {
+                    "description": "The course play log (`be-music-course-playlog`, docs/playlog.md)."
+                  },
+                  "stages": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "playDocument": {
+                          "description": "Fingerprint document of the stage chart as played; it must hash to the stage’s `chart.playFingerprint`."
+                        },
+                        "chartDocument": {
+                          "description": "Fingerprint document of the whole stage chart. Required the first time the server sees the chart."
+                        }
+                      },
+                      "required": [
+                        "playDocument"
+                      ]
+                    },
+                    "description": "The fingerprint documents of each played stage, in the order the stages were played. Empty for a NONSTOP run, whose stages are rebuilt from `stageCharts`."
+                  },
+                  "stageCharts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "stage": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "The course stage, zero-based."
+                        },
+                        "chart": {
+                          "description": "The stage chart as loaded (`BeMusicJSON`, `#RANDOM` still in); it must hash to the stage’s chart fingerprint. Used to verify the run, never stored."
+                        },
+                        "pms": {
+                          "type": "boolean",
+                          "description": "Whether the chart is a `.pms` file (a lane-mode input)."
+                        }
+                      },
+                      "required": [
+                        "stage",
+                        "chart"
+                      ]
+                    },
+                    "description": "The charts of the stages the server rebuilds: every stage the run never reached (their notes count as BP), and every stage of a NONSTOP run (stitched again to verify the play)."
+                  }
+                },
+                "required": [
+                  "coursePlaylog",
+                  "stages"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Already submitted by this account: the stored result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "courseScoreId": {
+                      "type": "string"
+                    },
+                    "courseFingerprint": {
+                      "type": "string",
+                      "description": "Course fingerprint (`bmcourse0:…`), the ranking key."
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "ruleset": {
+                            "enum": [
+                              "lr2",
+                              "beatoraja",
+                              "iidx"
+                            ],
+                            "type": "string",
+                            "description": "Ruleset the figures are simulated under."
+                          },
+                          "rulesetRevision": {
+                            "type": "string",
+                            "description": "Revision of the ruleset the run was simulated under (`lr2/0`, ...)."
+                          },
+                          "exScore": {
+                            "type": "integer"
+                          },
+                          "noteCount": {
+                            "type": "integer",
+                            "description": "Judgment notes over every stage, reached or not."
+                          },
+                          "clearLamp": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                          },
+                          "missCount": {
+                            "type": "integer",
+                            "description": "BP, with every note the run never judged."
+                          },
+                          "maxCombo": {
+                            "type": "integer",
+                            "description": "The course-wide max combo."
+                          },
+                          "stagesPlayed": {
+                            "type": "integer",
+                            "description": "Stages reached under this ruleset."
+                          },
+                          "trophy": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "The best trophy the run earned, by name."
+                          },
+                          "rank": {
+                            "type": "integer",
+                            "description": "The player’s rank on the course after this run."
+                          },
+                          "players": {
+                            "type": "integer"
+                          },
+                          "improved": {
+                            "type": "object",
+                            "properties": {
+                              "exScore": {
+                                "type": "boolean"
+                              },
+                              "lamp": {
+                                "type": "boolean"
+                              },
+                              "missCount": {
+                                "type": "boolean"
+                              },
+                              "trophy": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "exScore",
+                              "lamp",
+                              "missCount",
+                              "trophy"
+                            ],
+                            "description": "Which personal bests on the course this run improved."
+                          }
+                        },
+                        "required": [
+                          "ruleset",
+                          "rulesetRevision",
+                          "exScore",
+                          "noteCount",
+                          "clearLamp",
+                          "missCount",
+                          "maxCombo",
+                          "stagesPlayed",
+                          "trophy",
+                          "rank",
+                          "players",
+                          "improved"
+                        ]
+                      },
+                      "description": "The run under every ruleset."
+                    }
+                  },
+                  "required": [
+                    "courseScoreId",
+                    "courseFingerprint",
+                    "results"
+                  ]
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Accepted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "courseScoreId": {
+                      "type": "string"
+                    },
+                    "courseFingerprint": {
+                      "type": "string",
+                      "description": "Course fingerprint (`bmcourse0:…`), the ranking key."
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "ruleset": {
+                            "enum": [
+                              "lr2",
+                              "beatoraja",
+                              "iidx"
+                            ],
+                            "type": "string",
+                            "description": "Ruleset the figures are simulated under."
+                          },
+                          "rulesetRevision": {
+                            "type": "string",
+                            "description": "Revision of the ruleset the run was simulated under (`lr2/0`, ...)."
+                          },
+                          "exScore": {
+                            "type": "integer"
+                          },
+                          "noteCount": {
+                            "type": "integer",
+                            "description": "Judgment notes over every stage, reached or not."
+                          },
+                          "clearLamp": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                          },
+                          "missCount": {
+                            "type": "integer",
+                            "description": "BP, with every note the run never judged."
+                          },
+                          "maxCombo": {
+                            "type": "integer",
+                            "description": "The course-wide max combo."
+                          },
+                          "stagesPlayed": {
+                            "type": "integer",
+                            "description": "Stages reached under this ruleset."
+                          },
+                          "trophy": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "The best trophy the run earned, by name."
+                          },
+                          "rank": {
+                            "type": "integer",
+                            "description": "The player’s rank on the course after this run."
+                          },
+                          "players": {
+                            "type": "integer"
+                          },
+                          "improved": {
+                            "type": "object",
+                            "properties": {
+                              "exScore": {
+                                "type": "boolean"
+                              },
+                              "lamp": {
+                                "type": "boolean"
+                              },
+                              "missCount": {
+                                "type": "boolean"
+                              },
+                              "trophy": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "exScore",
+                              "lamp",
+                              "missCount",
+                              "trophy"
+                            ],
+                            "description": "Which personal bests on the course this run improved."
+                          }
+                        },
+                        "required": [
+                          "ruleset",
+                          "rulesetRevision",
+                          "exScore",
+                          "noteCount",
+                          "clearLamp",
+                          "missCount",
+                          "maxCombo",
+                          "stagesPlayed",
+                          "trophy",
+                          "rank",
+                          "players",
+                          "improved"
+                        ]
+                      },
+                      "description": "The run under every ruleset."
+                    }
+                  },
+                  "required": [
+                    "courseScoreId",
+                    "courseFingerprint",
+                    "results"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not a course submission (or its `stages` do not match the played stages).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "invalid-submission",
+                        "empty-body",
+                        "invalid-encoding",
+                        "invalid-json"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session: sign in first (anonymously is enough).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "sign-in-required"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`chart-document-required`: send every stage’s `chartDocument` too. `play-already-submitted`: another account sent it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "chart-document-required",
+                        "play-already-submitted"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The body is too large.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "body-too-large"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Not gzip-compressed JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "expected-json",
+                        "unsupported-encoding"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The run cannot be ranked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "invalid-playlog",
+                        "auto-play",
+                        "aborted",
+                        "tempo",
+                        "unreleased",
+                        "missing-fingerprint",
+                        "not-a-course-run",
+                        "play-document-not-a-document",
+                        "play-document-fingerprint-mismatch",
+                        "chart-document-not-a-document",
+                        "chart-document-fingerprint-mismatch",
+                        "course-ruleset-mismatch",
+                        "stage-chart-required",
+                        "stage-chart-invalid",
+                        "stage-chart-fingerprint-mismatch",
+                        "course-stage-facts-mismatch",
+                        "nonstop-stitch-unsupported",
+                        "nonstop-chart-mismatch",
+                        "nonstop-stage-mismatch",
+                        "course-constraint-mismatch",
+                        "course-carry-in-mismatch"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many submissions; retry after `Retry-After` seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "rate-limited"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "getCourseScores",
+        "tags": [
+          "Courses"
+        ],
+        "summary": "The latest course runs",
+        "description": "Newest first, with their figures under one ruleset. Anonymous players’ runs come in with `anonymous`, or for one `player`; hidden runs are listed only to their own player.",
+        "responses": {
+          "200": {
+            "description": "The runs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "runs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "integer",
+                            "description": "When the run was accepted (epoch ms)."
+                          },
+                          "courseFingerprint": {
+                            "type": "string"
+                          },
+                          "courseName": {
+                            "type": "string"
+                          },
+                          "courseKind": {
+                            "enum": [
+                              "grade",
+                              "expert",
+                              "nonstop"
+                            ],
+                            "type": "string"
+                          },
+                          "stageCount": {
+                            "type": "integer",
+                            "description": "Stages of the course."
+                          },
+                          "handle": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "anonymous": {
+                            "type": "boolean"
+                          },
+                          "avatarUrl": {
+                            "type": "string"
+                          },
+                          "playedRuleset": {
+                            "enum": [
+                              "lr2",
+                              "beatoraja",
+                              "iidx"
+                            ],
+                            "type": "string",
+                            "description": "Ruleset the figures are simulated under."
+                          },
+                          "assisted": {
+                            "type": "boolean"
+                          },
+                          "hidden": {
+                            "type": "boolean",
+                            "description": "Hidden by its player: listed only to the player."
+                          },
+                          "exScore": {
+                            "type": "integer"
+                          },
+                          "noteCount": {
+                            "type": "integer"
+                          },
+                          "clearLamp": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                          },
+                          "missCount": {
+                            "type": "integer"
+                          },
+                          "stagesPlayed": {
+                            "type": "integer",
+                            "description": "Stages reached under this ruleset."
+                          },
+                          "trophy": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "rank": {
+                            "type": "integer",
+                            "description": "Where the run’s EX-Score stands among the other players’ bests on the course."
+                          },
+                          "players": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "createdAt",
+                          "courseFingerprint",
+                          "courseName",
+                          "courseKind",
+                          "stageCount",
+                          "handle",
+                          "displayName",
+                          "anonymous",
+                          "avatarUrl",
+                          "playedRuleset",
+                          "assisted",
+                          "hidden",
+                          "exScore",
+                          "noteCount",
+                          "clearLamp",
+                          "missCount",
+                          "stagesPlayed",
+                          "trophy",
+                          "rank",
+                          "players"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "runs"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "data": {}
+                  },
+                  "required": [
+                    "success",
+                    "error",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ruleset",
+            "schema": {
+              "enum": [
+                "lr2",
+                "beatoraja",
+                "iidx"
+              ],
+              "type": "string"
+            },
+            "required": true,
+            "description": "Ruleset the figures are simulated under."
+          },
+          {
+            "in": "query",
+            "name": "player",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Only this player’s runs, by handle; anonymous or not."
+          },
+          {
+            "in": "query",
+            "name": "anonymous",
+            "schema": {
+              "enum": [
+                "0",
+                "1",
+                "true",
+                "false"
+              ],
+              "type": "string",
+              "default": "0"
+            },
+            "description": "Include anonymous players’ runs."
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": "50"
+            },
+            "description": "Runs to return."
+          }
+        ]
+      }
+    },
+    "/course-scores/{id}": {
+      "get": {
+        "operationId": "getCourseScoresById",
+        "tags": [
+          "Courses"
+        ],
+        "summary": "A course run",
+        "description": "A hidden run answers only its player; to anyone else it does not exist.",
+        "responses": {
+          "200": {
+            "description": "The run under every ruleset.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "courseFingerprint": {
+                      "type": "string"
+                    },
+                    "player": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "handle": {
+                              "type": "string"
+                            },
+                            "displayName": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "handle",
+                            "displayName"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "playedRuleset": {
+                      "enum": [
+                        "lr2",
+                        "beatoraja",
+                        "iidx"
+                      ],
+                      "type": "string",
+                      "description": "Ruleset the figures are simulated under."
+                    },
+                    "gauge": {
+                      "type": "string"
+                    },
+                    "assisted": {
+                      "type": "boolean"
+                    },
+                    "assistFlags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "verification": {
+                      "type": "string",
+                      "description": "Lowest verification layer its stages passed (`L3`, `L4`, ...)."
+                    },
+                    "stagesPlayed": {
+                      "type": "integer",
+                      "description": "Stages the run played."
+                    },
+                    "createdAt": {
+                      "type": "integer",
+                      "description": "When the run was accepted (epoch ms)."
+                    },
+                    "hidden": {
+                      "type": "boolean"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "ruleset": {
+                            "enum": [
+                              "lr2",
+                              "beatoraja",
+                              "iidx"
+                            ],
+                            "type": "string",
+                            "description": "Ruleset the figures are simulated under."
+                          },
+                          "rulesetRevision": {
+                            "type": "string"
+                          },
+                          "exScore": {
+                            "type": "integer"
+                          },
+                          "noteCount": {
+                            "type": "integer"
+                          },
+                          "clearLamp": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                          },
+                          "missCount": {
+                            "type": "integer"
+                          },
+                          "maxCombo": {
+                            "type": "integer"
+                          },
+                          "stagesPlayed": {
+                            "type": "integer"
+                          },
+                          "trophy": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "trophyRank": {
+                            "type": "integer",
+                            "description": "Where the trophy stands in the run’s course definition, easiest first: 1 for the first, 0 for none."
+                          },
+                          "gaugeType": {
+                            "type": "string"
+                          },
+                          "gaugeFinal": {
+                            "type": "number",
+                            "description": "Gauge the course ended on, in percent."
+                          },
+                          "judges": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": "number"
+                            },
+                            "description": "Judgment counts over the stages played."
+                          },
+                          "stages": {
+                            "anyOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "exScore": {
+                                      "type": "integer"
+                                    },
+                                    "noteCount": {
+                                      "type": "integer"
+                                    },
+                                    "missCount": {
+                                      "type": "integer",
+                                      "description": "BP, with the notes the stage never judged."
+                                    },
+                                    "maxCombo": {
+                                      "type": "integer"
+                                    },
+                                    "judges": {
+                                      "type": "object",
+                                      "propertyNames": {
+                                        "type": "string"
+                                      },
+                                      "additionalProperties": {
+                                        "type": "number"
+                                      },
+                                      "description": "Judgment counts, with `fast` and `slow`."
+                                    },
+                                    "gaugeType": {
+                                      "type": "string"
+                                    },
+                                    "gaugeFinal": {
+                                      "type": "number",
+                                      "description": "Gauge the stage ended on, in percent."
+                                    },
+                                    "cleared": {
+                                      "type": "boolean"
+                                    }
+                                  },
+                                  "required": [
+                                    "exScore",
+                                    "noteCount",
+                                    "missCount",
+                                    "maxCombo",
+                                    "judges",
+                                    "gaugeType",
+                                    "gaugeFinal",
+                                    "cleared"
+                                  ]
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Each reached stage’s own figures, in order; null for runs stored before they were kept."
+                          }
+                        },
+                        "required": [
+                          "ruleset",
+                          "rulesetRevision",
+                          "exScore",
+                          "noteCount",
+                          "clearLamp",
+                          "missCount",
+                          "maxCombo",
+                          "stagesPlayed",
+                          "trophy",
+                          "trophyRank",
+                          "gaugeType",
+                          "gaugeFinal",
+                          "judges",
+                          "stages"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "courseFingerprint",
+                    "player",
+                    "playedRuleset",
+                    "gauge",
+                    "assisted",
+                    "assistFlags",
+                    "verification",
+                    "stagesPlayed",
+                    "createdAt",
+                    "hidden",
+                    "results"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The run does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-found"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "patchCourseScoresById",
+        "tags": [
+          "Courses"
+        ],
+        "summary": "Hide or show my course run",
+        "description": "A hidden run is kept, but leaves the course rankings, the personal bests, the figures and every list, and only its player can open it. The player’s bests on the course, the trophy best included, are rebuilt from the runs still shown.",
+        "responses": {
+          "200": {
+            "description": "The run’s visibility after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "hidden": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "hidden"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "data": {}
+                  },
+                  "required": [
+                    "success",
+                    "error",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session: sign in first (anonymously is enough).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "sign-in-required"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Someone else ran it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-your-score"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The run does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-found"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "hidden": {
+                    "type": "boolean",
+                    "description": "Hide the run (`true`): it leaves the course rankings, the personal bests, the figures and every list, and only its player can open it. `false` shows it again."
+                  }
+                },
+                "required": [
+                  "hidden"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/course-scores/{id}/playlog": {
+      "get": {
+        "operationId": "getCourseScoresByIdPlaylog",
+        "tags": [
+          "Courses"
+        ],
+        "summary": "A course run’s play log",
+        "description": "The stored course play log (`be-music-course-playlog`), gzip-compressed. Anyone can read a shown run’s; only its player a hidden one’s.",
+        "responses": {
+          "200": {
+            "description": "The course play log (docs/playlog.md).",
+            "content": {
+              "application/json": {}
+            }
+          },
+          "404": {
+            "description": "The run or its play log does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-found"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/courses/{courseFingerprint}": {
+      "get": {
+        "operationId": "getCoursesByCourseFingerprint",
+        "tags": [
+          "Courses"
+        ],
+        "summary": "A course",
+        "description": "Its kind, constraints and stage charts, as the first submitted run named them.",
+        "responses": {
+          "200": {
+            "description": "The course.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "courseFingerprint": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string",
+                      "description": "The name the course was first submitted with."
+                    },
+                    "kind": {
+                      "enum": [
+                        "grade",
+                        "expert",
+                        "nonstop"
+                      ],
+                      "type": "string",
+                      "description": "Course kind."
+                    },
+                    "constraints": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Constraints, normalized and sorted (`gauge_lr2`, `grade_mirror`, ...)."
+                    },
+                    "stages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "chartFingerprint": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Null while the server has not seen the chart played."
+                          },
+                          "artist": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "playLevel": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "laneMode": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Lane mode (`7keys`, `14keys`, ...), null while unknown."
+                          }
+                        },
+                        "required": [
+                          "chartFingerprint",
+                          "title",
+                          "artist",
+                          "playLevel",
+                          "laneMode"
+                        ]
+                      }
+                    },
+                    "createdAt": {
+                      "type": "integer",
+                      "description": "When the first run was accepted (epoch ms)."
+                    }
+                  },
+                  "required": [
+                    "courseFingerprint",
+                    "name",
+                    "kind",
+                    "constraints",
+                    "stages",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The course does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-found"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "courseFingerprint",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/courses/{courseFingerprint}/leaderboard": {
+      "get": {
+        "operationId": "getCoursesByCourseFingerprintLeaderboard",
+        "tags": [
+          "Courses"
+        ],
+        "summary": "A course’s ranking",
+        "description": "Players by best course EX-Score under one ruleset, ranked like a chart; ties share a rank. `exScoreId` is the course run that set it, and `trophy` the best trophy each player earned.",
+        "responses": {
+          "200": {
+            "description": "A page of the ranking.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "rank": {
+                            "type": "integer",
+                            "description": "Competition rank: ties share a rank."
+                          },
+                          "handle": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "anonymous": {
+                            "type": "boolean"
+                          },
+                          "avatarUrl": {
+                            "type": "string"
+                          },
+                          "exScore": {
+                            "type": "integer"
+                          },
+                          "exScoreId": {
+                            "type": "string",
+                            "description": "The course run that set the best EX-Score."
+                          },
+                          "clearLamp": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                          },
+                          "missCount": {
+                            "type": "integer"
+                          },
+                          "playCount": {
+                            "type": "integer"
+                          },
+                          "playedHere": {
+                            "type": "boolean",
+                            "description": "Played under this ruleset at least once."
+                          },
+                          "achievedAt": {
+                            "type": "integer",
+                            "description": "When the best EX-Score was set (epoch ms)."
+                          },
+                          "noteCount": {
+                            "type": "integer",
+                            "description": "Judgment notes of the course under this ruleset, the DJ LEVEL’s scale."
+                          },
+                          "trophy": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "The best trophy the player earned on the course, by name."
+                          },
+                          "trophyScoreId": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "The course run that earned it."
+                          }
+                        },
+                        "required": [
+                          "rank",
+                          "handle",
+                          "displayName",
+                          "anonymous",
+                          "avatarUrl",
+                          "exScore",
+                          "exScoreId",
+                          "clearLamp",
+                          "missCount",
+                          "playCount",
+                          "playedHere",
+                          "achievedAt",
+                          "noteCount",
+                          "trophy",
+                          "trophyScoreId"
+                        ]
+                      }
+                    },
+                    "players": {
+                      "type": "integer",
+                      "description": "Players matching the filters."
+                    },
+                    "offset": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "entries",
+                    "players",
+                    "offset",
+                    "limit"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "data": {}
+                  },
+                  "required": [
+                    "success",
+                    "error",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ruleset",
+            "schema": {
+              "enum": [
+                "lr2",
+                "beatoraja",
+                "iidx"
+              ],
+              "type": "string"
+            },
+            "required": true,
+            "description": "Ruleset the figures are simulated under."
+          },
+          {
+            "in": "query",
+            "name": "assisted",
+            "schema": {
+              "enum": [
+                "0",
+                "1",
+                "true",
+                "false"
+              ],
+              "type": "string",
+              "default": "0"
+            },
+            "description": "Rank assisted plays (their own ranking) instead of unassisted ones."
+          },
+          {
+            "in": "query",
+            "name": "anonymous",
+            "schema": {
+              "enum": [
+                "0",
+                "1",
+                "true",
+                "false"
+              ],
+              "type": "string",
+              "default": "0"
+            },
+            "description": "Include anonymous players."
+          },
+          {
+            "in": "query",
+            "name": "played",
+            "schema": {
+              "enum": [
+                "0",
+                "1",
+                "true",
+                "false"
+              ],
+              "type": "string",
+              "default": "0"
+            },
+            "description": "Only players who played the chart under this ruleset at least once."
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": "0"
+            },
+            "description": "Entries to skip."
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": "50"
+            },
+            "description": "Entries to return."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "courseFingerprint",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/courses/{courseFingerprint}/leaderboard/me": {
+      "get": {
+        "operationId": "getCoursesByCourseFingerprintLeaderboardMe",
+        "tags": [
+          "Courses"
+        ],
+        "summary": "My rank on a course",
+        "description": "My bests on the course (trophy included) and my rank among every player, anonymous ones included.",
+        "responses": {
+          "200": {
+            "description": "My rank.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rank": {
+                      "type": "integer"
+                    },
+                    "players": {
+                      "type": "integer"
+                    },
+                    "exScore": {
+                      "type": "integer"
+                    },
+                    "exScoreId": {
+                      "type": "string"
+                    },
+                    "clearLamp": {
+                      "type": "integer",
+                      "description": "Best clear lamp (see the score results)."
+                    },
+                    "missCount": {
+                      "type": "integer",
+                      "description": "Fewest BP."
+                    },
+                    "playCount": {
+                      "type": "integer"
+                    },
+                    "trophy": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "My best trophy on the course, by name."
+                    },
+                    "trophyScoreId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "The course run that earned it."
+                    }
+                  },
+                  "required": [
+                    "rank",
+                    "players",
+                    "exScore",
+                    "exScoreId",
+                    "clearLamp",
+                    "missCount",
+                    "playCount",
+                    "trophy",
+                    "trophyScoreId"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "data": {}
+                  },
+                  "required": [
+                    "success",
+                    "error",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session: sign in first (anonymously is enough).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "sign-in-required"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "I have not run the course under these filters.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-played"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ruleset",
+            "schema": {
+              "enum": [
+                "lr2",
+                "beatoraja",
+                "iidx"
+              ],
+              "type": "string"
+            },
+            "required": true,
+            "description": "Ruleset the figures are simulated under."
+          },
+          {
+            "in": "query",
+            "name": "assisted",
+            "schema": {
+              "enum": [
+                "0",
+                "1",
+                "true",
+                "false"
+              ],
+              "type": "string",
+              "default": "0"
+            },
+            "description": "My rank among assisted plays instead of unassisted ones."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "courseFingerprint",
+            "required": true
+          }
+        ]
+      }
+    }
+  }
+}

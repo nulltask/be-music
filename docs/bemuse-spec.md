@@ -99,7 +99,7 @@ Extraction formula:
 - [ ] Invalid reference (outside index range, `start > end`, out of payload range) is treated as an error.
 - [ ] Retains extended items of `SongMetadata` (`replaygain`, `preview_start`, `preview_url`, `video_url`, `video_offset`, `readme`, `chart_names`)
 - [ ] Retains additional information of `charts[]` (`md5`, `noteCount`, `bpm`, `duration`, `keys`, `scratch`, `bga`)
-- [ ] Delegate the obtained music score string to the existing `parseBms` / `parseBmson`
+- [ ] Delegate the obtained music score string to the existing `parseBMS` / `parseBmson`
 
 ### stringifier (`@be-music/json` -> bemuse assets)
 

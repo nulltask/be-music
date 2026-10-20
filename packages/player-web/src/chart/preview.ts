@@ -1,11 +1,14 @@
-// IMPORTANT: import from `/triggers` (the pure / browser-safe subpath), NOT the package root. The root entry pulls in
-// Node-only modules (fs / path / fluent-ffmpeg) that Vite can't bundle for the demo target — see
-// `packages/player-web-demo/vite.config.ts` which explicitly drops the root alias for that reason.
-import { collectSampleTriggers, createTimingResolver } from '@be-music/audio-renderer/triggers';
-import { usesMonophonicWavPlayback } from '@be-music/chart';
-import { normalizeChannel, type BeMusicJson } from '@be-music/json';
+import {
+  firesBeforeTempoReversal,
+  isInvisibleNoteChannel,
+  resolveChart,
+  usesMonophonicWAVPlayback,
+  type TimedSampleTrigger,
+} from '@be-music/chart';
+import type { BeMusicJSON } from '@be-music/json';
 import { loadAssetBytes, resolveChartAudioAsset } from '../collection/collection.ts';
-import type { BrowserSongAssetSource, BrowserSongEntry } from '../collection/types.ts';
+import type { LibraryChart } from '@be-music/scene-model';
+import type { BrowserSongAssetSource } from '../collection/types.ts';
 
 /**
  * Sample-amplitude threshold below which we treat audio as silent for the leading-silence trim. Mirrors
@@ -39,7 +42,7 @@ export const DEFAULT_CHART_PREVIEW_FALLBACK_DURATION_SECONDS = 30;
 export const CHART_PREVIEW_STOP_FADE_OUT_SECONDS: number = 0.25;
 
 export interface ChartPreviewTarget {
-  song: BrowserSongEntry;
+  song: LibraryChart;
   source: BrowserSongAssetSource;
 }
 
@@ -91,7 +94,7 @@ export interface ChartPreviewEngineOptions {
  * chain (`.opus` / `.ogg` / `.mp3` / `.wav`) and case-insensitive lookup so a chart that says `preview.wav` still
  * resolves to a shipped `preview.ogg`.
  */
-export function resolveChartPreviewPath(chart: BeMusicJson): string | undefined {
+export function resolveChartPreviewPath(chart: BeMusicJSON): string | undefined {
   const bms = chart.bms?.preview;
   if (typeof bms === 'string' && bms.length > 0) return bms;
   const bmson = chart.bmson?.info?.previewMusic;
@@ -477,7 +480,7 @@ export class ChartPreviewEngine {
         this.finishSource(handle);
       };
       try {
-        if (usesMonophonicWavPlayback(chart) && activeSameSlot) {
+        if (usesMonophonicWAVPlayback(chart) && activeSameSlot) {
           this.stopSourceAt(activeSameSlot, when);
         }
         if (typeof trigger.sampleDurationSeconds === 'number') {
@@ -507,24 +510,21 @@ export class ChartPreviewEngine {
  *
  * `cutoffSeconds <= 0` returns an empty array — the engine skips the in-place fallback entirely in that case.
  */
-export function collectChartPreviewTriggers(
-  chart: BeMusicJson,
-  cutoffSeconds: number,
-): ReturnType<typeof collectSampleTriggers> {
+export function collectChartPreviewTriggers(chart: BeMusicJSON, cutoffSeconds: number): TimedSampleTrigger[] {
   if (!Number.isFinite(cutoffSeconds) || cutoffSeconds <= 0) return [];
-  const resolver = createTimingResolver(chart);
-  const all = collectSampleTriggers(chart, resolver, { inferBmsLnTypeWhenMissing: true });
-  return all
-    .filter((trigger) => !isInvisiblePlayLaneSoundChannel(trigger.channel) && trigger.seconds < cutoffSeconds)
+  const resolved = resolveChart(chart, { inferBmsLNTypeWhenMissing: true });
+  // LR2 negative-BPM reversal: the gameplay engine's event pump freezes at the reversal — nothing past it ever
+  // sounds, and on the reversal tick only the BGM LR2 orders before the negative BPM does — so the select-scene
+  // preview drops the same triggers.
+  const { reversal } = resolved;
+  return resolved.sampleTriggers
+    .filter(
+      (trigger) =>
+        !isInvisibleNoteChannel(trigger.channel) &&
+        trigger.seconds < cutoffSeconds &&
+        firesBeforeTempoReversal(reversal, trigger.seconds, trigger.channel),
+    )
     .sort((left, right) => left.seconds - right.seconds);
-}
-
-function isInvisiblePlayLaneSoundChannel(channel: string): boolean {
-  const normalized = normalizeChannel(channel);
-  if (normalized.length !== 2) return false;
-  const high = normalized.charCodeAt(0);
-  const low = normalized.charCodeAt(1);
-  return (high === 0x33 || high === 0x34) && low >= 0x31 && low <= 0x39;
 }
 
 function sameTarget(a: ChartPreviewTarget | undefined, b: ChartPreviewTarget | undefined): boolean {

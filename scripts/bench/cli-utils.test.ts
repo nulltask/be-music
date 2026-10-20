@@ -7,11 +7,11 @@ import {
   isExecutedAsScript,
   loadExportsBenchmarkSnapshot,
   loadExportsBenchmarkSnapshotOrUndefined,
-  parseNonNegativeCliNumber,
-  parsePositiveCliInteger,
-  parsePositiveCliNumber,
-  resolveCliValue,
-  runCliMain,
+  parseNonNegativeCLINumber,
+  parsePositiveCLIInteger,
+  parsePositiveCLINumber,
+  resolveCLIValue,
+  runCLIMain,
 } from './cli-utils.ts';
 import type { ExportsBenchmarkSnapshot } from './exports.types.ts';
 
@@ -44,7 +44,9 @@ function createSnapshot(overrides: Partial<ExportsBenchmarkSnapshot> = {}): Expo
       'audio-renderer': [],
       player: [],
       'player-tui': [],
+      'scene-model': [],
       'lr2-skin': [],
+      'beatoraja-skin': [],
       'skin-sdk': [],
       'player-web': [],
     },
@@ -82,18 +84,18 @@ async function createTempDir(): Promise<string> {
 
 describe('bench CLI value helpers', () => {
   it('resolves required option values', () => {
-    expect(resolveCliValue('out.json', '--output')).toBe('out.json');
-    expect(() => resolveCliValue(undefined, '--output')).toThrow('Missing value for --output');
+    expect(resolveCLIValue('out.json', '--output')).toBe('out.json');
+    expect(() => resolveCLIValue(undefined, '--output')).toThrow('Missing value for --output');
   });
 
   it('parses numeric option values', () => {
-    expect(parsePositiveCliNumber('1.5', '--time')).toBe(1.5);
-    expect(parseNonNegativeCliNumber('0', '--warmup-time')).toBe(0);
-    expect(parsePositiveCliInteger('3', '--top')).toBe(3);
+    expect(parsePositiveCLINumber('1.5', '--time')).toBe(1.5);
+    expect(parseNonNegativeCLINumber('0', '--warmup-time')).toBe(0);
+    expect(parsePositiveCLIInteger('3', '--top')).toBe(3);
 
-    expect(() => parsePositiveCliNumber('0', '--time')).toThrow('--time must be a positive number');
-    expect(() => parseNonNegativeCliNumber('-1', '--threshold')).toThrow('--threshold must be a non-negative number');
-    expect(() => parsePositiveCliInteger('0', '--top')).toThrow('--top must be a positive integer');
+    expect(() => parsePositiveCLINumber('0', '--time')).toThrow('--time must be a positive number');
+    expect(() => parseNonNegativeCLINumber('-1', '--threshold')).toThrow('--threshold must be a non-negative number');
+    expect(() => parsePositiveCLIInteger('0', '--top')).toThrow('--top must be a positive integer');
   });
 });
 
@@ -107,7 +109,7 @@ describe('bench CLI entrypoint helpers', () => {
 
   it('does not run a CLI main function for non-entry imports', async () => {
     let called = false;
-    runCliMain(pathToFileURL('/tmp/not-entry.ts').href, async () => {
+    runCLIMain(pathToFileURL('/tmp/not-entry.ts').href, async () => {
       called = true;
     });
     await Promise.resolve();

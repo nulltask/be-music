@@ -1,0 +1,39 @@
+*---------------------- HEADER FIELD
+
+#PLAYER 1
+#GENRE TEST
+#TITLE negative BPM test 2 (#BPMxx 0 via ch08)
+#ARTIST be-music #134
+#BPM 130
+#PLAYLEVEL 1
+#RANK 2
+#TOTAL 300
+
+#WAV01 negative-bpm-beep1.wav
+#WAV02 negative-bpm-beep2.wav
+#WAV03 negative-bpm-bgm.wav
+
+#BPM01 130
+#BPM02 0
+
+*---------------------- MAIN DATA FIELD
+
+*-- measures 1-3: normal play at BPM 130
+#00111:01010101
+#00101:03
+#00211:01010101
+#00201:03
+#00311:01010101
+#00301:03
+
+*-- measure 4: BPM 0 (channel 08 -> #BPM02 0)
+*-- expected in LR2: 240/0 puts +inf into the precomputed time table -> scroll STOPS
+*-- (hitkey matrix: "Stop"); no mirror (0 is not < 0), later events sit at t=inf and
+*-- never fire. Stage hangs; ESC to exit. BPM display shows a random flickering number.
+#00408:02
+#00413:00020202
+
+#00511:02020202
+#00501:03
+#00611:02020202
+#00601:03

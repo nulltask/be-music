@@ -3,7 +3,7 @@ import { basename } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { createAbortError, isAbortError, throwIfAborted } from '@be-music/utils/core';
 import { loadOptionalNodeModule } from '@be-music/utils/optional-node-module';
-import { createSeaWorker, isSeaRuntime } from './node/sea-worker.ts';
+import { createSEAWorker, isSEARuntime } from './node/sea-worker.ts';
 
 const SUPPORTED_VIDEO_CODECS = new Set(['mpeg1video', 'h264', 'mjpeg']);
 // Keep chunks small so ff_decode_multi never allocates too many full-size frames at once.
@@ -15,21 +15,21 @@ const FALLBACK_FPS = 30;
 // black chroma-key per the bmson 1.0.0 spec).
 type FrameMode = 'base' | 'layer' | 'bmson-layer';
 
-interface LibAvPlaneLayout {
+interface LibAVPlaneLayout {
   offset: number;
   stride: number;
 }
 
-interface LibAvVideoFrame {
+interface LibAVVideoFrame {
   data: unknown;
   format?: number;
-  layout?: LibAvPlaneLayout[];
+  layout?: LibAVPlaneLayout[];
   pts?: number;
   width?: number;
   height?: number;
 }
 
-interface LibAvStream {
+interface LibAVStream {
   index: number;
   codecpar: number;
   codec_type: number;
@@ -39,9 +39,9 @@ interface LibAvStream {
   duration: number;
 }
 
-type LibAvPacket = unknown;
+type LibAVPacket = unknown;
 
-interface LibAvInstance {
+interface LibAVInstance {
   AVMEDIA_TYPE_VIDEO: number;
   EAGAIN: number;
   AVERROR_EOF: number;
@@ -56,31 +56,31 @@ interface LibAvInstance {
   AV_PIX_FMT_RGB24?: number;
   AV_PIX_FMT_BGR24?: number;
   writeFile(path: string, data: Uint8Array): Promise<void>;
-  ff_init_demuxer_file(path: string): Promise<[number, LibAvStream[]]>;
+  ff_init_demuxer_file(path: string): Promise<[number, LibAVStream[]]>;
   avcodec_get_name(codecId: number): Promise<string>;
   ff_init_decoder(name: string | number, codecpar?: number): Promise<[number, number, number, number]>;
   ff_read_frame_multi(
     fmtCtx: number,
     pkt: number,
     config?: { limit?: number },
-  ): Promise<[number, Record<number, LibAvPacket[]>]>;
+  ): Promise<[number, Record<number, LibAVPacket[]>]>;
   ff_decode_multi(
     ctx: number,
     pkt: number,
     frame: number,
-    packets: LibAvPacket[],
+    packets: LibAVPacket[],
     config?: boolean | { fin?: boolean; ignoreErrors?: boolean; copyoutFrame?: 'video' | 'video_packed' },
-  ): Promise<LibAvVideoFrame[]>;
+  ): Promise<LibAVVideoFrame[]>;
   ff_free_decoder(ctx: number, pkt: number, frame: number): Promise<void>;
   terminate(): void;
 }
 
-interface LibAvFactory {
-  LibAV(options?: { noworker?: boolean; variant?: string }): Promise<LibAvInstance>;
+interface LibAVFactory {
+  LibAV(options?: { noworker?: boolean; variant?: string }): Promise<LibAVInstance>;
 }
 
-interface LibAvModule {
-  default: LibAvFactory;
+interface LibAVModule {
+  default: LibAVFactory;
 }
 
 export interface DecodedVideoFrame {
@@ -157,10 +157,10 @@ export async function decodeVideoFramesStreamDirect(
     stopAfterFirstFrame?: boolean;
   } = {},
 ): Promise<{ codecName: 'mpeg1video' | 'h264' | 'mjpeg'; frameCount: number; durationSeconds?: number } | undefined> {
-  let libav: LibAvInstance | undefined;
+  let libav: LibAVInstance | undefined;
   try {
     throwIfAborted(signal);
-    const libavInstance = await createLibAvInstance();
+    const libavInstance = await createLibAVInstance();
     libav = libavInstance;
     throwIfAborted(signal);
     const file = await readFile(videoPath, { signal });
@@ -238,11 +238,11 @@ export async function decodeVideoFramesToSourceFramesInWorker(
     mode,
     stopAfterFirstFrame: Boolean(options.stopAfterFirstFrame),
   } satisfies VideoDecodeWorkerInitData;
-  const worker = isSeaRuntime()
-    ? createSeaWorker('bga-video-worker', workerInitData)
-    : new Worker(resolveBgaVideoWorkerUrl(), {
+  const worker = isSEARuntime()
+    ? createSEAWorker('bga-video-worker', workerInitData)
+    : new Worker(resolveBGAVideoWorkerURL(), {
         workerData: workerInitData,
-        execArgv: resolveBgaVideoWorkerExecArgv(),
+        execArgv: resolveBGAVideoWorkerExecArgv(),
       });
 
   return await new Promise((resolve, reject) => {
@@ -308,9 +308,9 @@ function isSupportedVideoCodec(codecName: string): codecName is 'mpeg1video' | '
 }
 
 async function decodeVideoFramesWithCallback(
-  libav: LibAvInstance,
+  libav: LibAVInstance,
   formatContext: number,
-  stream: LibAvStream,
+  stream: LibAVStream,
   decoderContext: number,
   packetRef: number,
   frameRef: number,
@@ -325,10 +325,10 @@ async function decodeVideoFramesWithCallback(
   let lastSeconds = 0;
   let frameCount = 0;
 
-  const consume = (decodedFrames: LibAvVideoFrame[]): void => {
+  const consume = (decodedFrames: LibAVVideoFrame[]): void => {
     for (const frame of decodedFrames) {
       throwIfAborted(signal);
-      const converted = convertFrameToRgba(frame, libav);
+      const converted = convertFrameToRGBA(frame, libav);
       if (!converted) {
         continue;
       }
@@ -399,13 +399,13 @@ async function decodeVideoFramesWithCallback(
   return undefined;
 }
 
-function resolveTimeScale(stream: LibAvStream): number {
+function resolveTimeScale(stream: LibAVStream): number {
   const numerator = Number.isFinite(stream.time_base_num) ? stream.time_base_num : 1;
   const denominator = Number.isFinite(stream.time_base_den) && stream.time_base_den > 0 ? stream.time_base_den : 1;
   return numerator / denominator;
 }
 
-function resolveStreamDurationSeconds(stream: LibAvStream): number | undefined {
+function resolveStreamDurationSeconds(stream: LibAVStream): number | undefined {
   if (typeof stream.duration !== 'number' || !Number.isFinite(stream.duration) || stream.duration <= 0) {
     return undefined;
   }
@@ -420,16 +420,16 @@ function resolveFallbackStep(): number {
   return 1 / FALLBACK_FPS;
 }
 
-function resolveFramePts(frame: LibAvVideoFrame | undefined): number | undefined {
+function resolveFramePts(frame: LibAVVideoFrame | undefined): number | undefined {
   if (!frame || typeof frame.pts !== 'number' || !Number.isFinite(frame.pts)) {
     return undefined;
   }
   return frame.pts;
 }
 
-function convertFrameToRgba(
-  frame: LibAvVideoFrame,
-  libav: LibAvInstance,
+function convertFrameToRGBA(
+  frame: LibAVVideoFrame,
+  libav: LibAVInstance,
 ): { width: number; height: number; rgba: Uint8Array } | undefined {
   if (!(frame.data instanceof Uint8Array)) {
     return undefined;
@@ -449,43 +449,43 @@ function convertFrameToRgba(
   const rgba = new Uint8Array(width * height * 4);
 
   if (format === libav.AV_PIX_FMT_RGBA) {
-    copyPackedRgba(frame.data, frame.layout, width, height, rgba, 'rgba');
+    copyPackedRGBA(frame.data, frame.layout, width, height, rgba, 'rgba');
     return { width, height, rgba };
   }
   if (format === libav.AV_PIX_FMT_BGRA) {
-    copyPackedRgba(frame.data, frame.layout, width, height, rgba, 'bgra');
+    copyPackedRGBA(frame.data, frame.layout, width, height, rgba, 'bgra');
     return { width, height, rgba };
   }
   if (format === libav.AV_PIX_FMT_RGB24) {
-    copyPackedRgb24(frame.data, frame.layout, width, height, rgba, 'rgb24');
+    copyPackedRGB24(frame.data, frame.layout, width, height, rgba, 'rgb24');
     return { width, height, rgba };
   }
   if (format === libav.AV_PIX_FMT_BGR24) {
-    copyPackedRgb24(frame.data, frame.layout, width, height, rgba, 'bgr24');
+    copyPackedRGB24(frame.data, frame.layout, width, height, rgba, 'bgr24');
     return { width, height, rgba };
   }
 
   if (format === libav.AV_PIX_FMT_YUV420P || format === libav.AV_PIX_FMT_YUVJ420P) {
-    convertPlanarYuvToRgba(frame.data, frame.layout, width, height, rgba, 2, 2, format === libav.AV_PIX_FMT_YUVJ420P);
+    convertPlanarYuvToRGBA(frame.data, frame.layout, width, height, rgba, 2, 2, format === libav.AV_PIX_FMT_YUVJ420P);
     return { width, height, rgba };
   }
 
   if (format === libav.AV_PIX_FMT_YUV422P || format === libav.AV_PIX_FMT_YUVJ422P) {
-    convertPlanarYuvToRgba(frame.data, frame.layout, width, height, rgba, 2, 1, format === libav.AV_PIX_FMT_YUVJ422P);
+    convertPlanarYuvToRGBA(frame.data, frame.layout, width, height, rgba, 2, 1, format === libav.AV_PIX_FMT_YUVJ422P);
     return { width, height, rgba };
   }
 
   if (format === libav.AV_PIX_FMT_YUV444P || format === libav.AV_PIX_FMT_YUVJ444P) {
-    convertPlanarYuvToRgba(frame.data, frame.layout, width, height, rgba, 1, 1, format === libav.AV_PIX_FMT_YUVJ444P);
+    convertPlanarYuvToRGBA(frame.data, frame.layout, width, height, rgba, 1, 1, format === libav.AV_PIX_FMT_YUVJ444P);
     return { width, height, rgba };
   }
 
   return undefined;
 }
 
-function copyPackedRgba(
+function copyPackedRGBA(
   data: Uint8Array,
-  layout: LibAvPlaneLayout[] | undefined,
+  layout: LibAVPlaneLayout[] | undefined,
   width: number,
   height: number,
   out: Uint8Array,
@@ -516,9 +516,9 @@ function copyPackedRgba(
   }
 }
 
-function copyPackedRgb24(
+function copyPackedRGB24(
   data: Uint8Array,
-  layout: LibAvPlaneLayout[] | undefined,
+  layout: LibAVPlaneLayout[] | undefined,
   width: number,
   height: number,
   out: Uint8Array,
@@ -547,9 +547,9 @@ function copyPackedRgb24(
   }
 }
 
-function convertPlanarYuvToRgba(
+function convertPlanarYuvToRGBA(
   data: Uint8Array,
-  layout: LibAvPlaneLayout[] | undefined,
+  layout: LibAVPlaneLayout[] | undefined,
   width: number,
   height: number,
   out: Uint8Array,
@@ -600,7 +600,7 @@ function convertPlanarYuvToRgba(
 }
 
 function resolvePlane(
-  layout: LibAvPlaneLayout[] | undefined,
+  layout: LibAVPlaneLayout[] | undefined,
   index: number,
   width: number,
   height: number,
@@ -626,7 +626,7 @@ function clampToByte(value: number): number {
   return value;
 }
 
-async function createLibAvInstance(): Promise<LibAvInstance> {
+async function createLibAVInstance(): Promise<LibAVInstance> {
   if (typeof globalThis.self === 'undefined') {
     (globalThis as { self?: unknown }).self = globalThis;
   }
@@ -634,29 +634,29 @@ async function createLibAvInstance(): Promise<LibAvInstance> {
   // In a SEA binary the bare-specifier import always fails; the helper retries from a `node_modules`
   // directory next to the executable (or the working directory) before giving up.
   const loadedModule = (await loadOptionalNodeModule('@uwx/libav.js-fat', () => import('@uwx/libav.js-fat'))) as
-    | LibAvModule
-    | LibAvFactory
+    | LibAVModule
+    | LibAVFactory
     | undefined;
   if (!loadedModule) {
     throw new Error('@uwx/libav.js-fat is unavailable; cannot decode video BGA.');
   }
   // `import()` wraps the CJS exports in a namespace whose `default` holds them; the createRequire fallback
   // used inside a SEA returns the exports object directly. Accept both shapes.
-  const libAvFactory = 'default' in loadedModule ? loadedModule.default : loadedModule;
-  if (typeof libAvFactory.LibAV !== 'function') {
+  const libavFactory = 'default' in loadedModule ? loadedModule.default : loadedModule;
+  if (typeof libavFactory.LibAV !== 'function') {
     throw new Error('@uwx/libav.js-fat does not expose a LibAV factory; cannot decode video BGA.');
   }
-  return libAvFactory.LibAV({
+  return libavFactory.LibAV({
     noworker: true,
     variant: 'fat',
   });
 }
 
-function resolveBgaVideoWorkerUrl(): URL {
+function resolveBGAVideoWorkerURL(): URL {
   return new URL(import.meta.url.endsWith('.ts') ? './bga-video-worker.ts' : './bga-video-worker.js', import.meta.url);
 }
 
-function resolveBgaVideoWorkerExecArgv(): string[] {
+function resolveBGAVideoWorkerExecArgv(): string[] {
   if (!import.meta.url.endsWith('.ts')) {
     return process.execArgv;
   }

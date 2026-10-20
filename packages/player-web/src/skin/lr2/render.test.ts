@@ -3,20 +3,20 @@ import { describe, expect, test } from 'vite-plus/test';
 import {
   createCroppedTexture,
   evaluateElementDestination,
-  makeLr2BargraphSprite,
-  makeLr2SliderSprite,
-  makeLr2StaticImageSprite,
+  makeLR2BargraphSprite,
+  makeLR2SliderSprite,
+  makeLR2StaticImageSprite,
 } from './render.ts';
 import type {
-  Lr2BarGraphElement,
-  Lr2DestinationRect,
-  Lr2ImageElement,
-  Lr2ImageRect,
-  Lr2SliderElement,
+  LR2BarGraphElement,
+  LR2DestinationRect,
+  LR2ImageElement,
+  LR2ImageRect,
+  LR2SliderElement,
 } from '@be-music/lr2-skin';
 import { LR2_SPECIAL_GRAPHIC } from '@be-music/lr2-skin';
 
-function destination(overrides: Partial<Lr2DestinationRect> = {}): Lr2DestinationRect {
+function destination(overrides: Partial<LR2DestinationRect> = {}): LR2DestinationRect {
   return {
     time: 0,
     x: 10,
@@ -40,7 +40,7 @@ function destination(overrides: Partial<Lr2DestinationRect> = {}): Lr2Destinatio
   };
 }
 
-function source(overrides: Partial<Lr2ImageRect> = {}): Lr2ImageRect {
+function source(overrides: Partial<LR2ImageRect> = {}): LR2ImageRect {
   return {
     imagePath: 'skin.png',
     x: 0,
@@ -88,16 +88,16 @@ describe('evaluateElementDestination', () => {
   });
 });
 
-describe('makeLr2StaticImageSprite', () => {
+describe('makeLR2StaticImageSprite', () => {
   test('uses the full runtime texture for LR2 special graphics', () => {
-    const image: Lr2ImageElement = {
+    const image: LR2ImageElement = {
       source: source({ imagePath: LR2_SPECIAL_GRAPHIC.STAGEFILE, w: 0, h: 0 }),
       destination: destination({ w: 120, h: 90 }),
       keyframes: [],
       declarationOrder: 0,
     };
 
-    const sprite = makeLr2StaticImageSprite(image, image.destination, {
+    const sprite = makeLR2StaticImageSprite(image, image.destination, {
       textures: new Map(),
       elapsedSinceTimer: () => 0,
       resolveSpecialGraphicTexture: () => texture(320, 240),
@@ -129,9 +129,9 @@ describe('createCroppedTexture', () => {
   });
 });
 
-describe('makeLr2BargraphSprite', () => {
+describe('makeLR2BargraphSprite', () => {
   test('clips vertical bars from the bottom up', () => {
-    const bargraph: Lr2BarGraphElement = {
+    const bargraph: LR2BarGraphElement = {
       source: source({ h: 80 }),
       destination: destination({ h: 100 }),
       keyframes: [],
@@ -140,7 +140,7 @@ describe('makeLr2BargraphSprite', () => {
       declarationOrder: 0,
     };
 
-    const sprite = makeLr2BargraphSprite(bargraph, bargraph.destination, 0.25, new Map([['skin.png', texture()]]));
+    const sprite = makeLR2BargraphSprite(bargraph, bargraph.destination, 0.25, new Map([['skin.png', texture()]]));
 
     expect(sprite?.position.y).toBe(95);
     expect(sprite?.height).toBe(25);
@@ -148,9 +148,9 @@ describe('makeLr2BargraphSprite', () => {
   });
 });
 
-describe('makeLr2SliderSprite', () => {
+describe('makeLR2SliderSprite', () => {
   test('positions the knob along the configured slider axis', () => {
-    const slider: Lr2SliderElement = {
+    const slider: LR2SliderElement = {
       source: source({ divx: 2, w: 40 }),
       destination: destination(),
       keyframes: [],
@@ -160,7 +160,7 @@ describe('makeLr2SliderSprite', () => {
       declarationOrder: 0,
     };
 
-    const sprite = makeLr2SliderSprite(slider, slider.destination, 0.3, new Map([['skin.png', texture()]]));
+    const sprite = makeLR2SliderSprite(slider, slider.destination, 0.3, new Map([['skin.png', texture()]]));
 
     expect(sprite?.position.x).toBe(40);
     expect(sprite?.position.y).toBe(20);

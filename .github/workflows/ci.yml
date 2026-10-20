@@ -5,43 +5,75 @@ on:
     branches:
       - devel
       - main
+  # Every pull request, stacked ones included, so a branch that targets another feature branch is verified too.
   pull_request:
-    branches:
-      - devel
-      - main
   workflow_dispatch:
 
 permissions:
   contents: read
-  pull-requests: read
 
+# A new push to a pull request supersedes the run in progress. Pushes to `devel` / `main` all finish: their
+# benchmark comments are the history of each commit.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   changes:
     runs-on: ubuntu-24.04-arm
     outputs:
-      code_changed: ${{ steps.filter.outputs.code }}
+      code_changed: ${{ steps.code.outputs.code }}
+      bench_changed: ${{ steps.filter.outputs.bench }}
       sea_player_changed: ${{ steps.filter.outputs.sea_player }}
       sea_audio_renderer_changed: ${{ steps.filter.outputs.sea_audio_renderer }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - name: Detect changed paths
-        id: filter
-        uses: dorny/paths-filter@v4
+      # A file counts as code unless it is documentation. The negations need `every`: by default a file matches when
+      # any one pattern does, and `'**'` alone matches everything.
+      - name: Detect code changes
+        id: code
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
+          predicate-quantifier: every
           filters: |
             code:
               - '**'
               - '!docs/**'
               - '!**/*.md'
+
+      - name: Detect changed paths
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            # The packages scripts/bench measures (PACKAGE_NAMES in scripts/bench/exports.types.ts; a test in
+            # scripts/bench/affected-packages.test.ts checks this list against it) and the bench itself.
+            bench:
+              - 'packages/utils/**'
+              - 'packages/json/**'
+              - 'packages/chart/**'
+              - 'packages/parser/**'
+              - 'packages/stringifier/**'
+              - 'packages/editor/**'
+              - 'packages/audio-renderer/**'
+              - 'packages/player/**'
+              - 'packages/scene-model/**'
+              - 'packages/player-tui/**'
+              - 'packages/lr2-skin/**'
+              - 'packages/beatoraja-skin/**'
+              - 'packages/skin-sdk/**'
+              - 'packages/player-web/**'
+              - 'scripts/bench/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - '.node-version'
+              - '.github/workflows/ci.yml'
             sea_player:
               - 'packages/player/**'
               - 'packages/audio-renderer/**'
@@ -84,12 +116,11 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
-
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
       # `pnpm`, and caches the package store.
       - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1.21.1
+        uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
         with:
           node-version-file: .node-version
           cache: true
@@ -110,13 +141,14 @@ jobs:
     name: Benchmark (PR)
     needs: changes
     if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' &&
-      needs.changes.outputs.code_changed == 'true'
+      (github.base_ref == 'devel' || github.base_ref == 'main') &&
+      needs.changes.outputs.bench_changed == 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 75
     env:
       BENCH_TIME_MS: 50
       BENCH_WARMUP_TIME_MS: 25
-      BENCH_REPEATS: 3
+      BENCH_REPEATS: 5
       BENCH_REGRESSION_THRESHOLD: 8
     permissions:
       contents: read
@@ -124,7 +156,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
@@ -132,7 +164,7 @@ jobs:
       # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
       # `pnpm`, and caches the package store.
       - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1.21.1
+        uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
         with:
           node-version-file: .node-version
           cache: true
@@ -159,70 +191,69 @@ jobs:
       - name: Install dependencies
         run: vp install
 
-      - name: Run head benchmark
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p tmp/bench/head-runs
-          for run_index in $(seq 1 "$BENCH_REPEATS"); do
-            BENCH_GIT_SHA="${{ github.event.pull_request.head.sha }}" pnpm run bench --output "tmp/bench/head-runs/run-${run_index}.json" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
-          done
-
-      - name: Aggregate head benchmark snapshots
-        shell: bash
-        run: |
-          set -euo pipefail
-          pnpm run bench:aggregate -- --output tmp/bench/head.json tmp/bench/head-runs/*.json
-
-      - name: Run base benchmark
-        id: run-base-benchmark
+      # Head and base take turns (head, base, head, base, …), so a slow stretch on the shared runner slows both sides
+      # alike; the comparison then reads each side's run-to-run spread to tell a change from noise.
+      - name: Prepare base worktree
+        id: prepare-base
         if: steps.detect-bench.outputs.available == 'true'
         continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
-          BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          BASE_DIR="$(mktemp -d)"
+          BASE_DIR="${RUNNER_TEMP}/bench-base"
+          git worktree add --detach "$BASE_DIR" "${{ github.event.pull_request.base.sha }}"
+          (cd "$BASE_DIR" && pnpm install --frozen-lockfile --prefer-offline)
+          echo "dir=$BASE_DIR" >> "$GITHUB_OUTPUT"
 
-          cleanup() {
-            git worktree remove --force "$BASE_DIR" >/dev/null 2>&1 || true
-            rm -rf "$BASE_DIR" >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
+      - name: Run benchmarks (interleaved)
+        id: run-bench
+        shell: bash
+        env:
+          BASE_DIR: ${{ steps.prepare-base.outputs.dir }}
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/bench/head-runs tmp/bench/base-runs
+          # Only the packages this change can affect (the ones it touches and their dependents, see
+          # scripts/bench/affected-packages.ts), measured on both sides; a change outside packages/ measures them all.
+          BENCH_PACKAGES="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" | node --conditions=source scripts/bench/affected-packages.ts)"
+          echo "Benchmarking: $BENCH_PACKAGES"
+          base_ok=false
+          if [ -n "${BASE_DIR:-}" ]; then base_ok=true; fi
+          for run_index in $(seq 1 "$BENCH_REPEATS"); do
+            BENCH_GIT_SHA="${{ github.event.pull_request.head.sha }}" pnpm run bench --output "tmp/bench/head-runs/run-${run_index}.json" --packages "$BENCH_PACKAGES" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
+            if [ "$base_ok" = true ]; then
+              if ! (cd "$BASE_DIR" && BENCH_GIT_SHA="${{ github.event.pull_request.base.sha }}" pnpm run bench --output "$GITHUB_WORKSPACE/tmp/bench/base-runs/run-${run_index}.json" --packages "$BENCH_PACKAGES" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"); then
+                echo "::warning::The base benchmark failed; the report shows the head only."
+                base_ok=false
+                rm -f tmp/bench/base-runs/*.json
+              fi
+            fi
+          done
+          echo "base_ok=$base_ok" >> "$GITHUB_OUTPUT"
 
-          git worktree add --detach "$BASE_DIR" "$BASE_SHA"
-          mkdir -p tmp/bench/base-runs
-
-          (
-            cd "$BASE_DIR"
-            pnpm install --frozen-lockfile --prefer-offline
-            for run_index in $(seq 1 "$BENCH_REPEATS"); do
-              BENCH_GIT_SHA="$BASE_SHA" pnpm run bench --output "tmp/bench/base-runs/run-${run_index}.json" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
-            done
-          )
-
-          cp "$BASE_DIR"/tmp/bench/base-runs/*.json tmp/bench/base-runs/
-
-      - name: Aggregate base benchmark snapshots
-        if: steps.detect-bench.outputs.available == 'true' &&
-          steps.run-base-benchmark.outcome == 'success'
+      - name: Aggregate benchmark snapshots
         shell: bash
         run: |
           set -euo pipefail
-          pnpm run bench:aggregate -- --output tmp/bench/base.json tmp/bench/base-runs/*.json
+          pnpm run bench:aggregate -- --output tmp/bench/head.json tmp/bench/head-runs/*.json
+          if [ "${{ steps.run-bench.outputs.base_ok }}" = true ]; then
+            pnpm run bench:aggregate -- --output tmp/bench/base.json tmp/bench/base-runs/*.json
+          fi
 
       - name: Generate benchmark report
         shell: bash
         run: |
           set -euo pipefail
+          # The benchmarked packages this change touches, listed first in the report.
+          CHANGED_PACKAGES="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" -- packages 2>/dev/null | sed -n 's#^packages/\([^/]*\)/.*#\1#p' | sort -u | paste -sd, - || true)"
+          args=(--head tmp/bench/head.json --output tmp/bench/pr-benchmark.md --summary tmp/bench/pr-benchmark-summary.json --threshold "$BENCH_REGRESSION_THRESHOLD" --top 12 --repository-url "${{ github.server_url }}/${{ github.repository }}" --changed-packages "$CHANGED_PACKAGES")
           if [ -f tmp/bench/base.json ]; then
-            pnpm run bench:compare --head tmp/bench/head.json --base tmp/bench/base.json --output tmp/bench/pr-benchmark.md --summary tmp/bench/pr-benchmark-summary.json --threshold "$BENCH_REGRESSION_THRESHOLD" --top 12
-          else
-            pnpm run bench:compare --head tmp/bench/head.json --output tmp/bench/pr-benchmark.md --summary tmp/bench/pr-benchmark-summary.json --threshold "$BENCH_REGRESSION_THRESHOLD" --top 12
+            args+=(--base tmp/bench/base.json)
           fi
+          pnpm run bench:compare "${args[@]}"
 
       - name: Post benchmark comment
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           retries: 3
           script: |
@@ -267,20 +298,20 @@ jobs:
   benchmark-push:
     name: Benchmark (Push)
     needs: changes
-    if: github.event_name == 'push' && needs.changes.outputs.code_changed == 'true'
+    if: github.event_name == 'push' && needs.changes.outputs.bench_changed == 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 75
     env:
       BENCH_TIME_MS: 50
       BENCH_WARMUP_TIME_MS: 25
-      BENCH_REPEATS: 3
+      BENCH_REPEATS: 5
       BENCH_REGRESSION_THRESHOLD: 8
     permissions:
       contents: write
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           ref: ${{ github.sha }}
@@ -288,7 +319,7 @@ jobs:
       # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
       # `pnpm`, and caches the package store.
       - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1.21.1
+        uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
         with:
           node-version-file: .node-version
           cache: true
@@ -320,70 +351,65 @@ jobs:
       - name: Install dependencies
         run: vp install
 
-      - name: Run head benchmark
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p tmp/bench/head-runs
-          for run_index in $(seq 1 "$BENCH_REPEATS"); do
-            BENCH_GIT_SHA="${{ github.sha }}" pnpm run bench --output "tmp/bench/head-runs/run-${run_index}.json" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
-          done
-
-      - name: Aggregate head benchmark snapshots
-        shell: bash
-        run: |
-          set -euo pipefail
-          pnpm run bench:aggregate -- --output tmp/bench/head.json tmp/bench/head-runs/*.json
-
-      - name: Run base benchmark
-        id: run-base-benchmark
+      # Head and base take turns (head, base, head, base, …), so a slow stretch on the shared runner slows both sides
+      # alike; the comparison then reads each side's run-to-run spread to tell a change from noise.
+      - name: Prepare base worktree
+        id: prepare-base
         if: steps.detect-bench.outputs.available == 'true'
         continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
-          BASE_SHA="${{ github.event.before }}"
-          BASE_DIR="$(mktemp -d)"
+          BASE_DIR="${RUNNER_TEMP}/bench-base"
+          git worktree add --detach "$BASE_DIR" "${{ github.event.before }}"
+          (cd "$BASE_DIR" && pnpm install --frozen-lockfile --prefer-offline)
+          echo "dir=$BASE_DIR" >> "$GITHUB_OUTPUT"
 
-          cleanup() {
-            git worktree remove --force "$BASE_DIR" >/dev/null 2>&1 || true
-            rm -rf "$BASE_DIR" >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
+      - name: Run benchmarks (interleaved)
+        id: run-bench
+        shell: bash
+        env:
+          BASE_DIR: ${{ steps.prepare-base.outputs.dir }}
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/bench/head-runs tmp/bench/base-runs
+          base_ok=false
+          if [ -n "${BASE_DIR:-}" ]; then base_ok=true; fi
+          for run_index in $(seq 1 "$BENCH_REPEATS"); do
+            BENCH_GIT_SHA="${{ github.sha }}" pnpm run bench --output "tmp/bench/head-runs/run-${run_index}.json" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
+            if [ "$base_ok" = true ]; then
+              if ! (cd "$BASE_DIR" && BENCH_GIT_SHA="${{ github.event.before }}" pnpm run bench --output "$GITHUB_WORKSPACE/tmp/bench/base-runs/run-${run_index}.json" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"); then
+                echo "::warning::The base benchmark failed; the report shows the head only."
+                base_ok=false
+                rm -f tmp/bench/base-runs/*.json
+              fi
+            fi
+          done
+          echo "base_ok=$base_ok" >> "$GITHUB_OUTPUT"
 
-          git worktree add --detach "$BASE_DIR" "$BASE_SHA"
-          mkdir -p tmp/bench/base-runs
-
-          (
-            cd "$BASE_DIR"
-            pnpm install --frozen-lockfile --prefer-offline
-            for run_index in $(seq 1 "$BENCH_REPEATS"); do
-              BENCH_GIT_SHA="$BASE_SHA" pnpm run bench --output "tmp/bench/base-runs/run-${run_index}.json" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
-            done
-          )
-
-          cp "$BASE_DIR"/tmp/bench/base-runs/*.json tmp/bench/base-runs/
-
-      - name: Aggregate base benchmark snapshots
-        if: steps.detect-bench.outputs.available == 'true' &&
-          steps.run-base-benchmark.outcome == 'success'
+      - name: Aggregate benchmark snapshots
         shell: bash
         run: |
           set -euo pipefail
-          pnpm run bench:aggregate -- --output tmp/bench/base.json tmp/bench/base-runs/*.json
+          pnpm run bench:aggregate -- --output tmp/bench/head.json tmp/bench/head-runs/*.json
+          if [ "${{ steps.run-bench.outputs.base_ok }}" = true ]; then
+            pnpm run bench:aggregate -- --output tmp/bench/base.json tmp/bench/base-runs/*.json
+          fi
 
       - name: Generate benchmark report
         shell: bash
         run: |
           set -euo pipefail
+          # The benchmarked packages this change touches, listed first in the report.
+          CHANGED_PACKAGES="$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" -- packages 2>/dev/null | sed -n 's#^packages/\([^/]*\)/.*#\1#p' | sort -u | paste -sd, - || true)"
+          args=(--head tmp/bench/head.json --output tmp/bench/push-benchmark.md --summary tmp/bench/push-benchmark-summary.json --threshold "$BENCH_REGRESSION_THRESHOLD" --top 12 --repository-url "${{ github.server_url }}/${{ github.repository }}" --changed-packages "$CHANGED_PACKAGES")
           if [ -f tmp/bench/base.json ]; then
-            pnpm run bench:compare --head tmp/bench/head.json --base tmp/bench/base.json --output tmp/bench/push-benchmark.md --summary tmp/bench/push-benchmark-summary.json --threshold "$BENCH_REGRESSION_THRESHOLD" --top 12
-          else
-            pnpm run bench:compare --head tmp/bench/head.json --output tmp/bench/push-benchmark.md --summary tmp/bench/push-benchmark-summary.json --threshold "$BENCH_REGRESSION_THRESHOLD" --top 12
+            args+=(--base tmp/bench/base.json)
           fi
+          pnpm run bench:compare "${args[@]}"
 
       - name: Post benchmark comment
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           retries: 3
           script: |
@@ -441,12 +467,11 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
-
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
       # `pnpm`, and caches the package store.
       - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1.21.1
+        uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
         with:
           node-version-file: .node-version
           cache: true

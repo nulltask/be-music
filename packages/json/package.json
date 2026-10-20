@@ -1,6 +1,6 @@
 {
   "name": "@be-music/json",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Internal BMS/BMSON intermediate representation for be-music",
   "license": "MIT",
   "files": [
@@ -11,8 +11,8 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
       "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }
   },

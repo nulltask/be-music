@@ -4,16 +4,15 @@ import { availableParallelism, homedir } from 'node:os';
 import { dirname, extname, relative, resolve } from 'node:path';
 import { isAbortError, throwIfAborted } from '@be-music/utils/core';
 import { invokeWorkerizedFunction, workerize } from '@be-music/utils/workerize';
-import { type BeMusicJson, type BeMusicPlayLevel } from '@be-music/json';
-import { decodeBmsText, parseChart, resolveBmsControlFlow } from '@be-music/parser';
-import { createTimingResolver } from '@be-music/audio-renderer';
-import { extractPlayableNotes } from '@be-music/player';
+import { type BeMusicJSON, type BeMusicPlayLevel } from '@be-music/json';
+import { decodeBMSText, parseChart, resolveBMSControlFlow } from '@be-music/parser';
+import { resolveChart, type ResolvedChart } from '@be-music/chart';
 import {
   resolveDisplayedDifficultyValue,
   resolveDisplayedJudgeRankLabel,
   resolveDisplayedJudgeRankValue,
   resolveDisplayedPlayLevelValue,
-} from '@be-music/player/utils';
+} from '@be-music/player/display';
 import { resolvePreviewContinueKeyFromChart } from './chart-preview.ts';
 
 interface ChartSummaryItem {
@@ -113,7 +112,7 @@ export interface ListChartFilesOptions {
 }
 
 const SELECTABLE_CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson']);
-const CHART_SELECTION_CACHE_FORMAT = 'be-music-player-chart-selection-cache/6';
+const CHART_SELECTION_CACHE_FORMAT = 'be-music-player-chart-selection-cache/7';
 const CHART_SELECTION_BUILD_CONCURRENCY = Math.max(1, Math.min(8, availableParallelism()));
 let buildChartSelectionEntriesWorker = createBuildChartSelectionEntriesWorker();
 
@@ -467,7 +466,8 @@ async function buildChartSummary(
       ? parseChartSelectionSourceBuffer(filePath, sourceBuffer)
       : await parseChartFileWithCacheMiss(filePath, signal);
     throwIfAborted(signal);
-    const resolvedChart = resolveBmsControlFlow(chart, { random: () => 0 });
+    const resolvedChart = resolveBMSControlFlow(chart, { random: () => 0 });
+    const resolved = resolveChart(resolvedChart, { chartPath: filePath });
     throwIfAborted(signal);
     title = sanitizeChartSelectionMetadataText(chart.metadata.title);
     subtitle = sanitizeChartSelectionMetadataText(chart.metadata.subtitle);
@@ -476,13 +476,14 @@ async function buildChartSummary(
     genre = sanitizeChartSelectionMetadataText(chart.metadata.genre);
     comment = sanitizeChartSelectionMetadataText(chart.metadata.comment);
     bannerPath = resolveChartSelectionBannerPath(chart);
-    totalNotes = extractPlayableNotes(resolvedChart).length;
+    // The notes a play scores: FREE ZONE tails are judged by nobody (mines and invisible objects are not notes).
+    totalNotes = resolved.notes.filter((note) => note.freeZone !== true).length;
     player = chart.bms.player;
     difficulty = resolveDisplayedDifficultyValue(chart);
-    rank = resolveDisplayedJudgeRankValue(resolvedChart);
-    rankLabel = resolveDisplayedJudgeRankLabel(resolvedChart);
+    rank = resolveDisplayedJudgeRankValue(resolved);
+    rankLabel = resolveDisplayedJudgeRankLabel(resolved);
     playLevel = resolveDisplayedPlayLevelValue(chart);
-    const bpmSummary = extractChartBpmSummary(resolvedChart);
+    const bpmSummary = extractChartBPMSummary(resolved);
     bpmInitial = bpmSummary?.initial;
     bpmMin = bpmSummary?.min;
     bpmMax = bpmSummary?.max;
@@ -517,23 +518,23 @@ async function buildChartSummary(
   };
 }
 
-async function parseChartFileWithCacheMiss(filePath: string, signal?: AbortSignal): Promise<BeMusicJson> {
+async function parseChartFileWithCacheMiss(filePath: string, signal?: AbortSignal): Promise<BeMusicJSON> {
   const sourceBuffer = await readFile(filePath, { signal });
   return parseChartSelectionSourceBuffer(filePath, sourceBuffer);
 }
 
-function parseChartSelectionSourceBuffer(filePath: string, sourceBuffer: Buffer): BeMusicJson {
+function parseChartSelectionSourceBuffer(filePath: string, sourceBuffer: Buffer): BeMusicJSON {
   const extension = extname(filePath).toLowerCase();
   if (extension === '.bmson') {
-    return parseChart(decodeUtf8Buffer(sourceBuffer), 'bmson');
+    return parseChart(decodeUTF8Buffer(sourceBuffer), 'bmson');
   }
   if (extension === '.json') {
-    return parseChart(decodeUtf8Buffer(sourceBuffer), 'json');
+    return parseChart(decodeUTF8Buffer(sourceBuffer), 'json');
   }
-  return parseChart(decodeBmsText(sourceBuffer).text);
+  return parseChart(decodeBMSText(sourceBuffer).text);
 }
 
-function decodeUtf8Buffer(buffer: Buffer): string {
+function decodeUTF8Buffer(buffer: Buffer): string {
   let text = buffer.toString('utf8');
   if (text.charCodeAt(0) === 0xfeff) {
     text = text.slice(1);
@@ -640,7 +641,7 @@ function sanitizeChartSelectionMetadataText(value: string | undefined): string |
   return normalized.length > 0 ? normalized : undefined;
 }
 
-function resolveChartSelectionSubartist(json: BeMusicJson): string | undefined {
+function resolveChartSelectionSubartist(json: BeMusicJSON): string | undefined {
   if (Array.isArray(json.bmson.info.subartists) && json.bmson.info.subartists.length > 0) {
     const subartists = json.bmson.info.subartists
       .map((value) => sanitizeChartSelectionMetadataText(value))
@@ -653,7 +654,7 @@ function resolveChartSelectionSubartist(json: BeMusicJson): string | undefined {
   return sanitizeChartSelectionMetadataText(json.metadata.extras.SUBARTIST);
 }
 
-function resolveChartSelectionBannerPath(json: BeMusicJson): string | undefined {
+function resolveChartSelectionBannerPath(json: BeMusicJSON): string | undefined {
   const bmsonBanner = sanitizeChartSelectionMetadataText(json.bmson.info.bannerImage);
   if (bmsonBanner) {
     return bmsonBanner;
@@ -665,9 +666,8 @@ function resolveChartSelectionBannerPath(json: BeMusicJson): string | undefined 
   return sanitizeChartSelectionMetadataText(json.metadata.extras.BANNER);
 }
 
-function extractChartBpmSummary(json: BeMusicJson): { initial: number; min: number; max: number } | undefined {
-  const resolver = createTimingResolver(json);
-  const bpmValues = resolver.tempoPoints
+function extractChartBPMSummary(resolved: ResolvedChart): { initial: number; min: number; max: number } | undefined {
+  const bpmValues = resolved.timing.tempoPoints
     .map((point) => point.bpm)
     .filter((value) => Number.isFinite(value) && value > 0);
   if (bpmValues.length === 0) {

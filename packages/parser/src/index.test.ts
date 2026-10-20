@@ -2,21 +2,23 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vite-plus/test';
-import { BMS_JSON_FORMAT } from '../../json/src/index.ts';
+import { BMS_JSON_FORMAT, type BeMusicEvent } from '../../json/src/index.ts';
 import {
-  decodeBmsText,
-  decodeUtf8Text,
+  decodeBMSText,
+  decodeUTF8Text,
   parseBmson,
   parseChart,
   parseChartFile,
-  resolveBmsControlFlow,
+  resolveBMSControlFlow,
+  resolveBMSControlFlowWithDraws,
 } from './index.ts';
+import { drawRandomOutcomes } from '../../chart/src/index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
+const unifiedBMSChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
 describe('parser', () => {
   test('BMS: parses measure length, BPM, STOP, and BGA channels', async () => {
-    const json = await parseChartFile(unifiedBmsChartPath);
+    const json = await parseChartFile(unifiedBMSChartPath);
 
     expect(json.sourceFormat).toBe('bms');
     expect(json.metadata.title).toBe('Four-Measure Command Combo Test');
@@ -142,16 +144,16 @@ describe('parser', () => {
     ].join('\n');
     const parsed = parseChart(source);
 
-    const branch1 = resolveBmsControlFlow(parsed, { random: () => 0 });
+    const branch1 = resolveBMSControlFlow(parsed, { random: () => 0 });
     expect(branch1.events.map((event) => `${event.measure}:${event.value}`)).toEqual(['1:01', '2:03']);
     expect(branch1.metadata.extras.END).toBeUndefined();
 
-    const branch2 = resolveBmsControlFlow(parsed, { random: () => 0.9999999 });
+    const branch2 = resolveBMSControlFlow(parsed, { random: () => 0.9999999 });
     expect(branch2.events.map((event) => `${event.measure}:${event.value}`)).toEqual(['1:02', '2:03']);
 
     // Bare `#END` also closes the block; the measure-2 note must survive a non-matching roll.
     const bareEndSource = ['#BPM 120', '#RANDOM 2', '#IF 1', '#00111:01', '#END', '#00211:03', ''].join('\n');
-    const bareEnd = resolveBmsControlFlow(parseChart(bareEndSource), { random: () => 0.9999999 });
+    const bareEnd = resolveBMSControlFlow(parseChart(bareEndSource), { random: () => 0.9999999 });
     expect(bareEnd.events.map((event) => `${event.measure}:${event.value}`)).toEqual(['2:03']);
 
     // `#END <other value>` is NOT a control-flow alias — it stays an unknown header.
@@ -227,20 +229,55 @@ describe('parser', () => {
     const parsed = parseChart(['#RANDOM 2', '#IF 1', '#BPM 150', '#ENDIF', '#ENDRANDOM', '#00111:01', ''].join('\n'));
     expect(parsed.metadata.bpm).toBe(130);
 
-    const resolvedWhenBranchIsActive = resolveBmsControlFlow(parsed, { random: () => 0 });
+    const resolvedWhenBranchIsActive = resolveBMSControlFlow(parsed, { random: () => 0 });
     expect(resolvedWhenBranchIsActive.metadata.bpm).toBe(150);
 
-    const resolvedWhenBranchIsInactive = resolveBmsControlFlow(parsed, { random: () => 0.9999999 });
+    const resolvedWhenBranchIsInactive = resolveBMSControlFlow(parsed, { random: () => 0.9999999 });
     expect(resolvedWhenBranchIsInactive.metadata.bpm).toBe(130);
   });
 
+  test('BMS: applies headers in file order across a taken branch, as LR2 and beatoraja do', () => {
+    const source = [
+      '#WAV01 top-before.wav',
+      '#BPM 120',
+      '#RANDOM 1',
+      '#IF 1',
+      '#WAV01 branch.wav',
+      '#WAV02 branch.wav',
+      '#BPM 150',
+      '#STP 001.000 100',
+      '#ENDIF',
+      '#ENDRANDOM',
+      '#WAV02 top-after.wav',
+      '#BPM 180',
+      '#STP 002.000 100',
+      '#00111:0102',
+      '',
+    ].join('\n');
+    const resolved = resolveBMSControlFlow(parseChart(source), { random: () => 0 });
+
+    // A branch line beats an earlier top-level line and loses to a later one, whatever the header.
+    expect(resolved.resources.wav['01']).toBe('branch.wav');
+    expect(resolved.resources.wav['02']).toBe('top-after.wav');
+    expect(resolved.metadata.bpm).toBe(180);
+    // Repeatable commands still add up.
+    expect([...resolved.bms.stp].sort()).toEqual(['001.000 100', '002.000 100']);
+
+    // The rule survives a round trip through the JSON IR.
+    const viaJSON = resolveBMSControlFlow(parseChart(JSON.stringify(parseChart(source)), 'chart.json'), {
+      random: () => 0,
+    });
+    expect(viaJSON.resources.wav['02']).toBe('top-after.wav');
+    expect(viaJSON.metadata.bpm).toBe(180);
+  });
+
   test('BMS: parses extension headers into dedicated fields', async () => {
-    const json = await parseChartFile(unifiedBmsChartPath);
+    const json = await parseChartFile(unifiedBMSChartPath);
 
     expect(json.bms.preview).toBe('sample.wav');
     expect(json.bms.player).toBe(3);
-    expect(json.bms.pathWav).toBe('./');
-    expect(json.bms.baseBpm).toBe(128);
+    expect(json.bms.pathWAV).toBe('./');
+    expect(json.bms.baseBPM).toBe(128);
     expect(json.bms.stp).toEqual(['008.192']);
     expect(json.bms.option).toBe('RANDOM');
     expect(json.bms.changeOption['01']).toBe('MIRROR');
@@ -249,18 +286,18 @@ describe('parser', () => {
     expect(json.bms.lnType).toBe(1);
     expect(json.bms.lnMode).toBe(1);
     expect(json.bms.lnObjs).toEqual(['AA', 'AB']);
-    expect(json.bms.volWav).toBe(90);
+    expect(json.bms.volWAV).toBe(90);
     expect(json.bms.defExRank).toBe(120);
     expect(json.bms.exRank['01']).toBe('120,90,60,30');
     expect(json.bms.argb['01']).toBe('FF000000');
-    expect(json.bms.exWav['01']).toBe('ex_sample.wav');
-    expect(json.bms.exBmp['01']).toBe('ex_image.bmp');
+    expect(json.bms.exWAV['01']).toBe('ex_sample.wav');
+    expect(json.bms.exBMP['01']).toBe('ex_image.bmp');
     expect(json.bms.bga['01']).toBe('01');
     expect(json.bms.scroll['01']).toBe(0.5);
     expect(json.bms.scroll['02']).toBe(1);
     expect(json.bms.scroll['03']).toBe(1.5);
-    expect(json.bms.poorBga).toBe('03');
-    expect(json.bms.swBga['01']).toBe('02');
+    expect(json.bms.poorBGA).toBe('03');
+    expect(json.bms.swBGA['01']).toBe('02');
     expect(json.bms.videoFile).toBe('demo.mp4');
     expect(json.bms.midiFile).toBe('demo.mid');
     expect(json.bms.materials).toBe('demo.materials');
@@ -422,7 +459,7 @@ describe('parser', () => {
   });
 
   test('BMS: parses RANDOM/IF/SWITCH control flow directives', async () => {
-    const parsed = await parseChartFile(unifiedBmsChartPath);
+    const parsed = await parseChartFile(unifiedBMSChartPath);
 
     expect(parsed.resources.wav['02']).toBe('branch.wav');
     expect(parsed.bms.controlFlow.length).toBeGreaterThan(0);
@@ -430,7 +467,7 @@ describe('parser', () => {
     expect(parsed.events.some((event) => event.measure === 21 && event.channel === '16')).toBe(false);
     expect(parsed.events.some((event) => event.measure === 23 && event.channel === '22')).toBe(false);
 
-    const resolvedWhenRandomIs1 = resolveBmsControlFlow(parsed, { random: () => 0 });
+    const resolvedWhenRandomIs1 = resolveBMSControlFlow(parsed, { random: () => 0 });
     expect(resolvedWhenRandomIs1.resources.wav['02']).toBe('right.wav');
     expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 20 && event.channel === '12')).toBe(true);
     expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 22 && event.channel === '11')).toBe(false);
@@ -445,7 +482,7 @@ describe('parser', () => {
     expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '23')).toBe(true);
     expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '24')).toBe(false);
 
-    const resolvedWhenRandomIs2 = resolveBmsControlFlow(parsed, { random: () => 0.9999999 });
+    const resolvedWhenRandomIs2 = resolveBMSControlFlow(parsed, { random: () => 0.9999999 });
     expect(resolvedWhenRandomIs2.events.some((event) => event.measure === 23 && event.channel === '23')).toBe(false);
     expect(resolvedWhenRandomIs2.events.some((event) => event.measure === 23 && event.channel === '24')).toBe(true);
 
@@ -453,6 +490,57 @@ describe('parser', () => {
     expect(parsed.metadata.extras.SWITCH).toBeUndefined();
     expect(parsed.metadata.extras.SETRANDOM).toBeUndefined();
     expect(parsed.metadata.extras.SETSWITCH).toBeUndefined();
+  });
+
+  test('BMS: resolves control flow with explicit draws, the same draws always giving the same chart', async () => {
+    const parsed = await parseChartFile(unifiedBMSChartPath);
+    for (const roll of [0, 0.5, 0.9999999]) {
+      const draws = drawRandomOutcomes(parsed, () => roll);
+      const resolved = resolveBMSControlFlowWithDraws(parsed, draws);
+      expect(resolveBMSControlFlowWithDraws(parsed, draws)).toEqual(resolved);
+      // `resolveBMSControlFlow` is the same resolution with draws it makes itself.
+      expect(resolveBMSControlFlow(parsed, { random: () => roll })).toEqual(resolved);
+    }
+    // Resolving does not touch the source chart.
+    expect(parsed.events.some((event) => event.measure === 20 && event.channel === '12')).toBe(false);
+  });
+
+  test('BMS: a resolved chart carries no control flow, so resolving it again changes nothing', () => {
+    const parsed = parseChart(
+      [
+        '#RANDOM 2',
+        '#IF 1',
+        '#WAV01 one.wav',
+        '#00111:01',
+        '#ENDIF',
+        '#IF 2',
+        '#00112:01',
+        '#ENDIF',
+        '#ENDRANDOM',
+      ].join('\n'),
+      'bms',
+    );
+    const resolved = resolveBMSControlFlow(parsed, { random: () => 0 });
+    expect(resolved.bms.controlFlow).toEqual([]);
+    expect(resolved.events.map((event) => event.channel)).toEqual(['11']);
+    for (const roll of [0, 0.9]) {
+      // Without control flow there is nothing left to draw, so no roll can stack a second branch on top.
+      expect(resolveBMSControlFlow(resolved, { random: () => roll })).toEqual(resolved);
+    }
+    expect(parsed.bms.controlFlow.length).toBeGreaterThan(0);
+  });
+
+  test('BMS: rejects draws that were not drawn for the chart', () => {
+    const parsed = parseChart(['#RANDOM 2', '#IF 1', '#00111:01', '#ENDIF', '#ENDRANDOM'].join('\n'), 'bms');
+    expect(() => resolveBMSControlFlowWithDraws(parsed, [])).toThrow(RangeError);
+    expect(() => resolveBMSControlFlowWithDraws(parsed, [{ command: 'RANDOM', range: 2, value: 3 }])).toThrow(
+      RangeError,
+    );
+    const plain = parseChart('#00111:01', 'bms');
+    expect(() => resolveBMSControlFlowWithDraws(plain, [{ command: 'RANDOM', range: 2, value: 1 }])).toThrow(
+      RangeError,
+    );
+    expect(resolveBMSControlFlowWithDraws(plain, [])).toEqual(plain);
   });
 
   test('bmson: maps version/lines/info.resolution into IR', async () => {
@@ -481,6 +569,23 @@ describe('parser', () => {
           event.channel === '08' && event.measure === 1 && event.position[0] === 0 && event.position[1] === 720,
       ),
     ).toBe(true);
+  });
+
+  test.each([
+    ['info.resolution', { info: { init_bpm: 120, resolution: -480 } }],
+    ['root resolution', { info: { init_bpm: 120 }, resolution: -480 }],
+  ])('bmson: a negative %s is read as its absolute value per the 1.0.0 spec', (_label, document) => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        ...document,
+        sound_channels: [{ name: 'sample.wav', notes: [{ x: 1, y: 960 }] }],
+      }),
+    );
+
+    // Spec: "If negative, take the absolute value." At 480 pulses per quarter note, y = 960 is beat 2 of measure 0.
+    expect(json.bmson.info.resolution).toBe(480);
+    expect(json.events).toEqual([{ measure: 0, channel: '11', position: [960, 1920], value: '01' }]);
   });
 
   test('bmson: preserves bga/info extensions and notes.l/c in IR', async () => {
@@ -579,6 +684,37 @@ describe('parser', () => {
     expect(sortedChannels).toEqual(['11', '12', '13', '14', '15', '18', '19', '16']);
   });
 
+  test.each([
+    ['beat-5k', [1, 2, 3, 4, 5, 8], ['11', '12', '13', '14', '15', '16']],
+    [
+      'beat-10k',
+      [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 16],
+      ['11', '12', '13', '14', '15', '16', '21', '22', '23', '24', '25', '26'],
+    ],
+  ])(
+    'bmson: mode_hint=%s puts the scratch on x 8 (and 16) like the bmson spec and beatoraja',
+    (modeHint, xs, channels) => {
+      // bmson spec "Canonical List of Mode Hints" (`doc/index.rst` L825 / L827) and jbms-parser BMSONDecoder's
+      // `keyassign`: each side spans 8 `x` values with the scratch last, so x 6 / 7 (14 / 15) have no lane.
+      const json = parseBmson(
+        JSON.stringify({
+          version: '1.0.0',
+          info: { init_bpm: 120, resolution: 240, mode_hint: modeHint },
+          sound_channels: [{ name: 'sample.wav', notes: xs.map((x, index) => ({ x, y: index * 240 })) }],
+        }),
+      );
+
+      const sortedChannels = json.events
+        .slice()
+        .sort(
+          (left, right) =>
+            left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
+        )
+        .map((event) => event.channel);
+      expect(sortedChannels).toEqual(channels);
+    },
+  );
+
   test('bmson: mode_hint=popn-9k routes x=6..9 onto the PMS-STD 22..25 channels', () => {
     const json = parseBmson(
       JSON.stringify({
@@ -607,6 +743,170 @@ describe('parser', () => {
       )
       .map((event) => event.channel);
     expect(channels).toEqual(['15', '22', '23', '24', '25']);
+  });
+
+  test('bmson: mode_hint=keyboard-24k maps x=1..24 onto 11..1O and the wheel x=25 / 26 onto 1P / 1Q, without compacting', () => {
+    const xs = [1, 9, 10, 24, 25, 26];
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'keyboard-24k' },
+        sound_channels: [{ name: 'key.wav', notes: xs.map((x, index) => ({ x, y: index * 240 })) }],
+        mine_channels: [
+          {
+            name: 'mine.wav',
+            notes: [
+              { x: 10, y: 0 },
+              { x: 26, y: 240 },
+            ],
+          },
+        ],
+        key_channels: [{ name: 'hidden.wav', notes: [{ x: 24, y: 480 }] }],
+      }),
+    );
+
+    expect(sortEventsByTime(json.events.filter((event) => event.channel.startsWith('1')))).toEqual([
+      '11',
+      '19',
+      '1A',
+      '1O',
+      '1P',
+      '1Q',
+    ]);
+    // Mines and hidden notes take the same lanes on the landmine and invisible banks.
+    expect(sortEventsByTime(json.events.filter((event) => event.channel.startsWith('D')))).toEqual(['DA', 'DQ']);
+    expect(sortEventsByTime(json.events.filter((event) => event.channel.startsWith('3')))).toEqual(['3O']);
+  });
+
+  test('bmson: mode_hint=keyboard-24k keeps a sparse chart on its own lanes (no positional compaction)', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'keyboard-24k' },
+        sound_channels: [
+          {
+            name: 'key.wav',
+            notes: [
+              { x: 13, y: 0 },
+              { x: 26, y: 240 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    expect(sortEventsByTime(json.events)).toEqual(['1D', '1Q']);
+  });
+
+  test('bmson: mode_hint=keyboard-24k-double maps x=27..52 onto the 2P bank with the wheel on 2P / 2Q', () => {
+    const xs = [1, 25, 26, 27, 35, 36, 50, 51, 52];
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'keyboard-24k-double' },
+        sound_channels: [{ name: 'key.wav', notes: xs.map((x, index) => ({ x, y: index * 240 })) }],
+        mine_channels: [{ name: 'mine.wav', notes: [{ x: 52, y: 0 }] }],
+        key_channels: [{ name: 'hidden.wav', notes: [{ x: 36, y: 0 }] }],
+      }),
+    );
+
+    expect(
+      sortEventsByTime(json.events.filter((event) => event.channel.startsWith('1') || event.channel.startsWith('2'))),
+    ).toEqual(['11', '1P', '1Q', '21', '29', '2A', '2O', '2P', '2Q']);
+    expect(json.events.filter((event) => event.channel.startsWith('E')).map((event) => event.channel)).toEqual(['EQ']);
+    expect(json.events.filter((event) => event.channel.startsWith('4')).map((event) => event.channel)).toEqual(['4A']);
+  });
+
+  test('bmson: an unknown mode_hint numbers the lanes hidden notes and mines use along with the playable ones', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-3k' },
+        sound_channels: [
+          {
+            name: 'key.wav',
+            notes: [
+              { x: 1, y: 0 },
+              { x: 4, y: 240 },
+            ],
+          },
+        ],
+        key_channels: [{ name: 'hidden.wav', notes: [{ x: 2, y: 480 }] }],
+        mine_channels: [{ name: 'mine.wav', notes: [{ x: 3, y: 720 }] }],
+      }),
+    );
+
+    expect(sortEventsByTime(json.events)).toEqual(['11', '14', '32', 'D3']);
+  });
+
+  test.each(['beat-9k', 'BEAT-7K', 'iidx-7k'])(
+    'bmson: an unknown mode_hint (%s) whose lanes fit beat-7k reads as beat-7k, as beatoraja, Qwilight and Bemuse do',
+    (modeHint) => {
+      const json = parseBmson(
+        JSON.stringify({
+          version: '1.0.0',
+          info: { init_bpm: 120, resolution: 240, mode_hint: modeHint },
+          sound_channels: [
+            {
+              name: 'key.wav',
+              notes: [
+                { x: 1, y: 0 },
+                { x: 6, y: 240 },
+                { x: 7, y: 480 },
+                { x: 8, y: 720 },
+              ],
+            },
+          ],
+          mine_channels: [{ name: 'mine.wav', notes: [{ x: 7, y: 960 }] }],
+        }),
+      );
+
+      // x 6 / 7 are the 6th / 7th keys (18 / 19) and x 8 the scratch (16), not the next lanes in numeric order.
+      expect(sortEventsByTime(json.events)).toEqual(['11', '18', '19', '16', 'D9']);
+    },
+  );
+
+  test('bmson: an unknown mode_hint with lanes past x 8 keeps every lane, numbered in order', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'keyboard-36k' },
+        sound_channels: [
+          {
+            name: 'key.wav',
+            notes: [
+              { x: 1, y: 0 },
+              { x: 8, y: 240 },
+              { x: 12, y: 480 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    // beatoraja would turn x 12 into BGM; be-music keeps the chart playable.
+    expect(sortEventsByTime(json.events)).toEqual(['11', '12', '13']);
+  });
+
+  test('bmson: mode_hint=keyboard-48k (BmsONE single-player 48 keys) is not aliased to keyboard-24k-double', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'keyboard-48k' },
+        sound_channels: [
+          {
+            name: 'key.wav',
+            notes: [
+              { x: 30, y: 0 },
+              { x: 40, y: 240 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    // Unknown hint → positional fallback, so x=30 / 40 stay on the 1P side instead of being read as the 2P bank.
+    expect(sortEventsByTime(json.events)).toEqual(['11', '12']);
   });
 
   test('bmson: missing mode_hint defaults to beat-7k per the 1.0.0 spec', () => {
@@ -639,7 +939,7 @@ describe('parser', () => {
     expect(sortedChannels).toEqual(['19', '11', '15']);
   });
 
-  test('bmson: unknown mode_hint falls back to positional `x` ordering', () => {
+  test('bmson: an unknown mode_hint is still loaded, on the beat-7k lanes when its x values fit them', () => {
     const json = parseBmson(
       JSON.stringify({
         version: '1.0.0',
@@ -657,8 +957,7 @@ describe('parser', () => {
       }),
     );
 
-    // Unknown mode_hints (`kabuki-3k` etc.) fall through onto the positional fallback so consumers can still load the
-    // chart even if no canonical layout matches.
+    // Unknown mode_hints (`kabuki-3k` etc.) are read as beat-7k when every x fits its table, as other players read them.
     const sortedChannels = json.events
       .slice()
       .sort(
@@ -666,7 +965,55 @@ describe('parser', () => {
           left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
       )
       .map((event) => event.channel);
-    expect(sortedChannels).toEqual(['13', '11', '12']);
+    expect(sortedChannels).toEqual(['19', '11', '15']);
+  });
+
+  test.each([
+    ['beat-7k', 9],
+    ['beat-5k', 6],
+    ['beat-5k', 7],
+    ['beat-10k', 14],
+    ['beat-10k', 17],
+    ['popn-5k', 6],
+    ['keyboard-24k', 27],
+  ])('bmson: an x outside the %s lane table is a BGM note, as in beatoraja', (modeHint, outsideX) => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: modeHint },
+        sound_channels: [
+          { name: 'key.wav', notes: [{ x: 1, y: 0 }] },
+          { name: 'outside.wav', notes: [{ x: outsideX, y: 240 }] },
+        ],
+      }),
+    );
+
+    // beatoraja's BMSONDecoder maps `x` through the hint's key table and plays anything outside it as a background
+    // note, so the sound still plays but no lane receives a note.
+    expect(json.events.map((event) => [event.channel, event.value])).toEqual([
+      ['11', '01'],
+      ['01', '02'],
+    ]);
+  });
+
+  test('bmson: an out-of-table x on the same pulse as a playable note of its sound channel is dropped like x = 0', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [
+          {
+            name: 'sample.wav',
+            notes: [
+              { x: 1, y: 0 },
+              { x: 9, y: 0 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    expect(json.events.map((event) => event.channel)).toEqual(['11']);
   });
 
   test('bmson: generic-Nkeys mode_hint generates a left-to-right positional map', () => {
@@ -688,8 +1035,8 @@ describe('parser', () => {
       }),
     );
 
-    // x=1..3 within the declared key count map to 11/12/13; x=4 falls outside the map so the parser routes it to the
-    // channel-11 default (consumers see one playable note at lane 1 plus three at the explicit slots).
+    // x=1..3 within the declared key count map to 11/12/13; x=4 falls outside the map, so it is a BGM note (01), as
+    // beatoraja plays an x outside the key table.
     const sortedChannels = json.events
       .slice()
       .sort(
@@ -697,7 +1044,7 @@ describe('parser', () => {
           left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
       )
       .map((event) => event.channel);
-    expect(sortedChannels).toEqual(['11', '12', '13', '11']);
+    expect(sortedChannels).toEqual(['11', '12', '13', '01']);
   });
 
   test('bmson: missing info.total defaults to 100 per the 1.0.0 spec', () => {
@@ -1001,8 +1348,8 @@ describe('parser', () => {
     expect(reparsed.events.find((event) => event.channel === '11')?.bmson?.t).toBe(3);
   });
 
-  test('bmson: key_channels mines route through the same mode_hint lane map onto Dx / Ex channels', async () => {
-    const json = await parseChartFile(resolve(rootDir, 'examples/test/bmson-key-channels-mines.bmson'));
+  test('bmson: mine_channels become mines and key_channels become invisible notes through the mode_hint lane map', async () => {
+    const json = await parseChartFile(resolve(rootDir, 'examples/test/bmson-mine-key-channels.bmson'));
 
     const mineEvents = json.events.filter((event) => event.channel.startsWith('D') || event.channel.startsWith('E'));
     expect(mineEvents).toHaveLength(3);
@@ -1015,8 +1362,48 @@ describe('parser', () => {
     // x=8 → 16 (1P scratch) → mine D6
     expect(mineEvents[2].channel).toBe('D6');
     expect(mineEvents[2].bmson?.damage).toBe(100);
-    // The mine WAV is registered after the sound_channels block.
-    expect(json.resources.wav['03']).toBe('wrong.wav');
+    // The mine WAV is registered after the sound_channels and key_channels blocks.
+    expect(json.resources.wav['04']).toBe('wrong.wav');
+    expect(mineEvents.every((event) => event.value === '04')).toBe(true);
+
+    // key_channels are beatoraja's hidden notes: invisible objects on the same lanes, never mines.
+    const invisibleEvents = json.events.filter((event) => /^[34]/.test(event.channel));
+    expect(invisibleEvents.map((event) => event.channel)).toEqual(['32', '36']);
+    expect(json.resources.wav['03']).toBe('hidden.wav');
+  });
+
+  test('bmson: key_channels only carry x / y — damage, l and c are ignored like beatoraja does', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0 }] }],
+        key_channels: [
+          {
+            name: 'hidden.wav',
+            notes: [
+              { x: 1, y: 240, l: 240, c: true, damage: 30 },
+              { x: 0, y: 480 },
+            ],
+          },
+        ],
+        mine_channels: [
+          {
+            name: 'mine.wav',
+            notes: [
+              { x: 2, y: 480, l: 240, c: true },
+              { x: 0, y: 720 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    // A lane-less (`x` 0) hidden note or mine has nowhere to go and is dropped, as in beatoraja.
+    expect(json.events.filter((event) => event.channel !== '11')).toEqual([
+      { measure: 0, channel: '31', position: [240, 960], value: '02' },
+      { measure: 0, channel: 'D2', position: [480, 960], value: '03' },
+    ]);
   });
 
   test('JSON: normalizes bms/bmson extensions, ignores deprecated bms.lnObj, and rejects invalid positions', () => {
@@ -1034,11 +1421,11 @@ describe('parser', () => {
           lnMode: '1',
           lnObj: 'yy',
           lnObjs: ['zz'],
-          volWav: '90',
+          volWAV: '90',
           defExRank: '100.5',
           player: '2',
-          pathWav: 'sounds/',
-          baseBpm: '145.5',
+          pathWAV: 'sounds/',
+          baseBPM: '145.5',
           stp: ['001.240', 120, '002.120'],
           option: 'HS',
           changeOption: {
@@ -1052,10 +1439,10 @@ describe('parser', () => {
           argb: {
             a: 'FF000000',
           },
-          exWav: {
+          exWAV: {
             1: 'extended.wav',
           },
-          exBmp: {
+          exBMP: {
             2: 'extended.bmp',
           },
           bga: {
@@ -1067,8 +1454,8 @@ describe('parser', () => {
           speed: {
             1: '1.5',
           },
-          poorBga: '02',
-          swBga: {
+          poorBGA: '02',
+          swBGA: {
             4: '03',
           },
           videoFile: 'movie.mp4',
@@ -1120,11 +1507,11 @@ describe('parser', () => {
     expect(parsed.bms.lnMode).toBe(1);
     expect(parsed.bms.lnObjs).toEqual(['ZZ']);
     expect(parsed.bms.lnObjs).not.toContain('YY');
-    expect(parsed.bms.volWav).toBe(90);
+    expect(parsed.bms.volWAV).toBe(90);
     expect(parsed.bms.defExRank).toBe(100.5);
     expect(parsed.bms.player).toBe(2);
-    expect(parsed.bms.pathWav).toBe('sounds/');
-    expect(parsed.bms.baseBpm).toBe(145.5);
+    expect(parsed.bms.pathWAV).toBe('sounds/');
+    expect(parsed.bms.baseBPM).toBe(145.5);
     expect(parsed.bms.stp).toEqual(['001.240', '002.120']);
     expect(parsed.bms.option).toBe('HS');
     expect(parsed.bms.changeOption['01']).toBe('MIRROR');
@@ -1132,13 +1519,13 @@ describe('parser', () => {
     expect(parsed.bms.exRank['01']).toBe('120');
     expect(parsed.bms.exRank.AB).toBe('70,55,40,25');
     expect(parsed.bms.argb['0A']).toBe('FF000000');
-    expect(parsed.bms.exWav['01']).toBe('extended.wav');
-    expect(parsed.bms.exBmp['02']).toBe('extended.bmp');
+    expect(parsed.bms.exWAV['01']).toBe('extended.wav');
+    expect(parsed.bms.exBMP['02']).toBe('extended.bmp');
     expect(parsed.bms.bga['03']).toBe('01');
     expect(parsed.bms.scroll['01']).toBe(0.5);
     expect(parsed.bms.speed['01']).toBe(1.5);
-    expect(parsed.bms.poorBga).toBe('02');
-    expect(parsed.bms.swBga['04']).toBe('03');
+    expect(parsed.bms.poorBGA).toBe('02');
+    expect(parsed.bms.swBGA['04']).toBe('03');
     expect(parsed.bms.videoFile).toBe('movie.mp4');
     expect(parsed.bms.midiFile).toBe('song.mid');
     expect(parsed.bms.materials).toBe('materials.def');
@@ -1244,24 +1631,24 @@ describe('parser', () => {
     expect(parsed.bms.lnType).toBe(1);
     expect(parsed.bms.lnMode).toBe(2);
     expect(parsed.bms.lnObjs).toEqual(['ZZ']);
-    expect(parsed.bms.volWav).toBe(70);
+    expect(parsed.bms.volWAV).toBe(70);
     expect(parsed.bms.defExRank).toBe(120);
     expect(parsed.bms.player).toBe(1);
-    expect(parsed.bms.pathWav).toBe('sounds/');
-    expect(parsed.bms.baseBpm).toBe(150);
+    expect(parsed.bms.pathWAV).toBe('sounds/');
+    expect(parsed.bms.baseBPM).toBe(150);
     expect(parsed.bms.stp).toEqual(['001.240']);
     expect(parsed.bms.option).toBe('HS');
     expect(parsed.bms.changeOption['01']).toBe('MIRROR');
     expect(parsed.bms.wavCmd).toBe('legacy');
     expect(parsed.bms.exRank['01']).toBe('100,80,60,40');
     expect(parsed.bms.argb['0A']).toBe('FF000000');
-    expect(parsed.bms.exWav['01']).toBe('extended.wav');
-    expect(parsed.bms.exBmp['0A']).toBe('extended.bmp');
+    expect(parsed.bms.exWAV['01']).toBe('extended.wav');
+    expect(parsed.bms.exBMP['0A']).toBe('extended.bmp');
     expect(parsed.bms.bga['01']).toBe('01');
     expect(parsed.bms.scroll['01']).toBe(1.25);
     expect(parsed.bms.speed['01']).toBe(1.5);
-    expect(parsed.bms.poorBga).toBe('02');
-    expect(parsed.bms.swBga['01']).toBe('03');
+    expect(parsed.bms.poorBGA).toBe('02');
+    expect(parsed.bms.swBGA['01']).toBe('03');
     expect(parsed.bms.videoFile).toBe('movie.mp4');
     expect(parsed.bms.midiFile).toBe('song.mid');
     expect(parsed.bms.materials).toBe('materials.def');
@@ -1373,13 +1760,21 @@ describe('parser', () => {
     expect(parsed.resources.wav['0A']).toBe('lower.wav');
   });
 
-  test('BMS: `#BASE 62` after the first object line is ignored', () => {
+  test('BMS: `#BASE 62` after the first object line still applies to the whole file, as in beatoraja', () => {
     const parsed = parseChart(['#WAV0a lower.wav', '#00111:0a', '#BASE 62', ''].join('\n'));
 
-    // Pre-scan stops at the first object line; the late `#BASE 62` doesn't take effect, so case is folded as in default
-    // base-36.
-    expect(parsed.bms.base).toBeUndefined();
-    expect(parsed.resources.wav['0A']).toBe('lower.wav');
+    // beatoraja's BMSDecoder reads `#BASE` in a separate pass over the whole file before decoding, so its position does
+    // not matter.
+    expect(parsed.bms.base).toBe(62);
+    expect(parsed.resources.wav['0a']).toBe('lower.wav');
+    expect(parsed.events.map((event) => event.value)).toEqual(['0a']);
+  });
+
+  test('BMS: the last `#BASE` in the file wins, as in beatoraja', () => {
+    expect(parseChart(['#BASE 62', '#00111:0a', '#BASE 36', ''].join('\n')).bms.base).toBeUndefined();
+    expect(parseChart(['#BASE 36', '#00111:0a', '#BASE 62', ''].join('\n')).bms.base).toBe(62);
+    // A `#BASE` line inside a control-flow block counts too: beatoraja's pre-pass does not evaluate `#IF`.
+    expect(parseChart(['#RANDOM 2', '#IF 2', '#BASE 62', '#ENDIF', '#00111:0a', ''].join('\n')).bms.base).toBe(62);
   });
 
   test('BMS: `#BASE 62` preserves case for indexed-headers inside #RANDOM / #IF blocks', () => {
@@ -1399,34 +1794,67 @@ describe('parser', () => {
 
     // Resolving the control flow under a deterministic random value applies the IF block; the resolved chart should now
     // carry both case variants in `wav` as separate slots.
-    const resolved = resolveBmsControlFlow(parsed, { random: () => 0 });
+    const resolved = resolveBMSControlFlow(parsed, { random: () => 0 });
     expect(resolved.resources.wav['0a']).toBe('lower.wav');
     expect(resolved.resources.wav['0A']).toBe('upper.wav');
   });
 
-  test('decodeBmsText: honors #CHARSET UTF-8 even when shift_jis would also parse', () => {
+  test('decodeBMSText: honors #CHARSET UTF-8 even when shift_jis would also parse', () => {
     // The chart is authored in UTF-8 with the directive at the top. Without `#CHARSET`, the auto-detect path would
     // still reach UTF-8 here (no byte hits the 0x80+ shift_jis lead range), so we deliberately include a UTF-8 byte
     // sequence (`éclair` → `é` = 0xC3 0xA9) that decodes garbled under shift_jis. Honoring the directive yields the
     // correct accented form.
     const utf8Bytes = new TextEncoder().encode('#CHARSET UTF-8\n#TITLE éclair\n#ARTIST foo\n');
-    const decoded = decodeBmsText(utf8Bytes);
+    const decoded = decodeBMSText(utf8Bytes);
     expect(decoded.encoding).toBe('utf8');
     expect(decoded.text).toContain('#TITLE éclair');
   });
 
-  test('decodeBmsText: falls back to shift_jis default when no #CHARSET is declared', () => {
+  test('decodeBMSText: falls back to shift_jis default when no #CHARSET is declared', () => {
     // No directive, only shift_jis bytes (`「テスト」` = typical Japanese kana / brackets, well-formed in shift_jis but
     // garbled under UTF-8). The decoder should pick shift_jis automatically.
     const sjisBytes = new Uint8Array([
       0x23, 0x54, 0x49, 0x54, 0x4c, 0x45, 0x20, 0x83, 0x65, 0x83, 0x58, 0x83, 0x67, 0x0a,
     ]); // "#TITLE テスト\n" in Shift_JIS
-    const decoded = decodeBmsText(sjisBytes);
+    const decoded = decodeBMSText(sjisBytes);
     expect(decoded.encoding).toBe('shift_jis');
     expect(decoded.text).toContain('テスト');
   });
 
-  test('decodeBmsText: #CHARSET shift_jis with non-ASCII title surfaces the kana', () => {
+  test('decodeBMSText: detects a Korean EUC-KR chart, as beatoraja and Bemuse do', () => {
+    // "#TITLE 한국 노래\n#ARTIST 가수\n#BPM 150\n#00111:01\n" in EUC-KR (KS X 1001).
+    const eucKrBytes = new Uint8Array([
+      35, 84, 73, 84, 76, 69, 32, 199, 209, 177, 185, 32, 179, 235, 183, 161, 10, 35, 65, 82, 84, 73, 83, 84, 32, 176,
+      161, 188, 246, 10, 35, 66, 80, 77, 32, 49, 53, 48, 10, 35, 48, 48, 49, 49, 49, 58, 48, 49, 10,
+    ]);
+    const decoded = decodeBMSText(eucKrBytes);
+    expect(decoded.encoding).toBe('euc-kr');
+    const parsed = parseChart(decoded.text);
+    expect(parsed.metadata.title).toBe('한국 노래');
+    expect(parsed.metadata.artist).toBe('가수');
+  });
+
+  test('decodeBMSText: honors #CHARSET EUC-KR / CP949', () => {
+    const directive = new TextEncoder().encode('#CHARSET CP949\n');
+    const title = new Uint8Array([35, 84, 73, 84, 76, 69, 32, 199, 209, 177, 185, 10]); // "#TITLE 한국\n"
+    const merged = new Uint8Array(directive.length + title.length);
+    merged.set(directive, 0);
+    merged.set(title, directive.length);
+    const decoded = decodeBMSText(merged);
+    expect(decoded.encoding).toBe('euc-kr');
+    expect(decoded.text).toContain('#TITLE 한국');
+  });
+
+  test('decodeBMSText: does not read half-width katakana Shift_JIS that is not Hangul-shaped as EUC-KR', () => {
+    // "#TITLE ﾃﾞﾝﾜ\n#00111:01\n" in Shift_JIS. These bytes also form valid EUC-KR pairs, but one of the two is a
+    // Hanja, which Korean chart text does not look like.
+    const sjisBytes = new Uint8Array([
+      35, 84, 73, 84, 76, 69, 32, 195, 222, 221, 220, 10, 35, 48, 48, 49, 49, 49, 58, 48, 49, 10,
+    ]);
+    expect(decodeBMSText(sjisBytes).encoding).not.toBe('euc-kr');
+  });
+
+  test('decodeBMSText: #CHARSET shift_jis with non-ASCII title surfaces the kana', () => {
     // Same shift_jis content as above but with the directive explicitly set. The directive should drive the decode path
     // even though autodetect would also pick shift_jis, ensuring deterministic decoding when the chart author declares
     // an encoding.
@@ -1438,21 +1866,21 @@ describe('parser', () => {
     const merged = new Uint8Array(directiveBytes.length + titleBytes.length);
     merged.set(directiveBytes, 0);
     merged.set(titleBytes, directiveBytes.length);
-    const decoded = decodeBmsText(merged);
+    const decoded = decodeBMSText(merged);
     expect(decoded.encoding).toBe('shift_jis');
     expect(decoded.text).toContain('テスト');
   });
 
-  test('decodeUtf8Text: decodes UTF-8 bytes and strips a leading BOM', () => {
-    const withBom = new Uint8Array([0xef, 0xbb, 0xbf, ...new TextEncoder().encode('#TITLE éclair\n')]);
-    expect(decodeUtf8Text(withBom)).toBe('#TITLE éclair\n');
-    expect(decodeUtf8Text(new TextEncoder().encode('#TITLE plain\n'))).toBe('#TITLE plain\n');
+  test('decodeUTF8Text: decodes UTF-8 bytes and strips a leading BOM', () => {
+    const withBOM = new Uint8Array([0xef, 0xbb, 0xbf, ...new TextEncoder().encode('#TITLE éclair\n')]);
+    expect(decodeUTF8Text(withBOM)).toBe('#TITLE éclair\n');
+    expect(decodeUTF8Text(new TextEncoder().encode('#TITLE plain\n'))).toBe('#TITLE plain\n');
   });
 
-  test('decodeBmsText: decodes UTF-16LE charts via their BOM', () => {
+  test('decodeBMSText: decodes UTF-16LE charts via their BOM', () => {
     const source = '#TITLE てすと\n#BPM 150\n#00111:01\n';
     const bytes = new Uint8Array(Buffer.from(`﻿${source}`, 'utf16le'));
-    const decoded = decodeBmsText(bytes);
+    const decoded = decodeBMSText(bytes);
     expect(decoded.encoding).toBe('utf-16le');
     const parsed = parseChart(decoded.text);
     expect(parsed.metadata.title).toBe('てすと');
@@ -1460,7 +1888,7 @@ describe('parser', () => {
     expect(parsed.events).toHaveLength(1);
   });
 
-  test('decodeBmsText: decodes UTF-16BE charts via their BOM', () => {
+  test('decodeBMSText: decodes UTF-16BE charts via their BOM', () => {
     const source = '#TITLE てすと\n#BPM 150\n#00111:01\n';
     const littleEndian = Buffer.from(`﻿${source}`, 'utf16le');
     const bytes = new Uint8Array(littleEndian.length);
@@ -1468,27 +1896,64 @@ describe('parser', () => {
       bytes[index] = littleEndian[index + 1]!;
       bytes[index + 1] = littleEndian[index]!;
     }
-    const decoded = decodeBmsText(bytes);
+    const decoded = decodeBMSText(bytes);
     expect(decoded.encoding).toBe('utf-16be');
     expect(parseChart(decoded.text).metadata.title).toBe('てすと');
   });
 
-  test('decodeBmsText: detects BOM-less UTF-8 via strict validation', () => {
+  test('decodeBMSText: detects BOM-less UTF-8 via strict validation', () => {
     const bytes = new TextEncoder().encode('#TITLE 灼熱\n#BPM 150\n#00111:01\n');
-    const decoded = decodeBmsText(bytes);
+    const decoded = decodeBMSText(bytes);
     expect(decoded.encoding).toBe('utf8');
     expect(parseChart(decoded.text).metadata.title).toBe('灼熱');
   });
 
-  test('decodeBmsText: scores BOM-less EUC-JP charts as euc-jp', () => {
+  test('decodeBMSText: scores BOM-less EUC-JP charts as euc-jp', () => {
     // "テスト" in EUC-JP (A5C6 A5B9 A5C8) — invalid as strict UTF-8, half-width-kana garbage under shift_jis, clean
     // kana under euc-jp, so the scoring walk must land on euc-jp.
     const eucTitle = new Uint8Array([0xa5, 0xc6, 0xa5, 0xb9, 0xa5, 0xc8]);
     const head = new TextEncoder().encode('#TITLE ');
     const tail = new TextEncoder().encode('\n#BPM 150\n#00111:01\n');
     const bytes = new Uint8Array([...head, ...eucTitle, ...tail]);
-    const decoded = decodeBmsText(bytes);
+    const decoded = decodeBMSText(bytes);
     expect(decoded.encoding).toBe('euc-jp');
     expect(parseChart(decoded.text).metadata.title).toBe('テスト');
   });
+
+  test('decodeBMSText: scores only the non-ASCII lines per candidate, and returns the whole file decoded', () => {
+    // CRLF Shift_JIS with many ASCII-only lines: those read the same under every candidate, so they are counted once,
+    // and the result is still the whole file decoded with the winning candidate.
+    const ascii = (text: string) => [...new TextEncoder().encode(text)];
+    const bytes = new Uint8Array([
+      ...ascii('#TITLE '),
+      0x83,
+      0x65,
+      0x83,
+      0x58,
+      0x83,
+      0x67, // テスト
+      ...ascii('\r\n#BPM 150\r\n'),
+      ...Array.from({ length: 40 }, (_, index) => ascii(`#0${String(index).padStart(2, '0')}11:0101\r\n`)).flat(),
+      ...ascii('#GENRE '),
+      0x83,
+      0x65, // テ, on the last line with no line break after it
+    ]);
+    const decoded = decodeBMSText(bytes);
+    expect(decoded.encoding).toBe('shift_jis');
+    expect(decoded.text).toBe(new TextDecoder('shift_jis').decode(bytes));
+    const parsed = parseChart(decoded.text);
+    expect(parsed.metadata.title).toBe('テスト');
+    expect(parsed.metadata.genre).toBe('テ');
+  });
 });
+
+/** Channels of `events` in chart-time order. */
+function sortEventsByTime(events: readonly BeMusicEvent[]): string[] {
+  return events
+    .slice()
+    .sort(
+      (left, right) =>
+        left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
+    )
+    .map((event) => event.channel);
+}

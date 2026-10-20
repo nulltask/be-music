@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { getAsset } from 'node:sea';
 import { OPTIONAL_NODE_MODULE_DIR_ENV } from '@be-music/utils/optional-node-module';
-import { isSeaRuntime } from './sea-worker.ts';
+import { isSEARuntime } from './sea-worker.ts';
 
 // Asset names kept in sync with scripts/build-sea.ts.
 const MANIFEST_ASSET_NAME = 'embedded-node-modules.json';
@@ -24,8 +24,8 @@ interface EmbeddedModulesManifest {
  * Returns the base directory containing the extracted `node_modules`, or `undefined` when not running as a
  * SEA or when the binary has no embedded modules.
  */
-export async function ensureSeaEmbeddedNodeModules(): Promise<string | undefined> {
-  if (!isSeaRuntime()) {
+export async function ensureSEAEmbeddedNodeModules(): Promise<string | undefined> {
+  if (!isSEARuntime()) {
     return undefined;
   }
   const manifest = readEmbeddedModulesManifest();

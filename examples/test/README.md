@@ -83,7 +83,7 @@ One fixture per branch of `resolveChartPlayVariant`.
 | ----------------------------------- | ------------------------------------------------------------------------------------------------- |
 | `bmson-strict-features.bmson`       | The full `info` block, `bga` headers and events, `lines`, and `notes[].l` / `.c`.                  |
 | `bmson-lines-resolution-test.bmson` | Non-uniform `lines` and the resolution-dependent conversion of `stop_events.duration`.             |
-| `bmson-key-channels-mines.bmson`    | beatoraja extensions: `key_channels` mines routed through the `mode_hint` lane map onto `Dx` / `Ex`, `info.ln_type`, and `notes[].t`. |
+| `bmson-mine-key-channels.bmson`     | beatoraja extensions: `mine_channels` mines (`Dx` / `Ex`, with `damage`) and `key_channels` hidden notes (`3x` / `4x`) routed through the `mode_hint` lane map, `info.ln_type`, and `notes[].t`. |
 
 ### Format round trips
 

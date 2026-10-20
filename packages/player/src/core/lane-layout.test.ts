@@ -1,12 +1,15 @@
+import { PLAY_MODE_LAYOUTS } from '@be-music/chart';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   createLaneBindings,
   resolveLaneChannels,
   resolvePlayVariantLaneChannels,
   resolveLaneDisplayMode,
-  resolveLr2LaneIndex,
+  resolveLaneOptionChannels,
+  resolveLR2LaneIndex,
   resolveSideKeySlot,
   resolveSideRelativeLaneIndex,
+  resolveWheelLaneDirection,
 } from './lane-layout.ts';
 
 describe('resolveSideKeySlot', () => {
@@ -71,8 +74,11 @@ describe('resolveSideKeySlot', () => {
 });
 
 describe('24 KEY / 48 KEY keyboard modes', () => {
-  const SP_CHANNELS = Array.from('123456789ABCDEFGHIJKLMNO', (lane) => `1${lane}`);
-  const DP_CHANNELS = [...SP_CHANNELS, ...Array.from('123456789ABCDEFGHIJKLMNO', (lane) => `2${lane}`)];
+  const SP_KEYS = Array.from('123456789ABCDEFGHIJKLMNO', (lane) => `1${lane}`);
+  const DP_KEYS = Array.from('123456789ABCDEFGHIJKLMNO', (lane) => `2${lane}`);
+  // Lane order: the 1P wheel (up, down) left of the 1P keys, the 2P wheel right of the 2P keys.
+  const SP_CHANNELS = ['1P', '1Q', ...SP_KEYS];
+  const DP_CHANNELS = ['1P', '1Q', ...SP_KEYS, ...DP_KEYS, '2P', '2Q'];
 
   test('resolveSideKeySlot — the 24 columns are plain 1-based lane indices, with no scratch', () => {
     expect(resolveSideKeySlot('11', '24')).toBe(1);
@@ -84,25 +90,55 @@ describe('24 KEY / 48 KEY keyboard modes', () => {
     expect(resolveSideKeySlot('17', '24')).toBe(7);
     // Slot 0 is what `isScratchLaneForVariant` keys off; no keyboard-mode channel may produce it.
     expect(SP_CHANNELS.map((channel) => resolveSideKeySlot(channel, '24'))).not.toContain(0);
+    // The wheel follows the keys, as in beatoraja's keyboard lane offsets: up = 25, down = 26.
+    expect(resolveSideKeySlot('1P', '24')).toBe(25);
+    expect(resolveSideKeySlot('1Q', '24')).toBe(26);
     // The 2P bank uses the same side-relative slots under `'48'`.
     expect(resolveSideKeySlot('21', '48')).toBe(1);
     expect(resolveSideKeySlot('2O', '48')).toBe(24);
-    // Past the 24-column bank (`1P` = lane 25) and non-lane channels are rejected.
-    expect(resolveSideKeySlot('1P', '24')).toBe(-1);
+    expect(resolveSideKeySlot('2Q', '48')).toBe(26);
+    // Past the wheel (`1R` = lane 27) and non-lane channels are rejected.
+    expect(resolveSideKeySlot('1R', '24')).toBe(-1);
     expect(resolveSideKeySlot('D1', '24')).toBe(-1);
   });
 
-  test('resolveLr2LaneIndex — keyboard modes have no LR2 lane rects, so every channel reports -1', () => {
-    // LR2 only defines the 20 IIDX rects; returning -1 sends these charts to the fallback playfield
-    // instead of squeezing 24 lanes into the 7-key rect table.
-    expect(resolveLr2LaneIndex('11', '24')).toBe(-1);
-    expect(resolveLr2LaneIndex('1O', '24')).toBe(-1);
-    expect(resolveLr2LaneIndex('2A', '48')).toBe(-1);
+  test('resolveWheelLaneDirection — 1P / 2P turn the wheel up, 1Q / 2Q down, only in the keyboard modes', () => {
+    expect(resolveWheelLaneDirection('1P', '24')).toBe('up');
+    expect(resolveWheelLaneDirection('1Q', '24')).toBe('down');
+    expect(resolveWheelLaneDirection('1q', '48')).toBe('down');
+    expect(resolveWheelLaneDirection('2P', '48')).toBe('up');
+    expect(resolveWheelLaneDirection('2Q', '48')).toBe('down');
+    // 24 KEY SP has no 2P wheel; the keys and other modes have no wheel at all.
+    expect(resolveWheelLaneDirection('2P', '24')).toBeUndefined();
+    expect(resolveWheelLaneDirection('1O', '24')).toBeUndefined();
+    expect(resolveWheelLaneDirection('16', '24')).toBeUndefined();
+    expect(resolveWheelLaneDirection('1P', '7')).toBeUndefined();
+    expect(resolveWheelLaneDirection('1P')).toBeUndefined();
+    expect(resolveWheelLaneDirection('DP', '24')).toBeUndefined();
   });
 
-  test('resolveLaneChannels — lanes render in ascending column order, 1P bank before 2P', () => {
-    const notes = [{ channel: '1O' }, { channel: '11' }, { channel: '1A' }, { channel: '19' }];
-    expect(resolveLaneChannels(notes, '24')).toEqual(['11', '19', '1A', '1O']);
+  test('resolveLaneOptionChannels — the lane options move the 24 keys and leave the wheel alone', () => {
+    expect(resolveLaneOptionChannels('1P', '24')).toEqual(SP_KEYS);
+    expect(resolveLaneOptionChannels('2P', '24')).toEqual([]);
+    expect(resolveLaneOptionChannels('2P', '48')).toEqual(DP_KEYS);
+    // The IIDX families move the keys and leave the scratch alone.
+    expect(resolveLaneOptionChannels('1P', '7')).toEqual(['11', '12', '13', '14', '15', '18', '19']);
+    expect(resolveLaneOptionChannels('2P', '14')).toEqual(['21', '22', '23', '24', '25', '28', '29']);
+    expect(resolveLaneOptionChannels('1P')).toEqual(['11', '12', '13', '14', '15', '18', '19']);
+  });
+
+  test('resolveLR2LaneIndex — keyboard modes have no LR2 lane rects, so every channel reports -1', () => {
+    // LR2 only defines the 20 IIDX rects; returning -1 sends these charts to the fallback playfield
+    // instead of squeezing 26 lanes into the 7-key rect table.
+    expect(resolveLR2LaneIndex('11', '24')).toBe(-1);
+    expect(resolveLR2LaneIndex('1O', '24')).toBe(-1);
+    expect(resolveLR2LaneIndex('2A', '48')).toBe(-1);
+    expect(resolveLR2LaneIndex('1P', '24')).toBe(-1);
+  });
+
+  test('resolveLaneChannels — lanes render in ascending column order, 1P bank before 2P, wheels outside', () => {
+    const notes = [{ channel: '1O' }, { channel: '1Q' }, { channel: '11' }, { channel: '1A' }, { channel: '19' }];
+    expect(resolveLaneChannels(notes, '24')).toEqual(['1Q', '11', '19', '1A', '1O']);
     expect(
       resolveLaneChannels(
         DP_CHANNELS.map((channel) => ({ channel })),
@@ -116,44 +152,63 @@ describe('24 KEY / 48 KEY keyboard modes', () => {
     expect(resolveLaneDisplayMode(DP_CHANNELS)).toBe('48 KEY DP');
     // A `.bme` extension would otherwise mean 7 KEY SP; one extended column outranks it.
     expect(resolveLaneDisplayMode(['11', '18', '1A'], { chartExtension: '.bme' })).toBe('24 KEY SP');
+    // The BMS wheel channels are keyboard lanes too.
+    expect(resolveLaneDisplayMode(['11', '1Q'])).toBe('24 KEY SP');
     // Host override reaches the same modes without any extended channel present.
     expect(resolveLaneDisplayMode(['11', '12'], { playVariant: '24' })).toBe('24 KEY SP');
     expect(resolveLaneDisplayMode(['11', '21'], { playVariant: '48' })).toBe('48 KEY DP');
   });
 
-  test('createLaneBindings — every column gets its own key, none of them scratch', () => {
+  test('createLaneBindings — every column and wheel gets its own key, none of them scratch', () => {
     const bindings = createLaneBindings(SP_CHANNELS, { playVariant: '24' });
+    // In lane order, so the terminal player draws the wheel left of the keys.
     expect(bindings.map((binding) => binding.channel)).toEqual(SP_CHANNELS);
     expect(bindings.every((binding) => binding.side === '1P')).toBe(true);
     expect(bindings.some((binding) => binding.isScratch)).toBe(false);
-    expect(new Set(bindings.flatMap((binding) => binding.inputTokens)).size).toBe(24);
+    expect(new Set(bindings.flatMap((binding) => binding.inputTokens)).size).toBe(26);
+    const keyOf = (list: typeof bindings, channel: string) =>
+      list.find((binding) => binding.channel === channel)?.inputTokens;
+    expect(keyOf(bindings, '1P')).toEqual(['tab']);
+    expect(keyOf(bindings, '1Q')).toEqual(['shift-left']);
+    // The keys keep the pool they had before the wheel existed.
+    expect(keyOf(bindings, '11')).toEqual(['a']);
+    expect(keyOf(bindings, '1O')).toEqual(['n']);
 
     const dpBindings = createLaneBindings(DP_CHANNELS, { playVariant: '48' });
     expect(dpBindings.map((binding) => binding.channel)).toEqual(DP_CHANNELS);
-    expect(dpBindings.filter((binding) => binding.side === '2P')).toHaveLength(24);
-    // 48 lanes outrun the printable-key pool, so the tail falls back to function keys — still unique.
-    expect(new Set(dpBindings.flatMap((binding) => binding.inputTokens)).size).toBe(48);
+    expect(dpBindings.filter((binding) => binding.side === '2P')).toHaveLength(26);
+    // 48 keys outrun the printable-key pool, so the tail falls back to function keys — still unique.
+    expect(new Set(dpBindings.flatMap((binding) => binding.inputTokens)).size).toBe(52);
+    expect(keyOf(dpBindings, '2P')).toEqual(['enter']);
+    expect(keyOf(dpBindings, '2Q')).toEqual(['shift-right']);
+  });
+
+  test('createLaneBindings — a chart with lanes outside the layout still binds them off the wheel keys', () => {
+    const bindings = createLaneBindings(['11', '1Q', '1R'], { playVariant: '24' });
+    const tokens = bindings.flatMap((binding) => binding.inputTokens);
+    expect(new Set(tokens).size).toBe(tokens.length);
+    expect(bindings.find((binding) => binding.channel === '1R')?.side).toBe('OTHER');
   });
 });
 
-describe('resolveLr2LaneIndex', () => {
+describe('resolveLR2LaneIndex', () => {
   test('IIDX-side — 1P stays at 0..7, 2P offsets by 10', () => {
-    expect(resolveLr2LaneIndex('11')).toBe(1);
-    expect(resolveLr2LaneIndex('16')).toBe(0);
-    expect(resolveLr2LaneIndex('19')).toBe(7);
-    expect(resolveLr2LaneIndex('21')).toBe(11);
-    expect(resolveLr2LaneIndex('26')).toBe(10);
-    expect(resolveLr2LaneIndex('29')).toBe(17);
+    expect(resolveLR2LaneIndex('11')).toBe(1);
+    expect(resolveLR2LaneIndex('16')).toBe(0);
+    expect(resolveLR2LaneIndex('19')).toBe(7);
+    expect(resolveLR2LaneIndex('21')).toBe(11);
+    expect(resolveLR2LaneIndex('26')).toBe(10);
+    expect(resolveLR2LaneIndex('29')).toBe(17);
   });
 
   test('PMS / 9 KEY — single-side; both layouts collapse onto slots 1..9', () => {
     // COMPAT
-    expect(resolveLr2LaneIndex('11', '9')).toBe(1);
-    expect(resolveLr2LaneIndex('17', '9')).toBe(7);
-    expect(resolveLr2LaneIndex('19', '9')).toBe(9);
+    expect(resolveLR2LaneIndex('11', '9')).toBe(1);
+    expect(resolveLR2LaneIndex('17', '9')).toBe(7);
+    expect(resolveLR2LaneIndex('19', '9')).toBe(9);
     // STD
-    expect(resolveLr2LaneIndex('22', '9')).toBe(6);
-    expect(resolveLr2LaneIndex('25', '9')).toBe(9);
+    expect(resolveLR2LaneIndex('22', '9')).toBe(6);
+    expect(resolveLR2LaneIndex('25', '9')).toBe(9);
   });
 });
 
@@ -212,11 +267,18 @@ describe('lane mode `playVariant` host override (PlayerOptions.playVariant)', ()
     expect(ch19?.keyLabel).toBe('b');
     expect(ch16?.isScratch).toBe(false);
 
-    // Without the override, the same chart hits the 7-key-sp fallback — channel 16 becomes
-    // scratch and channels 17/18/19 lose the POPN-9 f/v/g/b bindings entirely.
+    // Without the override the lane mode comes from the shared `resolveChartPlayVariant` rule, which reads a full
+    // `11..19` 1P keyboard as POPN-9 too — the engine no longer falls back to 7-key-sp (16 as scratch) here.
     const withoutOverride = createLaneBindings(channels, { player: 1, chartExtension: '.bme' });
     const ch16NoOverride = withoutOverride.find((b) => b.channel === '16');
-    expect(ch16NoOverride?.isScratch).toBe(true);
+    expect(ch16NoOverride?.isScratch).toBe(false);
+    expect(ch16NoOverride?.keyLabel).toBe('f');
+    // A real 7 KEY chart (no `17`) keeps `16` as the scratch.
+    const sevenKey = createLaneBindings(['11', '12', '13', '14', '15', '16', '18', '19'], {
+      player: 1,
+      chartExtension: '.bme',
+    });
+    expect(sevenKey.find((b) => b.channel === '16')?.isScratch).toBe(true);
   });
 
   test('respects the override even when chart channels are inconsistent with the variant', () => {
@@ -305,8 +367,10 @@ describe('resolvePlayVariantLaneChannels', () => {
   });
 
   test('lays out all 24 / 48 keyboard columns', () => {
-    expect(resolvePlayVariantLaneChannels(only('11'), '24')).toHaveLength(24);
-    expect(resolvePlayVariantLaneChannels(only('11'), '48')).toHaveLength(48);
+    expect(resolvePlayVariantLaneChannels(only('11'), '24')).toHaveLength(26);
+    expect(resolvePlayVariantLaneChannels(only('11'), '48')).toHaveLength(52);
+    expect(resolvePlayVariantLaneChannels(only('11'), '24').slice(0, 3)).toEqual(['1P', '1Q', '11']);
+    expect(resolvePlayVariantLaneChannels(only('11'), '48').slice(-3)).toEqual(['2O', '2P', '2Q']);
   });
 
   test('keeps a lane in use outside the variant', () => {
@@ -325,5 +389,34 @@ describe('resolvePlayVariantLaneChannels', () => {
 
   test('without a variant, lists only the lanes in use', () => {
     expect(resolvePlayVariantLaneChannels(only('11', '15'))).toEqual(['11', '15']);
+  });
+});
+
+describe('the play-mode table drives the lane layout', () => {
+  test('createLaneBindings binds every lane of the layout, in the table’s order, with its side and scratch flag', () => {
+    for (const layout of Object.values(PLAY_MODE_LAYOUTS)) {
+      const bindings = createLaneBindings(
+        layout.lanes.map((lane) => lane.channel),
+        { playVariant: layout.variant, platform: 'linux' },
+      );
+      expect(bindings.map((binding) => [binding.channel, binding.side, binding.isScratch])).toEqual(
+        layout.lanes.map((lane) => [lane.channel, lane.side, lane.kind === 'scratch']),
+      );
+      expect(
+        resolveLaneDisplayMode(
+          layout.lanes.map((lane) => lane.channel),
+          { playVariant: layout.variant },
+        ),
+      ).toBe(layout.label);
+    }
+  });
+
+  test('the wheel direction is the table’s lane kind', () => {
+    for (const layout of [PLAY_MODE_LAYOUTS['24'], PLAY_MODE_LAYOUTS['48']]) {
+      for (const lane of layout.lanes) {
+        const expected = lane.kind === 'wheel-up' ? 'up' : lane.kind === 'wheel-down' ? 'down' : undefined;
+        expect(resolveWheelLaneDirection(lane.channel, layout.variant)).toBe(expected);
+      }
+    }
   });
 });

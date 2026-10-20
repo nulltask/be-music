@@ -57,6 +57,16 @@ export class RulesetGauge {
     this.set(this.value + delta);
   }
 
+  /**
+   * Empties the gauge for good — below the spec's floor — and ignores every later judgment. LR2 does this when a play
+   * ends with notes still unjudged after a negative-BPM reversal (`HP = 0`, OpenLR2 `LR2f.cpp:12980-12982`), so the
+   * run is always FAILED. Not a mid-play survival death: `failedMidPlay` stays as it was.
+   */
+  drainToZero(): void {
+    this.value = 0;
+    this.dead = true;
+  }
+
   cleared(): boolean {
     if (this.spec.survival) {
       return !this.failedMidPlay && this.value > 0;

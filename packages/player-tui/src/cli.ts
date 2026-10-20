@@ -5,7 +5,7 @@ import { main } from './cli/runner.ts';
 
 export * from './cli/runner.ts';
 
-function isCliEntryPoint(): boolean {
+function isCLIEntryPoint(): boolean {
   // In a SEA binary the bundle re-runs inside eval workers (see `./sea-main.ts`), where
   // `process.argv[1]` still equals `process.execPath` — never start the CLI from a worker thread.
   if (!isMainThread) {
@@ -17,9 +17,9 @@ function isCliEntryPoint(): boolean {
   }
 
   try {
-    const moduleUrl = (import.meta as { url?: unknown }).url;
-    if (typeof moduleUrl === 'string' && moduleUrl.length > 0) {
-      return resolve(entry) === fileURLToPath(moduleUrl);
+    const moduleURL = (import.meta as { url?: unknown }).url;
+    if (typeof moduleURL === 'string' && moduleURL.length > 0) {
+      return resolve(entry) === fileURLToPath(moduleURL);
     }
   } catch {
     // SEA/CJS bundles may not provide import.meta.url.
@@ -28,7 +28,7 @@ function isCliEntryPoint(): boolean {
   return resolve(entry) === resolve(process.execPath);
 }
 
-if (isCliEntryPoint()) {
+if (isCLIEntryPoint()) {
   void main()
     .then(() => {
       process.exit(process.exitCode ?? 0);

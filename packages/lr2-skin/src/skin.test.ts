@@ -1,35 +1,35 @@
 import { describe, expect, it } from 'vite-plus/test';
 import {
   autoDetectCanvasFromObservedCoordinates,
-  isLr2SpecialGraphic,
-  loadLr2SkinFromSourceFiles,
+  isLR2SpecialGraphic,
+  loadLR2SkinFromSourceFiles,
   LR2_SPECIAL_GRAPHIC,
-  resolveLr2AssetBytes,
+  resolveLR2AssetBytes,
 } from './skin.ts';
 
 const lines = (...rows: string[]): Uint8Array => new TextEncoder().encode(rows.join('\n'));
 
-const imageCsv = (name: string, grIndex = 0): Uint8Array =>
+const imageCSV = (name: string, grIndex = 0): Uint8Array =>
   lines(
     `#IMAGE,${name}.png`,
     `#SRC_IMAGE,0,${grIndex},0,0,100,100,1,1,0,0`,
     '#DST_IMAGE,0,0,0,0,100,100,0,255,255,255,255',
   );
 
-const imagePathsOf = (skin: ReturnType<typeof loadLr2SkinFromSourceFiles>): string[] =>
+const imagePathsOf = (skin: ReturnType<typeof loadLR2SkinFromSourceFiles>): string[] =>
   skin?.images.map((image) => image.source.imagePath) ?? [];
 
 describe('LR2 special graphics', () => {
   it('exposes renderer-independent sentinel paths', () => {
-    expect(isLr2SpecialGraphic(LR2_SPECIAL_GRAPHIC.STAGEFILE)).toBe(true);
-    expect(isLr2SpecialGraphic('stagefile.png')).toBe(false);
+    expect(isLR2SpecialGraphic(LR2_SPECIAL_GRAPHIC.STAGEFILE)).toBe(true);
+    expect(isLR2SpecialGraphic('stagefile.png')).toBe(false);
   });
 });
 
-describe('loadLr2SkinFromSourceFiles', () => {
+describe('loadLR2SkinFromSourceFiles', () => {
   it('reads a single CSV without conditionals', () => {
-    const files = new Map<string, Uint8Array>([['skin/main.csv', imageCsv('a')]]);
-    expect(imagePathsOf(loadLr2SkinFromSourceFiles(files))).toEqual(['a.png']);
+    const files = new Map<string, Uint8Array>([['skin/main.csv', imageCSV('a')]]);
+    expect(imagePathsOf(loadLR2SkinFromSourceFiles(files))).toEqual(['a.png']);
   });
 
   it('captures CUSTOMOPTION declarations and registers default ops', () => {
@@ -48,10 +48,10 @@ describe('loadLr2SkinFromSourceFiles', () => {
           '#ENDIF',
         ),
       ],
-      ['skin/left.csv', imageCsv('left', 0)],
-      ['skin/normal.csv', imageCsv('normal', 1)],
+      ['skin/left.csv', imageCSV('left', 0)],
+      ['skin/normal.csv', imageCSV('normal', 1)],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin?.customOptions).toEqual([
       { name: 'PLAYSIDE', defaultOp: 900, numChoices: 2 },
       { name: 'LANESIZE', defaultOp: 910, numChoices: 3 },
@@ -72,21 +72,21 @@ describe('loadLr2SkinFromSourceFiles', () => {
     // default-family chrome.
     const files = new Map<string, Uint8Array>([
       ['theme/select.lr2skin', lines('#CUSTOMFILE,palette,csv/*.csv,blue,', '#ENDOFHEADER', '#INCLUDE,csv/*.csv,')],
-      ['theme/csv/blue.csv', imageCsv('blue-body')],
-      ['theme/csv/pink.csv', imageCsv('pink-body')],
+      ['theme/csv/blue.csv', imageCSV('blue-body')],
+      ['theme/csv/pink.csv', imageCSV('pink-body')],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(imagePathsOf(skin)).toEqual(['blue-body.png']);
   });
 
   it('falls back to the regular include resolver when no #CUSTOMFILE matches the include pattern', () => {
     // Sanity check that the customFile pre-check doesn't break the non-wildcard include path. Plain
-    // `#INCLUDE,sibling.csv` (no wildcard, no customFile) must still resolve via `resolveLr2IncludePath`.
+    // `#INCLUDE,sibling.csv` (no wildcard, no customFile) must still resolve via `resolveLR2IncludePath`.
     const files = new Map<string, Uint8Array>([
       ['theme/main.lr2skin', lines('#ENDOFHEADER', '#INCLUDE,sibling.csv,')],
-      ['theme/sibling.csv', imageCsv('sibling')],
+      ['theme/sibling.csv', imageCSV('sibling')],
     ]);
-    expect(imagePathsOf(loadLr2SkinFromSourceFiles(files))).toEqual(['sibling.png']);
+    expect(imagePathsOf(loadLR2SkinFromSourceFiles(files))).toEqual(['sibling.png']);
   });
 
   it('skips IF blocks whose ops are not all true', () => {
@@ -108,11 +108,11 @@ describe('loadLr2SkinFromSourceFiles', () => {
           '#ENDIF',
         ),
       ],
-      ['skin/a.csv', imageCsv('a')],
-      ['skin/b.csv', imageCsv('b')],
-      ['skin/c.csv', imageCsv('c')],
+      ['skin/a.csv', imageCSV('a')],
+      ['skin/b.csv', imageCSV('b')],
+      ['skin/c.csv', imageCSV('c')],
     ]);
-    expect(imagePathsOf(loadLr2SkinFromSourceFiles(files))).toEqual(['a.png']);
+    expect(imagePathsOf(loadLR2SkinFromSourceFiles(files))).toEqual(['a.png']);
   });
 
   it('takes only the first matching ELSEIF branch', () => {
@@ -131,11 +131,11 @@ describe('loadLr2SkinFromSourceFiles', () => {
           '#ENDIF',
         ),
       ],
-      ['skin/big.csv', imageCsv('big')],
-      ['skin/normal.csv', imageCsv('normal')],
-      ['skin/fallback.csv', imageCsv('fallback')],
+      ['skin/big.csv', imageCSV('big')],
+      ['skin/normal.csv', imageCSV('normal')],
+      ['skin/fallback.csv', imageCSV('fallback')],
     ]);
-    expect(imagePathsOf(loadLr2SkinFromSourceFiles(files))).toEqual(['normal.png']);
+    expect(imagePathsOf(loadLR2SkinFromSourceFiles(files))).toEqual(['normal.png']);
   });
 
   it('takes ELSE when all preceding branches fail', () => {
@@ -154,11 +154,11 @@ describe('loadLr2SkinFromSourceFiles', () => {
           '#ENDIF',
         ),
       ],
-      ['skin/a.csv', imageCsv('a')],
-      ['skin/b.csv', imageCsv('b')],
-      ['skin/c.csv', imageCsv('c')],
+      ['skin/a.csv', imageCSV('a')],
+      ['skin/b.csv', imageCSV('b')],
+      ['skin/c.csv', imageCSV('c')],
     ]);
-    expect(imagePathsOf(loadLr2SkinFromSourceFiles(files))).toEqual(['c.png']);
+    expect(imagePathsOf(loadLR2SkinFromSourceFiles(files))).toEqual(['c.png']);
   });
 
   it('treats negative ops as negation', () => {
@@ -176,13 +176,13 @@ describe('loadLr2SkinFromSourceFiles', () => {
           '#ENDIF',
         ),
       ],
-      ['skin/not-right.csv', imageCsv('nr')],
-      ['skin/not-left.csv', imageCsv('nl')],
+      ['skin/not-right.csv', imageCSV('nr')],
+      ['skin/not-left.csv', imageCSV('nl')],
     ]);
-    expect(imagePathsOf(loadLr2SkinFromSourceFiles(files))).toEqual(['nr.png']);
+    expect(imagePathsOf(loadLR2SkinFromSourceFiles(files))).toEqual(['nr.png']);
   });
 
-  it('evaluates nested IFs against the parent active state', () => {
+  it('evaluates nested IFS against the parent active state', () => {
     const files = new Map<string, Uint8Array>([
       [
         'skin/main.lr2skin',
@@ -201,11 +201,11 @@ describe('loadLr2SkinFromSourceFiles', () => {
           '#ENDIF',
         ),
       ],
-      ['skin/left-normal.csv', imageCsv('ln')],
-      ['skin/left-wide.csv', imageCsv('lw')],
-      ['skin/right.csv', imageCsv('r')],
+      ['skin/left-normal.csv', imageCSV('ln')],
+      ['skin/left-wide.csv', imageCSV('lw')],
+      ['skin/right.csv', imageCSV('r')],
     ]);
-    expect(imagePathsOf(loadLr2SkinFromSourceFiles(files))).toEqual(['ln.png']);
+    expect(imagePathsOf(loadLR2SkinFromSourceFiles(files))).toEqual(['ln.png']);
   });
 
   it('maps NOWJUDGE_1P indices per the LR2 spec (1=POOR, 2=BAD, 3=GOOD, 4=GREAT, 5=PERFECT)', () => {
@@ -227,7 +227,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
         ),
       ],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     // The judge SRC keeps the FULL multi-cell rectangle (w=200, divx=2) so the renderer can pick the active animation
     // cell at runtime; cell width equals w/divx = 100 px.
     expect(skin?.judges.poor?.[0]?.source).toMatchObject({
@@ -259,7 +259,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
         ),
       ],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin?.judges.perfect).toHaveLength(1);
     // The destination is the FINAL keyframe (used for visibility checks); for the LR2 judge fade chain that's the
     // 0-alpha terminal frame.
@@ -283,7 +283,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
         ),
       ],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     // The regular POOR (id=1) overwrites the early POOR (id=0) so the surviving entry is the second one.
     expect(skin?.judges.poor?.[0]?.source).toMatchObject({ y: 30 });
     expect(skin?.judges.poor?.[0]?.destination).toMatchObject({ y: 200 });
@@ -306,7 +306,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
         ),
       ],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin?.nowCombos).toHaveLength(3);
     expect(skin?.nowCombos.map((entry) => entry.kind)).toEqual(['good', 'great', 'perfect']);
     expect(skin?.nowCombos[0]?.source.alignment).toBe('left');
@@ -324,7 +324,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
         ),
       ],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin?.numbers).toHaveLength(1);
     expect(skin?.numbers[0]?.source).toEqual({
       imagePath: 'font.png',
@@ -355,7 +355,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
         ),
       ],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin?.numbers).toHaveLength(1);
     expect(skin?.numbers[0]?.destination.alpha).toBe(1);
   });
@@ -374,7 +374,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
         ),
       ],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin?.numbers).toHaveLength(2);
     expect(skin?.numbers[0]?.source.num).toBe(100);
     expect(skin?.numbers[1]?.source.num).toBe(160);
@@ -396,7 +396,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
         ),
       ],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin?.numbers.map((number) => number.source.alignment)).toEqual(['right', 'left', 'center']);
   });
 
@@ -412,7 +412,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
         ),
       ],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin?.numbers).toHaveLength(1);
     expect(skin?.numbers[0]?.source.num).toBe(160);
   });
@@ -431,7 +431,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
       ['skin/Play/bomb/LR2 default.tga', tga],
       ['skin/Play/frame/LR2 default.tga', tga],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin?.customFiles).toEqual([
       { name: 'BOMB', path: 'skin/Play/bomb/LR2 default.tga' },
       { name: 'FRAME', path: 'skin/Play/frame/LR2 default.tga' },
@@ -445,7 +445,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
         lines('#CUSTOMFILE,BOMB,.\\LR2files\\Theme\\LR2\\Play\\bomb\\*.tga,Missing,', '#ENDOFHEADER'),
       ],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin?.customFiles).toEqual([]);
   });
 
@@ -475,7 +475,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
       ['skin/Play/bomb/LR2 default.tga', tga],
       ['skin/Play/frame/LR2 default.tga', tga],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin?.images.map((image) => image.source.imagePath)).toEqual([
       'skin/Play/bomb/LR2 default.tga',
       'skin/Play/frame/LR2 default.tga',
@@ -496,10 +496,10 @@ describe('loadLr2SkinFromSourceFiles', () => {
       ['skin/Decide/parts.tga', tga],
       ['skin/Play/close/LR2 default.tga', tga],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin).toBeDefined();
     expect(skin?.images[0]?.source.imagePath).toMatch(/\*\.tga$/u);
-    const bytes = resolveLr2AssetBytes(skin!, skin!.images[0]!.source.imagePath);
+    const bytes = resolveLR2AssetBytes(skin!, skin!.images[0]!.source.imagePath);
     expect(bytes).toBe(tga);
     // A `parts.tga` with the same basename sitting in the Decide folder must NOT be selected
     // when the wildcard scope is the close folder — the wildcard must stay folder-scoped.
@@ -518,7 +518,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
         ),
       ],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin?.grooveGauges).toHaveLength(1);
     expect(skin?.grooveGauges[0]).toMatchObject({
       index: 0,
@@ -531,7 +531,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
 
   it('parses TRANSCOLOR (rgb) for transparency masking', () => {
     const files = new Map<string, Uint8Array>([['skin/main.csv', lines('#TRANSCOLOR,255,0,255', '#IMAGE,a.png')]]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin?.transparentColor).toEqual({ r: 255, g: 0, b: 255 });
   });
 
@@ -560,11 +560,11 @@ describe('loadLr2SkinFromSourceFiles', () => {
     for (const side of [900, 901]) {
       for (const sc of [905, 906]) {
         for (const size of [910, 911, 912]) {
-          files.set(`skin/b_${side}_${sc}_${size}.csv`, imageCsv(`b_${side}_${sc}_${size}`));
+          files.set(`skin/b_${side}_${sc}_${size}.csv`, imageCSV(`b_${side}_${sc}_${size}`));
         }
       }
     }
-    expect(imagePathsOf(loadLr2SkinFromSourceFiles(files))).toEqual(['b_900_905_910.png']);
+    expect(imagePathsOf(loadLR2SkinFromSourceFiles(files))).toEqual(['b_900_905_910.png']);
   });
 
   it('picks the play skin for kind=play and the select skin for kind=select from a mixed bundle', () => {
@@ -590,8 +590,8 @@ describe('loadLr2SkinFromSourceFiles', () => {
         ),
       ],
     ]);
-    const playSkin = loadLr2SkinFromSourceFiles(files, { kind: 'play' });
-    const selectSkin = loadLr2SkinFromSourceFiles(files, { kind: 'select' });
+    const playSkin = loadLR2SkinFromSourceFiles(files, { kind: 'play' });
+    const selectSkin = loadLR2SkinFromSourceFiles(files, { kind: 'select' });
     expect(playSkin?.name).toBe('LR2 PLAY');
     expect(playSkin?.barLayout.slots).toHaveLength(0);
     expect(selectSkin?.name).toBe('LR2 SELECT');
@@ -618,7 +618,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
         ),
       ],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin?.barLayout.bodies).toHaveLength(2);
     expect(skin?.barLayout.bodies[0]).toMatchObject({ kind: 'song' });
     expect(skin?.barLayout.bodies[0]?.source.imagePath).toBe('bar.png');
@@ -658,7 +658,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
         ),
       ],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin?.barLayout.levels.map((entry) => entry.kind)).toEqual(['beginner', 'hyper', 'another']);
     expect(skin?.barLayout.levels[0]?.source.imagePath).toBe('levels.png');
     expect(skin?.barLayout.levels[0]?.source).toMatchObject({ alignment: 'right', padding: 2 });
@@ -684,7 +684,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
         ),
       ],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin?.images).toHaveLength(1);
     expect(skin?.images[0]?.source.imagePath).toBe('__lr2_special:backbmp');
   });
@@ -700,7 +700,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
         ),
       ],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin?.barLayout.title?.font).toBe(3);
     expect(skin?.barLayout.title?.destination).toMatchObject({ x: 8, y: 4, w: 260, h: 24 });
   });
@@ -721,7 +721,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
         ),
       ],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin?.bgas).toHaveLength(2);
     expect(skin?.bgas[0]?.destination).toMatchObject({ x: 291, y: 56, w: 256, h: 256 });
     expect(skin?.bgas[0]).toMatchObject({ noBase: false, noLayer: false, noPoor: false });
@@ -729,43 +729,43 @@ describe('loadLr2SkinFromSourceFiles', () => {
     expect(skin?.bgas[1]).toMatchObject({ noBase: false, noLayer: true, noPoor: true });
   });
 
-  // -- Result-screen path filtering --------------------------------- Covers the `Lr2SkinKind === 'result'` branch in
+  // -- Result-screen path filtering --------------------------------- Covers the `LR2SkinKind === 'result'` branch in
   // `isSkinPathOfKind` / `scoreSkinPath` plus the loader fallback policy: non-play kinds must NOT silently grab a play
   // skin when no kind-specific path exists (that's how the result scene used to render blank).
   describe('result skin loader', () => {
     it('selects Result/result.lr2skin when present and de-ranks /CourseResult/', () => {
       const files = new Map<string, Uint8Array>([
-        ['Theme/LR2/Result/result.lr2skin', imageCsv('result')],
+        ['Theme/LR2/Result/result.lr2skin', imageCSV('result')],
         // Same filename in a sibling /CourseResult/ folder must NOT be picked when the user asks for kind: 'result' —
         // the LR2 default theme ships both and the per-song one wins.
-        ['Theme/LR2/CourseResult/result.lr2skin', imageCsv('course')],
-        ['Theme/LR2/Play/play_7.lr2skin', imageCsv('play')],
+        ['Theme/LR2/CourseResult/result.lr2skin', imageCSV('course')],
+        ['Theme/LR2/Play/play_7.lr2skin', imageCSV('play')],
       ]);
-      const skin = loadLr2SkinFromSourceFiles(files, { kind: 'result' });
+      const skin = loadLR2SkinFromSourceFiles(files, { kind: 'result' });
       expect(imagePathsOf(skin)).toEqual(['result.png']);
     });
 
     it('returns undefined for kind: result when no Result/ skin is bundled', () => {
       const files = new Map<string, Uint8Array>([
-        ['Theme/LR2/Play/play_7.lr2skin', imageCsv('play')],
-        ['Theme/LR2/Select/select.lr2skin', imageCsv('select')],
+        ['Theme/LR2/Play/play_7.lr2skin', imageCSV('play')],
+        ['Theme/LR2/Select/select.lr2skin', imageCSV('select')],
       ]);
       // Earlier the loader fell through to "any .lr2skin" which would hand back play_7.lr2skin and the result scene
       // rendered blank because every play DST gates on play-only ops / timers. Asserting `undefined` here locks in the
       // "fall through to built-in fallback panel" contract.
-      expect(loadLr2SkinFromSourceFiles(files, { kind: 'result' })).toBeUndefined();
+      expect(loadLR2SkinFromSourceFiles(files, { kind: 'result' })).toBeUndefined();
     });
 
     it('returns undefined for kind: select when no Select/ skin is bundled', () => {
-      const files = new Map<string, Uint8Array>([['Theme/LR2/Play/play_7.lr2skin', imageCsv('play')]]);
-      expect(loadLr2SkinFromSourceFiles(files, { kind: 'select' })).toBeUndefined();
+      const files = new Map<string, Uint8Array>([['Theme/LR2/Play/play_7.lr2skin', imageCSV('play')]]);
+      expect(loadLR2SkinFromSourceFiles(files, { kind: 'select' })).toBeUndefined();
     });
 
     it('still falls back to any .lr2skin for kind: play (legacy single-skin bundle)', () => {
       // Some user bundles ship just one CSV and expect the play loader to pick it up regardless of folder layout. Keep
       // that behavior for `play` only — it's the fallback path that pre-dates select / result kind support.
-      const files = new Map<string, Uint8Array>([['skin/main.lr2skin', imageCsv('main')]]);
-      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { kind: 'play' }))).toEqual(['main.png']);
+      const files = new Map<string, Uint8Array>([['skin/main.lr2skin', imageCSV('main')]]);
+      expect(imagePathsOf(loadLR2SkinFromSourceFiles(files, { kind: 'play' }))).toEqual(['main.png']);
     });
   });
 
@@ -776,7 +776,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
   describe('#INFORMATION type-aware skin dispatch', () => {
     // Helper that prepends a `#INFORMATION,<type>,...` row to a regular image CSV — mimics the layout of a real
     // authored skin's entry CSV.
-    const informationCsv = (type: number, imageName: string): Uint8Array =>
+    const informationCSV = (type: number, imageName: string): Uint8Array =>
       lines(
         `#INFORMATION,${type},test skin,nobody,thumb.bmp,`,
         '#ENDOFHEADER',
@@ -787,26 +787,26 @@ describe('loadLr2SkinFromSourceFiles', () => {
 
     it('picks LITONE4-style AC7.lr2skin for kind: play via the declared type', () => {
       const files = new Map<string, Uint8Array>([
-        ['Theme/LITONE4/Play/AC7.lr2skin', informationCsv(0, 'ac7')],
+        ['Theme/LITONE4/Play/AC7.lr2skin', informationCSV(0, 'ac7')],
         // Decoy: a select-type skin sitting in the same theme but irrelevant to the play request.
-        ['Theme/LITONE4/Select/select.lr2skin', informationCsv(5, 'select')],
+        ['Theme/LITONE4/Select/select.lr2skin', informationCSV(5, 'select')],
       ]);
-      const skin = loadLr2SkinFromSourceFiles(files, { kind: 'play' });
+      const skin = loadLR2SkinFromSourceFiles(files, { kind: 'play' });
       expect(imagePathsOf(skin)).toEqual(['ac7.png']);
     });
 
     it('picks LITONE4-style select.lr2skin for kind: select even though decide and result are also present', () => {
       const files = new Map<string, Uint8Array>([
-        ['Theme/LITONE4/Play/AC7.lr2skin', informationCsv(0, 'play')],
-        ['Theme/LITONE4/Decide/decide.lr2skin', informationCsv(6, 'decide')],
-        ['Theme/LITONE4/Result/result.lr2skin', informationCsv(7, 'result')],
-        ['Theme/LITONE4/Select/select.lr2skin', informationCsv(5, 'select')],
+        ['Theme/LITONE4/Play/AC7.lr2skin', informationCSV(0, 'play')],
+        ['Theme/LITONE4/Decide/decide.lr2skin', informationCSV(6, 'decide')],
+        ['Theme/LITONE4/Result/result.lr2skin', informationCSV(7, 'result')],
+        ['Theme/LITONE4/Select/select.lr2skin', informationCSV(5, 'select')],
       ]);
       // Each kind should resolve to its declared sibling — no cross-pollination.
-      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { kind: 'select' }))).toEqual(['select.png']);
-      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { kind: 'decide' }))).toEqual(['decide.png']);
-      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { kind: 'result' }))).toEqual(['result.png']);
-      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { kind: 'play' }))).toEqual(['play.png']);
+      expect(imagePathsOf(loadLR2SkinFromSourceFiles(files, { kind: 'select' }))).toEqual(['select.png']);
+      expect(imagePathsOf(loadLR2SkinFromSourceFiles(files, { kind: 'decide' }))).toEqual(['decide.png']);
+      expect(imagePathsOf(loadLR2SkinFromSourceFiles(files, { kind: 'result' }))).toEqual(['result.png']);
+      expect(imagePathsOf(loadLR2SkinFromSourceFiles(files, { kind: 'play' }))).toEqual(['play.png']);
     });
 
     it('drops a skin whose declared type contradicts its folder name', () => {
@@ -815,24 +815,24 @@ describe('loadLr2SkinFromSourceFiles', () => {
       // play request; the misnamed file gets rejected from BOTH kinds' candidate lists.
       const files = new Map<string, Uint8Array>([
         // Misplaced: declared type 5 (select) under the Play folder.
-        ['Theme/T/Play/play_7.lr2skin', informationCsv(5, 'misplaced')],
-        ['Theme/T/Select/select.lr2skin', informationCsv(5, 'real-select')],
+        ['Theme/T/Play/play_7.lr2skin', informationCSV(5, 'misplaced')],
+        ['Theme/T/Select/select.lr2skin', informationCSV(5, 'real-select')],
       ]);
-      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { kind: 'select' }))).toEqual(['real-select.png']);
+      expect(imagePathsOf(loadLR2SkinFromSourceFiles(files, { kind: 'select' }))).toEqual(['real-select.png']);
       // Play has no valid candidate after the type filter rejects the misplaced one. The legacy single-skin fallback
       // for kind: play kicks in and grabs the misplaced file regardless of its declared type — same behaviour as
       // before this change for the "one .lr2skin in the bundle" case. Documenting that explicitly here.
-      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { kind: 'play' }))).toEqual(['misplaced.png']);
+      expect(imagePathsOf(loadLR2SkinFromSourceFiles(files, { kind: 'play' }))).toEqual(['misplaced.png']);
     });
 
     it('prefers play_<variant>.lr2skin over a type-only AC<N>.lr2skin in the same bundle', () => {
       // Bundles that ship BOTH the canonical filename and a non-canonical type-tagged file should pick the canonical
       // one — keeps the LR2 default theme's behaviour identical even when the type peek is enabled.
       const files = new Map<string, Uint8Array>([
-        ['Theme/X/Play/play_7.lr2skin', informationCsv(0, 'canonical')],
-        ['Theme/X/Play/AC7.lr2skin', informationCsv(0, 'ac7')],
+        ['Theme/X/Play/play_7.lr2skin', informationCSV(0, 'canonical')],
+        ['Theme/X/Play/AC7.lr2skin', informationCSV(0, 'ac7')],
       ]);
-      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { kind: 'play', playVariant: '7' }))).toEqual([
+      expect(imagePathsOf(loadLR2SkinFromSourceFiles(files, { kind: 'play', playVariant: '7' }))).toEqual([
         'canonical.png',
       ]);
     });
@@ -841,11 +841,11 @@ describe('loadLr2SkinFromSourceFiles', () => {
       // Older skins / hand-edited CSVs may omit `#INFORMATION` entirely. We fall back to the path heuristic so the
       // pre-type-aware behaviour is preserved for those.
       const files = new Map<string, Uint8Array>([
-        ['Theme/X/Play/play_7.lr2skin', imageCsv('legacy-play')],
-        ['Theme/X/Select/select.lr2skin', imageCsv('legacy-select')],
+        ['Theme/X/Play/play_7.lr2skin', imageCSV('legacy-play')],
+        ['Theme/X/Select/select.lr2skin', imageCSV('legacy-select')],
       ]);
-      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { kind: 'play' }))).toEqual(['legacy-play.png']);
-      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { kind: 'select' }))).toEqual(['legacy-select.png']);
+      expect(imagePathsOf(loadLR2SkinFromSourceFiles(files, { kind: 'play' }))).toEqual(['legacy-play.png']);
+      expect(imagePathsOf(loadLR2SkinFromSourceFiles(files, { kind: 'select' }))).toEqual(['legacy-select.png']);
     });
   });
 
@@ -878,7 +878,21 @@ describe('loadLr2SkinFromSourceFiles', () => {
       ]);
       // Both atlases should be present after parse — the runtime op gate decides which DST_IMAGE actually paints, but
       // neither can paint if its #IMAGE was filtered out at parse time.
-      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files))).toEqual(['parts.png', 'parts_fail.png']);
+      expect(imagePathsOf(loadLR2SkinFromSourceFiles(files))).toEqual(['parts.png', 'parts_fail.png']);
+    });
+  });
+
+  describe('parseOps', () => {
+    it('takes #IF blocks gated on the extra parse-time ops', () => {
+      // A course stage's ops (290 = in a course, 289 = final stage) gate whole blocks; LR2 reads the skin at each
+      // stage, so the host parses it again with them.
+      const files = new Map<string, Uint8Array>([
+        ['skin/main.csv', lines('#IF,290', '#INCLUDE,course.csv', '#ELSE', '#INCLUDE,single.csv', '#ENDIF')],
+        ['skin/course.csv', imageCSV('course')],
+        ['skin/single.csv', imageCSV('single')],
+      ]);
+      expect(imagePathsOf(loadLR2SkinFromSourceFiles(files))).toEqual(['single.png']);
+      expect(imagePathsOf(loadLR2SkinFromSourceFiles(files, { parseOps: [290, 289] }))).toEqual(['course.png']);
     });
   });
 
@@ -904,7 +918,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
           ),
         ],
       ]);
-      const skin = loadLr2SkinFromSourceFiles(files);
+      const skin = loadLR2SkinFromSourceFiles(files);
       expect(skin?.gaugeCharts).toHaveLength(2);
       const green = skin?.gaugeCharts[0];
       expect(green?.side).toBe('1P');
@@ -938,7 +952,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
           ),
         ],
       ]);
-      const skin = loadLr2SkinFromSourceFiles(files);
+      const skin = loadLR2SkinFromSourceFiles(files);
       expect(skin?.gaugeCharts).toHaveLength(2);
       const onesP = skin?.gaugeCharts.find((c) => c.side === '1P');
       const twoP = skin?.gaugeCharts.find((c) => c.side === '2P');
@@ -963,7 +977,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
           ),
         ],
       ]);
-      const skin = loadLr2SkinFromSourceFiles(files);
+      const skin = loadLR2SkinFromSourceFiles(files);
       expect(skin?.scoreCharts).toHaveLength(3);
       expect(skin?.scoreCharts.map((c) => c.source.index)).toEqual([0, 1, 2]);
       expect(skin?.scoreCharts[0]?.source).toMatchObject({
@@ -980,11 +994,11 @@ describe('loadLr2SkinFromSourceFiles', () => {
       const files = new Map<string, Uint8Array>([
         ['skin/main.csv', lines('#IMAGE,parts.png', '#SRC_GAUGECHART_1P,0,0,0,0,2,2,1,1,0,0,100,80,0,0')],
       ]);
-      expect(loadLr2SkinFromSourceFiles(files)?.gaugeCharts).toEqual([]);
+      expect(loadLR2SkinFromSourceFiles(files)?.gaugeCharts).toEqual([]);
     });
   });
 
-  // -- resolveLr2AssetBytes case-insensitive lookup ----------------- Real LR2 themes routinely mix `parts.tga` /
+  // -- resolveLR2AssetBytes case-insensitive lookup ----------------- Real LR2 themes routinely mix `parts.tga` /
   // `Parts.TGA`, and the chart side has the same problem with `#WAVxx kick.WAV`. Verify the resolver picks up a
   // case-mismatched key without the caller having to enumerate variants.
   describe('keyframe inheritance', () => {
@@ -1003,7 +1017,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
           ),
         ],
       ]);
-      const skin = loadLr2SkinFromSourceFiles(files);
+      const skin = loadLR2SkinFromSourceFiles(files);
       const image = skin?.images[0];
       expect(image?.destination.op4).toBe(1);
       // Sanity: the first keyframe still carries op4=1 too — the inheritance shouldn't reach back, just forward.
@@ -1025,23 +1039,23 @@ describe('loadLr2SkinFromSourceFiles', () => {
           ),
         ],
       ]);
-      const skin = loadLr2SkinFromSourceFiles(files);
+      const skin = loadLR2SkinFromSourceFiles(files);
       const image = skin?.images[0];
       expect(image?.destination.op4).toBe(0);
     });
   });
 
-  describe('resolveLr2AssetBytes', () => {
+  describe('resolveLR2AssetBytes', () => {
     it('finds an asset whose key differs only by casing', () => {
       const files = new Map<string, Uint8Array>([
-        ['skin/main.csv', imageCsv('parts')],
+        ['skin/main.csv', imageCSV('parts')],
         // The skin CSV declared `#IMAGE,parts.png`; here the actual file lives at `Parts.PNG`. With case-insensitive
         // lookup the resolver still hands back the bytes.
         ['skin/Parts.PNG', new Uint8Array([0xde, 0xad, 0xbe, 0xef])],
       ]);
-      const skin = loadLr2SkinFromSourceFiles(files);
+      const skin = loadLR2SkinFromSourceFiles(files);
       expect(skin).toBeDefined();
-      const bytes = resolveLr2AssetBytes(skin!, 'parts.png');
+      const bytes = resolveLR2AssetBytes(skin!, 'parts.png');
       expect(bytes).toEqual(new Uint8Array([0xde, 0xad, 0xbe, 0xef]));
     });
   });
@@ -1050,7 +1064,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
 describe('autoDetectCanvasFromObservedCoordinates', () => {
   // The helper is exported standalone so the data-shape coverage stays cheap to add — the integration path (a real
   // skin without `#RESOLUTION` gets its `width`/`height` upgraded by the loader) is exercised in the
-  // `loadLr2SkinFromSourceFiles` block below.
+  // `loadLR2SkinFromSourceFiles` block below.
   it('returns undefined when no corners were observed', () => {
     expect(autoDetectCanvasFromObservedCoordinates([])).toBeUndefined();
   });
@@ -1143,7 +1157,7 @@ describe('autoDetectCanvasFromObservedCoordinates', () => {
   });
 });
 
-describe('loadLr2SkinFromSourceFiles — #RESOLUTION-less canvas auto-detection', () => {
+describe('loadLR2SkinFromSourceFiles — #RESOLUTION-less canvas auto-detection', () => {
   const fhdLikeBody = (imageName: string): Uint8Array =>
     // Single `#IMAGE` with one `#DST_IMAGE` at FHD coordinates — `(x+w, y+h) = (1920, 1080)`. Authored without
     // `#RESOLUTION` to exercise the auto-detector path. LITONE4-shaped.
@@ -1157,7 +1171,7 @@ describe('loadLr2SkinFromSourceFiles — #RESOLUTION-less canvas auto-detection'
 
   it('snaps the canvas to 1920×1080 when the skin omits #RESOLUTION but uses FHD coordinates', () => {
     const files = new Map<string, Uint8Array>([['theme/play.lr2skin', fhdLikeBody('chrome')]]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin?.width).toBe(1920);
     expect(skin?.height).toBe(1080);
   });
@@ -1179,7 +1193,7 @@ describe('loadLr2SkinFromSourceFiles — #RESOLUTION-less canvas auto-detection'
         ),
       ],
     ]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin?.width).toBe(1280);
     expect(skin?.height).toBe(720);
   });
@@ -1187,7 +1201,7 @@ describe('loadLr2SkinFromSourceFiles — #RESOLUTION-less canvas auto-detection'
   it('keeps the 640×480 fallback when the skin has no DST entries at all', () => {
     // No `#DST_*` parsed → no observed corners → auto-detector returns undefined → 640×480 default stays.
     const files = new Map<string, Uint8Array>([['theme/play.lr2skin', new TextEncoder().encode('#IMAGE,a.png\n')]]);
-    const skin = loadLr2SkinFromSourceFiles(files);
+    const skin = loadLR2SkinFromSourceFiles(files);
     expect(skin?.width).toBe(640);
     expect(skin?.height).toBe(480);
   });

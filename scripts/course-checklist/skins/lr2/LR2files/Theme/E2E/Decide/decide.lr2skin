@@ -1,0 +1,14 @@
+// be-music course checklist fixture skin (LR2): the decide screen, a coloured frame that moves on quickly.
+#INFORMATION,6,BE-MUSIC E2E,be-music,
+#ENDOFHEADER
+#STARTINPUT,300
+#FADEOUT,200
+#IMAGE,LR2files\Theme\E2E\parts.png
+#FONT,16,1,0,sans-serif
+#SRC_IMAGE,0,0,0,128,64,64,1,1,0,0
+#DST_IMAGE,0,0,0,0,640,480,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+// The course decided (op 290) names its first stage (text 150).
+#IF,290
+#SRC_TEXT,0,0,150,0,0,0
+#DST_TEXT,0,0,20,20,600,18,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#ENDIF

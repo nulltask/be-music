@@ -91,7 +91,7 @@ export async function loadBeatorajaFonts(options: {
   // CSS-side prerequisites only matter for the FontFace branch. The BMFont branch needs Pixi's
   // runtime cache, which exists in any environment that loaded `pixi.js` — tests use jsdom which
   // doesn't ship `FontFace`, so guard the CSS branch and let BMFonts continue loading.
-  const canRegisterCssFont =
+  const canRegisterCSSFont =
     typeof globalThis !== 'undefined' &&
     typeof FontFace !== 'undefined' &&
     typeof document !== 'undefined' &&
@@ -104,7 +104,7 @@ export async function loadBeatorajaFonts(options: {
         return;
       }
       const entry = options.files.get(resolved);
-      // Fonts are typically eagerly loaded into the byte map (TTFs are tiny). If the entry was deferred,
+      // Fonts are typically eagerly loaded into the byte map (TTFS are tiny). If the entry was deferred,
       // pull it now — same `loadAssetBytes` helper the texture loader uses.
       const bytes = asLoadedBytes(entry) ?? (await loadAssetBytes(entry));
       if (bytes === undefined) {
@@ -126,7 +126,7 @@ export async function loadBeatorajaFonts(options: {
         }
         return;
       }
-      if (!canRegisterCssFont) return;
+      if (!canRegisterCSSFont) return;
       try {
         // Copy to a fresh, non-shared `ArrayBuffer`. The dropped-file map can hand back a
         // `Uint8Array<SharedArrayBuffer>` (some browsers' file readers return one), and
@@ -158,7 +158,7 @@ function makeCache(
     dispose: () => {
       if (disposed) return;
       disposed = true;
-      unregisterCssFaces(ownedResources.cssFaces);
+      unregisterCSSFaces(ownedResources.cssFaces);
       unregisterBitmapFonts(ownedResources.bitmapFonts);
       ownedResources.cssFaces.length = 0;
       ownedResources.bitmapFonts.length = 0;
@@ -167,7 +167,7 @@ function makeCache(
   };
 }
 
-function unregisterCssFaces(faces: ReadonlyArray<FontFace>): void {
+function unregisterCSSFaces(faces: ReadonlyArray<FontFace>): void {
   if (typeof document === 'undefined' || !('fonts' in document) || typeof document.fonts.delete !== 'function') {
     return;
   }
@@ -300,7 +300,7 @@ async function registerBitmapFont(args: {
     // CSS/canvas pipelines `Text` and `BitmapText` share). We can't pass through a negative
     // `style.fontSize` to reproduce upstream's double-negative cancellation, so we sign-strip
     // BOTH sides instead — `Math.abs(parsed.fontSize)` here, paired with `Math.abs(element.size)`
-    // in `scene/beatoraja/skin-view.ts`'s `buildTextEntry`. The result is mathematically
+    // in `view/beatoraja/skin-view/text.ts`'s `buildTextEntry`. The result is mathematically
     // equivalent: `+118 / +120 = +0.983`, same scale, same rendered glyph height.
     //
     // User report: without this normalization, `style.fontSize = abs(text.size)` (the only

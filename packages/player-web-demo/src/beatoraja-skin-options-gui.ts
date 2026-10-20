@@ -14,13 +14,13 @@
 //
 // Lifecycle:
 //
-//     const skinGui = new BeatorajaSkinOptionsGui(host);
+//     const skinGUI = new BeatorajaSkinOptionsGUI(host);
 //     // …user navigates into the select scene…
-//     skinGui.setSkin({ header, config, onChange: (next) => updateSelectScene(next) });
+//     skinGUI.setSkin({ header, config, onChange: (next) => updateSelectScene(next) });
 //     // …user navigates into the gameplay scene…
-//     skinGui.setSkin({ header: playSkin.header, config: playConfig, … });
+//     skinGUI.setSkin({ header: playSkin.header, config: playConfig, … });
 //     // …user drops a new theme; old controls go stale…
-//     skinGui.clear();
+//     skinGUI.clear();
 //
 // `setSkin` tears down the previous GUI and rebuilds — lil-gui doesn't support partial rebuilds, and
 // rebuilding is cheap (a few hundred μs even for a complex skin).
@@ -34,7 +34,7 @@ import type {
   BeatorajaSkinProperty,
 } from '@be-music/beatoraja-skin';
 
-export interface BeatorajaSkinOptionsGuiOptions {
+export interface BeatorajaSkinOptionsGUIOptions {
   /**
    * Parent element the panel attaches to. The GUI is positioned `absolute` inside this element at
    * `bottom: 0; left: 50% (translateX -50%);` — the host typically passes the demo's `.shell` so
@@ -48,7 +48,7 @@ export interface SetSkinOptions {
    * Stable identity for the active skin entry. When a subsequent `setSkin` call carries the same
    * `entryPath` the GUI is left intact (folder open/close state and scroll position survive); only
    * a different entry triggers a full rebuild against the new schema. Without this guard, every
-   * config-change → `replaceSkin` → `refreshBeatorajaSkinOptionsGui` round-trip would tear down
+   * config-change → `replaceSkin` → `refreshBeatorajaSkinOptionsGUI` round-trip would tear down
    * and recreate the lil-gui instance, snapping the panel back to its initial collapsed state on
    * every controller tweak.
    */
@@ -77,13 +77,13 @@ const AUTO_FILE_LABEL = '(auto)';
 /**
  * Bottom-right panel managing skin-config picks for the currently-loaded beatoraja skin.
  */
-export class BeatorajaSkinOptionsGui {
+export class BeatorajaSkinOptionsGUI {
   private readonly container: HTMLElement;
   private gui: GUI | undefined;
   /**
    * Identity of the currently-rendered skin entry. Compared against the next `setSkin`'s
    * `entryPath` so re-applying the SAME entry's config (the common case after a controller
-   * onChange triggers `replaceSkin` → `refreshBeatorajaSkinOptionsGui`) doesn't tear down and
+   * onChange triggers `replaceSkin` → `refreshBeatorajaSkinOptionsGUI`) doesn't tear down and
    * rebuild the lil-gui instance. State is already mutated in place by the controllers — the
    * subsequent `setSkin` is purely informational and should NOT reset folder open/close state
    * or scroll position. Cleared on `clear()` / `dispose()`.
@@ -113,7 +113,7 @@ export class BeatorajaSkinOptionsGui {
     customOffset: {},
   };
 
-  constructor(options: BeatorajaSkinOptionsGuiOptions) {
+  constructor(options: BeatorajaSkinOptionsGUIOptions) {
     this.container = options.container;
   }
 
@@ -133,7 +133,7 @@ export class BeatorajaSkinOptionsGui {
       // onChange that produced it). No-op.
       return;
     }
-    this.disposeGui();
+    this.disposeGUI();
     this.activeEntryPath = options.entryPath;
     // Hydrate customOffset state from the incoming config — every header.offset[] slot gets
     // a zero-filled record by default; existing host-persisted picks pre-populate matching
@@ -172,7 +172,7 @@ export class BeatorajaSkinOptionsGui {
       width: 320,
     });
     this.gui = gui;
-    this.applyDomStyles(gui.domElement);
+    this.applyDOMStyles(gui.domElement);
     // Bottom-centre skin-options panel — the ROOT starts COLLAPSED, but every folder
     // INSIDE opens by default. Two-tier rationale:
     //
@@ -360,15 +360,15 @@ export class BeatorajaSkinOptionsGui {
    * skin" (e.g., empty drop) so the controls don't outlive the skin they describe.
    */
   clear(): void {
-    this.disposeGui();
+    this.disposeGUI();
   }
 
   /** Tear down the holder. Idempotent. */
   dispose(): void {
-    this.disposeGui();
+    this.disposeGUI();
   }
 
-  private disposeGui(): void {
+  private disposeGUI(): void {
     if (this.gui !== undefined) {
       this.gui.destroy();
       this.gui = undefined;
@@ -384,7 +384,7 @@ export class BeatorajaSkinOptionsGui {
    * corner). Centring + edge-flush keeps the panel out of every authored skin's HUD zone
    * regardless of which scene is mounted.
    */
-  private applyDomStyles(root: HTMLElement): void {
+  private applyDOMStyles(root: HTMLElement): void {
     root.style.position = 'absolute';
     root.style.left = '50%';
     root.style.bottom = '0';

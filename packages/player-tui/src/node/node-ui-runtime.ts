@@ -3,48 +3,45 @@ import type { LogEntry } from '@be-music/utils/log';
 import { effect } from 'alien-signals';
 import { MessageChannel, type MessagePort, Worker } from 'node:worker_threads';
 import type { LaneBinding } from '../manual-input.ts';
-import type { PlayerStateSignals } from '@be-music/player/state-signals';
-import type { PlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
-import { resolveHighSpeedMultiplier } from '@be-music/player/core/high-speed-control';
-import type { ImageResizeAlgorithm } from '@be-music/player/image-resize-algorithm';
-import type { TuiNoteHeight } from '@be-music/player/core/ui-options';
-import { createDeferredUiFlush } from './deferred-ui-flush.ts';
-import { createSeaWorker, isSeaRuntime } from './sea-worker.ts';
-import { createUiFramePatchBuilder } from './ui-frame-patch.ts';
+import { resolveHighSpeedMultiplier, type PlayerStateSignals, type PlayerUISignalBus } from '@be-music/player/signals';
+import type { ImageResizeAlgorithm, TUINoteHeight } from '@be-music/player/display';
+import { createDeferredUIFlush } from './deferred-ui-flush.ts';
+import { createSEAWorker, isSEARuntime } from './sea-worker.ts';
+import { createUIFramePatchBuilder } from './ui-frame-patch.ts';
 import type {
-  NodeUiWorkerInboundMessage,
-  NodeUiWorkerInitData,
-  NodeUiWorkerOutboundMessage,
+  NodeUIWorkerInboundMessage,
+  NodeUIWorkerInitData,
+  NodeUIWorkerOutboundMessage,
 } from './node-ui-worker-protocol.ts';
 
-export interface NodeUiRuntimeOptions {
-  json: NodeUiWorkerInitData['json'];
-  mode: NodeUiWorkerInitData['mode'];
+export interface NodeUIRuntimeOptions {
+  json: NodeUIWorkerInitData['json'];
+  mode: NodeUIWorkerInitData['mode'];
   laneDisplayMode: string;
   laneBindings: LaneBinding[];
   speed: number;
-  uiFps?: number;
+  uiFPS?: number;
   tuiVisibleNotesLimit?: number;
-  tuiNoteHeight: TuiNoteHeight;
+  tuiNoteHeight: TUINoteHeight;
   judgeWindowMs: number;
   highSpeed: number;
   imageResizeAlgorithm: ImageResizeAlgorithm;
   showLaneChannels?: boolean;
   randomPatternSummary?: string;
   kittyGraphics?: boolean;
-  videoBgaStreaming?: boolean;
+  videoBGAStreaming?: boolean;
   stateSignals?: PlayerStateSignals;
-  uiSignals?: PlayerUiSignalBus;
-  initialFrame?: ReturnType<PlayerUiSignalBus['getFrame']>;
+  uiSignals?: PlayerUISignalBus;
+  initialFrame?: ReturnType<PlayerUISignalBus['getFrame']>;
   baseDir: string;
   loadSignal?: AbortSignal;
-  onBgaLoadProgress?: (progress: { ratio: number; detail?: string }) => void;
+  onBGALoadProgress?: (progress: { ratio: number; detail?: string }) => void;
   onLog?: (entry: LogEntry) => void;
   initialPaused?: boolean;
   initialJudgeCombo?: ReturnType<PlayerStateSignals['getJudgeCombo']>;
 }
 
-export interface NodeUiRuntime {
+export interface NodeUIRuntime {
   readonly tuiEnabled: boolean;
   readonly playbackEndSeconds?: number;
   start: () => void;
@@ -55,14 +52,14 @@ export interface NodeUiRuntime {
   createBridgePort: () => MessagePort;
 }
 
-export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promise<NodeUiRuntime> {
-  const worker = isSeaRuntime()
-    ? createSeaWorker('node-ui-worker', createWorkerInitData(options))
-    : new Worker(resolveNodeUiWorkerUrl(), {
+export async function createNodeUIRuntime(options: NodeUIRuntimeOptions): Promise<NodeUIRuntime> {
+  const worker = isSEARuntime()
+    ? createSEAWorker('node-ui-worker', createWorkerInitData(options))
+    : new Worker(resolveNodeUIWorkerURL(), {
         workerData: createWorkerInitData(options),
-        execArgv: resolveNodeUiWorkerExecArgv(),
+        execArgv: resolveNodeUIWorkerExecArgv(),
       });
-  const workerReady = await waitForWorkerReady(worker, options.loadSignal, options.onBgaLoadProgress, options.onLog);
+  const workerReady = await waitForWorkerReady(worker, options.loadSignal, options.onBGALoadProgress, options.onLog);
   if (!workerReady.enabled) {
     return {
       tuiEnabled: false,
@@ -81,34 +78,34 @@ export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promis
   let stopPromise: Promise<void> | undefined;
   let disposePromise: Promise<void> | undefined;
   let bridgePortAttached = false;
-  const handleWorkerMessage = (message: NodeUiWorkerOutboundMessage): void => {
+  const handleWorkerMessage = (message: NodeUIWorkerOutboundMessage): void => {
     if (message.kind === 'log') {
       options.onLog?.(message.entry);
     }
   };
   worker.on('message', handleWorkerMessage);
-  const postWorkerMessage = (message: NodeUiWorkerInboundMessage): void => {
+  const postWorkerMessage = (message: NodeUIWorkerInboundMessage): void => {
     if (disposed) {
       return;
     }
     worker.postMessage(message);
   };
-  const buildUiFramePatch = createUiFramePatchBuilder();
-  const postUiFrame = (frameState: Readonly<ReturnType<PlayerUiSignalBus['getFrame']>>): void => {
+  const buildUIFramePatch = createUIFramePatchBuilder();
+  const postUIFrame = (frameState: Readonly<ReturnType<PlayerUISignalBus['getFrame']>>): void => {
     postWorkerMessage({
       kind: 'frame',
-      frame: buildUiFramePatch(frameState),
+      frame: buildUIFramePatch(frameState),
     });
   };
 
   const initialFrame = options.initialFrame ?? options.uiSignals?.getFrame();
   if (initialFrame) {
-    postUiFrame(initialFrame);
+    postUIFrame(initialFrame);
   }
 
-  const deferredUiFlush =
+  const deferredUIFlush =
     options.uiSignals && options.stateSignals
-      ? createDeferredUiFlush(({ commands, frame }) => {
+      ? createDeferredUIFlush(({ commands, frame }) => {
           if (commands) {
             const queuedCommands = options.uiSignals?.drainCommands() ?? [];
             if (queuedCommands.length > 0) {
@@ -118,25 +115,25 @@ export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promis
           if (frame) {
             const frameState = options.uiSignals?.getFrame();
             if (frameState) {
-              postUiFrame(frameState);
+              postUIFrame(frameState);
             }
           }
         })
       : undefined;
 
   const stopFrameEffect =
-    options.uiSignals && deferredUiFlush
+    options.uiSignals && deferredUIFlush
       ? effect(() => {
           options.uiSignals?.frameTick();
-          deferredUiFlush.markFrameDirty();
+          deferredUIFlush.markFrameDirty();
         })
       : () => undefined;
 
   const stopCommandEffect =
-    options.uiSignals && deferredUiFlush
+    options.uiSignals && deferredUIFlush
       ? effect(() => {
           options.uiSignals?.commandTick();
-          deferredUiFlush.markCommandsDirty();
+          deferredUIFlush.markCommandsDirty();
         })
       : () => undefined;
 
@@ -190,7 +187,7 @@ export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promis
         return disposePromise;
       }
       disposed = true;
-      deferredUiFlush?.dispose();
+      deferredUIFlush?.dispose();
       stopFrameEffect();
       stopCommandEffect();
       stopPausedEffect();
@@ -224,8 +221,8 @@ export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promis
 
 function postWorkerMessageAndWaitForAck(
   worker: Worker,
-  message: NodeUiWorkerInboundMessage,
-  expectedKind: Extract<NodeUiWorkerOutboundMessage, { kind: string }>['kind'],
+  message: NodeUIWorkerInboundMessage,
+  expectedKind: Extract<NodeUIWorkerOutboundMessage, { kind: string }>['kind'],
   resolveOnExit = false,
 ): Promise<void> {
   return new Promise<void>((resolve, reject) => {
@@ -246,7 +243,7 @@ function postWorkerMessageAndWaitForAck(
       cb();
     };
 
-    const onMessage = (workerMessage: NodeUiWorkerOutboundMessage): void => {
+    const onMessage = (workerMessage: NodeUIWorkerOutboundMessage): void => {
       if (workerMessage.kind === expectedKind) {
         settle(resolve);
         return;
@@ -275,14 +272,14 @@ function postWorkerMessageAndWaitForAck(
   });
 }
 
-function createWorkerInitData(options: NodeUiRuntimeOptions): NodeUiWorkerInitData {
+function createWorkerInitData(options: NodeUIRuntimeOptions): NodeUIWorkerInitData {
   return {
     json: options.json,
     mode: options.mode,
     laneDisplayMode: options.laneDisplayMode,
     laneBindings: options.laneBindings,
     speed: options.speed,
-    uiFps: options.uiFps,
+    uiFPS: options.uiFPS,
     tuiVisibleNotesLimit: options.tuiVisibleNotesLimit,
     tuiNoteHeight: options.tuiNoteHeight,
     judgeWindowMs: options.judgeWindowMs,
@@ -292,7 +289,7 @@ function createWorkerInitData(options: NodeUiRuntimeOptions): NodeUiWorkerInitDa
     randomPatternSummary: options.randomPatternSummary,
     baseDir: options.baseDir,
     kittyGraphics: options.kittyGraphics,
-    videoBgaStreaming: options.videoBgaStreaming,
+    videoBGAStreaming: options.videoBGAStreaming,
     useAlternateScreen: shouldUseAlternateScreen(process.platform),
     stdinIsTTY: Boolean(process.stdin.isTTY),
     stdoutIsTTY: Boolean(process.stdout.isTTY),
@@ -310,11 +307,11 @@ function shouldUseAlternateScreen(platform: NodeJS.Platform): boolean {
   return platform !== 'win32';
 }
 
-function resolveNodeUiWorkerUrl(): URL {
+function resolveNodeUIWorkerURL(): URL {
   return new URL(import.meta.url.endsWith('.ts') ? './node-ui-worker.ts' : './node-ui-worker.js', import.meta.url);
 }
 
-function resolveNodeUiWorkerExecArgv(): string[] {
+function resolveNodeUIWorkerExecArgv(): string[] {
   if (!import.meta.url.endsWith('.ts')) {
     return process.execArgv;
   }
@@ -327,8 +324,8 @@ function resolveNodeUiWorkerExecArgv(): string[] {
 async function waitForWorkerReady(
   worker: Worker,
   signal: AbortSignal | undefined,
-  onBgaLoadProgress: NodeUiRuntimeOptions['onBgaLoadProgress'],
-  onLog: NodeUiRuntimeOptions['onLog'],
+  onBGALoadProgress: NodeUIRuntimeOptions['onBGALoadProgress'],
+  onLog: NodeUIRuntimeOptions['onLog'],
 ): Promise<{ enabled: boolean; bgaPlaybackEndSeconds?: number }> {
   if (signal?.aborted) {
     await worker.terminate();
@@ -354,13 +351,13 @@ async function waitForWorkerReady(
       cb();
     };
 
-    const onMessage = (message: NodeUiWorkerOutboundMessage): void => {
+    const onMessage = (message: NodeUIWorkerOutboundMessage): void => {
       if (message.kind === 'log') {
         onLog?.(message.entry);
         return;
       }
       if (message.kind === 'bga-load-progress') {
-        onBgaLoadProgress?.(message.progress);
+        onBGALoadProgress?.(message.progress);
         return;
       }
       if (message.kind === 'ready') {
@@ -441,7 +438,7 @@ function postWorkerAbort(worker: Worker, signal: AbortSignal | undefined): void 
     worker.postMessage({
       kind: 'abort',
       reason: resolveAbortReason(signal).message,
-    } satisfies NodeUiWorkerInboundMessage);
+    } satisfies NodeUIWorkerInboundMessage);
   } catch {
     void worker.terminate();
   }

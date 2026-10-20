@@ -1,6 +1,6 @@
 {
   "name": "@be-music/audio-renderer",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "Renderer for BMS, BMSON, and be-music JSON charts to WAV or AIFF",
   "license": "MIT",
   "bin": {
@@ -14,14 +14,9 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
       "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    },
-    "./triggers": {
-      "types": "./dist/core/triggers.d.ts",
-      "source": "./src/core/triggers.ts",
-      "default": "./dist/core/triggers.js"
     }
   },
   "scripts": {
@@ -39,6 +34,6 @@
     "@be-music/utils": "workspace:*",
     "@wasm-audio-decoders/ogg-vorbis": "^0.1.20",
     "mpg123-decoder": "^1.0.3",
-    "ogg-opus-decoder": "^1.7.3"
+    "ogg-opus-decoder": "^1.7.5"
   }
 }

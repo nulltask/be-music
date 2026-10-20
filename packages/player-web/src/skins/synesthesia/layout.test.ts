@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { TALL_STAGE_BGA, resolveGameplayLayout, tallStage, wideStage } from '@be-music/skin-sdk';
 import { STAGE_SIDE_COLUMN } from '@be-music/skin-sdk';
-import { GROOVE, resolveGrooveRect, resolveMilestoneSpot, resolvePortraitHudColumn } from './layout.ts';
+import { GROOVE, resolveGrooveRect, resolveMilestoneSpot, resolvePortraitHUDColumn } from './layout.ts';
 
 const SP7 = ['16', '11', '12', '13', '14', '15', '18', '19'];
 
@@ -19,9 +19,9 @@ describe('resolveGrooveRect', () => {
   });
 });
 
-describe('resolvePortraitHudColumn', () => {
+describe('resolvePortraitHUDColumn', () => {
   it('stacks plate, score and tally beside the monitor without overlap', () => {
-    const { plate, score, tally } = resolvePortraitHudColumn(tallStage, TALL_STAGE_BGA);
+    const { plate, score, tally } = resolvePortraitHUDColumn(tallStage, TALL_STAGE_BGA);
     expect(plate.x).toBeGreaterThan(TALL_STAGE_BGA.x + TALL_STAGE_BGA.w);
     expect(plate.x + plate.w).toBe(tallStage.width - 12);
     expect(plate.y).toBe(TALL_STAGE_BGA.y);

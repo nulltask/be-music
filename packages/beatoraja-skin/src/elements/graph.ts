@@ -17,7 +17,7 @@
 //         if (direction == 1) { /* vertical: scale region.height by value */ }
 //         else                 { /* horizontal: scale region.width by value */ }
 //
-//     `JsonSkin.Graph.angle` defaults to `1` (`JsonSkin.java:226`), so a skin that omits the
+//     `JSONSkin.Graph.angle` defaults to `1` (`JSONSkin.java:226`), so a skin that omits the
 //     field gets VERTICAL fill. The previous TS impl borrowed SkinSlider's 4-direction codes
 //     (0:up / 1:right / 2:down / 3:left), which both inverted the default (we treated 1 as
 //     'right') AND added 'left' / 'down' modes that don't exist in upstream — every gauge bar
@@ -119,9 +119,9 @@ function normalizeOne(entry: NormalizedElement): BeatorajaGraphElement | undefin
 function angleField(value: unknown): BeatorajaGraphFillDirection {
   // Mirror upstream `SkinGraph.java:99-106`: ONLY `direction == 1` triggers the vertical
   // branch; everything else (including 0, 2, 3, missing) falls into the horizontal catch-all.
-  // `JsonSkin.Graph.angle` defaults to 1 (`JsonSkin.java:226`), so an omitted `angle` field
+  // `JSONSkin.Graph.angle` defaults to 1 (`JSONSkin.java:226`), so an omitted `angle` field
   // resolves to vertical here too.
   if (typeof value === 'number' && value === 1) return 'vertical';
-  if (value === undefined) return 'vertical'; // JsonSkin default = 1 = vertical.
+  if (value === undefined) return 'vertical'; // JSONSkin default = 1 = vertical.
   return 'horizontal';
 }

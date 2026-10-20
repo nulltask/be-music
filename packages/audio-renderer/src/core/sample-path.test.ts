@@ -1,5 +1,8 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { describe, expect, test } from 'vite-plus/test';
-import { createSamplePathCandidates } from './sample-path.ts';
+import { createSamplePathCandidates, resolveSamplePath } from './sample-path.ts';
 
 describe('createSamplePathCandidates', () => {
   test('verbatim path is always first so an exact match short-circuits the codec walk', () => {
@@ -76,5 +79,41 @@ describe('createSamplePathCandidates', () => {
     const withoutPrefix = createSamplePathCandidates('kick.wav');
     expect(withBlank).toEqual(withoutPrefix);
     expect(withSpaces).toEqual(withoutPrefix);
+  });
+});
+
+describe('resolveSamplePath', () => {
+  async function withSongFolder(files: string[], run: (root: string) => Promise<void>): Promise<void> {
+    const root = await mkdtemp(join(tmpdir(), 'be-music-sample-path-'));
+    try {
+      for (const file of files) {
+        await mkdir(dirname(join(root, file)), { recursive: true });
+        await writeFile(join(root, file), '');
+      }
+      await run(root);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+
+  test('finds a keysound beside the chart, then one folder up for a 差分 chart in a sub-folder', async () => {
+    await withSongFolder(['Song/kick.ogg', 'Song/sub/snare.wav'], async (root) => {
+      const chartDir = join(root, 'Song', 'sub');
+      expect(await resolveSamplePath(chartDir, 'snare.wav')).toBe(join(chartDir, 'snare.wav'));
+      expect(await resolveSamplePath(chartDir, 'kick.wav')).toBe(join(root, 'Song', 'kick.ogg'));
+    });
+  });
+
+  test("tries every candidate in the chart's folder before the parent", async () => {
+    await withSongFolder(['Song/sub/kick.mp3', 'Song/kick.wav'], async (root) => {
+      const chartDir = join(root, 'Song', 'sub');
+      expect(await resolveSamplePath(chartDir, 'kick.wav')).toBe(join(chartDir, 'kick.mp3'));
+    });
+  });
+
+  test('goes up one folder only', async () => {
+    await withSongFolder(['kick.wav', 'Song/sub/x'], async (root) => {
+      expect(await resolveSamplePath(join(root, 'Song', 'sub'), 'kick.wav')).toBeUndefined();
+    });
   });
 });

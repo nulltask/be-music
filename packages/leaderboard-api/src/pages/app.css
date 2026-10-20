@@ -1,0 +1,34 @@
+/* Leaderboard pages: Tailwind CSS v4 with the Basecoat components (shadcn/ui design, no framework runtime).
+   Compiled by scripts/build-css.ts into styles.generated.ts; only the classes the pages use are kept. */
+@import 'tailwindcss' source(none);
+@source "./";
+@import 'basecoat-css';
+
+/* Figures line up everywhere: scores, counts, dates and percentages take tabular digits site-wide. */
+@layer base {
+  html {
+    font-variant-numeric: tabular-nums;
+    /* A link to a section (Help's topics) scrolls it into view below the sticky header, not under it. */
+    scroll-padding-top: 3.5rem;
+  }
+}
+
+/* The last place a header menu tries (layout.tsx, headerMenuStyle): under its button across the whole width, kept a
+   page gutter in from either edge, for when neither side of the button has room (a narrow phone). */
+@position-try --header-menu-span {
+  position-area: block-end span-all;
+  margin: 6px 1rem;
+}
+
+/* Moving between pages cross-fades instead of flashing (cross-document View Transitions). The header is its own
+   layer (layout.tsx) and is swapped without animation, so it stays still while the page below it fades. Off for
+   viewers who ask for reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+}
+::view-transition-old(site-header),
+::view-transition-new(site-header) {
+  animation: none;
+}

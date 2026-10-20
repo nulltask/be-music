@@ -1,16 +1,16 @@
-import type { PlayerUiFrameNote, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
+import type { PlayerUIFrameNote, PlayerUIFramePayload } from '@be-music/player/signals';
 
-export interface PlayerUiFrameNoteStateUpdate {
+export interface PlayerUIFrameNoteStateUpdate {
   index: number;
   judged: boolean;
   visibleUntilBeat?: number;
 }
 
-export interface PlayerUiFramePatch extends Omit<PlayerUiFramePayload, 'notes' | 'landmineNotes' | 'invisibleNotes'> {
-  notes?: PlayerUiFrameNote[];
-  landmineNotes?: PlayerUiFrameNote[];
-  invisibleNotes?: PlayerUiFrameNote[];
-  noteStateUpdates?: PlayerUiFrameNoteStateUpdate[];
+export interface PlayerUIFramePatch extends Omit<PlayerUIFramePayload, 'notes' | 'landmineNotes' | 'invisibleNotes'> {
+  notes?: PlayerUIFrameNote[];
+  landmineNotes?: PlayerUIFrameNote[];
+  invisibleNotes?: PlayerUIFrameNote[];
+  noteStateUpdates?: PlayerUIFrameNoteStateUpdate[];
 }
 
 interface NoteStateSnapshot {
@@ -18,9 +18,9 @@ interface NoteStateSnapshot {
   visibleUntilBeat?: number;
 }
 
-export function createUiFramePatchBuilder(): (frame: Readonly<PlayerUiFramePayload>) => PlayerUiFramePatch {
+export function createUIFramePatchBuilder(): (frame: Readonly<PlayerUIFramePayload>) => PlayerUIFramePatch {
   let staticCollectionsSent = false;
-  let lastNotes: ReadonlyArray<PlayerUiFrameNote> | undefined;
+  let lastNotes: ReadonlyArray<PlayerUIFrameNote> | undefined;
   let noteStateSnapshots: NoteStateSnapshot[] = [];
 
   return (frame) => {
@@ -35,7 +35,7 @@ export function createUiFramePatchBuilder(): (frame: Readonly<PlayerUiFramePaylo
       return frame;
     }
 
-    const noteStateUpdates: PlayerUiFrameNoteStateUpdate[] = [];
+    const noteStateUpdates: PlayerUIFrameNoteStateUpdate[] = [];
     for (let index = 0; index < frame.notes.length; index += 1) {
       const note = frame.notes[index]!;
       const previous = noteStateSnapshots[index];

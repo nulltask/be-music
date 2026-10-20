@@ -1,20 +1,12 @@
 import { unzipSync } from 'fflate';
-import {
-  type ChartPlayVariant,
-  isPlayableChannel,
-  resolveChartPlayVariant as resolveChartPlayVariantForChart,
-} from '@be-music/chart';
-import { decodeBmsText, decodeUtf8Text, parseBms, parseBmson } from '@be-music/parser';
-import type { BeMusicJson } from '@be-music/json';
-import { extractPlayableNotes } from '@be-music/player/playable-notes';
+import { countScoredNotes } from '@be-music/chart';
+import { decodeBMSText, decodeUTF8Text, parseBMS, parseBmson } from '@be-music/parser';
+import { seedLibraryChartPlayVariant, type ChartSourceKind, type LibraryChart } from '@be-music/scene-model';
 import { basename, dirname, normalizePath, readFilesIntoEntryMap, runWithConcurrency } from '@be-music/utils/core';
 import type {
-  BrowserFolderNode,
   BrowserSongAssetEntry,
   BrowserSongAssetSource,
   BrowserSongCollection,
-  BrowserSongEntry,
-  BrowserSongSourceKind,
   LoadProgressCallback,
 } from './types.ts';
 import { createEagerDropPathPredicate, isChartFilePath } from '../browser/drop.ts';
@@ -30,8 +22,6 @@ import { logger } from '../logger.ts';
 
 export { loadAssetBytes, asLoadedBytes } from './file-lookup.ts';
 export { type BrowserDroppedFile, DeferredDroppedFile, materializeDroppedFiles } from './dropped-file.ts';
-
-export { basename, dirname, normalizePath } from '@be-music/utils/core';
 
 const log = logger('drop');
 const MAX_ZIP_ARCHIVE_BYTES = 512 * 1024 * 1024;
@@ -49,7 +39,7 @@ export interface LoadProgressOptions {
 }
 
 export class BrowserSongCollectionStore {
-  public collection: BrowserSongCollection = { sources: [], songs: [], errors: [] };
+  public collection: BrowserSongCollection = { sources: [], charts: [], errors: [] };
   /**
    * Monotonic counter that prefixes every appended drop's source ids so subsequent drops don't collide with the
    * previous one's `files:0` / `bundle:0` ids. The counter is incremented every time a drop produces at least one new
@@ -84,7 +74,7 @@ export class BrowserSongCollectionStore {
     options: LoadProgressOptions = {},
   ): Promise<BrowserSongCollection> {
     const incoming = await loadSongCollectionFromFiles(files, options);
-    if (incoming.sources.length === 0 && incoming.songs.length === 0 && incoming.errors.length === 0) {
+    if (incoming.sources.length === 0 && incoming.charts.length === 0 && incoming.errors.length === 0) {
       return this.collection;
     }
     this.dropSeq += 1;
@@ -93,10 +83,10 @@ export class BrowserSongCollectionStore {
       ...source,
       id: prefix + source.id,
     }));
-    const remappedSongs: BrowserSongEntry[] = incoming.songs.map((song) => ({
-      ...song,
-      sourceId: prefix + song.sourceId,
-      id: prefix + song.id,
+    const remappedCharts: LibraryChart[] = incoming.charts.map((chart) => ({
+      ...chart,
+      sourceId: prefix + chart.sourceId,
+      id: prefix + chart.id,
     }));
     const remappedErrors = incoming.errors.map((error) => ({
       ...error,
@@ -104,7 +94,7 @@ export class BrowserSongCollectionStore {
     }));
     this.collection = {
       sources: [...this.collection.sources, ...remappedSources],
-      songs: [...this.collection.songs, ...remappedSongs],
+      charts: [...this.collection.charts, ...remappedCharts],
       errors: [...this.collection.errors, ...remappedErrors],
     };
     return this.collection;
@@ -370,7 +360,7 @@ export async function loadSongCollectionFromFiles(
     }
   }
   // Defer EVERY song-bundle file. Charts get read on demand by the parse loop below (each chart's bytes are released as
-  // soon as the parser produces its `BeMusicJson`), and asset files (BGA images, audio, video, banner, …) stay as lazy
+  // soon as the parser produces its `BeMusicJSON`), and asset files (BGA images, audio, video, banner, …) stay as lazy
   // `File` references until gameplay-mount actually needs them. This keeps the at-rest heap to "parsed chart metadata
   // only" for the song bundle — the dropped pack itself sits on disk until the user picks a song. The throttled
   // progress wrapper keeps the 4000-emit storm from dominating the read time.
@@ -423,7 +413,7 @@ export async function loadSongCollectionFromFiles(
     });
   }
 
-  const songs: BrowserSongEntry[] = [];
+  const charts: LibraryChart[] = [];
   const eventStrings = new PackedEventStrings();
   // Build the chart-path lists in one pass per source so we don't sort + filter the full path table twice (once for the
   // count, once for the parse loop). Sort the chart paths only — the non-chart paths don't need ordering since they're
@@ -433,7 +423,7 @@ export async function loadSongCollectionFromFiles(
     for (const path of source.files.keys()) {
       if (isChartFilePath(path)) paths.push(path);
     }
-    paths.sort((left, right) => left.localeCompare(right, 'ja'));
+    paths.sort(JAPANESE_COLLATOR.compare);
     return paths;
   });
   const chartCount = chartPathsBySource.reduce((acc, list) => acc + list.length, 0);
@@ -474,8 +464,9 @@ export async function loadSongCollectionFromFiles(
           throw new Error(`chart bytes missing for ${path}`);
         }
         const chart = parseChart(path, chartBytes);
-        const notes = extractPlayableNotes(chart, { inferBmsLnTypeWhenMissing: true });
-        const song: BrowserSongEntry = {
+        // The scored notes and the play variant they were read under, without timing every note: the list shows a count.
+        const scored = countScoredNotes(chart, { chartPath: path, inferBmsLNTypeWhenMissing: true });
+        const libraryChart: LibraryChart = {
           id: `${source.id}:${path}`,
           sourceId: source.id,
           sourceLabel: source.label,
@@ -489,14 +480,17 @@ export async function loadSongCollectionFromFiles(
           genre: chart.metadata.genre,
           playLevel: chart.metadata.playLevel,
           bpm: chart.metadata.bpm,
-          totalNotes: notes.filter((note) => isScoreTargetChannel(note.channel)).length,
+          // The notes the engine scores: FREE ZONE tails are judged by nobody, and mines / invisible objects are not
+          // notes at all. A long note counts once.
+          totalNotes: scored.notes,
           chart,
         };
-        songs.push(song);
+        charts.push(libraryChart);
         // Every parsed chart stays resident for as long as the song is in the collection, so trim it before keeping
-        // it. Work out the play variant first, while the events are still plain objects: select screens filter the
-        // whole list by it, and a cached answer spares them from unpacking every chart's events.
-        resolveChartPlayVariant(song);
+        // it. Keep the play variant first, while the events are still plain objects: select screens filter the whole
+        // list by it, and a cached answer spares them from unpacking every chart's events. Counting the notes already
+        // worked it out (`resolveChartPlayVariant` over the same chart and path).
+        seedLibraryChartPlayVariant(libraryChart, scored.playVariant);
         compactCollectionChart(chart, eventStrings);
       } catch (error) {
         errors.push({
@@ -517,7 +511,7 @@ export async function loadSongCollectionFromFiles(
     onProgress?.({ phase: 'parsing', current: chartCount, total: chartCount });
   }
 
-  return { sources, songs, errors };
+  return { sources, charts, errors };
 }
 
 /**
@@ -536,7 +530,7 @@ function yieldToEventLoop(): Promise<void> {
 }
 
 export function describeSongCollection(collection: BrowserSongCollection): string {
-  return `${collection.songs.length} charts loaded${
+  return `${collection.charts.length} charts loaded${
     collection.errors.length > 0 ? `, ${collection.errors.length} errors` : ''
   }`;
 }
@@ -582,50 +576,20 @@ function formatBytes(bytes: number): string {
 
 function parseChart(path: string, bytes: Uint8Array) {
   if (extensionOf(path) === '.bmson') {
-    return parseBmson(decodeUtf8Text(bytes));
+    return parseBmson(decodeUTF8Text(bytes));
   }
-  // Single canonical decode pipeline (`@be-music/parser`'s `decodeBmsText`) so the web player resolves a chart's
+  // Single canonical decode pipeline (`@be-music/parser`'s `decodeBMSText`) so the web player resolves a chart's
   // encoding exactly like the CLI / TUI do \u2014 BOM, `#CHARSET`, and the shift_jis fallback all live in one module.
-  return parseBms(decodeBmsText(bytes).text);
-}
-
-function isScoreTargetChannel(channel: string): boolean {
-  return isPlayableChannel(channel);
+  return parseBMS(decodeBMSText(bytes).text);
 }
 
 /**
- * Inspects a chart entry's playable note channels and reports which `play_<variant>.lr2skin` should be loaded for it.
- * Mapping:
- *
- * - - PMS / 9 KEY (Pop'n) - `.pms` extension OR `#PLAYER=3` paired with channel `17` → `'9'` - any `2X` channel → DP -
- *   any 6/7 key (18 / 19 / 28 / 29) → `'14'` - otherwise → `'10'` - SP only - any 6/7 key → `'7'` - otherwise → `'5'`
- *
- * Mirrors the CLI's `resolveLaneMode` decision (see `packages/player/src/manual-input.ts`) so the web player picks the
- * same `play_9.lr2skin` variant the CLI would for a Pop'n chart. The `22..25` PMS-STD channel signature is NOT used
- * here because real DP charts also drop notes there — the CLI treats that signature only as a layout disambiguator
- * (standard vs. compat) AFTER the 9KEY mode has been decided by extension or `#PLAYER=3 + 17`.
+ * `localeCompare(…, 'ja')` as one collator: the same order, without setting up a collator for each of the thousands of
+ * comparisons a large drop's path sort makes.
  */
-export function resolveChartPlayVariant(song: BrowserSongEntry): ChartPlayVariant {
-  const cached = playVariantByChart.get(song.chart);
-  if (cached !== undefined && cached.chartPath === song.chartPath) return cached.variant;
-  const variant = resolveChartPlayVariantForChart({
-    chartPath: song.chartPath,
-    events: song.chart.events,
-    bms: song.chart.bms,
-  });
-  playVariantByChart.set(song.chart, { chartPath: song.chartPath, variant });
-  return variant;
-}
+const JAPANESE_COLLATOR = new Intl.Collator('ja');
 
-/**
- * Play variant per chart object. Select screens filter the whole song list by key mode, and collection charts keep
- * their events packed (see `compactCollectionChart`), so recomputing the variant would unpack every chart on each
- * filter pass. Keyed by chart identity plus the path the answer was computed for, since the variant also depends on
- * the file extension.
- */
-const playVariantByChart = new WeakMap<BeMusicJson, { chartPath: string; variant: ChartPlayVariant }>();
-
-function inferSourceKind(files: ReadonlyMap<string, BrowserSongAssetEntry>): BrowserSongSourceKind {
+function inferSourceKind(files: ReadonlyMap<string, BrowserSongAssetEntry>): ChartSourceKind {
   for (const path of files.keys()) {
     if (path.includes('/')) return 'directory';
   }
@@ -634,7 +598,7 @@ function inferSourceKind(files: ReadonlyMap<string, BrowserSongAssetEntry>): Bro
 
 export function resolveSongSource(
   collection: BrowserSongCollection,
-  song: BrowserSongEntry,
+  song: LibraryChart,
 ): BrowserSongAssetSource | undefined {
   return collection.sources.find((source) => source.id === song.sourceId);
 }
@@ -642,7 +606,7 @@ export function resolveSongSource(
 /**
  * Resolves a chart-relative asset path (BMP, WAV, banner, …) to its decoded byte array within a song asset source.
  * Mirrors the BMS convention of looking next to the chart file first, then falling back to the source's root and the
- * basename. Used by both gameplay (BGA/audio) and select (banner / preview) loaders.
+ * basename, then — as LR2 does — the same one folder up from the chart. Used by both gameplay (BGA/audio) and select (banner / preview) loaders.
  *
  * Lookup is **case-insensitive** at every candidate step: real-world BMS archives routinely mix `KICK.WAV` / `kick.WAV`
  * / `Kick.wav`, and demanding the chart's casing match the file's would scuttle a large fraction of legitimate drops on
@@ -650,6 +614,30 @@ export function resolveSongSource(
  * builds a lazy lower-key index the first time it's called per source and caches it via WeakMap.
  */
 export function resolveChartAsset(
+  source: BrowserSongAssetSource,
+  chartPath: string,
+  assetPath: string,
+): BrowserSongAssetEntry | undefined {
+  for (const folderChartPath of chartLookupFolders(chartPath)) {
+    const entry = resolveChartAssetInFolder(source, folderChartPath, assetPath);
+    if (entry) return entry;
+  }
+  return undefined;
+}
+
+/**
+ * Where a chart's assets are looked for, as chart paths: the chart itself, then — as LR2 does — a stand-in one folder
+ * up, so a 差分 (alternate difficulty) chart shipped in a sub-folder finds the keysounds and BGA beside its parent.
+ * A chart directly under the dropped folder has no extra entry: its parent is the top, which the lookup always tries.
+ * Every extension is tried in the chart's own folder before the parent's (see {@link resolveChartAudioAsset}).
+ */
+function chartLookupFolders(chartPath: string): string[] {
+  const parent = dirname(dirname(chartPath));
+  return parent === '' ? [chartPath] : [chartPath, `${parent}/${basename(chartPath)}`];
+}
+
+/** {@link resolveChartAsset} in one folder: next to `chartPath`, then the top of the source. */
+function resolveChartAssetInFolder(
   source: BrowserSongAssetSource,
   chartPath: string,
   assetPath: string,
@@ -707,23 +695,27 @@ export function resolveChartAudioAsset(
   assetPath: string,
   options: ResolveChartAudioAssetOptions = {},
 ): BrowserSongAssetEntry | undefined {
-  for (const candidate of audioFallbackPaths(assetPath)) {
-    // Try the `#PATH_WAV` prefixed form first when supplied; fall through to the bare name if the prefix-joined path
-    // doesn't resolve. Charts that don't author `#PATH_WAV` pass `pathPrefix: undefined` and behave exactly as before.
-    const prefixed = joinPathWavPrefix(options.pathPrefix, candidate);
-    if (prefixed !== undefined) {
-      const entry = resolveChartAsset(source, chartPath, prefixed);
-      if (entry) return entry;
-    }
-    const entry = resolveChartAsset(source, chartPath, candidate);
-    if (entry) {
-      return entry;
+  // Every codec in the chart's folder before any in its parent, as LR2 does.
+  for (const folderChartPath of chartLookupFolders(chartPath)) {
+    for (const candidate of audioFallbackPaths(assetPath)) {
+      // Try the `#PATH_WAV` prefixed form first when supplied; fall through to the bare name if the prefix-joined path
+      // doesn't resolve. Charts that don't author `#PATH_WAV` pass `pathPrefix: undefined` and behave exactly as
+      // before.
+      const prefixed = joinPathWAVPrefix(options.pathPrefix, candidate);
+      if (prefixed !== undefined) {
+        const entry = resolveChartAssetInFolder(source, folderChartPath, prefixed);
+        if (entry) return entry;
+      }
+      const entry = resolveChartAssetInFolder(source, folderChartPath, candidate);
+      if (entry) {
+        return entry;
+      }
     }
   }
   return undefined;
 }
 
-function joinPathWavPrefix(prefix: string | undefined, samplePath: string): string | undefined {
+function joinPathWAVPrefix(prefix: string | undefined, samplePath: string): string | undefined {
   if (typeof prefix !== 'string') return undefined;
   const trimmedPrefix = prefix.trim();
   if (trimmedPrefix.length === 0) return undefined;
@@ -781,14 +773,36 @@ export function resolveChartImageAsset(
   chartPath: string,
   assetPath: string,
 ): BrowserSongAssetEntry | undefined {
-  for (const candidate of imageFallbackPaths(assetPath)) {
-    const entry = resolveChartAsset(source, chartPath, candidate);
-    if (entry) {
-      return entry;
+  return resolveChartBGAAsset(source, chartPath, assetPath)?.entry;
+}
+
+/**
+ * {@link resolveChartImageAsset}, also naming the file it found (`path`, relative like `assetPath`): a video declared
+ * as `_bga.mpg` may resolve to `_bga.mp4`, and the video loader should treat the bytes as what they are.
+ */
+export function resolveChartBGAAsset(
+  source: BrowserSongAssetSource,
+  chartPath: string,
+  assetPath: string,
+): { entry: BrowserSongAssetEntry; path: string } | undefined {
+  // Every extension in the chart's folder before any in its parent, as LR2 does.
+  for (const folderChartPath of chartLookupFolders(chartPath)) {
+    for (const candidate of imageFallbackPaths(assetPath)) {
+      const entry = resolveChartAssetInFolder(source, folderChartPath, candidate);
+      if (entry) {
+        return { entry, path: candidate };
+      }
     }
   }
   return undefined;
 }
+
+/**
+ * The video extensions tried, in order, when a chart's declared video BGA isn't there under its own name: packs often
+ * re-encode `_bga.mpg` / `_bga.wmv` to `_bga.mp4` without touching the chart (beatoraja looks for the other
+ * extensions too). Browser-native containers come first, so the re-encode wins over a legacy original left beside it.
+ */
+const VIDEO_FALLBACK_EXTENSIONS = ['mp4', 'webm', 'm4v', 'mov', 'mpg', 'mpeg', 'wmv', 'avi', 'mkv'] as const;
 
 function imageFallbackPaths(path: string): string[] {
   const lastSlash = path.lastIndexOf('/');
@@ -796,6 +810,7 @@ function imageFallbackPaths(path: string): string[] {
   if (dotIndex < 0 || dotIndex < lastSlash) {
     return [path];
   }
+  // A declared video falls back to the same name under the other video extensions (see VIDEO_FALLBACK_EXTENSIONS).
   // Don't walk image extensions when the chart explicitly declared a video BGA — `_scualee.mpg` paired with a same-
   // basename `_scualee.png` (cover art / static fallback frame shipped alongside the actual video) would otherwise have
   // the resolver pick the PNG. The BGA loader only checks the declared path's extension to decide between the image vs.
@@ -803,7 +818,9 @@ function imageFallbackPaths(path: string): string[] {
   // MP4 — visually a frozen still during gameplay. Returning just the original path here keeps the video reference
   // resolving to its own file.
   if (isVideoExtensionPath(path)) {
-    return [path];
+    const videoBase = path.slice(0, dotIndex);
+    const declared = path.slice(dotIndex + 1).toLowerCase();
+    return [path, ...VIDEO_FALLBACK_EXTENSIONS.filter((ext) => ext !== declared).map((ext) => `${videoBase}.${ext}`)];
   }
   const base = path.slice(0, dotIndex);
   const candidates = [`${base}.webp`, `${base}.png`, `${base}.jpg`, `${base}.jpeg`, `${base}.gif`, `${base}.bmp`];
@@ -814,44 +831,12 @@ function imageFallbackPaths(path: string): string[] {
 }
 
 /**
- * Local copy of `isVideoExtension` from `scene/core/gameplay-bga`. Pulled inline rather than imported so
- * `collection.ts` (the data-layer entry point) doesn't take a dependency on the Pixi-side BGA helpers; the patterns are
+ * Local copy of `isVideoExtension` from `chart/bga-timeline.ts`. Pulled inline rather than imported so
+ * `collection.ts` (the data-layer entry point) doesn't take a dependency on the play's BGA helpers; the patterns are
  * tiny and trivially kept in sync.
  */
 function isVideoExtensionPath(path: string): boolean {
   return /\.(mpg|mpeg|mp4|m4v|avi|mov|wmv|webm|mkv)$/iu.test(path);
-}
-
-/**
- * Groups a flat song list into top-level folders for the select-screen bar list. The grouping key is the **first
- * segment** of each song's `directoryLabel` (relative to its source) — so a song at `LunaticCrave/SongA/song.bms` lands
- * in the `LunaticCrave` folder. Songs without a directory (e.g. dropped a single file) fall back to their source label
- * so they still appear under a sensible group.
- *
- * The result is sorted by label using Japanese-aware locale ordering, matching how LR2 sorts folders alphabetically.
- * Each folder's songs preserve their original order, which keeps the chart-difficulty sequence stable when iterating
- * inside a folder.
- */
-export function groupSongsByFolder(songs: readonly BrowserSongEntry[]): BrowserFolderNode[] {
-  const buckets = new Map<string, BrowserSongEntry[]>();
-  for (const song of songs) {
-    const label = topLevelFolderLabel(song);
-    const bucket = buckets.get(label) ?? [];
-    bucket.push(song);
-    buckets.set(label, bucket);
-  }
-  return [...buckets.entries()]
-    .map(([label, entries]): BrowserFolderNode => ({ label, songs: entries }))
-    .sort((left, right) => left.label.localeCompare(right.label, 'ja'));
-}
-
-function topLevelFolderLabel(song: BrowserSongEntry): string {
-  const dir = song.directoryLabel;
-  if (!dir) {
-    return song.sourceLabel;
-  }
-  const slash = dir.indexOf('/');
-  return slash >= 0 ? dir.slice(0, slash) : dir;
 }
 
 function basenameWithoutExtension(path: string): string {

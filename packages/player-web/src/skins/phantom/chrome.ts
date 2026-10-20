@@ -33,20 +33,18 @@ import {
   isFlashingGreat,
   judgeDisplayWord,
   loadingDots,
-  resolveGameplayLayout,
   type BeMusicGameplayRuntime,
   type BeMusicGameplayLayout,
   type BeMusicLayoutLane,
-  wideStage,
   STAGE_BGA_BAND,
   STAGE_HEIGHT as DESIGN_HEIGHT,
   STAGE_SIDE_COLUMN,
   STAGE_WIDTH as DESIGN_WIDTH,
 } from '@be-music/skin-sdk';
 import {
-  addHudNumber as addNumber,
-  addHudText as addText,
-  type HudTextOptions as TextOptions,
+  addHUDNumber as addNumber,
+  addHUDText as addText,
+  type HUDTextOptions as TextOptions,
   type ChildPool,
   type PixiChromeContext,
 } from '../pixi-kit/index.ts';
@@ -111,17 +109,8 @@ export function renderPhantomChrome({
  * Built-in gameplay chrome for the default skin family, drawn in the "Phantom" poster style (see `style.ts`): ink-black
  * ground, blood-red slabs and a halftone floor wedge, slanted paper plates, and condensed italic type. It is
  * intentionally not an LR2 atlas facsimile: this path is the skinless experience, so it keeps only the information a
- * player can act on while playing. Lays the frame out on the 16:9 stage itself; skins receive the layout from the host
- * instead (see {@link renderPhantomChrome}).
+ * player can act on while playing. Draws on the layout the host resolved (see {@link renderPhantomChrome}).
  */
-export function renderDefaultGameplayFrame(
-  layer: Container,
-  runtime: FallbackGameplayRuntime = {},
-  options: FallbackGameplayRenderOptions = {},
-): void {
-  renderChromeFrame(layer, runtime, resolveGameplayLayout(runtime, wideStage), options);
-}
-
 function renderChromeFrame(
   layer: Container,
   runtime: FallbackGameplayRuntime,
@@ -133,12 +122,12 @@ function renderChromeFrame(
   const playfield = playfieldFromLayout(layout);
   // The scene composites the BGA into the layout's rect; without one the monitor (and its hole) is left out.
   const bga = layout.bga;
-  const hasBga = runtime.hasBga === true && bga !== undefined;
+  const hasBGA = runtime.hasBGA === true && bga !== undefined;
   frame.label = 'default-gameplay/chrome';
   // The poster moves with the music: halftone swells on the bass, the idle burst kicks on onsets, a spectrum strip.
   const drive = audioDrive(runtime.audio, runtime.effects);
-  const hole = hasBga ? bga : undefined;
-  const idleMonitor = bga !== undefined && !hasBga ? bga : undefined;
+  const hole = hasBGA ? bga : undefined;
+  const idleMonitor = bga !== undefined && !hasBGA ? bga : undefined;
   if (layerPool) {
     // The ground, the floor wedge, and the idle monitor's field barely change: they come from cached geometry, keyed by
     // the BGA rect and the audio level quantized well below a pixel, instead of being re-tessellated every frame.
@@ -158,7 +147,7 @@ function renderChromeFrame(
   // The monitor shrinks to fit beside a double-play field; only a page-wide keyboard field leaves no room for it.
   if (bga) {
     if (!layerPool && idleMonitor) drawMonitorField(frame.context, idleMonitor, quantizeLevel(drive.level));
-    drawBgaFrame(frame, layer, bga, hasBga, runtime.nowMs, drive, layerPool);
+    drawBGAFrame(frame, layer, bga, hasBGA, runtime.nowMs, drive, layerPool);
   }
   drawGauge(frame, layer, runtime, layerPool);
   drawSongPlate(frame, layer, runtime, layerPool);
@@ -184,15 +173,6 @@ function renderChromeFrame(
   if (runtime.loading) drawLoading(frontLayer, runtime.nowMs ?? 0, playfield, frontPool);
   else if (!covered) drawJudgements(frontLayer, runtime, playfield, frontPool, effects.amount);
 }
-
-/**
- * Compatibility alias for older callers. New code should use {@link renderDefaultGameplayFrame}.
- *
- * The explicit `typeof` annotation keeps `--isolatedDeclarations` happy — without it the d.ts generator
- * (`rolldown-plugin-dts`) can't infer the exported binding's type from the right-hand expression, which fails
- * the build with `TS9010: Variable must have an explicit type annotation`.
- */
-export const renderFallbackLr2Frame: typeof renderDefaultGameplayFrame = renderDefaultGameplayFrame;
 
 /** Steps the audio-driven halftone radius is quantized to — well under a pixel, so the swell still reads smooth. */
 const HALFTONE_LEVELS = 32;
@@ -443,11 +423,11 @@ function drawPlayfield(
  * strokes never cross the video. With no BGA the screen idles on a red halftone field with SOUND ONLY cut out of
  * magazines over a turning starburst.
  */
-function drawBgaFrame(
+function drawBGAFrame(
   frame: Graphics,
   layer: Container,
   bga: BeMusicRect,
-  hasBga: boolean,
+  hasBGA: boolean,
   nowMs: number | undefined,
   drive: AudioDrive,
   pool: ChildPool | undefined,
@@ -467,7 +447,7 @@ function drawBgaFrame(
     join: 'miter',
   });
   // The ink ground and red halftone under the idle burst come from `drawMonitorField`, beneath this frame.
-  if (hasBga) return;
+  if (hasBGA) return;
 
   // Slow-turning starburst behind the slug — the idle screen is alive, not a hole in the cabinet.
   // It pumps on the bass and jolts a notch round on every onset. Sized off the monitor, which shrinks in double play.
@@ -568,7 +548,7 @@ function drawStatusBar(
   );
 
   addText(layer, 'BPM', 136, 14, tagLabelStyle(PHANTOM_RED), pool);
-  addNumber(layer, formatBpmValue(runtime.bpm), 160, 5, displayStyle(22, PHANTOM_WHITE), pool);
+  addNumber(layer, formatBPMValue(runtime.bpm), 160, 5, displayStyle(22, PHANTOM_WHITE), pool);
   addText(layer, 'HI-SPEED', 218, 14, tagLabelStyle(PHANTOM_RED), pool);
   addNumber(layer, `x${formatHiSpeed(runtime.hiSpeed)}`, 266, 5, displayStyle(22, PHANTOM_WHITE), pool);
 
@@ -1066,7 +1046,7 @@ function formatRulesetLabel(value: string | undefined): string {
   }
 }
 
-function formatBpmValue(value: number | undefined): string {
+function formatBPMValue(value: number | undefined): string {
   if (value === undefined || !Number.isFinite(value)) return '---';
   return String(Math.round(value));
 }

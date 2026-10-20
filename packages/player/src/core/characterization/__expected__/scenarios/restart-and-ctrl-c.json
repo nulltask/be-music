@@ -1,0 +1,294 @@
+{
+  "manualRestart": {
+    "outcome": "interrupted: restart",
+    "endedAtMs": 1800,
+    "audio": [
+      "0.000 start",
+      "0.000 trigger 01:01@0+0/1",
+      "500.000 trigger 11:02@0+1/4",
+      "780.000 trigger 12:03@0+3/8",
+      "940.000 trigger 13:04@0+2/4",
+      "1000.000 trigger 97:80@0+1/2",
+      "1370.000 trigger 16:05@0+5/8",
+      "1500.000 trigger 14:02@0+3/4",
+      "1500.000 trigger 15:03@0+3/4",
+      "1800.000 dispose"
+    ],
+    "judges": [
+      "0.000 READY combo=0 gauge=20",
+      "500.000 PERFECT combo=1 ch=11 delta=0 gauge=34.545455",
+      "780.000 GREAT combo=2 ch=12 delta=30 gauge=49.090909",
+      "940.000 GOOD combo=3 ch=13 delta=-60 gauge=56.363636",
+      "1370.000 BAD combo=0 ch=16 delta=120 gauge=52.363636",
+      "1500.000 PERFECT combo=1 ch=14 delta=0 gauge=66.909091",
+      "1500.000 PERFECT combo=2 ch=15 delta=0 gauge=81.454545"
+    ],
+    "ui": [
+      "500.000 flash-lane 11",
+      "500.000 flash-lane 11",
+      "500.000 clear-poor-bga",
+      "500.000 press-lane 11",
+      "560.000 release-lane 11",
+      "780.000 flash-lane 12",
+      "780.000 flash-lane 12",
+      "780.000 clear-poor-bga",
+      "780.000 press-lane 12",
+      "840.000 release-lane 12",
+      "940.000 flash-lane 13",
+      "940.000 flash-lane 13",
+      "940.000 clear-poor-bga",
+      "940.000 press-lane 13",
+      "1000.000 release-lane 13",
+      "1370.000 flash-lane 16",
+      "1370.000 flash-lane 16",
+      "1370.000 press-lane 16",
+      "1430.000 release-lane 16",
+      "1500.000 flash-lane 14",
+      "1500.000 flash-lane 14",
+      "1500.000 clear-poor-bga",
+      "1500.000 press-lane 14",
+      "1500.000 flash-lane 15",
+      "1500.000 flash-lane 15",
+      "1500.000 clear-poor-bga",
+      "1500.000 press-lane 15",
+      "1560.000 release-lane 14",
+      "1560.000 release-lane 15"
+    ],
+    "frames": {
+      "count": 121,
+      "judged": [
+        "500.000 seconds=0.5 note 11@0.5",
+        "780.000 seconds=0.78 note 12@0.75",
+        "940.000 seconds=0.94 note 13@1",
+        "1370.000 seconds=1.37 note 16@1.25",
+        "1500.000 seconds=1.5 note 14@1.5",
+        "1500.000 seconds=1.5 note 15@1.5"
+      ],
+      "last": "1793.333 seconds=1.793333 beat=3.586667"
+    },
+    "host": [
+      "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
+      "0.000 input-runtime create manual",
+      "0.000 load-complete",
+      "0.000 ui start",
+      "0.000 input-runtime start",
+      "1800.000 input-runtime stop",
+      "1800.000 ui stop",
+      "1800.000 ui dispose"
+    ],
+    "log": [
+      "0.000 info playback.prepared {\"mode\":\"manual\",\"uiEnabled\":true,\"audioEnabled\":true,\"totalSeconds\":3.5}",
+      "0.000 info ui.start {\"mode\":\"manual\"}",
+      "0.000 debug ui.initial-frame.published {\"mode\":\"manual\",\"seconds\":0,\"beat\":0}",
+      "0.000 info audio.start {\"mode\":\"manual\"}"
+    ],
+    "output": ["Audio backend: characterization"]
+  },
+  "autoRestart": {
+    "outcome": "interrupted: restart",
+    "endedAtMs": 1800,
+    "audio": [
+      "0.000 start",
+      "0.000 trigger 01:01@0+0/1",
+      "500.000 trigger 11:02@0+1/4",
+      "750.000 trigger 12:03@0+3/8",
+      "1000.000 trigger 97:80@0+1/2",
+      "1000.000 trigger 13:04@0+2/4",
+      "1250.000 trigger 16:05@0+5/8",
+      "1500.000 trigger 14:02@0+3/4",
+      "1500.000 trigger 15:03@0+3/4",
+      "1750.000 trigger 18:04@0+7/8",
+      "1800.000 dispose"
+    ],
+    "judges": [
+      "0.000 READY combo=0 gauge=20",
+      "500.000 PERFECT combo=1 ch=11 gauge=34.545455",
+      "750.000 PERFECT combo=2 ch=12 gauge=49.090909",
+      "1000.000 PERFECT combo=3 ch=13 gauge=63.636364",
+      "1250.000 PERFECT combo=4 ch=16 gauge=78.181818",
+      "1500.000 PERFECT combo=5 ch=14 gauge=92.727273",
+      "1500.000 PERFECT combo=6 ch=15 gauge=100",
+      "1750.000 PERFECT combo=7 ch=18 gauge=100"
+    ],
+    "ui": [
+      "500.000 flash-lane 11",
+      "750.000 flash-lane 12",
+      "1000.000 flash-lane 13",
+      "1250.000 flash-lane 16",
+      "1500.000 flash-lane 14",
+      "1500.000 flash-lane 15",
+      "1750.000 flash-lane 18"
+    ],
+    "frames": {
+      "count": 116,
+      "judged": [
+        "500.000 seconds=0.5 note 11@0.5",
+        "750.000 seconds=0.75 note 12@0.75",
+        "1000.000 seconds=1 note 13@1",
+        "1250.000 seconds=1.25 note 16@1.25",
+        "1500.000 seconds=1.5 note 14@1.5",
+        "1500.000 seconds=1.5 note 15@1.5",
+        "1750.000 seconds=1.75 note 18@1.75"
+      ],
+      "last": "1783.333 seconds=1.783333 beat=3.566667"
+    },
+    "host": [
+      "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
+      "0.000 input-runtime create auto",
+      "0.000 load-complete",
+      "0.000 ui start",
+      "0.000 input-runtime start",
+      "1800.000 input-runtime stop",
+      "1800.000 ui stop",
+      "1800.000 ui dispose"
+    ],
+    "log": [
+      "0.000 info playback.prepared {\"mode\":\"auto\",\"uiEnabled\":true,\"audioEnabled\":true,\"totalSeconds\":3.5}",
+      "0.000 info ui.start {\"mode\":\"auto\"}",
+      "0.000 debug ui.initial-frame.published {\"mode\":\"auto\",\"seconds\":0,\"beat\":0}",
+      "0.000 info audio.start {\"mode\":\"auto\"}"
+    ],
+    "output": "(same as manualRestart)"
+  },
+  "manualCtrlC": {
+    "outcome": "interrupted: ctrl-c",
+    "endedAtMs": 1800,
+    "audio": [
+      "0.000 start",
+      "0.000 trigger 01:01@0+0/1",
+      "500.000 trigger 11:02@0+1/4",
+      "780.000 trigger 12:03@0+3/8",
+      "940.000 trigger 13:04@0+2/4",
+      "1000.000 trigger 97:80@0+1/2",
+      "1370.000 trigger 16:05@0+5/8",
+      "1500.000 trigger 14:02@0+3/4",
+      "1500.000 trigger 15:03@0+3/4",
+      "1800.000 dispose"
+    ],
+    "judges": [
+      "0.000 READY combo=0 gauge=20",
+      "500.000 PERFECT combo=1 ch=11 delta=0 gauge=34.545455",
+      "780.000 GREAT combo=2 ch=12 delta=30 gauge=49.090909",
+      "940.000 GOOD combo=3 ch=13 delta=-60 gauge=56.363636",
+      "1370.000 BAD combo=0 ch=16 delta=120 gauge=52.363636",
+      "1500.000 PERFECT combo=1 ch=14 delta=0 gauge=66.909091",
+      "1500.000 PERFECT combo=2 ch=15 delta=0 gauge=81.454545"
+    ],
+    "ui": [
+      "500.000 flash-lane 11",
+      "500.000 flash-lane 11",
+      "500.000 clear-poor-bga",
+      "500.000 press-lane 11",
+      "560.000 release-lane 11",
+      "780.000 flash-lane 12",
+      "780.000 flash-lane 12",
+      "780.000 clear-poor-bga",
+      "780.000 press-lane 12",
+      "840.000 release-lane 12",
+      "940.000 flash-lane 13",
+      "940.000 flash-lane 13",
+      "940.000 clear-poor-bga",
+      "940.000 press-lane 13",
+      "1000.000 release-lane 13",
+      "1370.000 flash-lane 16",
+      "1370.000 flash-lane 16",
+      "1370.000 press-lane 16",
+      "1430.000 release-lane 16",
+      "1500.000 flash-lane 14",
+      "1500.000 flash-lane 14",
+      "1500.000 clear-poor-bga",
+      "1500.000 press-lane 14",
+      "1500.000 flash-lane 15",
+      "1500.000 flash-lane 15",
+      "1500.000 clear-poor-bga",
+      "1500.000 press-lane 15",
+      "1560.000 release-lane 14",
+      "1560.000 release-lane 15"
+    ],
+    "frames": {
+      "count": 121,
+      "judged": [
+        "500.000 seconds=0.5 note 11@0.5",
+        "780.000 seconds=0.78 note 12@0.75",
+        "940.000 seconds=0.94 note 13@1",
+        "1370.000 seconds=1.37 note 16@1.25",
+        "1500.000 seconds=1.5 note 14@1.5",
+        "1500.000 seconds=1.5 note 15@1.5"
+      ],
+      "last": "1793.333 seconds=1.793333 beat=3.586667"
+    },
+    "host": [
+      "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
+      "0.000 input-runtime create manual",
+      "0.000 load-complete",
+      "0.000 ui start",
+      "0.000 input-runtime start",
+      "1800.000 input-runtime stop",
+      "1800.000 ui stop",
+      "1800.000 ui dispose"
+    ],
+    "log": "(same as manualRestart)",
+    "output": "(same as manualRestart)"
+  },
+  "autoCtrlC": {
+    "outcome": "interrupted: ctrl-c",
+    "endedAtMs": 1800,
+    "audio": [
+      "0.000 start",
+      "0.000 trigger 01:01@0+0/1",
+      "500.000 trigger 11:02@0+1/4",
+      "750.000 trigger 12:03@0+3/8",
+      "1000.000 trigger 97:80@0+1/2",
+      "1000.000 trigger 13:04@0+2/4",
+      "1250.000 trigger 16:05@0+5/8",
+      "1500.000 trigger 14:02@0+3/4",
+      "1500.000 trigger 15:03@0+3/4",
+      "1750.000 trigger 18:04@0+7/8",
+      "1800.000 dispose"
+    ],
+    "judges": [
+      "0.000 READY combo=0 gauge=20",
+      "500.000 PERFECT combo=1 ch=11 gauge=34.545455",
+      "750.000 PERFECT combo=2 ch=12 gauge=49.090909",
+      "1000.000 PERFECT combo=3 ch=13 gauge=63.636364",
+      "1250.000 PERFECT combo=4 ch=16 gauge=78.181818",
+      "1500.000 PERFECT combo=5 ch=14 gauge=92.727273",
+      "1500.000 PERFECT combo=6 ch=15 gauge=100",
+      "1750.000 PERFECT combo=7 ch=18 gauge=100"
+    ],
+    "ui": [
+      "500.000 flash-lane 11",
+      "750.000 flash-lane 12",
+      "1000.000 flash-lane 13",
+      "1250.000 flash-lane 16",
+      "1500.000 flash-lane 14",
+      "1500.000 flash-lane 15",
+      "1750.000 flash-lane 18"
+    ],
+    "frames": {
+      "count": 116,
+      "judged": [
+        "500.000 seconds=0.5 note 11@0.5",
+        "750.000 seconds=0.75 note 12@0.75",
+        "1000.000 seconds=1 note 13@1",
+        "1250.000 seconds=1.25 note 16@1.25",
+        "1500.000 seconds=1.5 note 14@1.5",
+        "1500.000 seconds=1.5 note 15@1.5",
+        "1750.000 seconds=1.75 note 18@1.75"
+      ],
+      "last": "1783.333 seconds=1.783333 beat=3.566667"
+    },
+    "host": [
+      "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
+      "0.000 input-runtime create auto",
+      "0.000 load-complete",
+      "0.000 ui start",
+      "0.000 input-runtime start",
+      "1800.000 input-runtime stop",
+      "1800.000 ui stop",
+      "1800.000 ui dispose"
+    ],
+    "log": "(same as autoRestart)",
+    "output": "(same as manualRestart)"
+  }
+}

@@ -1,0 +1,18 @@
+// be-music course checklist fixture skin (LR2): the course result (type 15), with the course's EX score
+// (number 71) and the stage titles (texts 150-152).
+#INFORMATION,15,BE-MUSIC E2E,be-music,
+#ENDOFHEADER
+#STARTINPUT,300
+#FADEOUT,200
+#IMAGE,LR2files\Theme\E2E\parts.png
+#FONT,16,1,0,sans-serif
+#SRC_IMAGE,0,0,0,192,64,64,1,1,0,0
+#DST_IMAGE,0,0,0,0,640,480,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_NUMBER,0,0,0,128,250,16,10,1,0,0,71,0,4
+#DST_NUMBER,0,0,20,20,24,32,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_TEXT,0,0,150,0,0,0
+#DST_TEXT,0,0,20,80,600,18,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_TEXT,0,0,151,0,0,0
+#DST_TEXT,0,0,20,104,600,18,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_TEXT,0,0,152,0,0,0
+#DST_TEXT,0,0,20,128,600,18,0,255,255,255,255,0,0,0,0,0,0,0,0,0

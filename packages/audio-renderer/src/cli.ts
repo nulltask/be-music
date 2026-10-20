@@ -1,9 +1,9 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveCliPath } from '@be-music/utils/cli-path';
+import { resolveCLIPath } from '@be-music/utils/cli-path';
 import { renderChartFile } from './index.ts';
 
-interface CliArgs {
+interface CLIArgs {
   input?: string;
   output?: string;
   sampleRate?: number;
@@ -25,14 +25,14 @@ export async function main(): Promise<void> {
     return;
   }
 
-  const input = resolveCliPath(args.input);
-  const output = resolveCliPath(args.output);
+  const input = resolveCLIPath(args.input);
+  const output = resolveCLIPath(args.output);
 
   const audioRenderResult = await renderChartFile(input, output, {
     sampleRate: args.sampleRate,
     normalize: args.normalize,
     tailSeconds: args.tailSeconds,
-    baseDir: args.baseDir ? resolveCliPath(args.baseDir) : undefined,
+    baseDir: args.baseDir ? resolveCLIPath(args.baseDir) : undefined,
   });
 
   process.stdout.write(
@@ -45,8 +45,8 @@ export async function main(): Promise<void> {
   );
 }
 
-function parseArgs(rawArgs: string[]): CliArgs {
-  const args: CliArgs = {};
+function parseArgs(rawArgs: string[]): CLIArgs {
+  const args: CLIArgs = {};
   const positional: string[] = [];
 
   for (let index = 0; index < rawArgs.length; index += 1) {
@@ -99,16 +99,16 @@ function printUsage(): void {
   );
 }
 
-function isCliEntryPoint(): boolean {
+function isCLIEntryPoint(): boolean {
   const entry = process.argv[1];
   if (!entry) {
     return false;
   }
 
   try {
-    const moduleUrl = (import.meta as { url?: unknown }).url;
-    if (typeof moduleUrl === 'string' && moduleUrl.length > 0) {
-      return resolve(entry) === fileURLToPath(moduleUrl);
+    const moduleURL = (import.meta as { url?: unknown }).url;
+    if (typeof moduleURL === 'string' && moduleURL.length > 0) {
+      return resolve(entry) === fileURLToPath(moduleURL);
     }
   } catch {
     // SEA/CJS bundles may not provide import.meta.url.
@@ -117,7 +117,7 @@ function isCliEntryPoint(): boolean {
   return resolve(entry) === resolve(process.execPath);
 }
 
-if (isCliEntryPoint()) {
+if (isCLIEntryPoint()) {
   void main().catch((error) => {
     const message = error instanceof Error && error.message ? error.message : String(error);
     process.stderr.write(`${message}\n`);

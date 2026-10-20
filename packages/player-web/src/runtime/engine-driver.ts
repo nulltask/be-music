@@ -1,5 +1,6 @@
-import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
-import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
+import type { BeMusicEvent, BeMusicJSON } from '@be-music/json';
+import type { WebAudioStageMixer } from './nonstop-audio.ts';
+import type { PlayerInputSignalBus } from '@be-music/player/signals';
 import {
   autoPlay as engineAutoPlay,
   manualPlay as engineManualPlay,
@@ -7,17 +8,17 @@ import {
   type CreateAudioSessionContext,
   type PlayerOptions,
   type PlayerSummary,
-} from '@be-music/player/core/engine';
+} from '@be-music/player';
 import { logger } from '../logger.ts';
 import { type AudioBusHandle } from './audio-bus.ts';
 import { createWebAudioSession, type WebAudioSessionSlicePlayback } from './web-audio-session.ts';
 import { createWebInputRuntimeFactory } from './web-input-runtime.ts';
-import { createWebUiRuntimeFactory, type WebUiRuntimeCallbacks } from './web-ui-runtime.ts';
+import { createWebUIRuntimeFactory, type WebUIRuntimeCallbacks } from './web-ui-runtime.ts';
 
 const log = logger('engine-driver');
 
 /**
- * Shape the engine driver expects from the host's preloaded sample cache. Decoupled from `BeMusicJson` so the host
+ * Shape the engine driver expects from the host's preloaded sample cache. Decoupled from `BeMusicJSON` so the host
  * can decode `#WAVxx` slots once during the prepare phase and reuse the same `AudioBuffer` set across pause /
  * resume / restart cycles without re-decoding.
  */
@@ -27,6 +28,12 @@ export interface EngineDriverAudioContext {
   decodedSamples: ReadonlyMap<string, AudioBuffer>;
   wavCmdVolumeMultipliers: ReadonlyMap<string, number>;
   bmsonSlicePlayback?: ReadonlyMap<BeMusicEvent, WebAudioSessionSlicePlayback>;
+  /** A stitched NONSTOP chart's per-stage rates and fades (`createNonstopStageMixer`). */
+  stageMixer?: WebAudioStageMixer;
+  /** Every sample's playback rate (`WebAudioSessionContext.playbackRate`): the play tempo when its pitch moves. */
+  playbackRate?: number;
+  /** {@link playbackRate} is the play tempo and follows a live tempo change (`pitch` mode). */
+  playbackRateFollowsTempo?: boolean;
 }
 
 /**
@@ -36,13 +43,13 @@ export interface EngineDriverAudioContext {
  */
 export interface EngineDriverOptions {
   /** Reference chart already resolved via `parseChart` / `parseChartFile`. */
-  chart: BeMusicJson;
+  chart: BeMusicJSON;
   /** Audio backend resources prepared by the host. The driver constructs a {@link createWebAudioSession} on top. */
   audio: EngineDriverAudioContext;
-  /** Engine play mode. Mirrors the existing `PixiGameplayView` `autoPlay` flag. */
+  /** Engine play mode. Mirrors the play session's `autoPlay` option. */
   mode: 'manual' | 'auto';
   /** Pixi-side rendering callbacks. The driver subscribes them to the engine's `uiSignals`. */
-  ui: WebUiRuntimeCallbacks;
+  ui: WebUIRuntimeCallbacks;
   /**
    * DOM key event source (defaults to `window`). Scoped targets work too — pass a focusable canvas to keep stray
    * keystrokes outside the player from reaching the engine.
@@ -57,7 +64,7 @@ export interface EngineDriverOptions {
    */
   onInputSignalsReady?: (signals: { inputSignals: PlayerInputSignalBus }) => void;
   /** Forwarded to the engine. The driver supplies sensible defaults but a host can override any field. */
-  engineOptions?: Omit<PlayerOptions, 'createAudioSession' | 'createInputRuntime' | 'createUiRuntime' | 'auto'>;
+  engineOptions?: Omit<PlayerOptions, 'createAudioSession' | 'createInputRuntime' | 'createUIRuntime' | 'auto'>;
 }
 
 /**
@@ -68,12 +75,12 @@ export type EngineDriverResult = PlayerSummary;
 
 /**
  * Glue layer that wires the three runtime adapters ({@link createWebAudioSession},
- * {@link createWebInputRuntimeFactory}, {@link createWebUiRuntimeFactory}) together and invokes the shared engine's
+ * {@link createWebInputRuntimeFactory}, {@link createWebUIRuntimeFactory}) together and invokes the shared engine's
  * `manualPlay` / `autoPlay`. Hosts call this once per chart play; the returned promise resolves with the final
  * `PlayerSummary` when the chart ends (or rejects with `PlayerInterruptedError` when the player aborts).
  *
  * The driver is intentionally stateless — every per-chart cache (decoded samples, WAVCMD multipliers, BGA video
- * handles) lives on the host side. That matches how the existing `PixiGameplayView.prepare*` chain already builds
+ * handles) lives on the host side. That matches how the play session's `load` chain (`session/play/*`) already builds
  * those caches, so adopting the driver in Phase 4b is a drop-in replacement for the gameplay view's self-judge
  * loop rather than a state-ownership refactor.
  *
@@ -82,27 +89,28 @@ export type EngineDriverResult = PlayerSummary;
  *   early BAD window has already opened.
  * - Out-of-window presses do not play the next pending lane keysound before that note's judgment window opens.
  * - Free-Zone (`17` / `27`) channels stay excluded from score/gauge targets and keep their scratch aliases.
- * - LN suppress windows + 380 ms initial / 120 ms repeat hold-grace.
+ * - Key releases inferred for input that reports none (`play-key-inference.ts`): 380 ms after a long note's head,
+ *   120 ms after any other press or key repeat.
  * - LN early-release audio cut via `AudioSession.stopChannel`.
  * - Mine vs note delta-based priority (closest delta wins).
  * - Multi-channel input mapping for scratch / Free-Zone aliases.
  *
  * Test-coverage trail for the dynamic-judge / sample-routing features the migration depends on:
  * - **EXRANK dynamic judge windows** — engine end-to-end at
- *   `packages/player/src/index.test.ts:'player: updates manual judge windows from dynamic EXRANK events'`.
- *   Frame summary propagation through `WebUiRuntime` is covered by
- *   `packages/player-web/src/web-ui-runtime.test.ts:'drainWebUiSignals routes the current frame snapshot ...'`.
+ *   `packages/player/src/player-long-notes-and-windows.test.ts:'player: updates manual judge windows from dynamic
+ *   EXRANK events'`. Frame summary propagation through `createWebUIRuntime` is covered by
+ *   `packages/player-web/src/runtime/web-ui-runtime.test.ts:'drainWebUISignals routes the current frame snapshot ...'`.
  * - **#WAVCMD per-slot gain** — covered by
- *   `packages/player-web/src/web-audio-session.test.ts:'applies #WAVCMD per-slot gain via an intermediate GainNode'`,
- *   which verifies the BufferSource → GainNode → mixer routing instead of BufferSource → mixer.
+ *   `packages/player-web/src/runtime/web-audio-session.test.ts:'applies #WAVCMD per-slot gain via an intermediate
+ *   GainNode'`, which verifies the BufferSource → GainNode → mixer routing instead of BufferSource → mixer.
  * - **bmson c=true continuation** — covered by
- *   `packages/player-web/src/web-audio-session.test.ts:'honours bmson c=true continuation by suppressing
+ *   `packages/player-web/src/runtime/web-audio-session.test.ts:'honours bmson c=true continuation by suppressing
  *   retriggers of an in-flight slot'`. The engine's lane fallback path still flows through
  *   `WebAudioSession.triggerEvent` (which checks `activeBySlot`).
  * - **#STP measure stops** — handled at the timing-resolver / timeline level inside `@be-music/chart`; the
  *   engine consumes chart-time seconds that already account for stops, so it doesn't have a separate code
- *   path. Covered by `packages/player/src/core/timeline.test.ts:'SCROLL/BPM/STOP: keeps zero and negative
- *   scroll with LR2-style stop compensation'`.
+ *   path. Covered by `packages/chart/src/timelines.test.ts:'SCROLL/BPM/STOP: keeps zero and negative scroll with
+ *   LR2-style stop compensation'`.
  */
 export async function runEngineDriver(options: EngineDriverOptions): Promise<EngineDriverResult> {
   const { chart, audio, mode, ui, inputTarget, shouldSkipKey, onInputSignalsReady, engineOptions } = options;
@@ -115,6 +123,9 @@ export async function runEngineDriver(options: EngineDriverOptions): Promise<Eng
       decodedSamples: audio.decodedSamples,
       wavCmdVolumeMultipliers: audio.wavCmdVolumeMultipliers,
       bmsonSlicePlayback: audio.bmsonSlicePlayback,
+      ...(audio.stageMixer !== undefined ? { stageMixer: audio.stageMixer } : {}),
+      ...(audio.playbackRate !== undefined ? { playbackRate: audio.playbackRate } : {}),
+      ...(audio.playbackRateFollowsTempo === true ? { playbackRateFollowsTempo: true } : {}),
     });
   };
   const createInputRuntime = createWebInputRuntimeFactory({
@@ -122,14 +133,14 @@ export async function runEngineDriver(options: EngineDriverOptions): Promise<Eng
     shouldSkipKey,
     onReady: onInputSignalsReady,
   });
-  const createUiRuntime = createWebUiRuntimeFactory(ui);
+  const createUIRuntime = createWebUIRuntimeFactory(ui);
   const compositeOptions: PlayerOptions = {
     ...engineOptions,
     auto: mode === 'auto',
     tui: false,
     createAudioSession,
     createInputRuntime,
-    createUiRuntime,
+    createUIRuntime,
   };
   log.info('engine driver starting', { mode, hasInputTarget: inputTarget !== undefined });
   const summary =

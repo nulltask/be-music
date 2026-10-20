@@ -15,12 +15,19 @@ function makePlaylog(): BeMusicPlaylog {
     format: BE_MUSIC_PLAYLOG_FORMAT,
     version: BE_MUSIC_PLAYLOG_VERSION,
     createdAt: '2026-08-17T01:02:03.456Z',
+    recorder: { name: 'be-music-web', version: '0.5.0', build: '6471cd16', engine: '0.8.0', platform: 'web' },
     clock: { unit: 'us', origin: 'chart-zero' },
     chart: {
       title: 'Song / Title: Test',
       subtitle: 'ANOTHER',
       artist: 'composer',
       genre: 'genre',
+      playLevel: '12',
+      difficulty: 3,
+      sha256: 'a'.repeat(64),
+      md5: 'c'.repeat(32),
+      chartFingerprint: `bmfp0:${'a'.repeat(64)}`,
+      playFingerprint: `bmfp0:${'b'.repeat(64)}`,
       sourceFormat: 'bms',
       laneMode: '7keys',
       total: 300,
@@ -43,6 +50,7 @@ function makePlaylog(): BeMusicPlaylog {
     inputs: [
       { seq: 0, timeUs: 499_000, action: 'down', channels: ['11'], tokens: ['z'] },
       { seq: 1, timeUs: 520_000, action: 'up', channels: ['11', '12'] },
+      { seq: 2, timeUs: 640_000, action: 'up', channels: ['13'], tokens: ['x'], inferred: true },
     ],
     play: {
       mode: 'manual',
@@ -51,7 +59,15 @@ function makePlaylog(): BeMusicPlaylog {
       randomLane: { p1: 'MIRROR', p2: 'RANDOM' },
       dpFlip: true,
       judgeWindowOverrideMs: 500,
+      randomDraws: [
+        { command: 'RANDOM', range: 3, value: 2 },
+        { command: 'SETRANDOM', range: 1, value: 4 },
+        { command: 'SWITCH', range: 2, value: 1 },
+      ],
       aborted: true,
+      abortedAtUs: 1_234_567,
+      endOnFailure: true,
+      course: { kind: 'grade', gaugeSet: 'lr2', judge: 'no-good', carryIn: { gauge: 62.4, combo: 31, maxCombo: 120 } },
       native: { hiSpeed: 2.5, skin: 'default', assist: false, memo: null },
     },
     results: {
@@ -66,6 +82,7 @@ function makePlaylog(): BeMusicPlaylog {
         score: 100000,
         djLevel: 'AA',
         gauge: { type: 'HARD', final: 0, cleared: false, failedMidPlay: true },
+        course: { combo: 0, maxCombo: 120 },
       },
     },
   };
@@ -104,6 +121,71 @@ describe('playlog format', () => {
     const parsed = parsePlaylog(serializePlaylog(minimal));
     expect(parsed).toEqual(minimal);
     expect(parsed.results).toBeUndefined();
+    expect(parsed.chart).not.toHaveProperty('sha256');
+    expect(parsed.chart).not.toHaveProperty('md5');
+    expect(parsed.chart).not.toHaveProperty('chartFingerprint');
+    expect(parsed.chart).not.toHaveProperty('playFingerprint');
+  });
+
+  test('rejects #RANDOM draws that no control-flow line could have made', () => {
+    for (const randomDraws of [
+      3,
+      [2],
+      [{ command: 'IF', range: 2, value: 1 }],
+      [{ command: 'RANDOM', range: 0, value: 1 }],
+      [{ command: 'RANDOM', range: 2, value: 3 }],
+      [{ command: 'RANDOM', range: 2, value: 1.5 }],
+      [{ command: 'SETRANDOM', range: 2, value: 1 }],
+      [{ command: 'SWITCH', range: 2, value: '1' }],
+    ]) {
+      const log = makePlaylog() as unknown as { play: Record<string, unknown> };
+      log.play.randomDraws = randomDraws;
+      expect(() => parsePlaylog(JSON.stringify(log))).toThrow(/play\.randomDraws/);
+    }
+  });
+
+  test('chart.reversalTimeUs survives the round-trip and stays absent when the chart has none', () => {
+    // LR2 negative-BPM reversal (#134): the recorder stamps the reversal instant so re-simulations freeze
+    // judging at the same point. It must survive serialize → parse untouched.
+    const playlog = makePlaylog();
+    playlog.chart.reversalTimeUs = 2_000_000;
+    const parsed = parsePlaylog(serializePlaylog(playlog));
+    expect(parsed.chart.reversalTimeUs).toBe(2_000_000);
+    expect(parsed).toEqual(playlog);
+
+    // A chart without a reversal keeps the key ABSENT (deleted), not `undefined`, so `toEqual` comparisons and
+    // JSON output stay canonical.
+    const withoutReversal = parsePlaylog(serializePlaylog(makePlaylog()));
+    expect(withoutReversal.chart).not.toHaveProperty('reversalTimeUs');
+  });
+
+  test('play.tempo survives the round-trip, a tempo of 1 is dropped and a non-positive one is refused', () => {
+    const playlog = makePlaylog();
+    playlog.play.tempo = 0.75;
+    const parsed = parsePlaylog(serializePlaylog(playlog));
+    expect(parsed.play.tempo).toBe(0.75);
+    expect(parsed).toEqual(playlog);
+    // Logs without the field (every log before it existed) played at tempo 1.
+    expect(parsePlaylog(serializePlaylog(makePlaylog())).play).not.toHaveProperty('tempo');
+    const unit = makePlaylog() as unknown as { play: Record<string, unknown> };
+    unit.play.tempo = 1;
+    expect(parsePlaylog(JSON.stringify(unit)).play).not.toHaveProperty('tempo');
+    for (const tempo of [0, -0.5, 'fast']) {
+      const log = makePlaylog() as unknown as { play: Record<string, unknown> };
+      log.play.tempo = tempo;
+      expect(() => parsePlaylog(JSON.stringify(log))).toThrow(/play\.tempo/);
+    }
+  });
+
+  test('writes the unstable revision 0 and still reads logs stamped 1, as revision 0', () => {
+    expect(BE_MUSIC_PLAYLOG_VERSION).toBe(0);
+    const legacy = parsePlaylog(
+      corrupt((value) => {
+        value.version = 1;
+      }),
+    );
+    expect(legacy.version).toBe(0);
+    expect(legacy).toEqual(parsePlaylog(serializePlaylog(makePlaylog())));
   });
 
   test('rejects invalid JSON and wrong format / version / clock markers', () => {
@@ -132,6 +214,27 @@ describe('playlog format', () => {
     ).toThrow(/^clock:/);
   });
 
+  test('reads a course stage without a carry-in and rejects malformed course fields', () => {
+    const first = parsePlaylog(
+      corrupt((value) => {
+        value.play.course = { kind: 'expert' };
+      }),
+    );
+    expect(first.play.course).toEqual({ kind: 'expert' });
+    for (const [mutate, message] of [
+      [(value: any) => (value.play.course.kind = 'dan'), "play.course.kind: expected 'grade' | 'expert' | 'nonstop'"],
+      [(value: any) => (value.play.course.gaugeSet = '8k'), 'play.course.gaugeSet'],
+      [(value: any) => (value.play.course.judge = 'no-bad'), 'play.course.judge'],
+      [
+        (value: any) => (value.play.course.carryIn.combo = -1),
+        'play.course.carryIn.combo: expected a non-negative integer',
+      ],
+      [(value: any) => (value.play.course.carryIn.gauge = 'full'), 'play.course.carryIn.gauge'],
+    ] as const) {
+      expect(() => parsePlaylog(corrupt(mutate))).toThrow(message);
+    }
+  });
+
   test('reports the field path of structural problems', () => {
     expect(() =>
       parsePlaylog(
@@ -140,6 +243,13 @@ describe('playlog format', () => {
         }),
       ),
     ).toThrow('inputs: expected an array');
+    expect(() =>
+      parsePlaylog(
+        corrupt((value) => {
+          value.inputs[0].inferred = true;
+        }),
+      ),
+    ).toThrow("inputs[0].inferred: expected true on an 'up'");
     expect(() =>
       parsePlaylog(
         corrupt((value) => {
@@ -185,6 +295,20 @@ describe('playlog format', () => {
     expect(() =>
       parsePlaylog(
         corrupt((value) => {
+          value.chart.chartFingerprint = 42;
+        }),
+      ),
+    ).toThrow('chart.chartFingerprint: expected a string');
+    expect(() =>
+      parsePlaylog(
+        corrupt((value) => {
+          value.chart.playFingerprint = 42;
+        }),
+      ),
+    ).toThrow('chart.playFingerprint: expected a string');
+    expect(() =>
+      parsePlaylog(
+        corrupt((value) => {
           value.play.gauge = 'SUPER';
         }),
       ),
@@ -196,6 +320,29 @@ describe('playlog format', () => {
         }),
       ),
     ).toThrow('results.native.judge.pgreat: expected a finite number');
+    expect(() =>
+      parsePlaylog(
+        corrupt((value) => {
+          value.recorder = 'be-music-web';
+        }),
+      ),
+    ).toThrow('recorder: expected an object');
+    expect(() =>
+      parsePlaylog(
+        corrupt((value) => {
+          value.recorder.version = 5;
+        }),
+      ),
+    ).toThrow('recorder.version: expected a string');
+  });
+
+  test('keeps only the recorder fields that are present', () => {
+    const parsed = parsePlaylog(
+      corrupt((value) => {
+        value.recorder = { engine: '0.8.0' };
+      }),
+    );
+    expect(parsed.recorder).toEqual({ engine: '0.8.0' });
   });
 
   test('ignores unknown fields for forward compatibility', () => {
@@ -207,6 +354,7 @@ describe('playlog format', () => {
         value.inputs[0].futureInputField = 1;
         value.play.futurePlayField = 1;
         value.results.native.futureResultField = 1;
+        value.recorder.futureRecorderField = 'x';
       }),
     );
     expect(parsed).toEqual(makePlaylog());

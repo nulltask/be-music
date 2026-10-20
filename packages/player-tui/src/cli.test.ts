@@ -9,8 +9,8 @@ import {
   cyclePlayMode,
   formatPlayModeLabel,
   parseArgs,
-  resolveEffectivePlayModeFromCliArgs,
-  resolveCliConfigOverrideFlags,
+  resolveEffectivePlayModeFromCLIArgs,
+  resolveCLIConfigOverrideFlags,
   resolveDefaultPlayerLogPath,
   resolvePlayLoadingStageFileDisplaySize,
   resolvePersistedPlayerConfigFromArgs,
@@ -52,7 +52,7 @@ function measureMusicSelectTestDisplayWidth(value: string): number {
   return width;
 }
 
-function stripAnsiTestCodes(value: string): string {
+function stripANSITestCodes(value: string): string {
   // eslint-disable-next-line no-control-regex
   return value.replaceAll(/\u001b\[[0-9;]*m/g, '');
 }
@@ -103,7 +103,7 @@ describe('player cli', () => {
   });
 
   test('cli: keeps BMS LN type auto-detection enabled by default and lets the user disable it', () => {
-    expect(parseArgs(['chart.bms']).inferBmsLnTypeWhenMissing).toBe(true);
+    expect(parseArgs(['chart.bms']).inferBmsLNTypeWhenMissing).toBe(true);
   });
 
   test('parses --ruleset and --gauge, and rejects unknown values', () => {
@@ -117,13 +117,13 @@ describe('player cli', () => {
     expect(() => parseArgs(['chart.bms', '--ruleset', 'lr2oraja'])).toThrow(/Unknown --ruleset/);
     expect(() => parseArgs(['chart.bms', '--gauge', 'ASSIST'])).toThrow(/Unknown --gauge/);
     const parsed = parseArgs(['chart.bms', '--no-ln-type-auto']);
-    expect(parsed.inferBmsLnTypeWhenMissing).toBe(false);
-    expect(parseArgs(['chart.bms', '--no-ln-type-auto', '--ln-type-auto']).inferBmsLnTypeWhenMissing).toBe(true);
+    expect(parsed.inferBmsLNTypeWhenMissing).toBe(false);
+    expect(parseArgs(['chart.bms', '--no-ln-type-auto', '--ln-type-auto']).inferBmsLNTypeWhenMissing).toBe(true);
   });
 
   test('cli: accepts --ln-type-auto explicitly', () => {
     const parsed = parseArgs(['chart.bms', '--ln-type-auto']);
-    expect(parsed.inferBmsLnTypeWhenMissing).toBe(true);
+    expect(parsed.inferBmsLNTypeWhenMissing).toBe(true);
   });
 
   test('cli: keeps kitty graphics enabled by default and lets the user disable it', () => {
@@ -140,9 +140,9 @@ describe('player cli', () => {
   });
 
   test('cli: enables video BGA streaming by default and lets the user switch back to legacy decode', () => {
-    expect(parseArgs(['chart.bms']).videoBgaStreaming).toBe(true);
-    expect(parseArgs(['chart.bms', '--no-video-bga-streaming']).videoBgaStreaming).toBe(false);
-    expect(parseArgs(['chart.bms', '--no-video-bga-streaming', '--video-bga-streaming']).videoBgaStreaming).toBe(true);
+    expect(parseArgs(['chart.bms']).videoBGAStreaming).toBe(true);
+    expect(parseArgs(['chart.bms', '--no-video-bga-streaming']).videoBGAStreaming).toBe(false);
+    expect(parseArgs(['chart.bms', '--no-video-bga-streaming', '--video-bga-streaming']).videoBGAStreaming).toBe(true);
   });
 
   test('cli: defaults image resize algorithm to nearest and accepts lanczos', () => {
@@ -151,9 +151,9 @@ describe('player cli', () => {
   });
 
   test('cli: defaults TUI rendering to 60fps and accepts custom fps', () => {
-    expect(parseArgs(['chart.bms']).uiFps).toBe(60);
-    expect(parseArgs(['chart.bms', '--tui-fps', '120']).uiFps).toBe(120);
-    expect(parseArgs(['chart.bms', '--tui-fps', '59.94']).uiFps).toBe(59.94);
+    expect(parseArgs(['chart.bms']).uiFPS).toBe(60);
+    expect(parseArgs(['chart.bms', '--tui-fps', '120']).uiFPS).toBe(120);
+    expect(parseArgs(['chart.bms', '--tui-fps', '59.94']).uiFPS).toBe(59.94);
   });
 
   test('cli: defaults visible notes limit to 8192 and accepts custom values', () => {
@@ -199,17 +199,17 @@ describe('player cli', () => {
   });
 
   test('cli: forces AUTO playback when TUI is disabled', () => {
-    expect(resolveEffectivePlayModeFromCliArgs(parseArgs(['chart.bms', '--no-tui']))).toBe('auto');
-    expect(resolveEffectivePlayModeFromCliArgs(parseArgs(['chart.bms', '--no-tui', '--auto-scratch']))).toBe('auto');
-    expect(resolveEffectivePlayModeFromCliArgs(parseArgs(['chart.bms', '--auto-scratch']))).toBe('auto-scratch');
+    expect(resolveEffectivePlayModeFromCLIArgs(parseArgs(['chart.bms', '--no-tui']))).toBe('auto');
+    expect(resolveEffectivePlayModeFromCLIArgs(parseArgs(['chart.bms', '--no-tui', '--auto-scratch']))).toBe('auto');
+    expect(resolveEffectivePlayModeFromCLIArgs(parseArgs(['chart.bms', '--auto-scratch']))).toBe('auto-scratch');
   });
 
   test('cli: detects explicit play-mode and high-speed override flags', () => {
-    expect(resolveCliConfigOverrideFlags(['chart.bms'])).toEqual({
+    expect(resolveCLIConfigOverrideFlags(['chart.bms'])).toEqual({
       playMode: false,
       highSpeed: false,
     });
-    expect(resolveCliConfigOverrideFlags(['chart.bms', '--auto', '--high-speed', '2.5'])).toEqual({
+    expect(resolveCLIConfigOverrideFlags(['chart.bms', '--auto', '--high-speed', '2.5'])).toEqual({
       playMode: true,
       highSpeed: true,
     });
@@ -232,7 +232,7 @@ describe('player cli', () => {
     const merged = applyPersistedPlayerConfigToArgs(
       parsed,
       { playMode: 'manual', highSpeed: 5 },
-      resolveCliConfigOverrideFlags(rawArgs),
+      resolveCLIConfigOverrideFlags(rawArgs),
     );
     expect(resolvePlayModeFromArgs(merged)).toBe('auto');
     expect(merged.highSpeed).toBe(2);
@@ -567,7 +567,7 @@ describe('player cli', () => {
     );
 
     expect(output).toContain('\u001b_Ga=T,t=d,f=24,s=4,v=2,c=48,r=2,i=7331,q=2,p=1,z=-1,C=1,m=0;');
-    expect(stripAnsiTestCodes(output)).toContain('Loading selected chart...');
+    expect(stripANSITestCodes(output)).toContain('Loading selected chart...');
     expect(output).not.toContain('ANSI_STAGE_LINE_1');
   });
 

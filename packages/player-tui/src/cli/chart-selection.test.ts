@@ -90,6 +90,24 @@ describe('chart selection', () => {
     });
   });
 
+  test('buildChartSelectionEntries: counts the notes a play scores (no FREE ZONE, .pms channel 17 is a key)', async () => {
+    const chartDir = await mkdtemp(join(tmpdir(), 'be-music-chart-selection-notes-'));
+    tempDirectories.push(chartDir);
+    const body = ['#BPM 120', '#00111:01', '#00116:01', '#00117:01', '#00118:01'].join('\n');
+    const bmsPath = join(chartDir, 'free-zone.bms');
+    const pmsPath = join(chartDir, 'nine.pms');
+    await writeFile(bmsPath, body);
+    await writeFile(pmsPath, ['#BPM 120', '#00111:01', '#00112:01', '#00117:01'].join('\n'));
+
+    const entries = await buildChartSelectionEntries(chartDir, [bmsPath, pmsPath]);
+    const totalNotes = (path: string) => {
+      const entry = entries.find((candidate) => candidate.kind === 'chart' && candidate.filePath === path);
+      return entry?.kind === 'chart' ? entry.totalNotes : undefined;
+    };
+    expect(totalNotes(bmsPath)).toBe(3);
+    expect(totalNotes(pmsPath)).toBe(3);
+  });
+
   test('buildChartSelectionEntries: carries BMS #BANNER into music-select metadata', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'be-music-chart-banner-'));
     tempDirectories.push(tempRoot);
@@ -194,7 +212,7 @@ describe('chart selection', () => {
     expect(parseChartSpy).not.toHaveBeenCalled();
 
     const cachePath = join(tempHome, '.be-music', 'chart-selection-cache.json');
-    const cacheJson = JSON.parse(await readFile(cachePath, 'utf8')) as {
+    const cacheJSON = JSON.parse(await readFile(cachePath, 'utf8')) as {
       entries: Record<
         string,
         {
@@ -204,7 +222,7 @@ describe('chart selection', () => {
         }
       >;
     };
-    const [cacheEntry] = Object.values(cacheJson.entries);
+    const [cacheEntry] = Object.values(cacheJSON.entries);
     expect(cacheEntry).toBeDefined();
     expect(cacheEntry?.contentHash).toEqual(expect.any(String));
     expect(cacheEntry?.cacheHash).toEqual(expect.any(String));
@@ -223,7 +241,7 @@ describe('chart selection', () => {
     await buildChartSelectionEntries(tempRoot, [chartPath]);
 
     const cachePath = join(tempHome, '.be-music', 'chart-selection-cache.json');
-    const cacheJson = JSON.parse(await readFile(cachePath, 'utf8')) as {
+    const cacheJSON = JSON.parse(await readFile(cachePath, 'utf8')) as {
       entries: Record<
         string,
         {
@@ -233,9 +251,9 @@ describe('chart selection', () => {
         }
       >;
     };
-    const [contentHash] = Object.keys(cacheJson.entries);
-    cacheJson.entries[contentHash]!.summary.title = 'Tampered';
-    await writeFile(cachePath, `${JSON.stringify(cacheJson, null, 2)}\n`, 'utf8');
+    const [contentHash] = Object.keys(cacheJSON.entries);
+    cacheJSON.entries[contentHash]!.summary.title = 'Tampered';
+    await writeFile(cachePath, `${JSON.stringify(cacheJSON, null, 2)}\n`, 'utf8');
 
     const parser = await import('@be-music/parser');
     const parseChartSpy = vi.spyOn(parser, 'parseChart');
@@ -314,9 +332,9 @@ describe('chart selection', () => {
     expect(parseChartSpy).not.toHaveBeenCalled();
 
     const cachePath = join(tempHome, '.be-music', 'chart-selection-cache.json');
-    const cacheJson = JSON.parse(await readFile(cachePath, 'utf8')) as {
+    const cacheJSON = JSON.parse(await readFile(cachePath, 'utf8')) as {
       entries: Record<string, unknown>;
     };
-    expect(Object.keys(cacheJson.entries)).toHaveLength(1);
+    expect(Object.keys(cacheJSON.entries)).toHaveLength(1);
   });
 });

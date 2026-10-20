@@ -1,6 +1,6 @@
 {
   "name": "@be-music/skin-sdk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Framework-free SDK for writing be-music skins for the be-music browser player",
   "license": "MIT",
   "files": [
@@ -11,8 +11,8 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
       "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }
   },
@@ -23,10 +23,10 @@
     "bench": "node --conditions=source scripts/bench.ts"
   },
   "dependencies": {
-    "@be-music/audio-renderer": "workspace:*",
     "@be-music/chart": "workspace:*",
     "@be-music/json": "workspace:*",
-    "@be-music/player": "workspace:*"
+    "@be-music/player": "workspace:*",
+    "@be-music/scene-model": "workspace:*"
   },
   "devDependencies": {
     "@be-music/parser": "workspace:*"

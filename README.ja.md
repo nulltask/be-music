@@ -12,14 +12,54 @@ TypeScript + pnpm workspaces で構成した BMS/BMSON ツールチェーンで�
 - `@be-music/parser`: `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / JSON のパーサ
 - `@be-music/stringifier`: JSON から `.bms` / `.bmson` への文字列化
 - `@be-music/audio-renderer`: 譜面をレンダリングして `.wav` / `.aiff` を出力
-- `@be-music/player`: 再生 engine、timing、判定、score、gauge、BGA timeline、UI/audio adapter 契約を共有する core package
+- `@be-music/player`: 規則と再生 engine を共有する package。1 つのプレイループ（手動・AUTO・リプレイ）、判定、score、gauge とクリアランプ、自己ベスト、コースの実行と NONSTOP、プレイログの形式、ホストが差し込む runtime 契約
 - `@be-music/player-tui`: autoplay、keyboard play、Music Select、BGA、SEA build を扱う terminal UI と `bms-player` CLI frontend、およびプレイログ再シミュレータ `bms-playlog`
+- `@be-music/scene-model`: ライブラリの項目・一覧・プレイオプション・プレイ状態と結果・コース・効果音など、スキンの種類によらず共有する実行環境非依存のシーンモデル
 - `@be-music/lr2-skin`: Lunatic Rave 2 skin parser、asset resolver、theme loader を renderer 非依存で提供する package
 - `@be-music/beatoraja-skin`: beatoraja JSON/Lua skin parser、normalizer、theme loader を renderer 非依存で提供する package
 - `@be-music/skin-sdk`: browser player 向け be-music スキンを書くための描画フレームワーク非依存の SDK
-- `@be-music/player-web`: 選曲、built-in default / LR2 / beatoraja skin 描画、gameplay、result scene、録画を扱う browser PixiJS player core
-- `@be-music/player-web-demo`: folder / ZIP drop、LR2 / beatoraja theme、debug control、browser 再生を接続する private Vite demo
+- `@be-music/player-web`: browser の PixiJS 実行層。選曲・決定・プレイ・リザルトの各画面を、built-in・LR2・beatoraja のファミリービューが描くシーンセッションとして 1 つのホスト向け API から作る。音のサービス、譜面のコレクション、スキンの読み込み、gameplay の録画も持つ
+- `@be-music/player-web-demo`: folder / ZIP drop、LR2 / beatoraja theme、Debug Menu、browser 再生を、1 つのシーンルーターの下のサービスとして接続する private Vite demo
+- `@be-music/leaderboard-api`: Cloudflare Workers で動く private な Leaderboard API。プレイログの投稿、再シミュレーションによる検証、ランキング
 - `@be-music/editor`: CLI エディタ (インポート・編集・エクスポート)
+
+パッケージは層を成して積み上がっています。矢印は、パッケージからそれに依存するパッケージへ向かいます。ほかの矢印を通じて既に届く依存は重ねて描いていません（`@be-music/utils` はほぼすべてのパッケージの下にあります）。パッケージの内側の同じ層は [アーキテクチャ — 目指す構造](./docs/architecture.ja.md#目指す構造) にあります。
+
+```mermaid
+flowchart TD
+  subgraph data["データ"]
+    utils["utils"] --> json["json"] --> chart["chart"] --> parser["parser"]
+    parser --> stringifier["stringifier"]
+    parser --> renderer["audio-renderer"]
+  end
+  subgraph rules["規則と engine"]
+    player["player"]
+  end
+  subgraph models["モデル"]
+    scene["scene-model"]
+    sdk["skin-sdk"]
+    lr2["lr2-skin"]
+    beatoraja["beatoraja-skin"]
+  end
+  subgraph hosts["実行層とホスト"]
+    editor["editor"]
+    tui["player-tui"]
+    lb["leaderboard-api"]
+    web["player-web"]
+    demo["player-web-demo"]
+  end
+
+  stringifier --> editor
+  renderer --> player
+  player --> scene
+  player --> tui
+  player --> lb
+  scene --> sdk
+  scene --> lr2 --> beatoraja
+  sdk --> web
+  beatoraja --> web
+  web --> demo
+```
 
 ## 必要環境
 
@@ -41,7 +81,7 @@ pnpm run check
 pnpm run test
 ```
 
-ツールチェーンは [Vite+](https://viteplus.dev/) (`vite-plus`) で、ルートの `vite.config.ts` に設定を集約しています。`pnpm run build` は Vite+ のタスクランナー (`vp run -r --cache build`) で各ワークスペースの `build` スクリプトを依存順に実行し、変更のない package はタスクキャッシュから再生します。ライブラリ package は各 `vite.config.ts` の `pack` ブロックから `vp pack` (tsdown) でビルドし、bundle と型定義 (`.d.ts`) をまとめて出力します。`pnpm run check` はフォーマット・lint・型チェック (Oxfmt / Oxlint / tsgolint) をワークスペース全体に対して一度に実行し、`pnpm run format` / `pnpm run lint` / `pnpm run typecheck` で個別に実行できます。各 package の `tsconfig.json` は型チェック用のプロジェクトで、型定義の出力には `tsconfig.build.json` を使います。依存関係をインストールすると、ステージされたファイルに `vp check --fix` を実行する Vite+ の pre-commit フックも登録されます。
+ツールチェーンは [Vite+](https://viteplus.dev/) (`vite-plus`) で、ルートの `vite.config.ts` に設定を集約しています。`pnpm run build` は Vite+ のタスクランナー (`vp run -r --cache build`) で各ワークスペースの `build` スクリプトを依存順に実行し、変更のない package はタスクキャッシュから再生します。ライブラリ package は各 `vite.config.ts` の `pack` ブロックから `vp pack` (tsdown) でビルドし、bundle と型定義 (`.d.ts`) をまとめて出力します。`pnpm run check` はフォーマット・lint・型チェック (Oxfmt / Oxlint / tsgolint) をワークスペース全体に対して一度に実行し、`pnpm run format` / `pnpm run lint` / `pnpm run typecheck` で個別に実行できます。各 package の `tsconfig.json` は型チェック用のプロジェクトで、型定義の出力には `tsconfig.build.json` を使います。依存関係をインストールすると、ステージされたファイルに `vp check --fix` を実行する Vite+ の pre-commit フックも登録されます。`pnpm run test:e2e` は Web デモでコースのブラウザ確認を Playwright で端から端まで実行します（数分かかるため `pnpm run test` には含めていません）。[docs/course-checklist.ja.md](docs/course-checklist.ja.md#自動実行) を参照してください。
 
 ## package ごとの release
 
@@ -55,7 +95,7 @@ pnpm run release:version
 
 - 通常の feature PR では、変更した package に対する `.changeset/*.md` を追加します
 - release したいタイミングで `devel` 上で `pnpm run release:version` を実行し、生成された `packages/*/package.json` と `packages/*/CHANGELOG.md` の更新をまとめてコミットします
-- その状態で `devel -> main` の release PR を merge すると、version が上がった package だけ GitHub Release が個別に作成されます
+- その状態で `devel -> main` の release PR を merge すると、version が上がった公開 package だけ GitHub Release が個別に作成されます（プレイヤーのデモや Leaderboard などの private package は対象外です）
 - player SEA 実行ファイルは `@be-music/player-tui` から build し、`@be-music/player-tui` release に添付します。`@be-music/audio-renderer` も SEA zip を添付します
 - private な repository root の `package.json` は `0.0.0` のままで、release 対象 version は `packages/*/package.json` で管理します
 
@@ -64,13 +104,17 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 ## 仕様書
 
 - [仕様書トップ](docs/README.ja.md)
+- [アーキテクチャ](docs/architecture.ja.md)と[設計判断の記録](docs/adr/README.ja.md)
 - [BMS 実装仕様](docs/bms-spec.ja.md)
 - [BMSON 実装仕様](docs/bmson-spec.ja.md)
 - [Bemuse 実装仕様](docs/bemuse-spec.ja.md)
+- [LR2 と beatoraja のセマンティクス](docs/semantics-lr2-beatoraja.ja.md)
 - [Player 実装仕様](docs/player-spec.ja.md)
 - [Terminal player 実装メモ](docs/player-tui.ja.md)
 - [Browser player 実装メモ](docs/player-web.ja.md)
+- [シーンモデル（`@be-music/scene-model`）](docs/scene-model.ja.md)
 - [プレイログ（プレイ履歴）仕様](docs/playlog.ja.md)
+- [コースと段位認定](docs/course.ja.md)
 - [be-music スキンの作り方](docs/be-music-skin.ja.md)
 - [LR2 skin 実装メモ](docs/lr2-skin.ja.md)
 - [beatoraja skin 実装メモ](docs/beatoraja-skin.ja.md)
@@ -87,10 +131,10 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - BMS のヘッダ / オブジェクト行 / 制御構文を保持
 - `#WAVxx` / `#BMPxx` / `#BPMxx` / `#STOPxx` / `#TEXTxx` を解釈
 - BMS 拡張ヘッダ (`#PREVIEW`, `#LNTYPE`, `#LNMODE`, `#LNOBJ`, `#VOLWAV`, `#SCROLLxx`, `#VIDEOFILE` など) を保持
-- BMSON の `info` / `lines` / `sound_channels` / `bpm_events` / `stop_events` / `bga` を解釈
+- BMSON の `info` / `lines` / `sound_channels` / `bpm_events` / `stop_events` / `bga` と beatoraja 拡張の `scroll_events` / `key_channels` / `mine_channels` を解釈
 - BMS テキストの文字コード推測 (`Shift_JIS`, `UTF-8`, `EUC-JP`, `latin1` など)
 - BMSON の `info.init_bpm` は parser が必須扱いにし、欠落・不正値は `130` fallback ではなく早期 error にします
-- BMSON の `key_channels` mine note を `mode_hint` lane resolver 経由で map し、mine ごとの `damage` を保持
+- beatoraja の BMSON 拡張を beatoraja と同じ意味で `mode_hint` lane resolver 経由で map し、`mine_channels` は mine ごとの `damage` を保持した地雷、`key_channels` は隠し（不可視）ノートにする
 
 ### stringifier (`@be-music/stringifier`)
 
@@ -110,11 +154,19 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 
 ### player core (`@be-music/player`)
 
-- terminal と browser runtime が共有する `autoPlay()` / `manualPlay()` engine
+- terminal と browser runtime が共有する `autoPlay()` / `manualPlay()` engine。決定的な判定コアの上の 1 つのプレイループに、手動・AUTO・リプレイの判定の戦略を差し込む（[アーキテクチャ](./docs/architecture.ja.md#エンジン-判定コアと-1-つのプレイループ)）
 - lane flash、POOR BGA command、frame snapshot、pause、restart、high-speed change を流す UI / input signal bus
 - playable note、legacy long note、`#LNOBJ`、FREE ZONE、mine、invisible note の共通抽出
 - 判定幅、動的 `#EXRANKxx`、score、groove gauge、scroll distance、BGA timeline、result summary の共通意味論
-- `core/engine`、`core/bga-timeline`、`core/scroll-distance`、`core/groove-gauge`、`playable-notes`、`playlog` などの browser-safe subpath export
+- エンジンのルートと並ぶ browser-safe な入口：`signals`、`lanes`、`display`、`ruleset`、`playlog`、`records`、`course`（[Player 実装仕様 — 公開する入口](./docs/player-spec.ja.md#公開する入口)）
+- `ruleset`: ホスト・スキン・リーダーボードが共有する語彙。ゲージ、クリアランプ、BP、スコア（`ScoreSummary`、`computeScoreRate`、DJ ランク、LR2 のマネースコア）
+- `course`、`records`、`playlog`: コースの実行、NONSTOP の流れ、コースのステージの規則、判定ルールセットごとの自己ベスト、プレイログの形式とその記録・シミュレータ
+
+### scene models (`@be-music/scene-model`)
+
+- スキンの種類によらない、実行環境非依存の各画面のモデル。譜面の言葉で表したライブラリの項目（`LibraryChart`、`LibraryFolder`、`LibraryCourse`）、一覧のモデル（`reduceBrowse`、`BrowseSnapshot`）、プレイオプション、プレイ状態（`PlayState`）、プレイ結果（`PlayResult`）、コースの表示用モデル、効果音セット
+- Web 実行層、スキン SDK、LR2 と beatoraja の状態を求める関数が使う
+- [シーンモデル](docs/scene-model.ja.md) を参照
 
 ### terminal player (`@be-music/player-tui`)
 
@@ -169,13 +221,14 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - タッチ主体の端末でのタッチ操作とタッチ用 gameplay layout、縦向きステージを持つスキンの縦画面表示、スキンごとの設定
 - LR2 の select / decide / gameplay / result skin を parse して PixiJS で描画
 - beatoraja の select / decide / gameplay / result skin を parse して PixiJS で描画
-- default gameplay chrome injection を分離し、default skin 描画が LR2 renderer module に依存しない構成
+- 画面ごとに 1 つのシーンセッションが振る舞い（一覧の操作、譜面の準備、エンジン、入力、音、終わり方）をすべてのファミリーに共通に持ち、built-in・LR2・beatoraja のファミリービューは描いてインテントを返すだけ（[シーンセッションとファミリービュー](./docs/player-web.ja.md#シーンセッションとファミリービュー)）
+- 設計した入口：`@be-music/player-web/host`（`PixiSceneHost`、`createSelectScene` / `createDecideScene` / `createPlayScene` / `createResultScene`）、`/skin`、`/collection`、`/audio`、`/recording`（[公開する入口](./docs/player-web.ja.md#公開する入口)）
 - destination 補間、sprite transform、number、text、slider、bargraph を扱う共通 LR2 Pixi helper
 - destination sampling、source cell selection、text、value、slider、gauge、graph、timing visualizer、note、marker、BGA、runtime op/timer wiring を扱う共通 beatoraja Pixi helper
 - note、timing、scroll distance、BGA cue、score、result は terminal player と共通の再生意味論を使用
-- key / BGM / master を分けた compressor control 付き WebAudio preview / gameplay bus
-- BGA still / video 描画、browser-side video transcode fallback、WebM gameplay recording
-- 1 つの renderer context を所有する PixiJS scene host と scene transition 時の resource dispose
+- 選曲 BGM・効果音・ジングル・譜面のプレビュー・スキンの音を 1 つのシステム `AudioContext` で鳴らす音のサービスと、key / BGM / master を分けた compressor control 付きのプレイごとの WebAudio bus
+- BGA still / video 描画、browser-side video transcode fallback、MP4 / WebM gameplay recording
+- 1 つの renderer context を所有し、一度に 1 つの scene を表示する PixiJS scene host。demo ではシーンルーターがすべての切り替えを受け持ち、去った scene を dispose する
 - hi-speed、BGA mode/size、filter、sort、HS-FIX、lane cover、lift、auto-scratch、DP flip、random/mirror、gauge variant、skin option を扱う LR2 / beatoraja PLAY OPTION control
 
 ### editor (`@be-music/editor`)
@@ -266,14 +319,15 @@ demo は Vite dev server を起動します。BMS/BMSON の楽曲 folder、LR2 t
 
 URL から archive を読み込むこともできます。`?music=<zip の URL>&skin=<zip の URL>`（どちらか一方だけでも可）を付けると、drop と同じ経路で archive を読み込みます。cross-origin の `https` URL は同一オリジンの proxy route `/__url-load-proxy` 経由で取得します。この route は Vite dev server と Cloudflare Worker の両方が提供します。
 
-demo を Cloudflare Workers（Static Assets と Worker。`packages/player-web-demo/wrangler.jsonc` を参照）へ deploy するには次を実行します。
+demo は Player の Worker（`packages/play`）が配信します。build した demo を Static Assets で配信し、ffmpeg core を R2 から返す処理と、Leaderboard の API への転送を Worker が受け持ちます。`main` と `devel` に push すると、すべてのサービスが本番とプレビューにデプロイされます（`.github/workflows/deploy.yml`、[サービスと環境](./docs/services.ja.md)）。Player を手でデプロイするには次を実行します。
 
 ```bash
-pnpm --filter @be-music/player-web-demo run cf:r2:create # 初回のみ: ffmpeg-core 用の R2 bucket を作成
-pnpm --filter @be-music/player-web-demo run deploy:cf
+pnpm --filter @be-music/player-web-demo run cf:r2:push # 固定している @ffmpeg/core が変わったとき: core を R2 へ upload
+pnpm --filter @be-music/play run deploy                # 本番、play.be-music.app
+pnpm --filter @be-music/play run deploy:preview        # プレビュー、play.preview.be-music.app
 ```
 
-`deploy:cf` は demo を build し、`ffmpeg-core.wasm` / `ffmpeg-core.js` を変更があったときだけ R2 へ upload して（Static Assets の 1 file あたりの上限を超えるため、Worker 経由で R2 から配信します）、`wrangler deploy` を実行します。`cf:r2:push` は ffmpeg core を強制的に upload します。
+`deploy` は demo を build して `cf deploy` を実行します。ffmpeg core（`ffmpeg-core.wasm` / `ffmpeg-core.js`）は Static Assets の 1 file あたりの上限を超えるので、R2 に置いて Worker 経由で配信します。
 
 ### 6. エディタ
 
@@ -335,26 +389,39 @@ pnpm run playlog -- /path/to/Song.bmplay.json --ruleset=lr2,beatoraja --json
 - `24 KEY SP`
 - `48 KEY DP`
 
-自動判定が曖昧な場合は拡張子で補完します。
+拡張子で判定に関わるのは `.pms` だけです。`.pms` のファイルはレーンの規則より先に `9 KEY` になります。`.bms`、`.bme`、`.bml` は使っているレーンで決まるので、6 / 7 鍵の列がない `.bme` の譜面は `5 KEY` です。
 
-- `.bms` -> `5 KEY SP/DP`
-- `.bme` -> `7 KEY SP/14 KEY DP`
-- `.pms` -> `9 KEY`
 - `11..19` をすべて使う 1P keyboard、または従来 IIDX 2P channel を含まない PMS-STD `22..25` も `9 KEY` として判定します。
-- 拡張レーンチャンネル (`1A..1O` / `2A..2O`) があれば、他のどのルールよりも優先して `24 KEY SP` / `48 KEY DP` と判定します。
+- 拡張レーンチャンネル (`1A..1O` / `2A..2O`、またはホイールの `1P` / `1Q` / `2P` / `2Q`) があれば、他のどのルールよりも優先して `24 KEY SP` / `48 KEY DP` と判定します。bmson の `mode_hint` が `keyboard-24k` / `keyboard-24k-double` の場合も同じです。
+
+判定規則（`@be-music/chart` の `resolveChartPlayVariant`）は次の順に調べ、最初に当てはまったものを採ります。「9 KEY のレーン配置」は次の 3 つの内容規則のいずれかです。`17` があり `21` / `26..29` がない `#PLAYER 3`、2P のレーンがなく `11..19` をすべて使う譜面、`21` / `26..29` なしで `22..25` を使う譜面です。「2P」は `2x` のレーンを 1 つでも使うことを指します。レーンの使用は `1x` / `2x` のレーンと `5x` / `6x` のロングノートで数え、地雷と不可視オブジェクトは数えません。
+
+```mermaid
+flowchart TD
+  hint{"bmson の keyboard<br/>mode_hint?"} -->|"keyboard-24k(-double)"| kb["24 KEY SP / 48 KEY DP"]
+  hint -->|なし| ext{"拡張レーン<br/>1A..1Q / 2A..2Q?"}
+  ext -->|"あり: 2P ? 48 : 24"| kb
+  ext -->|なし| pms{".pms?"}
+  pms -->|はい| nine["9 KEY"]
+  pms -->|いいえ| sig{"9 KEY の<br/>レーン配置?"}
+  sig -->|はい| nine
+  sig -->|いいえ| iidx{"18 / 19 / 28 / 29<br/>を使う?"}
+  iidx -->|"はい: 2P ? 14 : 7"| seven["7 KEY SP / 14 KEY DP"]
+  iidx -->|"いいえ: 2P ? 10 : 5"| five["5 KEY SP / 5 KEY DP"]
+```
 
 ### 代表モードのチャンネルと入力
 
-| Mode                     | Channel -> Input                                                                                                                             |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `5 KEY SP`               | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`                                                                        |
-| `5 KEY DP`               | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `26 -> RShift` |
-| `7 KEY SP`               | `5 KEY SP` + `18 -> f`, `19 -> v`                                                                                                            |
-| `14 KEY DP`              | `7 KEY SP` + `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `28 -> k`, `29 -> ,`, `26 -> RShift`                                     |
-| `9 KEY (BME-compatible)` | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `16 -> f`, `17 -> v`, `18 -> g`, `19 -> b`                                            |
-| `9 KEY (PMS-STD)`        | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `22 -> f`, `23 -> v`, `24 -> g`, `25 -> b`                                            |
-| `24 KEY SP`              | `11..19` + `1A..1O` (24 レーン、scratch なし) -> `a s d f g h j k l ; q w e r u i o p z x c v b n`                                           |
-| `48 KEY DP`              | `24 KEY SP` + `21..29` + `2A..2O`。2P バンクは印字キーを使い切り、末尾はファンクションキーになります                                         |
+| Mode                     | Channel -> Input                                                                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `5 KEY SP`               | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`                                                                            |
+| `5 KEY DP`               | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `26 -> RShift`     |
+| `7 KEY SP`               | `5 KEY SP` + `18 -> f`, `19 -> v`                                                                                                                |
+| `14 KEY DP`              | `7 KEY SP` + `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `28 -> k`, `29 -> ,`, `26 -> RShift`                                         |
+| `9 KEY (BME-compatible)` | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `16 -> f`, `17 -> v`, `18 -> g`, `19 -> b`                                                |
+| `9 KEY (PMS-STD)`        | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `22 -> f`, `23 -> v`, `24 -> g`, `25 -> b`                                                |
+| `24 KEY SP`              | `11..19` + `1A..1O` (24 鍵、scratch なし) -> `a s d f g h j k l ; q w e r u i o p z x c v b n`。ホイール `1P -> Tab`（上）、`1Q -> LShift`（下） |
+| `48 KEY DP`              | `24 KEY SP` + `21..29` + `2A..2O`。2P の鍵は印字キーを使い切り、末尾はファンクションキーになります。2P ホイール `2P -> Enter`、`2Q -> RShift`    |
 
 ## FREE ZONE (`17` / `27`)
 
@@ -459,5 +526,8 @@ pnpm run bench:compare -- --head tmp/bench/head.json --base tmp/bench/base.json 
 - compare 出力: 任意の Markdown と summary JSON
 - GitHub Actions では、`devel` / `main` 向け PR で base/head 比較を PR comment として投稿します
 - GitHub Actions では、`devel` / `main` への push でも直前 revision 比較を実行し、対象 commit へ commit comment を投稿します
-- CI は比較前に base と head を同一 runner で計測し、ホスト間ノイズが delta を支配しないようにします
-- CI はローカル default より長い per-case time を使い、比較シグナルは median change です。ケース単位の一覧も mean ではなく median ops/s で比較します
+- CI は base と head を同一 runner で交互に（head、base、head、base…）5 回ずつ計測し、ホスト間のノイズや一時的な遅さが両方に等しくかかるようにします
+- 速い関数は 1 回の計測サンプルの中で何度も呼び出し（1 サンプル約 50 µs）、ナノ秒単位のケースもタイマーの分解能に埋もれずに計測します。時間は 1 回の呼び出しあたりで表示します
+- 回帰・改善と判定するのは、中央値の変化がしきい値（CI では 8%）を超え、かつ base と head の各回の計測値が重ならないケースだけです。しきい値を超えても計測値が重なるものは「within noise」として別に表示します
+- `ioBound` を付けたケース（ファイルシステムに触るもの）は、時間が OS のキャッシュやディスクに左右されるため、判定せずに別枠で表示します
+- コメントは判定結果から始まり、base / head のコミットへのリンク、変更したパッケージのケース、追加・削除された公開関数を載せ、ノイズ・除外・実行条件は折りたたんで表示します

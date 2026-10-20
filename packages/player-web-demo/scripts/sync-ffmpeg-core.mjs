@@ -1,5 +1,5 @@
-// Syncs the ffmpeg.wasm core to the R2 bucket that backs `/ffmpeg-core/*` (served by worker/index.ts), but only when
-// the freshly built bytes differ from what's already there. The ~31 MB wasm only changes when the pinned `@ffmpeg/core`
+// Syncs the ffmpeg.wasm core to the R2 bucket that backs `/ffmpeg-core/*` (served by packages/play/src/index.ts), but
+// only when the freshly built bytes differ from what's already there. The ~31 MB wasm only changes when the pinned `@ffmpeg/core`
 // version does, so re-uploading it on every deploy would be pure waste — and in Workers Builds CI it would also hit R2
 // on every push, where the auto-generated token may not even have R2 write access.
 //
@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const BUCKET = 'be-music-ffmpeg-core';
+const BUCKET = process.argv.includes('--preview') ? 'play-preview' : 'play';
 const MANIFEST_KEY = 'ffmpeg-core.manifest';
 const CORE_DIR = fileURLToPath(new URL('../dist/ffmpeg-core/', import.meta.url));
 const FILES = [

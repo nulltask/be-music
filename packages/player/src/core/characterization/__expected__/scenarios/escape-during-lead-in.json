@@ -1,0 +1,205 @@
+{
+  "manual": {
+    "outcome": "completed",
+    "endedAtMs": 200,
+    "summary": {
+      "total": 11,
+      "perfect": 0,
+      "fast": 0,
+      "slow": 0,
+      "great": 0,
+      "good": 0,
+      "bad": 0,
+      "poor": 0,
+      "emptyPoor": 0,
+      "exScore": 0,
+      "score": 0,
+      "gauge": {
+        "current": 20,
+        "max": 100,
+        "clearThreshold": 80,
+        "initial": 20,
+        "effectiveTotal": 160,
+        "cleared": false,
+        "type": "GROOVE",
+        "survival": false,
+        "failedMidPlay": false
+      }
+    },
+    "playlog": {
+      "format": "be-music-playlog",
+      "version": 0,
+      "clock": {"unit":"us","origin":"chart-zero"},
+      "chart": {
+        "sourceFormat": "bms",
+        "laneMode": "7 KEY SP",
+        "lnMode": 1,
+        "judgeRank": {"percent":75,"sourceRank":2},
+        "noteCount": 11,
+        "notes": [
+          {"id":0,"channel":"11","type":"normal","timeUs":500000},
+          {"id":1,"channel":"12","type":"normal","timeUs":750000},
+          {"id":2,"channel":"13","type":"normal","timeUs":1000000},
+          {"id":3,"channel":"16","type":"normal","timeUs":1250000},
+          {"id":4,"channel":"14","type":"normal","timeUs":1500000},
+          {"id":5,"channel":"15","type":"normal","timeUs":1500000},
+          {"id":6,"channel":"18","type":"normal","timeUs":1750000},
+          {"id":7,"channel":"19","type":"normal","timeUs":2000000},
+          {"id":8,"channel":"11","type":"normal","timeUs":2500000},
+          {"id":9,"channel":"12","type":"normal","timeUs":3000000},
+          {"id":10,"channel":"11","type":"normal","timeUs":3500000}
+        ],
+        "chartFingerprint": "bmfp0:6786c0ecfaf1461b14e0f0b60e422b9138384824ef2587ab10f4288bc039fd78",
+        "playFingerprint": "bmfp0:6786c0ecfaf1461b14e0f0b60e422b9138384824ef2587ab10f4288bc039fd78",
+        "title": "basic",
+        "artist": "characterization",
+        "total": 160
+      },
+      "inputs": [],
+      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","aborted":true,"abortedAtUs":0,"endOnFailure":true},
+      "results": {
+        "native": {
+          "ruleset": "be-music/native",
+          "judge": {"pgreat":0,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+          "fast": 0,
+          "slow": 0,
+          "exScore": 0,
+          "noteCount": 11,
+          "maxCombo": 0,
+          "djLevel": "F",
+          "gauge": {"type":"GROOVE","final":20,"cleared":false},
+          "score": 0
+        }
+      }
+    },
+    "simulated": {
+      "lr2": {
+        "ruleset": "lr2/0",
+        "judge": {"pgreat":0,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+        "fast": 0,
+        "slow": 0,
+        "exScore": 0,
+        "noteCount": 11,
+        "maxCombo": 0,
+        "djLevel": "F",
+        "gauge": {"type":"GROOVE","final":20,"cleared":false},
+        "score": 0
+      },
+      "beatoraja": {
+        "ruleset": "beatoraja/0",
+        "judge": {"pgreat":0,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+        "fast": 0,
+        "slow": 0,
+        "exScore": 0,
+        "noteCount": 11,
+        "maxCombo": 0,
+        "djLevel": "F",
+        "gauge": {"type":"NORMAL","final":20,"cleared":false}
+      },
+      "iidx": {
+        "ruleset": "iidx/0",
+        "judge": {"pgreat":0,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+        "fast": 0,
+        "slow": 0,
+        "exScore": 0,
+        "noteCount": 11,
+        "maxCombo": 0,
+        "djLevel": "F",
+        "gauge": {"type":"NORMAL","final":22,"cleared":false}
+      }
+    },
+    "audio": ["200.000 dispose"],
+    "judges": ["0.000 READY combo=0 gauge=20"],
+    "ui": [],
+    "frames": {"count":1,"judged":[],"last":"0.000 seconds=0 beat=0"},
+    "host": [
+      "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
+      "0.000 input-runtime create manual",
+      "0.000 load-complete",
+      "0.000 ui start",
+      "0.000 input-runtime start",
+      "200.000 input-runtime stop",
+      "200.000 ui stop",
+      "200.000 ui dispose"
+    ],
+    "log": [
+      "0.000 info playback.prepared {\"mode\":\"manual\",\"uiEnabled\":true,\"audioEnabled\":true,\"totalSeconds\":3.5}",
+      "0.000 info ui.start {\"mode\":\"manual\"}",
+      "0.000 debug ui.initial-frame.published {\"mode\":\"manual\",\"seconds\":0,\"beat\":0}"
+    ],
+    "output": [
+      "Audio backend: characterization",
+      "--- Result ---",
+      "TOTAL  : 11",
+      "GAUGE  : 20.00 / 100.00 FAILED (TOTAL 160)",
+      "PGREAT : 0",
+      "GREAT  : 0",
+      "GOOD   : 0",
+      "BAD    : 0",
+      "POOR   : 0",
+      "EMPTY  : 0",
+      "FAST   : 0",
+      "SLOW   : 0",
+      "EX-SCORE: 0 / 22 (0.00%)",
+      "SCORE   : 0 / 200000 (0.00%)"
+    ]
+  },
+  "auto": {
+    "outcome": "completed",
+    "endedAtMs": 200,
+    "summary": {
+      "total": 11,
+      "perfect": 0,
+      "fast": 0,
+      "slow": 0,
+      "great": 0,
+      "good": 0,
+      "bad": 0,
+      "poor": 0,
+      "emptyPoor": 0,
+      "exScore": 0,
+      "score": 0,
+      "gauge": {
+        "current": 20,
+        "max": 100,
+        "clearThreshold": 80,
+        "initial": 20,
+        "effectiveTotal": 160,
+        "cleared": false,
+        "type": "GROOVE",
+        "survival": false,
+        "failedMidPlay": false
+      }
+    },
+    "playlog": {
+      "format": "be-music-playlog",
+      "version": 0,
+      "clock": {"unit":"us","origin":"chart-zero"},
+      "chart": "(same as manual)",
+      "inputs": "(same as manual)",
+      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","aborted":true,"abortedAtUs":0,"endOnFailure":true},
+      "results": "(same as manual)"
+    },
+    "simulated": "(same as manual)",
+    "audio": ["200.000 dispose"],
+    "judges": ["0.000 READY combo=0 gauge=20"],
+    "ui": [],
+    "frames": {"count":1,"judged":[],"last":"0.000 seconds=0 beat=0"},
+    "host": [
+      "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
+      "0.000 input-runtime create auto",
+      "0.000 load-complete",
+      "0.000 ui start",
+      "0.000 input-runtime start",
+      "200.000 input-runtime stop",
+      "200.000 ui stop",
+      "200.000 ui dispose"
+    ],
+    "log": [
+      "0.000 info playback.prepared {\"mode\":\"auto\",\"uiEnabled\":true,\"audioEnabled\":true,\"totalSeconds\":3.5}",
+      "0.000 info ui.start {\"mode\":\"auto\"}",
+      "0.000 debug ui.initial-frame.published {\"mode\":\"auto\",\"seconds\":0,\"beat\":0}"
+    ],
+    "output": "(same as manual)"
+  }
+}

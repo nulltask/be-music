@@ -1,25 +1,30 @@
-import type { CreatePlayerUiRuntimeContext, PlayerUiRuntime } from '@be-music/player/core/engine';
-import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
-import type { PlayerUiCommand, PlayerUiFramePayload, PlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
+import type { CreatePlayerUIRuntimeContext, PlayerUIRuntime } from '@be-music/player';
+import type {
+  PlayerJudgeComboSignalState,
+  PlayerStateSignals,
+  PlayerUICommand,
+  PlayerUIFramePayload,
+  PlayerUISignalBus,
+} from '@be-music/player/signals';
 import { logger } from '../logger.ts';
 
 const log = logger('web-ui-runtime');
 
 /**
- * Surface the {@link createWebUiRuntime} adapter exposes to the host gameplay view. The host wires these callbacks
+ * Surface the {@link createWebUIRuntime} adapter exposes to the host gameplay view. The host wires these callbacks
  * to its Pixi rendering pipeline; the engine's UI signal bus is the *only* state source the runtime consults, so
  * the host stays purely declarative.
  *
  * Both callbacks are optional — a host that doesn't need a particular hook can omit it. The runtime swallows
  * exceptions thrown from the callbacks so a Pixi-side bug doesn't break the engine's main loop.
  */
-export interface WebUiRuntimeCallbacks {
+export interface WebUIRuntimeCallbacks {
   /**
    * Fired on every `uiSignals.publishFrame()` (typically once per engine tick). Receives the current frame snapshot
    * — `currentBeat` / `currentSeconds` / `summary` / `notes` etc. The host should re-render the score panel, lane
    *  bars, and any other state-driven chrome from this single source.
    */
-  onFrame?: (frame: Readonly<PlayerUiFramePayload>) => void;
+  onFrame?: (frame: Readonly<PlayerUIFramePayload>) => void;
   /**
    * Fired for every `uiSignals.pushCommand()` event. Currently the engine emits:
    * - `flash-lane` — judged note's lane should pulse (manual judge / auto judge).
@@ -32,7 +37,7 @@ export interface WebUiRuntimeCallbacks {
    *
    * The host should switch on `command.kind` and apply the matching visual effect.
    */
-  onCommand?: (command: PlayerUiCommand) => void;
+  onCommand?: (command: PlayerUICommand) => void;
   /**
    * Fired once when the engine calls `start()` (after the BGA preload promise resolved). Useful for the host to
    * reveal its scene graph at the same moment chart playback begins.
@@ -66,23 +71,23 @@ export interface WebUiRuntimeCallbacks {
   /**
    * Fired once when the runtime is constructed, handing the engine's signal buses back to the host. Hosts that
    * already drive their own per-frame loop (rAF in the gameplay view) can use this to call
-   * {@link drainWebUiSignals} from inside that loop, sharing one event-drain pass with their other Pixi work
+   * {@link drainWebUISignals} from inside that loop, sharing one event-drain pass with their other Pixi work
    * instead of spinning up an independent alien-signals subscription. The runtime still fires `onFrame` /
    * `onCommand` / `onJudgeCombo` if the host doesn't poll — the two modes are interchangeable; pick whichever
    * matches the host's render scheduling.
    */
-  onSignalsReady?: (signals: { uiSignals: PlayerUiSignalBus; stateSignals?: PlayerStateSignals }) => void;
+  onSignalsReady?: (signals: { uiSignals: PlayerUISignalBus; stateSignals?: PlayerStateSignals }) => void;
 }
 
 /**
- * Construction-time inputs for {@link createWebUiRuntime}. The host supplies the engine's signal buses alongside
+ * Construction-time inputs for {@link createWebUIRuntime}. The host supplies the engine's signal buses alongside
  * its callbacks; the runtime sets up the subscription lifecycle.
  */
-export interface WebUiRuntimeOptions extends WebUiRuntimeCallbacks {
-  uiSignals: PlayerUiSignalBus;
+export interface WebUIRuntimeOptions extends WebUIRuntimeCallbacks {
+  uiSignals: PlayerUISignalBus;
   /**
    * Optional `PlayerStateSignals` bus. The engine emits judge / combo / pause / hi-speed updates through this
-   * channel separately from `uiSignals`; the runtime drains it inside {@link drainWebUiSignals} so a single
+   * channel separately from `uiSignals`; the runtime drains it inside {@link drainWebUISignals} so a single
    * per-frame poll catches both surfaces.
    */
   stateSignals?: PlayerStateSignals;
@@ -91,7 +96,7 @@ export interface WebUiRuntimeOptions extends WebUiRuntimeCallbacks {
 }
 
 /**
- * Web-side adapter for the engine's `PlayerUiRuntime` contract. Subscribes to `uiSignals`'s frameTick / commandTick
+ * Web-side adapter for the engine's `PlayerUIRuntime` contract. Subscribes to `uiSignals`'s frameTick / commandTick
  * during `start()`, drains the queues into the host's callbacks, and detaches on `stop()` / `dispose()`. The
  * runtime is intentionally thin — it just wires Pixi rendering up to the engine's existing event surface so the
  * Web view doesn't need to mirror the engine's internal state.
@@ -99,7 +104,7 @@ export interface WebUiRuntimeOptions extends WebUiRuntimeCallbacks {
  * `tuiEnabled` is hard-wired to `false` because the web runtime never claims to be a TUI; this signals the engine
  * that it should still emit per-frame log output (the engine's "no-TUI" branch) for diagnostics.
  */
-export function createWebUiRuntime(options: WebUiRuntimeOptions): PlayerUiRuntime {
+export function createWebUIRuntime(options: WebUIRuntimeOptions): PlayerUIRuntime {
   const { uiSignals } = options;
   // Fire the signals-ready hook synchronously during construction so a host that prefers per-frame polling has
   // the bus references in hand by the time the engine flips runtime.start().
@@ -213,9 +218,9 @@ export function createWebUiRuntime(options: WebUiRuntimeOptions): PlayerUiRuntim
  * Returns `true` when at least one event drained — useful for the host to skip Pixi work when the engine produced
  * nothing new this frame.
  */
-export function drainWebUiSignals(
-  uiSignals: PlayerUiSignalBus,
-  callbacks: WebUiRuntimeCallbacks,
+export function drainWebUISignals(
+  uiSignals: PlayerUISignalBus,
+  callbacks: WebUIRuntimeCallbacks,
   options: { stateSignals?: PlayerStateSignals; lastJudgeComboTick?: number } = {},
 ): { drained: boolean; lastJudgeComboTick: number } {
   let drained = false;
@@ -263,15 +268,15 @@ export function drainWebUiSignals(
 }
 
 /**
- * Convenience factory matching `PlayerOptions.createUiRuntime`. Closes over the host's callbacks so a caller can
- * pass `{ createUiRuntime: createWebUiRuntimeFactory({ onFrame, onCommand, ... }) }` directly to `manualPlay` /
+ * Convenience factory matching `PlayerOptions.createUIRuntime`. Closes over the host's callbacks so a caller can
+ * pass `{ createUIRuntime: createWebUIRuntimeFactory({ onFrame, onCommand, ... }) }` directly to `manualPlay` /
  * `autoPlay`.
  */
-export function createWebUiRuntimeFactory(
-  callbacks: WebUiRuntimeCallbacks,
-): (context: CreatePlayerUiRuntimeContext) => Promise<PlayerUiRuntime> {
+export function createWebUIRuntimeFactory(
+  callbacks: WebUIRuntimeCallbacks,
+): (context: CreatePlayerUIRuntimeContext) => Promise<PlayerUIRuntime> {
   return async (context) =>
-    createWebUiRuntime({
+    createWebUIRuntime({
       ...callbacks,
       uiSignals: context.uiSignals,
       stateSignals: context.stateSignals,
