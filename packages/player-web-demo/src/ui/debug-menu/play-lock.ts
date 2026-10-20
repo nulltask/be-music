@@ -10,7 +10,7 @@ export interface LockableControl {
 
 /** The Debug Menu's controls a play locks, as they are when it locks or unlocks (a picker can be made again meanwhile). */
 export interface PlayLockControls {
-  /** "Auto-save play history", latched as a play starts. */
+  /** "Auto-save replays", latched as a play starts. */
   readonly replaySave: LockableControl | undefined;
   /** Every option read as a play starts (`DebugMenu.trackPlayOption`). */
   readonly playOptions: readonly LockableControl[];

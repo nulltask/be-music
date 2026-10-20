@@ -97,8 +97,8 @@ export class CourseMakerService {
         return;
       }
       const reasons = {
-        full: 'the course already has 5 songs',
-        'key-mode': 'its key mode differs from the first song’s',
+        full: 'the course already has 5 charts',
+        'key-mode': 'its key mode differs from the first chart’s',
         'no-md5': 'its chart could not be hashed',
         'not-making': 'no course is being made',
       } as const;

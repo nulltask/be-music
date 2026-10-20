@@ -140,7 +140,7 @@ export interface DemoGUIState extends PlayTempoSettings {
   /**
    * When true (off by default), the replay (`*.bmplay.json` input replay — see `@be-music/player/replay`) recorded
    * during gameplay is automatically downloaded the moment the result scene mounts, for both the LR2/default and
-   * beatoraja result paths. Toggled from the Debug Menu's "Auto-save play history" checkbox.
+   * beatoraja result paths. Toggled from the Debug Menu's "Auto-save replays" checkbox.
    */
   autoSaveReplay: boolean;
   /**

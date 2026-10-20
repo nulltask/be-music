@@ -34,12 +34,12 @@ export const en = {
     menuAria: (name: string) => `Scoring rules: ${name}`,
     showUnder: 'Show scores under',
     notes: {
-      lr2: 'LR2’s judge windows, gauges and lamps',
+      lr2: 'LR2’s judgment windows, gauges and lamps',
       beatoraja: 'beatoraja’s, with the PERFECT and MAX lamps',
       iidx: 'beatmania IIDX’s, with charge notes',
     },
     meaning:
-      'Every play is scored under each ruleset: the judge windows, gauges and clear lamps of LR2, beatoraja or IIDX, applied by the be-music engine to the replay. It is how the score is counted, not the software the play came from.',
+      'Every play is scored under each ruleset: the judgment windows, gauges and clear lamps of LR2, beatoraja or IIDX, applied by the be-music engine to the replay. It is how the score is counted, not the software the play came from.',
     playedWith: (name: string) => `played with ${name}`,
     playedWithTitle: 'The scoring rules the player played under',
   },
@@ -110,7 +110,7 @@ export const en = {
     everyPlay: 'Every play',
     everyPlayHelp: 'List each play on its own row, so a player can appear more than once',
     assisted: 'Assisted',
-    assistedHelp: 'Plays with auto-scratch or a judge window override, ranked apart',
+    assistedHelp: 'Plays with auto-scratch or a judgment window override, ranked apart',
     anonymous: 'Anonymous players',
     anonymousHelp: 'Include players who have not created an account yet',
     anonymousPlaysHelp: 'Include plays by players who have not created an account yet',

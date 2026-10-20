@@ -1,4 +1,4 @@
-// The demo's replays: the app named as their recorder, and "Auto-save play history": a play's replay
+// The demo's replays: the app named as their recorder, and "Auto-save replays": a play's replay
 // (`*.bmplay.json`, an input replay), or a course's (`*.bmcourse.json`), downloaded the moment its result shows.
 
 import {
@@ -28,7 +28,7 @@ export interface ReplayAutoSaveOptions {
 }
 
 /**
- * Saves replays by the "Auto-save play history" setting as it was when the play started (`latch`): the checkbox is
+ * Saves replays by the "Auto-save replays" setting as it was when the play started (`latch`): the checkbox is
  * disabled during a play, so a change can only come between plays, and it applies from the next one. A course's log is
  * saved by the value latched for its last stage played (a NONSTOP run is one play), the same as that stage's own log.
  */
