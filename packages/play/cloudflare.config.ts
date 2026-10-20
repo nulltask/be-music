@@ -19,13 +19,13 @@ export default defineConfig(({ mode }) => {
       entrypoint: './src/index.ts',
       domains: [preview ? 'play.preview.be-music.app' : 'play.be-music.app'],
       observability: { enabled: true },
-      // Static Assets host the built SPA; `single-page-application` returns index.html for any unmatched path. The
-      // `runWorkerFirst` entries send `/ffmpeg-core/*` and `/__url-load-proxy` through the Worker (src/index.ts), so
+      // Static Assets host the built SPA; `single-page-application` returns index.html for any unmatched path.
+      // All requests pass through the Worker for automatic Accounts SSO. The FFmpeg and URL proxy routes ensure
       // the oversized ffmpeg core streams from R2 and URL auto-load archives bypass browser CORS, and send the
       // Leaderboard's API to it through the Service Binding.
       assets: {
         notFoundHandling: 'single-page-application',
-        runWorkerFirst: ['/ffmpeg-core/*', '/__url-load-proxy', '/api/*'],
+        runWorkerFirst: ['/*'],
       },
       env: {
         ASSETS: bindings.assets(),
