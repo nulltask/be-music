@@ -180,7 +180,7 @@ export function describeStartAccount(account: LeaderboardAccount | undefined): S
       state: 'anonymous',
       label: `@${account.handle} · anonymous`,
       href,
-      actions: ['keep', 'sign-in'],
+      actions: ['keep', 'sign-in', 'sign-out'],
       hint: 'This account lives only in this browser, and rankings leave it out. Keep it with a passkey to join them.',
     };
   }

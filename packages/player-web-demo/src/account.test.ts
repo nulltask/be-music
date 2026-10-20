@@ -83,14 +83,14 @@ describe('describeStartAccount', () => {
     });
   });
 
-  test('offers to keep an anonymous account, or to sign in to another', () => {
+  test('offers to keep an anonymous account, sign in to another or sign out', () => {
     expect(
       describeStartAccount({ handle: 'player-abc', displayName: 'Anonymous', anonymous: true, passkeys: 0 }),
     ).toEqual({
       state: 'anonymous',
       label: '@player-abc · anonymous',
       href: '/players/player-abc',
-      actions: ['keep', 'sign-in'],
+      actions: ['keep', 'sign-in', 'sign-out'],
       hint: 'This account lives only in this browser, and rankings leave it out. Keep it with a passkey to join them.',
     });
   });
