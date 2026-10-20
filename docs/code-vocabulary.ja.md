@@ -20,23 +20,24 @@
 
 ## プレイ・判定・記録
 
-| 概念                                                | 現行のコード名                                            | 意味・区別                                                                                 |
-| --------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| play / プレイ                                       | `manualPlay`, `autoPlay`                                  | 1 回の実行。単体プレイ・コースステージ・コース全体を明示する。                             |
-| play result / プレイ結果                            | `PlayResult`, `PlayerSummary`                             | 画面向けの結果とエンジンの集計。関連するが同じ型・役割ではない。                           |
-| score / 得点                                        | `ScoreSummary.score`, `exScore`, `ScoreSummary`           | 表示得点・EX-SCORE・判定集計を分ける。表示得点はルールセットに依存する。                   |
-| play submission / プレイ送信記録                    | `score`, `submissionId` in Leaderboard                    | score テーブルは数値ではなく送信済みプレイを保持する。送信 ID とプレイ ID の役割を分ける。 |
-| ruleset result / ルールセット別結果                 | `scoreResult`, `PlaylogRulesetResult`                     | 1 つのルールセットでの評価。実際に遊んだ規則と再シミュレーションを区別する。               |
-| best record / 自己ベスト                            | `BestRecord`, `bestScore`, `BeMusicSongRecord`            | 複数プレイから項目ごとに保持する最良値。単一のベストプレイではない。                       |
-| play log / プレイログ                               | `BeMusicPlaylog`, `recordPlaylog`, `serializePlaylog`     | 再現用の入力記録。含まれる結果キャッシュは再計算できる。                                   |
-| judgment / 判定                                     | `JudgeKind`, `Judge`, `JudgeTiming`, `PlaylogJudgeCounts` | 判定の種類・時刻付き判定・判定数を区別する。Judge の一括置換では整理できない。             |
-| ruleset / ルールセット                              | `PlaylogRulesetId`, `judgeRuleset`, `playedRuleset`       | プレイログ専用ではなくプレイ全体の規則。playedRuleset は実際に遊んだ規則。                 |
-| gauge / ゲージ                                      | `GaugeType`, `gaugeType`, `gauge`, `cleared`, `lamp`      | 選択した方式・規則上のゲージ・残量・クリア判定・クリアランプを分ける。                     |
-| arrangement / レーン配置                            | `randomLane`, `laneOption`, `randomDraws`                 | レーンのランダム化と BMS 制御構文の分岐抽選を区別する。                                    |
-| tempo / テンポ                                      | `speed`, `PlayerTempoChange`, `hiSpeed`, `hsFix`          | 再生テンポ・表示スクロール速度・その補正を区別する。                                       |
-| judgment rank / 判定ランク                          | `judgeRank`, `rank`, `exRank`, `RulesetJudgeRankFacts`    | 判定幅の厳しさ。ランキング順位や DJ RANK とは別。                                          |
-| DJ Rank / DJ RANK                                   | `IIDXRankLabel`, `resolveIIDXRankLabel`                   | EX-SCORE 率による評価。grade というコース種別とは別。                                      |
-| chart level and difficulty / 譜面レベルと難易度区分 | `playLevel`, `difficulty`, `difficultyFilter`             | 作者が設定したレベルの値と BEGINNER〜INSANE の区分を分ける。                               |
+| 概念                                                | 現行のコード名                                                             | 意味・区別                                                                                 |
+| --------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| play / プレイ                                       | `manualPlay`, `autoPlay`                                                   | 1 回の実行。単体プレイ・コースステージ・コース全体を明示する。                             |
+| play result / プレイ結果                            | `PlayResult`, `PlayerSummary`                                              | 画面向けの結果とエンジンの集計。関連するが同じ型・役割ではない。                           |
+| score / 得点                                        | `ScoreSummary.score`, `exScore`, `ScoreSummary`                            | 表示得点・EX-SCORE・判定集計を分ける。表示得点はルールセットに依存する。                   |
+| play submission / プレイ送信記録                    | `score`, `submissionId` in Leaderboard                                     | score テーブルは数値ではなく送信済みプレイを保持する。送信 ID とプレイ ID の役割を分ける。 |
+| ruleset result / ルールセット別結果                 | `scoreResult`, `PlaylogRulesetResult`                                      | 1 つのルールセットでの評価。実際に遊んだ規則と再シミュレーションを区別する。               |
+| best record / 自己ベスト                            | `BestRecord`, `bestScore`, `BeMusicSongRecord`                             | 複数プレイから項目ごとに保持する最良値。単一のベストプレイではない。                       |
+| play log / プレイログ                               | `BeMusicPlaylog`, `recordPlaylog`, `serializePlaylog`                      | 再現用の入力記録。含まれる結果キャッシュは再計算できる。                                   |
+| judgment / 判定                                     | `JudgeKind`, `Judge`, `JudgeTiming`, `PlaylogJudgeCounts`                  | 判定の種類・時刻付き判定・判定数を区別する。Judge の一括置換では整理できない。             |
+| ruleset / ルールセット                              | `BeMusicPlaylog`, `recordPlaylog`, `parsePlaylog`, `serializePlaylog`      | `BeMusicPlayLog`, `recordPlayLog`, `parsePlayLog`, `serializePlayLog`                      | 語の境界を明示する。ローカル変数は `log` とできる。 |
+| `PlaylogRulesetId`, `judgeRuleset`, `playedRuleset` | プレイログ専用ではなくプレイ全体の規則。playedRuleset は実際に遊んだ規則。 |
+| gauge / ゲージ                                      | `GaugeType`, `gaugeType`, `gauge`, `cleared`, `lamp`                       | 選択した方式・規則上のゲージ・残量・クリア判定・クリアランプを分ける。                     |
+| arrangement / レーン配置                            | `randomLane`, `laneOption`, `randomDraws`                                  | レーンのランダム化と BMS 制御構文の分岐抽選を区別する。                                    |
+| tempo / テンポ                                      | `speed`, `PlayerTempoChange`, `hiSpeed`, `hsFix`                           | 再生テンポ・表示スクロール速度・その補正を区別する。                                       |
+| judgment rank / 判定ランク                          | `judgeRank`, `rank`, `exRank`, `RulesetJudgeRankFacts`                     | 判定幅の厳しさ。ランキング順位や DJ RANK とは別。                                          |
+| DJ Rank / DJ RANK                                   | `IIDXRankLabel`, `resolveIIDXRankLabel`                                    | EX-SCORE 率による評価。grade というコース種別とは別。                                      |
+| chart level and difficulty / 譜面レベルと難易度区分 | `playLevel`, `difficulty`, `difficultyFilter`                              | 作者が設定したレベルの値と BEGINNER〜INSANE の区分を分ける。                               |
 
 ## コースとレイアウト
 
@@ -74,6 +75,8 @@
 
 ## 改名候補（未実装）
 
+読みやすさを優先し、識別子は `playLog` / `PlayLog`、文脈が明確なローカル変数は `log` とする方針です。下の候補は公開名・保存データの改名をまだ実施していません。
+
 | 現行名                                                      | 候補名                                                                     | 理由・注意点                                                                     |
 | ----------------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | `PlayResult.song`, `PlayResultFacts.song`                   | `chart`                                                                    | 譜面項目。コース結果では代表として最初のステージを渡すため、その扱いも明示する。 |
@@ -81,7 +84,7 @@
 | `BrowserSongAssetSource`, `BrowserSongAssetEntry`           | `BrowserAssetSource`, `BrowserAssetEntry`                                  | 複数の譜面で共有する実体。楽曲単位ではない。                                     |
 | `BeMusicSongRecord`, `songRecord`                           | `BeMusicChartBestRecord`, `chartBestRecord`                                | 譜面単位であることと、自己ベストの集計であることを明示する。                     |
 | `songRecordKey`, `parseSongRecords`, `serializeSongRecords` | `chartBestRecordKey`, `parseChartBestRecords`, `serializeChartBestRecords` | 内容を明示する。保存キー・保存形式の互換性は別途確認する。                       |
-| `JudgeKind`, `JudgeTiming`, `PlaylogJudgeCounts`            | `JudgmentKind`, `JudgmentTiming`, `PlaylogJudgmentCounts`                  | 型名を揃える。フォーマットのキーを機械的に変えない。                             |
+| `JudgeKind`, `JudgeTiming`, `PlaylogJudgeCounts`            | `JudgmentKind`, `JudgmentTiming`, `PlayLogJudgmentCounts`                  | 型名を揃える。フォーマットのキーを機械的に変えない。                             |
 | `PlaylogRulesetId`                                          | `RulesetId`                                                                | 記録形式ではなくルールセット層の概念。                                           |
 
 `score` テーブルのように保存形式・API と結びつく名前は、この表を理由にそのまま改名しません。新しい内部名には `playSubmission`・`rulesetResult`・`chartBestRecord` のように対象を明示し、境界で既存名に対応付ける案です。`PlayOptions` と `PlayerOptions` は単なる別名ではないため、改名より先に責務を整理します。

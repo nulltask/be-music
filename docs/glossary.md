@@ -23,7 +23,7 @@ Use these terms in documentation, source comments, and user-facing text. Code id
 | Musical work shared by charts         | music                | 楽曲                  | `music`                                                          |
 | JSON-based chart format               | bmson                | bmson                 | `bmson` / `Bmson`; existing `BMSON_*` constants remain unchanged |
 | Judgment result                       | judgment             | 判定                  | `judge` in existing APIs                                         |
-| Recorded input replay                 | play log             | プレイログ            | `playlog` / `Playlog`                                            |
+| Recorded input replay                 | play log             | プレイログ            | `playLog` / `PlayLog`                                            |
 | Profile image                         | avatar               | アバター              | `avatar`                                                         |
 | Unique public user name               | handle               | ユーザー名            | `handle`                                                         |
 | Name shown beside an avatar           | display name         | 表示名                | `displayName`                                                    |
@@ -31,6 +31,8 @@ Use these terms in documentation, source comments, and user-facing text. Code id
 | Deployment environments               | production / preview | 本番 / プレビュー     | `production` / `preview`                                         |
 
 Use **play history** for a collection or list of plays, and **play log** for one recorded replay; these are different concepts. Use **sign-in** and **sign-out** as modifiers or nouns, and **sign in** and **sign out** as verbs. A UI **icon** is a symbol for an action or entity; a user's profile image is an **avatar**.
+
+For new identifiers, write `playLog` / `PlayLog` as two words. Use `log` for local variables and parameters when the play-log context is unambiguous. Existing `BeMusicPlaylog`-style exports, import paths, command names and serialized keys remain compatibility spellings until an explicit migration.
 
 Existing names such as `CourseSongRecord`, `RandomCourseDrawSuccess.songs`, and `PlayResult.song` remain compatibility names for charts. Use **chart** in their explanations and in new names. Keep external names such as beatoraja's `song` table and `BMSONDecoder` as written by their source.
 
@@ -136,7 +138,7 @@ Existing names such as `CourseSongRecord`, `RandomCourseDrawSuccess.songs`, and 
 - **Sound / Visual status**: Separate loading-screen progress states for audio and visual resources.
 - **structured log**: NDJSON execution log written separately from TUI output, usually under `~/.be-music/logs/player.ndjson`.
 - **video BGA streaming**: Policy that prepares only the first video frame before gameplay starts, then decodes remaining frames progressively.
-- **play log (playlog)**: A recording for deterministic replay of one play (`*.bmplay.json`), including the resolved chart, input events, and play settings. It is distinct from the summary of the play and from the collection called play history. `bms-playlog` re-simulates it under the LR2, beatoraja, and IIDX rulesets.
+- **play log**: A recording for deterministic replay of one play (`*.bmplay.json`), including the resolved chart, input events, and play settings. It is distinct from the summary of the play and from the collection called play history. `bms-playlog` re-simulates it under the LR2, beatoraja, and IIDX rulesets.
 - **PlayerSummary**: Final playback summary containing judgment counts, FAST/SLOW, EX-SCORE, SCORE, gauge, and clear state.
 
 ## Courses, Records And View
