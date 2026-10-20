@@ -76,18 +76,10 @@ flowchart LR
 
 ### 2.2 Plan limits
 
-The Leaderboard starts on the **Workers Free plan** and moves to Paid when it has to. Free allows 10 ms of CPU per
-invocation. Bundle size no longer constrains it: since 2026-09-04 every plan allows a 64 MiB Worker, measured
-uncompressed, with no compressed limit (Free used to allow 3 MB compressed). Queues are on the Free plan too (10,000
-operations a day, 24-hour retention), but a consumer shares the same per-invocation CPU limit, so deferring work to a
-queue does not give it more CPU on Free. The CPU limit shapes two decisions:
+The official deployment uses **Workers Paid**. The former Free-plan CPU budget is no longer the basis for the service's architecture. Self-hosted installations must still check the limits of their chosen plan and runtime.
 
-- **Re-simulation** (gunzip, `parsePlaylog`, three `simulatePlaylog` runs) may exceed 10 ms on dense charts. It must be
-  measured against the regression corpus before the API is built (section 15). The verification step is written so it
-  can run inline or deferred, so the move to Paid changes configuration, not code.
-- **OG images are drawn in the browser** (section 11), because server-side rendering (satori + resvg) takes far more
-  than 10 ms of CPU, whether in the request or in a queue consumer. The bundle (resvg's wasm and a Japanese font) would
-  now fit; on Paid, a queue consumer could render the cards on submission.
+- **Re-simulation** remains inline. Measure gunzip, `parsePlaylog` and the three `simulatePlaylog` runs on the regression corpus when changing verification behavior.
+- **Share cards are currently drawn in the browser** and uploaded to R2 (section 11). This describes the current implementation, not a requirement imposed by the official plan. Server-side generation can be evaluated against the configured CPU budget, memory usage, font loading and rendering cost.
 
 ## 3. Authentication and accounts
 
@@ -95,7 +87,7 @@ queue does not give it more CPU on Free. The CPU limit shapes two decisions:
 - **Sign-in methods**: Accounts supports passkeys, guest accounts and configured Discord/Google providers. All passkey ceremonies take place on Accounts.
 - **Sessions**: the browser uses a host-only encrypted HttpOnly app cookie, valid for at most ten minutes. Server-to-server API calls carry an access token bound to this API and the `be-music:api` scope. Device authorization for the terminal player remains planned.
 - **Guest play**: start a guest account at Accounts before submitting; the player no longer silently creates an account after a finished play. Guest scores remain stored and filtered as before. Registering a passkey upgrades the account. Linking a guest to another account records a signed link claim; the Leaderboard transfers its plays idempotently on the target's next authenticated request.
-- **Identity**: `(issuer, sub)` maps through `oidc_identity` to the local player ID. Migration preserves existing player IDs and score ownership; new accounts create local mirrors lazily. Email never links accounts. Old auth tables are retained only for rollback and localhost tests; public requests cannot use their shared cookies.
+- **Identity**: `(issuer, sub)` maps through `oidc_identity` to the local player ID. Migration preserves existing player IDs and score ownership; new accounts create local mirrors lazily. Email never links accounts. Legacy authentication records have been cleared; table definitions remain for standalone localhost development and tests. Public requests use Accounts OIDC.
 - **Handles**: every account has a unique, changeable `handle` (used in URLs) and a `display_name`; OAuth profile names
   and emails are never shown. A changed handle keeps redirecting from the old URL, and a released handle cannot be
   claimed by someone else for a while (section 15).
@@ -393,7 +385,7 @@ course_best_score (user_id, course_fp, ruleset, assisted,     -- PK, as best_sco
                  best_ex, best_ex_score_id, best_lamp, best_lamp_score_id,
                  min_miss, min_miss_score_id, best_trophy, best_trophy_rank, best_trophy_score_id,
                  play_count, played_here, updated_at)
--- plus local user mirrors and oidc_identity (old auth tables remain for rollback)
+-- plus local user mirrors and oidc_identity (legacy auth records are cleared; table definitions remain for localhost development)
 ```
 
 - Ranking queries use an index on `best_scores (chart_fp, ruleset, assisted, best_ex DESC)`.
@@ -578,8 +570,7 @@ application, HonoX or Nuxt can take over; the shared data-access functions keep 
 
 ## 15. Open questions
 
-- **CPU on the Free plan**: measure gunzip, `parsePlaylog` and three `simulatePlaylog` runs on the regression corpus.
-  If they exceed 10 ms, defer verification or move to Paid.
+- **Rendering and verification budgets**: measure verification and any proposed server-side card renderer against the configured Workers Paid budget.
 - **D1 migrations with `cf`**: does `wrangler d1 migrations apply` work next to `cloudflare.config.ts`, or does it need a
   minimal Wrangler config beside it?
 - **Moving from `bmfp0` to `bmfp1`**: discard the beta data, or keep it under the old key? Discarding is the realistic
