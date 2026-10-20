@@ -29,6 +29,14 @@ export function createApp(options: { now?: () => number; newId?: () => string; c
   // Every response says how long it took and how much of that the database did.
   app.use('*', serverTiming<AppEnv>());
 
+  app.use('*', async (c, next) => {
+    if (c.env.AUTH_ISSUER && !c.req.path.startsWith('/api/')) {
+      const response = await oidcAuth(c.req.raw, c.env);
+      if (response) return response;
+    }
+    await next();
+  });
+
   app.on(['GET', 'POST'], '/api/auth/*', async (c) => {
     if (c.env.AUTH_ISSUER) return (await oidcAuth(c.req.raw, c.env)) ?? c.json({ error: 'not-found' }, 404);
     if (!['localhost', '127.0.0.1', '[::1]'].includes(new URL(c.req.url).hostname))

@@ -27,6 +27,7 @@ export interface LoginSession {
 }
 const SESSION_COOKIE = '__Host-be-music.session';
 const TRANSACTION_COOKIE = '__Host-be-music.oidc';
+const SSO_CHECK_COOKIE = '__Host-be-music.sso-check';
 const CLAIM = 'https://be-music.app/anonymous';
 const servers = new Map<string, oauth.AuthorizationServer>();
 const keySets = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
@@ -160,7 +161,31 @@ export async function verifyAccess(request: Request, env: OIDCEnv): Promise<Iden
 /** Handle local sign-in/callback/session/sign-out routes. No token is returned to browser JavaScript. */
 export async function handleAuth(request: Request, env: OIDCEnv): Promise<Response | null> {
   const url = new URL(request.url);
-  if (!url.pathname.startsWith('/api/auth/')) return null;
+  if (!url.pathname.startsWith('/api/auth/')) {
+    // Only top-level browser documents can start SSO; never redirect APIs, embeds, assets or prefetches.
+    if (
+      url.origin !== env.PUBLIC_ORIGIN ||
+      request.method !== 'GET' ||
+      url.pathname.startsWith('/api/') ||
+      request.headers.get('sec-fetch-mode') !== 'navigate' ||
+      request.headers.get('sec-fetch-dest') !== 'document' ||
+      !request.headers.get('accept')?.includes('text/html') ||
+      request.headers.has('purpose') ||
+      request.headers.has('sec-purpose') ||
+      cookieValue(request, SSO_CHECK_COOKIE) ||
+      (await readSession(request, env))
+    )
+      return null;
+    const start = new URL('/api/auth/sign-in', env.PUBLIC_ORIGIN);
+    start.searchParams.set('automatic', '1');
+    start.searchParams.set('returnTo', url.pathname + url.search);
+    try {
+      return await handleAuth(new Request(start), env);
+    } catch {
+      // An unavailable identity provider must not prevent browsing public pages.
+      return null;
+    }
+  }
   validateEnv(env);
   if (url.origin !== env.PUBLIC_ORIGIN) return new Response('Unknown origin', { status: 400 });
   const headers = new Headers({ 'cache-control': 'private, no-store', 'referrer-policy': 'no-referrer' });
@@ -183,6 +208,8 @@ export async function handleAuth(request: Request, env: OIDCEnv): Promise<Respon
     if (request.headers.get('origin') !== env.PUBLIC_ORIGIN) return reply({ error: 'invalid-origin' }, 403);
     headers.append('set-cookie', cookie(SESSION_COOKIE, '', 0));
     headers.append('set-cookie', cookie(TRANSACTION_COOKIE, '', 0));
+    // Respect an explicit app sign-out until the user starts sign-in again.
+    headers.append('set-cookie', cookie(SSO_CHECK_COOKIE, 'signed-out', 86400));
     return reply({ success: true });
   }
   if (url.pathname === '/api/auth/manage' && request.method === 'GET') {
@@ -190,6 +217,7 @@ export async function handleAuth(request: Request, env: OIDCEnv): Promise<Respon
     return new Response(null, { status: 302, headers });
   }
   if (url.pathname === '/api/auth/sign-in' && request.method === 'GET') {
+    const automatic = url.searchParams.get('automatic') === '1';
     const as = await server(env);
     const state = oauth.generateRandomState();
     const nonce = oauth.generateRandomNonce();
@@ -206,11 +234,18 @@ export async function handleAuth(request: Request, env: OIDCEnv): Promise<Respon
       code_challenge: await oauth.calculatePKCECodeChallenge(verifier),
       code_challenge_method: 'S256',
     }).toString();
+    if (automatic) target.searchParams.set('prompt', 'none');
+    // Back off after a failed silent attempt; also prevent a navigation loop if the provider is unavailable.
+    headers.append('set-cookie', cookie(SSO_CHECK_COOKIE, 'checked', 60));
     headers.append(
       'set-cookie',
       cookie(
         TRANSACTION_COOKIE,
-        await seal(env, { state, nonce, verifier, returnTo: returnPath(url.searchParams.get('returnTo')) }, 600),
+        await seal(
+          env,
+          { state, nonce, verifier, automatic, returnTo: returnPath(url.searchParams.get('returnTo')) },
+          600,
+        ),
         600,
       ),
     );
@@ -233,7 +268,22 @@ export async function handleAuth(request: Request, env: OIDCEnv): Promise<Respon
         token_endpoint_auth_method: 'none',
         id_token_signed_response_alg: 'RS256',
       };
-      const params = oauth.validateAuthResponse(as, client, url, transaction.state);
+      let params: URLSearchParams;
+      try {
+        params = oauth.validateAuthResponse(as, client, url, transaction.state);
+      } catch (error) {
+        if (
+          transaction.automatic === true &&
+          error instanceof oauth.AuthorizationResponseError &&
+          ['login_required', 'interaction_required', 'consent_required', 'account_selection_required'].includes(
+            error.error,
+          )
+        ) {
+          headers.set('location', returnPath(typeof transaction.returnTo === 'string' ? transaction.returnTo : null));
+          return new Response(null, { status: 302, headers });
+        }
+        throw error;
+      }
       const tokenResponse = await oauth.authorizationCodeGrantRequest(
         as,
         client,
@@ -284,6 +334,7 @@ export async function handleAuth(request: Request, env: OIDCEnv): Promise<Respon
           lifetime,
         ),
       );
+      headers.append('set-cookie', cookie(SSO_CHECK_COOKIE, '', 0));
       headers.set('location', returnPath(typeof transaction.returnTo === 'string' ? transaction.returnTo : null));
       return new Response(null, { status: 302, headers });
     } catch {
