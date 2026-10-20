@@ -111,7 +111,7 @@ export const profile = sqliteTable('profile', {
     .references(() => user.id, { onDelete: 'cascade' }),
   handle: text('handle').notNull().unique(),
   displayName: text('display_name').notNull(),
-  /** R2 key of the uploaded icon (`avatars/{userId}/{sha256}.{ext}`); null shows the generated one. */
+  /** Accounts avatar URL in OIDC deployments; a legacy R2 key only for standalone local development. */
   avatarKey: text('avatar_key'),
   ...timestamps,
 });

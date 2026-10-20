@@ -1,3 +1,4 @@
+/** Local ranking projection. Accounts owns profile edits in OIDC deployments. */
 import { and, eq, ne } from 'drizzle-orm';
 import type { Database } from './db/client.ts';
 import { handleHistory, profile } from './db/schema.ts';

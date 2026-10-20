@@ -35,10 +35,11 @@ export default defineConfig(({ mode }) => {
       triggers: [triggers.scheduled({ schedule: '17 * * * *' })],
       env: {
         DB: bindings.d1({ name: `leaderboard${suffix}`, id: databaseId }),
-        // The buckets keep their names from before the services were split.
-        BLOBS: bindings.r2({ name: `be-music-leaderboard${suffix}` }),
+        // Service-owned binary data; avatars are served by Accounts.
+        BLOBS: bindings.r2({ name: `leaderboard${suffix}` }),
         SUBMIT_LIMITER: bindings.rateLimit({ namespace: preview ? '2001' : '1001', simple: { limit: 10, period: 60 } }),
         RIVAL_LIMIT: bindings.text('100'),
+        ACCOUNTS: bindings.worker({ worker: `accounts${suffix}` }),
         AUTH_ISSUER: bindings.text(`https://accounts.${site}/api/auth`),
         PUBLIC_ORIGIN: bindings.text(`https://leaderboard.${site}`),
         OIDC_CLIENT_ID: bindings.text('leaderboard'),

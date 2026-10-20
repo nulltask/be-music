@@ -217,6 +217,7 @@ async function loadCardFont(font: CardFont | undefined): Promise<void> {
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
+    image.crossOrigin = 'anonymous';
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error(`cannot load ${src}`));
     image.src = src;

@@ -29,6 +29,10 @@ export async function avatarImage(c: PageContext<'/players/:handle/avatar'>) {
     if (current !== undefined) return c.redirect(movedTo(c.req.url, handle, current), 301);
     return c.body('Not Found', 404);
   }
+  if (found.avatarKey?.startsWith('https://')) {
+    c.header('cache-control', 'public, max-age=300');
+    return c.redirect(found.avatarKey, 302);
+  }
   if (found.avatarKey !== null) {
     const object = await c.env.BLOBS.get(found.avatarKey);
     if (object !== null) {

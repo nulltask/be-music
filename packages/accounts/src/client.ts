@@ -40,6 +40,8 @@ document.addEventListener('click', (event) => {
   status.textContent = '';
   void (async () => {
     switch (button.dataset.action) {
+      case 'remove-avatar':
+        return saveProfile('/api/profile/avatar', { method: 'DELETE' });
       case 'guest':
         return done(await auth.signIn.anonymous());
       case 'passkey':
@@ -67,3 +69,58 @@ document.addEventListener('click', (event) => {
 });
 
 document.documentElement.dataset.authReady = 'true';
+
+async function saveProfile(path: string, init: RequestInit): Promise<void> {
+  const response = await fetch(path, init);
+  if (!response.ok) {
+    const body = (await response.json()) as { error?: string };
+    throw new Error(body.error ?? 'Profile update failed');
+  }
+  location.reload();
+}
+document.querySelector<HTMLFormElement>('#profile-form')?.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const form = event.currentTarget as HTMLFormElement;
+  const data = new FormData(form);
+  const button = form.querySelector<HTMLButtonElement>('button')!;
+  button.disabled = true;
+  void saveProfile('/api/profile', {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ handle: data.get('handle'), displayName: data.get('displayName') }),
+  })
+    .catch((error: Error) => {
+      status.textContent = error.message;
+    })
+    .finally(() => {
+      button.disabled = false;
+    });
+});
+document.querySelector<HTMLInputElement>('#avatar-input')?.addEventListener('change', (event) => {
+  const input = event.currentTarget as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  input.disabled = true;
+  void (async () => {
+    const image = await createImageBitmap(file);
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 256;
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Cannot prepare image');
+      const size = Math.min(image.width, image.height);
+      context.drawImage(image, (image.width - size) / 2, (image.height - size) / 2, size, size, 0, 0, 256, 256);
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', 0.9));
+      if (!blob) throw new Error('Cannot encode image');
+      await saveProfile('/api/profile/avatar', { method: 'PUT', body: blob });
+    } finally {
+      image.close();
+    }
+  })()
+    .catch((error: Error) => {
+      status.textContent = error.message;
+    })
+    .finally(() => {
+      input.disabled = false;
+    });
+});

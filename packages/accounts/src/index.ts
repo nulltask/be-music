@@ -5,12 +5,22 @@ import { drizzle } from 'drizzle-orm/d1';
 import { createAuth, provisionClients, type Env } from './auth.ts';
 import { renderAccountPage } from './page.ts';
 import { CLIENT_JS } from './client.generated.ts';
-import { user } from './schema.ts';
+import { retryProfiles } from './profile-publish.ts';
+import { avatarURL } from './avatars.ts';
+import { profileHTTP } from './profile-http.ts';
+import { createProfile } from './profiles.ts';
+import { openDatabase } from './db/client.ts';
+import { profile, user } from './schema.ts';
 
 export default {
+  async scheduled(_controller, env, context) {
+    context.waitUntil(retryProfiles(env));
+  },
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (url.origin !== env.AUTH_ORIGIN) return new Response('Unknown origin', { status: 400 });
+    const profileResponse = await profileHTTP(request, env);
+    if (profileResponse) return profileResponse;
     await provisionClients(env);
     const auth = createAuth(env);
     if (
@@ -32,11 +42,24 @@ export default {
       return new Response(CLIENT_JS, { headers: { 'content-type': 'text/javascript', 'cache-control': 'no-cache' } });
     if (['/', '/login', '/account'].includes(url.pathname) && request.method === 'GET') {
       const session = await auth.api.getSession({ headers: request.headers });
+      let current;
+      if (session) {
+        const db = openDatabase(env.DB);
+        await createProfile(db, session.user.id, session.user.isAnonymous === true);
+        current = await db.query.profile.findFirst({ where: eq(profile.userId, session.user.id) });
+      }
       return new Response(
         renderAccountPage({
           signedIn: !!session,
           anonymous: session?.user.isAnonymous === true,
-          name: session?.user.name ?? '',
+          name: current?.displayName ?? session?.user.name ?? '',
+          profile: current
+            ? {
+                handle: current.handle,
+                displayName: current.displayName,
+                avatarURL: avatarURL(current.handle, current.avatarKey),
+              }
+            : undefined,
           login: url.pathname === '/login',
           discord: !!env.DISCORD_CLIENT_ID && !!env.DISCORD_CLIENT_SECRET,
           google: !!env.GOOGLE_CLIENT_ID && !!env.GOOGLE_CLIENT_SECRET,
@@ -47,7 +70,7 @@ export default {
             'content-type': 'text/html; charset=utf-8',
             'cache-control': 'private, no-store',
             'content-security-policy':
-              "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+              "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
             'referrer-policy': 'no-referrer',
             'x-content-type-options': 'nosniff',
           },

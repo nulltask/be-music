@@ -6,7 +6,8 @@ export interface Env {
   SESSION_SECRET?: string;
   API_AUDIENCE?: string;
   DB: D1Database;
-  /** Play logs, chart documents (and later ghosts and OG cards), keyed by prefix (docs/leaderboard.md section 7). */
+  ACCOUNTS?: Pick<Fetcher, 'fetch'>;
+  /** Play logs, chart documents and share-card images. Accounts owns avatars. */
   BLOBS: R2Bucket;
   /** Submissions per user or device and minute. Absent in tests and local runs that do not configure it. */
   SUBMIT_LIMITER?: RateLimit;

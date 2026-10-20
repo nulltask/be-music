@@ -63,7 +63,7 @@ pnpm exec cf d1 create --name leaderboard-preview --primary-location-hint apac
 ```
 
 ```bash
-pnpm exec cf r2 buckets create --name be-music-leaderboard-preview --location-hint apac
+pnpm exec cf r2 buckets create --name leaderboard-preview --location-hint apac
 ```
 
 ### Secrets
@@ -106,10 +106,10 @@ pnpm --filter @be-music/leaderboard-api run db:migrate:preview
 
 Two environments, like every service (docs/services.md section 2): `main` is production, `devel` the preview.
 
-| Environment | Worker                | Host                               | D1                    | R2                             |
-| ----------- | --------------------- | ---------------------------------- | --------------------- | ------------------------------ |
-| production  | `leaderboard`         | `leaderboard.be-music.app`         | `leaderboard`         | `be-music-leaderboard`         |
-| preview     | `leaderboard-preview` | `leaderboard.preview.be-music.app` | `leaderboard-preview` | `be-music-leaderboard-preview` |
+| Environment | Worker                | Host                               | D1                    | R2                    |
+| ----------- | --------------------- | ---------------------------------- | --------------------- | --------------------- |
+| production  | `leaderboard`         | `leaderboard.be-music.app`         | `leaderboard`         | `leaderboard`         |
+| preview     | `leaderboard-preview` | `leaderboard.preview.be-music.app` | `leaderboard-preview` | `leaderboard-preview` |
 
 The Deploy workflow (`.github/workflows/deploy.yml`) runs on every push to `main` or `devel`. It applies the migrations
 to the environment's D1, then deploys this Worker before the others, since they bind it:

@@ -36,7 +36,7 @@ export default defineConfig(({ mode }) => {
         SESSION_SECRET: bindings.secret(),
         // Holds `ffmpeg-core.wasm` (~31 MB, over the 25 MiB Static Assets per-file limit) and its `ffmpeg-core.js`
         // loader. Upload them with `pnpm cf:r2:push`.
-        FFMPEG_CORE: bindings.r2({ name: 'be-music-ffmpeg-core' }),
+        FFMPEG_CORE: bindings.r2({ name: `play${suffix}` }),
         // The Leaderboard API of the same environment; authenticated calls use an access token.
         LEADERBOARD: bindings.worker({ worker: `leaderboard${suffix}` }),
       },
