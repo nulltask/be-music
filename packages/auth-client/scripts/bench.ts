@@ -25,6 +25,19 @@ bench.add('handleAuth: session endpoint for anonymous visitor', async () => {
 bench.add('verifyAccess: missing bearer credentials', async () => {
   sink = await verifyAccess(request, env);
 });
+bench.add('handleAuth: browser visit suppressed after explicit sign-out', async () => {
+  sink = await handleAuth(
+    new Request(env.PUBLIC_ORIGIN, {
+      headers: {
+        accept: 'text/html',
+        'sec-fetch-mode': 'navigate',
+        'sec-fetch-dest': 'document',
+        cookie: '__Host-be-music.sso-check=signed-out',
+      },
+    }),
+    env,
+  );
+});
 await bench.run();
 console.table(bench.table());
 void sink;

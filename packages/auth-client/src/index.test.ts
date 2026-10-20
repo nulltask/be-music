@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vite-plus/test';
+import { describe, expect, test, vi } from 'vite-plus/test';
 import { handleAuth, readSession, returnPath, verifyAccess, type OIDCEnv } from './index.ts';
 const env: OIDCEnv = {
   AUTH_ISSUER: 'https://accounts.example/api/auth',
@@ -39,7 +39,28 @@ describe('relying-party boundaries', () => {
       new Request(`${env.PUBLIC_ORIGIN}/api/auth/sign-out`, { method: 'POST', headers: { origin: env.PUBLIC_ORIGIN } }),
       env,
     );
-    expect(response?.headers.getSetCookie()).toHaveLength(2);
+    expect(response?.headers.getSetCookie()).toHaveLength(3);
     expect(response?.headers.get('set-cookie')).toContain('Max-Age=0');
   });
+});
+
+test('never starts automatic SSO for APIs, assets, embeds, prefetches or non-GET requests', async () => {
+  const navigation = { 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document', accept: 'text/html' };
+  const fetchSpy = vi.fn();
+  vi.stubGlobal('fetch', fetchSpy);
+  try {
+    for (const [path, init] of [
+      ['/api/v0/me', { headers: navigation }],
+      ['/style.css', { headers: { ...navigation, 'sec-fetch-dest': 'style' } }],
+      ['/', { headers: { ...navigation, 'sec-fetch-dest': 'iframe' } }],
+      ['/', { headers: { ...navigation, 'sec-purpose': 'prefetch' } }],
+      ['/', { method: 'POST', headers: navigation }],
+      ['/', {}],
+    ] as [string, RequestInit][]) {
+      expect(await handleAuth(new Request(env.PUBLIC_ORIGIN + path, init), env)).toBeNull();
+    }
+    expect(fetchSpy).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });
