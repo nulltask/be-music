@@ -20,6 +20,7 @@ export default defineConfig(({ mode }) => {
       workersDev: false,
       observability: { enabled: true },
       env: {
+        SHOW_DONATE_LINK: bindings.text(String(preview)),
         LEADERBOARD: bindings.worker({ worker: `leaderboard${suffix}` }),
         AUTH_ISSUER: bindings.text(`https://accounts.${preview ? 'preview.be-music.app' : 'be-music.app'}/api/auth`),
         PUBLIC_ORIGIN: bindings.text(`https://${preview ? 'preview.be-music.app' : 'be-music.app'}`),

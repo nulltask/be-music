@@ -56,6 +56,7 @@ export function renderDashboard(input: {
   account: DashboardAccount | undefined;
   hostname: string;
   locale: Locale;
+  showDonateLink?: boolean;
   links?: { play: string; leaderboard: string; donate: string };
 }): string {
   const t = TEXT[input.locale];
@@ -90,7 +91,7 @@ export function renderDashboard(input: {
 <a class="panel service-card" href="${escapeHTML(links.leaderboard)}"><h3>Leaderboard</h3><p>${input.locale === 'ja' ? 'スコアやプレイヤーの記録をチェック。' : 'Explore scores, rankings and player records.'}</p><span class="service-open">${t.leaderboard} <span aria-hidden="true">→</span></span></a>
 </nav></section>
 </main>
-<footer class="site-footer">be-music · <a href="${escapeHTML(links.donate)}">${input.locale === 'ja' ? '寄付' : 'Donate'}</a></footer>
+<footer class="site-footer">be-music${input.showDonateLink ? ` · <a href="${escapeHTML(links.donate)}">${input.locale === 'ja' ? '寄付' : 'Donate'}</a>` : ''}</footer>
 </body>
 </html>
 `;

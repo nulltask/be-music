@@ -50,6 +50,7 @@ export default {
       }
       return new Response(
         renderAccountPage({
+          showDonateLink: env.SHOW_DONATE_LINK === 'true',
           signedIn: !!session,
           anonymous: session?.user.isAnonymous === true,
           name: current?.displayName ?? session?.user.name ?? '',
