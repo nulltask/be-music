@@ -9,6 +9,7 @@ export function renderAccountPage(input: {
   google: boolean;
   profile?: { handle: string; displayName: string; avatarURL: string };
   apps?: Record<string, string>;
+  showDonateLink?: boolean;
 }): string {
   const name = input.name.replace(
     /[&<>"']/g,
@@ -37,5 +38,5 @@ ${
         .join('')}</nav></div>`
     : ''
 }
-</section><p class="muted session-note">Signing out here ends the Accounts session. Existing app sessions expire within 10 minutes; each app also has its own sign-out.</p></main>${input.apps?.donate ? `<footer class="site-footer"><a href="${new URL('/api/auth/sign-in', input.apps.donate).href.replaceAll('&', '&amp;').replaceAll('"', '&quot;')}">Donate</a></footer>` : ''}<script type="module" src="/assets/client.js"></script></body></html>`;
+</section><p class="muted session-note">Signing out here ends the Accounts session. Existing app sessions expire within 10 minutes; each app also has its own sign-out.</p></main>${input.showDonateLink && input.apps?.donate ? `<footer class="site-footer"><a href="${new URL('/api/auth/sign-in', input.apps.donate).href.replaceAll('&', '&amp;').replaceAll('"', '&quot;')}">Donate</a></footer>` : ''}<script type="module" src="/assets/client.js"></script></body></html>`;
 }

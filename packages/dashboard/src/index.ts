@@ -7,6 +7,7 @@ interface Env extends OIDCEnv {
   PLAY_ORIGIN: string;
   LEADERBOARD_ORIGIN: string;
   DONATE_ORIGIN: string;
+  SHOW_DONATE_LINK?: string;
 }
 
 export default {
@@ -27,6 +28,7 @@ export default {
       renderDashboard({
         account,
         hostname: url.hostname,
+        showDonateLink: env.SHOW_DONATE_LINK === 'true',
         locale: pickLocale(request.headers.get('accept-language')),
         links: { play: env.PLAY_ORIGIN, leaderboard: env.LEADERBOARD_ORIGIN, donate: env.DONATE_ORIGIN },
       }),

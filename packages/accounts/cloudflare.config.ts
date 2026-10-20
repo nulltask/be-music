@@ -16,6 +16,7 @@ export default defineConfig(({ mode }) => {
       triggers: [triggers.scheduled({ schedule: '*/5 * * * *' })],
       observability: { enabled: true },
       env: {
+        SHOW_DONATE_LINK: bindings.text(String(preview)),
         DB: bindings.d1({
           name: `accounts${suffix}`,
           id: preview ? '<D1_DATABASE_ID>' : '<D1_DATABASE_ID>',
