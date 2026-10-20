@@ -36,23 +36,52 @@ describe('resolveAffectedBenchPackages', () => {
     expect(resolveAffectedBenchPackages(['packages/player-web/src/a.ts', ''], DEPENDENCIES)).toEqual(['player-web']);
   });
 
-  test('measures everything for a change outside packages/, or one that reaches nothing measured', () => {
+  test('measures shared tooling and dependency manifests in full', () => {
     expect(resolveAffectedBenchPackages(['packages/player/src/a.ts', 'pnpm-lock.yaml'], DEPENDENCIES)).toEqual([
       ...PACKAGE_NAMES,
     ]);
     expect(resolveAffectedBenchPackages(['scripts/bench/exports.ts'], DEPENDENCIES)).toEqual([...PACKAGE_NAMES]);
-    expect(resolveAffectedBenchPackages(['packages/leaderboard-api/src/app.ts'], DEPENDENCIES)).toEqual([
-      ...PACKAGE_NAMES,
+    expect(resolveAffectedBenchPackages(['packages/player/package.json'], DEPENDENCIES)).toEqual([...PACKAGE_NAMES]);
+    expect(resolveAffectedBenchPackages(['vite.config.ts'], DEPENDENCIES)).toEqual([...PACKAGE_NAMES]);
+  });
+  test('ignores documentation and test changes without broadening a runtime change', () => {
+    const ignored = [
+      'README.md',
+      'docs/architecture.ja.md',
+      '.changeset/player-fix.md',
+      'packages/player/README.md',
+      'packages/player/src/core/engine.test.ts',
+      'packages/player-web/src/example.spec.tsx',
+      '',
+    ];
+    expect(resolveAffectedBenchPackages(ignored, DEPENDENCIES)).toEqual([]);
+    expect(resolveAffectedBenchPackages([...ignored, 'packages/player-web/src/a.ts'], DEPENDENCIES)).toEqual([
+      'player-web',
+    ]);
+  });
+
+  test('skips changes that reach no measured package, including an empty change list', () => {
+    expect(resolveAffectedBenchPackages(['packages/leaderboard-api/src/app.ts'], DEPENDENCIES)).toEqual([]);
+    expect(resolveAffectedBenchPackages([], DEPENDENCIES)).toEqual([]);
+  });
+
+  test('keeps fixtures and deleted runtime paths in scope', () => {
+    expect(resolveAffectedBenchPackages(['packages/player-web/fixtures/chart.bms'], DEPENDENCIES)).toEqual([
+      'player-web',
+    ]);
+    expect(resolveAffectedBenchPackages(['packages/player/src/deleted.ts'], DEPENDENCIES)).toEqual([
+      'player',
+      'skin-sdk',
+      'player-web',
     ]);
   });
 });
 
 describe('the CI benchmark path filter', () => {
-  test('lists every benchmarked package, so a change to any of them runs the PR benchmark', () => {
+  test('includes every workspace package, including unmeasured dependency intermediaries', () => {
     const ci = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
     const filter = /^ +bench:\n((?: +- '[^']*'\n)+)/m.exec(ci)?.[1];
     expect(filter).toBeDefined();
-    const missing = PACKAGE_NAMES.filter((name) => !filter!.includes(`- 'packages/${name}/**'`));
-    expect(missing).toEqual([]);
+    expect(filter).toContain("- 'packages/**'");
   });
 });
