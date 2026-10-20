@@ -4,15 +4,15 @@
  */
 
 import { dirname } from '@be-music/utils/core';
-import { loadAssetBytes, resolveSongSource } from './collection.ts';
+import { loadAssetBytes, resolveChartSource } from './collection.ts';
 import type { LibraryChart } from '@be-music/scene-model';
-import type { BrowserSongCollection } from './types.ts';
+import type { BrowserChartCollection } from './types.ts';
 
 /** The `.txt` files directly inside the folder of `song`'s chart, in the source's order. */
-function readtextPaths(collection: BrowserSongCollection, song: LibraryChart): string[] {
-  const source = resolveSongSource(collection, song);
+function readtextPaths(collection: BrowserChartCollection, chartEntry: LibraryChart): string[] {
+  const source = resolveChartSource(collection, chartEntry);
   if (!source) return [];
-  const dir = dirname(song.chartPath).toLowerCase();
+  const dir = dirname(chartEntry.chartPath).toLowerCase();
   const paths: string[] = [];
   for (const path of source.files.keys()) {
     if (!path.toLowerCase().endsWith('.txt')) continue;
@@ -22,8 +22,8 @@ function readtextPaths(collection: BrowserSongCollection, song: LibraryChart): s
 }
 
 /** Whether the folder of `song`'s chart holds a text (`.txt`) file: LR2's readme (ops 174 / 175). */
-export function hasReadtextForSong(collection: BrowserSongCollection, song: LibraryChart): boolean {
-  return readtextPaths(collection, song).length > 0;
+export function hasReadtextForChart(collection: BrowserChartCollection, chartEntry: LibraryChart): boolean {
+  return readtextPaths(collection, chartEntry).length > 0;
 }
 
 /**
@@ -31,13 +31,13 @@ export function hasReadtextForSong(collection: BrowserSongCollection, song: Libr
  * above), in the source's order (the directory listing, or a ZIP's central directory), or `undefined` when there is
  * none. The files of a dropped folder are read on demand.
  */
-export async function findReadtextForSong(
-  collection: BrowserSongCollection,
-  song: LibraryChart,
+export async function findReadtextForChart(
+  collection: BrowserChartCollection,
+  chartEntry: LibraryChart,
 ): Promise<string | undefined> {
-  const source = resolveSongSource(collection, song);
+  const source = resolveChartSource(collection, chartEntry);
   if (!source) return undefined;
-  for (const path of readtextPaths(collection, song)) {
+  for (const path of readtextPaths(collection, chartEntry)) {
     const entry = source.files.get(path);
     if (entry === undefined) continue;
     const bytes = await loadAssetBytes(entry);

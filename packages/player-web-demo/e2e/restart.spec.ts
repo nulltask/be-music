@@ -54,20 +54,20 @@ test("F5 starts an AUTO play again with AUTO, though the Debug Menu's Auto play 
 
 test('F5 starts a replay again as the same replay', async ({ demo }) => {
   await openWithLibrary(demo);
-  // An AUTO play of Fixture A, played to its result, for its play log.
+  // An AUTO play of Fixture A, played to its result, for its replay.
   await demo.setOption(PLAY_OPTIONS, 'Auto play', true);
   await demo.browseTo(SONGS, 'Fixture A');
   await demo.key('Enter');
   await demo.waitForResult(0);
-  const playlog = await demo.lastPlaylog();
-  if (playlog === undefined) throw new Error('the play recorded no log');
-  expect(playlog.play.mode).toBe('auto');
+  const replay = await demo.lastReplay();
+  if (replay === undefined) throw new Error('the play recorded no log');
+  expect(replay.play.mode).toBe('auto');
   await demo.leaveResult();
   await demo.waitFor((current) => current.scene.kind === 'select', 'the select screen');
   // With Auto play off, a play F5 started without the replay's own mode would be a live manual play.
   await demo.setOption(PLAY_OPTIONS, 'Auto play', false);
 
-  await demo.dropText('fixture-a.bmplay.json', JSON.stringify(playlog));
+  await demo.dropText('fixture-a.bmplay.json', JSON.stringify(replay));
   let state = await underWay(demo);
   expect(state.status).toBe('Replaying: Fixture A');
   expect(state.play).toMatchObject({ title: 'Fixture A', autoPlay: true, replay: true });

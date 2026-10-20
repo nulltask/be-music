@@ -5,9 +5,9 @@
 
 import type { ResolvedPlayChart } from '@be-music/player';
 import type { AudioService } from '@be-music/player-web/audio';
-import { resolveSongSource } from '@be-music/player-web/collection';
+import { resolveChartSource } from '@be-music/player-web/collection';
 import { createResultScene, type PlayScene, type ResultSceneKit, type SelectScene } from '@be-music/player-web/host';
-import type { BeMusicCoursePlaylog, BeMusicPlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
+import type { BeMusicCourseReplay, BeMusicReplay, ReplayCourseResult } from '@be-music/player/replay';
 import { courseStageRecordPlayFromResult, recordPlayFromResult } from '@be-music/player/records';
 import {
   resolveResultJingle,
@@ -25,7 +25,7 @@ import type { LeaderboardPanel } from '../../leaderboard-ui.ts';
 import { resolveResultSoundSet, resolveResultViewJingles } from '../../result-jingles.ts';
 import type { CourseRunService } from '../../services/courses.ts';
 import type { LibraryService } from '../../services/library.ts';
-import type { PlaylogAutoSave } from '../../services/playlogs.ts';
+import type { ReplayAutoSave } from '../../services/replays.ts';
 import type { RecordsService } from '../../services/records.ts';
 import type { BeatorajaThemeService } from '../../services/themes/beatoraja.ts';
 import type { BuiltInThemeService } from '../../services/themes/built-in.ts';
@@ -59,13 +59,13 @@ export interface ResultRouteDeps {
   readonly beatoraja: Pick<BeatorajaThemeService, 'loadBeatorajaResultKit' | 'beatorajaThemeBGM'>;
   /** The be-music skin the built-in family draws with. */
   readonly builtIn: Pick<BuiltInThemeService, 'builtInKit'>;
-  /** A single play's play log auto-save, by the setting latched at the play's start. */
-  readonly playlogAutoSave: Pick<PlaylogAutoSave, 'savePlay'>;
+  /** A single play's replay auto-save, by the setting latched at the play's start. */
+  readonly replayAutoSave: Pick<ReplayAutoSave, 'savePlay'>;
   /** Ranks a single play. */
   readonly leaderboard: Pick<LeaderboardPanel, 'maybeSubmit'>;
   readonly audio: AudioService;
-  /** `window.__beMusicTest`, when installed: every result screen shown, and the play log it shows. */
-  readonly testHook: Pick<TestHookRecorder, 'recordPlaylog' | 'recordResult'> | undefined;
+  /** `window.__beMusicTest`, when installed: every result screen shown, and the replay it shows. */
+  readonly testHook: Pick<TestHookRecorder, 'recordReplay' | 'recordResult'> | undefined;
   /** The play last started: the chart R plays again. */
   readonly lastPlay: () => LastPlay | undefined;
   /** Which theme slot a result jingle came from, for the test hook. */
@@ -74,9 +74,12 @@ export interface ResultRouteDeps {
   readonly setPlayStatus: (text: string) => void;
   readonly showSelect: () => Promise<void>;
   /** Plays a chart again (R on the result). */
-  readonly playSong: (song: LibraryChart, overrides: { autoPlay: boolean; replay?: BeMusicPlaylog }) => Promise<void>;
+  readonly playChart: (
+    chartEntry: LibraryChart,
+    overrides: { autoPlay: boolean; replay?: BeMusicReplay },
+  ) => Promise<void>;
   /** Re-enables the options a play latched, once its result shows. */
-  readonly unlockPlaylogOptions: () => void;
+  readonly unlockReplayOptions: () => void;
 }
 
 /** A play's, a course's or a NONSTOP run's result screen, and where it leads. */
@@ -101,7 +104,7 @@ export class ResultRoute {
   private readonly lr2: ResultRouteDeps['lr2'];
   private readonly beatoraja: ResultRouteDeps['beatoraja'];
   private readonly builtIn: ResultRouteDeps['builtIn'];
-  private readonly playlogAutoSave: ResultRouteDeps['playlogAutoSave'];
+  private readonly replayAutoSave: ResultRouteDeps['replayAutoSave'];
   private readonly leaderboard: ResultRouteDeps['leaderboard'];
   private readonly audio: ResultRouteDeps['audio'];
   private readonly testHook: ResultRouteDeps['testHook'];
@@ -109,8 +112,8 @@ export class ResultRoute {
   private readonly nameResultJingle: ResultRouteDeps['nameResultJingle'];
   private readonly setPlayStatus: ResultRouteDeps['setPlayStatus'];
   private readonly showSelect: ResultRouteDeps['showSelect'];
-  private readonly playSong: ResultRouteDeps['playSong'];
-  private readonly unlockPlaylogOptions: ResultRouteDeps['unlockPlaylogOptions'];
+  private readonly playChart: ResultRouteDeps['playChart'];
+  private readonly unlockReplayOptions: ResultRouteDeps['unlockReplayOptions'];
 
   public constructor(deps: ResultRouteDeps) {
     this.router = deps.router;
@@ -122,7 +125,7 @@ export class ResultRoute {
     this.lr2 = deps.lr2;
     this.beatoraja = deps.beatoraja;
     this.builtIn = deps.builtIn;
-    this.playlogAutoSave = deps.playlogAutoSave;
+    this.replayAutoSave = deps.replayAutoSave;
     this.leaderboard = deps.leaderboard;
     this.audio = deps.audio;
     this.testHook = deps.testHook;
@@ -130,8 +133,8 @@ export class ResultRoute {
     this.nameResultJingle = deps.nameResultJingle;
     this.setPlayStatus = deps.setPlayStatus;
     this.showSelect = deps.showSelect;
-    this.playSong = deps.playSong;
-    this.unlockPlaylogOptions = deps.unlockPlaylogOptions;
+    this.playChart = deps.playChart;
+    this.unlockReplayOptions = deps.unlockReplayOptions;
   }
 
   /** The EXPERT / GRADE course being played, between its stages (the course run service's). */
@@ -152,29 +155,29 @@ export class ResultRoute {
   /**
    * The result of a play on the beatoraja play screen, on the theme's result skin: a course stage is recorded on the run
    * (its result shown unless the theme has no result skin, when the course goes straight on), a single play keeps its
-   * record, saves its play log and goes to the Leaderboard. Without a result skin a single play goes back to select.
+   * record, saves its replay and goes to the Leaderboard. Without a result skin a single play goes back to select.
    */
   public async showBeatorajaPlayResult(data: PlayResult, courseStage: boolean): Promise<void> {
-    this.testHook?.recordPlaylog(data.playlog);
+    this.testHook?.recordReplay(data.replay);
     const active = this.activeCourse;
     if (courseStage && active !== undefined) {
-      active.run.recordStage(data.playlog, data);
+      active.run.recordStage(data.replay, data);
       this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
       const mounted = await this.showBeatorajaResult(data, {
         run: 'stage',
         course: { info: activeCourseInfo(active) },
       });
       if (!mounted) this.courseRoute.continueCourse();
-      this.unlockPlaylogOptions();
+      this.unlockReplayOptions();
       return;
     }
     this.records.recordActivePlay(recordPlayFromResult(data));
     const mounted = await this.showBeatorajaResult(data, { run: 'single' });
     if (!mounted) await this.showSelect();
     // Auto-save fires even when the theme ships no result skin, so going back to select costs no replay file.
-    this.playlogAutoSave.savePlay(data.playlog);
-    this.leaderboard.maybeSubmit(data.playlog, data.song);
-    this.unlockPlaylogOptions();
+    this.replayAutoSave.savePlay(data.replay);
+    this.leaderboard.maybeSubmit(data.replay, data.chart);
+    this.unlockReplayOptions();
   }
 
   /**
@@ -191,16 +194,16 @@ export class ResultRoute {
     data: PlayResult,
     options: {
       run: PlayRunKind;
-      course?: { info: CourseView; result?: { log: BeMusicCoursePlaylog; native: PlaylogCourseResult } };
+      course?: { info: CourseView; result?: { log: BeMusicCourseReplay; native: ReplayCourseResult } };
       nonstopRetry?: () => void;
       playChart?: ResolvedPlayChart['chart'];
     },
   ): Promise<boolean> {
-    const song = data.song;
+    const chartEntry = data.chart;
     const course = options.course;
     // The course result (`course.result`) shows on the theme's COURSE_RESULT skin, falling back to its result skin.
     const courseResult = course?.result !== undefined;
-    const kit = await this.beatoraja.loadBeatorajaResultKit(song, courseResult);
+    const kit = await this.beatoraja.loadBeatorajaResultKit(chartEntry, courseResult);
     if (kit === undefined) return false;
 
     const run = options.run;
@@ -213,7 +216,7 @@ export class ResultRoute {
     // graph never plots another chart. A course run's result plots none.
     const playChart =
       options.playChart ??
-      (!courseResult && this.lastBeatorajaChart?.chartPath === song.chartPath
+      (!courseResult && this.lastBeatorajaChart?.chartPath === chartEntry.chartPath
         ? this.lastBeatorajaChart.resolved.chart
         : undefined);
     // R on the result plays the same chart again — only offered when the recorded play start is this chart's, and
@@ -222,8 +225,8 @@ export class ResultRoute {
     const retryTarget = resolveResultRetry({
       quickRetry: presentation.quickRetry,
       ...(options.nonstopRetry !== undefined ? { nonstopRetry: options.nonstopRetry } : {}),
-      songId: song.id,
-      ...(lastPlay !== undefined ? { lastPlay: { songId: lastPlay.song.id, play: lastPlay } } : {}),
+      chartId: chartEntry.id,
+      ...(lastPlay !== undefined ? { lastPlay: { chartId: lastPlay.chart.id, play: lastPlay } } : {}),
     });
     // beatoraja plays every result from its theme's one set: a course run's `course_clear` / `course_fail`, falling back
     // to the clear / fail ones, else the generic `result` one.
@@ -247,13 +250,13 @@ export class ResultRoute {
             // Straight back into the chart, the result screen gone first.
             void this.leaveThen(() => {
               if (retryTarget.kind === 'nonstop') retryTarget.retry();
-              else void this.playSong(retryTarget.play.song, retryTarget.play.overrides);
+              else void this.playChart(retryTarget.play.chart, retryTarget.play.overrides);
             });
           };
     const resultScene = createResultScene(kit, {
       result,
       run,
-      source: resolveSongSource(this.library.collection, song),
+      source: resolveChartSource(this.library.collection, chartEntry),
       ...(playChart !== undefined ? { playChart } : {}),
       sounds,
       audio: this.audio,
@@ -268,7 +271,7 @@ export class ResultRoute {
     });
     if (!shown) return true;
     this.setPlayStatus(
-      `Result (beatoraja): ${courseResult ? course!.info.title : song.title} · ex=${result.score.exScore} maxCombo=${result.maxCombo}`,
+      `Result (beatoraja): ${courseResult ? course!.info.title : chartEntry.title} · ex=${result.score.exScore} maxCombo=${result.maxCombo}`,
     );
     const jingle = this.nameResultJingle(jingleBytes);
     this.testHook?.recordResult(
@@ -287,18 +290,18 @@ export class ResultRoute {
     data: PlayResult,
     mode: {
       course?: CourseView;
-      /** The course result's play log and native result (what the test hook reports of it). */
-      courseLog?: { log: BeMusicCoursePlaylog; native: PlaylogCourseResult };
+      /** The course result's replay and native result (what the test hook reports of it). */
+      courseLog?: { log: BeMusicCourseReplay; native: ReplayCourseResult };
       nonstop?: { info: CourseView; retry: () => void };
     } = {},
   ): Promise<void> {
-    // A stage of a running course: its play log carries the course on, and dismissing its result plays the next stage.
+    // A stage of a running course: its replay carries the course on, and dismissing its result plays the next stage.
     const courseStage = mode.course === undefined && mode.nonstop === undefined && this.activeCourse !== undefined;
     const run =
       mode.course !== undefined ? 'course' : mode.nonstop !== undefined ? 'nonstop' : courseStage ? 'stage' : 'single';
     const presentation = resolveResultPresentation(run);
     if (courseStage) {
-      this.activeCourse!.run.recordStage(data.playlog, data);
+      this.activeCourse!.run.recordStage(data.replay, data);
       this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
     }
     // Family dispatch for result. Only the LR2 / default split is modelled here — a play on the beatoraja play screen
@@ -330,14 +333,14 @@ export class ResultRoute {
     const retryTarget = resolveResultRetry({
       quickRetry: presentation.quickRetry,
       ...(mode.nonstop !== undefined ? { nonstopRetry: mode.nonstop.retry } : {}),
-      songId: data.song.id,
-      ...(lastPlay !== undefined ? { lastPlay: { songId: lastPlay.song.id, play: lastPlay } } : {}),
+      chartId: data.chart.id,
+      ...(lastPlay !== undefined ? { lastPlay: { chartId: lastPlay.chart.id, play: lastPlay } } : {}),
     });
     const retry =
       retryTarget?.kind === 'nonstop'
         ? retryTarget.retry
         : retryTarget?.kind === 'replay'
-          ? () => void this.playSong(retryTarget.play.song, retryTarget.play.overrides)
+          ? () => void this.playChart(retryTarget.play.chart, retryTarget.play.overrides)
           : undefined;
     // The active theme's jingles: a beatoraja theme's when its result falls back to this view (a NONSTOP course on a
     // theme without a result skin).
@@ -368,7 +371,7 @@ export class ResultRoute {
       // The LR2 skin shows the course of the result (`result.course`): the stage's course, or the course run.
       result: lr2ResultSkin !== undefined && courseInfo !== undefined ? { ...data, course: courseInfo } : data,
       run,
-      source: resolveSongSource(this.library.collection, data.song),
+      source: resolveChartSource(this.library.collection, data.chart),
       sounds: resolveResultSoundSet(resultFamily, themeJingles),
       audio: this.audio,
       on: { continue: onContinue, ...(onRetry !== undefined ? { retry: onRetry } : {}) },
@@ -381,9 +384,9 @@ export class ResultRoute {
       continuesRun: true,
     });
     // A newer navigation that took the stage first keeps its own status; the play is still kept, saved and ranked.
-    if (shown) this.setPlayStatus(`Result: ${data.song.title}`);
+    if (shown) this.setPlayStatus(`Result: ${data.chart.title}`);
     if (this.testHook !== undefined) {
-      if (mode.course === undefined) this.testHook.recordPlaylog(data.playlog);
+      if (mode.course === undefined) this.testHook.recordReplay(data.replay);
       const family = lr2ResultSkin !== undefined ? 'lr2' : 'built-in';
       const jingle = this.nameResultJingle(data.cleared ? jingles.clearBGM : jingles.failBGM);
       if (shown) {
@@ -401,9 +404,9 @@ export class ResultRoute {
     this.records.recordActivePlay(recordPlayFromResult(data));
     // A course's stages are saved and ranked as the course, not one by one (a NONSTOP run's course log already was).
     if (presentation.quickRetry && mode.nonstop === undefined) {
-      this.playlogAutoSave.savePlay(data.playlog);
-      this.leaderboard.maybeSubmit(data.playlog, data.song);
+      this.replayAutoSave.savePlay(data.replay);
+      this.leaderboard.maybeSubmit(data.replay, data.chart);
     }
-    this.unlockPlaylogOptions();
+    this.unlockReplayOptions();
   }
 }

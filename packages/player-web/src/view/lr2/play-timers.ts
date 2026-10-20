@@ -45,7 +45,7 @@ const FULL_COMBO_FALLBACK_MS = 3000;
 
 /** What the timers read of the running play (`PlayfieldRuntime`'s members of these names). */
 export interface LR2PlayTimerSource {
-  readonly song: unknown;
+  readonly chart: unknown;
   readonly chartPlayVariant: ChartPlayVariant;
   readonly disposed: boolean;
   /**
@@ -194,7 +194,7 @@ export class LR2PlayTimers {
   public isActive(timer: number): boolean {
     if (this.startedAt(timer) !== undefined) return true;
     if (timer === LR2_TIMER.JUDGE_1P || timer === LR2_TIMER.JUDGE_2P) return true;
-    if (timer === LR2_TIMER.RHYTHM) return this.play.song !== undefined && !this.play.isIntroPlaying();
+    if (timer === LR2_TIMER.RHYTHM) return this.play.chart !== undefined && !this.play.isIntroPlaying();
     return false;
   }
 
@@ -211,7 +211,7 @@ export class LR2PlayTimers {
       return Math.max(0, now - (judgedAt ?? this.sceneStartAt));
     }
     if (timer === LR2_TIMER.RHYTHM) {
-      if (this.play.song === undefined) return 0;
+      if (this.play.chart === undefined) return 0;
       const beat = this.play.currentBeat(this.play.currentSeconds());
       if (!Number.isFinite(beat) || beat < 0) return 0;
       return (beat - Math.floor(beat)) * 1000;

@@ -11,7 +11,7 @@ export interface LockableControl {
 /** The Debug Menu's controls a play locks, as they are when it locks or unlocks (a picker can be made again meanwhile). */
 export interface PlayLockControls {
   /** "Auto-save play history", latched as a play starts. */
-  readonly playlogSave: LockableControl | undefined;
+  readonly replaySave: LockableControl | undefined;
   /** Every option read as a play starts (`DebugMenu.trackPlayOption`). */
   readonly playOptions: readonly LockableControl[];
   /** "Tempo (%)": one of the play options, which a play whose tempo changes live keeps enabled. */
@@ -47,7 +47,7 @@ export class PlayLock {
    */
   public lock(liveTempo = false): void {
     const controls = this.controls();
-    controls.playlogSave?.disable();
+    controls.replaySave?.disable();
     for (const controller of controls.playOptions) {
       controller.disable();
     }
@@ -57,11 +57,11 @@ export class PlayLock {
     if (liveTempo) controls.tempo?.enable();
   }
 
-  /** Re-enables the playlog option controllers, and the skin controls, once no play is in flight. */
+  /** Re-enables the replay option controllers, and the skin controls, once no play is in flight. */
   public unlock(): void {
     this.liveTempo = false;
     const controls = this.controls();
-    controls.playlogSave?.enable();
+    controls.replaySave?.enable();
     for (const controller of controls.playOptions) {
       controller.enable();
     }

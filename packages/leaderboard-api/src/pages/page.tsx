@@ -25,7 +25,7 @@ export const PAGE_CACHE = 'private, max-age=0';
 /** The display ruleset lasts a year; switching it again replaces it. The language does too. */
 export const RULESET_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
-/** `Artist · ` before the rest of a subtitle, or nothing when the play log carried no artist. */
+/** `Artist · ` before the rest of a subtitle, or nothing when the replay carried no artist. */
 export const withArtist = (artist: string | null): string =>
   artist !== null && artist.trim().length > 0 ? `${artist} · ` : '';
 
@@ -40,10 +40,10 @@ export const when = (epochMs: number | null): Child => (epochMs === null ? '-' :
 export const chartsetCrumbs = (filed: { id: string; title: string } | undefined): Crumb[] =>
   filed === undefined ? [] : [{ label: filed.title, href: chartsetHref(filed.id), kind: 'chartset' }];
 
-/** Detail rows without the ones the play log left empty. */
+/** Detail rows without the ones the replay left empty. */
 export const known = (rows: Array<[Child, Child]>): Array<[Child, Child]> => rows.filter(([, value]) => value !== '-');
 
-/** A text value a play log may have left out. */
+/** A text value a replay may have left out. */
 export const orDash = (value: string | number | null): string | number =>
   value === null || value === '' ? '-' : value;
 

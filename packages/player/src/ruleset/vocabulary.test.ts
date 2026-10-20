@@ -1,21 +1,21 @@
 import { createEmptyJSON } from '@be-music/json';
 import { describe, expect, it } from 'vite-plus/test';
-import { PLAYLOG_SIMULATOR_RULESETS } from '../playlog/simulate.ts';
-import { isPlaylogRulesetId, PLAYLOG_RULESET_IDS, resolveJudgeWindowsMs } from './vocabulary.ts';
+import { REPLAY_SIMULATOR_RULESETS } from '../replay/simulate.ts';
+import { isRulesetId, RULESET_IDS, resolveJudgeWindowsMs } from './vocabulary.ts';
 
 describe('judge ruleset ids', () => {
-  it('lists the judge rulesets in the order the play-log simulators run them', () => {
-    expect(PLAYLOG_RULESET_IDS).toEqual(['lr2', 'beatoraja', 'iidx']);
-    expect(PLAYLOG_RULESET_IDS).toEqual(PLAYLOG_SIMULATOR_RULESETS);
+  it('lists the judge rulesets in the order the replay simulators run them', () => {
+    expect(RULESET_IDS).toEqual(['lr2', 'beatoraja', 'iidx']);
+    expect(RULESET_IDS).toEqual(REPLAY_SIMULATOR_RULESETS);
   });
 
   it('knows the judge ruleset ids, in lower case', () => {
-    expect(PLAYLOG_RULESET_IDS.every(isPlaylogRulesetId)).toBe(true);
-    expect(isPlaylogRulesetId('LR2')).toBe(false);
-    expect(isPlaylogRulesetId('popn')).toBe(false);
-    expect(isPlaylogRulesetId('')).toBe(false);
-    expect(isPlaylogRulesetId(undefined)).toBe(false);
-    expect(isPlaylogRulesetId(['lr2'])).toBe(false);
+    expect(RULESET_IDS.every(isRulesetId)).toBe(true);
+    expect(isRulesetId('LR2')).toBe(false);
+    expect(isRulesetId('popn')).toBe(false);
+    expect(isRulesetId('')).toBe(false);
+    expect(isRulesetId(undefined)).toBe(false);
+    expect(isRulesetId(['lr2'])).toBe(false);
   });
 });
 

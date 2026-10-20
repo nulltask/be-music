@@ -11,7 +11,7 @@ const BMSON_DEFAULT_DISPLAY_JUDGE_RANK = 100;
  *
  * Reads the resolved chart's judge-rank facts (`ResolvedChart.judgeRank`); a source chart is resolved first. The facts
  * are the raw chart values, so the format defaults are filled here for display, as each ruleset fills them for play:
- * a play log records only what the chart sets and must replay to the same windows.
+ * a replay records only what the chart sets and must replay to the same windows.
  */
 export function resolveDisplayedJudgeRankValue(chart: BeMusicJSON | ResolvedChart): number {
   const resolved = toResolvedChart(chart);

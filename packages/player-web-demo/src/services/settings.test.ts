@@ -194,7 +194,7 @@ describe('createDemoGUIState', () => {
       bgmVolume: 100,
       playInSilentMode: true,
       compressor: true,
-      autoSavePlaylog: false,
+      autoSaveReplay: false,
       tempoPercent: 0,
       judgeRuleset: 'lr2',
       gauge: 'GROOVE',

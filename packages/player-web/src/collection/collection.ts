@@ -3,12 +3,7 @@ import { countScoredNotes } from '@be-music/chart';
 import { decodeBMSText, decodeUTF8Text, parseBMS, parseBmson } from '@be-music/parser';
 import { seedLibraryChartPlayVariant, type ChartSourceKind, type LibraryChart } from '@be-music/scene-model';
 import { basename, dirname, normalizePath, readFilesIntoEntryMap, runWithConcurrency } from '@be-music/utils/core';
-import type {
-  BrowserSongAssetEntry,
-  BrowserSongAssetSource,
-  BrowserSongCollection,
-  LoadProgressCallback,
-} from './types.ts';
+import type { BrowserAssetEntry, BrowserAssetSource, BrowserChartCollection, LoadProgressCallback } from './types.ts';
 import { createEagerDropPathPredicate, isChartFilePath } from '../browser/drop.ts';
 import { compactCollectionChart, PackedEventStrings } from './compact-chart.ts';
 import {
@@ -38,8 +33,8 @@ export interface LoadProgressOptions {
   onProgress?: LoadProgressCallback;
 }
 
-export class BrowserSongCollectionStore {
-  public collection: BrowserSongCollection = { sources: [], charts: [], errors: [] };
+export class BrowserChartCollectionStore {
+  public collection: BrowserChartCollection = { sources: [], charts: [], errors: [] };
   /**
    * Monotonic counter that prefixes every appended drop's source ids so subsequent drops don't collide with the
    * previous one's `files:0` / `bundle:0` ids. The counter is incremented every time a drop produces at least one new
@@ -54,8 +49,8 @@ export class BrowserSongCollectionStore {
   public async loadFromFiles(
     files: Iterable<BrowserDroppedFile>,
     options: LoadProgressOptions = {},
-  ): Promise<BrowserSongCollection> {
-    this.collection = await loadSongCollectionFromFiles(files, options);
+  ): Promise<BrowserChartCollection> {
+    this.collection = await loadChartCollectionFromFiles(files, options);
     this.dropSeq = 0;
     return this.collection;
   }
@@ -72,14 +67,14 @@ export class BrowserSongCollectionStore {
   public async appendFromFiles(
     files: Iterable<BrowserDroppedFile>,
     options: LoadProgressOptions = {},
-  ): Promise<BrowserSongCollection> {
-    const incoming = await loadSongCollectionFromFiles(files, options);
+  ): Promise<BrowserChartCollection> {
+    const incoming = await loadChartCollectionFromFiles(files, options);
     if (incoming.sources.length === 0 && incoming.charts.length === 0 && incoming.errors.length === 0) {
       return this.collection;
     }
     this.dropSeq += 1;
     const prefix = `drop${this.dropSeq}-`;
-    const remappedSources: BrowserSongAssetSource[] = incoming.sources.map((source) => ({
+    const remappedSources: BrowserAssetSource[] = incoming.sources.map((source) => ({
       ...source,
       id: prefix + source.id,
     }));
@@ -103,23 +98,23 @@ export class BrowserSongCollectionStore {
   public async loadFromDrop(
     dataTransfer: DataTransfer,
     options: LoadProgressOptions = {},
-  ): Promise<BrowserSongCollection> {
-    this.collection = await loadSongCollectionFromDrop(dataTransfer, options);
+  ): Promise<BrowserChartCollection> {
+    this.collection = await loadChartCollectionFromDrop(dataTransfer, options);
     this.dropSeq = 0;
     return this.collection;
   }
 }
 
-export async function loadSongCollectionFromDrop(
+export async function loadChartCollectionFromDrop(
   dataTransfer: DataTransfer,
   options: LoadProgressOptions = {},
-): Promise<BrowserSongCollection> {
+): Promise<BrowserChartCollection> {
   const files = await collectFilesFromDataTransfer(dataTransfer, options.onProgress);
-  return loadSongCollectionFromFiles(files, options);
+  return loadChartCollectionFromFiles(files, options);
 }
 
 /**
- * Lists a drop's files. Files the host needs straight away (theme candidates outside chart directories, play logs,
+ * Lists a drop's files. Files the host needs straight away (theme candidates outside chart directories, replays,
  * archives) come back as opened `File`s; song-bundle files come back as {@link DeferredDroppedFile} handles that open
  * on first read. Pass theme-side files through {@link materializeDroppedFiles} before handing them to an API that
  * needs real `File`s.
@@ -295,7 +290,7 @@ export async function readFilesIntoBytesMap(
      */
     shouldDefer?: (path: string) => boolean;
   } = {},
-): Promise<Map<string, BrowserSongAssetEntry>> {
+): Promise<Map<string, BrowserAssetEntry>> {
   return readFilesIntoEntryMap(files, {
     concurrency: options.concurrency,
     onRead: options.onRead,
@@ -333,15 +328,15 @@ function createThrottledProgress(
   };
 }
 
-export async function loadSongCollectionFromFiles(
+export async function loadChartCollectionFromFiles(
   files: Iterable<BrowserDroppedFile>,
   options: LoadProgressOptions = {},
-): Promise<BrowserSongCollection> {
+): Promise<BrowserChartCollection> {
   const onProgress = options.onProgress;
-  const sources: BrowserSongAssetSource[] = [];
-  const looseFiles = new Map<string, BrowserSongAssetEntry>();
+  const sources: BrowserAssetSource[] = [];
+  const looseFiles = new Map<string, BrowserAssetEntry>();
   const looseLabels = new Set<string>();
-  const errors: BrowserSongCollection['errors'] = [];
+  const errors: BrowserChartCollection['errors'] = [];
 
   // Materialize the iterable so we can report "X / N" totals up front. The callers always pass an array today, so this
   // is a no-op spread; it just lets the typing accept any iterable.
@@ -529,13 +524,13 @@ function yieldToEventLoop(): Promise<void> {
   });
 }
 
-export function describeSongCollection(collection: BrowserSongCollection): string {
+export function describeChartCollection(collection: BrowserChartCollection): string {
   return `${collection.charts.length} charts loaded${
     collection.errors.length > 0 ? `, ${collection.errors.length} errors` : ''
   }`;
 }
 
-function createZipSource(name: string, bytes: Uint8Array): BrowserSongAssetSource {
+function createZipSource(name: string, bytes: Uint8Array): BrowserAssetSource {
   let uncompressedBytes = 0;
   const entries = unzipSync(bytes, {
     filter: (file) => {
@@ -589,18 +584,18 @@ function parseChart(path: string, bytes: Uint8Array) {
  */
 const JAPANESE_COLLATOR = new Intl.Collator('ja');
 
-function inferSourceKind(files: ReadonlyMap<string, BrowserSongAssetEntry>): ChartSourceKind {
+function inferSourceKind(files: ReadonlyMap<string, BrowserAssetEntry>): ChartSourceKind {
   for (const path of files.keys()) {
     if (path.includes('/')) return 'directory';
   }
   return 'files';
 }
 
-export function resolveSongSource(
-  collection: BrowserSongCollection,
-  song: LibraryChart,
-): BrowserSongAssetSource | undefined {
-  return collection.sources.find((source) => source.id === song.sourceId);
+export function resolveChartSource(
+  collection: BrowserChartCollection,
+  chartEntry: LibraryChart,
+): BrowserAssetSource | undefined {
+  return collection.sources.find((source) => source.id === chartEntry.sourceId);
 }
 
 /**
@@ -614,10 +609,10 @@ export function resolveSongSource(
  * builds a lazy lower-key index the first time it's called per source and caches it via WeakMap.
  */
 export function resolveChartAsset(
-  source: BrowserSongAssetSource,
+  source: BrowserAssetSource,
   chartPath: string,
   assetPath: string,
-): BrowserSongAssetEntry | undefined {
+): BrowserAssetEntry | undefined {
   for (const folderChartPath of chartLookupFolders(chartPath)) {
     const entry = resolveChartAssetInFolder(source, folderChartPath, assetPath);
     if (entry) return entry;
@@ -638,10 +633,10 @@ function chartLookupFolders(chartPath: string): string[] {
 
 /** {@link resolveChartAsset} in one folder: next to `chartPath`, then the top of the source. */
 function resolveChartAssetInFolder(
-  source: BrowserSongAssetSource,
+  source: BrowserAssetSource,
   chartPath: string,
   assetPath: string,
-): BrowserSongAssetEntry | undefined {
+): BrowserAssetEntry | undefined {
   // bmson 1.0.0 spec MUST: reject malicious paths at the chart-asset entry point. `lookupBytesCaseInsensitive` also
   // vets each candidate as defense-in-depth, but short-circuiting here means we don't even synthesize the joined
   // `${base}/${assetPath}` candidate for a path the chart never had any business referencing.
@@ -690,11 +685,11 @@ export interface ResolveChartAudioAssetOptions {
 }
 
 export function resolveChartAudioAsset(
-  source: BrowserSongAssetSource,
+  source: BrowserAssetSource,
   chartPath: string,
   assetPath: string,
   options: ResolveChartAudioAssetOptions = {},
-): BrowserSongAssetEntry | undefined {
+): BrowserAssetEntry | undefined {
   // Every codec in the chart's folder before any in its parent, as LR2 does.
   for (const folderChartPath of chartLookupFolders(chartPath)) {
     for (const candidate of audioFallbackPaths(assetPath)) {
@@ -769,10 +764,10 @@ function audioFallbackPaths(path: string): string[] {
  * upper-case duplicates.
  */
 export function resolveChartImageAsset(
-  source: BrowserSongAssetSource,
+  source: BrowserAssetSource,
   chartPath: string,
   assetPath: string,
-): BrowserSongAssetEntry | undefined {
+): BrowserAssetEntry | undefined {
   return resolveChartBGAAsset(source, chartPath, assetPath)?.entry;
 }
 
@@ -781,10 +776,10 @@ export function resolveChartImageAsset(
  * as `_bga.mpg` may resolve to `_bga.mp4`, and the video loader should treat the bytes as what they are.
  */
 export function resolveChartBGAAsset(
-  source: BrowserSongAssetSource,
+  source: BrowserAssetSource,
   chartPath: string,
   assetPath: string,
-): { entry: BrowserSongAssetEntry; path: string } | undefined {
+): { entry: BrowserAssetEntry; path: string } | undefined {
   // Every extension in the chart's folder before any in its parent, as LR2 does.
   for (const folderChartPath of chartLookupFolders(chartPath)) {
     for (const candidate of imageFallbackPaths(assetPath)) {

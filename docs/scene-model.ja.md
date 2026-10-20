@@ -232,11 +232,11 @@ flowchart LR
   そのまま設定する（リプレイ）ができ、片方のサイドにもすべてのサイドにも効きます。ハイスピードと同じく `no_speed` はプレイヤーの変更を止めますが、
   そのまま設定するカバー（`cover-set`。リプレイが記録したカバーやホストの設定）は効きます。
   `resolveLaneCover` は描かれるカバーをレーンに対する割合で返し、HIDDEN+ は LIFT より上の部分に対する割合にします。
-- **見え方の設定**。`resolvePlaylogView` はプレイログの単位での見え方です。シーンのハイスピードの尺度での描画用の
+- **見え方の設定**。`captureReplayView` はリプレイの単位での見え方です。シーンのハイスピードの尺度での描画用の
   ハイスピード、HS-FIX、サイドごとのカバー、メイン BPM での表示時間（`resolveWhiteNumber`。指定した拍数の長さの
   レーンに対する白数字で、beatoraja は 4 拍。beatoraja と同じく LIFT は差し引きません）です。
   `resolveHiSpeedForWhiteNumber` はその逆で、記録された表示時間になるハイスピードを返します。ハイスピードの尺度が
-  違うリプレイに使います。`PlaylogViewCursor` はリプレイするログの見え方を再生位置に沿ってたどります。
+  違うリプレイに使います。`ReplayViewCursor` はリプレイするログの見え方を再生位置に沿ってたどります。
 
 ### 振る舞いの選択
 
@@ -255,18 +255,18 @@ flowchart LR
 | プレイ中のカバー                   | 固定                                        | レーンカバー・LIFT・HIDDEN のキー、ホイール、ボタン。全サイド | beatoraja の調整（LR2 にはない）。片方のサイドかすべてのサイド |
 | HIDDEN+ を 0 まで下げたとき        | —                                           | キーではオンのまま、ボタンではオフ                            | オフ                                                           |
 | `no_speed` 中のカバー              | —                                           | ロック                                                        | プレイヤーにはロック。リプレイやホストの設定は効く             |
-| プレイログの表示時間               | レーンの高さから SUDDEN+ と LIFT を引く     | beatoraja の白数字（LIFT は見ない）                           | 白数字（LIFT は見ない）                                        |
-| プレイログの HS-FIX                | 記録する                                    | 記録しない                                                    | 設定されていれば記録する                                       |
+| リプレイの表示時間                 | レーンの高さから SUDDEN+ と LIFT を引く     | beatoraja の白数字（LIFT は見ない）                           | 白数字（LIFT は見ない）                                        |
+| リプレイの HS-FIX                  | 記録する                                    | 記録しない                                                    | 設定されていれば記録する                                       |
 
 ## プレイ結果
 
 `PlayResult` は、どの結果画面も読む唯一の結果の形です。単独のプレイ、コースのステージ、EXPERT / GRADE のコース全体、
 NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）のいずれも表します。スコアとゲージの判定、唯一の
-クリアランプの規則によるランプ、グラフ、判定タイミングと早い / 遅いの数、プレイログ、ステージやコースが属するコース
+クリアランプの規則によるランプ、グラフ、判定タイミングと早い / 遅いの数、リプレイ、ステージやコースが属するコース
 （`course`、コースの表示用モデル）を持ちます。`@be-music/skin-sdk` はこれを `BeMusicResultData` として export します。
 
 - `playResultFromPlayState` はプレイの結果を最後のプレイ状態から読みます。
-- `playResultFromCourseRun` はコースの実行（`PlaylogCourseResult`）を 1 回のプレイとして読みます。合計したスコア、
+- `playResultFromCourseRun` はコースの実行（`ReplayCourseResult`）を 1 回のプレイとして読みます。合計したスコア、
   LR2 ではコースのノーツに対する LR2 の点数、最初のステージの譜面の下のコース名、到達したステージ数とトロフィー
   （`courseRun`）です。グラフは渡された記録で、LR2 のコースの結果と同じく最後のステージのもの、または beatoraja と
   同じく全ステージをつないだもの（`joinCourseStageHistories`）です。`courseRun.stageHistories` に全ステージのグラフを
@@ -309,7 +309,7 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 | `BrowserSongEntry`・`BrowserFolderNode`・`BrowserCourseEntry` など                | `@be-music/skin-sdk`                         | `LibraryChart`・`LibraryFolder`・`LibraryCourse` など（旧名は削除）                |
 | `BeMusicPlayOptions` とその値の型                                                 | `@be-music/skin-sdk`                         | `PlayOptions` など（skin-sdk に別名）                                              |
 | `BeMusicResultData`・`GaugeHistorySample`・`ScoreHistorySample`                   | `@be-music/skin-sdk`                         | `PlayResult` など（skin-sdk に別名）                                               |
-| `BeMusicJudge`・`BeMusicSide`・`BeMusicJudgeTiming`・`BeMusicLaneCover`           | `@be-music/skin-sdk`                         | `Judge`・`PlaySide`・`JudgeTiming`・`LaneCover`（skin-sdk に別名）                 |
+| `BeMusicJudgmentKind`・`BeMusicSide`・`BeMusicJudgmentTiming`・`BeMusicLaneCover` | `@be-music/skin-sdk`                         | `JudgmentKind`・`PlaySide`・`JudgmentTiming`・`LaneCover`（skin-sdk に別名）       |
 | `groupSongsByFolder`・`resolveChartPlayVariant`                                   | `player-web` の collection                   | `groupChartsByFolder`・`resolveLibraryChartPlayVariant`（player-web の旧名は削除） |
 | `matchesSearchQuery`・`wrappedCursorDelta`                                        | `player-web` のコアの選曲                    | 同じ名前（再 export は削除）                                                       |
 | コアの選曲のソートと難易度フィルター                                              | `player-web` のコアの選曲（非公開）          | `sortLibraryEntries`・`chartMatchesDifficultyFilter`                               |
@@ -320,12 +320,12 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 | `SceneCourseInfo`・`resolveSceneCourseInfo`                                       | `player-web` の `scene/course-info.ts`       | `CourseView`・`resolveCourseView`（旧名は削除）                                    |
 | `PixiPlayOptions` などの `Pixi*` のプレイオプションの型・`PixiGameplayResultData` | `player-web` の scene                        | `PlayOptions` など・`PlayResult`（旧名は削除）                                     |
 | `CourseComboState`・`createCourseCombo`・`advanceCourseCombo`                     | `player-web` の `scene/core/course-combo.ts` | 同じ名前。ただし `advanceCourseCombo` は純粋な `reduceCourseCombo` に置き換え      |
-| `PlaylogViewCursor`・`resolveBeatorajaPlaylogView`                                | `player-web` の `scene/playlog-view.ts`      | `PlaylogViewCursor`。どのプレイのビューも `resolvePlaylogView` で見え方を求める    |
+| `ReplayViewCursor`・`resolveBeatorajaReplayView`                                  | `player-web` の `scene/replay-view.ts`       | `ReplayViewCursor`。どのプレイのビューも `captureReplayView` で見え方を求める      |
 | `buildCourseResultData`・`joinCourseStageHistories`・`resolveResultPresentation`  | `player-web-demo` の `course-result.ts`      | `playResultFromCourseRun` など（旧名で再 export）                                  |
 | `resolveResultViewJingles`                                                        | `player-web-demo` の `result-jingles.ts`     | そのまま。`resolveResultJingles` の上に実装                                        |
 
 どの種類の選曲画面もこれらのモデル（`reduceBrowse`・`browseEntries`・`captureBrowse` / `restoreBrowse`・
 `browseSystemSound`）で一覧をたどります。どのプレイ画面も `PlayState` を一つ持ち、リザルトをそこから読みます
 （`playResultFromPlayState`）。そのため上のプレイ状態の選択に従います。フルコンボの最大コンボはどのプレイでもノーツ数になり、
-リザルトは判定ごとの早い / 遅いの数を持ち、プレイログの表示時間は白数字（`resolvePlaylogView`）です。Web 実行層の画面は、どれもこれらのモデルの上のシーンセッションです。スキンのパッケージはモデルを各スキンの
+リザルトは判定ごとの早い / 遅いの数を持ち、リプレイの表示時間は白数字（`captureReplayView`）です。Web 実行層の画面は、どれもこれらのモデルの上のシーンセッションです。スキンのパッケージはモデルを各スキンの
 語彙に写します。beatoraja の番号へは `@be-music/beatoraja-skin/scene` が写します（[beatoraja-skin.ja.md](./beatoraja-skin.ja.md#scene-mapping)）。

@@ -6,9 +6,9 @@
 
 import type { ResolvedPlayChart } from '@be-music/player';
 import type { AudioService } from '@be-music/player-web/audio';
-import { resolveSongSource, type ChartFileHashes } from '@be-music/player-web/collection';
+import { resolveChartSource, type ChartFileHashes } from '@be-music/player-web/collection';
 import { createPlayScene, type PixiSceneHost, type PlayScene, type SelectScene } from '@be-music/player-web/host';
-import type { BeMusicPlaylog, PlaylogRecorderInfo } from '@be-music/player/playlog';
+import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player/replay';
 import { courseStageRecordPlayFromResult } from '@be-music/player/records';
 import { snapHiSpeed, type LibraryChart, type PlayOptions, type PlayResult } from '@be-music/scene-model';
 import {
@@ -29,7 +29,7 @@ import type { LibraryService } from '../../services/library.ts';
 import type { PlayOptionsService } from '../../services/play-options.ts';
 import type { RecordsService } from '../../services/records.ts';
 import type { BeatorajaPlayEntry, BeatorajaThemeService } from '../../services/themes/beatoraja.ts';
-import { courseStageRecordKey, playRecordKey } from '../../song-records.ts';
+import { courseStageRecordKey, playRecordKey } from '../../chart-best-records.ts';
 import type { TestHookRecorder } from '../../test-hook.ts';
 import type { DemoGUIState, DemoScene, PlayerWebDemoElements } from '../../types.ts';
 import type { DebugMenu } from '../../ui/debug-menu/index.ts';
@@ -44,8 +44,8 @@ import type { SelectRoute } from './select.ts';
 
 /** The chart and play mode of a play start: what R on its result plays again. */
 export interface LastPlay {
-  song: LibraryChart;
-  overrides: { autoPlay: boolean; replay?: BeMusicPlaylog };
+  chart: LibraryChart;
+  overrides: { autoPlay: boolean; replay?: BeMusicReplay };
 }
 
 /**
@@ -101,10 +101,10 @@ export interface PlayRouteDeps {
   readonly audio: AudioService;
   /** The host the play shows on: it builds its layers as it loads. */
   readonly sceneHost: PixiSceneHost;
-  /** This app as the recorder of its play logs. */
-  readonly playlogRecorder: Omit<PlaylogRecorderInfo, 'engine'>;
-  /** `window.__beMusicTest`, when installed: the play log of a stage that shows no result. */
-  readonly testHook: Pick<TestHookRecorder, 'recordPlaylog'> | undefined;
+  /** This app as the recorder of its replays. */
+  readonly replayRecorder: Omit<ReplayRecorderInfo, 'engine'>;
+  /** `window.__beMusicTest`, when installed: the replay of a stage that shows no result. */
+  readonly testHook: Pick<TestHookRecorder, 'recordReplay'> | undefined;
   /** The video recording's deps: a recording armed on the select screen starts with the play. */
   readonly recordingDeps: () => RecordingDeps;
   /** Names the next saved recording after the chart. */
@@ -112,9 +112,9 @@ export interface PlayRouteDeps {
   /** Shows a status about the play, which the select screen replaces when it comes back. */
   readonly setPlayStatus: (text: string) => void;
   /** Latches the options a play takes for it, and disables their controls. */
-  readonly lockPlaylogOptionsForPlay: (liveTempo?: boolean) => void;
+  readonly lockReplayOptionsForPlay: (liveTempo?: boolean) => void;
   /** Re-enables the options a play latched. */
-  readonly unlockPlaylogOptions: () => void;
+  readonly unlockReplayOptions: () => void;
   readonly showSelect: () => Promise<void>;
   /** Keeps a play option for every screen and play, and pushes it to the select screen. */
   readonly setPlayOptions: (changes: Partial<PlayOptions>) => void;
@@ -149,13 +149,13 @@ export class PlayRoute {
   private readonly deviceProfile: PlayRouteDeps['deviceProfile'];
   private readonly audio: PlayRouteDeps['audio'];
   private readonly sceneHost: PlayRouteDeps['sceneHost'];
-  private readonly playlogRecorder: PlayRouteDeps['playlogRecorder'];
+  private readonly replayRecorder: PlayRouteDeps['replayRecorder'];
   private readonly testHook: PlayRouteDeps['testHook'];
   private readonly recordingDeps: PlayRouteDeps['recordingDeps'];
   private readonly setRecordingFilenameBase: PlayRouteDeps['setRecordingFilenameBase'];
   private readonly setPlayStatus: PlayRouteDeps['setPlayStatus'];
-  private readonly lockPlaylogOptionsForPlay: PlayRouteDeps['lockPlaylogOptionsForPlay'];
-  private readonly unlockPlaylogOptions: PlayRouteDeps['unlockPlaylogOptions'];
+  private readonly lockReplayOptionsForPlay: PlayRouteDeps['lockReplayOptionsForPlay'];
+  private readonly unlockReplayOptions: PlayRouteDeps['unlockReplayOptions'];
   private readonly showSelect: PlayRouteDeps['showSelect'];
   private readonly setPlayOptions: PlayRouteDeps['setPlayOptions'];
 
@@ -178,13 +178,13 @@ export class PlayRoute {
     this.deviceProfile = deps.deviceProfile;
     this.audio = deps.audio;
     this.sceneHost = deps.sceneHost;
-    this.playlogRecorder = deps.playlogRecorder;
+    this.replayRecorder = deps.replayRecorder;
     this.testHook = deps.testHook;
     this.recordingDeps = deps.recordingDeps;
     this.setRecordingFilenameBase = deps.setRecordingFilenameBase;
     this.setPlayStatus = deps.setPlayStatus;
-    this.lockPlaylogOptionsForPlay = deps.lockPlaylogOptionsForPlay;
-    this.unlockPlaylogOptions = deps.unlockPlaylogOptions;
+    this.lockReplayOptionsForPlay = deps.lockReplayOptionsForPlay;
+    this.unlockReplayOptions = deps.unlockReplayOptions;
     this.showSelect = deps.showSelect;
     this.setPlayOptions = deps.setPlayOptions;
   }
@@ -206,16 +206,16 @@ export class PlayRoute {
 
   /**
    * Makes the play scene for `song` with `kit` (`resolvePlayKit`: built-in, LR2 or beatoraja) and the current option
-   * snapshot (`createPlayScene`). Every family shares every other option, so `preloadGameplay` and `playSong` marshal
+   * snapshot (`createPlayScene`). Every family shares every other option, so `preloadGameplay` and `playChart` marshal
    * them in one place. Making a play puts nothing in force: it may load behind a decide screen that is backed out of.
    * It does so as it takes the stage ({@link latchPlay}).
    */
   public buildPlayScene(
-    song: LibraryChart,
+    chartEntry: LibraryChart,
     { kit, beatorajaPlay }: ResolvedPlayKit,
     overrides: {
       autoPlay?: boolean;
-      replay?: BeMusicPlaylog;
+      replay?: BeMusicReplay;
       chartHashes?: ChartFileHashes;
       courseStage?: CourseStagePlay;
       nonstop?: NonstopPlay;
@@ -239,7 +239,7 @@ export class PlayRoute {
       nonstop,
       audioCompressorParams: this.debugMenu.resolveCompressorParamOverrides(),
       audioCompressorMode: this.compressorMode,
-      playlogRecorder: this.playlogRecorder,
+      replayRecorder: this.replayRecorder,
     });
     // Only a play the player actually played counts towards the chart's best record; a course stage counts for the
     // course instead.
@@ -247,8 +247,8 @@ export class PlayRoute {
     // A play keeps the record of the judge ruleset it runs under (a replay keeps none).
     const judgeRuleset = this.guiState.judgeRuleset;
     const latches: PlayLatches = {
-      lastPlay: { song, overrides: { autoPlay, ...(replay !== undefined ? { replay } : {}) } },
-      playRecordKey: playRecordKey(song, overrides.chartHashes?.sha256, {
+      lastPlay: { chart: chartEntry, overrides: { autoPlay, ...(replay !== undefined ? { replay } : {}) } },
+      playRecordKey: playRecordKey(chartEntry, overrides.chartHashes?.sha256, {
         autoPlay,
         replay: replay !== undefined,
         course: courseStage !== undefined || nonstop !== undefined,
@@ -258,7 +258,7 @@ export class PlayRoute {
       // An EXPERT / GRADE stage also updates its chart's record, as LR2 does (not a NONSTOP run's stitched play).
       stageRecordKey:
         courseStage !== undefined
-          ? courseStageRecordKey(song, overrides.chartHashes?.sha256, {
+          ? courseStageRecordKey(chartEntry, overrides.chartHashes?.sha256, {
               autoPlay,
               replay: replay !== undefined,
               tempo,
@@ -274,15 +274,15 @@ export class PlayRoute {
       onTempoChange: (changed: number) => this.followLiveTempo(changed),
       onExit: () => {
         // ESC gives a running course up: the run is kept as a failed one (as LR2 records it), with the stage given up
-        // recorded once the engine hands its play log over.
+        // recorded once the engine hands its replay over.
         const view = this.gameplayView;
         const active = courseStage !== undefined ? this.activeCourse : undefined;
         const exit = resolveGameplayExit({ courseStage: active !== undefined, nonstop: nonstop !== undefined });
         if (exit === 'give-up-course') {
           void (async () => {
-            const playlog = await view?.waitForPlaylog();
-            this.testHook?.recordPlaylog(playlog);
-            this.courses.giveUp(active!, playlog);
+            const replay = await view?.waitForReplay();
+            this.testHook?.recordReplay(replay);
+            this.courses.giveUp(active!, replay);
             await this.courseRoute.showCourseResult();
           })();
           return;
@@ -291,12 +291,7 @@ export class PlayRoute {
           // The stitched chart as the play played it, for a beatoraja result skin's graphs.
           const resolved = view?.resolved;
           void (async () => {
-            await this.nonstopRoute.showNonstopCourseResult(
-              nonstop!,
-              await view?.waitForPlaylog(),
-              undefined,
-              resolved,
-            );
+            await this.nonstopRoute.showNonstopCourseResult(nonstop!, await view?.waitForReplay(), undefined, resolved);
           })();
           return;
         }
@@ -305,7 +300,7 @@ export class PlayRoute {
       onChartFinished: (result: PlayResult) => {
         if (nonstop !== undefined) {
           const resolved = this.gameplayView?.resolved;
-          void this.nonstopRoute.showNonstopCourseResult(nonstop, result.playlog, result, resolved);
+          void this.nonstopRoute.showNonstopCourseResult(nonstop, result.replay, result, resolved);
           return;
         }
         // A course stage with stage results skipped (or an auto-played one the course goes on after, as LR2 skips it)
@@ -316,17 +311,17 @@ export class PlayRoute {
           skipsCourseStageResult({
             skipStageResults: this.guiState.courseAutoAdvance,
             autoPlay,
-            courseGoesOn: this.activeCourse.run.goesOnAfter(result.playlog),
+            courseGoesOn: this.activeCourse.run.goesOnAfter(result.replay),
           })
         ) {
           void (async () => {
-            this.testHook?.recordPlaylog(result.playlog);
-            this.activeCourse?.run.recordStage(result.playlog, result);
+            this.testHook?.recordReplay(result.replay);
+            this.activeCourse?.run.recordStage(result.replay, result);
             this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(result));
             // No screen comes between the stages: the play leaves the stage, its last samples ringing out, and the next
             // stage (or the course result) shows.
             if (!(await this.router.leave({ playDispose: disposeKeepingAudioTail, continuesRun: true }))) return;
-            this.unlockPlaylogOptions();
+            this.unlockReplayOptions();
             this.courseRoute.continueCourse();
           })();
           return;
@@ -334,7 +329,7 @@ export class PlayRoute {
         if (kit.family === 'beatoraja') {
           // The beatoraja result plots the chart as the play played it.
           const resolved = this.gameplayView?.resolved;
-          if (resolved !== undefined) this.results.lastBeatorajaChart = { resolved, chartPath: song.chartPath };
+          if (resolved !== undefined) this.results.lastBeatorajaChart = { resolved, chartPath: chartEntry.chartPath };
           void this.results.showBeatorajaPlayResult(result, courseStage !== undefined);
           return;
         }
@@ -356,13 +351,13 @@ export class PlayRoute {
           return;
         }
         // A single chart plays again as it was played: AUTO stays AUTO, a replay stays a replay (`playAgainOverrides`).
-        void this.playSong(song, playAgainOverrides({ autoPlay, replay }));
+        void this.playChart(chartEntry, playAgainOverrides({ autoPlay, replay }));
       },
     };
     const { onExit, onChartFinished, onRestart, onHiSpeedChange, onTempoChange } = callbacks;
-    const source = resolveSongSource(this.library.collection, song);
+    const source = resolveChartSource(this.library.collection, chartEntry);
     const view = createPlayScene(kit, {
-      chart: song,
+      chart: chartEntry,
       ...(source !== undefined ? { source } : {}),
       settings:
         kit.family === 'built-in'
@@ -402,11 +397,11 @@ export class PlayRoute {
     this.beatoraja.activeBeatorajaPlay = latches.beatorajaPlay;
   }
 
-  public async playSong(
-    song: LibraryChart,
+  public async playChart(
+    chartEntry: LibraryChart,
     overrides: {
       autoPlay?: boolean;
-      replay?: BeMusicPlaylog;
+      replay?: BeMusicReplay;
       courseStage?: CourseStagePlay;
       nonstop?: NonstopPlay;
       /** The chart as a decide screen drew it, for a play made again after its preload failed. */
@@ -425,33 +420,33 @@ export class PlayRoute {
     if (!(await this.router.leave({ token }))) return;
     // Refresh the recording filename base for the upcoming play — each session writes to a unique file in the user's
     // downloads folder rather than overwriting the previous one.
-    this.setRecordingFilenameBase(sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`);
+    this.setRecordingFilenameBase(sanitizeFilenameStem(chartEntry.title) || `gameplay-${Date.now()}`);
     // The kit for the gameplay family the Debug Menu's "Skin family" pick (or the auto chain, beatoraja → LR2 →
     // default) gives the chart, a replay and a NONSTOP run included (`playsOnBeatoraja`). `preloadGameplay` asks the
     // same.
-    const kit = await this.familyKits.resolvePlayKit(song, overrides);
+    const kit = await this.familyKits.resolvePlayKit(chartEntry, overrides);
     if (kit === undefined) {
       void this.showSelect();
       return;
     }
-    // Chart-file hash for the recorded play log (skipped for replays — they record nothing — and for a stitched
+    // Chart-file hash for the recorded replay (skipped for replays — they record nothing — and for a stitched
     // NONSTOP chart, which has no file).
     const chartHashes =
       overrides.replay === undefined && overrides.nonstop === undefined
-        ? await this.records.resolveChartHashes(song)
+        ? await this.records.resolveChartHashes(chartEntry)
         : undefined;
-    const view = this.buildPlayScene(song, kit, { ...overrides, chartHashes });
+    const view = this.buildPlayScene(chartEntry, kit, { ...overrides, chartHashes });
     // A replay plays at its recorded tempo, unless the Replay / ghost options keep the viewer's own.
     const tempoPercent =
       overrides.replay !== undefined ? tempoPercentFromTempo(view.getTempo()) : this.guiState.tempoPercent;
     this.setPlayStatus(
-      describePlayingStatus(song.title, {
+      describePlayingStatus(chartEntry.title, {
         ...playingFamily(view),
         tempoPercent,
         replay: overrides.replay !== undefined,
       }),
     );
-    this.lockPlaylogOptionsForPlay(
+    this.lockReplayOptionsForPlay(
       allowsLiveTempo(this.guiState, { replay: overrides.replay !== undefined, tempo: view.getTempo() }),
     );
     // No splash covers the load window here: the play shows first, so `prepare` draws the playfield in its loading
@@ -472,7 +467,7 @@ export class PlayRoute {
    * at any point is practice, so it leaves the records alone (the Leaderboard refuses its log as `tempo`).
    */
   private followLiveTempo(tempo: number): void {
-    const title = this.lastPlay?.song.title;
+    const title = this.lastPlay?.chart.title;
     if (title !== undefined) {
       this.setPlayStatus(
         describePlayingStatus(title, {

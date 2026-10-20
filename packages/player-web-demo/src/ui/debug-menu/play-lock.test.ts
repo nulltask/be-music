@@ -18,7 +18,7 @@ function menuControls() {
   const autoPlay = new FakeControl();
   const tempo = new FakeControl();
   const controls = {
-    playlogSave: new FakeControl(),
+    replaySave: new FakeControl(),
     playOptions: [autoPlay, tempo],
     tempo,
     skinSystem: new FakeControl(),
@@ -26,7 +26,7 @@ function menuControls() {
     builtInSkin: new FakeControl(),
   };
   const read = (): PlayLockControls => ({
-    playlogSave: controls.playlogSave,
+    replaySave: controls.replaySave,
     playOptions: controls.playOptions,
     tempo: controls.tempo,
     skin: [controls.skinSystem, controls.lr2Theme, controls.builtInSkin],
@@ -41,7 +41,7 @@ describe('PlayLock', () => {
 
     lock.lock();
 
-    expect(controls.playlogSave.enabled).toBe(false);
+    expect(controls.replaySave.enabled).toBe(false);
     expect(autoPlay.enabled).toBe(false);
     expect(controls.tempo.enabled).toBe(false);
     expect(controls.skinSystem.enabled).toBe(false);
@@ -68,7 +68,7 @@ describe('PlayLock', () => {
 
     lock.unlock();
 
-    expect(controls.playlogSave.enabled).toBe(true);
+    expect(controls.replaySave.enabled).toBe(true);
     expect(autoPlay.enabled).toBe(true);
     expect(controls.tempo.enabled).toBe(true);
     expect(controls.skinSystem.enabled).toBe(true);
@@ -91,7 +91,7 @@ describe('PlayLock', () => {
   });
 
   it('skips the controls not made yet', () => {
-    const lock = new PlayLock(() => ({ playlogSave: undefined, playOptions: [], tempo: undefined, skin: [undefined] }));
+    const lock = new PlayLock(() => ({ replaySave: undefined, playOptions: [], tempo: undefined, skin: [undefined] }));
 
     expect(() => lock.lock(true)).not.toThrow();
     expect(() => lock.unlock()).not.toThrow();

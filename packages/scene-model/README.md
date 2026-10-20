@@ -28,7 +28,7 @@ The models and the rules behind them are described in [Scene models](../../docs/
 - **Play state**: the running gauge and EX score with their graphs, the combo (and a course stage's course combo),
   the timed judgments with early / late counts, the hi-speed under HS-FIX and the lane covers with LIFT and HIDDEN, as
   one immutable state fed by the engine's frames and judgments (`PlayState`, `reducePlayState`), and the view in the
-  play log's units (`resolvePlaylogView`).
+  replay's units (`captureReplayView`).
 - **Play result**: the one result payload for single plays, course stages, course runs and NONSTOP runs
   (`PlayResult`), read from a play state (`playResultFromPlayState`) or from a course run (`playResultFromCourseRun`).
 - **Course view**: the course a screen shows (`CourseView`, `resolveCourseView`) and the course-wide combo.

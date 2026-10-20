@@ -3,7 +3,7 @@ import { formatSeconds } from '../utils.ts';
 import { type PlayerUISignalBus } from './ui-signal-bus.ts';
 import { type PlaybackStateLogger } from './playback-support.ts';
 import { type JudgeCoreEffectSink } from './judge-core.ts';
-import { type PlaylogRecorder } from '../playlog/recorder.ts';
+import { type ReplayRecorder } from '../replay/recorder.ts';
 import {
   type NoTUIPlaybackEventTracer,
   writePlayableSampleTriggerEventLog,
@@ -13,7 +13,7 @@ import {
 import { type AudioSession } from './engine-types.ts';
 
 /**
- * Maps judge-core effects onto a play's audio session, UI buses, play log and no-TUI trace.
+ * Maps judge-core effects onto a play's audio session, UI buses, replay and no-TUI trace.
  */
 /** What a driver hands {@link createJudgeEffectHandler}: the host side of every judge-core effect. */
 interface JudgeEffectHost {
@@ -26,14 +26,14 @@ interface JudgeEffectHost {
   playbackEventTracer: NoTUIPlaybackEventTracer;
   uiSignals: PlayerUISignalBus;
   activeStateSignals: PlayerStateSignals | undefined;
-  playlogRecorder: PlaylogRecorder | undefined;
+  replayRecorder: ReplayRecorder | undefined;
   publishUIFrame: (seconds: number, beat: number) => void;
   beatAtSeconds: (seconds: number) => number;
 }
 
 /**
  * Interprets judge-core effects for one play: audio always, UI cues or the no-TUI trace depending on the mode, and
- * the play log when one is being recorded. Shared by the manual and the auto drivers.
+ * the replay when one is being recorded. Shared by the manual and the auto drivers.
  */
 export function createJudgeEffectHandler(host: JudgeEffectHost): JudgeCoreEffectSink {
   const {
@@ -46,17 +46,17 @@ export function createJudgeEffectHandler(host: JudgeEffectHost): JudgeCoreEffect
     playbackEventTracer,
     uiSignals,
     activeStateSignals,
-    playlogRecorder,
+    replayRecorder,
     publishUIFrame,
     beatAtSeconds,
   } = host;
   return (effect) => {
     switch (effect.kind) {
       case 'record-input':
-        playlogRecorder?.recordInput(effect.action, effect.seconds, effect.tokens, effect.channels, effect.inferred);
+        replayRecorder?.recordInput(effect.action, effect.seconds, effect.tokens, effect.channels, effect.inferred);
         return;
       case 'record-empty-poor':
-        playlogRecorder?.recordEmptyPoor();
+        replayRecorder?.recordEmptyPoor();
         return;
       case 'input-time':
         playbackEventTracer.flushUntil(effect.seconds);

@@ -60,14 +60,14 @@ describe('engine replay determinism', async () => {
 
       for (const variant of variants) {
         const { chart: json, randomDraws } = resolvePlayChart(parsed, { random: variant.random });
-        const { playlog } = await replayEngine(json, { randomDraws, inputs: [], speed: DETERMINISM_SPEED });
+        const { replay } = await replayEngine(json, { randomDraws, inputs: [], speed: DETERMINISM_SPEED });
         const pinnedPlay = expected.variants[variant.id]!.play;
 
-        for (const [scenario, inputs] of Object.entries(buildScenarios(playlog.chart.notes))) {
+        for (const [scenario, inputs] of Object.entries(buildScenarios(replay.chart.notes))) {
           const replays = await replayEngineRulesets(json, { randomDraws, inputs, speed: DETERMINISM_SPEED });
           for (const { ruleset, replay } of replays) {
             const where = `${variant.id} / ${scenario} / ${ruleset}`;
-            expect(replay.playlog.inputs, where).toEqual(inputs);
+            expect(replay.replay.inputs, where).toEqual(inputs);
             // Round-tripped through JSON like the pinned file, which drops `undefined` fields.
             expect(JSON.parse(JSON.stringify(summarizeEngineReplay(replay))), where).toEqual(
               pinnedPlay[scenario]!.engine[ruleset],

@@ -2,7 +2,7 @@ import type { ChartSourceKind, LibraryChart, LibraryFolder } from '@be-music/sce
 import type { BrowserDroppedFile } from './dropped-file.ts';
 
 /**
- * Asset payload kept inside a {@link BrowserSongAssetSource}. Each file from the dropped bundle is either:
+ * Asset payload kept inside a {@link BrowserAssetSource}. Each file from the dropped bundle is either:
  *
  * - **`Uint8Array`** — bytes already in memory. Used for small files that are accessed synchronously by parsers / image
  *   decoders (`.bms`, `.bmson`, `.bmp`, `.png`, `.tga`, `.csv`, `.dxa`, `.lr2skin`, …).
@@ -14,18 +14,18 @@ import type { BrowserDroppedFile } from './dropped-file.ts';
  * construction. Audio consumers go through `loadAssetBytes` / `resolveChartAudioAsset` to handle the lazy branch
  * transparently.
  */
-export type BrowserSongAssetEntry = Uint8Array | BrowserDroppedFile;
+export type BrowserAssetEntry = Uint8Array | BrowserDroppedFile;
 
-export interface BrowserSongAssetSource {
+export interface BrowserAssetSource {
   id: string;
   kind: ChartSourceKind;
   label: string;
-  files: ReadonlyMap<string, BrowserSongAssetEntry>;
+  files: ReadonlyMap<string, BrowserAssetEntry>;
 }
 
 /** The charts loaded from every dropped source: a `Library` of `@be-music/scene-model` a select screen browses. */
-export interface BrowserSongCollection {
-  sources: BrowserSongAssetSource[];
+export interface BrowserChartCollection {
+  sources: BrowserAssetSource[];
   charts: LibraryChart[];
   errors: Array<{ sourceId: string; path?: string; message: string }>;
   /** Course folders (see `resolveCourseFolders`), listed after the chart folders at the root of a select view. */

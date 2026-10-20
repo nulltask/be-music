@@ -146,7 +146,7 @@
         "12000000 11 02",
         "12461538 11 02"
       ],
-      "playlogChart": {
+      "replayChart": {
         "sourceFormat": "bms",
         "laneMode": "5 KEY SP",
         "lnMode": 1,

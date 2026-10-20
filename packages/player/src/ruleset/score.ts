@@ -4,7 +4,7 @@
  * (`@be-music/player/ruleset`). The engine's running combo and the trackers that fill a summary stay in `core/scoring`.
  */
 
-export type JudgeKind = 'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'POOR';
+export type JudgmentKind = 'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'POOR';
 
 export interface ScoreSummary {
   total: number;

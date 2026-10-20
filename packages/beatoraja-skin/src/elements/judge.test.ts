@@ -408,7 +408,7 @@ describe('expandBeatorajaJudgeDestinations', () => {
   });
 
   // Mirrors upstream `JsonPlaySkinObjectLoader.java:220-221`:
-  //   for (JSONSkin.Judge judge : sk.judge) {
+  //   for (JSONSkin.Judgment judge : sk.judge) {
   //       if (dst.id.equals(judge.id)) { ... instantiate ... }
   //   }
   // Only judges whose id matches a destination id get instantiated. The previous TS impl

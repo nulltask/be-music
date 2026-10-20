@@ -7,7 +7,7 @@ import { chart as chartTable } from '../db/schema.ts';
 import type { Env } from '../env.ts';
 import {
   makeChart,
-  makePlaylog,
+  makeReplay,
   ORIGIN,
   signInAnonymously,
   startTestBindings,
@@ -34,13 +34,13 @@ afterAll(async () => {
 });
 
 async function submit(cookie: string, chart: TestChart, hits: number, title: string, skip = 0) {
-  const playlog = makePlaylog(chart, { noteCount: 10, hits, skip });
-  playlog.chart.title = title;
-  playlog.chart.artist = 'Artist';
+  const replay = makeReplay(chart, { noteCount: 10, hits, skip });
+  replay.chart.title = title;
+  replay.chart.artist = 'Artist';
   const response = await fetchApp('/api/v0/scores', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'content-encoding': 'gzip', cookie },
-    body: submissionBody(playlog, chart.playDocument, chart.chartDocument),
+    body: submissionBody(replay, chart.playDocument, chart.chartDocument),
   });
   expect(response.status).toBe(201);
   return ((await response.json()) as { scoreId: string }).scoreId;
@@ -257,15 +257,15 @@ describe('Leaderboard pages', () => {
     const levelled = makeChart(['#00111:0101', '#00211:01010101']);
     const dave = await signInAnonymously(fetchApp);
     await claimAccount(openDatabase(env.DB), await userIdOf(dave));
-    const playlog = makePlaylog(levelled, { noteCount: 10, hits: 3 });
-    playlog.chart.title = 'Dave Song';
-    playlog.chart.playLevel = '12';
-    playlog.chart.difficulty = 4;
-    playlog.play.randomLane = { p1: 'RANDOM' };
+    const replay = makeReplay(levelled, { noteCount: 10, hits: 3 });
+    replay.chart.title = 'Dave Song';
+    replay.chart.playLevel = '12';
+    replay.chart.difficulty = 4;
+    replay.play.randomLane = { p1: 'RANDOM' };
     const first = await fetchApp('/api/v0/scores', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'content-encoding': 'gzip', cookie: dave },
-      body: submissionBody(playlog, levelled.playDocument, levelled.chartDocument),
+      body: submissionBody(replay, levelled.playDocument, levelled.chartDocument),
     });
     expect(first.status).toBe(201);
     // Dave is the chart's only player, so it is not listed: he sees his plays on his own view.
@@ -290,9 +290,9 @@ describe('Leaderboard pages', () => {
     const heidi = await signInAnonymously(fetchApp);
     const lnMode = 'LN — the start is judged; hold to the end';
     const submitWith = async (target: TestChart, longNotes: boolean, hits = 5) => {
-      const playlog = makePlaylog(target, { noteCount: 10, hits });
+      const replay = makeReplay(target, { noteCount: 10, hits });
       if (longNotes) {
-        const first = playlog.chart.notes[0]!;
+        const first = replay.chart.notes[0]!;
         first.type = 'long';
         first.endTimeUs = first.timeUs + 200_000;
         first.lnMode = 1;
@@ -300,7 +300,7 @@ describe('Leaderboard pages', () => {
       const response = await fetchApp('/api/v0/scores', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'content-encoding': 'gzip', cookie: heidi },
-        body: submissionBody(playlog, target.playDocument, target.chartDocument),
+        body: submissionBody(replay, target.playDocument, target.chartDocument),
       });
       expect(response.status).toBe(201);
     };
@@ -410,7 +410,7 @@ describe('Leaderboard pages', () => {
     // Nobody else can open it, its log or its page; the lists leave it out.
     expect((await fetchApp(`/api/v0/scores/${high}`)).status).toBe(404);
     expect((await fetchApp(`/api/v0/scores/${high}`, { headers: { cookie: grace } })).status).toBe(404);
-    expect((await fetchApp(`/api/v0/scores/${high}/playlog`)).status).toBe(404);
+    expect((await fetchApp(`/api/v0/scores/${high}/replay`)).status).toBe(404);
     expect((await page(`/scores/${high}`)).status).toBe(404);
     expect((await page('/')).html).not.toContain(`/scores/${high}`);
     expect((await page('/')).html).toContain(`/scores/${low}`);
@@ -440,7 +440,7 @@ describe('Leaderboard pages', () => {
         }
       ).hidden,
     ).toBe(true);
-    expect((await fetchApp(`/api/v0/scores/${high}/playlog`, { headers: { cookie: frank } })).status).toBe(200);
+    expect((await fetchApp(`/api/v0/scores/${high}/replay`, { headers: { cookie: frank } })).status).toBe(200);
 
     // Shown again, everything is back.
     expect((await setHidden(false, frank)).status).toBe(200);
@@ -458,7 +458,7 @@ describe('Leaderboard pages', () => {
     expect(score.html).toContain('Scored with');
     expect(score.html).toContain('beatoraja');
     expect(score.html).toContain('IIDX');
-    expect(score.html).toContain(`/api/v0/scores/${firstScore}/playlog`);
+    expect(score.html).toContain(`/api/v0/scores/${firstScore}/replay`);
 
     const ranking = await page(`/charts/${encodeURIComponent(chart.chartFingerprint)}`);
     expect(ranking.status).toBe(200);
@@ -484,8 +484,8 @@ describe('Leaderboard pages', () => {
     // Elsewhere: no file hash was recorded for this chart, so only the title search on BMS Search, encoded.
     expect(ranking.html).toContain('https://bmssearch.net/search?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E');
     expect(ranking.html).not.toContain('mocha-repository.info');
-    // Chart details and figures: the play log's metadata, the play counts and the lamp spread.
-    expect(ranking.html).toContain('>Judge rank<');
+    // Chart details and figures: the replay's metadata, the play counts and the lamp spread.
+    expect(ranking.html).toContain('>Judgment rank<');
     expect(ranking.html).toContain('>First played<');
     expect(ranking.html).toContain('>Clear lamps<');
 

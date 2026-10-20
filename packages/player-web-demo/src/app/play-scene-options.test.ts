@@ -2,7 +2,7 @@ import { createEmptyJSON } from '@be-music/json';
 import type { ChartFileHashes } from '@be-music/player-web/collection';
 import type { PlaySceneSettings } from '@be-music/player-web/host';
 import type { CourseConstraint, CourseDefinition, CourseKind, CourseSource } from '@be-music/player/course';
-import type { BeMusicPlaylog } from '@be-music/player/playlog';
+import type { BeMusicReplay } from '@be-music/player/replay';
 import {
   DEFAULT_PLAY_OPTIONS,
   resolveCourseView,
@@ -15,7 +15,7 @@ import { nextCourseStagePlay, startCourseRun } from '../course-flow.ts';
 import { resolvePlaySceneOptions, type PlaySceneGUIState, type PlaySceneOptionsInput } from './play-scene-options.ts';
 import type { NonstopPlay } from './routes/nonstop.ts';
 
-function song(id: string): LibraryChart {
+function chartEntry(id: string): LibraryChart {
   return {
     id,
     sourceId: 'drop1',
@@ -49,8 +49,8 @@ function course(
     id: 'dan#0',
     definition,
     stages: [
-      { title: 'a', chart: song('a') },
-      { title: 'b', chart: song('b') },
+      { title: 'a', chart: chartEntry('a') },
+      { title: 'b', chart: chartEntry('b') },
     ],
     playable: true,
   };
@@ -109,16 +109,16 @@ function input(changes: Partial<PlaySceneOptionsInput> = {}): PlaySceneOptionsIn
     playOptions: PLAY_OPTIONS,
     audioCompressorParams: COMPRESSOR_PARAMS,
     audioCompressorMode: 'split',
-    playlogRecorder: RECORDER,
+    replayRecorder: RECORDER,
     ...changes,
   };
 }
 
-/** A play log of an AUTO play at 1.2× (`null`: one with no tempo recorded), on the HARD gauge with auto scratch. */
-function replayLog(tempo: number | null = 1.2): BeMusicPlaylog {
+/** A replay of an AUTO play at 1.2× (`null`: one with no tempo recorded), on the HARD gauge with auto scratch. */
+function rereplay(tempo: number | null = 1.2): BeMusicReplay {
   return {
     play: { mode: 'auto', autoScratch: true, gauge: 'HARD', ...(tempo !== null ? { tempo } : {}) },
-  } as unknown as BeMusicPlaylog;
+  } as unknown as BeMusicReplay;
 }
 
 describe('resolvePlaySceneOptions: a single play', () => {
@@ -151,7 +151,7 @@ describe('resolvePlaySceneOptions: a single play', () => {
       judgeRuleset: 'lr2',
       chartSHA256: HASHES.sha256,
       chartMD5: HASHES.md5,
-      playlogRecorder: RECORDER,
+      replayRecorder: RECORDER,
       replayView: { tempo: true, hiSpeed: true, covers: true, lift: true },
       audioVolumes: { key: 0.8, bgm: 0.6 },
       audioCompressorParams: COMPRESSOR_PARAMS,
@@ -189,7 +189,7 @@ describe('resolvePlaySceneOptions: a single play', () => {
 
 describe('resolvePlaySceneOptions: a replay', () => {
   test('plays the recorded setup: no lane transforms, the log’s auto scratch and gauge, no judge of its own', () => {
-    const { settings } = resolvePlaySceneOptions(input({ replay: replayLog() }));
+    const { settings } = resolvePlaySceneOptions(input({ replay: rereplay() }));
     expect(settings).toMatchObject({
       random1P: 'OFF',
       random2P: 'OFF',
@@ -202,10 +202,10 @@ describe('resolvePlaySceneOptions: a replay', () => {
   });
 
   test('runs at the tempo its log recorded, or the viewer’s own when the Replay / ghost options keep it', () => {
-    expect(resolvePlaySceneOptions(input({ replay: replayLog() })).tempo).toBe(1.2);
-    expect(resolvePlaySceneOptions(input({ replay: replayLog(null) })).tempo).toBe(1);
+    expect(resolvePlaySceneOptions(input({ replay: rereplay() })).tempo).toBe(1.2);
+    expect(resolvePlaySceneOptions(input({ replay: rereplay(null) })).tempo).toBe(1);
     const own = gui({ replayView: { tempo: false, hiSpeed: true, covers: true, lift: true } });
-    expect(resolvePlaySceneOptions(input({ replay: replayLog(), guiState: own })).tempo).toBe(0.9);
+    expect(resolvePlaySceneOptions(input({ replay: rereplay(), guiState: own })).tempo).toBe(0.9);
   });
 });
 

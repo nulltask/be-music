@@ -22,7 +22,7 @@ import type { Container } from 'pixi.js';
 import { computeBeatorajaBPMCurve, type BPMCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
 import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
 import { resolveShownChartMainBPM } from '../../chart/main-bpm.ts';
-import type { BrowserSongAssetSource } from '../../collection/types.ts';
+import type { BrowserAssetSource } from '../../collection/types.ts';
 import type { BeatorajaKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
@@ -36,7 +36,7 @@ import {
   resolveBeatorajaFadeOutMs,
   resolveBeatorajaSceneTimers,
   resolveBeatorajaSkinTimingMs,
-  resolveBeatorajaSongText,
+  resolveBeatorajaChartText,
 } from './scene-frame.ts';
 
 const log = logger('decide');
@@ -89,7 +89,7 @@ export interface BeatorajaDecideViewOptions {
   /** The chart about to be played, whose images the view loads before its first frame. */
   readonly chart?: Pick<LibraryChart, 'chart' | 'chartPath'>;
   /** Where the chart's files are, for its `#STAGEFILE`, `#BACKBMP` and `#BANNER`; none load without one. */
-  readonly source?: BrowserSongAssetSource;
+  readonly source?: BrowserAssetSource;
   /** Where the skin's Lua sounds play (`main_state.audio_*`); they are silent without it. */
   readonly skinSounds?: BeatorajaSkinAudio;
 }
@@ -121,8 +121,8 @@ export class BeatorajaDecideView implements DecideView {
         skin,
         textures,
         resolveTextContent: (ref) =>
-          resolveBeatorajaSongText(ref, {
-            ...(this.frame !== undefined ? { song: this.frame.chart } : {}),
+          resolveBeatorajaChartText(ref, {
+            ...(this.frame !== undefined ? { chart: this.frame.chart } : {}),
             skin: this.kit.kit.skin,
             tableTextFallback: '',
           }),

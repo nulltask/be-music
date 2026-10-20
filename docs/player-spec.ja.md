@@ -31,8 +31,8 @@ core engine の既定は `lr2` 互換ルールセットと、その `GROOVE` gau
 | `./signals`        | ホストの入力と UI のランタイムが演奏中のプレイとやり取りするもの：入力のバスとそのコマンド、UI のバスとそのフレーム・コマンド・`PlayerGaugeSummary`、状態のシグナル、ハイスピードの範囲と操作                                                                                                                                                      |
 | `./lanes`          | プレイモードのレーン：レイアウトとスロット、スクラッチとホイールのレーン、キーの割り当て、FREE ZONE の入力、レーンオプションが入れ替えるレーン                                                                                                                                                                                                     |
 | `./display`        | ホストが表示するもの：時刻を付けたプレイのノート（`extract*`、`toTimed*`）、`ScrollDistanceMapper`、画面の BGA の cue（`pickActiveBGACue`、`pickActiveBGAKey`、`DEFAULT_POOR_BGA_DISPLAY_SECONDS`）、選曲画面が表示する譜面の情報（`resolveDisplayed*`）、`formatSeconds`、`resolveAltModifierLabel`、TUI のノートの高さ、BGA の縮小のアルゴリズム |
-| `./ruleset`        | ホスト・スキン・リーダーボードが共有する語彙：判定ルールセットの id（`PLAYLOG_RULESET_IDS`）、判定幅、ゲージ、クリアランプ、BP、スコア                                                                                                                                                                                                             |
-| `./playlog`        | プレイログの形式、その記録・シミュレーター・対象の判定、コースと NONSTOP のログ                                                                                                                                                                                                                                                                    |
+| `./ruleset`        | ホスト・スキン・リーダーボードが共有する語彙：判定ルールセットの id（`RULESET_IDS`）、判定幅、ゲージ、クリアランプ、BP、スコア                                                                                                                                                                                                                     |
+| `./replay`         | リプレイの形式、その記録・シミュレーター・対象の判定、コースと NONSTOP のログ                                                                                                                                                                                                                                                                      |
 | `./records`        | 判定ルールセットごとのベスト記録と、その記録の規則                                                                                                                                                                                                                                                                                                 |
 | `./course`         | コースの定義：LR2 の `.lr2crs`、beatoraja のコース、難易度表のコース、コースメーカー、NONSTOP の通しプレイ                                                                                                                                                                                                                                         |
 | `./audio-sink`     | Node（`node-web-audio-api`）と Web Audio のコンテキストの音声シンク                                                                                                                                                                                                                                                                                |
@@ -164,7 +164,7 @@ flowchart LR
     draw["drawRandomOutcomes"] --> draws(["RandomDraws"])
     resolve["resolveBMSControlFlowWithDraws"]
   end
-  log(["プレイログの<br/>randomDraws"])
+  log(["リプレイの<br/>randomDraws"])
   src --> draw
   src --> resolve
   draws --> resolve
@@ -173,7 +173,7 @@ flowchart LR
   subgraph users["利用者"]
     screens["決定 / プレイ /<br/>リザルト画面"]
     engine["エンジン"]
-    record["プレイログ"]
+    record["リプレイ"]
   end
   chart --> users
   draws --> users
@@ -182,9 +182,9 @@ flowchart LR
 どのホストも 1 回だけ引き、同じ譜面と draws をそのプレイのすべての利用者に渡します。CLI はプレビューの描画とゲームプレイ worker に、web player は決定画面、プレイ画面、エンジン、リザルト画面に渡します。
 リスタートでは引き直します。LR2 や beatoraja もプレイごとに引き直すためです。
 エンジン（`autoPlay` / `manualPlay`）は自分では引きません。解決済みの譜面はそのまま再生し、`PlayerOptions.randomDraws` は RANDOM 要約にだけ使います。
-制御構文が残った譜面を `randomDraws` と一緒に渡された場合（たとえば元の譜面とプレイログの draws）は、その draws でちょうど 1 回だけ解決します。draws なしで渡された場合は、エンジンの外の誰も知らない分岐を引く代わりに `TypeError` を投げます。
+制御構文が残った譜面を `randomDraws` と一緒に渡された場合（たとえば元の譜面とリプレイの draws）は、その draws でちょうど 1 回だけ解決します。draws なしで渡された場合は、エンジンの外の誰も知らない分岐を引く代わりに `TypeError` を投げます。
 
-プレイログは draws を `play.randomDraws` に記録し、リプレイはそれを `PlayerOptions.randomDraws` として渡し直します（[プレイログ](./playlog.ja.md) を参照）。
+リプレイは draws を `play.randomDraws` に記録し、リプレイはそれを `PlayerOptions.randomDraws` として渡し直します（[リプレイ](./replay.ja.md) を参照）。
 
 RANDOM 要約は draws から作ります。
 `#SETRANDOM` は固定値として表示し、複数の RANDOM 系がある場合は宣言順で `RANDOM #1 2/3  #2 1/2` のように整形します。
@@ -227,11 +227,11 @@ bmson の `l`、FREE ZONE (`17` / `27`)、BMS の `#LNOBJ`、BMS legacy LN (`#mm
 地雷チャンネルは、対応する playable lane に写像したうえで別配列として保持します。
 地雷は `summary.total` に含めません。
 
-地雷がいつ爆発するかは判定 ruleset が決めます（[`definitions.ts`](../packages/player/src/ruleset/definitions.ts) の `mineTrigger`）。engine と play log simulator は同じ規則を使います。ダメージモデルはどの ruleset でも同じです（beatoraja `JudgeManager` で確認）。
+地雷がいつ爆発するかは判定 ruleset が決めます（[`definitions.ts`](../packages/player/src/ruleset/definitions.ts) の `mineTrigger`）。engine と replay simulator は同じ規則を使います。ダメージモデルはどの ruleset でも同じです（beatoraja `JudgeManager` で確認）。
 
 - `lr2` ruleset — LR2 のモデル（LR2 自身の changelog）。「**キーを押したまま地雷が判定線を通過**」または「**地雷が判定線の `PGREAT` 窓以内にあるときの押下**」で爆発します。キーが押されていない地雷の通過は無害で、通過後かつ `PGREAT` 圏外の押下も無害です。
 - `beatoraja` ruleset — beatoraja のモデル（`JudgeManager` L244）。「**地雷が判定線を通過する瞬間にキーが押されている**」ときだけ爆発します。少し前に押して通過前に離した場合や、通過後の押下では何も起きません。
-- 「押されている」かどうかはレーンごとに記録した押下・離鍵の時刻から判定するため、地雷をいつ確定させてもライブプレイ・リプレイ・シミュレータの結果は一致します。2 つのキーで押さえたレーンは、どちらかが押されている間は押されたままです。通過と同じ瞬間の入力は通過より先に扱い、その µs に押したキーは押されている、その µs に離したキーは離れているものとします。離鍵を送らない入力では、判定が押下を受ける前にエンジンが離鍵を推定し、押下のたびにレーンを 120 ms（ロングノートの始点を弾いた押下では 380 ms）押されたままにします（[解放のない入力](./playlog.ja.md#解放のない入力)）。
+- 「押されている」かどうかはレーンごとに記録した押下・離鍵の時刻から判定するため、地雷をいつ確定させてもライブプレイ・リプレイ・シミュレータの結果は一致します。2 つのキーで押さえたレーンは、どちらかが押されている間は押されたままです。通過と同じ瞬間の入力は通過より先に扱い、その µs に押したキーは押されている、その µs に離したキーは離れているものとします。離鍵を送らない入力では、判定が押下を受ける前にエンジンが離鍵を推定し、押下のたびにレーンを 120 ms（ロングノートの始点を弾いた押下では 380 ms）押されたままにします（[解放のない入力](./replay.ja.md#解放のない入力)）。
 - `iidx` ruleset — IIDX には地雷がないため、根拠が見つかるまでは LR2 のモデルを使います。（losak の資料は `GOOD` 窓としていますが、一次資料である LR2 changelog は「ピカグレ範囲内」と明記しています。詳細は [`bms-spec.ja.md`](./bms-spec.ja.md) 参照。）
 - 爆発はゲージ減少と `#WAV00` 爆発音のみで、**判定・コンボ・スコアには一切影響しません**。通常ノートの判定は爆発と独立に行われます（地雷が近接ノートへの入力を吸い込むことはありません）。
 - ダメージは地雷オブジェクト値（大文字 base36）を **そのままパーセントとして解釈**します（LR2 / beatoraja 準拠。nanasi 系仕様の `value / 2` とは異なります）。bmson の `mine_channels[].notes[].damage` が付いた地雷はその値を優先します。`damage` のない bmson の地雷は既定の `4%` です（オブジェクト値はパーサーが割り当てた WAV スロットでありダメージ表現ではないため、ダメージとしては読みません）。
@@ -320,9 +320,9 @@ scratch で扱う FREE ZONE のチャンネルを持ちます。bmson の `mode_
 判定幅、押下がどのノートを取るか、ロングノートの扱い、空 POOR の規則、ゲージの種類とカーブ、スコア計算式は
 すべてルールセットが所有します。定数と出典は
 [`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts) にあり、
-3 つの比較表は [`docs/playlog.ja.md`](./playlog.ja.md) にあります。
+3 つの比較表は [`docs/replay.ja.md`](./replay.ja.md) にあります。
 
-同じテーブルがライブエンジンとプレイログシミュレータの両方を駆動し、等価性テストが同一の記録入力列に対して
+同じテーブルがライブエンジンとリプレイシミュレータの両方を駆動し、等価性テストが同一の記録入力列に対して
 両者の判定が 1 つずつ一致することを要求します。
 
 以降の章は既定の **`lr2` ルールセット**についての記述です。
@@ -396,7 +396,7 @@ player は `A0` チャンネルのイベント値を `#EXRANKxx` のキーとし
 各判定は、LR2 が 1 つの `judgetime[]` を読むのと同じく、その判定の瞬間の判定幅を使います。押下（候補探索とその分類、
 多重 BAD、地雷の押下判定、ロングノートを押しているレーンへの押下）は押した瞬間の幅、離鍵（LN の早離し、チャージ
 ノートの終点）は離した瞬間の幅を使います。ノートの見逃し期限とチャージノート終点の遅れ側の窓はそれぞれノートと終点の
-時刻の幅、地雷の進入と確定は地雷の時刻の幅を使います。エンジンと playlog シミュレータは同じ瞬間を読みます。
+時刻の幅、地雷の進入と確定は地雷の時刻の幅を使います。エンジンと replay シミュレータは同じ瞬間を読みます。
 
 ### bmson の初期判定幅
 
@@ -433,7 +433,7 @@ bmson の `judgeRank` は `#DEFEXRANK` と同じ「`100` = `NORMAL`」基準の�
 これは途中で判定幅が変わる譜面で、固定ラベル 1 つでは表現できないためです。
 
 ただし、プレイ開始後に TUI の `BAD` 幅表示を動的更新する機能はまだありません。
-現在の TUI/標準出力に出る `Judge window (<ルールセットの id>): ...` 行は、再生開始時点の幅を表示するだけです。
+現在の TUI/標準出力に出る `Judgment window (<ルールセットの id>): ...` 行は、再生開始時点の幅を表示するだけです。
 
 ## 判定語と副作用
 
@@ -552,7 +552,7 @@ EX-SCORE は IIDX 互換です。
   判定内訳だけで決まり、コンボ項はありません。
 - `beatoraja` と `iidx` は EX-SCORE を返します。これが実機の表示です（IIDX は BISTROVER でマネースコアを廃止）。
 
-スコアの語彙はルールセットのもので、`@be-music/player/ruleset` が公開します。`ScoreSummary`、`JudgeKind`、
+スコアの語彙はルールセットのもので、`@be-music/player/ruleset` が公開します。`ScoreSummary`、`JudgmentKind`、
 `createEmptyScore`、`computeScoreRate`、DJ ランク（`resolveIIDXRankIndexFromScore`、`resolveIIDXRankLabel`、
 `IIDX_RANK_LABELS`）、`resolveLR2MoneyScore`、`resolveDisplayedPoor` です。
 
@@ -583,7 +583,7 @@ IIDX は未測定のため、どちらも分けたままです。`PlayerSummary`
   底を打った HARD は `failedMidPlay` を報告し、以後クリアできません。
 - サバイバル系のゲージが尽きると、LR2 や beatoraja と同じくその場でプレイを終えます（`PlayerOptions.endOnFailure`、
   既定は `true`）。ゲージを尽きさせた判定が最後に数える判定で、プレイはそこで止まります。`endOnFailure: false`
-  なら、尽きたゲージのまま譜面の最後まで判定を続けます。プレイログはこのフラグを記録するので、再シミュレーションも
+  なら、尽きたゲージのまま譜面の最後まで判定を続けます。リプレイはこのフラグを記録するので、再シミュレーションも
   同じ判定で止まります。フラグがなかった頃のログは最後まで判定を続けます。
 - コースのステージ（`PlayerOptions.course`）は、ルールセットのコース用ゲージで、前のステージが残した値から始めます。
   [コースと段位認定](./course.ja.md#コースのステージを遊ぶ) を参照してください。
@@ -606,7 +606,7 @@ IIDX は未測定のため、どちらも分けたままです。`PlayerSummary`
   自身の既定値の `total / 100 ×` として扱い、0 以下は 100 % とみなします（beatoraja `BMSPlayerRule.validate`）。
   したがって `total` のない bmson 譜面は TOTAL 100 ではなく、ルールセットの既定値で演奏されます。
 - `summary.gauge.effectiveTotal` は解決後の値を報告し、beatoraja スキンの TOTAL 表示（ref 368）はプレイ中と
-  リザルト画面でこの値を表示します。プレイログは譜面の生の値を記録し、リプレイ時に改めて解決します。
+  リザルト画面でこの値を表示します。リプレイは譜面の生の値を記録し、リプレイ時に改めて解決します。
 
 ### 増減量
 
@@ -757,7 +757,7 @@ scratch playable channel 上の演奏ノートだけを自動で処理し、そ�
 
 `speed` は開始時のテンポです。ホストはプレイ中に入力コマンド `{ kind: 'tempo', tempo }` でこれを変えられます。
 エンジンはコマンドを取り出した譜面時刻で時計を付け替える（`createTempoClock`）ので、譜面時刻は途切れずに続き、そこから新しいテンポで進みます。
-変更はプレイログ（`play.tempoChanges`）に記録し、`AudioSession.setTempo` を呼び、`onTempoChange` でホストへ知らせます。
+変更はリプレイ（`play.tempoChanges`）に記録し、`AudioSession.setTempo` を呼び、`onTempoChange` でホストへ知らせます。
 判定と記録する入力は譜面時刻のままなので、再シミュレーションには影響しません。
 リプレイは、ホストがログの変更を `replayTempoChanges` で渡すとそれに従います。
 組み込みの Node 音声セッションは開始時のテンポで音声を作るので、変更には追従しません。
@@ -906,7 +906,7 @@ channel 08 経由で負の `#BPMxx` を参照すると（先に整数へ切り�
 - 反転以降、エンジンは UI フレームに `displayBeat = 2 × beat(反転点) − beat(現在)` を載せます。LR2 の描画と同じく譜面位置空間での鏡映です。TUI グリッドと web シーンはこれでスクロールするため、譜面は反転後のテンポで逆走して見えます（反転後の STOP では止まり、後続の BPM 変化に追従し、チャート先頭まで巻き戻った後は先頭で固定）。ステータス時計と summary は実クロックのままです。
 - 押下は鏡映クロック `t' = 2 × 反転点 − 現在時刻` で判定し続けます。反転点付近のノートは反転直後も叩け、レーンの次のノートが `t'` からルールセットの空 POOR 範囲内にある間は空 POOR が出て、反転以降のミス掃きはありません。反転を跨ぐホールドは離すと BAD、離さなければ開いたままです。地雷は反転点で凍結しますが、反転点ちょうどの押下は PGREAT 範囲内の地雷をまだ起爆します。
 - リアルタイム音声は LR2 のイベントポンプとともに凍結します。反転より後の BGM・キー音トリガは発火しませんが、反転と同じティックの BGM と BGA は発火します（LR2 の op 順）。BGA のキュー切り替えは止まり、再生中の動画は流れ続けます。NOWBPM は負の値の `|trunc(BPM)|` を保持します。
-- ステージは譜面の事前計算された末尾時刻で終了します（意図的逸脱 — 実機 LR2 は ESC まで進行不能）。未判定のスコア対象ノート（反転後のノート、開いたままのホールド、終端が反転点より後にある AUTO SCRATCH のロングノート）が残っていれば、LR2 がそうしたプレイを離脱したとき HP を 0 にするのと同じく、ゲージを 0 にして FAILED とします。playlog には `chart.reversalTimeUs` を記録し、再シミュレーションにも同じ鏡映クロックとリザルトを適用します。
+- ステージは譜面の事前計算された末尾時刻で終了します（意図的逸脱 — 実機 LR2 は ESC まで進行不能）。未判定のスコア対象ノート（反転後のノート、開いたままのホールド、終端が反転点より後にある AUTO SCRATCH のロングノート）が残っていれば、LR2 がそうしたプレイを離脱したとき HP を 0 にするのと同じく、ゲージを 0 にして FAILED とします。replay には `chart.reversalTimeUs` を記録し、再シミュレーションにも同じ鏡映クロックとリザルトを適用します。
 
 ### TUI 以外の出力
 
@@ -940,4 +940,4 @@ TUI が無効な場合は、モード開始メッセージ、レーン割り当�
 - browser gameplay での 2P 独立 gauge variant
 - ゲージ推移タイムライン表示
 - beatoraja の非デフォルトのノート選択アルゴリズム（`duration` / `lowest` / `score`）は実装済みですが
-  ライブプレイのオプションとしては公開していません（`bms-playlog` のシミュレータでは `--algorithm=` で選べます）
+  ライブプレイのオプションとしては公開していません（`bms-replay` のシミュレータでは `--algorithm=` で選べます）

@@ -11,7 +11,7 @@ import type {
 import type { PlayerInterruptReason, PlayerLoadProgress, PlayerSummary } from '@be-music/player';
 import type { LaneBinding } from '../manual-input.ts';
 import type { ImageResizeAlgorithm, TUINoteHeight } from '@be-music/player/display';
-import type { GaugeType, PlaylogRulesetId } from '@be-music/player/ruleset';
+import type { GaugeType, RulesetId } from '@be-music/player/ruleset';
 
 export interface NodeGameplayWorkerPlayOptions {
   inferBmsLNTypeWhenMissing?: boolean;
@@ -32,7 +32,7 @@ export interface NodeGameplayWorkerPlayOptions {
   imageResizeAlgorithm?: ImageResizeAlgorithm;
   highSpeed?: number;
   judgeWindowMs?: number;
-  judgeRuleset?: PlaylogRulesetId;
+  judgeRuleset?: RulesetId;
   gauge?: GaugeType;
   debugActiveAudio?: boolean;
   leadInMs?: number;

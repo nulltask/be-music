@@ -77,7 +77,7 @@ const BENCH_RESULT: PlayResult = {
   gauge: 84,
   cleared: true,
   playSeconds: 118,
-  song: BENCH_CHART,
+  chart: BENCH_CHART,
   gaugeHistory: [],
   scoreHistory: [],
   lamp: 'NORMAL',

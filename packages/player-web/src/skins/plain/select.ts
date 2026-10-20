@@ -2,8 +2,8 @@ import {
   describeCourseCard,
   formatPlayVariantLabel,
   resolveStageOrientation,
-  resolveSongRowFacts,
-  resolveSongStats,
+  resolveChartRowFacts,
+  resolveChartStats,
   type BeMusicSelectLayout,
   type LibraryEntry,
   type LibraryCourse,
@@ -79,12 +79,12 @@ export function drawSelect(surface: BeMusicSurface<'2d'>, frame: BeMusicSelectFr
 
 /** The left card: title, artist, the chart's key facts, and the PLAY / AUTO buttons. */
 function drawFocusedSong(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFrame): void {
-  const song = frame.focusedSong;
+  const chartEntry = frame.focusedChart;
   const x = MARGIN;
   const y = 56;
   ctx.fillStyle = PANEL;
   ctx.fillRect(x, y, PANEL_W, 300);
-  if (!song) {
+  if (!chartEntry) {
     if (frame.focusedCourse !== undefined) {
       drawCourse(ctx, frame, frame.focusedCourse, x + 16, y, PANEL_W - 32);
       button(ctx, frame, 'PLAY', x + 16, y + 236, 160, frame.actions.play, true);
@@ -96,24 +96,24 @@ function drawFocusedSong(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFram
   }
   // Genre, title, artist — the order every built-in skin uses.
   const { nowMs } = frame;
-  const lift = song.genre ? 12 : 0;
+  const lift = chartEntry.genre ? 12 : 0;
   const textW = PANEL_W - 32;
-  if (song.genre) text(ctx, song.genre, x + 16, y + 22, { size: 10, color: MUTED, maxWidth: textW, nowMs });
-  text(ctx, song.title, x + 16, y + 28 + lift, { size: 18, weight: 800, maxWidth: textW, nowMs });
-  text(ctx, song.artist ?? '', x + 16, y + 52 + lift, { size: 11, color: MUTED, maxWidth: textW, nowMs });
+  if (chartEntry.genre) text(ctx, chartEntry.genre, x + 16, y + 22, { size: 10, color: MUTED, maxWidth: textW, nowMs });
+  text(ctx, chartEntry.title, x + 16, y + 28 + lift, { size: 18, weight: 800, maxWidth: textW, nowMs });
+  text(ctx, chartEntry.artist ?? '', x + 16, y + 52 + lift, { size: 11, color: MUTED, maxWidth: textW, nowMs });
 
   // Three columns of facts; each value keeps to its column (a wide BPM range or gimmick list scrolls).
-  const facts = resolveSongRowFacts(song);
+  const facts = resolveChartRowFacts(chartEntry);
   const narrow = { maxWidth: 86, nowMs };
   const wide = { maxWidth: 84, nowMs };
-  stat(ctx, 'MODE', formatPlayVariantLabel(song), x + 16, y + 92, narrow);
-  stat(ctx, 'LEVEL', String(song.playLevel ?? '-'), x + 110, y + 92, { maxWidth: 72, nowMs });
+  stat(ctx, 'MODE', formatPlayVariantLabel(chartEntry), x + 16, y + 92, narrow);
+  stat(ctx, 'LEVEL', String(chartEntry.playLevel ?? '-'), x + 110, y + 92, { maxWidth: 72, nowMs });
   stat(ctx, 'BPM', facts.bpm, x + 190, y + 92, wide);
   stat(ctx, 'NOTES', facts.notes, x + 16, y + 140, narrow);
   stat(ctx, 'LENGTH', facts.length, x + 110, y + 140, { maxWidth: 72, nowMs });
   stat(ctx, 'GIMMICKS', facts.tags.join(' ') || '-', x + 190, y + 140, wide);
   // The judge rank (#RANK / #DEFEXRANK) on a third row.
-  stat(ctx, 'JUDGE', resolveSongStats(song).judgeRank, x + 16, y + 188, narrow);
+  stat(ctx, 'JUDGE', resolveChartStats(chartEntry).judgeRank, x + 16, y + 188, narrow);
 
   button(ctx, frame, 'PLAY', x + 16, y + 236, 160, frame.actions.play, true);
   button(ctx, frame, 'AUTO', x + 186, y + 236, 88, frame.actions.autoPlay, false);
@@ -134,9 +134,9 @@ function drawPortraitCard(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFra
   } = resolvePortraitSelectCard(width);
   ctx.fillStyle = PANEL;
   ctx.fillRect(card.x, card.y, card.w, card.h);
-  const song = frame.focusedSong;
+  const chartEntry = frame.focusedChart;
   const left = card.x + 16;
-  if (!song) {
+  if (!chartEntry) {
     if (frame.focusedCourse !== undefined) {
       drawCourse(ctx, frame, frame.focusedCourse, left, card.y, card.w - 32);
       button(ctx, frame, 'PLAY', play.x, play.y, play.w, frame.actions.play, true, play.h);
@@ -148,28 +148,29 @@ function drawPortraitCard(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFra
   }
   const { nowMs } = frame;
   const textW = card.w - 32;
-  const lift = song.genre ? 12 : 0;
-  if (song.genre) text(ctx, song.genre, left, card.y + 20, { size: 10, color: MUTED, maxWidth: textW, nowMs });
-  text(ctx, song.title, left, card.y + 30 + lift, { size: 20, weight: 800, maxWidth: textW, nowMs });
+  const lift = chartEntry.genre ? 12 : 0;
+  if (chartEntry.genre)
+    text(ctx, chartEntry.genre, left, card.y + 20, { size: 10, color: MUTED, maxWidth: textW, nowMs });
+  text(ctx, chartEntry.title, left, card.y + 30 + lift, { size: 20, weight: 800, maxWidth: textW, nowMs });
   // The judge rank (#RANK / #DEFEXRANK) at the end of the artist line: the card has no room for a third row of facts.
   const right = card.x + card.w - 16;
   const artistY = card.y + 56 + lift;
-  const judgeRank = resolveSongStats(song).judgeRank;
+  const judgeRank = resolveChartStats(chartEntry).judgeRank;
   text(ctx, judgeRank, right, artistY, { size: 12, weight: 800, align: 'right' });
   const judgeWidth = ctx.measureText(judgeRank).width;
   text(ctx, 'JUDGE', right - judgeWidth - 6, artistY, { size: 10, color: MUTED, align: 'right' });
   const judgeLeft = right - judgeWidth - 6 - ctx.measureText('JUDGE').width;
-  text(ctx, song.artist ?? '', left, artistY, {
+  text(ctx, chartEntry.artist ?? '', left, artistY, {
     size: 12,
     color: MUTED,
     maxWidth: Math.max(40, judgeLeft - left - 12),
     nowMs,
   });
 
-  const facts = resolveSongRowFacts(song);
+  const facts = resolveChartRowFacts(chartEntry);
   const fit = { maxWidth: factWidth, nowMs, labelSize: 10 };
-  stat(ctx, 'MODE', formatPlayVariantLabel(song), c0, r0, fit);
-  stat(ctx, 'LEVEL', String(song.playLevel ?? '-'), c1, r0, fit);
+  stat(ctx, 'MODE', formatPlayVariantLabel(chartEntry), c0, r0, fit);
+  stat(ctx, 'LEVEL', String(chartEntry.playLevel ?? '-'), c1, r0, fit);
   stat(ctx, 'BPM', facts.bpm, c2, r0, fit);
   stat(ctx, 'NOTES', facts.notes, c0, r1, fit);
   stat(ctx, 'LENGTH', facts.length, c1, r1, fit);
@@ -189,7 +190,7 @@ function drawCourse(
   width: number,
 ): void {
   const { nowMs } = frame;
-  const card = describeCourseCard(course, frame.courseRecord?.(course));
+  const card = describeCourseCard(course, frame.courseBestRecord?.(course));
   text(ctx, card.title, x, y + 28, { size: 18, weight: 800, maxWidth: width, nowMs });
   text(ctx, card.detail, x, y + 52, { size: 11, color: MUTED, maxWidth: width, nowMs });
   card.stages.slice(0, 6).forEach((stage, index) => {
@@ -273,10 +274,10 @@ function drawRow(
     text(ctx, describeCourse(entry.course), x + w - 12, midY, { size: 11, color: dim, align: 'right', maxWidth: 236 });
     return;
   }
-  const song = entry.chart;
-  const facts = resolveSongRowFacts(song);
-  text(ctx, String(song.playLevel ?? '-'), x + 22, midY, { size: 12, weight: 800, align: 'center' });
-  text(ctx, song.title, x + 44, midY, { size: 12, weight: 700, maxWidth: w - 300, nowMs });
+  const chartEntry = entry.chart;
+  const facts = resolveChartRowFacts(chartEntry);
+  text(ctx, String(chartEntry.playLevel ?? '-'), x + 22, midY, { size: 12, weight: 800, align: 'center' });
+  text(ctx, chartEntry.title, x + 44, midY, { size: 12, weight: 700, maxWidth: w - 300, nowMs });
   text(ctx, `${facts.notes} NOTES   ${facts.length}   ${facts.bpm} BPM`, x + w - 12, midY, {
     size: 11,
     color: dim,
@@ -310,10 +311,10 @@ function drawPortraitRow(
     text(ctx, describeCourse(entry.course), x + 44, midY + 9, { size: 10, color: dim, maxWidth: textW });
     return;
   }
-  const song = entry.chart;
-  const facts = resolveSongRowFacts(song);
-  text(ctx, String(song.playLevel ?? '-'), x + 22, midY, { size: 13, weight: 800, align: 'center' });
-  text(ctx, song.title, x + 44, midY - 8, { size: 13, weight: 700, maxWidth: textW, nowMs });
+  const chartEntry = entry.chart;
+  const facts = resolveChartRowFacts(chartEntry);
+  text(ctx, String(chartEntry.playLevel ?? '-'), x + 22, midY, { size: 13, weight: 800, align: 'center' });
+  text(ctx, chartEntry.title, x + 44, midY - 8, { size: 13, weight: 700, maxWidth: textW, nowMs });
   text(ctx, `${facts.notes} NOTES   ${facts.length}   ${facts.bpm} BPM`, x + 44, midY + 9, {
     size: 10,
     color: dim,

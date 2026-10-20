@@ -42,8 +42,8 @@ describe('evaluateBeatorajaLuaSkin (real beatoraja default theme)', () => {
         option: {
           'Lane Geometry': 920,
           'Score Graph': 900,
-          'Judge Count': 905,
-          'Judge Detail': 910,
+          'Judgment Count': 905,
+          'Judgment Detail': 910,
         },
       },
     });

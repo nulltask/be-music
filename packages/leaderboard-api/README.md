@@ -8,14 +8,14 @@ The be-music Leaderboard API: a Hono app on Cloudflare Workers with D1 and R2. T
 ## What is implemented
 
 - OIDC sign-in through the independent Accounts service, with guest accounts, passkeys and configured Discord/Google providers.
-- `POST /api/v0/scores`: submits a play log (gzip). The server checks eligibility and the play and chart fingerprint
+- `POST /api/v0/scores`: submits a replay (gzip). The server checks eligibility and the play and chart fingerprint
   documents (verification layers L1–L3, and L4 for charts without `#RANDOM`), re-simulates the play under `lr2`,
   `beatoraja` and `iidx`, stores the log in R2 and updates personal bests. A retried play is recognised; the same play
   from a second account is refused.
 - `GET /api/v0/charts/:chartFingerprint/leaderboard` and `.../leaderboard/me`: rankings, with filters for assisted
   plays, anonymous players, and "played under this ruleset".
-- `GET /api/v0/scores/:id` and `.../playlog`.
-- Course runs (docs/leaderboard.md section 6.1): `POST /api/v0/course-scores`, the latest runs, one run, its play log,
+- `GET /api/v0/scores/:id` and `.../replay`.
+- Course runs (docs/leaderboard.md section 6.1): `POST /api/v0/course-scores`, the latest runs, one run, its replay,
   hiding a run, a course, its ranking and my rank on it, with bests (the trophy best included) per course and ruleset.
 - `GET /api/v0/openapi.json`: the OpenAPI 3.1 document, generated from the routes' valibot schemas
   (`src/api/schemas.ts`), and its reference page at `/api-reference`. A copy is committed as
@@ -31,7 +31,7 @@ A score submission, in the order the Worker checks it (`src/api/v0.ts`, `src/sco
 
 ```mermaid
 flowchart TD
-  post(["POST /api/v0/scores"]) --> gate{"signed in, under the rate limit,<br/>a valid, eligible play log?"}
+  post(["POST /api/v0/scores"]) --> gate{"signed in, under the rate limit,<br/>a valid, eligible replay?"}
   gate -->|no| e4xx["401 / 429 / 400 / 422"]
   gate -->|yes| dup{"submission id<br/>already stored?"}
   dup -->|"yes, same player"| r200["200: the stored result"]
@@ -39,7 +39,7 @@ flowchart TD
   dup -->|no| docs{"documents match the<br/>fingerprints (L1–L4)?"}
   docs -->|no| reject["409 / 422"]
   docs -->|yes| sim["re-simulate under<br/>lr2 · beatoraja · iidx"]
-  sim --> store["R2: play log<br/>D1: score, results, bests"]
+  sim --> store["R2: replay<br/>D1: score, results, bests"]
   store --> r201["201: results and ranks"]
 ```
 

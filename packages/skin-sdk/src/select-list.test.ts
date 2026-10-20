@@ -6,7 +6,7 @@ import {
   describeCourseCard,
   selectListRows,
 } from './select-list.ts';
-import type { LibraryChart, LibraryCourse } from './song.ts';
+import type { LibraryChart, LibraryCourse } from './chart.ts';
 
 const entries = Array.from({ length: 20 }, (_, index) => index);
 

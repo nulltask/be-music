@@ -169,20 +169,20 @@ describe('resolveBeatorajaResultOps', () => {
 });
 
 describe('resolveBeatorajaResultText', () => {
-  const song = { title: 'Song', subtitle: 'sub', artist: 'Artist' };
+  const chartEntry = { title: 'Song', subtitle: 'sub', artist: 'Artist' };
 
   it('reads the song and skin texts, and a course run its title on the title texts', () => {
-    expect(resolveBeatorajaResultText(BEATORAJA_TEXT.FULLTITLE, input({ song }))).toBe('Song sub');
+    expect(resolveBeatorajaResultText(BEATORAJA_TEXT.FULLTITLE, input({ chart: chartEntry }))).toBe('Song sub');
     expect(resolveBeatorajaResultText(BEATORAJA_TEXT.SKIN_AUTHOR, input({ skin: { author: 'Maker' } }))).toBe('Maker');
-    expect(resolveBeatorajaResultText(BEATORAJA_TEXT.TABLE_NAME, input({ song }))).toBeUndefined();
+    expect(resolveBeatorajaResultText(BEATORAJA_TEXT.TABLE_NAME, input({ chart: chartEntry }))).toBeUndefined();
     const course = { kind: 'grade' as const, title: 'Dan', stages: [{ title: 'a' }, { title: 'b' }] };
-    const run = input({ song, result: facts({ course }) });
+    const run = input({ chart: chartEntry, result: facts({ course }) });
     expect(resolveBeatorajaResultText(BEATORAJA_TEXT.TITLE, run)).toBe('Dan');
     expect(resolveBeatorajaResultText(BEATORAJA_TEXT.FULLTITLE, run)).toBe('Dan');
     expect(resolveBeatorajaResultText(BEATORAJA_TEXT.ARTIST, run)).toBe('Artist');
     expect(resolveBeatorajaResultText(BEATORAJA_TEXT.COURSE1_TITLE + 1, run)).toBe('b');
     // A stage's result keeps the stage's chart on the title.
-    const stage = input({ song, result: facts({ course: { ...course, stageIndex: 0 } }) });
+    const stage = input({ chart: chartEntry, result: facts({ course: { ...course, stageIndex: 0 } }) });
     expect(resolveBeatorajaResultText(BEATORAJA_TEXT.TITLE, stage)).toBe('Song');
   });
 });

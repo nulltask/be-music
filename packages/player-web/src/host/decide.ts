@@ -5,7 +5,7 @@
 
 import type { ResolvedPlayChart } from '@be-music/player';
 import type { CourseView, LibraryChart, PlayOptions, SystemSoundSet } from '@be-music/scene-model';
-import type { BrowserSongAssetSource } from '../collection/types.ts';
+import type { BrowserAssetSource } from '../collection/types.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
 import { DecideSession, type DecideSessionEvents } from '../session/decide/decide-session.ts';
 import { SessionScene, type SessionSceneOptions } from '../session/session-scene.ts';
@@ -32,7 +32,7 @@ export interface DecideSceneOptions extends SessionSceneOptions {
   /** The options the play will run with, as the skin shows them. Defaults to `DEFAULT_PLAY_OPTIONS`. */
   readonly playOptions?: PlayOptions;
   /** Where the chart's files are, for the images a skin shows. */
-  readonly source?: BrowserSongAssetSource;
+  readonly source?: BrowserAssetSource;
   /** The theme's sounds: the screen plays `decideBGM`, its jingle, and stops it as it leaves. */
   readonly sounds: SystemSoundSet;
   /**

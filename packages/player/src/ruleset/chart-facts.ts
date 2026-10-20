@@ -18,7 +18,7 @@ export interface EngineRulesetChartInput {
 }
 
 /**
- * The judge-rank inputs a ruleset reads, as `RulesetChartFacts` / `PlaylogChart` record them: the LR2-axis percent and
+ * The judge-rank inputs a ruleset reads, as `RulesetChartFacts` / `ReplayChart` record them: the LR2-axis percent and
  * the chart's own `#RANK` / `#DEFEXRANK` (bmson `judge_rank`) from the resolved chart.
  */
 export function resolveChartJudgeRankFacts(
@@ -41,8 +41,8 @@ export function resolveChartJudgeRankFacts(
 export { resolveChartLongNoteMode };
 
 /**
- * Derives the ruleset's chart facts from the engine's own representation. The play log side has a matching adapter
- * (`rulesetChartFactsFromPlaylog`); both must agree, otherwise a live play and its replay would resolve different
+ * Derives the ruleset's chart facts from the engine's own representation. The replay side has a matching adapter
+ * (`rulesetChartFactsFromReplay`); both must agree, otherwise a live play and its replay would resolve different
  * rulesets from the same chart.
  */
 export function rulesetChartFactsFromChart(

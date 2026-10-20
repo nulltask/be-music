@@ -1,11 +1,11 @@
 import { createEmptyJSON } from '@be-music/json';
 import { parseBeatorajaCourseData } from '@be-music/player/course';
-import type { BeMusicPlaylog } from '@be-music/player/playlog';
+import type { BeMusicReplay } from '@be-music/player/replay';
 import type { BrowseSnapshot, LibraryChart, LibraryCourse } from '@be-music/scene-model';
 import { describe, expect, test } from 'vite-plus/test';
 import { CourseRunService } from './courses.ts';
 
-function song(id: string): LibraryChart {
+function chartEntry(id: string): LibraryChart {
   return {
     id,
     sourceId: 'drop1',
@@ -27,11 +27,16 @@ function grade(): LibraryCourse {
     hash: ['1', '2'].map((digit) => ({ md5: digit.repeat(32) })),
     constraint: ['CLASS'],
   })!;
-  return { id: 'dan#0', definition, stages: ['a', 'b'].map((id) => ({ title: id, chart: song(id) })), playable: true };
+  return {
+    id: 'dan#0',
+    definition,
+    stages: ['a', 'b'].map((id) => ({ title: id, chart: chartEntry(id) })),
+    playable: true,
+  };
 }
 
-/** A stage's play log with a result: the gauge where the stage left it. */
-function stageLog(final = 80): BeMusicPlaylog {
+/** A stage's replay with a result: the gauge where the stage left it. */
+function stageLog(final = 80): BeMusicReplay {
   return {
     play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
     results: {
@@ -46,7 +51,7 @@ function stageLog(final = 80): BeMusicPlaylog {
         gauge: { type: 'GRADE', final, cleared: final > 0 },
       },
     },
-  } as unknown as BeMusicPlaylog;
+  } as unknown as BeMusicReplay;
 }
 
 /** Where the select screen was (a folder open, the cursor on a bar). */
@@ -94,7 +99,7 @@ describe('CourseRunService', () => {
   test('ESC gives the run up: the stage is recorded, the run ends and is the running one again for its result', () => {
     const courses = new CourseRunService();
     const active = courses.beginRun(grade());
-    // A navigation took the run meanwhile (the play log arrives after the stage left).
+    // A navigation took the run meanwhile (the replay arrives after the stage left).
     courses.finishRun();
     courses.giveUp(active, stageLog(40));
     expect(courses.active).toBe(active);

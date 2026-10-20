@@ -83,7 +83,7 @@ export interface BeatorajaChartNoteDistribution {
   bpmSegments: ReadonlyArray<BeatorajaBPMSegment>;
   /**
    * The chart's main BPM, the BPM the most judged notes sit at (`resolveChartMainBPM`, the one
-   * rule HS-FIX and the play log read too), else the initial BPM for a chart without notes.
+   * rule HS-FIX and the replay read too), else the initial BPM for a chart without notes.
    * Beatoraja's BPM graph normalises the y axis around this value, so segments at `mainBPM`
    * paint at the vertical centre and segments at half / double map to the bottom / top edges.
    */
@@ -245,7 +245,7 @@ export function computeBeatorajaChartNoteDistribution(chart: BeMusicJSON): Beato
   }
   const maxCount = Math.max(20, Math.min(100, Math.ceil(densest / 10) * 10));
 
-  // The chart's main BPM: one rule for the graph, the skin's main-BPM numbers, HS-FIX and the play log. A chart
+  // The chart's main BPM: one rule for the graph, the skin's main-BPM numbers, HS-FIX and the replay. A chart
   // the walk found no notes in has none, so it skips resolving the chart.
   const mainBPM = (noteEvents.length > 0 ? resolveChartMainBPM(resolveChart(chart)) : undefined) ?? initialBPM;
 

@@ -8,7 +8,7 @@ import {
   type ImageResizeAlgorithm,
   type TUINoteHeight,
 } from '@be-music/player/display';
-import { PLAYLOG_RULESET_IDS, type GaugeType, type PlaylogRulesetId } from '@be-music/player/ruleset';
+import { RULESET_IDS, type GaugeType, type RulesetId } from '@be-music/player/ruleset';
 import { HIGH_SPEED_STEP, MAX_HIGH_SPEED, MIN_HIGH_SPEED } from './config.ts';
 
 export interface CLIArgs {
@@ -37,7 +37,7 @@ export interface CLIArgs {
   highSpeed?: number;
   judgeWindowMs?: number;
   /** Compat ruleset the engine judges under (`PlayerOptions.judgeRuleset`). Defaults to LR2. */
-  judgeRuleset?: PlaylogRulesetId;
+  judgeRuleset?: RulesetId;
   /** Gauge pick, in LR2's names; each ruleset maps it onto its own line-up. Defaults to `GROOVE`. */
   gauge?: GaugeType;
   debugActiveAudio: boolean;
@@ -88,11 +88,11 @@ export function parseArgs(rawArgs: string[]): CLIArgs {
 /** The gauge types, in the order the CLI lists them. */
 const CLI_GAUGES: readonly GaugeType[] = ['GROOVE', 'EASY', 'HARD', 'DEATH'];
 
-function parseCLIRuleset(rawValue: string): PlaylogRulesetId {
+function parseCLIRuleset(rawValue: string): RulesetId {
   const value = rawValue.trim().toLowerCase();
-  const match = PLAYLOG_RULESET_IDS.find((ruleset) => ruleset === value);
+  const match = RULESET_IDS.find((ruleset) => ruleset === value);
   if (!match) {
-    throw new Error(`Unknown --ruleset "${rawValue}". Expected one of: ${PLAYLOG_RULESET_IDS.join(', ')}.`);
+    throw new Error(`Unknown --ruleset "${rawValue}". Expected one of: ${RULESET_IDS.join(', ')}.`);
   }
   return match;
 }

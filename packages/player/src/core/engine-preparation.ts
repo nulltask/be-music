@@ -310,7 +310,7 @@ function resolvePlaybackControlFlow(json: BeMusicJSON, draws: RandomDraws): Cont
 export function resolvePlayerChart(json: BeMusicJSON, options: PlayerOptions): ControlFlowResolutionResult {
   if (options.randomDraws === undefined && hasControlFlow(json)) {
     // The engine never draws: rolling here would give the play branches nobody outside the engine knows about (the
-    // host's scene, result screen and play log would show another roll, or stack a second branch on top).
+    // host's scene, result screen and replay would show another roll, or stack a second branch on top).
     throw new TypeError(
       'The chart still carries #RANDOM / #SWITCH control flow. Resolve it once with resolvePlayChart (or ' +
         'drawRandomOutcomes + resolveBMSControlFlowWithDraws) and pass the draws as PlayerOptions.randomDraws.',

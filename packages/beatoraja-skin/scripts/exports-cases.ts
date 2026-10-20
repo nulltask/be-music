@@ -90,7 +90,7 @@ const BENCH_PM_CHARA_INPUT = [
   { id: 'dstPMchara1PBG', src: 'srcPMchara1P', color: 1, type: 1 },
 ];
 const BENCH_CUSTOM_OFFSET_INPUT = [
-  { name: 'Judge position', id: 40, x: true, y: true },
+  { name: 'Judgment position', id: 40, x: true, y: true },
   { name: 'Lane cover', id: 41, y: true, a: 1 },
   { name: 'Score graph', id: 42, x: true, w: true, h: true },
 ];

@@ -91,7 +91,7 @@ describe('loadBeatorajaSkin (JSON)', () => {
           name: 'demo',
           w: 1280,
           h: 720,
-          offset: [{ name: 'Judge Detail', id: 40, x: true, y: true, w: 0, h: 0, r: 1, a: true }],
+          offset: [{ name: 'Judgment Detail', id: 40, x: true, y: true, w: 0, h: 0, r: 1, a: true }],
           source: [{ id: 0, path: 'system.png' }],
           image: [{ id: 0, src: 0, x: 0, y: 0, w: 8, h: 8 }],
         }),
@@ -104,7 +104,7 @@ describe('loadBeatorajaSkin (JSON)', () => {
     expect(result.format).toBe('json');
     expect(result.header.type).toBe(5);
     expect(result.header.offset).toEqual([
-      { name: 'Judge Detail', id: 40, x: true, y: true, w: false, h: false, r: true, a: true },
+      { name: 'Judgment Detail', id: 40, x: true, y: true, w: false, h: false, r: true, a: true },
     ]);
     expect(result.skin?.name).toBe('demo');
   });

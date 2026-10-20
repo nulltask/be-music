@@ -26,15 +26,15 @@ import type {
   PlayerStateSignals,
 } from '@be-music/player/signals';
 import type { TimedPlayableNote } from '@be-music/player/display';
-import type { BeMusicPlaylog, PlaylogRecordingOptions, PlaylogViewState } from '@be-music/player/playlog';
+import type { BeMusicReplay, ReplayRecordingOptions, ReplayViewState } from '@be-music/player/replay';
 import {
   resolveDisplayedPoor,
   type GaugeType,
-  type JudgeKind,
+  type JudgmentKind,
   type LongNoteStyle,
   type ScoreSummary,
 } from '@be-music/player/ruleset';
-import { playEventFromUICommand, PlaylogViewCursor, type LibraryChart, type PlayResult } from '@be-music/scene-model';
+import { playEventFromUICommand, ReplayViewCursor, type LibraryChart, type PlayResult } from '@be-music/scene-model';
 import type { BeMusicJudgeWindows, BeMusicLaneKind } from '@be-music/skin-sdk';
 import type { AudioBusHandle } from '../../runtime/audio-bus.ts';
 import { runEngineDriver } from '../../runtime/engine-driver.ts';
@@ -47,15 +47,15 @@ import type { LongNoteTracker } from './long-note-tracker.ts';
 import type { LiveTempo } from './live-tempo.ts';
 import { logger } from '../../logger.ts';
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
-import type { BeMusicJudge } from '../../skin/be-music/types.ts';
+import type { BeMusicJudgmentKind } from '../../skin/be-music/types.ts';
 import { beginExitSequence, resolvePlayEnding, type PlayEndingContext } from './play-ending.ts';
 import { applyPlayEvent } from './play-state.ts';
 import { shouldSkipPlayKey } from './play-keys.ts';
 import { samplePlaybackRate } from './play-media.ts';
 import {
-  flushPlaylogView,
+  flushReplayView,
   followTempoChange,
-  startPlaylogView,
+  startReplayView,
   type PlayViewSettingsContext,
 } from './play-view-settings.ts';
 
@@ -79,7 +79,7 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
       | 'onChartFinished'
       | 'onExit'
       | 'onRestart'
-      | 'playlogRecorder'
+      | 'replayRecorder'
       | 'random1P'
       | 'random2P'
       | 'replay'
@@ -95,7 +95,7 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
       | 'hiddenSudden2P'
     >
   >;
-  readonly song: LibraryChart | undefined;
+  readonly chart: LibraryChart | undefined;
   readonly resolvedChart: BeMusicJSON | undefined;
   readonly randomDraws: RandomDraws | undefined;
   readonly preparedChart: PreparedPlaybackChartData | undefined;
@@ -125,9 +125,9 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
   engineFrame: Readonly<PlayerUIFramePayload> | undefined;
   chartEnded: boolean;
   chartEndTimeout: number | undefined;
-  playlog: BeMusicPlaylog | undefined;
-  readonly playlogWaiters: Array<(playlog: BeMusicPlaylog) => void>;
-  replayViewCursor: PlaylogViewCursor | undefined;
+  replay: BeMusicReplay | undefined;
+  readonly replayWaiters: Array<(replay: BeMusicReplay) => void>;
+  replayViewCursor: ReplayViewCursor | undefined;
   score: ScoreSummary;
   gaugeState: PlayerGaugeSummary;
   fastCount: number;
@@ -136,7 +136,7 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
   lastJudge: string;
   lastJudgeUntil: number;
   lastJudgeAt: number | undefined;
-  judgeSideState: Record<'1P' | '2P', { judge: JudgeKind | ''; until: number; combo: number; courseCombo?: number }>;
+  judgeSideState: Record<'1P' | '2P', { judge: JudgmentKind | ''; until: number; combo: number; courseCombo?: number }>;
   judgeWindows: BeMusicJudgeWindows | undefined;
   longNoteStyle: LongNoteStyle | undefined;
   readonly longNotes: LongNoteTracker;
@@ -157,7 +157,7 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
   readonly keyBeamFadeStartedAt: Map<string, number>;
   readonly keyFlashTimeouts: Set<number>;
   readonly bombStartedAt: Map<string, number>;
-  readonly bombJudge: Map<string, BeMusicJudge>;
+  readonly bombJudge: Map<string, BeMusicJudgmentKind>;
   resolveSelectedGauge(): GaugeType;
   getResultData(): PlayResult | undefined;
 }
@@ -173,14 +173,14 @@ const KEY_ON_FLASH_HOLD_MS = 60;
 /**
  * Hands the play over to the host once ({@link sharedEngineInterrupt}): a play still being judged is interrupted, so
  * the engine stops (and, for ESC, records the play as given up); a play whose chart already settled is complete, so
- * its hold is let go and it ends with its play log as usual. A no-op before the engine is running.
+ * its hold is let go and it ends with its replay as usual. A no-op before the engine is running.
  */
 export function interruptSharedEngine(ctx: PlayEngineContext, reason: 'escape' | 'restart'): void {
   if (ctx.sharedEngineInterrupt !== undefined) return;
   const signals = ctx.sharedEngineInputSignals;
   if (signals === undefined) return;
   ctx.sharedEngineInterrupt = reason;
-  flushPlaylogView(ctx);
+  flushReplayView(ctx);
   if (ctx.sharedEngineChartSettled) {
     ctx.chartEndHold?.abort();
     return;
@@ -238,7 +238,7 @@ function releaseKeyBeam(ctx: PlayEngineContext, channel: string): void {
  * Starts a bomb (hit explosion) on `channel`. The core scene draws it from `bombStartedAt`; themes react through the
  * `bomb` event (the LR2 family stamps its per-lane bomb timer at the same instant).
  */
-function triggerBomb(ctx: PlayEngineContext, channel: string, judge?: BeMusicJudge): void {
+function triggerBomb(ctx: PlayEngineContext, channel: string, judge?: BeMusicJudgmentKind): void {
   const now = ctx.playClock();
   ctx.bombStartedAt.set(channel, now);
   if (judge) ctx.bombJudge.set(channel, judge);
@@ -283,7 +283,7 @@ function flashKeyBeam(ctx: PlayEngineContext, channel: string): void {
 
 function publishJudge(
   ctx: PlayEngineContext,
-  judge: JudgeKind,
+  judge: JudgmentKind,
   seconds: number,
   state: Readonly<Pick<PlayerJudgeComboSignalState, 'channel' | 'deltaMs' | 'combo'>>,
 ): void {
@@ -370,14 +370,14 @@ function noteImpulse(ctx: PlayEngineContext, channel: string): void {
  * route to the host's `onExit` / `onRestart` callbacks the same way the legacy DOM keyhandler did.
  */
 /**
- * The chart the engine plays in shared-engine mode: the one `prepareSong` resolved. Since the renderer hands the
+ * The chart the engine plays in shared-engine mode: the one `prepareChart` resolved. Since the renderer hands the
  * engine its own `PreparedPlaybackChartData` instance (which already encodes shuffle / DP-flip), the chart events
  * here only feed engine-internal helpers (timing resolver, BGM / BGA / dynamic-volume realtime audio scheduling),
  * none of which care about the shuffled lane channels. The resolved chart carries no control flow, so the engine
  * plays it as is; {@link randomDraws} travel with it for the RANDOM summary.
  */
 function buildSharedEngineChart(ctx: PlayEngineContext): BeMusicJSON {
-  return ctx.resolvedChart ?? ctx.song!.chart;
+  return ctx.resolvedChart ?? ctx.chart!.chart;
 }
 
 /**
@@ -386,20 +386,20 @@ function buildSharedEngineChart(ctx: PlayEngineContext): BeMusicJSON {
  * `native` so a dropped log can be matched back to its song. The engine plays the chart the session resolved (and
  * flipped); the song's chart is the source both fingerprints describe (`#RANDOM` unresolved, no lane option applied).
  */
-export function resolvePlaylogRecording(
+export function resolveReplayRecording(
   options: Pick<
     PlaySessionOptions,
-    'gauge' | 'chartSHA256' | 'chartMD5' | 'playlogRecorder' | 'random1P' | 'random2P' | 'dpFlip'
+    'gauge' | 'chartSHA256' | 'chartMD5' | 'replayRecorder' | 'random1P' | 'random2P' | 'dpFlip'
   >,
-  song: Pick<LibraryChart, 'chart' | 'chartPath'> | undefined,
-  view: PlaylogViewState,
-): PlaylogRecordingOptions {
+  chartEntry: Pick<LibraryChart, 'chart' | 'chartPath'> | undefined,
+  view: ReplayViewState,
+): ReplayRecordingOptions {
   return {
     gauge: options.gauge,
     ...(options.chartSHA256 !== undefined ? { chartSHA256: options.chartSHA256 } : {}),
     ...(options.chartMD5 !== undefined ? { chartMD5: options.chartMD5 } : {}),
-    ...(options.playlogRecorder !== undefined ? { recorder: options.playlogRecorder } : {}),
-    ...(song !== undefined ? { sourceChart: song.chart } : {}),
+    ...(options.replayRecorder !== undefined ? { recorder: options.replayRecorder } : {}),
+    ...(chartEntry !== undefined ? { sourceChart: chartEntry.chart } : {}),
     ...(options.random1P !== undefined || options.random2P !== undefined
       ? {
           randomLane: {
@@ -410,13 +410,13 @@ export function resolvePlaylogRecording(
       : {}),
     ...(options.dpFlip !== undefined ? { dpFlip: options.dpFlip } : {}),
     view,
-    ...(song?.chartPath !== undefined ? { native: { chartPath: song.chartPath } } : {}),
+    ...(chartEntry?.chartPath !== undefined ? { native: { chartPath: chartEntry.chartPath } } : {}),
   };
 }
 
 export function launchSharedEngine(ctx: PlayEngineContext): void {
   if (ctx.disposed || ctx.sharedEnginePromise) return;
-  if (!ctx.song || !ctx.audioContext || !ctx.audioBus) return;
+  if (!ctx.chart || !ctx.audioContext || !ctx.audioBus) return;
   // Build the chart the engine sees from the view's already-shuffled notes / mines / invisibles. The view's
   // `applyRandomMode` mutates `runtimeNote.channel` (NOT `event.channel`), so without this remap the engine
   // would extract notes from `chart.events` with their ORIGINAL pre-shuffle channels — its judge would target
@@ -433,11 +433,11 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
     },
   };
   ctx.engineFrame = undefined;
-  // A replay shows its recorded view along the playhead; a recorded play logs its own from the start.
-  ctx.playlogViewCoalescer = undefined;
+  // A replay shows its recorded view along the playhead; a recorded replays its own from the start.
+  ctx.replayViewCoalescer = undefined;
   ctx.replayViewCursor =
     ctx.options.replay !== undefined
-      ? new PlaylogViewCursor(ctx.options.replay.play.view, ctx.options.replay.play.viewChanges)
+      ? new ReplayViewCursor(ctx.options.replay.play.view, ctx.options.replay.play.viewChanges)
       : undefined;
   ctx.sharedEnginePromise = runEngineDriver({
     chart,
@@ -527,7 +527,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       ...(ctx.options.replay !== undefined
         ? {
             // Replay playback — feed the recorded input stream; the engine ignores live lane input, and the run
-            // records no new play log (replaying a replay would only duplicate the file). Auto scratch, the
+            // records no new replay (replaying a replay would only duplicate the file). Auto scratch, the
             // judge ruleset, the debug judge-window override, the end-on-failure flag and the course stage are
             // restored from the log so the judging setup matches the recording.
             replayInputs: ctx.options.replay.inputs,
@@ -550,15 +550,15 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
           }
         : {
             ...(ctx.options.judgeRuleset !== undefined ? { judgeRuleset: ctx.options.judgeRuleset } : {}),
-            // Play log recording: the engine snapshots the resolved (post-shuffle) chart and the raw input
+            // Replay recording: the engine snapshots the resolved (post-shuffle) chart and the raw input
             // replay, then hands the assembled log here right before the play promise settles. The host reads it
-            // back through `getResultData().playlog` for the result screen's auto-save.
+            // back through `getResultData().replay` for the result screen's auto-save.
             // What the player sees at the start; the changes during the play go in as `view` commands.
-            recordPlaylog: resolvePlaylogRecording(ctx.options, ctx.song, startPlaylogView(ctx)),
-            onPlaylogRecorded: (playlog) => {
-              ctx.playlog = playlog;
-              const waiters = ctx.playlogWaiters.splice(0);
-              for (const resolve of waiters) resolve(playlog);
+            recordReplay: resolveReplayRecording(ctx.options, ctx.chart, startReplayView(ctx)),
+            onReplayRecorded: (replay) => {
+              ctx.replay = replay;
+              const waiters = ctx.replayWaiters.splice(0);
+              for (const resolve of waiters) resolve(replay);
             },
           }),
     },
@@ -649,7 +649,7 @@ function applyEngineFrame(ctx: PlayEngineContext, frame: Readonly<PlayerUIFrameP
 
 function applyEngineSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSummary>): void {
   // `summary.total` is the engine's authoritative scorable-note count (`scorableNotes.length`, which excludes
-  // Free-Zone channels). The view's own initial `score.total` is computed independently in `prepareSong` from
+  // Free-Zone channels). The view's own initial `score.total` is computed independently in `prepareChart` from
   // `notes.filter(isPlayableInputChannel).length`, which DOES include Free-Zone — so on charts that use
   // channel `17` / `27` as Free-Zone the two diverge by the Free-Zone count. That mismatch makes
   // `maybeFireFullCombo`'s `combo === score.total` predicate unreachable (combo can only ever climb to
@@ -672,7 +672,7 @@ function applyEngineSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSumm
   ctx.fastCount = summary.fast;
   ctx.slowCount = summary.slow;
   // The play state's gauge and EX score, the graphs' next samples. The graphs run over the scene's own chart length.
-  applyPlayEvent(ctx, { type: 'frame', frame: { totalSeconds: ctx.resolveSongDurationSeconds(), summary } });
+  applyPlayEvent(ctx, { type: 'frame', frame: { totalSeconds: ctx.resolveChartDurationSeconds(), summary } });
   if (summary.gauge) {
     const previous = ctx.gaugeState.current;
     ctx.gaugeState = { ...summary.gauge };
@@ -796,7 +796,7 @@ function applyResolvedRuleset(ctx: PlayEngineContext, info: PlayerRulesetInfo): 
  */
 function applyEngineJudgeCombo(ctx: PlayEngineContext, state: Readonly<PlayerJudgeComboSignalState>): void {
   if (state.judge === 'READY') return;
-  const judgeKind = state.judge as JudgeKind;
+  const judgeKind = state.judge as JudgmentKind;
   const seconds = ctx.currentSeconds();
   // Autoplay hits, mine BADs, and missed notes carry no `deltaMs`: the play state keeps no timing for them.
   applyPlayEvent(ctx, { type: 'judge', judge: state, seconds, atMs: ctx.playClock() });
@@ -861,7 +861,7 @@ function handleSharedEngineChartFinished(
         ctx.onHeldPlayEnded = () => {
           if (!ctx.disposed) finish();
         };
-        flushPlaylogView(ctx);
+        flushReplayView(ctx);
         ctx.chartEndHold?.abort();
       },
       // A normal end lets its last keysounds ring through the fade-out; a failure cuts them.

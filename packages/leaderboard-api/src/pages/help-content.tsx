@@ -194,7 +194,7 @@ const en: HelpContent = {
       <Section id="verification" t={t}>
         <Terms
           rows={[
-            ['L3', 'The chart in the play log matches its fingerprint.'],
+            ['L3', 'The chart in the replay matches its fingerprint.'],
             ['L4', 'The chart played is known to be this one: it has no #RANDOM, or this branch was seen before.'],
           ]}
         />
@@ -353,7 +353,7 @@ const ja: HelpContent = {
       <Section id="verification" t={t}>
         <Terms
           rows={[
-            ['L3', 'プレイログの譜面が譜面 ID と一致する。'],
+            ['L3', 'リプレイの譜面が譜面 ID と一致する。'],
             ['L4', '遊んだ譜面がこの譜面だと確かめられる: #RANDOM がない、または既に確認済みの分岐。'],
           ]}
         />

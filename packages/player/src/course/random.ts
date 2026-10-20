@@ -5,14 +5,14 @@ import {
   isClassCourseConstraints,
   type RandomCourseDefinition,
 } from './definition.ts';
-import { type CourseSongRecord, parseCourseSongFilter, selectCourseSongs } from './filter.ts';
+import { type CourseChartRecord, parseCourseChartFilter, selectCourseCharts } from './filter.ts';
 
 /** A drawn random course: the fixed course to play and the candidate drawn for each stage. */
 export interface RandomCourseDrawSuccess<T> {
   ok: true;
   course: CourseDefinition;
   /** One per stage, in stage order. */
-  songs: T[];
+  charts: T[];
 }
 
 /** Why a random course could not be drawn: the first stage whose filter is invalid or selects no chart. */
@@ -34,7 +34,7 @@ function pick(random: () => number, length: number): number {
 }
 
 /** The identity beatoraja's `distinct` compares: the chart's SHA-256 (MD5 for a record without one). */
-function chartKey(record: CourseSongRecord): string {
+function chartKey(record: CourseChartRecord): string {
   return record.sha256 !== undefined && record.sha256.length > 0 ? record.sha256.toLowerCase() : `md5:${record.md5}`;
 }
 
@@ -43,7 +43,7 @@ function chartKey(record: CourseSongRecord): string {
  * the fixed course to play.
  *
  * - Each stage draws uniformly from the candidates its filter selects, after the filter's own `ORDER BY` / `LIMIT`
- *   ({@link selectCourseSongs}; `ORDER BY RANDOM()` draws from `random` first). A stage without a filter draws from
+ *   ({@link selectCourseCharts}; `ORDER BY RANDOM()` draws from `random` first). A stage without a filter draws from
  *   every candidate when it is the first stage, and from the previous filter's selection otherwise.
  * - With `distinct`, a chart already drawn for an earlier stage is redrawn; when every candidate of the stage is taken,
  *   the stage falls back to any of them, so a chart can repeat (beatoraja does the same).
@@ -53,7 +53,7 @@ function chartKey(record: CourseSongRecord): string {
  * never `release`d (beatoraja's `RandomCourseData.createCourseData`). Deterministic given `random`, which returns
  * values in `[0, 1)` like `Math.random`; candidates are taken in the order given.
  */
-export function drawRandomCourse<T extends CourseSongRecord>(
+export function drawRandomCourse<T extends CourseChartRecord>(
   definition: RandomCourseDefinition,
   candidates: readonly T[],
   random: () => number,
@@ -70,9 +70,9 @@ export function drawRandomCourse<T extends CourseSongRecord>(
       if (stage.filter === undefined) {
         lots = usable;
       } else {
-        const parsed = parseCourseSongFilter(stage.filter);
+        const parsed = parseCourseChartFilter(stage.filter);
         if (!parsed.ok) return { ok: false, stage: index, reason: 'invalid-filter', error: parsed.error };
-        lots = selectCourseSongs(parsed.query, usable, ({ chart }) => chart, random);
+        lots = selectCourseCharts(parsed.query, usable, ({ chart }) => chart, random);
       }
     }
     if (lots.length === 0) return { ok: false, stage: index, reason: 'no-candidates' };
@@ -89,12 +89,12 @@ export function drawRandomCourse<T extends CourseSongRecord>(
       release: false,
       source: { format: 'beatoraja-random' },
     },
-    songs: drawn.map(({ chart }) => chart),
+    charts: drawn.map(({ chart }) => chart),
   };
 }
 
 /** `RandomCourseData.lotterySongData` with `distinct`: redraw a repeat, and allow one once every candidate is taken. */
-function drawDistinct<E extends { chart: CourseSongRecord }>(
+function drawDistinct<E extends { chart: CourseChartRecord }>(
   lots: readonly E[],
   drawn: readonly E[],
   random: () => number,

@@ -35,10 +35,10 @@
       "types": "./dist/course.d.ts",
       "default": "./dist/course.js"
     },
-    "./playlog": {
-      "source": "./src/playlog/index.ts",
-      "types": "./dist/playlog.d.ts",
-      "default": "./dist/playlog.js"
+    "./replay": {
+      "source": "./src/replay/index.ts",
+      "types": "./dist/replay.d.ts",
+      "default": "./dist/replay.js"
     },
     "./records": {
       "source": "./src/records/index.ts",

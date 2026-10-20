@@ -24,7 +24,7 @@ const workspacePackages = [
 ] as const;
 
 /**
- * Layering (docs/architecture.md): the chart model, the IR, the parser, the engine's core / play-log / ruleset code
+ * Layering (docs/architecture.md): the chart model, the IR, the parser, the engine's core / replay / ruleset code
  * with the player entries a browser host imports (signals, lanes, display), the scene models and the LR2 and beatoraja
  * state resolvers run unchanged in the browser and in Node, so they import no
  * Node built-in and read no DOM or Node-only global. Runtime services reach them through adapters
@@ -43,7 +43,7 @@ const runtimeNeutralSources = [
   'packages/player/src/judging.ts',
   'packages/player/src/lanes.ts',
   'packages/player/src/playable-notes.ts',
-  'packages/player/src/playlog/**/*.ts',
+  'packages/player/src/replay/**/*.ts',
   'packages/player/src/records/**/*.ts',
   'packages/player/src/ruleset/**/*.ts',
   'packages/player/src/signals.ts',
@@ -54,7 +54,7 @@ const runtimeNeutralSources = [
 /** Node / CLI entry points inside those trees: the runtime adapters the rule above points to. */
 const runtimeAdapterSources = ['packages/parser/src/cli.ts', 'packages/parser/src/node-file.ts'];
 /**
- * The deterministic judge (`judge-core*.ts`, `auto-judge-core.ts`, the ruleset rules and the play-log simulator): the
+ * The deterministic judge (`judge-core*.ts`, `auto-judge-core.ts`, the ruleset rules and the replay simulator): the
  * same inputs must give the same judgments, so these files read no clock, set no timer and draw no random number. The
  * scene models and the LR2 and beatoraja state resolvers are held to the same rule: a scene's time comes in as an input.
  */
@@ -64,7 +64,7 @@ const deterministicJudgeSources = [
   'packages/player/src/core/judge-*.ts',
   'packages/player/src/core/auto-judge-core.ts',
   'packages/player/src/ruleset/**/*.ts',
-  'packages/player/src/playlog/simulate.ts',
+  'packages/player/src/replay/simulate.ts',
   'packages/scene-model/src/**/*.ts',
 ];
 const nodeBuiltinMessage = 'Runtime-neutral code must not import Node built-ins; use a runtime adapter.';

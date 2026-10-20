@@ -1,8 +1,8 @@
 import type { BeMusicJSON } from '@be-music/json';
 import { resolveChartRulesetFacts } from '../core/play-chart.ts';
-import { createCoursePlaylog, type BeMusicCoursePlaylog, type PlaylogCourseStageEntry } from '../playlog/course.ts';
-import type { BeMusicPlaylog, PlaylogCourseStage, PlaylogRecorderInfo } from '../playlog/format.ts';
-import { computeStageChartFingerprint, resolvePlaylogCourseInfo } from './course-playlog.ts';
+import { createCourseReplay, type BeMusicCourseReplay, type ReplayCourseStageEntry } from '../replay/course.ts';
+import type { BeMusicReplay, ReplayCourseStage, ReplayRecorderInfo } from '../replay/format.ts';
+import { computeStageChartFingerprint, resolveReplayCourseInfo } from './course-replay.ts';
 import type { CourseDefinition } from './definition.ts';
 import { applyCourseLongNoteConstraint } from './long-note.ts';
 import {
@@ -23,7 +23,7 @@ export interface CourseRunStage {
   chartPath?: string;
 }
 
-/** What a host keeps of a played stage besides its play log, such as its result graphs. */
+/** What a host keeps of a played stage besides its replay, such as its result graphs. */
 export interface CourseRunStageExtras {
   /** The stage's play time in seconds, when known. It adds up to {@link CourseRun.playSeconds}. */
   playSeconds?: number;
@@ -37,13 +37,13 @@ export interface CourseRunStagePlan<S extends CourseRunStage = CourseRunStage> {
   /** The stage, its chart as the course plays it (the course's long-note constraint applied). */
   stage: S;
   /** `PlayerOptions.course` for the stage, with the state the previous stage left (`carryIn`). */
-  course: PlaylogCourseStage;
+  course: ReplayCourseStage;
   /** Whether the course forbids changing the hi-speed during the stage (`no_speed`). */
   hiSpeedLocked: boolean;
 }
 
 interface PlayedStage<H> {
-  playlog: BeMusicPlaylog;
+  replay: BeMusicReplay;
   playSeconds?: number;
   extras?: H;
 }
@@ -51,7 +51,7 @@ interface PlayedStage<H> {
 /**
  * One run of an EXPERT or GRADE course: plays the stages in order, carrying each stage's gauge value, course combo and
  * course max combo into the next, and ends when a stage fails, when the player gives up, or after the last stage. The
- * stage play logs it collects make the course play log. A NONSTOP course is played as one stitched chart instead
+ * stage replays it collects make the course replay. A NONSTOP course is played as one stitched chart instead
  * (`prepareNonstopCourse`).
  *
  * Runtime-neutral and chart-agnostic: `S` is the host's stage entry (anything with a chart, {@link CourseRunStage}) and
@@ -101,8 +101,8 @@ export class CourseRun<
   nextStage(): CourseRunStagePlan<S> | undefined {
     const index = this.played.length;
     if (this.ended || index >= this.stages.length) return undefined;
-    const course: PlaylogCourseStage = resolveCourseStageSettings(this.definition);
-    const previous = this.played.at(-1)?.playlog.results?.native;
+    const course: ReplayCourseStage = resolveCourseStageSettings(this.definition);
+    const previous = this.played.at(-1)?.replay.results?.native;
     if (previous !== undefined) {
       course.carryIn = {
         gauge: previous.gauge.final,
@@ -125,16 +125,16 @@ export class CourseRun<
   }
 
   /**
-   * Records a finished stage's play log, with what the host keeps of it (`extras`). Returns whether the run goes on: it
-   * ends when the stage's gauge emptied, when it was the last stage, or when the stage left no play log with a result
+   * Records a finished stage's replay, with what the host keeps of it (`extras`). Returns whether the run goes on: it
+   * ends when the stage's gauge emptied, when it was the last stage, or when the stage left no replay with a result
    * (nothing to carry on from).
    */
-  recordStage(playlog: BeMusicPlaylog | undefined, extras?: H): 'next' | 'finished' {
+  recordStage(replay: BeMusicReplay | undefined, extras?: H): 'next' | 'finished' {
     if (this.ended) return 'finished';
-    const goesOn = this.goesOnAfter(playlog);
-    if (playlog?.results?.native !== undefined) {
+    const goesOn = this.goesOnAfter(replay);
+    if (replay?.results?.native !== undefined) {
       this.played.push({
-        playlog,
+        replay,
         ...(extras?.playSeconds !== undefined ? { playSeconds: extras.playSeconds } : {}),
         ...(extras !== undefined ? { extras } : {}),
       });
@@ -146,25 +146,25 @@ export class CourseRun<
     return 'next';
   }
 
-  /** Whether the run would go on after recording `playlog` as the next stage ({@link recordStage} returning `next`). */
-  goesOnAfter(playlog: BeMusicPlaylog | undefined): boolean {
+  /** Whether the run would go on after recording `replay` as the next stage ({@link recordStage} returning `next`). */
+  goesOnAfter(replay: BeMusicReplay | undefined): boolean {
     if (this.ended) return false;
-    const native = playlog?.results?.native;
+    const native = replay?.results?.native;
     if (native === undefined) return false;
     const failed = native.gauge.failedMidPlay === true || native.gauge.final <= 0;
     return !failed && this.played.length + 1 < this.stages.length;
   }
 
   /**
-   * Records the stage the player gave up with ESC (its play log is marked `play.aborted`) and ends the run: a run given
+   * Records the stage the player gave up with ESC (its replay is marked `play.aborted`) and ends the run: a run given
    * up is a failed run, as LR2 records it. Its play time runs up to where it was left ({@link resolveGivenUpPlaySeconds}).
-   * A stage without a play log just ends the run.
+   * A stage without a replay just ends the run.
    */
-  giveUp(playlog: BeMusicPlaylog | undefined): void {
+  giveUp(replay: BeMusicReplay | undefined): void {
     if (this.ended) return;
-    if (playlog?.results?.native !== undefined) {
-      const playSeconds = resolveGivenUpPlaySeconds(playlog);
-      this.played.push({ playlog, ...(playSeconds !== undefined ? { playSeconds } : {}) });
+    if (replay?.results?.native !== undefined) {
+      const playSeconds = resolveGivenUpPlaySeconds(replay);
+      this.played.push({ replay, ...(playSeconds !== undefined ? { playSeconds } : {}) });
     }
     this.ended = true;
   }
@@ -180,14 +180,14 @@ export class CourseRun<
   }
 
   /**
-   * The course play log: the stages played, then every stage the run never reached, with its chart facts
+   * The course replay: the stages played, then every stage the run never reached, with its chart facts
    * (`resolveChartRulesetFacts`), its file hashes from the course definition and its chart fingerprint (which keys the
    * course on the Leaderboard), all read from the chart as the course plays it.
    */
-  buildPlaylog(options: { createdAt?: string; recorder?: PlaylogRecorderInfo } = {}): BeMusicCoursePlaylog {
-    const stages = this.stages.map((stage, index): PlaylogCourseStageEntry => {
-      const playlog = this.played[index]?.playlog;
-      if (playlog !== undefined) return { played: true, playlog };
+  buildReplay(options: { createdAt?: string; recorder?: ReplayRecorderInfo } = {}): BeMusicCourseReplay {
+    const stages = this.stages.map((stage, index): ReplayCourseStageEntry => {
+      const replay = this.played[index]?.replay;
+      if (replay !== undefined) return { played: true, replay };
       const ref = this.definition.stages[index];
       const chartFingerprint = computeStageChartFingerprint(stage.chart, stage.chartPath);
       return {
@@ -198,8 +198,8 @@ export class CourseRun<
         ...(chartFingerprint !== undefined ? { chartFingerprint } : {}),
       };
     });
-    return createCoursePlaylog({
-      course: resolvePlaylogCourseInfo(this.definition),
+    return createCourseReplay({
+      course: resolveReplayCourseInfo(this.definition),
       stages,
       ...(options.createdAt !== undefined ? { createdAt: options.createdAt } : {}),
       ...(options.recorder !== undefined ? { recorder: options.recorder } : {}),
@@ -212,14 +212,12 @@ export class CourseRun<
  * left after its chart had settled (every note judged, the play complete), up to its last note. `undefined` when the log
  * says neither.
  */
-export function resolveGivenUpPlaySeconds(
-  playlog: Partial<Pick<BeMusicPlaylog, 'play' | 'chart'>>,
-): number | undefined {
-  const abortedAtUs = playlog.play?.abortedAtUs;
+export function resolveGivenUpPlaySeconds(replay: Partial<Pick<BeMusicReplay, 'play' | 'chart'>>): number | undefined {
+  const abortedAtUs = replay.play?.abortedAtUs;
   if (abortedAtUs !== undefined) return Math.max(0, abortedAtUs) / 1e6;
-  if (playlog.play?.aborted === true) return undefined;
+  if (replay.play?.aborted === true) return undefined;
   let lastUs: number | undefined;
-  for (const note of playlog.chart?.notes ?? []) {
+  for (const note of replay.chart?.notes ?? []) {
     const endUs = note.endTimeUs ?? note.timeUs;
     if (lastUs === undefined || endUs > lastUs) lastUs = endUs;
   }

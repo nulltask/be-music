@@ -6,7 +6,7 @@
 import { createEmptyJSON, type BeMusicEvent, type BeMusicJSON } from '@be-music/json';
 import type { CourseDefinition } from '@be-music/player/course';
 import type { LibraryChart, LibraryCourse, LibraryFolder } from '@be-music/scene-model';
-import type { BrowserSongCollection } from '../../collection/types.ts';
+import type { BrowserChartCollection } from '../../collection/types.ts';
 
 /** A chart titled `id` in the folder `directory`, with one object on each of `channels` (a 7-key chart by default). */
 export function makeChart(
@@ -60,7 +60,7 @@ export function makeCollection(
   charts: readonly LibraryChart[],
   courseFolders: readonly LibraryFolder[] = [],
   files: Readonly<Record<string, Uint8Array>> = {},
-): BrowserSongCollection {
+): BrowserChartCollection {
   return {
     sources: [{ id: 'test', kind: 'directory', label: 'test', files: new Map(Object.entries(files)) }],
     charts: [...charts],

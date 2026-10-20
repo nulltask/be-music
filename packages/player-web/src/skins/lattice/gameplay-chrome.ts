@@ -160,7 +160,7 @@ export function renderLatticeChrome({
     drawBGAFrame(panels, layer, hasBGA, seconds, beatPhase, effects.amount, drive, layerPool);
   }
   drawGauge(panels, layer, runtime, moments, layerPool);
-  drawSongPlate(panels, layer, runtime, layerPool);
+  drawChartPlate(panels, layer, runtime, layerPool);
   drawScorePanel(panels, layer, runtime, layerPool);
   // The judge tally owns the side column on the right edge.
   drawJudgeTally(panels, layer, runtime, STAGE_SIDE_COLUMN.x, drive, layerPool);
@@ -679,13 +679,13 @@ function drawGauge(
   drawRulerTicks(graphics, GROOVE.x, GROOVE.y + GROOVE.h + 10, GROOVE.w, 1, LAT_INK, 0.35);
 }
 
-function drawSongPlate(graphics: Graphics, layer: Container, runtime: Runtime, pool: ChildPool): void {
+function drawChartPlate(graphics: Graphics, layer: Container, runtime: Runtime, pool: ChildPool): void {
   const { x, y, w } = SONG_PLATE;
   const sc = hudScramble(runtime);
   graphics.rect(x, y, w, 1).fill(LAT_INK);
   addHUDText(layer, sc('TRACK', 300, 6), x, y + 6, monoStyle(), pool);
   // Genre, title, artist — the order every built-in skin uses; the genre rides a small line above the title.
-  const genre = runtime.songGenre?.trim();
+  const genre = runtime.chartGenre?.trim();
   const lift = genre ? 9 : 0;
   if (genre) {
     addHUDText(
@@ -699,13 +699,13 @@ function drawSongPlate(graphics: Graphics, layer: Container, runtime: Runtime, p
   }
   addHUDText(
     layer,
-    sc(runtime.songTitle?.trim() || 'Untitled chart', 360, 7),
+    sc(runtime.chartTitle?.trim() || 'Untitled chart', 360, 7),
     x + 48,
     y + 4 + lift,
     { size: 15, weight: '500', fill: LAT_INK, fontFamily: LAT_TEXT_FONT, maxWidth: w - 48 },
     pool,
   );
-  const artist = runtime.songArtist?.trim();
+  const artist = runtime.chartArtist?.trim();
   if (artist) {
     addHUDText(
       layer,
@@ -806,7 +806,7 @@ const TALLY: ReadonlyArray<readonly [label: string, key: 'perfect' | 'great' | '
   ['PR', 'poor'],
 ];
 
-/** Judge tally as a column of type with a proportional hairline bar under each count. */
+/** JudgmentKind tally as a column of type with a proportional hairline bar under each count. */
 function drawJudgeTally(
   graphics: Graphics,
   layer: Container,

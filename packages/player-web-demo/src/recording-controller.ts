@@ -39,7 +39,7 @@ export interface RecordingDeps {
   getActiveGameplay(): GameplayRecorder | undefined;
   getAutoRecordArmed(): boolean;
   setAutoRecordArmed(value: boolean): void;
-  /** Snapshot of the recording filename stem at call time; the demo updates it per chart in `playSong`. */
+  /** Snapshot of the recording filename stem at call time; the demo updates it per chart in `playChart`. */
   getRecordingFilenameBase(): string;
   /** The Debug Menu's "Video format": the container and codec a new recording is written in. */
   getRecordingFormat(): RecordingFormat;

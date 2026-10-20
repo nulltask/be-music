@@ -27,8 +27,8 @@ be-music プレイヤーの各画面が何を表示し、どう振る舞うか�
   ハイスピードの範囲（`snapHiSpeed`・`stepPlayerHiSpeed`・`HiSpeedTransition`）。
 - **プレイ状態**: 進行中のゲージと EX スコアとそのグラフ、コンボ（コースのステージではコースのコンボも）、早い / 遅いの
   数つきの判定タイミング、HS-FIX を含むハイスピード、LIFT と HIDDEN を含むレーンカバーを、エンジンのフレームと判定で
-  進む一つのイミュータブルな状態にまとめたもの（`PlayState`・`reducePlayState`）と、プレイログの単位での見え方
-  （`resolvePlaylogView`）。
+  進む一つのイミュータブルな状態にまとめたもの（`PlayState`・`reducePlayState`）と、リプレイの単位での見え方
+  （`captureReplayView`）。
 - **プレイ結果**: 単独のプレイ、コースのステージ、コース全体、NONSTOP のプレイの唯一の結果の形（`PlayResult`）。
   プレイ状態（`playResultFromPlayState`）かコースの実行（`playResultFromCourseRun`）から読みます。
 - **コースの表示用モデル**: 画面が見せるコース（`CourseView`・`resolveCourseView`）とコース全体のコンボ。

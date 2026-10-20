@@ -13,7 +13,7 @@ import type { PlayJudge } from './play-strategy.ts';
 
 /**
  * Playback controls: the input commands every play takes the same way — pause, HIGH-SPEED, tempo changes (live, or a
- * replay following its log's), view changes for the play log and interrupts — and the lane commands it hands its judge.
+ * replay following its log's), view changes for the replay and interrupts — and the lane commands it hands its judge.
  */
 export interface PlayControls {
   /** Drains the input bus and applies every command on it. */
@@ -38,7 +38,7 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
     writeOutput,
     audioSession,
     activeStateSignals,
-    playlogRecorder,
+    replayRecorder,
     inputSignals,
   } = session;
   let highSpeed = session.highSpeed;
@@ -77,7 +77,7 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
       setAudioTempo: (next) => audioSession?.setTempo?.(next),
       // A replay's tempo only sets how fast it is re-driven: its re-recorded log carries none.
       recordTempoChange: (seconds, next) => {
-        if (!session.replay) playlogRecorder?.recordTempoChange(seconds, next);
+        if (!session.replay) replayRecorder?.recordTempoChange(seconds, next);
       },
       onTempoChange: (change) => {
         if (!uiEnabled) {
@@ -129,7 +129,7 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
               : undefined,
           });
         },
-        onViewChange: (change) => playlogRecorder?.recordViewChange(commandSeconds(), change),
+        onViewChange: (change) => replayRecorder?.recordViewChange(commandSeconds(), change),
         onTempoChange: changeTempo,
         // Lane and key-state commands go to the judge; a strategy without live key input drops them.
         onUnhandledCommand:
@@ -161,7 +161,7 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
       }
     },
     recordPendingViewChanges: () => {
-      recordPendingViewChanges(inputSignals, playlogRecorder, Math.max(0, commandSeconds()));
+      recordPendingViewChanges(inputSignals, replayRecorder, Math.max(0, commandSeconds()));
     },
     get interruptedReason() {
       return interruptedReason;

@@ -2,44 +2,41 @@
 
 # コード内ドメイン用語の整理案
 
-この文書はコードで使われる語を、概念・現行名・意味の違いに分けて整理したレビュー用の対応表です。下の改名候補は未実装です。[用語集](./glossary.ja.md)の定義と合わせて確認します。
-
-楽曲の正規語は `track` とし、新しい型・参照には `Track`・`trackId` を使います。下のメタデータは現行コードとの対応であり、既存の楽曲エンティティを示すものではありません。譜面は `chart`、音声ファイルは `audio asset` と区別します。
+この文書はコードで使われる語を、概念・現行名・意味の違いに分けて整理した対応表です。[用語集](./glossary.ja.md)の定義と合わせて確認します。
 
 ## 譜面とアセット
 
-| 概念                                | 現行のコード名                                         | 意味・区別                                                                                    |
-| ----------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
-| chart / 譜面                        | `BeMusicJSON`, `ResolvedChart`, `LibraryChart`         | ソース文書・解決済みデータ・ライブラリ項目という異なる表現。同じ型にまとめない。              |
-| track / 楽曲                        | `metadata.title`, `metadata.artist`                    | メタデータから楽曲の一意な ID を推定しない。                                                  |
-| chart set / 譜面セット              | `chartset`                                             | 差分を含む、外部 ID を持つ譜面のまとまり。譜面そのものやフォルダとは別。                      |
-| chart file / 譜面ファイル           | `chartPath`, `fileSha256`, `fileMd5`                   | ファイルの所在とバイト列の識別。フィンガープリントとは別。                                    |
-| chart collection / 譜面コレクション | `BrowserSongCollection`, `BrowserSongCollectionStore`  | 読み込んだ譜面・アセット供給元・エラー・コースフォルダ。Song は楽曲ではなく譜面を指している。 |
-| asset source / アセット供給元       | `BrowserSongAssetSource`, `sourceId`                   | 複数の譜面で共有できるファイル群の供給元。                                                    |
-| asset entry / アセット項目          | `BrowserSongAssetEntry`                                | バイト列または遅延読み込みするファイル参照。譜面とは別。                                      |
-| resource / リソース                 | `#WAV`, `#BMP`, `sound_channels`                       | 譜面・スキンが参照する対象。アセット項目がその実体を供給する。                                |
-| chart identity / 譜面の同一性       | `chartFingerprint`, `playFingerprint`, `sha256`, `md5` | 譜面・選択分岐・ファイルの識別を分ける。演奏結果の ID とは別。                                |
+| 概念                                | 現行のコード名                                          | 意味・区別                                                                       |
+| ----------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| chart / 譜面                        | `BeMusicJSON`, `ResolvedChart`, `LibraryChart`          | ソース文書・解決済みデータ・ライブラリ項目という異なる表現。同じ型にまとめない。 |
+| track / 楽曲                        | `metadata.title`, `metadata.artist`                     | メタデータから楽曲の一意な ID を推定しない。                                     |
+| chart set / 譜面セット              | `chartset`                                              | 差分を含む、外部 ID を持つ譜面のまとまり。譜面そのものやフォルダとは別。         |
+| chart file / 譜面ファイル           | `chartPath`, `fileSha256`, `fileMd5`                    | ファイルの所在とバイト列の識別。フィンガープリントとは別。                       |
+| chart collection / 譜面コレクション | `BrowserChartCollection`, `BrowserChartCollectionStore` | 読み込んだ譜面・アセット供給元・エラー・コースフォルダ。                         |
+| asset source / アセット供給元       | `BrowserAssetSource`, `sourceId`                        | 複数の譜面で共有できるファイル群の供給元。                                       |
+| asset entry / アセット項目          | `BrowserAssetEntry`                                     | バイト列または遅延読み込みするファイル参照。譜面とは別。                         |
+| resource / リソース                 | `#WAV`, `#BMP`, `sound_channels`                        | 譜面・スキンが参照する対象。アセット項目がその実体を供給する。                   |
+| chart identity / 譜面の同一性       | `chartFingerprint`, `playFingerprint`, `sha256`, `md5`  | 譜面・選択分岐・ファイルの識別を分ける。演奏結果の ID とは別。                   |
 
 ## プレイ・判定・記録
 
-| 概念                                                | 現行のコード名                                                             | 意味・区別                                                                                 |
-| --------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| play / プレイ                                       | `manualPlay`, `autoPlay`                                                   | 1 回の実行。単体プレイ・コースステージ・コース全体を明示する。                             |
-| play result / プレイ結果                            | `PlayResult`, `PlayerSummary`                                              | 画面向けの結果とエンジンの集計。関連するが同じ型・役割ではない。                           |
-| score / 得点                                        | `ScoreSummary.score`, `exScore`, `ScoreSummary`                            | 表示得点・EX-SCORE・判定集計を分ける。表示得点はルールセットに依存する。                   |
-| play submission / プレイ送信記録                    | `score`, `submissionId` in Leaderboard                                     | score テーブルは数値ではなく送信済みプレイを保持する。送信 ID とプレイ ID の役割を分ける。 |
-| ruleset result / ルールセット別結果                 | `scoreResult`, `PlaylogRulesetResult`                                      | 1 つのルールセットでの評価。実際に遊んだ規則と再シミュレーションを区別する。               |
-| best record / 自己ベスト                            | `BestRecord`, `bestScore`, `BeMusicSongRecord`                             | 複数プレイから項目ごとに保持する最良値。単一のベストプレイではない。                       |
-| play log / プレイログ                               | `BeMusicPlaylog`, `recordPlaylog`, `serializePlaylog`                      | 再現用の入力記録。含まれる結果キャッシュは再計算できる。                                   |
-| judgment / 判定                                     | `JudgeKind`, `Judge`, `JudgeTiming`, `PlaylogJudgeCounts`                  | 判定の種類・時刻付き判定・判定数を区別する。Judge の一括置換では整理できない。             |
-| ruleset / ルールセット                              | `BeMusicPlaylog`, `recordPlaylog`, `parsePlaylog`, `serializePlaylog`      | `BeMusicPlayLog`, `recordPlayLog`, `parsePlayLog`, `serializePlayLog`                      | 語の境界を明示する。ローカル変数は `log` とできる。 |
-| `PlaylogRulesetId`, `judgeRuleset`, `playedRuleset` | プレイログ専用ではなくプレイ全体の規則。playedRuleset は実際に遊んだ規則。 |
-| gauge / ゲージ                                      | `GaugeType`, `gaugeType`, `gauge`, `cleared`, `lamp`                       | 選択した方式・規則上のゲージ・残量・クリア判定・クリアランプを分ける。                     |
-| arrangement / レーン配置                            | `randomLane`, `laneOption`, `randomDraws`                                  | レーンのランダム化と BMS 制御構文の分岐抽選を区別する。                                    |
-| tempo / テンポ                                      | `speed`, `PlayerTempoChange`, `hiSpeed`, `hsFix`                           | 再生テンポ・表示スクロール速度・その補正を区別する。                                       |
-| judgment rank / 判定ランク                          | `judgeRank`, `rank`, `exRank`, `RulesetJudgeRankFacts`                     | 判定幅の厳しさ。ランキング順位や DJ RANK とは別。                                          |
-| DJ Rank / DJ RANK                                   | `IIDXRankLabel`, `resolveIIDXRankLabel`                                    | EX-SCORE 率による評価。grade というコース種別とは別。                                      |
-| chart level and difficulty / 譜面レベルと難易度区分 | `playLevel`, `difficulty`, `difficultyFilter`                              | 作者が設定したレベルの値と BEGINNER〜INSANE の区分を分ける。                               |
+| 概念                                                | 現行のコード名                                           | 意味・区別                                                                                 |
+| --------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| play / プレイ                                       | `manualPlay`, `autoPlay`                                 | 1 回の実行。単体プレイ・コースステージ・コース全体を明示する。                             |
+| play result / プレイ結果                            | `PlayResult`, `PlayerSummary`                            | 画面向けの結果とエンジンの集計。関連するが同じ型・役割ではない。                           |
+| score / 得点                                        | `ScoreSummary.score`, `exScore`, `ScoreSummary`          | 表示得点・EX-SCORE・判定集計を分ける。表示得点はルールセットに依存する。                   |
+| play submission / プレイ送信記録                    | `score`, `submissionId` in Leaderboard                   | score テーブルは数値ではなく送信済みプレイを保持する。送信 ID とプレイ ID の役割を分ける。 |
+| ruleset result / ルールセット別結果                 | `scoreResult`, `ReplayRulesetResult`                     | 1 つのルールセットでの評価。実際に遊んだ規則と再シミュレーションを区別する。               |
+| best record / 自己ベスト                            | `BestRecord`, `bestScore`, `BeMusicChartBestRecord`      | 複数プレイから項目ごとに保持する最良値。単一のベストプレイではない。                       |
+| replay / リプレイ                                   | `BeMusicReplay`, `recordReplay`, `serializeReplay`       | 再現用の入力記録。含まれる結果キャッシュは再計算できる。                                   |
+| judgment / 判定                                     | `JudgmentKind`, `JudgmentTiming`, `ReplayJudgmentCounts` | 判定の種類・時刻付き判定・判定数を区別する。種類・時刻・集計という役割を名前でも区別する。 |
+| ruleset / ルールセット                              | `RulesetId`, `judgeRuleset`, `playedRuleset`             | リプレイ専用ではなくプレイ全体の規則。playedRuleset は実際に遊んだ規則。                   |
+| gauge / ゲージ                                      | `GaugeType`, `gaugeType`, `gauge`, `cleared`, `lamp`     | 選択した方式・規則上のゲージ・残量・クリア判定・クリアランプを分ける。                     |
+| arrangement / レーン配置                            | `randomLane`, `laneOption`, `randomDraws`                | レーンのランダム化と BMS 制御構文の分岐抽選を区別する。                                    |
+| tempo / テンポ                                      | `speed`, `PlayerTempoChange`, `hiSpeed`, `hsFix`         | 再生テンポ・表示スクロール速度・その補正を区別する。                                       |
+| judgment rank / 判定ランク                          | `judgeRank`, `rank`, `exRank`, `RulesetJudgeRankFacts`   | 判定幅の厳しさ。ランキング順位や DJ RANK とは別。                                          |
+| DJ Rank / DJ RANK                                   | `IIDXRankLabel`, `resolveIIDXRankLabel`                  | EX-SCORE 率による評価。grade というコース種別とは別。                                      |
+| chart level and difficulty / 譜面レベルと難易度区分 | `playLevel`, `difficulty`, `difficultyFilter`            | 作者が設定したレベルの値と BEGINNER〜INSANE の区分を分ける。                               |
 
 ## コースとレイアウト
 
@@ -75,23 +72,17 @@
 | authentication session / 認証セッション | `LoginSession`, Better Auth session                     | アプリ・Accounts の認証状態と、画面・音声のセッションを区別する。                        |
 | guest / ゲスト                          | `isAnonymous`, `Identity.anonymous`, `linkedGuests`     | 永続資格情報のないユーザーと、その引き継ぎ先との対応。ユーザーが存在しない意味ではない。 |
 
-## 改名候補（未実装）
+## API の命名
 
-読みやすさを優先し、識別子は `playLog` / `PlayLog`、文脈が明確なローカル変数は `log` とする方針です。下の候補は公開名・保存データの改名をまだ実施していません。
+- リプレイ: `BeMusicReplay`、`parseReplay`、`serializeReplay`、`simulateReplay`。公開入口は `@be-music/player/replay`。
+- 譜面: `PlayResult.chart`、`BrowserChartCollection`、`BrowserChartCollectionStore`。
+- アセット供給元: `BrowserAssetSource`、`BrowserAssetEntry`。
+- 譜面の自己ベスト: `BeMusicChartBestRecord`、`chartBestRecord`、`parseChartBestRecords`。
+- 判定: `JudgmentKind`、`JudgmentTiming`、`ReplayJudgmentCounts`。
+- ルールセット: `RulesetId`。
+- スキンのデザイン領域: `BeMusicStage` を維持する。
 
-| 現行名                                                      | 候補名                                                                     | 理由・注意点                                                                     |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `PlayResult.song`, `PlayResultFacts.song`                   | `chart`                                                                    | 譜面項目。コース結果では代表として最初のステージを渡すため、その扱いも明示する。 |
-| `BrowserSongCollection`, `BrowserSongCollectionStore`       | `BrowserChartCollection`, `BrowserChartCollectionStore`                    | 楽曲作品ではなく譜面を読み込んだ集合。                                           |
-| `BrowserSongAssetSource`, `BrowserSongAssetEntry`           | `BrowserAssetSource`, `BrowserAssetEntry`                                  | 複数の譜面で共有する実体。楽曲単位ではない。                                     |
-| `BeMusicSongRecord`, `songRecord`                           | `BeMusicChartBestRecord`, `chartBestRecord`                                | 譜面単位であることと、自己ベストの集計であることを明示する。                     |
-| `songRecordKey`, `parseSongRecords`, `serializeSongRecords` | `chartBestRecordKey`, `parseChartBestRecords`, `serializeChartBestRecords` | 内容を明示する。保存キー・保存形式の互換性は別途確認する。                       |
-| `JudgeKind`, `JudgeTiming`, `PlaylogJudgeCounts`            | `JudgmentKind`, `JudgmentTiming`, `PlayLogJudgmentCounts`                  | 型名を揃える。フォーマットのキーを機械的に変えない。                             |
-| `PlaylogRulesetId`                                          | `RulesetId`                                                                | 記録形式ではなくルールセット層の概念。                                           |
-
-`score` テーブルのように保存形式・API と結びつく名前は、この表を理由にそのまま改名しません。新しい内部名には `playSubmission`・`rulesetResult`・`chartBestRecord` のように対象を明示し、境界で既存名に対応付ける案です。`PlayOptions` と `PlayerOptions` は単なる別名ではないため、改名より先に責務を整理します。
-
-`BeMusicStage` は現行名を維持します。`BeMusicSkin.stage` という文脈で、スキンのデザイン領域を指すことが分かるためです。コースステージとの違いは定義で明示します。
+旧名の互換エイリアスは設けません。BMS・bmson・外部サービスで要求される名前は維持します。`score` などの DB テーブル名は数値得点と区別して説明し、意味が違う `PlayOptions` と `PlayerOptions` は統合しません。
 
 ## 確認したコード
 
@@ -101,8 +92,8 @@
 - [packages/player/src/course/definition.ts](../packages/player/src/course/definition.ts)
 - [packages/player/src/ruleset/score.ts](../packages/player/src/ruleset/score.ts)
 - [packages/player/src/records/best-record.ts](../packages/player/src/records/best-record.ts)
-- [packages/player/src/playlog/format.ts](../packages/player/src/playlog/format.ts)
-- [packages/skin-sdk/src/song.ts](../packages/skin-sdk/src/song.ts)
+- [packages/player/src/replay/format.ts](../packages/player/src/replay/format.ts)
+- [packages/skin-sdk/src/chart.ts](../packages/skin-sdk/src/chart.ts)
 - [packages/skin-sdk/src/types.ts](../packages/skin-sdk/src/types.ts)
 - [packages/leaderboard-api/src/db/schema.ts](../packages/leaderboard-api/src/db/schema.ts)
 - [packages/accounts/src/schema.ts](../packages/accounts/src/schema.ts)

@@ -1,12 +1,12 @@
 // The demo's test hook: `window.__beMusicTest`, a read-only view of what the demo shows, for the end-to-end suite
 // (`packages/player-web-demo/e2e`, `docs/course-checklist.md`). It reads state the host already keeps and the facts of
-// each result screen and play log the host hands it; it never drives the demo. Files are loaded through the page's
+// each result screen and replay the host hands it; it never drives the demo. Files are loaded through the page's
 // drop handler, as a person drops them.
 //
 // The shape is a contract: the scene router and host rewrite (docs/architecture.md, P5) keep every field meaning
 // what it means here, and bump `version` when one changes.
 
-import type { BeMusicCoursePlaylog, BeMusicPlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
+import type { BeMusicCourseReplay, BeMusicReplay, ReplayCourseResult } from '@be-music/player/replay';
 import type { LibraryEntry, PlayResult } from '@be-music/scene-model';
 
 /** The contract's revision. */
@@ -32,7 +32,7 @@ export interface TestHookJudged {
  * `@be-music/scene-model` now calls the kind `'chart'`.
  */
 export interface TestHookBar {
-  kind: 'folder' | 'song' | 'course';
+  kind: 'folder' | 'chart' | 'course';
   /** The folder label, the chart title or the course name. */
   title: string;
   /** A course bar. */
@@ -140,23 +140,23 @@ export interface TestHookState {
   /** Drops (and file picks) finished so far. */
   loads: number;
   /** Charts listed (`songs`, contract v1's name) and the course folders. */
-  library: { songs: number; courseFolders: string[] };
+  library: { charts: number; courseFolders: string[] };
   cursor?: TestHookCursor;
   play?: TestHookPlay;
   /** The course being made (LR2's course maker). */
   courseDraft?: { kind: string; stages: string[] };
   /** Every result screen shown, oldest first. */
   results: TestHookResult[];
-  /** Play logs recorded so far (see `lastPlaylog()`). */
-  playlogs: number;
+  /** Replays recorded so far (see `lastReplay()`). */
+  replays: number;
 }
 
 /** `window.__beMusicTest`. */
 export interface BeMusicTestHook {
   readonly version: number;
   state(): TestHookState;
-  /** The play log the last finished play recorded (a single play, a course stage or a NONSTOP run). */
-  lastPlaylog(): BeMusicPlaylog | undefined;
+  /** The replay the last finished play recorded (a single play, a course stage or a NONSTOP run). */
+  lastReplay(): BeMusicReplay | undefined;
 }
 
 declare global {
@@ -166,7 +166,7 @@ declare global {
 }
 
 /** What the host reads for {@link TestHookState} at each call. */
-export type TestHookLiveState = Omit<TestHookState, 'version' | 'statusLog' | 'loads' | 'results' | 'playlogs'>;
+export type TestHookLiveState = Omit<TestHookState, 'version' | 'statusLog' | 'loads' | 'results' | 'replays'>;
 
 /** Whether the hook is installed: with `?e2e=1`, or in a development build. */
 export function isTestHookEnabled(href: string, dev: boolean): boolean {
@@ -178,10 +178,10 @@ export function isTestHookEnabled(href: string, dev: boolean): boolean {
   }
 }
 
-/** Keeps what the host hands the hook (results, play logs, finished loads) and answers `window.__beMusicTest`. */
+/** Keeps what the host hands the hook (results, replays, finished loads) and answers `window.__beMusicTest`. */
 export class TestHookRecorder {
   private readonly results: TestHookResult[] = [];
-  private readonly playlogs: BeMusicPlaylog[] = [];
+  private readonly replays: BeMusicReplay[] = [];
   private readonly statusLog: string[] = [];
   private loads = 0;
 
@@ -195,9 +195,9 @@ export class TestHookRecorder {
         statusLog: [...this.statusLog],
         loads: this.loads,
         results: [...this.results],
-        playlogs: this.playlogs.length,
+        replays: this.replays.length,
       }),
-      lastPlaylog: () => this.playlogs.at(-1),
+      lastReplay: () => this.replays.at(-1),
     };
   }
 
@@ -207,8 +207,8 @@ export class TestHookRecorder {
   }
 
   /** A play finished and recorded its log. */
-  recordPlaylog(playlog: BeMusicPlaylog | undefined): void {
-    if (playlog !== undefined) this.playlogs.push(playlog);
+  recordReplay(replay: BeMusicReplay | undefined): void {
+    if (replay !== undefined) this.replays.push(replay);
   }
 
   /** The status line changed. */
@@ -241,7 +241,7 @@ export function describeBar(entry: LibraryEntry, record?: { lamp?: string; troph
   };
   if (entry.kind === 'folder') return { kind: 'folder', title: entry.folder.label };
   // Contract v1 names a chart bar `'song'`.
-  if (entry.kind === 'chart') return { kind: 'song', title: entry.chart.title, ...kept };
+  if (entry.kind === 'chart') return { kind: 'chart', title: entry.chart.title, ...kept };
   const { course } = entry;
   return {
     kind: 'course',
@@ -268,7 +268,7 @@ export function resultFromData(
   return {
     run,
     family,
-    title: data.song.title,
+    title: data.chart.title,
     ...(data.lamp !== undefined ? { lamp: data.lamp } : {}),
     cleared: data.cleared,
     exScore: data.score.exScore,
@@ -279,21 +279,21 @@ export function resultFromData(
   };
 }
 
-/** An EXPERT / GRADE course result, from its course play log and the native course result. */
+/** An EXPERT / GRADE course result, from its course replay and the native course result. */
 export function resultFromCourseLog(
-  courseLog: BeMusicCoursePlaylog,
-  result: PlaylogCourseResult,
+  courseLog: BeMusicCourseReplay,
+  result: ReplayCourseResult,
   options: { family: TestHookFamily; playSeconds?: number; jingle?: string },
 ): TestHookResult {
   const stages = courseLog.stages.flatMap((entry): TestHookStageResult[] => {
     if (!entry.played) return [];
-    const { playlog } = entry;
-    const native = playlog.results?.native;
-    const start = playlog.play.course?.carryIn?.gauge;
+    const { replay } = entry;
+    const native = replay.results?.native;
+    const start = replay.play.course?.carryIn?.gauge;
     return [
       {
-        ...(playlog.chart.title !== undefined ? { title: playlog.chart.title } : {}),
-        aborted: playlog.play.aborted === true,
+        ...(replay.chart.title !== undefined ? { title: replay.chart.title } : {}),
+        aborted: replay.play.aborted === true,
         judged: {
           pgreat: native?.judge.pgreat ?? 0,
           great: native?.judge.great ?? 0,

@@ -6,7 +6,7 @@ import {
   isChartFilePath,
   isLR2SkinFilePath,
   resolveDropFilePath,
-  splitDroppedSongAndThemeFiles,
+  splitDroppedChartAndThemeFiles,
 } from './drop.ts';
 
 interface TestFile {
@@ -32,40 +32,40 @@ describe('drop helpers', () => {
     expect(resolveDropFilePath(file(String.raw`Root\\Song/../Song/main.bms`))).toBe('Root/Song/main.bms');
   });
 
-  test('splitDroppedSongAndThemeFiles keeps chart-directory assets together', () => {
+  test('splitDroppedChartAndThemeFiles keeps chart-directory assets together', () => {
     const songChart = file('LR2files/Sound/Example/main.bms');
     const songWAV = file('LR2files/Sound/Example/kick.wav');
     const themeSkin = file('LR2files/Theme/play_7.lr2skin');
     const themePNG = file('LR2files/Theme/parts.png');
 
-    const result = splitDroppedSongAndThemeFiles([songChart, songWAV, themeSkin, themePNG]);
+    const result = splitDroppedChartAndThemeFiles([songChart, songWAV, themeSkin, themePNG]);
 
-    expect(result.songFiles).toEqual([songChart, songWAV]);
+    expect(result.chartFiles).toEqual([songChart, songWAV]);
     expect(result.themeFiles).toEqual([themeSkin, themePNG]);
   });
 
-  test('splitDroppedSongAndThemeFiles treats chart-at-root drops as song material', () => {
+  test('splitDroppedChartAndThemeFiles treats chart-at-root drops as song material', () => {
     const chart = file('main.bms');
     const wav = file('kick.wav');
-    const result = splitDroppedSongAndThemeFiles([chart, wav]);
-    expect(result.songFiles).toEqual([chart, wav]);
+    const result = splitDroppedChartAndThemeFiles([chart, wav]);
+    expect(result.chartFiles).toEqual([chart, wav]);
     expect(result.themeFiles).toEqual([]);
   });
 
-  test('splitDroppedSongAndThemeFiles treats theme-only drops as theme material', () => {
+  test('splitDroppedChartAndThemeFiles treats theme-only drops as theme material', () => {
     const skin = file('Theme/play_7.lr2skin');
     const image = file('Theme/parts.png');
-    const result = splitDroppedSongAndThemeFiles([skin, image]);
-    expect(result.songFiles).toEqual([]);
+    const result = splitDroppedChartAndThemeFiles([skin, image]);
+    expect(result.chartFiles).toEqual([]);
     expect(result.themeFiles).toEqual([skin, image]);
   });
 
-  test('splitDroppedSongAndThemeFiles keeps sibling folders that share a name prefix apart', () => {
+  test('splitDroppedChartAndThemeFiles keeps sibling folders that share a name prefix apart', () => {
     const chart = file('Songs/A/main.bms');
     const wav = file('Songs/A/sub/kick.wav');
     const neighbour = file('Songs/AB/readme.txt');
-    const result = splitDroppedSongAndThemeFiles([chart, wav, neighbour]);
-    expect(result.songFiles).toEqual([chart, wav]);
+    const result = splitDroppedChartAndThemeFiles([chart, wav, neighbour]);
+    expect(result.chartFiles).toEqual([chart, wav]);
     expect(result.themeFiles).toEqual([neighbour]);
   });
 
@@ -84,7 +84,7 @@ describe('drop helpers', () => {
     expect(isEager('Theme/parts.png')).toBe(true);
   });
 
-  test('createEagerDropPathPredicate always opens play-logs and archives', () => {
+  test('createEagerDropPathPredicate always opens replays and archives', () => {
     const isEager = createEagerDropPathPredicate(['Song/main.bms', 'Song/run.bmplay.json', 'Song/extra.ZIP']);
     expect(isEager('Song/run.bmplay.json')).toBe(true);
     expect(isEager('Song/extra.ZIP')).toBe(true);

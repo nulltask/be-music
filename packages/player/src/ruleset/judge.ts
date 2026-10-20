@@ -1,7 +1,7 @@
 import type { JudgeWindowSetUs, RulesetWindowTables } from './definitions.ts';
 
 /**
- * Judge index inside a window set, best to worst: 0 PGREAT, 1 GREAT, 2 GOOD, 3 BAD. Matches the ordering the gauge
+ * Judgment index inside a window set, best to worst: 0 PGREAT, 1 GREAT, 2 GOOD, 3 BAD. Matches the ordering the gauge
  * tables use, so a classification result indexes straight into {@link GaugeJudgeIndex} territory.
  */
 export type RulesetJudgeIndex = 0 | 1 | 2 | 3;

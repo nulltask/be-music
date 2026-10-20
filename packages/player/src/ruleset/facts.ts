@@ -1,9 +1,9 @@
 import type { LongNoteMode } from '@be-music/chart';
 
 /**
- * The chart-side inputs a ruleset needs, in a form both the live engine and the play log simulator can produce.
+ * The chart-side inputs a ruleset needs, in a form both the live engine and the replay simulator can produce.
  *
- * The rulesets used to read a `PlaylogChart` directly, which tied them to the offline replay path. The live engine
+ * The rulesets used to read a `ReplayChart` directly, which tied them to the offline replay path. The live engine
  * has the same facts available (a resolved `BeMusicJSON` plus its prepared note arrays) but in a different shape,
  * so the ruleset tables now take this neutral record and each caller supplies an adapter. Everything here is
  * chart-derived and fixed for the whole play — per-play choices (gauge, judge algorithm) travel separately in

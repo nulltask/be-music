@@ -1,5 +1,5 @@
 import { and, asc, count, desc, eq, gt, type SQL } from 'drizzle-orm';
-import type { PlaylogRulesetId } from '@be-music/player/playlog';
+import type { RulesetId } from '@be-music/player/replay';
 import { avatarURL } from '../avatars.ts';
 import type { Database } from '../db/client.ts';
 import { courseBestScore, courseScoreResult, profile, user } from '../db/schema.ts';
@@ -7,7 +7,7 @@ import { courseBestScore, courseScoreResult, profile, user } from '../db/schema.
 /** A course ranking's filters, as `RankingFilter` for charts. */
 export interface CourseRankingFilter {
   courseFingerprint: string;
-  ruleset: PlaylogRulesetId;
+  ruleset: RulesetId;
   assisted: boolean;
   /** Include anonymous players. Off by default. */
   includeAnonymous: boolean;

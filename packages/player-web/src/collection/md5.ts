@@ -1,6 +1,6 @@
 /**
  * Dependency-free MD5 (RFC 1321). Web Crypto has no MD5, but LR2 and the sites built around it (LR2IR and its
- * archives) identify a chart by the MD5 of its file, so the play log recorder stamps it next to the SHA-256.
+ * archives) identify a chart by the MD5 of its file, so the replay recorder stamps it next to the SHA-256.
  * MD5 is used here only as a file identifier, never for security.
  */
 

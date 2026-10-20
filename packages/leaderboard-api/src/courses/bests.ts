@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
-import type { PlaylogRulesetId } from '@be-music/player/playlog';
+import type { RulesetId } from '@be-music/player/replay';
 import type { Database } from '../db/client.ts';
 import { courseBestScore, courseScore, courseScoreResult } from '../db/schema.ts';
 import { mergeBestScores, type BestScores } from '../scoring/best.ts';
@@ -14,7 +14,7 @@ export async function loadCourseBestScores(
   userId: string,
   courseFingerprint: string,
   assisted: boolean,
-): Promise<Map<PlaylogRulesetId, BestScores & { trophy: CourseTrophyBest; playedHere: boolean }>> {
+): Promise<Map<RulesetId, BestScores & { trophy: CourseTrophyBest; playedHere: boolean }>> {
   const rows = await db
     .select()
     .from(courseBestScore)
@@ -45,7 +45,7 @@ export async function loadCourseBestScores(
 }
 
 export function toCourseBestScoreRow(
-  key: { userId: string; courseFingerprint: string; ruleset: PlaylogRulesetId; assisted: boolean },
+  key: { userId: string; courseFingerprint: string; ruleset: RulesetId; assisted: boolean },
   bests: BestScores,
   trophy: CourseTrophyBest,
   playedHere: boolean,

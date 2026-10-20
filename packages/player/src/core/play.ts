@@ -22,7 +22,7 @@ export async function play(json: BeMusicJSON, options: PlayerOptions, strategy: 
 }
 
 /**
- * Manual play: judges the player's keys, or re-drives a recorded play log when `options.replayInputs` is set.
+ * Manual play: judges the player's keys, or re-drives a recorded replay when `options.replayInputs` is set.
  */
 export async function manualPlay(json: BeMusicJSON, options: PlayerOptions = {}): Promise<PlayerSummary> {
   return play(json, options, options.replayInputs !== undefined ? replayStrategy : manualStrategy);

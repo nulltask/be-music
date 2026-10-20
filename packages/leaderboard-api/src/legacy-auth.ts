@@ -59,7 +59,7 @@ export async function loadSession(
 }
 
 /**
- * Adds the cookies {@link loadSession} collected to a response, unless it is publicly cacheable (a play log, a card):
+ * Adds the cookies {@link loadSession} collected to a response, unless it is publicly cacheable (a replay, a card):
  * a shared cache must not keep one player's cookie, and a response with one would not be cached at all.
  */
 export function passOnSetCookies(response: Response, setCookies: readonly string[]): void {

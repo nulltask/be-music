@@ -17,7 +17,7 @@ import { LR2_TIMER } from '@be-music/lr2-skin/ids';
 import { resolveLR2DecideState, resolveLR2DecideTimers, type LR2SceneState } from '@be-music/lr2-skin/state';
 import type { LibraryChart } from '@be-music/scene-model';
 import { Color, Container, Graphics, Sprite, type Texture } from 'pixi.js';
-import type { BrowserSongAssetSource } from '../../collection/types.ts';
+import type { BrowserAssetSource } from '../../collection/types.ts';
 import type { LR2Kit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
@@ -66,7 +66,7 @@ export function resolveLR2DecideTiming(skin: Pick<LR2Skin, 'timing'>): SceneView
 
 export interface LR2DecideViewOptions {
   /** Where the chart's files are, for its `#STAGEFILE`, `*BANNER` and `*BACKBMP`; none load without one. */
-  readonly source?: BrowserSongAssetSource;
+  readonly source?: BrowserAssetSource;
 }
 
 /** The LR2 decide view. See the module comment. */
@@ -92,7 +92,7 @@ export class LR2DecideView implements DecideView {
   private cachedDesignWidth = -1;
   private cachedDesignHeight = -1;
   private readonly kit: LR2Kit;
-  private readonly source: BrowserSongAssetSource | undefined;
+  private readonly source: BrowserAssetSource | undefined;
   private readonly skinTextures = new LR2SkinTextureStore();
   private readonly chartGraphicTextures = new LR2ChartGraphicTextureStore();
   /** The skin's `#LR2FONT` bitmap fonts, once loaded. */

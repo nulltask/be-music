@@ -41,8 +41,8 @@ import {
   type SystemSoundSet,
   type SystemSoundSlot,
 } from '@be-music/scene-model';
-import { resolveSongSource } from '../../collection/collection.ts';
-import type { BrowserSongCollection } from '../../collection/types.ts';
+import { resolveChartSource } from '../../collection/collection.ts';
+import type { BrowserChartCollection } from '../../collection/types.ts';
 import type { AudioService } from '../../runtime/audio-service.ts';
 import type { CourseMaker } from '../../collection/course-maker.ts';
 import type {
@@ -56,7 +56,7 @@ import type {
 import type { SceneSession, SessionKeyEvent } from '../session-scene.ts';
 import { resolveSelectKeyAction } from './select-keys.ts';
 import { openLibrary, restoreSelectBrowse, SELECT_POLICIES, type SelectPolicy } from './select-policy.ts';
-import { findReadtextForSong } from '../../collection/readtext.ts';
+import { findReadtextForChart } from '../../collection/readtext.ts';
 
 /** A bar the player starts: a chart or a course. */
 export type SelectStartEntry = Exclude<LibraryEntry, { kind: 'folder' }>;
@@ -93,7 +93,7 @@ export type SelectAudio = Pick<
 
 export interface SelectSessionOptions {
   /** The library to browse, with its charts' files (the preview's samples, the text files). */
-  readonly library: BrowserSongCollection;
+  readonly library: BrowserChartCollection;
   /** Where to open it: a saved browse position. Without one, a library of one chart folder opens it. */
   readonly browse?: BrowseSnapshot;
   /** The play options to start from, over `DEFAULT_PLAY_OPTIONS`; their sort and filters shape the list. */
@@ -152,7 +152,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   private readonly policy: SelectPolicy;
   private readonly now: () => number;
   private readonly random: () => number;
-  private library: BrowserSongCollection;
+  private library: BrowserChartCollection;
   private browse: BrowseState;
   private playOptions: PlayOptions;
   private records: SelectRecords;
@@ -230,7 +230,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
    * Takes a library. The same one again only redraws (the course being made, the records). A new one keeps the
    * player's place over it, restored by folder label and bar key; a first library with one chart folder opens it.
    */
-  public setLibrary(library: BrowserSongCollection): void {
+  public setLibrary(library: BrowserChartCollection): void {
     if (library === this.library) {
       this.changed();
       return;
@@ -675,7 +675,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     }
     const lookup = ++this.readTextLookup;
     const library = this.library;
-    void findReadtextForSong(library, chart).then((text) => {
+    void findReadtextForChart(library, chart).then((text) => {
       if (lookup !== this.readTextLookup || this.disposed) return;
       if (text === undefined) {
         // No text file: a short cue says the click registered.
@@ -719,11 +719,11 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   /** Points the chart preview at the chart under the cursor, when that changed since it was last pointed. */
   private refreshPreview(): void {
     const chart = focusedChart(this.library, this.browse);
-    const source = chart === undefined ? undefined : resolveSongSource(this.library, chart);
+    const source = chart === undefined ? undefined : resolveChartSource(this.library, chart);
     const key = chart === undefined || source === undefined ? undefined : `${source.id}\n${chart.id}`;
     if (key === this.previewKey) return;
     this.previewKey = key;
     if (chart === undefined || source === undefined) this.options.audio.preview.focus(undefined);
-    else this.options.audio.preview.focus({ song: chart, source }, this);
+    else this.options.audio.preview.focus({ chart: chart, source }, this);
   }
 }

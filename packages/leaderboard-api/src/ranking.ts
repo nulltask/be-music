@@ -1,5 +1,5 @@
 import { and, asc, count, desc, eq, gt, type SQL } from 'drizzle-orm';
-import type { PlaylogRulesetId } from '@be-music/player/playlog';
+import type { RulesetId } from '@be-music/player/replay';
 import { avatarURL } from './avatars.ts';
 import type { Database } from './db/client.ts';
 import { bestScore, profile, score, user } from './db/schema.ts';
@@ -7,7 +7,7 @@ import { PLAY_INFO_COLUMNS, toPlayInfo, type PlayInfo } from './play-info.ts';
 
 export interface RankingFilter {
   chartFingerprint: string;
-  ruleset: PlaylogRulesetId;
+  ruleset: RulesetId;
   assisted: boolean;
   /** Include anonymous players (and accounts anonymized on deletion). Off by default. */
   includeAnonymous: boolean;
@@ -135,7 +135,7 @@ export async function countPlayers(db: Database, filter: RankingFilter): Promise
 /** The viewer's best on a chart and their rank among every player, anonymous ones included. */
 export async function loadMyRank(
   db: Database,
-  query: { userId: string; chartFingerprint: string; ruleset: PlaylogRulesetId; assisted: boolean },
+  query: { userId: string; chartFingerprint: string; ruleset: RulesetId; assisted: boolean },
 ) {
   const mine = await db.query.bestScore.findFirst({
     where: and(

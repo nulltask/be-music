@@ -12,15 +12,15 @@ TypeScript + pnpm workspaces で構成した BMS/bmson ツールチェーンで�
 - `@be-music/parser`: `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / JSON のパーサ
 - `@be-music/stringifier`: JSON から `.bms` / `.bmson` への文字列化
 - `@be-music/audio-renderer`: 譜面をレンダリングして `.wav` / `.aiff` を出力
-- `@be-music/player`: 規則と再生 engine を共有する package。1 つのプレイループ（手動・AUTO・リプレイ）、判定、score、gauge とクリアランプ、自己ベスト、コースの実行と NONSTOP、プレイログの形式、ホストが差し込む runtime 契約
-- `@be-music/player-tui`: autoplay、keyboard play、Music Select、BGA、SEA build を扱う terminal UI と `bms-player` CLI frontend、およびプレイログ再シミュレータ `bms-playlog`
+- `@be-music/player`: 規則と再生 engine を共有する package。1 つのプレイループ（手動・AUTO・リプレイ）、判定、score、gauge とクリアランプ、自己ベスト、コースの実行と NONSTOP、リプレイの形式、ホストが差し込む runtime 契約
+- `@be-music/player-tui`: autoplay、keyboard play、Music Select、BGA、SEA build を扱う terminal UI と `bms-player` CLI frontend、およびリプレイ再シミュレータ `bms-replay`
 - `@be-music/scene-model`: ライブラリの項目・一覧・プレイオプション・プレイ状態と結果・コース・効果音など、スキンの種類によらず共有する実行環境非依存のシーンモデル
 - `@be-music/lr2-skin`: Lunatic Rave 2 skin parser、asset resolver、theme loader を renderer 非依存で提供する package
 - `@be-music/beatoraja-skin`: beatoraja JSON/Lua skin parser、normalizer、theme loader を renderer 非依存で提供する package
 - `@be-music/skin-sdk`: browser player 向け be-music スキンを書くための描画フレームワーク非依存の SDK
 - `@be-music/player-web`: browser の PixiJS 実行層。選曲・決定・プレイ・リザルトの各画面を、built-in・LR2・beatoraja のファミリービューが描くシーンセッションとして 1 つのホスト向け API から作る。音のサービス、譜面のコレクション、スキンの読み込み、gameplay の録画も持つ
 - `@be-music/player-web-demo`: folder / ZIP drop、LR2 / beatoraja theme、Debug Menu、browser 再生を、1 つのシーンルーターの下のサービスとして接続する private Vite demo
-- `@be-music/leaderboard-api`: Cloudflare Workers で動く private な Leaderboard API。プレイログの投稿、再シミュレーションによる検証、ランキング
+- `@be-music/leaderboard-api`: Cloudflare Workers で動く private な Leaderboard API。リプレイの投稿、再シミュレーションによる検証、ランキング
 - `@be-music/editor`: CLI エディタ (インポート・編集・エクスポート)
 
 パッケージは層を成して積み上がっています。矢印は、パッケージからそれに依存するパッケージへ向かいます。ほかの矢印を通じて既に届く依存は重ねて描いていません（`@be-music/utils` はほぼすべてのパッケージの下にあります）。パッケージの内側の同じ層は [アーキテクチャ — 目指す構造](./docs/architecture.ja.md#目指す構造) にあります。
@@ -113,7 +113,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - [Terminal player 実装メモ](docs/player-tui.ja.md)
 - [Browser player 実装メモ](docs/player-web.ja.md)
 - [シーンモデル（`@be-music/scene-model`）](docs/scene-model.ja.md)
-- [プレイログ（プレイ履歴）仕様](docs/playlog.ja.md)
+- [リプレイ（プレイ履歴）仕様](docs/replay.ja.md)
 - [コースと段位認定](docs/course.ja.md)
 - [be-music スキンの作り方](docs/be-music-skin.ja.md)
 - [LR2 skin 実装メモ](docs/lr2-skin.ja.md)
@@ -158,9 +158,9 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - lane flash、POOR BGA command、frame snapshot、pause、restart、high-speed change を流す UI / input signal bus
 - playable note、legacy long note、`#LNOBJ`、FREE ZONE、mine、invisible note の共通抽出
 - 判定幅、動的 `#EXRANKxx`、score、groove gauge、scroll distance、BGA timeline、result summary の共通意味論
-- エンジンのルートと並ぶ browser-safe な入口：`signals`、`lanes`、`display`、`ruleset`、`playlog`、`records`、`course`（[Player 実装仕様 — 公開する入口](./docs/player-spec.ja.md#公開する入口)）
+- エンジンのルートと並ぶ browser-safe な入口：`signals`、`lanes`、`display`、`ruleset`、`replay`、`records`、`course`（[Player 実装仕様 — 公開する入口](./docs/player-spec.ja.md#公開する入口)）
 - `ruleset`: ホスト・スキン・リーダーボードが共有する語彙。ゲージ、クリアランプ、BP、スコア（`ScoreSummary`、`computeScoreRate`、DJ ランク、LR2 のマネースコア）
-- `course`、`records`、`playlog`: コースの実行、NONSTOP の流れ、コースのステージの規則、判定ルールセットごとの自己ベスト、プレイログの形式とその記録・シミュレータ
+- `course`、`records`、`replay`: コースの実行、NONSTOP の流れ、コースのステージの規則、判定ルールセットごとの自己ベスト、リプレイの形式とその記録・シミュレータ
 
 ### scene models (`@be-music/scene-model`)
 
@@ -189,7 +189,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - compressor / limiter の有効化切り替えと threshold / release 系の出力ダイナミクス調整
 - 構造化ログ出力 (`~/.be-music/logs/player.ndjson`, `--log-file` で上書き)
 - gameplay、TUI 描画、video BGA decode を分離する Node worker 構成
-- 記録したプレイログから LR2 / beatoraja / IIDX の結果を再計算する `bms-playlog` CLI（[プレイログ仕様](docs/playlog.ja.md) を参照）
+- 記録したリプレイから LR2 / beatoraja / IIDX の結果を再計算する `bms-replay` CLI（[リプレイ仕様](docs/replay.ja.md) を参照）
 
 ### LR2 skin (`@be-music/lr2-skin`)
 
@@ -337,14 +337,14 @@ pnpm run editor add-note chart.json 0 11 1 2 01
 pnpm run editor export chart.json chart.bms
 ```
 
-### 7. プレイログの再シミュレーション
+### 7. リプレイの再シミュレーション
 
 ```bash
-pnpm run playlog -- /path/to/Song.bmplay.json
-pnpm run playlog -- /path/to/Song.bmplay.json --ruleset=lr2,beatoraja --json
+pnpm run replay -- /path/to/Song.bmplay.json
+pnpm run replay -- /path/to/Song.bmplay.json --ruleset=lr2,beatoraja --json
 ```
 
-オプションは [プレイログ仕様](docs/playlog.ja.md) を参照してください。
+オプションは [リプレイ仕様](docs/replay.ja.md) を参照してください。
 
 ## player 操作
 

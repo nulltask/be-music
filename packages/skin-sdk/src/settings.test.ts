@@ -14,7 +14,7 @@ const THEME: BeMusicSkinSetting = {
 const OFFSET: BeMusicSkinSetting = {
   kind: 'number',
   id: 'judgeOffset',
-  label: 'Judge offset',
+  label: 'Judgment offset',
   min: -40,
   max: 40,
   step: 2,

@@ -3,11 +3,11 @@ import { createEmptyJSON, type BeMusicJSON } from '@be-music/json';
 import { parseChart } from '@be-music/parser';
 import { describe, expect, test } from 'vite-plus/test';
 import { manualPlay } from '../../index.ts';
-import type { BeMusicPlaylog, PlaylogInputEvent } from '../../playlog/format.ts';
-import { simulateCoursePlaylog } from '../../playlog/course.ts';
+import type { BeMusicReplay, ReplayInputEvent } from '../../replay/format.ts';
+import { simulateCourseReplay } from '../../replay/course.ts';
 import { parseBeatorajaCourseData } from '../beatoraja.ts';
 import {
-  buildNonstopCoursePlaylog,
+  buildNonstopCourseReplay,
   prepareNonstopCourse,
   resolveNonstopRun,
   type NonstopCourseStage,
@@ -61,8 +61,8 @@ function prepare(options: Partial<Parameters<typeof prepareNonstopCourse>[1]> = 
 }
 
 /** Presses every note of `chart` dead on, up to `untilUs`. */
-function presses(chart: BeMusicJSON, untilUs = Number.POSITIVE_INFINITY): PlaylogInputEvent[] {
-  const events: PlaylogInputEvent[] = [];
+function presses(chart: BeMusicJSON, untilUs = Number.POSITIVE_INFINITY): ReplayInputEvent[] {
+  const events: ReplayInputEvent[] = [];
   for (const note of resolveChart(chart).notes) {
     const timeUs = Math.round(note.seconds * 1_000_000);
     if (timeUs >= untilUs) continue;
@@ -73,8 +73,8 @@ function presses(chart: BeMusicJSON, untilUs = Number.POSITIVE_INFINITY): Playlo
   return events.sort((left, right) => left.timeUs - right.timeUs).map((event, seq) => ({ ...event, seq }));
 }
 
-async function play(course: PreparedNonstopCourse, untilUs?: number): Promise<BeMusicPlaylog> {
-  let recorded: BeMusicPlaylog | undefined;
+async function play(course: PreparedNonstopCourse, untilUs?: number): Promise<BeMusicReplay> {
+  let recorded: BeMusicReplay | undefined;
   await manualPlay(course.chart, {
     speed: 16,
     leadInMs: 0,
@@ -82,9 +82,9 @@ async function play(course: PreparedNonstopCourse, untilUs?: number): Promise<Be
     tui: false,
     replayInputs: presses(course.chart, untilUs),
     course: { kind: 'nonstop' },
-    recordPlaylog: {},
-    onPlaylogRecorded: (playlog) => {
-      recorded = playlog;
+    recordReplay: {},
+    onReplayRecorded: (replay) => {
+      recorded = replay;
     },
   });
   if (untilUs !== undefined) {
@@ -150,11 +150,11 @@ describe('prepareNonstopCourse', () => {
   });
 });
 
-describe('buildNonstopCoursePlaylog', () => {
+describe('buildNonstopCourseReplay', () => {
   test('records the stitched play with each stage cut out of it, named by its chart', async () => {
     const course = prepare();
-    const playlog = await play(course);
-    const log = buildNonstopCoursePlaylog(DEFINITION, course, playlog, {
+    const replay = await play(course);
+    const log = buildNonstopCourseReplay(DEFINITION, course, replay, {
       createdAt: '2026-10-16T00:00:00.000Z',
       recorder: { name: 'test' },
     });
@@ -168,19 +168,19 @@ describe('buildNonstopCoursePlaylog', () => {
     expect(log.stages.map((entry) => entry.played)).toEqual([true, true]);
     const [first, second] = log.stages;
     // Each stage names its chart as loaded, which keys the course on the Leaderboard.
-    expect(first!.played && first!.playlog.chart).toMatchObject({
+    expect(first!.played && first!.replay.chart).toMatchObject({
       title: 'A',
       sha256: 'a'.repeat(64),
       chartFingerprint: computeChartFingerprint(STAGES[0]!.chart, { chartPath: 'a/a.bms' }),
     });
-    expect(second!.played && second!.playlog.chart).toMatchObject({ title: 'B', subtitle: '[ANOTHER]' });
+    expect(second!.played && second!.replay.chart).toMatchObject({ title: 'B', subtitle: '[ANOTHER]' });
     expect(log.results?.native).toMatchObject({ noteCount: 6, stagesPlayed: 2 });
-    expect(simulateCoursePlaylog(log, { ruleset: 'lr2' })).toMatchObject({ noteCount: 6, missCount: 0 });
+    expect(simulateCourseReplay(log, { ruleset: 'lr2' })).toMatchObject({ noteCount: 6, missCount: 0 });
   });
 
   test('lists a stage the run never reached with its facts, hashes and chart fingerprint', async () => {
     const course = prepare();
-    const log = buildNonstopCoursePlaylog(DEFINITION, course, await play(course, 1_500_000));
+    const log = buildNonstopCourseReplay(DEFINITION, course, await play(course, 1_500_000));
     expect(log.stages[0]).toMatchObject({ played: true });
     expect(log.stages[1]).toEqual({
       played: false,
@@ -188,15 +188,15 @@ describe('buildNonstopCoursePlaylog', () => {
       md5: 'b'.repeat(32),
       chartFingerprint: computeChartFingerprint(STAGES[1]!.chart, { chartPath: 'b/b.bms' }),
     });
-    expect(simulateCoursePlaylog(log, { ruleset: 'lr2' })).toMatchObject({ lamp: 'FAILED', stagesPlayed: 1 });
+    expect(simulateCourseReplay(log, { ruleset: 'lr2' })).toMatchObject({ lamp: 'FAILED', stagesPlayed: 1 });
   });
 });
 
 describe('resolveNonstopRun', () => {
   test('gives the run a rebuild from the stage charts and the recorded draws must match', async () => {
     const course = prepare();
-    const playlog = await play(course);
-    const log = buildNonstopCoursePlaylog(DEFINITION, course, playlog);
+    const replay = await play(course);
+    const log = buildNonstopCourseReplay(DEFINITION, course, replay);
     const rebuilt = prepareNonstopCourse(
       STAGES.map((stage, index) => ({
         chart: stage.chart,
@@ -205,6 +205,6 @@ describe('resolveNonstopRun', () => {
       { constraints: ['hcn'], connections: log.nonstop!.connections, placement: log.nonstop!.placement },
     );
     if (!rebuilt.ok) throw new Error(rebuilt.reason);
-    expect(resolveNonstopRun(rebuilt.course, playlog)).toEqual(log.nonstop);
+    expect(resolveNonstopRun(rebuilt.course, replay)).toEqual(log.nonstop);
   });
 });

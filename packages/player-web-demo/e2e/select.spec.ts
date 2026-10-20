@@ -253,7 +253,7 @@ for (const setup of FAMILIES) {
       await demo.waitFor((current) => current.cursor?.folderPath.length === 0, 'the root of the list', 10_000);
       // At the root, the search lists the matching charts of every folder.
       state = await search(demo, 'Fixture G');
-      expect(state.cursor?.bar).toMatchObject({ kind: 'song', title: 'Fixture G' });
+      expect(state.cursor?.bar).toMatchObject({ kind: 'chart', title: 'Fixture G' });
       // Clearing it lists the folders again, from the top.
       state = await search(demo, '');
       expect(state.cursor?.bar).toMatchObject({ kind: 'folder', title: SONGS });

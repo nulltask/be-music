@@ -13,7 +13,7 @@ describe('OpenAPI document', () => {
       '/charts/{chartFingerprint}/leaderboard/me',
       '/course-scores',
       '/course-scores/{id}',
-      '/course-scores/{id}/playlog',
+      '/course-scores/{id}/replay',
       '/courses/{courseFingerprint}',
       '/courses/{courseFingerprint}/leaderboard',
       '/courses/{courseFingerprint}/leaderboard/me',
@@ -22,7 +22,7 @@ describe('OpenAPI document', () => {
       '/scores',
       '/scores/{id}',
       '/scores/{id}/card',
-      '/scores/{id}/playlog',
+      '/scores/{id}/replay',
     ]);
     const ranking = spec.paths?.['/charts/{chartFingerprint}/leaderboard']?.get;
     // The query parameters come from the validator the route runs.

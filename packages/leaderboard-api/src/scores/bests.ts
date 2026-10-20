@@ -1,6 +1,6 @@
 import { and, asc, eq, getTableColumns, inArray } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
-import type { PlaylogRulesetId } from '@be-music/player/playlog';
+import type { RulesetId } from '@be-music/player/replay';
 import type { Database } from '../db/client.ts';
 import { bestScore, score, scoreResult } from '../db/schema.ts';
 import { mergeBestScores, type BestScores } from '../scoring/best.ts';
@@ -20,7 +20,7 @@ export async function loadBestScores(
   userId: string,
   chartFingerprint: string,
   assisted: boolean,
-): Promise<Map<PlaylogRulesetId, BestScores & { playedHere: boolean }>> {
+): Promise<Map<RulesetId, BestScores & { playedHere: boolean }>> {
   const rows = await db
     .select()
     .from(bestScore)
@@ -48,7 +48,7 @@ export function toBestScores(row: typeof bestScore.$inferSelect): BestScores {
 }
 
 export function toBestScoreRow(
-  key: { userId: string; chartFingerprint: string; ruleset: PlaylogRulesetId; assisted: boolean },
+  key: { userId: string; chartFingerprint: string; ruleset: RulesetId; assisted: boolean },
   bests: BestScores,
   playedHere: boolean,
   now: number,
@@ -104,7 +104,7 @@ export async function rebuildBestScores(
 
   type Folded = {
     chartFingerprint: string;
-    ruleset: PlaylogRulesetId;
+    ruleset: RulesetId;
     assisted: boolean;
     bests: BestScores;
     playedHere: boolean;

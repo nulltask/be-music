@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import type { PlaylogRulesetResult } from '@be-music/player/playlog';
+import type { ReplayRulesetResult } from '@be-music/player/replay';
 import { courseTrophyRank, mergeCourseTrophy, NO_TROPHY, toCourseStageFigures } from './figures.ts';
 
 const TROPHIES = [
@@ -10,7 +10,7 @@ const TROPHIES = [
 
 describe('toCourseStageFigures', () => {
   test('keeps the stage’s figures, with BP counting the notes a failed stage never judged', () => {
-    const result: PlaylogRulesetResult = {
+    const result: ReplayRulesetResult = {
       ruleset: 'lr2/0',
       judge: { pgreat: 4, great: 1, good: 1, bad: 1, poor: 1, emptyPoor: 2 },
       fast: 2,

@@ -25,7 +25,7 @@ import type { CourseView } from '@be-music/scene-model';
 import type { GameplayLayoutMode } from '@be-music/skin-sdk';
 import type { Application, Texture } from 'pixi.js';
 import { loadAssetBytes, resolveChartImageAsset } from '../../collection/collection.ts';
-import type { BrowserSongAssetSource } from '../../collection/types.ts';
+import type { BrowserAssetSource } from '../../collection/types.ts';
 import type { LR2PlayKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import type { PlaySessionOptions } from '../../session/play/play-options.ts';
@@ -108,7 +108,7 @@ export type LR2PlayViewOptions = Pick<
   /** The course the play is a stage of (or the NONSTOP course it stitches), with the stage being played. */
   readonly course?: CourseView;
   /** Where the chart's files are, for its `#STAGEFILE`, `#BACKBMP` and `#BANNER`. */
-  readonly source?: BrowserSongAssetSource;
+  readonly source?: BrowserAssetSource;
 };
 
 /** The LR2 play view. See the module comment. */
@@ -357,7 +357,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     this.loaded = true;
     this.nonstopStage = 0;
     this.lr2Setup = {
-      ...(play.song !== undefined ? { chart: play.song } : {}),
+      ...(play.chart !== undefined ? { chart: play.chart } : {}),
       lanes: { playVariant: play.chartPlayVariant, channels: play.laneChannels },
       features: {
         longNote: play.notes.some((note) => note.endBeat !== undefined),
@@ -488,10 +488,10 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
    * A chart without one (or one that fails to decode) leaves the skin's "absent" branch (ops 190 / 192 / 194) to draw.
    */
   private async loadChartGraphics(): Promise<void> {
-    const song = this.play.song;
+    const chartEntry = this.play.chart;
     const source = this.options.source;
-    if (!song || !source) return;
-    const meta = song.chart.metadata;
+    if (!chartEntry || !source) return;
+    const meta = chartEntry.chart.metadata;
     const candidates: Array<{ key: LR2SpecialGraphic; assetPath: string }> = [];
     if (meta.stageFile) candidates.push({ key: LR2_SPECIAL_GRAPHIC.STAGEFILE, assetPath: meta.stageFile });
     if (meta.backBMP) candidates.push({ key: LR2_SPECIAL_GRAPHIC.BACKBMP, assetPath: meta.backBMP });
@@ -499,7 +499,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     await Promise.all(
       candidates.map(async ({ key, assetPath }) => {
         // The chart's files are read on demand; the image-aware lookup finds a `.bmp` declared but bundled as `.png`.
-        const bytes = await loadAssetBytes(resolveChartImageAsset(source, song.chartPath, assetPath));
+        const bytes = await loadAssetBytes(resolveChartImageAsset(source, chartEntry.chartPath, assetPath));
         if (!bytes) return;
         try {
           const texture = await loadTextureFromBytes(assetPath, bytes);

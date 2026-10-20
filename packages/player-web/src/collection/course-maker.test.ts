@@ -1,10 +1,10 @@
 import { parseChart } from '@be-music/parser';
 import { describe, expect, test } from 'vite-plus/test';
 import { CourseMaker, resolveCourseMakerFolders, type CourseMakerChange } from './course-maker.ts';
-import { createSongHashLookup } from './course.ts';
+import { createChartHashLookup } from './course.ts';
 import type { LibraryChart } from '@be-music/scene-model';
 
-function song(id: string, text: string): LibraryChart {
+function chartEntry(id: string, text: string): LibraryChart {
   return {
     id,
     sourceId: 'drop1',
@@ -19,8 +19,8 @@ function song(id: string, text: string): LibraryChart {
   };
 }
 
-const SEVEN = ['a', 'b', 'c'].map((id) => song(id, '#00111:01\n#00118:01'));
-const DOUBLE = song('d', '#00111:01\n#00121:01');
+const SEVEN = ['a', 'b', 'c'].map((id) => chartEntry(id, '#00111:01\n#00118:01'));
+const DOUBLE = chartEntry('d', '#00111:01\n#00121:01');
 const MD5 = new Map([...SEVEN, DOUBLE].map((entry, index) => [entry.id, String(index + 1).repeat(32)]));
 
 function maker(changes: CourseMakerChange[] = []): CourseMaker {
@@ -119,7 +119,7 @@ describe('resolveCourseMakerFolders', () => {
     courses.start('expert');
     await courses.append(SEVEN[0]!);
     courses.finish();
-    const lookup = createSongHashLookup(SEVEN.map((entry) => ({ song: entry, md5: MD5.get(entry.id)! })));
+    const lookup = createChartHashLookup(SEVEN.map((entry) => ({ chart: entry, md5: MD5.get(entry.id)! })));
     const folders = resolveCourseMakerFolders(courses.courses, lookup);
     expect(folders.map((folder) => folder.label)).toEqual(['MY COURSES', 'MY NONSTOP', 'MY DAN']);
     const [made, add] = folders[0]!.courses!;

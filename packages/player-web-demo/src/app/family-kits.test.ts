@@ -119,16 +119,16 @@ describe('FamilyKits.decideKitFor', () => {
   test("each family's splash: the beatoraja entry, the LR2 decide skin, or the be-music skin's own", async () => {
     const decide = skin('decide');
     const { kits, beatoraja, builtIn } = fakes({ decideSkin: decide });
-    const song = chart();
-    expect(await kits.decideKitFor('beatoraja', song, true)).toBe(BEATORAJA_KIT);
-    expect(beatoraja.loadBeatorajaDecideKit).toHaveBeenCalledWith(song);
-    expect(await kits.decideKitFor('lr2', song, false)).toEqual({ family: 'lr2', skin: decide });
+    const chartEntry = chart();
+    expect(await kits.decideKitFor('beatoraja', chartEntry, true)).toBe(BEATORAJA_KIT);
+    expect(beatoraja.loadBeatorajaDecideKit).toHaveBeenCalledWith(chartEntry);
+    expect(await kits.decideKitFor('lr2', chartEntry, false)).toEqual({ family: 'lr2', skin: decide });
     // A be-music skin without a decide screen shows no splash.
-    expect(await kits.decideKitFor('default', song, false)).toBeUndefined();
+    expect(await kits.decideKitFor('default', chartEntry, false)).toBeUndefined();
     builtIn.beMusicSkin = { ...BUILT_IN_KIT.skin, decide: {} } as BeMusicSkin;
-    expect(await kits.decideKitFor('default', song, false)).toBe(BUILT_IN_KIT);
+    expect(await kits.decideKitFor('default', chartEntry, false)).toBe(BUILT_IN_KIT);
     // Its splash hands over to a built-in or LR2 play, so none is shown before a beatoraja play.
-    expect(await kits.decideKitFor('default', song, true)).toBeUndefined();
+    expect(await kits.decideKitFor('default', chartEntry, true)).toBeUndefined();
   });
 
   test('no LR2 splash without a decide skin', async () => {
@@ -140,16 +140,16 @@ describe('FamilyKits.decideKitFor', () => {
 describe('FamilyKits.resolvePlayKit', () => {
   test('a chart the beatoraja theme can play plays on its play entry, handed with the kit', async () => {
     const { kits, beatoraja } = fakes({ beatoraja: beatorajaTheme() });
-    const song = chart();
-    expect(kits.playsOnBeatoraja(song)).toBe(true);
+    const chartEntry = chart();
+    expect(kits.playsOnBeatoraja(chartEntry)).toBe(true);
     // The entry goes with the kit: the play puts it in force as it takes the stage, not here.
-    expect(await kits.resolvePlayKit(song, {})).toEqual({
+    expect(await kits.resolvePlayKit(chartEntry, {})).toEqual({
       kit: BEATORAJA_KIT,
       beatorajaPlay: { entryPath: 'skin/play7.luaskin', header: { type: 0 }, variant: '7' },
     });
     // An entry that fails to load leaves no play kit.
     vi.mocked(beatoraja.loadBeatorajaPlayKit).mockResolvedValueOnce(undefined);
-    expect(await kits.resolvePlayKit(song, {})).toBeUndefined();
+    expect(await kits.resolvePlayKit(chartEntry, {})).toBeUndefined();
   });
 
   test("an LR2 play skin for the chart's key mode, with the 9-keys skin for invisible notes", async () => {

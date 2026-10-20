@@ -9,7 +9,7 @@ import {
   pickLR2ThemeBGMFile,
   summarizeLR2PlaySkins,
   type LR2PlaySkinMap,
-  type LR2PlaySkinSong,
+  type LR2PlaySkinChart,
   type LR2ThemeLoadProgress,
 } from './play-skin.ts';
 import type { LR2Skin } from './skin.ts';
@@ -31,7 +31,7 @@ function pathFile(path: string): LR2SkinInputFile {
   };
 }
 
-function songWithChannels(channels: string[]): LR2PlaySkinSong {
+function chartWithChannels(channels: string[]): LR2PlaySkinChart {
   return {
     chartPath: 'Song/main.bms',
     chart: {
@@ -53,8 +53,8 @@ describe('LR2 play-skin helpers', () => {
       '10': skin('10K'),
     };
 
-    expect(pickLR2PlaySkin(skins, songWithChannels(['18']))?.name).toBe('7K');
-    expect(pickLR2PlaySkin(skins, songWithChannels(['28']))?.name).toBe('10K');
+    expect(pickLR2PlaySkin(skins, chartWithChannels(['18']))?.name).toBe('7K');
+    expect(pickLR2PlaySkin(skins, chartWithChannels(['28']))?.name).toBe('10K');
   });
 
   test('pickLR2PlaySkin falls back to the SP / DP IIDX skins for 24-key keyboard charts', () => {
@@ -63,19 +63,19 @@ describe('LR2 play-skin helpers', () => {
     // 48-key DP form borrows the DP chain (`'14'` first).
     const skins: LR2PlaySkinMap = { '7': skin('7K'), '14': skin('14K') };
 
-    expect(pickLR2PlaySkin(skins, songWithChannels(['11', '1A']))?.name).toBe('7K');
-    expect(pickLR2PlaySkin(skins, songWithChannels(['11', '1A', '21', '2O']))?.name).toBe('14K');
+    expect(pickLR2PlaySkin(skins, chartWithChannels(['11', '1A']))?.name).toBe('7K');
+    expect(pickLR2PlaySkin(skins, chartWithChannels(['11', '1A', '21', '2O']))?.name).toBe('14K');
   });
 
   test('pickLR2PlaySkin returns undefined when no play skin is available', () => {
-    expect(pickLR2PlaySkin({}, songWithChannels(['11']))).toBeUndefined();
+    expect(pickLR2PlaySkin({}, chartWithChannels(['11']))).toBeUndefined();
   });
 
   test('pickLR2PlaySkinVariant names the variant pickLR2PlaySkin plays on', () => {
     const skins: LR2PlaySkinMap = { '7': skin('7K'), '10': skin('10K') };
-    expect(pickLR2PlaySkinVariant(skins, songWithChannels(['18']))).toBe('7');
-    expect(pickLR2PlaySkinVariant(skins, songWithChannels(['28']))).toBe('10');
-    expect(pickLR2PlaySkinVariant({}, songWithChannels(['11']))).toBeUndefined();
+    expect(pickLR2PlaySkinVariant(skins, chartWithChannels(['18']))).toBe('7');
+    expect(pickLR2PlaySkinVariant(skins, chartWithChannels(['28']))).toBe('10');
+    expect(pickLR2PlaySkinVariant({}, chartWithChannels(['11']))).toBeUndefined();
   });
 
   test('summarizeLR2PlaySkins formats loaded variants', () => {

@@ -1,24 +1,24 @@
 /** A judgment of a note, best first. */
-export type Judge = 'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'POOR';
+export type JudgmentKind = 'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'POOR';
 
 /** The judgments, best first. */
-export const JUDGES: readonly Judge[] = ['PERFECT', 'GREAT', 'GOOD', 'BAD', 'POOR'];
+export const JUDGMENT_KINDS: readonly JudgmentKind[] = ['PERFECT', 'GREAT', 'GOOD', 'BAD', 'POOR'];
 
 /** Whether `value` names a judgment. */
-export function isJudge(value: unknown): value is Judge {
-  return typeof value === 'string' && (JUDGES as readonly string[]).includes(value);
+export function isJudgmentKind(value: unknown): value is JudgmentKind {
+  return typeof value === 'string' && (JUDGMENT_KINDS as readonly string[]).includes(value);
 }
 
 /** A play side. `'2P'` only exists in double play. */
 export type PlaySide = '1P' | '2P';
 
 /** One timed judgment: when it happened, how early or late, and what it was. */
-export interface JudgeTiming {
+export interface JudgmentTiming {
   /** Play-clock ms of the judgment. */
   atMs: number;
   /** Signed offset (ms): > 0 late, < 0 early. */
   deltaMs: number;
-  judge: Judge;
+  judge: JudgmentKind;
   /** Lane channel of the judged note. */
   channel?: string;
 }

@@ -46,7 +46,7 @@ import {
 export interface ResolveChartOptions {
   /**
    * The `#RANDOM` / `#SWITCH` outcomes the chart was resolved with (`drawRandomOutcomes`), recorded on the result for
-   * the play log and the RANDOM summary. `resolveChart` does not apply them: resolve the control flow first
+   * the replay and the RANDOM summary. `resolveChart` does not apply them: resolve the control flow first
    * (`resolveBMSControlFlowWithDraws` in `@be-music/parser`, or `resolvePlayChart` in `@be-music/player`).
    */
   randomDraws?: RandomDraws;

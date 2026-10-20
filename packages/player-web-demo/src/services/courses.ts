@@ -4,7 +4,7 @@
 // interrupt. What a course's flow decides is `course-flow.ts`'s, and the run itself is `CourseRun`
 // (`@be-music/player/course`).
 
-import type { BeMusicPlaylog } from '@be-music/player/playlog';
+import type { BeMusicReplay } from '@be-music/player/replay';
 import type { BrowseSnapshot, LibraryCourse } from '@be-music/scene-model';
 import { startCourseRun, type ActiveCourse } from '../course-flow.ts';
 
@@ -60,11 +60,11 @@ export class CourseRunService {
   }
 
   /**
-   * ESC gave `active` up: the stage given up is recorded, with its play log once the engine has handed it over, and the
+   * ESC gave `active` up: the stage given up is recorded, with its replay once the engine has handed it over, and the
    * run is the running one again, so that its course result shows it as a failed run.
    */
-  public giveUp(active: ActiveCourse, playlog: BeMusicPlaylog | undefined): void {
-    active.run.giveUp(playlog);
+  public giveUp(active: ActiveCourse, replay: BeMusicReplay | undefined): void {
+    active.run.giveUp(replay);
     this.activeCourse = active;
   }
 
@@ -82,7 +82,7 @@ export class CourseRunService {
 
   /**
    * Ends the course run (EXPERT, GRADE or NONSTOP) when a navigation the scenes did not ask for takes over (the router's
-   * `onInterrupt`: a drop, a skin or theme change, files or a play log loaded): the run is dropped unrecorded, so the
+   * `onInterrupt`: a drop, a skin or theme change, files or a replay loaded): the run is dropped unrecorded, so the
    * next single play is not taken for its next stage. Returns where the select screen was when the course started, for
    * the select screen to come back to unless that navigation has put it somewhere already (a drop opens what it
    * brought). Outside a run it does nothing and returns `undefined`.

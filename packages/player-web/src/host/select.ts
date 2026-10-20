@@ -5,7 +5,7 @@
 
 import type { BeatorajaSkinConfig } from '@be-music/beatoraja-skin';
 import type { BrowseSnapshot, LibraryEntry, PlayOptions, SystemSoundSet } from '@be-music/scene-model';
-import type { BrowserSongCollection } from '../collection/types.ts';
+import type { BrowserChartCollection } from '../collection/types.ts';
 import { logger } from '../logger.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
 import { SELECT_POLICIES } from '../session/select/select-policy.ts';
@@ -36,7 +36,7 @@ export interface SelectSceneEvents extends SelectSessionEvents {
 
 export interface SelectSceneOptions extends SessionSceneOptions {
   /** The library to browse, with its charts' files (the preview's samples, the images, the text files). */
-  readonly library: BrowserSongCollection;
+  readonly library: BrowserChartCollection;
   /** Where to open it: a browse position saved with `snapshot()`. Without one, a library of one chart folder opens it. */
   readonly browse?: BrowseSnapshot;
   /** The play options to start from, over `DEFAULT_PLAY_OPTIONS`; their sort and filters shape the list. */
@@ -72,7 +72,7 @@ export interface SelectScene extends SessionScene<SelectFrame, SelectIntent> {
    * Takes a library: the same one again only redraws; a new one keeps the player's place over it (by folder label and
    * bar key).
    */
-  setLibrary(library: BrowserSongCollection): void;
+  setLibrary(library: BrowserChartCollection): void;
   /** Puts the player back where a snapshot says, over the library as it is now. */
   restore(snapshot: BrowseSnapshot): void;
   /** The records changed (another judge ruleset, a new best): the bars and panels draw them again. */
@@ -164,7 +164,7 @@ class FamilySelectScene extends SessionScene<SelectFrame, SelectIntent> implemen
     this.selectSession.setPlayOptions(partial);
   }
 
-  public setLibrary(library: BrowserSongCollection): void {
+  public setLibrary(library: BrowserChartCollection): void {
     this.selectSession.setLibrary(library);
   }
 

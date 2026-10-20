@@ -2,44 +2,41 @@
 
 # Code domain vocabulary review
 
-This review maps code vocabulary to domain concepts and separates aliases from genuine differences in meaning. Rename candidates below are proposals, not implemented API changes. Read them with the [glossary](./glossary.md).
-
-Use `track` for a musical work and `Track` / `trackId` for new types and references. The metadata mapping below does not imply that a track entity already exists. Keep `chart` for the playable arrangement and `audio asset` for an audio file payload.
+This document maps current code vocabulary to domain concepts and separates differences in meaning. Read them with the [glossary](./glossary.md).
 
 ## Charts and assets
 
-| Concept                             | Current code                                           | Meaning and distinction                                                                                                |
-| ----------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| chart / 譜面                        | `BeMusicJSON`, `ResolvedChart`, `LibraryChart`         | Source document, resolved playback data, and library entry are different representations of a chart.                   |
-| track / 楽曲                        | `metadata.title`, `metadata.artist`                    | Descriptive metadata is not a unique track ID.                                                                         |
-| chart set / 譜面セット              | `chartset`                                             | An externally identified grouping of charts, including add-ons; not a synonym for a chart or its containing directory. |
-| chart file / 譜面ファイル           | `chartPath`, `fileSha256`, `fileMd5`                   | File location and raw-byte identity, not chart fingerprint.                                                            |
-| chart collection / 譜面コレクション | `BrowserSongCollection`, `BrowserSongCollectionStore`  | Loaded charts, asset sources, errors and course folders; legacy Song names refer to charts.                            |
-| asset source / アセット供給元       | `BrowserSongAssetSource`, `sourceId`                   | A bundle of file payloads, potentially shared by several charts.                                                       |
-| asset entry / アセット項目          | `BrowserSongAssetEntry`                                | Bytes or a deferred file reference, not a playable chart.                                                              |
-| resource / リソース                 | `#WAV`, `#BMP`, `sound_channels`                       | A chart or skin references a resource; an asset entry supplies its payload.                                            |
-| chart identity / 譜面の同一性       | `chartFingerprint`, `playFingerprint`, `sha256`, `md5` | Keep chart, selected branch, and raw-file identities distinct; none is a performance ID.                               |
+| Concept                             | Current code                                            | Meaning and distinction                                                                                                |
+| ----------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| chart / 譜面                        | `BeMusicJSON`, `ResolvedChart`, `LibraryChart`          | Source document, resolved playback data, and library entry are different representations of a chart.                   |
+| track / 楽曲                        | `metadata.title`, `metadata.artist`                     | Descriptive metadata is not a unique track ID.                                                                         |
+| chart set / 譜面セット              | `chartset`                                              | An externally identified grouping of charts, including add-ons; not a synonym for a chart or its containing directory. |
+| chart file / 譜面ファイル           | `chartPath`, `fileSha256`, `fileMd5`                    | File location and raw-byte identity, not chart fingerprint.                                                            |
+| chart collection / 譜面コレクション | `BrowserChartCollection`, `BrowserChartCollectionStore` | Loaded charts, asset sources, errors and course folders.                                                               |
+| asset source / アセット供給元       | `BrowserAssetSource`, `sourceId`                        | A bundle of file payloads, potentially shared by several charts.                                                       |
+| asset entry / アセット項目          | `BrowserAssetEntry`                                     | Bytes or a deferred file reference, not a playable chart.                                                              |
+| resource / リソース                 | `#WAV`, `#BMP`, `sound_channels`                        | A chart or skin references a resource; an asset entry supplies its payload.                                            |
+| chart identity / 譜面の同一性       | `chartFingerprint`, `playFingerprint`, `sha256`, `md5`  | Keep chart, selected branch, and raw-file identities distinct; none is a performance ID.                               |
 
 ## Play, judgment and records
 
-| Concept                                             | Current code                                                                                     | Meaning and distinction                                                                                                                         |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| play / プレイ                                       | `manualPlay`, `autoPlay`                                                                         | An execution; qualify single play, course stage or course run.                                                                                  |
-| play result / プレイ結果                            | `PlayResult`, `PlayerSummary`                                                                    | Scene-facing result payload versus engine summary; related but not interchangeable.                                                             |
-| score / 得点                                        | `ScoreSummary.score`, `exScore`, `ScoreSummary`                                                  | Displayed numeric score, EX-SCORE and judgment summary must be named separately. The displayed score depends on the ruleset.                    |
-| play submission / プレイ送信記録                    | `score`, `submissionId` in Leaderboard                                                           | The score table stores a submitted play, not just one numeric score. Submission and play IDs have separate roles.                               |
-| ruleset result / ルールセット別結果                 | `scoreResult`, `PlaylogRulesetResult`                                                            | Evaluation under one ruleset; distinguish the ruleset actually played from a re-simulation.                                                     |
-| best record / 自己ベスト                            | `BestRecord`, `bestScore`, `BeMusicSongRecord`                                                   | Independent per-metric bests across plays; not one winning play.                                                                                |
-| play log / プレイログ                               | `BeMusicPlaylog`, `recordPlaylog`, `serializePlaylog`                                            | Recorded replay input; cached results may be regenerated.                                                                                       |
-| judgment / 判定                                     | `JudgeKind`, `Judge`, `JudgeTiming`, `PlaylogJudgeCounts`                                        | A judgment kind, a timed judgment and its counts are separate concepts. Existing Judge names need a coordinated rename, not blind substitution. |
-| ruleset / ルールセット                              | `BeMusicPlaylog`, `recordPlaylog`, `parsePlaylog`, `serializePlaylog`                            | `BeMusicPlayLog`, `recordPlayLog`, `parsePlayLog`, `serializePlayLog`                                                                           | Make the word boundary visible; local variables can be `log`. |
-| `PlaylogRulesetId`, `judgeRuleset`, `playedRuleset` | The rules belong to playback, not just to play logs. playedRuleset identifies the original play. |
-| gauge / ゲージ                                      | `GaugeType`, `gaugeType`, `gauge`, `cleared`, `lamp`                                             | User-selected gauge, ruleset gauge, remaining value, clear verdict and clear lamp differ.                                                       |
-| arrangement / レーン配置                            | `randomLane`, `laneOption`, `randomDraws`                                                        | Lane randomization differs from BMS control-flow branch selection.                                                                              |
-| tempo / テンポ                                      | `speed`, `PlayerTempoChange`, `hiSpeed`, `hsFix`                                                 | Playback tempo differs from visual scroll speed and its normalization.                                                                          |
-| judgment rank / 判定ランク                          | `judgeRank`, `rank`, `exRank`, `RulesetJudgeRankFacts`                                           | Timing strictness from chart metadata; not a leaderboard position or DJ Rank.                                                                   |
-| DJ Rank / DJ RANK                                   | `IIDXRankLabel`, `resolveIIDXRankLabel`                                                          | Performance grade derived from EX-SCORE rate; not the course kind named grade.                                                                  |
-| chart level and difficulty / 譜面レベルと難易度区分 | `playLevel`, `difficulty`, `difficultyFilter`                                                    | Authored numeric/string level differs from BEGINNER through INSANE categories.                                                                  |
+| Concept                                             | Current code                                             | Meaning and distinction                                                                                                               |
+| --------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| play / プレイ                                       | `manualPlay`, `autoPlay`                                 | An execution; qualify single play, course stage or course run.                                                                        |
+| play result / プレイ結果                            | `PlayResult`, `PlayerSummary`                            | Scene-facing result payload versus engine summary; related but not interchangeable.                                                   |
+| score / 得点                                        | `ScoreSummary.score`, `exScore`, `ScoreSummary`          | Displayed numeric score, EX-SCORE and judgment summary must be named separately. The displayed score depends on the ruleset.          |
+| play submission / プレイ送信記録                    | `score`, `submissionId` in Leaderboard                   | The score table stores a submitted play, not just one numeric score. Submission and play IDs have separate roles.                     |
+| ruleset result / ルールセット別結果                 | `scoreResult`, `ReplayRulesetResult`                     | Evaluation under one ruleset; distinguish the ruleset actually played from a re-simulation.                                           |
+| best record / 自己ベスト                            | `BestRecord`, `bestScore`, `BeMusicChartBestRecord`      | Independent per-metric bests across plays; not one winning play.                                                                      |
+| replay / リプレイ                                   | `BeMusicReplay`, `recordReplay`, `serializeReplay`       | Recorded replay input; cached results may be regenerated.                                                                             |
+| judgment / 判定                                     | `JudgmentKind`, `JudgmentTiming`, `ReplayJudgmentCounts` | A judgment kind, a timed judgment and its counts are separate concepts. Use kind, timing, and count names for their respective roles. |
+| ruleset / ルールセット                              | `RulesetId`, `judgeRuleset`, `playedRuleset`             | The rules belong to playback, not just to replays. playedRuleset identifies the original play.                                        |
+| gauge / ゲージ                                      | `GaugeType`, `gaugeType`, `gauge`, `cleared`, `lamp`     | User-selected gauge, ruleset gauge, remaining value, clear verdict and clear lamp differ.                                             |
+| arrangement / レーン配置                            | `randomLane`, `laneOption`, `randomDraws`                | Lane randomization differs from BMS control-flow branch selection.                                                                    |
+| tempo / テンポ                                      | `speed`, `PlayerTempoChange`, `hiSpeed`, `hsFix`         | Playback tempo differs from visual scroll speed and its normalization.                                                                |
+| judgment rank / 判定ランク                          | `judgeRank`, `rank`, `exRank`, `RulesetJudgeRankFacts`   | Timing strictness from chart metadata; not a leaderboard position or DJ Rank.                                                         |
+| DJ Rank / DJ RANK                                   | `IIDXRankLabel`, `resolveIIDXRankLabel`                  | Performance grade derived from EX-SCORE rate; not the course kind named grade.                                                        |
+| chart level and difficulty / 譜面レベルと難易度区分 | `playLevel`, `difficulty`, `difficultyFilter`            | Authored numeric/string level differs from BEGINNER through INSANE categories.                                                        |
 
 ## Courses and layouts
 
@@ -75,23 +72,17 @@ Use `track` for a musical work and `Track` / `trackId` for new types and referen
 | authentication session / 認証セッション | `LoginSession`, Better Auth session                     | App login state differs from Accounts state, scene sessions and audio sessions.                          |
 | guest / ゲスト                          | `isAnonymous`, `Identity.anonymous`, `linkedGuests`     | Credential-free identity and its migration links; do not infer missing user identity.                    |
 
-## Rename candidates (not implemented)
+## API naming
 
-Readability decision: prefer `playLog` / `PlayLog` in identifiers and `log` in an unambiguous local scope. The rename candidates below do not change exports or persisted data yet.
+- Replays: `BeMusicReplay`, `parseReplay`, `serializeReplay`, `simulateReplay`; the public entry is `@be-music/player/replay`.
+- Charts: `PlayResult.chart`, `BrowserChartCollection`, `BrowserChartCollectionStore`.
+- Asset sources: `BrowserAssetSource`, `BrowserAssetEntry`.
+- Chart bests: `BeMusicChartBestRecord`, `chartBestRecord`, `parseChartBestRecords`.
+- Judgments: `JudgmentKind`, `JudgmentTiming`, `ReplayJudgmentCounts`.
+- Rulesets: `RulesetId`.
+- Skin design area: retain `BeMusicStage`.
 
-| Current names                                               | Candidate names                                                            | Reason and constraint                                                                                         |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `PlayResult.song`, `PlayResultFacts.song`                   | `chart`                                                                    | A chart entry, including a representative first-stage chart for a course result; review that case explicitly. |
-| `BrowserSongCollection`, `BrowserSongCollectionStore`       | `BrowserChartCollection`, `BrowserChartCollectionStore`                    | Collection of charts rather than musical works.                                                               |
-| `BrowserSongAssetSource`, `BrowserSongAssetEntry`           | `BrowserAssetSource`, `BrowserAssetEntry`                                  | Shared payloads, not one song per source.                                                                     |
-| `BeMusicSongRecord`, `songRecord`                           | `BeMusicChartBestRecord`, `chartBestRecord`                                | Make both chart granularity and aggregated bests explicit.                                                    |
-| `songRecordKey`, `parseSongRecords`, `serializeSongRecords` | `chartBestRecordKey`, `parseChartBestRecords`, `serializeChartBestRecords` | Names describe the data. Storage keys and formats require a separate compatibility review.                    |
-| `JudgeKind`, `JudgeTiming`, `PlaylogJudgeCounts`            | `JudgmentKind`, `JudgmentTiming`, `PlayLogJudgmentCounts`                  | Coordinated type-name cleanup; do not rename format keys mechanically.                                        |
-| `PlaylogRulesetId`                                          | `RulesetId`                                                                | The concept belongs to the ruleset layer, not the recording format.                                           |
-
-Names tied to storage or API contracts, such as the score table, must not be renamed solely because of this table. Prefer explicit new internal names such as `playSubmission`, `rulesetResult` and `chartBestRecord`, mapping to existing names at boundaries. `PlayOptions` and `PlayerOptions` are not synonyms: clarify their responsibilities before renaming them.
-
-Keep `BeMusicStage`: the `BeMusicSkin.stage` context already identifies the skin design area. Explain its distinction from a course stage in the definition rather than renaming the type.
+There are no compatibility aliases for renamed APIs. Preserve names required by BMS, bmson and external services. Explain database table names such as score separately from numeric scores; keep `PlayOptions` and `PlayerOptions` distinct because their responsibilities differ.
 
 ## Inspected code
 
@@ -101,8 +92,8 @@ Keep `BeMusicStage`: the `BeMusicSkin.stage` context already identifies the skin
 - [packages/player/src/course/definition.ts](../packages/player/src/course/definition.ts)
 - [packages/player/src/ruleset/score.ts](../packages/player/src/ruleset/score.ts)
 - [packages/player/src/records/best-record.ts](../packages/player/src/records/best-record.ts)
-- [packages/player/src/playlog/format.ts](../packages/player/src/playlog/format.ts)
-- [packages/skin-sdk/src/song.ts](../packages/skin-sdk/src/song.ts)
+- [packages/player/src/replay/format.ts](../packages/player/src/replay/format.ts)
+- [packages/skin-sdk/src/chart.ts](../packages/skin-sdk/src/chart.ts)
 - [packages/skin-sdk/src/types.ts](../packages/skin-sdk/src/types.ts)
 - [packages/leaderboard-api/src/db/schema.ts](../packages/leaderboard-api/src/db/schema.ts)
 - [packages/accounts/src/schema.ts](../packages/accounts/src/schema.ts)

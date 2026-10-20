@@ -1,7 +1,7 @@
 import type { PlayerSummary } from '../core/engine-types.ts';
 import type { ScoreSummary } from '../ruleset/score.ts';
-import type { BeMusicCoursePlaylog } from '../playlog/course.ts';
-import { playedAtAnotherTempo } from '../playlog/view.ts';
+import type { BeMusicCourseReplay } from '../replay/course.ts';
+import { playedAtAnotherTempo } from '../replay/view.ts';
 import {
   betterClearLamp,
   clearLampRank,
@@ -9,7 +9,7 @@ import {
   resolveMissCount,
   type ClearLamp,
 } from '../ruleset/clear-lamp.ts';
-import type { PlaylogRulesetId } from '../ruleset/definitions.ts';
+import type { RulesetId } from '../ruleset/definitions.ts';
 
 /**
  * A player's best record on a chart or a course under one judge ruleset: the best clear lamp, EX-SCORE, max combo and BP
@@ -113,11 +113,7 @@ export type RecordPlaySummary = Pick<
  * What a play contributes to its chart's record from its final engine summary, for a host whose gameplay hands it no
  * result (the beatoraja family): the lamp comes from `resolveClearLamp` under `ruleset`, the rule every result uses.
  */
-export function recordPlayFromSummary(
-  summary: RecordPlaySummary,
-  maxCombo: number,
-  ruleset?: PlaylogRulesetId,
-): RecordPlay {
+export function recordPlayFromSummary(summary: RecordPlaySummary, maxCombo: number, ruleset?: RulesetId): RecordPlay {
   return {
     lamp: resolveClearLamp({
       cleared: summary.gauge?.cleared ?? false,
@@ -150,13 +146,13 @@ export function courseStageRecordPlayFromResult(result: RecordPlayResult): Recor
 export function courseStageRecordPlayFromSummary(
   summary: RecordPlaySummary,
   maxCombo: number,
-  ruleset?: PlaylogRulesetId,
+  ruleset?: RulesetId,
 ): RecordPlay {
   const play = recordPlayFromSummary(summary, maxCombo, ruleset);
   return { ...play, missCount: resolveMissCount(summary, unjudgedNotes(summary)) };
 }
 
-/** What a course run's result (`PlaylogCourseResult`) contributes to the course's record. */
+/** What a course run's result (`ReplayCourseResult`) contributes to the course's record. */
 export function courseRunRecordPlay(result: RecordPlay): RecordPlay {
   return { lamp: result.lamp, exScore: result.exScore, maxCombo: result.maxCombo, missCount: result.missCount };
 }
@@ -191,20 +187,20 @@ export function courseStageKeepsRecord(play: RecordPlayKind): boolean {
  * Whether a course run played a stage at another tempo at any point (`play.tempo`, `play.tempoChanges`): such a run is
  * practice, so it leaves the course's record alone, as a single play at another tempo leaves the chart's.
  */
-export function isCourseRunAtAnotherTempo(courseLog: Pick<BeMusicCoursePlaylog, 'stages'>): boolean {
-  return courseLog.stages.some((entry) => entry.played && playedAtAnotherTempo(entry.playlog.play));
+export function isCourseRunAtAnotherTempo(courseLog: Pick<BeMusicCourseReplay, 'stages'>): boolean {
+  return courseLog.stages.some((entry) => entry.played && playedAtAnotherTempo(entry.replay.play));
 }
 
 /**
  * Whether a course run played itself (`play.mode: 'auto'`) on any stage, or on the stitched play of a NONSTOP run: an
  * auto-played run leaves the course's record alone, as an auto play leaves the chart's.
  */
-export function isCourseRunAutoPlayed(courseLog: Pick<BeMusicCoursePlaylog, 'stages' | 'nonstop'>): boolean {
-  if (courseLog.nonstop?.playlog.play.mode === 'auto') return true;
-  return courseLog.stages.some((entry) => entry.played && entry.playlog.play.mode === 'auto');
+export function isCourseRunAutoPlayed(courseLog: Pick<BeMusicCourseReplay, 'stages' | 'nonstop'>): boolean {
+  if (courseLog.nonstop?.replay.play.mode === 'auto') return true;
+  return courseLog.stages.some((entry) => entry.played && entry.replay.play.mode === 'auto');
 }
 
 /** Whether a course run counts for the course's record: not auto-played and not played at another tempo. */
-export function courseRunKeepsRecord(courseLog: Pick<BeMusicCoursePlaylog, 'stages' | 'nonstop'>): boolean {
+export function courseRunKeepsRecord(courseLog: Pick<BeMusicCourseReplay, 'stages' | 'nonstop'>): boolean {
   return !isCourseRunAutoPlayed(courseLog) && !isCourseRunAtAnotherTempo(courseLog);
 }
