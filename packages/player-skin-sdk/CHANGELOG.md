@@ -4,7 +4,7 @@
 
 ### Minor Changes
 
-- b2818d0: Expose shared scene-model library entries, play options, play/results and course data to custom skins.
+- b2818d0: Expose shared player-scene-model library entries, play options, play/results and course data to custom skins.
   
   - Support course bars and records, keyboard-wheel lanes, 24/48-key filters, additional sort modes, touch-scroll rows and in-place search state.
   - Provide chart facts from the resolved chart, shared clear-lamp/rank vocabulary and result presentation for single plays, course stages and complete runs.

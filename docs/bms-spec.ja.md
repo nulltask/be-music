@@ -48,7 +48,7 @@
 
 ### 行終端
 
-現実装の `parser` は、BMS テキストを `LF` / `CRLF` / `CR` のいずれでも区切ります。
+現実装の `chart-parser` は、BMS テキストを `LF` / `CRLF` / `CR` のいずれでも区切ります。
 `CRLF` は 1 つの行終端として扱い、`CR` 単独改行も `LF` と同様に受理します。
 
 入力末尾に改行がなくても、EOF を最終行の終端として扱います。
@@ -177,13 +177,13 @@
 - [x] 単一値ヘッダ・索引付きヘッダ・`#mmm02` の重複定義は EOF 側を採用
 - [x] `#STP` / `#LNOBJ` / 制御構文は重複行を宣言順で保持
 - [x] `#PREVIEW` を選曲画面プレビュー再生で優先的に使用
-- [x] `#VOLWAV` を player / audio-renderer の再生ゲインに反映
+- [x] `#VOLWAV` を player / chart-audio-renderer の再生ゲインに反映
 - [x] `#xxx97` を BGM 側の動的音量変更として解釈
 - [x] `#xxx98` を playable/key 側の動的音量変更として解釈
 - [x] `#EXRANKxx` と `#xxxA0` を player の動的判定幅変更として解釈
 - [x] `#BPMxx` による LR2 100001倍 BPM 系ギミックを時刻解決でサポート
-- [x] すべての `#WAVCMD` 行を `bms.wavCmds` に保持し、audio-renderer と browser WebAudio では `01` volume parameter を反映
-- [x] `#EXWAVxx` を parse し、`v` volume parameter を audio-renderer と browser WebAudio で反映
+- [x] すべての `#WAVCMD` 行を `bms.wavCmds` に保持し、chart-audio-renderer と browser WebAudio では `01` volume parameter を反映
+- [x] `#EXWAVxx` を parse し、`v` volume parameter を chart-audio-renderer と browser WebAudio で反映
 - [x] `#BASEBPM` を `@be-music/chart-model` 経由で browser HS-FIX calibration の reference BPM として使用
 - [x] Browser player で `#BGAxx` sub-region BGA、`#SWBGAxx` switching BGA、`#ARGBxx` / `#EXBMPxx` tint/alpha を反映
 - [x] チャンネル `51-59` / `61-69`（拡張の `5A-5O` / `6A-6O` を含む）をロングノートとして解釈。`#LNTYPE` 省略時の既定である `#LNTYPE 1` はオブジェクトを始点 / 終点の組にし、`#LNTYPE 2`（MGQ）は `00` 以外が連続するセルの並びを 1 本のロングノートにする
@@ -223,11 +223,11 @@ scan は beatoraja と同じくファイル全体を対象にするため、`#BA
 
 runtime と round-trip の扱い:
 
-- `parser` は有効な base を `bms.base` に保持します。`#BASE 36` は既定値と同じなので、出力時に明示する必要はありません。
-- `stringifier` は `bms.base` が `62` の場合に `#BASE 62` を出力します。
+- `chart-parser` は有効な base を `bms.base` に保持します。`#BASE 36` は既定値と同じなので、出力時に明示する必要はありません。
+- `chart-writer` は `bms.base` が `62` の場合に `#BASE 62` を出力します。
 - `#WAVxx`, `#BMPxx`, `#BPMxx`, `#STOPxx`, `#TEXTxx`, `#LNOBJ`, BGA 系 indexed map、object stream value は有効な base で正規化します。
 - 制御構文 (`#RANDOM` / `#IF` / `#SWITCH` block) の内側も通常行と同じ base を使うため、branch 内の小文字 ID も parse と branch resolution を通して保持します。
-- `player`, `audio-renderer`, `chart`, `player-web` は sample、BGA、BPM/STOP、LN、地雷、timing 参照を `resolveBMSBase()` 経由で解決し、base-62 の小文字 ID を runtime でも区別します。
+- `player-engine`, `chart-audio-renderer`, `chart-model`, `player-browser` は sample、BGA、BPM/STOP、LN、地雷、timing 参照を `resolveBMSBase()` 経由で解決し、base-62 の小文字 ID を runtime でも区別します。
 
 例:
 
@@ -243,8 +243,8 @@ runtime と round-trip の扱い:
 
 ### `#VOLWAV`
 
-`parser` は `#VOLWAV` を非負の数値として `bms.volWAV` に保持します。
-`stringifier` は `bms.volWAV` が存在する場合、その値を `#VOLWAV n` としてそのまま出力します。
+`chart-parser` は `#VOLWAV` を非負の数値として `bms.volWAV` に保持します。
+`chart-writer` は `bms.volWAV` が存在する場合、その値を `#VOLWAV n` としてそのまま出力します。
 
 再生時とレンダリング時は、`#VOLWAV` を譜面全体へ掛かる線形 gain として扱います。
 省略時は `100` を既定値とします。`0 < n < 200` の値では実効倍率が `n / 100` になり、それ以外の値では原音量で鳴らします。
@@ -256,12 +256,12 @@ runtime と round-trip の扱い:
 
 この範囲は beatoraja に合わせたものです（beatoraja は `0 < n < 200` のときだけ `#VOLWAV` を適用します）。LR2 は `#VOLWAV` を無視します。beatoraja に合わせることで、`#VOLWAV 0` で譜面が無音になったり、大きな値で増幅されて音割れしたりすることを防ぎます。この規則は `@be-music/chart-model` の `volWAVToLinearGain` が実装しています。
 
-この倍率は `player` のリアルタイム再生、選曲画面プレビュー、`audio-renderer` の `renderJSON()` / `renderChartFile()` に適用します。
+この倍率は `player-engine` のリアルタイム再生、選曲画面プレビュー、`chart-audio-renderer` の `renderJSON()` / `renderChartFile()` に適用します。
 各 player やハードウェア固有の音量差は再現せず、現実装では単純な gain 倍率としてのみ扱います。
 
 ### `#xxx97` / `#xxx98`
 
-`parser` / `stringifier` は `97` / `98` を通常の object channel として保持します。
+`chart-parser` / `chart-writer` は `97` / `98` を通常の object channel として保持します。
 `00` は通常どおり空トークンとして扱い、`01-FF` の非ゼロ値だけがイベントになります。
 
 再生時とレンダリング時は、`97` を BGM 側、`98` を playable/key 側の動的 bus volume として扱います。
@@ -285,7 +285,7 @@ runtime と round-trip の扱い:
 - [ ] ヘッダ `#CDDA` の扱い（無視・保持・再生反映の方針）
 - [ ] 旧動画系ヘッダ `#VIDEOFPS` / `#VIDEODLY` / `#VIDEOCOLORS` / `#SEEK` 系の扱い
 - [ ] 素材分離ヘッダ `#MATERIALSBMP` / `#MATERIALSWAV` の扱い
-- [ ] `#WAVCMD` の pitch / loop 実行。現状の runtime support は audio-renderer と browser WebAudio の `01` volume parameter のみです。
+- [ ] `#WAVCMD` の pitch / loop 実行。現状の runtime support は chart-audio-renderer と browser WebAudio の `01` volume parameter のみです。
 - [ ] `#OPTION` 複数行の同時適用ルール（現状は単一値保持）
 - [ ] オブジェクトチャンネル `#xxxA6`（`#CHANGEOPTIONxx`）の実行時反映
 - [ ] `#TEXTxx` / `#TEXT00` のプレイ中表示挙動（現状は保持のみ）
@@ -402,7 +402,7 @@ runtime と round-trip の扱い:
 - 上記以外は `shift_jis`, `utf8`, `euc-jp`, `latin1` をスコアリングして推測
 - この判定は `@be-music/chart-parser` の `decodeBMSText` に一本化されており、CLI / TUI / Web のすべてが同じ結果になる
 
-## stringifier ルール
+## chart-writer ルール
 
 - `position` の分母情報から小節内解像度を決定
 - 同一小節・同一チャンネルでは分母の最小公倍数を採用
@@ -411,7 +411,7 @@ runtime と round-trip の扱い:
 
 ## 制御構文の評価ルール
 
-- `parser` は制御構文を `bms.controlFlow` として保持し、パース時には分岐を確定しない
+- `chart-parser` は制御構文を `bms.controlFlow` として保持し、パース時には分岐を確定しない
 - 分岐はプレイごとに 1 回、明示的な draws（`drawRandomOutcomes` で引いた `RandomDraws`）で決める。評価器は `@be-music/chart-model` の `evaluateControlFlow` だけで、parser の `resolveBMSControlFlowWithDraws` が有効ブロックを展開し、`bms.controlFlow` を持たない解決済みの譜面を作る。ホストは再生や描画の前に解決し、解決済みの譜面と draws をエンジンに渡す（[プレイヤー仕様 — 制御構文の扱い](./player-spec.ja.md#制御構文の扱い)）
 - `#RANDOM n` / `#SWITCH n` は `1..n` の整数を生成して選択値にする
 - `#SETRANDOM n` / `#SETSWITCH n` は選択値を固定する

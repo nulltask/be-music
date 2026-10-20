@@ -35,7 +35,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - [x] `info` extended item: `mode_hint`
 - [x] `info` extended item: `judge_rank`
 - [x] `info` extended item: `total`
-- [x] Preserve the beatoraja extensions `info.ln_type` and per-note `t` (1: LN / 2: CN / 3: HCN) in the IR, used for the player's LN mode resolution and stringifier output
+- [x] Preserve the beatoraja extensions `info.ln_type` and per-note `t` (1: LN / 2: CN / 3: HCN) in the IR, used for the player's LN mode resolution and chart-writer output
 - [x] `info` extended item: `back_image`
 - [x] `info` extended item: `eyecatch_image`
 - [x] `info` extended item: `banner_image`
@@ -66,7 +66,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - [x] Retention rules for `key:value` format (`music:`/`chart:` etc.) of `subartists`
 - [ ] Transparent preservation of unknown root keys
 
-### stringifier (`@be-music/chart-source` -> bmson)
+### chart-writer (`@be-music/chart-source` -> bmson)
 
 - [x] `version` output (`bmson.version`, `1.0.0` if not specified)
 - [x] `info.resolution` output (`240` if not specified)
@@ -101,7 +101,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - [ ] Transparent reoutput of unknown root key
 - [~] Strictly maintain the original value of `notes.x` (exact identity is not guaranteed as lanes are reallocated in IR)
 
-### player / audio-renderer (bmson playback behavior)
+### player / chart-audio-renderer (bmson playback behavior)
 
 - [x] bmson input playback (via `parseChartFile`)
 - [x] Use `info.banner_image` for player's song selection screen banner
@@ -209,7 +209,7 @@ flowchart TD
   - beatoraja drops a mine inside a long note or on a position a note already uses; be-music keeps it, as LR2 keeps such BMS mines (see [BMS / bmson compatibility notes §2.6](./format-compat.md#26-mines))
 - `bga` is kept in `bmson.bga`
 
-## BMS/bmson intermediate representation -> bmson conversion (stringifier)
+## BMS/bmson intermediate representation -> bmson conversion (chart-writer)
 
 - Generate `y = round(beat * resolution)` from beat resolution equivalent to `eventToBeat` of `@be-music/chart-model`
 - Output `bmson.version` to `version` (`1.0.0` if not specified)

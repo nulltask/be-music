@@ -30,7 +30,7 @@ LR2 と beatoraja は、同じ譜面、オプション、スキンの番号を�
 
 - **譜面の解決：1 つのモデルで、フィンガープリントを取る。** 制御構文、負の BPM、タイミング、描画はそれぞれ 1 つのモデルです。
 - **判定 ruleset：ruleset ごとに、入力から再シミュレーションする。** 判定幅、ノートの選択、LN の方式、地雷の発動、ゲージ、マネースコアを含みます。
-- **スキンの状態：スキンファミリーごと。** LR2 CSV スキンには LR2 の語彙を、beatoraja JSON/Lua スキンにはファミリー非依存の `scene-model` から作った beatoraja の語彙を渡します。
+- **スキンの状態：スキンファミリーごと。** LR2 CSV スキンには LR2 の語彙を、beatoraja JSON/Lua スキンにはファミリー非依存の `player-scene-model` から作った beatoraja の語彙を渡します。
 
 つまり be-music は、beatoraja スキンに LR2 のセマンティクスを一律に流し込んではおらず、beatoraja のプレイを LR2 のルールで判定してもいません。
 
@@ -820,7 +820,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
   - 数値 420 は MISS、426 は POOR+MISS、427 は BAD+POOR+MISS です（[skin/property/IntegerPropertyFactory.java#L461-L467](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/property/IntegerPropertyFactory.java#L461-L467)）。
 - **be-music の現状:** [`packages/skin-beatoraja/src/scene/score.ts`](../packages/skin-beatoraja/src/scene/score.ts) は 420 = POOR、426 = POOR、427 = BAD+POOR として読みますが、エンジンは `summary.emptyPoor` を数えています。[beatoraja skin 実装メモ](./beatoraja-skin.ja.md) にある、エンジンに MISS の判定がないという注記は古くなっています。
 - **影響:** A/C。
-- **推奨:** 数値を `emptyPoor` から読み、scene-model のスコアまで通す。表示だけの話です。
+- **推奨:** 数値を `emptyPoor` から読み、player-scene-model のスコアまで通す。表示だけの話です。
 
 ### ゲージ種別の op 42/43/1046（バグ）
 

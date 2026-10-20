@@ -30,7 +30,7 @@ Impact classes:
 
 - **Chart resolution: one model, fingerprinted.** Control flow, negative BPM, timing and drawing each have one model.
 - **The judge ruleset: per ruleset, re-simulated from inputs.** It covers windows, note selection, LN style, the mine trigger, gauges and money score.
-- **Skin state: per skin family.** LR2 CSV skins get LR2 vocabulary; beatoraja JSON/Lua skins get beatoraja vocabulary from the family-neutral `scene-model`.
+- **Skin state: per skin family.** LR2 CSV skins get LR2 vocabulary; beatoraja JSON/Lua skins get beatoraja vocabulary from the family-neutral `player-scene-model`.
 
 So be-music does **not** blanket-feed beatoraja skins LR2 semantics, and it does not judge beatoraja plays with LR2 rules.
 
@@ -820,7 +820,7 @@ Overall shape: two separate state mappings. LR2 CSV skins get LR2 vocabulary ([`
   - Number 420 is MISS, 426 is POOR+MISS, 427 is BAD+POOR+MISS ([skin/property/IntegerPropertyFactory.java#L461-L467](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/property/IntegerPropertyFactory.java#L461-L467)).
 - **be-music today:** [`packages/skin-beatoraja/src/scene/score.ts`](../packages/skin-beatoraja/src/scene/score.ts) reads 420 = POOR, 426 = POOR, 427 = BAD+POOR, although the engine counts `summary.emptyPoor`. The note in the [beatoraja skin notes](./beatoraja-skin.md) that the engine has no MISS judgment is stale.
 - **Impact:** A/C.
-- **Recommendation:** read the numbers from `emptyPoor` and plumb it through the scene-model score. Display only.
+- **Recommendation:** read the numbers from `emptyPoor` and plumb it through the player-scene-model score. Display only.
 
 ### Gauge-type ops 42/43/1046 (bug)
 

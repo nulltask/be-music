@@ -101,7 +101,7 @@
 - [ ] `charts[]` の付帯情報（`md5`, `noteCount`, `bpm`, `duration`, `keys`, `scratch`, `bga`）を保持
 - [ ] 取得した譜面文字列を既存 `parseBMS` / `parseBmson` に委譲
 
-### stringifier (`@be-music/chart-source` -> bemuse assets)
+### chart-writer (`@be-music/chart-source` -> bemuse assets)
 
 - [ ] `resources.wav` で参照される音声ファイルを収集
 - [ ] チャンク分割の上限を `1,474,560` byte（公式実装の `max`）で適用
@@ -115,7 +115,7 @@
 - [ ] `assets/metadata.json` を同時出力
 - [ ] `bemuse-song.json` / `index.json` の生成（single-song / multi-song server）をサポート
 
-### player / audio-renderer
+### player / chart-audio-renderer
 
 - [ ] 入力として `index.json` / `bemuse-song.json` を受理
 - [ ] keysound は `assets/metadata.json` + `*.bemuse` から解決

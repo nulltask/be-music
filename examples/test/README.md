@@ -112,8 +112,8 @@ Regenerate them through the editor API rather than by hand — that is what keep
 
 | File                                                       | Used by                                                                          |
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `sample.wav`                                               | The default keysound for most charts, and the audio-renderer's reference sample.  |
+| `sample.wav`                                               | The default keysound for most charts, and the chart-audio-renderer's reference sample.  |
 | `branch.wav`, `right.wav`, `wrong.wav`                     | Secondary keysounds, mostly for telling control-flow branches apart by ear.       |
 | `retrigger_a.wav`, `retrigger_b.wav`                       | The 2.2 s samples the retrigger charts need in order to overlap at all.           |
 | `ogg-test.ogg`                                             | The Vorbis sample `ogg-test.bms` declares.                                        |
-| `render-codec-test.mp3` / `.ogg` / `.opus`                 | The audio-renderer's per-codec decode cases, and its missing-`.wav` fallback case. |
+| `render-codec-test.mp3` / `.ogg` / `.opus`                 | The chart-audio-renderer's per-codec decode cases, and its missing-`.wav` fallback case. |

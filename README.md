@@ -30,12 +30,12 @@ The packages build on each other in layers. An arrow points from a package to a 
 ```mermaid
 flowchart TD
   subgraph data["Data"]
-    utils["utils"] --> json["json"] --> chart["chart"] --> parser["parser"]
-    parser --> stringifier["chart-writer"]
+    utils["shared-utils"] --> json["chart-source"] --> chart["chart-model"] --> parser["chart-parser"]
+    parser --> chart-writer["chart-writer"]
     parser --> renderer["chart-audio-renderer"]
   end
   subgraph rules["Rules and engine"]
-    player["player"]
+    player["player-engine"]
   end
   subgraph models["Models"]
     scene["player-scene-model"]
@@ -44,14 +44,14 @@ flowchart TD
     beatoraja["skin-beatoraja"]
   end
   subgraph hosts["Runtimes and hosts"]
-    editor["editor"]
+    editor["chart-editor"]
     tui["player-terminal"]
     lb["app-leaderboard"]
     web["player-browser"]
     demo["app-play"]
   end
 
-  stringifier --> editor
+  chart-writer --> editor
   renderer --> player
   player --> scene
   player --> tui
@@ -128,7 +128,7 @@ The semantics helper of the score is separated into `@be-music/chart-model`, and
 
 ## Compatibility status summary
 
-### parser (`@be-music/chart-parser`)
+### chart-parser (`@be-music/chart-parser`)
 
 - Preserves BMS header/object lines/control syntax
 - Interpret `#WAVxx` / `#BMPxx` / `#BPMxx` / `#STOPxx` / `#TEXTxx`
@@ -138,14 +138,14 @@ The semantics helper of the score is separated into `@be-music/chart-model`, and
 - bmson `info.init_bpm` is required by the parser; missing or invalid values fail early instead of falling back to `130`
 - The beatoraja bmson extensions are mapped through the `mode_hint` lane resolver as beatoraja reads them: `mine_channels` become mines that preserve per-mine `damage`, and `key_channels` become hidden (invisible) notes
 
-### stringifier (`@be-music/chart-writer`)
+### chart-writer (`@be-music/chart-writer`)
 
 - Output BMS/bmson from intermediate representation (JSON)
 - Stable reproduction of bar resolution using `position: [numerator, denominator]`
 - Output bmson extension information (`info` extension, `bga`, `notes.l/c`)
 - Preserve BMS source structure when the stored `preservation` layer still matches the normalized events
 
-### audio-renderer (`@be-music/chart-audio-renderer`)
+### chart-audio-renderer (`@be-music/chart-audio-renderer`)
 
 - Supports BMS / bmson / JSON input
 - Output format `.wav` / `.aiff`
@@ -154,7 +154,7 @@ The semantics helper of the score is separated into `@be-music/chart-model`, and
 - 100001 times the BPM gimmick value of LR2 series is processed by time resolution
 - Applies `#VOLWAV`, `#xxx97` / `#xxx98`, bmson `notes.c`, `#WAVCMD 01 xx vv`, and `#EXWAVxx v` volume scaling
 
-### player core (`@be-music/player-engine`)
+### player-engine (`@be-music/player-engine`)
 
 - Shared `autoPlay()` / `manualPlay()` engine for terminal and browser runtimes: one play loop with manual, auto and replay judge strategies over a deterministic judge core (see [Architecture](./docs/architecture.md#the-engine-judge-core-and-one-play-loop))
 - UI and input signal buses for lane flashes, POOR BGA commands, frame snapshots, pause, restart, and high-speed changes
@@ -233,7 +233,7 @@ The semantics helper of the score is separated into `@be-music/chart-model`, and
 - Single PixiJS scene host that owns one renderer context and shows one scene at a time; the demo's scene router owns every transition and disposes the scene that left
 - In-scene LR2 and beatoraja PLAY OPTION controls for hi-speed, BGA mode/size, filters, sort, HS-FIX, lane cover, lift, auto-scratch, DP flip, random/mirror modes, gauge variants, and skin options
 
-### editor (`@be-music/chart-editor`)
+### chart-editor (`@be-music/chart-editor`)
 
 - `init`, `import`, `export`, `set-meta`, `add-note`, `delete-note`, `list-notes`
 
@@ -468,7 +468,7 @@ flowchart TD
 
 ## Settings/Cache/Log
 
-`player` saves the following locally.
+`@be-music/player-terminal` saves the following locally.
 
 - Play Mode (`manual` / `auto-scratch` / `auto`)
 - HIGH-SPEED
@@ -491,7 +491,7 @@ Storage location and usage:
 # Build the player SEA binary
 pnpm run player:sea
 
-# Build the audio-renderer SEA binary
+# Build the chart-audio-renderer SEA binary
 pnpm run audio-renderer:sea
 
 # Build outputs

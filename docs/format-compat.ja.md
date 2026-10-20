@@ -350,7 +350,7 @@ be-music も beatoraja と同じく読みます。`mine_channels` は `damage` �
 
 ## 4. BMS と bmson の相互変換
 
-be-music の [`@be-music/chart-writer`](../packages/chart-writer/src/index.ts) は 1 つの IR から両方のフォーマットを書き出します。2 つのフォーマットは単位が食い違うため、そのままでは引き継げない値がいくつかあります。下の表は現在の stringifier の挙動です。詳細は [bmson 実装仕様 — BMS と bmson の相互変換](./bmson-spec.ja.md#bms-と-bmson-の相互変換) にあります。
+be-music の [`@be-music/chart-writer`](../packages/chart-writer/src/index.ts) は 1 つの IR から両方のフォーマットを書き出します。2 つのフォーマットは単位が食い違うため、そのままでは引き継げない値がいくつかあります。下の表は現在の chart-writer の挙動です。詳細は [bmson 実装仕様 — BMS と bmson の相互変換](./bmson-spec.ja.md#bms-と-bmson-の相互変換) にあります。
 
 往復の変換はどちら向きも IR を通ります（読み込みと書き出しの関数は [JSON 仕様 — 変換規則](./json-spec.ja.md#変換規則) にあります）。それぞれの書き出しが落とすものです。
 

@@ -48,7 +48,7 @@ This document defines how `packages/chart-parser` / `packages/chart-writer` / `p
 
 ### line end
 
-The actual `parser` separates the BMS text as either `LF` / `CRLF` / `CR`.
+The actual `chart-parser` separates the BMS text as either `LF` / `CRLF` / `CR`.
 `CRLF` is treated as a single line terminator, and `CR` single line breaks are accepted as well as `LF`.
 
 Treats EOF as the end of the last line even if there is no newline at the end of the input.
@@ -177,13 +177,13 @@ The original BM98-era core BMS specifications do not define landmine damage as p
 - [x] Adopt EOF side for single value header, indexed header, and duplicate definition of `#mmm02`
 - [x] `#STP` / `#LNOBJ` / Control constructs keep duplicate lines in declaration order
 - [x] `#PREVIEW` is used preferentially in song selection screen preview playback
-- [x] Reflect `#VOLWAV` to player / audio-renderer playback gain
+- [x] Reflect `#VOLWAV` to player / chart-audio-renderer playback gain
 - [x] Interpret `#xxx97` as dynamic volume change on BGM side
 - [x] Interpret `#xxx98` as dynamic volume change on playable/key side
 - [x] Interpret `#EXRANKxx` and `#xxxA0` as dynamic decision width changes of player
 - [x] Supports LR2 100001x BPM gimmick by `#BPMxx` with time resolution
-- [x] Keep every `#WAVCMD` line in `bms.wavCmds`; audio-renderer and browser WebAudio apply the `01` volume parameter
-- [x] Parse `#EXWAVxx` and apply its `v` volume parameter in audio-renderer and browser WebAudio
+- [x] Keep every `#WAVCMD` line in `bms.wavCmds`; chart-audio-renderer and browser WebAudio apply the `01` volume parameter
+- [x] Parse `#EXWAVxx` and apply its `v` volume parameter in chart-audio-renderer and browser WebAudio
 - [x] Use `#BASEBPM` as the chart reference BPM for browser HS-FIX calibration through `@be-music/chart-model`
 - [x] Browser player reflects `#BGAxx` sub-region BGA, `#SWBGAxx` switching BGA, and `#ARGBxx` / `#EXBMPxx` tint and alpha
 - [x] Interpret channels `51-59` / `61-69` (and the extended `5A-5O` / `6A-6O`) as long notes. `#LNTYPE 1`, the default when `#LNTYPE` is omitted, pairs objects as start / end; `#LNTYPE 2` (MGQ) makes a run of consecutive non-`00` cells one long note
@@ -226,11 +226,11 @@ Unsupported values are ignored.
 
 Runtime and round-trip behavior:
 
-- `parser` stores the active base in `bms.base`; `#BASE 36` is equivalent to the default and does not need to be emitted.
-- `stringifier` emits `#BASE 62` when `bms.base` is `62`.
+- `chart-parser` stores the active base in `bms.base`; `#BASE 36` is equivalent to the default and does not need to be emitted.
+- `chart-writer` emits `#BASE 62` when `bms.base` is `62`.
 - `#WAVxx`, `#BMPxx`, `#BPMxx`, `#STOPxx`, `#TEXTxx`, `#LNOBJ`, BGA-related indexed maps, and object-stream values are normalized with the active base.
 - Control-flow contents (`#RANDOM` / `#IF` / `#SWITCH` blocks) use the same base as normal lines, so lowercase IDs inside branches survive parsing and branch resolution.
-- `player`, `audio-renderer`, `chart`, and `player-web` resolve sample, BGA, BPM/STOP, LN, mine, and timing references through `resolveBMSBase()` so base-62 lowercase IDs remain distinct at runtime.
+- `player-engine`, `chart-audio-renderer`, `chart-model`, and `player-browser` resolve sample, BGA, BPM/STOP, LN, mine, and timing references through `resolveBMSBase()` so base-62 lowercase IDs remain distinct at runtime.
 
 Example:
 
@@ -246,8 +246,8 @@ Without `#BASE 62`, both keys fold into the same base-36 ID and the later defini
 
 ### `#VOLWAV`
 
-`parser` holds `#VOLWAV` as a non-negative number in `bms.volWAV`.
-`stringifier` outputs the value of `bms.volWAV` as is if it exists, as `#VOLWAV n`.
+`chart-parser` holds `#VOLWAV` as a non-negative number in `bms.volWAV`.
+`chart-writer` outputs the value of `bms.volWAV` as is if it exists, as `#VOLWAV n`.
 
 During playback and rendering, `#VOLWAV` is treated as a linear gain applied to the entire score.
 If omitted, the default value is `100`. A value with `0 < n < 200` gives the magnification `n / 100`; any other value plays at the original volume.
@@ -259,12 +259,12 @@ If omitted, the default value is `100`. A value with `0 < n < 200` gives the mag
 
 The range is beatoraja's (it applies `#VOLWAV` only for `0 < n < 200`); LR2 ignores `#VOLWAV`. Following beatoraja keeps `#VOLWAV 0` from muting a chart and large values from amplifying it into clipping. `@be-music/chart-model`'s `volWAVToLinearGain` implements the rule.
 
-This magnification applies to real-time playback of `player`, song selection screen preview, and `renderJSON()` / `renderChartFile()` of `audio-renderer`.
+This magnification applies to real-time playback of `player-engine`, song selection screen preview, and `renderJSON()` / `renderChartFile()` of `chart-audio-renderer`.
 It does not reproduce player- or hardware-specific volume differences, and is treated as a simple gain multiplication factor in actual equipment.
 
 ### `#xxx97` / `#xxx98`
 
-`parser` / `stringifier` keep `97` / `98` as regular object channels.
+`chart-parser` / `chart-writer` keep `97` / `98` as regular object channels.
 `00` is treated as an empty token as usual, and only non-zero values ​​of `01-FF` are events.
 
 During playback and rendering, `97` is treated as a dynamic bus volume on the BGM side and `98` on the playable/key side.
@@ -288,7 +288,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - [ ] Handling of header `#CDDA` (policy of ignoring, retaining, and replaying)
 - [ ] Handling of old video headers `#VIDEOFPS` / `#VIDEODLY` / `#VIDEOCOLORS` / `#SEEK`
 - [ ] Handling of material separation header `#MATERIALSBMP` / `#MATERIALSWAV`
-- [ ] `#WAVCMD` pitch and loop execution. Current runtime support only applies the `01` volume parameter in audio-renderer and browser WebAudio.
+- [ ] `#WAVCMD` pitch and loop execution. Current runtime support only applies the `01` volume parameter in chart-audio-renderer and browser WebAudio.
 - [ ] `#OPTION` Simultaneous application rule for multiple lines (currently holds a single value)
 - [ ] Runtime reflection of object channel `#xxxA6` (`#CHANGEOPTIONxx`)
 - [ ] `#TEXTxx` / `#TEXT00` display behavior during play (currently only retained)
@@ -405,7 +405,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - Otherwise infer by scoring `shift_jis`, `utf8`, `euc-jp`, `latin1`
 - This detection is unified in `@be-music/chart-parser`'s `decodeBMSText`, so CLI / TUI / Web all produce the same result
 
-## stringifier rules
+## chart-writer rules
 
 - Determine intra-measure resolution from denominator information of `position`
 - For the same measure and same channel, the least common multiple of the denominator is used.
@@ -414,7 +414,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 
 ## Evaluation rules for control constructs
 
-- `parser` retains control syntax as `bms.controlFlow` and does not commit branches when parsing
+- `chart-parser` retains control syntax as `bms.controlFlow` and does not commit branches when parsing
 - Branches are decided once per play by explicit draws (`RandomDraws`, drawn with `drawRandomOutcomes`); `evaluateControlFlow` in `@be-music/chart-model` is the only evaluator, and the parser's `resolveBMSControlFlowWithDraws` expands the active blocks into a resolved chart without `bms.controlFlow`. Hosts resolve before playback or rendering and hand the engine the resolved chart with its draws ([Player spec — Handling control syntax](./player-spec.md#handling-control-syntax))
 - `#RANDOM n` / `#SWITCH n` generate integers of `1..n` and use them as selection values
 - `#SETRANDOM n` / `#SETSWITCH n` fix the selection value

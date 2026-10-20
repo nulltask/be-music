@@ -32,8 +32,8 @@ Leaderboard は be-music のオンラインのスコアランキングで、LR2 
 ```mermaid
 flowchart LR
   subgraph clients[クライアント]
-    W[player-web]
-    T[player-tui]
+    W[player-browser]
+    T[player-terminal]
   end
   subgraph workers[Workers]
     P[play]
@@ -55,7 +55,7 @@ flowchart LR
   共有します。
 - **パッケージ**: `packages/app-leaderboard`（private）。プレイの再計算と fingerprint の検証のために
   `@be-music/player-engine/replay` と `@be-music/chart-model` を import します。
-- **型付きクライアント**: Hono RPC（`hc<AppType>`）で、`player-web` と `player-tui` に API の型をそのまま渡します。
+- **型付きクライアント**: Hono RPC（`hc<AppType>`）で、`player-browser` と `player-terminal` に API の型をそのまま渡します。
 - **入力検証**: Valibot と `@hono/standard-validator`。
 - **ORM**: Drizzle。drizzle-kit で SQL のマイグレーションをパッケージ内に生成し、Better Auth のテーブルも同じ
   マイグレーションで管理します。

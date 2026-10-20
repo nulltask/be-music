@@ -213,12 +213,12 @@ sequenceDiagram
 ## Browser player への配線
 
 `@be-music/player-browser` は `loadBeatorajaThemeFromFiles()` を提供し、dropped browser `File[]` を `BeatorajaThemeBundle` に wrap します。
-host はその bundle から、scene ごとのスキンのエントリを player-web の `loadBeatorajaSceneKit()`（[player-web.ja.md](./player-web.ja.md#beatoraja-skin-と-theme-support)）で読み込みます。これはこの package の `loadBeatorajaSkin()` を 2 回（ヘッダーの読み込みと、プレイヤーのオプションでのスキンの読み込み。ホストがオプションをすでに持っていれば 1 回）、`source[]` 向けの `bundleBeatorajaSources()`、Pixi texture 向けの `loadBeatorajaTexturesFromBundle()`、CSS / bitmap font 向けの `loadBeatorajaFonts()` を呼び、エントリごとに保持します。
+host はその bundle から、scene ごとのスキンのエントリを player-browser の `loadBeatorajaSceneKit()`（[player-web.ja.md](./player-web.ja.md#beatoraja-skin-と-theme-support)）で読み込みます。これはこの package の `loadBeatorajaSkin()` を 2 回（ヘッダーの読み込みと、プレイヤーのオプションでのスキンの読み込み。ホストがオプションをすでに持っていれば 1 回）、`source[]` 向けの `bundleBeatorajaSources()`、Pixi texture 向けの `loadBeatorajaTexturesFromBundle()`、CSS / bitmap font 向けの `loadBeatorajaFonts()` を呼び、エントリごとに保持します。
 state は LR2 theme state と並列に保持されるため、demo は両方の theme format を同時に保持できます。
 
 browser renderer は select、decide、gameplay、result skin の共有 view として `BeatorajaPlaySkinView` を使います。
 ファミリーのビューは `TEXT`、`NUM`、`OPTION`、timer、gauge、graph を [scene mapping](#scene-mapping) から読み、chart image、note layer、BGA layer、audio、result history など runtime 固有の部分を自分で提供します。
-select 画面、decide 画面、play 画面、result 画面は player-web の beatoraja の family view で、`createSelectScene`、`createDecideScene`、`createPlayScene`、`createResultScene` で作ります（[player-web.ja.md](./player-web.ja.md#選曲画面)）。select、decide、result の resolver でセッションのフレームを描き（result の view は `PlayResult` をそのまま読みます）、beatoraja の scene の timer をフレームごとに読みます。select の view は MODE と SORT の imageset のために一覧の位置の一覧の設定を読み（順番は `BEATORAJA_KEYS_FILTERS` と `BEATORAJA_SORTS`、設定の位置は `beatorajaKeysFilterIndex` と `beatorajaSortIndex` で決まります）、LNMODE の選択は自分で持ちます（select の入力の `lnMode`、なければ `beatorajaLNModeIndex` で読む譜面の `#LNMODE`）。ボタンはインテントとして選曲画面のセッションに返ります。
+select 画面、decide 画面、play 画面、result 画面は player-browser の beatoraja の family view で、`createSelectScene`、`createDecideScene`、`createPlayScene`、`createResultScene` で作ります（[player-web.ja.md](./player-web.ja.md#選曲画面)）。select、decide、result の resolver でセッションのフレームを描き（result の view は `PlayResult` をそのまま読みます）、beatoraja の scene の timer をフレームごとに読みます。select の view は MODE と SORT の imageset のために一覧の位置の一覧の設定を読み（順番は `BEATORAJA_KEYS_FILTERS` と `BEATORAJA_SORTS`、設定の位置は `beatorajaKeysFilterIndex` と `beatorajaSortIndex` で決まります）、LNMODE の選択は自分で持ちます（select の入力の `lnMode`、なければ `beatorajaLNModeIndex` で読む譜面の `#LNMODE`）。ボタンはインテントとして選曲画面のセッションに返ります。
 play の view は `BeatorajaPlayBridge` を通して描きます。play の state は play のセッションの `PlayState` で、bridge は frame、判定、レーン操作ごとに mapping が解決した op と timer を適用します（[player-web.ja.md](./player-web.ja.md#プレイ画面)）。
 
 browser gameplay path は parser が discovery する chart variant `5`、`7`、`9`、`10`、`14`、`24`、`24d` をすべて mount します。
