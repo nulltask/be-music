@@ -1,4 +1,3 @@
-export { ProfileSync } from './profile-rpc.ts';
 import { createApp } from './app.ts';
 import { bmsSearchLookup, refreshStaleChartsets } from './chartsets/refresh.ts';
 import { openDatabase } from './db/client.ts';

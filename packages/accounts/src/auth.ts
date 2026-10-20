@@ -12,7 +12,6 @@ import * as schema from './schema.ts';
 export interface Env {
   DB: D1Database;
   BLOBS: R2Bucket;
-  LEADERBOARD?: { syncProfile(subject: string): Promise<void> };
   AUTH_ORIGIN: string;
   SHOW_DONATE_LINK?: string;
   PASSKEY_RP_ID: string;

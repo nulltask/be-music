@@ -5,7 +5,6 @@ import { drizzle } from 'drizzle-orm/d1';
 import { createAuth, provisionClients, type Env } from './auth.ts';
 import { renderAccountPage } from './page.ts';
 import { CLIENT_JS } from './client.generated.ts';
-import { retryProfiles } from './profile-publish.ts';
 import { avatarURL } from './avatars.ts';
 import { profileHTTP } from './profile-http.ts';
 import { createProfile } from './profiles.ts';
@@ -13,9 +12,6 @@ import { openDatabase } from './db/client.ts';
 import { profile, user } from './schema.ts';
 
 export default {
-  async scheduled(_controller, env, context) {
-    context.waitUntil(retryProfiles(env));
-  },
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (url.origin !== env.AUTH_ORIGIN) return new Response('Unknown origin', { status: 400 });
