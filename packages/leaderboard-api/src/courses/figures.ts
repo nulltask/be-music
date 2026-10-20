@@ -1,4 +1,4 @@
-import type { PlaylogCourseInfo, PlaylogRulesetResult } from '@be-music/player/playlog';
+import type { ReplayCourseInfo, ReplayRulesetResult } from '@be-music/player/replay';
 
 /** One reached stage of a course run under one ruleset, as the run page breaks the run down. */
 export interface CourseStageFigures {
@@ -15,8 +15,8 @@ export interface CourseStageFigures {
   cleared: boolean;
 }
 
-/** A stage result of `simulateCoursePlaylog` (`PlaylogCourseResult.stages`) as it is stored. */
-export function toCourseStageFigures(result: PlaylogRulesetResult): CourseStageFigures {
+/** A stage result of `simulateCourseReplay` (`ReplayCourseResult.stages`) as it is stored. */
+export function toCourseStageFigures(result: ReplayRulesetResult): CourseStageFigures {
   const { judge } = result;
   const judged = judge.pgreat + judge.great + judge.good + judge.bad + judge.poor;
   return {
@@ -36,7 +36,7 @@ export function toCourseStageFigures(result: PlaylogRulesetResult): CourseStageF
  * `GradeBar.getTrophy` keeps the last one that qualifies): 1 for the first, 0 for none or a name the list lacks. A name
  * listed twice takes its last place, as the last qualifying trophy is the one earned.
  */
-export function courseTrophyRank(trophies: PlaylogCourseInfo['trophies'], trophy: string | undefined | null): number {
+export function courseTrophyRank(trophies: ReplayCourseInfo['trophies'], trophy: string | undefined | null): number {
   if (trophy === undefined || trophy === null) return 0;
   for (let index = trophies.length - 1; index >= 0; index -= 1) {
     if (trophies[index]!.name === trophy) return index + 1;

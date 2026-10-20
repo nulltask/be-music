@@ -12,11 +12,11 @@ The definitions follow general BMS/bmson terminology where possible, but priorit
 - Use **track** / `Track` / `trackId` for individual musical works. **Music** may describe music in general, but is not the entity name. A track is distinct from an **audio asset** (a file payload) and an **audio track** (a recording or editor timeline lane). Keep screen names such as **Music Select** and external keys such as `preview_music` unchanged.
 - **song** is not the default repository term. Use it only when referring to an external specification name or file name such as `song.mid`, `bemuse-song.json`, or `songs[]`.
 - **Music Select** is a screen name. The unit selected and restored on that screen is still a chart.
-- In the library a select screen browses, a chart is a **library chart** (`LibraryChart`): a chart bar is `{ kind: 'chart', chart }`, a folder lists its `charts` and a course stage names its `chart`. Some public names still say song (`PlayResult.song`, `BrowserSongCollectionStore`, `BrowserSongAssetSource`, the skin SDK's `songRecord`, `BeMusicSongRecord` and `resolveSongStats`); new names say chart.
+- In the library a select screen browses, a chart is a **library chart** (`LibraryChart`): a chart bar is `{ kind: 'chart', chart }`, a folder lists its `charts` and a course stage names its `chart`. Code names now say chart (`PlayResult.chart`, `BrowserChartCollectionStore`, `BrowserAssetSource`, the skin SDK's `chartBestRecord`, `BeMusicChartBestRecord` and `resolveChartStats`).
 
 ## Preferred Spellings
 
-Use these terms in documentation, source comments, and user-facing text. Code identifiers follow [the naming rules](../AGENTS.md); keep existing public APIs, database columns, external formats, command names, and URLs compatible.
+Use these terms in documentation, source comments, and user-facing text. Code identifiers follow [the naming rules](../AGENTS.md); preserve names required by BMS, bmson and external services while aligning project-owned names with this vocabulary.
 
 | Concept                               | English              | Japanese              | Code                                                             |
 | ------------------------------------- | -------------------- | --------------------- | ---------------------------------------------------------------- |
@@ -24,18 +24,18 @@ Use these terms in documentation, source comments, and user-facing text. Code id
 | Musical work shared by charts         | track                | 楽曲                  | `track`                                                          |
 | JSON-based chart format               | bmson                | bmson                 | `bmson` / `Bmson`; existing `BMSON_*` constants remain unchanged |
 | Judgment result                       | judgment             | 判定                  | `judge` in existing APIs                                         |
-| Recorded input replay                 | play log             | プレイログ            | `playLog` / `PlayLog`                                            |
+| Recorded input replay                 | replay               | リプレイ              | `replay` / `Replay`                                              |
 | Profile image                         | avatar               | アバター              | `avatar`                                                         |
 | Unique public user name               | handle               | ユーザー名            | `handle`                                                         |
 | Name shown beside an avatar           | display name         | 表示名                | `displayName`                                                    |
 | Enter or end an authenticated session | sign in / sign out   | ログイン / ログアウト | `signIn` / `signOut`; preserve authentication library contracts  |
 | Deployment environments               | production / preview | 本番 / プレビュー     | `production` / `preview`                                         |
 
-Use **play history** for a collection or list of plays, and **play log** for one recorded replay; these are different concepts. Use **sign-in** and **sign-out** as modifiers or nouns, and **sign in** and **sign out** as verbs. A UI **icon** is a symbol for an action or entity; a user's profile image is an **avatar**.
+Use **play history** for a collection or list of plays, and **replay** for one recorded replay; these are different concepts. Use **sign-in** and **sign-out** as modifiers or nouns, and **sign in** and **sign out** as verbs. A UI **icon** is a symbol for an action or entity; a user's profile image is an **avatar**.
 
-For new identifiers, write `playLog` / `PlayLog` as two words. Use `log` for local variables and parameters when the play-log context is unambiguous. Existing `BeMusicPlaylog`-style exports, import paths, command names and serialized keys remain compatibility spellings until an explicit migration.
+Use **replay** for recorded playback data: `BeMusicReplay` for its type, `replay` for data, and verbs such as `parseReplay`, `serializeReplay` and `simulateReplay` for operations. Reserve **log** for diagnostic or execution logs.
 
-Existing names such as `CourseSongRecord`, `RandomCourseDrawSuccess.songs`, and `PlayResult.song` remain compatibility names for charts. Use **chart** in their explanations and in new names. Keep external names such as beatoraja's `song` table and `BMSONDecoder` as written by their source.
+Use **chart** in code names for playable arrangements and **track** for musical works. Keep external names such as beatoraja’s `song` table and `BMSONDecoder` unchanged.
 
 ## Score And Resources
 
@@ -68,20 +68,20 @@ Existing names such as `CourseSongRecord`, `RandomCourseDrawSuccess.songs`, and 
 - **LNOBJ**: BMS long-note terminator object declared by `#LNOBJ`.
 - **LNMODE**: BMS long-note judgment rule. `1`, `2`, and `3` change end judgment and hold-break behavior.
 - **mine**: Damage note. Following LR2, a mine explodes when its lane is held as it crosses the judge line or pressed within the `PGREAT` window; the explosion only drains the gauge by the chart-defined damage and is not a judgment.
-- **judgment**: A note evaluation such as `PERFECT`, `GREAT`, `GOOD`, `BAD`, or `POOR`. Use judgment for the result and judge for the verb; existing identifiers such as `Judge`, `judge`, and `judgeRuleset` keep their spellings.
+- **judgment**: A note evaluation such as `PERFECT`, `GREAT`, `GOOD`, `BAD`, or `POOR`. Use judgment for the result and judge for the verb; use `JudgmentKind` for a kind and `JudgmentTiming` for a timed result. Verb-led engine names and format fields such as `judge` and `judgeRuleset` retain their roles.
 - **FAST/SLOW**: Timing-direction display for early or late hits. The current implementation aggregates only `GREAT` and `GOOD`.
 - **EX-SCORE**: IIDX-compatible score where `PERFECT=2`, `GREAT=1`, and other judgments add `0`.
-- **SCORE**: Standard score normalized to 200,000 points.
+- **SCORE**: The displayed score: LR2 uses its normalized 200,000-point money score; the other current rulesets display EX-SCORE.
 - **groove gauge**: Clear gauge. The shared core defaults to LR2-compatible `GROOVE` (`NORMAL`); the exported helper also supports `HARD`, `DEATH`, and `EASY` for browser play options.
 - **hi-speed**: The visual note-scroll setting; it changes the presentation and visible interval without changing note timing or playback tempo. External skin labels such as `HI-SPEED` and `HIGH-SPEED`, and existing `hiSpeed` names, keep their spellings.
 - **MANUAL / AUTO SCRATCH / AUTO**: Playback modes. `MANUAL` uses player input, `AUTO SCRATCH` automates scratch lanes only, and `AUTO` automates all playable notes.
 - **control flow**: BMS branch directives such as `#RANDOM`, `#IF`, and `#SWITCH`. The parser retains them; hosts resolve them once per play, before playback or rendering, with explicit `RandomDraws`.
-- **RandomDraws**: The outcome of a chart's control flow for one play: one entry (command, range, value) per `#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` line in file order. Drawn once with `drawRandomOutcomes` and shared by the resolver, the engine and the play log.
+- **RandomDraws**: The outcome of a chart's control flow for one play: one entry (command, range, value) per `#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` line in file order. Drawn once with `drawRandomOutcomes` and shared by the resolver, the engine and the replay.
 - **Source layer / Resolved layer**: The two layers a chart is read in. The Source layer (`BeMusicJSON`) is what the file says; the Resolved layer (`ResolvedChart`, built by `resolveChart` in `@be-music/chart`) is what the player plays, with every format default and de facto rule applied. See [Architecture](./architecture.md).
 
 ## Runtime Packages
 
-- **player core**: The shared `@be-music/player` rules and engine. The package root is the engine (`manualPlay`, `autoPlay`): it prepares a play from the resolved chart, judges it and owns the UI / audio / input runtime contracts. The other entries hold the rules (`./ruleset`, `./course`, `./records`, `./playlog`) and what a host shares with a play (`./signals`, `./lanes`, `./display`). Timing, note resolution and timelines live in `@be-music/chart`.
+- **player core**: The shared `@be-music/player` rules and engine. The package root is the engine (`manualPlay`, `autoPlay`): it prepares a play from the resolved chart, judges it and owns the UI / audio / input runtime contracts. The other entries hold the rules (`./ruleset`, `./course`, `./records`, `./replay`) and what a host shares with a play (`./signals`, `./lanes`, `./display`). Timing, note resolution and timelines live in `@be-music/chart`.
 - **terminal player**: The `@be-music/player-tui` CLI and TUI frontend. It provides Music Select, terminal gameplay, terminal BGA, loading screens, and SEA builds on top of the core engine.
 - **browser player**: The `@be-music/player-web` PixiJS/WebAudio runtime and the `@be-music/player-web-demo` Vite host. The runtime makes every screen as a scene session drawn by a family view, behind its host API, and loads the library and the skins and records plays; the demo handles browser drops, themes, the Debug Menu and the scene router.
 - **skin family**: The kind of skin that draws a browser-player scene: `built-in` (be-music skins), `lr2` or `beatoraja` (`SceneFamily`). The host picks it from the loaded themes and the player's choice.
@@ -139,7 +139,7 @@ Existing names such as `CourseSongRecord`, `RandomCourseDrawSuccess.songs`, and 
 - **Sound / Visual status**: Separate loading-screen progress states for audio and visual resources.
 - **structured log**: NDJSON execution log written separately from TUI output, usually under `~/.be-music/logs/player.ndjson`.
 - **video BGA streaming**: Policy that prepares only the first video frame before gameplay starts, then decodes remaining frames progressively.
-- **play log**: A recording for deterministic replay of one play (`*.bmplay.json`), including the resolved chart, input events, and play settings. It is distinct from the summary of the play and from the collection called play history. `bms-playlog` re-simulates it under the LR2, beatoraja, and IIDX rulesets.
+- **replay**: A recording for deterministic replay of one play (`*.bmplay.json`), including the resolved chart, input events, and play settings. It is distinct from the summary of the play and from the collection called play history. `bms-replay` re-simulates it under the LR2, beatoraja, and IIDX rulesets.
 - **PlayerSummary**: Final playback summary containing judgment counts, FAST/SLOW, EX-SCORE, SCORE, gauge, and clear state.
 
 ## Courses, Records And View
@@ -160,7 +160,7 @@ Existing names such as `CourseSongRecord`, `RandomCourseDrawSuccess.songs`, and 
 ## Architecture
 
 - **scene model**: The state and rules of one screen, independent of the skin family: what it shows and how it responds. See [ADR 0002](./adr/0002-scene-model-package.md) and [Scene models](./scene-model.md).
-- **designed entry point**: A package subpath made for its consumers rather than a file of its layout. `@be-music/player` exports `.` (the engine), `./signals`, `./lanes`, `./display`, `./ruleset`, `./playlog`, `./records`, `./course` and `./audio-sink`; `@be-music/player-web` exports `.`, `./host`, `./skin`, `./collection`, `./audio` and `./recording`. Everything else is internal. See [ADR 0005](./adr/0005-public-entry-points.md).
+- **designed entry point**: A package subpath made for its consumers rather than a file of its layout. `@be-music/player` exports `.` (the engine), `./signals`, `./lanes`, `./display`, `./ruleset`, `./replay`, `./records`, `./course` and `./audio-sink`; `@be-music/player-web` exports `.`, `./host`, `./skin`, `./collection`, `./audio` and `./recording`. Everything else is internal. See [ADR 0005](./adr/0005-public-entry-points.md).
 - **library / library chart / library entry**: What a select screen browses: the charts, grouped into folders at the root, and the course folders (`Library`); one chart in it is a library chart (`LibraryChart`), and one bar of its list is a chart, a folder or a course (`LibraryEntry`, `kind: 'chart' | 'folder' | 'course'`).
 - **browse state**: Where the player is in the library and how the list is shaped: the open folders, the cursor at each depth, the search, the sort and filters (the list options) and the favourites (`BrowseState`). Its snapshot (`BrowseSnapshot`, taken with `captureBrowse` and restored with `restoreBrowse`) keeps it across the scenes a play goes through.
 - **play state**: What every play screen reads of a play, fed by the engine's frames and judgments: the running gauge and EX-SCORE with their graphs, the combo, the timed judgments, and the view settings (`PlayState`, changed only through `reducePlayState`).
@@ -189,7 +189,7 @@ Existing names such as `CourseSongRecord`, `RandomCourseDrawSuccess.songs`, and 
 - [Browser player implementation notes](./player-web.md)
 - [Scene models](./scene-model.md)
 - [Architecture](./architecture.md)
-- [Play log (play history) specification](./playlog.md)
+- [Replay (play history) specification](./replay.md)
 - [Writing a be-music skin](./be-music-skin.md)
 - [LR2 skin implementation notes](./lr2-skin.md)
 - [beatoraja skin implementation notes](./beatoraja-skin.md)

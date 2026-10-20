@@ -1,10 +1,10 @@
-import type { PlaylogViewReplay, PlaylogViewState } from '@be-music/player/playlog';
+import type { ReplayPlaybackOptions, ReplayViewState } from '@be-music/player/replay';
 import {
   createHiSpeedState,
   createPlayState,
   HiSpeedTransition,
   laneCoversFromPlayOptions,
-  PlaylogViewCursor,
+  ReplayViewCursor,
   reducePlayState,
   resolveWhiteNumber,
 } from '@be-music/scene-model';
@@ -14,8 +14,8 @@ import type { PlayTempoRange } from './tempo-range.ts';
 import {
   resolveLaneCovers,
   resolveVisibleMs,
-  startPlaylogView,
-  updatePlaylogView,
+  startReplayView,
+  updateReplayView,
   type PlayViewSettingsContext,
 } from './play-view-settings.ts';
 
@@ -23,7 +23,7 @@ import {
 const LANE = { x: 0, w: 40, top: 0, bottom: 576 };
 
 function createView(
-  options: { replay?: PlaylogViewState; theme?: Partial<PlaySessionTheme>; replayView?: PlaylogViewReplay } = {},
+  options: { replay?: ReplayViewState; theme?: Partial<PlaySessionTheme>; replayView?: ReplayPlaybackOptions } = {},
 ): PlayViewSettingsContext {
   const covers = laneCoversFromPlayOptions(
     { hiddenSudden1P: 'SUDDEN', hiddenSudden2P: 'OFF', shutter: 0.25, laneCover: true },
@@ -36,17 +36,17 @@ function createView(
     laneX: new Map([['11', LANE]]),
     chartBPMRange: { minBPM: 120, maxBPM: 120, mainBPM: 120 },
     drawnLaneCovers: undefined,
-    playlogViewCoalescer: undefined,
-    replayViewCursor: options.replay !== undefined ? new PlaylogViewCursor(options.replay) : undefined,
+    replayViewCoalescer: undefined,
+    replayViewCursor: options.replay !== undefined ? new ReplayViewCursor(options.replay) : undefined,
     sharedEngineInputSignals: undefined,
     theme: options.theme ?? {},
     currentSeconds: () => 0,
   } as unknown as PlayViewSettingsContext;
 }
 
-describe("the play log's view on the built-in and LR2 play screens", () => {
+describe("the replay's view on the built-in and LR2 play screens", () => {
   test('records the visible time as the white number over the lanes laid out', () => {
-    const view = startPlaylogView(createView());
+    const view = startReplayView(createView());
     expect(view).toEqual({
       hiSpeed: 2,
       hiSpeedScale: 'be-music',
@@ -61,7 +61,7 @@ describe("the play log's view on the built-in and LR2 play screens", () => {
   test('leaves the LIFT out of the visible time, as beatoraja does', () => {
     const ctx = createView();
     ctx.playState = reducePlayState(ctx.playState, { type: 'cover-set', covers: [{ side: '1P', lift: 0.2 }] });
-    const view = startPlaylogView(ctx);
+    const view = startReplayView(ctx);
     expect(view.covers).toEqual([{ side: '1P', sudden: 0.25, hidden: 0, lift: 0.2 }]);
     expect(view.visibleMs).toBe(1500);
     expect(resolveVisibleMs(ctx, resolveLaneCovers(ctx)[0], 120, 1)).toBe(1500);
@@ -83,7 +83,7 @@ describe("the play log's view on the built-in and LR2 play screens", () => {
         covers: [{ side: '1P', sudden: 0.25, hidden: 0.1, lift: 0.1 }],
       },
     });
-    updatePlaylogView(ctx, 0);
+    updateReplayView(ctx, 0);
     // 8 beats × 0.75 at 120 BPM is 3000 ms at hi-speed 1, so 1000 ms is hi-speed 3.
     expect(ctx.playState.view.hiSpeed.drawn).toBe(3);
     expect(ctx.scrollHiSpeed.target).toBe(3);
@@ -92,10 +92,10 @@ describe("the play log's view on the built-in and LR2 play screens", () => {
   });
 
   test("records on the view's own scale when the view has one, at the play's main BPM, with no lanes laid out", () => {
-    const ctx = createView({ theme: { playlogView: () => ({ scale: 'beatoraja', laneBeats: 4 }) } });
+    const ctx = createView({ theme: { replayView: () => ({ scale: 'beatoraja', laneBeats: 4 }) } });
     ctx.laneX.clear();
     (ctx as { chartBPMRange: PlayTempoRange }).chartBPMRange = { minBPM: 120, maxBPM: 300, mainBPM: 150 };
-    const view = startPlaylogView(ctx);
+    const view = startReplayView(ctx);
     // 4 beats / 2 × (1 - 0.25) at the main 150 BPM, the one HS-FIX reads on every family's play screen.
     expect(view).toEqual({
       hiSpeed: 2,
@@ -107,15 +107,15 @@ describe("the play log's view on the built-in and LR2 play screens", () => {
   });
 
   test('a replay on a view that draws the LIFT shows the recorded LIFT, HIDDEN+ as drawn over it', () => {
-    const replay: PlaylogViewState = {
+    const replay: ReplayViewState = {
       hiSpeed: 1.6,
       hiSpeedScale: 'beatoraja',
       visibleMs: 1000,
       covers: [{ side: '1P', sudden: 0.25, hidden: 0.18, lift: 0.1 }],
     };
-    const theme = { playlogView: () => ({ scale: 'beatoraja', laneBeats: 4 }), drawsLift: () => true };
+    const theme = { replayView: () => ({ scale: 'beatoraja', laneBeats: 4 }), drawsLift: () => true };
     const ctx = createView({ replay, theme });
-    updatePlaylogView(ctx, 0);
+    updateReplayView(ctx, 0);
     expect(ctx.playState.view.hiSpeed.drawn).toBe(1.6);
     // The play state's HIDDEN+ is of the lane above the LIFT (0.18 / 0.9), so it draws the recorded 0.18 of the lane.
     expect(ctx.playState.view.covers[0]).toMatchObject({ lift: 0.1, hiddenOn: true });
@@ -126,13 +126,13 @@ describe("the play log's view on the built-in and LR2 play screens", () => {
 
     // With the LIFT toggle off, the viewer keeps their own LIFT (none) and HIDDEN+ as recorded of the lane.
     const own = createView({ replay, theme, replayView: { tempo: true, hiSpeed: true, covers: true, lift: false } });
-    updatePlaylogView(own, 0);
+    updateReplayView(own, 0);
     expect(resolveLaneCovers(own)[0]).toMatchObject({ sudden: 0.25, hidden: 0.18, lift: 0 });
   });
 
   test('a replay on the same scale takes the recorded hi-speed as drawn', () => {
     const ctx = createView({ replay: { hiSpeed: 2.5, hiSpeedScale: 'be-music', visibleMs: 900 } });
-    updatePlaylogView(ctx, 0);
+    updateReplayView(ctx, 0);
     expect(ctx.playState.view.hiSpeed.drawn).toBe(2.5);
   });
 });

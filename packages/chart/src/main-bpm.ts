@@ -15,7 +15,7 @@ export interface MainBPMChart {
  * moved by the split-second BPM spikes of BPM × N + STOP gimmicks or by stretches without notes. Ties go to the BPM
  * reached first (beatoraja's pick among ties follows its `HashMap` order). `undefined` for a chart without notes.
  *
- * The browser player reads the main BPM only from here: HS-FIX `AVERAGE`, the play log's `visibleMs`, the HUD and the
+ * The browser player reads the main BPM only from here: HS-FIX `AVERAGE`, the replay's `visibleMs`, the HUD and the
  * beatoraja skins' main-BPM numbers and BPM graph.
  */
 export function resolveChartMainBPM(chart: MainBPMChart): number | undefined {

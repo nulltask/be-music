@@ -1,15 +1,15 @@
 import { eq } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import {
-  checkCoursePlaylogEligibility,
-  PLAYLOG_ENGINE_VERSION,
+  checkCourseReplayEligibility,
+  REPLAY_ENGINE_VERSION,
   resolveCoursePlayedRuleset,
-  simulateCoursePlaylog,
-  type BeMusicCoursePlaylog,
-  type BeMusicPlaylog,
-  type PlaylogCourseResult,
-  type PlaylogRulesetId,
-} from '@be-music/player/playlog';
+  simulateCourseReplay,
+  type BeMusicCourseReplay,
+  type BeMusicReplay,
+  type ReplayCourseResult,
+  type RulesetId,
+} from '@be-music/player/replay';
 import { normalizeCourseConstraints } from '@be-music/player/course';
 import type { Database } from '../db/client.ts';
 import { course, courseBestScore, courseScore, courseScoreResult } from '../db/schema.ts';
@@ -39,8 +39,8 @@ export interface CourseStageDocuments {
 
 export interface CourseSubmissionInput {
   userId: string;
-  courseLog: BeMusicCoursePlaylog;
-  /** The course play log as stored (canonical JSON text). */
+  courseLog: BeMusicCourseReplay;
+  /** The course replay as stored (canonical JSON text). */
   courseLogText: string;
   /** One entry per played stage; none for a NONSTOP run, whose stages are rebuilt from {@link stageCharts}. */
   stages: readonly CourseStageDocuments[];
@@ -50,7 +50,7 @@ export interface CourseSubmissionInput {
 }
 
 export interface CourseRulesetOutcome {
-  ruleset: PlaylogRulesetId;
+  ruleset: RulesetId;
   rulesetRevision: string;
   exScore: number;
   noteCount: number;
@@ -77,11 +77,11 @@ export type CourseSubmissionOutcome =
 /**
  * Accepts one course run (docs/leaderboard.md section 6.1). Each played stage passes the checks a single play does
  * (eligibility, fingerprint documents, chart registration), each unreached stage's chart backs up its facts
- * (`checkUnreachedStageCharts`), the run is re-simulated under every ruleset with `simulateCoursePlaylog`, and
+ * (`checkUnreachedStageCharts`), the run is re-simulated under every ruleset with `simulateCourseReplay`, and
  * `checkCourseRun` refuses runs whose stages do not follow from each other or that were given up. A NONSTOP run is
  * verified on its stitched play instead: the server stitches the stage charts again (`checkNonstopStageCharts`) and the
  * play must have been recorded on that chart. A course run creates no chart scores. Rejections never write anything;
- * the course play log goes to R2 before the D1 batch, as for single plays.
+ * the course replay goes to R2 before the D1 batch, as for single plays.
  */
 export async function submitCourseScore(
   deps: SubmissionDeps,
@@ -89,13 +89,13 @@ export async function submitCourseScore(
 ): Promise<CourseSubmissionOutcome> {
   const { db, blobs } = deps;
   const { courseLog } = input;
-  const eligibility = checkCoursePlaylogEligibility(courseLog);
+  const eligibility = checkCourseReplayEligibility(courseLog);
   if (!eligibility.eligible) {
     return { status: 'rejected', httpStatus: 422, reason: eligibility.reason, ...stageOf(eligibility.stage) };
   }
   const { courseFingerprint, assistFlags } = eligibility;
   const assisted = assistFlags.length > 0;
-  const playedLogs = courseLog.stages.flatMap((entry) => (entry.played ? [entry.playlog] : []));
+  const playedLogs = courseLog.stages.flatMap((entry) => (entry.played ? [entry.replay] : []));
   const nonstop =
     courseLog.nonstop !== undefined && eligibility.nonstop !== undefined ? eligibility.nonstop : undefined;
   if (input.stages.length !== (nonstop !== undefined ? 0 : playedLogs.length)) {
@@ -104,7 +104,7 @@ export async function submitCourseScore(
 
   const submissionId = await sha256Hex(
     nonstop !== undefined
-      ? identifyNonstopRun(courseFingerprint, courseLog.nonstop!.playlog, nonstop.playFingerprint)
+      ? identifyNonstopRun(courseFingerprint, courseLog.nonstop!.replay, nonstop.playFingerprint)
       : identifyCourseRun(courseFingerprint, playedLogs, eligibility.stages),
   );
   const existing = await db.query.courseScore.findFirst({ where: eq(courseScore.submissionId, submissionId) });
@@ -141,19 +141,19 @@ export async function submitCourseScore(
         })
       : checkUnreachedStageCharts(courseLog, stageCharts);
   if (!charts.ok) return { status: 'rejected', httpStatus: 422, reason: charts.reason, ...stageOf(charts.stage) };
-  const simulated = new Map<PlaylogRulesetId, PlaylogCourseResult>(
-    RULESET_IDS.map((ruleset) => [ruleset, simulateCoursePlaylog(courseLog, { ruleset })]),
+  const simulated = new Map<RulesetId, ReplayCourseResult>(
+    RULESET_IDS.map((ruleset) => [ruleset, simulateCourseReplay(courseLog, { ruleset })]),
   );
   const run = checkCourseRun(courseLog, simulated.get(playedRuleset)!);
   if (!run.ok) return { status: 'rejected', httpStatus: 422, reason: run.reason, ...stageOf(run.stage) };
 
   const now = deps.now();
   const courseScoreId = deps.newId();
-  const playlogKey = `course-playlogs/${courseScoreId}.bmcourse.json.gz`;
+  const replayKey = `course-replays/${courseScoreId}.bmcourse.json.gz`;
   const [currentBests] = await Promise.all([
     loadCourseBestScores(db, input.userId, courseFingerprint, assisted),
     gzipText(input.courseLogText).then((compressed) =>
-      blobs.put(playlogKey, compressed, {
+      blobs.put(replayKey, compressed, {
         httpMetadata: { contentType: 'application/json', contentEncoding: 'gzip' },
       }),
     ),
@@ -182,13 +182,13 @@ export async function submitCourseScore(
   });
 
   // A NONSTOP run's gauge is its stitched play's.
-  const lastPlayed = courseLog.nonstop?.playlog ?? playedLogs.at(-1)!;
+  const lastPlayed = courseLog.nonstop?.replay ?? playedLogs.at(-1)!;
   const statements: BatchItem<'sqlite'>[] = [
     // A NONSTOP run registers no stage charts: its cut-out stages carry the stitched play's judge rank and TOTAL, not
     // their charts' own.
     ...(nonstop !== undefined
       ? []
-      : playedLogs.flatMap((playlog, index) => playedChartStatements(db, playlog, playedCharts[index]!, now))),
+      : playedLogs.flatMap((replay, index) => playedChartStatements(db, replay, playedCharts[index]!, now))),
     db
       .insert(course)
       .values({
@@ -197,7 +197,7 @@ export async function submitCourseScore(
         kind: courseLog.course.kind,
         constraints: [...new Set(normalizeCourseConstraints(courseLog.course.constraints))].sort(),
         stageChartFingerprints: courseLog.stages.map((entry) =>
-          entry.played ? entry.playlog.chart.chartFingerprint! : entry.chartFingerprint!,
+          entry.played ? entry.replay.chart.chartFingerprint! : entry.chartFingerprint!,
         ),
         createdAt: new Date(now),
         updatedAt: new Date(now),
@@ -218,8 +218,8 @@ export async function submitCourseScore(
       stagesPlayed: playedLogs.length,
       recordedBy: courseLog.recorder !== undefined ? { ...courseLog.recorder } : null,
       submittedBy: input.submittedBy ?? null,
-      serverEngine: PLAYLOG_ENGINE_VERSION,
-      playlogKey,
+      serverEngine: REPLAY_ENGINE_VERSION,
+      replayKey,
       createdAt: new Date(now),
       updatedAt: new Date(now),
     }),
@@ -298,22 +298,18 @@ export async function submitCourseScore(
  */
 export function identifyCourseRun(
   courseFingerprint: string,
-  playedLogs: readonly BeMusicPlaylog[],
+  playedLogs: readonly BeMusicReplay[],
   stages: ReadonlyArray<{ playFingerprint: string }>,
 ): string {
   return JSON.stringify({
     courseFingerprint,
-    stages: playedLogs.map((playlog, index) => identifyPlay(playlog, stages[index]!.playFingerprint)),
+    stages: playedLogs.map((replay, index) => identifyPlay(replay, stages[index]!.playFingerprint)),
   });
 }
 
 /** {@link identifyCourseRun} for a NONSTOP run: the course and its stitched play, as `identifyPlay` identifies it. */
-export function identifyNonstopRun(
-  courseFingerprint: string,
-  playlog: BeMusicPlaylog,
-  playFingerprint: string,
-): string {
-  return JSON.stringify({ courseFingerprint, nonstop: identifyPlay(playlog, playFingerprint) });
+export function identifyNonstopRun(courseFingerprint: string, replay: BeMusicReplay, playFingerprint: string): string {
+  return JSON.stringify({ courseFingerprint, nonstop: identifyPlay(replay, playFingerprint) });
 }
 
 function stageOf(stage: number | undefined): { stage?: number } {

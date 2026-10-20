@@ -7,7 +7,7 @@
  * - `play.ts` — `manualPlay` / `autoPlay`: a play session (`play-session.ts`) run through the play loop
  *   (`play-loop.ts`, `play-controls.ts`, `play-finish.ts`) with a judge strategy (`play-manual.ts`, `play-replay.ts`,
  *   `play-auto.ts`) plugged in;
- * - `engine-effects.ts` — maps core effects onto the host's audio session, UI buses, play log and trace;
+ * - `engine-effects.ts` — maps core effects onto the host's audio session, UI buses, replay and trace;
  * - `engine-preparation.ts`, `engine-audio.ts`, `engine-clock.ts`, `engine-trace.ts`, `engine-types.ts` — the
  *   services around the loop and the public types.
  *

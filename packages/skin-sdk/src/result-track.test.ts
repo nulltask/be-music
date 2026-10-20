@@ -35,17 +35,17 @@ describe('resolveResultLamp', () => {
 });
 
 describe('resolveResultTrackRows', () => {
-  const song = {
+  const chartEntry = {
     title: 'Song',
     playLevel: 12,
     bpm: 149.6,
     totalNotes: 100,
     chartPath: 'song.bms',
     chart: { events: [{ measure: 0, channel: '11', position: [0, 1], value: '01' }], bms: { player: 1 } },
-  } as unknown as BeMusicResultData['song'];
+  } as unknown as BeMusicResultData['chart'];
 
   it('lists level, rounded tempo and the combo breaks', () => {
-    const rows = resolveResultTrackRows({ song, score: score({ bad: 2, poor: 3 }) });
+    const rows = resolveResultTrackRows({ chart: chartEntry, score: score({ bad: 2, poor: 3 }) });
     expect(rows.map((row) => row.label)).toEqual(['MODE', 'LEVEL', 'BPM', 'COMBO BREAK']);
     expect(rows[0]!.value).toMatch(/KEYS$/u);
     expect(rows[1]!.value).toBe('12');
@@ -54,8 +54,8 @@ describe('resolveResultTrackRows', () => {
   });
 
   it('dashes out a missing level or tempo', () => {
-    const bare = { ...song, playLevel: undefined, bpm: undefined } as BeMusicResultData['song'];
-    const rows = resolveResultTrackRows({ song: bare, score: score({}) });
+    const bare = { ...chartEntry, playLevel: undefined, bpm: undefined } as BeMusicResultData['chart'];
+    const rows = resolveResultTrackRows({ chart: bare, score: score({}) });
     expect(rows[1]!.value).toBe('-');
     expect(rows[2]!.value).toBe('-');
   });

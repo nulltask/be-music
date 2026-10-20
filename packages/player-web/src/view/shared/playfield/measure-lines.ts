@@ -15,17 +15,17 @@ import type { PlayfieldContext } from './context.ts';
 import { resolveSideLaneRuns, type SideLaneRun } from './measure-line-runs.ts';
 
 function resolveMeasureBeats(ctx: PlayfieldContext): number[] {
-  const song = ctx.play.song;
-  if (!song) {
+  const chartEntry = ctx.play.chart;
+  if (!chartEntry) {
     return [];
   }
-  if (ctx.measureBeatCache.songId === song.id) {
+  if (ctx.measureBeatCache.chartId === chartEntry.id) {
     return ctx.measureBeatCache.beats;
   }
   // The resolved chart's bar lines: one per measure start up to the last measure, using the chosen `#RANDOM` branch's
   // `#xxx02` lengths, and none when a bmson chart opts out with `lines: []`.
-  const beats = [...(ctx.play.resolvedPlayChart ?? resolveChart(song.chart)).barLines];
-  ctx.measureBeatCache = { songId: song.id, beats };
+  const beats = [...(ctx.play.resolvedPlayChart ?? resolveChart(chartEntry.chart)).barLines];
+  ctx.measureBeatCache = { chartId: chartEntry.id, beats };
   return beats;
 }
 

@@ -1,7 +1,7 @@
 import { throwIfAborted } from '@be-music/utils/core';
 import { resolveChart, type ResolvedChart } from '@be-music/chart';
 import { normalizeChannel, type BeMusicJSON } from '@be-music/json';
-import { type GrooveGaugeJudgeKind } from './groove-gauge.ts';
+import { type GrooveGaugeJudgmentKind } from './groove-gauge.ts';
 import {
   GAUGE_JUDGE_BAD,
   GAUGE_JUDGE_EMPTY_POOR,
@@ -79,7 +79,7 @@ export function createInitialPlayerSummary(
   totalNotes: number,
 ): {
   summary: PlayerSummary;
-  applyGaugeJudge: (judge: GrooveGaugeJudgeKind) => void;
+  applyGaugeJudge: (judge: GrooveGaugeJudgmentKind) => void;
   applyGaugeDelta: (delta: number) => void;
   applyGaugeTick: (judge: GaugeJudgeIndex, rate: number) => void;
   /** Empties the gauge for good (LR2's `HP = 0` on leaving a reversed play with notes outstanding). */
@@ -120,7 +120,7 @@ export function createInitialPlayerSummary(
       score: 0,
       gauge: gaugeSummary,
     },
-    applyGaugeJudge: (judge: GrooveGaugeJudgeKind): void => {
+    applyGaugeJudge: (judge: GrooveGaugeJudgmentKind): void => {
       gauge.applyJudge(GROOVE_GAUGE_JUDGE_TO_RULESET_INDEX[judge]);
       syncGaugeSummary();
     },
@@ -142,7 +142,7 @@ export function createInitialPlayerSummary(
 }
 
 /** Engine judge kinds mapped onto the ruleset gauge tables' beatoraja-ordered indices. */
-const GROOVE_GAUGE_JUDGE_TO_RULESET_INDEX: Record<GrooveGaugeJudgeKind, GaugeJudgeIndex> = {
+const GROOVE_GAUGE_JUDGE_TO_RULESET_INDEX: Record<GrooveGaugeJudgmentKind, GaugeJudgeIndex> = {
   PERFECT: GAUGE_JUDGE_PGREAT,
   GREAT: GAUGE_JUDGE_GREAT,
   GOOD: GAUGE_JUDGE_GOOD,

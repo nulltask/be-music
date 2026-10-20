@@ -151,7 +151,7 @@ export function resolveBMSJudgeWindowsMsForExRankValue(exRankValue: number, debu
 /**
  * Resolves the chart's initial judgerank on the internal percent axis (VERY HARD = 25 / HARD = 50 / NORMAL = 75 /
  * EASY = 100) — the same value {@link resolveJudgeWindowsMs} scales its windows from. Exposed so consumers that
- * persist the resolved rank (e.g. the play log recorder) share the exact resolution chain (`#DEFEXRANK` →
+ * persist the resolved rank (e.g. the replay recorder) share the exact resolution chain (`#DEFEXRANK` →
  * `metadata.rank` → default for BMS; `info.judge_rank` → `metadata.rank` → default for bmson).
  */
 export function resolveJudgeRankPercent(json: BeMusicJSON): number {

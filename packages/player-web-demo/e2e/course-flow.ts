@@ -107,7 +107,7 @@ export function courseFlowTests(setup: FamilyCase): void {
       expect(state.results).toHaveLength(0);
       state = await demo.waitForResult(0);
       expect(state.results[0]).toMatchObject({ run: 'stage', family: setup.family, title: 'Fixture C' });
-      const stageLog = await demo.lastPlaylog();
+      const stageLog = await demo.lastReplay();
       expect(stageLog?.play).toMatchObject({ mode: 'auto', gauge: 'GROOVE', course: { kind: 'grade' } });
       expect(stageLog?.play.randomLane?.p1 ?? 'OFF').toBe('OFF');
       await demo.leaveResult();

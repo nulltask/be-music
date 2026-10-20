@@ -42,7 +42,7 @@ const THEME_ROOT_PREFIX = 'lr2files/theme/';
  *
  * Files that don't live under `LR2files/Theme/<name>/` at all (chart packs, song audio, etc.) are silently dropped.
  * That's the right behaviour for the picker UI: the caller already separated theme files from song files via
- * `splitDroppedSongAndThemeFiles` before invoking this.
+ * `splitDroppedChartAndThemeFiles` before invoking this.
  */
 export function discoverLR2Themes<TFile extends LR2ThemeDiscoveryFile>(
   files: Iterable<TFile>,

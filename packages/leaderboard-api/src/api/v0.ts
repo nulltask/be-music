@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { describeRoute, openAPIRouteHandler, resolver, validator } from 'hono-openapi';
-import { parsePlaylog, PlaylogParseError, serializePlaylog } from '@be-music/player/playlog';
+import { parseReplay, ReplayParseError, serializeReplay } from '@be-music/player/replay';
 import * as v from 'valibot';
 import { loadAccount } from '../accounts.ts';
 import { AVATAR_MAX_BYTES, putAvatar, removeAvatar } from '../avatars.ts';
@@ -14,7 +14,7 @@ import { loadMyRank, loadRanking, type RankingFilter } from '../ranking.ts';
 import { refreshChartsetIfUnchecked, type ChartsetLookup } from '../chartsets/refresh.ts';
 import { isOn } from '../http/query.ts';
 import { afterResponse } from '../http/after-response.ts';
-import { loadPlaylogAccess, loadScoreDetail, toScoreResponse } from '../scores/detail.ts';
+import { loadReplayAccess, loadScoreDetail, toScoreResponse } from '../scores/detail.ts';
 import { submitScore } from '../scores/submit.ts';
 import { mountCourseRoutes } from './v0-courses.ts';
 import { canSeeScore, setScoreHidden } from '../scores/visibility.ts';
@@ -198,7 +198,7 @@ export function createV0API(options: { now: () => number; newId: () => string; c
       tags: ['Scores'],
       summary: 'Submit a play',
       description:
-        'Submits a play log with its fingerprint documents. The body is JSON, gzip-compressed (`Content-Encoding: ' +
+        'Submits a replay with its fingerprint documents. The body is JSON, gzip-compressed (`Content-Encoding: ' +
         'gzip`). The server re-simulates the play under every ruleset and answers its figures and ranks. The same ' +
         'play submitted again by the same account answers 200 with the stored result.',
       requestBody: {
@@ -221,10 +221,10 @@ export function createV0API(options: { now: () => number; newId: () => string; c
         415: json('Not gzip-compressed JSON.', errorResponse(['expected-json', 'unsupported-encoding'])),
         422: json(
           'The play cannot be ranked: an auto or aborted play, a play at another tempo, a course stage, a malformed ' +
-            'play log, or a fingerprint ' +
-            'document that does not hash to the play log’s fingerprint.',
+            'replay, or a fingerprint ' +
+            'document that does not hash to the replay’s fingerprint.',
           errorResponse([
-            'invalid-playlog',
+            'invalid-replay',
             'auto-play',
             'aborted',
             'tempo',
@@ -256,19 +256,19 @@ export function createV0API(options: { now: () => number; newId: () => string; c
       if (!parsedBody.success) {
         return c.json({ error: 'invalid-submission' }, 400);
       }
-      let playlog;
+      let replay;
       try {
-        playlog = parsePlaylog(parsedBody.output.playlog);
+        replay = parseReplay(parsedBody.output.replay);
       } catch (error) {
-        if (error instanceof PlaylogParseError) return c.json({ error: 'invalid-playlog', detail: error.message }, 422);
+        if (error instanceof ReplayParseError) return c.json({ error: 'invalid-replay', detail: error.message }, 422);
         throw error;
       }
       const outcome = await submitScore(
         { db: c.get('db'), blobs: c.env.BLOBS, now, newId },
         {
           userId,
-          playlog,
-          playlogText: serializePlaylog(playlog),
+          replay,
+          replayText: serializeReplay(replay),
           playDocument: parsedBody.output.playDocument,
           chartDocument: parsedBody.output.chartDocument,
           submittedBy: c.req.header('be-music-client'),
@@ -365,18 +365,18 @@ export function createV0API(options: { now: () => number; newId: () => string; c
   );
 
   v0.get(
-    '/scores/:id/playlog',
+    '/scores/:id/replay',
     describeRoute({
       tags: ['Scores'],
-      summary: 'A play’s play log',
-      description: 'The stored play log, gzip-compressed. Only its player can read a private one.',
+      summary: 'A play’s replay',
+      description: 'The stored replay, gzip-compressed. Only its player can read a private one.',
       responses: {
-        200: { description: 'The play log (docs/playlog.md).', content: { 'application/json': {} } },
-        404: notFound('The score or its play log'),
+        200: { description: 'The replay (docs/replay.md).', content: { 'application/json': {} } },
+        404: notFound('The score or its replay'),
       },
     }),
     async (c) => {
-      const access = await loadPlaylogAccess(c.get('db'), c.req.param('id'), c.get('userId'));
+      const access = await loadReplayAccess(c.get('db'), c.req.param('id'), c.get('userId'));
       if (access === undefined) return c.json({ error: 'not-found' }, 404);
       const object = await c.env.BLOBS.get(access.key);
       if (object === null) return c.json({ error: 'not-found' }, 404);

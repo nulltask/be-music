@@ -39,14 +39,14 @@ import {
   computeBeatorajaChartNoteDistribution,
   type BeatorajaChartNoteDistribution,
 } from '../../chart/beatoraja/note-distribution.ts';
-import type { BrowserSongAssetSource } from '../../collection/types.ts';
+import type { BrowserAssetSource } from '../../collection/types.ts';
 import type { BeatorajaKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import type { BGACue, NonstopBGAStage, NonstopStageBGATimeline } from '../../chart/bga-timeline.ts';
 import { DESIGN_HEIGHT, DESIGN_WIDTH, KEY_ON_FADE_OUT_MS } from '../../stage/design.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
-import type { PlayPlaylogViewScale } from '../../session/play/play-session-theme.ts';
+import type { PlayReplayViewScale } from '../../session/play/play-session-theme.ts';
 import { playEndingFadeAlpha } from '../shared/play-frame.ts';
 import { uploadTextures } from '../shared/texture-upload.ts';
 import { TouchLaneInput } from '../shared/touch-lane-input.ts';
@@ -89,8 +89,8 @@ const BUTTON_LANECOVER = 330;
 const BUTTON_LIFT = 331;
 const BUTTON_HIDDEN = 332;
 
-/** The beatoraja scale the play log reads the hi-speed on: a lane is four beats at hi-speed 1. */
-const BEATORAJA_PLAYLOG_VIEW: PlayPlaylogViewScale = { scale: BEATORAJA_HI_SPEED_SCALE, laneBeats: 4 };
+/** The beatoraja scale the replay reads the hi-speed on: a lane is four beats at hi-speed 1. */
+const BEATORAJA_REPLAY_VIEW: PlayReplayViewScale = { scale: BEATORAJA_HI_SPEED_SCALE, laneBeats: 4 };
 
 /**
  * The beatoraja play skin's timing: the play has loaded once it shows (READY and the play timers start then), the chart
@@ -119,7 +119,7 @@ function resolveSkinConfigOps(
 
 /** What the beatoraja play view reads of the running play: the play session's members of these names. */
 export interface BeatorajaPlayRuntime {
-  readonly song: LibraryChart | undefined;
+  readonly chart: LibraryChart | undefined;
   /** The chart as the play plays it (its `#RANDOM` branches drawn), before DP FLIP. */
   readonly resolvedChart: BeMusicJSON | undefined;
   readonly resolvedPlayChart: { readonly reversal?: BeatorajaPlayChartLayout['reversal'] } | undefined;
@@ -149,7 +149,7 @@ export interface BeatorajaPlayRuntime {
   readonly judgeWindows: BeMusicJudgeWindows | undefined;
   readonly disposed: boolean;
   playClock(): number;
-  resolveSongDurationSeconds(): number;
+  resolveChartDurationSeconds(): number;
 }
 
 /** What the beatoraja play view draws with besides its kit. */
@@ -163,7 +163,7 @@ export interface BeatorajaPlayViewOptions {
   /** The stages of a stitched NONSTOP chart (`PlaySessionOptions.nonstop`), whose BGA cross-fades at each seam. */
   readonly nonstop?: { readonly stages: readonly NonstopBGAStage[] };
   /** Where the chart's files are, for its `#STAGEFILE`, `#BACKBMP` and `#BANNER`. */
-  readonly source?: BrowserSongAssetSource;
+  readonly source?: BrowserAssetSource;
   /** Where the skin's Lua sounds play (`main_state.audio_*`); they are silent without it. */
   readonly skinSounds?: BeatorajaSkinAudio;
 }
@@ -216,7 +216,7 @@ export class BeatorajaPlayView implements PlayView {
     this.play = play;
     this.options = options;
     this.timing = resolveBeatorajaPlayTiming(kit.kit.skin);
-    this.chartImages = new BeatorajaViewChartImages(play.song, options.source);
+    this.chartImages = new BeatorajaViewChartImages(play.chart, options.source);
     const skin = kit.kit.skin;
     this.playfieldSkin = {
       stage: {
@@ -247,7 +247,7 @@ export class BeatorajaPlayView implements PlayView {
   public async prepare(): Promise<void> {
     if (this.disposed || this.prepared !== undefined) return;
     const play = this.play;
-    const resolved = play.resolvedChart ?? play.song?.chart;
+    const resolved = play.resolvedChart ?? play.chart?.chart;
     if (resolved === undefined) return;
     const chart = this.options.dpFlip === true ? flipDPChart(resolved) : resolved;
     const skin = this.kit.kit.skin;
@@ -295,7 +295,7 @@ export class BeatorajaPlayView implements PlayView {
       chart,
       skinHeaderName: skin.name,
       skinHeaderAuthor: skin.author,
-      directoryLabel: this.play.song?.directoryLabel,
+      directoryLabel: this.play.chart?.directoryLabel,
       ...(this.options.course !== undefined ? { courseInfo: this.options.course } : {}),
       ...(laneHeight !== undefined ? { laneHeight } : {}),
       judgeComboMetrics: readJudgeComboMetrics(skin),
@@ -437,7 +437,7 @@ export class BeatorajaPlayView implements PlayView {
   private engineInput(): BeatorajaPlayEngineInput | undefined {
     const play = this.play;
     const frame = play.engineFrame;
-    const totalSeconds = play.resolveSongDurationSeconds();
+    const totalSeconds = play.resolveChartDurationSeconds();
     if (frame !== undefined) {
       return {
         currentSeconds: frame.currentSeconds,
@@ -457,11 +457,11 @@ export class BeatorajaPlayView implements PlayView {
   }
 
   /**
-   * The beatoraja scale the play log reads the hi-speed on: a lane of four beats. The session takes the visible time at
+   * The beatoraja scale the replay reads the hi-speed on: a lane of four beats. The session takes the visible time at
    * the play's main BPM, as on every family's play screen.
    */
-  public playlogView(): PlayPlaylogViewScale {
-    return BEATORAJA_PLAYLOG_VIEW;
+  public replayView(): PlayReplayViewScale {
+    return BEATORAJA_REPLAY_VIEW;
   }
 
   /**

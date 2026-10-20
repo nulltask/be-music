@@ -14,12 +14,12 @@
 import { mirrorBeatAtTempoReversal } from '@be-music/chart';
 import { createTempoClock, type TempoClock } from '@be-music/player';
 import { nonstopBPMAt } from '@be-music/player/course';
-import { DEFAULT_PLAYLOG_VIEW_REPLAY, type BeMusicPlaylog } from '@be-music/player/playlog';
+import { DEFAULT_REPLAY_PLAYBACK_OPTIONS, type BeMusicReplay } from '@be-music/player/replay';
 import type { GaugeType } from '@be-music/player/ruleset';
 import { createHiSpeedState, createPlayState, type LibraryChart, type PlayResult } from '@be-music/scene-model';
 import type { BeMusicLongNote } from '@be-music/skin-sdk';
 import type { Application, Texture } from 'pixi.js';
-import type { BrowserSongAssetSource } from '../../collection/types.ts';
+import type { BrowserAssetSource } from '../../collection/types.ts';
 import { logger } from '../../logger.ts';
 import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/gameplay-recorder.ts';
 import type { RecordingFormat } from '../../recording/recording-format.ts';
@@ -46,7 +46,7 @@ import { QuitHoldController } from './quit-hold.ts';
 import type { BeMusicLaneCover } from '../../skin/be-music/types.ts';
 import type { RuntimeNote } from '../../view/shared/playfield/context.ts';
 import type { PlayViewTiming } from '../../view/types.ts';
-import { prepareSong } from './play-chart.ts';
+import { prepareChart } from './play-chart.ts';
 import { beginExitSequence, getResultData } from './play-ending.ts';
 import { interruptSharedEngine, launchSharedEngine, stopSharedEngine } from './play-engine.ts';
 import {
@@ -111,7 +111,7 @@ export class PlaySession extends PlaySessionState {
             ownTempo: options.tempo,
             pitchMode: options.tempoPitchMode ?? 'pitch',
             // The recorded tempo timeline only when the viewer's replay options reproduce the tempo (default on).
-            reproduce: (options.replayView ?? DEFAULT_PLAYLOG_VIEW_REPLAY).tempo,
+            reproduce: (options.replayView ?? DEFAULT_REPLAY_PLAYBACK_OPTIONS).tempo,
           })
         : undefined;
     this.tempo = this.replayTempo?.tempo ?? clampPlayTempo(options.tempo);
@@ -159,13 +159,13 @@ export class PlaySession extends PlaySessionState {
    * ffmpeg.wasm fallback for unsupported codecs can take tens of seconds, and the play should show its LOADING
    * animation meanwhile instead of freezing the decide screen).
    */
-  public async load(song: LibraryChart, source?: BrowserSongAssetSource): Promise<void> {
-    this.song = song;
+  public async load(chartEntry: LibraryChart, source?: BrowserAssetSource): Promise<void> {
+    this.chart = chartEntry;
     this.source = source;
     // Hidden until {@link start} fires, so a play shown before it begins draws nothing of it yet.
     this.shown = false;
     this.assetsLoading = true;
-    prepareSong(this, song);
+    prepareChart(this, chartEntry);
     if (this.entered) {
       // No splash covers the load window: hold the chart clock before its start (see `start()`) and draw the loading
       // playfield while assets decode, instead of a blank stage.
@@ -297,23 +297,23 @@ export class PlaySession extends PlaySessionState {
   }
 
   /**
-   * The play log of this play once the engine has recorded it — also after Escape, which records the play as given up
+   * The replay of this play once the engine has recorded it — also after Escape, which records the play as given up
    * (`play.aborted`) a moment after `onExit` fires. Resolves `undefined` when none arrives within `timeoutMs` (a replay
    * records none).
    */
-  public waitForPlaylog(timeoutMs = 2000): Promise<BeMusicPlaylog | undefined> {
-    if (this.playlog !== undefined) return Promise.resolve(this.playlog);
+  public waitForReplay(timeoutMs = 2000): Promise<BeMusicReplay | undefined> {
+    if (this.replay !== undefined) return Promise.resolve(this.replay);
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
-        const index = this.playlogWaiters.indexOf(settle);
-        if (index >= 0) this.playlogWaiters.splice(index, 1);
+        const index = this.replayWaiters.indexOf(settle);
+        if (index >= 0) this.replayWaiters.splice(index, 1);
         resolve(undefined);
       }, timeoutMs);
-      const settle = (playlog: BeMusicPlaylog): void => {
+      const settle = (replay: BeMusicReplay): void => {
         clearTimeout(timer);
-        resolve(playlog);
+        resolve(replay);
       };
-      this.playlogWaiters.push(settle);
+      this.replayWaiters.push(settle);
     });
   }
 
@@ -562,7 +562,7 @@ export class PlaySession extends PlaySessionState {
     this.poorBGAFallbackUntilSeconds = Number.POSITIVE_INFINITY;
     this.hasBGA = false;
     this.bgaReadyPromise = undefined;
-    this.song = undefined;
+    this.chart = undefined;
     this.source = undefined;
     this.host = undefined;
   }
@@ -640,14 +640,14 @@ export class PlaySession extends PlaySessionState {
   }
 
   private forwardBeat(seconds: number): number {
-    // Prefer the proper STOP-aware resolver (built once per song in `prepareSong`). Falls back to a flat-BPM
+    // Prefer the proper STOP-aware resolver (built once per song in `prepareChart`). Falls back to a flat-BPM
     // extrapolation when the resolver isn't ready yet (very early frames during mount).
     const resolver = this.timingResolver;
     if (this.beatAtSeconds && resolver && resolver.tempoPoints.length > 0) {
       return this.beatAtSeconds(seconds);
     }
     if (!resolver || resolver.tempoPoints.length === 0) {
-      const bpm = this.song?.bpm ?? 130;
+      const bpm = this.chart?.bpm ?? 130;
       return Math.max(0, seconds * (bpm / 60));
     }
     let active = resolver.tempoPoints[0]!;
@@ -802,7 +802,7 @@ export class PlaySession extends PlaySessionState {
    * Changes the play tempo during the play (clamped by `clampPlayTempo`). Only in `pitch` mode: the samples follow it
    * through their playback rate, playing ones included, and so do the BGA videos and a NONSTOP chart's fades. Keep
    * pitch stretched the samples to the tempo they loaded at, and a replay follows its log, so both refuse it. The
-   * engine applies it at the chart time it takes the command and records it in the play log; the view follows from the
+   * engine applies it at the chart time it takes the command and records it in the replay; the view follows from the
    * chart second the engine reports. Returns whether the change was taken.
    */
   public setTempo(tempo: number): boolean {
@@ -835,11 +835,11 @@ export class PlaySession extends PlaySessionState {
   }
 
   /** Approximate total duration of the loaded chart in seconds. */
-  resolveSongDurationSeconds(): number {
-    if (!this.song) {
+  resolveChartDurationSeconds(): number {
+    if (!this.chart) {
       return 0;
     }
-    return this.songDurationSeconds;
+    return this.chartDurationSeconds;
   }
 
   /**

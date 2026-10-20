@@ -1,5 +1,5 @@
 import { signal } from 'alien-signals';
-import type { PlaylogViewState } from '../playlog/view.ts';
+import type { ReplayViewState } from '../replay/view.ts';
 import type { HighSpeedControlAction } from './high-speed-control.ts';
 
 type WritableSignal<T> = {
@@ -12,13 +12,13 @@ export type PlayerInputCommand =
   | { kind: 'toggle-pause' }
   | { kind: 'high-speed'; action: HighSpeedControlAction }
   /**
-   * The host's view changed (hi-speed, covers, lift): the engine records it in the play log at the chart time it
+   * The host's view changed (hi-speed, covers, lift): the engine records it in the replay at the chart time it
    * drains the command. It changes no judgment.
    */
-  | { kind: 'view'; change: PlaylogViewState }
+  | { kind: 'view'; change: ReplayViewState }
   /**
    * The host changed the play tempo (`PlayerOptions.speed`) during the play: the engine re-anchors its clock at the
-   * chart time it drains the command, runs at `tempo` from there on and records the change in the play log. Inputs and
+   * chart time it drains the command, runs at `tempo` from there on and records the change in the replay. Inputs and
    * judgments stay in chart time.
    */
   | { kind: 'tempo'; tempo: number }

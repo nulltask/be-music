@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, test } from 'vite-plus/test';
 import {
   makeChart,
-  makePlaylog,
+  makeReplay,
   ORIGIN,
   signInAnonymously,
   startTestBindings,
@@ -55,9 +55,9 @@ describe('migration 0012: LR2 DEATH lamp', () => {
     const chart = makeChart(['#00111:01010101', '#00211:01010101', '#00311:0101']);
     await submit(
       cookie,
-      submissionBody(makePlaylog(chart, { noteCount: 10, hits: 8 }), chart.playDocument, chart.chartDocument),
+      submissionBody(makeReplay(chart, { noteCount: 10, hits: 8 }), chart.playDocument, chart.chartDocument),
     );
-    await submit(cookie, submissionBody(makePlaylog(chart, { noteCount: 10, hits: 9 }), chart.playDocument));
+    await submit(cookie, submissionBody(makeReplay(chart, { noteCount: 10, hits: 9 }), chart.playDocument));
     const ids = (
       await env.DB.prepare('SELECT `id` FROM `score` ORDER BY `created_at`, `id`').all<{ id: string }>()
     ).results.map((row) => row.id);

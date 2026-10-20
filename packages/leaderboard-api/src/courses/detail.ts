@@ -1,5 +1,5 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import type { PlaylogRulesetId } from '@be-music/player/playlog';
+import type { RulesetId } from '@be-music/player/replay';
 import type { Database } from '../db/client.ts';
 import { chart, course, courseBestScore, courseScore, courseScoreResult, profile } from '../db/schema.ts';
 import { byRulesetOrder } from '../rulesets.ts';
@@ -104,7 +104,7 @@ export async function loadCourseScoreDetail(db: Database, id: string, viewerId: 
 /** The viewer's best on a course and their rank among every player, anonymous ones included. */
 export async function loadMyCourseRank(
   db: Database,
-  query: { userId: string; courseFingerprint: string; ruleset: PlaylogRulesetId; assisted: boolean },
+  query: { userId: string; courseFingerprint: string; ruleset: RulesetId; assisted: boolean },
 ) {
   const mine = await db.query.courseBestScore.findFirst({
     where: and(
@@ -140,19 +140,19 @@ export async function loadMyCourseRank(
 }
 
 /**
- * Where a course run's play log is stored, if the viewer may read it, as `loadPlaylogAccess` answers for a play. Course
+ * Where a course run's replay is stored, if the viewer may read it, as `loadReplayAccess` answers for a play. Course
  * runs have no replay setting of their own: a shown run's log is anyone's, a hidden run's only its player's. Undefined
  * otherwise, so a hidden run looks the same as a missing one.
  */
-export async function loadCoursePlaylogAccess(
+export async function loadCourseReplayAccess(
   db: Database,
   courseScoreId: string,
   viewerId: string | undefined,
 ): Promise<{ key: string; public: boolean } | undefined> {
   const found = await db.query.courseScore.findFirst({
     where: eq(courseScore.id, courseScoreId),
-    columns: { userId: true, playlogKey: true, hidden: true },
+    columns: { userId: true, replayKey: true, hidden: true },
   });
   if (found === undefined || !canSeeScore(found, viewerId)) return undefined;
-  return { key: found.playlogKey, public: !found.hidden };
+  return { key: found.replayKey, public: !found.hidden };
 }

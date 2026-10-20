@@ -10,7 +10,7 @@
  * - Play options: what the player picks before a play (`PlayOptions`), its defaults, choices and validation, and the
  *   hi-speed range.
  * - Play state: the running gauge, score, graphs, combo, timed judgments, hi-speed and lane covers of a play, fed by
- *   the engine's frames and judgments (`PlayState`, `reducePlayState`), and its view in the play log's units.
+ *   the engine's frames and judgments (`PlayState`, `reducePlayState`), and its view in the replay's units.
  * - Play result: the one result payload for single plays, course stages, course runs and NONSTOP runs (`PlayResult`).
  * - Course view: the course a screen shows (`CourseView`) and the course-wide combo of a stage.
  * - System sounds: a theme's cues and jingles by slot (`SystemSoundSet`), from an LR2 or a beatoraja theme.

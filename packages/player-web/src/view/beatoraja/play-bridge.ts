@@ -73,7 +73,7 @@ import { resolveSideKeySlot } from '@be-music/player/lanes';
 import {
   recentJudgeTimings,
   type CourseView,
-  type JudgeTiming,
+  type JudgmentTiming,
   type LaneCoverState,
   type PlayState,
 } from '@be-music/scene-model';
@@ -282,7 +282,7 @@ export class BeatorajaPlayBridge {
   /** The early / late counts the numbers read: the play state's, with beatoraja's MISS at 0. */
   private earlyLate: { source: PlayState['earlyLate']; counts: BeatorajaEarlyLate } | undefined;
   /** The latest timed judgments as the timing visualizer reads them, kept until the play state's list changes. */
-  private timingSamples: { source: readonly JudgeTiming[]; samples: Array<{ deltaMs: number; kind: string }> } = {
+  private timingSamples: { source: readonly JudgmentTiming[]; samples: Array<{ deltaMs: number; kind: string }> } = {
     source: [],
     samples: [],
   };
@@ -327,7 +327,7 @@ export class BeatorajaPlayBridge {
     this.texts = {
       ...(chart !== undefined
         ? {
-            song: {
+            chart: {
               title: chart.metadata.title,
               subtitle: chart.metadata.subtitle,
               genre: chart.metadata.genre,
@@ -792,7 +792,7 @@ export class BeatorajaPlayBridge {
   }
 
   /** The play state's latest timed judgments ({@link RECENT_TIMINGS_CAPACITY}), oldest first. */
-  private recentTimings(): readonly JudgeTiming[] {
+  private recentTimings(): readonly JudgmentTiming[] {
     return this.state !== undefined ? recentJudgeTimings(this.state, RECENT_TIMINGS_CAPACITY) : [];
   }
 

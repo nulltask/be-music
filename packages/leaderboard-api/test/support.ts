@@ -9,7 +9,7 @@ import {
   createPlayFingerprintDocument,
 } from '@be-music/chart';
 import { parseBMS } from '@be-music/parser';
-import type { BeMusicPlaylog, PlaylogInputEvent, PlaylogNote } from '@be-music/player/playlog';
+import type { BeMusicReplay, ReplayInputEvent, ReplayNote } from '@be-music/player/replay';
 import type { Env } from '../src/env.ts';
 
 const MIGRATIONS_DIR = join(import.meta.dirname, '..', 'migrations');
@@ -81,22 +81,22 @@ export function makeChart(lines: readonly string[]): TestChart {
 }
 
 /**
- * A play log of `noteCount` notes on lane 11, one every half second; `hits` of them, from note `skip` on, are pressed
+ * A replay of `noteCount` notes on lane 11, one every half second; `hits` of them, from note `skip` on, are pressed
  * dead on (PGREAT), the rest are never pressed.
  */
-export function makePlaylog(
+export function makeReplay(
   chart: TestChart,
   options: {
     noteCount: number;
     hits: number;
     skip?: number;
-    play?: Partial<BeMusicPlaylog['play']>;
-    chart?: Partial<BeMusicPlaylog['chart']>;
+    play?: Partial<BeMusicReplay['play']>;
+    chart?: Partial<BeMusicReplay['chart']>;
   },
-): BeMusicPlaylog {
+): BeMusicReplay {
   const skip = options.skip ?? 0;
-  const notes: PlaylogNote[] = [];
-  const inputs: PlaylogInputEvent[] = [];
+  const notes: ReplayNote[] = [];
+  const inputs: ReplayInputEvent[] = [];
   for (let index = 0; index < options.noteCount; index += 1) {
     const timeUs = 1_000_000 + index * 500_000;
     notes.push({ id: index, channel: '11', type: 'normal', timeUs });
@@ -106,7 +106,7 @@ export function makePlaylog(
     }
   }
   return {
-    format: 'be-music-playlog',
+    format: 'be-music-replay',
     version: 0,
     createdAt: '2026-10-13T00:00:00.000Z',
     clock: { unit: 'us', origin: 'chart-zero' },
@@ -129,11 +129,11 @@ export function makePlaylog(
 
 /** A gzipped submission request body. */
 export function submissionBody(
-  playlog: unknown,
+  replay: unknown,
   playDocument: unknown,
   chartDocument?: unknown,
 ): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(
-    gzipSync(JSON.stringify({ playlog, playDocument, ...(chartDocument !== undefined ? { chartDocument } : {}) })),
+    gzipSync(JSON.stringify({ replay, playDocument, ...(chartDocument !== undefined ? { chartDocument } : {}) })),
   );
 }

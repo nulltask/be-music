@@ -19,9 +19,9 @@ import { resolveShownChartMainBPM } from '../../../chart/main-bpm.ts';
  * malformed entry it can throw; a per-frame op-set computation must never throw, so we wrap
  * with a try/catch and fall back to `undefined` (= no `KEYSONG_*` op set, "modeless" bar).
  */
-export function safeResolveChartVariant(song: LibraryChart): ChartPlayVariant | undefined {
+export function safeResolveChartVariant(chartEntry: LibraryChart): ChartPlayVariant | undefined {
   try {
-    return resolveLibraryChartPlayVariant(song);
+    return resolveLibraryChartPlayVariant(chartEntry);
   } catch {
     return undefined;
   }
@@ -32,11 +32,11 @@ export function safeResolveChartVariant(song: LibraryChart): ChartPlayVariant | 
  * full event list + bpm/stop tables; caching keyed by the `LibraryChart` reference (= the
  * chart never changes once loaded) keeps per-frame resolves O(1).
  */
-function resolveSongLengthSeconds(song: LibraryChart): number {
-  const cached = SONG_LENGTH_CACHE.get(song);
+function resolveChartLengthSeconds(chartEntry: LibraryChart): number {
+  const cached = SONG_LENGTH_CACHE.get(chartEntry);
   if (cached !== undefined) return cached;
-  const seconds = computeBeatorajaChartTotalSeconds(song.chart);
-  SONG_LENGTH_CACHE.set(song, seconds);
+  const seconds = computeBeatorajaChartTotalSeconds(chartEntry.chart);
+  SONG_LENGTH_CACHE.set(chartEntry, seconds);
   return seconds;
 }
 const SONG_LENGTH_CACHE = new WeakMap<LibraryChart, number>();
@@ -45,21 +45,21 @@ const SONG_LENGTH_CACHE = new WeakMap<LibraryChart, number>();
  * Cached note breakdown for the focused song. Same caching pattern as the duration helper —
  * the events scan happens once per song, then per-frame resolves are O(1) lookups.
  */
-function resolveNoteBreakdown(song: LibraryChart): NoteBreakdown {
-  const cached = NOTE_BREAKDOWN_CACHE.get(song);
+function resolveNoteBreakdown(chartEntry: LibraryChart): NoteBreakdown {
+  const cached = NOTE_BREAKDOWN_CACHE.get(chartEntry);
   if (cached !== undefined) return cached;
-  const breakdown = computeBeatorajaNoteBreakdown(song.chart);
-  NOTE_BREAKDOWN_CACHE.set(song, breakdown);
+  const breakdown = computeBeatorajaNoteBreakdown(chartEntry.chart);
+  NOTE_BREAKDOWN_CACHE.set(chartEntry, breakdown);
   return breakdown;
 }
 const NOTE_BREAKDOWN_CACHE = new WeakMap<LibraryChart, NoteBreakdown>();
 
 /** Cached note density (peak / end / avg NPS) for the focused song. */
-function resolveDensity(song: LibraryChart): ChartDensity {
-  const cached = NOTE_DENSITY_CACHE.get(song);
+function resolveDensity(chartEntry: LibraryChart): ChartDensity {
+  const cached = NOTE_DENSITY_CACHE.get(chartEntry);
   if (cached !== undefined) return cached;
-  const density = computeBeatorajaChartDensity(song.chart);
-  NOTE_DENSITY_CACHE.set(song, density);
+  const density = computeBeatorajaChartDensity(chartEntry.chart);
+  NOTE_DENSITY_CACHE.set(chartEntry, density);
   return density;
 }
 const NOTE_DENSITY_CACHE = new WeakMap<LibraryChart, ChartDensity>();
@@ -72,8 +72,8 @@ const NOTE_DENSITY_CACHE = new WeakMap<LibraryChart, ChartDensity>();
  *
  * Cached per song via WeakMap — the events array is iterated once and reused across frames.
  */
-function resolveBPMRange(song: LibraryChart): { min: number; max: number } | undefined {
-  const cached = BPM_RANGE_CACHE.get(song);
+function resolveBPMRange(chartEntry: LibraryChart): { min: number; max: number } | undefined {
+  const cached = BPM_RANGE_CACHE.get(chartEntry);
   if (cached !== undefined) return cached === null ? undefined : cached;
   let min = Number.POSITIVE_INFINITY;
   let max = 0;
@@ -82,9 +82,9 @@ function resolveBPMRange(song: LibraryChart): { min: number; max: number } | und
     if (bpm < min) min = bpm;
     if (bpm > max) max = bpm;
   };
-  considerBPM(song.chart.metadata.bpm);
-  const bpmTable = song.chart.resources?.bpm ?? {};
-  for (const event of song.chart.events ?? []) {
+  considerBPM(chartEntry.chart.metadata.bpm);
+  const bpmTable = chartEntry.chart.resources?.bpm ?? {};
+  for (const event of chartEntry.chart.events ?? []) {
     if (event.value === '00' || event.value === '') continue;
     if (event.channel === '03') {
       considerBPM(parseInt(event.value, 16));
@@ -96,11 +96,11 @@ function resolveBPMRange(song: LibraryChart): { min: number; max: number } | und
     }
   }
   if (!Number.isFinite(min) || max <= 0) {
-    BPM_RANGE_CACHE.set(song, null);
+    BPM_RANGE_CACHE.set(chartEntry, null);
     return undefined;
   }
   const result = { min: Math.round(min), max: Math.round(max) };
-  BPM_RANGE_CACHE.set(song, result);
+  BPM_RANGE_CACHE.set(chartEntry, result);
   return result;
 }
 const BPM_RANGE_CACHE = new WeakMap<LibraryChart, { min: number; max: number } | null>();
@@ -110,23 +110,23 @@ const BPM_RANGE_CACHE = new WeakMap<LibraryChart, { min: number; max: number } |
  * that walk the chart (traits, note kinds, densities, length, BPM range, main BPM) are read the first time a skin asks
  * for them.
  */
-export function selectChartFacts(song: LibraryChart): BeatorajaSelectChartFacts {
-  let facts = SELECT_CHART_FACTS.get(song);
+export function selectChartFacts(chartEntry: LibraryChart): BeatorajaSelectChartFacts {
+  let facts = SELECT_CHART_FACTS.get(chartEntry);
   if (facts === undefined) {
-    const meta = song.chart.metadata;
+    const meta = chartEntry.chart.metadata;
     let traits: BeatorajaChartTraits | undefined;
-    const playVariant = safeResolveChartVariant(song);
+    const playVariant = safeResolveChartVariant(chartEntry);
     facts = {
       ...(playVariant !== undefined ? { playVariant } : {}),
       get traits(): BeatorajaChartTraits {
         if (traits === undefined) {
-          const features = resolveLR2ChartFeatures(song.chart);
+          const features = resolveLR2ChartFeatures(chartEntry.chart);
           traits = {
             longNote: features.longNote,
             bga: features.bga,
             bpmChange: features.bpmChange,
             random: features.random,
-            stop: chartHasStop(song),
+            stop: chartHasStop(chartEntry),
             stageFile: Boolean(meta.stageFile),
             banner: Boolean(meta.banner),
             backBMP: Boolean(meta.backBMP),
@@ -137,27 +137,27 @@ export function selectChartFacts(song: LibraryChart): BeatorajaSelectChartFacts 
       ...(meta.difficulty !== undefined ? { difficulty: meta.difficulty } : {}),
       ...(meta.rank !== undefined ? { judgeRank: meta.rank } : {}),
       ...(typeof meta.total === 'number' ? { total: meta.total } : {}),
-      ...(song.chart.bms?.lnMode !== undefined ? { lnMode: song.chart.bms.lnMode } : {}),
+      ...(chartEntry.chart.bms?.lnMode !== undefined ? { lnMode: chartEntry.chart.bms.lnMode } : {}),
       get subartist(): string {
-        return extractChartSubartist(song.chart);
+        return extractChartSubartist(chartEntry.chart);
       },
       get noteBreakdown(): NoteBreakdown {
-        return resolveNoteBreakdown(song);
+        return resolveNoteBreakdown(chartEntry);
       },
       get density(): ChartDensity {
-        return resolveDensity(song);
+        return resolveDensity(chartEntry);
       },
       get lengthSeconds(): number {
-        return resolveSongLengthSeconds(song);
+        return resolveChartLengthSeconds(chartEntry);
       },
       get bpmRange(): { min: number; max: number } | undefined {
-        return resolveBPMRange(song);
+        return resolveBPMRange(chartEntry);
       },
       get mainBPM(): number | undefined {
-        return resolveShownChartMainBPM(song.chart, song.chartPath);
+        return resolveShownChartMainBPM(chartEntry.chart, chartEntry.chartPath);
       },
     };
-    SELECT_CHART_FACTS.set(song, facts);
+    SELECT_CHART_FACTS.set(chartEntry, facts);
   }
   return facts;
 }
@@ -169,11 +169,11 @@ const SELECT_CHART_FACTS = new WeakMap<LibraryChart, BeatorajaSelectChartFacts>(
  * (a few thousand events) this is microseconds; the WeakMap-cached `resolveLR2ChartFeatures` next to
  * it amortises any worst-case cost across the same select-scene tick.
  */
-function chartHasStop(song: LibraryChart): boolean {
-  const cached = STOP_PRESENCE_CACHE.get(song);
+function chartHasStop(chartEntry: LibraryChart): boolean {
+  const cached = STOP_PRESENCE_CACHE.get(chartEntry);
   if (cached !== undefined) return cached;
-  const has = (song.chart.events ?? []).some((event) => event.channel === '09');
-  STOP_PRESENCE_CACHE.set(song, has);
+  const has = (chartEntry.chart.events ?? []).some((event) => event.channel === '09');
+  STOP_PRESENCE_CACHE.set(chartEntry, has);
   return has;
 }
 const STOP_PRESENCE_CACHE = new WeakMap<LibraryChart, boolean>();

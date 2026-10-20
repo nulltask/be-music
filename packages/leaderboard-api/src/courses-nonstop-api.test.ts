@@ -4,8 +4,8 @@ import { afterAll, beforeAll, describe, expect, test } from 'vite-plus/test';
 import { resolveChart } from '@be-music/chart';
 import { parseBMS } from '@be-music/parser';
 import { manualPlay } from '@be-music/player';
-import { buildNonstopCoursePlaylog, normalizeCourseConstraints, prepareNonstopCourse } from '@be-music/player/course';
-import type { BeMusicCoursePlaylog, BeMusicPlaylog, PlaylogInputEvent } from '@be-music/player/playlog';
+import { buildNonstopCourseReplay, normalizeCourseConstraints, prepareNonstopCourse } from '@be-music/player/course';
+import type { BeMusicCourseReplay, BeMusicReplay, ReplayInputEvent } from '@be-music/player/replay';
 import { ORIGIN, signInAnonymously, startTestBindings } from '../test/support.ts';
 import { createApp } from './app.ts';
 import { openDatabase } from './db/client.ts';
@@ -61,8 +61,8 @@ const SOURCES = [
 const OTHER_SOURCE = parseBMS(['#PLAYER 1', '#BPM 240', '#WAV01 c.wav', '#00211:01010101'].join('\n'));
 
 /** Presses every note of `chart` dead on, up to `untilUs`. */
-function presses(chart: Parameters<typeof resolveChart>[0], untilUs = Number.POSITIVE_INFINITY): PlaylogInputEvent[] {
-  const events: PlaylogInputEvent[] = [];
+function presses(chart: Parameters<typeof resolveChart>[0], untilUs = Number.POSITIVE_INFINITY): ReplayInputEvent[] {
+  const events: ReplayInputEvent[] = [];
   for (const note of resolveChart(chart).notes) {
     const timeUs = Math.round(note.seconds * 1_000_000);
     if (timeUs >= untilUs) continue;
@@ -78,7 +78,7 @@ function presses(chart: Parameters<typeof resolveChart>[0], untilUs = Number.POS
  * (`#RANDOM` drawn) with the course's long-note constraint applied, stitched, played as one chart, and cut into its
  * stages. `untilUs` gives up (ESC) there.
  */
-async function nonstopRun(untilUs?: number): Promise<BeMusicCoursePlaylog> {
+async function nonstopRun(untilUs?: number): Promise<BeMusicCourseReplay> {
   const constraints = normalizeCourseConstraints(COURSE.constraints);
   const prepared = prepareNonstopCourse(
     SOURCES.map((chart) => ({ chart })),
@@ -86,7 +86,7 @@ async function nonstopRun(untilUs?: number): Promise<BeMusicCoursePlaylog> {
   );
   if (!prepared.ok) throw new Error(`stitch failed: ${prepared.reason}`);
   const stitched = prepared.course;
-  let recorded: BeMusicPlaylog | undefined;
+  let recorded: BeMusicReplay | undefined;
   await manualPlay(stitched.chart, {
     speed: 16,
     leadInMs: 0,
@@ -94,27 +94,27 @@ async function nonstopRun(untilUs?: number): Promise<BeMusicCoursePlaylog> {
     tui: false,
     replayInputs: presses(stitched.chart, untilUs),
     course: { kind: 'nonstop', gaugeSet: 'lr2' },
-    recordPlaylog: {},
-    onPlaylogRecorded: (playlog) => {
-      recorded = playlog;
+    recordReplay: {},
+    onReplayRecorded: (replay) => {
+      recorded = replay;
     },
   });
-  const playlog = recorded!;
+  const replay = recorded!;
   if (untilUs !== undefined) {
-    playlog.play.aborted = true;
-    playlog.play.abortedAtUs = untilUs;
+    replay.play.aborted = true;
+    replay.play.abortedAtUs = untilUs;
   }
-  return buildNonstopCoursePlaylog({ ...COURSE, constraints, release: true }, stitched, playlog);
+  return buildNonstopCourseReplay({ ...COURSE, constraints, release: true }, stitched, replay);
 }
 
-function submit(cookie: string, log: BeMusicCoursePlaylog, charts: readonly unknown[] = SOURCES): Promise<Response> {
+function submit(cookie: string, log: BeMusicCourseReplay, charts: readonly unknown[] = SOURCES): Promise<Response> {
   return fetchApp('/api/v0/course-scores', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'content-encoding': 'gzip', cookie },
     body: Uint8Array.from(
       gzipSync(
         JSON.stringify({
-          coursePlaylog: log,
+          courseReplay: log,
           stages: [],
           stageCharts: charts.map((chart, stage) => ({ stage, chart })),
         }),

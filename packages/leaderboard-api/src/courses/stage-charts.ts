@@ -9,12 +9,12 @@ import {
 import {
   resolveChartRulesetFacts,
   resolveCourseStageChartFingerprints,
-  splitNonstopPlaylog,
-  type BeMusicCoursePlaylog,
-  type PlaylogNonstopStage,
-  type PlaylogRulesetId,
+  splitNonstopReplay,
+  type BeMusicCourseReplay,
+  type ReplayNonstopStage,
+  type RulesetId,
   type RulesetChartFacts,
-} from '@be-music/player/playlog';
+} from '@be-music/player/replay';
 
 type ChartJSON = Parameters<typeof computeChartFingerprint>[0];
 
@@ -73,7 +73,7 @@ function isChartJSON(value: unknown): value is ChartJSON {
  * the same chart the client loaded only when it hashes to that fingerprint.
  */
 function loadStageCharts(
-  courseLog: BeMusicCoursePlaylog,
+  courseLog: BeMusicCourseReplay,
   inputs: readonly StageChartInput[],
   stages: readonly number[],
 ): Loaded {
@@ -114,7 +114,7 @@ function noteCountFacts(facts: RulesetChartFacts) {
  * by understating the notes it never reached.
  */
 export function checkUnreachedStageCharts(
-  courseLog: BeMusicCoursePlaylog,
+  courseLog: BeMusicCourseReplay,
   inputs: readonly StageChartInput[],
 ): StageChartCheck {
   const unreached = courseLog.stages.flatMap((entry, index) => (entry.played ? [] : [index]));
@@ -137,7 +137,7 @@ export function checkUnreachedStageCharts(
   return { ok: true };
 }
 
-const sameStage = (left: PlaylogNonstopStage, right: PlaylogNonstopStage): boolean =>
+const sameStage = (left: ReplayNonstopStage, right: ReplayNonstopStage): boolean =>
   left.offsetUs === right.offsetUs &&
   left.windowStartUs === right.windowStartUs &&
   left.windowEndUs === right.windowEndUs &&
@@ -148,15 +148,15 @@ const sameStage = (left: PlaylogNonstopStage, right: PlaylogNonstopStage): boole
  * (`prepareNonstopCourse` in `@be-music/player/course`, which is deterministic): each stage chart (checked against its
  * chart fingerprint) resolved with the `#RANDOM` draws its stage recorded, the course's long-note constraint applied,
  * and the stages stitched with the recorded connections, placement and stitching rules (rules this server does not know
- * are refused). The stitched play (`nonstop.playlog`) must have been recorded on that chart — its play fingerprint must
+ * are refused). The stitched play (`nonstop.replay`) must have been recorded on that chart — its play fingerprint must
  * be the rebuilt chart's — and the run's stage map must be the one the rebuilt chart gives (`resolveNonstopRun`): the
  * stage placements, which stage each note belongs to, and how many stages the play reached (the cut-out stages the log
  * lists).
  */
 export function checkNonstopStageCharts(
-  courseLog: BeMusicCoursePlaylog,
+  courseLog: BeMusicCourseReplay,
   inputs: readonly StageChartInput[],
-  options: { playFingerprint: string; ruleset: PlaylogRulesetId },
+  options: { playFingerprint: string; ruleset: RulesetId },
 ): StageChartCheck {
   const run = courseLog.nonstop!;
   // A log from before the version was recorded was stitched by the first rules.
@@ -193,13 +193,13 @@ export function checkNonstopStageCharts(
   if (pms) fingerprints.push(computePlayFingerprint(course.chart, { chartPath: '.pms' }));
   if (!fingerprints.includes(options.playFingerprint)) return { ok: false, reason: 'nonstop-chart-mismatch' };
 
-  const rebuilt = resolveNonstopRun(course, run.playlog);
+  const rebuilt = resolveNonstopRun(course, run.replay);
   const misplaced = rebuilt.stages.findIndex((stage, index) => !sameStage(stage, run.stages[index]!));
   if (misplaced >= 0) return { ok: false, reason: 'nonstop-stage-mismatch', stage: misplaced };
   if (rebuilt.noteStages.some((stage, index) => stage !== run.noteStages[index])) {
     return { ok: false, reason: 'nonstop-stage-mismatch' };
   }
-  const reached = splitNonstopPlaylog(run, [], { ruleset: options.ruleset }).length;
+  const reached = splitNonstopReplay(run, [], { ruleset: options.ruleset }).length;
   if (reached !== courseLog.stages.filter((entry) => entry.played).length) {
     return { ok: false, reason: 'nonstop-stage-mismatch' };
   }

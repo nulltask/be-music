@@ -50,7 +50,7 @@ export function rulesetName(ruleset: string): string {
 
 /** What a ruleset is, for tooltips next to ruleset names. */
 export const RULESET_MEANING =
-  'Every play is scored under each ruleset: the judge windows, gauges and clear lamps of LR2, beatoraja or IIDX, applied by the be-music engine to the play log. It is how the score is counted, not the software the play came from.';
+  'Every play is scored under each ruleset: the judge windows, gauges and clear lamps of LR2, beatoraja or IIDX, applied by the be-music engine to the replay. It is how the score is counted, not the software the play came from.';
 
 /** EX score rate in percent with two decimals (`ex / (notes × 2)`), or `-` without notes. */
 export function formatScoreRate(exScore: number, noteCount: number): string {
@@ -76,7 +76,7 @@ export function formatTimestamp(epochMs: number): string {
   return `${new Date(epochMs).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 }
 
-/** A chart's display title, falling back to its fingerprint when the play log carried no title. */
+/** A chart's display title, falling back to its fingerprint when the replay carried no title. */
 export function chartTitle(title: string | null, chartFingerprint: string): string {
   return title !== null && title.trim().length > 0 ? title : `${chartFingerprint.slice(0, 18)}…`;
 }
@@ -90,7 +90,7 @@ export function formatGauge(type: string, final: number | null): string {
 }
 
 /**
- * The software that recorded a play, from its play log's `recorder`: `be-music-web 0.5.0 (build 6471cd16, engine 0.8.0,
+ * The software that recorded a play, from its replay's `recorder`: `be-music-web 0.5.0 (build 6471cd16, engine 0.8.0,
  * web)`, or `unknown` for logs written before the field existed.
  */
 export function formatRecorder(recorder: Record<string, string> | null): string {
@@ -111,7 +111,7 @@ export function formatExScore(exScore: number, noteCount: number): string {
   return `${exScore} / ${noteCount * 2} (${formatScoreRate(exScore, noteCount)})`;
 }
 
-/** `7keys` → `7 KEYS`, `popn-9k` → `POPN-9K`: a play log's lane mode as players name it. */
+/** `7keys` → `7 KEYS`, `popn-9k` → `POPN-9K`: a replay's lane mode as players name it. */
 export function formatLaneMode(laneMode: string | null): string {
   if (laneMode === null || laneMode.length === 0) return '-';
   const keys = /^(\d+)keys?$/i.exec(laneMode);

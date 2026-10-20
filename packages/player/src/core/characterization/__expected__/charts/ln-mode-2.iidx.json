@@ -26,8 +26,8 @@
         "failedMidPlay": false
       }
     },
-    "playlog": {
-      "format": "be-music-playlog",
+    "replay": {
+      "format": "be-music-replay",
       "version": 0,
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": {
@@ -251,8 +251,8 @@
         "failedMidPlay": false
       }
     },
-    "playlog": {
-      "format": "be-music-playlog",
+    "replay": {
+      "format": "be-music-replay",
       "version": 0,
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
@@ -381,8 +381,8 @@
         "failedMidPlay": false
       }
     },
-    "playlog": {
-      "format": "be-music-playlog",
+    "replay": {
+      "format": "be-music-replay",
       "version": 0,
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",

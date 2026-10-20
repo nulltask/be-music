@@ -30,7 +30,7 @@ export interface RandomDraw {
  * that is not taken, because the evaluator walks every line whatever the branch state.
  *
  * Draw it once with {@link drawRandomOutcomes}, then hand the same value to everything that needs the play's
- * branches (the resolver, the engine's RANDOM summary, the play log, hashing), so nothing rolls `#RANDOM` again.
+ * branches (the resolver, the engine's RANDOM summary, the replay, hashing), so nothing rolls `#RANDOM` again.
  */
 export type RandomDraws = ReadonlyArray<RandomDraw>;
 

@@ -8,7 +8,7 @@ import type { PlayJudge } from './play-strategy.ts';
 
 /**
  * Ends a play the same way whatever judged it: an ESC returns the summary of an aborted play, a restart or Ctrl+C
- * throws {@link PlayerInterruptedError}, anything else completes (or fails). The play log is finalized and handed to
+ * throws {@link PlayerInterruptedError}, anything else completes (or fails). The replay is finalized and handed to
  * the host, the no-TUI trace records the end, and the summary is written out.
  */
 export function finishPlay(
@@ -17,7 +17,7 @@ export function finishPlay(
   controls: PlayControls,
   outcome: PlayOutcome,
 ): PlayerSummary {
-  const { options, summary, totalSeconds, playlogRecorder, writeOutput } = session;
+  const { options, summary, totalSeconds, replayRecorder, writeOutput } = session;
   const { interruptedReason, endedOnFailure } = outcome;
   // View changes the host sent as the play ended, after the loop's last drain, still belong to it.
   controls.recordPendingViewChanges();
@@ -33,9 +33,9 @@ export function finishPlay(
     ]);
     session.stateLogger.logResult(totalSeconds, { reason, summary });
   }
-  if (playlogRecorder) {
-    options.onPlaylogRecorded?.(
-      playlogRecorder.finalize({
+  if (replayRecorder) {
+    options.onReplayRecorded?.(
+      replayRecorder.finalize({
         summary,
         maxCombo: session.score.scoreTracker.maxCombo,
         ...(aborted

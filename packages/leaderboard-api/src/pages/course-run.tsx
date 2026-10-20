@@ -177,13 +177,13 @@ export async function courseRunPage(c: PageContext<'/course-scores/:id'>) {
           ],
           [t.course.rows.fingerprint, <span class="font-mono text-xs break-all">{course.courseFingerprint}</span>],
           [
-            t.courseRun.playLog,
+            t.courseRun.replay,
             <a
               class="underline-offset-4 hover:underline"
-              href={`/api/v0/course-scores/${encodeURIComponent(run.id)}/playlog`}
+              href={`/api/v0/course-scores/${encodeURIComponent(run.id)}/replay`}
               download
             >
-              {t.courseRun.downloadPlayLog}
+              {t.courseRun.downloadReplay}
             </a>,
           ],
         ]}

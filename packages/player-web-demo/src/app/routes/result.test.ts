@@ -2,7 +2,7 @@ import { createEmptyJSON } from '@be-music/json';
 import type { LR2Skin } from '@be-music/lr2-skin';
 import type { ResolvedPlayChart } from '@be-music/player';
 import type { AudioService } from '@be-music/player-web/audio';
-import type { BrowserSongCollection } from '@be-music/player-web/collection';
+import type { BrowserChartCollection } from '@be-music/player-web/collection';
 import {
   createResultScene,
   type BeatorajaKit,
@@ -14,7 +14,7 @@ import {
 } from '@be-music/player-web/host';
 import type { BeatorajaThemeBGM, BeatorajaThemeBundle } from '@be-music/player-web/skin';
 import type { CourseDefinition } from '@be-music/player/course';
-import type { BeMusicCoursePlaylog, BeMusicPlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
+import type { BeMusicCourseReplay, BeMusicReplay, ReplayCourseResult } from '@be-music/player/replay';
 import { courseStageRecordPlayFromResult, recordPlayFromResult } from '@be-music/player/records';
 import {
   resolveCourseView,
@@ -38,7 +38,7 @@ vi.mock('@be-music/player-web/host', () => ({ createResultScene: vi.fn() }));
 
 type Family = ResultSceneKit['family'];
 
-function song(id: string): LibraryChart {
+function chartEntry(id: string): LibraryChart {
   return {
     id,
     sourceId: 'drop1',
@@ -69,8 +69,8 @@ function course(): LibraryCourse {
     id: 'dan#0',
     definition,
     stages: [
-      { title: 'a', chart: song('a') },
-      { title: 'b', chart: song('b') },
+      { title: 'a', chart: chartEntry('a') },
+      { title: 'b', chart: chartEntry('b') },
     ],
     playable: true,
   };
@@ -79,7 +79,7 @@ function course(): LibraryCourse {
 /** A play's result as the engine hands it over. */
 function resultOf(chart: LibraryChart, cleared = true): PlayResult {
   return {
-    song: chart,
+    chart: chart,
     score: { total: 10, perfect: 8, great: 2, good: 0, bad: 0, poor: 0, emptyPoor: 0, exScore: 18 },
     maxCombo: 10,
     gauge: 90,
@@ -88,20 +88,20 @@ function resultOf(chart: LibraryChart, cleared = true): PlayResult {
     playSeconds: 30,
     gaugeHistory: [],
     scoreHistory: [],
-    playlog: { play: { mode: 'manual' } } as unknown as BeMusicPlaylog,
+    replay: { play: { mode: 'manual' } } as unknown as BeMusicReplay,
   } as unknown as PlayResult;
 }
 
-/** A course run's play log and native result. */
+/** A course run's replay and native result. */
 const COURSE_LOG = {
-  log: { course: { name: 'Dan', kind: 'grade' }, stages: [] } as unknown as BeMusicCoursePlaylog,
+  log: { course: { name: 'Dan', kind: 'grade' }, stages: [] } as unknown as BeMusicCourseReplay,
   native: {
     lamp: 'NORMAL',
     exScore: 40,
     judge: { pgreat: 20, great: 0, good: 0, bad: 0, poor: 0 },
     gauge: { type: 'CLASS', final: 50, cleared: true },
     stagesPlayed: 2,
-  } as unknown as PlaylogCourseResult,
+  } as unknown as ReplayCourseResult,
 };
 
 const LR2_RESULT = { name: 'result' } as unknown as LR2Skin;
@@ -164,7 +164,7 @@ async function harness(options: { family?: 'lr2' | 'beatoraja' | 'none'; lastPla
   const courses = new CourseRunService();
   const deps = {
     router,
-    library: { collection: { sources: [], charts: [song('a')], errors: [] } as BrowserSongCollection },
+    library: { collection: { sources: [], charts: [chartEntry('a')], errors: [] } as BrowserChartCollection },
     records: {
       recordActivePlay: vi.fn<ResultRouteDeps['records']['recordActivePlay']>(),
       recordActiveCourseStage: vi.fn<ResultRouteDeps['records']['recordActiveCourseStage']>(),
@@ -187,16 +187,16 @@ async function harness(options: { family?: 'lr2' | 'beatoraja' | 'none'; lastPla
       beatorajaThemeBGM: family === 'beatoraja' ? BEATORAJA_BGM : {},
     },
     builtIn: { builtInKit: BUILT_IN_KIT },
-    playlogAutoSave: { savePlay: vi.fn<ResultRouteDeps['playlogAutoSave']['savePlay']>() },
+    replayAutoSave: { savePlay: vi.fn<ResultRouteDeps['replayAutoSave']['savePlay']>() },
     leaderboard: { maybeSubmit: vi.fn<ResultRouteDeps['leaderboard']['maybeSubmit']>() },
     audio: {} as AudioService,
-    testHook: { recordPlaylog: vi.fn(), recordResult: vi.fn() },
+    testHook: { recordReplay: vi.fn(), recordResult: vi.fn() },
     lastPlay: vi.fn<ResultRouteDeps['lastPlay']>(() => options.lastPlay),
     nameResultJingle: vi.fn<ResultRouteDeps['nameResultJingle']>(() => 'jingle'),
     setPlayStatus: vi.fn<ResultRouteDeps['setPlayStatus']>(),
     showSelect: vi.fn<ResultRouteDeps['showSelect']>(async () => {}),
-    playSong: vi.fn<ResultRouteDeps['playSong']>(async () => {}),
-    unlockPlaylogOptions: vi.fn<ResultRouteDeps['unlockPlaylogOptions']>(),
+    playChart: vi.fn<ResultRouteDeps['playChart']>(async () => {}),
+    unlockReplayOptions: vi.fn<ResultRouteDeps['unlockReplayOptions']>(),
   };
   const route = new ResultRoute({
     ...deps,
@@ -217,7 +217,7 @@ function shown(h: Harness): FakeResult {
 describe('ResultRoute.showResult: a single play', () => {
   test('the result takes the stage from the play, which rings out, and the play is kept, saved and ranked', async () => {
     const h = await harness();
-    const data = resultOf(song('a'));
+    const data = resultOf(chartEntry('a'));
     await h.route.showResult(data);
     const result = shown(h);
     expect(result.kit).toBe(BUILT_IN_KIT);
@@ -232,18 +232,18 @@ describe('ResultRoute.showResult: a single play', () => {
     // The play asked for its result: the run goes on.
     expect(h.onInterrupt).not.toHaveBeenCalled();
     expect(h.deps.setPlayStatus).toHaveBeenCalledWith('Result: a');
-    expect(h.deps.testHook.recordPlaylog).toHaveBeenCalledWith(data.playlog);
+    expect(h.deps.testHook.recordReplay).toHaveBeenCalledWith(data.replay);
     expect(h.deps.nameResultJingle).toHaveBeenCalledWith(LR2_JINGLES.clear);
     expect(h.deps.testHook.recordResult).toHaveBeenCalledWith(resultFromData(data, 'single', 'built-in', 'jingle'));
     expect(h.deps.records.recordActivePlay).toHaveBeenCalledWith(recordPlayFromResult(data));
-    expect(h.deps.playlogAutoSave.savePlay).toHaveBeenCalledWith(data.playlog);
-    expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(data.playlog, song('a'));
-    expect(h.deps.unlockPlaylogOptions).toHaveBeenCalledOnce();
+    expect(h.deps.replayAutoSave.savePlay).toHaveBeenCalledWith(data.replay);
+    expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(data.replay, chartEntry('a'));
+    expect(h.deps.unlockReplayOptions).toHaveBeenCalledOnce();
   });
 
   test('on an LR2 theme the result shows on its result skin, and a fail names the fail jingle', async () => {
     const h = await harness({ family: 'lr2' });
-    await h.route.showResult(resultOf(song('a'), false));
+    await h.route.showResult(resultOf(chartEntry('a'), false));
     expect(shown(h).kit).toEqual({ family: 'lr2', skin: LR2_RESULT });
     expect(h.deps.nameResultJingle).toHaveBeenCalledWith(LR2_JINGLES.fail);
     expect(h.deps.testHook.recordResult).toHaveBeenCalledWith(expect.objectContaining({ family: 'lr2' }));
@@ -251,17 +251,17 @@ describe('ResultRoute.showResult: a single play', () => {
 
   test('dismissed, it goes back to the select screen', async () => {
     const h = await harness();
-    await h.route.showResult(resultOf(song('a')));
+    await h.route.showResult(resultOf(chartEntry('a')));
     shown(h).options.on.continue();
     expect(h.deps.showSelect).toHaveBeenCalledOnce();
   });
 
   test('R plays the chart again as it was started, the result screen going first', async () => {
-    const lastPlay: LastPlay = { song: song('a'), overrides: { autoPlay: true } };
+    const lastPlay: LastPlay = { chart: chartEntry('a'), overrides: { autoPlay: true } };
     const h = await harness({ lastPlay });
-    await h.route.showResult(resultOf(song('a')));
+    await h.route.showResult(resultOf(chartEntry('a')));
     shown(h).options.on.retry!();
-    await vi.waitFor(() => expect(h.deps.playSong).toHaveBeenCalledWith(song('a'), { autoPlay: true }));
+    await vi.waitFor(() => expect(h.deps.playChart).toHaveBeenCalledWith(chartEntry('a'), { autoPlay: true }));
     expect(h.stage.at(-1)).toBeUndefined();
     expect(shown(h).dispose).toHaveBeenCalledOnce();
     // The result asked for the retry: the run goes on.
@@ -269,14 +269,14 @@ describe('ResultRoute.showResult: a single play', () => {
   });
 
   test('R is offered only when the play last started is this chart’s', async () => {
-    const h = await harness({ lastPlay: { song: song('b'), overrides: { autoPlay: false } } });
-    await h.route.showResult(resultOf(song('a')));
+    const h = await harness({ lastPlay: { chart: chartEntry('b'), overrides: { autoPlay: false } } });
+    await h.route.showResult(resultOf(chartEntry('a')));
     expect(shown(h).options.on.retry).toBeUndefined();
   });
 
   test('a newer navigation that took the stage first keeps its status; the play is still kept, saved and ranked', async () => {
     const h = await harness();
-    const data = resultOf(song('a'));
+    const data = resultOf(chartEntry('a'));
     const showing = h.route.showResult(data);
     // A drop, say, begins a navigation before the result's turn.
     h.router.begin();
@@ -285,17 +285,17 @@ describe('ResultRoute.showResult: a single play', () => {
     expect(h.deps.setPlayStatus).not.toHaveBeenCalled();
     expect(h.deps.testHook.recordResult).not.toHaveBeenCalled();
     expect(h.deps.records.recordActivePlay).toHaveBeenCalledOnce();
-    expect(h.deps.playlogAutoSave.savePlay).toHaveBeenCalledOnce();
+    expect(h.deps.replayAutoSave.savePlay).toHaveBeenCalledOnce();
     expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledOnce();
-    expect(h.deps.unlockPlaylogOptions).toHaveBeenCalledOnce();
+    expect(h.deps.unlockReplayOptions).toHaveBeenCalledOnce();
   });
 });
 
 describe('ResultRoute.showResult: a course', () => {
   test('a stage’s result records the stage on the run, shows the course, and leads to the next stage', async () => {
-    const h = await harness({ family: 'lr2', lastPlay: { song: song('a'), overrides: { autoPlay: false } } });
+    const h = await harness({ family: 'lr2', lastPlay: { chart: chartEntry('a'), overrides: { autoPlay: false } } });
     const active = h.deps.courses.beginRun(course());
-    const data = resultOf(song('a'));
+    const data = resultOf(chartEntry('a'));
     await h.route.showResult(data);
     expect(h.deps.records.recordActiveCourseStage).toHaveBeenCalledWith(courseStageRecordPlayFromResult(data));
     const info = activeCourseInfo(active);
@@ -304,7 +304,7 @@ describe('ResultRoute.showResult: a course', () => {
     expect(result.options).toMatchObject({ run: 'stage', result: { ...data, course: info } });
     // No quick retry in a course, and its stages are saved and ranked as the course.
     expect(result.options.on.retry).toBeUndefined();
-    expect(h.deps.playlogAutoSave.savePlay).not.toHaveBeenCalled();
+    expect(h.deps.replayAutoSave.savePlay).not.toHaveBeenCalled();
     expect(h.deps.leaderboard.maybeSubmit).not.toHaveBeenCalled();
 
     result.options.on.continue();
@@ -316,25 +316,25 @@ describe('ResultRoute.showResult: a course', () => {
   test('the course result shows on the course-result skin and reports the course run', async () => {
     const h = await harness({ family: 'lr2' });
     const info = resolveCourseView(course());
-    const data = resultOf(song('a'));
+    const data = resultOf(chartEntry('a'));
     await h.route.showResult(data, { course: info, courseLog: COURSE_LOG });
     expect(h.deps.lr2.courseLR2Skin).toHaveBeenCalledWith(LR2_COURSE_RESULT, info, { kind: 'courseResult' });
     expect(shown(h).options.run).toBe('course');
-    expect(h.deps.testHook.recordPlaylog).not.toHaveBeenCalled();
+    expect(h.deps.testHook.recordReplay).not.toHaveBeenCalled();
     expect(h.deps.testHook.recordResult).toHaveBeenCalledWith(
       resultFromCourseLog(COURSE_LOG.log, COURSE_LOG.native, { family: 'lr2', playSeconds: 30, jingle: 'jingle' }),
     );
-    expect(h.deps.playlogAutoSave.savePlay).not.toHaveBeenCalled();
+    expect(h.deps.replayAutoSave.savePlay).not.toHaveBeenCalled();
   });
 
   test('a NONSTOP run’s result: R stitches it again, and its course log was saved already', async () => {
     const h = await harness();
     const retry = vi.fn();
-    await h.route.showResult(resultOf(song('a')), { nonstop: { info: resolveCourseView(course()), retry } });
+    await h.route.showResult(resultOf(chartEntry('a')), { nonstop: { info: resolveCourseView(course()), retry } });
     expect(shown(h).options.run).toBe('nonstop');
     shown(h).options.on.retry!();
     await vi.waitFor(() => expect(retry).toHaveBeenCalledOnce());
-    expect(h.deps.playlogAutoSave.savePlay).not.toHaveBeenCalled();
+    expect(h.deps.replayAutoSave.savePlay).not.toHaveBeenCalled();
     expect(h.deps.leaderboard.maybeSubmit).not.toHaveBeenCalled();
     expect(h.deps.records.recordActivePlay).toHaveBeenCalledOnce();
   });
@@ -343,17 +343,20 @@ describe('ResultRoute.showResult: a course', () => {
 describe('ResultRoute: the beatoraja result', () => {
   test('without a result skin nothing shows', async () => {
     const h = await harness();
-    expect(await h.route.showBeatorajaResult(resultOf(song('a')), { run: 'single' })).toBe(false);
+    expect(await h.route.showBeatorajaResult(resultOf(chartEntry('a')), { run: 'single' })).toBe(false);
     expect(createResultScene).not.toHaveBeenCalled();
     expect(h.router.current).toBe(h.play);
   });
 
   test('it shows on the theme’s result skin, with the chart as the play played it', async () => {
-    const h = await harness({ family: 'beatoraja', lastPlay: { song: song('a'), overrides: { autoPlay: false } } });
+    const h = await harness({
+      family: 'beatoraja',
+      lastPlay: { chart: chartEntry('a'), overrides: { autoPlay: false } },
+    });
     h.route.lastBeatorajaChart = { resolved: PLAYED, chartPath: 'a.bms' };
-    const data = resultOf(song('a'));
+    const data = resultOf(chartEntry('a'));
     expect(await h.route.showBeatorajaResult(data, { run: 'single' })).toBe(true);
-    expect(h.deps.beatoraja.loadBeatorajaResultKit).toHaveBeenCalledWith(song('a'), false);
+    expect(h.deps.beatoraja.loadBeatorajaResultKit).toHaveBeenCalledWith(chartEntry('a'), false);
     const result = shown(h);
     expect(result.kit).toBe(BEATORAJA_KIT);
     expect(result.options).toMatchObject({
@@ -368,17 +371,17 @@ describe('ResultRoute: the beatoraja result', () => {
     expect(h.deps.testHook.recordResult).toHaveBeenCalledWith(resultFromData(data, 'single', 'beatoraja', 'jingle'));
 
     result.options.on.retry!();
-    await vi.waitFor(() => expect(h.deps.playSong).toHaveBeenCalledWith(song('a'), { autoPlay: false }));
+    await vi.waitFor(() => expect(h.deps.playChart).toHaveBeenCalledWith(chartEntry('a'), { autoPlay: false }));
   });
 
   test('a chart kept from another song is not plotted, and a NONSTOP run’s own chart is', async () => {
     const h = await harness({ family: 'beatoraja' });
     h.route.lastBeatorajaChart = { resolved: PLAYED, chartPath: 'b.bms' };
-    await h.route.showBeatorajaResult(resultOf(song('a')), { run: 'single' });
+    await h.route.showBeatorajaResult(resultOf(chartEntry('a')), { run: 'single' });
     expect(shown(h).options).not.toHaveProperty('playChart');
     const stitched = createEmptyJSON('bms');
     const retry = vi.fn();
-    await h.route.showBeatorajaResult(resultOf(song('a')), {
+    await h.route.showBeatorajaResult(resultOf(chartEntry('a')), {
       run: 'nonstop',
       course: { info: resolveCourseView(course()) },
       nonstopRetry: retry,
@@ -393,8 +396,11 @@ describe('ResultRoute: the beatoraja result', () => {
     const h = await harness({ family: 'beatoraja' });
     h.route.lastBeatorajaChart = { resolved: PLAYED, chartPath: 'a.bms' };
     const info = resolveCourseView(course());
-    await h.route.showBeatorajaResult(resultOf(song('a')), { run: 'course', course: { info, result: COURSE_LOG } });
-    expect(h.deps.beatoraja.loadBeatorajaResultKit).toHaveBeenCalledWith(song('a'), true);
+    await h.route.showBeatorajaResult(resultOf(chartEntry('a')), {
+      run: 'course',
+      course: { info, result: COURSE_LOG },
+    });
+    expect(h.deps.beatoraja.loadBeatorajaResultKit).toHaveBeenCalledWith(chartEntry('a'), true);
     expect(shown(h).options).not.toHaveProperty('playChart');
     expect(shown(h).options.result.course).toEqual(info);
     expect(h.deps.setPlayStatus).toHaveBeenCalledWith('Result (beatoraja): Dan · ex=18 maxCombo=10');
@@ -405,25 +411,25 @@ describe('ResultRoute: the beatoraja result', () => {
 
   test('a single play on the beatoraja play screen is kept, saved and ranked; without a result skin it goes back to select', async () => {
     const h = await harness();
-    const data = resultOf(song('a'));
+    const data = resultOf(chartEntry('a'));
     await h.route.showBeatorajaPlayResult(data, false);
-    expect(h.deps.testHook.recordPlaylog).toHaveBeenCalledWith(data.playlog);
+    expect(h.deps.testHook.recordReplay).toHaveBeenCalledWith(data.replay);
     expect(h.deps.records.recordActivePlay).toHaveBeenCalledWith(recordPlayFromResult(data));
     expect(h.deps.showSelect).toHaveBeenCalledOnce();
-    expect(h.deps.playlogAutoSave.savePlay).toHaveBeenCalledWith(data.playlog);
-    expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(data.playlog, song('a'));
-    expect(h.deps.unlockPlaylogOptions).toHaveBeenCalledOnce();
+    expect(h.deps.replayAutoSave.savePlay).toHaveBeenCalledWith(data.replay);
+    expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(data.replay, chartEntry('a'));
+    expect(h.deps.unlockReplayOptions).toHaveBeenCalledOnce();
   });
 
   test('a course stage on the beatoraja play screen is recorded on the run, and goes on when no result skin shows it', async () => {
     const h = await harness();
     h.deps.courses.beginRun(course());
-    const data = resultOf(song('a'));
+    const data = resultOf(chartEntry('a'));
     await h.route.showBeatorajaPlayResult(data, true);
     expect(h.deps.records.recordActiveCourseStage).toHaveBeenCalledWith(courseStageRecordPlayFromResult(data));
     expect(h.deps.courseRoute.continueCourse).toHaveBeenCalledOnce();
     expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
-    expect(h.deps.unlockPlaylogOptions).toHaveBeenCalledOnce();
+    expect(h.deps.unlockReplayOptions).toHaveBeenCalledOnce();
 
     const themed = await harness({ family: 'beatoraja' });
     const running = themed.deps.courses.beginRun(course());

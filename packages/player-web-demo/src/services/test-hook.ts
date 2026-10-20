@@ -1,13 +1,13 @@
 // The test hook's live half: what `window.__beMusicTest.state()` reads from the app at each call (the scene the router
 // shows, the select screen's cursor, the play on the stage, the library, the course run and the course being made),
 // and the theme slot a result's jingle came from. `test-hook.ts` keeps the contract and records what the host hands
-// it (results, play logs, loads). Every read here is synchronous and starts nothing: `state()` answers at once, from
+// it (results, replays, loads). Every read here is synchronous and starts nothing: `state()` answers at once, from
 // what the app holds already, and leaves the app as it found it.
 
 import type { PlayScene, SelectScene } from '@be-music/player-web/host';
 import type { LibraryChart, LibraryEntry } from '@be-music/scene-model';
-import type { BeMusicSongRecord } from '@be-music/skin-sdk';
-import { lookupCourseRecord } from '../course-result.ts';
+import type { BeMusicChartBestRecord } from '@be-music/skin-sdk';
+import { lookupCourseBestRecord } from '../course-result.ts';
 import { describeBar, judgedOf, nameJingle, type TestHookLiveState } from '../test-hook.ts';
 import type { DemoGUIState, DemoScene, PlayerWebDemoElements } from '../types.ts';
 import type { CourseMakerService } from './course-maker.ts';
@@ -26,7 +26,7 @@ export interface TestHookScenes {
 
 /** The chart and play mode of the most recent play start (the play route's `lastPlay`). */
 export interface TestHookPlayStart {
-  readonly song: Pick<LibraryChart, 'title'>;
+  readonly chart: Pick<LibraryChart, 'title'>;
   readonly overrides: { readonly autoPlay: boolean; readonly replay?: unknown };
 }
 
@@ -40,7 +40,7 @@ export interface LiveTestHookDeps {
   /** The library: its charts and course folders. */
   readonly library: Pick<LibraryService, 'collection'>;
   /** The best records of the current judge ruleset, which the select screen shows, read without hashing a chart. */
-  readonly records: Pick<RecordsService, 'peekSongRecord' | 'currentRulesetRecords'>;
+  readonly records: Pick<RecordsService, 'peekChartBestRecord' | 'currentRulesetRecords'>;
   /** The course run in progress. */
   readonly courses: Pick<CourseRunService, 'active'>;
   /** The course being made. */
@@ -72,7 +72,7 @@ export function liveTestHookState(deps: LiveTestHookDeps): TestHookLiveState {
     status: deps.guiState.status,
     loading: deps.elements.loadingOverlay.classList.contains('visible'),
     library: {
-      songs: collection.charts.length,
+      charts: collection.charts.length,
       courseFolders: (collection.courseFolders ?? []).map((folder) => folder.label),
     },
     cursor:
@@ -89,7 +89,7 @@ export function liveTestHookState(deps: LiveTestHookDeps): TestHookLiveState {
           }
         : undefined,
     play: play && {
-      title: play.song.title,
+      title: play.chart.title,
       autoPlay: play.overrides.autoPlay,
       replay: play.overrides.replay !== undefined,
       tempo: gameplay?.getTempo() ?? 1,
@@ -110,13 +110,13 @@ export function liveTestHookState(deps: LiveTestHookDeps): TestHookLiveState {
 /**
  * The best record kept for a select-screen bar, as the select screen shows it: a chart's or a course's (with the trophy
  * its bests earn), of the current judge ruleset. Records are stored under ruleset-prefixed keys (a course run's under the
- * ruleset it was played on, `resolveCourseRecordUpdate`), so a course is looked up in the current ruleset's records.
+ * ruleset it was played on, `resolveCourseBestRecordUpdate`), so a course is looked up in the current ruleset's records.
  */
-function barRecord(entry: LibraryEntry, deps: LiveTestHookDeps): BeMusicSongRecord | undefined {
+function barRecord(entry: LibraryEntry, deps: LiveTestHookDeps): BeMusicChartBestRecord | undefined {
   // A chart's record is keyed by its hash once known; a read hashes nothing (the select screen does as it shows the bar).
-  if (entry.kind === 'chart') return deps.records.peekSongRecord(entry.chart);
+  if (entry.kind === 'chart') return deps.records.peekChartBestRecord(entry.chart);
   if (entry.kind === 'course') {
-    return lookupCourseRecord(entry.course, deps.records.currentRulesetRecords(), deps.guiState.nonstopPlacement);
+    return lookupCourseBestRecord(entry.course, deps.records.currentRulesetRecords(), deps.guiState.nonstopPlacement);
   }
   return undefined;
 }

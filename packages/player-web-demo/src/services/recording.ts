@@ -29,11 +29,11 @@ export class RecordingService {
   private autoRecordArmed = false;
   /**
    * Filename base for the next saved recording. Derived from the currently-playing song's title (sanitized for
-   * filesystem safety) or `gameplay-<timestamp>` when no song info is available. Updated on every `playSong` so
+   * filesystem safety) or `gameplay-<timestamp>` when no song info is available. Updated on every `playChart` so
    * back-to-back recordings don't overwrite each other in the user's downloads folder.
    *
    * Read by `toggleRecording` (in `recording-controller.ts`) when assembling the download filename; mutated in
-   * `playSong` / `preloadGameplay` as each chart starts.
+   * `playChart` / `preloadGameplay` as each chart starts.
    */
   private recordingFilenameBase = 'gameplay';
   private readonly sceneHost: RecordingServiceOptions['sceneHost'];

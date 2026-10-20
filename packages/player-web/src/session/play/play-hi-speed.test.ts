@@ -7,7 +7,7 @@ describe('PlaySession hi-speed under HS-FIX', () => {
   /** A play (not loaded) at the player's hi-speed 3.0 on a chart whose HS-FIX multiplier is 2/3. */
   function hsFixView(onHiSpeedChange: (hiSpeed: number) => void, locked = false) {
     const view = new PlaySession({ initialHiSpeed: 3, onHiSpeedChange });
-    // What `prepareSong` leaves once the chart is prepared.
+    // What `prepareChart` leaves once the chart is prepared.
     view.playState = createPlayState({
       view: { hiSpeed: createHiSpeedState({ hiSpeed: 3, multiplier: 2 / 3, locked }) },
     });

@@ -111,7 +111,7 @@ const BENCH_PLAY_RESULT: PlayResult = {
   gauge: 100,
   cleared: true,
   playSeconds: 1,
-  song: BENCH_SONG,
+  chart: BENCH_SONG,
   gaugeHistory: [],
   scoreHistory: [],
 };
@@ -119,7 +119,7 @@ const BENCH_COLLECTION = {
   sources: [BENCH_SOURCE],
   charts: [BENCH_SONG],
   errors: [],
-} satisfies playerWebCoreAPI.BrowserSongCollection;
+} satisfies playerWebCoreAPI.BrowserChartCollection;
 const BENCH_SONG_MD5 = '0123456789abcdef0123456789abcdef';
 const BENCH_COURSE_DEFINITION = parseBeatorajaCourseData({
   name: 'Bench Dan',
@@ -127,8 +127,8 @@ const BENCH_COURSE_DEFINITION = parseBeatorajaCourseData({
   constraint: ['MIRROR', 'GAUGE_LR2', 'NO_SPEED', 'HCN'],
 })!;
 const BENCH_COURSE_GROUPS = [{ label: 'Bench', courses: [BENCH_COURSE_DEFINITION] }];
-const BENCH_HASHED_SONGS = [{ song: BENCH_SONG, md5: BENCH_SONG_MD5 }];
-const BENCH_COURSE_LOOKUP = playerWebCoreAPI.createSongHashLookup(BENCH_HASHED_SONGS);
+const BENCH_HASHED_SONGS = [{ chart: BENCH_SONG, md5: BENCH_SONG_MD5 }];
+const BENCH_COURSE_LOOKUP = playerWebCoreAPI.createChartHashLookup(BENCH_HASHED_SONGS);
 const BENCH_RANDOM_COURSE = parseBeatorajaRandomCourseData({
   name: 'Bench Random',
   stage: [{ sql: 'level >= 0' }],
@@ -230,9 +230,9 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreAPI.blendCodeToPixi(9);
     },
   });
-  define('player-web.BrowserSongCollectionStore', {
+  define('player-web.BrowserChartCollectionStore', {
     run: async () => {
-      const store = new playerWebCoreAPI.BrowserSongCollectionStore();
+      const store = new playerWebCoreAPI.BrowserChartCollectionStore();
       await store.loadFromFiles([BENCH_BMS_FILE]);
       await store.appendFromFiles([BENCH_APPEND_BMS_FILE]);
     },
@@ -417,9 +417,9 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       await file.arrayBuffer();
     },
   });
-  define('player-web.describeSongCollection', {
+  define('player-web.describeChartCollection', {
     run: () => {
-      playerWebCoreAPI.describeSongCollection(BENCH_COLLECTION);
+      playerWebCoreAPI.describeChartCollection(BENCH_COLLECTION);
     },
   });
   define('player-web.downloadBlob', {
@@ -464,9 +464,9 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreAPI.readCourseFile('Songs/dan.lr2crs', BENCH_LR2CRS_BYTES);
     },
   });
-  define('player-web.createSongHashLookup', {
+  define('player-web.createChartHashLookup', {
     run: () => {
-      playerWebCoreAPI.createSongHashLookup(BENCH_HASHED_SONGS);
+      playerWebCoreAPI.createChartHashLookup(BENCH_HASHED_SONGS);
     },
   });
   define('player-web.resolveCourseFolders', {
@@ -479,9 +479,9 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreAPI.createRandomCourseEntry('Bench#r0', BENCH_RANDOM_COURSE);
     },
   });
-  define('player-web.createCourseSongRecord', {
+  define('player-web.createCourseChartRecord', {
     run: () => {
-      const record = playerWebCoreAPI.createCourseSongRecord(BENCH_SONG, { md5: BENCH_SONG_MD5 });
+      const record = playerWebCoreAPI.createCourseChartRecord(BENCH_SONG, { md5: BENCH_SONG_MD5 });
       void record.level;
     },
   });
@@ -640,16 +640,16 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreAPI.logger('bench');
     },
   });
-  define('player-web.loadSongCollectionFromDrop', {
+  define('player-web.loadChartCollectionFromDrop', {
     run: async () => {
-      await playerWebCoreAPI.loadSongCollectionFromDrop({
+      await playerWebCoreAPI.loadChartCollectionFromDrop({
         files: [BENCH_BMS_FILE, BENCH_WAV_FILE],
       } as unknown as DataTransfer);
     },
   });
-  define('player-web.loadSongCollectionFromFiles', {
+  define('player-web.loadChartCollectionFromFiles', {
     run: async () => {
-      await playerWebCoreAPI.loadSongCollectionFromFiles([BENCH_BMS_FILE, BENCH_WAV_FILE]);
+      await playerWebCoreAPI.loadChartCollectionFromFiles([BENCH_BMS_FILE, BENCH_WAV_FILE]);
     },
   });
   define('player-web.loadTextureFromBytes', {
@@ -875,14 +875,14 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       new playerWebCoreAPI.Rectangle(0, 0, 320, 180);
     },
   });
-  define('player-web.resolveSongSource', {
+  define('player-web.resolveChartSource', {
     run: () => {
-      playerWebCoreAPI.resolveSongSource(BENCH_COLLECTION, BENCH_SONG);
+      playerWebCoreAPI.resolveChartSource(BENCH_COLLECTION, BENCH_SONG);
     },
   });
-  define('player-web.splitDroppedSongAndThemeFiles', {
+  define('player-web.splitDroppedChartAndThemeFiles', {
     run: () => {
-      playerWebCoreAPI.splitDroppedSongAndThemeFiles([
+      playerWebCoreAPI.splitDroppedChartAndThemeFiles([
         { name: 'main.bms', webkitRelativePath: 'Songs/Example/main.bms' },
         { name: 'kick.wav', webkitRelativePath: 'Songs/Example/kick.wav' },
         { name: 'play_7.lr2skin', webkitRelativePath: 'Theme/play_7.lr2skin' },
@@ -923,7 +923,7 @@ function makeBenchFile(path: string, body: string | Uint8Array<ArrayBuffer>): Fi
   return file;
 }
 
-function makeBenchSource(): playerWebCoreAPI.BrowserSongAssetSource {
+function makeBenchSource(): playerWebCoreAPI.BrowserAssetSource {
   return {
     id: 'files:bench',
     kind: 'directory',

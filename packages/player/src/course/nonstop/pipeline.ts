@@ -1,16 +1,16 @@
 import type { RandomDraws } from '@be-music/chart';
 import type { BeMusicJSON } from '@be-music/json';
 import { resolveChartRulesetFacts, resolvePlayChart } from '../../core/play-chart.ts';
-import { createCoursePlaylog, type BeMusicCoursePlaylog, type PlaylogCourseStageEntry } from '../../playlog/course.ts';
-import type { BeMusicPlaylog, PlaylogRecorderInfo } from '../../playlog/format.ts';
+import { createCourseReplay, type BeMusicCourseReplay, type ReplayCourseStageEntry } from '../../replay/course.ts';
+import type { BeMusicReplay, ReplayRecorderInfo } from '../../replay/format.ts';
 import {
   resolveNonstopNoteStages,
-  resolveNonstopPlaylogStages,
-  splitNonstopPlaylog,
+  resolveNonstopReplayStages,
+  splitNonstopReplay,
   type NonstopStageChartFacts,
-  type PlaylogNonstopRun,
-} from '../../playlog/nonstop.ts';
-import { computeStageChartFingerprint, resolvePlaylogCourseInfo } from '../course-playlog.ts';
+  type ReplayNonstopRun,
+} from '../../replay/nonstop.ts';
+import { computeStageChartFingerprint, resolveReplayCourseInfo } from '../course-replay.ts';
 import type { CourseConstraint, CourseDefinition, NonstopConnection } from '../definition.ts';
 import { applyCourseLongNoteConstraint } from '../long-note.ts';
 import {
@@ -26,7 +26,7 @@ import {
  * stitched chart with the same ones, so the two always agree on the chart that was played.
  */
 
-/** One stage of a NONSTOP course: its chart as loaded and what its cut-out play log names it by. */
+/** One stage of a NONSTOP course: its chart as loaded and what its cut-out replay names it by. */
 export interface NonstopCourseStage {
   /** The stage chart as loaded (`#RANDOM` / `#SWITCH` still in). */
   chart: BeMusicJSON;
@@ -142,38 +142,38 @@ export function prepareNonstopCourse(
 }
 
 /**
- * The NONSTOP run of a play of the stitched chart (`BeMusicCoursePlaylog.nonstop`): how the chart was stitched, where
- * each stage sat in the play with the draws its chart was resolved with ({@link resolveNonstopPlaylogStages}), and the
+ * The NONSTOP run of a play of the stitched chart (`BeMusicCourseReplay.nonstop`): how the chart was stitched, where
+ * each stage sat in the play with the draws its chart was resolved with ({@link resolveNonstopReplayStages}), and the
  * stage of every note ({@link resolveNonstopNoteStages}).
  */
-export function resolveNonstopRun(course: PreparedNonstopCourse, playlog: BeMusicPlaylog): PlaylogNonstopRun {
+export function resolveNonstopRun(course: PreparedNonstopCourse, replay: BeMusicReplay): ReplayNonstopRun {
   return {
     connections: [...course.connections],
     placement: course.placement,
     stitch: course.stitch,
-    playlog,
-    stages: resolveNonstopPlaylogStages(course.map, course.stageDraws),
-    noteStages: resolveNonstopNoteStages(course.chart, course.map, playlog.chart.notes),
+    replay,
+    stages: resolveNonstopReplayStages(course.map, course.stageDraws),
+    noteStages: resolveNonstopNoteStages(course.chart, course.map, replay.chart.notes),
   };
 }
 
 /**
- * The course play log of a NONSTOP run: the stitched play ({@link resolveNonstopRun}), each reached stage cut out of it
- * ({@link splitNonstopPlaylog}, named by its facts and chart fingerprint), and every stage the run never reached with the
+ * The course replay of a NONSTOP run: the stitched play ({@link resolveNonstopRun}), each reached stage cut out of it
+ * ({@link splitNonstopReplay}, named by its facts and chart fingerprint), and every stage the run never reached with the
  * facts of its chart as played (`resolveChartRulesetFacts`), its file hashes and its chart fingerprint.
  */
-export function buildNonstopCoursePlaylog(
+export function buildNonstopCourseReplay(
   definition: Pick<CourseDefinition, 'name' | 'kind' | 'constraints' | 'trophies' | 'release'>,
   course: PreparedNonstopCourse,
-  playlog: BeMusicPlaylog,
-  options: { createdAt?: string; recorder?: PlaylogRecorderInfo } = {},
-): BeMusicCoursePlaylog {
-  const nonstop = resolveNonstopRun(course, playlog);
+  replay: BeMusicReplay,
+  options: { createdAt?: string; recorder?: ReplayRecorderInfo } = {},
+): BeMusicCourseReplay {
+  const nonstop = resolveNonstopRun(course, replay);
   const stageFacts = course.stages.map(resolveStageChartFacts);
-  const cut = splitNonstopPlaylog(nonstop, stageFacts, { ruleset: playlog.play.judgeRuleset ?? 'lr2' });
-  const stages = course.stageCharts.map((chart, index): PlaylogCourseStageEntry => {
+  const cut = splitNonstopReplay(nonstop, stageFacts, { ruleset: replay.play.judgeRuleset ?? 'lr2' });
+  const stages = course.stageCharts.map((chart, index): ReplayCourseStageEntry => {
     const stageLog = cut[index];
-    if (stageLog !== undefined) return { played: true, playlog: stageLog };
+    if (stageLog !== undefined) return { played: true, replay: stageLog };
     const facts = stageFacts[index];
     return {
       played: false,
@@ -183,8 +183,8 @@ export function buildNonstopCoursePlaylog(
       ...(facts?.chartFingerprint !== undefined ? { chartFingerprint: facts.chartFingerprint } : {}),
     };
   });
-  return createCoursePlaylog({
-    course: resolvePlaylogCourseInfo(definition),
+  return createCourseReplay({
+    course: resolveReplayCourseInfo(definition),
     stages,
     nonstop,
     ...(options.createdAt !== undefined ? { createdAt: options.createdAt } : {}),

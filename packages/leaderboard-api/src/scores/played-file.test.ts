@@ -1,17 +1,17 @@
 import { describe, expect, test } from 'vite-plus/test';
-import type { BeMusicPlaylog } from '@be-music/player/playlog';
+import type { BeMusicReplay } from '@be-music/player/replay';
 import { fileHashAliases, laneOptionOf, playedFileOf } from './played-file.ts';
 
-function log(chart: Partial<BeMusicPlaylog['chart']>, inputs: Array<{ timeUs: number }> = []) {
+function log(chart: Partial<BeMusicReplay['chart']>, inputs: Array<{ timeUs: number }> = []) {
   return {
-    chart: { notes: [], ...chart } as unknown as BeMusicPlaylog['chart'],
+    chart: { notes: [], ...chart } as unknown as BeMusicReplay['chart'],
     inputs: inputs.map((input, seq) => ({
       seq,
       action: 'down',
       channels: ['11'],
       ...input,
-    })) as BeMusicPlaylog['inputs'],
-    play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' } as BeMusicPlaylog['play'],
+    })) as BeMusicReplay['inputs'],
+    play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' } as BeMusicReplay['play'],
   };
 }
 
@@ -29,7 +29,7 @@ describe('playedFileOf', () => {
     const notes = [
       { id: 0, channel: '11', type: 'normal', timeUs: 1_000_000 },
       { id: 1, channel: '12', type: 'long', timeUs: 2_000_000, endTimeUs: 95_400_000 },
-    ] as BeMusicPlaylog['chart']['notes'];
+    ] as BeMusicReplay['chart']['notes'];
     expect(playedFileOf(log({ notes })).durationMs).toBe(95_400);
     expect(playedFileOf(log({ notes }, [{ timeUs: 97_000_400 }])).durationMs).toBe(97_000);
     expect(playedFileOf(log({})).durationMs).toBe(0);

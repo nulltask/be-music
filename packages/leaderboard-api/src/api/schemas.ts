@@ -37,7 +37,7 @@ export const myRankQuery = v.object({
 });
 
 export const submissionBody = v.object({
-  playlog: described(v.unknown(), 'The play log (`be-music-playlog`, docs/playlog.md).'),
+  replay: described(v.unknown(), 'The replay (`be-music-replay`, docs/replay.md).'),
   playDocument: described(
     v.unknown(),
     'Fingerprint document of the played chart (the rolled branches); it must hash to `chart.playFingerprint`.',
@@ -51,7 +51,7 @@ export const submissionBody = v.object({
 });
 
 export const courseSubmissionBody = v.object({
-  coursePlaylog: described(v.unknown(), 'The course play log (`be-music-course-playlog`, docs/playlog.md).'),
+  courseReplay: described(v.unknown(), 'The course replay (`be-music-course-replay`, docs/replay.md).'),
   stages: described(
     v.array(
       v.object({

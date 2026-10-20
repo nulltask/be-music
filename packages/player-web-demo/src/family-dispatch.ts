@@ -3,7 +3,7 @@ import type { BeatorajaThemeBundle } from '@be-music/player-web/skin';
 import type { LibraryChart } from '@be-music/scene-model';
 import { pickLR2PlaySkin, type LR2PlaySkinMap, type LR2Skin } from '@be-music/lr2-skin';
 import type { SkinFamilyOverride, SkinFamilySceneKind } from './types.ts';
-import { canPlaySongBeatoraja } from './chart-shape.ts';
+import { canPlayChartBeatoraja } from './chart-shape.ts';
 
 /**
  * Read-only state snapshot the family-dispatch helpers operate on. The demo's `FamilyKits` (`app/family-kits.ts`) builds
@@ -30,7 +30,7 @@ export interface FamilyDispatchState {
 export function availableFamiliesForScene(
   state: FamilyDispatchState,
   scene: SkinFamilySceneKind,
-  song?: LibraryChart,
+  chartEntry?: LibraryChart,
 ): Set<SkinFamilyId> {
   const available = new Set<SkinFamilyId>(['default']);
   // Beatoraja availability per scene. The play scene additionally needs a chart so we can check whether the
@@ -40,7 +40,11 @@ export function availableFamiliesForScene(
     if (scene === 'select' && beatorajaTheme.selectSkin !== undefined) available.add('beatoraja');
     else if (scene === 'decide' && beatorajaTheme.decideSkin !== undefined) available.add('beatoraja');
     else if (scene === 'result' && beatorajaTheme.resultSkin !== undefined) available.add('beatoraja');
-    else if (scene === 'gameplay' && song !== undefined && canPlaySongBeatoraja(state.beatorajaTheme, song)) {
+    else if (
+      scene === 'gameplay' &&
+      chartEntry !== undefined &&
+      canPlayChartBeatoraja(state.beatorajaTheme, chartEntry)
+    ) {
       available.add('beatoraja');
     }
   }
@@ -51,7 +55,11 @@ export function availableFamiliesForScene(
   if (scene === 'select' && state.selectSkin !== undefined) available.add('lr2');
   else if (scene === 'decide' && state.decideSkin !== undefined) available.add('lr2');
   else if (scene === 'result' && state.resultSkin !== undefined) available.add('lr2');
-  else if (scene === 'gameplay' && song !== undefined && pickLR2PlaySkin(state.playSkins, song) !== undefined) {
+  else if (
+    scene === 'gameplay' &&
+    chartEntry !== undefined &&
+    pickLR2PlaySkin(state.playSkins, chartEntry) !== undefined
+  ) {
     available.add('lr2');
   }
   return available;
@@ -72,9 +80,9 @@ export function availableFamiliesForScene(
 export function pickActiveFamilyForScene(
   state: FamilyDispatchState,
   scene: SkinFamilySceneKind,
-  song?: LibraryChart,
+  chartEntry?: LibraryChart,
 ): SkinFamilyId {
-  const available = availableFamiliesForScene(state, scene, song);
+  const available = availableFamiliesForScene(state, scene, chartEntry);
   const override = state.skinFamilyOverride;
   if (override !== 'auto') {
     return available.has(override) ? override : 'default';

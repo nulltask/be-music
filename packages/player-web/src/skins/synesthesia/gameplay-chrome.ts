@@ -335,7 +335,7 @@ export function renderSynesthesiaChrome({
     drawPortraitHeader(front, overlayLayer, runtime, layout, accent, pulse, overlayLayerPool);
   } else {
     drawGauge(panels, layer, runtime, accent, layerPool);
-    drawSongPlate(panels, layer, runtime, accent, layerPool);
+    drawChartPlate(panels, layer, runtime, accent, layerPool);
     drawScorePanel(panels, layer, runtime, accent, layerPool);
     // The judge tally owns the side column on the right edge.
     drawJudgeTally(panels, layer, runtime, STAGE_SIDE_COLUMN.x, layerPool);
@@ -949,11 +949,11 @@ function drawGaugeCells(graphics: Graphics, runtime: Runtime, groove: BeMusicRec
   }
 }
 
-function drawSongPlate(graphics: Graphics, layer: Container, runtime: Runtime, accent: number, pool: ChildPool): void {
+function drawChartPlate(graphics: Graphics, layer: Container, runtime: Runtime, accent: number, pool: ChildPool): void {
   const { x, y, w, h } = SONG_PLATE;
   drawFrame(graphics, x, y, w, h, accent);
   // Genre, title, artist — the order every built-in skin uses; the genre rides a small line above the title.
-  const genre = runtime.songGenre?.trim();
+  const genre = runtime.chartGenre?.trim();
   const lift = genre ? 5 : 0;
   if (genre) {
     addHUDText(
@@ -967,7 +967,7 @@ function drawSongPlate(graphics: Graphics, layer: Container, runtime: Runtime, a
   }
   addHUDText(
     layer,
-    runtime.songTitle?.trim() || 'Untitled chart',
+    runtime.chartTitle?.trim() || 'Untitled chart',
     x + 14,
     y + 6 + lift,
     {
@@ -980,7 +980,7 @@ function drawSongPlate(graphics: Graphics, layer: Container, runtime: Runtime, a
     },
     pool,
   );
-  const artist = runtime.songArtist?.trim();
+  const artist = runtime.chartArtist?.trim();
   if (artist) {
     addHUDText(
       layer,
@@ -1212,7 +1212,7 @@ function drawPortraitHUD(
   drawFrame(graphics, plate.x, plate.y, plate.w, plate.h, accent);
   const textX = plate.x + 10;
   const textW = plate.w - 20;
-  const genre = runtime.songGenre?.trim();
+  const genre = runtime.chartGenre?.trim();
   addHUDText(
     layer,
     genre ? genre.toUpperCase() : 'NOW PLAYING',
@@ -1223,7 +1223,7 @@ function drawPortraitHUD(
   );
   addHUDText(
     layer,
-    runtime.songTitle?.trim() || 'Untitled chart',
+    runtime.chartTitle?.trim() || 'Untitled chart',
     textX,
     plate.y + 19,
     {
@@ -1236,7 +1236,7 @@ function drawPortraitHUD(
     },
     pool,
   );
-  const artist = runtime.songArtist?.trim();
+  const artist = runtime.chartArtist?.trim();
   if (artist) {
     addHUDText(
       layer,

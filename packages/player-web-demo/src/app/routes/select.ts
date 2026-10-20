@@ -5,7 +5,7 @@
 // (`course.ts`).
 
 import type { AudioService } from '@be-music/player-web/audio';
-import { describeSongCollection } from '@be-music/player-web/collection';
+import { describeChartCollection } from '@be-music/player-web/collection';
 import {
   createSelectScene,
   type PlayScene,
@@ -14,7 +14,7 @@ import {
   type SelectStartEntry,
 } from '@be-music/player-web/host';
 import type { BrowseSnapshot, LibraryChart } from '@be-music/scene-model';
-import { lookupCourseRecord } from '../../course-result.ts';
+import { lookupCourseBestRecord } from '../../course-result.ts';
 import { pickActiveFamilyForScene } from '../../family-dispatch.ts';
 import type { InlineSearch } from '../../inline-search.ts';
 import type { CourseMakerService } from '../../services/course-maker.ts';
@@ -40,13 +40,13 @@ export interface SelectRouteDeps {
   /** The library the screen lists. */
   readonly library: Pick<LibraryService, 'collection'>;
   /** The best records the screen shows on its bars. */
-  readonly records: Pick<RecordsService, 'lookupSongRecord' | 'currentRulesetRecords'>;
+  readonly records: Pick<RecordsService, 'lookupChartBestRecord' | 'currentRulesetRecords'>;
   /** The course run: where the cursor goes back to once a course is over. */
   readonly courses: Pick<CourseRunService, 'takeReturnNavigation'>;
   /** Starts a course bar's run. */
   readonly courseRoute: Pick<CourseRoute, 'startCourse'>;
   /** The course being made, which a chart started on the screen joins, and its card. */
-  readonly courseMaker: Pick<CourseMakerService, 'maker' | 'panel' | 'addSongToCourseBeingMade'>;
+  readonly courseMaker: Pick<CourseMakerService, 'maker' | 'panel' | 'addChartToCourseBeingMade'>;
   /** The family that draws the screen, and its sounds. */
   readonly familyKits: Pick<FamilyKits, 'familyDispatchState' | 'selectSoundSet'>;
   /** The LR2 theme's select skin. */
@@ -73,11 +73,11 @@ export interface SelectRouteDeps {
   readonly playStatusShown: () => boolean;
   readonly setStatus: (text: string) => void;
   /** Re-enables the options a play latched. */
-  readonly unlockPlaylogOptions: () => void;
+  readonly unlockReplayOptions: () => void;
   /** Remembers a hi-speed set on the screen for the next play, and mirrors it onto the Debug Menu. */
   readonly rememberHiSpeed: (value: number, source: 'select') => void;
   /** Shows the decide screen for a chart started on the screen (`DecideRoute`). */
-  readonly showDecide: (song: LibraryChart, overrides: { autoPlay?: boolean }) => Promise<void>;
+  readonly showDecide: (chartEntry: LibraryChart, overrides: { autoPlay?: boolean }) => Promise<void>;
 }
 
 /** The select screen, from its first showing to every return, and the starts made on it. */
@@ -107,7 +107,7 @@ export class SelectRoute {
   private readonly beatorajaSkinOptions: SelectRouteDeps['beatorajaSkinOptions'];
   private readonly playStatusShown: SelectRouteDeps['playStatusShown'];
   private readonly setStatus: SelectRouteDeps['setStatus'];
-  private readonly unlockPlaylogOptions: SelectRouteDeps['unlockPlaylogOptions'];
+  private readonly unlockReplayOptions: SelectRouteDeps['unlockReplayOptions'];
   private readonly rememberHiSpeed: SelectRouteDeps['rememberHiSpeed'];
   private readonly showDecide: SelectRouteDeps['showDecide'];
 
@@ -131,7 +131,7 @@ export class SelectRoute {
     this.beatorajaSkinOptions = deps.beatorajaSkinOptions;
     this.playStatusShown = deps.playStatusShown;
     this.setStatus = deps.setStatus;
-    this.unlockPlaylogOptions = deps.unlockPlaylogOptions;
+    this.unlockReplayOptions = deps.unlockReplayOptions;
     this.rememberHiSpeed = deps.rememberHiSpeed;
     this.showDecide = deps.showDecide;
   }
@@ -147,12 +147,12 @@ export class SelectRoute {
    */
   public async showSelect(): Promise<void> {
     // Back from a play or a result: the status line describes the library again instead of the play just left.
-    if (this.playStatusShown()) this.setStatus(describeSongCollection(this.library.collection));
+    if (this.playStatusShown()) this.setStatus(describeChartCollection(this.library.collection));
     // Back from a course: the cursor returns to the course bar it was started from.
     const courseReturn = this.courses.takeReturnNavigation();
     if (courseReturn !== undefined) this.lastSelectNavigation = courseReturn;
     this.elements.shell.classList.remove('playing');
-    this.unlockPlaylogOptions();
+    this.unlockReplayOptions();
     // The `.empty` class drives the centered "Drop BMS folder…" hint. Toggle it off the moment we have charts to show,
     // and back on after a wipe / failed drop so the hint comes back instead of leaving the user staring at a blank
     // canvas.
@@ -205,9 +205,9 @@ export class SelectRoute {
       ...(this.lastSelectNavigation !== undefined ? { browse: this.lastSelectNavigation } : {}),
       playOptions,
       records: {
-        chart: (song) => this.records.lookupSongRecord(song),
+        chart: (chartEntry) => this.records.lookupChartBestRecord(chartEntry),
         course: (course) =>
-          lookupCourseRecord(course, this.records.currentRulesetRecords(), this.guiState.nonstopPlacement),
+          lookupCourseBestRecord(course, this.records.currentRulesetRecords(), this.guiState.nonstopPlacement),
       },
       sounds,
       audio: this.audio,
@@ -268,7 +268,7 @@ export class SelectRoute {
    */
   private startFromSelect(entry: SelectStartEntry, autoPlay: boolean): boolean {
     if (entry.kind === 'chart') {
-      if (this.courseMaker.addSongToCourseBeingMade(entry.chart)) return false;
+      if (this.courseMaker.addChartToCourseBeingMade(entry.chart)) return false;
       // The skin's AUTOPLAY forces auto play for this play only; the Debug Menu's checkbox keeps its state.
       void this.showDecide(entry.chart, autoPlay ? { autoPlay: true } : {});
       return true;

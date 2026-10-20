@@ -3,7 +3,7 @@ import { createApp } from './app.ts';
 import type { Env } from './env.ts';
 import {
   makeChart,
-  makePlaylog,
+  makeReplay,
   ORIGIN,
   signInAnonymously,
   startTestBindings,
@@ -31,12 +31,12 @@ const PNG = Uint8Array.from(
 
 async function submit(cookie: string): Promise<string> {
   const chart = makeChart(['#00111:01010101', '#00211:0101']);
-  const playlog = makePlaylog(chart, { noteCount: 6, hits: 6 });
-  playlog.chart.title = 'card test';
+  const replay = makeReplay(chart, { noteCount: 6, hits: 6 });
+  replay.chart.title = 'card test';
   const response = await fetchApp('/api/v0/scores', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'content-encoding': 'gzip', cookie },
-    body: submissionBody(playlog, chart.playDocument, chart.chartDocument),
+    body: submissionBody(replay, chart.playDocument, chart.chartDocument),
   });
   expect(response.status).toBe(201);
   return ((await response.json()) as { scoreId: string }).scoreId;

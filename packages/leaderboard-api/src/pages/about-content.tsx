@@ -55,7 +55,7 @@ const en: AboutContent = {
       text: 'a new chart is listed once two players with an account have played it.',
       more: 'checks',
     },
-    { title: 'Every play a replay', text: 'download any play log and watch it judged again.', more: 'replays' },
+    { title: 'Every play a replay', text: 'download any replay and watch it judged again.', more: 'replays' },
     {
       title: 'No sign-up to start',
       text: 'play anonymously, and create an account whenever you like.',
@@ -76,9 +76,9 @@ const en: AboutContent = {
     <>
       <Section id="scoring" title="How a play is scored">
         <p>
-          When a play ends, the player sends its <strong>play log</strong>: the chart’s notes and every key press with
-          its time. The server does not take the score the player saw; it replays the log on the be-music engine and
-          counts the result itself.
+          When a play ends, the player sends its <strong>replay</strong>: the chart’s notes and every key press with its
+          time. The server does not take the score the player saw; it replays the log on the be-music engine and counts
+          the result itself.
         </p>
         <p>
           It does so three times, under the <strong>LR2</strong>, <strong>beatoraja</strong> and <strong>IIDX</strong>{' '}
@@ -134,8 +134,8 @@ const en: AboutContent = {
       </Section>
       <Section id="replays" title="Replays">
         <p>
-          Every play is kept with its <strong>play log</strong>, not just the best ones. Download it from the play’s
-          page and drop it on the player to watch it again: it replays the same key presses on the same engine, so it is
+          Every play is kept with its <strong>replay</strong>, not just the best ones. Download it from the play’s page
+          and drop it on the player to watch it again: it replays the same key presses on the same engine, so it is
           judged exactly as it was.
         </p>
         <p>
@@ -201,7 +201,7 @@ const ja: AboutContent = {
     },
     {
       title: 'すべてのプレイをリプレイで',
-      text: 'どのプレイもプレイログをダウンロードして、もう一度見られます。',
+      text: 'どのプレイもリプレイをダウンロードして、もう一度見られます。',
       more: 'replays',
     },
     { title: '登録なしで始められる', text: '匿名ですぐに遊べて、あとからアカウントを作れます。', more: 'accounts' },
@@ -220,7 +220,7 @@ const ja: AboutContent = {
     <>
       <Section id="scoring" title="プレイの採点">
         <p>
-          プレイが終わると、プレイヤーは<strong>プレイログ</strong>
+          プレイが終わると、プレイヤーは<strong>リプレイ</strong>
           （譜面のノーツと、すべての打鍵とその時刻）を送ります。サーバーはプレイヤーの画面に出たスコアを使わず、ログを
           be-music エンジンで再生してスコアを計算し直します。
         </p>
@@ -278,7 +278,7 @@ const ja: AboutContent = {
       </Section>
       <Section id="replays" title="リプレイ">
         <p>
-          ベストだけでなく、すべてのプレイを<strong>プレイログ</strong>
+          ベストだけでなく、すべてのプレイを<strong>リプレイ</strong>
           付きで保存しています。プレイのページからダウンロードしてプレイヤーにドロップすると、もう一度見られます。同じエンジンで同じ打鍵を再生するので、判定もそのときと同じです。
         </p>
         <p>

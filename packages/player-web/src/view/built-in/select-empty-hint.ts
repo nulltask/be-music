@@ -7,7 +7,7 @@
  */
 
 import { Color, type Container, Text, TextStyle } from 'pixi.js';
-import type { BrowserSongCollection } from '../../collection/types.ts';
+import type { BrowserChartCollection } from '../../collection/types.ts';
 import { CORE_TEXT_FONT } from '../shared/fonts.ts';
 
 const TEXT = new Color('#f6f2e8');
@@ -16,7 +16,7 @@ const MUTED = new Color('#a9a39a');
 /** What the empty-library hint reads and draws into on the select scene: its fields of these names. */
 export interface SelectEmptyHintContext {
   readonly skinLayer: Container;
-  readonly collection: BrowserSongCollection;
+  readonly collection: BrowserChartCollection;
 }
 
 /**

@@ -31,7 +31,7 @@ import { buildChartModel } from './fingerprint-chart-model.ts';
 // ---------------------------------------------------------------------------------------------------------------------
 
 /**
- * A function from an outcome (the chart's `RandomDraws`, as a play log records them) to its play document, composed
+ * A function from an outcome (the chart's `RandomDraws`, as a replay records them) to its play document, composed
  * from the chart model rather than by resolving the chart. The function throws for an outcome of an opaque factor. Not
  * part of the package API; used to check the model against the parser.
  */

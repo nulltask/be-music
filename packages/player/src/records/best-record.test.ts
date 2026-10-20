@@ -199,7 +199,7 @@ describe('playKeepsRecord / courseStageKeepsRecord', () => {
 
 describe('isCourseRunAtAnotherTempo', () => {
   const played = (tempo?: number) =>
-    ({ played: true, playlog: { play: tempo === undefined ? {} : { tempo } } }) as unknown as Parameters<
+    ({ played: true, replay: { play: tempo === undefined ? {} : { tempo } } }) as unknown as Parameters<
       typeof isCourseRunAtAnotherTempo
     >[0]['stages'][number];
   const unreached = { played: false, facts: {} } as unknown as ReturnType<typeof played>;
@@ -211,7 +211,7 @@ describe('isCourseRunAtAnotherTempo', () => {
   it('flags a run with a stage whose tempo changed during the play', () => {
     const changed = {
       played: true,
-      playlog: { play: { tempoChanges: [{ timeUs: 1_000_000, tempo: 1.1 }] } },
+      replay: { play: { tempoChanges: [{ timeUs: 1_000_000, tempo: 1.1 }] } },
     } as unknown as ReturnType<typeof played>;
     expect(isCourseRunAtAnotherTempo({ stages: [played(), changed] })).toBe(true);
   });
@@ -224,7 +224,7 @@ describe('isCourseRunAtAnotherTempo', () => {
 describe('isCourseRunAutoPlayed / courseRunKeepsRecord', () => {
   type Log = Parameters<typeof courseRunKeepsRecord>[0];
   const played = (play: { mode?: 'manual' | 'auto'; tempo?: number } = {}) =>
-    ({ played: true, playlog: { play: { mode: 'manual', ...play } } }) as unknown as Log['stages'][number];
+    ({ played: true, replay: { play: { mode: 'manual', ...play } } }) as unknown as Log['stages'][number];
   const unreached = { played: false, facts: {} } as unknown as Log['stages'][number];
 
   it('flags a run with any stage played by itself', () => {
@@ -233,7 +233,7 @@ describe('isCourseRunAutoPlayed / courseRunKeepsRecord', () => {
   });
 
   it('flags a NONSTOP run whose stitched play played itself', () => {
-    const nonstop = { playlog: { play: { mode: 'auto' } } } as unknown as NonNullable<Log['nonstop']>;
+    const nonstop = { replay: { play: { mode: 'auto' } } } as unknown as NonNullable<Log['nonstop']>;
     expect(isCourseRunAutoPlayed({ stages: [unreached], nonstop })).toBe(true);
   });
 

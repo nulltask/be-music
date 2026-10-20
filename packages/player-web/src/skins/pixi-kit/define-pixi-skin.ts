@@ -299,7 +299,7 @@ class SelectScreen {
       });
     }
     for (const area of this.hits) frame.hit(area.x, area.y, area.w, area.h, area.action, area.cursor);
-    this.renderer.tick(frame.nowMs, frame.focusedSong, frame.launchAt, frame.audio);
+    this.renderer.tick(frame.nowMs, frame.focusedChart, frame.launchAt, frame.audio);
     return this.root;
   }
 

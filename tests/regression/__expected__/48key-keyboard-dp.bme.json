@@ -659,7 +659,7 @@
         "9000000 2N 01",
         "9000000 2O 01"
       ],
-      "playlogChart": {
+      "replayChart": {
         "sourceFormat": "bms",
         "laneMode": "48 KEY DP",
         "lnMode": 1,

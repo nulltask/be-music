@@ -1,7 +1,7 @@
 import { createEmptyJSON } from '@be-music/json';
 import type { ResolvedPlayChart } from '@be-music/player';
 import type { AudioService } from '@be-music/player-web/audio';
-import type { BrowserSongCollection, ChartFileHashes } from '@be-music/player-web/collection';
+import type { BrowserChartCollection, ChartFileHashes } from '@be-music/player-web/collection';
 import {
   createDecideScene,
   type DecideScene,
@@ -25,7 +25,7 @@ vi.mock('../../recording-controller.ts', () => ({ startArmedRecording: vi.fn() }
 
 type Family = DecideSceneKit['family'];
 
-function song(id: string): LibraryChart {
+function chartEntry(id: string): LibraryChart {
   return {
     id,
     sourceId: 'drop1',
@@ -152,7 +152,7 @@ async function harness(options: { decideFamily?: Family | null; playFamily?: Fam
     router,
     selectRoute,
     elements: { shell } as Pick<PlayerWebDemoElements, 'shell'>,
-    library: { collection: { sources: [], charts: [song('a')], errors: [] } as BrowserSongCollection },
+    library: { collection: { sources: [], charts: [chartEntry('a')], errors: [] } as BrowserChartCollection },
     records: { resolveChartHashes: vi.fn<DecideRouteDeps['records']['resolveChartHashes']>(async () => HASHES) },
     familyKits: {
       familyDispatchState: () => state,
@@ -176,9 +176,9 @@ async function harness(options: { decideFamily?: Family | null; playFamily?: Fam
     setRecordingFilenameBase: vi.fn<DecideRouteDeps['setRecordingFilenameBase']>(),
     setStatus: vi.fn<DecideRouteDeps['setStatus']>(),
     setPlayStatus: vi.fn<DecideRouteDeps['setPlayStatus']>(),
-    lockPlaylogOptionsForPlay: vi.fn<DecideRouteDeps['lockPlaylogOptionsForPlay']>(),
+    lockReplayOptionsForPlay: vi.fn<DecideRouteDeps['lockReplayOptionsForPlay']>(),
     showSelect: vi.fn<DecideRouteDeps['showSelect']>(async () => {}),
-    playSong: vi.fn<DecideRouteDeps['playSong']>(async () => {}),
+    playChart: vi.fn<DecideRouteDeps['playChart']>(async () => {}),
     buildPlayScene: vi.fn<DecideRouteDeps['buildPlayScene']>((_song, { kit }) => {
       const play = fakePlay(kit.family);
       plays.push(play);
@@ -201,13 +201,13 @@ async function decided(h: Harness): Promise<{ decide: FakeDecide; play: FakePlay
 describe('DecideRoute: a chart’s built-in decide screen', () => {
   test('the select screen goes off the stage, kept, and the screen shows the chart with the play options in force', async () => {
     const h = await harness();
-    await h.route.showDecide(song('a'), { autoPlay: true });
+    await h.route.showDecide(chartEntry('a'), { autoPlay: true });
 
     const decide = h.decides[0]!;
-    expect(h.deps.familyKits.decideKitFor).toHaveBeenCalledWith('default', song('a'), false);
+    expect(h.deps.familyKits.decideKitFor).toHaveBeenCalledWith('default', chartEntry('a'), false);
     expect(decide.kit).toEqual({ family: 'built-in' });
     expect(decide.options).toMatchObject({
-      chart: song('a'),
+      chart: chartEntry('a'),
       playOptions: { ...h.deps.playOptions.current, autoPlay: true },
       // The select screen's decide jingle rings on through it: the built-in screen plays none of its own.
       sounds: {},
@@ -226,18 +226,18 @@ describe('DecideRoute: a chart’s built-in decide screen', () => {
   test('the Debug Menu’s auto play goes on the screen when the start set none', async () => {
     const h = await harness();
     h.deps.guiState.autoPlay = true;
-    await h.route.showDecide(song('a'));
+    await h.route.showDecide(chartEntry('a'));
     expect(h.decides[0]!.options.playOptions?.autoPlay).toBe(true);
   });
 
   test('the play loads off stage behind the screen, with the screen’s draws and the start’s AUTO', async () => {
     const h = await harness();
-    await h.route.showDecide(song('a'), { autoPlay: true });
+    await h.route.showDecide(chartEntry('a'), { autoPlay: true });
     const { play } = await decided(h);
 
-    expect(h.deps.familyKits.resolvePlayKit).toHaveBeenCalledWith(song('a'), {});
+    expect(h.deps.familyKits.resolvePlayKit).toHaveBeenCalledWith(chartEntry('a'), {});
     expect(h.deps.buildPlayScene).toHaveBeenCalledWith(
-      song('a'),
+      chartEntry('a'),
       { kit: { family: 'built-in' } },
       {
         autoPlay: true,
@@ -253,7 +253,7 @@ describe('DecideRoute: a chart’s built-in decide screen', () => {
 
   test('once the screen is done, the play it prepared takes the stage and starts', async () => {
     const h = await harness();
-    await h.route.showDecide(song('a'));
+    await h.route.showDecide(chartEntry('a'));
     const { decide, play } = await decided(h);
     h.deps.selectRoute.lastSelectNavigation = undefined;
 
@@ -278,19 +278,19 @@ describe('DecideRoute: a chart’s built-in decide screen', () => {
       h.deps.setPlayStatus.mock.invocationCallOrder[0]!,
     );
     // Pitch follows tempo at the slider's tempo: the tempo slider stays live during the play.
-    expect(h.deps.lockPlaylogOptionsForPlay).toHaveBeenCalledWith(true);
+    expect(h.deps.lockReplayOptionsForPlay).toHaveBeenCalledWith(true);
     // A recording armed on the select screen starts with the play.
     expect(startArmedRecording).toHaveBeenLastCalledWith(h.recording);
     expect(play.start.mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(startArmedRecording).mock.invocationCallOrder.at(-1)!,
     );
     expect(h.deps.beatorajaSkinOptions.refreshBeatorajaPlaySkinOptions).toHaveBeenCalledOnce();
-    expect(h.deps.playSong).not.toHaveBeenCalled();
+    expect(h.deps.playChart).not.toHaveBeenCalled();
   });
 
   test('the play shown is the one prepared behind the screen, never whichever play the router holds by then', async () => {
     const h = await harness();
-    await h.route.showDecide(song('a'));
+    await h.route.showDecide(chartEntry('a'));
     const { decide, play } = await decided(h);
     play.load.resolve();
     await vi.waitFor(() => expect(h.router.play).toBe(play));
@@ -308,7 +308,7 @@ describe('DecideRoute: a chart’s built-in decide screen', () => {
 
   test('the screen leads on once: a second continue, or a cancel after it, does nothing', async () => {
     const h = await harness();
-    await h.route.showDecide(song('a'));
+    await h.route.showDecide(chartEntry('a'));
     const { decide, play } = await decided(h);
     play.load.resolve();
     decide.options.on.continue();
@@ -320,7 +320,7 @@ describe('DecideRoute: a chart’s built-in decide screen', () => {
 
   test('backing out of the screen goes back to the select screen', async () => {
     const h = await harness();
-    await h.route.showDecide(song('a'));
+    await h.route.showDecide(chartEntry('a'));
     const { decide, play } = await decided(h);
     decide.options.on.cancel();
     decide.options.on.continue();
@@ -334,7 +334,7 @@ describe('DecideRoute: a chart’s built-in decide screen', () => {
 
   test('a newer navigation drops the play prepared behind the screen, and the screen leads nowhere', async () => {
     const h = await harness();
-    await h.route.showDecide(song('a'));
+    await h.route.showDecide(chartEntry('a'));
     const { decide, play } = await decided(h);
     // A drop, say: the router begins a navigation of its own.
     h.router.begin();
@@ -343,18 +343,18 @@ describe('DecideRoute: a chart’s built-in decide screen', () => {
     await vi.waitFor(() => expect(play.dispose).toHaveBeenCalledOnce());
     expect(play.start).not.toHaveBeenCalled();
     expect(h.stage).not.toContain(play);
-    expect(h.deps.playSong).not.toHaveBeenCalled();
+    expect(h.deps.playChart).not.toHaveBeenCalled();
     expect(h.deps.latchPlay).not.toHaveBeenCalled();
   });
 
   test('a play that failed to load is made again without the screen, with the screen’s draws', async () => {
     const h = await harness();
-    await h.route.showDecide(song('a'), { autoPlay: true });
+    await h.route.showDecide(chartEntry('a'), { autoPlay: true });
     const { decide, play } = await decided(h);
     play.load.reject(new Error('decode failed'));
     decide.options.on.continue();
-    await vi.waitFor(() => expect(h.deps.playSong).toHaveBeenCalledOnce());
-    expect(h.deps.playSong).toHaveBeenCalledWith(song('a'), { autoPlay: true, preResolved: RESOLVED });
+    await vi.waitFor(() => expect(h.deps.playChart).toHaveBeenCalledOnce());
+    expect(h.deps.playChart).toHaveBeenCalledWith(chartEntry('a'), { autoPlay: true, preResolved: RESOLVED });
     expect(play.dispose).toHaveBeenCalledOnce();
     expect(play.start).not.toHaveBeenCalled();
   });
@@ -362,10 +362,10 @@ describe('DecideRoute: a chart’s built-in decide screen', () => {
   test('a chart with no play skin is played again the same way', async () => {
     const h = await harness();
     h.deps.familyKits.resolvePlayKit.mockResolvedValue(undefined);
-    await h.route.showDecide(song('a'));
+    await h.route.showDecide(chartEntry('a'));
     h.decides[0]!.options.on.continue();
-    await vi.waitFor(() => expect(h.deps.playSong).toHaveBeenCalledOnce());
-    expect(h.deps.playSong).toHaveBeenCalledWith(song('a'), { preResolved: RESOLVED });
+    await vi.waitFor(() => expect(h.deps.playChart).toHaveBeenCalledOnce());
+    expect(h.deps.playChart).toHaveBeenCalledWith(chartEntry('a'), { preResolved: RESOLVED });
     expect(h.deps.buildPlayScene).not.toHaveBeenCalled();
   });
 });
@@ -375,21 +375,21 @@ describe('DecideRoute: a course’s decide screen, and none at all', () => {
     const h = await harness();
     const start = vi.fn(async () => {});
     const cancel = vi.fn();
-    await h.route.showDecide(song('a'), {}, { start, cancel });
+    await h.route.showDecide(chartEntry('a'), {}, { start, cancel });
     expect(h.onInterrupt).not.toHaveBeenCalled();
     expect(h.router.current).toBe(h.decides[0]);
 
     h.decides[0]!.options.on.continue();
     expect(start).toHaveBeenCalledOnce();
     expect(h.deps.buildPlayScene).not.toHaveBeenCalled();
-    expect(h.deps.playSong).not.toHaveBeenCalled();
+    expect(h.deps.playChart).not.toHaveBeenCalled();
   });
 
   test('backing out of a course’s screen undoes its start and goes back to the select screen', async () => {
     const h = await harness();
     const start = vi.fn(async () => {});
     const cancel = vi.fn();
-    await h.route.showDecide(song('a'), {}, { start, cancel });
+    await h.route.showDecide(chartEntry('a'), {}, { start, cancel });
     h.decides[0]!.options.on.cancel();
     expect(cancel).toHaveBeenCalledOnce();
     expect(h.deps.showSelect).toHaveBeenCalledOnce();
@@ -398,31 +398,31 @@ describe('DecideRoute: a course’s decide screen, and none at all', () => {
 
   test('with no decide screen the chart plays at once, and a course its first stage', async () => {
     const h = await harness({ decideFamily: null });
-    await h.route.showDecide(song('a'), { autoPlay: true });
-    expect(h.deps.playSong).toHaveBeenCalledWith(song('a'), { autoPlay: true });
+    await h.route.showDecide(chartEntry('a'), { autoPlay: true });
+    expect(h.deps.playChart).toHaveBeenCalledWith(chartEntry('a'), { autoPlay: true });
     expect(createDecideScene).not.toHaveBeenCalled();
     // No navigation of its own: the play takes the select screen off the stage.
     expect(h.router.current).toBe(h.select);
     expect(h.onInterrupt).not.toHaveBeenCalled();
 
     const start = vi.fn(async () => {});
-    await h.route.showDecide(song('a'), {}, { start });
+    await h.route.showDecide(chartEntry('a'), {}, { start });
     expect(start).toHaveBeenCalledOnce();
-    expect(h.deps.playSong).toHaveBeenCalledOnce();
+    expect(h.deps.playChart).toHaveBeenCalledOnce();
   });
 });
 
 describe('DecideRoute: the other families', () => {
   test('the LR2 screen plays no jingle of its own either', async () => {
     const h = await harness({ decideFamily: 'lr2' });
-    await h.route.showDecide(song('a'));
+    await h.route.showDecide(chartEntry('a'));
     expect(h.decides[0]!.options.sounds).toEqual({});
     expect(h.deps.setStatus).not.toHaveBeenCalled();
   });
 
   test('a beatoraja screen plays its theme’s decide sound and names itself in the status line', async () => {
     const h = await harness({ decideFamily: 'beatoraja' });
-    await h.route.showDecide(song('a'));
+    await h.route.showDecide(chartEntry('a'));
     expect(h.decides[0]!.options.sounds).toEqual(
       systemSoundSetFromBeatoraja({ bgm: h.deps.beatoraja.beatorajaThemeBGM }),
     );
@@ -431,8 +431,8 @@ describe('DecideRoute: the other families', () => {
 
   test('a play on the beatoraja play screen asks for its decide kit as one, and names itself once it starts', async () => {
     const h = await harness({ decideFamily: 'beatoraja', playFamily: 'beatoraja' });
-    await h.route.showDecide(song('a'));
-    expect(h.deps.familyKits.decideKitFor).toHaveBeenCalledWith('default', song('a'), true);
+    await h.route.showDecide(chartEntry('a'));
+    expect(h.deps.familyKits.decideKitFor).toHaveBeenCalledWith('default', chartEntry('a'), true);
     const { decide, play } = await decided(h);
     play.load.resolve();
     decide.options.on.continue();

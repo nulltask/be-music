@@ -11,7 +11,7 @@ export default defineConfig({
       display: 'src/display.ts',
       'audio-sink': 'src/audio-sink.ts',
       course: 'src/course/index.ts',
-      playlog: 'src/playlog/index.ts',
+      replay: 'src/replay/index.ts',
       records: 'src/records/index.ts',
       ruleset: 'src/ruleset/vocabulary.ts',
     },

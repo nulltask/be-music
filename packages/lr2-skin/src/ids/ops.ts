@@ -193,13 +193,13 @@ export const LR2_OP = {
   NO_RANDOM: 178,
   /** The chart has a `#RANDOM`. */
   HAS_RANDOM: 179,
-  /** Judge rank VERY HARD (`#RANK 0`). */
+  /** Judgment rank VERY HARD (`#RANK 0`). */
   JUDGE_VERY_HARD: 180,
-  /** Judge rank HARD (`#RANK 1`). */
+  /** Judgment rank HARD (`#RANK 1`). */
   JUDGE_HARD: 181,
-  /** Judge rank NORMAL (`#RANK 2`). */
+  /** Judgment rank NORMAL (`#RANK 2`). */
   JUDGE_NORMAL: 182,
-  /** Judge rank EASY (`#RANK 3`). */
+  /** Judgment rank EASY (`#RANK 3`). */
   JUDGE_EASY: 183,
   /** The chart has no `#STAGEFILE`. */
   NO_STAGEFILE: 190,

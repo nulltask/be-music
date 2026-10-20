@@ -429,22 +429,22 @@ export function renderPhantomResult(frame: PixiResultFrame): void {
   const textX = TRACK_X + 16;
   const textW = trackW - 24;
   // Genre, title, artist — the order every built-in skin uses.
-  const genreLift = result.song.genre ? 14 : 0;
-  if (result.song.genre) {
-    addText(track.root, result.song.genre.toUpperCase(), textX, trackTop + 20, {
+  const genreLift = result.chart.genre ? 14 : 0;
+  if (result.chart.genre) {
+    addText(track.root, result.chart.genre.toUpperCase(), textX, trackTop + 20, {
       size: 9,
       weight: '800',
       fill: PHANTOM_ASH,
       maxWidth: textW,
     });
   }
-  addText(track.root, result.song.title || 'Untitled chart', textX, trackTop + 22 + genreLift, {
+  addText(track.root, result.chart.title || 'Untitled chart', textX, trackTop + 22 + genreLift, {
     size: 16,
     fill: PHANTOM_WHITE,
     fontFamily: DEFAULT_HEADLINE_FONT,
     maxWidth: textW,
   });
-  addText(track.root, result.song.artist ?? '', textX, trackTop + 46 + genreLift, {
+  addText(track.root, result.chart.artist ?? '', textX, trackTop + 46 + genreLift, {
     size: 10,
     weight: '800',
     fill: PHANTOM_RED_HOT,

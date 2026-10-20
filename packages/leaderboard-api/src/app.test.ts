@@ -2,7 +2,7 @@ import { gunzipSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, test } from 'vite-plus/test';
 import {
   makeChart,
-  makePlaylog,
+  makeReplay,
   ORIGIN,
   signInAnonymously,
   startTestBindings,
@@ -51,10 +51,10 @@ function submit(cookie: string | undefined, body: Uint8Array<ArrayBuffer>): Prom
 }
 
 async function submitPlay(cookie: string, chart: TestChart, hits: number, withChartDocument = true, skip = 0) {
-  const playlog = makePlaylog(chart, { noteCount: 10, hits, skip });
+  const replay = makeReplay(chart, { noteCount: 10, hits, skip });
   return submit(
     cookie,
-    submissionBody(playlog, chart.playDocument, withChartDocument ? chart.chartDocument : undefined),
+    submissionBody(replay, chart.playDocument, withChartDocument ? chart.chartDocument : undefined),
   );
 }
 
@@ -130,23 +130,23 @@ describe('POST /api/v0/scores', () => {
     expect(body.results.find((result) => result.ruleset === 'beatoraja')?.clearLamp).toBe(clearLampRank('MAX'));
     expect(body.results.find((result) => result.ruleset === 'lr2')?.clearLamp).toBe(clearLampRank('FULL_COMBO'));
 
-    // The play log and the chart document are stored in R2.
-    const stored = await env.BLOBS.get(`playlogs/${body.scoreId}.bmplay.json.gz`);
-    const playlog = JSON.parse(gunzipSync(Buffer.from(await stored!.arrayBuffer())).toString('utf8'));
-    expect(playlog.chart.chartFingerprint).toBe(chart.chartFingerprint);
+    // The replay and the chart document are stored in R2.
+    const stored = await env.BLOBS.get(`replays/${body.scoreId}.bmplay.json.gz`);
+    const replay = JSON.parse(gunzipSync(Buffer.from(await stored!.arrayBuffer())).toString('utf8'));
+    expect(replay.chart.chartFingerprint).toBe(chart.chartFingerprint);
     expect(await env.BLOBS.head(`charts/${chart.chartFingerprint}.json`)).not.toBeNull();
 
     // The play's length is kept: to the last input, 50 ms after the tenth note at 5.5 s.
     const db = openDatabase(env.DB);
     const stored0 = await db.query.score.findFirst({ where: (row, { eq }) => eq(row.id, body.scoreId) });
     expect(stored0?.durationMs).toBe(5_550);
-    // A play stored before lengths were kept gets it back from its play log.
+    // A play stored before lengths were kept gets it back from its replay.
     await db.update(score).set({ durationMs: null }).where(eq(score.id, body.scoreId));
     expect(await backfillPlayedFiles(db, env.BLOBS)).toBeGreaterThanOrEqual(1);
     const backfilled = await db.query.score.findFirst({ where: (row, { eq }) => eq(row.id, body.scoreId) });
     expect(backfilled?.durationMs).toBe(5_550);
 
-    // Sending the same play log again returns the stored play instead of a second one.
+    // Sending the same replay again returns the stored play instead of a second one.
     const again = await submitPlay(cookie, chart, 10);
     expect(again.status).toBe(200);
     expect(((await again.json()) as { scoreId: string }).scoreId).toBe(body.scoreId);
@@ -156,7 +156,7 @@ describe('POST /api/v0/scores', () => {
     const original = await signInAnonymously(fetchApp);
     const copier = await signInAnonymously(fetchApp);
     expect((await submitPlay(original, chart, 5, true, 1)).status).toBe(201);
-    const copied = makePlaylog(chart, { noteCount: 10, hits: 5, skip: 1 });
+    const copied = makeReplay(chart, { noteCount: 10, hits: 5, skip: 1 });
     // Re-dating the log or claiming another recorder does not make it a different play.
     copied.createdAt = '2030-01-01T00:00:00.000Z';
     copied.recorder = { name: 'other-client', version: '9.9.9' };
@@ -167,29 +167,29 @@ describe('POST /api/v0/scores', () => {
 
   test('rejects a play document that does not hash to the play fingerprint', async () => {
     const cookie = await signInAnonymously(fetchApp);
-    const playlog = makePlaylog(chart, { noteCount: 10, hits: 3 });
+    const replay = makeReplay(chart, { noteCount: 10, hits: 3 });
     const tampered = { ...(chart.playDocument as object), bpm: '999' };
-    const response = await submit(cookie, submissionBody(playlog, tampered, chart.chartDocument));
+    const response = await submit(cookie, submissionBody(replay, tampered, chart.chartDocument));
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error: 'play-document-fingerprint-mismatch' });
   });
 
-  test('rejects auto plays and malformed play logs', async () => {
+  test('rejects auto plays and malformed replays', async () => {
     const cookie = await signInAnonymously(fetchApp);
-    const auto = makePlaylog(chart, { noteCount: 10, hits: 10, play: { mode: 'auto' } });
+    const auto = makeReplay(chart, { noteCount: 10, hits: 10, play: { mode: 'auto' } });
     const autoResponse = await submit(cookie, submissionBody(auto, chart.playDocument, chart.chartDocument));
     expect(autoResponse.status).toBe(422);
     expect(await autoResponse.json()).toEqual({ error: 'auto-play' });
 
     // A play at another tempo is practice: refused, like beatoraja's frequency trainer leaves its scores unsaved.
-    const slowed = makePlaylog(chart, { noteCount: 10, hits: 10, play: { tempo: 0.8 } });
+    const slowed = makeReplay(chart, { noteCount: 10, hits: 10, play: { tempo: 0.8 } });
     const slowedResponse = await submit(cookie, submissionBody(slowed, chart.playDocument, chart.chartDocument));
     expect(slowedResponse.status).toBe(422);
     expect(await slowedResponse.json()).toEqual({ error: 'tempo' });
 
     const malformed = await submit(cookie, submissionBody({ format: 'nope' }, chart.playDocument));
     expect(malformed.status).toBe(422);
-    expect(((await malformed.json()) as { error: string }).error).toBe('invalid-playlog');
+    expect(((await malformed.json()) as { error: string }).error).toBe('invalid-replay');
   });
 });
 
@@ -249,7 +249,7 @@ describe('rankings', () => {
       submit(
         cookie,
         submissionBody(
-          makePlaylog(fileChart, { noteCount: 10, hits, chart: { sha256, md5: sha256.slice(0, 32) } }),
+          makeReplay(fileChart, { noteCount: 10, hits, chart: { sha256, md5: sha256.slice(0, 32) } }),
           fileChart.playDocument,
           fileChart.chartDocument,
         ),
@@ -292,10 +292,10 @@ describe('rankings', () => {
   test('ranks assisted plays apart from unassisted ones', async () => {
     const assistedChart = makeChart(['#00111:0101', '#00211:0101', '#00311:0101', '#00411:0101', '#00511:0101']);
     const cookie = await signInAnonymously(fetchApp);
-    const playlog = makePlaylog(assistedChart, { noteCount: 10, hits: 10, play: { autoScratch: true } });
+    const replay = makeReplay(assistedChart, { noteCount: 10, hits: 10, play: { autoScratch: true } });
     const response = await submit(
       cookie,
-      submissionBody(playlog, assistedChart.playDocument, assistedChart.chartDocument),
+      submissionBody(replay, assistedChart.playDocument, assistedChart.chartDocument),
     );
     expect(response.status).toBe(201);
     const base = `/api/v0/charts/${encodeURIComponent(assistedChart.chartFingerprint)}/leaderboard?ruleset=lr2&anonymous=1`;
@@ -305,7 +305,7 @@ describe('rankings', () => {
 });
 
 describe('GET /api/v0/scores/:id', () => {
-  test('returns the play and its public play log', async () => {
+  test('returns the play and its public replay', async () => {
     const chart = makeChart(['#00111:01', '#00211:01', '#00311:01', '#00411:01', '#00511:01', '#00611:01']);
     const cookie = await signInAnonymously(fetchApp);
     const accepted = (await (await submitPlay(cookie, chart, 7)).json()) as { scoreId: string };
@@ -329,9 +329,9 @@ describe('GET /api/v0/scores/:id', () => {
       expect(result.gaugeFinal).toBeLessThanOrEqual(100);
     }
 
-    const playlog = await fetchApp(`/api/v0/scores/${accepted.scoreId}/playlog`);
-    expect(playlog.status).toBe(200);
-    expect(playlog.headers.get('content-encoding')).toBe('gzip');
+    const replay = await fetchApp(`/api/v0/scores/${accepted.scoreId}/replay`);
+    expect(replay.status).toBe(200);
+    expect(replay.headers.get('content-encoding')).toBe('gzip');
 
     expect((await fetchApp('/api/v0/scores/missing')).status).toBe(404);
   });
@@ -369,8 +369,8 @@ describe('reassignScores', () => {
         ['lr2', 6],
         ['beatoraja', 8],
       ] as const) {
-        const playlog = makePlaylog(chart, { noteCount: 10, hits, play: { judgeRuleset } });
-        const response = await submit(anonymous, submissionBody(playlog, chart.playDocument, chart.chartDocument));
+        const replay = makeReplay(chart, { noteCount: 10, hits, play: { judgeRuleset } });
+        const response = await submit(anonymous, submissionBody(replay, chart.playDocument, chart.chartDocument));
         expect(response.status).toBe(201);
       }
     }

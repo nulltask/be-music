@@ -9,17 +9,17 @@ import {
 import type { BeMusicJSON } from '@be-music/json';
 import { resolveBMSControlFlowWithDraws } from '@be-music/parser';
 import {
-  checkCoursePlaylogEligibility,
-  checkPlaylogEligibility,
+  checkCourseReplayEligibility,
+  checkReplayEligibility,
   resolveCourseStageChartFingerprints,
-  type BeMusicCoursePlaylog,
-  type BeMusicPlaylog,
-  type PlaylogRulesetId,
-} from '@be-music/player/playlog';
+  type BeMusicCourseReplay,
+  type BeMusicReplay,
+  type RulesetId,
+} from '@be-music/player/replay';
 
 /** What the Leaderboard API needs for one play (docs/leaderboard.md section 5.1). */
 export interface LeaderboardSubmission {
-  playlog: BeMusicPlaylog;
+  replay: BeMusicReplay;
   playDocument: BeMusicFingerprintDocument;
   chartDocument: BeMusicFingerprintDocument;
 }
@@ -29,38 +29,38 @@ export type SubmissionPreparation =
   | { ok: false; reason: 'not-rankable' | 'tempo' | 'missing-fingerprint' | 'fingerprint-mismatch' };
 
 /**
- * Builds the submission of a finished play from its play log and the song's chart as loaded. The play document is
+ * Builds the submission of a finished play from its replay and the song's chart as loaded. The play document is
  * rebuilt the way the recorder fingerprinted the play (the source chart resolved with the log's `#RANDOM` / `#SWITCH`
  * draws, the chart path as the lane-mode input), then checked against the log's play fingerprint, so a play the server would
  * reject as a mismatch is never sent. Auto plays, replays of aborted runs and other unrankable logs are skipped here.
  */
 export function prepareLeaderboardSubmission(
-  playlog: BeMusicPlaylog,
+  replay: BeMusicReplay,
   sourceChart: BeMusicJSON,
   chartPath: string | undefined,
 ): SubmissionPreparation {
-  // The server applies the same check (`checkPlaylogEligibility`); assists are allowed and ranked apart there.
-  const eligibility = checkPlaylogEligibility(playlog);
+  // The server applies the same check (`checkReplayEligibility`); assists are allowed and ranked apart there.
+  const eligibility = checkReplayEligibility(replay);
   if (!eligibility.eligible) {
     return { ok: false, reason: skippedReason(eligibility.reason) };
   }
-  const documents = rebuildDocuments(playlog, sourceChart, chartPath, eligibility);
+  const documents = rebuildDocuments(replay, sourceChart, chartPath, eligibility);
   if (documents === undefined) return { ok: false, reason: 'fingerprint-mismatch' };
-  return { ok: true, submission: { playlog, ...documents } };
+  return { ok: true, submission: { replay, ...documents } };
 }
 
 /**
  * Both fingerprint documents of a play, rebuilt from the source chart as the recorder fingerprinted it, or `undefined`
- * when they would not hash to the play log's fingerprints.
+ * when they would not hash to the replay's fingerprints.
  */
 function rebuildDocuments(
-  playlog: BeMusicPlaylog,
+  replay: BeMusicReplay,
   sourceChart: BeMusicJSON,
   chartPath: string | undefined,
   fingerprints: { chartFingerprint: string; playFingerprint: string },
 ): { playDocument: BeMusicFingerprintDocument; chartDocument: BeMusicFingerprintDocument } | undefined {
   const playedChart = hasControlFlow(sourceChart)
-    ? resolveBMSControlFlowWithDraws(sourceChart, playlog.play.randomDraws ?? [])
+    ? resolveBMSControlFlowWithDraws(sourceChart, replay.play.randomDraws ?? [])
     : sourceChart;
   const options = { chartPath };
   const playDocument = createPlayFingerprintDocument(playedChart, options);
@@ -76,7 +76,7 @@ function rebuildDocuments(
 
 /** The API's answer for one ruleset (`RulesetOutcome` in `@be-music/leaderboard-api`). */
 export interface LeaderboardRulesetResult {
-  ruleset: PlaylogRulesetId;
+  ruleset: RulesetId;
   exScore: number;
   clearLamp: number;
   missCount: number;
@@ -97,7 +97,7 @@ export interface LeaderboardClientOptions {
 }
 
 /**
- * Sends one play to the Leaderboard: requires an Accounts session, posts the play log gzipped
+ * Sends one play to the Leaderboard: requires an Accounts session, posts the replay gzipped
  * with its play document, and resends with the chart document when the server does not know the chart (409).
  */
 export async function submitToLeaderboard(
@@ -105,7 +105,7 @@ export async function submitToLeaderboard(
   options: LeaderboardClientOptions = {},
 ): Promise<LeaderboardSubmitResult> {
   const response = await postWithChartDocuments('/api/v0/scores', options, (withChartDocument) => ({
-    playlog: submission.playlog,
+    replay: submission.replay,
     playDocument: submission.playDocument,
     ...(withChartDocument ? { chartDocument: submission.chartDocument } : {}),
   }));
@@ -151,11 +151,11 @@ async function postWithChartDocuments(
 }
 
 /**
- * What the Leaderboard API needs for one course run: the course play log, each played stage's documents, and the charts
+ * What the Leaderboard API needs for one course run: the course replay, each played stage's documents, and the charts
  * of the stages the server rebuilds (every unreached stage, and every stage of a NONSTOP run).
  */
 export interface CourseLeaderboardSubmission {
-  coursePlaylog: BeMusicCoursePlaylog;
+  courseReplay: BeMusicCourseReplay;
   /** One entry per played stage; none for a NONSTOP run. */
   stages: Array<{ playDocument: BeMusicFingerprintDocument; chartDocument: BeMusicFingerprintDocument }>;
   stageCharts: Array<{ stage: number; chart: BeMusicJSON; pms?: boolean }>;
@@ -166,19 +166,19 @@ export type CourseSubmissionPreparation =
   | { ok: false; reason: 'not-rankable' | 'tempo' | 'unreleased' | 'missing-fingerprint' | 'fingerprint-mismatch' };
 
 /**
- * Builds the submission of a finished course run: the course play log, with the fingerprint documents of each played
+ * Builds the submission of a finished course run: the course replay, with the fingerprint documents of each played
  * stage rebuilt from the stage's chart as the course played it (`stageCharts`, one per course stage, in order) and
  * checked like a single play's, and the chart of each stage the server rebuilds itself: every stage the run never
  * reached (the server checks the notes they count as BP), and every stage of a NONSTOP run (the server stitches them
  * again; a NONSTOP run sends no documents). Each such chart must hash to the chart fingerprint the log names for its
  * stage. Runs the server would refuse outright (auto play, an aborted stage, a stage chart without its fingerprint) are
- * skipped here (`checkCoursePlaylogEligibility`).
+ * skipped here (`checkCourseReplayEligibility`).
  */
 export function prepareCourseLeaderboardSubmission(
-  coursePlaylog: BeMusicCoursePlaylog,
+  courseReplay: BeMusicCourseReplay,
   stageCharts: ReadonlyArray<{ chart: BeMusicJSON; chartPath: string | undefined }>,
 ): CourseSubmissionPreparation {
-  const eligibility = checkCoursePlaylogEligibility(coursePlaylog);
+  const eligibility = checkCourseReplayEligibility(courseReplay);
   if (!eligibility.eligible) {
     return {
       ok: false,
@@ -188,13 +188,13 @@ export function prepareCourseLeaderboardSubmission(
   const nonstop = eligibility.nonstop !== undefined;
   const stages: CourseLeaderboardSubmission['stages'] = [];
   const rebuilt: CourseLeaderboardSubmission['stageCharts'] = [];
-  const chartFingerprints = resolveCourseStageChartFingerprints(coursePlaylog);
-  for (const [index, entry] of coursePlaylog.stages.entries()) {
+  const chartFingerprints = resolveCourseStageChartFingerprints(courseReplay);
+  for (const [index, entry] of courseReplay.stages.entries()) {
     const stageChart = stageCharts[index];
     if (stageChart === undefined) return { ok: false, reason: 'fingerprint-mismatch' };
     if (entry.played && !nonstop) {
       const documents = rebuildDocuments(
-        entry.playlog,
+        entry.replay,
         stageChart.chart,
         stageChart.chartPath,
         eligibility.stages[index]!,
@@ -209,7 +209,7 @@ export function prepareCourseLeaderboardSubmission(
     const pms = stageChart.chartPath?.toLowerCase().endsWith('.pms') === true;
     rebuilt.push({ stage: index, chart: stageChart.chart, ...(pms ? { pms } : {}) });
   }
-  return { ok: true, submission: { coursePlaylog, stages, stageCharts: rebuilt } };
+  return { ok: true, submission: { courseReplay, stages, stageCharts: rebuilt } };
 }
 
 /**
@@ -248,7 +248,7 @@ export async function submitCourseToLeaderboard(
   options: LeaderboardClientOptions = {},
 ): Promise<CourseLeaderboardSubmitResult> {
   const response = await postWithChartDocuments('/api/v0/course-scores', options, (withChartDocuments) => ({
-    coursePlaylog: submission.coursePlaylog,
+    courseReplay: submission.courseReplay,
     stages: submission.stages.map((stage) => ({
       playDocument: stage.playDocument,
       ...(withChartDocuments ? { chartDocument: stage.chartDocument } : {}),
@@ -306,7 +306,7 @@ export function describeSkippedSubmission(reason: Exclude<SubmissionPreparation,
     case 'tempo':
       return 'Leaderboard: not submitted (a play at another tempo is practice and is not ranked)';
     case 'missing-fingerprint':
-      return 'Leaderboard: not submitted (this play log has no chart fingerprint)';
+      return 'Leaderboard: not submitted (this replay has no chart fingerprint)';
     case 'fingerprint-mismatch':
       return 'Leaderboard: not submitted (the chart does not match the recorded play)';
   }

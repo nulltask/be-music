@@ -3,7 +3,7 @@ import { createPlayState, reducePlayState, type PlayEvent, type PlayState } from
 import { makeChart } from '../test-support/library.ts';
 import { playResultFromPlayState, playResultRun, resolveResultPresentation } from './result.ts';
 
-const song = makeChart('song', 'Pack/x');
+const chartEntry = makeChart('song', 'Pack/x');
 const score = { total: 4, perfect: 3, great: 1, good: 0, bad: 0, poor: 0, emptyPoor: 0, exScore: 7, score: 7 };
 
 function played(...events: PlayEvent[]): PlayState {
@@ -24,7 +24,7 @@ describe('playResultFromPlayState', () => {
 
   test('reads the score, gauge, combo and graphs, ending the graphs where the play ended', () => {
     const state = played(frame(2, 24), judge(1, 10, -3), frame(7, 82, true), judge(4, 60, 5));
-    const result = playResultFromPlayState(state, { song, score, seconds: 90, judgeRuleset: 'lr2' });
+    const result = playResultFromPlayState(state, { chart: chartEntry, score, seconds: 90, judgeRuleset: 'lr2' });
     expect(result).toMatchObject({
       score,
       maxCombo: 4,
@@ -48,19 +48,21 @@ describe('playResultFromPlayState', () => {
   test('lamps the play by the one clear-lamp rule', () => {
     const cleared = played(frame(7, 82, true));
     // Every note judged GREAT or better on a cleared gauge: LR2 tops out at FULL COMBO.
-    expect(playResultFromPlayState(cleared, { song, score, seconds: 100, judgeRuleset: 'lr2' }).lamp).toBe(
+    expect(playResultFromPlayState(cleared, { chart: chartEntry, score, seconds: 100, judgeRuleset: 'lr2' }).lamp).toBe(
       'FULL_COMBO',
     );
-    expect(playResultFromPlayState(cleared, { song, score, seconds: 100, judgeRuleset: 'beatoraja' }).lamp).toBe(
-      'PERFECT',
+    expect(
+      playResultFromPlayState(cleared, { chart: chartEntry, score, seconds: 100, judgeRuleset: 'beatoraja' }).lamp,
+    ).toBe('PERFECT');
+    expect(playResultFromPlayState(played(frame(7, 40)), { chart: chartEntry, score, seconds: 100 }).lamp).toBe(
+      'FAILED',
     );
-    expect(playResultFromPlayState(played(frame(7, 40)), { song, score, seconds: 100 }).lamp).toBe('FAILED');
   });
 
   test('carries the run and the course a stage belongs to, and the play time apart from the chart time', () => {
     const course = { kind: 'grade' as const, title: 'Dan', stages: [{ title: 'song' }], stageIndex: 0 };
     const result = playResultFromPlayState(played(), {
-      song,
+      chart: chartEntry,
       score,
       seconds: 100,
       playSeconds: 125,

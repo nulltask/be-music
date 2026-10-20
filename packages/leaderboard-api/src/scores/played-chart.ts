@@ -1,13 +1,13 @@
 import { eq } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
-import type { BeMusicPlaylog } from '@be-music/player/playlog';
+import type { BeMusicReplay } from '@be-music/player/replay';
 import type { Database } from '../db/client.ts';
 import { chart, chartAlias } from '../db/schema.ts';
 import { checkFingerprintDocument } from '../submission/documents.ts';
-import { nextHasLongNotes, playlogHasLongNotes } from './long-notes.ts';
+import { nextHasLongNotes, replayHasLongNotes } from './long-notes.ts';
 import { fileHashAliases } from './played-file.ts';
 
-/** What the server makes of the chart one play log played, before anything is written. */
+/** What the server makes of the chart one replay played, before anything is written. */
 export interface PlayedChart {
   chartFingerprint: string;
   playFingerprint: string;
@@ -22,7 +22,7 @@ export interface PlayedChart {
 export type PlayedChartCheck = ({ ok: true } & PlayedChart) | { ok: false; httpStatus: 409 | 422; reason: string };
 
 /**
- * Checks the chart one play log played (verification layers L3 and L4, docs/leaderboard.md section 5.3): the play
+ * Checks the chart one replay played (verification layers L3 and L4, docs/leaderboard.md section 5.3): the play
  * document must hash to the play fingerprint, and a chart the server does not know needs its chart document, which must
  * hash to the chart fingerprint. Shared by single plays and the stages of a course run.
  */
@@ -72,36 +72,36 @@ export async function putChartDocument(blobs: R2Bucket, played: PlayedChart): Pr
 
 /**
  * The statements that record what one play says about its chart: a new chart's row, what a known chart learns from the
- * play (the level of charts registered before play logs carried it, whether it has long notes), and the file hashes the
+ * play (the level of charts registered before replays carried it, whether it has long notes), and the file hashes the
  * client claims as aliases.
  */
 export function playedChartStatements(
   db: Database,
-  playlog: BeMusicPlaylog,
+  replay: BeMusicReplay,
   played: PlayedChart,
   now: number,
 ): BatchItem<'sqlite'>[] {
   const { chartFingerprint, playFingerprint, known } = played;
-  const playedLongNotes = playlogHasLongNotes(playlog.chart);
+  const playedLongNotes = replayHasLongNotes(replay.chart);
   const chartValues = played.registration
     ? [
         db
           .insert(chart)
           .values({
             chartFingerprint,
-            title: playlog.chart.title ?? null,
-            artist: playlog.chart.artist ?? null,
-            subtitle: playlog.chart.subtitle ?? null,
-            genre: playlog.chart.genre ?? null,
-            playLevel: playlog.chart.playLevel ?? null,
-            difficulty: playlog.chart.difficulty ?? null,
-            sourceFormat: playlog.chart.sourceFormat,
-            laneMode: playlog.chart.laneMode,
-            total: playlog.chart.total ?? null,
-            lnMode: playlog.chart.lnMode,
+            title: replay.chart.title ?? null,
+            artist: replay.chart.artist ?? null,
+            subtitle: replay.chart.subtitle ?? null,
+            genre: replay.chart.genre ?? null,
+            playLevel: replay.chart.playLevel ?? null,
+            difficulty: replay.chart.difficulty ?? null,
+            sourceFormat: replay.chart.sourceFormat,
+            laneMode: replay.chart.laneMode,
+            total: replay.chart.total ?? null,
+            lnMode: replay.chart.lnMode,
             hasLongNotes: playedLongNotes,
-            judgeRank: chartJudgeRank(playlog.chart.judgeRank),
-            noteCount: playlog.chart.noteCount,
+            judgeRank: chartJudgeRank(replay.chart.judgeRank),
+            noteCount: replay.chart.noteCount,
             playFingerprints: played.verification === 'L4' ? [playFingerprint] : [],
             documentKey: chartDocumentKey(chartFingerprint),
             createdAt: new Date(now),
@@ -111,12 +111,12 @@ export function playedChartStatements(
           .onConflictDoNothing(),
       ]
     : [];
-  // What a known chart learns from this play, in one statement: charts registered before play logs carried the level
+  // What a known chart learns from this play, in one statement: charts registered before replays carried the level
   // take it from the first play that does, and whether the chart has long notes (see `nextHasLongNotes`).
   const learned: Partial<typeof chart.$inferInsert> = {};
-  if (known !== undefined && known.playLevel === null && playlog.chart.playLevel !== undefined) {
-    learned.playLevel = playlog.chart.playLevel;
-    learned.difficulty = playlog.chart.difficulty ?? null;
+  if (known !== undefined && known.playLevel === null && replay.chart.playLevel !== undefined) {
+    learned.playLevel = replay.chart.playLevel;
+    learned.difficulty = replay.chart.difficulty ?? null;
   }
   const hasLongNotes = known === undefined ? undefined : nextHasLongNotes(known.hasLongNotes, playedLongNotes);
   if (hasLongNotes !== undefined) learned.hasLongNotes = hasLongNotes;
@@ -126,7 +126,7 @@ export function playedChartStatements(
       : [];
   // The file hashes the client claims (`chart.sha256`, `chart.md5`). The server cannot check them without the file, so
   // they only name the chart on other sites; well-formed ones are kept, lowercased.
-  const aliasValues = fileHashAliases(playlog.chart).map((alias) =>
+  const aliasValues = fileHashAliases(replay.chart).map((alias) =>
     db
       .insert(chartAlias)
       .values({ ...alias, chartFingerprint })
@@ -144,7 +144,7 @@ function chartJudgeRank(judgeRank: { percent: number; sourceRank?: number; sourc
   };
 }
 
-/** gzip of a text, for the play logs stored in R2. */
+/** gzip of a text, for the replays stored in R2. */
 export async function gzipText(text: string): Promise<ArrayBuffer> {
   const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
   return await new Response(stream).arrayBuffer();

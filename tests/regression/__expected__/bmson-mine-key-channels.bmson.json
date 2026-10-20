@@ -232,7 +232,7 @@
         "2700000 36 03",
         "3200000 01 02"
       ],
-      "playlogChart": {
+      "replayChart": {
         "sourceFormat": "bmson",
         "laneMode": "7 KEY SP",
         "lnMode": 2,

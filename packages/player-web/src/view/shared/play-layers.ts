@@ -14,7 +14,7 @@ import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { PerfTracker } from './perf.ts';
 import { ChildPool } from '../../stage/pixi-utils.ts';
 import type { BeMusicGameplayBinding } from '../../skin/be-music/binding.ts';
-import type { SongImageCache } from '../../skin/be-music/song-images.ts';
+import type { ChartImageCache } from '../../skin/be-music/chart-images.ts';
 import type { BeMusicGameplayLayout, BeMusicStage } from '../../skin/be-music/types.ts';
 import type { SideLaneRun } from './playfield/measure-line-runs.ts';
 import type { PlayfieldBGATarget } from '../types.ts';
@@ -155,8 +155,8 @@ export class PlayLayers {
       }
     | undefined;
   skinBindingInstance: BeMusicGameplayBinding | undefined;
-  /** Song images handed to the be-music skin (`frame.songImage`), from the playing song's asset source. */
-  songImages: SongImageCache | undefined;
+  /** Song images handed to the be-music skin (`frame.chartImage`), from the playing song's asset source. */
+  chartImages: ChartImageCache | undefined;
   /**
    * Cropped copies of the `#BGAxx` sub-region textures, for a skin that composites the BGA itself (a canvas image can't
    * carry the crop the way a Pixi sub-texture does). `null` while the crop is being made.
@@ -167,7 +167,7 @@ export class PlayLayers {
    * the measure list every frame. Each entry is the beat count at the *start* of the measure with that index (measure 0
    * starts at beat 0).
    */
-  measureBeatCache: { songId: string | undefined; beats: number[] } = { songId: undefined, beats: [] };
+  measureBeatCache: { chartId: string | undefined; beats: number[] } = { chartId: undefined, beats: [] };
 
   public constructor(play: PlayfieldRuntime) {
     this.play = play;

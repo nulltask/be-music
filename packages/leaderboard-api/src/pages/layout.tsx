@@ -2,7 +2,7 @@
 import type { Child } from 'hono/jsx';
 import { raw } from 'hono/html';
 import { renderBuildInfo, type BuildInfo } from '@be-music/web-theme';
-import type { PlaylogRulesetId } from '@be-music/player/playlog';
+import type { RulesetId } from '@be-music/player/replay';
 import { RULESET_LABELS } from './format.ts';
 import { LOCALE_NAMES, LOCALES, MessagesContext, messagesFor, useMessages, type Locale } from './i18n/index.ts';
 import { helpHref } from './help-topics.ts';
@@ -149,7 +149,7 @@ export interface PageMeta {
   /** Path and query of this page, where the ruleset switch comes back to. */
   path: string;
   /** The viewer's display ruleset, highlighted in the switch. */
-  ruleset: PlaylogRulesetId;
+  ruleset: RulesetId;
   /** The language the page is in. */
   locale: Locale;
   /** The signed-in player, or null. */
@@ -404,9 +404,9 @@ const FOOTER_LINK = 'hover:text-foreground inline-flex items-center gap-1 underl
  * current ruleset on the button, the three to pick from in its popover. A choice is kept in a cookie
  * (`/ruleset/:id`) and brings the viewer back to the page.
  */
-function RulesetMenu(props: { current: PlaylogRulesetId; path: string }) {
+function RulesetMenu(props: { current: RulesetId; path: string }) {
   const t = useMessages();
-  const name = (id: PlaylogRulesetId) => t.rules.name(RULESET_LABELS[id] ?? id);
+  const name = (id: RulesetId) => t.rules.name(RULESET_LABELS[id] ?? id);
   return (
     <div class="relative">
       <button

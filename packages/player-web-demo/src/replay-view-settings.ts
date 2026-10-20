@@ -1,7 +1,7 @@
-import { DEFAULT_PLAYLOG_VIEW_REPLAY, type PlaylogViewReplay } from '@be-music/player/playlog';
+import { DEFAULT_REPLAY_PLAYBACK_OPTIONS, type ReplayPlaybackOptions } from '@be-music/player/replay';
 
 /**
- * The Debug Menu's "Replay / ghost" settings: which of what a play log recorded the player seeing (tempo, hi-speed,
+ * The Debug Menu's "Replay / ghost" settings: which of what a replay recorded the player seeing (tempo, hi-speed,
  * SUDDEN+ / HIDDEN+, LIFT) a replay or ghost reproduces, the rest staying the viewer's own. All on by default;
  * remembered in `localStorage` and read once per play, at its start.
  */
@@ -9,10 +9,10 @@ import { DEFAULT_PLAYLOG_VIEW_REPLAY, type PlaylogViewReplay } from '@be-music/p
 /** `localStorage` key of the replay view settings. */
 export const REPLAY_VIEW_STORAGE_KEY = 'be-music-demo.replay-view';
 
-const KEYS = ['tempo', 'hiSpeed', 'covers', 'lift'] as const satisfies readonly (keyof PlaylogViewReplay)[];
+const KEYS = ['tempo', 'hiSpeed', 'covers', 'lift'] as const satisfies readonly (keyof ReplayPlaybackOptions)[];
 
 /** Stored settings, each toggle checked on its own; on (the default) for anything missing or unreadable. */
-export function parseStoredReplayView(raw: string | null | undefined): PlaylogViewReplay {
+export function parseStoredReplayView(raw: string | null | undefined): ReplayPlaybackOptions {
   let stored: Record<string, unknown> = {};
   try {
     const parsed: unknown = raw === null || raw === undefined ? undefined : JSON.parse(raw);
@@ -20,7 +20,7 @@ export function parseStoredReplayView(raw: string | null | undefined): PlaylogVi
   } catch {
     // Unreadable: the defaults.
   }
-  const settings = { ...DEFAULT_PLAYLOG_VIEW_REPLAY };
+  const settings = { ...DEFAULT_REPLAY_PLAYBACK_OPTIONS };
   for (const key of KEYS) {
     if (typeof stored[key] === 'boolean') settings[key] = stored[key];
   }
@@ -30,17 +30,17 @@ export function parseStoredReplayView(raw: string | null | undefined): PlaylogVi
 /** The remembered settings, or the defaults when none are stored or storage is blocked. */
 export function readStoredReplayView(
   storage: Pick<Storage, 'getItem'> | undefined = defaultStorage(),
-): PlaylogViewReplay {
+): ReplayPlaybackOptions {
   try {
     return parseStoredReplayView(storage?.getItem(REPLAY_VIEW_STORAGE_KEY));
   } catch {
-    return { ...DEFAULT_PLAYLOG_VIEW_REPLAY };
+    return { ...DEFAULT_REPLAY_PLAYBACK_OPTIONS };
   }
 }
 
 /** Remembers the settings for the next visit. */
 export function storeReplayView(
-  settings: Readonly<PlaylogViewReplay>,
+  settings: Readonly<ReplayPlaybackOptions>,
   storage: Pick<Storage, 'setItem'> | undefined = defaultStorage(),
 ): void {
   try {

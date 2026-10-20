@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { computeChartFingerprint, computePlayFingerprint, drawRandomOutcomes } from '@be-music/chart';
 import { parseBMS, resolveBMSControlFlowWithDraws } from '@be-music/parser';
-import type { BeMusicCoursePlaylog, BeMusicPlaylog } from '@be-music/player/playlog';
+import type { BeMusicCourseReplay, BeMusicReplay } from '@be-music/player/replay';
 import {
   courseStageChartFingerprint,
   describeCourseLeaderboardResult,
@@ -23,12 +23,12 @@ const SOURCE = parseBMS(
 );
 const CHART_PATH = 'song/chart.bms';
 
-/** A play log fingerprinted the way the recorder does it: source chart, its draws, and the chart path. */
-function recordedPlaylog(play: Partial<BeMusicPlaylog['play']> = {}): BeMusicPlaylog {
+/** A replay fingerprinted the way the recorder does it: source chart, its draws, and the chart path. */
+function recordedReplay(play: Partial<BeMusicReplay['play']> = {}): BeMusicReplay {
   const randomDraws = [...drawRandomOutcomes(SOURCE, () => 0.9)];
   const played = resolveBMSControlFlowWithDraws(SOURCE, randomDraws);
   return {
-    format: 'be-music-playlog',
+    format: 'be-music-replay',
     version: 0,
     clock: { unit: 'us', origin: 'chart-zero' },
     chart: {
@@ -47,26 +47,26 @@ function recordedPlaylog(play: Partial<BeMusicPlaylog['play']> = {}): BeMusicPla
 }
 
 describe('prepareLeaderboardSubmission', () => {
-  test('rebuilds both documents so they hash to the fingerprints the play log carries', () => {
-    const prepared = prepareLeaderboardSubmission(recordedPlaylog(), SOURCE, CHART_PATH);
+  test('rebuilds both documents so they hash to the fingerprints the replay carries', () => {
+    const prepared = prepareLeaderboardSubmission(recordedReplay(), SOURCE, CHART_PATH);
     expect(prepared.ok).toBe(true);
   });
 
   test('skips plays the server would not rank', () => {
-    expect(prepareLeaderboardSubmission(recordedPlaylog({ mode: 'auto' }), SOURCE, CHART_PATH)).toEqual({
+    expect(prepareLeaderboardSubmission(recordedReplay({ mode: 'auto' }), SOURCE, CHART_PATH)).toEqual({
       ok: false,
       reason: 'not-rankable',
     });
-    expect(prepareLeaderboardSubmission(recordedPlaylog({ aborted: true }), SOURCE, CHART_PATH)).toEqual({
+    expect(prepareLeaderboardSubmission(recordedReplay({ aborted: true }), SOURCE, CHART_PATH)).toEqual({
       ok: false,
       reason: 'not-rankable',
     });
     // A play at another tempo is practice: skipped, with its own reason for the status line.
-    expect(prepareLeaderboardSubmission(recordedPlaylog({ tempo: 0.8 }), SOURCE, CHART_PATH)).toEqual({
+    expect(prepareLeaderboardSubmission(recordedReplay({ tempo: 0.8 }), SOURCE, CHART_PATH)).toEqual({
       ok: false,
       reason: 'tempo',
     });
-    const withoutFingerprint = recordedPlaylog();
+    const withoutFingerprint = recordedReplay();
     delete withoutFingerprint.chart.playFingerprint;
     expect(prepareLeaderboardSubmission(withoutFingerprint, SOURCE, CHART_PATH)).toEqual({
       ok: false,
@@ -75,7 +75,7 @@ describe('prepareLeaderboardSubmission', () => {
   });
 
   test('never sends documents that would not match (another lane-mode input here)', () => {
-    expect(prepareLeaderboardSubmission(recordedPlaylog(), SOURCE, 'song/chart.pms')).toEqual({
+    expect(prepareLeaderboardSubmission(recordedReplay(), SOURCE, 'song/chart.pms')).toEqual({
       ok: false,
       reason: 'fingerprint-mismatch',
     });
@@ -83,7 +83,7 @@ describe('prepareLeaderboardSubmission', () => {
 });
 
 describe('submitToLeaderboard', () => {
-  const prepared = prepareLeaderboardSubmission(recordedPlaylog(), SOURCE, CHART_PATH);
+  const prepared = prepareLeaderboardSubmission(recordedReplay(), SOURCE, CHART_PATH);
   const submission = (prepared as { ok: true; submission: LeaderboardSubmission }).submission;
   const accepted = {
     scoreId: 's1',
@@ -203,17 +203,14 @@ describe('course submissions', () => {
     { chart: OTHER, chartPath: 'song/other.bms' },
   ];
 
-  function courseLog(
-    play: Partial<BeMusicPlaylog['play']> = {},
-    withUnreachedFingerprint = true,
-  ): BeMusicCoursePlaylog {
+  function courseLog(play: Partial<BeMusicReplay['play']> = {}, withUnreachedFingerprint = true): BeMusicCourseReplay {
     const unreachedFingerprint = courseStageChartFingerprint(stageCharts[1]!);
     return {
-      format: 'be-music-course-playlog',
+      format: 'be-music-course-replay',
       version: 0,
       course: { name: 'Dan', kind: 'grade', constraints: [], trophies: [] },
       stages: [
-        { played: true, playlog: recordedPlaylog({ course: { kind: 'grade' }, ...play }) },
+        { played: true, replay: recordedReplay({ course: { kind: 'grade' }, ...play }) },
         {
           played: false,
           facts: {
@@ -232,7 +229,7 @@ describe('course submissions', () => {
   }
 
   test('courseStageChartFingerprint fingerprints a stage chart as the recorder would', () => {
-    expect(courseStageChartFingerprint(stageCharts[0]!)).toBe(recordedPlaylog().chart.chartFingerprint);
+    expect(courseStageChartFingerprint(stageCharts[0]!)).toBe(recordedReplay().chart.chartFingerprint);
   });
 
   test('prepareCourseLeaderboardSubmission rebuilds each played stage’s documents and sends each unreached chart', () => {

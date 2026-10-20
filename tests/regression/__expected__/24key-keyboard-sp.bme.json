@@ -370,7 +370,7 @@
         "9000000 1N 01",
         "9000000 1O 01"
       ],
-      "playlogChart": {
+      "replayChart": {
         "sourceFormat": "bms",
         "laneMode": "24 KEY SP",
         "lnMode": 1,

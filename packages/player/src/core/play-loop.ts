@@ -121,7 +121,7 @@ async function playChart(
   const horizonMs = (): number => tempoClock.clockMsAt(totalSeconds) + widestReachMs + 1000;
   // Without audio to play out a play ends as soon as its chart is over and judged — unless the host holds it open.
   const endsWithChart = session.audioSession === undefined && hold === undefined;
-  // A replay of an ESC-aborted log stops where the play was aborted, as the play log simulators do.
+  // A replay of an ESC-aborted log stops where the play was aborted, as the replay simulators do.
   const replayStopSeconds =
     session.replay && options.replayAbortedAtUs !== undefined ? options.replayAbortedAtUs / 1_000_000 : undefined;
   let settled = false;

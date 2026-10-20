@@ -1,12 +1,12 @@
 import type { BeMusicJSON } from '@be-music/json';
 import { normalizePath } from '@be-music/utils/core';
 import { resolveChartAudioAsset, resolveChartBGAAsset } from './collection.ts';
-import type { BrowserSongAssetEntry, BrowserSongAssetSource } from './types.ts';
+import type { BrowserAssetEntry, BrowserAssetSource } from './types.ts';
 
 /** One stage of a NONSTOP course as the host has it: its chart, where it was loaded from, and its chart path. */
 export interface NonstopAssetStage {
   chart: BeMusicJSON;
-  source: BrowserSongAssetSource;
+  source: BrowserAssetSource;
   chartPath: string;
 }
 
@@ -23,12 +23,12 @@ export const NONSTOP_CHART_PATH = 'nonstop.bms';
  *   {@link NONSTOP_CHART_PATH}) to load.
  */
 export function createNonstopAssets(stages: readonly NonstopAssetStage[]): {
-  source: BrowserSongAssetSource;
+  source: BrowserAssetSource;
   assetPath: (stage: number, kind: 'wav' | 'bmp', path: string) => string;
 } {
-  const files = new Map<string, BrowserSongAssetEntry>();
-  const keyOf = stages.map(() => undefined as Map<BrowserSongAssetEntry, string> | undefined);
-  const keyIn = (stage: number, entry: BrowserSongAssetEntry): string | undefined => {
+  const files = new Map<string, BrowserAssetEntry>();
+  const keyOf = stages.map(() => undefined as Map<BrowserAssetEntry, string> | undefined);
+  const keyIn = (stage: number, entry: BrowserAssetEntry): string | undefined => {
     let index = keyOf[stage];
     if (index === undefined) {
       index = new Map();
@@ -37,7 +37,7 @@ export function createNonstopAssets(stages: readonly NonstopAssetStage[]): {
     }
     return index.get(entry);
   };
-  const source: BrowserSongAssetSource = {
+  const source: BrowserAssetSource = {
     id: `nonstop:${stages.map((stage) => `${stage.source.id}:${stage.chartPath}`).join('|')}`,
     kind: 'files',
     label: 'NONSTOP',

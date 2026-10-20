@@ -7,7 +7,7 @@ export interface BrowserDropFileLike {
 
 export interface SplitDroppedSongAndThemeFilesResult<TFile extends BrowserDropFileLike> {
   themeFiles: TFile[];
-  songFiles: TFile[];
+  chartFiles: TFile[];
 }
 
 const CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson']);
@@ -51,41 +51,41 @@ export function resolveDropFilePath(file: BrowserDropFileLike): string {
   return normalizePath(file.webkitRelativePath || file.name);
 }
 
-export function splitDroppedSongAndThemeFiles<TFile extends BrowserDropFileLike>(
+export function splitDroppedChartAndThemeFiles<TFile extends BrowserDropFileLike>(
   files: readonly TFile[],
 ): SplitDroppedSongAndThemeFilesResult<TFile> {
-  const isSongPath = createSongPathMatcher(files.map(resolveDropFilePath));
-  if (!isSongPath) {
-    return { themeFiles: [...files], songFiles: [] };
+  const isChartPath = createChartPathMatcher(files.map(resolveDropFilePath));
+  if (!isChartPath) {
+    return { themeFiles: [...files], chartFiles: [] };
   }
 
   const themeFiles: TFile[] = [];
-  const songFiles: TFile[] = [];
+  const chartFiles: TFile[] = [];
   for (const file of files) {
-    if (isSongPath(resolveDropFilePath(file))) {
-      songFiles.push(file);
+    if (isChartPath(resolveDropFilePath(file))) {
+      chartFiles.push(file);
     } else {
       themeFiles.push(file);
     }
   }
-  return { themeFiles, songFiles };
+  return { themeFiles, chartFiles };
 }
 
 /**
  * Returns a predicate telling which dropped paths must be opened as soon as the drop lands: everything that
- * {@link splitDroppedSongAndThemeFiles} would route to the theme side, play logs (`.bmplay.json`) and archives
+ * {@link splitDroppedChartAndThemeFiles} would route to the theme side, replays (`.bmplay.json`) and archives
  * (`.zip`). The remaining paths are song-bundle files — charts, audio, BGA — which the song loader only reads on
  * demand, so the drop walk can leave them as unopened handles instead of paying a `FileSystemFileEntry.file()` call
  * for each of them up front.
  */
 export function createEagerDropPathPredicate(paths: readonly string[]): (path: string) => boolean {
-  const isSongPath = createSongPathMatcher(paths);
+  const isChartPath = createChartPathMatcher(paths);
   return (path) => {
     const lower = path.toLowerCase();
     if (lower.endsWith('.bmplay.json') || lower.endsWith('.zip')) {
       return true;
     }
-    return !isSongPath?.(path);
+    return !isChartPath?.(path);
   };
 }
 
@@ -93,17 +93,17 @@ export function createEagerDropPathPredicate(paths: readonly string[]): (path: s
  * Builds the "is this path inside a chart directory?" test shared by the drop helpers. `undefined` when no chart was
  * dropped, in which case every path counts as a theme candidate.
  */
-function createSongPathMatcher(paths: readonly string[]): ((path: string) => boolean) | undefined {
-  const songDirPrefixes = new Set<string>();
+function createChartPathMatcher(paths: readonly string[]): ((path: string) => boolean) | undefined {
+  const chartDirectoryPrefixes = new Set<string>();
   for (const path of paths) {
     if (isChartFilePath(path)) {
-      songDirPrefixes.add(dirname(path));
+      chartDirectoryPrefixes.add(dirname(path));
     }
   }
-  if (songDirPrefixes.size === 0) {
+  if (chartDirectoryPrefixes.size === 0) {
     return undefined;
   }
-  if (songDirPrefixes.has('')) {
+  if (chartDirectoryPrefixes.has('')) {
     return () => true;
   }
   return (path) => {
@@ -111,12 +111,12 @@ function createSongPathMatcher(paths: readonly string[]): ((path: string) => boo
     // folders stays linear in the number of dropped files.
     let slash = path.lastIndexOf('/');
     while (slash > 0) {
-      if (songDirPrefixes.has(path.slice(0, slash))) {
+      if (chartDirectoryPrefixes.has(path.slice(0, slash))) {
         return true;
       }
       slash = path.lastIndexOf('/', slash - 1);
     }
-    return songDirPrefixes.has(path);
+    return chartDirectoryPrefixes.has(path);
   };
 }
 

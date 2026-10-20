@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import type { BeMusicJSON } from '@be-music/json';
-import type { PlaylogRulesetResult } from '../../playlog/format.ts';
+import type { ReplayRulesetResult } from '../../replay/format.ts';
 import { basicChart, denseChart, exRankChart, longNoteChart, mineChart } from './charts.ts';
 import { command, observePlay, tap, type PlayObservation, type ScriptStep } from './harness.ts';
 
@@ -65,8 +65,8 @@ describe('driver drift', () => {
     expect(rankChanges(auto)).toEqual(rankChanges(manual));
     expect(rankChanges(auto).every((line) => line.endsWith(' bad:150ms'))).toBe(true);
     const withChanges = await observePlay({ driver: 'auto', chart: exRankChart(true) });
-    // Its play log records the changes, and manual play judges by them.
-    expect(withChanges.playlog?.chart.judgeRank.timeline).toEqual([
+    // Its replay records the changes, and manual play judges by them.
+    expect(withChanges.replay?.chart.judgeRank.timeline).toEqual([
       { timeUs: 1_000_000, exRankValue: 25 },
       { timeUs: 2_000_000, exRankValue: 200 },
     ]);
@@ -79,11 +79,11 @@ describe('driver drift', () => {
   test('ESC — manual and auto play both record where their judge had settled as abortedAtUs', async () => {
     const manual = await observePlay({ driver: 'manual', chart: basicChart(), script: [escape(1800)] });
     const auto = await observePlay({ driver: 'auto', chart: basicChart(), script: [escape(1800)] });
-    expect(manual.playlog?.play.aborted).toBe(true);
-    expect(auto.playlog?.play.aborted).toBe(true);
+    expect(manual.replay?.play.aborted).toBe(true);
+    expect(auto.replay?.play.aborted).toBe(true);
     // The last tick before the ESC was drained (ticks every 1000 / 60 ms).
-    expect(manual.playlog?.play.abortedAtUs).toBe(1_783_333);
-    expect(auto.playlog?.play.abortedAtUs).toBe(1_783_333);
+    expect(manual.replay?.play.abortedAtUs).toBe(1_783_333);
+    expect(auto.replay?.play.abortedAtUs).toBe(1_783_333);
   });
 
   test('ESC — manual and auto play both trace the end of the play as an escape', async () => {
@@ -105,7 +105,7 @@ describe('driver drift', () => {
       // The play stops at the ESC, before the chart's audio starts, and records an abort at the chart's start.
       expect(observation.audio).toEqual(['200.000 dispose']);
       expect(observation.endedAtMs).toBe(200);
-      expect(observation.playlog?.play).toMatchObject({ aborted: true, abortedAtUs: 0 });
+      expect(observation.replay?.play).toMatchObject({ aborted: true, abortedAtUs: 0 });
     }
   });
 
@@ -168,10 +168,10 @@ describe('driver drift', () => {
   test('manual and auto play both record endOnFailure', async () => {
     const manual = await observePlay({ driver: 'manual', chart: basicChart(), script: ON_TIME });
     const auto = await observePlay({ driver: 'auto', chart: basicChart() });
-    expect(manual.playlog?.play.endOnFailure).toBe(true);
-    expect(auto.playlog?.play.endOnFailure).toBe(true);
+    expect(manual.replay?.play.endOnFailure).toBe(true);
+    expect(auto.replay?.play.endOnFailure).toBe(true);
     const keepingOn = await observePlay({ driver: 'auto', chart: basicChart(), options: { endOnFailure: false } });
-    expect(keepingOn.playlog?.play).not.toHaveProperty('endOnFailure');
+    expect(keepingOn.replay?.play).not.toHaveProperty('endOnFailure');
   });
 
   test('a replay records neither the tempo nor the tempo changes it is re-driven at, in manual and auto play', async () => {
@@ -180,16 +180,16 @@ describe('driver drift', () => {
     const replay = await observePlay({
       driver: 'manual',
       chart: basicChart(),
-      options: { ...options, replayInputs: live.playlog!.inputs },
+      options: { ...options, replayInputs: live.replay!.inputs },
     });
     // A replay of an auto-played log: its inputs are empty.
     const auto = await observePlay({ driver: 'auto', chart: basicChart(), options: { ...options, replayInputs: [] } });
     expect(replay.host.filter((entry) => entry.includes(' tempo '))).toHaveLength(1);
-    expect(replay.playlog?.play).not.toHaveProperty('tempo');
-    expect(replay.playlog?.play).not.toHaveProperty('tempoChanges');
+    expect(replay.replay?.play).not.toHaveProperty('tempo');
+    expect(replay.replay?.play).not.toHaveProperty('tempoChanges');
     expect(auto.host.filter((entry) => entry.includes(' tempo '))).toHaveLength(1);
-    expect(auto.playlog?.play).not.toHaveProperty('tempo');
-    expect(auto.playlog?.play).not.toHaveProperty('tempoChanges');
+    expect(auto.replay?.play).not.toHaveProperty('tempo');
+    expect(auto.replay?.play).not.toHaveProperty('tempoChanges');
   });
 
   test('manual and auto play both follow replayTempoChanges only in a replay', async () => {
@@ -215,22 +215,22 @@ describe('driver drift', () => {
     const replay = await observePlay({
       driver: 'manual',
       chart: basicChart(),
-      options: { replayInputs: live.playlog!.inputs, replayAbortedAtUs: live.playlog!.play.abortedAtUs },
+      options: { replayInputs: live.replay!.inputs, replayAbortedAtUs: live.replay!.play.abortedAtUs },
     });
     expect(live.simulated?.lr2.judge.poor).toBe(0);
     expect(live.summary?.poor).toBe(0);
     // The replay misses nothing after the abort: it ends there, as an ESC, with the live play's result and log.
     expect(replay.outcome).toBe('completed');
     expect(replay.summary).toEqual(live.summary);
-    expect(replay.playlog?.inputs).toEqual(live.playlog?.inputs);
-    expect(replay.playlog?.play).toMatchObject({ aborted: true, abortedAtUs: live.playlog!.play.abortedAtUs });
+    expect(replay.replay?.inputs).toEqual(live.replay?.inputs);
+    expect(replay.replay?.play).toMatchObject({ aborted: true, abortedAtUs: live.replay!.play.abortedAtUs });
     expect(replay.endedAtMs).toBeLessThan(1100 + 1000 / 60);
   });
 
   test('a play from input without key releases, its replay and the simulators agree', async () => {
     // A terminal without the kitty keyboard protocol sends a key as one press and then, while it is held, as repeated
     // presses, with no releases. The engine infers when each key came up and records it (`inferred` ups), so the log
-    // says what the judge saw: its replay and the play log simulator of the play's ruleset reach the same result.
+    // says what the judge saw: its replay and the replay simulator of the play's ruleset reach the same result.
     const presses = (fromMs: number, toMs: number, everyMs: number, lane: string): ScriptStep[] =>
       Array.from({ length: Math.floor((toMs - fromMs) / everyMs) + 1 }, (_, index) => ({
         atMs: fromMs + index * everyMs,
@@ -289,17 +289,17 @@ describe('driver drift', () => {
         const play = `${name} / ${judgeRuleset}`;
         const live = await observePlay({ driver: 'manual', chart, script, options: { judgeRuleset } });
         expect(
-          live.playlog?.inputs.some((input) => input.inferred === true),
+          live.replay?.inputs.some((input) => input.inferred === true),
           play,
         ).toBe(true);
         const replay = await observePlay({
           driver: 'manual',
           chart,
-          options: { judgeRuleset, replayInputs: live.playlog!.inputs },
+          options: { judgeRuleset, replayInputs: live.replay!.inputs },
         });
         expect(replay.summary, play).toEqual(live.summary);
-        expect(replay.playlog?.inputs, play).toEqual(live.playlog?.inputs);
-        const outcome = (result: PlaylogRulesetResult | undefined) => ({
+        expect(replay.replay?.inputs, play).toEqual(live.replay?.inputs);
+        const outcome = (result: ReplayRulesetResult | undefined) => ({
           judge: result?.judge,
           fast: result?.fast,
           slow: result?.slow,
@@ -307,8 +307,8 @@ describe('driver drift', () => {
           maxCombo: result?.maxCombo,
           gauge: { final: result?.gauge.final, cleared: result?.gauge.cleared },
         });
-        expect(live.playlog?.results?.native?.judge, play).toBeDefined();
-        expect(outcome(live.simulated?.[judgeRuleset]), play).toEqual(outcome(live.playlog?.results?.native));
+        expect(live.replay?.results?.native?.judge, play).toBeDefined();
+        expect(outcome(live.simulated?.[judgeRuleset]), play).toEqual(outcome(live.replay?.results?.native));
       }
     }
   });

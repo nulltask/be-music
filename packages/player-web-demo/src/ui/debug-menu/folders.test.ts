@@ -152,12 +152,12 @@ describe('settings reset', () => {
     const storage = memoryStorage({
       'be-music-demo.volumes': '{}',
       'be-music-demo.debug-menu-folders': '{}',
-      'be-music-demo.song-records': '{}',
+      'be-music-demo.chart-best-records': '{}',
       'other-app.key': 'x',
     });
     expect(demoSettingKeys(storage).sort()).toEqual(['be-music-demo.debug-menu-folders', 'be-music-demo.volumes']);
     expect(clearDemoSettings(storage)).toBe(2);
-    expect([...storage.values.keys()].sort()).toEqual(['be-music-demo.song-records', 'other-app.key']);
+    expect([...storage.values.keys()].sort()).toEqual(['be-music-demo.chart-best-records', 'other-app.key']);
   });
 
   it('does nothing on blocked storage', () => {

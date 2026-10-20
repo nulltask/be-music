@@ -14,7 +14,7 @@ import {
 function createPlay(overrides: { variant?: ChartPlayVariant } = {}) {
   const state = { now: 0, intro: false, beat: 0, disposed: false };
   const play: LR2PlayTimerSource = {
-    song: {},
+    chart: {},
     chartPlayVariant: overrides.variant ?? '7',
     get disposed() {
       return state.disposed;

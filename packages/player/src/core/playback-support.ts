@@ -1,4 +1,4 @@
-import type { PlaylogViewState } from '../playlog/view.ts';
+import type { ReplayViewState } from '../replay/view.ts';
 import { mirrorBeatAtTempoReversal, type TempoReversalPoint } from '@be-music/chart';
 import { type PlayerStateSignals } from '../state-signals.ts';
 import { applyHighSpeedControlAction, type HighSpeedControlAction } from './high-speed-control.ts';
@@ -170,7 +170,7 @@ export function applyPlaybackHighSpeedAction(params: {
 
 /**
  * Changes the play tempo at play-clock time `nowMs`: re-anchors `tempoClock` there (chart time stays continuous and
- * runs at `tempo` from then on), then tells the audio backend, the play log and the host, each with the chart second
+ * runs at `tempo` from then on), then tells the audio backend, the replay and the host, each with the chart second
  * the change took effect at. A change to an unusable tempo or the one in force does nothing. Returns whether it did.
  */
 export function applyPlaybackTempoChange(params: {
@@ -197,7 +197,7 @@ export function consumePlaybackInputCommands(params: {
   onTogglePause: () => void;
   onHighSpeedAction: (action: HighSpeedControlAction | undefined) => void;
   /** A view change to record (`{ kind: 'view' }`). */
-  onViewChange?: (change: PlaylogViewState) => void;
+  onViewChange?: (change: ReplayViewState) => void;
   /** A tempo change (`{ kind: 'tempo' }`). */
   onTempoChange?: (tempo: number) => void;
   onUnhandledCommand?: (command: PlayerInputCommand) => void;
@@ -250,7 +250,7 @@ export function consumePlaybackInputCommands(params: {
  */
 export function recordPendingViewChanges(
   inputSignals: PlayerInputSignalBus,
-  recorder: { recordViewChange(timeSeconds: number, change: PlaylogViewState): void } | undefined,
+  recorder: { recordViewChange(timeSeconds: number, change: ReplayViewState): void } | undefined,
   chartSeconds: number,
 ): void {
   for (const command of inputSignals.drainCommands()) {

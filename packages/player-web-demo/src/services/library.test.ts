@@ -1,4 +1,4 @@
-import type { BrowserSongCollection } from '@be-music/player-web/collection';
+import type { BrowserChartCollection } from '@be-music/player-web/collection';
 import type { SceneKind, SelectScene } from '@be-music/player-web/host';
 import type { BrowseSnapshot } from '@be-music/scene-model';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
@@ -80,7 +80,7 @@ function stubFetch(pages: Record<string, string>): ReturnType<typeof vi.fn> {
 
 function harness(overrides: Partial<LibraryServiceOptions> = {}) {
   const statuses: string[] = [];
-  const shown: BrowserSongCollection[] = [];
+  const shown: BrowserChartCollection[] = [];
   const showing: { current: SceneKind | undefined } = { current: 'select' };
   const elements = {
     shell: fakeElement(),
@@ -103,7 +103,7 @@ function harness(overrides: Partial<LibraryServiceOptions> = {}) {
     },
     leaveSelect: async () => false,
     browseTo: vi.fn(),
-    startPlaylogReplayFromFile: vi.fn(async () => {}),
+    startReplayReplayFromFile: vi.fn(async () => {}),
     loadTheme: vi.fn(async () => {}),
     loadBeatorajaTheme: vi.fn(async () => {}),
     playSkins: () => ({}),
@@ -236,11 +236,11 @@ describe('LibraryService drops', () => {
     expect(shown).toEqual([]);
   });
 
-  test('replays a play log dropped on its own, and loads nothing else', async () => {
+  test('replays a replay dropped on its own, and loads nothing else', async () => {
     const { library, options, shown } = harness();
-    const playlog = dropped('run.bmplay.json', '{}');
-    await library.processIncomingFiles([playlog]);
-    expect(options.startPlaylogReplayFromFile).toHaveBeenCalledWith(playlog);
+    const replay = dropped('run.bmplay.json', '{}');
+    await library.processIncomingFiles([replay]);
+    expect(options.startReplayReplayFromFile).toHaveBeenCalledWith(replay);
     expect(options.loadTheme).not.toHaveBeenCalled();
     expect(shown).toEqual([]);
   });

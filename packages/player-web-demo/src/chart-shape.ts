@@ -10,8 +10,8 @@ import { resolveLibraryChartPlayVariant, type LibraryChart } from '@be-music/sce
  * Maps a song's parsed chart variant onto the `{ keys, isDouble, isPMS }` shape `pickBeatorajaPlayableVariant`
  * expects. Pure derivation — no state, no side effects.
  */
-export function chartShapeFor(song: LibraryChart): { keys: number; isDouble: boolean; isPMS: boolean } {
-  const variant = resolveLibraryChartPlayVariant(song);
+export function chartShapeFor(chartEntry: LibraryChart): { keys: number; isDouble: boolean; isPMS: boolean } {
+  const variant = resolveLibraryChartPlayVariant(chartEntry);
   // `'48'` is the DP form of the 24-key keyboard mode, so it reports 24 keys per side plus `isDouble` — the same
   // per-side convention the IIDX `'14'` / `'10'` variants use.
   const keys =
@@ -40,10 +40,10 @@ export function chartShapeFor(song: LibraryChart): { keys: number; isDouble: boo
  */
 export function resolveBeatorajaSkinVariant(
   bundle: BeatorajaThemeBundle | undefined,
-  song: LibraryChart,
+  chartEntry: LibraryChart,
 ): BeatorajaPlayableVariant | undefined {
   if (!bundle) return undefined;
-  const desired = pickBeatorajaPlayableVariant(chartShapeFor(song));
+  const desired = pickBeatorajaPlayableVariant(chartShapeFor(chartEntry));
   if (desired === undefined) return undefined;
   return pickBeatorajaPlayableSkinVariant(bundle.theme.playSkins, desired);
 }
@@ -52,6 +52,6 @@ export function resolveBeatorajaSkinVariant(
  * Quick predicate — `true` when the loaded beatoraja theme can render this song's gameplay scene. Threads through
  * {@link resolveBeatorajaSkinVariant} so the answer matches what the play path would actually mount.
  */
-export function canPlaySongBeatoraja(bundle: BeatorajaThemeBundle | undefined, song: LibraryChart): boolean {
-  return resolveBeatorajaSkinVariant(bundle, song) !== undefined;
+export function canPlayChartBeatoraja(bundle: BeatorajaThemeBundle | undefined, chartEntry: LibraryChart): boolean {
+  return resolveBeatorajaSkinVariant(bundle, chartEntry) !== undefined;
 }

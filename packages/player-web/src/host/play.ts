@@ -4,7 +4,7 @@
  */
 
 import type { ResolvedPlayChart } from '@be-music/player';
-import type { BeMusicPlaylog, PlaylogCourseStage } from '@be-music/player/playlog';
+import type { BeMusicReplay, ReplayCourseStage } from '@be-music/player/replay';
 import {
   DEFAULT_PLAY_OPTIONS,
   type CourseView,
@@ -13,7 +13,7 @@ import {
   type PlayResult,
 } from '@be-music/scene-model';
 import type { Texture } from 'pixi.js';
-import type { BrowserSongAssetSource } from '../collection/types.ts';
+import type { BrowserAssetSource } from '../collection/types.ts';
 import type { GameplayRecorderResult } from '../recording/gameplay-recorder.ts';
 import type { RecordingFormat } from '../recording/recording-format.ts';
 import type { AudioBusChannel, CompressorParams, CompressorStage, TunableCompressor } from '../runtime/audio-bus.ts';
@@ -22,7 +22,7 @@ import type { PlayDisposeOptions, PlaySessionOptions } from '../session/play/pla
 import type { PixiSceneHost } from './scene-host.ts';
 import { PlaySceneSession } from '../session/play/play-scene-session.ts';
 import { PlaySession } from '../session/play/play-session.ts';
-import type { PlayPlaylogViewScale, PlaySessionTheme } from '../session/play/play-session-theme.ts';
+import type { PlayReplayViewScale, PlaySessionTheme } from '../session/play/play-session-theme.ts';
 import { SessionScene, type SessionSceneOptions } from '../session/session-scene.ts';
 import { logger } from '../logger.ts';
 import { BeatorajaPlayView } from '../view/beatoraja/play-view.ts';
@@ -61,17 +61,17 @@ export type PlaySceneSettings = Omit<
 
 /** The course a play is a stage of: the stage's rules and carried-in state, and the course as a skin shows it. */
 export interface PlaySceneCourse {
-  /** The stage's rules for the engine (`PlaylogCourseStage`), with what the previous stage carried in. */
-  readonly stage: PlaylogCourseStage;
+  /** The stage's rules for the engine (`ReplayCourseStage`), with what the previous stage carried in. */
+  readonly stage: ReplayCourseStage;
   /** The course and the stage being played, for the skin. */
   readonly view?: CourseView;
 }
 
 /** Where a play leads. */
 export interface PlaySceneEvents {
-  /** The chart was played to its end (the ending has run): the result, and the play log the engine recorded. */
-  finish(result: PlayResult, playlog: BeMusicPlaylog | undefined): void;
-  /** The player left the play (Escape, the Backspace hold, `requestExit`); its play log follows (`waitForPlaylog`). */
+  /** The chart was played to its end (the ending has run): the result, and the replay the engine recorded. */
+  finish(result: PlayResult, replay: BeMusicReplay | undefined): void;
+  /** The player left the play (Escape, the Backspace hold, `requestExit`); its replay follows (`waitForReplay`). */
   exit(): void;
   /** The player asked to play the chart again (F5). */
   restart(): void;
@@ -85,12 +85,12 @@ export interface PlaySceneOptions extends SessionSceneOptions {
   /** The chart to play. */
   readonly chart: LibraryChart;
   /** Where the chart's files are: its samples, BGA and images. */
-  readonly source?: BrowserSongAssetSource;
+  readonly source?: BrowserAssetSource;
   readonly settings: PlaySceneSettings;
   /** The course stage this play is, if any. */
   readonly course?: PlaySceneCourse;
-  /** A play log to play back instead of the player's input: its recorded setup, arrangement, tempo and view. */
-  readonly replay?: BeMusicPlaylog;
+  /** A replay to play back instead of the player's input: its recorded setup, arrangement, tempo and view. */
+  readonly replay?: BeMusicReplay;
   /**
    * The chart's `#RANDOM` / `#SWITCH` branches as the decide screen drew them (`DecideScene.resolved`), so the play
    * plays the branches the screen showed. Without it the play draws its own; a replay plays its log's.
@@ -145,8 +145,8 @@ export interface PlayScene extends SessionScene<PlayFrame, PlayIntent> {
    * until the scene is disposed: what a result's graphs plot.
    */
   readonly resolved: ResolvedPlayChart | undefined;
-  /** The play log once the engine has recorded it, also after Escape; `undefined` after `timeoutMs` without one. */
-  waitForPlaylog(timeoutMs?: number): Promise<BeMusicPlaylog | undefined>;
+  /** The replay once the engine has recorded it, also after Escape; `undefined` after `timeoutMs` without one. */
+  waitForReplay(timeoutMs?: number): Promise<BeMusicReplay | undefined>;
   /**
    * Takes the player's new settings for the kit's skin; the next frame draws with them. The scene keeps its family: a
    * kit of another family is ignored. A built-in or LR2 scene keeps its skin too, while a beatoraja scene takes another
@@ -174,8 +174,8 @@ interface FamilyPlayView {
   prepareOn(host: PixiSceneHost): void;
   /** Loads the view's own assets once the chart is prepared (the session theme's `prepareView`). */
   prepareView?(): Promise<void>;
-  /** The scale the view's hi-speed reads on in the play log, when it has its own (the session theme's `playlogView`). */
-  playlogView?(): PlayPlaylogViewScale | undefined;
+  /** The scale the view's hi-speed reads on in the replay, when it has its own (the session theme's `replayView`). */
+  replayView?(): PlayReplayViewScale | undefined;
   /** The view draws the LIFT (the session theme's `drawsLift`). */
   readonly drawsLift?: boolean;
   uploadTextures(textures: Iterable<Texture | undefined>, isCancelled: () => boolean): Promise<void>;
@@ -211,7 +211,7 @@ function createPlayView(
       playfieldSkin: view.playfieldSkin,
       prepareOn: (host) => view.prepareOn(host),
       prepareView: () => view.prepare(),
-      playlogView: () => view.playlogView(),
+      replayView: () => view.replayView(),
       drawsLift: true,
       uploadTextures: (textures, isCancelled) => view.uploadTextures(textures, isCancelled),
       // A beatoraja skin draws its own notes: neither drawing option applies.
@@ -282,13 +282,13 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
   private readonly playSession: PlaySceneSession;
   private readonly familyView: FamilyPlayView;
   private readonly chart: LibraryChart;
-  private readonly source: BrowserSongAssetSource | undefined;
+  private readonly source: BrowserAssetSource | undefined;
   private readonly prepareHost: PixiSceneHost | undefined;
 
   public constructor(
     session: PlaySceneSession,
     familyView: FamilyPlayView,
-    facts: { chart: LibraryChart; source?: BrowserSongAssetSource; host?: PixiSceneHost },
+    facts: { chart: LibraryChart; source?: BrowserAssetSource; host?: PixiSceneHost },
     options: SessionSceneOptions,
   ) {
     super(session, familyView.view, options);
@@ -370,8 +370,8 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
     return resolvedChart !== undefined && randomDraws !== undefined ? { chart: resolvedChart, randomDraws } : undefined;
   }
 
-  public waitForPlaylog(timeoutMs?: number): Promise<BeMusicPlaylog | undefined> {
-    return this.play.waitForPlaylog(timeoutMs);
+  public waitForReplay(timeoutMs?: number): Promise<BeMusicReplay | undefined> {
+    return this.play.waitForReplay(timeoutMs);
   }
 
   public updateKit(kit: PlaySceneKit): void {
@@ -433,7 +433,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
     keyOnFadeMs: (channel) => family!.playfieldSkin.keyOnFadeMs(channel),
     prepareView: () => family?.prepareView?.() ?? Promise.resolve(),
     uploadTextures: (textures) => family?.uploadTextures(textures, () => play.disposed) ?? Promise.resolve(),
-    playlogView: () => family?.playlogView?.(),
+    replayView: () => family?.replayView?.(),
     drawsLift: () => family?.drawsLift === true,
   };
   const play = new PlaySession(
@@ -448,7 +448,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       audio: options.audio,
       onExit: () => on.exit(),
       onRestart: () => on.restart(),
-      onChartFinished: (result) => on.finish(result, result.playlog),
+      onChartFinished: (result) => on.finish(result, result.replay),
       ...(on.hiSpeed !== undefined ? { onHiSpeedChange: (hiSpeed: number) => on.hiSpeed?.(hiSpeed) } : {}),
       ...(on.tempo !== undefined ? { onTempoChange: (tempo: number) => on.tempo?.(tempo) } : {}),
     },

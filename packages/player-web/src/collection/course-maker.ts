@@ -62,7 +62,7 @@ export interface CourseMakerOptions {
   /** The connection a new NONSTOP course gets after each stage (LR2's button 268). Default `fade`. */
   defaultConnection?: NonstopConnection;
   /** A song's chart MD5, which a course keys its stages by; `undefined` when it cannot be hashed. */
-  md5Of: (song: LibraryChart) => Promise<string | undefined>;
+  md5Of: (chartEntry: LibraryChart) => Promise<string | undefined>;
   /** Called after every change, so a host can save the courses and redraw. */
   onChange?: (change: CourseMakerChange) => void;
 }
@@ -114,18 +114,18 @@ export class CourseMaker {
   }
 
   /** Adds a song to the course being made (see `appendCourseDraftStage` for the limits). */
-  async append(song: LibraryChart): Promise<{ ok: true } | { ok: false; reason: CourseMakerAppendFailure }> {
+  async append(chartEntry: LibraryChart): Promise<{ ok: true } | { ok: false; reason: CourseMakerAppendFailure }> {
     if (this.current === undefined) return { ok: false, reason: 'not-making' };
-    const md5 = await this.options.md5Of(song);
+    const md5 = await this.options.md5Of(chartEntry);
     // The course may have been finished or cancelled while the chart was hashed.
     const draft = this.current;
     if (draft === undefined) return { ok: false, reason: 'not-making' };
     const result = appendCourseDraftStage(draft, {
       md5: md5 ?? '',
-      keyMode: Number(resolveLibraryChartPlayVariant(song)),
-      title: song.title,
-      ...(song.subtitle !== undefined ? { subtitle: song.subtitle } : {}),
-      ...(song.artist !== undefined ? { artist: song.artist } : {}),
+      keyMode: Number(resolveLibraryChartPlayVariant(chartEntry)),
+      title: chartEntry.title,
+      ...(chartEntry.subtitle !== undefined ? { subtitle: chartEntry.subtitle } : {}),
+      ...(chartEntry.artist !== undefined ? { artist: chartEntry.artist } : {}),
     });
     if (!result.ok) return result;
     this.current = result.draft;

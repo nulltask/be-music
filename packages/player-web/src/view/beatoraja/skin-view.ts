@@ -437,7 +437,7 @@ export class BeatorajaPlaySkinView {
     // actually referenced by `parts.destination` get expanded. Mirrors upstream's
     // `JsonPlaySkinObjectLoader.java:220-221`:
     //
-    //     for (JSONSkin.Judge judge : sk.judge) {
+    //     for (JSONSkin.Judgment judge : sk.judge) {
     //         if (dst.id.equals(judge.id)) { ... instantiate ... }
     //     }
     //

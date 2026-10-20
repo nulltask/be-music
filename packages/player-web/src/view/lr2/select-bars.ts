@@ -171,12 +171,12 @@ function drawBarFlash(ctx: LR2SelectBarsContext, flash: LR2BarFlashElement, bar:
  */
 function drawBarLevel(
   ctx: LR2SelectBarsContext,
-  song: LibraryChart,
+  chartEntry: LibraryChart,
   bar: LR2DestinationRect,
   levels: ReadonlyArray<LR2BarLevelSource>,
   levelDst: LR2DestinationRect,
 ): void {
-  const barLevel = resolveLR2BarLevel(song);
+  const barLevel = resolveLR2BarLevel(chartEntry);
   if (barLevel === undefined) {
     return;
   }

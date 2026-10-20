@@ -73,7 +73,7 @@
         "500000 12 02",
         "2500000 11 03"
       ],
-      "playlogChart": {
+      "replayChart": {
         "sourceFormat": "bms",
         "laneMode": "5 KEY SP",
         "lnMode": 1,

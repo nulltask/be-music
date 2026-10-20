@@ -9,7 +9,7 @@ export const SUBMISSION_LIMITS: BodyLimits = { maxEncodedBytes: 2 * 1024 * 1024,
 export type BodyResult = { ok: true; value: unknown } | { ok: false; status: 400 | 413 | 415; reason: string };
 
 /**
- * Reads a JSON request body, gunzipping it when it is sent with `Content-Encoding: gzip` (play logs compress about ten
+ * Reads a JSON request body, gunzipping it when it is sent with `Content-Encoding: gzip` (replays compress about ten
  * to one). Both the encoded and the decoded size are counted while streaming, so an oversized or decompression-bomb
  * body is cut off instead of buffered.
  */

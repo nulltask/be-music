@@ -110,7 +110,7 @@ const BENCH_RESULT: sceneAPI.BeatorajaResultInput = {
   gauge: BENCH_GAUGE,
   chartTotal: 300,
   breakdown: BENCH_BREAKDOWN,
-  song: { title: 'Bench', subtitle: '[ANOTHER]', artist: 'be-music', genre: 'BENCH' },
+  chart: { title: 'Bench', subtitle: '[ANOTHER]', artist: 'be-music', genre: 'BENCH' },
   skin: { name: 'Bench Skin', author: 'be-music' },
 };
 const BENCH_SONG: LibraryChart = {
@@ -232,9 +232,9 @@ export function registerBeatorajaSkinSceneExportsCases(define: DefineBenchmarkCa
       sceneAPI.joinBeatorajaText('Bench', '[ANOTHER]');
     },
   });
-  define('beatoraja-skin.scene.resolveBeatorajaSongText', {
+  define('beatoraja-skin.scene.resolveBeatorajaChartText', {
     run: () => {
-      sceneAPI.resolveBeatorajaSongText(BEATORAJA_TEXT.FULLTITLE, BENCH_RESULT.song);
+      sceneAPI.resolveBeatorajaChartText(BEATORAJA_TEXT.FULLTITLE, BENCH_RESULT.chart);
     },
   });
   define('beatoraja-skin.scene.resolveBeatorajaSkinText', {
@@ -244,7 +244,7 @@ export function registerBeatorajaSkinSceneExportsCases(define: DefineBenchmarkCa
   });
   define('beatoraja-skin.scene.resolveBeatorajaPlayText', {
     run: () => {
-      sceneAPI.resolveBeatorajaPlayText(BEATORAJA_TEXT.TITLE, { song: BENCH_RESULT.song, course: BENCH_COURSE_VIEW });
+      sceneAPI.resolveBeatorajaPlayText(BEATORAJA_TEXT.TITLE, { chart: BENCH_RESULT.chart, course: BENCH_COURSE_VIEW });
     },
   });
 

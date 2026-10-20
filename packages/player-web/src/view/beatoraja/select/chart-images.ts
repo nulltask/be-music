@@ -21,7 +21,7 @@ const log = logger('beatoraja-select');
 /** What the chart images read on the select view: its fields of these names. */
 export interface BeatorajaSelectChartImagesContext {
   /** Decodes a chart's own images; without it the synthetic image ids stay hidden. */
-  readonly decodeChartImages: ((song: LibraryChart) => Promise<BeatorajaChartImages>) | undefined;
+  readonly decodeChartImages: ((chartEntry: LibraryChart) => Promise<BeatorajaChartImages>) | undefined;
   readonly disposed: boolean;
   readonly entries: ReadonlyArray<LibraryEntry>;
   /** The cursor: `entries[currentIndex]` is the focused bar. */
@@ -51,27 +51,27 @@ export class BeatorajaSelectChartImages {
    * after the cursor moved on are kept for when it comes back; those that land after the part is disposed are
    * destroyed.
    */
-  refreshChartImagesForFocus(song: LibraryChart | undefined): void {
-    if (song === undefined) return;
+  refreshChartImagesForFocus(chartEntry: LibraryChart | undefined): void {
+    if (chartEntry === undefined) return;
     const decoder = this.ctx.decodeChartImages;
     if (decoder === undefined) return;
-    if (this.chartImageCache.has(song.id)) return;
+    if (this.chartImageCache.has(chartEntry.id)) return;
     // Mark as in-flight so concurrent focus changes don't fire duplicate decodes.
-    this.chartImageCache.set(song.id, null);
-    void decoder(song)
+    this.chartImageCache.set(chartEntry.id, null);
+    void decoder(chartEntry)
       .then((images) => {
         if (this.ctx.disposed || this.disposed) {
           destroyChartImages(images);
           return;
         }
         // The next frame picks up the new texture via `chartImageProvider`, which reads the cache every frame.
-        this.chartImageCache.set(song.id, images);
+        this.chartImageCache.set(chartEntry.id, images);
       })
       .catch((error: unknown) => {
         // Decode failed; leave the cache entry as `null` so we don't retry on every cursor settle. User-visible: the
         // banner / stagefile / backbmp slot stays hidden.
-        log.warn('chart-image decode failed', { songId: song.id, error });
-        this.chartImageCache.set(song.id, null);
+        log.warn('chart-image decode failed', { chartId: chartEntry.id, error });
+        this.chartImageCache.set(chartEntry.id, null);
       });
   }
 
@@ -107,11 +107,11 @@ export class BeatorajaSelectChartImages {
    * segment list — sharing the walk between the bpmgraph and notes-graph renderers. Cached
    * per song-id so cursor moves through a folder don't redundantly re-analyse.
    */
-  private analysisFor(song: LibraryChart): BeatorajaChartNoteDistribution {
-    const cached = this.chartAnalysisCache.get(song.id);
+  private analysisFor(chartEntry: LibraryChart): BeatorajaChartNoteDistribution {
+    const cached = this.chartAnalysisCache.get(chartEntry.id);
     if (cached !== undefined) return cached;
-    const result = computeBeatorajaChartNoteDistribution(song.chart);
-    this.chartAnalysisCache.set(song.id, result);
+    const result = computeBeatorajaChartNoteDistribution(chartEntry.chart);
+    this.chartAnalysisCache.set(chartEntry.id, result);
     return result;
   }
   private readonly chartAnalysisCache = new Map<string, BeatorajaChartNoteDistribution>();

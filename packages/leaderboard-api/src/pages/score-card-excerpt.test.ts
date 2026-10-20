@@ -14,7 +14,7 @@ describe('score card excerpt', () => {
       { channel: '18', tone: 'blue', side: '1P' },
       { channel: '19', tone: 'white', side: '1P' },
     ]);
-    // The play logs' labels, play variants and the older `7keys` form all name a layout.
+    // The replays' labels, play variants and the older `7keys` form all name a layout.
     expect(excerptLanes('7')).toEqual(excerptLanes('7 KEY SP'));
     expect(excerptLanes('7keys')).toEqual(excerptLanes('7 KEY SP'));
     expect(excerptLanes('5 KEY SP')).toHaveLength(6);

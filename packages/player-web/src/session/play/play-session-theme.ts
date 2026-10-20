@@ -58,11 +58,11 @@ export interface PlaySessionTheme {
   /** Uploads `textures` to the GPU now, so the first frame that draws them does not stall. */
   uploadTextures?(textures: Iterable<Texture | undefined>): Promise<void>;
   /**
-   * How the view's hi-speed reads in the play log (`PlaylogViewState`): its scale and the lane in beats at hi-speed 1.
-   * Without it the play log reads the built-in and LR2 scale over the lanes the shared playfield laid out. Either way
+   * How the view's hi-speed reads in the replay (`ReplayViewState`): its scale and the lane in beats at hi-speed 1.
+   * Without it the replay reads the built-in and LR2 scale over the lanes the shared playfield laid out. Either way
    * the visible time is taken at the play's main BPM, which the session works out for every family.
    */
-  playlogView?(): PlayPlaylogViewScale | undefined;
+  replayView?(): PlayReplayViewScale | undefined;
   /**
    * Whether the view draws the LIFT (the beatoraja play skin raises its judgement line): a replay then shows the
    * recorded one. Without it the view draws none, and a replay leaves the play state's LIFT alone.
@@ -70,8 +70,8 @@ export interface PlaySessionTheme {
   drawsLift?(): boolean;
 }
 
-/** How a view's hi-speed reads in the play log: its scale and the lane in beats at hi-speed 1. */
-export interface PlayPlaylogViewScale {
+/** How a view's hi-speed reads in the replay: its scale and the lane in beats at hi-speed 1. */
+export interface PlayReplayViewScale {
   readonly scale: string;
   readonly laneBeats: number;
 }

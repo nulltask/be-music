@@ -31,8 +31,8 @@ gauge. Both are options: `PlayerOptions.judgeRuleset` picks the ruleset and `Pla
 | `./signals`        | What a host's input and UI runtimes exchange with a running play: the input bus and its commands, the UI bus with its frames, commands and `PlayerGaugeSummary`, the state signals, and the high-speed range and actions                                                                                                                                          |
 | `./lanes`          | The lanes of a play mode: the layout and its slots, scratch and wheel lanes, key bindings, FREE ZONE input, and the lanes the lane options permute                                                                                                                                                                                                                |
 | `./display`        | What a host shows: the timed play notes (`extract*`, `toTimed*`), `ScrollDistanceMapper`, the BGA cue on screen (`pickActiveBGACue`, `pickActiveBGAKey`, `DEFAULT_POOR_BGA_DISPLAY_SECONDS`), the chart facts a song screen shows (`resolveDisplayed*`), `formatSeconds`, `resolveAltModifierLabel`, the TUI note heights and the BGA resize algorithms           |
-| `./ruleset`        | The vocabulary hosts, skins and the Leaderboard share: the judge ruleset ids (`PLAYLOG_RULESET_IDS`), the judge windows, gauges, clear lamps, BP and the score                                                                                                                                                                                                    |
-| `./playlog`        | The play log format, its recorder, simulator and eligibility checks, and the course and NONSTOP logs                                                                                                                                                                                                                                                              |
+| `./ruleset`        | The vocabulary hosts, skins and the Leaderboard share: the judge ruleset ids (`RULESET_IDS`), the judge windows, gauges, clear lamps, BP and the score                                                                                                                                                                                                            |
+| `./replay`         | The replay format, its recorder, simulator and eligibility checks, and the course and NONSTOP logs                                                                                                                                                                                                                                                                |
 | `./records`        | Best records per judge ruleset and the rules that keep them                                                                                                                                                                                                                                                                                                       |
 | `./course`         | Course definitions: LR2 `.lr2crs`, beatoraja courses and table courses, the course maker, and NONSTOP runs                                                                                                                                                                                                                                                        |
 | `./audio-sink`     | The audio sinks for Node (`node-web-audio-api`) and for a Web Audio context                                                                                                                                                                                                                                                                                       |
@@ -164,7 +164,7 @@ flowchart LR
     draw["drawRandomOutcomes"] --> draws(["RandomDraws"])
     resolve["resolveBMSControlFlowWithDraws"]
   end
-  log(["play log<br/>randomDraws"])
+  log(["replay<br/>randomDraws"])
   src --> draw
   src --> resolve
   draws --> resolve
@@ -173,7 +173,7 @@ flowchart LR
   subgraph users["Consumers"]
     screens["decide / play /<br/>result screens"]
     engine["engine"]
-    record["play log"]
+    record["replay"]
   end
   chart --> users
   draws --> users
@@ -182,9 +182,9 @@ flowchart LR
 Every host draws once and hands the same chart and draws to every consumer of the play: the CLI to the preview render and the gameplay worker, the web player to the decide screen, the play screen, the engine and the result screen.
 A restart draws again, as LR2 and beatoraja re-roll each play.
 The engine (`autoPlay` / `manualPlay`) never draws: it plays a resolved chart as is, taking `PlayerOptions.randomDraws` only for the RANDOM summary.
-Handed a chart that still carries control flow together with `randomDraws` (for example a play log's draws against the source chart), it resolves the chart exactly once with them; handed one without draws, it throws a `TypeError` instead of rolling branches nobody outside the engine knows about.
+Handed a chart that still carries control flow together with `randomDraws` (for example a replay's draws against the source chart), it resolves the chart exactly once with them; handed one without draws, it throws a `TypeError` instead of rolling branches nobody outside the engine knows about.
 
-A play log records the draws as `play.randomDraws`, and a replay hands them back as `PlayerOptions.randomDraws` (see [Playlog](./playlog.md)).
+A replay records the draws as `play.randomDraws`, and a replay hands them back as `PlayerOptions.randomDraws` (see [Replay](./replay.md)).
 
 The RANDOM summary is derived from the draws.
 `#SETRANDOM` is shown as a fixed value, and if there are multiple RANDOM types, they are formatted as `RANDOM #1 2/3  #2 1/2` in the order of declaration.
@@ -227,11 +227,11 @@ Landmines and invisible notes are not collapsed.
 Mine channels are mapped to their corresponding playable lane and kept in a separate array.
 Mines are not included in `summary.total`.
 
-When a mine detonates belongs to the judge ruleset (`mineTrigger` in [`definitions.ts`](../packages/player/src/ruleset/definitions.ts)); the engine and the play log simulators apply the same rule. The damage model is the same everywhere (confirmed against beatoraja's `JudgeManager`).
+When a mine detonates belongs to the judge ruleset (`mineTrigger` in [`definitions.ts`](../packages/player/src/ruleset/definitions.ts)); the engine and the replay simulators apply the same rule. The damage model is the same everywhere (confirmed against beatoraja's `JudgeManager`).
 
 - `lr2` ruleset — LR2's model (its own changelog): a mine explodes on either of two conditions: **holding the lane's key as the mine crosses the judge line**, or **pressing while the mine is within the `PGREAT` window** of the judge line. A mine passing with the key up is harmless, and a press that lands after the crossing but outside `PGREAT` is too.
 - `beatoraja` ruleset — beatoraja's model (`JudgeManager` L244): a mine explodes only when **the lane's key is down at the moment the mine crosses the judge line**. A press shortly before (released before the crossing) or after does nothing.
-- "Held" is read off each lane's recorded presses and releases, so live play, replays and the simulators agree however late the mine is settled; a lane held by two keys stays held while either is down. An input at the very instant of a crossing counts before the crossing: a key pressed at that µs is down, one released at that µs is up. For input that sends no releases the engine infers them before the judge sees the press, holding the lane for 120 ms after each press (380 ms after one that hits a long note's head) ([Input without key releases](./playlog.md#input-without-key-releases)).
+- "Held" is read off each lane's recorded presses and releases, so live play, replays and the simulators agree however late the mine is settled; a lane held by two keys stays held while either is down. An input at the very instant of a crossing counts before the crossing: a key pressed at that µs is down, one released at that µs is up. For input that sends no releases the engine infers them before the judge sees the press, holding the lane for 120 ms after each press (380 ms after one that hits a long note's head) ([Input without key releases](./replay.md#input-without-key-releases)).
 - `iidx` ruleset — IIDX has no mines, so LR2's model stands in until there is evidence otherwise. (losak's writeup claims the `GOOD` window, but LR2's changelog — the primary source — says the PGREAT range; see [`bms-spec.md`](./bms-spec.md).)
 - An explosion only drains the gauge and plays the `#WAV00` explosion sample — **no verdict, no combo break, no score change**. Regular note judgment runs independently of detonation (a mine never swallows the input aimed at a nearby note).
 - Damage interprets the mine object value (upper-case base36) **directly as a percentage** (LR2 / beatoraja behavior; this differs from the nanasi-lineage `value / 2` rule). A bmson mine with `mine_channels[].notes[].damage` uses that value instead; a bmson mine without `damage` deals the default `4%` (its object value is the WAV slot the parser assigned, not a damage encoding, so it is never read as damage).
@@ -333,9 +333,9 @@ default), `beatoraja`, or `iidx` — chosen with `PlayerOptions.judgeRuleset`. T
 which note a press resolves against, the long-note style, the empty-POOR rule, the gauge line-up and its curve,
 and the score formula. The tables and their primary sources live in
 [`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts) and are compared
-side by side in [`docs/playlog.md`](./playlog.md).
+side by side in [`docs/replay.md`](./replay.md).
 
-The same tables drive the live engine and the play log simulator, and an equivalence suite requires the two to
+The same tables drive the live engine and the replay simulator, and an equivalence suite requires the two to
 agree judge for judge on the same recorded input stream.
 
 The rest of this chapter describes the **`lr2` ruleset**, which is the default.
@@ -410,7 +410,7 @@ Each judgment reads the width in force at its own instant, as LR2 reads its one 
 candidate search, its classification, the multi-BAD collector, a mine's press leg, a press on a held long note) uses the
 width at the press, and a release (an LN's early release, a charge note's tail) the width at the release. A note's miss
 deadline and a charge tail's late window use the width at the note and at the tail, and a mine's entry and settling
-the width at the mine. The engine and the play log simulator read the same instants.
+the width at the mine. The engine and the replay simulator read the same instants.
 
 ### bmson initial judgment width
 
@@ -447,7 +447,7 @@ A BMS that has dynamic changes using `#EXRANKxx` will have a displayed rank of `
 This is because the judgment range changes midway through the score, and it cannot be expressed with a single fixed label.
 
 However, there is still no ability to dynamically update the TUI's `BAD` width display after play has started.
-The `Judge window (<ruleset id>): ...` line that appears on the current TUI/standard output only displays the width at the start of playback.
+The `Judgment window (<ruleset id>): ...` line that appears on the current TUI/standard output only displays the width at the start of playback.
 
 ## Judgment words and side effects
 
@@ -568,7 +568,7 @@ EX-SCORE is IIDX compatible.
 - `beatoraja` and `iidx` report EX-SCORE, which is what they display. IIDX retired its own money score in
   BISTROVER.
 
-The score vocabulary is the ruleset's, exported from `@be-music/player/ruleset`: `ScoreSummary`, `JudgeKind`,
+The score vocabulary is the ruleset's, exported from `@be-music/player/ruleset`: `ScoreSummary`, `JudgmentKind`,
 `createEmptyScore`, `computeScoreRate`, the DJ Ranks (`resolveIIDXRankIndexFromScore`, `resolveIIDXRankLabel`,
 `IIDX_RANK_LABELS`), `resolveLR2MoneyScore` and `resolveDisplayedPoor`.
 
@@ -600,7 +600,7 @@ split.
   reports `failedMidPlay` and can no longer clear.
 - A survival gauge that empties ends the play there, as in LR2 and beatoraja (`PlayerOptions.endOnFailure`, default
   `true`): the judgment that emptied it is the last one counted, and the play stops. With `endOnFailure: false` the run
-  keeps judging to the end of the chart on a dead gauge. The play log records the flag, so re-simulations stop at the
+  keeps judging to the end of the chart on a dead gauge. The replay records the flag, so re-simulations stop at the
   same judgment; logs from before it existed keep judging to the end.
 - A course stage (`PlayerOptions.course`) runs on the ruleset's course gauge instead, starting from the value the
   previous stage left. See [Courses and dan certification](./course.md#playing-a-course-stage).
@@ -623,7 +623,7 @@ split.
   `total / 100 ×` its own default, and a value ≤ 0 means 100 % (beatoraja `BMSPlayerRule.validate`). A bmson chart
   without `total` therefore plays at the ruleset default, not at TOTAL 100.
 - `summary.gauge.effectiveTotal` reports the resolved value, and beatoraja skins' TOTAL readout (ref 368) shows it during
-  play and on the result screen. Play logs record the chart's raw value and resolve it again on replay.
+  play and on the result screen. Replays record the chart's raw value and resolve it again on replay.
 
 ### Increase/Decrease
 
@@ -788,7 +788,7 @@ Both `AUTO` and `MANUAL` are used to convert seconds on the musical score to rea
 
 `speed` is the tempo at the start. A host can change it during the play with the `{ kind: 'tempo', tempo }` input command.
 The engine re-anchors its clock at the chart time it drains the command (`createTempoClock`), so chart time stays continuous and runs at the new tempo from then on.
-It records the change in the play log (`play.tempoChanges`), calls `AudioSession.setTempo` and reports the change through `onTempoChange`.
+It records the change in the replay (`play.tempoChanges`), calls `AudioSession.setTempo` and reports the change through `onTempoChange`.
 Judgments and recorded inputs stay in chart time, so a re-simulation is unaffected.
 A replay follows its log's changes when the host passes them as `replayTempoChanges`.
 The built-in Node audio session renders its audio for the starting tempo and does not follow a change.
@@ -866,7 +866,7 @@ With `LNMODE=3`, the gauge continues to decrease even during hold break.
 ### UI runtime
 
 The player body is independent of the UI implementation and notifies the state through `stateSignals` and `uiSignals`.
-Judge/combo, frame information, POOR BGA, lane flash, and lane hold indication are communicated via this signal.
+Judgment/combo, frame information, POOR BGA, lane flash, and lane hold indication are communicated via this signal.
 The UI command queue also carries long-note lifecycle commands: `long-note-start` (with `mode`: `ln` / `cn` / `hcn`, the mode the active ruleset actually plays the note in, which can differ from the chart's `#LNMODE`) when a hold begins, and `long-note-end` (with `outcome`: `complete` / `dropped`) when it finishes.
 
 `PlayerOptions.onRulesetResolved` is called once before playback starts with a `PlayerRulesetInfo` (`id`, `rulesetId`, `longNoteStyle`, and the judge `windows` in µs at the start of the chart), so a host can show the windows the engine actually uses instead of re-deriving them.
@@ -937,7 +937,7 @@ A negative `#BPMxx` referenced through channel 08 (truncated to an integer first
 - From the reversal on, the engine publishes `displayBeat = 2 × beat(reversal) − beat(now)` on the UI frame — a mirror in chart-position space, as LR2 draws it. The TUI grid and the web scenes scroll from it, so the chart visibly runs backwards at the post-reversal tempo (pausing through post-reversal STOPs, following later BPM changes, pinning at the chart head if it rewinds past the start) while the status clock and summary stay on the true clock.
 - Presses keep being judged on the mirrored clock `t' = 2 × reversal − now`: notes around the reversal stay hittable just after it, empty POORs fire while the lane's next note is within the ruleset's empty-POOR reach of `t'`, and there is no miss sweep past the reversal. A hold spanning the reversal BADs on release and stays open otherwise. Mines freeze at the reversal; a press at the reversal instant itself still detonates a mine within its PGREAT reach.
 - Realtime audio freezes with LR2's event pump: BGM / keysound triggers behind the reversal never fire, while BGM and BGA on the reversal tick itself still do (LR2's op order). BGA cues stop changing; a movie that is already playing keeps running. NOWBPM holds `|trunc(BPM)|` of the negative value.
-- The run ends at the chart's precomputed end time (a documented deviation — real LR2 soft-locks until ESC). If scorable notes are left unjudged — post-reversal notes, open holds, an AUTO SCRATCH long note whose tail lies past the reversal — the gauge drops to 0 and the run is FAILED, as LR2 zeroes HP when such a play is left. Playlogs record `chart.reversalTimeUs` so re-simulations apply the same mirrored clock and result.
+- The run ends at the chart's precomputed end time (a documented deviation — real LR2 soft-locks until ESC). If scorable notes are left unjudged — post-reversal notes, open holds, an AUTO SCRATCH long note whose tail lies past the reversal — the gauge drops to 0 and the run is FAILED, as LR2 zeroes HP when such a play is left. Replays record `chart.reversalTimeUs` so re-simulations apply the same mirrored clock and result.
 
 ### Non-TUI output
 
@@ -971,4 +971,4 @@ ruleset-scoped gauge id), `survival`, and `failedMidPlay`.
 - Independent 2P gauge variant in browser gameplay
 - Gauge timeline display
 - beatoraja's non-default note-selection algorithms (`duration` / `lowest` / `score`) are implemented but not
-  exposed as a live-play option (the `bms-playlog` simulator can select them with `--algorithm=`)
+  exposed as a live-play option (the `bms-replay` simulator can select them with `--algorithm=`)

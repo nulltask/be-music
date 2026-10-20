@@ -2,7 +2,7 @@
 
 # Be-Music Fingerprint 仕様
 
-> ステータス: `@be-music/chart` に実装済みで、プレイログにも記録します（7 章）。アルゴリズムのバージョン: `bmfp0`。
+> ステータス: `@be-music/chart` に実装済みで、リプレイにも記録します（7 章）。アルゴリズムのバージョン: `bmfp0`。
 
 略語の命名移行により、正規ドキュメントとヘッダ差分のキー `baseBpm` を `baseBPM` に変更します。譜面の再生内容が同じでも既存の `bmfp0` 値は変わり、それを含むコースフィンガープリントも変わります。保存データを移行する際は、譜面からフィンガープリントと正規ドキュメントを再生成してください。開発版のバージョンは `bmfp0` のままです。
 
@@ -16,10 +16,10 @@ Be-Music Fingerprint は、譜面をファイルのバイト列ではなく **�
 
 ## 1. 2 種類の fingerprint
 
-| 名前                   | 入力                                               | 用途                                                               |
-| ---------------------- | -------------------------------------------------- | ------------------------------------------------------------------ |
-| **譜面 fingerprint**   | `#RANDOM` / `#SWITCH` の構造を解決しないままの譜面 | 譜面ファイルの識別（曲リスト、難易度表、スコアデータベース）       |
-| **プレイ fingerprint** | 制御構文の分岐をすべて決めた後の譜面               | 1 回のプレイで実際に遊んだ内容の識別（プレイログ、リプレイの照合） |
+| 名前                   | 入力                                               | 用途                                                             |
+| ---------------------- | -------------------------------------------------- | ---------------------------------------------------------------- |
+| **譜面 fingerprint**   | `#RANDOM` / `#SWITCH` の構造を解決しないままの譜面 | 譜面ファイルの識別（曲リスト、難易度表、スコアデータベース）     |
+| **プレイ fingerprint** | 制御構文の分岐をすべて決めた後の譜面               | 1 回のプレイで実際に遊んだ内容の識別（リプレイ、リプレイの照合） |
 
 どちらも次の 2 つを入力にします。
 
@@ -40,7 +40,7 @@ flowchart TD
 
 どの結果でも同じように遊べる譜面（とくに制御構文のない譜面）では、譜面 fingerprint とプレイ fingerprint は同じ値になります。
 
-MIRROR / RANDOM / DP フリップなどのレーンオプションは譜面ではなくプレイオプションなので、どちらの fingerprint にも含めません。プレイログでは別に記録します。
+MIRROR / RANDOM / DP フリップなどのレーンオプションは譜面ではなくプレイオプションなので、どちらの fingerprint にも含めません。リプレイでは別に記録します。
 
 ## 2. 含めるもの
 
@@ -183,7 +183,7 @@ fingerprint は **be-music による譜面の解釈** の上で定義します�
 
 因子はそれぞれ、変数をファイル順に並べた既約な決定木になります。節点は 1 つの変数を調べ、その枝は変数の値を分割し、葉は差分です。部分木の等しい枝は併合し、すべての枝が同じ部分木に行く節点はその部分木そのものにします。結果が依存しない変数の節点はありません。ドキュメントでは節点を `{"random": "n", "branches": [...]}`（`#RANDOM` でも `#SWITCH` でも同じ）、枝を `{"values": [...], ...}` で表し、枝は葉の差分（`"add"`、`"remove"`、`"header"`。空なら省略）か、後の変数の節点 `"next"` を持ちます。`values` は値を `"v"` または両端を含む範囲 `"low-high"` で昇順に並べます。枝は最初の値の順に並べます。ドキュメントが等しくなる枝はドキュメント上でも併合します。
 
-結果として、`#RANDOM 2` の下の `#IF 1 A #ELSE B` と `#IF 1 A #IF 2 B` は同じドキュメントになり、`#SWITCH` とそれと同等な `#RANDOM` + `#IF` も同じになります。同じように遊べる枝の値はラベルによらず併合されます。ある結果の確率は、経路に沿った `|values| / n` の積です。値そのものはドキュメントに含まれるので、どの値でどの枝を遊ぶかを入れ替える（`#IF 1 A` と `#IF 2 A`）と、分布としては同じように遊べても譜面 fingerprint は変わります。節点はどの `#RANDOM` 行を調べるかを記録せず、範囲だけを持ちます。ドキュメントは結果の分布を表し、1 回のプレイの結果はプレイログの `randomDraws` が特定します（7 章）。
+結果として、`#RANDOM 2` の下の `#IF 1 A #ELSE B` と `#IF 1 A #IF 2 B` は同じドキュメントになり、`#SWITCH` とそれと同等な `#RANDOM` + `#IF` も同じになります。同じように遊べる枝の値はラベルによらず併合されます。ある結果の確率は、経路に沿った `|values| / n` の積です。値そのものはドキュメントに含まれるので、どの値でどの枝を遊ぶかを入れ替える（`#IF 1 A` と `#IF 2 A`）と、分布としては同じように遊べても譜面 fingerprint は変わります。節点はどの `#RANDOM` 行を調べるかを記録せず、範囲だけを持ちます。ドキュメントは結果の分布を表し、1 回のプレイの結果はリプレイの `randomDraws` が特定します（7 章）。
 
 #### 3.6.5 括り出し
 
@@ -290,9 +290,9 @@ bmfp0:<正規 JSON のバイト列の SHA-256 を小文字 16 進で表したも
   - 結果は、`evaluateControlFlow`（`control-flow.ts`）のフレーム操作を 1 組の draws ではなくすべての値クラスについてまとめて動かして列挙し（`fingerprint-control-flow.ts`）、差分、因子、決定木にします（`fingerprint-delta.ts`、`fingerprint-chart-model.ts`）。差分テストは、入れ子や不正な制御構文を含む数千のランダムな譜面について、譜面モデルから組み立てたすべての結果が、同じ draws で `resolveBMSControlFlowWithDraws` が解決した譜面のプレイドキュメントと一致すること、そしてすべての譜面ドキュメントの結果の分布がパーサーのものと一致することを確かめます。
 - パーサーは BMS の値を数値として保持するので、保持された double の最短往復表現のテキストを小数表記の代わりにします（3.1 節）。パーサーが生の文字列で保持するもの（`#EXRANKxx`、`#STP`）は数字の並びから読みます。
 
-## 7. プレイログ
+## 7. リプレイ
 
-プレイログは、譜面の譜面 fingerprint を `chart.chartFingerprint` に、遊んだ内容のプレイ fingerprint を `chart.playFingerprint` に、このプレイの `#RANDOM` / `#SWITCH` の結果を `RandomDraws` として `play.randomDraws` に記録します（[playlog.ja.md](./playlog.ja.md) を参照）。プレイを譜面ごとにまとめるには譜面 fingerprint を使います。`#RANDOM` 行が何を引いても、同じ譜面のプレイはすべて同じ値を持ちます。譜面ファイルを持つ検証者は、その draws で譜面を解決し直し（`resolveBMSControlFlowWithDraws(json, randomDraws)`。その譜面のために引かれていない draws は拒否します）、譜面の拡張子でプレイ fingerprint を計算し直せます。`@be-music/player` の `createPlaylogRecorder` は、どちらも元の譜面（読み込んだままの譜面。`#RANDOM` を自分で解決したりレーンを書き換えたりするホストは `recordPlaylog.sourceChart` で渡し、渡さなければエンジンが受け取った譜面です）から計算し、プレイ fingerprint はプレイの draws で解決した譜面から求めるので、レーンオプション（RANDOM / MIRROR / DP FLIP）はどちらも変えません。draws がその譜面のために引かれたものでない、または元の譜面が無いときは、プレイ fingerprint はエンジンが遊んだ譜面から求め、譜面 fingerprint はプレイが draws を持たない場合を除いて省きます。レーン構成の入力にはエンジンの `laneModeExtension` を使い、それがなければ 9 KEY のプレイを `.pms` の代わりとします。draws はエンジンの `PlayerOptions.randomDraws` です。どのホストもプレイごとに 1 回だけ引き（`resolvePlayChart`）、同じ draws をエンジンに渡してエンジンが記録し、リプレイはログの draws を同じように渡し直します。
+リプレイは、譜面の譜面 fingerprint を `chart.chartFingerprint` に、遊んだ内容のプレイ fingerprint を `chart.playFingerprint` に、このプレイの `#RANDOM` / `#SWITCH` の結果を `RandomDraws` として `play.randomDraws` に記録します（[replay.ja.md](./replay.ja.md) を参照）。プレイを譜面ごとにまとめるには譜面 fingerprint を使います。`#RANDOM` 行が何を引いても、同じ譜面のプレイはすべて同じ値を持ちます。譜面ファイルを持つ検証者は、その draws で譜面を解決し直し（`resolveBMSControlFlowWithDraws(json, randomDraws)`。その譜面のために引かれていない draws は拒否します）、譜面の拡張子でプレイ fingerprint を計算し直せます。`@be-music/player` の `createReplayRecorder` は、どちらも元の譜面（読み込んだままの譜面。`#RANDOM` を自分で解決したりレーンを書き換えたりするホストは `recordReplay.sourceChart` で渡し、渡さなければエンジンが受け取った譜面です）から計算し、プレイ fingerprint はプレイの draws で解決した譜面から求めるので、レーンオプション（RANDOM / MIRROR / DP FLIP）はどちらも変えません。draws がその譜面のために引かれたものでない、または元の譜面が無いときは、プレイ fingerprint はエンジンが遊んだ譜面から求め、譜面 fingerprint はプレイが draws を持たない場合を除いて省きます。レーン構成の入力にはエンジンの `laneModeExtension` を使い、それがなければ 9 KEY のプレイを `.pms` の代わりとします。draws はエンジンの `PlayerOptions.randomDraws` です。どのホストもプレイごとに 1 回だけ引き（`resolvePlayChart`）、同じ draws をエンジンに渡してエンジンが記録し、リプレイはログの draws を同じように渡し直します。
 
 ## 8. コース fingerprint
 
@@ -325,7 +325,7 @@ flowchart LR
 | `stages`      | 各ステージの譜面 fingerprint（1 章）をステージ順に並べたもの。ランダムコースは抽選したステージで表します。                                                                                                                                                                |
 | `nonstop`     | NONSTOP コースだけ。`connections` はつなぎ目ごとにちょうど 1 つ（ステージ数 − 1 個）です。最後のステージの後に書かれたつなぎ方は何もつながないので捨て、コースが書いていないつなぎ目は、結合処理の読み方どおり `fade` にします。`placement` は `intended` か `lr2` です。 |
 
-遊ぶ内容を変えないので、次は含めません。コース名、トロフィー、`release` フラグ、NONSTOP のプレイログが記録する結合規則の版（`nonstop.stitch`。結合処理を直してもそのコースのランキングが分かれないようにするため。[playlog.ja.md](./playlog.ja.md#コースのプレイログ)）。
+遊ぶ内容を変えないので、次は含めません。コース名、トロフィー、`release` フラグ、NONSTOP のリプレイが記録する結合規則の版（`nonstop.stitch`。結合処理を直してもそのコースのランキングが分かれないようにするため。[replay.ja.md](./replay.ja.md#コースのリプレイ)）。
 
 ### 8.2 出力とバージョン
 
@@ -333,6 +333,6 @@ flowchart LR
 bmcourse0:<ドキュメントの RFC 8785 テキストの SHA-256（小文字 16 進）>
 ```
 
-値はすべて文字列か文字列のリストなので、RFC 8785 のテキストは、キーを並べ替えて空白をなくしたドキュメントになります。`bmfp0` と同じく `bmcourse0` は開発版で、バージョンを上げずに変わることがあります。ステージの譜面 fingerprint が変われば、コース fingerprint も変わります。最初の安定版からは、既存のコースのドキュメントを変える変更には新しいバージョンが必要です。`packages/player/src/playlog/course-fingerprint.test.ts` で golden の値を固定しています。
+値はすべて文字列か文字列のリストなので、RFC 8785 のテキストは、キーを並べ替えて空白をなくしたドキュメントになります。`bmfp0` と同じく `bmcourse0` は開発版で、バージョンを上げずに変わることがあります。ステージの譜面 fingerprint が変われば、コース fingerprint も変わります。最初の安定版からは、既存のコースのドキュメントを変える変更には新しいバージョンが必要です。`packages/player/src/replay/course-fingerprint.test.ts` で golden の値を固定しています。
 
-この章は `@be-music/player/playlog` の `createCourseFingerprintDocument(input)` と `computeCourseFingerprint(input)` が実装し、`@be-music/chart` の `canonicalizeJSONValue` と `sha256Hex` を使います。`computeCoursePlaylogFingerprint(log)` はコースのプレイログから入力を読みます。
+この章は `@be-music/player/replay` の `createCourseFingerprintDocument(input)` と `computeCourseFingerprint(input)` が実装し、`@be-music/chart` の `canonicalizeJSONValue` と `sha256Hex` を使います。`computeCourseReplayFingerprint(log)` はコースのリプレイから入力を読みます。

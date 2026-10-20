@@ -20,7 +20,7 @@ import type { PlayfieldRuntime } from '../shared/playfield/context.ts';
 import type {
   BeMusicGameplayLayout,
   BeMusicGameplayRuntime,
-  BeMusicJudgeState,
+  BeMusicJudgmentState,
   BeMusicStage,
 } from '../../skin/be-music/types.ts';
 import type { PlayfieldBGATarget, PlayfieldStage } from '../types.ts';
@@ -28,7 +28,7 @@ import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../../stage/design.ts';
 import { BGA } from '../shared/play-constants.ts';
 
 /** One side's recent judgement state for skinless chrome renderers (the be-music skin type). */
-export type SkinlessGameplayJudgeState = BeMusicJudgeState;
+export type SkinlessGameplayJudgeState = BeMusicJudgmentState;
 
 /** Live gameplay values a skinless chrome renderer can paint (the be-music skin type). */
 export type SkinlessGameplayChromeRuntime = BeMusicGameplayRuntime;
@@ -130,7 +130,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
   const total = ctx.play.score.total > 0 ? ctx.play.score.total : 0;
   const play = ctx.play.playState;
   const seconds = ctx.play.currentSeconds();
-  const songLengthSeconds = ctx.play.resolveSongDurationSeconds();
+  const chartLengthSeconds = ctx.play.resolveChartDurationSeconds();
   const usesPlayer2 =
     ctx.play.chartPlayVariant !== '9' && ctx.play.laneChannels.some((channel) => channel.startsWith('2'));
   const judgeSides: SkinlessGameplayJudgeState[] = [];
@@ -146,13 +146,13 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
   const currentBeat = ctx.play.currentBeat(seconds);
   // The BPM readout freezes at the reversal value (LR2's frozen pump holds |BPM| there) instead of following the
   // mirrored scroll back through earlier tempo points — see `nowBPM`.
-  const bpm = ctx.play.nowBPM(seconds) ?? ctx.play.song?.bpm;
+  const bpm = ctx.play.nowBPM(seconds) ?? ctx.play.chart?.bpm;
   const laneCovers = ctx.play.resolveLaneCovers();
   const visibleMs = ctx.play.resolveVisibleMs(laneCovers[0], bpm, ctx.play.scrollMapper?.rateAt?.(currentBeat) ?? 1);
   return {
-    songTitle: ctx.play.song?.title,
-    songArtist: ctx.play.song?.artist,
-    songGenre: ctx.play.song?.genre,
+    chartTitle: ctx.play.chart?.title,
+    chartArtist: ctx.play.chart?.artist,
+    chartGenre: ctx.play.chart?.genre,
     // The scroll above runs on the chart's tempo; a NONSTOP readout shows the stage's own BPM — see `displayBPM`.
     bpm: ctx.play.displayBPM(seconds) ?? bpm,
     // The player's hi-speed, as the select panel and the host show it (HS-FIX scales only the scroll).
@@ -178,7 +178,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     autoplay: ctx.options.autoPlay === true,
     hasBGA: ctx.play.hasBGA,
     nowMs: ctx.play.playClock(),
-    progressRatio: songLengthSeconds > 0 ? Math.max(0, Math.min(1, seconds / songLengthSeconds)) : 0,
+    progressRatio: chartLengthSeconds > 0 ? Math.max(0, Math.min(1, seconds / chartLengthSeconds)) : 0,
     // The beat this frame already worked out for the same `seconds`.
     beatPhase: currentBeat - Math.floor(currentBeat),
     rulesetLabel: ctx.play.resolveJudgeRuleset(),
@@ -195,15 +195,15 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     impulseKind: ctx.play.lastImpulseKind,
     effects: ctx.options.beMusicEffects ?? 'full',
     audio: ctx.audioFrame,
-    song: ctx.play.song,
+    chart: ctx.play.chart,
     lastJudgeDeltaMs: play.lastJudgeDeltaMs,
     judgeTimings: recentJudgeTimings(play),
     minBPM: ctx.play.chartBPMRange?.minBPM,
     maxBPM: ctx.play.chartBPMRange?.maxBPM,
     mainBPM: ctx.play.chartBPMRange?.mainBPM,
-    songLengthMs: ctx.play.song ? songLengthSeconds * 1000 : undefined,
+    songLengthMs: ctx.play.chart ? chartLengthSeconds * 1000 : undefined,
     // Clamped to the length so the remaining time never runs negative through the audio tail.
-    songElapsedMs: ctx.play.song ? Math.min(seconds, songLengthSeconds) * 1000 : undefined,
+    songElapsedMs: ctx.play.chart ? Math.min(seconds, chartLengthSeconds) * 1000 : undefined,
     failedAtMs: ctx.play.playMoments.failedAtMs,
     allNotesDoneAtMs: ctx.play.playMoments.allNotesDoneAtMs,
     outroAtMs: ctx.play.playMoments.outroAtMs,

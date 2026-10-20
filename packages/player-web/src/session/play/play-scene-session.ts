@@ -17,7 +17,7 @@ import type { PlaySession } from './play-session.ts';
 import { applyPlayEvent } from './play-state.ts';
 import type { PlayMoment } from './play-session-theme.ts';
 import { playViewEventFromMoment } from './play-view-events.ts';
-import { updatePlaylogView } from './play-view-settings.ts';
+import { updateReplayView } from './play-view-settings.ts';
 
 /**
  * What a play's frames carry besides the play itself: the chart picked, its course stage and the play options; and the
@@ -108,7 +108,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
   }
 
   /**
-   * Advances the play to now — the engine's UI signals drained into the play state, the play log's view recorded or
+   * Advances the play to now — the engine's UI signals drained into the play state, the replay's view recorded or
    * replayed, the score readout eased — and returns what the view draws.
    */
   public frame(nowMs: number): PlayFrame {
@@ -116,7 +116,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
     const seconds = play.currentSeconds();
     if (!play.paused && !play.disposed) {
       drainSharedEngineSignals(play);
-      updatePlaylogView(play, seconds);
+      updateReplayView(play, seconds);
     }
     play.updateDisplayedScore();
     const events = this.pending;
@@ -125,7 +125,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
     const bpm = play.displayBPM(seconds);
     return {
       clock: { nowMs, enteredAtMs: this.enteredAtMs },
-      chart: play.song ?? this.facts.chart,
+      chart: play.chart ?? this.facts.chart,
       ...(this.facts.course !== undefined ? { course: this.facts.course } : {}),
       playOptions: this.facts.playOptions,
       state: play.playState,

@@ -1,7 +1,7 @@
 import { createEmptyJSON } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
-import type { BeMusicPlaylog } from '../playlog/format.ts';
-import { rulesetChartFactsFromPlaylog } from '../playlog/rulesets.ts';
+import type { BeMusicReplay } from '../replay/format.ts';
+import { rulesetChartFactsFromReplay } from '../replay/rulesets.ts';
 import { GAUGE_JUDGE_BAD, GAUGE_JUDGE_EMPTY_POOR, RulesetGauge } from './gauge.ts';
 import {
   countBaseNotes,
@@ -106,7 +106,7 @@ describe('ruleset/beatoraja bmson judge_rank default', () => {
     expect(absent.note.judges[0]).toEqual([-20_000, 20_000]);
   });
 
-  test('the play-log adapter, which records `sourceExRank` only when the chart sets it, resolves the same default', () => {
+  test('the replay adapter, which records `sourceExRank` only when the chart sets it, resolves the same default', () => {
     const recorded = resolveRuleset(facts({ sourceFormat: 'bmson', judgeRank: { percent: 75 } }), 'beatoraja');
     const explicit = resolveRuleset(
       facts({ sourceFormat: 'bmson', judgeRank: { percent: 75, sourceExRank: 100 } }),
@@ -171,7 +171,7 @@ describe('effective TOTAL', () => {
 });
 
 describe('ruleset chart-facts adapters agree', () => {
-  test('the engine adapter and the play-log adapter derive the same facts from one chart', () => {
+  test('the engine adapter and the replay adapter derive the same facts from one chart', () => {
     // A live play and a replay of that same play must resolve the SAME ruleset, so the two adapters have to agree.
     const json = createEmptyJSON('bms');
     json.metadata.rank = 2;
@@ -184,8 +184,8 @@ describe('ruleset chart-facts adapters agree', () => {
     ] as never;
     const fromChart = rulesetChartFactsFromChart(json, { scorableNotes, laneDisplayMode: '7keys' });
 
-    const playlog: BeMusicPlaylog = {
-      format: 'be-music-playlog',
+    const replay: BeMusicReplay = {
+      format: 'be-music-replay',
       version: 0,
       clock: { unit: 'us', origin: 'chart-zero' },
       chart: {
@@ -203,13 +203,13 @@ describe('ruleset chart-facts adapters agree', () => {
       inputs: [],
       play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
     };
-    const fromPlaylog = rulesetChartFactsFromPlaylog(playlog);
+    const fromReplay = rulesetChartFactsFromReplay(replay);
 
-    expect(fromChart).toEqual(fromPlaylog);
+    expect(fromChart).toEqual(fromReplay);
     // …and therefore resolve identical rulesets.
     for (const id of ['lr2', 'beatoraja', 'iidx'] as const) {
-      expect(resolveRuleset(fromChart, id).noteCount).toBe(resolveRuleset(fromPlaylog, id).noteCount);
-      expect(resolveRuleset(fromChart, id).effectiveTotal).toBe(resolveRuleset(fromPlaylog, id).effectiveTotal);
+      expect(resolveRuleset(fromChart, id).noteCount).toBe(resolveRuleset(fromReplay, id).noteCount);
+      expect(resolveRuleset(fromChart, id).effectiveTotal).toBe(resolveRuleset(fromReplay, id).effectiveTotal);
     }
   });
 
@@ -218,8 +218,8 @@ describe('ruleset chart-facts adapters agree', () => {
     json.metadata.total = 150;
     const scorableNotes = [{ channel: '11', seconds: 1, beat: 0, judged: false, event: {} as never }] as never;
     const fromChart = rulesetChartFactsFromChart(json, { scorableNotes, laneDisplayMode: '7keys' });
-    const playlog: BeMusicPlaylog = {
-      format: 'be-music-playlog',
+    const replay: BeMusicReplay = {
+      format: 'be-music-replay',
       version: 0,
       clock: { unit: 'us', origin: 'chart-zero' },
       chart: {
@@ -234,11 +234,11 @@ describe('ruleset chart-facts adapters agree', () => {
       inputs: [],
       play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
     };
-    const fromPlaylog = rulesetChartFactsFromPlaylog(playlog);
-    expect(fromChart).toEqual(fromPlaylog);
+    const fromReplay = rulesetChartFactsFromReplay(replay);
+    expect(fromChart).toEqual(fromReplay);
     for (const id of ['lr2', 'beatoraja', 'iidx'] as const) {
       const live = resolveRuleset(fromChart, id).effectiveTotal;
-      expect(resolveRuleset(fromPlaylog, id).effectiveTotal).toBe(live);
+      expect(resolveRuleset(fromReplay, id).effectiveTotal).toBe(live);
       // 150 % of the ruleset's default for one note, never an absolute TOTAL 150.
       const fallback = id === 'beatoraja' ? resolveBeatorajaDefaultTotal(1) : resolveLR2DefaultTotal(1);
       expect(live).toBeCloseTo(fallback * 1.5, 9);

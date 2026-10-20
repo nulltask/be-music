@@ -8,7 +8,7 @@ import {
   resolveRuleset,
   rulesetChartFactsFromChart,
   type JudgeWindowSetUs,
-  type PlaylogRulesetId,
+  type RulesetId,
 } from '../../player/src/ruleset/index.ts';
 import { stringifyBMS, stringifyBmson } from './index.ts';
 
@@ -1069,7 +1069,7 @@ describe('stringifier', () => {
 
     describe("be-music's judge windows for the BMS and its bmson conversion", () => {
       const chart = { scorableNotes: [], laneDisplayMode: '7 KEY SP' };
-      const windowsOf = (json: ReturnType<typeof parseChart>, ruleset: PlaylogRulesetId): JudgeWindowSetUs =>
+      const windowsOf = (json: ReturnType<typeof parseChart>, ruleset: RulesetId): JudgeWindowSetUs =>
         resolveRuleset(rulesetChartFactsFromChart(json, chart), ruleset).windows.note;
       const convert = (source: string) => {
         const bms = parseChart(source);

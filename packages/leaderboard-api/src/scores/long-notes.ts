@@ -1,10 +1,10 @@
-import type { BeMusicPlaylog } from '@be-music/player/playlog';
+import type { BeMusicReplay } from '@be-music/player/replay';
 
 /**
- * Whether a play log's chart had long notes: the notes the engine resolved and recorded as `long` (from `#LNTYPE` /
+ * Whether a replay's chart had long notes: the notes the engine resolved and recorded as `long` (from `#LNTYPE` /
  * `#LNOBJ` / channels `5x` / `6x`, or bmson lengths). FREE ZONE notes are recorded as their own type and do not count.
  */
-export function playlogHasLongNotes(chart: Pick<BeMusicPlaylog['chart'], 'notes'>): boolean {
+export function replayHasLongNotes(chart: Pick<BeMusicReplay['chart'], 'notes'>): boolean {
   return chart.notes.some((note) => note.type === 'long');
 }
 

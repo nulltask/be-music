@@ -150,7 +150,7 @@ function renderChromeFrame(
     drawBGAFrame(frame, layer, bga, hasBGA, runtime.nowMs, drive, layerPool);
   }
   drawGauge(frame, layer, runtime, layerPool);
-  drawSongPlate(frame, layer, runtime, layerPool);
+  drawChartPlate(frame, layer, runtime, layerPool);
   drawScorePlate(frame, layer, runtime, drive, layerPool);
   // The side column on the right edge: the judge tally on top, the spectrum below it.
   const tallyBottom = drawJudgeTally(frame, layer, runtime, STAGE_SIDE_COLUMN.x, layerPool);
@@ -637,7 +637,7 @@ function drawGauge(
 }
 
 /** The track card: a paper plate on a red shadow, black title, red artist line. */
-function drawSongPlate(
+function drawChartPlate(
   frame: Graphics,
   layer: Container,
   runtime: FallbackGameplayRuntime,
@@ -651,7 +651,7 @@ function drawSongPlate(
     .stroke({ color: PHANTOM_INK, width: 2 });
   frame.poly(parallelogramPoints(x + 6, y + 6, 5, h - 12, 5)).fill(PHANTOM_RED);
   // Genre, title, artist — the order every built-in skin uses; the genre rides a small line above the title.
-  const genre = runtime.songGenre?.trim();
+  const genre = runtime.chartGenre?.trim();
   const lift = genre ? 8 : 0;
   if (genre) {
     addText(
@@ -665,13 +665,13 @@ function drawSongPlate(
   }
   addText(
     layer,
-    runtime.songTitle?.trim() || 'Untitled chart',
+    runtime.chartTitle?.trim() || 'Untitled chart',
     x + 22,
     y + 5 + lift,
     { size: 16, fill: PHANTOM_INK, fontFamily: DEFAULT_HEADLINE_FONT, maxWidth: w - 30 },
     pool,
   );
-  const artist = runtime.songArtist?.trim();
+  const artist = runtime.chartArtist?.trim();
   if (artist) {
     addText(
       layer,

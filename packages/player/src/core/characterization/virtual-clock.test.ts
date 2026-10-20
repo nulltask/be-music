@@ -60,17 +60,17 @@ describe('createVirtualClock', () => {
 /**
  * Real time against virtual time: the same plays on the host's clock and on the virtual clock reach the same result.
  * The real-time runs tick on the host's timers, so only what does not depend on where the ticks fall is compared: a
- * replay (judged on chart time, `advanceJudgeCoreReplay`) and an auto play, their summaries and play logs, the
+ * replay (judged on chart time, `advanceJudgeCoreReplay`) and an auto play, their summaries and replays, the
  * judgments in order, and the audio session's calls and the UI commands as sets.
  */
 describe('the virtual clock against real time', () => {
   const untimed = (entries: readonly string[]): string[] => entries.map((entry) => entry.replace(/^\S+ /, ''));
   const comparable = (observation: PlayObservation) => {
-    const { createdAt: _createdAt, recorder: _recorder, ...playlog } = observation.playlog!;
+    const { createdAt: _createdAt, recorder: _recorder, ...replay } = observation.replay!;
     return {
       outcome: observation.outcome,
       summary: observation.summary,
-      playlog,
+      replay,
       simulated: observation.simulated,
       judges: untimed(observation.judges),
       audio: untimed(observation.audio).sort(),
@@ -102,7 +102,7 @@ describe('the virtual clock against real time', () => {
     const replay = {
       driver: 'manual' as const,
       chart,
-      options: { judgeRuleset: 'beatoraja' as const, speed: 8, replayInputs: recorded.playlog!.inputs },
+      options: { judgeRuleset: 'beatoraja' as const, speed: 8, replayInputs: recorded.replay!.inputs },
     };
     const auto = { driver: 'auto' as const, chart: basicChart(), options: { speed: 8 } };
 

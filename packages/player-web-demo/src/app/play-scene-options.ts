@@ -5,7 +5,7 @@
 import type { ChartFileHashes } from '@be-music/player-web/collection';
 import type { PlaySceneCourse, PlaySceneSettings } from '@be-music/player-web/host';
 import { resolveCourseStagePlaySettings, resolveCourseStageSettings } from '@be-music/player/course';
-import type { BeMusicPlaylog, PlaylogRecorderInfo } from '@be-music/player/playlog';
+import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player/replay';
 import { resolveCourseView, type PlayOptions } from '@be-music/scene-model';
 import type { ActiveCourse, CourseStagePlay } from '../course-flow.ts';
 import { tempoFromPercent } from '../play-tempo-settings.ts';
@@ -48,9 +48,9 @@ export interface PlaySceneOptionsInput {
   readonly playOptions: PlayOptions;
   /** The start's AUTO; the Debug Menu's when it set none. */
   readonly autoPlay?: boolean;
-  /** A play log to play back instead of the player's input. */
-  readonly replay?: BeMusicPlaylog;
-  /** The chart file's hashes, which the play log records. */
+  /** A replay to play back instead of the player's input. */
+  readonly replay?: BeMusicReplay;
+  /** The chart file's hashes, which the replay records. */
   readonly chartHashes?: ChartFileHashes;
   /** The EXPERT / GRADE course stage this play is. */
   readonly courseStage?: CourseStagePlay;
@@ -62,8 +62,8 @@ export interface PlaySceneOptionsInput {
   readonly audioCompressorParams: PlaySceneSettings['audioCompressorParams'];
   /** The compressor architecture every play mounts with (`?compressor=`). */
   readonly audioCompressorMode: 'split' | 'legacy';
-  /** This app as the recorder of its play logs. */
-  readonly playlogRecorder: Omit<PlaylogRecorderInfo, 'engine'>;
+  /** This app as the recorder of its replays. */
+  readonly replayRecorder: Omit<ReplayRecorderInfo, 'engine'>;
 }
 
 /** A play's settings and course, and the AUTO and tempo it runs with, which its record keys depend on. */
@@ -108,7 +108,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
         : picked;
   const tempo = lanes.tempo;
   const sharedOptions = {
-    // The playlog-relevant options (auto play / random / DP flip / auto scratch / gauge / judge) read from
+    // The replay-relevant options (auto play / random / DP flip / auto scratch / gauge / judge) read from
     // `guiState` — the Debug Menu's "Play options" folder and the LR2 select panel two-way sync into it, and it
     // is the surface that exists on every family (default / beatoraja selects have no LR2 PLAY OPTION panel).
     autoPlay,
@@ -152,7 +152,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     ...(input.chartHashes !== undefined
       ? { chartSHA256: input.chartHashes.sha256, chartMD5: input.chartHashes.md5 }
       : {}),
-    playlogRecorder: input.playlogRecorder,
+    replayRecorder: input.replayRecorder,
     // What the replay shows of the recorded view (the Debug Menu's "Replay / ghost" toggles, latched at song start).
     replayView: { ...guiState.replayView },
     audioVolumes: { key: guiState.keyVolume / 100, bgm: guiState.bgmVolume / 100 },

@@ -206,7 +206,7 @@
         "5200000 11 01 ~600000",
         "5800000 11 01"
       ],
-      "playlogChart": {
+      "replayChart": {
         "sourceFormat": "bmson",
         "laneMode": "5 KEY SP",
         "lnMode": 1,

@@ -3,12 +3,12 @@ import type { BeMusicJSON } from '@be-music/json';
 import { manualPlay, type PlayerSummary } from '@be-music/player';
 import type { PlayerGaugeSummary } from '@be-music/player/signals';
 import type {
-  BeMusicPlaylog,
-  PlaylogInputEvent,
-  PlaylogNote,
-  PlaylogRulesetId,
-  PlaylogRulesetResult,
-} from '@be-music/player/playlog';
+  BeMusicReplay,
+  ReplayInputEvent,
+  ReplayNote,
+  RulesetId,
+  ReplayRulesetResult,
+} from '@be-music/player/replay';
 
 /**
  * Fixed input scenarios and the engine replay driver shared by the regression suites. Every stream is a pure
@@ -16,7 +16,7 @@ import type {
  */
 
 /** The judge rulesets the engine runs under (and the simulators reproduce). */
-export const JUDGE_RULESETS: readonly PlaylogRulesetId[] = ['lr2', 'beatoraja', 'iidx'];
+export const JUDGE_RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', 'iidx'];
 
 /**
  * Playback speed of the corpus's pinned engine replays. A replay is judged on the judge core's fixed chart-time grid,
@@ -36,7 +36,7 @@ const OFFSET_SCENARIO_SKIP_EVERY = 7;
 const TAP_HOLD_US = 40_000;
 
 /** The three input streams the corpus pins: no input, every note on time, and presses cycled across every window. */
-export function buildScenarios(notes: readonly PlaylogNote[]): Record<string, PlaylogInputEvent[]> {
+export function buildScenarios(notes: readonly ReplayNote[]): Record<string, ReplayInputEvent[]> {
   return {
     missed: [],
     perfect: buildInputs(
@@ -54,23 +54,23 @@ export function buildScenarios(notes: readonly PlaylogNote[]): Record<string, Pl
 
 export interface EngineReplayOptions {
   randomDraws: RandomDraws;
-  inputs: readonly PlaylogInputEvent[];
-  judgeRuleset?: PlaylogRulesetId;
+  inputs: readonly ReplayInputEvent[];
+  judgeRuleset?: RulesetId;
   speed: number;
 }
 
 export interface EngineReplay {
   summary: PlayerSummary;
-  playlog: BeMusicPlaylog;
+  replay: BeMusicReplay;
 }
 
 /**
  * Replays `inputs` through the live engine (`manualPlay`, no audio, no TUI, no lead-in) and returns its summary
- * together with the playlog it re-recorded. The chart must already be resolved with `randomDraws`, the way the
+ * together with the replay it re-recorded. The chart must already be resolved with `randomDraws`, the way the
  * hosts hand it to the engine.
  */
 export async function replayEngine(json: BeMusicJSON, options: EngineReplayOptions): Promise<EngineReplay> {
-  let playlog: BeMusicPlaylog | undefined;
+  let replay: BeMusicReplay | undefined;
   const summary = await manualPlay(json, {
     randomDraws: options.randomDraws,
     speed: options.speed,
@@ -80,24 +80,24 @@ export async function replayEngine(json: BeMusicJSON, options: EngineReplayOptio
     writeOutput: () => {},
     ...(options.judgeRuleset === undefined ? {} : { judgeRuleset: options.judgeRuleset }),
     replayInputs: options.inputs,
-    recordPlaylog: {},
-    onPlaylogRecorded: (recorded) => {
-      playlog = recorded;
+    recordReplay: {},
+    onReplayRecorded: (recorded) => {
+      replay = recorded;
     },
   });
-  if (playlog === undefined) {
-    throw new Error('manualPlay finished without recording a playlog');
+  if (replay === undefined) {
+    throw new Error('manualPlay finished without recording a replay');
   }
-  return { summary, playlog };
+  return { summary, replay };
 }
 
 /**
- * The fields on which an engine replay's own result (the play log's `results.native`) and the simulator's result for
+ * The fields on which an engine replay's own result (the replay's `results.native`) and the simulator's result for
  * the same ruleset disagree, as `field engine/simulator`, or an empty list when they agree. Both report the same
  * fields the same way, and both apply the same gauge steps in the same order, so every field must match exactly.
  */
-export function findEngineSimulatorMismatches(engine: EngineReplay, simulated: PlaylogRulesetResult): string[] {
-  const native = engine.playlog.results?.native;
+export function findEngineSimulatorMismatches(engine: EngineReplay, simulated: ReplayRulesetResult): string[] {
+  const native = engine.replay.results?.native;
   if (native === undefined) {
     return ['results.native missing'];
   }
@@ -130,7 +130,7 @@ function flattenResult(value: object, prefix = ''): Map<string, unknown> {
 export async function replayEngineRulesets(
   json: BeMusicJSON,
   options: Omit<EngineReplayOptions, 'judgeRuleset'>,
-): Promise<Array<{ ruleset: PlaylogRulesetId; replay: EngineReplay }>> {
+): Promise<Array<{ ruleset: RulesetId; replay: EngineReplay }>> {
   return Promise.all(
     JUDGE_RULESETS.map(async (ruleset) => ({
       ruleset,
@@ -140,10 +140,10 @@ export async function replayEngineRulesets(
 }
 
 /** What the corpus pins for one engine replay: its summary with floats rounded, plus the max combo it recorded. */
-export function summarizeEngineReplay({ summary, playlog }: EngineReplay): Record<string, unknown> {
+export function summarizeEngineReplay({ summary, replay }: EngineReplay): Record<string, unknown> {
   return {
     ...summary,
-    maxCombo: playlog.results?.native?.maxCombo,
+    maxCombo: replay.results?.native?.maxCombo,
     gauge: summary.gauge === undefined ? undefined : roundGauge(summary.gauge),
   };
 }
@@ -168,12 +168,12 @@ function roundGauge(gauge: PlayerGaugeSummary): PlayerGaugeSummary {
  * lane's previous release, and a tap is released before the lane's next press.
  */
 function buildInputs(
-  notes: readonly PlaylogNote[],
+  notes: readonly ReplayNote[],
   offsetUs: (index: number) => number,
   skip: (index: number) => boolean,
-): PlaylogInputEvent[] {
+): ReplayInputEvent[] {
   const pressable = notes.filter((note) => note.type !== 'mine' && note.type !== 'invisible');
-  const byChannel = new Map<string, Array<{ note: PlaylogNote; index: number }>>();
+  const byChannel = new Map<string, Array<{ note: ReplayNote; index: number }>>();
   pressable.forEach((note, index) => {
     if (skip(index)) {
       return;
@@ -183,7 +183,7 @@ function buildInputs(
     byChannel.set(note.channel, lane);
   });
 
-  const events: Array<Omit<PlaylogInputEvent, 'seq'>> = [];
+  const events: Array<Omit<ReplayInputEvent, 'seq'>> = [];
   for (const [channel, lane] of byChannel) {
     let lastUpUs = Number.NEGATIVE_INFINITY;
     lane.forEach(({ note, index }, position) => {
