@@ -8,7 +8,8 @@ The definitions follow general BMS/bmson terminology where possible, but priorit
 ## Usage Rules
 
 - **chart** is the default word for a playable arrangement of timed objects and resource references. A **chart file** serializes a chart; the arrangement and its file bytes are different identities.
-- **music** names the musical work, independently of a playable arrangement. One work can have multiple charts; title and artist are descriptive metadata, not unique identifiers. Do not infer a separate music entity or identity from those fields.
+- **track** names the musical work, independently of a playable arrangement. One work can have multiple charts; title and artist are descriptive metadata, not unique identifiers. Do not infer a separate track entity or identity from those fields.
+- Use **track** / `Track` / `trackId` for individual musical works. **Music** may describe music in general, but is not the entity name. A track is distinct from an **audio asset** (a file payload) and an **audio track** (a recording or editor timeline lane). Keep screen names such as **Music Select** and external keys such as `preview_music` unchanged.
 - **song** is not the default repository term. Use it only when referring to an external specification name or file name such as `song.mid`, `bemuse-song.json`, or `songs[]`.
 - **Music Select** is a screen name. The unit selected and restored on that screen is still a chart.
 - In the library a select screen browses, a chart is a **library chart** (`LibraryChart`): a chart bar is `{ kind: 'chart', chart }`, a folder lists its `charts` and a course stage names its `chart`. Some public names still say song (`PlayResult.song`, `BrowserSongCollectionStore`, `BrowserSongAssetSource`, the skin SDK's `songRecord`, `BeMusicSongRecord` and `resolveSongStats`); new names say chart.
@@ -20,7 +21,7 @@ Use these terms in documentation, source comments, and user-facing text. Code id
 | Concept                               | English              | Japanese              | Code                                                             |
 | ------------------------------------- | -------------------- | --------------------- | ---------------------------------------------------------------- |
 | Playable arrangement                  | chart                | 譜面                  | `chart`                                                          |
-| Musical work shared by charts         | music                | 楽曲                  | `music`                                                          |
+| Musical work shared by charts         | track                | 楽曲                  | `track`                                                          |
 | JSON-based chart format               | bmson                | bmson                 | `bmson` / `Bmson`; existing `BMSON_*` constants remain unchanged |
 | Judgment result                       | judgment             | 判定                  | `judge` in existing APIs                                         |
 | Recorded input replay                 | play log             | プレイログ            | `playLog` / `PlayLog`                                            |
