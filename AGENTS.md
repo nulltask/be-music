@@ -11,7 +11,7 @@
 # Terminology Rules
 
 - Use [the glossary](docs/glossary.md) as the canonical vocabulary for documentation, source comments, user-facing text, and new internal names. Keep its Japanese counterpart in sync.
-- Use `chart` for a playable score and `music` for the musical work. Preserve existing public API names and external `song` names.
+- Use `chart` for a playable score and `track` for the musical work. Preserve existing public API names and external `song` names.
 - For new play-log identifiers, separate the words as `playLog` / `PlayLog`; use `log` for local variables or parameters when their context is clear. Preserve existing public and persisted spellings until an explicit migration.
 - Write `bmson` in prose, `play log` for a recorded replay, and `avatar` for a user's profile image. Keep external identifiers, database columns, URLs, and compatibility names unchanged.
 

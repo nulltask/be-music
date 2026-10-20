@@ -4,12 +4,14 @@
 
 This review maps code vocabulary to domain concepts and separates aliases from genuine differences in meaning. Rename candidates below are proposals, not implemented API changes. Read them with the [glossary](./glossary.md).
 
+Use `track` for a musical work and `Track` / `trackId` for new types and references. The metadata mapping below does not imply that a track entity already exists. Keep `chart` for the playable arrangement and `audio asset` for an audio file payload.
+
 ## Charts and assets
 
 | Concept                             | Current code                                           | Meaning and distinction                                                                                                |
 | ----------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
 | chart / 譜面                        | `BeMusicJSON`, `ResolvedChart`, `LibraryChart`         | Source document, resolved playback data, and library entry are different representations of a chart.                   |
-| music / 楽曲                        | `metadata.title`, `metadata.artist`                    | Descriptive metadata is not a unique music ID.                                                                         |
+| track / 楽曲                        | `metadata.title`, `metadata.artist`                    | Descriptive metadata is not a unique track ID.                                                                         |
 | chart set / 譜面セット              | `chartset`                                             | An externally identified grouping of charts, including add-ons; not a synonym for a chart or its containing directory. |
 | chart file / 譜面ファイル           | `chartPath`, `fileSha256`, `fileMd5`                   | File location and raw-byte identity, not chart fingerprint.                                                            |
 | chart collection / 譜面コレクション | `BrowserSongCollection`, `BrowserSongCollectionStore`  | Loaded charts, asset sources, errors and course folders; legacy Song names refer to charts.                            |
