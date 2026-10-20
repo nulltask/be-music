@@ -175,6 +175,8 @@ Existing names such as `CourseSongRecord`, `RandomCourseDrawSuccess.songs`, and 
 
 ## Related Documents
 
+- [Code domain vocabulary review](./code-vocabulary.md)
+
 - [Specification top](./README.md)
 - [BMS implementation specification](./bms-spec.md)
 - [bmson implementation specification](./bmson-spec.md)

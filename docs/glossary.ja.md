@@ -175,6 +175,8 @@
 
 ## 関連文書
 
+- [コード内ドメイン用語の整理案](./code-vocabulary.ja.md)
+
 - [仕様書トップ](./README.ja.md)
 - [BMS 実装仕様](./bms-spec.ja.md)
 - [bmson 実装仕様](./bmson-spec.ja.md)
