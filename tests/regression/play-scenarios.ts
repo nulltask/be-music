@@ -1,14 +1,14 @@
-import type { RandomDraws } from '@be-music/chart';
-import type { BeMusicJSON } from '@be-music/json';
-import { manualPlay, type PlayerSummary } from '@be-music/player';
-import type { PlayerGaugeSummary } from '@be-music/player/signals';
+import type { RandomDraws } from '@be-music/chart-model';
+import type { BeMusicJSON } from '@be-music/chart-source';
+import { manualPlay, type PlayerSummary } from '@be-music/player-engine';
+import type { PlayerGaugeSummary } from '@be-music/player-engine/signals';
 import type {
   BeMusicReplay,
   ReplayInputEvent,
   ReplayNote,
   RulesetId,
   ReplayRulesetResult,
-} from '@be-music/player/replay';
+} from '@be-music/player-engine/replay';
 
 /**
  * Fixed input scenarios and the engine replay driver shared by the regression suites. Every stream is a pure

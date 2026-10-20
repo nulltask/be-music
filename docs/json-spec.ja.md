@@ -1,9 +1,9 @@
 [English version](./json-spec.md)
 
-# BMS/bmson 中間表現 (`@be-music/json`) 実装仕様
+# BMS/bmson 中間表現 (`@be-music/chart-source`) 実装仕様
 
-この文書は、`@be-music/json` が提供する BMS/bmson 中間表現の正規仕様です。
-`@be-music/json` は Be-Music の内部処理専用フォーマットであり、配布や再利用を目的とした外部交換フォーマットではありません。
+この文書は、`@be-music/chart-source` が提供する BMS/bmson 中間表現の正規仕様です。
+`@be-music/chart-source` は Be-Music の内部処理専用フォーマットであり、配布や再利用を目的とした外部交換フォーマットではありません。
 また、まだ開発初期段階のため、この中間表現の後方互換性は保証しません。
 
 ## 目的
@@ -13,9 +13,9 @@
 
 ## パッケージ境界
 
-- `@be-music/json` は純粋な IR パッケージです
-- `@be-music/json` が提供するのは、型、正規化済みのデータ構造、clone / 初期化 / 基本的な整形 helper に限られます
-- beat 変換、イベント順序、ロングノート解決、sample trigger 判定などの譜面意味論は `@be-music/chart` が担当します。譜面の [Be-Music Fingerprint](fingerprint-spec.ja.md) も `@be-music/chart` が求めます（`computeChartFingerprint` / `computePlayFingerprint`）
+- `@be-music/chart-source` は純粋な IR パッケージです
+- `@be-music/chart-source` が提供するのは、型、正規化済みのデータ構造、clone / 初期化 / 基本的な整形 helper に限られます
+- beat 変換、イベント順序、ロングノート解決、sample trigger 判定などの譜面意味論は `@be-music/chart-model` が担当します。譜面の [Be-Music Fingerprint](fingerprint-spec.ja.md) も `@be-music/chart-model` が求めます（`computeChartFingerprint` / `computePlayFingerprint`）
 - round-trip のための source-level 情報は IR の一部として保持しますが、正規化済みの譜面意味論とは `preservation` 層で分離します
 
 ## 設計原則
@@ -47,7 +47,7 @@
 
 ## ルート構造
 
-ルートオブジェクトとその部分です（フィールドの型は `packages/json/src/index.ts` にあります）。
+ルートオブジェクトとその部分です（フィールドの型は `packages/chart-source/src/index.ts` にあります）。
 
 ```mermaid
 classDiagram
@@ -418,7 +418,7 @@ flowchart LR
     bmsonIn[".bmson"]
     jsonIn[".json"]
   end
-  ir["BeMusicJSON<br/>(@be-music/json)"]
+  ir["BeMusicJSON<br/>(@be-music/chart-source)"]
   subgraph out["書き出し"]
     bmsOut[".bms"]
     bmsonOut[".bmson"]
@@ -434,4 +434,4 @@ flowchart LR
 
 - `stringifier` は `position` 分母情報を使って小節内解像度を決定します
 - `parseJson` は `position` タプルを必須とし、欠損イベントはエラー扱いにします
-- beat 変換やイベント順序などの譜面意味論 helper は `@be-music/chart` が提供します
+- beat 変換やイベント順序などの譜面意味論 helper は `@be-music/chart-model` が提供します

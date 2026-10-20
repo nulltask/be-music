@@ -27,48 +27,48 @@ importers:
 
   .:
     devDependencies:
-      '@be-music/audio-renderer':
+      '@be-music/chart-audio-renderer':
         specifier: workspace:*
-        version: link:packages/audio-renderer
-      '@be-music/beatoraja-skin':
+        version: link:packages/chart-audio-renderer
+      '@be-music/chart-editor':
         specifier: workspace:*
-        version: link:packages/beatoraja-skin
-      '@be-music/chart':
+        version: link:packages/chart-editor
+      '@be-music/chart-model':
         specifier: workspace:*
-        version: link:packages/chart
-      '@be-music/editor':
+        version: link:packages/chart-model
+      '@be-music/chart-parser':
         specifier: workspace:*
-        version: link:packages/editor
-      '@be-music/json':
+        version: link:packages/chart-parser
+      '@be-music/chart-source':
         specifier: workspace:*
-        version: link:packages/json
-      '@be-music/lr2-skin':
+        version: link:packages/chart-source
+      '@be-music/chart-writer':
         specifier: workspace:*
-        version: link:packages/lr2-skin
-      '@be-music/parser':
+        version: link:packages/chart-writer
+      '@be-music/player-browser':
         specifier: workspace:*
-        version: link:packages/parser
-      '@be-music/player':
+        version: link:packages/player-browser
+      '@be-music/player-engine':
         specifier: workspace:*
-        version: link:packages/player
-      '@be-music/player-tui':
+        version: link:packages/player-engine
+      '@be-music/player-scene-model':
         specifier: workspace:*
-        version: link:packages/player-tui
-      '@be-music/player-web':
+        version: link:packages/player-scene-model
+      '@be-music/player-skin-sdk':
         specifier: workspace:*
-        version: link:packages/player-web
-      '@be-music/scene-model':
+        version: link:packages/player-skin-sdk
+      '@be-music/player-terminal':
         specifier: workspace:*
-        version: link:packages/scene-model
-      '@be-music/skin-sdk':
+        version: link:packages/player-terminal
+      '@be-music/shared-utils':
         specifier: workspace:*
-        version: link:packages/skin-sdk
-      '@be-music/stringifier':
+        version: link:packages/shared-utils
+      '@be-music/skin-beatoraja':
         specifier: workspace:*
-        version: link:packages/stringifier
-      '@be-music/utils':
+        version: link:packages/skin-beatoraja
+      '@be-music/skin-lr2':
         specifier: workspace:*
-        version: link:packages/utils
+        version: link:packages/skin-lr2
       '@changesets/cli':
         specifier: ^3.0.3
         version: 3.0.3
@@ -100,14 +100,14 @@ importers:
         specifier: 'catalog:'
         version: 5.0.5(@types/node@26.6.1)(@vitest/browser-preview@5.0.5)(@vitest/coverage-v8@5.0.5(@vitest/browser@5.0.5)(vitest@5.0.5))(@vitest/ui@5.0.5(vitest@5.0.5))(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)(unrun@0.2.37)(yaml@2.9.0))
 
-  packages/accounts:
+  packages/app-accounts:
     dependencies:
-      '@be-music/auth-client':
+      '@be-music/service-auth-client':
         specifier: workspace:*
-        version: link:../auth-client
-      '@be-music/web-theme':
+        version: link:../service-auth-client
+      '@be-music/service-web-theme':
         specifier: workspace:*
-        version: link:../web-theme
+        version: link:../service-web-theme
       '@better-auth/oauth-provider':
         specifier: 1.7.10
         version: 1.7.10(@better-auth/core@1.7.10(@better-auth/utils@0.5.0)(@better-fetch/fetch@1.3.2)(better-call@1.4.2(zod@4.6.7))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.5))(@better-auth/utils@0.5.0)(@better-fetch/fetch@1.3.2)(better-auth@1.7.10(drizzle-kit@0.31.11)(drizzle-orm@0.45.4(@cloudflare/workers-types@5.20261016.1)(kysely@0.29.6))(vitest@5.0.5))(better-call@1.4.2(zod@4.6.7))
@@ -135,86 +135,19 @@ importers:
         version: 5.20261006.1-alpha(@types/node@26.6.1)
       vite-plus:
         specifier: 'catalog:'
-        version: 1.3.0(@types/node@26.6.1)(@vitest/coverage-v8@5.0.5)(@vitest/ui@5.0.5(vitest@5.0.5))(esbuild@0.28.2)(jiti@2.7.0)(playwright@1.64.1)(tsx@4.23.13)(typescript@7.0.2)(unrun@0.2.37)(yaml@2.9.0)
+        version: 1.3.0(@types/node@26.6.1)(@vitest/coverage-v8@5.0.5(@vitest/browser@5.0.5)(vitest@5.0.5))(@vitest/ui@5.0.5(vitest@5.0.5))(esbuild@0.28.2)(jiti@2.7.0)(playwright@1.64.1)(tsx@4.23.13)(typescript@7.0.2)(unrun@0.2.37)(yaml@2.9.0)
       wrangler:
         specifier: ^4.151.0
         version: 4.151.0(@cloudflare/workers-types@5.20261016.1)(@types/node@26.6.1)
 
-  packages/audio-renderer:
+  packages/app-dashboard:
     dependencies:
-      '@be-music/chart':
+      '@be-music/service-auth-client':
         specifier: workspace:*
-        version: link:../chart
-      '@be-music/json':
+        version: link:../service-auth-client
+      '@be-music/service-web-theme':
         specifier: workspace:*
-        version: link:../json
-      '@be-music/parser':
-        specifier: workspace:*
-        version: link:../parser
-      '@be-music/utils':
-        specifier: workspace:*
-        version: link:../utils
-      '@wasm-audio-decoders/ogg-vorbis':
-        specifier: ^0.1.20
-        version: 0.1.20
-      mpg123-decoder:
-        specifier: ^1.0.3
-        version: 1.0.3
-      ogg-opus-decoder:
-        specifier: ^1.7.5
-        version: 1.7.5
-
-  packages/auth-client:
-    dependencies:
-      jose:
-        specifier: ^6.1.3
-        version: 6.2.12
-      oauth4webapi:
-        specifier: ^3.8.5
-        version: 3.8.8
-    devDependencies:
-      tinybench:
-        specifier: ^6.2.1
-        version: 6.2.2
-
-  packages/beatoraja-skin:
-    dependencies:
-      '@be-music/lr2-skin':
-        specifier: workspace:*
-        version: link:../lr2-skin
-      '@be-music/player':
-        specifier: workspace:*
-        version: link:../player
-      '@be-music/scene-model':
-        specifier: workspace:*
-        version: link:../scene-model
-      '@be-music/utils':
-        specifier: workspace:*
-        version: link:../utils
-      fengari:
-        specifier: ^0.1.4
-        version: 0.1.5
-      fengari-web:
-        specifier: ^0.1.4
-        version: 0.1.4
-
-  packages/chart:
-    dependencies:
-      '@be-music/json':
-        specifier: workspace:*
-        version: link:../json
-      '@be-music/utils':
-        specifier: workspace:*
-        version: link:../utils
-
-  packages/dashboard:
-    dependencies:
-      '@be-music/auth-client':
-        specifier: workspace:*
-        version: link:../auth-client
-      '@be-music/web-theme':
-        specifier: workspace:*
-        version: link:../web-theme
+        version: link:../service-web-theme
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^5.20261015.1
@@ -229,44 +162,20 @@ importers:
         specifier: ^4.151.0
         version: 4.151.0(@cloudflare/workers-types@5.20261016.1)(@types/node@26.6.1)
 
-  packages/editor:
+  packages/app-leaderboard:
     dependencies:
-      '@be-music/chart':
+      '@be-music/chart-model':
         specifier: workspace:*
-        version: link:../chart
-      '@be-music/json':
+        version: link:../chart-model
+      '@be-music/player-engine':
         specifier: workspace:*
-        version: link:../json
-      '@be-music/parser':
+        version: link:../player-engine
+      '@be-music/service-auth-client':
         specifier: workspace:*
-        version: link:../parser
-      '@be-music/stringifier':
+        version: link:../service-auth-client
+      '@be-music/service-web-theme':
         specifier: workspace:*
-        version: link:../stringifier
-      '@be-music/utils':
-        specifier: workspace:*
-        version: link:../utils
-
-  packages/json:
-    dependencies:
-      '@be-music/utils':
-        specifier: workspace:*
-        version: link:../utils
-
-  packages/leaderboard-api:
-    dependencies:
-      '@be-music/auth-client':
-        specifier: workspace:*
-        version: link:../auth-client
-      '@be-music/chart':
-        specifier: workspace:*
-        version: link:../chart
-      '@be-music/player':
-        specifier: workspace:*
-        version: link:../player
-      '@be-music/web-theme':
-        specifier: workspace:*
-        version: link:../web-theme
+        version: link:../service-web-theme
       '@better-auth/passkey':
         specifier: ^1.7.10
         version: 1.7.10(@better-auth/core@1.7.10(@better-auth/utils@0.5.0)(@better-fetch/fetch@1.3.2)(better-call@1.4.2(zod@4.6.7))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.5))(@better-auth/utils@0.5.0)(@better-fetch/fetch@1.3.2)(better-auth@1.7.10(drizzle-kit@0.31.11)(drizzle-orm@0.45.4(@cloudflare/workers-types@5.20261016.1)(kysely@0.29.6))(vitest@5.0.5))(better-call@1.4.2(zod@4.6.7))(nanostores@1.5.5)
@@ -298,9 +207,9 @@ importers:
         specifier: ^1.5.0
         version: 1.5.0(typescript@7.0.2)
     devDependencies:
-      '@be-music/parser':
+      '@be-music/chart-parser':
         specifier: workspace:*
-        version: link:../parser
+        version: link:../chart-parser
       '@cloudflare/workers-types':
         specifier: ^5.20261015.1
         version: 5.20261016.1
@@ -335,201 +244,38 @@ importers:
         specifier: ^4.151.0
         version: 4.151.0(@cloudflare/workers-types@5.20261016.1)(@types/node@26.6.1)
 
-  packages/lr2-skin:
+  packages/app-play:
     dependencies:
-      '@be-music/chart':
+      '@be-music/chart-model':
         specifier: workspace:*
-        version: link:../chart
-      '@be-music/json':
+        version: link:../chart-model
+      '@be-music/chart-parser':
         specifier: workspace:*
-        version: link:../json
-      '@be-music/player':
+        version: link:../chart-parser
+      '@be-music/chart-source':
         specifier: workspace:*
-        version: link:../player
-      '@be-music/scene-model':
+        version: link:../chart-source
+      '@be-music/player-browser':
         specifier: workspace:*
-        version: link:../scene-model
-      '@be-music/utils':
+        version: link:../player-browser
+      '@be-music/player-engine':
         specifier: workspace:*
-        version: link:../utils
-
-  packages/parser:
-    dependencies:
-      '@be-music/chart':
+        version: link:../player-engine
+      '@be-music/player-scene-model':
         specifier: workspace:*
-        version: link:../chart
-      '@be-music/json':
+        version: link:../player-scene-model
+      '@be-music/player-skin-sdk':
         specifier: workspace:*
-        version: link:../json
-      '@be-music/utils':
+        version: link:../player-skin-sdk
+      '@be-music/service-web-theme':
         specifier: workspace:*
-        version: link:../utils
-
-  packages/play:
-    dependencies:
-      '@be-music/auth-client':
+        version: link:../service-web-theme
+      '@be-music/skin-beatoraja':
         specifier: workspace:*
-        version: link:../auth-client
-    devDependencies:
-      '@cloudflare/workers-types':
-        specifier: ^5.20261015.1
-        version: 5.20261016.1
-      cf:
-        specifier: 1.0.0-beta.17
-        version: 1.0.0-beta.17(@types/node@26.6.1)
-      vite-plus:
-        specifier: 'catalog:'
-        version: 1.3.0(@types/node@26.6.1)(@vitest/coverage-v8@5.0.5)(@vitest/ui@5.0.5(vitest@5.0.5))(esbuild@0.28.2)(jiti@2.7.0)(playwright@1.64.1)(tsx@4.23.13)(typescript@7.0.2)(unrun@0.2.37)(yaml@2.9.0)
-      wrangler:
-        specifier: ^4.151.0
-        version: 4.151.0(@cloudflare/workers-types@5.20261016.1)(@types/node@26.6.1)
-
-  packages/player:
-    dependencies:
-      '@be-music/audio-renderer':
+        version: link:../skin-beatoraja
+      '@be-music/skin-lr2':
         specifier: workspace:*
-        version: link:../audio-renderer
-      '@be-music/chart':
-        specifier: workspace:*
-        version: link:../chart
-      '@be-music/json':
-        specifier: workspace:*
-        version: link:../json
-      '@be-music/parser':
-        specifier: workspace:*
-        version: link:../parser
-      '@be-music/utils':
-        specifier: workspace:*
-        version: link:../utils
-      alien-signals:
-        specifier: ^3.2.1
-        version: 3.2.1
-      node-web-audio-api:
-        specifier: ^2.2.0
-        version: 2.2.0
-
-  packages/player-tui:
-    dependencies:
-      '@be-music/audio-renderer':
-        specifier: workspace:*
-        version: link:../audio-renderer
-      '@be-music/chart':
-        specifier: workspace:*
-        version: link:../chart
-      '@be-music/json':
-        specifier: workspace:*
-        version: link:../json
-      '@be-music/parser':
-        specifier: workspace:*
-        version: link:../parser
-      '@be-music/player':
-        specifier: workspace:*
-        version: link:../player
-      '@be-music/utils':
-        specifier: workspace:*
-        version: link:../utils
-      '@uwx/libav.js-fat':
-        specifier: 6.0.0-nightly.29.f420ff.ffmpeg.6.1.1
-        version: 6.0.0-nightly.29.f420ff.ffmpeg.6.1.1
-      alien-signals:
-        specifier: ^3.2.1
-        version: 3.2.1
-      fast-bmp:
-        specifier: ^4.0.1
-        version: 4.0.1
-      fast-png:
-        specifier: ^8.0.0
-        version: 8.0.0
-      jpeg-js:
-        specifier: ^0.4.4
-        version: 0.4.4
-
-  packages/player-web:
-    dependencies:
-      '@be-music/beatoraja-skin':
-        specifier: workspace:*
-        version: link:../beatoraja-skin
-      '@be-music/chart':
-        specifier: workspace:*
-        version: link:../chart
-      '@be-music/json':
-        specifier: workspace:*
-        version: link:../json
-      '@be-music/lr2-skin':
-        specifier: workspace:*
-        version: link:../lr2-skin
-      '@be-music/parser':
-        specifier: workspace:*
-        version: link:../parser
-      '@be-music/player':
-        specifier: workspace:*
-        version: link:../player
-      '@be-music/scene-model':
-        specifier: workspace:*
-        version: link:../scene-model
-      '@be-music/skin-sdk':
-        specifier: workspace:*
-        version: link:../skin-sdk
-      '@be-music/utils':
-        specifier: workspace:*
-        version: link:../utils
-      '@ffmpeg/core':
-        specifier: ^0.12.10
-        version: 0.12.10
-      '@ffmpeg/core-mt':
-        specifier: ^0.12.10
-        version: 0.12.10
-      '@ffmpeg/ffmpeg':
-        specifier: ^0.12.15
-        version: 0.12.15
-      '@ffmpeg/util':
-        specifier: ^0.12.2
-        version: 0.12.2
-      fflate:
-        specifier: ^0.8.3
-        version: 0.8.3
-      mediabunny:
-        specifier: ^1.61.6
-        version: 1.61.6
-      pixi.js:
-        specifier: ^8.22.0
-        version: 8.22.0
-      signalsmith-stretch:
-        specifier: ^1.3.2
-        version: 1.3.2
-
-  packages/player-web-demo:
-    dependencies:
-      '@be-music/beatoraja-skin':
-        specifier: workspace:*
-        version: link:../beatoraja-skin
-      '@be-music/chart':
-        specifier: workspace:*
-        version: link:../chart
-      '@be-music/json':
-        specifier: workspace:*
-        version: link:../json
-      '@be-music/lr2-skin':
-        specifier: workspace:*
-        version: link:../lr2-skin
-      '@be-music/parser':
-        specifier: workspace:*
-        version: link:../parser
-      '@be-music/player':
-        specifier: workspace:*
-        version: link:../player
-      '@be-music/player-web':
-        specifier: workspace:*
-        version: link:../player-web
-      '@be-music/scene-model':
-        specifier: workspace:*
-        version: link:../scene-model
-      '@be-music/skin-sdk':
-        specifier: workspace:*
-        version: link:../skin-sdk
-      '@be-music/web-theme':
-        specifier: workspace:*
-        version: link:../web-theme
+        version: link:../skin-lr2
       '@better-auth/passkey':
         specifier: ^1.7.10
         version: 1.7.10(@better-auth/core@1.7.10(@better-auth/utils@0.5.0)(@better-fetch/fetch@1.3.2)(better-call@1.4.2(zod@4.6.7))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.5))(@better-auth/utils@0.5.0)(@better-fetch/fetch@1.3.2)(better-auth@1.7.10(drizzle-kit@0.31.11)(drizzle-orm@0.45.4(@cloudflare/workers-types@5.20261016.1)(kysely@0.29.6))(vitest@5.0.5))(better-call@1.4.2(zod@4.6.7))(nanostores@1.5.5)
@@ -556,57 +302,255 @@ importers:
         specifier: ^4.151.0
         version: 4.151.0(@cloudflare/workers-types@5.20261016.1)(@types/node@26.6.1)
 
-  packages/scene-model:
+  packages/chart-audio-renderer:
     dependencies:
-      '@be-music/chart':
+      '@be-music/chart-model':
         specifier: workspace:*
-        version: link:../chart
-      '@be-music/json':
+        version: link:../chart-model
+      '@be-music/chart-parser':
         specifier: workspace:*
-        version: link:../json
-      '@be-music/player':
+        version: link:../chart-parser
+      '@be-music/chart-source':
         specifier: workspace:*
-        version: link:../player
+        version: link:../chart-source
+      '@be-music/shared-utils':
+        specifier: workspace:*
+        version: link:../shared-utils
+      '@wasm-audio-decoders/ogg-vorbis':
+        specifier: ^0.1.20
+        version: 0.1.20
+      mpg123-decoder:
+        specifier: ^1.0.3
+        version: 1.0.3
+      ogg-opus-decoder:
+        specifier: ^1.7.5
+        version: 1.7.5
+
+  packages/chart-editor:
+    dependencies:
+      '@be-music/chart-model':
+        specifier: workspace:*
+        version: link:../chart-model
+      '@be-music/chart-parser':
+        specifier: workspace:*
+        version: link:../chart-parser
+      '@be-music/chart-source':
+        specifier: workspace:*
+        version: link:../chart-source
+      '@be-music/chart-writer':
+        specifier: workspace:*
+        version: link:../chart-writer
+      '@be-music/shared-utils':
+        specifier: workspace:*
+        version: link:../shared-utils
+
+  packages/chart-model:
+    dependencies:
+      '@be-music/chart-source':
+        specifier: workspace:*
+        version: link:../chart-source
+      '@be-music/shared-utils':
+        specifier: workspace:*
+        version: link:../shared-utils
+
+  packages/chart-parser:
+    dependencies:
+      '@be-music/chart-model':
+        specifier: workspace:*
+        version: link:../chart-model
+      '@be-music/chart-source':
+        specifier: workspace:*
+        version: link:../chart-source
+      '@be-music/shared-utils':
+        specifier: workspace:*
+        version: link:../shared-utils
+
+  packages/chart-source:
+    dependencies:
+      '@be-music/shared-utils':
+        specifier: workspace:*
+        version: link:../shared-utils
+
+  packages/chart-writer:
+    dependencies:
+      '@be-music/chart-model':
+        specifier: workspace:*
+        version: link:../chart-model
+      '@be-music/chart-parser':
+        specifier: workspace:*
+        version: link:../chart-parser
+      '@be-music/chart-source':
+        specifier: workspace:*
+        version: link:../chart-source
+      '@be-music/shared-utils':
+        specifier: workspace:*
+        version: link:../shared-utils
+
+  packages/player-browser:
+    dependencies:
+      '@be-music/chart-model':
+        specifier: workspace:*
+        version: link:../chart-model
+      '@be-music/chart-parser':
+        specifier: workspace:*
+        version: link:../chart-parser
+      '@be-music/chart-source':
+        specifier: workspace:*
+        version: link:../chart-source
+      '@be-music/player-engine':
+        specifier: workspace:*
+        version: link:../player-engine
+      '@be-music/player-scene-model':
+        specifier: workspace:*
+        version: link:../player-scene-model
+      '@be-music/player-skin-sdk':
+        specifier: workspace:*
+        version: link:../player-skin-sdk
+      '@be-music/shared-utils':
+        specifier: workspace:*
+        version: link:../shared-utils
+      '@be-music/skin-beatoraja':
+        specifier: workspace:*
+        version: link:../skin-beatoraja
+      '@be-music/skin-lr2':
+        specifier: workspace:*
+        version: link:../skin-lr2
+      '@ffmpeg/core':
+        specifier: ^0.12.10
+        version: 0.12.10
+      '@ffmpeg/core-mt':
+        specifier: ^0.12.10
+        version: 0.12.10
+      '@ffmpeg/ffmpeg':
+        specifier: ^0.12.15
+        version: 0.12.15
+      '@ffmpeg/util':
+        specifier: ^0.12.2
+        version: 0.12.2
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
+      mediabunny:
+        specifier: ^1.61.6
+        version: 1.61.6
+      pixi.js:
+        specifier: ^8.22.0
+        version: 8.22.0
+      signalsmith-stretch:
+        specifier: ^1.3.2
+        version: 1.3.2
+
+  packages/player-engine:
+    dependencies:
+      '@be-music/chart-audio-renderer':
+        specifier: workspace:*
+        version: link:../chart-audio-renderer
+      '@be-music/chart-model':
+        specifier: workspace:*
+        version: link:../chart-model
+      '@be-music/chart-parser':
+        specifier: workspace:*
+        version: link:../chart-parser
+      '@be-music/chart-source':
+        specifier: workspace:*
+        version: link:../chart-source
+      '@be-music/shared-utils':
+        specifier: workspace:*
+        version: link:../shared-utils
+      alien-signals:
+        specifier: ^3.2.1
+        version: 3.2.1
+      node-web-audio-api:
+        specifier: ^2.2.0
+        version: 2.2.0
+
+  packages/player-scene-model:
+    dependencies:
+      '@be-music/chart-model':
+        specifier: workspace:*
+        version: link:../chart-model
+      '@be-music/chart-source':
+        specifier: workspace:*
+        version: link:../chart-source
+      '@be-music/player-engine':
+        specifier: workspace:*
+        version: link:../player-engine
     devDependencies:
-      '@be-music/parser':
+      '@be-music/chart-parser':
         specifier: workspace:*
-        version: link:../parser
+        version: link:../chart-parser
 
-  packages/skin-sdk:
+  packages/player-skin-sdk:
     dependencies:
-      '@be-music/chart':
+      '@be-music/chart-model':
         specifier: workspace:*
-        version: link:../chart
-      '@be-music/json':
+        version: link:../chart-model
+      '@be-music/chart-source':
         specifier: workspace:*
-        version: link:../json
-      '@be-music/player':
+        version: link:../chart-source
+      '@be-music/player-engine':
         specifier: workspace:*
-        version: link:../player
-      '@be-music/scene-model':
+        version: link:../player-engine
+      '@be-music/player-scene-model':
         specifier: workspace:*
-        version: link:../scene-model
+        version: link:../player-scene-model
     devDependencies:
-      '@be-music/parser':
+      '@be-music/chart-parser':
         specifier: workspace:*
-        version: link:../parser
+        version: link:../chart-parser
 
-  packages/stringifier:
+  packages/player-terminal:
     dependencies:
-      '@be-music/chart':
+      '@be-music/chart-audio-renderer':
         specifier: workspace:*
-        version: link:../chart
-      '@be-music/json':
+        version: link:../chart-audio-renderer
+      '@be-music/chart-model':
         specifier: workspace:*
-        version: link:../json
-      '@be-music/parser':
+        version: link:../chart-model
+      '@be-music/chart-parser':
         specifier: workspace:*
-        version: link:../parser
-      '@be-music/utils':
+        version: link:../chart-parser
+      '@be-music/chart-source':
         specifier: workspace:*
-        version: link:../utils
+        version: link:../chart-source
+      '@be-music/player-engine':
+        specifier: workspace:*
+        version: link:../player-engine
+      '@be-music/shared-utils':
+        specifier: workspace:*
+        version: link:../shared-utils
+      '@uwx/libav.js-fat':
+        specifier: 6.0.0-nightly.29.f420ff.ffmpeg.6.1.1
+        version: 6.0.0-nightly.29.f420ff.ffmpeg.6.1.1
+      alien-signals:
+        specifier: ^3.2.1
+        version: 3.2.1
+      fast-bmp:
+        specifier: ^4.0.1
+        version: 4.0.1
+      fast-png:
+        specifier: ^8.0.0
+        version: 8.0.0
+      jpeg-js:
+        specifier: ^0.4.4
+        version: 0.4.4
 
-  packages/utils:
+  packages/service-auth-client:
+    dependencies:
+      jose:
+        specifier: ^6.1.3
+        version: 6.2.12
+      oauth4webapi:
+        specifier: ^3.8.5
+        version: 3.8.8
+    devDependencies:
+      tinybench:
+        specifier: ^6.2.1
+        version: 6.2.2
+
+  packages/service-web-theme: {}
+
+  packages/shared-utils:
     dependencies:
       isoworker:
         specifier: ^0.2.4
@@ -615,7 +559,63 @@ importers:
         specifier: ^10.4.0
         version: 10.4.0
 
-  packages/web-theme: {}
+  packages/skin-beatoraja:
+    dependencies:
+      '@be-music/player-engine':
+        specifier: workspace:*
+        version: link:../player-engine
+      '@be-music/player-scene-model':
+        specifier: workspace:*
+        version: link:../player-scene-model
+      '@be-music/shared-utils':
+        specifier: workspace:*
+        version: link:../shared-utils
+      '@be-music/skin-lr2':
+        specifier: workspace:*
+        version: link:../skin-lr2
+      fengari:
+        specifier: ^0.1.4
+        version: 0.1.5
+      fengari-web:
+        specifier: ^0.1.4
+        version: 0.1.4
+
+  packages/skin-lr2:
+    dependencies:
+      '@be-music/chart-model':
+        specifier: workspace:*
+        version: link:../chart-model
+      '@be-music/chart-source':
+        specifier: workspace:*
+        version: link:../chart-source
+      '@be-music/player-engine':
+        specifier: workspace:*
+        version: link:../player-engine
+      '@be-music/player-scene-model':
+        specifier: workspace:*
+        version: link:../player-scene-model
+      '@be-music/shared-utils':
+        specifier: workspace:*
+        version: link:../shared-utils
+
+  packages/worker-play:
+    dependencies:
+      '@be-music/service-auth-client':
+        specifier: workspace:*
+        version: link:../service-auth-client
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^5.20261015.1
+        version: 5.20261016.1
+      cf:
+        specifier: 1.0.0-beta.17
+        version: 1.0.0-beta.17(@types/node@26.6.1)
+      vite-plus:
+        specifier: 'catalog:'
+        version: 1.3.0(@types/node@26.6.1)(@vitest/coverage-v8@5.0.5)(@vitest/ui@5.0.5(vitest@5.0.5))(esbuild@0.28.2)(jiti@2.7.0)(playwright@1.64.1)(tsx@4.23.13)(typescript@7.0.2)(unrun@0.2.37)(yaml@2.9.0)
+      wrangler:
+        specifier: ^4.151.0
+        version: 4.151.0(@cloudflare/workers-types@5.20261016.1)(@types/node@26.6.1)
 
 packages:
 
@@ -5641,7 +5641,7 @@ snapshots:
       '@testing-library/dom': 10.4.2
       '@testing-library/user-event': 14.6.7(@testing-library/dom@10.4.2)
       '@vitest/browser': 5.0.5(vite@8.3.4(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))(vitest@5.0.5)
-      vitest: 5.0.5(@types/node@26.6.1)(@vitest/browser-preview@5.0.5)(@vitest/coverage-v8@5.0.5)(@vitest/ui@5.0.5)(vite@8.3.4(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
+      vitest: 5.0.5(@types/node@26.6.1)(@vitest/browser-preview@5.0.5)(@vitest/coverage-v8@5.0.5)(@vitest/ui@5.0.5(vitest@5.0.5))(vite@8.3.4(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
     transitivePeerDependencies:
       - bufferutil
       - msw
@@ -5677,7 +5677,7 @@ snapshots:
       pngjs: 7.0.0
       sirv: 3.0.2
       tinyrainbow: 3.2.0
-      vitest: 5.0.5(@types/node@26.6.1)(@vitest/browser-preview@5.0.5)(@vitest/coverage-v8@5.0.5)(@vitest/ui@5.0.5)(vite@8.3.4(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
+      vitest: 5.0.5(@types/node@26.6.1)(@vitest/browser-preview@5.0.5)(@vitest/coverage-v8@5.0.5)(@vitest/ui@5.0.5(vitest@5.0.5))(vite@8.3.4(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
       ws: 8.22.0
     transitivePeerDependencies:
       - bufferutil
@@ -5911,7 +5911,7 @@ snapshots:
     optionalDependencies:
       drizzle-kit: 0.31.11
       drizzle-orm: 0.45.4(@cloudflare/workers-types@5.20261016.1)(kysely@0.29.6)
-      vitest: 5.0.5(@types/node@26.6.1)(@vitest/browser-preview@5.0.5)(@vitest/coverage-v8@5.0.5)(@vitest/ui@5.0.5)(vite@8.3.4(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
+      vitest: 5.0.5(@types/node@26.6.1)(@vitest/browser-preview@5.0.5)(@vitest/coverage-v8@5.0.5(@vitest/browser@5.0.5)(vitest@5.0.5))(@vitest/ui@5.0.5(vitest@5.0.5))(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)(unrun@0.2.37)(yaml@2.9.0))
     transitivePeerDependencies:
       - '@opentelemetry/api'
 
@@ -7041,7 +7041,7 @@ snapshots:
     transitivePeerDependencies:
       - msw
 
-  vitest@5.0.5(@types/node@26.6.1)(@vitest/browser-preview@5.0.5)(@vitest/coverage-v8@5.0.5)(@vitest/ui@5.0.5)(vite@8.3.4(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)):
+  vitest@5.0.5(@types/node@26.6.1)(@vitest/browser-preview@5.0.5)(@vitest/coverage-v8@5.0.5)(@vitest/ui@5.0.5(vitest@5.0.5))(vite@8.3.4(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)):
     dependencies:
       '@types/chai': 5.2.3
       '@vitest/mocker': 5.0.5(vite@8.3.4(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))

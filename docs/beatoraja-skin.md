@@ -2,13 +2,13 @@
 
 # beatoraja skin implementation notes
 
-This document summarizes the current `@be-music/beatoraja-skin` implementation. The package parses beatoraja JSON
+This document summarizes the current `@be-music/skin-beatoraja` implementation. The package parses beatoraja JSON
 and Lua skin themes into renderer-independent data structures. PixiJS rendering is the responsibility of
-`@be-music/player-web`; CLI / TUI render paths do not load beatoraja skins.
+`@be-music/player-browser`; CLI / TUI render paths do not load beatoraja skins.
 
 ## Scope
 
-- `@be-music/beatoraja-skin` reads `*.json` and `*.luaskin` entries for the play, select, decide, result, and
+- `@be-music/skin-beatoraja` reads `*.json` and `*.luaskin` entries for the play, select, decide, result, and
   course-result scenes.
 - Theme assets are resolved from a dropped folder or in-memory file map. Paths are normalized against the entry
   script's directory; `*` wildcards (e.g. `play/background/*.png`) and case-insensitive lookup are supported.
@@ -128,22 +128,22 @@ variant first for a keyboard chart.
 
 ## Scene mapping
 
-`@be-music/beatoraja-skin/scene` maps the family-neutral scene models of `@be-music/scene-model` to a beatoraja
+`@be-music/skin-beatoraja/scene` maps the family-neutral scene models of `@be-music/player-scene-model` to a beatoraja
 skin's vocabulary: which ops are lit, what each number and text reads, which timers start and stop, the gauge, the
 graphs and the live offsets ([ADR 0002](./adr/0002-scene-model-package.md)). It is the beatoraja state resolution that
-used to live next to the renderer in `@be-music/player-web`; the select, decide, play and result family views read it
+used to live next to the renderer in `@be-music/player-browser`; the select, decide, play and result family views read it
 (the play view through its play bridge).
 
 ```mermaid
 flowchart LR
-  subgraph models["@be-music/scene-model"]
+  subgraph models["@be-music/player-scene-model"]
     play["PlayState · engine frame"]
     result["PlayResult"]
     entry["LibraryEntry · list options"]
     chart["LibraryChart · load progress"]
     course["CourseView"]
   end
-  subgraph mapping["@be-music/beatoraja-skin/scene"]
+  subgraph mapping["@be-music/skin-beatoraja/scene"]
     playR["play resolvers"]
     resultR["result resolvers"]
     selectR["select resolvers"]
@@ -190,7 +190,7 @@ score table: it reads the focused chart's facts, 0 for the play's main live numb
 gauge and judgment counts), and nothing for the rest. The decide screen does not use the score table: it reads the chart's
 `#PLAYLEVEL`, its listed BPM on the BPM numbers and the loading progress (165), and 0 for every other number. On the
 select and decide screens the main BPM (92) is the one the play shows, the BPM the most judged notes sit at
-(`resolveChartMainBPM` in `@be-music/chart`), which the caller passes in (`mainBPM`); without it they read the header
+(`resolveChartMainBPM` in `@be-music/chart-model`), which the caller passes in (`mainBPM`); without it they read the header
 BPM.
 
 ### Timers as data
@@ -249,7 +249,7 @@ sequenceDiagram
 
 ## Browser player wiring
 
-`@be-music/player-web` ships `loadBeatorajaThemeFromFiles()` to wrap dropped browser `File[]` objects into a
+`@be-music/player-browser` ships `loadBeatorajaThemeFromFiles()` to wrap dropped browser `File[]` objects into a
 `BeatorajaThemeBundle`. Hosts then load each scene's skin entry with player-web's `loadBeatorajaSceneKit()`
 ([player-web.md](./player-web.md#beatoraja-skin-and-theme-support)), which calls `loadBeatorajaSkin()` from this
 package twice (a header pass, then the skin with the player's options; once when the host already holds the options), `bundleBeatorajaSources()` for `source[]`,

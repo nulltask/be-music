@@ -6,14 +6,14 @@ import {
   createTimingResolver,
   resolveChartPlayVariant,
   resolveChartReferenceBPM,
-} from '@be-music/chart';
-import type { BeMusicEvent, BeMusicJSON } from '@be-music/json';
-import { parseChart, parseChartFile } from '@be-music/parser';
-import type { RandomDraws } from '@be-music/chart';
-import { resolvePlayChart } from '@be-music/player';
-import { extractTimedNotes } from '@be-music/player/display';
-import { simulateReplayRulesets, type ReplayNote, type ReplayRulesetResult } from '@be-music/player/replay';
-import { stringifyBMS, stringifyBmson } from '@be-music/stringifier';
+} from '@be-music/chart-model';
+import type { BeMusicEvent, BeMusicJSON } from '@be-music/chart-source';
+import { parseChart, parseChartFile } from '@be-music/chart-parser';
+import type { RandomDraws } from '@be-music/chart-model';
+import { resolvePlayChart } from '@be-music/player-engine';
+import { extractTimedNotes } from '@be-music/player-engine/display';
+import { simulateReplayRulesets, type ReplayNote, type ReplayRulesetResult } from '@be-music/player-engine/replay';
+import { stringifyBMS, stringifyBmson } from '@be-music/chart-writer';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   buildScenarios,
@@ -156,7 +156,7 @@ async function buildResolvedExpected(
   // A no-input run snapshots the note list the engine prepares for play (lane transforms, long-note modes, mine
   // damage, FREE ZONE); the scenarios' input streams are built from it. Each stream is then judged twice per ruleset:
   // by the pure simulator and by the live engine replaying it. Both are pinned side by side, and the two must agree on
-  // every chart: `packages/player/src/replay/equivalence.test.ts` reduces each rule to a minimal case, while this
+  // every chart: `packages/player-engine/src/replay/equivalence.test.ts` reduces each rule to a minimal case, while this
   // catches whatever combination of rules a real chart reaches that no minimal case covered.
   const { replay } = await replayEngine(json, { randomDraws, inputs: [], speed: ENGINE_REPLAY_SPEED });
   const notes = replay.chart.notes;

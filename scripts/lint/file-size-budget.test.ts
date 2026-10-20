@@ -15,13 +15,13 @@ describe('file-size budget', () => {
   });
 
   test('only package sources are budgeted', () => {
-    expect(isBudgetedSourcePath('packages/player/src/core/engine.ts')).toBe(true);
-    expect(isBudgetedSourcePath('packages/editor/src/App.vue')).toBe(true);
-    expect(isBudgetedSourcePath('packages/player/src/index.test.ts')).toBe(false);
-    expect(isBudgetedSourcePath('packages/player/src/types.d.ts')).toBe(false);
-    expect(isBudgetedSourcePath('packages/beatoraja-skin/src/__fixtures__/skin.ts')).toBe(false);
-    expect(isBudgetedSourcePath('packages/player/scripts/bench.ts')).toBe(false);
-    expect(isBudgetedSourcePath('packages/player/src/assets/logo.png')).toBe(false);
+    expect(isBudgetedSourcePath('packages/player-engine/src/core/engine.ts')).toBe(true);
+    expect(isBudgetedSourcePath('packages/chart-editor/src/App.vue')).toBe(true);
+    expect(isBudgetedSourcePath('packages/player-engine/src/index.test.ts')).toBe(false);
+    expect(isBudgetedSourcePath('packages/player-engine/src/types.d.ts')).toBe(false);
+    expect(isBudgetedSourcePath('packages/skin-beatoraja/src/__fixtures__/skin.ts')).toBe(false);
+    expect(isBudgetedSourcePath('packages/player-engine/scripts/bench.ts')).toBe(false);
+    expect(isBudgetedSourcePath('packages/player-engine/src/assets/logo.png')).toBe(false);
   });
 
   test('splits offenders into failures and allowlisted warnings, and flags stale allowlist entries', () => {

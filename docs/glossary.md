@@ -77,25 +77,25 @@ Use **chart** in code names for playable arrangements and **track** for musical 
 - **MANUAL / AUTO SCRATCH / AUTO**: Playback modes. `MANUAL` uses player input, `AUTO SCRATCH` automates scratch lanes only, and `AUTO` automates all playable notes.
 - **control flow**: BMS branch directives such as `#RANDOM`, `#IF`, and `#SWITCH`. The parser retains them; hosts resolve them once per play, before playback or rendering, with explicit `RandomDraws`.
 - **RandomDraws**: The outcome of a chart's control flow for one play: one entry (command, range, value) per `#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` line in file order. Drawn once with `drawRandomOutcomes` and shared by the resolver, the engine and the replay.
-- **Source layer / Resolved layer**: The two layers a chart is read in. The Source layer (`BeMusicJSON`) is what the file says; the Resolved layer (`ResolvedChart`, built by `resolveChart` in `@be-music/chart`) is what the player plays, with every format default and de facto rule applied. See [Architecture](./architecture.md).
+- **Source layer / Resolved layer**: The two layers a chart is read in. The Source layer (`BeMusicJSON`) is what the file says; the Resolved layer (`ResolvedChart`, built by `resolveChart` in `@be-music/chart-model`) is what the player plays, with every format default and de facto rule applied. See [Architecture](./architecture.md).
 
 ## Runtime Packages
 
-- **player core**: The shared `@be-music/player` rules and engine. The package root is the engine (`manualPlay`, `autoPlay`): it prepares a play from the resolved chart, judges it and owns the UI / audio / input runtime contracts. The other entries hold the rules (`./ruleset`, `./course`, `./records`, `./replay`) and what a host shares with a play (`./signals`, `./lanes`, `./display`). Timing, note resolution and timelines live in `@be-music/chart`.
-- **terminal player**: The `@be-music/player-tui` CLI and TUI frontend. It provides Music Select, terminal gameplay, terminal BGA, loading screens, and SEA builds on top of the core engine.
-- **browser player**: The `@be-music/player-web` PixiJS/WebAudio runtime and the `@be-music/player-web-demo` Vite host. The runtime makes every screen as a scene session drawn by a family view, behind its host API, and loads the library and the skins and records plays; the demo handles browser drops, themes, the Debug Menu and the scene router.
+- **player core**: The shared `@be-music/player-engine` rules and engine. The package root is the engine (`manualPlay`, `autoPlay`): it prepares a play from the resolved chart, judges it and owns the UI / audio / input runtime contracts. The other entries hold the rules (`./ruleset`, `./course`, `./records`, `./replay`) and what a host shares with a play (`./signals`, `./lanes`, `./display`). Timing, note resolution and timelines live in `@be-music/chart-model`.
+- **terminal player**: The `@be-music/player-terminal` CLI and TUI frontend. It provides Music Select, terminal gameplay, terminal BGA, loading screens, and SEA builds on top of the core engine.
+- **browser player**: The `@be-music/player-browser` PixiJS/WebAudio runtime and the `@be-music/app-play` Vite host. The runtime makes every screen as a scene session drawn by a family view, behind its host API, and loads the library and the skins and records plays; the demo handles browser drops, themes, the Debug Menu and the scene router.
 - **skin family**: The kind of skin that draws a browser-player scene: `built-in` (be-music skins), `lr2` or `beatoraja` (`SceneFamily`). The host picks it from the loaded themes and the player's choice.
 - **built-in family (default skin family)**: The skin family used when no external theme is active or when the host explicitly selects it. It draws select, play and result (and decide, when the skin declares one) through a be-music skin; its play view draws the shared playfield, as the LR2 one does, and the skin draws the chrome around it.
-- **be-music skin**: Code-based skin written against `@be-music/skin-sdk`. The player hands it a canvas and plain per-frame data, and the skin draws each screen with whatever renderer it brings.
+- **be-music skin**: Code-based skin written against `@be-music/player-skin-sdk`. The player hands it a canvas and plain per-frame data, and the skin draws each screen with whatever renderer it brings.
 - **built-in skins**: The be-music skins bundled with the browser player: Synesthesia (the default), Phantom, and Plain, plus the opt-in Lattice.
 - **touch layout / portrait stage**: Gameplay layouts for touch-first devices. The touch layout spreads equal-width lanes across the stage; a skin with a `portraitStage` can also be shown on a portrait (9:16) stage.
-- **LR2 skin**: Lunatic Rave 2 CSV skin format handled by `@be-music/lr2-skin`. The package parses skin files and resolves theme assets independently from PixiJS.
-- **beatoraja skin**: beatoraja JSON or Lua skin format handled by `@be-music/beatoraja-skin`. The package parses headers and full skins, resolves options and assets, and normalizes elements independently from PixiJS.
+- **LR2 skin**: Lunatic Rave 2 CSV skin format handled by `@be-music/skin-lr2`. The package parses skin files and resolves theme assets independently from PixiJS.
+- **beatoraja skin**: beatoraja JSON or Lua skin format handled by `@be-music/skin-beatoraja`. The package parses headers and full skins, resolves options and assets, and normalizes elements independently from PixiJS.
 
 ## Internal Model
 
-- **IR (`@be-music/json`)**: Internal intermediate representation for BMS/bmson/JSON charts. It is not an external exchange format.
-- **pure IR**: Design policy that `@be-music/json` stores normalized structure and preservation data without owning score semantics.
+- **IR (`@be-music/chart-source`)**: Internal intermediate representation for BMS/bmson/JSON charts. It is not an external exchange format.
+- **pure IR**: Design policy that `@be-music/chart-source` stores normalized structure and preservation data without owning score semantics.
 - **sourceFormat**: IR attribute that records whether the chart came from `bms`, `bmson`, or `json`.
 - **round-trip**: Recreate source structure as much as possible through `parse -> IR -> stringify`.
 - **preservation**: Auxiliary source-level data retained for round-trip output, separate from normalized `events` and `measures`.
@@ -103,7 +103,7 @@ Use **chart** in code names for playable arrangements and **track** for musical 
 - **objectLines**: BMS preservation data that keeps object lines outside control-flow blocks.
 - **event**: Normalized score event with `measure`, `channel`, `position`, and `value`.
 - **position**: IR event position. `[numerator, denominator]` represents a relative position inside the measure.
-- **chart semantics (`@be-music/chart`)**: Score semantics above IR, including beat resolution, event order, long-note resolution, sample triggers, BGA timelines, and reference BPM.
+- **chart semantics (`@be-music/chart-model`)**: Score semantics above IR, including beat resolution, event order, long-note resolution, sample triggers, BGA timelines, and reference BPM.
 - **bms.controlFlow**: BMS control-flow array retained by the parser. Branches are not finalized during parsing; a resolved chart has an empty array.
 
 ## Identity And Profiles
@@ -126,7 +126,7 @@ Use **chart** in code names for playable arrangements and **track** for musical 
 - **candidate note**: Unjudged note searched as the judgment target when an input event arrives for a lane set.
 - **keysound fallback**: LR2-compatible blank-press sound routing. If no note is judged, manual play may retrigger the latest same-lane visible or invisible WAV whose early BAD window has already opened; it never looks ahead to a future pending WAV before that note's window opens.
 - **empty POOR**: LR2-compatible blank-keystroke side effect. It flashes `POOR`, triggers POOR BGA, and applies the `EMPTY_POOR` gauge delta without changing judgment counters, combo, EX-SCORE, or score.
-- **stateSignals / uiSignals**: Signal groups that send engine state to UI adapters, including judge, combo, frame, lane flash, and hold state (`createPlayerStateSignals`, `createPlayerUISignalBus` on `@be-music/player/signals`).
+- **stateSignals / uiSignals**: Signal groups that send engine state to UI adapters, including judge, combo, frame, lane flash, and hold state (`createPlayerStateSignals`, `createPlayerUISignalBus` on `@be-music/player-engine/signals`).
 - **UI runtime**: Runtime display adapter between the player core and a concrete frontend such as TUI or PixiJS.
 - **gameplay worker / UI worker**: Node worker split used by the terminal frontend for heavier gameplay, rendering, and video BGA work.
 - **ANSI rendering**: Terminal image/BGA rendering through character cells and colored strings.
@@ -151,7 +151,7 @@ Use **chart** in code names for playable arrangements and **track** for musical 
 - **stitched play**: The single chart a NONSTOP course is played as, built by stitching its stages with their connections and placement.
 - **judge ruleset**: The game whose judge windows, gauges and lamps a play is judged and ranked by: `lr2`, `beatoraja` or `iidx`.
 - **gauge type**: The gauge the player picks, in LR2's names: `GROOVE`, `HARD`, `DEATH` or `EASY` (`GaugeType`). Each judge ruleset plays it on a gauge of its own line-up, named by its gauge id (`NORMAL`, `HAZARD`, `CLASS`, ...).
-- **clear lamp**: The class of clear a play earned (FAILED to MAX, `ClearLamp`). Each judge ruleset awards its own subset; one rule lamps every play (`resolveClearLamp`, `resolveCourseClearLamp` in `@be-music/player/ruleset`).
+- **clear lamp**: The class of clear a play earned (FAILED to MAX, `ClearLamp`). Each judge ruleset awards its own subset; one rule lamps every play (`resolveClearLamp`, `resolveCourseClearLamp` in `@be-music/player-engine/ruleset`).
 - **BP**: The miss count: BADs, POORs and empty POORs, plus, for a course, the notes the run never judged (`resolveMissCount`).
 - **best record**: The independently retained best clear lamp, highest EX-SCORE, highest max combo, and lowest BP across a player’s plays of a chart or course under one judge ruleset (`BestRecord`). These values can come from different plays; a best record is not a single play result.
 - **view settings**: What the player saw, apart from what was judged: hi-speed, hi-speed fix, visible time and each side's SUDDEN+, HIDDEN+ and LIFT. _Avoid_: display options.
@@ -160,21 +160,21 @@ Use **chart** in code names for playable arrangements and **track** for musical 
 ## Architecture
 
 - **scene model**: The state and rules of one screen, independent of the skin family: what it shows and how it responds. See [ADR 0002](./adr/0002-scene-model-package.md) and [Scene models](./scene-model.md).
-- **designed entry point**: A package subpath made for its consumers rather than a file of its layout. `@be-music/player` exports `.` (the engine), `./signals`, `./lanes`, `./display`, `./ruleset`, `./replay`, `./records`, `./course` and `./audio-sink`; `@be-music/player-web` exports `.`, `./host`, `./skin`, `./collection`, `./audio` and `./recording`. Everything else is internal. See [ADR 0005](./adr/0005-public-entry-points.md).
+- **designed entry point**: A package subpath made for its consumers rather than a file of its layout. `@be-music/player-engine` exports `.` (the engine), `./signals`, `./lanes`, `./display`, `./ruleset`, `./replay`, `./records`, `./course` and `./audio-sink`; `@be-music/player-browser` exports `.`, `./host`, `./skin`, `./collection`, `./audio` and `./recording`. Everything else is internal. See [ADR 0005](./adr/0005-public-entry-points.md).
 - **library / library chart / library entry**: What a select screen browses: the charts, grouped into folders at the root, and the course folders (`Library`); one chart in it is a library chart (`LibraryChart`), and one bar of its list is a chart, a folder or a course (`LibraryEntry`, `kind: 'chart' | 'folder' | 'course'`).
 - **browse state**: Where the player is in the library and how the list is shaped: the open folders, the cursor at each depth, the search, the sort and filters (the list options) and the favourites (`BrowseState`). Its snapshot (`BrowseSnapshot`, taken with `captureBrowse` and restored with `restoreBrowse`) keeps it across the scenes a play goes through.
 - **play state**: What every play screen reads of a play, fed by the engine's frames and judgments: the running gauge and EX-SCORE with their graphs, the combo, the timed judgments, and the view settings (`PlayState`, changed only through `reducePlayState`).
 - **play result**: The one result payload of a single play, a course stage, a course run or a NONSTOP run (`PlayResult`); its run kind (`single`, `stage`, `course`, `nonstop`) says which. Every result screen reads it.
 - **system sound set**: A theme's cues and jingles by slot (cursor, decide, folders, option panels, select BGM, clear / fail jingles, …), each resolved to bytes or to a path in the theme (`SystemSoundSet`).
-- **scene session**: The one implementation of a screen's behaviour, shared by every skin family (`session/` in `@be-music/player-web`): browsing, chart preparation, the engine, input, sound and endings. Each tick it hands its family view a frame built over the scene models and takes back intents. See [ADR 0001](./adr/0001-skin-families-only-draw.md).
+- **scene session**: The one implementation of a screen's behaviour, shared by every skin family (`session/` in `@be-music/player-browser`): browsing, chart preparation, the engine, input, sound and endings. Each tick it hands its family view a frame built over the scene models and takes back intents. See [ADR 0001](./adr/0001-skin-families-only-draw.md).
 - **family view**: How one skin family draws a scene model (`view/built-in/`, `view/lr2/`, `view/beatoraja/`); it draws the session's frames, returns the player's actions as intents and never runs the engine.
 - **family kit**: What a host hands a scene to draw it with, per skin family: a be-music skin with the player's settings for it (`built-in`), an LR2 skin (`lr2`) or a loaded beatoraja theme entry (`beatoraja`) (`SelectKit`, `DecideKit`, `PlayKit`, `ResultKit`).
-- **host API**: `@be-music/player-web/host`: `PixiSceneHost`, which shows one scene at a time, and `createSelectScene`, `createDecideScene`, `createPlayScene` and `createResultScene`, which make each screen from a family kit as a `SessionScene`.
+- **host API**: `@be-music/player-browser/host`: `PixiSceneHost`, which shows one scene at a time, and `createSelectScene`, `createDecideScene`, `createPlayScene` and `createResultScene`, which make each screen from a family kit as a `SessionScene`.
 - **scene lifecycle**: The one contract every scene implements (`PixiScene`): `root`, `identity` (`{ kind, family }`), `enter`, `exit` and `dispose`. A host changes scenes only with `setScene`.
 - **intent**: What a player's action on a view means for the scene: open a folder, start a course, cycle the gauge.
 - **play loop / judge strategy**: The one engine loop every play runs through, and the manual, auto or replay judging plugged into it. See [ADR 0003](./adr/0003-one-play-loop.md).
 - **scene router**: The host's single owner of the current scene and every transition (`app/scene-router.ts` in the web demo). See [ADR 0006](./adr/0006-scene-router.md).
-- **audio service**: The one way the web player plays sounds outside a play's chart (`createAudioService` on `@be-music/player-web/audio`): the select BGM, cues, jingles, chart preview and skin sounds, on one system `AudioContext`. Each play opens its own context through it (`openPlayGraph`). A scene passes itself as the owner of what it starts and stops it with `stopOwned`. See [ADR 0007](./adr/0007-one-system-audio-context.md).
+- **audio service**: The one way the web player plays sounds outside a play's chart (`createAudioService` on `@be-music/player-browser/audio`): the select BGM, cues, jingles, chart preview and skin sounds, on one system `AudioContext`. Each play opens its own context through it (`openPlayGraph`). A scene passes itself as the owner of what it starts and stops it with `stopOwned`. See [ADR 0007](./adr/0007-one-system-audio-context.md).
 
 ## Related Documents
 
@@ -193,4 +193,4 @@ Use **chart** in code names for playable arrangements and **track** for musical 
 - [Writing a be-music skin](./be-music-skin.md)
 - [LR2 skin implementation notes](./lr2-skin.md)
 - [beatoraja skin implementation notes](./beatoraja-skin.md)
-- [BMS/bmson intermediate representation (`@be-music/json`) implementation specification](./json-spec.md)
+- [BMS/bmson intermediate representation (`@be-music/chart-source`) implementation specification](./json-spec.md)

@@ -56,10 +56,10 @@ A replay is deliberately **not** a list of judgments. Its canonical payload is:
    `{ kind: 'view' }` input commands; judgments do not depend on them, and a replay or ghost reproduces as much of them
    as its viewer picks, `ReplayPlaybackOptions`), `course` for a course stage (its kind, the course's gauge set and judge constraint, and `carryIn`: the
    gauge value, course combo and course max combo the previous stage left), and `randomDraws`: the play's `#RANDOM` /
-   `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` outcomes as a `RandomDraws` value (`@be-music/chart`), one
+   `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` outcomes as a `RandomDraws` value (`@be-music/chart-model`), one
    `{ command, range, value }` entry per such line of the chart in file order. They are the
    `PlayerOptions.randomDraws` the engine played with: every host draws once per play (`resolvePlayChart` in
-   `@be-music/player`) and hands the same draws to the engine, which records them. With the chart file,
+   `@be-music/player-engine`) and hands the same draws to the engine, which records them. With the chart file,
    `resolveBMSControlFlowWithDraws(json, play.randomDraws)` rebuilds the chart that was played (it rejects draws that
    were not drawn for that chart), so a verifier can recompute `chart.playFingerprint`. `parseReplay` rejects an
    entry no control-flow line could have made. It is omitted for charts without control flow.
@@ -74,7 +74,7 @@ later fix to any ruleset re-scores every previously recorded play without re-rec
 Timestamps are integer microseconds relative to chart zero (the same t = 0 the engine's note timing uses).
 
 The TypeScript types, serializer, and defensive parser live in
-[`packages/player/src/replay/format.ts`](../packages/player/src/replay/format.ts) (`@be-music/player/replay`).
+[`packages/player-engine/src/replay/format.ts`](../packages/player-engine/src/replay/format.ts) (`@be-music/player-engine/replay`).
 The recommended file suffix is `.bmplay.json`.
 
 ## Recording
@@ -98,7 +98,7 @@ Every log also carries a top-level **`recorder`** that identifies the software t
 `{ name, version, build, engine, platform }`. The host declares the application fields through
 `recordReplay.recorder` (the browser player sends `name: 'be-music-web'`, the demo's package version, the short
 source commit as `build`, and `platform: 'web'`), and the recorder always fills `engine` with the
-`@be-music/player` version that ran the play. The values are self-reported: they help tell which build wrote a log
+`@be-music/player-engine` version that ran the play. The values are self-reported: they help tell which build wrote a log
 when a recording bug turns up, and are never a basis for trusting a log. Logs written before the field existed omit
 it.
 
@@ -166,7 +166,7 @@ owns the whole decision surface:
 - the score formula and the EX-SCORE denominator
 
 The same tables drive the live engine and the replay simulator, and an equivalence suite
-([`equivalence.test.ts`](../packages/player/src/replay/equivalence.test.ts)) replays one recorded input stream
+([`equivalence.test.ts`](../packages/player-engine/src/replay/equivalence.test.ts)) replays one recorded input stream
 through both and requires them to agree judge for judge. The selected ruleset is recorded as `play.judgeRuleset`
 and replays re-apply it automatically.
 
@@ -218,7 +218,7 @@ The beatoraja scene's HIDDEN cover is a ratio of the lane above the lift, so it 
 
 **`visibleMs` and LIFT.** Every scene records `visibleMs` as beatoraja's white number, which leaves LIFT out. LR2 has no LIFT, so beatoraja decides it. beatoraja's [`LaneRenderer`](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/play/LaneRenderer.java#L321-L330) scrolls a note across the lane above the lifted judgement line at a speed scaled to that lane (`rxhs = (hu - hl) * hispeed * speed`, `hl` raised by the lift), so LIFT shortens the lane but not the time a note takes to cross it. The white number it shows is `region * (1 - lanecover)` with `region = 240000 / nbpm / hispeed / speed / nscroll`, and no lift term (`currentduration`, lines 321-330). Its fixed hi-speed modes solve the same formula for the hi-speed (`resetHispeed`, [lines 206-210](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/play/LaneRenderer.java#L206-L210)). The scene model computes it once: `resolveWhiteNumber` for a lane of a given length in beats at hi-speed 1 (four on the beatoraja scene, the lane laid out over `PIXELS_PER_BEAT` on the built-in and LR2 scenes), and `resolveHiSpeedForWhiteNumber` back. The built-in and LR2 scenes draw no LIFT, so their white number is the time a note shows.
 
-**The main BPM.** `visibleMs` is taken at the chart's main BPM, the BPM the most judged notes sit at (`resolveChartMainBPM` in `@be-music/chart`). It is beatoraja's: [`LaneRenderer.init`](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/play/LaneRenderer.java#L130-L152) adds up [`TimeLine.getTotalNotes()`](https://github.com/exch-bms2/jbms-parser/blob/8108cd54a19275810e1f5d2c9586f008eb6db95e/src/bms/model/TimeLine.java#L139-L156) (taps, long-note heads, and CN / HCN tails; no mines or invisible notes) per timeline BPM, keeps the BPM with the most and pegs HS-FIX `MAINBPM` to it, and the white and green numbers at the main BPM read the same value ([`IntegerPropertyFactory`](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/skin/property/IntegerPropertyFactory.java#L541-L560), lines 541-560). LR2 defines no main BPM to follow (its skin numbers give only the highest, lowest and current BPM), so beatoraja decides it. Every family's play screen takes the one main BPM that HS-FIX `AVERAGE` pegs the hi-speed to, so the BPM a log's `visibleMs` is taken at no longer depends on the family that played it. Ties go to the BPM reached first, where beatoraja follows its hash-map order; a chart without notes takes its start BPM.
+**The main BPM.** `visibleMs` is taken at the chart's main BPM, the BPM the most judged notes sit at (`resolveChartMainBPM` in `@be-music/chart-model`). It is beatoraja's: [`LaneRenderer.init`](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/play/LaneRenderer.java#L130-L152) adds up [`TimeLine.getTotalNotes()`](https://github.com/exch-bms2/jbms-parser/blob/8108cd54a19275810e1f5d2c9586f008eb6db95e/src/bms/model/TimeLine.java#L139-L156) (taps, long-note heads, and CN / HCN tails; no mines or invisible notes) per timeline BPM, keeps the BPM with the most and pegs HS-FIX `MAINBPM` to it, and the white and green numbers at the main BPM read the same value ([`IntegerPropertyFactory`](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/skin/property/IntegerPropertyFactory.java#L541-L560), lines 541-560). LR2 defines no main BPM to follow (its skin numbers give only the highest, lowest and current BPM), so beatoraja decides it. Every family's play screen takes the one main BPM that HS-FIX `AVERAGE` pegs the hi-speed to, so the BPM a log's `visibleMs` is taken at no longer depends on the family that played it. Ties go to the BPM reached first, where beatoraja follows its hash-map order; a chart without notes takes its start BPM.
 
 **Older logs.** Before this rule the built-in and LR2 screens took the BPM held longest, and the beatoraja screen counted mines and every long-note end as well. On a chart where these disagree (BPM gimmicks, or a long stretch at another BPM with few notes), an older log's `visibleMs` differs from what a play records now, so replaying it on another hi-speed scale may scroll at a slightly different hi-speed. A replay on the scale it was recorded on draws the recorded `hiSpeed` and is unaffected, and so is the judging.
 
@@ -242,10 +242,10 @@ On the same scale (or a log without `hiSpeedScale`) the replay draws the recorde
 
 ## Re-deriving LR2 / beatoraja / IIDX results
 
-`simulateReplay(replay, { ruleset })` (from `@be-music/player/replay`) replays the input stream through one
+`simulateReplay(replay, { ruleset })` (from `@be-music/player-engine/replay`) replays the input stream through one
 ruleset; `simulateReplayRulesets(replay)` runs all three. Each ruleset differs in judge windows, note selection,
 long-note semantics, empty-POOR behavior, and gauge tables — the constants are documented per source in
-[`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts):
+[`packages/player-engine/src/ruleset/definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts):
 
 | aspect                  | LR2 (`lr2/0`)                                     | beatoraja (`beatoraja/0`)                                   | IIDX (`iidx/0`)                                                |
 | ----------------------- | ------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------- |
@@ -298,11 +298,11 @@ flowchart TD
   s2 -->|extractCourseStage| single["single-chart replay"]
 ```
 
-`simulateCourseReplay(log, { ruleset })` re-derives the course result. Each stage after the first starts from the state the **simulated** previous stage left, not the recorded `carryIn`, and the course stops at the first stage whose gauge emptied, as the live run did. A stage given up with ESC (`play.aborted`) fails the course whatever its gauge, as LR2 records a run given up mid-course. The result (`ReplayCourseResult`) sums the stages played: judgments, fast / slow, EX-SCORE. It counts notes over every stage, adds every note the run never judged to the BP (`missCount`), takes the course-wide max combo and the last stage's gauge, and resolves the course lamp and the trophy (see [Courses and dan certification](./course.md)). `createCourseReplay` assembles the log from the stage logs a host recorded and caches the engine's own course result as `results.native`, lamped under the judge ruleset the stages were played on. `resolveCoursePlayedRuleset(log)` names that ruleset (a NONSTOP run's is its stitched play's), or `undefined` when the stages differ: the Leaderboard ranks the run under it and a host keeps the run's best record under it. A single result's lamp is `resolveRulesetResultLamp(result, ruleset)`, and the lamps, the course lamp rule and BP are the vocabulary of `@be-music/player/ruleset` (`resolveClearLamp`, `resolveCourseClearLamp`, `resolveMissCount`).
+`simulateCourseReplay(log, { ruleset })` re-derives the course result. Each stage after the first starts from the state the **simulated** previous stage left, not the recorded `carryIn`, and the course stops at the first stage whose gauge emptied, as the live run did. A stage given up with ESC (`play.aborted`) fails the course whatever its gauge, as LR2 records a run given up mid-course. The result (`ReplayCourseResult`) sums the stages played: judgments, fast / slow, EX-SCORE. It counts notes over every stage, adds every note the run never judged to the BP (`missCount`), takes the course-wide max combo and the last stage's gauge, and resolves the course lamp and the trophy (see [Courses and dan certification](./course.md)). `createCourseReplay` assembles the log from the stage logs a host recorded and caches the engine's own course result as `results.native`, lamped under the judge ruleset the stages were played on. `resolveCoursePlayedRuleset(log)` names that ruleset (a NONSTOP run's is its stitched play's), or `undefined` when the stages differ: the Leaderboard ranks the run under it and a host keeps the run's best record under it. A single result's lamp is `resolveRulesetResultLamp(result, ruleset)`, and the lamps, the course lamp rule and BP are the vocabulary of `@be-music/player-engine/ruleset` (`resolveClearLamp`, `resolveCourseClearLamp`, `resolveMissCount`).
 
 **Course identity.** `computeCourseFingerprint({ kind, constraints, stageChartFingerprints })` keys a course as `bmcourse0:<sha256>` ([fingerprint-spec.md §8](./fingerprint-spec.md#8-course-fingerprint)) over its kind, its constraints (normalized as `normalizeCourseConstraints` reads them, then sorted) and its stages' chart fingerprints in order; a NONSTOP course also adds its connections between the stages (the one listed after the last stage joins nothing and is dropped) and its placement mode (`intended` or `lr2`), since they decide the stitched chart that is played. The name and the trophies are left out. So the same course read from a `.lr2crs`, a beatoraja course file or a difficulty table gets one key whenever its charts match, and a random course, once drawn, is keyed like a fixed one. `computeCourseReplayFingerprint(log)` reads the stage fingerprints from the log (played and unreached stages alike, so failed runs are keyed too) and is `undefined` when one is missing. `checkCourseReplayEligibility(log)` is the course counterpart of `checkReplayEligibility`: every played stage must pass the single-play check (being a course stage of this course kind is required here, not refused), the played stages must come first, and the assists of every stage flag the run. Only the last played stage may be aborted: that is a run given up with ESC, which counts as a failed one.
 
-**NONSTOP runs.** An LR2 NONSTOP course is played as one stitched chart (see [Courses and dan certification](./course.md#nonstop-courses)), so its course log adds `nonstop`. `buildNonstopCourseReplay` (`@be-music/player/course`) writes such a log from the stitched play:
+**NONSTOP runs.** An LR2 NONSTOP course is played as one stitched chart (see [Courses and dan certification](./course.md#nonstop-courses)), so its course log adds `nonstop`. `buildNonstopCourseReplay` (`@be-music/player-engine/course`) writes such a log from the stitched play:
 
 - `nonstop.replay`: the play of the stitched chart, as recorded. It is what was judged, and `simulateCourseReplay` takes the course result from it: its judgments, gauge and max combo, with BP counting every note it never judged.
 - `nonstop.connections` and `nonstop.placement`: how the chart was stitched.
@@ -324,7 +324,7 @@ So `extractCourseStage` still gives a single-chart log that replays on its own; 
 
 ## CLI
 
-`@be-music/player-tui` ships a second binary, `bms-replay`:
+`@be-music/player-terminal` ships a second binary, `bms-replay`:
 
 ```bash
 pnpm replay -- results/Song-2026-08-17T10-00-00-000Z.bmplay.json

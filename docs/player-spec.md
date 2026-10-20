@@ -2,19 +2,19 @@
 
 # Player implementation specifications
 
-This document defines the runtime specification for the shared `@be-music/player` core engine.
+This document defines the runtime specification for the shared `@be-music/player-engine` core engine.
 Regarding the acceptance rules of musical score formats and the meaning of IR, priority is given to [`bms-spec.md`](./bms-spec.md), [`bmson-spec.md`](./bmson-spec.md), and [`json-spec.md`](./json-spec.md), and this document only deals with how the player plays, judges, and displays them.
 
 ## Purpose
 
-- Consolidate the behavior of `@be-music/player` by mode in one place.
+- Consolidate the behavior of `@be-music/player-engine` by mode in one place.
 - Clarify criteria for judgment, scores, gauges, audio, and display.
 - Leave a compatibility policy that should be checked when changing the implementation.
 
 ## Scope
 
 This document covers the results returned by `autoPlay()` and `manualPlay()`, as well as the judgment, display, and audio processing they use internally.
-Invocation methods such as `@be-music/player-tui` CLI arguments, configuration file persistence, and Node worker communication are not covered.
+Invocation methods such as `@be-music/player-terminal` CLI arguments, configuration file persistence, and Node worker communication are not covered.
 The terminal player and browser player reuse the same chart semantics for timing, notes, BGA cues, score, and results. Terminal UI behavior is documented separately in [Terminal player implementation notes](./player-tui.md), while PixiJS scenes, LR2/beatoraja skin rendering, browser file loading, and WebAudio lifecycle are documented in [Browser player implementation notes](./player-web.md).
 
 The core engine defaults to the `lr2` compat ruleset and its `GROOVE` gauge, which corresponds to LR2's `NORMAL`
@@ -23,21 +23,21 @@ gauge. Both are options: `PlayerOptions.judgeRuleset` picks the ruleset and `Pla
 
 ## Entry points
 
-`@be-music/player` exports designed entries, not its file layout ([ADR 0005](./adr/0005-public-entry-points.md)):
+`@be-music/player-engine` exports designed entries, not its file layout ([ADR 0005](./adr/0005-public-entry-points.md)):
 
-| Entry              | What it exports                                                                                                                                                                                                                                                                                                                                                   |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@be-music/player` | The engine: `manualPlay`, `autoPlay`, `PlayerOptions` with its five category types, `PlayerSummary`, the load progress, `PlayerInterruptedError`, the runtime contracts (`AudioSession`, `PlayerInputRuntime`, `PlayerUIRuntime` and their `Create*Context` types), `resolvePlayChart`, `preparePlaybackChart`, `resolveChartRulesetFacts` and `createTempoClock` |
-| `./signals`        | What a host's input and UI runtimes exchange with a running play: the input bus and its commands, the UI bus with its frames, commands and `PlayerGaugeSummary`, the state signals, and the high-speed range and actions                                                                                                                                          |
-| `./lanes`          | The lanes of a play mode: the layout and its slots, scratch and wheel lanes, key bindings, FREE ZONE input, and the lanes the lane options permute                                                                                                                                                                                                                |
-| `./display`        | What a host shows: the timed play notes (`extract*`, `toTimed*`), `ScrollDistanceMapper`, the BGA cue on screen (`pickActiveBGACue`, `pickActiveBGAKey`, `DEFAULT_POOR_BGA_DISPLAY_SECONDS`), the chart facts a song screen shows (`resolveDisplayed*`), `formatSeconds`, `resolveAltModifierLabel`, the TUI note heights and the BGA resize algorithms           |
-| `./ruleset`        | The vocabulary hosts, skins and the Leaderboard share: the judge ruleset ids (`RULESET_IDS`), the judge windows, gauges, clear lamps, BP and the score                                                                                                                                                                                                            |
-| `./replay`         | The replay format, its recorder, simulator and eligibility checks, and the course and NONSTOP logs                                                                                                                                                                                                                                                                |
-| `./records`        | Best records per judge ruleset and the rules that keep them                                                                                                                                                                                                                                                                                                       |
-| `./course`         | Course definitions: LR2 `.lr2crs`, beatoraja courses and table courses, the course maker, and NONSTOP runs                                                                                                                                                                                                                                                        |
-| `./audio-sink`     | The audio sinks for Node (`node-web-audio-api`) and for a Web Audio context                                                                                                                                                                                                                                                                                       |
+| Entry                     | What it exports                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@be-music/player-engine` | The engine: `manualPlay`, `autoPlay`, `PlayerOptions` with its five category types, `PlayerSummary`, the load progress, `PlayerInterruptedError`, the runtime contracts (`AudioSession`, `PlayerInputRuntime`, `PlayerUIRuntime` and their `Create*Context` types), `resolvePlayChart`, `preparePlaybackChart`, `resolveChartRulesetFacts` and `createTempoClock` |
+| `./signals`               | What a host's input and UI runtimes exchange with a running play: the input bus and its commands, the UI bus with its frames, commands and `PlayerGaugeSummary`, the state signals, and the high-speed range and actions                                                                                                                                          |
+| `./lanes`                 | The lanes of a play mode: the layout and its slots, scratch and wheel lanes, key bindings, FREE ZONE input, and the lanes the lane options permute                                                                                                                                                                                                                |
+| `./display`               | What a host shows: the timed play notes (`extract*`, `toTimed*`), `ScrollDistanceMapper`, the BGA cue on screen (`pickActiveBGACue`, `pickActiveBGAKey`, `DEFAULT_POOR_BGA_DISPLAY_SECONDS`), the chart facts a song screen shows (`resolveDisplayed*`), `formatSeconds`, `resolveAltModifierLabel`, the TUI note heights and the BGA resize algorithms           |
+| `./ruleset`               | The vocabulary hosts, skins and the Leaderboard share: the judge ruleset ids (`RULESET_IDS`), the judge windows, gauges, clear lamps, BP and the score                                                                                                                                                                                                            |
+| `./replay`                | The replay format, its recorder, simulator and eligibility checks, and the course and NONSTOP logs                                                                                                                                                                                                                                                                |
+| `./records`               | Best records per judge ruleset and the rules that keep them                                                                                                                                                                                                                                                                                                       |
+| `./course`                | Course definitions: LR2 `.lr2crs`, beatoraja courses and table courses, the course maker, and NONSTOP runs                                                                                                                                                                                                                                                        |
+| `./audio-sink`            | The audio sinks for Node (`node-web-audio-api`) and for a Web Audio context                                                                                                                                                                                                                                                                                       |
 
-The chart-layer names come from `@be-music/chart`: `ChartPlayVariant`, `LongNoteMode`, the timelines and their points, `BGACue` and the BGA timeline builders, the timing resolver and the sample triggers. Everything else in the package is internal.
+The chart-layer names come from `@be-music/chart-model`: `ChartPlayVariant`, `LongNoteMode`, the timelines and their points, `BGACue` and the BGA timeline builders, the timing resolver and the sample triggers. Everything else in the package is internal.
 
 ## BMS compatible range
 
@@ -114,7 +114,7 @@ Items that are only stored in the IR by the parser and not referenced by the pla
 player executes the score in the following order:
 
 1. Take the chart the host resolved for this play (`resolvePlayChart`); a chart that still carries control flow is resolved once with `PlayerOptions.randomDraws`.
-2. Resolve the branched score once with `resolveChart` (`@be-music/chart`, see [Architecture](./architecture.md)) and take the performance notes, mines, invisible notes, real-time audio triggers, tempo map and chart facts from the resulting `ResolvedChart`.
+2. Resolve the branched score once with `resolveChart` (`@be-music/chart-model`, see [Architecture](./architecture.md)) and take the performance notes, mines, invisible notes, real-time audio triggers, tempo map and chart facts from the resulting `ResolvedChart`.
 3. Confirm the lane mode from the branched score (see [Lane mode and input](#lane-mode-and-input)), then the key assignment and lane FREE ZONE alias from the actual channels.
 4. Initialize gauges, scores, UI state, input runtime, and audio runtime.
 5. Run the one play loop (`play-loop.ts`) with the play's judge strategy — manual (AUTO SCRATCH included), replay (`replayInputs`) or AUTO — and return `PlayerSummary` at the end.
@@ -144,14 +144,14 @@ Of several `#STOPxx` objects at one position the last one wins, as in LR2 and be
 
 BMS's `#RANDOM` / `#SETRANDOM` / `#SWITCH` control syntax is resolved once per play, by the host, before playback starts.
 
-The outcome of a play is an explicit value, `RandomDraws` (`@be-music/chart`): one entry per `#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` line in file order, each with the line's command, its `range` (the number of outcomes) and the `value` in force after it.
+The outcome of a play is an explicit value, `RandomDraws` (`@be-music/chart-model`): one entry per `#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` line in file order, each with the line's command, its `range` (the number of outcomes) and the `value` in force after it.
 
 - Every such line has an entry, including the ones nested in a branch that is not taken: the evaluator walks every directive whatever the branch state.
 - `#RANDOM n` / `#SWITCH n` draw `value` from `1..n`. A missing, zero, negative or non-numeric `n` is a single-outcome line: `range` 1, `value` 1, and it does not consume the random source.
 - `#SETRANDOM n` / `#SETSWITCH n` fix `value` to `n` (1 when `n` is missing or not positive), with `range` 1; they draw nothing.
 
-The single resolution point is the pair `drawRandomOutcomes(chart, random)` → `RandomDraws` and `resolveBMSControlFlowWithDraws(chart, draws)` (`@be-music/parser`) → resolved chart, wrapped for hosts as `resolvePlayChart(chart)` (`@be-music/player`), which returns `{ chart, randomDraws }`.
-The branch semantics (one shared stack, an open `#IF` outliving `#ENDRANDOM`, definitions in a taken branch applying to the whole chart) live once in `evaluateControlFlow` (`@be-music/chart`).
+The single resolution point is the pair `drawRandomOutcomes(chart, random)` → `RandomDraws` and `resolveBMSControlFlowWithDraws(chart, draws)` (`@be-music/chart-parser`) → resolved chart, wrapped for hosts as `resolvePlayChart(chart)` (`@be-music/player-engine`), which returns `{ chart, randomDraws }`.
+The branch semantics (one shared stack, an open `#IF` outliving `#ENDRANDOM`, definitions in a taken branch applying to the whole chart) live once in `evaluateControlFlow` (`@be-music/chart-model`).
 The same chart and draws always resolve to the same result, and draws that were not drawn for the chart are rejected with a `RangeError`.
 A resolved chart carries no `bms.controlFlow`, so resolving it again changes nothing.
 
@@ -193,7 +193,7 @@ The RANDOM summary is derived from the draws.
 
 ### Notes to be played
 
-The notes come from the resolved chart (`ResolvedChart.notes`, `resolveChart` in `@be-music/chart`), which normalizes the IR `events` into a sequence of notes with beats/seconds; the engine copies them into play notes (`preparePlaybackChart`) that carry the per-play state.
+The notes come from the resolved chart (`ResolvedChart.notes`, `resolveChart` in `@be-music/chart-model`), which normalizes the IR `events` into a sequence of notes with beats/seconds; the engine copies them into play notes (`preparePlaybackChart`) that carry the per-play state.
 Only the playable channel is included, and each note has at least the following information:
 
 - `channel`
@@ -227,7 +227,7 @@ Landmines and invisible notes are not collapsed.
 Mine channels are mapped to their corresponding playable lane and kept in a separate array.
 Mines are not included in `summary.total`.
 
-When a mine detonates belongs to the judge ruleset (`mineTrigger` in [`definitions.ts`](../packages/player/src/ruleset/definitions.ts)); the engine and the replay simulators apply the same rule. The damage model is the same everywhere (confirmed against beatoraja's `JudgeManager`).
+When a mine detonates belongs to the judge ruleset (`mineTrigger` in [`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts)); the engine and the replay simulators apply the same rule. The damage model is the same everywhere (confirmed against beatoraja's `JudgeManager`).
 
 - `lr2` ruleset — LR2's model (its own changelog): a mine explodes on either of two conditions: **holding the lane's key as the mine crosses the judge line**, or **pressing while the mine is within the `PGREAT` window** of the judge line. A mine passing with the key up is harmless, and a press that lands after the crossing but outside `PGREAT` is too.
 - `beatoraja` ruleset — beatoraja's model (`JudgeManager` L244): a mine explodes only when **the lane's key is down at the moment the mine crosses the judge line**. A press shortly before (released before the crossing) or after does nothing.
@@ -258,7 +258,7 @@ ordinary key columns, so they keep whatever length the chart authored (a plain t
 
 ## Lane mode and input
 
-The lane mode comes from one rule shared by every host: `resolveChartPlayVariant` in `@be-music/chart`, run over the
+The lane mode comes from one rule shared by every host: `resolveChartPlayVariant` in `@be-music/chart-model`, run over the
 branched score's events, `bms.player`, the bmson `mode_hint`, and the chart extension (`PlayerOptions.laneModeExtension`).
 A bmson `keyboard-24k` / `keyboard-24k-double` hint selects `24 KEY SP` / `48 KEY DP` outright, so a keyboard chart that
 only uses its first nine keys is not read as 7 / 9 KEY; every other hint leaves the decision to the lanes. A host that already
@@ -307,8 +307,8 @@ If you fall back to a terminal that does not support kitty, side-specific input 
 
 ### Play-mode table
 
-Every play mode is declared once, in `PLAY_MODE_LAYOUTS` ([`chart/src/play-modes.ts`](../packages/chart/src/play-modes.ts),
-exported by `@be-music/chart`). For each layout it lists the lanes left to right, each with its kind (key, scratch, wheel
+Every play mode is declared once, in `PLAY_MODE_LAYOUTS` ([`chart/src/play-modes.ts`](../packages/chart-model/src/play-modes.ts),
+exported by `@be-music/chart-model`). For each layout it lists the lanes left to right, each with its kind (key, scratch, wheel
 up / down), side, slot (key number, `0` for the scratch, `25` / `26` for the wheel), colour class, and the BMS channels of
 every object family on it (visible `1x` / `2x`, invisible `3x` / `4x`, `#LNTYPE` `5x` / `6x`, mine `Dx` / `Ex`, the
 extended `A`..`Q` lanes included), plus the FREE ZONE channels it plays on its scratch. The bmson `mode_hint` lane tables
@@ -332,7 +332,7 @@ player's lane layout and lane options, the CLI's lane colours, and the skin SDK'
 default), `beatoraja`, or `iidx` — chosen with `PlayerOptions.judgeRuleset`. The ruleset owns the judge windows,
 which note a press resolves against, the long-note style, the empty-POOR rule, the gauge line-up and its curve,
 and the score formula. The tables and their primary sources live in
-[`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts) and are compared
+[`packages/player-engine/src/ruleset/definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) and are compared
 side by side in [`docs/replay.md`](./replay.md).
 
 The same tables drive the live engine and the replay simulator, and an equivalence suite requires the two to
@@ -515,7 +515,7 @@ Empty POOR mirrors LR2's phantom-press behaviour:
 - Increment `summary.emptyPoor`, and do NOT touch the note-judgment counters (`perfect` / `great` / `good` / `bad` / `poor`) — no note was consumed. Whether a player's POOR counter displays the two summed is a presentation choice; LR2's does (OpenLR2 `ApplyJudgeNote` increments `playerstat.poor` for the empty-POOR branch).
 - Do NOT change EX-SCORE or the score.
 - Cut the combo only where the ruleset says to (`comboBreaksOnEmptyPoor`): beatoraja's five-key and PMS rules do, LR2 and IIDX do not.
-- Apply `EMPTY_POOR` to the gauge — the delta lives in the ruleset's gauge table ([`definitions.ts`](../packages/player/src/ruleset/definitions.ts)). Under `lr2`: GROOVE `-2`, HARD `-2` (subject to the TOTAL multiplier), EASY `-1.6`, DEATH `-10`. Nearly harmless on GROOVE / EASY; meaningful drain on HARD / DEATH.
+- Apply `EMPTY_POOR` to the gauge — the delta lives in the ruleset's gauge table ([`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts)). Under `lr2`: GROOVE `-2`, HARD `-2` (subject to the TOTAL multiplier), EASY `-1.6`, DEATH `-10`. Nearly harmless on GROOVE / EASY; meaningful drain on HARD / DEATH.
 - Trigger POOR BGA (`trigger-poor-bga`).
 - Flash the judge display as `POOR` for 0.6 s (`publishJudgeCombo('POOR', combo)`). The LR2 spec separates op 246 (1P empty POOR) / 266 (2P empty POOR) from op 245 / 265 (missed POOR), but both NOWJUDGE indices currently resolve to the same `'poor'` skin slot in this implementation, so the rendered sprite is identical.
 
@@ -568,7 +568,7 @@ EX-SCORE is IIDX compatible.
 - `beatoraja` and `iidx` report EX-SCORE, which is what they display. IIDX retired its own money score in
   BISTROVER.
 
-The score vocabulary is the ruleset's, exported from `@be-music/player/ruleset`: `ScoreSummary`, `JudgmentKind`,
+The score vocabulary is the ruleset's, exported from `@be-music/player-engine/ruleset`: `ScoreSummary`, `JudgmentKind`,
 `createEmptyScore`, `computeScoreRate`, the DJ Ranks (`resolveIIDXRankIndexFromScore`, `resolveIIDXRankLabel`,
 `IIDX_RANK_LABELS`), `resolveLR2MoneyScore` and `resolveDisplayedPoor`.
 
@@ -604,7 +604,7 @@ split.
   same judgment; logs from before it existed keep judging to the end.
 - A course stage (`PlayerOptions.course`) runs on the ruleset's course gauge instead, starting from the value the
   previous stage left. See [Courses and dan certification](./course.md#playing-a-course-stage).
-- The tables live in [`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts)
+- The tables live in [`packages/player-engine/src/ruleset/definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts)
   and are applied through `RulesetGauge`. The shared engine is the authority for final score and summary values;
   browser scenes mirror `summary.gauge`.
 
@@ -630,7 +630,7 @@ split.
 `noteCount` is the number of notes played for TOTAL / EX-SCORE / SCORE.
 FREE ZONE, mines, and invisible objects are not included in `noteCount`.
 
-The following deltas describe the `lr2` ruleset's `GROOVE` gauge. `HARD`, `DEATH`, `EASY`, and the other rulesets' values live in [`definitions.ts`](../packages/player/src/ruleset/definitions.ts).
+The following deltas describe the `lr2` ruleset's `GROOVE` gauge. `HARD`, `DEATH`, `EASY`, and the other rulesets' values live in [`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts).
 
 `baseGain = effectiveTotal / noteCount`
 
@@ -797,7 +797,7 @@ The built-in Node audio session renders its audio for the starting tempo and doe
 
 `highSpeed` is a display parameter that primarily changes the visible range and scrolling density of the TUI.
 The judgment window itself cannot be changed.
-The runtime normalizes high-speed values with `resolveHighSpeedMultiplier` from `@be-music/player/signals`.
+The runtime normalizes high-speed values with `resolveHighSpeedMultiplier` from `@be-music/player-engine/signals`.
 Valid values range from `0.5` to `10.0` and snap to `0.5` increments.
 
 ### pause / restart / interrupt

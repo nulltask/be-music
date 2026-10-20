@@ -1,9 +1,9 @@
 [Japanese version](./json-spec.ja.md)
 
-# BMS/bmson intermediate representation (`@be-music/json`) implementation specification
+# BMS/bmson intermediate representation (`@be-music/chart-source`) implementation specification
 
-This document is the canonical specification for the BMS/bmson intermediate representation provided by `@be-music/json`.
-`@be-music/json` is a format for Be-Music's internal processing only, and is not an external exchange format for distribution or reuse.
+This document is the canonical specification for the BMS/bmson intermediate representation provided by `@be-music/chart-source`.
+`@be-music/chart-source` is a format for Be-Music's internal processing only, and is not an external exchange format for distribution or reuse.
 Also, as it is still in the early stages of development, backward compatibility of this intermediate representation cannot be guaranteed.
 
 ## Purpose
@@ -13,9 +13,9 @@ Also, as it is still in the early stages of development, backward compatibility 
 
 ## Package boundaries
 
-- `@be-music/json` is a pure IR package
-- `@be-music/json` only provides types, normalized data structures, and clone/initialization/basic formatting helpers
-- `@be-music/chart` is in charge of score semantics such as beat conversion, event order, long note resolution, sample trigger judgment, etc., and computes the [Be-Music Fingerprint](./fingerprint-spec.md) of a chart (`computeChartFingerprint` / `computePlayFingerprint`).
+- `@be-music/chart-source` is a pure IR package
+- `@be-music/chart-source` only provides types, normalized data structures, and clone/initialization/basic formatting helpers
+- `@be-music/chart-model` is in charge of score semantics such as beat conversion, event order, long note resolution, sample trigger judgment, etc., and computes the [Be-Music Fingerprint](./fingerprint-spec.md) of a chart (`computeChartFingerprint` / `computePlayFingerprint`).
 - Source-level information for round-trips is kept as part of the IR, but separated from the normalized score semantics in the `preservation` layer.
 
 ## Design principles
@@ -47,7 +47,7 @@ The parser accepts the former IR keys below on input and emits their canonical s
 
 ## Root structure
 
-The root object and its parts (field types are in `packages/json/src/index.ts`):
+The root object and its parts (field types are in `packages/chart-source/src/index.ts`):
 
 ```mermaid
 classDiagram
@@ -418,7 +418,7 @@ flowchart LR
     bmsonIn[".bmson"]
     jsonIn[".json"]
   end
-  ir["BeMusicJSON<br/>(@be-music/json)"]
+  ir["BeMusicJSON<br/>(@be-music/chart-source)"]
   subgraph out["Written"]
     bmsOut[".bms"]
     bmsonOut[".bmson"]
@@ -434,4 +434,4 @@ flowchart LR
 
 - `stringifier` uses `position` denominator information to determine intra-bar resolution
 - `parseJson` requires `position` tuple and treats missing events as errors
-- Score semantics helpers such as beat conversion and event order are provided by `@be-music/chart`
+- Score semantics helpers such as beat conversion and event order are provided by `@be-music/chart-model`

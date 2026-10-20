@@ -1,8 +1,8 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { dirname, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseChartFile } from '@be-music/parser';
-import { resolvePlayChart } from '@be-music/player';
+import { parseChartFile } from '@be-music/chart-parser';
+import { resolvePlayChart } from '@be-music/player-engine';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   buildScenarios,

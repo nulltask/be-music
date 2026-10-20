@@ -12,7 +12,7 @@ A self-hosted instance may put services on unrelated domains. The interim shared
 
 Accounts owns authentication in a separate D1 and runs Better Auth's OAuth provider with public first-party clients, exact callback URIs, authorization code and S256 PKCE. Dynamic registration is disabled. All clients use public subjects; services key identities by `(issuer, sub)`, never email.
 
-`@be-music/auth-client` implements the server-side relying party: state/nonce checks, issuer/audience and signature validation, and resource-bound API access tokens. Each app stores an encrypted, host-only HttpOnly session for at most ten minutes, bounded by its tokens. There are no refresh tokens, parent-domain cookies or browser-visible bearer tokens. The flow is shown in [Services §3](../services.md#3-sign-in).
+`@be-music/service-auth-client` implements the server-side relying party: state/nonce checks, issuer/audience and signature validation, and resource-bound API access tokens. Each app stores an encrypted, host-only HttpOnly session for at most ten minutes, bounded by its tokens. There are no refresh tokens, parent-domain cookies or browser-visible bearer tokens. The flow is shown in [Services §3](../services.md#3-sign-in).
 
 The Leaderboard keeps its profiles and scores. An identity mapping preserves migrated player IDs; signed guest-link claims transfer anonymous scores lazily and idempotently. Accounts does not import Leaderboard modules or access its database.
 

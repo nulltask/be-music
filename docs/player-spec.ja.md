@@ -2,19 +2,19 @@
 
 # Player 実装仕様
 
-この文書は、共有 `@be-music/player` core engine の実行時仕様を定義します。
+この文書は、共有 `@be-music/player-engine` core engine の実行時仕様を定義します。
 譜面フォーマットの受理規則や IR の意味は [`bms-spec.md`](./bms-spec.ja.md)、[`bmson-spec.md`](./bmson-spec.ja.md)、[`json-spec.md`](./json-spec.ja.md) を優先し、この文書では player がそれらをどのように再生・判定・表示するかだけを扱います。
 
 ## 目的
 
-- `@be-music/player` のモード別挙動を 1 か所に集約する。
+- `@be-music/player-engine` のモード別挙動を 1 か所に集約する。
 - 判定、スコア、ゲージ、音声、表示の基準を明文化する。
 - 実装変更時に確認すべき互換方針を残す。
 
 ## 対象範囲
 
 この文書が対象にするのは、`autoPlay()` と `manualPlay()` が返す結果、およびそれらが内部で使う判定・表示・音声処理です。
-`@be-music/player-tui` の CLI 引数、設定ファイル永続化、Node ワーカー間通信などの呼び出し方法は対象外です。
+`@be-music/player-terminal` の CLI 引数、設定ファイル永続化、Node ワーカー間通信などの呼び出し方法は対象外です。
 terminal player と browser player は timing、note、BGA cue、score、result に同じ譜面意味論を再利用します。Terminal UI の挙動は [Terminal player 実装メモ](./player-tui.ja.md) に分けて記述し、PixiJS scene、LR2 / beatoraja skin 描画、browser file loading、WebAudio lifecycle は [Browser player 実装メモ](./player-web.ja.md) に分けて記述します。
 
 core engine の既定は `lr2` 互換ルールセットと、その `GROOVE` gauge（LR2 の `NORMAL` gauge 相当）です。
@@ -23,21 +23,21 @@ core engine の既定は `lr2` 互換ルールセットと、その `GROOVE` gau
 
 ## 公開する入口
 
-`@be-music/player` は、ファイル構成ではなく設計した入口を公開します（[ADR 0005](./adr/0005-public-entry-points.ja.md)）。
+`@be-music/player-engine` は、ファイル構成ではなく設計した入口を公開します（[ADR 0005](./adr/0005-public-entry-points.ja.md)）。
 
-| 入口               | 公開するもの                                                                                                                                                                                                                                                                                                                                       |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@be-music/player` | エンジン：`manualPlay`、`autoPlay`、`PlayerOptions` と 5 つの分類の型、`PlayerSummary`、読み込みの進捗、`PlayerInterruptedError`、ランタイムの契約（`AudioSession`、`PlayerInputRuntime`、`PlayerUIRuntime` とその `Create*Context` の型）、`resolvePlayChart`、`preparePlaybackChart`、`resolveChartRulesetFacts`、`createTempoClock`             |
-| `./signals`        | ホストの入力と UI のランタイムが演奏中のプレイとやり取りするもの：入力のバスとそのコマンド、UI のバスとそのフレーム・コマンド・`PlayerGaugeSummary`、状態のシグナル、ハイスピードの範囲と操作                                                                                                                                                      |
-| `./lanes`          | プレイモードのレーン：レイアウトとスロット、スクラッチとホイールのレーン、キーの割り当て、FREE ZONE の入力、レーンオプションが入れ替えるレーン                                                                                                                                                                                                     |
-| `./display`        | ホストが表示するもの：時刻を付けたプレイのノート（`extract*`、`toTimed*`）、`ScrollDistanceMapper`、画面の BGA の cue（`pickActiveBGACue`、`pickActiveBGAKey`、`DEFAULT_POOR_BGA_DISPLAY_SECONDS`）、選曲画面が表示する譜面の情報（`resolveDisplayed*`）、`formatSeconds`、`resolveAltModifierLabel`、TUI のノートの高さ、BGA の縮小のアルゴリズム |
-| `./ruleset`        | ホスト・スキン・リーダーボードが共有する語彙：判定ルールセットの id（`RULESET_IDS`）、判定幅、ゲージ、クリアランプ、BP、スコア                                                                                                                                                                                                                     |
-| `./replay`         | リプレイの形式、その記録・シミュレーター・対象の判定、コースと NONSTOP のログ                                                                                                                                                                                                                                                                      |
-| `./records`        | 判定ルールセットごとのベスト記録と、その記録の規則                                                                                                                                                                                                                                                                                                 |
-| `./course`         | コースの定義：LR2 の `.lr2crs`、beatoraja のコース、難易度表のコース、コースメーカー、NONSTOP の通しプレイ                                                                                                                                                                                                                                         |
-| `./audio-sink`     | Node（`node-web-audio-api`）と Web Audio のコンテキストの音声シンク                                                                                                                                                                                                                                                                                |
+| 入口                      | 公開するもの                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@be-music/player-engine` | エンジン：`manualPlay`、`autoPlay`、`PlayerOptions` と 5 つの分類の型、`PlayerSummary`、読み込みの進捗、`PlayerInterruptedError`、ランタイムの契約（`AudioSession`、`PlayerInputRuntime`、`PlayerUIRuntime` とその `Create*Context` の型）、`resolvePlayChart`、`preparePlaybackChart`、`resolveChartRulesetFacts`、`createTempoClock`             |
+| `./signals`               | ホストの入力と UI のランタイムが演奏中のプレイとやり取りするもの：入力のバスとそのコマンド、UI のバスとそのフレーム・コマンド・`PlayerGaugeSummary`、状態のシグナル、ハイスピードの範囲と操作                                                                                                                                                      |
+| `./lanes`                 | プレイモードのレーン：レイアウトとスロット、スクラッチとホイールのレーン、キーの割り当て、FREE ZONE の入力、レーンオプションが入れ替えるレーン                                                                                                                                                                                                     |
+| `./display`               | ホストが表示するもの：時刻を付けたプレイのノート（`extract*`、`toTimed*`）、`ScrollDistanceMapper`、画面の BGA の cue（`pickActiveBGACue`、`pickActiveBGAKey`、`DEFAULT_POOR_BGA_DISPLAY_SECONDS`）、選曲画面が表示する譜面の情報（`resolveDisplayed*`）、`formatSeconds`、`resolveAltModifierLabel`、TUI のノートの高さ、BGA の縮小のアルゴリズム |
+| `./ruleset`               | ホスト・スキン・リーダーボードが共有する語彙：判定ルールセットの id（`RULESET_IDS`）、判定幅、ゲージ、クリアランプ、BP、スコア                                                                                                                                                                                                                     |
+| `./replay`                | リプレイの形式、その記録・シミュレーター・対象の判定、コースと NONSTOP のログ                                                                                                                                                                                                                                                                      |
+| `./records`               | 判定ルールセットごとのベスト記録と、その記録の規則                                                                                                                                                                                                                                                                                                 |
+| `./course`                | コースの定義：LR2 の `.lr2crs`、beatoraja のコース、難易度表のコース、コースメーカー、NONSTOP の通しプレイ                                                                                                                                                                                                                                         |
+| `./audio-sink`            | Node（`node-web-audio-api`）と Web Audio のコンテキストの音声シンク                                                                                                                                                                                                                                                                                |
 
-譜面の層の名前は `@be-music/chart` から読み込みます。`ChartPlayVariant`、`LongNoteMode`、タイムラインとその点、`BGACue` と BGA のタイムラインを作る関数、タイミングの解決、サンプルのトリガーです。それ以外はパッケージの内部です。
+譜面の層の名前は `@be-music/chart-model` から読み込みます。`ChartPlayVariant`、`LongNoteMode`、タイムラインとその点、`BGACue` と BGA のタイムラインを作る関数、タイミングの解決、サンプルのトリガーです。それ以外はパッケージの内部です。
 
 ## BMS 対応範囲
 
@@ -114,7 +114,7 @@ parser が IR へ保持するだけで、player が実行時に参照しない�
 player は次の順序で譜面を実行します。
 
 1. ホストが今回のプレイ用に解決した譜面（`resolvePlayChart`）を受け取ります。制御構文が残った譜面は `PlayerOptions.randomDraws` で 1 回だけ解決します。
-2. 分岐後の譜面を `resolveChart`（`@be-music/chart`、[アーキテクチャ](./architecture.ja.md) を参照）で 1 回だけ解決し、演奏ノート、地雷、不可視ノート、リアルタイム音声トリガ、テンポマップ、譜面の事実を、得られた `ResolvedChart` から取り出します。
+2. 分岐後の譜面を `resolveChart`（`@be-music/chart-model`、[アーキテクチャ](./architecture.ja.md) を参照）で 1 回だけ解決し、演奏ノート、地雷、不可視ノート、リアルタイム音声トリガ、テンポマップ、譜面の事実を、得られた `ResolvedChart` から取り出します。
 3. 分岐後の譜面からレーンモードを確定し（[レーンモードと入力](#レーンモードと入力)）、実際に存在するチャンネル群からキー割り当てと FREE ZONE のエイリアスを確定します。
 4. ゲージ、スコア、UI state、入力 runtime、音声 runtime を初期化します。
 5. 1 つのプレイループ（`play-loop.ts`）を、そのプレイの判定の戦略（手動（AUTO SCRATCH を含む）、リプレイ（`replayInputs`）、AUTO）で実行し、最後に `PlayerSummary` を返します。
@@ -144,14 +144,14 @@ flowchart TD
 
 BMS の `#RANDOM` / `#SETRANDOM` / `#SWITCH` 系制御構文は、再生開始前に、ホストがプレイごとに 1 回だけ解決します。
 
-1 回のプレイの結果は、はっきりした値 `RandomDraws`（`@be-music/chart`）で表します。`#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` の行ごとにファイル順で 1 項目あり、各項目は行のコマンド、`range`（取りうる結果の数）、その行の後で有効な `value` を持ちます。
+1 回のプレイの結果は、はっきりした値 `RandomDraws`（`@be-music/chart-model`）で表します。`#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` の行ごとにファイル順で 1 項目あり、各項目は行のコマンド、`range`（取りうる結果の数）、その行の後で有効な `value` を持ちます。
 
 - 選ばれなかった分岐の中にある行も含め、該当する行にはすべて項目があります。評価器は分岐の状態にかかわらずすべての制御行をたどるためです。
 - `#RANDOM n` / `#SWITCH n` は `1..n` から `value` を引きます。`n` がない、0、負、数値でない行は結果が 1 つしかない行として扱い、`range` 1、`value` 1 とし、乱数源を消費しません。
 - `#SETRANDOM n` / `#SETSWITCH n` は `value` を `n`（`n` がないか正でなければ 1）に固定し、`range` は 1 です。乱数は引きません。
 
-解決する場所は 1 か所だけで、`drawRandomOutcomes(chart, random)` → `RandomDraws` と `resolveBMSControlFlowWithDraws(chart, draws)`（`@be-music/parser`）→ 解決済みの譜面、の組です。ホスト向けには `resolvePlayChart(chart)`（`@be-music/player`）がこれをまとめ、`{ chart, randomDraws }` を返します。
-分岐の意味（スタックは 1 本で共有する、閉じていない `#IF` は `#ENDRANDOM` の後も残る、選ばれた分岐の中の定義は譜面全体に効く）は、`evaluateControlFlow`（`@be-music/chart`）の 1 か所だけにあります。
+解決する場所は 1 か所だけで、`drawRandomOutcomes(chart, random)` → `RandomDraws` と `resolveBMSControlFlowWithDraws(chart, draws)`（`@be-music/chart-parser`）→ 解決済みの譜面、の組です。ホスト向けには `resolvePlayChart(chart)`（`@be-music/player-engine`）がこれをまとめ、`{ chart, randomDraws }` を返します。
+分岐の意味（スタックは 1 本で共有する、閉じていない `#IF` は `#ENDRANDOM` の後も残る、選ばれた分岐の中の定義は譜面全体に効く）は、`evaluateControlFlow`（`@be-music/chart-model`）の 1 か所だけにあります。
 同じ譜面と draws からは常に同じ結果が得られ、その譜面のために引かれていない draws は `RangeError` で拒否します。
 解決済みの譜面は `bms.controlFlow` を持たないので、もう一度解決しても何も変わりません。
 
@@ -193,7 +193,7 @@ RANDOM 要約は draws から作ります。
 
 ### 演奏対象ノート
 
-ノートは解決済みの譜面（`ResolvedChart.notes`、`@be-music/chart` の `resolveChart`）から取ります。`resolveChart` は IR の `events` を beat/seconds 付きのノート列へ正規化し、エンジンはそれをプレイごとの状態を持つ演奏ノートにコピーします（`preparePlaybackChart`）。
+ノートは解決済みの譜面（`ResolvedChart.notes`、`@be-music/chart-model` の `resolveChart`）から取ります。`resolveChart` は IR の `events` を beat/seconds 付きのノート列へ正規化し、エンジンはそれをプレイごとの状態を持つ演奏ノートにコピーします（`preparePlaybackChart`）。
 演奏対象に含めるのは playable channel のみで、各ノートは少なくとも次の情報を持ちます。
 
 - `channel`
@@ -227,7 +227,7 @@ bmson の `l`、FREE ZONE (`17` / `27`)、BMS の `#LNOBJ`、BMS legacy LN (`#mm
 地雷チャンネルは、対応する playable lane に写像したうえで別配列として保持します。
 地雷は `summary.total` に含めません。
 
-地雷がいつ爆発するかは判定 ruleset が決めます（[`definitions.ts`](../packages/player/src/ruleset/definitions.ts) の `mineTrigger`）。engine と replay simulator は同じ規則を使います。ダメージモデルはどの ruleset でも同じです（beatoraja `JudgeManager` で確認）。
+地雷がいつ爆発するかは判定 ruleset が決めます（[`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) の `mineTrigger`）。engine と replay simulator は同じ規則を使います。ダメージモデルはどの ruleset でも同じです（beatoraja `JudgeManager` で確認）。
 
 - `lr2` ruleset — LR2 のモデル（LR2 自身の changelog）。「**キーを押したまま地雷が判定線を通過**」または「**地雷が判定線の `PGREAT` 窓以内にあるときの押下**」で爆発します。キーが押されていない地雷の通過は無害で、通過後かつ `PGREAT` 圏外の押下も無害です。
 - `beatoraja` ruleset — beatoraja のモデル（`JudgeManager` L244）。「**地雷が判定線を通過する瞬間にキーが押されている**」ときだけ爆発します。少し前に押して通過前に離した場合や、通過後の押下では何も起きません。
@@ -257,7 +257,7 @@ beatoraja はどちらも 7 鍵・14 鍵の譜面で `17` / `27` チャンネル
 
 ## レーンモードと入力
 
-レーンモードは、すべての host が共有するひとつのルール `@be-music/chart` の `resolveChartPlayVariant` で決めます。
+レーンモードは、すべての host が共有するひとつのルール `@be-music/chart-model` の `resolveChartPlayVariant` で決めます。
 入力は分岐後の譜面のイベント、`bms.player`、bmson の `mode_hint`、譜面の拡張子 (`PlayerOptions.laneModeExtension`) です。
 bmson の `keyboard-24k` / `keyboard-24k-double` は `24 KEY SP` / `48 KEY DP` をそのまま選ぶため、最初の 9 鍵しか使わない
 キーボード譜面も 7 / 9 KEY とは判定しません。ほかの hint はレーンによる判定に任せます。variant をすでに
@@ -294,8 +294,8 @@ kitty 非対応端末へフォールバックした場合、reverse scratch の 
 
 ### プレイモード表
 
-すべてのプレイモードは `PLAY_MODE_LAYOUTS`（[`chart/src/play-modes.ts`](../packages/chart/src/play-modes.ts)、
-`@be-music/chart` から export）の 1 か所で宣言します。レイアウトごとにレーンを左から右へ並べ、各レーンの種類（鍵、scratch、
+すべてのプレイモードは `PLAY_MODE_LAYOUTS`（[`chart/src/play-modes.ts`](../packages/chart-model/src/play-modes.ts)、
+`@be-music/chart-model` から export）の 1 か所で宣言します。レイアウトごとにレーンを左から右へ並べ、各レーンの種類（鍵、scratch、
 ホイールの上 / 下）、side、slot（鍵の番号。scratch は `0`、ホイールは `25` / `26`）、色の分類、そのレーンに載る各オブジェ系統の
 BMS チャンネル（可視 `1x` / `2x`、不可視 `3x` / `4x`、`#LNTYPE` の `5x` / `6x`、地雷 `Dx` / `Ex`。拡張レーン `A`..`Q` を含む）と、
 scratch で扱う FREE ZONE のチャンネルを持ちます。bmson の `mode_hint` のレーン表（`BMSON_MODE_HINT_LAYOUTS`）も同じレイアウトから
@@ -319,7 +319,7 @@ scratch で扱う FREE ZONE のチャンネルを持ちます。bmson の `mode_
 `lr2`（デフォルト）/ `beatoraja` / `iidx` のいずれかで動作します（`PlayerOptions.judgeRuleset`）。
 判定幅、押下がどのノートを取るか、ロングノートの扱い、空 POOR の規則、ゲージの種類とカーブ、スコア計算式は
 すべてルールセットが所有します。定数と出典は
-[`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts) にあり、
+[`packages/player-engine/src/ruleset/definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) にあり、
 3 つの比較表は [`docs/replay.ja.md`](./replay.ja.md) にあります。
 
 同じテーブルがライブエンジンとリプレイシミュレータの両方を駆動し、等価性テストが同一の記録入力列に対して
@@ -501,7 +501,7 @@ flowchart TD
 - `summary.emptyPoor` を加算し、ノート判定カウンタ (`perfect`/`great`/`good`/`bad`/`poor`) は **更新しない**。ノートを消費していないため。POOR カウンタに両者の合計を表示するかは提示側の選択で、LR2 は合算します（OpenLR2 `ApplyJudgeNote` が空POOR 分岐でも `playerstat.poor` を加算）。
 - EX-SCORE とスコアは **変化させない**。
 - combo はルールセットが指示する場合のみ切る（`comboBreaksOnEmptyPoor`）。beatoraja の 5 鍵 / PMS のみ切れ、LR2 と IIDX は切れません。
-- ゲージには `EMPTY_POOR` を適用する。デルタはルールセットのゲージ表（[`definitions.ts`](../packages/player/src/ruleset/definitions.ts)）にあり、`lr2` では GROOVE `-2`、HARD `-2`（TOTAL 補正対象）、EASY `-1.6`、DEATH `-10`。GROOVE / EASY ではほぼ無害だが、HARD / DEATH では実害が出る。
+- ゲージには `EMPTY_POOR` を適用する。デルタはルールセットのゲージ表（[`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts)）にあり、`lr2` では GROOVE `-2`、HARD `-2`（TOTAL 補正対象）、EASY `-1.6`、DEATH `-10`。GROOVE / EASY ではほぼ無害だが、HARD / DEATH では実害が出る。
 - **POOR BGA を発火する** (`trigger-poor-bga`)。
 - **judge 表示を `POOR` で 0.6 秒フラッシュ** する (`publishJudgeCombo('POOR', combo)`)。 LR2 spec 上は op 246 (1P 空POOR) / 266 (2P 空POOR) と op 245 / 265 (見逃しPOOR) が分岐するが、本実装では NOWJUDGE index 0 / 1 を同じ `'poor'` skin slot に解決しているため、視覚上は同一の POOR 表示になる。
 
@@ -552,7 +552,7 @@ EX-SCORE は IIDX 互換です。
   判定内訳だけで決まり、コンボ項はありません。
 - `beatoraja` と `iidx` は EX-SCORE を返します。これが実機の表示です（IIDX は BISTROVER でマネースコアを廃止）。
 
-スコアの語彙はルールセットのもので、`@be-music/player/ruleset` が公開します。`ScoreSummary`、`JudgmentKind`、
+スコアの語彙はルールセットのもので、`@be-music/player-engine/ruleset` が公開します。`ScoreSummary`、`JudgmentKind`、
 `createEmptyScore`、`computeScoreRate`、DJ ランク（`resolveIIDXRankIndexFromScore`、`resolveIIDXRankLabel`、
 `IIDX_RANK_LABELS`）、`resolveLR2MoneyScore`、`resolveDisplayedPoor` です。
 
@@ -587,7 +587,7 @@ IIDX は未測定のため、どちらも分けたままです。`PlayerSummary`
   同じ判定で止まります。フラグがなかった頃のログは最後まで判定を続けます。
 - コースのステージ（`PlayerOptions.course`）は、ルールセットのコース用ゲージで、前のステージが残した値から始めます。
   [コースと段位認定](./course.ja.md#コースのステージを遊ぶ) を参照してください。
-- テーブルは [`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts) にあり、
+- テーブルは [`packages/player-engine/src/ruleset/definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) にあり、
   `RulesetGauge` を通して適用されます。最終スコアと summary の authority は共有エンジンで、
   browser scene は `summary.gauge` をミラーします。
 
@@ -614,7 +614,7 @@ IIDX は未測定のため、どちらも分けたままです。`PlayerSummary`
 FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めません。
 
 次の delta は `lr2` ルールセットの `GROOVE` gauge 向けです。`HARD`、`DEATH`、`EASY` と他ルールセットの値は
-[`definitions.ts`](../packages/player/src/ruleset/definitions.ts) にあります。
+[`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) にあります。
 
 `baseGain = effectiveTotal / noteCount`
 
@@ -766,7 +766,7 @@ scratch playable channel 上の演奏ノートだけを自動で処理し、そ�
 
 `highSpeed` は主に TUI の可視範囲とスクロール密度を変える表示用パラメータです。
 判定窓そのものは変えません。
-runtime は `@be-music/player/signals` の `resolveHighSpeedMultiplier` で high-speed 値を正規化します。
+runtime は `@be-music/player-engine/signals` の `resolveHighSpeedMultiplier` で high-speed 値を正規化します。
 有効範囲は `0.5` から `10.0` で、`0.5` 刻みに丸めます。
 
 ### pause / restart / interrupt

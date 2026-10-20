@@ -2,7 +2,7 @@
 
 # シーンモデル
 
-`@be-music/scene-model` は、プレイヤーの各画面が何を表示し、どう振る舞うかを、それを描くスキンの種類に関係なく
+`@be-music/player-scene-model` は、プレイヤーの各画面が何を表示し、どう振る舞うかを、それを描くスキンの種類に関係なく
 保持します（[ADR 0002](./adr/0002-scene-model-package.ja.md)）。標準・LR2・beatoraja の各スキンの種類はこれまで
 一覧のモデルを二つ、プレイ状態の記録を二通り、結果の形を二つ持っていて、そのずれがコース対応で見つかった不具合の
 大半の原因でした（[ADR 0001](./adr/0001-skin-families-only-draw.ja.md)）。ここにあるモデルが、各画面のセッションが
@@ -10,10 +10,10 @@
 
 ```mermaid
 flowchart TD
-  player["@be-music/player<br/>ルールセット・コース・記録・エンジン"]
-  model["@be-music/scene-model<br/>ライブラリ・ブラウズ・プレイオプション<br/>プレイ状態・プレイ結果・コース・効果音"]
+  player["@be-music/player-engine<br/>ルールセット・コース・記録・エンジン"]
+  model["@be-music/player-scene-model<br/>ライブラリ・ブラウズ・プレイオプション<br/>プレイ状態・プレイ結果・コース・効果音"]
   skins["skin-sdk・lr2-skin・beatoraja-skin<br/>モデルを各スキンの語彙へ写す"]
-  sessions["@be-music/player-web<br/>シーンセッション・ファミリービュー"]
+  sessions["@be-music/player-browser<br/>シーンセッション・ファミリービュー"]
 
   player --> model
   model --> skins
@@ -24,7 +24,7 @@ flowchart TD
 このパッケージは実行環境に依存しません。レンダラーを import せず、DOM や Node のグローバルも時計も読まず、乱数も
 引きません。時刻と乱数は入力として受け取ります。`pnpm run check` が実行環境に依存しないコードの lint 規則で Node の
 組み込みモジュールと DOM や Node のグローバルを、決定的な判定の lint 規則で時計、タイマー、`Math.random` を禁じ、
-テストが `@be-music/chart`・`@be-music/json`・`@be-music/player` 以外に依存していないことを確かめます。
+テストが `@be-music/chart-model`・`@be-music/chart-source`・`@be-music/player-engine` 以外に依存していないことを確かめます。
 
 モデルは、これまでの各シーンの振る舞いから導いています。標準 / LR2 のシーンと beatoraja のシーンで違っていた
 ところは、互換性の方針に従って一つを選びました。LR2 の振る舞い、LR2 にない機能は beatoraja の振る舞いです。
@@ -39,7 +39,7 @@ flowchart TD
 - **ルートのフォルダ**。`groupChartsByFolder` は譜面をディレクトリの最初の区切りでまとめ（ディレクトリがなければ
   ソースのラベル）、フォルダを日本語を考慮したラベル順に、各フォルダの譜面をソースの順に並べます。
   `libraryRootFolders` はそのフォルダ、続いてコースフォルダを並べ、譜面の一覧ごとに結果を保持します。
-- **キーモード**。`resolveLibraryChartPlayVariant` は譜面のプレイバリアントです（`@be-music/chart` のレーンモードの
+- **キーモード**。`resolveLibraryChartPlayVariant` は譜面のプレイバリアントです（`@be-music/chart-model` のレーンモードの
   規則を譜面ごとにキャッシュ。ライブラリの読み込み側は `seedLibraryChartPlayVariant` で値を先に入れます）。
   `resolveLibraryChartKeyMode` はキーモードフィルターが譜面を並べるキーモードで、bmson の `mode_hint` が示すもの、
   なければプレイバリアントです。
@@ -48,7 +48,7 @@ flowchart TD
 
 項目は用語集の「譜面」の語に従います。譜面のバーは `{ kind: 'chart', chart }`、フォルダは `charts` に譜面を並べ、
 コースのステージは見つかった譜面を `chart` に持ち、`Library` は `charts` を持ちます。以前はブラウザプレイヤーの
-`song`・`songs`・`'song'` という名前のままでした。`@be-music/skin-sdk` はこれらの型をこの名前で再 export し、
+`song`・`songs`・`'song'` という名前のままでした。`@be-music/player-skin-sdk` はこれらの型をこの名前で再 export し、
 `Browser*` の別名は削除しました（`BrowserSongEntry` は `LibraryChart`、`BrowserFolderNode` は `LibraryFolder`、
 `BrowserCourseEntry` は `LibraryCourse`、`BrowserCourseStage` は `LibraryCourseStage`、`BrowserBrowseEntry` は
 `LibraryEntry`、`BrowserSongSourceKind` は `ChartSourceKind` でした）。
@@ -160,7 +160,7 @@ NONSTOP がライブラリを置き換えていても、コースのバーをキ
 beatoraja の LN モードの上書き（LNMODE ボタン）は一覧の状態には含めません。まだ何もそれでプレイしないので、モデルにも
 入れていません。beatoraja の選曲画面のビューが持ちます。
 
-Web 実行層の選曲セッションは、モデルが任せる選択をファミリーの選曲ポリシー（`@be-music/player-web` の
+Web 実行層の選曲セッションは、モデルが任せる選択をファミリーの選曲ポリシー（`@be-music/player-browser` の
 `session/select/select-policy.ts`）で決めます。標準と LR2 の画面では、ルートで戻っても何もせず、戻す位置がなければ
 譜面フォルダが一つだけのライブラリはそれを開き、ソートとフィルターはプレイオプションのものとして復元でも保ちます。beatoraja のポリシーはルートでキャンセル音を鳴らして画面を出て、ライブラリをルートで開き、
 MODE と SORT を一覧の位置に含め（復元で戻ります）、beatoraja のキー（ページのキー、Home / End、ランダムなバーへの R）を
@@ -170,7 +170,7 @@ MODE と SORT を一覧の位置に含め（復元で戻ります）、beatoraja
 
 `PlayOptions` はプレイ前にプレイヤーが選ぶものです。ハイスピードと HS-FIX、オートプレイ、BGA の表示と大きさ、
 スコアグラフ、一覧のソートとフィルター、サイドごとの HIDDEN / SUDDEN とレーンカバーの高さ・オンオフ、オート
-スクラッチ、DP FLIP、サイドごとの配置変更とゲージの種類です。`@be-music/skin-sdk` は `BeMusicPlayOptions` として
+スクラッチ、DP FLIP、サイドごとの配置変更とゲージの種類です。`@be-music/player-skin-sdk` は `BeMusicPlayOptions` として
 export します。
 
 - `DEFAULT_PLAY_OPTIONS` はプレイヤーの初期値です（ハイスピード 2.0、BGA はオンで拡大、スコアグラフはオン）。
@@ -263,7 +263,7 @@ flowchart LR
 `PlayResult` は、どの結果画面も読む唯一の結果の形です。単独のプレイ、コースのステージ、EXPERT / GRADE のコース全体、
 NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）のいずれも表します。スコアとゲージの判定、唯一の
 クリアランプの規則によるランプ、グラフ、判定タイミングと早い / 遅いの数、リプレイ、ステージやコースが属するコース
-（`course`、コースの表示用モデル）を持ちます。`@be-music/skin-sdk` はこれを `BeMusicResultData` として export します。
+（`course`、コースの表示用モデル）を持ちます。`@be-music/player-skin-sdk` はこれを `BeMusicResultData` として export します。
 
 - `playResultFromPlayState` はプレイの結果を最後のプレイ状態から読みます。
 - `playResultFromCourseRun` はコースの実行（`ReplayCourseResult`）を 1 回のプレイとして読みます。合計したスコア、
@@ -306,10 +306,10 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 
 | ヘルパー                                                                          | 移動前                                       | 移動後                                                                             |
 | --------------------------------------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `BrowserSongEntry`・`BrowserFolderNode`・`BrowserCourseEntry` など                | `@be-music/skin-sdk`                         | `LibraryChart`・`LibraryFolder`・`LibraryCourse` など（旧名は削除）                |
-| `BeMusicPlayOptions` とその値の型                                                 | `@be-music/skin-sdk`                         | `PlayOptions` など（skin-sdk に別名）                                              |
-| `BeMusicResultData`・`GaugeHistorySample`・`ScoreHistorySample`                   | `@be-music/skin-sdk`                         | `PlayResult` など（skin-sdk に別名）                                               |
-| `BeMusicJudgmentKind`・`BeMusicSide`・`BeMusicJudgmentTiming`・`BeMusicLaneCover` | `@be-music/skin-sdk`                         | `JudgmentKind`・`PlaySide`・`JudgmentTiming`・`LaneCover`（skin-sdk に別名）       |
+| `BrowserSongEntry`・`BrowserFolderNode`・`BrowserCourseEntry` など                | `@be-music/player-skin-sdk`                  | `LibraryChart`・`LibraryFolder`・`LibraryCourse` など（旧名は削除）                |
+| `BeMusicPlayOptions` とその値の型                                                 | `@be-music/player-skin-sdk`                  | `PlayOptions` など（skin-sdk に別名）                                              |
+| `BeMusicResultData`・`GaugeHistorySample`・`ScoreHistorySample`                   | `@be-music/player-skin-sdk`                  | `PlayResult` など（skin-sdk に別名）                                               |
+| `BeMusicJudgmentKind`・`BeMusicSide`・`BeMusicJudgmentTiming`・`BeMusicLaneCover` | `@be-music/player-skin-sdk`                  | `JudgmentKind`・`PlaySide`・`JudgmentTiming`・`LaneCover`（skin-sdk に別名）       |
 | `groupSongsByFolder`・`resolveChartPlayVariant`                                   | `player-web` の collection                   | `groupChartsByFolder`・`resolveLibraryChartPlayVariant`（player-web の旧名は削除） |
 | `matchesSearchQuery`・`wrappedCursorDelta`                                        | `player-web` のコアの選曲                    | 同じ名前（再 export は削除）                                                       |
 | コアの選曲のソートと難易度フィルター                                              | `player-web` のコアの選曲（非公開）          | `sortLibraryEntries`・`chartMatchesDifficultyFilter`                               |
@@ -321,11 +321,11 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 | `PixiPlayOptions` などの `Pixi*` のプレイオプションの型・`PixiGameplayResultData` | `player-web` の scene                        | `PlayOptions` など・`PlayResult`（旧名は削除）                                     |
 | `CourseComboState`・`createCourseCombo`・`advanceCourseCombo`                     | `player-web` の `scene/core/course-combo.ts` | 同じ名前。ただし `advanceCourseCombo` は純粋な `reduceCourseCombo` に置き換え      |
 | `ReplayViewCursor`・`resolveBeatorajaReplayView`                                  | `player-web` の `scene/replay-view.ts`       | `ReplayViewCursor`。どのプレイのビューも `captureReplayView` で見え方を求める      |
-| `buildCourseResultData`・`joinCourseStageHistories`・`resolveResultPresentation`  | `player-web-demo` の `course-result.ts`      | `playResultFromCourseRun` など（旧名で再 export）                                  |
-| `resolveResultViewJingles`                                                        | `player-web-demo` の `result-jingles.ts`     | そのまま。`resolveResultJingles` の上に実装                                        |
+| `buildCourseResultData`・`joinCourseStageHistories`・`resolveResultPresentation`  | `app-play` の `course-result.ts`             | `playResultFromCourseRun` など（旧名で再 export）                                  |
+| `resolveResultViewJingles`                                                        | `app-play` の `result-jingles.ts`            | そのまま。`resolveResultJingles` の上に実装                                        |
 
 どの種類の選曲画面もこれらのモデル（`reduceBrowse`・`browseEntries`・`captureBrowse` / `restoreBrowse`・
 `browseSystemSound`）で一覧をたどります。どのプレイ画面も `PlayState` を一つ持ち、リザルトをそこから読みます
 （`playResultFromPlayState`）。そのため上のプレイ状態の選択に従います。フルコンボの最大コンボはどのプレイでもノーツ数になり、
 リザルトは判定ごとの早い / 遅いの数を持ち、リプレイの表示時間は白数字（`captureReplayView`）です。Web 実行層の画面は、どれもこれらのモデルの上のシーンセッションです。スキンのパッケージはモデルを各スキンの
-語彙に写します。beatoraja の番号へは `@be-music/beatoraja-skin/scene` が写します（[beatoraja-skin.ja.md](./beatoraja-skin.ja.md#scene-mapping)）。
+語彙に写します。beatoraja の番号へは `@be-music/skin-beatoraja/scene` が写します（[beatoraja-skin.ja.md](./beatoraja-skin.ja.md#scene-mapping)）。

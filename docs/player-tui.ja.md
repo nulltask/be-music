@@ -2,16 +2,16 @@
 
 # Terminal player 実装メモ
 
-この文書は、`@be-music/player-tui` と `bms-player` CLI で実装する terminal frontend の実装メモです。
+この文書は、`@be-music/player-terminal` と `bms-player` CLI で実装する terminal frontend の実装メモです。
 timing、note、判定、score、gauge、BGA cue などの共有再生意味論は [Player 実装仕様](./player-spec.ja.md) で定義します。
 browser 固有の PixiJS / WebAudio 挙動は [Browser player 実装メモ](./player-web.ja.md) に記述します。
 
 ## Runtime 境界
 
-`@be-music/player-tui` は、共有 `@be-music/player` engine を使う Node frontend です。
+`@be-music/player-terminal` は、共有 `@be-music/player-engine` engine を使う Node frontend です。
 CLI runner は chart file の parse、directory selection、loading / result screen 描画、1 回の gameplay session 起動を担当します。
-gameplay 本体は worker thread 上で動き、`@be-music/player` の `autoPlay()` または `manualPlay()` を呼びます。
-UI worker が import するのは `@be-music/player/signals` と `@be-music/player/display` だけなので、プレイループや音声レンダラーは読み込みません。
+gameplay 本体は worker thread 上で動き、`@be-music/player-engine` の `autoPlay()` または `manualPlay()` を呼びます。
+UI worker が import するのは `@be-music/player-engine/signals` と `@be-music/player-engine/display` だけなので、プレイループや音声レンダラーは読み込みません。
 
 main thread は terminal input を所有し、worker 側の 2 つの surface と自身の input runtime を調停します。
 
