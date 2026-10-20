@@ -13,3 +13,5 @@
 - [システム音は 1 つの AudioContext を共有し、プレイは自分の AudioContext を持つ](./0007-one-system-audio-context.ja.md)
 
 - [0008: Accounts の独立と OIDC](./0008-accounts-oidc.ja.md)
+
+- [0009: Accounts がプロフィールとアバターを管理する](./0009-accounts-profiles.ja.md)

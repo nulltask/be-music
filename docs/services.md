@@ -184,3 +184,17 @@ Next:
   the external platforms, or both. Stripe's restricted business list and Japan's Specified Commercial Transactions Act
   must be checked before taking payments directly.
 - **User content domain**: the name of the separate domain for uploaded files.
+
+## Storage ownership
+
+Accounts owns public profiles and avatars; all edits take place there. Leaderboard retains only its public ranking projection, player identity mappings and score data. See [ADR 0009](./adr/0009-accounts-profiles.md) for synchronization and the migration sequence.
+
+| Worker                                | D1             | R2                                                     |
+| ------------------------------------- | -------------- | ------------------------------------------------------ |
+| `accounts` / `accounts-preview`       | Same as Worker | Same as Worker: avatars                                |
+| `leaderboard` / `leaderboard-preview` | Same as Worker | Same as Worker: playlogs, chart documents, share cards |
+| `play` / `play-preview`               | None           | Same as Worker: FFmpeg core                            |
+| `dashboard` / `dashboard-preview`     | None           | None                                                   |
+| `donate` / `donate-preview`           | None           | None; financial data stays in its repository           |
+
+The static public asset bucket is `assets`, served at `assets.be-music.app`. The FFmpeg upload script defaults to `play`; `pnpm --filter @be-music/player-web-demo run cf:r2:push:preview` updates `play-preview` separately.

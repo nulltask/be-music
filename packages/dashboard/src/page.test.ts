@@ -45,6 +45,32 @@ describe('renderDashboard', () => {
     expect(signedOut).toContain('data-state="signed-out"');
   });
 
+  test('keeps the skip target and localized service navigation', () => {
+    const html = renderDashboard({
+      account: undefined,
+      hostname: 'preview.be-music.app',
+      locale: 'ja',
+      showDonateLink: true,
+    });
+    expect(html).toContain('href="#main"');
+    expect(html).toContain('id="main"');
+    expect(html).toContain('aria-label="サービス"');
+    expect(html).toContain('href="https://donate.preview.be-music.app/"');
+    expect(html.split('</main>')[0]).not.toContain('https://donate.');
+    expect(html).toContain(
+      '<footer class="site-footer">be-music · <a href="https://donate.preview.be-music.app/">寄付</a></footer>',
+    );
+    expect(html).toContain('class="button" href="/api/auth/sign-in"');
+  });
+
+  test('hides Donate unless explicitly enabled', () => {
+    for (const showDonateLink of [undefined, false]) {
+      const html = renderDashboard({ account: undefined, hostname: 'be-music.app', locale: 'en', showDonateLink });
+      expect(html).not.toContain('https://donate.');
+      expect(html).toContain('<footer class="site-footer">be-music</footer>');
+    }
+  });
+
   test('escapes the display name', () => {
     const html = renderDashboard({
       account: { handle: 'a', displayName: '<script>x</script>', anonymous: false },

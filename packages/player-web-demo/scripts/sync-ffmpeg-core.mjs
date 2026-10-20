@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const BUCKET = 'be-music-ffmpeg-core';
+const BUCKET = process.argv.includes('--preview') ? 'play-preview' : 'play';
 const MANIFEST_KEY = 'ffmpeg-core.manifest';
 const CORE_DIR = fileURLToPath(new URL('../dist/ffmpeg-core/', import.meta.url));
 const FILES = [

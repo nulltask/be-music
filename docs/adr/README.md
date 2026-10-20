@@ -13,3 +13,5 @@ Decisions that shape the code and would be costly to reverse, with why they were
 - [System sounds share one AudioContext; each play keeps its own](./0007-one-system-audio-context.md)
 
 - [0008: Independent Accounts and OIDC](./0008-accounts-oidc.md)
+
+- [0009: Accounts owns public profiles and avatars](./0009-accounts-profiles.md)

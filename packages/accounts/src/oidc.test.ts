@@ -26,6 +26,7 @@ beforeAll(async () => {
       script: 'export default {}',
       compatibilityDate: '2026-10-01',
       d1Databases: ['DB'],
+      r2Buckets: ['BLOBS'],
     }),
   );
   const DB = (await mf.getD1Database('DB')) as unknown as D1Database;
@@ -36,6 +37,7 @@ beforeAll(async () => {
   }
   env = {
     DB,
+    BLOBS: (await mf.getR2Bucket('BLOBS')) as unknown as R2Bucket,
     AUTH_ORIGIN: 'https://accounts.example.com',
     PASSKEY_RP_ID: 'example.com',
     API_AUDIENCE: app.API_AUDIENCE,
@@ -183,5 +185,117 @@ describe('Accounts OIDC across unrelated domains', () => {
       .bind('donate')
       .first<{ disabled: number }>();
     expect(row?.disabled).toBe(1);
+  });
+});
+
+describe('Accounts-owned profiles and avatars', () => {
+  test('edits profiles and serves public avatars without downstream services', async () => {
+    const signedIn = await worker.fetch(
+      new Request(`${env.AUTH_ORIGIN}/api/auth/sign-in/anonymous`, {
+        method: 'POST',
+        headers: { origin: env.AUTH_ORIGIN, 'content-type': 'application/json' },
+        body: '{}',
+      }),
+      env,
+    );
+    const cookie = cookies(signedIn);
+    const subject = ((await signedIn.json()) as { user: { id: string } }).user.id;
+    const profileEnv = env;
+    const call = (path: string, init: RequestInit = {}) =>
+      worker.fetch(
+        new Request(`${env.AUTH_ORIGIN}${path}`, {
+          ...init,
+          headers: { cookie, origin: env.AUTH_ORIGIN, ...Object.fromEntries(new Headers(init.headers)) },
+        }),
+        profileEnv,
+      );
+    const initial = await call('/api/profile');
+    expect(initial.status).toBe(200);
+    const updated = await call('/api/profile', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ handle: 'profile_owner', displayName: 'Profile Owner' }),
+    });
+    expect(updated.status).toBe(200);
+
+    const publicResponse = await worker.fetch(new Request(`${env.AUTH_ORIGIN}/api/profiles/${subject}`), profileEnv);
+    const publicData = await publicResponse.json();
+    expect(publicData).toEqual({
+      handle: 'profile_owner',
+      displayName: 'Profile Owner',
+      avatarURL: `${env.AUTH_ORIGIN}/profiles/profile_owner/avatar?v=g`,
+    });
+    const otherSignIn = await worker.fetch(
+      new Request(`${env.AUTH_ORIGIN}/api/auth/sign-in/anonymous`, {
+        method: 'POST',
+        headers: { origin: env.AUTH_ORIGIN, 'content-type': 'application/json' },
+        body: '{}',
+      }),
+      profileEnv,
+    );
+    const duplicate = await worker.fetch(
+      new Request(`${env.AUTH_ORIGIN}/api/profile`, {
+        method: 'PATCH',
+        headers: { cookie: cookies(otherSignIn), origin: env.AUTH_ORIGIN, 'content-type': 'application/json' },
+        body: JSON.stringify({ handle: 'profile_owner' }),
+      }),
+      profileEnv,
+    );
+    expect(duplicate.status).toBe(409);
+    const page = await call('/account');
+    expect(await page.text()).toContain('id="profile-form"');
+    const forbidden = await worker.fetch(
+      new Request(`${env.AUTH_ORIGIN}/api/profile`, {
+        method: 'PATCH',
+        headers: { cookie, origin: 'https://evil.example', 'content-type': 'application/json' },
+        body: '{}',
+      }),
+      profileEnv,
+    );
+    expect(forbidden.status).toBe(403);
+    const png = Uint8Array.from(
+      atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='),
+      (c) => c.charCodeAt(0),
+    );
+    expect((await call('/api/profile/avatar', { method: 'PUT', body: png })).status).toBe(200);
+    const image = await worker.fetch(new Request(`${env.AUTH_ORIGIN}/profiles/profile_owner/avatar`), profileEnv);
+    expect(image.headers.get('content-type')).toBe('image/png');
+    expect(image.headers.get('access-control-allow-origin')).toBe('*');
+    const imageHead = await worker.fetch(
+      new Request(`${env.AUTH_ORIGIN}/profiles/profile_owner/avatar`, { method: 'HEAD' }),
+      profileEnv,
+    );
+    expect(imageHead.status).toBe(200);
+    expect(await imageHead.text()).toBe('');
+    expect(imageHead.headers.get('content-type')).toBe('image/png');
+    const uploadedPage = await call('/account');
+    expect(await uploadedPage.text()).toMatch(/src="\/profiles\/profile_owner\/avatar\?v=[a-f0-9]{16}"/);
+    expect(new Uint8Array(await image.arrayBuffer())).toEqual(png);
+    expect((await call('/api/profile/avatar', { method: 'PUT', body: new Uint8Array(128 * 1024 + 1) })).status).toBe(
+      413,
+    );
+    expect((await call('/api/profile/avatar', { method: 'PUT', body: '<svg></svg>' })).status).toBe(415);
+    expect((await call('/api/profile/avatar', { method: 'DELETE' })).status).toBe(200);
+    const outbox = await env.DB.prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'profile_sync'",
+    ).first();
+    expect(outbox).toBeNull();
+    const generated = await worker.fetch(new Request(`${env.AUTH_ORIGIN}/profiles/profile_owner/avatar`), profileEnv);
+    expect(generated.headers.get('content-type')).toBe('image/svg+xml');
+    expect(generated.headers.get('access-control-allow-origin')).toBe('*');
+    expect(
+      (await call('/api/profile', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: '{' }))
+        .status,
+    ).toBe(400);
+    expect(
+      (
+        await call('/api/profile', {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ handle: 'admin' }),
+        })
+      ).status,
+    ).toBe(400);
+    expect((await worker.fetch(new Request(`${env.AUTH_ORIGIN}/api/profile`), profileEnv)).status).toBe(401);
   });
 });

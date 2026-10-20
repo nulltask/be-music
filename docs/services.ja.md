@@ -182,3 +182,17 @@ be-music の分だけです。`workers.dev` のサブドメインは `be-music.w
 - **寄付**: 寄付サイトが Stripe で直接支払いを受け付けるのか（ログインして単発・月額）、外部のサービスを使い続けるのか、
   両方なのか。直接受け付ける前に、Stripe の制限業種の一覧と、特定商取引法の扱いを確認する必要があります。
 - **ユーザーのファイル用ドメイン**: アップロードされたファイルを配信する、別ドメインの名前。
+
+## データの管理先
+
+公開プロフィールとアバターの正本は Accounts に置き、編集もそこで行います。Leaderboard はランキング用のコピー、プレイヤー ID の対応、スコアを保持します。同期と移行順は [ADR 0009](./adr/0009-accounts-profiles.ja.md) を参照してください。
+
+| Worker                                | D1            | R2                                                    |
+| ------------------------------------- | ------------- | ----------------------------------------------------- |
+| `accounts` / `accounts-preview`       | Worker と同名 | Worker と同名：アバター                               |
+| `leaderboard` / `leaderboard-preview` | Worker と同名 | Worker と同名：プレイログ、譜面構造データ、共有カード |
+| `play` / `play-preview`               | なし          | Worker と同名：FFmpeg core                            |
+| `dashboard` / `dashboard-preview`     | なし          | なし                                                  |
+| `donate` / `donate-preview`           | なし          | なし。収支データはリポジトリで管理                    |
+
+公開の静的アセットは `assets` バケットを `assets.be-music.app` で配信します。FFmpeg のアップロード先は既定で `play` です。`pnpm --filter @be-music/player-web-demo run cf:r2:push:preview` で `play-preview` を別に更新します。

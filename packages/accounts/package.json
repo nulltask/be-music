@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@be-music/auth-client": "workspace:*",
+    "@be-music/web-theme": "workspace:*",
     "@better-auth/oauth-provider": "1.7.10",
     "@better-auth/passkey": "1.7.10",
     "better-auth": "1.7.10",
