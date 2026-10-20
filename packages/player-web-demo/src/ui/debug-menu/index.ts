@@ -174,7 +174,7 @@ export class DebugMenu {
   public readonly compressorTunings: Record<TunableCompressor, CompressorTuning> = readStoredCompressorTunings();
   public recordController: Controller | undefined;
   /**
-   * "Auto-save play history" checkbox controller. Held so the play-start path can `disable()` it for the duration
+   * "Auto-save replays" checkbox controller. Held so the play-start path can `disable()` it for the duration
    * of a play — the replay options are latched when a song starts and cannot change mid-song — and the result /
    * select paths can `enable()` it again.
    */

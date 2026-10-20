@@ -11,3 +11,13 @@ test('shows fixed build metadata in start-card and help footers', async () => {
   expect(DEMO_APP_HTML.match(/>01234567<\/code>/g)).toHaveLength(2);
   expect(DEMO_APP_HTML).toContain('class="service-build-footer"');
 });
+
+test('uses chart and replay vocabulary in bilingual help', async () => {
+  const { DEMO_APP_HTML } = await import('./dom-template.ts');
+  expect(DEMO_APP_HTML).toContain('Loading charts');
+  expect(DEMO_APP_HTML).toContain('Chart select');
+  expect(DEMO_APP_HTML).toContain('譜面の読み込み');
+  expect(DEMO_APP_HTML).toContain('リプレイ (<code>*.bmplay.json</code>)');
+  expect(DEMO_APP_HTML).not.toContain('チャート');
+  expect(DEMO_APP_HTML).not.toContain('Loading songs');
+});

@@ -39,7 +39,7 @@ export function buildLibraryFolder(
   // is playing — replay options cannot change mid-play.
   this.replaySaveController = library
     .add(this.guiState, 'autoSaveReplay')
-    .name('Auto-save play history')
+    .name('Auto-save replays')
     .onChange((value: boolean) => {
       this.guiState.autoSaveReplay = value;
     });

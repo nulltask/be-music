@@ -480,7 +480,7 @@ export const DEMO_APP_HTML = `
                 <li>Use at your own risk. No warranty is provided.</li>
               </ul>
             </section>
-            <h3 class="help-section-title">Loading songs</h3>
+            <h3 class="help-section-title">Loading charts</h3>
             <ul class="help-list">
               <li>Drop a BMS folder anywhere on the page to register its charts.</li>
               <li>
@@ -502,11 +502,11 @@ export const DEMO_APP_HTML = `
               </li>
             </ul>
 
-            <h3 class="help-section-title">Song select</h3>
+            <h3 class="help-section-title">Chart select</h3>
             <ul class="help-list">
               <li><kbd>/</kbd> focuses the search input. Filter by title, artist, or genre.</li>
               <li><kbd>Esc</kbd> clears the search filter.</li>
-              <li>Click a song row, or click the active skin's <em>PLAY</em> button, to start.</li>
+              <li>Click a chart row, or click the active skin's <em>PLAY</em> button, to start.</li>
             </ul>
 
             <h3 class="help-section-title">Gameplay (default keys)</h3>
@@ -532,14 +532,14 @@ export const DEMO_APP_HTML = `
               <li><kbd>↑</kbd> / <kbd>↓</kbd> adjusts hi-speed.</li>
               <li><kbd>Space</kbd> pauses / resumes.</li>
               <li><kbd>F5</kbd> restarts the current chart.</li>
-              <li><kbd>Esc</kbd> exits to the result screen (or back to song select).</li>
+              <li><kbd>Esc</kbd> exits to the result screen (or back to chart select).</li>
               <li>Hold <kbd>Backspace</kbd> for 0.5 s to quit the play the same way (works in fullscreen on every browser).</li>
               <li>Double-click the playfield to enter or leave fullscreen. <kbd>Esc</kbd> leaves fullscreen first, then repeats the usual scene action. On Chrome / Edge, <kbd>Esc</kbd> keeps its usual scene action in fullscreen; hold <kbd>Esc</kbd> to leave fullscreen.</li>
             </ul>
 
             <h3 class="help-section-title">Result</h3>
             <ul class="help-list">
-              <li><kbd>Enter</kbd> / <kbd>Space</kbd> / <kbd>Esc</kbd> returns to song select.</li>
+              <li><kbd>Enter</kbd> / <kbd>Space</kbd> / <kbd>Esc</kbd> returns to chart select.</li>
               <li><kbd>R</kbd> plays the same chart again right away with the same options.</li>
             </ul>
 
@@ -554,7 +554,7 @@ export const DEMO_APP_HTML = `
                 MediaRecorder support — see Open source / browser checks).
               </li>
               <li>
-                Open the active skin's <strong>PLAY OPTION</strong> panel during song select to set per-side
+                Open the active skin's <strong>PLAY OPTION</strong> panel during chart select to set per-side
                 modifiers (Random / Mirror / Auto-scratch / hi-speed).
               </li>
             </ul>
@@ -600,15 +600,15 @@ export const DEMO_APP_HTML = `
                 <li>利用は自己責任でお願いします。本ソフトウェアは無保証で提供されます。</li>
               </ul>
             </section>
-            <h3 class="help-section-title">楽曲の読み込み</h3>
+            <h3 class="help-section-title">譜面の読み込み</h3>
             <ul class="help-list">
-              <li>BMS フォルダをページ上にドロップすると、その中のチャートが登録されます。</li>
+              <li>BMS フォルダをページ上にドロップすると、その中の譜面が登録されます。</li>
               <li><code>LR2files</code> フォルダか beatoraja の <code>skin/</code> フォルダ (またはその中身) をドロップするとスキンが適用されます。</li>
               <li>
                 右上 Debug Menu の <strong>Open folder</strong> ボタンからネイティブのフォルダ選択ダイアログも使えます。
-                ドラッグ&ドロップと同じ処理経路を通るので、LR2 / beatoraja のテーマとチャートが同居したフォルダもまとめて読み込めます。
+                ドラッグ&ドロップと同じ処理経路を通るので、LR2 / beatoraja のテーマと譜面が同居したフォルダもまとめて読み込めます。
                 ボタンを押し直せば別フォルダを追加で読み込めます。
-                <strong>Open files</strong> では ZIP アーカイブやリプレイするリプレイ (<code>*.bmplay.json</code>) を選べます。
+                <strong>Open files</strong> では ZIP アーカイブやリプレイ (<code>*.bmplay.json</code>) を選べます。
               </li>
               <li>追加でドロップした場合、既存のライブラリに追加され、テーマも維持されます。</li>
             </ul>
@@ -617,7 +617,7 @@ export const DEMO_APP_HTML = `
             <ul class="help-list">
               <li><kbd>/</kbd> で検索入力にフォーカス。タイトル / アーティスト / ジャンルで絞り込めます。</li>
               <li><kbd>Esc</kbd> で検索条件をクリア。</li>
-              <li>曲の行をクリック、または現在のスキンの <em>PLAY</em> ボタンで再生開始。</li>
+              <li>譜面の行をクリック、または現在のスキンの <em>PLAY</em> ボタンで再生開始。</li>
             </ul>
 
             <h3 class="help-section-title">ゲームプレイ (デフォルトキー)</h3>
@@ -642,7 +642,7 @@ export const DEMO_APP_HTML = `
             <ul class="help-list">
               <li><kbd>↑</kbd> / <kbd>↓</kbd> でハイスピード調整。</li>
               <li><kbd>Space</kbd> でポーズ / 再開。</li>
-              <li><kbd>F5</kbd> で現在のチャートをリスタート。</li>
+              <li><kbd>F5</kbd> で現在の譜面をリスタート。</li>
               <li><kbd>Esc</kbd> でリザルト画面 (または選曲画面) へ戻ります。</li>
               <li><kbd>Backspace</kbd> を 0.5 秒長押しでも同じようにプレイを中断します (どのブラウザでもフルスクリーン中に使えます)。</li>
               <li>プレイフィールドをダブルクリックするとフルスクリーンに入り / 解除します。<kbd>Esc</kbd> は先にフルスクリーンを解除し、もう一度押すと通常のシーン操作になります。Chrome / Edge ではフルスクリーン中も <kbd>Esc</kbd> は通常のシーン操作のままで、<kbd>Esc</kbd> 長押しでフルスクリーンを解除します。</li>
@@ -651,7 +651,7 @@ export const DEMO_APP_HTML = `
             <h3 class="help-section-title">リザルト</h3>
             <ul class="help-list">
               <li><kbd>Enter</kbd> / <kbd>Space</kbd> / <kbd>Esc</kbd> で選曲画面へ戻ります。</li>
-              <li><kbd>R</kbd> で同じオプションのまま同じチャートをすぐにもう一度プレイします。</li>
+              <li><kbd>R</kbd> で同じオプションのまま同じ譜面をすぐにもう一度プレイします。</li>
             </ul>
 
             <h3 class="help-section-title">オプションと録画</h3>
