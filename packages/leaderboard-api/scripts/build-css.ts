@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { binEntry } from './bin-entry.ts';
 
 const packageDir = resolve(import.meta.dirname, '..');
 const input = join(packageDir, 'src/pages/app.css');
@@ -15,7 +16,8 @@ const workDir = mkdtempSync(join(tmpdir(), 'leaderboard-css-'));
 
 try {
   const compiled = join(workDir, 'app.css');
-  execFileSync(join(packageDir, 'node_modules/.bin/tailwindcss'), ['-i', input, '-o', compiled, '--minify'], {
+  const tailwindcss = binEntry(packageDir, '@tailwindcss/cli', 'tailwindcss');
+  execFileSync(process.execPath, [tailwindcss, '-i', input, '-o', compiled, '--minify'], {
     cwd: packageDir,
     stdio: 'inherit',
   });
