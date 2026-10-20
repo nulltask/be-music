@@ -6,7 +6,8 @@ import { sha256Hex } from './hash.ts';
 
 /**
  * Share cards of plays: the 1200 x 630 picture link previews show (og:image, twitter:card). The player's browser draws
- * it (client/score-card.ts) and uploads it here; a Worker on the Free plan cannot afford to rasterize one itself.
+ * it (client/score-card.ts) and uploads it here. The official deployment now uses Workers Paid; browser rendering
+ * describes the current implementation rather than a plan requirement.
  * Until a play has its card, the site's default card stands in.
  */
 

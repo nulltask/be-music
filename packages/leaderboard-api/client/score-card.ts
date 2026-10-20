@@ -1,6 +1,6 @@
 /**
  * Draws a play's share card (1200 x 630, the link-preview picture of its score page) on a canvas. The player's browser
- * draws it, since the Worker cannot rasterize on the Free plan, and main.ts uploads it.
+ * draws it and main.ts uploads it. Workers Paid is the official deployment; server-side rendering is a separate option.
  *
  * The layout keeps to a grid: one left edge (MARGIN) for every block, the same margin at the top and right, the site's
  * name in the top right corner and the player in a footer band below, on its right: link previews lay their own labels
