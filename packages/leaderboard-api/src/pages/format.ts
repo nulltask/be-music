@@ -50,7 +50,7 @@ export function rulesetName(ruleset: string): string {
 
 /** What a ruleset is, for tooltips next to ruleset names. */
 export const RULESET_MEANING =
-  'Every play is scored under each ruleset: the judge windows, gauges and clear lamps of LR2, beatoraja or IIDX, applied by the be-music engine to the replay. It is how the score is counted, not the software the play came from.';
+  'Every play is scored under each ruleset: the judgment windows, gauges and clear lamps of LR2, beatoraja or IIDX, applied by the be-music engine to the replay. It is how the score is counted, not the software the play came from.';
 
 /** EX score rate in percent with two decimals (`ex / (notes × 2)`), or `-` without notes. */
 export function formatScoreRate(exScore: number, noteCount: number): string {
