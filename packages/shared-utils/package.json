@@ -1,0 +1,64 @@
+{
+  "name": "@be-music/shared-utils",
+  "version": "0.4.0",
+  "description": "Shared utilities for be-music packages",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./core": {
+      "source": "./src/core.ts",
+      "types": "./dist/core.d.ts",
+      "default": "./dist/core.js"
+    },
+    "./cli-path": {
+      "source": "./src/cli-path.ts",
+      "types": "./dist/cli-path.d.ts",
+      "default": "./dist/cli-path.js"
+    },
+    "./log": {
+      "source": "./src/log.ts",
+      "types": "./dist/log.d.ts",
+      "default": "./dist/log.js"
+    },
+    "./optional-node-module": {
+      "source": "./src/optional-node-module.ts",
+      "types": "./dist/optional-node-module.d.ts",
+      "default": "./dist/optional-node-module.js"
+    },
+    "./path": {
+      "source": "./src/path.ts",
+      "types": "./dist/path.d.ts",
+      "default": "./dist/path.js"
+    },
+    "./pcm": {
+      "source": "./src/pcm.ts",
+      "types": "./dist/pcm.d.ts",
+      "default": "./dist/pcm.js"
+    },
+    "./workerize": {
+      "source": "./src/workerize.ts",
+      "types": "./dist/workerize.d.ts",
+      "default": "./dist/workerize.js"
+    }
+  },
+  "scripts": {
+    "build:bundle": "vp pack",
+    "build": "vp pack",
+    "clean": "rimraf dist",
+    "bench": "node --conditions=source scripts/bench.ts"
+  },
+  "dependencies": {
+    "isoworker": "^0.2.4",
+    "pino": "^10.4.0"
+  }
+}

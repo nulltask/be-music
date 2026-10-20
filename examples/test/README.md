@@ -6,7 +6,7 @@ Shared chart and audio fixtures for the be-music test suite. Every chart here ta
 every chart is read by at least one test — a fixture no test reads goes stale without anyone noticing, which is how the
 problems fixed in this directory got in.
 
-The corpus-level guard lives in [`packages/parser/src/fixtures.test.ts`](../../packages/parser/src/fixtures.test.ts). It
+The corpus-level guard lives in [`packages/chart-parser/src/fixtures.test.ts`](../../packages/chart-parser/src/fixtures.test.ts). It
 scans this directory, parses every chart off disk, and requires each one to yield playable events after control-flow
 resolution. Add a chart here and it is picked up automatically; break one and that test fails.
 
@@ -26,7 +26,7 @@ resolution. Add a chart here and it is picked up automatically; break one and th
 | File                                   | Covers                                                                                                                                                             |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `four-measure-command-combo-test.bms`  | Every extension header and object channel the parser routes, one 4-measure block per command group. Proves routing and roundtrip preservation, not payload validity. |
-| `extended-directives.bms`              | The same directive family with payloads the `@be-music/chart` value parsers accept: `#EXWAV` `pvf`, `#EXBMP` ARGB tuple, `#ARGB` hex and decimal, `#BGA` sub-region, `#SWBGA` animation, `#WAVCMD` pitch/volume/loop, `#EXRANK` on channel `A0`, `#CHANGEOPTION` on channel `A6`, `#STP`. |
+| `extended-directives.bms`              | The same directive family with payloads the `@be-music/chart-model` value parsers accept: `#EXWAV` `pvf`, `#EXBMP` ARGB tuple, `#ARGB` hex and decimal, `#BGA` sub-region, `#SWBGA` animation, `#WAVCMD` pitch/volume/loop, `#EXRANK` on channel `A0`, `#CHANGEOPTION` on channel `A6`, `#STP`. |
 | `base62-ids.bms`                       | `#BASE 62` — upper, lower and mixed case object IDs as distinct slots, in indexed headers, channel streams, `#LNOBJ`, and inside a `#RANDOM` / `#IF` block.          |
 | `sjis-encoding-test.bms`               | Shift_JIS auto-detection. Its parsed IR is pinned in `sjis-encoding-test.json`.                                                                                     |
 
@@ -88,7 +88,7 @@ One fixture per branch of `resolveChartPlayVariant`.
 ### Format round trips
 
 These five files only mean anything as a set, and
-[`packages/editor/src/index.test.ts`](../../packages/editor/src/index.test.ts) checks them against the live pipeline:
+[`packages/chart-editor/src/index.test.ts`](../../packages/chart-editor/src/index.test.ts) checks them against the live pipeline:
 
 | File                     | Role                                                    |
 | ------------------------ | ------------------------------------------------------- |

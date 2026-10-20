@@ -1,0 +1,12 @@
+{
+  "name": "@be-music/service-web-theme",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "bench": "node scripts/bench.ts"
+  }
+}

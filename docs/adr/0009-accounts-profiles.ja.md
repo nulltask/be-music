@@ -22,9 +22,9 @@ flowchart LR
 
 D1 と R2 は `accounts`／`accounts-preview`、`leaderboard`／`leaderboard-preview`、`play`／`play-preview` の命名に揃えます。公開の静的アセットは `assets.be-music.app` の `assets` バケットに保存します。本番とプレビューでユーザーの認証データを共有しません。
 
-既存環境では Accounts のプロフィール用マイグレーションを適用し、`packages/accounts/scripts/migrate-profiles.ts --apply`（プレビューは `--preview` も付与）でプロフィールと履歴をコピーします。アバターのファイルも Accounts にコピーしてから Worker を切り替えます。所有者をメールアドレスから推測しません。旧認証データの削除前に、パスキーが Accounts に移行済みかスクリプトで確認します。両 Worker が対応したら `--apply --project` で旧アバターのキーを Accounts の URL に置き換えます。
+既存環境では Accounts のプロフィール用マイグレーションを適用し、`packages/app-accounts/scripts/migrate-profiles.ts --apply`（プレビューは `--preview` も付与）でプロフィールと履歴をコピーします。アバターのファイルも Accounts にコピーしてから Worker を切り替えます。所有者をメールアドレスから推測しません。旧認証データの削除前に、パスキーが Accounts に移行済みかスクリプトで確認します。両 Worker が対応したら `--apply --project` で旧アバターのキーを Accounts の URL に置き換えます。
 
-一時的なコピー用 Worker `packages/accounts/scripts/storage-copy-worker.ts` は、明示したコピー元・コピー先のバインディングと一時的な秘密値を使います。ファイルをストリームでコピーし、メタデータを引き継いでサイズ、単一パートの ETag、ストリームで計算した SHA-256 を照合します。バインディングを切り替えた後に最終コピーと再検証を行います。静的アセットのドメインはコピー先を検証してから付け替えます。新しいサービスの確認が終わってから旧バケットと一時 Worker を削除します。
+一時的なコピー用 Worker `packages/app-accounts/scripts/storage-copy-worker.ts` は、明示したコピー元・コピー先のバインディングと一時的な秘密値を使います。ファイルをストリームでコピーし、メタデータを引き継いでサイズ、単一パートの ETag、ストリームで計算した SHA-256 を照合します。バインディングを切り替えた後に最終コピーと再検証を行います。静的アセットのドメインはコピー先を検証してから付け替えます。新しいサービスの確認が終わってから旧バケットと一時 Worker を削除します。
 
 Leaderboard の削除用マイグレーションは、旧セッション、認証チャレンジ、外部プロバイダーの認証情報、パスキーを削除し、ローカルのプレイヤー行から旧メール・画像情報を取り除きます。プレイヤー ID、プロフィール、ID 対応、スコアは維持します。テーブル定義は単独のローカル開発用に残しますが、本番の認証は Accounts の OIDC だけを使います。
 

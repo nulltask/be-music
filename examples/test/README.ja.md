@@ -6,7 +6,7 @@ be-music のテストスイートが共有する譜面・音声フィクスチ�
 かつ必ずどこかのテストから読まれます。どのテストからも読まれないフィクスチャは誰にも気づかれないまま古くなり、
 実際にこのディレクトリで見つかった不具合はすべてそれが原因でした。
 
-コーパス全体の番人は [`packages/parser/src/fixtures.test.ts`](../../packages/parser/src/fixtures.test.ts) です。
+コーパス全体の番人は [`packages/chart-parser/src/fixtures.test.ts`](../../packages/chart-parser/src/fixtures.test.ts) です。
 このディレクトリを走査してすべての譜面をディスクから読み、制御フロー解決後にプレイ可能なイベントが残ることを要求します。
 譜面を追加すれば自動的に対象に入り、壊せばこのテストが落ちます。
 
@@ -26,7 +26,7 @@ be-music のテストスイートが共有する譜面・音声フィクスチ�
 | ファイル                              | 対象                                                                                                                     |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `four-measure-command-combo-test.bms` | パーサが振り分ける拡張ヘッダとオブジェクトチャネルを網羅。コマンド群ごとに 4 小節ブロック。検証しているのは振り分けとラウンドトリップ保持で、ペイロードの妥当性ではない。 |
-| `extended-directives.bms`             | 同じ命令群を `@be-music/chart` の値パーサが受け付けるペイロードで記述。`#EXWAV` の `pvf`、`#EXBMP` の ARGB タプル、`#ARGB` の 16 進と 10 進、`#BGA` 部分矩形、`#SWBGA` アニメーション、`#WAVCMD` の pitch/volume/loop、チャネル `A0` からの `#EXRANK`、チャネル `A6` からの `#CHANGEOPTION`、`#STP`。 |
+| `extended-directives.bms`             | 同じ命令群を `@be-music/chart-model` の値パーサが受け付けるペイロードで記述。`#EXWAV` の `pvf`、`#EXBMP` の ARGB タプル、`#ARGB` の 16 進と 10 進、`#BGA` 部分矩形、`#SWBGA` アニメーション、`#WAVCMD` の pitch/volume/loop、チャネル `A0` からの `#EXRANK`、チャネル `A6` からの `#CHANGEOPTION`、`#STP`。 |
 | `base62-ids.bms`                      | `#BASE 62` — 大文字・小文字・混在の ID を別スロットとして扱う。インデックス付きヘッダ、チャネルストリーム、`#LNOBJ`、`#RANDOM` / `#IF` ブロック内のすべてで検証。 |
 | `sjis-encoding-test.bms`              | Shift_JIS の自動判定。パース結果の IR は `sjis-encoding-test.json` に固定してある。                                        |
 
@@ -88,7 +88,7 @@ be-music のテストスイートが共有する譜面・音声フィクスチ�
 ### フォーマット間ラウンドトリップ
 
 次の 5 ファイルは組でしか意味を持たず、
-[`packages/editor/src/index.test.ts`](../../packages/editor/src/index.test.ts) が実パイプラインと突き合わせています。
+[`packages/chart-editor/src/index.test.ts`](../../packages/chart-editor/src/index.test.ts) が実パイプラインと突き合わせています。
 
 | ファイル                 | 役割                                       |
 | ------------------------ | ------------------------------------------ |

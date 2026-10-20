@@ -3,7 +3,7 @@
 # BMS / bmson 互換性ノート
 
 この文書は、BMS と bmson の仕様が定めていること（de jure）と既存のプレイヤーが実際にしていること（de facto）を比べ、どの仕様も定めていない挙動を洗い出し、be-music がどうしているか・なぜそうしたかを記録します。
-実装をまたいだ比較のための資料です。be-music 自身が各フォーマットをどう扱うかは [BMS 実装仕様](./bms-spec.ja.md)、[bmson 実装仕様](./bmson-spec.ja.md)、[Player 実装仕様](./player-spec.ja.md)、[`@be-music/json`](./json-spec.ja.md) に定めてあり、ここでは繰り返さずにリンクします。
+実装をまたいだ比較のための資料です。be-music 自身が各フォーマットをどう扱うかは [BMS 実装仕様](./bms-spec.ja.md)、[bmson 実装仕様](./bmson-spec.ja.md)、[Player 実装仕様](./player-spec.ja.md)、[`@be-music/chart-source`](./json-spec.ja.md) に定めてあり、ここでは繰り返さずにリンクします。
 
 ## 1. この文書の読み方
 
@@ -350,7 +350,7 @@ be-music も beatoraja と同じく読みます。`mine_channels` は `damage` �
 
 ## 4. BMS と bmson の相互変換
 
-be-music の [`@be-music/stringifier`](../packages/stringifier/src/index.ts) は 1 つの IR から両方のフォーマットを書き出します。2 つのフォーマットは単位が食い違うため、そのままでは引き継げない値がいくつかあります。下の表は現在の stringifier の挙動です。詳細は [bmson 実装仕様 — BMS と bmson の相互変換](./bmson-spec.ja.md#bms-と-bmson-の相互変換) にあります。
+be-music の [`@be-music/chart-writer`](../packages/chart-writer/src/index.ts) は 1 つの IR から両方のフォーマットを書き出します。2 つのフォーマットは単位が食い違うため、そのままでは引き継げない値がいくつかあります。下の表は現在の stringifier の挙動です。詳細は [bmson 実装仕様 — BMS と bmson の相互変換](./bmson-spec.ja.md#bms-と-bmson-の相互変換) にあります。
 
 往復の変換はどちら向きも IR を通ります（読み込みと書き出しの関数は [JSON 仕様 — 変換規則](./json-spec.ja.md#変換規則) にあります）。それぞれの書き出しが落とすものです。
 
@@ -412,31 +412,31 @@ be-music が de facto の実装と理由を記録しないまま食い違って�
 1. **地雷と不可視ノートによるレーンモード**：beatoraja は 5K / 7K / 10K / 14K の判定にこれらも数え、be-music は数えない（[§2.4](#24-レーンモードとチャンネル配置)）。beatoraja の規則は確かめたが、LR2 の規則は確かめられていない。OpenLR2 の再現コードには、キーモードを記録する曲の走査処理がない。beatoraja に合わせると、2P 側に不可視のキー音しかない SP 譜面（`examples/test/invisible-notes.bms`）が 2P 側の空いた DP 譜面になり、作者の意図と違う。LR2 の規則が分かるまで未解決とする。
 2. **LR2 の根拠の不足**：負の STOP、0 の BPM、重複したオブジェクト行、`#TOTAL ≤ 0`、地雷の正確な爆発窓は、コミュニティの報告か再現コードに頼っており、情報源どうしも一部食い違う。ソースコードだけでは決められず、LR2 そのもので確かめる必要がある（負の `#BPMxx` は OpenLR2 に加えて LR2body.exe でも確認済み。[§2.8](#28-bpm) 参照）。
 
-[bm-parser]: ../packages/parser/src/core/parser.ts
-[bm-bmson-document]: ../packages/parser/src/core/bmson-document.ts
-[bm-event-utils]: ../packages/parser/src/core/event-utils.ts
-[bm-control-flow]: ../packages/parser/src/core/control-flow.ts
-[bm-decode]: ../packages/parser/src/core/bms-text-decode.ts
-[bm-charset]: ../packages/parser/src/core/bms-charset.ts
-[bm-bmson]: ../packages/parser/src/core/bmson.ts
-[bm-bmson-keys]: ../packages/parser/src/core/bmson-keys.ts
-[bm-play-variant]: ../packages/chart/src/play-variant.ts
-[bm-channels]: ../packages/chart/src/channels.ts
-[bm-reference-bpm]: ../packages/chart/src/reference-bpm.ts
-[bm-wav-directives]: ../packages/chart/src/wav-directives.ts
-[bm-long-notes]: ../packages/chart/src/long-notes.ts
-[bm-timing]: ../packages/chart/src/timing.ts
-[bm-timelines]: ../packages/chart/src/timelines.ts
-[bm-sample-triggers]: ../packages/chart/src/sample-triggers.ts
-[bm-resolved-notes]: ../packages/chart/src/resolved-notes.ts
-[bm-note-rules]: ../packages/chart/src/note-rules.ts
-[bm-judge-window]: ../packages/player/src/core/judge-window.ts
-[bm-ruleset]: ../packages/player/src/ruleset/definitions.ts
-[bm-scroll]: ../packages/player/src/core/scroll-distance.ts
-[bm-note-draw]: ../packages/player-web/src/chart/note-draw-window.ts
-[bm-bga]: ../packages/chart/src/bga.ts
-[bm-web-bga]: ../packages/player-web/src/chart/bga-timeline.ts
-[bm-play-bga]: ../packages/player-web/src/chart/play-bga.ts
+[bm-parser]: ../packages/chart-parser/src/core/parser.ts
+[bm-bmson-document]: ../packages/chart-parser/src/core/bmson-document.ts
+[bm-event-utils]: ../packages/chart-parser/src/core/event-utils.ts
+[bm-control-flow]: ../packages/chart-parser/src/core/control-flow.ts
+[bm-decode]: ../packages/chart-parser/src/core/bms-text-decode.ts
+[bm-charset]: ../packages/chart-parser/src/core/bms-charset.ts
+[bm-bmson]: ../packages/chart-parser/src/core/bmson.ts
+[bm-bmson-keys]: ../packages/chart-parser/src/core/bmson-keys.ts
+[bm-play-variant]: ../packages/chart-model/src/play-variant.ts
+[bm-channels]: ../packages/chart-model/src/channels.ts
+[bm-reference-bpm]: ../packages/chart-model/src/reference-bpm.ts
+[bm-wav-directives]: ../packages/chart-model/src/wav-directives.ts
+[bm-long-notes]: ../packages/chart-model/src/long-notes.ts
+[bm-timing]: ../packages/chart-model/src/timing.ts
+[bm-timelines]: ../packages/chart-model/src/timelines.ts
+[bm-sample-triggers]: ../packages/chart-model/src/sample-triggers.ts
+[bm-resolved-notes]: ../packages/chart-model/src/resolved-notes.ts
+[bm-note-rules]: ../packages/chart-model/src/note-rules.ts
+[bm-judge-window]: ../packages/player-engine/src/core/judge-window.ts
+[bm-ruleset]: ../packages/player-engine/src/ruleset/definitions.ts
+[bm-scroll]: ../packages/player-engine/src/core/scroll-distance.ts
+[bm-note-draw]: ../packages/player-browser/src/chart/note-draw-window.ts
+[bm-bga]: ../packages/chart-model/src/bga.ts
+[bm-web-bga]: ../packages/player-browser/src/chart/bga-timeline.ts
+[bm-play-bga]: ../packages/player-browser/src/chart/play-bga.ts
 [cmds-indent]: https://hitkey.nekokan.dyndns.info/cmdsJP.htm#INDENT-STYLE
 [cmds-comment]: https://hitkey.nekokan.dyndns.info/cmdsJP.htm#COMMENT-SYNTAX
 [cmds-general]: https://hitkey.nekokan.dyndns.info/cmdsJP.htm#BEHAVIOR-IN-GENERAL-IMPLEMENTATION
@@ -561,6 +561,6 @@ be-music が de facto の実装と理由を記録しないまま食い違って�
 [b-bms-resource]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/BMSResource.java#L72-L87
 [b-bar-banner]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/select/BarManager.java#L712-L725
 [b-song-resources]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/song/SongResources.java#L107-L108
-[bm-collection]: ../packages/player-web/src/collection/collection.ts
-[bm-file-lookup]: ../packages/player-web/src/collection/file-lookup.ts
-[bm-sample-path]: ../packages/audio-renderer/src/core/sample-path.ts
+[bm-collection]: ../packages/player-browser/src/collection/collection.ts
+[bm-file-lookup]: ../packages/player-browser/src/collection/file-lookup.ts
+[bm-sample-path]: ../packages/chart-audio-renderer/src/core/sample-path.ts

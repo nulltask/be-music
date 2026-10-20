@@ -2,7 +2,7 @@
 
 # BMS implementation specification
 
-This document defines how `packages/parser` / `packages/stringifier` / `packages/player` handles BMS.
+This document defines how `packages/chart-parser` / `packages/chart-writer` / `packages/player-engine` handles BMS.
 
 ## Primary References
 
@@ -184,7 +184,7 @@ The original BM98-era core BMS specifications do not define landmine damage as p
 - [x] Supports LR2 100001x BPM gimmick by `#BPMxx` with time resolution
 - [x] Keep every `#WAVCMD` line in `bms.wavCmds`; audio-renderer and browser WebAudio apply the `01` volume parameter
 - [x] Parse `#EXWAVxx` and apply its `v` volume parameter in audio-renderer and browser WebAudio
-- [x] Use `#BASEBPM` as the chart reference BPM for browser HS-FIX calibration through `@be-music/chart`
+- [x] Use `#BASEBPM` as the chart reference BPM for browser HS-FIX calibration through `@be-music/chart-model`
 - [x] Browser player reflects `#BGAxx` sub-region BGA, `#SWBGAxx` switching BGA, and `#ARGBxx` / `#EXBMPxx` tint and alpha
 - [x] Interpret channels `51-59` / `61-69` (and the extended `5A-5O` / `6A-6O`) as long notes. `#LNTYPE 1`, the default when `#LNTYPE` is omitted, pairs objects as start / end; `#LNTYPE 2` (MGQ) makes a run of consecutive non-`00` cells one long note
 - [x] `#LNOBJ`: every declaration is active and kept in declaration order in `bms.lnObjs`; the object ends the long note started by the previous note on its lane and is not sounded (the HDX key-up sound is not adopted). A `#LNOBJ` object with no note before it becomes an ordinary note
@@ -198,7 +198,7 @@ The original BM98-era core BMS specifications do not define landmine damage as p
 
 LR2 is the baseline (issue #134; verified against OpenLR2's reconstruction of LR2 beta3 100201 — branch `LR2Beta3-v100201` at `583a385`, `LR2f.cpp` — and the matching code in LR2body.exe, plus hitkey's command memo and LR2's own `history.txt`):
 
-- **Timing.** LR2 parses `#BPMxx` sign-preserving and integrates note times at **|BPM|** when it precomputes timing at load (`LR2_bmsload.cpp:2841-2843`) — the timeline never runs backwards. The timing resolver (`@be-music/chart`, `timing.ts`) does the same: it integrates `Math.abs(bpm)` and exposes the first reversing event's position as `TimingResolver.reversal` (beat and seconds), which the Resolved Chart carries as `ResolvedChart.reversal`.
+- **Timing.** LR2 parses `#BPMxx` sign-preserving and integrates note times at **|BPM|** when it precomputes timing at load (`LR2_bmsload.cpp:2841-2843`) — the timeline never runs backwards. The timing resolver (`@be-music/chart-model`, `timing.ts`) does the same: it integrates `Math.abs(bpm)` and exposes the first reversing event's position as `TimingResolver.reversal` (beat and seconds), which the Resolved Chart carries as `ResolvedChart.reversal`.
 - **Truncation.** LR2 converts the BPM to int before its `< 0` check (LR2body.exe 0x42b960 `__ftol`): only `trunc(BPM) < 0` arms the reversal, so `-1 < BPM < 0` never reverses — it just crawls at |BPM|. NOWBPM shows `|trunc(BPM)|` for a negative value (0 for `-0.5`, 65 for `-65.5`) while timing keeps the full |BPM| (`TempoPoint.displayBPM`, `TimingResolver.displayBPMAtBeat`).
 - **Event pump.** When the negative BPM fires, LR2's event pump freezes for good: no later BGM keysound, BGA cue, BPM, or STOP event fires, autoplay stops, and NOWBPM holds `|trunc(BPM)|`. On the reversal tick itself LR2 orders events by op (`CMP_NotesByRealTimingOp`, `LR2f.cpp:24013`): BGM (op 1), BPM (op 3) and the BGA layers (ops 4 / 6 / 7) fire **before** the negative BPM (op 8); STOP (op 9), lane sounds (10–29) and invisible objects (30+) on that tick are frozen. The engine, the offline renderer and the select-scene preview filter with `firesBeforeTempoReversal` (`0A` is grouped with the BGA layers). A movie BGA that is already playing keeps running; only cue changes stop.
 - **Display.** LR2 mirrors the chart **position**, not the clock: past the reversal R it draws from `2·pos(R) − pos(now)`, where `pos(now)` keeps advancing through the |BPM| tempo map (`LR2f.cpp:2185-2188`; LR2body.exe 0x406d81). The reverse scroll therefore runs at the post-reversal tempo — at the |BPM| of the negative value, following later BPM changes in the timing table, and pausing during post-reversal STOPs — rather than retracing the pre-reversal tempo. The engine publishes `displayBeat = 2·beat(R) − beat(now)` on the UI frame (`mirrorBeatAtTempoReversal`); the TUI grid, the beatoraja layers and the web scene's `currentBeat` scroll from it. be-music has no time-based ("constant") HS-FIX scroll, so no time-space mirror is needed anywhere. LR2's note-drawing rules carry on through the reversal: its `draw_count` never moves back, so a note, mine or bar line that went before the reversal stays gone as the scroll recedes, while the notes charted after the reversal, never judged, rise away from the line; under beatoraja's drawing rules (charts with SCROLL or SPEED) object times are compared with the mirrored judge clock (`resolveReversedDrawClock`).
@@ -257,7 +257,7 @@ If omitted, the default value is `100`. A value with `0 < n < 200` gives the mag
 - `#VOLWAV 150`: `1.5` times the original volume
 - `#VOLWAV 0`, `#VOLWAV 200` or above: Original volume
 
-The range is beatoraja's (it applies `#VOLWAV` only for `0 < n < 200`); LR2 ignores `#VOLWAV`. Following beatoraja keeps `#VOLWAV 0` from muting a chart and large values from amplifying it into clipping. `@be-music/chart`'s `volWAVToLinearGain` implements the rule.
+The range is beatoraja's (it applies `#VOLWAV` only for `0 < n < 200`); LR2 ignores `#VOLWAV`. Following beatoraja keeps `#VOLWAV 0` from muting a chart and large values from amplifying it into clipping. `@be-music/chart-model`'s `volWAVToLinearGain` implements the rule.
 
 This magnification applies to real-time playback of `player`, song selection screen preview, and `renderJSON()` / `renderChartFile()` of `audio-renderer`.
 It does not reproduce player- or hardware-specific volume differences, and is treated as a simple gain multiplication factor in actual equipment.
@@ -342,7 +342,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 ## Player-Specific Behavior
 
 - Automatically determine lane mode from used channel (`5 KEY SP`, `5 KEY DP`, `7 KEY SP`, `14 KEY DP`, `9 KEY`, `24 KEY SP`, `48 KEY DP`)
-- Every host (the engine, the CLI, and the web player) decides the lane mode with one shared rule, `resolveChartPlayVariant` in `@be-music/chart`, unless the host declares the variant explicitly. For a play it runs over the chart after `#RANDOM` / `#SWITCH` are resolved, so lanes a chosen branch adds count
+- Every host (the engine, the CLI, and the web player) decides the lane mode with one shared rule, `resolveChartPlayVariant` in `@be-music/chart-model`, unless the host declares the variant explicitly. For a play it runs over the chart after `#RANDOM` / `#SWITCH` are resolved, so lanes a chosen branch adds count
 - Lane usage counts the `1x` / `2x` lane channels and the `5x` / `6x` `#LNTYPE` long-note channels on the lanes they map to (so `#LNOBJ` and `#LNTYPE` spellings of a chart agree). Mines (`Dx` / `Ex`) and invisible objects (`3x` / `4x`) never decide the lane mode
 - Extended lane channels (`1A..1O` / `2A..2O`) select `24 KEY SP` / `48 KEY DP` ahead of every other rule
 - be-music-specific: channels `1P` / `1Q` (`2P` / `2Q` on the 2P side) are the 24 / 48 KEY wheel, up / down — the BMS spelling of the bmson `keyboard-24k` wheel lanes (`x` = 25 / 26). Other BMS players do not define these channels. They count as extended lanes, so they select the keyboard modes too
@@ -380,11 +380,11 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - In `SCROLL 0`, when multiple notes overlap in the same lane and same drawing cell, the preceding note is placed at the reference position, and the subsequent notes are stacked in order toward the side (upward) away from the judgment line.
 - Web player: `SCROLL < 0` runs notes backwards as beatoraja does; a note still ahead that ends up below the judgement line is drawn there, down to the bottom of the stage ([Browser player — Note visibility](./player-web.md#note-visibility))
 - Terminal player: `SCROLL < 0` prioritizes "maintaining note approach display" rather than "faithful reproduction of backward running display", and drawing distance is handled by `abs(distance)`
-- Visible search for `SCROLL` is capped at `MAX_SCROLL_LOOKAHEAD_BEATS` (`4 * 64` beat, in `packages/player-tui/src/tui/tui.ts`)
+- Visible search for `SCROLL` is capped at `MAX_SCROLL_LOOKAHEAD_BEATS` (`4 * 64` beat, in `packages/player-terminal/src/tui/tui.ts`)
 - As in beatoraja's `LaneRenderer`, the search ends at the first point where the chart runs past the top of the lane: notes a later negative `SCROLL` brings back into the lane are not drawn until the playhead reaches them (web player and terminal player; see [Browser player — Note visibility](./player-web.md#note-visibility))
 - Even with gimmicks that include BPM×`100001` + `STOP` correction, the BPM display uses the value used in internal time calculation as is.
 - Beatoraja-specific drawing bug-dependent scores are not compatible, and a reproduction mode is not implemented at this time.
-- Verify regression of the above policy with `packages/player-tui/src/tui/lane-stacking.test.ts`, `packages/chart/src/timelines.test.ts`, `packages/player-tui/src/bga.test.ts`
+- Verify regression of the above policy with `packages/player-terminal/src/tui/lane-stacking.test.ts`, `packages/chart-model/src/timelines.test.ts`, `packages/player-terminal/src/bga.test.ts`
 
 ## Handling of event location
 
@@ -403,7 +403,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - A buffer that passes strict UTF-8 validation (fatal decode succeeds with multibyte sequences present) is UTF-8
 - A buffer whose every non-ASCII byte pairs up as KS X 1001 (`0xA1`–`0xFE` lead and trail, beatoraja's EUC-KR probe) and whose non-ASCII text is at least 90 % Hangul syllables is Korean `euc-kr`
 - Otherwise infer by scoring `shift_jis`, `utf8`, `euc-jp`, `latin1`
-- This detection is unified in `@be-music/parser`'s `decodeBMSText`, so CLI / TUI / Web all produce the same result
+- This detection is unified in `@be-music/chart-parser`'s `decodeBMSText`, so CLI / TUI / Web all produce the same result
 
 ## stringifier rules
 
@@ -415,7 +415,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 ## Evaluation rules for control constructs
 
 - `parser` retains control syntax as `bms.controlFlow` and does not commit branches when parsing
-- Branches are decided once per play by explicit draws (`RandomDraws`, drawn with `drawRandomOutcomes`); `evaluateControlFlow` in `@be-music/chart` is the only evaluator, and the parser's `resolveBMSControlFlowWithDraws` expands the active blocks into a resolved chart without `bms.controlFlow`. Hosts resolve before playback or rendering and hand the engine the resolved chart with its draws ([Player spec — Handling control syntax](./player-spec.md#handling-control-syntax))
+- Branches are decided once per play by explicit draws (`RandomDraws`, drawn with `drawRandomOutcomes`); `evaluateControlFlow` in `@be-music/chart-model` is the only evaluator, and the parser's `resolveBMSControlFlowWithDraws` expands the active blocks into a resolved chart without `bms.controlFlow`. Hosts resolve before playback or rendering and hand the engine the resolved chart with its draws ([Player spec — Handling control syntax](./player-spec.md#handling-control-syntax))
 - `#RANDOM n` / `#SWITCH n` generate integers of `1..n` and use them as selection values
 - `#SETRANDOM n` / `#SETSWITCH n` fix the selection value
 - `#IF` chain branches at the current RANDOM selection value, `#ELSEIF` / `#ELSE` are invalid if there is a previously established branch

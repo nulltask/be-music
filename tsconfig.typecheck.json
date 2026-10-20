@@ -6,8 +6,8 @@
     "customConditions": ["source"]
   },
   "files": [
-    "packages/beatoraja-skin/src/fengari-types.d.ts",
-    "packages/player-tui/src/audio-sink-modules.d.ts",
-    "packages/player-web/src/vite-assets.d.ts"
+    "packages/skin-beatoraja/src/fengari-types.d.ts",
+    "packages/player-terminal/src/audio-sink-modules.d.ts",
+    "packages/player-browser/src/vite-assets.d.ts"
   ]
 }

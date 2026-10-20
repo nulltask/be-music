@@ -2,12 +2,12 @@
 
 # Leaderboard 設計
 
-> ステータス: P0 の中核は [`packages/leaderboard-api`](../packages/leaderboard-api/README.ja.md) に実装済みです（認証、
+> ステータス: P0 の中核は [`packages/app-leaderboard`](../packages/app-leaderboard/README.ja.md) に実装済みです（認証、
 > 検証の層 L1〜L3 付きの送信（`#RANDOM` のない譜面では L4 も）、3 つのルールセットでの再計算、ランキングの API）。
 > それ以外はまだ設計段階です。このドキュメントは、これまでに決めたことと、まだ決まっていないこと（15 章）を記録します。
 
 Leaderboard は be-music のオンラインのスコアランキングで、LR2 や beatoraja が「IR」（Internet Ranking）と呼ぶ
-ものにあたります。このリポジトリでは「IR」を JSON の中間表現（`@be-music/json`）の意味で使っているので、
+ものにあたります。このリポジトリでは「IR」を JSON の中間表現（`@be-music/chart-source`）の意味で使っているので、
 ランキングはコード・ドキュメント・UI のどこでも **Leaderboard** と呼びます。外部のものの名前（LR2IR、beatoraja
 スキンの IR 系 op）はそのままの表記を使います。
 
@@ -53,8 +53,8 @@ flowchart LR
 - **実行環境**: Cloudflare Workers と D1・R2。Cloudflare から移る予定はありません。
 - **フレームワーク**: Hono。API とサーバーレンダリングするページを 1 つの Worker に置き、データアクセスの関数を
   共有します。
-- **パッケージ**: `packages/leaderboard-api`（private）。プレイの再計算と fingerprint の検証のために
-  `@be-music/player/replay` と `@be-music/chart` を import します。
+- **パッケージ**: `packages/app-leaderboard`（private）。プレイの再計算と fingerprint の検証のために
+  `@be-music/player-engine/replay` と `@be-music/chart-model` を import します。
 - **型付きクライアント**: Hono RPC（`hc<AppType>`）で、`player-web` と `player-tui` に API の型をそのまま渡します。
 - **入力検証**: Valibot と `@hono/standard-validator`。
 - **ORM**: Drizzle。drizzle-kit で SQL のマイグレーションをパッケージ内に生成し、Better Auth のテーブルも同じ
@@ -102,7 +102,7 @@ flowchart LR
 - **`chart.playFingerprint`** は 1 回のプレイで引いた枝を表します。何を遊んだかを識別し、検証とゴーストの対応付けに
   使います。
 - **別名**: 譜面ファイルの SHA-256 と MD5 を、chart fingerprint への多対一の別名として持ちます（`chart_aliases`）。
-  LR2IR と難易度表が使うキーです。Web Crypto には MD5 がないので、`@be-music/chart` の SHA-256 の隣に、テスト付きの
+  LR2IR と難易度表が使うキーです。Web Crypto には MD5 がないので、`@be-music/chart-model` の SHA-256 の隣に、テスト付きの
   小さな MD5 を追加します。
 
 **開発用のバージョン。** fingerprint のバージョンは `bmfp0`、ルールセットの結果 ID は `lr2/0`、`beatoraja/0`、
@@ -204,7 +204,7 @@ sequenceDiagram
 chart document をでっち上げることはできます。ただしそれは新しい fingerprint を持つので、誰も遊ばないランキングが
 できるだけで、本物のランキングは汚せません。譜面が公開一覧に載るのは条件を満たしてからです（7 章）。
 
-L4 と L5 には、`@be-music/chart` にテスト付きの純粋関数が 2 つ必要です。chart document の各結果を組み立てる関数と、
+L4 と L5 には、`@be-music/chart-model` にテスト付きの純粋関数が 2 つ必要です。chart document の各結果を組み立てる関数と、
 play document の位置とタイムラインから、エンジンと一致するノーツの時刻を求める関数です。
 
 ## 6. スコアのルール
@@ -224,7 +224,7 @@ play document の位置とタイムラインから、エンジンと一致する
 - **ランプと BP はルールセットごとに各ゲームに従います**: `lr2` では DEATH でのクリアは NORMAL です（LR2body.exe の
   `CheckClear`）。beatoraja と IIDX では DEATH（`HAZARD`）のクリアは EX HARD です。BP には LR2 も含めどのルールセットでも
   空 POOR を数えます。この規則より前に保存された `lr2` の結果は、マイグレーション `0012` で書き直しました。
-  ランプと BP はどのクライアントとも同じ規則で決めます（`@be-music/player/replay` の `resolveRulesetResultLamp`、`@be-music/player/ruleset` の `resolveClearLamp` と `resolveMissCount`）。フルコンボにはすべてのノートが GOOD 以上である必要があるので、ノートのない譜面はゲージのランプになります。ランプはその順位（`clearLampRank`）で保存します。1 FAILED、2 ASSIST EASY、3 EASY、4 NORMAL、5 HARD、6 EX HARD、7 FULL COMBO、8 PERFECT、9 MAX です。
+  ランプと BP はどのクライアントとも同じ規則で決めます（`@be-music/player-engine/replay` の `resolveRulesetResultLamp`、`@be-music/player-engine/ruleset` の `resolveClearLamp` と `resolveMissCount`）。フルコンボにはすべてのノートが GOOD 以上である必要があるので、ノートのない譜面はゲージのランプになります。ランプはその順位（`clearLampRank`）で保存します。1 FAILED、2 ASSIST EASY、3 EASY、4 NORMAL、5 HARD、6 EX HARD、7 FULL COMBO、8 PERFECT、9 MAX です。
 - **自己ベストは beatoraja 方式**: EX スコア、クリアランプ、ミス数のベストを別々に持ち、それぞれ達成したスコアを
   指します。各ベストのリプレイとゴーストにすぐたどれます。ミス数は、中断していないプレイならクリアの有無に関係なく
   対象にします。
@@ -241,7 +241,7 @@ play document の位置とタイムラインから、エンジンと一致する
 コースのプレイ（段位認定、EXPERT / NONSTOP コース、beatoraja のコース、難易度表のコース）は、1 回のプレイとして
 ルールセットごとのランキングに載せます。単曲のプレイとしては扱いません。
 
-- **コースの識別。** コースは **コースのフィンガープリント**（`bmcourse0:<sha256>`、`@be-music/player/replay` の
+- **コースの識別。** コースは **コースのフィンガープリント**（`bmcourse0:<sha256>`、`@be-music/player-engine/replay` の
   `computeCourseFingerprint`）で表します。コースの種類、制約（正規化して並べ替えたもの）、各ステージの譜面
   フィンガープリントを順に並べたもの、NONSTOP コースではさらに結合譜面を決めるつなぎ方と配置モードから作ります。名前とトロフィーは含めないので、`.lr2crs`、beatoraja の
   コースファイル、難易度表のどれから読んだコースでも、譜面が同じならランキングは 1 つです。ランダムコースは抽選した
@@ -280,7 +280,7 @@ play document の位置とタイムラインから、エンジンと一致する
   同じく `unreleased` として拒否します。
 - **NONSTOP のプレイ。** NONSTOP コースはつないだ 1 本の譜面として遊び、判定して順位を付けるのはそのプレイ
   （`nonstop.replay`）です。サーバーはステージの譜面から、クライアントとまったく同じようにつないだ譜面を作り直し
-  ます。両者は同じ決定的な処理（`@be-music/player/course` の `prepareNonstopCourse`。
+  ます。両者は同じ決定的な処理（`@be-music/player-engine/course` の `prepareNonstopCourse`。
   [コースと段位認定](./course.ja.md#nonstop-コース) を参照）を使います。各ステージの譜面はそのステージの譜面
   フィンガープリントになる必要があり、ステージが記録した `#RANDOM` の抽選結果（`nonstop.stages[].randomDraws`）で
   解決し、コースの LN 制約を当て、記録したつなぎ方・配置・結合規則の版（`nonstop.stitch`。ないときは版 1。
@@ -451,7 +451,7 @@ course_best_score (user_id, course_fp, ruleset, assisted,     -- PK、best_score
   引いた）場合は、ノーツ数に対する割合の位置でノーツを対応付けます。
 - **クライアントへの組み込み**: LR2 と beatoraja のスキンには、ライバル・ターゲット・ゴーストの枠がすでにあり、
   今は仮の値（`NO TARGET`、ターゲットのスコア 0）を読んでいます。これをここで得た値に置き換えます。ゴーストの
-  推移の計算と対応付けは、`@be-music/player` の純粋関数にします。
+  推移の計算と対応付けは、`@be-music/player-engine` の純粋関数にします。
 
 ## 10. ページ（`leaderboard.be-music.app`）
 

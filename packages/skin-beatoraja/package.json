@@ -1,0 +1,38 @@
+{
+  "name": "@be-music/skin-beatoraja",
+  "version": "0.3.0",
+  "description": "Renderer-independent beatoraja JSON / Lua skin parser and theme loader for be-music",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./scene": {
+      "source": "./src/scene/index.ts",
+      "types": "./dist/scene.d.ts",
+      "default": "./dist/scene.js"
+    }
+  },
+  "scripts": {
+    "build:bundle": "vp pack",
+    "build": "vp pack",
+    "clean": "rimraf dist",
+    "bench": "node --conditions=source scripts/bench.ts"
+  },
+  "dependencies": {
+    "@be-music/player-engine": "workspace:*",
+    "@be-music/player-scene-model": "workspace:*",
+    "@be-music/shared-utils": "workspace:*",
+    "@be-music/skin-lr2": "workspace:*",
+    "fengari": "^0.1.4",
+    "fengari-web": "^0.1.4"
+  }
+}

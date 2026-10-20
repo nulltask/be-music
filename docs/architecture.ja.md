@@ -9,17 +9,17 @@ be-music は譜面を 2 つの層で読みます。**Source 層**はファイル
 ```mermaid
 flowchart TD
   files[".bms / .bme / .pms / .bmson / .json"]
-  source["BeMusicJSON<br/><i>Source 層 (@be-music/json)</i>"]
+  source["BeMusicJSON<br/><i>Source 層 (@be-music/chart-source)</i>"]
   flat["制御構文を解決した BeMusicJSON"]
-  resolved["ResolvedChart<br/><i>Resolved 層 (@be-music/chart)</i>"]
-  player["@be-music/player<br/>エンジンの準備 (preparePlaybackChart)、ルールセットの事実、リプレイ"]
-  renderer["@be-music/audio-renderer<br/>renderJSON"]
-  tui["@be-music/player-tui<br/>譜面一覧、プレビューの署名、BGA、UI worker"]
-  web["@be-music/player-web<br/>プレイセッション、プレイフィールド、譜面のプレビュー、beatoraja の譜面グラフ、コース"]
-  skin["@be-music/skin-sdk<br/>譜面の統計 (resolveChartStats)"]
+  resolved["ResolvedChart<br/><i>Resolved 層 (@be-music/chart-model)</i>"]
+  player["@be-music/player-engine<br/>エンジンの準備 (preparePlaybackChart)、ルールセットの事実、リプレイ"]
+  renderer["@be-music/chart-audio-renderer<br/>renderJSON"]
+  tui["@be-music/player-terminal<br/>譜面一覧、プレビューの署名、BGA、UI worker"]
+  web["@be-music/player-browser<br/>プレイセッション、プレイフィールド、譜面のプレビュー、beatoraja の譜面グラフ、コース"]
+  skin["@be-music/player-skin-sdk<br/>譜面の統計 (resolveChartStats)"]
 
-  files -->|"@be-music/parser<br/>parseChart, parseBMS, parseBmson"| source
-  source -->|"drawRandomOutcomes(chart, random) → RandomDraws (@be-music/chart)<br/>resolveBMSControlFlowWithDraws(chart, draws) (@be-music/parser)<br/>ホスト: resolvePlayChart(chart) → { chart, randomDraws } (@be-music/player)"| flat
+  files -->|"@be-music/chart-parser<br/>parseChart, parseBMS, parseBmson"| source
+  source -->|"drawRandomOutcomes(chart, random) → RandomDraws (@be-music/chart-model)<br/>resolveBMSControlFlowWithDraws(chart, draws) (@be-music/chart-parser)<br/>ホスト: resolvePlayChart(chart) → { chart, randomDraws } (@be-music/player-engine)"| flat
   flat -->|"resolveChart(chart, { randomDraws, chartPath, playVariant, inferBmsLNTypeWhenMissing })"| resolved
   resolved --> player
   resolved --> renderer
@@ -30,17 +30,17 @@ flowchart TD
 
 ## Source 層
 
-`BeMusicJSON`（[JSON 仕様](./json-spec.ja.md)）は BMS / bmson ファイルを忠実に表します。生のチャンネルとオブジェクト値、ヘッダの表、小節長、`#RANDOM` / `#SWITCH` のブロック（`bms.controlFlow`）、bmson の拡張、往復変換に必要な保持データを持ちます。これを書くのは `@be-music/parser` と `@be-music/stringifier` だけで、ファイル上の書き方を知る必要があるのもこの 2 つだけです。
+`BeMusicJSON`（[JSON 仕様](./json-spec.ja.md)）は BMS / bmson ファイルを忠実に表します。生のチャンネルとオブジェクト値、ヘッダの表、小節長、`#RANDOM` / `#SWITCH` のブロック（`bms.controlFlow`）、bmson の拡張、往復変換に必要な保持データを持ちます。これを書くのは `@be-music/chart-parser` と `@be-music/chart-writer` だけで、ファイル上の書き方を知る必要があるのもこの 2 つだけです。
 
 パースしたばかりの譜面には制御構文が残っています。その `events` が持つのは無条件のオブジェクトだけです。
 
 ## 制御構文と `RandomDraws`
 
-1 回のプレイでの `#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` の結果は、`RandomDraws` という値で表します。ファイル順に、行ごとに 1 項目を持ちます。ホストは `drawRandomOutcomes`（`@be-music/chart`）で 1 回だけ引き、`resolveBMSControlFlowWithDraws`（`@be-music/parser`）で譜面を解決します。`resolvePlayChart`（`@be-music/player`）を使えば両方を一度に行えます。そのうえで、同じ譜面と draws を、シーン、エンジン、リザルト画面、リプレイなど、そのプレイのすべての利用者に渡します。分岐の意味を評価するのは `@be-music/chart` の `evaluateControlFlow` だけです。有効になったヘッダ行の適用は parser に残しています。parser のディレクティブ表を使い回すためです。[プレイヤー仕様 — 制御構文の扱い](./player-spec.ja.md#制御構文の扱い) も参照してください。
+1 回のプレイでの `#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` の結果は、`RandomDraws` という値で表します。ファイル順に、行ごとに 1 項目を持ちます。ホストは `drawRandomOutcomes`（`@be-music/chart-model`）で 1 回だけ引き、`resolveBMSControlFlowWithDraws`（`@be-music/chart-parser`）で譜面を解決します。`resolvePlayChart`（`@be-music/player-engine`）を使えば両方を一度に行えます。そのうえで、同じ譜面と draws を、シーン、エンジン、リザルト画面、リプレイなど、そのプレイのすべての利用者に渡します。分岐の意味を評価するのは `@be-music/chart-model` の `evaluateControlFlow` だけです。有効になったヘッダ行の適用は parser に残しています。parser のディレクティブ表を使い回すためです。[プレイヤー仕様 — 制御構文の扱い](./player-spec.ja.md#制御構文の扱い) も参照してください。
 
 ## Resolved 層
 
-`@be-music/chart` の `resolveChart(chart, options)`（[`resolved-chart.ts`](../packages/chart/src/resolved-chart.ts)）は `ResolvedChart` を返します。この関数は純粋で、同じ譜面とオプションからは常に同じ値が得られます。重い部分は最初に読んだときに計算して保持するので、利用側は読んだ部分の分だけ計算します。
+`@be-music/chart-model` の `resolveChart(chart, options)`（[`resolved-chart.ts`](../packages/chart-model/src/resolved-chart.ts)）は `ResolvedChart` を返します。この関数は純粋で、同じ譜面とオプションからは常に同じ値が得られます。重い部分は最初に読んだときに計算して保持するので、利用側は読んだ部分の分だけ計算します。
 
 | フィールド                                          | 内容                                                                                                                                                                                                                                                        |
 | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -59,32 +59,32 @@ flowchart TD
 | `judgeRank`、`total`、`lnMode`                      | ルールセットへの入力。`#RANK`、`#DEFEXRANK` / bmson の `judge_rank`、`#EXRANKxx` の変化。`#TOTAL`（`absolute`）または bmson の `total`（`percent`）。譜面全体の LN モード                                                                                   |
 | `lastNoteSeconds`                                   | 最後の判定ノート、地雷、不可視オブジェクトが終わる時刻                                                                                                                                                                                                      |
 
-解決済みのノートは元の `event` への参照を持ちます。エンジンはこれでキー音を引き、ログはこれでオブジェクトを示します。プレイ中の状態は Resolved 層に含めません。エンジンはノートを書き換えられる演奏ノートにコピーし（`@be-music/player` の `preparePlaybackChart`。`judged` を加え、レーンオプションが `channel` を書き換えられる）、そこでキーをレーンに割り当てます。
+解決済みのノートは元の `event` への参照を持ちます。エンジンはこれでキー音を引き、ログはこれでオブジェクトを示します。プレイ中の状態は Resolved 層に含めません。エンジンはノートを書き換えられる演奏ノートにコピーし（`@be-music/player-engine` の `preparePlaybackChart`。`judged` を加え、レーンオプションが `channel` を書き換えられる）、そこでキーをレーンに割り当てます。
 
 ### 層の外に置くもの
 
-- **ルールセットの選択**は `@be-music/player` のルールセット（`lr2`、`beatoraja`、`iidx`）が持ちます。判定ランクの入力から判定幅を作ること、既定の TOTAL と bmson の割合をそれにどう適用するか、ゲージの曲線、LN モードの指定をどう演奏するか（LN / CN / HCN）がこれにあたります。Resolved 層は譜面の生の入力を渡します。
-- **判定ランクの既定値**：`judgeRank` は譜面が書いた値だけを持ちます。bmson の `judge_rank` の既定値（100）と BMS の `#RANK` の既定値（NORMAL）は各ルールセットが補い、選曲などの画面では同じ値を読む `resolveDisplayedJudgeRankValue` / `Label`（`@be-music/player/display`）が補います。リプレイは譜面自身の値（`sourceRank` / `sourceExRank`）を記録し、それを持たないログも同じ判定幅で再生できなければならないので、ルールセットはいずれにせよ既定値を必要とします。ここで補うと、`judge_rank` のない bmson 譜面すべてで記録される値も変わります。
-- **レーンの割り当てと入力**：キーの割り当て、FREE ZONE のエイリアス、スコア対象のノート、レーンオプション（RANDOM、MIRROR、FLIP）は `@be-music/player` のプレイ設定です。
+- **ルールセットの選択**は `@be-music/player-engine` のルールセット（`lr2`、`beatoraja`、`iidx`）が持ちます。判定ランクの入力から判定幅を作ること、既定の TOTAL と bmson の割合をそれにどう適用するか、ゲージの曲線、LN モードの指定をどう演奏するか（LN / CN / HCN）がこれにあたります。Resolved 層は譜面の生の入力を渡します。
+- **判定ランクの既定値**：`judgeRank` は譜面が書いた値だけを持ちます。bmson の `judge_rank` の既定値（100）と BMS の `#RANK` の既定値（NORMAL）は各ルールセットが補い、選曲などの画面では同じ値を読む `resolveDisplayedJudgeRankValue` / `Label`（`@be-music/player-engine/display`）が補います。リプレイは譜面自身の値（`sourceRank` / `sourceExRank`）を記録し、それを持たないログも同じ判定幅で再生できなければならないので、ルールセットはいずれにせよ既定値を必要とします。ここで補うと、`judge_rank` のない bmson 譜面すべてで記録される値も変わります。
+- **レーンの割り当てと入力**：キーの割り当て、FREE ZONE のエイリアス、スコア対象のノート、レーンオプション（RANDOM、MIRROR、FLIP）は `@be-music/player-engine` のプレイ設定です。
 - **描画と音声出力**：Resolved 層が並べたものを、ホストがどう描き、どうミックスするか。
 
 ## プレイモード表
 
-すべてのプレイモード（5 / 7 / 9 PMS / 9 BME / 10 / 14 / 24 / 48 KEY）は `PLAY_MODE_LAYOUTS`（[`play-modes.ts`](../packages/chart/src/play-modes.ts)）で 1 回だけ宣言します。各レーンの種類、サイド、表示位置、BMS のチャンネル（可視、不可視、`#LNTYPE`、地雷）と、FREE ZONE のチャンネルを持ちます。bmson の `mode_hint` の表、stringifier の `x` の対応、プレイバリアントのレーン集合、エンジンのレーン配置、TUI のレーン色、スキンのレーン種別は、すべてここから作ります。`ResolvedChart.layouts` が譜面のバリアントに対応する項目です。[プレイヤー仕様 — プレイモード表](./player-spec.ja.md#プレイモード表) も参照してください。
+すべてのプレイモード（5 / 7 / 9 PMS / 9 BME / 10 / 14 / 24 / 48 KEY）は `PLAY_MODE_LAYOUTS`（[`play-modes.ts`](../packages/chart-model/src/play-modes.ts)）で 1 回だけ宣言します。各レーンの種類、サイド、表示位置、BMS のチャンネル（可視、不可視、`#LNTYPE`、地雷）と、FREE ZONE のチャンネルを持ちます。bmson の `mode_hint` の表、stringifier の `x` の対応、プレイバリアントのレーン集合、エンジンのレーン配置、TUI のレーン色、スキンのレーン種別は、すべてここから作ります。`ResolvedChart.layouts` が譜面のバリアントに対応する項目です。[プレイヤー仕様 — プレイモード表](./player-spec.ja.md#プレイモード表) も参照してください。
 
 ## 規則の置き場所
 
-| 規則                                                                                                                             | モジュール（`@be-music/chart`）                                                                                        |
-| -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| 分岐の意味（`#RANDOM`、`#SWITCH`、入れ子、閉じていない `#IF`）                                                                   | [`control-flow.ts`](../packages/chart/src/control-flow.ts)                                                             |
-| レーンモード（`resolveChartPlayVariant`）、モードごとのレーン、bmson の `mode_hint` のレーン                                     | [`play-variant.ts`](../packages/chart/src/play-variant.ts)、[`play-modes.ts`](../packages/chart/src/play-modes.ts)     |
-| 小節長からの beat、イベントの順序                                                                                                | [`beats.ts`](../packages/chart/src/beats.ts)（`createBeatResolver`、`sortEvents`）                                     |
-| BPM（`03` / `08`。0 は無視し、負の `#BPMxx` は絶対値で進む）、LR2 の負の BPM による反転、STOP と `#STP`、ノートと同じ位置の STOP | [`timing.ts`](../packages/chart/src/timing.ts)                                                                         |
-| `#LNOBJ`、`#LNTYPE 1` / `2`（と推定）、bmson の `l` / `t` / `ln_type`、FREE ZONE の終端、レーンと位置ごとに判定ノート 1 つ       | [`long-notes.ts`](../packages/chart/src/long-notes.ts)、[`resolved-notes.ts`](../packages/chart/src/resolved-notes.ts) |
-| 地雷のダメージ（36 進の値、bmson の `damage`、既定 4 %）、譜面の LN モード                                                       | [`note-rules.ts`](../packages/chart/src/note-rules.ts)                                                                 |
-| サンプルトリガ、bmson のスライスと `c`                                                                                           | [`sample-triggers.ts`](../packages/chart/src/sample-triggers.ts)                                                       |
-| SCROLL / SPEED のキーフレーム、小節線、BPM / 小節 / STOP のタイムライン                                                          | [`timelines.ts`](../packages/chart/src/timelines.ts)                                                                   |
-| BGA の切り替え                                                                                                                   | [`bga.ts`](../packages/chart/src/bga.ts)                                                                               |
+| 規則                                                                                                                             | モジュール（`@be-music/chart-model`）                                                                                              |
+| -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| 分岐の意味（`#RANDOM`、`#SWITCH`、入れ子、閉じていない `#IF`）                                                                   | [`control-flow.ts`](../packages/chart-model/src/control-flow.ts)                                                                   |
+| レーンモード（`resolveChartPlayVariant`）、モードごとのレーン、bmson の `mode_hint` のレーン                                     | [`play-variant.ts`](../packages/chart-model/src/play-variant.ts)、[`play-modes.ts`](../packages/chart-model/src/play-modes.ts)     |
+| 小節長からの beat、イベントの順序                                                                                                | [`beats.ts`](../packages/chart-model/src/beats.ts)（`createBeatResolver`、`sortEvents`）                                           |
+| BPM（`03` / `08`。0 は無視し、負の `#BPMxx` は絶対値で進む）、LR2 の負の BPM による反転、STOP と `#STP`、ノートと同じ位置の STOP | [`timing.ts`](../packages/chart-model/src/timing.ts)                                                                               |
+| `#LNOBJ`、`#LNTYPE 1` / `2`（と推定）、bmson の `l` / `t` / `ln_type`、FREE ZONE の終端、レーンと位置ごとに判定ノート 1 つ       | [`long-notes.ts`](../packages/chart-model/src/long-notes.ts)、[`resolved-notes.ts`](../packages/chart-model/src/resolved-notes.ts) |
+| 地雷のダメージ（36 進の値、bmson の `damage`、既定 4 %）、譜面の LN モード                                                       | [`note-rules.ts`](../packages/chart-model/src/note-rules.ts)                                                                       |
+| サンプルトリガ、bmson のスライスと `c`                                                                                           | [`sample-triggers.ts`](../packages/chart-model/src/sample-triggers.ts)                                                             |
+| SCROLL / SPEED のキーフレーム、小節線、BPM / 小節 / STOP のタイムライン                                                          | [`timelines.ts`](../packages/chart-model/src/timelines.ts)                                                                         |
+| BGA の切り替え                                                                                                                   | [`bga.ts`](../packages/chart-model/src/bga.ts)                                                                                     |
 
 [Be-Music Fingerprint](./fingerprint-spec.ja.md) は同じモジュールを通して項目を読むので、Resolved 層が遊ぶ内容そのもので譜面を識別します。Resolved 層が拍と秒で持つところを小節内の正確な位置で持つことと、`control-flow.ts` のフレーム操作をすべての結果についてまとめて動かすことだけが違います。
 
@@ -96,7 +96,7 @@ flowchart TD
 
 ## エンジン: 判定コアと 1 つのプレイループ
 
-`@be-music/player` のエンジン（[`core/`](../packages/player/src/core)）は、決定的な判定コアと、それを動かす 1 つのプレイループでできています。手動プレイ、リプレイ、AUTO プレイの違いは、ループに差し込む判定の戦略だけです（[ADR 0003](./adr/0003-one-play-loop.ja.md)）。
+`@be-music/player-engine` のエンジン（[`core/`](../packages/player-engine/src/core)）は、決定的な判定コアと、それを動かす 1 つのプレイループでできています。手動プレイ、リプレイ、AUTO プレイの違いは、ループに差し込む判定の戦略だけです（[ADR 0003](./adr/0003-one-play-loop.ja.md)）。
 
 ```mermaid
 flowchart TD
@@ -139,13 +139,13 @@ flowchart TD
 
 ### エンジンの特性テスト
 
-[`core/characterization/`](../packages/player/src/core/characterization) はエンジンの挙動を固定し、リファクタリングが意図しない変更をしていないことを示せるようにします。1 つのプレイループ（P1）は、これが書かれた元の 2 つのドライバを置き換え、スナップショットを 1 つも変えませんでした。そのあと、ドライバ間のずれをプルリクエストのコミットごとに 1 つずつ直し、それぞれどのスナップショットを変えたかを書いています。各ケースは小さな合成譜面（通常ノート、`#LNMODE` ごとのロングノート、地雷、BPM / STOP / SCROLL / SPEED の変化、`#EXRANK` の変化、サバイバルゲージを空にする譜面、2 ステージをつないだ NONSTOP の譜面）を、台本どおりの入力でのライブ、その記録のリプレイ、AUTO の 3 通りで、判定ルールセットごとに演奏します。シナリオでは、開始時に設定したテンポと途中で変えたテンポ、表示・HIGH-SPEED・ポーズのコマンド、ESC・リスタート・Ctrl+C、ゲージ切れで終わるプレイ、`holdAfterChart`、コースのステージの引き継ぎ、UI なし、音声セッションなし、書き込み位置が先行する音声の時計、リードイン、端末からの入力を加えます。`__expected__/` のスナップショットには、各プレイについてホストから見えるものを記録します。サマリ、リプレイとすべてのルールセットでの再シミュレーション、音声セッションへの呼び出し、ゲージ付きの判定の合図、UI のコマンドとフレーム、ホストへのコールバック、テキスト出力です。`driver-drift.test.ts` は、古いドライバ間でずれていたところで、手動と AUTO のプレイ、およびライブのプレイとそのリプレイが一致することを確かめます。解放のない入力のプレイも、リプレイと再シミュレーションがライブの結果と一致します。
+[`core/characterization/`](../packages/player-engine/src/core/characterization) はエンジンの挙動を固定し、リファクタリングが意図しない変更をしていないことを示せるようにします。1 つのプレイループ（P1）は、これが書かれた元の 2 つのドライバを置き換え、スナップショットを 1 つも変えませんでした。そのあと、ドライバ間のずれをプルリクエストのコミットごとに 1 つずつ直し、それぞれどのスナップショットを変えたかを書いています。各ケースは小さな合成譜面（通常ノート、`#LNMODE` ごとのロングノート、地雷、BPM / STOP / SCROLL / SPEED の変化、`#EXRANK` の変化、サバイバルゲージを空にする譜面、2 ステージをつないだ NONSTOP の譜面）を、台本どおりの入力でのライブ、その記録のリプレイ、AUTO の 3 通りで、判定ルールセットごとに演奏します。シナリオでは、開始時に設定したテンポと途中で変えたテンポ、表示・HIGH-SPEED・ポーズのコマンド、ESC・リスタート・Ctrl+C、ゲージ切れで終わるプレイ、`holdAfterChart`、コースのステージの引き継ぎ、UI なし、音声セッションなし、書き込み位置が先行する音声の時計、リードイン、端末からの入力を加えます。`__expected__/` のスナップショットには、各プレイについてホストから見えるものを記録します。サマリ、リプレイとすべてのルールセットでの再シミュレーション、音声セッションへの呼び出し、ゲージ付きの判定の合図、UI のコマンドとフレーム、ホストへのコールバック、テキスト出力です。`driver-drift.test.ts` は、古いドライバ間でずれていたところで、手動と AUTO のプレイ、およびライブのプレイとそのリプレイが一致することを確かめます。解放のない入力のプレイも、リプレイと再シミュレーションがライブの結果と一致します。
 
-プレイは仮想の時計で動きます。`engine-clock.ts` は時刻の読み取りと待機を `EngineScheduler` を通して行い、テストは `setEngineScheduler` で自前のものに差し替えます（テスト専用で、どの入口からも export しません）。時間はプレイが待つあいだだけ進むので、テストは決定的で数秒で終わります。`virtual-clock.test.ts` は、リプレイと AUTO プレイが実時間の時計でも同じ結果になることを確かめます。実行は `pnpm exec vp test run packages/player/src/core/characterization` です。スナップショットが変わったら、エンジンの挙動が変わったということです。スナップショットの更新（`-u`）は、その挙動を変えるつもりのプルリクエストでだけ行い、理由をそこに書きます。リファクタリングでは触りません。
+プレイは仮想の時計で動きます。`engine-clock.ts` は時刻の読み取りと待機を `EngineScheduler` を通して行い、テストは `setEngineScheduler` で自前のものに差し替えます（テスト専用で、どの入口からも export しません）。時間はプレイが待つあいだだけ進むので、テストは決定的で数秒で終わります。`virtual-clock.test.ts` は、リプレイと AUTO プレイが実時間の時計でも同じ結果になることを確かめます。実行は `pnpm exec vp test run packages/player-engine/src/core/characterization` です。スナップショットが変わったら、エンジンの挙動が変わったということです。スナップショットの更新（`-u`）は、その挙動を変えるつもりのプルリクエストでだけ行い、理由をそこに書きます。リファクタリングでは触りません。
 
 ## エンジンのオプションの分類
 
-`PlayerOptions` は、[`engine-types.ts`](../packages/player/src/core/engine-types.ts) にある 5 つの分類の型を合わせたものです。どのフィールドもちょうど 1 つの分類に属し、そうでなければ `engine-types.test.ts` が型検査で失敗します。`PlayerPlaySettings` は、将来の `play(chart, settings, runtime)` API でシリアライズできる `settings` になり、プレイを再現するためにリプレイが記録すべき集合になる予定です。
+`PlayerOptions` は、[`engine-types.ts`](../packages/player-engine/src/core/engine-types.ts) にある 5 つの分類の型を合わせたものです。どのフィールドもちょうど 1 つの分類に属し、そうでなければ `engine-types.test.ts` が型検査で失敗します。`PlayerPlaySettings` は、将来の `play(chart, settings, runtime)` API でシリアライズできる `settings` になり、プレイを再現するためにリプレイが記録すべき集合になる予定です。
 
 | 分類                                                                | フィールド                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -164,7 +164,7 @@ flowchart TD
 - `highSpeed` はスクロールだけを変えます。それでもホストはログの `play.native` に残せます。
 - `recordReplay` は、設定である `gauge`、`randomLane`、`dpFlip`、`native` を、譜面の識別情報（`chartSHA256`、`chartMD5`、`sourceChart`、`recorder`）と一緒に宣言します。
 
-リプレイ（[`replay/format.ts`](../packages/player/src/replay/format.ts) の `ReplayPlay`）が記録していないもの：
+リプレイ（[`replay/format.ts`](../packages/player-engine/src/replay/format.ts) の `ReplayPlay`）が記録していないもの：
 
 - `speed` は `play.tempo` として、プレイ中のテンポ変更（入力コマンド `{ kind: 'tempo' }`）は `play.tempoChanges` として記録されますが、再シミュレーションはこれらを使いません。入力と判定は譜面時刻だからです。離鍵イベントのない入力（kitty キーボードプロトコルのない端末）は、離した時刻を推定し（`play-key-inference.ts`。押下ごとの保持猶予を、開始時のテンポの再生の時計、譜面の 1 秒あたり `1000 / speed` ms で数えるので、譜面時刻に対して線形です）、リプレイはその解放を記録します。そのため、リプレイと再シミュレーションはライブで判定したとおりに判定します（[解放のない入力](./replay.ja.md#解放のない入力)）。
 - `inferBmsLNTypeWhenMissing` は記録されません。`chart.notes` はこれが作ったロングノートを持ちますが、元の譜面に対してリプレイするには同じフラグが必要です。
@@ -181,23 +181,23 @@ flowchart TD
   subgraph data["データ"]
     d["json · chart · parser<br/>stringifier · audio-renderer · utils"]
   end
-  subgraph domain["規則とエンジン — @be-music/player"]
+  subgraph domain["規則とエンジン — @be-music/player-engine"]
     rules["ruleset · replay<br/>course · records"]
     engine["engine: 1 つのプレイループ<br/>手動 · AUTO · リプレイ"]
   end
   subgraph models["モデル"]
-    scene["@be-music/scene-model"]
+    scene["@be-music/player-scene-model"]
     skins["skin-sdk · lr2-skin<br/>beatoraja-skin"]
   end
-  subgraph web["Web 実行層 — @be-music/player-web"]
+  subgraph web["Web 実行層 — @be-music/player-browser"]
     sessions["シーンセッション"]
     views["ファミリービュー"]
     hostApi["ホスト向けの API"]
   end
   subgraph hosts["ホスト"]
-    demo["player-web-demo"]
-    tui["player-tui"]
-    lb["leaderboard-api"]
+    demo["app-play"]
+    tui["player-terminal"]
+    lb["app-leaderboard"]
   end
 
   d --> rules --> engine
@@ -214,10 +214,10 @@ flowchart TD
 
 矢印は、ある層からその上に作られた層へ向かいます。
 
-- **規則とエンジン**（`@be-music/player`）。ゲージ・クリアランプ・BP・スコアの語彙（`./ruleset`）、コースの実行、NONSTOP の流れ、コースのステージの規則（`./course`）、判定ルールセットごとの自己ベストの統合（`./records`）、リプレイの形式とそのシミュレータ（`./replay`）を持ちます（[ADR 0004](./adr/0004-domain-rules-in-player.ja.md)）。パッケージのルートはエンジンで、プレイループは 1 つ、手動・AUTO・リプレイの判定の戦略を差し込みます（[ADR 0003](./adr/0003-one-play-loop.ja.md)）。ホストの実行環境がプレイとやり取りするもの、レーン、ホストが表示するものは、入口の `./signals`、`./lanes`、`./display` です（[Player 実装仕様 — 公開する入口](./player-spec.ja.md#公開する入口)）。
-- **シーンモデル**（`@be-music/scene-model`）。スキンの種類によらず、各画面が何を見せ、どう振る舞うか。ライブラリの項目（`LibraryChart`、`LibraryFolder`、`LibraryCourse`）、一覧の状態とその保存形（`BrowseState`、`BrowseSnapshot`）、プレイオプション、プレイ状態（`PlayState`）、プレイ結果（`PlayResult`）、コースの表示用モデル（`CourseView`）、効果音セットです（[ADR 0002](./adr/0002-scene-model-package.ja.md)、[シーンモデル](./scene-model.ja.md)）。
-- **スキンモデル**（`skin-sdk`、`lr2-skin`、`beatoraja-skin`）。それぞれのスキンを解析し、シーンモデルをそのスキンの語彙に写します。be-music スキンの契約（`@be-music/skin-sdk`）、LR2 互換の op・数値・テキスト・タイマーの番号表 1 つ（`@be-music/lr2-skin/ids`）と LR2 の状態を求める関数（`@be-music/lr2-skin/state`）、beatoraja の状態の計算（`@be-music/beatoraja-skin/scene`）です。
-- **Web 実行層**（`@be-music/player-web`）。シーンセッション（`session/`）が各画面の振る舞いを、どのスキンの種類にも共通に 1 つだけ持ちます。譜面の準備、RANDOM / FLIP、音と BGA、エンジンの設定、入力、終わり方です。ファミリービュー（`view/`）はセッションのフレームを描いてインテントを返すだけです（[ADR 0001](./adr/0001-skin-families-only-draw.ja.md)）。ホスト向けの API（`./host`）は、どの画面もファミリーキットから `createSelectScene`、`createDecideScene`、`createPlayScene`、`createResultScene` で作り、`PixiSceneHost` が表示する 1 つの画面のライフサイクル（`PixiScene`）を持つ `SessionScene` にします。プレイの譜面の音以外はすべて 1 つの音のサービス（`./audio`、[ADR 0007](./adr/0007-one-system-audio-context.ja.md)）を通ります。[ブラウザプレイヤー — シーンセッションとファミリービュー](./player-web.ja.md#シーンセッションとファミリービュー)を参照してください。
+- **規則とエンジン**（`@be-music/player-engine`）。ゲージ・クリアランプ・BP・スコアの語彙（`./ruleset`）、コースの実行、NONSTOP の流れ、コースのステージの規則（`./course`）、判定ルールセットごとの自己ベストの統合（`./records`）、リプレイの形式とそのシミュレータ（`./replay`）を持ちます（[ADR 0004](./adr/0004-domain-rules-in-player.ja.md)）。パッケージのルートはエンジンで、プレイループは 1 つ、手動・AUTO・リプレイの判定の戦略を差し込みます（[ADR 0003](./adr/0003-one-play-loop.ja.md)）。ホストの実行環境がプレイとやり取りするもの、レーン、ホストが表示するものは、入口の `./signals`、`./lanes`、`./display` です（[Player 実装仕様 — 公開する入口](./player-spec.ja.md#公開する入口)）。
+- **シーンモデル**（`@be-music/player-scene-model`）。スキンの種類によらず、各画面が何を見せ、どう振る舞うか。ライブラリの項目（`LibraryChart`、`LibraryFolder`、`LibraryCourse`）、一覧の状態とその保存形（`BrowseState`、`BrowseSnapshot`）、プレイオプション、プレイ状態（`PlayState`）、プレイ結果（`PlayResult`）、コースの表示用モデル（`CourseView`）、効果音セットです（[ADR 0002](./adr/0002-scene-model-package.ja.md)、[シーンモデル](./scene-model.ja.md)）。
+- **スキンモデル**（`skin-sdk`、`lr2-skin`、`beatoraja-skin`）。それぞれのスキンを解析し、シーンモデルをそのスキンの語彙に写します。be-music スキンの契約（`@be-music/player-skin-sdk`）、LR2 互換の op・数値・テキスト・タイマーの番号表 1 つ（`@be-music/skin-lr2/ids`）と LR2 の状態を求める関数（`@be-music/skin-lr2/state`）、beatoraja の状態の計算（`@be-music/skin-beatoraja/scene`）です。
+- **Web 実行層**（`@be-music/player-browser`）。シーンセッション（`session/`）が各画面の振る舞いを、どのスキンの種類にも共通に 1 つだけ持ちます。譜面の準備、RANDOM / FLIP、音と BGA、エンジンの設定、入力、終わり方です。ファミリービュー（`view/`）はセッションのフレームを描いてインテントを返すだけです（[ADR 0001](./adr/0001-skin-families-only-draw.ja.md)）。ホスト向けの API（`./host`）は、どの画面もファミリーキットから `createSelectScene`、`createDecideScene`、`createPlayScene`、`createResultScene` で作り、`PixiSceneHost` が表示する 1 つの画面のライフサイクル（`PixiScene`）を持つ `SessionScene` にします。プレイの譜面の音以外はすべて 1 つの音のサービス（`./audio`、[ADR 0007](./adr/0007-one-system-audio-context.ja.md)）を通ります。[ブラウザプレイヤー — シーンセッションとファミリービュー](./player-web.ja.md#シーンセッションとファミリービュー)を参照してください。
 - **ホスト**。Web のデモは、構成の根（`app/app.ts`）がつなぐサービス（`services/`）とルート（`app/routes/`）の集まりで、画面の切り替えはすべて 1 つのシーンルーター（`app/scene-router.ts`）が受け持ちます（[ADR 0006](./adr/0006-scene-router.ja.md)）。ルートは選曲、決定、プレイ、リザルト、リプレイ、コース、NONSTOP です。`main.ts` はアプリを起動するだけで、サービスは lil-gui、UI（`ui/`）、アプリ（`app/`）のモジュールを import しません（[ブラウザプレイヤー — demo の作り](./player-web.ja.md#demo-の作り)）。ターミナルプレイヤーはエンジンと入口の `./signals`、`./lanes`、`./display` で遊び、Leaderboard は規則（`./course`、`./replay`、`./ruleset`）で記録を確かめて順位を付けます。
 
 変更しやすさを保つための規則：
@@ -235,8 +235,8 @@ flowchart TD
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------ |
 | [P0](#p0-安全網)                 | 安全網：エンジンのスナップショットと、コースの確認の自動化                                                             | 完了   |
 | [P1](#p1-1-つのプレイループ)     | 判定の戦略を差し込む 1 つのプレイループ                                                                                | 完了   |
-| [P2](#p2-ドメインの規則)         | 規則を `@be-music/player` に集める                                                                                     | 完了   |
-| [P3](#p3-シーンとスキンのモデル) | `@be-music/scene-model`、スキンのパッケージでの LR2 と beatoraja の状態の写し方                                        | 完了   |
+| [P2](#p2-ドメインの規則)         | 規則を `@be-music/player-engine` に集める                                                                              | 完了   |
+| [P3](#p3-シーンとスキンのモデル) | `@be-music/player-scene-model`、スキンのパッケージでの LR2 と beatoraja の状態の写し方                                 | 完了   |
 | [P4](#p4-web-実行層)             | Web 実行層：シーンセッション、ファミリービュー、画面のライフサイクル・音のサービス・ホスト向けの API をそれぞれ 1 つに | 完了   |
 | [P5](#p5-web-のデモ)             | Web のデモをシーンルーターの下のサービスに分ける                                                                       | 完了   |
 | [P6](#p6-devel-への仕上げ)       | 公開する入口、ドキュメント、ファイルサイズの許可リストを空に、changeset、実在のスキンでの総点検。そのあと `devel` へ   | 進行中 |
@@ -263,19 +263,19 @@ flowchart TD
 
 #### P2: ドメインの規則
 
-| 手順 | 入ったもの                                                                                                                                                      | 削除                                                                                                                        | PR                                                    | 状態 |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ---- |
-| P2a  | ゲージ・クリアランプ・BP の語彙を 1 つに（`@be-music/player/ruleset`）、判定ルールセットごとの自己ベスト（[ADR 0004](./adr/0004-domain-rules-in-player.ja.md)） | player-web・リーダーボード・デモ・beatoraja-skin にあったランプと記録の規則の写し、`core/groove-gauge` と `GrooveGaugeType` | [#424](https://github.com/nulltask/be-music/pull/424) | 完了 |
-| P2b  | コースの実行、共有する NONSTOP の流れ（リーダーボードも）、コースのステージの規則を `@be-music/player/course` に                                                | player-web のコレクションにあったコースの規則、デモの `CourseSession`、デモとリーダーボードにあった NONSTOP の写し          | [#423](https://github.com/nulltask/be-music/pull/423) | 完了 |
+| 手順 | 入ったもの                                                                                                                                                             | 削除                                                                                                                        | PR                                                    | 状態 |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ---- |
+| P2a  | ゲージ・クリアランプ・BP の語彙を 1 つに（`@be-music/player-engine/ruleset`）、判定ルールセットごとの自己ベスト（[ADR 0004](./adr/0004-domain-rules-in-player.ja.md)） | player-web・リーダーボード・デモ・beatoraja-skin にあったランプと記録の規則の写し、`core/groove-gauge` と `GrooveGaugeType` | [#424](https://github.com/nulltask/be-music/pull/424) | 完了 |
+| P2b  | コースの実行、共有する NONSTOP の流れ（リーダーボードも）、コースのステージの規則を `@be-music/player-engine/course` に                                                | player-web のコレクションにあったコースの規則、デモの `CourseSession`、デモとリーダーボードにあった NONSTOP の写し          | [#423](https://github.com/nulltask/be-music/pull/423) | 完了 |
 
 #### P3: シーンとスキンのモデル
 
 | 手順          | 入ったもの                                                                                                                                                                                                                                        | 削除                                                                              | PR                                                                                                           | 状態 |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---- |
-| P3a           | `@be-music/scene-model` パッケージ（[ADR 0002](./adr/0002-scene-model-package.ja.md)）：ライブラリ、一覧、プレイオプション。続いてプレイ状態、プレイ結果、コースの表示、システム音                                                                | —                                                                                 | [#429](https://github.com/nulltask/be-music/pull/429), [#431](https://github.com/nulltask/be-music/pull/431) | 完了 |
-| P3b           | LR2 の番号表 `@be-music/lr2-skin/ids`。`beatoraja-skin` と共有し、Web のシーンが使う                                                                                                                                                              | Web のシーンにあった LR2 の生の番号                                               | [#428](https://github.com/nulltask/be-music/pull/428)                                                        | 完了 |
-| P3c-LR2       | `@be-music/lr2-skin/state` が選曲・決定・プレイ・リザルトの画面とコースについて、シーンモデルを LR2 の op、数値、テキスト、スライダー、タイマーに写し、LR2 のシーンがそれを呼ぶ                                                                   | —                                                                                 | [#433](https://github.com/nulltask/be-music/pull/433)                                                        | 完了 |
-| P3c-beatoraja | `@be-music/beatoraja-skin/scene` がプレイ・選曲・リザルトの画面、コース、システム音について、シーンモデルを beatoraja の op、数値、テキスト、タイマー、ゲージ、グラフに写し、beatoraja のランタイムアダプターと選曲・リザルトのシーンがそれを呼ぶ | player-web にあった状態の計算：`BeatorajaRuntimeAdapter` は 3,100 行から 914 行に | [#434](https://github.com/nulltask/be-music/pull/434)                                                        | 完了 |
+| P3a           | `@be-music/player-scene-model` パッケージ（[ADR 0002](./adr/0002-scene-model-package.ja.md)）：ライブラリ、一覧、プレイオプション。続いてプレイ状態、プレイ結果、コースの表示、システム音                                                         | —                                                                                 | [#429](https://github.com/nulltask/be-music/pull/429), [#431](https://github.com/nulltask/be-music/pull/431) | 完了 |
+| P3b           | LR2 の番号表 `@be-music/skin-lr2/ids`。`beatoraja-skin` と共有し、Web のシーンが使う                                                                                                                                                              | Web のシーンにあった LR2 の生の番号                                               | [#428](https://github.com/nulltask/be-music/pull/428)                                                        | 完了 |
+| P3c-LR2       | `@be-music/skin-lr2/state` が選曲・決定・プレイ・リザルトの画面とコースについて、シーンモデルを LR2 の op、数値、テキスト、スライダー、タイマーに写し、LR2 のシーンがそれを呼ぶ                                                                   | —                                                                                 | [#433](https://github.com/nulltask/be-music/pull/433)                                                        | 完了 |
+| P3c-beatoraja | `@be-music/skin-beatoraja/scene` がプレイ・選曲・リザルトの画面、コース、システム音について、シーンモデルを beatoraja の op、数値、テキスト、タイマー、ゲージ、グラフに写し、beatoraja のランタイムアダプターと選曲・リザルトのシーンがそれを呼ぶ | player-web にあった状態の計算：`BeatorajaRuntimeAdapter` は 3,100 行から 914 行に | [#434](https://github.com/nulltask/be-music/pull/434)                                                        | 完了 |
 
 #### P4: Web 実行層
 
@@ -289,9 +289,9 @@ flowchart TD
 | E1           | 入力のランタイムが、キーを離したことを報告すると宣言できる（`PlayerInputRuntime.reportsKeyReleases`）。ブラウザの最初の押下はキーの状態の推測を通らない                                                                                 | —                                                                                                                                                | [#437](https://github.com/nulltask/be-music/pull/437)                                                        | 完了 |
 | E2           | 判定コアはキーの状態の入力だけを受け取る。離した情報のない入力は `play-key-inference.ts` を通し、離したことを記録していないログは推測し直す（EP2、[#495](https://github.com/nulltask/be-music/pull/495) で廃止）                        | 離した情報のない押下のためのコアの経路：保持の猶予、ロングノートのリピートの抑制（`isLongNoteKeyRepeat`）、猶予による地雷の判定、`keyStateInput` | [#441](https://github.com/nulltask/be-music/pull/441)                                                        | 完了 |
 | E3           | 判定ルールセットの id をすべて `RulesetId` で型付け。`JudgeWindowRuleset` は非推奨の別名として残す                                                                                                                                      | —                                                                                                                                                | [#435](https://github.com/nulltask/be-music/pull/435)                                                        | 完了 |
-| E4           | スコアの語彙を `@be-music/player/ruleset` から公開。`core/scoring` は非推奨の別名として残す                                                                                                                                             | —                                                                                                                                                | [#440](https://github.com/nulltask/be-music/pull/440)                                                        | 完了 |
+| E4           | スコアの語彙を `@be-music/player-engine/ruleset` から公開。`core/scoring` は非推奨の別名として残す                                                                                                                                      | —                                                                                                                                                | [#440](https://github.com/nulltask/be-music/pull/440)                                                        | 完了 |
 | E5           | [#430](https://github.com/nulltask/be-music/issues/430) で確度が低かったスキンの番号を OpenLR2 と beatoraja で確かめ、既知の問題のうち番号の誤りを修正                                                                                  | —                                                                                                                                                | [#443](https://github.com/nulltask/be-music/pull/443)                                                        | 完了 |
-| B1           | `loadBeatorajaSceneKit`（`@be-music/player-web/skin`）が、beatoraja の各画面のスキンを `BeatorajaSceneKit` に読み込む                                                                                                                   | デモにあった、項目ごとのスキンの読み込みの写し                                                                                                   | [#454](https://github.com/nulltask/be-music/pull/454)                                                        | 完了 |
+| B1           | `loadBeatorajaSceneKit`（`@be-music/player-browser/skin`）が、beatoraja の各画面のスキンを `BeatorajaSceneKit` に読み込む                                                                                                               | デモにあった、項目ごとのスキンの読み込みの写し                                                                                                   | [#454](https://github.com/nulltask/be-music/pull/454)                                                        | 完了 |
 | B2           | 移動のみ：beatoraja のプレイのスキンビューのグラフとゲージの描画を `skin-view/` へ                                                                                                                                                      | —                                                                                                                                                | [#446](https://github.com/nulltask/be-music/pull/446)                                                        | 完了 |
 | B3           | 移動のみ：テキスト・数値・画像の描画と Lua のコンテキスト。`skin-view.ts` をファイルサイズの許可リストから外す                                                                                                                          | —                                                                                                                                                | [#448](https://github.com/nulltask/be-music/pull/448)                                                        | 完了 |
 | B4           | 移動のみ：`PixiBeatorajaSelectScene` の曲の一覧の行を `select/rows.ts` へ                                                                                                                                                               | —                                                                                                                                                | [#456](https://github.com/nulltask/be-music/pull/456)                                                        | 完了 |
@@ -354,33 +354,33 @@ Web のデモを 1 つのシーンルーター（[ADR 0006](./adr/0006-scene-rou
 
 公開する入口（[ADR 0005](./adr/0005-public-entry-points.ja.md)）、ドキュメント、ファイルサイズの許可リストを空に、changeset、実在のスキンでの総点検。そのあと `feat/course-definitions` を `devel` へ入れます。Web 実行層の外の移動だけの分割は先に入り、許可リストに最後まで残ったデモの `main.ts` も P5.7b で外れたので、許可リストは空です。
 
-| 手順           | 範囲                                                                                                                                                                          | PR                                                    | 状態 |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ---- |
-| `lr2-skin`     | 移動のみ：LR2 のスキンの解析器 `src/skin.ts` を `src/skin/` へ。許可リストから外す                                                                                            | [#468](https://github.com/nulltask/be-music/pull/468) | 完了 |
-| `chart`        | 移動のみ：`src/index.ts` をモジュールに分ける。許可リストから外す                                                                                                             | [#469](https://github.com/nulltask/be-music/pull/469) | 完了 |
-| `parser`       | 移動のみ：`src/core/parser.ts` をモジュールに分ける。許可リストから外す                                                                                                       | [#470](https://github.com/nulltask/be-music/pull/470) | 完了 |
-| `stringifier`  | 移動のみ：`src/index.ts` をモジュールに分ける。許可リストから外す                                                                                                             | [#471](https://github.com/nulltask/be-music/pull/471) | 完了 |
-| TUI のランナー | 移動のみ：`player-tui` の `src/cli/runner.ts` をモジュールに分ける。許可リストから外す                                                                                        | [#472](https://github.com/nulltask/be-music/pull/472) | 完了 |
-| TUI の画面     | 移動のみ：`player-tui` の `src/tui/tui.ts` をモジュールに分ける。許可リストから外す                                                                                           | [#482](https://github.com/nulltask/be-music/pull/482) | 完了 |
-| TUI の BGA     | 移動のみ：`player-tui` の `src/bga.ts` をモジュールに分ける。許可リストから外す                                                                                               | [#485](https://github.com/nulltask/be-music/pull/485) | 完了 |
-| EP1            | `@be-music/player` の入口 `./signals`、`./lanes`、`./display` と、`./ruleset` の判定幅とリプレイのルールセット ID。TUI、skin-sdk、回帰テストがそれを使う                      | [#496](https://github.com/nulltask/be-music/pull/496) | 完了 |
-| EP2            | 離鍵を記録していないリプレイ（#432 より前）のリプレイで、離鍵を推定し直さない                                                                                                 | [#495](https://github.com/nulltask/be-music/pull/495) | 完了 |
-| EP3            | `@be-music/player-web` の入口 `./host`、`./skin`、`./collection`、`./audio`、`./recording` と、別名の削除（`Pixi*` の型、`resolveSceneCourseInfo`、`PixiGameplayResultData`） | [#497](https://github.com/nulltask/be-music/pull/497) | 完了 |
-| EP4            | `player-web` が player の新しい入口と、`@be-music/chart` のタイミング API を使う                                                                                              | [#499](https://github.com/nulltask/be-music/pull/499) | 完了 |
-| EP5            | skin-sdk のライブラリの `Browser*` 型を、scene-model の `Library*` の名前に（Z2 で完了）                                                                                      | [#500](https://github.com/nulltask/be-music/pull/500) | 完了 |
-| EP6            | player のファイル名の subpath（`core/*` と `core/scoring`、`utils`、`judging` など）と、audio-renderer の `./triggers` の廃止                                                 | [#501](https://github.com/nulltask/be-music/pull/501) | 完了 |
-| EP7            | 任意：すべての入口のベンチマーク（beatoraja-skin のルート、utils の Node 専用の subpath）                                                                                     | [#498](https://github.com/nulltask/be-music/pull/498) | 完了 |
-| ドキュメント   | ドキュメントと用語集を、目指す構造の語彙にそろえる                                                                                                                            | [#531](https://github.com/nulltask/be-music/pull/531) | 完了 |
-| changeset      | changeset を、パッケージと変更ごとにまとめる                                                                                                                                  | [#528](https://github.com/nulltask/be-music/pull/528) | 完了 |
-| 実在のスキン   | 実在のスキン（LR2 の標準のテーマ、ModernChic）で、ブラウザ確認を手で行う                                                                                                      | —                                                     | 完了 |
-| `devel`        | `feat/course-definitions` を `devel` へマージ                                                                                                                                 | —                                                     | 予定 |
+| 手順           | 範囲                                                                                                                                                                              | PR                                                    | 状態 |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ---- |
+| `lr2-skin`     | 移動のみ：LR2 のスキンの解析器 `src/skin.ts` を `src/skin/` へ。許可リストから外す                                                                                                | [#468](https://github.com/nulltask/be-music/pull/468) | 完了 |
+| `chart`        | 移動のみ：`src/index.ts` をモジュールに分ける。許可リストから外す                                                                                                                 | [#469](https://github.com/nulltask/be-music/pull/469) | 完了 |
+| `parser`       | 移動のみ：`src/core/parser.ts` をモジュールに分ける。許可リストから外す                                                                                                           | [#470](https://github.com/nulltask/be-music/pull/470) | 完了 |
+| `stringifier`  | 移動のみ：`src/index.ts` をモジュールに分ける。許可リストから外す                                                                                                                 | [#471](https://github.com/nulltask/be-music/pull/471) | 完了 |
+| TUI のランナー | 移動のみ：`player-tui` の `src/cli/runner.ts` をモジュールに分ける。許可リストから外す                                                                                            | [#472](https://github.com/nulltask/be-music/pull/472) | 完了 |
+| TUI の画面     | 移動のみ：`player-tui` の `src/tui/tui.ts` をモジュールに分ける。許可リストから外す                                                                                               | [#482](https://github.com/nulltask/be-music/pull/482) | 完了 |
+| TUI の BGA     | 移動のみ：`player-tui` の `src/bga.ts` をモジュールに分ける。許可リストから外す                                                                                                   | [#485](https://github.com/nulltask/be-music/pull/485) | 完了 |
+| EP1            | `@be-music/player-engine` の入口 `./signals`、`./lanes`、`./display` と、`./ruleset` の判定幅とリプレイのルールセット ID。TUI、skin-sdk、回帰テストがそれを使う                   | [#496](https://github.com/nulltask/be-music/pull/496) | 完了 |
+| EP2            | 離鍵を記録していないリプレイ（#432 より前）のリプレイで、離鍵を推定し直さない                                                                                                     | [#495](https://github.com/nulltask/be-music/pull/495) | 完了 |
+| EP3            | `@be-music/player-browser` の入口 `./host`、`./skin`、`./collection`、`./audio`、`./recording` と、別名の削除（`Pixi*` の型、`resolveSceneCourseInfo`、`PixiGameplayResultData`） | [#497](https://github.com/nulltask/be-music/pull/497) | 完了 |
+| EP4            | `player-web` が player の新しい入口と、`@be-music/chart-model` のタイミング API を使う                                                                                            | [#499](https://github.com/nulltask/be-music/pull/499) | 完了 |
+| EP5            | skin-sdk のライブラリの `Browser*` 型を、scene-model の `Library*` の名前に（Z2 で完了）                                                                                          | [#500](https://github.com/nulltask/be-music/pull/500) | 完了 |
+| EP6            | player のファイル名の subpath（`core/*` と `core/scoring`、`utils`、`judging` など）と、audio-renderer の `./triggers` の廃止                                                     | [#501](https://github.com/nulltask/be-music/pull/501) | 完了 |
+| EP7            | 任意：すべての入口のベンチマーク（beatoraja-skin のルート、utils の Node 専用の subpath）                                                                                         | [#498](https://github.com/nulltask/be-music/pull/498) | 完了 |
+| ドキュメント   | ドキュメントと用語集を、目指す構造の語彙にそろえる                                                                                                                                | [#531](https://github.com/nulltask/be-music/pull/531) | 完了 |
+| changeset      | changeset を、パッケージと変更ごとにまとめる                                                                                                                                      | [#528](https://github.com/nulltask/be-music/pull/528) | 完了 |
+| 実在のスキン   | 実在のスキン（LR2 の標準のテーマ、ModernChic）で、ブラウザ確認を手で行う                                                                                                          | —                                                     | 完了 |
+| `devel`        | `feat/course-definitions` を `devel` へマージ                                                                                                                                     | —                                                     | 予定 |
 
 ## 層の規則とサイズの上限
 
 `pnpm run check` は、フォーマット・lint・型のほかに、構造に関する次の規則を検査します。
 
-- **実行環境に依存しないコード**：`@be-music/chart`、`@be-music/json`、`@be-music/parser`、`@be-music/scene-model`、`@be-music/lr2-skin` の `state/`、`@be-music/beatoraja-skin` の `scene/` と、`@be-music/player` の `core/`、`course/`、`replay/`、`records/`、`ruleset/` と、入口の `signals`、`lanes`、`display` およびそれらが集めるモジュールは、ブラウザでも Node でもそのまま動きます。そこでは Oxlint の `no-restricted-imports` と `no-restricted-globals`（[`vite.config.ts`](../vite.config.ts) で設定）が、Node の組み込みモジュールの import（`node:*` と接頭辞なしの名前）と、DOM や Node だけのグローバル（`window`、`document`、`process`、`Buffer` など）を拒否します。実行環境のサービスはアダプタを通して渡します。`PlayerOptions.createAudioSession` / `createUIRuntime` / `createInputRuntime`、Node の音声出力を読み込むオプショナルモジュールのローダー、parser の [`node-file.ts`](../packages/parser/src/node-file.ts)（`parseChartFile`）です。`node-file.ts` と parser の CLI、テストはこの規則の対象外です。
-- **決定的な判定**：`core/judge-*.ts`、`core/auto-judge-core.ts`、`ruleset/`、`replay/simulate.ts` では、さらに `Date` と `performance` の読み取り、タイマーの設定、`Math.random` の呼び出しを禁止します。時刻と乱数は入力として受け取ります。シーンモデル（`@be-music/scene-model`）と、LR2 と beatoraja の状態を求める関数（`@be-music/lr2-skin` の `state/`、`@be-music/beatoraja-skin` の `scene/`）にも同じ規則を課します。画面の時刻は入力として受け取ります。
-- **web ランタイムの層**：`@be-music/player-web` では、同じ Oxlint の規則が層を分けたまま保ちます（[層の分け方](./player-web.ja.md#層の分け方)）。下の層（`host/`、`session/`、`view/` 以外のすべてのディレクトリ）は、ホスト、セッション、ビューを型であっても import しません。セッションとビューが互いとホストに触れるのは型だけで、セッションは Pixi も型だけ、ビューはエンジンを型であっても import しません。エンジンを値として import するのはセッションと `runtime/engine-driver.ts` だけで、`AudioContext` や `OfflineAudioContext` を作るのは音の層の `runtime/` だけです。後の 2 つの規則は web demo にも課します。
+- **実行環境に依存しないコード**：`@be-music/chart-model`、`@be-music/chart-source`、`@be-music/chart-parser`、`@be-music/player-scene-model`、`@be-music/skin-lr2` の `state/`、`@be-music/skin-beatoraja` の `scene/` と、`@be-music/player-engine` の `core/`、`course/`、`replay/`、`records/`、`ruleset/` と、入口の `signals`、`lanes`、`display` およびそれらが集めるモジュールは、ブラウザでも Node でもそのまま動きます。そこでは Oxlint の `no-restricted-imports` と `no-restricted-globals`（[`vite.config.ts`](../vite.config.ts) で設定）が、Node の組み込みモジュールの import（`node:*` と接頭辞なしの名前）と、DOM や Node だけのグローバル（`window`、`document`、`process`、`Buffer` など）を拒否します。実行環境のサービスはアダプタを通して渡します。`PlayerOptions.createAudioSession` / `createUIRuntime` / `createInputRuntime`、Node の音声出力を読み込むオプショナルモジュールのローダー、parser の [`node-file.ts`](../packages/chart-parser/src/node-file.ts)（`parseChartFile`）です。`node-file.ts` と parser の CLI、テストはこの規則の対象外です。
+- **決定的な判定**：`core/judge-*.ts`、`core/auto-judge-core.ts`、`ruleset/`、`replay/simulate.ts` では、さらに `Date` と `performance` の読み取り、タイマーの設定、`Math.random` の呼び出しを禁止します。時刻と乱数は入力として受け取ります。シーンモデル（`@be-music/player-scene-model`）と、LR2 と beatoraja の状態を求める関数（`@be-music/skin-lr2` の `state/`、`@be-music/skin-beatoraja` の `scene/`）にも同じ規則を課します。画面の時刻は入力として受け取ります。
+- **web ランタイムの層**：`@be-music/player-browser` では、同じ Oxlint の規則が層を分けたまま保ちます（[層の分け方](./player-web.ja.md#層の分け方)）。下の層（`host/`、`session/`、`view/` 以外のすべてのディレクトリ）は、ホスト、セッション、ビューを型であっても import しません。セッションとビューが互いとホストに触れるのは型だけで、セッションは Pixi も型だけ、ビューはエンジンを型であっても import しません。エンジンを値として import するのはセッションと `runtime/engine-driver.ts` だけで、`AudioContext` や `OfflineAudioContext` を作るのは音の層の `runtime/` だけです。後の 2 つの規則は web demo にも課します。
 - **web demo の層**：web demo のサービス（`services/`）は、lil-gui、`ui/`、`app/` のモジュールを型であっても import しません。アプリから必要なものは deps として受け取ります（[ブラウザプレイヤー — demo の作り](./player-web.ja.md#demo-の作り)）。
 - **ファイルサイズの上限**：[`scripts/lint/file-size-budget.ts`](../scripts/lint/file-size-budget.ts) は、パッケージのソースファイル（テスト、型宣言、フィクスチャを除く）が 1,500 行を超えると失敗します。上限を入れた時点で既に大きかったファイルは許可リストに入れて警告だけを出し、分けるたびに外してきました。いまリストは空です。許可リストのファイルが上限を下回ったら、リストから外す必要があります。単独では `pnpm run check:file-size` で実行できます。

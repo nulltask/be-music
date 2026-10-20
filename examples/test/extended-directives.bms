@@ -13,7 +13,7 @@
 * `four-measure-command-combo-test.bms` proves the parser ROUTES every extended
 * header into the right `bms` field, but its payloads are placeholders
 * (`#EXWAV01 ex_sample.wav`, `#BGA01 01`, `#SWBGA01 02`, `#WAVCMD legacy`) that
-* every `@be-music/chart` value parser rejects. This chart carries the same
+* every `@be-music/chart-model` value parser rejects. This chart carries the same
 * directive family with payloads that actually parse, so the value parsers are
 * exercised against a real file instead of inline strings only.
 *

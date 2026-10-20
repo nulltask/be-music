@@ -120,7 +120,7 @@ Accounts has its own D1 (`accounts` / `accounts-preview`) for users, provider li
 
 The Leaderboard owns public profiles and scores. `oidc_identity` maps `(issuer, subject)` to its local player ID. A verified token creates the local mirror/profile lazily; email is never a linking key. Existing mappings keep the original player IDs and score ownership. Signed guest-link claims let the Leaderboard transfer guest plays idempotently when an account is linked, without giving Accounts access to score tables.
 
-Apply the Accounts schema and Leaderboard migration `0013`, then run `packages/accounts/scripts/migrate-identities.ts` before switching authentication. It defaults to a dry run; `--preview --apply` copies preview users/provider links/passkeys and seeds their local mappings; omit `--preview` for production. It does not copy old sessions or challenges and never prints credentials. The source auth tables remain for rollback. Do not rerun the copy after new OIDC players have been provisioned. Users sign in again; migrated passkeys keep their existing RP IDs.
+Apply the Accounts schema and Leaderboard migration `0013`, then run `packages/app-accounts/scripts/migrate-identities.ts` before switching authentication. It defaults to a dry run; `--preview --apply` copies preview users/provider links/passkeys and seeds their local mappings; omit `--preview` for production. It does not copy old sessions or challenges and never prints credentials. The source auth tables remain for rollback. Do not rerun the copy after new OIDC players have been provisioned. Users sign in again; migrated passkeys keep their existing RP IDs.
 
 `legacy-auth.ts` is confined to localhost tests/development. Public deployments fail closed without OIDC configuration and cannot accept the old shared session cookie.
 
@@ -162,7 +162,7 @@ configuration:
 | ----------- | -------------------------------------------------------------------------------------- |
 | Dashboard   | `dashboard` / `dashboard-preview`, a temporary page showing the session and links      |
 | Accounts    | `accounts` / `accounts-preview`, independent OIDC provider and auth D1                 |
-| Player      | `play` / `play-preview` (`packages/play`, serving `@be-music/player-web-demo`'s build) |
+| Player      | `play` / `play-preview` (`packages/worker-play`, serving `@be-music/app-play`'s build) |
 | Leaderboard | `leaderboard` / `leaderboard-preview`, pages at the root of its host                   |
 | Donate      | `donate` / `donate-preview`, OIDC login and public financial data                      |
 
@@ -197,4 +197,4 @@ Accounts owns public profiles and avatars; all edits take place there. Leaderboa
 | `dashboard` / `dashboard-preview`     | None           | None                                                  |
 | `donate` / `donate-preview`           | None           | None; financial data stays in its repository          |
 
-The static public asset bucket is `assets`, served at `assets.be-music.app`. The FFmpeg upload script defaults to `play`; `pnpm --filter @be-music/player-web-demo run cf:r2:push:preview` updates `play-preview` separately.
+The static public asset bucket is `assets`, served at `assets.be-music.app`. The FFmpeg upload script defaults to `play`; `pnpm --filter @be-music/app-play run cf:r2:push:preview` updates `play-preview` separately.

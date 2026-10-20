@@ -2,7 +2,7 @@
 
 # be-music スキンの作り方
 
-このガイドは、ブラウザプレイヤーの組み込み（デフォルト）ファミリー向けにスキンを作りたい人のためのものです。スキンは `@be-music/skin-sdk` パッケージに対して書きます。組み込みスキンもまさにこのパッケージだけを使っており、Synesthesia・Phantom・Lattice・Plain はプレイヤーの他の部分を一切 import していません。組み込みスキンにできることは、あなたのスキンにもできます。
+このガイドは、ブラウザプレイヤーの組み込み（デフォルト）ファミリー向けにスキンを作りたい人のためのものです。スキンは `@be-music/player-skin-sdk` パッケージに対して書きます。組み込みスキンもまさにこのパッケージだけを使っており、Synesthesia・Phantom・Lattice・Plain はプレイヤーの他の部分を一切 import していません。組み込みスキンにできることは、あなたのスキンにもできます。
 
 be-music スキンはデータファイルではなくコードです。LR2 / beatoraja テーマはシーンが解釈しますが、be-music スキンはすべての画面を自分で描きます。それ以外はすべてプレイヤーの担当です。
 
@@ -16,18 +16,18 @@ be-music スキンはデータファイルではなくコードです。LR2 / be
 
 SDK 自体は描画を行わず、描画フレームワークも import しません。キャンバスは、スキンに合ったもので描いてください。
 
-| 描画手段                      | `context`                           | 方法                                                                               | 作例                                                                                      |
-| ----------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Canvas 2D API                 | `'2d'`                              | そのまま描く。キャンバスはクリア済みで、デザインピクセルにスケール済み             | Plain（`packages/player-web/src/skins/plain/`）                                           |
-| PixiJS                        | `'webgl2'`                          | `setup` でキャンバス上に Pixi レンダラーを作り、シーングラフを組んで `draw` で描画 | Synesthesia、Phantom、Lattice（`packages/player-web/src/skins/`、`skins/pixi-kit/` 経由） |
-| three.js、素の WebGL / WebGPU | `'webgl'` / `'webgl2'` / `'webgpu'` | `setup` でレンダラーやパイプラインを作り、`draw` で描画し、`teardown` で解放       | —                                                                                         |
+| 描画手段                      | `context`                           | 方法                                                                               | 作例                                                                                          |
+| ----------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Canvas 2D API                 | `'2d'`                              | そのまま描く。キャンバスはクリア済みで、デザインピクセルにスケール済み             | Plain（`packages/player-browser/src/skins/plain/`）                                           |
+| PixiJS                        | `'webgl2'`                          | `setup` でキャンバス上に Pixi レンダラーを作り、シーングラフを組んで `draw` で描画 | Synesthesia、Phantom、Lattice（`packages/player-browser/src/skins/`、`skins/pixi-kit/` 経由） |
+| three.js、素の WebGL / WebGPU | `'webgl'` / `'webgl2'` / `'webgpu'` | `setup` でレンダラーやパイプラインを作り、`draw` で描画し、`teardown` で解放       | —                                                                                             |
 
 フレームワークは、スキン自身の依存として同梱します。Plain は意図的に小さく読みやすく作ってあるので、出発点としてコピーして使えます。縦向きの画面への対応の仕方も示しています（[縦向きに対応する](#縦向きに対応する)を参照）。
 
 ## クイックスタート: Canvas 2D スキン
 
 ```ts
-import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin, resolveLaneRuns } from '@be-music/skin-sdk';
+import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin, resolveLaneRuns } from '@be-music/player-skin-sdk';
 
 export default defineBeMusicSkin({
   apiVersion: BE_MUSIC_SKIN_API_VERSION,
@@ -79,7 +79,7 @@ export default defineBeMusicSkin({
 
 `setup` でサーフェスのキャンバス上にフレームワークのレンダラーを作り、`teardown` で解放します。`setup` はサーフェスごとに最初の描画前に 1 回呼ばれ、Promise を返すとプレイヤーはその完了を待ちます。サーフェスは画面ごとにあります（ゲームプレイ 1 つ、選曲画面ごと 1 つ、決定画面ごと 1 つ、リザルト画面ごと 1 つ）。
 
-スキンの登録から画面の終わりまでの、1 つのサーフェスの一生です（`@be-music/player-web` の `skin/be-music/registry.ts` と `binding.ts`）。
+スキンの登録から画面の終わりまでの、1 つのサーフェスの一生です（`@be-music/player-browser` の `skin/be-music/registry.ts` と `binding.ts`）。
 
 ```mermaid
 sequenceDiagram
@@ -106,7 +106,7 @@ sequenceDiagram
 
 ```ts
 import { WebGLRenderer, Container } from 'pixi.js';
-import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin } from '@be-music/skin-sdk';
+import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin } from '@be-music/player-skin-sdk';
 
 const renderers = new WeakMap<HTMLCanvasElement, WebGLRenderer>();
 
@@ -208,10 +208,10 @@ export default defineBeMusicSkin({
 
 ### 縦向きに対応する
 
-縦向き対応はオプトインです。Plain（`packages/player-web/src/skins/plain/`）がその実例です。`index.ts` でオプトインし、`layout.ts` で縦向きの配置をテスト付きの素の関数として求め、各画面のファイルがサーフェスの向きで描き分けています。
+縦向き対応はオプトインです。Plain（`packages/player-browser/src/skins/plain/`）がその実例です。`index.ts` でオプトインし、`layout.ts` で縦向きの配置をテスト付きの素の関数として求め、各画面のファイルがサーフェスの向きで描き分けています。
 
 ```ts
-import { defineBeMusicSkin, resolveStageOrientation, tallStage } from '@be-music/skin-sdk';
+import { defineBeMusicSkin, resolveStageOrientation, tallStage } from '@be-music/player-skin-sdk';
 
 export default defineBeMusicSkin({
   // …メタデータ…
@@ -318,13 +318,13 @@ runtime のフィールドはすべて省略可能です。ホストが提供で
 - **`select.outroMs`:** 曲決定後のアウトロの長さ。終わるまで `frame.launchAt` を設定したまま描画が続き、その間の入力は無視されます。
 - **`select.draw(surface, frame)`** は `BeMusicSelectFrame` を受け取ります。
   - `entries`、`selectedIndex`、`firstVisibleIndex`、`visibleRows`、`focusedChart`（カーソル位置の譜面のバー）、`focusedCourse`
-  - `entries` の各要素は `LibraryEntry` です（`@be-music/scene-model` の型で、SDK が `LibraryChart`・`LibraryFolder`・`LibraryCourse`・`LibraryCourseStage`・`ChartSourceKind` とともに再 export します）。`{ kind: 'folder', folder }`（譜面フォルダは `folder.charts`、コースフォルダは `folder.courses` を並べます）、`{ kind: 'chart', chart }`、`{ kind: 'course', course }`（`course.stages` の各ステージは、見つかった譜面を `chart` に持ちます）のいずれかです。行の文言は `browseEntryTitle`・`browseEntryCount`・`browseEntryBadge` で、フォーカス中のコースのカードは `describeCourseCard` で得られます。
+  - `entries` の各要素は `LibraryEntry` です（`@be-music/player-scene-model` の型で、SDK が `LibraryChart`・`LibraryFolder`・`LibraryCourse`・`LibraryCourseStage`・`ChartSourceKind` とともに再 export します）。`{ kind: 'folder', folder }`（譜面フォルダは `folder.charts`、コースフォルダは `folder.courses` を並べます）、`{ kind: 'chart', chart }`、`{ kind: 'course', course }`（`course.stages` の各ステージは、見つかった譜面を `chart` に持ちます）のいずれかです。行の文言は `browseEntryTitle`・`browseEntryCount`・`browseEntryBadge` で、フォーカス中のコースのカードは `describeCourseCard` で得られます。
   - 以前の SDK からの移行: 譜面のバーの種類は `'song'` から `'chart'` になりました。`entry.song` は `entry.chart`、`folder.songs` は `folder.charts`、`stage.song` は `stage.chart` で読みます。`Browser*` の型の別名は削除しました。`BrowserSongEntry` は `LibraryChart`、`BrowserFolderNode` は `LibraryFolder`、`BrowserCourseEntry` は `LibraryCourse`、`BrowserCourseStage` は `LibraryCourseStage`、`BrowserBrowseEntry` は `LibraryEntry`、`BrowserSongSourceKind` は `ChartSourceKind` です。
   - `listScroll`: リストが後ろのエントリ側へ引かれている量（デザインピクセル、1 行未満）。指でドラッグしている間、スワイプ後に慣性で流れている間、トラックパッドでスクロールしている途中は 0 以外になり、静止時とリストの端では 0 です。行を `selectListRows(frame, rowHeight)` で並べると、リストが指に追随します。各行の小数の `slot`（上端は `listTop + slot * rowHeight`）と、表示範囲の端にかかった行を薄くする `alpha` が得られます。無視したスキンは 1 行ずつスクロールします。
   - `folderLabel`、`searchQuery`、`searchEditing`（検索ボックスの上のホストの入力欄でプレイヤーが入力中。ボックスは描き、文字は描かない）、`totalCharts`
   - `actions`: `play`、`autoPlay`、`activateSearch`、`setPlayOption(key, value)`、`cyclePlayOption(key, step?)`（step は 1 か -1、端で折り返し）、`toggleReadme()`（フォーカス中の曲の `.txt` を開閉）
   - `playOptions`（`BeMusicPlayOptions`: ハイスピード、ランダム、ゲージ、HIDDEN / SUDDEN、レーンカバー、BGA、リストのフィルタなど）と `playOptionChoices`（列挙型・オンオフのオプションが取りうる値）。選択肢にない値は無視されます。`hiSpeed` と `shutter` は任意の数値を受け付けて範囲内に丸められ、`cyclePlayOption` では変わりません。
-  - `chartBestRecord(song)`: ホストが遊ぶ判定ルールセットでの、その譜面のプレイヤーのベスト記録（`BeMusicChartBestRecord`。`@be-music/player/records` の `BestRecord`: `{ lamp, exScore?, maxCombo?, missCount?, playCount? }`）。ホストが記録を持たなければ `undefined`。`lamp` は `BeMusicClearLamp`（`@be-music/player/ruleset` の `ClearLamp`）で、悪い順に `NO_PLAY`、`FAILED`、`ASSIST_EASY`、`EASY`、`NORMAL`、`HARD`、`EX_HARD`、`FULL_COMBO`、`PERFECT`、`MAX`
+  - `chartBestRecord(song)`: ホストが遊ぶ判定ルールセットでの、その譜面のプレイヤーのベスト記録（`BeMusicChartBestRecord`。`@be-music/player-engine/records` の `BestRecord`: `{ lamp, exScore?, maxCombo?, missCount?, playCount? }`）。ホストが記録を持たなければ `undefined`。`lamp` は `BeMusicClearLamp`（`@be-music/player-engine/ruleset` の `ClearLamp`）で、悪い順に `NO_PLAY`、`FAILED`、`ASSIST_EASY`、`EASY`、`NORMAL`、`HARD`、`EX_HARD`、`FULL_COMBO`、`PERFECT`、`MAX`
   - `courseBestRecord?(course)`: コースバーでのプレイヤーのベスト記録（`BeMusicCourseBestRecord`: `BeMusicChartBestRecord` に、ベストの値で取れる最高のトロフィー `trophy?` を加えたもの）。遊んだことのないコース、ランダムコース、NEW COURSE バーでは `undefined`。これより古いホストにはありません。`describeCourseCard(course, record)` は、コースカードの説明行にベストのランプとトロフィーを加えます
   - `pointer`: デザインピクセルでのポインタ位置。なければ `undefined`
   - `settings` と `chartImage`: [スキン設定](#スキン設定)と[曲の画像](#曲の画像)を参照
@@ -533,14 +533,14 @@ SDK は、フレームやヘルパーが使う型も export しています。�
 
 ## パッケージングと読み込み
 
-- **インストール:** `@be-music/skin-sdk` をスキンの依存に追加します（`npm install @be-music/skin-sdk`）。使う描画フレームワークも同様です。`@be-music/player-web` は不要です。
-- **import の範囲:** スキンモジュールが import するのは `@be-music/skin-sdk`、選んだ描画フレームワーク、自身のファイルです。組み込みスキンもテストでこのルールを守らされているので、組み込みスキンがプレイヤーから使っているものはすべて使えます。
+- **インストール:** `@be-music/player-skin-sdk` をスキンの依存に追加します（`npm install @be-music/player-skin-sdk`）。使う描画フレームワークも同様です。`@be-music/player-browser` は不要です。
+- **import の範囲:** スキンモジュールが import するのは `@be-music/player-skin-sdk`、選んだ描画フレームワーク、自身のファイルです。組み込みスキンもテストでこのルールを守らされているので、組み込みスキンがプレイヤーから使っているものはすべて使えます。
 - **export:** スキンはモジュールの default export にします。
 - **ホスト側:** ホストはスキンをレジストリに登録します。
 
   ```ts
-  import { createPlayScene } from '@be-music/player-web/host';
-  import { BUILT_IN_BE_MUSIC_SKINS, createBeMusicSkinRegistry } from '@be-music/player-web/skin';
+  import { createPlayScene } from '@be-music/player-browser/host';
+  import { BUILT_IN_BE_MUSIC_SKINS, createBeMusicSkinRegistry } from '@be-music/player-browser/skin';
   import mySkin from 'my-be-music-skin';
 
   const skins = createBeMusicSkinRegistry(BUILT_IN_BE_MUSIC_SKINS);

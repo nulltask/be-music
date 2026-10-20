@@ -46,19 +46,19 @@ jobs:
       # Migrations run before the Leaderboard deploys, so each must work with the code still running (expand →
       # switch → contract; docs/leaderboard.md section 2.1).
       - name: Migrate the Leaderboard database
-        run: pnpm --filter @be-music/leaderboard-api run "db:migrate:$DB_ENV"
+        run: pnpm --filter @be-music/app-leaderboard run "db:migrate:$DB_ENV"
 
       - name: Migrate Accounts
-        run: pnpm --filter @be-music/accounts run "db:migrate:$DB_ENV"
+        run: pnpm --filter @be-music/app-accounts run "db:migrate:$DB_ENV"
 
       - name: Deploy Accounts
-        run: pnpm --filter @be-music/accounts run "deploy$SUFFIX"
+        run: pnpm --filter @be-music/app-accounts run "deploy$SUFFIX"
 
       - name: Deploy the Leaderboard
-        run: pnpm --filter @be-music/leaderboard-api run "deploy$SUFFIX"
+        run: pnpm --filter @be-music/app-leaderboard run "deploy$SUFFIX"
 
       - name: Deploy the Player
-        run: pnpm --filter @be-music/play run "deploy$SUFFIX"
+        run: pnpm --filter @be-music/worker-play run "deploy$SUFFIX"
 
       - name: Deploy the Dashboard
-        run: pnpm --filter @be-music/dashboard run "deploy$SUFFIX"
+        run: pnpm --filter @be-music/app-dashboard run "deploy$SUFFIX"
