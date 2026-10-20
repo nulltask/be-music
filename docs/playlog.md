@@ -107,9 +107,9 @@ In the browser player:
 - Every play screen (`createPlayScene`) hands the recorded log to `on.finish(result, playlog)`, and
   `waitForPlaylog()` waits for the log of a play that was left.
 - The demo auto-downloads the log as `<title>-<timestamp>.bmplay.json` when the result scene mounts, controlled by
-  the **Auto-save play history** checkbox in the Debug Menu's **Library & records** folder (OFF by default). Play-log options are latched at song start
-  and cannot change mid-play — the controls are disabled while a song is playing, and the values in effect when
-  the song started govern that play.
+  the **Auto-save play history** checkbox in the Debug Menu's **Library & records** folder (OFF by default). Play log options are latched at chart start
+  and cannot change mid-play — the controls are disabled while a chart is playing, and the values in effect when
+  the chart started govern that play.
 - The Debug Menu's **Play options** folder covers the recorded play settings: auto play, gauge, Random 1P/2P, DP
   flip, and auto scratch; the judge windows (LR2 / beatoraja / IIDX) are in its **Developer** folder. Where the LR2
   select screen's PLAY OPTION panel has a counterpart, the two surfaces two-way sync. Its **Replay / ghost** subfolder picks what a
@@ -165,7 +165,7 @@ owns the whole decision surface:
 - the gauge line-up and its curve, TOTAL default, guts softening, and clear rule
 - the score formula and the EX-SCORE denominator
 
-The same tables drive the live engine and the play-log simulator, and an equivalence suite
+The same tables drive the live engine and the play log simulator, and an equivalence suite
 ([`equivalence.test.ts`](../packages/player/src/playlog/equivalence.test.ts)) replays one recorded input stream
 through both and requires them to agree judge for judge. The selected ruleset is recorded as `play.judgeRuleset`
 and replays re-apply it automatically.
@@ -178,14 +178,14 @@ and IIDX has no HAZARD so `DEATH` folds onto `EX-HARD`).
 
 ## Replay playback
 
-Dropping a `*.bmplay.json` file onto the browser player starts replay playback when the matching song is loaded
-(dropping the song folder together with the log works too — the songs load first). Matching prefers the chart-file
+Dropping a `*.bmplay.json` file onto the browser player starts replay playback when the matching chart is loaded
+(dropping the chart folder together with the log works too — the charts load first). Matching prefers the chart-file
 hash (`chart.sha256` — stable across sessions and file moves), then the recorded `play.native.chartPath`, then a
 title + artist fallback for older logs.
 
 Replay re-drives the recorded input stream deterministically inside the shared engine
 (`PlayerOptions.replayInputs`): every event fires at its exact chart-relative microsecond timestamp, live lane
-input is ignored (ESC / pause / hi-speed keep working), and no new play-log is recorded for the run. Because the
+input is ignored (ESC / pause / hi-speed keep working), and no new play log is recorded for the run. Because the
 log stores the resolved note arrangement, the chart prepare re-applies the recorded channels onto the freshly
 loaded chart (`applyPlaylogArrangement`) instead of re-rolling RANDOM / MIRROR — so shuffled plays replay exactly.
 The chart's `#RANDOM` / `#SWITCH` lines are resolved with the log's `play.randomDraws`, so a replay plays the

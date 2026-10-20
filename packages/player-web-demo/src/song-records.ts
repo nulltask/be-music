@@ -75,7 +75,7 @@ export function courseStageRecordKey(
 
 /**
  * The key a chart's record is stored under, before its judge ruleset ({@link rulesetRecordKey}): its chart-file SHA-256
- * when known (stable across sessions, machines, and file moves — the same hash the play-logs record), else its chart
+ * when known (stable across sessions, machines, and file moves — the same hash the play logs record), else its chart
  * path inside the dropped library.
  */
 export function songRecordKey(song: Pick<LibraryChart, 'chartPath'>, chartSHA256: string | undefined): string {

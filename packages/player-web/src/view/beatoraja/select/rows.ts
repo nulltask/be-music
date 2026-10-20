@@ -981,7 +981,7 @@ export class BeatorajaSelectRows {
 
 /**
  * `LibraryChart.playLevel` arrives as either a number (BMS `#PLAYLEVEL 12`) or a string
- * (some BMSON files / BMS variants store it as text). The skin's `value[]` resolver expects
+ * (some bmson files / BMS variants store it as text). The skin's `value[]` resolver expects
  * a number, so we coerce — strings parse via `parseInt`; non-finite results return
  * `undefined` so the digit panel shows blanks rather than NaN garbage.
  */

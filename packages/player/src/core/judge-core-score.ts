@@ -98,7 +98,7 @@ export function badWindowSeconds(config: JudgeCoreConfig): number {
 /**
  * How long past its own time a note stays reachable, in seconds. Resolved from the window set active at THAT NOTE's
  * time and on THAT NOTE's lane: a mid-chart `#EXRANKxx` must not retroactively move the deadline of notes that had
- * already scrolled past under the old rank. The play-log simulator freezes the same per-note deadline.
+ * already scrolled past under the old rank. The play log simulator freezes the same per-note deadline.
  */
 export function resolveMissDeadlineSeconds(config: JudgeCoreConfig, note: TimedPlayableNote): number {
   return resolveNoteLateReachUs(config, note) / 1e6;
@@ -115,7 +115,7 @@ function resolveNoteLateReachUs(config: JudgeCoreConfig, note: TimedPlayableNote
 
 /**
  * A chart instant in whole microseconds, the play log's clock. Timed judgments (tails, misses, auto notes, mines) are
- * scheduled on it, so the engine and the play-log simulator see the same instants and the same ties.
+ * scheduled on it, so the engine and the play log simulator see the same instants and the same ties.
  */
 export function toJudgeUs(seconds: number): number {
   return Math.round(seconds * 1e6);
@@ -269,7 +269,7 @@ export function noteOwesTailMiss(ruleset: RulesetConfig, note: TimedPlayableNote
 /**
  * True once judging has stopped: the survival gauge emptied in a play that ends on failure
  * (`JudgeCoreConfig.endOnFailure`). Nothing after the judgment that emptied it counts — no tally, combo, gauge or
- * fast / slow — as in the play-log simulator, which checks the same at the same points.
+ * fast / slow — as in the play log simulator, which checks the same at the same points.
  */
 export function isJudgingClosed(state: JudgeCoreState): boolean {
   return state.config.endOnFailure && state.summary.gauge?.failedMidPlay === true;

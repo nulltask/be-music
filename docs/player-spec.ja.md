@@ -227,7 +227,7 @@ bmson の `l`、FREE ZONE (`17` / `27`)、BMS の `#LNOBJ`、BMS legacy LN (`#mm
 地雷チャンネルは、対応する playable lane に写像したうえで別配列として保持します。
 地雷は `summary.total` に含めません。
 
-地雷がいつ爆発するかは判定 ruleset が決めます（[`definitions.ts`](../packages/player/src/ruleset/definitions.ts) の `mineTrigger`）。engine と play-log simulator は同じ規則を使います。ダメージモデルはどの ruleset でも同じです（beatoraja `JudgeManager` で確認）。
+地雷がいつ爆発するかは判定 ruleset が決めます（[`definitions.ts`](../packages/player/src/ruleset/definitions.ts) の `mineTrigger`）。engine と play log simulator は同じ規則を使います。ダメージモデルはどの ruleset でも同じです（beatoraja `JudgeManager` で確認）。
 
 - `lr2` ruleset — LR2 のモデル（LR2 自身の changelog）。「**キーを押したまま地雷が判定線を通過**」または「**地雷が判定線の `PGREAT` 窓以内にあるときの押下**」で爆発します。キーが押されていない地雷の通過は無害で、通過後かつ `PGREAT` 圏外の押下も無害です。
 - `beatoraja` ruleset — beatoraja のモデル（`JudgeManager` L244）。「**地雷が判定線を通過する瞬間にキーが押されている**」ときだけ爆発します。少し前に押して通過前に離した場合や、通過後の押下では何も起きません。
@@ -881,7 +881,7 @@ Music Select の focus は directory ごとに保存し、chart だけでなく 
 
 - 曲名、ジャンル、プレイモード、BPM、SCROLL、STOP
 - progress、現在小節、判定窓、HIGH-SPEED
-- NOTES / EX-SCORE / SCORE / judge counts / FAST / SLOW
+- NOTES / EX-SCORE / SCORE / judgment counts / FAST / SLOW
 - レーン本体、judge/combo、入力キー、groove gauge
 - 必要に応じて RANDOM 要約、BGA、audio debug 行
 

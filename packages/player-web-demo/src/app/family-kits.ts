@@ -141,7 +141,7 @@ export class FamilyKits {
 
   /**
    * Whether a play of `song` runs on the beatoraja play screen: the gameplay family says so, whatever the play is (a
-   * replay and a stitched NONSTOP chart included: the play session carries the play-log arrangement and the per-stage
+   * replay and a stitched NONSTOP chart included: the play session carries the play log arrangement and the per-stage
    * audio for every family). Every path into gameplay — `playSong`, and the decide splash deciding what to preload — asks
    * this one question.
    */

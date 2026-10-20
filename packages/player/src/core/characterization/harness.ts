@@ -71,7 +71,7 @@ export interface TestAudioSessionOptions {
 export interface CharacterizationPlay {
   driver: CharacterizationDriver;
   chart: BeMusicJSON;
-  /** Engine options over the harness's own (no lead-in, the test runtimes and callbacks, play-log recording). */
+  /** Engine options over the harness's own (no lead-in, the test runtimes and callbacks, play log recording). */
   options?: PlayerOptions;
   script?: readonly ScriptStep[];
   /**
@@ -432,7 +432,7 @@ const SHARED_PARTS: ReadonlyArray<readonly string[]> = [
 ];
 
 /**
- * The snapshot form of the plays of one case: volatile play-log fields dropped (`createdAt`, the recorder's engine
+ * The snapshot form of the plays of one case: volatile play log fields dropped (`createdAt`, the recorder's engine
  * version), every number rounded to a millionth (so reordering float arithmetic does not churn the snapshots while any
  * real change still shows), and a large part that equals an earlier play's written as `"(same as <play>)"`.
  */

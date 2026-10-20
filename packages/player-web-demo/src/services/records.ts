@@ -54,7 +54,7 @@ export class RecordsService {
   }
 
   /**
-   * SHA-256 and MD5 (lowercase hex) of a song's source chart file, cached per entry id — the hashes feed the play-log
+   * SHA-256 and MD5 (lowercase hex) of a song's source chart file, cached per entry id — the hashes feed the play log
    * recording (`chart.sha256` / `chart.md5`) and dropped-log matching, and chart files are small enough that hashing
    * the whole library on a dropped log stays cheap.
    */

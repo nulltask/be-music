@@ -445,7 +445,7 @@ describe('judge core', () => {
 
     expect(state.summary.poor).toBe(5);
     expect(isJudgeCoreSettled(state)).toBe(true); // finish settles every pending timed judgment at its own instant
-    // Each note is missed at its own deadline, as the play-log simulator does, rather than charged in one batch.
+    // Each note is missed at its own deadline, as the play log simulator does, rather than charged in one batch.
     expect(effects.filter((effect) => effect.kind === 'judge-combo')).toHaveLength(5);
   });
 

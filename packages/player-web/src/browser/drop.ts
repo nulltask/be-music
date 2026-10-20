@@ -73,7 +73,7 @@ export function splitDroppedSongAndThemeFiles<TFile extends BrowserDropFileLike>
 
 /**
  * Returns a predicate telling which dropped paths must be opened as soon as the drop lands: everything that
- * {@link splitDroppedSongAndThemeFiles} would route to the theme side, play-logs (`.bmplay.json`) and archives
+ * {@link splitDroppedSongAndThemeFiles} would route to the theme side, play logs (`.bmplay.json`) and archives
  * (`.zip`). The remaining paths are song-bundle files — charts, audio, BGA — which the song loader only reads on
  * demand, so the drop walk can leave them as unopened handles instead of paying a `FileSystemFileEntry.file()` call
  * for each of them up front.

@@ -1,9 +1,9 @@
 /**
- * Play-log adapter over the shared ruleset definitions.
+ * Play log adapter over the shared ruleset definitions.
  *
  * The tables themselves live in `../ruleset/` so the live engine and the simulator share one source of truth;
  * this module only turns a {@link BeMusicPlaylog} into the neutral {@link RulesetChartFacts} the tables take, and
- * re-exports the ruleset surface the play-log API has always exposed.
+ * re-exports the ruleset surface the play log API has always exposed.
  */
 import {
   createEmptyRulesetNoteCounts,
@@ -17,7 +17,7 @@ import type { PlaylogRulesetId, ResolveRulesetOptions, RulesetCourseOptions } fr
 
 export * from '../ruleset/index.ts';
 
-/** Derives the ruleset's chart facts from a recorded play-log. */
+/** Derives the ruleset's chart facts from a recorded play log. */
 export function rulesetChartFactsFromPlaylog(playlog: BeMusicPlaylog): RulesetChartFacts {
   const chart = playlog.chart;
   const notes = createEmptyRulesetNoteCounts();
@@ -43,7 +43,7 @@ export function rulesetChartFactsFromPlaylog(playlog: BeMusicPlaylog): RulesetCh
 
 /**
  * Resolves the ruleset a recorded play should be re-simulated under. Thin wrapper over {@link resolveRuleset}
- * that supplies the play-log's own gauge pick and debug judge-window override.
+ * that supplies the play log's own gauge pick and debug judge-window override.
  */
 export function resolveRulesetConfig(
   playlog: BeMusicPlaylog,

@@ -4,14 +4,14 @@ import type { JudgeStrategy, PlayJudge } from './play-strategy.ts';
 import { createPlayJudgeCore, judgeCoreJudge, writeManualIntro } from './play-manual.ts';
 
 /**
- * The replay judge strategy: the manual judge core re-driven by a recorded play-log input stream
+ * The replay judge strategy: the manual judge core re-driven by a recorded play log input stream
  * (`PlayerOptions.replayInputs`). It steps the core from one judgment instant to the next (`advanceJudgeCoreReplay`)
  * up to each tick's chart time, so the replayed judgments depend on neither tick timing nor `speed`. Live lane and key
  * input is ignored; pause, HIGH-SPEED, tempo, view and interrupt commands still work.
  *
  * The recorded inputs are replayed as they are. A log recorded before the engine inferred releases for input that
  * reports none (a terminal without the kitty keyboard protocol) has only presses, so each key stays down from its press
- * to the end of the play and every key repeat is a press of its own, as the play-log simulators read it.
+ * to the end of the play and every key repeat is a press of its own, as the play log simulators read it.
  */
 function createReplayJudge(session: PlaySession): PlayJudge {
   const { applyJudgeEffect } = session;

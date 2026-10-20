@@ -26,7 +26,7 @@ import {
 export { PlaylogParseError } from './parse.ts';
 
 /**
- * be-music play-log ("playlog") format.
+ * be-music play log ("playlog") format.
  *
  * A playlog is an INPUT REPLAY, not a result log: the canonical payload is the resolved chart that actually
  * scrolled past the player (post `#RANDOM`, post lane-shuffle / DP-flip), the raw key press / release stream, and
@@ -242,7 +242,7 @@ export interface PlaylogJudgeCounts {
   good: number;
   bad: number;
   poor: number;
-  /** LR2-style empty POOR count — never part of the judge counters above. */
+  /** LR2-style empty POOR count — never part of the judgment counters above. */
   emptyPoor: number;
 }
 

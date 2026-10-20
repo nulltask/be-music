@@ -138,7 +138,7 @@ export interface DemoGUIState extends PlayTempoSettings {
    */
   judgedNoteDisplay: 'KEEP_SCROLLING' | 'HIDE';
   /**
-   * When true (off by default), the play-log (`*.bmplay.json` input replay — see `@be-music/player/playlog`) recorded
+   * When true (off by default), the play log (`*.bmplay.json` input replay — see `@be-music/player/playlog`) recorded
    * during gameplay is automatically downloaded the moment the result scene mounts, for both the LR2/default and
    * beatoraja result paths. Toggled from the Debug Menu's "Auto-save play history" checkbox.
    */
@@ -169,7 +169,7 @@ export interface DemoGUIState extends PlayTempoSettings {
   /**
    * The compat ruleset the shared engine judges under (`PlayerOptions.judgeRuleset`): LR2 (default) / beatoraja / IIDX.
    * It owns every judge rule: the windows, note selection, empty POOR, the long-note style, the gauge and the score.
-   * Latched at song start (the Play options folder is disabled during a play) and recorded into the play-log.
+   * Latched at song start (the Play options folder is disabled during a play) and recorded into the play log.
    */
   judgeRuleset: PlaylogRulesetId;
   /**

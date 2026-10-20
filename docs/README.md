@@ -7,7 +7,7 @@ This directory is a Markdown collection of specifications used in the `be-music`
 - [Architecture: the chart layers, the engine and the package layers](./architecture.md)
 - [Architecture decisions](./adr/README.md)
 - [BMS implementation specification](./bms-spec.md)
-- [BMSON implementation specification](./bmson-spec.md)
+- [bmson implementation specification](./bmson-spec.md)
 - [BMS / bmson compatibility notes (de jure vs de facto)](./format-compat.md)
 - [LR2 and beatoraja semantics](./semantics-lr2-beatoraja.md)
 - [Bemuse implementation specification](./bemuse-spec.md)
@@ -24,7 +24,7 @@ This directory is a Markdown collection of specifications used in the `be-music`
 - [LR2 skin implementation notes](./lr2-skin.md)
 - [beatoraja skin implementation notes](./beatoraja-skin.md)
 - [Writing a be-music skin](./be-music-skin.md)
-- [BMS/BMSON intermediate representation (`@be-music/json`) implementation specification](./json-spec.md)
+- [BMS/bmson intermediate representation (`@be-music/json`) implementation specification](./json-spec.md)
 - [Glossary](./glossary.md)
 
 Supplement:

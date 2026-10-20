@@ -375,7 +375,7 @@ export const ja: Messages = {
   settings: {
     title: '設定',
     description: 'be-music Leaderboard のプロフィール。',
-    signedOutLead: 'ログインすると、ユーザー名・表示名・アイコンを変更できます。',
+    signedOutLead: 'ログインすると、ユーザー名・表示名・アバターを変更できます。',
     signIn: 'ログイン',
     signInLead: 'アカウントに登録したパスキー（端末の指紋認証や PIN）でログインします。',
     signInWithPasskey: 'パスキーでログイン',
@@ -390,10 +390,10 @@ export const ja: Messages = {
     name: '表示名',
     nameHint: '32 文字まで。',
     save: '保存',
-    icon: 'アイコン',
-    iconLead: '名前の横に表示されます。画像は正方形に切り抜き、256 px に縮小します。',
+    avatar: 'アバター',
+    avatarLead: '名前の横に表示されます。画像は正方形に切り抜き、256 px に縮小します。',
     upload: '画像をアップロード',
-    useGenerated: '自動生成のアイコンに戻す',
+    useGenerated: '自動生成のアバターに戻す',
     passkeys: 'パスキー',
     passkeysAnonymous:
       'いまは匿名で記録しています。パスキーを作るとアカウントとして保存され、ほかの端末からもログインできます。',

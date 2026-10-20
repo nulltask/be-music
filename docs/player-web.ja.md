@@ -56,7 +56,7 @@ pnpm run player:web
 
 この command は Vite demo を起動します。page には次のものを drop できます。
 
-- BMS/BMSON の楽曲 folder
+- BMS/bmson の楽曲 folder
 - 楽曲 folder を含む ZIP
 - LR2 theme folder
 - beatoraja theme folder

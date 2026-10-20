@@ -49,7 +49,7 @@ export interface RulesetWindowTables {
 
 export type PlaylogRulesetId = 'lr2' | 'beatoraja' | 'iidx';
 
-/** Every judge ruleset id, in the order the play-log simulators run them. */
+/** Every judge ruleset id, in the order the play log simulators run them. */
 export const PLAYLOG_RULESET_IDS: readonly PlaylogRulesetId[] = ['lr2', 'beatoraja', 'iidx'];
 
 /** Whether `value` names a judge ruleset. */
@@ -239,7 +239,7 @@ function resolveBeatorajaJudgeRank(chart: RulesetChartFacts, rankTable: readonly
   const exRank = chart.judgeRank.sourceExRank;
   if (chart.sourceFormat === 'bmson') {
     // bmson's judge_rank is the judgerank itself; a chart that omits it gets the format default, not BMS #RANK 2.
-    // Decided here rather than in the chart facts so a play-log, which records `sourceExRank` only when the chart sets
+    // Decided here rather than in the chart facts so a play log, which records `sourceExRank` only when the chart sets
     // it, resolves the same windows on replay.
     return typeof exRank === 'number' && exRank > 0 ? exRank : BMSON_DEFAULT_JUDGE_RANK;
   }
@@ -668,7 +668,7 @@ function resolveIIDXGauge(gaugeId: string, noteCount: number): GaugeSpec {
   }
 }
 
-/** Maps the play-log's LR2-family gauge pick onto each ruleset's own gauge id. */
+/** Maps the play log's LR2-family gauge pick onto each ruleset's own gauge id. */
 function resolveDefaultGaugeId(rulesetId: PlaylogRulesetId, playGauge: string): string {
   switch (playGauge) {
     case 'EASY':
@@ -723,7 +723,7 @@ function resolveEffectiveTotal(rulesetId: PlaylogRulesetId, chart: RulesetChartF
 /**
  * Builds the ruleset a play runs under, from chart facts plus the per-play choices.
  *
- * This is the single source of truth shared by the live engine and the play-log simulator: both produce a
+ * This is the single source of truth shared by the live engine and the play log simulator: both produce a
  * {@link RulesetChartFacts} from their own chart representation and get back the same tables.
  */
 export function resolveRuleset(

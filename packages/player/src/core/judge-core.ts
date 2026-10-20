@@ -239,7 +239,7 @@ function processReplayEventsUntil(
  * Advances a replay's judge state up to `untilSec`, stepping from one instant to the next: to each replay event's own
  * microsecond, and to the microsecond after each timed judgment ({@link nextTimedJudgmentUs}) — a tail, a miss
  * deadline, an AUTO SCRATCH note, a mine check — so every step settles the judgments of exactly one instant, in the
- * order the play-log simulator settles them. The state is stepped to each event's instant BEFORE the event is applied,
+ * order the play log simulator settles them. The state is stepped to each event's instant BEFORE the event is applied,
  * so a release resolves its long note before a later press on that lane can refresh the hold, and misses, tails and
  * presses reach the gauge in chart-time order — the gauge clamps at its bounds, so the order of judgments is part of
  * the result. The steps depend only on the chart and the inputs, never on how the calls are spaced.

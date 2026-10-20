@@ -7,7 +7,7 @@ import type { PlayerOptions, ResolvedPlayChart, ResolvePlayChartOptions } from '
 
 /*
  * The chart-side steps of a play, apart from the engine's audio and UI start-up so that runtime-neutral consumers (a
- * play-log verifier on a server) can rebuild the chart a play was played on without loading the driver.
+ * play log verifier on a server) can rebuild the chart a play was played on without loading the driver.
  */
 
 /**

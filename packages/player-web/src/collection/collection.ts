@@ -119,7 +119,7 @@ export async function loadSongCollectionFromDrop(
 }
 
 /**
- * Lists a drop's files. Files the host needs straight away (theme candidates outside chart directories, play-logs,
+ * Lists a drop's files. Files the host needs straight away (theme candidates outside chart directories, play logs,
  * archives) come back as opened `File`s; song-bundle files come back as {@link DeferredDroppedFile} handles that open
  * on first read. Pass theme-side files through {@link materializeDroppedFiles} before handing them to an API that
  * needs real `File`s.

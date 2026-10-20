@@ -62,7 +62,7 @@ import type { JudgeStrategy } from './play-strategy.ts';
 
 /**
  * A play session: everything a play is set up with before its loop runs — the chart resolved for play, the tempo clock,
- * the ruleset, the score, the play-log recorder, the UI / input buses and runtimes, the audio session, the no-TUI
+ * the ruleset, the score, the play log recorder, the UI / input buses and runtimes, the audio session, the no-TUI
  * trace and the realtime audio. The same for every judge strategy.
  */
 export interface PlaySession {

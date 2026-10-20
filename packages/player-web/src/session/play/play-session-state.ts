@@ -328,7 +328,7 @@ export class PlaySessionState {
    */
   playState: PlayState = createPlayState();
   /**
-   * Play-log assembled by the shared engine right before its play promise settles (`onPlaylogRecorded`). Snapshotted
+   * Play log assembled by the shared engine right before its play promise settles (`onPlaylogRecorded`). Snapshotted
    * into {@link getResultData} so the result host can offer it as a download.
    */
   playlog: BeMusicPlaylog | undefined;

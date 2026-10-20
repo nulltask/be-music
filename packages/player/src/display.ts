@@ -1,6 +1,6 @@
 /**
  * `@be-music/player/display`: what a host shows; nothing here changes a judgment. The notes of a play as the engine
- * times them, the scroll-distance mapper, the BGA cue on screen, the chart facts a song screen shows, time and key
+ * times them, the scroll-distance mapper, the BGA cue on screen, the chart facts a chart screen shows, time and key
  * labels, and the TUI's note-height and BGA resize options.
  *
  * The chart-side types these read (`LongNoteMode`, `ScrollTimelinePoint`, `SpeedTimelinePoint`, `BGACue`, the BGA

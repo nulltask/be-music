@@ -431,7 +431,7 @@ export const DEMO_APP_HTML = `
           <div class="help-lang is-active" data-lang="en">
             <section class="help-about">
               <p class="help-about-summary">
-                A browser-based BMS player. Drop in a folder containing BMS / BMSON charts and
+                A browser-based BMS player. Drop in a folder containing BMS / bmson charts and
                 play them straight from the page. It comes with two skins, Synesthesia and Plain
                 (Debug Menu → Built-in skin), and reads <strong>Lunatic Rave 2</strong> skins
                 (<code>.lr2skin</code>) and <strong>beatoraja</strong> skins
@@ -562,7 +562,7 @@ export const DEMO_APP_HTML = `
           <div class="help-lang" data-lang="ja" hidden>
             <section class="help-about">
               <p class="help-about-summary">
-                ブラウザ上で動作する BMS プレイヤーです。BMS / BMSON が入ったフォルダをドロップするだけでそのまま再生できます。
+                ブラウザ上で動作する BMS プレイヤーです。BMS / bmson が入ったフォルダをドロップするだけでそのまま再生できます。
                 内蔵スキンはシナスタジア (Synesthesia) とプレーン (Plain) の 2 種類です (Debug Menu → Built-in skin)。
                 <strong>Lunatic Rave 2</strong> のスキン (<code>.lr2skin</code>) と <strong>beatoraja</strong> のスキン (<code>.json</code> / <code>.luaskin</code>) も解釈するので、<code>LR2files</code> フォルダや beatoraja の <code>skin/</code> フォルダをページにドロップすれば既存のスキンをそのまま適用できます。
               </p>

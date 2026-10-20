@@ -59,7 +59,7 @@ export interface ResultRouteDeps {
   readonly beatoraja: Pick<BeatorajaThemeService, 'loadBeatorajaResultKit' | 'beatorajaThemeBGM'>;
   /** The be-music skin the built-in family draws with. */
   readonly builtIn: Pick<BuiltInThemeService, 'builtInKit'>;
-  /** A single play's play-log auto-save, by the setting latched at the play's start. */
+  /** A single play's play log auto-save, by the setting latched at the play's start. */
   readonly playlogAutoSave: Pick<PlaylogAutoSave, 'savePlay'>;
   /** Ranks a single play. */
   readonly leaderboard: Pick<LeaderboardPanel, 'maybeSubmit'>;

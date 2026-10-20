@@ -43,7 +43,7 @@ export class ReplayRoute {
   }
 
   /**
-   * Parses a dropped play-log file and starts replay playback when the matching song is loaded. Matching prefers
+   * Parses a dropped play log file and starts replay playback when the matching song is loaded. Matching prefers
    * the exact `chartPath` the log recorded (`play.native.chartPath`); older logs without it fall back to a
    * title + artist match. When no match (or the chart's `#RANDOM` roll differs so the resolved notes can't be
    * re-aligned), the failure lands in the status row instead of throwing — a bad drop must never wedge the UI.
@@ -75,7 +75,7 @@ export class ReplayRoute {
   }
 
   /**
-   * Finds the loaded song a play-log belongs to. Chart-file SHA-256 first (`chart.sha256`), then the recorded
+   * Finds the loaded song a play log belongs to. Chart-file SHA-256 first (`chart.sha256`), then the recorded
    * `chartPath`, then a title + artist heuristic for logs recorded before either rode along.
    */
   private async findSongForPlaylog(playlog: BeMusicPlaylog): Promise<LibraryChart | undefined> {

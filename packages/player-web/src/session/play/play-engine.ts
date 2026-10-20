@@ -527,7 +527,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       ...(ctx.options.replay !== undefined
         ? {
             // Replay playback — feed the recorded input stream; the engine ignores live lane input, and the run
-            // records no new play-log (replaying a replay would only duplicate the file). Auto scratch, the
+            // records no new play log (replaying a replay would only duplicate the file). Auto scratch, the
             // judge ruleset, the debug judge-window override, the end-on-failure flag and the course stage are
             // restored from the log so the judging setup matches the recording.
             replayInputs: ctx.options.replay.inputs,
@@ -550,7 +550,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
           }
         : {
             ...(ctx.options.judgeRuleset !== undefined ? { judgeRuleset: ctx.options.judgeRuleset } : {}),
-            // Play-log recording: the engine snapshots the resolved (post-shuffle) chart and the raw input
+            // Play log recording: the engine snapshots the resolved (post-shuffle) chart and the raw input
             // replay, then hands the assembled log here right before the play promise settles. The host reads it
             // back through `getResultData().playlog` for the result screen's auto-save.
             // What the player sees at the start; the changes during the play go in as `view` commands.

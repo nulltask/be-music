@@ -8,7 +8,7 @@ import type { BeMusicPlaylog, PlaylogInputEvent } from './format.ts';
 import type { PlaylogRulesetId } from '../ruleset/index.ts';
 
 /**
- * Golden-replay equivalence: the live engine and the play-log simulator must reach the SAME judgments from the
+ * Golden-replay equivalence: the live engine and the play log simulator must reach the SAME judgments from the
  * same inputs under the same ruleset. The engine judges against a wall-clock playback loop and the simulator
  * against a pure event queue, so agreement here is what makes a recorded log a faithful score reproduction rather
  * than an approximation.

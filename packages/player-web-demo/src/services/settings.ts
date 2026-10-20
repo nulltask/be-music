@@ -213,7 +213,7 @@ export function createDemoGUIState(inputs: DemoGUIStateInputs): DemoGUIState {
     // to the judgement line. The dropdown offers `'HIDE'` (gone the moment it is judged) as a preference.
     judgedNoteDisplay: 'KEEP_SCROLLING',
     // Play-history auto-save defaults OFF, so plays don't pile up downloaded files. Users who want every play's
-    // play-log (`*.bmplay.json`) preserved turn it on from the Debug Menu checkbox; it then downloads when the result
+    // play log (`*.bmplay.json`) preserved turn it on from the Debug Menu checkbox; it then downloads when the result
     // scene mounts.
     autoSavePlaylog: false,
     courseAutoAdvance: false,

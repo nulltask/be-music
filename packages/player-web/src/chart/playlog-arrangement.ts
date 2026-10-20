@@ -1,7 +1,7 @@
 import type { PlaylogNote } from '@be-music/player/playlog';
 
 /**
- * Re-applies a recorded play-log's note arrangement onto a freshly prepared chart for replay playback.
+ * Re-applies a recorded play log's note arrangement onto a freshly prepared chart for replay playback.
  *
  * A playlog stores the RESOLVED chart the player saw — post lane-shuffle (RANDOM / MIRROR / S-RANDOM) and post
  * DP-flip. A fresh chart prepare (with those options off) yields the same notes at the same times but with the
