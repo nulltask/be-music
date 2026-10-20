@@ -8,6 +8,16 @@ on:
   # Every pull request, stacked ones included, so a branch that targets another feature branch is verified too.
   pull_request:
   workflow_dispatch:
+    inputs:
+      compare_runners:
+        description: Compare test and benchmark duration on x64 and arm64 only
+        type: boolean
+        default: false
+      comparison_repeats:
+        description: Measured rounds per task and runner
+        type: choice
+        options: ['3', '1', '5']
+        default: '3'
 
 permissions:
   contents: read
@@ -20,6 +30,7 @@ concurrency:
 
 jobs:
   changes:
+    if: inputs.compare_runners != true
     runs-on: ubuntu-24.04-arm
     outputs:
       code_changed: ${{ steps.code.outputs.code }}
@@ -492,3 +503,74 @@ jobs:
       - name: Verify audio-renderer SEA bundle
         if: needs.changes.outputs.sea_audio_renderer_changed == 'true'
         run: node --conditions=source scripts/build-sea.ts --package audio-renderer --bundle-only
+
+  runner-comparison:
+    name: Compare (${{ matrix.architecture }}, ${{ matrix.task }})
+    if: github.event_name == 'workflow_dispatch' && inputs.compare_runners
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [test, benchmark]
+        architecture: [x64, arm64]
+        include:
+          - architecture: x64
+            runner: ubuntu-24.04
+          - architecture: arm64
+            runner: ubuntu-24.04-arm
+    env:
+      COMPARISON_TASK: ${{ matrix.task }}
+      COMPARISON_RUNNER: ${{ matrix.runner }}
+      COMPARISON_ARCHITECTURE: ${{ matrix.architecture }}
+      COMPARISON_REPEATS: ${{ inputs.comparison_repeats }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Vite+ without installation cache
+        uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
+        with:
+          node-version-file: .node-version
+          cache: false
+          run-install: false
+      - name: Measure dependency installation
+        run: node scripts/ci/runner-comparison.ts install
+      - name: Measure repeated task runs
+        run: node scripts/ci/runner-comparison.ts measure
+      - name: Upload measurements and logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: runner-comparison-${{ matrix.architecture }}-${{ matrix.task }}
+          path: tmp/runner-comparison/
+          retention-days: 14
+
+  runner-comparison-report:
+    name: Runner comparison report
+    needs: runner-comparison
+    if: github.event_name == 'workflow_dispatch' && inputs.compare_runners
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
+        with:
+          node-version-file: .node-version
+          cache: false
+          run-install: false
+      - name: Download measurements
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: runner-comparison-*
+          path: tmp/runner-comparison/
+      - name: Summarize results
+        run: |
+          node scripts/ci/runner-comparison.ts report
+          cat tmp/runner-comparison/comparison.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload comparison report
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: runner-comparison-report
+          path: tmp/runner-comparison/comparison.md
+          retention-days: 14
