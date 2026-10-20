@@ -1,7 +1,7 @@
 {
   "name": "@be-music/chart-writer",
   "version": "0.4.0",
-  "description": "Stringifier from be-music JSON charts to BMS or BMSON",
+  "description": "Writers for exporting be-music JSON chart sources to BMS or bmson",
   "license": "MIT",
   "bin": {
     "bms-stringify": "dist/cli.js"

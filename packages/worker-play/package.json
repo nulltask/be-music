@@ -2,6 +2,7 @@
   "name": "@be-music/worker-play",
   "version": "0.1.0",
   "private": true,
+  "description": "Cloudflare Worker serving the web player, authentication, API forwarding, and asset proxies",
   "type": "module",
   "scripts": {
     "deploy": "pnpm --filter @be-music/app-play run build:cf && cf deploy",

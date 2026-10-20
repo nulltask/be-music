@@ -1,7 +1,7 @@
 {
   "name": "@be-music/skin-lr2",
   "version": "0.2.0",
-  "description": "Renderer-independent Lunatic Rave 2 skin parser and theme loader for be-music",
+  "description": "Renderer-independent LR2 skin parsing, loading, and scene state resolution",
   "license": "MIT",
   "files": [
     "dist"

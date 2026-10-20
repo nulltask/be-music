@@ -1,7 +1,7 @@
 {
   "name": "@be-music/chart-source",
   "version": "0.3.0",
-  "description": "Internal BMS/BMSON intermediate representation for be-music",
+  "description": "JSON-compatible chart source types and helpers preserving BMS and bmson data",
   "license": "MIT",
   "files": [
     "dist"
