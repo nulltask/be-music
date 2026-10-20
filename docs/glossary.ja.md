@@ -11,13 +11,33 @@
 - **music / 曲 / 楽曲** は、タイトルとアーティストで人間が認識する作品単位です。1 つの music に複数の chart が属することがあります。
 - **song** は、このリポジトリの既定語ではありません。`song.mid`、`bemuse-song.json`、`songs[]` のような外部仕様名やファイル名をそのまま参照するときに使います。
 - **Music Select** は画面名です。この画面で選択・復元する単位は chart です。
-- 選曲画面が一覧するライブラリでは、chart は **ライブラリの譜面**（`LibraryChart`）です。譜面のバーは `{ kind: 'chart', chart }`、フォルダは `charts` を並べ、コースのステージは `chart` を指します。公開の名前の一部はまだ song のままです（`PlayResult.song`、`BrowserSongCollectionStore`、`BrowserSongAssetSource`、スキン SDK の `songRecord`、`BeMusicSongRecord`、`resolveSongStats`）。新しい名前は chart を使います。
+- 選曲画面が一覧するライブラリでは、chart は **ライブラリの譜面**（`LibraryChart`）です。譜面のバーは `{ kind: 'chart', chart }`、フォルダは `charts` を並べ、コースのステージは `chart` を指します。公開の名前の一部はまだ song のままです（`PlayResult.song`、`BrowserSongCollection`、`BeMusicSongRecord`、`resolveSongStats`、`CourseSongRecord`）。新しい名前は chart を使います。
+- 下の語を取り違えそうなときは、[同名でも別のもの](#同名でも別のもの) がどれを指すかを決めます。
+
+## 同名でも別のもの
+
+- **chart** / **music** / **chartset**。chart は譜面ファイル 1 つで、遊ぶ・選ぶ・保存する単位です。music はタイトルとアーティストで人が認識する作品で、1 つの作品に複数の chart が属することがあります。chartset は Leaderboard が保存するその作品で、BMS Search がまとめた譜面の束です。英語の本文では同じ束を work と書くことがあり、日本語の UI は作品です。まだ紐づいていない譜面は単独で表示します。
+- **song**。外部の名前だけに使います（`song.mid`、`bemuse-song.json`、`songs[]`、LR2 や beatoraja の song bar）。song と書いてある公開の名前の中身は chart です。
+- **play variant** / **key mode** / **lane mode** / **play mode**。play variant（`ChartPlayVariant`、`'5'` から `'48'`）はレーン配置とプレイスキンを決めます。key mode（`KeyMode`、数値）は選曲フィルタの鍵数で、bmson の `mode_hint` があれば variant より優先します。lane mode は Leaderboard が保存するラベル（`7keys`）です。play mode は `PLAY_MODE_LAYOUTS` の 1 行で、同じ鍵数を別レイアウトに分けることがあります（9 KEY の BME と PMS）。
+- **gauge type** / **gauge id**。gauge type はプレイヤーが選ぶゲージで、LR2 の名前です（`GROOVE`、`HARD`、`DEATH`、`EASY`）。gauge id は判定ルールセットが実際に動かすゲージです（`NORMAL`、`HAZARD`、`CLASS`）。`DEATH` は beatoraja では `HAZARD` です。
+- **skin** / **theme** / **family** / **kit**。skin はスキン定義 1 枚です。theme は落としたフォルダで、スキンに BGM とシステム音が加わります。family はどの描き方か（`built-in`、`lr2`、`beatoraja`）です。kit はホストが、その family の 1 画面に渡す材料です。
+- **library** / **collection**。library は選曲画面のモデル（`Library`、`LibraryChart`）です。collection はそれを埋めるブラウザの読み込み口（`BrowserSongCollection`、`./collection`）です。新しい読み込み口の名前は library にします。
+- **play log** / **replay** / **score** / **best record** / **PlayerSummary** / **play result**。play log は入力を記録したファイルです。replay はそのファイルを再生することで、リプレイの判定戦略でもあります。Leaderboard の score は投稿された 1 プレイです。`SCORE` と `EX-SCORE` は点数で、その行の名前ではありません。best record は 1 つの判定ルールセットでの最良のランプ、EX-SCORE、コンボ、BP です。`PlayerSummary` はプレイ終了時のエンジンの集計です。play result は、どのリザルト画面も読むペイロードです。
+- **IR**。譜面の IR は `BeMusicJSON` です。Internet Ranking は LR2 と beatoraja がオンラインランキングを呼ぶ名前で、このリポジトリでは Leaderboard です。Leaderboard を IR と呼ばないでください。
+- **hi-speed** / **HS-FIX** / **white number** / **play tempo**。hi-speed はノートの見た目の密度を変え、判定時刻は変えません。HS-FIX はその密度を測る BPM を選びます。white number は画面に出る hi-speed の数字です。play tempo（`speed`）は譜面そのものの進む速さで、判定時刻も変わります。テンポを変えたプレイは練習です。
+- **judge rank** / **DJ rank** / **play level** / **difficulty**。judge rank は `#RANK`、`#EXRANK`、bmson の `judge_rank` で、判定幅です。DJ rank は EX-SCORE の等級です。play level は譜面のレベル（☆）です。difficulty は BMS の `#DIFFICULTY`（1–5）です。
+- **stage**。course stage はコースの実行の中の 1 譜面です。skin stage はスキンが描く矩形（`BeMusicStage`、portrait stage）です。`STAGEFILE` はローディング画像です。
+- **option** / **op**。play options はプレイヤーが決める設定（ゲージ、レーンランダム、hi-speed）です。op は LR2 または beatoraja のスキンの、表示を決める番号です。custom option はスキン作者が宣言する選択肢です。
+- **preview**。chart preview は選曲画面の短い試聴音（`#PREVIEW`、bmson の `preview_music`）です。preview 環境は `devel` からのデプロイです。URL の自動読み込み（`?music=`）はどちらでもありません。
+- **BP** / **misses**。名前は BP です（`resolveMissCount`）。Leaderboard の英語で misses と書いてあるものは BP です。
+- **clear** / **clear lamp** / **trophy**。clear はゲージが譜面を生き延びたことです。clear lamp はその結果の等級（FAILED から MAX）です。trophy はコースの実行に対する賞で、ランプとは別です。
+- **random**。`#RANDOM` は制御構文です。random のレーンオプション（RANDOM、MIRROR など）はレーンの並びを変えます。選曲画面の random 項目は譜面を 1 つ引きます。この 3 つは結果を共有しません。
 
 ## 譜面とリソース
 
 - **BMS**: Be-Music Source 系のテキスト譜面形式です。`#TITLE`、`#WAVxx`、`#mmmcc:...` のようなヘッダ行とオブジェクト行で構成します。
 - **bmson**: JSON ベースの譜面形式です。`info`、`sound_channels`、`bga`、`lines` などの構造を持ちます。
-- **チャート (chart)**: 1 つの譜面ファイル、またはその再生単位です。Music Select では 1 entry が 1 chart に対応します。
+- **チャート (chart)**: 1 つの譜面ファイルであり、再生の単位です。Music Select では 1 entry が 1 chart に対応します。chartset は 1 つの作品に属する譜面を Leaderboard がまとめたもので、chart の別名ではありません。
 - **メタデータ (metadata)**: 曲名、アーティスト、ジャンル、コメント、`#STAGEFILE`、`#BACKBMP`、`#BANNER` など、譜面本体以外の付加情報です。
 - **リソース (resource)**: 譜面や skin から参照される音声、画像、動画、テキストなどの外部ファイルです。
 - **keysound**: ノートや BGM の発音に使う音声リソースです。BMS では主に `#WAVxx`、bmson では `sound_channels` が対応します。
@@ -70,7 +90,7 @@
 
 ## 内部モデル
 
-- **IR (`@be-music/json`)**: BMS/BMSON/JSON chart を共通表現として扱う内部中間表現です。外部交換フォーマットではありません。
+- **IR (`@be-music/json`)**: BMS/BMSON/JSON chart を共通表現として扱う内部中間表現（`BeMusicJSON`）です。外部交換フォーマットではありません。LR2 と beatoraja は Internet Ranking のことも IR と呼びますが、ここではその製品は Leaderboard です。
 - **pure IR**: `@be-music/json` が譜面意味論を持たず、正規化済みデータ構造と preservation data の保持に徹する設計方針です。
 - **sourceFormat**: その IR がもともと `bms`、`bmson`、`json` のどれから来たかを示す属性です。
 - **round-trip**: `parse -> IR -> stringify` の往復で、元の譜面構造をできるだけ再現することです。
@@ -100,20 +120,20 @@
 - **Sound / Visual status**: loading screen で audio 側と visual 側の進捗を別々に表示する状態です。
 - **structured log**: TUI 出力とは分離して書き出す NDJSON 実行ログです。通常は `~/.be-music/logs/player.ndjson` に出力します。
 - **video BGA streaming**: gameplay 開始前には動画 BGA の最初の frame だけを確保し、残りを gameplay 開始後に段階的に decode する方針です。
-- **プレイログ (playlog)**: 1 回のプレイの入力を記録したもの（`*.bmplay.json`）です。解決済み譜面、すべてのキーの押下と解放、プレイ設定を持ちます。`bms-playlog` は LR2、beatoraja、IIDX のルールセットでこれを再シミュレーションします。
+- **プレイログ (playlog)**: 1 回のプレイの入力を記録したファイル（`*.bmplay.json`）です。解決済み譜面、すべてのキーの押下と解放、プレイ設定を持ちます。`bms-playlog` は LR2、beatoraja、IIDX のルールセットでこれを再シミュレーションします。そのファイルを再生することは replay で、ファイルの別名ではありません。
 - **PlayerSummary**: 再生終了後の集計結果です。judge counts、FAST/SLOW、EX-SCORE、SCORE、gauge、clear state などを含みます。
 
 ## コース・記録・表示
 
 - **コースの実行（course run）**: コースを 1 回遊ぶこと。ステージを順に遊ぶか、NONSTOP では結合した 1 本のプレイです。1 回分として順位付け・記録します。_避ける語_: course session、course play。
-- **ステージ（stage）**: コースの実行の中の 1 譜面。
+- **ステージ（stage）**: コースの実行の中の 1 譜面。スキンの stage（`BeMusicStage`）と `#STAGEFILE` は別のものです。
 - **持ち越し（carry-in）**: ステージが始まるときのゲージ値・コースのコンボ・コースの最大コンボ。前のステージが残したものです。
 - **投げ（give up）**: コースの実行を ESC で抜けること。投げた実行は落ちた実行です。
 - **結合したプレイ（stitched play）**: NONSTOP のコースを遊ぶ 1 本の譜面。ステージをつなぎ方と配置に従って結合して作ります。
 - **判定ルールセット（judge ruleset）**: プレイを判定し順位付けする基準のゲーム。判定幅・ゲージ・ランプが決まります。`lr2`・`beatoraja`・`iidx`。
 - **ゲージの種類（gauge type）**: プレイヤーが選ぶゲージ。LR2 の名前で `GROOVE`・`HARD`・`DEATH`・`EASY`（`GaugeType`）。判定ルールセットはそれぞれ自分のゲージで遊ばせ、そのゲージはゲージ ID（`NORMAL`・`HAZARD`・`CLASS` など）で呼びます。
 - **クリアランプ（clear lamp）**: プレイで得たクリアの区分（FAILED〜MAX、`ClearLamp`）。判定ルールセットごとに付く範囲が違います。どのプレイも 1 つの規則で決めます（`@be-music/player/ruleset` の `resolveClearLamp`、`resolveCourseClearLamp`）。
-- **BP**: ミスの数。BAD・POOR・空 POOR に、コースでは判定されなかったノートを加えたもの（`resolveMissCount`）。
+- **BP**: BAD・POOR・空 POOR に、コースでは判定されなかったノートを加えたもの（`resolveMissCount`）。Leaderboard の英語で misses と書いてあるものはこの数です。
 - **自己ベスト（best record）**: 1 つの判定ルールセットで、譜面またはコースについてプレイヤーが持つ最良のクリアランプ・EX-SCORE・最大コンボ・BP（`BestRecord`。`@be-music/player/records` の規則で保ちます）。
 - **表示設定（view settings）**: 判定とは別に、プレイヤーが見ていたもの。ハイスピード、ハイスピード固定、表示時間、各サイドの SUDDEN+・HIDDEN+・LIFT です。_避ける語_: display options。
 - **プレイテンポ（play tempo）**: 譜面に対してプレイがどれだけ速く進むか（`speed`）。テンポを変えたプレイは練習扱いです。

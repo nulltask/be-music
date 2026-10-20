@@ -11,13 +11,33 @@ The definitions follow general BMS/BMSON terminology where possible, but priorit
 - **music** is a human-facing work unit such as a title and artist. One piece of music can have multiple charts.
 - **song** is not the default repository term. Use it only when referring to an external specification name or file name such as `song.mid`, `bemuse-song.json`, or `songs[]`.
 - **Music Select** is a screen name. The unit selected and restored on that screen is still a chart.
-- In the library a select screen browses, a chart is a **library chart** (`LibraryChart`): a chart bar is `{ kind: 'chart', chart }`, a folder lists its `charts` and a course stage names its `chart`. Some public names still say song (`PlayResult.song`, `BrowserSongCollectionStore`, `BrowserSongAssetSource`, the skin SDK's `songRecord`, `BeMusicSongRecord` and `resolveSongStats`); new names say chart.
+- In the library a select screen browses, a chart is a **library chart** (`LibraryChart`): a chart bar is `{ kind: 'chart', chart }`, a folder lists its `charts` and a course stage names its `chart`. Some public names still say song (`PlayResult.song`, `BrowserSongCollection`, `BeMusicSongRecord`, `resolveSongStats`, `CourseSongRecord`); new names say chart.
+- When two entries below could be swapped, [Words that are not synonyms](#words-that-are-not-synonyms) says which word names which thing.
 
-## Score And Resources
+## Words that are not synonyms
+
+- **chart** / **music** / **chartset**. A chart is one chart file, and the unit of play, selection and storage. Music is the work a person names by title and artist; one work can have several charts. A chartset is that work as the Leaderboard stores it, the charts BMS Search files together. English prose may say work for the same grouping; the Japanese UI says 作品. A chart that is not linked yet is shown on its own.
+- **song**. An external name only (`song.mid`, `bemuse-song.json`, `songs[]`, an LR2 or beatoraja song bar). Public names that still say song mean a chart.
+- **play variant** / **key mode** / **lane mode** / **play mode**. The play variant (`ChartPlayVariant`, `'5'` through `'48'`) picks the lane layout and the play skin. The key mode (`KeyMode`, a number) is the key-count a select filter lists; a bmson `mode_hint` wins over the variant. Lane mode is the Leaderboard's stored label (`7keys`). A play mode is one row of `PLAY_MODE_LAYOUTS`, which can split one key count into two layouts (9 KEY BME and 9 KEY PMS).
+- **gauge type** / **gauge id**. The gauge type is what the player picks, in LR2's names (`GROOVE`, `HARD`, `DEATH`, `EASY`). The gauge id is the gauge that judge ruleset actually runs (`NORMAL`, `HAZARD`, `CLASS`). `DEATH` runs as beatoraja's `HAZARD`.
+- **skin** / **theme** / **family** / **kit**. A skin is one skin definition. A theme is a dropped folder of skins plus its BGM and system sounds. A family is which drawer runs (`built-in`, `lr2`, `beatoraja`). A kit is what the host hands one scene of that family.
+- **library** / **collection**. The library is the select screen's model (`Library`, `LibraryChart`). A collection is the browser loader that fills one (`BrowserSongCollection`, the `./collection` entry). New loader names say library.
+- **play log** / **replay** / **score** / **best record** / **PlayerSummary** / **play result**. A play log is the recorded-input file. A replay is playing that log, and the replay judge strategy. A Leaderboard score is one submitted play. `SCORE` and `EX-SCORE` are point totals, not that row. A best record is the best lamp, EX-SCORE, combo and BP under one judge ruleset. `PlayerSummary` is the engine's tally at the end of a play. A play result is the payload every result screen reads.
+- **IR**. The chart IR is `BeMusicJSON`. An Internet Ranking is what LR2 and beatoraja call an online ranking; this repository's is the Leaderboard. _Avoid_ calling the Leaderboard an IR.
+- **hi-speed** / **HS-FIX** / **white number** / **play tempo**. Hi-speed changes how dense notes look, not judgment time. HS-FIX picks the BPM that density is measured against. The white number is the hi-speed value a screen shows. Play tempo (`speed`) changes how fast the chart itself runs, including judgment time. A changed tempo is practice.
+- **judge rank** / **DJ rank** / **play level** / **difficulty**. Judge rank is `#RANK`, `#EXRANK` or bmson `judge_rank`: the judge windows. DJ rank is the grade of an EX-SCORE. Play level is the chart's level (☆). Difficulty is BMS `#DIFFICULTY` (1–5).
+- **stage**. A course stage is one chart of a course run. A skin stage is the rectangle a skin draws on (`BeMusicStage`, a portrait stage). `STAGEFILE` is the loading image.
+- **option** / **op**. Play options are what the player sets (gauge, lane random, hi-speed). An op is an LR2 or beatoraja skin's numeric visibility gate. A custom option is a choice the skin author declares.
+- **preview**. A chart preview is the short select-screen audio (`#PREVIEW`, bmson `preview_music`). A preview environment is the deploy from `devel`. URL auto-load (`?music=`) is neither.
+- **BP** / **misses**. BP is the name (`resolveMissCount`). Leaderboard English that says misses means BP.
+- **clear** / **clear lamp** / **trophy**. A clear is the gauge surviving the chart. A clear lamp is the grade of the result (FAILED to MAX). A trophy is the course-run award, separate from the lamp.
+- **random**. `#RANDOM` is control flow. A random lane option (RANDOM, MIRROR, and the rest) reorders lanes. The random entry on a select screen picks a chart. The three do not share a result.
+
+## Charts And Resources
 
 - **BMS**: Be-Music Source text score format. It consists of header and object lines such as `#TITLE`, `#WAVxx`, and `#mmmcc:...`.
 - **bmson**: JSON-based score format with structures such as `info`, `sound_channels`, `bga`, and `lines`.
-- **chart**: One score file or playback unit. In Music Select, one list entry corresponds to one chart.
+- **chart**: One chart file, and the unit of playback. In Music Select, one list entry corresponds to one chart. A chartset is the Leaderboard's grouping of the charts of one work, not another name for a chart.
 - **metadata**: Descriptive data outside the note body, such as title, artist, genre, comments, `#STAGEFILE`, `#BACKBMP`, and `#BANNER`.
 - **resource**: External audio, image, video, or text file referenced by a chart or skin.
 - **keysound**: Audio resource used for notes and BGM. BMS usually uses `#WAVxx`; bmson uses `sound_channels`.
@@ -70,7 +90,7 @@ The definitions follow general BMS/BMSON terminology where possible, but priorit
 
 ## Internal Model
 
-- **IR (`@be-music/json`)**: Internal intermediate representation for BMS/BMSON/JSON charts. It is not an external exchange format.
+- **IR (`@be-music/json`)**: Internal intermediate representation for BMS/BMSON/JSON charts (`BeMusicJSON`). It is not an external exchange format. LR2 and beatoraja also say IR for an Internet Ranking; here that product is the Leaderboard.
 - **pure IR**: Design policy that `@be-music/json` stores normalized structure and preservation data without owning score semantics.
 - **sourceFormat**: IR attribute that records whether the chart came from `bms`, `bmson`, or `json`.
 - **round-trip**: Recreate source structure as much as possible through `parse -> IR -> stringify`.
@@ -100,20 +120,20 @@ The definitions follow general BMS/BMSON terminology where possible, but priorit
 - **Sound / Visual status**: Separate loading-screen progress states for audio and visual resources.
 - **structured log**: NDJSON execution log written separately from TUI output, usually under `~/.be-music/logs/player.ndjson`.
 - **video BGA streaming**: Policy that prepares only the first video frame before gameplay starts, then decodes remaining frames progressively.
-- **play log (playlog)**: Recorded input replay of one play (`*.bmplay.json`): the resolved chart, every key press and release, and the play settings. `bms-playlog` re-simulates it under the LR2, beatoraja, and IIDX rulesets.
+- **play log (playlog)**: The recorded input of one play (`*.bmplay.json`): the resolved chart, every key press and release, and the play settings. `bms-playlog` re-simulates it under the LR2, beatoraja, and IIDX rulesets. Playing that file back is a replay, not a second name for the file.
 - **PlayerSummary**: Final playback summary containing judge counts, FAST/SLOW, EX-SCORE, SCORE, gauge, and clear state.
 
 ## Courses, Records And View
 
 - **course run**: One play of a course: its stages in order, or, for NONSTOP, one stitched play. It is ranked and recorded as one run. _Avoid_: course session, course play.
-- **stage**: One chart of a course run.
+- **stage**: One chart of a course run. A skin stage (`BeMusicStage`) and `#STAGEFILE` are different things.
 - **carry-in**: The gauge value, course combo and course max combo a stage starts from, left by the stage before it.
 - **give up**: Leaving a course run with ESC. A run given up is a failed run.
 - **stitched play**: The single chart a NONSTOP course is played as, built by stitching its stages with their connections and placement.
 - **judge ruleset**: The game whose judge windows, gauges and lamps a play is judged and ranked by: `lr2`, `beatoraja` or `iidx`.
 - **gauge type**: The gauge the player picks, in LR2's names: `GROOVE`, `HARD`, `DEATH` or `EASY` (`GaugeType`). Each judge ruleset plays it on a gauge of its own line-up, named by its gauge id (`NORMAL`, `HAZARD`, `CLASS`, ...).
 - **clear lamp**: The class of clear a play earned (FAILED to MAX, `ClearLamp`). Each judge ruleset awards its own subset; one rule lamps every play (`resolveClearLamp`, `resolveCourseClearLamp` in `@be-music/player/ruleset`).
-- **BP**: The miss count: BADs, POORs and empty POORs, plus, for a course, the notes the run never judged (`resolveMissCount`).
+- **BP**: BADs, POORs and empty POORs, plus, for a course, the notes the run never judged (`resolveMissCount`). Leaderboard English that says misses means this count.
 - **best record**: The best clear lamp, EX-SCORE, max combo and BP a player has on a chart or course under one judge ruleset (`BestRecord`, kept by the rules of `@be-music/player/records`).
 - **view settings**: What the player saw, apart from what was judged: hi-speed, hi-speed fix, visible time and each side's SUDDEN+, HIDDEN+ and LIFT. _Avoid_: display options.
 - **play tempo**: How fast a play runs relative to the chart (`speed`). A play at another tempo is practice.
