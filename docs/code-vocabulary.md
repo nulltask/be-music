@@ -83,9 +83,10 @@ This review maps code vocabulary to domain concepts and separates aliases from g
 | `songRecordKey`, `parseSongRecords`, `serializeSongRecords` | `chartBestRecordKey`, `parseChartBestRecords`, `serializeChartBestRecords` | Names describe the data. Storage keys and formats require a separate compatibility review.                    |
 | `JudgeKind`, `JudgeTiming`, `PlaylogJudgeCounts`            | `JudgmentKind`, `JudgmentTiming`, `PlaylogJudgmentCounts`                  | Coordinated type-name cleanup; do not rename format keys mechanically.                                        |
 | `PlaylogRulesetId`                                          | `RulesetId`                                                                | The concept belongs to the ruleset layer, not the recording format.                                           |
-| `BeMusicStage`                                              | `BeMusicDesignStage`                                                       | Disambiguate design coordinates from course stages.                                                           |
 
 Names tied to storage or API contracts, such as the score table, must not be renamed solely because of this table. Prefer explicit new internal names such as `playSubmission`, `rulesetResult` and `chartBestRecord`, mapping to existing names at boundaries. `PlayOptions` and `PlayerOptions` are not synonyms: clarify their responsibilities before renaming them.
+
+Keep `BeMusicStage`: the `BeMusicSkin.stage` context already identifies the skin design area. Explain its distinction from a course stage in the definition rather than renaming the type.
 
 ## Inspected code
 
