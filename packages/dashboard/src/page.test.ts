@@ -31,6 +31,8 @@ describe('renderDashboard', () => {
     expect(html).toContain('Signed in as Alice (@alice).');
     expect(html).toContain('href="https://play.be-music.app/"');
     expect(html).toContain('href="https://leaderboard.be-music.app/"');
+    expect(html).toContain('<form method="post" action="/api/auth/sign-out?returnTo=%2F">');
+    expect(html).toContain('type="submit">Sign out</button>');
   });
 
   test('tells anonymous and signed-out visitors apart', () => {
@@ -41,8 +43,10 @@ describe('renderDashboard', () => {
     });
     expect(anonymous).toContain('data-state="anonymous"');
     expect(anonymous).toContain('lang="ja"');
+    expect(anonymous).toContain('type="submit">ログアウト</button>');
     const signedOut = renderDashboard({ account: undefined, hostname: 'be-music.app', locale: 'en' });
     expect(signedOut).toContain('data-state="signed-out"');
+    expect(signedOut).not.toContain('/api/auth/sign-out');
   });
 
   test('keeps the skip target and localized service navigation', () => {
