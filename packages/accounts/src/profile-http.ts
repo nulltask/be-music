@@ -30,11 +30,12 @@ export async function profileHTTP(request: Request, env: Env): Promise<Response 
     return found ? reply(found) : reply({ error: 'not-found' }, 404);
   }
   const avatarMatch = /^\/profiles\/([A-Za-z0-9_]+)\/avatar$/.exec(url.pathname);
-  if (avatarMatch && request.method === 'GET') {
+  if (avatarMatch && ['GET', 'HEAD'].includes(request.method)) {
     const found = await db.query.profile.findFirst({ where: eq(profile.handle, avatarMatch[1].toLowerCase()) });
     if (!found) return reply({ error: 'not-found' }, 404);
     const object = found.avatarKey ? await env.BLOBS.get(found.avatarKey) : null;
-    return new Response(object?.body ?? generatedAvatarSVG(found.userId), {
+    if (request.method === 'HEAD') await object?.body.cancel();
+    return new Response(request.method === 'HEAD' ? null : (object?.body ?? generatedAvatarSVG(found.userId)), {
       headers: {
         'content-type': object?.httpMetadata?.contentType ?? 'image/svg+xml',
         'access-control-allow-origin': '*',
