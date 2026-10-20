@@ -1,5 +1,26 @@
 # @be-music/skin-lr2
 
+## 0.3.0
+
+### Minor Changes
+
+- 9a0c3f9: Rename the play-skin chart description to `LR2PlaySkinChart` and consume canonical chart, replay, and judgment models. Keep LR2 format identifiers and skin operation values unchanged.
+  
+  Rename the package from `@be-music/lr2-skin` to `@be-music/skin-lr2` to identify its role consistently. Update imports and package filters to the new name.
+
+### Patch Changes
+
+- Updated dependencies [dca9a2f]
+- Updated dependencies [dca9a2f]
+- Updated dependencies [9a0c3f9]
+- Updated dependencies [9a0c3f9]
+- Updated dependencies [dca9a2f]
+  - @be-music/chart-model@0.6.0
+  - @be-music/chart-source@0.4.0
+  - @be-music/player-engine@0.10.0
+  - @be-music/player-scene-model@0.2.0
+  - @be-music/shared-utils@0.5.0
+
 ## 0.2.0
 
 ### Minor Changes

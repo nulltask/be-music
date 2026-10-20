@@ -1,6 +1,6 @@
 {
   "name": "@be-music/skin-lr2",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Renderer-independent LR2 skin parsing, loading, and scene state resolution",
   "license": "MIT",
   "files": [

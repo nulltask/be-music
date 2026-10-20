@@ -1,6 +1,6 @@
 {
   "name": "@be-music/player-engine",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Playback engine with judgment, scoring, rulesets, courses, best records, and replays",
   "license": "MIT",
   "files": [

@@ -1,5 +1,34 @@
 # @be-music/player-browser
 
+## 0.11.0
+
+### Minor Changes
+
+- 9a0c3f9: Use `BrowserChartCollection`, `BrowserAssetSource`, chart-based result and image fields, and explicit chart/course best-record callbacks. Expose replay-named recording helpers and adopt the player replay API without compatibility aliases.
+  
+  Rename the package from `@be-music/player-web` to `@be-music/player-browser` to identify its role consistently. Update imports and package filters to the new name.
+
+### Patch Changes
+
+- Updated dependencies [9a0c3f9]
+- Updated dependencies [dca9a2f]
+- Updated dependencies [dca9a2f]
+- Updated dependencies [dca9a2f]
+- Updated dependencies [9a0c3f9]
+- Updated dependencies [9a0c3f9]
+- Updated dependencies [9a0c3f9]
+- Updated dependencies [dca9a2f]
+- Updated dependencies [9a0c3f9]
+  - @be-music/skin-beatoraja@0.4.0
+  - @be-music/chart-model@0.6.0
+  - @be-music/chart-parser@0.4.0
+  - @be-music/chart-source@0.4.0
+  - @be-music/skin-lr2@0.3.0
+  - @be-music/player-engine@0.10.0
+  - @be-music/player-scene-model@0.2.0
+  - @be-music/shared-utils@0.5.0
+  - @be-music/player-skin-sdk@0.4.0
+
 ## 0.10.0
 
 ### Minor Changes

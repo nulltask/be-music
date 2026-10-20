@@ -1,6 +1,6 @@
 {
   "name": "@be-music/player-browser",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Browser player runtime with audio, input, skin rendering, and video recording",
   "license": "MIT",
   "files": [
