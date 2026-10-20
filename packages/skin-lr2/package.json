@@ -1,0 +1,42 @@
+{
+  "name": "@be-music/skin-lr2",
+  "version": "0.3.0",
+  "description": "Renderer-independent LR2 skin parsing, loading, and scene state resolution",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./ids": {
+      "source": "./src/ids/index.ts",
+      "types": "./dist/ids.d.ts",
+      "default": "./dist/ids.js"
+    },
+    "./state": {
+      "source": "./src/state/index.ts",
+      "types": "./dist/state.d.ts",
+      "default": "./dist/state.js"
+    }
+  },
+  "scripts": {
+    "build:bundle": "vp pack",
+    "build": "vp pack",
+    "clean": "rimraf dist",
+    "bench": "node --conditions=source scripts/bench.ts"
+  },
+  "dependencies": {
+    "@be-music/chart-model": "workspace:*",
+    "@be-music/chart-source": "workspace:*",
+    "@be-music/player-engine": "workspace:*",
+    "@be-music/player-scene-model": "workspace:*",
+    "@be-music/shared-utils": "workspace:*"
+  }
+}

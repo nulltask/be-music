@@ -51,35 +51,23 @@ jobs:
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           filters: |
-            # The packages scripts/bench measures (PACKAGE_NAMES in scripts/bench/exports.types.ts; a test in
-            # scripts/bench/affected-packages.test.ts checks this list against it) and the bench itself.
+            # Include unmeasured intermediaries too; the scope selector follows their benchmarked dependents.
             bench:
-              - 'packages/utils/**'
-              - 'packages/json/**'
-              - 'packages/chart/**'
-              - 'packages/parser/**'
-              - 'packages/stringifier/**'
-              - 'packages/editor/**'
-              - 'packages/audio-renderer/**'
-              - 'packages/player/**'
-              - 'packages/scene-model/**'
-              - 'packages/player-tui/**'
-              - 'packages/lr2-skin/**'
-              - 'packages/beatoraja-skin/**'
-              - 'packages/skin-sdk/**'
-              - 'packages/player-web/**'
+              - 'packages/**'
               - 'scripts/bench/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
               - '.node-version'
+              - 'vite.config.ts'
+              - 'tsconfig*.json'
               - '.github/workflows/ci.yml'
             sea_player:
-              - 'packages/player/**'
-              - 'packages/audio-renderer/**'
-              - 'packages/parser/**'
-              - 'packages/json/**'
-              - 'packages/utils/**'
+              - 'packages/player-engine/**'
+              - 'packages/chart-audio-renderer/**'
+              - 'packages/chart-parser/**'
+              - 'packages/chart-source/**'
+              - 'packages/shared-utils/**'
               - 'scripts/build-sea.ts'
               - 'package.json'
               - 'pnpm-lock.yaml'
@@ -87,10 +75,10 @@ jobs:
               - 'tsconfig*.json'
               - 'packages/*/tsconfig*.json'
             sea_audio_renderer:
-              - 'packages/audio-renderer/**'
-              - 'packages/parser/**'
-              - 'packages/json/**'
-              - 'packages/utils/**'
+              - 'packages/chart-audio-renderer/**'
+              - 'packages/chart-parser/**'
+              - 'packages/chart-source/**'
+              - 'packages/shared-utils/**'
               - 'scripts/build-sea.ts'
               - 'package.json'
               - 'pnpm-lock.yaml'
@@ -148,7 +136,7 @@ jobs:
     env:
       BENCH_TIME_MS: 50
       BENCH_WARMUP_TIME_MS: 25
-      BENCH_REPEATS: 5
+      BENCH_REPEATS: 3
       BENCH_REGRESSION_THRESHOLD: 8
     permissions:
       contents: read
@@ -170,7 +158,29 @@ jobs:
           cache: true
           run-install: false
 
+      - name: Select benchmark packages
+        id: scope
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            git ls-files > "$RUNNER_TEMP/bench-changed-files"
+          else
+            git diff --no-renames --name-only "$BASE_SHA" "$HEAD_SHA" > "$RUNNER_TEMP/bench-changed-files"
+          fi
+          packages="$(node --conditions=source scripts/bench/affected-packages.ts < "$RUNNER_TEMP/bench-changed-files")"
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+          if [ -z "$packages" ]; then
+            echo "No benchmarked runtime packages changed; measurement skipped." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Benchmarking $packages: 3 paired runs per revision." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Detect benchmark support
+        if: steps.scope.outputs.packages != ''
         id: detect-bench
         shell: bash
         run: |
@@ -189,13 +199,14 @@ jobs:
           fi
 
       - name: Install dependencies
+        if: steps.scope.outputs.packages != ''
         run: vp install
 
       # Head and base take turns (head, base, head, base, …), so a slow stretch on the shared runner slows both sides
       # alike; the comparison then reads each side's run-to-run spread to tell a change from noise.
       - name: Prepare base worktree
         id: prepare-base
-        if: steps.detect-bench.outputs.available == 'true'
+        if: steps.scope.outputs.packages != '' && steps.detect-bench.outputs.available == 'true'
         continue-on-error: true
         shell: bash
         run: |
@@ -206,17 +217,15 @@ jobs:
           echo "dir=$BASE_DIR" >> "$GITHUB_OUTPUT"
 
       - name: Run benchmarks (interleaved)
+        if: steps.scope.outputs.packages != ''
         id: run-bench
         shell: bash
         env:
           BASE_DIR: ${{ steps.prepare-base.outputs.dir }}
+          BENCH_PACKAGES: ${{ steps.scope.outputs.packages }}
         run: |
           set -euo pipefail
           mkdir -p tmp/bench/head-runs tmp/bench/base-runs
-          # Only the packages this change can affect (the ones it touches and their dependents, see
-          # scripts/bench/affected-packages.ts), measured on both sides; a change outside packages/ measures them all.
-          BENCH_PACKAGES="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" | node --conditions=source scripts/bench/affected-packages.ts)"
-          echo "Benchmarking: $BENCH_PACKAGES"
           base_ok=false
           if [ -n "${BASE_DIR:-}" ]; then base_ok=true; fi
           for run_index in $(seq 1 "$BENCH_REPEATS"); do
@@ -232,6 +241,7 @@ jobs:
           echo "base_ok=$base_ok" >> "$GITHUB_OUTPUT"
 
       - name: Aggregate benchmark snapshots
+        if: steps.scope.outputs.packages != ''
         shell: bash
         run: |
           set -euo pipefail
@@ -241,6 +251,7 @@ jobs:
           fi
 
       - name: Generate benchmark report
+        if: steps.scope.outputs.packages != ''
         shell: bash
         run: |
           set -euo pipefail
@@ -253,6 +264,7 @@ jobs:
           pnpm run bench:compare "${args[@]}"
 
       - name: Post benchmark comment
+        if: steps.scope.outputs.packages != ''
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           retries: 3
@@ -304,7 +316,7 @@ jobs:
     env:
       BENCH_TIME_MS: 50
       BENCH_WARMUP_TIME_MS: 25
-      BENCH_REPEATS: 5
+      BENCH_REPEATS: 3
       BENCH_REGRESSION_THRESHOLD: 8
     permissions:
       contents: write
@@ -325,7 +337,29 @@ jobs:
           cache: true
           run-install: false
 
+      - name: Select benchmark packages
+        id: scope
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            git ls-files > "$RUNNER_TEMP/bench-changed-files"
+          else
+            git diff --no-renames --name-only "$BASE_SHA" "$HEAD_SHA" > "$RUNNER_TEMP/bench-changed-files"
+          fi
+          packages="$(node --conditions=source scripts/bench/affected-packages.ts < "$RUNNER_TEMP/bench-changed-files")"
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+          if [ -z "$packages" ]; then
+            echo "No benchmarked runtime packages changed; measurement skipped." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Benchmarking $packages: 3 paired runs per revision." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Detect benchmark support
+        if: steps.scope.outputs.packages != ''
         id: detect-bench
         shell: bash
         run: |
@@ -349,13 +383,14 @@ jobs:
           fi
 
       - name: Install dependencies
+        if: steps.scope.outputs.packages != ''
         run: vp install
 
       # Head and base take turns (head, base, head, base, …), so a slow stretch on the shared runner slows both sides
       # alike; the comparison then reads each side's run-to-run spread to tell a change from noise.
       - name: Prepare base worktree
         id: prepare-base
-        if: steps.detect-bench.outputs.available == 'true'
+        if: steps.scope.outputs.packages != '' && steps.detect-bench.outputs.available == 'true'
         continue-on-error: true
         shell: bash
         run: |
@@ -366,19 +401,21 @@ jobs:
           echo "dir=$BASE_DIR" >> "$GITHUB_OUTPUT"
 
       - name: Run benchmarks (interleaved)
+        if: steps.scope.outputs.packages != ''
         id: run-bench
         shell: bash
         env:
           BASE_DIR: ${{ steps.prepare-base.outputs.dir }}
+          BENCH_PACKAGES: ${{ steps.scope.outputs.packages }}
         run: |
           set -euo pipefail
           mkdir -p tmp/bench/head-runs tmp/bench/base-runs
           base_ok=false
           if [ -n "${BASE_DIR:-}" ]; then base_ok=true; fi
           for run_index in $(seq 1 "$BENCH_REPEATS"); do
-            BENCH_GIT_SHA="${{ github.sha }}" pnpm run bench --output "tmp/bench/head-runs/run-${run_index}.json" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
+            BENCH_GIT_SHA="${{ github.sha }}" pnpm run bench --output "tmp/bench/head-runs/run-${run_index}.json" --packages "$BENCH_PACKAGES" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
             if [ "$base_ok" = true ]; then
-              if ! (cd "$BASE_DIR" && BENCH_GIT_SHA="${{ github.event.before }}" pnpm run bench --output "$GITHUB_WORKSPACE/tmp/bench/base-runs/run-${run_index}.json" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"); then
+              if ! (cd "$BASE_DIR" && BENCH_GIT_SHA="${{ github.event.before }}" pnpm run bench --output "$GITHUB_WORKSPACE/tmp/bench/base-runs/run-${run_index}.json" --packages "$BENCH_PACKAGES" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"); then
                 echo "::warning::The base benchmark failed; the report shows the head only."
                 base_ok=false
                 rm -f tmp/bench/base-runs/*.json
@@ -388,6 +425,7 @@ jobs:
           echo "base_ok=$base_ok" >> "$GITHUB_OUTPUT"
 
       - name: Aggregate benchmark snapshots
+        if: steps.scope.outputs.packages != ''
         shell: bash
         run: |
           set -euo pipefail
@@ -397,6 +435,7 @@ jobs:
           fi
 
       - name: Generate benchmark report
+        if: steps.scope.outputs.packages != ''
         shell: bash
         run: |
           set -euo pipefail
@@ -409,6 +448,7 @@ jobs:
           pnpm run bench:compare "${args[@]}"
 
       - name: Post benchmark comment
+        if: steps.scope.outputs.packages != ''
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           retries: 3

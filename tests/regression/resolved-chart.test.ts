@@ -8,11 +8,11 @@ import {
   resolveChartPlayVariant,
   type ResolvedChart,
   type ResolvedNote,
-} from '@be-music/chart';
-import type { BeMusicJSON } from '@be-music/json';
-import { parseChartFile } from '@be-music/parser';
-import { resolvePlayChart } from '@be-music/player';
-import { extractTimedNotes, type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/display';
+} from '@be-music/chart-model';
+import type { BeMusicJSON } from '@be-music/chart-source';
+import { parseChartFile } from '@be-music/chart-parser';
+import { resolvePlayChart } from '@be-music/player-engine';
+import { extractTimedNotes, type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player-engine/display';
 import { describe, expect, test } from 'vite-plus/test';
 
 /**
@@ -41,7 +41,7 @@ interface ExpectedVariant {
   playVariant: string;
   timing: { tempo: string[]; stops: string[] };
   sampleTriggers: string[];
-  playlogChart: {
+  replayChart: {
     judgeRank: {
       sourceRank?: number;
       sourceExRank?: number;
@@ -137,7 +137,7 @@ function expectPinnedEquivalence(resolved: ResolvedChart, expected: ExpectedVari
     ),
   ).toEqual(expected.sampleTriggers);
 
-  // The engine's prepared note list, as the play log records it.
+  // The engine's prepared note list, as the replay records it.
   const lines = [
     ...resolved.notes.map((note) => {
       if (note.freeZone) {
@@ -152,7 +152,7 @@ function expectPinnedEquivalence(resolved: ResolvedChart, expected: ExpectedVari
   ];
   expect(lines.sort()).toEqual([...expected.notes].sort());
 
-  const { judgeRank, total, lnMode } = expected.playlogChart;
+  const { judgeRank, total, lnMode } = expected.replayChart;
   expect(resolved.lnMode).toBe(lnMode);
   expect(resolved.judgeRank.rank).toBe(judgeRank.sourceRank);
   expect(resolved.judgeRank.exRank).toBe(judgeRank.sourceExRank);

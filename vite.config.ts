@@ -2,69 +2,70 @@ import { builtinModules } from 'node:module';
 import { defaultClientConditions, defaultServerConditions, defineConfig } from 'vite-plus';
 
 const workspacePackages = [
-  'utils',
-  'json',
-  'chart',
-  'parser',
-  'stringifier',
-  'audio-renderer',
-  'player',
-  'scene-model',
-  'player-tui',
-  'lr2-skin',
-  'beatoraja-skin',
-  'skin-sdk',
-  'editor',
-  'player-web',
-  'accounts',
-  'auth-client',
-  'dashboard',
-  'play',
+  'shared-utils',
+  'chart-source',
+  'chart-model',
+  'chart-parser',
+  'chart-writer',
+  'chart-audio-renderer',
+  'player-engine',
+  'player-scene-model',
+  'player-terminal',
+  'skin-lr2',
+  'skin-beatoraja',
+  'player-skin-sdk',
+  'chart-editor',
+  'player-browser',
+  'app-accounts',
+  'service-auth-client',
+  'app-dashboard',
+  'worker-play',
+  'service-web-theme',
 ] as const;
 
 /**
- * Layering (docs/architecture.md): the chart model, the IR, the parser, the engine's core / play-log / ruleset code
+ * Layering (docs/architecture.md): the chart model, the IR, the parser, the engine's core / replay / ruleset code
  * with the player entries a browser host imports (signals, lanes, display), the scene models and the LR2 and beatoraja
  * state resolvers run unchanged in the browser and in Node, so they import no
  * Node built-in and read no DOM or Node-only global. Runtime services reach them through adapters
  * (`PlayerOptions.createAudioSession`, `createUIRuntime`, the parser's `node-file.ts`) instead.
  */
 const runtimeNeutralSources = [
-  'packages/beatoraja-skin/src/scene/**/*.ts',
-  'packages/chart/src/**/*.ts',
-  'packages/json/src/**/*.ts',
-  'packages/lr2-skin/src/state/**/*.ts',
-  'packages/parser/src/**/*.ts',
-  'packages/player/src/core/**/*.ts',
-  'packages/player/src/course/**/*.ts',
-  'packages/player/src/display.ts',
-  'packages/player/src/image-resize-algorithm.ts',
-  'packages/player/src/judging.ts',
-  'packages/player/src/lanes.ts',
-  'packages/player/src/playable-notes.ts',
-  'packages/player/src/playlog/**/*.ts',
-  'packages/player/src/records/**/*.ts',
-  'packages/player/src/ruleset/**/*.ts',
-  'packages/player/src/signals.ts',
-  'packages/player/src/state-signals.ts',
-  'packages/player/src/utils.ts',
-  'packages/scene-model/src/**/*.ts',
+  'packages/skin-beatoraja/src/scene/**/*.ts',
+  'packages/chart-model/src/**/*.ts',
+  'packages/chart-source/src/**/*.ts',
+  'packages/skin-lr2/src/state/**/*.ts',
+  'packages/chart-parser/src/**/*.ts',
+  'packages/player-engine/src/core/**/*.ts',
+  'packages/player-engine/src/course/**/*.ts',
+  'packages/player-engine/src/display.ts',
+  'packages/player-engine/src/image-resize-algorithm.ts',
+  'packages/player-engine/src/judging.ts',
+  'packages/player-engine/src/lanes.ts',
+  'packages/player-engine/src/playable-notes.ts',
+  'packages/player-engine/src/replay/**/*.ts',
+  'packages/player-engine/src/records/**/*.ts',
+  'packages/player-engine/src/ruleset/**/*.ts',
+  'packages/player-engine/src/signals.ts',
+  'packages/player-engine/src/state-signals.ts',
+  'packages/player-engine/src/utils.ts',
+  'packages/player-scene-model/src/**/*.ts',
 ];
 /** Node / CLI entry points inside those trees: the runtime adapters the rule above points to. */
-const runtimeAdapterSources = ['packages/parser/src/cli.ts', 'packages/parser/src/node-file.ts'];
+const runtimeAdapterSources = ['packages/chart-parser/src/cli.ts', 'packages/chart-parser/src/node-file.ts'];
 /**
- * The deterministic judge (`judge-core*.ts`, `auto-judge-core.ts`, the ruleset rules and the play-log simulator): the
+ * The deterministic judge (`judge-core*.ts`, `auto-judge-core.ts`, the ruleset rules and the replay simulator): the
  * same inputs must give the same judgments, so these files read no clock, set no timer and draw no random number. The
  * scene models and the LR2 and beatoraja state resolvers are held to the same rule: a scene's time comes in as an input.
  */
 const deterministicJudgeSources = [
-  'packages/beatoraja-skin/src/scene/**/*.ts',
-  'packages/lr2-skin/src/state/**/*.ts',
-  'packages/player/src/core/judge-*.ts',
-  'packages/player/src/core/auto-judge-core.ts',
-  'packages/player/src/ruleset/**/*.ts',
-  'packages/player/src/playlog/simulate.ts',
-  'packages/scene-model/src/**/*.ts',
+  'packages/skin-beatoraja/src/scene/**/*.ts',
+  'packages/skin-lr2/src/state/**/*.ts',
+  'packages/player-engine/src/core/judge-*.ts',
+  'packages/player-engine/src/core/auto-judge-core.ts',
+  'packages/player-engine/src/ruleset/**/*.ts',
+  'packages/player-engine/src/replay/simulate.ts',
+  'packages/player-scene-model/src/**/*.ts',
 ];
 const nodeBuiltinMessage = 'Runtime-neutral code must not import Node built-ins; use a runtime adapter.';
 const nodeBuiltinImports = {
@@ -109,23 +110,23 @@ const clockGlobals = ['Date', 'performance', 'setTimeout', 'setInterval', 'setIm
  * Oxlint does not merge the options of two overrides that set the same rule: the last one wins. So each file group
  * below gets one complete `no-restricted-imports` object, and a group comes after the wider one it narrows.
  */
-const playerWebSources = ['packages/player-web/src/**/*.ts'];
-const engineDriverSources = ['packages/player-web/src/runtime/engine-driver.ts'];
-const webAudioLayerSources = ['packages/player-web/src/runtime/**/*.ts'];
-const sceneSessionSources = ['packages/player-web/src/session/**/*.ts'];
-const familyViewSources = ['packages/player-web/src/view/**/*.ts'];
-const webHostSources = ['packages/player-web/src/host/**/*.ts', 'packages/player-web/src/index.ts'];
-const webDemoSources = ['packages/player-web-demo/src/**/*.ts'];
+const playerWebSources = ['packages/player-browser/src/**/*.ts'];
+const engineDriverSources = ['packages/player-browser/src/runtime/engine-driver.ts'];
+const webAudioLayerSources = ['packages/player-browser/src/runtime/**/*.ts'];
+const sceneSessionSources = ['packages/player-browser/src/session/**/*.ts'];
+const familyViewSources = ['packages/player-browser/src/view/**/*.ts'];
+const webHostSources = ['packages/player-browser/src/host/**/*.ts', 'packages/player-browser/src/index.ts'];
+const webDemoSources = ['packages/app-play/src/**/*.ts'];
 /** Import specifiers that reach the named directories of `player-web/src` (or of the web demo's `src`). */
 const webLayerGroup = (...dirs: string[]): string[] => dirs.flatMap((dir) => [`**/${dir}`, `**/${dir}/**`]);
 const lowerLayerMessage =
   'A lower layer of the web runtime knows no scene: it imports no host, session or view module.';
 const lowerLayerPatterns = [{ group: webLayerGroup('host', 'session', 'view'), message: lowerLayerMessage }];
 /**
- * The engine is the root of `@be-music/player`. Its other entries (`./signals`, `./lanes`, `./display`, `./ruleset`, …)
+ * The engine is the root of `@be-music/player-engine`. Its other entries (`./signals`, `./lanes`, `./display`, `./ruleset`, …)
  * are the vocabulary a host shares with a play, not the engine, so any layer may import them.
  */
-const engineModule = '@be-music/player';
+const engineModule = '@be-music/player-engine';
 const engineMessage = `Only a scene session (and runtime/engine-driver.ts) runs the engine (${engineModule}); import its types only.`;
 const engineTypeImports = {
   paths: [{ name: engineModule, allowTypeImports: true, message: engineMessage }],
@@ -170,7 +171,7 @@ const webAudioProperties = ['globalThis', 'window', 'self'].flatMap((object) =>
  * the others share. A service knows neither the UI nor the wiring: it imports no lil-gui, `ui/` or `app/` module, not
  * even a type, and reaches the app through the deps it is given.
  */
-const webDemoServiceSources = ['packages/player-web-demo/src/services/**/*.ts'];
+const webDemoServiceSources = ['packages/app-play/src/services/**/*.ts'];
 const webDemoServiceMessage = 'A demo service imports no lil-gui, ui/ or app/ module; it takes what it needs as deps.';
 const webDemoServiceImports = {
   paths: [...engineTypeImports.paths, { name: 'lil-gui', message: webDemoServiceMessage }],
@@ -209,17 +210,17 @@ export default defineConfig({
       {
         extends: true as const,
         test: {
-          name: '@be-music/player-web-demo',
-          include: ['packages/player-web-demo/src/**/*.test.ts'],
+          name: '@be-music/app-play',
+          include: ['packages/app-play/src/**/*.test.ts'],
         },
       },
       {
         extends: true as const,
         test: {
-          name: '@be-music/leaderboard-api',
+          name: '@be-music/app-leaderboard',
           // The pages' stylesheet, icons and client script are generated, not kept in git.
-          globalSetup: ['packages/leaderboard-api/test/global-setup.ts'],
-          include: ['packages/leaderboard-api/src/**/*.test.ts', 'packages/leaderboard-api/client/**/*.test.ts'],
+          globalSetup: ['packages/app-leaderboard/test/global-setup.ts'],
+          include: ['packages/app-leaderboard/src/**/*.test.ts', 'packages/app-leaderboard/client/**/*.test.ts'],
           // The API tests start a workerd process (Miniflare) for real D1 and R2 bindings.
           testTimeout: 30_000,
           hookTimeout: 60_000,
@@ -254,69 +255,69 @@ export default defineConfig({
         'packages/*/src/**/*.test.ts',
         'packages/*/src/cli.ts',
         'packages/*/src/**/*.d.ts',
-        'packages/audio-renderer/src/index.ts',
-        'packages/parser/src/index.ts',
-        'packages/player/src/index.ts',
-        'packages/player/src/tui.ts',
-        'packages/player/src/node/*protocol.ts',
-        'packages/player-tui/src/cli.ts',
-        'packages/player-tui/src/tui.ts',
-        'packages/player-tui/src/node/*protocol.ts',
-        'packages/player-web/src/index.ts',
-        'packages/player-web/src/library.ts',
-        'packages/player-web/src/pixi-*.ts',
+        'packages/chart-audio-renderer/src/index.ts',
+        'packages/chart-parser/src/index.ts',
+        'packages/player-engine/src/index.ts',
+        'packages/player-engine/src/tui.ts',
+        'packages/player-engine/src/node/*protocol.ts',
+        'packages/player-terminal/src/cli.ts',
+        'packages/player-terminal/src/tui.ts',
+        'packages/player-terminal/src/node/*protocol.ts',
+        'packages/player-browser/src/index.ts',
+        'packages/player-browser/src/library.ts',
+        'packages/player-browser/src/pixi-*.ts',
       ],
       thresholds: {
         // Use package-level thresholds so lower-coverage packages don't hide behind unrelated ones.
-        'packages/audio-renderer/src/**/*.ts': {
+        'packages/chart-audio-renderer/src/**/*.ts': {
           statements: 65,
           branches: 57,
           functions: 74,
           lines: 66,
         },
-        'packages/chart/src/**/*.ts': {
+        'packages/chart-model/src/**/*.ts': {
           statements: 90,
           branches: 81,
           functions: 93,
           lines: 90,
         },
-        'packages/editor/src/**/*.ts': {
+        'packages/chart-editor/src/**/*.ts': {
           statements: 95,
           branches: 84,
           functions: 95,
           lines: 96,
         },
-        'packages/json/src/**/*.ts': {
+        'packages/chart-source/src/**/*.ts': {
           statements: 94,
           branches: 91,
           functions: 70,
           lines: 99,
         },
-        'packages/parser/src/**/*.ts': {
+        'packages/chart-parser/src/**/*.ts': {
           statements: 87,
           branches: 76,
           functions: 93,
           lines: 87,
         },
-        'packages/player/src/**/*.ts': {
+        'packages/player-engine/src/**/*.ts': {
           statements: 59,
           branches: 51,
           functions: 64,
           lines: 59,
         },
-        'packages/player-tui/src/**/*.ts': {
+        'packages/player-terminal/src/**/*.ts': {
           statements: 59,
           branches: 51,
           functions: 64,
           lines: 59,
         },
-        'packages/stringifier/src/**/*.ts': {
+        'packages/chart-writer/src/**/*.ts': {
           statements: 87,
           branches: 77,
           functions: 96,
           lines: 86,
         },
-        'packages/utils/src/**/*.ts': {
+        'packages/shared-utils/src/**/*.ts': {
           statements: 96,
           branches: 91,
           functions: 99,
@@ -343,18 +344,18 @@ export default defineConfig({
       // Regression snapshots are compared byte-for-byte by `toMatchFileSnapshot`; reformatting them would fail the suite.
       'tests/regression/__expected__/**',
       // So are the engine characterization snapshots.
-      'packages/player/src/core/characterization/__expected__/**',
+      'packages/player-engine/src/core/characterization/__expected__/**',
       // Generated by Changesets on every release; reformatting them would churn each version bump.
       '**/CHANGELOG.md',
       // Generated by the Leaderboard's `build:css`; it is rewritten whole on every rebuild.
-      'packages/leaderboard-api/src/pages/styles.generated.ts',
-      'packages/leaderboard-api/src/pages/icons.generated.ts',
-      'packages/leaderboard-api/src/pages/fonts.generated.ts',
-      'packages/leaderboard-api/src/pages/client.generated.ts',
+      'packages/app-leaderboard/src/pages/styles.generated.ts',
+      'packages/app-leaderboard/src/pages/icons.generated.ts',
+      'packages/app-leaderboard/src/pages/fonts.generated.ts',
+      'packages/app-leaderboard/src/pages/client.generated.ts',
       // Generated by drizzle-kit, which compares and rewrites them in its own layout.
-      'packages/leaderboard-api/migrations/meta/**',
+      'packages/app-leaderboard/migrations/meta/**',
       // Written by the Leaderboard's OpenAPI test, which compares it byte for byte.
-      'packages/leaderboard-api/openapi.json',
+      'packages/app-leaderboard/openapi.json',
     ],
   },
   lint: {
@@ -367,10 +368,10 @@ export default defineConfig({
       'packages/*/dist/**',
       'examples/**',
       'tmp/**',
-      'packages/leaderboard-api/src/pages/styles.generated.ts',
-      'packages/leaderboard-api/src/pages/icons.generated.ts',
-      'packages/leaderboard-api/src/pages/fonts.generated.ts',
-      'packages/leaderboard-api/src/pages/client.generated.ts',
+      'packages/app-leaderboard/src/pages/styles.generated.ts',
+      'packages/app-leaderboard/src/pages/icons.generated.ts',
+      'packages/app-leaderboard/src/pages/fonts.generated.ts',
+      'packages/app-leaderboard/src/pages/client.generated.ts',
     ],
     options: {
       typeAware: true,

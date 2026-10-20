@@ -60,15 +60,15 @@ const repositoryDir = resolve(scriptDir, '..');
 
 const SEA_TARGETS: Record<SEATargetName, SEATargetConfig> = {
   player: {
-    packageDir: resolve(repositoryDir, 'packages/player-tui'),
+    packageDir: resolve(repositoryDir, 'packages/player-terminal'),
     outputBaseName: 'be-music-player',
     entry: 'src/sea-main.ts',
     embedBundleAsset: true,
     embeddedNodeModules: [
-      { name: 'node-web-audio-api', resolveFrom: 'packages/player' },
+      { name: 'node-web-audio-api', resolveFrom: 'packages/player-engine' },
       {
         name: '@uwx/libav.js-fat',
-        resolveFrom: 'packages/player-tui',
+        resolveFrom: 'packages/player-terminal',
         // Node always selects the `.wasm` build (see the target() probe in dist/libav-fat.js) and the player
         // initialises libav with `noworker: true`, so the asm.js fallback (~122MB), the worker-threaded
         // build (~35MB), and the LGPL source tarballs (~30MB) are dead weight for the SEA runtime.
@@ -79,7 +79,7 @@ const SEA_TARGETS: Record<SEATargetName, SEATargetConfig> = {
     bundleBanner: SEA_WORKER_BANNER,
   },
   'audio-renderer': {
-    packageDir: resolve(repositoryDir, 'packages/audio-renderer'),
+    packageDir: resolve(repositoryDir, 'packages/chart-audio-renderer'),
     outputBaseName: 'be-music-audio-render',
     bundleBanner: SEA_WORKER_BANNER,
   },
@@ -279,7 +279,7 @@ async function inlineSEARelativeChunks(seaDir: string): Promise<void> {
   await Promise.all(localChunkFileNames.map((fileName) => unlink(resolve(seaDir, fileName))));
 }
 
-// Asset names kept in sync with packages/player-tui/src/node/sea-embedded-modules.ts.
+// Asset names kept in sync with packages/player-terminal/src/node/sea-embedded-modules.ts.
 const EMBEDDED_MODULES_MANIFEST_ASSET = 'embedded-node-modules.json';
 const EMBEDDED_MODULE_ASSET_PREFIX = 'embedded-node-modules/';
 // The SEA binary targets the build host platform, so only the matching native addon is embedded.
@@ -466,7 +466,7 @@ async function main(): Promise<void> {
   }
 
   const assets: Record<string, string> = {
-    // Asset name kept in sync with SEA_BUNDLE_ASSET_NAME in packages/player-tui/src/node/sea-worker.ts.
+    // Asset name kept in sync with SEA_BUNDLE_ASSET_NAME in packages/player-terminal/src/node/sea-worker.ts.
     ...(targetConfig.embedBundleAsset ? { 'sea-entry.cjs': bundlePath } : {}),
     ...(embeddedModules ? { [EMBEDDED_MODULES_MANIFEST_ASSET]: embeddedManifestPath, ...embeddedModules.assets } : {}),
   };

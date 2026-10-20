@@ -2,13 +2,13 @@
 
 # beatoraja skin 実装メモ
 
-この文書は、現在の `@be-music/beatoraja-skin` 実装をまとめます。
+この文書は、現在の `@be-music/skin-beatoraja` 実装をまとめます。
 この package は beatoraja の JSON skin と Lua skin theme を renderer 非依存の data structure に parse します。
-PixiJS rendering は `@be-music/player-web` の責務です。CLI/TUI render path は beatoraja skin を読み込みません。
+PixiJS rendering は `@be-music/player-browser` の責務です。CLI/TUI render path は beatoraja skin を読み込みません。
 
 ## 対象範囲
 
-- `@be-music/beatoraja-skin` は play、select、decide、result、course-result scene の `*.json` / `*.luaskin` entry を読み込みます。
+- `@be-music/skin-beatoraja` は play、select、decide、result、course-result scene の `*.json` / `*.luaskin` entry を読み込みます。
 - dropped folder や in-memory file map から theme asset を解決します。entry script の directory に対して path を normalize し、`*` wildcard (`play/background/*.png` 等) と case-insensitive lookup に対応します。
 - beatoraja の Lua 2-phase 評価契約を honor します。entry を `skin_config = nil` で 1 度評価し header (`property[]`、`filepath[]`、custom `offset[]` schema) を取得、次に user の選択を inject して `main()` 経由で完全な skin table を得ます。
 - package は plain TypeScript object のみを返します。PixiJS object、WebAudio node、browser DOM UI は作成しません。
@@ -114,20 +114,20 @@ beatoraja 本体はプレイモードをまたいで fallback しません。モ
 
 ## Scene mapping
 
-`@be-music/beatoraja-skin/scene` は、`@be-music/scene-model` の skin family に依存しない scene model を beatoraja skin の語彙に写します。
+`@be-music/skin-beatoraja/scene` は、`@be-music/player-scene-model` の skin family に依存しない scene model を beatoraja skin の語彙に写します。
 どの op が点くか、各 number と text が何を読むか、どの timer が始まり止まるか、gauge、graph、live offset です（[ADR 0002](./adr/0002-scene-model-package.ja.md)）。
-以前は `@be-music/player-web` の renderer のそばにあった beatoraja の state 解決で、今は select、decide、play、result の family view が読みます（play の view は play bridge を通して読みます）。
+以前は `@be-music/player-browser` の renderer のそばにあった beatoraja の state 解決で、今は select、decide、play、result の family view が読みます（play の view は play bridge を通して読みます）。
 
 ```mermaid
 flowchart LR
-  subgraph models["@be-music/scene-model"]
+  subgraph models["@be-music/player-scene-model"]
     play["PlayState · engine frame"]
     result["PlayResult"]
     entry["LibraryEntry · 一覧の設定"]
     chart["LibraryChart · 読み込みの進み具合"]
     course["CourseView"]
   end
-  subgraph mapping["@be-music/beatoraja-skin/scene"]
+  subgraph mapping["@be-music/skin-beatoraja/scene"]
     playR["play の resolver"]
     resultR["result の resolver"]
     selectR["select の resolver"]
@@ -169,7 +169,7 @@ play は hi-speed、lane cover、白数字と緑数字（`resolveWhiteNumber`）
 result は timing の平均と標準偏差を加え、扱わない number はすべて 0 とします。
 select は score の表を使いません。フォーカス中の chart の情報を読み、play の主な live な number（score、EX score、rate、combo、gauge、判定数）は 0 とし、残りは何も読みません。
 decide は score の表を使いません。chart の `#PLAYLEVEL`、BPM の number には一覧の BPM、読み込みの進み具合（165）を読み、ほかの number はすべて 0 とします。
-select と decide のメイン BPM（92）は play が表示するもの、つまり最も多くの判定ノートが置かれた BPM（`@be-music/chart` の `resolveChartMainBPM`）で、呼び出し側が `mainBPM` として渡します。
+select と decide のメイン BPM（92）は play が表示するもの、つまり最も多くの判定ノートが置かれた BPM（`@be-music/chart-model` の `resolveChartMainBPM`）で、呼び出し側が `mainBPM` として渡します。
 渡されなければヘッダーの BPM を読みます。
 
 ### Timer を data で返す
@@ -212,13 +212,13 @@ sequenceDiagram
 
 ## Browser player への配線
 
-`@be-music/player-web` は `loadBeatorajaThemeFromFiles()` を提供し、dropped browser `File[]` を `BeatorajaThemeBundle` に wrap します。
-host はその bundle から、scene ごとのスキンのエントリを player-web の `loadBeatorajaSceneKit()`（[player-web.ja.md](./player-web.ja.md#beatoraja-skin-と-theme-support)）で読み込みます。これはこの package の `loadBeatorajaSkin()` を 2 回（ヘッダーの読み込みと、プレイヤーのオプションでのスキンの読み込み。ホストがオプションをすでに持っていれば 1 回）、`source[]` 向けの `bundleBeatorajaSources()`、Pixi texture 向けの `loadBeatorajaTexturesFromBundle()`、CSS / bitmap font 向けの `loadBeatorajaFonts()` を呼び、エントリごとに保持します。
+`@be-music/player-browser` は `loadBeatorajaThemeFromFiles()` を提供し、dropped browser `File[]` を `BeatorajaThemeBundle` に wrap します。
+host はその bundle から、scene ごとのスキンのエントリを player-browser の `loadBeatorajaSceneKit()`（[player-web.ja.md](./player-web.ja.md#beatoraja-skin-と-theme-support)）で読み込みます。これはこの package の `loadBeatorajaSkin()` を 2 回（ヘッダーの読み込みと、プレイヤーのオプションでのスキンの読み込み。ホストがオプションをすでに持っていれば 1 回）、`source[]` 向けの `bundleBeatorajaSources()`、Pixi texture 向けの `loadBeatorajaTexturesFromBundle()`、CSS / bitmap font 向けの `loadBeatorajaFonts()` を呼び、エントリごとに保持します。
 state は LR2 theme state と並列に保持されるため、demo は両方の theme format を同時に保持できます。
 
 browser renderer は select、decide、gameplay、result skin の共有 view として `BeatorajaPlaySkinView` を使います。
 ファミリーのビューは `TEXT`、`NUM`、`OPTION`、timer、gauge、graph を [scene mapping](#scene-mapping) から読み、chart image、note layer、BGA layer、audio、result history など runtime 固有の部分を自分で提供します。
-select 画面、decide 画面、play 画面、result 画面は player-web の beatoraja の family view で、`createSelectScene`、`createDecideScene`、`createPlayScene`、`createResultScene` で作ります（[player-web.ja.md](./player-web.ja.md#選曲画面)）。select、decide、result の resolver でセッションのフレームを描き（result の view は `PlayResult` をそのまま読みます）、beatoraja の scene の timer をフレームごとに読みます。select の view は MODE と SORT の imageset のために一覧の位置の一覧の設定を読み（順番は `BEATORAJA_KEYS_FILTERS` と `BEATORAJA_SORTS`、設定の位置は `beatorajaKeysFilterIndex` と `beatorajaSortIndex` で決まります）、LNMODE の選択は自分で持ちます（select の入力の `lnMode`、なければ `beatorajaLNModeIndex` で読む譜面の `#LNMODE`）。ボタンはインテントとして選曲画面のセッションに返ります。
+select 画面、decide 画面、play 画面、result 画面は player-browser の beatoraja の family view で、`createSelectScene`、`createDecideScene`、`createPlayScene`、`createResultScene` で作ります（[player-web.ja.md](./player-web.ja.md#選曲画面)）。select、decide、result の resolver でセッションのフレームを描き（result の view は `PlayResult` をそのまま読みます）、beatoraja の scene の timer をフレームごとに読みます。select の view は MODE と SORT の imageset のために一覧の位置の一覧の設定を読み（順番は `BEATORAJA_KEYS_FILTERS` と `BEATORAJA_SORTS`、設定の位置は `beatorajaKeysFilterIndex` と `beatorajaSortIndex` で決まります）、LNMODE の選択は自分で持ちます（select の入力の `lnMode`、なければ `beatorajaLNModeIndex` で読む譜面の `#LNMODE`）。ボタンはインテントとして選曲画面のセッションに返ります。
 play の view は `BeatorajaPlayBridge` を通して描きます。play の state は play のセッションの `PlayState` で、bridge は frame、判定、レーン操作ごとに mapping が解決した op と timer を適用します（[player-web.ja.md](./player-web.ja.md#プレイ画面)）。
 
 browser gameplay path は parser が discovery する chart variant `5`、`7`、`9`、`10`、`14`、`24`、`24d` をすべて mount します。

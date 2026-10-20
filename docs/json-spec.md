@@ -1,29 +1,29 @@
 [Japanese version](./json-spec.ja.md)
 
-# BMS/BMSON intermediate representation (`@be-music/json`) implementation specification
+# BMS/bmson intermediate representation (`@be-music/chart-source`) implementation specification
 
-This document is the canonical specification for the BMS/BMSON intermediate representation provided by `@be-music/json`.
-`@be-music/json` is a format for Be-Music's internal processing only, and is not an external exchange format for distribution or reuse.
+This document is the canonical specification for the BMS/bmson intermediate representation provided by `@be-music/chart-source`.
+`@be-music/chart-source` is a format for Be-Music's internal processing only, and is not an external exchange format for distribution or reuse.
 Also, as it is still in the early stages of development, backward compatibility of this intermediate representation cannot be guaranteed.
 
 ## Purpose
 
-- Absorb BMS / BMSON differences and handle internal processing in a single format
+- Absorb BMS / bmson differences and handle internal processing in a single format
 - Preserve event timing stably during round trips
 
 ## Package boundaries
 
-- `@be-music/json` is a pure IR package
-- `@be-music/json` only provides types, normalized data structures, and clone/initialization/basic formatting helpers
-- `@be-music/chart` is in charge of score semantics such as beat conversion, event order, long note resolution, sample trigger judgment, etc., and computes the [Be-Music Fingerprint](./fingerprint-spec.md) of a chart (`computeChartFingerprint` / `computePlayFingerprint`).
+- `@be-music/chart-source` is a pure IR package
+- `@be-music/chart-source` only provides types, normalized data structures, and clone/initialization/basic formatting helpers
+- `@be-music/chart-model` is in charge of score semantics such as beat conversion, event order, long note resolution, sample trigger judgment, etc., and computes the [Be-Music Fingerprint](./fingerprint-spec.md) of a chart (`computeChartFingerprint` / `computePlayFingerprint`).
 - Source-level information for round-trips is kept as part of the IR, but separated from the normalized score semantics in the `preservation` layer.
 
 ## Design principles
 
 - When stringifying parsed input, the IR aims to preserve the original chart structure as faithfully as possible.
-- The structure here includes elements that affect the re-stringing result, such as the order of overlapping definitions, control syntax, object line division units, and BMSON bar line information.
+- The structure here includes elements that affect the re-stringing result, such as the order of overlapping definitions, control syntax, object line division units, and bmson bar line information.
 - Surface information that is not explicitly maintained by the IR, such as blank lines, comments, white space, line breaks, character codes, etc., is not subject to this principle.
-- As a result of editing the IR, if the retained structural information and the normalized `events` / `measures` / extension information no longer match, the stringifier will prioritize consistency and regenerate it.
+- As a result of editing the IR, if the retained structural information and the normalized `events` / `measures` / extension information no longer match, the chart-writer will prioritize consistency and regenerate it.
 
 ## Identifier and key naming
 
@@ -47,7 +47,7 @@ The parser accepts the former IR keys below on input and emits their canonical s
 
 ## Root structure
 
-The root object and its parts (field types are in `packages/json/src/index.ts`):
+The root object and its parts (field types are in `packages/chart-source/src/index.ts`):
 
 ```mermaid
 classDiagram
@@ -284,7 +284,7 @@ A full example:
 - `backBMP`: BMS `#BACKBMP`; bmson mirrors `info.back_image` here when present
 - `banner`: BMS `#BANNER`; bmson mirrors `info.banner_image` here when present
 - `playLevel`: BMS `#PLAYLEVEL` or bmson `info.level`; can be a number or a string
-- `rank`: BMS `#RANK` (a `0`–`4` rank index) or bmson `info.judge_rank` (a percentage, `100` = NORMAL); the stringifier converts between the two units when writing bmson
+- `rank`: BMS `#RANK` (a `0`–`4` rank index) or bmson `info.judge_rank` (a percentage, `100` = NORMAL); the chart-writer converts between the two units when writing bmson
 - `total`: BMS `#TOTAL` or bmson `info.total`
 - `difficulty`: BMS `#DIFFICULTY`
 - `bpm`: BMS `#BPM` or bmson `info.init_bpm`; BMS defaults to `130`, while bmson requires a positive `init_bpm`
@@ -355,7 +355,7 @@ This keeps `0a` and `0A` distinct for base-62 charts while preserving base-36 be
 - `preservation.bms.sourceLines` is the first choice to reproduce `stringifyBMS(parseChart(...))` while preserving the relative position of BMS header / object / control syntax
 - `preservation.bms.objectLines`: declaration order snapshot of object lines outside of control constructs
 - `preservation.bms.objectLines` is a partial snapshot for processing where you only want to handle object lines outside the control syntax
-- If `preservation.bms.objectLines` does not match `events` / `measures`, stringifier ignores and regenerates this array
+- If `preservation.bms.objectLines` does not match `events` / `measures`, chart-writer ignores and regenerates this array
 - `preservation.bmson.lines`: Array of bar line `y` values ​​(ascending order, no duplicates, starting from `0`)
 - `preservation.bmson.bpmEvents`: ordered snapshot of `bpm_events`
 - `preservation.bmson.stopEvents`: ordered snapshot of `stop_events`
@@ -418,7 +418,7 @@ flowchart LR
     bmsonIn[".bmson"]
     jsonIn[".json"]
   end
-  ir["BeMusicJSON<br/>(@be-music/json)"]
+  ir["BeMusicJSON<br/>(@be-music/chart-source)"]
   subgraph out["Written"]
     bmsOut[".bms"]
     bmsonOut[".bmson"]
@@ -429,9 +429,9 @@ flowchart LR
   jsonIn -->|"parseChart(…, 'json')"| ir
   ir -->|stringifyBMS| bmsOut
   ir -->|stringifyBmson| bmsonOut
-  ir -->|"parser CLI: JSON.stringify"| jsonOut
+  ir -->|"chart-parser CLI: JSON.stringify"| jsonOut
 ```
 
-- `stringifier` uses `position` denominator information to determine intra-bar resolution
+- `chart-writer` uses `position` denominator information to determine intra-bar resolution
 - `parseJson` requires `position` tuple and treats missing events as errors
-- Score semantics helpers such as beat conversion and event order are provided by `@be-music/chart`
+- Score semantics helpers such as beat conversion and event order are provided by `@be-music/chart-model`

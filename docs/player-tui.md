@@ -2,16 +2,16 @@
 
 # Terminal player implementation notes
 
-This document summarizes the terminal frontend implemented by `@be-music/player-tui` and the `bms-player` CLI.
+This document summarizes the terminal frontend implemented by `@be-music/player-terminal` and the `bms-player` CLI.
 Shared playback semantics such as timing, notes, judgment, score, gauge, and BGA cues are defined in [Player implementation specifications](./player-spec.md).
 Browser-specific PixiJS and WebAudio behavior is documented in [Browser player implementation notes](./player-web.md).
 
 ## Runtime boundary
 
-`@be-music/player-tui` is a Node frontend around the shared `@be-music/player` engine.
+`@be-music/player-terminal` is a Node frontend around the shared `@be-music/player-engine` engine.
 The CLI runner parses chart files, manages directory selection, renders loading/result screens, and starts one gameplay session.
-Gameplay itself runs in a worker thread that calls `autoPlay()` or `manualPlay()` from `@be-music/player`.
-The UI worker imports only `@be-music/player/signals` and `@be-music/player/display`, so it does not load the play loop or the audio renderer.
+Gameplay itself runs in a worker thread that calls `autoPlay()` or `manualPlay()` from `@be-music/player-engine`.
+The UI worker imports only `@be-music/player-engine/signals` and `@be-music/player-engine/display`, so it does not load the play loop or the audio renderer.
 
 The main thread owns terminal input and coordinates two worker-side surfaces and its own input runtime:
 
@@ -100,7 +100,7 @@ On non-Windows terminals, it opts into the Kitty keyboard protocol by default so
 On Windows, it opts into the Win32 terminal input mode.
 Set `BE_MUSIC_KEYBOARD_PROTOCOLS=kitty`, `win32`, or a comma-separated combination to override protocol opt-in.
 Once the terminal has answered the opt-in with a key event in that protocol, every later play of the process declares that its keys report their releases (`PlayerInputRuntime.reportsKeyReleases`), so the engine judges the play as key-state input from its first key.
-Before that, the engine infers when each key came up until the first `kitty-state` command arrives ([Input without key releases](./playlog.md#input-without-key-releases)).
+Before that, the engine infers when each key came up until the first `kitty-state` command arrives ([Input without key releases](./replay.md#input-without-key-releases)).
 
 Important command mappings:
 

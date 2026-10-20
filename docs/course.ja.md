@@ -2,9 +2,9 @@
 
 # コースと段位認定
 
-**コース**は、複数の譜面を 1 回のプレイにつなげたものです。代表的なのが**段位認定**で、共通の段位ゲージのまま各ステージを続けて遊び、全体に 1 つの結果が付きます。LR2 と beatoraja はそれぞれ独自の形式でコースを定義し、難易度表は表のヘッダーにコースを載せています。be-music はこの 3 つを `@be-music/player/course` の `CourseDefinition` という 1 つのモデルに読み込むので、後段はコースの出どころを気にする必要がありません。
+**コース**は、複数の譜面を 1 回のプレイにつなげたものです。代表的なのが**段位認定**で、共通の段位ゲージのまま各ステージを続けて遊び、全体に 1 つの結果が付きます。LR2 と beatoraja はそれぞれ独自の形式でコースを定義し、難易度表は表のヘッダーにコースを載せています。be-music はこの 3 つを `@be-music/player-engine/course` の `CourseDefinition` という 1 つのモデルに読み込むので、後段はコースの出どころを気にする必要がありません。
 
-この文書では、コースのモデルと、各形式がそれにどう対応するかを説明します。プレイの規則（段位ゲージ、引き継ぐ状態、コースの結果）とプレイログは、実装に合わせてそれぞれの節に追加します。
+この文書では、コースのモデルと、各形式がそれにどう対応するかを説明します。プレイの規則（段位ゲージ、引き継ぐ状態、コースの結果）とリプレイは、実装に合わせてそれぞれの節に追加します。
 
 ```mermaid
 flowchart LR
@@ -52,7 +52,7 @@ XML の `<courselist>` に、`title`、`line`（キーモード）、`type`、`h
 - **`hash`**：32 文字のヘッダーに続き、ステージごとに 32 文字の譜面 MD5 が並びます。コースのバーには 10 ステージまで並びますが、LR2 は EXPERT・GRADE も含めどのコースも先頭の 5 ステージだけを遊びます（譜面の読み込み処理がプレイのたびにステージ数を 1〜5 に収める。`LR2body.exe` 0x4b0b0f）。そのためコースはその 5 ステージとして読みます。読まなかったステージの数は `countLR2UnplayedStages(course)` で数えられ、Web デモはファイルを読み込んだときに知らせます。ヘッダーの 10 文字目がコースの種類です。
 - **`type`**：OpenLR2 にならい（`expert` / `nonstop` / `grade` テーブルとスキンの op 291-293）、`0` が EXPERT、`1` が NONSTOP、`2` が GRADE です。`type` 要素がなければヘッダーの 10 文字目を使います。
 - **制約**：この形式には制約の欄がありません。GRADE のコースには `grade` と `gauge_lr2` を付けます。LR2 は GRADE コースの開始時に両サイドのレーンオプションをオフにする（[Main.cpp M1124-M1170](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/Main.cpp#L1124-L1170)）ので、正規しか使えません。表の旧形式 `grade` リストは jbmstable-parser の読み方どおり `grade_mirror` のままです。
-- **LR2 のその他のリセット**：同じ処理で、EASY と G-ATTACK のゲージは GROOVE になり、HIDDEN / SUDDEN、アシスト（オートスクラッチなど）、BATTLE、DP の FLIP、プレイテンポ（ピッチ）、追加の変化オプションがオフになります。LR2 はこれを設定に書き込みますが、ホストはコースのステージにだけ適用するので、プレイヤーの設定はコースの後に戻ります（`@be-music/player/course` の `isLR2GradeCourse`、`resolveLR2GradeCoursePlaySettings`）。対象は `.lr2crs` から読んだ GRADE コースとコース作成で作った GRADE コースで、表や beatoraja の段位は対象外です。
+- **LR2 のその他のリセット**：同じ処理で、EASY と G-ATTACK のゲージは GROOVE になり、HIDDEN / SUDDEN、アシスト（オートスクラッチなど）、BATTLE、DP の FLIP、プレイテンポ（ピッチ）、追加の変化オプションがオフになります。LR2 はこれを設定に書き込みますが、ホストはコースのステージにだけ適用するので、プレイヤーの設定はコースの後に戻ります（`@be-music/player-engine/course` の `isLR2GradeCourse`、`resolveLR2GradeCoursePlaySettings`）。対象は `.lr2crs` から読んだ GRADE コースとコース作成で作った GRADE コースで、表や beatoraja の段位は対象外です。
 - ステージがない、ステージの hash が不正、種類が未知のコースは読み飛ばします。
 
 ### beatoraja の `course/*.json`
@@ -104,7 +104,7 @@ flowchart LR
   def --> play["通常のコースとして遊ぶ"]
 ```
 
-- **フィルタ。** be-music には楽曲データベースがないので、`parseCourseSongFilter` / `evaluateCourseSongFilter` が句を読み、各譜面（`CourseSongRecord`）を SQLite の比較規則で判定します。対応するのは、比較、`AND` / `OR` / `NOT`、`IN`、`LIKE`、`BETWEEN`、`IS NULL`、四則演算です。列は be-music が埋められる `song` の列に限ります：`md5`、`sha256`、`title`、`subtitle`、`artist`、`subartist`、`genre`、`tag`、`path`、`level`、`difficulty`、`mode`、`notes`、`minbpm`、`maxbpm`、`length`、`judge`、`feature`、`content`。beatoraja は `song` にプレイヤーの `score` と `scorelog`（と `information`）を結合するため、複数の表にある列は表名で修飾する必要があります。修飾しない `sha256`、`mode`、`notes`、`date`、`clear`、`combo`、`minbp`、`avgjudge` は SQLite にとって曖昧で、フィルタは拒否されます（`mode = 7` ではなく `song.mode = 7` と書きます）。末尾の `ORDER BY`（式または `RANDOM()`、`ASC` / `DESC`、`NULLS FIRST` / `LAST`）と `LIMIT n [OFFSET m]` / `LIMIT m, n` は抽選の前に候補を絞ります。beatoraja 自身の `folder/default.json` も MY BEST でこう書いています（`playcount > 0 ORDER BY playcount DESC LIMIT 10`）。これを適用するのは `selectCourseSongs` で、同順位は候補の順を保ち、`RANDOM()` は外から渡した `random` を使います。それ以外（未知の列、関数、サブクエリ）は解析エラーとし、そのステージはどの譜面も選びません。beatoraja でも失敗したクエリは何も返しません。
+- **フィルタ。** be-music には楽曲データベースがないので、`parseCourseChartFilter` / `evaluateCourseChartFilter` が句を読み、各譜面（`CourseChartRecord`）を SQLite の比較規則で判定します。対応するのは、比較、`AND` / `OR` / `NOT`、`IN`、`LIKE`、`BETWEEN`、`IS NULL`、四則演算です。列は be-music が埋められる `song` の列に限ります：`md5`、`sha256`、`title`、`subtitle`、`artist`、`subartist`、`genre`、`tag`、`path`、`level`、`difficulty`、`mode`、`notes`、`minbpm`、`maxbpm`、`length`、`judge`、`feature`、`content`。beatoraja は `song` にプレイヤーの `score` と `scorelog`（と `information`）を結合するため、複数の表にある列は表名で修飾する必要があります。修飾しない `sha256`、`mode`、`notes`、`date`、`clear`、`combo`、`minbp`、`avgjudge` は SQLite にとって曖昧で、フィルタは拒否されます（`mode = 7` ではなく `song.mode = 7` と書きます）。末尾の `ORDER BY`（式または `RANDOM()`、`ASC` / `DESC`、`NULLS FIRST` / `LAST`）と `LIMIT n [OFFSET m]` / `LIMIT m, n` は抽選の前に候補を絞ります。beatoraja 自身の `folder/default.json` も MY BEST でこう書いています（`playcount > 0 ORDER BY playcount DESC LIMIT 10`）。これを適用するのは `selectCourseCharts` で、同順位は候補の順を保ち、`RANDOM()` は外から渡した `random` を使います。それ以外（未知の列、関数、サブクエリ）は解析エラーとし、そのステージはどの譜面も選びません。beatoraja でも失敗したクエリは何も返しません。
 - **抽選。** `drawRandomCourse(definition, candidates, random)` は `RandomCourseData.lotterySongDatas` に従います。各ステージは、フィルタが選んだ譜面（`ORDER BY` / `LIMIT` の適用後）から一様に 1 曲引きます。フィルタのないステージは、前のステージの候補から引きます（最初のステージなら全譜面から）。`distinct` があれば、引き済みの譜面は引き直します。ただし候補がすべて引き済みなら重複を許します。結果は固定のコースで、レーンオプションの制約があれば `grade`、なければ `expert` です。`random` は外から渡すので、抽選を再現できます。
 - **失敗。** フィルタを解析できないステージ、または何も選ばないステージで抽選は止まり、その旨を返します（`RandomCourseDrawFailure`）。
 
@@ -149,10 +149,10 @@ flowchart LR
 - **判定ランクと TOTAL。** 結合後の譜面は最初のステージの `#RANK` で始まり、最後のステージの `#TOTAL` を使います。LR2 は TOTAL をステージごとに上書きします。後のステージではそのステージの `#RANK` に切り替わります（`map.stageRanks`、次項）。
 - **後のステージの判定ランク**（`resolveNonstopStageRanks`）。LR2 のローダーは、後のステージの `#RANK` をそのステージの始まりにオブジェクトとして置きます（[L26301-L26313](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26301-L26313)）。このオブジェクトはステージを切り詰めるときにほかのオブジェクトと一緒に前へずれ、プレイのループがそこに来ると判定幅を設定します（[L12831-L12877](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L12831-L12877)、`LR2body.exe` 0x42be2f）。`placement: 'lr2'` ではそのとおり、ステージ自身の時刻 0 で切り替えます。この時刻は前のステージの最後のノーツより何小節も前になることがあります。`#RANK` のないステージでは、それまでのランクのままです。判定幅は LR2 の NONSTOP 専用の表（`resolveLR2NonstopRankWindowsMs`）から取ります。この表は譜面の開始時の表（0x4b5835）と VERY HARD（PGREAT ±12 / GREAT ±24 / GOOD ±60 ms。開始時は ±8 / ±24 / ±40）と HARD（GOOD ±80 ms。開始時は ±60）で違います。既定の `'intended'` の配置では、前のステージの最後のノーツとそのステージの最初のノーツの中間で、その `#RANK` で始まる譜面と同じ判定幅に切り替えます。`#RANK` のないステージは NORMAL として扱います。
 - **BPM 表示**（`resolveNonstopTempo`、`nonstopBPMAt`）。結合後の譜面は 150 BPM で進みますが、LR2 は各ステージ自身の BPM を表示します。ローダーは後のステージの `#BPM` を（FIT の倍率を掛けて）ステージの始まりに BPM オブジェクトとして置き（[L26257-L26273](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26257-L26273)）、プレイのループの BPM オブジェクトが表示を変えます（[L12717-L12724](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L12717-L12724)）。`map.tempo` がこの表示を持ちます。既定では各ステージの BPM をそのステージの担当区間で出します。`placement: 'lr2'` では LR2 のイベント順どおりです（後のステージの `#BPM` はステージの時刻 0 から。最後のステージ以外では、最終小節線から後の BPM 変化を捨てます。[L26970-L26976](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26970-L26976)）。
-- **ホスト向けの情報。** 結果のマップは各ステージについて次を返します：キー（ステージ別の音のバスと BGA レイヤー用）、担当区間、つなぎ方に応じた音のフェードと 3 秒の BGA クロスフェード、LR2 がステージの切り替わりを知らせるか（BLANK でつないだときだけ）。さらに BPM 表示（`tempo`）と判定ランクの切り替え（`stageRanks`）を返します。`stageRanks` はエンジンの `stageRanks` オプションに渡します。プレイログは `chart.judgeRank.stageRanks` として記録するので、リプレイと再シミュレーションでも同じ判定幅で判定します。`assetPath` で、ホストは各ステージのファイルパスに接頭辞を付けられます。
+- **ホスト向けの情報。** 結果のマップは各ステージについて次を返します：キー（ステージ別の音のバスと BGA レイヤー用）、担当区間、つなぎ方に応じた音のフェードと 3 秒の BGA クロスフェード、LR2 がステージの切り替わりを知らせるか（BLANK でつないだときだけ）。さらに BPM 表示（`tempo`）と判定ランクの切り替え（`stageRanks`）を返します。`stageRanks` はエンジンの `stageRanks` オプションに渡します。リプレイは `chart.judgeRank.stageRanks` として記録するので、リプレイと再シミュレーションでも同じ判定幅で判定します。`assetPath` で、ホストは各ステージのファイルパスに接頭辞を付けられます。
 - **未対応。** あるステージのオブジェクトが別のステージの STOP 中に鳴るときのスクロール。結合できるのは BMS のステージだけです。
 
-**処理の流れ**（`prepareNonstopCourse`、`resolveNonstopRun`、`buildNonstopCoursePlaylog`）。ホストが遊ぶためにコースを結合するときも、Leaderboard が確かめるためにプレイの結合譜面を作り直すときも、同じ手順を使います。そのため、遊んだ譜面について両者の結果が一致します。
+**処理の流れ**（`prepareNonstopCourse`、`resolveNonstopRun`、`buildNonstopCourseReplay`）。ホストが遊ぶためにコースを結合するときも、Leaderboard が確かめるためにプレイの結合譜面を作り直すときも、同じ手順を使います。そのため、遊んだ譜面について両者の結果が一致します。
 
 ```mermaid
 flowchart TD
@@ -161,12 +161,12 @@ flowchart TD
   ln --> stitch["stitchNonstopCourse"]
   stitch --> play["結合した譜面を遊ぶ"]
   play --> run["resolveNonstopRun"]
-  run --> log["buildNonstopCoursePlaylog"]
+  run --> log["buildNonstopCourseReplay"]
 ```
 
 - `prepareNonstopCourse(stages, options)` は、各ステージの譜面の `#RANDOM` / `#SWITCH` を解決し（ステージに `randomDraws` があればそれで、なければ `random` で抽選）、コースのロングノート制約を適用し、つなぎ方・配置・結合規則の版でステージを結合します。ホストのアセットの扱いは `assetPath` で渡します。`assetPath` は遊ぶ形のステージの譜面を受け取ります。解決できないステージの譜面は `stage-chart` として断ります。
-- `resolveNonstopRun(course, playlog)` はプレイの `nonstop` の記録を返します。譜面のつなぎ方、各ステージがプレイのどこにあったか（とその抽選結果）、各ノーツのステージです。
-- `buildNonstopCoursePlaylog(definition, course, playlog)` はコースのプレイログを作ります。結合したプレイ、そこから切り出した到達済みの各ステージ（譜面で名前を付けます。ホストが渡す題名とファイルのハッシュ、読み込んだままの譜面のフィンガープリント）、たどり着かなかった各ステージ（遊ぶ形の譜面の情報付き）です。
+- `resolveNonstopRun(course, replay)` はプレイの `nonstop` の記録を返します。譜面のつなぎ方、各ステージがプレイのどこにあったか（とその抽選結果）、各ノーツのステージです。
+- `buildNonstopCourseReplay(definition, course, replay)` はコースのリプレイを作ります。結合したプレイ、そこから切り出した到達済みの各ステージ（譜面で名前を付けます。ホストが渡す題名とファイルのハッシュ、読み込んだままの譜面のフィンガープリント）、たどり着かなかった各ステージ（遊ぶ形の譜面の情報付き）です。
 
 ## ステージを探す
 
@@ -174,7 +174,7 @@ flowchart TD
 
 ## コースを作る
 
-LR2 では、選曲画面で自分の EXPERT・NONSTOP・GRADE コースを作れます（[L12148-L12269](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L12148-L12269)、[L11063-L11137](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L11063-L11137)）。作ったコースは `.lr2crs` ではなく LR2 のデータベースに保存されます。`@be-music/player/course` は、その規則を純粋関数として持ちます。
+LR2 では、選曲画面で自分の EXPERT・NONSTOP・GRADE コースを作れます（[L12148-L12269](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L12148-L12269)、[L11063-L11137](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L11063-L11137)）。作ったコースは `.lr2crs` ではなく LR2 のデータベースに保存されます。`@be-music/player-engine/course` は、その規則を純粋関数として持ちます。
 
 ```mermaid
 stateDiagram-v2
@@ -193,13 +193,13 @@ stateDiagram-v2
 - **縛り。** LR2 のコース作成には縛りを設定する手段がありません（オプション禁止のボタンは実装されませんでした）。そのため、作ったコースは `defaultCourseMakerConstraints` の縛りになります（GRADE は LR2 の段位としてレーンオプションなし・LR2 ゲージ、ほかは縛りなし）。ホストが beatoraja のコースエディタのように縛りを設定することもできます。作成中は `CourseDraft.constraints`、作った後は `withCourseConstraints` で、グループごとに 1 つに正規化します。
 - **共有。** `serializeLR2CourseFile` は、コースを UTF-8 の `.lr2crs` に書きます。`parseLR2CourseFile` で読み戻すと同じコースになりますが、この形式には縛りと `release` を書く場所がありません（どのコースもランキング対象として読み戻されます）。`serializeBeatorajaCourseFile` は両方を残したまま beatoraja の `course/*.json` を書きます（beatoraja にない NONSTOP コースは含めません）。
 
-`CourseMaker`（`@be-music/player-web/collection`）は、ホストのためにプレイヤーのコースと作成中のコースを持ちます。`resolveCourseMakerFolders` は、LR2 と同じくそれらを並べます。種類ごとにコースフォルダが 1 つあり、その中にコースが並んで、最後に NEW COURSE バーが来ます。
+`CourseMaker`（`@be-music/player-browser/collection`）は、ホストのためにプレイヤーのコースと作成中のコースを持ちます。`resolveCourseMakerFolders` は、LR2 と同じくそれらを並べます。種類ごとにコースフォルダが 1 つあり、その中にコースが並んで、最後に NEW COURSE バーが来ます。
 
 ## コースのステージを遊ぶ
 
-ホストはコースを 1 ステージずつ遊び、それぞれに `PlayerOptions.course` を渡します。中身は、コースの `kind`、コースの `gaugeSet`（`gauge_*` 制約）と `judge` 制約（`no-good` / `no-great`）、前のステージが残した状態を表す `carryIn`（最初のステージにはなし）です。ステージはこのオブジェクトをそのままプレイログの `play.course` に記録するので、ログは単体で再生・再シミュレーションできます。
+ホストはコースを 1 ステージずつ遊び、それぞれに `PlayerOptions.course` を渡します。中身は、コースの `kind`、コースの `gaugeSet`（`gauge_*` 制約）と `judge` 制約（`no-good` / `no-great`）、前のステージが残した状態を表す `carryIn`（最初のステージにはなし）です。ステージはこのオブジェクトをそのままリプレイの `play.course` に記録するので、ログは単体で再生・再シミュレーションできます。
 
-各ステージの遊び方はコースの制約で決まります。この規則は `@be-music/player/course` にあります。
+各ステージの遊び方はコースの制約で決まります。この規則は `@be-music/player-engine/course` にあります。
 
 - `resolveCourseStageSettings` はコースから `PlayerOptions.course`（種類、ゲージの組、判定の制約）を読みます。
 - `resolveCourseLaneOptions` は beatoraja の `MusicSelector` と同じくレーンオプションを制限します。`grade` は両サイドと DP の FLIP をオフにし、`grade_mirror` は 1P の MIRROR を残してそのとき 2P も MIRROR、FLIP をオンにします（ほかの選択ではすべてオフ）。`grade_random` は各サイドのランダム系を残します。
@@ -237,7 +237,7 @@ flowchart LR
 
 ### 引き継ぐ状態
 
-- **ゲージ**：次のステージは、前のステージが終わったときのゲージ値（`results.native.gauge.final`）から始まります。`resolveCourseStageStartGauge`（`@be-music/player/playlog`）は、エンジンが動く前にステージのコース用ゲージと開始値を返すので、ホストはステージの READY の段階からそのゲージを表示し、結果のグラフもそこから始められます。
+- **ゲージ**：次のステージは、前のステージが終わったときのゲージ値（`results.native.gauge.final`）から始まります。`resolveCourseStageStartGauge`（`@be-music/player-engine/replay`）は、エンジンが動く前にステージのコース用ゲージと開始値を返すので、ホストはステージの READY の段階からそのゲージを表示し、結果のグラフもそこから始められます。
 - **コースのコンボ**：各ステージは LR2 や beatoraja と同じく自分のコンボと最大コンボを持ち、それとは別に、ステージをまたいで続き、ステージのコンボと同じところで切れるコース全体のコンボを持ちます（`PlayerSummary.course`、`results.*.course`）。次のステージはそのコンボとコースの最大コンボを引き継ぎます。
 
 ### ゲージが尽きたら終わる
@@ -246,11 +246,11 @@ flowchart LR
 
 ESC で投げたステージも、コースを落ちたプレイとして終えます。これは意図的に LR2 と変えています。`LR2body.exe` は、投げたステージの結果を FAILED として表示し、ゲージが 2 % 以上残っていて次のステージがあれば次へ進みます（遊ばなかったステージがあるので、コースのランプは最後に FAILED になります）。GOOD 以上の判定が 1 つもなければ、保存せずに選曲画面へ戻ります。be-music では、ESC はコースを投げる操作として扱います。
 
-コースのステージは単曲のプレイとしてランキングに載せられません。`checkPlaylogEligibility` は `course-stage` として拒否します。
+コースのステージは単曲のプレイとしてランキングに載せられません。`checkReplayEligibility` は `course-stage` として拒否します。
 
 ### コースのプレイ
 
-`CourseRun`（`@be-music/player/course`）は EXPERT や GRADE のコースの 1 回のプレイです。NONSTOP コースは代わりに 1 本につないだ譜面として遊びます（[NONSTOP コース](#nonstop-コース)）。ホストはコースの定義と各ステージの譜面を渡します。ステージはホスト自身のエントリ（曲のエントリや譜面ファイルなど、`chart` と `chartPath` を持つもの）で、コースが遊ぶ形の譜面にして返します。ランタイムに依存しないので、どのホストも同じ規則でコースを遊べます。
+`CourseRun`（`@be-music/player-engine/course`）は EXPERT や GRADE のコースの 1 回のプレイです。NONSTOP コースは代わりに 1 本につないだ譜面として遊びます（[NONSTOP コース](#nonstop-コース)）。ホストはコースの定義と各ステージの譜面を渡します。ステージはホスト自身のエントリ（曲のエントリや譜面ファイルなど、`chart` と `chartPath` を持つもの）で、コースが遊ぶ形の譜面にして返します。ランタイムに依存しないので、どのホストも同じ規則でコースを遊べます。
 
 ```mermaid
 stateDiagram-v2
@@ -258,20 +258,20 @@ stateDiagram-v2
     ステージ --> ステージ: recordStage（続く）
     ステージ --> 終了: recordStage（ゲージが尽きた・最後のステージ）
     ステージ --> 終了: giveUp（ESC）
-    終了 --> [*]: buildPlaylog
+    終了 --> [*]: buildReplay
 ```
 
 - `nextStage` は次のステージを決めます。コースのロングノート制約を適用した譜面、引き継ぎ状態を入れた `PlayerOptions.course`、ハイスピードを固定するかどうかです。`playSettings` は、プレイヤーの選択の代わりにそのステージで使う設定を返します（`resolveCourseStagePlaySettings`。コースが許すレーンオプション、次に LR2 の GRADE コースのリセット）。
-- `recordStage` はステージのプレイログを記録し、コースが続くかどうかを返します（`goesOnAfter` で先に確かめられます）。`giveUp` は ESC で投げたステージを記録し、コースを落ちたプレイとして終えます。
+- `recordStage` はステージのリプレイを記録し、コースが続くかどうかを返します（`goesOnAfter` で先に確かめられます）。`giveUp` は ESC で投げたステージを記録し、コースを落ちたプレイとして終えます。
 - `playSeconds` はステージのプレイ時間を合計します。投げたステージは投げたところまでです（`resolveGivenUpPlaySeconds`）。`stageExtras` は、ホストが各ステージについて残したもの（結果のグラフなど）を持ちます。
-- `buildPlaylog` はコースのプレイログを書きます。遊んだステージに続けて、たどり着かなかった各ステージを、譜面の情報、ファイルのハッシュ、譜面のフィンガープリントとともに並べます。
+- `buildReplay` はコースのリプレイを書きます。遊んだステージに続けて、たどり着かなかった各ステージを、譜面の情報、ファイルのハッシュ、譜面のフィンガープリントとともに並べます。
 
 ### コースの結果
 
-コースの結果はステージを合計し（[プレイログ — コースのプレイログ](./playlog.ja.md#コースのプレイログ) を参照）、そのうえで次を決めます。
+コースの結果はステージを合計し（[リプレイ — コースのリプレイ](./replay.ja.md#コースのリプレイ) を参照）、そのうえで次を決めます。
 
 - **ランプ**：ゲージが尽きて終わったステージがあるか、到達しなかったステージがあれば FAILED。コースの最大コンボがコースの全ノートに届いていれば（LR2 と beatoraja と同じく Σ ノート数 == コースの最大コンボ）FULL COMBO、GOOD がなければ PERFECT、PGREAT だけなら MAX（LR2 と IIDX は FULL COMBO が上限）。それ以外はゲージのランプです。LR2 はプレイヤーの選んだゲージに従い（EASY → EASY、HARD → HARD、それ以外は NORMAL。LR2 が HARD を出すのは HARD 系のゲージだけなので、DEATH でのクリアは NORMAL です。LR2body.exe の `CheckCourseClear`）、beatoraja と IIDX は段位ゲージに従います（`CLASS` は NORMAL、`EXCLASS` は HARD、`EXHARDCLASS` は EX-HARD）。
 - **BP**（`missCount`）：BAD・POOR・空 POOR（LR2 も空 POOR を POOR の数に足すので BP に含まれます）に、未到達のステージを含め判定されなかったノートをすべて加えます（LR2 の `CheckCourseClear`、beatoraja の `MusicResult`）。
 - **トロフィー**（beatoraja の `GradeBar.getTrophy`）：`missRate` ≥ BP × 100 / ノート数、かつ `scoreRate` ≤ EX スコア × 100 / (2 × ノート数) を満たす最後のトロフィー。
 
-ランプと BP は、どのプレイのランプも決める語彙のうちコースの規則と BP です（`@be-music/player/ruleset` の `resolveCourseClearLamp`、`resolveMissCount`）。ホストはプレイの自己ベストを、そのプレイを判定したルールセットで保ちます（`resolveCoursePlayedRuleset`。ステージごとに違うプレイは記録しません）。規則は `@be-music/player/records` にあります。`courseRunRecordPlay` はプレイが記録に残すものを読み、`courseRunKeepsRecord` はオートプレイとテンポを変えたプレイを除き、`mergeCourseStageRecord` は LR2 と同じく EXPERT / GRADE のステージをその譜面の記録に反映します（最高の EX スコア・最大コンボ・最少の BP と、FULL COMBO 以上のランプ。クリアランプとプレイ回数は更新しません）。
+ランプと BP は、どのプレイのランプも決める語彙のうちコースの規則と BP です（`@be-music/player-engine/ruleset` の `resolveCourseClearLamp`、`resolveMissCount`）。ホストはプレイの自己ベストを、そのプレイを判定したルールセットで保ちます（`resolveCoursePlayedRuleset`。ステージごとに違うプレイは記録しません）。規則は `@be-music/player-engine/records` にあります。`courseRunRecordPlay` はプレイが記録に残すものを読み、`courseRunKeepsRecord` はオートプレイとテンポを変えたプレイを除き、`mergeCourseStageRecord` は LR2 と同じく EXPERT / GRADE のステージをその譜面の記録に反映します（最高の EX スコア・最大コンボ・最少の BP と、FULL COMBO 以上のランプ。クリアランプとプレイ回数は更新しません）。

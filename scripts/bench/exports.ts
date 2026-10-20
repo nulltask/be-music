@@ -4,9 +4,9 @@ import { dirname, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { Bench } from 'tinybench';
-import * as jsonAPI from '@be-music/json';
-import * as parserAPI from '@be-music/parser';
-import type { RenderResult } from '@be-music/audio-renderer';
+import * as jsonAPI from '@be-music/chart-source';
+import * as parserAPI from '@be-music/chart-parser';
+import type { RenderResult } from '@be-music/chart-audio-renderer';
 import { parseNonNegativeCLINumber, parsePositiveCLINumber, resolveCLIValue, runCLIMain } from './cli-utils.ts';
 import {
   convertTaskResult,

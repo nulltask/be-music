@@ -2,7 +2,7 @@
 
 # Bemuse 実装仕様
 
-この文書は、`packages/parser` / `packages/stringifier` / `packages/player` が Bemuse 形式（Music Server + assets package）をどう扱うかを定義します。
+この文書は、`packages/chart-parser` / `packages/chart-writer` / `packages/player-engine` が Bemuse 形式（Music Server + assets package）をどう扱うかを定義します。
 
 ## 一次参照
 
@@ -25,7 +25,7 @@
 
 - 対応レベル: 未対応
 - 方針: bemuse を「譜面形式」ではなく「配布コンテナ」として扱う
-- 変換方針: `@be-music/json` の `sourceFormat` は `bms` / `bmson` を維持し、bemuse は入力解決レイヤで吸収する
+- 変換方針: `@be-music/chart-source` の `sourceFormat` は `bms` / `bmson` を維持し、bemuse は入力解決レイヤで吸収する
 
 ## 形式概要
 
@@ -83,7 +83,7 @@
 
 ## 対応チェックリスト
 
-### parser (bemuse -> `@be-music/json`)
+### parser (bemuse -> `@be-music/chart-source`)
 
 - [ ] `index.json` (`MusicServerIndex`) を受理し、`songs[]` を列挙
 - [ ] `songs[].id` / `songs[].path` を保持し、`path` 末尾 `/` を正規化
@@ -101,7 +101,7 @@
 - [ ] `charts[]` の付帯情報（`md5`, `noteCount`, `bpm`, `duration`, `keys`, `scratch`, `bga`）を保持
 - [ ] 取得した譜面文字列を既存 `parseBMS` / `parseBmson` に委譲
 
-### stringifier (`@be-music/json` -> bemuse assets)
+### chart-writer (`@be-music/chart-source` -> bemuse assets)
 
 - [ ] `resources.wav` で参照される音声ファイルを収集
 - [ ] チャンク分割の上限を `1,474,560` byte（公式実装の `max`）で適用
@@ -115,7 +115,7 @@
 - [ ] `assets/metadata.json` を同時出力
 - [ ] `bemuse-song.json` / `index.json` の生成（single-song / multi-song server）をサポート
 
-### player / audio-renderer
+### player / chart-audio-renderer
 
 - [ ] 入力として `index.json` / `bemuse-song.json` を受理
 - [ ] keysound は `assets/metadata.json` + `*.bemuse` から解決

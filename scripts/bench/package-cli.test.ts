@@ -5,10 +5,10 @@ import { resolvePackageBenchmarkOutputPath } from './package-cli.ts';
 
 describe('resolvePackageBenchmarkOutputPath', () => {
   it('uses the repository tmp/bench path for a package script', () => {
-    const packageScriptPath = resolve('/repo/packages/chart/scripts/bench.ts');
+    const packageScriptPath = resolve('/repo/packages/chart-model/scripts/bench.ts');
 
-    expect(resolvePackageBenchmarkOutputPath(pathToFileURL(packageScriptPath).href, 'chart')).toBe(
-      resolve('/repo/tmp/bench/exports-chart.json'),
+    expect(resolvePackageBenchmarkOutputPath(pathToFileURL(packageScriptPath).href, 'chart-model')).toBe(
+      resolve('/repo/tmp/bench/exports-chart-model.json'),
     );
   });
 });

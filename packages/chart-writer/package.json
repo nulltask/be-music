@@ -1,0 +1,35 @@
+{
+  "name": "@be-music/chart-writer",
+  "version": "0.5.0",
+  "description": "Writers for exporting be-music JSON chart sources to BMS or bmson",
+  "license": "MIT",
+  "bin": {
+    "bms-stringify": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build:bundle": "vp pack",
+    "build": "vp pack",
+    "clean": "rimraf dist",
+    "dev": "node --conditions=source src/cli.ts",
+    "bench": "node --conditions=source scripts/bench.ts"
+  },
+  "dependencies": {
+    "@be-music/chart-model": "workspace:*",
+    "@be-music/chart-parser": "workspace:*",
+    "@be-music/chart-source": "workspace:*",
+    "@be-music/shared-utils": "workspace:*"
+  }
+}

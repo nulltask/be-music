@@ -1,10 +1,10 @@
-import { createEmptyJSON, type BeMusicJSON } from '@be-music/json';
-import { manualPlay } from '@be-music/player';
-import type { PlaylogInputEvent, PlaylogNote, PlaylogRulesetId } from '@be-music/player/playlog';
+import { createEmptyJSON, type BeMusicJSON } from '@be-music/chart-source';
+import { manualPlay } from '@be-music/player-engine';
+import type { ReplayInputEvent, ReplayNote, RulesetId } from '@be-music/player-engine/replay';
 import type { EngineReplay } from './play-scenarios.ts';
 
 /**
- * Seeded random charts and input streams for the engine / play-log simulator differential test. Everything is drawn
+ * Seeded random charts and input streams for the engine / replay simulator differential test. Everything is drawn
  * from one deterministic generator per seed, so a failing seed reproduces exactly.
  */
 
@@ -112,8 +112,8 @@ export function buildFuzzChart(mode: FuzzMode, random: () => number): FuzzChart 
  * them), some skipped, some preceded by a stray press, long notes released around, well before or well after their
  * tail, and keys sometimes held across mines. Every lane alternates down / up.
  */
-export function buildFuzzInputs(notes: readonly PlaylogNote[], random: () => number): PlaylogInputEvent[] {
-  const byLane = new Map<string, PlaylogNote[]>();
+export function buildFuzzInputs(notes: readonly ReplayNote[], random: () => number): ReplayInputEvent[] {
+  const byLane = new Map<string, ReplayNote[]>();
   for (const note of notes) {
     if (note.type === 'invisible') continue;
     const laneNotes = byLane.get(note.channel) ?? [];
@@ -127,7 +127,7 @@ export function buildFuzzInputs(notes: readonly PlaylogNote[], random: () => num
     if (roll < 0.9) return Math.round((random() - 0.5) * 400_000);
     return Math.round((random() - 0.5) * 1_200_000);
   };
-  const events: Array<Omit<PlaylogInputEvent, 'seq'>> = [];
+  const events: Array<Omit<ReplayInputEvent, 'seq'>> = [];
   const press = (channel: string, down: number, up: number): void => {
     events.push({ timeUs: down, action: 'down', channels: [channel] });
     events.push({ timeUs: up, action: 'up', channels: [channel] });
@@ -191,18 +191,18 @@ export function buildFuzzInputs(notes: readonly PlaylogNote[], random: () => num
 }
 
 export interface FuzzReplayOptions {
-  ruleset: PlaylogRulesetId;
+  ruleset: RulesetId;
   gauge: FuzzGauge;
   autoScratch: boolean;
 }
 
-/** Replays `inputs` through the live engine with the play options a fuzz case draws, recording a play log. */
+/** Replays `inputs` through the live engine with the play options a fuzz case draws, recording a replay. */
 export async function replayFuzzCase(
   chart: FuzzChart,
-  inputs: readonly PlaylogInputEvent[],
+  inputs: readonly ReplayInputEvent[],
   options: FuzzReplayOptions,
 ): Promise<EngineReplay> {
-  let playlog: EngineReplay['playlog'] | undefined;
+  let replay: EngineReplay['replay'] | undefined;
   const summary = await manualPlay(chart.json, {
     speed: 1024,
     leadInMs: 0,
@@ -214,13 +214,13 @@ export async function replayFuzzCase(
     gauge: options.gauge,
     autoScratch: options.autoScratch,
     replayInputs: inputs,
-    recordPlaylog: { gauge: options.gauge },
-    onPlaylogRecorded: (recorded) => {
-      playlog = recorded;
+    recordReplay: { gauge: options.gauge },
+    onReplayRecorded: (recorded) => {
+      replay = recorded;
     },
   });
-  if (playlog === undefined) {
-    throw new Error('manualPlay finished without recording a playlog');
+  if (replay === undefined) {
+    throw new Error('manualPlay finished without recording a replay');
   }
-  return { summary, playlog };
+  return { summary, replay };
 }

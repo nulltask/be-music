@@ -159,7 +159,7 @@
         "3750000 14 01",
         "8000000 11 01"
       ],
-      "playlogChart": {
+      "replayChart": {
         "sourceFormat": "bms",
         "laneMode": "5 KEY SP",
         "lnMode": 1,
@@ -658,7 +658,7 @@
         "3750000 22 01",
         "24000000 16 01"
       ],
-      "playlogChart": {
+      "replayChart": {
         "sourceFormat": "bms",
         "laneMode": "14 KEY DP",
         "lnMode": 1,

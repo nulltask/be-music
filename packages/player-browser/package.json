@@ -1,0 +1,68 @@
+{
+  "name": "@be-music/player-browser",
+  "version": "0.11.0",
+  "description": "Browser player runtime with audio, input, skin rendering, and video recording",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./host": {
+      "source": "./src/host/index.ts",
+      "types": "./dist/host.d.ts",
+      "default": "./dist/host.js"
+    },
+    "./skin": {
+      "source": "./src/skin/index.ts",
+      "types": "./dist/skin.d.ts",
+      "default": "./dist/skin.js"
+    },
+    "./collection": {
+      "source": "./src/collection/index.ts",
+      "types": "./dist/collection.d.ts",
+      "default": "./dist/collection.js"
+    },
+    "./audio": {
+      "source": "./src/runtime/index.ts",
+      "types": "./dist/audio.d.ts",
+      "default": "./dist/audio.js"
+    },
+    "./recording": {
+      "source": "./src/recording/index.ts",
+      "types": "./dist/recording.d.ts",
+      "default": "./dist/recording.js"
+    }
+  },
+  "scripts": {
+    "build": "vp pack",
+    "clean": "rimraf dist",
+    "bench": "node --conditions=source scripts/bench.ts"
+  },
+  "dependencies": {
+    "@be-music/chart-model": "workspace:*",
+    "@be-music/chart-parser": "workspace:*",
+    "@be-music/chart-source": "workspace:*",
+    "@be-music/player-engine": "workspace:*",
+    "@be-music/player-scene-model": "workspace:*",
+    "@be-music/player-skin-sdk": "workspace:*",
+    "@be-music/shared-utils": "workspace:*",
+    "@be-music/skin-beatoraja": "workspace:*",
+    "@be-music/skin-lr2": "workspace:*",
+    "@ffmpeg/core": "^0.12.10",
+    "@ffmpeg/core-mt": "^0.12.10",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
+    "fflate": "^0.8.3",
+    "mediabunny": "^1.61.6",
+    "pixi.js": "^8.22.0",
+    "signalsmith-stretch": "^1.3.2"
+  }
+}
