@@ -97,7 +97,7 @@ describe('flipDPChart', () => {
 });
 
 /**
- * The play session applies DP FLIP to the prepared notes (`prepareSong`) where the beatoraja play used to flip the chart
+ * The play session applies DP FLIP to the prepared notes (`prepareChart`) where the beatoraja play used to flip the chart
  * before preparing it: both must give the same notes, lanes and timing.
  */
 describe('DP FLIP on the prepared notes', () => {

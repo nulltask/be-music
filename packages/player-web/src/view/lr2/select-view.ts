@@ -34,9 +34,9 @@ import {
   type LR2TimerUpdate,
 } from '@be-music/lr2-skin/state';
 import type { LibraryChart, LibraryEntry } from '@be-music/scene-model';
-import type { BrowserSongCollection } from '../../collection/types.ts';
+import type { BrowserChartCollection } from '../../collection/types.ts';
 import { COURSE_NAME_PROMPT } from '../../collection/course-maker.ts';
-import { hasReadtextForSong } from '../../collection/readtext.ts';
+import { hasReadtextForChart } from '../../collection/readtext.ts';
 import { resolveChartBPMRange } from '../../chart/bpm-range.ts';
 import type { LR2Kit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
@@ -97,7 +97,7 @@ type SortedSelectChromeEntry =
   | { kind: 'slider'; order: number; layerIsForeground: boolean; element: LR2SliderElement };
 
 const NO_ENTRIES: readonly LibraryEntry[] = [];
-const EMPTY_LIBRARY: BrowserSongCollection = { sources: [], charts: [], errors: [] };
+const EMPTY_LIBRARY: BrowserChartCollection = { sources: [], charts: [], errors: [] };
 
 /** The LR2 select view. See the module comment. */
 export class LR2SelectView implements SelectView {
@@ -307,11 +307,11 @@ export class LR2SelectView implements SelectView {
     return this.frame?.cursor ?? 0;
   }
 
-  private get library(): BrowserSongCollection {
+  private get library(): BrowserChartCollection {
     return this.frame?.library ?? EMPTY_LIBRARY;
   }
 
-  private focusedSong(): LibraryChart | undefined {
+  private focusedChart(): LibraryChart | undefined {
     const entry = this.entries[this.cursor];
     return entry?.kind === 'chart' ? entry.chart : undefined;
   }
@@ -416,7 +416,7 @@ export class LR2SelectView implements SelectView {
    */
   private computeState(skin: LR2Skin, frame: SelectFrame): LR2SelectState {
     const focused = frame.entries[frame.cursor];
-    const song = focused?.kind === 'chart' ? focused.chart : undefined;
+    const chartEntry = focused?.kind === 'chart' ? focused.chart : undefined;
     const maker = frame.courseMaker;
     return resolveLR2SelectState({
       ...(focused !== undefined ? { focused } : {}),
@@ -429,8 +429,8 @@ export class LR2SelectView implements SelectView {
             : {},
       openPanels: frame.panel !== undefined ? [frame.panel] : [],
       customOps: skin.customOptions.map((option) => option.defaultOp),
-      readme: song !== undefined && hasReadtextForSong(frame.library, song),
-      ...(song !== undefined ? { bpmRange: resolveChartBPMRange(song.chart) } : {}),
+      readme: chartEntry !== undefined && hasReadtextForChart(frame.library, chartEntry),
+      ...(chartEntry !== undefined ? { bpmRange: resolveChartBPMRange(chartEntry.chart) } : {}),
       // The search word is the typed query, left to the host's field while the player types in it.
       searchText: frame.searchEditing ? '' : frame.browse.searchText,
       listPosition: this.resolveListPosition(frame.entries.length),
@@ -1125,11 +1125,11 @@ export class LR2SelectView implements SelectView {
     if (solidTexture) {
       return solidTexture;
     }
-    const song = this.focusedSong();
-    if (!song) {
+    const chartEntry = this.focusedChart();
+    if (!chartEntry) {
       return undefined;
     }
-    return this.chartGraphicTextures.resolve(this.library, song, path, () => undefined);
+    return this.chartGraphicTextures.resolve(this.library, chartEntry, path, () => undefined);
   }
 
   /** What the bar list reads and draws into: the list layer, the skin's images and fonts, the frame and its timers. */

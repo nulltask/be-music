@@ -7,7 +7,7 @@
  */
 import type { Texture } from 'pixi.js';
 import type { PreparedPlaybackChartData, PlayerSummary } from '@be-music/player';
-import { createEmptyScore, type JudgeKind, type LongNoteStyle, type ScoreSummary } from '@be-music/player/ruleset';
+import { createEmptyScore, type JudgmentKind, type LongNoteStyle, type ScoreSummary } from '@be-music/player/ruleset';
 import type {
   PlayerInputSignalBus,
   PlayerStateSignals,
@@ -16,7 +16,7 @@ import type {
   PlayerUISignalBus,
 } from '@be-music/player/signals';
 import type { ScrollDistanceMapperLike, TimedPlayableNote } from '@be-music/player/display';
-import type { BeMusicPlaylog, PlaylogViewCoalescer } from '@be-music/player/playlog';
+import type { BeMusicReplay, ReplayViewCoalescer } from '@be-music/player/replay';
 import {
   createPlayState,
   DEFAULT_HISPEED,
@@ -24,10 +24,10 @@ import {
   type LaneCover,
   type LaneCoverState,
   type LibraryChart,
-  type PlaylogViewCursor,
+  type ReplayViewCursor,
   type PlayState,
 } from '@be-music/scene-model';
-import type { BrowserSongAssetSource } from '../../collection/types.ts';
+import type { BrowserAssetSource } from '../../collection/types.ts';
 import type {
   AudioBusChannel,
   AudioBusHandle,
@@ -54,7 +54,7 @@ import type {
   ChartPlayVariant,
 } from '@be-music/chart';
 import type { BGACue, NonstopStageBGATimeline } from '../../chart/bga-timeline.ts';
-import type { BeMusicJudge } from '../../skin/be-music/types.ts';
+import type { BeMusicJudgmentKind } from '../../skin/be-music/types.ts';
 import type { BeMusicJudgeWindows, BeMusicLaneKind } from '@be-music/skin-sdk';
 import type { RuntimeMineNote, RuntimeNote } from '../../view/shared/playfield/context.ts';
 import type { PlayfieldLaneRect } from '../../view/types.ts';
@@ -65,8 +65,8 @@ export class PlaySessionState {
    * before that, accessing `this.app` throws. See `PixiSceneHost` for the single-Application architecture rationale.
    */
   host: PixiSceneHost | undefined;
-  song: LibraryChart | undefined;
-  source: BrowserSongAssetSource | undefined;
+  chart: LibraryChart | undefined;
+  source: BrowserAssetSource | undefined;
   /**
    * The chart's `#RANDOM` / `#IF` control flow resolved for THIS play session. `song.chart` is the raw parsed JSON
    * (kept for metadata stability), but every gameplay-time consumer — note extraction, timing resolver, sample
@@ -100,7 +100,7 @@ export class PlaySessionState {
   /** Beats of the chart's lane timelines, for the last timeline beatoraja's rules draw past the lane top. */
   laneTimelineBeats: Float64Array = new Float64Array(0);
   /**
-   * Engine's `preparePlaybackChartData` result, computed once during {@link prepareSong} and forwarded to the
+   * Engine's `preparePlaybackChartData` result, computed once during {@link prepareChart} and forwarded to the
    * shared engine via `engineOptions.preparedChart`. Holds the canonical `notes` / `landmineNotes` /
    * `invisibleNotes` arrays the renderer points at (`this.notes` / `this.mineNotes` / `this.invisibleNotes`
    * are the same instances), so any mutation the engine performs on a note's `judged` flag is automatically
@@ -128,7 +128,7 @@ export class PlaySessionState {
   invisibleNotes: TimedPlayableNote[] = [];
   maxLongNoteBeatSpan = 0;
   chartLastNoteEndSeconds = 0;
-  songDurationSeconds = 0;
+  chartDurationSeconds = 0;
   laneChannels: string[] = [];
   /**
    * Cached `resolveChartPlayVariant` result for the loaded chart. Used to pick the right per-variant theme layout (LR2
@@ -253,7 +253,7 @@ export class PlaySessionState {
   /**
    * The interrupt the view sent the shared engine (ESC / F5 / teardown), once sent. The engine only reads its abort
    * signal at launch, so a play left mid-chart must be interrupted through its input bus: that ends the engine's loop
-   * and, for ESC, records the play log as given up (`play.aborted`), which {@link waitForPlaylog} hands the host.
+   * and, for ESC, records the replay as given up (`play.aborted`), which {@link waitForReplay} hands the host.
    */
   sharedEngineInterrupt: 'escape' | 'restart' | undefined;
   /** True once the shared engine settled the chart (every note judged) and holds the play open for the outro. */
@@ -284,7 +284,7 @@ export class PlaySessionState {
   decodedSamples: Map<string, AudioBuffer> = new Map<string, AudioBuffer>();
   /**
    * Per-`#WAVxx` slot volume multipliers from `#WAVCMD 01 xx vv` lines, expressed as 0..1 linear gain. Built once per
-   * chart by {@link prepareSong} via the shared `collectChartVolumeMultipliers` helper, looked up on every
+   * chart by {@link prepareChart} via the shared `collectChartVolumeMultipliers` helper, looked up on every
    * `playSample` / `playSampleByKey` so a slot with no `#WAVCMD` directive returns `undefined` and the fast path (no
    * extra GainNode) takes over.
    *
@@ -294,7 +294,7 @@ export class PlaySessionState {
    */
   wavCmdVolumeMultipliers: Map<string, number> = new Map<string, number>();
   /**
-   * Parsed `#SWBGAxx` directives keyed by slot id. Built once per chart by {@link prepareSong}, looked up on every BGA
+   * Parsed `#SWBGAxx` directives keyed by slot id. Built once per chart by {@link prepareChart}, looked up on every BGA
    * frame draw — `pickSwitchingBGAFrame(entry, elapsedMs)` resolves the currently-visible source `#BMPxx` key to swap
    * into the layer draw. Slots without a `#SWBGAxx` declaration stay absent so the fast path (single texture lookup)
    * takes over.
@@ -306,7 +306,7 @@ export class PlaySessionState {
    * bmson per-event slice playback map. For bmson charts `@be-music/chart`'s `createBmsonSamplePlaybackMap`
    * precomputes which portion of each `sound_channels[]` WAV a given note is supposed to play — `offsetSeconds` is the
    * seek-into-file position, `durationSeconds` (when set) caps how long the slice should run. Built once per chart in
-   * `prepareSong`; the `WebAudioSession` looks each note's event up here and calls `node.start(when, offset, duration)`
+   * `prepareChart`; the `WebAudioSession` looks each note's event up here and calls `node.start(when, offset, duration)`
    * accordingly so the sliced-WAV authoring intent is preserved.
    *
    * Stays `undefined` for non-bmson charts (they have no slicing semantics — each note plays its entire WAV from t=0).
@@ -328,12 +328,12 @@ export class PlaySessionState {
    */
   playState: PlayState = createPlayState();
   /**
-   * Play-log assembled by the shared engine right before its play promise settles (`onPlaylogRecorded`). Snapshotted
+   * Replay assembled by the shared engine right before its play promise settles (`onReplayRecorded`). Snapshotted
    * into {@link getResultData} so the result host can offer it as a download.
    */
-  playlog: BeMusicPlaylog | undefined;
-  /** Callers of {@link waitForPlaylog} waiting for the engine to record the play. */
-  readonly playlogWaiters: Array<(playlog: BeMusicPlaylog) => void> = [];
+  replay: BeMusicReplay | undefined;
+  /** Callers of {@link waitForReplay} waiting for the engine to record the play. */
+  readonly replayWaiters: Array<(replay: BeMusicReplay) => void> = [];
   /** Long-note holds of the current play, fed from the engine's `long-note-start` / `long-note-end` commands. */
   readonly longNotes: LongNoteTracker = new LongNoteTracker();
   /**
@@ -343,16 +343,16 @@ export class PlaySessionState {
    */
   longNoteStyle: LongNoteStyle | undefined;
   judgeWindows: BeMusicJudgeWindows | undefined;
-  /** The chart's BPM range, worked out once per {@link prepareSong}. */
+  /** The chart's BPM range, worked out once per {@link prepareChart}. */
   chartBPMRange: PlayTempoRange | undefined;
   /**
-   * Scratch lanes the engine plays itself under auto-scratch (empty when it is off), resolved per {@link prepareSong}.
+   * Scratch lanes the engine plays itself under auto-scratch (empty when it is off), resolved per {@link prepareChart}.
    * See {@link isAutoplayedChannel}.
    */
   autoScratchChannels: ReadonlySet<string> = new Set();
   /**
    * Play-clock ms of once-per-play moments (gauge failed, last note judged, chart end, gauge first risen above its
-   * start / reaching its max), latched as they happen and cleared per {@link prepareSong}.
+   * start / reaching its max), latched as they happen and cleared per {@link prepareChart}.
    */
   playMoments: {
     failedAtMs?: number;
@@ -366,12 +366,12 @@ export class PlaySessionState {
    * `runtime.laneCovers`; rebuilt only when the play state's covers change.
    */
   drawnLaneCovers: { covers: readonly LaneCoverState[]; drawn: LaneCover[] } | undefined;
-  /** Folds the live view into the recorded play log's view changes ({@link updatePlaylogView}); unset in a replay. */
-  playlogViewCoalescer: PlaylogViewCoalescer | undefined;
-  /** A replay's recorded view along the playhead ({@link updatePlaylogView}). */
-  replayViewCursor: PlaylogViewCursor | undefined;
+  /** Folds the live view into the recorded replay's view changes ({@link updateReplayView}); unset in a replay. */
+  replayViewCoalescer: ReplayViewCoalescer | undefined;
+  /** A replay's recorded view along the playhead ({@link updateReplayView}). */
+  replayViewCursor: ReplayViewCursor | undefined;
   /** Judgement that set off each lane's live bomb, by channel; absent for bombs without one (an autoplayed LN head). */
-  readonly bombJudge: Map<string, BeMusicJudge> = new Map<string, BeMusicJudge>();
+  readonly bombJudge: Map<string, BeMusicJudgmentKind> = new Map<string, BeMusicJudgmentKind>();
   /** Play-clock ms of each lane's last key press / release (also autoplay hits), by channel. */
   readonly lanePressedAt: Map<string, number> = new Map<string, number>();
   readonly laneReleasedAt: Map<string, number> = new Map<string, number>();
@@ -387,7 +387,10 @@ export class PlaySessionState {
    * SP charts only ever populate the `'1P'` slot, so the global `lastJudge` / `lastJudgeUntil` aliases above keep their
    * existing behavior for the fallback `renderText` path.
    */
-  judgeSideState: Record<'1P' | '2P', { judge: JudgeKind | ''; until: number; combo: number; courseCombo?: number }> = {
+  judgeSideState: Record<
+    '1P' | '2P',
+    { judge: JudgmentKind | ''; until: number; combo: number; courseCombo?: number }
+  > = {
     '1P': { judge: '', until: 0, combo: 0 },
     '2P': { judge: '', until: 0, combo: 0 },
   };
@@ -434,14 +437,14 @@ export class PlaySessionState {
   /**
    * FAST / SLOW counts. Incremented on every GREAT or GOOD judgement — PERFECT is "on time" so it doesn't count,
    * BAD/POOR break combo and aren't tracked here. Mirrors `applyFastSlow` in `packages/player`'s judge core
-   * (`core/judge-core-score.ts`). Reset per play in `prepareSong`.
+   * (`core/judge-core-score.ts`). Reset per play in `prepareChart`.
    */
   fastCount = 0;
   slowCount = 0;
   /**
    * Set to `true` once the player has hit every chart note without a single BAD / POOR break. Latches on first
    * achievement so the `full-combo` theme event (LR2 FC timers 48 / 49) only fires once per play — replaying the chart resets this in
-   * `prepareSong`. Note: AUTO mode reaches FC the moment the last note's auto-PERFECT lands, so the FC presentation
+   * `prepareChart`. Note: AUTO mode reaches FC the moment the last note's auto-PERFECT lands, so the FC presentation
    * also plays during autoplay sessions (the player specifically asked for that behavior).
    */
   fullComboFired = false;
@@ -510,7 +513,7 @@ export class PlaySessionState {
   lastPoorAt = 0;
   /**
    * BMS spec — when the chart omits `#POORBGA` and provides `#BMP00`, the BMP00 image acts as the implicit POOR
-   * placeholder until an explicit `#xxx06` POOR cue takes over. Set during {@link prepareSong} so the renderer can
+   * placeholder until an explicit `#xxx06` POOR cue takes over. Set during {@link prepareChart} so the renderer can
    * paint BMP00 on a miss before any authored POOR event fires; left `undefined` when the chart already authors a
    * proper POOR track or doesn't ship a BMP00 fallback. Mirrors the TUI BGA renderer's `poorFallbackKey` plumbing.
    */

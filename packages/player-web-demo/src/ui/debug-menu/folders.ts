@@ -11,7 +11,7 @@ export const DEBUG_MENU_FOLDERS_STORAGE_KEY = `${DEMO_STORAGE_PREFIX}debug-menu-
  * Stored keys "Reset settings" leaves alone: the best records are play data, not settings, and have their own
  * "Clear best records" button.
  */
-export const DEMO_STORAGE_KEYS_KEPT_ON_RESET: readonly string[] = [`${DEMO_STORAGE_PREFIX}song-records`];
+export const DEMO_STORAGE_KEYS_KEPT_ON_RESET: readonly string[] = [`${DEMO_STORAGE_PREFIX}chart-best-records`];
 
 /** A Debug Menu folder: its title and whether it starts open before the user has opened or closed it. */
 export interface DebugMenuFolder {

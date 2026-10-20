@@ -2,8 +2,8 @@ import { resolveChart } from '@be-music/chart';
 import type { BeMusicJSON } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import type { PlayerOptions } from '../engine-types.ts';
-import type { PlaylogRulesetId } from '../../ruleset/definitions.ts';
-import type { PlaylogViewState } from '../../playlog/view.ts';
+import type { RulesetId } from '../../ruleset/definitions.ts';
+import type { ReplayViewState } from '../../replay/view.ts';
 import { basicChart, denseChart, exRankChart, longNoteChart, mineChart, nonstopCourse, tempoChart } from './charts.ts';
 import {
   command,
@@ -19,7 +19,7 @@ import {
 /**
  * Engine characterization: golden snapshots of what `manualPlay` and `autoPlay` do today, run on a virtual clock so
  * every run is the same and takes milliseconds. Each case plays a synthetic chart (`charts.ts`) and pins everything a
- * host can observe (see `harness.ts`): the summary, the play log and its re-simulations under every ruleset, the audio
+ * host can observe (see `harness.ts`): the summary, the replay and its re-simulations under every ruleset, the audio
  * session's calls, the judge cues, the UI commands and frames, the host callbacks and the text output.
  *
  * The snapshots are not a specification. They record the current behaviour so a refactor that should not change it
@@ -27,7 +27,7 @@ import {
  * that behaviour: update it there with `vp test run -u` and say why in the pull request.
  */
 
-const RULESETS: readonly PlaylogRulesetId[] = ['lr2', 'beatoraja', 'iidx'];
+const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', 'iidx'];
 
 /** Every note pressed `offsetsMs[i]` off its time (cycled), every `skipEvery`th left alone, long notes held to their end. */
 function scriptForNotes(
@@ -125,10 +125,10 @@ async function expectSnapshot(name: string, observations: Record<string, PlayObs
   await expect(`${formatSnapshot(snapshotOf(observations))}\n`).toMatchFileSnapshot(`__expected__/${name}.json`);
 }
 
-/** A live manual play, the replay of its play log, and an auto play of the same chart. */
+/** A live manual play, the replay of its replay, and an auto play of the same chart. */
 async function playThreeWays(play: Omit<CharacterizationPlay, 'driver'>) {
   const manual = await observePlay({ ...play, driver: 'manual' });
-  const log = manual.playlog!;
+  const log = manual.replay!;
   const replay = await observePlay({
     ...play,
     driver: 'manual',
@@ -156,14 +156,14 @@ describe('engine characterization: charts × drivers × rulesets', () => {
         });
         // A replay re-derives the live play's judgments from its log.
         expect(plays.replay.summary).toEqual(plays.manual.summary);
-        expect(plays.replay.playlog?.inputs).toEqual(plays.manual.playlog?.inputs);
+        expect(plays.replay.replay?.inputs).toEqual(plays.manual.replay?.inputs);
         await expectSnapshot(`charts/${chartCase.name}.${ruleset}`, plays);
       });
     }
   }
 });
 
-const VIEW: PlaylogViewState = {
+const VIEW: ReplayViewState = {
   hiSpeed: 2,
   hsFix: 'MAIN',
   visibleMs: 800,
@@ -195,7 +195,7 @@ describe('engine characterization: play scenarios', () => {
     const autoFollowingTheLog = await observePlay({
       driver: 'auto',
       chart,
-      options: { replayInputs: [], replayTempoChanges: plays.manual.playlog!.play.tempoChanges! },
+      options: { replayInputs: [], replayTempoChanges: plays.manual.replay!.play.tempoChanges! },
     });
     const autoWithCommand = await observePlay({ driver: 'auto', chart, script: [script[0]!] });
     expect(plays.replay.summary).toEqual(plays.manual.summary);
@@ -214,7 +214,7 @@ describe('engine characterization: play scenarios', () => {
       command(2200, { kind: 'view', change: { covers: [{ side: '1P', sudden: 0.35, hidden: 0, lift: 0.1 }] } }),
       command(2300, { kind: 'high-speed', action: 'decrease' }),
     ];
-    const options: PlayerOptions = { recordPlaylog: { view: VIEW } };
+    const options: PlayerOptions = { recordReplay: { view: VIEW } };
     const manual = await observePlay({ driver: 'manual', chart, script, options });
     const auto = await observePlay({
       driver: 'auto',
@@ -236,7 +236,7 @@ describe('engine characterization: play scenarios', () => {
     const replayOfTheAbortedLog = await observePlay({
       driver: 'manual',
       chart,
-      options: { replayInputs: manual.playlog!.inputs, replayAbortedAtUs: manual.playlog!.play.abortedAtUs },
+      options: { replayInputs: manual.replay!.inputs, replayAbortedAtUs: manual.replay!.play.abortedAtUs },
     });
     const auto = await observePlay({
       driver: 'auto',
@@ -385,7 +385,7 @@ describe('engine characterization: play scenarios', () => {
       { atMs: 3600, press: ['15'], pressedAtMs: 3480 },
     ];
     const manual = await observePlay({ driver: 'manual', chart, script });
-    const replay = await observePlay({ driver: 'manual', chart, options: { replayInputs: manual.playlog!.inputs } });
+    const replay = await observePlay({ driver: 'manual', chart, options: { replayInputs: manual.replay!.inputs } });
     await expectSnapshot('scenarios/terminal-input', { manual, replay });
   });
 });

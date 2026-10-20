@@ -1,5 +1,11 @@
 import type { ClearLamp } from '@be-music/player/ruleset';
-import type { CourseView, EarlyLateCount, GaugeHistorySample, Judge, ScoreHistorySample } from '@be-music/scene-model';
+import type {
+  CourseView,
+  EarlyLateCount,
+  GaugeHistorySample,
+  JudgmentKind,
+  ScoreHistorySample,
+} from '@be-music/scene-model';
 import type { BeatorajaGaugeState } from '../elements/gauge.ts';
 import {
   BEATORAJA_NUM,
@@ -22,10 +28,10 @@ import {
 import { beatorajaGenericRankOps, resolveBeatorajaScoreNumber, type BeatorajaScoreNumberInput } from './score.ts';
 import {
   resolveBeatorajaSkinText,
-  resolveBeatorajaSongText,
+  resolveBeatorajaChartText,
   type BeatorajaSkinTextInput,
-  type BeatorajaSongTextInput,
-} from './song-text.ts';
+  type BeatorajaChartTextInput,
+} from './chart-text.ts';
 
 /** What a result skin reads of a run's result: the parts of `PlayResult` it shows (a `PlayResult` is one). */
 export interface BeatorajaResultFacts {
@@ -62,7 +68,7 @@ export interface BeatorajaResultInput {
   /** The chart's note kinds. */
   readonly breakdown?: BeatorajaNoteBreakdown;
   /** The chart played. */
-  readonly song?: BeatorajaSongTextInput;
+  readonly chart?: BeatorajaChartTextInput;
   readonly skin?: BeatorajaSkinTextInput;
 }
 
@@ -102,7 +108,7 @@ export function beatorajaEarlyLateFromTimings(
 ): BeatorajaEarlyLate {
   const cached = TIMING_EARLY_LATE.get(timings);
   if (cached !== undefined) return cached;
-  const counts: Record<Judge, { early: number; late: number }> = {
+  const counts: Record<JudgmentKind, { early: number; late: number }> = {
     PERFECT: { ...NO_EARLY_LATE },
     GREAT: { ...NO_EARLY_LATE },
     GOOD: { ...NO_EARLY_LATE },
@@ -110,7 +116,7 @@ export function beatorajaEarlyLateFromTimings(
     POOR: { ...NO_EARLY_LATE },
   };
   for (const timing of timings) {
-    const count = counts[timing.judge as Judge];
+    const count = counts[timing.judge as JudgmentKind];
     if (count === undefined || timing.deltaMs === 0) continue;
     if (timing.deltaMs < 0) count.early += 1;
     else count.late += 1;
@@ -237,7 +243,7 @@ export function resolveBeatorajaResultText(id: number, input: BeatorajaResultInp
       return course.title;
     }
   }
-  return resolveBeatorajaSongText(id, input.song) ?? resolveBeatorajaSkinText(id, input.skin);
+  return resolveBeatorajaChartText(id, input.chart) ?? resolveBeatorajaSkinText(id, input.skin);
 }
 
 /** The final gauge as a gauge element draws it ({@link resolveBeatorajaGaugeState}). */

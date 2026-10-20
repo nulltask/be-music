@@ -1,6 +1,6 @@
 import { createEmptyJSON, type BeMusicJSON } from '@be-music/json';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
-import type { BrowserSongAssetSource } from '../collection/types.ts';
+import type { BrowserAssetSource } from '../collection/types.ts';
 import { collectChartVolumeMultipliers, loadPlaySamples } from './play-audio.ts';
 
 const mocks = vi.hoisted(() => ({
@@ -38,7 +38,7 @@ function fakeAudioContext(): BaseAudioContext & { decoded: string[] } {
   } as unknown as BaseAudioContext & { decoded: string[] };
 }
 
-const SOURCE = {} as BrowserSongAssetSource;
+const SOURCE = {} as BrowserAssetSource;
 
 describe('collectChartVolumeMultipliers', () => {
   test('multiplies #WAVCMD and #EXWAV volumes of the same slot', () => {

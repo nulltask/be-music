@@ -8,14 +8,14 @@
 
 import { resolveStageOrientation, type GameplayLayoutMode } from '@be-music/skin-sdk';
 import type { Application, Texture } from 'pixi.js';
-import type { BrowserSongAssetSource } from '../../collection/types.ts';
+import type { BrowserAssetSource } from '../../collection/types.ts';
 import type { BuiltInKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import type { PlaySessionOptions } from '../../session/play/play-options.ts';
 import { KEY_ON_FADE_OUT_MS } from '../../stage/design.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { BeMusicGameplayBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
-import { SongImageCache } from '../../skin/be-music/song-images.ts';
+import { ChartImageCache } from '../../skin/be-music/chart-images.ts';
 import type { BeMusicStage } from '../../skin/be-music/types.ts';
 import { PHANTOM_BOMB_DURATION_MS } from '../../skins/phantom/playfield.ts';
 import { build, render, type PlayFrameContext } from '../shared/play-frame.ts';
@@ -54,7 +54,7 @@ export type BuiltInPlayViewOptions = Pick<
   'bga' | 'autoPlay' | 'nonstop' | 'showInvisibleNotes' | 'judgedNoteDisplay' | 'layoutMode'
 > & {
   /** Where the chart's files are, for the skin's song images. */
-  readonly source?: BrowserSongAssetSource;
+  readonly source?: BrowserAssetSource;
 };
 
 /** The built-in play view. See the module comment. */
@@ -129,11 +129,11 @@ export class BuiltInPlayView
   get skinBinding(): BeMusicGameplayBinding {
     if (!this.skinBindingInstance) {
       const source = this.options.source;
-      this.songImages = new SongImageCache({
-        resolveSource: (song) => (source !== undefined && song.sourceId === source.id ? source : undefined),
+      this.chartImages = new ChartImageCache({
+        resolveSource: (chartEntry) => (source !== undefined && chartEntry.sourceId === source.id ? source : undefined),
       });
       this.skinBindingInstance = new BeMusicGameplayBinding(this.kit.skin, {
-        songImage: this.songImages.lookup,
+        chartImage: this.chartImages.lookup,
         settings: this.kit.settings,
         renderer: this.host?.app.renderer,
       });
@@ -181,8 +181,8 @@ export class BuiltInPlayView
     try {
       this.skinBindingInstance?.dispose();
       this.skinBindingInstance = undefined;
-      this.songImages?.dispose();
-      this.songImages = undefined;
+      this.chartImages?.dispose();
+      this.chartImages = undefined;
       for (const crop of this.skinBGACrops.values()) crop?.close();
       this.skinBGACrops.clear();
       this.noteLayerPool.destroy();

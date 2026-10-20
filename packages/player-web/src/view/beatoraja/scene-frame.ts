@@ -15,13 +15,13 @@ import {
 } from '@be-music/beatoraja-skin';
 import {
   resolveBeatorajaSkinText,
-  resolveBeatorajaSongText as resolveBeatorajaSongTextOf,
-  type BeatorajaSongTextInput,
+  resolveBeatorajaChartText as resolveBeatorajaChartTextOf,
+  type BeatorajaChartTextInput,
 } from '@be-music/beatoraja-skin/scene';
 import type { LibraryChart } from '@be-music/scene-model';
 import { Container, Graphics, type Texture } from 'pixi.js';
 import { extractChartSubartist } from '../../chart/beatoraja/meta.ts';
-import type { BrowserSongAssetSource } from '../../collection/types.ts';
+import type { BrowserAssetSource } from '../../collection/types.ts';
 import { destroyTextureAndRevokeBlobURL } from '../../media/textures.ts';
 import type { BeatorajaPlaySkinView } from './skin-view.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
@@ -43,22 +43,22 @@ interface BeatorajaStageView {
   readonly container: Container;
 }
 
-const SONG_TEXTS = new WeakMap<LibraryChart, BeatorajaSongTextInput>();
+const SONG_TEXTS = new WeakMap<LibraryChart, BeatorajaChartTextInput>();
 
 /** What a beatoraja skin's song texts read of a library chart (its sub-artist read off the chart once). */
-export function beatorajaSongTextOf(song: LibraryChart | undefined): BeatorajaSongTextInput | undefined {
-  if (song === undefined) return undefined;
-  let text = SONG_TEXTS.get(song);
+export function beatorajaChartTextOf(chartEntry: LibraryChart | undefined): BeatorajaChartTextInput | undefined {
+  if (chartEntry === undefined) return undefined;
+  let text = SONG_TEXTS.get(chartEntry);
   if (text === undefined) {
     text = {
-      title: song.title,
-      subtitle: song.subtitle,
-      genre: song.genre,
-      artist: song.artist,
-      subartist: extractChartSubartist(song.chart),
-      directory: song.directoryLabel,
+      title: chartEntry.title,
+      subtitle: chartEntry.subtitle,
+      genre: chartEntry.genre,
+      artist: chartEntry.artist,
+      subartist: extractChartSubartist(chartEntry.chart),
+      directory: chartEntry.directoryLabel,
     };
-    SONG_TEXTS.set(song, text);
+    SONG_TEXTS.set(chartEntry, text);
   }
   return text;
 }
@@ -67,10 +67,10 @@ export function beatorajaSongTextOf(song: LibraryChart | undefined): BeatorajaSo
  * The song and skin texts of the decide and result screens (`@be-music/beatoraja-skin/scene`); the difficulty-table
  * texts read `tableTextFallback`.
  */
-export function resolveBeatorajaSongText(
+export function resolveBeatorajaChartText(
   refOp: number,
   options: {
-    song?: LibraryChart;
+    chart?: LibraryChart;
     skin: BeatorajaSkin;
     tableTextFallback?: string;
   },
@@ -82,7 +82,7 @@ export function resolveBeatorajaSongText(
       return options.tableTextFallback;
   }
   return (
-    resolveBeatorajaSongTextOf(refOp, beatorajaSongTextOf(options.song)) ??
+    resolveBeatorajaChartTextOf(refOp, beatorajaChartTextOf(options.chart)) ??
     resolveBeatorajaSkinText(refOp, options.skin)
   );
 }
@@ -208,14 +208,14 @@ export class BeatorajaSkinStage {
  */
 export class BeatorajaViewChartImages {
   private readonly chart: Pick<LibraryChart, 'chart' | 'chartPath'> | undefined;
-  private readonly source: BrowserSongAssetSource | undefined;
+  private readonly source: BrowserAssetSource | undefined;
   private images: BeatorajaChartImages = {};
   private loading: Promise<void> | undefined;
   private disposed = false;
 
   public constructor(
     chart: Pick<LibraryChart, 'chart' | 'chartPath'> | undefined,
-    source: BrowserSongAssetSource | undefined,
+    source: BrowserAssetSource | undefined,
   ) {
     this.chart = chart;
     this.source = source;

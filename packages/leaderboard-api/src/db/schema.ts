@@ -154,10 +154,10 @@ export const chart = sqliteTable(
     chartFingerprint: text('chart_fingerprint').primaryKey(),
     title: text('title'),
     artist: text('artist'),
-    // What the first play log of the chart said about it. Null for charts registered before these were kept.
+    // What the first replay of the chart said about it. Null for charts registered before these were kept.
     subtitle: text('subtitle'),
     genre: text('genre'),
-    /** `#PLAYLEVEL` / bmson `info.level` as written, and `#DIFFICULTY` (1 BEGINNER .. 5 INSANE), from a play log. */
+    /** `#PLAYLEVEL` / bmson `info.level` as written, and `#DIFFICULTY` (1 BEGINNER .. 5 INSANE), from a replay. */
     playLevel: text('play_level'),
     difficulty: integer('difficulty'),
     sourceFormat: text('source_format', { enum: ['bms', 'bmson'] }),
@@ -171,7 +171,7 @@ export const chart = sqliteTable(
      * kept, until their next play; a later play with long notes sets it, as `#RANDOM` outcomes can differ.
      */
     hasLongNotes: integer('has_long_notes', { mode: 'boolean' }),
-    /** Judge rank as the play log carried it: the window percentage and the raw `#RANK` / `#DEFEXRANK`. */
+    /** Judgment rank as the replay carried it: the window percentage and the raw `#RANK` / `#DEFEXRANK`. */
     judgeRank: text('judge_rank', { mode: 'json' }).$type<{
       percent: number;
       sourceRank?: number;
@@ -228,7 +228,7 @@ export const score = sqliteTable(
       .references(() => chart.chartFingerprint),
     playFingerprint: text('play_fingerprint').notNull(),
     /**
-     * The chart file the play came from, as its client reported it (`chart.sha256` / `chart.md5` of the play log).
+     * The chart file the play came from, as its client reported it (`chart.sha256` / `chart.md5` of the replay).
      * One chart fingerprint can cover several files (re-saves, re-encodes); rankings can be narrowed to one of them.
      * Null when the log carried no hash; filled for older plays from their logs (src/scores/backfill.ts).
      */
@@ -238,7 +238,7 @@ export const score = sqliteTable(
     durationMs: integer('duration_ms'),
     /**
      * The lane arrangement the play used (`RANDOM`, `MIRROR / RANDOM` for the two sides of a double play, ` FLIP`
-     * appended for a swapped double play), `OFF` for none. Null until filled in from the play log.
+     * appended for a swapped double play), `OFF` for none. Null until filled in from the replay.
      */
     laneOption: text('lane_option'),
     playedRuleset: text('played_ruleset', { enum: RULESET_IDS }).notNull(),
@@ -250,7 +250,7 @@ export const score = sqliteTable(
     recordedBy: text('recorded_by', { mode: 'json' }).$type<Record<string, string>>(),
     submittedBy: text('submitted_by'),
     serverEngine: text('server_engine').notNull(),
-    playlogKey: text('playlog_key').notNull(),
+    replayKey: text('replay_key').notNull(),
     /** R2 key of the play's share card (`cards/scores/{scoreId}/{sha256}.{ext}`), drawn by the player's browser. */
     cardKey: text('card_key'),
     replayVisibility: text('replay_visibility', { enum: ['public', 'private'] })
@@ -376,7 +376,7 @@ export const courseScore = sqliteTable(
     recordedBy: text('recorded_by', { mode: 'json' }).$type<Record<string, string>>(),
     submittedBy: text('submitted_by'),
     serverEngine: text('server_engine').notNull(),
-    playlogKey: text('playlog_key').notNull(),
+    replayKey: text('replay_key').notNull(),
     /** Hidden by its player, as `score.hidden`. */
     hidden: integer('hidden', { mode: 'boolean' }).notNull().default(false),
     ...timestamps,

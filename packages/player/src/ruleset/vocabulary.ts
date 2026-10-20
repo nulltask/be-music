@@ -7,11 +7,11 @@
 export * from './clear-lamp.ts';
 export * from './gauge-type.ts';
 export {
-  isPlaylogRulesetId,
-  PLAYLOG_RULESET_IDS,
+  isRulesetId,
+  RULESET_IDS,
   type JudgeWindowSetUs,
   type LongNoteStyle,
-  type PlaylogRulesetId,
+  type RulesetId,
   type RulesetWindowTables,
   type WindowPairUs,
 } from './definitions.ts';
@@ -25,6 +25,6 @@ export {
   resolveIIDXRankLabel,
   resolveLR2MoneyScore,
   type IIDXRankLabel,
-  type JudgeKind,
+  type JudgmentKind,
   type ScoreSummary,
 } from './score.ts';

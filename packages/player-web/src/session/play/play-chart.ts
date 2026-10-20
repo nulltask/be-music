@@ -4,7 +4,7 @@
  * applies the lane options (DP FLIP, RANDOM / MIRROR / S-RANDOM / SCATTER) or a replay's recorded arrangement, and
  * resets the play's state for the new chart.
  *
- * `prepareSong` reads and writes the play's state through {@link PlayChartContext}; the play session passes itself.
+ * `prepareChart` reads and writes the play's state through {@link PlayChartContext}; the play session passes itself.
  */
 
 import {
@@ -34,10 +34,10 @@ import {
   type TimedPlayableNote,
 } from '@be-music/player/display';
 import type { PlayerGaugeSummary } from '@be-music/player/signals';
-import { createEmptyScore, type GaugeType, type JudgeKind, type ScoreSummary } from '@be-music/player/ruleset';
+import { createEmptyScore, type GaugeType, type JudgmentKind, type ScoreSummary } from '@be-music/player/ruleset';
 import { collectChartVolumeMultipliers } from '../../chart/play-audio.ts';
 import { resolvePoorBGAFallbackKey } from '../../chart/play-bga.ts';
-import { applyPlaylogArrangement } from '../../chart/playlog-arrangement.ts';
+import { applyReplayArrangement } from '../../chart/replay-arrangement.ts';
 import {
   splitNonstopBGATimeline,
   toBrowserBGATimeline,
@@ -65,7 +65,7 @@ import {
 } from '@be-music/scene-model';
 import { resolveLaneSides } from '../../chart/lane-sides.ts';
 
-/** The play state {@link prepareSong} resets and fills for a new chart: the play session's fields of these names. */
+/** The play state {@link prepareChart} resets and fills for a new chart: the play session's fields of these names. */
 export interface PlayChartContext {
   readonly options: Readonly<
     Pick<
@@ -89,7 +89,7 @@ export interface PlayChartContext {
       | 'autoScratch2P'
     >
   >;
-  song: LibraryChart | undefined;
+  chart: LibraryChart | undefined;
   resolvedChart: BeMusicJSON | undefined;
   resolvedPlayChart: ResolvedChart | undefined;
   randomDraws: RandomDraws | undefined;
@@ -102,7 +102,7 @@ export interface PlayChartContext {
   invisibleNotes: TimedPlayableNote[];
   maxLongNoteBeatSpan: number;
   chartLastNoteEndSeconds: number;
-  songDurationSeconds: number;
+  chartDurationSeconds: number;
   laneChannels: string[];
   chartPlayVariant: ChartPlayVariant;
   touchTokenByChannel: Map<string, string> | undefined;
@@ -129,7 +129,7 @@ export interface PlayChartContext {
   readonly laneReleasedAt: Map<string, number>;
   lastJudge: string;
   lastJudgeUntil: number;
-  judgeSideState: Record<'1P' | '2P', { judge: JudgeKind | ''; until: number; combo: number; courseCombo?: number }>;
+  judgeSideState: Record<'1P' | '2P', { judge: JudgmentKind | ''; until: number; combo: number; courseCombo?: number }>;
   gaugeState: PlayerGaugeSummary;
   fastCount: number;
   slowCount: number;
@@ -146,7 +146,7 @@ export interface PlayChartContext {
   resolveSelectedGauge(): GaugeType;
 }
 
-export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
+export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): void {
   // Resolve `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow once, first, so every play-time consumer below and the
   // engine see the same chosen branches. The draws are fresh each play (LR2 re-rolls each play); a replay resolves
   // with the draws its log recorded, so it plays the recorded branches.
@@ -154,7 +154,7 @@ export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
     ctx.options.replay === undefined && ctx.options.preResolved !== undefined
       ? ctx.options.preResolved
       : resolvePlayChart(
-          song.chart,
+          chartEntry.chart,
           ctx.options.replay?.play.randomDraws !== undefined
             ? { randomDraws: ctx.options.replay.play.randomDraws }
             : {},
@@ -197,7 +197,7 @@ export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
   // the result here gives the engine + adapter + renderer a single source of truth without each one
   // re-running its own heuristic. Classify the RESOLVED chart: lanes that only a chosen `#RANDOM` / `#SWITCH`
   // branch adds are not in `song.chart.events`, and missing them would lay out (and judge) a 7 KEY play as 5 KEY.
-  const hostPlayVariant = resolveLibraryChartPlayVariant(song, resolved);
+  const hostPlayVariant = resolveLibraryChartPlayVariant(chartEntry, resolved);
   const resolvedPlay = resolveChart(resolved, {
     randomDraws,
     playVariant: hostPlayVariant,
@@ -209,7 +209,7 @@ export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
   // `showInvisibleNotes`. The audio horizon is left at 0: the engine recomputes its own from realtime triggers.
   const prepared = preparePlaybackChart(
     resolvedPlay,
-    { laneModeExtension: extractChartExtension(ctx.song?.chartPath) },
+    { laneModeExtension: extractChartExtension(ctx.chart?.chartPath) },
     0,
   );
   ctx.preparedChart = prepared;
@@ -218,13 +218,13 @@ export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
   ctx.mineNotes = prepared.landmineNotes;
   ctx.invisibleNotes = prepared.invisibleNotes;
   if (ctx.options.replay !== undefined) {
-    // Replay playback — the recorded play-log carries the FINAL note arrangement (post-flip, post-shuffle), so
+    // Replay playback — the recorded replay carries the FINAL note arrangement (post-flip, post-shuffle), so
     // instead of re-rolling the lane transforms we re-apply the recorded channels onto the freshly prepared
     // notes. A mismatch means the loaded chart is not the one the log was recorded against (different `#RANDOM`
     // roll or a different file) — surface it as a prepare failure rather than replaying garbage.
-    const arranged = applyPlaylogArrangement(ctx.options.replay.chart.notes, prepared);
+    const arranged = applyReplayArrangement(ctx.options.replay.chart.notes, prepared);
     if (!arranged.ok) {
-      throw new Error(`play-log replay chart mismatch: ${arranged.reason}`);
+      throw new Error(`replay replay chart mismatch: ${arranged.reason}`);
     }
   } else {
     // DP FLIP — swap 1P / 2P channels in place. Cheap O(n) walk because we already iterate `notes` for sorting; SP
@@ -270,7 +270,7 @@ export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
     return Math.max(max, Math.max(0, note.endBeat - note.beat));
   }, 0);
   ctx.chartLastNoteEndSeconds = ctx.notes.reduce((acc, note) => Math.max(acc, note.endSeconds ?? note.seconds), 0);
-  ctx.songDurationSeconds = ctx.chartLastNoteEndSeconds;
+  ctx.chartDurationSeconds = ctx.chartLastNoteEndSeconds;
   ctx.chartEnded = false;
   // Drop the previous chart's active-sample tracking. Stale entries would otherwise let a `c=true` note on the new
   // chart suppress its own first trigger because a same-key node from the old play looks "still playing" until it
@@ -338,17 +338,17 @@ export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
           beatResolver,
         )
       : undefined;
-  ctx.songDurationSeconds = Math.max(ctx.chartLastNoteEndSeconds, ctx.autoSampleTriggers.at(-1)?.seconds ?? 0);
+  ctx.chartDurationSeconds = Math.max(ctx.chartLastNoteEndSeconds, ctx.autoSampleTriggers.at(-1)?.seconds ?? 0);
   // Initialize gauge with the actual playable-note count and the chart's #TOTAL value so PG/GR gain matches LR2: a
   // long chart with TOTAL=300 and 1000 notes gets +0.3 per PG/GR, while a short TOTAL=160 100-note chart gets +1.6
   // per PG/GR.
   ctx.gaugeState = createPlaceholderGaugeState(ctx.resolveSelectedGauge(), resolveCourseStartGaugeInput(ctx));
-  // The one BPM range of the play: HS-FIX, the HUD and the play log's visible time all take the main BPM from it.
+  // The one BPM range of the play: HS-FIX, the HUD and the replay's visible time all take the main BPM from it.
   ctx.chartBPMRange = resolvePlayTempoRange(
     resolvedPlay,
-    resolved.metadata.bpm > 0 ? resolved.metadata.bpm : ctx.song?.bpm,
+    resolved.metadata.bpm > 0 ? resolved.metadata.bpm : ctx.chart?.bpm,
   );
-  ctx.playState = createChartPlayState(ctx, resolver, resolveChartReferenceBPM(resolved, ctx.song?.bpm));
+  ctx.playState = createChartPlayState(ctx, resolver, resolveChartReferenceBPM(resolved, ctx.chart?.bpm));
   // Chart setup, before the notes are on screen — no glide.
   ctx.scrollHiSpeed.jump(ctx.playState.view.hiSpeed.drawn);
   ctx.fastCount = 0;
@@ -384,7 +384,7 @@ export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
  * HS-FIX keeps the player's hi-speed at the chart's reference BPM (`#BASEBPM`, else the start BPM:
  * `resolveChartReferenceBPM` prefers `#BASEBPM` so a chart whose `#BPM` is its peak or average still calibrates at the
  * speed the author intended) and rescales it at the chart's MAXBPM, MINBPM or main BPM (`resolveHSFixMultiplier`), the
- * main BPM being the play's (`chartBPMRange`), which the play log's visible time reads too.
+ * main BPM being the play's (`chartBPMRange`), which the replay's visible time reads too.
  */
 function createChartPlayState(
   ctx: PlayChartContext,
@@ -405,7 +405,7 @@ function createChartPlayState(
   const course = ctx.options.course;
   const started = createPlayState({
     gauge: gaugePercent(ctx.gaugeState),
-    totalSeconds: ctx.songDurationSeconds,
+    totalSeconds: ctx.chartDurationSeconds,
     ...(course !== undefined ? { courseCarryIn: course.carryIn ?? { combo: 0, maxCombo: 0 } } : {}),
     view: {
       hiSpeed,
@@ -416,7 +416,7 @@ function createChartPlayState(
   // The starting gauge's type and verdict, so a play given up before the engine's first frame still names its gauge.
   return reducePlayState(started, {
     type: 'frame',
-    frame: { totalSeconds: ctx.songDurationSeconds, summary: { exScore: 0, gauge: ctx.gaugeState } },
+    frame: { totalSeconds: ctx.chartDurationSeconds, summary: { exScore: 0, gauge: ctx.gaugeState } },
   });
 }
 

@@ -1,5 +1,5 @@
 import type { GaugeType } from '../ruleset/gauge-type.ts';
-import type { PlaylogCourseStage } from '../playlog/format.ts';
+import type { ReplayCourseStage } from '../replay/format.ts';
 import type { CourseConstraint, CourseDefinition } from './definition.ts';
 
 /*
@@ -10,8 +10,8 @@ import type { CourseConstraint, CourseDefinition } from './definition.ts';
 const GAUGE_SETS = { gauge_lr2: 'lr2', gauge_5k: '5k', gauge_7k: '7k', gauge_9k: '9k', gauge_24k: '24k' } as const;
 
 /** The course settings every stage plays under (`PlayerOptions.course` without the carried-in state). */
-export function resolveCourseStageSettings(definition: CourseDefinition): Omit<PlaylogCourseStage, 'carryIn'> {
-  const settings: Omit<PlaylogCourseStage, 'carryIn'> = { kind: definition.kind };
+export function resolveCourseStageSettings(definition: CourseDefinition): Omit<ReplayCourseStage, 'carryIn'> {
+  const settings: Omit<ReplayCourseStage, 'carryIn'> = { kind: definition.kind };
   for (const constraint of definition.constraints) {
     if (Object.hasOwn(GAUGE_SETS, constraint)) settings.gaugeSet = GAUGE_SETS[constraint as keyof typeof GAUGE_SETS];
     if (constraint === 'no_good') settings.judge = 'no-good';

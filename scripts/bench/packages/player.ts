@@ -3,7 +3,7 @@ import * as audioSinkAPI from '@be-music/player/audio-sink';
 import * as courseAPI from '@be-music/player/course';
 import * as displayAPI from '@be-music/player/display';
 import * as lanesAPI from '@be-music/player/lanes';
-import * as playlogAPI from '@be-music/player/playlog';
+import * as replayAPI from '@be-music/player/replay';
 import * as recordsAPI from '@be-music/player/records';
 import * as rulesetAPI from '@be-music/player/ruleset';
 import * as signalsAPI from '@be-music/player/signals';
@@ -25,7 +25,7 @@ export const playerBenchmarkPackage: BenchmarkPackageDefinition = {
     ...prefixed('course', courseAPI),
     ...prefixed('records', recordsAPI),
     ...prefixed('ruleset', rulesetAPI),
-    ...prefixed('playlog', playlogAPI),
+    ...prefixed('replay', replayAPI),
   },
   registerCases: registerPlayerExportsCases,
 };

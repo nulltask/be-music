@@ -10,13 +10,13 @@ import {
 } from '../engine-types.ts';
 import type { PlayerInputCommand } from '../input-signal-bus.ts';
 import type { PlayerUICommand, PlayerUIFrameNote } from '../ui-signal-bus.ts';
-import type { BeMusicPlaylog, PlaylogRulesetResult } from '../../playlog/format.ts';
-import { simulatePlaylogRulesets } from '../../playlog/simulate.ts';
+import type { BeMusicReplay, ReplayRulesetResult } from '../../replay/format.ts';
+import { simulateReplayRulesets } from '../../replay/simulate.ts';
 import { createVirtualClock } from './virtual-clock.ts';
 
 /**
  * Test support: runs one `manualPlay` / `autoPlay` with scripted input, a test audio session and a recording UI
- * runtime, and collects everything a host could observe of it — the summary, the play log and its re-simulations, the
+ * runtime, and collects everything a host could observe of it — the summary, the replay and its re-simulations, the
  * audio session's calls, the judge cues, the UI commands and frames, the host callbacks and the text output — as plain
  * data for the characterization snapshots. Times are milliseconds of the clock the play ran on, from the call that
  * started it (play-clock milliseconds when the lead-in is 0).
@@ -71,7 +71,7 @@ export interface TestAudioSessionOptions {
 export interface CharacterizationPlay {
   driver: CharacterizationDriver;
   chart: BeMusicJSON;
-  /** Engine options over the harness's own (no lead-in, the test runtimes and callbacks, play-log recording). */
+  /** Engine options over the harness's own (no lead-in, the test runtimes and callbacks, replay recording). */
   options?: PlayerOptions;
   script?: readonly ScriptStep[];
   /**
@@ -95,12 +95,12 @@ export interface PlayObservation {
   /** When the call settled. */
   endedAtMs: number;
   summary?: PlayerSummary;
-  playlog?: BeMusicPlaylog;
-  /** `simulatePlaylog` of the recorded log under each ruleset. */
-  simulated?: Record<string, PlaylogRulesetResult>;
+  replay?: BeMusicReplay;
+  /** `simulateReplay` of the recorded log under each ruleset. */
+  simulated?: Record<string, ReplayRulesetResult>;
   /** The audio session's calls. */
   audio: string[];
-  /** Judge cues (`publishJudgeCombo`), with the gauge as it stood then. */
+  /** Judgment cues (`publishJudgeCombo`), with the gauge as it stood then. */
   judges: string[];
   /** UI commands (lane flashes, long notes, POOR BGA). */
   ui: string[];
@@ -262,7 +262,7 @@ export async function observePlay(
   const hostEntry = (text: string): void => {
     host.push(`${now()} ${text}`);
   };
-  let playlog: BeMusicPlaylog | undefined;
+  let replay: BeMusicReplay | undefined;
   const pendingInputs: Array<() => void> = [];
   const holdController = play.holdAfterChart === undefined ? undefined : new AbortController();
 
@@ -286,9 +286,9 @@ export async function observePlay(
     onHighSpeedChange: (highSpeed) => hostEntry(`high-speed ${formatNumber(highSpeed)}`),
     onRulesetResolved: (info) =>
       hostEntry(`ruleset ${info.id} ${info.longNoteStyle} note=${JSON.stringify(info.windows.note)}`),
-    recordPlaylog: {},
-    onPlaylogRecorded: (recorded) => {
-      playlog = recorded;
+    recordReplay: {},
+    onReplayRecorded: (recorded) => {
+      replay = recorded;
     },
     createInputRuntime: (context) => {
       hostEntry(`input-runtime create ${context.mode}`);
@@ -405,7 +405,7 @@ export async function observePlay(
     outcome,
     endedAtMs: Math.round(endedAtMs * 1000) / 1000,
     ...(summary === undefined ? {} : { summary }),
-    ...(playlog === undefined ? {} : { playlog, simulated: simulatePlaylogRulesets(playlog) }),
+    ...(replay === undefined ? {} : { replay, simulated: simulateReplayRulesets(replay) }),
     audio,
     judges,
     ui,
@@ -423,16 +423,16 @@ export async function observePlay(
 
 /** Parts of a play that often repeat an earlier play's of the same case; a repeat is written as a reference. */
 const SHARED_PARTS: ReadonlyArray<readonly string[]> = [
-  ['playlog', 'chart'],
-  ['playlog', 'inputs'],
-  ['playlog', 'results'],
+  ['replay', 'chart'],
+  ['replay', 'inputs'],
+  ['replay', 'results'],
   ['simulated'],
   ['log'],
   ['output'],
 ];
 
 /**
- * The snapshot form of the plays of one case: volatile play-log fields dropped (`createdAt`, the recorder's engine
+ * The snapshot form of the plays of one case: volatile replay fields dropped (`createdAt`, the recorder's engine
  * version), every number rounded to a millionth (so reordering float arithmetic does not churn the snapshots while any
  * real change still shows), and a large part that equals an earlier play's written as `"(same as <play>)"`.
  */
@@ -440,9 +440,9 @@ export function snapshotOf(plays: Readonly<Record<string, PlayObservation>>): Re
   const result: Record<string, Record<string, unknown>> = {};
   for (const [name, observation] of Object.entries(plays)) {
     const play = roundNumbers(observation) as Record<string, unknown>;
-    if (observation.playlog !== undefined) {
-      const { createdAt: _createdAt, recorder: _recorder, ...playlog } = play.playlog as Record<string, unknown>;
-      play.playlog = playlog;
+    if (observation.replay !== undefined) {
+      const { createdAt: _createdAt, recorder: _recorder, ...replay } = play.replay as Record<string, unknown>;
+      play.replay = replay;
     }
     for (const path of SHARED_PARTS) {
       const value = readPath(play, path);

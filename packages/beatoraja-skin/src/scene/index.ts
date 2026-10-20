@@ -21,7 +21,7 @@
  */
 export * from './inputs.ts';
 export * from './score.ts';
-export * from './song-text.ts';
+export * from './chart-text.ts';
 export * from './play-numbers.ts';
 export * from './play-ops.ts';
 export * from './play-text.ts';

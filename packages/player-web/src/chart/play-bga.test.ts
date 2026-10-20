@@ -1,7 +1,7 @@
 import { createEmptyJSON, type BeMusicJSON } from '@be-music/json';
 import { Texture } from 'pixi.js';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
-import type { BrowserSongAssetSource } from '../collection/types.ts';
+import type { BrowserAssetSource } from '../collection/types.ts';
 import {
   collectPlayBGAResources,
   loadPlayBGA,
@@ -28,7 +28,7 @@ vi.mock('../media/textures.ts', () => ({
   loadVideoTextureFromBytes: mocks.loadVideoTextureFromBytes,
 }));
 
-const SOURCE = {} as BrowserSongAssetSource;
+const SOURCE = {} as BrowserAssetSource;
 
 function bmsChart(bmp: Record<string, string>): BeMusicJSON {
   const chart = createEmptyJSON('bms');

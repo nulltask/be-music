@@ -297,10 +297,10 @@ export async function scorePage(c: PageContext<'/scores/:id'>) {
                   t.score.replay,
                   <a
                     class="underline-offset-4 hover:underline"
-                    href={`/api/v0/scores/${encodeURIComponent(detail.score.id)}/playlog`}
+                    href={`/api/v0/scores/${encodeURIComponent(detail.score.id)}/replay`}
                     download
                   >
-                    {t.score.downloadPlayLog}
+                    {t.score.downloadReplay}
                   </a>,
                 ],
               ] as Array<[Child, Child]>)

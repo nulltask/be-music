@@ -537,7 +537,7 @@
           "Scores"
         ],
         "summary": "Submit a play",
-        "description": "Submits a play log with its fingerprint documents. The body is JSON, gzip-compressed (`Content-Encoding: gzip`). The server re-simulates the play under every ruleset and answers its figures and ranks. The same play submitted again by the same account answers 200 with the stored result.",
+        "description": "Submits a replay with its fingerprint documents. The body is JSON, gzip-compressed (`Content-Encoding: gzip`). The server re-simulates the play under every ruleset and answers its figures and ranks. The same play submitted again by the same account answers 200 with the stored result.",
         "requestBody": {
           "required": true,
           "content": {
@@ -545,8 +545,8 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "playlog": {
-                    "description": "The play log (`be-music-playlog`, docs/playlog.md)."
+                  "replay": {
+                    "description": "The replay (`be-music-replay`, docs/replay.md)."
                   },
                   "playDocument": {
                     "description": "Fingerprint document of the played chart (the rolled branches); it must hash to `chart.playFingerprint`."
@@ -556,7 +556,7 @@
                   }
                 },
                 "required": [
-                  "playlog",
+                  "replay",
                   "playDocument"
                 ]
               }
@@ -898,7 +898,7 @@
             }
           },
           "422": {
-            "description": "The play cannot be ranked: an auto or aborted play, a play at another tempo, a course stage, a malformed play log, or a fingerprint document that does not hash to the play log’s fingerprint.",
+            "description": "The play cannot be ranked: an auto or aborted play, a play at another tempo, a course stage, a malformed replay, or a fingerprint document that does not hash to the replay’s fingerprint.",
             "content": {
               "application/json": {
                 "schema": {
@@ -906,7 +906,7 @@
                   "properties": {
                     "error": {
                       "enum": [
-                        "invalid-playlog",
+                        "invalid-replay",
                         "auto-play",
                         "aborted",
                         "tempo",
@@ -1559,23 +1559,23 @@
         ]
       }
     },
-    "/scores/{id}/playlog": {
+    "/scores/{id}/replay": {
       "get": {
-        "operationId": "getScoresByIdPlaylog",
+        "operationId": "getScoresByIdReplay",
         "tags": [
           "Scores"
         ],
-        "summary": "A play’s play log",
-        "description": "The stored play log, gzip-compressed. Only its player can read a private one.",
+        "summary": "A play’s replay",
+        "description": "The stored replay, gzip-compressed. Only its player can read a private one.",
         "responses": {
           "200": {
-            "description": "The play log (docs/playlog.md).",
+            "description": "The replay (docs/replay.md).",
             "content": {
               "application/json": {}
             }
           },
           "404": {
-            "description": "The score or its play log does not exist.",
+            "description": "The score or its replay does not exist.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2017,7 +2017,7 @@
           "Courses"
         ],
         "summary": "Submit a course run",
-        "description": "Submits a course play log with the fingerprint documents of each played stage and the charts of the stages it never reached. The body is JSON, gzip-compressed (`Content-Encoding: gzip`). Every played stage is checked like a single play, every unreached stage’s facts must be its chart’s, the run is re-simulated under every ruleset, and each stage’s carry-in must be the state the previous stage, re-simulated, left. A run given up with ESC on its last stage played is a failed run; one that stopped before the last stage otherwise must have failed there, or it is refused as `aborted`. A NONSTOP run sends every stage chart instead of documents: the server stitches them again, the stitched play must have been recorded on that chart, and the stitched play is re-simulated (given up with ESC, it is a failed run). A course run creates no chart scores. The same run submitted again by the same account answers 200 with the stored result. Rejections name the stage at fault in `detail` when there is one.",
+        "description": "Submits a course replay with the fingerprint documents of each played stage and the charts of the stages it never reached. The body is JSON, gzip-compressed (`Content-Encoding: gzip`). Every played stage is checked like a single play, every unreached stage’s facts must be its chart’s, the run is re-simulated under every ruleset, and each stage’s carry-in must be the state the previous stage, re-simulated, left. A run given up with ESC on its last stage played is a failed run; one that stopped before the last stage otherwise must have failed there, or it is refused as `aborted`. A NONSTOP run sends every stage chart instead of documents: the server stitches them again, the stitched play must have been recorded on that chart, and the stitched play is re-simulated (given up with ESC, it is a failed run). A course run creates no chart scores. The same run submitted again by the same account answers 200 with the stored result. Rejections name the stage at fault in `detail` when there is one.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2025,8 +2025,8 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "coursePlaylog": {
-                    "description": "The course play log (`be-music-course-playlog`, docs/playlog.md)."
+                  "courseReplay": {
+                    "description": "The course replay (`be-music-course-replay`, docs/replay.md)."
                   },
                   "stages": {
                     "type": "array",
@@ -2073,7 +2073,7 @@
                   }
                 },
                 "required": [
-                  "coursePlaylog",
+                  "courseReplay",
                   "stages"
                 ]
               }
@@ -2477,7 +2477,7 @@
                   "properties": {
                     "error": {
                       "enum": [
-                        "invalid-playlog",
+                        "invalid-replay",
                         "auto-play",
                         "aborted",
                         "tempo",
@@ -3216,23 +3216,23 @@
         ]
       }
     },
-    "/course-scores/{id}/playlog": {
+    "/course-scores/{id}/replay": {
       "get": {
-        "operationId": "getCourseScoresByIdPlaylog",
+        "operationId": "getCourseScoresByIdReplay",
         "tags": [
           "Courses"
         ],
-        "summary": "A course run’s play log",
-        "description": "The stored course play log (`be-music-course-playlog`), gzip-compressed. Anyone can read a shown run’s; only its player a hidden one’s.",
+        "summary": "A course run’s replay",
+        "description": "The stored course replay (`be-music-course-replay`), gzip-compressed. Anyone can read a shown run’s; only its player a hidden one’s.",
         "responses": {
           "200": {
-            "description": "The course play log (docs/playlog.md).",
+            "description": "The course replay (docs/replay.md).",
             "content": {
               "application/json": {}
             }
           },
           "404": {
-            "description": "The run or its play log does not exist.",
+            "description": "The run or its replay does not exist.",
             "content": {
               "application/json": {
                 "schema": {

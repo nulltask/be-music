@@ -1,4 +1,4 @@
-import type { EarlyLateCount, Judge } from '@be-music/scene-model';
+import type { EarlyLateCount, JudgmentKind } from '@be-music/scene-model';
 
 /**
  * A play's judgment counts and scores as the engine reports them (`PlayerSummary`, the play result's `ScoreSummary`).
@@ -36,7 +36,7 @@ export interface BeatorajaGaugeInput {
  * How many of each judgment's timed hits were early and late. `MISS` is beatoraja's empty POOR; without a `MISS` entry
  * its rows read POOR's.
  */
-export type BeatorajaEarlyLate = Readonly<Partial<Record<Judge | 'MISS', EarlyLateCount>>>;
+export type BeatorajaEarlyLate = Readonly<Partial<Record<JudgmentKind | 'MISS', EarlyLateCount>>>;
 
 /** The local date and time a clock readout shows (numbers 21-26). `month` counts from 1. */
 export interface BeatorajaWallClock {

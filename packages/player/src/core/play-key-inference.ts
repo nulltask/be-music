@@ -9,8 +9,8 @@ export const LONG_NOTE_REPEAT_HOLD_GRACE_MS = 120;
 /**
  * Key state for input that reports no key releases — a terminal without the kitty keyboard protocol, which sends a key
  * as one press and then, while it is held, as repeated presses. The judge core takes key-state input only, so the
- * inference turns that stream into the presses and releases it takes, and the judge, the play log and therefore a
- * replay and the play-log simulators all see the same keys:
+ * inference turns that stream into the presses and releases it takes, and the judge, the replay and therefore a
+ * replay and the replay simulators all see the same keys:
  *
  * - a press on a lane that is up is a key going down (`hold` + `press`);
  * - a lane stays down for a grace after each press — {@link LONG_NOTE_INITIAL_HOLD_GRACE_MS} after the press that hits a
@@ -26,7 +26,7 @@ export const LONG_NOTE_REPEAT_HOLD_GRACE_MS = 120;
  * long note held there and no note in reach of the press. The inference learns those heads from the judge core's
  * effects ({@link KeyStateInference.observe}), and forgets each once the judge has advanced to its end.
  *
- * Every step goes to the judge core in chart order, so it judges exactly what the play log records.
+ * Every step goes to the judge core in chart order, so it judges exactly what the replay records.
  */
 export interface KeyStateInference {
   /** A press from the input, at chart second `nowSec` and judge millisecond `nowMs`. */
@@ -58,7 +58,7 @@ export function createKeyStateInference(
   // The end of the long note whose head a press on each lane last hit, until the judge advances to it.
   const longNoteEnds = new Map<string, number>();
   // The chart time of the latest inferred release: a press stamped earlier (a key event drained late) is taken there,
-  // so the judge, and the play log, see the inputs in order.
+  // so the judge, and the replay, see the inputs in order.
   let releasedThroughSec = Number.NEGATIVE_INFINITY;
   let releasedThroughMs = Number.NEGATIVE_INFINITY;
   const extend = (hold: InferredHold | undefined, nowSec: number, nowMs: number, graceMs: number): InferredHold => {
@@ -87,7 +87,7 @@ export function createKeyStateInference(
   const release = (channel: string, hold: InferredHold): void => {
     holds.delete(channel);
     if (hold.untilSec > state.advancedThroughSeconds) {
-      // The timed judgments due before the release settle first, as a replay of the play log settles them.
+      // The timed judgments due before the release settle first, as a replay of the replay settles them.
       advancingTo(hold.untilSec);
       step({ kind: 'advance', nowSec: hold.untilSec, nowMs: hold.untilMs });
     }

@@ -7,12 +7,12 @@ import type { CourseView, PlayResult } from '@be-music/scene-model';
 import type { GameplayLayoutMode } from '@be-music/skin-sdk';
 import type { NonstopStitchMap } from '@be-music/player/course';
 import type {
-  BeMusicPlaylog,
-  PlaylogCourseStage,
-  PlaylogRecordingOptions,
-  PlaylogViewReplay,
-} from '@be-music/player/playlog';
-import type { GaugeType, PlaylogRulesetId } from '@be-music/player/ruleset';
+  BeMusicReplay,
+  ReplayCourseStage,
+  ReplayRecordingOptions,
+  ReplayPlaybackOptions,
+} from '@be-music/player/replay';
+import type { GaugeType, RulesetId } from '@be-music/player/ruleset';
 import type { ResolvedPlayChart } from '@be-music/player';
 import type { CompressorParams, TunableCompressor } from '../../runtime/audio-bus.ts';
 import type { AudioService } from '../../runtime/audio-service.ts';
@@ -149,35 +149,35 @@ export interface PlaySessionOptions {
   /** 2P side note arrangement (`#SRC_BUTTON,type=43`). */
   random2P?: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
   /**
-   * Replay playback: a recorded play-log to re-drive instead of live keyboard input. The chart prepare skips the
-   * usual DP-flip / lane-shuffle passes and re-applies the RECORDED arrangement (`applyPlaylogArrangement`), the
-   * engine consumes `playlog.inputs` deterministically (`PlayerOptions.replayInputs`), live lane input is ignored,
-   * and no new play-log is recorded for the run. The chart's `#RANDOM` / `#SWITCH` lines take the log's
+   * Replay playback: a recorded replay to re-drive instead of live keyboard input. The chart prepare skips the
+   * usual DP-flip / lane-shuffle passes and re-applies the RECORDED arrangement (`applyReplayArrangement`), the
+   * engine consumes `replay.inputs` deterministically (`PlayerOptions.replayInputs`), live lane input is ignored,
+   * and no new replay is recorded for the run. The chart's `#RANDOM` / `#SWITCH` lines take the log's
    * `play.randomDraws`, so the replay plays the recorded branches. `prepare` rejects when the loaded chart does not
    * match the log (draws that were not drawn for its control flow, a log without draws whose branches differ, or a
    * different chart file).
    */
-  replay?: BeMusicPlaylog;
+  replay?: BeMusicReplay;
   /**
    * Which of the view a {@link replay} recorded (`play.view` / `play.viewChanges`) it shows over the viewer's own
    * settings: the hi-speed, SUDDEN+ / HIDDEN+, the lift (this scene has none to show) and the tempo. Defaults to all
-   * (`DEFAULT_PLAYLOG_VIEW_REPLAY`).
+   * (`DEFAULT_REPLAY_PLAYBACK_OPTIONS`).
    */
-  replayView?: Readonly<PlaylogViewReplay>;
+  replayView?: Readonly<ReplayPlaybackOptions>;
   /**
-   * Judge-window ruleset for the shared engine (`PlayerOptions.judgeRuleset`): `'lr2'` (default) / `'beatoraja'`
-   * / `'iidx'`. Recorded into the play-log; replays re-apply the log's own value instead.
+   * Judgment-window ruleset for the shared engine (`PlayerOptions.judgeRuleset`): `'lr2'` (default) / `'beatoraja'`
+   * / `'iidx'`. Recorded into the replay; replays re-apply the log's own value instead.
    */
-  judgeRuleset?: PlaylogRulesetId;
+  judgeRuleset?: RulesetId;
   /**
    * SHA-256 (lowercase hex) of the source chart file bytes, when the host computed one. Stamped into the recorded
-   * play-log (`chart.sha256`) so a dropped log can be matched back to its chart by content.
+   * replay (`chart.sha256`) so a dropped log can be matched back to its chart by content.
    */
   chartSHA256?: string;
   /** MD5 (lowercase hex) of the same bytes, stamped as `chart.md5` (the key LR2 and LR2IR use). */
   chartMD5?: string;
-  /** Host application stamped into the recorded play-log's `recorder` (the engine adds its own version). */
-  playlogRecorder?: PlaylogRecordingOptions['recorder'];
+  /** Host application stamped into the recorded replay's `recorder` (the engine adds its own version). */
+  replayRecorder?: ReplayRecordingOptions['recorder'];
   /**
    * 1P gauge variant (`#SRC_BUTTON,type=40`). Selects the ruleset's gauge (the engine resolves the curve) and drives
    * the gauge-on-red-branch op flags (43 / 45). 2P-side gauge isn't yet separately wired — the engine
@@ -186,9 +186,9 @@ export interface PlaySessionOptions {
   gauge?: GaugeType;
   /**
    * The play is one stage of a course (`PlayerOptions.course`): it runs on the ruleset's course gauge, from the state the
-   * previous stage left. Recorded into the play log, which then replays on its own.
+   * previous stage left. Recorded into the replay, which then replays on its own.
    */
-  course?: PlaylogCourseStage;
+  course?: ReplayCourseStage;
   /**
    * The running course as the skin shows it — its kind, title, stage list and the stage being played (LR2 ops 280-293,
    * texts 150-170; beatoraja's course strings). Display only; the judging follows {@link course}.

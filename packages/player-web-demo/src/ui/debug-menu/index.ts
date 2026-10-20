@@ -58,7 +58,7 @@ export interface DebugMenuDeps {
   /** The library service: "Import table courses" and "Load from URLs" add to the library through it. */
   readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromURL'>;
   /** The records service, whose best records "Clear best records" empties. */
-  readonly records: Pick<RecordsService, 'songRecords'>;
+  readonly records: Pick<RecordsService, 'chartBestRecords'>;
   /** The course-maker service, whose card "My courses…" opens. */
   readonly courseMaker: Pick<CourseMakerService, 'panel'>;
   /** Each be-music skin's stored settings by skin id, which the "Skin settings" folder edits. */
@@ -138,7 +138,7 @@ export class DebugMenu {
   public readonly sceneHost: PixiSceneHost;
   public readonly silentMode: SilentModeSetting;
   public readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromURL'>;
-  public readonly records: Pick<RecordsService, 'songRecords'>;
+  public readonly records: Pick<RecordsService, 'chartBestRecords'>;
   public readonly courseMaker: Pick<CourseMakerService, 'panel'>;
   public readonly skinSettings: StoredSkinSettings;
   public readonly beatorajaSkinOverridesByType: Map<number, string>;
@@ -175,13 +175,13 @@ export class DebugMenu {
   public recordController: Controller | undefined;
   /**
    * "Auto-save play history" checkbox controller. Held so the play-start path can `disable()` it for the duration
-   * of a play — the playlog options are latched when a song starts and cannot change mid-song — and the result /
+   * of a play — the replay options are latched when a song starts and cannot change mid-song — and the result /
    * select paths can `enable()` it again.
    */
-  public playlogSaveController: Controller | undefined;
+  public replaySaveController: Controller | undefined;
   /**
    * Every "Play options" folder controller (auto play / judge / gauge / random / DP flip / auto scratch). Disabled
-   * together while a song is playing (`lockPlaylogOptionsForPlay`) and refreshed when the LR2 select panel pushes
+   * together while a song is playing (`lockReplayOptionsForPlay`) and refreshed when the LR2 select panel pushes
    * a change (`refreshPlayOptionControllers`).
    */
   public readonly playOptionControllers: Controller[] = [];
@@ -216,7 +216,7 @@ export class DebugMenu {
   public readonly skinControllers: Controller[] = [];
   /** The locks a play puts on the options it latched and on the skin controls, and whether one runs. */
   public readonly playLock: PlayLock = new PlayLock(() => ({
-    playlogSave: this.playlogSaveController,
+    replaySave: this.replaySaveController,
     playOptions: this.playOptionControllers,
     tempo: this.tempoController,
     skin: [this.skinFamilyController, this.lr2ThemeController, ...this.skinControllers],
@@ -311,7 +311,7 @@ export class DebugMenu {
     this.statusController = gui.add(this.guiState, 'status').name('Status').disable();
     this.statusController.domElement.classList.add('status-row');
     gui.add(this.guiState, 'openFolder').name('Open folder');
-    gui.add(this.guiState, 'openFiles').name('Open files (ZIP / play log)');
+    gui.add(this.guiState, 'openFiles').name('Open files (ZIP / replay)');
     // Folders in the order a session uses them: how to play (options, tempo, courses), how it looks and sounds, the
     // library, capturing a play, the Leaderboard, then the developer settings.
     const playOptions = addFolder(gui, DEBUG_MENU_FOLDERS.playOptions);
@@ -330,7 +330,7 @@ export class DebugMenu {
   }
 
   /**
-   * Options read when a play starts, which are disabled while one runs (`lockPlaylogOptionsForPlay`); returns the
+   * Options read when a play starts, which are disabled while one runs (`lockReplayOptionsForPlay`); returns the
    * controller.
    */
   public trackPlayOption(controller: Controller): Controller {
@@ -363,7 +363,7 @@ export class DebugMenu {
     this.playLock.lock(liveTempo);
   }
 
-  /** Re-enables the playlog option controllers, and the skin controls, once no play is in flight. */
+  /** Re-enables the replay option controllers, and the skin controls, once no play is in flight. */
   public unlockAfterPlay(): void {
     this.playLock.unlock();
   }

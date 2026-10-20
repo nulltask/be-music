@@ -1,10 +1,10 @@
 import type { BeMusicEvent, BeMusicSourceFormat } from '@be-music/json';
 import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts';
-import type { PlaylogInputEvent } from '../playlog/format.ts';
+import type { ReplayInputEvent } from '../replay/format.ts';
 import type { RulesetConfig } from '../ruleset/definitions.ts';
 import type { GaugeJudgeIndex } from '../ruleset/gauge.ts';
 import type { HCNTickCounter } from '../ruleset/long-note.ts';
-import type { GrooveGaugeJudgeKind } from './groove-gauge.ts';
+import type { GrooveGaugeJudgmentKind } from './groove-gauge.ts';
 import type { LaneHoldHistory } from './lane-hold.ts';
 import { type PendingAutoLongNoteState, type TimedManualJudge } from './judge-rules.ts';
 import { type ScoreSummary, type ScoreTracker } from './scoring.ts';
@@ -68,7 +68,7 @@ export interface JudgeCoreSummary extends ScoreSummary {
 export interface JudgeCoreScore {
   summary: JudgeCoreSummary;
   scoreTracker: ScoreTracker;
-  applyGaugeJudge: (judge: GrooveGaugeJudgeKind) => void;
+  applyGaugeJudge: (judge: GrooveGaugeJudgmentKind) => void;
   applyGaugeDelta: (delta: number) => void;
   /** One Hell Charge tick: a judge-table entry at a rate (beatoraja's `gauge.update(judge, rate)`). */
   applyGaugeTick: (judge: GaugeJudgeIndex, rate: number) => void;
@@ -107,7 +107,7 @@ export interface JudgeCoreState {
   readonly config: JudgeCoreConfig;
   readonly summary: JudgeCoreScore['summary'];
   readonly scoreTracker: ScoreTracker;
-  readonly applyGaugeJudge: (judge: GrooveGaugeJudgeKind) => void;
+  readonly applyGaugeJudge: (judge: GrooveGaugeJudgmentKind) => void;
   readonly applyGaugeDelta: (delta: number) => void;
   readonly applyGaugeTick: (judge: GaugeJudgeIndex, rate: number) => void;
   readonly drainGaugeToZero: () => void;
@@ -161,8 +161,8 @@ export type JudgeCoreInput =
    */
   | { kind: 'hold'; channels: ReadonlySet<string>; inferred?: boolean }
   /**
-   * Keys came up. `recordSec` is the instant the play log records for the release. `inferred`: the driver inferred it
-   * from input without releases (the play log marks it), so no lane cue shows it.
+   * Keys came up. `recordSec` is the instant the replay records for the release. `inferred`: the driver inferred it
+   * from input without releases (the replay marks it), so no lane cue shows it.
    */
   | {
       kind: 'release';
@@ -185,21 +185,21 @@ export type JudgeTraceField = readonly [key: string, value: string | number | bo
 /** Where a keysound the core triggered came from. */
 export type JudgeSoundSource = 'auto-scratch' | 'manual-note' | 'lane-fallback' | 'mine-hit';
 
-/** What a step produced, in order. Drivers map these onto audio, the UI buses, the play log and the no-TUI trace. */
+/** What a step produced, in order. Drivers map these onto audio, the UI buses, the replay and the no-TUI trace. */
 export type JudgeCoreEffect =
   /**
-   * Record a raw input in the play log (before it is judged). `channels` is only valid during dispatch. `inferred`
+   * Record a raw input in the replay (before it is judged). `channels` is only valid during dispatch. `inferred`
    * marks a release the driver inferred from input without releases.
    */
   | {
       kind: 'record-input';
-      action: PlaylogInputEvent['action'];
+      action: ReplayInputEvent['action'];
       seconds: number;
       tokens: readonly string[];
       channels: ReadonlySet<string>;
       inferred?: boolean;
     }
-  /** Count an empty POOR in the play log's native result. */
+  /** Count an empty POOR in the replay's native result. */
   | { kind: 'record-empty-poor' }
   /** An input is about to be judged at `seconds` (replay): flush time-scheduled trace output up to it first. */
   | { kind: 'input-time'; seconds: number }
@@ -214,7 +214,7 @@ export type JudgeCoreEffect =
       event: BeMusicEvent;
     }
   /** The gauge moved (`judge` absent for raw deltas). `delta` is the applied change, after clamping. */
-  | { kind: 'gauge'; seconds: number; reason: string; judge?: GrooveGaugeJudgeKind; delta?: number }
+  | { kind: 'gauge'; seconds: number; reason: string; judge?: GrooveGaugeJudgmentKind; delta?: number }
   /** The combo was set to `value`. */
   | { kind: 'combo'; seconds: number; value: number; reason: string; judge?: string; channel?: string }
   /** A long note changed state. */

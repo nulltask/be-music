@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vite-plus/test';
 import * as display from './display.ts';
 import * as engine from './index.ts';
 import * as lanes from './lanes.ts';
-import * as playlog from './playlog/index.ts';
+import * as replay from './replay/index.ts';
 import * as signals from './signals.ts';
 
 /** The values an entry exports, sorted: the barrels are curated, so a new or dropped name shows up here. */
@@ -23,9 +23,9 @@ describe('designed entries', () => {
     ]);
   });
 
-  it('@be-music/player/playlog leaves the score vocabulary to @be-music/player/ruleset', () => {
+  it('@be-music/player/replay leaves the score vocabulary to @be-music/player/ruleset', () => {
     for (const name of ['computeScoreRate', 'resolveIIDXRankLabel', 'IIDX_RANK_LABELS']) {
-      expect(playlog).not.toHaveProperty(name);
+      expect(replay).not.toHaveProperty(name);
     }
   });
 

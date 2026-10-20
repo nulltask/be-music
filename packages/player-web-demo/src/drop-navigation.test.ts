@@ -2,23 +2,23 @@ import type { LibraryChart } from '@be-music/scene-model';
 import { describe, expect, test } from 'vite-plus/test';
 import { navigationAfterDrop } from './drop-navigation.ts';
 
-function song(id: string, directoryLabel: string): LibraryChart {
+function chartEntry(id: string, directoryLabel: string): LibraryChart {
   return { id, directoryLabel, sourceLabel: 'source' } as LibraryChart;
 }
 
 describe('navigationAfterDrop', () => {
-  const old = [song('a', 'Alpha/One'), song('b', 'Beta/Two')];
+  const old = [chartEntry('a', 'Alpha/One'), chartEntry('b', 'Beta/Two')];
   const before = new Set(old.map((entry) => entry.id));
 
   test('opens the one folder a drop added', () => {
-    const songs = [...old, song('c', 'Gamma/Three'), song('d', 'Gamma/Four')];
-    expect(navigationAfterDrop(songs, before)).toEqual({ folderPath: ['Gamma'], cursors: [2, 0] });
+    const chartEntries = [...old, chartEntry('c', 'Gamma/Three'), chartEntry('d', 'Gamma/Four')];
+    expect(navigationAfterDrop(chartEntries, before)).toEqual({ folderPath: ['Gamma'], cursors: [2, 0] });
   });
 
   test('shows the folder list, on the first added folder, when a drop added several', () => {
-    const songs = [...old, song('c', 'Delta/Three'), song('d', 'Charlie/Four')];
+    const chartEntries = [...old, chartEntry('c', 'Delta/Three'), chartEntry('d', 'Charlie/Four')];
     // Folders sort by label: Alpha, Beta, Charlie, Delta.
-    expect(navigationAfterDrop(songs, before)).toEqual({ folderPath: [], cursors: [2] });
+    expect(navigationAfterDrop(chartEntries, before)).toEqual({ folderPath: [], cursors: [2] });
   });
 
   test('leaves the screen alone when the drop added no songs', () => {
@@ -26,7 +26,7 @@ describe('navigationAfterDrop', () => {
   });
 
   test('opens the folder of a first drop into an empty library', () => {
-    expect(navigationAfterDrop([song('c', 'Pack/Song')], new Set())).toEqual({
+    expect(navigationAfterDrop([chartEntry('c', 'Pack/Song')], new Set())).toEqual({
       folderPath: ['Pack'],
       cursors: [0, 0],
     });

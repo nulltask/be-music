@@ -8,7 +8,7 @@ import {
 import type { BeMusicJSON } from '@be-music/json';
 import { loadAssetBytes, resolveChartAudioAsset } from '../collection/collection.ts';
 import type { LibraryChart } from '@be-music/scene-model';
-import type { BrowserSongAssetSource } from '../collection/types.ts';
+import type { BrowserAssetSource } from '../collection/types.ts';
 
 /**
  * Sample-amplitude threshold below which we treat audio as silent for the leading-silence trim. Mirrors
@@ -42,8 +42,8 @@ export const DEFAULT_CHART_PREVIEW_FALLBACK_DURATION_SECONDS = 30;
 export const CHART_PREVIEW_STOP_FADE_OUT_SECONDS: number = 0.25;
 
 export interface ChartPreviewTarget {
-  song: LibraryChart;
-  source: BrowserSongAssetSource;
+  chart: LibraryChart;
+  source: BrowserAssetSource;
 }
 
 interface PreviewSourceHandle {
@@ -351,7 +351,7 @@ export class ChartPreviewEngine {
 
   private async startPreview(target: ChartPreviewTarget, sequence: number): Promise<void> {
     if (this.isStale(sequence)) return;
-    const previewPath = resolveChartPreviewPath(target.song.chart);
+    const previewPath = resolveChartPreviewPath(target.chart.chart);
     if (previewPath !== undefined) {
       await this.playPreviewFile(target, previewPath, sequence);
       return;
@@ -360,7 +360,7 @@ export class ChartPreviewEngine {
   }
 
   private async playPreviewFile(target: ChartPreviewTarget, previewPath: string, sequence: number): Promise<void> {
-    const entry = resolveChartAudioAsset(target.source, target.song.chartPath, previewPath);
+    const entry = resolveChartAudioAsset(target.source, target.chart.chartPath, previewPath);
     const bytes = await loadAssetBytes(entry);
     if (!bytes) return;
     if (this.isStale(sequence)) return;
@@ -406,7 +406,7 @@ export class ChartPreviewEngine {
   }
 
   private async playInPlace(target: ChartPreviewTarget, sequence: number): Promise<void> {
-    const chart = target.song.chart;
+    const chart = target.chart.chart;
     const triggers = collectChartPreviewTriggers(chart, this.fallbackDurationSeconds);
     if (triggers.length === 0) return;
     // Unique #WAVxx slots referenced inside the preview window — the only WAVs we need to bother decoding for this
@@ -423,7 +423,7 @@ export class ChartPreviewEngine {
         if (this.isStale(sequence)) return;
         const path = chart.resources.wav[key];
         if (typeof path !== 'string') return;
-        const entry = resolveChartAudioAsset(target.source, target.song.chartPath, path);
+        const entry = resolveChartAudioAsset(target.source, target.chart.chartPath, path);
         const bytes = await loadAssetBytes(entry);
         if (!bytes) return;
         if (this.isStale(sequence)) return;
@@ -530,7 +530,7 @@ export function collectChartPreviewTriggers(chart: BeMusicJSON, cutoffSeconds: n
 function sameTarget(a: ChartPreviewTarget | undefined, b: ChartPreviewTarget | undefined): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
-  return a.song.id === b.song.id && a.source.id === b.source.id;
+  return a.chart.id === b.chart.id && a.source.id === b.source.id;
 }
 
 /**

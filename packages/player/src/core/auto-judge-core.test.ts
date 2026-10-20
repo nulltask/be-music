@@ -1,7 +1,7 @@
 import { resolveChart } from '@be-music/chart';
 import { createEmptyJSON, type BeMusicJSON } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
-import { resolveRuleset, rulesetChartFactsFromChart, type PlaylogRulesetId } from '../ruleset/index.ts';
+import { resolveRuleset, rulesetChartFactsFromChart, type RulesetId } from '../ruleset/index.ts';
 import {
   createAutoJudgeState,
   isAutoJudgeSettled,
@@ -28,7 +28,7 @@ const CHART: BeMusicJSON = (() => {
   return json;
 })();
 
-function createAuto(ruleset: PlaylogRulesetId, chart: BeMusicJSON = CHART): AutoJudgeState {
+function createAuto(ruleset: RulesetId, chart: BeMusicJSON = CHART): AutoJudgeState {
   const source = structuredClone(chart);
   const resolved = resolveChart(source);
   const prepared = preparePlaybackChart(resolved);
@@ -53,10 +53,7 @@ function createAuto(ruleset: PlaylogRulesetId, chart: BeMusicJSON = CHART): Auto
   );
 }
 
-function run(
-  ruleset: PlaylogRulesetId,
-  ticks: readonly number[],
-): { state: AutoJudgeState; effects: JudgeCoreEffect[] } {
+function run(ruleset: RulesetId, ticks: readonly number[]): { state: AutoJudgeState; effects: JudgeCoreEffect[] } {
   const state = createAuto(ruleset);
   const effects: JudgeCoreEffect[] = [];
   for (const tick of ticks) {
@@ -96,7 +93,7 @@ describe('auto judge core', () => {
 
   test("an LN's one judgment lands at the tail; a charge note's head at the head and its tail at the tail", () => {
     // LR2 plays the long note as an LN, IIDX as a CN.
-    const perfectsAfter = (ruleset: PlaylogRulesetId, ticks: readonly number[]): number[] => {
+    const perfectsAfter = (ruleset: RulesetId, ticks: readonly number[]): number[] => {
       const state = createAuto(ruleset);
       return ticks.map((nowSec) => {
         stepAutoJudge(state, { kind: 'advance', nowSec });

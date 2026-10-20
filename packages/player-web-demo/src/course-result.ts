@@ -1,6 +1,6 @@
-import { resolveCourseTrophy } from '@be-music/player/playlog';
+import { resolveCourseTrophy } from '@be-music/player/replay';
 import type { LibraryCourse } from '@be-music/scene-model';
-import type { BeMusicCourseRecord, BeMusicSongRecord } from '@be-music/skin-sdk';
+import type { BeMusicCourseBestRecord, BeMusicChartBestRecord } from '@be-music/skin-sdk';
 
 /*
  * How the demo shows a course run's results: when a stage's result is skipped, and the records kept per course. The
@@ -34,7 +34,7 @@ export function skipsCourseStageResult(options: {
  * The key a course's best record is kept under: the course kind, its constraints and its stages' chart hashes in
  * order (SHA-256 when the course names one, else MD5), like beatoraja keys course scores on the stage hashes.
  */
-export function courseRecordKey(course: LibraryCourse, placement: 'intended' | 'lr2' = 'intended'): string {
+export function courseBestRecordKey(course: LibraryCourse, placement: 'intended' | 'lr2' = 'intended'): string {
   const { definition } = course;
   const stages = definition.stages.map((stage) => stage.sha256 ?? stage.md5 ?? '').join(',');
   const key = `course:${definition.kind}:${[...definition.constraints].sort().join('+')}:${stages}`;
@@ -45,18 +45,18 @@ export function courseRecordKey(course: LibraryCourse, placement: 'intended' | '
 }
 
 /**
- * The player's best record on a course bar, read from the records under {@link courseRecordKey}, with the trophy its
+ * The player's best record on a course bar, read from the records under {@link courseBestRecordKey}, with the trophy its
  * bests earn: beatoraja's `GradeBar.getTrophy` takes the best EX score and the fewest BP (which may come from different
  * runs) over the course's notes, whether the run cleared or not. A random course bar (its stages are drawn on start)
  * and a NEW COURSE bar have no record. A NONSTOP course reads the record of the placement it would be played with.
  */
-export function lookupCourseRecord(
+export function lookupCourseBestRecord(
   course: LibraryCourse,
-  records: { get(key: string): BeMusicSongRecord | undefined },
+  records: { get(key: string): BeMusicChartBestRecord | undefined },
   placement: 'intended' | 'lr2' = 'intended',
-): BeMusicCourseRecord | undefined {
+): BeMusicCourseBestRecord | undefined {
   if (course.random !== undefined || course.newCourse === true) return undefined;
-  const record = records.get(courseRecordKey(course, placement));
+  const record = records.get(courseBestRecordKey(course, placement));
   if (record === undefined) return undefined;
   const noteCount = course.stages.reduce((sum, stage) => sum + (stage.chart?.totalNotes ?? 0), 0);
   if (record.exScore === undefined || record.missCount === undefined || noteCount <= 0) return record;

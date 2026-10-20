@@ -1,21 +1,21 @@
 import { resolveChart } from '@be-music/chart';
 import { parseChart } from '@be-music/parser';
 import { manualPlay } from '@be-music/player';
-import { buildNonstopCoursePlaylog, parseLR2CourseFile } from '@be-music/player/course';
-import type { BeMusicPlaylog, PlaylogInputEvent } from '@be-music/player/playlog';
-import { simulatePlaylog } from '@be-music/player/playlog';
+import { buildNonstopCourseReplay, parseLR2CourseFile } from '@be-music/player/course';
+import type { BeMusicReplay, ReplayInputEvent } from '@be-music/player/replay';
+import { simulateReplay } from '@be-music/player/replay';
 import type { LibraryChart, LibraryCourse } from '@be-music/scene-model';
-import type { BrowserSongAssetSource } from '@be-music/player-web/collection';
+import type { BrowserAssetSource } from '@be-music/player-web/collection';
 import { describe, expect, test } from 'vite-plus/test';
 import { courseStageChartFingerprint, prepareCourseLeaderboardSubmission } from './leaderboard.ts';
 import { prepareNonstopPlay } from './nonstop-course.ts';
 
 const MD5 = ['1', '2'].map((digit) => digit.repeat(32));
 
-function song(id: string, text: string): { song: LibraryChart; source: BrowserSongAssetSource } {
+function chartEntry(id: string, text: string): { chart: LibraryChart; source: BrowserAssetSource } {
   const chartPath = `${id}/${id}.bms`;
   return {
-    song: {
+    chart: {
       id,
       sourceId: `src-${id}`,
       sourceLabel: id,
@@ -36,8 +36,8 @@ function song(id: string, text: string): { song: LibraryChart; source: BrowserSo
   };
 }
 
-const STAGE_A = song('a', ['#BPM 240', '#WAV01 a.wav', '#00111:0101', '#00212:01'].join('\n'));
-const STAGE_B = song('b', ['#BPM 240', '#WAV01 b.wav', '#00211:00010000', '#00312:00010001'].join('\n'));
+const STAGE_A = chartEntry('a', ['#BPM 240', '#WAV01 a.wav', '#00111:0101', '#00212:01'].join('\n'));
+const STAGE_B = chartEntry('b', ['#BPM 240', '#WAV01 b.wav', '#00211:00010000', '#00312:00010001'].join('\n'));
 
 function course(): LibraryCourse {
   // A NONSTOP course (type 1) with a CUT connection after stage 1.
@@ -48,14 +48,14 @@ function course(): LibraryCourse {
   return {
     id: 'ns#0',
     definition: definition!,
-    stages: [STAGE_A, STAGE_B].map(({ song: entry }) => ({ title: entry.title, chart: entry })),
+    stages: [STAGE_A, STAGE_B].map(({ chart: entry }) => ({ title: entry.title, chart: entry })),
     playable: true,
   };
 }
 
 /** Presses every note of `chart` dead on. */
-function presses(chart: LibraryChart['chart']): PlaylogInputEvent[] {
-  const events: PlaylogInputEvent[] = [];
+function presses(chart: LibraryChart['chart']): ReplayInputEvent[] {
+  const events: ReplayInputEvent[] = [];
   for (const note of resolveChart(chart).notes) {
     const timeUs = Math.round(note.seconds * 1_000_000);
     events.push({ seq: 0, timeUs, action: 'down', channels: [note.channel] });
@@ -64,13 +64,13 @@ function presses(chart: LibraryChart['chart']): PlaylogInputEvent[] {
   return events.sort((left, right) => left.timeUs - right.timeUs).map((event, seq) => ({ ...event, seq }));
 }
 
-const sourceOf = (entry: LibraryChart) => [STAGE_A, STAGE_B].find((stage) => stage.song.id === entry.id)?.source;
+const sourceOf = (entry: LibraryChart) => [STAGE_A, STAGE_B].find((stage) => stage.chart.id === entry.id)?.source;
 
 describe('prepareNonstopPlay', () => {
   test("stitches the stages into one song played from the stages' own files", () => {
     const prepared = prepareNonstopPlay(course(), { sourceOf, random: () => 0 });
     if (!prepared.ok) throw new Error(prepared.reason);
-    const { song: stitched, source } = prepared.prepared;
+    const { chart: stitched, source } = prepared.prepared;
     const { map, connections } = prepared.prepared.stitched;
     expect(connections).toEqual(['cut']);
     expect(stitched).toMatchObject({ title: 'Nonstop', chartPath: 'nonstop.bms', sourceId: source.id, totalNotes: 6 });
@@ -90,11 +90,11 @@ describe('a NONSTOP run in the demo', () => {
     const prepared = prepareNonstopPlay(course(), {
       sourceOf,
       random: () => 0,
-      hashesOf: (song) => ({ md5: song.id.repeat(32) }),
+      hashesOf: (chartEntry) => ({ md5: chartEntry.id.repeat(32) }),
     });
     if (!prepared.ok) throw new Error(prepared.reason);
-    const chart = prepared.prepared.song.chart;
-    let playlog: BeMusicPlaylog | undefined;
+    const chart = prepared.prepared.chart.chart;
+    let replay: BeMusicReplay | undefined;
     await manualPlay(chart, {
       speed: 16,
       leadInMs: 0,
@@ -102,30 +102,30 @@ describe('a NONSTOP run in the demo', () => {
       tui: false,
       replayInputs: presses(chart),
       course: { kind: 'nonstop' },
-      recordPlaylog: {},
-      onPlaylogRecorded: (recorded) => {
-        playlog = recorded;
+      recordReplay: {},
+      onReplayRecorded: (recorded) => {
+        replay = recorded;
       },
     });
-    const log = buildNonstopCoursePlaylog(course().definition, prepared.prepared.stitched, playlog!, {
+    const log = buildNonstopCourseReplay(course().definition, prepared.prepared.stitched, replay!, {
       createdAt: '2026-10-15T00:00:00.000Z',
     });
     expect(log.nonstop?.connections).toEqual(['cut']);
     expect(log.stages.map((entry) => entry.played)).toEqual([true, true]);
     const [first, second] = log.stages;
-    expect(first!.played && first!.playlog.chart).toMatchObject({ title: 'A', md5: 'a'.repeat(32) });
-    expect(second!.played && second!.playlog.chart.notes).toHaveLength(3);
+    expect(first!.played && first!.replay.chart).toMatchObject({ title: 'A', md5: 'a'.repeat(32) });
+    expect(second!.played && second!.replay.chart.notes).toHaveLength(3);
     expect(log.results?.native).toMatchObject({ noteCount: 6, stagesPlayed: 2 });
-    expect(simulatePlaylog(log.nonstop!.playlog, { ruleset: 'lr2' }).noteCount).toBe(6);
+    expect(simulateReplay(log.nonstop!.replay, { ruleset: 'lr2' }).noteCount).toBe(6);
     // Each stage names its chart, which keys the course on the Leaderboard.
-    expect(log.stages.map((entry) => entry.played && entry.playlog.chart.chartFingerprint)).toEqual(
-      [STAGE_A, STAGE_B].map(({ song: entry }) => courseStageChartFingerprint(entry)),
+    expect(log.stages.map((entry) => entry.played && entry.replay.chart.chartFingerprint)).toEqual(
+      [STAGE_A, STAGE_B].map(({ chart: entry }) => courseStageChartFingerprint(entry)),
     );
 
     // The Leaderboard gets every stage chart to stitch again, and no documents.
     const submission = prepareCourseLeaderboardSubmission(
       log,
-      [STAGE_A, STAGE_B].map(({ song: entry }) => ({ chart: entry.chart, chartPath: entry.chartPath })),
+      [STAGE_A, STAGE_B].map(({ chart: entry }) => ({ chart: entry.chart, chartPath: entry.chartPath })),
     );
     expect(submission).toMatchObject({ ok: true, submission: { stages: [] } });
     expect(submission.ok && submission.submission.stageCharts.map((stage) => stage.stage)).toEqual([0, 1]);

@@ -1,10 +1,5 @@
 import { and, count, countDistinct, eq, max, min, sql, type SQL } from 'drizzle-orm';
-import {
-  computeScoreRate,
-  IIDX_RANK_LABELS,
-  type IIDXRankLabel,
-  type PlaylogRulesetId,
-} from '@be-music/player/ruleset';
+import { computeScoreRate, IIDX_RANK_LABELS, type IIDXRankLabel, type RulesetId } from '@be-music/player/ruleset';
 import type { Database } from '../db/client.ts';
 import { courseFilterConditions, type CourseRankingFilter } from '../courses/ranking.ts';
 import { bestScore, chart, courseBestScore, courseScore, score, scoreResult, user } from '../db/schema.ts';
@@ -145,7 +140,7 @@ export interface PlayerStats {
   firstPlayedAt: number | null;
   lastPlayedAt: number | null;
   /** Plays per ruleset the player played under. */
-  playsByRuleset: Array<{ ruleset: PlaylogRulesetId; count: number }>;
+  playsByRuleset: Array<{ ruleset: RulesetId; count: number }>;
   /** Best lamps per chart under the display ruleset, unassisted. */
   lamps: Distribution<number>;
   /** DJ Ranks of the best EX-Scores per chart under the display ruleset, unassisted. */
@@ -173,7 +168,7 @@ export const JUDGE_KEYS = ['pgreat', 'great', 'good', 'bad', 'poor', 'emptyPoor'
 >;
 
 /** A player's play counts and the spread of their bests under one ruleset. */
-export async function loadPlayerStats(db: Database, userId: string, ruleset: PlaylogRulesetId): Promise<PlayerStats> {
+export async function loadPlayerStats(db: Database, userId: string, ruleset: RulesetId): Promise<PlayerStats> {
   const judgeSum = (key: keyof JudgeTotals) =>
     sql<number | null>`sum(json_extract(${scoreResult.judges}, ${`$.${key}`}))`;
   // One walk over the player's plays: counts, dates, plays per ruleset played, and the totals under the display ruleset.

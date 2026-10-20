@@ -281,7 +281,7 @@ describe('createAudioService', () => {
       return engine;
     });
     const { service, fake } = createService(undefined, { createPreviewEngine, preview: { focusDelayMs: 5 } });
-    const target = { song: { id: 'a' }, source: { id: 's' } } as unknown as ChartPreviewTarget;
+    const target = { chart: { id: 'a' }, source: { id: 's' } } as unknown as ChartPreviewTarget;
     await service.playBGM({ bytes: new Uint8Array([1]) }, { owner: scene });
     const duck = busOf(fake.sources[0]!);
     service.preview.focus(target, scene);

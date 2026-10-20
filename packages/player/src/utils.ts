@@ -6,12 +6,12 @@ const BMS_DEFAULT_DISPLAY_PLAY_LEVEL = 3;
 const BMSON_DEFAULT_DISPLAY_JUDGE_RANK = 100;
 
 /**
- * The judge rank a song screen shows: bmson `judge_rank` (100 when the chart has none), or BMS `#DEFEXRANK` when it is
+ * The judge rank a chart screen shows: bmson `judge_rank` (100 when the chart has none), or BMS `#DEFEXRANK` when it is
  * above 0, else `#RANK 0`–`4` (truncated), else NORMAL (`2`).
  *
  * Reads the resolved chart's judge-rank facts (`ResolvedChart.judgeRank`); a source chart is resolved first. The facts
  * are the raw chart values, so the format defaults are filled here for display, as each ruleset fills them for play:
- * a play log records only what the chart sets and must replay to the same windows.
+ * a replay records only what the chart sets and must replay to the same windows.
  */
 export function resolveDisplayedJudgeRankValue(chart: BeMusicJSON | ResolvedChart): number {
   const resolved = toResolvedChart(chart);

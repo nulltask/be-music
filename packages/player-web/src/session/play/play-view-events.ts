@@ -5,7 +5,7 @@
  * each `PlayFrame`.
  */
 
-import { isJudge } from '@be-music/scene-model';
+import { isJudgmentKind } from '@be-music/scene-model';
 import type { PlayViewEvent } from '../../view/types.ts';
 import type { PlayMoment } from './play-session-theme.ts';
 
@@ -23,7 +23,7 @@ export function playViewEventFromMoment(event: PlayMoment): PlayViewEvent | unde
     case 'exit-close':
       return { kind: event.kind, atMs: event.at };
     case 'judge':
-      if (!isJudge(event.judge)) return undefined;
+      if (!isJudgmentKind(event.judge)) return undefined;
       return {
         kind: 'judge',
         judge: event.judge,

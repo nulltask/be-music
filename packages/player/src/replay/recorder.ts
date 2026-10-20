@@ -1,0 +1,454 @@
+import type { ReplayTempoChange, ReplayViewChange, ReplayViewState } from './view.ts';
+import {
+  computeChartFingerprint,
+  computePlayFingerprint,
+  hasControlFlow,
+  resolveChart,
+  type RandomDraws,
+} from '@be-music/chart';
+import { resolveBMSControlFlowWithDraws } from '@be-music/parser';
+import { resolveBMSBase, type BeMusicJSON } from '@be-music/json';
+import type { PlayerSummary } from '../core/engine.ts';
+import type { PreparedPlaybackChartData } from '../core/bootstrap.ts';
+import { resolveChartJudgeRankFacts } from '../ruleset/index.ts';
+import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
+import { resolveIIDXRankLabel } from '../ruleset/score.ts';
+import type { GaugeType } from '../ruleset/gauge-type.ts';
+import type { RulesetId } from '../ruleset/definitions.ts';
+import packageJSON from '../../package.json' with { type: 'json' };
+import {
+  BE_MUSIC_REPLAY_FORMAT,
+  BE_MUSIC_REPLAY_VERSION,
+  type BeMusicReplay,
+  type ReplayChart,
+  type ReplayCourseStage,
+  type ReplayInputAction,
+  type ReplayInputEvent,
+  type ReplayNote,
+  type ReplayPlay,
+  type ReplayRecorderInfo,
+  type ReplayRulesetResult,
+} from './format.ts';
+
+/** Ruleset id used for the engine's own summary cached into `results` at record time. */
+export const REPLAY_NATIVE_RULESET_ID = 'be-music/native';
+
+/** `@be-music/player` version stamped into `recorder.engine` of every log this engine records. */
+export const REPLAY_ENGINE_VERSION: string = packageJSON.version;
+const ENGINE_VERSION = REPLAY_ENGINE_VERSION;
+
+/**
+ * Chart data the recorder snapshots — structurally a subset of the engine's `PreparedPlaybackChartData`, so the
+ * engine can hand its prepared bundle over verbatim.
+ */
+export type ReplayRecorderChartData = Pick<
+  PreparedPlaybackChartData,
+  'notes' | 'landmineNotes' | 'invisibleNotes' | 'activeFreeZoneChannels' | 'scorableNotes' | 'laneDisplayMode'
+> &
+  Partial<Pick<PreparedPlaybackChartData, 'resolvedChart'>>;
+
+export interface ReplayRecorderPlaySettings {
+  mode: 'manual' | 'auto';
+  autoScratch: boolean;
+  /** The gauge the engine ran (`PlayerOptions.gauge`, else `recordReplay.gauge`); `GROOVE` when neither is set. */
+  gauge?: GaugeType;
+  randomLane?: { p1?: string; p2?: string };
+  dpFlip?: boolean;
+  judgeWindowOverrideMs?: number;
+  /** Judgment-window ruleset the engine ran (`PlayerOptions.judgeRuleset`). Absent = `'lr2'`. */
+  judgeRuleset?: RulesetId;
+  /** The play's `#RANDOM` / `#SWITCH` outcomes (`PlayerOptions.randomDraws`). Recorded when non-empty. */
+  randomDraws?: RandomDraws;
+  /** The play ended the moment its survival gauge emptied (`PlayerOptions.endOnFailure`). Recorded when true. */
+  endOnFailure?: boolean;
+  /** The course stage the play was (`PlayerOptions.course`). */
+  course?: ReplayCourseStage;
+  /** The play tempo (`PlayerOptions.speed`). Recorded when it is not 1. */
+  tempo?: number;
+  /** What the player sees at the start (`PlayerOptions.recordReplay.view`): hi-speed, covers and lift. */
+  view?: ReplayViewState;
+  native?: Record<string, string | number | boolean | null>;
+}
+
+/**
+ * Host-declared subset of the recording inputs — the fields the engine cannot know by itself. Passed through
+ * `PlayerOptions.recordReplay`. `chartSHA256` is the SHA-256 (lowercase hex) of the source chart FILE bytes;
+ * hosts that have the raw file compute it so dropped logs can be matched back to their chart by content. `chartMD5` is
+ * the MD5 of the same bytes, the key LR2 and LR2IR use.
+ * `sourceChart` is the chart as loaded, before `#RANDOM` / `#SWITCH` resolution and before any lane option; hosts that
+ * resolve control flow or rewrite lanes on the chart themselves pass it so the fingerprints describe the chart, not
+ * their working copy. Without it the engine uses the chart it was given. `recorder` identifies the host application;
+ * the engine version is added by the recorder itself.
+ */
+export type ReplayRecordingOptions = Pick<
+  ReplayRecorderPlaySettings,
+  'gauge' | 'randomLane' | 'dpFlip' | 'view' | 'native'
+> & {
+  chartSHA256?: string;
+  chartMD5?: string;
+  sourceChart?: BeMusicJSON;
+  recorder?: Omit<ReplayRecorderInfo, 'engine'>;
+};
+
+export interface ReplayRecorderOptions {
+  /** Resolved chart JSON (post `#RANDOM` control flow) — metadata source. */
+  json: BeMusicJSON;
+  chart: ReplayRecorderChartData;
+  /** SHA-256 (lowercase hex) of the source chart file bytes, when the host computed one. */
+  chartSHA256?: string;
+  /** MD5 (lowercase hex) of the source chart file bytes, when the host computed one. */
+  chartMD5?: string;
+  /**
+   * The chart file's extension (`PlayerOptions.laneModeExtension`), the fingerprint's lane-mode input. Without it the
+   * recorder infers `.pms` from a 9 KEY lane mode.
+   */
+  laneModeExtension?: string;
+  /**
+   * The chart before `#RANDOM` / `#SWITCH` resolution and before any lane option — the fingerprint source. Used when
+   * `play.randomDraws` were drawn for its control flow; otherwise the fingerprints fall back to {@link json}.
+   */
+  sourceChart?: BeMusicJSON;
+  play: ReplayRecorderPlaySettings;
+  /** True when the ruleset the play ran under keeps LR2's money score; the native result then carries `score`. */
+  moneyScore?: boolean;
+  /** Host application that records the play. `engine` is always overwritten with this package's version. */
+  recorder?: Omit<ReplayRecorderInfo, 'engine'>;
+  /** Dynamic `#EXRANKxx` changes the engine collected (chart order). */
+  dynamicJudgeRankChanges?: ReadonlyArray<{ seconds: number; exRankValue: number }>;
+  /** A stitched NONSTOP chart's later stages taking over the judge rank (`PlayerPlaySettings.stageRanks`). */
+  stageRanks?: ReadonlyArray<{ seconds: number; rank: number; table: 'chart' | 'lr2-nonstop' }>;
+  /** LR2 negative-BPM reversal (chart seconds, #134) — recorded so re-simulations freeze judging at the same point. */
+  reversalSeconds?: number;
+  /** Clock source for `createdAt` — injectable for tests. Defaults to `Date`. */
+  now?: () => Date;
+}
+
+export interface ReplayRecorderFinalizeInput {
+  summary: PlayerSummary;
+  maxCombo?: number;
+  aborted?: boolean;
+  /** Chart seconds the judge had settled through when the play was aborted. */
+  abortedAtSeconds?: number;
+}
+
+export interface ReplayRecorder {
+  /** Records a press or release; `inferred` marks a release the engine inferred from input without releases. */
+  recordInput(
+    action: ReplayInputAction,
+    timeSeconds: number,
+    tokens: readonly string[],
+    channels: Iterable<string>,
+    inferred?: boolean,
+  ): void;
+  /** Counts an LR2-style empty POOR — cached into the native result for diagnostics. */
+  recordEmptyPoor(): void;
+  /** Records a view change (hi-speed, covers, lift) at a chart time. An empty change is dropped. */
+  recordViewChange(timeSeconds: number, change: ReplayViewState): void;
+  /** Records a tempo change at a chart time. A change to the tempo already in force is dropped. */
+  recordTempoChange(timeSeconds: number, tempo: number): void;
+  finalize(input: ReplayRecorderFinalizeInput): BeMusicReplay;
+}
+
+export function createReplayRecorder(options: ReplayRecorderOptions): ReplayRecorder {
+  const chart = buildReplayChart(options);
+  const inputs: ReplayInputEvent[] = [];
+  let seq = 0;
+  let emptyPoorCount = 0;
+  const viewChanges: ReplayViewChange[] = [];
+  const tempoChanges: ReplayTempoChange[] = [];
+  let currentTempo = options.play.tempo ?? 1;
+
+  return {
+    recordInput: (action, timeSeconds, tokens, channels, inferred): void => {
+      const channelList = [...channels];
+      if (channelList.length === 0) {
+        return;
+      }
+      const event: ReplayInputEvent = {
+        seq: seq++,
+        timeUs: secondsToMicroseconds(timeSeconds),
+        action,
+        channels: channelList,
+      };
+      if (tokens.length > 0) {
+        event.tokens = [...tokens];
+      }
+      if (inferred === true && action === 'up') {
+        event.inferred = true;
+      }
+      inputs.push(event);
+    },
+    recordEmptyPoor: (): void => {
+      emptyPoorCount += 1;
+    },
+    recordViewChange: (timeSeconds, change): void => {
+      const entries = Object.entries(change).filter(([, value]) => value !== undefined);
+      if (entries.length === 0) return;
+      const recorded: ReplayViewChange = { timeUs: secondsToMicroseconds(timeSeconds), ...change };
+      if (change.covers !== undefined) recorded.covers = change.covers.map((cover) => ({ ...cover }));
+      viewChanges.push(recorded);
+    },
+    recordTempoChange: (timeSeconds, tempo): void => {
+      if (!(tempo > 0) || tempo === currentTempo) return;
+      currentTempo = tempo;
+      tempoChanges.push({ timeUs: secondsToMicroseconds(timeSeconds), tempo });
+    },
+    finalize: ({ summary, maxCombo, aborted, abortedAtSeconds }): BeMusicReplay => {
+      const play: ReplayPlay = {
+        mode: options.play.mode,
+        autoScratch: options.play.autoScratch,
+        gauge: options.play.gauge ?? 'GROOVE',
+      };
+      if (options.play.randomLane !== undefined) play.randomLane = options.play.randomLane;
+      if (options.play.dpFlip !== undefined) play.dpFlip = options.play.dpFlip;
+      if (options.play.judgeWindowOverrideMs !== undefined) {
+        play.judgeWindowOverrideMs = options.play.judgeWindowOverrideMs;
+      }
+      if (options.play.judgeRuleset !== undefined) play.judgeRuleset = options.play.judgeRuleset;
+      if (options.play.randomDraws !== undefined && options.play.randomDraws.length > 0) {
+        play.randomDraws = options.play.randomDraws.map((draw) => ({ ...draw }));
+      }
+      if (aborted === true) {
+        play.aborted = true;
+        if (abortedAtSeconds !== undefined) play.abortedAtUs = secondsToMicroseconds(abortedAtSeconds);
+      }
+      if (options.play.endOnFailure === true) play.endOnFailure = true;
+      if (options.play.course !== undefined) play.course = structuredClone(options.play.course);
+      if (options.play.tempo !== undefined && options.play.tempo !== 1) play.tempo = options.play.tempo;
+      if (tempoChanges.length > 0) play.tempoChanges = tempoChanges.map((change) => ({ ...change }));
+      if (options.play.view !== undefined) play.view = structuredClone(options.play.view);
+      if (viewChanges.length > 0) play.viewChanges = structuredClone(viewChanges);
+      if (options.play.native !== undefined) play.native = options.play.native;
+
+      const createdAt = (options.now?.() ?? new Date()).toISOString();
+      return {
+        format: BE_MUSIC_REPLAY_FORMAT,
+        version: BE_MUSIC_REPLAY_VERSION,
+        createdAt,
+        recorder: { ...options.recorder, engine: ENGINE_VERSION },
+        clock: { unit: 'us', origin: 'chart-zero' },
+        chart,
+        inputs,
+        play,
+        results: {
+          native: buildNativeResult(summary, maxCombo, emptyPoorCount, play.gauge, options.moneyScore === true),
+        },
+      };
+    },
+  };
+}
+
+function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
+  const { json, chart } = options;
+  const idBase = resolveBMSBase(json);
+  const resolved = chart.resolvedChart ?? resolveChart(json);
+  const chartLNMode = resolved.lnMode;
+  const notes: ReplayNote[] = [];
+
+  for (const note of chart.notes) {
+    const isFreeZone = chart.activeFreeZoneChannels.has(note.channel);
+    const hasTail =
+      typeof note.endSeconds === 'number' && Number.isFinite(note.endSeconds) && note.endSeconds > note.seconds;
+    const entry: ReplayNote = {
+      id: 0,
+      channel: note.channel,
+      type: isFreeZone ? 'freezone' : hasTail ? 'long' : 'normal',
+      timeUs: secondsToMicroseconds(note.seconds),
+    };
+    if (hasTail) {
+      entry.endTimeUs = secondsToMicroseconds(note.endSeconds!);
+      if (!isFreeZone) {
+        entry.lnMode = note.longNoteMode ?? chartLNMode;
+      }
+    }
+    notes.push(entry);
+  }
+  for (const mine of chart.landmineNotes) {
+    notes.push({
+      id: 0,
+      channel: mine.channel,
+      type: 'mine',
+      timeUs: secondsToMicroseconds(mine.seconds),
+      damage: resolveLandmineGaugeEffect(mine.event, idBase, json.sourceFormat).damage,
+    });
+  }
+  for (const invisible of chart.invisibleNotes) {
+    notes.push({
+      id: 0,
+      channel: invisible.channel,
+      type: 'invisible',
+      timeUs: secondsToMicroseconds(invisible.seconds),
+    });
+  }
+  notes.sort(compareReplayNotes);
+  for (let index = 0; index < notes.length; index += 1) {
+    notes[index]!.id = index;
+  }
+
+  const judgeRank: ReplayChart['judgeRank'] = resolveChartJudgeRankFacts(json, resolved);
+  const timelineSource = options.dynamicJudgeRankChanges ?? [];
+  if (timelineSource.length > 0) {
+    judgeRank.timeline = timelineSource.map((change) => ({
+      timeUs: secondsToMicroseconds(change.seconds),
+      exRankValue: change.exRankValue,
+    }));
+  }
+  if (options.stageRanks !== undefined && options.stageRanks.length > 0) {
+    judgeRank.stageRanks = options.stageRanks.map((change) => ({
+      timeUs: secondsToMicroseconds(change.seconds),
+      rank: change.rank,
+      table: change.table,
+    }));
+  }
+
+  const result: ReplayChart = {
+    sourceFormat: json.sourceFormat === 'bmson' ? 'bmson' : 'bms',
+    laneMode: chart.laneDisplayMode,
+    lnMode: chartLNMode,
+    judgeRank,
+    noteCount: chart.scorableNotes.length,
+    notes,
+  };
+  if (typeof options.reversalSeconds === 'number' && Number.isFinite(options.reversalSeconds)) {
+    result.reversalTimeUs = secondsToMicroseconds(options.reversalSeconds);
+  }
+  if (typeof options.chartSHA256 === 'string' && options.chartSHA256.length > 0) {
+    result.sha256 = options.chartSHA256.toLowerCase();
+  }
+  if (typeof options.chartMD5 === 'string' && options.chartMD5.length > 0) {
+    result.md5 = options.chartMD5.toLowerCase();
+  }
+  const { chartFingerprint, playFingerprint } = computeReplayFingerprints(options);
+  if (chartFingerprint !== undefined) result.chartFingerprint = chartFingerprint;
+  if (playFingerprint !== undefined) result.playFingerprint = playFingerprint;
+  if (typeof json.metadata.title === 'string' && json.metadata.title.length > 0) result.title = json.metadata.title;
+  if (typeof json.metadata.subtitle === 'string' && json.metadata.subtitle.length > 0) {
+    result.subtitle = json.metadata.subtitle;
+  }
+  if (typeof json.metadata.artist === 'string' && json.metadata.artist.length > 0) result.artist = json.metadata.artist;
+  if (typeof json.metadata.genre === 'string' && json.metadata.genre.length > 0) result.genre = json.metadata.genre;
+  const playLevel = json.metadata.playLevel;
+  if (
+    (typeof playLevel === 'number' && Number.isFinite(playLevel)) ||
+    (typeof playLevel === 'string' && playLevel !== '')
+  ) {
+    result.playLevel = String(playLevel);
+  }
+  if (typeof json.metadata.difficulty === 'number' && Number.isFinite(json.metadata.difficulty)) {
+    result.difficulty = json.metadata.difficulty;
+  }
+  if (resolved.total.value !== undefined) {
+    result.total = resolved.total.value;
+  }
+  return result;
+}
+
+/**
+ * Chart and play fingerprints (`bmfp0:…`) of the play. Their lane-mode input is the chart's extension, which the
+ * engine passes as `laneModeExtension`; without it, a 9 KEY play stands in for `.pms` (it is 9 KEY exactly when the
+ * chart is `.pms` or its content says so).
+ *
+ * The source chart rebuilds both whatever the host did to its working copy (a DP flip baked into the chart JSON, the
+ * control flow resolved away), provided `play.randomDraws` were drawn for its control flow. Without a usable source the
+ * engine's chart gives the play fingerprint, and the chart fingerprint only when the play has no draws — a chart with
+ * control flow has none to resolve there, so its chart fingerprint is unknown and omitted. A failure only drops a
+ * field — it must never break recording.
+ */
+function computeReplayFingerprints(options: ReplayRecorderOptions): {
+  chartFingerprint?: string;
+  playFingerprint?: string;
+} {
+  const chartPath =
+    options.laneModeExtension ?? (options.chart.laneDisplayMode.startsWith('9 KEY') ? '.pms' : undefined);
+  const draws = options.play.randomDraws ?? [];
+  const source = options.sourceChart;
+  const played = source !== undefined ? tryResolveSource(source, draws) : undefined;
+  if (source !== undefined && played !== undefined) {
+    return {
+      chartFingerprint: tryFingerprint(() => computeChartFingerprint(source, { chartPath })),
+      playFingerprint: tryFingerprint(() => computePlayFingerprint(played, { chartPath })),
+    };
+  }
+  const playFingerprint = tryFingerprint(() => computePlayFingerprint(options.json, { chartPath }));
+  return draws.length === 0 ? { chartFingerprint: playFingerprint, playFingerprint } : { playFingerprint };
+}
+
+/** The source chart resolved with the play's draws, or `undefined` when they were not drawn for its control flow. */
+function tryResolveSource(source: BeMusicJSON, draws: RandomDraws): BeMusicJSON | undefined {
+  if (!hasControlFlow(source)) {
+    return draws.length === 0 ? source : undefined;
+  }
+  try {
+    return resolveBMSControlFlowWithDraws(source, draws);
+  } catch {
+    return undefined;
+  }
+}
+
+function tryFingerprint(compute: () => string): string | undefined {
+  try {
+    return compute();
+  } catch {
+    return undefined;
+  }
+}
+
+function buildNativeResult(
+  summary: PlayerSummary,
+  maxCombo: number | undefined,
+  emptyPoorCount: number,
+  declaredGauge: GaugeType,
+  moneyScore: boolean,
+): ReplayRulesetResult {
+  // Reported the way the simulators report a ruleset result: the judgment count as `noteCount`, the DJ LEVEL, a money
+  // score only where the ruleset has one, and the mid-play death flag.
+  const result: ReplayRulesetResult = {
+    ruleset: REPLAY_NATIVE_RULESET_ID,
+    judge: {
+      pgreat: summary.perfect,
+      great: summary.great,
+      good: summary.good,
+      bad: summary.bad,
+      poor: summary.poor,
+      emptyPoor: emptyPoorCount,
+    },
+    fast: summary.fast,
+    slow: summary.slow,
+    exScore: summary.exScore,
+    noteCount: summary.total,
+    maxCombo: maxCombo ?? 0,
+    djLevel: resolveIIDXRankLabel(summary.exScore, summary.total),
+    gauge: {
+      type: summary.gauge?.type ?? declaredGauge,
+      final: summary.gauge?.current ?? 0,
+      cleared: summary.gauge?.cleared ?? false,
+    },
+  };
+  if (summary.gauge?.failedMidPlay === true) {
+    result.gauge.failedMidPlay = true;
+  }
+  if (moneyScore) {
+    result.score = summary.score;
+  }
+  if (summary.course !== undefined) {
+    result.course = { combo: summary.course.combo, maxCombo: summary.course.maxCombo };
+  }
+  return result;
+}
+
+function compareReplayNotes(left: ReplayNote, right: ReplayNote): number {
+  if (left.timeUs !== right.timeUs) {
+    return left.timeUs - right.timeUs;
+  }
+  if (left.channel !== right.channel) {
+    return left.channel < right.channel ? -1 : 1;
+  }
+  if (left.type !== right.type) {
+    return left.type < right.type ? -1 : 1;
+  }
+  return 0;
+}
+
+function secondsToMicroseconds(seconds: number): number {
+  return Math.round(seconds * 1_000_000);
+}

@@ -3,8 +3,8 @@
 // stages in turn, and its course result. The run it acts on is the course run service's (`services/courses.ts`); the
 // screens are the app's.
 
-import { createCourseSongRecord, drawBrowserRandomCourse, type CourseMaker } from '@be-music/player-web/collection';
-import type { BeMusicCoursePlaylog, PlaylogCourseResult, PlaylogRecorderInfo } from '@be-music/player/playlog';
+import { createCourseChartRecord, drawBrowserRandomCourse, type CourseMaker } from '@be-music/player-web/collection';
+import type { BeMusicCourseReplay, ReplayCourseResult, ReplayRecorderInfo } from '@be-music/player/replay';
 import {
   resolveCourseView,
   type BrowseSnapshot,
@@ -20,22 +20,22 @@ import {
   describeUnplayableCourse,
   nextCourseStagePlay,
   planCourseStart,
-  resolveCourseRecordUpdate,
+  resolveCourseBestRecordUpdate,
   type CourseStagePlay,
 } from '../../course-flow.ts';
-import { buildCourseResultData, courseRecordKey, joinCourseStageHistories } from '../../course-result.ts';
+import { buildCourseResultData, courseBestRecordKey, joinCourseStageHistories } from '../../course-result.ts';
 import { pickActiveFamilyForScene } from '../../family-dispatch.ts';
 import type { LeaderboardPanel } from '../../leaderboard-ui.ts';
 import type { CourseRunService } from '../../services/courses.ts';
 import type { LibraryService } from '../../services/library.ts';
-import type { PlaylogAutoSave } from '../../services/playlogs.ts';
+import type { ReplayAutoSave } from '../../services/replays.ts';
 import type { RecordsService } from '../../services/records.ts';
 import type { FamilyKits } from '../family-kits.ts';
 
-/** A course run's play log and native result, as its course result screen reports them. */
+/** A course run's replay and native result, as its course result screen reports them. */
 export interface CourseResultLog {
-  log: BeMusicCoursePlaylog;
-  native: PlaylogCourseResult;
+  log: BeMusicCourseReplay;
+  native: ReplayCourseResult;
 }
 
 export interface CourseRouteDeps {
@@ -47,14 +47,14 @@ export interface CourseRouteDeps {
   readonly records: Pick<RecordsService, 'resolveChartHashes' | 'recordCourseResult'>;
   /** The course maker, which a NEW COURSE bar starts. */
   readonly courseMaker: { readonly maker: Pick<CourseMaker, 'start'> };
-  /** The course play log's auto-save, by the setting latched at the last stage's start. */
-  readonly playlogAutoSave: Pick<PlaylogAutoSave, 'saveCourse'>;
+  /** The course replay's auto-save, by the setting latched at the last stage's start. */
+  readonly replayAutoSave: Pick<ReplayAutoSave, 'saveCourse'>;
   /** Ranks the course run as one. */
   readonly leaderboard: Pick<LeaderboardPanel, 'maybeSubmitCourse'>;
   /** The family the course result is drawn by. */
   readonly familyKits: Pick<FamilyKits, 'familyDispatchState'>;
-  /** This app as the recorder of its play logs (`recorder` in the course play log). */
-  readonly playlogRecorder: Omit<PlaylogRecorderInfo, 'engine'>;
+  /** This app as the recorder of its replays (`recorder` in the course replay). */
+  readonly replayRecorder: Omit<ReplayRecorderInfo, 'engine'>;
   /** Where the select screen is: its position on the stage or off it, else the one last kept. */
   readonly selectNavigation: () => BrowseSnapshot | undefined;
   readonly setStatus: (text: string) => void;
@@ -63,13 +63,13 @@ export interface CourseRouteDeps {
   readonly showSelect: () => Promise<void>;
   /** Shows the decide screen for `song`, which leads to `then.start` instead of playing `song`. */
   readonly showDecide: (
-    song: LibraryChart,
+    chartEntry: LibraryChart,
     overrides: { autoPlay?: boolean },
     then: { start: () => Promise<void>; cancel?: () => void },
   ) => Promise<void>;
   /** Plays a course stage, with the course's AUTO when it was started with one. */
-  readonly playSong: (
-    song: LibraryChart,
+  readonly playChart: (
+    chartEntry: LibraryChart,
     overrides: { courseStage: CourseStagePlay; autoPlay?: boolean },
   ) => Promise<void>;
   /** Shows the course result on the LR2 or built-in result screen. */
@@ -83,7 +83,7 @@ export interface CourseRouteDeps {
     options: { run: 'course'; course: { info: CourseView; result: CourseResultLog } },
   ) => Promise<boolean>;
   /** Re-enables the options a play latched, once its result shows. */
-  readonly unlockPlaylogOptions: () => void;
+  readonly unlockReplayOptions: () => void;
 }
 
 /** A course from its course bar to its course result. */
@@ -92,38 +92,38 @@ export class CourseRoute {
   private readonly library: CourseRouteDeps['library'];
   private readonly records: CourseRouteDeps['records'];
   private readonly courseMaker: CourseRouteDeps['courseMaker'];
-  private readonly playlogAutoSave: CourseRouteDeps['playlogAutoSave'];
+  private readonly replayAutoSave: CourseRouteDeps['replayAutoSave'];
   private readonly leaderboard: CourseRouteDeps['leaderboard'];
   private readonly familyKits: CourseRouteDeps['familyKits'];
-  private readonly playlogRecorder: CourseRouteDeps['playlogRecorder'];
+  private readonly replayRecorder: CourseRouteDeps['replayRecorder'];
   private readonly selectNavigation: CourseRouteDeps['selectNavigation'];
   private readonly setStatus: CourseRouteDeps['setStatus'];
   private readonly startNonstopCourse: CourseRouteDeps['startNonstopCourse'];
   private readonly showSelect: CourseRouteDeps['showSelect'];
   private readonly showDecide: CourseRouteDeps['showDecide'];
-  private readonly playSong: CourseRouteDeps['playSong'];
+  private readonly playChart: CourseRouteDeps['playChart'];
   private readonly showResult: CourseRouteDeps['showResult'];
   private readonly showBeatorajaResult: CourseRouteDeps['showBeatorajaResult'];
-  private readonly unlockPlaylogOptions: CourseRouteDeps['unlockPlaylogOptions'];
+  private readonly unlockReplayOptions: CourseRouteDeps['unlockReplayOptions'];
 
   public constructor(deps: CourseRouteDeps) {
     this.courses = deps.courses;
     this.library = deps.library;
     this.records = deps.records;
     this.courseMaker = deps.courseMaker;
-    this.playlogAutoSave = deps.playlogAutoSave;
+    this.replayAutoSave = deps.replayAutoSave;
     this.leaderboard = deps.leaderboard;
     this.familyKits = deps.familyKits;
-    this.playlogRecorder = deps.playlogRecorder;
+    this.replayRecorder = deps.replayRecorder;
     this.selectNavigation = deps.selectNavigation;
     this.setStatus = deps.setStatus;
     this.startNonstopCourse = deps.startNonstopCourse;
     this.showSelect = deps.showSelect;
     this.showDecide = deps.showDecide;
-    this.playSong = deps.playSong;
+    this.playChart = deps.playChart;
     this.showResult = deps.showResult;
     this.showBeatorajaResult = deps.showBeatorajaResult;
-    this.unlockPlaylogOptions = deps.unlockPlaylogOptions;
+    this.unlockReplayOptions = deps.unlockReplayOptions;
   }
 
   /**
@@ -148,9 +148,9 @@ export class CourseRoute {
     let course = entry;
     if (plan.action === 'draw') {
       const candidates = await Promise.all(
-        this.library.collection.charts.map(async (song) => ({
-          song,
-          ...(await this.records.resolveChartHashes(song)),
+        this.library.collection.charts.map(async (chartEntry) => ({
+          chart: chartEntry,
+          ...(await this.records.resolveChartHashes(chartEntry)),
         })),
       );
       const drawn = drawBrowserRandomCourse(entry, candidates, Math.random);
@@ -190,7 +190,7 @@ export class CourseRoute {
       return;
     }
     this.setStatus(`${active.course.definition.name}: stage ${stage.index + 1} / ${stage.stageCount}`);
-    await this.playSong(stage.stage, {
+    await this.playChart(stage.stage, {
       courseStage: stage,
       ...(this.courses.autoPlay !== undefined ? { autoPlay: this.courses.autoPlay } : {}),
     });
@@ -207,7 +207,7 @@ export class CourseRoute {
   }
 
   /**
-   * The course result: the course play log built from the stages played, its native result shown on the result scene
+   * The course result: the course replay built from the stages played, its native result shown on the result scene
    * as one run, saved (when auto-save is on) and kept as the course's best record.
    */
   public async showCourseResult(): Promise<void> {
@@ -217,14 +217,14 @@ export class CourseRoute {
       return;
     }
     const { course, run } = active;
-    const courseLog = run.buildPlaylog({ createdAt: new Date().toISOString(), recorder: this.playlogRecorder });
+    const courseLog = run.buildReplay({ createdAt: new Date().toISOString(), recorder: this.replayRecorder });
     const result = courseLog.results?.native;
     if (result === undefined) {
       await this.showSelect();
       return;
     }
-    this.records.recordCourseResult(resolveCourseRecordUpdate(courseLog, result, courseRecordKey(course)));
-    this.playlogAutoSave.saveCourse(courseLog);
+    this.records.recordCourseResult(resolveCourseBestRecordUpdate(courseLog, result, courseBestRecordKey(course)));
+    this.replayAutoSave.saveCourse(courseLog);
     // The course is ranked as one run (its stages never go one by one); the rank lands in the status line.
     this.leaderboard.maybeSubmitCourse(courseLog, run.stages);
     const courseInfo = resolveCourseView(course);
@@ -235,7 +235,7 @@ export class CourseRoute {
       // every stage's graph joined, each stage as wide as its chart is long.
       const joined = joinCourseStageHistories(
         histories,
-        run.stages.map((song) => createCourseSongRecord(song).length ?? 0),
+        run.stages.map((chartEntry) => createCourseChartRecord(chartEntry).length ?? 0),
       );
       const runResult = buildCourseResultData(course, result, courseLog, joined, {
         playSeconds: run.playSeconds,
@@ -246,7 +246,7 @@ export class CourseRoute {
         course: { info: courseInfo, result: { log: courseLog, native: result } },
       });
       if (mounted) {
-        this.unlockPlaylogOptions();
+        this.unlockReplayOptions();
         return;
       }
     }

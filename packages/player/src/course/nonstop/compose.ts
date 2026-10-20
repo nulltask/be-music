@@ -29,8 +29,8 @@ export interface NonstopStageInput {
 }
 
 /**
- * The version of the stitching rules {@link stitchNonstopCourse} follows. A NONSTOP play log records it
- * (`PlaylogNonstopRun.stitch`), so a stitched chart is rebuilt by the rules it was played on. Raise it whenever a change
+ * The version of the stitching rules {@link stitchNonstopCourse} follows. A NONSTOP replay records it
+ * (`ReplayNonstopRun.stitch`), so a stitched chart is rebuilt by the rules it was played on. Raise it whenever a change
  * moves a stitched note, sound, rank or timing, and keep the earlier rules reachable through `options.stitch`.
  */
 export const NONSTOP_STITCH_VERSION = 1;

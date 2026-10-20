@@ -100,7 +100,7 @@ describe('course pages', () => {
     expect(course.html).toContain('<meta name="robots" content="noindex"/>');
   });
 
-  test('a run page breaks the run down by stage and offers its play log', async () => {
+  test('a run page breaks the run down by stage and offers its replay', async () => {
     const db = openDatabase(env.DB);
     const dave = await signInAnonymously(fetchApp);
     await claimAccount(db, await userIdOf(dave));
@@ -112,7 +112,7 @@ describe('course pages', () => {
     // Stage 1 cleared, stage 2 failed on its first POOR, stage 3 never reached.
     expect(runPage.html).toContain('not reached');
     expect(runPage.html).toContain('2 / 3');
-    expect(runPage.html).toContain(`/api/v0/course-scores/${failed.courseScoreId}/playlog`);
+    expect(runPage.html).toContain(`/api/v0/course-scores/${failed.courseScoreId}/replay`);
     // The stage list links the stage charts.
     expect(runPage.html).toContain(`href="/charts/${encodeURIComponent(charts[2]!.chartFingerprint)}"`);
     // Only its player gets the visibility switch.

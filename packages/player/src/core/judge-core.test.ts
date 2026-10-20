@@ -2,14 +2,14 @@ import { resolveChart } from '@be-music/chart';
 import { createEmptyJSON, resolveBMSBase, type BeMusicJSON } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import {
-  BE_MUSIC_PLAYLOG_FORMAT,
-  BE_MUSIC_PLAYLOG_VERSION,
-  type BeMusicPlaylog,
-  type PlaylogInputEvent,
-  type PlaylogNote,
-} from '../playlog/format.ts';
-import { simulatePlaylog } from '../playlog/simulate.ts';
-import { resolveRuleset, rulesetChartFactsFromChart, type PlaylogRulesetId } from '../ruleset/index.ts';
+  BE_MUSIC_REPLAY_FORMAT,
+  BE_MUSIC_REPLAY_VERSION,
+  type BeMusicReplay,
+  type ReplayInputEvent,
+  type ReplayNote,
+} from '../replay/format.ts';
+import { simulateReplay } from '../replay/simulate.ts';
+import { resolveRuleset, rulesetChartFactsFromChart, type RulesetId } from '../ruleset/index.ts';
 import { createInitialPlayerSummary, preparePlaybackChart } from './bootstrap.ts';
 import {
   advanceJudgeCoreReplay,
@@ -59,7 +59,7 @@ const LONG_AND_MINE = chart(
 
 function createCore(
   json: BeMusicJSON,
-  ruleset: PlaylogRulesetId = 'lr2',
+  ruleset: RulesetId = 'lr2',
   options: { autoScratch?: boolean; judgeMsPerChartSecond?: number; endOnFailure?: boolean } = {},
 ): JudgeCoreState {
   const source = structuredClone(json);
@@ -127,7 +127,7 @@ function snapshot(effect: JudgeCoreEffect): unknown {
 }
 
 /** Replays `inputs` through a fresh core, advancing it at the given chart-time ticks, and returns everything seen. */
-function replay(json: BeMusicJSON, inputs: PlaylogInputEvent[], ticks: readonly number[], ruleset: PlaylogRulesetId) {
+function replay(json: BeMusicJSON, inputs: ReplayInputEvent[], ticks: readonly number[], ruleset: RulesetId) {
   const state = createCore(json, ruleset);
   const run = createJudgeCoreReplay(inputs);
   const effects: unknown[] = [];
@@ -138,7 +138,7 @@ function replay(json: BeMusicJSON, inputs: PlaylogInputEvent[], ticks: readonly 
   return { summary: structuredClone(state.summary), combo: state.combo, effects };
 }
 
-function inputs(...events: Array<[timeUs: number, action: 'down' | 'up', channel: string]>): PlaylogInputEvent[] {
+function inputs(...events: Array<[timeUs: number, action: 'down' | 'up', channel: string]>): ReplayInputEvent[] {
   return events.map(([timeUs, action, channel], seq) => ({ seq, timeUs, action, channels: [channel] }));
 }
 
@@ -274,7 +274,7 @@ describe('judge core', () => {
     const isMineHit = (effect: JudgeCoreEffect): boolean => effect.kind === 'trace' && effect.name === 'mine-hit';
 
     /** Live play: each 60 Hz frame first applies the key events up to it (at their own instants), then advances. */
-    function liveMineHits(ruleset: PlaylogRulesetId, events: readonly KeyEvent[]): number {
+    function liveMineHits(ruleset: RulesetId, events: readonly KeyEvent[]): number {
       const state = createCore(MINE_LANE, ruleset);
       let hits = 0;
       const sink = (effect: JudgeCoreEffect): void => {
@@ -292,7 +292,7 @@ describe('judge core', () => {
             runJudgeCoreStep(state, { kind: 'hold', channels }, sink);
             runJudgeCoreStep(state, { kind: 'press', channels, tokens, nowSec: ms / 1000, nowMs: ms }, sink);
           } else {
-            // A release is drained at the frame; the play log keeps its own instant.
+            // A release is drained at the frame; the replay keeps its own instant.
             const release = { kind: 'release', channels, tokens, nowSec: frameMs / 1000, nowMs: frameMs } as const;
             runJudgeCoreStep(state, { ...release, recordSec: ms / 1000 }, sink);
           }
@@ -302,7 +302,7 @@ describe('judge core', () => {
       return hits;
     }
 
-    function toPlaylogInputs(events: readonly KeyEvent[]): PlaylogInputEvent[] {
+    function toReplayInputs(events: readonly KeyEvent[]): ReplayInputEvent[] {
       return events.map(([ms, action, token], seq) => ({
         seq,
         timeUs: Math.round(ms * 1000),
@@ -312,9 +312,9 @@ describe('judge core', () => {
       }));
     }
 
-    function replayMineHits(ruleset: PlaylogRulesetId, events: readonly KeyEvent[]): number {
+    function replayMineHits(ruleset: RulesetId, events: readonly KeyEvent[]): number {
       const state = createCore(MINE_LANE, ruleset);
-      const run = createJudgeCoreReplay(toPlaylogInputs(events));
+      const run = createJudgeCoreReplay(toReplayInputs(events));
       let hits = 0;
       for (let frame = 0; frame * FRAME_MS <= 3200; frame += 1) {
         advanceJudgeCoreReplay(state, run, (frame * FRAME_MS) / 1000, (effect) => {
@@ -324,12 +324,12 @@ describe('judge core', () => {
       return hits;
     }
 
-    function simulatedMineHits(ruleset: PlaylogRulesetId, events: readonly KeyEvent[]): number {
-      const tap: PlaylogNote = { id: 0, channel: '12', type: 'normal', timeUs: 3_000_000 };
-      const mine: PlaylogNote = { id: 1, channel: '12', type: 'mine', timeUs: 2_500_000, damage: 10 };
-      const playlog = (notes: PlaylogNote[]): BeMusicPlaylog => ({
-        format: BE_MUSIC_PLAYLOG_FORMAT,
-        version: BE_MUSIC_PLAYLOG_VERSION,
+    function simulatedMineHits(ruleset: RulesetId, events: readonly KeyEvent[]): number {
+      const tap: ReplayNote = { id: 0, channel: '12', type: 'normal', timeUs: 3_000_000 };
+      const mine: ReplayNote = { id: 1, channel: '12', type: 'mine', timeUs: 2_500_000, damage: 10 };
+      const replay = (notes: ReplayNote[]): BeMusicReplay => ({
+        format: BE_MUSIC_REPLAY_FORMAT,
+        version: BE_MUSIC_REPLAY_VERSION,
         clock: { unit: 'us', origin: 'chart-zero' },
         chart: {
           sourceFormat: 'bms',
@@ -339,15 +339,15 @@ describe('judge core', () => {
           noteCount: 1,
           notes,
         },
-        inputs: toPlaylogInputs(events),
+        inputs: toReplayInputs(events),
         play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
       });
-      const withMine = simulatePlaylog(playlog([tap, mine]), { ruleset });
-      const without = simulatePlaylog(playlog([tap]), { ruleset });
+      const withMine = simulateReplay(replay([tap, mine]), { ruleset });
+      const without = simulateReplay(replay([tap]), { ruleset });
       return withMine.gauge.final < without.gauge.final ? 1 : 0;
     }
 
-    function mineHits(ruleset: PlaylogRulesetId, events: readonly KeyEvent[]): number[] {
+    function mineHits(ruleset: RulesetId, events: readonly KeyEvent[]): number[] {
       return [liveMineHits(ruleset, events), replayMineHits(ruleset, events), simulatedMineHits(ruleset, events)];
     }
 
@@ -445,7 +445,7 @@ describe('judge core', () => {
 
     expect(state.summary.poor).toBe(5);
     expect(isJudgeCoreSettled(state)).toBe(true); // finish settles every pending timed judgment at its own instant
-    // Each note is missed at its own deadline, as the play-log simulator does, rather than charged in one batch.
+    // Each note is missed at its own deadline, as the replay simulator does, rather than charged in one batch.
     expect(effects.filter((effect) => effect.kind === 'judge-combo')).toHaveLength(5);
   });
 

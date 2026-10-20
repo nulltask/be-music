@@ -88,7 +88,7 @@ function makePreviewAudioMocks(): { audioContext: AudioContext; output: AudioNod
 
 function makePreviewTarget(chart: BeMusicJSON): ChartPreviewTarget {
   return {
-    song: {
+    chart: {
       id: 'song',
       sourceId: 'source',
       sourceLabel: 'source',

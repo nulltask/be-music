@@ -3,7 +3,7 @@
  * record. beatoraja runs each stage's clause against its song database (`SQLiteSongDatabaseAccessor.getSongDatas`),
  * appending it to `... WHERE ` over `song` joined with the player's `score` and `scorelog` (and `information` when song
  * information is on); be-music has no database, so the clause is evaluated per candidate with SQLite's comparison
- * rules, and a trailing `ORDER BY … LIMIT …` orders and cuts the selection ({@link selectCourseSongs}).
+ * rules, and a trailing `ORDER BY … LIMIT …` orders and cuts the selection ({@link selectCourseCharts}).
  *
  * Anything outside the subset — an unknown column, a column the joined tables make ambiguous, a function call, a
  * sub-query — is a parse error, so a stage with such a filter selects nothing (beatoraja's query fails and returns no
@@ -15,7 +15,7 @@
  * can supply. A missing text column reads as `''` and a missing integer column as `0`, the values beatoraja's
  * `SongData` stores for a chart that leaves them unset.
  */
-export interface CourseSongRecord {
+export interface CourseChartRecord {
   md5?: string;
   sha256?: string;
   title?: string;
@@ -45,13 +45,22 @@ export interface CourseSongRecord {
   content?: number;
 }
 
-type CourseSongTextColumn = 'md5' | 'sha256' | 'title' | 'subtitle' | 'artist' | 'subartist' | 'genre' | 'tag' | 'path';
-type CourseSongIntegerColumn = Exclude<keyof CourseSongRecord, CourseSongTextColumn>;
+type CourseChartTextColumn =
+  | 'md5'
+  | 'sha256'
+  | 'title'
+  | 'subtitle'
+  | 'artist'
+  | 'subartist'
+  | 'genre'
+  | 'tag'
+  | 'path';
+type CourseChartIntegerColumn = Exclude<keyof CourseChartRecord, CourseChartTextColumn>;
 
-/** A column a filter can read: one of the {@link CourseSongRecord} fields. */
-export type CourseSongColumn = keyof CourseSongRecord;
+/** A column a filter can read: one of the {@link CourseChartRecord} fields. */
+export type CourseChartColumn = keyof CourseChartRecord;
 
-const COLUMN_TYPES: Readonly<Record<CourseSongColumn, 'text' | 'integer'>> = {
+const COLUMN_TYPES: Readonly<Record<CourseChartColumn, 'text' | 'integer'>> = {
   md5: 'text',
   sha256: 'text',
   title: 'text',
@@ -71,7 +80,7 @@ const COLUMN_TYPES: Readonly<Record<CourseSongColumn, 'text' | 'integer'>> = {
   judge: 'integer',
   feature: 'integer',
   content: 'integer',
-} satisfies Record<CourseSongTextColumn, 'text'> & Record<CourseSongIntegerColumn, 'integer'>;
+} satisfies Record<CourseChartTextColumn, 'text'> & Record<CourseChartIntegerColumn, 'integer'>;
 
 /**
  * The columns that more than one of the tables beatoraja joins has (`song`, `score`, `scorelog`, `information`), so
@@ -95,66 +104,66 @@ const AMBIGUOUS_COLUMNS: ReadonlySet<string> = new Set([
 export type CourseSQLValue = number | string | null;
 
 /** The parsed form of a filter. */
-export type CourseSongFilterExpr =
+export type CourseChartFilterExpr =
   | {
       type: 'literal';
       value: CourseSQLValue;
       /** A number written with a `.` or an exponent: SQLite REAL. */ real?: true;
     }
-  | { type: 'column'; column: CourseSongColumn }
-  | { type: 'unary'; op: '-' | '+' | 'not'; operand: CourseSongFilterExpr }
+  | { type: 'column'; column: CourseChartColumn }
+  | { type: 'unary'; op: '-' | '+' | 'not'; operand: CourseChartFilterExpr }
   | {
       type: 'binary';
       op: 'or' | 'and' | '=' | '!=' | '<' | '<=' | '>' | '>=' | '&' | '|' | '+' | '-' | '*' | '/' | '%' | '||';
-      left: CourseSongFilterExpr;
-      right: CourseSongFilterExpr;
+      left: CourseChartFilterExpr;
+      right: CourseChartFilterExpr;
     }
-  | { type: 'in'; operand: CourseSongFilterExpr; values: CourseSongFilterExpr[]; negated: boolean }
+  | { type: 'in'; operand: CourseChartFilterExpr; values: CourseChartFilterExpr[]; negated: boolean }
   | {
       type: 'like';
-      operand: CourseSongFilterExpr;
-      pattern: CourseSongFilterExpr;
-      escape?: CourseSongFilterExpr;
+      operand: CourseChartFilterExpr;
+      pattern: CourseChartFilterExpr;
+      escape?: CourseChartFilterExpr;
       negated: boolean;
     }
   | {
       type: 'between';
-      operand: CourseSongFilterExpr;
-      low: CourseSongFilterExpr;
-      high: CourseSongFilterExpr;
+      operand: CourseChartFilterExpr;
+      low: CourseChartFilterExpr;
+      high: CourseChartFilterExpr;
       negated: boolean;
     }
-  | { type: 'isNull'; operand: CourseSongFilterExpr; negated: boolean };
+  | { type: 'isNull'; operand: CourseChartFilterExpr; negated: boolean };
 
 /** What an `ORDER BY` term sorts by: an expression, or SQLite's `RANDOM()`, which takes the injected random source. */
-export type CourseSongOrderKey = CourseSongFilterExpr | { type: 'random' };
+export type CourseChartOrderKey = CourseChartFilterExpr | { type: 'random' };
 
 /** One `ORDER BY` term. */
-export interface CourseSongOrderTerm {
-  key: CourseSongOrderKey;
+export interface CourseChartOrderTerm {
+  key: CourseChartOrderKey;
   descending: boolean;
   /** `NULLS FIRST` / `NULLS LAST`; absent, SQLite's default: NULL sorts first ascending and last descending. */
   nulls?: 'first' | 'last';
 }
 
 /** A whole stage filter: the `WHERE` clause and the trailing `ORDER BY` / `LIMIT` / `OFFSET` it may carry. */
-export interface CourseSongQuery {
-  where: CourseSongFilterExpr;
+export interface CourseChartQuery {
+  where: CourseChartFilterExpr;
   /** Empty without `ORDER BY`: the selection keeps the candidates' order. */
-  orderBy: CourseSongOrderTerm[];
+  orderBy: CourseChartOrderTerm[];
   /** `LIMIT`; absent (or negative in the SQL) for none. */
   limit?: number;
   /** `OFFSET` (or the first number of `LIMIT m, n`); 0 without one, a negative one reading as 0, as in SQLite. */
   offset: number;
 }
 
-export type CourseSongFilterParseResult =
+export type CourseChartFilterParseResult =
   | {
       ok: true;
-      /** The `WHERE` clause alone ({@link evaluateCourseSongFilter}). */
-      filter: CourseSongFilterExpr;
-      /** The whole filter, ordering and limit included ({@link selectCourseSongs}). */
-      query: CourseSongQuery;
+      /** The `WHERE` clause alone ({@link evaluateCourseChartFilter}). */
+      filter: CourseChartFilterExpr;
+      /** The whole filter, ordering and limit included ({@link selectCourseCharts}). */
+      query: CourseChartQuery;
     }
   | { ok: false; error: string };
 
@@ -263,7 +272,7 @@ class Parser {
     this.tokens = tokens;
   }
 
-  parse(): CourseSongQuery {
+  parse(): CourseChartQuery {
     const where = this.or();
     const orderBy = this.orderBy();
     let limit: number | undefined;
@@ -290,12 +299,12 @@ class Parser {
   }
 
   /** `ORDER BY term [ASC | DESC] [NULLS FIRST | LAST], …`, or nothing. */
-  private orderBy(): CourseSongOrderTerm[] {
+  private orderBy(): CourseChartOrderTerm[] {
     if (!this.acceptKeyword('order')) return [];
     this.expectKeyword('by');
-    const terms: CourseSongOrderTerm[] = [];
+    const terms: CourseChartOrderTerm[] = [];
     do {
-      let key: CourseSongOrderKey;
+      let key: CourseChartOrderKey;
       const at = this.peek().at;
       const after = this.peek(1);
       if (this.isKeyword('random') && after.kind === 'op' && after.value === '(') {
@@ -377,25 +386,25 @@ class Parser {
     }
   }
 
-  private or(): CourseSongFilterExpr {
+  private or(): CourseChartFilterExpr {
     let left = this.and();
     while (this.acceptKeyword('or')) left = { type: 'binary', op: 'or', left, right: this.and() };
     return left;
   }
 
-  private and(): CourseSongFilterExpr {
+  private and(): CourseChartFilterExpr {
     let left = this.not();
     while (this.acceptKeyword('and')) left = { type: 'binary', op: 'and', left, right: this.not() };
     return left;
   }
 
-  private not(): CourseSongFilterExpr {
+  private not(): CourseChartFilterExpr {
     if (this.acceptKeyword('not')) return { type: 'unary', op: 'not', operand: this.not() };
     return this.equality();
   }
 
   /** SQLite's equality tier: `=`, `==`, `!=`, `<>`, `IS [NOT] NULL`, `[NOT] IN`, `[NOT] LIKE`, `[NOT] BETWEEN`. */
-  private equality(): CourseSongFilterExpr {
+  private equality(): CourseChartFilterExpr {
     let left = this.relational();
     for (;;) {
       const op = this.acceptOp('=', '==', '!=', '<>');
@@ -414,7 +423,7 @@ class Parser {
       if (this.acceptKeyword('in')) {
         this.expectOp('(');
         if (this.isKeyword('select')) throw new FilterSyntaxError(`sub-queries are not supported`);
-        const values: CourseSongFilterExpr[] = [];
+        const values: CourseChartFilterExpr[] = [];
         if (this.acceptOp(')') === undefined) {
           do values.push(this.or());
           while (this.acceptOp(',') !== undefined);
@@ -439,7 +448,7 @@ class Parser {
     }
   }
 
-  private relational(): CourseSongFilterExpr {
+  private relational(): CourseChartFilterExpr {
     let left = this.bitwise();
     for (;;) {
       const op = this.acceptOp('<', '<=', '>', '>=') as '<' | '<=' | '>' | '>=' | undefined;
@@ -448,7 +457,7 @@ class Parser {
     }
   }
 
-  private bitwise(): CourseSongFilterExpr {
+  private bitwise(): CourseChartFilterExpr {
     let left = this.additive();
     for (;;) {
       const op = this.acceptOp('&', '|') as '&' | '|' | undefined;
@@ -457,7 +466,7 @@ class Parser {
     }
   }
 
-  private additive(): CourseSongFilterExpr {
+  private additive(): CourseChartFilterExpr {
     let left = this.multiplicative();
     for (;;) {
       const op = this.acceptOp('+', '-') as '+' | '-' | undefined;
@@ -466,7 +475,7 @@ class Parser {
     }
   }
 
-  private multiplicative(): CourseSongFilterExpr {
+  private multiplicative(): CourseChartFilterExpr {
     let left = this.concat();
     for (;;) {
       const op = this.acceptOp('*', '/', '%') as '*' | '/' | '%' | undefined;
@@ -475,19 +484,19 @@ class Parser {
     }
   }
 
-  private concat(): CourseSongFilterExpr {
+  private concat(): CourseChartFilterExpr {
     let left = this.unary();
     while (this.acceptOp('||') !== undefined) left = { type: 'binary', op: '||', left, right: this.unary() };
     return left;
   }
 
-  private unary(): CourseSongFilterExpr {
+  private unary(): CourseChartFilterExpr {
     const op = this.acceptOp('-', '+') as '-' | '+' | undefined;
     if (op !== undefined) return { type: 'unary', op, operand: this.unary() };
     return this.primary();
   }
 
-  private primary(): CourseSongFilterExpr {
+  private primary(): CourseChartFilterExpr {
     const token = this.next();
     if (token.kind === 'number') return { type: 'literal', value: token.value, ...(token.real ? { real: true } : {}) };
     if (token.kind === 'string') return { type: 'literal', value: token.value };
@@ -520,7 +529,7 @@ class Parser {
       const column = name.toLowerCase();
       if (!qualified && AMBIGUOUS_COLUMNS.has(column)) throw new FilterSyntaxError(`ambiguous column name: ${name}`);
       if (!Object.hasOwn(COLUMN_TYPES, column)) throw new FilterSyntaxError(`unknown column '${name}'`);
-      return { type: 'column', column: column as CourseSongColumn };
+      return { type: 'column', column: column as CourseChartColumn };
     }
     throw new FilterSyntaxError(`unexpected ${describe(token)} at ${token.at}`);
   }
@@ -539,7 +548,7 @@ function describe(token: Token): string {
  * `LIMIT m, n`. Anything else — an unknown column, an unqualified column beatoraja's joined tables share (`mode`,
  * `notes`, `sha256`, …), another table, a function, a sub-query — gives `{ ok: false }` with the reason.
  */
-export function parseCourseSongFilter(sql: string): CourseSongFilterParseResult {
+export function parseCourseChartFilter(sql: string): CourseChartFilterParseResult {
   try {
     const query = new Parser(tokenize(sql)).parse();
     return { ok: true, filter: query.where, query };
@@ -551,11 +560,11 @@ export function parseCourseSongFilter(sql: string): CourseSongFilterParseResult 
 
 type Affinity = 'text' | 'integer' | 'none';
 
-function affinityOf(expr: CourseSongFilterExpr): Affinity {
+function affinityOf(expr: CourseChartFilterExpr): Affinity {
   return expr.type === 'column' ? COLUMN_TYPES[expr.column] : 'none';
 }
 
-function columnValue(record: CourseSongRecord, column: CourseSongColumn): CourseSQLValue {
+function columnValue(record: CourseChartRecord, column: CourseChartColumn): CourseSQLValue {
   const value = record[column];
   if (COLUMN_TYPES[column] === 'text') return typeof value === 'string' ? value : '';
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
@@ -590,9 +599,9 @@ function compareValues(a: number | string, b: number | string): number {
 
 /** The operands of a comparison with SQLite's affinity rules applied (INTEGER beats TEXT beats none). */
 function comparisonOperands(
-  left: CourseSongFilterExpr,
-  right: CourseSongFilterExpr,
-  record: CourseSongRecord,
+  left: CourseChartFilterExpr,
+  right: CourseChartFilterExpr,
+  record: CourseChartRecord,
 ): [CourseSQLValue, CourseSQLValue] {
   let a = evaluate(left, record);
   let b = evaluate(right, record);
@@ -607,9 +616,9 @@ function comparisonOperands(
 
 function compare(
   op: '=' | '!=' | '<' | '<=' | '>' | '>=',
-  left: CourseSongFilterExpr,
-  right: CourseSongFilterExpr,
-  record: CourseSongRecord,
+  left: CourseChartFilterExpr,
+  right: CourseChartFilterExpr,
+  record: CourseChartRecord,
 ): CourseSQLValue {
   const [a, b] = comparisonOperands(left, right, record);
   if (a === null || b === null) return null;
@@ -673,7 +682,7 @@ function likePattern(pattern: string, escape: string | undefined): RegExp {
 }
 
 /** Whether an arithmetic operand is REAL by type: a REAL literal, or arithmetic over one. */
-function isRealExpr(expr: CourseSongFilterExpr): boolean {
+function isRealExpr(expr: CourseChartFilterExpr): boolean {
   if (expr.type === 'literal') return expr.real === true;
   if (expr.type === 'unary') return expr.op !== 'not' && isRealExpr(expr.operand);
   if (expr.type === 'binary' && ['+', '-', '*', '/'].includes(expr.op))
@@ -707,7 +716,7 @@ function arithmetic(op: '+' | '-' | '*' | '/' | '%' | '&' | '|', a: number, b: n
   }
 }
 
-function evaluate(expr: CourseSongFilterExpr, record: CourseSongRecord): CourseSQLValue {
+function evaluate(expr: CourseChartFilterExpr, record: CourseChartRecord): CourseSQLValue {
   switch (expr.type) {
     case 'literal':
       return expr.value;
@@ -774,12 +783,12 @@ function evaluate(expr: CourseSongFilterExpr, record: CourseSongRecord): CourseS
 }
 
 /** Whether a record passes a parsed filter: the clause is true (an unknown / NULL result does not pass, as in SQL). */
-export function evaluateCourseSongFilter(filter: CourseSongFilterExpr, record: CourseSongRecord): boolean {
+export function evaluateCourseChartFilter(filter: CourseChartFilterExpr, record: CourseChartRecord): boolean {
   return truth(evaluate(filter, record)) === true;
 }
 
 /** SQLite's `ORDER BY` order of two values for one term: NULL first ascending, last descending, unless `nulls` says. */
-function compareOrderValues(a: CourseSQLValue, b: CourseSQLValue, term: CourseSongOrderTerm): number {
+function compareOrderValues(a: CourseSQLValue, b: CourseSQLValue, term: CourseChartOrderTerm): number {
   if (a === null || b === null) {
     if (a === b) return 0;
     const nullsFirst = term.nulls !== undefined ? term.nulls === 'first' : !term.descending;
@@ -792,16 +801,16 @@ function compareOrderValues(a: CourseSQLValue, b: CourseSQLValue, term: CourseSo
 /**
  * The candidates a whole stage filter selects, in its order: those its `WHERE` clause passes, sorted by its
  * `ORDER BY` (ties keep the candidates' order, so the result is deterministic), then cut by its `OFFSET` / `LIMIT`.
- * `recordOf` gives each candidate's {@link CourseSongRecord}. `ORDER BY RANDOM()` draws one value per selected
+ * `recordOf` gives each candidate's {@link CourseChartRecord}. `ORDER BY RANDOM()` draws one value per selected
  * candidate, in the candidates' order, from `random` (values in `[0, 1)` like `Math.random`), and throws without it.
  */
-export function selectCourseSongs<T>(
-  query: CourseSongQuery,
+export function selectCourseCharts<T>(
+  query: CourseChartQuery,
   candidates: readonly T[],
-  recordOf: (candidate: T) => CourseSongRecord,
+  recordOf: (candidate: T) => CourseChartRecord,
   random?: () => number,
 ): T[] {
-  const selected = candidates.filter((candidate) => evaluateCourseSongFilter(query.where, recordOf(candidate)));
+  const selected = candidates.filter((candidate) => evaluateCourseChartFilter(query.where, recordOf(candidate)));
   let ordered = selected;
   if (query.orderBy.length > 0) {
     const keyed = selected.map((candidate) => {

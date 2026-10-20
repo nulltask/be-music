@@ -18,8 +18,8 @@ import {
   type RulesetConfig,
 } from '../ruleset/index.ts';
 import type { JudgeCoreEffectSink, JudgeCoreScore } from './judge-core.ts';
-import { createPlaylogRecorder, type PlaylogRecorder } from '../playlog/recorder.ts';
-import { courseStageCarryCombo, courseStageRulesetOptions } from '../playlog/rulesets.ts';
+import { createReplayRecorder, type ReplayRecorder } from '../replay/recorder.ts';
+import { courseStageCarryCombo, courseStageRulesetOptions } from '../replay/rulesets.ts';
 import { createInitialPlayerSummary, preparePlaybackChart, type PreparedPlaybackChartData } from './bootstrap.ts';
 import {
   appendShadowedNoteTriggers,
@@ -62,7 +62,7 @@ import type { JudgeStrategy } from './play-strategy.ts';
 
 /**
  * A play session: everything a play is set up with before its loop runs — the chart resolved for play, the tempo clock,
- * the ruleset, the score, the play-log recorder, the UI / input buses and runtimes, the audio session, the no-TUI
+ * the ruleset, the score, the replay recorder, the UI / input buses and runtimes, the audio session, the no-TUI
  * trace and the realtime audio. The same for every judge strategy.
  */
 export interface PlaySession {
@@ -95,7 +95,7 @@ export interface PlaySession {
   readonly endOnFailure: boolean;
   /** The play re-drives a recorded play (`PlayerOptions.replayInputs`). */
   readonly replay: boolean;
-  readonly playlogRecorder: PlaylogRecorder | undefined;
+  readonly replayRecorder: ReplayRecorder | undefined;
   readonly stateSignals: PlayerStateSignals;
   readonly uiSignals: PlayerUISignalBus;
   readonly inputSignals: PlayerInputSignalBus;
@@ -108,7 +108,7 @@ export interface PlaySession {
   readonly tracer: NoTUIPlaybackEventTracer;
   readonly stateLogger: PlaybackStateLogger;
   readonly publishUIFrame: (seconds: number, beat: number) => void;
-  /** Maps the judge's effects onto audio, the UI buses, the play log and the trace. */
+  /** Maps the judge's effects onto audio, the UI buses, the replay and the trace. */
   readonly applyJudgeEffect: JudgeCoreEffectSink;
   /** The chart's volume changes (`#97` / `#98`), queued against the audio write head. */
   readonly volumeChanges: RealtimeAudioCursor;
@@ -170,9 +170,9 @@ export async function createPlaySession(
   const idBase = resolveBMSBase(resolvedJSON);
   const wavResources = resolvedJSON.resources.wav;
 
-  // The gauge the play runs on and the play log records: one value, so a re-simulation runs the same gauge. A host that
-  // only declared it for the log (`recordPlaylog.gauge`) gets it played too.
-  const selectedGauge = options.gauge ?? options.recordPlaylog?.gauge;
+  // The gauge the play runs on and the replay records: one value, so a re-simulation runs the same gauge. A host that
+  // only declared it for the log (`recordReplay.gauge`) gets it played too.
+  const selectedGauge = options.gauge ?? options.recordReplay?.gauge;
   const ruleset = resolveRuleset(
     rulesetChartFactsFromChart(resolvedJSON, playbackChart, judgeRankChanges, options.stageRanks),
     options.judgeRuleset ?? 'lr2',
@@ -197,10 +197,10 @@ export async function createPlaySession(
     // The same object the tracker updates, so the summary always shows the live course combo.
     summary.course = score.scoreTracker.course;
   }
-  const playlogRecorder = options.onPlaylogRecorded
+  const replayRecorder = options.onReplayRecorded
     ? (() => {
-        const { chartSHA256, chartMD5, recorder, sourceChart, ...hostPlaySettings } = options.recordPlaylog ?? {};
-        return createPlaylogRecorder({
+        const { chartSHA256, chartMD5, recorder, sourceChart, ...hostPlaySettings } = options.recordReplay ?? {};
+        return createReplayRecorder({
           json: resolvedJSON,
           moneyScore: ruleset.moneyScore,
           chart: playbackChart,
@@ -329,7 +329,7 @@ export async function createPlaySession(
     playbackEventTracer: tracer,
     uiSignals,
     activeStateSignals,
-    playlogRecorder,
+    replayRecorder,
     publishUIFrame,
     beatAtSeconds,
   });
@@ -372,7 +372,7 @@ export async function createPlaySession(
     autoScratch,
     endOnFailure,
     replay,
-    playlogRecorder,
+    replayRecorder,
     stateSignals,
     uiSignals,
     inputSignals,

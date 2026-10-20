@@ -1,7 +1,7 @@
 import { computeChartFingerprint } from '@be-music/chart';
 import { createEmptyJSON, type BeMusicJSON } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
-import type { BeMusicPlaylog, PlaylogRulesetResult } from '../playlog/format.ts';
+import type { BeMusicReplay, ReplayRulesetResult } from '../replay/format.ts';
 import { CourseRun, parseBeatorajaCourseData, resolveGivenUpPlaySeconds } from './index.ts';
 
 const MD5 = ['1', '2', '3'].map((digit) => digit.repeat(32));
@@ -22,7 +22,7 @@ function run(constraint?: string[]): CourseRun<Stage, { playSeconds?: number; gr
   return new CourseRun(definition(constraint), ['a', 'b', 'c'].map(stage));
 }
 
-function stageLog(native: Partial<PlaylogRulesetResult>, play?: Partial<BeMusicPlaylog['play']>): BeMusicPlaylog {
+function stageLog(native: Partial<ReplayRulesetResult>, play?: Partial<BeMusicReplay['play']>): BeMusicReplay {
   return {
     ...(play !== undefined ? { play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', ...play } } : {}),
     results: {
@@ -39,7 +39,7 @@ function stageLog(native: Partial<PlaylogRulesetResult>, play?: Partial<BeMusicP
         ...native,
       },
     },
-  } as unknown as BeMusicPlaylog;
+  } as unknown as BeMusicReplay;
 }
 
 describe('CourseRun', () => {
@@ -103,7 +103,7 @@ describe('CourseRun', () => {
     expect(full.recordStage(stageLog({}))).toBe('next');
     expect(full.recordStage(stageLog({}))).toBe('finished');
     expect(full.stagesPlayed).toBe(3);
-    // A stage without a play log ends the run too.
+    // A stage without a replay ends the run too.
     expect(run().recordStage(undefined)).toBe('finished');
   });
 
@@ -136,7 +136,7 @@ describe('CourseRun', () => {
     expect(run([]).playSeconds).toBe(0);
   });
 
-  test('builds the course play log with each unreached stage’s facts, hashes and chart fingerprint', () => {
+  test('builds the course replay with each unreached stage’s facts, hashes and chart fingerprint', () => {
     const course = run();
     course.recordStage(
       stageLog(
@@ -144,7 +144,7 @@ describe('CourseRun', () => {
         { course: { kind: 'grade' } },
       ),
     );
-    const log = course.buildPlaylog({ createdAt: '2026-10-16T00:00:00.000Z', recorder: { name: 'test' } });
+    const log = course.buildReplay({ createdAt: '2026-10-16T00:00:00.000Z', recorder: { name: 'test' } });
     expect(log).toMatchObject({
       createdAt: '2026-10-16T00:00:00.000Z',
       recorder: { name: 'test' },
@@ -167,8 +167,8 @@ describe('CourseRun', () => {
 
   test('marks a course whose runs must not be ranked', () => {
     const unreleased = { ...definition([]), release: false as const };
-    expect(new CourseRun(unreleased, ['a', 'b', 'c'].map(stage)).buildPlaylog().course.release).toBe(false);
-    expect(run([]).buildPlaylog().course).not.toHaveProperty('release');
+    expect(new CourseRun(unreleased, ['a', 'b', 'c'].map(stage)).buildReplay().course.release).toBe(false);
+    expect(run([]).buildReplay().course).not.toHaveProperty('release');
   });
 
   test('applies the course’s stage play settings', () => {
@@ -204,7 +204,7 @@ describe('resolveGivenUpPlaySeconds', () => {
           { id: 2, channel: '13', type: 'normal' as const, timeUs: 8_000_000 },
         ],
       },
-    } as unknown as BeMusicPlaylog;
+    } as unknown as BeMusicReplay;
     expect(resolveGivenUpPlaySeconds(settled)).toBe(9.5);
     // An abort without its time says nothing.
     expect(resolveGivenUpPlaySeconds({ play: { ...settled.play, aborted: true } })).toBeUndefined();

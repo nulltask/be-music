@@ -5,7 +5,7 @@
   "license": "MIT",
   "bin": {
     "bms-player": "dist/cli.js",
-    "bms-playlog": "dist/playlog-cli.js"
+    "bms-replay": "dist/replay-cli.js"
   },
   "files": [
     "dist"
@@ -26,7 +26,7 @@
     "build:sea": "node --conditions=source ../../scripts/build-sea.ts --package player",
     "clean": "rimraf dist",
     "dev": "node --conditions=source src/cli.ts",
-    "playlog": "node --conditions=source src/playlog-cli.ts",
+    "replay": "node --conditions=source src/replay-cli.ts",
     "diag:keyboard": "node --conditions=source src/keyboard-diagnostic.ts",
     "diag:gameplay-input": "node --conditions=source src/gameplay-input-diagnostic.ts",
     "bench": "node --conditions=source scripts/bench.ts"

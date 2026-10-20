@@ -40,7 +40,7 @@ void waitForDefaultUIFonts().finally(() => {
     elements: {
       stage: document.querySelector<HTMLDivElement>('#stage')!,
       shell: document.querySelector<HTMLDivElement>('.shell')!,
-      songInput: document.querySelector<HTMLInputElement>('#songs')!,
+      chartInput: document.querySelector<HTMLInputElement>('#songs')!,
       filesInput: document.querySelector<HTMLInputElement>('#files')!,
       searchInput: document.querySelector<HTMLInputElement>('#search')!,
       loadingOverlay: document.querySelector<HTMLDivElement>('#loading-overlay')!,

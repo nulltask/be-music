@@ -29,7 +29,7 @@ import { createDemoGUIState, resolveCompressorMode, storeBuiltInSkinId } from '.
 import { BE_MUSIC_SKINS } from '../services/built-in-skins.ts';
 import { SilentModeSetting } from '../services/silent-mode.ts';
 import { playOptionsFromGUI, PlayOptionsService } from '../services/play-options.ts';
-import { PLAYLOG_RECORDER, PlaylogAutoSave } from '../services/playlogs.ts';
+import { REPLAY_RECORDER, ReplayAutoSave } from '../services/replays.ts';
 import { RecordingService } from '../services/recording.ts';
 import { StatusLine } from '../services/status.ts';
 import { CourseMakerService } from '../services/course-maker.ts';
@@ -43,7 +43,7 @@ import { FamilyKits } from './family-kits.ts';
 import type { TestHookRecorder } from '../test-hook.ts';
 import { nameResultJingle, type LiveTestHookDeps } from '../services/test-hook.ts';
 
-const gameplayLog = logger('gameplay');
+const gamereplay = logger('gameplay');
 
 /** What the app is made with: the page's elements, the device it runs on, and the test hook's recorder when enabled. */
 export interface PlayerWebDemoAppOptions {
@@ -88,7 +88,7 @@ export class PlayerWebDemoApp {
       },
     },
     recorder: { finalize: () => finalizeRecordingIfActive(this.recording.deps()) },
-    // A navigation the scenes did not ask for (a drop, a skin or theme change, files or a play log loaded) ends the
+    // A navigation the scenes did not ask for (a drop, a skin or theme change, files or a replay loaded) ends the
     // course run, so the next single play is not taken for its next stage.
     onInterrupt: () => {
       // The select screen comes back where the course was started, unless that navigation has put it somewhere already.
@@ -108,7 +108,7 @@ export class PlayerWebDemoApp {
   private readonly nonstopRoute: NonstopRoute;
   /** The player's own courses and the course being made (LR2's course maker), kept in IndexedDB, and its card. */
   private readonly courseMaker = new CourseMakerService({
-    resolveChartHashes: (song) => this.records.resolveChartHashes(song),
+    resolveChartHashes: (chartEntry) => this.records.resolveChartHashes(chartEntry),
     collection: () => this.library.collection,
     refreshMadeCourses: () => this.library.refreshMadeCourses(),
     selectView: () => this.selectView,
@@ -148,7 +148,7 @@ export class PlayerWebDemoApp {
   private readonly playRoute: PlayRoute;
   /** A play's, a course's or a NONSTOP run's result screen, and where it leads (`app/routes/result.ts`). */
   private readonly resultRoute: ResultRoute;
-  /** A play log played back from a file (`app/routes/replay.ts`). */
+  /** A replay played back from a file (`app/routes/replay.ts`). */
   private readonly replayRoute: ReplayRoute;
   /** Where the select screen was, for its next showing to come back to (the select route's). */
   private get lastSelectNavigation(): BrowseSnapshot | undefined {
@@ -179,8 +179,8 @@ export class PlayerWebDemoApp {
     // Read on use: `guiState` is initialized after this field.
     settings: () => this.guiState,
     setStatus: (text) => this.status.set(text),
-    warn: (message, error) => gameplayLog.warn(message, error),
-    recorder: PLAYLOG_RECORDER,
+    warn: (message, error) => gamereplay.warn(message, error),
+    recorder: REPLAY_RECORDER,
   });
   /**
    * The play options in force, the full set: fed by the select screen (`on.playOptions`) and the Debug Menu
@@ -193,13 +193,13 @@ export class PlayerWebDemoApp {
     judgeRuleset: () => this.guiState.judgeRuleset,
   });
   /**
-   * Play-log auto-save, by `guiState.autoSavePlaylog` as it was when the current play STARTED: the result-screen
+   * Replay auto-save, by `guiState.autoSaveReplay` as it was when the current play STARTED: the result-screen
    * auto-save of a play, and of a course after its last stage, reads this latch, not the live checkbox (the checkbox is
    * disabled during gameplay anyway — the latch is the enforcement for any path that slips through).
    */
-  private readonly playlogAutoSave = new PlaylogAutoSave({
+  private readonly replayAutoSave = new ReplayAutoSave({
     download: downloadBlob,
-    warn: (message, error) => gameplayLog.warn(message, error),
+    warn: (message, error) => gamereplay.warn(message, error),
   });
   /** The Capture folder's video recording and screenshots: the record armed, the next file name, the format. */
   private readonly recording: RecordingService;
@@ -222,7 +222,7 @@ export class PlayerWebDemoApp {
       devicePixelRatio: window.devicePixelRatio || 1,
       builtInSkinId: (stored) => BE_MUSIC_SKINS.resolve(stored).id,
       actions: {
-        openFolder: () => this.elements.songInput.click(),
+        openFolder: () => this.elements.chartInput.click(),
         openFiles: () => this.elements.filesInput.click(),
         record: () => {
           void toggleRecording(this.recording.deps());
@@ -283,7 +283,7 @@ export class PlayerWebDemoApp {
     });
     this.library = new LibraryService({
       elements,
-      resolveChartHashes: (song) => this.records.resolveChartHashes(song),
+      resolveChartHashes: (chartEntry) => this.records.resolveChartHashes(chartEntry),
       courseMaker: this.courseMaker.maker,
       selectView: () => this.selectView,
       showing: () => this.router.current?.identity.kind,
@@ -293,7 +293,7 @@ export class PlayerWebDemoApp {
       browseTo: (navigation) => {
         this.lastSelectNavigation = navigation;
       },
-      startPlaylogReplayFromFile: (file) => this.replayRoute.startPlaylogReplayFromFile(file),
+      startReplayReplayFromFile: (file) => this.replayRoute.startReplayReplayFromFile(file),
       loadTheme: (files) => this.lr2.loadTheme(files),
       loadBeatorajaTheme: (files) => this.beatoraja.loadBeatorajaTheme(files),
       playSkins: () => this.lr2.playSkins,
@@ -314,37 +314,37 @@ export class PlayerWebDemoApp {
       library: this.library,
       records: this.records,
       guiState: this.guiState,
-      playlogAutoSave: this.playlogAutoSave,
+      replayAutoSave: this.replayAutoSave,
       leaderboard: this.leaderboard,
       familyKits: this.familyKits,
-      playlogRecorder: PLAYLOG_RECORDER,
+      replayRecorder: REPLAY_RECORDER,
       testHook: this.testHook,
       setStatus: (text) => this.status.set(text),
       showSelect: () => this.showSelect(),
-      showDecide: (song, overrides, then) => this.decideRoute.showDecide(song, overrides, then),
-      playSong: (song, overrides) => this.playRoute.playSong(song, overrides),
+      showDecide: (chartEntry, overrides, then) => this.decideRoute.showDecide(chartEntry, overrides, then),
+      playChart: (chartEntry, overrides) => this.playRoute.playChart(chartEntry, overrides),
       showResult: (data, mode) => this.resultRoute.showResult(data, mode),
       showBeatorajaResult: (data, options) => this.resultRoute.showBeatorajaResult(data, options),
-      unlockPlaylogOptions: () => this.unlockPlaylogOptions(),
+      unlockReplayOptions: () => this.unlockReplayOptions(),
     });
     this.courseRoute = new CourseRoute({
       courses: this.courses,
       library: this.library,
       records: this.records,
       courseMaker: this.courseMaker,
-      playlogAutoSave: this.playlogAutoSave,
+      replayAutoSave: this.replayAutoSave,
       leaderboard: this.leaderboard,
       familyKits: this.familyKits,
-      playlogRecorder: PLAYLOG_RECORDER,
+      replayRecorder: REPLAY_RECORDER,
       selectNavigation: () => this.selectView?.snapshot() ?? this.lastSelectNavigation,
       setStatus: (text) => this.status.set(text),
       startNonstopCourse: (course, options) => this.nonstopRoute.startNonstopCourse(course, options),
       showSelect: () => this.showSelect(),
-      showDecide: (song, overrides, then) => this.decideRoute.showDecide(song, overrides, then),
-      playSong: (song, overrides) => this.playRoute.playSong(song, overrides),
+      showDecide: (chartEntry, overrides, then) => this.decideRoute.showDecide(chartEntry, overrides, then),
+      playChart: (chartEntry, overrides) => this.playRoute.playChart(chartEntry, overrides),
       showResult: (data, mode) => this.resultRoute.showResult(data, mode),
       showBeatorajaResult: (data, options) => this.resultRoute.showBeatorajaResult(data, options),
-      unlockPlaylogOptions: () => this.unlockPlaylogOptions(),
+      unlockReplayOptions: () => this.unlockReplayOptions(),
     });
     this.debugMenu = new DebugMenu(this.debugMenuDeps());
     this.beatorajaSkinOptions = new BeatorajaSkinOptionsPanel(this.beatorajaSkinOptionsDeps());
@@ -368,9 +368,9 @@ export class PlayerWebDemoApp {
       beatorajaSkinOptions: this.beatorajaSkinOptions,
       playStatusShown: () => this.status.playShown,
       setStatus: (text) => this.status.set(text),
-      unlockPlaylogOptions: () => this.unlockPlaylogOptions(),
+      unlockReplayOptions: () => this.unlockReplayOptions(),
       rememberHiSpeed: (value, source) => this.playRoute.rememberHiSpeed(value, source),
-      showDecide: (song, overrides) => this.decideRoute.showDecide(song, overrides),
+      showDecide: (chartEntry, overrides) => this.decideRoute.showDecide(chartEntry, overrides),
     });
     this.decideRoute = new DecideRoute({
       router: this.router,
@@ -389,10 +389,10 @@ export class PlayerWebDemoApp {
       setRecordingFilenameBase: (base) => this.recording.setFilenameBase(base),
       setStatus: (text) => this.status.set(text),
       setPlayStatus: (text) => this.status.setPlay(text),
-      lockPlaylogOptionsForPlay: (liveTempo) => this.lockPlaylogOptionsForPlay(liveTempo),
+      lockReplayOptionsForPlay: (liveTempo) => this.lockReplayOptionsForPlay(liveTempo),
       showSelect: () => this.showSelect(),
-      playSong: (song, overrides) => this.playRoute.playSong(song, overrides),
-      buildPlayScene: (song, kit, overrides) => this.playRoute.buildPlayScene(song, kit, overrides),
+      playChart: (chartEntry, overrides) => this.playRoute.playChart(chartEntry, overrides),
+      buildPlayScene: (chartEntry, kit, overrides) => this.playRoute.buildPlayScene(chartEntry, kit, overrides),
       latchPlay: (view) => this.playRoute.latchPlay(view),
     });
     this.resultRoute = new ResultRoute({
@@ -405,7 +405,7 @@ export class PlayerWebDemoApp {
       lr2: this.lr2,
       beatoraja: this.beatoraja,
       builtIn: this.builtIn,
-      playlogAutoSave: this.playlogAutoSave,
+      replayAutoSave: this.replayAutoSave,
       leaderboard: this.leaderboard,
       audio: this.audio,
       testHook: this.testHook,
@@ -413,8 +413,8 @@ export class PlayerWebDemoApp {
       nameResultJingle: (bytes) => nameResultJingle(bytes, { lr2: this.lr2, beatoraja: this.beatoraja }),
       setPlayStatus: (text) => this.status.setPlay(text),
       showSelect: () => this.showSelect(),
-      playSong: (song, overrides) => this.playRoute.playSong(song, overrides),
-      unlockPlaylogOptions: () => this.unlockPlaylogOptions(),
+      playChart: (chartEntry, overrides) => this.playRoute.playChart(chartEntry, overrides),
+      unlockReplayOptions: () => this.unlockReplayOptions(),
     });
     this.playRoute = new PlayRoute({
       router: this.router,
@@ -435,13 +435,13 @@ export class PlayerWebDemoApp {
       deviceProfile,
       audio: this.audio,
       sceneHost: this.sceneHost,
-      playlogRecorder: PLAYLOG_RECORDER,
+      replayRecorder: REPLAY_RECORDER,
       testHook: this.testHook,
       recordingDeps: () => this.recording.deps(),
       setRecordingFilenameBase: (base) => this.recording.setFilenameBase(base),
       setPlayStatus: (text) => this.status.setPlay(text),
-      lockPlaylogOptionsForPlay: (liveTempo) => this.lockPlaylogOptionsForPlay(liveTempo),
-      unlockPlaylogOptions: () => this.unlockPlaylogOptions(),
+      lockReplayOptionsForPlay: (liveTempo) => this.lockReplayOptionsForPlay(liveTempo),
+      unlockReplayOptions: () => this.unlockReplayOptions(),
       showSelect: () => this.showSelect(),
       setPlayOptions: (changes) => this.setPlayOptions(changes),
     });
@@ -450,7 +450,7 @@ export class PlayerWebDemoApp {
       records: this.records,
       setStatus: (text) => this.status.set(text),
       setPlayStatus: (text) => this.status.setPlay(text),
-      playSong: (song, overrides) => this.playRoute.playSong(song, overrides),
+      playChart: (chartEntry, overrides) => this.playRoute.playChart(chartEntry, overrides),
       showSelect: () => this.showSelect(),
     });
     this.shell = new DemoShell({
@@ -658,19 +658,19 @@ export class PlayerWebDemoApp {
   }
 
   /**
-   * Latches the playlog-related GUI options for the play that is about to start and disables their controllers.
-   * Playlog options are per-play: the value in effect at song start governs the whole play, and mid-song changes
-   * are rejected by keeping the controls disabled until {@link unlockPlaylogOptions} runs (result mounted or back
+   * Latches the replay-related GUI options for the play that is about to start and disables their controllers.
+   * Replay options are per-play: the value in effect at song start governs the whole play, and mid-song changes
+   * are rejected by keeping the controls disabled until {@link unlockReplayOptions} runs (result mounted or back
    * at select). The Debug Menu disables its skin controls with them (`DebugMenu.lockForPlay`).
    */
-  private lockPlaylogOptionsForPlay(liveTempo = false): void {
-    this.playlogAutoSave.latch(this.guiState.autoSavePlaylog);
+  private lockReplayOptionsForPlay(liveTempo = false): void {
+    this.replayAutoSave.latch(this.guiState.autoSaveReplay);
     this.leaderboard.lockForPlay();
     this.debugMenu.lockForPlay(liveTempo);
   }
 
-  /** Re-enables the playlog option controllers, and the skin controls, once no play is in flight. */
-  private unlockPlaylogOptions(): void {
+  /** Re-enables the replay option controllers, and the skin controls, once no play is in flight. */
+  private unlockReplayOptions(): void {
     this.leaderboard.unlock();
     this.debugMenu.unlockAfterPlay();
   }

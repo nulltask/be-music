@@ -22,7 +22,7 @@ describe('resolvePlayChart', () => {
     }
   });
 
-  test('resolves with given draws (a play log’s) without drawing', () => {
+  test('resolves with given draws (a replay’s) without drawing', () => {
     const randomDraws = [{ command: 'RANDOM' as const, range: 2, value: 2 }];
     const resolved = resolvePlayChart(SOURCE, {
       randomDraws,

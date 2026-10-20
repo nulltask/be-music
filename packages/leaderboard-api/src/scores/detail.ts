@@ -61,17 +61,17 @@ export function toScoreResponse(detail: ScoreDetail) {
  * Where a play's log is stored, if the viewer may read it: anyone for a public replay of a shown play, only its player
  * for a private replay or a hidden play. Undefined otherwise, so a private replay looks the same as a missing one.
  */
-export async function loadPlaylogAccess(
+export async function loadReplayAccess(
   db: Database,
   scoreId: string,
   viewerId: string | undefined,
 ): Promise<{ key: string; public: boolean } | undefined> {
   const found = await db.query.score.findFirst({
     where: eq(score.id, scoreId),
-    columns: { userId: true, playlogKey: true, replayVisibility: true, hidden: true },
+    columns: { userId: true, replayKey: true, replayVisibility: true, hidden: true },
   });
   if (found === undefined || !canSeeScore(found, viewerId)) return undefined;
   const isPublic = found.replayVisibility === 'public';
   if (!isPublic && found.userId !== viewerId) return undefined;
-  return { key: found.playlogKey, public: isPublic };
+  return { key: found.replayKey, public: isPublic };
 }

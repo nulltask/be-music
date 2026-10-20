@@ -40,7 +40,7 @@ import {
 import { type JudgeCoreEffectSink, type JudgeCoreInput, type JudgeCoreState } from './judge-core-types.ts';
 
 /**
- * Judge-core input handling: which note a press resolves against, multi-BAD, empty POOR and
+ * Judgment-core input handling: which note a press resolves against, multi-BAD, empty POOR and
  * releases.
  */
 
@@ -225,7 +225,7 @@ export function handleLanePress(
 ): void {
   const { config } = state;
   const { ruleset } = config;
-  // Play-log press event — recorded BEFORE any judging so the log stays a raw input replay.
+  // Replay press event — recorded BEFORE any judging so the log stays a raw input replay.
   emit({ kind: 'record-input', action: 'down', seconds: nowSec, tokens, channels: candidateChannels });
 
   for (const mappedChannel of candidateChannels) {
@@ -485,7 +485,7 @@ export function handleLaneRelease(
       ...(input.inferred === true ? { inferred: true } : {}),
     });
   }
-  // The release's own instant (a live driver drains it later than it happened; the play log records the instant).
+  // The release's own instant (a live driver drains it later than it happened; the replay records the instant).
   const releaseMs = input.nowMs - (input.nowSec - input.recordSec) * state.config.judgeMsPerChartSecond;
   let settleNow = false;
   for (const channel of input.channels) {

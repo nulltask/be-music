@@ -1,11 +1,11 @@
 import type { Hono } from 'hono';
 import { describeRoute, resolver, validator } from 'hono-openapi';
-import { parseCoursePlaylog, PlaylogParseError, serializeCoursePlaylog } from '@be-music/player/playlog';
+import { parseCourseReplay, ReplayParseError, serializeCourseReplay } from '@be-music/player/replay';
 import * as v from 'valibot';
 import type { AppEnv } from '../app.ts';
 import {
   loadCourseDetail,
-  loadCoursePlaylogAccess,
+  loadCourseReplayAccess,
   loadCourseScoreDetail,
   loadMyCourseRank,
 } from '../courses/detail.ts';
@@ -41,7 +41,7 @@ const notFound = (what: string) => json(`${what} does not exist.`, errorResponse
 
 /** The rejection codes of a course submission's 422, in the order they are checked. */
 const COURSE_REJECTIONS = [
-  'invalid-playlog',
+  'invalid-replay',
   'auto-play',
   'aborted',
   'tempo',
@@ -66,7 +66,7 @@ const COURSE_REJECTIONS = [
 
 /**
  * The course routes of `/api/v0` (docs/leaderboard.md section 6.1): submitting a course run, a course, its ranking, my
- * rank on it, the latest runs, one run, its play log, and hiding a run. Mounted on the version's own router, so they
+ * rank on it, the latest runs, one run, its replay, and hiding a run. Mounted on the version's own router, so they
  * share its session middleware and its OpenAPI document.
  */
 export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number; newId: () => string }): void {
@@ -78,7 +78,7 @@ export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number
       tags: ['Courses'],
       summary: 'Submit a course run',
       description:
-        'Submits a course play log with the fingerprint documents of each played stage and the charts of the ' +
+        'Submits a course replay with the fingerprint documents of each played stage and the charts of the ' +
         'stages it never reached. The body is JSON, gzip-compressed (`Content-Encoding: gzip`). Every played stage ' +
         'is checked like a single play, every unreached stage’s facts must be its chart’s, the run is ' +
         're-simulated under every ruleset, and each stage’s carry-in must be the state the previous stage, ' +
@@ -121,9 +121,9 @@ export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number
       if (!parsedBody.success) return c.json({ error: 'invalid-submission' }, 400);
       let courseLog;
       try {
-        courseLog = parseCoursePlaylog(parsedBody.output.coursePlaylog);
+        courseLog = parseCourseReplay(parsedBody.output.courseReplay);
       } catch (error) {
-        if (error instanceof PlaylogParseError) return c.json({ error: 'invalid-playlog', detail: error.message }, 422);
+        if (error instanceof ReplayParseError) return c.json({ error: 'invalid-replay', detail: error.message }, 422);
         throw error;
       }
       const outcome = await submitCourseScore(
@@ -131,7 +131,7 @@ export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number
         {
           userId,
           courseLog,
-          courseLogText: serializeCoursePlaylog(courseLog),
+          courseLogText: serializeCourseReplay(courseLog),
           stages: parsedBody.output.stages,
           ...(parsedBody.output.stageCharts !== undefined ? { stageCharts: parsedBody.output.stageCharts } : {}),
           submittedBy: c.req.header('be-music-client'),
@@ -191,19 +191,19 @@ export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number
   );
 
   v0.get(
-    '/course-scores/:id/playlog',
+    '/course-scores/:id/replay',
     describeRoute({
       tags: ['Courses'],
-      summary: 'A course run’s play log',
+      summary: 'A course run’s replay',
       description:
-        'The stored course play log (`be-music-course-playlog`), gzip-compressed. Anyone can read a shown run’s; only its player a hidden one’s.',
+        'The stored course replay (`be-music-course-replay`), gzip-compressed. Anyone can read a shown run’s; only its player a hidden one’s.',
       responses: {
-        200: { description: 'The course play log (docs/playlog.md).', content: { 'application/json': {} } },
-        404: notFound('The run or its play log'),
+        200: { description: 'The course replay (docs/replay.md).', content: { 'application/json': {} } },
+        404: notFound('The run or its replay'),
       },
     }),
     async (c) => {
-      const access = await loadCoursePlaylogAccess(c.get('db'), c.req.param('id'), c.get('userId'));
+      const access = await loadCourseReplayAccess(c.get('db'), c.req.param('id'), c.get('userId'));
       if (access === undefined) return c.json({ error: 'not-found' }, 404);
       const object = await c.env.BLOBS.get(access.key);
       if (object === null) return c.json({ error: 'not-found' }, 404);

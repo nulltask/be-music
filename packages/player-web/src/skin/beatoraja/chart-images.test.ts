@@ -1,7 +1,7 @@
 import { createEmptyJSON } from '@be-music/json';
 import { Texture } from 'pixi.js';
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
-import type { BrowserSongAssetSource } from '../../collection/types.ts';
+import type { BrowserAssetSource } from '../../collection/types.ts';
 import { loadBeatorajaChartImages, resolveBeatorajaChartImage } from './chart-images.ts';
 
 const decoded = vi.hoisted(() => [] as string[]);
@@ -14,7 +14,7 @@ vi.mock('../lr2/textures.ts', () => ({
   }),
 }));
 
-function source(paths: Record<string, number>): BrowserSongAssetSource {
+function source(paths: Record<string, number>): BrowserAssetSource {
   return {
     id: 'source',
     kind: 'directory',

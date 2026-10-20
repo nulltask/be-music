@@ -1,9 +1,9 @@
-import type { BeMusicPlaylog } from '@be-music/player/playlog';
+import type { BeMusicReplay } from '@be-music/player/replay';
 import { resolveClearLamp, type ClearLamp, type ScoreSummary } from '@be-music/player/ruleset';
 import type { CourseView } from '../course-view/course-view.ts';
 import type { LibraryChart } from '../library/entries.ts';
 import type { EarlyLateCount, PlayState } from '../play-state/state.ts';
-import type { GaugeHistorySample, Judge, JudgeTiming, ScoreHistorySample } from '../play-state/types.ts';
+import type { GaugeHistorySample, JudgmentKind, JudgmentTiming, ScoreHistorySample } from '../play-state/types.ts';
 import type { CourseStageHistory } from './course.ts';
 
 /**
@@ -14,7 +14,7 @@ export type PlayRunKind = 'single' | 'stage' | 'course' | 'nonstop';
 
 /**
  * The one result payload every result screen reads, whatever the run and whatever the skin family: the score, the
- * gauge and its verdict, the clear lamp, the graphs, the timed judgments and the play log, with the course a stage or a
+ * gauge and its verdict, the clear lamp, the graphs, the timed judgments and the replay, with the course a stage or a
  * run belongs to.
  */
 export interface PlayResult {
@@ -34,13 +34,13 @@ export interface PlayResult {
   /** The time played, in seconds (a course run: every stage's). */
   playSeconds: number;
   /** The chart played: its metadata for the song info panel (a course run: the course under its first stage's chart). */
-  song: LibraryChart;
+  chart: LibraryChart;
   /** The gauge graph, from the start of the play to its end. */
   gaugeHistory: GaugeHistorySample[];
   /** The EX-score graph. */
   scoreHistory: ScoreHistorySample[];
-  /** The play log the engine recorded, when it recorded one. */
-  playlog?: BeMusicPlaylog;
+  /** The replay the engine recorded, when it recorded one. */
+  replay?: BeMusicReplay;
   /** The clear lamp (FAILED, the gauge cleared on, FULL COMBO, …). */
   lamp?: ClearLamp;
   /** The gauge the play ran on, as the ruleset names it (`GROOVE`, `HARD`, `EX-HARD`, …). */
@@ -64,9 +64,9 @@ export interface PlayResult {
   fast?: number;
   slow?: number;
   /** Every timed judgment of the play, oldest first. */
-  judgeTimings?: readonly JudgeTiming[];
+  judgeTimings?: readonly JudgmentTiming[];
   /** How many of each judgment's timed hits were early and late (beatoraja's early / late counts). */
-  earlyLate?: Readonly<Record<Judge, EarlyLateCount>>;
+  earlyLate?: Readonly<Record<JudgmentKind, EarlyLateCount>>;
 }
 
 /** What a course run's result carries beside its summed score. */
@@ -111,7 +111,7 @@ export function resolveResultPresentation(run: PlayRunKind): ResultPresentation 
 
 /** What a play's result adds to its final play state. */
 export interface PlayResultFacts {
-  song: LibraryChart;
+  chart: LibraryChart;
   /** The final judgment counts and scores (the engine's final summary). */
   score: ScoreSummary;
   /** Chart time the play ended at, in seconds: the graphs' last sample and the play time. */
@@ -121,7 +121,7 @@ export interface PlayResultFacts {
   judgeRuleset?: string;
   fast?: number;
   slow?: number;
-  playlog?: BeMusicPlaylog;
+  replay?: BeMusicReplay;
   run?: PlayRunKind;
   course?: CourseView;
 }
@@ -139,10 +139,10 @@ export function playResultFromPlayState(state: PlayState, facts: PlayResultFacts
     gauge: state.gauge,
     cleared: state.cleared,
     playSeconds: facts.playSeconds ?? facts.seconds,
-    song: facts.song,
+    chart: facts.chart,
     gaugeHistory: [...state.gaugeHistory, { progress, value: state.gauge }],
     scoreHistory: [...state.scoreHistory, { progress, exScore: state.exScore }],
-    ...(facts.playlog !== undefined ? { playlog: facts.playlog } : {}),
+    ...(facts.replay !== undefined ? { replay: facts.replay } : {}),
     lamp: resolveClearLamp({
       cleared: state.cleared,
       score: facts.score,

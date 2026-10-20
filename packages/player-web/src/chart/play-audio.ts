@@ -8,7 +8,7 @@ import { collectBMSExWAVVolumeMultipliers, collectBmsWAVCmdVolumeMultipliers } f
 import { resolveBMSBase, type BeMusicJSON } from '@be-music/json';
 import type { NonstopStitchMap } from '@be-music/player/course';
 import { loadAssetBytes, resolveChartAudioAsset } from '../collection/collection.ts';
-import type { BrowserSongAssetSource } from '../collection/types.ts';
+import type { BrowserAssetSource } from '../collection/types.ts';
 import {
   resolveSampleStretchRates,
   stretchDecodedSamples,
@@ -39,7 +39,7 @@ export interface LoadPlaySamplesOptions {
   audioContext: BaseAudioContext;
   /** The resolved chart (after `#RANDOM` / `#IF`), so `#IF`-gated `#WAV`s match the chosen branches. */
   chart: BeMusicJSON;
-  source: BrowserSongAssetSource;
+  source: BrowserAssetSource;
   chartPath: string;
   /** The map the samples land in, keyed by {@link decodedSampleKey} of the chart's `#WAV` path. */
   samples: Map<string, AudioBuffer>;

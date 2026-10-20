@@ -1,14 +1,8 @@
-import type {
-  GaugeGutsStep,
-  GaugeSpec,
-  JudgeWindowSetUs,
-  PlaylogRulesetId,
-  RulesetWindowTables,
-} from './definitions.ts';
+import type { GaugeGutsStep, GaugeSpec, JudgeWindowSetUs, RulesetId, RulesetWindowTables } from './definitions.ts';
 
 /**
  * Course play (LR2 grade / expert / nonstop courses and beatoraja courses): which gauge a stage runs on and how a
- * course's judge constraint narrows the windows. Shared by the engine and the play-log simulator through
+ * course's judge constraint narrows the windows. Shared by the engine and the replay simulator through
  * `resolveRuleset`, like every other ruleset rule.
  */
 
@@ -151,11 +145,7 @@ export function resolveDefaultCourseGaugeSet(laneMode: string): CourseGaugeSet {
  * - beatoraja and IIDX: GROOVE / EASY play `CLASS`, HARD `EXCLASS`, DEATH `EXHARDCLASS` (`GrooveGauge.create`: types up
  *   to NORMAL → CLASS, HARD → EXCLASS, EX-HARD / HAZARD → EXHARDCLASS).
  */
-export function resolveCourseGaugeId(
-  rulesetId: PlaylogRulesetId,
-  kind: RulesetCourseKind,
-  selectedGauge: string,
-): string {
+export function resolveCourseGaugeId(rulesetId: RulesetId, kind: RulesetCourseKind, selectedGauge: string): string {
   if (rulesetId === 'lr2') {
     const prefix = kind === 'grade' ? 'GRADE' : 'COURSE';
     switch (selectedGauge) {
@@ -185,7 +175,7 @@ export function resolveCourseGaugeId(
  * beatoraja's (the LR2-first policy falls back to beatoraja for what LR2 lacks).
  */
 export function resolveCourseGauge(
-  rulesetId: PlaylogRulesetId,
+  rulesetId: RulesetId,
   gaugeId: string,
   course: RulesetCourseOptions,
   laneMode: string,

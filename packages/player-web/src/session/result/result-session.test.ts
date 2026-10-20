@@ -25,7 +25,7 @@ function playResult(overrides: Partial<PlayResult> = {}): PlayResult {
     gauge: 90,
     cleared: true,
     playSeconds: 30,
-    song: CHART,
+    chart: CHART,
     gaugeHistory: [],
     scoreHistory: [],
     ...overrides,

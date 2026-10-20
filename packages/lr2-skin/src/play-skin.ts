@@ -20,7 +20,7 @@ export interface LR2ThemeLoadProgress {
 
 export type LR2ThemeLoadProgressCallback = (progress: LR2ThemeLoadProgress) => void;
 
-export interface LR2PlaySkinSong {
+export interface LR2PlaySkinChart {
   chartPath?: string;
   chart: {
     events: ReadonlyArray<{ channel: string }>;
@@ -461,8 +461,8 @@ export async function loadLR2SystemSound(
   };
 }
 
-export function pickLR2PlaySkin(playSkins: LR2PlaySkinMap, song: LR2PlaySkinSong): LR2Skin | undefined {
-  const variant = pickLR2PlaySkinVariant(playSkins, song);
+export function pickLR2PlaySkin(playSkins: LR2PlaySkinMap, chartEntry: LR2PlaySkinChart): LR2Skin | undefined {
+  const variant = pickLR2PlaySkinVariant(playSkins, chartEntry);
   return variant !== undefined ? playSkins[variant] : undefined;
 }
 
@@ -470,12 +470,15 @@ export function pickLR2PlaySkin(playSkins: LR2PlaySkinMap, song: LR2PlaySkinSong
  * The play-skin variant {@link pickLR2PlaySkin} plays a chart on, so a host can parse that skin again (for a course
  * stage's parse-time ops, see {@link LR2ThemeSkins.loadSkin}).
  */
-export function pickLR2PlaySkinVariant(playSkins: LR2PlaySkinMap, song: LR2PlaySkinSong): LR2PlayVariant | undefined {
+export function pickLR2PlaySkinVariant(
+  playSkins: LR2PlaySkinMap,
+  chartEntry: LR2PlaySkinChart,
+): LR2PlayVariant | undefined {
   const target = resolveChartPlayVariant({
-    chartPath: song.chartPath,
-    events: song.chart.events,
-    bms: song.chart.bms,
-    bmson: song.chart.bmson,
+    chartPath: chartEntry.chartPath,
+    events: chartEntry.chart.events,
+    bms: chartEntry.chart.bms,
+    bmson: chartEntry.chart.bmson,
   });
   return PLAY_SKIN_FALLBACKS[target].find((variant) => playSkins[variant] !== undefined);
 }

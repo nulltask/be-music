@@ -2,11 +2,11 @@ import { createEmptyJSON } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import { resolveChartAudioAsset, resolveChartImageAsset } from './collection.ts';
 import { createNonstopAssets, NONSTOP_CHART_PATH } from './nonstop.ts';
-import type { BrowserSongAssetSource } from './types.ts';
+import type { BrowserAssetSource } from './types.ts';
 
 const bytes = (value: number) => new Uint8Array([value]);
 
-function source(id: string, files: Record<string, Uint8Array>): BrowserSongAssetSource {
+function source(id: string, files: Record<string, Uint8Array>): BrowserAssetSource {
   return { id, kind: 'directory', label: id, files: new Map(Object.entries(files)) };
 }
 

@@ -119,7 +119,7 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
     // browsers don't expose Kitty-style protocol events, so we synthesize a minimal release-only shape — the
     // engine's LN release path keys on `releaseTokens` and ignores press / repeat in this case.
     // `pressedAt` here represents the release event's timestamp (same wall-clock-ms domain as `lane-input`): the
-    // play log records the release at that instant, as it records a press.
+    // replay records the release at that instant, as it records a press.
     options.inputSignals.pushCommand({
       kind: 'kitty-state',
       pressTokens: [],

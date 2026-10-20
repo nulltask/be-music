@@ -82,7 +82,7 @@ LR2 と beatoraja は、同じ譜面、オプション、スキンの番号を�
 
    (B, A)
 
-10. **プレイログに物理キーの識別が残らない。** スクラッチの向きがないと、beatoraja の逆回転による BSS 終了は判定も再シミュレーションもできません。後からフィールドを足すと古いログがあいまいになるので、早めに足してください。(B、データ形式)
+10. **リプレイに物理キーの識別が残らない。** スクラッチの向きがないと、beatoraja の逆回転による BSS 終了は判定も再シミュレーションもできません。後からフィールドを足すと古いログがあいまいになるので、早めに足してください。(B、データ形式)
 
 ほかに目立つ点：
 
@@ -98,7 +98,7 @@ LR2 と beatoraja は、同じ譜面、オプション、スキンの番号を�
 - イベントのタイムスタンプによる入力。
 - 正確な STOP の長さ。
 
-これらは譜面の同一性（フィンガープリント）か入力ログに属します。ruleset ごとに分けると「1 つの譜面、1 つの入力列、3 つの再シミュレーション」（[プレイログ](./playlog.ja.md)、[Leaderboard](./leaderboard.ja.md)）が崩れます。`beatoraja` での既知の非再現として文書に書いてください。
+これらは譜面の同一性（フィンガープリント）か入力ログに属します。ruleset ごとに分けると「1 つの譜面、1 つの入力列、3 つの再シミュレーション」（[リプレイ](./replay.ja.md)、[Leaderboard](./leaderboard.ja.md)）が崩れます。`beatoraja` での既知の非再現として文書に書いてください。
 
 ```mermaid
 flowchart TD
@@ -214,7 +214,7 @@ flowchart TD
   - `audioOffsetMs` は判定の時計を動かします（[`packages/player/src/core/engine-types.ts`](../packages/player/src/core/engine-types.ts)、[`play-loop.ts`](../packages/player/src/core/play-loop.ts)）。表示だけのオフセットはありません。
   - beatoraja の `NUMBER_JUDGETIMING` は 0 を返し（[`packages/beatoraja-skin/src/scene/play-numbers.ts`](../packages/beatoraja-skin/src/scene/play-numbers.ts)）、LR2 の数値 12 も同じです（[`packages/lr2-skin/src/state/options.ts`](../packages/lr2-skin/src/state/options.ts)）。
 - **影響:** C。軽い A（スキンの数値とその +/- ボタンが何もしない）。
-- **推奨:** 表示だけのオフセットを、両ファミリー共通のプレイヤーオプションとして追加し、両方のスキンの数値に出す。表示だけなので、プレイログへのリスクはありません。
+- **推奨:** 表示だけのオフセットを、両ファミリー共通のプレイヤーオプションとして追加し、両方のスキンの数値に出す。表示だけなので、リプレイへのリスクはありません。
 
 ### 負の BPM とゼロの BPM
 
@@ -282,7 +282,7 @@ flowchart TD
 - **LR2:** BAD の後、同じ押下を、そのレーンの次のノートが BAD の判定幅にあればそのノートに渡します。そのノートは自分のずれで判定され、PGREAT/GREAT/GOOD になることもあります。連鎖は前にしか進まず、通常ノートだけに適用され、各段階が BAD である間だけ続きます。ソース：[#L7509-L7521](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L7509-L7521)、バイナリの VA 0x418d3b-0x418d55（`cmpl 0x97a30` = `judgetime[2]`、`calll 0x418850`）。
 - **beatoraja:** multi-BAD はありません。
 - **種類:** セマンティクス。
-- **be-music の現状:** lr2oraja の `MultiBadCollector` に従っています（[`core/judge-core-press.ts`](../packages/player/src/core/judge-core-press.ts) の `applyMultiBadCollector`、[`ruleset/long-note.ts`](../packages/player/src/ruleset/long-note.ts)、[`playlog/simulate.ts`](../packages/player/src/playlog/simulate.ts) にも同じもの）。
+- **be-music の現状:** lr2oraja の `MultiBadCollector` に従っています（[`core/judge-core-press.ts`](../packages/player/src/core/judge-core-press.ts) の `applyMultiBadCollector`、[`ruleset/long-note.ts`](../packages/player/src/ruleset/long-note.ts)、[`replay/simulate.ts`](../packages/player/src/replay/simulate.ts) にも同じもの）。
 - **影響:** B。`lr2` で縦連と同時押しの EX とコンボが変わります。
 - **推奨:** LR2 優先ではバイナリが基準なので、`lr2` を連鎖に切り替える。`lr2/0` の再シミュレーション結果が変わりますが、ログの形式は変わりません。
 
@@ -303,7 +303,7 @@ flowchart TD
 
 - **beatoraja:** PMS は `MissCondition.ONE` と、BAD に対する `judgeVanish = false` を使うので、BAD の後もノートを叩けます（[play/JudgeProperty.java#L34-L44](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeProperty.java#L34-L44)）。LR2 に PMS はありません。
 - **種類:** セマンティクス。
-- **be-music の現状:** 未実装。`MissCondition.ONE` は [プレイログ — 再現度に関する注意](./playlog.ja.md#再現度に関する注意) に載っていますが、`judgeVanish` は載っていません。
+- **be-music の現状:** 未実装。`MissCondition.ONE` は [リプレイ — 再現度に関する注意](./replay.ja.md#再現度に関する注意) に載っていますが、`judgeVanish` は載っていません。
 - **影響:** B。`beatoraja` での 9 鍵の譜面。
 - **推奨:** `judgeVanish` を再現度に関する注意に加え、PMS が重要になったら両方を実装する。
 
@@ -318,12 +318,12 @@ flowchart TD
 - **be-music の現状:**
   - `per-note` は譜面に従い、`#LNMODE` がなければ LN として遊びます（[`packages/chart/src/note-rules.ts`](../packages/chart/src/note-rules.ts)、[`ruleset/long-note.ts`](../packages/player/src/ruleset/long-note.ts)）。
   - プレイヤーオプションはありません。
-  - 記録のキーは `ruleset:sha256` です（[`packages/player-web-demo/src/song-records.ts`](../packages/player-web-demo/src/song-records.ts)）。
+  - 記録のキーは `ruleset:sha256` です（[`packages/player-web-demo/src/chart-best-records.ts`](../packages/player-web-demo/src/chart-best-records.ts)）。
   - フィンガープリントの LN モードは `#LNMODE`、なければ 1 です（[フィンガープリント仕様 §3.4](./fingerprint-spec.ja.md#34-イベント)）。
   - スキンの LN モードのボタンは何もしません。
 - **影響:** A（beatoraja の `score.db` を取り込むと CN/HCN の行がつぶれる）。B（CN/HCN のプレイヤーのスコアを再現できない）。
 - **推奨:**
-  - `beatoraja` にプレイヤーオプションを足し、`judgeAlgorithm` と同じように ruleset の入力としてプレイログに記録する。再シミュレーションはログから読むこと。
+  - `beatoraja` にプレイヤーオプションを足し、`judgeAlgorithm` と同じように ruleset の入力としてリプレイに記録する。再シミュレーションはログから読むこと。
   - オプションを出す**前に**、実際の LN モードを記録のキーと Leaderboard のランキングのキー（またはフィルタ）に入れる。
 
 ### スクラッチ、BSS、オートスクラッチ
@@ -342,8 +342,8 @@ flowchart TD
 - **種類:** セマンティクス。ランプはゲージだけでなくオプションの関数です。
 - **be-music の現状:** どちらのモデルでもありません。
   - `resolveClearLamp`（[`ruleset/clear-lamp.ts`](../packages/player/src/ruleset/clear-lamp.ts)）はオプションを無視します。
-  - `checkPlaylogEligibility`（[`playlog/eligibility.ts`](../packages/player/src/playlog/eligibility.ts)）が印を付けるのはオートスクラッチと判定幅の上書きだけです。
-  - ローカルのベスト（[`records/best-record.ts`](../packages/player/src/records/best-record.ts)、[`player-web-demo/src/app/routes/result.ts`](../packages/player-web-demo/src/app/routes/result.ts)、[`song-records.ts`](../packages/player-web-demo/src/song-records.ts) の `playKeepsRecord`）は、オートスクラッチ、SCATTER、CONSTANT のプレイでもランプ、EX、BP をそのまま残します。
+  - `checkReplayEligibility`（[`replay/eligibility.ts`](../packages/player/src/replay/eligibility.ts)）が印を付けるのはオートスクラッチと判定幅の上書きだけです。
+  - ローカルのベスト（[`records/best-record.ts`](../packages/player/src/records/best-record.ts)、[`player-web-demo/src/app/routes/result.ts`](../packages/player-web-demo/src/app/routes/result.ts)、[`chart-best-records.ts`](../packages/player-web-demo/src/chart-best-records.ts) の `playKeepsRecord`）は、オートスクラッチ、SCATTER、CONSTANT のプレイでもランプ、EX、BP をそのまま残します。
 - **影響:** B。ベストとランプがどちらのエンジンよりも高くなり、SCATTER/CONSTANT のプレイがアシストなしのボードに載ります。
 - **推奨:**
   - ログにある `play` のフィールド（レーンオプション、HS-FIX、オートスクラッチ、判定の上書き、バトル）から ruleset ごとに「アシスト区分」を決める純粋なリゾルバーを足す：
@@ -366,7 +366,7 @@ flowchart TD
 - **LR2:** ゲージが 2 % を下回るとランが終わります（[#139](https://github.com/nulltask/be-music/issues/139)）。
 - **beatoraja:** 0 で終わります。
 - **種類:** データの水準でのセマンティクス。
-- **be-music の現状:** ライブのプレイ、つまり入力ログは、プレイした ruleset の失敗地点で止まります。しかし `simulatePlaylogRulesets` と Leaderboard は 3 つの ruleset すべてでランキングします。生き残っていたはずの ruleset では、残りのノートがすべて見逃しになります。
+- **be-music の現状:** ライブのプレイ、つまり入力ログは、プレイした ruleset の失敗地点で止まります。しかし `simulateReplayRulesets` と Leaderboard は 3 つの ruleset すべてでランキングします。生き残っていたはずの ruleset では、残りのノートがすべて見逃しになります。
 - **影響:** B。失敗したランの別 ruleset での EX、BP、ランプは、プレイヤーが止められた地点で決まる人工物です。
 - **推奨:** 失敗したサバイバルゲージのランはプレイした ruleset でだけランキングするか、印を付け、そのことを [Leaderboard 設計](./leaderboard.ja.md) に書く。プレイされなかった入力を合成してはいけません。
 
@@ -424,11 +424,11 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
   - 更新のたびにそのオプションとシードを保存します。
   - ゴースト、トロフィー、クリア回数とプレイ回数、更新ごとの `scorelog` の行も持ちます（[ScoreData.java#L541-L590](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/ScoreData.java#L541-L590)）。
 - **種類:** セマンティクス：アシストの関門と、各ベストと一緒に保存するもの。
-- **be-music の現状:** `mergeBestRecord` はランプ、EX、コンボ、BP を独立にマージし、プレイ回数を持ちます。アシストの関門、クリア回数、判定のスナップショット、日付はなく、ベストのプレイログへのリンクもありません。
+- **be-music の現状:** `mergeBestRecord` はランプ、EX、コンボ、BP を独立にマージし、プレイ回数を持ちます。アシストの関門、クリア回数、判定のスナップショット、日付はなく、ベストのリプレイへのリンクもありません。
 - **影響:** B。取り込み時に A。
 - **推奨:**
   - アシストの関門を足す。
-  - `clearCount`、ベスト EX の判定スナップショット、ベストのプレイログへのポインタを足す。ポインタは [#418](https://github.com/nulltask/be-music/issues/418) の MY BEST ゴーストに必要です。
+  - `clearCount`、ベスト EX の判定スナップショット、ベストのリプレイへのポインタを足す。ポインタは [#418](https://github.com/nulltask/be-music/issues/418) の MY BEST ゴーストに必要です。
   - どれもログから導けるので、記録は再構築できます。
 
 ### リプレイと取り込みの形式
@@ -442,7 +442,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
   - スロットは 4 つで、アシスト付きのプレイは何も保存しません。
   - ゴーストは `score.db` に gzip+base64 で入っています。
 - **種類:** セマンティクス。beatoraja のリプレイは、現在のエンジンで判定し直す物理キーのログです。
-- **be-music の現状:** すべてのプレイを `be-music-playlog`（解決済みのノート + チャンネルの入力 + 抽選結果）として自動保存し、ruleset ごとに再シミュレーションします。`score.db` や `.brd` の読み込みはありません。
+- **be-music の現状:** すべてのプレイを `be-music-replay`（解決済みのノート + チャンネルの入力 + 抽選結果）として自動保存し、ruleset ごとに再シミュレーションします。`score.db` や `.brd` の読み込みはありません。
 - **影響:** どの取り込みでも A。
 - **推奨:**
   - `.brd` の取り込みでは、`laneShufflePattern` + `rand` を解決済みのノートに、keycode をチャンネル + `source` に変換する。
@@ -468,7 +468,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 - **LR2:** 表は 1 組です。
 - **beatoraja:** FIVEKEYS、SEVENKEYS、PMS、KEYBOARD で別の表があります。例：5K の境界は 75/50、HARD_5 は回復なし、PMS は最大 120・初期値 30・境界 85（[play/GaugeProperty.java#L77-L105](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/GaugeProperty.java#L77-L105)）。24K の既定の TOTAL も違います。
 - **種類:** パラメータ。
-- **be-music の現状:** すべてのモードで 7K の表です（[プレイログ — 再現度に関する注意](./playlog.ja.md#再現度に関する注意) に記載）。コースの段位ゲージはすでにモードごとに切り替わります。
+- **be-music の現状:** すべてのモードで 7K の表です（[リプレイ — 再現度に関する注意](./replay.ja.md#再現度に関する注意) に記載）。コースの段位ゲージはすでにモードごとに切り替わります。
 - **影響:** B。PMS のゲージ最大 120 はスキンでのゲージの描き方を変えるので A も。
 - **推奨:** `beatoraja` の中でモードごとに表を選ぶ。
 
@@ -529,7 +529,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 - **LR2:** 1 つのシードが `#RANDOM` とすべてのレーンオプションに使われます。シードはリプレイと `score.rseed` に書き込まれ、**クイックリトライでも保たれます**（[LR2f.cpp#L25756-L25766](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25756-L25766)、[Main.cpp#L1100](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/Main.cpp#L1100)）。
 - **beatoraja:** `#RANDOM` の結果は `rand` として保存し、各サイドのレーンオプションはそれぞれ自分のシードを持ちます。リザルト画面には REPLAY_SAME と REPLAY_DIFFERENT があります（[ReplayData.java#L53-L82](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/ReplayData.java#L53-L82)、[result/MusicResult.java#L221-L244](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/result/MusicResult.java#L221-L244)）。
 - **種類:** セマンティクス：何を何から再現できるか。
-- **be-music の現状:** 抽選結果を記録し、解決済みのレーン配置をログに残します（[`packages/player-web/src/chart/playlog-arrangement.ts`](../packages/player-web/src/chart/playlog-arrangement.ts)）。レーンのシャッフルはシードなしの `Math.random` を使い、F5 で配置を引き直します。
+- **be-music の現状:** 抽選結果を記録し、解決済みのレーン配置をログに残します（[`packages/player-web/src/chart/replay-arrangement.ts`](../packages/player-web/src/chart/replay-arrangement.ts)）。レーンのシャッフルはシードなしの `Math.random` を使い、F5 で配置を引き直します。
 - **影響:** C（「同じパターンで再挑戦」がない）。取り込みでは A。PRNG とアルゴリズムが違うので、外部のシードからパターンを再生成できません。
 - **推奨:**
   - 解決済みの配置をログに残し続ける。再シミュレーションにはこのほうが厳密に優れています。
@@ -585,7 +585,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 
 - **LR2:** 0.10 から 9.00 までの整数 ×100 と `basespeed`。ノートの y はスキンのピクセルに依存するので、表示時間はスキンのレーンの長さに依存します（[#L2241-L2242](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2241-L2242)、[#L16051-L16053](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L16051-L16053)）。
 - **beatoraja:** 0.01 から 20 までの float。HS 1 でレーンが 4 拍で、スキンの大きさに依存しません（[PlayConfig.java#L18-L54](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayConfig.java#L18-L54)）。
-- **be-music の現状:** 0.1-6.0 で、2 つの尺度を `PlaylogViewState` に記録し、リプレイでは白数字を合わせます（[`packages/scene-model/src/play-options/hi-speed.ts`](../packages/scene-model/src/play-options/hi-speed.ts)、[`play-state/view.ts`](../packages/scene-model/src/play-state/view.ts)）。
+- **be-music の現状:** 0.1-6.0 で、2 つの尺度を `ReplayViewState` に記録し、リプレイでは白数字を合わせます（[`packages/scene-model/src/play-options/hi-speed.ts`](../packages/scene-model/src/play-options/hi-speed.ts)、[`play-state/view.ts`](../packages/scene-model/src/play-state/view.ts)）。
 - **影響:** C。
 - **推奨:** ファミリーごとの尺度を維持し、上限を上げる：LR2 は 9、beatoraja のシーンは 20。表示は判定の外です。
 
@@ -669,7 +669,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 - **LR2:** 2 つのスクラッチ入力が 1 つのレーンに対応し、どの押下も新しい押下です。
 - **beatoraja:** BSS をどちらのスクラッチキーで始めたかを覚えているので、**逆方向を押すと BSS が終わります**（`LONGSCRATCH_END` で判定）。アナログスクラッチにも対応しています（[JudgeManager.java#L350-L371](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L350-L371)、[#L498-L532](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L498-L532)）。
 - **種類:** セマンティクス。
-- **be-music の現状:** プレイログの入力は `channels` だけを持ちます。`tokens` は診断用で、シミュレーターは無視します（[`packages/player/src/playlog/format.ts`](../packages/player/src/playlog/format.ts)）。ゲームパッドやアナログの入力はありません。
+- **be-music の現状:** リプレイの入力は `channels` だけを持ちます。`tokens` は診断用で、シミュレーターは無視します（[`packages/player/src/replay/format.ts`](../packages/player/src/replay/format.ts)）。ゲームパッドやアナログの入力はありません。
 - **影響:** B。beatoraja の逆回転による BSS の終了は判定も再シミュレーションもできません。
 - **推奨:**
   - ログがたまる前に、入力ごとの省略可能な `source`（スクラッチの向きか物理キーの番号）を**今すぐ**足す。
@@ -708,7 +708,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 - **LR2:** コースのハッシュ文字列（コースのヘッダー + ステージの MD5）。
 - **beatoraja:** ステージの SHA-256 をつなげたものと、`mode = lnmode + option*10 + no_speed*100 + judge*1000 + gauge*10000`（[PlayDataAccessor.java#L343-L372](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayDataAccessor.java#L343-L372)）。
 - **be-music の現状:**
-  - デモはコースの記録を `stage.sha256 ?? stage.md5` で区別します（[`packages/player-web-demo/src/course-result.ts`](../packages/player-web-demo/src/course-result.ts) の `courseRecordKey`）。同じコースを `.lr2crs`（MD5 だけ）と beatoraja の JSON から読むと、**記録が 2 つ**になります。
+  - デモはコースの記録を `stage.sha256 ?? stage.md5` で区別します（[`packages/player-web-demo/src/course-result.ts`](../packages/player-web-demo/src/course-result.ts) の `courseBestRecordKey`）。同じコースを `.lr2crs`（MD5 だけ）と beatoraja の JSON から読むと、**記録が 2 つ**になります。
   - Leaderboard は `bmcourse0` のフィンガープリントを使います。
   - コースの制約、ゲージ、ランダムコース、持ち越し、トロフィーは [#403](https://github.com/nulltask/be-music/issues/403)〜[#410](https://github.com/nulltask/be-music/issues/410) と [#408](https://github.com/nulltask/be-music/issues/408) で扱いました。そのうちランダムコースの SQL フィルタは **[#564](https://github.com/nulltask/be-music/issues/564) で修正済み**で、コースメーカーで作ったコースはランキング対象外で始まるようになりました（**[#566](https://github.com/nulltask/be-music/issues/566) で修正済み**）。
 - **影響:** A/B。

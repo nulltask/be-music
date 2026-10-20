@@ -134,7 +134,7 @@ export interface PixiSelectRenderer {
    */
   render(frame: PixiSelectFrame): boolean;
   /** Per-frame, transform-only animation of the persistent layers. */
-  tick(nowMs: number, focusedSong: LibraryChart | undefined, launchAt?: number, audio?: BeMusicAudioFrame): void;
+  tick(nowMs: number, focusedChart: LibraryChart | undefined, launchAt?: number, audio?: BeMusicAudioFrame): void;
   dispose(): void;
 }
 

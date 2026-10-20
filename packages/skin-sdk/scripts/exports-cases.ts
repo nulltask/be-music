@@ -20,7 +20,7 @@ const BENCH_SONG = {
   totalNotes: 8,
   chart: BENCH_CHART,
 } satisfies skinSdkAPI.LibraryChart;
-const BENCH_STATS = skinSdkAPI.resolveSongStats(BENCH_SONG);
+const BENCH_STATS = skinSdkAPI.resolveChartStats(BENCH_SONG);
 const BENCH_COURSE_ENTRY = {
   kind: 'course',
   course: {
@@ -60,7 +60,7 @@ const BENCH_RESULT = {
   gauge: 82,
   cleared: true,
   playSeconds: 95,
-  song: BENCH_SONG,
+  chart: BENCH_SONG,
   gaugeHistory: [{ progress: 0, value: 20 }],
   scoreHistory: [{ progress: 0, exScore: 0 }],
 } satisfies skinSdkAPI.BeMusicResultData;
@@ -98,7 +98,16 @@ const BENCH_SETTINGS = [
     ],
     default: 'neon',
   },
-  { kind: 'number', id: 'judgeOffset', label: 'Judge offset', min: -40, max: 40, step: 2, default: 0, unit: 'px' },
+  {
+    kind: 'number',
+    id: 'judgeOffset',
+    label: 'Judgment offset',
+    min: -40,
+    max: 40,
+    step: 2,
+    default: 0,
+    unit: 'px',
+  },
   { kind: 'toggle', id: 'glow', label: 'Glow', default: true },
 ] satisfies skinSdkAPI.BeMusicSkinSetting[];
 const BENCH_STORED_SETTINGS = { theme: 'mono', judgeOffset: 72, glow: 'yes', removed: 1 };
@@ -106,7 +115,7 @@ const BENCH_JUDGE_TIMINGS = Array.from({ length: 1000 }, (_, index) => ({
   atMs: index * 120,
   deltaMs: Math.round(Math.sin(index * 1.7) * 60),
   judge: 'GREAT',
-})) satisfies skinSdkAPI.BeMusicJudgeTiming[];
+})) satisfies skinSdkAPI.BeMusicJudgmentTiming[];
 const BENCH_SKIN = {
   apiVersion: skinSdkAPI.BE_MUSIC_SKIN_API_VERSION,
   id: 'bench',
@@ -136,9 +145,9 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       skinSdkAPI.bandLevel(BENCH_AUDIO.bands, 5, 24);
     },
   });
-  define('skin-sdk.binJudgeTimings', {
+  define('skin-sdk.binJudgmentTimings', {
     run: () => {
-      skinSdkAPI.binJudgeTimings(BENCH_JUDGE_TIMINGS, 2, 100);
+      skinSdkAPI.binJudgmentTimings(BENCH_JUDGE_TIMINGS, 2, 100);
     },
   });
   define('skin-sdk.describeCourseCard', {
@@ -191,9 +200,9 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       skinSdkAPI.formatPlayVariantLabel(BENCH_SONG);
     },
   });
-  define('skin-sdk.formatSongLength', {
+  define('skin-sdk.formatChartLength', {
     run: () => {
-      skinSdkAPI.formatSongLength(125.4);
+      skinSdkAPI.formatChartLength(125.4);
     },
   });
   define('skin-sdk.holdSparks', {
@@ -378,19 +387,19 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       skinSdkAPI.resolveSkinlessLaneLayout(BENCH_CHANNELS_7K, BENCH_CHANNELS_7K.length, '7');
     },
   });
-  define('skin-sdk.resolveSongRowFacts', {
+  define('skin-sdk.resolveChartRowFacts', {
     run: () => {
-      skinSdkAPI.resolveSongRowFacts(BENCH_SONG);
+      skinSdkAPI.resolveChartRowFacts(BENCH_SONG);
     },
   });
-  define('skin-sdk.resolveSongStats', {
+  define('skin-sdk.resolveChartStats', {
     run: () => {
-      skinSdkAPI.resolveSongStats(BENCH_SONG);
+      skinSdkAPI.resolveChartStats(BENCH_SONG);
     },
   });
-  define('skin-sdk.resolveSongTags', {
+  define('skin-sdk.resolveChartTags', {
     run: () => {
-      skinSdkAPI.resolveSongTags(BENCH_STATS);
+      skinSdkAPI.resolveChartTags(BENCH_STATS);
     },
   });
   define('skin-sdk.resolveStageBGARect', {

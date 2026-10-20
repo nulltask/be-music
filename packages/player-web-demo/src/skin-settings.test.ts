@@ -20,7 +20,7 @@ const SCHEMA: readonly BeMusicSkinSetting[] = [
     ],
     default: 'dark',
   },
-  { kind: 'number', id: 'offset', label: 'Judge offset', min: -40, max: 40, step: 2, default: 0, unit: 'px' },
+  { kind: 'number', id: 'offset', label: 'Judgment offset', min: -40, max: 40, step: 2, default: 0, unit: 'px' },
   { kind: 'number', id: 'opacity', label: 'Opacity', min: 0, max: 1, default: 1 },
   { kind: 'toggle', id: 'glow', label: 'Glow', default: true },
 ];
@@ -84,7 +84,7 @@ describe('describeSkinSettingControllers', () => {
   it('maps each setting kind to its controller, in declaration order', () => {
     expect(describeSkinSettingControllers(SCHEMA)).toEqual([
       { kind: 'dropdown', id: 'theme', name: 'Theme', options: { Dark: 'dark', Light: 'light' } },
-      { kind: 'slider', id: 'offset', name: 'Judge offset (px)', min: -40, max: 40, step: 2 },
+      { kind: 'slider', id: 'offset', name: 'Judgment offset (px)', min: -40, max: 40, step: 2 },
       { kind: 'slider', id: 'opacity', name: 'Opacity', min: 0, max: 1, step: undefined },
       { kind: 'checkbox', id: 'glow', name: 'Glow' },
     ]);

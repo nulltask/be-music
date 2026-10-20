@@ -9,10 +9,10 @@ import { type AudioSinkClockState } from '../audio-sink.ts';
 import { type PlayerGaugeSummary, type PlayerUISignalBus } from './ui-signal-bus.ts';
 import { type PlayerInputSignalBus } from './input-signal-bus.ts';
 import type { GaugeType } from '../ruleset/gauge-type.ts';
-import { type LongNoteStyle, type PlaylogRulesetId, type RulesetWindowTables } from '../ruleset/index.ts';
-import { type PlaylogRecordingOptions } from '../playlog/recorder.ts';
-import type { BeMusicPlaylog, PlaylogCourseStage, PlaylogInputEvent } from '../playlog/format.ts';
-import type { PlaylogTempoChange } from '../playlog/view.ts';
+import { type LongNoteStyle, type RulesetId, type RulesetWindowTables } from '../ruleset/index.ts';
+import { type ReplayRecordingOptions } from '../replay/recorder.ts';
+import type { BeMusicReplay, ReplayCourseStage, ReplayInputEvent } from '../replay/format.ts';
+import type { ReplayTempoChange } from '../replay/view.ts';
 import { type PreparedPlaybackChartData } from './bootstrap.ts';
 
 /**
@@ -71,7 +71,7 @@ export interface CreatePlayerInputRuntimeContext {
 
 /**
  * Play settings: what decides the judgments and the score, or which chart / branch is played. Plain serializable
- * values, and the set a play log has to carry to reproduce a play (see "Engine options by category" in
+ * values, and the set a replay has to carry to reproduce a play (see "Engine options by category" in
  * docs/architecture.md for the ones it does not record yet). The engine does not read `auto`: the host picks
  * `autoPlay` or `manualPlay`.
  */
@@ -81,22 +81,22 @@ export interface PlayerPlaySettings {
   /**
    * Gauge the player selected, as an LR2-family id (`'GROOVE'` / `'EASY'` / `'HARD'` / `'DEATH'`). Mapped onto the
    * active ruleset's own line-up — `'GROOVE'` is beatoraja's `NORMAL`, `'DEATH'` is its `HAZARD`, and so on.
-   * Defaults to `recordPlaylog.gauge`, then `'GROOVE'`. The play log records the gauge the play ran on.
+   * Defaults to `recordReplay.gauge`, then `'GROOVE'`. The replay records the gauge the play ran on.
    */
   gauge?: GaugeType;
   /**
    * The compat ruleset the play is judged under: `'lr2'` (default), `'beatoraja'` or `'iidx'`. It owns every judge
    * rule — the windows (beatoraja's SEVENKEYS windows scaled by its judgerank, IIDX's fixed ±16.67 / ±33.33 /
    * ±116.67 / ±250 ms), which note a press resolves against, the long-note style, the empty-POOR rule, mines, the gauge
-   * line-up and its curve, and the score — and the play-log simulator plays by the same tables. Dynamic `#EXRANKxx`
-   * changes are an LR2 concept and only apply under `'lr2'`. Recorded into the play log (`play.judgeRuleset`) so
+   * line-up and its curve, and the score — and the replay simulator plays by the same tables. Dynamic `#EXRANKxx`
+   * changes are an LR2 concept and only apply under `'lr2'`. Recorded into the replay (`play.judgeRuleset`) so
    * replays and re-simulations judge under the same ruleset.
    */
-  judgeRuleset?: PlaylogRulesetId;
+  judgeRuleset?: RulesetId;
   /**
    * The `#RANDOM` / `#SWITCH` outcomes of this play (`resolvePlayChart`, or `drawRandomOutcomes` from
    * `@be-music/chart`). With a chart the host already resolved, these are the draws it was resolved with and only feed
-   * the RANDOM summary. With a chart that still carries `bms.controlFlow` (e.g. replaying a play log against the source
+   * the RANDOM summary. With a chart that still carries `bms.controlFlow` (e.g. replaying a replay against the source
    * chart), the engine resolves it exactly once with these draws. The engine never draws itself: a chart with control
    * flow and no draws is rejected with a `TypeError`.
    */
@@ -125,19 +125,19 @@ export interface PlayerPlaySettings {
   /**
    * End the play the moment a survival gauge empties, as LR2 and beatoraja do: nothing after the judgment that emptied
    * it counts, and the play stops there. Default `true`; `false` keeps judging to the end of the chart with the gauge
-   * dead (`failedMidPlay`). Recorded into the play log (`play.endOnFailure`) so re-simulations stop at the same point.
+   * dead (`failedMidPlay`). Recorded into the replay (`play.endOnFailure`) so re-simulations stop at the same point.
    */
   endOnFailure?: boolean;
   /**
    * This play is one stage of a course: the stage runs on the ruleset's course gauge under the course's judge
    * constraint, starting from the state the previous stage left (`carryIn`; absent for the first stage). Recorded into
-   * the play log (`play.course`), so the stage replays on its own.
+   * the replay (`play.course`), so the stage replays on its own.
    */
-  course?: PlaylogCourseStage;
+  course?: ReplayCourseStage;
   /**
    * The judge rank changes of a stitched LR2 NONSTOP chart's later stages (`NonstopStitchMap.stageRanks` from
    * `@be-music/player/course`), in chart seconds: from each change on, the windows of that stage's `#RANK`. Applied under
-   * the LR2 ruleset only (as `#EXRANKxx`) and recorded into the play log (`chart.judgeRank.stageRanks`), so a replay
+   * the LR2 ruleset only (as `#EXRANKxx`) and recorded into the replay (`chart.judgeRank.stageRanks`), so a replay
    * and a re-simulation judge with them.
    */
   stageRanks?: ReadonlyArray<PlayerStageRank>;
@@ -199,7 +199,7 @@ export interface PlayerPlayRuntime {
    * Keeps a play open after its chart is over, so the player's keys still light the lanes (and the chart's remaining
    * background sounds still play) while the host shows its outro. When the chart is over — every note judged and the
    * judge windows passed — `onSettled` runs once; the play then carries on until `signal` aborts, and only then ends
-   * normally (its summary and play log as usual; aborting this signal is not an interrupt). Without it a play ends as
+   * normally (its summary and replay as usual; aborting this signal is not an interrupt). Without it a play ends as
    * soon as its chart is over. Manual, replay and AUTO play alike.
    */
   holdAfterChart?: { signal: AbortSignal; onSettled?: () => void };
@@ -263,7 +263,7 @@ export interface PlayerPlayTuning {
 }
 
 /**
- * Play debug: diagnostic overrides. `judgeWindowMs` changes the judgments (the play log records it as
+ * Play debug: diagnostic overrides. `judgeWindowMs` changes the judgments (the replay records it as
  * `play.judgeWindowOverrideMs`); the others only change what is shown or heard. The engine does not read
  * `showInvisibleNotes`.
  */
@@ -280,29 +280,29 @@ export interface PlayerPlayDebug {
 }
 
 /**
- * Play recording: play-log capture and replay. `recordPlaylog` declares the host-side settings the log records
+ * Play recording: replay capture and replay. `recordReplay` declares the host-side settings the log records
  * (`gauge`, `randomLane`, `dpFlip`, `native`) next to the chart identity, and `replayInputs` re-drives a
  * recorded input stream.
  */
 export interface PlayerPlayRecording {
   /**
-   * Host-declared play settings merged into the recorded play-log (`randomLane`, `dpFlip`, `native`, ...). The engine
+   * Host-declared play settings merged into the recorded replay (`randomLane`, `dpFlip`, `native`, ...). The engine
    * itself knows mode / auto-scratch / judge-window override; everything host-side (which lane shuffle produced
    * `preparedChart`, ...) arrives through this bag. `gauge` here is a fallback for {@link PlayerPlaySettings.gauge}: the play runs on, and
-   * the log records, one gauge. Only meaningful together with {@link onPlaylogRecorded}.
+   * the log records, one gauge. Only meaningful together with {@link onReplayRecorded}.
    */
-  recordPlaylog?: PlaylogRecordingOptions;
+  recordReplay?: ReplayRecordingOptions;
   /**
-   * Enables play-log recording: when set, the engine snapshots the resolved chart it actually played
+   * Enables replay recording: when set, the engine snapshots the resolved chart it actually played
    * (post-`#RANDOM`, post lane-shuffle via `preparedChart`), records every judged key press / release with
-   * chart-relative timestamps, and hands the assembled {@link BeMusicPlaylog} here right before `autoPlay` /
-   * `manualPlay` resolves — including the ESC (aborted) exit. The playlog's `results.native` caches this run's
-   * engine summary; see `@be-music/player/playlog` for the format and the LR2 / beatoraja / IIDX re-simulation
+   * chart-relative timestamps, and hands the assembled {@link BeMusicReplay} here right before `autoPlay` /
+   * `manualPlay` resolves — including the ESC (aborted) exit. The replay's `results.native` caches this run's
+   * engine summary; see `@be-music/player/replay` for the format and the LR2 / beatoraja / IIDX re-simulation
    * tools.
    */
-  onPlaylogRecorded?: (playlog: BeMusicPlaylog) => void;
+  onReplayRecorded?: (replay: BeMusicReplay) => void;
   /**
-   * Replay playback: a recorded play-log input stream (`playlog.inputs`) `manualPlay` re-drives DETERMINISTICALLY.
+   * Replay playback: a recorded replay input stream (`replay.inputs`) `manualPlay` re-drives DETERMINISTICALLY.
    * Each event fires at its exact chart-relative microsecond timestamp (no wall-clock jitter — the judge timestamp
    * is the recorded one), so replaying a log against the same resolved chart reproduces the original judgments.
    * While a replay is active, live lane / kitty input commands are ignored; pause, high-speed, and interrupt
@@ -311,17 +311,17 @@ export interface PlayerPlayRecording {
    * re-drive, but a replay of an AUTO-played log passes its (empty) inputs too: either way the play is a replay, so
    * its `speed` and tempo changes only set how fast it is re-driven and a re-recorded log carries neither.
    */
-  replayInputs?: readonly PlaylogInputEvent[];
+  replayInputs?: readonly ReplayInputEvent[];
   /**
    * The tempo changes a replay follows (`play.tempoChanges` of its log, in chart time), on top of `speed` as the tempo
    * at the start (`play.tempo`). Each takes effect once the replay's chart time reaches it, as a live `{ kind: 'tempo' }`
    * command would. Read only in a replay ({@link replayInputs} set), by `manualPlay` and `autoPlay` alike; it changes no
    * judgment.
    */
-  replayTempoChanges?: readonly PlaylogTempoChange[];
+  replayTempoChanges?: readonly ReplayTempoChange[];
   /**
    * Where the replayed play was aborted (`play.abortedAtUs` of a log with `play.aborted`), in chart microseconds: the
-   * replay judges up to it and stops there, as an ESC, as the play-log simulators stop there, instead of missing the
+   * replay judges up to it and stops there, as an ESC, as the replay simulators stop there, instead of missing the
    * rest of the chart. Read only in a replay ({@link replayInputs} set).
    */
   replayAbortedAtUs?: number;
@@ -346,11 +346,11 @@ export interface PlayerTempoChange {
 export interface PlayerRulesetInfo {
   /** Versioned ruleset id (`'lr2/0'`, `'beatoraja/0'`, `'iidx/0'`). */
   id: string;
-  rulesetId: PlaylogRulesetId;
+  rulesetId: RulesetId;
   /** How the ruleset plays the chart's long notes (LN / per-note / charge). */
   longNoteStyle: LongNoteStyle;
   /**
-   * Judge windows (µs) at the start of the chart, in the ruleset convention `delta = noteTime - inputTime`: each pair
+   * Judgment windows (µs) at the start of the chart, in the ruleset convention `delta = noteTime - inputTime`: each pair
    * is `[lateBound <= 0, earlyBound >= 0]`, so a positive delta is an EARLY press.
    */
   windows: RulesetWindowTables;
@@ -483,13 +483,13 @@ export interface AudioSessionLoadProgress {
 export interface ResolvedPlayChart {
   /** The chart with the drawn branches applied; it carries no control flow. */
   chart: BeMusicJSON;
-  /** The draws `chart` was resolved with: hand them to the engine (`PlayerOptions.randomDraws`) and the play log. */
+  /** The draws `chart` was resolved with: hand them to the engine (`PlayerOptions.randomDraws`) and the replay. */
   randomDraws: RandomDraws;
 }
 
 export interface ResolvePlayChartOptions {
   /** Random source for the draws, in `[0, 1)`. Defaults to `Math.random`. */
   random?: () => number;
-  /** Draws to resolve with instead of drawing, e.g. the ones a play log recorded. */
+  /** Draws to resolve with instead of drawing, e.g. the ones a replay recorded. */
   randomDraws?: RandomDraws;
 }

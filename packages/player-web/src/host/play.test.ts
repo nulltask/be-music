@@ -10,7 +10,7 @@ import { createEmptyJSON } from '@be-music/json';
 import type { LR2Skin } from '@be-music/lr2-skin';
 import { parseChart } from '@be-music/parser';
 import { autoPlay } from '@be-music/player';
-import type { BeMusicPlaylog } from '@be-music/player/playlog';
+import type { BeMusicReplay } from '@be-music/player/replay';
 import { createPlayerUISignalBus, type PlayerUIFramePayload } from '@be-music/player/signals';
 import type { LibraryChart } from '@be-music/scene-model';
 import type { Texture } from 'pixi.js';
@@ -18,9 +18,9 @@ import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import type { AudioService } from '../runtime/audio-service.ts';
 import { BeatorajaPlaySkinView } from '../view/beatoraja/skin-view.ts';
 import type { PixiSceneHost } from './scene-host.ts';
-import { drainSharedEngineSignals, resolvePlaylogRecording } from '../session/play/play-engine.ts';
+import { drainSharedEngineSignals, resolveReplayRecording } from '../session/play/play-engine.ts';
 import type { PlaySceneSession } from '../session/play/play-scene-session.ts';
-import { startPlaylogView } from '../session/play/play-view-settings.ts';
+import { startReplayView } from '../session/play/play-view-settings.ts';
 import type { SessionKeyTarget } from '../session/session-scene.ts';
 import type { BeatorajaRenderContext } from '../skin/beatoraja/render.ts';
 import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
@@ -165,7 +165,7 @@ describe('createPlayScene', () => {
     await scene.prepare((value) => progress.push(value));
     expect(progress).toEqual([0, 1]);
     const result = scene.progress();
-    expect(result?.song.title).toBe('Chart');
+    expect(result?.chart.title).toBe('Chart');
     expect(result?.gaugeType).toBe('GROOVE');
     // The gauge's clear border (in percent), which a beatoraja result skin shows with the TOTAL the engine reports
     // (none before its first frame).
@@ -325,7 +325,7 @@ describe('createPlayScene with an LR2 kit', () => {
     expect(scene.identity).toEqual({ kind: 'play', family: 'lr2' });
     expect(scene.getHiSpeed()).toBe(2);
     await scene.prepare();
-    expect(scene.progress()?.song.title).toBe('Chart');
+    expect(scene.progress()?.chart.title).toBe('Chart');
     scene.dispose();
   });
 
@@ -436,7 +436,7 @@ describe('createPlayScene with a beatoraja kit', () => {
     scene.dispose();
   });
 
-  it('scrolls under HS-FIX as every family does, and records it in the play log', async () => {
+  it('scrolls under HS-FIX as every family does, and records it in the replay', async () => {
     const { scene, play } = createBeatoraja({
       chart: { ...CHART, chart: TEMPO_CHART } as LibraryChart,
       settings: { initialHiSpeed: 2, hsFix: 'MAXBPM' },
@@ -446,7 +446,7 @@ describe('createPlayScene with a beatoraja kit', () => {
     expect(play.playState.view.hsFix).toBe('MAXBPM');
     expect(play.playState.view.hiSpeed).toMatchObject({ player: 2, drawn: 1 });
     expect(play.scrollHiSpeed.target).toBe(1);
-    expect(startPlaylogView(play)).toMatchObject({ hiSpeed: 1, hiSpeedScale: 'beatoraja', hsFix: 'MAXBPM' });
+    expect(startReplayView(play)).toMatchObject({ hiSpeed: 1, hiSpeedScale: 'beatoraja', hsFix: 'MAXBPM' });
     scene.dispose();
   });
 
@@ -455,7 +455,7 @@ describe('createPlayScene with a beatoraja kit', () => {
     const { scene, play } = createBeatoraja();
     await scene.prepare();
     // The #RANDOM draw of 1 leaves one note, at 2 s: the graphs run over the chart's 2 s from LR2's starting 20 %.
-    expect(play.resolveSongDurationSeconds()).toBe(2);
+    expect(play.resolveChartDurationSeconds()).toBe(2);
     const frame = (seconds: number, gauge: number): PlayerUIFramePayload => ({
       currentBeat: seconds * 2,
       currentSeconds: seconds,
@@ -478,7 +478,7 @@ describe('createPlayScene with a beatoraja kit', () => {
     scene.dispose();
   });
 
-  it("takes the chart's main BPM by one rule on every family's play screen, for HS-FIX and the play log", async () => {
+  it("takes the chart's main BPM by one rule on every family's play screen, for HS-FIX and the replay", async () => {
     const options = {
       chart: { ...CHART, chart: MAIN_BPM_CHART } as LibraryChart,
       settings: { initialHiSpeed: 2, hsFix: 'AVERAGE' as const },
@@ -500,11 +500,11 @@ describe('createPlayScene with a beatoraja kit', () => {
       expect(play.playState.view.hiSpeed).toMatchObject({ player: 2, drawn: 2 });
     }
     // The beatoraja lane of four beats at hi-speed 2 and 120 BPM shows a note for 1000 ms.
-    expect(startPlaylogView(beatoraja.play)).toMatchObject({ hiSpeedScale: 'beatoraja', visibleMs: 1000 });
+    expect(startReplayView(beatoraja.play)).toMatchObject({ hiSpeedScale: 'beatoraja', visibleMs: 1000 });
     for (const scene of [builtIn, lr2, beatoraja.scene]) scene.dispose();
   });
 
-  it("plays the host's lane options, as every family does, and records them in the play log", async () => {
+  it("plays the host's lane options, as every family does, and records them in the replay", async () => {
     const { scene, play } = createBeatoraja({
       chart: { ...CHART, chart: TWO_LANE_CHART } as LibraryChart,
       settings: { initialHiSpeed: 2, random1P: 'MIRROR', random2P: 'OFF' },
@@ -513,7 +513,7 @@ describe('createPlayScene with a beatoraja kit', () => {
     expect(play.options).toMatchObject({ random1P: 'MIRROR', random2P: 'OFF' });
     // MIRROR swaps the chart's two lanes: lane 1's note plays on lane 2 and lane 2's on lane 1.
     expect(play.notes.map((note) => note.channel)).toEqual(['12', '11']);
-    expect(resolvePlaylogRecording(play.options, play.song, {}).randomLane).toEqual({ p1: 'MIRROR', p2: 'OFF' });
+    expect(resolveReplayRecording(play.options, play.chart, {}).randomLane).toEqual({ p1: 'MIRROR', p2: 'OFF' });
     scene.dispose();
   });
 
@@ -637,21 +637,21 @@ describe('createPlayScene with a beatoraja kit', () => {
     scene.dispose();
   });
 
-  it('replays a play log with its own skin: the recorded arrangement and gauge', async () => {
+  it('replays a replay with its own skin: the recorded arrangement and gauge', async () => {
     // A log of the two-lane chart as played on MIRROR: lane 1's note on lane 2 and lane 2's on lane 1.
-    let recorded: BeMusicPlaylog | undefined;
+    let recorded: BeMusicReplay | undefined;
     await autoPlay(TWO_LANE_CHART, {
       speed: 64,
       leadInMs: 0,
       audio: false,
       tui: false,
       gauge: 'HARD',
-      recordPlaylog: { gauge: 'HARD', randomLane: { p1: 'MIRROR' } },
-      onPlaylogRecorded: (playlog) => {
-        recorded = playlog;
+      recordReplay: { gauge: 'HARD', randomLane: { p1: 'MIRROR' } },
+      onReplayRecorded: (replay) => {
+        recorded = replay;
       },
     });
-    const playlog: BeMusicPlaylog = {
+    const replay: BeMusicReplay = {
       ...recorded!,
       chart: {
         ...recorded!.chart,
@@ -661,7 +661,7 @@ describe('createPlayScene with a beatoraja kit', () => {
     const { scene, play } = createBeatoraja({
       chart: { ...CHART, chart: TWO_LANE_CHART } as LibraryChart,
       settings: { initialHiSpeed: 2 },
-      replay: playlog,
+      replay: replay,
     });
     await scene.prepare();
     expect(scene.identity).toEqual({ kind: 'play', family: 'beatoraja' });

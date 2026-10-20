@@ -24,12 +24,12 @@ function asArray(value: unknown): unknown[] {
 export function parseBeatorajaCourseData(value: unknown): CourseDefinition | undefined {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const data = value as Record<string, unknown>;
-  const songs = asArray(data.hash);
-  if (songs.length === 0) return undefined;
+  const chartEntries = asArray(data.hash);
+  if (chartEntries.length === 0) return undefined;
   const stages: CourseStageRef[] = [];
-  for (const [index, song] of songs.entries()) {
-    if (song === null || typeof song !== 'object') return undefined;
-    const fields = song as Record<string, unknown>;
+  for (const [index, chartEntry] of chartEntries.entries()) {
+    if (chartEntry === null || typeof chartEntry !== 'object') return undefined;
+    const fields = chartEntry as Record<string, unknown>;
     const title = typeof fields.title === 'string' && fields.title.length > 0 ? fields.title : `course ${index + 1}`;
     const stage = createCourseStageRef({ ...fields, title });
     if (stage === undefined) return undefined;

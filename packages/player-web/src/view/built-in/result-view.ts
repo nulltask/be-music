@@ -7,7 +7,7 @@
 import { computeScoreRate, resolveIIDXRankLabel } from '@be-music/player/ruleset';
 import { resolveStageOrientation } from '@be-music/skin-sdk';
 import { Color, Container, Graphics } from 'pixi.js';
-import type { BrowserSongAssetSource } from '../../collection/types.ts';
+import type { BrowserAssetSource } from '../../collection/types.ts';
 import type { BuiltInKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
@@ -18,7 +18,7 @@ import {
   setDesignTextResolution,
 } from '../../stage/viewport.ts';
 import { BeMusicResultBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
-import { SongImageCache } from '../../skin/be-music/song-images.ts';
+import { ChartImageCache } from '../../skin/be-music/chart-images.ts';
 import type { IntentSink, ResultFrame, ResultIntent, ResultView, SceneViewTiming } from '../types.ts';
 
 const log = logger('result');
@@ -44,10 +44,10 @@ export function resolveBuiltInRankLabel(exScore: number, total: number): string 
 
 export interface BuiltInResultViewOptions {
   /**
-   * Where the result's chart files are, for its images (`frame.songImage`); every image reads as unavailable without
+   * Where the result's chart files are, for its images (`frame.chartImage`); every image reads as unavailable without
    * one.
    */
-  readonly source?: BrowserSongAssetSource;
+  readonly source?: BrowserAssetSource;
 }
 
 /** The built-in result view. See the module comment. */
@@ -65,10 +65,10 @@ export class BuiltInResultView implements ResultView {
   private cachedDesignWidth = -1;
   private cachedDesignHeight = -1;
   private kit: BuiltInKit;
-  private readonly source: BrowserSongAssetSource | undefined;
+  private readonly source: BrowserAssetSource | undefined;
   /** Draws the skin's result; made on the first frame, when the host's renderer is at hand. */
   private binding: BeMusicResultBinding | undefined;
-  private songImages: SongImageCache | undefined;
+  private chartImages: ChartImageCache | undefined;
   private host: PixiSceneHost | undefined;
   private emit: IntentSink<ResultIntent> | undefined;
   private built = false;
@@ -115,8 +115,8 @@ export class BuiltInResultView implements ResultView {
     try {
       this.binding?.dispose();
       this.binding = undefined;
-      this.songImages?.dispose();
-      this.songImages = undefined;
+      this.chartImages?.dispose();
+      this.chartImages = undefined;
       this.root.destroy({ children: true, context: true });
     } catch (error) {
       log.warn('result cleanup threw', error);
@@ -182,9 +182,9 @@ export class BuiltInResultView implements ResultView {
   private ensureBinding(host: PixiSceneHost): BeMusicResultBinding {
     if (this.binding !== undefined) return this.binding;
     const source = this.source;
-    this.songImages = new SongImageCache({ resolveSource: () => source });
+    this.chartImages = new ChartImageCache({ resolveSource: () => source });
     this.binding = new BeMusicResultBinding(this.kit.skin, {
-      songImage: this.songImages.lookup,
+      chartImage: this.chartImages.lookup,
       settings: this.kit.settings,
       renderer: host.app.renderer,
     });

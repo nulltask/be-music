@@ -1,8 +1,8 @@
 import { createEmptyJSON } from '@be-music/json';
 import { parseBeatorajaCourseData } from '@be-music/player/course';
-import type { BeMusicCoursePlaylog, BeMusicPlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
+import type { BeMusicCourseReplay, BeMusicReplay, ReplayCourseResult } from '@be-music/player/replay';
 import type { LibraryChart, LibraryCourse } from '@be-music/scene-model';
-import type { PlaylogRulesetId } from '@be-music/player/ruleset';
+import type { RulesetId } from '@be-music/player/ruleset';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   activeCourseInfo,
@@ -13,7 +13,7 @@ import {
   describeUnplayableCourse,
   planCourseStart,
   playAgainOverrides,
-  resolveCourseRecordUpdate,
+  resolveCourseBestRecordUpdate,
   resolveGameplayExit,
   resolveGameplayRestart,
   resolveResultRetry,
@@ -21,7 +21,7 @@ import {
   startCourseRun,
 } from './course-flow.ts';
 
-function song(id: string): LibraryChart {
+function chartEntry(id: string): LibraryChart {
   return {
     id,
     sourceId: 'drop1',
@@ -41,10 +41,10 @@ function song(id: string): LibraryChart {
 
 function course(overrides: Partial<LibraryCourse> = {}): LibraryCourse {
   const definition = parseBeatorajaCourseData({ name: 'Dan', hash: [{ md5: '1'.repeat(32) }], constraint: [] })!;
-  return { id: 'dan#0', definition, stages: [{ title: 'a', chart: song('a') }], playable: true, ...overrides };
+  return { id: 'dan#0', definition, stages: [{ title: 'a', chart: chartEntry('a') }], playable: true, ...overrides };
 }
 
-const RESULT: PlaylogCourseResult = {
+const RESULT: ReplayCourseResult = {
   ruleset: 'lr2',
   judge: { pgreat: 10, great: 2, good: 1, bad: 1, poor: 1, emptyPoor: 1 },
   fast: 0,
@@ -57,20 +57,20 @@ const RESULT: PlaylogCourseResult = {
   gauge: { type: 'GROOVE', final: 80, cleared: true },
   lamp: 'NORMAL',
   stagesPlayed: 1,
-} as PlaylogCourseResult;
+} as ReplayCourseResult;
 
 function courseLog(
   play: {
     mode?: 'auto' | 'manual';
     tempo?: number;
-    judgeRuleset?: PlaylogRulesetId;
+    judgeRuleset?: RulesetId;
   },
-  second?: { judgeRuleset?: PlaylogRulesetId },
-): Pick<BeMusicCoursePlaylog, 'stages' | 'nonstop'> {
-  const stage = (stagePlay: object) => ({ played: true, playlog: { play: { mode: 'manual', ...stagePlay } } });
+  second?: { judgeRuleset?: RulesetId },
+): Pick<BeMusicCourseReplay, 'stages' | 'nonstop'> {
+  const stage = (stagePlay: object) => ({ played: true, replay: { play: { mode: 'manual', ...stagePlay } } });
   return {
     stages: second === undefined ? [stage(play)] : [stage(play), stage(second)],
-  } as unknown as Pick<BeMusicCoursePlaylog, 'stages' | 'nonstop'>;
+  } as unknown as Pick<BeMusicCourseReplay, 'stages' | 'nonstop'>;
 }
 
 describe('planCourseStart', () => {
@@ -97,7 +97,7 @@ describe('planCourseStart', () => {
 
 describe('courseDecideSong', () => {
   test('names the course and drops the first stage’s own subtitle, artist and genre', () => {
-    const decided = courseDecideSong(course(), song('a'));
+    const decided = courseDecideSong(course(), chartEntry('a'));
     expect(decided).toMatchObject({ id: 'a', title: 'Dan', chartPath: 'a.bms' });
     expect(decided).not.toHaveProperty('subtitle');
     expect(decided).not.toHaveProperty('artist');
@@ -107,7 +107,7 @@ describe('courseDecideSong', () => {
 
 describe('failure messages', () => {
   test('say how many stages of an unplayable course are missing', () => {
-    const missingOne = course({ playable: false, stages: [{ title: 'a', chart: song('a') }, { title: 'x' }] });
+    const missingOne = course({ playable: false, stages: [{ title: 'a', chart: chartEntry('a') }, { title: 'x' }] });
     expect(describeUnplayableCourse(missingOne)).toBe('Dan: 1 stage is not in the collection');
     expect(describeUnplayableCourse(course({ playable: false, stages: [{ title: 'x' }, { title: 'y' }] }))).toBe(
       'Dan: 2 stages are not in the collection',
@@ -133,25 +133,25 @@ describe('failure messages', () => {
   });
 });
 
-describe('resolveCourseRecordUpdate', () => {
+describe('resolveCourseBestRecordUpdate', () => {
   test('keeps the run’s lamp, EX score, max combo and BP under the course key of its judge ruleset', () => {
-    expect(resolveCourseRecordUpdate(courseLog({}), RESULT, 'course:k')).toEqual({
+    expect(resolveCourseBestRecordUpdate(courseLog({}), RESULT, 'course:k')).toEqual({
       key: 'lr2:course:k',
       play: { lamp: 'NORMAL', exScore: 22, maxCombo: 9, missCount: 3 },
     });
-    expect(resolveCourseRecordUpdate(courseLog({ judgeRuleset: 'beatoraja' }), RESULT, 'course:k')?.key).toBe(
+    expect(resolveCourseBestRecordUpdate(courseLog({ judgeRuleset: 'beatoraja' }), RESULT, 'course:k')?.key).toBe(
       'beatoraja:course:k',
     );
   });
 
   test('keeps nothing for a run whose stages were judged under different rulesets', () => {
     const mixed = courseLog({ judgeRuleset: 'lr2' }, { judgeRuleset: 'iidx' });
-    expect(resolveCourseRecordUpdate(mixed, RESULT, 'course:k')).toBeUndefined();
+    expect(resolveCourseBestRecordUpdate(mixed, RESULT, 'course:k')).toBeUndefined();
   });
 
   test('keeps nothing for an auto-played run or one at another tempo', () => {
-    expect(resolveCourseRecordUpdate(courseLog({ mode: 'auto' }), RESULT, 'course:k')).toBeUndefined();
-    expect(resolveCourseRecordUpdate(courseLog({ tempo: 1.1 }), RESULT, 'course:k')).toBeUndefined();
+    expect(resolveCourseBestRecordUpdate(courseLog({ mode: 'auto' }), RESULT, 'course:k')).toBeUndefined();
+    expect(resolveCourseBestRecordUpdate(courseLog({ tempo: 1.1 }), RESULT, 'course:k')).toBeUndefined();
   });
 });
 
@@ -181,24 +181,24 @@ describe('gameplay exits', () => {
 });
 
 describe('resolveResultRetry', () => {
-  const lastPlay = { songId: 'a', play: 'last' };
+  const lastPlay = { chartId: 'a', play: 'last' };
 
   test('a NONSTOP result retries by stitching the course again', () => {
     const retry = () => {};
-    expect(resolveResultRetry({ quickRetry: false, nonstopRetry: retry, songId: 'n', lastPlay })).toEqual({
+    expect(resolveResultRetry({ quickRetry: false, nonstopRetry: retry, chartId: 'n', lastPlay })).toEqual({
       kind: 'nonstop',
       retry,
     });
   });
 
   test('a single chart replays the last play only when it was this chart', () => {
-    expect(resolveResultRetry({ quickRetry: true, songId: 'a', lastPlay })).toEqual({ kind: 'replay', play: 'last' });
-    expect(resolveResultRetry({ quickRetry: true, songId: 'b', lastPlay })).toBeUndefined();
-    expect(resolveResultRetry({ quickRetry: true, songId: 'a' })).toBeUndefined();
+    expect(resolveResultRetry({ quickRetry: true, chartId: 'a', lastPlay })).toEqual({ kind: 'replay', play: 'last' });
+    expect(resolveResultRetry({ quickRetry: true, chartId: 'b', lastPlay })).toBeUndefined();
+    expect(resolveResultRetry({ quickRetry: true, chartId: 'a' })).toBeUndefined();
   });
 
   test('a course stage or course result offers no retry', () => {
-    expect(resolveResultRetry({ quickRetry: false, songId: 'a', lastPlay })).toBeUndefined();
+    expect(resolveResultRetry({ quickRetry: false, chartId: 'a', lastPlay })).toBeUndefined();
   });
 });
 
@@ -212,11 +212,11 @@ describe('a running course', () => {
     return {
       id: 'dan#0',
       definition,
-      stages: ['a', 'b', 'c'].map((id) => ({ title: id, chart: song(id) })),
+      stages: ['a', 'b', 'c'].map((id) => ({ title: id, chart: chartEntry(id) })),
       playable: true,
     };
   };
-  const stageLog = (): BeMusicPlaylog =>
+  const stageLog = (): BeMusicReplay =>
     ({
       results: {
         native: {
@@ -230,7 +230,7 @@ describe('a running course', () => {
           gauge: { type: 'GRADE', final: 90, cleared: true },
         },
       },
-    }) as unknown as BeMusicPlaylog;
+    }) as unknown as BeMusicReplay;
 
   test('plays the course bar’s songs, each stage named for the skins', () => {
     const active = startCourseRun(three());

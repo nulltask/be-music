@@ -2,7 +2,7 @@ import { getPlayModeLayouts, PLAY_MODE_LAYOUTS, type ChartPlayVariant, type Play
 import { chartExcerpt, type ChartExcerpt, type ExcerptDocument, type ExcerptLane } from './chart-excerpt.ts';
 
 /**
- * The layout a chart's recorded lane mode names: a layout's label as the player writes it into play logs
+ * The layout a chart's recorded lane mode names: a layout's label as the player writes it into replays
  * (`7 KEY SP`, `9 KEY (PMS-STD)`), a play variant (`7`), or the older `7keys` form; undefined for anything else.
  */
 export function layoutOfLaneMode(laneMode: string): PlayModeLayout | undefined {

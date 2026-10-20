@@ -8,7 +8,7 @@ import {
 } from './definition.ts';
 import { LR2_NONSTOP_CONNECTIONS, parseLR2NonstopConnections } from './lr2crs.ts';
 
-/** LR2's course maker takes at most five songs (OpenLR2 `LR2f.cpp` L12221-L12229: `count <= 4` before adding). */
+/** LR2's course maker takes at most five charts (OpenLR2 `LR2f.cpp` L12221-L12229: `count <= 4` before adding). */
 export const LR2_COURSE_MAKER_MAX_STAGES = 5;
 
 /** The connections LR2's select-screen buttons 240-248 edit: the one after each of stages 1-9. */
@@ -16,7 +16,7 @@ const LR2_CONNECTION_SLOTS = 9;
 
 const LR2_COURSE_TYPES: Readonly<Record<CourseKind, number>> = { expert: 0, nonstop: 1, grade: 2 };
 
-/** One song picked into a course being made. */
+/** One chart picked into a course being made. */
 export interface CourseDraftStage {
   /** The chart's MD5 (lowercase hex): LR2 keys a course's stages by it. */
   md5: string;
@@ -53,7 +53,7 @@ export function withCourseConstraints(
   return { ...course, constraints: normalizeCourseConstraints(constraints) };
 }
 
-/** Why a song cannot join a course being made. */
+/** Why a chart cannot join a course being made. */
 export type CourseDraftAppendFailure = 'full' | 'key-mode' | 'no-md5';
 
 /** An empty course of `kind`, named `name` (LR2 starts with a "type the course title" prompt, a host concern). */
@@ -62,8 +62,8 @@ export function createCourseDraft(kind: CourseKind, name = ''): CourseDraft {
 }
 
 /**
- * Adds a song to the end of a course being made, as LR2's decide on a song bar does (OpenLR2 L12221-L12229): at most
- * {@link LR2_COURSE_MAKER_MAX_STAGES} songs, all in the first song's key mode. The same song may appear twice.
+ * Adds a chart to the end of a course being made, as LR2's decide on a chart bar does (OpenLR2 L12221-L12229): at most
+ * {@link LR2_COURSE_MAKER_MAX_STAGES} charts, all in the first chart's key mode. The same chart may appear twice.
  */
 export function appendCourseDraftStage(
   draft: CourseDraft,
@@ -77,7 +77,7 @@ export function appendCourseDraftStage(
   return { ok: true, draft: { ...draft, stages: [...draft.stages, { ...stage, md5 }] } };
 }
 
-/** Drops the last song of a course being made (LR2's right click, OpenLR2 L12265-L12269). */
+/** Drops the last chart of a course being made (LR2's right click, OpenLR2 L12265-L12269). */
 export function removeLastCourseDraftStage(draft: CourseDraft): CourseDraft {
   return { ...draft, stages: draft.stages.slice(0, -1) };
 }
@@ -138,7 +138,7 @@ function lr2CourseDefinition(
 
 /**
  * Turns a course being made into a course, as LR2's finish (button 230) saves it: `undefined` for a course with no
- * song. The course starts unranked (`release: false`), as LR2's and beatoraja's made courses do. A NONSTOP course gets `defaultConnection` (LR2's `config.course.defaultconnection`, button 268) after each of
+ * chart. The course starts unranked (`release: false`), as LR2's and beatoraja's made courses do. A NONSTOP course gets `defaultConnection` (LR2's `config.course.defaultconnection`, button 268) after each of
  * stages 1-5; the per-stage connections are edited afterwards ({@link withNonstopConnection}).
  */
 export function finishCourseDraft(

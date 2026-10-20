@@ -1,7 +1,7 @@
 import { resolveChartMainBPM, type MainBPMChart, type TimingResolver } from '@be-music/chart';
 
 /**
- * The lowest, highest, and main BPM of a play: the built-in HUD shows them, and HS-FIX `AVERAGE` and the play log's
+ * The lowest, highest, and main BPM of a play: the built-in HUD shows them, and HS-FIX `AVERAGE` and the replay's
  * visible time read the main one, on every family's play screen. Not the select screen's `ChartBPMRange`
  * (`chart/bpm-range.ts`), which counts the header `#BPM` too, as beatoraja's `getMinBPM` / `getMaxBPM` do.
  */

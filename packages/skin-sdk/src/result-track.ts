@@ -1,6 +1,6 @@
 import { resolveClearLamp } from '@be-music/player/ruleset';
 import type { BeMusicResultData } from './result-data.ts';
-import { formatPlayVariantLabel } from './song-stats.ts';
+import { formatPlayVariantLabel } from './chart-stats.ts';
 
 /**
  * The play's clear lamp as the result track column labels it: `PERFECT` (every note a PGREAT), `FULL COMBO` (no BAD /
@@ -42,15 +42,19 @@ export interface ResultTrackRow {
  * The chart facts the 16:9 result screens list beside the score grid: play mode, level, tempo, and the combo breaks
  * (BAD + POOR) of the run.
  */
-export function resolveResultTrackRows(result: Pick<BeMusicResultData, 'score' | 'song'>): ResultTrackRow[] {
-  const { song, score } = result;
+export function resolveResultTrackRows(result: Pick<BeMusicResultData, 'score' | 'chart'>): ResultTrackRow[] {
+  const { chart: chartEntry, score } = result;
   return [
-    { label: 'MODE', value: formatPlayVariantLabel(song) },
+    { label: 'MODE', value: formatPlayVariantLabel(chartEntry) },
     {
       label: 'LEVEL',
-      value: song.playLevel !== undefined && String(song.playLevel) !== '' ? String(song.playLevel) : '-',
+      value:
+        chartEntry.playLevel !== undefined && String(chartEntry.playLevel) !== '' ? String(chartEntry.playLevel) : '-',
     },
-    { label: 'BPM', value: song.bpm !== undefined && Number.isFinite(song.bpm) ? String(Math.round(song.bpm)) : '-' },
+    {
+      label: 'BPM',
+      value: chartEntry.bpm !== undefined && Number.isFinite(chartEntry.bpm) ? String(Math.round(chartEntry.bpm)) : '-',
+    },
     { label: 'COMBO BREAK', value: String(Math.max(0, score.bad + score.poor)) },
   ];
 }

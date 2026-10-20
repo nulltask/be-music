@@ -78,7 +78,7 @@ describe('page formatting', () => {
     expect(formatGauge('NORMAL', null)).toBe('NORMAL');
   });
 
-  test('names the recording software from the play log recorder', () => {
+  test('names the recording software from the replay recorder', () => {
     expect(
       formatRecorder({ name: 'be-music-web', version: '0.5.0', build: '6471cd16', engine: '0.8.0', platform: 'web' }),
     ).toBe('be-music-web 0.5.0 (build 6471cd16, engine 0.8.0, web)');

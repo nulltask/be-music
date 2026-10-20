@@ -272,9 +272,9 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
   });
 
   // Play state
-  define('scene-model.isJudge', {
+  define('scene-model.isJudgmentKind', {
     run: () => {
-      sceneModelAPI.isJudge('GREAT');
+      sceneModelAPI.isJudgmentKind('GREAT');
     },
   });
   define('scene-model.gaugePercent', {
@@ -354,18 +354,18 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.resolveGreenNumber(640);
     },
   });
-  define('scene-model.resolvePlaylogView', {
+  define('scene-model.captureReplayView', {
     run: () => {
-      sceneModelAPI.resolvePlaylogView(BENCH_PLAYED.view, {
+      sceneModelAPI.captureReplayView(BENCH_PLAYED.view, {
         scale: sceneModelAPI.BE_MUSIC_HI_SPEED_SCALE,
         laneBeats: 4,
         mainBPM: 150,
       });
     },
   });
-  define('scene-model.PlaylogViewCursor', {
+  define('scene-model.ReplayViewCursor', {
     run: () => {
-      const cursor = new sceneModelAPI.PlaylogViewCursor({ hiSpeed: 2 }, [{ timeUs: 1_000_000, hiSpeed: 2.5 }]);
+      const cursor = new sceneModelAPI.ReplayViewCursor({ hiSpeed: 2 }, [{ timeUs: 1_000_000, hiSpeed: 2.5 }]);
       cursor.next(0);
       cursor.next(2_000_000);
     },
@@ -385,7 +385,7 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
   define('scene-model.playResultFromPlayState', {
     run: () => {
       sceneModelAPI.playResultFromPlayState(BENCH_PLAYED, {
-        song: BENCH_CHARTS[0]!,
+        chart: BENCH_CHARTS[0]!,
         score: BENCH_SCORE,
         seconds: 100,
         judgeRuleset: 'lr2',
@@ -522,7 +522,7 @@ const BENCH_COURSE_RESULT: Parameters<typeof sceneModelAPI.playResultFromCourseR
   stages: [],
 };
 const BENCH_COURSE_LOG = {
-  stages: [{ played: true, playlog: { play: { judgeRuleset: 'lr2' } } }],
+  stages: [{ played: true, replay: { play: { judgeRuleset: 'lr2' } } }],
 } as unknown as Parameters<typeof sceneModelAPI.playResultFromCourseRun>[2];
 const BENCH_SOUND_SET: sceneModelAPI.SystemSoundSet = {
   selectBGM: { bytes: BENCH_BYTES },

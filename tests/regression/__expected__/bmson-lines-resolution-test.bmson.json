@@ -148,7 +148,7 @@
         "1933333 11 01 ~1300000",
         "3233333 11 01"
       ],
-      "playlogChart": {
+      "replayChart": {
         "sourceFormat": "bmson",
         "laneMode": "5 KEY SP",
         "lnMode": 1,

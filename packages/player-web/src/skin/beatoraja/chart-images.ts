@@ -7,7 +7,7 @@
 import type { LibraryChart } from '@be-music/scene-model';
 import type { Texture } from 'pixi.js';
 import { loadAssetBytes } from '../../collection/file-lookup.ts';
-import type { BrowserSongAssetSource } from '../../collection/types.ts';
+import type { BrowserAssetSource } from '../../collection/types.ts';
 import { logger } from '../../logger.ts';
 // Through the LR2 texture module, which registers the DDS decoder with the shared loader.
 import { loadTextureFromBytes } from '../lr2/textures.ts';
@@ -45,7 +45,7 @@ export function resolveBeatorajaChartImage(
  */
 export async function loadBeatorajaChartImages(
   chart: Pick<LibraryChart, 'chart' | 'chartPath'>,
-  source: BrowserSongAssetSource | undefined,
+  source: BrowserAssetSource | undefined,
 ): Promise<BeatorajaChartImages> {
   if (source === undefined) return {};
   const meta = chart.chart.metadata;

@@ -6,7 +6,7 @@ import { chart } from '../db/schema.ts';
 import type { Env } from '../env.ts';
 import {
   makeChart,
-  makePlaylog,
+  makeReplay,
   ORIGIN,
   signInAnonymously,
   startTestBindings,
@@ -42,13 +42,13 @@ afterAll(async () => {
 /** Submits one play of a fresh chart whose file has the given SHA-256, and returns the chart fingerprint. */
 async function submitChart(cookie: string, lines: string[], sha256: string, title: string): Promise<string> {
   const testChart = makeChart(lines);
-  const playlog = makePlaylog(testChart, { noteCount: 4, hits: 4 });
-  playlog.chart.title = title;
-  playlog.chart.sha256 = sha256;
+  const replay = makeReplay(testChart, { noteCount: 4, hits: 4 });
+  replay.chart.title = title;
+  replay.chart.sha256 = sha256;
   const response = await fetchApp('/api/v0/scores', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'content-encoding': 'gzip', cookie },
-    body: submissionBody(playlog, testChart.playDocument, testChart.chartDocument),
+    body: submissionBody(replay, testChart.playDocument, testChart.chartDocument),
   });
   expect(response.status).toBe(201);
   return ((await response.json()) as { chartFingerprint: string }).chartFingerprint;

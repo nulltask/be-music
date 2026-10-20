@@ -3,10 +3,10 @@
 // play. The AUTO the course was started with is the course run service's (`services/courses.ts`), kept through every
 // restitch (F5 during the play, R on the result).
 
-import { resolveSongSource, type ChartFileHashes } from '@be-music/player-web/collection';
+import { resolveChartSource, type ChartFileHashes } from '@be-music/player-web/collection';
 import type { ResolvedPlayChart } from '@be-music/player';
-import { buildNonstopCoursePlaylog } from '@be-music/player/course';
-import type { BeMusicPlaylog, PlaylogRecorderInfo } from '@be-music/player/playlog';
+import { buildNonstopCourseReplay } from '@be-music/player/course';
+import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player/replay';
 import {
   resolveCourseView,
   type CourseView,
@@ -14,14 +14,14 @@ import {
   type LibraryCourse,
   type PlayResult,
 } from '@be-music/scene-model';
-import { describeNonstopPrepareFailure, resolveCourseRecordUpdate } from '../../course-flow.ts';
-import { buildCourseResultData, courseRecordKey } from '../../course-result.ts';
+import { describeNonstopPrepareFailure, resolveCourseBestRecordUpdate } from '../../course-flow.ts';
+import { buildCourseResultData, courseBestRecordKey } from '../../course-result.ts';
 import { pickActiveFamilyForScene } from '../../family-dispatch.ts';
 import type { LeaderboardPanel } from '../../leaderboard-ui.ts';
 import { prepareNonstopPlay, type PreparedNonstopPlay } from '../../nonstop-course.ts';
 import type { CourseRunService } from '../../services/courses.ts';
 import type { LibraryService } from '../../services/library.ts';
-import type { PlaylogAutoSave } from '../../services/playlogs.ts';
+import type { ReplayAutoSave } from '../../services/replays.ts';
 import type { RecordsService } from '../../services/records.ts';
 import type { TestHookRecorder } from '../../test-hook.ts';
 import type { DemoGUIState } from '../../types.ts';
@@ -38,30 +38,33 @@ export interface NonstopRouteDeps {
   readonly courses: Pick<CourseRunService, 'autoPlay'>;
   /** The library: the stages' sources, and the composite source the stitched chart loads from. */
   readonly library: Pick<LibraryService, 'collection'>;
-  /** The stages' chart hashes, which their cut-out play logs record, and the course's best record. */
+  /** The stages' chart hashes, which their cut-out replays record, and the course's best record. */
   readonly records: Pick<RecordsService, 'resolveChartHashes' | 'recordCourseResult'>;
   /** Debug Menu → Course → NONSTOP placement. */
   readonly guiState: Pick<DemoGUIState, 'nonstopPlacement'>;
-  /** The course play log's auto-save, by the setting latched at the play's start. */
-  readonly playlogAutoSave: Pick<PlaylogAutoSave, 'saveCourse'>;
+  /** The course replay's auto-save, by the setting latched at the play's start. */
+  readonly replayAutoSave: Pick<ReplayAutoSave, 'saveCourse'>;
   /** Ranks the NONSTOP run as one course run. */
   readonly leaderboard: Pick<LeaderboardPanel, 'maybeSubmitCourse'>;
   /** The family the result is drawn by. */
   readonly familyKits: Pick<FamilyKits, 'familyDispatchState'>;
-  /** This app as the recorder of its play logs (`recorder` in the course play log). */
-  readonly playlogRecorder: Omit<PlaylogRecorderInfo, 'engine'>;
-  /** `window.__beMusicTest`, when installed: the play log the run recorded. */
-  readonly testHook: Pick<TestHookRecorder, 'recordPlaylog'> | undefined;
+  /** This app as the recorder of its replays (`recorder` in the course replay). */
+  readonly replayRecorder: Omit<ReplayRecorderInfo, 'engine'>;
+  /** `window.__beMusicTest`, when installed: the replay the run recorded. */
+  readonly testHook: Pick<TestHookRecorder, 'recordReplay'> | undefined;
   readonly setStatus: (text: string) => void;
   readonly showSelect: () => Promise<void>;
   /** Shows the decide screen for the stitched song, which leads to `then.start` instead of playing it. */
   readonly showDecide: (
-    song: LibraryChart,
+    chartEntry: LibraryChart,
     overrides: { autoPlay?: boolean },
     then: { start: () => Promise<void> },
   ) => Promise<void>;
   /** Plays the stitched chart, with the course's AUTO when it was started with one. */
-  readonly playSong: (song: LibraryChart, overrides: { nonstop: NonstopPlay; autoPlay?: boolean }) => Promise<void>;
+  readonly playChart: (
+    chartEntry: LibraryChart,
+    overrides: { nonstop: NonstopPlay; autoPlay?: boolean },
+  ) => Promise<void>;
   /**
    * Shows the result on the LR2 or built-in result screen: the run's (`mode.nonstop`), or the play's own when the
    * stitched play left no course log.
@@ -78,7 +81,7 @@ export interface NonstopRouteDeps {
     },
   ) => Promise<boolean>;
   /** Re-enables the options a play latched, once its result shows. */
-  readonly unlockPlaylogOptions: () => void;
+  readonly unlockReplayOptions: () => void;
 }
 
 /** A NONSTOP course from its start (or a restitch) to its result. */
@@ -87,36 +90,36 @@ export class NonstopRoute {
   private readonly library: NonstopRouteDeps['library'];
   private readonly records: NonstopRouteDeps['records'];
   private readonly guiState: NonstopRouteDeps['guiState'];
-  private readonly playlogAutoSave: NonstopRouteDeps['playlogAutoSave'];
+  private readonly replayAutoSave: NonstopRouteDeps['replayAutoSave'];
   private readonly leaderboard: NonstopRouteDeps['leaderboard'];
   private readonly familyKits: NonstopRouteDeps['familyKits'];
-  private readonly playlogRecorder: NonstopRouteDeps['playlogRecorder'];
+  private readonly replayRecorder: NonstopRouteDeps['replayRecorder'];
   private readonly testHook: NonstopRouteDeps['testHook'];
   private readonly setStatus: NonstopRouteDeps['setStatus'];
   private readonly showSelect: NonstopRouteDeps['showSelect'];
   private readonly showDecide: NonstopRouteDeps['showDecide'];
-  private readonly playSong: NonstopRouteDeps['playSong'];
+  private readonly playChart: NonstopRouteDeps['playChart'];
   private readonly showResult: NonstopRouteDeps['showResult'];
   private readonly showBeatorajaResult: NonstopRouteDeps['showBeatorajaResult'];
-  private readonly unlockPlaylogOptions: NonstopRouteDeps['unlockPlaylogOptions'];
+  private readonly unlockReplayOptions: NonstopRouteDeps['unlockReplayOptions'];
 
   public constructor(deps: NonstopRouteDeps) {
     this.courses = deps.courses;
     this.library = deps.library;
     this.records = deps.records;
     this.guiState = deps.guiState;
-    this.playlogAutoSave = deps.playlogAutoSave;
+    this.replayAutoSave = deps.replayAutoSave;
     this.leaderboard = deps.leaderboard;
     this.familyKits = deps.familyKits;
-    this.playlogRecorder = deps.playlogRecorder;
+    this.replayRecorder = deps.replayRecorder;
     this.testHook = deps.testHook;
     this.setStatus = deps.setStatus;
     this.showSelect = deps.showSelect;
     this.showDecide = deps.showDecide;
-    this.playSong = deps.playSong;
+    this.playChart = deps.playChart;
     this.showResult = deps.showResult;
     this.showBeatorajaResult = deps.showBeatorajaResult;
-    this.unlockPlaylogOptions = deps.unlockPlaylogOptions;
+    this.unlockReplayOptions = deps.unlockReplayOptions;
   }
 
   /**
@@ -132,8 +135,8 @@ export class NonstopRoute {
       if (found !== undefined) hashes.set(stage.chart.id, found);
     }
     const prepared = prepareNonstopPlay(course, {
-      sourceOf: (song) => resolveSongSource(this.library.collection, song),
-      hashesOf: (song) => hashes.get(song.id),
+      sourceOf: (chartEntry) => resolveChartSource(this.library.collection, chartEntry),
+      hashesOf: (chartEntry) => hashes.get(chartEntry.id),
       placement: this.guiState.nonstopPlacement,
     });
     if (!prepared.ok) {
@@ -149,13 +152,13 @@ export class NonstopRoute {
       ],
     };
     const play = () =>
-      this.playSong(prepared.prepared.song, {
+      this.playChart(prepared.prepared.chart, {
         nonstop: { course, prepared: prepared.prepared },
         ...(this.courses.autoPlay !== undefined ? { autoPlay: this.courses.autoPlay } : {}),
       });
     // The decide screen names the course (the stitched song's title); a quick retry skips it, as LR2's does.
     if (options.decide === true) {
-      await this.showDecide(prepared.prepared.song, {}, { start: play });
+      await this.showDecide(prepared.prepared.chart, {}, { start: play });
       return;
     }
     await play();
@@ -168,18 +171,18 @@ export class NonstopRoute {
    */
   public async showNonstopCourseResult(
     nonstop: NonstopPlay,
-    playlog: BeMusicPlaylog | undefined,
+    replay: BeMusicReplay | undefined,
     fallback?: PlayResult,
     resolved?: ResolvedPlayChart,
   ): Promise<void> {
-    this.testHook?.recordPlaylog(playlog);
-    if (playlog === undefined) {
+    this.testHook?.recordReplay(replay);
+    if (replay === undefined) {
       await (fallback !== undefined ? this.showResult(fallback) : this.showSelect());
       return;
     }
-    const courseLog = buildNonstopCoursePlaylog(nonstop.course.definition, nonstop.prepared.stitched, playlog, {
+    const courseLog = buildNonstopCourseReplay(nonstop.course.definition, nonstop.prepared.stitched, replay, {
       createdAt: new Date().toISOString(),
-      recorder: this.playlogRecorder,
+      recorder: this.replayRecorder,
     });
     const native = courseLog.results?.native;
     if (native === undefined) {
@@ -187,13 +190,13 @@ export class NonstopRoute {
       return;
     }
     this.records.recordCourseResult(
-      resolveCourseRecordUpdate(
+      resolveCourseBestRecordUpdate(
         courseLog,
         native,
-        courseRecordKey(nonstop.course, nonstop.prepared.stitched.placement),
+        courseBestRecordKey(nonstop.course, nonstop.prepared.stitched.placement),
       ),
     );
-    this.playlogAutoSave.saveCourse(courseLog);
+    this.replayAutoSave.saveCourse(courseLog);
     // Ranked as one course run: the Leaderboard stitches the stage charts again to check the stitched play.
     this.leaderboard.maybeSubmitCourse(
       courseLog,
@@ -212,7 +215,7 @@ export class NonstopRoute {
         ...(resolved !== undefined ? { playChart: resolved.chart } : {}),
       });
       if (mounted) {
-        this.unlockPlaylogOptions();
+        this.unlockReplayOptions();
         return;
       }
     }

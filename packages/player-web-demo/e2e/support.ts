@@ -1,7 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import { test as base, type Page } from '@playwright/test';
-import type { BeMusicPlaylog } from '@be-music/player/playlog';
+import type { BeMusicReplay } from '@be-music/player/replay';
 import type { TestHookBar, TestHookState } from '../src/test-hook.ts';
 
 /**
@@ -80,9 +80,9 @@ export class Demo {
     });
   }
 
-  /** The play log the last finished play recorded. */
-  async lastPlaylog(): Promise<BeMusicPlaylog | undefined> {
-    return this.page.evaluate(() => window.__beMusicTest?.lastPlaylog());
+  /** The replay the last finished play recorded. */
+  async lastReplay(): Promise<BeMusicReplay | undefined> {
+    return this.page.evaluate(() => window.__beMusicTest?.lastReplay());
   }
 
   /** Polls the test hook until `predicate` holds, and returns that state. */
@@ -133,7 +133,7 @@ export class Demo {
     return this.waitFor((state) => state.loads > before && !state.loading, `the drop of ${root} to load`);
   }
 
-  /** Drops a file made here (a play log, an exported course file) under `name`. */
+  /** Drops a file made here (a replay, an exported course file) under `name`. */
   async dropText(name: string, text: string): Promise<TestHookState> {
     const before = (await this.state()).loads;
     await this.page.evaluate(

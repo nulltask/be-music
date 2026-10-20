@@ -72,7 +72,7 @@ describe('POST /api/v0/course-scores', () => {
     });
     const run = await db.query.courseScore.findFirst({ where: eq(courseScore.id, body.courseScoreId) });
     expect(run).toMatchObject({ playedRuleset: 'lr2', stagesPlayed: 3, verification: 'L4' });
-    expect(await env.BLOBS.head(run!.playlogKey)).not.toBeNull();
+    expect(await env.BLOBS.head(run!.replayKey)).not.toBeNull();
 
     // The same run again answers the stored result; from another account it is a copied replay.
     const again = await submitCourse(cookie, courseBody(log, charts));
@@ -352,15 +352,15 @@ describe('PATCH /api/v0/course-scores/:id', () => {
     );
     const own = await fetchApp(`/api/v0/course-scores/${best.courseScoreId}`, { headers: { cookie } });
     expect(await own.json()).toMatchObject({ hidden: true });
-    // Its play log too: only its player reads it, and no shared cache keeps it.
-    const playlogPath = `/api/v0/course-scores/${best.courseScoreId}/playlog`;
-    expect((await fetchApp(playlogPath)).status).toBe(404);
-    const ownLog = await fetchApp(playlogPath, { headers: { cookie } });
+    // Its replay too: only its player reads it, and no shared cache keeps it.
+    const replayPath = `/api/v0/course-scores/${best.courseScoreId}/replay`;
+    expect((await fetchApp(replayPath)).status).toBe(404);
+    const ownLog = await fetchApp(replayPath, { headers: { cookie } });
     expect(ownLog.status).toBe(200);
     expect(ownLog.headers.get('cache-control')).toBe('private');
 
     await setHidden(best.courseScoreId, false, cookie);
-    const shownLog = await fetchApp(playlogPath);
+    const shownLog = await fetchApp(replayPath);
     expect(shownLog.status).toBe(200);
     expect(shownLog.headers.get('content-encoding')).toBe('gzip');
     expect(shownLog.headers.get('cache-control')).toContain('public');
@@ -368,8 +368,8 @@ describe('PATCH /api/v0/course-scores/:id', () => {
       format: string;
       course: { name: string };
     };
-    expect(log).toMatchObject({ format: 'be-music-course-playlog', course: { name: 'Test Dan' } });
-    expect((await fetchApp('/api/v0/course-scores/nothing/playlog')).status).toBe(404);
+    expect(log).toMatchObject({ format: 'be-music-course-replay', course: { name: 'Test Dan' } });
+    expect((await fetchApp('/api/v0/course-scores/nothing/replay')).status).toBe(404);
     expect(await mine()).toMatchObject({ exScore: 40, playCount: 2, trophy: 'goldmedal' });
   });
 });

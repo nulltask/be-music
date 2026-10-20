@@ -41,7 +41,7 @@ export function buildCourseFolder(this: DebugMenu, folder: GUI): void {
 }
 
 /**
- * Takes a NONSTOP placement picked on the menu. A NONSTOP course keeps its records per placement (`courseRecordKey`), so
+ * Takes a NONSTOP placement picked on the menu. A NONSTOP course keeps its records per placement (`courseBestRecordKey`), so
  * the select screen draws its records again to show the new placement's: the built-in screen builds itself again only
  * when told something changed.
  */

@@ -19,7 +19,7 @@ import {
 import { formatRandomPatternSummary, resolveBMSControlFlowForPlayback } from './core/engine-preparation.ts';
 import { extractPlayableNotes } from './display.ts';
 import type { PlayerUICommand } from './core/ui-signal-bus.ts';
-import { simulatePlaylog, type BeMusicPlaylog } from './playlog/index.ts';
+import { simulateReplay, type BeMusicReplay } from './replay/index.ts';
 import {
   resetAudioSinkState,
   unifiedBMSChartPath,
@@ -1000,7 +1000,7 @@ describe('player', () => {
     expect(output.some((line) => line.includes('result:EMPTY_POOR'))).toBe(false);
   });
 
-  test('player: records the #RANDOM draws and the extension-aware fingerprints in the play log', async () => {
+  test('player: records the #RANDOM draws and the extension-aware fingerprints in the replay', async () => {
     const json = parseChart(
       [
         '#BPM 240',
@@ -1017,7 +1017,7 @@ describe('player', () => {
       'bms',
     );
     const randomDraws = drawRandomOutcomes(json, () => 0.9);
-    let playlog: BeMusicPlaylog | undefined;
+    let replay: BeMusicReplay | undefined;
     await autoPlay(json, {
       speed: 64,
       leadInMs: 0,
@@ -1025,72 +1025,72 @@ describe('player', () => {
       tui: false,
       laneModeExtension: '.pms',
       randomDraws,
-      onPlaylogRecorded: (recorded) => {
-        playlog = recorded;
+      onReplayRecorded: (recorded) => {
+        replay = recorded;
       },
     });
-    expect(playlog!.play.randomDraws).toEqual([{ command: 'RANDOM', range: 2, value: 2 }]);
-    const replayed = resolveBMSControlFlowWithDraws(json, playlog!.play.randomDraws!);
-    expect(playlog!.chart.playFingerprint).toBe(computePlayFingerprint(replayed, { chartPath: '.pms' }));
-    expect(playlog!.chart.playFingerprint).not.toBe(computePlayFingerprint(replayed, { chartPath: undefined }));
+    expect(replay!.play.randomDraws).toEqual([{ command: 'RANDOM', range: 2, value: 2 }]);
+    const replayed = resolveBMSControlFlowWithDraws(json, replay!.play.randomDraws!);
+    expect(replay!.chart.playFingerprint).toBe(computePlayFingerprint(replayed, { chartPath: '.pms' }));
+    expect(replay!.chart.playFingerprint).not.toBe(computePlayFingerprint(replayed, { chartPath: undefined }));
     // The engine resolved `#RANDOM` itself, so its input is the source chart the chart fingerprint describes.
-    expect(playlog!.chart.chartFingerprint).toBe(computeChartFingerprint(json, { chartPath: '.pms' }));
+    expect(replay!.chart.chartFingerprint).toBe(computeChartFingerprint(json, { chartPath: '.pms' }));
   });
 
-  test('player: onPlaylogRecorded captures the resolved chart, raw inputs, and native result cache', async () => {
+  test('player: onReplayRecorded captures the resolved chart, raw inputs, and native result cache', async () => {
     // BPM 240 → measure 1 starts at chart 1.0 s. One press near the note, then natural chart end.
     const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
-    json.metadata.title = 'Playlog Test';
+    json.metadata.title = 'Replay Test';
     json.metadata.total = 300;
     json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
 
-    let playlog: BeMusicPlaylog | undefined;
+    let replay: BeMusicReplay | undefined;
     const summary = await manualPlay(json, {
       speed: 1,
       leadInMs: 0,
       audio: false,
       tui: false,
-      recordPlaylog: { gauge: 'GROOVE', randomLane: { p1: 'MIRROR' } },
-      onPlaylogRecorded: (recorded) => {
-        playlog = recorded;
+      recordReplay: { gauge: 'GROOVE', randomLane: { p1: 'MIRROR' } },
+      onReplayRecorded: (recorded) => {
+        replay = recorded;
       },
       createInputRuntime: createScheduledInputRuntime([
         { delayMs: 1000, command: { kind: 'lane-input', tokens: ['z'] } },
       ]),
     });
 
-    expect(playlog).toBeDefined();
-    expect(playlog!.format).toBe('be-music-playlog');
-    expect(playlog!.version).toBe(0);
-    expect(playlog!.clock).toEqual({ unit: 'us', origin: 'chart-zero' });
-    expect(playlog!.chart.title).toBe('Playlog Test');
-    expect(playlog!.chart.total).toBe(300);
-    expect(playlog!.chart.noteCount).toBe(1);
-    expect(playlog!.chart.notes).toHaveLength(1);
-    expect(playlog!.chart.notes[0]).toMatchObject({ id: 0, channel: '11', type: 'normal', timeUs: 1_000_000 });
-    expect(playlog!.play).toMatchObject({ mode: 'manual', autoScratch: false, gauge: 'GROOVE' });
-    expect(playlog!.play.randomLane).toEqual({ p1: 'MIRROR' });
-    expect(playlog!.play.randomDraws).toBeUndefined();
-    expect(playlog!.play.aborted).toBeUndefined();
+    expect(replay).toBeDefined();
+    expect(replay!.format).toBe('be-music-replay');
+    expect(replay!.version).toBe(0);
+    expect(replay!.clock).toEqual({ unit: 'us', origin: 'chart-zero' });
+    expect(replay!.chart.title).toBe('Replay Test');
+    expect(replay!.chart.total).toBe(300);
+    expect(replay!.chart.noteCount).toBe(1);
+    expect(replay!.chart.notes).toHaveLength(1);
+    expect(replay!.chart.notes[0]).toMatchObject({ id: 0, channel: '11', type: 'normal', timeUs: 1_000_000 });
+    expect(replay!.play).toMatchObject({ mode: 'manual', autoScratch: false, gauge: 'GROOVE' });
+    expect(replay!.play.randomLane).toEqual({ p1: 'MIRROR' });
+    expect(replay!.play.randomDraws).toBeUndefined();
+    expect(replay!.play.aborted).toBeUndefined();
     // The single scheduled press resolves against lane channel 11 with a chart-relative µs timestamp near the note.
-    expect(playlog!.inputs).toHaveLength(1);
-    expect(playlog!.inputs[0]).toMatchObject({ seq: 0, action: 'down', channels: ['11'] });
-    expect(Math.abs(playlog!.inputs[0]!.timeUs - 1_000_000)).toBeLessThan(250_000);
+    expect(replay!.inputs).toHaveLength(1);
+    expect(replay!.inputs[0]).toMatchObject({ seq: 0, action: 'down', channels: ['11'] });
+    expect(Math.abs(replay!.inputs[0]!.timeUs - 1_000_000)).toBeLessThan(250_000);
     // The native cache mirrors the engine's own summary.
-    const native = playlog!.results?.native;
+    const native = replay!.results?.native;
     expect(native).toBeDefined();
     expect(native!.exScore).toBe(summary.exScore);
     expect(native!.judge.pgreat).toBe(summary.perfect);
     expect(native!.judge.poor).toBe(summary.poor);
     expect(native!.gauge.final).toBeCloseTo(summary.gauge?.current ?? -1, 6);
     // The recorded log feeds the ruleset simulators without further conversion.
-    const lr2 = simulatePlaylog(playlog!, { ruleset: 'lr2' });
+    const lr2 = simulateReplay(replay!, { ruleset: 'lr2' });
     expect(lr2.noteCount).toBe(1);
     expect(lr2.judge.pgreat + lr2.judge.great + lr2.judge.good + lr2.judge.bad + lr2.judge.poor).toBe(1);
   });
 
-  test('player: replayInputs re-drives a recorded playlog deterministically', async () => {
+  test('player: replayInputs re-drives a recorded replay deterministically', async () => {
     // BPM 240 → notes at 1.0 s ('11') and 1.5 s ('12'). Record a play with two slightly-off presses, then replay
     // the recorded input stream — the judgments must reproduce exactly, even at a different engine speed.
     const json = createEmptyJSON('bms');
@@ -1101,14 +1101,14 @@ describe('player', () => {
       { measure: 1, channel: '12', position: [1, 2], value: '01' },
     ];
 
-    let recorded: BeMusicPlaylog | undefined;
+    let recorded: BeMusicReplay | undefined;
     const original = await manualPlay(json, {
       speed: 1,
       leadInMs: 0,
       audio: false,
       tui: false,
-      onPlaylogRecorded: (playlog) => {
-        recorded = playlog;
+      onReplayRecorded: (replay) => {
+        recorded = replay;
       },
       createInputRuntime: createScheduledInputRuntime([
         { delayMs: 990, command: { kind: 'lane-input', tokens: ['z'] } },
@@ -1126,7 +1126,7 @@ describe('player', () => {
     const originalJudged = original.perfect + original.great + original.good + original.bad;
     expect(originalJudged).toBeGreaterThan(0);
 
-    let replayed: BeMusicPlaylog | undefined;
+    let replayed: BeMusicReplay | undefined;
     const replaySummary = await manualPlay(json, {
       // Chart-relative replay timestamps are speed-independent — run the replay fast to keep the test quick.
       speed: 8,
@@ -1134,8 +1134,8 @@ describe('player', () => {
       audio: false,
       tui: false,
       replayInputs: recorded!.inputs,
-      onPlaylogRecorded: (playlog) => {
-        replayed = playlog;
+      onReplayRecorded: (replay) => {
+        replayed = replay;
       },
     });
 
@@ -1166,15 +1166,15 @@ describe('player', () => {
       'bms',
     );
     // Record a play of branch 2 with a press on lane 12 (`s`).
-    let recorded: BeMusicPlaylog | undefined;
+    let recorded: BeMusicReplay | undefined;
     const original = await manualPlay(json, {
       speed: 1,
       leadInMs: 0,
       audio: false,
       tui: false,
       randomDraws: drawRandomOutcomes(json, () => 0.9),
-      onPlaylogRecorded: (playlog) => {
-        recorded = playlog;
+      onReplayRecorded: (replay) => {
+        recorded = replay;
       },
       createInputRuntime: createScheduledInputRuntime([
         { delayMs: 1000, command: { kind: 'lane-input', tokens: ['s'] } },
@@ -1183,8 +1183,8 @@ describe('player', () => {
     expect(recorded!.play.randomDraws).toEqual([{ command: 'RANDOM', range: 2, value: 2 }]);
     expect(original.perfect + original.great).toBe(1);
 
-    const replay = async (randomDraws: RandomDraws): Promise<{ summary: PlayerSummary; playlog: BeMusicPlaylog }> => {
-      let playlog: BeMusicPlaylog | undefined;
+    const replay = async (randomDraws: RandomDraws): Promise<{ summary: PlayerSummary; replay: BeMusicReplay }> => {
+      let replay: BeMusicReplay | undefined;
       const summary = await manualPlay(json, {
         speed: 8,
         leadInMs: 0,
@@ -1192,27 +1192,27 @@ describe('player', () => {
         tui: false,
         replayInputs: recorded!.inputs,
         randomDraws,
-        onPlaylogRecorded: (log) => {
-          playlog = log;
+        onReplayRecorded: (log) => {
+          replay = log;
         },
       });
-      return { summary, playlog: playlog! };
+      return { summary, replay: replay! };
     };
 
     const withRecordedDraws = await replay(recorded!.play.randomDraws!);
-    expect(withRecordedDraws.playlog.play.randomDraws).toEqual(recorded!.play.randomDraws);
-    expect(withRecordedDraws.playlog.chart.notes.map((note) => note.channel)).toEqual(['12']);
-    expect(withRecordedDraws.playlog.chart.playFingerprint).toBe(recorded!.chart.playFingerprint);
-    expect(withRecordedDraws.playlog.chart.chartFingerprint).toBe(recorded!.chart.chartFingerprint);
+    expect(withRecordedDraws.replay.play.randomDraws).toEqual(recorded!.play.randomDraws);
+    expect(withRecordedDraws.replay.chart.notes.map((note) => note.channel)).toEqual(['12']);
+    expect(withRecordedDraws.replay.chart.playFingerprint).toBe(recorded!.chart.playFingerprint);
+    expect(withRecordedDraws.replay.chart.chartFingerprint).toBe(recorded!.chart.chartFingerprint);
     expect(withRecordedDraws.summary.exScore).toBe(original.exScore);
     expect(withRecordedDraws.summary.perfect).toBe(original.perfect);
     expect(withRecordedDraws.summary.great).toBe(original.great);
 
     // Other draws play branch 1, where the recorded press misses; the chart fingerprint stays the same.
     const otherDraws = await replay(drawRandomOutcomes(json, () => 0));
-    expect(otherDraws.playlog.chart.notes.map((note) => note.channel)).toEqual(['11']);
-    expect(otherDraws.playlog.chart.playFingerprint).not.toBe(recorded!.chart.playFingerprint);
-    expect(otherDraws.playlog.chart.chartFingerprint).toBe(recorded!.chart.chartFingerprint);
+    expect(otherDraws.replay.chart.notes.map((note) => note.channel)).toEqual(['11']);
+    expect(otherDraws.replay.chart.playFingerprint).not.toBe(recorded!.chart.playFingerprint);
+    expect(otherDraws.replay.chart.chartFingerprint).toBe(recorded!.chart.chartFingerprint);
     expect(otherDraws.summary.exScore).toBe(0);
   });
 

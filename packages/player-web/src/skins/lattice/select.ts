@@ -23,7 +23,7 @@ import {
   type LibraryChart,
   describeCourseCard,
   formatPlayVariantLabel,
-  resolveSongRowFacts,
+  resolveChartRowFacts,
   stageProgress,
   selectListRows,
   browseEntryBadge,
@@ -125,7 +125,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
 
   public tick(
     nowMs: number,
-    focusedSong: LibraryChart | undefined,
+    focusedChart: LibraryChart | undefined,
     _launchAt?: number,
     audio?: BeMusicAudioFrame,
   ): void {
@@ -140,7 +140,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
     if (this.levelText) {
       this.levelText.text = `dB ${drive.db <= -95 ? '-inf' : drive.db.toFixed(1).padStart(5, ' ')}`;
     }
-    const bpm = focusedSong?.bpm;
+    const bpm = focusedChart?.bpm;
     const beatsPerSecond = (bpm !== undefined && Number.isFinite(bpm) && bpm > 0 ? Math.min(bpm, 300) : 120) / 60;
     const seconds = (nowMs / 1000) * rate;
     const cursorAge = nowMs - this.cursorChangedAt;
@@ -208,7 +208,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
   }
 
   private renderChrome(frame: PixiSelectFrame): boolean {
-    const { layer, designWidth, designHeight, entries, focusedSong: song } = frame;
+    const { layer, designWidth, designHeight, entries, focusedChart: chartEntry } = frame;
     const chrome = new Graphics();
     chrome.label = 'lattice-select/chrome';
     const text = (value: string, x: number, y: number, options: SkinTextOptions) =>
@@ -254,18 +254,18 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
 
     // Focused chart.
     const course =
-      song === undefined && frame.focusedCourse !== undefined
-        ? describeCourseCard(frame.focusedCourse, frame.courseRecord?.(frame.focusedCourse))
+      chartEntry === undefined && frame.focusedCourse !== undefined
+        ? describeCourseCard(frame.focusedCourse, frame.courseBestRecord?.(frame.focusedCourse))
         : undefined;
-    const songTitle = song?.title ?? course?.title ?? 'No chart selected';
-    const songArtist = song?.artist || song?.subtitle || course?.detail || '';
+    const chartTitle = chartEntry?.title ?? course?.title ?? 'No chart selected';
+    const chartArtist = chartEntry?.artist || chartEntry?.subtitle || course?.detail || '';
     const position =
       entries.length > 0
         ? `No. ${String(Math.min(frame.selectedIndex + 1, entries.length)).padStart(3, '0')} / ${String(entries.length).padStart(3, '0')}`
         : 'No. 000 / 000';
     chrome.rect(14, 56, 290, 1).fill(LAT_INK);
     // The genre heads the block, where a fixed caption used to sit.
-    const genre = song?.genre?.trim();
+    const genre = chartEntry?.genre?.trim();
     if (genre) {
       text(
         onCursor(genre.toUpperCase(), 60, 3),
@@ -277,7 +277,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
     text(onCursor(position, 0, 4, 260), 304, 63, mono(LAT_INK, { anchorX: 1 }));
     addStaggeredSkinText(
       layer,
-      onCursor(songTitle, 0, 5, 460),
+      onCursor(chartTitle, 0, 5, 460),
       14,
       84,
       { size: 20, weight: '500', fill: LAT_INK, fontFamily: LAT_TEXT_FONT, maxWidth: 290 },
@@ -286,8 +286,8 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
         return { dy: 10 * (1 - springEase(Math.min(1, local), 2.2, 0.5)), alpha: Math.min(1, local * 3) };
       },
     );
-    if (songArtist) {
-      text(onCursor(songArtist, 90, 6), 14, 114, {
+    if (chartArtist) {
+      text(onCursor(chartArtist, 90, 6), 14, 114, {
         size: 10,
         weight: '300',
         fill: LAT_GRAPHITE,
@@ -300,10 +300,10 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
     // Stats table.
     chrome.rect(14, 140, 290, 1).fill(LAT_INK);
     chrome.rect(14, 196, 290, 1).fill({ color: LAT_RULE, alpha: 1 });
-    const playLevel = song?.playLevel !== undefined ? String(song.playLevel) : '-';
+    const playLevel = chartEntry?.playLevel !== undefined ? String(chartEntry.playLevel) : '-';
     const stats: ReadonlyArray<readonly [x: number, label: string, value: string, fill: number]> = [
-      [14, '01 MODE', song ? formatPlayVariantLabel(song) : '- KEYS', LAT_INK],
-      [114, '02 BPM', song?.bpm !== undefined ? String(Math.round(song.bpm)) : '-', LAT_INK],
+      [14, '01 MODE', chartEntry ? formatPlayVariantLabel(chartEntry) : '- KEYS', LAT_INK],
+      [114, '02 BPM', chartEntry?.bpm !== undefined ? String(Math.round(chartEntry.bpm)) : '-', LAT_INK],
       [214, '03 LEVEL', playLevel, LAT_ACCENT],
     ];
     stats.forEach(([x, label, value, fill], index) => {
@@ -313,7 +313,9 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
     });
     // Level as a row of squares.
     const levelNumber =
-      song?.playLevel !== undefined ? Number.parseFloat(String(song.playLevel).replace(/^[^\d.]+/u, '')) : NaN;
+      chartEntry?.playLevel !== undefined
+        ? Number.parseFloat(String(chartEntry.playLevel).replace(/^[^\d.]+/u, ''))
+        : NaN;
     const lit = Number.isFinite(levelNumber) ? Math.max(1, Math.min(12, Math.round(levelNumber))) : 0;
     for (let dot = 0; dot < 12; dot += 1) {
       const x = 14 + dot * 24;
@@ -326,8 +328,8 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
       }
     }
     chrome.rect(14, 223, 288, 1).fill({ color: LAT_INK, alpha: 0.6 });
-    if (song?.fileLabel) {
-      text(onCursor(song.fileLabel, 220, 7), 14, 234, mono(LAT_GRAPHITE, { maxWidth: 290 }));
+    if (chartEntry?.fileLabel) {
+      text(onCursor(chartEntry.fileLabel, 220, 7), 14, 234, mono(LAT_GRAPHITE, { maxWidth: 290 }));
     }
 
     // PLAY (ink) / AUTO (outline).
@@ -445,7 +447,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
     const { listX, listTop, rowHeight } = LAYOUT;
     const y = listTop + visibleIndex * rowHeight;
     const active = entryIndex === frame.selectedIndex;
-    const song = entry.kind === 'chart' ? entry.chart : undefined;
+    const chartEntry = entry.kind === 'chart' ? entry.chart : undefined;
     const introT = stageProgress(
       frame.nowMs - frame.sceneStartedAt,
       100 + Math.max(0, visibleIndex) * INTRO_STAGGER_MS,
@@ -492,7 +494,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
     });
     // On the right, the facts a player checks before picking — gimmick tags, note count, length and tempo range — in
     // fixed columns so they line up down the list. Folders show their size instead.
-    const facts = song ? resolveSongRowFacts(song) : undefined;
+    const facts = chartEntry ? resolveChartRowFacts(chartEntry) : undefined;
     const meta = facts ? `${facts.bpm} BPM` : (browseEntryCount(entry) ?? '');
     const metaNode = addSkinText(
       frame.layer,
@@ -574,7 +576,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
     );
     title.label = `fallback-title[idx=${entryIndex}]`;
     // The artist trails the title in graphite while there is room for it.
-    const artist = song?.artist?.trim();
+    const artist = chartEntry?.artist?.trim();
     const artistX = x + 62 + title.width + 10;
     if (artist && factsLeft - artistX >= 40) {
       addSkinText(frame.layer, artist, artistX, midY, {
@@ -611,7 +613,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
     const textIn = Math.max(0, (t - 0.35) / 0.5);
     addStaggeredSkinText(
       layer,
-      scrambleText(frame.focusedSong?.title ?? '', textIn * 1.4, scrambleTick(frame.nowMs), 77),
+      scrambleText(frame.focusedChart?.title ?? '', textIn * 1.4, scrambleTick(frame.nowMs), 77),
       designWidth / 2,
       designHeight / 2,
       {

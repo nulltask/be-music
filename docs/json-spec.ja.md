@@ -1,14 +1,14 @@
 [English version](./json-spec.md)
 
-# BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様
+# BMS/bmson 中間表現 (`@be-music/json`) 実装仕様
 
-この文書は、`@be-music/json` が提供する BMS/BMSON 中間表現の正規仕様です。
+この文書は、`@be-music/json` が提供する BMS/bmson 中間表現の正規仕様です。
 `@be-music/json` は Be-Music の内部処理専用フォーマットであり、配布や再利用を目的とした外部交換フォーマットではありません。
 また、まだ開発初期段階のため、この中間表現の後方互換性は保証しません。
 
 ## 目的
 
-- BMS / BMSON の差分を吸収して、内部処理を単一形式で扱う
+- BMS / bmson の差分を吸収して、内部処理を単一形式で扱う
 - 再文字列化時にイベント時刻を安定再現する
 
 ## パッケージ境界

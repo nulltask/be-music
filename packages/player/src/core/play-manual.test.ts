@@ -2,9 +2,9 @@ import { describe, expect, test } from 'vite-plus/test';
 import { basicChart, longNoteChart, mineChart } from './characterization/charts.ts';
 import { observePlay, type PlayObservation, type ScriptStep } from './characterization/harness.ts';
 
-/** A play log's inputs as `action lanes @us`, with `inferred` on an inferred release. */
+/** A replay's inputs as `action lanes @us`, with `inferred` on an inferred release. */
 const loggedInputs = (observation: PlayObservation): string[] =>
-  (observation.playlog?.inputs ?? []).map(
+  (observation.replay?.inputs ?? []).map(
     (input) =>
       `${input.action} ${input.channels.join(',')} @${input.timeUs}${input.inferred === true ? ' inferred' : ''}`,
   );
@@ -77,22 +77,22 @@ describe('manual play: a tap whose release is drained right after its press', ()
         audio,
         options: { judgeRuleset: ruleset },
       });
-      const playlog = live.playlog!;
+      const replay = live.replay!;
       expect(loggedInputs(live)).toHaveLength(2);
-      const [down, up] = playlog.inputs;
+      const [down, up] = replay.inputs;
       expect([down!.action, up!.action]).toEqual(['down', 'up']);
       expect(up!.timeUs).toBeGreaterThanOrEqual(down!.timeUs);
 
-      const replay = await observePlay({
+      const replayed = await observePlay({
         driver: 'manual',
         chart: mineChart(),
         audio,
-        options: { judgeRuleset: ruleset, replayInputs: playlog.inputs },
+        options: { judgeRuleset: ruleset, replayInputs: replay.inputs },
       });
-      expect(replay.summary).toEqual(live.summary);
-      expect(replay.playlog?.inputs).toEqual(playlog.inputs);
-      // The play-log simulator re-derives the engine's own result.
-      expect(live.simulated![ruleset]).toEqual({ ...playlog.results?.native, ruleset: expect.any(String) });
+      expect(replayed.summary).toEqual(live.summary);
+      expect(replayed.replay?.inputs).toEqual(replay.inputs);
+      // The replay simulator re-derives the engine's own result.
+      expect(live.simulated![ruleset]).toEqual({ ...replay.results?.native, ruleset: expect.any(String) });
     },
   );
 
@@ -110,7 +110,7 @@ describe('manual play: a tap whose release is drained right after its press', ()
       ],
       audio,
     });
-    const inputs = live.playlog!.inputs;
+    const inputs = live.replay!.inputs;
     expect(inputs.map((input) => input.action)).toEqual(['down', 'up', 'down', 'up']);
     for (let index = 1; index < inputs.length; index += 1) {
       expect(inputs[index]!.timeUs).toBeGreaterThanOrEqual(inputs[index - 1]!.timeUs);

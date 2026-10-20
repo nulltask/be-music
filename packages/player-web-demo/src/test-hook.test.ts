@@ -1,7 +1,7 @@
 import { createEmptyJSON } from '@be-music/json';
 import { parseLR2CourseFile } from '@be-music/player/course';
 import type { SelectScene } from '@be-music/player-web/host';
-import type { BeMusicCoursePlaylog, BeMusicPlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
+import type { BeMusicCourseReplay, BeMusicReplay, ReplayCourseResult } from '@be-music/player/replay';
 import type { LibraryChart, LibraryCourse, PlayResult } from '@be-music/scene-model';
 import { describe, expect, test } from 'vite-plus/test';
 import { liveTestHookState, type LiveTestHookDeps } from './services/test-hook.ts';
@@ -18,7 +18,7 @@ import {
   type TestHookLiveState,
 } from './test-hook.ts';
 
-function song(title: string): LibraryChart {
+function chartEntry(title: string): LibraryChart {
   return {
     id: title,
     sourceId: 'drop1',
@@ -37,10 +37,10 @@ const LIVE: TestHookLiveState = {
   scene: { kind: 'select', family: 'built-in' },
   status: '2 charts loaded',
   loading: false,
-  library: { songs: 2, courseFolders: ['courses'] },
+  library: { charts: 2, courseFolders: ['courses'] },
 };
 
-/** A stage's play log: only the fields the hook reads. */
+/** A stage's replay: only the fields the hook reads. */
 function stageLog(options: {
   title: string;
   pgreat: number;
@@ -48,7 +48,7 @@ function stageLog(options: {
   final: number;
   start?: number;
   aborted?: boolean;
-}): BeMusicPlaylog {
+}): BeMusicReplay {
   return {
     chart: { title: options.title },
     play: {
@@ -66,7 +66,7 @@ function stageLog(options: {
         gauge: { type: 'GRADE', final: options.final, cleared: options.final > 0 },
       },
     },
-  } as unknown as BeMusicPlaylog;
+  } as unknown as BeMusicReplay;
 }
 
 describe('isTestHookEnabled', () => {
@@ -92,15 +92,15 @@ describe('TestHookRecorder', () => {
       statusLog: [],
       loads: 0,
       results: [],
-      playlogs: 0,
+      replays: 0,
     });
 
-    const playlog = stageLog({ title: 'A', pgreat: 1, poor: 0, final: 100 });
+    const replay = stageLog({ title: 'A', pgreat: 1, poor: 0, final: 100 });
     recorder.recordStatus('Loading');
     recorder.recordStatus('2 charts loaded');
     recorder.recordLoad();
-    recorder.recordPlaylog(undefined);
-    recorder.recordPlaylog(playlog);
+    recorder.recordReplay(undefined);
+    recorder.recordReplay(replay);
     recorder.recordResult({
       run: 'single',
       family: 'beatoraja',
@@ -111,9 +111,9 @@ describe('TestHookRecorder', () => {
       gauge: { value: 0 },
     });
     const state = hook.state();
-    expect(state).toMatchObject({ statusLog: ['Loading', '2 charts loaded'], loads: 1, playlogs: 1 });
+    expect(state).toMatchObject({ statusLog: ['Loading', '2 charts loaded'], loads: 1, replays: 1 });
     expect(state.results).toHaveLength(1);
-    expect(hook.lastPlaylog()).toBe(playlog);
+    expect(hook.lastReplay()).toBe(replay);
     // A state is a copy: changing it changes nothing the hook keeps.
     state.results.pop();
     state.statusLog.pop();
@@ -125,15 +125,15 @@ describe('contract v1', () => {
   test("state() answers v1's fields, the live ones read from the app's scenes and services", () => {
     const select = {
       identity: { kind: 'select', family: 'built-in' },
-      focused: () => ({ kind: 'chart', chart: song('Fixture A') }),
+      focused: () => ({ kind: 'chart', chart: chartEntry('Fixture A') }),
       snapshot: () => ({ folderPath: ['pack'], cursors: [0, 0], list: { sort: 'TITLE' } }),
     } as unknown as SelectScene;
     const deps: LiveTestHookDeps = {
       router: { current: select, select, play: undefined },
       elements: { loadingOverlay: { classList: { contains: () => false } } } as unknown as LiveTestHookDeps['elements'],
       guiState: { status: '1 chart loaded', nonstopPlacement: 'intended' },
-      library: { collection: { sources: [], charts: [song('Fixture A')], errors: [] } },
-      records: { peekSongRecord: () => ({ lamp: 'HARD' }), currentRulesetRecords: () => new Map() },
+      library: { collection: { sources: [], charts: [chartEntry('Fixture A')], errors: [] } },
+      records: { peekChartBestRecord: () => ({ lamp: 'HARD' }), currentRulesetRecords: () => new Map() },
       courses: { active: undefined },
       courseMaker: { maker: { draft: undefined } },
       lastPlay: () => undefined,
@@ -150,26 +150,26 @@ describe('contract v1', () => {
       statusLog: ['1 chart loaded'],
       loading: false,
       loads: 1,
-      library: { songs: 1, courseFolders: [] },
+      library: { charts: 1, courseFolders: [] },
       cursor: {
         folderPath: ['pack'],
-        bar: { kind: 'song', title: 'Fixture A', lamp: 'HARD' },
+        bar: { kind: 'chart', title: 'Fixture A', lamp: 'HARD' },
         list: { sort: 'TITLE', keysFilter: 'ALL', difficultyFilter: 'ALL', search: '' },
       },
       results: [],
-      playlogs: 0,
+      replays: 0,
     });
   });
 });
 
 describe('describeBar', () => {
-  test('names a folder, a chart bar (`song` in contract v1) with its lamp, and a course with its stages', () => {
+  test('names a folder, a chart bar with its lamp, and a course with its stages', () => {
     expect(describeBar({ kind: 'folder', folder: { label: 'pack', charts: [] } })).toEqual({
       kind: 'folder',
       title: 'pack',
     });
-    expect(describeBar({ kind: 'chart', chart: song('Fixture A') }, { lamp: 'HARD' })).toEqual({
-      kind: 'song',
+    expect(describeBar({ kind: 'chart', chart: chartEntry('Fixture A') }, { lamp: 'HARD' })).toEqual({
+      kind: 'chart',
       title: 'Fixture A',
       lamp: 'HARD',
     });
@@ -179,7 +179,7 @@ describe('describeBar', () => {
     const course: LibraryCourse = {
       id: 'courses:0',
       definition: definition!,
-      stages: [{ title: 'Fixture A', chart: song('Fixture A') }, { title: 'NOT FOUND' }],
+      stages: [{ title: 'Fixture A', chart: chartEntry('Fixture A') }, { title: 'NOT FOUND' }],
       playable: false,
     };
     expect(describeBar({ kind: 'course', course }, { lamp: 'FAILED', trophy: 'bronzemedal' })).toEqual({
@@ -206,7 +206,7 @@ describe('results', () => {
       gauge: 80,
       cleared: true,
       playSeconds: 6.5,
-      song: song('Fixture A'),
+      chart: chartEntry('Fixture A'),
       gaugeHistory: [],
       scoreHistory: [],
       lamp: 'NORMAL',
@@ -233,7 +233,7 @@ describe('results', () => {
       gauge: 40,
       cleared: false,
       playSeconds: 4,
-      song: song('Fixture B'),
+      chart: chartEntry('Fixture B'),
       gaugeHistory: [],
       scoreHistory: [],
       lamp: 'FAILED',
@@ -257,18 +257,18 @@ describe('results', () => {
     const courseLog = {
       course: { name: 'FIX GRADE', kind: 'grade', constraints: [], trophies: [] },
       stages: [
-        { played: true, playlog: stageLog({ title: 'A', pgreat: 12, poor: 0, final: 100 }) },
-        { played: true, playlog: stageLog({ title: 'B', pgreat: 3, poor: 1, final: 97, start: 100, aborted: true }) },
+        { played: true, replay: stageLog({ title: 'A', pgreat: 12, poor: 0, final: 100 }) },
+        { played: true, replay: stageLog({ title: 'B', pgreat: 3, poor: 1, final: 97, start: 100, aborted: true }) },
         { played: false, facts: {} },
       ],
-    } as unknown as BeMusicCoursePlaylog;
+    } as unknown as BeMusicCourseReplay;
     const native = {
       judge: { pgreat: 15, great: 0, good: 0, bad: 0, poor: 1, emptyPoor: 0 },
       exScore: 30,
       gauge: { type: 'GRADE', final: 97, cleared: false },
       stagesPlayed: 2,
       lamp: 'FAILED',
-    } as unknown as PlaylogCourseResult;
+    } as unknown as ReplayCourseResult;
     expect(
       resultFromCourseLog(courseLog, native, { family: 'built-in', playSeconds: 9, jingle: 'lr2:courseFail' }),
     ).toEqual({

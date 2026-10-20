@@ -7,13 +7,13 @@ import type { PlayerOptions, ResolvedPlayChart, ResolvePlayChartOptions } from '
 
 /*
  * The chart-side steps of a play, apart from the engine's audio and UI start-up so that runtime-neutral consumers (a
- * play-log verifier on a server) can rebuild the chart a play was played on without loading the driver.
+ * replay verifier on a server) can rebuild the chart a play was played on without loading the driver.
  */
 
 /**
  * The hosts' single control-flow step: draws `source`'s `#RANDOM` / `#SWITCH` outcomes once (or takes
  * `options.randomDraws`) and resolves the chart with them. Every consumer of the play — the scene, the engine, the
- * result screen, the play log — then works from the returned chart and draws, so nothing rolls `#RANDOM` again.
+ * result screen, the replay — then works from the returned chart and draws, so nothing rolls `#RANDOM` again.
  */
 export function resolvePlayChart(source: BeMusicJSON, options: ResolvePlayChartOptions = {}): ResolvedPlayChart {
   const randomDraws = options.randomDraws ?? drawRandomOutcomes(source, options.random ?? Math.random);

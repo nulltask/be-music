@@ -1,13 +1,13 @@
 import {
-  resolvePlaylogViewAt,
-  roundPlaylogView,
-  type PlaylogViewChange,
-  type PlaylogViewState,
-} from '@be-music/player/playlog';
+  resolveReplayViewAt,
+  roundReplayView,
+  type ReplayViewChange,
+  type ReplayViewState,
+} from '@be-music/player/replay';
 import { resolveLaneCover } from './lane-cover.ts';
 import type { PlayViewState } from './state.ts';
 
-/** The hi-speed scale of the built-in and LR2 scenes (`PIXELS_PER_BEAT × hiSpeed`), as `PlaylogViewState.hiSpeedScale`. */
+/** The hi-speed scale of the built-in and LR2 scenes (`PIXELS_PER_BEAT × hiSpeed`), as `ReplayViewState.hiSpeedScale`. */
 export const BE_MUSIC_HI_SPEED_SCALE = 'be-music';
 /** The hi-speed scale of the beatoraja scene (a lane is four beats at hi-speed 1). */
 export const BEATORAJA_HI_SPEED_SCALE = 'beatoraja';
@@ -34,7 +34,7 @@ export function resolveWhiteNumber(input: {
 /**
  * The hi-speed that shows a note for `whiteNumberMs` below the SUDDEN+ cover ({@link resolveWhiteNumber} solved for the
  * hi-speed), for a lane `laneBeats` beats long at hi-speed 1: a replay on another hi-speed scale works out the speed that
- * shows the visible time a play log recorded. Like the white number it leaves the LIFT out. `undefined` when nothing of
+ * shows the visible time a replay recorded. Like the white number it leaves the LIFT out. `undefined` when nothing of
  * the lane is uncovered or an input is not positive.
  */
 export function resolveHiSpeedForWhiteNumber(input: {
@@ -61,17 +61,17 @@ export function resolveGreenNumber(whiteNumberMs: number): number {
 }
 
 /**
- * What the player sees in the play log's units (`PlaylogViewState`): the drawn hi-speed on the scene's hi-speed
+ * What the player sees in the replay's units (`ReplayViewState`): the drawn hi-speed on the scene's hi-speed
  * `scale`, the HS-FIX, each side's covers as fractions of the lane, and the visible time at the chart's main BPM without
  * `#SCROLL` ({@link resolveWhiteNumber} on the first side's cover, for a lane `laneBeats` beats long at hi-speed 1), so
- * a replay on another scale can match it. Rounded to the play log's precision.
+ * a replay on another scale can match it. Rounded to the replay's precision.
  */
-export function resolvePlaylogView(
+export function captureReplayView(
   view: PlayViewState,
   options: { scale: string; laneBeats?: number; mainBPM?: number },
-): PlaylogViewState {
+): ReplayViewState {
   const covers = view.covers.map(resolveLaneCover);
-  const playlogView: PlaylogViewState = {
+  const replayView: ReplayViewState = {
     hiSpeed: view.hiSpeed.drawn,
     hiSpeedScale: options.scale,
     ...(view.hsFix !== undefined ? { hsFix: view.hsFix } : {}),
@@ -79,26 +79,26 @@ export function resolvePlaylogView(
   };
   const { laneBeats, mainBPM } = options;
   if (laneBeats !== undefined && laneBeats > 0 && mainBPM !== undefined && mainBPM > 0 && view.hiSpeed.drawn > 0) {
-    playlogView.visibleMs = resolveWhiteNumber({
+    replayView.visibleMs = resolveWhiteNumber({
       laneBeats,
       hiSpeed: view.hiSpeed.drawn,
       sudden: covers[0]?.sudden ?? 0,
       bpm: mainBPM,
     });
   }
-  return roundPlaylogView(playlogView);
+  return roundReplayView(replayView);
 }
 
 /**
- * Walks a replayed play log's view (`play.view`, then `play.viewChanges`) along the playhead, so a screen re-applies it
+ * Walks a replayed replay's view (`play.view`, then `play.viewChanges`) along the playhead, so a screen re-applies it
  * only when it changes instead of resolving it every frame.
  */
-export class PlaylogViewCursor {
+export class ReplayViewCursor {
   private applied = -1;
-  private readonly initial: PlaylogViewState | undefined;
-  private readonly changes: readonly PlaylogViewChange[];
+  private readonly initial: ReplayViewState | undefined;
+  private readonly changes: readonly ReplayViewChange[];
 
-  constructor(initial: PlaylogViewState | undefined, changes: readonly PlaylogViewChange[] = []) {
+  constructor(initial: ReplayViewState | undefined, changes: readonly ReplayViewChange[] = []) {
     this.initial = initial;
     this.changes = changes;
   }
@@ -107,16 +107,16 @@ export class PlaylogViewCursor {
    * The recorded view in force at `timeUs` (chart time, µs) when it differs from the one the last call returned — the
    * first call always returns it — else `undefined`. The playhead may move back (a restart): the view follows it.
    */
-  next(timeUs: number): PlaylogViewState | undefined {
+  next(timeUs: number): ReplayViewState | undefined {
     const count = countChangesAt(this.changes, timeUs);
     if (count === this.applied) return undefined;
     this.applied = count;
-    return resolvePlaylogViewAt(this.initial, this.changes, timeUs);
+    return resolveReplayViewAt(this.initial, this.changes, timeUs);
   }
 }
 
 /** How many of `changes` (in time order) are at or before `timeUs`. */
-function countChangesAt(changes: readonly PlaylogViewChange[], timeUs: number): number {
+function countChangesAt(changes: readonly ReplayViewChange[], timeUs: number): number {
   let low = 0;
   let high = changes.length;
   while (low < high) {

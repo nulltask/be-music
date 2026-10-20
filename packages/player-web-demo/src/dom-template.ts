@@ -24,10 +24,10 @@ export const DEMO_APP_HTML = `
       forward a synthetic click to this hidden input from the
       function controller's handler. \`webkitdirectory\` makes the
       browser show a folder picker on Chromium / Safari. ZIPs and
-      play logs go through the "Open files" picker below.
+      replays go through the "Open files" picker below.
     -->
     <input id="songs" type="file" webkitdirectory multiple class="hidden-file-input" />
-    <!-- The "Open files" button's picker: ZIP archives and play logs (\`*.bmplay.json\`). -->
+    <!-- The "Open files" button's picker: ZIP archives and replays (\`*.bmplay.json\`). -->
     <input id="files" type="file" multiple accept=".zip,.json" class="hidden-file-input" />
     <input id="search" class="search-input" type="search" placeholder="Search title / artist / genre..." />
     <div class="stage" id="stage">
@@ -431,7 +431,7 @@ export const DEMO_APP_HTML = `
           <div class="help-lang is-active" data-lang="en">
             <section class="help-about">
               <p class="help-about-summary">
-                A browser-based BMS player. Drop in a folder containing BMS / BMSON charts and
+                A browser-based BMS player. Drop in a folder containing BMS / bmson charts and
                 play them straight from the page. It comes with two skins, Synesthesia and Plain
                 (Debug Menu → Built-in skin), and reads <strong>Lunatic Rave 2</strong> skins
                 (<code>.lr2skin</code>) and <strong>beatoraja</strong> skins
@@ -460,7 +460,7 @@ export const DEMO_APP_HTML = `
                 <li>
                   Dropped files stay entirely in your browser. Charts, audio, and BGA assets are
                   <strong>never uploaded to any server</strong>. Only with
-                  <strong>Submit to Leaderboard</strong> on does a finished play send its play log
+                  <strong>Submit to Leaderboard</strong> on does a finished play send its replay
                   (your key presses and the chart's note layout) and a fingerprint of the chart to
                   the Leaderboard.
                 </li>
@@ -491,7 +491,7 @@ export const DEMO_APP_HTML = `
                 Or click <strong>Open folder</strong> in the Debug Menu (top-right) to use the native
                 folder picker — same handling as a drag-drop, so a folder containing both an LR2 / beatoraja
                 theme and BMS charts loads both in one shot. Press the button again to add another folder.
-                <strong>Open files</strong> picks ZIP archives or a play log (<code>*.bmplay.json</code>) to replay.
+                <strong>Open files</strong> picks ZIP archives or a replay (<code>*.bmplay.json</code>) to replay.
               </li>
               <li>Subsequent drops add to the library and keep the current theme.</li>
               <li>
@@ -562,7 +562,7 @@ export const DEMO_APP_HTML = `
           <div class="help-lang" data-lang="ja" hidden>
             <section class="help-about">
               <p class="help-about-summary">
-                ブラウザ上で動作する BMS プレイヤーです。BMS / BMSON が入ったフォルダをドロップするだけでそのまま再生できます。
+                ブラウザ上で動作する BMS プレイヤーです。BMS / bmson が入ったフォルダをドロップするだけでそのまま再生できます。
                 内蔵スキンはシナスタジア (Synesthesia) とプレーン (Plain) の 2 種類です (Debug Menu → Built-in skin)。
                 <strong>Lunatic Rave 2</strong> のスキン (<code>.lr2skin</code>) と <strong>beatoraja</strong> のスキン (<code>.json</code> / <code>.luaskin</code>) も解釈するので、<code>LR2files</code> フォルダや beatoraja の <code>skin/</code> フォルダをページにドロップすれば既存のスキンをそのまま適用できます。
               </p>
@@ -586,7 +586,7 @@ export const DEMO_APP_HTML = `
                 <li>
                   ドロップしたファイルはブラウザ内でのみ処理され、譜面・音声・BGA データを
                   <strong>サーバへ送信することは一切ありません</strong>。
-                  <strong>Submit to Leaderboard</strong> をオンにしたときだけ、プレイ終了時にプレイログ (キー入力と譜面のノーツ配置) と譜面のフィンガープリントを Leaderboard に送ります。
+                  <strong>Submit to Leaderboard</strong> をオンにしたときだけ、プレイ終了時にリプレイ (キー入力と譜面のノーツ配置) と譜面のフィンガープリントを Leaderboard に送ります。
                 </li>
                 <li>一部の機能はまだ実装されていません。動作が不完全な箇所があります。</li>
                 <li>
@@ -608,7 +608,7 @@ export const DEMO_APP_HTML = `
                 右上 Debug Menu の <strong>Open folder</strong> ボタンからネイティブのフォルダ選択ダイアログも使えます。
                 ドラッグ&ドロップと同じ処理経路を通るので、LR2 / beatoraja のテーマとチャートが同居したフォルダもまとめて読み込めます。
                 ボタンを押し直せば別フォルダを追加で読み込めます。
-                <strong>Open files</strong> では ZIP アーカイブやリプレイするプレイログ (<code>*.bmplay.json</code>) を選べます。
+                <strong>Open files</strong> では ZIP アーカイブやリプレイするリプレイ (<code>*.bmplay.json</code>) を選べます。
               </li>
               <li>追加でドロップした場合、既存のライブラリに追加され、テーマも維持されます。</li>
             </ul>

@@ -1,7 +1,7 @@
 import { createEmptyJSON } from '@be-music/json';
 import type { LR2Skin } from '@be-music/lr2-skin';
 import type { AudioService } from '@be-music/player-web/audio';
-import { describeSongCollection, type BrowserSongCollection } from '@be-music/player-web/collection';
+import { describeChartCollection, type BrowserChartCollection } from '@be-music/player-web/collection';
 import {
   createSelectScene,
   type PlayScene,
@@ -26,7 +26,7 @@ vi.mock('@be-music/player-web/host', () => ({ createSelectScene: vi.fn() }));
 
 type Family = SelectSceneKit['family'];
 
-function song(id: string): LibraryChart {
+function chartEntry(id: string): LibraryChart {
   return {
     id,
     sourceId: 'drop1',
@@ -49,8 +49,8 @@ function course(playable = true): LibraryCourse {
     hash: [{ md5: '1'.repeat(32) }, { md5: '2'.repeat(32) }],
     constraint: ['CLASS'],
   })!;
-  const b = playable ? { title: 'b', chart: song('b') } : { title: 'b' };
-  return { id: 'dan#0', definition, stages: [{ title: 'a', chart: song('a') }, b], playable };
+  const b = playable ? { title: 'b', chart: chartEntry('b') } : { title: 'b' };
+  return { id: 'dan#0', definition, stages: [{ title: 'a', chart: chartEntry('a') }, b], playable };
 }
 
 /** Where the select screen was left, and where a course was started from. */
@@ -71,7 +71,7 @@ interface FakeSelect {
   readonly options: SelectSceneOptions;
   readonly updateKit: ReturnType<typeof vi.fn<(kit: SelectSceneKit) => void>>;
   readonly setSounds: ReturnType<typeof vi.fn<(sounds: unknown) => void>>;
-  readonly setLibrary: ReturnType<typeof vi.fn<(library: BrowserSongCollection) => void>>;
+  readonly setLibrary: ReturnType<typeof vi.fn<(library: BrowserChartCollection) => void>>;
   readonly restore: ReturnType<typeof vi.fn<(snapshot: BrowseSnapshot) => void>>;
   readonly snapshot: ReturnType<typeof vi.fn<() => BrowseSnapshot>>;
   readonly dispose: ReturnType<typeof vi.fn<() => void>>;
@@ -142,10 +142,10 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     router,
     elements: { shell } as Pick<PlayerWebDemoElements, 'shell'>,
     library: {
-      collection: { sources: [], charts: options.charts ?? [song('a')], errors: [] } as BrowserSongCollection,
+      collection: { sources: [], charts: options.charts ?? [chartEntry('a')], errors: [] } as BrowserChartCollection,
     },
     records: {
-      lookupSongRecord: vi.fn<SelectRouteDeps['records']['lookupSongRecord']>(() => undefined),
+      lookupChartBestRecord: vi.fn<SelectRouteDeps['records']['lookupChartBestRecord']>(() => undefined),
       currentRulesetRecords: vi.fn<SelectRouteDeps['records']['currentRulesetRecords']>(() => new Map()),
     },
     courses,
@@ -153,7 +153,7 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     courseMaker: {
       maker: {} as SelectRouteDeps['courseMaker']['maker'],
       panel: undefined,
-      addSongToCourseBeingMade: vi.fn<SelectRouteDeps['courseMaker']['addSongToCourseBeingMade']>(() => false),
+      addChartToCourseBeingMade: vi.fn<SelectRouteDeps['courseMaker']['addChartToCourseBeingMade']>(() => false),
     },
     familyKits: {
       familyDispatchState: state,
@@ -188,7 +188,7 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     beatorajaSkinOptions: { refreshBeatorajaSelectSkinOptions: vi.fn(), clear: vi.fn() },
     playStatusShown: vi.fn(() => false),
     setStatus: vi.fn<SelectRouteDeps['setStatus']>(),
-    unlockPlaylogOptions: vi.fn<SelectRouteDeps['unlockPlaylogOptions']>(),
+    unlockReplayOptions: vi.fn<SelectRouteDeps['unlockReplayOptions']>(),
     rememberHiSpeed: vi.fn<SelectRouteDeps['rememberHiSpeed']>(),
     showDecide: vi.fn<SelectRouteDeps['showDecide']>(async () => {}),
   };
@@ -235,7 +235,7 @@ describe('SelectRoute: the first select screen', () => {
     expect(h.stage).toEqual([scene]);
     expect(h.deps.debugMenu.scheduleFirstRunResolutionDetect).toHaveBeenCalledOnce();
     expect(h.deps.beatorajaSkinOptions.refreshBeatorajaSelectSkinOptions).not.toHaveBeenCalled();
-    expect(h.deps.unlockPlaylogOptions).toHaveBeenCalledOnce();
+    expect(h.deps.unlockReplayOptions).toHaveBeenCalledOnce();
     expect([...h.classes]).toEqual([]);
   });
 
@@ -262,7 +262,7 @@ describe('SelectRoute: the first select screen', () => {
     expect(h.deps.setStatus).not.toHaveBeenCalled();
     h.deps.playStatusShown.mockReturnValue(true);
     await h.route.showSelect();
-    expect(h.deps.setStatus).toHaveBeenCalledWith(describeSongCollection(h.deps.library.collection));
+    expect(h.deps.setStatus).toHaveBeenCalledWith(describeChartCollection(h.deps.library.collection));
   });
 
   test('a newer navigation begun before it shows disposes it, and the screen does nothing more', async () => {
@@ -494,18 +494,18 @@ describe('SelectRoute: what the screen tells the app', () => {
     const h = harness();
     await h.route.showSelect();
     const { start } = lastMade(h).options.on;
-    expect(start({ kind: 'chart', chart: song('a') }, { autoPlay: true })).toBe(true);
-    expect(h.deps.showDecide).toHaveBeenLastCalledWith(song('a'), { autoPlay: true });
-    expect(start({ kind: 'chart', chart: song('b') }, { autoPlay: false })).toBe(true);
-    expect(h.deps.showDecide).toHaveBeenLastCalledWith(song('b'), {});
+    expect(start({ kind: 'chart', chart: chartEntry('a') }, { autoPlay: true })).toBe(true);
+    expect(h.deps.showDecide).toHaveBeenLastCalledWith(chartEntry('a'), { autoPlay: true });
+    expect(start({ kind: 'chart', chart: chartEntry('b') }, { autoPlay: false })).toBe(true);
+    expect(h.deps.showDecide).toHaveBeenLastCalledWith(chartEntry('b'), {});
   });
 
   test('while a course is being made, a chart started joins it and plays nothing', async () => {
     const h = harness();
-    h.deps.courseMaker.addSongToCourseBeingMade.mockReturnValue(true);
+    h.deps.courseMaker.addChartToCourseBeingMade.mockReturnValue(true);
     await h.route.showSelect();
-    expect(lastMade(h).options.on.start({ kind: 'chart', chart: song('a') }, { autoPlay: false })).toBe(false);
-    expect(h.deps.courseMaker.addSongToCourseBeingMade).toHaveBeenCalledWith(song('a'));
+    expect(lastMade(h).options.on.start({ kind: 'chart', chart: chartEntry('a') }, { autoPlay: false })).toBe(false);
+    expect(h.deps.courseMaker.addChartToCourseBeingMade).toHaveBeenCalledWith(chartEntry('a'));
     expect(h.deps.showDecide).not.toHaveBeenCalled();
   });
 
@@ -578,8 +578,8 @@ describe('SelectRoute: what the screen tells the app', () => {
     const h = harness();
     await h.route.showSelect();
     const { records, on } = lastMade(h).options;
-    records!.chart(song('a'));
-    expect(h.deps.records.lookupSongRecord).toHaveBeenCalledWith(song('a'));
+    records!.chart(chartEntry('a'));
+    expect(h.deps.records.lookupChartBestRecord).toHaveBeenCalledWith(chartEntry('a'));
     expect(records!.course(course())).toBeUndefined();
     expect(h.deps.records.currentRulesetRecords).toHaveBeenCalled();
     on.search!();

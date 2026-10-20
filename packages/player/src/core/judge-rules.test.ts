@@ -8,7 +8,7 @@ import {
   longNoteScoresTail,
   resolveLoggedLongNoteMode,
   resolveLongNoteEndSeconds,
-  resolveManualJudgeKind,
+  resolveManualJudgmentKind,
   resolveManualTimedJudge,
   resolvePlayableLongNoteMode,
   resolveRulesetLongNoteMode,
@@ -38,12 +38,12 @@ function note(seconds: number, extra: Partial<TimedPlayableNote> = {}): TimedPla
 }
 
 describe('judge rules', () => {
-  test('resolveManualJudgeKind classifies the engine sign convention against both window legs', () => {
+  test('resolveManualJudgmentKind classifies the engine sign convention against both window legs', () => {
     // Positive deltas are LATE presses, which read the windows' negative (late) leg.
-    expect(resolveManualJudgeKind(25, WINDOWS)).toBe('PERFECT');
-    expect(resolveManualJudgeKind(-25, WINDOWS)).toBe('GREAT');
-    expect(resolveManualJudgeKind(205, WINDOWS)).toBe('BAD');
-    expect(resolveManualJudgeKind(-205, WINDOWS)).toBeUndefined();
+    expect(resolveManualJudgmentKind(25, WINDOWS)).toBe('PERFECT');
+    expect(resolveManualJudgmentKind(-25, WINDOWS)).toBe('GREAT');
+    expect(resolveManualJudgmentKind(205, WINDOWS)).toBe('BAD');
+    expect(resolveManualJudgmentKind(-205, WINDOWS)).toBeUndefined();
   });
 
   test('resolveManualTimedJudge turns an out-of-reach delta into a POOR', () => {

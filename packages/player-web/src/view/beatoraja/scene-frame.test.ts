@@ -16,7 +16,7 @@ import {
   resolveBeatorajaFadeOutMs,
   resolveBeatorajaSceneTimers,
   resolveBeatorajaSkinTimingMs,
-  resolveBeatorajaSongText,
+  resolveBeatorajaChartText,
 } from './scene-frame.ts';
 
 function makeSong(overrides: Partial<LibraryChart> = {}): LibraryChart {
@@ -43,22 +43,24 @@ function makeSong(overrides: Partial<LibraryChart> = {}): LibraryChart {
 
 const skin = { name: 'Skin Name', author: 'Skin Author' } as BeatorajaSkin;
 
-describe('resolveBeatorajaSongText', () => {
+describe('resolveBeatorajaChartText', () => {
   it('resolves shared song, skin, and directory text refs', () => {
-    const song = makeSong();
+    const chartEntry = makeSong();
 
-    expect(resolveBeatorajaSongText(BEATORAJA_TEXT.TITLE, { song, skin })).toBe('Title');
-    expect(resolveBeatorajaSongText(BEATORAJA_TEXT.FULLTITLE, { song, skin })).toBe('Title Sub');
-    expect(resolveBeatorajaSongText(BEATORAJA_TEXT.GENRE, { song, skin })).toBe('Genre');
-    expect(resolveBeatorajaSongText(BEATORAJA_TEXT.FULLARTIST, { song, skin })).toBe('Artist movie:artist');
-    expect(resolveBeatorajaSongText(BEATORAJA_TEXT.SKIN_NAME, { song, skin })).toBe('Skin Name');
-    expect(resolveBeatorajaSongText(BEATORAJA_TEXT.SKIN_AUTHOR, { song, skin })).toBe('Skin Author');
-    expect(resolveBeatorajaSongText(BEATORAJA_TEXT.DIRECTORY, { song, skin })).toBe('Song Folder');
+    expect(resolveBeatorajaChartText(BEATORAJA_TEXT.TITLE, { chart: chartEntry, skin })).toBe('Title');
+    expect(resolveBeatorajaChartText(BEATORAJA_TEXT.FULLTITLE, { chart: chartEntry, skin })).toBe('Title Sub');
+    expect(resolveBeatorajaChartText(BEATORAJA_TEXT.GENRE, { chart: chartEntry, skin })).toBe('Genre');
+    expect(resolveBeatorajaChartText(BEATORAJA_TEXT.FULLARTIST, { chart: chartEntry, skin })).toBe(
+      'Artist movie:artist',
+    );
+    expect(resolveBeatorajaChartText(BEATORAJA_TEXT.SKIN_NAME, { chart: chartEntry, skin })).toBe('Skin Name');
+    expect(resolveBeatorajaChartText(BEATORAJA_TEXT.SKIN_AUTHOR, { chart: chartEntry, skin })).toBe('Skin Author');
+    expect(resolveBeatorajaChartText(BEATORAJA_TEXT.DIRECTORY, { chart: chartEntry, skin })).toBe('Song Folder');
   });
 
   it('lets decide keep table refs visible while result leaves them unresolved', () => {
-    expect(resolveBeatorajaSongText(BEATORAJA_TEXT.TABLE_NAME, { skin })).toBeUndefined();
-    expect(resolveBeatorajaSongText(BEATORAJA_TEXT.TABLE_NAME, { skin, tableTextFallback: '' })).toBe('');
+    expect(resolveBeatorajaChartText(BEATORAJA_TEXT.TABLE_NAME, { skin })).toBeUndefined();
+    expect(resolveBeatorajaChartText(BEATORAJA_TEXT.TABLE_NAME, { skin, tableTextFallback: '' })).toBe('');
   });
 });
 

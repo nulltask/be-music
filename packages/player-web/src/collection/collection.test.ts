@@ -1,8 +1,8 @@
 import { zipSync } from 'fflate';
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import {
-  BrowserSongCollectionStore,
-  loadSongCollectionFromFiles,
+  BrowserChartCollectionStore,
+  loadChartCollectionFromFiles,
   resolveChartAsset,
   resolveChartAudioAsset,
   resolveChartBGAAsset,
@@ -12,7 +12,7 @@ import { resolveChart } from '@be-music/chart';
 import { parseChart } from '@be-music/parser';
 import { preparePlaybackChart } from '@be-music/player';
 import { DeferredDroppedFile } from './dropped-file.ts';
-import type { BrowserSongAssetEntry, BrowserSongAssetSource, LoadProgress } from './types.ts';
+import type { BrowserAssetEntry, BrowserAssetSource, LoadProgress } from './types.ts';
 
 /**
  * The drag-drop loader fires `LoadProgress` events as it walks the `reading` and `parsing` phases so the host UI can
@@ -21,7 +21,7 @@ import type { BrowserSongAssetEntry, BrowserSongAssetSource, LoadProgress } from
  * the totals stay in sync with the actual work.
  *
  * The fixture `File`s are minimal stubs — `arrayBuffer()` returns a tiny but valid BMS chart so
- * `loadSongCollectionFromFiles` actually parses them and we exercise the parsing-phase emitter end-to-end.
+ * `loadChartCollectionFromFiles` actually parses them and we exercise the parsing-phase emitter end-to-end.
  */
 
 function makeFile(path: string, contents = ''): File {
@@ -55,7 +55,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('loadSongCollectionFromFiles with deferred drop handles', () => {
+describe('loadChartCollectionFromFiles with deferred drop handles', () => {
   test('parses unopened charts in path order and leaves assets unopened', async () => {
     const opened: string[] = [];
     const deferred = (path: string, contents = '') =>
@@ -72,14 +72,14 @@ describe('loadSongCollectionFromFiles with deferred drop handles', () => {
     const charts = Array.from({ length: 12 }, (_, index) =>
       deferred(`Pack/S${String(index).padStart(2, '0')}/main.bms`, MINIMAL_BMS.replace('Test', `Song ${index}`)),
     );
-    const collection = await loadSongCollectionFromFiles([...charts].reverse().concat(deferred('Pack/S00/kick.wav')));
+    const collection = await loadChartCollectionFromFiles([...charts].reverse().concat(deferred('Pack/S00/kick.wav')));
     expect(collection.errors).toEqual([]);
-    expect(collection.charts.map((song) => song.title)).toEqual(charts.map((_, index) => `Song ${index}`));
+    expect(collection.charts.map((chartEntry) => chartEntry.title)).toEqual(charts.map((_, index) => `Song ${index}`));
     expect(opened).not.toContain('Pack/S00/kick.wav');
   });
 });
 
-describe('loadSongCollectionFromFiles note counts', () => {
+describe('loadChartCollectionFromFiles note counts', () => {
   const engineScorableNotes = (path: string, text: string): number =>
     preparePlaybackChart(resolveChart(parseChart(text, path), { chartPath: path, inferBmsLNTypeWhenMissing: true }))
       .scorableNotes.length;
@@ -104,16 +104,16 @@ describe('loadSongCollectionFromFiles note counts', () => {
       expected: 2,
     },
   ])('$name', async ({ path, text, expected }) => {
-    const collection = await loadSongCollectionFromFiles([makeFile(path, text)]);
+    const collection = await loadChartCollectionFromFiles([makeFile(path, text)]);
     expect(collection.charts[0]!.totalNotes).toBe(expected);
     expect(engineScorableNotes(path, text)).toBe(expected);
   });
 });
 
-describe('loadSongCollectionFromFiles progress events', () => {
+describe('loadChartCollectionFromFiles progress events', () => {
   test('reports the reading phase with a monotonic current and a guaranteed terminal event', async () => {
     const events: LoadProgress[] = [];
-    await loadSongCollectionFromFiles(
+    await loadChartCollectionFromFiles(
       [makeFile('Song/main.bms', MINIMAL_BMS), makeFile('Song/kick.wav'), makeFile('Song/snare.wav')],
       { onProgress: (event) => events.push(event) },
     );
@@ -132,7 +132,7 @@ describe('loadSongCollectionFromFiles progress events', () => {
 
   test('reports a parsing event per chart file (skipping non-charts)', async () => {
     const events: LoadProgress[] = [];
-    await loadSongCollectionFromFiles(
+    await loadChartCollectionFromFiles(
       [
         makeFile('Pack/A/main.bms', MINIMAL_BMS),
         makeFile('Pack/A/kick.wav'),
@@ -151,7 +151,7 @@ describe('loadSongCollectionFromFiles progress events', () => {
     // A theme-only / no-chart drop must NOT emit a "0 / 0" parsing event — the UI would otherwise flash a determinate
     // "Parsing 0 / 0" before disappearing, which is jarring.
     const events: LoadProgress[] = [];
-    await loadSongCollectionFromFiles([makeFile('Theme/cover.png')], {
+    await loadChartCollectionFromFiles([makeFile('Theme/cover.png')], {
       onProgress: (event) => events.push(event),
     });
     expect(events.some((event) => event.phase === 'parsing')).toBe(false);
@@ -160,7 +160,7 @@ describe('loadSongCollectionFromFiles progress events', () => {
   test('survives without an onProgress callback (calls are guarded)', async () => {
     // The progress hook is optional; supplying no options must not throw. Acts as a safety net so existing callers (and
     // tests) that haven't migrated keep working.
-    const collection = await loadSongCollectionFromFiles([makeFile('Song/main.bms', MINIMAL_BMS)]);
+    const collection = await loadChartCollectionFromFiles([makeFile('Song/main.bms', MINIMAL_BMS)]);
     expect(collection.charts.length).toBe(1);
   });
 
@@ -179,18 +179,18 @@ describe('loadSongCollectionFromFiles progress events', () => {
       makeFile(`Pack/${String(index).padStart(2, '0')}.bms`, MINIMAL_BMS),
     );
 
-    const collection = await loadSongCollectionFromFiles(files);
+    const collection = await loadChartCollectionFromFiles(files);
 
     expect(collection.charts).toHaveLength(32);
     expect(scheduler.yield).toHaveBeenCalledTimes(1);
   });
 
   test('loads charts from zip archives', async () => {
-    const collection = await loadSongCollectionFromFiles([makeZipFile('Pack.zip', { 'Song/main.bms': MINIMAL_BMS })]);
+    const collection = await loadChartCollectionFromFiles([makeZipFile('Pack.zip', { 'Song/main.bms': MINIMAL_BMS })]);
 
     expect(collection.sources).toHaveLength(1);
     expect(collection.sources[0]?.kind).toBe('zip');
-    expect(collection.charts.map((song) => song.chartPath)).toEqual(['Song/main.bms']);
+    expect(collection.charts.map((chartEntry) => chartEntry.chartPath)).toEqual(['Song/main.bms']);
   });
 
   test('rejects oversized zip archives before reading their bytes', async () => {
@@ -202,7 +202,7 @@ describe('loadSongCollectionFromFiles progress events', () => {
       arrayBuffer,
     } as unknown as File;
 
-    const collection = await loadSongCollectionFromFiles([oversized]);
+    const collection = await loadChartCollectionFromFiles([oversized]);
 
     expect(arrayBuffer).not.toHaveBeenCalled();
     expect(collection.sources).toHaveLength(0);
@@ -213,9 +213,9 @@ describe('loadSongCollectionFromFiles progress events', () => {
   });
 });
 
-describe('BrowserSongCollectionStore', () => {
+describe('BrowserChartCollectionStore', () => {
   test('appendFromFiles accumulates drops with collision-safe source and song ids', async () => {
-    const store = new BrowserSongCollectionStore();
+    const store = new BrowserChartCollectionStore();
 
     const first = await store.appendFromFiles([makeFile('PackA/main.bms', MINIMAL_BMS)]);
     expect(first).toBe(store.collection);
@@ -230,25 +230,25 @@ describe('BrowserSongCollectionStore', () => {
     expect(second.sources).toHaveLength(2);
     expect(second.charts).toHaveLength(2);
     expect(second.sources.map((source) => source.id)).toEqual(['drop1-files:0', 'drop2-files:0']);
-    expect(second.charts.map((song) => song.sourceId)).toEqual(['drop1-files:0', 'drop2-files:0']);
+    expect(second.charts.map((chartEntry) => chartEntry.sourceId)).toEqual(['drop1-files:0', 'drop2-files:0']);
   });
 
   test('loadFromFiles replaces the collection and resets the next append prefix', async () => {
-    const store = new BrowserSongCollectionStore();
+    const store = new BrowserChartCollectionStore();
     await store.appendFromFiles([makeFile('PackA/main.bms', MINIMAL_BMS)]);
 
     const replaced = await store.loadFromFiles([makeFile('PackB/main.bms', MINIMAL_BMS)]);
     expect(replaced).toBe(store.collection);
     expect(replaced.sources.map((source) => source.id)).toEqual(['files:0']);
-    expect(replaced.charts.map((song) => song.sourceId)).toEqual(['files:0']);
+    expect(replaced.charts.map((chartEntry) => chartEntry.sourceId)).toEqual(['files:0']);
 
     const appended = await store.appendFromFiles([makeFile('PackC/main.bms', MINIMAL_BMS)]);
     expect(appended.sources.map((source) => source.id)).toEqual(['files:0', 'drop1-files:0']);
-    expect(appended.charts.map((song) => song.sourceId)).toEqual(['files:0', 'drop1-files:0']);
+    expect(appended.charts.map((chartEntry) => chartEntry.sourceId)).toEqual(['files:0', 'drop1-files:0']);
   });
 
   test('loadFromDrop replaces the collection from DataTransfer files', async () => {
-    const store = new BrowserSongCollectionStore();
+    const store = new BrowserChartCollectionStore();
     await store.appendFromFiles([makeFile('PackA/main.bms', MINIMAL_BMS)]);
 
     const loaded = await store.loadFromDrop({
@@ -256,17 +256,17 @@ describe('BrowserSongCollectionStore', () => {
     } as unknown as DataTransfer);
     expect(loaded).toBe(store.collection);
     expect(loaded.sources.map((source) => source.id)).toEqual(['files:0']);
-    expect(loaded.charts.map((song) => song.sourceId)).toEqual(['files:0']);
+    expect(loaded.charts.map((chartEntry) => chartEntry.sourceId)).toEqual(['files:0']);
   });
 });
 
 /**
  * Builds a tiny in-memory song source for testing the chart-asset resolver. The `files` map keys are relative paths
- * (matching how `loadSongCollectionFromFiles` populates the source); the chart path is fixed so each test only varies
+ * (matching how `loadChartCollectionFromFiles` populates the source); the chart path is fixed so each test only varies
  * the asset-side bytes.
  */
-function makeAssetSource(files: Record<string, Uint8Array>): BrowserSongAssetSource {
-  const map = new Map<string, BrowserSongAssetEntry>();
+function makeAssetSource(files: Record<string, Uint8Array>): BrowserAssetSource {
+  const map = new Map<string, BrowserAssetEntry>();
   for (const [key, value] of Object.entries(files)) {
     map.set(key, value);
   }

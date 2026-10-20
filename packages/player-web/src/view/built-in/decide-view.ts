@@ -5,7 +5,7 @@
 
 import { resolveStageOrientation } from '@be-music/skin-sdk';
 import { Color, Container, Graphics } from 'pixi.js';
-import type { BrowserSongAssetSource } from '../../collection/types.ts';
+import type { BrowserAssetSource } from '../../collection/types.ts';
 import type { BuiltInKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
@@ -20,7 +20,7 @@ import {
   resolveBeMusicDecideDurationMs,
   resolveBeMusicSkinStage,
 } from '../../skin/be-music/binding.ts';
-import { SongImageCache } from '../../skin/be-music/song-images.ts';
+import { ChartImageCache } from '../../skin/be-music/chart-images.ts';
 import type { DecideFrame, DecideIntent, DecideView, IntentSink, SceneViewTiming } from '../types.ts';
 
 const log = logger('decide');
@@ -28,8 +28,8 @@ const log = logger('decide');
 const BG = new Color('#05070b');
 
 export interface BuiltInDecideViewOptions {
-  /** Where the chart's files are, for its images (`frame.songImage`); every image reads as unavailable without one. */
-  readonly source?: BrowserSongAssetSource;
+  /** Where the chart's files are, for its images (`frame.chartImage`); every image reads as unavailable without one. */
+  readonly source?: BrowserAssetSource;
 }
 
 /**
@@ -58,9 +58,9 @@ export class BuiltInDecideView implements DecideView {
   private cachedDesignWidth = -1;
   private cachedDesignHeight = -1;
   private kit: BuiltInKit;
-  private readonly source: BrowserSongAssetSource | undefined;
+  private readonly source: BrowserAssetSource | undefined;
   private binding: BeMusicDecideBinding | undefined;
-  private songImages: SongImageCache | undefined;
+  private chartImages: ChartImageCache | undefined;
   private host: PixiSceneHost | undefined;
   private emit: IntentSink<DecideIntent> | undefined;
   private built = false;
@@ -108,8 +108,8 @@ export class BuiltInDecideView implements DecideView {
     try {
       this.binding?.dispose();
       this.binding = undefined;
-      this.songImages?.dispose();
-      this.songImages = undefined;
+      this.chartImages?.dispose();
+      this.chartImages = undefined;
       this.root.destroy({ children: true, context: true });
     } catch (error) {
       log.warn('decide cleanup threw', error);
@@ -148,7 +148,7 @@ export class BuiltInDecideView implements DecideView {
       designHeight,
       nowMs: frame.clock.nowMs,
       elapsedMs: frame.clock.nowMs - frame.clock.enteredAtMs,
-      song: frame.chart,
+      chart: frame.chart,
       playOptions: frame.playOptions,
       effects: this.kit.effects ?? 'full',
       audio: undefined,
@@ -166,9 +166,9 @@ export class BuiltInDecideView implements DecideView {
     this.root.addChild(this.viewportBackground, this.designRoot);
     if (skin.decide !== undefined) {
       const source = this.source;
-      this.songImages = new SongImageCache({ resolveSource: () => source });
+      this.chartImages = new ChartImageCache({ resolveSource: () => source });
       this.binding = new BeMusicDecideBinding(skin, {
-        songImage: this.songImages.lookup,
+        chartImage: this.chartImages.lookup,
         settings: this.kit.settings,
         renderer: host.app.renderer,
       });

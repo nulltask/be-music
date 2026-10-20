@@ -1,8 +1,8 @@
 [English version](./bmson-spec.md)
 
-# BMSON 実装仕様
+# bmson 実装仕様
 
-この文書は、`packages/parser` / `packages/stringifier` が BMSON をどう扱うかを定義します。
+この文書は、`packages/parser` / `packages/stringifier` が bmson をどう扱うかを定義します。
 beatoraja など他のプレイヤーが同じフィールドをどう読むかは [BMS / bmson 互換性ノート](./format-compat.ja.md) で比較しています。
 
 ## 一次参照
@@ -136,7 +136,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - `mine_channels[].notes[]`: `x`, `y`, `damage`
 - `bga`: `bga_header`, `bga_events`, `layer_events`, `poor_events`
 
-## bmson -> BMS/BMSON 中間表現 (`@be-music/json`) 変換
+## bmson -> BMS/bmson 中間表現 (`@be-music/json`) 変換
 
 読み込みと書き出しの全体の向きは [JSON 仕様 — 変換規則](./json-spec.ja.md#変換規則) にあります。ノートの `x` は、下の一覧の `mode_hint` の規則でレーンを決めます。
 
@@ -209,7 +209,7 @@ flowchart TD
   - beatoraja はロングノート内やノートのある位置の地雷を捨てるが、be-music は LR2 が BMS のそうした地雷を残すのと同じく残す（[BMS / bmson 互換性ノート §2.6](./format-compat.ja.md#26-地雷) を参照）
 - `bga` は `bmson.bga` へ保持
 
-## BMS/BMSON 中間表現 -> BMSON 変換 (stringifier)
+## BMS/bmson 中間表現 -> bmson 変換 (stringifier)
 
 - `@be-music/chart` の `eventToBeat` 相当の beat 解決から `y = round(beat * resolution)` を生成
 - `bmson.version` を `version` に出力 (未指定時は `1.0.0`)

@@ -230,7 +230,7 @@ export const profile = sqliteTable('profile', {
     .references(() => user.id, { onDelete: 'cascade' }),
   handle: text('handle').notNull().unique(),
   displayName: text('display_name').notNull(),
-  /** R2 key of the uploaded icon (`avatars/{userId}/{sha256}.{ext}`); null shows the generated one. */
+  /** R2 key of the uploaded avatar (`avatars/{userId}/{sha256}.{ext}`); null shows the generated one. */
   avatarKey: text('avatar_key'),
   ...timestamps,
 });
