@@ -2,7 +2,7 @@
 
 # Scene models
 
-`@be-music/scene-model` holds what every screen of the player shows and how it behaves, independent of the skin family
+`@be-music/player-scene-model` holds what every screen of the player shows and how it behaves, independent of the skin family
 that draws it ([ADR 0002](./adr/0002-scene-model-package.md)). The built-in, LR2 and beatoraja families used to keep
 two browse models, two sets of play-state bookkeeping and two result shapes, and their drift caused most of the bugs
 the course work found ([ADR 0001](./adr/0001-skin-families-only-draw.md)). The models here are the one implementation
@@ -10,10 +10,10 @@ each screen's session works on; the families only draw them.
 
 ```mermaid
 flowchart TD
-  player["@be-music/player<br/>ruleset · course · records · engine"]
-  model["@be-music/scene-model<br/>library · browse · play options<br/>play state · play result · course view · sounds"]
-  skins["skin-sdk · lr2-skin · beatoraja-skin<br/>map the models to each skin's vocabulary"]
-  sessions["@be-music/player-web<br/>scene sessions · family views"]
+  player["@be-music/player-engine<br/>ruleset · course · records · engine"]
+  model["@be-music/player-scene-model<br/>library · browse · play options<br/>play state · play result · course view · sounds"]
+  skins["player-skin-sdk · skin-lr2 · skin-beatoraja<br/>map the models to each skin's vocabulary"]
+  sessions["@be-music/player-browser<br/>scene sessions · family views"]
 
   player --> model
   model --> skins
@@ -24,7 +24,7 @@ flowchart TD
 The package is runtime-neutral: it imports no renderer, reads no DOM or Node global and no clock, and draws no random
 number. Time and randomness come in as inputs. `pnpm run check` keeps Node built-ins and DOM / Node globals out with the
 runtime-neutral lint rules, and clocks, timers and `Math.random` with the deterministic judge's, and a test checks that
-it builds on `@be-music/chart`, `@be-music/json` and `@be-music/player` only.
+it builds on `@be-music/chart-model`, `@be-music/chart-source` and `@be-music/player-engine` only.
 
 The models are derived from what the scenes did before them. Where the built-in / LR2 scenes and the beatoraja
 scenes differed, the model picks one behaviour, following the compatibility policy: what LR2 does, and beatoraja's
@@ -40,7 +40,7 @@ list (`LibraryEntry`). A `Library` is the charts plus the course folders; the br
 - **Root folders.** `groupChartsByFolder` groups the charts by the first segment of their directory (their source label
   when they have none), folders in Japanese-aware label order, each folder's charts in their source order.
   `libraryRootFolders` lists those folders, then the course folders, and keeps the result per chart list.
-- **Key mode.** `resolveLibraryChartPlayVariant` is the chart's play variant (the lane-mode rule of `@be-music/chart`,
+- **Key mode.** `resolveLibraryChartPlayVariant` is the chart's play variant (the lane-mode rule of `@be-music/chart-model`,
   cached per chart; a library loader seeds it with `seedLibraryChartPlayVariant`). `resolveLibraryChartKeyMode` is the
   key mode a key-mode filter lists it under: the one a bmson `mode_hint` names, else the play variant.
 - **Entry key.** `libraryEntryKey` names a bar across library rebuilds: a chart by id, a folder by label, a course by id
@@ -48,7 +48,7 @@ list (`LibraryEntry`). A `Library` is the charts plus the course folders; the br
 
 The entries follow the glossary's chart wording: a chart bar is `{ kind: 'chart', chart }`, a folder lists its
 `charts`, a course stage names the local `chart` it resolved to, and a `Library` holds `charts`. They used to keep the
-browser player's `song`, `songs` and `'song'` names. `@be-music/skin-sdk` re-exports the types under these names; its
+browser player's `song`, `songs` and `'song'` names. `@be-music/player-skin-sdk` re-exports the types under these names; its
 `Browser*` aliases are removed (`BrowserSongEntry` was `LibraryChart`, `BrowserFolderNode` `LibraryFolder`,
 `BrowserCourseEntry` `LibraryCourse`, `BrowserCourseStage` `LibraryCourseStage`, `BrowserBrowseEntry` `LibraryEntry`
 and `BrowserSongSourceKind` `ChartSourceKind`).
@@ -162,7 +162,7 @@ beatoraja's LN mode override (the LNMODE button) is not part of browsing; nothin
 models: the beatoraja select view keeps it.
 
 A select session of the web runtime makes the choices the model leaves to it with its family's select policy
-(`session/select/select-policy.ts` in `@be-music/player-web`). On the built-in and LR2 screens a back-out at the root
+(`session/select/select-policy.ts` in `@be-music/player-browser`). On the built-in and LR2 screens a back-out at the root
 does nothing, a library of one chart folder opens it when there is no position to restore, and the sort and the
 filters are the play options', which a restore keeps. The beatoraja policy
 leaves the screen at the root with the cancel cue, opens a library at its root, keeps its MODE and SORT in the browse
@@ -173,7 +173,7 @@ folder's cue without the cursor cue. Under every family a restore goes as far as
 
 `PlayOptions` is what the player picks before a play: hi-speed and HS-FIX, autoplay, BGA mode and size, the score
 graph, the list's sort and filters, HIDDEN / SUDDEN per side with the lane cover height and switch, auto scratch, DP
-FLIP, note arrangement and gauge type per side. `@be-music/skin-sdk` exports it as `BeMusicPlayOptions`.
+FLIP, note arrangement and gauge type per side. `@be-music/player-skin-sdk` exports it as `BeMusicPlayOptions`.
 
 - `DEFAULT_PLAY_OPTIONS` are the values a player starts with (hi-speed 2.0, BGA on and extended, the score graph on).
 - `PLAY_OPTION_CHOICES` lists each enum or on-off option's choices in its LR2 button cycle order (`BGA_CYCLE`,
@@ -264,7 +264,7 @@ flowchart LR
 `PlayResult` is the one payload every result screen reads, for a single play, a course stage, a whole EXPERT / GRADE
 course run and a NONSTOP run (`run`: `single`, `stage`, `course`, `nonstop`): the score and the gauge's verdict, the
 clear lamp by the one clear-lamp rule, the graphs, the timed judgments and their early / late counts, the replay, and
-the course a stage or a run belongs to (`course`, a course view). `@be-music/skin-sdk` exports it as
+the course a stage or a run belongs to (`course`, a course view). `@be-music/player-skin-sdk` exports it as
 `BeMusicResultData`.
 
 - `playResultFromPlayState` reads a play's result off its final play state.
@@ -306,30 +306,30 @@ the select cues (`cursor`, `decide`, `cancel`, `folderOpen`, `folderClose`, `opt
 
 ## Where the helpers moved
 
-| Helper                                                                              | Was in                                    | Now                                                                                |
-| ----------------------------------------------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------- |
-| `BrowserSongEntry`, `BrowserFolderNode`, `BrowserCourseEntry`, …                    | `@be-music/skin-sdk`                      | `LibraryChart`, `LibraryFolder`, `LibraryCourse`, … (the old names are removed)    |
-| `BeMusicPlayOptions` and its value types                                            | `@be-music/skin-sdk`                      | `PlayOptions`, … (aliased in skin-sdk)                                             |
-| `BeMusicResultData`, `GaugeHistorySample`, `ScoreHistorySample`                     | `@be-music/skin-sdk`                      | `PlayResult`, … (aliased in skin-sdk)                                              |
-| `BeMusicJudgmentKind`, `BeMusicSide`, `BeMusicJudgmentTiming`, `BeMusicLaneCover`   | `@be-music/skin-sdk`                      | `JudgmentKind`, `PlaySide`, `JudgmentTiming`, `LaneCover` (aliased in skin-sdk)    |
-| `groupSongsByFolder`, `resolveChartPlayVariant`                                     | `player-web` collection                   | `groupChartsByFolder`, `resolveLibraryChartPlayVariant` (player-web's are removed) |
-| `matchesSearchQuery`, `wrappedCursorDelta`                                          | `player-web` core select                  | Same names (the re-exports are removed)                                            |
-| The core select's sort and difficulty filter                                        | `player-web` core select (private)        | `sortLibraryEntries`, `chartMatchesDifficultyFilter`                               |
-| `resolveSelectNavigation`                                                           | `player-web` core select                  | Removed: the select session restores a `BrowseSnapshot` with `restoreBrowse`       |
-| `DEFAULT_PLAY_OPTIONS`, the option cycles                                           | `player-web` core select                  | Same names (the `DEFAULT_PLAY_OPTIONS` re-export is removed)                       |
-| `resolveSkinPlayOptionValue`, `cycleSkinPlayOptionValue`                            | `player-web` core select                  | `resolvePlayOptionValue`, `cyclePlayOptionValue`                                   |
-| The hi-speed range and steps                                                        | `player-web` `scene/hi-speed.ts`          | Same names (the re-exports are removed)                                            |
-| `SceneCourseInfo`, `resolveSceneCourseInfo`                                         | `player-web` `scene/course-info.ts`       | `CourseView`, `resolveCourseView` (the old names are removed)                      |
-| `PixiPlayOptions` and the other `Pixi*` play-option types, `PixiGameplayResultData` | `player-web` scenes                       | `PlayOptions`, …, `PlayResult` (the old names are removed)                         |
-| `CourseComboState`, `createCourseCombo`, `advanceCourseCombo`                       | `player-web` `scene/core/course-combo.ts` | Same names, but `advanceCourseCombo` is replaced by the pure `reduceCourseCombo`   |
-| `ReplayViewCursor`, `resolveBeatorajaReplayView`                                    | `player-web` `scene/replay-view.ts`       | `ReplayViewCursor`; every play view resolves its view with `captureReplayView`     |
-| `buildCourseResultData`, `joinCourseStageHistories`, `resolveResultPresentation`    | `player-web-demo` `course-result.ts`      | `playResultFromCourseRun`, … (re-exported under the old names)                     |
-| `resolveResultViewJingles`                                                          | `player-web-demo` `result-jingles.ts`     | Stays, over `resolveResultJingles`                                                 |
+| Helper                                                                              | Was in                                        | Now                                                                                    |
+| ----------------------------------------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `BrowserSongEntry`, `BrowserFolderNode`, `BrowserCourseEntry`, …                    | `@be-music/player-skin-sdk`                   | `LibraryChart`, `LibraryFolder`, `LibraryCourse`, … (the old names are removed)        |
+| `BeMusicPlayOptions` and its value types                                            | `@be-music/player-skin-sdk`                   | `PlayOptions`, … (aliased in player-skin-sdk)                                          |
+| `BeMusicResultData`, `GaugeHistorySample`, `ScoreHistorySample`                     | `@be-music/player-skin-sdk`                   | `PlayResult`, … (aliased in player-skin-sdk)                                           |
+| `BeMusicJudgmentKind`, `BeMusicSide`, `BeMusicJudgmentTiming`, `BeMusicLaneCover`   | `@be-music/player-skin-sdk`                   | `JudgmentKind`, `PlaySide`, `JudgmentTiming`, `LaneCover` (aliased in player-skin-sdk) |
+| `groupSongsByFolder`, `resolveChartPlayVariant`                                     | `player-browser` collection                   | `groupChartsByFolder`, `resolveLibraryChartPlayVariant` (player-browser's are removed) |
+| `matchesSearchQuery`, `wrappedCursorDelta`                                          | `player-browser` core select                  | Same names (the re-exports are removed)                                                |
+| The core select's sort and difficulty filter                                        | `player-browser` core select (private)        | `sortLibraryEntries`, `chartMatchesDifficultyFilter`                                   |
+| `resolveSelectNavigation`                                                           | `player-browser` core select                  | Removed: the select session restores a `BrowseSnapshot` with `restoreBrowse`           |
+| `DEFAULT_PLAY_OPTIONS`, the option cycles                                           | `player-browser` core select                  | Same names (the `DEFAULT_PLAY_OPTIONS` re-export is removed)                           |
+| `resolveSkinPlayOptionValue`, `cycleSkinPlayOptionValue`                            | `player-browser` core select                  | `resolvePlayOptionValue`, `cyclePlayOptionValue`                                       |
+| The hi-speed range and steps                                                        | `player-browser` `scene/hi-speed.ts`          | Same names (the re-exports are removed)                                                |
+| `SceneCourseInfo`, `resolveSceneCourseInfo`                                         | `player-browser` `scene/course-info.ts`       | `CourseView`, `resolveCourseView` (the old names are removed)                          |
+| `PixiPlayOptions` and the other `Pixi*` play-option types, `PixiGameplayResultData` | `player-browser` scenes                       | `PlayOptions`, …, `PlayResult` (the old names are removed)                             |
+| `CourseComboState`, `createCourseCombo`, `advanceCourseCombo`                       | `player-browser` `scene/core/course-combo.ts` | Same names, but `advanceCourseCombo` is replaced by the pure `reduceCourseCombo`       |
+| `ReplayViewCursor`, `resolveBeatorajaReplayView`                                    | `player-browser` `scene/replay-view.ts`       | `ReplayViewCursor`; every play view resolves its view with `captureReplayView`         |
+| `buildCourseResultData`, `joinCourseStageHistories`, `resolveResultPresentation`    | `app-play` `course-result.ts`                 | `playResultFromCourseRun`, … (re-exported under the old names)                         |
+| `resolveResultViewJingles`                                                          | `app-play` `result-jingles.ts`                | Stays, over `resolveResultJingles`                                                     |
 
 Every family's select screen browses with these models (`reduceBrowse`, `browseEntries`, `captureBrowse` /
 `restoreBrowse`, `browseSystemSound`). Every play screen keeps one `PlayState` and reads its result off it
 (`playResultFromPlayState`), so every play follows the model's play-state choices above: a full combo's max combo is every
 note for any play, the result carries each judgment's early / late count, and the replay's visible time is the white
 number (`captureReplayView`). Every screen of the web runtime is a scene session on these models. The skin packages
-map the models to each skin's vocabulary: `@be-music/beatoraja-skin/scene` to beatoraja's ids (see
+map the models to each skin's vocabulary: `@be-music/skin-beatoraja/scene` to beatoraja's ids (see
 [beatoraja-skin.md](./beatoraja-skin.md#scene-mapping)).

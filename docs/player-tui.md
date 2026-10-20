@@ -2,16 +2,16 @@
 
 # Terminal player implementation notes
 
-This document summarizes the terminal frontend implemented by `@be-music/player-tui` and the `bms-player` CLI.
+This document summarizes the terminal frontend implemented by `@be-music/player-terminal` and the `bms-player` CLI.
 Shared playback semantics such as timing, notes, judgment, score, gauge, and BGA cues are defined in [Player implementation specifications](./player-spec.md).
 Browser-specific PixiJS and WebAudio behavior is documented in [Browser player implementation notes](./player-web.md).
 
 ## Runtime boundary
 
-`@be-music/player-tui` is a Node frontend around the shared `@be-music/player` engine.
+`@be-music/player-terminal` is a Node frontend around the shared `@be-music/player-engine` engine.
 The CLI runner parses chart files, manages directory selection, renders loading/result screens, and starts one gameplay session.
-Gameplay itself runs in a worker thread that calls `autoPlay()` or `manualPlay()` from `@be-music/player`.
-The UI worker imports only `@be-music/player/signals` and `@be-music/player/display`, so it does not load the play loop or the audio renderer.
+Gameplay itself runs in a worker thread that calls `autoPlay()` or `manualPlay()` from `@be-music/player-engine`.
+The UI worker imports only `@be-music/player-engine/signals` and `@be-music/player-engine/display`, so it does not load the play loop or the audio renderer.
 
 The main thread owns terminal input and coordinates two worker-side surfaces and its own input runtime:
 

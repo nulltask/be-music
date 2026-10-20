@@ -1,6 +1,6 @@
 import { inflateSync } from 'node:zlib';
 import { describe, expect, test } from 'vite-plus/test';
-import { parseLR2CourseFile } from '../../packages/player/src/course/lr2crs.ts';
+import { parseLR2CourseFile } from '../../packages/player-engine/src/course/lr2crs.ts';
 import { bandsPNG, fixtureBMS, lr2CourseList, sineWAV } from './fixtures.ts';
 
 describe('course checklist fixtures', () => {

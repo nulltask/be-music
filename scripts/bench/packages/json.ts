@@ -1,5 +1,5 @@
-import * as jsonAPI from '@be-music/json';
-import { registerJSONExportsCases } from '../../../packages/json/scripts/exports-cases.ts';
+import * as jsonAPI from '@be-music/chart-source';
+import { registerJSONExportsCases } from '../../../packages/chart-source/scripts/exports-cases.ts';
 import type { BenchmarkPackageDefinition } from '../exports.types.ts';
 
 export const jsonBenchmarkPackage: BenchmarkPackageDefinition = {

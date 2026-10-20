@@ -1,0 +1,29 @@
+{
+  "name": "@be-music/chart-model",
+  "version": "0.5.0",
+  "description": "Resolved chart models, timing, note semantics, and fingerprints for be-music",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build:bundle": "vp pack",
+    "build": "vp pack",
+    "clean": "rimraf dist",
+    "bench": "node --conditions=source scripts/bench.ts"
+  },
+  "dependencies": {
+    "@be-music/chart-source": "workspace:*",
+    "@be-music/shared-utils": "workspace:*"
+  }
+}

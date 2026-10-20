@@ -9,12 +9,12 @@ const repositoryDir = resolve(scriptDir, '..', '..');
 const packagesDir = resolve(repositoryDir, 'packages');
 
 // SEA-eligible packages, keyed by their package slug (directory name under `packages/`). The CLI/TUI
-// frontend lives in `@be-music/player-tui` since the player-tui split — the engine library
-// `@be-music/player` does not ship an executable, so it must NOT trigger SEA jobs. `archiveBaseName`
+// frontend lives in `@be-music/player-terminal` since the player-tui split — the engine library
+// `@be-music/player-engine` does not ship an executable, so it must NOT trigger SEA jobs. `archiveBaseName`
 // stays `be-music-player` (the user-facing binary name) regardless of the source package's slug.
 const SEA_RELEASES = new Map([
-  ['player-tui', { archiveBaseName: 'be-music-player' }],
-  ['audio-renderer', { archiveBaseName: 'be-music-audio-render' }],
+  ['player-terminal', { archiveBaseName: 'be-music-player' }],
+  ['chart-audio-renderer', { archiveBaseName: 'be-music-audio-render' }],
 ]);
 
 interface ResolveReleaseOptions {
@@ -194,8 +194,8 @@ async function main(): Promise<void> {
   }
 
   const seaReleases = releases.filter((release) => release.isSEAPackage);
-  const playerTUIRelease = seaReleases.find((release) => release.packageSlug === 'player-tui');
-  const audioRendererRelease = seaReleases.find((release) => release.packageSlug === 'audio-renderer');
+  const playerTUIRelease = seaReleases.find((release) => release.packageSlug === 'player-terminal');
+  const audioRendererRelease = seaReleases.find((release) => release.packageSlug === 'chart-audio-renderer');
 
   if (options.jsonOutput) {
     await writeFile(options.jsonOutput, `${JSON.stringify({ releases, seaReleases }, null, 2)}\n`, 'utf8');

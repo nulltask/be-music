@@ -57,9 +57,9 @@ LR2 / beatoraja / IIDX のリザルトを再現するツールについて説明
    再現します。`ReplayPlaybackOptions`）、コースのステージなら `course`
    （コースの種類、ゲージ表と判定の制約、前のステージが残したゲージ値・コースのコンボ・コースの最大コンボを表す
    `carryIn`）、`randomDraws` です。`randomDraws` はこのプレイの `#RANDOM` /
-   `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` の結果を `RandomDraws`（`@be-music/chart`）として表したもので、
+   `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` の結果を `RandomDraws`（`@be-music/chart-model`）として表したもので、
    譜面のそうした行ごとにファイル順で `{ command, range, value }` を 1 つ持ちます。これはエンジンが遊んだ
-   `PlayerOptions.randomDraws` です。どのホストもプレイごとに 1 回だけ引き（`@be-music/player` の
+   `PlayerOptions.randomDraws` です。どのホストもプレイごとに 1 回だけ引き（`@be-music/player-engine` の
    `resolvePlayChart`）、同じ draws をエンジンに渡し、エンジンがそれを記録します。譜面ファイルがあれば
    `resolveBMSControlFlowWithDraws(json, play.randomDraws)` で遊んだ譜面を組み立て直せる（その譜面のために
    引かれていない draws は拒否します）ので、検証者は `chart.playFingerprint` を計算し直せます。どの制御行からも
@@ -75,7 +75,7 @@ LR2 / beatoraja / IIDX のリザルトを再現するツールについて説明
 時刻は譜面ゼロ基準の整数マイクロ秒です（エンジンのノート時刻と同じ t = 0）。
 
 TypeScript 型・シリアライザ・防御的パーサは
-[`packages/player/src/replay/format.ts`](../packages/player/src/replay/format.ts)（`@be-music/player/replay`）
+[`packages/player-engine/src/replay/format.ts`](../packages/player-engine/src/replay/format.ts)（`@be-music/player-engine/replay`）
 にあります。推奨拡張子は `.bmplay.json` です。
 
 ## 記録
@@ -99,7 +99,7 @@ TypeScript 型・シリアライザ・防御的パーサは
 各ログはトップレベルに、記録したソフトウェアを表す **`recorder`**（`{ name, version, build, engine, platform }`）
 を持ちます。アプリ側の項目はホストが `recordReplay.recorder` で宣言し（ブラウザプレイヤーは
 `name: 'be-music-web'`、デモのパッケージバージョン、短縮したソースコミットを `build`、`platform: 'web'` として
-渡します）、`engine` にはプレイを実行した `@be-music/player` のバージョンを recorder が必ず書き込みます。値は
+渡します）、`engine` にはプレイを実行した `@be-music/player-engine` のバージョンを recorder が必ず書き込みます。値は
 自己申告であり、記録側のバグが見つかったときにどのビルドが書いたログかを判別するための情報で、ログを信頼する
 根拠にはしません。このフィールドが追加される前に書かれたログには含まれません。
 
@@ -166,7 +166,7 @@ kitty キーボードプロトコルのない端末は、キーを 1 回の押�
 - スコア計算式と EX-SCORE の分母
 
 同じテーブルがライブエンジンとリプレイシミュレータの両方を駆動し、等価性テスト
-（[`equivalence.test.ts`](../packages/player/src/replay/equivalence.test.ts)）が同一の記録入力列を両者に流して
+（[`equivalence.test.ts`](../packages/player-engine/src/replay/equivalence.test.ts)）が同一の記録入力列を両者に流して
 判定が 1 つずつ一致することを要求します。選択値は `play.judgeRuleset` として記録され、リプレイは自動的に同じ
 ルールセットを再適用します。
 
@@ -216,7 +216,7 @@ beatoraja のシーンの HIDDEN カバーはリフトより上のレーンに�
 
 **`visibleMs` と LIFT。** どのシーンも `visibleMs` を beatoraja の白数字として記録し、LIFT は差し引きません。LR2 には LIFT がないため、beatoraja に従います。beatoraja の [`LaneRenderer`](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/play/LaneRenderer.java#L321-L330) は、持ち上げた判定ラインより上のレーンを、そのレーンに合わせた速さでノートが流れるように描きます（`rxhs = (hu - hl) * hispeed * speed`。`hl` はリフトの分だけ上がります）。そのため LIFT はレーンを短くしますが、ノートがレーンを流れきる時間は変えません。表示する白数字は `region * (1 - lanecover)` で、`region = 240000 / nbpm / hispeed / speed / nscroll` です。リフトの項はありません（`currentduration`、321〜330 行）。ハイスピード固定のモードも同じ式をハイスピードについて解きます（`resetHispeed`、[206〜210 行](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/play/LaneRenderer.java#L206-L210)）。シーンモデルはこれを一か所で計算します。`resolveWhiteNumber` はハイスピード 1 で指定した拍数の長さのレーンについて求め（beatoraja のシーンでは 4 拍、組み込みと LR2 のシーンでは配置したレーンを `PIXELS_PER_BEAT` で割った拍数）、`resolveHiSpeedForWhiteNumber` はその逆です。組み込みと LR2 のシーンは LIFT を描かないので、その白数字はノートが見えている時間そのものです。
 
-**メイン BPM。** `visibleMs` は譜面のメイン BPM、つまり判定するノートが最も多く置かれた BPM（`@be-music/chart` の `resolveChartMainBPM`）で求めます。これは beatoraja の値です。[`LaneRenderer.init`](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/play/LaneRenderer.java#L130-L152) はタイムラインの BPM ごとに [`TimeLine.getTotalNotes()`](https://github.com/exch-bms2/jbms-parser/blob/8108cd54a19275810e1f5d2c9586f008eb6db95e/src/bms/model/TimeLine.java#L139-L156)（通常ノート、ロングノートの始点、CN / HCN の終点。地雷と不可視ノートは数えない）を足し合わせ、最も多い BPM を HS-FIX `MAINBPM` の基準にします。メイン BPM での白数字と緑数字も同じ値を読みます（[`IntegerPropertyFactory`](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/skin/property/IntegerPropertyFactory.java#L541-L560)、541〜560 行）。LR2 には従うべきメイン BPM の定義がない（スキンの数値は最高・最低・現在の BPM だけ）ため、beatoraja に従います。どの種類のプレイ画面も、HS-FIX `AVERAGE` がハイスピードを合わせるのと同じメイン BPM を使うので、ログの `visibleMs` を求める BPM は遊んだ種類によって変わりません。同数のときは先に現れる BPM を選びます（beatoraja はハッシュマップの順序）。ノートのない譜面は開始 BPM を使います。
+**メイン BPM。** `visibleMs` は譜面のメイン BPM、つまり判定するノートが最も多く置かれた BPM（`@be-music/chart-model` の `resolveChartMainBPM`）で求めます。これは beatoraja の値です。[`LaneRenderer.init`](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/play/LaneRenderer.java#L130-L152) はタイムラインの BPM ごとに [`TimeLine.getTotalNotes()`](https://github.com/exch-bms2/jbms-parser/blob/8108cd54a19275810e1f5d2c9586f008eb6db95e/src/bms/model/TimeLine.java#L139-L156)（通常ノート、ロングノートの始点、CN / HCN の終点。地雷と不可視ノートは数えない）を足し合わせ、最も多い BPM を HS-FIX `MAINBPM` の基準にします。メイン BPM での白数字と緑数字も同じ値を読みます（[`IntegerPropertyFactory`](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/skin/property/IntegerPropertyFactory.java#L541-L560)、541〜560 行）。LR2 には従うべきメイン BPM の定義がない（スキンの数値は最高・最低・現在の BPM だけ）ため、beatoraja に従います。どの種類のプレイ画面も、HS-FIX `AVERAGE` がハイスピードを合わせるのと同じメイン BPM を使うので、ログの `visibleMs` を求める BPM は遊んだ種類によって変わりません。同数のときは先に現れる BPM を選びます（beatoraja はハッシュマップの順序）。ノートのない譜面は開始 BPM を使います。
 
 **古いログ。** この規則より前は、組み込みと LR2 の画面は最も長く続いた BPM を使い、beatoraja の画面は地雷とロングノートの終点もすべて数えていました。これらが食い違う譜面（BPM のギミックや、ノートの少ない別の BPM が長く続く譜面）では、古いログの `visibleMs` は今のプレイが記録する値と異なります。そのため別のハイスピードの尺度で再生すると、わずかに違うハイスピードで流れることがあります。記録したときと同じ尺度での再生は記録した `hiSpeed` で描くので影響を受けず、判定にも影響はありません。
 
@@ -240,10 +240,10 @@ flowchart TD
 
 ## LR2 / beatoraja / IIDX リザルトの再現
 
-`@be-music/player/replay` の `simulateReplay(replay, { ruleset })` が 1 ルールセットで入力列を再生し、
+`@be-music/player-engine/replay` の `simulateReplay(replay, { ruleset })` が 1 ルールセットで入力列を再生し、
 `simulateReplayRulesets(replay)` が 3 つ全てを実行します。判定幅・ノート選択・ロングノート仕様・
 空 POOR・ゲージ表がルールセットごとに異なります。定数の出典は
-[`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts) に記載しています。
+[`packages/player-engine/src/ruleset/definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) に記載しています。
 
 | 項目                  | LR2 (`lr2/0`)                                           | beatoraja (`beatoraja/0`)                                    | IIDX (`iidx/0`)                                          |
 | --------------------- | ------------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------- |
@@ -297,11 +297,11 @@ flowchart TD
   s2 -->|extractCourseStage| single["単曲のリプレイ"]
 ```
 
-`simulateCourseReplay(log, { ruleset })` はコースの結果を導き直します。2 ステージ目以降は、記録された `carryIn` ではなく、**シミュレーションした**前のステージが残した状態から始め、ライブのプレイと同じく、ゲージが尽きた最初のステージでコースを止めます。ESC で投げたステージ（`play.aborted`）は、LR2 がコースの途中で投げたプレイを記録するのと同じく、ゲージにかかわらずコースを落ちたものにします。結果（`ReplayCourseResult`）は、遊んだステージの判定・FAST / SLOW・EX スコアを合計します。ノート数は全ステージで数え、判定されなかったノートはすべて BP（`missCount`）に加え、コース全体の最大コンボと最後のステージのゲージを取り、コースのランプとトロフィーを決めます（[コースと段位認定](./course.ja.md) を参照）。`createCourseReplay` は、ホストが記録したステージのログからコースのログを組み立て、エンジン自身のコース結果を `results.native` としてキャッシュします。このランプは、ステージを判定したルールセットで決めます。`resolveCoursePlayedRuleset(log)` はそのルールセットを返し（NONSTOP では結合したプレイのもの）、ステージごとに違えば `undefined` を返します。リーダーボードはそのルールセットで順位を付け、ホストはそのルールセットの自己ベストに記録します。1 つの結果のランプは `resolveRulesetResultLamp(result, ruleset)` で、ランプ、コースのランプの規則、BP は `@be-music/player/ruleset` の語彙です（`resolveClearLamp`、`resolveCourseClearLamp`、`resolveMissCount`）。
+`simulateCourseReplay(log, { ruleset })` はコースの結果を導き直します。2 ステージ目以降は、記録された `carryIn` ではなく、**シミュレーションした**前のステージが残した状態から始め、ライブのプレイと同じく、ゲージが尽きた最初のステージでコースを止めます。ESC で投げたステージ（`play.aborted`）は、LR2 がコースの途中で投げたプレイを記録するのと同じく、ゲージにかかわらずコースを落ちたものにします。結果（`ReplayCourseResult`）は、遊んだステージの判定・FAST / SLOW・EX スコアを合計します。ノート数は全ステージで数え、判定されなかったノートはすべて BP（`missCount`）に加え、コース全体の最大コンボと最後のステージのゲージを取り、コースのランプとトロフィーを決めます（[コースと段位認定](./course.ja.md) を参照）。`createCourseReplay` は、ホストが記録したステージのログからコースのログを組み立て、エンジン自身のコース結果を `results.native` としてキャッシュします。このランプは、ステージを判定したルールセットで決めます。`resolveCoursePlayedRuleset(log)` はそのルールセットを返し（NONSTOP では結合したプレイのもの）、ステージごとに違えば `undefined` を返します。リーダーボードはそのルールセットで順位を付け、ホストはそのルールセットの自己ベストに記録します。1 つの結果のランプは `resolveRulesetResultLamp(result, ruleset)` で、ランプ、コースのランプの規則、BP は `@be-music/player-engine/ruleset` の語彙です（`resolveClearLamp`、`resolveCourseClearLamp`、`resolveMissCount`）。
 
 **コースの識別。** `computeCourseFingerprint({ kind, constraints, stageChartFingerprints })` は、コースの種類、制約（`normalizeCourseConstraints` の読み方で正規化して並べ替えたもの）、各ステージの譜面フィンガープリントを順に並べたものから、コースを `bmcourse0:<sha256>` で表します（[fingerprint-spec.ja.md 8 章](./fingerprint-spec.ja.md#8-コース-fingerprint)）。NONSTOP コースは、ステージ間のつなぎ方（最後のステージの後に書かれたものは何もつながないので除きます）と配置モード（`intended` または `lr2`）も含めます。これらが実際に遊ぶ結合譜面を決めるからです。名前とトロフィーは含めません。そのため `.lr2crs`、beatoraja のコースファイル、難易度表のどれから読んだコースでも、譜面が同じなら同じキーになり、ランダムコースも抽選後は固定のコースと同じように扱われます。`computeCourseReplayFingerprint(log)` はログからステージのフィンガープリントを読み（遊んだステージも到達しなかったステージも読むので、失敗したプレイにもキーがつきます）、1 つでも欠けていれば `undefined` を返します。`checkCourseReplayEligibility(log)` は `checkReplayEligibility` のコース版です。遊んだステージはそれぞれ単曲と同じ確認を通る必要があり（ここではこのコースの種類のステージであることが拒否理由ではなく条件です）、遊んだステージが先に並び、どのステージのアシストもそのプレイの印になります。中断してよいのは最後に遊んだステージだけです。これは ESC で投げたプレイで、落ちたプレイとして数えます。
 
-**NONSTOP のプレイ。** LR2 の NONSTOP コースは、つないだ 1 本の譜面として遊びます（[コースと段位認定](./course.ja.md#nonstop-コース) を参照）。そのため、コースのリプレイに `nonstop` を加えます。このログは `buildNonstopCourseReplay`（`@be-music/player/course`）がつないだプレイから書きます。
+**NONSTOP のプレイ。** LR2 の NONSTOP コースは、つないだ 1 本の譜面として遊びます（[コースと段位認定](./course.ja.md#nonstop-コース) を参照）。そのため、コースのリプレイに `nonstop` を加えます。このログは `buildNonstopCourseReplay`（`@be-music/player-engine/course`）がつないだプレイから書きます。
 
 - `nonstop.replay`：つないだ譜面のプレイの記録そのものです。判定されたのはこのプレイなので、`simulateCourseReplay` はコースの結果をここから出します。判定、ゲージ、最大コンボはこのプレイのもので、BP には判定されなかったノーツをすべて数えます。
 - `nonstop.connections` と `nonstop.placement`：譜面をどうつないだか。
@@ -323,7 +323,7 @@ flowchart TD
 
 ## CLI
 
-`@be-music/player-tui` は 2 つ目のバイナリ `bms-replay` を提供します。
+`@be-music/player-terminal` は 2 つ目のバイナリ `bms-replay` を提供します。
 
 ```bash
 pnpm replay -- results/Song-2026-08-17T10-00-00-000Z.bmplay.json

@@ -10,7 +10,7 @@ import { crc32, deflateSync } from 'node:zlib';
  * every LR2 kind, a GRADE course with a dense stage that empties the gauge, a course with a stage missing from the
  * library, and a seven-stage file for the five-stage warning. It also writes two minimal skins made for the checklist
  * (`skins/`, no third-party assets): an LR2 theme with its sound set and a beatoraja JSON skin, each with the
- * course scenes, PLAY / AUTO buttons and solid-colour images. The end-to-end suite (`packages/player-web-demo/e2e`)
+ * course scenes, PLAY / AUTO buttons and solid-colour images. The end-to-end suite (`packages/app-play/e2e`)
  * writes the same files with {@link writeChecklistFixtures}.
  *
  * Usage: `node scripts/course-checklist/fixtures.ts <out-dir>` writes `<out-dir>/songs/…`,

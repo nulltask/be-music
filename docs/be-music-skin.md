@@ -2,7 +2,7 @@
 
 # Writing a be-music skin
 
-This guide is for people who want to make a skin for the browser player's built-in (default) family. Skins are written against the `@be-music/skin-sdk` package. The built-in skins use exactly this package: Synesthesia, Phantom, Lattice, and Plain import nothing else from the player. Anything they do, your skin can do too.
+This guide is for people who want to make a skin for the browser player's built-in (default) family. Skins are written against the `@be-music/player-skin-sdk` package. The built-in skins use exactly this package: Synesthesia, Phantom, Lattice, and Plain import nothing else from the player. Anything they do, your skin can do too.
 
 A be-music skin is code, not a data file. LR2 and beatoraja themes are interpreted by a scene; a be-music skin draws every screen itself. The player keeps ownership of everything else:
 
@@ -16,18 +16,18 @@ Each frame, the player hands your skin a canvas and the frame's content as plain
 
 The SDK does not draw and imports no rendering framework. Draw the canvas with whatever suits your skin:
 
-| Renderer                     | `context`                            | How                                                                                       | Example                                                                                     |
-| ---------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Canvas 2D API                | `'2d'`                               | Draw directly; the canvas comes cleared and scaled to design pixels                       | Plain (`packages/player-web/src/skins/plain/`)                                              |
-| PixiJS                       | `'webgl2'`                           | Create a Pixi renderer on the canvas in `setup`, build a scene graph, render it in `draw` | Synesthesia, Phantom, Lattice (`packages/player-web/src/skins/`, through `skins/pixi-kit/`) |
-| three.js, raw WebGL / WebGPU | `'webgl'`, `'webgl2'`, or `'webgpu'` | Create the renderer or pipelines in `setup`, render in `draw`, release them in `teardown` | —                                                                                           |
+| Renderer                     | `context`                            | How                                                                                       | Example                                                                                         |
+| ---------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Canvas 2D API                | `'2d'`                               | Draw directly; the canvas comes cleared and scaled to design pixels                       | Plain (`packages/player-browser/src/skins/plain/`)                                              |
+| PixiJS                       | `'webgl2'`                           | Create a Pixi renderer on the canvas in `setup`, build a scene graph, render it in `draw` | Synesthesia, Phantom, Lattice (`packages/player-browser/src/skins/`, through `skins/pixi-kit/`) |
+| three.js, raw WebGL / WebGPU | `'webgl'`, `'webgl2'`, or `'webgpu'` | Create the renderer or pipelines in `setup`, render in `draw`, release them in `teardown` | —                                                                                               |
 
 Your skin bundles its own framework as a dependency. Plain is deliberately small and readable; copy it as a starting point. It also shows how to support portrait screens; see [Supporting portrait](#supporting-portrait).
 
 ## Quick start: a Canvas 2D skin
 
 ```ts
-import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin, resolveLaneRuns } from '@be-music/skin-sdk';
+import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin, resolveLaneRuns } from '@be-music/player-skin-sdk';
 
 export default defineBeMusicSkin({
   apiVersion: BE_MUSIC_SKIN_API_VERSION,
@@ -79,7 +79,7 @@ export default defineBeMusicSkin({
 
 Create the framework's renderer on the surface's canvas in `setup`, and release it in `teardown`. The player calls `setup` once per surface, before the first draw, and waits for a returned promise. Each screen gets its own surface: one for gameplay, one per select screen, one per decide screen, and one per result screen.
 
-One surface's life, from registering the skin to the screen ending (`skin/be-music/registry.ts` and `binding.ts` in `@be-music/player-web`):
+One surface's life, from registering the skin to the screen ending (`skin/be-music/registry.ts` and `binding.ts` in `@be-music/player-browser`):
 
 ```mermaid
 sequenceDiagram
@@ -106,7 +106,7 @@ sequenceDiagram
 
 ```ts
 import { WebGLRenderer, Container } from 'pixi.js';
-import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin } from '@be-music/skin-sdk';
+import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin } from '@be-music/player-skin-sdk';
 
 const renderers = new WeakMap<HTMLCanvasElement, WebGLRenderer>();
 
@@ -208,10 +208,10 @@ Every skin declares these fields. `defineBeMusicSkin` checks the rules it can te
 
 ### Supporting portrait
 
-Portrait support is opt-in. Plain (`packages/player-web/src/skins/plain/`) is the worked example: `index.ts` opts in, `layout.ts` works out the portrait geometry as plain, tested functions, and each screen file switches on the surface's orientation.
+Portrait support is opt-in. Plain (`packages/player-browser/src/skins/plain/`) is the worked example: `index.ts` opts in, `layout.ts` works out the portrait geometry as plain, tested functions, and each screen file switches on the surface's orientation.
 
 ```ts
-import { defineBeMusicSkin, resolveStageOrientation, tallStage } from '@be-music/skin-sdk';
+import { defineBeMusicSkin, resolveStageOrientation, tallStage } from '@be-music/player-skin-sdk';
 
 export default defineBeMusicSkin({
   // …metadata…
@@ -318,13 +318,13 @@ Every runtime field is optional. A host that can't provide one leaves it `undefi
 - **`select.outroMs`:** length of the launch outro. After a chart is picked, the screen keeps drawing with `frame.launchAt` set until it ends, and ignores input meanwhile.
 - **`select.draw(surface, frame)`** receives a `BeMusicSelectFrame`:
   - `entries`, `selectedIndex`, `firstVisibleIndex`, `visibleRows`, `focusedChart` (the chart bar under the cursor) and `focusedCourse`
-  - Each of `entries` is a `LibraryEntry` (`@be-music/scene-model`'s, re-exported by the SDK with `LibraryChart`, `LibraryFolder`, `LibraryCourse`, `LibraryCourseStage` and `ChartSourceKind`): `{ kind: 'folder', folder }` (a chart folder lists `folder.charts`, a course folder `folder.courses`), `{ kind: 'chart', chart }`, or `{ kind: 'course', course }` (each of `course.stages` names the local `chart` it resolved to, if any). `browseEntryTitle`, `browseEntryCount` and `browseEntryBadge` give a row's text, and `describeCourseCard` a focused course's card.
+  - Each of `entries` is a `LibraryEntry` (`@be-music/player-scene-model`'s, re-exported by the SDK with `LibraryChart`, `LibraryFolder`, `LibraryCourse`, `LibraryCourseStage` and `ChartSourceKind`): `{ kind: 'folder', folder }` (a chart folder lists `folder.charts`, a course folder `folder.courses`), `{ kind: 'chart', chart }`, or `{ kind: 'course', course }` (each of `course.stages` names the local `chart` it resolved to, if any). `browseEntryTitle`, `browseEntryCount` and `browseEntryBadge` give a row's text, and `describeCourseCard` a focused course's card.
   - Moving from an earlier SDK: a chart bar's kind was `'song'` and is `'chart'`; read `entry.chart` for `entry.song`, `folder.charts` for `folder.songs` and `stage.chart` for `stage.song`. The `Browser*` type aliases are gone: `BrowserSongEntry` is `LibraryChart`, `BrowserFolderNode` `LibraryFolder`, `BrowserCourseEntry` `LibraryCourse`, `BrowserCourseStage` `LibraryCourseStage`, `BrowserBrowseEntry` `LibraryEntry` and `BrowserSongSourceKind` `ChartSourceKind`.
   - `listScroll`: how far the list is pulled toward later entries, in design pixels, under one row. It is non-zero while a finger drags the list, while the list glides after a swipe, or mid-trackpad-scroll, and 0 at rest and at the list's ends. Lay the rows out with `selectListRows(frame, rowHeight)` and the list follows the finger: it gives each row's fractional `slot` (top at `listTop + slot * rowHeight`) and an `alpha` that fades rows sliding past the window's edge. A skin that ignores it scrolls one row at a time.
   - `folderLabel`, `searchQuery`, `searchEditing` (the player is typing in the host's text field over the search box: draw the box but not its text), `totalCharts`
   - `actions`: `play`, `autoPlay`, `activateSearch`, `setPlayOption(key, value)`, `cyclePlayOption(key, step?)` (step 1 or -1, wrapping), and `toggleReadme()` (opens or closes the focused song's `.txt`)
   - `playOptions` (`BeMusicPlayOptions`: hi-speed, random, gauge, HIDDEN / SUDDEN, lane cover, BGA, list filters, …) and `playOptionChoices`, the values each enum or on / off option can take. Values outside the choices are ignored; `hiSpeed` and `shutter` take any number and are clamped to their range, and `cyclePlayOption` leaves them alone.
-  - `chartBestRecord(song)`: the player's best record on a chart under the judge ruleset the host plays on (`BeMusicChartBestRecord`, the `BestRecord` of `@be-music/player/records`: `{ lamp, exScore?, maxCombo?, missCount?, playCount? }`), or `undefined` when the host keeps none. `lamp` is a `BeMusicClearLamp` (the `ClearLamp` of `@be-music/player/ruleset`), worst first: `NO_PLAY`, `FAILED`, `ASSIST_EASY`, `EASY`, `NORMAL`, `HARD`, `EX_HARD`, `FULL_COMBO`, `PERFECT`, `MAX`
+  - `chartBestRecord(song)`: the player's best record on a chart under the judge ruleset the host plays on (`BeMusicChartBestRecord`, the `BestRecord` of `@be-music/player-engine/records`: `{ lamp, exScore?, maxCombo?, missCount?, playCount? }`), or `undefined` when the host keeps none. `lamp` is a `BeMusicClearLamp` (the `ClearLamp` of `@be-music/player-engine/ruleset`), worst first: `NO_PLAY`, `FAILED`, `ASSIST_EASY`, `EASY`, `NORMAL`, `HARD`, `EX_HARD`, `FULL_COMBO`, `PERFECT`, `MAX`
   - `courseBestRecord?(course)`: the player's best record on a course bar (`BeMusicCourseBestRecord`: a `BeMusicChartBestRecord` plus `trophy?`, the best trophy the bests earn), or `undefined` for a course never played, a random course or a NEW COURSE bar. Hosts that predate it leave it out. `describeCourseCard(course, record)` adds the best lamp and trophy to a course card's detail line
   - `pointer`: the pointer in design pixels, or `undefined`
   - `settings` and `chartImage`: see [Skin settings](#skin-settings) and [Song images](#chart-images)
@@ -533,14 +533,14 @@ List every face you draw with in `fontLoads`. The host loads them with `document
 
 ## Packaging and loading
 
-- **Install:** add `@be-music/skin-sdk` as a dependency of your skin (`npm install @be-music/skin-sdk`), along with the rendering framework you use. You don't need `@be-music/player-web`.
-- **Imports:** a skin module imports `@be-music/skin-sdk`, the rendering framework it chooses, and its own files. The built-in skins are held to this rule by a test, so anything they use from the player is available to you.
+- **Install:** add `@be-music/player-skin-sdk` as a dependency of your skin (`npm install @be-music/player-skin-sdk`), along with the rendering framework you use. You don't need `@be-music/player-browser`.
+- **Imports:** a skin module imports `@be-music/player-skin-sdk`, the rendering framework it chooses, and its own files. The built-in skins are held to this rule by a test, so anything they use from the player is available to you.
 - **Export:** export the skin as the module's default export.
 - **Hosts:** a host registers skins in a registry:
 
   ```ts
-  import { createPlayScene } from '@be-music/player-web/host';
-  import { BUILT_IN_BE_MUSIC_SKINS, createBeMusicSkinRegistry } from '@be-music/player-web/skin';
+  import { createPlayScene } from '@be-music/player-browser/host';
+  import { BUILT_IN_BE_MUSIC_SKINS, createBeMusicSkinRegistry } from '@be-music/player-browser/skin';
   import mySkin from 'my-be-music-skin';
 
   const skins = createBeMusicSkinRegistry(BUILT_IN_BE_MUSIC_SKINS);

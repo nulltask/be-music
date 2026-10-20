@@ -8,11 +8,11 @@ import {
   resolveChartPlayVariant,
   type ResolvedChart,
   type ResolvedNote,
-} from '@be-music/chart';
-import type { BeMusicJSON } from '@be-music/json';
-import { parseChartFile } from '@be-music/parser';
-import { resolvePlayChart } from '@be-music/player';
-import { extractTimedNotes, type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/display';
+} from '@be-music/chart-model';
+import type { BeMusicJSON } from '@be-music/chart-source';
+import { parseChartFile } from '@be-music/chart-parser';
+import { resolvePlayChart } from '@be-music/player-engine';
+import { extractTimedNotes, type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player-engine/display';
 import { describe, expect, test } from 'vite-plus/test';
 
 /**

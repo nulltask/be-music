@@ -3,7 +3,7 @@
 # BMS / bmson compatibility notes
 
 This document compares what the BMS and bmson specifications say (de jure) with what existing players do (de facto), lists the behaviours no specification defines, and records what be-music does and why.
-It is a cross-implementation reference. How be-music itself handles each format is specified in [BMS implementation specification](./bms-spec.md), [bmson implementation specification](./bmson-spec.md), [Player implementation specification](./player-spec.md), and [`@be-music/json`](./json-spec.md); this document links there instead of repeating them.
+It is a cross-implementation reference. How be-music itself handles each format is specified in [BMS implementation specification](./bms-spec.md), [bmson implementation specification](./bmson-spec.md), [Player implementation specification](./player-spec.md), and [`@be-music/chart-source`](./json-spec.md); this document links there instead of repeating them.
 
 ## 1. How to read this document
 
@@ -350,7 +350,7 @@ The spec's `bga` (L765-806) has `bga_header`, `bga_events`, `layer_events` and `
 
 ## 4. Converting between BMS and bmson
 
-be-music's [`@be-music/stringifier`](../packages/stringifier/src/index.ts) writes both formats from one IR. The two formats disagree on units, so several values do not carry over as they are. The table states what the stringifier does today; [bmson spec — Converting between BMS and bmson](./bmson-spec.md#converting-between-bms-and-bmson) has the details.
+be-music's [`@be-music/chart-writer`](../packages/chart-writer/src/index.ts) writes both formats from one IR. The two formats disagree on units, so several values do not carry over as they are. The table states what the chart-writer does today; [bmson spec — Converting between BMS and bmson](./bmson-spec.md#converting-between-bms-and-bmson) has the details.
 
 A round trip goes through the IR both ways (the readers and writers are drawn in [JSON spec — Conversion rules](./json-spec.md#conversion-rules)). What each writer leaves out:
 
@@ -412,31 +412,31 @@ These are points where be-music disagrees with a de facto implementation without
 1. **Lane mode from mines and invisible notes** — beatoraja counts them when choosing 5K / 7K / 10K / 14K, be-music does not ([§2.4](#24-lane-modes-and-channel-layouts)). beatoraja's rule is verified, LR2's is not: the OpenLR2 reconstruction lacks the song scanner that stores the key mode. Following beatoraja would turn an SP chart whose only 2P objects are invisible keysounds (`examples/test/invisible-notes.bms`) into a DP chart with an empty 2P side, which is not what its author meant, so this stays open until LR2's rule is known.
 2. **LR2 evidence gaps** — negative STOP, zero BPM, duplicate object lines, `#TOTAL ≤ 0`, and the exact mine detonation window rest on community reports or on a reconstruction, and the sources partly disagree. They need checking against LR2 itself; source code alone cannot settle them. (Negative `#BPMxx` was checked against LR2body.exe as well as OpenLR2; see [§2.8](#28-bpm).)
 
-[bm-parser]: ../packages/parser/src/core/parser.ts
-[bm-bmson-document]: ../packages/parser/src/core/bmson-document.ts
-[bm-event-utils]: ../packages/parser/src/core/event-utils.ts
-[bm-control-flow]: ../packages/parser/src/core/control-flow.ts
-[bm-decode]: ../packages/parser/src/core/bms-text-decode.ts
-[bm-charset]: ../packages/parser/src/core/bms-charset.ts
-[bm-bmson]: ../packages/parser/src/core/bmson.ts
-[bm-bmson-keys]: ../packages/parser/src/core/bmson-keys.ts
-[bm-play-variant]: ../packages/chart/src/play-variant.ts
-[bm-channels]: ../packages/chart/src/channels.ts
-[bm-reference-bpm]: ../packages/chart/src/reference-bpm.ts
-[bm-wav-directives]: ../packages/chart/src/wav-directives.ts
-[bm-long-notes]: ../packages/chart/src/long-notes.ts
-[bm-timing]: ../packages/chart/src/timing.ts
-[bm-timelines]: ../packages/chart/src/timelines.ts
-[bm-sample-triggers]: ../packages/chart/src/sample-triggers.ts
-[bm-resolved-notes]: ../packages/chart/src/resolved-notes.ts
-[bm-note-rules]: ../packages/chart/src/note-rules.ts
-[bm-judge-window]: ../packages/player/src/core/judge-window.ts
-[bm-ruleset]: ../packages/player/src/ruleset/definitions.ts
-[bm-scroll]: ../packages/player/src/core/scroll-distance.ts
-[bm-note-draw]: ../packages/player-web/src/chart/note-draw-window.ts
-[bm-bga]: ../packages/chart/src/bga.ts
-[bm-web-bga]: ../packages/player-web/src/chart/bga-timeline.ts
-[bm-play-bga]: ../packages/player-web/src/chart/play-bga.ts
+[bm-parser]: ../packages/chart-parser/src/core/parser.ts
+[bm-bmson-document]: ../packages/chart-parser/src/core/bmson-document.ts
+[bm-event-utils]: ../packages/chart-parser/src/core/event-utils.ts
+[bm-control-flow]: ../packages/chart-parser/src/core/control-flow.ts
+[bm-decode]: ../packages/chart-parser/src/core/bms-text-decode.ts
+[bm-charset]: ../packages/chart-parser/src/core/bms-charset.ts
+[bm-bmson]: ../packages/chart-parser/src/core/bmson.ts
+[bm-bmson-keys]: ../packages/chart-parser/src/core/bmson-keys.ts
+[bm-play-variant]: ../packages/chart-model/src/play-variant.ts
+[bm-channels]: ../packages/chart-model/src/channels.ts
+[bm-reference-bpm]: ../packages/chart-model/src/reference-bpm.ts
+[bm-wav-directives]: ../packages/chart-model/src/wav-directives.ts
+[bm-long-notes]: ../packages/chart-model/src/long-notes.ts
+[bm-timing]: ../packages/chart-model/src/timing.ts
+[bm-timelines]: ../packages/chart-model/src/timelines.ts
+[bm-sample-triggers]: ../packages/chart-model/src/sample-triggers.ts
+[bm-resolved-notes]: ../packages/chart-model/src/resolved-notes.ts
+[bm-note-rules]: ../packages/chart-model/src/note-rules.ts
+[bm-judge-window]: ../packages/player-engine/src/core/judge-window.ts
+[bm-ruleset]: ../packages/player-engine/src/ruleset/definitions.ts
+[bm-scroll]: ../packages/player-engine/src/core/scroll-distance.ts
+[bm-note-draw]: ../packages/player-browser/src/chart/note-draw-window.ts
+[bm-bga]: ../packages/chart-model/src/bga.ts
+[bm-web-bga]: ../packages/player-browser/src/chart/bga-timeline.ts
+[bm-play-bga]: ../packages/player-browser/src/chart/play-bga.ts
 [cmds-indent]: https://hitkey.nekokan.dyndns.info/cmds.htm#INDENT-STYLE
 [cmds-comment]: https://hitkey.nekokan.dyndns.info/cmds.htm#COMMENT-SYNTAX
 [cmds-general]: https://hitkey.nekokan.dyndns.info/cmds.htm#BEHAVIOR-IN-GENERAL-IMPLEMENTATION
@@ -561,6 +561,6 @@ These are points where be-music disagrees with a de facto implementation without
 [b-bms-resource]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/BMSResource.java#L72-L87
 [b-bar-banner]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/select/BarManager.java#L712-L725
 [b-song-resources]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/song/SongResources.java#L107-L108
-[bm-collection]: ../packages/player-web/src/collection/collection.ts
-[bm-file-lookup]: ../packages/player-web/src/collection/file-lookup.ts
-[bm-sample-path]: ../packages/audio-renderer/src/core/sample-path.ts
+[bm-collection]: ../packages/player-browser/src/collection/collection.ts
+[bm-file-lookup]: ../packages/player-browser/src/collection/file-lookup.ts
+[bm-sample-path]: ../packages/chart-audio-renderer/src/core/sample-path.ts

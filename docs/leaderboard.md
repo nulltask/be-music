@@ -2,13 +2,13 @@
 
 # Leaderboard design
 
-> Status: the core of P0 is implemented in [`packages/leaderboard-api`](../packages/leaderboard-api/README.md):
+> Status: the core of P0 is implemented in [`packages/app-leaderboard`](../packages/app-leaderboard/README.md):
 > authentication, submission with verification layers L1–L3 (L4 for charts without `#RANDOM`), re-simulation under
 > the three rulesets, and the ranking API. Everything else is still design. This document records the decisions made
 > so far and the questions that are still open (section 15).
 
 The Leaderboard is be-music's online score ranking — what LR2 and beatoraja call an "IR" (Internet Ranking). This
-repository uses "IR" for the JSON intermediate representation (`@be-music/json`), so the ranking is called the
+repository uses "IR" for the JSON intermediate representation (`@be-music/chart-source`), so the ranking is called the
 **Leaderboard** everywhere: in code, in docs, and in the UI. Third-party names keep their own spelling (LR2IR, the
 beatoraja skin's IR ops).
 
@@ -33,8 +33,8 @@ Non-goals:
 ```mermaid
 flowchart LR
   subgraph clients[Clients]
-    W[player-web]
-    T[player-tui]
+    W[player-browser]
+    T[player-terminal]
   end
   subgraph workers[Workers]
     P[play]
@@ -53,9 +53,9 @@ flowchart LR
 
 - **Runtime**: Cloudflare Workers with D1 and R2. There is no plan to leave Cloudflare.
 - **Framework**: Hono. The API and the server-rendered pages live in one Worker and share the data-access functions.
-- **Package**: `packages/leaderboard-api` (private). It imports `@be-music/player/replay` and `@be-music/chart` to
+- **Package**: `packages/app-leaderboard` (private). It imports `@be-music/player-engine/replay` and `@be-music/chart-model` to
   re-simulate plays and verify fingerprints.
-- **Typed client**: Hono RPC (`hc<AppType>`) gives `player-web` and `player-tui` the API types directly.
+- **Typed client**: Hono RPC (`hc<AppType>`) gives `player-browser` and `player-terminal` the API types directly.
 - **Validation**: Valibot through `@hono/standard-validator`.
 - **ORM**: Drizzle. drizzle-kit generates SQL migrations into the package; Better Auth's tables use the same
   migrations.
@@ -104,7 +104,7 @@ Charts are identified by the **Be-Music Fingerprint** ([fingerprint-spec.md](./f
 - **`chart.playFingerprint`** covers the branches one play rolled. It identifies what was played and is used for
   verification and ghost matching.
 - **Aliases**: the chart file's SHA-256 and MD5 map many-to-one onto a chart fingerprint (`chart_aliases`). They are
-  the keys LR2IR and difficulty tables use. Web Crypto has no MD5, so `@be-music/chart` gains a small tested MD5 next to
+  the keys LR2IR and difficulty tables use. Web Crypto has no MD5, so `@be-music/chart-model` gains a small tested MD5 next to
   its SHA-256.
 
 **Development versions.** The fingerprint is versioned `bmfp0` and the ruleset result ids are `lr2/0`, `beatoraja/0`
@@ -205,7 +205,7 @@ sequenceDiagram
 Someone can still invent a chart document. It gets its own new fingerprint, so it creates a ranking nobody else
 plays and cannot pollute a real one; a chart is listed publicly only once it qualifies (section 7).
 
-L4 and L5 need two new pure functions in `@be-music/chart`, with tests: composing a chart document's outcomes, and
+L4 and L5 need two new pure functions in `@be-music/chart-model`, with tests: composing a chart document's outcomes, and
 turning a play document's positions and timeline into note times that match the engine's.
 
 ## 6. Scoring rules
@@ -224,7 +224,7 @@ turning a play document's positions and timeline into note times that match the 
   emptied) are stored and count as plays.
 - **Lamps and BP per ruleset** follow each game: under `lr2` a DEATH clear is a NORMAL clear (LR2body.exe `CheckClear`);
   beatoraja and IIDX give DEATH (`HAZARD`) an EX HARD lamp. Every ruleset counts empty POORs in BP, LR2 included. Migration `0012` rewrote the `lr2` results stored before this rule.
-  The lamp and BP come from the rules every client uses (`resolveRulesetResultLamp` in `@be-music/player/replay`, `resolveClearLamp` and `resolveMissCount` in `@be-music/player/ruleset`): a full combo needs every note judged GOOD or better, so a chart without notes takes its gauge's lamp. Lamps are stored as their rank (`clearLampRank`): 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 NORMAL, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX.
+  The lamp and BP come from the rules every client uses (`resolveRulesetResultLamp` in `@be-music/player-engine/replay`, `resolveClearLamp` and `resolveMissCount` in `@be-music/player-engine/ruleset`): a full combo needs every note judged GOOD or better, so a chart without notes takes its gauge's lamp. Lamps are stored as their rank (`clearLampRank`): 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 NORMAL, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX.
 - **Personal bests, beatoraja style**: the best EX score, the best clear lamp and the fewest misses are kept separately,
   each pointing at the score that set it, so each best's replay and ghost are one click away. Misses count for every
   play that was not aborted, cleared or not.
@@ -242,7 +242,7 @@ A course run (a dan course, an expert or nonstop course, a beatoraja course or a
 with its own rankings per ruleset, and never as single-chart plays.
 
 - **Course identity.** A course is keyed by its **course fingerprint** (`bmcourse0:<sha256>`,
-  `computeCourseFingerprint` in `@be-music/player/replay`): its kind, its constraints (normalized and sorted) and its
+  `computeCourseFingerprint` in `@be-music/player-engine/replay`): its kind, its constraints (normalized and sorted) and its
   stages' chart fingerprints in order, and for a NONSTOP course its connections and placement mode, which decide the
   stitched chart. The name and trophies are left out, so the same course read from a `.lr2crs`,
   a beatoraja course file or a table shares one board whenever its charts match. A random course is keyed by the
@@ -281,7 +281,7 @@ with its own rankings per ruleset, and never as single-chart plays.
   beatoraja keeps them off IR.
 - **NONSTOP runs.** A NONSTOP course is played as one stitched chart, and that play (`nonstop.replay`) is what is
   judged and ranked. The server rebuilds the stitched chart from the stage charts exactly as the client built it: both
-  take the same deterministic pipeline (`prepareNonstopCourse` in `@be-music/player/course`, see
+  take the same deterministic pipeline (`prepareNonstopCourse` in `@be-music/player-engine/course`, see
   [Courses and dan certification](./course.md#nonstop-courses)). Each stage chart must hash to its stage's chart
   fingerprint, is resolved with the `#RANDOM` draws its stage recorded (`nonstop.stages[].randomDraws`), gets the
   course's long-note constraint, and the stages are stitched with the recorded connections, placement and stitching
@@ -465,7 +465,7 @@ counted in D1.
   `#RANDOM` outcome), notes are matched by their position as a fraction of the note count.
 - **Client wiring**: the LR2 and beatoraja skins already have rival, target and ghost slots that read placeholders
   today (`NO TARGET`, zero target scores); they read these values instead. The ghost-curve and matching helpers are pure
-  functions in `@be-music/player`.
+  functions in `@be-music/player-engine`.
 
 ## 10. Pages (`leaderboard.be-music.app`)
 

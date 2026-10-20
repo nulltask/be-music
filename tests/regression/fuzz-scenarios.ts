@@ -1,6 +1,6 @@
-import { createEmptyJSON, type BeMusicJSON } from '@be-music/json';
-import { manualPlay } from '@be-music/player';
-import type { ReplayInputEvent, ReplayNote, RulesetId } from '@be-music/player/replay';
+import { createEmptyJSON, type BeMusicJSON } from '@be-music/chart-source';
+import { manualPlay } from '@be-music/player-engine';
+import type { ReplayInputEvent, ReplayNote, RulesetId } from '@be-music/player-engine/replay';
 import type { EngineReplay } from './play-scenarios.ts';
 
 /**

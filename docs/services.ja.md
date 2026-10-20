@@ -120,7 +120,7 @@ Accounts は専用の D1（`accounts`／`accounts-preview`）にユーザー、�
 
 Leaderboard は公開プロフィールとスコアを所有し、`oidc_identity` で `(issuer, subject)` とローカルのプレイヤー ID を対応させます。検証済みトークンから初回アクセス時に必要な行を作り、メールでは紐付けません。既存の対応付けは元のプレイヤー ID とスコアの所有者を維持します。アカウント連携時は、署名されたゲスト連携情報からプレイを冪等に移し、Accounts にスコア DB へのアクセスを与えません。
 
-Accounts のスキーマと Leaderboard の `0013` を適用し、認証の切り替え前に `packages/accounts/scripts/migrate-identities.ts` を実行します。既定はドライランです。`--preview --apply` はプレビューのユーザー・外部連携・パスキーをコピーし、対応付けを登録します。本番は `--preview` を外します。古いセッションとチャレンジはコピーせず、資格情報を出力しません。元の認証テーブルはロールバック用に残します。新しい OIDC ユーザーが作られた後は再実行しません。再ログインは必要ですが、移行したパスキーの RP ID は維持します。
+Accounts のスキーマと Leaderboard の `0013` を適用し、認証の切り替え前に `packages/app-accounts/scripts/migrate-identities.ts` を実行します。既定はドライランです。`--preview --apply` はプレビューのユーザー・外部連携・パスキーをコピーし、対応付けを登録します。本番は `--preview` を外します。古いセッションとチャレンジはコピーせず、資格情報を出力しません。元の認証テーブルはロールバック用に残します。新しい OIDC ユーザーが作られた後は再実行しません。再ログインは必要ですが、移行したパスキーの RP ID は維持します。
 
 `legacy-auth.ts` は localhost のテスト・開発専用です。公開ホストでは OIDC 設定がなければ認証を拒否し、以前の共有 Cookie も受け付けません。
 
@@ -161,7 +161,7 @@ Accounts のスキーマと Leaderboard の `0013` を適用し、認証の切�
 | ----------- | -------------------------------------------------------------------------------------- |
 | Dashboard   | `dashboard` / `dashboard-preview`。セッションとリンクを表示する仮のページ              |
 | Accounts    | `accounts` / `accounts-preview`。専用 D1 を持つ独立した OIDC プロバイダー              |
-| Player      | `play` / `play-preview`（`packages/play`。`@be-music/player-web-demo` のビルドを配信） |
+| Player      | `play` / `play-preview`（`packages/worker-play`。`@be-music/app-play` のビルドを配信） |
 | Leaderboard | `leaderboard` / `leaderboard-preview`。ページはホストのルートに置く                    |
 | Donate      | `donate` / `donate-preview`。OIDC ログインと公開の収支データ                           |
 
@@ -195,4 +195,4 @@ be-music の分だけです。`workers.dev` のサブドメインは `be-music.w
 | `dashboard` / `dashboard-preview`     | なし          | なし                                                |
 | `donate` / `donate-preview`           | なし          | なし。収支データはリポジトリで管理                  |
 
-公開の静的アセットは `assets` バケットを `assets.be-music.app` で配信します。FFmpeg のアップロード先は既定で `play` です。`pnpm --filter @be-music/player-web-demo run cf:r2:push:preview` で `play-preview` を別に更新します。
+公開の静的アセットは `assets` バケットを `assets.be-music.app` で配信します。FFmpeg のアップロード先は既定で `play` です。`pnpm --filter @be-music/app-play run cf:r2:push:preview` で `play-preview` を別に更新します。

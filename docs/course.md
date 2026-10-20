@@ -2,7 +2,7 @@
 
 # Courses and dan certification
 
-A **course** chains several charts into one run. The best-known kind is **dan certification (段位認定)**: the stages are played back to back on one shared class gauge, and the whole run gets a single result. LR2 and beatoraja each define courses in their own formats, and difficulty tables publish theirs inside the table header. be-music reads all three into one model, `CourseDefinition` in `@be-music/player/course`, so nothing downstream needs to know where a course came from.
+A **course** chains several charts into one run. The best-known kind is **dan certification (段位認定)**: the stages are played back to back on one shared class gauge, and the whole run gets a single result. LR2 and beatoraja each define courses in their own formats, and difficulty tables publish theirs inside the table header. be-music reads all three into one model, `CourseDefinition` in `@be-music/player-engine/course`, so nothing downstream needs to know where a course came from.
 
 This document covers the course model and how each format maps onto it. The play rules (class gauges, carried state, the course result) and the replay are covered in their own sections as they land.
 
@@ -52,7 +52,7 @@ An XML `<courselist>` of `<course>` elements with `title`, `line` (key mode), `t
 - **`hash`.** A 32-character header followed by one 32-character chart MD5 per stage. A course bar lists up to ten stages, but LR2 plays only the first five of any course, EXPERT and GRADE included (its chart loader clamps the stage count to 1-5 on every play, `LR2body.exe` 0x4b0b0f), so a course is read as those five. `countLR2UnplayedStages(course)` counts the stages left out, which the web demo reports when a file is loaded. Character 10 of the header is the course type.
 - **`type`.** `0` EXPERT, `1` NONSTOP, `2` GRADE, following OpenLR2 (its `expert` / `nonstop` / `grade` tables and skin ops 291-293). Without a `type` element the header's character 10 is used.
 - **Constraints.** The format has none. A grade course gets `grade` and `gauge_lr2`: when a GRADE course starts, LR2 turns both sides' lane options off ([Main.cpp M1124-M1170](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/Main.cpp#L1124-L1170)), so only OFF is allowed. A table's legacy `grade` list keeps jbmstable-parser's `grade_mirror`.
-- **LR2's other resets.** The same code also moves an EASY or G-ATTACK gauge pick to GROOVE and turns off HIDDEN / SUDDEN, the assists (auto scratch and the rest), BATTLE, DP FLIP, the play tempo (pitch) and the extra modifiers. LR2 writes them into its config; a host applies them to the course's stages only, so the player's settings come back afterwards (`isLR2GradeCourse`, `resolveLR2GradeCoursePlaySettings` in `@be-music/player/course`). They apply to a GRADE course read from `.lr2crs` or made with the course maker, not to a table's or beatoraja's grade.
+- **LR2's other resets.** The same code also moves an EASY or G-ATTACK gauge pick to GROOVE and turns off HIDDEN / SUDDEN, the assists (auto scratch and the rest), BATTLE, DP FLIP, the play tempo (pitch) and the extra modifiers. LR2 writes them into its config; a host applies them to the course's stages only, so the player's settings come back afterwards (`isLR2GradeCourse`, `resolveLR2GradeCoursePlaySettings` in `@be-music/player-engine/course`). They apply to a GRADE course read from `.lr2crs` or made with the course maker, not to a table's or beatoraja's grade.
 - A course with no stage, a malformed stage hash or an unknown type is skipped.
 
 ### beatoraja `course/*.json`
@@ -174,7 +174,7 @@ flowchart TD
 
 ## Making a course
 
-LR2 lets the player make their own EXPERT, NONSTOP and GRADE courses on the select screen ([L12148-L12269](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L12148-L12269), [L11063-L11137](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L11063-L11137)), and keeps them in its database rather than in `.lr2crs` files. `@be-music/player/course` has the rules as pure functions:
+LR2 lets the player make their own EXPERT, NONSTOP and GRADE courses on the select screen ([L12148-L12269](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L12148-L12269), [L11063-L11137](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L11063-L11137)), and keeps them in its database rather than in `.lr2crs` files. `@be-music/player-engine/course` has the rules as pure functions:
 
 ```mermaid
 stateDiagram-v2
@@ -193,13 +193,13 @@ stateDiagram-v2
 - **Constraints.** LR2's maker has none to set (its option-ban buttons were never built), so a made course takes `defaultCourseMakerConstraints` (a GRADE course reads as an LR2 grade, no lane option with the LR2 gauge; the others have none) unless the host sets them, as beatoraja's course editor does: `CourseDraft.constraints` while making, `withCourseConstraints` afterwards (one per group, normalized).
 - **Sharing.** `serializeLR2CourseFile` writes courses as a UTF-8 `.lr2crs` that `parseLR2CourseFile` reads back into the same courses, but the format has no room for constraints or `release` (every course reads back released). `serializeBeatorajaCourseFile` writes a beatoraja `course/*.json` that keeps both (NONSTOP courses, which beatoraja lacks, are left out).
 
-`CourseMaker` (`@be-music/player-web/collection`) holds the player's courses and the course being made for a host, and `resolveCourseMakerFolders` lists them as LR2 does: one course folder per kind, each with its courses and a NEW COURSE bar last.
+`CourseMaker` (`@be-music/player-browser/collection`) holds the player's courses and the course being made for a host, and `resolveCourseMakerFolders` lists them as LR2 does: one course folder per kind, each with its courses and a NEW COURSE bar last.
 
 ## Playing a course stage
 
 A host plays a course one stage at a time, passing `PlayerOptions.course` for each: the course `kind`, the course's `gaugeSet` (its `gauge_*` constraint) and `judge` constraint (`no-good` / `no-great`), and `carryIn`, the state the previous stage left (absent for the first stage). The stage records the same object as `play.course` in its replay, so the log replays and re-simulates on its own.
 
-The course's constraints decide how each stage plays. These rules are in `@be-music/player/course`:
+The course's constraints decide how each stage plays. These rules are in `@be-music/player-engine/course`:
 
 - `resolveCourseStageSettings` reads `PlayerOptions.course` (kind, gauge set, judge constraint) from the course;
 - `resolveCourseLaneOptions` limits the lane options as beatoraja's `MusicSelector` does: `grade` turns both sides and DP FLIP off, `grade_mirror` keeps a 1P MIRROR and then plays 2P on MIRROR with FLIP on (any other pick turns them all off), and `grade_random` keeps the random family on each side;
@@ -237,7 +237,7 @@ A course stage runs on the ruleset's course gauge, not on the single-chart gauge
 
 ### Carried state
 
-- **Gauge**: the next stage starts at the gauge value the previous stage ended on (`results.native.gauge.final`). `resolveCourseStageStartGauge` (`@be-music/player/replay`) names the course gauge and the value a stage starts on before the engine runs, so a host shows that gauge from the stage's READY phase and starts its result graph there.
+- **Gauge**: the next stage starts at the gauge value the previous stage ended on (`results.native.gauge.final`). `resolveCourseStageStartGauge` (`@be-music/player-engine/replay`) names the course gauge and the value a stage starts on before the engine runs, so a host shows that gauge from the stage's READY phase and starts its result graph there.
 - **Course combo**: each stage keeps its own combo and max combo, as LR2 and beatoraja do, plus a course-wide combo that runs across stages and breaks where the stage combo breaks (`PlayerSummary.course`, `results.*.course`). The next stage carries in that combo and the course max combo.
 
 ### Ending on failure
@@ -250,7 +250,7 @@ A course stage cannot be ranked as a single-chart play: `checkReplayEligibility`
 
 ### The course run
 
-`CourseRun` (`@be-music/player/course`) is one run of an EXPERT or GRADE course; a NONSTOP course is played as one stitched chart instead ([NONSTOP courses](#nonstop-courses)). A host gives it the course definition and each stage's chart: its own entries (a song entry, a chart file), anything with a `chart` and a `chartPath`, which it hands back with the chart as the course plays it. The run is runtime-neutral, so every host plays courses by the same rules.
+`CourseRun` (`@be-music/player-engine/course`) is one run of an EXPERT or GRADE course; a NONSTOP course is played as one stitched chart instead ([NONSTOP courses](#nonstop-courses)). A host gives it the course definition and each stage's chart: its own entries (a song entry, a chart file), anything with a `chart` and a `chartPath`, which it hands back with the chart as the course plays it. The run is runtime-neutral, so every host plays courses by the same rules.
 
 ```mermaid
 stateDiagram-v2
@@ -274,4 +274,4 @@ The course result sums the stages (see [Replay — Course replays](./replay.md#c
 - **BP** (`missCount`): BADs, POORs and empty POORs (LR2 adds an empty POOR to its POOR count, so its BP includes them too), plus every note the run never judged, the unreached stages included (LR2 `CheckCourseClear`, beatoraja `MusicResult`).
 - **Trophy** (beatoraja `GradeBar.getTrophy`): the last trophy with `missRate` ≥ BP × 100 / notes and `scoreRate` ≤ EX-SCORE × 100 / (2 × notes).
 
-The lamp and BP are the course rule and BP of the vocabulary every play is lamped with (`resolveCourseClearLamp`, `resolveMissCount` in `@be-music/player/ruleset`). A host keeps a run's best record under the judge ruleset it was played on (`resolveCoursePlayedRuleset`; a run whose stages differ keeps none), by the rules of `@be-music/player/records`: `courseRunRecordPlay` reads what the run contributes, `courseRunKeepsRecord` refuses auto-played runs and runs at another tempo, and `mergeCourseStageRecord` folds an EXPERT / GRADE stage into its chart's record as LR2 does (the best EX score, max combo and BP, and a FULL COMBO or better lamp, but no clear lamp or play count).
+The lamp and BP are the course rule and BP of the vocabulary every play is lamped with (`resolveCourseClearLamp`, `resolveMissCount` in `@be-music/player-engine/ruleset`). A host keeps a run's best record under the judge ruleset it was played on (`resolveCoursePlayedRuleset`; a run whose stages differ keeps none), by the rules of `@be-music/player-engine/records`: `courseRunRecordPlay` reads what the run contributes, `courseRunKeepsRecord` refuses auto-played runs and runs at another tempo, and `mergeCourseStageRecord` folds an EXPERT / GRADE stage into its chart's record as LR2 does (the best EX score, max combo and BP, and a FULL COMBO or better lamp, but no clear lamp or play count).

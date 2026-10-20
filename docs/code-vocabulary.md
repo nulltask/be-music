@@ -74,7 +74,7 @@ This document maps current code vocabulary to domain concepts and separates diff
 
 ## API naming
 
-- Replays: `BeMusicReplay`, `parseReplay`, `serializeReplay`, `simulateReplay`; the public entry is `@be-music/player/replay`.
+- Replays: `BeMusicReplay`, `parseReplay`, `serializeReplay`, `simulateReplay`; the public entry is `@be-music/player-engine/replay`.
 - Charts: `PlayResult.chart`, `BrowserChartCollection`, `BrowserChartCollectionStore`.
 - Asset sources: `BrowserAssetSource`, `BrowserAssetEntry`.
 - Chart bests: `BeMusicChartBestRecord`, `chartBestRecord`, `parseChartBestRecords`.
@@ -86,16 +86,16 @@ There are no compatibility aliases for renamed APIs. Preserve names required by 
 
 ## Inspected code
 
-- [packages/scene-model/src/library/entries.ts](../packages/scene-model/src/library/entries.ts)
-- [packages/scene-model/src/play-result/result.ts](../packages/scene-model/src/play-result/result.ts)
-- [packages/player-web/src/collection/types.ts](../packages/player-web/src/collection/types.ts)
-- [packages/player/src/course/definition.ts](../packages/player/src/course/definition.ts)
-- [packages/player/src/ruleset/score.ts](../packages/player/src/ruleset/score.ts)
-- [packages/player/src/records/best-record.ts](../packages/player/src/records/best-record.ts)
-- [packages/player/src/replay/format.ts](../packages/player/src/replay/format.ts)
-- [packages/skin-sdk/src/chart.ts](../packages/skin-sdk/src/chart.ts)
-- [packages/skin-sdk/src/types.ts](../packages/skin-sdk/src/types.ts)
-- [packages/leaderboard-api/src/db/schema.ts](../packages/leaderboard-api/src/db/schema.ts)
-- [packages/accounts/src/schema.ts](../packages/accounts/src/schema.ts)
-- [packages/auth-client/src/index.ts](../packages/auth-client/src/index.ts)
-- [packages/chart/src/play-modes.ts](../packages/chart/src/play-modes.ts)
+- [packages/player-scene-model/src/library/entries.ts](../packages/player-scene-model/src/library/entries.ts)
+- [packages/player-scene-model/src/play-result/result.ts](../packages/player-scene-model/src/play-result/result.ts)
+- [packages/player-browser/src/collection/types.ts](../packages/player-browser/src/collection/types.ts)
+- [packages/player-engine/src/course/definition.ts](../packages/player-engine/src/course/definition.ts)
+- [packages/player-engine/src/ruleset/score.ts](../packages/player-engine/src/ruleset/score.ts)
+- [packages/player-engine/src/records/best-record.ts](../packages/player-engine/src/records/best-record.ts)
+- [packages/player-engine/src/replay/format.ts](../packages/player-engine/src/replay/format.ts)
+- [packages/player-skin-sdk/src/chart.ts](../packages/player-skin-sdk/src/chart.ts)
+- [packages/player-skin-sdk/src/types.ts](../packages/player-skin-sdk/src/types.ts)
+- [packages/app-leaderboard/src/db/schema.ts](../packages/app-leaderboard/src/db/schema.ts)
+- [packages/app-accounts/src/schema.ts](../packages/app-accounts/src/schema.ts)
+- [packages/service-auth-client/src/index.ts](../packages/service-auth-client/src/index.ts)
+- [packages/chart-model/src/play-modes.ts](../packages/chart-model/src/play-modes.ts)
