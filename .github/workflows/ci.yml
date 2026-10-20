@@ -450,20 +450,25 @@ jobs:
               });
             }
 
+  # The release builds the SEA binaries on these three runners (release.yml), and its install runs every package's
+  # `prepare` there, so a release pull request (and a manual run) installs on each of them first. The bundles are
+  # checked only when their sources changed.
   sea:
-    name: SEA
+    name: SEA (${{ matrix.os }})
     needs: changes
     if: |
-      (
-        (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-        (github.event_name == 'pull_request' && github.base_ref == 'main')
-      ) &&
-      (
-        needs.changes.outputs.sea_player_changed == 'true' ||
-        needs.changes.outputs.sea_audio_renderer_changed == 'true'
-      )
-    runs-on: ubuntu-latest
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.base_ref == 'main')
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
 
     steps:
       - name: Checkout
