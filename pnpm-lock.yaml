@@ -264,6 +264,9 @@ importers:
       '@be-music/player':
         specifier: workspace:*
         version: link:../player
+      '@be-music/web-theme':
+        specifier: workspace:*
+        version: link:../web-theme
       '@better-auth/passkey':
         specifier: ^1.7.10
         version: 1.7.10(@better-auth/core@1.7.10(@better-auth/utils@0.5.0)(@better-fetch/fetch@1.3.2)(better-call@1.4.2(zod@4.6.7))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.5))(@better-auth/utils@0.5.0)(@better-fetch/fetch@1.3.2)(better-auth@1.7.10(drizzle-kit@0.31.11)(drizzle-orm@0.45.4(@cloudflare/workers-types@5.20261016.1)(kysely@0.29.6))(vitest@5.0.5))(better-call@1.4.2(zod@4.6.7))(nanostores@1.5.5)
@@ -524,6 +527,9 @@ importers:
       '@be-music/skin-sdk':
         specifier: workspace:*
         version: link:../skin-sdk
+      '@be-music/web-theme':
+        specifier: workspace:*
+        version: link:../web-theme
       '@better-auth/passkey':
         specifier: ^1.7.10
         version: 1.7.10(@better-auth/core@1.7.10(@better-auth/utils@0.5.0)(@better-fetch/fetch@1.3.2)(better-call@1.4.2(zod@4.6.7))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.5))(@better-auth/utils@0.5.0)(@better-fetch/fetch@1.3.2)(better-auth@1.7.10(drizzle-kit@0.31.11)(drizzle-orm@0.45.4(@cloudflare/workers-types@5.20261016.1)(kysely@0.29.6))(vitest@5.0.5))(better-call@1.4.2(zod@4.6.7))(nanostores@1.5.5)

@@ -1,3 +1,4 @@
+import { getBuildInfo } from '../../scripts/release/build-info.ts';
 import { bindings, defineConfig, triggers } from 'cf/config';
 
 /**
@@ -8,6 +9,7 @@ import { bindings, defineConfig, triggers } from 'cf/config';
  * OIDC session or an Accounts access token bound to this API. The Player and Dashboard call it through bindings.
  */
 export default defineConfig(({ mode }) => {
+  const buildInfo = getBuildInfo(import.meta.dirname);
   const preview = mode === 'preview';
   const suffix = preview ? '-preview' : '';
   // `be-music.app` for production, `preview.be-music.app` for the preview.
@@ -34,6 +36,8 @@ export default defineConfig(({ mode }) => {
       // Hourly: ask BMS Search which work new and stale charts belong to (src/chartsets/refresh.ts).
       triggers: [triggers.scheduled({ schedule: '17 * * * *' })],
       env: {
+        BUILD_TIMESTAMP: bindings.text(buildInfo.builtAt),
+        BUILD_REVISION: bindings.text(buildInfo.revision),
         DB: bindings.d1({ name: `leaderboard${suffix}`, id: databaseId }),
         // Service-owned binary data; avatars are served by Accounts.
         BLOBS: bindings.r2({ name: `leaderboard${suffix}` }),

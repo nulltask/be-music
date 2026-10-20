@@ -4,6 +4,8 @@ import { pickLocale, renderDashboard, type DashboardAccount } from './page.ts';
 
 interface Env extends OIDCEnv {
   ACCOUNTS?: Pick<Fetcher, 'fetch'>;
+  BUILD_TIMESTAMP?: string;
+  BUILD_REVISION?: string;
   PLAY_ORIGIN: string;
   LEADERBOARD_ORIGIN: string;
   DONATE_ORIGIN: string;
@@ -42,6 +44,9 @@ export default {
     }
     return new Response(
       renderDashboard({
+        buildInfo: env.BUILD_TIMESTAMP
+          ? { builtAt: env.BUILD_TIMESTAMP, revision: env.BUILD_REVISION ?? 'unknown' }
+          : undefined,
         account,
         hostname: url.hostname,
         showDonateLink: env.SHOW_DONATE_LINK === 'true',

@@ -1,6 +1,8 @@
+import { getBuildInfo } from '../../scripts/release/build-info.ts';
 import { bindings, defineConfig } from 'cf/config';
 
 export default defineConfig(({ mode }) => {
+  const buildInfo = getBuildInfo(import.meta.dirname);
   const preview = mode === 'preview';
   const site = preview ? 'preview.be-music.app' : 'be-music.app';
   const suffix = preview ? '-preview' : '';
@@ -15,6 +17,8 @@ export default defineConfig(({ mode }) => {
       workersDev: false,
       observability: { enabled: true },
       env: {
+        BUILD_TIMESTAMP: bindings.text(buildInfo.builtAt),
+        BUILD_REVISION: bindings.text(buildInfo.revision),
         SHOW_DONATE_LINK: bindings.text(String(preview)),
         DB: bindings.d1({
           name: `accounts${suffix}`,
