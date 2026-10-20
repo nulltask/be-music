@@ -3,7 +3,7 @@ import { bindings, defineConfig } from 'cf/config';
 /**
  * The Dashboard Worker, one configuration per environment (docs/services.md section 2): the default mode is production
  * (`dashboard`, from `main`), `cf deploy --mode preview` the preview (`dashboard-preview`, from `devel`). It reaches the
- * Leaderboard Worker of the same environment for public profiles through a Service Binding; sign-in uses Accounts OIDC.
+ * Accounts Worker of the same environment for public profiles through a Service Binding; sign-in uses Accounts OIDC.
  */
 export default defineConfig(({ mode }) => {
   const preview = mode === 'preview';
@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
       observability: { enabled: true },
       env: {
         SHOW_DONATE_LINK: bindings.text(String(preview)),
-        LEADERBOARD: bindings.worker({ worker: `leaderboard${suffix}` }),
+        ACCOUNTS: bindings.worker({ worker: `accounts${suffix}` }),
         AUTH_ISSUER: bindings.text(`https://accounts.${preview ? 'preview.be-music.app' : 'be-music.app'}/api/auth`),
         PUBLIC_ORIGIN: bindings.text(`https://${preview ? 'preview.be-music.app' : 'be-music.app'}`),
         OIDC_CLIENT_ID: bindings.text('dashboard'),

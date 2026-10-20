@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from 'vite-plus/test';
+import { afterAll, beforeAll, describe, expect, test, vi } from 'vite-plus/test';
 import { eq, count } from 'drizzle-orm';
 import { startTestBindings } from '../test/support.ts';
 import { syncIdentity, loadSession, oidcEnv } from './auth.ts';
@@ -129,4 +129,34 @@ test('refreshes the local public projection from Accounts', async () => {
   await expect(syncIdentity(bad, { issuer, sub: 'central-profile', name: 'Ignored', anonymous: true })).rejects.toThrow(
     'Invalid Accounts avatar',
   );
+});
+
+test('pulls profiles over HTTPS when no Accounts binding is configured', async () => {
+  const issuer = 'https://accounts.example/api/auth';
+  const fetchProfile = vi.fn(async (request: Request) => {
+    expect(request.url).toBe('https://accounts.example/api/profiles/https-profile');
+    expect(request.headers.get('authorization')).toBeNull();
+    return Response.json({
+      handle: 'https_profile',
+      displayName: 'HTTPS Profile',
+      avatarURL: 'https://accounts.example/profiles/https_profile/avatar?v=g',
+    });
+  });
+  vi.stubGlobal('fetch', fetchProfile);
+  try {
+    const id = await syncIdentity(
+      { ...env, AUTH_ISSUER: issuer },
+      {
+        issuer,
+        sub: 'https-profile',
+        name: 'Old name',
+        anonymous: false,
+      },
+    );
+    const row = await openDatabase(env.DB).query.profile.findFirst({ where: eq(profile.userId, id) });
+    expect(row?.displayName).toBe('HTTPS Profile');
+    expect(fetchProfile).toHaveBeenCalledOnce();
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

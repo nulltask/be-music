@@ -250,10 +250,3 @@ export const handleHistory = sqliteTable(
   // A player's former handles.
   (table) => [index('handle_history_user_idx').on(table.userId)],
 );
-
-export const profileSync = sqliteTable('profile_sync', {
-  userId: text('user_id')
-    .primaryKey()
-    .references(() => user.id, { onDelete: 'cascade' }),
-  revision: text('revision').notNull(),
-});

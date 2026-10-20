@@ -6,7 +6,7 @@ import { updateProfile } from './profiles.ts';
 
 /** Pull the authoritative public profile from Accounts; this never accepts caller-provided profile values. */
 export async function syncAccountProfile(env: Env, subject: string, userId?: string): Promise<void> {
-  if (!env.AUTH_ISSUER || !env.ACCOUNTS) return;
+  if (!env.AUTH_ISSUER) return;
   const db = openDatabase(env.DB);
   if (!userId) {
     const mapping = await db.query.oidcIdentity.findFirst({
@@ -17,7 +17,8 @@ export async function syncAccountProfile(env: Env, subject: string, userId?: str
   // A user who has never opened Leaderboard has no local projection to refresh yet.
   if (!userId) return;
   const url = new URL(`/api/profiles/${encodeURIComponent(subject)}`, env.AUTH_ISSUER);
-  const response = await env.ACCOUNTS.fetch(new Request(url));
+  const request = new Request(url);
+  const response = await (env.ACCOUNTS ? env.ACCOUNTS.fetch(request) : fetch(request));
   if (!response.ok) throw new Error('Accounts profile unavailable');
   const value = (await response.json()) as { handle?: unknown; displayName?: unknown; avatarURL?: unknown };
   if (typeof value.handle !== 'string' || typeof value.displayName !== 'string' || typeof value.avatarURL !== 'string')

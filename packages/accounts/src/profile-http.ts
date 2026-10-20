@@ -1,7 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { createAuth, type Env } from './auth.ts';
 import { openDatabase } from './db/client.ts';
-import { publishProfile } from './profile-publish.ts';
 import { profile, user } from './schema.ts';
 import { createProfile, updateProfile } from './profiles.ts';
 import { AVATAR_MAX_BYTES, avatarURL, generatedAvatarSVG, putAvatar, removeAvatar } from './avatars.ts';
@@ -101,7 +100,5 @@ export async function profileHTTP(request: Request, env: Env): Promise<Response 
     await removeAvatar(db, env.BLOBS, userId);
   } else if (!(url.pathname === '/api/profile' && request.method === 'GET'))
     return reply({ error: 'method-not-allowed' }, 405);
-  // This private RPC entrypoint is not exposed by the Leaderboard HTTP router. Retrying a saved update is safe.
-  if (request.method !== 'GET') await publishProfile(env, userId);
   return reply(await publicProfile(env, userId));
 }

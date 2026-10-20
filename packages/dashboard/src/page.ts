@@ -1,6 +1,6 @@
 import { SERVICE_CSS } from '@be-music/web-theme';
 
-/** The signed-in account as the Leaderboard's `GET /api/v0/me` reports it. */
+/** The Accounts public profile combined with the local OIDC session's anonymous status. */
 export interface DashboardAccount {
   handle: string;
   displayName: string;

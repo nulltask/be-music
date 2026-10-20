@@ -3,7 +3,6 @@ import { readdir, readFile } from 'node:fs/promises';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { handleAuth, readSession, verifyAccess, type OIDCEnv } from '@be-music/auth-client';
 import worker from './index.ts';
-import { retryProfiles } from './profile-publish.ts';
 import type { Env } from './auth.ts';
 
 let env: Env;
@@ -190,7 +189,7 @@ describe('Accounts OIDC across unrelated domains', () => {
 });
 
 describe('Accounts-owned profiles and avatars', () => {
-  test('edits only through Accounts, synchronizes Leaderboard and serves public avatars', async () => {
+  test('edits profiles and serves public avatars without downstream services', async () => {
     const signedIn = await worker.fetch(
       new Request(`${env.AUTH_ORIGIN}/api/auth/sign-in/anonymous`, {
         method: 'POST',
@@ -201,8 +200,7 @@ describe('Accounts-owned profiles and avatars', () => {
     );
     const cookie = cookies(signedIn);
     const subject = ((await signedIn.json()) as { user: { id: string } }).user.id;
-    const syncProfile = vi.fn(async () => {});
-    const profileEnv = { ...env, LEADERBOARD: { syncProfile } };
+    const profileEnv = env;
     const call = (path: string, init: RequestInit = {}) =>
       worker.fetch(
         new Request(`${env.AUTH_ORIGIN}${path}`, {
@@ -219,7 +217,7 @@ describe('Accounts-owned profiles and avatars', () => {
       body: JSON.stringify({ handle: 'profile_owner', displayName: 'Profile Owner' }),
     });
     expect(updated.status).toBe(200);
-    expect(syncProfile).toHaveBeenCalledWith(subject);
+
     const publicResponse = await worker.fetch(new Request(`${env.AUTH_ORIGIN}/api/profiles/${subject}`), profileEnv);
     const publicData = await publicResponse.json();
     expect(publicData).toEqual({
@@ -278,11 +276,10 @@ describe('Accounts-owned profiles and avatars', () => {
     );
     expect((await call('/api/profile/avatar', { method: 'PUT', body: '<svg></svg>' })).status).toBe(415);
     expect((await call('/api/profile/avatar', { method: 'DELETE' })).status).toBe(200);
-    syncProfile.mockRejectedValueOnce(new Error('temporary unavailable'));
-    expect((await call('/api/profile/avatar', { method: 'DELETE' })).status).toBe(200);
-    expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM profile_sync').first<{ n: number }>())?.n).toBe(1);
-    await retryProfiles(profileEnv);
-    expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM profile_sync').first<{ n: number }>())?.n).toBe(0);
+    const outbox = await env.DB.prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'profile_sync'",
+    ).first();
+    expect(outbox).toBeNull();
     const generated = await worker.fetch(new Request(`${env.AUTH_ORIGIN}/profiles/profile_owner/avatar`), profileEnv);
     expect(generated.headers.get('content-type')).toBe('image/svg+xml');
     expect(generated.headers.get('access-control-allow-origin')).toBe('*');
