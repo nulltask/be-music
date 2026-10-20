@@ -9,6 +9,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { binEntry } from './bin-entry.ts';
 
 const WORKERS = { preview: 'leaderboard-preview', production: 'leaderboard' } as const;
 
@@ -38,8 +39,21 @@ for (const { name, reference } of entries) {
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   execFileSync(
-    join(packageDir, 'node_modules/.bin/cf'),
-    ['workers', 'secrets', 'update', name, '--worker', worker, '--type', 'secret_text', '--text', value, '--quiet'],
+    process.execPath,
+    [
+      binEntry(packageDir, 'cf', 'cf'),
+      'workers',
+      'secrets',
+      'update',
+      name,
+      '--worker',
+      worker,
+      '--type',
+      'secret_text',
+      '--text',
+      value,
+      '--quiet',
+    ],
     { cwd: packageDir, stdio: ['ignore', 'ignore', 'inherit'] },
   );
   console.log(`${worker}: set ${name}`);
