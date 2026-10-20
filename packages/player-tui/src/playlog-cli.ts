@@ -13,7 +13,7 @@ import {
 } from '@be-music/player/playlog';
 
 /**
- * `bms-playlog` — re-derives LR2 / beatoraja / IIDX scores from a recorded play-log (`*.bmplay.json`).
+ * `bms-playlog` — re-derives LR2 / beatoraja / IIDX scores from a recorded play log (`*.bmplay.json`).
  *
  * The playlog is an input replay: the resolved chart, every raw key press / release, and the play settings. Each
  * ruleset simulator replays the same input stream through its own judge windows, note-selection algorithm,

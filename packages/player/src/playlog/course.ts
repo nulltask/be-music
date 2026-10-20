@@ -39,7 +39,7 @@ export const COURSE_PLAYLOG_FILE_SUFFIX = '.bmcourse.json';
 
 export interface BeMusicCoursePlaylog {
   format: typeof BE_MUSIC_COURSE_PLAYLOG_FORMAT;
-  /** Shares the play-log revision: course logs change together with the stage logs they hold. */
+  /** Shares the play log revision: course logs change together with the stage logs they hold. */
   version: number;
   createdAt?: string;
   recorder?: PlaylogRecorderInfo;

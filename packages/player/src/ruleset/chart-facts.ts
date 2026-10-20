@@ -41,7 +41,7 @@ export function resolveChartJudgeRankFacts(
 export { resolveChartLongNoteMode };
 
 /**
- * Derives the ruleset's chart facts from the engine's own representation. The play-log side has a matching adapter
+ * Derives the ruleset's chart facts from the engine's own representation. The play log side has a matching adapter
  * (`rulesetChartFactsFromPlaylog`); both must agree, otherwise a live play and its replay would resolve different
  * rulesets from the same chart.
  */

@@ -170,9 +170,9 @@ export class LibraryService {
     if (files.length === 0) {
       return;
     }
-    // Play-log files ride their own path: they are replay inputs, not chart / theme assets. They are peeled off
+    // Play log files ride their own path: they are replay inputs, not chart / theme assets. They are peeled off
     // BEFORE the song/theme split so a stray `.bmplay.json` never classifies as a theme candidate — and handled
-    // AFTER the split's loaders ran, so dropping a song folder together with its play-log loads the song first and
+    // AFTER the split's loaders ran, so dropping a song folder together with its play log loads the song first and
     // then starts the replay in one gesture.
     const playlogFiles = files.filter((file) => file.name.toLowerCase().endsWith(PLAYLOG_FILE_SUFFIX));
     files = files.filter((file) => !file.name.toLowerCase().endsWith(PLAYLOG_FILE_SUFFIX));

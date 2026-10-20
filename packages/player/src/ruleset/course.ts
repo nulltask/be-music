@@ -8,7 +8,7 @@ import type {
 
 /**
  * Course play (LR2 grade / expert / nonstop courses and beatoraja courses): which gauge a stage runs on and how a
- * course's judge constraint narrows the windows. Shared by the engine and the play-log simulator through
+ * course's judge constraint narrows the windows. Shared by the engine and the play log simulator through
  * `resolveRuleset`, like every other ruleset rule.
  */
 

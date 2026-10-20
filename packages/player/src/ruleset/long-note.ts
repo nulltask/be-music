@@ -2,7 +2,7 @@ import type { JudgeWindowSetUs, LongNoteStyle, RulesetConfig } from './definitio
 import { classifyRulesetJudge, judgeWindowLateReachUs, RULESET_JUDGE_NONE, type RulesetJudgeIndex } from './judge.ts';
 
 /**
- * Long-note and multi-note rules that both the live engine (`core/judge-core.ts`) and the play-log simulator
+ * Long-note and multi-note rules that both the live engine (`core/judge-core.ts`) and the play log simulator
  * (`playlog/simulate.ts`) apply. They are pure functions of the ruleset and the notes involved, so the two judges
  * cannot drift on them.
  */
@@ -116,7 +116,7 @@ export function resolveLNEarlyRelease(
 export const HCN_TICK_US = 200_000;
 
 /**
- * beatoraja's Hell Charge gauge ticks (`JudgeManager` L289-L340), shared by the engine and the play-log simulator.
+ * beatoraja's Hell Charge gauge ticks (`JudgeManager` L289-L340), shared by the engine and the play log simulator.
  *
  * While an HCN passes the judge line (from its head, once the head is judged, until its tail) a signed counter runs:
  * up while the lane gains (a key on it is down, or the tail was released at GOOD or better), down otherwise. Each time

@@ -230,7 +230,7 @@ describe('driver drift', () => {
   test('a play from input without key releases, its replay and the simulators agree', async () => {
     // A terminal without the kitty keyboard protocol sends a key as one press and then, while it is held, as repeated
     // presses, with no releases. The engine infers when each key came up and records it (`inferred` ups), so the log
-    // says what the judge saw: its replay and the play-log simulator of the play's ruleset reach the same result.
+    // says what the judge saw: its replay and the play log simulator of the play's ruleset reach the same result.
     const presses = (fromMs: number, toMs: number, everyMs: number, lane: string): ScriptStep[] =>
       Array.from({ length: Math.floor((toMs - fromMs) / everyMs) + 1 }, (_, index) => ({
         atMs: fromMs + index * everyMs,

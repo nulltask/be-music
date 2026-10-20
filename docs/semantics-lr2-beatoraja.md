@@ -214,7 +214,7 @@ Most fixes below move a rule into the right box. The assist class and LR2 mine c
   - `audioOffsetMs` moves the judge clock ([`packages/player/src/core/engine-types.ts`](../packages/player/src/core/engine-types.ts), [`play-loop.ts`](../packages/player/src/core/play-loop.ts)). There is no display-only offset.
   - beatoraja `NUMBER_JUDGETIMING` reads 0 ([`packages/beatoraja-skin/src/scene/play-numbers.ts`](../packages/beatoraja-skin/src/scene/play-numbers.ts)), and so does LR2 number 12 ([`packages/lr2-skin/src/state/options.ts`](../packages/lr2-skin/src/state/options.ts)).
 - **Impact:** C; minor A (the skin number and its +/- buttons do nothing).
-- **Recommendation:** add a display-only offset as a player option, shared by both families, and expose it in both skin numbers. It is display only, so there is no play-log risk.
+- **Recommendation:** add a display-only offset as a player option, shared by both families, and expose it in both skin numbers. It is display only, so there is no play log risk.
 
 ### Negative and zero BPM
 
@@ -669,7 +669,7 @@ These are already documented in format-compat [§2.6](./format-compat.md#26-mine
 - **LR2:** two scratch inputs map to one lane, and each press is a new press.
 - **beatoraja:** remembers which scratch key started a BSS, so pressing the **other direction ends it** (judged with `LONGSCRATCH_END`). It also supports analog scratch ([JudgeManager.java#L350-L371](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L350-L371), [#L498-L532](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L498-L532)).
 - **Kind:** semantic.
-- **be-music today:** play-log inputs carry `channels` only; `tokens` are diagnostic and simulators ignore them ([`packages/player/src/playlog/format.ts`](../packages/player/src/playlog/format.ts)). There is no gamepad or analog input.
+- **be-music today:** play log inputs carry `channels` only; `tokens` are diagnostic and simulators ignore them ([`packages/player/src/playlog/format.ts`](../packages/player/src/playlog/format.ts)). There is no gamepad or analog input.
 - **Impact:** B. beatoraja's BSS end by reversal cannot be judged or re-simulated.
 - **Recommendation:**
   - Add an optional per-input `source` (scratch direction or physical key index) **now**, before logs accumulate.

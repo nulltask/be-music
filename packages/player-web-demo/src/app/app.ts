@@ -193,7 +193,7 @@ export class PlayerWebDemoApp {
     judgeRuleset: () => this.guiState.judgeRuleset,
   });
   /**
-   * Play-log auto-save, by `guiState.autoSavePlaylog` as it was when the current play STARTED: the result-screen
+   * Play log auto-save, by `guiState.autoSavePlaylog` as it was when the current play STARTED: the result-screen
    * auto-save of a play, and of a course after its last stage, reads this latch, not the live checkbox (the checkbox is
    * disabled during gameplay anyway — the latch is the enforcement for any path that slips through).
    */

@@ -8,6 +8,12 @@
 - Keep keys and spellings required by external specifications (including BMS and bmson), database schemas, external tools, and API contracts unchanged. Translate between external keys and internal names at the boundary.
 - Unit symbols and shortened words are not initialisms: keep names such as `durationMs`, `thresholdDb`, `command`, and `exRank` in their conventional form.
 
+# Terminology Rules
+
+- Use [the glossary](docs/glossary.md) as the canonical vocabulary for documentation, source comments, user-facing text, and new internal names. Keep its Japanese counterpart in sync.
+- Use `chart` for a playable score and `music` for the musical work. Preserve existing public API names and external `song` names.
+- Write `bmson` in prose, `play log` for a recorded replay, and `avatar` for a user's profile image. Keep external identifiers, database columns, URLs, and compatibility names unchanged.
+
 # Commit Rules
 
 - Write commit messages in English.

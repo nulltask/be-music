@@ -91,7 +91,7 @@ describe('manual play: a tap whose release is drained right after its press', ()
       });
       expect(replay.summary).toEqual(live.summary);
       expect(replay.playlog?.inputs).toEqual(playlog.inputs);
-      // The play-log simulator re-derives the engine's own result.
+      // The play log simulator re-derives the engine's own result.
       expect(live.simulated![ruleset]).toEqual({ ...playlog.results?.native, ruleset: expect.any(String) });
     },
   );

@@ -149,10 +149,10 @@ export interface PlaySessionOptions {
   /** 2P side note arrangement (`#SRC_BUTTON,type=43`). */
   random2P?: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
   /**
-   * Replay playback: a recorded play-log to re-drive instead of live keyboard input. The chart prepare skips the
+   * Replay playback: a recorded play log to re-drive instead of live keyboard input. The chart prepare skips the
    * usual DP-flip / lane-shuffle passes and re-applies the RECORDED arrangement (`applyPlaylogArrangement`), the
    * engine consumes `playlog.inputs` deterministically (`PlayerOptions.replayInputs`), live lane input is ignored,
-   * and no new play-log is recorded for the run. The chart's `#RANDOM` / `#SWITCH` lines take the log's
+   * and no new play log is recorded for the run. The chart's `#RANDOM` / `#SWITCH` lines take the log's
    * `play.randomDraws`, so the replay plays the recorded branches. `prepare` rejects when the loaded chart does not
    * match the log (draws that were not drawn for its control flow, a log without draws whose branches differ, or a
    * different chart file).
@@ -166,17 +166,17 @@ export interface PlaySessionOptions {
   replayView?: Readonly<PlaylogViewReplay>;
   /**
    * Judge-window ruleset for the shared engine (`PlayerOptions.judgeRuleset`): `'lr2'` (default) / `'beatoraja'`
-   * / `'iidx'`. Recorded into the play-log; replays re-apply the log's own value instead.
+   * / `'iidx'`. Recorded into the play log; replays re-apply the log's own value instead.
    */
   judgeRuleset?: PlaylogRulesetId;
   /**
    * SHA-256 (lowercase hex) of the source chart file bytes, when the host computed one. Stamped into the recorded
-   * play-log (`chart.sha256`) so a dropped log can be matched back to its chart by content.
+   * play log (`chart.sha256`) so a dropped log can be matched back to its chart by content.
    */
   chartSHA256?: string;
   /** MD5 (lowercase hex) of the same bytes, stamped as `chart.md5` (the key LR2 and LR2IR use). */
   chartMD5?: string;
-  /** Host application stamped into the recorded play-log's `recorder` (the engine adds its own version). */
+  /** Host application stamped into the recorded play log's `recorder` (the engine adds its own version). */
   playlogRecorder?: PlaylogRecordingOptions['recorder'];
   /**
    * 1P gauge variant (`#SRC_BUTTON,type=40`). Selects the ruleset's gauge (the engine resolves the curve) and drives

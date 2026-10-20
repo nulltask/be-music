@@ -922,7 +922,7 @@ export function isPerfectJudge(kind: string): boolean {
  * Numeric value references (`value[].ref`). Values are pulled directly from prop.lua's `local num = { ... }`
  * dump (https://github.com/ovnz/blanket/blob/main/prop.lua) — the canonical authority for beatoraja's
  * numeric op IDs. Skin authors point a `value[].ref` at one of these to display the matching number on
- * screen (score, combo, BPM, judge counts, gauge percent, etc.).
+ * screen (score, combo, BPM, judgment counts, gauge percent, etc.).
  *
  * Categories (mirroring prop.lua's grouping):
  *

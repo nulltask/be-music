@@ -4,8 +4,8 @@ import { md5HexOfBytes } from './md5.ts';
 import type { BrowserSongAssetSource } from './types.ts';
 
 /**
- * SHA-256 (lowercase hex) of a byte buffer via Web Crypto. Shared by the play-log recorder plumbing (stamping
- * `chart.sha256` at record time) and the play-log drop matching (hashing loaded charts for comparison).
+ * SHA-256 (lowercase hex) of a byte buffer via Web Crypto. Shared by the play log recorder plumbing (stamping
+ * `chart.sha256` at record time) and the play log drop matching (hashing loaded charts for comparison).
  */
 export async function computeSHA256Hex(bytes: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', bytes as BufferSource);
@@ -40,7 +40,7 @@ export async function computeChartFileSHA256(
   }
 }
 
-/** The file hashes of a chart: SHA-256 (the play-log's primary key) and MD5 (how LR2 and LR2IR name a chart). */
+/** The file hashes of a chart: SHA-256 (the play log's primary key) and MD5 (how LR2 and LR2IR name a chart). */
 export interface ChartFileHashes {
   sha256: string;
   md5: string;

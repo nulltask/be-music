@@ -1,7 +1,7 @@
 import type { LongNoteMode } from '@be-music/chart';
 
 /**
- * The chart-side inputs a ruleset needs, in a form both the live engine and the play-log simulator can produce.
+ * The chart-side inputs a ruleset needs, in a form both the live engine and the play log simulator can produce.
  *
  * The rulesets used to read a `PlaylogChart` directly, which tied them to the offline replay path. The live engine
  * has the same facts available (a resolved `BeMusicJSON` plus its prepared note arrays) but in a different shape,

@@ -225,7 +225,7 @@ export function handleLanePress(
 ): void {
   const { config } = state;
   const { ruleset } = config;
-  // Play-log press event — recorded BEFORE any judging so the log stays a raw input replay.
+  // Play log press event — recorded BEFORE any judging so the log stays a raw input replay.
   emit({ kind: 'record-input', action: 'down', seconds: nowSec, tokens, channels: candidateChannels });
 
   for (const mappedChannel of candidateChannels) {

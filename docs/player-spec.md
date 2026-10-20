@@ -32,7 +32,7 @@ gauge. Both are options: `PlayerOptions.judgeRuleset` picks the ruleset and `Pla
 | `./lanes`          | The lanes of a play mode: the layout and its slots, scratch and wheel lanes, key bindings, FREE ZONE input, and the lanes the lane options permute                                                                                                                                                                                                                |
 | `./display`        | What a host shows: the timed play notes (`extract*`, `toTimed*`), `ScrollDistanceMapper`, the BGA cue on screen (`pickActiveBGACue`, `pickActiveBGAKey`, `DEFAULT_POOR_BGA_DISPLAY_SECONDS`), the chart facts a song screen shows (`resolveDisplayed*`), `formatSeconds`, `resolveAltModifierLabel`, the TUI note heights and the BGA resize algorithms           |
 | `./ruleset`        | The vocabulary hosts, skins and the Leaderboard share: the judge ruleset ids (`PLAYLOG_RULESET_IDS`), the judge windows, gauges, clear lamps, BP and the score                                                                                                                                                                                                    |
-| `./playlog`        | The play-log format, its recorder, simulator and eligibility checks, and the course and NONSTOP logs                                                                                                                                                                                                                                                              |
+| `./playlog`        | The play log format, its recorder, simulator and eligibility checks, and the course and NONSTOP logs                                                                                                                                                                                                                                                              |
 | `./records`        | Best records per judge ruleset and the rules that keep them                                                                                                                                                                                                                                                                                                       |
 | `./course`         | Course definitions: LR2 `.lr2crs`, beatoraja courses and table courses, the course maker, and NONSTOP runs                                                                                                                                                                                                                                                        |
 | `./audio-sink`     | The audio sinks for Node (`node-web-audio-api`) and for a Web Audio context                                                                                                                                                                                                                                                                                       |
@@ -227,7 +227,7 @@ Landmines and invisible notes are not collapsed.
 Mine channels are mapped to their corresponding playable lane and kept in a separate array.
 Mines are not included in `summary.total`.
 
-When a mine detonates belongs to the judge ruleset (`mineTrigger` in [`definitions.ts`](../packages/player/src/ruleset/definitions.ts)); the engine and the play-log simulators apply the same rule. The damage model is the same everywhere (confirmed against beatoraja's `JudgeManager`).
+When a mine detonates belongs to the judge ruleset (`mineTrigger` in [`definitions.ts`](../packages/player/src/ruleset/definitions.ts)); the engine and the play log simulators apply the same rule. The damage model is the same everywhere (confirmed against beatoraja's `JudgeManager`).
 
 - `lr2` ruleset — LR2's model (its own changelog): a mine explodes on either of two conditions: **holding the lane's key as the mine crosses the judge line**, or **pressing while the mine is within the `PGREAT` window** of the judge line. A mine passing with the key up is harmless, and a press that lands after the crossing but outside `PGREAT` is too.
 - `beatoraja` ruleset — beatoraja's model (`JudgeManager` L244): a mine explodes only when **the lane's key is down at the moment the mine crosses the judge line**. A press shortly before (released before the crossing) or after does nothing.
@@ -335,7 +335,7 @@ and the score formula. The tables and their primary sources live in
 [`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts) and are compared
 side by side in [`docs/playlog.md`](./playlog.md).
 
-The same tables drive the live engine and the play-log simulator, and an equivalence suite requires the two to
+The same tables drive the live engine and the play log simulator, and an equivalence suite requires the two to
 agree judge for judge on the same recorded input stream.
 
 The rest of this chapter describes the **`lr2` ruleset**, which is the default.
@@ -410,7 +410,7 @@ Each judgment reads the width in force at its own instant, as LR2 reads its one 
 candidate search, its classification, the multi-BAD collector, a mine's press leg, a press on a held long note) uses the
 width at the press, and a release (an LN's early release, a charge note's tail) the width at the release. A note's miss
 deadline and a charge tail's late window use the width at the note and at the tail, and a mine's entry and settling
-the width at the mine. The engine and the play-log simulator read the same instants.
+the width at the mine. The engine and the play log simulator read the same instants.
 
 ### bmson initial judgment width
 
@@ -512,7 +512,7 @@ flowchart TD
 
 Empty POOR mirrors LR2's phantom-press behaviour:
 
-- Increment `summary.emptyPoor`, and do NOT touch the note-judge counters (`perfect` / `great` / `good` / `bad` / `poor`) — no note was consumed. Whether a player's POOR counter displays the two summed is a presentation choice; LR2's does (OpenLR2 `ApplyJudgeNote` increments `playerstat.poor` for the empty-POOR branch).
+- Increment `summary.emptyPoor`, and do NOT touch the note-judgment counters (`perfect` / `great` / `good` / `bad` / `poor`) — no note was consumed. Whether a player's POOR counter displays the two summed is a presentation choice; LR2's does (OpenLR2 `ApplyJudgeNote` increments `playerstat.poor` for the empty-POOR branch).
 - Do NOT change EX-SCORE or the score.
 - Cut the combo only where the ruleset says to (`comboBreaksOnEmptyPoor`): beatoraja's five-key and PMS rules do, LR2 and IIDX do not.
 - Apply `EMPTY_POOR` to the gauge — the delta lives in the ruleset's gauge table ([`definitions.ts`](../packages/player/src/ruleset/definitions.ts)). Under `lr2`: GROOVE `-2`, HARD `-2` (subject to the TOTAL multiplier), EASY `-1.6`, DEATH `-10`. Nearly harmless on GROOVE / EASY; meaningful drain on HARD / DEATH.
@@ -526,7 +526,7 @@ Without key-state input (a terminal that sends no release events, so key repeat 
 
 ### Landmine
 
-A mine explosion is not a judgment word: it does not produce `BAD` / `POOR`, does not touch the judge counters, combo, EX-SCORE, or score, and never takes priority over a nearby note candidate.
+A mine explosion is not a judgment word: it does not produce `BAD` / `POOR`, does not touch the judgment counters, combo, EX-SCORE, or score, and never takes priority over a nearby note candidate.
 It only applies the mine damage to the gauge and triggers `#WAV00` when defined. See [Landmines](#landmines) for the detonation conditions and the damage rule.
 An object value that is not a two-character upper-case base36 ID (or is `00`) falls back to the default damage of `4%`; under `#BASE 62` this also covers lower-case values. A bmson mine without `damage` uses the same `4%`.
 
@@ -623,7 +623,7 @@ split.
   `total / 100 ×` its own default, and a value ≤ 0 means 100 % (beatoraja `BMSPlayerRule.validate`). A bmson chart
   without `total` therefore plays at the ruleset default, not at TOTAL 100.
 - `summary.gauge.effectiveTotal` reports the resolved value, and beatoraja skins' TOTAL readout (ref 368) shows it during
-  play and on the result screen. Play-logs record the chart's raw value and resolve it again on replay.
+  play and on the result screen. Play logs record the chart's raw value and resolve it again on replay.
 
 ### Increase/Decrease
 
@@ -912,7 +912,7 @@ The standard TUI displays the following information:
 
 - Song title, genre, play mode, BPM, SCROLL, STOP
 - progress, current measure, judgment window, HIGH-SPEED
-- NOTES / EX-SCORE / SCORE / judge counts / FAST / SLOW
+- NOTES / EX-SCORE / SCORE / judgment counts / FAST / SLOW
 - Lane body, judge/combo, input key, groove gauge
 - RANDOM summary, BGA, audio debug lines as needed
 

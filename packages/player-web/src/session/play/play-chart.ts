@@ -218,7 +218,7 @@ export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
   ctx.mineNotes = prepared.landmineNotes;
   ctx.invisibleNotes = prepared.invisibleNotes;
   if (ctx.options.replay !== undefined) {
-    // Replay playback — the recorded play-log carries the FINAL note arrangement (post-flip, post-shuffle), so
+    // Replay playback — the recorded play log carries the FINAL note arrangement (post-flip, post-shuffle), so
     // instead of re-rolling the lane transforms we re-apply the recorded channels onto the freshly prepared
     // notes. A mismatch means the loaded chart is not the one the log was recorded against (different `#RANDOM`
     // roll or a different file) — surface it as a prepare failure rather than replaying garbage.

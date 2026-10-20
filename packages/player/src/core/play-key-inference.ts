@@ -10,7 +10,7 @@ export const LONG_NOTE_REPEAT_HOLD_GRACE_MS = 120;
  * Key state for input that reports no key releases — a terminal without the kitty keyboard protocol, which sends a key
  * as one press and then, while it is held, as repeated presses. The judge core takes key-state input only, so the
  * inference turns that stream into the presses and releases it takes, and the judge, the play log and therefore a
- * replay and the play-log simulators all see the same keys:
+ * replay and the play log simulators all see the same keys:
  *
  * - a press on a lane that is up is a key going down (`hold` + `press`);
  * - a lane stays down for a grace after each press — {@link LONG_NOTE_INITIAL_HOLD_GRACE_MS} after the press that hits a

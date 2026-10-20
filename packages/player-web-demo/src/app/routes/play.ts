@@ -434,7 +434,7 @@ export class PlayRoute {
       void this.showSelect();
       return;
     }
-    // Chart-file hash for the recorded play-log (skipped for replays — they record nothing — and for a stitched
+    // Chart-file hash for the recorded play log (skipped for replays — they record nothing — and for a stitched
     // NONSTOP chart, which has no file).
     const chartHashes =
       overrides.replay === undefined && overrides.nonstop === undefined

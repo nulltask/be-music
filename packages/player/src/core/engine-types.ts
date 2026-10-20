@@ -88,7 +88,7 @@ export interface PlayerPlaySettings {
    * The compat ruleset the play is judged under: `'lr2'` (default), `'beatoraja'` or `'iidx'`. It owns every judge
    * rule — the windows (beatoraja's SEVENKEYS windows scaled by its judgerank, IIDX's fixed ±16.67 / ±33.33 /
    * ±116.67 / ±250 ms), which note a press resolves against, the long-note style, the empty-POOR rule, mines, the gauge
-   * line-up and its curve, and the score — and the play-log simulator plays by the same tables. Dynamic `#EXRANKxx`
+   * line-up and its curve, and the score — and the play log simulator plays by the same tables. Dynamic `#EXRANKxx`
    * changes are an LR2 concept and only apply under `'lr2'`. Recorded into the play log (`play.judgeRuleset`) so
    * replays and re-simulations judge under the same ruleset.
    */
@@ -280,20 +280,20 @@ export interface PlayerPlayDebug {
 }
 
 /**
- * Play recording: play-log capture and replay. `recordPlaylog` declares the host-side settings the log records
+ * Play recording: play log capture and replay. `recordPlaylog` declares the host-side settings the log records
  * (`gauge`, `randomLane`, `dpFlip`, `native`) next to the chart identity, and `replayInputs` re-drives a
  * recorded input stream.
  */
 export interface PlayerPlayRecording {
   /**
-   * Host-declared play settings merged into the recorded play-log (`randomLane`, `dpFlip`, `native`, ...). The engine
+   * Host-declared play settings merged into the recorded play log (`randomLane`, `dpFlip`, `native`, ...). The engine
    * itself knows mode / auto-scratch / judge-window override; everything host-side (which lane shuffle produced
    * `preparedChart`, ...) arrives through this bag. `gauge` here is a fallback for {@link PlayerPlaySettings.gauge}: the play runs on, and
    * the log records, one gauge. Only meaningful together with {@link onPlaylogRecorded}.
    */
   recordPlaylog?: PlaylogRecordingOptions;
   /**
-   * Enables play-log recording: when set, the engine snapshots the resolved chart it actually played
+   * Enables play log recording: when set, the engine snapshots the resolved chart it actually played
    * (post-`#RANDOM`, post lane-shuffle via `preparedChart`), records every judged key press / release with
    * chart-relative timestamps, and hands the assembled {@link BeMusicPlaylog} here right before `autoPlay` /
    * `manualPlay` resolves — including the ESC (aborted) exit. The playlog's `results.native` caches this run's
@@ -302,7 +302,7 @@ export interface PlayerPlayRecording {
    */
   onPlaylogRecorded?: (playlog: BeMusicPlaylog) => void;
   /**
-   * Replay playback: a recorded play-log input stream (`playlog.inputs`) `manualPlay` re-drives DETERMINISTICALLY.
+   * Replay playback: a recorded play log input stream (`playlog.inputs`) `manualPlay` re-drives DETERMINISTICALLY.
    * Each event fires at its exact chart-relative microsecond timestamp (no wall-clock jitter — the judge timestamp
    * is the recorded one), so replaying a log against the same resolved chart reproduces the original judgments.
    * While a replay is active, live lane / kitty input commands are ignored; pause, high-speed, and interrupt
@@ -321,7 +321,7 @@ export interface PlayerPlayRecording {
   replayTempoChanges?: readonly PlaylogTempoChange[];
   /**
    * Where the replayed play was aborted (`play.abortedAtUs` of a log with `play.aborted`), in chart microseconds: the
-   * replay judges up to it and stops there, as an ESC, as the play-log simulators stop there, instead of missing the
+   * replay judges up to it and stops there, as an ESC, as the play log simulators stop there, instead of missing the
    * rest of the chart. Read only in a replay ({@link replayInputs} set).
    */
   replayAbortedAtUs?: number;

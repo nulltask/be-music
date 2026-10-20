@@ -32,7 +32,7 @@ export function buildLibraryFolder(
   library.add(urls, 'music').name('Music ZIP URL');
   library.add(urls, 'skin').name('Skin ZIP URL');
   library.add(urls, 'load').name('Load from URLs');
-  // Play-history auto-save — OFF by default. When enabled, every finished play downloads its play-log
+  // Play-history auto-save — OFF by default. When enabled, every finished play downloads its play log
   // (`*.bmplay.json`, the raw input replay defined in `@be-music/player/playlog`) as soon as the result scene
   // mounts. The file feeds the `bms-playlog` CLI, which re-derives LR2 / beatoraja / IIDX scores from the replay.
   // The value is LATCHED at song start (`lockPlaylogOptionsForPlay`) and the controller is disabled while a song

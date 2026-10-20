@@ -16,7 +16,7 @@ export type GaugeJudgeIndex = 0 | 1 | 2 | 3 | 4 | 5;
 /**
  * A gauge running under one ruleset's {@link GaugeSpec}.
  *
- * Shared by the live engine and the play-log simulator so a replayed run and the run that produced it agree to the
+ * Shared by the live engine and the play log simulator so a replayed run and the run that produced it agree to the
  * last decimal. The spec already carries the per-judge deltas with the ruleset's TOTAL modifier folded in; this
  * class only applies the runtime parts: low-gauge damage softening (`guts`), clamping, the LR2 death border, and
  * the survival-gauge "0 % is permanent" latch.

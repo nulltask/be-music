@@ -42,7 +42,7 @@ export interface JudgeGraphEntry {
   element: BeatorajaJudgeGraphElement;
   /**
    * Pixi `Graphics` painting the judge histogram bars. Cleared and rebuilt every frame the bar
-   * values change — judge counts grow during a play, and the result scene's snapshot is a
+   * values change — judgment counts grow during a play, and the result scene's snapshot is a
    * one-time paint, so the rebuild cost is bounded.
    */
   graphics: Graphics;
