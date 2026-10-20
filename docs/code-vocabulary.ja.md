@@ -83,9 +83,10 @@
 | `songRecordKey`, `parseSongRecords`, `serializeSongRecords` | `chartBestRecordKey`, `parseChartBestRecords`, `serializeChartBestRecords` | 内容を明示する。保存キー・保存形式の互換性は別途確認する。                       |
 | `JudgeKind`, `JudgeTiming`, `PlaylogJudgeCounts`            | `JudgmentKind`, `JudgmentTiming`, `PlaylogJudgmentCounts`                  | 型名を揃える。フォーマットのキーを機械的に変えない。                             |
 | `PlaylogRulesetId`                                          | `RulesetId`                                                                | 記録形式ではなくルールセット層の概念。                                           |
-| `BeMusicStage`                                              | `BeMusicDesignStage`                                                       | コースステージとデザイン上の座標領域を区別する。                                 |
 
 `score` テーブルのように保存形式・API と結びつく名前は、この表を理由にそのまま改名しません。新しい内部名には `playSubmission`・`rulesetResult`・`chartBestRecord` のように対象を明示し、境界で既存名に対応付ける案です。`PlayOptions` と `PlayerOptions` は単なる別名ではないため、改名より先に責務を整理します。
+
+`BeMusicStage` は現行名を維持します。`BeMusicSkin.stage` という文脈で、スキンのデザイン領域を指すことが分かるためです。コースステージとの違いは定義で明示します。
 
 ## 確認したコード
 
