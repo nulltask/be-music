@@ -12,7 +12,7 @@
 flowchart TD
   player["@be-music/player-engine<br/>ルールセット・コース・記録・エンジン"]
   model["@be-music/player-scene-model<br/>ライブラリ・ブラウズ・プレイオプション<br/>プレイ状態・プレイ結果・コース・効果音"]
-  skins["skin-sdk・lr2-skin・beatoraja-skin<br/>モデルを各スキンの語彙へ写す"]
+  skins["player-skin-sdk・skin-lr2・skin-beatoraja<br/>モデルを各スキンの語彙へ写す"]
   sessions["@be-music/player-browser<br/>シーンセッション・ファミリービュー"]
 
   player --> model
@@ -304,25 +304,25 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 
 ## ヘルパーの移動先
 
-| ヘルパー                                                                          | 移動前                                       | 移動後                                                                             |
-| --------------------------------------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `BrowserSongEntry`・`BrowserFolderNode`・`BrowserCourseEntry` など                | `@be-music/player-skin-sdk`                  | `LibraryChart`・`LibraryFolder`・`LibraryCourse` など（旧名は削除）                |
-| `BeMusicPlayOptions` とその値の型                                                 | `@be-music/player-skin-sdk`                  | `PlayOptions` など（skin-sdk に別名）                                              |
-| `BeMusicResultData`・`GaugeHistorySample`・`ScoreHistorySample`                   | `@be-music/player-skin-sdk`                  | `PlayResult` など（skin-sdk に別名）                                               |
-| `BeMusicJudgmentKind`・`BeMusicSide`・`BeMusicJudgmentTiming`・`BeMusicLaneCover` | `@be-music/player-skin-sdk`                  | `JudgmentKind`・`PlaySide`・`JudgmentTiming`・`LaneCover`（skin-sdk に別名）       |
-| `groupSongsByFolder`・`resolveChartPlayVariant`                                   | `player-web` の collection                   | `groupChartsByFolder`・`resolveLibraryChartPlayVariant`（player-web の旧名は削除） |
-| `matchesSearchQuery`・`wrappedCursorDelta`                                        | `player-web` のコアの選曲                    | 同じ名前（再 export は削除）                                                       |
-| コアの選曲のソートと難易度フィルター                                              | `player-web` のコアの選曲（非公開）          | `sortLibraryEntries`・`chartMatchesDifficultyFilter`                               |
-| `resolveSelectNavigation`                                                         | `player-web` のコアの選曲                    | 削除。選曲セッションは `BrowseSnapshot` を `restoreBrowse` で戻す                  |
-| `DEFAULT_PLAY_OPTIONS`、オプションの巡回順                                        | `player-web` のコアの選曲                    | 同じ名前（`DEFAULT_PLAY_OPTIONS` の再 export は削除）                              |
-| `resolveSkinPlayOptionValue`・`cycleSkinPlayOptionValue`                          | `player-web` のコアの選曲                    | `resolvePlayOptionValue`・`cyclePlayOptionValue`                                   |
-| ハイスピードの範囲と刻み                                                          | `player-web` の `scene/hi-speed.ts`          | 同じ名前（再 export は削除）                                                       |
-| `SceneCourseInfo`・`resolveSceneCourseInfo`                                       | `player-web` の `scene/course-info.ts`       | `CourseView`・`resolveCourseView`（旧名は削除）                                    |
-| `PixiPlayOptions` などの `Pixi*` のプレイオプションの型・`PixiGameplayResultData` | `player-web` の scene                        | `PlayOptions` など・`PlayResult`（旧名は削除）                                     |
-| `CourseComboState`・`createCourseCombo`・`advanceCourseCombo`                     | `player-web` の `scene/core/course-combo.ts` | 同じ名前。ただし `advanceCourseCombo` は純粋な `reduceCourseCombo` に置き換え      |
-| `ReplayViewCursor`・`resolveBeatorajaReplayView`                                  | `player-web` の `scene/replay-view.ts`       | `ReplayViewCursor`。どのプレイのビューも `captureReplayView` で見え方を求める      |
-| `buildCourseResultData`・`joinCourseStageHistories`・`resolveResultPresentation`  | `app-play` の `course-result.ts`             | `playResultFromCourseRun` など（旧名で再 export）                                  |
-| `resolveResultViewJingles`                                                        | `app-play` の `result-jingles.ts`            | そのまま。`resolveResultJingles` の上に実装                                        |
+| ヘルパー                                                                          | 移動前                                           | 移動後                                                                                 |
+| --------------------------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `BrowserSongEntry`・`BrowserFolderNode`・`BrowserCourseEntry` など                | `@be-music/player-skin-sdk`                      | `LibraryChart`・`LibraryFolder`・`LibraryCourse` など（旧名は削除）                    |
+| `BeMusicPlayOptions` とその値の型                                                 | `@be-music/player-skin-sdk`                      | `PlayOptions` など（player-skin-sdk に別名）                                           |
+| `BeMusicResultData`・`GaugeHistorySample`・`ScoreHistorySample`                   | `@be-music/player-skin-sdk`                      | `PlayResult` など（player-skin-sdk に別名）                                            |
+| `BeMusicJudgmentKind`・`BeMusicSide`・`BeMusicJudgmentTiming`・`BeMusicLaneCover` | `@be-music/player-skin-sdk`                      | `JudgmentKind`・`PlaySide`・`JudgmentTiming`・`LaneCover`（player-skin-sdk に別名）    |
+| `groupSongsByFolder`・`resolveChartPlayVariant`                                   | `player-browser` の collection                   | `groupChartsByFolder`・`resolveLibraryChartPlayVariant`（player-browser の旧名は削除） |
+| `matchesSearchQuery`・`wrappedCursorDelta`                                        | `player-browser` のコアの選曲                    | 同じ名前（再 export は削除）                                                           |
+| コアの選曲のソートと難易度フィルター                                              | `player-browser` のコアの選曲（非公開）          | `sortLibraryEntries`・`chartMatchesDifficultyFilter`                                   |
+| `resolveSelectNavigation`                                                         | `player-browser` のコアの選曲                    | 削除。選曲セッションは `BrowseSnapshot` を `restoreBrowse` で戻す                      |
+| `DEFAULT_PLAY_OPTIONS`、オプションの巡回順                                        | `player-browser` のコアの選曲                    | 同じ名前（`DEFAULT_PLAY_OPTIONS` の再 export は削除）                                  |
+| `resolveSkinPlayOptionValue`・`cycleSkinPlayOptionValue`                          | `player-browser` のコアの選曲                    | `resolvePlayOptionValue`・`cyclePlayOptionValue`                                       |
+| ハイスピードの範囲と刻み                                                          | `player-browser` の `scene/hi-speed.ts`          | 同じ名前（再 export は削除）                                                           |
+| `SceneCourseInfo`・`resolveSceneCourseInfo`                                       | `player-browser` の `scene/course-info.ts`       | `CourseView`・`resolveCourseView`（旧名は削除）                                        |
+| `PixiPlayOptions` などの `Pixi*` のプレイオプションの型・`PixiGameplayResultData` | `player-browser` の scene                        | `PlayOptions` など・`PlayResult`（旧名は削除）                                         |
+| `CourseComboState`・`createCourseCombo`・`advanceCourseCombo`                     | `player-browser` の `scene/core/course-combo.ts` | 同じ名前。ただし `advanceCourseCombo` は純粋な `reduceCourseCombo` に置き換え          |
+| `ReplayViewCursor`・`resolveBeatorajaReplayView`                                  | `player-browser` の `scene/replay-view.ts`       | `ReplayViewCursor`。どのプレイのビューも `captureReplayView` で見え方を求める          |
+| `buildCourseResultData`・`joinCourseStageHistories`・`resolveResultPresentation`  | `app-play` の `course-result.ts`                 | `playResultFromCourseRun` など（旧名で再 export）                                      |
+| `resolveResultViewJingles`                                                        | `app-play` の `result-jingles.ts`                | そのまま。`resolveResultJingles` の上に実装                                            |
 
 どの種類の選曲画面もこれらのモデル（`reduceBrowse`・`browseEntries`・`captureBrowse` / `restoreBrowse`・
 `browseSystemSound`）で一覧をたどります。どのプレイ画面も `PlayState` を一つ持ち、リザルトをそこから読みます

@@ -33,8 +33,8 @@ Non-goals:
 ```mermaid
 flowchart LR
   subgraph clients[Clients]
-    W[player-web]
-    T[player-tui]
+    W[player-browser]
+    T[player-terminal]
   end
   subgraph workers[Workers]
     P[play]
@@ -55,7 +55,7 @@ flowchart LR
 - **Framework**: Hono. The API and the server-rendered pages live in one Worker and share the data-access functions.
 - **Package**: `packages/app-leaderboard` (private). It imports `@be-music/player-engine/replay` and `@be-music/chart-model` to
   re-simulate plays and verify fingerprints.
-- **Typed client**: Hono RPC (`hc<AppType>`) gives `player-web` and `player-tui` the API types directly.
+- **Typed client**: Hono RPC (`hc<AppType>`) gives `player-browser` and `player-terminal` the API types directly.
 - **Validation**: Valibot through `@hono/standard-validator`.
 - **ORM**: Drizzle. drizzle-kit generates SQL migrations into the package; Better Auth's tables use the same
   migrations.

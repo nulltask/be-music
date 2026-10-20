@@ -5,7 +5,7 @@
 Decisions that shape the code and would be costly to reverse, with why they were taken. The target they add up to is in [Architecture](../architecture.md#target-architecture).
 
 - [Skin families only draw](./0001-skin-families-only-draw.md)
-- [A runtime-neutral scene-model package](./0002-scene-model-package.md)
+- [A runtime-neutral player-scene-model package](./0002-scene-model-package.md)
 - [One play loop with judge strategies](./0003-one-play-loop.md)
 - [Course, record and lamp rules live in @be-music/player-engine](./0004-domain-rules-in-player.md)
 - [Designed public entry points; breaking changes allowed before 1.0](./0005-public-entry-points.md)

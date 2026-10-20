@@ -112,8 +112,8 @@ be-music のテストスイートが共有する譜面・音声フィクスチ�
 
 | ファイル                                   | 用途                                                                  |
 | ------------------------------------------ | --------------------------------------------------------------------- |
-| `sample.wav`                               | ほとんどの譜面の既定キー音。audio-renderer の基準サンプルでもある。     |
+| `sample.wav`                               | ほとんどの譜面の既定キー音。chart-audio-renderer の基準サンプルでもある。     |
 | `branch.wav`, `right.wav`, `wrong.wav`     | 副次的なキー音。主に制御フローの分岐を耳で聞き分けるため。               |
 | `retrigger_a.wav`, `retrigger_b.wav`       | リトリガー譜面が重なりを作るために必要な 2.2 秒サンプル。               |
 | `ogg-test.ogg`                             | `ogg-test.bms` が宣言する Vorbis サンプル。                            |
-| `render-codec-test.mp3` / `.ogg` / `.opus` | audio-renderer のコーデック別デコードケースと、`.wav` 不在時のフォールバックケース。 |
+| `render-codec-test.mp3` / `.ogg` / `.opus` | chart-audio-renderer のコーデック別デコードケースと、`.wav` 不在時のフォールバックケース。 |

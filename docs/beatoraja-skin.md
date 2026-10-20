@@ -250,7 +250,7 @@ sequenceDiagram
 ## Browser player wiring
 
 `@be-music/player-browser` ships `loadBeatorajaThemeFromFiles()` to wrap dropped browser `File[]` objects into a
-`BeatorajaThemeBundle`. Hosts then load each scene's skin entry with player-web's `loadBeatorajaSceneKit()`
+`BeatorajaThemeBundle`. Hosts then load each scene's skin entry with player-browser's `loadBeatorajaSceneKit()`
 ([player-web.md](./player-web.md#beatoraja-skin-and-theme-support)), which calls `loadBeatorajaSkin()` from this
 package twice (a header pass, then the skin with the player's options; once when the host already holds the options), `bundleBeatorajaSources()` for `source[]`,
 `loadBeatorajaTexturesFromBundle()` for Pixi textures and `loadBeatorajaFonts()` for CSS or bitmap fonts, and keeps
@@ -259,7 +259,7 @@ them per entry. The state lives in parallel with LR2 theme state, so the demo ca
 The browser renderer uses `BeatorajaPlaySkinView` as the shared view for select, decide, gameplay, and result
 skins. The family views read `TEXT`, `NUM`, `OPTION`, timers, gauges and graphs from the [scene mapping](#scene-mapping) and
 provide the runtime-specific parts themselves: chart images, note layers, BGA layers, audio and the result histories.
-The select, decide, play and result screens are player-web's beatoraja family views, made with `createSelectScene`,
+The select, decide, play and result screens are player-browser's beatoraja family views, made with `createSelectScene`,
 `createDecideScene`, `createPlayScene` and `createResultScene` ([player-web.md](./player-web.md#the-select-screen)): they
 draw the sessions' frames through the select, decide and result resolvers, the result view reading a `PlayResult`
 directly, and read beatoraja's scene timers off each frame. The select view reads the browse position's list options for

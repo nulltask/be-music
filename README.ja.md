@@ -30,12 +30,12 @@ TypeScript + pnpm workspaces で構成した BMS/bmson ツールチェーンで�
 ```mermaid
 flowchart TD
   subgraph data["データ"]
-    utils["utils"] --> json["json"] --> chart["chart"] --> parser["parser"]
-    parser --> stringifier["chart-writer"]
+    utils["shared-utils"] --> json["chart-source"] --> chart["chart-model"] --> parser["chart-parser"]
+    parser --> chart-writer["chart-writer"]
     parser --> renderer["chart-audio-renderer"]
   end
   subgraph rules["規則と engine"]
-    player["player"]
+    player["player-engine"]
   end
   subgraph models["モデル"]
     scene["player-scene-model"]
@@ -44,14 +44,14 @@ flowchart TD
     beatoraja["skin-beatoraja"]
   end
   subgraph hosts["実行層とホスト"]
-    editor["editor"]
+    editor["chart-editor"]
     tui["player-terminal"]
     lb["app-leaderboard"]
     web["player-browser"]
     demo["app-play"]
   end
 
-  stringifier --> editor
+  chart-writer --> editor
   renderer --> player
   player --> scene
   player --> tui
@@ -128,7 +128,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 
 ## 対応状況サマリ
 
-### parser (`@be-music/chart-parser`)
+### chart-parser (`@be-music/chart-parser`)
 
 - BMS のヘッダ / オブジェクト行 / 制御構文を保持
 - `#WAVxx` / `#BMPxx` / `#BPMxx` / `#STOPxx` / `#TEXTxx` を解釈
@@ -138,14 +138,14 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - bmson の `info.init_bpm` は parser が必須扱いにし、欠落・不正値は `130` fallback ではなく早期 error にします
 - beatoraja の bmson 拡張を beatoraja と同じ意味で `mode_hint` lane resolver 経由で map し、`mine_channels` は mine ごとの `damage` を保持した地雷、`key_channels` は隠し（不可視）ノートにする
 
-### stringifier (`@be-music/chart-writer`)
+### chart-writer (`@be-music/chart-writer`)
 
 - 中間表現(JSON) から BMS/bmson を出力
 - `position: [numerator, denominator]` を使って小節解像度を安定再現
 - bmson 拡張情報 (`info` 拡張, `bga`, `notes.l/c`) を出力
 - `preservation` layer が normalized event と一致している場合、BMS source 構造を優先して再出力
 
-### audio-renderer (`@be-music/chart-audio-renderer`)
+### chart-audio-renderer (`@be-music/chart-audio-renderer`)
 
 - BMS / bmson / JSON 入力に対応
 - 出力形式 `.wav` / `.aiff`
@@ -154,7 +154,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - LR2 系の 100001 倍 BPM ギミック値を時刻解決で処理
 - `#VOLWAV`、`#xxx97` / `#xxx98`、bmson `notes.c`、`#WAVCMD 01 xx vv`、`#EXWAVxx v` の volume scaling を反映
 
-### player core (`@be-music/player-engine`)
+### player-engine (`@be-music/player-engine`)
 
 - terminal と browser runtime が共有する `autoPlay()` / `manualPlay()` engine。決定的な判定コアの上の 1 つのプレイループに、手動・AUTO・リプレイの判定の戦略を差し込む（[アーキテクチャ](./docs/architecture.ja.md#エンジン-判定コアと-1-つのプレイループ)）
 - lane flash、POOR BGA command、frame snapshot、pause、restart、high-speed change を流す UI / input signal bus
@@ -233,7 +233,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - 1 つの renderer context を所有し、一度に 1 つの scene を表示する PixiJS scene host。demo ではシーンルーターがすべての切り替えを受け持ち、去った scene を dispose する
 - hi-speed、BGA mode/size、filter、sort、HS-FIX、lane cover、lift、auto-scratch、DP flip、random/mirror、gauge variant、skin option を扱う LR2 / beatoraja PLAY OPTION control
 
-### editor (`@be-music/chart-editor`)
+### chart-editor (`@be-music/chart-editor`)
 
 - `init`, `import`, `export`, `set-meta`, `add-note`, `delete-note`, `list-notes`
 
@@ -468,7 +468,7 @@ flowchart TD
 
 ## 設定・キャッシュ・ログ
 
-`player` は次をローカルへ保存します。
+`@be-music/player-terminal` は次をローカルへ保存します。
 
 - Play Mode (`manual` / `auto-scratch` / `auto`)
 - HIGH-SPEED
@@ -491,7 +491,7 @@ flowchart TD
 # player の SEA バイナリを生成
 pnpm run player:sea
 
-# audio-renderer の SEA バイナリを生成
+# chart-audio-renderer の SEA バイナリを生成
 pnpm run audio-renderer:sea
 
 # 生成物

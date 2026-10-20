@@ -23,7 +23,7 @@ Also, as it is still in the early stages of development, backward compatibility 
 - When stringifying parsed input, the IR aims to preserve the original chart structure as faithfully as possible.
 - The structure here includes elements that affect the re-stringing result, such as the order of overlapping definitions, control syntax, object line division units, and bmson bar line information.
 - Surface information that is not explicitly maintained by the IR, such as blank lines, comments, white space, line breaks, character codes, etc., is not subject to this principle.
-- As a result of editing the IR, if the retained structural information and the normalized `events` / `measures` / extension information no longer match, the stringifier will prioritize consistency and regenerate it.
+- As a result of editing the IR, if the retained structural information and the normalized `events` / `measures` / extension information no longer match, the chart-writer will prioritize consistency and regenerate it.
 
 ## Identifier and key naming
 
@@ -284,7 +284,7 @@ A full example:
 - `backBMP`: BMS `#BACKBMP`; bmson mirrors `info.back_image` here when present
 - `banner`: BMS `#BANNER`; bmson mirrors `info.banner_image` here when present
 - `playLevel`: BMS `#PLAYLEVEL` or bmson `info.level`; can be a number or a string
-- `rank`: BMS `#RANK` (a `0`–`4` rank index) or bmson `info.judge_rank` (a percentage, `100` = NORMAL); the stringifier converts between the two units when writing bmson
+- `rank`: BMS `#RANK` (a `0`–`4` rank index) or bmson `info.judge_rank` (a percentage, `100` = NORMAL); the chart-writer converts between the two units when writing bmson
 - `total`: BMS `#TOTAL` or bmson `info.total`
 - `difficulty`: BMS `#DIFFICULTY`
 - `bpm`: BMS `#BPM` or bmson `info.init_bpm`; BMS defaults to `130`, while bmson requires a positive `init_bpm`
@@ -355,7 +355,7 @@ This keeps `0a` and `0A` distinct for base-62 charts while preserving base-36 be
 - `preservation.bms.sourceLines` is the first choice to reproduce `stringifyBMS(parseChart(...))` while preserving the relative position of BMS header / object / control syntax
 - `preservation.bms.objectLines`: declaration order snapshot of object lines outside of control constructs
 - `preservation.bms.objectLines` is a partial snapshot for processing where you only want to handle object lines outside the control syntax
-- If `preservation.bms.objectLines` does not match `events` / `measures`, stringifier ignores and regenerates this array
+- If `preservation.bms.objectLines` does not match `events` / `measures`, chart-writer ignores and regenerates this array
 - `preservation.bmson.lines`: Array of bar line `y` values ​​(ascending order, no duplicates, starting from `0`)
 - `preservation.bmson.bpmEvents`: ordered snapshot of `bpm_events`
 - `preservation.bmson.stopEvents`: ordered snapshot of `stop_events`
@@ -429,9 +429,9 @@ flowchart LR
   jsonIn -->|"parseChart(…, 'json')"| ir
   ir -->|stringifyBMS| bmsOut
   ir -->|stringifyBmson| bmsonOut
-  ir -->|"parser CLI: JSON.stringify"| jsonOut
+  ir -->|"chart-parser CLI: JSON.stringify"| jsonOut
 ```
 
-- `stringifier` uses `position` denominator information to determine intra-bar resolution
+- `chart-writer` uses `position` denominator information to determine intra-bar resolution
 - `parseJson` requires `position` tuple and treats missing events as errors
 - Score semantics helpers such as beat conversion and event order are provided by `@be-music/chart-model`

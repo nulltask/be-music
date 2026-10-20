@@ -101,7 +101,7 @@ Extraction formula:
 - [ ] Retains additional information of `charts[]` (`md5`, `noteCount`, `bpm`, `duration`, `keys`, `scratch`, `bga`)
 - [ ] Delegate the obtained music score string to the existing `parseBMS` / `parseBmson`
 
-### stringifier (`@be-music/chart-source` -> bemuse assets)
+### chart-writer (`@be-music/chart-source` -> bemuse assets)
 
 - [ ] Collect audio files referenced in `resources.wav`
 - [ ] Apply the upper limit of chunk division to `1,474,560` byte (`max` in official implementation)
@@ -115,7 +115,7 @@ Extraction formula:
 - [ ] Simultaneously output `assets/metadata.json`
 - [ ] Supports `bemuse-song.json` / `index.json` generation (single-song / multi-song server)
 
-### player / audio-renderer
+### player / chart-audio-renderer
 
 - [ ] Accept `index.json` / `bemuse-song.json` as input
 - [ ] keysound resolved from `assets/metadata.json` + `*.bemuse`

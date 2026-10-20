@@ -35,7 +35,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] `info` 拡張項目: `mode_hint`
 - [x] `info` 拡張項目: `judge_rank`
 - [x] `info` 拡張項目: `total`
-- [x] beatoraja 拡張 `info.ln_type` と note 単位 `t`（1: LN / 2: CN / 3: HCN）を IR に保持し、player の LN モード解決と stringifier 出力に使用
+- [x] beatoraja 拡張 `info.ln_type` と note 単位 `t`（1: LN / 2: CN / 3: HCN）を IR に保持し、player の LN モード解決と chart-writer 出力に使用
 - [x] `info` 拡張項目: `back_image`
 - [x] `info` 拡張項目: `eyecatch_image`
 - [x] `info` 拡張項目: `banner_image`
@@ -66,7 +66,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] `subartists` の `key:value` 形式（`music:`/`chart:` 等）の保持規則
 - [ ] 未知ルートキーの透過保持
 
-### stringifier (`@be-music/chart-source` -> bmson)
+### chart-writer (`@be-music/chart-source` -> bmson)
 
 - [x] `version` 出力 (`bmson.version`, 未指定時 `1.0.0`)
 - [x] `info.resolution` 出力 (未指定時 `240`)
@@ -101,7 +101,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [ ] 未知ルートキーの透過再出力
 - [~] `notes.x` の元値を厳密保持 (IR で lanes を再割当するため完全同一は保証しない)
 
-### player / audio-renderer (bmson 再生挙動)
+### player / chart-audio-renderer (bmson 再生挙動)
 
 - [x] bmson 入力再生 (`parseChartFile` 経由)
 - [x] `info.banner_image` を player の選曲画面 banner に使用
@@ -209,7 +209,7 @@ flowchart TD
   - beatoraja はロングノート内やノートのある位置の地雷を捨てるが、be-music は LR2 が BMS のそうした地雷を残すのと同じく残す（[BMS / bmson 互換性ノート §2.6](./format-compat.ja.md#26-地雷) を参照）
 - `bga` は `bmson.bga` へ保持
 
-## BMS/bmson 中間表現 -> bmson 変換 (stringifier)
+## BMS/bmson 中間表現 -> bmson 変換 (chart-writer)
 
 - `@be-music/chart-model` の `eventToBeat` 相当の beat 解決から `y = round(beat * resolution)` を生成
 - `bmson.version` を `version` に出力 (未指定時は `1.0.0`)

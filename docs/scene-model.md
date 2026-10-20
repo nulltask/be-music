@@ -12,7 +12,7 @@ each screen's session works on; the families only draw them.
 flowchart TD
   player["@be-music/player-engine<br/>ruleset · course · records · engine"]
   model["@be-music/player-scene-model<br/>library · browse · play options<br/>play state · play result · course view · sounds"]
-  skins["skin-sdk · lr2-skin · beatoraja-skin<br/>map the models to each skin's vocabulary"]
+  skins["player-skin-sdk · skin-lr2 · skin-beatoraja<br/>map the models to each skin's vocabulary"]
   sessions["@be-music/player-browser<br/>scene sessions · family views"]
 
   player --> model
@@ -306,25 +306,25 @@ the select cues (`cursor`, `decide`, `cancel`, `folderOpen`, `folderClose`, `opt
 
 ## Where the helpers moved
 
-| Helper                                                                              | Was in                                    | Now                                                                                |
-| ----------------------------------------------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------- |
-| `BrowserSongEntry`, `BrowserFolderNode`, `BrowserCourseEntry`, …                    | `@be-music/player-skin-sdk`               | `LibraryChart`, `LibraryFolder`, `LibraryCourse`, … (the old names are removed)    |
-| `BeMusicPlayOptions` and its value types                                            | `@be-music/player-skin-sdk`               | `PlayOptions`, … (aliased in skin-sdk)                                             |
-| `BeMusicResultData`, `GaugeHistorySample`, `ScoreHistorySample`                     | `@be-music/player-skin-sdk`               | `PlayResult`, … (aliased in skin-sdk)                                              |
-| `BeMusicJudgmentKind`, `BeMusicSide`, `BeMusicJudgmentTiming`, `BeMusicLaneCover`   | `@be-music/player-skin-sdk`               | `JudgmentKind`, `PlaySide`, `JudgmentTiming`, `LaneCover` (aliased in skin-sdk)    |
-| `groupSongsByFolder`, `resolveChartPlayVariant`                                     | `player-web` collection                   | `groupChartsByFolder`, `resolveLibraryChartPlayVariant` (player-web's are removed) |
-| `matchesSearchQuery`, `wrappedCursorDelta`                                          | `player-web` core select                  | Same names (the re-exports are removed)                                            |
-| The core select's sort and difficulty filter                                        | `player-web` core select (private)        | `sortLibraryEntries`, `chartMatchesDifficultyFilter`                               |
-| `resolveSelectNavigation`                                                           | `player-web` core select                  | Removed: the select session restores a `BrowseSnapshot` with `restoreBrowse`       |
-| `DEFAULT_PLAY_OPTIONS`, the option cycles                                           | `player-web` core select                  | Same names (the `DEFAULT_PLAY_OPTIONS` re-export is removed)                       |
-| `resolveSkinPlayOptionValue`, `cycleSkinPlayOptionValue`                            | `player-web` core select                  | `resolvePlayOptionValue`, `cyclePlayOptionValue`                                   |
-| The hi-speed range and steps                                                        | `player-web` `scene/hi-speed.ts`          | Same names (the re-exports are removed)                                            |
-| `SceneCourseInfo`, `resolveSceneCourseInfo`                                         | `player-web` `scene/course-info.ts`       | `CourseView`, `resolveCourseView` (the old names are removed)                      |
-| `PixiPlayOptions` and the other `Pixi*` play-option types, `PixiGameplayResultData` | `player-web` scenes                       | `PlayOptions`, …, `PlayResult` (the old names are removed)                         |
-| `CourseComboState`, `createCourseCombo`, `advanceCourseCombo`                       | `player-web` `scene/core/course-combo.ts` | Same names, but `advanceCourseCombo` is replaced by the pure `reduceCourseCombo`   |
-| `ReplayViewCursor`, `resolveBeatorajaReplayView`                                    | `player-web` `scene/replay-view.ts`       | `ReplayViewCursor`; every play view resolves its view with `captureReplayView`     |
-| `buildCourseResultData`, `joinCourseStageHistories`, `resolveResultPresentation`    | `app-play` `course-result.ts`             | `playResultFromCourseRun`, … (re-exported under the old names)                     |
-| `resolveResultViewJingles`                                                          | `app-play` `result-jingles.ts`            | Stays, over `resolveResultJingles`                                                 |
+| Helper                                                                              | Was in                                        | Now                                                                                    |
+| ----------------------------------------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `BrowserSongEntry`, `BrowserFolderNode`, `BrowserCourseEntry`, …                    | `@be-music/player-skin-sdk`                   | `LibraryChart`, `LibraryFolder`, `LibraryCourse`, … (the old names are removed)        |
+| `BeMusicPlayOptions` and its value types                                            | `@be-music/player-skin-sdk`                   | `PlayOptions`, … (aliased in player-skin-sdk)                                          |
+| `BeMusicResultData`, `GaugeHistorySample`, `ScoreHistorySample`                     | `@be-music/player-skin-sdk`                   | `PlayResult`, … (aliased in player-skin-sdk)                                           |
+| `BeMusicJudgmentKind`, `BeMusicSide`, `BeMusicJudgmentTiming`, `BeMusicLaneCover`   | `@be-music/player-skin-sdk`                   | `JudgmentKind`, `PlaySide`, `JudgmentTiming`, `LaneCover` (aliased in player-skin-sdk) |
+| `groupSongsByFolder`, `resolveChartPlayVariant`                                     | `player-browser` collection                   | `groupChartsByFolder`, `resolveLibraryChartPlayVariant` (player-browser's are removed) |
+| `matchesSearchQuery`, `wrappedCursorDelta`                                          | `player-browser` core select                  | Same names (the re-exports are removed)                                                |
+| The core select's sort and difficulty filter                                        | `player-browser` core select (private)        | `sortLibraryEntries`, `chartMatchesDifficultyFilter`                                   |
+| `resolveSelectNavigation`                                                           | `player-browser` core select                  | Removed: the select session restores a `BrowseSnapshot` with `restoreBrowse`           |
+| `DEFAULT_PLAY_OPTIONS`, the option cycles                                           | `player-browser` core select                  | Same names (the `DEFAULT_PLAY_OPTIONS` re-export is removed)                           |
+| `resolveSkinPlayOptionValue`, `cycleSkinPlayOptionValue`                            | `player-browser` core select                  | `resolvePlayOptionValue`, `cyclePlayOptionValue`                                       |
+| The hi-speed range and steps                                                        | `player-browser` `scene/hi-speed.ts`          | Same names (the re-exports are removed)                                                |
+| `SceneCourseInfo`, `resolveSceneCourseInfo`                                         | `player-browser` `scene/course-info.ts`       | `CourseView`, `resolveCourseView` (the old names are removed)                          |
+| `PixiPlayOptions` and the other `Pixi*` play-option types, `PixiGameplayResultData` | `player-browser` scenes                       | `PlayOptions`, …, `PlayResult` (the old names are removed)                             |
+| `CourseComboState`, `createCourseCombo`, `advanceCourseCombo`                       | `player-browser` `scene/core/course-combo.ts` | Same names, but `advanceCourseCombo` is replaced by the pure `reduceCourseCombo`       |
+| `ReplayViewCursor`, `resolveBeatorajaReplayView`                                    | `player-browser` `scene/replay-view.ts`       | `ReplayViewCursor`; every play view resolves its view with `captureReplayView`         |
+| `buildCourseResultData`, `joinCourseStageHistories`, `resolveResultPresentation`    | `app-play` `course-result.ts`                 | `playResultFromCourseRun`, … (re-exported under the old names)                         |
+| `resolveResultViewJingles`                                                          | `app-play` `result-jingles.ts`                | Stays, over `resolveResultJingles`                                                     |
 
 Every family's select screen browses with these models (`reduceBrowse`, `browseEntries`, `captureBrowse` /
 `restoreBrowse`, `browseSystemSound`). Every play screen keeps one `PlayState` and reads its result off it
