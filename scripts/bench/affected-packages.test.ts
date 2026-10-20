@@ -4,44 +4,48 @@ import { PACKAGE_NAMES } from './exports.types.ts';
 import { resolveAffectedBenchPackages } from './affected-packages.ts';
 
 const DEPENDENCIES = {
-  utils: [],
-  json: ['utils'],
-  chart: ['json', 'utils'],
-  player: ['chart', 'json', 'utils'],
-  'skin-sdk': ['chart', 'json', 'player'],
-  'beatoraja-skin': ['chart'],
-  'theme-kit': ['chart'],
-  'player-web': ['beatoraja-skin', 'theme-kit', 'player', 'skin-sdk'],
-  'leaderboard-api': ['player'],
+  'shared-utils': [],
+  'chart-source': ['shared-utils'],
+  'chart-model': ['chart-source', 'shared-utils'],
+  'player-engine': ['chart-model', 'chart-source', 'shared-utils'],
+  'player-skin-sdk': ['chart-model', 'chart-source', 'player-engine'],
+  'skin-beatoraja': ['chart-model'],
+  'theme-kit': ['chart-model'],
+  'player-browser': ['skin-beatoraja', 'theme-kit', 'player-engine', 'player-skin-sdk'],
+  'app-leaderboard': ['player-engine'],
 };
 
 describe('resolveAffectedBenchPackages', () => {
   test('measures a changed package and what depends on it, in benchmark order', () => {
-    expect(resolveAffectedBenchPackages(['packages/player/src/core/engine.ts'], DEPENDENCIES)).toEqual([
-      'player',
-      'skin-sdk',
-      'player-web',
+    expect(resolveAffectedBenchPackages(['packages/player-engine/src/core/engine.ts'], DEPENDENCIES)).toEqual([
+      'player-engine',
+      'player-skin-sdk',
+      'player-browser',
     ]);
   });
 
   test('follows dependencies through packages the benchmark does not measure', () => {
-    expect(resolveAffectedBenchPackages(['packages/theme-kit/src/skin.ts'], DEPENDENCIES)).toEqual(['player-web']);
-    expect(resolveAffectedBenchPackages(['packages/beatoraja-skin/src/skin.ts'], DEPENDENCIES)).toEqual([
-      'beatoraja-skin',
-      'player-web',
+    expect(resolveAffectedBenchPackages(['packages/theme-kit/src/skin.ts'], DEPENDENCIES)).toEqual(['player-browser']);
+    expect(resolveAffectedBenchPackages(['packages/skin-beatoraja/src/skin.ts'], DEPENDENCIES)).toEqual([
+      'skin-beatoraja',
+      'player-browser',
     ]);
   });
 
   test('a leaf package measures only itself', () => {
-    expect(resolveAffectedBenchPackages(['packages/player-web/src/a.ts', ''], DEPENDENCIES)).toEqual(['player-web']);
+    expect(resolveAffectedBenchPackages(['packages/player-browser/src/a.ts', ''], DEPENDENCIES)).toEqual([
+      'player-browser',
+    ]);
   });
 
   test('measures shared tooling and dependency manifests in full', () => {
-    expect(resolveAffectedBenchPackages(['packages/player/src/a.ts', 'pnpm-lock.yaml'], DEPENDENCIES)).toEqual([
+    expect(resolveAffectedBenchPackages(['packages/player-engine/src/a.ts', 'pnpm-lock.yaml'], DEPENDENCIES)).toEqual([
       ...PACKAGE_NAMES,
     ]);
     expect(resolveAffectedBenchPackages(['scripts/bench/exports.ts'], DEPENDENCIES)).toEqual([...PACKAGE_NAMES]);
-    expect(resolveAffectedBenchPackages(['packages/player/package.json'], DEPENDENCIES)).toEqual([...PACKAGE_NAMES]);
+    expect(resolveAffectedBenchPackages(['packages/player-engine/package.json'], DEPENDENCIES)).toEqual([
+      ...PACKAGE_NAMES,
+    ]);
     expect(resolveAffectedBenchPackages(['vite.config.ts'], DEPENDENCIES)).toEqual([...PACKAGE_NAMES]);
   });
   test('ignores documentation and test changes without broadening a runtime change', () => {
@@ -49,30 +53,30 @@ describe('resolveAffectedBenchPackages', () => {
       'README.md',
       'docs/architecture.ja.md',
       '.changeset/player-fix.md',
-      'packages/player/README.md',
-      'packages/player/src/core/engine.test.ts',
-      'packages/player-web/src/example.spec.tsx',
+      'packages/player-engine/README.md',
+      'packages/player-engine/src/core/engine.test.ts',
+      'packages/player-browser/src/example.spec.tsx',
       '',
     ];
     expect(resolveAffectedBenchPackages(ignored, DEPENDENCIES)).toEqual([]);
-    expect(resolveAffectedBenchPackages([...ignored, 'packages/player-web/src/a.ts'], DEPENDENCIES)).toEqual([
-      'player-web',
+    expect(resolveAffectedBenchPackages([...ignored, 'packages/player-browser/src/a.ts'], DEPENDENCIES)).toEqual([
+      'player-browser',
     ]);
   });
 
   test('skips changes that reach no measured package, including an empty change list', () => {
-    expect(resolveAffectedBenchPackages(['packages/leaderboard-api/src/app.ts'], DEPENDENCIES)).toEqual([]);
+    expect(resolveAffectedBenchPackages(['packages/app-leaderboard/src/app.ts'], DEPENDENCIES)).toEqual([]);
     expect(resolveAffectedBenchPackages([], DEPENDENCIES)).toEqual([]);
   });
 
   test('keeps fixtures and deleted runtime paths in scope', () => {
-    expect(resolveAffectedBenchPackages(['packages/player-web/fixtures/chart.bms'], DEPENDENCIES)).toEqual([
-      'player-web',
+    expect(resolveAffectedBenchPackages(['packages/player-browser/fixtures/chart.bms'], DEPENDENCIES)).toEqual([
+      'player-browser',
     ]);
-    expect(resolveAffectedBenchPackages(['packages/player/src/deleted.ts'], DEPENDENCIES)).toEqual([
-      'player',
-      'skin-sdk',
-      'player-web',
+    expect(resolveAffectedBenchPackages(['packages/player-engine/src/deleted.ts'], DEPENDENCIES)).toEqual([
+      'player-engine',
+      'player-skin-sdk',
+      'player-browser',
     ]);
   });
 });

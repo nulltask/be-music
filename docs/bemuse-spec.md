@@ -2,7 +2,7 @@
 
 # Bemuse implementation specifications
 
-This document defines how `packages/parser` / `packages/stringifier` / `packages/player` handles the Bemuse format (Music Server + assets package).
+This document defines how `packages/chart-parser` / `packages/chart-writer` / `packages/player-engine` handles the Bemuse format (Music Server + assets package).
 
 ## Primary reference
 
@@ -25,7 +25,7 @@ This document defines how `packages/parser` / `packages/stringifier` / `packages
 
 - Compatibility level: Not supported
 - Policy: Treat bemuse as a "distribution container" rather than a "musical score format"
-- Conversion policy: `sourceFormat` of `@be-music/json` maintains `bms` / `bmson`, bemuse is absorbed in the input resolution layer
+- Conversion policy: `sourceFormat` of `@be-music/chart-source` maintains `bms` / `bmson`, bemuse is absorbed in the input resolution layer
 
 ## Format overview
 
@@ -83,7 +83,7 @@ Extraction formula:
 
 ## Compatibility checklist
 
-### parser (bemuse -> `@be-music/json`)
+### parser (bemuse -> `@be-music/chart-source`)
 
 - [ ] Accept `index.json` (`MusicServerIndex`) and enumerate `songs[]`
 - [ ] Keep `songs[].id` / `songs[].path` and normalize `/` at the end of `path`
@@ -101,7 +101,7 @@ Extraction formula:
 - [ ] Retains additional information of `charts[]` (`md5`, `noteCount`, `bpm`, `duration`, `keys`, `scratch`, `bga`)
 - [ ] Delegate the obtained music score string to the existing `parseBMS` / `parseBmson`
 
-### stringifier (`@be-music/json` -> bemuse assets)
+### chart-writer (`@be-music/chart-source` -> bemuse assets)
 
 - [ ] Collect audio files referenced in `resources.wav`
 - [ ] Apply the upper limit of chunk division to `1,474,560` byte (`max` in official implementation)
@@ -115,7 +115,7 @@ Extraction formula:
 - [ ] Simultaneously output `assets/metadata.json`
 - [ ] Supports `bemuse-song.json` / `index.json` generation (single-song / multi-song server)
 
-### player / audio-renderer
+### player / chart-audio-renderer
 
 - [ ] Accept `index.json` / `bemuse-song.json` as input
 - [ ] keysound resolved from `assets/metadata.json` + `*.bemuse`

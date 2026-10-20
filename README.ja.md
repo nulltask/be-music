@@ -2,54 +2,56 @@
 
 # be-music
 
+[パッケージの命名と移行](./docs/packages.ja.md)
+
 TypeScript + pnpm workspaces で構成した BMS/bmson ツールチェーンです。
 
 ## パッケージ
 
-- `@be-music/json`: Be-Music 内部処理専用の BMS/bmson 中間表現 (JSON互換) の pure IR
-- `@be-music/chart`: beat 解決、イベント順序、ロングノート解決などの譜面意味論 helper
-- `@be-music/utils`: 全パッケージで再利用する汎用ユーティリティ。browser-safe な core helper と Node 向け helper は狭い subpath export で分けています
-- `@be-music/parser`: `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / JSON のパーサ
-- `@be-music/stringifier`: JSON から `.bms` / `.bmson` への文字列化
-- `@be-music/audio-renderer`: 譜面をレンダリングして `.wav` / `.aiff` を出力
-- `@be-music/player`: 規則と再生 engine を共有する package。1 つのプレイループ（手動・AUTO・リプレイ）、判定、score、gauge とクリアランプ、自己ベスト、コースの実行と NONSTOP、リプレイの形式、ホストが差し込む runtime 契約
-- `@be-music/player-tui`: autoplay、keyboard play、Music Select、BGA、SEA build を扱う terminal UI と `bms-player` CLI frontend、およびリプレイ再シミュレータ `bms-replay`
-- `@be-music/scene-model`: ライブラリの項目・一覧・プレイオプション・プレイ状態と結果・コース・効果音など、スキンの種類によらず共有する実行環境非依存のシーンモデル
-- `@be-music/lr2-skin`: Lunatic Rave 2 skin parser、asset resolver、theme loader を renderer 非依存で提供する package
-- `@be-music/beatoraja-skin`: beatoraja JSON/Lua skin parser、normalizer、theme loader を renderer 非依存で提供する package
-- `@be-music/skin-sdk`: browser player 向け be-music スキンを書くための描画フレームワーク非依存の SDK
-- `@be-music/player-web`: browser の PixiJS 実行層。選曲・決定・プレイ・リザルトの各画面を、built-in・LR2・beatoraja のファミリービューが描くシーンセッションとして 1 つのホスト向け API から作る。音のサービス、譜面のコレクション、スキンの読み込み、gameplay の録画も持つ
-- `@be-music/player-web-demo`: folder / ZIP drop、LR2 / beatoraja theme、Debug Menu、browser 再生を、1 つのシーンルーターの下のサービスとして接続する private Vite demo
-- `@be-music/leaderboard-api`: Cloudflare Workers で動く private な Leaderboard API。リプレイの投稿、再シミュレーションによる検証、ランキング
-- `@be-music/editor`: CLI エディタ (インポート・編集・エクスポート)
+- `@be-music/chart-source`: Be-Music 内部処理専用の BMS/bmson 中間表現 (JSON互換) の pure IR
+- `@be-music/chart-model`: beat 解決、イベント順序、ロングノート解決などの譜面意味論 helper
+- `@be-music/shared-utils`: 全パッケージで再利用する汎用ユーティリティ。browser-safe な core helper と Node 向け helper は狭い subpath export で分けています
+- `@be-music/chart-parser`: `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / JSON のパーサ
+- `@be-music/chart-writer`: JSON から `.bms` / `.bmson` への文字列化
+- `@be-music/chart-audio-renderer`: 譜面をレンダリングして `.wav` / `.aiff` を出力
+- `@be-music/player-engine`: 規則と再生 engine を共有する package。1 つのプレイループ（手動・AUTO・リプレイ）、判定、score、gauge とクリアランプ、自己ベスト、コースの実行と NONSTOP、リプレイの形式、ホストが差し込む runtime 契約
+- `@be-music/player-terminal`: autoplay、keyboard play、Music Select、BGA、SEA build を扱う terminal UI と `bms-player` CLI frontend、およびリプレイ再シミュレータ `bms-replay`
+- `@be-music/player-scene-model`: ライブラリの項目・一覧・プレイオプション・プレイ状態と結果・コース・効果音など、スキンの種類によらず共有する実行環境非依存のシーンモデル
+- `@be-music/skin-lr2`: Lunatic Rave 2 skin parser、asset resolver、theme loader を renderer 非依存で提供する package
+- `@be-music/skin-beatoraja`: beatoraja JSON/Lua skin parser、normalizer、theme loader を renderer 非依存で提供する package
+- `@be-music/player-skin-sdk`: browser player 向け be-music スキンを書くための描画フレームワーク非依存の SDK
+- `@be-music/player-browser`: browser の PixiJS 実行層。選曲・決定・プレイ・リザルトの各画面を、built-in・LR2・beatoraja のファミリービューが描くシーンセッションとして 1 つのホスト向け API から作る。音のサービス、譜面のコレクション、スキンの読み込み、gameplay の録画も持つ
+- `@be-music/app-play`: folder / ZIP drop、LR2 / beatoraja theme、Debug Menu、browser 再生を、1 つのシーンルーターの下のサービスとして接続する private Vite demo
+- `@be-music/app-leaderboard`: Cloudflare Workers で動く private な Leaderboard API。リプレイの投稿、再シミュレーションによる検証、ランキング
+- `@be-music/chart-editor`: CLI エディタ (インポート・編集・エクスポート)
 
-パッケージは層を成して積み上がっています。矢印は、パッケージからそれに依存するパッケージへ向かいます。ほかの矢印を通じて既に届く依存は重ねて描いていません（`@be-music/utils` はほぼすべてのパッケージの下にあります）。パッケージの内側の同じ層は [アーキテクチャ — 目指す構造](./docs/architecture.ja.md#目指す構造) にあります。
+パッケージは層を成して積み上がっています。矢印は、パッケージからそれに依存するパッケージへ向かいます。ほかの矢印を通じて既に届く依存は重ねて描いていません（`@be-music/shared-utils` はほぼすべてのパッケージの下にあります）。パッケージの内側の同じ層は [アーキテクチャ — 目指す構造](./docs/architecture.ja.md#目指す構造) にあります。
 
 ```mermaid
 flowchart TD
   subgraph data["データ"]
-    utils["utils"] --> json["json"] --> chart["chart"] --> parser["parser"]
-    parser --> stringifier["stringifier"]
-    parser --> renderer["audio-renderer"]
+    utils["shared-utils"] --> json["chart-source"] --> chart["chart-model"] --> parser["chart-parser"]
+    parser --> chart-writer["chart-writer"]
+    parser --> renderer["chart-audio-renderer"]
   end
   subgraph rules["規則と engine"]
-    player["player"]
+    player["player-engine"]
   end
   subgraph models["モデル"]
-    scene["scene-model"]
-    sdk["skin-sdk"]
-    lr2["lr2-skin"]
-    beatoraja["beatoraja-skin"]
+    scene["player-scene-model"]
+    sdk["player-skin-sdk"]
+    lr2["skin-lr2"]
+    beatoraja["skin-beatoraja"]
   end
   subgraph hosts["実行層とホスト"]
-    editor["editor"]
-    tui["player-tui"]
-    lb["leaderboard-api"]
-    web["player-web"]
-    demo["player-web-demo"]
+    editor["chart-editor"]
+    tui["player-terminal"]
+    lb["app-leaderboard"]
+    web["player-browser"]
+    demo["app-play"]
   end
 
-  stringifier --> editor
+  chart-writer --> editor
   renderer --> player
   player --> scene
   player --> tui
@@ -96,7 +98,7 @@ pnpm run release:version
 - 通常の feature PR では、変更した package に対する `.changeset/*.md` を追加します
 - release したいタイミングで `devel` 上で `pnpm run release:version` を実行し、生成された `packages/*/package.json` と `packages/*/CHANGELOG.md` の更新をまとめてコミットします
 - その状態で `devel -> main` の release PR を merge すると、version が上がった公開 package だけ GitHub Release が個別に作成されます（プレイヤーのデモや Leaderboard などの private package は対象外です）
-- player SEA 実行ファイルは `@be-music/player-tui` から build し、`@be-music/player-tui` release に添付します。`@be-music/audio-renderer` も SEA zip を添付します
+- player SEA 実行ファイルは `@be-music/player-terminal` から build し、`@be-music/player-terminal` release に添付します。`@be-music/chart-audio-renderer` も SEA zip を添付します
 - private な repository root の `package.json` は `0.0.0` のままで、release 対象 version は `packages/*/package.json` で管理します
 
 tag は `@be-music/package-name@x.y.z` 形式で作成されます。
@@ -112,21 +114,21 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - [Player 実装仕様](docs/player-spec.ja.md)
 - [Terminal player 実装メモ](docs/player-tui.ja.md)
 - [Browser player 実装メモ](docs/player-web.ja.md)
-- [シーンモデル（`@be-music/scene-model`）](docs/scene-model.ja.md)
+- [シーンモデル（`@be-music/player-scene-model`）](docs/scene-model.ja.md)
 - [リプレイ（プレイ履歴）仕様](docs/replay.ja.md)
 - [コースと段位認定](docs/course.ja.md)
 - [be-music スキンの作り方](docs/be-music-skin.ja.md)
 - [LR2 skin 実装メモ](docs/lr2-skin.ja.md)
 - [beatoraja skin 実装メモ](docs/beatoraja-skin.ja.md)
-- [BMS/bmson 中間表現 (`@be-music/json`) 実装仕様](docs/json-spec.ja.md)
+- [BMS/bmson 中間表現 (`@be-music/chart-source`) 実装仕様](docs/json-spec.ja.md)
 - [用語集](docs/glossary.ja.md)
 
-`@be-music/json` は Be-Music の内部データモデルです。配布フォーマットや他ツールとの再利用可能な交換フォーマットとしては設計していません。
-譜面の意味論 helper は `@be-music/chart` に分離しており、`@be-music/json` 自体は pure IR と round-trip preservation を担当します。
+`@be-music/chart-source` は Be-Music の内部データモデルです。配布フォーマットや他ツールとの再利用可能な交換フォーマットとしては設計していません。
+譜面の意味論 helper は `@be-music/chart-model` に分離しており、`@be-music/chart-source` 自体は pure IR と round-trip preservation を担当します。
 
 ## 対応状況サマリ
 
-### parser (`@be-music/parser`)
+### chart-parser (`@be-music/chart-parser`)
 
 - BMS のヘッダ / オブジェクト行 / 制御構文を保持
 - `#WAVxx` / `#BMPxx` / `#BPMxx` / `#STOPxx` / `#TEXTxx` を解釈
@@ -136,14 +138,14 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - bmson の `info.init_bpm` は parser が必須扱いにし、欠落・不正値は `130` fallback ではなく早期 error にします
 - beatoraja の bmson 拡張を beatoraja と同じ意味で `mode_hint` lane resolver 経由で map し、`mine_channels` は mine ごとの `damage` を保持した地雷、`key_channels` は隠し（不可視）ノートにする
 
-### stringifier (`@be-music/stringifier`)
+### chart-writer (`@be-music/chart-writer`)
 
 - 中間表現(JSON) から BMS/bmson を出力
 - `position: [numerator, denominator]` を使って小節解像度を安定再現
 - bmson 拡張情報 (`info` 拡張, `bga`, `notes.l/c`) を出力
 - `preservation` layer が normalized event と一致している場合、BMS source 構造を優先して再出力
 
-### audio-renderer (`@be-music/audio-renderer`)
+### chart-audio-renderer (`@be-music/chart-audio-renderer`)
 
 - BMS / bmson / JSON 入力に対応
 - 出力形式 `.wav` / `.aiff`
@@ -152,7 +154,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - LR2 系の 100001 倍 BPM ギミック値を時刻解決で処理
 - `#VOLWAV`、`#xxx97` / `#xxx98`、bmson `notes.c`、`#WAVCMD 01 xx vv`、`#EXWAVxx v` の volume scaling を反映
 
-### player core (`@be-music/player`)
+### player-engine (`@be-music/player-engine`)
 
 - terminal と browser runtime が共有する `autoPlay()` / `manualPlay()` engine。決定的な判定コアの上の 1 つのプレイループに、手動・AUTO・リプレイの判定の戦略を差し込む（[アーキテクチャ](./docs/architecture.ja.md#エンジン-判定コアと-1-つのプレイループ)）
 - lane flash、POOR BGA command、frame snapshot、pause、restart、high-speed change を流す UI / input signal bus
@@ -162,13 +164,13 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - `ruleset`: ホスト・スキン・リーダーボードが共有する語彙。ゲージ、クリアランプ、BP、スコア（`ScoreSummary`、`computeScoreRate`、DJ ランク、LR2 のマネースコア）
 - `course`、`records`、`replay`: コースの実行、NONSTOP の流れ、コースのステージの規則、判定ルールセットごとの自己ベスト、リプレイの形式とその記録・シミュレータ
 
-### scene models (`@be-music/scene-model`)
+### scene models (`@be-music/player-scene-model`)
 
 - スキンの種類によらない、実行環境非依存の各画面のモデル。譜面の言葉で表したライブラリの項目（`LibraryChart`、`LibraryFolder`、`LibraryCourse`）、一覧のモデル（`reduceBrowse`、`BrowseSnapshot`）、プレイオプション、プレイ状態（`PlayState`）、プレイ結果（`PlayResult`）、コースの表示用モデル、効果音セット
 - Web 実行層、スキン SDK、LR2 と beatoraja の状態を求める関数が使う
 - [シーンモデル](docs/scene-model.ja.md) を参照
 
-### terminal player (`@be-music/player-tui`)
+### terminal player (`@be-music/player-terminal`)
 
 - MANUAL / AUTO SCRATCH / AUTO の 3 モード
 - TUI プレイ画面と選曲画面
@@ -191,14 +193,14 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - gameplay、TUI 描画、video BGA decode を分離する Node worker 構成
 - 記録したリプレイから LR2 / beatoraja / IIDX の結果を再計算する `bms-replay` CLI（[リプレイ仕様](docs/replay.ja.md) を参照）
 
-### LR2 skin (`@be-music/lr2-skin`)
+### LR2 skin (`@be-music/skin-lr2`)
 
 - LR2 の select / decide / play / result skin CSV を PixiJS 非依存で parse
 - `#INCLUDE`、`#CUSTOMOPTION`、`#CUSTOMFILE`、`#LR2FONT`、system font、skin timer、op condition、play-skin variant を解決
 - image、number、text、slider、bargraph、button、BGA、judge line、measure line、gauge、score chart、result graph element を parse
 - case-insensitive / wildcard asset lookup、TGA decode、DXA archive extraction で theme asset を読み込み
 
-### beatoraja skin (`@be-music/beatoraja-skin`)
+### beatoraja skin (`@be-music/skin-beatoraja`)
 
 - beatoraja JSON skin と Lua `.luaskin` entry を PixiJS 非依存で parse
 - beatoraja の 2-phase Lua contract を制限付き Fengari sandbox 上で評価
@@ -206,14 +208,14 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - `property[]`、`filepath[]`、category group、custom offset、wildcard source path、case-insensitive asset を解決
 - image、imageset、value、float-value、text、slider、note、judge、gauge、graph、BPM graph、timing graph、song-list、custom event、destination、PM character element を normalize
 
-### be-music skin SDK (`@be-music/skin-sdk`)
+### be-music skin SDK (`@be-music/player-skin-sdk`)
 
 - browser player の built-in family 向けスキンの契約。スキンは毎フレームのデータからキャンバスに各画面を描く
 - 描画フレームワークを import しない。フレームワークはスキンが持ち込む（Canvas 2D、WebGL / WebGPU、PixiJS、three.js など）
 - stage、lane layout、touch / portrait layout、moment、判定表示、loading、audio drive、曲情報、result track、skin settings、motion の helper
 - [be-music スキンの作り方](docs/be-music-skin.ja.md) を参照
 
-### browser player (`@be-music/player-web` / `@be-music/player-web-demo`)
+### browser player (`@be-music/player-browser` / `@be-music/app-play`)
 
 - dropped folder、ZIP、song / LR2 / beatoraja theme 混在 drop を扱う browser song library
 - 大きな audio / video file を lazy に扱い、case-insensitive に path lookup
@@ -222,7 +224,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - LR2 の select / decide / gameplay / result skin を parse して PixiJS で描画
 - beatoraja の select / decide / gameplay / result skin を parse して PixiJS で描画
 - 画面ごとに 1 つのシーンセッションが振る舞い（一覧の操作、譜面の準備、エンジン、入力、音、終わり方）をすべてのファミリーに共通に持ち、built-in・LR2・beatoraja のファミリービューは描いてインテントを返すだけ（[シーンセッションとファミリービュー](./docs/player-web.ja.md#シーンセッションとファミリービュー)）
-- 設計した入口：`@be-music/player-web/host`（`PixiSceneHost`、`createSelectScene` / `createDecideScene` / `createPlayScene` / `createResultScene`）、`/skin`、`/collection`、`/audio`、`/recording`（[公開する入口](./docs/player-web.ja.md#公開する入口)）
+- 設計した入口：`@be-music/player-browser/host`（`PixiSceneHost`、`createSelectScene` / `createDecideScene` / `createPlayScene` / `createResultScene`）、`/skin`、`/collection`、`/audio`、`/recording`（[公開する入口](./docs/player-web.ja.md#公開する入口)）
 - destination 補間、sprite transform、number、text、slider、bargraph を扱う共通 LR2 Pixi helper
 - destination sampling、source cell selection、text、value、slider、gauge、graph、timing visualizer、note、marker、BGA、runtime op/timer wiring を扱う共通 beatoraja Pixi helper
 - note、timing、scroll distance、BGA cue、score、result は terminal player と共通の再生意味論を使用
@@ -231,7 +233,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - 1 つの renderer context を所有し、一度に 1 つの scene を表示する PixiJS scene host。demo ではシーンルーターがすべての切り替えを受け持ち、去った scene を dispose する
 - hi-speed、BGA mode/size、filter、sort、HS-FIX、lane cover、lift、auto-scratch、DP flip、random/mirror、gauge variant、skin option を扱う LR2 / beatoraja PLAY OPTION control
 
-### editor (`@be-music/editor`)
+### chart-editor (`@be-music/chart-editor`)
 
 - `init`, `import`, `export`, `set-meta`, `add-note`, `delete-note`, `list-notes`
 
@@ -319,12 +321,12 @@ demo は Vite dev server を起動します。BMS/bmson の楽曲 folder、LR2 t
 
 URL から archive を読み込むこともできます。`?music=<zip の URL>&skin=<zip の URL>`（どちらか一方だけでも可）を付けると、drop と同じ経路で archive を読み込みます。cross-origin の `https` URL は同一オリジンの proxy route `/__url-load-proxy` 経由で取得します。この route は Vite dev server と Cloudflare Worker の両方が提供します。
 
-demo は Player の Worker（`packages/play`）が配信します。build した demo を Static Assets で配信し、ffmpeg core を R2 から返す処理と、Leaderboard の API への転送を Worker が受け持ちます。`main` と `devel` に push すると、すべてのサービスが本番とプレビューにデプロイされます（`.github/workflows/deploy.yml`、[サービスと環境](./docs/services.ja.md)）。Player を手でデプロイするには次を実行します。
+demo は Player の Worker（`packages/worker-play`）が配信します。build した demo を Static Assets で配信し、ffmpeg core を R2 から返す処理と、Leaderboard の API への転送を Worker が受け持ちます。`main` と `devel` に push すると、すべてのサービスが本番とプレビューにデプロイされます（`.github/workflows/deploy.yml`、[サービスと環境](./docs/services.ja.md)）。Player を手でデプロイするには次を実行します。
 
 ```bash
-pnpm --filter @be-music/player-web-demo run cf:r2:push # 固定している @ffmpeg/core が変わったとき: core を R2 へ upload
-pnpm --filter @be-music/play run deploy                # 本番、play.be-music.app
-pnpm --filter @be-music/play run deploy:preview        # プレビュー、play.preview.be-music.app
+pnpm --filter @be-music/app-play run cf:r2:push # 固定している @ffmpeg/core が変わったとき: core を R2 へ upload
+pnpm --filter @be-music/worker-play run deploy                # 本番、play.be-music.app
+pnpm --filter @be-music/worker-play run deploy:preview        # プレビュー、play.preview.be-music.app
 ```
 
 `deploy` は demo を build して `cf deploy` を実行します。ffmpeg core（`ffmpeg-core.wasm` / `ffmpeg-core.js`）は Static Assets の 1 file あたりの上限を超えるので、R2 に置いて Worker 経由で配信します。
@@ -394,7 +396,7 @@ pnpm run replay -- /path/to/Song.bmplay.json --ruleset=lr2,beatoraja --json
 - `11..19` をすべて使う 1P keyboard、または従来 IIDX 2P channel を含まない PMS-STD `22..25` も `9 KEY` として判定します。
 - 拡張レーンチャンネル (`1A..1O` / `2A..2O`、またはホイールの `1P` / `1Q` / `2P` / `2Q`) があれば、他のどのルールよりも優先して `24 KEY SP` / `48 KEY DP` と判定します。bmson の `mode_hint` が `keyboard-24k` / `keyboard-24k-double` の場合も同じです。
 
-判定規則（`@be-music/chart` の `resolveChartPlayVariant`）は次の順に調べ、最初に当てはまったものを採ります。「9 KEY のレーン配置」は次の 3 つの内容規則のいずれかです。`17` があり `21` / `26..29` がない `#PLAYER 3`、2P のレーンがなく `11..19` をすべて使う譜面、`21` / `26..29` なしで `22..25` を使う譜面です。「2P」は `2x` のレーンを 1 つでも使うことを指します。レーンの使用は `1x` / `2x` のレーンと `5x` / `6x` のロングノートで数え、地雷と不可視オブジェクトは数えません。
+判定規則（`@be-music/chart-model` の `resolveChartPlayVariant`）は次の順に調べ、最初に当てはまったものを採ります。「9 KEY のレーン配置」は次の 3 つの内容規則のいずれかです。`17` があり `21` / `26..29` がない `#PLAYER 3`、2P のレーンがなく `11..19` をすべて使う譜面、`21` / `26..29` なしで `22..25` を使う譜面です。「2P」は `2x` のレーンを 1 つでも使うことを指します。レーンの使用は `1x` / `2x` のレーンと `5x` / `6x` のロングノートで数え、地雷と不可視オブジェクトは数えません。
 
 ```mermaid
 flowchart TD
@@ -466,7 +468,7 @@ flowchart TD
 
 ## 設定・キャッシュ・ログ
 
-`player` は次をローカルへ保存します。
+`@be-music/player-terminal` は次をローカルへ保存します。
 
 - Play Mode (`manual` / `auto-scratch` / `auto`)
 - HIGH-SPEED
@@ -489,12 +491,12 @@ flowchart TD
 # player の SEA バイナリを生成
 pnpm run player:sea
 
-# audio-renderer の SEA バイナリを生成
+# chart-audio-renderer の SEA バイナリを生成
 pnpm run audio-renderer:sea
 
 # 生成物
-./packages/player-tui/dist-sea/be-music-player chart.bms
-./packages/audio-renderer/dist-sea/be-music-audio-render chart.bms output.wav
+./packages/player-terminal/dist-sea/be-music-player chart.bms
+./packages/chart-audio-renderer/dist-sea/be-music-audio-render chart.bms output.wav
 
 # Node 実行ファイルを明示する場合
 pnpm run player:sea --node-binary /path/to/node
@@ -513,7 +515,7 @@ pnpm run audio-renderer:sea --node-binary /path/to/node
 pnpm run bench
 
 # 単一パッケージ（例: parser）
-pnpm --filter @be-music/parser run bench
+pnpm --filter @be-music/chart-parser run bench
 
 # 複数 run を集約
 pnpm run bench:aggregate -- --output tmp/bench/head.json tmp/bench/head-runs/*.json

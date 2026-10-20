@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import type { BuildInfo } from '../../packages/web-theme/src/build-info.ts';
+import type { BuildInfo } from '../../packages/service-web-theme/src/build-info.ts';
 
 /** Prefer explicit build metadata, then the actual checkout, then CI metadata when Git is absent. */
 export function resolveBuildInfo(

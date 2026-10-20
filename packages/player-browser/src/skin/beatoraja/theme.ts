@@ -1,0 +1,203 @@
+// Browser-side wiring for beatoraja themes.
+//
+// Mirrors `loadLR2ThemeSkinsFromFiles` from `@be-music/skin-lr2` so the host UI can keep its LR2 code path and pick
+// up beatoraja themes through a parallel surface. The parser pipeline lives in `@be-music/skin-beatoraja`; this file
+// only wires the dropped-File array up to that pipeline and doesn't open any PixiJS resources.
+
+import {
+  asLoadedBytes,
+  discoverBeatorajaTheme,
+  loadAssetBytes,
+  pickBeatorajaPlaySkinVariant,
+  readFilesIntoBytesMap,
+} from '@be-music/skin-beatoraja';
+import { pickBeatorajaThemeBGMPaths } from '@be-music/skin-beatoraja/scene';
+import type {
+  BeatorajaPlaySkinMap,
+  BeatorajaPlayVariant,
+  BeatorajaSkinConfig,
+  BeatorajaSkinEntry,
+  BeatorajaSkinFileEntry,
+  BeatorajaSkinHeader,
+  BeatorajaSkinInputFile,
+  BeatorajaTheme,
+  BeatorajaThemeDiscoveryWarning,
+} from '@be-music/skin-beatoraja';
+import type { ChartPlayVariant } from '@be-music/chart-model';
+import type { LoadProgressCallback } from '../../collection/types.ts';
+
+/** Single discovered skin entry, sized to live alongside its loaded byte map. */
+export interface BeatorajaThemeBundle {
+  /** All files the user dropped, indexed by case-insensitive lookup key. */
+  files: ReadonlyMap<string, BeatorajaSkinFileEntry>;
+  /** Per-scene entries discovered from the bundle. */
+  theme: BeatorajaTheme;
+  /** Entries the discovery pass failed to parse. Surfaced for diagnostics; consumers can keep going. */
+  warnings: ReadonlyArray<BeatorajaThemeDiscoveryWarning>;
+}
+
+export interface LoadBeatorajaThemeOptions {
+  /**
+   * Optional progress hook fired as files are read. The bundle parser is fast (<50ms for the reference theme), so the
+   * dominant cost is reading file bytes off disk; the callback fires once per file as the read completes.
+   */
+  onProgress?: LoadProgressCallback;
+}
+
+/**
+ * Read the dropped theme files into memory and discover every skin entry inside. Returns the
+ * file map alongside the discovered theme so the caller can pass both to `loadBeatorajaSkin`
+ * (from `@be-music/skin-beatoraja`) once the user picks a scene + variant.
+ */
+export async function loadBeatorajaThemeFromFiles(
+  files: ReadonlyArray<BeatorajaSkinInputFile>,
+  options: LoadBeatorajaThemeOptions = {},
+): Promise<BeatorajaThemeBundle> {
+  const total = files.length;
+  const fileMap = await readFilesIntoBytesMap(files, {
+    shouldDefer: shouldDeferBeatorajaThemeFile,
+    onRead: (_path, current) => {
+      options.onProgress?.({ phase: 'reading', current, total });
+    },
+  });
+  const { theme, warnings } = discoverBeatorajaTheme(fileMap);
+  return { files: fileMap, theme, warnings };
+}
+
+const EAGER_BEATORAJA_THEME_EXTENSIONS = [
+  '.json',
+  '.luaskin',
+  '.lua',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.bmp',
+  '.gif',
+  '.webp',
+  '.tga',
+  '.svg',
+] as const;
+
+function shouldDeferBeatorajaThemeFile(path: string): boolean {
+  // Whole beatoraja folder drops often include JRE/runtime artifacts. Keep only skin scripts and
+  // images eager; fonts/audio/other files are loaded on demand by their dedicated loaders.
+  const lower = path.toLowerCase();
+  return !EAGER_BEATORAJA_THEME_EXTENSIONS.some((extension) => lower.endsWith(extension));
+}
+
+/**
+ * Compact textual summary of the play skins inside a bundle. Useful for logging "loaded play=7,14" lines next to the
+ * LR2 equivalent.
+ */
+export function summarizeBeatorajaPlaySkins(playSkins: BeatorajaPlaySkinMap, separator = ','): string {
+  const variants: BeatorajaPlayVariant[] = ['7', '5', '14', '10', '9', '24', '24d'];
+  const present = variants.filter((v) => playSkins[v] !== undefined);
+  return present.join(separator);
+}
+
+/**
+ * Play variants the renderer is willing to mount — every variant beatoraja themes author, including the 24-key
+ * keyboard modes. Charts reach those through the extended `1A..1O` / `2A..2O` lane channels (`ChartPlayVariant`
+ * `'24'` / `'48'`), and the play bridge addresses their lanes via the `1000`-block timer bases upstream's
+ * `play24main.lua` uses.
+ *
+ * If the dropped theme doesn't ship the variant a chart needs, {@link pickBeatorajaPlayableSkinVariant} chains
+ * through the closest substitutes — same shape as `pickLR2PlaySkin` on the LR2 side.
+ */
+const BEATORAJA_PLAYABLE_VARIANTS = ['7', '5', '9', '10', '14', '24', '24d'] as const;
+export type BeatorajaPlayableVariant = (typeof BEATORAJA_PLAYABLE_VARIANTS)[number];
+
+/**
+ * Map a chart's key count + double-play flag to the corresponding beatoraja play variant. Mirrors the logic
+ * `pickLR2PlaySkin` uses on the LR2 side. Returns `undefined` for chart shapes the renderer doesn't support.
+ */
+export function pickBeatorajaPlayableVariant(chart: {
+  keys: number;
+  isDouble: boolean;
+  isPMS: boolean;
+}): BeatorajaPlayableVariant | undefined {
+  if (chart.isPMS) return '9';
+  if (chart.isDouble) {
+    if (chart.keys === 24) return '24d';
+    if (chart.keys === 14) return '14';
+    if (chart.keys === 10) return '10';
+    return undefined;
+  }
+  if (chart.keys === 24) return '24';
+  if (chart.keys === 7) return '7';
+  if (chart.keys === 5) return '5';
+  return undefined;
+}
+
+/**
+ * Beatoraja play-skin variant → `ChartPlayVariant` (the engine / lane-layout vocabulary). The two spellings differ
+ * only for the keyboard DP mode: beatoraja names its skin `'24d'` (24 keys, double), while the chart classifier
+ * reports the total lane count as `'48'`.
+ */
+export function chartPlayVariantForBeatorajaVariant(variant: BeatorajaPlayableVariant): ChartPlayVariant {
+  return variant === '24d' ? '48' : variant;
+}
+
+/**
+ * The variant whose skin plays a `desired` chart: `desired` when the theme ships it, otherwise the closest substitute
+ * down the fallback list of `pickBeatorajaPlaySkinVariant` (`@be-music/skin-beatoraja`), which this calls. Many themes
+ * ship only the 7-keys variant and let the other charts re-use it. Returns `undefined` when the theme has no play skin
+ * at all.
+ */
+export function pickBeatorajaPlayableSkinVariant(
+  playSkins: BeatorajaPlaySkinMap,
+  desired: BeatorajaPlayableVariant,
+): BeatorajaPlayableVariant | undefined {
+  return pickBeatorajaPlaySkinVariant(playSkins, desired);
+}
+
+export type {
+  BeatorajaPlaySkinMap,
+  BeatorajaPlayVariant,
+  BeatorajaSkinConfig,
+  BeatorajaSkinEntry,
+  BeatorajaSkinHeader,
+  BeatorajaTheme,
+};
+
+/** BGM byte arrays discovered inside a beatoraja theme bundle. Each slot is a decoded WAV / OGG / MP3
+ * payload ready to hand to `AudioContext.decodeAudioData`. Slots are `undefined` when no matching
+ * file exists in the dropped tree.
+ */
+export interface BeatorajaThemeBGM {
+  /** Splash audio for the decide scene — typically `decide.wav` / `*decide*.wav`. */
+  decide?: Uint8Array;
+  /** Result-scene jingle for cleared runs — `clear.wav`. */
+  clear?: Uint8Array;
+  /** Result-scene jingle for failed runs — `fail.wav`. */
+  fail?: Uint8Array;
+  /** Generic result jingle — `result.wav`. Used when neither `clear` nor `fail` matched the outcome. */
+  result?: Uint8Array;
+  /**
+   * Course-result jingle for a cleared course — `course_clear.wav` (beatoraja `SystemSoundManager.COURSE_CLEAR`).
+   * beatoraja falls back to the {@link clear} one without it.
+   */
+  courseClear?: Uint8Array;
+  /** Course-result jingle for a failed course — `course_fail.wav`, falling back to {@link fail}. */
+  courseFail?: Uint8Array;
+}
+
+/**
+ * Scan a beatoraja theme bundle for BGM files. The lookup is heuristic — beatoraja's spec doesn't
+ * pin BGM to a fixed path, so the file stems are matched against the conventional names (see
+ * `pickBeatorajaThemeBGMPaths` in `@be-music/skin-beatoraja/scene`).
+ *
+ * Returns synchronously when every matched entry was eagerly loaded. When some entries are
+ * deferred (lazy file readers), the helper awaits each `loadAssetBytes` call serially — each BGM
+ * is small enough (<1 MiB) that the latency is negligible, and serializing avoids spawning a
+ * concurrent read storm on the dropped-file IO layer.
+ */
+export async function findBeatorajaThemeBGM(bundle: BeatorajaThemeBundle): Promise<BeatorajaThemeBGM> {
+  const out: BeatorajaThemeBGM = {};
+  for (const [slot, path] of Object.entries(pickBeatorajaThemeBGMPaths(bundle.files.keys()))) {
+    const entry = bundle.files.get(path);
+    const bytes = asLoadedBytes(entry) ?? (await loadAssetBytes(entry));
+    if (bytes !== undefined) out[slot as keyof BeatorajaThemeBGM] = bytes;
+  }
+  return out;
+}

@@ -2,7 +2,7 @@
 
 # bmson implementation specification
 
-This document defines how `packages/parser` / `packages/stringifier` handles bmson.
+This document defines how `packages/chart-parser` / `packages/chart-writer` handles bmson.
 How beatoraja and other players read the same fields is compared in [BMS / bmson compatibility notes](./format-compat.md).
 
 ## Primary reference
@@ -19,7 +19,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 
 ## Compatibility checklist
 
-### parser (bmson -> `@be-music/json`)
+### parser (bmson -> `@be-music/chart-source`)
 
 - [x] Root: `version`
 - [x] Root: `info`
@@ -35,7 +35,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - [x] `info` extended item: `mode_hint`
 - [x] `info` extended item: `judge_rank`
 - [x] `info` extended item: `total`
-- [x] Preserve the beatoraja extensions `info.ln_type` and per-note `t` (1: LN / 2: CN / 3: HCN) in the IR, used for the player's LN mode resolution and stringifier output
+- [x] Preserve the beatoraja extensions `info.ln_type` and per-note `t` (1: LN / 2: CN / 3: HCN) in the IR, used for the player's LN mode resolution and chart-writer output
 - [x] `info` extended item: `back_image`
 - [x] `info` extended item: `eyecatch_image`
 - [x] `info` extended item: `banner_image`
@@ -66,7 +66,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - [x] Retention rules for `key:value` format (`music:`/`chart:` etc.) of `subartists`
 - [ ] Transparent preservation of unknown root keys
 
-### stringifier (`@be-music/json` -> bmson)
+### chart-writer (`@be-music/chart-source` -> bmson)
 
 - [x] `version` output (`bmson.version`, `1.0.0` if not specified)
 - [x] `info.resolution` output (`240` if not specified)
@@ -101,7 +101,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - [ ] Transparent reoutput of unknown root key
 - [~] Strictly maintain the original value of `notes.x` (exact identity is not guaranteed as lanes are reallocated in IR)
 
-### player / audio-renderer (bmson playback behavior)
+### player / chart-audio-renderer (bmson playback behavior)
 
 - [x] bmson input playback (via `parseChartFile`)
 - [x] Use `info.banner_image` for player's song selection screen banner
@@ -136,7 +136,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - `mine_channels[].notes[]`: `x`, `y`, `damage`
 - `bga`: `bga_header`, `bga_events`, `layer_events`, `poor_events`
 
-## bmson -> BMS/bmson intermediate representation (`@be-music/json`) conversion
+## bmson -> BMS/bmson intermediate representation (`@be-music/chart-source`) conversion
 
 The overall read and write directions are in [JSON spec — Conversion rules](./json-spec.md#conversion-rules). A note's `x` finds its lane by the `mode_hint` rules in the list below:
 
@@ -175,7 +175,7 @@ flowchart TD
 - If `lines` exists, calculate `measure` and `position` using the `lines` interval as a measure.
 - Map `notes[].x` to BMS channels by `info.mode_hint`, in this order:
   1. A blank or missing `mode_hint` is treated as `beat-7k` (the bmson 1.0.0 default).
-  2. `beat-5k`, `beat-7k`, `beat-10k`, `beat-14k`, `popn-5k`, `popn-9k`, `keyboard-24k`, and `keyboard-24k-double` use a fixed lane table (for example `beat-7k` maps `x` 1-5 to `11`-`15`, 6-7 to `18`-`19`, and 8 to the scratch `16`; the keyboard tables are below). As in the bmson spec's canonical list and beatoraja, `beat-5k` keeps the scratch on `x` 8 and leaves `x` 6 / 7 without a lane, and `beat-10k` puts the 2P keys on `x` 9-13 and the 2P scratch on `x` 16. The tables are `BMSON_MODE_HINT_LAYOUTS` in `@be-music/chart`, built from the play-mode table (see [Player spec — Play-mode table](./player-spec.md#play-mode-table)).
+  2. `beat-5k`, `beat-7k`, `beat-10k`, `beat-14k`, `popn-5k`, `popn-9k`, `keyboard-24k`, and `keyboard-24k-double` use a fixed lane table (for example `beat-7k` maps `x` 1-5 to `11`-`15`, 6-7 to `18`-`19`, and 8 to the scratch `16`; the keyboard tables are below). As in the bmson spec's canonical list and beatoraja, `beat-5k` keeps the scratch on `x` 8 and leaves `x` 6 / 7 without a lane, and `beat-10k` puts the 2P keys on `x` 9-13 and the 2P scratch on `x` 16. The tables are `BMSON_MODE_HINT_LAYOUTS` in `@be-music/chart-model`, built from the play-mode table (see [Player spec — Play-mode table](./player-spec.md#play-mode-table)).
   3. `generic-Nkeys` maps `x = 1..N` left to right onto consecutive channels from `11`.
   4. Any other hint is unknown. When every positive `x` of `sound_channels`, `key_channels` and `mine_channels` is in the `beat-7k` table (1–8), the chart is read as `beat-7k`, as beatoraja (with a warning), Qwilight and Bemuse read it. Otherwise the unique positive `x` values are numbered in ascending order onto consecutive channels from `11`: beatoraja would turn the lanes past `x` 8 into BGM, and keeping them is what the author meant (be-music decision).
 - A note with `x` omitted or `x <= 0` becomes BGM (`01`).
@@ -209,9 +209,9 @@ flowchart TD
   - beatoraja drops a mine inside a long note or on a position a note already uses; be-music keeps it, as LR2 keeps such BMS mines (see [BMS / bmson compatibility notes §2.6](./format-compat.md#26-mines))
 - `bga` is kept in `bmson.bga`
 
-## BMS/bmson intermediate representation -> bmson conversion (stringifier)
+## BMS/bmson intermediate representation -> bmson conversion (chart-writer)
 
-- Generate `y = round(beat * resolution)` from beat resolution equivalent to `eventToBeat` of `@be-music/chart`
+- Generate `y = round(beat * resolution)` from beat resolution equivalent to `eventToBeat` of `@be-music/chart-model`
 - Output `bmson.version` to `version` (`1.0.0` if not specified)
 - Output `bmson.info.resolution` to `info.resolution` (`240` if not specified)
 - Output extended items of `bmson.info` (`subartists`, `chart_name`, `judge_rank`, `total`, image/preview etc.)

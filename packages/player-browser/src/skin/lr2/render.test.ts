@@ -1,0 +1,169 @@
+import { Rectangle, Texture } from 'pixi.js';
+import { describe, expect, test } from 'vite-plus/test';
+import {
+  createCroppedTexture,
+  evaluateElementDestination,
+  makeLR2BargraphSprite,
+  makeLR2SliderSprite,
+  makeLR2StaticImageSprite,
+} from './render.ts';
+import type {
+  LR2BarGraphElement,
+  LR2DestinationRect,
+  LR2ImageElement,
+  LR2ImageRect,
+  LR2SliderElement,
+} from '@be-music/skin-lr2';
+import { LR2_SPECIAL_GRAPHIC } from '@be-music/skin-lr2';
+
+function destination(overrides: Partial<LR2DestinationRect> = {}): LR2DestinationRect {
+  return {
+    time: 0,
+    x: 10,
+    y: 20,
+    w: 30,
+    h: 40,
+    acc: 0,
+    alpha: 1,
+    r: 255,
+    g: 255,
+    b: 255,
+    blend: 0,
+    filter: 0,
+    angle: 0,
+    center: 0,
+    loop: -1,
+    timer: 0,
+    ops: [],
+    op4: 0,
+    ...overrides,
+  };
+}
+
+function source(overrides: Partial<LR2ImageRect> = {}): LR2ImageRect {
+  return {
+    imagePath: 'skin.png',
+    x: 0,
+    y: 0,
+    w: 20,
+    h: 20,
+    divx: 1,
+    divy: 1,
+    cycle: 0,
+    timer: 0,
+    ...overrides,
+  };
+}
+
+function texture(width = 64, height = 64): Texture {
+  return new Texture({
+    source: Texture.EMPTY.source,
+    frame: new Rectangle(0, 0, width, height),
+  });
+}
+
+describe('evaluateElementDestination', () => {
+  test('returns static destinations without reading timer state', () => {
+    const staticDestination = destination({ x: 12 });
+    const element = {
+      destination: staticDestination,
+      keyframes: [staticDestination],
+    };
+
+    expect(evaluateElementDestination(element, () => 100)).toBe(staticDestination);
+  });
+
+  test('interpolates keyframes against the element destination timer', () => {
+    const keyframes = [destination({ timer: 7, x: 0, time: 0 }), destination({ timer: 7, x: 100, time: 100 })];
+
+    const resolved = evaluateElementDestination(
+      {
+        destination: keyframes[1]!,
+        keyframes,
+      },
+      (timer) => (timer === 7 ? 25 : 0),
+    );
+
+    expect(resolved.x).toBe(25);
+  });
+});
+
+describe('makeLR2StaticImageSprite', () => {
+  test('uses the full runtime texture for LR2 special graphics', () => {
+    const image: LR2ImageElement = {
+      source: source({ imagePath: LR2_SPECIAL_GRAPHIC.STAGEFILE, w: 0, h: 0 }),
+      destination: destination({ w: 120, h: 90 }),
+      keyframes: [],
+      declarationOrder: 0,
+    };
+
+    const sprite = makeLR2StaticImageSprite(image, image.destination, {
+      textures: new Map(),
+      elapsedSinceTimer: () => 0,
+      resolveSpecialGraphicTexture: () => texture(320, 240),
+    });
+
+    expect(sprite?.texture.width).toBe(320);
+    expect(sprite?.width).toBe(120);
+    expect(sprite?.height).toBe(90);
+  });
+});
+
+describe('createCroppedTexture', () => {
+  test('reuses cached crop textures for repeated LR2 frame requests', () => {
+    const base = texture();
+    const first = createCroppedTexture(base, { x: 1, y: 2, w: 16, h: 24 });
+    const second = createCroppedTexture(base, { x: 1, y: 2, w: 16, h: 24 });
+
+    expect(first).toBe(second);
+    expect(first?.source).toBe(base.source);
+  });
+
+  test('rejects non-finite LR2 frame requests before constructing a Pixi texture', () => {
+    const base = texture();
+
+    expect(createCroppedTexture(base, { x: Number.NaN, y: 0, w: 16, h: 16 })).toBeUndefined();
+    expect(createCroppedTexture(base, { x: 0, y: Number.POSITIVE_INFINITY, w: 16, h: 16 })).toBeUndefined();
+    expect(createCroppedTexture(base, { x: 0, y: 0, w: Number.NaN, h: 16 })).toBeUndefined();
+    expect(createCroppedTexture(base, { x: 0, y: 0, w: 16, h: Number.POSITIVE_INFINITY })).toBeUndefined();
+  });
+});
+
+describe('makeLR2BargraphSprite', () => {
+  test('clips vertical bars from the bottom up', () => {
+    const bargraph: LR2BarGraphElement = {
+      source: source({ h: 80 }),
+      destination: destination({ h: 100 }),
+      keyframes: [],
+      type: 1,
+      muki: 'vertical',
+      declarationOrder: 0,
+    };
+
+    const sprite = makeLR2BargraphSprite(bargraph, bargraph.destination, 0.25, new Map([['skin.png', texture()]]));
+
+    expect(sprite?.position.y).toBe(95);
+    expect(sprite?.height).toBe(25);
+    expect(sprite?.texture.frame.height).toBe(20);
+  });
+});
+
+describe('makeLR2SliderSprite', () => {
+  test('positions the knob along the configured slider axis', () => {
+    const slider: LR2SliderElement = {
+      source: source({ divx: 2, w: 40 }),
+      destination: destination(),
+      keyframes: [],
+      type: 1,
+      muki: 'right',
+      range: 100,
+      declarationOrder: 0,
+    };
+
+    const sprite = makeLR2SliderSprite(slider, slider.destination, 0.3, new Map([['skin.png', texture()]]));
+
+    expect(sprite?.position.x).toBe(40);
+    expect(sprite?.position.y).toBe(20);
+    expect(sprite?.texture.frame.width).toBe(20);
+  });
+});

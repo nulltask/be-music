@@ -2,7 +2,7 @@
 
 # BMS 実装仕様
 
-この文書は、`packages/parser` / `packages/stringifier` / `packages/player` が BMS をどう扱うかを定義します。
+この文書は、`packages/chart-parser` / `packages/chart-writer` / `packages/player-engine` が BMS をどう扱うかを定義します。
 
 ## 一次参照
 
@@ -48,7 +48,7 @@
 
 ### 行終端
 
-現実装の `parser` は、BMS テキストを `LF` / `CRLF` / `CR` のいずれでも区切ります。
+現実装の `chart-parser` は、BMS テキストを `LF` / `CRLF` / `CR` のいずれでも区切ります。
 `CRLF` は 1 つの行終端として扱い、`CR` 単独改行も `LF` と同様に受理します。
 
 入力末尾に改行がなくても、EOF を最終行の終端として扱います。
@@ -177,14 +177,14 @@
 - [x] 単一値ヘッダ・索引付きヘッダ・`#mmm02` の重複定義は EOF 側を採用
 - [x] `#STP` / `#LNOBJ` / 制御構文は重複行を宣言順で保持
 - [x] `#PREVIEW` を選曲画面プレビュー再生で優先的に使用
-- [x] `#VOLWAV` を player / audio-renderer の再生ゲインに反映
+- [x] `#VOLWAV` を player / chart-audio-renderer の再生ゲインに反映
 - [x] `#xxx97` を BGM 側の動的音量変更として解釈
 - [x] `#xxx98` を playable/key 側の動的音量変更として解釈
 - [x] `#EXRANKxx` と `#xxxA0` を player の動的判定幅変更として解釈
 - [x] `#BPMxx` による LR2 100001倍 BPM 系ギミックを時刻解決でサポート
-- [x] すべての `#WAVCMD` 行を `bms.wavCmds` に保持し、audio-renderer と browser WebAudio では `01` volume parameter を反映
-- [x] `#EXWAVxx` を parse し、`v` volume parameter を audio-renderer と browser WebAudio で反映
-- [x] `#BASEBPM` を `@be-music/chart` 経由で browser HS-FIX calibration の reference BPM として使用
+- [x] すべての `#WAVCMD` 行を `bms.wavCmds` に保持し、chart-audio-renderer と browser WebAudio では `01` volume parameter を反映
+- [x] `#EXWAVxx` を parse し、`v` volume parameter を chart-audio-renderer と browser WebAudio で反映
+- [x] `#BASEBPM` を `@be-music/chart-model` 経由で browser HS-FIX calibration の reference BPM として使用
 - [x] Browser player で `#BGAxx` sub-region BGA、`#SWBGAxx` switching BGA、`#ARGBxx` / `#EXBMPxx` tint/alpha を反映
 - [x] チャンネル `51-59` / `61-69`（拡張の `5A-5O` / `6A-6O` を含む）をロングノートとして解釈。`#LNTYPE` 省略時の既定である `#LNTYPE 1` はオブジェクトを始点 / 終点の組にし、`#LNTYPE 2`（MGQ）は `00` 以外が連続するセルの並びを 1 本のロングノートにする
 - [x] `#LNOBJ`: すべての宣言が有効で、宣言順に `bms.lnObjs` へ保持する。このオブジェクトは同じレーンの直前のノートから始まるロングノートを終わらせ、発音しない（HDX の Keyup 発音は採用しない）。直前にノートのない `#LNOBJ` オブジェクトは通常ノートになる
@@ -198,7 +198,7 @@
 
 LR2 を基準とします（issue #134。OpenLR2 による LR2 beta3 100201 の再構成 — ブランチ `LR2Beta3-v100201` の `583a385`、`LR2f.cpp` — と LR2body.exe の対応コード、hitkey command memo、LR2 同梱 `history.txt` で検証）。
 
-- **タイミング。** LR2 は `#BPMxx` を符号付きのままパースし、ロード時のタイミング事前計算では **|BPM|** で積分します（`LR2_bmsload.cpp:2841-2843`）— 時間軸は決して逆行しません。timing resolver（`@be-music/chart` の `timing.ts`）も同じく `Math.abs(bpm)` で積分し、最初に反転を起こすイベントの位置を `TimingResolver.reversal`（beat と seconds）として公開します。Resolved Chart はこれを `ResolvedChart.reversal` として持ちます。
+- **タイミング。** LR2 は `#BPMxx` を符号付きのままパースし、ロード時のタイミング事前計算では **|BPM|** で積分します（`LR2_bmsload.cpp:2841-2843`）— 時間軸は決して逆行しません。timing resolver（`@be-music/chart-model` の `timing.ts`）も同じく `Math.abs(bpm)` で積分し、最初に反転を起こすイベントの位置を `TimingResolver.reversal`（beat と seconds）として公開します。Resolved Chart はこれを `ResolvedChart.reversal` として持ちます。
 - **切り捨て。** LR2 は `< 0` 判定の前に BPM を int へ変換します（LR2body.exe 0x42b960 `__ftol`）。反転するのは `trunc(BPM) < 0` のときだけで、`-1 < BPM < 0` は反転せず |BPM| で這うように進むだけです。負の値の NOWBPM は `|trunc(BPM)|`（`-0.5` なら 0、`-65.5` なら 65）を表示し、タイミングは |BPM| をそのまま使います（`TempoPoint.displayBPM`、`TimingResolver.displayBPMAtBeat`）。
 - **イベントポンプ。** 負の BPM が発火すると LR2 のイベントポンプは以後ずっと凍結します。後続の BGM キー音・BGA キュー・BPM・STOP イベントは一切発火せず、オートプレイも止まり、NOWBPM は `|trunc(BPM)|` のままです。反転と同じティックでは、LR2 はイベントを op 順に並べます（`CMP_NotesByRealTimingOp`、`LR2f.cpp:24013`）。BGM（op 1）・BPM（op 3）・BGA レイヤー（op 4 / 6 / 7）は負の BPM（op 8）より**前に**発火し、そのティックの STOP（op 9）・レーン音（10〜29）・不可視オブジェクト（30 以降）は凍結します。エンジン・オフラインレンダラー・選曲プレビューは `firesBeforeTempoReversal` で絞り込みます（`0A` は BGA レイヤー扱い）。再生中の動画 BGA はそのまま流れ続け、止まるのはキューの切り替えだけです。
 - **表示。** LR2 は時刻ではなく譜面の**位置**を鏡映します。反転点 R 以降は `2·pos(R) − pos(now)` で描画し、`pos(now)` は |BPM| のテンポマップに沿って前進し続けます（`LR2f.cpp:2185-2188`、LR2body.exe 0x406d81）。そのため逆スクロールの速さは反転前のテンポをなぞるのではなく反転後のテンポに従い、負の値の |BPM| で進み、タイミングテーブル上の後続の BPM 変化に追従し、反転後の STOP では止まります。エンジンは UI フレームに `displayBeat = 2·beat(R) − beat(now)`（`mirrorBeatAtTempoReversal`）を載せ、TUI グリッド・beatoraja レイヤー・web シーンの `currentBeat` はこれでスクロールします。be-music には時刻ベース（「constant」）の HS-FIX スクロールがないため、時刻空間の鏡映はどこにも要りません。LR2 のノート描画規則は反転後も続きます。LR2 の `draw_count` は戻らないため、反転前に消えたノート・地雷・小節線はスクロールが戻っても消えたままで、反転より後に置かれた判定されないノートは判定ラインから上へ遠ざかります。beatoraja の描画規則（SCROLL や SPEED を含む譜面）では、オブジェクトの時刻を鏡映した判定クロックと比べます（`resolveReversedDrawClock`）。
@@ -223,11 +223,11 @@ scan は beatoraja と同じくファイル全体を対象にするため、`#BA
 
 runtime と round-trip の扱い:
 
-- `parser` は有効な base を `bms.base` に保持します。`#BASE 36` は既定値と同じなので、出力時に明示する必要はありません。
-- `stringifier` は `bms.base` が `62` の場合に `#BASE 62` を出力します。
+- `chart-parser` は有効な base を `bms.base` に保持します。`#BASE 36` は既定値と同じなので、出力時に明示する必要はありません。
+- `chart-writer` は `bms.base` が `62` の場合に `#BASE 62` を出力します。
 - `#WAVxx`, `#BMPxx`, `#BPMxx`, `#STOPxx`, `#TEXTxx`, `#LNOBJ`, BGA 系 indexed map、object stream value は有効な base で正規化します。
 - 制御構文 (`#RANDOM` / `#IF` / `#SWITCH` block) の内側も通常行と同じ base を使うため、branch 内の小文字 ID も parse と branch resolution を通して保持します。
-- `player`, `audio-renderer`, `chart`, `player-web` は sample、BGA、BPM/STOP、LN、地雷、timing 参照を `resolveBMSBase()` 経由で解決し、base-62 の小文字 ID を runtime でも区別します。
+- `player-engine`, `chart-audio-renderer`, `chart-model`, `player-browser` は sample、BGA、BPM/STOP、LN、地雷、timing 参照を `resolveBMSBase()` 経由で解決し、base-62 の小文字 ID を runtime でも区別します。
 
 例:
 
@@ -243,8 +243,8 @@ runtime と round-trip の扱い:
 
 ### `#VOLWAV`
 
-`parser` は `#VOLWAV` を非負の数値として `bms.volWAV` に保持します。
-`stringifier` は `bms.volWAV` が存在する場合、その値を `#VOLWAV n` としてそのまま出力します。
+`chart-parser` は `#VOLWAV` を非負の数値として `bms.volWAV` に保持します。
+`chart-writer` は `bms.volWAV` が存在する場合、その値を `#VOLWAV n` としてそのまま出力します。
 
 再生時とレンダリング時は、`#VOLWAV` を譜面全体へ掛かる線形 gain として扱います。
 省略時は `100` を既定値とします。`0 < n < 200` の値では実効倍率が `n / 100` になり、それ以外の値では原音量で鳴らします。
@@ -254,14 +254,14 @@ runtime と round-trip の扱い:
 - `#VOLWAV 150`: 原音量の `1.5` 倍
 - `#VOLWAV 0`、`#VOLWAV 200` 以上: 原音量
 
-この範囲は beatoraja に合わせたものです（beatoraja は `0 < n < 200` のときだけ `#VOLWAV` を適用します）。LR2 は `#VOLWAV` を無視します。beatoraja に合わせることで、`#VOLWAV 0` で譜面が無音になったり、大きな値で増幅されて音割れしたりすることを防ぎます。この規則は `@be-music/chart` の `volWAVToLinearGain` が実装しています。
+この範囲は beatoraja に合わせたものです（beatoraja は `0 < n < 200` のときだけ `#VOLWAV` を適用します）。LR2 は `#VOLWAV` を無視します。beatoraja に合わせることで、`#VOLWAV 0` で譜面が無音になったり、大きな値で増幅されて音割れしたりすることを防ぎます。この規則は `@be-music/chart-model` の `volWAVToLinearGain` が実装しています。
 
-この倍率は `player` のリアルタイム再生、選曲画面プレビュー、`audio-renderer` の `renderJSON()` / `renderChartFile()` に適用します。
+この倍率は `player-engine` のリアルタイム再生、選曲画面プレビュー、`chart-audio-renderer` の `renderJSON()` / `renderChartFile()` に適用します。
 各 player やハードウェア固有の音量差は再現せず、現実装では単純な gain 倍率としてのみ扱います。
 
 ### `#xxx97` / `#xxx98`
 
-`parser` / `stringifier` は `97` / `98` を通常の object channel として保持します。
+`chart-parser` / `chart-writer` は `97` / `98` を通常の object channel として保持します。
 `00` は通常どおり空トークンとして扱い、`01-FF` の非ゼロ値だけがイベントになります。
 
 再生時とレンダリング時は、`97` を BGM 側、`98` を playable/key 側の動的 bus volume として扱います。
@@ -285,7 +285,7 @@ runtime と round-trip の扱い:
 - [ ] ヘッダ `#CDDA` の扱い（無視・保持・再生反映の方針）
 - [ ] 旧動画系ヘッダ `#VIDEOFPS` / `#VIDEODLY` / `#VIDEOCOLORS` / `#SEEK` 系の扱い
 - [ ] 素材分離ヘッダ `#MATERIALSBMP` / `#MATERIALSWAV` の扱い
-- [ ] `#WAVCMD` の pitch / loop 実行。現状の runtime support は audio-renderer と browser WebAudio の `01` volume parameter のみです。
+- [ ] `#WAVCMD` の pitch / loop 実行。現状の runtime support は chart-audio-renderer と browser WebAudio の `01` volume parameter のみです。
 - [ ] `#OPTION` 複数行の同時適用ルール（現状は単一値保持）
 - [ ] オブジェクトチャンネル `#xxxA6`（`#CHANGEOPTIONxx`）の実行時反映
 - [ ] `#TEXTxx` / `#TEXT00` のプレイ中表示挙動（現状は保持のみ）
@@ -339,7 +339,7 @@ runtime と round-trip の扱い:
 ## player 固有挙動
 
 - 使用チャンネルからレーンモードを自動判定 (`5 KEY SP`, `5 KEY DP`, `7 KEY SP`, `14 KEY DP`, `9 KEY`, `24 KEY SP`, `48 KEY DP`)
-- すべての host（engine、CLI、Web player）は、host が variant を明示しない限り、共通ルール `@be-music/chart` の `resolveChartPlayVariant` ひとつでレーンモードを決めます。演奏時は `#RANDOM` / `#SWITCH` 解決後の譜面に対して判定するため、選ばれた分岐が追加するレーンも数えます
+- すべての host（engine、CLI、Web player）は、host が variant を明示しない限り、共通ルール `@be-music/chart-model` の `resolveChartPlayVariant` ひとつでレーンモードを決めます。演奏時は `#RANDOM` / `#SWITCH` 解決後の譜面に対して判定するため、選ばれた分岐が追加するレーンも数えます
 - レーン使用は `1x` / `2x` のレーンチャンネルと、対応レーンに写した `5x` / `6x` の `#LNTYPE` ロングノートチャンネルで数えます（同じ譜面の `#LNOBJ` 表記と `#LNTYPE` 表記で結果が一致します）。地雷 (`Dx` / `Ex`) と不可視オブジェ (`3x` / `4x`) はレーンモードの判定に使いません
 - 拡張レーンチャンネル (`1A..1O` / `2A..2O`) は他のどのルールよりも優先して `24 KEY SP` / `48 KEY DP` を選びます
 - be-music 独自: チャンネル `1P` / `1Q`（2P 側は `2P` / `2Q`）は 24 / 48 KEY のホイールの上 / 下で、bmson `keyboard-24k` のホイールレーン（`x` = 25 / 26）の BMS 表記です。ほかの BMS プレイヤーはこれらのチャンネルを定義していません。拡張レーンとして数えるため、これらもキーボードモードを選びます
@@ -377,11 +377,11 @@ runtime と round-trip の扱い:
 - `SCROLL 0` で同一レーン・同一描画セルに複数ノートが重なる場合、先行ノートを基準位置に置き、後続ノートは判定ラインから遠ざかる側（上方向）へ順に積み上げる
 - web player: `SCROLL < 0` は beatoraja と同じくノートを逆向きに動かす。判定ラインより下に来た、時刻がまだ先のノートはステージの下端までその位置に描く（[ブラウザプレイヤー — ノートの表示範囲](./player-web.ja.md#ノートの表示範囲)）
 - terminal player: `SCROLL < 0` は「逆走表示の忠実再現」ではなく「ノート接近表示の維持」を優先し、描画距離は `abs(distance)` で扱う
-- `SCROLL` の可視探索は `MAX_SCROLL_LOOKAHEAD_BEATS`（`4 * 64` beat、`packages/player-tui/src/tui/tui.ts`）で上限を設ける
+- `SCROLL` の可視探索は `MAX_SCROLL_LOOKAHEAD_BEATS`（`4 * 64` beat、`packages/player-terminal/src/tui/tui.ts`）で上限を設ける
 - beatoraja の `LaneRenderer` と同じく、可視探索は譜面が最初にレーン上端を越えた位置で打ち切る。後の負の `SCROLL` でレーン内に戻ってくるノートは、判定ラインの位置がそこへ進むまで描かない（web player と terminal player。[ブラウザプレイヤー — ノートの表示範囲](./player-web.ja.md#ノートの表示範囲)）
 - BPM×`100001` + `STOP` 補正を含むギミックでも、BPM 表示は内部時刻計算で使用する値をそのまま採用する
 - beatoraja 固有の描画バグ依存譜面は互換対象外とし、現時点では再現モードを実装しない
-- 上記ポリシーの回帰は `packages/player-tui/src/tui/lane-stacking.test.ts`・`packages/chart/src/timelines.test.ts`・`packages/player-tui/src/bga.test.ts` で検証する
+- 上記ポリシーの回帰は `packages/player-terminal/src/tui/lane-stacking.test.ts`・`packages/chart-model/src/timelines.test.ts`・`packages/player-terminal/src/bga.test.ts` で検証する
 
 ## イベント位置の扱い
 
@@ -400,9 +400,9 @@ runtime と round-trip の扱い:
 - 厳密 UTF-8 検証（マルチバイト列を含み fatal デコードに成功）を通れば UTF-8 とみなす
 - 非 ASCII のバイトがすべて KS X 1001 の 2 バイトの組（先頭・後続とも `0xA1`〜`0xFE`。beatoraja の EUC-KR 判定と同じ）になり、非 ASCII の文字の 90 % 以上がハングル音節なら韓国語の `euc-kr`
 - 上記以外は `shift_jis`, `utf8`, `euc-jp`, `latin1` をスコアリングして推測
-- この判定は `@be-music/parser` の `decodeBMSText` に一本化されており、CLI / TUI / Web のすべてが同じ結果になる
+- この判定は `@be-music/chart-parser` の `decodeBMSText` に一本化されており、CLI / TUI / Web のすべてが同じ結果になる
 
-## stringifier ルール
+## chart-writer ルール
 
 - `position` の分母情報から小節内解像度を決定
 - 同一小節・同一チャンネルでは分母の最小公倍数を採用
@@ -411,8 +411,8 @@ runtime と round-trip の扱い:
 
 ## 制御構文の評価ルール
 
-- `parser` は制御構文を `bms.controlFlow` として保持し、パース時には分岐を確定しない
-- 分岐はプレイごとに 1 回、明示的な draws（`drawRandomOutcomes` で引いた `RandomDraws`）で決める。評価器は `@be-music/chart` の `evaluateControlFlow` だけで、parser の `resolveBMSControlFlowWithDraws` が有効ブロックを展開し、`bms.controlFlow` を持たない解決済みの譜面を作る。ホストは再生や描画の前に解決し、解決済みの譜面と draws をエンジンに渡す（[プレイヤー仕様 — 制御構文の扱い](./player-spec.ja.md#制御構文の扱い)）
+- `chart-parser` は制御構文を `bms.controlFlow` として保持し、パース時には分岐を確定しない
+- 分岐はプレイごとに 1 回、明示的な draws（`drawRandomOutcomes` で引いた `RandomDraws`）で決める。評価器は `@be-music/chart-model` の `evaluateControlFlow` だけで、parser の `resolveBMSControlFlowWithDraws` が有効ブロックを展開し、`bms.controlFlow` を持たない解決済みの譜面を作る。ホストは再生や描画の前に解決し、解決済みの譜面と draws をエンジンに渡す（[プレイヤー仕様 — 制御構文の扱い](./player-spec.ja.md#制御構文の扱い)）
 - `#RANDOM n` / `#SWITCH n` は `1..n` の整数を生成して選択値にする
 - `#SETRANDOM n` / `#SETSWITCH n` は選択値を固定する
 - `#IF` チェーンは現在の RANDOM 選択値で分岐し、`#ELSEIF` / `#ELSE` は先に成立した枝がある場合は無効

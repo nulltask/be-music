@@ -1,0 +1,377 @@
+// The demo's lil-gui "Debug Menu": its folders, the controllers the app reaches after building them, and the locks a
+// play puts on them. Each folder is built in a module of its own (`play-options.ts`, `tempo.ts`, …) with the menu as
+// `this`; the folder titles and the remembered open states are `folders.ts`'. The menu reaches the app only through
+// `DebugMenuDeps`, which the app (`app/app.ts`) builds.
+
+import type { BeatorajaSkinConfig, BeatorajaSkinHeader } from '@be-music/skin-beatoraja';
+import type { LR2DiscoveredTheme } from '@be-music/skin-lr2';
+import type { TunableCompressor } from '@be-music/player-browser/audio';
+import type { PixiSceneHost, PlayScene, SelectScene } from '@be-music/player-browser/host';
+import type { BeatorajaThemeBundle } from '@be-music/player-browser/skin';
+import type { PlayOptions } from '@be-music/player-scene-model';
+import type { BeMusicSkin } from '@be-music/player-skin-sdk';
+// lil-gui auto-injects its stylesheet at construction time (see `injectStyles` option, default `true`), so we don't
+// import its CSS explicitly — its package.json doesn't expose the file via `exports` anyway.
+import GUI, { type Controller } from 'lil-gui';
+import { readStoredCompressorTunings, type CompressorTuning } from '../../compressor-tuning.ts';
+import type { FamilyDispatchState } from '../../family-dispatch.ts';
+import type { LeaderboardPanel } from '../../leaderboard-ui.ts';
+import type { CourseMakerService } from '../../services/course-maker.ts';
+import type { LibraryService } from '../../services/library.ts';
+import type { RecordsService } from '../../services/records.ts';
+import type { SilentModeSetting } from '../../services/silent-mode.ts';
+import type { StoredSkinSettings } from '../../skin-settings.ts';
+import type { DemoGUIState, SkinFamilyOverride } from '../../types.ts';
+import type { ActiveBeatorajaPlay } from '../beatoraja-skin-options.ts';
+import type { SkinDropFamily } from '../skin-drop-prompt.ts';
+import { buildAudioFolder } from './audio.ts';
+import { buildCaptureFolder } from './capture.ts';
+import {
+  buildCompressorTuningGUI,
+  refreshCompressorStageVisibility,
+  resolveCompressorParamOverrides,
+} from './compressor.ts';
+import { buildCourseFolder } from './course.ts';
+import { buildDeveloperFolder } from './developer.ts';
+import { DEBUG_MENU_FOLDERS, rememberFolderOpenStates, type DebugMenuFolder } from './folders.ts';
+import { buildLibraryFolder } from './library.ts';
+import { PlayLock } from './play-lock.ts';
+import { buildPlayOptionsFolder, buildReplayViewFolder } from './play-options.ts';
+import { detectRenderResolution, scheduleFirstRunResolutionDetect } from './render-resolution.ts';
+import { applyBeatorajaSkinSwitchIfActive, rebuildBeatorajaSkinPickers } from './skin-pickers.ts';
+import { buildSkinFolder, rebuildLR2ThemePicker, rebuildSkinFamilyPicker, rebuildSkinSettingsFolder } from './skin.ts';
+import { buildTempoFolder } from './tempo.ts';
+
+/**
+ * What the Debug Menu needs from the app: the settings and stores its controllers change, readers of what the app has
+ * loaded and shows, and the app's actions its controllers start. The actions keep the names of the app's methods.
+ */
+export interface DebugMenuDeps {
+  /** The settings the controllers read and write (`createDemoGUIState`), read by the app as each play starts. */
+  readonly settings: DemoGUIState;
+  /** The scene host: "Render resolution" sets its resolution, and the Developer folder reads its frame rate. */
+  readonly sceneHost: PixiSceneHost;
+  /** "Play in silent mode": the Audio folder's checkbox and the start card's option drive it. */
+  readonly silentMode: SilentModeSetting;
+  /** The Leaderboard panel, which fills its own folder. */
+  readonly leaderboard: Pick<LeaderboardPanel, 'buildFolder'>;
+  /** The library service: "Import table courses" and "Load from URLs" add to the library through it. */
+  readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromURL'>;
+  /** The records service, whose best records "Clear best records" empties. */
+  readonly records: Pick<RecordsService, 'chartBestRecords'>;
+  /** The course-maker service, whose card "My courses…" opens. */
+  readonly courseMaker: Pick<CourseMakerService, 'panel'>;
+  /** Each be-music skin's stored settings by skin id, which the "Skin settings" folder edits. */
+  readonly skinSettings: StoredSkinSettings;
+  /** The beatoraja skin entry picked for each scene type (`SkinType`), which the "Beatoraja skins" pickers write. */
+  readonly beatorajaSkinOverridesByType: Map<number, string>;
+  /** The compressor architecture every play mounts with (`?compressor=`), read once at boot. */
+  readonly compressorMode: 'split' | 'legacy';
+  /** The demo shell, which "Toggle fullscreen" takes fullscreen. */
+  readonly shell: HTMLElement;
+
+  /** The play: loading behind a decide screen, or on the stage. */
+  gameplayView(): PlayScene | undefined;
+  /** The select screen, on the stage or kept off it. */
+  selectView(): SelectScene | undefined;
+  /** Whether the scene host is mounted on the page yet. */
+  stageMounted(): boolean;
+  /** The loaded skins and the skin family pick, which say whether an LR2 skin is loaded. */
+  familyDispatchState(): FamilyDispatchState;
+  /** The loaded beatoraja theme. */
+  beatorajaTheme(): BeatorajaThemeBundle | undefined;
+  /** The LR2 themes the drops so far discovered, by name. */
+  availableLR2Themes(): ReadonlyArray<LR2DiscoveredTheme<File>>;
+  /** The name of the LR2 theme mounted. */
+  activeLR2ThemeName(): string | undefined;
+  /** The be-music skin the built-in scenes draw with. */
+  beMusicSkin(): BeMusicSkin;
+  /** The beatoraja play entry the play on the stage is drawn with, when it plays on a beatoraja theme. */
+  activeBeatorajaPlay(): ActiveBeatorajaPlay | undefined;
+  /** The player's options for a beatoraja entry, or its header's defaults. */
+  beatorajaSkinConfig(entryPath: string, header: BeatorajaSkinHeader): BeatorajaSkinConfig;
+
+  /** Shows a status line. */
+  setStatus(text: string): void;
+  /** Keeps play options set from the menu for every screen and play, and hands them to the select screen. */
+  setPlayOptions(changes: Partial<PlayOptions>): void;
+  /** Remembers a hi-speed set on the menu's slider, and hands it to the running play. */
+  rememberHiSpeed(value: number, source: 'menu'): void;
+  /**
+   * Has the select screen draw its records again, as they read now: those of the judge ruleset or the NONSTOP placement
+   * just picked.
+   */
+  refreshSelectRecords(): void;
+  /** Switches the scenes to another skin system (or the same one with other effects), making the select screen again. */
+  handleSkinFamilyOverrideChange(value: SkinFamilyOverride): void;
+  /** Switches the built-in scenes to another be-music skin. */
+  handleBuiltInSkinChange(id: string): void;
+  /** Adds a be-music skin and switches to it. */
+  addBeMusicSkin(skin: BeMusicSkin): void;
+  /** Imports a be-music skin module from a URL and adds it. */
+  addBeMusicSkinFromURL(url: string): Promise<void>;
+  /** Hands the be-music skin's settings, as stored, to the scenes drawing with it. */
+  applyBeMusicSkinSettings(): void;
+  /** Mounts another of the discovered LR2 themes. */
+  applyLR2ThemeByName(name: string): Promise<void>;
+  /** Asks for a drop of a skin of a skin system with none loaded (`promptSkinDrop`). */
+  promptSkinDrop(family: SkinDropFamily): void;
+  /** Loads the select entry again with other options and hands it to the beatoraja select screen. */
+  applyBeatorajaSelectSkinConfig(entryPath: string, config: BeatorajaSkinConfig): Promise<void>;
+  /** Loads a play entry again with other options and hands it to the beatoraja play on the stage. */
+  applyBeatorajaPlaySkinConfig(entryPath: string, config: BeatorajaSkinConfig): Promise<void>;
+}
+
+/**
+ * The Debug Menu (top-right, collapsed on arrival). {@link buildGUI} makes it; then the app reaches it through the
+ * methods it calls on a change of its own: a theme load rebuilds the pickers, a status line repaints the status row, a
+ * play locks the options it latched ({@link lockForPlay}) and its end unlocks them ({@link unlockAfterPlay}).
+ *
+ * The folders are built by functions in modules of their own, which run with the menu as `this`, so the controllers
+ * and helpers they reach are public members.
+ */
+export class DebugMenu {
+  /** What the menu reaches of the app. */
+  public readonly deps: DebugMenuDeps;
+  /** The settings the controllers read and write ({@link DebugMenuDeps.settings}). */
+  public readonly guiState: DemoGUIState;
+  public readonly sceneHost: PixiSceneHost;
+  public readonly silentMode: SilentModeSetting;
+  public readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromURL'>;
+  public readonly records: Pick<RecordsService, 'chartBestRecords'>;
+  public readonly courseMaker: Pick<CourseMakerService, 'panel'>;
+  public readonly skinSettings: StoredSkinSettings;
+  public readonly beatorajaSkinOverridesByType: Map<number, string>;
+  public readonly compressorMode: 'split' | 'legacy';
+  /**
+   * Debug-menu folder hosting one dropdown per skin scene type (Play 5K / 7K / 9K / 10K / 14K /
+   * 24K / 24Kdp / Music Select / Decide / Result / etc.). Empty until a beatoraja theme is
+   * dropped — `rebuildBeatorajaSkinPickers` (re-)populates it from `beatorajaTheme.entries`.
+   */
+  public beatorajaSkinPickerFolder: GUI | undefined;
+  /**
+   * Active controllers inside {@link beatorajaSkinPickerFolder}, keyed by scene type. Cleared
+   * and rebuilt on each `rebuildBeatorajaSkinPickers` call so dropdown options stay in sync with
+   * the latest theme drop.
+   */
+  public readonly beatorajaSkinPickerControllers: Map<number, Controller> = new Map();
+  /** The skin system the scenes run on, so a pick of one that is not loaded can be undone. */
+  public activeSkinSystem: SkinFamilyOverride = 'auto';
+  /** The Debug Menu's "Render resolution" dropdown and "Auto-detect resolution" button. */
+  public resolutionPicker: Controller | undefined;
+  public autoDetectResolutionControl: Controller | undefined;
+  /** Whether a render resolution benchmark is running. */
+  public detectingResolution = false;
+  /** Whether this visit already scheduled the first-run benchmark. */
+  public firstRunResolutionScheduled = false;
+  /**
+   * lil-gui handles for controllers we need to address by name after construction — toggling the per-stage folder
+   * visibility, renaming the record button, and reflecting URL- flag-driven compressor changes back into the GUI.
+   */
+  public gui: GUI | undefined;
+  public compressorStageFolder: GUI | undefined;
+  /** Compressor tuning in slider units, restored from the last visit; seeds every gameplay mount. */
+  public readonly compressorTunings: Record<TunableCompressor, CompressorTuning> = readStoredCompressorTunings();
+  public recordController: Controller | undefined;
+  /**
+   * "Auto-save replays" checkbox controller. Held so the play-start path can `disable()` it for the duration
+   * of a play — the replay options are latched when a song starts and cannot change mid-song — and the result /
+   * select paths can `enable()` it again.
+   */
+  public replaySaveController: Controller | undefined;
+  /**
+   * Every "Play options" folder controller (auto play / judge / gauge / random / DP flip / auto scratch). Disabled
+   * together while a song is playing (`lockReplayOptionsForPlay`) and refreshed when the LR2 select panel pushes
+   * a change (`refreshPlayOptionControllers`).
+   */
+  public readonly playOptionControllers: Controller[] = [];
+  /** The "Hi-speed" slider — left enabled during a play (it applies live) and repainted by {@link refreshHiSpeed}. */
+  public hiSpeedController: Controller | undefined;
+  /** The "Tempo (%)" slider — left enabled during a play whose tempo can change live (`allowsLiveTempo`). */
+  public tempoController: Controller | undefined;
+  /** Debug Menu folder holding the active be-music skin's settings; hidden for a skin that declares none. */
+  public skinSettingsFolder: GUI | undefined;
+  /** The Debug Menu's "Skin & display" folder, which hosts the LR2 theme picker once a drop discovers themes. */
+  public skinFolder: GUI | undefined;
+  /**
+   * Top-level "Skin family" dropdown. Rebuilt via {@link rebuildSkinFamilyPicker} on every theme load / wipe so its
+   * option list reflects which families are actually selectable (LR2 only shows up once an `.lr2skin` has been
+   * dropped; beatoraja only after a `.luaskin` / `skin/*.json` drop; Auto + Default always present). Holding the
+   * controller reference lets `rebuildSkinFamilyPicker` swap the options in-place via lil-gui's
+   * `Controller#options` API without disturbing the insertion order of subsequent controllers.
+   */
+  public skinFamilyController: Controller | undefined;
+  /**
+   * "LR2 theme" picker. Visible only when `availableLR2Themes` has 2+ entries; rebuilt on each theme drop so
+   * its option list tracks what was just loaded. The lil-gui option-controller pattern (`Controller#options(...)`)
+   * preserves the previously-attached `onChange` listener across rebuilds — see {@link rebuildSkinFamilyPicker}
+   * for the same idiom.
+   */
+  public lr2ThemeController: Controller | undefined;
+  /**
+   * The Debug Menu's other skin controls that make the select screen again: Built-in skin, Skin effects and the Add
+   * skin buttons. They, {@link skinFamilyController} and {@link lr2ThemeController} are disabled during a play
+   * ({@link playLock}), since going back to the select screen would end it.
+   */
+  public readonly skinControllers: Controller[] = [];
+  /** The locks a play puts on the options it latched and on the skin controls, and whether one runs. */
+  public readonly playLock: PlayLock = new PlayLock(() => ({
+    replaySave: this.replaySaveController,
+    playOptions: this.playOptionControllers,
+    tempo: this.tempoController,
+    skin: [this.skinFamilyController, this.lr2ThemeController, ...this.skinControllers],
+  }));
+  /**
+   * Disabled string controller used as the read-only status row inside the lil-gui panel. We hold a reference so {@link
+   * refreshStatus} can call `updateDisplay()` directly rather than relying on lil-gui's `.listen()` polling.
+   */
+  public statusController: Controller | undefined;
+
+  // The folders and the controls that follow what is loaded, each built in its own module with the menu as `this`.
+  private readonly buildCaptureFolder = buildCaptureFolder;
+  private readonly buildPlayOptionsFolder = buildPlayOptionsFolder;
+  private readonly buildReplayViewFolder = buildReplayViewFolder;
+  private readonly buildTempoFolder = buildTempoFolder;
+  private readonly buildCourseFolder = buildCourseFolder;
+  private readonly buildAudioFolder = buildAudioFolder;
+  private readonly buildSkinFolder = buildSkinFolder;
+  private readonly buildLibraryFolder = buildLibraryFolder;
+  private readonly buildDeveloperFolder = buildDeveloperFolder;
+  public readonly buildCompressorTuningGUI = buildCompressorTuningGUI;
+  public readonly refreshCompressorStageVisibility = refreshCompressorStageVisibility;
+  /** Bus `CompressorParams` for every compressor, from the tuning: what each play mounts with. */
+  public readonly resolveCompressorParamOverrides = resolveCompressorParamOverrides;
+  /** Rebuilds the Skin system picker's options: on every theme load. */
+  public readonly rebuildSkinFamilyPicker = rebuildSkinFamilyPicker;
+  /** Refills the "Skin settings" folder: when the be-music skin changes. */
+  public readonly rebuildSkinSettingsFolder = rebuildSkinSettingsFolder;
+  /** Rebuilds the LR2 theme picker: on every LR2 theme load. */
+  public readonly rebuildLR2ThemePicker = rebuildLR2ThemePicker;
+  /** Rebuilds the "Beatoraja skins" pickers: on every beatoraja theme load. */
+  public readonly rebuildBeatorajaSkinPickers = rebuildBeatorajaSkinPickers;
+  public readonly applyBeatorajaSkinSwitchIfActive = applyBeatorajaSkinSwitchIfActive;
+  /** Benchmarks the render resolution once, the first time the select screen shows. */
+  public readonly scheduleFirstRunResolutionDetect = scheduleFirstRunResolutionDetect;
+  public readonly detectRenderResolution = detectRenderResolution;
+
+  public constructor(deps: DebugMenuDeps) {
+    this.deps = deps;
+    this.guiState = deps.settings;
+    this.sceneHost = deps.sceneHost;
+    this.silentMode = deps.silentMode;
+    this.library = deps.library;
+    this.records = deps.records;
+    this.courseMaker = deps.courseMaker;
+    this.skinSettings = deps.skinSettings;
+    this.beatorajaSkinOverridesByType = deps.beatorajaSkinOverridesByType;
+    this.compressorMode = deps.compressorMode;
+  }
+
+  /** The play: loading behind a decide screen, or on the stage. */
+  public get gameplayView(): PlayScene | undefined {
+    return this.deps.gameplayView();
+  }
+
+  /** The select screen, on the stage or kept off it. */
+  public get selectView(): SelectScene | undefined {
+    return this.deps.selectView();
+  }
+
+  /** Shows a status line ({@link DebugMenuDeps.setStatus}). */
+  public setStatus(text: string): void {
+    this.deps.setStatus(text);
+  }
+
+  /** A play option set from the menu ({@link DebugMenuDeps.setPlayOptions}). */
+  public setPlayOptions(changes: Partial<PlayOptions>): void {
+    this.deps.setPlayOptions(changes);
+  }
+
+  /**
+   * Builds the floating lil-gui control panel and wires every controller to the gameplay / scene state. Centralizing
+   * this in one method lets us bind handles to specific controllers (`recordController`, `compressorStageFolder`)
+   * up-front, so runtime code can address them by name (renaming the record button when capture starts, hiding the
+   * per-stage folder on compressor mode change) without re-querying the DOM.
+   *
+   * Layout (folder titles and default open states live in `folders.ts`): the everyday controls sit at the top level
+   * — status, loading, skin pick, capture — followed by the Play options and Audio folders (open by default), then the
+   * skin detail, library, and developer folders (closed by default). Every folder remembers whether it was left open.
+   */
+  public buildGUI(): void {
+    // Start the panel itself collapsed so it doesn't cover the select-screen / gameplay canvas the moment a user lands
+    // on the demo.
+    const gui = new GUI({ title: 'Debug Menu', width: 280 });
+    gui.close();
+    this.gui = gui;
+    const addFolder = (parent: GUI, folder: DebugMenuFolder): GUI => parent.addFolder(folder.title).open(folder.open);
+    // Status row pinned to the top of the panel — first thing the user sees, so a glance at the GUI is enough to tell
+    // whether a load is in flight, what's currently playing, or where a saved recording landed. Disabled so the field
+    // reads as a passive read-out instead of an editable input. Updates are pushed explicitly via `setStatus`; cheaper
+    // than lil-gui's `.listen()` polling and the only writer is this class anyway.
+    this.statusController = gui.add(this.guiState, 'status').name('Status').disable();
+    this.statusController.domElement.classList.add('status-row');
+    gui.add(this.guiState, 'openFolder').name('Open folder');
+    gui.add(this.guiState, 'openFiles').name('Open files (ZIP / replay)');
+    // Folders in the order a session uses them: how to play (options, tempo, courses), how it looks and sounds, the
+    // library, capturing a play, the Leaderboard, then the developer settings.
+    const playOptions = addFolder(gui, DEBUG_MENU_FOLDERS.playOptions);
+    this.buildPlayOptionsFolder(playOptions);
+    this.buildReplayViewFolder(addFolder(playOptions, DEBUG_MENU_FOLDERS.replayView));
+    this.buildTempoFolder(addFolder(gui, DEBUG_MENU_FOLDERS.tempo));
+    this.buildCourseFolder(addFolder(gui, DEBUG_MENU_FOLDERS.course));
+    this.buildSkinFolder(addFolder(gui, DEBUG_MENU_FOLDERS.skin), addFolder);
+    this.buildAudioFolder(addFolder(gui, DEBUG_MENU_FOLDERS.audio), addFolder);
+    this.buildLibraryFolder(addFolder(gui, DEBUG_MENU_FOLDERS.library), addFolder);
+    this.buildCaptureFolder(addFolder(gui, DEBUG_MENU_FOLDERS.capture));
+    this.deps.leaderboard.buildFolder(addFolder(gui, DEBUG_MENU_FOLDERS.leaderboard));
+    this.buildDeveloperFolder(addFolder(gui, DEBUG_MENU_FOLDERS.developer));
+    this.refreshCompressorStageVisibility();
+    rememberFolderOpenStates(gui);
+  }
+
+  /**
+   * Options read when a play starts, which are disabled while one runs (`lockReplayOptionsForPlay`); returns the
+   * controller.
+   */
+  public trackPlayOption(controller: Controller): Controller {
+    this.playOptionControllers.push(controller);
+    return controller;
+  }
+
+  /** Repaints the status row with the status line just set. */
+  public refreshStatus(): void {
+    this.statusController?.updateDisplay();
+  }
+
+  /** Repaints the "Hi-speed" slider with a hi-speed set elsewhere (the select screen, the play's keys). */
+  public refreshHiSpeed(): void {
+    this.hiSpeedController?.updateDisplay();
+  }
+
+  /** Shows `value` as the skin system the scenes run on, which a pick of one with no skin loaded goes back to. */
+  public showSkinSystem(value: SkinFamilyOverride): void {
+    this.activeSkinSystem = value;
+    this.skinFamilyController?.updateDisplay();
+  }
+
+  /**
+   * Disables the options a play latches as it starts, so mid-song changes are rejected until {@link unlockAfterPlay}
+   * runs (result mounted or back at select), and the skin controls with them ({@link playLock}). With `liveTempo`, the
+   * tempo slider stays enabled and changes the play's tempo live.
+   */
+  public lockForPlay(liveTempo = false): void {
+    this.playLock.lock(liveTempo);
+  }
+
+  /** Re-enables the replay option controllers, and the skin controls, once no play is in flight. */
+  public unlockAfterPlay(): void {
+    this.playLock.unlock();
+  }
+
+  /** Repaints the "Play options" controllers after an external write (the LR2 select panel's edits). */
+  public refreshPlayOptionControllers(): void {
+    for (const controller of this.playOptionControllers) {
+      controller.updateDisplay();
+    }
+  }
+}

@@ -1,9 +1,9 @@
 [English version](./json-spec.md)
 
-# BMS/bmson 中間表現 (`@be-music/json`) 実装仕様
+# BMS/bmson 中間表現 (`@be-music/chart-source`) 実装仕様
 
-この文書は、`@be-music/json` が提供する BMS/bmson 中間表現の正規仕様です。
-`@be-music/json` は Be-Music の内部処理専用フォーマットであり、配布や再利用を目的とした外部交換フォーマットではありません。
+この文書は、`@be-music/chart-source` が提供する BMS/bmson 中間表現の正規仕様です。
+`@be-music/chart-source` は Be-Music の内部処理専用フォーマットであり、配布や再利用を目的とした外部交換フォーマットではありません。
 また、まだ開発初期段階のため、この中間表現の後方互換性は保証しません。
 
 ## 目的
@@ -13,9 +13,9 @@
 
 ## パッケージ境界
 
-- `@be-music/json` は純粋な IR パッケージです
-- `@be-music/json` が提供するのは、型、正規化済みのデータ構造、clone / 初期化 / 基本的な整形 helper に限られます
-- beat 変換、イベント順序、ロングノート解決、sample trigger 判定などの譜面意味論は `@be-music/chart` が担当します。譜面の [Be-Music Fingerprint](fingerprint-spec.ja.md) も `@be-music/chart` が求めます（`computeChartFingerprint` / `computePlayFingerprint`）
+- `@be-music/chart-source` は純粋な IR パッケージです
+- `@be-music/chart-source` が提供するのは、型、正規化済みのデータ構造、clone / 初期化 / 基本的な整形 helper に限られます
+- beat 変換、イベント順序、ロングノート解決、sample trigger 判定などの譜面意味論は `@be-music/chart-model` が担当します。譜面の [Be-Music Fingerprint](fingerprint-spec.ja.md) も `@be-music/chart-model` が求めます（`computeChartFingerprint` / `computePlayFingerprint`）
 - round-trip のための source-level 情報は IR の一部として保持しますが、正規化済みの譜面意味論とは `preservation` 層で分離します
 
 ## 設計原則
@@ -23,7 +23,7 @@
 - IR は `parse` した入力を `stringify` したときに、元の譜面が持っていた構造をできる限り変えずに再現することを原則とします
 - ここでいう構造には、重複定義の順序、制御構文、オブジェクト行の分割単位、bmson の小節線情報など、再文字列化結果に影響する要素を含みます
 - 空行、コメント、空白、改行コード、文字コードなど、IR が明示的に保持しない表層情報はこの原則の対象外です
-- IR を編集した結果、保持していた構造情報と正規化済みの `events` / `measures` / 拡張情報が一致しなくなった場合、stringifier は整合性を優先して再生成を行います
+- IR を編集した結果、保持していた構造情報と正規化済みの `events` / `measures` / 拡張情報が一致しなくなった場合、chart-writer は整合性を優先して再生成を行います
 
 ## 識別子とキーの命名
 
@@ -47,7 +47,7 @@
 
 ## ルート構造
 
-ルートオブジェクトとその部分です（フィールドの型は `packages/json/src/index.ts` にあります）。
+ルートオブジェクトとその部分です（フィールドの型は `packages/chart-source/src/index.ts` にあります）。
 
 ```mermaid
 classDiagram
@@ -284,7 +284,7 @@ classDiagram
 - `backBMP`: BMS `#BACKBMP`。bmson では `info.back_image` が存在する場合にここへ mirror します
 - `banner`: BMS `#BANNER`。bmson では `info.banner_image` が存在する場合にここへ mirror します
 - `playLevel`: BMS `#PLAYLEVEL` または bmson `info.level`。number または string を保持できます
-- `rank`: BMS `#RANK`（`0`〜`4` のランク番号）または bmson `info.judge_rank`（`100` = NORMAL の百分率）。単位が異なるため、stringifier は bmson 出力時に換算します
+- `rank`: BMS `#RANK`（`0`〜`4` のランク番号）または bmson `info.judge_rank`（`100` = NORMAL の百分率）。単位が異なるため、chart-writer は bmson 出力時に換算します
 - `total`: BMS `#TOTAL` または bmson `info.total`
 - `difficulty`: BMS `#DIFFICULTY`
 - `bpm`: BMS `#BPM` または bmson `info.init_bpm`。BMS は `130` を既定値にしますが、bmson は正の `init_bpm` を必須にします
@@ -355,7 +355,7 @@ ID を消費する code は手動で upper-case せず、`resolveBMSBase(json)` 
 - `preservation.bms.sourceLines` は BMS の header / object / 制御構文の相対位置を保ったまま `stringifyBMS(parseChart(...))` を再現するための第一選択です
 - `preservation.bms.objectLines`: 制御構文の外側にあるオブジェクト行の宣言順スナップショット
 - `preservation.bms.objectLines` は制御構文外の object 行だけを扱いたい処理向けの部分スナップショットです
-- `preservation.bms.objectLines` が `events` / `measures` と一致しない場合、stringifier はこの配列を無視して再生成します
+- `preservation.bms.objectLines` が `events` / `measures` と一致しない場合、chart-writer はこの配列を無視して再生成します
 - `preservation.bmson.lines`: 小節線 `y` 値の配列 (昇順・重複なし・`0` 始まり)
 - `preservation.bmson.bpmEvents`: `bpm_events` の配列順スナップショット
 - `preservation.bmson.stopEvents`: `stop_events` の配列順スナップショット
@@ -418,7 +418,7 @@ flowchart LR
     bmsonIn[".bmson"]
     jsonIn[".json"]
   end
-  ir["BeMusicJSON<br/>(@be-music/json)"]
+  ir["BeMusicJSON<br/>(@be-music/chart-source)"]
   subgraph out["書き出し"]
     bmsOut[".bms"]
     bmsonOut[".bmson"]
@@ -429,9 +429,9 @@ flowchart LR
   jsonIn -->|"parseChart(…, 'json')"| ir
   ir -->|stringifyBMS| bmsOut
   ir -->|stringifyBmson| bmsonOut
-  ir -->|"parser CLI: JSON.stringify"| jsonOut
+  ir -->|"chart-parser CLI: JSON.stringify"| jsonOut
 ```
 
-- `stringifier` は `position` 分母情報を使って小節内解像度を決定します
+- `chart-writer` は `position` 分母情報を使って小節内解像度を決定します
 - `parseJson` は `position` タプルを必須とし、欠損イベントはエラー扱いにします
-- beat 変換やイベント順序などの譜面意味論 helper は `@be-music/chart` が提供します
+- beat 変換やイベント順序などの譜面意味論 helper は `@be-music/chart-model` が提供します

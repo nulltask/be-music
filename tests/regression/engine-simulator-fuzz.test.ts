@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { simulateReplay, type RulesetId } from '@be-music/player/replay';
+import { simulateReplay, type RulesetId } from '@be-music/player-engine/replay';
 import {
   buildFuzzChart,
   buildFuzzInputs,

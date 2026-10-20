@@ -139,14 +139,14 @@ jobs:
 
       - name: Build player SEA executable
         if: needs.prepare.outputs.release_player_tui == 'true'
-        # The CLI / TUI bin moved to `@be-music/player-tui` during the player-tui-split refactor; the
+        # The CLI / TUI bin moved to `@be-music/player-terminal` during the player-tui-split refactor; the
         # `build:sea` script lives there now (the SEA bundle still ships under `be-music-player` for
         # backward compatibility with existing release assets).
-        run: pnpm --filter @be-music/player-tui run build:sea
+        run: pnpm --filter @be-music/player-terminal run build:sea
 
       - name: Build audio-renderer SEA executable
         if: needs.prepare.outputs.release_audio_renderer == 'true'
-        run: pnpm --filter @be-music/audio-renderer run build:sea
+        run: pnpm --filter @be-music/chart-audio-renderer run build:sea
 
       - name: Sign macOS SEA executables
         if: runner.os == 'macOS'
@@ -219,10 +219,10 @@ jobs:
 
           files=()
           if [ "${{ needs.prepare.outputs.release_player_tui }}" = 'true' ]; then
-            files+=(packages/player-tui/dist-sea/be-music-player)
+            files+=(packages/player-terminal/dist-sea/be-music-player)
           fi
           if [ "${{ needs.prepare.outputs.release_audio_renderer }}" = 'true' ]; then
-            files+=(packages/audio-renderer/dist-sea/be-music-audio-render)
+            files+=(packages/chart-audio-renderer/dist-sea/be-music-audio-render)
           fi
 
           for file in "${files[@]}"; do
@@ -240,7 +240,7 @@ jobs:
           mkdir -p tmp/release-assets/player tmp/release-assets/audio-renderer
 
           if [ "${{ needs.prepare.outputs.release_player_tui }}" = 'true' ]; then
-            cp packages/player-tui/dist-sea/be-music-player tmp/release-assets/player/
+            cp packages/player-terminal/dist-sea/be-music-player tmp/release-assets/player/
             chmod +x tmp/release-assets/player/be-music-player
             (
               cd tmp/release-assets/player
@@ -249,7 +249,7 @@ jobs:
           fi
 
           if [ "${{ needs.prepare.outputs.release_audio_renderer }}" = 'true' ]; then
-            cp packages/audio-renderer/dist-sea/be-music-audio-render tmp/release-assets/audio-renderer/
+            cp packages/chart-audio-renderer/dist-sea/be-music-audio-render tmp/release-assets/audio-renderer/
             chmod +x tmp/release-assets/audio-renderer/be-music-audio-render
             (
               cd tmp/release-assets/audio-renderer
@@ -265,10 +265,10 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path $assetDir | Out-Null
           if ('${{ needs.prepare.outputs.release_player_tui }}' -eq 'true') {
-            Copy-Item 'packages/player-tui/dist-sea/be-music-player.exe' "$assetDir/be-music-player.exe"
+            Copy-Item 'packages/player-terminal/dist-sea/be-music-player.exe' "$assetDir/be-music-player.exe"
           }
           if ('${{ needs.prepare.outputs.release_audio_renderer }}' -eq 'true') {
-            Copy-Item 'packages/audio-renderer/dist-sea/be-music-audio-render.exe' "$assetDir/be-music-audio-render.exe"
+            Copy-Item 'packages/chart-audio-renderer/dist-sea/be-music-audio-render.exe' "$assetDir/be-music-audio-render.exe"
           }
 
       - name: Upload SEA archives

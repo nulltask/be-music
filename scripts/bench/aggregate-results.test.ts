@@ -16,24 +16,24 @@ function createSnapshot(
     options: {
       timeMs: 200,
       warmupTimeMs: 100,
-      packages: ['utils'],
+      packages: ['shared-utils'],
       includeInteractive: false,
     },
     exports: {
-      utils: ['clamp'],
-      json: [],
-      chart: [],
-      parser: [],
-      stringifier: [],
-      editor: [],
-      'audio-renderer': [],
-      player: [],
-      'player-tui': [],
-      'scene-model': [],
-      'lr2-skin': [],
-      'beatoraja-skin': [],
-      'skin-sdk': [],
-      'player-web': [],
+      'shared-utils': ['clamp'],
+      'chart-source': [],
+      'chart-model': [],
+      'chart-parser': [],
+      'chart-writer': [],
+      'chart-editor': [],
+      'chart-audio-renderer': [],
+      'player-engine': [],
+      'player-terminal': [],
+      'player-scene-model': [],
+      'skin-lr2': [],
+      'skin-beatoraja': [],
+      'player-skin-sdk': [],
+      'player-browser': [],
     },
     totals: {
       exported: 1,
@@ -43,7 +43,7 @@ function createSnapshot(
     },
     skipped: {},
     results: {
-      'utils.clamp': {
+      'shared-utils.clamp': {
         hz,
         medianHz: hz,
         meanMs,
@@ -73,31 +73,31 @@ describe('aggregateBenchmarkSnapshots', () => {
       strategy: 'median',
       runCount: 3,
     });
-    expect(aggregated.results['utils.clamp'].hz).toBe(120);
-    expect(aggregated.results['utils.clamp'].medianHz).toBe(120);
-    expect(aggregated.results['utils.clamp'].meanMs).toBe(9);
-    expect(aggregated.results['utils.clamp'].p50Ms).toBe(9);
-    expect(aggregated.results['utils.clamp'].p99Ms).toBe(11);
+    expect(aggregated.results['shared-utils.clamp'].hz).toBe(120);
+    expect(aggregated.results['shared-utils.clamp'].medianHz).toBe(120);
+    expect(aggregated.results['shared-utils.clamp'].meanMs).toBe(9);
+    expect(aggregated.results['shared-utils.clamp'].p50Ms).toBe(9);
+    expect(aggregated.results['shared-utils.clamp'].p99Ms).toBe(11);
     // Every run's figure is kept, for the comparison's noise check.
-    expect(aggregated.results['utils.clamp'].runMedianHz).toEqual([100, 140, 120]);
-    expect(aggregated.results['utils.clamp'].iterationsPerSample).toBeUndefined();
+    expect(aggregated.results['shared-utils.clamp'].runMedianHz).toEqual([100, 140, 120]);
+    expect(aggregated.results['shared-utils.clamp'].iterationsPerSample).toBeUndefined();
   });
 
   it('keeps the median batch size of batched runs', () => {
     const batched = (hz: number, iterations: number) => {
       const snapshot = createSnapshot(hz, 1000 / hz);
-      snapshot.results['utils.clamp']!.iterationsPerSample = iterations;
+      snapshot.results['shared-utils.clamp']!.iterationsPerSample = iterations;
       return snapshot;
     };
     const aggregated = aggregateBenchmarkSnapshots([batched(100, 400), batched(110, 500), batched(90, 450)]);
-    expect(aggregated.results['utils.clamp'].iterationsPerSample).toBe(450);
+    expect(aggregated.results['shared-utils.clamp'].iterationsPerSample).toBe(450);
   });
 
   it('aggregates medianHz independently from mean hz', () => {
     const aggregated = aggregateBenchmarkSnapshots([
       createSnapshot(80, 12, {
         results: {
-          'utils.clamp': {
+          'shared-utils.clamp': {
             hz: 80,
             medianHz: 100,
             meanMs: 12,
@@ -114,7 +114,7 @@ describe('aggregateBenchmarkSnapshots', () => {
       }),
       createSnapshot(200, 5, {
         results: {
-          'utils.clamp': {
+          'shared-utils.clamp': {
             hz: 200,
             medianHz: 140,
             meanMs: 5,
@@ -131,7 +131,7 @@ describe('aggregateBenchmarkSnapshots', () => {
       }),
       createSnapshot(90, 11, {
         results: {
-          'utils.clamp': {
+          'shared-utils.clamp': {
             hz: 90,
             medianHz: 120,
             meanMs: 11,
@@ -148,9 +148,9 @@ describe('aggregateBenchmarkSnapshots', () => {
       }),
     ]);
 
-    expect(aggregated.results['utils.clamp'].hz).toBe(90);
-    expect(aggregated.results['utils.clamp'].medianHz).toBe(120);
-    expect(aggregated.results['utils.clamp'].p50Ms).toBe(9);
+    expect(aggregated.results['shared-utils.clamp'].hz).toBe(90);
+    expect(aggregated.results['shared-utils.clamp'].medianHz).toBe(120);
+    expect(aggregated.results['shared-utils.clamp'].p50Ms).toBe(9);
   });
 
   it('rejects incompatible snapshots', () => {
@@ -161,7 +161,7 @@ describe('aggregateBenchmarkSnapshots', () => {
           options: {
             timeMs: 500,
             warmupTimeMs: 100,
-            packages: ['utils'],
+            packages: ['shared-utils'],
             includeInteractive: false,
           },
         }),
