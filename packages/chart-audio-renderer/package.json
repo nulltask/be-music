@@ -1,7 +1,7 @@
 {
   "name": "@be-music/chart-audio-renderer",
   "version": "0.3.0",
-  "description": "Renderer for BMS, BMSON, and be-music JSON charts to WAV or AIFF",
+  "description": "Offline audio rendering of BMS, bmson, and be-music JSON charts to WAV or AIFF",
   "license": "MIT",
   "bin": {
     "bms-audio-render": "dist/cli.js"

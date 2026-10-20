@@ -2,7 +2,7 @@
   "name": "@be-music/app-leaderboard",
   "version": "0.1.0",
   "private": true,
-  "description": "Leaderboard API for be-music on Cloudflare Workers",
+  "description": "Chart and course rankings, score APIs, and web pages for be-music",
   "license": "MIT",
   "type": "module",
   "scripts": {

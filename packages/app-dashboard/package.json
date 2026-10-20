@@ -2,6 +2,7 @@
   "name": "@be-music/app-dashboard",
   "version": "0.1.0",
   "private": true,
+  "description": "Web dashboard for accessing be-music services and managing account access",
   "type": "module",
   "scripts": {
     "deploy": "cf deploy",

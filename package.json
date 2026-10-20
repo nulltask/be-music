@@ -2,7 +2,7 @@
   "name": "be-music",
   "version": "0.0.0",
   "private": true,
-  "description": "TypeScript monorepo for the be-music BMS/BMSON toolchain",
+  "description": "TypeScript workspace for the be-music BMS and bmson toolchain, players, and web services",
   "license": "MIT",
   "type": "module",
   "scripts": {

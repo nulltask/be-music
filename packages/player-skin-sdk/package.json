@@ -1,7 +1,7 @@
 {
   "name": "@be-music/player-skin-sdk",
   "version": "0.3.0",
-  "description": "Framework-free SDK for writing be-music skins for the be-music browser player",
+  "description": "Framework-free types and helpers for authoring be-music browser player skins",
   "license": "MIT",
   "files": [
     "dist"

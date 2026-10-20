@@ -2,6 +2,7 @@
   "name": "@be-music/app-accounts",
   "version": "0.1.0",
   "private": true,
+  "description": "Account management and OIDC identity provider for be-music services",
   "type": "module",
   "scripts": {
     "deploy": "pnpm run build:client && cf deploy",

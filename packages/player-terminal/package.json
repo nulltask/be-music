@@ -1,7 +1,7 @@
 {
   "name": "@be-music/player-terminal",
   "version": "0.6.0",
-  "description": "Terminal UI and CLI frontend for the be-music player",
+  "description": "Terminal player application and CLI for chart browsing, gameplay, and replay simulation",
   "license": "MIT",
   "bin": {
     "bms-player": "dist/cli.js",

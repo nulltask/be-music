@@ -1,7 +1,7 @@
 {
   "name": "@be-music/shared-utils",
   "version": "0.4.0",
-  "description": "Shared utilities for be-music packages",
+  "description": "Shared utilities with browser-safe and Node.js-specific entry points",
   "license": "MIT",
   "files": [
     "dist"
