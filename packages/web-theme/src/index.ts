@@ -1,3 +1,4 @@
+export { renderBuildInfo, type BuildInfo } from './build-info.ts';
 /** Shared service-page foundation, matching the Leaderboard's Basecoat neutral palette and Vega geometry. */
 export const SERVICE_CSS = `
 :root{color-scheme:light;--bg:oklch(1 0 0);--fg:oklch(.145 0 0);--card:oklch(1 0 0);--muted:oklch(.556 0 0);--soft:oklch(.97 0 0);--line:oklch(.922 0 0);--primary:oklch(.205 0 0);--primary-fg:oklch(.985 0 0);--ring:oklch(.708 0 0);--danger:oklch(.577 .245 27.325)}

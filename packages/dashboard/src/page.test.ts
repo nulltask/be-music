@@ -87,3 +87,14 @@ describe('escapeHTML', () => {
     expect(escapeHTML(`<a href="x">'&'</a>`)).toBe('&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;');
   });
 });
+
+test('includes stable build information in the dashboard footer', () => {
+  const page = renderDashboard({
+    account: undefined,
+    hostname: 'be-music.app',
+    locale: 'en',
+    buildInfo: { builtAt: '2026-10-20T08:00:00Z', revision: '0123456789abcdef' },
+  });
+  expect(page.split('</main>')[1]).toContain('2026-10-20 08:00:00 UTC');
+  expect(page).toContain('>01234567</code>');
+});

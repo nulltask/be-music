@@ -13,6 +13,8 @@ export interface Env {
   DB: D1Database;
   BLOBS: R2Bucket;
   AUTH_ORIGIN: string;
+  BUILD_TIMESTAMP?: string;
+  BUILD_REVISION?: string;
   SHOW_DONATE_LINK?: string;
   PASSKEY_RP_ID: string;
   /** JSON map of first-party client IDs to exact origins. */
