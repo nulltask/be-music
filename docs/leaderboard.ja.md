@@ -74,18 +74,10 @@ flowchart LR
 
 ### 2.2 プランの制限
 
-Leaderboard は **Workers の無料プラン**で始め、必要になったら有料プランに移ります。無料プランは 1 回の実行
-あたり CPU 10 ms までです。バンドルサイズはもう制約になりません。2026-09-04 から全プランで Worker は非圧縮 64 MiB
-までになり、圧縮後のサイズ制限はなくなりました（以前の無料プランは圧縮後 3 MB まで）。Queues も無料プランで使えます
-（1 日 10,000 オペレーション、保持 24 時間）が、コンシューマーにも同じ実行あたりの CPU 制限がかかるため、キューに
-回しても無料プランでは CPU が増えません。CPU の制限が 2 つの判断を決めています。
+公式環境は **Workers Paid** を使います。以前の無料プランの CPU 枠は、現在の設計の前提ではありません。セルフホストでは、選んだプランと実行環境の制限を確認してください。
 
-- **再計算**（gzip の展開、`parsePlaylog`、`simulatePlaylog` 3 回）は、ノーツの多い譜面で 10 ms を超えるおそれが
-  あります。API を作る前に regression corpus で計測します（15 章）。検証の処理は、その場で実行するか後で実行するか
-  を切り替えられる形で書き、有料プランへの移行が設定の変更だけで済むようにします。
-- **OG 画像はブラウザで描画します**（11 章）。サーバーで描画する方式（satori + resvg）は、リクエスト内でもキューの
-  コンシューマーでも CPU 10 ms を大きく超えます。バンドル（resvg の wasm と日本語フォント）は今なら収まるので、有料
-  プランではキューのコンシューマーで投稿時にカードを描けます。
+- **再計算**はリクエスト内で行います。検証の処理を変更するときは、gzip の展開、`parsePlaylog`、`simulatePlaylog` 3 回を regression corpus で計測します。
+- **共有カードは現在ブラウザで描画**し、R2 にアップロードします（11 章）。これは現在の実装であり、公式環境のプランから必須となる制約ではありません。サーバー側での生成は、設定した CPU 枠、メモリ使用量、フォントの読み込み、描画コストを計測して検討できます。
 
 ## 3. 認証とアカウント
 
@@ -93,7 +85,7 @@ Leaderboard は **Workers の無料プラン**で始め、必要になったら�
 - **ログイン手段**: Accounts がパスキー・ゲスト・設定済みの Discord／Google を提供します。パスキーの操作は Accounts のホストで行います。
 - **セッション**: ブラウザはホスト専用・暗号化・HttpOnly のアプリ Cookie を使い、期限は最大 10 分です。サーバー間の API 呼び出しは、この API 向けの audience と `be-music:api` スコープを持つアクセストークンを使います。ターミナル向けのデバイス認可は今後の実装です。
 - **ゲストのプレイ**: スコア送信前に Accounts でゲストアカウントを作ります。プレイ終了時に暗黙には作成しません。保存と表示フィルタは従来どおりです。パスキーの登録で通常のアカウントになり、別アカウントへの連携時は署名された連携情報から、移動先の次のアクセスでプレイを冪等に移します。
-- **識別**: `oidc_identity` が `(issuer, sub)` とローカルのプレイヤー ID を対応させます。移行では既存の ID とスコアの所有者を保ち、新規ユーザーは初回アクセス時に必要な行を作ります。メールでは紐付けません。古い認証テーブルはロールバックと localhost のテスト用に残し、公開ホストでは以前の共有 Cookie を受け付けません。
+- **識別**: `oidc_identity` が `(issuer, sub)` とローカルのプレイヤー ID を対応させます。移行では既存の ID とスコアの所有者を保ち、新規ユーザーは初回アクセス時に必要な行を作ります。メールでは紐付けません。旧認証データは削除済みです。テーブル定義は localhost の単独開発とテスト用に残し、公開リクエストでは Accounts の OIDC を使います。
 - **handle**: すべてのアカウントが、一意で変更できる `handle`（URL に使う）と `display_name` を持ちます。OAuth の
   プロフィール名やメールアドレスは表示しません。変更した handle は旧 URL からのリダイレクトを残し、手放された
   handle はしばらくのあいだ他人が取れないようにします（15 章）。
@@ -391,7 +383,7 @@ course_best_score (user_id, course_fp, ruleset, assisted,     -- PK、best_score
                  best_ex, best_ex_score_id, best_lamp, best_lamp_score_id,
                  min_miss, min_miss_score_id, best_trophy, best_trophy_rank, best_trophy_score_id,
                  play_count, played_here, updated_at)
--- ほかにローカルのユーザーと oidc_identity（古い認証テーブルはロールバック用に残す）
+-- ほかにローカルのユーザーと oidc_identity（旧認証データは削除し、テーブル定義は localhost の開発用に残す）
 ```
 
 - ランキングの取得には `best_scores (chart_fp, ruleset, assisted, best_ex DESC)` のインデックスを使います。
@@ -560,8 +552,7 @@ SHA-256 で Mocha-Repository、MinIR、BMS Search（`/patterns/{sha256}`）を�
 
 ## 15. 未決事項
 
-- **無料プランでの CPU**: gzip の展開、`parsePlaylog`、`simulatePlaylog` 3 回を regression corpus で計測する。
-  10 ms を超えるなら、検証を後回しにするか有料プランに移る。
+- **描画と検証の処理予算**: 検証処理と、今後検討するサーバー側のカード生成を、設定した Workers Paid の CPU 枠に対して計測する。
 - **`cf` での D1 マイグレーション**: `cloudflare.config.ts` と並べて `wrangler d1 migrations apply` が動くか、
   最小限の Wrangler の設定を横に置く必要があるか。
 - **`bmfp0` から `bmfp1` への移行**: ベータのデータを捨てるか、古いキーのまま残すか。捨てるのが現実的な既定。

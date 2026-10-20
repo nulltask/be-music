@@ -23,3 +23,5 @@ Signing out of Accounts stops new SSO sessions, but existing app sessions can la
 Preview has a separate issuer, database, keys and app secrets. Branch URLs are not clients; adding one requires an exact registered origin and callback. This deliberately replaces the earlier proposed wildcard redirects.
 
 The private donation content repository vendors the small relying-party module from a pinned monorepo commit until a separately distributable package is released. A sync script records its source and checksum; updates must run the shared auth tests and donation tests together.
+
+Public profiles and avatars move to Accounts under [ADR 0009](./0009-accounts-profiles.md); Leaderboard keeps a ranking projection.

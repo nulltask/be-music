@@ -15,10 +15,12 @@ export default defineConfig(({ mode }) => {
       workersDev: false,
       observability: { enabled: true },
       env: {
+        SHOW_DONATE_LINK: bindings.text(String(preview)),
         DB: bindings.d1({
           name: `accounts${suffix}`,
           id: preview ? '3fc82533-baf9-4e50-99dc-9fb38b80b0a7' : '4b5b02cc-a446-4026-b72d-4f973fc7a8fe',
         }),
+        BLOBS: bindings.r2({ name: `accounts${suffix}` }),
         AUTH_ORIGIN: bindings.text(`https://accounts.${site}`),
         PASSKEY_RP_ID: bindings.text(site),
         API_AUDIENCE: bindings.text(`https://leaderboard.${site}`),

@@ -22,4 +22,31 @@ describe('Accounts page', () => {
     expect(page).toContain('href="https://play.example/api/auth/sign-in"');
     expect(page).not.toContain('data-action="guest"');
   });
+  test('keeps preview Donate only in the footer', () => {
+    const page = renderAccountPage({
+      ...input,
+      showDonateLink: true,
+      apps: { play: 'https://play.example', donate: 'https://donate.example' },
+    });
+    expect(page.split('</main>')[0]).not.toContain('https://donate.example');
+    expect(page).toContain(
+      '<footer class="site-footer"><a href="https://donate.example/api/auth/sign-in">Donate</a></footer>',
+    );
+  });
+  test('hides Donate unless explicitly enabled', () => {
+    for (const showDonateLink of [undefined, false]) {
+      const page = renderAccountPage({ ...input, showDonateLink, apps: { donate: 'https://donate.example' } });
+      expect(page).not.toContain('https://donate.example');
+      expect(page).not.toContain('>Donate<');
+    }
+  });
+  test('keeps continuation and account actions available in the shared shell', () => {
+    const page = renderAccountPage({ ...input, signedIn: true, anonymous: true, name: 'Guest' });
+    expect(page).toContain('href="#main"');
+    expect(page).toContain('id="main"');
+    expect(page).toContain('data-action="continue"');
+    expect(page).toContain('data-action="sign-out"');
+    expect(page).toContain('aria-live="polite"');
+    expect(page).not.toContain('data-action="guest"');
+  });
 });

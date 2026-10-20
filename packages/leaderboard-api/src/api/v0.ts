@@ -120,6 +120,8 @@ export function createV0API(options: { now: () => number; newId: () => string; c
     async (c) => {
       const userId = c.get('userId');
       if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
+      if (c.env.AUTH_ISSUER)
+        return c.json({ error: 'managed-by-accounts', manageURL: new URL('/account', c.env.AUTH_ISSUER).href }, 409);
       const result = await updateProfile(c.get('db'), userId, c.req.valid('json'));
       if (!result.ok) {
         return result.status === 400
@@ -157,6 +159,8 @@ export function createV0API(options: { now: () => number; newId: () => string; c
     async (c) => {
       const userId = c.get('userId');
       if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
+      if (c.env.AUTH_ISSUER)
+        return c.json({ error: 'managed-by-accounts', manageURL: new URL('/account', c.env.AUTH_ISSUER).href }, 409);
       const declared = Number(c.req.header('content-length') ?? '0');
       if (declared > AVATAR_MAX_BYTES) return c.json({ error: 'avatar-too-large' }, 413);
       const bytes = new Uint8Array(await c.req.arrayBuffer());
@@ -179,6 +183,8 @@ export function createV0API(options: { now: () => number; newId: () => string; c
     async (c) => {
       const userId = c.get('userId');
       if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
+      if (c.env.AUTH_ISSUER)
+        return c.json({ error: 'managed-by-accounts', manageURL: new URL('/account', c.env.AUTH_ISSUER).href }, 409);
       await removeAvatar(c.get('db'), c.env.BLOBS, userId);
       const account = await loadAccount(c.get('db'), userId);
       if (account === undefined) return c.json({ error: 'not-found' }, 404);

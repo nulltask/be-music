@@ -223,3 +223,30 @@ export const identityLink = sqliteTable('identity_link', {
   fromUserId: text('from_user_id').primaryKey(),
   toUserId: text('to_user_id').notNull(),
 });
+
+export const profile = sqliteTable('profile', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  handle: text('handle').notNull().unique(),
+  displayName: text('display_name').notNull(),
+  /** R2 key of the uploaded icon (`avatars/{userId}/{sha256}.{ext}`); null shows the generated one. */
+  avatarKey: text('avatar_key'),
+  ...timestamps,
+});
+
+/**
+ * Handles an account used before. They stay reserved for that account, and their URLs redirect to its current handle.
+ */
+export const handleHistory = sqliteTable(
+  'handle_history',
+  {
+    handle: text('handle').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    createdAt: timestamps.createdAt,
+  },
+  // A player's former handles.
+  (table) => [index('handle_history_user_idx').on(table.userId)],
+);

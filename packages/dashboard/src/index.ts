@@ -3,10 +3,11 @@ import { handleAuth, readSession, type OIDCEnv } from '@be-music/auth-client';
 import { pickLocale, renderDashboard, type DashboardAccount } from './page.ts';
 
 interface Env extends OIDCEnv {
-  LEADERBOARD: Fetcher;
+  ACCOUNTS?: Pick<Fetcher, 'fetch'>;
   PLAY_ORIGIN: string;
   LEADERBOARD_ORIGIN: string;
   DONATE_ORIGIN: string;
+  SHOW_DONATE_LINK?: string;
 }
 
 export default {
@@ -18,15 +19,32 @@ export default {
     const session = await readSession(request, env);
     let account: DashboardAccount | undefined;
     if (session) {
-      const response = await env.LEADERBOARD.fetch(
-        new Request(`${env.API_AUDIENCE}/api/v0/me`, { headers: { authorization: `Bearer ${session.accessToken}` } }),
-      );
-      if (response.ok) account = (await response.json()) as DashboardAccount;
+      try {
+        const profileRequest = new Request(
+          new URL(`/api/profiles/${encodeURIComponent(session.identity.sub)}`, env.AUTH_ISSUER),
+        );
+        const response = await (env.ACCOUNTS ? env.ACCOUNTS.fetch(profileRequest) : fetch(profileRequest));
+        if (!response.ok) throw new Error('Profile unavailable');
+        const profile = (await response.json()) as { handle?: unknown; displayName?: unknown };
+        if (typeof profile.handle !== 'string' || typeof profile.displayName !== 'string')
+          throw new Error('Invalid profile');
+        account = {
+          handle: profile.handle,
+          displayName: profile.displayName,
+          anonymous: session.identity.anonymous,
+        };
+      } catch {
+        return new Response('Account profile temporarily unavailable', {
+          status: 503,
+          headers: { 'cache-control': 'no-store', 'retry-after': '30' },
+        });
+      }
     }
     return new Response(
       renderDashboard({
         account,
         hostname: url.hostname,
+        showDonateLink: env.SHOW_DONATE_LINK === 'true',
         locale: pickLocale(request.headers.get('accept-language')),
         links: { play: env.PLAY_ORIGIN, leaderboard: env.LEADERBOARD_ORIGIN, donate: env.DONATE_ORIGIN },
       }),
