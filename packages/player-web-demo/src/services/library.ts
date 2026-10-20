@@ -219,7 +219,7 @@ export class LibraryService {
     dropLog.info(
       `received ${files.length} file(s) · theme=${themeFiles.length}${
         themeMarkers.length > 0 ? ` (${themeMarkers.join('+')})` : ' (no skin entry → preserving current theme)'
-      } · songs=${chartFiles.length}`,
+      } · charts=${chartFiles.length}`,
     );
     // The songs already listed, so the select screen can open on what this drop added.
     const previousChartIds = new Set(this.collection.charts.map((chartEntry) => chartEntry.id));
@@ -244,7 +244,7 @@ export class LibraryService {
       ? summarizeBeatorajaPlaySkins(beatorajaTheme.theme.playSkins) || 'none'
       : 'none';
     dropLog.info(
-      `loaded · songs=${this.collection.charts.length} · errors=${
+      `loaded · charts=${this.collection.charts.length} · errors=${
         this.collection.errors.length
       } · play-skins=${playSkinSummary || 'none'} · select-skin=${this.selectSkin()?.name ?? 'none'}${
         beatorajaTheme ? ` · beatoraja-skins=${beatorajaSummary}` : ''
@@ -443,7 +443,7 @@ export class LibraryService {
   }
 
   private async loadCharts(files: BrowserDroppedFile[]): Promise<void> {
-    this.setStatus('Loading songs...');
+    this.setStatus('Loading charts...');
     // Append rather than replace so a second / third folder drop adds to the existing collection instead of wiping the
     // previous pack. The store re-prefixes source / song IDs so each drop's entries stay uniquely addressable. The
     // very first drop is just `append onto an empty collection`, which produces the same result as `loadFromFiles`

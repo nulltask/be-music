@@ -116,7 +116,7 @@ const en: HelpContent = {
               'The lane option the play used; OFF is not shown. MIRROR / RANDOM gives both sides of a double play, FLIP a swap of the sides.',
             ],
             ['#3 / 12', 'Where the play’s EX-Score stands among the players on the chart.'],
-            ['played with LR2 rules', 'The rules the player played under (their judge windows and gauge).'],
+            ['played with LR2 rules', 'The rules the player played under (their judgment windows and gauge).'],
             [<>+23 81</>, 'The EX-Score, with how far it beat the player’s earlier best.'],
             ['AA 64.48%', 'The DJ LEVEL and the score rate.'],
             ['ⓘ', 'The play’s details: gauge, lane option, assists, length, verification and the app it came from.'],
@@ -149,12 +149,15 @@ const en: HelpContent = {
       </Section>
       <Section id="rules" t={t}>
         <p>
-          Every play is scored under all three rulesets, each with its own judge windows, gauges and lamps. Pick the one
-          the pages show from the menu in the header; it is kept for your next visit.
+          Every play is scored under all three rulesets, each with its own judgment windows, gauges and lamps. Pick the
+          one the pages show from the menu in the header; it is kept for your next visit.
         </p>
         <Terms
           rows={[
-            [t.rules.name(RULESET_LABELS.lr2!), 'LR2’s judge windows, gauges and lamps; FULL COMBO is the top lamp.'],
+            [
+              t.rules.name(RULESET_LABELS.lr2!),
+              'LR2’s judgment windows, gauges and lamps; FULL COMBO is the top lamp.',
+            ],
             [
               t.rules.name(RULESET_LABELS.beatoraja!),
               'beatoraja’s, with PERFECT (no GOOD) and MAX (all PGREAT) above FULL COMBO.',
@@ -184,7 +187,7 @@ const en: HelpContent = {
             ],
             [
               t.filters.assisted,
-              'Plays with an assist (auto scratch, a widened judge window), ranked apart from the rest.',
+              'Plays with an assist (auto scratch, a widened judgment window), ranked apart from the rest.',
             ],
             [t.filters.anonymous, 'Players who have not created an account yet, shown when turned on.'],
             [t.filters.file, 'One chart can come in several files (re-saves, re-encodes); rank one file’s plays only.'],
