@@ -30,7 +30,7 @@ import {
   describeCourseCard,
   formatPlayVariantLabel,
   hash01,
-  resolveSongRowFacts,
+  resolveChartRowFacts,
   stageProgress,
   selectListRows,
   browseEntryBadge,
@@ -207,7 +207,7 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
       const labelX = w * 0.62;
       const labelY = h * 0.3;
       const pop = 1.5 - 0.5 * easeOutBack(land, 2);
-      const title = frame.focusedSong?.title ?? '';
+      const title = frame.focusedChart?.title ?? '';
       g.poly(parallelogramPoints(labelX - 150 * pop, labelY - 22 * pop, 300 * pop, 44 * pop, 12)).fill(PHANTOM_INK);
       addSkinText(layer, title, labelX, labelY, {
         size: 20,
@@ -243,7 +243,7 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
 
   public tick(
     nowMs: number,
-    focusedSong: LibraryChart | undefined,
+    focusedChart: LibraryChart | undefined,
     _launchAt?: number,
     audio?: BeMusicAudioFrame,
   ): void {
@@ -256,7 +256,7 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
       this.dots.alpha = Math.min(1, 0.75 + 0.6 * drive.level);
     }
     // Beat clock from the focused chart's BPM, so the whole screen previews the song's tempo.
-    const bpm = focusedSong?.bpm;
+    const bpm = focusedChart?.bpm;
     const beatsPerSecond = (bpm !== undefined && Number.isFinite(bpm) && bpm > 0 ? Math.min(bpm, 300) : 120) / 60;
     const beatPulse = (1 - ((seconds * beatsPerSecond) % 1)) ** 3;
     if (this.burst) {
@@ -383,24 +383,26 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
 
   /** Header, info panel, action cards, search box, and library footer. Returns true while the title slides in. */
   private renderChrome(frame: PixiSelectFrame): boolean {
-    const { layer, designWidth, designHeight, entries, focusedSong: song } = frame;
+    const { layer, designWidth, designHeight, entries, focusedChart: chartEntry } = frame;
     const chrome = new Graphics();
     chrome.label = 'default-select/chrome';
     const addText = (text: string, x: number, y: number, options: SkinTextOptions = {}) =>
       addSkinText(layer, text, x, y, options);
 
     const course =
-      song === undefined && frame.focusedCourse !== undefined
-        ? describeCourseCard(frame.focusedCourse, frame.courseRecord?.(frame.focusedCourse))
+      chartEntry === undefined && frame.focusedCourse !== undefined
+        ? describeCourseCard(frame.focusedCourse, frame.courseBestRecord?.(frame.focusedCourse))
         : undefined;
-    const songTitle = song?.title ?? course?.title ?? 'No chart selected';
-    const songArtist = song?.artist || song?.subtitle || course?.detail || '';
-    const playLevel = song?.playLevel !== undefined ? String(song.playLevel) : '-';
+    const chartTitle = chartEntry?.title ?? course?.title ?? 'No chart selected';
+    const chartArtist = chartEntry?.artist || chartEntry?.subtitle || course?.detail || '';
+    const playLevel = chartEntry?.playLevel !== undefined ? String(chartEntry.playLevel) : '-';
     const playLevelNumber =
-      song?.playLevel !== undefined ? Number.parseFloat(String(song.playLevel).replace(/^[^\d.]+/u, '')) : NaN;
-    const songBPM = song?.bpm !== undefined ? String(Math.round(song.bpm)) : '-';
-    const fileLabel = song?.fileLabel ?? '';
-    const modeLabel = song ? formatPlayVariantLabel(song) : '- KEYS';
+      chartEntry?.playLevel !== undefined
+        ? Number.parseFloat(String(chartEntry.playLevel).replace(/^[^\d.]+/u, ''))
+        : NaN;
+    const chartBPM = chartEntry?.bpm !== undefined ? String(Math.round(chartEntry.bpm)) : '-';
+    const fileLabel = chartEntry?.fileLabel ?? '';
+    const modeLabel = chartEntry ? formatPlayVariantLabel(chartEntry) : '- KEYS';
     const categoryName = frame.searchQuery ? `Search: ${frame.searchQuery}` : (frame.folderLabel ?? 'Library');
     const selectedPosition =
       entries.length > 0 ? `${Math.min(frame.selectedIndex + 1, entries.length)} / ${entries.length}` : '0 / 0';
@@ -436,7 +438,7 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
       .stroke({ color: PHANTOM_WHITE, width: 2, join: 'miter' });
     chrome.poly(parallelogramPoints(20, 62, 74, 16, 6)).fill(PHANTOM_RED);
     addText('SELECTED', 28, 70, { ...tagStyle(PHANTOM_WHITE), anchorY: 0.5 });
-    const genre = song?.genre?.trim();
+    const genre = chartEntry?.genre?.trim();
     if (genre) {
       addText(genre.toUpperCase(), 288, 70, {
         size: 9,
@@ -449,15 +451,15 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
     }
     // Title / artist slide in from the right after each cursor move.
     const slide = 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS));
-    addText(songTitle, 24 + slide * 28, 90, {
+    addText(chartTitle, 24 + slide * 28, 90, {
       size: 18,
       fontFamily: DEFAULT_HEADLINE_FONT,
       fill: PHANTOM_WHITE,
       maxWidth: 268,
       alpha: 1 - slide,
     });
-    if (songArtist) {
-      addText(songArtist, 24 + slide * 44, 116, {
+    if (chartArtist) {
+      addText(chartArtist, 24 + slide * 44, 116, {
         size: 10,
         weight: '700',
         fill: PHANTOM_RED_HOT,
@@ -472,7 +474,7 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
       readonly [x: number, w: number, label: string, value: string, fill: number, size: number]
     > = [
       [24, 76, 'MODE', modeLabel, PHANTOM_WHITE, 16],
-      [112, 76, 'BPM', songBPM, PHANTOM_WHITE, 22],
+      [112, 76, 'BPM', chartBPM, PHANTOM_WHITE, 22],
       [200, 92, 'LEVEL', playLevel, PHANTOM_GOLD, 24],
     ];
     for (const [x, w, label, value, fill, size] of chips) {
@@ -587,18 +589,18 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
     const y = listTop + visibleIndex * rowHeight;
     const row = new Graphics();
     const active = entryIndex === frame.selectedIndex;
-    const song = entry.kind === 'chart' ? entry.chart : undefined;
+    const chartEntry = entry.kind === 'chart' ? entry.chart : undefined;
     const folder = entry.kind === 'folder' ? entry.folder : undefined;
     const titleText = browseEntryTitle(entry);
-    const keyText = song ? formatPlayVariantLabel(song).replace(' KEYS', '') : 'DIR';
+    const keyText = chartEntry ? formatPlayVariantLabel(chartEntry).replace(' KEYS', '') : 'DIR';
     // One line per row: the title (and artist) on the left; on the right the facts a player checks before picking —
     // gimmick tags, note count, length and tempo range in fixed columns, so they line up down the list. Folders show
     // their size instead.
-    const facts = song ? resolveSongRowFacts(song) : undefined;
+    const facts = chartEntry ? resolveChartRowFacts(chartEntry) : undefined;
     const metaText = facts ? `${facts.bpm} BPM` : (browseEntryCount(entry) ?? '');
     const playLevelText =
-      song?.playLevel !== undefined
-        ? String(song.playLevel)
+      chartEntry?.playLevel !== undefined
+        ? String(chartEntry.playLevel)
         : folder
           ? String(folder.courses?.length ?? folder.charts.length)
           : browseEntryBadge(entry);
@@ -714,7 +716,7 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
     });
     title.label = `fallback-title[idx=${entryIndex}]`;
     // The artist trails the title in a quieter weight while there is room for it.
-    const artist = song?.artist?.trim();
+    const artist = chartEntry?.artist?.trim();
     const artistX = titleX + title.width + 10;
     if (artist && factsLeft - artistX >= 40) {
       addSkinText(frame.layer, artist, artistX, rowMidY, {

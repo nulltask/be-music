@@ -7,7 +7,7 @@
 - [アーキテクチャ: 譜面の層、エンジン、パッケージの層](architecture.ja.md)
 - [設計判断の記録](adr/README.ja.md)
 - [BMS 実装仕様](bms-spec.ja.md)
-- [BMSON 実装仕様](bmson-spec.ja.md)
+- [bmson 実装仕様](bmson-spec.ja.md)
 - [BMS / bmson 互換性ノート（de jure と de facto）](format-compat.ja.md)
 - [LR2 と beatoraja のセマンティクス](semantics-lr2-beatoraja.ja.md)
 - [Bemuse 実装仕様](bemuse-spec.ja.md)
@@ -15,7 +15,7 @@
 - [Terminal player 実装メモ](player-tui.ja.md)
 - [Browser player 実装メモ](player-web.ja.md)
 - [シーンモデル（`@be-music/scene-model`）](scene-model.ja.md)
-- [プレイログ（プレイ履歴）仕様](playlog.ja.md)
+- [リプレイ（プレイ履歴）仕様](replay.ja.md)
 - [コースと段位認定](course.ja.md)
 - [コースのブラウザ確認](course-checklist.ja.md)
 - [Be-Music Fingerprint 仕様](fingerprint-spec.ja.md)
@@ -24,7 +24,7 @@
 - [LR2 skin 実装メモ](lr2-skin.ja.md)
 - [beatoraja skin 実装メモ](beatoraja-skin.ja.md)
 - [be-music スキンの作り方](be-music-skin.ja.md)
-- [BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様](json-spec.ja.md)
+- [BMS/bmson 中間表現 (`@be-music/json`) 実装仕様](json-spec.ja.md)
 - [用語集](glossary.ja.md)
 
 補足:

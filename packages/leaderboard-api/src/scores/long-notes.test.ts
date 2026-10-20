@@ -1,19 +1,19 @@
 import { describe, expect, test } from 'vite-plus/test';
-import type { BeMusicPlaylog } from '@be-music/player/playlog';
-import { nextHasLongNotes, playlogHasLongNotes } from './long-notes.ts';
+import type { BeMusicReplay } from '@be-music/player/replay';
+import { nextHasLongNotes, replayHasLongNotes } from './long-notes.ts';
 
-const notes = (...types: Array<BeMusicPlaylog['chart']['notes'][number]['type']>) => ({
+const notes = (...types: Array<BeMusicReplay['chart']['notes'][number]['type']>) => ({
   notes: types.map((type, id) => ({ id, channel: '11', type, timeUs: id * 1000 })),
 });
 
-describe('playlogHasLongNotes', () => {
+describe('replayHasLongNotes', () => {
   test('is true when any note is a long note', () => {
-    expect(playlogHasLongNotes(notes('normal', 'long', 'normal'))).toBe(true);
+    expect(replayHasLongNotes(notes('normal', 'long', 'normal'))).toBe(true);
   });
 
   test('is false without long notes, FREE ZONE, mines and invisible notes aside', () => {
-    expect(playlogHasLongNotes(notes('normal', 'freezone', 'mine', 'invisible'))).toBe(false);
-    expect(playlogHasLongNotes(notes())).toBe(false);
+    expect(replayHasLongNotes(notes('normal', 'freezone', 'mine', 'invisible'))).toBe(false);
+    expect(replayHasLongNotes(notes())).toBe(false);
   });
 });
 

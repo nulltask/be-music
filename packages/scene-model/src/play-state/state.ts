@@ -4,11 +4,11 @@ import { createHiSpeedState, reduceHiSpeed, type HiSpeedCommand, type HiSpeedSta
 import { reduceLaneCovers, type LaneCoverCommand, type LaneCoverState } from './lane-cover.ts';
 import {
   gaugePercent,
-  isJudge,
-  JUDGES,
+  isJudgmentKind,
+  JUDGMENT_KINDS,
   type GaugeHistorySample,
-  type Judge,
-  type JudgeTiming,
+  type JudgmentKind,
+  type JudgmentTiming,
   type PlayFrameInput,
   type PlayJudgeInput,
   type PlayScoreInput,
@@ -53,8 +53,8 @@ export interface PlayState {
   readonly gaugeHistory: readonly GaugeHistorySample[];
   readonly scoreHistory: readonly ScoreHistorySample[];
   /** Every timed judgment, oldest first. */
-  readonly judgeTimings: readonly JudgeTiming[];
-  readonly earlyLate: Readonly<Record<Judge, EarlyLateCount>>;
+  readonly judgeTimings: readonly JudgmentTiming[];
+  readonly earlyLate: Readonly<Record<JudgmentKind, EarlyLateCount>>;
   /** The signed offset of the latest timed judgment; absent before the first. */
   readonly lastJudgeDeltaMs?: number;
   readonly view: PlayViewState;
@@ -71,9 +71,9 @@ export interface PlayStateInit {
   view?: Partial<PlayViewState>;
 }
 
-const NO_EARLY_LATE: Readonly<Record<Judge, EarlyLateCount>> = Object.fromEntries(
-  JUDGES.map((judge) => [judge, { early: 0, late: 0 }]),
-) as Record<Judge, EarlyLateCount>;
+const NO_EARLY_LATE: Readonly<Record<JudgmentKind, EarlyLateCount>> = Object.fromEntries(
+  JUDGMENT_KINDS.map((judge) => [judge, { early: 0, late: 0 }]),
+) as Record<JudgmentKind, EarlyLateCount>;
 
 /** A play state at the start of a play. */
 export function createPlayState(init: PlayStateInit = {}): PlayState {
@@ -181,8 +181,8 @@ function applyJudge(state: PlayState, judge: PlayJudgeInput, seconds: number, at
   };
   if (state.courseCombo !== undefined) next.courseCombo = reduceCourseCombo(state.courseCombo, combo);
   const deltaMs = judge.deltaMs;
-  if (deltaMs !== undefined && Number.isFinite(deltaMs) && isJudge(judge.judge)) {
-    const timing: JudgeTiming = { atMs, deltaMs, judge: judge.judge };
+  if (deltaMs !== undefined && Number.isFinite(deltaMs) && isJudgmentKind(judge.judge)) {
+    const timing: JudgmentTiming = { atMs, deltaMs, judge: judge.judge };
     if (judge.channel !== undefined) timing.channel = judge.channel;
     next.judgeTimings = [...state.judgeTimings, timing];
     next.lastJudgeDeltaMs = deltaMs;
@@ -249,7 +249,7 @@ export function reducePlayState(state: PlayState, event: PlayEvent): PlayState {
 export function recentJudgeTimings(
   state: Pick<PlayState, 'judgeTimings'>,
   count: number = RECENT_JUDGE_TIMING_COUNT,
-): readonly JudgeTiming[] {
+): readonly JudgmentTiming[] {
   const all = state.judgeTimings;
   if (all.length <= count) return all;
   const key = `${count}`;
@@ -269,4 +269,4 @@ export function recentJudgeTimings(
 /** How many judgments {@link recentJudgeTimings} keeps by default. */
 export const RECENT_JUDGE_TIMING_COUNT = 64;
 
-const RECENT_MEMO = new WeakMap<readonly JudgeTiming[], Map<string, readonly JudgeTiming[]>>();
+const RECENT_MEMO = new WeakMap<readonly JudgmentTiming[], Map<string, readonly JudgmentTiming[]>>();

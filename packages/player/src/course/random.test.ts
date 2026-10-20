@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
-  type CourseSongRecord,
+  type CourseChartRecord,
   drawRandomCourse,
   parseBeatorajaCommandFolderFile,
   type RandomCourseDefinition,
@@ -10,11 +10,15 @@ function hex(n: number, length: number): string {
   return n.toString(16).padStart(length, '0');
 }
 
-function song(n: number, level: number, extra: Partial<CourseSongRecord> = {}): CourseSongRecord & { id: number } {
+function chartEntry(
+  n: number,
+  level: number,
+  extra: Partial<CourseChartRecord> = {},
+): CourseChartRecord & { id: number } {
   return { id: n, md5: hex(n, 32), sha256: hex(n, 64), title: `song ${n}`, artist: `artist ${n}`, level, ...extra };
 }
 
-const LIBRARY = [song(1, 10), song(2, 11), song(3, 12), song(4, 12), song(5, 12)];
+const LIBRARY = [chartEntry(1, 10), chartEntry(2, 11), chartEntry(3, 12), chartEntry(4, 12), chartEntry(5, 12)];
 
 function definition(stages: RandomCourseDefinition['stages'], extra: Partial<RandomCourseDefinition> = {}) {
   return { name: 'Random', stages, constraints: [], trophies: [], distinct: false, ...extra } as RandomCourseDefinition;
@@ -50,7 +54,7 @@ describe('drawRandomCourse', () => {
         release: false,
         source: { format: 'beatoraja-random' },
       },
-      songs: [LIBRARY[0], LIBRARY[3]],
+      charts: [LIBRARY[0], LIBRARY[3]],
     });
   });
 
@@ -61,14 +65,14 @@ describe('drawRandomCourse', () => {
 
   test('a first stage without a filter draws from every chart; a later one reuses the previous selection', () => {
     const first = drawRandomCourse(definition([{}]), LIBRARY, () => 0.99);
-    expect(first.ok && first.songs.map(({ id }) => id)).toEqual([5]);
+    expect(first.ok && first.charts.map(({ id }) => id)).toEqual([5]);
     const reuse = drawRandomCourse(definition([{ filter: 'level = 12' }, {}, {}]), LIBRARY, sequence(0, 0.4, 0.99));
-    expect(reuse.ok && reuse.songs.map(({ id }) => id)).toEqual([3, 4, 5]);
+    expect(reuse.ok && reuse.charts.map(({ id }) => id)).toEqual([3, 4, 5]);
   });
 
   test('without distinct a chart can repeat', () => {
     const result = drawRandomCourse(definition([{ filter: 'level = 12' }, {}]), LIBRARY, () => 0);
-    expect(result.ok && result.songs.map(({ id }) => id)).toEqual([3, 3]);
+    expect(result.ok && result.charts.map(({ id }) => id)).toEqual([3, 3]);
   });
 
   test('distinct redraws a repeat and allows one once every candidate is taken', () => {
@@ -76,17 +80,17 @@ describe('drawRandomCourse', () => {
     const result = drawRandomCourse(definition(stages, { distinct: true }), LIBRARY, () => 0);
     // Stage 2 draws index 0 (song 3, taken), drops it, then draws song 4; stage 3 likewise ends on song 5; stage 4
     // finds every candidate taken and falls back to a plain draw.
-    expect(result.ok && result.songs.map(({ id }) => id)).toEqual([3, 4, 5, 3]);
+    expect(result.ok && result.charts.map(({ id }) => id)).toEqual([3, 4, 5, 3]);
   });
 
   test('distinct compares charts by SHA-256', () => {
-    const twin = { ...song(3, 12), id: 99, md5: hex(99, 32) };
+    const twin = { ...chartEntry(3, 12), id: 99, md5: hex(99, 32) };
     const result = drawRandomCourse(
       definition([{ filter: 'level = 12' }, {}], { distinct: true }),
-      [song(3, 12), twin, song(4, 12)],
+      [chartEntry(3, 12), twin, chartEntry(4, 12)],
       sequence(0, 0, 0),
     );
-    expect(result.ok && result.songs.map(({ id }) => id)).toEqual([3, 4]);
+    expect(result.ok && result.charts.map(({ id }) => id)).toEqual([3, 4]);
   });
 
   test('reports the first stage with no candidates or an invalid filter', () => {
@@ -109,10 +113,10 @@ describe('drawRandomCourse', () => {
       LIBRARY,
       () => 0.99,
     );
-    expect(top.ok && top.songs.map((entry) => entry.id)).toEqual([4]);
+    expect(top.ok && top.charts.map((entry) => entry.id)).toEqual([4]);
     // A later stage without a filter reuses the cut selection.
     const reuse = drawRandomCourse(definition([{ filter: '1 ORDER BY level LIMIT 1' }, {}]), LIBRARY, () => 0.5);
-    expect(reuse.ok && reuse.songs.map((entry) => entry.id)).toEqual([1, 1]);
+    expect(reuse.ok && reuse.charts.map((entry) => entry.id)).toEqual([1, 1]);
   });
 
   test('ORDER BY RANDOM() draws its sort keys from the injected random source, before the pick', () => {
@@ -122,7 +126,7 @@ describe('drawRandomCourse', () => {
       LIBRARY,
       sequence(0.7, 0.2, 0.9, 0),
     );
-    expect(result.ok && result.songs.map((entry) => entry.id)).toEqual([4]);
+    expect(result.ok && result.charts.map((entry) => entry.id)).toEqual([4]);
   });
 
   test('a filter with an unqualified ambiguous column is invalid, as it selects nothing in beatoraja', () => {
@@ -135,8 +139,8 @@ describe('drawRandomCourse', () => {
   });
 
   test('never draws a candidate without a chart hash, and clamps a random value of 1', () => {
-    const result = drawRandomCourse(definition([{}]), [{ title: 'no hash', level: 1 }, song(7, 1)], () => 1);
-    expect(result.ok && result.songs.map((entry) => entry.title)).toEqual(['song 7']);
+    const result = drawRandomCourse(definition([{}]), [{ title: 'no hash', level: 1 }, chartEntry(7, 1)], () => 1);
+    expect(result.ok && result.charts.map((entry) => entry.title)).toEqual(['song 7']);
   });
 
   test('is deterministic for the same random sequence', () => {

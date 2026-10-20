@@ -1,5 +1,5 @@
 import { resolveLR2MoneyScore } from '@be-music/player/ruleset';
-import type { BeMusicCoursePlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
+import type { BeMusicCourseReplay, ReplayCourseResult } from '@be-music/player/replay';
 import { resolveCourseView } from '../course-view/course-view.ts';
 import type { LibraryCourse } from '../library/entries.ts';
 import type { GaugeHistorySample, ScoreHistorySample } from '../play-state/types.ts';
@@ -66,14 +66,14 @@ export function joinCourseStageHistories(
  */
 export function playResultFromCourseRun(
   course: LibraryCourse,
-  result: PlaylogCourseResult,
-  courseLog: BeMusicCoursePlaylog,
+  result: ReplayCourseResult,
+  courseLog: BeMusicCourseReplay,
   history: CourseStageHistory = EMPTY_COURSE_STAGE_HISTORY,
   options: { playSeconds?: number; stageHistories?: readonly CourseStageHistory[] } = {},
 ): PlayResult {
   const first = course.stages[0]!.chart!;
   const lastStage = [...courseLog.stages].reverse().find((entry) => entry.played);
-  const judgeRuleset = lastStage?.played === true ? (lastStage.playlog.play.judgeRuleset ?? 'lr2') : 'lr2';
+  const judgeRuleset = lastStage?.played === true ? (lastStage.replay.play.judgeRuleset ?? 'lr2') : 'lr2';
   const score =
     judgeRuleset === 'lr2'
       ? resolveLR2MoneyScore({
@@ -99,7 +99,7 @@ export function playResultFromCourseRun(
     gauge: result.gauge.final,
     cleared: result.gauge.cleared,
     playSeconds: options.playSeconds ?? history.playSeconds ?? 0,
-    song: {
+    chart: {
       ...first,
       id: `course:${course.id}`,
       title: course.definition.name,

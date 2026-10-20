@@ -27,8 +27,8 @@
       },
       "course": {"combo":3,"maxCombo":30}
     },
-    "playlog": {
-      "format": "be-music-playlog",
+    "replay": {
+      "format": "be-music-replay",
       "version": 0,
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": {
@@ -316,8 +316,8 @@
       },
       "course": {"combo":3,"maxCombo":30}
     },
-    "playlog": {
-      "format": "be-music-playlog",
+    "replay": {
+      "format": "be-music-replay",
       "version": 0,
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
@@ -486,8 +486,8 @@
       },
       "course": {"combo":18,"maxCombo":30}
     },
-    "playlog": {
-      "format": "be-music-playlog",
+    "replay": {
+      "format": "be-music-replay",
       "version": 0,
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",

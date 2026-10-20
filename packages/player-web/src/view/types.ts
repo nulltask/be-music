@@ -9,14 +9,14 @@
 
 import type { BeMusicJSON } from '@be-music/json';
 import type { CourseDraft, NonstopConnection } from '@be-music/player/course';
-import type { BeMusicAudioFrame, BeMusicCourseRecord, BeMusicSongRecord } from '@be-music/skin-sdk';
+import type { BeMusicAudioFrame, BeMusicCourseBestRecord, BeMusicChartBestRecord } from '@be-music/skin-sdk';
 import type {
   BrowseCommand,
   BrowseEvent,
   BrowseState,
   CourseView,
   HiSpeedCommand,
-  Judge,
+  JudgmentKind,
   LaneCoverCommand,
   LibraryChart,
   LibraryCourse,
@@ -28,7 +28,7 @@ import type {
   ResultPresentation,
 } from '@be-music/scene-model';
 import type { Container, Sprite, Texture } from 'pixi.js';
-import type { BrowserSongCollection } from '../collection/types.ts';
+import type { BrowserChartCollection } from '../collection/types.ts';
 import type { SceneFamily } from '../host/family-kit.ts';
 import type { PixiSceneHost } from '../host/scene-host.ts';
 import type { PlayfieldRuntime } from './shared/playfield/context.ts';
@@ -99,8 +99,8 @@ export interface SceneViewTiming {
 
 /** The player's best records, as the select screen shows them on its bars and panels. */
 export interface SelectRecords {
-  chart(chart: LibraryChart): BeMusicSongRecord | undefined;
-  course(course: LibraryCourse): BeMusicCourseRecord | undefined;
+  chart(chart: LibraryChart): BeMusicChartBestRecord | undefined;
+  course(course: LibraryCourse): BeMusicCourseBestRecord | undefined;
 }
 
 /**
@@ -143,7 +143,7 @@ export type SelectCourseMakerAction =
 export interface SelectFrame {
   readonly clock: SceneClock;
   /** The library, with the files of its charts (their images and text files). */
-  readonly library: BrowserSongCollection;
+  readonly library: BrowserChartCollection;
   readonly browse: BrowseState;
   /** The list shown (`browseEntries`) and the cursor in it (`browseCursor`). */
   readonly entries: readonly LibraryEntry[];
@@ -275,7 +275,7 @@ export type PlayViewEvent =
   | { readonly kind: 'scene-start' | 'load-end' | 'play-start' | 'exit-fade-out' | 'exit-close'; readonly atMs: number }
   | {
       readonly kind: 'judge';
-      readonly judge: Judge;
+      readonly judge: JudgmentKind;
       readonly side: PlaySide;
       readonly channel?: string;
       readonly deltaMs?: number;
@@ -406,7 +406,7 @@ export interface ResultFrame {
   /** How the run is presented: the course-result skin, the course jingles, quick retry. */
   readonly presentation: ResultPresentation;
   /** The player's best record on the chart (or the course) before this play, for the best and difference figures. */
-  readonly previousBest?: BeMusicSongRecord;
+  readonly previousBest?: BeMusicChartBestRecord;
   /** When input opens, on the clock; the result's graphs start drawing then (LR2's timers 1 and 150). */
   readonly inputOpenAtMs: number;
   /**

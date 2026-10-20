@@ -72,10 +72,10 @@ function resultOps(input: LR2ResultInput): number[] {
   // The result is always on a chart.
   ops.push(LR2_OP.SONG_BAR, LR2_OP.PLAYABLE_BAR);
   // The key mode in both ranges, as skins gate on either.
-  const keyModeOp = resolveLR2KeyModeOp(result.song);
+  const keyModeOp = resolveLR2KeyModeOp(result.chart);
   ops.push(keyModeOp, keyConfigOp(keyModeOp));
   // A chart without a difficulty reads NORMAL here: the stock skin ships per-difficulty panels for 152-155 only.
-  const difficultyOp = resolveLR2DifficultyOp(result.song.chart.metadata.difficulty);
+  const difficultyOp = resolveLR2DifficultyOp(result.chart.chart.metadata.difficulty);
   ops.push(difficultyOp === LR2_OP.DIFFICULTY_UNDEFINED ? LR2_OP.DIFFICULTY_NORMAL : difficultyOp);
   // The play's lamp, else the one clear-lamp rule over its result.
   const lamp =
@@ -173,7 +173,7 @@ function resultNumber(num: number, result: PlayResult): number | undefined {
       return percentOfNotes(score.poor);
     case LR2_NUM.MAX_BPM:
     case LR2_NUM.MIN_BPM:
-      return result.song.bpm ?? result.song.chart.metadata.bpm;
+      return result.chart.bpm ?? result.chart.chart.metadata.bpm;
     case LR2_NUM.GAUGE:
       return Math.round(result.gauge);
     case LR2_NUM.PLAY_MINUTE:
@@ -204,7 +204,7 @@ function resultText(st: number, input: LR2ResultInput): string | undefined {
       // `ProcI_Result` sets it): with no internet ranking there is none.
       return '';
     default:
-      return resolveLR2ChartText(st, input.result.song);
+      return resolveLR2ChartText(st, input.result.chart);
   }
 }
 

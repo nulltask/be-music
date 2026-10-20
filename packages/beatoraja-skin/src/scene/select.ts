@@ -13,10 +13,10 @@ import type { BeatorajaNoteBreakdown, BeatorajaWallClock } from './inputs.ts';
 import { beatorajaKeysongOp, resolveBeatorajaChartTraitOps, type BeatorajaChartTraits } from './play-ops.ts';
 import {
   resolveBeatorajaSkinText,
-  resolveBeatorajaSongText,
+  resolveBeatorajaChartText,
   joinBeatorajaText,
   type BeatorajaSkinTextInput,
-} from './song-text.ts';
+} from './chart-text.ts';
 
 /** The key-mode filters in the order of beatoraja's MODE button (`BUTTON_MODE`), which its `modeset` images follow. */
 export const BEATORAJA_KEYS_FILTERS: readonly KeysFilter[] = [
@@ -246,13 +246,13 @@ export function resolveBeatorajaSelectText(id: number, input: BeatorajaSelectInp
     const courseText = resolveBeatorajaCourseText(id, view, { missingStages: missing });
     if (courseText !== undefined) return courseText;
   }
-  const song = entry?.kind === 'chart' ? entry.chart : undefined;
+  const chartEntry = entry?.kind === 'chart' ? entry.chart : undefined;
   const folderLabel = entry?.kind === 'folder' ? entry.folder.label : undefined;
   switch (id) {
     case BEATORAJA_TEXT.TITLE:
-      return folderLabel ?? song?.title ?? '';
+      return folderLabel ?? chartEntry?.title ?? '';
     case BEATORAJA_TEXT.FULLTITLE:
-      return folderLabel ?? joinBeatorajaText(song?.title, song?.subtitle);
+      return folderLabel ?? joinBeatorajaText(chartEntry?.title, chartEntry?.subtitle);
     case BEATORAJA_TEXT.SEARCHWORD:
       return input.searchText;
     case BEATORAJA_TEXT.TABLE_NAME:
@@ -260,13 +260,13 @@ export function resolveBeatorajaSelectText(id: number, input: BeatorajaSelectInp
     case BEATORAJA_TEXT.TABLE_FULL:
       return '';
   }
-  const songText = resolveBeatorajaSongText(id, {
-    title: song?.title,
-    subtitle: song?.subtitle,
-    genre: song?.genre,
-    artist: song?.artist,
-    subartist: song !== undefined ? input.chart?.subartist : undefined,
-    directory: song?.directoryLabel ?? input.folderLabel,
+  const songText = resolveBeatorajaChartText(id, {
+    title: chartEntry?.title,
+    subtitle: chartEntry?.subtitle,
+    genre: chartEntry?.genre,
+    artist: chartEntry?.artist,
+    subartist: chartEntry !== undefined ? input.chart?.subartist : undefined,
+    directory: chartEntry?.directoryLabel ?? input.folderLabel,
   });
   return songText ?? resolveBeatorajaSkinText(id, input.skin);
 }
@@ -307,7 +307,7 @@ export function resolveBeatorajaSelectNumber(id: number, input: BeatorajaSelectI
       return input.wallClock?.second;
   }
   if (entry?.kind !== 'chart') return undefined;
-  const song = entry.chart;
+  const chartEntry = entry.chart;
   const chart = input.chart;
   switch (id) {
     case BEATORAJA_NUM.BMS_TOTAL:
@@ -334,19 +334,19 @@ export function resolveBeatorajaSelectNumber(id: number, input: BeatorajaSelectI
       return chart?.density.average.afterDot;
     case BEATORAJA_NUM.TOTALNOTES:
     case BEATORAJA_NUM.TOTALNOTES_LIVE:
-      return song.totalNotes;
+      return chartEntry.totalNotes;
     case BEATORAJA_NUM.MAINBPM: {
-      const main = chart?.mainBPM !== undefined && chart.mainBPM > 0 ? chart.mainBPM : song.bpm;
+      const main = chart?.mainBPM !== undefined && chart.mainBPM > 0 ? chart.mainBPM : chartEntry.bpm;
       return main !== undefined ? Math.round(main) : undefined;
     }
     case BEATORAJA_NUM.NOWBPM:
-      return song.bpm !== undefined ? Math.round(song.bpm) : undefined;
+      return chartEntry.bpm !== undefined ? Math.round(chartEntry.bpm) : undefined;
     case BEATORAJA_NUM.MAXBPM:
       return chart?.bpmRange?.max;
     case BEATORAJA_NUM.MINBPM:
       return chart?.bpmRange?.min;
     case BEATORAJA_NUM.PLAYLEVEL:
-      return playLevelNumber(song.playLevel);
+      return playLevelNumber(chartEntry.playLevel);
     case BEATORAJA_NUM.JUDGETIMING:
       return input.judgeTiming;
     case BEATORAJA_NUM.SONGLENGTH_MINUTE:

@@ -8,7 +8,7 @@
 
 import type { TimingResolver } from '@be-music/chart';
 import type { PlayerSummary } from '@be-music/player';
-import type { BeMusicPlaylog } from '@be-music/player/playlog';
+import type { BeMusicReplay } from '@be-music/player/replay';
 import type { ScoreSummary } from '@be-music/player/ruleset';
 import type { PlayerGaugeSummary } from '@be-music/player/signals';
 import {
@@ -84,17 +84,17 @@ export interface PlayEndingContext {
   exitFadeOutHandle: number | undefined;
   exitCloseHandle: number | undefined;
   readonly audioBus: AudioBusHandle | undefined;
-  readonly song: LibraryChart | undefined;
+  readonly chart: LibraryChart | undefined;
   readonly score: ScoreSummary;
   /** The engine's gauge as of its last frame: its clear border and the TOTAL it runs on. */
   readonly gaugeState: PlayerGaugeSummary;
   playState: PlayState;
   readonly fastCount: number;
   readonly slowCount: number;
-  readonly playlog: BeMusicPlaylog | undefined;
+  readonly replay: BeMusicReplay | undefined;
   playClock(): number;
   currentSeconds(): number;
-  resolveSongDurationSeconds(): number;
+  resolveChartDurationSeconds(): number;
   resolveJudgeRuleset(): string;
   /** Whether `score.poor` folds the empty POORs in (LR2). */
   resolveEmptyPoorCountsInPoorDisplay(): boolean;
@@ -182,18 +182,18 @@ export function beginExitSequence(
  * border (in percent) and TOTAL, which a beatoraja result skin shows.
  */
 export function getResultData(ctx: PlayEndingContext): PlayResult | undefined {
-  if (!ctx.song) {
+  if (!ctx.chart) {
     return undefined;
   }
   const gauge = ctx.gaugeState;
   const result = playResultFromPlayState(ctx.playState, {
-    song: ctx.song,
+    chart: ctx.chart,
     score: ctx.score,
     seconds: ctx.currentSeconds(),
     judgeRuleset: ctx.resolveJudgeRuleset(),
     fast: ctx.fastCount,
     slow: ctx.slowCount,
-    ...(ctx.playlog !== undefined ? { playlog: ctx.playlog } : {}),
+    ...(ctx.replay !== undefined ? { replay: ctx.replay } : {}),
   });
   return {
     ...result,

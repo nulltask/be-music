@@ -12,7 +12,7 @@ import { parseChart, parseChartFile } from '@be-music/parser';
 import type { RandomDraws } from '@be-music/chart';
 import { resolvePlayChart } from '@be-music/player';
 import { extractTimedNotes } from '@be-music/player/display';
-import { simulatePlaylogRulesets, type PlaylogNote, type PlaylogRulesetResult } from '@be-music/player/playlog';
+import { simulateReplayRulesets, type ReplayNote, type ReplayRulesetResult } from '@be-music/player/replay';
 import { stringifyBMS, stringifyBmson } from '@be-music/stringifier';
 import { describe, expect, test } from 'vite-plus/test';
 import {
@@ -156,13 +156,13 @@ async function buildResolvedExpected(
   // A no-input run snapshots the note list the engine prepares for play (lane transforms, long-note modes, mine
   // damage, FREE ZONE); the scenarios' input streams are built from it. Each stream is then judged twice per ruleset:
   // by the pure simulator and by the live engine replaying it. Both are pinned side by side, and the two must agree on
-  // every chart: `packages/player/src/playlog/equivalence.test.ts` reduces each rule to a minimal case, while this
+  // every chart: `packages/player/src/replay/equivalence.test.ts` reduces each rule to a minimal case, while this
   // catches whatever combination of rules a real chart reaches that no minimal case covered.
-  const { playlog } = await replayEngine(json, { randomDraws, inputs: [], speed: ENGINE_REPLAY_SPEED });
-  const notes = playlog.chart.notes;
+  const { replay } = await replayEngine(json, { randomDraws, inputs: [], speed: ENGINE_REPLAY_SPEED });
+  const notes = replay.chart.notes;
   const play: Record<string, unknown> = {};
   for (const [id, inputs] of Object.entries(buildScenarios(notes))) {
-    const simulated = simulatePlaylogRulesets({ ...playlog, inputs });
+    const simulated = simulateReplayRulesets({ ...replay, inputs });
     const replays = await replayEngineRulesets(json, { randomDraws, inputs, speed: ENGINE_REPLAY_SPEED });
     for (const { ruleset, replay } of replays) {
       expect(findEngineSimulatorMismatches(replay, simulated[ruleset]!), `${path} ${id} ${ruleset}`).toEqual([]);
@@ -176,7 +176,7 @@ async function buildResolvedExpected(
     };
   }
 
-  const { notes: _notes, ...chartFacts } = playlog.chart;
+  const { notes: _notes, ...chartFacts } = replay.chart;
   return {
     randomPatterns: formatRandomPatterns(randomDraws),
     title: json.metadata.title,
@@ -194,13 +194,13 @@ async function buildResolvedExpected(
         (trigger.sampleOffsetSeconds === 0 ? '' : ` +${roundUs(trigger.sampleOffsetSeconds)}`) +
         (trigger.sampleDurationSeconds === undefined ? '' : ` ~${roundUs(trigger.sampleDurationSeconds)}`),
     ),
-    playlogChart: chartFacts,
-    notes: notes.map(formatPlaylogNote),
+    replayChart: chartFacts,
+    notes: notes.map(formatReplayNote),
     play,
   };
 }
 
-function formatPlaylogNote(note: PlaylogNote): string {
+function formatReplayNote(note: ReplayNote): string {
   return (
     `${note.timeUs} ${note.channel} ${note.type}` +
     (note.endTimeUs === undefined ? '' : ` ->${note.endTimeUs}`) +
@@ -216,6 +216,6 @@ function formatRandomPatterns(draws: RandomDraws): string[] {
     .map((draw) => (draw.command === 'SETRANDOM' ? `${draw.value}/${draw.value}` : `${draw.value}/${draw.range}`));
 }
 
-function roundRulesetResult(result: PlaylogRulesetResult): PlaylogRulesetResult {
+function roundRulesetResult(result: ReplayRulesetResult): ReplayRulesetResult {
   return { ...result, gauge: { ...result.gauge, final: round6(result.gauge.final) } };
 }

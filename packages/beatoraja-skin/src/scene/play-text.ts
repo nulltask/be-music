@@ -2,15 +2,15 @@ import type { CourseView } from '@be-music/scene-model';
 import { resolveBeatorajaCourseText } from './course.ts';
 import {
   resolveBeatorajaSkinText,
-  resolveBeatorajaSongText,
+  resolveBeatorajaChartText,
   type BeatorajaSkinTextInput,
-  type BeatorajaSongTextInput,
-} from './song-text.ts';
+  type BeatorajaChartTextInput,
+} from './chart-text.ts';
 
 /** What a play skin's texts read. */
 export interface BeatorajaPlayTextInput {
   /** The chart being played. */
-  readonly song?: BeatorajaSongTextInput;
+  readonly chart?: BeatorajaChartTextInput;
   readonly skin?: BeatorajaSkinTextInput;
   /** The running course, when the play is one of its stages. */
   readonly course?: CourseView;
@@ -25,5 +25,5 @@ export function resolveBeatorajaPlayText(id: number, input: BeatorajaPlayTextInp
     const courseText = resolveBeatorajaCourseText(id, input.course);
     if (courseText !== undefined) return courseText;
   }
-  return resolveBeatorajaSongText(id, input.song) ?? resolveBeatorajaSkinText(id, input.skin);
+  return resolveBeatorajaChartText(id, input.chart) ?? resolveBeatorajaSkinText(id, input.skin);
 }

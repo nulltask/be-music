@@ -100,7 +100,7 @@ On non-Windows terminals, it opts into the Kitty keyboard protocol by default so
 On Windows, it opts into the Win32 terminal input mode.
 Set `BE_MUSIC_KEYBOARD_PROTOCOLS=kitty`, `win32`, or a comma-separated combination to override protocol opt-in.
 Once the terminal has answered the opt-in with a key event in that protocol, every later play of the process declares that its keys report their releases (`PlayerInputRuntime.reportsKeyReleases`), so the engine judges the play as key-state input from its first key.
-Before that, the engine infers when each key came up until the first `kitty-state` command arrives ([Input without key releases](./playlog.md#input-without-key-releases)).
+Before that, the engine infers when each key came up until the first `kitty-state` command arrives ([Input without key releases](./replay.md#input-without-key-releases)).
 
 Important command mappings:
 

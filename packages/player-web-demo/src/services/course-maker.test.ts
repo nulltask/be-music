@@ -1,11 +1,11 @@
 import { parseChart } from '@be-music/parser';
-import type { BrowserSongCollection } from '@be-music/player-web/collection';
+import type { BrowserChartCollection } from '@be-music/player-web/collection';
 import type { SelectScene } from '@be-music/player-web/host';
 import type { LibraryChart } from '@be-music/scene-model';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { CourseMakerService } from './course-maker.ts';
 
-function song(id: string): LibraryChart {
+function chartEntry(id: string): LibraryChart {
   return {
     id,
     sourceId: 'drop1',
@@ -20,11 +20,11 @@ function song(id: string): LibraryChart {
   };
 }
 
-const SONGS = ['a', 'b', 'c', 'd', 'e', 'f'].map(song);
+const SONGS = ['a', 'b', 'c', 'd', 'e', 'f'].map(chartEntry);
 
 function harness() {
   const statuses: string[] = [];
-  const collection: BrowserSongCollection = { sources: [], charts: SONGS, errors: [] };
+  const collection: BrowserChartCollection = { sources: [], charts: SONGS, errors: [] };
   const view = { setLibrary: vi.fn() };
   const refreshMadeCourses = vi.fn(async () => {});
   const service = new CourseMakerService({
@@ -51,9 +51,9 @@ afterEach(() => {
 describe('CourseMakerService', () => {
   test('plays a decided chart unless a course is being made, which takes it instead', async () => {
     const { service, statuses } = harness();
-    expect(service.addSongToCourseBeingMade(SONGS[0]!)).toBe(false);
+    expect(service.addChartToCourseBeingMade(SONGS[0]!)).toBe(false);
     service.maker.start('expert');
-    expect(service.addSongToCourseBeingMade(SONGS[0]!)).toBe(true);
+    expect(service.addChartToCourseBeingMade(SONGS[0]!)).toBe(true);
     await vi.waitFor(() => expect(statuses).toEqual(['Added A to the course (1 / 5)']));
     expect(service.maker.draft?.stages.map((stage) => stage.md5)).toEqual(['a'.repeat(32)]);
   });
@@ -62,10 +62,10 @@ describe('CourseMakerService', () => {
     const { service, statuses, refreshMadeCourses } = harness();
     service.maker.start('grade');
     for (const entry of SONGS.slice(0, 5)) {
-      service.addSongToCourseBeingMade(entry);
+      service.addChartToCourseBeingMade(entry);
       await vi.waitFor(() => expect(service.maker.draft?.stages.length).toBe(SONGS.indexOf(entry) + 1));
     }
-    expect(service.addSongToCourseBeingMade(SONGS[5]!)).toBe(true);
+    expect(service.addChartToCourseBeingMade(SONGS[5]!)).toBe(true);
     expect(service.maker.draft).toBeUndefined();
     expect(service.maker.courses.map((course) => course.name)).toEqual(['DAN 1']);
     expect(statuses).toContain('Saved the course "DAN 1"');

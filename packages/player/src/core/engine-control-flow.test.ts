@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vite-plus/test';
 import { drawRandomOutcomes, type RandomDraws } from '../../../chart/src/index.ts';
 import type { BeMusicJSON } from '../../../json/src/index.ts';
 import { parseChart, resolveBMSControlFlowWithDraws } from '../../../parser/src/index.ts';
-import type { BeMusicPlaylog } from '../playlog/index.ts';
+import type { BeMusicReplay } from '../replay/index.ts';
 import { autoPlay, manualPlay, type PlayerOptions } from './engine.ts';
 
 // Branch 1 puts a note on lane 11, branch 2 one on lane 12; the trailing `#SETRANDOM 3` only shows up in the summary.
@@ -40,7 +40,7 @@ async function play(
   chart: BeMusicJSON,
   options: Pick<PlayerOptions, 'randomDraws'>,
 ): Promise<PlayResult> {
-  let playlog: BeMusicPlaylog | undefined;
+  let replay: BeMusicReplay | undefined;
   let output = '';
   let resolved: BeMusicJSON | undefined;
   await run(chart, {
@@ -56,11 +56,11 @@ async function play(
     onResolvedChart: (json) => {
       resolved = json;
     },
-    onPlaylogRecorded: (recorded) => {
-      playlog = recorded;
+    onReplayRecorded: (recorded) => {
+      replay = recorded;
     },
   });
-  return { notes: playlog!.chart.notes.map((note) => note.channel), output, resolved };
+  return { notes: replay!.chart.notes.map((note) => note.channel), output, resolved };
 }
 
 describe('engine control flow', () => {

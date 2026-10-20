@@ -232,11 +232,11 @@ function drawHUD(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, wid
 
   // Track, bottom left.
   // Genre, title, artist — the order every built-in skin uses.
-  if (runtime.songGenre) {
-    text(ctx, runtime.songGenre, MARGIN, height - 70, { size: 10, color: MUTED, maxWidth: 380, nowMs });
+  if (runtime.chartGenre) {
+    text(ctx, runtime.chartGenre, MARGIN, height - 70, { size: 10, color: MUTED, maxWidth: 380, nowMs });
   }
-  text(ctx, runtime.songTitle ?? '', MARGIN, height - 50, { size: 16, weight: 700, maxWidth: 380, nowMs });
-  text(ctx, runtime.songArtist ?? '', MARGIN, height - 28, { size: 11, color: MUTED, maxWidth: 380, nowMs });
+  text(ctx, runtime.chartTitle ?? '', MARGIN, height - 50, { size: 16, weight: 700, maxWidth: 380, nowMs });
+  text(ctx, runtime.chartArtist ?? '', MARGIN, height - 28, { size: 11, color: MUTED, maxWidth: 380, nowMs });
 
   // Score figures, bottom right, in one row.
   scoreFigures(runtime).forEach(([label, value], index) => {
@@ -323,13 +323,18 @@ function drawPortraitHUD(
   );
 
   // Genre, title, artist — the order every built-in skin uses — at the top of the column.
-  const lift = runtime.songGenre ? 12 : 0;
+  const lift = runtime.chartGenre ? 12 : 0;
   const textW = track.w;
-  if (runtime.songGenre) {
-    text(ctx, runtime.songGenre, track.x, track.y + 8, { size: 10, color: MUTED, maxWidth: textW, nowMs });
+  if (runtime.chartGenre) {
+    text(ctx, runtime.chartGenre, track.x, track.y + 8, { size: 10, color: MUTED, maxWidth: textW, nowMs });
   }
-  text(ctx, runtime.songTitle ?? '', track.x, track.y + 14 + lift, { size: 16, weight: 700, maxWidth: textW, nowMs });
-  text(ctx, runtime.songArtist ?? '', track.x, track.y + 34 + lift, { size: 11, color: MUTED, maxWidth: textW, nowMs });
+  text(ctx, runtime.chartTitle ?? '', track.x, track.y + 14 + lift, { size: 16, weight: 700, maxWidth: textW, nowMs });
+  text(ctx, runtime.chartArtist ?? '', track.x, track.y + 34 + lift, {
+    size: 11,
+    color: MUTED,
+    maxWidth: textW,
+    nowMs,
+  });
 
   // Score figures, two by two.
   scoreFigures(runtime).forEach(([label, value], index) => {

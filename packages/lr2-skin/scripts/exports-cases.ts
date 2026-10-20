@@ -20,14 +20,14 @@ const BENCH_SONG = {
     bms: {},
     events: [{ channel: '11' }, { channel: '18' }],
   },
-} satisfies lr2SkinAPI.LR2PlaySkinSong;
+} satisfies lr2SkinAPI.LR2PlaySkinChart;
 const BENCH_PMS_SONG = {
   chartPath: 'Songs/Bench/main.pms',
   chart: {
     bms: { player: 3 },
     events: [{ channel: '11' }, { channel: '17' }, { channel: '19' }],
   },
-} satisfies lr2SkinAPI.LR2PlaySkinSong;
+} satisfies lr2SkinAPI.LR2PlaySkinChart;
 
 export function registerLR2SkinExportsCases(define: DefineBenchmarkCase): void {
   registerLR2SkinStateExportsCases(define);

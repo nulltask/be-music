@@ -10,7 +10,7 @@ import {
 import type { SelectRecords } from '../types.ts';
 import { Container, EventBoundary, Matrix, Sprite, Text, Texture } from 'pixi.js';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
-import type { BrowserSongCollection } from '../../collection/types.ts';
+import type { BrowserChartCollection } from '../../collection/types.ts';
 import type { BeatorajaKit } from '../../host/family-kit.ts';
 import { SILENT_AUDIO } from '../../runtime/audio-analysis.ts';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
@@ -67,7 +67,7 @@ type ViewInternals = {
  * session, on a clock the test moves.
  */
 function setup(
-  library: BrowserSongCollection,
+  library: BrowserChartCollection,
   options: { kit?: BeatorajaKit; view?: BeatorajaSelectViewOptions; records?: SelectRecords } = {},
 ) {
   let clock = 0;

@@ -15,7 +15,7 @@ import { countBaseNotes, type RulesetChartFacts } from './facts.ts';
 import { isChargeLongNoteMode, resolveEffectiveLongNoteMode } from './long-note.ts';
 
 /**
- * Ruleset tables for the playlog simulators.
+ * Ruleset tables for the replay simulators.
  *
  * Every numeric constant here was read from primary sources (2026-08 HEAD):
  * - beatoraja: `exch-bms2/beatoraja` — `play/JudgeProperty.java`, `play/JudgeAlgorithm.java`,
@@ -47,14 +47,14 @@ export interface RulesetWindowTables {
   longScratchEnd: JudgeWindowSetUs;
 }
 
-export type PlaylogRulesetId = 'lr2' | 'beatoraja' | 'iidx';
+/** Every supported judge ruleset id, in canonical display order. */
+export const RULESET_IDS = ['lr2', 'beatoraja', 'iidx'] as const;
 
-/** Every judge ruleset id, in the order the play-log simulators run them. */
-export const PLAYLOG_RULESET_IDS: readonly PlaylogRulesetId[] = ['lr2', 'beatoraja', 'iidx'];
+export type RulesetId = (typeof RULESET_IDS)[number];
 
 /** Whether `value` names a judge ruleset. */
-export function isPlaylogRulesetId(value: unknown): value is PlaylogRulesetId {
-  return typeof value === 'string' && (PLAYLOG_RULESET_IDS as readonly string[]).includes(value);
+export function isRulesetId(value: unknown): value is RulesetId {
+  return typeof value === 'string' && (RULESET_IDS as readonly string[]).includes(value);
 }
 
 export type BeatorajaJudgeAlgorithm = 'combo' | 'duration' | 'lowest' | 'score';
@@ -129,7 +129,7 @@ export interface GaugeSpec {
 export interface RulesetConfig {
   /** Versioned ruleset id written into the result (`'lr2/0'` etc.). */
   id: string;
-  rulesetId: PlaylogRulesetId;
+  rulesetId: RulesetId;
   windows: RulesetWindowTables;
   /**
    * LR2 dynamic `#EXRANKxx` support: returns the window tables active at `timeUs`. Rulesets without dynamic
@@ -239,7 +239,7 @@ function resolveBeatorajaJudgeRank(chart: RulesetChartFacts, rankTable: readonly
   const exRank = chart.judgeRank.sourceExRank;
   if (chart.sourceFormat === 'bmson') {
     // bmson's judge_rank is the judgerank itself; a chart that omits it gets the format default, not BMS #RANK 2.
-    // Decided here rather than in the chart facts so a play-log, which records `sourceExRank` only when the chart sets
+    // Decided here rather than in the chart facts so a replay, which records `sourceExRank` only when the chart sets
     // it, resolves the same windows on replay.
     return typeof exRank === 'number' && exRank > 0 ? exRank : BMSON_DEFAULT_JUDGE_RANK;
   }
@@ -668,8 +668,8 @@ function resolveIIDXGauge(gaugeId: string, noteCount: number): GaugeSpec {
   }
 }
 
-/** Maps the play-log's LR2-family gauge pick onto each ruleset's own gauge id. */
-function resolveDefaultGaugeId(rulesetId: PlaylogRulesetId, playGauge: string): string {
+/** Maps the replay's LR2-family gauge pick onto each ruleset's own gauge id. */
+function resolveDefaultGaugeId(rulesetId: RulesetId, playGauge: string): string {
   switch (playGauge) {
     case 'EASY':
       return 'EASY';
@@ -700,7 +700,7 @@ function countRulesetNotes(chart: RulesetChartFacts, style: LongNoteStyle): numb
  * for `beatoraja`. The `iidx` gauge never reads TOTAL (its recovery comes from {@link resolveIIDXGaugeUnit}), so its
  * reported TOTAL follows the `lr2` curve.
  */
-function resolveDefaultTotal(rulesetId: PlaylogRulesetId, baseNoteCount: number): number {
+function resolveDefaultTotal(rulesetId: RulesetId, baseNoteCount: number): number {
   return rulesetId === 'beatoraja'
     ? resolveBeatorajaDefaultTotal(baseNoteCount)
     : resolveLR2DefaultTotal(baseNoteCount);
@@ -711,7 +711,7 @@ function resolveDefaultTotal(rulesetId: PlaylogRulesetId, baseNoteCount: number)
  * default TOTAL (bmson 1.0.0; beatoraja `BMSPlayerRule.validate`: `total > 0 ? total / 100 × default : default`).
  * Either way a value ≤ 0 means "use the default", so bmson `total: 0` does not freeze the gauge.
  */
-function resolveEffectiveTotal(rulesetId: PlaylogRulesetId, chart: RulesetChartFacts, baseNoteCount: number): number {
+function resolveEffectiveTotal(rulesetId: RulesetId, chart: RulesetChartFacts, baseNoteCount: number): number {
   const fallback = resolveDefaultTotal(rulesetId, baseNoteCount);
   const raw = chart.total;
   if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) {
@@ -723,12 +723,12 @@ function resolveEffectiveTotal(rulesetId: PlaylogRulesetId, chart: RulesetChartF
 /**
  * Builds the ruleset a play runs under, from chart facts plus the per-play choices.
  *
- * This is the single source of truth shared by the live engine and the play-log simulator: both produce a
+ * This is the single source of truth shared by the live engine and the replay simulator: both produce a
  * {@link RulesetChartFacts} from their own chart representation and get back the same tables.
  */
 export function resolveRuleset(
   chart: RulesetChartFacts,
-  rulesetId: PlaylogRulesetId,
+  rulesetId: RulesetId,
   options: ResolveRulesetOptions = {},
 ): RulesetConfig {
   const baseNotes = countBaseNotes(chart.notes);

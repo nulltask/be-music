@@ -55,10 +55,10 @@ export function drawResult(surface: BeMusicSurface<'2d'>, frame: BeMusicResultFr
   ctx.fillStyle = PANEL;
   ctx.fillRect(x, 60, 220, 330);
   // Genre, title, artist — the order every built-in skin uses.
-  const lift = result.song.genre ? 12 : 0;
-  if (result.song.genre) text(ctx, result.song.genre, x + 14, 78, { size: 10, color: MUTED, maxWidth: 192, nowMs });
-  text(ctx, result.song.title, x + 14, 82 + lift, { size: 14, weight: 800, maxWidth: 192, nowMs });
-  text(ctx, result.song.artist ?? '', x + 14, 102 + lift, { size: 11, color: MUTED, maxWidth: 192, nowMs });
+  const lift = result.chart.genre ? 12 : 0;
+  if (result.chart.genre) text(ctx, result.chart.genre, x + 14, 78, { size: 10, color: MUTED, maxWidth: 192, nowMs });
+  text(ctx, result.chart.title, x + 14, 82 + lift, { size: 14, weight: 800, maxWidth: 192, nowMs });
+  text(ctx, result.chart.artist ?? '', x + 14, 102 + lift, { size: 11, color: MUTED, maxWidth: 192, nowMs });
   resolveResultTrackRows(result).forEach((row, index) => {
     const y = 140 + index * 34;
     text(ctx, row.label, x + 14, y, { size: 10, color: MUTED, weight: 700 });
@@ -144,12 +144,12 @@ function drawPortraitResult(
   const left = track.x + 14;
   const right = track.x + track.w - 14;
   const textW = right - left;
-  const lift = result.song.genre ? 12 : 0;
-  if (result.song.genre) {
-    text(ctx, result.song.genre, left, track.y + 18, { size: 10, color: MUTED, maxWidth: textW, nowMs });
+  const lift = result.chart.genre ? 12 : 0;
+  if (result.chart.genre) {
+    text(ctx, result.chart.genre, left, track.y + 18, { size: 10, color: MUTED, maxWidth: textW, nowMs });
   }
-  text(ctx, result.song.title, left, track.y + 24 + lift, { size: 16, weight: 800, maxWidth: textW, nowMs });
-  text(ctx, result.song.artist ?? '', left, track.y + 46 + lift, { size: 11, color: MUTED, maxWidth: textW, nowMs });
+  text(ctx, result.chart.title, left, track.y + 24 + lift, { size: 16, weight: 800, maxWidth: textW, nowMs });
+  text(ctx, result.chart.artist ?? '', left, track.y + 46 + lift, { size: 11, color: MUTED, maxWidth: textW, nowMs });
   resolveResultTrackRows(result).forEach((row, index) => {
     const y = grid.trackRowsY + index * grid.rowPitch;
     text(ctx, row.label, left, y, { size: 10, color: MUTED, weight: 700 });

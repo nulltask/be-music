@@ -187,12 +187,12 @@ be-music の分だけです。`workers.dev` のサブドメインは `be-music.w
 
 公開プロフィールとアバターの正本は Accounts に置き、編集もそこで行います。Leaderboard はランキング用のコピー、プレイヤー ID の対応、スコアを保持します。同期と移行順は [ADR 0009](./adr/0009-accounts-profiles.ja.md) を参照してください。
 
-| Worker                                | D1            | R2                                                    |
-| ------------------------------------- | ------------- | ----------------------------------------------------- |
-| `accounts` / `accounts-preview`       | Worker と同名 | Worker と同名：アバター                               |
-| `leaderboard` / `leaderboard-preview` | Worker と同名 | Worker と同名：プレイログ、譜面構造データ、共有カード |
-| `play` / `play-preview`               | なし          | Worker と同名：FFmpeg core                            |
-| `dashboard` / `dashboard-preview`     | なし          | なし                                                  |
-| `donate` / `donate-preview`           | なし          | なし。収支データはリポジトリで管理                    |
+| Worker                                | D1            | R2                                                  |
+| ------------------------------------- | ------------- | --------------------------------------------------- |
+| `accounts` / `accounts-preview`       | Worker と同名 | Worker と同名：アバター                             |
+| `leaderboard` / `leaderboard-preview` | Worker と同名 | Worker と同名：リプレイ、譜面構造データ、共有カード |
+| `play` / `play-preview`               | なし          | Worker と同名：FFmpeg core                          |
+| `dashboard` / `dashboard-preview`     | なし          | なし                                                |
+| `donate` / `donate-preview`           | なし          | なし。収支データはリポジトリで管理                  |
 
 公開の静的アセットは `assets` バケットを `assets.be-music.app` で配信します。FFmpeg のアップロード先は既定で `play` です。`pnpm --filter @be-music/player-web-demo run cf:r2:push:preview` で `play-preview` を別に更新します。

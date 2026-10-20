@@ -252,7 +252,7 @@ export interface ResolveBMSControlFlowOptions {
 /**
  * Resolves `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow with freshly drawn outcomes: shorthand for
  * `resolveBMSControlFlowWithDraws(input, drawRandomOutcomes(input, random))`. A host that needs to know which branches
- * it played (the play log, the RANDOM summary, a second scene showing the same chart) draws once with
+ * it played (the replay, the RANDOM summary, a second scene showing the same chart) draws once with
  * `drawRandomOutcomes` (`@be-music/chart`) and resolves with {@link resolveBMSControlFlowWithDraws} instead.
  */
 export function resolveBMSControlFlow(input: BeMusicJSON, options: ResolveBMSControlFlowOptions = {}): BeMusicJSON {
@@ -261,7 +261,7 @@ export function resolveBMSControlFlow(input: BeMusicJSON, options: ResolveBMSCon
 
 /**
  * Resolves `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow with explicit outcomes — the draws made once for a play
- * with `drawRandomOutcomes`, or the ones a play log recorded. The same chart and draws always give the same result.
+ * with `drawRandomOutcomes`, or the ones a replay recorded. The same chart and draws always give the same result.
  *
  * @throws RangeError when `draws` was not drawn for `input`'s control flow.
  */

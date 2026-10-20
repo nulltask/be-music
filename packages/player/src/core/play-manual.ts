@@ -83,7 +83,7 @@ export function writeManualIntro(session: PlaySession): void {
   if (session.autoScratch) {
     writeOutput('Mode: AUTO SCRATCH (16ch/26ch only)\n');
   }
-  writeOutput(`Judge window (${ruleset.id}): ${formatJudgeWindowSet(ruleset.windows.note)}\n`);
+  writeOutput(`Judgment window (${ruleset.id}): ${formatJudgeWindowSet(ruleset.windows.note)}\n`);
   writeOutput('Press Space to pause/resume.\n');
   writeOutput('Press Shift+R to restart.\n');
   writeOutput(`Press ${highSpeedModifierLabel}+odd lane key to decrease HIGH-SPEED.\n`);
@@ -177,7 +177,7 @@ function createManualJudge(session: PlaySession): PlayJudge {
             tokens: command.releaseTokens,
             nowSec: tempoClock.chartSecondsAt(releaseNowMs),
             nowMs: tempoClock.initialTempoMsAt(releaseNowMs),
-            // The play log records the release at the key event's own instant, like a press.
+            // The replay records the release at the key event's own instant, like a press.
             recordSec: tempoClock.chartSecondsAt(stampMs(releaseNowMs, command.pressedAt)),
           });
         }

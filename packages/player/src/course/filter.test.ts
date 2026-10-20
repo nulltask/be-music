@@ -1,7 +1,12 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { type CourseSongRecord, evaluateCourseSongFilter, parseCourseSongFilter, selectCourseSongs } from './index.ts';
+import {
+  type CourseChartRecord,
+  evaluateCourseChartFilter,
+  parseCourseChartFilter,
+  selectCourseCharts,
+} from './index.ts';
 
-const SONG: CourseSongRecord = {
+const SONG: CourseChartRecord = {
   md5: '0123456789abcdef0123456789abcdef',
   sha256: 'a'.repeat(64),
   title: 'Air (Another)',
@@ -20,18 +25,18 @@ const SONG: CourseSongRecord = {
   feature: 8 | 64,
 };
 
-function matches(sql: string, record: CourseSongRecord = SONG): boolean {
-  const parsed = parseCourseSongFilter(sql);
+function matches(sql: string, record: CourseChartRecord = SONG): boolean {
+  const parsed = parseCourseChartFilter(sql);
   if (!parsed.ok) throw new Error(parsed.error);
-  return evaluateCourseSongFilter(parsed.filter, record);
+  return evaluateCourseChartFilter(parsed.filter, record);
 }
 
 function parseError(sql: string): string | undefined {
-  const parsed = parseCourseSongFilter(sql);
+  const parsed = parseCourseChartFilter(sql);
   return parsed.ok ? undefined : parsed.error;
 }
 
-describe('parseCourseSongFilter / evaluateCourseSongFilter', () => {
+describe('parseCourseChartFilter / evaluateCourseChartFilter', () => {
   test('comparisons on integer columns', () => {
     expect(matches('level = 12')).toBe(true);
     expect(matches('level == 12')).toBe(true);
@@ -173,7 +178,7 @@ describe('parseCourseSongFilter / evaluateCourseSongFilter', () => {
   });
 
   test('a trailing ORDER BY / LIMIT / OFFSET parses into the query', () => {
-    const parsed = parseCourseSongFilter('level >= 11 ORDER BY level DESC, title ASC NULLS LAST LIMIT 10 OFFSET 2');
+    const parsed = parseCourseChartFilter('level >= 11 ORDER BY level DESC, title ASC NULLS LAST LIMIT 10 OFFSET 2');
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     expect(parsed.filter).toEqual(parsed.query.where);
@@ -183,11 +188,11 @@ describe('parseCourseSongFilter / evaluateCourseSongFilter', () => {
     ]);
     expect(parsed.query).toMatchObject({ limit: 10, offset: 2 });
     // `LIMIT m, n` puts the offset first; a negative LIMIT is none and a negative OFFSET is 0, as in SQLite.
-    const comma = parseCourseSongFilter('1 LIMIT 3, 5');
+    const comma = parseCourseChartFilter('1 LIMIT 3, 5');
     expect(comma.ok && comma.query).toMatchObject({ limit: 5, offset: 3 });
-    const negative = parseCourseSongFilter('1 LIMIT -1 OFFSET -4');
+    const negative = parseCourseChartFilter('1 LIMIT -1 OFFSET -4');
     expect(negative.ok && negative.query).toEqual({ where: { type: 'literal', value: 1 }, orderBy: [], offset: 0 });
-    const random = parseCourseSongFilter('level = 12 ORDER BY RANDOM() LIMIT 1');
+    const random = parseCourseChartFilter('level = 12 ORDER BY RANDOM() LIMIT 1');
     expect(random.ok && random.query.orderBy).toEqual([{ key: { type: 'random' }, descending: false }]);
   });
 
@@ -203,8 +208,8 @@ describe('parseCourseSongFilter / evaluateCourseSongFilter', () => {
   });
 });
 
-describe('selectCourseSongs', () => {
-  const SONGS: CourseSongRecord[] = [
+describe('selectCourseCharts', () => {
+  const SONGS: CourseChartRecord[] = [
     { md5: 'a', title: 'A', level: 11 },
     { md5: 'b', title: 'B', level: 12 },
     { md5: 'c', title: 'C', level: 12 },
@@ -213,9 +218,11 @@ describe('selectCourseSongs', () => {
   ];
 
   function select(sql: string, random?: () => number): string[] {
-    const parsed = parseCourseSongFilter(sql);
+    const parsed = parseCourseChartFilter(sql);
     if (!parsed.ok) throw new Error(parsed.error);
-    return selectCourseSongs(parsed.query, SONGS, (song) => song, random).map((song) => song.md5!);
+    return selectCourseCharts(parsed.query, SONGS, (chartEntry) => chartEntry, random).map(
+      (chartEntry) => chartEntry.md5!,
+    );
   }
 
   test('without ORDER BY / LIMIT it keeps the candidates the clause passes, in order', () => {

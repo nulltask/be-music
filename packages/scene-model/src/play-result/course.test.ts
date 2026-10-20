@@ -1,6 +1,6 @@
 import { createEmptyJSON } from '@be-music/json';
 import { parseBeatorajaCourseData } from '@be-music/player/course';
-import type { BeMusicCoursePlaylog, BeMusicPlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
+import type { BeMusicCourseReplay, BeMusicReplay, ReplayCourseResult } from '@be-music/player/replay';
 import { describe, expect, test } from 'vite-plus/test';
 import type { LibraryChart, LibraryCourse } from '../library/entries.ts';
 import { joinCourseStageHistories, playResultFromCourseRun } from './course.ts';
@@ -33,7 +33,7 @@ function course(kind?: 'nonstop'): LibraryCourse {
 }
 
 describe('playResultFromCourseRun', () => {
-  const result: PlaylogCourseResult = {
+  const result: ReplayCourseResult = {
     ruleset: 'lr2',
     judge: { pgreat: 36, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0 },
     fast: 0,
@@ -49,11 +49,11 @@ describe('playResultFromCourseRun', () => {
     trophy: 'goldmedal',
     stages: [],
   };
-  const courseLog = (judgeRuleset?: 'lr2' | 'beatoraja'): BeMusicCoursePlaylog => {
-    const playlog = {
+  const courseLog = (judgeRuleset?: 'lr2' | 'beatoraja'): BeMusicCourseReplay => {
+    const replay = {
       play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', ...(judgeRuleset ? { judgeRuleset } : {}) },
-    } as unknown as BeMusicPlaylog;
-    return { stages: [{ played: true, playlog }] } as unknown as BeMusicCoursePlaylog;
+    } as unknown as BeMusicReplay;
+    return { stages: [{ played: true, replay }] } as unknown as BeMusicCourseReplay;
   };
 
   test('shows an LR2 course on the stage results’ 200000 scale, with the stages’ play time, as a course run', () => {
@@ -67,7 +67,7 @@ describe('playResultFromCourseRun', () => {
 
   test('names the course in the song panel and carries the course view and the stages reached', () => {
     const data = playResultFromCourseRun(course(), result, courseLog());
-    expect(data.song).toMatchObject({ id: 'course:dan#0', title: 'Dan', subtitle: '3 / 3 STAGES · goldmedal' });
+    expect(data.chart).toMatchObject({ id: 'course:dan#0', title: 'Dan', subtitle: '3 / 3 STAGES · goldmedal' });
     expect(data.course).toMatchObject({ kind: 'expert', title: 'Dan' });
     expect(data.course?.stageIndex).toBeUndefined();
     expect(data.courseRun).toEqual({ stagesPlayed: 3, trophy: 'goldmedal' });

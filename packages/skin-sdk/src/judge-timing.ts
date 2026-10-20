@@ -1,7 +1,7 @@
-import type { BeMusicJudgeTiming } from './types.ts';
+import type { BeMusicJudgmentTiming } from './types.ts';
 
-/** A histogram of judgement timings (see {@link binJudgeTimings}). */
-export interface BeMusicJudgeTimingHistogram {
+/** A histogram of judgement timings (see {@link binJudgmentTimings}). */
+export interface BeMusicJudgmentTimingHistogram {
   /** Width of each bin (ms). */
   binMs: number;
   /** Lower edge (ms) of `counts[0]`; bin `i` covers `originMs + i × binMs` up to (not including) the next edge. */
@@ -20,11 +20,11 @@ export interface BeMusicJudgeTimingHistogram {
  *
  * @throws RangeError when `binMs` is not a positive finite number.
  */
-export function binJudgeTimings(
-  timings: readonly Pick<BeMusicJudgeTiming, 'deltaMs'>[],
+export function binJudgmentTimings(
+  timings: readonly Pick<BeMusicJudgmentTiming, 'deltaMs'>[],
   binMs = 1,
   rangeMs?: number,
-): BeMusicJudgeTimingHistogram {
+): BeMusicJudgmentTimingHistogram {
   if (!(Number.isFinite(binMs) && binMs > 0)) throw new RangeError(`binMs must be a positive number, got ${binMs}`);
   let min: number;
   let max: number;

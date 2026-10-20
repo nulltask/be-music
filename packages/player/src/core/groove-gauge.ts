@@ -1,4 +1,4 @@
-import type { JudgeKind } from './scoring.ts';
+import type { JudgmentKind } from './scoring.ts';
 
 /**
  * The judges the engine moves the gauge with.
@@ -9,4 +9,4 @@ import type { JudgeKind } from './scoring.ts';
  */
 
 /** Judges that move the gauge. `'EMPTY_POOR'` is the input-on-an-empty-lane penalty, which is not a note judgment. */
-export type GrooveGaugeJudgeKind = JudgeKind | 'EMPTY_POOR';
+export type GrooveGaugeJudgmentKind = JudgmentKind | 'EMPTY_POOR';

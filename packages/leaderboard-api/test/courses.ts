@@ -1,18 +1,18 @@
 import { gzipSync } from 'node:zlib';
 import {
-  createCoursePlaylog,
+  createCourseReplay,
   resolveChartRulesetFacts,
-  simulatePlaylog,
-  type BeMusicCoursePlaylog,
-  type BeMusicPlaylog,
-  type PlaylogCourseInfo,
-  type PlaylogCourseStageEntry,
+  simulateReplay,
+  type BeMusicCourseReplay,
+  type BeMusicReplay,
+  type ReplayCourseInfo,
+  type ReplayCourseStageEntry,
   type RulesetChartFacts,
-} from '@be-music/player/playlog';
-import { makeChart, makePlaylog, type TestChart } from './support.ts';
+} from '@be-music/player/replay';
+import { makeChart, makeReplay, type TestChart } from './support.ts';
 
 /** The grade course the course tests run, unless a run names its own. */
-export const TEST_COURSE: PlaylogCourseInfo = {
+export const TEST_COURSE: ReplayCourseInfo = {
   name: 'Test Dan',
   kind: 'grade',
   constraints: ['grade_mirror', 'gauge_lr2'],
@@ -29,12 +29,12 @@ export function stageChart(lane: string): TestChart {
 const factsOf = (chart: TestChart): RulesetChartFacts => resolveChartRulesetFacts(chart.json);
 
 export interface CourseRunOptions {
-  gauge?: BeMusicPlaylog['play']['gauge'];
-  play?: Partial<BeMusicPlaylog['play']>;
+  gauge?: BeMusicReplay['play']['gauge'];
+  play?: Partial<BeMusicReplay['play']>;
   /** The course definition (name, trophies, ...); {@link TEST_COURSE} by default. */
-  course?: Partial<PlaylogCourseInfo>;
+  course?: Partial<ReplayCourseInfo>;
   /** Changes a stage log after its carry-in is set. */
-  tamper?: (stage: BeMusicPlaylog, index: number) => void;
+  tamper?: (stage: BeMusicReplay, index: number) => void;
 }
 
 /**
@@ -45,9 +45,9 @@ export function courseRun(
   charts: readonly TestChart[],
   hits: readonly number[],
   options: CourseRunOptions = {},
-): BeMusicCoursePlaylog {
-  const stages: PlaylogCourseStageEntry[] = [];
-  let previous: ReturnType<typeof simulatePlaylog> | undefined;
+): BeMusicCourseReplay {
+  const stages: ReplayCourseStageEntry[] = [];
+  let previous: ReturnType<typeof simulateReplay> | undefined;
   for (const [index, chart] of charts.entries()) {
     if (index >= hits.length) {
       stages.push({ played: false, facts: factsOf(chart), chartFingerprint: chart.chartFingerprint });
@@ -57,7 +57,7 @@ export function courseRun(
       previous === undefined
         ? undefined
         : { gauge: previous.gauge.final, combo: previous.course!.combo, maxCombo: previous.course!.maxCombo };
-    const playlog = makePlaylog(chart, {
+    const replay = makeReplay(chart, {
       noteCount: 10,
       hits: hits[index]!,
       play: {
@@ -66,11 +66,11 @@ export function courseRun(
         ...options.play,
       },
     });
-    previous = simulatePlaylog(playlog, { ruleset: 'lr2' });
-    options.tamper?.(playlog, index);
-    stages.push({ played: true, playlog });
+    previous = simulateReplay(replay, { ruleset: 'lr2' });
+    options.tamper?.(replay, index);
+    stages.push({ played: true, replay });
   }
-  return createCoursePlaylog({
+  return createCourseReplay({
     course: { ...TEST_COURSE, ...options.course },
     stages,
     createdAt: '2026-10-15T00:00:00.000Z',
@@ -86,14 +86,14 @@ export function gzipBody(body: unknown): Uint8Array<ArrayBuffer> {
  * (`stageCharts` overrides them).
  */
 export function courseBody(
-  log: BeMusicCoursePlaylog,
+  log: BeMusicCourseReplay,
   charts: readonly TestChart[],
   withChartDocuments = true,
   stageCharts?: ReadonlyArray<{ stage: number; chart: unknown }>,
 ): Uint8Array<ArrayBuffer> {
   const played = log.stages.filter((entry) => entry.played).length;
   return gzipBody({
-    coursePlaylog: log,
+    courseReplay: log,
     stages: charts.slice(0, played).map((chart) => ({
       playDocument: chart.playDocument,
       ...(withChartDocuments ? { chartDocument: chart.chartDocument } : {}),

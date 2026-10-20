@@ -1,7 +1,7 @@
 /**
  * The course-wide combo a course stage shows: carried in from the previous stage and running on with the stage's own
  * combo until the first break, then the stage combo itself (beatoraja `JudgeManager.coursecombo`, LR2
- * `now_combo_course`). The judge engine keeps the same figure for the play log; a screen follows it from the combo
+ * `now_combo_course`). The judge engine keeps the same figure for the replay; a screen follows it from the combo
  * readings the engine publishes.
  */
 export interface CourseComboState {

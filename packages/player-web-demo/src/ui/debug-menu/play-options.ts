@@ -17,7 +17,7 @@ import type { DebugMenu } from './index.ts';
 /**
  * How the player plays: auto play, hi-speed, gauge, lane options and assists.
  *
- * Play options — the playMode / chartOptions / assists / judge / gauge settings that get recorded into the play-log.
+ * Play options — the playMode / chartOptions / assists / judge / gauge settings that get recorded into the replay.
  * Two-way synced with the LR2 select scene's PLAY OPTION panel where a counterpart exists (the panel pushes user
  * edits back through `onPlayOptionsChange`; these controllers push through `setPlayOptions`). All of them are latched
  * at song start and DISABLED during a play — mid-song changes never apply.
@@ -115,7 +115,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: GUI): void {
 }
 
 /**
- * Replay / ghost: which of what a play log recorded the player seeing a replay shows (the tempo, the hi-speed,
+ * Replay / ghost: which of what a replay recorded the player seeing a replay shows (the tempo, the hi-speed,
  * SUDDEN+ / HIDDEN+ and LIFT), the rest staying the player's own. Read when a play starts, so disabled during one.
  */
 export function buildReplayViewFolder(this: DebugMenu, folder: GUI): void {

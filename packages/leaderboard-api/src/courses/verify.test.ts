@@ -1,32 +1,32 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
-  createCoursePlaylog,
+  createCourseReplay,
   resolveCoursePlayedRuleset,
-  simulateCoursePlaylog,
-  simulatePlaylog,
-  type BeMusicPlaylog,
-  type PlaylogCourseStage,
-} from '@be-music/player/playlog';
-import { makeChart, makePlaylog } from '../../test/support.ts';
+  simulateCourseReplay,
+  simulateReplay,
+  type BeMusicReplay,
+  type ReplayCourseStage,
+} from '@be-music/player/replay';
+import { makeChart, makeReplay } from '../../test/support.ts';
 import { checkCourseRun } from './verify.ts';
 
 const CHART = makeChart(['#00111:01010101', '#00211:01010101', '#00311:0101']);
 
-function stage(course: PlaylogCourseStage, play: Partial<BeMusicPlaylog['play']> = {}): BeMusicPlaylog {
-  return makePlaylog(CHART, { noteCount: 10, hits: 10, play: { gauge: 'GROOVE', course, ...play } });
+function stage(course: ReplayCourseStage, play: Partial<BeMusicReplay['play']> = {}): BeMusicReplay {
+  return makeReplay(CHART, { noteCount: 10, hits: 10, play: { gauge: 'GROOVE', course, ...play } });
 }
 
-function carryAfter(log: BeMusicPlaylog): PlaylogCourseStage['carryIn'] {
-  const result = simulatePlaylog(log, { ruleset: 'lr2' });
+function carryAfter(log: BeMusicReplay): ReplayCourseStage['carryIn'] {
+  const result = simulateReplay(log, { ruleset: 'lr2' });
   return { gauge: result.gauge.final, combo: result.course!.combo, maxCombo: result.course!.maxCombo };
 }
 
-function run(constraints: string[], stages: BeMusicPlaylog[]) {
-  const log = createCoursePlaylog({
+function run(constraints: string[], stages: BeMusicReplay[]) {
+  const log = createCourseReplay({
     course: { name: 'Dan', kind: 'grade', constraints, trophies: [] },
-    stages: stages.map((playlog) => ({ played: true as const, playlog })),
+    stages: stages.map((replay) => ({ played: true as const, replay })),
   });
-  return { log, simulated: simulateCoursePlaylog(log, { ruleset: 'lr2' }) };
+  return { log, simulated: simulateCourseReplay(log, { ruleset: 'lr2' }) };
 }
 
 describe('resolveCoursePlayedRuleset', () => {
@@ -78,15 +78,15 @@ describe('checkCourseRun', () => {
 
 describe('a NONSTOP run', () => {
   /** A NONSTOP run whose stitched play is `stitched`; its two cut-out stages carry no settings of their own. */
-  function nonstopRun(constraints: string[], stitched: BeMusicPlaylog) {
+  function nonstopRun(constraints: string[], stitched: BeMusicReplay) {
     const cut = stage({ kind: 'nonstop' });
-    const log = createCoursePlaylog({
+    const log = createCourseReplay({
       course: { name: 'Nonstop', kind: 'nonstop', constraints, trophies: [] },
-      stages: [cut, cut].map((playlog) => ({ played: true as const, playlog })),
+      stages: [cut, cut].map((replay) => ({ played: true as const, replay })),
       nonstop: {
         connections: ['cut'],
         placement: 'intended',
-        playlog: stitched,
+        replay: stitched,
         stages: [
           { offsetUs: 0, windowStartUs: 0, windowEndUs: 3_000_000, rate: 1 },
           { offsetUs: 2_000_000, windowStartUs: 3_000_000, rate: 1 },
@@ -94,7 +94,7 @@ describe('a NONSTOP run', () => {
         noteStages: stitched.chart.notes.map((note) => (note.timeUs < 3_000_000 ? 0 : 1)),
       },
     });
-    return { log, simulated: simulateCoursePlaylog(log, { ruleset: 'lr2' }) };
+    return { log, simulated: simulateCourseReplay(log, { ruleset: 'lr2' }) };
   }
 
   test('is judged under the ruleset of its stitched play', () => {
@@ -103,7 +103,7 @@ describe('a NONSTOP run', () => {
   });
 
   test('checks only the stitched play against the constraints, given up or not', () => {
-    const settings: PlaylogCourseStage = { kind: 'nonstop', gaugeSet: 'lr2' };
+    const settings: ReplayCourseStage = { kind: 'nonstop', gaugeSet: 'lr2' };
     const cleared = nonstopRun(['gauge_lr2', 'grade'], stage(settings));
     expect(checkCourseRun(cleared.log, cleared.simulated)).toEqual({ ok: true });
     const givenUp = nonstopRun(['gauge_lr2'], stage(settings, { aborted: true, abortedAtUs: 2_000_000 }));

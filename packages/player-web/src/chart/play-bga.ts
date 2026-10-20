@@ -8,7 +8,7 @@ import { runWithConcurrency } from '@be-music/utils/core';
 import { parseBmsBGA } from '@be-music/chart';
 import { normalizeObjectKey, resolveBMSBase, type BeMusicJSON } from '@be-music/json';
 import { loadAssetBytes, resolveChartBGAAsset } from '../collection/collection.ts';
-import type { BrowserSongAssetSource } from '../collection/types.ts';
+import type { BrowserAssetSource } from '../collection/types.ts';
 import { loadTextureFromBytes, loadVideoTextureFromBytes, type VideoTranscodeOptions } from '../media/textures.ts';
 import { collectBGATextureLoadKeys, isVideoExtension, type BGACue } from './bga-timeline.ts';
 import { logger } from '../logger.ts';
@@ -92,7 +92,7 @@ export function collectPlayBGAResources(
 export interface LoadPlayBGAOptions {
   /** The resolved chart (after `#RANDOM` / `#IF`). */
   chart: BeMusicJSON;
-  source: BrowserSongAssetSource;
+  source: BrowserAssetSource;
   chartPath: string;
   timeline: PlayBGATimeline;
   poorFallbackKey?: string;

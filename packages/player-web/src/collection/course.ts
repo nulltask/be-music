@@ -5,12 +5,12 @@ import {
   isClassCourseConstraints,
   parseBeatorajaCommandFolderFile,
   parseBeatorajaCourseFile,
-  parseCourseSongFilter,
+  parseCourseChartFilter,
   parseLR2CourseFile,
   resolveCourseStages,
   type CourseChartLookup,
   type CourseDefinition,
-  type CourseSongRecord,
+  type CourseChartRecord,
   type RandomCourseDefinition,
   type RandomCourseDrawFailure,
 } from '@be-music/player/course';
@@ -74,17 +74,17 @@ export function readCourseFile(path: string, bytes: Uint8Array): CourseDefinitio
 }
 
 /** A song lookup by chart-file hash, for {@link resolveCourseFolders}. */
-export function createSongHashLookup(
-  songs: Iterable<{ song: LibraryChart; sha256?: string; md5?: string }>,
+export function createChartHashLookup(
+  chartEntries: Iterable<{ chart: LibraryChart; sha256?: string; md5?: string }>,
 ): CourseChartLookup<LibraryChart> {
   const bySHA256 = new Map<string, LibraryChart>();
   const byMD5 = new Map<string, LibraryChart>();
   // The first song with a hash wins, so a chart dropped twice resolves to the copy loaded first.
-  for (const { song, sha256, md5 } of songs) {
+  for (const { chart: chartEntry, sha256, md5 } of chartEntries) {
     const sha = sha256?.toLowerCase();
     const md = md5?.toLowerCase();
-    if (sha !== undefined && !bySHA256.has(sha)) bySHA256.set(sha, song);
-    if (md !== undefined && !byMD5.has(md)) byMD5.set(md, song);
+    if (sha !== undefined && !bySHA256.has(sha)) bySHA256.set(sha, chartEntry);
+    if (md !== undefined && !byMD5.has(md)) byMD5.set(md, chartEntry);
   }
   return { bySHA256: (hash) => bySHA256.get(hash), byMD5: (hash) => byMD5.get(hash) };
 }
@@ -153,7 +153,7 @@ export function createRandomCourseEntry(id: string, random: RandomCourseDefiniti
     stages: random.stages.map((stage) => ({ title: stage.title ?? stage.filter ?? 'RANDOM' })),
     playable:
       random.stages.length > 0 &&
-      random.stages.every((stage) => stage.filter === undefined || parseCourseSongFilter(stage.filter).ok),
+      random.stages.every((stage) => stage.filter === undefined || parseCourseChartFilter(stage.filter).ok),
     random,
   };
 }
@@ -164,42 +164,45 @@ const MODE_IDS = { '5': 5, '7': 7, '9': 9, '10': 10, '14': 14, '24': 25, '48': 5
 type ResolvedChart = ReturnType<typeof resolveChart>;
 
 /**
- * A song as a random-course filter sees it (`CourseSongRecord`), with the song itself under `song`. Text columns,
+ * A song as a random-course filter sees it (`CourseChartRecord`), with the song itself under `song`. Text columns,
  * `level`, `difficulty`, `notes` and `judge` are read up front; `mode`, `minbpm` / `maxbpm`, `length` and `feature`
  * need the chart resolved and are worked out on first read, so a filter that never names them costs nothing.
  *
  * `feature` carries the long-note bits (LN / CN / HCN by the chart's long-note mode, `UNDEFINEDLN` when the chart names
  * none), mines, `#RANDOM`, STOP and scroll changes. `content` is not filled, so it reads as 0.
  */
-export function createCourseSongRecord(
-  song: LibraryChart,
+export function createCourseChartRecord(
+  chartEntry: LibraryChart,
   hashes: { md5?: string; sha256?: string } = {},
-): CourseSongRecord & { readonly song: LibraryChart } {
-  const { chart } = song;
-  const level = typeof song.playLevel === 'number' ? song.playLevel : Number.parseInt(String(song.playLevel ?? ''), 10);
+): CourseChartRecord & { readonly chart: LibraryChart } {
+  const { chart } = chartEntry;
+  const level =
+    typeof chartEntry.playLevel === 'number'
+      ? chartEntry.playLevel
+      : Number.parseInt(String(chartEntry.playLevel ?? ''), 10);
   const subartist = chart.metadata.extras.SUBARTIST ?? chart.bmson.info.subartists?.join(' ');
-  const record: CourseSongRecord & { song: LibraryChart } = {
-    song,
-    title: song.title,
-    path: song.chartPath,
+  const record: CourseChartRecord & { chart: LibraryChart } = {
+    chart: chartEntry,
+    title: chartEntry.title,
+    path: chartEntry.chartPath,
     level: Number.isFinite(level) ? Math.trunc(level) : 0,
     difficulty: Math.trunc(chart.metadata.difficulty ?? 0) || 0,
-    notes: song.totalNotes,
+    notes: chartEntry.totalNotes,
     judge: Math.trunc(chart.metadata.rank ?? 0) || 0,
     ...(hashes.md5 !== undefined ? { md5: hashes.md5.toLowerCase() } : {}),
     ...(hashes.sha256 !== undefined ? { sha256: hashes.sha256.toLowerCase() } : {}),
-    ...(song.subtitle !== undefined ? { subtitle: song.subtitle } : {}),
-    ...(song.artist !== undefined ? { artist: song.artist } : {}),
+    ...(chartEntry.subtitle !== undefined ? { subtitle: chartEntry.subtitle } : {}),
+    ...(chartEntry.artist !== undefined ? { artist: chartEntry.artist } : {}),
     ...(subartist !== undefined ? { subartist } : {}),
-    ...(song.genre !== undefined ? { genre: song.genre } : {}),
+    ...(chartEntry.genre !== undefined ? { genre: chartEntry.genre } : {}),
   };
   let resolved: ResolvedChart | undefined;
   const resolve = (): ResolvedChart => (resolved ??= resolveChart(chart));
-  const lazy = (key: keyof CourseSongRecord, read: () => number): void => {
+  const lazy = (key: keyof CourseChartRecord, read: () => number): void => {
     let value: number | undefined;
     Object.defineProperty(record, key, { enumerable: true, get: () => (value ??= read()) });
   };
-  lazy('mode', () => MODE_IDS[resolveLibraryChartPlayVariant(song)]);
+  lazy('mode', () => MODE_IDS[resolveLibraryChartPlayVariant(chartEntry)]);
   lazy('minbpm', () => Math.trunc(resolveChartBPMRange(chart).min));
   lazy('maxbpm', () => Math.trunc(resolveChartBPMRange(chart).max));
   lazy('length', () => {
@@ -227,17 +230,17 @@ function songFeatureBits(chart: BeMusicJSON, resolved: ResolvedChart): number {
 /**
  * Draws a random course's stages from the collection (`drawRandomCourse`) and returns the course bar to play: a fixed
  * course whose stages are the drawn songs. `candidates` are the collection's songs with their chart-file hashes, as
- * {@link createSongHashLookup} takes them; a song without a hash is never drawn. `random` returns values in `[0, 1)`.
+ * {@link createChartHashLookup} takes them; a song without a hash is never drawn. `random` returns values in `[0, 1)`.
  * A course without `random` is returned as it is.
  */
 export function drawBrowserRandomCourse(
   entry: LibraryCourse,
-  candidates: Iterable<{ song: LibraryChart; sha256?: string; md5?: string }>,
+  candidates: Iterable<{ chart: LibraryChart; sha256?: string; md5?: string }>,
   random: () => number,
 ): { ok: true; course: LibraryCourse } | RandomCourseDrawFailure {
   if (entry.random === undefined) return { ok: true, course: entry };
-  const records = Array.from(candidates, ({ song, md5, sha256 }) =>
-    createCourseSongRecord(song, {
+  const records = Array.from(candidates, ({ chart: chartEntry, md5, sha256 }) =>
+    createCourseChartRecord(chartEntry, {
       ...(md5 !== undefined ? { md5 } : {}),
       ...(sha256 !== undefined ? { sha256 } : {}),
     }),
@@ -249,7 +252,7 @@ export function drawBrowserRandomCourse(
     course: {
       id: entry.id,
       definition: drawn.course,
-      stages: drawn.songs.map(({ song }) => ({ title: song.title, chart: song })),
+      stages: drawn.charts.map(({ chart: chartEntry }) => ({ title: chartEntry.title, chart: chartEntry })),
       playable: true,
     },
   };

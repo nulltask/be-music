@@ -61,7 +61,7 @@ const CONSTRAINT_FIELDS: readonly {
   },
   {
     group: 'judge',
-    label: 'Judge',
+    label: 'JudgmentKind',
     choices: [
       ['', 'Normal'],
       ['no_great', 'No GREAT'],

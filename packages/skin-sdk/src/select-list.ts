@@ -1,4 +1,4 @@
-import type { BeMusicCourseRecord, LibraryCourse, LibraryEntry } from './song.ts';
+import type { BeMusicCourseBestRecord, LibraryCourse, LibraryEntry } from './chart.ts';
 
 /** One row of the select list to draw this frame. */
 export interface SelectListRow {
@@ -86,12 +86,12 @@ const COURSE_KIND_LABELS = { grade: 'DAN', expert: 'COURSE', nonstop: 'NONSTOP' 
 /**
  * What a select card shows for a focused course bar in place of a chart: the course's name, a line naming its kind and
  * its stage count (or `make a course` on a NEW COURSE bar), and its stage titles in order. With the player's `record`
- * on the course (`frame.courseRecord`), the line also names its best lamp and trophy (`DAN · 4 stages · HARD ·
+ * on the course (`frame.courseBestRecord`), the line also names its best lamp and trophy (`DAN · 4 stages · HARD ·
  * goldmedal`); a lamp of `NO_PLAY` is left out.
  */
 export function describeCourseCard(
   course: LibraryCourse,
-  record?: BeMusicCourseRecord,
+  record?: BeMusicCourseBestRecord,
 ): { title: string; detail: string; stages: string[] } {
   const title = course.definition.name;
   if (course.newCourse === true) return { title, detail: 'make a course', stages: [] };

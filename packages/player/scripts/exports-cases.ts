@@ -5,13 +5,13 @@ import * as audioSinkAPI from '@be-music/player/audio-sink';
 import * as courseAPI from '@be-music/player/course';
 import * as displayAPI from '@be-music/player/display';
 import * as lanesAPI from '@be-music/player/lanes';
-import * as playlogAPI from '@be-music/player/playlog';
+import * as replayAPI from '@be-music/player/replay';
 import * as recordsAPI from '@be-music/player/records';
 import * as rulesetAPI from '@be-music/player/ruleset';
 import * as signalsAPI from '@be-music/player/signals';
 import type { PlayerOptions } from '@be-music/player';
 import type { WebAudioContextLike } from '@be-music/player/audio-sink';
-import type { BeMusicPlaylog } from '@be-music/player/playlog';
+import type { BeMusicReplay } from '@be-music/player/replay';
 import type { PlayerUIFramePayload } from '@be-music/player/signals';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
@@ -45,14 +45,14 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playerAPI.resolvePlayChart(fixtures.controlFlowJSON, { random: () => 0.42 });
     },
   });
-  define('player.playlog.resolveChartRulesetFacts', {
+  define('player.replay.resolveChartRulesetFacts', {
     run: (fixtures) => {
-      playlogAPI.resolveChartRulesetFacts(fixtures.sampleBmsJSON);
+      replayAPI.resolveChartRulesetFacts(fixtures.sampleBmsJSON);
     },
   });
-  define('player.playlog.resolvePlayChart', {
+  define('player.replay.resolvePlayChart', {
     run: (fixtures) => {
-      playlogAPI.resolvePlayChart(fixtures.controlFlowJSON, { random: () => 0.42 });
+      replayAPI.resolvePlayChart(fixtures.controlFlowJSON, { random: () => 0.42 });
     },
   });
   define('player.preparePlaybackChart', {
@@ -265,21 +265,21 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
     { offsetUs: 0, windowStartUs: 0, windowEndUs: 1_500_000, rate: 1 },
     { offsetUs: 500_000, windowStartUs: 1_500_000, rate: 1 },
   ];
-  const benchSplitNoteStages = BENCH_PLAYLOG.chart.notes.map((note) => (note.timeUs < 1_500_000 ? 0 : 1));
-  define('player.playlog.resolveNonstopPlaylogStages', {
+  const benchSplitNoteStages = BENCH_REPLAY.chart.notes.map((note) => (note.timeUs < 1_500_000 ? 0 : 1));
+  define('player.replay.resolveNonstopReplayStages', {
     run: () => {
-      playlogAPI.resolveNonstopPlaylogStages(benchStitchedMap);
+      replayAPI.resolveNonstopReplayStages(benchStitchedMap);
     },
   });
-  define('player.playlog.resolveNonstopNoteStages', {
+  define('player.replay.resolveNonstopNoteStages', {
     run: () => {
-      playlogAPI.resolveNonstopNoteStages(benchStitchedChart, benchStitchedMap, BENCH_PLAYLOG.chart.notes);
+      replayAPI.resolveNonstopNoteStages(benchStitchedChart, benchStitchedMap, BENCH_REPLAY.chart.notes);
     },
   });
-  define('player.playlog.splitNonstopPlaylog', {
+  define('player.replay.splitNonstopReplay', {
     run: () => {
-      playlogAPI.splitNonstopPlaylog(
-        { playlog: BENCH_PLAYLOG, stages: benchSplitStages, noteStages: benchSplitNoteStages },
+      replayAPI.splitNonstopReplay(
+        { replay: BENCH_REPLAY, stages: benchSplitStages, noteStages: benchSplitNoteStages },
         [{ title: 'A' }, { title: 'B' }],
         { ruleset: 'lr2' },
       );
@@ -300,15 +300,15 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   if (!benchPrepared.ok) throw new Error(`bench NONSTOP course failed to stitch: ${benchPrepared.reason}`);
   define('player.course.resolveNonstopRun', {
     run: () => {
-      courseAPI.resolveNonstopRun(benchPrepared.course, BENCH_PLAYLOG);
+      courseAPI.resolveNonstopRun(benchPrepared.course, BENCH_REPLAY);
     },
   });
-  define('player.course.buildNonstopCoursePlaylog', {
+  define('player.course.buildNonstopCourseReplay', {
     run: () => {
-      courseAPI.buildNonstopCoursePlaylog(
+      courseAPI.buildNonstopCourseReplay(
         { name: 'Nonstop', kind: 'nonstop', constraints: ['cn'], trophies: [], release: true },
         benchPrepared.course,
-        BENCH_PLAYLOG,
+        BENCH_REPLAY,
       );
     },
   });
@@ -425,27 +425,28 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   });
   const benchFilterSQL =
     "song.level BETWEEN 11 AND 12 AND song.mode IN (7, 14) AND title NOT LIKE '%HYPER%' ORDER BY level DESC LIMIT 50";
-  const benchFilter = courseAPI.parseCourseSongFilter(benchFilterSQL);
-  const benchSongs = Array.from({ length: 200 }, (_, index) => ({
+  const benchFilter = courseAPI.parseCourseChartFilter(benchFilterSQL);
+  const benchCharts = Array.from({ length: 200 }, (_, index) => ({
     md5: index.toString(16).padStart(32, '0'),
     sha256: index.toString(16).padStart(64, '0'),
     title: `song ${index}`,
     level: index % 13,
     mode: index % 2 === 0 ? 7 : 14,
   }));
-  define('player.course.parseCourseSongFilter', {
+  define('player.course.parseCourseChartFilter', {
     run: () => {
-      courseAPI.parseCourseSongFilter(benchFilterSQL);
+      courseAPI.parseCourseChartFilter(benchFilterSQL);
     },
   });
-  define('player.course.evaluateCourseSongFilter', {
+  define('player.course.evaluateCourseChartFilter', {
     run: () => {
-      if (benchFilter.ok) for (const song of benchSongs) courseAPI.evaluateCourseSongFilter(benchFilter.filter, song);
+      if (benchFilter.ok)
+        for (const chartEntry of benchCharts) courseAPI.evaluateCourseChartFilter(benchFilter.filter, chartEntry);
     },
   });
-  define('player.course.selectCourseSongs', {
+  define('player.course.selectCourseCharts', {
     run: () => {
-      if (benchFilter.ok) courseAPI.selectCourseSongs(benchFilter.query, benchSongs, (song) => song);
+      if (benchFilter.ok) courseAPI.selectCourseCharts(benchFilter.query, benchCharts, (chartEntry) => chartEntry);
     },
   });
   let benchSeed = 1;
@@ -459,7 +460,7 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
           trophies: [],
           distinct: true,
         },
-        benchSongs,
+        benchCharts,
         () => {
           benchSeed = (benchSeed * 16807) % 2147483647;
           return (benchSeed - 1) / 2147483646;
@@ -498,21 +499,21 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       courseAPI.resolveCourseStages(benchCourse, { bySHA256: () => 'chart', byMD5: () => 'chart' });
     },
   });
-  define('player.playlog.checkPlaylogEligibility', {
+  define('player.replay.checkReplayEligibility', {
     run: () => {
-      playlogAPI.checkPlaylogEligibility(BENCH_PLAYLOG);
+      replayAPI.checkReplayEligibility(BENCH_REPLAY);
     },
   });
-  define('player.playlog.serializePlaylog', {
+  define('player.replay.serializeReplay', {
     run: () => {
-      playlogAPI.serializePlaylog(BENCH_PLAYLOG);
+      replayAPI.serializeReplay(BENCH_REPLAY);
     },
   });
-  define('player.playlog.createPlaylogRecorder', {
+  define('player.replay.createReplayRecorder', {
     run: () => {
       const json = parseChart('#BPM 120\n#00111:01\n');
-      playlogAPI
-        .createPlaylogRecorder({
+      replayAPI
+        .createReplayRecorder({
           json,
           chart: {
             notes: [],
@@ -527,59 +528,59 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
         .recordInput('down', 0.5, ['z'], ['11']);
     },
   });
-  define('player.playlog.PlaylogParseError', {
+  define('player.replay.ReplayParseError', {
     run: () => {
-      void new playlogAPI.PlaylogParseError('bench');
+      void new replayAPI.ReplayParseError('bench');
     },
   });
-  define('player.playlog.resolvePlaylogFilename', {
+  define('player.replay.resolveReplayFilename', {
     run: () => {
-      playlogAPI.resolvePlaylogFilename(BENCH_PLAYLOG, new Date(0));
+      replayAPI.resolveReplayFilename(BENCH_REPLAY, new Date(0));
     },
   });
-  define('player.playlog.resolveRulesetConfig', {
+  define('player.replay.resolveRulesetConfig', {
     run: () => {
-      playlogAPI.resolveRulesetConfig(BENCH_PLAYLOG, 'beatoraja');
+      replayAPI.resolveRulesetConfig(BENCH_REPLAY, 'beatoraja');
     },
   });
-  define('player.playlog.resolveLR2DefaultTotal', {
+  define('player.replay.resolveLR2DefaultTotal', {
     run: () => {
-      playlogAPI.resolveLR2DefaultTotal(1200);
+      replayAPI.resolveLR2DefaultTotal(1200);
     },
   });
-  define('player.playlog.resolveBeatorajaDefaultTotal', {
+  define('player.replay.resolveBeatorajaDefaultTotal', {
     run: () => {
-      playlogAPI.resolveBeatorajaDefaultTotal(1200);
+      replayAPI.resolveBeatorajaDefaultTotal(1200);
     },
   });
-  define('player.playlog.resolveIIDXGaugeUnit', {
+  define('player.replay.resolveIIDXGaugeUnit', {
     run: () => {
-      playlogAPI.resolveIIDXGaugeUnit(1200);
+      replayAPI.resolveIIDXGaugeUnit(1200);
     },
   });
-  define('player.playlog.resolveLR2HardDamageMultiplier', {
+  define('player.replay.resolveLR2HardDamageMultiplier', {
     run: () => {
-      playlogAPI.resolveLR2HardDamageMultiplier(300, 1200);
+      replayAPI.resolveLR2HardDamageMultiplier(300, 1200);
     },
   });
-  define('player.playlog.resolveBeatorajaHardRecoverMultiplier', {
+  define('player.replay.resolveBeatorajaHardRecoverMultiplier', {
     run: () => {
-      playlogAPI.resolveBeatorajaHardRecoverMultiplier(300, 1200);
+      replayAPI.resolveBeatorajaHardRecoverMultiplier(300, 1200);
     },
   });
-  define('player.playlog.parsePlaylog', {
+  define('player.replay.parseReplay', {
     run: () => {
-      playlogAPI.parsePlaylog(BENCH_PLAYLOG_JSON);
+      replayAPI.parseReplay(BENCH_REPLAY_JSON);
     },
   });
-  define('player.playlog.simulatePlaylog', {
+  define('player.replay.simulateReplay', {
     run: () => {
-      playlogAPI.simulatePlaylog(BENCH_PLAYLOG, { ruleset: 'lr2' });
+      replayAPI.simulateReplay(BENCH_REPLAY, { ruleset: 'lr2' });
     },
   });
-  define('player.playlog.simulatePlaylogRulesets', {
+  define('player.replay.simulateReplayRulesets', {
     run: () => {
-      playlogAPI.simulatePlaylogRulesets(BENCH_PLAYLOG);
+      replayAPI.simulateReplayRulesets(BENCH_REPLAY);
     },
   });
   const benchCourseInfo = {
@@ -588,16 +589,16 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
     constraints: ['grade_mirror', 'gauge_lr2'],
     trophies: [{ name: 'gold', missRate: 5, scoreRate: 80 }],
   };
-  const benchCourseLog = playlogAPI.createCoursePlaylog({
+  const benchCourseLog = replayAPI.createCourseReplay({
     course: benchCourseInfo,
     stages: [
-      { played: true, playlog: BENCH_PLAYLOG },
-      { played: true, playlog: BENCH_PLAYLOG },
+      { played: true, replay: BENCH_REPLAY },
+      { played: true, replay: BENCH_REPLAY },
     ],
   });
-  const benchCourseText = playlogAPI.serializeCoursePlaylog(benchCourseLog);
-  const benchStageResult = playlogAPI.simulatePlaylog(BENCH_PLAYLOG, { ruleset: 'lr2' });
-  const benchRunStageLog: BeMusicPlaylog = { ...BENCH_PLAYLOG, results: { native: benchStageResult } };
+  const benchCourseText = replayAPI.serializeCourseReplay(benchCourseLog);
+  const benchStageResult = replayAPI.simulateReplay(BENCH_REPLAY, { ruleset: 'lr2' });
+  const benchRunStageLog: BeMusicReplay = { ...BENCH_REPLAY, results: { native: benchStageResult } };
   const benchRunStages = [
     { chart: benchNonstopChart, chartPath: 'a.bms' },
     { chart: benchNonstopChart, chartPath: 'b.bms' },
@@ -608,18 +609,18 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       run.nextStage();
       run.recordStage(benchRunStageLog, { playSeconds: 16 });
       run.nextStage();
-      run.buildPlaylog();
+      run.buildReplay();
     },
   });
   define('player.course.resolveGivenUpPlaySeconds', {
     run: () => {
-      courseAPI.resolveGivenUpPlaySeconds(BENCH_PLAYLOG);
-      courseAPI.resolveGivenUpPlaySeconds({ play: { ...BENCH_PLAYLOG.play, aborted: true, abortedAtUs: 4_000_000 } });
+      courseAPI.resolveGivenUpPlaySeconds(BENCH_REPLAY);
+      courseAPI.resolveGivenUpPlaySeconds({ play: { ...BENCH_REPLAY.play, aborted: true, abortedAtUs: 4_000_000 } });
     },
   });
-  define('player.playlog.aggregateCourseResult', {
+  define('player.replay.aggregateCourseResult', {
     run: () => {
-      playlogAPI.aggregateCourseResult(
+      replayAPI.aggregateCourseResult(
         'lr2/0',
         benchCourseInfo,
         [benchStageResult, benchStageResult],
@@ -628,19 +629,19 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       );
     },
   });
-  define('player.playlog.createCoursePlaylog', {
+  define('player.replay.createCourseReplay', {
     run: () => {
-      playlogAPI.createCoursePlaylog({ course: benchCourseInfo, stages: [{ played: true, playlog: BENCH_PLAYLOG }] });
+      replayAPI.createCourseReplay({ course: benchCourseInfo, stages: [{ played: true, replay: BENCH_REPLAY }] });
     },
   });
-  define('player.playlog.extractCourseStage', {
+  define('player.replay.extractCourseStage', {
     run: () => {
-      playlogAPI.extractCourseStage(benchCourseLog, 1);
+      replayAPI.extractCourseStage(benchCourseLog, 1);
     },
   });
-  define('player.playlog.parseCoursePlaylog', {
+  define('player.replay.parseCourseReplay', {
     run: () => {
-      playlogAPI.parseCoursePlaylog(benchCourseText);
+      replayAPI.parseCourseReplay(benchCourseText);
     },
   });
   const benchLampScore = { total: 100, perfect: 90, great: 8, good: 2 };
@@ -805,63 +806,63 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       rulesetAPI.resolveDisplayedPoor({ poor: 5, emptyPoor: 2 }, true);
     },
   });
-  define('player.playlog.resolveCourseLamp', {
+  define('player.replay.resolveCourseLamp', {
     run: () => {
-      playlogAPI.resolveCourseLamp('beatoraja', benchStageResult, 'GROOVE');
+      replayAPI.resolveCourseLamp('beatoraja', benchStageResult, 'GROOVE');
     },
   });
-  define('player.playlog.resolveCoursePlayedRuleset', {
+  define('player.replay.resolveCoursePlayedRuleset', {
     run: () => {
-      playlogAPI.resolveCoursePlayedRuleset(benchCourseLog);
+      replayAPI.resolveCoursePlayedRuleset(benchCourseLog);
     },
   });
-  define('player.playlog.resolveRulesetResultLamp', {
+  define('player.replay.resolveRulesetResultLamp', {
     run: () => {
-      playlogAPI.resolveRulesetResultLamp(benchStageResult, 'lr2');
+      replayAPI.resolveRulesetResultLamp(benchStageResult, 'lr2');
     },
   });
-  define('player.playlog.resolveCoursePlaylogFilename', {
+  define('player.replay.resolveCourseReplayFilename', {
     run: () => {
-      playlogAPI.resolveCoursePlaylogFilename(benchCourseLog);
+      replayAPI.resolveCourseReplayFilename(benchCourseLog);
     },
   });
-  define('player.playlog.resolveCourseStageStartGauge', {
+  define('player.replay.resolveCourseStageStartGauge', {
     run: () => {
-      playlogAPI.resolveCourseStageStartGauge(
+      replayAPI.resolveCourseStageStartGauge(
         'lr2',
         { kind: 'grade', carryIn: { gauge: 64, combo: 0, maxCombo: 0 } },
         'GROOVE',
       );
     },
   });
-  define('player.playlog.resolveCourseTrophy', {
+  define('player.replay.resolveCourseTrophy', {
     run: () => {
-      playlogAPI.resolveCourseTrophy(benchCourseInfo.trophies, { missCount: 4, exScore: 170, noteCount: 100 });
+      replayAPI.resolveCourseTrophy(benchCourseInfo.trophies, { missCount: 4, exScore: 170, noteCount: 100 });
     },
   });
-  define('player.playlog.serializeCoursePlaylog', {
+  define('player.replay.serializeCourseReplay', {
     run: () => {
-      playlogAPI.serializeCoursePlaylog(benchCourseLog);
+      replayAPI.serializeCourseReplay(benchCourseLog);
     },
   });
-  define('player.playlog.simulateCoursePlaylog', {
+  define('player.replay.simulateCourseReplay', {
     run: () => {
-      playlogAPI.simulateCoursePlaylog(benchCourseLog, { ruleset: 'lr2' });
+      replayAPI.simulateCourseReplay(benchCourseLog, { ruleset: 'lr2' });
     },
   });
-  const benchKeyedCourseLog = playlogAPI.createCoursePlaylog({
+  const benchKeyedCourseLog = replayAPI.createCourseReplay({
     course: benchCourseInfo,
     stages: [
       {
         played: true,
-        playlog: {
-          ...BENCH_PLAYLOG,
+        replay: {
+          ...BENCH_REPLAY,
           chart: {
-            ...BENCH_PLAYLOG.chart,
+            ...BENCH_REPLAY.chart,
             chartFingerprint: 'bmfp0:bench-stage-1',
             playFingerprint: 'bmfp0:bench-stage-1',
           },
-          play: { ...BENCH_PLAYLOG.play, course: { kind: 'grade' } },
+          play: { ...BENCH_REPLAY.play, course: { kind: 'grade' } },
         },
       },
       {
@@ -877,9 +878,9 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       },
     ],
   });
-  define('player.playlog.createCourseFingerprintDocument', {
+  define('player.replay.createCourseFingerprintDocument', {
     run: () => {
-      playlogAPI.createCourseFingerprintDocument({
+      replayAPI.createCourseFingerprintDocument({
         kind: 'nonstop',
         constraints: [],
         stageChartFingerprints: ['bmfp0:a', 'bmfp0:b', 'bmfp0:c'],
@@ -896,88 +897,88 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
     { timeUs: 1_000_000, tempo: 1.25 },
     { timeUs: 2_000_000, tempo: 1 },
   ];
-  define('player.playlog.resolvePlaylogViewAt', {
+  define('player.replay.resolveReplayViewAt', {
     run: () => {
-      playlogAPI.resolvePlaylogViewAt(benchView, benchViewChanges, 1_500_000);
+      replayAPI.resolveReplayViewAt(benchView, benchViewChanges, 1_500_000);
     },
   });
-  define('player.playlog.resolvePlaylogTempoAt', {
+  define('player.replay.resolveReplayTempoAt', {
     run: () => {
-      playlogAPI.resolvePlaylogTempoAt(1, benchTempoChanges, 1_500_000);
+      replayAPI.resolveReplayTempoAt(1, benchTempoChanges, 1_500_000);
     },
   });
-  define('player.playlog.playedAtAnotherTempo', {
+  define('player.replay.playedAtAnotherTempo', {
     run: () => {
-      playlogAPI.playedAtAnotherTempo({ tempoChanges: benchTempoChanges });
+      replayAPI.playedAtAnotherTempo({ tempoChanges: benchTempoChanges });
     },
   });
-  define('player.playlog.resolveReplayView', {
+  define('player.replay.resolveReplayView', {
     run: () => {
-      playlogAPI.resolveReplayView(benchView, { hiSpeed: 1 }, playlogAPI.DEFAULT_PLAYLOG_VIEW_REPLAY);
+      replayAPI.resolveReplayView(benchView, { hiSpeed: 1 }, replayAPI.DEFAULT_REPLAY_PLAYBACK_OPTIONS);
     },
   });
-  define('player.playlog.resolveReplayHiSpeed', {
+  define('player.replay.resolveReplayHiSpeed', {
     run: () => {
-      playlogAPI.resolveReplayHiSpeed(
+      replayAPI.resolveReplayHiSpeed(
         { ...benchView, hiSpeedScale: 'beatoraja', visibleMs: 400 },
         'be-music',
         (ms) => 1000 / ms,
       );
     },
   });
-  define('player.playlog.roundPlaylogView', {
+  define('player.replay.roundReplayView', {
     run: () => {
-      playlogAPI.roundPlaylogView({ ...benchView, hiSpeed: 2.5000000000000004 });
+      replayAPI.roundReplayView({ ...benchView, hiSpeed: 2.5000000000000004 });
     },
   });
-  define('player.playlog.diffPlaylogView', {
+  define('player.replay.diffReplayView', {
     run: () => {
-      playlogAPI.diffPlaylogView(benchView, { ...benchView, hiSpeed: 2.5 });
+      replayAPI.diffReplayView(benchView, { ...benchView, hiSpeed: 2.5 });
     },
   });
-  define('player.playlog.createPlaylogViewCoalescer', {
+  define('player.replay.createReplayViewCoalescer', {
     run: () => {
-      const coalescer = playlogAPI.createPlaylogViewCoalescer(benchView);
+      const coalescer = replayAPI.createReplayViewCoalescer(benchView);
       coalescer.observe({ ...benchView, hiSpeed: 2.5 }, 0);
     },
   });
-  define('player.playlog.parsePlaylogViewState', {
+  define('player.replay.parseReplayViewState', {
     run: () => {
-      playlogAPI.parsePlaylogViewState(benchView, 'play.view');
+      replayAPI.parseReplayViewState(benchView, 'play.view');
     },
   });
-  define('player.playlog.parsePlaylogViewChanges', {
+  define('player.replay.parseReplayViewChanges', {
     run: () => {
-      playlogAPI.parsePlaylogViewChanges(benchViewChanges, 'play.viewChanges');
+      replayAPI.parseReplayViewChanges(benchViewChanges, 'play.viewChanges');
     },
   });
-  define('player.playlog.parsePlaylogTempoChanges', {
+  define('player.replay.parseReplayTempoChanges', {
     run: () => {
-      playlogAPI.parsePlaylogTempoChanges(benchTempoChanges, 'play.tempoChanges');
+      replayAPI.parseReplayTempoChanges(benchTempoChanges, 'play.tempoChanges');
     },
   });
-  define('player.playlog.computeCourseFingerprint', {
+  define('player.replay.computeCourseFingerprint', {
     run: () => {
-      playlogAPI.computeCourseFingerprint({
+      replayAPI.computeCourseFingerprint({
         kind: 'grade',
         constraints: ['grade_mirror', 'gauge_lr2'],
         stageChartFingerprints: ['bmfp0:a', 'bmfp0:b', 'bmfp0:c', 'bmfp0:d'],
       });
     },
   });
-  define('player.playlog.resolveCourseStageChartFingerprints', {
+  define('player.replay.resolveCourseStageChartFingerprints', {
     run: () => {
-      playlogAPI.resolveCourseStageChartFingerprints(benchKeyedCourseLog);
+      replayAPI.resolveCourseStageChartFingerprints(benchKeyedCourseLog);
     },
   });
-  define('player.playlog.computeCoursePlaylogFingerprint', {
+  define('player.replay.computeCourseReplayFingerprint', {
     run: () => {
-      playlogAPI.computeCoursePlaylogFingerprint(benchKeyedCourseLog);
+      replayAPI.computeCourseReplayFingerprint(benchKeyedCourseLog);
     },
   });
-  define('player.playlog.checkCoursePlaylogEligibility', {
+  define('player.replay.checkCourseReplayEligibility', {
     run: () => {
-      playlogAPI.checkCoursePlaylogEligibility(benchKeyedCourseLog);
+      replayAPI.checkCourseReplayEligibility(benchKeyedCourseLog);
     },
   });
   define('player.ruleset.resolveJudgeWindowsMs', {
@@ -985,10 +986,10 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       rulesetAPI.resolveJudgeWindowsMs(fixtures.sampleBmsJSON, 250);
     },
   });
-  define('player.ruleset.isPlaylogRulesetId', {
+  define('player.ruleset.isRulesetId', {
     run: () => {
-      rulesetAPI.isPlaylogRulesetId('beatoraja');
-      rulesetAPI.isPlaylogRulesetId('popn');
+      rulesetAPI.isRulesetId('beatoraja');
+      rulesetAPI.isRulesetId('popn');
     },
   });
   registerSignalsCases(define);
@@ -1304,8 +1305,8 @@ function createBenchAudioContext(): WebAudioContextLike {
   };
 }
 
-const BENCH_PLAYLOG: BeMusicPlaylog = {
-  format: 'be-music-playlog',
+const BENCH_REPLAY: BeMusicReplay = {
+  format: 'be-music-replay',
   version: 0,
   clock: { unit: 'us', origin: 'chart-zero' },
   chart: {
@@ -1331,7 +1332,7 @@ const BENCH_PLAYLOG: BeMusicPlaylog = {
   })),
   play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
 };
-const BENCH_PLAYLOG_JSON = JSON.stringify(BENCH_PLAYLOG);
+const BENCH_REPLAY_JSON = JSON.stringify(BENCH_REPLAY);
 
 async function runSilently<T>(task: () => Promise<T>): Promise<T> {
   const stdout = process.stdout as NodeJS.WriteStream & { write: typeof process.stdout.write };

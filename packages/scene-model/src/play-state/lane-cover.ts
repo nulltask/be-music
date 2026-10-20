@@ -82,7 +82,7 @@ function onKey(part: 'sudden' | 'hidden'): 'suddenOn' | 'hiddenOn' {
 }
 
 /**
- * A cover height after a step, on the 1/10000 grid of the play log (so repeated 0.05 or 0.005 steps land on round
+ * A cover height after a step, on the 1/10000 grid of the replay (so repeated 0.05 or 0.005 steps land on round
  * values instead of drifting through float rounding), clamped to the lane.
  */
 function stepHeight(height: number, delta: number): number {

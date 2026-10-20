@@ -11,7 +11,7 @@ import {
 } from '../ruleset/long-note.ts';
 import type { RulesetConfig } from '../ruleset/definitions.ts';
 import type { TimedPlayableNote } from '../playable-notes.ts';
-import type { JudgeKind } from './scoring.ts';
+import type { JudgmentKind } from './scoring.ts';
 import type { PlayerUILongNoteMode } from './ui-signal-bus.ts';
 
 /**
@@ -20,7 +20,7 @@ import type { PlayerUILongNoteMode } from './ui-signal-bus.ts';
  */
 
 /**
- * `noteTime - inputTime` in whole microseconds, the unit of the play log's clock and of the ruleset window tables.
+ * `noteTime - inputTime` in whole microseconds, the unit of the replay's clock and of the ruleset window tables.
  * The difference of two float second values can land a hair outside a window edge that an exact delta sits on (a
  * press 150 ms late reading as 150.0000001 ms), so every window comparison of the judge core goes through this.
  */
@@ -30,12 +30,12 @@ export function judgeDeltaUs(noteSeconds: number, inputSeconds: number): number 
 
 /** A judgment with the signed timing it was made at (positive = the press was LATE). */
 export interface TimedManualJudge {
-  kind: JudgeKind;
+  kind: JudgmentKind;
   signedDeltaMs: number;
 }
 
-/** Judge indices, best to worst, in the order the ruleset window sets use. */
-export const RULESET_JUDGE_KINDS: readonly [JudgeKind, JudgeKind, JudgeKind, JudgeKind] = [
+/** Judgment indices, best to worst, in the order the ruleset window sets use. */
+export const RULESET_JUDGE_KINDS: readonly [JudgmentKind, JudgmentKind, JudgmentKind, JudgmentKind] = [
   'PERFECT',
   'GREAT',
   'GOOD',
@@ -50,7 +50,7 @@ export const RULESET_JUDGE_KINDS: readonly [JudgeKind, JudgeKind, JudgeKind, Jud
  * `signedDeltaMs` is the engine's convention (positive = the press was LATE); the window tables use beatoraja's
  * (`noteTime - inputTime`, positive = EARLY), hence the negation.
  */
-export function resolveManualJudgeKind(signedDeltaMs: number, windows: JudgeWindowSetUs): JudgeKind | undefined {
+export function resolveManualJudgmentKind(signedDeltaMs: number, windows: JudgeWindowSetUs): JudgmentKind | undefined {
   const judge = classifyRulesetJudge(Math.round(-signedDeltaMs * 1000), windows);
   return judge === RULESET_JUDGE_NONE ? undefined : RULESET_JUDGE_KINDS[judge];
 }
@@ -61,12 +61,12 @@ export function resolveManualJudgeKind(signedDeltaMs: number, windows: JudgeWind
  */
 export function resolveManualTimedJudge(signedDeltaMs: number, windows: JudgeWindowSetUs): TimedManualJudge {
   return {
-    kind: resolveManualJudgeKind(signedDeltaMs, windows) ?? 'POOR',
+    kind: resolveManualJudgmentKind(signedDeltaMs, windows) ?? 'POOR',
     signedDeltaMs,
   };
 }
 
-function resolveJudgeSeverity(judge: JudgeKind): number {
+function resolveJudgeSeverity(judge: JudgmentKind): number {
   switch (judge) {
     case 'PERFECT':
       return 0;
@@ -94,7 +94,7 @@ export function combineLongNoteJudges(head: TimedManualJudge, tail: TimedManualJ
   return Math.abs(head.signedDeltaMs) >= Math.abs(tail.signedDeltaMs) ? head : tail;
 }
 
-const LN_JUDGE_KINDS: readonly JudgeKind[] = ['PERFECT', 'GREAT', 'GOOD', 'BAD', 'POOR'];
+const LN_JUDGE_KINDS: readonly JudgmentKind[] = ['PERFECT', 'GREAT', 'GOOD', 'BAD', 'POOR'];
 
 /**
  * The single judgment of an LN released before its tail, by the ruleset's rule ({@link resolveLNEarlyRelease}).

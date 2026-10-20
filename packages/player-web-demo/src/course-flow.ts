@@ -1,14 +1,10 @@
 import { CourseRun, type CourseRunStagePlan, type RandomCourseDrawFailure } from '@be-music/player/course';
-import {
-  resolveCoursePlayedRuleset,
-  type BeMusicCoursePlaylog,
-  type PlaylogCourseResult,
-} from '@be-music/player/playlog';
+import { resolveCoursePlayedRuleset, type BeMusicCourseReplay, type ReplayCourseResult } from '@be-music/player/replay';
 import { resolveCourseView, type CourseView, type LibraryChart, type LibraryCourse } from '@be-music/scene-model';
 import { EMPTY_COURSE_STAGE_HISTORY, type CourseStageHistory } from './course-result.ts';
 import type { NonstopPlayFailure } from './nonstop-course.ts';
 import { courseRunKeepsRecord, courseRunRecordPlay, type RecordPlay } from '@be-music/player/records';
-import { rulesetRecordKey } from './song-records.ts';
+import { rulesetRecordKey } from './chart-best-records.ts';
 
 /**
  * The decisions the demo's course flow takes, kept apart from the scenes that act on them so they can be tested: what
@@ -112,9 +108,9 @@ export function describeNonstopPrepareFailure(
  * which is practice (and the Leaderboard refuses it as `tempo`), and one whose stages were judged under different
  * rulesets.
  */
-export function resolveCourseRecordUpdate(
-  courseLog: Pick<BeMusicCoursePlaylog, 'stages' | 'nonstop'>,
-  result: PlaylogCourseResult,
+export function resolveCourseBestRecordUpdate(
+  courseLog: Pick<BeMusicCourseReplay, 'stages' | 'nonstop'>,
+  result: ReplayCourseResult,
   key: string,
 ): { key: string; play: RecordPlay } | undefined {
   const ruleset = resolveCoursePlayedRuleset(courseLog);
@@ -169,10 +165,10 @@ export function resolveResultRetry<T>(options: {
   /** Whether the result offers quick retry at all (`resolveResultPresentation`). */
   quickRetry: boolean;
   nonstopRetry?: () => void;
-  songId: string;
-  lastPlay?: { songId: string; play: T };
+  chartId: string;
+  lastPlay?: { chartId: string; play: T };
 }): { kind: 'nonstop'; retry: () => void } | { kind: 'replay'; play: T } | undefined {
   if (options.nonstopRetry !== undefined) return { kind: 'nonstop', retry: options.nonstopRetry };
-  if (!options.quickRetry || options.lastPlay?.songId !== options.songId) return undefined;
+  if (!options.quickRetry || options.lastPlay?.chartId !== options.chartId) return undefined;
   return { kind: 'replay', play: options.lastPlay.play };
 }

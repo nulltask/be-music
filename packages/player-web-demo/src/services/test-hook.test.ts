@@ -1,12 +1,12 @@
 import { createEmptyJSON } from '@be-music/json';
-import { computeChartFileHashes, type BrowserSongCollection } from '@be-music/player-web/collection';
+import { computeChartFileHashes, type BrowserChartCollection } from '@be-music/player-web/collection';
 import type { PlayScene, SelectScene } from '@be-music/player-web/host';
 import { parseBeatorajaCourseData } from '@be-music/player/course';
-import type { PlaylogRulesetId } from '@be-music/player/ruleset';
+import type { RulesetId } from '@be-music/player/ruleset';
 import type { BrowseSnapshot, LibraryChart, LibraryCourse, LibraryEntry, PlayResult } from '@be-music/scene-model';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { ActiveCourse } from '../course-flow.ts';
-import { courseRecordKey } from '../course-result.ts';
+import { courseBestRecordKey } from '../course-result.ts';
 import type { DemoScene, PlayerWebDemoElements } from '../types.ts';
 import { RecordsService } from './records.ts';
 import { liveTestHookState, nameResultJingle, type LiveTestHookDeps } from './test-hook.ts';
@@ -21,7 +21,7 @@ const hashChart = vi.mocked(computeChartFileHashes);
 // The SHA-256 of the bytes `abc`.
 const ABC_SHA256 = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
 
-function song(id: string): LibraryChart {
+function chartEntry(id: string): LibraryChart {
   return {
     id,
     sourceId: 'src',
@@ -52,16 +52,16 @@ function dan(): LibraryCourse {
         { name: 'goldmedal', missRate: 2.5, scoreRate: 85 },
       ],
     },
-    stages: ['a', 'b', 'c'].map((id) => ({ title: id.toUpperCase(), chart: song(id) })),
+    stages: ['a', 'b', 'c'].map((id) => ({ title: id.toUpperCase(), chart: chartEntry(id) })),
     playable: true,
   };
 }
 
 /** A library whose one source holds `a.bms` (the bytes `abc`), listing `a` and a course folder. */
-function library(): BrowserSongCollection {
+function library(): BrowserChartCollection {
   return {
     sources: [{ id: 'src', kind: 'files', label: 'src', files: new Map([['a.bms', new TextEncoder().encode('abc')]]) }],
-    charts: [song('a')],
+    charts: [chartEntry('a')],
     errors: [],
     courseFolders: [{ label: 'courses', charts: [], courses: [dan()] }],
   };
@@ -97,7 +97,7 @@ interface Harness {
   readonly deps: LiveTestHookDeps;
   readonly router: { current: DemoScene | undefined; select: SelectScene | undefined; play: PlayScene | undefined };
   readonly records: RecordsService;
-  readonly ruleset: { current: PlaylogRulesetId };
+  readonly ruleset: { current: RulesetId };
 }
 
 function harness(options: { loading?: boolean } = {}): Harness {
@@ -129,7 +129,7 @@ describe('liveTestHookState', () => {
       scene: { kind: 'none' },
       status: '1 chart loaded',
       loading: true,
-      library: { songs: 1, courseFolders: ['courses'] },
+      library: { charts: 1, courseFolders: ['courses'] },
       cursor: undefined,
       play: undefined,
       courseDraft: undefined,
@@ -138,9 +138,9 @@ describe('liveTestHookState', () => {
 
   test("reports the select screen's cursor: its folders, the bar under it with its record, and the list's shape", () => {
     const h = harness();
-    h.records.songRecords.set('lr2:path:a.bms', { lamp: 'HARD' });
+    h.records.chartBestRecords.set('lr2:path:a.bms', { lamp: 'HARD' });
     const select = selectScene(
-      { kind: 'chart', chart: song('a') },
+      { kind: 'chart', chart: chartEntry('a') },
       { folderPath: ['src'], list: { sort: 'TITLE', keysFilter: 'KEYS_7' }, searchText: 'a' },
     );
     h.router.current = select;
@@ -149,7 +149,7 @@ describe('liveTestHookState', () => {
       scene: { kind: 'select', family: 'lr2' },
       cursor: {
         folderPath: ['src'],
-        bar: { kind: 'song', title: 'A', lamp: 'HARD' },
+        bar: { kind: 'chart', title: 'A', lamp: 'HARD' },
         list: { sort: 'TITLE', keysFilter: 'KEYS_7', difficultyFilter: 'ALL', search: 'a' },
       },
     });
@@ -157,8 +157,8 @@ describe('liveTestHookState', () => {
 
   test("reads a chart bar's record without hashing the chart: by its path until the select screen has hashed it", async () => {
     const h = harness();
-    h.records.songRecords.set('lr2:path:a.bms', { lamp: 'EASY' });
-    h.records.songRecords.set(`lr2:sha256:${ABC_SHA256}`, { lamp: 'HARD' });
+    h.records.chartBestRecords.set('lr2:path:a.bms', { lamp: 'EASY' });
+    h.records.chartBestRecords.set(`lr2:sha256:${ABC_SHA256}`, { lamp: 'HARD' });
     const chart = h.deps.library.collection.charts[0]!;
     const select = selectScene({ kind: 'chart', chart });
     h.router.current = select;
@@ -167,7 +167,7 @@ describe('liveTestHookState', () => {
     expect(liveTestHookState(h.deps).cursor?.bar?.lamp).toBe('EASY');
     expect(hashChart).not.toHaveBeenCalled();
     // The select screen looks the bar's record up, which hashes the chart; the hook then reads the record by its hash.
-    h.records.lookupSongRecord(chart);
+    h.records.lookupChartBestRecord(chart);
     await h.records.resolveChartHashes(chart);
     expect(liveTestHookState(h.deps).cursor?.bar?.lamp).toBe('HARD');
     expect(hashChart).toHaveBeenCalledTimes(1);
@@ -191,16 +191,20 @@ describe('liveTestHookState', () => {
     const select = selectScene({ kind: 'course', course }, { folderPath: ['courses'] });
     h.router.current = select;
     h.router.select = select;
-    // A run is kept under the ruleset it was played on (`resolveCourseRecordUpdate`): 52 / 60 EX, no BP, a gold medal.
-    h.records.songRecords.set(`lr2:${courseRecordKey(course)}`, { lamp: 'FAILED', exScore: 52, missCount: 0 });
-    h.records.songRecords.set(`beatoraja:${courseRecordKey(course)}`, { lamp: 'HARD', exScore: 40, missCount: 3 });
+    // A run is kept under the ruleset it was played on (`resolveCourseBestRecordUpdate`): 52 / 60 EX, no BP, a gold medal.
+    h.records.chartBestRecords.set(`lr2:${courseBestRecordKey(course)}`, { lamp: 'FAILED', exScore: 52, missCount: 0 });
+    h.records.chartBestRecords.set(`beatoraja:${courseBestRecordKey(course)}`, {
+      lamp: 'HARD',
+      exScore: 40,
+      missCount: 3,
+    });
     expect(liveTestHookState(h.deps).cursor?.bar).toMatchObject({
       kind: 'course',
       title: 'Dan',
       lamp: 'FAILED',
       trophy: 'goldmedal',
     });
-    // Judge windows picks the ruleset whose records the select screen shows, and the hook reports the same.
+    // JudgmentKind windows picks the ruleset whose records the select screen shows, and the hook reports the same.
     h.ruleset.current = 'beatoraja';
     expect(liveTestHookState(h.deps).cursor?.bar).toMatchObject({ lamp: 'HARD', trophy: 'bronzemedal' });
     h.ruleset.current = 'iidx';
@@ -211,7 +215,7 @@ describe('liveTestHookState', () => {
 
   test('reports no cursor while the select scene is kept off the stage', () => {
     const h = harness();
-    h.router.select = selectScene({ kind: 'chart', chart: song('a') });
+    h.router.select = selectScene({ kind: 'chart', chart: chartEntry('a') });
     h.router.current = { identity: { kind: 'decide', family: 'lr2' } } as unknown as DemoScene;
     expect(liveTestHookState(h.deps)).toMatchObject({ scene: { kind: 'decide', family: 'lr2' }, cursor: undefined });
   });
@@ -228,7 +232,7 @@ describe('liveTestHookState', () => {
     h.router.play = play;
     const deps: LiveTestHookDeps = {
       ...h.deps,
-      lastPlay: () => ({ song: song('b'), overrides: { autoPlay: true, replay: {} } }),
+      lastPlay: () => ({ chart: chartEntry('b'), overrides: { autoPlay: true, replay: {} } }),
       courses: {
         active: { course: dan(), run: { stagesPlayed: 1, stageCount: 3 } } as unknown as ActiveCourse,
       },
@@ -254,7 +258,10 @@ describe('liveTestHookState', () => {
     const h = harness();
     h.router.play = playScene();
     h.router.current = { identity: { kind: 'decide', family: 'beatoraja' } } as unknown as DemoScene;
-    const deps: LiveTestHookDeps = { ...h.deps, lastPlay: () => ({ song: song('b'), overrides: { autoPlay: false } }) };
+    const deps: LiveTestHookDeps = {
+      ...h.deps,
+      lastPlay: () => ({ chart: chartEntry('b'), overrides: { autoPlay: false } }),
+    };
     expect(liveTestHookState(deps).play).toBeUndefined();
   });
 

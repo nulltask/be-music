@@ -9,7 +9,7 @@ import type { BMSSwitchingBGA, ResolvedChart, TimingResolver, ChartPlayVariant }
 import type { BeMusicJSON } from '@be-music/json';
 import type { ScrollDistanceMapperLike, TimedLandmineNote, TimedPlayableNote } from '@be-music/player/display';
 import type { PlayerGaugeSummary } from '@be-music/player/signals';
-import type { JudgeKind, ScoreSummary } from '@be-music/player/ruleset';
+import type { JudgmentKind, ScoreSummary } from '@be-music/player/ruleset';
 import type { HiSpeedTransition, LibraryChart, PlayState } from '@be-music/scene-model';
 import type { BeMusicJudgeWindows, BeMusicLaneKind, BeMusicLongNote } from '@be-music/skin-sdk';
 import type { Graphics, Text, Texture } from 'pixi.js';
@@ -21,7 +21,7 @@ import type { LongNoteTracker } from '../../../session/play/long-note-tracker.ts
 import type { GoneDrawObjects } from '../../../chart/note-draw-window.ts';
 import type { ChildPool } from '../../../stage/pixi-utils.ts';
 import type { BeMusicGameplayBinding } from '../../../skin/be-music/binding.ts';
-import type { BeMusicJudge, BeMusicLaneCover } from '../../../skin/be-music/types.ts';
+import type { BeMusicJudgmentKind, BeMusicLaneCover } from '../../../skin/be-music/types.ts';
 import type { LaneGeometryContext } from '../../built-in/play-chrome.ts';
 import type { PlayfieldLaneRect, PlayfieldSkin } from '../../types.ts';
 import type { SideLaneRun } from './measure-line-runs.ts';
@@ -53,7 +53,7 @@ export type RuntimeMineNote = TimedLandmineNote;
  * (`PlaySession`) is one; the view reads it and writes only the lanes it lays out and the BGA videos it plays.
  */
 export interface PlayfieldRuntime {
-  readonly song: LibraryChart | undefined;
+  readonly chart: LibraryChart | undefined;
   readonly resolvedChart: BeMusicJSON | undefined;
   readonly resolvedPlayChart: ResolvedChart | undefined;
   readonly laneChannels: string[];
@@ -80,7 +80,7 @@ export interface PlayfieldRuntime {
   readonly lastJudgeAt: number | undefined;
   readonly judgeSideState: Record<
     '1P' | '2P',
-    { judge: JudgeKind | ''; until: number; combo: number; courseCombo?: number }
+    { judge: JudgmentKind | ''; until: number; combo: number; courseCombo?: number }
   >;
   readonly judgeWindows: BeMusicJudgeWindows | undefined;
   readonly lastImpulseAt: number | undefined;
@@ -111,7 +111,7 @@ export interface PlayfieldRuntime {
    */
   readonly touchLiftCount: number;
   readonly bombStartedAt: Map<string, number>;
-  readonly bombJudge: Map<string, BeMusicJudge>;
+  readonly bombJudge: Map<string, BeMusicJudgmentKind>;
   readonly hasBGA: boolean;
   readonly bgaTimeline: { base: BGACue[]; layer: BGACue[]; poor: BGACue[] };
   readonly nonstopBGATimelines: NonstopStageBGATimeline[] | undefined;
@@ -140,7 +140,7 @@ export interface PlayfieldRuntime {
   isAutoplayedChannel(channel: string): boolean;
   resolveLaneCovers(): readonly BeMusicLaneCover[];
   resolveLongNoteMode(note: RuntimeNote): BeMusicLongNote['mode'];
-  resolveSongDurationSeconds(): number;
+  resolveChartDurationSeconds(): number;
   resolveVisibleMs(
     cover: BeMusicLaneCover | undefined,
     bpm: number | undefined,
@@ -189,7 +189,7 @@ export interface PlayfieldContext extends LaneGeometryContext {
       }
     | undefined;
   readonly goneDrawObjects: GoneDrawObjects;
-  measureBeatCache: { songId: string | undefined; beats: number[] };
+  measureBeatCache: { chartId: string | undefined; beats: number[] };
   measureLineRuns: { signature: number; runs: SideLaneRun[] } | undefined;
   readonly audioFrame: AudioFeatures | undefined;
 }

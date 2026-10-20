@@ -3,7 +3,7 @@
 // a chart decided on the select screen joins it instead of playing.
 
 import { logger } from '@be-music/player-web';
-import { CourseMaker, type BrowserSongCollection, type ChartFileHashes } from '@be-music/player-web/collection';
+import { CourseMaker, type BrowserChartCollection, type ChartFileHashes } from '@be-music/player-web/collection';
 import type { SelectScene } from '@be-music/player-web/host';
 import { LR2_COURSE_MAKER_MAX_STAGES } from '@be-music/player/course';
 import type { LibraryChart } from '@be-music/scene-model';
@@ -14,9 +14,9 @@ const dropLog = logger('drop');
 
 export interface CourseMakerServiceOptions {
   /** A chart's file hashes, cached per chart (`RecordsService`): a course keys its stages by MD5. */
-  readonly resolveChartHashes: (song: LibraryChart) => Promise<ChartFileHashes | undefined>;
+  readonly resolveChartHashes: (chartEntry: LibraryChart) => Promise<ChartFileHashes | undefined>;
   /** The library as last loaded (`LibraryService`). */
-  readonly collection: () => BrowserSongCollection;
+  readonly collection: () => BrowserChartCollection;
   /** Relists the course folders after the player's own courses changed (`LibraryService`). */
   readonly refreshMadeCourses: () => Promise<void>;
   /** The select screen the router keeps, on the stage or off it; `undefined` before the first. */
@@ -41,7 +41,7 @@ export class CourseMakerService {
     this.selectView = options.selectView;
     this.setStatus = options.setStatus;
     this.maker = new CourseMaker({
-      md5Of: async (song) => (await options.resolveChartHashes(song))?.md5,
+      md5Of: async (chartEntry) => (await options.resolveChartHashes(chartEntry))?.md5,
       onChange: (change) => void this.handleCourseMakerChange(change),
     });
   }
@@ -83,7 +83,7 @@ export class CourseMakerService {
    * While a course is being made, deciding a song adds it to the course instead of playing it, as LR2 does; deciding one
    * more once it holds five saves the course. Returns whether the song was taken.
    */
-  public addSongToCourseBeingMade(song: LibraryChart): boolean {
+  public addChartToCourseBeingMade(chartEntry: LibraryChart): boolean {
     const draft = this.maker.draft;
     if (draft === undefined) return false;
     if (draft.stages.length >= LR2_COURSE_MAKER_MAX_STAGES) {
@@ -91,9 +91,9 @@ export class CourseMakerService {
       if (saved !== undefined) this.setStatus(`Saved the course "${saved.name}"`);
       return true;
     }
-    void this.maker.append(song).then((result) => {
+    void this.maker.append(chartEntry).then((result) => {
       if (result.ok) {
-        this.setStatus(`Added ${song.title} to the course (${this.maker.draft?.stages.length ?? 0} / 5)`);
+        this.setStatus(`Added ${chartEntry.title} to the course (${this.maker.draft?.stages.length ?? 0} / 5)`);
         return;
       }
       const reasons = {
@@ -102,7 +102,7 @@ export class CourseMakerService {
         'no-md5': 'its chart could not be hashed',
         'not-making': 'no course is being made',
       } as const;
-      this.setStatus(`Could not add ${song.title}: ${reasons[result.reason]}`);
+      this.setStatus(`Could not add ${chartEntry.title}: ${reasons[result.reason]}`);
     });
     return true;
   }

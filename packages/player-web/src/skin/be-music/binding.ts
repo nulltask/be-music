@@ -25,9 +25,9 @@ import type {
   BeMusicSelectFrame,
   BeMusicSkin,
   BeMusicSkinSettingValues,
-  BeMusicSongImageLookup,
-  BeMusicSongRecord,
-  BeMusicCourseRecord,
+  BeMusicChartImageLookup,
+  BeMusicChartBestRecord,
+  BeMusicCourseBestRecord,
   BeMusicStage,
   BeMusicSurface,
   BeMusicSurfaceContextMap,
@@ -43,11 +43,11 @@ import type {
 const log = logger('be-music-skin');
 
 /** Hosts that hand no song images report every image as unavailable. */
-const NO_SONG_IMAGE: BeMusicSongImageLookup = () => undefined;
+const NO_SONG_IMAGE: BeMusicChartImageLookup = () => undefined;
 
 /** Hosts that keep no play records report every song as never played. */
-const NO_SONG_RECORD = (): BeMusicSongRecord | undefined => undefined;
-const NO_COURSE_RECORD = (): BeMusicCourseRecord | undefined => undefined;
+const NO_SONG_RECORD = (): BeMusicChartBestRecord | undefined => undefined;
+const NO_COURSE_RECORD = (): BeMusicCourseBestRecord | undefined => undefined;
 
 /**
  * The player's stored values for a skin's settings, keyed by setting id, as a host persisted them. Bindings check them
@@ -257,7 +257,7 @@ export class BeMusicGameplayBinding {
   readonly drawsBGA: boolean;
   private readonly skin: BeMusicSkin;
   private settings: BeMusicSkinSettingValues;
-  private readonly songImage: BeMusicSongImageLookup;
+  private readonly chartImage: BeMusicChartImageLookup;
   private readonly surface: SkinSurface;
   private frame: BeMusicGameplayFrame | undefined;
   private lanes: BeMusicLaneFrame[] = [];
@@ -270,17 +270,17 @@ export class BeMusicGameplayBinding {
   private drawnFrame = -1;
 
   /**
-   * `songImage` resolves the song's images for `frame.songImage`; without one every image reads as unavailable.
+   * `chartImage` resolves the song's images for `frame.chartImage`; without one every image reads as unavailable.
    * `settings` are the player's stored values for the skin's settings; without them the skin draws with its defaults.
    * `renderer` is the player's Pixi renderer: a Pixi-kit skin draws through it.
    */
   constructor(
     skin: BeMusicSkin,
-    options: { songImage?: BeMusicSongImageLookup; settings?: BeMusicStoredSkinSettings; renderer?: Renderer } = {},
+    options: { chartImage?: BeMusicChartImageLookup; settings?: BeMusicStoredSkinSettings; renderer?: Renderer } = {},
   ) {
     this.skin = skin;
     this.surface = new SkinSurface(skin, options.renderer);
-    this.songImage = options.songImage ?? NO_SONG_IMAGE;
+    this.chartImage = options.chartImage ?? NO_SONG_IMAGE;
     this.bombDurationMs = skin.gameplay.bombDurationMs ?? 300;
     this.drawsMines = skin.gameplay.drawsMines === true;
     this.drawsLaneCover = skin.gameplay.drawsLaneCover === true;
@@ -324,7 +324,7 @@ export class BeMusicGameplayBinding {
       effects: runtime.effects ?? 'full',
       audio: runtime.audio,
       settings: this.settings,
-      songImage: this.songImage,
+      chartImage: this.chartImage,
     };
     const sprite = context.layerPool.acquireSprite();
     sprite.texture = this.surface.texture;
@@ -388,11 +388,19 @@ export class BeMusicGameplayBinding {
 
 /**
  * The select frame the scene hands over; the binding adds `revision`, `audio`, `hit`, and the skin-facing extras
- * (`pointer`, `songRecord`, `songImage`, `settings`).
+ * (`pointer`, `chartBestRecord`, `chartImage`, `settings`).
  */
 export type BeMusicSelectSceneFrame = Omit<
   BeMusicSelectFrame,
-  'revision' | 'audio' | 'hit' | 'pointer' | 'songRecord' | 'courseRecord' | 'songImage' | 'settings' | 'listScroll'
+  | 'revision'
+  | 'audio'
+  | 'hit'
+  | 'pointer'
+  | 'chartBestRecord'
+  | 'courseBestRecord'
+  | 'chartImage'
+  | 'settings'
+  | 'listScroll'
 >;
 
 /**
@@ -409,9 +417,9 @@ export class BeMusicSelectBinding {
   private readonly surface: SkinSurface;
   private readonly hitPool: ChildPool;
   private settings: BeMusicSkinSettingValues;
-  private readonly songRecord: BeMusicSelectFrame['songRecord'];
-  private readonly courseRecord: NonNullable<BeMusicSelectFrame['courseRecord']>;
-  private readonly songImage: BeMusicSongImageLookup;
+  private readonly chartBestRecord: BeMusicSelectFrame['chartBestRecord'];
+  private readonly courseBestRecord: NonNullable<BeMusicSelectFrame['courseBestRecord']>;
+  private readonly chartImage: BeMusicChartImageLookup;
   /** `frame.listScroll`: how far the list is pulled past its resting place, in design pixels (see `setListScroll`). */
   private listScroll = 0;
   /** The pointer in design pixels, replaced (not mutated) when it moves so a skin may keep last frame's. */
@@ -425,8 +433,8 @@ export class BeMusicSelectBinding {
   searchFieldRect: { x: number; y: number; width: number; height: number } | undefined;
 
   /**
-   * `resolveSongRecord` looks up the player's best record on a song for `frame.songRecord`; without one every song
-   * reads as never played; `resolveCourseRecord` does the same for a course bar (`frame.courseRecord`). `songImage` resolves song images for `frame.songImage` (call {@link invalidate} when one
+   * `resolveChartBestRecord` looks up the player's best record on a song for `frame.chartBestRecord`; without one every song
+   * reads as never played; `resolveCourseBestRecord` does the same for a course bar (`frame.courseBestRecord`). `chartImage` resolves song images for `frame.chartImage` (call {@link invalidate} when one
    * arrives); without one every image reads as unavailable. `settings` are the player's stored values for the skin's
    * settings; without them the skin draws with its defaults.
    * `renderer` is the player's Pixi renderer: a Pixi-kit skin draws through it.
@@ -434,9 +442,9 @@ export class BeMusicSelectBinding {
   constructor(
     skin: BeMusicSkin,
     options: {
-      resolveSongRecord?: BeMusicSelectFrame['songRecord'];
-      resolveCourseRecord?: BeMusicSelectFrame['courseRecord'];
-      songImage?: BeMusicSongImageLookup;
+      resolveChartBestRecord?: BeMusicSelectFrame['chartBestRecord'];
+      resolveCourseBestRecord?: BeMusicSelectFrame['courseBestRecord'];
+      chartImage?: BeMusicChartImageLookup;
       settings?: BeMusicStoredSkinSettings;
       renderer?: Renderer;
     } = {},
@@ -444,9 +452,9 @@ export class BeMusicSelectBinding {
     this.skin = skin;
     this.surface = new SkinSurface(skin, options.renderer);
     this.outroMs = skin.select.outroMs ?? 0;
-    this.songRecord = options.resolveSongRecord ?? NO_SONG_RECORD;
-    this.courseRecord = options.resolveCourseRecord ?? NO_COURSE_RECORD;
-    this.songImage = options.songImage ?? NO_SONG_IMAGE;
+    this.chartBestRecord = options.resolveChartBestRecord ?? NO_SONG_RECORD;
+    this.courseBestRecord = options.resolveCourseBestRecord ?? NO_COURSE_RECORD;
+    this.chartImage = options.chartImage ?? NO_SONG_IMAGE;
     this.settings = resolveBeMusicSkinSettings(skin, options.settings);
     this.backLayer.addChild(new Sprite({ texture: this.surface.texture, roundPixels: true }));
     this.hitPool = new ChildPool(this.frontLayer);
@@ -495,7 +503,7 @@ export class BeMusicSelectBinding {
   /** Draws the skin with the latest state, the current time, and what is playing. */
   tick(
     nowMs: number,
-    focusedSong: BeMusicSelectFrame['focusedSong'],
+    focusedChart: BeMusicSelectFrame['focusedChart'],
     launchAt: number | undefined,
     audio: BeMusicSelectFrame['audio'],
   ): void {
@@ -508,15 +516,15 @@ export class BeMusicSelectBinding {
     const frame: BeMusicSelectFrame = {
       ...base,
       nowMs,
-      focusedSong,
+      focusedChart,
       launchAt,
       audio,
       revision: this.revision,
       listScroll: this.listScroll,
       pointer,
-      songRecord: this.songRecord,
-      courseRecord: this.courseRecord,
-      songImage: this.songImage,
+      chartBestRecord: this.chartBestRecord,
+      courseBestRecord: this.courseBestRecord,
+      chartImage: this.chartImage,
       settings: this.settings,
       hit: (x, y, w, h, action, cursor = 'pointer') => {
         const area = pool.acquireGraphics();
@@ -547,8 +555,8 @@ export class BeMusicSelectBinding {
   }
 }
 
-/** The result frame the scene hands over; the binding adds `songImage` and `settings`. */
-export type BeMusicResultSceneFrame = Omit<BeMusicResultFrame, 'songImage' | 'settings'>;
+/** The result frame the scene hands over; the binding adds `chartImage` and `settings`. */
+export type BeMusicResultSceneFrame = Omit<BeMusicResultFrame, 'chartImage' | 'settings'>;
 
 /** Result for one scene: draws the skin every frame onto a canvas shown by {@link view}. */
 export class BeMusicResultBinding {
@@ -557,21 +565,21 @@ export class BeMusicResultBinding {
   private readonly skin: BeMusicSkin;
   private readonly surface: SkinSurface;
   private settings: BeMusicSkinSettingValues;
-  private readonly songImage: BeMusicSongImageLookup;
+  private readonly chartImage: BeMusicChartImageLookup;
 
   /**
-   * `songImage` resolves song images for `frame.songImage`; without one every image reads as unavailable. `settings`
+   * `chartImage` resolves song images for `frame.chartImage`; without one every image reads as unavailable. `settings`
    * are the player's stored values for the skin's settings; without them the skin draws with its defaults.
    * `renderer` is the player's Pixi renderer: a Pixi-kit skin draws through it.
    */
   constructor(
     skin: BeMusicSkin,
-    options: { songImage?: BeMusicSongImageLookup; settings?: BeMusicStoredSkinSettings; renderer?: Renderer } = {},
+    options: { chartImage?: BeMusicChartImageLookup; settings?: BeMusicStoredSkinSettings; renderer?: Renderer } = {},
   ) {
     this.skin = skin;
     this.surface = new SkinSurface(skin, options.renderer);
     this.settings = resolveBeMusicSkinSettings(skin, options.settings);
-    this.songImage = options.songImage ?? NO_SONG_IMAGE;
+    this.chartImage = options.chartImage ?? NO_SONG_IMAGE;
     this.view.addChild(new Sprite({ texture: this.surface.texture, roundPixels: true }));
   }
 
@@ -581,7 +589,7 @@ export class BeMusicResultBinding {
   }
 
   render(sceneFrame: BeMusicResultSceneFrame): void {
-    const frame: BeMusicResultFrame = { ...sceneFrame, songImage: this.songImage, settings: this.settings };
+    const frame: BeMusicResultFrame = { ...sceneFrame, chartImage: this.chartImage, settings: this.settings };
     this.surface.draw({ width: frame.designWidth, height: frame.designHeight }, (surface) =>
       this.skin.result.draw(surface, frame),
     );
@@ -593,8 +601,8 @@ export class BeMusicResultBinding {
   }
 }
 
-/** The decide frame the scene hands over; the binding adds `songImage` and `settings`. */
-export type BeMusicDecideSceneFrame = Omit<BeMusicDecideFrame, 'songImage' | 'settings'>;
+/** The decide frame the scene hands over; the binding adds `chartImage` and `settings`. */
+export type BeMusicDecideSceneFrame = Omit<BeMusicDecideFrame, 'chartImage' | 'settings'>;
 
 /** Decide for one scene: draws the skin's `decide` every frame onto a canvas shown by {@link view}. */
 export class BeMusicDecideBinding {
@@ -603,21 +611,21 @@ export class BeMusicDecideBinding {
   private readonly skin: BeMusicSkin;
   private readonly surface: SkinSurface;
   private settings: BeMusicSkinSettingValues;
-  private readonly songImage: BeMusicSongImageLookup;
+  private readonly chartImage: BeMusicChartImageLookup;
 
   /**
-   * `songImage` resolves song images for `frame.songImage`; without one every image reads as unavailable. `settings`
+   * `chartImage` resolves song images for `frame.chartImage`; without one every image reads as unavailable. `settings`
    * are the player's stored values for the skin's settings; without them the skin draws with its defaults.
    * `renderer` is the player's Pixi renderer: a Pixi-kit skin draws through it.
    */
   constructor(
     skin: BeMusicSkin,
-    options: { songImage?: BeMusicSongImageLookup; settings?: BeMusicStoredSkinSettings; renderer?: Renderer } = {},
+    options: { chartImage?: BeMusicChartImageLookup; settings?: BeMusicStoredSkinSettings; renderer?: Renderer } = {},
   ) {
     this.skin = skin;
     this.surface = new SkinSurface(skin, options.renderer);
     this.settings = resolveBeMusicSkinSettings(skin, options.settings);
-    this.songImage = options.songImage ?? NO_SONG_IMAGE;
+    this.chartImage = options.chartImage ?? NO_SONG_IMAGE;
     this.view.addChild(new Sprite({ texture: this.surface.texture, roundPixels: true }));
   }
 
@@ -630,7 +638,7 @@ export class BeMusicDecideBinding {
   render(sceneFrame: BeMusicDecideSceneFrame): void {
     const decide = this.skin.decide;
     if (!decide) return;
-    const frame: BeMusicDecideFrame = { ...sceneFrame, songImage: this.songImage, settings: this.settings };
+    const frame: BeMusicDecideFrame = { ...sceneFrame, chartImage: this.chartImage, settings: this.settings };
     this.surface.draw({ width: frame.designWidth, height: frame.designHeight }, (surface) =>
       decide.draw(surface, frame),
     );

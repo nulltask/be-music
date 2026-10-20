@@ -5,14 +5,14 @@ import {
   isClassCourseConstraints,
   type RandomCourseDefinition,
 } from './definition.ts';
-import { type CourseSongRecord, parseCourseSongFilter, selectCourseSongs } from './filter.ts';
+import { type CourseChartRecord, parseCourseChartFilter, selectCourseCharts } from './filter.ts';
 
 /** A drawn random course: the fixed course to play and the candidate drawn for each stage. */
 export interface RandomCourseDrawSuccess<T> {
   ok: true;
   course: CourseDefinition;
   /** One per stage, in stage order. */
-  songs: T[];
+  charts: T[];
 }
 
 /** Why a random course could not be drawn: the first stage whose filter is invalid or selects no chart. */
@@ -34,7 +34,7 @@ function pick(random: () => number, length: number): number {
 }
 
 /** The identity beatoraja's `distinct` compares: the chart's SHA-256 (MD5 for a record without one). */
-function songKey(record: CourseSongRecord): string {
+function chartKey(record: CourseChartRecord): string {
   return record.sha256 !== undefined && record.sha256.length > 0 ? record.sha256.toLowerCase() : `md5:${record.md5}`;
 }
 
@@ -43,7 +43,7 @@ function songKey(record: CourseSongRecord): string {
  * the fixed course to play.
  *
  * - Each stage draws uniformly from the candidates its filter selects, after the filter's own `ORDER BY` / `LIMIT`
- *   ({@link selectCourseSongs}; `ORDER BY RANDOM()` draws from `random` first). A stage without a filter draws from
+ *   ({@link selectCourseCharts}; `ORDER BY RANDOM()` draws from `random` first). A stage without a filter draws from
  *   every candidate when it is the first stage, and from the previous filter's selection otherwise.
  * - With `distinct`, a chart already drawn for an earlier stage is redrawn; when every candidate of the stage is taken,
  *   the stage falls back to any of them, so a chart can repeat (beatoraja does the same).
@@ -53,26 +53,26 @@ function songKey(record: CourseSongRecord): string {
  * never `release`d (beatoraja's `RandomCourseData.createCourseData`). Deterministic given `random`, which returns
  * values in `[0, 1)` like `Math.random`; candidates are taken in the order given.
  */
-export function drawRandomCourse<T extends CourseSongRecord>(
+export function drawRandomCourse<T extends CourseChartRecord>(
   definition: RandomCourseDefinition,
   candidates: readonly T[],
   random: () => number,
 ): RandomCourseDrawResult<T> {
-  const usable: Array<{ song: T; ref: CourseStageRef }> = [];
-  for (const song of candidates) {
-    const ref = createCourseStageRef(song);
-    if (ref !== undefined) usable.push({ song, ref });
+  const usable: Array<{ chart: T; ref: CourseStageRef }> = [];
+  for (const chart of candidates) {
+    const ref = createCourseStageRef(chart);
+    if (ref !== undefined) usable.push({ chart, ref });
   }
-  const drawn: Array<{ song: T; ref: CourseStageRef }> = [];
+  const drawn: Array<{ chart: T; ref: CourseStageRef }> = [];
   let lots = usable;
   for (const [index, stage] of definition.stages.entries()) {
     if (stage.filter !== undefined || index === 0) {
       if (stage.filter === undefined) {
         lots = usable;
       } else {
-        const parsed = parseCourseSongFilter(stage.filter);
+        const parsed = parseCourseChartFilter(stage.filter);
         if (!parsed.ok) return { ok: false, stage: index, reason: 'invalid-filter', error: parsed.error };
-        lots = selectCourseSongs(parsed.query, usable, ({ song }) => song, random);
+        lots = selectCourseCharts(parsed.query, usable, ({ chart }) => chart, random);
       }
     }
     if (lots.length === 0) return { ok: false, stage: index, reason: 'no-candidates' };
@@ -89,22 +89,22 @@ export function drawRandomCourse<T extends CourseSongRecord>(
       release: false,
       source: { format: 'beatoraja-random' },
     },
-    songs: drawn.map(({ song }) => song),
+    charts: drawn.map(({ chart }) => chart),
   };
 }
 
 /** `RandomCourseData.lotterySongData` with `distinct`: redraw a repeat, and allow one once every candidate is taken. */
-function drawDistinct<E extends { song: CourseSongRecord }>(
+function drawDistinct<E extends { chart: CourseChartRecord }>(
   lots: readonly E[],
   drawn: readonly E[],
   random: () => number,
 ): E {
-  const taken = new Set(drawn.map(({ song }) => songKey(song)));
+  const taken = new Set(drawn.map(({ chart }) => chartKey(chart)));
   const remaining = [...lots];
   while (remaining.length > 0) {
     const index = pick(random, remaining.length);
     const candidate = remaining[index]!;
-    if (!taken.has(songKey(candidate.song))) return candidate;
+    if (!taken.has(chartKey(candidate.chart))) return candidate;
     remaining.splice(index, 1);
   }
   return lots[pick(random, lots.length)]!;

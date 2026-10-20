@@ -8,7 +8,7 @@
 import { cyclePlayOptionValue, normalizeSearchQuery, PLAY_OPTION_CHOICES } from '@be-music/scene-model';
 import { resolveBeMusicSelectLayout, resolveStageOrientation, type BeMusicSelectLayout } from '@be-music/skin-sdk';
 import { Color, Container, Graphics } from 'pixi.js';
-import { resolveSongSource } from '../../collection/collection.ts';
+import { resolveChartSource } from '../../collection/collection.ts';
 import type { BuiltInKit } from '../../host/family-kit.ts';
 import {
   designRectToCanvas,
@@ -23,7 +23,7 @@ import { PerfTracker } from '../shared/perf.ts';
 import { SelectPointer, type SelectDesignSize, type SelectPointerContext } from '../shared/select-pointer.ts';
 import { BeMusicSelectBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
 import { resolveSelectListWindow } from '../../skin/be-music/registry.ts';
-import { SongImageCache } from '../../skin/be-music/song-images.ts';
+import { ChartImageCache } from '../../skin/be-music/chart-images.ts';
 import type { BeMusicSelectActions } from '../../skin/be-music/types.ts';
 import { logger } from '../../logger.ts';
 import type { IntentSink, SelectFrame, SelectIntent, SelectView } from '../types.ts';
@@ -57,7 +57,7 @@ export class BuiltInSelectView implements SelectView {
   private built = false;
   private disposed = false;
   private renderer: BeMusicSelectBinding | undefined;
-  private songImages: SongImageCache | undefined;
+  private chartImages: ChartImageCache | undefined;
   /** The last frame drawn: what the pointer reads (the list, the cursor) between frames. */
   private frame: SelectFrame | undefined;
   /** The frame revision the skin was last built from; it rebuilds when the session's state changes. */
@@ -134,8 +134,8 @@ export class BuiltInSelectView implements SelectView {
     this.disposed = true;
     this.renderer?.dispose();
     this.renderer = undefined;
-    this.songImages?.dispose();
-    this.songImages = undefined;
+    this.chartImages?.dispose();
+    this.chartImages = undefined;
     this.root.parent?.removeChild(this.root);
     try {
       this.root.destroy({ children: true, context: true });
@@ -266,7 +266,7 @@ export class BuiltInSelectView implements SelectView {
       selectedIndex: frame.cursor,
       firstVisibleIndex: window.firstVisibleIndex,
       visibleRows: window.visibleRows,
-      focusedSong: focused?.kind === 'chart' ? focused.chart : undefined,
+      focusedChart: focused?.kind === 'chart' ? focused.chart : undefined,
       focusedCourse: focused?.kind === 'course' ? focused.course : undefined,
       folderLabel: folder?.label,
       searchQuery: normalizeSearchQuery(frame.browse.searchText),
@@ -285,23 +285,24 @@ export class BuiltInSelectView implements SelectView {
 
   private ensureRenderer(frame: SelectFrame): BeMusicSelectBinding {
     if (this.renderer !== undefined) {
-      if (this.songImages !== undefined && this.imagesLibrary !== frame.library) {
+      if (this.chartImages !== undefined && this.imagesLibrary !== frame.library) {
         // Images cached for the previous library's charts may not match the new one's files.
-        this.songImages.clear();
+        this.chartImages.clear();
         this.imagesLibrary = frame.library;
       }
       return this.renderer;
     }
     this.imagesLibrary = frame.library;
-    const songImages = new SongImageCache({
-      resolveSource: (song) => (this.frame === undefined ? undefined : resolveSongSource(this.frame.library, song)),
+    const chartImages = new ChartImageCache({
+      resolveSource: (chartEntry) =>
+        this.frame === undefined ? undefined : resolveChartSource(this.frame.library, chartEntry),
       onLoaded: () => this.renderer?.invalidate(),
     });
-    this.songImages = songImages;
+    this.chartImages = chartImages;
     this.renderer = new BeMusicSelectBinding(this.kit.skin, {
-      resolveSongRecord: (song) => this.frame?.records.chart(song),
-      resolveCourseRecord: (course) => this.frame?.records.course(course),
-      songImage: songImages.lookup,
+      resolveChartBestRecord: (chartEntry) => this.frame?.records.chart(chartEntry),
+      resolveCourseBestRecord: (course) => this.frame?.records.course(course),
+      chartImage: chartImages.lookup,
       settings: this.kit.settings,
       renderer: this.host?.app.renderer,
     });

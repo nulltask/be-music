@@ -1,6 +1,6 @@
-import type { GaugeType, PlaylogRulesetId } from '@be-music/player/ruleset';
+import type { GaugeType, RulesetId } from '@be-music/player/ruleset';
 import type { PlayerGaugeSummary } from '@be-music/player/signals';
-import { resolveCourseStageStartGauge, type PlaylogCourseStage } from '@be-music/player/playlog';
+import { resolveCourseStageStartGauge, type ReplayCourseStage } from '@be-music/player/replay';
 
 /**
  * Placeholder gauge state for the frames before the engine reports one (the READY / LOADING phase), and the first point
@@ -12,7 +12,7 @@ import { resolveCourseStageStartGauge, type PlaylogCourseStage } from '@be-music
  */
 export function createPlaceholderGaugeState(
   type: GaugeType = 'GROOVE',
-  course?: { stage: PlaylogCourseStage; ruleset: PlaylogRulesetId },
+  course?: { stage: ReplayCourseStage; ruleset: RulesetId },
 ): PlayerGaugeSummary {
   if (course !== undefined) {
     const start = resolveCourseStageStartGauge(course.ruleset, course.stage, type);

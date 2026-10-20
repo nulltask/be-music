@@ -2,25 +2,25 @@
 
 # be-music
 
-BMS/BMSON toolchain composed of TypeScript + pnpm workspaces.
+BMS/bmson toolchain composed of TypeScript + pnpm workspaces.
 
 ## Packages
 
-- `@be-music/json`: pure IR of BMS/BMSON intermediate representation (JSON compatible) dedicated to Be-Music internal processing
+- `@be-music/json`: pure IR of BMS/bmson intermediate representation (JSON compatible) dedicated to Be-Music internal processing
 - `@be-music/chart`: chart semantics helper such as beat resolution, event order, long note resolution, etc.
 - `@be-music/utils`: Generic utilities reused across all packages, with narrow subpath exports for browser-safe core helpers and Node-facing helpers
 - `@be-music/parser`: `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / JSON parser
 - `@be-music/stringifier`: Stringization from JSON to `.bms` / `.bmson`
 - `@be-music/audio-renderer`: Render the music score and output `.wav` / `.aiff`
-- `@be-music/player`: Shared rules and playback engine: one play loop (manual, auto, replay), judgment, scoring, gauges and clear lamps, best records, course runs and NONSTOP, the play-log format, and the runtime contracts hosts plug into
-- `@be-music/player-tui`: Terminal UI and `bms-player` CLI frontend for autoplay, keyboard play, Music Select, BGA, and SEA builds, plus the `bms-playlog` play-log re-simulator
+- `@be-music/player`: Shared rules and playback engine: one play loop (manual, auto, replay), judgment, scoring, gauges and clear lamps, best records, course runs and NONSTOP, the replay format, and the runtime contracts hosts plug into
+- `@be-music/player-tui`: Terminal UI and `bms-player` CLI frontend for autoplay, keyboard play, Music Select, BGA, and SEA builds, plus the `bms-replay` replay re-simulator
 - `@be-music/scene-model`: Runtime-neutral scene models — library entries, browsing, play options, play state and results, course views, system sounds — shared by every skin family
 - `@be-music/lr2-skin`: Renderer-independent Lunatic Rave 2 skin parser, asset resolver, and theme loader
 - `@be-music/beatoraja-skin`: Renderer-independent beatoraja JSON/Lua skin parser, normalizer, and theme loader
 - `@be-music/skin-sdk`: Framework-free SDK for writing be-music skins for the browser player
 - `@be-music/player-web`: Browser PixiJS runtime: every select, decide, play and result screen as a scene session drawn by a built-in, LR2 or beatoraja family view, behind one host API, plus the audio service, the chart collection, skin loading and gameplay recording
 - `@be-music/player-web-demo`: Private Vite demo that wires folder/ZIP drops, LR2/beatoraja themes, the Debug Menu and browser playback together, as services behind one scene router
-- `@be-music/leaderboard-api`: Private Leaderboard API on Cloudflare Workers: play-log submission, verification by re-simulation, and rankings
+- `@be-music/leaderboard-api`: Private Leaderboard API on Cloudflare Workers: replay submission, verification by re-simulation, and rankings
 - `@be-music/editor`: CLI editor (import/edit/export)
 
 The packages build on each other in layers. An arrow points from a package to a package that depends on it; a dependency already reached through another arrow is not drawn again (`@be-music/utils` sits under almost every package). [Architecture — Target architecture](./docs/architecture.md#target-architecture) shows the same layers inside the packages.
@@ -106,19 +106,19 @@ The tag is created in the format `@be-music/package-name@x.y.z`.
 - [Specification top](./docs/README.md)
 - [Architecture](./docs/architecture.md) and the [architecture decisions](./docs/adr/README.md)
 - [BMS implementation specification](./docs/bms-spec.md)
-- [BMSON implementation specification](./docs/bmson-spec.md)
+- [bmson implementation specification](./docs/bmson-spec.md)
 - [Bemuse implementation specification](./docs/bemuse-spec.md)
 - [LR2 and beatoraja semantics](./docs/semantics-lr2-beatoraja.md)
 - [Player implementation specification](./docs/player-spec.md)
 - [Terminal player implementation notes](./docs/player-tui.md)
 - [Browser player implementation notes](./docs/player-web.md)
 - [Scene models (`@be-music/scene-model`)](./docs/scene-model.md)
-- [Play log (play history) specification](./docs/playlog.md)
+- [Replay (play history) specification](./docs/replay.md)
 - [Courses and dan certification](./docs/course.md)
 - [Writing a be-music skin](./docs/be-music-skin.md)
 - [LR2 skin implementation notes](./docs/lr2-skin.md)
 - [beatoraja skin implementation notes](./docs/beatoraja-skin.md)
-- [BMS/BMSON intermediate representation (`@be-music/json`) implementation specification](./docs/json-spec.md)
+- [BMS/bmson intermediate representation (`@be-music/json`) implementation specification](./docs/json-spec.md)
 - [Glossary](./docs/glossary.md)
 
 `@be-music/json` is Be-Music's internal data model. It is not designed as a distribution format or a reusable exchange format with other tools.
@@ -131,26 +131,26 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 - Preserves BMS header/object lines/control syntax
 - Interpret `#WAVxx` / `#BMPxx` / `#BPMxx` / `#STOPxx` / `#TEXTxx`
 - Contains BMS extension headers (`#PREVIEW`, `#LNTYPE`, `#LNMODE`, `#LNOBJ`, `#VOLWAV`, `#SCROLLxx`, `#VIDEOFILE`, etc.)
-- Interpret BMSON's `info` / `lines` / `sound_channels` / `bpm_events` / `stop_events` / `bga`, and beatoraja's `scroll_events` / `key_channels` / `mine_channels` extensions
+- Interpret bmson's `info` / `lines` / `sound_channels` / `bpm_events` / `stop_events` / `bga`, and beatoraja's `scroll_events` / `key_channels` / `mine_channels` extensions
 - BMS text character code guessing (`Shift_JIS`, `UTF-8`, `EUC-JP`, `latin1`, etc.)
-- BMSON `info.init_bpm` is required by the parser; missing or invalid values fail early instead of falling back to `130`
-- The beatoraja BMSON extensions are mapped through the `mode_hint` lane resolver as beatoraja reads them: `mine_channels` become mines that preserve per-mine `damage`, and `key_channels` become hidden (invisible) notes
+- bmson `info.init_bpm` is required by the parser; missing or invalid values fail early instead of falling back to `130`
+- The beatoraja bmson extensions are mapped through the `mode_hint` lane resolver as beatoraja reads them: `mine_channels` become mines that preserve per-mine `damage`, and `key_channels` become hidden (invisible) notes
 
 ### stringifier (`@be-music/stringifier`)
 
-- Output BMS/BMSON from intermediate representation (JSON)
+- Output BMS/bmson from intermediate representation (JSON)
 - Stable reproduction of bar resolution using `position: [numerator, denominator]`
-- Output BMSON extension information (`info` extension, `bga`, `notes.l/c`)
+- Output bmson extension information (`info` extension, `bga`, `notes.l/c`)
 - Preserve BMS source structure when the stored `preservation` layer still matches the normalized events
 
 ### audio-renderer (`@be-music/audio-renderer`)
 
-- Supports BMS / BMSON / JSON input
+- Supports BMS / bmson / JSON input
 - Output format `.wav` / `.aiff`
 - Sample loading: `WAV` / `MP3` / `OGG` (Vorbis/Opus) / `OPUS`
 - Reflects bar length / BPM / STOP
 - 100001 times the BPM gimmick value of LR2 series is processed by time resolution
-- Applies `#VOLWAV`, `#xxx97` / `#xxx98`, BMSON `notes.c`, `#WAVCMD 01 xx vv`, and `#EXWAVxx v` volume scaling
+- Applies `#VOLWAV`, `#xxx97` / `#xxx98`, bmson `notes.c`, `#WAVCMD 01 xx vv`, and `#EXWAVxx v` volume scaling
 
 ### player core (`@be-music/player`)
 
@@ -158,9 +158,9 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 - UI and input signal buses for lane flashes, POOR BGA commands, frame snapshots, pause, restart, and high-speed changes
 - Shared note extraction for playable notes, legacy long notes, `#LNOBJ`, FREE ZONE, mines, and invisible notes
 - Shared judgment windows, dynamic `#EXRANKxx` changes, score, groove gauge, scroll-distance, BGA timelines, and result summaries
-- Browser-safe entries next to the engine root: `signals`, `lanes`, `display`, `ruleset`, `playlog`, `records` and `course` (see [Player spec — Entry points](./docs/player-spec.md#entry-points))
+- Browser-safe entries next to the engine root: `signals`, `lanes`, `display`, `ruleset`, `replay`, `records` and `course` (see [Player spec — Entry points](./docs/player-spec.md#entry-points))
 - `ruleset`: the vocabulary hosts, skins and the Leaderboard share: gauges, clear lamps, BP and the score (`ScoreSummary`, `computeScoreRate`, the DJ Ranks, LR2's money score)
-- `course`, `records` and `playlog`: course runs, the NONSTOP pipeline and the course stage rules; best records per judge ruleset; the play-log format, its recorder and its simulator
+- `course`, `records` and `replay`: course runs, the NONSTOP pipeline and the course stage rules; best records per judge ruleset; the replay format, its recorder and its simulator
 
 ### scene models (`@be-music/scene-model`)
 
@@ -189,7 +189,7 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 - Output dynamics tuning with compressor/limiter switches and threshold/release controls
 - Structured log output (`~/.be-music/logs/player.ndjson`, overwritten with `--log-file`)
 - Node worker split for gameplay, TUI rendering, and video BGA decoding
-- `bms-playlog` CLI that re-derives LR2 / beatoraja / IIDX results from a recorded play log (see [Play log specification](./docs/playlog.md))
+- `bms-replay` CLI that re-derives LR2 / beatoraja / IIDX results from a recorded replay (see [Replay specification](./docs/replay.md))
 
 ### LR2 skin (`@be-music/lr2-skin`)
 
@@ -237,13 +237,13 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 
 ## Main commands
 
-### 1. Convert BMS/BMSON to JSON
+### 1. Convert BMS/bmson to JSON
 
 ```bash
 pnpm run parse chart.bms chart.json
 ```
 
-### 2. Convert JSON to BMS/BMSON
+### 2. Convert JSON to BMS/bmson
 
 ```bash
 pnpm run stringify chart.json chart.bms --format bms
@@ -315,7 +315,7 @@ pnpm run player chart.bms --no-ln-type-auto
 pnpm run player:web
 ```
 
-The demo starts a Vite dev server. Drop a BMS/BMSON song folder, an LR2 theme folder, a beatoraja theme folder, a ZIP, or a song folder and LR2/beatoraja theme folder together into the browser.
+The demo starts a Vite dev server. Drop a BMS/bmson song folder, an LR2 theme folder, a beatoraja theme folder, a ZIP, or a song folder and LR2/beatoraja theme folder together into the browser.
 
 The demo can also load archives from a URL: `?music=<zip URL>&skin=<zip URL>` (either parameter may be omitted) feeds the archives into the same pipeline as a drop. Cross-origin `https` URLs are fetched through the same-origin proxy route `/__url-load-proxy`, served by the Vite dev server and by the Cloudflare Worker.
 
@@ -337,14 +337,14 @@ pnpm run editor add-note chart.json 0 11 1 2 01
 pnpm run editor export chart.json chart.bms
 ```
 
-### 7. Play log re-simulation
+### 7. Replay re-simulation
 
 ```bash
-pnpm run playlog -- /path/to/Song.bmplay.json
-pnpm run playlog -- /path/to/Song.bmplay.json --ruleset=lr2,beatoraja --json
+pnpm run replay -- /path/to/Song.bmplay.json
+pnpm run replay -- /path/to/Song.bmplay.json --ruleset=lr2,beatoraja --json
 ```
 
-See [Play log specification](./docs/playlog.md) for the options.
+See [Replay specification](./docs/replay.md) for the options.
 
 ## Player Operations
 
@@ -456,7 +456,7 @@ flowchart TD
 
 - Judgment type: `PERFECT`, `GREAT`, `GOOD`, `BAD`, `POOR`
 - `FAST` / `SLOW` is added only when pressing `GREAT` / `GOOD` quickly or slowly.
-- A blank keystroke without a corresponding unjudged note fires LR2-style empty POOR: it does not change judge counters, score, EX-SCORE, or combo, but it applies the empty-POOR gauge delta and triggers POOR BGA.
+- A blank keystroke without a corresponding unjudged note fires LR2-style empty POOR: it does not change judgment counters, score, EX-SCORE, or combo, but it applies the empty-POOR gauge delta and triggers POOR BGA.
 - EX-SCORE:
   - `PERFECT = +2`
   - `GREAT = +1`

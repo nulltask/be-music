@@ -82,7 +82,7 @@ function makeResult(overrides: ResultOverrides = {}): PlayResult {
     maxCombo: 0,
     gauge: 80,
     playSeconds: 60,
-    song: {
+    chart: {
       id: 'test:song',
       sourceId: 'test',
       sourceLabel: 'test',

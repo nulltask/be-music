@@ -31,7 +31,7 @@ const RESULT: PlayResult = {
   cleared: false,
   playSeconds: 30,
   lamp: 'FAILED',
-  song: {
+  chart: {
     id: 'chart',
     sourceId: 'source',
     sourceLabel: 'Source',
@@ -159,7 +159,7 @@ describe('readBeatorajaResult', () => {
     expect(reading.input.result).toBe(RESULT);
     expect(reading.input.chartTotal).toBe(300);
     expect(reading.input.breakdown).toMatchObject({ normal: 2, scratch: 1 });
-    expect(reading.input.song).toMatchObject({ title: 'Chart', directory: 'song' });
+    expect(reading.input.chart).toMatchObject({ title: 'Chart', directory: 'song' });
     expect(reading.input.skin).toEqual(SKIN);
     expect(reading.ops).toContain(BEATORAJA_OP.RESULT_FAIL);
     expect(reading.bpmCurve.length).toBeGreaterThan(0);

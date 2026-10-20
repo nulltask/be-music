@@ -1,5 +1,5 @@
 import type { NonstopStitchMap } from '@be-music/player/course';
-import { DEFAULT_PLAYLOG_VIEW_REPLAY, type PlaylogPlay, type PlaylogTempoChange } from '@be-music/player/playlog';
+import { DEFAULT_REPLAY_PLAYBACK_OPTIONS, type ReplayPlay, type ReplayTempoChange } from '@be-music/player/replay';
 import type { BeMusicEvent } from '@be-music/json';
 import { stretchAudioBuffers, type TimeStretchAlgorithm } from './time-stretch.ts';
 import type { WebAudioSessionSlicePlayback } from './web-audio-session.ts';
@@ -57,19 +57,19 @@ export function supportsLiveTempoChange(mode: TempoPitchMode): boolean {
 /** The tempo a replay plays at: the one it starts at and the changes it follows (chart time, the log's clock). */
 export interface ReplayTempo {
   tempo: number;
-  changes: PlaylogTempoChange[];
+  changes: ReplayTempoChange[];
 }
 
 /**
  * The tempo a replay plays at. When the viewer reproduces the recorded tempo (`reproduce`, by default as
- * `DEFAULT_PLAYLOG_VIEW_REPLAY`), it starts at `play.tempo` and, when the tempo can change live
+ * `DEFAULT_REPLAY_PLAYBACK_OPTIONS`), it starts at `play.tempo` and, when the tempo can change live
  * ({@link supportsLiveTempoChange}), follows `play.tempoChanges`; otherwise it plays at the viewer's own tempo.
  */
 export function resolveReplayTempo(
-  play: Pick<PlaylogPlay, 'tempo' | 'tempoChanges'>,
+  play: Pick<ReplayPlay, 'tempo' | 'tempoChanges'>,
   options: { ownTempo?: number; pitchMode: TempoPitchMode; reproduce?: boolean },
 ): ReplayTempo {
-  if (!(options.reproduce ?? DEFAULT_PLAYLOG_VIEW_REPLAY.tempo)) {
+  if (!(options.reproduce ?? DEFAULT_REPLAY_PLAYBACK_OPTIONS.tempo)) {
     return { tempo: clampPlayTempo(options.ownTempo), changes: [] };
   }
   const changes = supportsLiveTempoChange(options.pitchMode)

@@ -4,7 +4,7 @@
 
 A **course** chains several charts into one run. The best-known kind is **dan certification (段位認定)**: the stages are played back to back on one shared class gauge, and the whole run gets a single result. LR2 and beatoraja each define courses in their own formats, and difficulty tables publish theirs inside the table header. be-music reads all three into one model, `CourseDefinition` in `@be-music/player/course`, so nothing downstream needs to know where a course came from.
 
-This document covers the course model and how each format maps onto it. The play rules (class gauges, carried state, the course result) and the play log are covered in their own sections as they land.
+This document covers the course model and how each format maps onto it. The play rules (class gauges, carried state, the course result) and the replay are covered in their own sections as they land.
 
 ```mermaid
 flowchart LR
@@ -104,7 +104,7 @@ flowchart LR
   def --> play["played like any course"]
 ```
 
-- **Filters.** be-music has no song database, so `parseCourseSongFilter` / `evaluateCourseSongFilter` read the clause and test each chart (`CourseSongRecord`) with SQLite's comparison rules. The subset covers comparisons, `AND` / `OR` / `NOT`, `IN`, `LIKE`, `BETWEEN`, `IS NULL` and arithmetic over the `song` columns be-music can supply: `md5`, `sha256`, `title`, `subtitle`, `artist`, `subartist`, `genre`, `tag`, `path`, `level`, `difficulty`, `mode`, `notes`, `minbpm`, `maxbpm`, `length`, `judge`, `feature` and `content`. beatoraja joins `song` with the player's `score` and `scorelog` (and `information`), so a column more than one of them has must be qualified: an unqualified `sha256`, `mode`, `notes`, `date`, `clear`, `combo`, `minbp` or `avgjudge` is ambiguous to SQLite, and the filter is refused (write `song.mode = 7`, not `mode = 7`). A trailing `ORDER BY` (expressions or `RANDOM()`, `ASC` / `DESC`, `NULLS FIRST` / `LAST`) and `LIMIT n [OFFSET m]` / `LIMIT m, n` cut the selection before the draw, as beatoraja's own `folder/default.json` does for MY BEST (`playcount > 0 ORDER BY playcount DESC LIMIT 10`); `selectCourseSongs` applies them, ties keep the candidates' order, and `RANDOM()` reads the injected `random`. Anything else (an unknown column, a function, a sub-query) is a parse error, and the stage selects no chart, as beatoraja's failing query returns none.
+- **Filters.** be-music has no song database, so `parseCourseChartFilter` / `evaluateCourseChartFilter` read the clause and test each chart (`CourseChartRecord`) with SQLite's comparison rules. The subset covers comparisons, `AND` / `OR` / `NOT`, `IN`, `LIKE`, `BETWEEN`, `IS NULL` and arithmetic over the `song` columns be-music can supply: `md5`, `sha256`, `title`, `subtitle`, `artist`, `subartist`, `genre`, `tag`, `path`, `level`, `difficulty`, `mode`, `notes`, `minbpm`, `maxbpm`, `length`, `judge`, `feature` and `content`. beatoraja joins `song` with the player's `score` and `scorelog` (and `information`), so a column more than one of them has must be qualified: an unqualified `sha256`, `mode`, `notes`, `date`, `clear`, `combo`, `minbp` or `avgjudge` is ambiguous to SQLite, and the filter is refused (write `song.mode = 7`, not `mode = 7`). A trailing `ORDER BY` (expressions or `RANDOM()`, `ASC` / `DESC`, `NULLS FIRST` / `LAST`) and `LIMIT n [OFFSET m]` / `LIMIT m, n` cut the selection before the draw, as beatoraja's own `folder/default.json` does for MY BEST (`playcount > 0 ORDER BY playcount DESC LIMIT 10`); `selectCourseCharts` applies them, ties keep the candidates' order, and `RANDOM()` reads the injected `random`. Anything else (an unknown column, a function, a sub-query) is a parse error, and the stage selects no chart, as beatoraja's failing query returns none.
 - **Drawing.** `drawRandomCourse(definition, candidates, random)` follows `RandomCourseData.lotterySongDatas`. Each stage draws uniformly from what its filter selects (after its `ORDER BY` / `LIMIT`); a stage without a filter draws from the previous stage's selection (every chart for the first). With `distinct`, a chart already drawn is drawn again, unless every candidate is taken. The result is a fixed course: `grade` when the definition has a lane-option constraint, else `expert`. `random` is injected, so a draw is reproducible.
 - **Failure.** A stage whose filter does not parse, or selects nothing, stops the draw and is reported (`RandomCourseDrawFailure`).
 
@@ -147,12 +147,12 @@ flowchart LR
 - **The seam.** A later stage's note that lands more than 0.1 s before the previous stage's last note head, or within 0.1 s of it on a lane an earlier stage also used then, becomes background sound. A long note converted this way keeps only its head's sound ([L26988-L27010](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26988-L27010)).
 - **Keys.** Every stage's keysound, BGA and STOP keys are renumbered into one base-62 space (`#BASE 62`). A course that needs more than 3843 of one kind is refused (`id-space`). Mines keep their value, which is their damage.
 - **Rank and TOTAL.** The stitched chart opens with the first stage's `#RANK` and uses the last stage's `#TOTAL`; LR2 overwrites TOTAL stage by stage. Each later stage's `#RANK` then takes over (`map.stageRanks`, below).
-- **Judge rank of later stages** (`resolveNonstopStageRanks`). LR2's loader turns a later stage's `#RANK` into an object at the stage's start ([L26301-L26313](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26301-L26313)), which moves earlier with the rest of the stage when it is cut, and the play loop sets the judge windows when it gets there ([L12831-L12877](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L12831-L12877), `LR2body.exe` 0x42be2f). With `placement: 'lr2'` the change comes there, at the stage's own time zero, which can be several measures before the previous stage's last notes; a stage without `#RANK` keeps the rank in force; and the windows come from LR2's own NONSTOP table (`resolveLR2NonstopRankWindowsMs`), which differs from the one a chart opens with (0x4b5835) for VERY HARD (PGREAT ±12 / GREAT ±24 / GOOD ±60 ms instead of ±8 / ±24 / ±40) and HARD (GOOD ±80 ms instead of ±60). The default `'intended'` placement switches halfway between the previous stage's last note and the stage's first one, to the windows a chart opening with that `#RANK` gets, and reads a stage without `#RANK` as NORMAL.
+- **Judgment rank of later stages** (`resolveNonstopStageRanks`). LR2's loader turns a later stage's `#RANK` into an object at the stage's start ([L26301-L26313](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26301-L26313)), which moves earlier with the rest of the stage when it is cut, and the play loop sets the judge windows when it gets there ([L12831-L12877](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L12831-L12877), `LR2body.exe` 0x42be2f). With `placement: 'lr2'` the change comes there, at the stage's own time zero, which can be several measures before the previous stage's last notes; a stage without `#RANK` keeps the rank in force; and the windows come from LR2's own NONSTOP table (`resolveLR2NonstopRankWindowsMs`), which differs from the one a chart opens with (0x4b5835) for VERY HARD (PGREAT ±12 / GREAT ±24 / GOOD ±60 ms instead of ±8 / ±24 / ±40) and HARD (GOOD ±80 ms instead of ±60). The default `'intended'` placement switches halfway between the previous stage's last note and the stage's first one, to the windows a chart opening with that `#RANK` gets, and reads a stage without `#RANK` as NORMAL.
 - **BPM readout** (`resolveNonstopTempo`, `nonstopBPMAt`). The stitched chart runs at 150 BPM, but LR2 shows each stage's own BPM: its loader inserts a later stage's `#BPM` as a BPM object (× the FIT rate) at the stage's start ([L26257-L26273](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26257-L26273)), and the play loop's BPM object sets the readout ([L12717-L12724](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L12717-L12724)). `map.tempo` holds that readout: by default each stage's BPM over its own window; with `placement: 'lr2'` in LR2's event order (a later stage's `#BPM` from its time zero, and a stage's BPM changes from its last-measure line on dropped, except the last stage's, [L26970-L26976](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26970-L26976)).
-- **For the host.** The result's map gives each stage its keys (for its sound bus and BGA layer), its window, the sound fades and the 3 s BGA crossfade the connection calls for, and whether LR2 announces the stage (only after a BLANK connection), plus the BPM readout (`tempo`) and the judge rank changes (`stageRanks`, for the engine's `stageRanks` option, which the play log records as `chart.judgeRank.stageRanks` so a replay and a re-simulation judge with them). `assetPath` lets the host prefix each stage's file paths.
+- **For the host.** The result's map gives each stage its keys (for its sound bus and BGA layer), its window, the sound fades and the 3 s BGA crossfade the connection calls for, and whether LR2 announces the stage (only after a BLANK connection), plus the BPM readout (`tempo`) and the judge rank changes (`stageRanks`, for the engine's `stageRanks` option, which the replay records as `chart.judgeRank.stageRanks` so a replay and a re-simulation judge with them). `assetPath` lets the host prefix each stage's file paths.
 - **Not covered yet.** The scroll of an object of one stage that sounds during another stage's STOP. Only BMS stages can be stitched.
 
-**The pipeline** (`prepareNonstopCourse`, `resolveNonstopRun`, `buildNonstopCoursePlaylog`). A host stitches a course to play it, and the Leaderboard rebuilds a run's stitched chart to verify it, with the same steps, so the two agree on the chart that was played:
+**The pipeline** (`prepareNonstopCourse`, `resolveNonstopRun`, `buildNonstopCourseReplay`). A host stitches a course to play it, and the Leaderboard rebuilds a run's stitched chart to verify it, with the same steps, so the two agree on the chart that was played:
 
 ```mermaid
 flowchart TD
@@ -161,12 +161,12 @@ flowchart TD
   ln --> stitch["stitchNonstopCourse"]
   stitch --> play["play the stitched chart"]
   play --> run["resolveNonstopRun"]
-  run --> log["buildNonstopCoursePlaylog"]
+  run --> log["buildNonstopCourseReplay"]
 ```
 
 - `prepareNonstopCourse(stages, options)` resolves each stage chart's `#RANDOM` / `#SWITCH` (with the stage's `randomDraws` when given, else drawn with `random`), applies the course's long-note constraint, and stitches the stages with the connections, placement and stitching rules. The host's asset plumbing comes in through `assetPath`, which gets the stage charts as played. A stage chart that does not resolve is refused as `stage-chart`.
-- `resolveNonstopRun(course, playlog)` gives a play's `nonstop` record: how the chart was stitched, where each stage sat in the play with its draws, and the stage of every note.
-- `buildNonstopCoursePlaylog(definition, course, playlog)` builds the course play log: the stitched play, each reached stage cut out of it and named by its chart (the host's title and file hashes, and the chart fingerprint of the chart as loaded), and every stage never reached with the facts of its chart as played.
+- `resolveNonstopRun(course, replay)` gives a play's `nonstop` record: how the chart was stitched, where each stage sat in the play with its draws, and the stage of every note.
+- `buildNonstopCourseReplay(definition, course, replay)` builds the course replay: the stitched play, each reached stage cut out of it and named by its chart (the host's title and file hashes, and the chart fingerprint of the chart as loaded), and every stage never reached with the facts of its chart as played.
 
 ## Finding the stages
 
@@ -197,7 +197,7 @@ stateDiagram-v2
 
 ## Playing a course stage
 
-A host plays a course one stage at a time, passing `PlayerOptions.course` for each: the course `kind`, the course's `gaugeSet` (its `gauge_*` constraint) and `judge` constraint (`no-good` / `no-great`), and `carryIn`, the state the previous stage left (absent for the first stage). The stage records the same object as `play.course` in its play log, so the log replays and re-simulates on its own.
+A host plays a course one stage at a time, passing `PlayerOptions.course` for each: the course `kind`, the course's `gaugeSet` (its `gauge_*` constraint) and `judge` constraint (`no-good` / `no-great`), and `carryIn`, the state the previous stage left (absent for the first stage). The stage records the same object as `play.course` in its replay, so the log replays and re-simulates on its own.
 
 The course's constraints decide how each stage plays. These rules are in `@be-music/player/course`:
 
@@ -231,13 +231,13 @@ A course stage runs on the ruleset's course gauge, not on the single-chart gauge
 
 **`beatoraja`** plays every course on its class gauges (`GrooveGauge.create`): GROOVE and EASY map to `CLASS`, HARD to `EXCLASS`, DEATH to `EXHARDCLASS`. The table set comes from the course's `gauge_*` constraint, or from the play mode when it names none (5 / 10 keys → `5k`, PMS → `9k`, 24 / 48 keys → `24k`, otherwise `7k`). They start at 100 with no TOTAL modifier. **`iidx`** has no published class gauge, so it uses beatoraja's.
 
-### Judge constraints
+### Judgment constraints
 
 `no_good` gives GOOD the GREAT window, and `no_great` gives GREAT and GOOD the PGREAT window, on every window table (beatoraja `JudgeManager` L175-L184 sets the window rates to 0, and `JudgeWindowRule.create` widens a window narrower than the one inside it). Under these constraints a press just outside the remaining windows is a BAD. They apply under every ruleset.
 
 ### Carried state
 
-- **Gauge**: the next stage starts at the gauge value the previous stage ended on (`results.native.gauge.final`). `resolveCourseStageStartGauge` (`@be-music/player/playlog`) names the course gauge and the value a stage starts on before the engine runs, so a host shows that gauge from the stage's READY phase and starts its result graph there.
+- **Gauge**: the next stage starts at the gauge value the previous stage ended on (`results.native.gauge.final`). `resolveCourseStageStartGauge` (`@be-music/player/replay`) names the course gauge and the value a stage starts on before the engine runs, so a host shows that gauge from the stage's READY phase and starts its result graph there.
 - **Course combo**: each stage keeps its own combo and max combo, as LR2 and beatoraja do, plus a course-wide combo that runs across stages and breaks where the stage combo breaks (`PlayerSummary.course`, `results.*.course`). The next stage carries in that combo and the course max combo.
 
 ### Ending on failure
@@ -246,7 +246,7 @@ A survival gauge that empties ends the play there (`PlayerOptions.endOnFailure`,
 
 A stage given up with ESC also ends the course as a failed run. This departs from LR2 on purpose: `LR2body.exe` shows the given-up stage's result as FAILED and, when the gauge is still at 2 % or more and stages remain, goes on to the next stage (the course lamp is FAILED in the end, since a stage was left unplayed); with no GOOD or better judged it returns to the select screen without saving. be-music treats ESC as giving up the course.
 
-A course stage cannot be ranked as a single-chart play: `checkPlaylogEligibility` rejects it as `course-stage`.
+A course stage cannot be ranked as a single-chart play: `checkReplayEligibility` rejects it as `course-stage`.
 
 ### The course run
 
@@ -258,17 +258,17 @@ stateDiagram-v2
     Stage --> Stage: recordStage (goes on)
     Stage --> Over: recordStage (gauge empty or last stage)
     Stage --> Over: giveUp (ESC)
-    Over --> [*]: buildPlaylog
+    Over --> [*]: buildReplay
 ```
 
 - `nextStage` plans the next stage: its chart with the course's long-note constraint applied, `PlayerOptions.course` with the carry-in, and whether the hi-speed is locked. `playSettings` gives the settings it plays with in place of the player's picks (`resolveCourseStagePlaySettings`: the lane options the course allows, then an LR2 GRADE course's resets).
-- `recordStage` records a stage's play log and says whether the run goes on (`goesOnAfter` asks first); `giveUp` records a stage given up with ESC and ends the run as a failed one.
+- `recordStage` records a stage's replay and says whether the run goes on (`goesOnAfter` asks first); `giveUp` records a stage given up with ESC and ends the run as a failed one.
 - `playSeconds` adds up the stages' play time, a stage given up up to where it was left (`resolveGivenUpPlaySeconds`). `stageExtras` keeps what the host kept of each stage, such as its result graphs.
-- `buildPlaylog` writes the course play log: the stages played, then every stage never reached with its chart facts, its file hashes and its chart fingerprint.
+- `buildReplay` writes the course replay: the stages played, then every stage never reached with its chart facts, its file hashes and its chart fingerprint.
 
 ### The course result
 
-The course result sums the stages (see [Play log — Course play logs](./playlog.md#course-play-logs)), then:
+The course result sums the stages (see [Replay — Course replays](./replay.md#course-replays)), then:
 
 - **Lamp**: FAILED when a stage ended with its gauge empty or a stage was never reached. A FULL COMBO when the course max combo covers every note of the course (Σ notes == course max combo, as LR2 and beatoraja check), a PERFECT without a GOOD and a MAX with only PGREATs, capped at LR2's and IIDX's FULL COMBO. Otherwise the gauge's lamp: LR2 follows the player's pick (EASY → EASY, HARD → HARD, else NORMAL: LR2 awards HARD only for its HARD-family gauges, so a DEATH clear is NORMAL, LR2body.exe `CheckCourseClear`); beatoraja and IIDX follow the class gauge (`CLASS` NORMAL, `EXCLASS` HARD, `EXHARDCLASS` EX-HARD).
 - **BP** (`missCount`): BADs, POORs and empty POORs (LR2 adds an empty POOR to its POOR count, so its BP includes them too), plus every note the run never judged, the unreached stages included (LR2 `CheckCourseClear`, beatoraja `MusicResult`).

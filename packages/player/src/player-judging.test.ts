@@ -7,7 +7,7 @@ import { createEmptyJSON } from '../../json/src/index.ts';
 import { parseChart } from '../../parser/src/index.ts';
 import { autoPlay, manualPlay } from './index.ts';
 import { preparePlaybackChartData } from './core/bootstrap.ts';
-import { parsePlaylog, serializePlaylog, type BeMusicPlaylog } from './playlog/index.ts';
+import { parseReplay, serializeReplay, type BeMusicReplay } from './replay/index.ts';
 import {
   resetAudioSinkState,
   createLandmineOnlyChart,
@@ -45,56 +45,56 @@ describe('player', () => {
     expect(beatoraja.bad).toBe(1);
   });
 
-  test('player: recordPlaylog stamps the chart hash and judge ruleset into the playlog', async () => {
+  test('player: recordReplay stamps the chart hash and judge ruleset into the replay', async () => {
     const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
     json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
 
-    let playlog: BeMusicPlaylog | undefined;
+    let replay: BeMusicReplay | undefined;
     await manualPlay(json, {
       speed: 8,
       leadInMs: 0,
       audio: false,
       tui: false,
       judgeRuleset: 'iidx',
-      recordPlaylog: { chartSHA256: 'ABCDEF0123456789' },
-      onPlaylogRecorded: (recorded) => {
-        playlog = recorded;
+      recordReplay: { chartSHA256: 'ABCDEF0123456789' },
+      onReplayRecorded: (recorded) => {
+        replay = recorded;
       },
       createInputRuntime: createScheduledInputRuntime([
         { delayMs: 50, command: { kind: 'interrupt', reason: 'escape' } },
       ]),
     });
 
-    expect(playlog!.chart.sha256).toBe('abcdef0123456789');
-    expect(playlog!.play.judgeRuleset).toBe('iidx');
-    const parsed = parsePlaylog(serializePlaylog(playlog!));
+    expect(replay!.chart.sha256).toBe('abcdef0123456789');
+    expect(replay!.play.judgeRuleset).toBe('iidx');
+    const parsed = parseReplay(serializeReplay(replay!));
     expect(parsed.chart.sha256).toBe('abcdef0123456789');
     expect(parsed.play.judgeRuleset).toBe('iidx');
   });
 
-  test('player: ESC-interrupted play records an aborted playlog', async () => {
+  test('player: ESC-interrupted play records an aborted replay', async () => {
     const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
     json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
 
-    let playlog: BeMusicPlaylog | undefined;
+    let replay: BeMusicReplay | undefined;
     await manualPlay(json, {
       speed: 1,
       leadInMs: 0,
       audio: false,
       tui: false,
-      onPlaylogRecorded: (recorded) => {
-        playlog = recorded;
+      onReplayRecorded: (recorded) => {
+        replay = recorded;
       },
       createInputRuntime: createScheduledInputRuntime([
         { delayMs: 100, command: { kind: 'interrupt', reason: 'escape' } },
       ]),
     });
 
-    expect(playlog).toBeDefined();
-    expect(playlog!.play.aborted).toBe(true);
-    expect(playlog!.inputs).toHaveLength(0);
+    expect(replay).toBeDefined();
+    expect(replay!.play.aborted).toBe(true);
+    expect(replay!.inputs).toHaveLength(0);
   });
 
   test('preparePlaybackChartData: lane mode comes from the shared play-variant rule, not mines or invisible objects', () => {

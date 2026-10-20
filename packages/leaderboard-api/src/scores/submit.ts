@@ -1,14 +1,14 @@
 import { eq } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import {
-  checkPlaylogEligibility,
-  PLAYLOG_ENGINE_VERSION,
+  checkReplayEligibility,
+  REPLAY_ENGINE_VERSION,
   resolveRulesetResultLamp,
-  simulatePlaylog,
-  type BeMusicPlaylog,
-  type PlaylogRulesetId,
-  type PlaylogRulesetResult,
-} from '@be-music/player/playlog';
+  simulateReplay,
+  type BeMusicReplay,
+  type RulesetId,
+  type ReplayRulesetResult,
+} from '@be-music/player/replay';
 import { refreshChartListing } from '../charts.ts';
 import type { Database } from '../db/client.ts';
 import { bestScore, score, scoreResult } from '../db/schema.ts';
@@ -23,9 +23,9 @@ import { loadBestScores, toBestScoreRow } from './bests.ts';
 
 export interface SubmissionInput {
   userId: string;
-  playlog: BeMusicPlaylog;
-  /** The play log as stored (canonical JSON text). */
-  playlogText: string;
+  replay: BeMusicReplay;
+  /** The replay as stored (canonical JSON text). */
+  replayText: string;
   playDocument: unknown;
   chartDocument?: unknown;
   /** The `Be-Music-Client` header of the request, if any. */
@@ -40,7 +40,7 @@ export interface SubmissionDeps {
 }
 
 export interface RulesetOutcome {
-  ruleset: PlaylogRulesetId;
+  ruleset: RulesetId;
   rulesetRevision: string;
   exScore: number;
   noteCount: number;
@@ -58,18 +58,18 @@ export type SubmissionOutcome =
 
 /**
  * Accepts one play (docs/leaderboard.md section 5). Rejections never write anything; an accepted play writes its
- * play log to R2 before the D1 batch, so a failed batch leaves only an unreferenced object.
+ * replay to R2 before the D1 batch, so a failed batch leaves only an unreferenced object.
  */
 export async function submitScore(deps: SubmissionDeps, input: SubmissionInput): Promise<SubmissionOutcome> {
   const { db, blobs } = deps;
-  const eligibility = checkPlaylogEligibility(input.playlog);
+  const eligibility = checkReplayEligibility(input.replay);
   if (!eligibility.eligible) {
     return { status: 'rejected', httpStatus: 422, reason: eligibility.reason };
   }
   const { chartFingerprint, playFingerprint, assistFlags } = eligibility;
   const assisted = assistFlags.length > 0;
 
-  const submissionId = await sha256Hex(identifyPlay(input.playlog, playFingerprint));
+  const submissionId = await sha256Hex(identifyPlay(input.replay, playFingerprint));
   const existing = await db.query.score.findFirst({ where: eq(score.submissionId, submissionId) });
   if (existing !== undefined && existing.userId !== input.userId) {
     // The same inputs on the same chart from another account: a copied replay, not a play.
@@ -95,23 +95,23 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
   }
   const { verification } = played;
 
-  const simulated = RULESET_IDS.map((ruleset) => ({ ruleset, result: simulatePlaylog(input.playlog, { ruleset }) }));
+  const simulated = RULESET_IDS.map((ruleset) => ({ ruleset, result: simulateReplay(input.replay, { ruleset }) }));
 
   const now = deps.now();
   const scoreId = deps.newId();
-  const playlogKey = `playlogs/${scoreId}.bmplay.json.gz`;
+  const replayKey = `replays/${scoreId}.bmplay.json.gz`;
   // The stored files and the current bests do not depend on each other: one wait for all of them. The play's rows are
   // written only once every file is stored, as before.
   const [currentBests] = await Promise.all([
     loadBestScores(db, input.userId, chartFingerprint, assisted),
-    gzipText(input.playlogText).then((compressed) =>
-      blobs.put(playlogKey, compressed, {
+    gzipText(input.replayText).then((compressed) =>
+      blobs.put(replayKey, compressed, {
         httpMetadata: { contentType: 'application/json', contentEncoding: 'gzip' },
       }),
     ),
     putChartDocument(blobs, played),
   ]);
-  const playedRuleset = input.playlog.play.judgeRuleset ?? 'lr2';
+  const playedRuleset = input.replay.play.judgeRuleset ?? 'lr2';
   const figures = simulated.map(({ ruleset, result }) => {
     const lamp = clearLampRank(resolveRulesetResultLamp(result, ruleset));
     const missCount = resolveMissCount(result.judge);
@@ -122,23 +122,23 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
   });
 
   const statements: BatchItem<'sqlite'>[] = [
-    ...playedChartStatements(db, input.playlog, played, now),
+    ...playedChartStatements(db, input.replay, played, now),
     db.insert(score).values({
       id: scoreId,
       submissionId,
       userId: input.userId,
       chartFingerprint,
       playFingerprint,
-      ...playedFileOf(input.playlog),
+      ...playedFileOf(input.replay),
       playedRuleset,
-      gauge: input.playlog.play.gauge,
+      gauge: input.replay.play.gauge,
       assisted,
       assistFlags,
       verification,
-      recordedBy: input.playlog.recorder !== undefined ? { ...input.playlog.recorder } : null,
+      recordedBy: input.replay.recorder !== undefined ? { ...input.replay.recorder } : null,
       submittedBy: input.submittedBy ?? null,
-      serverEngine: PLAYLOG_ENGINE_VERSION,
-      playlogKey,
+      serverEngine: REPLAY_ENGINE_VERSION,
+      replayKey,
       createdAt: new Date(now),
       updatedAt: new Date(now),
     }),
@@ -196,15 +196,15 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
  * the same play submitted from a second account (a downloaded replay) is refused. Recording time, the recorder and the
  * host's `native` extras are left out.
  */
-export function identifyPlay(playlog: BeMusicPlaylog, playFingerprint: string): string {
-  const { native: _native, ...play } = playlog.play;
-  return JSON.stringify({ playFingerprint, play, inputs: playlog.inputs });
+export function identifyPlay(replay: BeMusicReplay, playFingerprint: string): string {
+  const { native: _native, ...play } = replay.play;
+  return JSON.stringify({ playFingerprint, play, inputs: replay.inputs });
 }
 
 function toScoreResultRow(
   scoreId: string,
-  ruleset: PlaylogRulesetId,
-  result: PlaylogRulesetResult,
+  ruleset: RulesetId,
+  result: ReplayRulesetResult,
   lamp: number,
   missCount: number,
 ): typeof scoreResult.$inferInsert {

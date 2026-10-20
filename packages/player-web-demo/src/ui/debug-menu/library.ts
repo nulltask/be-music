@@ -1,7 +1,7 @@
 // The Debug Menu's Library & records folder. It is built with the menu as `this` (`DebugMenu`).
 
 import type { GUI } from 'lil-gui';
-import { storeSongRecords } from '../../song-records.ts';
+import { storeChartBestRecords } from '../../chart-best-records.ts';
 import { parseURLMediaParams } from '../../url-load.ts';
 import { DEBUG_MENU_FOLDERS, type DebugMenuFolder } from './folders.ts';
 import type { DebugMenu } from './index.ts';
@@ -32,34 +32,34 @@ export function buildLibraryFolder(
   library.add(urls, 'music').name('Music ZIP URL');
   library.add(urls, 'skin').name('Skin ZIP URL');
   library.add(urls, 'load').name('Load from URLs');
-  // Play-history auto-save — OFF by default. When enabled, every finished play downloads its play-log
-  // (`*.bmplay.json`, the raw input replay defined in `@be-music/player/playlog`) as soon as the result scene
-  // mounts. The file feeds the `bms-playlog` CLI, which re-derives LR2 / beatoraja / IIDX scores from the replay.
-  // The value is LATCHED at song start (`lockPlaylogOptionsForPlay`) and the controller is disabled while a song
-  // is playing — playlog options cannot change mid-play.
-  this.playlogSaveController = library
-    .add(this.guiState, 'autoSavePlaylog')
+  // Play-history auto-save — OFF by default. When enabled, every finished play downloads its replay
+  // (`*.bmplay.json`, the raw input replay defined in `@be-music/player/replay`) as soon as the result scene
+  // mounts. The file feeds the `bms-replay` CLI, which re-derives LR2 / beatoraja / IIDX scores from the replay.
+  // The value is LATCHED at song start (`lockReplayOptionsForPlay`) and the controller is disabled while a song
+  // is playing — replay options cannot change mid-play.
+  this.replaySaveController = library
+    .add(this.guiState, 'autoSaveReplay')
     .name('Auto-save play history')
     .onChange((value: boolean) => {
-      this.guiState.autoSavePlaylog = value;
+      this.guiState.autoSaveReplay = value;
     });
   library
     .add(
       {
         clear: () => {
-          if (this.records.songRecords.size === 0) {
+          if (this.records.chartBestRecords.size === 0) {
             this.setStatus('No best records to clear');
             return;
           }
           if (
             !window.confirm(
-              `Clear ${this.records.songRecords.size} best record(s), of every judge ruleset? This cannot be undone.`,
+              `Clear ${this.records.chartBestRecords.size} best record(s), of every judge ruleset? This cannot be undone.`,
             )
           ) {
             return;
           }
-          this.records.songRecords.clear();
-          storeSongRecords(this.records.songRecords);
+          this.records.chartBestRecords.clear();
+          storeChartBestRecords(this.records.chartBestRecords);
           this.setStatus('Best records cleared');
         },
       },
@@ -67,7 +67,7 @@ export function buildLibraryFolder(
     )
     .name('Clear best records');
   // BGA video transcode controls. Both settings are seeded into the next play scene's settings (see
-  // `preloadGameplay` / `playSong` for the wiring), so changing them mid-session takes effect on the next chart mount
+  // `preloadGameplay` / `playChart` for the wiring), so changing them mid-session takes effect on the next chart mount
   // — no need to rebuild gameplay if the user is between songs. We don't push live into the running gameplay because
   // BGA assets are loaded once at chart- prepare time and the codec / resize decisions are encoded into the cached
   // video bytes.

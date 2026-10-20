@@ -17,7 +17,7 @@ function Card(props: { title: string; description?: string; children: Child }) {
 }
 
 /**
- * The signed-in player's settings: handle, display name, icon and passkeys. The forms and buttons are wired by the
+ * The signed-in player's settings: handle, display name, avatar and passkeys. The forms and buttons are wired by the
  * client script (client/main.ts), which calls the account API; signed out, the page offers the passkey sign-in.
  */
 export async function settingsPage(c: PageContext<'/settings'>) {
@@ -91,7 +91,7 @@ export async function settingsPage(c: PageContext<'/settings'>) {
           </div>
         </form>
       </Card>
-      <Card title={t.icon} description={t.iconLead}>
+      <Card title={t.avatar} description={t.avatarLead}>
         <div class="flex flex-wrap items-center gap-4">
           <Avatar src={viewer.avatarUrl} size={96} />
           <div class="flex flex-wrap items-center gap-2">

@@ -8,14 +8,14 @@ be-music の Leaderboard API です。Cloudflare Workers 上の Hono アプリ�
 ## 実装済みのもの
 
 - 独立した Accounts に OIDC でログイン。ゲスト、パスキー、設定済みの Discord／Google に対応。
-- `POST /api/v0/scores`: プレイログ（gzip）を送信します。サーバーは対象かどうかの判定と、play / chart fingerprint の
+- `POST /api/v0/scores`: リプレイ（gzip）を送信します。サーバーは対象かどうかの判定と、play / chart fingerprint の
   ドキュメントの確認（検証の層 L1〜L3、`#RANDOM` のない譜面では L4 も）を行い、`lr2`・`beatoraja`・`iidx` で再計算し、
   ログを R2 に保存して自己ベストを更新します。再送された同じプレイはそれと分かり、別のアカウントからの同じプレイは
   拒否します。
 - `GET /api/v0/charts/:chartFingerprint/leaderboard` と `.../leaderboard/me`: ランキング。アシスト付きのプレイ、匿名の
   プレイヤー、「このルールセットでプレイしたもの」のフィルタ付き。
-- `GET /api/v0/scores/:id` と `.../playlog`。
-- コースのプレイ（docs/leaderboard.ja.md 6.1 節）: `POST /api/v0/course-scores`、最新のプレイ、1 プレイ、そのプレイログ、
+- `GET /api/v0/scores/:id` と `.../replay`。
+- コースのプレイ（docs/leaderboard.ja.md 6.1 節）: `POST /api/v0/course-scores`、最新のプレイ、1 プレイ、そのリプレイ、
   プレイの非表示、コース、そのランキングと自分の順位。コースとルールセットごとのベスト（トロフィーのベストを含む）を持ちます。
 - `GET /api/v0/openapi.json`: OpenAPI 3.1 のドキュメント。ルートの valibot スキーマ（`src/api/schemas.ts`）から生成します。リファレンスページは `/api-reference` です。コピーを [`openapi.json`](./openapi.json) としてコミットしており、古くなるとテストが失敗します。API を変えたら `vp test run -u` で更新してください。
 
@@ -28,7 +28,7 @@ be-music の Leaderboard API です。Cloudflare Workers 上の Hono アプリ�
 
 ```mermaid
 flowchart TD
-  post(["POST /api/v0/scores"]) --> gate{"ログイン済み、レート制限内、<br/>正しく対象のプレイログ?"}
+  post(["POST /api/v0/scores"]) --> gate{"ログイン済み、レート制限内、<br/>正しく対象のリプレイ?"}
   gate -->|いいえ| e4xx["401 / 429 / 400 / 422"]
   gate -->|はい| dup{"submission id が<br/>保存済み?"}
   dup -->|"はい、同じプレイヤー"| r200["200: 保存済みの結果"]
@@ -36,7 +36,7 @@ flowchart TD
   dup -->|いいえ| docs{"ドキュメントが fingerprint<br/>と一致（L1〜L4）?"}
   docs -->|いいえ| reject["409 / 422"]
   docs -->|はい| sim["lr2・beatoraja・iidx<br/>で再計算"]
-  sim --> store["R2: プレイログ<br/>D1: スコア、結果、ベスト"]
+  sim --> store["R2: リプレイ<br/>D1: スコア、結果、ベスト"]
   store --> r201["201: 結果と順位"]
 ```
 

@@ -7,17 +7,17 @@
  * - Stage and layout: {@link wideStage} (the 16:9 stage the built-ins use) and {@link tallStage} (its 9:16 portrait
  *   counterpart, picked with {@link resolveBeMusicStage}), the `BeMusicGameplayLayout` each gameplay frame carries,
  *   {@link resolveLaneRuns}, and {@link resolveMilestoneArea} for placing cut-ins clear of the lanes.
- * - Play state: judgement words (`judgeDisplayWord`, the flashing GREAT of a PERFECT), moments (combo milestones, the
+ * - Play state: judgment words (`judgeDisplayWord`, the flashing GREAT of a PERFECT), moments (combo milestones, the
  *   clear line, full combo, count-in progress), effect levels, input impulses, and the loading caption.
  * - Sound: `audioDrive` turns the frame's audio analysis into ready-to-use drive values.
- * - Song facts: select-row facts (`resolveSongRowFacts`), result lamp and track rows, and judgement-timing histograms
- *   (`binJudgeTimings`).
+ * - Chart facts: select-row facts (`resolveChartRowFacts`), result lamp and track rows, and judgment-timing histograms
+ *   (`binJudgmentTimings`).
  * - Skin settings: `resolveBeMusicSkinSettings` fills in and checks the values of a skin's `settings` schema.
  * - Text and motion: tabular figure layout, the default text face, easing, staged timelines, roll-up counters, and a
  *   deterministic hash for jitter.
  */
 export type * from './types.ts';
-export type * from './song.ts';
+export type * from './chart.ts';
 export type * from './result-data.ts';
 export type * from './play-options.ts';
 
@@ -40,6 +40,6 @@ export * from './judge-word.ts';
 export * from './moments.ts';
 export * from './loading.ts';
 export * from './audio-drive.ts';
-export * from './song-stats.ts';
+export * from './chart-stats.ts';
 export * from './result-track.ts';
 export * from './select-list.ts';

@@ -435,7 +435,7 @@ export function summarizeComparison(
   };
 }
 
-/** The package a case key belongs to: `player.playlog.parsePlaylog` → `player`. */
+/** The package a case key belongs to: `player.replay.parseReplay` → `player`. */
 export function packageOf(key: string): string {
   const dot = key.indexOf('.');
   return dot === -1 ? key : key.slice(0, dot);

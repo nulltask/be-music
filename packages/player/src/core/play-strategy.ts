@@ -1,9 +1,9 @@
-import type { PlaylogPlay } from '../playlog/format.ts';
+import type { ReplayPlay } from '../replay/format.ts';
 import type { PlayerInputCommand } from './input-signal-bus.ts';
 import type { PlaySession } from './play-session.ts';
 
 /**
- * Judge strategies: what differs between manual, replay and AUTO play. The play loop (`play-loop.ts`) owns the clock,
+ * Judgment strategies: what differs between manual, replay and AUTO play. The play loop (`play-loop.ts`) owns the clock,
  * the lead-in, audio, input commands, the horizon and the hold after the chart; a strategy decides how the notes are
  * judged on each tick, which input it takes and how the judging ends.
  */
@@ -45,8 +45,8 @@ export interface PlayJudge {
 
 /** How a play is judged: manual play from live input, a replay of a recorded input stream, or AUTO play. */
 export interface JudgeStrategy {
-  /** The play log's `play.mode`, and the mode the input runtime and the audio session are created for. */
-  readonly mode: PlaylogPlay['mode'];
+  /** The replay's `play.mode`, and the mode the input runtime and the audio session are created for. */
+  readonly mode: ReplayPlay['mode'];
   /** Whether the play shows the active-audio debug readout from a chart estimate when the session reports none. */
   readonly estimatesActiveAudio: boolean;
   /** Writes the no-TUI introduction (mode, lane map, keys). */

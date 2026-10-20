@@ -14,7 +14,7 @@ import type { Texture } from 'pixi.js';
 import { loadPlaySamples } from '../../chart/play-audio.ts';
 import { loadPlayBGA } from '../../chart/play-bga.ts';
 import type { LibraryChart } from '@be-music/scene-model';
-import type { BrowserSongAssetSource } from '../../collection/types.ts';
+import type { BrowserAssetSource } from '../../collection/types.ts';
 import { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
 import type {
   AudioBusChannel,
@@ -48,8 +48,8 @@ export interface PlayMediaContext {
       | 'audio'
     >
   >;
-  readonly song: LibraryChart | undefined;
-  readonly source: BrowserSongAssetSource | undefined;
+  readonly chart: LibraryChart | undefined;
+  readonly source: BrowserAssetSource | undefined;
   readonly resolvedChart: BeMusicJSON | undefined;
   readonly disposed: boolean;
   readonly tempo: number;
@@ -80,7 +80,7 @@ export interface PlayMediaContext {
 }
 
 export async function prepareAudio(ctx: PlayMediaContext): Promise<void> {
-  if (!ctx.source || !ctx.song) {
+  if (!ctx.source || !ctx.chart) {
     return;
   }
   // Build the audio bus. See `audio-bus.ts` for the full architecture; in short:
@@ -93,7 +93,7 @@ export async function prepareAudio(ctx: PlayMediaContext): Promise<void> {
   ctx.audioCompressorMode = ctx.options.audioCompressorMode ?? 'split';
   const initialMode: CompressorMode = ctx.options.audioCompressor === false ? 'off' : ctx.audioCompressorMode;
   // Use the control-flow-resolved chart so #IF-gated #WAVxx declarations match the chosen #RANDOM branch.
-  const chart = ctx.resolvedChart ?? ctx.song.chart;
+  const chart = ctx.resolvedChart ?? ctx.chart.chart;
   // The AudioContext, the bus and `#VOLWAV` are built by the audio layer (`runtime/play-audio-graph.ts`), and the
   // samples decoded into them (`chart/play-audio.ts`). With the host's audio service the play opens them through it
   // (`openPlayGraph`, ADR 0007), which taps the bus for the analyser and owns the context's teardown.
@@ -124,7 +124,7 @@ export async function prepareAudio(ctx: PlayMediaContext): Promise<void> {
     audioContext: ctx.audioContext,
     chart,
     source: ctx.source,
-    chartPath: ctx.song.chartPath,
+    chartPath: ctx.chart.chartPath,
     samples: ctx.decodedSamples,
     tempo: ctx.tempo,
     tempoPitchMode: pitchMode,
@@ -152,7 +152,7 @@ export async function prepareAudio(ctx: PlayMediaContext): Promise<void> {
     ctx.webAudioSession = createWebAudioSession({
       audioContext: ctx.audioContext,
       audioBus: ctx.audioBus,
-      chart: ctx.resolvedChart ?? ctx.song!.chart,
+      chart: ctx.resolvedChart ?? ctx.chart!.chart,
       decodedSamples: ctx.decodedSamples,
       wavCmdVolumeMultipliers: ctx.wavCmdVolumeMultipliers,
       bmsonSlicePlayback: ctx.bmsonSlicePlayback,
@@ -173,19 +173,19 @@ export function samplePlaybackRate(ctx: Pick<PlayMediaContext, 'options' | 'temp
  * without fanning browser decoders out without limit.
  */
 export async function prepareBGA(ctx: PlayMediaContext): Promise<void> {
-  const song = ctx.song;
+  const chartEntry = ctx.chart;
   const source = ctx.source;
-  if (!song || !source || !ctx.hasBGA) {
+  if (!chartEntry || !source || !ctx.hasBGA) {
     return;
   }
   // Use the control-flow-resolved chart so #IF-gated BMP / bga header declarations match the chosen #RANDOM branch.
-  const chart = ctx.resolvedChart ?? song.chart;
+  const chart = ctx.resolvedChart ?? chartEntry.chart;
   // Loaded as the beatoraja prep loads them (`chart/play-bga.ts`): base + POOR textures keep their blacks, the layer
   // track's are keyed out for BMS, videos get one texture for both tracks, and `#BGAxx` sub-regions become views.
   await loadPlayBGA({
     chart,
     source,
-    chartPath: song.chartPath,
+    chartPath: chartEntry.chartPath,
     timeline: ctx.bgaTimeline,
     poorFallbackKey: ctx.poorBGAFallbackKey,
     into: {
@@ -249,7 +249,7 @@ export function disposePlayAudio(ctx: PlayMediaTeardownContext, options: PlayDis
   // still-playing source so they don't survive into the next chart's bus and bleed audio through. Fire-and-
   // forget the returned promise; the session's dispose path is best-effort.
   const preserveAudioTail = options.preserveAudioTail === true && ctx.chartEnded;
-  const audioTailChart = ctx.resolvedChart ?? ctx.song?.chart;
+  const audioTailChart = ctx.resolvedChart ?? ctx.chart?.chart;
   const audioTailCleanupDelayMs =
     preserveAudioTail && audioTailChart !== undefined
       ? chartToElapsedSeconds(

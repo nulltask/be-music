@@ -2,25 +2,25 @@
 
 # be-music
 
-TypeScript + pnpm workspaces で構成した BMS/BMSON ツールチェーンです。
+TypeScript + pnpm workspaces で構成した BMS/bmson ツールチェーンです。
 
 ## パッケージ
 
-- `@be-music/json`: Be-Music 内部処理専用の BMS/BMSON 中間表現 (JSON互換) の pure IR
+- `@be-music/json`: Be-Music 内部処理専用の BMS/bmson 中間表現 (JSON互換) の pure IR
 - `@be-music/chart`: beat 解決、イベント順序、ロングノート解決などの譜面意味論 helper
 - `@be-music/utils`: 全パッケージで再利用する汎用ユーティリティ。browser-safe な core helper と Node 向け helper は狭い subpath export で分けています
 - `@be-music/parser`: `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / JSON のパーサ
 - `@be-music/stringifier`: JSON から `.bms` / `.bmson` への文字列化
 - `@be-music/audio-renderer`: 譜面をレンダリングして `.wav` / `.aiff` を出力
-- `@be-music/player`: 規則と再生 engine を共有する package。1 つのプレイループ（手動・AUTO・リプレイ）、判定、score、gauge とクリアランプ、自己ベスト、コースの実行と NONSTOP、プレイログの形式、ホストが差し込む runtime 契約
-- `@be-music/player-tui`: autoplay、keyboard play、Music Select、BGA、SEA build を扱う terminal UI と `bms-player` CLI frontend、およびプレイログ再シミュレータ `bms-playlog`
+- `@be-music/player`: 規則と再生 engine を共有する package。1 つのプレイループ（手動・AUTO・リプレイ）、判定、score、gauge とクリアランプ、自己ベスト、コースの実行と NONSTOP、リプレイの形式、ホストが差し込む runtime 契約
+- `@be-music/player-tui`: autoplay、keyboard play、Music Select、BGA、SEA build を扱う terminal UI と `bms-player` CLI frontend、およびリプレイ再シミュレータ `bms-replay`
 - `@be-music/scene-model`: ライブラリの項目・一覧・プレイオプション・プレイ状態と結果・コース・効果音など、スキンの種類によらず共有する実行環境非依存のシーンモデル
 - `@be-music/lr2-skin`: Lunatic Rave 2 skin parser、asset resolver、theme loader を renderer 非依存で提供する package
 - `@be-music/beatoraja-skin`: beatoraja JSON/Lua skin parser、normalizer、theme loader を renderer 非依存で提供する package
 - `@be-music/skin-sdk`: browser player 向け be-music スキンを書くための描画フレームワーク非依存の SDK
 - `@be-music/player-web`: browser の PixiJS 実行層。選曲・決定・プレイ・リザルトの各画面を、built-in・LR2・beatoraja のファミリービューが描くシーンセッションとして 1 つのホスト向け API から作る。音のサービス、譜面のコレクション、スキンの読み込み、gameplay の録画も持つ
 - `@be-music/player-web-demo`: folder / ZIP drop、LR2 / beatoraja theme、Debug Menu、browser 再生を、1 つのシーンルーターの下のサービスとして接続する private Vite demo
-- `@be-music/leaderboard-api`: Cloudflare Workers で動く private な Leaderboard API。プレイログの投稿、再シミュレーションによる検証、ランキング
+- `@be-music/leaderboard-api`: Cloudflare Workers で動く private な Leaderboard API。リプレイの投稿、再シミュレーションによる検証、ランキング
 - `@be-music/editor`: CLI エディタ (インポート・編集・エクスポート)
 
 パッケージは層を成して積み上がっています。矢印は、パッケージからそれに依存するパッケージへ向かいます。ほかの矢印を通じて既に届く依存は重ねて描いていません（`@be-music/utils` はほぼすべてのパッケージの下にあります）。パッケージの内側の同じ層は [アーキテクチャ — 目指す構造](./docs/architecture.ja.md#目指す構造) にあります。
@@ -106,19 +106,19 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - [仕様書トップ](docs/README.ja.md)
 - [アーキテクチャ](docs/architecture.ja.md)と[設計判断の記録](docs/adr/README.ja.md)
 - [BMS 実装仕様](docs/bms-spec.ja.md)
-- [BMSON 実装仕様](docs/bmson-spec.ja.md)
+- [bmson 実装仕様](docs/bmson-spec.ja.md)
 - [Bemuse 実装仕様](docs/bemuse-spec.ja.md)
 - [LR2 と beatoraja のセマンティクス](docs/semantics-lr2-beatoraja.ja.md)
 - [Player 実装仕様](docs/player-spec.ja.md)
 - [Terminal player 実装メモ](docs/player-tui.ja.md)
 - [Browser player 実装メモ](docs/player-web.ja.md)
 - [シーンモデル（`@be-music/scene-model`）](docs/scene-model.ja.md)
-- [プレイログ（プレイ履歴）仕様](docs/playlog.ja.md)
+- [リプレイ（プレイ履歴）仕様](docs/replay.ja.md)
 - [コースと段位認定](docs/course.ja.md)
 - [be-music スキンの作り方](docs/be-music-skin.ja.md)
 - [LR2 skin 実装メモ](docs/lr2-skin.ja.md)
 - [beatoraja skin 実装メモ](docs/beatoraja-skin.ja.md)
-- [BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様](docs/json-spec.ja.md)
+- [BMS/bmson 中間表現 (`@be-music/json`) 実装仕様](docs/json-spec.ja.md)
 - [用語集](docs/glossary.ja.md)
 
 `@be-music/json` は Be-Music の内部データモデルです。配布フォーマットや他ツールとの再利用可能な交換フォーマットとしては設計していません。
@@ -131,26 +131,26 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - BMS のヘッダ / オブジェクト行 / 制御構文を保持
 - `#WAVxx` / `#BMPxx` / `#BPMxx` / `#STOPxx` / `#TEXTxx` を解釈
 - BMS 拡張ヘッダ (`#PREVIEW`, `#LNTYPE`, `#LNMODE`, `#LNOBJ`, `#VOLWAV`, `#SCROLLxx`, `#VIDEOFILE` など) を保持
-- BMSON の `info` / `lines` / `sound_channels` / `bpm_events` / `stop_events` / `bga` と beatoraja 拡張の `scroll_events` / `key_channels` / `mine_channels` を解釈
+- bmson の `info` / `lines` / `sound_channels` / `bpm_events` / `stop_events` / `bga` と beatoraja 拡張の `scroll_events` / `key_channels` / `mine_channels` を解釈
 - BMS テキストの文字コード推測 (`Shift_JIS`, `UTF-8`, `EUC-JP`, `latin1` など)
-- BMSON の `info.init_bpm` は parser が必須扱いにし、欠落・不正値は `130` fallback ではなく早期 error にします
-- beatoraja の BMSON 拡張を beatoraja と同じ意味で `mode_hint` lane resolver 経由で map し、`mine_channels` は mine ごとの `damage` を保持した地雷、`key_channels` は隠し（不可視）ノートにする
+- bmson の `info.init_bpm` は parser が必須扱いにし、欠落・不正値は `130` fallback ではなく早期 error にします
+- beatoraja の bmson 拡張を beatoraja と同じ意味で `mode_hint` lane resolver 経由で map し、`mine_channels` は mine ごとの `damage` を保持した地雷、`key_channels` は隠し（不可視）ノートにする
 
 ### stringifier (`@be-music/stringifier`)
 
-- 中間表現(JSON) から BMS/BMSON を出力
+- 中間表現(JSON) から BMS/bmson を出力
 - `position: [numerator, denominator]` を使って小節解像度を安定再現
-- BMSON 拡張情報 (`info` 拡張, `bga`, `notes.l/c`) を出力
+- bmson 拡張情報 (`info` 拡張, `bga`, `notes.l/c`) を出力
 - `preservation` layer が normalized event と一致している場合、BMS source 構造を優先して再出力
 
 ### audio-renderer (`@be-music/audio-renderer`)
 
-- BMS / BMSON / JSON 入力に対応
+- BMS / bmson / JSON 入力に対応
 - 出力形式 `.wav` / `.aiff`
 - サンプル読込: `WAV` / `MP3` / `OGG` (Vorbis/Opus) / `OPUS`
 - 小節長 / BPM / STOP を反映
 - LR2 系の 100001 倍 BPM ギミック値を時刻解決で処理
-- `#VOLWAV`、`#xxx97` / `#xxx98`、BMSON `notes.c`、`#WAVCMD 01 xx vv`、`#EXWAVxx v` の volume scaling を反映
+- `#VOLWAV`、`#xxx97` / `#xxx98`、bmson `notes.c`、`#WAVCMD 01 xx vv`、`#EXWAVxx v` の volume scaling を反映
 
 ### player core (`@be-music/player`)
 
@@ -158,9 +158,9 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - lane flash、POOR BGA command、frame snapshot、pause、restart、high-speed change を流す UI / input signal bus
 - playable note、legacy long note、`#LNOBJ`、FREE ZONE、mine、invisible note の共通抽出
 - 判定幅、動的 `#EXRANKxx`、score、groove gauge、scroll distance、BGA timeline、result summary の共通意味論
-- エンジンのルートと並ぶ browser-safe な入口：`signals`、`lanes`、`display`、`ruleset`、`playlog`、`records`、`course`（[Player 実装仕様 — 公開する入口](./docs/player-spec.ja.md#公開する入口)）
+- エンジンのルートと並ぶ browser-safe な入口：`signals`、`lanes`、`display`、`ruleset`、`replay`、`records`、`course`（[Player 実装仕様 — 公開する入口](./docs/player-spec.ja.md#公開する入口)）
 - `ruleset`: ホスト・スキン・リーダーボードが共有する語彙。ゲージ、クリアランプ、BP、スコア（`ScoreSummary`、`computeScoreRate`、DJ ランク、LR2 のマネースコア）
-- `course`、`records`、`playlog`: コースの実行、NONSTOP の流れ、コースのステージの規則、判定ルールセットごとの自己ベスト、プレイログの形式とその記録・シミュレータ
+- `course`、`records`、`replay`: コースの実行、NONSTOP の流れ、コースのステージの規則、判定ルールセットごとの自己ベスト、リプレイの形式とその記録・シミュレータ
 
 ### scene models (`@be-music/scene-model`)
 
@@ -189,7 +189,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - compressor / limiter の有効化切り替えと threshold / release 系の出力ダイナミクス調整
 - 構造化ログ出力 (`~/.be-music/logs/player.ndjson`, `--log-file` で上書き)
 - gameplay、TUI 描画、video BGA decode を分離する Node worker 構成
-- 記録したプレイログから LR2 / beatoraja / IIDX の結果を再計算する `bms-playlog` CLI（[プレイログ仕様](docs/playlog.ja.md) を参照）
+- 記録したリプレイから LR2 / beatoraja / IIDX の結果を再計算する `bms-replay` CLI（[リプレイ仕様](docs/replay.ja.md) を参照）
 
 ### LR2 skin (`@be-music/lr2-skin`)
 
@@ -237,13 +237,13 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 
 ## 主要コマンド
 
-### 1. BMS/BMSON を JSON に変換
+### 1. BMS/bmson を JSON に変換
 
 ```bash
 pnpm run parse chart.bms chart.json
 ```
 
-### 2. JSON を BMS/BMSON に変換
+### 2. JSON を BMS/bmson に変換
 
 ```bash
 pnpm run stringify chart.json chart.bms --format bms
@@ -315,7 +315,7 @@ pnpm run player chart.bms --no-ln-type-auto
 pnpm run player:web
 ```
 
-demo は Vite dev server を起動します。BMS/BMSON の楽曲 folder、LR2 theme folder、beatoraja theme folder、ZIP、または楽曲 folder と LR2 / beatoraja theme folder の組み合わせを browser に drop できます。
+demo は Vite dev server を起動します。BMS/bmson の楽曲 folder、LR2 theme folder、beatoraja theme folder、ZIP、または楽曲 folder と LR2 / beatoraja theme folder の組み合わせを browser に drop できます。
 
 URL から archive を読み込むこともできます。`?music=<zip の URL>&skin=<zip の URL>`（どちらか一方だけでも可）を付けると、drop と同じ経路で archive を読み込みます。cross-origin の `https` URL は同一オリジンの proxy route `/__url-load-proxy` 経由で取得します。この route は Vite dev server と Cloudflare Worker の両方が提供します。
 
@@ -337,14 +337,14 @@ pnpm run editor add-note chart.json 0 11 1 2 01
 pnpm run editor export chart.json chart.bms
 ```
 
-### 7. プレイログの再シミュレーション
+### 7. リプレイの再シミュレーション
 
 ```bash
-pnpm run playlog -- /path/to/Song.bmplay.json
-pnpm run playlog -- /path/to/Song.bmplay.json --ruleset=lr2,beatoraja --json
+pnpm run replay -- /path/to/Song.bmplay.json
+pnpm run replay -- /path/to/Song.bmplay.json --ruleset=lr2,beatoraja --json
 ```
 
-オプションは [プレイログ仕様](docs/playlog.ja.md) を参照してください。
+オプションは [リプレイ仕様](docs/replay.ja.md) を参照してください。
 
 ## player 操作
 
@@ -456,7 +456,7 @@ flowchart TD
 
 - 判定種別: `PERFECT`, `GREAT`, `GOOD`, `BAD`, `POOR`
 - `FAST` / `SLOW` は `GREAT` / `GOOD` の早押し・遅押し時のみ加算
-- 対応する未判定ノートが存在しない空打鍵は LR2-style empty POOR として扱います。judge counter、score、EX-SCORE、combo は変えませんが、empty POOR の gauge delta を適用し、POOR BGA を起動します
+- 対応する未判定ノートが存在しない空打鍵は LR2-style empty POOR として扱います。judgment counter、score、EX-SCORE、combo は変えませんが、empty POOR の gauge delta を適用し、POOR BGA を起動します
 - EX-SCORE:
   - `PERFECT = +2`
   - `GREAT = +1`

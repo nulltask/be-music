@@ -11,7 +11,7 @@ export interface PlayInfo {
   laneOption: string | null;
   durationMs: number | null;
   verification: string;
-  /** The play log's `recorder` (application, version, build, engine version, platform). */
+  /** The replay's `recorder` (application, version, build, engine version, platform). */
   recordedBy: Record<string, string> | null;
   /** The `Be-Music-Client` header the play was sent with. */
   submittedBy: string | null;

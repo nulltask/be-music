@@ -330,7 +330,7 @@ describe('SelectSession sound', () => {
     const { session, key, advance, audio } = createSession({ browse: { folderPath: ['pack'], cursors: [1, 0] } });
     const focus = audio.preview.focus;
     expect(focus).toHaveBeenLastCalledWith(
-      expect.objectContaining({ song: expect.objectContaining({ id: 'a' }) }),
+      expect.objectContaining({ chart: expect.objectContaining({ id: 'a' }) }),
       session,
     );
     session.exit();
@@ -342,7 +342,7 @@ describe('SelectSession sound', () => {
     advance(10);
     expect(focus).toHaveBeenCalledTimes(2);
     expect(focus).toHaveBeenLastCalledWith(
-      expect.objectContaining({ song: expect.objectContaining({ id: 'b' }) }),
+      expect.objectContaining({ chart: expect.objectContaining({ id: 'b' }) }),
       session,
     );
   });
@@ -353,7 +353,7 @@ describe('SelectSession sound', () => {
     advance(10);
     expect(audio.preview.focus).toHaveBeenCalledTimes(2);
     expect(audio.preview.focus).toHaveBeenLastCalledWith(
-      expect.objectContaining({ song: expect.objectContaining({ id: 'c' }) }),
+      expect.objectContaining({ chart: expect.objectContaining({ id: 'c' }) }),
       session,
     );
   });

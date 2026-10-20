@@ -13,7 +13,7 @@ import { makeChart, makeChartWith, makeCourse } from './test-support.ts';
 
 const CLOCK = { year: 2026, month: 10, day: 16, hour: 9, minute: 5, second: 30 };
 
-function song(...args: Parameters<typeof makeChartWith>): LibraryEntry {
+function chartEntry(...args: Parameters<typeof makeChartWith>): LibraryEntry {
   return { kind: 'chart', chart: makeChartWith(...args) };
 }
 
@@ -45,7 +45,7 @@ describe('resolveLR2SelectState ops', () => {
 
   it('lights the focused chart’s ops: its bar, key mode, features, judge rank, difficulty and lamp', () => {
     const { ops } = resolveLR2SelectState({
-      focused: song({ channels: ['11', '16', '51', '03'], difficulty: 3, rank: 1 }),
+      focused: chartEntry({ channels: ['11', '16', '51', '03'], difficulty: 3, rank: 1 }),
       options: DEFAULT_PLAY_OPTIONS,
       record: { lamp: 'HARD' },
       readme: true,
@@ -144,7 +144,7 @@ describe('resolveLR2SelectState ops', () => {
     expect(onFolder.has(LR2_OP.FOLDER_BAR)).toBe(true);
     expect(onFolder.has(LR2_OP.SONG_BAR)).toBe(false);
     expect(onFolder.has(LR2_OP.PLAYABLE_BAR)).toBe(false);
-    const onSong = resolveLR2SelectState({ focused: song({}), options: DEFAULT_PLAY_OPTIONS }).ops;
+    const onSong = resolveLR2SelectState({ focused: chartEntry({}), options: DEFAULT_PLAY_OPTIONS }).ops;
     expect(onSong.has(LR2_OP.FOLDER_BAR)).toBe(false);
     expect(onSong.has(LR2_OP.SONG_BAR)).toBe(true);
     expect(resolveLR2SelectState({ options: DEFAULT_PLAY_OPTIONS }).ops.has(LR2_OP.FOLDER_BAR)).toBe(false);
@@ -210,7 +210,7 @@ describe('resolveLR2SelectState numbers', () => {
 describe('resolveLR2SelectState texts', () => {
   it('reads the search word, the player and the option panel', () => {
     const state = resolveLR2SelectState({
-      focused: song({ channels: ['11', '18'] }),
+      focused: chartEntry({ channels: ['11', '18'] }),
       options: { ...DEFAULT_PLAY_OPTIONS, bga: 'AUTOPLAY_ONLY', autoScratch1P: true, laneCover: false },
       searchText: 'abc',
     });
@@ -226,7 +226,7 @@ describe('resolveLR2SelectState texts', () => {
 
   it('reads the focused chart’s texts', () => {
     const state = resolveLR2SelectState({
-      focused: song({ difficulty: 5 }, { title: 'T', subtitle: 'S', artist: 'A', genre: 'G', playLevel: 12 }),
+      focused: chartEntry({ difficulty: 5 }, { title: 'T', subtitle: 'S', artist: 'A', genre: 'G', playLevel: 12 }),
       options: DEFAULT_PLAY_OPTIONS,
     });
     expect(state.text(LR2_TEXT.TITLE)).toBe('T');

@@ -4,7 +4,7 @@ import { type Demo, expect, openWithLibrary, SONGS, test } from './support.ts';
 
 /**
  * The lane options apply on every family (ADR 0001): an AUTO play of Fixture A with the Debug Menu's Random 1P on
- * MIRROR plays the chart's keys mirrored, and its play log records the option and the arrangement played.
+ * MIRROR plays the chart's keys mirrored, and its replay records the option and the arrangement played.
  */
 
 const PLAY_OPTIONS = ['Play options'];
@@ -94,12 +94,12 @@ for (const setup of FAMILIES) {
     const state = await demo.waitForResult(0);
     expect(state.results[0]).toMatchObject({ run: 'single', family: setup.family, title: 'Fixture A' });
 
-    const playlog = await demo.lastPlaylog();
-    if (playlog === undefined) throw new Error('the play recorded no log');
-    expect(playlog.play.mode).toBe('auto');
-    expect(playlog.play.randomLane?.p1).toBe('MIRROR');
+    const replay = await demo.lastReplay();
+    if (replay === undefined) throw new Error('the play recorded no log');
+    expect(replay.play.mode).toBe('auto');
+    expect(replay.play.randomLane?.p1).toBe('MIRROR');
     // The log's notes are the lanes the chart played on: every key mirrored, the scratch where it was.
-    const played = playlog.chart.notes
+    const played = replay.chart.notes
       .filter((note) => note.type === 'normal')
       .sort((left, right) => left.timeUs - right.timeUs)
       .map((note) => note.channel);

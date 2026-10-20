@@ -38,7 +38,7 @@ import { playSkinTypeForVariant } from '../../demo-utils.ts';
 import { applyLoadProgress, type LoadingOverlayElements } from '../../loading-overlay.ts';
 
 const dropLog = logger('drop');
-const gameplayLog = logger('gameplay');
+const gamereplay = logger('gameplay');
 
 export interface BeatorajaThemeServiceOptions {
   /** The loading overlay a theme load reports its progress on. */
@@ -252,7 +252,7 @@ export class BeatorajaThemeService {
    * lays the lanes out for (`resolveLibraryChartPlayVariant`), so a 9 KEY chart keeps its POPN lanes on a 7 KEY
    * skin.
    */
-  public async loadBeatorajaPlayKit(song: LibraryChart): Promise<
+  public async loadBeatorajaPlayKit(chartEntry: LibraryChart): Promise<
     | {
         readonly kit: BeatorajaKit;
         readonly entryPath: string;
@@ -263,15 +263,15 @@ export class BeatorajaThemeService {
   > {
     const bundle = this.beatorajaTheme;
     if (bundle === undefined) return undefined;
-    const variant = resolveBeatorajaSkinVariant(bundle, song);
-    const chartVariant = pickBeatorajaPlayableVariant(chartShapeFor(song));
+    const variant = resolveBeatorajaSkinVariant(bundle, chartEntry);
+    const chartVariant = pickBeatorajaPlayableVariant(chartShapeFor(chartEntry));
     if (variant === undefined || chartVariant === undefined) {
-      this.setStatus(`Beatoraja gameplay unavailable: no play skin for ${song.title}`);
+      this.setStatus(`Beatoraja gameplay unavailable: no play skin for ${chartEntry.title}`);
       return undefined;
     }
     if (variant !== chartVariant) {
       // The skin's lane count differs from the chart's; the play keeps the chart's lanes.
-      gameplayLog.warn(
+      gamereplay.warn(
         `beatoraja gameplay: theme has no '${chartVariant}' skin — falling back to '${variant}' (lane chrome may not match chart key count)`,
       );
     }
@@ -284,7 +284,7 @@ export class BeatorajaThemeService {
       bundle.theme.playSkins[variant],
     );
     if (selectedEntry === undefined) {
-      gameplayLog.warn(`beatoraja gameplay: no skin entry for variant '${variant}'`);
+      gamereplay.warn(`beatoraja gameplay: no skin entry for variant '${variant}'`);
       this.setStatus(`Beatoraja gameplay unavailable: no '${variant}' skin`);
       return undefined;
     }
@@ -295,21 +295,21 @@ export class BeatorajaThemeService {
       entryPath: selectedEntry.entryPath,
       caches: this.beatorajaKitCaches,
       onSources: (sourceBundle) => {
-        gameplayLog.info(
+        gamereplay.info(
           `beatoraja gameplay source bundle: resolved=${sourceBundle.assets.length} unresolved=${sourceBundle.unresolved.length} (entry=${selectedEntry.entryPath})`,
         );
         for (const u of sourceBundle.unresolved) {
-          gameplayLog.warn(`beatoraja gameplay unresolved source[${u.id}] '${u.path}': ${u.reason}`);
+          gamereplay.warn(`beatoraja gameplay unresolved source[${u.id}] '${u.path}': ${u.reason}`);
         }
       },
       onFonts: (loaded, declared) => {
-        gameplayLog.info(
+        gamereplay.info(
           `beatoraja gameplay fonts: declared=${declared} loaded=${loaded.values().length} (entry=${selectedEntry.entryPath})`,
         );
       },
     });
     if (!load.ok) {
-      gameplayLog.warn(`beatoraja gameplay${load.stage === 'header' ? ' header' : ''}: ${load.message}`);
+      gamereplay.warn(`beatoraja gameplay${load.stage === 'header' ? ' header' : ''}: ${load.message}`);
       this.setStatus(`Beatoraja gameplay unavailable: ${load.message}`);
       return undefined;
     }
@@ -365,7 +365,7 @@ export class BeatorajaThemeService {
       bundle.theme.selectSkin,
     );
     if (selectedEntry === undefined) {
-      gameplayLog.warn('beatoraja select: no select skin in theme');
+      gamereplay.warn('beatoraja select: no select skin in theme');
       this.setStatus('Beatoraja select unavailable: no select skin');
       return undefined;
     }
@@ -378,16 +378,16 @@ export class BeatorajaThemeService {
       entryPath: selectedEntry.entryPath,
       caches: this.beatorajaKitCaches,
       onSources: (sourceBundle) => {
-        gameplayLog.info(
+        gamereplay.info(
           `beatoraja select source bundle: resolved=${sourceBundle.assets.length} unresolved=${sourceBundle.unresolved.length} (entry=${selectedEntry.entryPath})`,
         );
         for (const u of sourceBundle.unresolved) {
-          gameplayLog.warn(`beatoraja select unresolved source[${u.id}] '${u.path}': ${u.reason}`);
+          gamereplay.warn(`beatoraja select unresolved source[${u.id}] '${u.path}': ${u.reason}`);
         }
       },
     });
     if (!load.ok) {
-      gameplayLog.warn(`beatoraja select: ${load.message}`);
+      gamereplay.warn(`beatoraja select: ${load.message}`);
       this.setStatus(`Beatoraja select unavailable: ${load.message}`);
       return undefined;
     }
@@ -428,7 +428,7 @@ export class BeatorajaThemeService {
    * beatoraja theme, no decide skin in it, or one that failed to load. The player's pick in the Debug Menu wins over the
    * discovery's (`theme.decideSkin`, not `decideCandidates[0]`, which is only the first in the file walk).
    */
-  public async loadBeatorajaDecideKit(song: LibraryChart): Promise<DecideSceneKit | undefined> {
+  public async loadBeatorajaDecideKit(chartEntry: LibraryChart): Promise<DecideSceneKit | undefined> {
     const bundle = this.beatorajaTheme;
     if (bundle === undefined) return undefined;
     const decideCandidates = bundle.theme.entries.filter((entry) => entry.header.type === BEATORAJA_SKIN_TYPE.DECIDE);
@@ -445,10 +445,10 @@ export class BeatorajaThemeService {
       files: bundle.files,
       entryPath: selectedEntry.entryPath,
       caches: this.beatorajaKitCaches,
-      runtimeContext: (skinConfig) => this.buildBeatorajaSkinLoadContext(song, skinConfig),
+      runtimeContext: (skinConfig) => this.buildBeatorajaSkinLoadContext(chartEntry, skinConfig),
     });
     if (!load.ok) {
-      gameplayLog.warn(`beatoraja decide: ${load.message}`);
+      gamereplay.warn(`beatoraja decide: ${load.message}`);
       return undefined;
     }
     return { family: 'beatoraja', kit: load.kit };
@@ -460,7 +460,10 @@ export class BeatorajaThemeService {
    * theme's COURSE_RESULT skin, falling back to its result skin. The player's pick in the Debug Menu wins over the
    * discovery's.
    */
-  public async loadBeatorajaResultKit(song: LibraryChart, courseResult: boolean): Promise<BeatorajaKit | undefined> {
+  public async loadBeatorajaResultKit(
+    chartEntry: LibraryChart,
+    courseResult: boolean,
+  ): Promise<BeatorajaKit | undefined> {
     const bundle = this.beatorajaTheme;
     if (bundle === undefined) return undefined;
     // Same fix as decide — fall back to the discovery's `theme.resultSkin` rather than
@@ -486,10 +489,10 @@ export class BeatorajaThemeService {
       files: bundle.files,
       entryPath: selectedEntry.entryPath,
       caches: this.beatorajaKitCaches,
-      runtimeContext: (skinConfig) => this.buildBeatorajaSkinLoadContext(song, skinConfig),
+      runtimeContext: (skinConfig) => this.buildBeatorajaSkinLoadContext(chartEntry, skinConfig),
     });
     if (!load.ok) {
-      gameplayLog.warn(`beatoraja result: ${load.message}`);
+      gamereplay.warn(`beatoraja result: ${load.message}`);
       return undefined;
     }
     return { family: 'beatoraja', kit: load.kit };
@@ -537,9 +540,9 @@ export class BeatorajaThemeService {
    * ModernChic's decide.lua crashes its whole `main()` without the difficulty ops, and its `Root/customsound.lua` calls
    * the audio accessors from every panel toggle.
    */
-  private buildBeatorajaSkinLoadContext(song: LibraryChart, skinConfig: BeatorajaSkinConfig) {
+  private buildBeatorajaSkinLoadContext(chartEntry: LibraryChart, skinConfig: BeatorajaSkinConfig) {
     return createBeatorajaSkinLoadContext({
-      difficulty: song.chart.metadata.difficulty,
+      difficulty: chartEntry.chart.metadata.difficulty,
       skinConfig,
       skinAudio: this.audio.skinSounds.owned(this.themeOwner),
     });

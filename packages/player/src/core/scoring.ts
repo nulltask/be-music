@@ -2,7 +2,7 @@ import {
   IIDX_EX_SCORE_PER_GREAT,
   IIDX_EX_SCORE_PER_PGREAT,
   resolveLR2MoneyScore,
-  type JudgeKind,
+  type JudgmentKind,
   type ScoreSummary,
 } from '../ruleset/score.ts';
 
@@ -21,7 +21,7 @@ export {
   resolveIIDXRankLabel,
   resolveLR2MoneyScore,
   type IIDXRankLabel,
-  type JudgeKind,
+  type JudgmentKind,
   type ScoreSummary,
 } from '../ruleset/score.ts';
 
@@ -64,7 +64,7 @@ export function breakTrackedCombo(tracker: ScoreTracker): void {
   }
 }
 
-export function applyJudgeToSummary(summary: ScoreSummary, judge: JudgeKind, tracker: ScoreTracker): void {
+export function applyJudgeToSummary(summary: ScoreSummary, judge: JudgmentKind, tracker: ScoreTracker): void {
   if (judge === 'PERFECT') {
     summary.perfect += 1;
   } else if (judge === 'GREAT') {
@@ -96,7 +96,7 @@ export function applyJudgeToSummary(summary: ScoreSummary, judge: JudgeKind, tra
   summary.score = tracker.moneyScore ? resolveLR2MoneyScore(summary) : summary.exScore;
 }
 
-function resolveExScoreDelta(judge: JudgeKind): number {
+function resolveExScoreDelta(judge: JudgmentKind): number {
   if (judge === 'PERFECT') {
     return IIDX_EX_SCORE_PER_PGREAT;
   }

@@ -1,14 +1,14 @@
 [Japanese version](./json-spec.ja.md)
 
-# BMS/BMSON intermediate representation (`@be-music/json`) implementation specification
+# BMS/bmson intermediate representation (`@be-music/json`) implementation specification
 
-This document is the canonical specification for the BMS/BMSON intermediate representation provided by `@be-music/json`.
+This document is the canonical specification for the BMS/bmson intermediate representation provided by `@be-music/json`.
 `@be-music/json` is a format for Be-Music's internal processing only, and is not an external exchange format for distribution or reuse.
 Also, as it is still in the early stages of development, backward compatibility of this intermediate representation cannot be guaranteed.
 
 ## Purpose
 
-- Absorb BMS / BMSON differences and handle internal processing in a single format
+- Absorb BMS / bmson differences and handle internal processing in a single format
 - Preserve event timing stably during round trips
 
 ## Package boundaries
@@ -21,7 +21,7 @@ Also, as it is still in the early stages of development, backward compatibility 
 ## Design principles
 
 - When stringifying parsed input, the IR aims to preserve the original chart structure as faithfully as possible.
-- The structure here includes elements that affect the re-stringing result, such as the order of overlapping definitions, control syntax, object line division units, and BMSON bar line information.
+- The structure here includes elements that affect the re-stringing result, such as the order of overlapping definitions, control syntax, object line division units, and bmson bar line information.
 - Surface information that is not explicitly maintained by the IR, such as blank lines, comments, white space, line breaks, character codes, etc., is not subject to this principle.
 - As a result of editing the IR, if the retained structural information and the normalized `events` / `measures` / extension information no longer match, the stringifier will prioritize consistency and regenerate it.
 

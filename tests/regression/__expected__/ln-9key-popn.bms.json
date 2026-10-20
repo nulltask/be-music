@@ -176,7 +176,7 @@
         "8000000 18 01",
         "8000000 19 01"
       ],
-      "playlogChart": {
+      "replayChart": {
         "sourceFormat": "bms",
         "laneMode": "9 KEY (PMS-COMPAT)",
         "lnMode": 1,

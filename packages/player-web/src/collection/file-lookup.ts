@@ -5,12 +5,12 @@ import {
   loadFileEntryBytes,
   lookupCaseInsensitiveMapEntry,
 } from '@be-music/utils/core';
-import type { BrowserSongAssetEntry } from './types.ts';
+import type { BrowserAssetEntry } from './types.ts';
 
 export { isMaliciousAssetPath } from '@be-music/utils/core';
 
 /**
- * Shared case-insensitive lookup helpers for the file maps used by the song collection (`BrowserSongAssetSource.files`)
+ * Shared case-insensitive lookup helpers for the file maps used by the song collection (`BrowserAssetSource.files`)
  * and the LR2 skin asset map (`LR2Skin.files`).
  *
  * Map values can be either:
@@ -39,7 +39,7 @@ export { isMaliciousAssetPath } from '@be-music/utils/core';
  * themselves) get the fast path with no Map allocation; only on a miss do we touch the lazy index.
  */
 export function findCaseInsensitivePath(
-  files: ReadonlyMap<string, BrowserSongAssetEntry>,
+  files: ReadonlyMap<string, BrowserAssetEntry>,
   candidate: string,
 ): string | undefined {
   return findCaseInsensitiveMapPath(files, candidate, { rejectCandidate: isMaliciousAssetPath });
@@ -50,21 +50,21 @@ export function findCaseInsensitivePath(
  * key.
  */
 export function lookupBytesCaseInsensitive(
-  files: ReadonlyMap<string, BrowserSongAssetEntry>,
+  files: ReadonlyMap<string, BrowserAssetEntry>,
   candidate: string,
-): BrowserSongAssetEntry | undefined {
+): BrowserAssetEntry | undefined {
   return lookupCaseInsensitiveMapEntry(files, candidate, { rejectCandidate: isMaliciousAssetPath });
 }
 
 /**
- * Forces a {@link BrowserSongAssetEntry} into a `Uint8Array`. If the entry is a `File` (a lazy audio reference) this
+ * Forces a {@link BrowserAssetEntry} into a `Uint8Array`. If the entry is a `File` (a lazy audio reference) this
  * performs an `arrayBuffer()` read on demand. The result is NOT cached on the source map — callers that need to cache
  * (e.g. the gameplay sample decoder) should hold onto the returned buffer themselves.
  *
  * Returns `undefined` when the entry itself is undefined so the common pattern
  * `loadAssetBytes(lookupBytesCaseInsensitive(...))` stays readable without an extra null-guard.
  */
-export async function loadAssetBytes(entry: BrowserSongAssetEntry | undefined): Promise<Uint8Array | undefined> {
+export async function loadAssetBytes(entry: BrowserAssetEntry | undefined): Promise<Uint8Array | undefined> {
   return loadFileEntryBytes(entry);
 }
 
@@ -73,6 +73,6 @@ export async function loadAssetBytes(entry: BrowserSongAssetEntry | undefined): 
  * (the caller has to use {@link loadAssetBytes} to read those). Used by image / texture loaders that can't reasonably
  * go async at the call site.
  */
-export function asLoadedBytes(entry: BrowserSongAssetEntry | undefined): Uint8Array | undefined {
+export function asLoadedBytes(entry: BrowserAssetEntry | undefined): Uint8Array | undefined {
   return asLoadedFileEntryBytes(entry);
 }

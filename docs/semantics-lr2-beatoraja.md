@@ -82,7 +82,7 @@ Top risks, most serious first:
 
    (B, A)
 
-10. **Play logs drop physical key identity.** Without the scratch direction, beatoraja's BSS-by-reversal can never be judged or re-simulated. A field added later leaves older logs ambiguous, so add it soon. (B, data format)
+10. **Replays drop physical key identity.** Without the scratch direction, beatoraja's BSS-by-reversal can never be judged or re-simulated. A field added later leaves older logs ambiguous, so add it soon. (B, data format)
 
 Also notable:
 
@@ -98,7 +98,7 @@ Also notable:
 - Event-timestamp input.
 - Exact STOP lengths.
 
-These belong to chart identity (fingerprint) or to the input log. Splitting them per ruleset would break "one chart, one input stream, three re-simulations" ([play log](./playlog.md), [Leaderboard](./leaderboard.md)). Document them as known non-fidelity under `beatoraja`.
+These belong to chart identity (fingerprint) or to the input log. Splitting them per ruleset would break "one chart, one input stream, three re-simulations" ([replay](./replay.md), [Leaderboard](./leaderboard.md)). Document them as known non-fidelity under `beatoraja`.
 
 ```mermaid
 flowchart TD
@@ -107,7 +107,7 @@ flowchart TD
     I[Input log]
   end
   subgraph PerRuleset["Per ruleset (re-simulated)"]
-    J[Judge + gauge]
+    J[Judgment + gauge]
     R[Lamp, BP, assist class]
   end
   subgraph PerFamily["Per skin family"]
@@ -148,7 +148,7 @@ Most fixes below move a rule into the right box. The assist class and LR2 mine c
 | 19  | Negative / zero BPM                                 | B, C        | LR2 reversal for all                                    | Keep; document                                                         |
 | 20  | STOP rounding, SCROLL/SPEED                         | B (tiny), C | Exact; beatoraja drawing                                | Keep                                                                   |
 | 21  | Input time source                                   | C           | Event timestamps                                        | Keep                                                                   |
-| 22  | Judge-timing (display) offset                       | C, A        | Only audio/judge offset; skin numbers 0                 | Add display-only offset; feed skin numbers                             |
+| 22  | Judgment-timing (display) offset                    | C, A        | Only audio/judge offset; skin numbers 0                 | Add display-only offset; feed skin numbers                             |
 | 23  | `#RANDOM` nesting model                             | B (rare)    | Superset stack model                                    | Keep; document; fix doc comment                                        |
 | 24  | Seeds vs resolved pattern; retry same pattern       | C, A        | Resolved channels logged; no seed                       | Keep; add "retry keeps pattern" option                                 |
 | 25  | Option vocabulary / index order                     | A, C        | LR2 order, no CONVERGE / beatoraja set                  | Options by name, per-family index tables                               |
@@ -205,7 +205,7 @@ Most fixes below move a rule into the right box. The assist class and LR2 mine c
 - **Impact:** B, at sub-ms boundaries only.
 - **Recommendation:** keep, and document it as accepted.
 
-### Judge-timing offset: what it moves
+### Judgment-timing offset: what it moves
 
 - **LR2:** `judgetiming` (-99..99) shifts only the drawing clock ([#L2185](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2185)), and AUTO-ADJUST nudges it ([#L12643-L12644](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L12643-L12644)).
 - **beatoraja:** the same visual-only meaning ([play/LaneRenderer.java#L301](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/LaneRenderer.java#L301)), with auto-adjust in `JudgeManager`.
@@ -214,7 +214,7 @@ Most fixes below move a rule into the right box. The assist class and LR2 mine c
   - `audioOffsetMs` moves the judge clock ([`packages/player/src/core/engine-types.ts`](../packages/player/src/core/engine-types.ts), [`play-loop.ts`](../packages/player/src/core/play-loop.ts)). There is no display-only offset.
   - beatoraja `NUMBER_JUDGETIMING` reads 0 ([`packages/beatoraja-skin/src/scene/play-numbers.ts`](../packages/beatoraja-skin/src/scene/play-numbers.ts)), and so does LR2 number 12 ([`packages/lr2-skin/src/state/options.ts`](../packages/lr2-skin/src/state/options.ts)).
 - **Impact:** C; minor A (the skin number and its +/- buttons do nothing).
-- **Recommendation:** add a display-only offset as a player option, shared by both families, and expose it in both skin numbers. It is display only, so there is no play-log risk.
+- **Recommendation:** add a display-only offset as a player option, shared by both families, and expose it in both skin numbers. It is display only, so there is no replay risk.
 
 ### Negative and zero BPM
 
@@ -282,7 +282,7 @@ Already modelled per ruleset ([`packages/player/src/ruleset/definitions.ts`](../
 - **LR2:** after a BAD, the same press is fed to the lane's next note if that note lies within the BAD window. The note is judged on its own gap and can come out PGREAT/GREAT/GOOD. The chain moves forward only, applies to taps only, and continues only while each step is a BAD. Sources: [#L7509-L7521](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L7509-L7521); binary VA 0x418d3b-0x418d55 (`cmpl 0x97a30` = `judgetime[2]`, `calll 0x418850`).
 - **beatoraja:** no multi-BAD.
 - **Kind:** semantic.
-- **be-music today:** follows lr2oraja's `MultiBadCollector` ([`core/judge-core-press.ts`](../packages/player/src/core/judge-core-press.ts) `applyMultiBadCollector`, [`ruleset/long-note.ts`](../packages/player/src/ruleset/long-note.ts), mirrored in [`playlog/simulate.ts`](../packages/player/src/playlog/simulate.ts)).
+- **be-music today:** follows lr2oraja's `MultiBadCollector` ([`core/judge-core-press.ts`](../packages/player/src/core/judge-core-press.ts) `applyMultiBadCollector`, [`ruleset/long-note.ts`](../packages/player/src/ruleset/long-note.ts), mirrored in [`replay/simulate.ts`](../packages/player/src/replay/simulate.ts)).
 - **Impact:** B. EX and combo change on jacks and chords under `lr2`.
 - **Recommendation:** under LR2-first, the binary is the authority, so switch `lr2` to the chain. That changes `lr2/0` re-simulations; the log format is unchanged.
 
@@ -303,7 +303,7 @@ Already modelled per ruleset ([`packages/player/src/ruleset/definitions.ts`](../
 
 - **beatoraja:** PMS uses `MissCondition.ONE` and `judgeVanish = false` for BAD, so a note stays hittable after a BAD ([play/JudgeProperty.java#L34-L44](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeProperty.java#L34-L44)). LR2 has no PMS.
 - **Kind:** semantic.
-- **be-music today:** not modelled. `MissCondition.ONE` is listed in [play log — Fidelity notes](./playlog.md#fidelity-notes); `judgeVanish` is not.
+- **be-music today:** not modelled. `MissCondition.ONE` is listed in [replay — Fidelity notes](./replay.md#fidelity-notes); `judgeVanish` is not.
 - **Impact:** B. 9-key charts under `beatoraja`.
 - **Recommendation:** add `judgeVanish` to the fidelity notes, and model both when PMS matters.
 
@@ -318,12 +318,12 @@ Already modelled per ruleset ([`packages/player/src/ruleset/definitions.ts`](../
 - **be-music today:**
   - `per-note` honours the chart, and a missing `#LNMODE` plays as LN ([`packages/chart/src/note-rules.ts`](../packages/chart/src/note-rules.ts), [`ruleset/long-note.ts`](../packages/player/src/ruleset/long-note.ts)).
   - There is no player option.
-  - Records are keyed `ruleset:sha256` ([`packages/player-web-demo/src/song-records.ts`](../packages/player-web-demo/src/song-records.ts)).
+  - Records are keyed `ruleset:sha256` ([`packages/player-web-demo/src/chart-best-records.ts`](../packages/player-web-demo/src/chart-best-records.ts)).
   - The fingerprint's LN mode is `#LNMODE`, else 1 ([fingerprint spec §3.4](./fingerprint-spec.md#34-events)).
   - The skins' LN-mode button does nothing.
 - **Impact:** A (beatoraja `score.db` import collapses CN/HCN rows); B (CN/HCN players' scores cannot be reproduced).
 - **Recommendation:**
-  - Add a player option under `beatoraja` and record it in the play log as a ruleset input, as `judgeAlgorithm` is. Re-simulation must read it from the log.
+  - Add a player option under `beatoraja` and record it in the replay as a ruleset input, as `judgeAlgorithm` is. Re-simulation must read it from the log.
   - Put the effective LN mode in the record key and the Leaderboard ranking key (or a filter) **before** shipping the option.
 
 ### Scratch, BSS, auto scratch
@@ -342,8 +342,8 @@ Already per ruleset: the windows, LR2's re-judge or empty POOR on a reversal, an
 - **Kind:** semantic. The lamp is a function of the options, not only of the gauge.
 - **be-music today:** neither model.
   - `resolveClearLamp` ([`ruleset/clear-lamp.ts`](../packages/player/src/ruleset/clear-lamp.ts)) ignores options.
-  - `checkPlaylogEligibility` ([`playlog/eligibility.ts`](../packages/player/src/playlog/eligibility.ts)) flags only auto scratch and a judge-window override.
-  - Local bests ([`records/best-record.ts`](../packages/player/src/records/best-record.ts), [`player-web-demo/src/app/routes/result.ts`](../packages/player-web-demo/src/app/routes/result.ts), [`song-records.ts`](../packages/player-web-demo/src/song-records.ts) `playKeepsRecord`) keep full lamp, EX and BP for auto-scratch, SCATTER and CONSTANT plays.
+  - `checkReplayEligibility` ([`replay/eligibility.ts`](../packages/player/src/replay/eligibility.ts)) flags only auto scratch and a judge-window override.
+  - Local bests ([`records/best-record.ts`](../packages/player/src/records/best-record.ts), [`player-web-demo/src/app/routes/result.ts`](../packages/player-web-demo/src/app/routes/result.ts), [`chart-best-records.ts`](../packages/player-web-demo/src/chart-best-records.ts) `playKeepsRecord`) keep full lamp, EX and BP for auto-scratch, SCATTER and CONSTANT plays.
 - **Impact:** B. Bests and lamps come out higher than either engine gives, and SCATTER/CONSTANT plays sit on unassisted boards.
 - **Recommendation:**
   - Add a pure per-ruleset "assist class" resolver over logged `play` fields (lane option, HS-FIX, auto scratch, judge override, battle):
@@ -366,7 +366,7 @@ Already per ruleset: the windows, LR2's re-judge or empty POOR on a reversal, an
 - **LR2:** a run ends below 2 % ([#139](https://github.com/nulltask/be-music/issues/139)).
 - **beatoraja:** ends at 0.
 - **Kind:** semantic, at the data level.
-- **be-music today:** the live play, and so its input log, stops at the played ruleset's failure point, but `simulatePlaylogRulesets` and the Leaderboard rank all three rulesets. Under a ruleset that would have survived, the remaining notes are all missed.
+- **be-music today:** the live play, and so its input log, stops at the played ruleset's failure point, but `simulateReplayRulesets` and the Leaderboard rank all three rulesets. Under a ruleset that would have survived, the remaining notes are all missed.
 - **Impact:** B. Other-ruleset EX, BP and lamp of failed runs are artifacts of where the player was stopped.
 - **Recommendation:** rank failed survival-gauge runs only under the played ruleset, or mark them, and say so in the [Leaderboard design](./leaderboard.md). Never synthesize the inputs that were not played.
 
@@ -424,11 +424,11 @@ EX = 2PG + GR in both engines. Only LR2 has the money score ([#L1991](https://gi
   - Each improvement stores its option and seed.
   - It also keeps the ghost, trophies, clear and play counts, and a `scorelog` row per improvement ([ScoreData.java#L541-L590](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/ScoreData.java#L541-L590)).
 - **Kind:** semantic: the assist gate, and what is stored alongside each best.
-- **be-music today:** `mergeBestRecord` merges lamp, EX, combo and BP independently and keeps a play count. There is no assist gate, clear count, judge snapshot or date, and no link to the best play log.
+- **be-music today:** `mergeBestRecord` merges lamp, EX, combo and BP independently and keeps a play count. There is no assist gate, clear count, judge snapshot or date, and no link to the best replay.
 - **Impact:** B; A on import.
 - **Recommendation:**
   - Add the assist gate.
-  - Add `clearCount`, the best-EX judge snapshot and a pointer to the best play log; the pointer is needed for the [#418](https://github.com/nulltask/be-music/issues/418) MY BEST ghost.
+  - Add `clearCount`, the best-EX judge snapshot and a pointer to the best replay; the pointer is needed for the [#418](https://github.com/nulltask/be-music/issues/418) MY BEST ghost.
   - Everything is derivable from logs, so records can be rebuilt.
 
 ### Replay and import formats
@@ -442,7 +442,7 @@ EX = 2PG + GR in both engines. Only LR2 has the money score ([#L1991](https://gi
   - There are 4 slots, and nothing is saved for assisted plays.
   - The ghost lives in `score.db` as gzip+base64.
 - **Kind:** semantic. beatoraja replays are physical-key logs re-judged by the current engine.
-- **be-music today:** every play is auto-saved as a `be-music-playlog` (resolved notes + channel inputs + draws) and re-simulated per ruleset. No `score.db` or `.brd` reader exists.
+- **be-music today:** every play is auto-saved as a `be-music-replay` (resolved notes + channel inputs + draws) and re-simulated per ruleset. No `score.db` or `.brd` reader exists.
 - **Impact:** A for any import.
 - **Recommendation:**
   - A `.brd` import converts `laneShufflePattern` + `rand` into resolved notes, and keycodes into channels + `source`.
@@ -468,7 +468,7 @@ Already per ruleset: LR2 death border and guts, the LR2 DEATH table (**fixed in 
 - **LR2:** one set of tables.
 - **beatoraja:** separate FIVEKEYS, SEVENKEYS, PMS and KEYBOARD tables. Examples: 5K borders 75/50; HARD_5 has no recovery; PMS max 120, initial 30, border 85 ([play/GaugeProperty.java#L77-L105](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/GaugeProperty.java#L77-L105)). The 24K default TOTAL also differs.
 - **Kind:** parameter.
-- **be-music today:** the 7K table for every mode (documented in [play log — Fidelity notes](./playlog.md#fidelity-notes)). Course class gauges already switch per mode.
+- **be-music today:** the 7K table for every mode (documented in [replay — Fidelity notes](./replay.md#fidelity-notes)). Course class gauges already switch per mode.
 - **Impact:** B; A, because a PMS gauge max of 120 changes how skins render the gauge.
 - **Recommendation:** pick the table per mode inside `beatoraja`.
 
@@ -529,7 +529,7 @@ Already per ruleset: LR2 death border and guts, the LR2 DEATH table (**fixed in 
 - **LR2:** one seed feeds both `#RANDOM` and every lane option. It is written into the replay and into `score.rseed`, and it is **kept on quick retry** ([LR2f.cpp#L25756-L25766](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25756-L25766), [Main.cpp#L1100](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/Main.cpp#L1100)).
 - **beatoraja:** `#RANDOM` results are stored as `rand`, and each side's lane option has its own seed. The result screen offers REPLAY_SAME and REPLAY_DIFFERENT ([ReplayData.java#L53-L82](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/ReplayData.java#L53-L82), [result/MusicResult.java#L221-L244](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/result/MusicResult.java#L221-L244)).
 - **Kind:** semantic: what can be reproduced, and from what.
-- **be-music today:** draws are recorded, and the resolved lane arrangement is logged ([`packages/player-web/src/chart/playlog-arrangement.ts`](../packages/player-web/src/chart/playlog-arrangement.ts)). Lane shuffles use unseeded `Math.random`, and F5 re-rolls the arrangement.
+- **be-music today:** draws are recorded, and the resolved lane arrangement is logged ([`packages/player-web/src/chart/replay-arrangement.ts`](../packages/player-web/src/chart/replay-arrangement.ts)). Lane shuffles use unseeded `Math.random`, and F5 re-rolls the arrangement.
 - **Impact:** C (no "retry same pattern"); A for imports, because a foreign seed cannot regenerate the pattern (different PRNGs and algorithms).
 - **Recommendation:**
   - Keep logging resolved arrangements; that is strictly better for re-simulation.
@@ -585,7 +585,7 @@ Already per ruleset: LR2 death border and guts, the LR2 DEATH table (**fixed in 
 
 - **LR2:** an integer ×100 from 0.10 to 9.00, plus `basespeed`. Note y depends on skin pixels, so the visible time depends on the skin's lane length ([#L2241-L2242](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2241-L2242), [#L16051-L16053](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L16051-L16053)).
 - **beatoraja:** a float from 0.01 to 20; the lane is 4 beats at HS 1, independent of skin size ([PlayConfig.java#L18-L54](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayConfig.java#L18-L54)).
-- **be-music today:** 0.1-6.0, with two scales recorded in `PlaylogViewState`, and white-number matching for replays ([`packages/scene-model/src/play-options/hi-speed.ts`](../packages/scene-model/src/play-options/hi-speed.ts), [`play-state/view.ts`](../packages/scene-model/src/play-state/view.ts)).
+- **be-music today:** 0.1-6.0, with two scales recorded in `ReplayViewState`, and white-number matching for replays ([`packages/scene-model/src/play-options/hi-speed.ts`](../packages/scene-model/src/play-options/hi-speed.ts), [`play-state/view.ts`](../packages/scene-model/src/play-state/view.ts)).
 - **Impact:** C.
 - **Recommendation:** keep the per-family scales and raise the cap: 9 for LR2, 20 for beatoraja scenes. The view is outside judging.
 
@@ -669,7 +669,7 @@ These are already documented in format-compat [§2.6](./format-compat.md#26-mine
 - **LR2:** two scratch inputs map to one lane, and each press is a new press.
 - **beatoraja:** remembers which scratch key started a BSS, so pressing the **other direction ends it** (judged with `LONGSCRATCH_END`). It also supports analog scratch ([JudgeManager.java#L350-L371](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L350-L371), [#L498-L532](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L498-L532)).
 - **Kind:** semantic.
-- **be-music today:** play-log inputs carry `channels` only; `tokens` are diagnostic and simulators ignore them ([`packages/player/src/playlog/format.ts`](../packages/player/src/playlog/format.ts)). There is no gamepad or analog input.
+- **be-music today:** replay inputs carry `channels` only; `tokens` are diagnostic and simulators ignore them ([`packages/player/src/replay/format.ts`](../packages/player/src/replay/format.ts)). There is no gamepad or analog input.
 - **Impact:** B. beatoraja's BSS end by reversal cannot be judged or re-simulated.
 - **Recommendation:**
   - Add an optional per-input `source` (scratch direction or physical key index) **now**, before logs accumulate.
@@ -708,7 +708,7 @@ These are already documented in format-compat [§2.6](./format-compat.md#26-mine
 - **LR2:** a course hash string (course header + stage MD5s).
 - **beatoraja:** concatenated stage SHA-256s, plus `mode = lnmode + option*10 + no_speed*100 + judge*1000 + gauge*10000` ([PlayDataAccessor.java#L343-L372](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayDataAccessor.java#L343-L372)).
 - **be-music today:**
-  - The demo keys course records by `stage.sha256 ?? stage.md5` ([`packages/player-web-demo/src/course-result.ts`](../packages/player-web-demo/src/course-result.ts) `courseRecordKey`). The same course loaded from `.lr2crs` (MD5 only) and from beatoraja JSON gets **two records**.
+  - The demo keys course records by `stage.sha256 ?? stage.md5` ([`packages/player-web-demo/src/course-result.ts`](../packages/player-web-demo/src/course-result.ts) `courseBestRecordKey`). The same course loaded from `.lr2crs` (MD5 only) and from beatoraja JSON gets **two records**.
   - The Leaderboard uses the `bmcourse0` fingerprint.
   - Course constraints, gauges, random courses, carry-in and trophies were covered in [#403](https://github.com/nulltask/be-music/issues/403)–[#410](https://github.com/nulltask/be-music/issues/410) and [#408](https://github.com/nulltask/be-music/issues/408). Of those, the random-course SQL filters are **fixed in [#564](https://github.com/nulltask/be-music/issues/564)**, and courses made in the course maker now start unranked (**fixed in [#566](https://github.com/nulltask/be-music/issues/566)**).
 - **Impact:** A/B.

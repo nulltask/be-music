@@ -100,7 +100,7 @@ input runtime は、共有 engine に渡す前に keyboard input を token strin
 Windows では Win32 terminal input mode へ opt-in します。
 protocol opt-in を上書きする場合は、`BE_MUSIC_KEYBOARD_PROTOCOLS=kitty`、`win32`、または comma-separated combination を設定します。
 terminal が opt-in にその protocol の key event で応えたあとは、同じ process の以降の play がすべて key の解放を伝えると宣言する（`PlayerInputRuntime.reportsKeyReleases`）ので、engine は最初の key から key-state input として判定します。
-それまでは、最初の `kitty-state` command が来るまで engine が各 key を離した時刻を推定します（[解放のない入力](./playlog.ja.md#解放のない入力)）。
+それまでは、最初の `kitty-state` command が来るまで engine が各 key を離した時刻を推定します（[解放のない入力](./replay.ja.md#解放のない入力)）。
 
 主な command mapping は次のとおりです。
 

@@ -4,46 +4,46 @@ import type { PlaySide } from './types.ts';
 import {
   BE_MUSIC_HI_SPEED_SCALE,
   BEATORAJA_HI_SPEED_SCALE,
-  PlaylogViewCursor,
+  ReplayViewCursor,
   resolveGreenNumber,
   resolveHiSpeedForWhiteNumber,
-  resolvePlaylogView,
+  captureReplayView,
   resolveWhiteNumber,
 } from './view.ts';
 
-describe('PlaylogViewCursor', () => {
+describe('ReplayViewCursor', () => {
   const changes = [
     { timeUs: 1_000_000, hiSpeed: 2.5 },
     { timeUs: 2_000_000, covers: [{ side: '1P' as const, sudden: 0.3, hidden: 0, lift: 0 }] },
   ];
 
   test('returns the view on the first call and again only when a change comes into force', () => {
-    const cursor = new PlaylogViewCursor({ hiSpeed: 2 }, changes);
+    const cursor = new ReplayViewCursor({ hiSpeed: 2 }, changes);
     expect(cursor.next(0)).toEqual({ hiSpeed: 2 });
     expect(cursor.next(500_000)).toBeUndefined();
     expect(cursor.next(1_000_000)).toEqual({ hiSpeed: 2.5 });
     expect(cursor.next(1_500_000)).toBeUndefined();
     // Past both changes in one step.
-    expect(new PlaylogViewCursor({ hiSpeed: 2 }, changes).next(3_000_000)).toEqual({
+    expect(new ReplayViewCursor({ hiSpeed: 2 }, changes).next(3_000_000)).toEqual({
       hiSpeed: 2.5,
       covers: [{ side: '1P', sudden: 0.3, hidden: 0, lift: 0 }],
     });
   });
 
   test('follows the playhead back', () => {
-    const cursor = new PlaylogViewCursor({ hiSpeed: 2 }, changes);
+    const cursor = new ReplayViewCursor({ hiSpeed: 2 }, changes);
     expect(cursor.next(1_500_000)).toEqual({ hiSpeed: 2.5 });
     expect(cursor.next(0)).toEqual({ hiSpeed: 2 });
   });
 
   test('a log without a view gives an empty one once', () => {
-    const cursor = new PlaylogViewCursor(undefined);
+    const cursor = new ReplayViewCursor(undefined);
     expect(cursor.next(0)).toEqual({});
     expect(cursor.next(10_000_000)).toBeUndefined();
   });
 });
 
-describe('resolvePlaylogView on the beatoraja scale', () => {
+describe('resolveReplayView on the beatoraja scale', () => {
   /** A beatoraja view: one cover state on every side, a lane four beats long, the visible time at the main BPM. */
   function beatorajaView(view: {
     hiSpeed: number;
@@ -62,7 +62,7 @@ describe('resolvePlaylogView on the beatoraja scale', () => {
       hiddenOn: view.hiddenEnabled,
       lift: view.lift,
     }));
-    return resolvePlaylogView(
+    return captureReplayView(
       { hiSpeed: createHiSpeedState({ hiSpeed: view.hiSpeed }), covers },
       { scale: BEATORAJA_HI_SPEED_SCALE, laneBeats: 4, ...(view.mainBPM > 0 ? { mainBPM: view.mainBPM } : {}) },
     );
@@ -144,12 +144,12 @@ describe('resolveHiSpeedForWhiteNumber', () => {
   });
 });
 
-describe('resolvePlaylogView', () => {
+describe('resolveReplayView', () => {
   const covers = [{ side: '1P' as const, sudden: 0.3, suddenOn: true, hidden: 0.5, hiddenOn: true, lift: 0.2 }];
 
   test('records the drawn hi-speed on the scale, the HS-FIX, the covers as drawn and the visible time', () => {
     const hiSpeed = createHiSpeedState({ hiSpeed: 2, multiplier: 1.5 });
-    const view = resolvePlaylogView(
+    const view = captureReplayView(
       { hiSpeed, covers, hsFix: 'MAXBPM' },
       { scale: BE_MUSIC_HI_SPEED_SCALE, laneBeats: 4, mainBPM: 120 },
     );
@@ -164,7 +164,7 @@ describe('resolvePlaylogView', () => {
   });
 
   test('leaves the visible time out without a lane length or a BPM, and the HS-FIX out when it has none', () => {
-    const view = resolvePlaylogView({ hiSpeed: createHiSpeedState(), covers: [] }, { scale: 'beatoraja' });
+    const view = captureReplayView({ hiSpeed: createHiSpeedState(), covers: [] }, { scale: 'beatoraja' });
     expect(view).toEqual({ hiSpeed: 2, hiSpeedScale: 'beatoraja', covers: [] });
   });
 });

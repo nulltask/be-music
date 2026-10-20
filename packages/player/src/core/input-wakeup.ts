@@ -9,7 +9,7 @@ import type { PlayerInputSignalBus } from './input-signal-bus.ts';
  *
  * Why this matters even with `pressedAt` already in place:
  * - `pressedAt` (introduced earlier in the latency-reduction work) ensures the JUDGE timestamp matches the
- *   physical press regardless of when the engine drains. So the lane judge result is already correct.
+ *   physical press regardless of when the engine drains. So the lane judgment result is already correct.
  * - This wake-up addresses a different latency: the AUDIO and VISUAL response. A keysound triggered at
  *   drain time is heard up to 16 ms sooner under event-driven wake-up; a lane flash queued at drain time
  *   reaches the next rAF boundary up to 16 ms earlier. For a player, this is the difference between "the

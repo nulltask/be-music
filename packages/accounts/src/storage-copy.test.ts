@@ -21,7 +21,7 @@ test('copies binary bytes and metadata, verifies retries, and refuses unauthenti
   try {
     const bucket = await mf.getR2Bucket('SOURCE');
     const destination = await mf.getR2Bucket('DESTINATION');
-    await bucket.put('playlogs/test.gz', new Uint8Array([0, 1, 2, 255]), {
+    await bucket.put('replays/test.gz', new Uint8Array([0, 1, 2, 255]), {
       httpMetadata: { contentType: 'application/json', contentEncoding: 'gzip' },
       customMetadata: { version: 'one' },
     });
@@ -40,14 +40,14 @@ test('copies binary bytes and metadata, verifies retries, and refuses unauthenti
     expect((await mf.dispatchFetch('https://copy.example/copy', { method: 'POST' })).status).toBe(403);
     expect((await call('/verify?excludeAvatars=true')).status).toBe(500);
     expect((await call('/copy?excludeAvatars=true')).status).toBe(200);
-    const copied = await destination.get('playlogs/test.gz');
+    const copied = await destination.get('replays/test.gz');
     expect(new Uint8Array(await copied!.arrayBuffer())).toEqual(new Uint8Array([0, 1, 2, 255]));
     expect(copied!.httpMetadata).toEqual({ contentType: 'application/json', contentEncoding: 'gzip' });
     expect(copied!.customMetadata).toEqual({ version: 'one' });
     expect(await destination.head('avatars/test.png')).toBeNull();
     expect((await call('/verify?excludeAvatars=true')).status).toBe(200);
     expect((await call('/copy?excludeAvatars=true')).status).toBe(200);
-    await destination.put('playlogs/test.gz', 'wrong');
+    await destination.put('replays/test.gz', 'wrong');
     expect((await call('/copy?excludeAvatars=true')).status).toBe(500);
     const emptyURL = 'https://copy.example/empty-source?source=be-music-leaderboard&destination=leaderboard';
     expect(
@@ -63,7 +63,7 @@ test('copies binary bytes and metadata, verifies retries, and refuses unauthenti
       ).status,
     ).toBe(200);
     expect((await bucket.list()).objects).toHaveLength(0);
-    expect(await destination.head('playlogs/test.gz')).not.toBeNull();
+    expect(await destination.head('replays/test.gz')).not.toBeNull();
   } finally {
     await mf.dispose();
   }

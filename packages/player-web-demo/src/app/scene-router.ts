@@ -8,7 +8,7 @@
 //
 // A run is the screens the scenes lead through on their own: a decide screen, a play and its result, and a course's
 // every stage. A navigation the scenes asked for carries their run on (`continuesRun`); any other one (a drop, a skin
-// or theme change, files or a play log loaded) interrupts it, and the host ends it (`onInterrupt`).
+// or theme change, files or a replay loaded) interrupts it, and the host ends it (`onInterrupt`).
 
 /** What the router asks of a scene: it disposes the scenes it owns. */
 export interface RoutedScene {

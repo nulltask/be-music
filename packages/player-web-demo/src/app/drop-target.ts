@@ -12,7 +12,7 @@ import type { PlayerWebDemoElements } from '../types.ts';
 
 export interface DropTargetOptions {
   /** The loading overlay a load shows while it reads, and the Debug Menu's hidden file inputs. */
-  readonly elements: LoadingOverlayElements & Pick<PlayerWebDemoElements, 'songInput' | 'filesInput'>;
+  readonly elements: LoadingOverlayElements & Pick<PlayerWebDemoElements, 'chartInput' | 'filesInput'>;
   /** Takes the select screen off the stage while files load, when it is the one showing. */
   readonly leaveSelect: () => Promise<boolean>;
   /** Loads a drop's (or the folder picker's) files (`LibraryService`). */
@@ -60,7 +60,7 @@ export class DropTarget {
         try {
           // Route through the same post-enumeration pipeline as drag-drop so the picker's selection produces a theme +
           // songs split (handy when a user hand-picks a folder whose root carries both an LR2 theme and a BMS pack),
-          // instead of the previous `loadSongs`-only path that quietly skipped any LR2 assets in the selection.
+          // instead of the previous `loadCharts`-only path that quietly skipped any LR2 assets in the selection.
           await load(fileList);
         } finally {
           hideLoadingOverlay(this.elements);
@@ -68,8 +68,8 @@ export class DropTarget {
         }
       })();
     };
-    this.elements.songInput.addEventListener('change', () =>
-      onFilesPicked(this.elements.songInput, (files) => this.processIncomingFiles(files)),
+    this.elements.chartInput.addEventListener('change', () =>
+      onFilesPicked(this.elements.chartInput, (files) => this.processIncomingFiles(files)),
     );
     this.elements.filesInput.addEventListener('change', () =>
       onFilesPicked(this.elements.filesInput, (files) => this.loadPickedFiles(files)),
@@ -152,7 +152,7 @@ export class DropTarget {
       });
       await this.processIncomingFiles(files);
     } finally {
-      // Always tear the overlay down — even when one of the sub-loaders threw or `splitDroppedSongAndThemeFiles`
+      // Always tear the overlay down — even when one of the sub-loaders threw or `splitDroppedChartAndThemeFiles`
       // produced an empty bucket. Otherwise a failed drop would leave the UI permanently masked.
       hideLoadingOverlay(this.elements);
       this.recordLoad();

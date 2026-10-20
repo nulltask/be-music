@@ -29,7 +29,7 @@ import type { LibraryChart, PlayResult } from '@be-music/scene-model';
 import type { Container } from 'pixi.js';
 import { computeBeatorajaBPMCurve, type BPMCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
 import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
-import type { BrowserSongAssetSource } from '../../collection/types.ts';
+import type { BrowserAssetSource } from '../../collection/types.ts';
 import type { BeatorajaKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
@@ -40,7 +40,7 @@ import {
   BeatorajaSkinStage,
   BeatorajaViewChartImages,
   beatorajaSceneNowMs,
-  beatorajaSongTextOf,
+  beatorajaChartTextOf,
   resolveBeatorajaFadeOutMs,
   resolveBeatorajaSceneTimers,
   resolveBeatorajaSkinTimingMs,
@@ -90,7 +90,7 @@ export interface BeatorajaResultViewOptions {
   /** The chart the result is of, whose images the view loads before its first frame. */
   readonly chart?: Pick<LibraryChart, 'chart' | 'chartPath'>;
   /** Where the chart's files are, for its `#STAGEFILE`, `#BACKBMP` and `#BANNER`; none load without one. */
-  readonly source?: BrowserSongAssetSource;
+  readonly source?: BrowserAssetSource;
   /** Where the skin's Lua sounds play (`main_state.audio_*`); they are silent without it. */
   readonly skinSounds?: BeatorajaSkinAudio;
 }
@@ -254,7 +254,7 @@ export function readBeatorajaResult(
   skin: Pick<BeatorajaSkin, 'name' | 'author'>,
 ): BeatorajaResultReading {
   let breakdown: BeatorajaNoteBreakdown | undefined;
-  const song = beatorajaSongTextOf(result.song);
+  const chartEntry = beatorajaChartTextOf(result.chart);
   const input: BeatorajaResultInput = {
     result,
     ...(playChart?.metadata.total !== undefined ? { chartTotal: playChart.metadata.total } : {}),
@@ -263,7 +263,7 @@ export function readBeatorajaResult(
       breakdown ??= computeBeatorajaNoteBreakdown(playChart);
       return breakdown;
     },
-    ...(song !== undefined ? { song } : {}),
+    ...(chartEntry !== undefined ? { chart: chartEntry } : {}),
     skin: { name: skin.name, author: skin.author },
   };
   return {

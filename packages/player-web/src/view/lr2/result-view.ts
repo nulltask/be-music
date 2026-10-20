@@ -22,7 +22,7 @@ import {
 } from '@be-music/lr2-skin/state';
 import type { PlayResult } from '@be-music/scene-model';
 import { Color, Container, Graphics, type Texture } from 'pixi.js';
-import type { BrowserSongAssetSource } from '../../collection/types.ts';
+import type { BrowserAssetSource } from '../../collection/types.ts';
 import type { LR2Kit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import {
@@ -72,7 +72,7 @@ export function resolveLR2ResultTiming(skin: Pick<LR2Skin, 'timing'>): SceneView
 
 export interface LR2ResultViewOptions {
   /** Where the result's chart files are, for its `*STAGEFILE`, `*BANNER` and `*BACKBMP`; none load without one. */
-  readonly source?: BrowserSongAssetSource;
+  readonly source?: BrowserAssetSource;
 }
 
 /** A point of a result graph, both axes 0..1. */
@@ -98,7 +98,7 @@ export class LR2ResultView implements ResultView {
   private cachedDesignWidth = -1;
   private cachedDesignHeight = -1;
   private readonly kit: LR2Kit;
-  private readonly source: BrowserSongAssetSource | undefined;
+  private readonly source: BrowserAssetSource | undefined;
   private readonly skinTextures = new LR2SkinTextureStore();
   private readonly chartGraphicTextures = new LR2ChartGraphicTextureStore();
   /** The skin's `#LR2FONT` bitmap fonts, once loaded. */
@@ -429,7 +429,7 @@ export class LR2ResultView implements ResultView {
   private chartGraphicTexture(result: PlayResult, path: LR2SpecialGraphic): Texture | undefined {
     return (
       resolveSolidSpecialGraphicTexture(path) ??
-      this.chartGraphicTextures.resolveFromSource(this.source, result.song, path, () => undefined)
+      this.chartGraphicTextures.resolveFromSource(this.source, result.chart, path, () => undefined)
     );
   }
 

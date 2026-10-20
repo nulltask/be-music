@@ -33,8 +33,8 @@ import {
 } from '@be-music/beatoraja-skin/scene';
 import type { BrowseListOptions, LibraryChart, LibraryEntry } from '@be-music/scene-model';
 import { Container } from 'pixi.js';
-import { resolveSongSource } from '../../collection/collection.ts';
-import type { BrowserSongCollection } from '../../collection/types.ts';
+import { resolveChartSource } from '../../collection/collection.ts';
+import type { BrowserChartCollection } from '../../collection/types.ts';
 import type { BeatorajaKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
@@ -82,7 +82,10 @@ export interface BeatorajaSelectViewOptions {
    * Decodes a chart's own images for the skin's synthetic slots; `loadBeatorajaChartImages` over the library's files
    * by default.
    */
-  readonly loadChartImages?: (song: LibraryChart, library: BrowserSongCollection) => Promise<BeatorajaChartImages>;
+  readonly loadChartImages?: (
+    chartEntry: LibraryChart,
+    library: BrowserChartCollection,
+  ) => Promise<BeatorajaChartImages>;
 }
 
 /** The bar's own object (its chart, folder or course), which stays the same across the lists that show it. */
@@ -448,11 +451,13 @@ export class BeatorajaSelectView implements SelectView {
   }
 
   /** Decodes a chart's own images, over the files of the library drawn. */
-  private decodeChartImages(song: LibraryChart): Promise<BeatorajaChartImages> {
+  private decodeChartImages(chartEntry: LibraryChart): Promise<BeatorajaChartImages> {
     const library = this.frame?.library;
     if (library === undefined) return Promise.resolve({});
     const load = this.options.loadChartImages;
-    return load !== undefined ? load(song, library) : loadBeatorajaChartImages(song, resolveSongSource(library, song));
+    return load !== undefined
+      ? load(chartEntry, library)
+      : loadBeatorajaChartImages(chartEntry, resolveChartSource(library, chartEntry));
   }
 
   /**
@@ -503,7 +508,7 @@ export class BeatorajaSelectView implements SelectView {
       },
       nowMs: () => view.frame?.clock.nowMs ?? 0,
       get decodeChartImages() {
-        return (song: LibraryChart) => view.decodeChartImages(song);
+        return (chartEntry: LibraryChart) => view.decodeChartImages(chartEntry);
       },
       get disposed(): boolean {
         return view.disposed;

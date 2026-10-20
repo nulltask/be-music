@@ -49,7 +49,7 @@ import {
 import { createLaneHoldHistory, type LaneHoldHistory, wasLaneDownAt } from './lane-hold.ts';
 
 /**
- * Judge-core time steps: long-note holds and tails, HCN ticks, mines, auto-scratch, misses
+ * Judgment-core time steps: long-note holds and tails, HCN ticks, mines, auto-scratch, misses
  * and the end-of-play charge.
  */
 
@@ -143,7 +143,7 @@ const LANDMINE_SCAN_AHEAD_US = 1_000_000;
  * crosses counts, and the mine settles there.
  *
  * Each check is a timed judgment at its own microsecond (the entry, the crossing, the settling), taken once time has
- * moved past it and in time order with the other mines, asking whether the lane was down at that instant. The play-log
+ * moved past it and in time order with the other mines, asking whether the lane was down at that instant. The replay
  * simulator schedules the same checks, so both detonate the same mines in the same order.
  */
 export function processLandminePassage(
@@ -671,7 +671,7 @@ export function advanceJudgeState(
   // (`LR2f.cpp:7613-7616`). Judgments, logs and UI cues keep the true clock.
   const judgeSec = toJudgeClock(config, nowSec);
   const judgeUs = toJudgeUs(judgeSec);
-  // Tails reached at one instant settle in channel order, the tie-break the play-log simulator uses.
+  // Tails reached at one instant settle in channel order, the tie-break the replay simulator uses.
   const holds = [...state.activeLongNotes.entries()].sort(([left], [right]) => compareJudgeChannels(left, right));
   for (const [channel, hold] of holds) {
     // A long note is held while its lane is down, and while a let-go one waits out the ruleset's release margin.
@@ -710,7 +710,7 @@ export function advanceJudgeState(
         judgeUs <= resolveChargeTailDeadlineUs(state, channel, hold)
       ) {
         // Charge modes judge the tail on the RELEASE. Still holding past the tail is not yet a judgment — the player
-        // has until the tail's late window closes to let go, exactly as the play-log simulator models it.
+        // has until the tail's late window closes to let go, exactly as the replay simulator models it.
         continue;
       }
       if (hold.mode === 1) {
@@ -786,7 +786,7 @@ export function advanceJudgeState(
  * The earliest microsecond, at or after `afterUs`, at which a timed judgment falls due: a long-note tail, a charge
  * tail's late window or a release waiting to settle, an AUTO SCRATCH note or tail, a miss deadline, a mine check. A
  * judgment falls due once time has moved past its microsecond, so a replay that steps to the microsecond after each
- * settles one instant per step, in the same order as the play-log simulator. `Infinity` when nothing is pending.
+ * settles one instant per step, in the same order as the replay simulator. `Infinity` when nothing is pending.
  */
 export function nextTimedJudgmentUs(state: JudgeCoreState, afterUs: number): number {
   const { config } = state;
@@ -872,7 +872,7 @@ export function finishJudgeState(state: JudgeCoreState, totalSeconds: number, em
   }
   const { ruleset, reversalSeconds } = config;
   // Settle every timed judgment still pending — misses, tails, AUTO SCRATCH, mines, Hell Charge ticks — each at its
-  // own instant, as the play-log simulator does when its clock runs out.
+  // own instant, as the replay simulator does when its clock runs out.
   for (let afterUs = Number.NEGATIVE_INFINITY; ;) {
     const nextUs = nextTimedJudgmentUs(state, afterUs);
     if (!Number.isFinite(nextUs)) {

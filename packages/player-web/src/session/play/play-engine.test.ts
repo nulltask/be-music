@@ -43,8 +43,8 @@ function createPlay(options: {
   const fadeAsked: string[] = [];
   const ctx = {
     options: { autoPlay: options.autoPlay === true },
-    song: SONG,
-    playlog: undefined,
+    chart: SONG,
+    replay: undefined,
     disposed: false,
     sharedEngineSignals: { uiSignals, stateSignals },
     sharedEngineLastJudgeComboTick: 0,
@@ -89,7 +89,7 @@ function createPlay(options: {
     },
     playClock: () => clock.ms,
     currentSeconds: () => clock.seconds,
-    resolveSongDurationSeconds: () => CHART_SECONDS,
+    resolveChartDurationSeconds: () => CHART_SECONDS,
     // As `PlaySession` decides it: only LR2 shows the empty POORs inside its POOR counter.
     resolveEmptyPoorCountsInPoorDisplay: () => judgeRuleset === 'lr2',
     resolveJudgeRuleset: () => judgeRuleset,
@@ -249,7 +249,7 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     expect(result.earlyLate?.PERFECT).toEqual({ early: 0, late: 1 });
     expect(result.judgeRuleset).toBe('lr2');
     expect(result.lamp).toBe('FAILED');
-    expect(result.song).toBe(SONG);
+    expect(result.chart).toBe(SONG);
   });
 
   test('under LR2 an empty POOR is in the POOR count, the POOR judgments alone beside it, and in the BP once', () => {

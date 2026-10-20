@@ -103,7 +103,7 @@ export function tempoChart(): BeMusicJSON {
 }
 
 /**
- * Judge rank changes: `#RANK 2` (NORMAL), `#EXRANK01 25` (narrower) from 1.0 and `#EXRANK02 200` (wider) from 2.0.
+ * JudgmentKind rank changes: `#RANK 2` (NORMAL), `#EXRANK01 25` (narrower) from 1.0 and `#EXRANK02 200` (wider) from 2.0.
  * Taps on 11 @ 0.5, 12 @ 1.5, 13 @ 2.5 and 14 @ 3.0; mines on 15 @ 1.75 and 3.25 and an invisible note on 16 @ 2.25.
  */
 export function exRankChart(withChanges = true): BeMusicJSON {

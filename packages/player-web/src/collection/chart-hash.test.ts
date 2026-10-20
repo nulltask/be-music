@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'vite-plus/test';
-import type { BrowserSongAssetSource } from './types.ts';
+import type { BrowserAssetSource } from './types.ts';
 import { computeChartFileHashes, computeChartFileSHA256, computeSHA256Hex } from './chart-hash.ts';
 import { md5HexOfBytes } from './md5.ts';
 
 const encoder = new TextEncoder();
 
-function makeSource(files: Record<string, Uint8Array>): BrowserSongAssetSource {
+function makeSource(files: Record<string, Uint8Array>): BrowserAssetSource {
   return {
     id: 'src',
     kind: 'directory',

@@ -1,9 +1,9 @@
 /**
  * Barrel for the `@be-music/player-web/collection` subpath. Groups the user-facing browser-input surface:
  *
- * - Chart collection store (`BrowserSongCollectionStore`, `BrowserSongCollection`, descriptors); the library entries
+ * - Chart collection store (`BrowserChartCollectionStore`, `BrowserChartCollection`, descriptors); the library entries
  *   it lists (`LibraryChart`, `LibraryFolder`, `LibraryCourse`, …) are `@be-music/scene-model`'s
- * - Drop handling (`readDroppedFiles`, `splitDroppedSongAndThemeFiles`, `LoadProgress`)
+ * - Drop handling (`readDroppedFiles`, `splitDroppedChartAndThemeFiles`, `LoadProgress`)
  * - Browser compatibility probe (`checkBrowserCompat`, `summarizeBrowserCompat`, `BrowserCompatReport`)
  *
  * Anything else under `collection/` (the case-insensitive file-lookup helpers) stays internal to the package.

@@ -5,7 +5,7 @@
  * - `'beatoraja'` — beatoraja Lua skins (`.luaskin` + texture atlases). Loaded via `@be-music/beatoraja-skin`.
  * - `'default'` — the built-in chrome used when neither LR2 nor beatoraja is supplied. Has no theme to load.
  *
- * Before this abstraction the demo branched ad-hoc on `canPlaySongBeatoraja(song)` / `decideSkin !== undefined` /
+ * Before this abstraction the demo branched ad-hoc on `canPlayChartBeatoraja(song)` / `decideSkin !== undefined` /
  * `selectSkin !== undefined` at every transition point (drop routing, scene construction, theme detection). Funnelling
  * those checks through a single registry makes the policy explicit (which family takes precedence when both themes are
  * loaded? answer: the registry's iteration order) and adding a fourth family in the future a localised change instead

@@ -301,8 +301,8 @@ describe('formatting', () => {
   });
 
   it('names a case by its package', () => {
-    expect(packageOf('player.playlog.parsePlaylog')).toBe('player');
-    expect(packageOf('player-web.serializePlaylog')).toBe('player-web');
+    expect(packageOf('player.replay.parseReplay')).toBe('player');
+    expect(packageOf('player-web.serializeReplay')).toBe('player-web');
   });
 
   it('opens with the verdict', () => {

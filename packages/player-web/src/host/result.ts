@@ -5,7 +5,7 @@
 
 import type { BeMusicJSON } from '@be-music/json';
 import type { PlayResult, PlayRunKind, SystemSoundSet } from '@be-music/scene-model';
-import type { BrowserSongAssetSource } from '../collection/types.ts';
+import type { BrowserAssetSource } from '../collection/types.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
 import { ResultSession, type ResultSessionEvents } from '../session/result/result-session.ts';
 import { SessionScene, type SessionSceneOptions } from '../session/session-scene.ts';
@@ -36,7 +36,7 @@ export interface ResultSceneOptions extends SessionSceneOptions {
    */
   readonly run?: PlayRunKind;
   /** Where the result's chart files are, for the images a skin shows. */
-  readonly source?: BrowserSongAssetSource;
+  readonly source?: BrowserAssetSource;
   /**
    * The chart as the play played it (its `#RANDOM` branches drawn), when the host has it: a beatoraja skin's BPM graph,
    * note kinds and TOTAL readout read it, and show nothing of the chart without it.
@@ -103,7 +103,7 @@ function createResultView(
     }
     case 'beatoraja': {
       const view = new BeatorajaResultView(kit, {
-        chart: options.result.song,
+        chart: options.result.chart,
         ...source,
         skinSounds: options.audio.skinSounds.owned(session),
       });

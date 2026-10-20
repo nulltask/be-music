@@ -82,12 +82,12 @@ export class FamilyKits {
    */
   public async decideKitFor(
     family: SkinFamilyId,
-    song: LibraryChart,
+    chartEntry: LibraryChart,
     playsOnBeatoraja: boolean,
   ): Promise<DecideSceneKit | undefined> {
     switch (family) {
       case 'beatoraja':
-        return this.beatoraja.loadBeatorajaDecideKit(song);
+        return this.beatoraja.loadBeatorajaDecideKit(chartEntry);
       case 'lr2':
         return this.lr2.decideSkin !== undefined ? { family: 'lr2', skin: this.lr2.decideSkin } : undefined;
       default:
@@ -108,11 +108,11 @@ export class FamilyKits {
    * Nothing is put in force here: the play may load behind a decide screen that is backed out of.
    */
   public async resolvePlayKit(
-    song: LibraryChart,
+    chartEntry: LibraryChart,
     overrides: { courseStage?: CourseStagePlay; nonstop?: { readonly course: LibraryCourse } },
   ): Promise<ResolvedPlayKit | undefined> {
-    if (this.playsOnBeatoraja(song)) {
-      const loaded = await this.beatoraja.loadBeatorajaPlayKit(song);
+    if (this.playsOnBeatoraja(chartEntry)) {
+      const loaded = await this.beatoraja.loadBeatorajaPlayKit(chartEntry);
       return loaded !== undefined
         ? {
             kit: loaded.kit,
@@ -121,17 +121,17 @@ export class FamilyKits {
         : undefined;
     }
     // Picking `'default'` from the Debug Menu strips the LR2 skin even when one is loaded for this chart.
-    const gameplayFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song);
+    const gameplayFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', chartEntry);
     const playSkin =
       gameplayFamily !== 'lr2'
         ? undefined
         : overrides.courseStage !== undefined || overrides.nonstop !== undefined
           ? this.lr2.courseLR2Skin(
-              pickLR2PlaySkin(this.lr2.playSkins, song),
+              pickLR2PlaySkin(this.lr2.playSkins, chartEntry),
               overrides.courseStage?.courseInfo ?? resolveCourseView(overrides.nonstop!.course, 0),
-              { kind: 'play', playVariant: pickLR2PlaySkinVariant(this.lr2.playSkins, song) },
+              { kind: 'play', playVariant: pickLR2PlaySkinVariant(this.lr2.playSkins, chartEntry) },
             )
-          : pickLR2PlaySkin(this.lr2.playSkins, song);
+          : pickLR2PlaySkin(this.lr2.playSkins, chartEntry);
     if (playSkin === undefined) return { kit: this.builtIn.builtInKit };
     const invisibleNoteSkin = this.lr2.playSkins['9'];
     return {
@@ -141,11 +141,11 @@ export class FamilyKits {
 
   /**
    * Whether a play of `song` runs on the beatoraja play screen: the gameplay family says so, whatever the play is (a
-   * replay and a stitched NONSTOP chart included: the play session carries the play-log arrangement and the per-stage
-   * audio for every family). Every path into gameplay — `playSong`, and the decide splash deciding what to preload — asks
+   * replay and a stitched NONSTOP chart included: the play session carries the replay arrangement and the per-stage
+   * audio for every family). Every path into gameplay — `playChart`, and the decide splash deciding what to preload — asks
    * this one question.
    */
-  public playsOnBeatoraja(song: LibraryChart): boolean {
-    return pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song) === 'beatoraja';
+  public playsOnBeatoraja(chartEntry: LibraryChart): boolean {
+    return pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', chartEntry) === 'beatoraja';
   }
 }

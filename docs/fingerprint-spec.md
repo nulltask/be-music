@@ -2,7 +2,7 @@
 
 # Be-Music Fingerprint specification
 
-> Status: implemented in `@be-music/chart` and recorded in play logs (section 7). Algorithm version: `bmfp0`.
+> Status: implemented in `@be-music/chart` and recorded in replays (section 7). Algorithm version: `bmfp0`.
 
 The abbreviation naming migration changes the canonical document key `baseBpm` to `baseBPM`, including header deltas. This changes existing `bmfp0` values even when the chart plays identically; course fingerprints containing those values also change. Recompute fingerprints and regenerate canonical documents from the chart when migrating stored data. The development version remains `bmfp0`.
 
@@ -16,10 +16,10 @@ Anything that changes judging, the gauge, timing, or how the notes look on their
 
 ## 1. Two fingerprints
 
-| Name                  | Input                                                         | Use                                                                        |
-| --------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| **Chart fingerprint** | The chart with its `#RANDOM` / `#SWITCH` structure unresolved | Identifying a chart file (song lists, tables, score databases)             |
-| **Play fingerprint**  | The chart after every control-flow branch is chosen           | Identifying what one play actually played (play logs, replay verification) |
+| Name                  | Input                                                         | Use                                                                      |
+| --------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| **Chart fingerprint** | The chart with its `#RANDOM` / `#SWITCH` structure unresolved | Identifying a chart file (song lists, tables, score databases)           |
+| **Play fingerprint**  | The chart after every control-flow branch is chosen           | Identifying what one play actually played (replays, replay verification) |
 
 Both are computed from two inputs:
 
@@ -40,22 +40,22 @@ flowchart TD
 
 A chart whose every outcome plays the same — in particular a chart without control flow — has equal chart and play fingerprints.
 
-Lane options such as MIRROR / RANDOM / DP flip are play options, not part of the chart, and are in neither fingerprint. A play log records them separately.
+Lane options such as MIRROR / RANDOM / DP flip are play options, not part of the chart, and are in neither fingerprint. A replay records them separately.
 
 ## 2. What is included
 
-| Included (affects play or what the lanes show)                                        | Excluded                                                                                               |
-| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Lane mode (5 / 7 / 9 / 10 / 14 / 24 / 48 KEY)                                         | Title, subtitle, artist, genre, `#PLAYLEVEL`, `#DIFFICULTY`, `#COMMENT`, `#TEXT`, `#PREVIEW`           |
-| Visible notes: position and lane                                                      | The sample a note plays (keysound assignment)                                                          |
-| Long notes: start, end, and mode (LN / CN / HCN); FREE ZONE notes                     | BGM (channel `01`), `#WAV`, `#EXWAV`, `#VOLWAV`, `#WAVCMD`, volume-change channels                     |
-| Mines (`Dx` / `Ex`, bmson `mine_channels`): position, lane, and damage                | BGA, layers, POOR image, `#BMP`, `#BGA`, `#SWBGA`, `#ARGB`, `#STAGEFILE`, `#BANNER`, `#BACKBMP`, video |
-| Bar lines (measure lengths, and whether bar lines are drawn at all)                   | Invisible notes (`3x` / `4x`, bmson `key_channels`; not judged)                                        |
-| Initial BPM, BPM changes, STOP, `#STP`                                                | `#LNTYPE`, `#LNOBJ`, and `5x` / `6x` as notations (the resolved long notes are included instead)       |
-| SCROLL (`SC`) and SPEED (`SP`)                                                        | `#OPTION`, `#MIDIFILE`, `#PATH_WAV`, `#MATERIALS`, `#BASE`, `#CHARSET`                                 |
-| `#BASEBPM` (sets the reference BPM for hi-speed, so it changes how fast notes look)   | `#CHANGEOPTION` (see below)                                                                            |
-| Judge rank: `#RANK`, `#DEFEXRANK`, bmson `judge_rank`, and `#EXRANKxx` changes (`A0`) | Anything a player does not draw in or over the lanes                                                   |
-| `#TOTAL` / bmson `total`                                                              |                                                                                                        |
+| Included (affects play or what the lanes show)                                           | Excluded                                                                                               |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Lane mode (5 / 7 / 9 / 10 / 14 / 24 / 48 KEY)                                            | Title, subtitle, artist, genre, `#PLAYLEVEL`, `#DIFFICULTY`, `#COMMENT`, `#TEXT`, `#PREVIEW`           |
+| Visible notes: position and lane                                                         | The sample a note plays (keysound assignment)                                                          |
+| Long notes: start, end, and mode (LN / CN / HCN); FREE ZONE notes                        | BGM (channel `01`), `#WAV`, `#EXWAV`, `#VOLWAV`, `#WAVCMD`, volume-change channels                     |
+| Mines (`Dx` / `Ex`, bmson `mine_channels`): position, lane, and damage                   | BGA, layers, POOR image, `#BMP`, `#BGA`, `#SWBGA`, `#ARGB`, `#STAGEFILE`, `#BANNER`, `#BACKBMP`, video |
+| Bar lines (measure lengths, and whether bar lines are drawn at all)                      | Invisible notes (`3x` / `4x`, bmson `key_channels`; not judged)                                        |
+| Initial BPM, BPM changes, STOP, `#STP`                                                   | `#LNTYPE`, `#LNOBJ`, and `5x` / `6x` as notations (the resolved long notes are included instead)       |
+| SCROLL (`SC`) and SPEED (`SP`)                                                           | `#OPTION`, `#MIDIFILE`, `#PATH_WAV`, `#MATERIALS`, `#BASE`, `#CHARSET`                                 |
+| `#BASEBPM` (sets the reference BPM for hi-speed, so it changes how fast notes look)      | `#CHANGEOPTION` (see below)                                                                            |
+| Judgment rank: `#RANK`, `#DEFEXRANK`, bmson `judge_rank`, and `#EXRANKxx` changes (`A0`) | Anything a player does not draw in or over the lanes                                                   |
+| `#TOTAL` / bmson `total`                                                                 |                                                                                                        |
 
 `#CHANGEOPTION` can force lane options mid-chart, which would change play. be-music parses it but never applies it, so it is excluded: two charts that differ only in `#CHANGEOPTION` play the same in be-music. If be-music ever applies it, it joins the fingerprint with a version bump (section 5).
 
@@ -183,7 +183,7 @@ Interaction is transitive (union–find). For non-interacting factors, the play 
 
 Each factor becomes a reduced decision tree over its variables in file order: a node tests one variable, its branches partition the variable's values, and a leaf is a delta. Branches whose subtrees are equal merge, and a node whose branches all lead to the same subtree is that subtree; a variable the outcome does not depend on has no node. In the document a node is `{"random": "n", "branches": [...]}` — for `#RANDOM` and `#SWITCH` alike — and a branch is `{"values": [...], ...}` with either the leaf's delta (`"add"`, `"remove"`, `"header"`, each omitted when empty) or `"next"`, the node of a later variable. `values` lists the values as `"v"` or inclusive ranges `"low-high"`, ascending. Branches are sorted by their first value. Branches whose documents are equal are merged in the document as well.
 
-Consequences: `#IF 1 A #ELSE B` and `#IF 1 A #IF 2 B` under `#RANDOM 2` give one document, as do a `#SWITCH` and the `#RANDOM` + `#IF` it is equivalent to; values whose branches play alike are merged whatever their labels; an outcome's probability is the product of `|values| / n` along its path. The values themselves are part of the document, so swapping which value plays which branch (`#IF 1 A` against `#IF 2 A`) changes the chart fingerprint, although it plays alike in distribution. Nodes do not record which `#RANDOM` line they test, only its range: the document describes the distribution of outcomes, and a play log's `randomDraws` identify the outcome of one play (section 7).
+Consequences: `#IF 1 A #ELSE B` and `#IF 1 A #IF 2 B` under `#RANDOM 2` give one document, as do a `#SWITCH` and the `#RANDOM` + `#IF` it is equivalent to; values whose branches play alike are merged whatever their labels; an outcome's probability is the product of `|values| / n` along its path. The values themselves are part of the document, so swapping which value plays which branch (`#IF 1 A` against `#IF 2 A`) changes the chart fingerprint, although it plays alike in distribution. Nodes do not record which `#RANDOM` line they test, only its range: the document describes the distribution of outcomes, and a replay's `randomDraws` identify the outcome of one play (section 7).
 
 #### 3.6.5 Hoisting
 
@@ -290,9 +290,9 @@ The `bmfp0` prefix names the algorithm version. Fingerprints are only comparable
   - Outcomes are enumerated (`fingerprint-control-flow.ts`) with the frame operations of `evaluateControlFlow` (`control-flow.ts`), driven for every value class at once instead of for one set of draws, and turned into deltas, factors and decision trees (`fingerprint-delta.ts`, `fingerprint-chart-model.ts`). Differential tests check, for thousands of random charts with nested and malformed control flow, that every outcome composed from the chart model equals the play document of the chart `resolveBMSControlFlowWithDraws` resolves with the same draws, and that the outcome distribution of every chart document equals the parser's.
 - The parser stores BMS values as numbers, so the shortest round-trip text of the stored double stands in for the decimal text (section 3.1). Raw strings the parser keeps (`#EXRANKxx`, `#STP`) are read from their digits.
 
-## 7. Play logs
+## 7. Replays
 
-The play log records the chart fingerprint of the chart as `chart.chartFingerprint`, the play fingerprint of what was played as `chart.playFingerprint`, and the play's `#RANDOM` / `#SWITCH` outcomes as `play.randomDraws`, its `RandomDraws` (see [playlog.md](./playlog.md)). The chart fingerprint is the one to group plays by: every play of a chart shares it, whatever its `#RANDOM` lines rolled. A verifier with the chart file re-resolves it with those draws (`resolveBMSControlFlowWithDraws(json, randomDraws)`, which rejects draws that were not drawn for the chart) and recomputes the play fingerprint with the chart's extension. `createPlaylogRecorder` in `@be-music/player` computes both from the source chart — the chart as loaded, which a host that resolves `#RANDOM` or rewrites lanes itself passes as `recordPlaylog.sourceChart`, otherwise the chart the engine was handed — resolved with the play's draws for the play fingerprint, so lane options (RANDOM / MIRROR / DP FLIP) do not change either. Without a source chart the draws were drawn for, the play fingerprint comes from the chart the engine played and the chart fingerprint is omitted unless the play has no draws. Its lane-mode input is the engine's `laneModeExtension`; without one, a 9 KEY play stands in for `.pms`. The draws are the engine's `PlayerOptions.randomDraws`: every host draws once per play (`resolvePlayChart`) and hands the same draws to the engine, which records them, and a replay passes the log's draws back the same way.
+The replay records the chart fingerprint of the chart as `chart.chartFingerprint`, the play fingerprint of what was played as `chart.playFingerprint`, and the play's `#RANDOM` / `#SWITCH` outcomes as `play.randomDraws`, its `RandomDraws` (see [replay.md](./replay.md)). The chart fingerprint is the one to group plays by: every play of a chart shares it, whatever its `#RANDOM` lines rolled. A verifier with the chart file re-resolves it with those draws (`resolveBMSControlFlowWithDraws(json, randomDraws)`, which rejects draws that were not drawn for the chart) and recomputes the play fingerprint with the chart's extension. `createReplayRecorder` in `@be-music/player` computes both from the source chart — the chart as loaded, which a host that resolves `#RANDOM` or rewrites lanes itself passes as `recordReplay.sourceChart`, otherwise the chart the engine was handed — resolved with the play's draws for the play fingerprint, so lane options (RANDOM / MIRROR / DP FLIP) do not change either. Without a source chart the draws were drawn for, the play fingerprint comes from the chart the engine played and the chart fingerprint is omitted unless the play has no draws. Its lane-mode input is the engine's `laneModeExtension`; without one, a 9 KEY play stands in for `.pms`. The draws are the engine's `PlayerOptions.randomDraws`: every host draws once per play (`resolvePlayChart`) and hands the same draws to the engine, which records them, and a replay passes the log's draws back the same way.
 
 ## 8. Course fingerprint
 
@@ -325,7 +325,7 @@ flowchart LR
 | `stages`      | Each stage's chart fingerprint (section 1), in stage order. A random course is keyed by the stages it drew.                                                                                                                                                          |
 | `nonstop`     | NONSTOP courses only. `connections` has exactly one entry per seam (stages − 1): a connection listed after the last stage joins nothing and is dropped, and a seam the course does not name is `fade`, as the stitcher reads it. `placement` is `intended` or `lr2`. |
 
-Left out, because they do not change what is played: the course name, the trophies, the `release` flag, and the stitching rule version a NONSTOP play log records (`nonstop.stitch`, so a fix to the stitching keeps the course's board; [playlog.md](./playlog.md#course-play-logs)).
+Left out, because they do not change what is played: the course name, the trophies, the `release` flag, and the stitching rule version a NONSTOP replay records (`nonstop.stitch`, so a fix to the stitching keeps the course's board; [replay.md](./replay.md#course-replays)).
 
 ### 8.2 Output and versioning
 
@@ -333,6 +333,6 @@ Left out, because they do not change what is played: the course name, the trophi
 bmcourse0:<lowercase hex SHA-256 of the RFC 8785 text of the document>
 ```
 
-Every value is a string or a list of strings, so the RFC 8785 text is the document with its keys sorted and no whitespace. Like `bmfp0`, `bmcourse0` is the development version and may change without a version bump; a course fingerprint also changes whenever a stage's chart fingerprint does. From the first stable version on, any change to the document of an existing course needs a new version. `packages/player/src/playlog/course-fingerprint.test.ts` pins golden values for this.
+Every value is a string or a list of strings, so the RFC 8785 text is the document with its keys sorted and no whitespace. Like `bmfp0`, `bmcourse0` is the development version and may change without a version bump; a course fingerprint also changes whenever a stage's chart fingerprint does. From the first stable version on, any change to the document of an existing course needs a new version. `packages/player/src/replay/course-fingerprint.test.ts` pins golden values for this.
 
-`createCourseFingerprintDocument(input)` and `computeCourseFingerprint(input)` in `@be-music/player/playlog` implement this section, with `canonicalizeJSONValue` and `sha256Hex` from `@be-music/chart`; `computeCoursePlaylogFingerprint(log)` reads the input from a course play log.
+`createCourseFingerprintDocument(input)` and `computeCourseFingerprint(input)` in `@be-music/player/replay` implement this section, with `canonicalizeJSONValue` and `sha256Hex` from `@be-music/chart`; `computeCourseReplayFingerprint(log)` reads the input from a course replay.

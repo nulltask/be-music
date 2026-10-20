@@ -1,8 +1,8 @@
 [Japanese version](./bmson-spec.ja.md)
 
-# BMSON implementation specification
+# bmson implementation specification
 
-This document defines how `packages/parser` / `packages/stringifier` handles BMSON.
+This document defines how `packages/parser` / `packages/stringifier` handles bmson.
 How beatoraja and other players read the same fields is compared in [BMS / bmson compatibility notes](./format-compat.md).
 
 ## Primary reference
@@ -15,7 +15,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 ## Compliance status summary
 
 - Compatibility level: Partial compliance
-- Policy: Prioritize the minimum set required for BMS interconversion and playback, rather than the full BMSON specification.
+- Policy: Prioritize the minimum set required for BMS interconversion and playback, rather than the full bmson specification.
 
 ## Compatibility checklist
 
@@ -136,7 +136,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - `mine_channels[].notes[]`: `x`, `y`, `damage`
 - `bga`: `bga_header`, `bga_events`, `layer_events`, `poor_events`
 
-## bmson -> BMS/BMSON intermediate representation (`@be-music/json`) conversion
+## bmson -> BMS/bmson intermediate representation (`@be-music/json`) conversion
 
 The overall read and write directions are in [JSON spec — Conversion rules](./json-spec.md#conversion-rules). A note's `x` finds its lane by the `mode_hint` rules in the list below:
 
@@ -209,7 +209,7 @@ flowchart TD
   - beatoraja drops a mine inside a long note or on a position a note already uses; be-music keeps it, as LR2 keeps such BMS mines (see [BMS / bmson compatibility notes §2.6](./format-compat.md#26-mines))
 - `bga` is kept in `bmson.bga`
 
-## BMS/BMSON intermediate representation -> BMSON conversion (stringifier)
+## BMS/bmson intermediate representation -> bmson conversion (stringifier)
 
 - Generate `y = round(beat * resolution)` from beat resolution equivalent to `eventToBeat` of `@be-music/chart`
 - Output `bmson.version` to `version` (`1.0.0` if not specified)

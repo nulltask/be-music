@@ -21,7 +21,7 @@ const RESULT: PlayResult = {
   gauge: 100,
   cleared: true,
   playSeconds: 30,
-  song: {
+  chart: {
     id: 'chart',
     sourceId: 'source',
     sourceLabel: 'Source',

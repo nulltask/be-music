@@ -1,4 +1,4 @@
-import type { BeMusicPlaylog, PlaylogRecorderInfo } from '@be-music/player/playlog';
+import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player/replay';
 import type { LibraryChart } from '@be-music/scene-model';
 import type GUI from 'lil-gui';
 import type { Controller } from 'lil-gui';
@@ -16,7 +16,7 @@ import {
 } from './account.ts';
 import { wireAccountDialogs } from './account-dialogs.ts';
 import { leaderboardLink } from './service-links.ts';
-import type { BeMusicCoursePlaylog } from '@be-music/player/playlog';
+import type { BeMusicCourseReplay } from '@be-music/player/replay';
 import {
   describeCourseLeaderboardResult,
   describeLeaderboardResult,
@@ -34,11 +34,11 @@ export interface LeaderboardPanelHost {
   settings(): { submitToLeaderboard: boolean };
   setStatus(text: string): void;
   warn(message: string, error: unknown): void;
-  recorder: Omit<PlaylogRecorderInfo, 'engine'>;
+  recorder: Omit<ReplayRecorderInfo, 'engine'>;
 }
 
 /** The `Be-Music-Client` header a submission carries: `be-music-web/0.5.0 (build abc)`. */
-export function describeSubmittingClient(recorder: Omit<PlaylogRecorderInfo, 'engine'>): string {
+export function describeSubmittingClient(recorder: Omit<ReplayRecorderInfo, 'engine'>): string {
   return `${recorder.name}/${recorder.version}${recorder.build !== undefined ? ` (build ${recorder.build})` : ''}`;
 }
 
@@ -151,14 +151,14 @@ export class LeaderboardPanel {
    * Sends the play to the Leaderboard when "Submit to Leaderboard" was on at song start. Runs in the background: the
    * result screen never waits for it, and its outcome (rank, or why it was not sent) goes to the status line.
    */
-  maybeSubmit(playlog: BeMusicPlaylog | undefined, song: LibraryChart): void {
-    if (!this.submitThisPlay || playlog === undefined) return;
-    const prepared = prepareLeaderboardSubmission(playlog, song.chart, song.chartPath);
+  maybeSubmit(replay: BeMusicReplay | undefined, chartEntry: LibraryChart): void {
+    if (!this.submitThisPlay || replay === undefined) return;
+    const prepared = prepareLeaderboardSubmission(replay, chartEntry.chart, chartEntry.chartPath);
     if (!prepared.ok) {
       this.host.setStatus(describeSkippedSubmission(prepared.reason));
       return;
     }
-    const playedRuleset = playlog.play.judgeRuleset ?? 'lr2';
+    const playedRuleset = replay.play.judgeRuleset ?? 'lr2';
     void submitToLeaderboard(prepared.submission, { client: describeSubmittingClient(this.host.recorder) })
       .then((result) => {
         this.host.setStatus(describeLeaderboardResult(result, playedRuleset));
@@ -177,19 +177,19 @@ export class LeaderboardPanel {
    * charts rebuild each played stage's fingerprint documents, and go to the server for the stages it rebuilds: the
    * unreached ones, and all of a NONSTOP run). The course rank goes to the status line.
    */
-  maybeSubmitCourse(coursePlaylog: BeMusicCoursePlaylog, stageSongs: readonly LibraryChart[]): void {
+  maybeSubmitCourse(courseReplay: BeMusicCourseReplay, stageSongs: readonly LibraryChart[]): void {
     if (!this.submitThisPlay) return;
     const prepared = prepareCourseLeaderboardSubmission(
-      coursePlaylog,
-      stageSongs.map((song) => ({ chart: song.chart, chartPath: song.chartPath })),
+      courseReplay,
+      stageSongs.map((chartEntry) => ({ chart: chartEntry.chart, chartPath: chartEntry.chartPath })),
     );
     if (!prepared.ok) {
       this.host.setStatus(describeSkippedCourseSubmission(prepared.reason));
       return;
     }
-    const firstStage = coursePlaylog.stages[0];
+    const firstStage = courseReplay.stages[0];
     // Every stage of a ranked run is judged under one ruleset (the server refuses mixed ones); a NONSTOP run was one play.
-    const judged = coursePlaylog.nonstop?.playlog ?? (firstStage?.played === true ? firstStage.playlog : undefined);
+    const judged = courseReplay.nonstop?.replay ?? (firstStage?.played === true ? firstStage.replay : undefined);
     const playedRuleset = judged?.play.judgeRuleset ?? 'lr2';
     void submitCourseToLeaderboard(prepared.submission, { client: describeSubmittingClient(this.host.recorder) })
       .then((result) => {

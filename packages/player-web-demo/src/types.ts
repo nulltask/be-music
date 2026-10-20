@@ -1,7 +1,7 @@
 import type { DecideScene, PlayScene, ResultScene, SelectScene } from '@be-music/player-web/host';
 import type { SkinFamilyId } from '@be-music/player-web/skin';
-import type { PlaylogViewReplay } from '@be-music/player/playlog';
-import type { GaugeType, PlaylogRulesetId } from '@be-music/player/ruleset';
+import type { ReplayPlaybackOptions } from '@be-music/player/replay';
+import type { GaugeType, RulesetId } from '@be-music/player/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '@be-music/scene-model';
 import type { PlayTempoSettings } from './play-tempo-settings.ts';
 
@@ -19,10 +19,10 @@ export interface PlayerWebDemoElements {
    * Hidden `<input type="file" webkitdirectory>` triggered from a lil-gui function controller. The DOM element survives
    * across lil-gui rebuilds (e.g. theme changes) so the underlying `change` listener stays bound through the session.
    */
-  songInput: HTMLInputElement;
+  chartInput: HTMLInputElement;
   /**
-   * Hidden `<input type="file" multiple>` behind the Debug Menu's "Open files" button: ZIP archives and play logs, which
-   * the folder picker (`songInput`) can't select.
+   * Hidden `<input type="file" multiple>` behind the Debug Menu's "Open files" button: ZIP archives and replays, which
+   * the folder picker (`chartInput`) can't select.
    */
   filesInput: HTMLInputElement;
   /**
@@ -138,11 +138,11 @@ export interface DemoGUIState extends PlayTempoSettings {
    */
   judgedNoteDisplay: 'KEEP_SCROLLING' | 'HIDE';
   /**
-   * When true (off by default), the play-log (`*.bmplay.json` input replay — see `@be-music/player/playlog`) recorded
+   * When true (off by default), the replay (`*.bmplay.json` input replay — see `@be-music/player/replay`) recorded
    * during gameplay is automatically downloaded the moment the result scene mounts, for both the LR2/default and
    * beatoraja result paths. Toggled from the Debug Menu's "Auto-save play history" checkbox.
    */
-  autoSavePlaylog: boolean;
+  autoSaveReplay: boolean;
   /**
    * In a course, go straight on to the next stage instead of showing each stage's result (the course result still
    * shows at the end). False (the default) shows every stage's result, as LR2 and beatoraja do.
@@ -154,11 +154,11 @@ export interface DemoGUIState extends PlayTempoSettings {
    */
   nonstopPlacement: 'intended' | 'lr2';
   /**
-   * Which of what a play log recorded the player seeing a replay or ghost reproduces (tempo, hi-speed, SUDDEN+ /
+   * Which of what a replay recorded the player seeing a replay or ghost reproduces (tempo, hi-speed, SUDDEN+ /
    * HIDDEN+, LIFT), the rest staying the viewer's own: the Debug Menu's "Play options / Replay / ghost" toggles, all on
    * by default, remembered across visits and latched at song start.
    */
-  replayView: PlaylogViewReplay;
+  replayView: ReplayPlaybackOptions;
   /** `tempoPercent` / `tempoPitchMode` / `tempoStretchAlgorithm`: see {@link PlayTempoSettings}. */
   /**
    * When true (off by default), every finished play is sent to the Leaderboard when the result scene mounts — signing
@@ -169,9 +169,9 @@ export interface DemoGUIState extends PlayTempoSettings {
   /**
    * The compat ruleset the shared engine judges under (`PlayerOptions.judgeRuleset`): LR2 (default) / beatoraja / IIDX.
    * It owns every judge rule: the windows, note selection, empty POOR, the long-note style, the gauge and the score.
-   * Latched at song start (the Play options folder is disabled during a play) and recorded into the play-log.
+   * Latched at song start (the Play options folder is disabled during a play) and recorded into the replay.
    */
-  judgeRuleset: PlaylogRulesetId;
+  judgeRuleset: RulesetId;
   /**
    * Hi-speed (note scroll multiplier) the next play starts at. Two-way synced with the LR2 select panel's HS and the
    * in-game `ArrowUp` / `ArrowDown` keys, applied live to a running play when changed here, and remembered across
@@ -218,7 +218,7 @@ export interface DemoGUIState extends PlayTempoSettings {
   status: string;
   /** Triggered by clicking the GUI's "Open folder" button. */
   openFolder: () => void;
-  /** Triggered by clicking the GUI's "Open files" button (ZIP archives / play logs). */
+  /** Triggered by clicking the GUI's "Open files" button (ZIP archives / replays). */
   openFiles: () => void;
   /** "Video format": the container and codec of recordings, as `mp4/avc` / `webm/vp9` (`recording-format-choice.ts`). */
   recordingFormat: string;

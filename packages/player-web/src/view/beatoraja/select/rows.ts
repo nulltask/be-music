@@ -676,14 +676,14 @@ export class BeatorajaSelectRows {
           for (const sprite of levelDigits) sprite.visible = false;
         }
       } else {
-        const song = entry.chart;
+        const chartEntry = entry.chart;
         // `SongBar.getTitle()` (`SongBar.java:61-63`) returns `song.getFullTitle()`, which is
         // `subtitle.length() > 0 ? title + " " + subtitle : title` (`SongData.java:285-290`).
         // Authors who use `#SUBTITLE` to disambiguate difficulty (`Foo` + `[INSANE]`) rely on
         // this concatenation — pre-fix the bar showed only the title, so charts that share
         // a base title looked identical in the song list.
-        label.text = joinBeatorajaText(song.title, song.subtitle);
-        const lvl = resolvePlayLevel(song.playLevel);
+        label.text = joinBeatorajaText(chartEntry.title, chartEntry.subtitle);
+        const lvl = resolvePlayLevel(chartEntry.playLevel);
         const showLevel = lvl !== undefined && lvl > 0;
         // Per-difficulty value element pick. Upstream's `BarRenderer` reads
         // `barlevel[song.difficulty]` per row so each chart paints its `#PLAYLEVEL` from the
@@ -692,7 +692,7 @@ export class BeatorajaSelectRows {
         // entry) when the chart's difficulty doesn't have a matching authored entry — keeps
         // skins with a partial level set or non-standard `#DIFFICULTY` values still
         // rendering some sprite digits.
-        const perDifficultyLevelValue = this.levelValueElementForDifficulty(song.chart.metadata.difficulty);
+        const perDifficultyLevelValue = this.levelValueElementForDifficulty(chartEntry.chart.metadata.difficulty);
         if (
           levelDigits !== undefined &&
           perDifficultyLevelValue !== undefined &&
@@ -981,7 +981,7 @@ export class BeatorajaSelectRows {
 
 /**
  * `LibraryChart.playLevel` arrives as either a number (BMS `#PLAYLEVEL 12`) or a string
- * (some BMSON files / BMS variants store it as text). The skin's `value[]` resolver expects
+ * (some bmson files / BMS variants store it as text). The skin's `value[]` resolver expects
  * a number, so we coerce — strings parse via `parseInt`; non-finite results return
  * `undefined` so the digit panel shows blanks rather than NaN garbage.
  */

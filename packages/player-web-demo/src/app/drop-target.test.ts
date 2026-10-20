@@ -52,7 +52,7 @@ function harness(overrides: Partial<DropTargetOptions> = {}) {
     loadingLabel: fakeElement(),
     loadingBarFill: fakeElement(),
     loadingCounter: fakeElement(),
-    songInput: fakeElement(),
+    chartInput: fakeElement(),
     filesInput: fakeElement(),
   };
   const loaded: string[][] = [];

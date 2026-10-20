@@ -3,25 +3,49 @@
 # 用語集
 
 この文書は、`be-music` の仕様書と実装で使う用語を定義します。
-一般的な BMS/BMSON 用語にできるだけ沿いつつ、**このリポジトリでどう扱うか**を優先します。
+一般的な BMS/bmson 用語にできるだけ沿いつつ、**このリポジトリでどう扱うか**を優先します。
 
 ## 用語運用ルール
 
-- **chart** は、譜面ファイルや再生・選択・保存の単位を指す既定語です。
-- **music / 曲 / 楽曲** は、タイトルとアーティストで人間が認識する作品単位です。1 つの music に複数の chart が属することがあります。
+- **chart（譜面）** は、時刻を持つオブジェクトとリソース参照からなる演奏単位です。**譜面ファイル（chart file）** はその保存表現であり、演奏内容の同一性とファイルのバイト列の同一性を区別します。
+- **track（楽曲）** は、演奏用の配置とは独立した音楽作品を指します。1 つの楽曲が複数の譜面を持つことがあります。タイトルとアーティストは説明用のメタデータであり、一意な ID ではありません。この組だけから独立した楽曲エンティティや同一性を推定しません。
+- 個々の楽曲の名前には **track** / `Track` / `trackId` を使います。**music** は音楽全般を指す一般語として使えますが、エンティティ名にはしません。**音声アセット（audio asset）** はファイルの実体、**音声トラック（audio track）** は録音やエディタのタイムライン上のレーンとして区別します。**Music Select** という画面名や `preview_music` などの外部キーは維持します。
 - **song** は、このリポジトリの既定語ではありません。`song.mid`、`bemuse-song.json`、`songs[]` のような外部仕様名やファイル名をそのまま参照するときに使います。
 - **Music Select** は画面名です。この画面で選択・復元する単位は chart です。
-- 選曲画面が一覧するライブラリでは、chart は **ライブラリの譜面**（`LibraryChart`）です。譜面のバーは `{ kind: 'chart', chart }`、フォルダは `charts` を並べ、コースのステージは `chart` を指します。公開の名前の一部はまだ song のままです（`PlayResult.song`、`BrowserSongCollectionStore`、`BrowserSongAssetSource`、スキン SDK の `songRecord`、`BeMusicSongRecord`、`resolveSongStats`）。新しい名前は chart を使います。
+- 選曲画面が一覧するライブラリでは、chart は **ライブラリの譜面**（`LibraryChart`）です。譜面のバーは `{ kind: 'chart', chart }`、フォルダは `charts` を並べ、コースのステージは `chart` を指します。コード名も chart に統一しています（`PlayResult.chart`、`BrowserChartCollectionStore`、`BrowserAssetSource`、スキン SDK の `chartBestRecord`、`BeMusicChartBestRecord`、`resolveChartStats`）。新しい名前は chart を使います。
+
+## 推奨表記
+
+ドキュメント・ソースコメント・画面の文言では、次の表記を使います。コードの識別子は[命名規則](../AGENTS.md)に従います。BMS・bmson・外部サービスが要求する名前は維持します。プロジェクト独自の名前はこの用語に揃えます。
+
+| 概念                             | 英語                 | 日本語                | コード                                           |
+| -------------------------------- | -------------------- | --------------------- | ------------------------------------------------ |
+| 時刻を持つノートなどの演奏用配置 | chart                | 譜面                  | `chart`                                          |
+| 複数の譜面が共有する音楽作品     | track                | 楽曲                  | `track`                                          |
+| JSON ベースの譜面形式            | bmson                | bmson                 | `bmson` / `Bmson`。既存の `BMSON_*` 定数は維持   |
+| ノートを評価した結果             | judgment             | 判定                  | 既存 API の `judge` は維持                       |
+| 入力を記録したリプレイ           | replay               | リプレイ              | `replay` / `Replay`                              |
+| プロフィール画像                 | avatar               | アバター              | `avatar`                                         |
+| 一意な公開ユーザー名             | handle               | ユーザー名            | `handle`                                         |
+| アバターの横に表示する名前       | display name         | 表示名                | `displayName`                                    |
+| 認証済みセッションの開始・終了   | sign in / sign out   | ログイン / ログアウト | `signIn` / `signOut`。認証ライブラリの契約は維持 |
+| デプロイ先の環境                 | production / preview | 本番 / プレビュー     | `production` / `preview`                         |
+
+**プレイ履歴（play history）** はプレイの集合や一覧、**リプレイ（replay）** は 1 回分の入力リプレイを指し、区別します。英語では修飾語・名詞に **sign-in / sign-out**、動詞に **sign in / sign out** を使います。UI の操作や対象を表す記号は **アイコン（icon）**、ユーザーのプロフィール画像は **アバター（avatar）** です。
+
+記録データの正規語は **リプレイ（replay）** です。型は `BeMusicReplay`、変数は `replay`、操作は `parseReplay`・`serializeReplay`・`simulateReplay` のように動詞で区別します。`log` は診断・実行ログを指します。
+
+譜面を指すコード名は chart、楽曲は track に揃えます。beatoraja の `song` テーブルや `BMSONDecoder` などの外部名は原文を維持します。
 
 ## 譜面とリソース
 
 - **BMS**: Be-Music Source 系のテキスト譜面形式です。`#TITLE`、`#WAVxx`、`#mmmcc:...` のようなヘッダ行とオブジェクト行で構成します。
 - **bmson**: JSON ベースの譜面形式です。`info`、`sound_channels`、`bga`、`lines` などの構造を持ちます。
-- **チャート (chart)**: 1 つの譜面ファイル、またはその再生単位です。Music Select では 1 entry が 1 chart に対応します。
+- **譜面 (chart)**: 時刻を持つオブジェクトとリソース参照からなる演奏単位です。譜面ファイルは BMS・bmson・内部 JSON による保存表現です。Music Select では抽象的な音楽作品ではなく、ライブラリの譜面を選びます。
 - **メタデータ (metadata)**: 曲名、アーティスト、ジャンル、コメント、`#STAGEFILE`、`#BACKBMP`、`#BANNER` など、譜面本体以外の付加情報です。
 - **リソース (resource)**: 譜面や skin から参照される音声、画像、動画、テキストなどの外部ファイルです。
 - **keysound**: ノートや BGM の発音に使う音声リソースです。BMS では主に `#WAVxx`、bmson では `sound_channels` が対応します。
-- **preview**: Music Select で再生する短い試聴音です。`#PREVIEW` や bmson の `info.preview_music` を優先して使います。
+- **試聴音（audio preview）**: Music Select で再生する短い音です。デプロイ環境も扱う文脈では audio preview と明示します。`#PREVIEW` や bmson の `info.preview_music` を優先して使います。
 - **BGA**: gameplay 中に表示する背景画像/動画です。base、layer、layer2、POOR などの cue を持ちます。
 - **POOR BGA**: `POOR` 判定時に表示する専用 BGA です。譜面側で定義されている場合だけ使います。
 - **STAGEFILE**: chart 選択後の loading screen に表示する画像です。gameplay 中の BGA とは別用途です。
@@ -35,7 +59,7 @@
 - **scratch**: スクラッチ用レーンです。SP では `16`、DP では `16` と `26` が対応します。
 - **FREE ZONE**: `17` / `27` を使う特殊ノートです。9KEY 以外では scratch レーンに重ねて描画し、通常の score/gauge 対象からは外します。
 - **小節 (measure)**: 譜面上の区切りです。BMS の `#mmmcc` の `mmm` や、IR の `measure` が対応します。
-- **beat**: 小節長を正規化した譜面上の時間単位です。`@be-music/chart` と player runtime は beat を基準に時刻や表示位置を計算します。
+- **拍（beat）**: 四分音符を単位とする譜面上の位置です。通常の 4/4 小節は 4 拍で、小節長の倍率によって拍数が変わります。秒や、小節内の相対位置 `position` とは区別します。
 - **BPM**: 1 分あたりの拍数です。譜面の時間進行を決めます。
 - **STOP**: 一定時間だけ譜面時間を停止するイベントです。見た目と判定時刻の両方に影響します。
 - **SCROLL**: ノートの見た目の流れ方を変える係数です。判定時刻ではなく表示位置に影響します。
@@ -44,20 +68,20 @@
 - **LNOBJ**: BMS の `#LNOBJ` で宣言する long note 終端オブジェクトです。
 - **LNMODE**: BMS long note の判定確定ルールです。`1`、`2`、`3` で終点判定や hold break 時の扱いが変わります。
 - **地雷 (mine)**: 押すとダメージを受けるノートです。LR2 に合わせ、レーンを押したまま判定線を通過するか、`PGREAT` 窓内で押すと爆発します。爆発は譜面値ベースの gauge damage を与えるだけで、判定にはなりません。
-- **判定 (judge)**: `PERFECT` / `GREAT` / `GOOD` / `BAD` / `POOR` の結果です。score、combo、gauge へ影響します。
+- **判定（judgment）**: `PERFECT`・`GREAT`・`GOOD`・`BAD`・`POOR` など、ノートに対する評価です。結果は judgment、判定する動作は judge と呼びます。種類は `JudgmentKind`、時刻付きの結果は `JudgmentTiming` です。エンジンの動作名やフォーマットのフィールドである `judge`・`judgeRuleset` は役割を区別して扱います。
 - **FAST / SLOW**: 判定タイミングの早押し/遅押しの補助表示です。現行実装では `GREAT` と `GOOD` のみ集計します。
 - **EX-SCORE**: IIDX 互換のスコアです。一般に `PERFECT=2`、`GREAT=1`、それ以外 `0` で集計します。
-- **SCORE**: 20 万点満点へ正規化した通常スコアです。
+- **SCORE**: 画面に表示する得点です。LR2 では 20 万点満点の通常スコア、ほかの現行ルールセットでは EX-SCORE を使います。
 - **groove gauge**: クリア判定に使うゲージです。shared core の既定は LR2 互換の `GROOVE` (`NORMAL`) で、export された helper は browser play option 向けに `HARD`、`DEATH`、`EASY` も扱います。
-- **HIGH-SPEED**: ノート表示密度を変えるユーザー設定です。譜面の時刻自体は変えません。
+- **ハイスピード（hi-speed）**: ノートのスクロール表示を調整する設定です。表示や見える時間の範囲を変えますが、ノートの時刻や再生テンポは変えません。外部スキンの `HI-SPEED`・`HIGH-SPEED` や既存の `hiSpeed` という名前は維持します。
 - **MANUAL / AUTO SCRATCH / AUTO**: 再生モードです。`MANUAL` は手動、`AUTO SCRATCH` は scratch だけ自動、`AUTO` は全自動です。
 - **制御構文 (control flow)**: BMS の `#RANDOM`、`#IF`、`#SWITCH` などの分岐命令です。parser は保持し、ホストが再生/レンダリング前に、明示的な `RandomDraws` でプレイごとに 1 回解決します。
-- **RandomDraws**: 1 回のプレイでの譜面の制御構文の結果です。`#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` の行ごとにファイル順で 1 項目（コマンド、range、value）を持ちます。`drawRandomOutcomes` で 1 回引き、resolver、エンジン、プレイログで共有します。
+- **RandomDraws**: 1 回のプレイでの譜面の制御構文の結果です。`#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` の行ごとにファイル順で 1 項目（コマンド、range、value）を持ちます。`drawRandomOutcomes` で 1 回引き、resolver、エンジン、リプレイで共有します。
 - **Source 層 / Resolved 層**: 譜面を読む 2 つの層です。Source 層（`BeMusicJSON`）はファイルに書いてあること、Resolved 層（`@be-music/chart` の `resolveChart` が作る `ResolvedChart`）は、フォーマットの既定値と de facto の規則をすべて適用した、プレイヤーが演奏するものです。[アーキテクチャ](./architecture.ja.md) を参照してください。
 
 ## Runtime Package
 
-- **player core**: `@be-music/player` の共有の規則と engine です。パッケージのルートは engine（`manualPlay`、`autoPlay`）で、解決済みの譜面からプレイを準備して判定し、UI / audio / input の runtime 契約を持ちます。ほかの入口は規則（`./ruleset`、`./course`、`./records`、`./playlog`）と、ホストがプレイと共有するもの（`./signals`、`./lanes`、`./display`）です。timing、ノートの解決、timeline は `@be-music/chart` にあります。
+- **player core**: `@be-music/player` の共有の規則と engine です。パッケージのルートは engine（`manualPlay`、`autoPlay`）で、解決済みの譜面からプレイを準備して判定し、UI / audio / input の runtime 契約を持ちます。ほかの入口は規則（`./ruleset`、`./course`、`./records`、`./replay`）と、ホストがプレイと共有するもの（`./signals`、`./lanes`、`./display`）です。timing、ノートの解決、timeline は `@be-music/chart` にあります。
 - **terminal player**: `@be-music/player-tui` の CLI / TUI frontend です。core engine の上に Music Select、terminal gameplay、terminal BGA、loading screen、SEA build を提供します。
 - **browser player**: `@be-music/player-web` の PixiJS/WebAudio runtime と `@be-music/player-web-demo` の Vite host です。runtime はホスト向けの API から、どの画面もファミリービューが描くシーンセッションとして作り、ライブラリとスキンの読み込みとプレイの録画も持ちます。demo は browser drop、theme、Debug Menu、シーンルーターを扱います。
 - **skin family**: browser player の scene を描くスキンの種類です。`built-in`（be-music skin）、`lr2`、`beatoraja` があります（`SceneFamily`）。host は読み込んだ theme とプレイヤーの選択から選びます。
@@ -70,7 +94,7 @@
 
 ## 内部モデル
 
-- **IR (`@be-music/json`)**: BMS/BMSON/JSON chart を共通表現として扱う内部中間表現です。外部交換フォーマットではありません。
+- **IR (`@be-music/json`)**: BMS/bmson/JSON chart を共通表現として扱う内部中間表現です。外部交換フォーマットではありません。
 - **pure IR**: `@be-music/json` が譜面意味論を持たず、正規化済みデータ構造と preservation data の保持に徹する設計方針です。
 - **sourceFormat**: その IR がもともと `bms`、`bmson`、`json` のどれから来たかを示す属性です。
 - **round-trip**: `parse -> IR -> stringify` の往復で、元の譜面構造をできるだけ再現することです。
@@ -82,11 +106,26 @@
 - **chart semantics (`@be-music/chart`)**: IR の上にある譜面意味論です。beat 解決、イベント順序、long note 解決、sample trigger、BGA timeline、reference BPM などを含みます。
 - **bms.controlFlow**: parser が保持する BMS 制御構文配列です。parse 時には分岐を確定しません。解決済みの譜面では空配列です。
 
+## ユーザーとプロフィール
+
+- **ユーザー（user）**: サービスをまたいでプレイやデータを所有する主体です。所有権は安定したユーザー ID（OIDC の境界では issuer と subject の組）で識別し、ユーザー名・表示名・アバターとは区別します。
+- **アカウント（account）**: 認証によってユーザーにアクセスするための、利用者向けの概念です。外部プロバイダーとの対応は **外部ログイン連携（linked login account）** と明示します。Better Auth の `account` テーブルは別の be-music ユーザーではなく、この対応を保持します。
+- **ゲスト／匿名ユーザー（guest / anonymous user）**: 永続的なログイン資格情報を登録せずに作られたユーザーです。guest は画面での呼び方、anonymous は保存された認証状態を指します。ユーザー ID を持ち、プレイを所有できます。
+- **プロフィール（profile）**: ユーザー名・表示名・アバターからなる公開上の見せ方です。変更してもユーザーの同一性は変わりません。
+- **認証セッション（session）**: 有効期間を持つ認証状態です。Accounts と各アプリのローカルセッションは、同じユーザーを指していても別の状態です。エンジンのプレイセッションやシーンセッションとは区別します。
+- **プレビュー環境（preview environment）**: 本番への反映前に変更を確認するデプロイ環境です。試聴音とは異なる概念です。
+
+## 譜面の同一性
+
+- **譜面ファイルのハッシュ（chart file hash）**: SHA-256・MD5 など、ファイルの生バイト列から計算した値です。演奏内容が同じでも、整形や形式変換で変わることがあります。ターミナルの選曲キャッシュの `contentHash` もこの値です。`cacheHash` は別にキャッシュした要約の破損を検知します。
+- **譜面フィンガープリント（chart fingerprint）**: プレイを譜面ごとにまとめる、内容に基づく識別子です。制御構文の全分岐を含み、ファイルのハッシュや 1 回のプレイで選ばれた分岐とは区別します。
+- **プレイフィンガープリント（play fingerprint）**: そのプレイで選んだ譜面の分岐を、内容に基づいて識別する値です。特定のプレイヤーの演奏結果を識別する値ではなく、RANDOM・MIRROR などのレーンオプションによってもプレイ結果の ID にはなりません。[フィンガープリント](./fingerprint-spec.ja.md)を参照してください。
+
 ## 実行時と表示
 
 - **candidate note**: 入力イベントが来たときに、そのレーン集合で判定対象として探す未判定ノートです。
 - **keysound fallback**: LR2 互換の空打鍵時発音です。判定対象ノートがない場合、manual play は early BAD 窓がすでに開いた同レーン最新の可視または不可視 WAV を再発音できます。ただし、そのノートの判定窓が開く前の未来 pending WAV は先読みしません。
-- **empty POOR / 空POOR**: LR2 互換の空打鍵副作用です。judge 表示を `POOR` にし、POOR BGA を発火し、`EMPTY_POOR` gauge delta を適用しますが、judge counter、combo、EX-SCORE、score は変えません。
+- **empty POOR / 空POOR**: LR2 互換の空打鍵副作用です。判定表示を `POOR` にし、POOR BGA を発火し、`EMPTY_POOR` gauge delta を適用しますが、判定カウンター、combo、EX-SCORE、score は変えません。
 - **stateSignals / uiSignals**: engine 本体から UI adapter へ状態を渡す信号群です。judge、combo、frame、lane flash、hold state などを通知します（`@be-music/player/signals` の `createPlayerStateSignals`、`createPlayerUISignalBus`）。
 - **UI runtime**: player core と TUI/PixiJS などの具体的 frontend をつなぐ runtime display adapter です。
 - **gameplay worker / UI worker**: terminal frontend で重い gameplay、rendering、video BGA 処理を分離する Node worker 構成です。
@@ -100,8 +139,8 @@
 - **Sound / Visual status**: loading screen で audio 側と visual 側の進捗を別々に表示する状態です。
 - **structured log**: TUI 出力とは分離して書き出す NDJSON 実行ログです。通常は `~/.be-music/logs/player.ndjson` に出力します。
 - **video BGA streaming**: gameplay 開始前には動画 BGA の最初の frame だけを確保し、残りを gameplay 開始後に段階的に decode する方針です。
-- **プレイログ (playlog)**: 1 回のプレイの入力を記録したもの（`*.bmplay.json`）です。解決済み譜面、すべてのキーの押下と解放、プレイ設定を持ちます。`bms-playlog` は LR2、beatoraja、IIDX のルールセットでこれを再シミュレーションします。
-- **PlayerSummary**: 再生終了後の集計結果です。judge counts、FAST/SLOW、EX-SCORE、SCORE、gauge、clear state などを含みます。
+- **リプレイ（replay）**: 1 回のプレイを決定的に再現するための記録（`*.bmplay.json`）です。解決済み譜面・入力イベント・プレイ設定を持ち、プレイ結果の集計や、複数のプレイからなるプレイ履歴とは区別します。`bms-replay` は LR2、beatoraja、IIDX のルールセットでこれを再シミュレーションします。
+- **PlayerSummary**: 再生終了後の集計結果です。判定数、FAST/SLOW、EX-SCORE、SCORE、gauge、clear state などを含みます。
 
 ## コース・記録・表示
 
@@ -114,14 +153,14 @@
 - **ゲージの種類（gauge type）**: プレイヤーが選ぶゲージ。LR2 の名前で `GROOVE`・`HARD`・`DEATH`・`EASY`（`GaugeType`）。判定ルールセットはそれぞれ自分のゲージで遊ばせ、そのゲージはゲージ ID（`NORMAL`・`HAZARD`・`CLASS` など）で呼びます。
 - **クリアランプ（clear lamp）**: プレイで得たクリアの区分（FAILED〜MAX、`ClearLamp`）。判定ルールセットごとに付く範囲が違います。どのプレイも 1 つの規則で決めます（`@be-music/player/ruleset` の `resolveClearLamp`、`resolveCourseClearLamp`）。
 - **BP**: ミスの数。BAD・POOR・空 POOR に、コースでは判定されなかったノートを加えたもの（`resolveMissCount`）。
-- **自己ベスト（best record）**: 1 つの判定ルールセットで、譜面またはコースについてプレイヤーが持つ最良のクリアランプ・EX-SCORE・最大コンボ・BP（`BestRecord`。`@be-music/player/records` の規則で保ちます）。
+- **自己ベスト（best record）**: 同じ判定ルールセット・譜面またはコースについて、最良のランプ・最高 EX-SCORE・最大コンボ・最少 BP を項目ごとに保持したものです（`BestRecord`）。各値は異なるプレイから得られることがあり、1 回のプレイ結果とは区別します。
 - **表示設定（view settings）**: 判定とは別に、プレイヤーが見ていたもの。ハイスピード、ハイスピード固定、表示時間、各サイドの SUDDEN+・HIDDEN+・LIFT です。_避ける語_: display options。
 - **プレイテンポ（play tempo）**: 譜面に対してプレイがどれだけ速く進むか（`speed`）。テンポを変えたプレイは練習扱いです。
 
 ## アーキテクチャ
 
 - **シーンモデル（scene model）**: スキンの種類によらない 1 画面の状態と規則。何を見せ、どう応えるか。[ADR 0002](./adr/0002-scene-model-package.ja.md) と [シーンモデル](./scene-model.ja.md) を参照。
-- **設計した入口（designed entry point）**: ファイル構成ではなく、使う側のために作ったパッケージの subpath。`@be-music/player` は `.`（エンジン）、`./signals`、`./lanes`、`./display`、`./ruleset`、`./playlog`、`./records`、`./course`、`./audio-sink` を、`@be-music/player-web` は `.`、`./host`、`./skin`、`./collection`、`./audio`、`./recording` を公開します。それ以外は内部です。[ADR 0005](./adr/0005-public-entry-points.ja.md) を参照。
+- **設計した入口（designed entry point）**: ファイル構成ではなく、使う側のために作ったパッケージの subpath。`@be-music/player` は `.`（エンジン）、`./signals`、`./lanes`、`./display`、`./ruleset`、`./replay`、`./records`、`./course`、`./audio-sink` を、`@be-music/player-web` は `.`、`./host`、`./skin`、`./collection`、`./audio`、`./recording` を公開します。それ以外は内部です。[ADR 0005](./adr/0005-public-entry-points.ja.md) を参照。
 - **ライブラリ / ライブラリの譜面 / ライブラリの項目（library / library chart / library entry）**: 選曲画面が一覧する対象。ルートでフォルダにまとめた譜面と、コースフォルダです（`Library`）。その中の 1 つの譜面がライブラリの譜面（`LibraryChart`）で、一覧の 1 本のバーは譜面・フォルダ・コースのいずれかです（`LibraryEntry`、`kind: 'chart' | 'folder' | 'course'`）。
 - **一覧の状態（browse state）**: プレイヤーがライブラリのどこにいて、一覧がどんな形か。開いているフォルダ、各階層のカーソル、検索、ソートとフィルター（一覧のオプション）、お気に入りです（`BrowseState`）。その保存形（`BrowseSnapshot`。`captureBrowse` で取り、`restoreBrowse` で戻します）がプレイの通るシーンをまたいで状態を保ちます。
 - **プレイ状態（play state）**: どのプレイ画面も読むプレイの状態で、エンジンのフレームと判定で進みます。進行中のゲージと EX スコアとそのグラフ、コンボ、判定タイミング、見え方の設定です（`PlayState`。変えるのは `reducePlayState` だけです）。
@@ -139,17 +178,19 @@
 
 ## 関連文書
 
+- [コード内ドメイン用語の整理案](./code-vocabulary.ja.md)
+
 - [仕様書トップ](./README.ja.md)
 - [BMS 実装仕様](./bms-spec.ja.md)
-- [BMSON 実装仕様](./bmson-spec.ja.md)
+- [bmson 実装仕様](./bmson-spec.ja.md)
 - [Bemuse 実装仕様](./bemuse-spec.ja.md)
 - [Player 実装仕様](./player-spec.ja.md)
 - [Terminal player 実装メモ](./player-tui.ja.md)
 - [Browser player 実装メモ](./player-web.ja.md)
 - [シーンモデル](./scene-model.ja.md)
 - [アーキテクチャ](./architecture.ja.md)
-- [プレイログ（プレイ履歴）仕様](./playlog.ja.md)
+- [リプレイ（プレイ履歴）仕様](./replay.ja.md)
 - [be-music スキンの作り方](./be-music-skin.ja.md)
 - [LR2 skin 実装メモ](./lr2-skin.ja.md)
 - [beatoraja skin 実装メモ](./beatoraja-skin.ja.md)
-- [BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様](./json-spec.ja.md)
+- [BMS/bmson 中間表現 (`@be-music/json`) 実装仕様](./json-spec.ja.md)
