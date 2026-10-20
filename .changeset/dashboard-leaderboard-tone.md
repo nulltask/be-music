@@ -3,3 +3,5 @@
 ---
 
 Match the dashboard to the Leaderboard and organize account status and service links into responsive panels.
+
+Keep the donation link discreetly in the footer rather than alongside the main services.

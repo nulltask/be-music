@@ -74,7 +74,7 @@ export function renderDashboard(input: {
 <meta name="robots" content="noindex">
 <title>${t.title}</title>
 <style>${SERVICE_CSS}
-.account-panel{margin-bottom:32px}.account-panel p{font-size:.875rem}.service-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.service-card{display:flex;flex-direction:column;gap:12px;color:var(--fg);text-decoration:none;min-width:0}.service-card p{font-size:.875rem;margin:0;color:var(--muted);flex:1}.service-card .service-open{font-size:.875rem;font-weight:500}.services-heading{margin-bottom:16px}@media(hover:hover){.service-card:hover{background:var(--soft)}}.service-card:focus-visible{outline:3px solid var(--ring);outline-offset:3px}@media(max-width:640px){.service-grid{grid-template-columns:1fr}}
+.account-panel{margin-bottom:32px}.account-panel p{font-size:.875rem}.service-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.service-card{display:flex;flex-direction:column;gap:12px;color:var(--fg);text-decoration:none;min-width:0}.service-card p{font-size:.875rem;margin:0;color:var(--muted);flex:1}.service-card .service-open{font-size:.875rem;font-weight:500}.services-heading{margin-bottom:16px}@media(hover:hover){.service-card:hover{background:var(--soft)}}.service-card:focus-visible{outline:3px solid var(--ring);outline-offset:3px}@media(max-width:640px){.service-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -88,10 +88,9 @@ export function renderDashboard(input: {
 <section aria-labelledby="services-heading"><h2 class="services-heading" id="services-heading">${input.locale === 'ja' ? 'サービス' : 'Services'}</h2><nav class="service-grid" aria-label="${input.locale === 'ja' ? 'サービス' : 'Services'}">
 <a class="panel service-card" href="${escapeHTML(links.play)}"><h3>Play</h3><p>${input.locale === 'ja' ? 'BMS・Bmson の譜面をブラウザでプレイ。' : 'Play BMS and Bmson charts in your browser.'}</p><span class="service-open">${t.play} <span aria-hidden="true">→</span></span></a>
 <a class="panel service-card" href="${escapeHTML(links.leaderboard)}"><h3>Leaderboard</h3><p>${input.locale === 'ja' ? 'スコアやプレイヤーの記録をチェック。' : 'Explore scores, rankings and player records.'}</p><span class="service-open">${t.leaderboard} <span aria-hidden="true">→</span></span></a>
-<a class="panel service-card" href="${escapeHTML(links.donate)}"><h3>Support</h3><p>${input.locale === 'ja' ? '運営への支援方法と、公開している支出。' : 'Support the project and view published expenses.'}</p><span class="service-open">${input.locale === 'ja' ? '支援する' : 'Support'} <span aria-hidden="true">→</span></span></a>
 </nav></section>
 </main>
-<footer class="site-footer">be-music</footer>
+<footer class="site-footer">be-music · <a href="${escapeHTML(links.donate)}">${input.locale === 'ja' ? '寄付' : 'Donate'}</a></footer>
 </body>
 </html>
 `;
