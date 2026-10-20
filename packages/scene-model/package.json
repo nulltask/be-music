@@ -1,6 +1,6 @@
 {
   "name": "@be-music/scene-model",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Runtime-neutral scene models for be-music: what every screen shows and how it behaves, whatever skin family draws it",
   "license": "MIT",
   "files": [

@@ -1,5 +1,10 @@
 # @be-music/utils
 
+## 0.4.0
+
+### Minor Changes
+
+- b2818d0: Rename ASCII and PCM helpers to the canonical abbreviation spellings, including `normalizeASCIIBase36Code` and `writeStereoPcm16LE`. Update imports of their former names.
 ## 0.3.0
 
 ### Minor Changes
