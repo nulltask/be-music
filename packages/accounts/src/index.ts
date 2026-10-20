@@ -46,6 +46,9 @@ export default {
       }
       return new Response(
         renderAccountPage({
+          buildInfo: env.BUILD_TIMESTAMP
+            ? { builtAt: env.BUILD_TIMESTAMP, revision: env.BUILD_REVISION ?? 'unknown' }
+            : undefined,
           showDonateLink: env.SHOW_DONATE_LINK === 'true',
           signedIn: !!session,
           anonymous: session?.user.isAnonymous === true,

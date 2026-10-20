@@ -1,5 +1,7 @@
 /** Bindings of the Leaderboard Worker (see `cloudflare.config.ts`). */
 export interface Env {
+  BUILD_TIMESTAMP?: string;
+  BUILD_REVISION?: string;
   AUTH_ISSUER?: string;
   PUBLIC_ORIGIN?: string;
   OIDC_CLIENT_ID?: string;

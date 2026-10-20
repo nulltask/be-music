@@ -547,3 +547,15 @@ describe('Leaderboard pages', () => {
     }
   });
 });
+
+test('renders deployment metadata in the shared page footer', async () => {
+  const response = await app.request(ORIGIN + '/about', undefined, {
+    ...env,
+    BUILD_TIMESTAMP: '2026-10-20T08:00:00Z',
+    BUILD_REVISION: '0123456789abcdef',
+  });
+  const html = await response.text();
+  expect(response.status).toBe(200);
+  expect(html.split('</main>')[1]).toContain('2026-10-20 08:00:00 UTC');
+  expect(html).toContain('>01234567</code>');
+});

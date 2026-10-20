@@ -1,4 +1,4 @@
-import { SERVICE_CSS } from '@be-music/web-theme';
+import { SERVICE_CSS, renderBuildInfo, type BuildInfo } from '@be-music/web-theme';
 
 /** The Accounts public profile combined with the local OIDC session's anonymous status. */
 export interface DashboardAccount {
@@ -57,6 +57,7 @@ export function renderDashboard(input: {
   hostname: string;
   locale: Locale;
   showDonateLink?: boolean;
+  buildInfo?: BuildInfo;
   links?: { play: string; leaderboard: string; donate: string };
 }): string {
   const t = TEXT[input.locale];
@@ -91,7 +92,7 @@ export function renderDashboard(input: {
 <a class="panel service-card" href="${escapeHTML(links.leaderboard)}"><h3>Leaderboard</h3><p>${input.locale === 'ja' ? 'スコアやプレイヤーの記録をチェック。' : 'Explore scores, rankings and player records.'}</p><span class="service-open">${t.leaderboard} <span aria-hidden="true">→</span></span></a>
 </nav></section>
 </main>
-<footer class="site-footer">be-music${input.showDonateLink ? ` · <a href="${escapeHTML(links.donate)}">${input.locale === 'ja' ? '寄付' : 'Donate'}</a>` : ''}</footer>
+<footer class="site-footer">be-music${input.showDonateLink ? ` · <a href="${escapeHTML(links.donate)}">${input.locale === 'ja' ? '寄付' : 'Donate'}</a>` : ''}${input.buildInfo ? ' · ' + renderBuildInfo(input.buildInfo) : ''}</footer>
 </body>
 </html>
 `;

@@ -2824,3 +2824,14 @@ html.touch-first .search-input.search-inline:focus {
   display: grid;
   gap: 6px;
 }
+
+/* The start-card footer stays outside the skin's playfield. */
+.service-build-footer {
+  color: #94a3b8;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.service-build-footer code {
+  font: inherit;
+}

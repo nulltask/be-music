@@ -20,6 +20,7 @@ const workspacePackages = [
   'auth-client',
   'dashboard',
   'play',
+  'web-theme',
 ] as const;
 
 /**

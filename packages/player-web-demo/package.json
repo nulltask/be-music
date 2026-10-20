@@ -22,6 +22,7 @@
     "@be-music/player-web": "workspace:*",
     "@be-music/scene-model": "workspace:*",
     "@be-music/skin-sdk": "workspace:*",
+    "@be-music/web-theme": "workspace:*",
     "@better-auth/passkey": "^1.7.10",
     "better-auth": "^1.7.10",
     "fflate": "^0.8.3",

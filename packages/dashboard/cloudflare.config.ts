@@ -1,3 +1,4 @@
+import { getBuildInfo } from '../../scripts/release/build-info.ts';
 import { bindings, defineConfig } from 'cf/config';
 
 /**
@@ -6,6 +7,7 @@ import { bindings, defineConfig } from 'cf/config';
  * Accounts Worker of the same environment for public profiles through a Service Binding; sign-in uses Accounts OIDC.
  */
 export default defineConfig(({ mode }) => {
+  const buildInfo = getBuildInfo(import.meta.dirname);
   const preview = mode === 'preview';
   const suffix = preview ? '-preview' : '';
   return {
@@ -20,6 +22,8 @@ export default defineConfig(({ mode }) => {
       workersDev: false,
       observability: { enabled: true },
       env: {
+        BUILD_TIMESTAMP: bindings.text(buildInfo.builtAt),
+        BUILD_REVISION: bindings.text(buildInfo.revision),
         SHOW_DONATE_LINK: bindings.text(String(preview)),
         ACCOUNTS: bindings.worker({ worker: `accounts${suffix}` }),
         AUTH_ISSUER: bindings.text(`https://accounts.${preview ? 'preview.be-music.app' : 'be-music.app'}/api/auth`),
