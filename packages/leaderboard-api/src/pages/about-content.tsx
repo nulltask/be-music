@@ -82,9 +82,9 @@ const en: AboutContent = {
         </p>
         <p>
           It does so three times, under the <strong>LR2</strong>, <strong>beatoraja</strong> and <strong>IIDX</strong>{' '}
-          scoring rules: their judge windows, gauges and clear lamps. Every play is in all three rankings. The rules a
-          play was <em>played with</em> are marked on it; the rules the pages show are yours to pick in the header. They
-          are how a play is counted, not the software it came from.
+          scoring rules: their judgment windows, gauges and clear lamps. Every play is in all three rankings. The rules
+          a play was <em>played with</em> are marked on it; the rules the pages show are yours to pick in the header.
+          They are how a play is counted, not the software it came from.
         </p>
       </Section>
       <Section id="charts" title="Charts">
@@ -114,7 +114,7 @@ const en: AboutContent = {
           <li>The score is always recounted from the inputs, never read from the log.</li>
           <li>Auto play and plays quit with ESC are not recorded; failed plays are.</li>
           <li>
-            Plays with an assist (auto scratch, a widened judge window) are <strong>ranked apart</strong>.
+            Plays with an assist (auto scratch, a widened judgment window) are <strong>ranked apart</strong>.
           </li>
           <li>
             The chart in the log must match its fingerprint (<strong>L3</strong>), and the chart played must be known to
