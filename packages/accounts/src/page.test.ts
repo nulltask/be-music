@@ -22,6 +22,16 @@ describe('Accounts page', () => {
     expect(page).toContain('href="https://play.example/api/auth/sign-in"');
     expect(page).not.toContain('data-action="guest"');
   });
+  test('keeps Donate only in the footer', () => {
+    const page = renderAccountPage({
+      ...input,
+      apps: { play: 'https://play.example', donate: 'https://donate.example' },
+    });
+    expect(page.split('</main>')[0]).not.toContain('https://donate.example');
+    expect(page).toContain(
+      '<footer class="site-footer"><a href="https://donate.example/api/auth/sign-in">Donate</a></footer>',
+    );
+  });
   test('keeps continuation and account actions available in the shared shell', () => {
     const page = renderAccountPage({ ...input, signedIn: true, anonymous: true, name: 'Guest' });
     expect(page).toContain('href="#main"');

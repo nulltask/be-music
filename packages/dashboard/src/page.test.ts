@@ -51,6 +51,10 @@ describe('renderDashboard', () => {
     expect(html).toContain('id="main"');
     expect(html).toContain('aria-label="サービス"');
     expect(html).toContain('href="https://donate.preview.be-music.app/"');
+    expect(html.split('</main>')[0]).not.toContain('https://donate.');
+    expect(html).toContain(
+      '<footer class="site-footer">be-music · <a href="https://donate.preview.be-music.app/">寄付</a></footer>',
+    );
     expect(html).toContain('class="button" href="/api/auth/sign-in"');
   });
 

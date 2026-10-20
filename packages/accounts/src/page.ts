@@ -24,8 +24,9 @@ ${!input.signedIn || input.login ? button('passkey', 'Sign in with a passkey', !
 ${input.signedIn ? button('add-passkey', 'Add a passkey to keep this account', !input.login) + button('sign-out', 'Sign out of Accounts') : ''}
 </div><p id="status" role="status" aria-live="polite"></p>
 ${
-  Object.keys(input.apps ?? {}).length
+  Object.keys(input.apps ?? {}).some((name) => name !== 'donate')
     ? `<div class="account-services"><h2>Services</h2><nav aria-label="Services">${Object.entries(input.apps ?? {})
+        .filter(([name]) => name !== 'donate')
         .map(
           ([name, origin]) =>
             `<a href="${new URL('/api/auth/sign-in', origin).href.replaceAll('&', '&amp;').replaceAll('"', '&quot;')}">${name.replaceAll('&', '&amp;').replaceAll('<', '&lt;')}</a>`,
@@ -33,5 +34,5 @@ ${
         .join('')}</nav></div>`
     : ''
 }
-</section><p class="muted session-note">Signing out here ends the Accounts session. Existing app sessions expire within 10 minutes; each app also has its own sign-out.</p></main><script type="module" src="/assets/client.js"></script></body></html>`;
+</section><p class="muted session-note">Signing out here ends the Accounts session. Existing app sessions expire within 10 minutes; each app also has its own sign-out.</p></main>${input.apps?.donate ? `<footer class="site-footer"><a href="${new URL('/api/auth/sign-in', input.apps.donate).href.replaceAll('&', '&amp;').replaceAll('"', '&quot;')}">Donate</a></footer>` : ''}<script type="module" src="/assets/client.js"></script></body></html>`;
 }
