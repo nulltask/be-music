@@ -25,7 +25,7 @@ export const nativeSkin: BeMusicSkin = defineBeMusicSkin({
       standard: { top: 8, judgementY: 464, maxRight: 540 },
       touch: { top: 8, judgementY: 424, maxRight: 540 },
     },
-    resolveBGARect: () => ({ x: 570, y: 16, w: 260, h: 260 }),
+    resolveBGARect: () => ({ x: 724, y: 8, w: 106, h: 106 }),
   },
   portraitStage: {
     ...tallStage,

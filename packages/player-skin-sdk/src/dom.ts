@@ -1,8 +1,13 @@
-import type { PlayOptions, PlayState } from '@be-music/player-scene-model';
+import type { CourseView, PlayOptions, PlayState } from '@be-music/player-scene-model';
 import type { LibraryEntry, LibraryChart } from './chart.ts';
 import type { BeMusicResultData } from './result-data.ts';
 import type { BeMusicSkinSettingValues } from './settings.ts';
-import type { BeMusicEffectLevel, BeMusicGameplayLayout, BeMusicPlayOptionChoices } from './types.ts';
+import type {
+  BeMusicEffectLevel,
+  BeMusicGameplayLayout,
+  BeMusicGameplayRuntime,
+  BeMusicPlayOptionChoices,
+} from './types.ts';
 
 /** A native DOM screen. Mount once, update without replacing focused elements, dispose once. */
 export interface BeMusicDOMScreen<Frame> {
@@ -48,7 +53,12 @@ export interface BeMusicDOMGameplayFrame extends BeMusicDOMPresentation {
   /** Design stage and lane bounds, for placing DOM controls clear of the playfield. */
   readonly layout: Pick<BeMusicGameplayLayout, 'stage' | 'orientation' | 'playfield'>;
   readonly chart: LibraryChart | undefined;
-  readonly state: Pick<PlayState, 'totalSeconds' | 'gauge' | 'gaugeType' | 'exScore' | 'combo' | 'maxCombo'>;
+  readonly state: Readonly<PlayState>;
+  /** The same resource-free HUD values available to Canvas skins. */
+  readonly runtime: Readonly<BeMusicGameplayRuntime>;
+  readonly playOptions: Readonly<PlayOptions>;
+  readonly emptyPoor: number;
+  readonly course?: CourseView;
   readonly seconds: number;
   readonly bpm: number | undefined;
   readonly progress: number | undefined;
