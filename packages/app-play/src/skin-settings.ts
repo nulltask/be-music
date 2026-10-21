@@ -89,7 +89,7 @@ export type SkinSettingController =
       kind: 'dropdown';
       id: string;
       name: string;
-      /** Shown label → option value, as lil-gui's `add(object, key, options)` takes them. */
+      /** Shown label → option value, converted to native list items by the pane. */
       options: Record<string, string>;
     }
   | { kind: 'slider'; id: string; name: string; min: number; max: number; step: number | undefined }

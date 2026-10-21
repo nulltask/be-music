@@ -551,7 +551,7 @@ export class BeatorajaThemeService {
   /**
    * Pre-resolve `filepath[]` candidate lists for the skin-options panel. Each entry's `path` field
    * is a wildcard relative to the skin directory; `expandBeatorajaWildcard` walks the dropped file
-   * map and returns every match. The panel hands these to lil-gui as dropdown options so the user
+   * map and returns every match. The panel hands these to Tweakpane as dropdown options so the user
    * can pick a specific file by name rather than guessing.
    */
   public collectBeatorajaFileCandidates(

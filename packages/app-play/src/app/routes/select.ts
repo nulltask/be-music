@@ -196,7 +196,7 @@ export class SelectRoute {
       return;
     }
     // The screen starts from the play options in force (two-way sync: the screen's own edits come back through
-    // `on.playOptions` below; lil-gui edits push through `setPlayOptions`).
+    // `on.playOptions` below; Tweakpane edits push through `setPlayOptions`).
     const playOptions = this.playOptions.current;
     // The select session plays through the audio service; its decide jingle plays out through the decide screen into
     // the play.
@@ -216,7 +216,7 @@ export class SelectRoute {
         start: (entry, { autoPlay }) => this.startFromSelect(entry, autoPlay),
         playOptions: (options) => {
           // Keep the screen's play option edits (an LR2 panel, a skin's buttons) and mirror them into the Debug Menu
-          // state so both surfaces always agree, then repaint the lil-gui controllers.
+          // state so both surfaces always agree, then repaint the Tweakpane controllers.
           this.playOptions.update(options);
           copyPlayOptionsToGUI(options, this.guiState);
           if (options.hiSpeed !== this.guiState.hiSpeed) this.rememberHiSpeed(options.hiSpeed, 'select');

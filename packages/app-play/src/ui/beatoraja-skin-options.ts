@@ -42,7 +42,7 @@ export interface BeatorajaSkinOptionsPanelDeps {
 /** The skin-options panel for the beatoraja select screen or play showing. */
 export class BeatorajaSkinOptionsPanel {
   /**
-   * Bottom-right lil-gui panel exposing the active beatoraja skin's `property[]` / `filepath[]` /
+   * Bottom-right Tweakpane panel exposing the active beatoraja skin's `property[]` / `filepath[]` /
    * note-offset for live editing. Lazily constructed once `start()` mounts the host (the panel is
    * absolute-positioned inside the demo shell so the shell needs to exist first).
    */

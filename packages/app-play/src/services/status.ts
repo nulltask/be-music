@@ -30,7 +30,7 @@ export class StatusLine {
   }
 
   /**
-   * Single chokepoint for status-text updates. Writes the new value into `guiState` and refreshes the lil-gui
+   * Single chokepoint for status-text updates. Writes the new value into `guiState` and refreshes the Tweakpane
    * controller so the read-only row repaints with the new text.
    */
   public set(text: string): void {

@@ -1,7 +1,7 @@
+import { selectBinding, type PaneBinding } from '../../pane-controls.ts';
 // The Debug Menu's Play options folder and the Replay / ghost folder inside it. They are built with the menu as `this`
 // (`DebugMenu`).
-
-import type { Controller, GUI } from 'lil-gui';
+import type { FolderApi } from 'tweakpane';
 import {
   DIFFICULTY_FILTER_CYCLE,
   HISPEED_MAX,
@@ -11,9 +11,7 @@ import {
   SORT_CYCLE,
 } from '@be-music/player-scene-model';
 import { storeReplayView } from '../../replay-view-settings.ts';
-import type { DemoGUIState } from '../../types.ts';
 import type { DebugMenu } from './index.ts';
-
 /**
  * How the player plays: auto play, hi-speed, gauge, lane options and assists.
  *
@@ -22,106 +20,97 @@ import type { DebugMenu } from './index.ts';
  * edits back through `onPlayOptionsChange`; these controllers push through `setPlayOptions`). All of them are latched
  * at song start and DISABLED during a play — mid-song changes never apply.
  */
-export function buildPlayOptionsFolder(this: DebugMenu, folder: GUI): void {
-  const trackPlayOption = (controller: Controller): Controller => this.trackPlayOption(controller);
+export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void {
+  const trackPlayOption = (controller: PaneBinding): PaneBinding => this.trackPlayOption(controller);
   trackPlayOption(
-    folder
-      .add(this.guiState, 'autoPlay')
-      .name('Auto play')
-      .onChange((value: boolean) => {
-        this.setPlayOptions({ autoPlay: value });
-      }),
+    folder.addBinding(this.guiState, 'autoPlay', { label: 'Auto play' }).on('change', ({ value }) => {
+      this.setPlayOptions({ autoPlay: value });
+    }),
   );
   trackPlayOption(
-    folder
-      .add(this.guiState, 'gauge', ['GROOVE', 'EASY', 'HARD', 'DEATH'])
-      .name('Gauge')
-      .onChange((value: DemoGUIState['gauge']) => {
+    selectBinding(folder, this.guiState, 'gauge', 'Gauge', ['GROOVE', 'EASY', 'HARD', 'DEATH']).on(
+      'change',
+      ({ value }) => {
         this.setPlayOptions({ gauge1P: value });
-      }),
+      },
+    ),
   );
   trackPlayOption(
-    folder
-      .add(this.guiState, 'random1P', ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'])
-      .name('Random 1P')
-      .onChange((value: DemoGUIState['random1P']) => {
-        this.setPlayOptions({ random1P: value });
-      }),
+    selectBinding(folder, this.guiState, 'random1P', 'Random 1P', [
+      'OFF',
+      'MIRROR',
+      'RANDOM',
+      'S-RANDOM',
+      'SCATTER',
+    ]).on('change', ({ value }) => {
+      this.setPlayOptions({ random1P: value });
+    }),
   );
   trackPlayOption(
-    folder
-      .add(this.guiState, 'random2P', ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'])
-      .name('Random 2P')
-      .onChange((value: DemoGUIState['random2P']) => {
-        this.setPlayOptions({ random2P: value });
-      }),
+    selectBinding(folder, this.guiState, 'random2P', 'Random 2P', [
+      'OFF',
+      'MIRROR',
+      'RANDOM',
+      'S-RANDOM',
+      'SCATTER',
+    ]).on('change', ({ value }) => {
+      this.setPlayOptions({ random2P: value });
+    }),
   );
   trackPlayOption(
-    folder
-      .add(this.guiState, 'dpFlip')
-      .name('DP flip')
-      .onChange((value: boolean) => {
-        this.setPlayOptions({ dpFlip: value });
-      }),
+    folder.addBinding(this.guiState, 'dpFlip', { label: 'DP flip' }).on('change', ({ value }) => {
+      this.setPlayOptions({ dpFlip: value });
+    }),
   );
   trackPlayOption(
-    folder
-      .add(this.guiState, 'autoScratch1P')
-      .name('Auto scratch 1P')
-      .onChange((value: boolean) => {
-        this.setPlayOptions({ autoScratch1P: value });
-      }),
+    folder.addBinding(this.guiState, 'autoScratch1P', { label: 'Auto scratch 1P' }).on('change', ({ value }) => {
+      this.setPlayOptions({ autoScratch1P: value });
+    }),
   );
   trackPlayOption(
-    folder
-      .add(this.guiState, 'autoScratch2P')
-      .name('Auto scratch 2P')
-      .onChange((value: boolean) => {
-        this.setPlayOptions({ autoScratch2P: value });
-      }),
+    folder.addBinding(this.guiState, 'autoScratch2P', { label: 'Auto scratch 2P' }).on('change', ({ value }) => {
+      this.setPlayOptions({ autoScratch2P: value });
+    }),
   );
   // The built-in and LR2 select screens' sort and filters (an LR2 skin's buttons change them too); the list keeps
   // the bar under the cursor.
   trackPlayOption(
-    folder
-      .add(this.guiState, 'sort', [...SORT_CYCLE])
-      .name('Sort')
-      .onChange((value: DemoGUIState['sort']) => {
-        this.setPlayOptions({ sort: value });
-      }),
+    selectBinding(folder, this.guiState, 'sort', 'Sort', [...SORT_CYCLE]).on('change', ({ value }) => {
+      this.setPlayOptions({ sort: value });
+    }),
   );
   trackPlayOption(
-    folder
-      .add(this.guiState, 'keysFilter', [...KEYS_FILTER_CYCLE])
-      .name('Key filter')
-      .onChange((value: DemoGUIState['keysFilter']) => {
+    selectBinding(folder, this.guiState, 'keysFilter', 'Key filter', [...KEYS_FILTER_CYCLE]).on(
+      'change',
+      ({ value }) => {
         this.setPlayOptions({ keysFilter: value });
-      }),
+      },
+    ),
   );
   trackPlayOption(
-    folder
-      .add(this.guiState, 'difficultyFilter', [...DIFFICULTY_FILTER_CYCLE])
-      .name('Difficulty filter')
-      .onChange((value: DemoGUIState['difficultyFilter']) => {
+    selectBinding(folder, this.guiState, 'difficultyFilter', 'Difficulty filter', [...DIFFICULTY_FILTER_CYCLE]).on(
+      'change',
+      ({ value }) => {
         this.setPlayOptions({ difficultyFilter: value });
-      }),
+      },
+    ),
   );
   // Hi-speed — the same range and step as the in-game `ArrowUp` / `ArrowDown` keys. Unlike the options above it is
   // visual only, so it stays enabled during a play and applies to it live.
   this.hiSpeedController = folder
-    .add(this.guiState, 'hiSpeed', HISPEED_MIN, HISPEED_MAX, HISPEED_STEP)
-    .name('Hi-speed')
-    .onChange((value: number) => this.deps.rememberHiSpeed(value, 'menu'));
+    .addBinding(this.guiState, 'hiSpeed', { label: 'Hi-speed', min: HISPEED_MIN, max: HISPEED_MAX, step: HISPEED_STEP })
+    .on('change', ({ value }) => this.deps.rememberHiSpeed(value, 'menu'));
 }
-
 /**
  * Replay / ghost: which of what a replay recorded the player seeing a replay shows (the tempo, the hi-speed,
  * SUDDEN+ / HIDDEN+ and LIFT), the rest staying the player's own. Read when a play starts, so disabled during one.
  */
-export function buildReplayViewFolder(this: DebugMenu, folder: GUI): void {
+export function buildReplayViewFolder(this: DebugMenu, folder: FolderApi): void {
   const remember = () => storeReplayView(this.guiState.replayView);
   const labels = { tempo: 'Tempo', hiSpeed: 'Hi-speed', covers: 'SUDDEN+ / HIDDEN+', lift: 'LIFT' } as const;
   for (const key of ['tempo', 'hiSpeed', 'covers', 'lift'] as const) {
-    this.trackPlayOption(folder.add(this.guiState.replayView, key).name(labels[key]).onChange(remember));
+    this.trackPlayOption(
+      folder.addBinding(this.guiState.replayView, key, { label: labels[key] }).on('change', remember),
+    );
   }
 }

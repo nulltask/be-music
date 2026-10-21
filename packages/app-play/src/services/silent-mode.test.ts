@@ -5,14 +5,14 @@ describe('SilentModeSetting', () => {
   test('a change from either checkbox lands in the state and repaints both checkboxes', () => {
     const settings = { playInSilentMode: false };
     const silentMode = new SilentModeSetting({ settings, touchFirst: true });
-    const controller = { updateDisplay: vi.fn() };
+    const controller = { refresh: vi.fn() };
     const startOption = { setChecked: vi.fn() };
     silentMode.controller = controller;
     silentMode.startOption = startOption;
 
     silentMode.set(true);
     expect(settings.playInSilentMode).toBe(true);
-    expect(controller.updateDisplay).toHaveBeenCalledTimes(1);
+    expect(controller.refresh).toHaveBeenCalledTimes(1);
     expect(startOption.setChecked).toHaveBeenCalledWith(true);
 
     silentMode.set(false);

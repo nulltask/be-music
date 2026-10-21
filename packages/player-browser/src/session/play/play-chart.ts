@@ -209,7 +209,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     inferBmsLNTypeWhenMissing: true,
   });
   ctx.resolvedPlayChart = resolvedPlay;
-  // The invisible / keysound array is always prepared even when the overlay is off — so the lil-gui toggle can flip
+  // The invisible / keysound array is always prepared even when the overlay is off — so the Tweakpane toggle can flip
   // the visualization on mid-song without a chart restart; the per-frame render loop is gated on
   // `showInvisibleNotes`. The audio horizon is left at 0: the engine recomputes its own from realtime triggers.
   const prepared = preparePlaybackChart(

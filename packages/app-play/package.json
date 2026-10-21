@@ -26,9 +26,10 @@
     "@be-music/skin-beatoraja": "workspace:*",
     "@be-music/skin-lr2": "workspace:*",
     "fflate": "^0.8.3",
-    "lil-gui": "^0.21.0"
+    "tweakpane": "^4.0.5"
   },
   "devDependencies": {
+    "@tweakpane/core": "^2.0.5",
     "vite": "catalog:",
     "vite-plus": "catalog:",
     "wrangler": "^4.151.0"

@@ -191,22 +191,21 @@ export class Demo {
   ): Promise<{ value: boolean | number | string; enabled: boolean }> {
     return this.page.evaluate(
       ({ folder, name, action }) => {
-        // A beatoraja theme adds its Skin Config panel as another lil-gui root, so pick the Debug Menu's by its title.
-        const titleOf = (candidate: Element): string | undefined =>
-          candidate.querySelector(':scope > .lil-title')?.textContent?.trim();
-        let gui: HTMLElement | undefined = [...document.querySelectorAll<HTMLElement>('.lil-gui.lil-root')].find(
-          (candidate) => titleOf(candidate) === 'Debug Menu',
-        );
-        if (gui === undefined) throw new Error('no Debug Menu');
+        let gui = document.querySelector<HTMLElement>('[data-pane="debug"]');
+        if (gui === null) throw new Error('no Debug Menu');
         for (const title of folder) {
-          const children: Element | null | undefined = gui?.querySelector(':scope > .lil-children');
-          gui = [...(children?.querySelectorAll<HTMLElement>(':scope > .lil-gui') ?? [])].find(
-            (candidate) => titleOf(candidate) === title,
-          );
+          const content: Element | null = gui.querySelector(':scope > .tp-rotv_c, :scope > .tp-fldv_c');
+          gui =
+            [...(content?.querySelectorAll<HTMLElement>(':scope > .tp-fldv') ?? [])].find(
+              (candidate) => candidate.querySelector(':scope > .tp-fldv_b .tp-fldv_t')?.textContent?.trim() === title,
+            ) ?? null;
+          if (gui === null) throw new Error(`no Debug Menu folder ${title}`);
         }
-        const controller = [
-          ...(gui?.querySelectorAll<HTMLElement>(':scope > .lil-children > .lil-controller') ?? []),
-        ].find((candidate) => candidate.querySelector('.lil-name')?.textContent?.trim() === name);
+        const content = gui.querySelector(':scope > .tp-rotv_c, :scope > .tp-fldv_c');
+        const controller = [...(content?.children ?? [])].find((candidate) => {
+          const label = candidate.querySelector('.tp-lblv_l')?.textContent?.trim();
+          return (label || candidate.querySelector('button')?.textContent?.trim()) === name;
+        });
         if (controller === undefined) throw new Error(`no Debug Menu control ${[...folder, name].join(' / ')}`);
         const select = controller.querySelector('select');
         const input = controller.querySelector('input');
@@ -225,7 +224,8 @@ export class Demo {
           input.dispatchEvent(new Event('change'));
         } else if (value !== undefined && input !== null) {
           input.value = String(value);
-          input.dispatchEvent(new Event('input'));
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
           input.dispatchEvent(new Event('blur'));
         }
         const read =
@@ -236,7 +236,7 @@ export class Demo {
               : input !== null
                 ? Number(input.value)
                 : '';
-        return { value: read, enabled: !controller.classList.contains('lil-disabled') };
+        return { value: read, enabled: !(select?.disabled || input?.disabled || button?.disabled) };
       },
       { folder: [...folder], name, action },
     );

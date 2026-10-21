@@ -77,7 +77,7 @@ Holding `Backspace` for 0.5 s during play quits it the same way `Esc` does; a ta
 
 ### Debug Menu
 
-The lil-gui **Debug Menu** (top-right, collapsed on arrival) puts the everyday controls first and groups the rest into folders. Every folder remembers whether it was left open or closed (`localStorage`, `be-music-demo.debug-menu-folders`); the panel itself always starts collapsed.
+The Tweakpane **Debug Menu** (top-right, collapsed on arrival) puts the everyday controls first and groups the rest into folders. Every folder remembers whether it was left open or closed (`localStorage`, `be-music-demo.debug-menu-folders`); the panel itself always starts collapsed.
 
 - **Top level:** Status (read-only), Open folder, Open files (ZIP / replay). Open files picks chart ZIP archives (loaded like `?music=`) or a replay (`*.bmplay.json`) to replay; Open folder uses the folder picker and the same pipeline as a drop.
 - **Play options** (open): Auto play, Gauge, Random 1P / 2P, DP flip, Auto scratch 1P / 2P, Sort, Key filter, Difficulty filter, Hi-speed. Everything but Hi-speed (which applies live) is latched at song start and disabled during a play. Sort and the two filters shape the built-in and LR2 select screens' list, and an LR2 skin's sort and filter buttons change them too; the beatoraja select screen keeps its own MODE and SORT choices.
@@ -89,7 +89,9 @@ The lil-gui **Debug Menu** (top-right, collapsed on arrival) puts the everyday c
 - **Library & records** (closed): Music / Skin ZIP URL with Load from URLs (the `?music=` / `?skin=` path on demand), Auto-save play history, Clear best records, and the **BGA video transcode** folder.
 - **Capture** (closed): ● Record gameplay video, Video format (MP4 · H.264 by default; MP4 or WebM with H.264 / H.265 / AV1 / VP9 / VP8), 📸 Screenshot.
 - **Leaderboard** (closed): Submit to Leaderboard, Account (the signed-in handle, or "Not signed in"), Create passkey (keep this account), Sign in with passkey, and Sign out.
-- **Developer** (closed): Judgment windows (latched at song start; it also picks which ruleset's [best records](#best-records) the select screen shows), Auto pause on blur, Show invisible notes, FPS (renderer frame rate, sampled while the folder is open), and Reset settings and reload, which clears every stored demo setting except the best records.
+- **Developer** (closed): Judgment windows (latched at song start; it also picks which ruleset's [best records](#best-records) the select screen shows), Auto pause on blur, Show invisible notes, FPS (native history graph, sampled every 500 ms with 60 samples), and Reset settings and reload, which clears every stored demo setting except the best records.
+
+The Status and Account rows use read-only multiline monitors. The separate **Skin Config** pane uses **Options**, **Files** (when declared), and **Timing & offsets** tabs. Categories remain grouped within each tab. A custom offset with both `x` and `y` exposes a native 2D position control; other authored axes keep their numeric sliders. **Reset all to 0** refreshes the native controls and applies one configuration update. Switching scenes rebuilds the schema; editing the same skin entry preserves the selected tab and folder state.
 
 ### Best records
 
@@ -154,7 +156,7 @@ An arrow points from a module to one it makes or uses. The app also makes the sc
 
 **Composition root.** `app/app.ts` (`PlayerWebDemoApp`) makes the services, the scene router and the routes, and wires them to each other, to the Debug Menu and to the Leaderboard. It also holds the play lock: as a play starts it latches the Auto-save play history setting and disables the options the play latched, the skin controls and Submit to Leaderboard; a result or the select screen coming back lifts it. `app/shell.ts` keeps the page around the stage in step with the scenes once the stage is mounted: the shell's `in-gameplay` state and the pinch zoom it blocks, the touch pause and quit buttons, and the canvas's double-click fullscreen with its `Esc` handling.
 
-**Layers.** A service holds state and rules and takes what it needs of the app as deps: it imports no lil-gui, `ui/` or `app/` module, not even a type ([Layering and size guards](./architecture.md#layering-and-size-guards)). The routes and the Debug Menu work through the services, and the routes put scenes on the stage only through the scene router, which owns every transition ([Scene lifecycle](#scene-lifecycle), [ADR 0006](./adr/0006-scene-router.md)).
+**Layers.** A service holds state and rules and takes what it needs of the app as deps: it imports no Tweakpane, `ui/` or `app/` module, not even a type ([Layering and size guards](./architecture.md#layering-and-size-guards)). The routes and the Debug Menu work through the services, and the routes put scenes on the stage only through the scene router, which owns every transition ([Scene lifecycle](#scene-lifecycle), [ADR 0006](./adr/0006-scene-router.md)).
 
 **Select and decide.** `app/routes/select.ts` shows the select screen. The scene router keeps it across a decide screen, a play and its result, so every return shows the same scene again: the latest theme's skin and sounds and the library go onto it before it enters, and then the cursor goes back where it was (to the course bar after a course). It is made afresh only when another family takes it over. A chart started on it joins the course being made, if there is one, or goes to `app/routes/decide.ts`, which shows the decide screen with the play loading off stage behind it and then hands the stage to that play. Without a decide screen the chart plays at once.
 

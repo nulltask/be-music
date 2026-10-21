@@ -1,4 +1,4 @@
-// Layout and persistence helpers for the demo's lil-gui "Debug Menu". The folder titles, their order, and which ones
+// Layout and persistence helpers for the demo's Tweakpane "Debug Menu". The folder titles, their order, and which ones
 // start open live here so the structure reads in one place and stays testable; `index.ts` binds the controllers.
 
 /** Prefix every `localStorage` key the demo writes starts with. */
@@ -110,48 +110,50 @@ export function storeFolderOpenStates(
   }
 }
 
-/** The lil-gui surface the folder-state helpers touch (a `GUI` satisfies it). */
+/** Public folder state used by the pane persistence logic. */
 export interface FolderNode {
-  readonly _title: string;
-  readonly _closed: boolean;
-  readonly folders: readonly FolderNode[];
-  readonly parent?: FolderNode | undefined;
-  open(open?: boolean): unknown;
-  onOpenClose(callback: (changed: FolderNode) => void): unknown;
+  readonly title: string | undefined;
+  expanded: boolean;
+  readonly children: readonly unknown[];
+  on(event: 'fold', callback: (event: { expanded: boolean }) => void): unknown;
 }
 
-/** Titles from the top-level folder down to `folder` (the root panel, which has no parent, is left out). */
-export function folderTitles(folder: FolderNode): string[] {
-  const titles: string[] = [];
-  for (let node: FolderNode | undefined = folder; node?.parent !== undefined; node = node.parent) {
-    titles.unshift(node._title);
-  }
-  return titles;
+/** Folder paths exclude the root pane and tab page titles, preserving earlier stored keys. */
+export function folderEntries(root: FolderNode): { folder: FolderNode; titles: readonly string[] }[] {
+  const entries: { folder: FolderNode; titles: readonly string[] }[] = [];
+  const walk = (node: unknown, titles: readonly string[]): void => {
+    if (typeof node !== 'object' || node === null) return;
+    const container = node as { children?: readonly unknown[]; pages?: readonly unknown[] };
+    let path = titles;
+    if ('expanded' in node && 'title' in node && 'on' in node && Array.isArray(container.children)) {
+      const folder = node as FolderNode;
+      path = node === root ? [] : [...titles, folder.title ?? ''];
+      entries.push({ folder, titles: path });
+    }
+    for (const child of container.children ?? []) walk(child, path);
+    for (const page of container.pages ?? []) walk(page, path);
+  };
+  walk(root, []);
+  return entries;
 }
 
-/**
- * Opens / closes every folder under `root` the way the user last left it, then remembers each later open or close.
- * Folders keep the state they were built with until the user changes them. The root panel's own state is not
- * remembered: it starts closed so it never covers the stage on arrival.
- */
+/** Restore child folder states before subscribing; the root pane always starts collapsed. */
 export function rememberFolderOpenStates(
   root: FolderNode,
   storage: DebugMenuStorage | undefined = defaultStorage(),
 ): void {
   const states = readFolderOpenStates(storage);
-  const apply = (folder: FolderNode): void => {
-    for (const child of folder.folders) {
-      const remembered = states[folderPath(folderTitles(child))];
-      if (remembered !== undefined) child.open(remembered);
-      apply(child);
-    }
-  };
-  apply(root);
-  root.onOpenClose((changed) => {
-    if (changed === root || changed.parent === undefined) return;
-    states[folderPath(folderTitles(changed))] = !changed._closed;
-    storeFolderOpenStates(states, storage);
-  });
+  const entries = folderEntries(root).filter(({ folder }) => folder !== root);
+  for (const { folder, titles } of entries) {
+    const remembered = states[folderPath(titles)];
+    if (remembered !== undefined) folder.expanded = remembered;
+  }
+  for (const { folder, titles } of entries) {
+    folder.on('fold', () => {
+      states[folderPath(titles)] = folder.expanded;
+      storeFolderOpenStates(states, storage);
+    });
+  }
 }
 
 /** The demo's stored keys a settings reset removes: every `be-music-demo.*` key except the kept ones. */

@@ -537,7 +537,7 @@ export class PlaySessionState {
   autoPaused = false;
   /**
    * Whether `visibilitychange` / `blur` / `pagehide` should auto-pause gameplay. Seeded from `options.autoPauseOnBlur`
-   * (default `false`). The host can flip it at runtime via {@link setAutoPauseOnBlur} — useful for a lil-gui toggle
+   * (default `false`). The host can flip it at runtime via {@link setAutoPauseOnBlur} — useful for a Tweakpane toggle
    * that lets the user opt into the LR2-desktop-style "pause when I Cmd-Tab away" behavior.
    */
   autoPauseOnBlur = false;
