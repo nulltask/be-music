@@ -168,7 +168,7 @@ async function harness(options: { decideFamily?: Family | null; playFamily?: Fam
       beatorajaThemeBGM: { decide: new Uint8Array([1, 2, 3]) } as DecideRouteDeps['beatoraja']['beatorajaThemeBGM'],
     },
     playOptions: new PlayOptionsService({ hiSpeed: 3 }),
-    guiState: { autoPlay: false, tempoPercent: 0, tempoPitchMode: 'pitch' as const },
+    guiState: { autoPlay: false, tempoEnabled: true, tempoPercent: 0, tempoPitchMode: 'pitch' as const },
     audio: {} as AudioService,
     beatorajaSkinOptions: { refreshBeatorajaPlaySkinOptions: vi.fn() },
     lastPlay: vi.fn<DecideRouteDeps['lastPlay']>(() => undefined),

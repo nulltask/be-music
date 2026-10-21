@@ -438,7 +438,11 @@ export class PlayRoute {
     const view = this.buildPlayScene(chartEntry, kit, { ...overrides, chartHashes });
     // A replay plays at its recorded tempo, unless the Replay / ghost options keep the viewer's own.
     const tempoPercent =
-      overrides.replay !== undefined ? tempoPercentFromTempo(view.getTempo()) : this.guiState.tempoPercent;
+      overrides.replay !== undefined
+        ? tempoPercentFromTempo(view.getTempo())
+        : this.guiState.tempoEnabled
+          ? this.guiState.tempoPercent
+          : 0;
     this.setPlayStatus(
       describePlayingStatus(chartEntry.title, {
         ...playingFamily(view),

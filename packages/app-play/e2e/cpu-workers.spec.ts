@@ -24,6 +24,7 @@ test('uses real workers for chart loading and WSOLA; persists concurrency', asyn
   await openWithLibrary(demo, {
     'be-music-demo.worker-count': '2',
     'be-music-demo.play-tempo': JSON.stringify({
+      tempoEnabled: true,
       tempoPercent: 20,
       tempoPitchMode: 'keep-pitch',
       tempoStretchAlgorithm: 'wsola',

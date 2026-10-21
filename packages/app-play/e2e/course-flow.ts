@@ -187,6 +187,7 @@ export function courseFlowTests(setup: FamilyCase): void {
 
     test('plays a NONSTOP course as one stitched chart, retries it with R, on both placements', async ({ demo }) => {
       await setup.open(demo);
+      await demo.setOption(['Tempo'], 'Enabled', true);
       await startCourse(demo, setup, 'FIX NONSTOP', true);
       let state = await demo.waitFor(
         (current) => current.scene.kind === 'play' && current.play?.title === 'FIX NONSTOP',

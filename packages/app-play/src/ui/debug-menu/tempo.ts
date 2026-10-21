@@ -19,6 +19,7 @@ export function buildTempoFolder(this: DebugMenu, folder: GUI): void {
   // records).
   // With the pitch following the tempo, the slider stays enabled during a play and changes its tempo live.
   const rememberTempo = () => storePlayTempoSettings(this.guiState);
+  trackPlayOption(folder.add(this.guiState, 'tempoEnabled').name('Enabled').onChange(rememberTempo));
   this.tempoController = trackPlayOption(
     folder
       .add(this.guiState, 'tempoPercent', TEMPO_PERCENT_MIN, TEMPO_PERCENT_MAX, 1)
@@ -38,7 +39,7 @@ export function buildTempoFolder(this: DebugMenu, folder: GUI): void {
   );
   trackPlayOption(
     folder
-      .add(this.guiState, 'tempoStretchAlgorithm', { 'Signalsmith Stretch': 'signalsmith', WSOLA: 'wsola' })
+      .add(this.guiState, 'tempoStretchAlgorithm', { WSOLA: 'wsola', 'Signalsmith Stretch': 'signalsmith' })
       .name('Keep-pitch stretcher')
       .onChange(rememberTempo),
   );
