@@ -22,6 +22,14 @@ export function drawPlayfield(
   ctx.fillRect(0, 0, width, height);
   const bga = frame.layout.bga;
   if (bga && frame.runtime.hasBGA) ctx.clearRect(bga.x, bga.y, bga.w, bga.h);
+  // Incoming notes may have overscan above the lanes; keep them out of the compact header.
+  const runs = resolveLaneRuns(frame.lanes);
+  ctx.save();
+  ctx.beginPath();
+  for (const run of runs) {
+    ctx.rect(run.left, frame.layout.playfield.top, run.right - run.left, height - frame.layout.playfield.top);
+  }
+  ctx.clip();
   for (const lane of frame.lanes) {
     ctx.fillStyle = lane.kind === 'white' ? '#202d40' : '#152031';
     ctx.fillRect(lane.x, lane.top, lane.w, lane.bottom - lane.top);
@@ -51,8 +59,7 @@ export function drawPlayfield(
     ctx.fillRect(note.x, note.y - 6, note.w, 6);
   }
   ctx.fillStyle = '#ffa8b3';
-  for (const run of resolveLaneRuns(frame.lanes))
-    ctx.fillRect(run.left, frame.layout.playfield.judgementY, run.right - run.left, 2);
+  for (const run of runs) ctx.fillRect(run.left, frame.layout.playfield.judgementY, run.right - run.left, 2);
   for (const bomb of frame.bombs) {
     const age = Math.min(1, bomb.elapsedMs / 300);
     ctx.strokeStyle = '#e5efff';
@@ -75,4 +82,5 @@ export function drawPlayfield(
       frame.layout.playfield.judgementY - 90,
     );
   }
+  ctx.restore();
 }

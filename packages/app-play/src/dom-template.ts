@@ -259,7 +259,7 @@ export const DEMO_APP_HTML = `
     <!--
       "Drop a skin" — shown when the Debug Menu's Skin system is set to LR2 or
       beatoraja with none of that system loaded. A drop anywhere closes it, and
-      a skin of the asked-for system is then used without asking. Filled by
+      the detected skin is confirmed before it is used. Filled by
       \`promptSkinDrop\` (ui/skin-drop-prompt.ts).
     -->
     <dialog class="skin-drop" id="skin-drop" aria-labelledby="skin-drop-title">
@@ -271,6 +271,21 @@ export const DEMO_APP_HTML = `
       <h2 class="drop-title" id="skin-drop-title">Drop an LR2 skin</h2>
       <p class="skin-drop-hint" data-skin-drop-hint></p>
       <button type="button" class="account-dialog-quiet" data-skin-drop-cancel>Cancel</button>
+    </dialog>
+    <dialog class="account-dialog" id="skin-switch" aria-labelledby="skin-switch-title" aria-describedby="skin-switch-hint">
+      <form method="dialog" class="account-dialog-body">
+        <header>
+          <h2 id="skin-switch-title">Use the dropped skin?</h2>
+          <p id="skin-switch-hint">Switch to this skin? Cancel keeps your current skin. Charts in the drop will still be imported.</p>
+        </header>
+        <footer>
+          <button type="submit" value="" class="account-dialog-quiet" autofocus>Cancel</button>
+          <span class="account-dialog-buttons">
+            <button type="submit" value="lr2" class="account-dialog-primary" data-skin-family="lr2">Use LR2 skin</button>
+            <button type="submit" value="beatoraja" class="account-dialog-primary" data-skin-family="beatoraja">Use beatoraja skin</button>
+          </span>
+        </footer>
+      </form>
     </dialog>
     <!--
       Loading overlay. Hidden by default; revealed via the

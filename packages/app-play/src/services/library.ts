@@ -83,8 +83,10 @@ export interface LibraryServiceOptions {
   readonly resultSkin: () => LR2Skin | undefined;
   /** The beatoraja theme. */
   readonly beatorajaTheme: () => BeatorajaThemeBundle | undefined;
-  /** Hands the skin families a drop brought to the "Drop a skin" prompt, once its select screen shows. */
-  readonly answerSkinDropPrompt: (families: ReadonlySet<SkinFamilyId>) => void;
+  /** Confirms a detected skin before replacing any loaded theme; cancellation leaves charts importable. */
+  readonly confirmSkinDrop: (families: ReadonlySet<SkinFamilyId>) => Promise<SkinFamilyId | undefined>;
+  /** Applies the confirmed skin and releases the previous select scene before its replacement mounts. */
+  readonly applyDroppedSkin: (family: SkinFamilyId) => void | Promise<void>;
 }
 
 /** The charts and courses the select screen lists, and the loads that add to them. */
@@ -116,7 +118,8 @@ export class LibraryService {
   private readonly selectSkin: LibraryServiceOptions['selectSkin'];
   private readonly resultSkin: LibraryServiceOptions['resultSkin'];
   private readonly beatorajaTheme: LibraryServiceOptions['beatorajaTheme'];
-  private readonly answerSkinDropPrompt: LibraryServiceOptions['answerSkinDropPrompt'];
+  private readonly confirmSkinDrop: LibraryServiceOptions['confirmSkinDrop'];
+  private readonly applyDroppedSkin: LibraryServiceOptions['applyDroppedSkin'];
 
   public constructor(options: LibraryServiceOptions) {
     this.elements = options.elements;
@@ -135,7 +138,8 @@ export class LibraryService {
     this.selectSkin = options.selectSkin;
     this.resultSkin = options.resultSkin;
     this.beatorajaTheme = options.beatorajaTheme;
-    this.answerSkinDropPrompt = options.answerSkinDropPrompt;
+    this.confirmSkinDrop = options.confirmSkinDrop;
+    this.applyDroppedSkin = options.applyDroppedSkin;
   }
 
   /**
@@ -213,8 +217,9 @@ export class LibraryService {
     const themeFamilies = skinFamilyRegistry.detectThemeFamilies(
       themeFiles.map((file) => file.webkitRelativePath || file.name),
     );
-    const carriesLR2Theme = themeFamilies.has('lr2');
-    const carriesBeatorajaTheme = themeFamilies.has('beatoraja');
+    const confirmedFamily = await this.confirmSkinDrop(themeFamilies);
+    const carriesLR2Theme = confirmedFamily === 'lr2';
+    const carriesBeatorajaTheme = confirmedFamily === 'beatoraja';
     const themeMarkers = [...themeFamilies];
     dropLog.info(
       `received ${files.length} file(s) · theme=${themeFiles.length}${
@@ -234,7 +239,7 @@ export class LibraryService {
       tasks.push(this.loadCharts(chartFiles));
     }
     if (tasks.length === 0) {
-      dropLog.warn('nothing to load — neither theme nor chart files matched');
+      await this.showSelect();
       return;
     }
     await Promise.all(tasks);
@@ -265,9 +270,9 @@ export class LibraryService {
     // Open what was dropped: its folder, or the folder list when the drop carried several.
     const dropped = navigationAfterDrop(this.collection.charts, previousChartIds);
     if (dropped !== undefined) this.browseTo(dropped);
+    // Commit the confirmed family before mounting the next select scene.
+    if (confirmedFamily !== undefined) await this.applyDroppedSkin(confirmedFamily);
     await this.showSelect();
-    // A skin the player asked for through the Debug Menu ("drop a skin") is switched to once the drop brings it.
-    this.answerSkinDropPrompt(themeFamilies);
     if (replayFiles.length > 0) {
       await this.startReplayReplayFromFile(replayFiles[0]!);
     }

@@ -146,6 +146,19 @@ export type BeMusicStageOrientation = 'landscape' | 'portrait';
 export interface BeMusicStage {
   readonly width: number;
   readonly height: number;
+  /** Optional lane bounds in design pixels, shared by rendering, note placement and touch input. */
+  readonly playfield?: Partial<
+    Record<
+      GameplayLayoutMode,
+      {
+        readonly top: number;
+        readonly judgementY: number;
+        /** Shrinks wide lane banks to leave room for a side HUD; narrower banks retain their widths. */
+        readonly maxRight?: number;
+      }
+    >
+  >;
+
   /**
    * The gameplay BGA rect for a playfield whose rightmost lane ends at `playfieldRight`. The scene composites the BGA
    * here and the skin frames the same rect, so the BGA can make room for wide (double play / keyboard) playfields.
