@@ -10,6 +10,7 @@ export const PACKAGE_NAMES = [
   'chart-editor',
   'chart-audio-renderer',
   'player-engine',
+  'player-node-audio',
   'player-scene-model',
   'player-terminal',
   'skin-lr2',
