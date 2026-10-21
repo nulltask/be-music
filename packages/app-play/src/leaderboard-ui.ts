@@ -1,7 +1,8 @@
+import { setDisabled, type PaneBinding } from './pane-controls.ts';
 import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player-engine/replay';
 import type { LibraryChart } from '@be-music/player-scene-model';
-import type GUI from 'lil-gui';
-import type { Controller } from 'lil-gui';
+import type { FolderApi } from 'tweakpane';
+
 import {
   createLeaderboardPasskey,
   describeAccountChip,
@@ -27,21 +28,20 @@ import {
   submitCourseToLeaderboard,
   submitToLeaderboard,
 } from './leaderboard.ts';
-
 /** What the panel needs from the demo: the remembered toggle, the status line and the recorder it names as client. */
 export interface LeaderboardPanelHost {
   /** The remembered settings holding the "Submit to Leaderboard" toggle (`guiState`), read on use. */
-  settings(): { submitToLeaderboard: boolean };
+  settings(): {
+    submitToLeaderboard: boolean;
+  };
   setStatus(text: string): void;
   warn(message: string, error: unknown): void;
   recorder: Omit<ReplayRecorderInfo, 'engine'>;
 }
-
 /** The `Be-Music-Client` header a submission carries: `be-music-web/0.5.0 (build abc)`. */
 export function describeSubmittingClient(recorder: Omit<ReplayRecorderInfo, 'engine'>): string {
   return `${recorder.name}/${recorder.version}${recorder.build !== undefined ? ` (build ${recorder.build})` : ''}`;
 }
-
 /**
  * Everything the demo shows of the Leaderboard: the start card's row (submission checkbox, account and its sign-in /
  * sign-up buttons), the Debug Menu folder (the same toggle, account row and passkey buttons), the account chip in the
@@ -50,30 +50,29 @@ export function describeSubmittingClient(recorder: Omit<ReplayRecorderInfo, 'eng
  * moving that device's anonymous plays into it.
  */
 export class LeaderboardPanel {
-  private folder: GUI | undefined;
-  private submitController: Controller | undefined;
-  private accountController: Controller | undefined;
+  private folder: FolderApi | undefined;
+  private openPane: () => void = () => undefined;
+  private submitController: PaneBinding | undefined;
+  private accountController: PaneBinding | undefined;
   private readonly accountState = { status: 'Not signed in' };
   /** Opens the sign-in / sign-up dialogs the start card's buttons lead to. */
   private readonly openDialog = wireAccountDialogs({
     onChanged: () => void this.refreshAccount(),
     // Signing in is choosing to take part: plays from now on are submitted.
-    onSignedIn: () => this.submitController?.setValue(true),
+    onSignedIn: () => this.setSubmitting(true),
   });
   /** The account state last shown, so signing in (or arriving signed in) can be told from a refresh. */
   private shownState: 'signed-in' | 'anonymous' | 'signed-out' | undefined;
   /** The toggle as it was when the current play started: a play is sent only if it was on at song start. */
   private submitThisPlay = false;
-
   private readonly host: LeaderboardPanelHost;
-
   constructor(host: LeaderboardPanelHost) {
     this.host = host;
   }
-
   /** Fills the Debug Menu's Leaderboard folder and wires the account chip. */
-  buildFolder(folder: GUI): void {
+  buildFolder(folder: FolderApi, openPane: () => void = () => undefined): void {
     this.folder = folder;
+    this.openPane = openPane;
     // Signed out, the account chip has no page to open: it opens this folder instead.
     document.querySelector<HTMLAnchorElement>('#account-chip')?.addEventListener('click', (event) => {
       if (event.currentTarget instanceof HTMLElement && event.currentTarget.dataset.state !== 'signed-out') return;
@@ -85,9 +84,8 @@ export class LeaderboardPanel {
     const settings = this.host.settings();
     const startCheckbox = document.querySelector<HTMLInputElement>('#start-submit');
     this.submitController = folder
-      .add(settings, 'submitToLeaderboard')
-      .name('Submit to Leaderboard')
-      .onChange((value: boolean) => {
+      .addBinding(settings, 'submitToLeaderboard', { label: 'Submit to Leaderboard' })
+      .on('change', ({ value }) => {
         settings.submitToLeaderboard = value;
         if (startCheckbox !== null) startCheckbox.checked = value;
       });
@@ -95,23 +93,27 @@ export class LeaderboardPanel {
     // Debug Menu change.
     if (startCheckbox !== null) {
       startCheckbox.checked = settings.submitToLeaderboard;
-      startCheckbox.addEventListener('change', () => this.submitController?.setValue(startCheckbox.checked));
+      startCheckbox.addEventListener('change', () => this.setSubmitting(startCheckbox.checked));
     }
-    this.accountController = folder.add(this.accountState, 'status').name('Account').disable();
+    this.accountController = folder.addBinding(this.accountState, 'status', {
+      label: 'Account',
+      readonly: true,
+      multiline: true,
+      rows: 2,
+    });
     const run = (label: string, action: () => Promise<AccountActionResult>, onSuccess?: () => void) => () =>
       this.runAccountAction(label, action, onSuccess);
     // Signing in, or keeping the account with a passkey, is choosing to take part: plays from now on are submitted.
-    const takePart = () => this.submitController?.setValue(true);
+    const takePart = () => this.setSubmitting(true);
     folder
-      .add({ create: run('Create passkey', createLeaderboardPasskey, takePart) }, 'create')
-      .name('Create passkey (keep this account)');
+      .addButton({ title: 'Create passkey (keep this account)' })
+      .on('click', run('Create passkey', createLeaderboardPasskey, takePart));
     folder
-      .add({ signIn: run('Sign in with passkey', signInWithLeaderboardPasskey, takePart) }, 'signIn')
-      .name('Sign in with passkey');
-    folder.add({ signOut: run('Sign out', signOutOfLeaderboard) }, 'signOut').name('Sign out');
+      .addButton({ title: 'Sign in with passkey' })
+      .on('click', run('Sign in with passkey', signInWithLeaderboardPasskey, takePart));
+    folder.addButton({ title: 'Sign out' }).on('click', run('Sign out', signOutOfLeaderboard));
     void this.refreshAccount();
   }
-
   /** Runs an account action, reporting it in the status line and under the start card's account row. */
   private async runAccountAction(
     label: string,
@@ -136,17 +138,14 @@ export class LeaderboardPanel {
     }
     await this.refreshAccount();
   }
-
   /** Latches the toggle for the play about to start and locks it until {@link unlock}. */
   lockForPlay(): void {
     this.submitThisPlay = this.host.settings().submitToLeaderboard;
-    this.submitController?.disable();
+    setDisabled(this.submitController, true);
   }
-
   unlock(): void {
-    this.submitController?.enable();
+    setDisabled(this.submitController, false);
   }
-
   /**
    * Sends the play to the Leaderboard when "Submit to Leaderboard" was on at song start. Runs in the background: the
    * result screen never waits for it, and its outcome (rank, or why it was not sent) goes to the status line.
@@ -170,7 +169,6 @@ export class LeaderboardPanel {
         this.host.setStatus('Leaderboard: not submitted (network error)');
       });
   }
-
   /**
    * Sends a finished course run to the Leaderboard when "Submit to Leaderboard" was on when its last stage started, as
    * {@link maybeSubmit} does for one play. `stageSongs` are the course's stages as it played them, in order (their
@@ -201,17 +199,16 @@ export class LeaderboardPanel {
         this.host.setStatus('Leaderboard: course not submitted (network error)');
       });
   }
-
   /** Re-reads the account into the Debug Menu's "Account" row and the account chip. */
   async refreshAccount(): Promise<void> {
     const account = await loadLeaderboardAccount();
     const state = describeAccountChip(account).state;
     // A player who is signed in takes part: submitting turns on when they arrive signed in or sign in, not on every
     // refresh, so unticking it during a session sticks.
-    if (shouldTurnOnSubmitting(this.shownState, state)) this.submitController?.setValue(true);
+    if (shouldTurnOnSubmitting(this.shownState, state)) this.setSubmitting(true);
     this.shownState = state;
     this.accountState.status = describeLeaderboardAccount(account);
-    this.accountController?.updateDisplay();
+    this.accountController?.refresh();
     this.renderStartAccount(account);
     const chip = document.querySelector<HTMLAnchorElement>('#account-chip');
     if (chip === null) return;
@@ -223,7 +220,6 @@ export class LeaderboardPanel {
     const label = chip.querySelector('#account-chip-label');
     if (label !== null) label.textContent = view.label;
   }
-
   /** Fills the start card's account row: who the plays go to, a link to their page, and the actions that fit. */
   private renderStartAccount(account: Awaited<ReturnType<typeof loadLeaderboardAccount>>): void {
     const row = document.querySelector<HTMLElement>('#start-account');
@@ -262,12 +258,18 @@ export class LeaderboardPanel {
       }),
     );
   }
-
+  private setSubmitting(value: boolean): void {
+    this.host.settings().submitToLeaderboard = value;
+    const checkbox = document.querySelector<HTMLInputElement>('#start-submit');
+    if (checkbox) checkbox.checked = value;
+    this.submitController?.refresh();
+  }
   /** Opens the Debug Menu with the Leaderboard folder unfolded. */
   private openFolder(): void {
     const folder = this.folder;
     if (folder === undefined) return;
-    for (let current: GUI | undefined = folder; current !== undefined; current = current.parent) current.open();
-    folder.domElement.scrollIntoView({ block: 'nearest' });
+    folder.expanded = true;
+    this.openPane();
+    folder.element.scrollIntoView({ block: 'nearest' });
   }
 }

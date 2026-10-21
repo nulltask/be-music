@@ -484,7 +484,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       onTempoChange: (change) => followTempoChange(ctx, change),
       // Forward AUTO SCRATCH: engine has a single boolean rather than per-side, so either-side AUTO SCRATCH
       // turns scratch auto on for both 16 / 26 channels. That's a per-side fidelity loss for rare DP charts
-      // where only one player's scratch should auto-spin (the demo's lil-gui surfaces them as two separate
+      // where only one player's scratch should auto-spin (the demo's Tweakpane surfaces them as two separate
       // toggles), but the alternative — leaving auto off — was worse: scratch notes the user expected to be
       // auto-spun would just sit there as misses, and the legacy `autoScratchJudge` path is gated off in
       // shared-engine mode. A future engine extension could split the flag per side.

@@ -83,7 +83,7 @@ export interface VideoTextureHandle {
 
 /**
  * Tunables for the ffmpeg.wasm fallback path. Plumbed through from the host so end-users can trade encode time for
- * visual resolution at runtime (the demo wires this to a lil-gui pair).
+ * visual resolution at runtime (the demo wires this to a Tweakpane pair).
  */
 export interface VideoTranscodeOptions {
   /**
