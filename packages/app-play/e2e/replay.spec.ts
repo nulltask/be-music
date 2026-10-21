@@ -14,6 +14,7 @@ const REPLAY_VIEW = ['Play options', 'Replay / ghost'];
  * notes are judged, and returns its replay.
  */
 async function playWithLiveChanges(demo: Demo): Promise<BeMusicReplay> {
+  await demo.setOption(TEMPO, 'Enabled', true);
   await demo.setOption(['Play options'], 'Auto play', true);
   await demo.browseTo(SONGS, 'Fixture A');
   await demo.key('Enter');

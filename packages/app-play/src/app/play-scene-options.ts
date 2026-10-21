@@ -23,6 +23,7 @@ export type PlaySceneGUIState = Pick<
   | 'autoScratch1P'
   | 'autoScratch2P'
   | 'replayView'
+  | 'tempoEnabled'
   | 'tempoPercent'
   | 'tempoPitchMode'
   | 'tempoStretchAlgorithm'
@@ -98,7 +99,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     tempo:
       replay !== undefined && guiState.replayView.tempo
         ? (replay.play.tempo ?? 1)
-        : tempoFromPercent(guiState.tempoPercent),
+        : tempoFromPercent(guiState.tempoEnabled ? guiState.tempoPercent : 0),
   };
   const lanes =
     input.activeCourse !== undefined && courseStage !== undefined

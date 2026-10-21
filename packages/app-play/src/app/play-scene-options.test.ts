@@ -69,6 +69,7 @@ function gui(changes: Partial<PlaySceneGUIState> = {}): PlaySceneGUIState {
     autoScratch1P: true,
     autoScratch2P: true,
     replayView: { tempo: true, hiSpeed: true, covers: true, lift: true },
+    tempoEnabled: true,
     tempoPercent: -10,
     tempoPitchMode: 'pitch',
     tempoStretchAlgorithm: 'wsola',
@@ -163,6 +164,14 @@ describe('resolvePlaySceneOptions: a single play', () => {
       showInvisibleNotes: false,
       judgedNoteDisplay: 'KEEP_SCROLLING',
     });
+  });
+
+  test('bypasses the stored percentage when disabled but preserves replay tempo', () => {
+    const guiState = gui({ tempoEnabled: false, tempoPercent: -20 });
+    expect(resolvePlaySceneOptions(input({ guiState })).tempo).toBe(1);
+    expect(resolvePlaySceneOptions(input({ guiState, replay: rereplay(1.2) })).tempo).toBe(1.2);
+    guiState.tempoEnabled = true;
+    expect(resolvePlaySceneOptions(input({ guiState })).tempo).toBe(0.8);
   });
 
   test('the start’s AUTO wins over the Debug Menu’s; without one the Debug Menu’s counts', () => {
