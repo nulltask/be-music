@@ -24,7 +24,7 @@ const fullscreenLog = logger('fullscreen');
 export interface DemoShellDeps {
   readonly sceneHost: PixiSceneHost;
   readonly elements: Pick<PlayerWebDemoElements, 'shell'>;
-  readonly search: Pick<InlineSearch, 'skinHasBox'>;
+  readonly search: Pick<InlineSearch, 'skinHasBox'> & Partial<Pick<InlineSearch, 'ownsNativeInput'>>;
   readonly deviceProfile: Pick<DeviceProfile, 'phone'>;
   /** The play, whichever family draws it: loading behind a decide screen, or on the stage. */
   readonly gameplayView: () => PlayScene | undefined;
@@ -91,6 +91,7 @@ export class DemoShell {
       portraitStage: this.sceneHost.getStageOrientation() === 'portrait',
       skinHasBox: this.search.skinHasBox,
     });
+    this.elements.shell.classList.toggle('native-search', this.search.ownsNativeInput === true);
     const state = shellStateKey(resolved);
     if (state === this.shellGameplayState) return;
     this.shellGameplayState = state;

@@ -53,6 +53,8 @@ export interface PixiScene {
 }
 
 export interface PixiSceneHostMountOptions {
+  /** Native skin screens mount here; defaults to the Canvas container. */
+  domContainer?: HTMLElement;
   /**
    * Optional override for the underlying `Application.init` options. The host fills in opinionated defaults (no
    * antialias, nearest sampling, devicePixelRatio resolution, transparent BG) that match the LR2 pixel-art aesthetic;
@@ -82,6 +84,27 @@ export interface PixiSceneHostMountOptions {
 export class PixiSceneHost {
   /** The shared `Application`. Scenes read `host.app` for the ticker, screen size, canvas, etc. */
   public readonly app: Application = new Application();
+  private domLayer: HTMLElement | undefined;
+  private domParent: HTMLElement | undefined;
+  private previousPosition: string | undefined;
+
+  /** The host-owned native layer. DOM screens are siblings of the Canvas, outside the Pixi scene graph. */
+  public get domRoot(): HTMLElement {
+    if (!this.domParent) throw new Error('Mount the scene host before attaching a DOM skin');
+    if (!this.domLayer) {
+      const parent = this.domParent;
+      if (parent.ownerDocument.defaultView?.getComputedStyle(parent).position === 'static') {
+        this.previousPosition = parent.style.position;
+        parent.style.position = 'relative';
+      }
+      this.domLayer = parent.ownerDocument.createElement('div');
+      this.domLayer.setAttribute('data-be-music-dom', '');
+      Object.assign(this.domLayer.style, { position: 'absolute', inset: '0', pointerEvents: 'none', zIndex: '1' });
+      parent.append(this.domLayer);
+    }
+    return this.domLayer;
+  }
+
   /** The currently-active scene, or `undefined` between transitions. */
   private current: PixiScene | undefined;
   /**
@@ -180,6 +203,7 @@ export class PixiSceneHost {
     this.app.canvas.style.contain = 'content';
     this.app.stage.label = 'host/stage';
     container.appendChild(this.app.canvas);
+    this.domParent = options?.domContainer ?? container;
   }
 
   /**
@@ -299,6 +323,12 @@ export class PixiSceneHost {
       }
       this.current = undefined;
     }
+    this.domLayer?.remove();
+    this.domLayer = undefined;
+    if (this.domParent && this.previousPosition !== undefined && this.domParent.style.position === 'relative') {
+      this.domParent.style.position = this.previousPosition;
+    }
+    this.domParent = undefined;
     try {
       // With only ONE Application owned by the process, releasing the module-shared `batchPool` here is safe — no other
       // live Application can be tripped up by the cleared pool. (See the class doc-block above for the

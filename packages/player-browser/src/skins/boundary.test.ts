@@ -14,7 +14,7 @@ const SDK_PACKAGE = '@be-music/player-skin-sdk';
 const PIXI_KIT = join(SKINS_DIR, 'pixi-kit');
 const PIXI_KIT_BARREL = join(PIXI_KIT, 'index.ts');
 /** Skins drawn without Pixi. */
-const FRAMEWORK_FREE = new Set(['plain']);
+const FRAMEWORK_FREE = new Set(['plain', 'native']);
 const SPECIFIER = /\b(?:import|export)\b[^'"]*?\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/gu;
 
 function listFiles(dir: string): string[] {
@@ -48,7 +48,14 @@ describe('built-in skin import boundary', () => {
   const skins = readdirSync(SKINS_DIR, { withFileTypes: true }).filter((entry) => entry.isDirectory());
 
   it('covers every built-in skin', () => {
-    expect(skins.map((entry) => entry.name).sort()).toEqual(['lattice', 'phantom', 'pixi-kit', 'plain', 'synesthesia']);
+    expect(skins.map((entry) => entry.name).sort()).toEqual([
+      'lattice',
+      'native',
+      'phantom',
+      'pixi-kit',
+      'plain',
+      'synesthesia',
+    ]);
   });
 
   it.each(skins.map((entry) => entry.name))(

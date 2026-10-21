@@ -864,6 +864,32 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
     },
     interactive: true,
   });
+  define('player-browser.SceneController', {
+    run: () => {
+      const controller = new playerWebCoreAPI.SceneController(BENCH_SCENE_SESSION);
+      const store = controller.createStore((frame) => frame);
+      const unsubscribe = store.subscribe(() => undefined);
+      controller.enter(0);
+      controller.advance(1);
+      store.getSnapshot();
+      unsubscribe();
+      controller.dispose();
+    },
+  });
+  define('player-browser.createSelectController', {
+    run: () => {
+      const controller = playerWebCoreAPI.createSelectController({
+        library: { sources: [], charts: [BENCH_SONG], errors: [] },
+        sounds: {},
+        audio: playerWebCoreAPI.createAudioService({ createContext: () => undefined }),
+        on: { start: () => undefined },
+        now: () => 0,
+      });
+      controller.enter(0);
+      controller.advance(0);
+      controller.dispose();
+    },
+  });
   define('player-browser.SessionScene', {
     run: async () => {
       const scene = new playerWebCoreAPI.SessionScene(BENCH_SCENE_SESSION, BENCH_FAMILY_VIEW, { now: () => 0 });

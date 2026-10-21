@@ -44,6 +44,11 @@
       "source": "./src/compute/index.ts",
       "types": "./dist/compute.d.ts",
       "default": "./dist/compute.js"
+    },
+    "./controller": {
+      "source": "./src/host/controllers.ts",
+      "types": "./dist/controller.d.ts",
+      "default": "./dist/controller.js"
     }
   },
   "scripts": {

@@ -21,10 +21,10 @@ import type {
 
 /**
  * be-music skin format — the code-defined skins the built-in (default) family renders with when no LR2 / beatoraja
- * theme is loaded. Unlike LR2 / beatoraja themes (data files interpreted by a scene), a be-music skin draws every
- * screen itself onto a canvas the player hands it, with whatever it likes: the Canvas 2D API, raw WebGL / WebGPU, or a
+ * theme is loaded. Unlike LR2 / beatoraja themes (data files interpreted by a scene), a be-music skin draws screens
+ * onto Canvas surfaces or mounts native DOM screens. Canvas drawing can use the Canvas 2D API, raw WebGL / WebGPU, or a
  * framework such as PixiJS or three.js that the skin brings along. The player owns input, timing, audio, judging, and
- * layout, collects what is on screen each frame as plain data, and shows the skin's canvas.
+ * layout, and supplies plain frame data and semantic actions to the skin.
  *
  * Nothing here depends on a rendering framework. Skins are written against the `@be-music/player-skin-sdk` package
  * and declared with its `defineBeMusicSkin`, which checks {@link BeMusicSkin.apiVersion} and the metadata.
@@ -32,6 +32,8 @@ import type {
  * the built-in family's kit (`{ family: 'built-in', skin }`).
  */
 export interface BeMusicSkin<K extends BeMusicSurfaceContextKind = BeMusicSurfaceContextKind> {
+  /** Native DOM screens and a DOM gameplay HUD, mounted independently from Canvas surfaces. */
+  readonly dom?: import('./dom.ts').BeMusicDOMSkin;
   /**
    * The skin API revision the skin was written against (`BE_MUSIC_SKIN_API_VERSION` when it was built). Hosts refuse a
    * skin whose revision they don't support and fall back to a built-in one.
