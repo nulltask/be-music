@@ -20,7 +20,7 @@ export const DEMO_APP_HTML = `
   <div class="shell empty">
     <!--
       Hidden file input — triggered by the GUI's "Open folder"
-      button. lil-gui has no native file controller, so we
+      button. Tweakpane has no native file controller, so we
       forward a synthetic click to this hidden input from the
       function controller's handler. \`webkitdirectory\` makes the
       browser show a folder picker on Chromium / Safari. ZIPs and
@@ -291,7 +291,7 @@ export const DEMO_APP_HTML = `
     <!--
       Bottom-right floating Help button. Pinned so it stays
       reachable from every scene (select / gameplay / result)
-      without having to compete with lil-gui (top-right) or the
+      without having to compete with Tweakpane (top-right) or the
       search bar (bottom-left). Opens the unified Help dialog
       that hosts both the usage guide and the third-party
       attribution required by the libraries we ship.

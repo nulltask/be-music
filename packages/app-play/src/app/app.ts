@@ -169,7 +169,7 @@ export class PlayerWebDemoApp {
    */
   private compressorMode: 'split' | 'legacy' = 'split';
   /**
-   * GUI state object the lil-gui controllers read / write. Held on the instance so the GUI build code and the runtime
+   * GUI state object the Tweakpane controllers read / write. Held on the instance so the GUI build code and the runtime
    * handlers (`toggleRecording` etc.) share a single source of truth — programmatic updates go through `state.foo = …`
    * + `controller.updateDisplay()`.
    */
@@ -479,7 +479,6 @@ export class PlayerWebDemoApp {
       shell: this.elements.shell,
       gameplayView: () => this.gameplayView,
       selectView: () => this.selectView,
-      stageMounted: () => this.stageMount !== undefined,
       familyDispatchState: () => this.familyKits.familyDispatchState(),
       beatorajaTheme: () => this.beatoraja.beatorajaTheme,
       availableLR2Themes: () => this.lr2.availableLR2Themes,

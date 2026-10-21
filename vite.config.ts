@@ -173,14 +173,20 @@ const webAudioProperties = ['globalThis', 'window', 'self'].flatMap((object) =>
 /**
  * The web demo's layers (docs/player-web.md, "How the demo is built"): `main.ts` boots the app, `app/` composes it (the
  * scene router, the routes, the shell), `ui/` is the Debug Menu and the panels, and `services/` hold the state and rules
- * the others share. A service knows neither the UI nor the wiring: it imports no lil-gui, `ui/` or `app/` module, not
+ * the others share. A service knows neither the UI nor the wiring: it imports no Tweakpane, `ui/` or `app/` module, not
  * even a type, and reaches the app through the deps it is given.
  */
 const webDemoServiceSources = ['packages/app-play/src/services/**/*.ts'];
-const webDemoServiceMessage = 'A demo service imports no lil-gui, ui/ or app/ module; it takes what it needs as deps.';
+const webDemoServiceMessage =
+  'A demo service imports no Tweakpane, ui/ or app/ module; it takes what it needs as deps.';
 const webDemoServiceImports = {
-  paths: [...engineTypeImports.paths, { name: 'lil-gui', message: webDemoServiceMessage }],
-  patterns: [{ group: ['lil-gui/*', ...webLayerGroup('ui', 'app')], message: webDemoServiceMessage }],
+  paths: [...engineTypeImports.paths, { name: 'tweakpane', message: webDemoServiceMessage }],
+  patterns: [
+    {
+      group: ['tweakpane', 'tweakpane/*', '@tweakpane/core', '@tweakpane/core/*', ...webLayerGroup('ui', 'app')],
+      message: webDemoServiceMessage,
+    },
+  ],
 };
 
 const workspaceProjects = workspacePackages.map((name) => ({
