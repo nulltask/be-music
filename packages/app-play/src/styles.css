@@ -2363,6 +2363,14 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   box-shadow: 0 24px 60px rgb(0 0 0 / 0.55);
   font-family: system-ui, sans-serif;
 }
+/* Hidden family choices must override the shared buttons' inline-flex display. */
+#skin-switch [hidden] {
+  display: none;
+}
+#skin-switch footer,
+#skin-switch .account-dialog-buttons {
+  flex-wrap: wrap;
+}
 .account-dialog::backdrop {
   background: rgb(0 0 0 / 0.55);
 }

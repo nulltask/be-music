@@ -130,6 +130,23 @@ export class Demo {
       },
       { route: FILE_ROUTE, root, files, prefix: options.prefix ?? '' },
     );
+    // Theme imports now wait for an explicit choice before loading assets.
+    await this.page.waitForFunction(
+      (before) => {
+        const state = window.__beMusicTest?.state();
+        return (
+          (state !== undefined && state.loads > before && !state.loading) ||
+          document.querySelector<HTMLDialogElement>('#skin-switch')?.open
+        );
+      },
+      before,
+      { timeout: 90_000 },
+    );
+    const confirmation = this.page.locator('#skin-switch[open]');
+    if (await confirmation.count()) {
+      const beatoraja = confirmation.locator('[data-skin-family="beatoraja"]');
+      await ((await beatoraja.isVisible()) ? beatoraja : confirmation.locator('[data-skin-family="lr2"]')).click();
+    }
     return this.waitFor((state) => state.loads > before && !state.loading, `the drop of ${root} to load`);
   }
 
@@ -193,20 +210,43 @@ export class Demo {
       ({ folder, name, action }) => {
         let gui = document.querySelector<HTMLElement>('[data-pane="debug"]');
         if (gui === null) throw new Error('no Debug Menu');
+        // Tab pages are transparent to the existing folder paths.
+        const children = (content: Element | null): Element[] =>
+          [...(content?.children ?? [])].flatMap((child) =>
+            child.classList.contains('tp-tabv')
+              ? [...child.querySelectorAll(':scope > .tp-tabv_c > .tp-tbpv > .tp-tbpv_c')].flatMap(children)
+              : [child],
+          );
+        const revealTab = (element: Element): void => {
+          const page = element.closest('.tp-tbpv');
+          const tab = page?.parentElement?.closest('.tp-tabv');
+          if (!page || !tab) return;
+          const pages = [...tab.querySelectorAll(':scope > .tp-tabv_c > .tp-tbpv')];
+          tab
+            .querySelectorAll<HTMLButtonElement>(':scope > .tp-tabv_t > .tp-tbiv > button')
+            [pages.indexOf(page)]?.click();
+        };
         for (const title of folder) {
           const content: Element | null = gui.querySelector(':scope > .tp-rotv_c, :scope > .tp-fldv_c');
           gui =
-            [...(content?.querySelectorAll<HTMLElement>(':scope > .tp-fldv') ?? [])].find(
-              (candidate) => candidate.querySelector(':scope > .tp-fldv_b .tp-fldv_t')?.textContent?.trim() === title,
-            ) ?? null;
+            children(content)
+              .filter(
+                (candidate): candidate is HTMLElement =>
+                  candidate instanceof HTMLElement && candidate.classList.contains('tp-fldv'),
+              )
+              .find(
+                (candidate) => candidate.querySelector(':scope > .tp-fldv_b .tp-fldv_t')?.textContent?.trim() === title,
+              ) ?? null;
           if (gui === null) throw new Error(`no Debug Menu folder ${title}`);
+          revealTab(gui);
         }
         const content = gui.querySelector(':scope > .tp-rotv_c, :scope > .tp-fldv_c');
-        const controller = [...(content?.children ?? [])].find((candidate) => {
+        const controller = children(content).find((candidate) => {
           const label = candidate.querySelector('.tp-lblv_l')?.textContent?.trim();
           return (label || candidate.querySelector('button')?.textContent?.trim()) === name;
         });
         if (controller === undefined) throw new Error(`no Debug Menu control ${[...folder, name].join(' / ')}`);
+        revealTab(controller);
         const select = controller.querySelector('select');
         const input = controller.querySelector('input');
         const button = controller.querySelector('button');

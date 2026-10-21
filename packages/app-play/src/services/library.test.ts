@@ -110,7 +110,8 @@ function harness(overrides: Partial<LibraryServiceOptions> = {}) {
     selectSkin: () => undefined,
     resultSkin: () => undefined,
     beatorajaTheme: () => undefined,
-    answerSkinDropPrompt: vi.fn(),
+    confirmSkinDrop: vi.fn(async (families) => [...families][0]),
+    applyDroppedSkin: vi.fn(),
     ...overrides,
   };
   const library = new LibraryService(options);
@@ -213,6 +214,37 @@ describe('LibraryService drops', () => {
     expect(folders()).toEqual([]);
     expect(shown).toEqual([]);
     expect(options.loadTheme).not.toHaveBeenCalled();
+  });
+
+  test('canceling a skin-only drop restores select without replacing the current skin', async () => {
+    const confirmSkinDrop = vi.fn(async () => undefined);
+    const { library, options, shown } = harness({ confirmSkinDrop });
+    const before = library.collection;
+    await library.processIncomingFiles([dropped('theme/select.lr2skin', '#INFORMATION,5,Example')]);
+    expect(confirmSkinDrop).toHaveBeenCalledWith(new Set(['lr2']));
+    expect(library.collection).toBe(before);
+    expect(options.loadTheme).not.toHaveBeenCalled();
+    expect(options.loadBeatorajaTheme).not.toHaveBeenCalled();
+    expect(options.applyDroppedSkin).not.toHaveBeenCalled();
+    expect(shown).toEqual([before]);
+  });
+
+  test('applies the confirmed skin before showing select', async () => {
+    const order: string[] = [];
+    const { library, options } = harness({
+      loadTheme: vi.fn(async () => {
+        order.push('load');
+      }),
+      applyDroppedSkin: vi.fn(async () => {
+        order.push('apply');
+      }),
+      showSelect: async () => {
+        order.push('show');
+      },
+    });
+    await library.processIncomingFiles([dropped('theme/select.lr2skin', '#INFORMATION,5,Example')]);
+    expect(options.applyDroppedSkin).toHaveBeenCalledWith('lr2');
+    expect(order).toEqual(['load', 'apply', 'show']);
   });
 
   test('reads a course file that lists more than five stages as the five LR2 plays, and says so', async () => {

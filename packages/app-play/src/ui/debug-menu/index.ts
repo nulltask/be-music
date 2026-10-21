@@ -184,8 +184,10 @@ export class DebugMenu {
   public tempoController: PaneBinding | undefined;
   /** Debug Menu folder holding the active be-music skin's settings; hidden for a skin that declares none. */
   public skinSettingsFolder: FolderApi | undefined;
-  /** The Debug Menu's "Skin & display" folder, which hosts the LR2 theme picker once a drop discovers themes. */
+  /** The Debug Menu's "Skin & display" folder, with the common family and display controls. */
   public skinFolder: FolderApi | undefined;
+  /** LR2 tab holding the discovered theme picker. */
+  public lr2SkinPage: Pick<FolderApi, 'addBinding'> | undefined;
   /** Native list whose options follow loaded theme families without replacing its event handlers. */
   public skinFamilyController: ListInputBindingApi<SkinFamilyOverride> | undefined;
   /** Native theme list, refreshed as drops discover new themes. */
@@ -280,7 +282,7 @@ export class DebugMenu {
     gui.element.dataset.pane = 'debug';
     gui.expanded = false;
     this.gui = gui;
-    const addFolder = (parent: FolderApi, folder: DebugMenuFolder): FolderApi =>
+    const addFolder = (parent: Pick<FolderApi, 'addFolder'>, folder: DebugMenuFolder): FolderApi =>
       parent.addFolder({ title: folder.title, expanded: folder.open });
     // The native read-only monitor shows long load and playback messages without making them editable.
     // Status changes also refresh it immediately through `setStatus`.

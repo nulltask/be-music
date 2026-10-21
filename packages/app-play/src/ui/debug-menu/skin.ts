@@ -18,17 +18,26 @@ import { AUTO_DETECT_RESOLUTION_LABEL } from './render-resolution.ts';
 export function buildSkinFolder(
   this: DebugMenu,
   skin: FolderApi,
-  addFolder: (parent: FolderApi, folder: DebugMenuFolder) => FolderApi,
+  addFolder: (parent: Pick<FolderApi, 'addFolder'>, folder: DebugMenuFolder) => FolderApi,
 ): void {
   this.skinFolder = skin;
   // Skin family override — picks the active rendering family (LR2 / beatoraja / default) regardless of what's
-  // loaded. First-time build seeds with `Auto` + `Default` only; `rebuildSkinFamilyPicker` swaps the option list
-  // in place once a theme drop adds LR2 / beatoraja to the pool.
+  // loaded. Unloaded families ask for a drop; rebuilding updates their availability labels in place.
   this.rebuildSkinFamilyPicker();
+  const tabs = skin.addTab({ pages: [{ title: 'Built-in' }, { title: 'LR2' }, { title: 'beatoraja' }] });
+  const [builtIn, lr2, beatoraja] = tabs.pages;
+  if (!builtIn || !lr2 || !beatoraja) return;
+  this.lr2SkinPage = lr2;
+  for (const [page, family, title] of [
+    [lr2, 'lr2', 'Load LR2 skin…'],
+    [beatoraja, 'beatoraja', 'Load beatoraja skin…'],
+  ] as const) {
+    this.skinControllers.push(page.addButton({ title }).on('click', () => this.deps.promptSkinDrop(family)));
+  }
   // Built-in (be-music) skin used whenever the default family renders — i.e. no LR2 / beatoraja theme covers the
   // scene. Persisted so a reload keeps the pick.
   const skinOptions = () => Object.fromEntries(BE_MUSIC_SKINS.skins.map((skin) => [skin.label, skin.id]));
-  const skinPicker = selectBinding(skin, this.guiState, 'builtInSkin', 'Built-in skin', skinOptions()).on(
+  const skinPicker = selectBinding(builtIn, this.guiState, 'builtInSkin', 'Built-in skin', skinOptions()).on(
     'change',
     ({ value: id }) => {
       this.deps.handleBuiltInSkinChange(id);
@@ -39,7 +48,7 @@ export function buildSkinFolder(
     skinPicker.options = paneOptions(skinOptions());
     skinPicker.refresh();
   });
-  const skinEffects = selectBinding(skin, this.guiState, 'skinEffects', 'Skin effects', {
+  const skinEffects = selectBinding(builtIn, this.guiState, 'skinEffects', 'Skin effects', {
     Full: 'full',
     Reduced: 'reduced',
     Off: 'off',
@@ -85,20 +94,19 @@ export function buildSkinFolder(
   });
   // The same toggle as double-clicking the playfield, for pointers where a double click is awkward.
   skin.addButton({ title: 'Toggle fullscreen' }).on('click', () => void toggleFullscreen(this.deps.shell));
-  // "LR2 theme" (see `rebuildLR2ThemePicker`) slots in here, above the beatoraja pickers, once a drop carries themes.
   // Per-scene beatoraja skin picker, hidden until a beatoraja theme is dropped — `rebuildBeatorajaSkinPickers()`
   // re-populates it on each load. Selecting a non-default entry for a scene records it on
   // `beatorajaSkinOverridesByType`; the next mount picks it up via `pickBeatorajaSkinEntryWithOverride`.
-  this.beatorajaSkinPickerFolder = addFolder(skin, DEBUG_MENU_FOLDERS.beatorajaSkins);
+  this.beatorajaSkinPickerFolder = addFolder(beatoraja, DEBUG_MENU_FOLDERS.beatorajaSkins);
   this.beatorajaSkinPickerFolder.hidden = true;
   // The active be-music skin's own settings, built from its `settings` schema (rebuilt when the skin changes).
-  this.skinSettingsFolder = addFolder(skin, DEBUG_MENU_FOLDERS.skinSettings);
+  this.skinSettingsFolder = addFolder(builtIn, DEBUG_MENU_FOLDERS.skinSettings);
   this.rebuildSkinSettingsFolder();
   // LR2 theme picker — added once a drop discovers a theme (see `rebuildLR2ThemePicker`).
   this.rebuildLR2ThemePicker();
   // Add skins: the bundled Lattice, or a skin module from a URL (its default export, built with the skin SDK).
   if (!EXTRA_BUILT_IN_SKINS_ENABLED) return;
-  const addSkins = addFolder(skin, DEBUG_MENU_FOLDERS.addSkin);
+  const addSkins = addFolder(builtIn, DEBUG_MENU_FOLDERS.addSkin);
   const skinSource = {
     url: '',
     addLattice: () => this.deps.addBeMusicSkin(latticeSkin),
@@ -218,7 +226,7 @@ export function rebuildSkinSettingsFolder(this: DebugMenu): void {
  * Native mutable options keep the picker in place across theme discoveries.
  */
 export function rebuildLR2ThemePicker(this: DebugMenu): void {
-  const folder = this.skinFolder;
+  const folder = this.lr2SkinPage;
   if (folder === undefined) return;
   const themes = this.deps.availableLR2Themes();
   if (themes.length === 0) {
@@ -250,11 +258,4 @@ export function rebuildLR2ThemePicker(this: DebugMenu): void {
   });
   // A theme dropped during a play brings the picker in disabled, as the other skin controls are then.
   this.lr2ThemeController.disabled = this.playLock.skinControlsLocked;
-  // Reorder through the native container API, preserving the theme picker group.
-  const before = this.beatorajaSkinPickerFolder;
-  const index = before === undefined ? -1 : folder.children.indexOf(before);
-  if (index >= 0) {
-    folder.remove(this.lr2ThemeController);
-    folder.add(this.lr2ThemeController, index);
-  }
 }
