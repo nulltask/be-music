@@ -9,11 +9,13 @@ export function mountGameplay(
     container,
     'gameplay',
     `
-    <p class="eyebrow" data-mode>Live</p><h2 data-title></h2><p class="muted" data-stage></p>
-    <p class="stat" data-score>0</p><p class="muted">EX SCORE</p>
-    <dl><dt>Combo</dt><dd data-combo>0</dd><dt>BPM</dt><dd data-bpm>—</dd><dt>Time</dt><dd data-time>0 / 0</dd></dl>
-    <label>Gauge <meter min="0" max="100" value="0" aria-label="Gauge"></meter><span data-gauge></span></label>
-    <div class="actions"><button data-pause>Pause</button><button data-retry>Retry</button><button data-quit>Back</button></div>`,
+    <aside class="hud" aria-label="Play status">
+      <div class="hud-heading"><span class="eyebrow" data-mode>Live</span><h2 data-title></h2><span class="muted" data-stage></span></div>
+      <div class="hud-score"><span class="muted">EX SCORE</span><strong class="stat" data-score>0</strong></div>
+      <dl><dt>Combo</dt><dd data-combo>0</dd><dt>BPM</dt><dd data-bpm>—</dd><dt>Time</dt><dd data-time>0 / 0</dd></dl>
+      <label class="hud-gauge"><span data-gauge>Gauge</span><meter min="0" max="100" value="0" aria-label="Gauge"></meter></label>
+      <div class="actions"><button data-pause>Pause</button><button data-retry>Retry</button><button data-quit>Back</button></div>
+    </aside>`,
   );
   const score = query(root, '[data-score]');
   const combo = query(root, '[data-combo]');
@@ -25,6 +27,8 @@ export function mountGameplay(
   query(root, '[data-quit]').addEventListener('click', () => actions.quit());
   return {
     update(frame) {
+      root.dataset.orientation = frame.layout.orientation;
+      root.style.setProperty('--stage-ratio', String(frame.layout.stage.width / frame.layout.stage.height));
       setText(query(root, '[data-title]'), frame.chart?.title ?? 'Preparing chart');
       setText(query(root, '[data-mode]'), frame.replay ? 'Replay' : frame.autoPlay ? 'Auto play' : 'Live');
       setText(

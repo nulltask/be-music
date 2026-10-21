@@ -110,7 +110,8 @@ function harness(overrides: Partial<LibraryServiceOptions> = {}) {
     selectSkin: () => undefined,
     resultSkin: () => undefined,
     beatorajaTheme: () => undefined,
-    answerSkinDropPrompt: vi.fn(),
+    confirmSkinDrop: vi.fn(async (families) => [...families][0]),
+    applyDroppedSkin: vi.fn(),
     ...overrides,
   };
   const library = new LibraryService(options);

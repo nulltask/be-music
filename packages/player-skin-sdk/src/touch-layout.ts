@@ -7,7 +7,7 @@ import {
   type FallbackLaneLayoutRect,
 } from './lane-geometry.ts';
 import { resolvePortraitLaneLayout, resolveStageOrientation } from './portrait.ts';
-import type { BeMusicStageOrientation, GameplayLayoutMode } from './types.ts';
+import type { BeMusicStage, BeMusicStageOrientation, GameplayLayoutMode } from './types.ts';
 
 /**
  * Geometry of the touch layout on the 854x480 stage, in design px. The lanes take the stage from its left margin up to
@@ -99,29 +99,48 @@ export function resolveGameplayLaneGeometry(
   laneCount: number | undefined,
   playVariant: ChartPlayVariant | undefined,
   mode: GameplayLayoutMode = 'standard',
-  stage?: { width: number; height: number },
+  stage?: Pick<BeMusicStage, 'width' | 'height' | 'playfield'>,
 ): GameplayLaneGeometry {
+  let geometry: GameplayLaneGeometry;
   if (stage && resolveStageOrientation(stage) === 'portrait') {
-    return {
+    geometry = {
       mode,
       orientation: 'portrait',
       ...resolvePortraitLaneLayout(channels, laneCount, playVariant, mode, stage),
     };
-  }
-  if (mode === 'touch' && supportsTouchLayout(playVariant)) {
-    return {
+  } else if (mode === 'touch' && supportsTouchLayout(playVariant)) {
+    geometry = {
       mode: 'touch',
       orientation: 'landscape',
       ...resolveTouchLaneLayout(channels, laneCount, playVariant),
       top: TOUCH_PLAYFIELD.top,
       judgementY: TOUCH_PLAYFIELD.judgementY,
     };
+  } else {
+    geometry = {
+      mode: 'standard',
+      orientation: 'landscape',
+      ...resolveSkinlessLaneLayout(channels, laneCount, playVariant),
+      top: PLAYFIELD.y,
+      judgementY: PLAYFIELD.judgementY,
+    };
   }
+  const bounds = stage?.playfield?.[geometry.mode];
+  if (!bounds) return geometry;
+  const right = bounds.maxRight === undefined ? geometry.right : Math.min(geometry.right, bounds.maxRight);
+  const scale = (right - geometry.left) / (geometry.right - geometry.left || 1);
   return {
-    mode: 'standard',
-    orientation: 'landscape',
-    ...resolveSkinlessLaneLayout(channels, laneCount, playVariant),
-    top: PLAYFIELD.y,
-    judgementY: PLAYFIELD.judgementY,
+    ...geometry,
+    top: bounds.top,
+    judgementY: bounds.judgementY,
+    right,
+    lanes:
+      scale === 1
+        ? geometry.lanes
+        : geometry.lanes.map((lane) => ({
+            ...lane,
+            x: geometry.left + (lane.x - geometry.left) * scale,
+            w: lane.w * scale,
+          })),
   };
 }
