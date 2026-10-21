@@ -281,7 +281,11 @@ export async function createPlaySession(
   let activeAudioEstimator: Awaited<ReturnType<typeof createDebugActiveAudioEstimator>> | undefined;
   if (strategy.estimatesActiveAudio) {
     activeAudioEstimator = options.debugActiveAudio
-      ? await createDebugActiveAudioEstimator(resolvedChart, { baseDir: options.audioBaseDir, signal: options.signal })
+      ? await createDebugActiveAudioEstimator(resolvedChart, {
+          baseDir: options.audioBaseDir,
+          signal: options.signal,
+          loadSampleDurations: options.loadAudioSampleDurations,
+        })
       : undefined;
     throwIfAborted(options.signal);
   }

@@ -172,6 +172,8 @@ flowchart TD
 
 対応するオプションがないリプレイのフィールド：`play.mode`（判定の戦略）、`play.randomLane` と `play.dpFlip`（ホストのレーンオプション。`preparedChart` で適用し、`recordReplay` で宣言します）、`play.native`、`play.aborted` / `play.abortedAtUs`（結果）。
 
+音声実装はホストが提供します。`@be-music/player-node-audio` が Node セッション、`chart-audio-renderer` によるサンプルのデコード、`node-web-audio-api` による PCM 出力を所有します。エンジンは `AudioSession` 契約を持ち、自身の解決済み譜面をファクトリーへ渡します。未指定なら無音再生です。ターミナルは Node アダプター、ブラウザーは Web Audio アダプターを設定し、デバッグ用のサンプル長読み込みも注入します（[ADR 0011](./adr/0011-host-provided-audio.ja.md)）。
+
 ## 目指す構造
 
 パッケージの構成は、`feat/course-definitions` を `devel` に入れる前に作り直しました。手順ごとの記録は下の[移行](#移行)に残します。この節では今の構造を説明し、新しいコードや移すコードはこれに従います。理由は[設計判断の記録](./adr/README.ja.md)にあります。
@@ -197,6 +199,7 @@ flowchart TD
   subgraph hosts["ホスト"]
     demo["app-play"]
     tui["player-terminal"]
+    nodeaudio["player-node-audio"]
     lb["app-leaderboard"]
   end
 
@@ -208,7 +211,8 @@ flowchart TD
   sessions --> hostApi
   views --> hostApi
   hostApi --> demo
-  engine --> tui
+  engine --> nodeaudio --> tui
+  d --> nodeaudio
   rules --> lb
 ```
 

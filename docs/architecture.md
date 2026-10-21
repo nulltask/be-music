@@ -172,6 +172,8 @@ What the replay (`ReplayPlay` in [`replay/format.ts`](../packages/player-engine/
 
 Replay fields with no matching option: `play.mode` (the judge strategy), `play.randomLane` and `play.dpFlip` (host lane options, applied through `preparedChart` and declared through `recordReplay`), `play.native`, and `play.aborted` / `play.abortedAtUs` (an outcome).
 
+Audio implementations are host-provided. `@be-music/player-node-audio` owns the Node session, sample decoding through `chart-audio-renderer`, and PCM output through `node-web-audio-api`. The engine owns the `AudioSession` contract and passes its resolved chart to the factory; an absent adapter means silent playback. The terminal installs the Node adapter, and the browser installs its Web Audio adapter. Optional diagnostic duration loading is injected too ([ADR 0011](./adr/0011-host-provided-audio.md)).
+
 ## Target architecture
 
 The packages were reshaped on `feat/course-definitions` before it goes to `devel`; the [migration](#migration) below keeps the record of each step. This section describes the shape they have now, which new and moved code follows. The [architecture decisions](./adr/README.md) record why.
@@ -197,6 +199,7 @@ flowchart TD
   subgraph hosts["Hosts"]
     demo["app-play"]
     tui["player-terminal"]
+    nodeaudio["player-node-audio"]
     lb["app-leaderboard"]
   end
 
@@ -208,7 +211,8 @@ flowchart TD
   sessions --> hostApi
   views --> hostApi
   hostApi --> demo
-  engine --> tui
+  engine --> nodeaudio --> tui
+  d --> nodeaudio
   rules --> lb
 ```
 
@@ -379,7 +383,7 @@ Public entry points ([ADR 0005](./adr/0005-public-entry-points.md)), documentati
 
 `pnpm run check` enforces these structural rules besides format, lint and types.
 
-- **Runtime-neutral code.** `@be-music/chart-model`, `@be-music/chart-source`, `@be-music/chart-parser`, `@be-music/player-scene-model`, `@be-music/skin-lr2`'s `state/`, `@be-music/skin-beatoraja`'s `scene/` and `@be-music/player-engine`'s `core/`, `course/`, `replay/`, `records/` and `ruleset/`, with its `signals`, `lanes` and `display` entries and the modules they gather, run unchanged in the browser and in Node. Oxlint's `no-restricted-imports` and `no-restricted-globals` (configured in [`vite.config.ts`](../vite.config.ts)) reject Node built-in imports (`node:*` and bare names) and DOM / Node-only globals (`window`, `document`, `process`, `Buffer`, …) there. Runtime services come in through adapters instead: `PlayerOptions.createAudioSession` / `createUIRuntime` / `createInputRuntime`, the optional-module loader for the Node audio sink, and the parser's [`node-file.ts`](../packages/chart-parser/src/node-file.ts) (`parseChartFile`), which with the parser CLI is exempt. Tests are exempt too.
+- **Runtime-neutral code.** `@be-music/chart-model`, `@be-music/chart-source`, `@be-music/chart-parser`, `@be-music/player-scene-model`, `@be-music/skin-lr2`'s `state/`, `@be-music/skin-beatoraja`'s `scene/` and `@be-music/player-engine`'s `core/`, `course/`, `replay/`, `records/` and `ruleset/`, with its `signals`, `lanes` and `display` entries and the modules they gather, run unchanged in the browser and in Node. Oxlint's `no-restricted-imports` and `no-restricted-globals` (configured in [`vite.config.ts`](../vite.config.ts)) reject Node built-in imports (`node:*` and bare names) and DOM / Node-only globals (`window`, `document`, `process`, `Buffer`, …) there. Runtime services come in through adapters instead: `PlayerOptions.createAudioSession` / `createUIRuntime` / `createInputRuntime`, and the parser's [`node-file.ts`](../packages/chart-parser/src/node-file.ts) (`parseChartFile`), which with the parser CLI is exempt. Tests are exempt too.
 - **Deterministic judge.** `core/judge-*.ts`, `core/auto-judge-core.ts`, `ruleset/` and `replay/simulate.ts` additionally may not read `Date` or `performance`, set timers, or call `Math.random`: time and randomness are inputs. The scene models (`@be-music/player-scene-model`) and the LR2 and beatoraja state resolvers (`@be-music/skin-lr2`'s `state/`, `@be-music/skin-beatoraja`'s `scene/`) are held to the same rule: a scene's time comes in as an input.
 - **Web runtime layers.** In `@be-music/player-browser`, the same Oxlint rules keep the layers apart ([Layering](./player-web.md#layering)): no lower layer (every directory but `host/`, `session/` and `view/`) imports the host, a session or a view, not even a type; a session and a view reach each other and the host only for types, a session uses Pixi only for types, and a view imports nothing of the engine, not even a type; only a session and `runtime/engine-driver.ts` import the engine as values; and only the audio layer, `runtime/`, creates an `AudioContext` or `OfflineAudioContext`. The last two rules cover the web demo too.
 - **Web demo layers.** In the web demo, a service (`services/`) imports no lil-gui, `ui/` or `app/` module, not even a type: it takes what it needs of the app as deps ([Browser player — How the demo is built](./player-web.md#how-the-demo-is-built)).

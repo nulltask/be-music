@@ -46,15 +46,17 @@ flowchart TD
   subgraph hosts["実行層とホスト"]
     editor["chart-editor"]
     tui["player-terminal"]
+    nodeaudio["player-node-audio"]
     lb["app-leaderboard"]
     web["player-browser"]
     demo["app-play"]
   end
 
   chart-writer --> editor
-  renderer --> player
+  parser --> player
+  renderer --> nodeaudio
   player --> scene
-  player --> tui
+  player --> nodeaudio --> tui
   player --> lb
   scene --> sdk
   scene --> lr2 --> beatoraja
@@ -163,6 +165,12 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - エンジンのルートと並ぶ browser-safe な入口：`signals`、`lanes`、`display`、`ruleset`、`replay`、`records`、`course`（[Player 実装仕様 — 公開する入口](./docs/player-spec.ja.md#公開する入口)）
 - `ruleset`: ホスト・スキン・リーダーボードが共有する語彙。ゲージ、クリアランプ、BP、スコア（`ScoreSummary`、`computeScoreRate`、DJ ランク、LR2 のマネースコア）
 - `course`、`records`、`replay`: コースの実行、NONSTOP の流れ、コースのステージの規則、判定ルールセットごとの自己ベスト、リプレイの形式とその記録・シミュレータ
+
+### Node 音声 (`@be-music/player-node-audio`)
+
+- Node 音声セッション、リアルタイムのサンプルミックス、`node-web-audio-api` による PCM 出力
+- `chart-audio-renderer` への依存を所有し、`player-engine` から音声レンダーと Node 出力を分離
+- Node でエンジンを呼ぶ場合は `createAudioSession: createNodeAudioSession` を設定。ターミナルプレイヤーは自動設定（[プレイヤー仕様](./docs/player-spec.ja.md#node-音声アダプター)）
 
 ### scene models (`@be-music/player-scene-model`)
 

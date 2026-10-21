@@ -1,11 +1,14 @@
+import { autoPlay, manualPlay } from './test-support/node-audio-player.ts';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 
 // The engine writes to a mocked Node audio sink (shared state in test-support/player-fixtures.ts).
-vi.mock('./audio-sink.ts', async () => (await import('./test-support/player-fixtures.ts')).mockAudioSinkModule());
+vi.mock('../../player-node-audio/src/audio-sink.ts', async () =>
+  (await import('./test-support/player-fixtures.ts')).mockAudioSinkModule(),
+);
 
 import { createEmptyJSON } from '../../chart-source/src/index.ts';
 import { parseChart } from '../../chart-parser/src/index.ts';
-import { autoPlay, manualPlay } from './index.ts';
+
 import { preparePlaybackChartData } from './core/bootstrap.ts';
 import { parseReplay, serializeReplay, type BeMusicReplay } from './replay/index.ts';
 import {

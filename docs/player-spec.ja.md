@@ -35,9 +35,27 @@ core engine の既定は `lr2` 互換ルールセットと、その `GROOVE` gau
 | `./replay`                | リプレイの形式、その記録・シミュレーター・対象の判定、コースと NONSTOP のログ                                                                                                                                                                                                                                                                      |
 | `./records`               | 判定ルールセットごとのベスト記録と、その記録の規則                                                                                                                                                                                                                                                                                                 |
 | `./course`                | コースの定義：LR2 の `.lr2crs`、beatoraja のコース、難易度表のコース、コースメーカー、NONSTOP の通しプレイ                                                                                                                                                                                                                                         |
-| `./audio-sink`            | Node（`node-web-audio-api`）と Web Audio のコンテキストの音声シンク                                                                                                                                                                                                                                                                                |
 
 譜面の層の名前は `@be-music/chart-model` から読み込みます。`ChartPlayVariant`、`LongNoteMode`、タイムラインとその点、`BGACue` と BGA のタイムラインを作る関数、タイミングの解決、サンプルのトリガーです。それ以外はパッケージの内部です。
+
+## Node 音声アダプター
+
+エンジンは `PlayerOptions.createAudioSession` を通して音声を開きます。未指定または戻り値が `undefined` の場合は無音で再生します。`audio: false` の場合はファクトリーを呼びません。ファクトリーにはエンジン自身の `resolvedChart` を渡し、タイミング、サンプルのスライス、元イベントの参照を共有します。
+
+Node で音声を再生する場合は `@be-music/player-node-audio` を導入します。ルートは `createNodeAudioSession` と `loadNodeAudioSampleDurations` を公開します。PCM シンクは `@be-music/player-engine/audio-sink` から `@be-music/player-node-audio/audio-sink` に移動しました。ターミナルプレイヤーはこのアダプターを自動設定し、ブラウザーホストは自身のアダプターを使用します。
+
+```typescript
+import { autoPlay } from '@be-music/player-engine';
+import { createNodeAudioSession, loadNodeAudioSampleDurations } from '@be-music/player-node-audio';
+
+await autoPlay(chart, {
+  audioBaseDir: chartDirectory,
+  createAudioSession: createNodeAudioSession,
+  loadAudioSampleDurations: loadNodeAudioSampleDurations,
+});
+```
+
+`loadAudioSampleDurations` は無音再生を含むアクティブ音声のデバッグ表示にサンプル長を提供します。未指定なら譜面のスライス長または従来の短い推定値を使い、ファイル読み込みやデコードは行いません。[ADR 0011](./adr/0011-host-provided-audio.ja.md) を参照してください。
 
 ## BMS 対応範囲
 
@@ -96,18 +114,18 @@ parser が IR へ保持するだけで、player が実行時に参照しない�
 
 ### 未対応コマンド
 
-| command                                                                                                                                     | 現在の player 実装                                                                                                                                                                                                                               |
-| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `#TEXTxx`, `#TEXT00`                                                                                                                        | parser は保持しますが、player の表示や runtime 演出には使いません。                                                                                                                                                                              |
-| `#OPTION`, `#CHANGEOPTIONxx`                                                                                                                | parser は保持しますが、core runtime での play option 強制変更は未対応です。                                                                                                                                                                      |
-| `#WAVCMD`, `#EXWAVxx`                                                                                                                       | parser は保持します。bundled Node realtime audio session は適用しませんが、chart-audio-renderer と browser WebAudio は実装済みの volume subset (`#WAVCMD 01` と `#EXWAVxx v`) を反映します。pitch、loop、pan、frequency parameter は未対応です。 |
-| `#BACKBMP`                                                                                                                                  | core/terminal runtime には専用挙動がありません。browser LR2 special graphic はこの値を利用できます。                                                                                                                                             |
-| `#MAKER`                                                                                                                                    | metadata-only / unsupported です。                                                                                                                                                                                                               |
-| `#EXBMPxx`, `#BGAxx`, `#SWBGAxx`, `#ARGBxx`                                                                                                 | parser は保持します。terminal/core runtime は適用しませんが、browser player は BGA sub-region、switching、tint、alpha の実装済み subset を描画します。                                                                                           |
-| `#BASEBPM`                                                                                                                                  | parser は保持しますが、player は時間解決に使いません。                                                                                                                                                                                           |
-| `#VIDEOFILE`                                                                                                                                | parser は保持しますが、player の BGA 動画解決には使いません。現実装の動画再生は `#BMPxx` で参照した動画ファイルだけを扱います。                                                                                                                  |
-| `#MIDIFILE`, `#MATERIALS`, `#DIVIDEPROP`, `#CHARSET`                                                                                        | parser は保持しますが、player runtime は参照しません。                                                                                                                                                                                           |
-| `#SONGxx`, `#EXBPMxx`, `#CHARFILE`, `#ExtChr`, `#CDDA`, `#VIDEOFPS`, `#VIDEODLY`, `#VIDEOCOLORS`, `#SEEK`, `#MATERIALSBMP`, `#MATERIALSWAV` | 現在の player 実装では未対応です。                                                                                                                                                                                                               |
+| command                                                                                                                                     | 現在の player 実装                                                                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `#TEXTxx`, `#TEXT00`                                                                                                                        | parser は保持しますが、player の表示や runtime 演出には使いません。                                                                                                                                                             |
+| `#OPTION`, `#CHANGEOPTIONxx`                                                                                                                | parser は保持しますが、core runtime での play option 強制変更は未対応です。                                                                                                                                                     |
+| `#WAVCMD`, `#EXWAVxx`                                                                                                                       | parser は保持します。Node audio adapter は適用しませんが、chart-audio-renderer と browser WebAudio は実装済みの volume subset (`#WAVCMD 01` と `#EXWAVxx v`) を反映します。pitch、loop、pan、frequency parameter は未対応です。 |
+| `#BACKBMP`                                                                                                                                  | core/terminal runtime には専用挙動がありません。browser LR2 special graphic はこの値を利用できます。                                                                                                                            |
+| `#MAKER`                                                                                                                                    | metadata-only / unsupported です。                                                                                                                                                                                              |
+| `#EXBMPxx`, `#BGAxx`, `#SWBGAxx`, `#ARGBxx`                                                                                                 | parser は保持します。terminal/core runtime は適用しませんが、browser player は BGA sub-region、switching、tint、alpha の実装済み subset を描画します。                                                                          |
+| `#BASEBPM`                                                                                                                                  | parser は保持しますが、player は時間解決に使いません。                                                                                                                                                                          |
+| `#VIDEOFILE`                                                                                                                                | parser は保持しますが、player の BGA 動画解決には使いません。現実装の動画再生は `#BMPxx` で参照した動画ファイルだけを扱います。                                                                                                 |
+| `#MIDIFILE`, `#MATERIALS`, `#DIVIDEPROP`, `#CHARSET`                                                                                        | parser は保持しますが、player runtime は参照しません。                                                                                                                                                                          |
+| `#SONGxx`, `#EXBPMxx`, `#CHARFILE`, `#ExtChr`, `#CDDA`, `#VIDEOFPS`, `#VIDEODLY`, `#VIDEOCOLORS`, `#SEEK`, `#MATERIALSBMP`, `#MATERIALSWAV` | 現在の player 実装では未対応です。                                                                                                                                                                                              |
 
 ## 実行フロー
 

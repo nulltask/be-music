@@ -37,6 +37,7 @@
     "@be-music/chart-parser": "workspace:*",
     "@be-music/chart-source": "workspace:*",
     "@be-music/player-engine": "workspace:*",
+    "@be-music/player-node-audio": "workspace:*",
     "@be-music/shared-utils": "workspace:*",
     "@uwx/libav.js-fat": "6.0.0-nightly.29.f420ff.ffmpeg.6.1.1",
     "alien-signals": "^3.2.1",

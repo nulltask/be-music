@@ -161,7 +161,7 @@ function resolveAudioLoadComponentStatus(progress: AudioSessionLoadProgress): Pl
   if (progress.message === 'Audio disabled; skipping audio setup.') {
     return createDisabledLoadComponentStatus('Disabled');
   }
-  if (progress.message === 'node-web-audio-api is unavailable; continuing without audio.') {
+  if (progress.message === 'Audio unavailable.') {
     return createDisabledLoadComponentStatus('Unavailable');
   }
   return createPendingLoadComponentStatus(progress.message, progress.detail);
