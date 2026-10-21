@@ -1,7 +1,7 @@
 const HOST_IS_LITTLE_ENDIAN = new Uint8Array(new Uint16Array([0x00ff]).buffer)[0] === 0xff;
 type PCM16ByteOrder = 'le' | 'be';
 
-export function writeStereoPcm16LE(
+export function writeStereoPCM16LE(
   destination: Buffer,
   byteOffset: number,
   left: ArrayLike<number>,
@@ -12,7 +12,7 @@ export function writeStereoPcm16LE(
   writeStereoPCM16(destination, byteOffset, left, right, startFrame, frameCount, 'le');
 }
 
-export function writeStereoPcm16BE(
+export function writeStereoPCM16BE(
   destination: Buffer,
   byteOffset: number,
   left: ArrayLike<number>,
