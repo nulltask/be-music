@@ -83,6 +83,8 @@ export interface DemoGUIState extends PlayTempoSettings {
   autoPauseOnBlur: boolean;
   /** Master volume in percent (0..100) over every sound the player makes, applied live and remembered across reloads. */
   masterVolume: number;
+  /** Silence every sound while retaining the master volume setting. Persisted in localStorage. */
+  muted: boolean;
   /** Keysound bus volume in percent (0..100), pushed live to gameplay and remembered across reloads. */
   keyVolume: number;
   /** BGM bus volume in percent (0..100), pushed live to gameplay and remembered across reloads. */

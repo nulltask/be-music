@@ -151,7 +151,7 @@ describe('recording format', () => {
 
 describe('volumes', () => {
   test('are all 100 % when nothing is stored, the JSON is broken or storage is blocked', () => {
-    const full = { masterVolume: 100, keyVolume: 100, bgmVolume: 100 };
+    const full = { masterVolume: 100, muted: false, keyVolume: 100, bgmVolume: 100 };
     expect(readStoredVolumes(memoryStorage())).toEqual(full);
     expect(readStoredVolumes(memoryStorage({ [VOLUME_STORAGE_KEY]: '{not json' }))).toEqual(full);
     expect(readStoredVolumes(blockedStorage)).toEqual(full);
@@ -160,11 +160,11 @@ describe('volumes', () => {
   test('round-trip, each clamped to 0..100, a missing or non-numeric one at 100', () => {
     const storage = memoryStorage();
     storeVolumes({ masterVolume: 80, keyVolume: 55, bgmVolume: 30 }, storage);
-    expect(readStoredVolumes(storage)).toEqual({ masterVolume: 80, keyVolume: 55, bgmVolume: 30 });
+    expect(readStoredVolumes(storage)).toEqual({ masterVolume: 80, muted: false, keyVolume: 55, bgmVolume: 30 });
     const odd = memoryStorage({
       [VOLUME_STORAGE_KEY]: JSON.stringify({ masterVolume: 140, keyVolume: -5, bgmVolume: 'x' }),
     });
-    expect(readStoredVolumes(odd)).toEqual({ masterVolume: 100, keyVolume: 0, bgmVolume: 100 });
+    expect(readStoredVolumes(odd)).toEqual({ masterVolume: 100, muted: false, keyVolume: 0, bgmVolume: 100 });
     expect(() => storeVolumes({ masterVolume: 1, keyVolume: 1, bgmVolume: 1 }, blockedStorage)).not.toThrow();
   });
 });
@@ -190,6 +190,7 @@ describe('createDemoGUIState', () => {
     expect(state).toMatchObject({
       autoPlay: false,
       masterVolume: 100,
+      muted: false,
       keyVolume: 100,
       bgmVolume: 100,
       playInSilentMode: true,
@@ -235,6 +236,7 @@ describe('createDemoGUIState', () => {
     );
     expect(state).toMatchObject({
       masterVolume: 70,
+      muted: false,
       keyVolume: 60,
       bgmVolume: 50,
       playInSilentMode: false,

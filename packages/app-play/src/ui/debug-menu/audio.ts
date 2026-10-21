@@ -25,6 +25,7 @@ export function buildAudioFolder(
   const rememberVolumes = () =>
     storeVolumes({
       masterVolume: this.guiState.masterVolume,
+      muted: this.guiState.muted,
       keyVolume: this.guiState.keyVolume,
       bgmVolume: this.guiState.bgmVolume,
     });
@@ -33,10 +34,17 @@ export function buildAudioFolder(
     rememberVolumes();
   };
   audio
+    .add(this.guiState, 'muted')
+    .name('Mute')
+    .onChange((value: boolean) => {
+      setMasterVolume(value ? 0 : this.guiState.masterVolume / 100);
+      rememberVolumes();
+    });
+  audio
     .add(this.guiState, 'masterVolume', 0, 100, 1)
     .name('Master (%)')
     .onChange((value: number) => {
-      setMasterVolume(value / 100);
+      setMasterVolume(this.guiState.muted ? 0 : value / 100);
       rememberVolumes();
     });
   audio.add(this.guiState, 'keyVolume', 0, 100, 1).name('Key sound (%)').onChange(onVolumeChange('key'));
