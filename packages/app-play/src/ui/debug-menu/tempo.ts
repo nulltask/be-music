@@ -1,6 +1,6 @@
+import { selectBinding, type PaneBinding } from '../../pane-controls.ts';
 // The Debug Menu's Tempo folder. It is built with the menu as `this` (`DebugMenu`).
-
-import type { Controller, GUI } from 'lil-gui';
+import type { FolderApi } from 'tweakpane';
 import {
   storePlayTempoSettings,
   TEMPO_PERCENT_MAX,
@@ -8,23 +8,26 @@ import {
   tempoFromPercent,
 } from '../../play-tempo-settings.ts';
 import type { DebugMenu } from './index.ts';
-
 /**
  * The play tempo (-50 % .. +50 %) and how a tempo change sounds, for the song tempo and NONSTOP FIT stages alike.
  */
-export function buildTempoFolder(this: DebugMenu, folder: GUI): void {
-  const trackPlayOption = (controller: Controller): Controller => this.trackPlayOption(controller);
+export function buildTempoFolder(this: DebugMenu, folder: FolderApi): void {
+  const trackPlayOption = (controller: PaneBinding): PaneBinding => this.trackPlayOption(controller);
   // The play tempo (-50 % .. +50 %) and how a tempo change sounds, for the song tempo and NONSTOP FIT stages alike.
   // Read when a play starts, so they are disabled during one; a play at another tempo is practice (not ranked, no
   // records).
   // With the pitch following the tempo, the slider stays enabled during a play and changes its tempo live.
   const rememberTempo = () => storePlayTempoSettings(this.guiState);
-  trackPlayOption(folder.add(this.guiState, 'tempoEnabled').name('Enabled').onChange(rememberTempo));
+  trackPlayOption(folder.addBinding(this.guiState, 'tempoEnabled', { label: 'Enabled' }).on('change', rememberTempo));
   this.tempoController = trackPlayOption(
     folder
-      .add(this.guiState, 'tempoPercent', TEMPO_PERCENT_MIN, TEMPO_PERCENT_MAX, 1)
-      .name('Tempo (%)')
-      .onChange(() => {
+      .addBinding(this.guiState, 'tempoPercent', {
+        label: 'Tempo (%)',
+        min: TEMPO_PERCENT_MIN,
+        max: TEMPO_PERCENT_MAX,
+        step: 1,
+      })
+      .on('change', () => {
         rememberTempo();
         if (!this.playLock.liveTempoPlay) return;
         const tempo = tempoFromPercent(this.guiState.tempoPercent);
@@ -32,15 +35,15 @@ export function buildTempoFolder(this: DebugMenu, folder: GUI): void {
       }),
   );
   trackPlayOption(
-    folder
-      .add(this.guiState, 'tempoPitchMode', { 'Pitch follows tempo (LR2)': 'pitch', 'Keep pitch': 'keep-pitch' })
-      .name('Pitch')
-      .onChange(rememberTempo),
+    selectBinding(folder, this.guiState, 'tempoPitchMode', 'Pitch', {
+      'Pitch follows tempo (LR2)': 'pitch',
+      'Keep pitch': 'keep-pitch',
+    }).on('change', rememberTempo),
   );
   trackPlayOption(
-    folder
-      .add(this.guiState, 'tempoStretchAlgorithm', { WSOLA: 'wsola', 'Signalsmith Stretch': 'signalsmith' })
-      .name('Keep-pitch stretcher')
-      .onChange(rememberTempo),
+    selectBinding(folder, this.guiState, 'tempoStretchAlgorithm', 'Keep-pitch stretcher', {
+      WSOLA: 'wsola',
+      'Signalsmith Stretch': 'signalsmith',
+    }).on('change', rememberTempo),
   );
 }
