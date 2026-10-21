@@ -50,3 +50,5 @@ export { latticeSkin } from '../skins/lattice/index.ts';
 export { phantomSkin } from '../skins/phantom/index.ts';
 export { plainSkin } from '../skins/plain/index.ts';
 export { synesthesiaSkin } from '../skins/synesthesia/index.ts';
+
+export { nativeSkin } from '../skins/native/index.ts';

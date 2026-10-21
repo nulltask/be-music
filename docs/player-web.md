@@ -43,15 +43,16 @@ The browser host installs one shared worker pool for chart parsing/counting/pack
 
 `@be-music/player-browser` exports designed entries, not its file layout ([ADR 0005](./adr/0005-public-entry-points.md)):
 
-| Entry                      | What it exports                                                                                                                                                                                                                                                            |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@be-music/player-browser` | The union of the entries below, plus `logger` and Pixi's `Rectangle`                                                                                                                                                                                                       |
-| `./host`                   | The host API: `PixiSceneHost`, `PixiScene`, `SessionScene`, `createSelectScene` / `createDecideScene` / `createPlayScene` / `createResultScene` with their kits, options and events, the family kit types and the view contract types                                      |
-| `./skin`                   | The skin families and their loading: the `SkinFamily` registry, the LR2 and beatoraja theme loaders, `loadBeatorajaSceneKit`, the be-music skin registry, and the built-in skins (`BUILT_IN_BE_MUSIC_SKINS`, `phantomSkin`, `plainSkin`, `latticeSkin`, `synesthesiaSkin`) |
-| `./collection`             | Library loading: `BrowserChartCollectionStore`, dropped files, courses and the course maker, chart hashes, and the browser compatibility check                                                                                                                             |
-| `./audio`                  | The audio service (`createAudioService`), the audio bus and its compressor parameters, the master volume, the system audio session, and `ChartPreviewEngine`                                                                                                               |
-| `./recording`              | `GameplayRecorder`, the recording formats, `makeWebMSeekable`, `downloadBlob` and the WebCodecs helpers                                                                                                                                                                    |
-| `./compute`                | Shared CPU worker pool, count settings, data-only task dispatch, and host worker setup.                                                                                                                                                                                    |
+| Entry                      | What it exports                                                                                                                                                                                                                                                                          |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@be-music/player-browser` | The union of the entries below, plus `logger` and Pixi's `Rectangle`                                                                                                                                                                                                                     |
+| `./host`                   | The host API: `PixiSceneHost`, `PixiScene`, `SessionScene`, `createSelectScene` / `createDecideScene` / `createPlayScene` / `createResultScene` with their kits, options and events, the family kit types and the view contract types                                                    |
+| `./controller`             | Renderer-independent `SceneController`, selected snapshot stores and `createSelectController` for a standalone collection browser.                                                                                                                                                       |
+| `./skin`                   | The skin families and their loading: the `SkinFamily` registry, the LR2 and beatoraja theme loaders, `loadBeatorajaSceneKit`, the be-music skin registry, and the built-in skins (`BUILT_IN_BE_MUSIC_SKINS`, `phantomSkin`, `plainSkin`, `latticeSkin`, `synesthesiaSkin`, `nativeSkin`) |
+| `./collection`             | Library loading: `BrowserChartCollectionStore`, dropped files, courses and the course maker, chart hashes, and the browser compatibility check                                                                                                                                           |
+| `./audio`                  | The audio service (`createAudioService`), the audio bus and its compressor parameters, the master volume, the system audio session, and `ChartPreviewEngine`                                                                                                                             |
+| `./recording`              | `GameplayRecorder`, the recording formats, `makeWebMSeekable`, `downloadBlob` and the WebCodecs helpers                                                                                                                                                                                  |
+| `./compute`                | Shared CPU worker pool, count settings, data-only task dispatch, and host worker setup.                                                                                                                                                                                                  |
 
 The models the scenes take and hand back come from their own packages: the play options, `PlayResult`, `CourseView`, the hi-speed range, the library entries (`LibraryChart`, `LibraryFolder`, `LibraryCourse`, `LibraryEntry`, …) and their helpers (`groupChartsByFolder`, `resolveLibraryChartPlayVariant`) from `@be-music/player-scene-model`, the be-music skin contract from `@be-music/player-skin-sdk`, and the replay format from `@be-music/player-engine/replay`. Everything else in the package is internal.
 
@@ -814,3 +815,30 @@ flowchart LR
 The browser player is a runtime consumer of the repository's shared parser, chart, chart-audio-renderer, player, utils, LR2 skin, and beatoraja skin packages.
 When browser behavior diverges from the terminal player, prefer moving pure path, timing, scroll, lookup, or event-mapping helpers into shared packages and covering them with package-local tests.
 PixiJS scene wiring can remain in `player-browser` when the behavior depends on browser rendering or WebAudio resources.
+
+## Native DOM skins and standalone controllers
+
+Choose **Native (DOM + Canvas)** under Debug Menu → Skin & display → Built-in skin. Native uses HTML for the collection, search, play options, loading card, score HUD and results, including a meter and an SVG gauge history. Lanes, BGA and immediate judgment feedback remain on Canvas. Choose Synesthesia or Plain to return to full Canvas; the choice is remembered. Native inputs keep browser focus, scrolling and IME behavior. The `/` shortcut focuses the native search input.
+
+A `BeMusicSkin` declares optional `dom.select`, `dom.decide`, `dom.result` and `dom.gameplay` factories (`player-skin-sdk/src/dom.ts`). Each receives an `HTMLElement` and actions that reach the existing session, and returns `update(frame)` and `dispose()`. The first three replace Canvas drawing; gameplay supplements the Canvas playfield. Frames carry skin settings and effect preferences. A select screen can return `focusSearch()` to own the search input and suppress the host's overlay. Factories create DOM only when attached; skin modules remain safe to import before a document exists. Detaching preserves the mount and its local state for re-entry; disposing releases listeners, framework roots and resources. Native uses shadow DOM for style isolation. `PixiSceneHost.mount` accepts `domContainer` when a host wants to place native screens elsewhere.
+
+`@be-music/player-browser/controller` exposes `SceneController` and `createSelectController` without importing Pixi at runtime. A controller has explicit `enter(nowMs)`, `advance(nowMs)`, `dispatch(intent)`, `exit()` and `dispose()` operations. One owner advances it; `getSnapshot()` and subscribers share that frame, including its transient events. Call `createStore(selector, equals?)` for a stable selected snapshot: its `getSnapshot()` returns `undefined` before the first advance and its `subscribe(listener)` returns an unsubscribe function. Removing a subscription does not end the session. React or Vue adapters can bind these stores to their own component lifecycle while the Canvas renderer keeps its frame loop.
+
+For example, a standalone collection browser can reuse preview playback and browse behavior:
+
+```ts
+import { createSelectController } from '@be-music/player-browser/controller';
+
+const controller = createSelectController({ library, audio, sounds: {}, on: { start: openChart } });
+const query = controller.createStore((frame) => frame.browse.searchText);
+const unsubscribe = query.subscribe(() => updateSearch(query.getSnapshot()));
+controller.enter(performance.now());
+// The host advances once per animation tick while the browser is active.
+controller.advance(performance.now());
+controller.dispatch({ type: 'browse', command: { type: 'search', text: 'title' } });
+// On final teardown:
+unsubscribe();
+controller.dispose();
+```
+
+The existing Pixi scenes expose the same controller as `scene.controller`. The host already advances it; observers must not advance it again. Gameplay preparation and its internal `PlayfieldRuntime` still contain rendering resources and are not a standalone public gameplay controller. Canvas screenshots and video recording capture the Canvas playfield; they do not capture the DOM HUD. See [ADR 0012](./adr/0012-native-skin-screens.md).

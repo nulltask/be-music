@@ -6,7 +6,13 @@
  * touch lanes and sends them as `lane` intents.
  */
 
-import { resolveStageOrientation, type GameplayLayoutMode } from '@be-music/player-skin-sdk';
+import type { BeMusicDOMGameplayFrame, BeMusicDOMGameplayActions } from '@be-music/player-skin-sdk';
+import { SkinDOMMount } from '../../skin/be-music/dom-mount.ts';
+import {
+  resolveBeMusicSkinSettings,
+  resolveStageOrientation,
+  type GameplayLayoutMode,
+} from '@be-music/player-skin-sdk';
 import type { Application, Texture } from 'pixi.js';
 import type { BrowserAssetSource } from '../../collection/types.ts';
 import type { BuiltInKit } from '../../host/family-kit.ts';
@@ -72,11 +78,14 @@ export class BuiltInPlayView
   public readonly chrome: PlayChrome;
   /** The fingers on the lanes, sent to the session as `lane` intents while attached. */
   private readonly touchLanes: TouchLaneInput = new TouchLaneInput(playfieldTouchLanes(this));
+  private domSettings: ReturnType<typeof resolveBeMusicSkinSettings>;
   private kit: BuiltInKit;
+  private dom: SkinDOMMount<BeMusicDOMGameplayFrame, BeMusicDOMGameplayActions> | undefined;
 
   public constructor(kit: BuiltInKit, play: PlayfieldRuntime, options: BuiltInPlayViewOptions = {}) {
     super(play);
     this.kit = kit;
+    this.domSettings = resolveBeMusicSkinSettings(kit.skin, kit.settings);
     this.options = { ...options, ...(kit.effects !== undefined ? { beMusicEffects: kit.effects } : {}) };
     this.playfieldSkin = createBuiltInPlayfieldSkin(this);
     // A be-music skin draws notes from data: no text of its own after the bombs, and nothing for a retired bomb.
@@ -149,6 +158,18 @@ export class BuiltInPlayView
   public attach(host: PixiSceneHost, emit: IntentSink<PlayIntent>): void {
     build(this, host);
     this.touchLanes.attach(host, emit);
+    const factory = this.kit.skin.dom?.gameplay;
+    if (factory && !this.dom)
+      this.dom = new SkinDOMMount(
+        factory,
+        {
+          pause: () => emit({ type: 'pause' }),
+          restart: () => emit({ type: 'restart' }),
+          quit: () => emit({ type: 'quit' }),
+        },
+        'gameplay',
+      );
+    this.dom?.attach(host.domRoot);
   }
 
   public draw(frame: PlayFrame): void {
@@ -158,10 +179,30 @@ export class BuiltInPlayView
     render(this, frame.seconds, frame.playfield.audioAnalyzer !== undefined ? frame.audio : undefined);
     // A skin drawing through the player's renderer draws the frame just collected now, before Pixi renders.
     this.skinBindingInstance?.flush();
+    this.dom?.update({
+      settings: this.domSettings,
+      effects: this.kit.effects ?? 'full',
+      chart: frame.chart,
+      state: {
+        totalSeconds: frame.state.totalSeconds,
+        gauge: frame.state.gauge,
+        gaugeType: frame.state.gaugeType,
+        exScore: frame.state.exScore,
+        combo: frame.state.combo,
+        maxCombo: frame.state.maxCombo,
+      },
+      seconds: frame.seconds,
+      bpm: frame.bpm,
+      progress: frame.progress,
+      stage: frame.stage,
+      autoPlay: frame.autoPlay,
+      replay: frame.replay,
+    });
   }
 
   public detach(): void {
     this.touchLanes.detach();
+    this.dom?.detach();
   }
 
   /** Uploads `textures` to the GPU through the host's renderer (the BGA the play loads), when the view has a host. */
@@ -172,11 +213,14 @@ export class BuiltInPlayView
   /** Takes the player's new kit (skin settings, effects); the next frame draws with them. */
   public updateKit(kit: BuiltInKit): void {
     this.kit = kit;
+    this.domSettings = resolveBeMusicSkinSettings(kit.skin, kit.settings);
     if (kit.effects !== undefined) this.options.beMusicEffects = kit.effects;
     this.skinBindingInstance?.setSettings(kit.settings);
   }
 
   public dispose(): void {
+    this.dom?.dispose();
+    this.dom = undefined;
     // Drop every per-frame child pool before the scene graph so each pooled child is freed through its own `destroy()`.
     try {
       this.skinBindingInstance?.dispose();

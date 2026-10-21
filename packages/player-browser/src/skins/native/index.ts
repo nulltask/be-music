@@ -1,0 +1,40 @@
+import {
+  BE_MUSIC_SKIN_API_VERSION,
+  defineBeMusicSkin,
+  tallStage,
+  type BeMusicSkin,
+  type BeMusicSurface,
+} from '@be-music/player-skin-sdk';
+import { drawPlayfield } from './playfield.ts';
+import { mountSelect } from './select.ts';
+import { mountGameplay } from './play.ts';
+import { mountDecide, mountResult } from './result.ts';
+
+/** Responsive native screens and HUD; Canvas retains time-sensitive lanes, BGA and judgments. */
+export const nativeSkin: BeMusicSkin = defineBeMusicSkin({
+  apiVersion: BE_MUSIC_SKIN_API_VERSION,
+  version: '1.0.0',
+  author: { name: 'be-music' },
+  license: 'MIT',
+  fontLoads: [],
+  context: '2d',
+  portraitStage: tallStage,
+  select: { layout: { listX: 0, listTop: 0, listBottomInset: 0, rowHeight: 40 }, draw: drawDOMRequired },
+  result: { draw: drawDOMRequired },
+  id: 'native',
+  label: 'Native (DOM + Canvas)',
+  description: 'Native HTML collection, settings, results and score HUD with a Canvas playfield.',
+  gameplay: { draw: drawPlayfield },
+  decide: { durationMs: 2000, draw: drawDOMRequired },
+  dom: { select: mountSelect, gameplay: mountGameplay, decide: mountDecide, result: mountResult },
+});
+
+/** Older hosts can show a readable capability notice instead of an empty screen. */
+function drawDOMRequired({ context, width, height }: BeMusicSurface<'2d'>): void {
+  context.fillStyle = '#10151f';
+  context.fillRect(0, 0, width, height);
+  context.fillStyle = '#edf2fa';
+  context.font = '20px system-ui';
+  context.textAlign = 'center';
+  context.fillText('Native requires a DOM-capable BeMusicSkin host.', width / 2, height / 2);
+}

@@ -1,5 +1,5 @@
 /**
- * Top-level `@be-music/player-browser` entry: the union of the designed entries (`./host`, `./skin`, `./collection`,
+ * Top-level `@be-music/player-browser` entry: the union of the designed entries (`./host`, `./controller`, `./skin`, `./collection`,
  * `./audio`, `./recording`), plus `logger` and Pixi's `Rectangle`, which belong to no single entry. Prefer the entry
  * that matches the area being worked on (docs/player-web.md, "Entry points").
  */

@@ -142,3 +142,17 @@ describe('defineBeMusicSkin', () => {
     );
   });
 });
+
+describe('native DOM skin declarations', () => {
+  it('accepts native screens alongside the Canvas playfield', () => {
+    expect(validateBeMusicSkin(skin({ dom: { select: () => ({ update() {}, dispose() {} }) } }))).toEqual([]);
+  });
+  it('rejects malformed DOM factories without throwing', () => {
+    expect(validateBeMusicSkin(skin({ dom: null as unknown as BeMusicSkin['dom'] }))).toContain(
+      'dom must be an object of screen factories',
+    );
+    expect(validateBeMusicSkin(skin({ dom: { select: 1 } as unknown as BeMusicSkin['dom'] }))).toContain(
+      'dom.select must be a function',
+    );
+  });
+});

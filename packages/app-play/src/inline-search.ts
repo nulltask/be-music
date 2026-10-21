@@ -38,6 +38,8 @@ export function placeInlineField(
 
 /** What the inline search needs from the player. */
 export interface InlineSearchHost {
+  /** A native skin can supply and focus its own input. */
+  nativeSearch?(): { focus(): void } | undefined;
   readonly input: HTMLInputElement;
   readonly shell: HTMLElement;
   /** The canvas the select scene draws on. */
@@ -95,6 +97,11 @@ export class InlineSearch {
 
   /** Starts typing: focuses the field (over the skin's box when there is one) with its text selected. */
   open(): void {
+    const native = this.host.nativeSearch?.();
+    if (native) {
+      native.focus();
+      return;
+    }
     this.host.input.focus();
     this.host.input.select();
   }
@@ -109,8 +116,12 @@ export class InlineSearch {
   }
 
   /** Whether the skin on screen draws its own search box, so the field at the foot of the screen can step aside. */
+  get ownsNativeInput(): boolean {
+    return this.host.nativeSearch?.() !== undefined;
+  }
+
   get skinHasBox(): boolean {
-    return this.host.fieldRect() !== undefined;
+    return this.host.nativeSearch?.() !== undefined || this.host.fieldRect() !== undefined;
   }
 
   private attach(): void {
