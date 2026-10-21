@@ -34,6 +34,7 @@ import {
   collectBGATargets,
   LEGACY_STAGE_SIZE,
   renderBuiltInChrome,
+  resolveBeMusicLayout,
   type BGATargetsContext,
   type BuiltInChromeContext,
 } from './play-chrome.ts';
@@ -180,6 +181,7 @@ export class BuiltInPlayView
     // A skin drawing through the player's renderer draws the frame just collected now, before Pixi renders.
     this.skinBindingInstance?.flush();
     this.dom?.update({
+      layout: resolveBeMusicLayout(this),
       settings: this.domSettings,
       effects: this.kit.effects ?? 'full',
       chart: frame.chart,

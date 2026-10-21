@@ -21,7 +21,7 @@ import { ReplayRoute } from './routes/replay.ts';
 import { DemoShell } from './shell.ts';
 import { InlineSearch } from '../inline-search.ts';
 import { DebugMenu, type DebugMenuDeps } from '../ui/debug-menu/index.ts';
-import { promptSkinDrop } from '../ui/skin-drop-prompt.ts';
+import { confirmSkinDrop, promptSkinDrop } from '../ui/skin-drop-prompt.ts';
 import { readDeviceSignals, type DeviceProfile } from '../device-profile.ts';
 import { captureScreenshot, finalizeRecordingIfActive, toggleRecording } from '../recording-controller.ts';
 import type { DemoGUIState, DemoScene, PlayerWebDemoElements, SkinFamilyOverride } from '../types.ts';
@@ -308,7 +308,12 @@ export class PlayerWebDemoApp {
       selectSkin: () => this.lr2.selectSkin,
       resultSkin: () => this.lr2.resultSkin,
       beatorajaTheme: () => this.beatoraja.beatorajaTheme,
-      answerSkinDropPrompt: (themeFamilies) => this.answerSkinDropPrompt(themeFamilies),
+      confirmSkinDrop: (families) => {
+        const preferred = this.pendingSkinSystem;
+        this.pendingSkinSystem = undefined;
+        return confirmSkinDrop(families, preferred);
+      },
+      applyDroppedSkin: (family) => this.applyDroppedSkin(family),
     });
     this.dropTarget = new DropTarget({
       elements,
@@ -599,11 +604,12 @@ export class PlayerWebDemoApp {
     return select !== undefined && this.router.current === select ? this.router.leave() : Promise.resolve(false);
   }
 
-  /** Switches to the skin the player asked for through the Debug Menu ("drop a skin") once a drop brings it. */
-  private answerSkinDropPrompt(themeFamilies: ReadonlySet<SkinFamilyId>): void {
-    const asked = this.pendingSkinSystem;
-    this.pendingSkinSystem = undefined;
-    if (asked !== undefined && themeFamilies.has(asked)) this.handleSkinFamilyOverrideChange(asked);
+  /** Applies the confirmed family before the library mounts the select scene. */
+  private async applyDroppedSkin(family: SkinFamilyId): Promise<void> {
+    if (family !== 'lr2' && family !== 'beatoraja') return;
+    this.guiState.skinFamilyOverride = family;
+    this.debugMenu.showSkinSystem(family);
+    await this.selectRoute.dropSelect();
   }
 
   /** Redraws the select screen in place with the records of the current judge ruleset, after it changed. */

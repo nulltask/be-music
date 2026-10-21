@@ -3,7 +3,7 @@ export function createScreen(container: HTMLElement, kind: string, markup: strin
   const shadow = container.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
   style.textContent = `
-    :host { color-scheme: dark; font-family: system-ui, sans-serif; color: #edf2fa; }
+    :host { container-type:size; color-scheme: dark; font-family: system-ui, sans-serif; color: #edf2fa; }
     * { box-sizing: border-box; }
     .screen { height:100%; overflow:auto; pointer-events:auto; background:#10151f; padding:clamp(16px,3vw,36px); }
     header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:20px; }
@@ -26,14 +26,33 @@ export function createScreen(container: HTMLElement, kind: string, markup: strin
     dl { display:grid; grid-template-columns:1fr auto; gap:10px 18px; } dt { color:#9baac0; } dd { margin:0; font-variant-numeric:tabular-nums; }
     meter,progress { width:100%; height:18px; accent-color:#9cc4ff; } pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:30vh; overflow:auto; }
     .center { display:grid; place-content:center; gap:20px; max-width:720px; margin:auto; min-height:100%; }
-    .hud { position:absolute; right:3%; bottom:5%; width:38%; max-width:420px; max-height:60%; overflow:auto; pointer-events:auto; padding:18px; background:#18212fee; border:1px solid #38465c; border-radius:14px; }
-    .hud .stat { font-size:clamp(20px,3.5vw,40px); } .hud h2 { font-size:14px; } .hud dl { margin:10px 0; gap:5px; font-size:12px; }
-    .hud button { padding:7px 10px; font-size:12px; } .hud .actions { margin-top:12px; }
-    @media(max-width:650px) { .columns { grid-template-columns:1fr; } .rows { max-height:43vh; } header { flex-wrap:wrap; } .hud { right:8px; top:8px; bottom:auto; width:46%; max-height:30%; padding:10px; } .hud .muted { font-size:11px; } }
+    .gameplay { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(100cqw,calc(100cqh * var(--stage-ratio,1))); height:min(100cqh,calc(100cqw / var(--stage-ratio,1))); container-type:size; pointer-events:none; }
+    .hud { position:absolute; right:2.8%; bottom:2%; width:32%; max-height:40%; overflow:auto; pointer-events:auto; padding:8px; background:#18212fee; border:1px solid #38465c; border-radius:8px; font-size:clamp(10px,1.4cqw,14px); }
+    .hud-heading { display:flex; align-items:baseline; gap:6px; min-width:0; }
+    .hud .eyebrow { margin:0; font-size:.75em; white-space:nowrap; }
+    .hud h2 { font-size:1em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+    .hud .muted { font-size:.85em; line-height:1.2; }
+    .hud-score { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+    .hud .stat { font-size:1.8em; }
+    .hud dl { display:flex; flex-wrap:wrap; gap:4px 6px; margin:4px 0; font-size:.85em; }
+    .hud dd { margin-right:6px; }
+    .hud-gauge { gap:2px; font-size:.8em; }
+    .hud meter { height:10px; }
+    .hud button { padding:4px 8px; font-size:.85em; }
+    .hud .actions { margin-top:4px; gap:4px; }
+    .gameplay[data-orientation=portrait] .hud { top:.9%; left:2.5%; right:auto; bottom:auto; width:75%; height:11.5%; max-height:none; padding:2px 4px; border:0; border-radius:0; font-size:clamp(9px,2.5cqw,14px); }
+    .gameplay[data-orientation=portrait] .hud-heading [data-stage] { margin-left:auto; }
+    .gameplay[data-orientation=portrait] .hud-score { float:right; }
+    .gameplay[data-orientation=portrait] .hud .stat { font-size:1.3em; }
+    .gameplay[data-orientation=portrait] .hud dl { margin:2px 0; }
+    .gameplay[data-orientation=portrait] .hud-gauge { display:flex; align-items:center; gap:6px; }
+    .gameplay[data-orientation=portrait] .hud meter { flex:1; min-width:0; }
+    .gameplay[data-orientation=portrait] .hud button { padding:2px 6px; }
+    @media(max-width:650px) { .columns { grid-template-columns:1fr; } .rows { max-height:43vh; } header { flex-wrap:wrap; } }
     @media(prefers-reduced-motion:no-preference) { button { transition:background .12s; } }
   `;
   const root = document.createElement('section');
-  root.className = kind === 'gameplay' ? 'hud' : 'screen';
+  root.className = kind === 'gameplay' ? 'gameplay' : 'screen';
   root.dataset.nativeScreen = kind;
   // Markup is a skin-authored literal. Chart metadata is always assigned with textContent below.
   root.innerHTML = markup;
