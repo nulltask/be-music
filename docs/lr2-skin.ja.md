@@ -28,6 +28,18 @@ LR2 には鍵盤モード用の play skin がないため、`24` / `48` KEY の�
 parser は select、decide、play、result、course-result data を 1 つの `LR2Skin` shape に保持します。
 consumer は scene に必要な field だけを読みます。
 
+## HD の座標系と素材
+
+ブラウザーの Gameplay は、ノーツ・小節線・BGA・レーンカバー・エフェクトを含むすべてのレイヤーをスキンの設計座標で描き、キャンバス全体を一度だけ画面に合わせて拡縮します。HD スキンを固定の 640×480 のプレイ領域に縮小する処理は不要になります。スクロール距離とリプレイの表示時間にも同じ座標スケールを使います。
+
+`#RESOLUTION,0` / `1` / `2` / `3` は 640×480 / 1280×720 / 1920×1080 / 3840×2160 を指定します。拡張の `#RESOLUTION,width,height` も受け付けます。指定がない場合や無効な場合は、座標から自動判定します。`#INFORMATION` のプレイ種別は 0=7KEY、1=5KEY、2=14KEY、3=10KEY、4=9KEY で、読み込み時のキーモード条件にも選択したスキンの種別を反映します。
+
+画像とビットマップフォントは、ディレクトリを含むパスの末尾が最も長く一致する素材を優先します。単独配布の `LITONE4/` フォルダーでも元の `LR2files/Theme/LITONE4/…` 参照を保持でき、Play と Result の同名素材を取り違えません。DXA は引き続き自動展開します。
+
+`#IMAGE,CONTINUE` と `#LR2FONT,CONTINUE` は前の画面の同じ番号の素材を引き継ぎます。`LR2Skin.resources` に有効な画像・フォントの一覧が入り、次の画面の読み込み時に `LoadLR2SkinOptions.resources` に渡せます。テーマローダーは Select → Decide → Play → Result → CourseResult の順に素材を引き継ぎ、プレイスキンの各種別は個別に読み込みます。画面ごとのスキンの組み合わせや種別を変更するアプリは、実際の前画面の素材を `loadSkin` に指定できます。
+
+提供された LITONE4 (1080p) と WMIX_HD_set_0321 は、それぞれ 1920×1080 と 1280×720 のレイアウトを持ちます。配布ファイル自体はリポジトリに含めません。第三者製スキンのすべての挙動の再現には、各 LR2 命令と実行時機能の対応も必要です。
+
 ## コース
 
 LR2 には、コース全体の結果を出す専用のシーンがあります。`#INFORMATION` の type 15 で、慣例では `CourseResult/` の下に置きます。`loadLR2ThemeSkinsFromFiles` はこれを `courseResultSkin` として読み込み、コース結果用のジングルも読みます。`result` の検索がこのスキンを選ぶことはありません。

@@ -86,7 +86,7 @@ Top risks, most serious first:
 
 Also notable:
 
-- `#RESOLUTION,N` in beatoraja-era LR2 CSV skins is parsed as width/height. Every such skin's canvas breaks. (A)
+- `#RESOLUTION,N` in beatoraja-era LR2 CSV skins now accepts the indexed resolution; the former width/height parsing bug is fixed.
 - LR2-CSV dialect clashes: the bar-lamp index 5 is FC in LR2 and EX HARD in beatoraja, and 22nd-column offsets are ignored. (A)
 - HS-FIX is chart-relative. LR2 normalises to BPM 150, and beatoraja keeps a visible duration (the green number). (C)
 
@@ -168,7 +168,7 @@ Most fixes below move a rule into the right box. The assist class and LR2 mine c
 | 39  | Course record identity (md5 vs sha256, LN mode)     | A, B        | Two keys for one course                                 | Key by course fingerprint                                              |
 | 40  | Best-record merge contents                          | B, A        | No assist gate, snapshot, clear count                   | Add; rebuildable from logs                                             |
 | 41  | Replay format (.brd)                                | A           | No importer                                             | Convert via laneShufflePattern + keymap                                |
-| 42  | `#RESOLUTION,N`                                     | A           | Parsed as w,h (bug)                                     | Accept index form                                                      |
+| 42  | `#RESOLUTION,N`                                     | Fixed       | Index form supported                                    | Keep w,h as an extension                                               |
 | 43  | DST offset columns 21+                              | A           | LR2 op4 only                                            | Accept 3/4/5/10                                                        |
 | 44  | beatoraja CSV-dialect commands                      | A           | Not parsed                                              | Optional dialect support                                               |
 | 45  | `#SRC_BAR_LAMP` index meaning                       | A           | LR2                                                     | Switch on detected beatoraja dialect                                   |
@@ -718,16 +718,15 @@ These are already documented in format-compat [§2.6](./format-compat.md#26-mine
 
 Overall shape: two separate state mappings. LR2 CSV skins get LR2 vocabulary ([`packages/skin-lr2/src/state/`](../packages/skin-lr2/src/state/)). beatoraja JSON/Lua skins get beatoraja vocabulary ([`packages/skin-beatoraja/src/scene/`](../packages/skin-beatoraja/src/scene/)), built from the family-neutral [`packages/player-scene-model`](../packages/player-scene-model). The risks are beatoraja-path wiring gaps and **beatoraja-era LR2 CSV skins**, which are written in beatoraja's extended CSV dialect but which be-music reads strictly as LR2.
 
-### `#RESOLUTION` syntax (bug)
+### `#RESOLUTION` syntax
 
 - **LR2:** no such command; LR2body.exe contains no `RESOLUTION` string. The canvas is a fixed 640×480, origin top-left.
 - **beatoraja:**
   - `#RESOLUTION,N` is an index into SD/HD/FHD/UHD ([skin/lr2/LR2SkinHeaderLoader.java#L103-L106](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/lr2/LR2SkinHeaderLoader.java#L103-L106), [Resolution.java#L8-L23](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/Resolution.java#L8-L23); the same in [endless dream L107-L110](https://github.com/seraxis/lr2oraja-endlessdream/blob/2394f65825994a153b99fbefea1a51476064c283/core/src/bms/player/beatoraja/skin/lr2/LR2SkinHeaderLoader.java#L107-L110)).
   - Coordinates are y-flipped and scaled ([skin/lr2/LR2SkinCSVLoader.java#L230-L234](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/lr2/LR2SkinCSVLoader.java#L230-L234)).
 - **Kind:** parameter (syntax), but it breaks the whole layout.
-- **be-music today:** [`packages/skin-lr2/src/skin/read.ts`](../packages/skin-lr2/src/skin/read.ts) L131-L136 reads it as `w,h`. `#RESOLUTION,1` therefore gives width 1, and the explicit value disables auto-detection.
-- **Impact:** A.
-- **Recommendation:** accept the index form. Keep `w,h` only as an extension.
+- **be-music today:** [`packages/skin-lr2/src/skin/read.ts`](../packages/skin-lr2/src/skin/read.ts) accepts the SD/HD/FHD/UHD index and retains `w,h` as an extension. Invalid declarations do not disable coordinate-based detection.
+- **Impact:** the syntax mismatch is fixed; vertical coordinate conversion remains a separate dialect difference.
 
 ### `#DST_*` columns 21+ and beatoraja-only CSV commands
 

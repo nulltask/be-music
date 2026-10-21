@@ -28,6 +28,18 @@ LR2 never shipped keyboard-mode play skins, so `24` / `48` KEY charts borrow a `
 The parser keeps select, decide, play, result and course-result data in one `LR2Skin` shape.
 Consumers read only the fields that make sense for their scene.
 
+## HD coordinate space and resources
+
+The browser gameplay view uses the skin's authored canvas for every layer, including notes, measure lines, BGA, covers and effects, and letterboxes that canvas once at the viewport. HD skins no longer pass through a fixed 640×480 gameplay stage. Scroll distance and replay-visible time use the same canvas scale.
+
+`#RESOLUTION,0` / `1` / `2` / `3` select 640×480 / 1280×720 / 1920×1080 / 3840×2160. The explicit `#RESOLUTION,width,height` extension also works. Missing or invalid declarations leave coordinate-based detection enabled. `#INFORMATION` play types are 0=7KEY, 1=5KEY, 2=14KEY, 3=10KEY and 4=9KEY; parse-time key-mode conditions follow the selected skin.
+
+Asset and bitmap-font lookup prefer the longest matching directory suffix, so a standalone `LITONE4/` distribution can retain its original `LR2files/Theme/LITONE4/…` references without confusing Play and Result assets with identical filenames. DXA expansion remains automatic.
+
+`#IMAGE,CONTINUE` and `#LR2FONT,CONTINUE` inherit the previous scene's resource at the same index. `LR2Skin.resources` contains the effective image/font slots; pass them as `LoadLR2SkinOptions.resources` when parsing the next scene. The theme loader seeds Select → Decide → Play → Result → CourseResult, parsing play variants independently. Applications that change skin combinations or variants can supply the actual previous scene's resources to `loadSkin`.
+
+The supplied LITONE4 (1080p) and WMIX_HD_set_0321 distributions provide 1920×1080 and 1280×720 layouts respectively. Their files remain external to this repository. Full third-party skin behavior still depends on the implemented LR2 directives and runtime features.
+
 ## Courses
 
 LR2 has a scene of its own for the result of a whole course: `#INFORMATION` type 15, conventionally under `CourseResult/`. `loadLR2ThemeSkinsFromFiles` loads it as `courseResultSkin`, along with the course-result jingles. A `result` lookup never picks it.

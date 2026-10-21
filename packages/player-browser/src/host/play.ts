@@ -429,6 +429,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
   // The view is made for the play below; the play asks its theme nothing before both exist.
   const theme: PlaySessionTheme = {
     timing: () => family!.view.timing,
+    pixelsPerBeat: () => family?.playfieldSkin.pixelsPerBeat,
     moment: (moment) => sceneSession?.queueEvent(moment),
     keyOnFadeMs: (channel) => family!.playfieldSkin.keyOnFadeMs(channel),
     prepareView: () => family?.prepareView?.() ?? Promise.resolve(),

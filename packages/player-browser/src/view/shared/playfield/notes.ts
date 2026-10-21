@@ -40,7 +40,8 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
   }
   const currentBeat = ctx.play.currentBeat(seconds);
   // The eased scroll factor, so a hi-speed change glides instead of making the notes jump.
-  const pixelsPerBeat = PIXELS_PER_BEAT * ctx.play.scrollHiSpeed.valueAt(performance.now());
+  const pixelsPerBeat =
+    (ctx.playfieldSkin.pixelsPerBeat ?? PIXELS_PER_BEAT) * ctx.play.scrollHiSpeed.valueAt(performance.now());
   let laneHeight = 1;
   for (const lane of ctx.play.laneX.values()) {
     laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
@@ -57,7 +58,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
     mapper: ctx.play.scrollMapper,
     laneBeats: laneHeight / Math.max(1, pixelsPerBeat),
     timelineBeats: ctx.play.laneTimelineBeats,
-    overscanBeats: 48 / Math.max(1, pixelsPerBeat),
+    overscanBeats: overscan / Math.max(1, pixelsPerBeat),
     stageBottomY: height,
   });
   renderMeasureLines(ctx, drawWindow, pixelsPerBeat);
