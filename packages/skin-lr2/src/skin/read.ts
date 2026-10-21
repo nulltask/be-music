@@ -129,11 +129,22 @@ export function readLR2Path(
     if (command === '#INFORMATION') {
       context.name = row[2] || context.name;
     } else if (command === '#RESOLUTION') {
-      context.width = toNumber(row[1], context.width);
-      context.height = toNumber(row[2], context.height);
-      // Mark the resolution as authored-explicit so the post-parse auto-detector skips this skin. Authored
-      // `#RESOLUTION` is the canonical signal — we always trust it over our heuristic.
-      context.explicitResolution = true;
+      // beatoraja's LR2 dialect uses 0=SD, 1=HD, 2=FHD, 3=UHD. Also retain the explicit width,height form.
+      const indexedSizes = [
+        [640, 480],
+        [1280, 720],
+        [1920, 1080],
+        [3840, 2160],
+      ] as const;
+      const index = Number(row[1]);
+      const indexed = row[1]?.trim() && !row[2]?.trim() && Number.isInteger(index) ? indexedSizes[index] : undefined;
+      const width = indexed?.[0] ?? toNumber(row[1], 0);
+      const height = indexed?.[1] ?? toNumber(row[2], 0);
+      if (width > 0 && height > 0) {
+        context.width = width;
+        context.height = height;
+        context.explicitResolution = true;
+      }
     } else if (command === '#IMAGE') {
       const normalized = normalizeLR2Path(row[1] ?? '');
       const expanded = context.customFileLookup.get(normalized.toLowerCase()) ?? normalized;
@@ -161,7 +172,13 @@ export function readLR2Path(
       const normalized = normalizeLR2Path(row[1] ?? '');
       const expanded =
         normalized.length > 0 ? (context.customFileLookup.get(normalized.toLowerCase()) ?? normalized) : '';
-      context.lr2FontPaths.push(expanded);
+      // Resolve against the actual dropped tree, including DXA entries flattened by the theme loader.
+      // Standalone distributions can omit the LR2files/Theme prefix used by their CSV declarations.
+      context.lr2FontPaths.push(
+        expanded && expanded.toUpperCase() !== 'CONTINUE'
+          ? (resolveLR2IncludePath(sourceFiles, dirname(path), expanded) ?? expanded)
+          : expanded,
+      );
     } else if (command === '#FONT') {
       // `#FONT,size,thick,style,name` — system-font fallback registry. See the `#LR2FONT` block above for the per-kind
       // indexing rationale. LR2 ignores the name and uses the user's SET UP option, so we only capture the size for our

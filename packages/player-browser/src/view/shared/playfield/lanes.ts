@@ -3,6 +3,7 @@
  * and draws the lane backgrounds and key beams through the be-music skin (or Phantom's) unless the skin owns them.
  */
 
+import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../../../stage/design.ts';
 import { PLAYFIELD } from '@be-music/player-skin-sdk';
 import { resolveLR2LaneIndex } from '@be-music/player-engine/lanes';
 import { resolveBeMusicLaneKind } from '../../../skin/be-music/registry.ts';
@@ -24,15 +25,18 @@ export function renderLanes(ctx: PlayfieldContext, width: number, height: number
     judgementY: fallbackBottom,
   } = resolveLaneGeometry(ctx);
 
+  // LR2 can borrow an SP/DP skin for keyboard modes, whose lanes the skin does not place.
+  const fallbackScaleX = ctx.beMusicStage ? 1 : width / DESIGN_WIDTH;
+  const fallbackScaleY = ctx.beMusicStage ? 1 : height / DESIGN_HEIGHT;
   const skinlessLanes: BeMusicLaneFrame[] = [];
   ctx.play.laneChannels.forEach((channel, index) => {
     // A skin-authored lane rect wins; channels the skin doesn't place use the default-family layout.
     const themeLane = skin.laneRect(channel, { width, height });
     const fallbackLane = fallbackLanes[index];
-    const x = themeLane ? themeLane.x : (fallbackLane?.x ?? fallbackLeft);
-    const w = themeLane ? themeLane.w : Math.max(4, fallbackLane?.w ?? PLAYFIELD.w);
-    const top = themeLane ? themeLane.top : fallbackTop;
-    const bottom = themeLane ? themeLane.bottom : fallbackBottom;
+    const x = themeLane ? themeLane.x : (fallbackLane?.x ?? fallbackLeft) * fallbackScaleX;
+    const w = themeLane ? themeLane.w : Math.max(4, (fallbackLane?.w ?? PLAYFIELD.w) * fallbackScaleX);
+    const top = themeLane ? themeLane.top : fallbackTop * fallbackScaleY;
+    const bottom = themeLane ? themeLane.bottom : fallbackBottom * fallbackScaleY;
     ctx.play.laneX.set(channel, { x, w, top, bottom });
 
     if (skinOwnsLanes) {
