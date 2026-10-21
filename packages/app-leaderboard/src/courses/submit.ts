@@ -13,7 +13,7 @@ import {
 import { normalizeCourseConstraints } from '@be-music/player-engine/course';
 import type { Database } from '../db/client.ts';
 import { course, courseBestScore, courseScore, courseScoreResult } from '../db/schema.ts';
-import { sha256Hex } from '../hash.ts';
+import { sha256HexAsync as sha256Hex } from '@be-music/shared-utils/hash';
 import { byRulesetOrder, RULESET_IDS } from '../rulesets.ts';
 import {
   checkPlayedChart,

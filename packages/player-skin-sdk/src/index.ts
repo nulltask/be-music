@@ -43,3 +43,6 @@ export * from './audio-drive.ts';
 export * from './chart-stats.ts';
 export * from './result-track.ts';
 export * from './select-list.ts';
+
+/** Framework-free range clamping shared with the core packages. */
+export { clamp } from '@be-music/shared-utils/core';

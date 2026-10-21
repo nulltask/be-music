@@ -1,3 +1,4 @@
+import { clamp } from '@be-music/shared-utils/core';
 // Compute a step-shaped BPM polyline from a parsed BMS chart, ready for the bpmgraph renderer.
 //
 // Beatoraja's `bpmgraph` plots how the song's BPM evolves over chart time — visually, a vertical
@@ -84,7 +85,5 @@ export function computeBeatorajaBPMCurve(chart: BeMusicJSON): ReadonlyArray<BPMC
 
 function clampUnit(v: number): number {
   if (!Number.isFinite(v)) return 0;
-  if (v <= 0) return 0;
-  if (v >= 1) return 1;
-  return v;
+  return clamp(v, 0, 1);
 }

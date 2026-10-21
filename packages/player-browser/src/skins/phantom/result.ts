@@ -1,3 +1,4 @@
+import { clamp } from '@be-music/player-skin-sdk';
 import { Container, Graphics, Text, type Color } from 'pixi.js';
 import { DEFAULT_DISPLAY_FONT, DEFAULT_HEADLINE_FONT } from './fonts.ts';
 import {
@@ -613,5 +614,5 @@ function drawSeries(
 
 function clamp01(value: number): number {
   if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(1, value));
+  return clamp(value, 0, 1);
 }

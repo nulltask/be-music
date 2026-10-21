@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { detectAvatarType } from './avatars.ts';
 import type { Database } from './db/client.ts';
 import { score } from './db/schema.ts';
-import { sha256Hex } from './hash.ts';
+import { sha256HexAsync as sha256Hex } from '@be-music/shared-utils/hash';
 
 /**
  * Share cards of plays: the 1200 x 630 picture link previews show (og:image, twitter:card). The player's browser draws
