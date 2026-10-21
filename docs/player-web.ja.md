@@ -45,6 +45,7 @@ engine（`@be-music/player-engine`）は `node:path` / `node:timers/promises` �
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@be-music/player-browser` | 下の入口すべての和集合と、`logger`、Pixi の `Rectangle`                                                                                                                                                                                                   |
 | `./host`                   | ホスト API：`PixiSceneHost`、`PixiScene`、`SessionScene`、`createSelectScene`・`createDecideScene`・`createPlayScene`・`createResultScene` とそのキット・オプション・イベント、種類ごとのキットの型、ビューの契約の型                                     |
+| `./controller`             | 描画に依存しない `SceneController`、選択した値の snapshot store、独立した選曲ブラウザー用の `createSelectController`。                                                                                                                                    |
 | `./skin`                   | スキンの種類と読み込み：`SkinFamily` のレジストリ、LR2 と beatoraja のテーマの読み込み、`loadBeatorajaSceneKit`、be-music スキンのレジストリ、組み込みのスキン（`BUILT_IN_BE_MUSIC_SKINS`、`phantomSkin`、`plainSkin`、`latticeSkin`、`synesthesiaSkin`） |
 | `./collection`             | ライブラリの読み込み：`BrowserChartCollectionStore`、ドロップしたファイル、コースとコースメーカー、譜面のハッシュ、ブラウザの互換性チェック                                                                                                               |
 | `./audio`                  | オーディオサービス（`createAudioService`）、オーディオバスとコンプレッサーのパラメーター、マスター音量、システムの audio session、`ChartPreviewEngine`                                                                                                    |
@@ -810,3 +811,30 @@ flowchart LR
 browser player は、この repository の parser、chart、chart-audio-renderer、player、utils、LR2 skin、beatoraja skin package を共有する runtime consumer です。
 browser behavior が terminal player と分岐する場合は、pure な path、timing、scroll、lookup、event mapping helper を shared package へ移し、package-local test で覆う方針を優先します。
 PixiJS scene wiring は browser rendering や WebAudio resource に依存する場合、`player-browser` に残してかまいません。
+
+## DOM スキンと独立した controller
+
+Debug Menu → Skin & display → Built-in skin で **Native (DOM + Canvas)** を選ぶ。Native はコレクション、検索、プレイオプション、ロード画面、スコア HUD、結果画面を HTML で表示し、メーターと SVG のゲージ履歴も使う。レーン、BGA、即時の判定表示には Canvas を使う。Synesthesia または Plain を選ぶとフル Canvas に戻り、選択は保存される。入力にはブラウザーのフォーカス、スクロール、IME の挙動を使い、`/` ショートカットは DOM の検索欄にフォーカスする。
+
+`BeMusicSkin` は任意の `dom.select`・`dom.decide`・`dom.result`・`dom.gameplay` factory を宣言できる（`player-skin-sdk/src/dom.ts`）。それぞれ `HTMLElement` と既存 session に届く操作を受け取り、`update(frame)` と `dispose()` を返す。先頭の三つは Canvas の描画を置き換え、gameplay は Canvas のプレイフィールドを補う。frame はスキン設定とエフェクトの設定も持つ。select 画面が `focusSearch()` を返すと、自分で検索欄を所有して host の重複する入力欄を隠せる。DOM は attach 時に作り、document が存在する前でもスキンの module を import できる。detach は mount とローカル状態を再入場まで保持し、dispose は listener、フレームワークの root、リソースを解放する。Native は shadow DOM でスタイルを分離する。別の場所に DOM を置く host は `PixiSceneHost.mount` に `domContainer` を渡す。
+
+`@be-music/player-browser/controller` は Pixi を実行時に import せず、`SceneController` と `createSelectController` を公開する。controller の操作は明示的な `enter(nowMs)`・`advance(nowMs)`・`dispatch(intent)`・`exit()`・`dispose()` で、所有者一つが進行させる。`getSnapshot()` と購読者は一時イベントも含め同じ frame を共有する。`createStore(selector, equals?)` は選択した値の安定した snapshot を提供し、最初の advance 前の `getSnapshot()` は `undefined`、`subscribe(listener)` の戻り値は購読解除関数になる。購読を解除しても session は終了しない。React・Vue の adapter は store をコンポーネントのライフサイクルにつなぎ、Canvas renderer は独自の frame loop を使える。
+
+独立したコレクションブラウザーでも、プレビュー再生と選曲の振る舞いを共有できる。
+
+```ts
+import { createSelectController } from '@be-music/player-browser/controller';
+
+const controller = createSelectController({ library, audio, sounds: {}, on: { start: openChart } });
+const query = controller.createStore((frame) => frame.browse.searchText);
+const unsubscribe = query.subscribe(() => updateSearch(query.getSnapshot()));
+controller.enter(performance.now());
+// ブラウザーがアクティブな間、host が animation tick ごとに一度進行させる。
+controller.advance(performance.now());
+controller.dispatch({ type: 'browse', command: { type: 'search', text: 'title' } });
+// 最終的な破棄時:
+unsubscribe();
+controller.dispose();
+```
+
+既存の Pixi scene でも同じ controller を `scene.controller` から参照できる。進行は host が担当するため、購読者はもう一度 advance しない。gameplay preparation と内部の `PlayfieldRuntime` には描画リソースが残り、独立した gameplay controller の公開 interface にはしていない。Canvas のスクリーンショットと録画は Canvas 内のプレイフィールドを対象とし、DOM HUD を含まない。[ADR 0012](./adr/0012-native-skin-screens.ja.md) を参照。

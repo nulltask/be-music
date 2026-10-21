@@ -5,7 +5,7 @@
  * contract types and the sessions' events are exported with them.
  *
  * The models the scenes take and hand back (play options, `PlayResult`, `CourseView`, the hi-speed range) are
- * `@be-music/player-scene-model`'s, and the built-in be-music skins are on `./skin`. The sessions, views and layers under them
+ * `@be-music/player-scene-model`'s, and the built-in be-music skins are on `./skin`. Controllers are also available without a renderer from `./controller`. The sessions, views and layers under them
  * (`session/`, `view/`, `stage/`) stay internal to the package.
  */
 export * from './scene-host.ts';
@@ -45,3 +45,5 @@ export {
   type SelectSceneOptions,
 } from './select.ts';
 export type { SelectCourseMaker, SelectSessionEvents, SelectStartEntry } from '../session/select/select-session.ts';
+
+export { SceneController, createSelectController, type SceneStore } from './controllers.ts';

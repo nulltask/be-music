@@ -2749,3 +2749,8 @@ html.touch-first .search-input.search-inline:focus {
 .service-build-footer code {
   font: inherit;
 }
+
+/* A DOM skin owns a real search input; remove the Canvas overlay from focus and accessibility as well. */
+.shell.native-search .search-input {
+  display: none;
+}

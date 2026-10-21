@@ -131,6 +131,14 @@ export class PlayerWebDemoApp {
     shell: document.querySelector<HTMLElement>('.shell')!,
     canvas: () => this.sceneHost?.app.canvas,
     fieldRect: () => this.selectView?.searchFieldRect(),
+    nativeSearch: () =>
+      this.selectView?.ownsSearchInput
+        ? {
+            focus: () => {
+              this.selectView?.focusSearch();
+            },
+          }
+        : undefined,
     setQuery: (query) => this.selectView?.setSearch(query),
     setEditing: (editing) => this.selectView?.setSearchEditing(editing),
     touch: () => document.documentElement.classList.contains('touch-first'),
