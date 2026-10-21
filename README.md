@@ -46,15 +46,17 @@ flowchart TD
   subgraph hosts["Runtimes and hosts"]
     editor["chart-editor"]
     tui["player-terminal"]
+    nodeaudio["player-node-audio"]
     lb["app-leaderboard"]
     web["player-browser"]
     demo["app-play"]
   end
 
   chart-writer --> editor
-  renderer --> player
+  parser --> player
+  renderer --> nodeaudio
   player --> scene
-  player --> tui
+  player --> nodeaudio --> tui
   player --> lb
   scene --> sdk
   scene --> lr2 --> beatoraja
@@ -163,6 +165,12 @@ The semantics helper of the score is separated into `@be-music/chart-model`, and
 - Browser-safe entries next to the engine root: `signals`, `lanes`, `display`, `ruleset`, `replay`, `records` and `course` (see [Player spec — Entry points](./docs/player-spec.md#entry-points))
 - `ruleset`: the vocabulary hosts, skins and the Leaderboard share: gauges, clear lamps, BP and the score (`ScoreSummary`, `computeScoreRate`, the DJ Ranks, LR2's money score)
 - `course`, `records` and `replay`: course runs, the NONSTOP pipeline and the course stage rules; best records per judge ruleset; the replay format, its recorder and its simulator
+
+### Node audio (`@be-music/player-node-audio`)
+
+- Host-provided Node audio session, realtime sample mixing, and PCM output through `node-web-audio-api`
+- Owns the `chart-audio-renderer` dependency; `player-engine` imports neither audio rendering nor Node output
+- Configure `createAudioSession: createNodeAudioSession` for Node engine calls; the terminal player does this automatically (see [Player spec](./docs/player-spec.md#node-audio-adapter))
 
 ### scene models (`@be-music/player-scene-model`)
 

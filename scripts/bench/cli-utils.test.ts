@@ -43,6 +43,7 @@ function createSnapshot(overrides: Partial<ExportsBenchmarkSnapshot> = {}): Expo
       'chart-editor': [],
       'chart-audio-renderer': [],
       'player-engine': [],
+      'player-node-audio': [],
       'player-terminal': [],
       'player-scene-model': [],
       'skin-lr2': [],

@@ -1,7 +1,10 @@
+import { autoPlay, manualPlay } from './test-support/node-audio-player.ts';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 
 // The engine writes to a mocked Node audio sink (shared state in test-support/player-fixtures.ts).
-vi.mock('./audio-sink.ts', async () => (await import('./test-support/player-fixtures.ts')).mockAudioSinkModule());
+vi.mock('../../player-node-audio/src/audio-sink.ts', async () =>
+  (await import('./test-support/player-fixtures.ts')).mockAudioSinkModule(),
+);
 
 import {
   computeChartFingerprint,
@@ -13,10 +16,8 @@ import { createEmptyJSON, type BeMusicJSON } from '../../chart-source/src/index.
 import { parseChart, parseChartFile, resolveBMSControlFlowWithDraws } from '../../chart-parser/src/index.ts';
 import { resolveBeatorajaDefaultTotal, resolveLR2DefaultTotal } from './ruleset/index.ts';
 import {
-  autoPlay,
   type PlayerLoadProgress,
   type PlayerRulesetInfo,
-  manualPlay,
   PlayerInterruptedError,
   resolvePlayChart,
   type PlayerSummary,

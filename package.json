@@ -47,6 +47,7 @@
     "@be-music/chart-writer": "workspace:*",
     "@be-music/player-browser": "workspace:*",
     "@be-music/player-engine": "workspace:*",
+    "@be-music/player-node-audio": "workspace:*",
     "@be-music/player-scene-model": "workspace:*",
     "@be-music/player-skin-sdk": "workspace:*",
     "@be-music/player-terminal": "workspace:*",

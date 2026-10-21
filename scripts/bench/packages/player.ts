@@ -1,5 +1,4 @@
 import * as playerAPI from '@be-music/player-engine';
-import * as audioSinkAPI from '@be-music/player-engine/audio-sink';
 import * as courseAPI from '@be-music/player-engine/course';
 import * as displayAPI from '@be-music/player-engine/display';
 import * as lanesAPI from '@be-music/player-engine/lanes';
@@ -21,7 +20,6 @@ export const playerBenchmarkPackage: BenchmarkPackageDefinition = {
     ...prefixed('signals', signalsAPI),
     ...prefixed('lanes', lanesAPI),
     ...prefixed('display', displayAPI),
-    ...prefixed('audio-sink', audioSinkAPI),
     ...prefixed('course', courseAPI),
     ...prefixed('records', recordsAPI),
     ...prefixed('ruleset', rulesetAPI),

@@ -1,7 +1,6 @@
 import { resolveChart } from '@be-music/chart-model';
 import { parseChart } from '@be-music/chart-parser';
 import * as playerAPI from '@be-music/player-engine';
-import * as audioSinkAPI from '@be-music/player-engine/audio-sink';
 import * as courseAPI from '@be-music/player-engine/course';
 import * as displayAPI from '@be-music/player-engine/display';
 import * as lanesAPI from '@be-music/player-engine/lanes';
@@ -10,7 +9,6 @@ import * as recordsAPI from '@be-music/player-engine/records';
 import * as rulesetAPI from '@be-music/player-engine/ruleset';
 import * as signalsAPI from '@be-music/player-engine/signals';
 import type { PlayerOptions } from '@be-music/player-engine';
-import type { WebAudioContextLike } from '@be-music/player-engine/audio-sink';
 import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import type { PlayerUIFramePayload } from '@be-music/player-engine/signals';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
@@ -995,7 +993,6 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   registerSignalsCases(define);
   registerLanesCases(define);
   registerDisplayCases(define);
-  registerAudioSinkCases(define);
 }
 
 /** `@be-music/player-engine/signals`: the buses and state signals a host's runtimes exchange with a play. */
@@ -1223,35 +1220,6 @@ function registerDisplayCases(define: DefineBenchmarkCase): void {
   });
 }
 
-/** `@be-music/player-engine/audio-sink`: the PCM sinks over Web Audio. */
-function registerAudioSinkCases(define: DefineBenchmarkCase): void {
-  define('player-engine.audio-sink.createBrowserAudioSink', {
-    run: () => {
-      const sink = audioSinkAPI.createBrowserAudioSink(createBenchAudioContext(), {
-        sampleRate: 44_100,
-        channels: 2,
-        samplesPerFrame: 512,
-        mode: 'manual',
-      });
-      sink.write(BENCH_PCM_CHUNK);
-      sink.getClockState();
-    },
-  });
-  define('player-engine.audio-sink.createNodeAudioSink', {
-    // Opens the machine's audio output through node-web-audio-api.
-    run: async () => {
-      const sink = await audioSinkAPI.createNodeAudioSink({
-        sampleRate: 44_100,
-        channels: 2,
-        samplesPerFrame: 512,
-        mode: 'manual',
-      });
-      sink?.destroy();
-    },
-    interactive: true,
-  });
-}
-
 const BENCH_UI_FRAME: PlayerUIFramePayload = {
   currentBeat: 0,
   currentSeconds: 0,
@@ -1292,18 +1260,6 @@ const BENCH_SPEED_TIMELINE = [
   { beat: 12, speed: 2 },
 ];
 const BENCH_BGA_CUES = Array.from({ length: 512 }, (_, index) => ({ seconds: index * 0.125, key: `${index}` }));
-const BENCH_PCM_CHUNK = new Uint8Array(new Int16Array(1024).buffer);
-
-function createBenchAudioContext(): WebAudioContextLike {
-  return {
-    currentTime: 0,
-    destination: {},
-    createBuffer: (_channels: number, length: number) => ({ getChannelData: () => new Float32Array(length) }),
-    createBufferSource: () => ({ buffer: null, connect: () => undefined, start: () => undefined }),
-    suspend: async () => undefined,
-    resume: async () => undefined,
-  };
-}
 
 const BENCH_REPLAY: BeMusicReplay = {
   format: 'be-music-replay',

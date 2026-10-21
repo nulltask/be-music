@@ -7,7 +7,7 @@ import { writeStereoPCM16LE } from '@be-music/shared-utils/pcm';
 import { createEmptyJSON, type BeMusicJSON } from '@be-music/chart-source';
 import { parseChartFile, resolveBMSControlFlow } from '@be-music/chart-parser';
 import { type RenderResult, renderJSON } from '@be-music/chart-audio-renderer';
-import { createNodeAudioSink } from '@be-music/player-engine/audio-sink';
+import { createNodeAudioSink } from '@be-music/player-node-audio/audio-sink';
 
 interface PreviewPlaybackHandle {
   stop: () => void;

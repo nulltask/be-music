@@ -35,9 +35,27 @@ gauge. Both are options: `PlayerOptions.judgeRuleset` picks the ruleset and `Pla
 | `./replay`                | The replay format, its recorder, simulator and eligibility checks, and the course and NONSTOP logs                                                                                                                                                                                                                                                                |
 | `./records`               | Best records per judge ruleset and the rules that keep them                                                                                                                                                                                                                                                                                                       |
 | `./course`                | Course definitions: LR2 `.lr2crs`, beatoraja courses and table courses, the course maker, and NONSTOP runs                                                                                                                                                                                                                                                        |
-| `./audio-sink`            | The audio sinks for Node (`node-web-audio-api`) and for a Web Audio context                                                                                                                                                                                                                                                                                       |
 
 The chart-layer names come from `@be-music/chart-model`: `ChartPlayVariant`, `LongNoteMode`, the timelines and their points, `BGACue` and the BGA timeline builders, the timing resolver and the sample triggers. Everything else in the package is internal.
+
+## Node audio adapter
+
+The engine opens audio only through `PlayerOptions.createAudioSession`. Omitting the factory or returning `undefined` plays silently. `audio: false` skips the factory. The factory receives the engine's `resolvedChart`, preserving its timing, sample slices and source-event identities.
+
+Install `@be-music/player-node-audio` for Node playback. Its root exports `createNodeAudioSession` and `loadNodeAudioSampleDurations`; PCM sinks moved from `@be-music/player-engine/audio-sink` to `@be-music/player-node-audio/audio-sink`. The terminal player installs this adapter automatically. Browser hosts keep their own adapter.
+
+```typescript
+import { autoPlay } from '@be-music/player-engine';
+import { createNodeAudioSession, loadNodeAudioSampleDurations } from '@be-music/player-node-audio';
+
+await autoPlay(chart, {
+  audioBaseDir: chartDirectory,
+  createAudioSession: createNodeAudioSession,
+  loadAudioSampleDurations: loadNodeAudioSampleDurations,
+});
+```
+
+`loadAudioSampleDurations` supplies sample lengths for optional active-audio diagnostics, including playback with audio disabled. Without it, diagnostics use chart-defined slice lengths or the existing short estimate and perform no file reads or decoding. See [ADR 0011](./adr/0011-host-provided-audio.md).
 
 ## BMS compatible range
 
@@ -96,18 +114,18 @@ Items that are only stored in the IR by the parser and not referenced by the pla
 
 ### Unsupported commands
 
-| command                                                                                                                                     | Current player implementation                                                                                                                                                                                                                                           |
-| ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `#TEXTxx`, `#TEXT00`                                                                                                                        | The parser is retained, but it is not used for player display or runtime performance.                                                                                                                                                                                   |
-| `#OPTION`, `#CHANGEOPTIONxx`                                                                                                                | Parser is retained, but forced play-option changes are not supported by the core runtime.                                                                                                                                                                               |
-| `#WAVCMD`, `#EXWAVxx`                                                                                                                       | Parser is retained. The bundled Node realtime audio session does not apply them, while chart-audio-renderer and browser WebAudio apply the implemented volume subset (`#WAVCMD 01` and `#EXWAVxx v`). Pitch, loop, pan, and frequency parameters are still unsupported. |
-| `#BACKBMP`                                                                                                                                  | The core/terminal runtime has no dedicated behavior for this command. Browser LR2 special graphics can use it.                                                                                                                                                          |
-| `#MAKER`                                                                                                                                    | Metadata-only/unsupported.                                                                                                                                                                                                                                              |
-| `#EXBMPxx`, `#BGAxx`, `#SWBGAxx`, `#ARGBxx`                                                                                                 | The parser retains them. The terminal/core runtime does not apply them, while the browser player renders the implemented BGA sub-region, switching, tint, and alpha subset.                                                                                             |
-| `#BASEBPM`                                                                                                                                  | The parser is retained, but the player is not used for time resolution.                                                                                                                                                                                                 |
-| `#VIDEOFILE`                                                                                                                                | The parser is retained, but it is not used for BGA video resolution in the player. Real-world video playback only handles video files referenced with `#BMPxx`.                                                                                                         |
-| `#MIDIFILE`, `#MATERIALS`, `#DIVIDEPROP`, `#CHARSET`                                                                                        | Retains the parser but does not refer to the player runtime.                                                                                                                                                                                                            |
-| `#SONGxx`, `#EXBPMxx`, `#CHARFILE`, `#ExtChr`, `#CDDA`, `#VIDEOFPS`, `#VIDEODLY`, `#VIDEOCOLORS`, `#SEEK`, `#MATERIALSBMP`, `#MATERIALSWAV` | Not supported by the current player implementation.                                                                                                                                                                                                                     |
+| command                                                                                                                                     | Current player implementation                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `#TEXTxx`, `#TEXT00`                                                                                                                        | The parser is retained, but it is not used for player display or runtime performance.                                                                                                                                                                  |
+| `#OPTION`, `#CHANGEOPTIONxx`                                                                                                                | Parser is retained, but forced play-option changes are not supported by the core runtime.                                                                                                                                                              |
+| `#WAVCMD`, `#EXWAVxx`                                                                                                                       | Parser is retained. The Node audio adapter does not apply them, while chart-audio-renderer and browser WebAudio apply the implemented volume subset (`#WAVCMD 01` and `#EXWAVxx v`). Pitch, loop, pan, and frequency parameters are still unsupported. |
+| `#BACKBMP`                                                                                                                                  | The core/terminal runtime has no dedicated behavior for this command. Browser LR2 special graphics can use it.                                                                                                                                         |
+| `#MAKER`                                                                                                                                    | Metadata-only/unsupported.                                                                                                                                                                                                                             |
+| `#EXBMPxx`, `#BGAxx`, `#SWBGAxx`, `#ARGBxx`                                                                                                 | The parser retains them. The terminal/core runtime does not apply them, while the browser player renders the implemented BGA sub-region, switching, tint, and alpha subset.                                                                            |
+| `#BASEBPM`                                                                                                                                  | The parser is retained, but the player is not used for time resolution.                                                                                                                                                                                |
+| `#VIDEOFILE`                                                                                                                                | The parser is retained, but it is not used for BGA video resolution in the player. Real-world video playback only handles video files referenced with `#BMPxx`.                                                                                        |
+| `#MIDIFILE`, `#MATERIALS`, `#DIVIDEPROP`, `#CHARSET`                                                                                        | Retains the parser but does not refer to the player runtime.                                                                                                                                                                                           |
+| `#SONGxx`, `#EXBPMxx`, `#CHARFILE`, `#ExtChr`, `#CDDA`, `#VIDEOFPS`, `#VIDEODLY`, `#VIDEOCOLORS`, `#SEEK`, `#MATERIALSBMP`, `#MATERIALSWAV` | Not supported by the current player implementation.                                                                                                                                                                                                    |
 
 ## Execution flow
 
@@ -791,7 +809,7 @@ The engine re-anchors its clock at the chart time it drains the command (`create
 It records the change in the replay (`play.tempoChanges`), calls `AudioSession.setTempo` and reports the change through `onTempoChange`.
 Judgments and recorded inputs stay in chart time, so a re-simulation is unaffected.
 A replay follows its log's changes when the host passes them as `replayTempoChanges`.
-The built-in Node audio session renders its audio for the starting tempo and does not follow a change.
+The Node audio adapter renders its audio for the starting tempo and does not follow a change.
 
 ### `highSpeed`
 
