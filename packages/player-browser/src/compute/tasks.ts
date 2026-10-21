@@ -1,8 +1,7 @@
 import { unzipSync } from 'fflate';
-import { countScoredNotes, resolveChart, type ChartPlayVariant, type RandomDraws } from '@be-music/chart-model';
+import { countScoredNotes } from '@be-music/chart-model';
 import { decodeBMSText, decodeUTF8Text, parseBMS, parseBmson } from '@be-music/chart-parser';
 import { createEmptyJSON, type BeMusicJSON } from '@be-music/chart-source';
-import { preparePlaybackChart, type PreparedPlaybackChartData } from '@be-music/player-engine/preparation';
 import { normalizePath } from '@be-music/shared-utils/core';
 import { packEvents, PackedEventStrings, type PackedEvents } from '../collection/packed-events.ts';
 import { timeStretchChannels } from '../runtime/time-stretch.ts';
@@ -53,22 +52,6 @@ export function unzipTask(input: ZipTaskInput): Record<string, Uint8Array> {
     },
   });
 }
-export interface PreparePlaybackTaskInput {
-  chart: BeMusicJSON;
-  randomDraws: RandomDraws;
-  playVariant: ChartPlayVariant;
-  extension: string | undefined;
-}
-export type PreparedPlaybackTaskResult = Omit<PreparedPlaybackChartData, 'resolvedChart'>;
-export function preparePlaybackTask(input: PreparePlaybackTaskInput): PreparedPlaybackTaskResult {
-  const resolved = resolveChart(input.chart, {
-    randomDraws: input.randomDraws,
-    playVariant: input.playVariant,
-    inferBmsLNTypeWhenMissing: true,
-  });
-  const { resolvedChart: _, ...prepared } = preparePlaybackChart(resolved, { laneModeExtension: input.extension }, 0);
-  return prepared;
-}
 export interface StretchTaskInput {
   channels: Float32Array[];
   sampleRate: number;
@@ -84,8 +67,6 @@ export function executeBrowserTask(name: string, input: unknown): unknown {
       return parseChartTask(input as ParseChartTaskInput);
     case 'unzip':
       return unzipTask(input as ZipTaskInput);
-    case 'prepare-playback':
-      return preparePlaybackTask(input as PreparePlaybackTaskInput);
     case 'stretch':
       return stretchTask(input as StretchTaskInput);
     default:

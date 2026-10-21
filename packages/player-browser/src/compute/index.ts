@@ -32,11 +32,4 @@ export function disposeBrowserWorkers(): void {
 export function runBrowserTask<T>(name: string, input: unknown, fallback: () => T | Promise<T>): Promise<T> {
   return pool.run(name, input, fallback);
 }
-export {
-  executeBrowserTask,
-  type ParseChartTaskInput,
-  type ParseChartTaskResult,
-  type PreparePlaybackTaskInput,
-  type PreparedPlaybackTaskResult,
-  type ZipTaskInput,
-} from './tasks.ts';
+export { executeBrowserTask, type ParseChartTaskInput, type ParseChartTaskResult, type ZipTaskInput } from './tasks.ts';

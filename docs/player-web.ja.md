@@ -7,7 +7,7 @@ timing、note、判定、score、gauge、BGA event の意味など、CLI と共�
 
 ## CPU Worker
 
-ブラウザのホストは、譜面のパース・集計・圧縮、ZIP 展開、WSOLA、プレイ準備、ランキングの送信データ準備で共通の Worker プールを使います。Debug Panel の **Developer → CPU workers** から並列数を指定でき、既定値は取得した論理 CPU 数の半分を切り捨てた数（最小1）です。変更値は保存します。Signalsmith は既存の AudioWorklet の経路を維持します。処理の境界と障害時の動作は [ADR 0010](./adr/0010-browser-task-pool.ja.md) を参照してください。
+ブラウザのホストは、譜面のパース・集計・圧縮、ZIP 展開、WSOLAで共通の Worker プールを使います。Debug Panel の **Developer → CPU workers** から並列数を指定でき、既定値は取得した論理 CPU 数の半分を切り捨てた数（最小1）です。変更値は保存します。Signalsmith は既存の AudioWorklet の経路を維持します。処理の境界と障害時の動作は [ADR 0010](./adr/0010-browser-task-pool.ja.md) を参照してください。
 
 ## 共通 runtime 連携
 

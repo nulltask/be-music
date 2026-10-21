@@ -63,14 +63,6 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       );
     },
   });
-  define('player-engine.preparation.preparePlaybackChart', {
-    run: (fixtures) => {
-      playerAPI.preparePlaybackChart(
-        resolveChart(fixtures.sampleBmsJSON, { chartPath: '.bms', inferBmsLNTypeWhenMissing: true }),
-        { laneModeExtension: '.bms' },
-      );
-    },
-  });
   define('player-engine.autoPlay', {
     run: async (fixtures) => {
       await runSilently(async () => {

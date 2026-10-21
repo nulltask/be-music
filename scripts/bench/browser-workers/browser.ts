@@ -1,3 +1,4 @@
+import { preparePlaybackTask } from './preparation.ts';
 import { loadChartCollectionFromFiles as loadBaseline } from 'virtual:baseline-collection';
 import { loadChartCollectionFromFiles } from '../../../packages/player-browser/src/collection/collection.ts';
 import {
@@ -6,7 +7,7 @@ import {
   runBrowserTask,
   disposeBrowserWorkers,
 } from '@be-music/player-browser/compute';
-import { preparePlaybackTask, unzipTask } from '../../../packages/player-browser/src/compute/tasks.ts';
+import { unzipTask } from '../../../packages/player-browser/src/compute/tasks.ts';
 import { timeStretchChannels, stretchAudioBuffers } from '../../../packages/player-browser/src/runtime/time-stretch.ts';
 import {
   parseBMS,
@@ -57,7 +58,7 @@ function createPool(count: number): void {
   workerErrors = 0;
   configureBrowserWorkers(() => {
     created++;
-    const worker = new Worker(new URL('../../../packages/app-play/src/compute-worker.ts', import.meta.url), {
+    const worker = new Worker(new URL('./prototype-worker.ts', import.meta.url), {
       type: 'module',
     });
     worker.addEventListener('message', (event) => {

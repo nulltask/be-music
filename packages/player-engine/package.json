@@ -54,11 +54,6 @@
       "source": "./src/audio-sink.ts",
       "types": "./dist/audio-sink.d.ts",
       "default": "./dist/audio-sink.js"
-    },
-    "./preparation": {
-      "source": "./src/preparation.ts",
-      "types": "./dist/preparation.d.ts",
-      "default": "./dist/preparation.js"
     }
   },
   "scripts": {

@@ -204,9 +204,7 @@ describe('createPlayScene', () => {
     vi.useFakeTimers();
     const fake = createFakeHost();
     const { scene, on } = create({ host: fake.host });
-    const preparing = scene.prepare();
-    await vi.advanceTimersByTimeAsync(0);
-    await preparing;
+    await scene.prepare();
     await scene.enter(fake.host);
     // The play's own keys and the canvas's touch lanes listen from the entry on.
     expect(fake.listening('keydown')).toBe(1);
@@ -238,9 +236,7 @@ describe('createPlayScene', () => {
     await scene.enter(fake.host);
     fake.tick();
     expect(scene.root.visible).toBe(false);
-    const preparing = scene.prepare();
-    await vi.advanceTimersByTimeAsync(0);
-    await preparing;
+    await scene.prepare();
     fake.tick();
     expect(scene.root.visible).toBe(true);
     scene.dispose();
@@ -337,9 +333,7 @@ describe('createPlayScene with an LR2 kit', () => {
     vi.useFakeTimers();
     const fake = createFakeHost();
     const { scene, on } = createLR2({ fadeOut: 300, close: 200 }, { host: fake.host });
-    const preparing = scene.prepare();
-    await vi.advanceTimersByTimeAsync(0);
-    await preparing;
+    await scene.prepare();
     await scene.enter(fake.host);
     expect(scene.root.visible).toBe(false);
     scene.start();
@@ -528,9 +522,7 @@ describe('createPlayScene with a beatoraja kit', () => {
     const update = vi.spyOn(BeatorajaPlaySkinView.prototype, 'update');
     const fake = createFakeHost();
     const { scene, on } = createBeatoraja({ host: fake.host });
-    const preparing = scene.prepare();
-    await vi.advanceTimersByTimeAsync(0);
-    await preparing;
+    await scene.prepare();
     await scene.enter(fake.host);
     scene.start();
     fake.tick();

@@ -49,7 +49,7 @@ The first chart-import pass, including worker startup and cold calculation/JIT, 
 
 ## Implication
 
-Keep worker parallelism for imports, ZIPs, and WSOLA. Reconsider unconditional worker dispatch for small single-play and submission preparation: a local path or a measured size threshold is more appropriate. This benchmark does not change production dispatch policy.
+Production keeps worker parallelism only for chart imports, ZIP expansion, and WSOLA. Single-play preparation and fingerprint/submission JSON generation stay local because worker overhead made them slower. The measurements above preserve the original five-operation prototype; the rejected operations remain only in the benchmark harness for reproducibility.
 
 ## Reproduce
 

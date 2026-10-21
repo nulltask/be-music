@@ -37,7 +37,7 @@ when the host supplies a `PlayerOptions.createAudioSession` factory (e.g. `creat
 
 ## CPU workers
 
-The browser host installs one shared worker pool for chart parsing/counting/packing, ZIP expansion, WSOLA, playback preparation, and leaderboard payload preparation. Set **Developer → CPU workers** in the Debug Panel; the default is half the reported logical CPU count, rounded down with a minimum of one. The override is remembered. Signalsmith already uses an AudioWorklet and keeps its existing path. See [ADR 0010](./adr/0010-browser-task-pool.md) for task boundaries and failure handling.
+The browser host installs one shared worker pool for chart parsing/counting/packing, ZIP expansion, and WSOLA. Set **Developer → CPU workers** in the Debug Panel; the default is half the reported logical CPU count, rounded down with a minimum of one. The override is remembered. Signalsmith already uses an AudioWorklet and keeps its existing path. See [ADR 0010](./adr/0010-browser-task-pool.md) for task boundaries and failure handling.
 
 ## Entry points
 

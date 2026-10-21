@@ -165,8 +165,7 @@ export class PlaySession extends PlaySessionState {
     // Hidden until {@link start} fires, so a play shown before it begins draws nothing of it yet.
     this.shown = false;
     this.assetsLoading = true;
-    await prepareChart(this, chartEntry);
-    if (this.disposed) return;
+    prepareChart(this, chartEntry);
     if (this.entered) {
       // No splash covers the load window: hold the chart clock before its start (see `start()`) and draw the loading
       // playfield while assets decode, instead of a blank stage.

@@ -1,9 +1,6 @@
-import { parseBMS } from '@be-music/chart-parser';
-import { computeChartFingerprint, computePlayFingerprint } from '@be-music/chart-model';
-import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import { expect, openWithLibrary, SONGS, test } from './support.ts';
 
-test('uses real workers for chart loading, playback preparation and WSOLA; persists concurrency', async ({ demo }) => {
+test('uses real workers for chart loading and WSOLA; persists concurrency', async ({ demo }) => {
   const workers: string[] = [];
   demo.page.on('worker', (worker) => workers.push(worker.url()));
   await demo.page.addInitScript(() => {
@@ -44,44 +41,25 @@ test('uses real workers for chart loading, playback preparation and WSOLA; persi
     () => (window as unknown as { __cpuTasks: { sent: string[]; done: number[]; errors: string[] } }).__cpuTasks,
   );
   expect(tasks.sent).toContain('parse-chart');
-  expect(tasks.sent).toContain('prepare-playback');
+  for (const name of ['prepare-playback', 'submission', 'course-submission', 'gzip-json']) {
+    expect(tasks.sent).not.toContain(name);
+  }
   expect(tasks.sent).toContain('stretch');
   expect(tasks.errors).toEqual([]);
   expect(tasks.done.length).toBe(tasks.sent.length);
 });
 
-test('the bundled worker expands ZIPs and builds compressed submission payloads', async ({ demo }) => {
+test('the bundled worker expands ZIPs and rejects discarded prototype tasks', async ({ demo }) => {
   const workers: string[] = [];
   demo.page.on('worker', (worker) => workers.push(worker.url()));
   await openWithLibrary(demo, { 'be-music-demo.worker-count': '1' });
   const url = workers.find((value) => value.includes('compute-worker'));
   if (!url) throw new Error('Compute worker did not start');
-  // The library already proved that the deployed worker bundle can parse charts. Exercise its other data-only jobs
-  // through the same message boundary, without requiring a real leaderboard account or submitting a score.
+  // Exercise ZIP expansion through the deployed bundle and verify that rejected prototype jobs stay unavailable.
   const { zipSync, strToU8 } = await import('fflate');
   const zip = Array.from(zipSync({ 'a.txt': strToU8('worker zip') }));
-  const chart = parseBMS('#TITLE Worker\n#BPM 120\n#00111:01');
-  const chartPath = 'worker.bms';
-  const replay: BeMusicReplay = {
-    format: 'be-music-replay',
-    version: 0,
-    clock: { unit: 'us', origin: 'chart-zero' },
-    chart: {
-      sourceFormat: 'bms',
-      laneMode: '7keys',
-      lnMode: 1,
-      judgeRank: { percent: 75 },
-      noteCount: 0,
-      notes: [],
-      chartFingerprint: computeChartFingerprint(chart, { chartPath }),
-      playFingerprint: computePlayFingerprint(chart, { chartPath }),
-    },
-    inputs: [],
-    play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', judgeRuleset: 'lr2', randomDraws: [] },
-  };
-
   const result = await demo.page.evaluate(
-    async ({ url, zip, chart, replay, chartPath }) => {
+    async ({ url, zip }) => {
       const worker = new Worker(url, { type: 'module' });
       let id = 0;
       async function task(name: string, input: unknown): Promise<unknown> {
@@ -103,17 +81,23 @@ test('the bundled worker expands ZIPs and builds compressed submission payloads'
           limit: 1024,
           limitMessage: 'limit',
         })) as Record<string, Uint8Array>;
-        const zipped = (await task('gzip-json', { test: 'payload', values: [1, 2, 3] })) as Uint8Array;
-        const json = await new Response(
-          new Blob([new Uint8Array(zipped)]).stream().pipeThrough(new DecompressionStream('gzip')),
-        ).json();
-        const prepared = (await task('submission', [replay, chart, chartPath])) as { ok: boolean };
-        return { text: new TextDecoder().decode(entries['a.txt']), json, prepared: prepared.ok };
+        const rejected: string[] = [];
+        for (const name of ['prepare-playback', 'submission', 'course-submission', 'gzip-json']) {
+          try {
+            await task(name, {});
+          } catch (error) {
+            rejected.push(error instanceof Error ? error.message : String(error));
+          }
+        }
+        return { text: new TextDecoder().decode(entries['a.txt']), rejected };
       } finally {
         worker.terminate();
       }
     },
-    { url, zip, chart, replay, chartPath },
+    { url, zip },
   );
-  expect(result).toEqual({ text: 'worker zip', json: { test: 'payload', values: [1, 2, 3] }, prepared: true });
+  expect(result.text).toBe('worker zip');
+  expect(result.rejected).toEqual(
+    ['prepare-playback', 'submission', 'course-submission', 'gzip-json'].map((name) => `Unknown browser task: ${name}`),
+  );
 });
