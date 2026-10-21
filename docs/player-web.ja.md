@@ -816,7 +816,9 @@ PixiJS scene wiring は browser rendering や WebAudio resource に依存する�
 
 Debug Menu → Skin & display → Built-in → Built-in skin で **Native (DOM + Canvas)** を選ぶ。Native はコレクション、検索、プレイオプション、ロード画面、スコア HUD、結果画面を HTML で表示し、メーターと SVG のゲージ履歴も使う。レーン、BGA、即時の判定表示には Canvas を使う。Synesthesia または Plain を選ぶとフル Canvas に戻り、選択は保存される。入力にはブラウザーのフォーカス、スクロール、IME の挙動を使い、`/` ショートカットは DOM の検索欄にフォーカスする。
 
-Native は横画面では HUD を右側の列に、縦画面ではコンパクトな上部バーに配置し、レーンを画面下部まで広げます。タッチ操作では判定ラインの下に指を置く余白を確保します。ステージ固有の `playfield` 範囲を描画・ノート配置・タッチ判定で共有します。DOM のゲームプレイフレームにもレイアウトを渡し、リサイズや画面回転後も HUD を Canvas の表示領域に揃えます。
+Native は横画面では HUD をレーン横の空間に、縦画面ではコンパクトな上部バーに配置し、レーンを画面下部まで広げます。タッチ操作では判定ラインの下に指を置く余白を確保します。ステージ固有の `playfield` 範囲を描画・ノート配置・タッチ判定で共有します。DOM のゲームプレイフレームにもレイアウトを渡し、リサイズや画面回転後も HUD を Canvas の表示領域に揃えます。
+
+ゲームプレイのダッシュボードには EX スコア・ランク・スコア率、コンボ、BPM、時間・進行状況に加え、判定内訳と早遅の件数、空 POOR を含む BP、直近の判定ずれ、ゲージ推移と判定タイミングのグラフを表示します。ハイスピードと描画速度、HS-FIX、緑数字、表示時間、BPM 範囲、レーンカバー、ランダム・ゲージ設定、オートスクラッチ、DP フリップ、BGA モード、譜面情報とコースのステージも確認できます。横画面ではレーン横の空間を使い、情報カードを最初から展開します。縦画面では **All play information** から詳細カードをレーンに重ねて開き、レーンを短くしません。DOM の更新はおよそ毎秒12回に抑え、グラフはゲージ最大96点・タイミング最大32件を表示します。
 
 `BeMusicSkin` は任意の `dom.select`・`dom.decide`・`dom.result`・`dom.gameplay` factory を宣言できる（`player-skin-sdk/src/dom.ts`）。それぞれ `HTMLElement` と既存 session に届く操作を受け取り、`update(frame)` と `dispose()` を返す。先頭の三つは Canvas の描画を置き換え、gameplay は Canvas のプレイフィールドを補う。frame はスキン設定とエフェクトの設定も持つ。select 画面が `focusSearch()` を返すと、自分で検索欄を所有して host の重複する入力欄を隠せる。DOM は attach 時に作り、document が存在する前でもスキンの module を import できる。detach は mount とローカル状態を再入場まで保持し、dispose は listener、フレームワークの root、リソースを解放する。Native は shadow DOM でスタイルを分離する。別の場所に DOM を置く host は `PixiSceneHost.mount` に `domContainer` を渡す。
 

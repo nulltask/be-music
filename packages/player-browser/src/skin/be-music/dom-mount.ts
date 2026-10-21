@@ -30,7 +30,7 @@ export class SkinDOMMount<Frame, Actions> {
           tag === 'TEXTAREA' ||
           tag === 'SELECT' ||
           target?.isContentEditable ||
-          ((tag === 'BUTTON' || tag === 'A') && (event.code === 'Enter' || event.code === 'Space'))
+          ((tag === 'BUTTON' || tag === 'A' || tag === 'SUMMARY') && (event.code === 'Enter' || event.code === 'Space'))
         ) {
           event.stopPropagation();
         }
