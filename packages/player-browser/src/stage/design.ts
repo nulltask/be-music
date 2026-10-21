@@ -1,12 +1,7 @@
 // The play stage's design space and timing defaults: values the play session and the views both use.
 
 export const PIXELS_PER_BEAT = 72;
-/**
- * Design canvas the gameplay path renders into. 640x480 matches the LR2 default skin's authored canvas (LR2 default
- * `play_*.lr2skin` doesn't carry a `#RESOLUTION` directive, so the loader's seed at `skin.ts` width=640 /
- * height=480 wins). Keeping the design space aligned with the skin's native width/height lets `renderLanes`' `skinX +
- * lr2Lane.x * scale` resolve to scale=1.0 with no horizontal offset.
- */
+/** Baseline design units for built-in layouts and hi-speed. LR2 views use their skin's authored canvas. */
 export const DESIGN_WIDTH = 640;
 export const DESIGN_HEIGHT = 480;
 

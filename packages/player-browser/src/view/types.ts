@@ -505,8 +505,10 @@ export interface PlayfieldBGATarget {
  * family views") lists which member took over each one.
  */
 export interface PlayfieldSkin {
-  /** The design canvas: LR2's 640x480, a be-music skin's stage, a beatoraja skin's size. */
+  /** The skin's authored design canvas, fitted to the host viewport as a whole. */
   readonly stage: PlayfieldStage;
+  /** Design pixels per beat at hi-speed 1; defaults to the shared 640x480 baseline. */
+  readonly pixelsPerBeat?: number;
   /**
    * The skin draws the lane backgrounds, key beams and bombs itself; the playfield still lays out the lanes for the
    * notes, measure lines and covers.

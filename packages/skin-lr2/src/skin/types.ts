@@ -611,7 +611,15 @@ export interface LR2ScratchFlip {
   reloadBanner: boolean;
 }
 
+/** Resource slots carried across LR2 scene changes by IMAGE/LR2FONT CONTINUE. */
+export interface LR2SkinResources {
+  readonly images: readonly string[];
+  readonly fonts: readonly string[];
+}
+
 export interface LR2Skin {
+  /** Effective resource slots, including those inherited from an earlier scene. */
+  resources?: LR2SkinResources;
   name: string;
   width: number;
   height: number;

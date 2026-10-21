@@ -238,12 +238,12 @@ export function resolveVisibleMs(
 
 /**
  * The lanes laid out last frame in beats at hi-speed 1: the tallest lane's height in design pixels over the scroll of
- * one beat (`PIXELS_PER_BEAT`). 0 before the lanes are laid out.
+ * one beat (the view's scale, or `PIXELS_PER_BEAT`). 0 before the lanes are laid out.
  */
 function resolveLaneBeats(ctx: PlayViewSettingsContext): number {
   let laneHeight = 0;
   for (const lane of ctx.laneX.values()) {
     laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
   }
-  return laneHeight / PIXELS_PER_BEAT;
+  return laneHeight / (ctx.theme.pixelsPerBeat?.() ?? PIXELS_PER_BEAT);
 }
