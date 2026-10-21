@@ -46,6 +46,8 @@ export type PlayMoment =
 export interface PlaySessionTheme {
   /** The view's timing as its skin authors it: when loading counts as done, when the chart starts, the fade and close. */
   timing(): PlayViewTiming;
+  /** Design pixels per beat at hi-speed 1, when the view uses a different canvas scale. */
+  pixelsPerBeat?(): number | undefined;
   /** A moment of the play happened. */
   moment(moment: PlayMoment): void;
   /** How long `channel`'s key beam fades once its key is up, in ms. */

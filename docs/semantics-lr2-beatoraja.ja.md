@@ -86,7 +86,7 @@ LR2 と beatoraja は、同じ譜面、オプション、スキンの番号を�
 
 ほかに目立つ点：
 
-- beatoraja 時代の LR2 CSV スキンにある `#RESOLUTION,N` を幅 / 高さとして読んでいる。そうしたスキンはすべてキャンバスが壊れる。(A)
+- beatoraja 時代の LR2 CSV スキンにある `#RESOLUTION,N` は番号として受け付けます。幅 / 高さとして読んでいた不具合は修正済みです。
 - LR2 CSV の方言の衝突：バーのランプ番号 5 は LR2 では FC、beatoraja では EX HARD。22 列目以降のオフセットは無視される。(A)
 - HS-FIX が譜面基準になっている。LR2 は BPM 150 に正規化し、beatoraja は表示時間（緑数字）を保つ。(C)
 
@@ -168,7 +168,7 @@ flowchart TD
 | 39  | コース記録の同一性（md5 と sha256、LN モード）          | A, B           | 1 つのコースに 2 つのキー                          | コースのフィンガープリントをキーにする                                                |
 | 40  | ベスト記録のマージ内容                                  | B, A           | アシストの関門、スナップショット、クリア回数なし   | 追加。ログから再構築できる                                                            |
 | 41  | リプレイの形式（.brd）                                  | A              | 取り込みなし                                       | laneShufflePattern + キー割り当てで変換                                               |
-| 42  | `#RESOLUTION,N`                                         | A              | w,h として読む（バグ）                             | 番号の形を受け付ける                                                                  |
+| 42  | `#RESOLUTION,N`                                         | 修正済み       | 番号の形に対応                                     | w,h は拡張として残す                                                                  |
 | 43  | DST の 21 列目以降のオフセット                          | A              | LR2 の op4 だけ                                    | 3/4/5/10 を受け付ける                                                                 |
 | 44  | beatoraja の CSV 方言のコマンド                         | A              | 読まない                                           | 方言を任意で対応                                                                      |
 | 45  | `#SRC_BAR_LAMP` の番号の意味                            | A              | LR2                                                | beatoraja の方言を検出したら切り替える                                                |
@@ -718,16 +718,15 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 
 全体の形：状態の対応付けは 2 つに分かれています。LR2 CSV スキンには LR2 の語彙を渡します（[`packages/skin-lr2/src/state/`](../packages/skin-lr2/src/state/)）。beatoraja JSON/Lua スキンには、ファミリー非依存の [`packages/player-scene-model`](../packages/player-scene-model) から作った beatoraja の語彙を渡します（[`packages/skin-beatoraja/src/scene/`](../packages/skin-beatoraja/src/scene/)）。リスクは beatoraja 側の配線漏れと、**beatoraja 時代の LR2 CSV スキン**にあります。後者は beatoraja の拡張 CSV 方言で書かれていますが、be-music は厳密に LR2 として読みます。
 
-### `#RESOLUTION` の構文（バグ）
+### `#RESOLUTION` の構文
 
 - **LR2:** このコマンドはありません。LR2body.exe に `RESOLUTION` という文字列はありません。キャンバスは 640×480 固定で、原点は左上です。
 - **beatoraja:**
   - `#RESOLUTION,N` は SD/HD/FHD/UHD の番号です（[skin/lr2/LR2SkinHeaderLoader.java#L103-L106](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/lr2/LR2SkinHeaderLoader.java#L103-L106)、[Resolution.java#L8-L23](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/Resolution.java#L8-L23)。[endless dream L107-L110](https://github.com/seraxis/lr2oraja-endlessdream/blob/2394f65825994a153b99fbefea1a51476064c283/core/src/bms/player/beatoraja/skin/lr2/LR2SkinHeaderLoader.java#L107-L110) も同じ）。
   - 座標は y を反転してスケールします（[skin/lr2/LR2SkinCSVLoader.java#L230-L234](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/lr2/LR2SkinCSVLoader.java#L230-L234)）。
 - **種類:** パラメータ（構文）ですが、レイアウト全体が壊れます。
-- **be-music の現状:** [`packages/skin-lr2/src/skin/read.ts`](../packages/skin-lr2/src/skin/read.ts) L131-L136 が `w,h` として読みます。そのため `#RESOLUTION,1` は幅 1 になり、明示した値が自動判定を止めます。
-- **影響:** A。
-- **推奨:** 番号の形を受け付ける。`w,h` は拡張としてだけ残す。
+- **be-music の現状:** [`packages/skin-lr2/src/skin/read.ts`](../packages/skin-lr2/src/skin/read.ts) は SD/HD/FHD/UHD の番号を受け付け、`w,h` も拡張として残します。無効な宣言は座標からの自動判定を妨げません。
+- **影響:** 構文の不一致は修正済み。座標の上下反転は別の方言上の違いです。
 
 ### `#DST_*` の 21 列目以降と beatoraja だけの CSV コマンド
 

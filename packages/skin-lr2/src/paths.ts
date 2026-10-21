@@ -29,9 +29,9 @@ export type LR2PlayVariant = '5' | '7' | '9' | '10' | '14';
 export const LR2_SKIN_INFORMATION_TYPE = {
   PLAY_7KEYS: 0,
   PLAY_5KEYS: 1,
-  PLAY_9KEYS: 2,
+  PLAY_14KEYS: 2,
   PLAY_10KEYS: 3,
-  PLAY_14KEYS: 4,
+  PLAY_9KEYS: 4,
   MUSIC_SELECT: 5,
   DECIDE: 6,
   RESULT: 7,

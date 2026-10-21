@@ -1,6 +1,6 @@
 /**
  * The LR2 family's play screen: an LR2 play skin (`play_<variant>.lr2skin`) drawn around the shared playfield
- * (`view/shared/playfield`) on LR2's 640x480 canvas, letterboxed into the window. It draws the play session's frames:
+ * (`view/shared/playfield`) in the skin's authored coordinate space, letterboxed into the window. It draws the play session's frames:
  *
  * - the skin's ops, numbers, texts, sliders and bar graphs through the frame's LR2 state (`resolveLR2PlayState` over the
  *   frame's `PlayState` and the play's score);
@@ -29,7 +29,7 @@ import type { BrowserAssetSource } from '../../collection/types.ts';
 import type { LR2PlayKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import type { PlaySessionOptions } from '../../session/play/play-options.ts';
-import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../../stage/design.ts';
+import { DESIGN_HEIGHT, PIXELS_PER_BEAT } from '../../stage/design.ts';
 import { resolveLR2LaneIndex } from '@be-music/player-engine/lanes';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { releaseTexturesOnHost } from '../../stage/pixi-utils.ts';
@@ -47,7 +47,6 @@ import type {
   PlayViewEvent,
   PlayViewTiming,
   PlayfieldSkin,
-  PlayfieldStage,
 } from '../types.ts';
 import {
   collectLR2BGATargets,
@@ -64,9 +63,6 @@ import { playfieldTouchLanes, TouchLaneInput } from '../shared/touch-lane-input.
 import { LR2Turntable } from './play-turntable.ts';
 
 const log = logger('gameplay');
-
-/** The canvas an LR2 play skin is drawn on: LR2's 640x480, the skin scaled to fit it. */
-const LR2_PLAY_STAGE: PlayfieldStage = { width: DESIGN_WIDTH, height: DESIGN_HEIGHT };
 
 /** Design px above a lane's top through which notes keep drawing as they scroll in from off the stage. */
 const NOTE_OVERSCAN = 48;
@@ -152,8 +148,10 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     this.timing = resolveLR2PlayTiming(kit.skin);
     this.timers = new LR2PlayTimers(play);
     const skin = kit.skin;
+    this.overlay.scale.set(skin.height / DESIGN_HEIGHT);
     this.playfieldSkin = {
-      stage: LR2_PLAY_STAGE,
+      stage: { width: skin.width, height: skin.height },
+      pixelsPerBeat: PIXELS_PER_BEAT * (skin.height / DESIGN_HEIGHT),
       ownsLanes: true,
       laneRect: (channel, stage) => resolveLR2LaneRect(skin, this.laneIndex(channel), stage),
       noteCell: (kind, channel) => resolveLR2NoteCell(this, kind, this.laneIndex(channel)),
@@ -202,7 +200,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
 
   /** The lanes start at the stage's top edge, so notes scroll in from off the stage. */
   get noteOverscan(): number {
-    return NOTE_OVERSCAN;
+    return NOTE_OVERSCAN * (this.skin.height / DESIGN_HEIGHT);
   }
 
   /** No be-music skin: the playfield draws nothing of its own as data. */
@@ -450,6 +448,10 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     skin.numbers.forEach((number) => imagePaths.add(number.source.imagePath));
     skin.grooveGauges.forEach((gauge) => imagePaths.add(gauge.source.imagePath));
     skin.nowCombos.forEach((combo) => imagePaths.add(combo.source.imagePath));
+    skin.judgeLines.forEach((line) => imagePaths.add(line.source.imagePath));
+    skin.measureLines.forEach((line) => imagePaths.add(line.source.imagePath));
+    skin.bargraphs.forEach((graph) => imagePaths.add(graph.source.imagePath));
+    skin.sliders.forEach((slider) => imagePaths.add(slider.source.imagePath));
     await Promise.all(
       [...imagePaths].map(async (path) => {
         if (this.isGone() || isLR2SpecialGraphic(path)) return;

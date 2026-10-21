@@ -210,11 +210,26 @@ export async function loadLR2ThemeSkinsFromFiles(
     pickFromSoundSet(sharedFiles, soundSet, key) ?? pickLR2ThemeBGMFromMap(sharedFiles, role);
   // Each task wraps a synchronous parse / pick in `Promise.resolve` so the existing progress-tracking + parallel-await
   // shape continues to work — no semantic change beyond the up-front batched read.
-  const playSkinTasks = LR2_PLAY_VARIANTS.map((variant) =>
-    track(
-      `play/${variant}K`,
-      Promise.resolve(loadLR2SkinFromSourceFiles(sharedFiles, { kind: 'play', playVariant: variant })),
-    ),
+  // Seed every variant independently from the scene preceding gameplay; parsing DP must not overwrite SP slots.
+  const initialSelect = loadLR2SkinFromSourceFiles(sharedFiles, { kind: 'select' });
+  const initialDecide = loadLR2SkinFromSourceFiles(sharedFiles, {
+    kind: 'decide',
+    resources: initialSelect?.resources,
+  });
+  const beforePlay = initialDecide?.resources ?? initialSelect?.resources;
+  const initialPlaySkins = LR2_PLAY_VARIANTS.map((playVariant) =>
+    loadLR2SkinFromSourceFiles(sharedFiles, { kind: 'play', playVariant, resources: beforePlay }),
+  );
+  const initialResult = loadLR2SkinFromSourceFiles(sharedFiles, {
+    kind: 'result',
+    resources: initialPlaySkins[0]?.resources ?? beforePlay,
+  });
+  const initialCourseResult = loadLR2SkinFromSourceFiles(sharedFiles, {
+    kind: 'courseResult',
+    resources: initialResult?.resources,
+  });
+  const playSkinTasks = LR2_PLAY_VARIANTS.map((variant, index) =>
+    track(`play/${variant}K`, Promise.resolve(initialPlaySkins[index])),
   );
   const [
     variantSkins,
@@ -237,10 +252,10 @@ export async function loadLR2ThemeSkinsFromFiles(
     optionChange,
   ] = await Promise.all([
     Promise.all(playSkinTasks),
-    track('select', Promise.resolve(loadLR2SkinFromSourceFiles(sharedFiles, { kind: 'select' }))),
-    track('result', Promise.resolve(loadLR2SkinFromSourceFiles(sharedFiles, { kind: 'result' }))),
-    track('decide', Promise.resolve(loadLR2SkinFromSourceFiles(sharedFiles, { kind: 'decide' }))),
-    track('courseResult', Promise.resolve(loadLR2SkinFromSourceFiles(sharedFiles, { kind: 'courseResult' }))),
+    track('select', Promise.resolve(initialSelect)),
+    track('result', Promise.resolve(initialResult)),
+    track('decide', Promise.resolve(initialDecide)),
+    track('courseResult', Promise.resolve(initialCourseResult)),
     // Theme audio (BGM + system sounds) goes through `materializeLR2ThemeAudio` so the lazy file branch from
     // `readFilesIntoBytesMap`'s `deferAudio: true` default is unwrapped here. The rest of the pack stays lazy — only
     // the theme's small handful of audio files (BGM + ~6 cues) is forced eager up front, since they need to be ready
@@ -278,7 +293,24 @@ export async function loadLR2ThemeSkinsFromFiles(
     resultSkin,
     decideSkin,
     courseResultSkin,
-    loadSkin: (skinOptions) => loadLR2SkinFromSourceFiles(sharedFiles, skinOptions),
+    loadSkin: (skinOptions) => {
+      let resources = beforePlay;
+      switch (skinOptions.kind) {
+        case 'select':
+          resources = undefined;
+          break;
+        case 'decide':
+          resources = selectSkin?.resources;
+          break;
+        case 'result':
+          resources = playSkins[skinOptions.playVariant ?? '7']?.resources ?? beforePlay;
+          break;
+        case 'courseResult':
+          resources = resultSkin?.resources;
+          break;
+      }
+      return loadLR2SkinFromSourceFiles(sharedFiles, { ...skinOptions, resources: skinOptions.resources ?? resources });
+    },
     selectBGM,
     decideBGM,
     clearBGM,
