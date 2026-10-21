@@ -24,13 +24,10 @@
     "@be-music/service-web-theme": "workspace:*",
     "@be-music/skin-beatoraja": "workspace:*",
     "@be-music/skin-lr2": "workspace:*",
-    "@better-auth/passkey": "^1.7.10",
-    "better-auth": "^1.7.10",
     "fflate": "^0.8.3",
     "lil-gui": "^0.21.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20261015.1",
     "vite": "catalog:",
     "vite-plus": "catalog:",
     "wrangler": "^4.151.0"
