@@ -35,6 +35,9 @@ function createSnapshot(
       'skin-beatoraja': [],
       'player-skin-sdk': [],
       'player-browser': [],
+      'player-ui': [],
+      'player-ui-react': [],
+      'player-ui-vue': [],
     },
     totals: {
       exported: 1,
