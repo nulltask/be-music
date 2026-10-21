@@ -239,7 +239,8 @@ export class LibraryService {
       tasks.push(this.loadCharts(chartFiles));
     }
     if (tasks.length === 0) {
-      await this.showSelect();
+      // A canceled skin drop resumes select; unrelated files leave navigation untouched.
+      if (themeFamilies.size > 0) await this.showSelect();
       return;
     }
     await Promise.all(tasks);
