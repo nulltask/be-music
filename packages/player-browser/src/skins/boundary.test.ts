@@ -4,13 +4,13 @@ import { describe, expect, it } from 'vite-plus/test';
 
 /**
  * The built-in skins are written like third-party skins: each may import only the public skin SDK (`@be-music/player-skin-sdk`), files inside
- * its own folder, and the rendering framework it brings (tests may also use the test runner and Node built-ins). The
- * Pixi skins bring `pixi.js` and the shared Pixi kit (`pixi-kit/`, itself limited to the SDK and Pixi); Plain, the
- * Canvas 2D example, brings neither. This keeps the SDK honest — if a built-in skin needs something from the player,
- * the SDK has to offer it.
+ * its own folder, and the rendering framework it brings (tests may also use the test runner and Node built-ins). Native
+ * may also use the reusable presentation components from `@be-music/player-ui`. The Pixi skins bring `pixi.js` and the
+ * shared Pixi kit (`pixi-kit/`, itself limited to the SDK and Pixi); Plain, the Canvas 2D example, brings neither.
  */
 const SKINS_DIR = import.meta.dirname;
 const SDK_PACKAGE = '@be-music/player-skin-sdk';
+const UI_PACKAGE = '@be-music/player-ui';
 const PIXI_KIT = join(SKINS_DIR, 'pixi-kit');
 const PIXI_KIT_BARREL = join(PIXI_KIT, 'index.ts');
 /** Skins drawn without Pixi. */
@@ -31,8 +31,14 @@ function violations(file: string): string[] {
   const found: string[] = [];
   for (const match of readFileSync(file, 'utf8').matchAll(SPECIFIER)) {
     const specifier = match[1] ?? match[2]!;
-    const usesPixi = !FRAMEWORK_FREE.has(relative(SKINS_DIR, skinDir));
-    if (specifier === SDK_PACKAGE || (specifier === 'pixi.js' && usesPixi)) continue;
+    const skinName = relative(SKINS_DIR, skinDir);
+    const usesPixi = !FRAMEWORK_FREE.has(skinName);
+    if (
+      specifier === SDK_PACKAGE ||
+      (specifier === 'pixi.js' && usesPixi) ||
+      (specifier === UI_PACKAGE && skinName === 'native')
+    )
+      continue;
     if (isTest && (specifier === 'vite-plus/test' || specifier.startsWith('node:'))) continue;
     if (specifier.startsWith('.')) {
       const target = resolve(dirname(file), specifier);
