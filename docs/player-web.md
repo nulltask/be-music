@@ -768,7 +768,7 @@ pnpm bench -- --packages player-browser
 - The default family renders the same chart BGA layer stack as LR2 skins inside its built-in BGA frame.
 - BMS rendering applies the implemented `#BGAxx` sub-region, `#SWBGAxx` switching, and `#ARGBxx` / `#EXBMPxx` tint and alpha subset.
 - bmson rendering uses `bga.bga_events`, `bga.layer_events`, and `bga.poor_events`; unlike BMS layer channels, bmson layer images preserve black pixels instead of treating black as transparent.
-- The browser demo can transcode unsupported video assets through the ffmpeg.wasm path before playback.
+- The browser demo can transcode unsupported video assets before playback with ffmpeg.wasm and its single-threaded `@ffmpeg/core`. The multithreaded core is not installed because its current 0.12.x build crashes in libx264; typical BMS BGA videos take tens of seconds to transcode.
 - Natural chart completion waits for a short post-chart delay before opening the result scene. The visual transition
   does not cut off the remaining gameplay audio tail.
 - The gameplay recorder writes MP4 or WebM output and coordinates stop/finalization before scene disposal so active recordings are flushed before the gameplay bus is torn down.
