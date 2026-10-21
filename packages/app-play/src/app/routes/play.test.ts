@@ -196,6 +196,7 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
       autoScratch1P: false,
       autoScratch2P: false,
       replayView: { tempo: true, hiSpeed: true, covers: true, lift: true },
+      tempoEnabled: true,
       tempoPercent: 0,
       tempoPitchMode: 'pitch',
       tempoStretchAlgorithm: 'wsola',

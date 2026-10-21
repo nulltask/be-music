@@ -66,7 +66,7 @@ export interface DecideRouteDeps {
   /** The play options in force, which the screen shows. */
   readonly playOptions: Pick<PlayOptionsService, 'current'>;
   /** The Debug Menu's auto play, and the tempo the status line shows. */
-  readonly guiState: Pick<DemoGUIState, 'autoPlay' | 'tempoPercent' | 'tempoPitchMode'>;
+  readonly guiState: Pick<DemoGUIState, 'autoPlay' | 'tempoEnabled' | 'tempoPercent' | 'tempoPitchMode'>;
   readonly audio: AudioService;
   /** The skin-options panel of the beatoraja play showing. */
   readonly beatorajaSkinOptions: Pick<BeatorajaSkinOptionsPanel, 'refreshBeatorajaPlaySkinOptions'>;
@@ -289,7 +289,7 @@ export class DecideRoute {
     this.setPlayStatus(
       describePlayingStatus(chartEntry.title, {
         ...playingFamily(view),
-        tempoPercent: this.guiState.tempoPercent,
+        tempoPercent: this.guiState.tempoEnabled ? this.guiState.tempoPercent : 0,
         replay: this.lastPlay()?.overrides.replay !== undefined,
       }),
     );

@@ -159,7 +159,7 @@ export interface DemoGUIState extends PlayTempoSettings {
    * by default, remembered across visits and latched at song start.
    */
   replayView: ReplayPlaybackOptions;
-  /** `tempoPercent` / `tempoPitchMode` / `tempoStretchAlgorithm`: see {@link PlayTempoSettings}. */
+  /** `tempoEnabled` / `tempoPercent` / `tempoPitchMode` / `tempoStretchAlgorithm`: see {@link PlayTempoSettings}. */
   /**
    * When true (off by default), every finished play is sent to the Leaderboard when the result scene mounts — signing
    * in anonymously the first time (docs/leaderboard.md). Toggled from the Debug Menu's "Submit to Leaderboard"
