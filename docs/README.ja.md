@@ -36,3 +36,5 @@
 - `@be-music/player-engine` は共有の規則と engine の package です。terminal 固有の挙動は `@be-music/player-terminal` と [Terminal player 実装メモ](player-tui.ja.md)、browser 固有の挙動は `@be-music/player-browser` と [Browser player 実装メモ](player-web.ja.md) に置きます。
 - `@be-music/player-scene-model` は、スキンの種類によらず各画面が何を見せ、どう振る舞うかを持ちます（[シーンモデル](scene-model.ja.md)）。`@be-music/player-browser` ではシーンセッションがそれを動かし、ファミリービューが描きます。
 - `@be-music/skin-lr2` と `@be-music/skin-beatoraja` は skin parsing を renderer 非依存に保ちます。browser PixiJS rendering は `@be-music/player-browser` 側に記述します。
+
+- [ブラウザ Worker のベンチマーク（2026-10-21）](./benchmarks/browser-workers-2026-10-21.ja.md)

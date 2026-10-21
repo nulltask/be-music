@@ -81,6 +81,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 'catalog:'
         version: 5.0.5(@vitest/browser@5.0.5)(vitest@5.0.5)
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
       rimraf:
         specifier: ^6.0.1
         version: 6.1.3
