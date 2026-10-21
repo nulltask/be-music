@@ -244,8 +244,8 @@ export class PlayerWebDemoApp {
       settings: this.guiState,
       setStatus: (text) => this.status.set(text),
     });
-    // Every sound plays through the master volume; start from the remembered level.
-    setMasterVolume(this.guiState.masterVolume / 100);
+    // Every sound plays through the master volume; start from the remembered level and mute state.
+    setMasterVolume(this.guiState.muted ? 0 : this.guiState.masterVolume / 100);
     this.playOptions = new PlayOptionsService(playOptionsFromGUI(this.guiState));
     this.silentMode = new SilentModeSetting({ settings: this.guiState, touchFirst: deviceProfile.touchFirst });
     this.silentMode.install();
