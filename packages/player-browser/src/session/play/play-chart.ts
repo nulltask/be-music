@@ -1,3 +1,5 @@
+import { runBrowserTask } from '../../compute/index.ts';
+import { preparePlaybackTask } from '../../compute/tasks.ts';
 /**
  * Chart preparation for a play (`PlaySession`), whichever family draws it: resolves the chart's `#RANDOM` / `#SWITCH`
  * control flow, prepares the notes the engine judges and the view draws (one shared `PreparedPlaybackChartData`),
@@ -21,7 +23,7 @@ import {
   createBeatAtSecondsResolverFromTimingResolver,
 } from '@be-music/chart-model';
 import { resolveBMSBase, type BeMusicEvent, type BeMusicJSON } from '@be-music/chart-source';
-import { preparePlaybackChart, resolvePlayChart, type PreparedPlaybackChartData } from '@be-music/player-engine';
+import { resolvePlayChart, type PreparedPlaybackChartData } from '@be-music/player-engine';
 import {
   isPlayableInputChannel,
   resolveLaneOptionChannels,
@@ -151,7 +153,7 @@ export interface PlayChartContext {
   resolveSelectedGauge(): GaugeType;
 }
 
-export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): void {
+export async function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): Promise<void> {
   // Resolve `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow once, first, so every play-time consumer below and the
   // engine see the same chosen branches. The draws are fresh each play (LR2 re-rolls each play); a replay resolves
   // with the draws its log recorded, so it plays the recorded branches.
@@ -212,11 +214,14 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // The invisible / keysound array is always prepared even when the overlay is off — so the lil-gui toggle can flip
   // the visualization on mid-song without a chart restart; the per-frame render loop is gated on
   // `showInvisibleNotes`. The audio horizon is left at 0: the engine recomputes its own from realtime triggers.
-  const prepared = preparePlaybackChart(
-    resolvedPlay,
-    { laneModeExtension: extractChartExtension(ctx.chart?.chartPath) },
-    0,
-  );
+  const input = {
+    chart: resolved,
+    randomDraws,
+    playVariant: hostPlayVariant,
+    extension: extractChartExtension(ctx.chart?.chartPath),
+  };
+  const data = await runBrowserTask('prepare-playback', input, () => preparePlaybackTask(input));
+  const prepared: PreparedPlaybackChartData = { ...data, resolvedChart: resolvedPlay };
   ctx.preparedChart = prepared;
   ctx.touchTokenByChannel = undefined;
   ctx.notes = prepared.notes;

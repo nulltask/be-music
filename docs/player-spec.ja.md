@@ -36,6 +36,7 @@ core engine の既定は `lr2` 互換ルールセットと、その `GROOVE` gau
 | `./records`               | 判定ルールセットごとのベスト記録と、その記録の規則                                                                                                                                                                                                                                                                                                 |
 | `./course`                | コースの定義：LR2 の `.lr2crs`、beatoraja のコース、難易度表のコース、コースメーカー、NONSTOP の通しプレイ                                                                                                                                                                                                                                         |
 | `./audio-sink`            | Node（`node-web-audio-api`）と Web Audio のコンテキストの音声シンク                                                                                                                                                                                                                                                                                |
+| `./preparation`           | エンジンを開始せずに再生用ノートを準備する。ブラウザの準備処理用 Worker でも使用できる。                                                                                                                                                                                                                                                           |
 
 譜面の層の名前は `@be-music/chart-model` から読み込みます。`ChartPlayVariant`、`LongNoteMode`、タイムラインとその点、`BGACue` と BGA のタイムラインを作る関数、タイミングの解決、サンプルのトリガーです。それ以外はパッケージの内部です。
 

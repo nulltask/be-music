@@ -7,6 +7,7 @@ export default defineConfig({
     entries: {
       index: 'src/index.ts',
       signals: 'src/signals.ts',
+      preparation: 'src/preparation.ts',
       lanes: 'src/lanes.ts',
       display: 'src/display.ts',
       'audio-sink': 'src/audio-sink.ts',

@@ -43,6 +43,7 @@ const runtimeNeutralSources = [
   'packages/player-engine/src/judging.ts',
   'packages/player-engine/src/lanes.ts',
   'packages/player-engine/src/playable-notes.ts',
+  'packages/player-engine/src/preparation.ts',
   'packages/player-engine/src/replay/**/*.ts',
   'packages/player-engine/src/records/**/*.ts',
   'packages/player-engine/src/ruleset/**/*.ts',

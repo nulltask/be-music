@@ -39,6 +39,11 @@
       "source": "./src/recording/index.ts",
       "types": "./dist/recording.d.ts",
       "default": "./dist/recording.js"
+    },
+    "./compute": {
+      "source": "./src/compute/index.ts",
+      "types": "./dist/compute.d.ts",
+      "default": "./dist/compute.js"
     }
   },
   "scripts": {

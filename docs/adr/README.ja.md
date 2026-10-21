@@ -15,3 +15,5 @@
 - [0008: Accounts の独立と OIDC](./0008-accounts-oidc.ja.md)
 
 - [0009: Accounts がプロフィールとアバターを管理する](./0009-accounts-profiles.ja.md)
+
+- [ブラウザの CPU 処理で並列数を制限した Worker プールを共有する](./0010-browser-task-pool.ja.md)

@@ -1,3 +1,4 @@
+import { runBrowserTask } from '@be-music/player-browser/compute';
 import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player-engine/replay';
 import type { LibraryChart } from '@be-music/player-scene-model';
 import type GUI from 'lil-gui';
@@ -153,16 +154,18 @@ export class LeaderboardPanel {
    */
   maybeSubmit(replay: BeMusicReplay | undefined, chartEntry: LibraryChart): void {
     if (!this.submitThisPlay || replay === undefined) return;
-    const prepared = prepareLeaderboardSubmission(replay, chartEntry.chart, chartEntry.chartPath);
-    if (!prepared.ok) {
-      this.host.setStatus(describeSkippedSubmission(prepared.reason));
-      return;
-    }
+    const input: Parameters<typeof prepareLeaderboardSubmission> = [replay, chartEntry.chart, chartEntry.chartPath];
     const playedRuleset = replay.play.judgeRuleset ?? 'lr2';
-    void submitToLeaderboard(prepared.submission, { client: describeSubmittingClient(this.host.recorder) })
-      .then((result) => {
+    void runBrowserTask('submission', input, () => prepareLeaderboardSubmission(...input))
+      .then(async (prepared) => {
+        if (!prepared.ok) {
+          this.host.setStatus(describeSkippedSubmission(prepared.reason));
+          return;
+        }
+        const result = await submitToLeaderboard(prepared.submission, {
+          client: describeSubmittingClient(this.host.recorder),
+        });
         this.host.setStatus(describeLeaderboardResult(result, playedRuleset));
-        // The first submission signs in anonymously; show the account it created.
         void this.refreshAccount();
       })
       .catch((error: unknown) => {
@@ -179,20 +182,22 @@ export class LeaderboardPanel {
    */
   maybeSubmitCourse(courseReplay: BeMusicCourseReplay, stageSongs: readonly LibraryChart[]): void {
     if (!this.submitThisPlay) return;
-    const prepared = prepareCourseLeaderboardSubmission(
+    const input: Parameters<typeof prepareCourseLeaderboardSubmission> = [
       courseReplay,
       stageSongs.map((chartEntry) => ({ chart: chartEntry.chart, chartPath: chartEntry.chartPath })),
-    );
-    if (!prepared.ok) {
-      this.host.setStatus(describeSkippedCourseSubmission(prepared.reason));
-      return;
-    }
+    ];
     const firstStage = courseReplay.stages[0];
-    // Every stage of a ranked run is judged under one ruleset (the server refuses mixed ones); a NONSTOP run was one play.
     const judged = courseReplay.nonstop?.replay ?? (firstStage?.played === true ? firstStage.replay : undefined);
     const playedRuleset = judged?.play.judgeRuleset ?? 'lr2';
-    void submitCourseToLeaderboard(prepared.submission, { client: describeSubmittingClient(this.host.recorder) })
-      .then((result) => {
+    void runBrowserTask('course-submission', input, () => prepareCourseLeaderboardSubmission(...input))
+      .then(async (prepared) => {
+        if (!prepared.ok) {
+          this.host.setStatus(describeSkippedCourseSubmission(prepared.reason));
+          return;
+        }
+        const result = await submitCourseToLeaderboard(prepared.submission, {
+          client: describeSubmittingClient(this.host.recorder),
+        });
         this.host.setStatus(describeCourseLeaderboardResult(result, playedRuleset));
         void this.refreshAccount();
       })

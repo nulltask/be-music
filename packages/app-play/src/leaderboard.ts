@@ -1,3 +1,4 @@
+import { runBrowserTask } from '@be-music/player-browser/compute';
 import {
   computeChartFingerprint,
   computeFingerprintOfDocument,
@@ -331,8 +332,17 @@ export function describeSkippedCourseSubmission(
 }
 
 async function gzipJSON(value: unknown): Promise<Blob> {
-  const stream = new Blob([JSON.stringify(value)]).stream().pipeThrough(new CompressionStream('gzip'));
-  return await new Response(stream).blob();
+  const bytes = await runBrowserTask(
+    'gzip-json',
+    value,
+    async () =>
+      new Uint8Array(
+        await new Response(
+          new Blob([JSON.stringify(value)]).stream().pipeThrough(new CompressionStream('gzip')),
+        ).arrayBuffer(),
+      ),
+  );
+  return new Blob([new Uint8Array(bytes)]);
 }
 
 async function readError(response: Response): Promise<string | undefined> {
