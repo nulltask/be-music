@@ -213,16 +213,16 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
       await utilsAPI.resolveFirstExistingPath(fixtures.tmpDir, ['missing.wav', 'missing.ogg']);
     },
   });
-  define('shared-utils.writeStereoPcm16LE', {
+  define('shared-utils.writeStereoPCM16LE', {
     run: (fixtures) => {
       const buffer = Buffer.allocUnsafe(16);
-      utilsAPI.writeStereoPcm16LE(buffer, 0, fixtures.sampleRenderResult.left, fixtures.sampleRenderResult.right, 0, 4);
+      utilsAPI.writeStereoPCM16LE(buffer, 0, fixtures.sampleRenderResult.left, fixtures.sampleRenderResult.right, 0, 4);
     },
   });
-  define('shared-utils.writeStereoPcm16BE', {
+  define('shared-utils.writeStereoPCM16BE', {
     run: (fixtures) => {
       const buffer = Buffer.allocUnsafe(16);
-      utilsAPI.writeStereoPcm16BE(buffer, 0, fixtures.sampleRenderResult.left, fixtures.sampleRenderResult.right, 0, 4);
+      utilsAPI.writeStereoPCM16BE(buffer, 0, fixtures.sampleRenderResult.left, fixtures.sampleRenderResult.right, 0, 4);
     },
   });
 
