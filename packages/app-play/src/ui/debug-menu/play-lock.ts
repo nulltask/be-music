@@ -1,11 +1,10 @@
 // The locks a play puts on the Debug Menu: the options it latched as it started stay disabled until it ends, and so do
 // the skin controls, which would make the select screen again and end it. A play whose tempo changes live keeps the
-// tempo slider. It works on the controls it is handed, so it is tested with stand-ins for lil-gui's controllers.
+// tempo slider. It works on the controls it is handed, so it is tested against the native disabled-state contract.
 
-/** What a lock does to a Debug Menu control; a lil-gui `Controller` is one. */
+/** Native bindings and buttons expose the same disabled-state contract. */
 export interface LockableControl {
-  enable(enabled?: boolean): unknown;
-  disable(disabled?: boolean): unknown;
+  disabled: boolean;
 }
 
 /** The Debug Menu's controls a play locks, as they are when it locks or unlocks (a picker can be made again meanwhile). */
@@ -47,23 +46,23 @@ export class PlayLock {
    */
   public lock(liveTempo = false): void {
     const controls = this.controls();
-    controls.replaySave?.disable();
+    if (controls.replaySave) controls.replaySave.disabled = true;
     for (const controller of controls.playOptions) {
-      controller.disable();
+      controller.disabled = true;
     }
     this.setSkinControlsLocked(controls, true);
     // The tempo slider changes this play's tempo live (`allowsLiveTempo`).
     this.liveTempo = liveTempo;
-    if (liveTempo) controls.tempo?.enable();
+    if (liveTempo && controls.tempo) controls.tempo.disabled = false;
   }
 
   /** Re-enables the replay option controllers, and the skin controls, once no play is in flight. */
   public unlock(): void {
     this.liveTempo = false;
     const controls = this.controls();
-    controls.replaySave?.enable();
+    if (controls.replaySave) controls.replaySave.disabled = false;
     for (const controller of controls.playOptions) {
-      controller.enable();
+      controller.disabled = false;
     }
     this.setSkinControlsLocked(controls, false);
   }
@@ -76,7 +75,7 @@ export class PlayLock {
   private setSkinControlsLocked(controls: PlayLockControls, locked: boolean): void {
     this.skinLocked = locked;
     for (const controller of controls.skin) {
-      controller?.enable(!locked);
+      if (controller) controller.disabled = locked;
     }
   }
 }

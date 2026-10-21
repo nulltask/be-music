@@ -16,8 +16,8 @@ export interface PlayerWebDemoElements {
   stage: HTMLDivElement;
   shell: HTMLDivElement;
   /**
-   * Hidden `<input type="file" webkitdirectory>` triggered from a lil-gui function controller. The DOM element survives
-   * across lil-gui rebuilds (e.g. theme changes) so the underlying `change` listener stays bound through the session.
+   * Hidden `<input type="file" webkitdirectory>` triggered from a Tweakpane function controller. The DOM element survives
+   * across Tweakpane rebuilds (e.g. theme changes) so the underlying `change` listener stays bound through the session.
    */
   chartInput: HTMLInputElement;
   /**
@@ -57,10 +57,10 @@ export type SkinFamilyOverride = SkinFamilyId | 'auto';
 export type SkinFamilySceneKind = 'select' | 'decide' | 'gameplay' | 'result';
 
 /**
- * Plain-data state object backing the lil-gui controllers. Each key matches a controller; reads / writes go through the
+ * Plain-data state object backing the Tweakpane controllers. Each key matches a controller; reads / writes go through the
  * same `state.foo` reference so a programmatic update (e.g. `setAudioCompressor` triggered by a URL flag) can call
  * `controller.updateDisplay()` and the GUI reflects the new value. Function members are bound to the host so `this`
- * keeps its meaning when lil-gui invokes them.
+ * keeps its meaning when Tweakpane invokes them.
  */
 export interface DemoGUIState extends PlayTempoSettings {
   autoPlay: boolean;
