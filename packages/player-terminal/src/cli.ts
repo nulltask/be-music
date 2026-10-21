@@ -1,34 +1,9 @@
-import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { isMainThread } from 'node:worker_threads';
+import { isCLIEntryPoint } from '@be-music/shared-utils/cli';
 import { main } from './cli/runner.ts';
 
 export * from './cli/runner.ts';
 
-function isCLIEntryPoint(): boolean {
-  // In a SEA binary the bundle re-runs inside eval workers (see `./sea-main.ts`), where
-  // `process.argv[1]` still equals `process.execPath` — never start the CLI from a worker thread.
-  if (!isMainThread) {
-    return false;
-  }
-  const entry = process.argv[1];
-  if (!entry) {
-    return false;
-  }
-
-  try {
-    const moduleURL = (import.meta as { url?: unknown }).url;
-    if (typeof moduleURL === 'string' && moduleURL.length > 0) {
-      return resolve(entry) === fileURLToPath(moduleURL);
-    }
-  } catch {
-    // SEA/CJS bundles may not provide import.meta.url.
-  }
-
-  return resolve(entry) === resolve(process.execPath);
-}
-
-if (isCLIEntryPoint()) {
+if (isCLIEntryPoint(() => (import.meta as { url?: unknown }).url, { allowExecutableFallback: true })) {
   void main()
     .then(() => {
       process.exit(process.exitCode ?? 0);

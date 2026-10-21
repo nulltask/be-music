@@ -1,7 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import { normalizeHandle, normalizeDisplayName, generateHandle } from '../src/profiles.ts';
 import { avatarURL, generatedAvatarSVG, detectAvatarType } from '../src/avatars.ts';
-import { sha256Hex } from '../src/hash.ts';
+import { sha256HexAsync as sha256Hex } from '@be-music/shared-utils/hash';
 const cases = {
   normalizeHandle: () => normalizeHandle('DJ_Taro'),
   normalizeDisplayName: () => normalizeDisplayName('  Café 🎹  '),

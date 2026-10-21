@@ -1,3 +1,4 @@
+import { settleWithTimeout as settleMaybeAsyncWithTimeout } from '@be-music/shared-utils/async';
 import { effect } from 'alien-signals';
 import { createAbortError } from '@be-music/shared-utils/core';
 import type { LogEntry } from '@be-music/shared-utils/log';
@@ -323,25 +324,4 @@ function postWorkerMessage(
   transferList?: MessagePort[],
 ): void {
   worker.postMessage(message, transferList ?? []);
-}
-
-async function settleMaybeAsyncWithTimeout(
-  task: void | Promise<void> | undefined,
-  timeoutMs: number,
-): Promise<boolean> {
-  if (!task) {
-    return true;
-  }
-  return await settleWithTimeout(Promise.resolve(task), timeoutMs);
-}
-
-async function settleWithTimeout(task: Promise<void>, timeoutMs: number): Promise<boolean> {
-  let completed = false;
-  const guardedTask = task
-    .catch(() => undefined)
-    .then(() => {
-      completed = true;
-    });
-  await Promise.race([guardedTask, new Promise((resolve) => setTimeout(resolve, timeoutMs))]);
-  return completed;
 }

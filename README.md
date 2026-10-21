@@ -107,6 +107,7 @@ The tag is created in the format `@be-music/package-name@x.y.z`.
 
 ## Specifications
 
+- [Shared utilities](./docs/shared-utils.md)
 - [Specification top](./docs/README.md)
 - [Architecture](./docs/architecture.md) and the [architecture decisions](./docs/adr/README.md)
 - [BMS implementation specification](./docs/bms-spec.md)

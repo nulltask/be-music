@@ -531,15 +531,15 @@ export function normalizeObjectKey(value: string, base: 36 | 62 = 36): string {
   if (value.length === 2) {
     const raw0 = value.charCodeAt(0);
     const raw1 = value.charCodeAt(1);
-    const code0 = normalizeASCIIBase36CodeFast(raw0);
-    const code1 = normalizeASCIIBase36CodeFast(raw1);
+    const code0 = normalizeASCIIBase36Code(raw0);
+    const code1 = normalizeASCIIBase36Code(raw1);
     if (code0 >= 0 && code1 >= 0) {
       // Already normalized (the common case, called per event in every hot loop): no new string.
       return code0 === raw0 && code1 === raw1 ? value : String.fromCharCode(code0, code1);
     }
   }
   if (value.length === 1) {
-    const code = normalizeASCIIBase36CodeFast(value.charCodeAt(0));
+    const code = normalizeASCIIBase36Code(value.charCodeAt(0));
     if (code >= 0) {
       return String.fromCharCode(0x30, code);
     }
@@ -615,8 +615,8 @@ export function normalizeChannel(value: string): string {
   if (value.length === 2) {
     const raw0 = value.charCodeAt(0);
     const raw1 = value.charCodeAt(1);
-    const code0 = normalizeASCIIBase36CodeFast(raw0);
-    const code1 = normalizeASCIIBase36CodeFast(raw1);
+    const code0 = normalizeASCIIBase36Code(raw0);
+    const code1 = normalizeASCIIBase36Code(raw1);
     if (code0 >= 0 && code1 >= 0) {
       // Already normalized (the common case, called per event in every hot loop): no new string.
       return code0 === raw0 && code1 === raw1 ? value : String.fromCharCode(code0, code1);
@@ -710,15 +710,4 @@ function cloneBMSObjectLineEntry(entry: BMSObjectLineEntry): BMSObjectLineEntry 
     ...entry,
     events: entry.events.map(cloneEvent),
   };
-}
-
-function normalizeASCIIBase36CodeFast(code: number): number {
-  if (code >= 0x30 && code <= 0x39) {
-    return code;
-  }
-  const uppercase = code & 0xdf;
-  if (uppercase >= 0x41 && uppercase <= 0x5a) {
-    return uppercase;
-  }
-  return -1;
 }

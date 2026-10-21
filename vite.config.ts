@@ -32,6 +32,9 @@ const workspacePackages = [
  * (`PlayerOptions.createAudioSession`, `createUIRuntime`, the parser's `node-file.ts`) instead.
  */
 const runtimeNeutralSources = [
+  'packages/shared-utils/src/core.ts',
+  'packages/shared-utils/src/hash.ts',
+  'packages/shared-utils/src/async.ts',
   'packages/skin-beatoraja/src/scene/**/*.ts',
   'packages/chart-model/src/**/*.ts',
   'packages/chart-source/src/**/*.ts',

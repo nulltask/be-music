@@ -1,3 +1,4 @@
+import { clamp } from '@be-music/shared-utils/core';
 import type { NonstopStitchMap } from '@be-music/player-engine/course';
 import {
   DEFAULT_REPLAY_PLAYBACK_OPTIONS,
@@ -29,7 +30,7 @@ export type { TimeStretchAlgorithm };
 /** `value` as a play tempo: clamped to {@link PLAY_TEMPO_MIN}..{@link PLAY_TEMPO_MAX} on a 1 % grid; 1 when unusable. */
 export function clampPlayTempo(value: number | undefined): number {
   if (value === undefined || !Number.isFinite(value) || value <= 0) return 1;
-  return Math.round(Math.min(PLAY_TEMPO_MAX, Math.max(PLAY_TEMPO_MIN, value)) * 100) / 100;
+  return Math.round(clamp(value, PLAY_TEMPO_MIN, PLAY_TEMPO_MAX) * 100) / 100;
 }
 
 /** Chart seconds `elapsedSeconds` of the play clock cover at `tempo`. */

@@ -22,6 +22,7 @@
     "@be-music/player-scene-model": "workspace:*",
     "@be-music/player-skin-sdk": "workspace:*",
     "@be-music/service-web-theme": "workspace:*",
+    "@be-music/shared-utils": "workspace:*",
     "@be-music/skin-beatoraja": "workspace:*",
     "@be-music/skin-lr2": "workspace:*",
     "fflate": "^0.8.3",

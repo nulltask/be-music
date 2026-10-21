@@ -1,3 +1,4 @@
+import { clamp } from '@be-music/shared-utils/core';
 // Normalizer for the `skin.note` declaration.
 //
 // Beatoraja's `note` block defines per-lane note rendering: which `image[]` IDs to use for each note kind
@@ -267,9 +268,7 @@ function clampPercent(value: unknown, fallback: number): number {
   // clamp silently lifted 0 to 1, which made an authored-zero scale render at 1% (= almost
   // invisible but not actually invisible). Negative values still clamp up to 0 since they're
   // never meaningful here.
-  if (value < 0) return 0;
-  if (value > 1000) return 1000;
-  return value;
+  return clamp(value, 0, 1000);
 }
 
 /**

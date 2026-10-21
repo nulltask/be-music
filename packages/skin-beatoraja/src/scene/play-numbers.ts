@@ -1,3 +1,4 @@
+import { clamp } from '@be-music/shared-utils/core';
 import {
   resolveGreenNumber,
   resolveLaneCover,
@@ -142,7 +143,7 @@ function duration(input: BeatorajaPlayNumberInput, bpm: number, withCover: boole
 }
 
 function clampUnit(value: number): number {
-  return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
+  return Number.isFinite(value) ? clamp(value, 0, 1) : 0;
 }
 
 /**

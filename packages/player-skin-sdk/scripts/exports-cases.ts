@@ -462,4 +462,9 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       for (const entry of BENCH_BROWSE_ENTRIES) skinSdkAPI.browseEntryBadge(entry);
     },
   });
+  define('player-skin-sdk.clamp', {
+    run: () => {
+      skinSdkAPI.clamp(1.5, 0, 1);
+    },
+  });
 }

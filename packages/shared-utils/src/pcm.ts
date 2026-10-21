@@ -1,3 +1,5 @@
+import { floatToInt16 } from './core.ts';
+
 const HOST_IS_LITTLE_ENDIAN = new Uint8Array(new Uint16Array([0x00ff]).buffer)[0] === 0xff;
 type PCM16ByteOrder = 'le' | 'be';
 
@@ -81,8 +83,8 @@ function fillInterleavedInt16(
   let sourceFrame = startFrame;
   let sampleIndex = 0;
   for (let frame = 0; frame < frameCount; frame += 1) {
-    destination[sampleIndex] = floatToInt16Local(left[sourceFrame]!);
-    destination[sampleIndex + 1] = floatToInt16Local(right[sourceFrame]!);
+    destination[sampleIndex] = floatToInt16(left[sourceFrame]!);
+    destination[sampleIndex + 1] = floatToInt16(right[sourceFrame]!);
     sourceFrame += 1;
     sampleIndex += 2;
   }
@@ -124,8 +126,8 @@ function writeStereoPCM16Fallback(
   let pointer = byteOffset;
   let sourceFrame = startFrame;
   for (let frame = 0; frame < frameCount; frame += 1) {
-    const leftSample = floatToInt16Local(left[sourceFrame]!);
-    const rightSample = floatToInt16Local(right[sourceFrame]!);
+    const leftSample = floatToInt16(left[sourceFrame]!);
+    const rightSample = floatToInt16(right[sourceFrame]!);
     if (bigEndian) {
       destination.writeInt16BE(leftSample, pointer);
       destination.writeInt16BE(rightSample, pointer + 2);
@@ -136,12 +138,4 @@ function writeStereoPCM16Fallback(
     sourceFrame += 1;
     pointer += 4;
   }
-}
-
-function floatToInt16Local(value: number): number {
-  const clamped = value <= -1 ? -1 : value >= 1 ? 1 : value;
-  if (clamped >= 0) {
-    return Math.round(clamped * 32767);
-  }
-  return Math.round(clamped * 32768);
 }

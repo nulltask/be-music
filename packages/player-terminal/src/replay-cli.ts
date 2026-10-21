@@ -1,7 +1,5 @@
+import { isCLIEntryPoint } from '@be-music/shared-utils/cli';
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { isMainThread } from 'node:worker_threads';
 import {
   parseReplay,
   simulateReplay,
@@ -213,26 +211,7 @@ export async function runReplayCLI(argv: readonly string[] = process.argv.slice(
   return failures > 0 ? 1 : 0;
 }
 
-function isCLIEntryPoint(): boolean {
-  if (!isMainThread) {
-    return false;
-  }
-  const entry = process.argv[1];
-  if (!entry) {
-    return false;
-  }
-  try {
-    const moduleURL = (import.meta as { url?: unknown }).url;
-    if (typeof moduleURL === 'string' && moduleURL.length > 0) {
-      return resolve(entry) === fileURLToPath(moduleURL);
-    }
-  } catch {
-    // SEA/CJS bundles may not provide import.meta.url.
-  }
-  return resolve(entry) === resolve(process.execPath);
-}
-
-if (isCLIEntryPoint()) {
+if (isCLIEntryPoint(() => (import.meta as { url?: unknown }).url, { allowExecutableFallback: true })) {
   void runReplayCLI()
     .then((code) => {
       process.exit(code);

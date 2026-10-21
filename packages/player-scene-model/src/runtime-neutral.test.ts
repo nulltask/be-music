@@ -6,12 +6,17 @@ import { describe, expect, it } from 'vite-plus/test';
  * The scene models sit below every skin family and renderer: they draw nothing and run unchanged in the browser, in
  * Node and in tests. This walks every module the package barrel reaches — type-only imports included, since they shape
  * the published declarations — and checks that it stays inside this package and that its only package imports are the
- * chart model and the engine, none of which draws. (Node built-ins and DOM globals are kept out by the runtime-neutral
+ * chart model, engine and runtime-neutral shared core, none of which draws. (Node built-ins and DOM globals are kept out by the runtime-neutral
  * lint rules in `vite.config.ts`.)
  */
 const BARREL = resolve(import.meta.dirname, 'index.ts');
 const SRC_DIR = import.meta.dirname;
-const ALLOWED_PACKAGES = ['@be-music/chart-model', '@be-music/chart-source', '@be-music/player-engine/'];
+const ALLOWED_PACKAGES = [
+  '@be-music/chart-model',
+  '@be-music/chart-source',
+  '@be-music/player-engine/',
+  '@be-music/shared-utils/core',
+];
 const SPECIFIER = /\b(?:import|export)\b[^'"]*?\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/gu;
 
 function packageImports(entry: string): string[] {
@@ -37,7 +42,7 @@ function packageImports(entry: string): string[] {
 }
 
 describe('scene models', () => {
-  it('stay inside the package and build only on the chart model and the engine', () => {
+  it('stay inside the package and build only on the chart model, engine and runtime-neutral shared core', () => {
     expect(packageImports(BARREL)).toEqual([]);
   });
 });

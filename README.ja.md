@@ -107,6 +107,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 
 ## 仕様書
 
+- [共通ユーティリティ](docs/shared-utils.ja.md)
 - [仕様書トップ](docs/README.ja.md)
 - [アーキテクチャ](docs/architecture.ja.md)と[設計判断の記録](docs/adr/README.ja.md)
 - [BMS 実装仕様](docs/bms-spec.ja.md)

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, test } from 'vite-plus/test';
-import { sha256Hex, sha256HexOfBytes } from './sha256.ts';
+import { sha256Hex, sha256HexOfBytes, sha256HexAsync } from './hash.ts';
 
 function nodeSHA256(input: string | Uint8Array): string {
   return createHash('sha256').update(input).digest('hex');
@@ -42,5 +42,19 @@ describe('sha256HexOfBytes', () => {
   test('matches node:crypto for every byte value', () => {
     const bytes = Uint8Array.from({ length: 1000 }, (_, index) => (index * 31) & 0xff);
     expect(sha256HexOfBytes(bytes)).toBe(nodeSHA256(bytes));
+  });
+});
+
+describe('sha256HexAsync', () => {
+  test.each(['', 'abc', '譜面 🎹', 'broken \ud800 pair', 'a'.repeat(129)])(
+    'matches the synchronous digest for %j',
+    async (text) => {
+      expect(await sha256HexAsync(text)).toBe(sha256Hex(text));
+    },
+  );
+  test('hashes only the selected byte window of a typed array', async () => {
+    const bytes = new Uint8Array([255, 0, 1, 2, 128, 254]);
+    const selected = bytes.subarray(1, 5);
+    expect(await sha256HexAsync(selected)).toBe(nodeSHA256(selected));
   });
 });

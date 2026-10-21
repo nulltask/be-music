@@ -49,6 +49,21 @@
       "source": "./src/workerize.ts",
       "types": "./dist/workerize.d.ts",
       "default": "./dist/workerize.js"
+    },
+    "./hash": {
+      "source": "./src/hash.ts",
+      "types": "./dist/hash.d.ts",
+      "default": "./dist/hash.js"
+    },
+    "./async": {
+      "source": "./src/async.ts",
+      "types": "./dist/async.d.ts",
+      "default": "./dist/async.js"
+    },
+    "./cli": {
+      "source": "./src/cli.ts",
+      "types": "./dist/cli.d.ts",
+      "default": "./dist/cli.js"
     }
   },
   "scripts": {

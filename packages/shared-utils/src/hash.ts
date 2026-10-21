@@ -96,3 +96,10 @@ export function sha256HexOfBytes(bytes: Uint8Array): string {
 function rotateRight(value: number, bits: number): number {
   return (value >>> bits) | (value << (32 - bits));
 }
+
+/** Native Web Crypto SHA-256 of UTF-8 text or bytes, as lowercase hex. */
+export async function sha256HexAsync(input: Uint8Array | string): Promise<string> {
+  const bytes = typeof input === 'string' ? new TextEncoder().encode(input) : input;
+  const digest = await crypto.subtle.digest('SHA-256', bytes as BufferSource);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}

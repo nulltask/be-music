@@ -1,3 +1,4 @@
+import { clamp } from '@be-music/shared-utils/core';
 import { GAUGE_TYPES } from '@be-music/player-engine/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
 import { DEFAULT_HISPEED, snapHiSpeed } from './hi-speed.ts';
@@ -135,7 +136,7 @@ export function clampHiSpeed(value: number): number {
 export function clampShutter(value: number): number {
   if (!Number.isFinite(value)) return SHUTTER_DEFAULT;
   const snapped = Math.round(value * 100) / 100;
-  return Math.max(0, Math.min(1, snapped));
+  return clamp(snapped, 0, 1);
 }
 
 /** Numeric play options, each with the clamp applied to a value set for it. */
