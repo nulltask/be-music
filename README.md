@@ -20,6 +20,7 @@ BMS/bmson toolchain composed of TypeScript + pnpm workspaces.
 - `@be-music/skin-lr2`: Renderer-independent Lunatic Rave 2 skin parser, asset resolver, and theme loader
 - `@be-music/skin-beatoraja`: Renderer-independent beatoraja JSON/Lua skin parser, normalizer, and theme loader
 - `@be-music/player-skin-sdk`: Framework-free SDK for writing be-music skins for the browser player
+- `@be-music/player-ui`, `@be-music/player-ui-react`, `@be-music/player-ui-vue`: [Reusable Lit Web Components, with typed React and Vue wrappers](./packages/player-ui/README.md)
 - `@be-music/player-browser`: Browser PixiJS runtime: every select, decide, play and result screen as a scene session drawn by a built-in, LR2 or beatoraja family view, behind one host API, plus the audio service, the chart collection, skin loading and gameplay recording
 - `@be-music/app-play`: Private Vite demo that wires folder/ZIP drops, LR2/beatoraja themes, the Debug Menu and browser playback together, as services behind one scene router
 - `@be-music/app-leaderboard`: Private Leaderboard API on Cloudflare Workers: replay submission, verification by re-simulation, and rankings

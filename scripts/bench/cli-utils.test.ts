@@ -50,6 +50,9 @@ function createSnapshot(overrides: Partial<ExportsBenchmarkSnapshot> = {}): Expo
       'skin-beatoraja': [],
       'player-skin-sdk': [],
       'player-browser': [],
+      'player-ui': [],
+      'player-ui-react': [],
+      'player-ui-vue': [],
     },
     totals: {
       exported: 1,

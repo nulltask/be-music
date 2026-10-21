@@ -21,3 +21,5 @@
 - [音声実装をホストが提供する](./0011-host-provided-audio.ja.md)
 
 - [DOM の画面でも scene session を共有する](./0012-native-skin-screens.ja.md)
+
+- [再利用するプレイヤー UI を Web Components にする](./0013-player-ui-components.ja.md)

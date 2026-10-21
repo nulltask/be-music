@@ -17,6 +17,9 @@ export const PACKAGE_NAMES = [
   'skin-beatoraja',
   'player-skin-sdk',
   'player-browser',
+  'player-ui',
+  'player-ui-react',
+  'player-ui-vue',
 ] as const;
 
 export type PackageName = (typeof PACKAGE_NAMES)[number];
