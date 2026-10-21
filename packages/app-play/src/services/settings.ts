@@ -131,13 +131,14 @@ export const VOLUME_STORAGE_KEY = 'be-music-demo.volumes';
 
 export interface StoredVolumes {
   masterVolume: number;
+  muted: boolean;
   keyVolume: number;
   bgmVolume: number;
 }
 
 /** Master / keysound / BGM volumes in percent, as last set in the Debug Menu (all 100 when nothing is stored). */
 export function readStoredVolumes(storage: SettingStorage | undefined = defaultSettingStorage()): StoredVolumes {
-  const fallback = { masterVolume: 100, keyVolume: 100, bgmVolume: 100 };
+  const fallback = { masterVolume: 100, muted: false, keyVolume: 100, bgmVolume: 100 };
   try {
     const raw = storage?.getItem(VOLUME_STORAGE_KEY);
     if (!raw) return fallback;
@@ -146,6 +147,7 @@ export function readStoredVolumes(storage: SettingStorage | undefined = defaultS
       typeof value === 'number' && Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : otherwise;
     return {
       masterVolume: percent(parsed.masterVolume, 100),
+      muted: parsed.muted === true,
       keyVolume: percent(parsed.keyVolume, 100),
       bgmVolume: percent(parsed.bgmVolume, 100),
     };
@@ -155,11 +157,11 @@ export function readStoredVolumes(storage: SettingStorage | undefined = defaultS
 }
 
 export function storeVolumes(
-  volumes: StoredVolumes,
+  volumes: Pick<StoredVolumes, 'masterVolume' | 'keyVolume' | 'bgmVolume'> & Partial<Pick<StoredVolumes, 'muted'>>,
   storage: SettingStorage | undefined = defaultSettingStorage(),
 ): void {
   try {
-    storage?.setItem(VOLUME_STORAGE_KEY, JSON.stringify(volumes));
+    storage?.setItem(VOLUME_STORAGE_KEY, JSON.stringify({ ...volumes, muted: volumes.muted ?? false }));
   } catch {
     // Private windows / blocked storage: the volumes still apply for this session.
   }
