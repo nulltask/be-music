@@ -65,3 +65,15 @@ function defineLazyEvents(chart: BeMusicJSON, packed: PackedEvents, strings: Pac
     },
   });
 }
+
+/** Restore the lazy event accessor after a worker transfers packed columns. */
+export function restorePackedCollectionChart(
+  chart: BeMusicJSON,
+  packed: PackedEvents | undefined,
+  values: readonly string[],
+): void {
+  if (!packed) return;
+  const strings = new PackedEventStrings();
+  for (const value of values) strings.idOf(value);
+  defineLazyEvents(chart, packed, strings);
+}

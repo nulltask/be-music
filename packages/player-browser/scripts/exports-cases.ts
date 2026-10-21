@@ -202,6 +202,54 @@ const BENCH_BEATORAJA_DESTINATION = {
 } satisfies BeatorajaDestinationGroup;
 
 export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): void {
+  define('player-browser.defaultBrowserWorkerCount', {
+    run: () => {
+      playerWebCoreAPI.defaultBrowserWorkerCount(8);
+    },
+  });
+  define('player-browser.normalizeBrowserWorkerCount', {
+    run: () => {
+      playerWebCoreAPI.normalizeBrowserWorkerCount(3, 8);
+    },
+  });
+  define('player-browser.getBrowserWorkerCount', {
+    run: () => {
+      playerWebCoreAPI.getBrowserWorkerCount();
+    },
+  });
+  define('player-browser.setBrowserWorkerCount', {
+    run: () => {
+      playerWebCoreAPI.setBrowserWorkerCount(2);
+    },
+  });
+  define('player-browser.runBrowserTask', {
+    run: async () => {
+      await playerWebCoreAPI.runBrowserTask('benchmark', 0, () => 0);
+    },
+  });
+  define('player-browser.executeBrowserTask', {
+    run: () => {
+      playerWebCoreAPI.executeBrowserTask('parse-chart', {
+        path: 'a.bms',
+        bytes: new TextEncoder().encode('#TITLE Bench\n#00111:01'),
+      });
+    },
+  });
+  define('player-browser.configureBrowserWorkers', {
+    interactive: true,
+    run: () => {
+      playerWebCoreAPI.configureBrowserWorkers(() => {
+        throw new Error('No browser worker');
+      });
+    },
+  });
+  define('player-browser.disposeBrowserWorkers', {
+    interactive: true,
+    run: () => {
+      playerWebCoreAPI.disposeBrowserWorkers();
+    },
+  });
+
   define('player-browser.applyBeatorajaStretchRect', {
     run: () => {
       playerWebCoreAPI.applyBeatorajaStretchRect(

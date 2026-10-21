@@ -1,3 +1,5 @@
+import { getBrowserWorkerCount, setBrowserWorkerCount } from '@be-music/player-browser/compute';
+import { storeWorkerCount } from '../../worker-settings.ts';
 // The Debug Menu's Developer folder. It is built with the menu as `this` (`DebugMenu`).
 
 import type { GUI } from 'lil-gui';
@@ -6,6 +8,19 @@ import type { DebugMenu } from './index.ts';
 
 /** Diagnostics and session behaviour most players never touch, plus the reset for every remembered setting. */
 export function buildDeveloperFolder(this: DebugMenu, developer: GUI): void {
+  const compute = { workers: getBrowserWorkerCount() };
+  developer
+    .add(compute, 'workers', 1, Math.max(1, navigator.hardwareConcurrency || 2), 1)
+    .name('CPU workers')
+    .onChange((count: number) => {
+      setBrowserWorkerCount(count);
+      try {
+        storeWorkerCount(globalThis.localStorage, getBrowserWorkerCount());
+      } catch {
+        /* Storage can be disabled. */
+      }
+    });
+
   // The judge ruleset — no in-skin counterpart; the Debug Menu is its only surface. It switches every judge rule
   // (windows, note selection, empty POOR, long notes, gauge, score — see docs/replay.md).
   this.trackPlayOption(

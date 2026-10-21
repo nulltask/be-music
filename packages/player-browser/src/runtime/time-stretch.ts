@@ -1,3 +1,4 @@
+import { runBrowserTask } from '../compute/index.ts';
 import { logger } from '../logger.ts';
 import { layoutStretchBatch, packStretchBatch, unpackStretchBatch } from './time-stretch-batch.ts';
 
@@ -124,7 +125,11 @@ export async function stretchAudioBuffers(
       log.warn('Signalsmith Stretch unavailable; stretching with WSOLA', error);
     }
   }
-  stretched ??= samples.map((channels) => timeStretchChannels(channels, sampleRate, rate));
+  stretched ??= await Promise.all(
+    samples.map((channels) =>
+      runBrowserTask('stretch', { channels, sampleRate, rate }, () => timeStretchChannels(channels, sampleRate, rate)),
+    ),
+  );
   return stretched.map((channels) => {
     const buffer = context.createBuffer(channels.length, channels[0]!.length, sampleRate);
     channels.forEach((channel, index) => buffer.copyToChannel(channel, index));

@@ -8,6 +8,7 @@ export * from './skin/index.ts';
 export * from './collection/index.ts';
 export * from './runtime/index.ts';
 export * from './recording/index.ts';
+export * from './compute/index.ts';
 
 // Logger lives at the package root because it isn't tied to any single area — every entry emits log lines through it.
 export * from './logger.ts';

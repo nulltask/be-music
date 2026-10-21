@@ -14,6 +14,7 @@ export default defineConfig({
       collection: 'src/collection/index.ts',
       audio: 'src/runtime/index.ts',
       recording: 'src/recording/index.ts',
+      compute: 'src/compute/index.ts',
     },
   }),
 });

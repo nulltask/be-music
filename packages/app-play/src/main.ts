@@ -1,3 +1,9 @@
+import {
+  configureBrowserWorkers,
+  setBrowserWorkerCount,
+  disposeBrowserWorkers,
+} from '@be-music/player-browser/compute';
+import { readWorkerCount } from './worker-settings.ts';
 // The demo's bootstrap: the page's markup, the browser check, the device classes and the Help modal, then the app
 // (`app/app.ts`) once the UI fonts are ready, with the test hook installed over it before it starts.
 import { checkBrowserCompat } from '@be-music/player-browser/collection';
@@ -10,6 +16,18 @@ import { waitForDefaultUIFonts } from './services/built-in-skins.ts';
 import { isTestHookEnabled, TestHookRecorder } from './test-hook.ts';
 import { liveTestHookState } from './services/test-hook.ts';
 import './styles.css';
+
+let workerStorage: Storage | undefined;
+try {
+  workerStorage = globalThis.localStorage;
+} catch {
+  /* Storage can be disabled. */
+}
+setBrowserWorkerCount(readWorkerCount(workerStorage, navigator.hardwareConcurrency));
+configureBrowserWorkers(() => new Worker(new URL('./compute-worker.ts', import.meta.url), { type: 'module' }));
+window.addEventListener('pagehide', (event) => {
+  if (!event.persisted) disposeBrowserWorkers();
+});
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) {
