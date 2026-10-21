@@ -1,10 +1,7 @@
 import { isAbortError, throwIfAborted } from '@be-music/shared-utils/core';
 import { loadOptionalNodeModule } from '@be-music/shared-utils/optional-node-module';
 
-// Browser-compatible cooperative-sleep helper. Mirrors what `node:timers/promises.setTimeout` returned (a Promise
-// that resolves after `ms` ms) but uses the global `setTimeout` available in both runtimes. Hand-rolled so this
-// module stays importable from a browser bundle even though the rest of the file is the Node sink (which only
-// runs when the runtime actually invokes `createNodeAudioSink`; see `engine.ts:createAudioSessionIfEnabled`).
+// Cooperative wait used for output backpressure and graceful draining.
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 export type AudioRuntime = 'node' | 'browser';
@@ -63,10 +60,8 @@ export interface WebAudioContextLike {
   resume?: () => Promise<void>;
 }
 
-export interface AudioSinkClockState {
-  outputSeconds: number;
-  scheduledSeconds: number;
-}
+export type { AudioSinkClockState } from '@be-music/player-engine';
+import type { AudioSinkClockState } from '@be-music/player-engine';
 
 interface NodeWebAudioModule {
   AudioContext?: unknown;

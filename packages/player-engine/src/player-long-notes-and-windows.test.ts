@@ -1,12 +1,15 @@
+import { manualPlay } from './test-support/node-audio-player.ts';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 
 // The engine writes to a mocked Node audio sink (shared state in test-support/player-fixtures.ts).
-vi.mock('./audio-sink.ts', async () => (await import('./test-support/player-fixtures.ts')).mockAudioSinkModule());
+vi.mock('../../player-node-audio/src/audio-sink.ts', async () =>
+  (await import('./test-support/player-fixtures.ts')).mockAudioSinkModule(),
+);
 
 import { resolveChart } from '@be-music/chart-model';
 import { createEmptyJSON } from '../../chart-source/src/index.ts';
-import { manualPlay } from './index.ts';
-import { resolveBGMHeadroomGain, shouldUseAutoMixBGMHeadroomControl } from './core/engine-audio.ts';
+
+import { resolveBGMHeadroomGain, shouldUseAutoMixBGMHeadroomControl } from '../../player-node-audio/src/session.ts';
 import { extractPlayableNotes, resolveDisplayedJudgeRankLabel, resolveDisplayedJudgeRankValue } from './display.ts';
 import { resolveJudgeWindowsMs } from './ruleset/vocabulary.ts';
 import {

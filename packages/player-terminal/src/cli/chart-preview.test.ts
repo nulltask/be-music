@@ -251,7 +251,7 @@ describe('player chart preview', () => {
         renderJSON,
       };
     });
-    vi.doMock('@be-music/player-engine/audio-sink', () => ({
+    vi.doMock('@be-music/player-node-audio/audio-sink', () => ({
       createNodeAudioSink: vi.fn(async () => undefined),
     }));
 
@@ -273,7 +273,7 @@ describe('player chart preview', () => {
     await controller.dispose();
     vi.doUnmock('@be-music/chart-parser');
     vi.doUnmock('@be-music/chart-audio-renderer');
-    vi.doUnmock('@be-music/player-engine/audio-sink');
+    vi.doUnmock('@be-music/player-node-audio/audio-sink');
   });
 
   test('applies global, BGM, and key preview volumes to fallback chart rendering', async () => {
@@ -312,7 +312,7 @@ describe('player chart preview', () => {
         renderJSON,
       };
     });
-    vi.doMock('@be-music/player-engine/audio-sink', () => ({
+    vi.doMock('@be-music/player-node-audio/audio-sink', () => ({
       createNodeAudioSink: vi.fn(async () => undefined),
     }));
 
@@ -339,7 +339,7 @@ describe('player chart preview', () => {
     await controller.dispose();
     vi.doUnmock('@be-music/chart-parser');
     vi.doUnmock('@be-music/chart-audio-renderer');
-    vi.doUnmock('@be-music/player-engine/audio-sink');
+    vi.doUnmock('@be-music/player-node-audio/audio-sink');
   });
 
   test('waits briefly before rendering the focused chart preview', async () => {
@@ -374,7 +374,7 @@ describe('player chart preview', () => {
         renderJSON,
       };
     });
-    vi.doMock('@be-music/player-engine/audio-sink', () => ({
+    vi.doMock('@be-music/player-node-audio/audio-sink', () => ({
       createNodeAudioSink: vi.fn(async () => undefined),
     }));
 
@@ -394,7 +394,7 @@ describe('player chart preview', () => {
     await controller.dispose();
     vi.doUnmock('@be-music/chart-parser');
     vi.doUnmock('@be-music/chart-audio-renderer');
-    vi.doUnmock('@be-music/player-engine/audio-sink');
+    vi.doUnmock('@be-music/player-node-audio/audio-sink');
   });
 
   test('skips preview rendering for entries that lose focus before the settle delay elapses', async () => {
@@ -434,7 +434,7 @@ describe('player chart preview', () => {
         renderJSON,
       };
     });
-    vi.doMock('@be-music/player-engine/audio-sink', () => ({
+    vi.doMock('@be-music/player-node-audio/audio-sink', () => ({
       createNodeAudioSink: vi.fn(async () => undefined),
     }));
 
@@ -457,7 +457,7 @@ describe('player chart preview', () => {
     await controller.dispose();
     vi.doUnmock('@be-music/chart-parser');
     vi.doUnmock('@be-music/chart-audio-renderer');
-    vi.doUnmock('@be-music/player-engine/audio-sink');
+    vi.doUnmock('@be-music/player-node-audio/audio-sink');
   });
 });
 

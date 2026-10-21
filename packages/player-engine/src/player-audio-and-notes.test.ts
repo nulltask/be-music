@@ -1,11 +1,14 @@
+import { autoPlay, manualPlay } from './test-support/node-audio-player.ts';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 
 // The engine writes to a mocked Node audio sink (shared state in test-support/player-fixtures.ts).
-vi.mock('./audio-sink.ts', async () => (await import('./test-support/player-fixtures.ts')).mockAudioSinkModule());
+vi.mock('../../player-node-audio/src/audio-sink.ts', async () =>
+  (await import('./test-support/player-fixtures.ts')).mockAudioSinkModule(),
+);
 
 import { createEmptyJSON } from '../../chart-source/src/index.ts';
 import { parseChart } from '../../chart-parser/src/index.ts';
-import { type AudioSession, autoPlay, type CreateAudioSessionContext, manualPlay } from './index.ts';
+import { type AudioSession, type CreateAudioSessionContext } from './index.ts';
 import { preparePlaybackChartData } from './core/bootstrap.ts';
 import {
   extractInvisiblePlayableNotes,
@@ -222,9 +225,8 @@ describe('player', () => {
     expect(audioSinkState.writes.length).toBe(0);
   });
 
-  test('player: falls back to the bundled Node sink when createAudioSession returns undefined', async () => {
-    // Returning `undefined` from the factory must be treated as "no opinion" so a runtime can probe optional
-    // backends without forfeiting the default sink. The Node sink mock should still receive writes in this path.
+  test('player: continues silently when createAudioSession returns undefined', async () => {
+    // An unavailable adapter leaves playback silent; the engine must not create a Node sink.
     const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 0, channel: '11', position: [0, 1] as const, value: '01' }];
@@ -245,7 +247,7 @@ describe('player', () => {
     });
 
     expect(factoryCalls).toBe(1);
-    expect(audioSinkState.writes.length).toBeGreaterThan(0);
+    expect(audioSinkState.writes.length).toBe(0);
   });
 
   test('player: manual landmine hit sounds #WAV00 when audio is enabled', async () => {

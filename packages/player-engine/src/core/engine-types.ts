@@ -1,11 +1,11 @@
-import { type ChartPlayVariant, type RandomDraws } from '@be-music/chart-model';
+import { type ChartPlayVariant, type RandomDraws, type ResolvedChart } from '@be-music/chart-model';
 import type { LogEntry } from '@be-music/shared-utils/log';
 import { type BeMusicEvent, type BeMusicJSON } from '@be-music/chart-source';
 import { type PlayerStateSignals } from '../state-signals.ts';
 import { type LaneBinding } from './lane-layout.ts';
 import { type ImageResizeAlgorithm } from '../image-resize-algorithm.ts';
 import { type TUINoteHeight } from './ui-options.ts';
-import { type AudioSinkClockState } from '../audio-sink.ts';
+import { type AudioSinkClockState } from '../audio-clock.ts';
 import { type PlayerGaugeSummary, type PlayerUISignalBus } from './ui-signal-bus.ts';
 import { type PlayerInputSignalBus } from './input-signal-bus.ts';
 import type { GaugeType } from '../ruleset/gauge-type.ts';
@@ -183,17 +183,13 @@ export interface PlayerPlayRuntime {
   preparedChart?: PreparedPlaybackChartData;
   createUIRuntime?: (context: CreatePlayerUIRuntimeContext) => Promise<PlayerUIRuntime | undefined>;
   createInputRuntime?: (context: CreatePlayerInputRuntimeContext) => PlayerInputRuntime | undefined;
-  /**
-   * Optional override for the audio playback backend. When provided, the engine routes every sample trigger / channel
-   * stop / pause-resume / finish-dispose through the returned {@link AudioSession} instead of the bundled Node
-   * `createNodeAudioSink` path. Used by the web (Pixi) runtime to wire a Web Audio API backend through the same
-   * judging code the TUI runs, so both runtimes hit the engine's beatoraja-compliant judge / fallback / LN logic
-   * without each one re-implementing it.
-   *
-   * Returning `undefined` (or omitting the option entirely) preserves the original behavior — the engine falls
-   * through to the Node sink, which is what every existing TUI / test path already relies on.
-   */
+  /** The host's audio backend. Omitted or returning undefined means playback without audio. */
   createAudioSession?: (context: CreateAudioSessionContext) => Promise<AudioSession | undefined>;
+  /** Optional sample-duration loader for active-audio diagnostics, including silent playback. */
+  loadAudioSampleDurations?: (
+    resolved: ResolvedChart,
+    options: { baseDir?: string; signal?: AbortSignal },
+  ) => Promise<ReadonlyMap<string, number>>;
   signal?: AbortSignal;
   /**
    * Keeps a play open after its chart is over, so the player's keys still light the lanes (and the chart's remaining
@@ -413,9 +409,8 @@ export class PlayerInterruptedError extends Error {
 }
 
 /**
- * The audio playback contract the engine uses regardless of which runtime backs it. The default Node implementation
- * created in {@link createAudioSessionIfEnabled} wraps `node-web-audio-api`; alternative runtimes (browser Web Audio,
- * test mocks) implement this same shape and plug in via {@link PlayerOptions.createAudioSession}.
+ * The host-provided audio playback contract. Node and browser adapters implement this shape and plug in via
+ * {@link PlayerOptions.createAudioSession}.
  *
  * **Lifetime**: caller invokes `start()` once chart playback begins, `pause()` / `resume()` during input-driven
  * pauses, and exactly one of `finish()` (graceful drain) or `dispose()` (abort, no drain) at the end of playback.
@@ -450,12 +445,12 @@ export interface AudioSession {
 }
 
 /**
- * Context handed to a {@link PlayerOptions.createAudioSession} factory. Mirrors the inputs the engine's built-in
- * Node session would consume so a custom backend can apply the same chart-derived gain / volume semantics. Forward-
- * compatible: backends should ignore unrecognized fields.
+ * Context handed to a {@link PlayerOptions.createAudioSession} factory. The resolved chart is shared with the engine
+ * so adapters use the same timing, sample slices and chart facts.
  */
 export interface CreateAudioSessionContext {
   json: BeMusicJSON;
+  resolvedChart: ResolvedChart;
   options: PlayerOptions;
   mode: 'auto' | 'manual';
   onLoadProgress?: (progress: AudioSessionLoadProgress) => void;

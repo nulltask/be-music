@@ -160,7 +160,7 @@
 ## アーキテクチャ
 
 - **シーンモデル（scene model）**: スキンの種類によらない 1 画面の状態と規則。何を見せ、どう応えるか。[ADR 0002](./adr/0002-scene-model-package.ja.md) と [シーンモデル](./scene-model.ja.md) を参照。
-- **設計した入口（designed entry point）**: ファイル構成ではなく、使う側のために作ったパッケージの subpath。`@be-music/player-engine` は `.`（エンジン）、`./signals`、`./lanes`、`./display`、`./ruleset`、`./replay`、`./records`、`./course`、`./audio-sink` を、`@be-music/player-browser` は `.`、`./host`、`./skin`、`./collection`、`./audio`、`./recording` を公開します。それ以外は内部です。[ADR 0005](./adr/0005-public-entry-points.ja.md) を参照。
+- **設計した入口（designed entry point）**: ファイル構成ではなく、使う側のために作ったパッケージの subpath。`@be-music/player-engine` は `.`（エンジン）、`./signals`、`./lanes`、`./display`、`./ruleset`、`./replay`、`./records`、`./course` を、`@be-music/player-browser` は `.`、`./host`、`./skin`、`./collection`、`./audio`、`./recording` を公開します。それ以外は内部です。[ADR 0005](./adr/0005-public-entry-points.ja.md) を参照。
 - **ライブラリ / ライブラリの譜面 / ライブラリの項目（library / library chart / library entry）**: 選曲画面が一覧する対象。ルートでフォルダにまとめた譜面と、コースフォルダです（`Library`）。その中の 1 つの譜面がライブラリの譜面（`LibraryChart`）で、一覧の 1 本のバーは譜面・フォルダ・コースのいずれかです（`LibraryEntry`、`kind: 'chart' | 'folder' | 'course'`）。
 - **一覧の状態（browse state）**: プレイヤーがライブラリのどこにいて、一覧がどんな形か。開いているフォルダ、各階層のカーソル、検索、ソートとフィルター（一覧のオプション）、お気に入りです（`BrowseState`）。その保存形（`BrowseSnapshot`。`captureBrowse` で取り、`restoreBrowse` で戻します）がプレイの通るシーンをまたいで状態を保ちます。
 - **プレイ状態（play state）**: どのプレイ画面も読むプレイの状態で、エンジンのフレームと判定で進みます。進行中のゲージと EX スコアとそのグラフ、コンボ、判定タイミング、見え方の設定です（`PlayState`。変えるのは `reducePlayState` だけです）。

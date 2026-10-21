@@ -51,6 +51,9 @@ importers:
       '@be-music/player-engine':
         specifier: workspace:*
         version: link:packages/player-engine
+      '@be-music/player-node-audio':
+        specifier: workspace:*
+        version: link:packages/player-node-audio
       '@be-music/player-scene-model':
         specifier: workspace:*
         version: link:packages/player-scene-model
@@ -433,9 +436,6 @@ importers:
 
   packages/player-engine:
     dependencies:
-      '@be-music/chart-audio-renderer':
-        specifier: workspace:*
-        version: link:../chart-audio-renderer
       '@be-music/chart-model':
         specifier: workspace:*
         version: link:../chart-model
@@ -451,6 +451,24 @@ importers:
       alien-signals:
         specifier: ^3.2.1
         version: 3.2.1
+
+  packages/player-node-audio:
+    dependencies:
+      '@be-music/chart-audio-renderer':
+        specifier: workspace:*
+        version: link:../chart-audio-renderer
+      '@be-music/chart-model':
+        specifier: workspace:*
+        version: link:../chart-model
+      '@be-music/chart-source':
+        specifier: workspace:*
+        version: link:../chart-source
+      '@be-music/player-engine':
+        specifier: workspace:*
+        version: link:../player-engine
+      '@be-music/shared-utils':
+        specifier: workspace:*
+        version: link:../shared-utils
       node-web-audio-api:
         specifier: ^2.2.0
         version: 2.2.0
@@ -507,6 +525,9 @@ importers:
       '@be-music/player-engine':
         specifier: workspace:*
         version: link:../player-engine
+      '@be-music/player-node-audio':
+        specifier: workspace:*
+        version: link:../player-node-audio
       '@be-music/shared-utils':
         specifier: workspace:*
         version: link:../shared-utils
