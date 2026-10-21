@@ -1,3 +1,4 @@
+import { clamp } from '@be-music/shared-utils/core';
 // Pure helpers for translating beatoraja `destination[]` samples into PixiJS `Sprite` props.
 //
 // Keeping the math pure (no Pixi imports here) means the test suite can exercise every keyframe interaction
@@ -544,9 +545,7 @@ export function applyBeatorajaStretchRect(
 
 function clampUnit(v: number): number {
   if (!Number.isFinite(v)) return 0;
-  if (v <= 0) return 0;
-  if (v >= 1) return 1;
-  return v;
+  return clamp(v, 0, 1);
 }
 
 function packRGBTint(r: number, g: number, b: number): number {
@@ -557,9 +556,7 @@ function packRGBTint(r: number, g: number, b: number): number {
 }
 
 function clamp255(v: number): number {
-  if (v <= 0) return 0;
-  if (v >= 255) return 255;
-  return Math.round(v);
+  return Math.round(clamp(v, 0, 255));
 }
 
 /**

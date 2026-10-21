@@ -15,7 +15,7 @@ import { bestScore, score, scoreResult } from '../db/schema.ts';
 import { rankOfExScore, countPlayers } from '../ranking.ts';
 import { mergeBestScores } from '../scoring/best.ts';
 import { clearLampRank, resolveMissCount } from '@be-music/player-engine/ruleset';
-import { sha256Hex } from '../hash.ts';
+import { sha256HexAsync as sha256Hex } from '@be-music/shared-utils/hash';
 import { playedFileOf } from './played-file.ts';
 import { checkPlayedChart, gzipText, playedChartStatements, putChartDocument } from './played-chart.ts';
 import { byRulesetOrder, RULESET_IDS } from '../rulesets.ts';

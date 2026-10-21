@@ -1,3 +1,4 @@
+import { clamp } from '@be-music/shared-utils/core';
 import { Graphics, Sprite, Texture, type Container } from 'pixi.js';
 import {
   centerToAnchor,
@@ -435,7 +436,5 @@ export class BeatorajaGraphRenderer {
 /** Clamp a number to `[0, 1]`. NaN / negative / overshoot all collapse to a safe in-range value. */
 function clampUnit01(v: number): number {
   if (!Number.isFinite(v)) return 0;
-  if (v <= 0) return 0;
-  if (v >= 1) return 1;
-  return v;
+  return clamp(v, 0, 1);
 }

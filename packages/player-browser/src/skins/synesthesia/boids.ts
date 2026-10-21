@@ -1,3 +1,4 @@
+import { clamp } from '@be-music/player-skin-sdk';
 import { hash01 } from '@be-music/player-skin-sdk';
 
 /**
@@ -172,5 +173,5 @@ function wall(value: number, min: number, max: number): number {
 }
 
 function clampTo(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
+  return clamp(value, min, max);
 }

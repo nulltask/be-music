@@ -1,3 +1,4 @@
+import { clamp } from '@be-music/shared-utils/core';
 /**
  * The Debug Menu's play tempo settings: the tempo slider (-50 % .. +50 %), how a tempo change sounds (also for NONSTOP
  * FIT stages) and the keep-pitch stretcher. Remembered in `localStorage` and read once per play, at its start; with the
@@ -35,7 +36,7 @@ export const DEFAULT_PLAY_TEMPO_SETTINGS: Readonly<PlayTempoSettings> = {
 /** `value` as a whole percent within the slider's range; 0 when it is not a finite number. */
 export function clampTempoPercent(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
-  return Math.round(Math.min(TEMPO_PERCENT_MAX, Math.max(TEMPO_PERCENT_MIN, value)));
+  return Math.round(clamp(value, TEMPO_PERCENT_MIN, TEMPO_PERCENT_MAX));
 }
 
 /** The play tempo multiplier (`tempo` / `speed`) of a slider percent: -20 → 0.8. */

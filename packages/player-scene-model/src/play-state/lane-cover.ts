@@ -1,3 +1,4 @@
+import { clamp } from '@be-music/shared-utils/core';
 import { SHUTTER_DEFAULT } from '../play-options/choices.ts';
 import type { HiddenSuddenMode, PlayOptions } from '../play-options/options.ts';
 import type { LaneCover, PlaySide } from './types.ts';
@@ -18,7 +19,7 @@ export interface LaneCoverState {
 }
 
 function clampFraction(value: number): number {
-  return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
+  return Number.isFinite(value) ? clamp(value, 0, 1) : 0;
 }
 
 /**

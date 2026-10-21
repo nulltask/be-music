@@ -6,16 +6,17 @@ import { describe, expect, it } from 'vite-plus/test';
  * The skin SDK never touches a rendering framework: skins bring their own (Canvas 2D, WebGL, PixiJS, three.js, …). This
  * walks every module the SDK barrel reaches — type-only imports included, since they shape the published declarations —
  * and checks that it stays inside this package and that its only package imports are the repository's own engine
- * packages, none of which draws.
+ * packages and runtime-neutral shared core, none of which draws.
  */
 const SDK_BARREL = resolve(import.meta.dirname, 'index.ts');
 const SRC_DIR = import.meta.dirname;
-/** Packages the SDK may build on: the chart model, the engine and the scene models, which import no renderer. */
+/** The SDK builds on chart/engine/scene models and runtime-neutral utilities, which import no renderer. */
 const ALLOWED_PACKAGES = [
   '@be-music/chart-model',
   '@be-music/chart-source',
   '@be-music/player-engine/',
   '@be-music/player-scene-model',
+  '@be-music/shared-utils/core',
 ];
 const SPECIFIER = /\b(?:import|export)\b[^'"]*?\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/gu;
 

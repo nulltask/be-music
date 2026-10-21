@@ -1,3 +1,4 @@
+import { clamp } from '@be-music/player-skin-sdk';
 import { Graphics, type Container } from 'pixi.js';
 import { GROOVE } from './layout.ts';
 import {
@@ -1008,5 +1009,5 @@ function formatExRate(exScore: number | undefined, max: number | undefined): str
 
 function clampPercent(value: number): number {
   if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(100, value));
+  return clamp(value, 0, 100);
 }

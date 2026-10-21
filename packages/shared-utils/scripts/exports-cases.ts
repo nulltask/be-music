@@ -1,3 +1,6 @@
+import * as hashAPI from '@be-music/shared-utils/hash';
+import * as asyncAPI from '@be-music/shared-utils/async';
+import * as cliAPI from '@be-music/shared-utils/cli';
 import * as utilsAPI from '@be-music/shared-utils';
 import * as optionalNodeModuleAPI from '@be-music/shared-utils/optional-node-module';
 import * as workerizeAPI from '@be-music/shared-utils/workerize';
@@ -255,6 +258,31 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
   define('shared-utils.workerize.invokeWorkerizedFunction', {
     run: async () => {
       await workerizeAPI.invokeWorkerizedFunction(inlineWorker, [41], { signal: workerAbortController.signal });
+    },
+  });
+  define('shared-utils.hash.sha256Hex', {
+    run: () => {
+      hashAPI.sha256Hex('Be-Music benchmark');
+    },
+  });
+  define('shared-utils.hash.sha256HexOfBytes', {
+    run: () => {
+      hashAPI.sha256HexOfBytes(eagerEntry);
+    },
+  });
+  define('shared-utils.hash.sha256HexAsync', {
+    run: async () => {
+      await hashAPI.sha256HexAsync(eagerEntry);
+    },
+  });
+  define('shared-utils.async.settleWithTimeout', {
+    run: async () => {
+      await asyncAPI.settleWithTimeout(Promise.resolve(), 100);
+    },
+  });
+  define('shared-utils.cli.isCLIEntryPoint', {
+    run: () => {
+      cliAPI.isCLIEntryPoint(() => import.meta.url);
     },
   });
 }

@@ -1,3 +1,4 @@
+import { clamp } from '@be-music/shared-utils/core';
 import {
   gaugePercent,
   resolveLaneCover,
@@ -83,7 +84,7 @@ export function resolveBeatorajaPlaySliderValue(type: number, input: BeatorajaPl
 }
 
 function clampUnit(value: number): number {
-  return Math.max(0, Math.min(1, value));
+  return clamp(value, 0, 1);
 }
 
 interface CachedPolyline {

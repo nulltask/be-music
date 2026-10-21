@@ -25,7 +25,8 @@
   "dependencies": {
     "@be-music/chart-model": "workspace:*",
     "@be-music/chart-source": "workspace:*",
-    "@be-music/player-engine": "workspace:*"
+    "@be-music/player-engine": "workspace:*",
+    "@be-music/shared-utils": "workspace:*"
   },
   "devDependencies": {
     "@be-music/chart-parser": "workspace:*"
