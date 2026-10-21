@@ -200,6 +200,8 @@ export type SelectIntent =
 
 /** A skin family's drawing of the select screen. */
 export interface SelectView extends FamilyView<SelectFrame, SelectIntent> {
+  readonly ownsSearchInput?: boolean;
+  focusSearch?(): boolean;
   /** How long the skin's launch outro plays before a started chart is handed on, in ms; `0` for none. */
   readonly launchOutroMs: number;
   /**

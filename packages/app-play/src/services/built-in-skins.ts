@@ -5,6 +5,7 @@ import {
   createBeMusicSkinRegistry,
   latticeSkin,
   plainSkin,
+  nativeSkin,
   synesthesiaSkin,
   type BeMusicSkinRegistry,
 } from '@be-music/player-browser/skin';
@@ -12,7 +13,7 @@ import type { BeMusicSkin } from '@be-music/player-skin-sdk';
 import { readStoredBuiltInSkinId } from './settings.ts';
 
 /**
- * Built-in be-music skins beyond Synesthesia and Plain are on hold while those two are polished: Phantom and Lattice,
+ * Built-in be-music skins beyond Synesthesia, Plain and Native are on hold while those two are polished: Phantom and Lattice,
  * and "Add skin" (a be-music skin module). The code stays; turning this on brings them back. LR2 themes and beatoraja
  * skins are not affected: they load from a drop, `?skin=` or the skin ZIP URL as before.
  */
@@ -20,7 +21,7 @@ export const EXTRA_BUILT_IN_SKINS_ENABLED: boolean = false;
 
 /** Built-in be-music skins the default family can render with; the Debug Menu's "Built-in skin" picks one. */
 export const BE_MUSIC_SKINS: BeMusicSkinRegistry = createBeMusicSkinRegistry(
-  EXTRA_BUILT_IN_SKINS_ENABLED ? BUILT_IN_BE_MUSIC_SKINS : [synesthesiaSkin, plainSkin],
+  EXTRA_BUILT_IN_SKINS_ENABLED ? BUILT_IN_BE_MUSIC_SKINS : [synesthesiaSkin, plainSkin, nativeSkin],
 );
 // Lattice ships with the player but isn't loaded by default; bring it back when it was the last skin picked.
 if (EXTRA_BUILT_IN_SKINS_ENABLED && readStoredBuiltInSkinId() === latticeSkin.id) BE_MUSIC_SKINS.add(latticeSkin);

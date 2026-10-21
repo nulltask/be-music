@@ -3,6 +3,7 @@
  * kit's family and returns the scene to show with `PixiSceneHost.setScene`.
  */
 
+import { DOMResultView } from '../view/built-in/dom-view.ts';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import type { PlayResult, PlayRunKind, SystemSoundSet } from '@be-music/player-scene-model';
 import type { BrowserAssetSource } from '../collection/types.ts';
@@ -113,7 +114,7 @@ function createResultView(
       };
     }
     case 'built-in': {
-      const view = new BuiltInResultView(kit, source);
+      const view = kit.skin.dom?.result ? new DOMResultView(kit) : new BuiltInResultView(kit, source);
       return {
         view,
         updateKit: (next) => (next.family === 'built-in' ? view.updateKit(next) : ignoreKit(next, 'built-in')),

@@ -3,6 +3,7 @@
  * kit's family and returns the scene to show with `PixiSceneHost.setScene`.
  */
 
+import { DOMSelectView } from '../view/built-in/dom-view.ts';
 import type { BeatorajaSkinConfig } from '@be-music/skin-beatoraja';
 import type { BrowseSnapshot, LibraryEntry, PlayOptions, SystemSoundSet } from '@be-music/player-scene-model';
 import type { BrowserChartCollection } from '../collection/types.ts';
@@ -60,6 +61,9 @@ export interface SelectSceneOptions extends SessionSceneOptions {
 
 /** The select screen as a scene. */
 export interface SelectScene extends SessionScene<SelectFrame, SelectIntent> {
+  /** The skin owns a native search input, so the host can hide its overlay input. */
+  readonly ownsSearchInput: boolean;
+  focusSearch(): boolean;
   /** The browse position as plain data (`captureBrowse`): hand it back as `browse`, or to `restore`, later. */
   snapshot(): BrowseSnapshot;
   /** The bar under the cursor, or `undefined` when the list is empty. */
@@ -125,7 +129,7 @@ function createSelectView(
       };
     }
     case 'built-in': {
-      const view = new BuiltInSelectView(kit);
+      const view = kit.skin.dom?.select ? new DOMSelectView(kit) : new BuiltInSelectView(kit);
       return {
         view,
         updateKit: (next) => (next.family === 'built-in' ? view.updateKit(next) : ignoreKit(next, 'built-in')),
@@ -146,6 +150,13 @@ class FamilySelectScene extends SessionScene<SelectFrame, SelectIntent> implemen
     super(session, familyView.view, options);
     this.selectSession = session;
     this.familyView = familyView;
+  }
+
+  public get ownsSearchInput(): boolean {
+    return this.familyView.view.ownsSearchInput === true;
+  }
+  public focusSearch(): boolean {
+    return this.familyView.view.focusSearch?.() ?? false;
   }
 
   public snapshot(): BrowseSnapshot {

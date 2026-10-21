@@ -3,6 +3,7 @@
  * kit's family and returns the scene to show with `PixiSceneHost.setScene`.
  */
 
+import { DOMDecideView } from '../view/built-in/dom-view.ts';
 import type { ResolvedPlayChart } from '@be-music/player-engine';
 import type { CourseView, LibraryChart, PlayOptions, SystemSoundSet } from '@be-music/player-scene-model';
 import type { BrowserAssetSource } from '../collection/types.ts';
@@ -113,7 +114,7 @@ function createDecideView(
       };
     }
     case 'built-in': {
-      const view = new BuiltInDecideView(kit, source);
+      const view = kit.skin.dom?.decide ? new DOMDecideView(kit) : new BuiltInDecideView(kit, source);
       return {
         view,
         updateKit: (next) => (next.family === 'built-in' ? view.updateKit(next) : ignoreKit(next, 'built-in')),
