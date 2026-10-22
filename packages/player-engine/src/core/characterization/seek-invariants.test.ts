@@ -3,12 +3,13 @@ import { describe, expect, test } from 'vite-plus/test';
 import type { PlayerOptions } from '../engine-types.ts';
 import type { RulesetId } from '../../ruleset/definitions.ts';
 import { basicChart, exRankChart, longNoteChart } from './charts.ts';
-import { observePlay } from './harness.ts';
+import { command, observePlay, type PlayObservation } from './harness.ts';
 
 /**
- * What an AUTO play started partway (`startAtSeconds`) must show: what a play from the chart's start shows at that
- * second, and the same end. Each case starts at a second no note lies just after, so the play from 0 reaches it on a
- * tick that judges nothing past it.
+ * What an AUTO play that seeks must show (ADR 0016): at the second sought, what a play from the chart's start shows
+ * there, and the same end — whether it starts there (`startAtSeconds`) or seeks there forwards or backwards mid-play.
+ * Each case goes to a second no note lies just after, so the play from 0 reaches it on a tick that judges nothing past
+ * it.
  */
 
 interface StartCase {
@@ -27,37 +28,45 @@ const CASES: readonly StartCase[] = [
 
 const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', 'iidx'];
 
-async function playBothWays(startCase: StartCase, ruleset: RulesetId) {
+/** How the play gets to the case's second: from its start, or by a seek command forwards or backwards mid-play. */
+const WAYS = {
+  'started there': (startCase: StartCase) => ({ options: { startAtSeconds: startCase.at } }),
+  'sought forwards': (startCase: StartCase) => ({ script: [command(300, { kind: 'seek', seconds: startCase.at })] }),
+  'sought backwards': (startCase: StartCase) => ({ script: [command(3000, { kind: 'seek', seconds: startCase.at })] }),
+} as const;
+
+async function playBothWays(
+  startCase: StartCase,
+  ruleset: RulesetId,
+  way: keyof typeof WAYS,
+): Promise<{ fromStart: PlayObservation; sought: PlayObservation }> {
   const options: PlayerOptions = { ...startCase.options, judgeRuleset: ruleset };
-  const fromStart = await observePlay({
+  const fromStart = await observePlay({ driver: 'auto', chart: startCase.chart(), options, captureAt: [startCase.at] });
+  const { options: wayOptions, script } = { options: {}, script: [], ...WAYS[way](startCase) };
+  const sought = await observePlay({
     driver: 'auto',
     chart: startCase.chart(),
-    options,
+    options: { ...options, ...wayOptions },
+    script,
     captureAt: [startCase.at],
   });
-  const partway = await observePlay({
-    driver: 'auto',
-    chart: startCase.chart(),
-    options: { ...options, startAtSeconds: startCase.at },
-    captureAt: [startCase.at],
-  });
-  return { fromStart, partway };
+  return { fromStart, sought };
 }
 
-describe('an AUTO play started partway', () => {
+describe('an AUTO play that seeks', () => {
   for (const startCase of CASES) {
     for (const ruleset of RULESETS) {
-      test(`${startCase.name} / ${ruleset}: ends as a play from the start does`, async () => {
-        const { fromStart, partway } = await playBothWays(startCase, ruleset);
-        expect(partway.outcome).toBe('completed');
-        expect(partway.summary).toEqual(fromStart.summary);
-      });
-
-      // D1 of the seek redesign: the notes before the start count, but no judge cue carries their combo.
-      test.fails(`${startCase.name} / ${ruleset}: shows at the start what a play from the start shows there`, async () => {
-        const { fromStart, partway } = await playBothWays(startCase, ruleset);
-        expect(partway.captured).toEqual(fromStart.captured);
-      });
+      for (const way of Object.keys(WAYS) as (keyof typeof WAYS)[]) {
+        test(`${startCase.name} / ${ruleset} / ${way}: shows there and at the end what a play from the start shows`, async () => {
+          const { fromStart, sought } = await playBothWays(startCase, ruleset, way);
+          expect(sought.outcome).toBe('completed');
+          expect(sought.frames.generations?.at(-1)).toMatch(/ generation=1 /);
+          expect(sought.captured).toEqual(fromStart.captured);
+          expect(sought.summary).toEqual(fromStart.summary);
+          // A play that sought records no replay.
+          expect(sought.replay).toBeUndefined();
+        });
+      }
     }
   }
 });

@@ -13,11 +13,17 @@ import type { PlayJudge } from './play-strategy.ts';
 
 /**
  * Playback controls: the input commands every play takes the same way — pause, HIGH-SPEED, tempo changes (live, or a
- * replay following its log's), view changes for the replay and interrupts — and the lane commands it hands its judge.
+ * replay following its log's), view changes for the replay, seeks and interrupts — and the lane commands it hands its
+ * judge.
  */
 export interface PlayControls {
   /** Drains the input bus and applies every command on it. */
   consume(): void;
+  /**
+   * The seek to apply on this tick, if one is waiting: the last `seek` command drained so far (seeks coalesce, the last
+   * one wins), or the play's start (`PlayerOptions.startAtSeconds`) until the chart starts. Taking it clears it.
+   */
+  takeSeek(): number | undefined;
   /** Applies the replay's recorded tempo changes due by `nowSec`. */
   followReplayTempoChanges(nowSec: number): void;
   /** Interrupts the play at chart second `seconds` (a replay reaching the instant its log was aborted at). */
@@ -48,6 +54,9 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
 
   // A pause sent during the lead-in holds the chart at its start.
   let pauseAtStart = false;
+  // The seek waiting for the next tick: the play's start first, when its judge can start partway.
+  let pendingSeek: number | undefined =
+    judge.seek !== undefined && session.startAtSeconds > 0 ? session.startAtSeconds : undefined;
   const togglePause = (): void => {
     if (session.clock === undefined) {
       pauseAtStart = !pauseAtStart;
@@ -131,6 +140,9 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
         },
         onViewChange: (change) => replayRecorder?.recordViewChange(commandSeconds(), change),
         onTempoChange: changeTempo,
+        onSeek: (seconds) => {
+          if (judge.seek !== undefined) pendingSeek = seconds;
+        },
         // Lane and key-state commands go to the judge; a strategy without live key input drops them.
         onUnhandledCommand:
           handleLaneCommand === undefined
@@ -140,6 +152,11 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
               },
         logInterrupt: (reason) => traceInterrupt(reason, commandSeconds()),
       });
+    },
+    takeSeek: () => {
+      const seconds = pendingSeek;
+      pendingSeek = undefined;
+      return seconds;
     },
     interrupt: (reason, seconds) => {
       if (interruptedReason !== undefined) return;

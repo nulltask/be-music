@@ -1,0 +1,124 @@
+import { formatSeconds } from '../utils.ts';
+import { writeRuntimeEventLog } from './engine-trace.ts';
+import type { PreparedPlaybackChartData } from './bootstrap.ts';
+import type { JudgeCoreEffectSink } from './judge-core-types.ts';
+import type { PlaySession } from './play-session.ts';
+import type { PlayJudge } from './play-strategy.ts';
+import type { PlayerUIFrameSummary, PlayerUISeekJudgment } from './ui-signal-bus.ts';
+
+/**
+ * Seeking: a command to the running play, handled by the play loop between two ticks (ADR 0016). The play is never
+ * started again: its audio, its chart time and its judge move to the second sought, and the host is told through a
+ * `seek` UI command and a frame of the next generation.
+ */
+
+/** A judge-core effect sink that keeps, of a judge rebuilt from the start, only the judgments it makes. */
+export interface SeekRebuildSink {
+  readonly emit: JudgeCoreEffectSink;
+  readonly judgments: PlayerUISeekJudgment[];
+}
+
+/**
+ * The sink a judge is re-simulated into when it seeks: nothing is heard, shown or traced, and every judgment is kept
+ * with the chart second it was made at and the gauge and EX score of `summary` right after it.
+ */
+export function createSeekRebuildSink(summary: Readonly<PlayerUIFrameSummary>): SeekRebuildSink {
+  const judgments: PlayerUISeekJudgment[] = [];
+  let seconds = 0;
+  return {
+    judgments,
+    emit: (effect) => {
+      if ('seconds' in effect) seconds = effect.seconds;
+      if (effect.kind !== 'judge-combo') return;
+      judgments.push({
+        judge: effect.judge,
+        combo: effect.combo,
+        ...(effect.channel !== undefined ? { channel: effect.channel } : {}),
+        ...(effect.signedDeltaMs !== undefined ? { deltaMs: effect.signedDeltaMs } : {}),
+        seconds,
+        ...(summary.gauge !== undefined ? { gauge: summary.gauge.current } : {}),
+        exScore: summary.exScore,
+      });
+    },
+  };
+}
+
+/** Clears what the judge marked on the play's notes (judged, the long-note visibility), so it can judge them again. */
+export function resetPlayNotes(chart: PreparedPlaybackChartData): void {
+  for (const notes of [chart.notes, chart.renderNotes, chart.scorableNotes, chart.invisibleNotes]) {
+    for (const note of notes) {
+      note.judged = false;
+      note.visibleUntilBeat = undefined;
+    }
+  }
+  for (const mine of chart.landmineNotes) mine.judged = false;
+}
+
+/** The chart second a seek to `seconds` goes to: within the chart, the start for a value that is not a number. */
+export function clampSeekSeconds(session: PlaySession, seconds: number): number {
+  if (!Number.isFinite(seconds)) return 0;
+  return Math.max(0, Math.min(seconds, session.totalSeconds));
+}
+
+/**
+ * Applies a seek to chart second `seconds` at play-clock time `nowMs`, when the judge can seek; returns the second it
+ * went to, or `undefined` when it could not. The audio session stops what plays and resets its gains (`seek`), the
+ * volume changes before the target apply again and the sounds still ringing there start partway; chart time re-bases on
+ * the play clock at the tempo in force (a paused play stays paused); the judge rebuilds its state from the start; the
+ * UI buses drop what they still hold of the old position and get the `seek` command, the long notes held across the
+ * target and a cleared POOR image; and a frame at the target goes out. A play that seeks records no replay.
+ */
+export function applySeek(session: PlaySession, judge: PlayJudge, seconds: number, nowMs: number): number | undefined {
+  if (judge.seek === undefined) return undefined;
+  const { audioSession, uiEnabled, uiSignals, summary } = session;
+  const target = clampSeekSeconds(session, seconds);
+  session.seekGeneration += 1;
+  const generation = session.seekGeneration;
+
+  audioSession?.seek?.(target);
+  session.volumeChanges.seek(target);
+  session.backgroundAudio.seek(target, (sound, offsetSeconds) =>
+    audioSession?.triggerEventAt?.(sound.event, offsetSeconds),
+  );
+  session.tempoClock.rebase(nowMs, target);
+  session.resetScore();
+  resetPlayNotes(session.playbackChart);
+  const rebuilt = judge.seek(target);
+
+  // What the buses still hold belongs to the old position.
+  uiSignals.drainCommands();
+  session.activeStateSignals?.drainPendingJudgeCombos();
+  if (uiEnabled) {
+    const { gauge, course, ...counts } = summary;
+    uiSignals.pushCommand({
+      kind: 'seek',
+      generation,
+      seconds: target,
+      snapshot: {
+        summary: {
+          ...counts,
+          ...(gauge !== undefined ? { gauge: { ...gauge } } : {}),
+          ...(course !== undefined ? { course: { ...course } } : {}),
+        },
+        combo: session.score.scoreTracker.combo,
+        maxCombo: session.score.scoreTracker.maxCombo,
+        judgments: rebuilt.judgments,
+      },
+    });
+    for (const held of rebuilt.heldLongNotes) {
+      if (held.endBeat !== undefined) {
+        uiSignals.pushCommand({ kind: 'hold-lane-until-beat', channel: held.channel, beat: held.endBeat });
+      }
+      uiSignals.pushCommand({ kind: 'long-note-start', channel: held.channel, beat: held.beat, mode: held.mode });
+    }
+    uiSignals.pushCommand({ kind: 'clear-poor-bga' });
+  } else {
+    writeRuntimeEventLog(session.writeOutput, 'seek', [
+      ['time', formatSeconds(target)],
+      ['generation', generation],
+    ]);
+  }
+  session.tracer.flushUntil(target);
+  session.publishUIFrame(target, session.beatAtSeconds(target));
+  return target;
+}

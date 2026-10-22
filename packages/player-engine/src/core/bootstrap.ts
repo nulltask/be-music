@@ -84,8 +84,10 @@ export function createInitialPlayerSummary(
   applyGaugeTick: (judge: GaugeJudgeIndex, rate: number) => void;
   /** Empties the gauge for good (LR2's `HP = 0` on leaving a reversed play with notes outstanding). */
   drainGaugeToZero: () => void;
+  /** Puts the summary and the gauge back to the play's start, in place (a seek rebuilds the play from there). */
+  reset: () => void;
 } {
-  const gauge = new RulesetGauge(ruleset.gauge);
+  let gauge = new RulesetGauge(ruleset.gauge);
   const gaugeSummary: PlayerGaugeSummary = {
     current: gauge.value,
     max: ruleset.gauge.max,
@@ -105,21 +107,25 @@ export function createInitialPlayerSummary(
     gaugeSummary.failedMidPlay = gauge.failedMidPlay;
   };
 
+  const summary: PlayerSummary = {
+    total: totalNotes,
+    perfect: 0,
+    fast: 0,
+    slow: 0,
+    great: 0,
+    good: 0,
+    bad: 0,
+    poor: 0,
+    emptyPoor: 0,
+    exScore: 0,
+    score: 0,
+    combo: 0,
+    maxCombo: 0,
+    gauge: gaugeSummary,
+  };
+
   return {
-    summary: {
-      total: totalNotes,
-      perfect: 0,
-      fast: 0,
-      slow: 0,
-      great: 0,
-      good: 0,
-      bad: 0,
-      poor: 0,
-      emptyPoor: 0,
-      exScore: 0,
-      score: 0,
-      gauge: gaugeSummary,
-    },
+    summary,
     applyGaugeJudge: (judge: GrooveGaugeJudgmentKind): void => {
       gauge.applyJudge(GROOVE_GAUGE_JUDGE_TO_RULESET_INDEX[judge]);
       syncGaugeSummary();
@@ -137,6 +143,14 @@ export function createInitialPlayerSummary(
     drainGaugeToZero: (): void => {
       gauge.drainToZero();
       syncGaugeSummary();
+    },
+    reset: (): void => {
+      gauge = new RulesetGauge(ruleset.gauge);
+      syncGaugeSummary();
+      for (const key of ['perfect', 'fast', 'slow', 'great', 'good', 'bad', 'poor', 'emptyPoor', 'exScore'] as const) {
+        summary[key] = 0;
+      }
+      summary.score = 0;
     },
   };
 }
