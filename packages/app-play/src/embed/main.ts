@@ -1,0 +1,20 @@
+// The embed page's bootstrap (`/embed/?track=…`): the browser workers, then the preview player over the page.
+import { configureBrowserWorkers, disposeBrowserWorkers } from '@be-music/player-browser/compute';
+import { PreviewApp } from './preview-app.ts';
+import { parseEmbedTrack } from './track-url.ts';
+import './embed.css';
+
+configureBrowserWorkers(() => new Worker(new URL('../compute-worker.ts', import.meta.url), { type: 'module' }));
+window.addEventListener('pagehide', (event) => {
+  if (!event.persisted) disposeBrowserWorkers();
+});
+
+const element = (id: string): HTMLElement => {
+  const found = document.getElementById(id);
+  if (!found) throw new Error(`The embed page has no #${id}`);
+  return found;
+};
+
+void new PreviewApp({ root: element('preview'), stage: element('stage'), overlay: element('overlay') }).open(
+  parseEmbedTrack(window.location.href),
+);
