@@ -10,8 +10,8 @@ const chrome = {
 };
 
 describe('resolvePreviewBGARect', () => {
-  it('puts the BGA square in the right pane, against the top edge', () => {
-    expect(resolvePreviewBGARect(300)).toEqual({ x: 529, y: 16, w: 232, h: 232 });
+  it('fills the height above the video controls beside narrow lanes', () => {
+    expect(resolvePreviewBGARect(184)).toEqual({ x: 208, y: 16, w: 397, h: 397 });
   });
 
   it('stays clear of lanes reaching past the middle', () => {

@@ -26,6 +26,17 @@ export { BeMusicPreviewHUDElement } from './components/preview-hud.ts';
 export { BeMusicPreviewSelectElement } from './components/preview-select.ts';
 export { BeMusicPreviewStartElement } from './components/preview-start.ts';
 export { formatPlaybackTime, resolveSeekTarget } from './playback.ts';
+export {
+  PREVIEW_CONTROLS_RATIO,
+  PREVIEW_GUTTER,
+  PREVIEW_INFO_BELOW_HEIGHT,
+  PREVIEW_INFO_MIN_WIDTH,
+  previewContentBottom,
+  resolvePreviewBGARect,
+  resolvePreviewInfoBox,
+  type PreviewInfoBox,
+  type PreviewLayout,
+} from './preview-layout.ts';
 export { resolveGameplayPanels, type BeMusicGameplayPanels } from './gameplay-data.ts';
 export { BeMusicPlayfieldCanvasElement } from './playfield/canvas-element.ts';
 export { resolvePlayfieldParts } from './playfield/parts.ts';

@@ -1,6 +1,7 @@
 // The embed's preview player: loads the `?track=` archive, lists its charts when it has several, and plays the one
-// picked in AUTO from the preview skin, with video controls. A play ends back on the list, or — for a single chart —
-// on a replay button. Nothing is judged from input and nothing is recorded.
+// picked in AUTO from the preview skin, with video controls. `?chart=` naming one of them (`findEmbedChart`) plays it on
+// its own, as a track of one chart does. A play ends back on the list, or — for a chart played on its own — on a
+// replay button. Nothing is judged from input and nothing is recorded.
 
 import { createAudioService, setMasterVolume, type AudioService } from '@be-music/player-browser/audio';
 import {
@@ -11,6 +12,7 @@ import {
 import { createPlayScene, PixiSceneHost, type PlayScene } from '@be-music/player-browser/host';
 import type { LibraryChart } from '@be-music/player-scene-model';
 import { defineBeMusicElements, resolveSeekTarget, type BeMusicUIEvent } from '@be-music/player-ui';
+import { findEmbedChart } from './chart-match.ts';
 import { createPreviewSkin, type PreviewChrome, type PreviewChromeState } from './preview-skin.ts';
 import type { EmbedTrack } from './track-url.ts';
 
@@ -38,6 +40,8 @@ export class PreviewApp {
   private scene: PlayScene | undefined;
   /** The chart the scene plays, and whether it has started (its play button was pressed, or it was picked). */
   private current: { chart: LibraryChart; started: boolean } | undefined;
+  /** The chart played on its own (`?chart=`, or a track of one chart): its play ends on a replay button. */
+  private single: LibraryChart | undefined;
 
   public constructor(elements: PreviewAppElements) {
     this.elements = elements;
@@ -56,27 +60,27 @@ export class PreviewApp {
       return;
     }
     this.trackName = track.fileName.replace(/\.zip$/iu, '');
-    this.showMessage('Loading track…');
+    const progress = new LoadingProgress();
+    this.showOverlay(progress.element);
     try {
       await this.host.mount(this.elements.stage);
       window.addEventListener('keydown', this.handleKey, true);
-      const response = await fetch(track.fetchURL, { redirect: 'follow' });
-      if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
-      const file = new File([await response.arrayBuffer()], track.fileName);
+      const bytes = await downloadTrack(track.fetchURL, (loaded, total) => progress.downloading(loaded, total));
+      const file = new File([bytes], track.fileName);
+      progress.reading(0, 0);
       this.collection = await new BrowserChartCollectionStore().loadFromFiles([file], {
-        onProgress: (progress) =>
-          this.showMessage(
-            progress.total > 0 ? `Loading track… ${progress.current} / ${progress.total}` : 'Loading track…',
-          ),
+        onProgress: ({ current, total }) => progress.reading(current, total),
       });
     } catch (error) {
       this.showMessage(`Could not load the track: ${error instanceof Error ? error.message : String(error)}`);
       return;
     }
-    if (this.charts.length === 0) {
+    const named = track.chart === undefined ? undefined : findEmbedChart(this.charts, track.chart);
+    this.single = named ?? (this.charts.length === 1 ? this.charts[0] : undefined);
+    if (this.single !== undefined) {
+      await this.prepare(this.single, 'play');
+    } else if (this.charts.length === 0) {
       this.showMessage('The track holds no playable chart.');
-    } else if (this.charts.length === 1) {
-      await this.prepare(this.charts[0]!, 'play');
     } else {
       this.showSelect();
     }
@@ -154,7 +158,7 @@ export class PreviewApp {
   private async ended(scene: PlayScene): Promise<void> {
     if (this.scene !== scene) return;
     const chart = this.current?.chart;
-    if (this.charts.length > 1 || chart === undefined) {
+    if (chart === undefined || chart !== this.single) {
       await this.closeScene();
       this.showSelect();
       return;
@@ -271,4 +275,77 @@ class PreviewChromeController implements PreviewChrome {
     this.current = { ...this.current, ...change };
     for (const listener of this.listeners) listener();
   }
+}
+
+/**
+ * Fetches the track archive, reporting the bytes received (`total` is 0 when the response gives no length, or when it
+ * is compressed in transit and the length counts the compressed bytes).
+ */
+async function downloadTrack(url: string, onProgress: (loaded: number, total: number) => void): Promise<ArrayBuffer> {
+  const response = await fetch(url, { redirect: 'follow' });
+  if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
+  const encoded = (response.headers.get('content-encoding') ?? 'identity') !== 'identity';
+  const length = Number(response.headers.get('content-length'));
+  const total = !encoded && Number.isFinite(length) && length > 0 ? length : 0;
+  if (response.body === null) return response.arrayBuffer();
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let loaded = 0;
+  onProgress(0, total);
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    loaded += value.byteLength;
+    onProgress(loaded, total);
+  }
+  const bytes = new Uint8Array(loaded);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes.buffer;
+}
+
+/** The track's loading state over the stage: what is happening, and a bar that fills as it goes. */
+class LoadingProgress {
+  public readonly element: HTMLElement;
+  private readonly label: HTMLElement;
+  private readonly bar: HTMLProgressElement;
+
+  public constructor() {
+    this.element = document.createElement('div');
+    this.element.className = 'preview-loading';
+    this.label = document.createElement('p');
+    this.bar = document.createElement('progress');
+    this.bar.setAttribute('aria-label', 'Loading track');
+    this.element.append(this.label, this.bar);
+    this.downloading(0, 0);
+  }
+
+  public downloading(loaded: number, total: number): void {
+    const size =
+      total > 0 ? `${formatMegabytes(loaded)} / ${formatMegabytes(total)} MB` : `${formatMegabytes(loaded)} MB`;
+    this.show(`Downloading track… ${size}`, loaded, total);
+  }
+
+  public reading(current: number, total: number): void {
+    this.show(total > 0 ? `Reading charts… ${current} / ${total}` : 'Reading charts…', current, total);
+  }
+
+  /** An indeterminate bar while the total is unknown. */
+  private show(text: string, value: number, max: number): void {
+    this.label.textContent = text;
+    if (max > 0) {
+      this.bar.max = max;
+      this.bar.value = Math.min(value, max);
+    } else {
+      this.bar.removeAttribute('value');
+    }
+  }
+}
+
+function formatMegabytes(bytes: number): string {
+  return (bytes / 1_000_000).toFixed(1);
 }
