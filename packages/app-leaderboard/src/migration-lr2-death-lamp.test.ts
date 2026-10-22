@@ -8,7 +8,7 @@ import {
   signInAnonymously,
   startTestBindings,
   submissionBody,
-} from '../test/support.ts';
+} from './test-support/support.ts';
 import { createApp } from './app.ts';
 import type { Env } from './env.ts';
 

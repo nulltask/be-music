@@ -398,6 +398,10 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
       displayedScore: play.displayedScore,
       ...(bpm !== undefined ? { bpm } : {}),
       fps: this.fps,
+      judgments: {
+        '1P': play.judgeSideState['1P'].judge || 'EMPTY_POOR',
+        '2P': play.judgeSideState['2P'].judge || 'EMPTY_POOR',
+      },
     });
   }
 

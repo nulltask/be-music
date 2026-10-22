@@ -10,6 +10,24 @@ import {
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 
 describe('evaluateBeatorajaLuaSkin', () => {
+  it('advances os.clock in seconds from the runtime clock for delayed draw predicates', () => {
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(`local start = nil
+        return { draw = function()
+          start = start or os.clock()
+          return (os.clock() - start) * 1000 >= 1800
+        end, clock = function() return os.clock() end }`),
+      modules: [],
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    const value = result.value as Record<string, import('./lua.ts').BeatorajaLuaFunctionValue>;
+    expect(evaluateBeatorajaLuaBoolean(value.draw!, { time: () => 1_000_000 })).toBe(false);
+    expect(evaluateBeatorajaLuaBoolean(value.draw!, { time: () => 2_799_000 })).toBe(false);
+    expect(evaluateBeatorajaLuaBoolean(value.draw!, { time: () => 2_801_000 })).toBe(true);
+    expect(evaluateBeatorajaLuaNumber(value.clock!, { time: () => 3_250_000 })).toBe(3.25);
+    expect(evaluateBeatorajaLuaNumber(value.clock!)).toBe(0);
+  });
+
   it('returns the table value from a trivial entry script', () => {
     const result = evaluateBeatorajaLuaSkin({
       entry: enc('return { name = "demo", w = 1280, h = 720 }'),

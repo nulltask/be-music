@@ -8,7 +8,7 @@ import {
   signInAnonymously,
   startTestBindings,
   submissionBody,
-} from '../test/support.ts';
+} from './test-support/support.ts';
 
 let env: Env;
 let dispose: () => Promise<void>;

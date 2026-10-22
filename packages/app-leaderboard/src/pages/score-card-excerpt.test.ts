@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { makeChart } from '../../test/support.ts';
+import { makeChart } from '../test-support/support.ts';
 import { excerptLanes, excerptLaneWidths, scoreCardExcerpt } from './score-card-excerpt.ts';
 
 describe('score card excerpt', () => {

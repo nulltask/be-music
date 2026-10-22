@@ -11,7 +11,10 @@ import { mountSelect } from './select.ts';
 import { mountGameplay } from './play.ts';
 import { mountDecide, mountResult } from './result.ts';
 
-/** Responsive native screens and HUD; Canvas retains time-sensitive lanes, BGA and judgments. */
+/**
+ * Responsive native screens and HUD. The playfield is a set of components, each drawing on a canvas the size of its
+ * part of the stage; the player's own canvas keeps only the BGA.
+ */
 export const nativeSkin: BeMusicSkin = defineBeMusicSkin({
   apiVersion: BE_MUSIC_SKIN_API_VERSION,
   version: '1.0.0',
@@ -40,8 +43,8 @@ export const nativeSkin: BeMusicSkin = defineBeMusicSkin({
   result: { draw: drawDOMRequired },
   id: 'native',
   label: 'Native (DOM + Canvas)',
-  description: 'Native HTML collection, settings, results and score HUD with a Canvas playfield.',
-  gameplay: { draw: drawPlayfield },
+  description: 'Native HTML collection, settings, results and score HUD with a playfield of canvas components.',
+  gameplay: { draw: drawPlayfield, drawsOnDOM: true, drawsMines: true, drawsLaneCover: true, drawsMeasureLines: true },
   decide: { durationMs: 2000, draw: drawDOMRequired },
   dom: { select: mountSelect, gameplay: mountGameplay, decide: mountDecide, result: mountResult },
 });

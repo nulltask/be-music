@@ -1,4 +1,4 @@
-import { Texture, Assets } from 'pixi.js';
+import { Texture } from 'pixi.js';
 import {
   decodeDDSImageData,
   decodeTGA,
@@ -10,7 +10,7 @@ import {
 } from '@be-music/skin-lr2';
 import { normalizePath } from '@be-music/shared-utils/core';
 import type { LR2LoadedFont } from './bitmap-text.ts';
-import { attachBlobURLToTexture } from '../../media/textures.ts';
+import { loadTextureFromBytes as loadImageTextureFromBytes } from '../../media/textures.ts';
 import { logger } from '../../logger.ts';
 
 const log = logger('lr2-font');
@@ -190,39 +190,9 @@ async function loadTextureFromBytes(bytes: Uint8Array, relPath: string): Promise
   if (ext === 'dds') {
     return loadDDSTexture(bytes, relPath);
   }
-  // Pixi v8 `Assets.load` accepts a URL — we mint an in-memory blob URL so the loader's WebGL upload pipeline is
-  // reused. The URL is *not* revoked synchronously after the upload because the texture's `<img>` source keeps a
-  // reference to it for the lifetime of the GPU upload (and for re-decode on a WebGL context-loss event); revoking
-  // here would break those redirects. Instead we stamp the URL onto the texture via `attachBlobURLToTexture` so
-  // `destroyTextureAndRevokeBlobURL` (used by `destroyUniqueTextures` and the LR2 texture stores) can revoke the URL
-  // when the texture is finally torn down.
-  const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'bmp' ? 'image/bmp' : 'image/png';
-  // Copy into a fresh `ArrayBuffer` — `bytes.buffer` may be a `SharedArrayBuffer` view (when the bytes came through a
-  // worker), and `Blob` only accepts plain `ArrayBuffer` parts.
-  const buffer = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(buffer).set(bytes);
-  const blob = new Blob([buffer], { type: mime });
-  const url = URL.createObjectURL(blob);
-  try {
-    const texture = await Assets.load<Texture>(url);
-    // Pixi v8 occasionally resolves `Assets.load` with a falsy value for unsupported payloads (notably when the URL
-    // points at bytes that don't match the MIME-implied format — Pixi probes a few decoders and returns null when
-    // every one rejects). Guard so the `attachBlobURLToTexture` call below doesn't blow up on null; return undefined
-    // so the caller falls back to the system-font / placeholder text path. Earlier this surfaced as a crashing
-    // `Cannot set properties of null (setting 'Symbol...')` whenever a DDS bitmap-font slipped past the extension
-    // dispatch above.
-    if (!texture) {
-      URL.revokeObjectURL(url);
-      log.info(`decoder returned no texture for ${relPath} — falling back to system font`);
-      return undefined;
-    }
-    attachBlobURLToTexture(texture, url);
-    return texture;
-  } catch (error) {
-    log.warn(`failed to decode ${relPath}`, error);
-    URL.revokeObjectURL(url);
-    return undefined;
-  }
+  // Blob URLs carry no extension for Pixi's asset parser selection. Use the shared byte decoder,
+  // which detects PNG/BMP/JPEG directly (WMIX_HD mixes PNG and TGA sheets in a single font).
+  return loadImageTextureFromBytes(relPath, bytes);
 }
 
 /**

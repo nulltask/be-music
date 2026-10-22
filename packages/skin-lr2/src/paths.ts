@@ -196,6 +196,19 @@ export function scoreSkinPath(
     if (lower.includes('/decide') && lower.endsWith('.lr2skin')) return 10;
     return informationTypeMatches(options.type, kind) ? 20 : 100;
   }
+  // A declared key mode outranks a misleading filename. When the requested mode is absent,
+  // prefer the same number of play sides before borrowing an SP/DP layout.
+  const declaredVariant = options.type === undefined ? undefined : informationTypeToPlayVariant(options.type);
+  if (options.variant && declaredVariant && declaredVariant !== options.variant) {
+    const fallbackOrder: Record<LR2PlayVariant, readonly LR2PlayVariant[]> = {
+      '5': ['5', '7', '9', '10', '14'],
+      '7': ['7', '5', '9', '14', '10'],
+      '9': ['9', '7', '5', '14', '10'],
+      '10': ['10', '14', '5', '7', '9'],
+      '14': ['14', '10', '7', '5', '9'],
+    };
+    return 60 + fallbackOrder[options.variant].indexOf(declaredVariant);
+  }
   if (options.variant && lower.endsWith(`/play_${options.variant}.lr2skin`)) return -1;
   if (lower.endsWith('/play_7.lr2skin')) return 0;
   if (lower.endsWith('/play_5.lr2skin')) return 1;
