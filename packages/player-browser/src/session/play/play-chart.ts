@@ -253,7 +253,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     // intact.
     applyRandomMode(
       ctx.notes as Array<{ channel: string }>,
-      resolveLaneOptionChannels('1P', hostPlayVariant),
+      resolveLaneOptionChannels('1P', hostPlayVariant, prepared.laneBindings),
       ctx.options.random1P ?? 'OFF',
       Math.random,
       ctx.mineNotes as Array<{ channel: string }>,
@@ -261,7 +261,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     );
     applyRandomMode(
       ctx.notes as Array<{ channel: string }>,
-      resolveLaneOptionChannels('2P', hostPlayVariant),
+      resolveLaneOptionChannels('2P', hostPlayVariant, prepared.laneBindings),
       ctx.options.random2P ?? 'OFF',
       Math.random,
       ctx.mineNotes as Array<{ channel: string }>,
@@ -505,14 +505,14 @@ export function flipDPChannel(channel: string): string {
 /**
  * Shuffles `notes` in place per the chosen arrangement mode. Only `allLanes` — one side's keyboard lanes, from
  * `resolveLaneOptionChannels` — are touched; scratches, the keyboard modes' wheel, and the other side pass through
- * untouched, matching LR2 / beatoraja where the lane options shuffle the keys only. The `usedLanes` filter trims the permutation domain to the lanes actually
- * present in the chart so 5K charts (lanes 1..5 only) MIRROR / RANDOM cleanly inside that subset.
+ * untouched. MIRROR / RANDOM use the complete mode domain, even on sparse charts. The note-wise modes currently
+ * keep their own occupied-lane domains.
  *
- * - `MIRROR` — deterministic reversal of `usedLanes`
- * - `RANDOM` — single chart-wide permutation (Fisher-Yates with the supplied RNG)
+ * - `MIRROR` — deterministic reversal of the full mode key set
+ * - `RANDOM` — chart-wide permutation of the full mode key set (Fisher-Yates with the supplied RNG)
  * - `S-RANDOM` — per-chord permutation; chord notes share the beat key, and we re-permute within that group so notes on
  *   the same beat never collide on one lane
- * - `SCATTER` — currently aliased to `RANDOM`; reserved for a future per-measure permutation pass
+ * - `SCATTER` — legacy chart-wide permutation of occupied lanes
  */
 export function applyRandomMode(
   notes: Array<{ channel: string }>,
@@ -520,14 +520,16 @@ export function applyRandomMode(
   mode: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER',
   rng: () => number,
   // Extra channel-bearing arrays (e.g. mine notes) that should follow the same lane shuffle as the playable notes. The
-  // `usedLanes` set is computed from `notes` only — secondary entries on a lane that has no playable notes get remapped
-  // through the same chart-wide map / chord permutation, so mines stay anchored to the visual lane they were authored
-  // on relative to the surrounding chord.
+  // Secondary entries follow the same mode-wide map / chord permutation, even when no playable note occupies their
+  // lane, so their authored relationship to the keys is preserved.
   ...secondary: Array<Array<{ channel: string }>>
 ): void {
   if (mode === 'OFF') return;
-  const usedLanes = allLanes.filter((lane) => notes.some((note) => note.channel === lane));
-  if (usedLanes.length < 2) return;
+  const domainLanes =
+    mode === 'MIRROR' || mode === 'RANDOM'
+      ? allLanes
+      : allLanes.filter((lane) => notes.some((note) => note.channel === lane));
+  if (domainLanes.length < 2) return;
 
   const remapAll = (map: Map<string, string>): void => {
     for (const note of notes) {
@@ -544,18 +546,18 @@ export function applyRandomMode(
 
   if (mode === 'MIRROR') {
     const map = new Map<string, string>();
-    for (let index = 0; index < usedLanes.length; index += 1) {
-      map.set(usedLanes[index]!, usedLanes[usedLanes.length - 1 - index]!);
+    for (let index = 0; index < domainLanes.length; index += 1) {
+      map.set(domainLanes[index]!, domainLanes[domainLanes.length - 1 - index]!);
     }
     remapAll(map);
     return;
   }
 
   if (mode === 'RANDOM' || mode === 'SCATTER') {
-    const perm = shuffleArray([...usedLanes], rng);
+    const perm = shuffleArray([...domainLanes], rng);
     const map = new Map<string, string>();
-    for (let index = 0; index < usedLanes.length; index += 1) {
-      map.set(usedLanes[index]!, perm[index]!);
+    for (let index = 0; index < domainLanes.length; index += 1) {
+      map.set(domainLanes[index]!, perm[index]!);
     }
     remapAll(map);
     return;
@@ -572,7 +574,7 @@ export function applyRandomMode(
     };
     const groupBy = (arr: Array<{ channel: string }>): void => {
       for (const note of arr) {
-        if (!usedLanes.includes(note.channel)) continue;
+        if (!domainLanes.includes(note.channel)) continue;
         const beat = beatOf(note);
         if (beat === undefined) continue;
         const group = grouped.get(beat);
@@ -586,10 +588,10 @@ export function applyRandomMode(
     groupBy(notes);
     for (const arr of secondary) groupBy(arr);
     for (const chord of grouped.values()) {
-      const perm = shuffleArray([...usedLanes], rng);
+      const perm = shuffleArray([...domainLanes], rng);
       const map = new Map<string, string>();
-      for (let index = 0; index < usedLanes.length; index += 1) {
-        map.set(usedLanes[index]!, perm[index]!);
+      for (let index = 0; index < domainLanes.length; index += 1) {
+        map.set(domainLanes[index]!, perm[index]!);
       }
       for (const note of chord) {
         const target = map.get(note.channel);

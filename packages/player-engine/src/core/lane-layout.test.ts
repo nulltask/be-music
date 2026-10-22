@@ -420,3 +420,32 @@ describe('the play-mode table drives the lane layout', () => {
     }
   });
 });
+
+describe('complete lane-option domains', () => {
+  test.each([
+    ['5', '1P', ['11', '12', '13', '14', '15']],
+    ['5', '2P', []],
+    ['10', '2P', ['21', '22', '23', '24', '25']],
+    ['7', '2P', []],
+    ['9', '1P', ['11', '12', '13', '14', '15', '16', '17', '18', '19']],
+    ['9', '2P', []],
+  ] as const)('%s %s uses the complete mode key set', (variant, side, expected) => {
+    expect(resolveLaneOptionChannels(side, variant)).toEqual(expected);
+  });
+
+  test('PMS-STD right-bank encodings are keys of 1P, including on a sparse chart', () => {
+    const bindings = createLaneBindings(['11'], { playVariant: '9', chartExtension: '.pms' });
+    expect(resolveLaneOptionChannels('1P', '9', bindings)).toEqual([
+      '11',
+      '12',
+      '13',
+      '14',
+      '15',
+      '22',
+      '23',
+      '24',
+      '25',
+    ]);
+    expect(resolveLaneOptionChannels('2P', '9', bindings)).toEqual([]);
+  });
+});

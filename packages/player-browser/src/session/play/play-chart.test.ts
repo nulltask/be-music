@@ -1,3 +1,9 @@
+import { resolveChart, type ChartPlayVariant } from '@be-music/chart-model';
+import { parseChart } from '@be-music/chart-parser';
+import { preparePlaybackChart } from '@be-music/player-engine';
+import { createReplayRecorder } from '@be-music/player-engine/replay';
+import { createEmptyScore } from '@be-music/player-engine/ruleset';
+import { applyReplayArrangement } from '../../chart/replay-arrangement.ts';
 import { describe, expect, test } from 'vite-plus/test';
 import { resolveLaneOptionChannels } from '@be-music/player-engine/lanes';
 import { applyRandomMode, extractChartExtension, flipDPChannel, shuffleArray } from './play-chart.ts';
@@ -42,15 +48,28 @@ describe('applyRandomMode', () => {
     expect(channelsOf(notes)).toEqual([...KEYS_7, '16']);
   });
 
+  test('sparse seven-key MIRROR uses the complete mode, including empty lanes', () => {
+    const notes = notesOn(['12', '13', '14', '15', '18', '19']);
+    applyRandomMode(notes, KEYS_1P, 'MIRROR', seededRandom(1));
+    expect(channelsOf(notes)).toEqual(['18', '15', '14', '13', '12', '11']);
+  });
+
+  test('a single used key can move under RANDOM within the complete mode', () => {
+    const notes = notesOn(['13']);
+    const expected = shuffleArray([...KEYS_7], seededRandom(1))[KEYS_7.indexOf('13')];
+    applyRandomMode(notes, KEYS_1P, 'RANDOM', seededRandom(1));
+    expect(channelsOf(notes)).toEqual([expected]);
+  });
+
   test('MIRROR reverses the keys and leaves the scratch', () => {
     const notes = notesOn([...KEYS_7, '16']);
     applyRandomMode(notes, KEYS_1P, 'MIRROR', seededRandom(1));
     expect(channelsOf(notes)).toEqual(['19', '18', '15', '14', '13', '12', '11', '16']);
   });
 
-  test('MIRROR reverses only the keys the chart uses, so a 5 KEY chart stays on its five lanes', () => {
+  test('MIRROR stays within the five-key mode domain', () => {
     const notes = notesOn(['11', '12', '13', '14', '15']);
-    applyRandomMode(notes, KEYS_1P, 'MIRROR', seededRandom(1));
+    applyRandomMode(notes, resolveLaneOptionChannels('1P', '5'), 'MIRROR', seededRandom(1));
     expect(channelsOf(notes)).toEqual(['15', '14', '13', '12', '11']);
   });
 
@@ -59,9 +78,9 @@ describe('applyRandomMode', () => {
     const mines = notesOn(['11']);
     const invisible = notesOn(['13', '14']);
     applyRandomMode(notes, KEYS_1P, 'MIRROR', seededRandom(1), mines, invisible);
-    expect(channelsOf(mines)).toEqual(['13']);
-    // A lane no playable note uses (14) is not in the permutation, so its invisible note stays.
-    expect(channelsOf(invisible)).toEqual(['11', '14']);
+    expect(channelsOf(mines)).toEqual(['19']);
+    // Unused lanes take part in the same full-mode permutation.
+    expect(channelsOf(invisible)).toEqual(['15', '14']);
   });
 
   test('RANDOM moves every key by one permutation drawn from the random', () => {
@@ -97,13 +116,13 @@ describe('applyRandomMode', () => {
   test('a 1P option leaves the 2P lanes alone', () => {
     const notes = notesOn(['11', '12', '21', '22', '26']);
     applyRandomMode(notes, KEYS_1P, 'MIRROR', seededRandom(1));
-    expect(channelsOf(notes)).toEqual(['12', '11', '21', '22', '26']);
+    expect(channelsOf(notes)).toEqual(['19', '18', '21', '22', '26']);
   });
 
-  test('a chart on fewer than two keys is left as it is', () => {
+  test('RANDOM remaps a sparse chart while preserving scratch', () => {
     const notes = notesOn(['13', '13', '16']);
     applyRandomMode(notes, KEYS_1P, 'RANDOM', seededRandom(1));
-    expect(channelsOf(notes)).toEqual(['13', '13', '16']);
+    expect(channelsOf(notes)).toEqual(['19', '19', '16']);
   });
 });
 
@@ -148,4 +167,65 @@ describe('shuffleArray', () => {
     const array = [1, 2, 3];
     expect(shuffleArray(array, seededRandom(1))).toBe(array);
   });
+});
+
+test.each([
+  ['5', '1P', '11', '15'],
+  ['7', '1P', '12', '18'],
+  ['10', '2P', '21', '25'],
+  ['14', '2P', '22', '28'],
+  ['24', '1P', '11', '1O'],
+  ['48', '2P', '21', '2O'],
+] as const)('sparse %s/%s MIRROR keeps the LN head and tail on %s→%s', (variant, side, from, to) => {
+  const note = { channel: from as string, beat: 2, endBeat: 6, seconds: 1, endSeconds: 3 };
+  const notes = [note];
+  applyRandomMode(notes, resolveLaneOptionChannels(side, variant), 'MIRROR', seededRandom(1));
+  expect(note).toEqual({ channel: to, beat: 2, endBeat: 6, seconds: 1, endSeconds: 3 });
+});
+
+test.each([
+  ['11', '19', '16', '14'],
+  ['11', '25', '22', '14'],
+] as const)('PMS MIRROR maps both halves as one nine-key keyboard (%s→%s)', (left, right, sixth, fourth) => {
+  const notes = notesOn([left, sixth]);
+  const domains = notesOn([left, sixth]);
+  applyRandomMode(notes, resolveLaneOptionChannels('1P', '9', domains), 'MIRROR', seededRandom(1));
+  applyRandomMode(notes, resolveLaneOptionChannels('2P', '9', domains), 'MIRROR', seededRandom(1));
+  expect(channelsOf(notes)).toEqual([right, fourth]);
+});
+
+test.each(['5', '7', '9', '10', '14', '24', '48'] as const)(
+  'RANDOM is deterministic and bijective over the whole %s-key mode',
+  (variant) => {
+    for (const side of ['1P', '2P'] as const) {
+      const lanes = resolveLaneOptionChannels(side, variant);
+      const first = notesOn(lanes),
+        second = notesOn(lanes);
+      applyRandomMode(first, lanes, 'RANDOM', seededRandom(42));
+      applyRandomMode(second, lanes, 'RANDOM', seededRandom(42));
+      expect(first).toEqual(second);
+      expect(channelsOf(first).sort()).toEqual([...lanes].sort());
+    }
+  },
+);
+
+test('recorded arrangements preserve the resolved full-mode placement and old sparse placements', () => {
+  const json = parseChart('#BPM 120\n#LNOBJ AA\n#00012:0001\n#00112:00AA', 'bms');
+  const prepare = () => preparePlaybackChart(resolveChart(json, { playVariant: '7' as ChartPlayVariant }));
+  const chart = prepare();
+  applyRandomMode(chart.notes, resolveLaneOptionChannels('1P', '7'), 'MIRROR', seededRandom(1));
+  const replay = createReplayRecorder({
+    json,
+    chart,
+    play: { mode: 'auto', autoScratch: false, randomLane: { p1: 'MIRROR' } },
+  }).finalize({ summary: { ...createEmptyScore(1), fast: 0, slow: 0 } });
+  expect(replay.chart.notes).toMatchObject([{ channel: '18', timeUs: 1_000_000, endTimeUs: 3_000_000 }]);
+  const target = prepare();
+  expect(applyReplayArrangement(replay.chart.notes, target)).toEqual({ ok: true });
+  expect(target.notes[0]!.channel).toBe('18');
+  // Historical files already store the exact channels; do not re-roll their old subset MIRROR.
+  const oldNotes = replay.chart.notes.map((note) => ({ ...note, channel: '12' }));
+  const oldTarget = prepare();
+  expect(applyReplayArrangement(oldNotes, oldTarget)).toEqual({ ok: true });
+  expect(oldTarget.notes[0]!.channel).toBe('12');
 });
