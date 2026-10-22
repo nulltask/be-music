@@ -10,6 +10,13 @@ import { BeMusicSelectScreenElement } from './components/select-screen.ts';
 import { BeMusicResultScreenElement } from './components/result-screen.ts';
 import { BeMusicDecideScreenElement } from './components/decide-screen.ts';
 import { BeMusicGameplayHUDElement } from './components/gameplay-hud.ts';
+import { BeMusicLanesElement } from './components/lanes.ts';
+import { BeMusicNotesElement } from './components/notes.ts';
+import { BeMusicLaneCoversElement } from './components/lane-covers.ts';
+import { BeMusicJudgeLineElement } from './components/judge-line.ts';
+import { BeMusicBombsElement } from './components/bombs.ts';
+import { BeMusicJudgmentDisplayElement } from './components/judgment-display.ts';
+import { BeMusicPlayfieldElement } from './components/playfield.ts';
 
 /** Explicit and idempotent: importing the package never registers global elements. */
 export function defineBeMusicElements(registry: CustomElementRegistry | undefined = globalThis.customElements): void {
@@ -27,6 +34,13 @@ export function defineBeMusicElements(registry: CustomElementRegistry | undefine
     ['be-music-result-screen', BeMusicResultScreenElement],
     ['be-music-decide-screen', BeMusicDecideScreenElement],
     ['be-music-gameplay-hud', BeMusicGameplayHUDElement],
+    ['be-music-lanes', BeMusicLanesElement],
+    ['be-music-notes', BeMusicNotesElement],
+    ['be-music-lane-covers', BeMusicLaneCoversElement],
+    ['be-music-judge-line', BeMusicJudgeLineElement],
+    ['be-music-bombs', BeMusicBombsElement],
+    ['be-music-judgment-display', BeMusicJudgmentDisplayElement],
+    ['be-music-playfield', BeMusicPlayfieldElement],
   ] as const) {
     const existing = registry.get(tag);
     if (existing && existing !== constructor)
@@ -49,5 +63,12 @@ declare global {
     'be-music-result-screen': BeMusicResultScreenElement;
     'be-music-decide-screen': BeMusicDecideScreenElement;
     'be-music-gameplay-hud': BeMusicGameplayHUDElement;
+    'be-music-lanes': BeMusicLanesElement;
+    'be-music-notes': BeMusicNotesElement;
+    'be-music-lane-covers': BeMusicLaneCoversElement;
+    'be-music-judge-line': BeMusicJudgeLineElement;
+    'be-music-bombs': BeMusicBombsElement;
+    'be-music-judgment-display': BeMusicJudgmentDisplayElement;
+    'be-music-playfield': BeMusicPlayfieldElement;
   }
 }

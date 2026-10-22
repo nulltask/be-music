@@ -16,22 +16,35 @@ React and Vue are peer dependencies of their respective wrappers. The skin SDK h
 
 ## Components
 
-| Element                   | Properties                                   |
-| ------------------------- | -------------------------------------------- |
-| `be-music-score-summary`  | `data: BeMusicScoreData`, optional `compact` |
-| `be-music-judgment-table` | `data: BeMusicJudgmentData`                  |
-| `be-music-gauge-panel`    | `data: BeMusicGaugeData`, optional `compact` |
-| `be-music-timing-graph`   | `data: BeMusicTimingData`                    |
-| `be-music-play-settings`  | `data: BeMusicSettingsData`                  |
-| `be-music-chart-list`     | `entries`, `selectedIndex`, `disabled`       |
-| `be-music-chart-details`  | `entry`, `launching`, `readText`             |
-| `be-music-play-options`   | `options`, `choices`, `disabled`             |
-| `be-music-select-screen`  | `frame: BeMusicDOMSelectFrame`               |
-| `be-music-gameplay-hud`   | `frame: BeMusicDOMGameplayFrame`             |
-| `be-music-result-screen`  | `frame: BeMusicDOMResultFrame`               |
-| `be-music-decide-screen`  | `frame: BeMusicDOMDecideFrame`               |
+| Element                     | Properties                                              |
+| --------------------------- | ------------------------------------------------------- |
+| `be-music-score-summary`    | `data: BeMusicScoreData`, optional `compact`            |
+| `be-music-judgment-table`   | `data: BeMusicJudgmentData`                             |
+| `be-music-gauge-panel`      | `data: BeMusicGaugeData`, optional `compact`            |
+| `be-music-timing-graph`     | `data: BeMusicTimingData`                               |
+| `be-music-play-settings`    | `data: BeMusicSettingsData`                             |
+| `be-music-chart-list`       | `entries`, `selectedIndex`, `disabled`                  |
+| `be-music-chart-details`    | `entry`, `launching`, `readText`                        |
+| `be-music-play-options`     | `options`, `choices`, `disabled`                        |
+| `be-music-select-screen`    | `frame: BeMusicDOMSelectFrame`                          |
+| `be-music-gameplay-hud`     | `frame: BeMusicDOMGameplayFrame`                        |
+| `be-music-result-screen`    | `frame: BeMusicDOMResultFrame`                          |
+| `be-music-decide-screen`    | `frame: BeMusicDOMDecideFrame`                          |
+| `be-music-lanes`            | `data: BeMusicLanesData`, `rect: BeMusicRect`           |
+| `be-music-notes`            | `data: BeMusicNotesData`, `rect: BeMusicRect`           |
+| `be-music-lane-covers`      | `data: BeMusicLaneCoversData`, `rect: BeMusicRect`      |
+| `be-music-judge-line`       | `data: BeMusicJudgeLineData`, `rect: BeMusicRect`       |
+| `be-music-bombs`            | `data: BeMusicBombsData`, `rect: BeMusicRect`           |
+| `be-music-judgment-display` | `data: BeMusicJudgmentDisplayData`, `rect: BeMusicRect` |
+| `be-music-playfield`        | `frame: BeMusicGameplayFrame`                           |
 
 Each class is exported as `BeMusic…Element`. Wrappers export the same names without `Element`, for example `BeMusicGameplayHUD` and `BeMusicJudgmentTable`. Leaf components take only their own presentation data and can be arranged independently. Screen components compose those leaves and accept the existing DOM skin frames.
+
+## Playfield
+
+The playfield elements each draw on their own canvas, sized to the device pixels of the element's box. `rect` is the part of the stage the element covers, in stage design pixels, and `data` is drawn in the same coordinates, so an element can be placed and sized freely by its layout. `be-music-playfield` takes a whole `BeMusicGameplayFrame`, splits it with `resolvePlayfieldParts(frame)`, and places each element on its part of the letterboxed stage, under the gameplay HUD. Give it a frame on every animation frame; the elements own no clock.
+
+`paintPlayfieldParts(context, parts)` paints the same parts on one Canvas 2D context, each clipped to its rect, for a host that offers only a stage-sized surface. Subclass `BeMusicPlayfieldCanvasElement` and implement `paint(context, data)` for a part of your own. The playfield exposes `stage`, `lanes`, `notes`, `lane-covers`, `judge-line`, `bombs` and `judgment-display` parts, and each element a `canvas` part.
 
 ## HTML and TypeScript
 
@@ -102,7 +115,7 @@ Vue emits the event detail directly: `@selection-change="({ index }) => select(i
 
 The elements use shadow roots. Theme tokens inherit across them: `--be-music-color-text`, `--be-music-color-muted`, `--be-music-color-background`, `--be-music-color-accent`, `--be-music-panel-background`, `--be-music-control-background`, `--be-music-focus-color`, `--be-music-timing-color`, `--be-music-font`, and `--be-music-radius`.
 
-The gameplay HUD exposes `hud`, `heading`, `primary`, `actions`, `details`, `score-summary`, `score-value`, `score-panel`, `judgment-panel`, `judgment-table`, `gauge-meter`, `gauge-panel`, `gauge-graph`, `timing-panel`, `timing-graph` and `settings-panel` parts. Leaf panels expose their own `panel` and applicable `table` / `graph` / `meter` / `value` parts. Gameplay and chart details have an `actions` slot and a default slot. Other screens have a default slot.
+The gameplay HUD exposes `hud`, `heading`, `primary`, `actions`, `details`, `score-summary`, `score-value`, `score-panel`, `judgment-panel`, `judgment-table`, `gauge-meter`, `gauge-panel`, `gauge-graph`, `timing-panel`, `timing-graph` and `settings-panel` parts, and a `paused` part while paused. Leaf panels expose their own `panel` and applicable `table` / `graph` / `meter` / `value` parts. Gameplay and chart details have an `actions` slot and a default slot. Other screens have a default slot.
 
 ```css
 be-music-gameplay-hud {
@@ -118,6 +131,6 @@ be-music-gameplay-hud::part(judgment-table) {
 
 Imports do not register Be-Music tags. On an SSR server the wrappers render host elements; properties and inner content are supplied on the client. Full component SSR and hydration are outside this implementation.
 
-Removing and reconnecting an element preserves its state. The owner removes scene subscriptions and disposes the player separately. Native's adapter removes its request listeners on disposal and caps ordinary gameplay property updates to roughly 12 per second while forwarding stage, orientation and view changes immediately. Lit batches rendering; gauge and timing graphs cap their sample counts. Canvas remains on the existing play loop.
+Removing and reconnecting an element preserves its state. The owner removes scene subscriptions and disposes the player separately. Native's adapter removes its request listeners on disposal and caps ordinary gameplay property updates to roughly 12 per second while forwarding stage, orientation and view changes immediately. Lit batches rendering; gauge and timing graphs cap their sample counts. The playfield is updated on every animation frame and repaints only each element's own canvas.
 
 See [ADR 0013](../../docs/adr/0013-player-ui-components.md) for the dependency and registration decisions.

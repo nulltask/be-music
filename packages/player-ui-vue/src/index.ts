@@ -10,6 +10,14 @@ import type {
   BeMusicDOMGameplayFrame,
   BeMusicDOMResultFrame,
   BeMusicDOMDecideFrame,
+  BeMusicGameplayFrame,
+  BeMusicLanesData,
+  BeMusicNotesData,
+  BeMusicLaneCoversData,
+  BeMusicJudgeLineData,
+  BeMusicBombsData,
+  BeMusicJudgmentDisplayData,
+  BeMusicRect,
 } from '@be-music/player-ui';
 import { wrap, type BeMusicVueEventHandlers, type BeMusicVueElementRef } from './wrap.ts';
 export type { BeMusicVueEventHandlers, BeMusicVueElementRef } from './wrap.ts';
@@ -147,3 +155,54 @@ export const BeMusicDecideScreen: DefineComponent<BeMusicDecideScreenProps, BeMu
   { frame?: BeMusicDOMDecideFrame },
   'continue-request' | 'cancel-request'
 >('BeMusicDecideScreen', 'be-music-decide-screen', ['frame'], ['continue-request', 'cancel-request']);
+
+export type BeMusicLanesProps = { data?: BeMusicLanesData; rect?: BeMusicRect } & BeMusicVueEventHandlers<never>;
+export const BeMusicLanes: DefineComponent<BeMusicLanesProps, BeMusicVueElementRef> = wrap<
+  { data?: BeMusicLanesData; rect?: BeMusicRect },
+  never
+>('BeMusicLanes', 'be-music-lanes', ['data', 'rect'], []);
+
+export type BeMusicNotesProps = { data?: BeMusicNotesData; rect?: BeMusicRect } & BeMusicVueEventHandlers<never>;
+export const BeMusicNotes: DefineComponent<BeMusicNotesProps, BeMusicVueElementRef> = wrap<
+  { data?: BeMusicNotesData; rect?: BeMusicRect },
+  never
+>('BeMusicNotes', 'be-music-notes', ['data', 'rect'], []);
+
+export type BeMusicLaneCoversProps = {
+  data?: BeMusicLaneCoversData;
+  rect?: BeMusicRect;
+} & BeMusicVueEventHandlers<never>;
+export const BeMusicLaneCovers: DefineComponent<BeMusicLaneCoversProps, BeMusicVueElementRef> = wrap<
+  { data?: BeMusicLaneCoversData; rect?: BeMusicRect },
+  never
+>('BeMusicLaneCovers', 'be-music-lane-covers', ['data', 'rect'], []);
+
+export type BeMusicJudgeLineProps = {
+  data?: BeMusicJudgeLineData;
+  rect?: BeMusicRect;
+} & BeMusicVueEventHandlers<never>;
+export const BeMusicJudgeLine: DefineComponent<BeMusicJudgeLineProps, BeMusicVueElementRef> = wrap<
+  { data?: BeMusicJudgeLineData; rect?: BeMusicRect },
+  never
+>('BeMusicJudgeLine', 'be-music-judge-line', ['data', 'rect'], []);
+
+export type BeMusicBombsProps = { data?: BeMusicBombsData; rect?: BeMusicRect } & BeMusicVueEventHandlers<never>;
+export const BeMusicBombs: DefineComponent<BeMusicBombsProps, BeMusicVueElementRef> = wrap<
+  { data?: BeMusicBombsData; rect?: BeMusicRect },
+  never
+>('BeMusicBombs', 'be-music-bombs', ['data', 'rect'], []);
+
+export type BeMusicJudgmentDisplayProps = {
+  data?: BeMusicJudgmentDisplayData;
+  rect?: BeMusicRect;
+} & BeMusicVueEventHandlers<never>;
+export const BeMusicJudgmentDisplay: DefineComponent<BeMusicJudgmentDisplayProps, BeMusicVueElementRef> = wrap<
+  { data?: BeMusicJudgmentDisplayData; rect?: BeMusicRect },
+  never
+>('BeMusicJudgmentDisplay', 'be-music-judgment-display', ['data', 'rect'], []);
+
+export type BeMusicPlayfieldProps = { frame?: BeMusicGameplayFrame } & BeMusicVueEventHandlers<never>;
+export const BeMusicPlayfield: DefineComponent<BeMusicPlayfieldProps, BeMusicVueElementRef> = wrap<
+  { frame?: BeMusicGameplayFrame },
+  never
+>('BeMusicPlayfield', 'be-music-playfield', ['frame'], []);

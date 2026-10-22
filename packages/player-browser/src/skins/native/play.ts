@@ -1,13 +1,16 @@
-import type { BeMusicDOMGameplayFrame, BeMusicDOMGameplayActions, BeMusicDOMScreen } from '@be-music/player-skin-sdk';
+import type {
+  BeMusicDOMGameplayFrame,
+  BeMusicDOMGameplayActions,
+  BeMusicDOMGameplayScreen,
+} from '@be-music/player-skin-sdk';
 import { mountElement } from './mount.ts';
 
-export function mountGameplay(
-  container: HTMLElement,
-  actions: BeMusicDOMGameplayActions,
-): BeMusicDOMScreen<BeMusicDOMGameplayFrame> {
+export function mountGameplay(container: HTMLElement, actions: BeMusicDOMGameplayActions): BeMusicDOMGameplayScreen {
   let previous: BeMusicDOMGameplayFrame | undefined;
   let lastUpdateMs = -Infinity;
-  return mountElement(
+  // Mounted first so the HUD stays above the lanes.
+  const playfield = mountElement(container, 'be-music-playfield', {});
+  const hud = mountElement<BeMusicDOMGameplayFrame>(
     container,
     'be-music-gameplay-hud',
     {
@@ -33,4 +36,12 @@ export function mountGameplay(
       return true;
     },
   );
+  return {
+    update: (frame) => hud.update(frame),
+    drawPlayfield: (frame) => playfield.update(frame),
+    dispose() {
+      hud.dispose();
+      playfield.dispose();
+    },
+  };
 }

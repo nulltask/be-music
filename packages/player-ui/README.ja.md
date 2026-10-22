@@ -16,22 +16,35 @@ React・Vue はそれぞれのラッパーの peer dependency です。スキン
 
 ## コンポーネント
 
-| 要素                      | property                                   |
-| ------------------------- | ------------------------------------------ |
-| `be-music-score-summary`  | `data: BeMusicScoreData`、任意の `compact` |
-| `be-music-judgment-table` | `data: BeMusicJudgmentData`                |
-| `be-music-gauge-panel`    | `data: BeMusicGaugeData`、任意の `compact` |
-| `be-music-timing-graph`   | `data: BeMusicTimingData`                  |
-| `be-music-play-settings`  | `data: BeMusicSettingsData`                |
-| `be-music-chart-list`     | `entries`・`selectedIndex`・`disabled`     |
-| `be-music-chart-details`  | `entry`・`launching`・`readText`           |
-| `be-music-play-options`   | `options`・`choices`・`disabled`           |
-| `be-music-select-screen`  | `frame: BeMusicDOMSelectFrame`             |
-| `be-music-gameplay-hud`   | `frame: BeMusicDOMGameplayFrame`           |
-| `be-music-result-screen`  | `frame: BeMusicDOMResultFrame`             |
-| `be-music-decide-screen`  | `frame: BeMusicDOMDecideFrame`             |
+| 要素                        | property                                                |
+| --------------------------- | ------------------------------------------------------- |
+| `be-music-score-summary`    | `data: BeMusicScoreData`、任意の `compact`              |
+| `be-music-judgment-table`   | `data: BeMusicJudgmentData`                             |
+| `be-music-gauge-panel`      | `data: BeMusicGaugeData`、任意の `compact`              |
+| `be-music-timing-graph`     | `data: BeMusicTimingData`                               |
+| `be-music-play-settings`    | `data: BeMusicSettingsData`                             |
+| `be-music-chart-list`       | `entries`・`selectedIndex`・`disabled`                  |
+| `be-music-chart-details`    | `entry`・`launching`・`readText`                        |
+| `be-music-play-options`     | `options`・`choices`・`disabled`                        |
+| `be-music-select-screen`    | `frame: BeMusicDOMSelectFrame`                          |
+| `be-music-gameplay-hud`     | `frame: BeMusicDOMGameplayFrame`                        |
+| `be-music-result-screen`    | `frame: BeMusicDOMResultFrame`                          |
+| `be-music-decide-screen`    | `frame: BeMusicDOMDecideFrame`                          |
+| `be-music-lanes`            | `data: BeMusicLanesData`・`rect: BeMusicRect`           |
+| `be-music-notes`            | `data: BeMusicNotesData`・`rect: BeMusicRect`           |
+| `be-music-lane-covers`      | `data: BeMusicLaneCoversData`・`rect: BeMusicRect`      |
+| `be-music-judge-line`       | `data: BeMusicJudgeLineData`・`rect: BeMusicRect`       |
+| `be-music-bombs`            | `data: BeMusicBombsData`・`rect: BeMusicRect`           |
+| `be-music-judgment-display` | `data: BeMusicJudgmentDisplayData`・`rect: BeMusicRect` |
+| `be-music-playfield`        | `frame: BeMusicGameplayFrame`                           |
 
 各クラスを `BeMusic…Element` として export します。ラッパーは `BeMusicGameplayHUD`・`BeMusicJudgmentTable` のように `Element` を除いた名前です。個々の部品は自身に必要な表示データだけを受け取り、独立して配置できます。画面コンポーネントはそれらを組み合わせ、既存の DOM スキンフレームを受け取ります。
+
+## プレイフィールド
+
+プレイフィールドの各要素は、要素の box のデバイスピクセルに合わせた自分専用の canvas に描画します。`rect` は要素が受け持つステージ上の範囲（ステージのデザイン座標）で、`data` も同じ座標で描くため、要素の位置と大きさはレイアウト側で自由に決められます。`be-music-playfield` は `BeMusicGameplayFrame` 全体を受け取り、`resolvePlayfieldParts(frame)` で分割して、レターボックスしたステージ上の各範囲に要素を配置します。ゲームプレイ HUD の下に重ねて使います。要素は時計を持たないため、毎アニメーションフレーム frame を渡してください。
+
+`paintPlayfieldParts(context, parts)` は、ステージ全体の surface しか持たない host 向けに、同じ部品を一つの Canvas 2D context に各範囲で clip して描きます。独自の部品は `BeMusicPlayfieldCanvasElement` を継承して `paint(context, data)` を実装します。プレイフィールドは `stage`・`lanes`・`notes`・`lane-covers`・`judge-line`・`bombs`・`judgment-display` の parts を、各要素は `canvas` part を公開します。
 
 ## HTML・TypeScript
 
@@ -102,7 +115,7 @@ Vue は detail を直接 emit するため、`@selection-change="({ index }) => 
 
 各要素は Shadow DOM を使います。`--be-music-color-text`・`--be-music-color-muted`・`--be-music-color-background`・`--be-music-color-accent`・`--be-music-panel-background`・`--be-music-control-background`・`--be-music-focus-color`・`--be-music-timing-color`・`--be-music-font`・`--be-music-radius` が継承されるテーマ用トークンです。
 
-Gameplay HUD は `hud`・`heading`・`primary`・`actions`・`details`・`score-summary`・`score-value`・`score-panel`・`judgment-panel`・`judgment-table`・`gauge-meter`・`gauge-panel`・`gauge-graph`・`timing-panel`・`timing-graph`・`settings-panel` を part として公開します。各部品は `panel` と、該当する `table`・`graph`・`meter`・`value` を公開します。Gameplay と譜面詳細には `actions` slot と既定 slot があり、ほかの画面には既定 slot があります。
+Gameplay HUD は `hud`・`heading`・`primary`・`actions`・`details`・`score-summary`・`score-value`・`score-panel`・`judgment-panel`・`judgment-table`・`gauge-meter`・`gauge-panel`・`gauge-graph`・`timing-panel`・`timing-graph`・`settings-panel` を、一時停止中は `paused` も part として公開します。各部品は `panel` と、該当する `table`・`graph`・`meter`・`value` を公開します。Gameplay と譜面詳細には `actions` slot と既定 slot があり、ほかの画面には既定 slot があります。
 
 ```css
 be-music-gameplay-hud {
@@ -118,6 +131,6 @@ be-music-gameplay-hud::part(judgment-table) {
 
 import だけでは Be-Music のタグを登録しません。SSR ではラッパーがホスト要素を出力し、property と内部の表示をクライアントで設定します。コンポーネント全体の SSR・hydration はこの実装の対象に含みません。
 
-切り離して再接続しても要素の状態を保ちます。シーンの購読解除とプレイヤーの破棄は所有者が別に行います。Native のアダプターは破棄時に操作イベントを解除します。通常の Gameplay property 更新をおよそ毎秒12回に制限し、ステージ・向き・表示設定の変更は即座に渡します。Lit が描画をまとめ、グラフは描画点数を制限します。Canvas は既存のプレイループを維持します。
+切り離して再接続しても要素の状態を保ちます。シーンの購読解除とプレイヤーの破棄は所有者が別に行います。Native のアダプターは破棄時に操作イベントを解除します。通常の Gameplay property 更新をおよそ毎秒12回に制限し、ステージ・向き・表示設定の変更は即座に渡します。Lit が描画をまとめ、グラフは描画点数を制限します。プレイフィールドは毎アニメーションフレーム更新し、各要素の canvas だけを描き直します。
 
 依存関係と登録方法の判断は [ADR 0013](../../docs/adr/0013-player-ui-components.ja.md) に記録しています。
