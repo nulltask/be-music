@@ -192,8 +192,8 @@ The play state (`PlayState`) is what every gameplay screen reads of a play: the 
 graphs, the combo and max combo (and a course stage's course-wide combo), every timed judgment with the early / late
 count of each judgment, and the view — the hi-speed and the lane covers. It is immutable and fed by events through
 `reducePlayState`: the engine's frames and judgments, its `trigger-poor-bga` command (an empty POOR, through
-`playEventFromUICommand`), the final summary, and the player's and the host's hi-speed and cover changes. No clock is
-read: chart time and play-clock time come in with the events.
+`playEventFromUICommand`), a seek (`seek`, with the engine's `PlaySeekSnapshot`), the final summary, and the player's and
+the host's hi-speed and cover changes. No clock is read: chart time and play-clock time come in with the events.
 
 ```mermaid
 flowchart LR
@@ -215,9 +215,16 @@ flowchart LR
 - **Graphs.** They start at the gauge the play starts with (from `createPlayState`, else the first frame) and take a
   sample of the gauge (in percent of its maximum) and the EX score at each judgment and each empty POOR, at the
   judgment's chart-time fraction. The result adds a last sample where the play ended.
-- **Combo.** The combo the engine publishes, the longest kept as the max combo; a final summary that is a full combo
-  (every note GOOD or better, none BAD or POOR) makes the max combo every note, as the combo never broke. A course stage
-  runs the course combo on from the one carried in (`reduceCourseCombo`).
+- **Combo.** The combo the engine publishes, the longest kept as the max combo; a frame's combo, max combo and course
+  combo, when it carries them, are the engine's own and win. A final summary that is a full combo (every note GOOD or
+  better, none BAD or POOR) makes the max combo every note, as the combo never broke. A course stage runs the course
+  combo on from the one carried in (`reduceCourseCombo`).
+- **Seek.** The engine rebuilds a play that seeks from the chart's start to the second sought and sends what it reached
+  (`PlaySeekSnapshot`: the summary, the combo, the max combo and every judgment before the second, each with its chart
+  second and the gauge and EX score right after it). The `seek` event makes the state that one: the graphs from their
+  start sample with one sample per judgment, the timed judgments (their play-clock time worked back from the seek's at
+  the play's tempo) with their early / late counts, and the snapshot's gauge, EX score and combos; the chart's length
+  and the view stay. A play rebuilt this way equals one that judged the same notes live.
 - **Judgment timings.** Each PERFECT … POOR judgment with a timing, with its play-clock time and lane;
   `recentJudgeTimings` is the latest 64 for a live meter (one array per judgment list). Each judgment's early and late
   count (beatoraja's) comes with them.

@@ -415,7 +415,35 @@ export type LR2PlayTimerEvent =
   /** The gauge moved from `previous` to `next` percent: up (timer 42), reaching 100 % (timer 44, which stops below). */
   | { readonly kind: 'gauge'; readonly previous: number; readonly next: number; readonly at: number }
   /** A lane's bomb, long-note hold, key on or key off (`resolveLR2LaneTimer`). */
-  | { readonly kind: 'lane'; readonly bank: LR2LaneTimerBank; readonly lane: LR2Lane; readonly at: number };
+  | { readonly kind: 'lane'; readonly bank: LR2LaneTimerBank; readonly lane: LR2Lane; readonly at: number }
+  /**
+   * The play sought to another chart second, its gauge `gauge` percent there: what the judgments started is void (see
+   * {@link LR2_SEEK_STOPPED_TIMERS}), and the gauge-max timer (44) runs again from `at` when the gauge is full.
+   */
+  | { readonly kind: 'seek'; readonly gauge: number; readonly at: number };
+
+/**
+ * The timers a seek stops: the ones the judgments and the lanes start — the gauge rise (42 / 43) and full gauge (44 /
+ * 45), the judgements (46 / 47), the full combo (48 / 49) and every lane bank (bombs 50-69, long-note holds 70-89, key
+ * on 100-119 and key off 120-139). The scene's timers (0-3, READY 40, play 41) and the rhythm (140) run on; a long note
+ * held across the second sought starts its hold timer again as the play announces it.
+ */
+const LR2_SEEK_STOPPED_TIMERS: readonly number[] = [
+  LR2_TIMER.GAUGE_UP_1P,
+  LR2_TIMER.GAUGE_UP_2P,
+  LR2_TIMER.GAUGE_MAX_1P,
+  LR2_TIMER.GAUGE_MAX_2P,
+  LR2_TIMER.JUDGE_1P,
+  LR2_TIMER.JUDGE_2P,
+  LR2_TIMER.FULL_COMBO_1P,
+  LR2_TIMER.FULL_COMBO_2P,
+  ...[LR2_TIMER.BOMB_1P, LR2_TIMER.BOMB_2P, LR2_TIMER.LN_HOLD_1P, LR2_TIMER.LN_HOLD_2P].flatMap((base) =>
+    Array.from({ length: LR2_LANE_TIMER_BANK_SIZE }, (_, lane) => base + lane),
+  ),
+  ...[LR2_TIMER.KEY_ON_1P, LR2_TIMER.KEY_ON_2P, LR2_TIMER.KEY_OFF_1P, LR2_TIMER.KEY_OFF_2P].flatMap((base) =>
+    Array.from({ length: LR2_LANE_TIMER_BANK_SIZE }, (_, lane) => base + lane),
+  ),
+];
 
 /** The LR2 timers a moment of the play screen starts and stops. */
 export function resolveLR2PlayTimers(event: LR2PlayTimerEvent): LR2TimerUpdate {
@@ -446,5 +474,7 @@ export function resolveLR2PlayTimers(event: LR2PlayTimerEvent): LR2TimerUpdate {
       const timer = resolveLR2LaneTimer(event.bank, event.lane);
       return lr2TimerUpdate(timer !== undefined ? [timer] : [], event.at);
     }
+    case 'seek':
+      return lr2TimerUpdate(event.gauge >= 100 ? [LR2_TIMER.GAUGE_MAX_1P] : [], event.at, LR2_SEEK_STOPPED_TIMERS);
   }
 }

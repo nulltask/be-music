@@ -7,12 +7,7 @@
  */
 import type { Texture } from 'pixi.js';
 import type { PreparedPlaybackChartData, PlayerSummary } from '@be-music/player-engine';
-import {
-  createEmptyScore,
-  type JudgmentKind,
-  type LongNoteStyle,
-  type ScoreSummary,
-} from '@be-music/player-engine/ruleset';
+import { createEmptyScore, type LongNoteStyle, type ScoreSummary } from '@be-music/player-engine/ruleset';
 import type {
   PlayerInputSignalBus,
   PlayerStateSignals,
@@ -42,7 +37,7 @@ import type {
 } from '../../runtime/audio-bus.ts';
 import type { GameplayRecorder } from '../../recording/gameplay-recorder.ts';
 import type { PlayTempoRange } from './tempo-range.ts';
-import { LongNoteTracker } from './long-note-tracker.ts';
+import { PlayPresentation } from './play-presentation.ts';
 import { createPlaceholderGaugeState } from './placeholder-gauge.ts';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
@@ -59,12 +54,12 @@ import type {
   ChartPlayVariant,
 } from '@be-music/chart-model';
 import type { BGACue, NonstopStageBGATimeline } from '../../chart/bga-timeline.ts';
-import type { BeMusicJudgmentKind } from '../../skin/be-music/types.ts';
-import type { BeMusicJudgeWindows, BeMusicLaneKind } from '@be-music/player-skin-sdk';
+
+import type { BeMusicJudgeWindows } from '@be-music/player-skin-sdk';
 import type { RuntimeMineNote, RuntimeNote } from '../../view/shared/playfield/context.ts';
 import type { PlayfieldLaneRect } from '../../view/types.ts';
 
-export class PlaySessionState {
+export class PlaySessionState extends PlayPresentation {
   /**
    * The host that owns the underlying `Application`. Set by {@link prepare} or {@link enter}, whichever runs first;
    * before that, accessing `this.app` throws. See `PixiSceneHost` for the single-Application architecture rationale.
@@ -151,10 +146,6 @@ export class PlaySessionState {
   sceneStartTime = 0;
   /** Intro length scheduled by `start()` (theme `#PLAYSTART` or the fallback), for chrome count-ins. */
   scheduledIntroMs = 0;
-  /** Play-clock time of the last judgement / key impulse, for the be-music skin's reactive visuals. */
-  lastJudgeAt: number | undefined;
-  lastImpulseAt: number | undefined;
-  lastImpulseKind: BeMusicLaneKind | undefined;
   startTime = 0;
   /**
    * True while the chart's assets are still loading: from {@link prepare} until audio is decoded and the BGA preload
@@ -167,8 +158,9 @@ export class PlaySessionState {
    */
   entered = false;
   /**
-   * `audioContext.currentTime` value that corresponds to chart-second 0. Used to schedule background samples with
-   * sample-accurate Web Audio timing.
+   * `audioContext.currentTime` when the play-start gate opened (0 before): the chart's clock until the engine's first
+   * frame, and what tells the BGA videos the chart has started. From then on the frames drive the chart's clock
+   * (`PlaySession.currentSeconds`).
    */
   audioContextStartTime = 0;
   /** The stage fades and FIT rates of a stitched NONSTOP chart (`options.nonstop`). */
@@ -273,19 +265,15 @@ export class PlaySessionState {
   /** Input token a touch on each lane channel presses, from the chart's lane bindings (built on the first touch). */
   touchTokenByChannel: Map<string, string> | undefined;
   /**
-   * Latch flipped on the first non-zero `frame.currentSeconds` from the engine. The view's
-   * `audioContextStartTime` is re-anchored at that moment so the renderer's chart-time matches what the engine
-   * judges against — without this snap, the engine's `playbackClock` (which anchors at the moment it's
-   * constructed inside `manualPlay`'s prepare phase) sits a few ms to a few hundred ms behind the view's
-   * PLAYSTART anchor and notes pass the judgment line ahead of the engine's actual judge event.
-   */
-  sharedEngineClockAnchored = false;
-  /**
-   * The engine's latest UI frame (its chart time and beat, the chart's length, its summary and gauge), as drained into
-   * the play state; `undefined` before the engine's first frame. A view that draws the engine's own clock (the beatoraja
-   * play view) reads it.
+   * The engine's latest UI frame (its chart time and beat, the clock it holds at, the chart's length, its summary and
+   * gauge), as drained into the play state; `undefined` before the engine's first frame. The chart's clock runs on from
+   * it (`PlaySession.currentSeconds`); a view that draws the engine's own clock (the beatoraja play view) reads it.
    */
   engineFrame: Readonly<PlayerUIFramePayload> | undefined;
+  /** The seek generation of the engine's last `seek` command (0 before the first): older frames are stale. */
+  seekGeneration = 0;
+  /** The seeks asked for and not yet applied (`seekPlay`): each resolves once the engine applies its seek or a later one. */
+  readonly seekWaiters: Array<{ seconds: number; resolve: () => void }> = [];
   decodedSamples: Map<string, AudioBuffer> = new Map<string, AudioBuffer>();
   /**
    * Per-`#WAVxx` slot volume multipliers from `#WAVCMD 01 xx vv` lines, expressed as 0..1 linear gain. Built once per
@@ -339,8 +327,6 @@ export class PlaySessionState {
   replay: BeMusicReplay | undefined;
   /** Callers of {@link waitForReplay} waiting for the engine to record the play. */
   readonly replayWaiters: Array<(replay: BeMusicReplay) => void> = [];
-  /** Long-note holds of the current play, fed from the engine's `long-note-start` / `long-note-end` commands. */
-  readonly longNotes: LongNoteTracker = new LongNoteTracker();
   /**
    * How the engine's ruleset plays long notes and its judge windows (ms), from `onRulesetResolved` at engine launch.
    * The windows are the ones in force when the chart starts: an LR2 mid-chart `#EXRANKxx` change narrows or widens
@@ -356,17 +342,6 @@ export class PlaySessionState {
    */
   autoScratchChannels: ReadonlySet<string> = new Set();
   /**
-   * Play-clock ms of once-per-play moments (gauge failed, last note judged, chart end, gauge first risen above its
-   * start / reaching its max), latched as they happen and cleared per {@link prepareChart}.
-   */
-  playMoments: {
-    failedAtMs?: number;
-    allNotesDoneAtMs?: number;
-    outroAtMs?: number;
-    gaugeRiseAtMs?: number;
-    gaugeMaxAtMs?: number;
-  } = {};
-  /**
    * The lane covers as drawn ({@link resolveLaneCover} of the play state's covers), handed to skins as
    * `runtime.laneCovers`; rebuilt only when the play state's covers change.
    */
@@ -375,30 +350,6 @@ export class PlaySessionState {
   replayViewCoalescer: ReplayViewCoalescer | undefined;
   /** A replay's recorded view along the playhead ({@link updateReplayView}). */
   replayViewCursor: ReplayViewCursor | undefined;
-  /** Judgement that set off each lane's live bomb, by channel; absent for bombs without one (an autoplayed LN head). */
-  readonly bombJudge: Map<string, BeMusicJudgmentKind> = new Map<string, BeMusicJudgmentKind>();
-  /** Play-clock ms of each lane's last key press / release (also autoplay hits), by channel. */
-  readonly lanePressedAt: Map<string, number> = new Map<string, number>();
-  readonly laneReleasedAt: Map<string, number> = new Map<string, number>();
-  lastJudge = '';
-  lastJudgeUntil = 0;
-  /**
-   * Per-side judge / combo snapshots. Each side captures the verdict text, the chart-time at which the plate should
-   * disappear, and the running combo *at the moment that side's note was judged*. The DP renderer reads these directly
-   * so the 1P assembly displays the combo at the latest 1P hit and the 2P assembly displays the combo at the latest 2P
-   * hit — they only stay synchronized on charts where every press triggers identical-timing hits on both sides (a
-   * coincidence, not the rule).
-   *
-   * SP charts only ever populate the `'1P'` slot, so the global `lastJudge` / `lastJudgeUntil` aliases above keep their
-   * existing behavior for the fallback `renderText` path.
-   */
-  judgeSideState: Record<
-    '1P' | '2P',
-    { judge: JudgmentKind | ''; until: number; combo: number; courseCombo?: number }
-  > = {
-    '1P': { judge: '', until: 0, combo: 0 },
-    '2P': { judge: '', until: 0, combo: 0 },
-  };
   chartEndTimeout: number | undefined;
   /**
    * `setTimeout` handles for the scene-exit sequence (fade-out → close, LR2 timers 2 / 3). Cleared on dispose so the
@@ -422,16 +373,6 @@ export class PlaySessionState {
    * callback or restart the timeline.
    */
   exiting = false;
-  readonly keyFlashTimeouts: Set<number> = new Set();
-  readonly pressedChannels: Set<string> = new Set();
-  /**
-   * By channel, the play-clock timestamp of a key beam's in-flight release fade. When set, the lane's beam (and a
-   * skin's key-on sprites) taper from 1 → 0 over the view's key-beam fade starting at the recorded value, so an LN
-   * release decays instead of popping off. Releasing a lane (`releaseKeyBeam`) sets it; a fresh press (`startKeyBeam`)
-   * clears it.
-   */
-  readonly keyBeamFadeStartedAt: Map<string, number> = new Map();
-  readonly bombStartedAt: Map<string, number> = new Map();
   /**
    * Mirror of the engine's gauge state, refreshed from every `summary.gauge` frame. The gauge model itself
    * (per-judge deltas, TOTAL scaling, guts softening, clear rule) lives entirely in the active ruleset — this view
@@ -447,24 +388,11 @@ export class PlaySessionState {
   fastCount = 0;
   slowCount = 0;
   /**
-   * Set to `true` once the player has hit every chart note without a single BAD / POOR break. Latches on first
-   * achievement so the `full-combo` theme event (LR2 FC timers 48 / 49) only fires once per play — replaying the chart resets this in
-   * `prepareChart`. Note: AUTO mode reaches FC the moment the last note's auto-PERFECT lands, so the FC presentation
-   * also plays during autoplay sessions (the player specifically asked for that behavior).
-   */
-  fullComboFired = false;
-  /**
    * The scroll factor notes, bar lines and long notes are positioned with: it glides to each new drawn hi-speed (the
    * play state's `view.hiSpeed.drawn`) over `HISPEED_TRANSITION_MS` (wall clock) instead of jumping, while the HUD /
    * readouts show the new target at once. Visual only — judging never reads it.
    */
   readonly scrollHiSpeed: HiSpeedTransition = new HiSpeedTransition(DEFAULT_HISPEED);
-  /**
-   * By channel, the `playClock()` timestamp at which the lane's key beam came on (a press, an autoplayed note, a long
-   * note's hold); removed once the beam has faded out after the key is up. A view maps the channels onto its own
-   * timers: the LR2 view onto LR2's key-on bank (100-119).
-   */
-  readonly keyBeamStartedAt: Map<string, number> = new Map();
   /**
    * BPM-aware seconds → beat resolver, prepared once per song. Used by `renderNotes` to position scrolling notes
    * correctly across `#BPM` change events; the previous hand-rolled `beatAtSeconds` only saw the initial BPM, which
@@ -514,8 +442,6 @@ export class PlaySessionState {
    * `currentTime` offset relative to the cue's start seconds.
    */
   bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } } = {};
-  /** `performance.now()` of the most recent POOR judgement, drives the POOR-BGA window. */
-  lastPoorAt = 0;
   /**
    * BMS spec — when the chart omits `#POORBGA` and provides `#BMP00`, the BMP00 image acts as the implicit POOR
    * placeholder until an explicit `#xxx06` POOR cue takes over. Set during {@link prepareChart} so the renderer can
@@ -531,8 +457,6 @@ export class PlaySessionState {
   poorBGAFallbackUntilSeconds: number = Number.POSITIVE_INFINITY;
   /** Whether the chart actually carries any BGA events (drives LR2 op 170/171). */
   hasBGA = false;
-  /** Smoothed score for the count-up animation. Lerps toward `score.score`. */
-  displayedScore = 0;
   /** True iff we paused because the tab/window backgrounded itself. */
   autoPaused = false;
   /**
@@ -559,6 +483,4 @@ export class PlaySessionState {
    * `onExit` callback fires at most once. {@link handleSharedEngineChartFinished} is the only writer.
    */
   chartEnded = false;
-  /** The chart second the engine starts its next run at: 0, or where the play was sought to (`seekPlay`). */
-  startAtSeconds = 0;
 }

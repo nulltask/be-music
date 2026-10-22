@@ -212,3 +212,135 @@ describe('reducePlayState', () => {
     expect(replayedSpeed.view.covers).toBe(replayed.view.covers);
   });
 });
+
+describe('engine combos on frames', () => {
+  const comboFrame = (combo: number, maxCombo: number, course?: { combo: number; maxCombo: number }): PlayEvent => ({
+    type: 'frame',
+    frame: { totalSeconds: 100, summary: { exScore: 0, combo, maxCombo, ...(course ? { course } : {}) } },
+  });
+
+  test('win over the combos the judgments counted', () => {
+    const state = run(createPlayState(), judge('PERFECT', 1, 1), comboFrame(4, 6));
+    expect(state).toMatchObject({ combo: 4, maxCombo: 6 });
+    expect(reducePlayState(state, comboFrame(4, 6))).toBe(state);
+  });
+
+  test('take the course combo of a course stage', () => {
+    const state = run(
+      createPlayState({ courseCarryIn: { combo: 40, maxCombo: 55 } }),
+      comboFrame(3, 3, { combo: 43, maxCombo: 55 }),
+    );
+    expect(state.courseCombo).toEqual({ combo: 43, maxCombo: 55, stageCombo: 3 });
+    expect(reducePlayState(state, comboFrame(3, 3, { combo: 43, maxCombo: 55 }))).toBe(state);
+  });
+});
+
+describe('seek', () => {
+  const gauge = (current: number) => ({ current, max: 100, initial: 20, cleared: false, type: 'GROOVE' });
+  const emptySnapshot = { summary: { exScore: 0, gauge: gauge(20) }, combo: 0, maxCombo: 0, judgments: [] };
+
+  test('rebuilds the state a play reaches by judging the same notes', () => {
+    // Played live: each frame carries the gauge and EX score right after the judgment that follows it.
+    const played = run(
+      createPlayState({ gauge: 20, totalSeconds: 100 }),
+      frame(2, 22),
+      judge('PERFECT', 1, 10, -3, '11'),
+      frame(3, 23),
+      judge('GREAT', 2, 20, 8, '12'),
+      frame(3, 21),
+      judge('POOR', 0, 30),
+      frame(5, 23),
+      judge('PERFECT', 1, 40, 0, '13'),
+    );
+    const sought = reducePlayState(createPlayState({ gauge: 20, totalSeconds: 100 }), {
+      type: 'seek',
+      seconds: 45,
+      atMs: 45_000,
+      snapshot: {
+        summary: { exScore: 5, gauge: gauge(23) },
+        combo: 1,
+        maxCombo: 2,
+        judgments: [
+          { judge: 'PERFECT', combo: 1, channel: '11', deltaMs: -3, seconds: 10, gauge: 22, exScore: 2 },
+          { judge: 'GREAT', combo: 2, channel: '12', deltaMs: 8, seconds: 20, gauge: 23, exScore: 3 },
+          { judge: 'POOR', combo: 0, seconds: 30, gauge: 21, exScore: 3 },
+          { judge: 'PERFECT', combo: 1, channel: '13', deltaMs: 0, seconds: 40, gauge: 23, exScore: 5 },
+        ],
+      },
+    });
+    expect(sought).toEqual({ ...played, gaugeType: 'GROOVE' });
+  });
+
+  test('goes back: what came after the second sought is gone, the view and the chart length stay', () => {
+    const view = { hiSpeed: createHiSpeedState({ hiSpeed: 3 }) };
+    const played = run(
+      createPlayState({ gauge: 20, totalSeconds: 100, view }),
+      frame(4, 30),
+      judge('PERFECT', 1, 10, 5),
+      judge('PERFECT', 2, 50, -5),
+    );
+    const sought = reducePlayState(played, {
+      type: 'seek',
+      seconds: 20,
+      atMs: 70_000,
+      tempo: 2,
+      snapshot: {
+        summary: { exScore: 2, gauge: gauge(22) },
+        combo: 1,
+        maxCombo: 1,
+        judgments: [{ judge: 'PERFECT', combo: 1, deltaMs: 5, seconds: 10, gauge: 22, exScore: 2 }],
+      },
+    });
+    expect(sought).toMatchObject({
+      totalSeconds: 100,
+      gauge: 22,
+      exScore: 2,
+      combo: 1,
+      maxCombo: 1,
+      lastJudgeDeltaMs: 5,
+    });
+    expect(sought.view).toBe(played.view);
+    // Chart time ran twice as fast as the play clock: 10 chart seconds before the seek are 5 s of play clock.
+    expect(sought.judgeTimings).toEqual([{ atMs: 65_000, deltaMs: 5, judge: 'PERFECT' }]);
+    expect(sought.earlyLate.PERFECT).toEqual({ early: 0, late: 1 });
+    expect(sought.gaugeHistory).toEqual([
+      { progress: 0, value: 20 },
+      { progress: 0.1, value: 22 },
+    ]);
+  });
+
+  test('to the start empties the play, starting the graphs at the gauge the play starts with', () => {
+    const played = run(createPlayState({ totalSeconds: 100 }), frame(4, 30), judge('PERFECT', 1, 10, 5));
+    const sought = reducePlayState(played, { type: 'seek', seconds: 0, atMs: 0, snapshot: emptySnapshot });
+    expect(sought).toMatchObject({ gauge: 20, exScore: 0, combo: 0, maxCombo: 0, judgeTimings: [] });
+    // The graphs keep the start sample of the play (the first frame's gauge here).
+    expect(sought.gaugeHistory).toEqual([{ progress: 0, value: 30 }]);
+    expect(sought.lastJudgeDeltaMs).toBeUndefined();
+    // Without a start sample yet, the gauge's initial value starts the graphs.
+    const fresh = reducePlayState(createPlayState({ totalSeconds: 100 }), {
+      type: 'seek',
+      seconds: 0,
+      atMs: 0,
+      snapshot: emptySnapshot,
+    });
+    expect(fresh.gaugeHistory).toEqual([{ progress: 0, value: 20 }]);
+    expect(fresh.scoreHistory).toEqual([{ progress: 0, exScore: 0 }]);
+  });
+
+  test('takes a course stage course combo from the snapshot', () => {
+    const sought = reducePlayState(createPlayState({ courseCarryIn: { combo: 40, maxCombo: 55 } }), {
+      type: 'seek',
+      seconds: 10,
+      atMs: 0,
+      snapshot: { summary: { exScore: 4, course: { combo: 42, maxCombo: 55 } }, combo: 2, maxCombo: 2, judgments: [] },
+    });
+    expect(sought.courseCombo).toEqual({ combo: 42, maxCombo: 55, stageCombo: 2 });
+  });
+
+  test('never changes the state it is given', () => {
+    const state = run(createPlayState({ gauge: 20, totalSeconds: 100 }), frame(4, 30), judge('PERFECT', 1, 10, 3));
+    const before = JSON.stringify(state);
+    reducePlayState(state, { type: 'seek', seconds: 0, atMs: 0, snapshot: emptySnapshot });
+    expect(JSON.stringify(state)).toBe(before);
+  });
+});

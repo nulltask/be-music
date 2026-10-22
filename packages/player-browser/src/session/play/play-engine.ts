@@ -40,7 +40,7 @@ import {
   type LibraryChart,
   type PlayResult,
 } from '@be-music/player-scene-model';
-import type { BeMusicJudgeWindows, BeMusicLaneKind } from '@be-music/player-skin-sdk';
+import type { BeMusicJudgeWindows } from '@be-music/player-skin-sdk';
 import type { AudioBusHandle } from '../../runtime/audio-bus.ts';
 import { runEngineDriver } from '../../runtime/engine-driver.ts';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
@@ -54,6 +54,8 @@ import { logger } from '../../logger.ts';
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
 import type { BeMusicJudgmentKind } from '../../skin/be-music/types.ts';
 import { beginExitSequence, resolvePlayEnding, type PlayEndingContext } from './play-ending.ts';
+import type { PlayPresentation } from './play-presentation.ts';
+import { resolveSeekWaiters, settleSeekWaiters } from './play-seek.ts';
 import { applyPlayEvent } from './play-state.ts';
 import { shouldSkipPlayKey } from './play-keys.ts';
 import { samplePlaybackRate } from './play-media.ts';
@@ -67,7 +69,8 @@ import {
 const log = logger('gameplay');
 
 /** The scene's members the engine side reads and writes: the play session's members of these names. */
-export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingContext {
+export interface PlayEngineContext
+  extends PlayViewSettingsContext, PlayEndingContext, Omit<PlayPresentation, 'longNotes' | 'playMoments'> {
   readonly options: Readonly<
     Pick<
       PlaySessionOptions,
@@ -107,6 +110,7 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
   readonly notes: TimedPlayableNote[];
   readonly timingResolver: TimingResolver | undefined;
   readonly chartPlayVariant: ChartPlayVariant;
+  readonly audioContext: AudioContext | undefined;
   readonly audioBus: AudioBusHandle | undefined;
   readonly decodedSamples: Map<string, AudioBuffer>;
   readonly wavCmdVolumeMultipliers: Map<string, number>;
@@ -114,7 +118,6 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
     | Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>
     | undefined;
   readonly nonstopMixer: NonstopStageMixer | undefined;
-  audioContextStartTime: number;
   readonly replayTempo: ReplayTempo | undefined;
   readonly liveTempo: LiveTempo;
   sharedEnginePromise: Promise<unknown> | undefined;
@@ -126,11 +129,12 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
   sharedEngineInputSignals: PlayerInputSignalBus | undefined;
   sharedEngineInterrupt: 'escape' | 'restart' | undefined;
   sharedEngineChartSettled: boolean;
-  sharedEngineClockAnchored: boolean;
   engineFrame: Readonly<PlayerUIFramePayload> | undefined;
+  seekGeneration: number;
+  readonly seekWaiters: Array<{ seconds: number; resolve: () => void }>;
+  bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } };
   chartEnded: boolean;
   chartEndTimeout: number | undefined;
-  readonly startAtSeconds: number;
   replay: BeMusicReplay | undefined;
   readonly replayWaiters: Array<(replay: BeMusicReplay) => void>;
   replayViewCursor: ReplayViewCursor | undefined;
@@ -138,32 +142,11 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
   gaugeState: PlayerGaugeSummary;
   fastCount: number;
   slowCount: number;
-  fullComboFired: boolean;
-  lastJudge: string;
-  lastJudgeUntil: number;
-  lastJudgeAt: number | undefined;
-  judgeSideState: Record<'1P' | '2P', { judge: JudgmentKind | ''; until: number; combo: number; courseCombo?: number }>;
   judgeWindows: BeMusicJudgeWindows | undefined;
   longNoteStyle: LongNoteStyle | undefined;
   readonly longNotes: LongNoteTracker;
-  readonly playMoments: {
-    failedAtMs?: number;
-    allNotesDoneAtMs?: number;
-    outroAtMs?: number;
-    gaugeRiseAtMs?: number;
-    gaugeMaxAtMs?: number;
-  };
-  lastPoorAt: number;
-  lastImpulseAt: number | undefined;
-  lastImpulseKind: BeMusicLaneKind | undefined;
-  readonly lanePressedAt: Map<string, number>;
-  readonly laneReleasedAt: Map<string, number>;
-  readonly pressedChannels: Set<string>;
-  readonly keyBeamStartedAt: Map<string, number>;
-  readonly keyBeamFadeStartedAt: Map<string, number>;
-  readonly keyFlashTimeouts: Set<number>;
-  readonly bombStartedAt: Map<string, number>;
-  readonly bombJudge: Map<string, BeMusicJudgmentKind>;
+  readonly playMoments: PlayPresentation['playMoments'];
+  pauseAllBGAVideos(): void;
   resolveSelectedGauge(): GaugeType;
   getResultData(): PlayResult | undefined;
 }
@@ -457,6 +440,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       ...(ctx.nonstopMixer !== undefined ? { stageMixer: ctx.nonstopMixer } : {}),
       playbackRate: samplePlaybackRate(ctx),
       playbackRateFollowsTempo: supportsLiveTempoChange(ctx.options.tempoPitchMode ?? 'pitch'),
+      tempo: ctx.tempo,
     },
     mode: ctx.options.autoPlay ? 'auto' : 'manual',
     ui: callbacks,
@@ -476,11 +460,8 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       // The draws `resolvedChart` was resolved with; the engine plays that chart as is and names them in its summary.
       ...(ctx.randomDraws !== undefined ? { randomDraws: ctx.randomDraws } : {}),
       // The view's own intro timing already gated the chart to PLAYSTART; tell the engine to start its chart
-      // immediately so its t=0 lines up with our `audioContextStartTime` anchor instead of imposing the
-      // engine's default 1.5 s lead-in on top.
+      // immediately instead of imposing the engine's default 1.5 s lead-in on top.
       leadInMs: 0,
-      // A play sought partway starts the engine there; it records no replay of a play it did not see from the start.
-      ...(ctx.startAtSeconds > 0 ? { startAtSeconds: ctx.startAtSeconds } : {}),
       // The play tempo: the engine's clock runs `tempo` times as fast and judges in chart time. A change during the
       // play comes back through `onTempoChange`, at the chart second the engine took it.
       speed: ctx.tempo,
@@ -561,23 +542,21 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
             // Replay recording: the engine snapshots the resolved (post-shuffle) chart and the raw input
             // replay, then hands the assembled log here right before the play promise settles. The host reads it
             // back through `getResultData().replay` for the result screen's auto-save.
-            // What the player sees at the start; the changes during the play go in as `view` commands.
-            ...(ctx.startAtSeconds > 0
-              ? {}
-              : {
-                  recordReplay: resolveReplayRecording(ctx.options, ctx.chart, startReplayView(ctx)),
-                  onReplayRecorded: (replay: BeMusicReplay) => {
-                    ctx.replay = replay;
-                    const waiters = ctx.replayWaiters.splice(0);
-                    for (const resolve of waiters) resolve(replay);
-                  },
-                }),
+            // What the player sees at the start; the changes during the play go in as `view` commands. A play that
+            // seeks records none: the engine discards its recorder at the first seek.
+            recordReplay: resolveReplayRecording(ctx.options, ctx.chart, startReplayView(ctx)),
+            onReplayRecorded: (replay: BeMusicReplay) => {
+              ctx.replay = replay;
+              const waiters = ctx.replayWaiters.splice(0);
+              for (const resolve of waiters) resolve(replay);
+            },
           }),
     },
   })
     .then((summary) => {
       log.info('shared engine driver finished');
       drainSharedEngineSignals(ctx);
+      settleSeekWaiters(ctx);
       applyFinalSummary(ctx, summary);
       // A play the view interrupted (ESC / F5 / teardown) has already handed the host over; it does not finish.
       if (ctx.sharedEngineInterrupt !== undefined) return;
@@ -592,6 +571,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       handleSharedEngineChartFinished(ctx, summary);
     })
     .catch((error: unknown) => {
+      settleSeekWaiters(ctx);
       // The view's own ESC / F5 handler (`handleSharedEngineExitKey`) drives the LR2 fadeout animation, calls
       // the host's `onExit` / `onRestart` from the fade-completion callback, and then aborts the engine's
       // signal — which is what produced this rejection. The view is already disposing (or about to), so the
@@ -636,26 +616,13 @@ export function drainSharedEngineSignals(ctx: PlayEngineContext): void {
  * Mirrors the engine's per-frame snapshot into the view's score / gauge / fast-slow fields so the LR2 NUMBER
  * elements + score-graph keep rendering from the existing source paths — they don't need to know the engine
  * replaced the in-tree judge ladder. The summary's optional `gauge` payload populates `this.gaugeState` so the
- * skin's `#DST_GAUGE` chrome animates against the same value the engine considers authoritative.
+ * skin's `#DST_GAUGE` chrome animates against the same value the engine considers authoritative. The frame is also
+ * what the chart's clock runs on from (`PlaySession.currentSeconds`); one of a seek generation older than the last
+ * `seek` command is stale and dropped.
  */
 function applyEngineFrame(ctx: PlayEngineContext, frame: Readonly<PlayerUIFramePayload>): void {
+  if ((frame.generation ?? 0) < ctx.seekGeneration) return;
   ctx.engineFrame = frame;
-  // Re-anchor the view's chart-time clock to the engine's the very first time the engine publishes a frame.
-  // The engine's `playbackClock` (and therefore the chart-time it stamps on every judge / sample / ui-signal
-  // event) anchors at the moment the engine creates the clock — which lands a few ms to a few hundred ms
-  // AFTER the view set `audioContextStartTime` in its PLAYSTART gate, since `manualPlay` runs through its
-  // entire prepare phase between those two points. Without re-anchoring, every note appears to pass the
-  // judgment line slightly EARLIER (in view time) than the engine actually judges it, so the visual hit
-  // doesn't line up with the score event.
-  //
-  // Using the first non-zero `frame.currentSeconds` snaps the view's `audioContextStartTime` so that
-  // `currentSeconds() === frame.currentSeconds` from now on. Subsequent frames don't re-anchor — both
-  // clocks tick on the AudioContext now, so the offset stays locked.
-  if (!ctx.sharedEngineClockAnchored && frame.currentSeconds > 0 && ctx.audioContext) {
-    ctx.audioContextStartTime = ctx.audioContext.currentTime - ctx.tempoClock.clockMsAt(frame.currentSeconds) / 1000;
-    ctx.sharedEngineClockAnchored = true;
-    ctx.nonstopMixer?.schedule(ctx.audioContextStartTime);
-  }
   applyEngineSummary(ctx, frame.summary);
 }
 
@@ -733,8 +700,10 @@ export function applyFinalSummary(ctx: PlayEngineContext, summary: Readonly<Play
  * drives its LN-hold timers and turntable from it).
  */
 function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUICommand): void {
-  // A run started partway announces its start as a seek; the session cleared its state before launching it.
-  if (command.kind === 'seek') return;
+  if (command.kind === 'seek') {
+    applyEngineSeek(ctx, command);
+    return;
+  }
   switch (command.kind) {
     case 'flash-lane':
       noteImpulse(ctx, command.channel);
@@ -786,6 +755,42 @@ function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUICommand): v
       break;
   }
   ctx.theme.moment({ kind: 'lane-command', command });
+}
+
+/**
+ * The engine sought: what the play showed of the old position is void — the lane effects, the held long notes, the
+ * plates, the POOR image and the latched moments ({@link PlayPresentation.resetPresentation}), the lead-out and the
+ * BGA videos — and the score, the gauge and the play state become the snapshot it rebuilt (the combo, the max combo,
+ * the graphs and the timings of the judgments before the second sought included). The long notes held across it come
+ * next, as the commands that follow. The view hears of it (`seek` moment), and the seeks waiting on it settle.
+ */
+function applyEngineSeek(ctx: PlayEngineContext, command: Extract<PlayerUICommand, { kind: 'seek' }>): void {
+  const { snapshot, seconds, generation } = command;
+  ctx.seekGeneration = generation;
+  ctx.resetPresentation();
+  // A play sought back out of its lead-out plays on: the engine settles the chart again.
+  if (ctx.chartEndTimeout !== undefined) {
+    window.clearTimeout(ctx.chartEndTimeout);
+    ctx.chartEndTimeout = undefined;
+  }
+  ctx.chartEnded = false;
+  ctx.sharedEngineChartSettled = false;
+  ctx.onHeldPlayEnded = undefined;
+  // The next BGA sync starts each video at the chart time sought.
+  ctx.pauseAllBGAVideos();
+  ctx.bgaActiveVideos = {};
+  applyEngineSummary(ctx, snapshot.summary);
+  ctx.displayedScore = ctx.score.score;
+  applyPlayEvent(ctx, { type: 'seek', snapshot, seconds, atMs: ctx.playClock(), tempo: ctx.tempo });
+  ctx.lastPoorAt = -Number.POSITIVE_INFINITY;
+  ctx.theme.moment({
+    kind: 'seek',
+    seconds,
+    gauge: ctx.playState.gauge,
+    judgments: snapshot.judgments,
+    at: ctx.playClock(),
+  });
+  resolveSeekWaiters(ctx, seconds);
 }
 
 /** Keeps the engine's long-note style and its judge windows (converted to ms) for the skin runtime. */
@@ -903,6 +908,6 @@ export function stopSharedEngine(ctx: PlayEngineContext): void {
   ctx.sharedEngineSignals = undefined;
   ctx.sharedEngineInputSignals = undefined;
   ctx.liveTempo.attach(undefined);
-  ctx.sharedEngineClockAnchored = false;
   ctx.sharedEnginePromise = undefined;
+  settleSeekWaiters(ctx);
 }

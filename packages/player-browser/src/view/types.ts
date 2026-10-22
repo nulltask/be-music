@@ -305,7 +305,20 @@ export type PlayViewEvent =
   /** The POOR image shows (a miss at chart time `seconds`) or clears. */
   | { readonly kind: 'poor-bga'; readonly shown: boolean; readonly seconds?: number }
   /** The player's keys changed a view setting (the hi-speed, a lane cover): the frame's state has the new value. */
-  | { readonly kind: 'view-setting'; readonly setting: PlayViewSetting; readonly atMs: number };
+  | { readonly kind: 'view-setting'; readonly setting: PlayViewSetting; readonly atMs: number }
+  /**
+   * The play sought to chart second `seconds`, its gauge `gauge` percent there: what the view started for the judgments
+   * and the lanes before (skin timers, bombs, plates) is void; the frame's state is the one at `seconds`, `judgments` are
+   * the judgments before it (each at its chart second, with its timing when it has one), and the long notes held across
+   * it come again as `lane-hold` / `long-note-start` events.
+   */
+  | {
+      readonly kind: 'seek';
+      readonly seconds: number;
+      readonly gauge: number;
+      readonly judgments: readonly { readonly judge: string; readonly seconds: number; readonly deltaMs?: number }[];
+      readonly atMs: number;
+    };
 
 /**
  * A view setting the player's keys change during a play: the hi-speed, SUDDEN+ (`sudden`), the LIFT, HIDDEN+'s height
@@ -330,7 +343,7 @@ export interface PlayFrame {
   readonly progress?: number;
   /** Chart time in seconds; negative during the intro. */
   readonly seconds: number;
-  /** Whether a `seek` intent moves the play now: an AUTO play whose chart is running. */
+  /** Whether a `seek` intent moves the play now: an AUTO play whose chart is running (paused or not). */
   readonly seekable: boolean;
   /** The beat the playfield scrolls from (mirrored past an LR2 negative-BPM reversal). */
   readonly beat: number;
