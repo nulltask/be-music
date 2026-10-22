@@ -11,7 +11,7 @@
     "bench": "node scripts/bench.ts"
   },
   "dependencies": {
-    "jose": "^6.1.3",
+    "jose": "^6.2.13",
     "oauth4webapi": "^3.8.5"
   },
   "devDependencies": {
