@@ -344,6 +344,19 @@ player's lane layout and lane options, the CLI's lane colours, and the skin SDK'
 | `24`    | `24 KEY SP`          | `1P` / `1Q` (wheel), `11`-`19`, `1A`-`1O`                                    | `keyboard-24k`        |
 | `48`    | `48 KEY DP`          | as `24`, then `21`-`29`, `2A`-`2O`, `2P` / `2Q` (wheel)                      | `keyboard-24k-double` |
 
+### S-RANDOM arrangement
+
+`randomizeSRandomNotes` (`@be-music/player-engine/lanes`) is a runtime-neutral pure helper: it takes resolved event times in milliseconds, a complete mode/side key domain, the selected judge ruleset and an injected random source, and returns channels in input order without mutating notes. The browser applies the channels to the same note objects the engine judges, preserving long-note endpoints. Scratch/wheel and other-side events stay fixed.
+
+| Rule                      | LR2 and provisional IIDX                                             | beatoraja                                                                     |
+| ------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Active LN                 | Reserve its destination through the tail row                         | Preserve its source/destination map through the tail row                      |
+| Ordinary notes            | Choose unused, unheld destinations                                   | Prefer destinations more than 40 integer ms after their previous scoring note |
+| Insufficient jack spacing | No jack threshold                                                    | Use the oldest available destinations, choosing ties randomly                 |
+| Mines and hidden notes    | Mines choose free destinations; hidden notes follow their source map | Follow the timeline permutation without updating jack times                   |
+
+The selected judge ruleset controls these rules independently of the drawing family. Complete domains include both PMS encodings and 5/7/9/10/14/24/48-key modes. An impossible LR2 row with more events than free destinations fails explicitly instead of retrying indefinitely. Record the resolved channels; replay playback applies those channels rather than drawing again, so older recordings retain their arrangement.
+
 ## Compat rulesets
 
 **The player has no judge logic of its own.** Every play runs under one of three compat rulesets — `lr2` (the
