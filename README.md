@@ -15,6 +15,7 @@ BMS/bmson toolchain composed of TypeScript + pnpm workspaces.
 - `@be-music/chart-writer`: Stringization from JSON to `.bms` / `.bmson`
 - `@be-music/chart-audio-renderer`: Render the music score and output `.wav` / `.aiff`
 - `@be-music/player-engine`: Shared rules and playback engine: one play loop (manual, auto, replay), judgment, scoring, gauges and clear lamps, best records, course runs and NONSTOP, the replay format, and the runtime contracts hosts plug into
+- `@be-music/player-node-audio`: Host adapter for Node audio sessions, sample decoding, and PCM output
 - `@be-music/player-terminal`: Terminal UI and `bms-player` CLI frontend for autoplay, keyboard play, Music Select, BGA, and SEA builds, plus the `bms-replay` replay re-simulator
 - `@be-music/player-scene-model`: Runtime-neutral scene models — library entries, browsing, play options, play state and results, course views, system sounds — shared by every skin family
 - `@be-music/skin-lr2`: Renderer-independent Lunatic Rave 2 skin parser, asset resolver, and theme loader
@@ -44,6 +45,11 @@ flowchart TD
     lr2["skin-lr2"]
     beatoraja["skin-beatoraja"]
   end
+  subgraph presentation["Reusable UI"]
+    ui["player-ui"]
+    wrappers["player-ui-react · player-ui-vue"]
+  end
+
   subgraph hosts["Runtimes and hosts"]
     editor["chart-editor"]
     tui["player-terminal"]
@@ -61,6 +67,8 @@ flowchart TD
   player --> lb
   scene --> sdk
   scene --> lr2 --> beatoraja
+  sdk --> ui --> web
+  ui --> wrappers
   sdk --> web
   beatoraja --> web
   web --> demo
@@ -209,6 +217,7 @@ The semantics helper of the score is separated into `@be-music/chart-model`, and
 - Resolves `#INCLUDE`, `#CUSTOMOPTION`, `#CUSTOMFILE`, `#LR2FONT`, system font declarations, skin timers, op conditions, and play-skin variants
 - Parses image, number, text, slider, bargraph, button, BGA, judge-line, measure-line, gauge, score-chart, and result graph elements
 - Loads theme assets with case-insensitive and wildcard lookup, TGA decoding, and DXA archive extraction
+- Supports authored HD resolutions, coordinate-based canvas detection, and image resources inherited across includes (see [HD support and limits](./docs/lr2-skin.md#hd-coordinate-space-and-resources))
 
 ### beatoraja skin (`@be-music/skin-beatoraja`)
 
@@ -220,21 +229,25 @@ The semantics helper of the score is separated into `@be-music/chart-model`, and
 
 ### be-music skin SDK (`@be-music/player-skin-sdk`)
 
-- Skin contract for the browser player's built-in family: the skin draws each screen onto a canvas from plain per-frame data
+- Skin contract for the browser player's built-in family: the skin composes Canvas rendering and optional DOM screens from presentation data
 - Imports no rendering framework; a skin brings its own (Canvas 2D, WebGL / WebGPU, PixiJS, three.js, …)
 - Stage, lane layout, touch / portrait layout, moment, judgement word, loading, audio drive, song fact, result track, skin settings, and motion helpers
 - See [Writing a be-music skin](./docs/be-music-skin.md)
+
+### Reusable player UI
+
+`@be-music/player-ui` provides Lit Web Components for select, decide and result screens, the gameplay HUD, and score, judgment and gauge panels. Use the same components as Native Skin through the typed `@be-music/player-ui-react` and `@be-music/player-ui-vue` wrappers. Connect presentation data and request events while the host owns playback timing and audio. See the [Player UI guide](./packages/player-ui/README.md) for registration, events, themes and SSR limits.
 
 ### browser player (`@be-music/player-browser` / `@be-music/app-play`)
 
 - Browser song library for dropped folders, ZIPs, and mixed song/LR2/beatoraja theme drops
 - Lazy browser asset loading for large audio/video files, with case-insensitive path lookup
-- Built-in be-music skins (Synesthesia by default, Phantom, and Plain, plus the opt-in Lattice) for select, gameplay, and result, and for a decide screen when the skin declares one
+- Built-in be-music skins (Synesthesia by default, Phantom, Plain, Native (DOM + Canvas), and the opt-in Lattice) for select, gameplay, and result, and for a decide screen when the skin declares one
 - Touch play and a touch gameplay layout on touch-first devices, portrait stages for skins that provide one, and per-skin settings
 - LR2 select / decide / gameplay / result skin parsing and rendering on PixiJS
 - beatoraja select / decide / gameplay / result skin parsing and rendering on PixiJS
 - One scene session per screen holds its behaviour (browsing, chart preparation, engine, input, sound, endings) for every family; the built-in, LR2 and beatoraja family views only draw it and return intents (see [Scene sessions and family views](./docs/player-web.md#scene-sessions-and-family-views))
-- Designed entries: `@be-music/player-browser/host` (`PixiSceneHost`, `createSelectScene` / `createDecideScene` / `createPlayScene` / `createResultScene`), `/skin`, `/collection`, `/audio` and `/recording` (see [Entry points](./docs/player-web.md#entry-points))
+- Designed entries: `@be-music/player-browser/host` (`PixiSceneHost`, `createSelectScene` / `createDecideScene` / `createPlayScene` / `createResultScene`), `/skin`, `/collection`, `/audio`, `/recording`, `/compute` and `/controller` (see [Entry points](./docs/player-web.md#entry-points))
 - Shared LR2 Pixi helpers for destination interpolation, sprite transforms, numbers, text, sliders, and bargraphs
 - Shared beatoraja Pixi helpers for destination sampling, source-cell selection, text, values, sliders, gauges, graphs, timing visualizers, notes, markers, BGA, and runtime op/timer wiring
 - Shared playback semantics with the terminal player for notes, timing, scroll distance, BGA cues, score, and results

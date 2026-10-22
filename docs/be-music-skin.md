@@ -2,15 +2,15 @@
 
 # Writing a be-music skin
 
-This guide is for people who want to make a skin for the browser player's built-in (default) family. Skins are written against the `@be-music/player-skin-sdk` package. The built-in skins use exactly this package: Synesthesia, Phantom, Lattice, and Plain import nothing else from the player. Anything they do, your skin can do too.
+Skins for the browser player's built-in family use the `@be-music/player-skin-sdk` contract. Synesthesia, Phantom, Lattice and Plain use Canvas; Native combines DOM screens with a Canvas playfield. Native's presentation components are also available independently from `@be-music/player-ui`.
 
 A be-music skin is code, not a data file. LR2 and beatoraja themes are interpreted by a scene; a be-music skin draws every screen itself. The player keeps ownership of everything else:
 
 - input, timing, audio, and judging;
 - the lane layout and note positions;
-- select-list hit-testing.
+- Canvas select-list hit-testing; DOM screens handle their own elements and forward actions.
 
-Each frame, the player hands your skin a canvas and the frame's content as plain data. Your skin decides how it looks.
+Canvas drawing receives a surface and per-frame data. DOM presentation receives a mount container, presentation frames and actions. The skin owns appearance while scene sessions share behavior.
 
 ## Bring your own renderer
 
@@ -23,6 +23,41 @@ The SDK does not draw and imports no rendering framework. Draw the canvas with w
 | three.js, raw WebGL / WebGPU | `'webgl'`, `'webgl2'`, or `'webgpu'` | Create the renderer or pipelines in `setup`, render in `draw`, release them in `teardown` | —                                                                                               |
 
 Your skin bundles its own framework as a dependency. Plain is deliberately small and readable; copy it as a starting point. It also shows how to support portrait screens; see [Supporting portrait](#supporting-portrait).
+
+## Combine Canvas and DOM
+
+`BeMusicSkin.dom.select`, `.decide` and `.result` replace the corresponding Canvas screens. `.gameplay` accompanies Canvas lanes, BGA and immediate judgment feedback. Each factory receives `(container, actions)` and returns `update(frame)`, `dispose()` and, optionally for select screens, `focusSearch()`.
+
+Create DOM when the factory is called. Update existing elements to preserve focus and IME state, and release listeners and elements in `dispose`. Leaving a screen temporarily preserves its mount for re-entry. A custom React or Vue screen can use the same contract: deliver frames through its framework and unmount its root on disposal.
+
+This factory connects the existing result component to a skin. Assign it to the skin's `dom.result` property.
+
+```ts
+import { defineBeMusicElements } from '@be-music/player-ui';
+import type { BeMusicDOMFactory, BeMusicDOMResultFrame, BeMusicDOMResultActions } from '@be-music/player-skin-sdk';
+
+export const mountResult: BeMusicDOMFactory<BeMusicDOMResultFrame, BeMusicDOMResultActions> = (container, actions) => {
+  defineBeMusicElements();
+  const element = document.createElement('be-music-result-screen');
+  const onContinue = () => actions.continue();
+  const onRetry = () => actions.retry();
+  element.addEventListener('continue-request', onContinue);
+  element.addEventListener('retry-request', onRetry);
+  container.append(element);
+  return {
+    update(frame) {
+      element.frame = frame;
+    },
+    dispose() {
+      element.removeEventListener('continue-request', onContinue);
+      element.removeEventListener('retry-request', onRetry);
+      element.remove();
+    },
+  };
+};
+```
+
+Lit is optional for custom DOM screens. The [Player UI guide](../packages/player-ui/README.md) lists reusable tags, JavaScript properties, request events, React/Vue wrappers, and CSS variables, parts and slots. See the [browser player](./player-web.md#native-dom-skins-and-standalone-controllers) for host/controller integration, update cadence and the limitation that Canvas recordings exclude DOM.
 
 ## Quick start: a Canvas 2D skin
 
