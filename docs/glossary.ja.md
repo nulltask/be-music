@@ -77,7 +77,7 @@
 - **MANUAL / AUTO SCRATCH / AUTO**: 再生モードです。`MANUAL` は手動、`AUTO SCRATCH` は scratch だけ自動、`AUTO` は全自動です。
 - **制御構文 (control flow)**: BMS の `#RANDOM`、`#IF`、`#SWITCH` などの分岐命令です。parser は保持し、ホストが再生/レンダリング前に、明示的な `RandomDraws` でプレイごとに 1 回解決します。
 - **RandomDraws**: 1 回のプレイでの譜面の制御構文の結果です。`#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` の行ごとにファイル順で 1 項目（コマンド、range、value）を持ちます。`drawRandomOutcomes` で 1 回引き、resolver、エンジン、リプレイで共有します。
-- **Source 層 / Resolved 層**: 譜面を読む 2 つの層です。Source 層（`BeMusicJSON`）はファイルに書いてあること、Resolved 層（`@be-music/chart-model` の `resolveChart` が作る `ResolvedChart`）は、フォーマットの既定値と de facto の規則をすべて適用した、プレイヤーが演奏するものです。[アーキテクチャ](./architecture.ja.md) を参照してください。
+- **Source レイヤー / Resolved レイヤー**: 譜面を読む 2 つのレイヤーです。Source レイヤー（`BeMusicJSON`）はファイルに書いてあること、Resolved レイヤー（`@be-music/chart-model` の `resolveChart` が作る `ResolvedChart`）は、フォーマットの既定値と de facto の規則をすべて適用した、プレイヤーが演奏するものです。[アーキテクチャ](./architecture.ja.md) を参照してください。
 
 ## Runtime Package
 
@@ -99,7 +99,7 @@
 - **pure IR**: `@be-music/chart-source` が譜面意味論を持たず、正規化済みデータ構造と preservation data の保持に徹する設計方針です。
 - **sourceFormat**: その IR がもともと `bms`、`bmson`、`json` のどれから来たかを示す属性です。
 - **round-trip**: `parse -> IR -> stringify` の往復で、元の譜面構造をできるだけ再現することです。
-- **preservation**: round-trip のために source-level 情報を保持する補助層です。正規化済みの `events` / `measures` とは分けて管理します。
+- **preservation**: round-trip のために source-level 情報を保持する補助レイヤーです。正規化済みの `events` / `measures` とは分けて管理します。
 - **sourceLines**: BMS の header、object、control-flow 行を宣言順で保持する preservation 情報です。
 - **objectLines**: 制御構文の外側にある object 行だけを保持する preservation 情報です。
 - **event**: 正規化後の譜面イベントです。`measure`、`channel`、`position`、`value` を持ちます。
