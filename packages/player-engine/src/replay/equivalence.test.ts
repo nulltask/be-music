@@ -833,7 +833,8 @@ describe('engine / simulator equivalence', () => {
     expect(summary.bad).toBe(1);
     expect(summary.emptyPoor).toBe(1);
     expect(simulated.judge.emptyPoor).toBe(summary.emptyPoor);
-    expect(simulated.gauge.final).toBe(summary.gauge?.current);
+    expect(summary.gauge).toMatchObject({ max: 120, current: 16 });
+    expect(simulated.gauge.final).toBe((summary.gauge!.current / summary.gauge!.max) * 100);
   });
 
   // beatoraja ticks the Hell Charge note crossing the judge line. Pressing the lane's next HCN early, before the one
