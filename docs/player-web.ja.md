@@ -648,7 +648,7 @@ Web のデモはどの種類のプレイもすべてこの方法で、その種�
 
 プレイのセッションとプレイのビューは、プレイの部品を共有します。各モジュールはプレイ（またはビュー）を明示的なコンテキスト（`ctx`）として受け取り、自分のインターフェースを通してその状態を読み書きします。セッションの状態は `PlaySessionState` です。ビューはレイヤーを `PlayLayers` に持ち、進行中のプレイを `PlayfieldRuntime` として読みます。
 
-進行中のプレイは player-scene-model の `PlayState`（`playState`）一つです。ゲージと EX スコアとそのグラフ、コンボ、最大コンボ、コースのコンボ、時刻つきの判定と判定ごとの早い / 遅いの数、表示設定（HS-FIX のかかったハイスピードとレーンカバー）を持ちます。これを変えるものはすべて `applyPlayEvent`（`session/play/play-state.ts`）を通ります。`applyPlayEvent` は `reducePlayState` で状態を進め、描くハイスピードが変わればノートのスクロールをそこへなめらかに移します。エンジンのフレーム、判定、空 POOR、最終の集計、プレイヤーのハイスピードのキー、ホストの `setHiSpeed`、リプレイが記録した表示設定がこれを通ります。スキンのランタイム、LR2 の状態の解決（`resolveLR2PlayState`）、beatoraja のプレイのブリッジ、リザルト（`playResultFromPlayState`）はこれを読みます。セッションはその横に、表示のとおりのエンジンの判定数（`score`。LR2 では空 POOR を POOR の数に含めます）と、エンジンのゲージの集計（`gaugeState`）を持ちます。
+進行中のプレイは player-scene-model の `PlayState`（`playState`）一つです。ゲージと EX スコアとそのグラフ、コンボ、最大コンボ、コースのコンボ、時刻つきの判定と判定ごとの早い / 遅いの数、表示設定（HS-FIX のかかったハイスピードとレーンカバー）を持ちます。これを変えるものはすべて `applyPlayEvent`（`session/play/play-state.ts`）を通ります。`applyPlayEvent` は `reducePlayState` で状態を進め、描くハイスピードが変わればノートのスクロールをそこへなめらかに移します。エンジンのフレーム、判定、空 POOR、シークのスナップショット、最終の集計、プレイヤーのハイスピードのキー、ホストの `setHiSpeed`、リプレイが記録した表示設定がこれを通ります。スキンのランタイム、LR2 の状態の解決（`resolveLR2PlayState`）、beatoraja のプレイのブリッジ、リザルト（`playResultFromPlayState`）はこれを読みます。セッションはその横に、表示のとおりのエンジンの判定数（`score`。LR2 では空 POOR を POOR の数に含めます）と、エンジンのゲージの集計（`gaugeState`）を持ちます。
 
 - `session/play/`：
   - `play-session.ts`：`PlaySession`。部品の組み立て、クロック、一時停止、録画、後片付け。`play-session-state.ts`：その状態。`play-options.ts`：そのオプション（`PlaySessionOptions`）。`play-session-theme.ts`：ビューに求めるもの（`PlaySessionTheme`）と、知らせるきっかけ（`PlayMoment`）
@@ -842,7 +842,7 @@ stateDiagram-v2
 - **再生待ち:** 譜面が 1 つのときは、プレイ画面の上に再生ボタン（`be-music-preview-start`）を表示する。再生後はリプレイボタンになる。リザルト画面はない。
 - **再生中:** プレビュー用スキン（`src/embed/preview-skin.ts`）は、左ペインにレーン、右ペインに BGA を置き、その下に譜面の情報・スコア・コンボ・ゲージ・判定（`be-music-preview-hud`）、下端に動画プレイヤー風のコントロール（`be-music-playback-controls`）を置く。コントロールは再生／一時停止・シークバー・時間・ミュートと音量・全画面である。Space で再生／一時停止、← / → で 5 秒シーク、M でミュート、F で全画面を切り替える。
 
-シークは、デコード済みの音声・準備済みのノート・BGA を保ったまま、エンジンを指定した譜面の秒数から再開する（`PlayScene.seek`、`PlayerOptions.startAtSeconds`）。それより前のノートは AUTO が判定した扱いになり、その時点で鳴っている音は途中から鳴らす（`AudioSession.triggerEventAt`）。一時停止中のプレイは再開する。ゲージとスコアのグラフはシークした位置から描き直す。[ADR 0015](./adr/0015-preview-seek.ja.md) を参照。エンジンはいま `startAtSeconds` をプレイの最初のシーク、つまりプレイループのコマンドとして扱い（[ADR 0016](./adr/0016-seek-play-loop-command.ja.md)）、その位置をまたいで押さえているロングノートを知らせる。セッションがこのコマンドへ移るのは後の段階である。
+シークは、デコード済みの音声・準備済みのノート・BGA を保ったまま、エンジンを指定した譜面の秒数から再開する（`PlayScene.seek`、`PlayerOptions.startAtSeconds`）。それより前のノートは AUTO が判定した扱いになり、その時点で鳴っている音は途中から鳴らす（`AudioSession.triggerEventAt`）。一時停止中のプレイは再開する。エンジンの `seek` コマンドは譜面の頭から組み直した状態（`PlaySeekSnapshot`）を持ち、セッションはスコア・ゲージ・コンボ・最大コンボ・グラフ・タイミングをそこから取るので、シークした位置までプレイしたときと同じ表示になる。[ADR 0015](./adr/0015-preview-seek.ja.md) を参照。エンジンはいま `startAtSeconds` をプレイの最初のシーク、つまりプレイループのコマンドとして扱い（[ADR 0016](./adr/0016-seek-play-loop-command.ja.md)）、その位置をまたいで押さえているロングノートを知らせる。セッションがこのコマンドへ移るのは後の段階である。
 
 ## DOM スキンと独立した controller
 
