@@ -29,6 +29,63 @@ import {
 beforeEach(resetAudioSinkState);
 
 describe('player', () => {
+  test('player: AUTO play started partway counts the earlier notes and starts what still rings partway', async () => {
+    // BPM 240: a measure lasts 1 s. Notes at 1 s, 2 s, 3 s and 4 s; background sounds at 1 s and 3 s.
+    const json = createEmptyJSON('bms');
+    json.metadata.bpm = 240;
+    json.resources.wav = {
+      '01': 'n1.wav',
+      '02': 'n2.wav',
+      '03': 'n3.wav',
+      '04': 'n4.wav',
+      '05': 'bgm1.wav',
+      '06': 'bgm3.wav',
+    };
+    json.events = [
+      { measure: 1, channel: '11', position: [0, 1] as const, value: '01' },
+      { measure: 2, channel: '11', position: [0, 1] as const, value: '02' },
+      { measure: 3, channel: '11', position: [0, 1] as const, value: '03' },
+      { measure: 4, channel: '11', position: [0, 1] as const, value: '04' },
+      { measure: 1, channel: '01', position: [0, 1] as const, value: '05' },
+      { measure: 3, channel: '01', position: [0, 1] as const, value: '06' },
+    ];
+    const triggered: string[] = [];
+    const startedPartway: [string, number][] = [];
+    const summary = await autoPlay(json, {
+      speed: 4,
+      leadInMs: 0,
+      startAtSeconds: 2.5,
+      audio: true,
+      tui: false,
+      createAudioSession: async () => ({
+        backendLabel: 'recording-audio',
+        chartStartDelayMs: 0,
+        start: () => undefined,
+        pause: () => undefined,
+        resume: () => undefined,
+        finish: async () => undefined,
+        dispose: async () => undefined,
+        triggerEvent: (event) => {
+          triggered.push(event.value);
+        },
+        triggerEventAt: (event, offsetSeconds) => {
+          startedPartway.push([event.value, Math.round(offsetSeconds * 100) / 100]);
+        },
+        stopChannel: () => undefined,
+      }),
+      createInputRuntime: createScheduledInputRuntime([]),
+    });
+
+    expect([...startedPartway].sort(([a], [b]) => a.localeCompare(b))).toEqual([
+      ['01', 1.5],
+      ['02', 0.5],
+      ['05', 1.5],
+    ]);
+    expect([...triggered].sort((a, b) => a.localeCompare(b))).toEqual(['03', '04', '06']);
+    expect(summary.perfect).toBe(4);
+    expect(summary.exScore).toBe(8);
+  });
+
   test('player: LR2 negative BPM freezes autoplay judging and audio at the reversal', async () => {
     const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
