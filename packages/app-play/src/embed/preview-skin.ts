@@ -1,7 +1,6 @@
 import {
   BE_MUSIC_SKIN_API_VERSION,
   STAGE_HEIGHT,
-  STAGE_MARGIN,
   STAGE_WIDTH,
   defineBeMusicSkin,
   type BeMusicDOMGameplayActions,
@@ -14,15 +13,14 @@ import {
 import {
   defineBeMusicElements,
   paintPlayfieldParts,
+  PREVIEW_GUTTER,
+  resolvePreviewBGARect as resolvePreviewBGARectOnStage,
   resolvePlayfieldParts,
   type BeMusicUIEvent,
 } from '@be-music/player-ui';
 
-/** The left pane holds the lanes up to the stage's middle; the right pane the BGA and the play's facts. */
+/** The lanes stay in the stage's left half; the BGA and the play's facts take what they leave on the right. */
 const PANE_SPLIT = STAGE_WIDTH / 2;
-const PANE_GUTTER = 24;
-/** The BGA's largest edge, leaving the right pane room for the facts under it. */
-const MAX_BGA_SIZE = 232;
 /** The controls bar along the bottom of the stage takes this much below the judge line. */
 const JUDGEMENT_Y = STAGE_HEIGHT - 60;
 /** Between HUD redraws (12 a second); a stage, view or seekability change redraws at once. */
@@ -43,17 +41,14 @@ export interface PreviewChrome {
   toggleFullscreen(): void;
 }
 
-/** The BGA square in the right pane: as large as fits beside the lanes, against the stage's top edge. */
+/** The BGA square: as large as fits right of the lanes and above the video controls (`resolvePreviewBGARect`). */
 export function resolvePreviewBGARect(playfieldRight: number): BeMusicRect {
-  const left = Math.max(playfieldRight, PANE_SPLIT) + PANE_GUTTER;
-  const room = STAGE_WIDTH - STAGE_MARGIN - left;
-  const size = Math.max(0, Math.min(room, MAX_BGA_SIZE));
-  return { x: Math.round(left + (room - size) / 2), y: STAGE_MARGIN, w: size, h: size };
+  return resolvePreviewBGARectOnStage({ width: STAGE_WIDTH, height: STAGE_HEIGHT }, playfieldRight);
 }
 
 /** The embed's be-music skin: a DOM playfield and preview HUD, no Canvas of its own. */
 export function createPreviewSkin(chrome: PreviewChrome): BeMusicSkin {
-  const playfield = { top: 0, judgementY: JUDGEMENT_Y, maxRight: PANE_SPLIT - PANE_GUTTER };
+  const playfield = { top: 0, judgementY: JUDGEMENT_Y, maxRight: PANE_SPLIT - PREVIEW_GUTTER };
   return defineBeMusicSkin({
     apiVersion: BE_MUSIC_SKIN_API_VERSION,
     id: 'preview',

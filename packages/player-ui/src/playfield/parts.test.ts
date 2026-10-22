@@ -108,7 +108,7 @@ describe('resolvePlayfieldParts', () => {
 
   it('keeps empty rects when the chart has no lanes yet', () => {
     const parts = resolvePlayfieldParts(frame({ lanes: [] }));
-    expect(parts.lanes.rect).toEqual({ x: 20, y: 8, w: 320, h: 0 });
+    expect(parts.lanes.rect).toEqual({ x: 20, y: 8, w: 0, h: 0 });
     expect(parts.judgeLine.data.runs).toEqual([]);
   });
 });
