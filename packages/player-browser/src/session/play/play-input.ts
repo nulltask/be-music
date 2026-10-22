@@ -221,7 +221,7 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
   }
   if (
     (event.code === 'ArrowLeft' || event.code === 'ArrowRight') &&
-    (ctx.options.autoPlay === true || ctx.options.replay !== undefined)
+    (ctx.options.autoPlay === true || ctx.options.replay !== undefined || ctx.options.allowSeek === 'practice')
   ) {
     const target = (event.composedPath?.()[0] ?? event.target) as HTMLElement | null;
     if (
