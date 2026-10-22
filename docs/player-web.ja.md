@@ -842,7 +842,7 @@ stateDiagram-v2
 - **再生待ち:** 譜面が 1 つのときは、プレイ画面の上に再生ボタン（`be-music-preview-start`）を表示する。再生後はリプレイボタンになる。リザルト画面はない。
 - **再生中:** プレビュー用スキン（`src/embed/preview-skin.ts`）は、左ペインにレーン、右ペインに BGA を置き、その下に譜面の情報・スコア・コンボ・ゲージ・判定（`be-music-preview-hud`）、下端に動画プレイヤー風のコントロール（`be-music-playback-controls`）を置く。コントロールは再生／一時停止・シークバー・時間・ミュートと音量・全画面である。Space で再生／一時停止、← / → で 5 秒シーク、M でミュート、F で全画面を切り替える。
 
-シークは、デコード済みの音声・準備済みのノート・BGA を保ったまま、エンジンを指定した譜面の秒数から再開する（`PlayScene.seek`、`PlayerOptions.startAtSeconds`）。それより前のノートは AUTO が判定した扱いになり、その時点で鳴っている音は途中から鳴らす（`AudioSession.triggerEventAt`）。一時停止中のプレイは再開する。ゲージとスコアのグラフはシークした位置から描き直す。[ADR 0015](./adr/0015-preview-seek.ja.md) を参照。
+シークは、デコード済みの音声・準備済みのノート・BGA を保ったまま、エンジンを指定した譜面の秒数から再開する（`PlayScene.seek`、`PlayerOptions.startAtSeconds`）。それより前のノートは AUTO が判定した扱いになり、その時点で鳴っている音は途中から鳴らす（`AudioSession.triggerEventAt`）。一時停止中のプレイは再開する。ゲージとスコアのグラフはシークした位置から描き直す。[ADR 0015](./adr/0015-preview-seek.ja.md) を参照。エンジンはいま `startAtSeconds` をプレイの最初のシーク、つまりプレイループのコマンドとして扱い（[ADR 0016](./adr/0016-seek-play-loop-command.ja.md)）、その位置をまたいで押さえているロングノートを知らせる。セッションがこのコマンドへ移るのは後の段階である。
 
 ## DOM スキンと独立した controller
 

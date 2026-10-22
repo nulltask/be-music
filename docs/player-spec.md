@@ -811,6 +811,17 @@ Judgments and recorded inputs stay in chart time, so a re-simulation is unaffect
 A replay follows its log's changes when the host passes them as `replayTempoChanges`.
 The Node audio adapter renders its audio for the starting tempo and does not follow a change.
 
+### Seek
+
+A host moves a running play to another chart second with the `{ kind: 'seek', seconds }` input command; `startAtSeconds` is a play's first seek ([ADR 0016](./adr/0016-seek-play-loop-command.md)).
+The engine keeps the last seek of each drain and applies it at its next tick, clamped to the chart; during the lead-in it sets where the chart starts.
+The audio session stops what plays (`AudioSession.seek`), the volume changes before the target apply again and the sounds still ringing there start partway (`AudioSession.triggerEventAt`).
+Chart time re-bases on the play clock at the tempo in force, so a paused play stays paused.
+The judge state becomes the one a play from the start reaches at the target: the score, the gauge, the combos and the notes' judged marks are rebuilt from 0.
+The UI gets a `seek` command, the long notes held across the target again and a frame at the target with the next `generation`; the hold after the chart is re-armed.
+A play that seeks records no replay.
+Only AUTO play seeks for now; manual play and replays drop the command.
+
 ### `highSpeed`
 
 `highSpeed` is a display parameter that primarily changes the visible range and scrolling density of the TUI.
@@ -886,6 +897,8 @@ With `LNMODE=3`, the gauge continues to decrease even during hold break.
 The player body is independent of the UI implementation and notifies the state through `stateSignals` and `uiSignals`.
 Judgment/combo, frame information, POOR BGA, lane flash, and lane hold indication are communicated via this signal.
 The UI command queue also carries long-note lifecycle commands: `long-note-start` (with `mode`: `ln` / `cn` / `hcn`, the mode the active ruleset actually plays the note in, which can differ from the chart's `#LNMODE`) when a hold begins, and `long-note-end` (with `outcome`: `complete` / `dropped`) when it finishes.
+A seek pushes `seek` (with its `generation`, the `seconds` sought and a `snapshot`: the summary, the combo, the max combo and every judgment before the target) after dropping the commands and judge cues still queued.
+Every frame carries its seek `generation` (0 until the first seek) and the `clock` its chart time holds at (`outputSeconds` of the audio session's output clock, `tempo`, `paused`), and the summary carries `combo` and `maxCombo`.
 
 `PlayerOptions.onRulesetResolved` is called once before playback starts with a `PlayerRulesetInfo` (`id`, `rulesetId`, `longNoteStyle`, and the judge `windows` in µs at the start of the chart), so a host can show the windows the engine actually uses instead of re-deriving them.
 

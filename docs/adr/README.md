@@ -26,4 +26,6 @@ Decisions that shape the code and would be costly to reverse, with why they were
 
 - [Native draws its playfield with canvas components](./0014-native-playfield-components.md)
 
-- [Previews seek by starting AUTO play partway](./0015-preview-seek.md)
+- [Previews seek by starting AUTO play partway](./0015-preview-seek.md) (superseded by 0016)
+
+- [Seek is a play-loop command](./0016-seek-play-loop-command.md)
