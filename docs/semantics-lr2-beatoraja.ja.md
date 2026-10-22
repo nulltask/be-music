@@ -131,7 +131,7 @@ flowchart TD
 | 2   | BP に未判定ノートを含める（シングルプレイ）             | B              | コースだけ                                         | 全 ruleset で修正 + Leaderboard のマイグレーション                                    |
 | 3   | 失敗したランを別 ruleset で再シミュレーション           | B              | 3 つすべてでランキング                             | 失敗したサバイバルのランはプレイした ruleset でだけランキングする（または印を付ける） |
 | 4   | LIGHT ASSIST EASY ランプ                                | A, B           | なし。ASSIST-EASY ゲージ → ASSIST_EASY             | ランプを追加。追加のみの rank かマイグレーション                                      |
-| 5   | LR2 はゲージ判定より先に FC                             | B              | FAILED が先（beatoraja 方式）                      | ruleset ごと                                                                          |
+| 5   | LR2 はゲージ判定より先に FC                             | B              | ruleset ごとの優先順位（fixed in #591）            | ruleset ごと                                                                          |
 | 6   | FC と空 POOR のコンボ切れ（bea 5K/PMS）                 | B              | 無視                                               | ruleset ごと                                                                          |
 | 7   | beatoraja の TOTAL のノート数（CN/HCN の終端）          | B              | 基本ノート数                                       | ruleset ごと（バグ修正）                                                              |
 | 8   | judgerank > 100 での beatoraja の BAD のスケーリング    | B              | スケール前の BAD に抑える                          | ruleset ごと（バグ修正）                                                              |
@@ -394,9 +394,9 @@ flowchart TD
 - **LR2:** `CheckClear` は、ゲージを調べる前に `totalnotes == max_combo` なら FC を返します（[#L1834-L1840](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1834-L1840)。バイナリ 0x405da4-0x405dc9）。
 - **beatoraja:** プレイが失敗しておらず、ゲージが条件を満たすときだけ FC です（[BMSPlayer.java#L864-L868](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L864-L868)）。
 - **種類:** セマンティクス。
-- **be-music の現状:** すべての ruleset で FAILED が先です（[`ruleset/clear-lamp.ts`](../packages/player-engine/src/ruleset/clear-lamp.ts) の `finishClearLamp`）。
+- **be-music の現状:** fixed in [#591](https://github.com/nulltask/be-music/issues/591)。`resolveClearLamp` は LR2 のフルコンボをゲージ判定より先に評価します。他の ruleset はゲージ条件を維持します。結果画面のクリア判定も、解決したランプに合わせます。
 - **影響:** B。まれな `lr2` のランプ。たとえば空 POOR のせいで 80 % 未満で終わった GROOVE のフルコンボ。
-- **推奨:** ruleset ごと。ランプは保存済みの結果の純粋な関数なので、導き直すだけで足ります。
+- **保存済みの結果:** リプレイのシミュレーション、ローカル記録、Leaderboard の検証は同じ resolver を使います。`0016_lr2_full_combo_precedence.sql` は判定数から保存済み LR2 ランプを再導出し、公開スコアのベストランプ参照を更新します。EX スコア、BP、ゲージ実測値とリプレイのリビジョン 0 は変更しません。過去のローカル集計ベストには判定数がないため、推測による移行はせず、次の該当プレイで更新します。
 
 ### フルコンボと空 POOR のコンボ切れ（beatoraja 5K/PMS）
 
