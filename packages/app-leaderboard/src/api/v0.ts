@@ -115,6 +115,7 @@ export function createV0API(options: { now: () => number; newId: () => string; c
         404: notFound('The account'),
         409: json('Another player holds this handle, now or formerly.', errorResponse(['handle-taken'])),
       },
+      requestBody: { required: true, content: { 'application/json': { schema: resolver(profileUpdateBody) } } },
     }),
     validator('json', profileUpdateBody),
     async (c) => {
