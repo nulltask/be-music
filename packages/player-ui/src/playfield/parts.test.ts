@@ -35,6 +35,7 @@ function frame(overrides: Partial<PartsInput> = {}): PartsInput {
     measureLines: [],
     bombs: [],
     bga: undefined,
+    nowMs: 0,
     runtime: {},
     ...overrides,
   };
@@ -50,7 +51,7 @@ describe('resolvePlayfieldParts', () => {
     expect(parts.laneCovers.rect).toEqual(parts.lanes.rect);
     expect(parts.judgeLine.rect).toEqual({ x: 20, y: 464, w: 320, h: 2 });
     expect(parts.bombs.rect).toEqual({ x: 20, y: 438, w: 320, h: 52 });
-    expect(parts.judgmentDisplay.rect).toEqual({ x: 20, y: 352, w: 320, h: 28 });
+    expect(parts.judgmentDisplay.rect).toEqual({ x: 20, y: 352, w: 320, h: 52 });
   });
 
   it('draws the judge line once per lane run', () => {
@@ -63,21 +64,34 @@ describe('resolvePlayfieldParts', () => {
     });
   });
 
-  it('centers each side’s judgment word on that side and flashes PERFECT as GREAT', () => {
+  it('centers each side’s judgment word, flashes a PGREAT’s GREAT, and shows a combo the judgment keeps', () => {
     const parts = resolvePlayfieldParts(
       frame({
+        nowMs: 0,
         runtime: {
-          judgeSides: [{ side: '1P', judge: 'PERFECT' }, { side: '2P', judge: 'BAD' }, { side: '1P' }],
+          judgeSides: [
+            { side: '1P', judge: 'PERFECT', combo: 12 },
+            { side: '2P', judge: 'BAD', combo: 4 },
+            { side: '1P' },
+          ],
         },
       }),
     );
     expect(parts.judgmentDisplay.data).toEqual({
       words: [
-        { x: 55, text: 'GREAT' },
-        { x: 320, text: 'BAD' },
+        { x: 55, text: 'GREAT', color: '#ffffff', combo: 12 },
+        { x: 320, text: 'BAD', color: '#ff5c6c' },
       ],
       y: 374,
     });
+    const stepped = resolvePlayfieldParts(
+      frame({ nowMs: 50, runtime: { judgeSides: [{ side: '1P', judge: 'PERFECT', combo: 1 }] } }),
+    );
+    expect(stepped.judgmentDisplay.data.words[0]).toMatchObject({ text: 'GREAT', color: '#5b8cff', combo: 1 });
+    const steady = resolvePlayfieldParts(
+      frame({ nowMs: 50, runtime: { judgeSides: [{ side: '1P', judge: 'GREAT', combo: 3 }] } }),
+    );
+    expect(steady.judgmentDisplay.data.words[0]).toEqual({ x: 55, text: 'GREAT', color: '#e5efff', combo: 3 });
   });
 
   it('covers each side over that side’s lanes and skips sides without a cover', () => {
