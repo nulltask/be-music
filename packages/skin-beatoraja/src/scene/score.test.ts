@@ -299,3 +299,20 @@ describe('resolveBeatorajaPlayScoreOps', () => {
     expect(rangesLit(resolveBeatorajaPlayScoreOps(SCORE, { current: 0, max: 0 }))).toEqual([]);
   });
 });
+
+it.each([
+  ['ASSIST-EASY', [42, 1046]],
+  ['EASY', [42, 1046]],
+  ['NORMAL', [42]],
+  ['HARD', [43]],
+  ['EX-HARD', [43, 1046]],
+  ['HAZARD', [43, 1046]],
+  ['CLASS', [43]],
+  ['EXCLASS', [43, 1046]],
+  ['EXHARDCLASS', [43, 1046]],
+] as const)('uses the actual %s gauge class for play frame ops', (type, expected) => {
+  for (const max of [100, 200]) {
+    const ops = resolveBeatorajaPlayScoreOps(SCORE, { current: 50, max, type });
+    expect(ops.filter((op) => [42, 43, 1046].includes(op))).toEqual(expected);
+  }
+});
