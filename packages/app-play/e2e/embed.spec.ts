@@ -89,10 +89,10 @@ test('seeks back and forth: the time follows the second sought, and the combo is
   };
   // Paused, the play stays where it was sought.
   await page.keyboard.press('Space');
-  await expect(hud.getByRole('status')).toHaveText('Paused');
+  await expect(hud.locator('button.resume')).toBeVisible();
   await seekTo(5);
   await expectAt(5);
-  await expect(hud.getByRole('status')).toHaveText('Paused');
+  await expect(hud.locator('button.resume')).toBeVisible();
   // Back: the notes after the second sought are not judged any more, the max combo included.
   await seekTo(3);
   await expectAt(3);
@@ -100,7 +100,7 @@ test('seeks back and forth: the time follows the second sought, and the combo is
   await expectAt(4.5);
   // Played on from there, the time runs on from the second sought and the combo keeps counting.
   await page.keyboard.press('Space');
-  await expect(hud.getByRole('status')).toHaveCount(0);
+  await expect(hud.locator('button.resume')).toHaveCount(0);
   await expect.poll(async () => Number(await seek.inputValue())).toBeGreaterThan(4.7);
   await expect(combo).toHaveText(/Combo 12\s*\/\s*12\s*$/, { timeout: 30_000 });
 });
@@ -160,4 +160,17 @@ test('a paused play shows a centred play button, and the controls fade out while
   await expect(hud).toHaveAttribute('controls-hidden', '', { timeout: 6000 });
   await page.mouse.move(10, 10);
   await expect(hud).not.toHaveAttribute('controls-hidden');
+});
+
+test('asks the platform audio session for playback, so an iPhone in silent mode still plays the sound', async ({
+  page,
+}) => {
+  // Chromium has no `navigator.audioSession` (Safari's Audio Session API); stand one in to see what the embed asks for.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'audioSession', { value: { type: 'auto' }, configurable: true });
+  });
+  await openEmbed(page, ['songs/fixA']);
+  await expect
+    .poll(() => page.evaluate(() => (navigator as { audioSession?: { type: string } }).audioSession?.type))
+    .toBe('playback');
 });
