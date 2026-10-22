@@ -99,6 +99,8 @@ export interface ReplayCourseResult {
   missCount: number;
   /** The course-wide max combo. */
   maxCombo: number;
+  /** Mine POORs included in judge.poor, not consumed judgment notes. */
+  minePoor?: number;
   djLevel: string;
   /** The gauge the course ended on. */
   gauge: { type: string; final: number; cleared: boolean };
@@ -196,12 +198,20 @@ export function aggregateCourseResult(
   let slow = 0;
   let exScore = 0;
   let judged = 0;
+  let minePoor = 0;
   for (const stage of stageResults) {
     for (const key of Object.keys(judge) as Array<keyof ReplayJudgmentCounts>) judge[key] += stage.judge[key];
     fast += stage.fast;
     slow += stage.slow;
     exScore += stage.exScore;
-    judged += stage.judge.pgreat + stage.judge.great + stage.judge.good + stage.judge.bad + stage.judge.poor;
+    minePoor += stage.minePoor ?? 0;
+    judged +=
+      stage.judge.pgreat +
+      stage.judge.great +
+      stage.judge.good +
+      stage.judge.bad +
+      stage.judge.poor -
+      (stage.minePoor ?? 0);
   }
   const noteCount = stageNoteCounts.reduce((sum, count) => sum + count, 0);
   const last = stageResults.at(-1);
@@ -227,6 +237,7 @@ export function aggregateCourseResult(
     noteCount,
     missCount,
     maxCombo: partial.maxCombo,
+    ...(minePoor > 0 ? { minePoor } : {}),
     djLevel: resolveIIDXRankLabel(exScore, noteCount),
     gauge,
     stagesPlayed: stageResults.length,
@@ -318,7 +329,7 @@ function nonstopCourseResult(
   stageResults: readonly ReplayRulesetResult[],
 ): ReplayCourseResult {
   const { judge, noteCount } = run;
-  const judged = judge.pgreat + judge.great + judge.good + judge.bad + judge.poor;
+  const judged = judge.pgreat + judge.great + judge.good + judge.bad + judge.poor - (run.minePoor ?? 0);
   // A NONSTOP play given up with ESC is a failed run.
   const gauge = {
     type: run.gauge.type,
@@ -334,6 +345,7 @@ function nonstopCourseResult(
     noteCount,
     missCount: resolveMissCount(judge, noteCount - judged),
     maxCombo: run.maxCombo,
+    ...(run.minePoor !== undefined ? { minePoor: run.minePoor } : {}),
     djLevel: resolveIIDXRankLabel(run.exScore, noteCount),
     gauge,
     stagesPlayed: courseLog.stages.filter((entry) => entry.played).length,
@@ -662,6 +674,7 @@ function parseCourseResults(results: Record<string, unknown>): Record<string, Re
       noteCount: base!.noteCount,
       missCount: expectFiniteNumber(record.missCount, `${path}.missCount`),
       maxCombo: base!.maxCombo,
+      ...(base!.minePoor !== undefined ? { minePoor: base!.minePoor } : {}),
       djLevel: expectString(record.djLevel, `${path}.djLevel`),
       gauge: { type: base!.gauge.type, final: base!.gauge.final, cleared: base!.gauge.cleared },
       stagesPlayed: expectFiniteNumber(record.stagesPlayed, `${path}.stagesPlayed`),

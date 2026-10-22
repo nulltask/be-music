@@ -46,6 +46,14 @@ function stageResult(overrides: Partial<ReplayRulesetResult> = {}): ReplayRulese
 }
 
 describe('course results', () => {
+  test('mine POORs never stand in for notes a failed stage did not judge', () => {
+    const stage = stageResult({ minePoor: 2, judge: { pgreat: 8, great: 0, good: 0, bad: 0, poor: 2, emptyPoor: 0 } });
+    expect(aggregateCourseResult('lr2/0', COURSE, [stage], [10], 'GROOVE')).toMatchObject({
+      minePoor: 2,
+      missCount: 4,
+    });
+  });
+
   test('resolveCourseLamp follows the LR2 pick, the beatoraja class gauge, and full-combo upgrades', () => {
     const base = {
       judge: { pgreat: 5, great: 1, good: 1, bad: 1, poor: 0, emptyPoor: 0 },
@@ -275,7 +283,9 @@ describe('course replays', () => {
     expect(simulateReplay(stage, { ruleset: 'lr2' }).gauge.final).toBe(native.stages[1]!.gauge.final);
     expect(extractCourseStage(log, 5)).toBeUndefined();
 
-    // The course log round-trips.
+    // The course log round-trips, including the optional mine count.
+    expect(parseCourseReplay(serializeCourseReplay(log))).toEqual(log);
+    log.results!.native!.minePoor = 1;
     expect(parseCourseReplay(serializeCourseReplay(log))).toEqual(log);
   });
 

@@ -50,6 +50,8 @@ export function parseResults(
         cleared: gauge.cleared === true,
       },
     };
+    if (record.minePoor !== undefined)
+      result.minePoor = expectNonNegativeInteger(record.minePoor, `${prefix}.${key}.minePoor`);
     if (gauge.failedMidPlay !== undefined) result.gauge.failedMidPlay = gauge.failedMidPlay === true;
     const score = optionalFiniteNumber(record.score, `${prefix}.${key}.score`);
     if (score !== undefined) result.score = score;

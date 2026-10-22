@@ -373,7 +373,7 @@ export interface PlayerSummary {
   great: number;
   good: number;
   bad: number;
-  /** Notes that were missed or hit outside every scoring window. Empty POORs are counted separately. */
+  /** Missed notes, plus LR2 mine hits (`minePoor`). Empty POORs are counted separately. */
   poor: number;
   /**
    * Empty POOR (空POOR) — a press with no note in reach but one inside the ruleset's miss window. It costs gauge
@@ -382,6 +382,8 @@ export interface PlayerSummary {
    * (OpenLR2 `ApplyJudgeNote` increments `playerstat.poor` for it), which is why the split is exposed here.
    */
   emptyPoor: number;
+  /** LR2 mine hits already included in `poor`; not judgment notes and never a combo break. */
+  minePoor?: number;
   exScore: number;
   score: number;
   /**

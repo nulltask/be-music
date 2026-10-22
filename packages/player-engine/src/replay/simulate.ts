@@ -189,6 +189,7 @@ class ReplaySimulation {
   private readonly gauge: RulesetGauge;
   private combo = 0;
   private maxCombo = 0;
+  private minePoor = 0;
   /** The course-wide combo and max combo, for a course stage (carried in from the previous stage). */
   private readonly course: { combo: number; maxCombo: number } | undefined;
   /** Judging stops the moment the survival gauge empties (`play.endOnFailure`). */
@@ -263,6 +264,7 @@ class ReplaySimulation {
         cleared: this.gauge.cleared(),
       },
     };
+    if (this.minePoor > 0) result.minePoor = this.minePoor;
     if (this.gauge.failedMidPlay) {
       result.gauge.failedMidPlay = true;
     }
@@ -423,7 +425,7 @@ class ReplaySimulation {
         const due = (timeUs: number): boolean => timeUs >= this.lastAdvanceUs && timeUs < untilUs;
         const enterUs = mine.timeUs - earlyUs;
         if (this.config.mineTrigger === 'press-or-hold' && due(enterUs)) {
-          // LR2: a key already down as the mine enters the PGREAT window detonates it there.
+          // The provisional IIDX model also detonates on held PGREAT entry.
           events.push({ timeUs: enterUs, kind: 'mine-enter', lane, mine });
         }
         if (due(mine.timeUs)) events.push({ timeUs: mine.timeUs, kind: 'mine', lane, mine });
@@ -552,12 +554,16 @@ class ReplaySimulation {
     mine.applied = true;
     if (this.closed()) return;
     // Applied even at 0 damage, as the engine does: the raw path still settles a gauge sitting on its floor.
+    if (this.config.mineTrigger === 'press-ahead-or-hold') {
+      this.counts[JUDGE_MISS_POOR]! += 1;
+      this.minePoor += 1;
+    }
     this.gauge.applyRawDelta(-mine.damage);
   }
 
-  /** LR2: a press with a mine inside the PGREAT window of the line detonates it (before the press judges a note). */
+  /** LR2beta3 uses strict ahead-only GREAT; the provisional IIDX model keeps symmetric PGREAT. */
   private detonateMinesOnPress(lanes: readonly SimLane[], timeUs: number): void {
-    if (this.config.mineTrigger !== 'press-or-hold') return;
+    if (this.config.mineTrigger === 'hold') return;
     const reversalUs = this.replay.chart.reversalTimeUs;
     for (const lane of lanes) {
       for (let index = lane.mineCursor; index < lane.mines.length; index += 1) {
@@ -565,10 +571,13 @@ class ReplaySimulation {
         if (reversalUs !== undefined && mine.timeUs >= reversalUs) break;
         // Mines further ahead than any PGREAT reach cannot be hit.
         if (mine.timeUs - timeUs > 1_000_000) break;
-        // The PGREAT window in force at the press, as LR2 reads it (`#EXRANK` can change it).
+        // Read the window at the press, including a dynamic LR2 rank.
         const [lateUs, earlyUs] = pgreatWindowReachUs(this.config.windowsAt(timeUs).note);
-        if (mine.timeUs - earlyUs > timeUs) continue;
-        if (!mine.applied && timeUs - mine.timeUs <= lateUs) this.detonateMine(mine);
+        const hit =
+          this.config.mineTrigger === 'press-ahead-or-hold'
+            ? mine.timeUs >= timeUs && mine.timeUs - timeUs < this.config.windowsAt(timeUs).note.judges[1][1]
+            : mine.timeUs - earlyUs <= timeUs && timeUs - mine.timeUs <= lateUs;
+        if (!mine.applied && hit) this.detonateMine(mine);
       }
     }
   }

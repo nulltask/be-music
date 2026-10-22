@@ -95,6 +95,21 @@ function corrupt(mutate: (value: any) => void): unknown {
 }
 
 describe('replay format', () => {
+  test('preserves mine POOR counts and rejects negative or fractional counts', () => {
+    const replay = makeReplay();
+    replay.results!.native!.minePoor = 1;
+    expect(parseReplay(serializeReplay(replay))).toEqual(replay);
+    for (const value of [-1, 0.5, '1']) {
+      expect(() =>
+        parseReplay(
+          corrupt((log) => {
+            log.results.native.minePoor = value;
+          }),
+        ),
+      ).toThrow(/minePoor: expected a non-negative integer/);
+    }
+  });
+
   test('serializeReplay → parseReplay round-trips every field', () => {
     const replay = makeReplay();
     expect(parseReplay(serializeReplay(replay))).toEqual(replay);
