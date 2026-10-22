@@ -656,6 +656,8 @@ The engine owns chart time. Every frame carries the chart second it shows, its s
 
 A seek is a command to the running engine ([ADR 0016](./adr/0016-seek-play-loop-command.md)): `PlayScene.seek(T)` pushes `{ kind: 'seek', seconds: T }` on its input bus (`play-seek.ts`) and resolves once the engine applied it or a later seek. The engine answers with a frame of the next generation at `T` and a `seek` UI command whose snapshot the session takes its score, gauge and play state from (`reducePlayState`'s `seek` event); the presentation is reset, a lead-out under way is cancelled, the BGA videos are synced again, and the view hears a `seek` event (the LR2 view stops its per-judgment and lane timers through `resolveLR2PlayTimers`, the beatoraja bridge through `resolveBeatorajaSeekTimers`, rebuilding its judge-state graph from the snapshot's judgments). The long notes held across `T` come next as the engine announces them again. A paused play stays paused at `T`.
 
+AUTO play and replays can seek; manual play remains unavailable. On a replay, the judge re-drives the recorded inputs from the start to the target, restores the recorded tempo there and resets its tempo cursor, and reapplies the recorded view at the target according to the host's Replay / ghost options. The normal play screen also accepts ← / → to seek five seconds in AUTO or replay playback. A sought play records no new replay.
+
 ```mermaid
 sequenceDiagram
   participant H as PlayScene

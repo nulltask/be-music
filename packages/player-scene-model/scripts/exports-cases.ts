@@ -370,6 +370,8 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       const cursor = new sceneModelAPI.ReplayViewCursor({ hiSpeed: 2 }, [{ timeUs: 1_000_000, hiSpeed: 2.5 }]);
       cursor.next(0);
       cursor.next(2_000_000);
+      cursor.seek(0);
+      cursor.seek(1_500_000);
     },
   });
 

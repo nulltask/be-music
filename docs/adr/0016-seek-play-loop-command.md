@@ -53,4 +53,4 @@ The work lands in phases: the engine command for AUTO play (this decision's firs
 
 ## Trade-offs
 
-A seek no longer tears the engine down, and the state at the target is the engine's alone. The price is a full re-simulation per applied seek, and a contract that grows: frames carry a generation and a clock, the UI command queue a `seek` command, and an audio backend can implement `seek` to stop and retime its voices. Until a judge implements `seek` (manual play and replays, for now), its play drops the command.
+A seek no longer tears the engine down, and the state at the target is the engine's alone. The price is a full re-simulation per applied seek, and a contract that grows: frames carry a generation and a clock, the UI command queue a `seek` command, and an audio backend can implement `seek` to stop and retime its voices. Until a judge implements `seek` (manual play, for now), its play drops the command.
