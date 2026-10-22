@@ -40,6 +40,7 @@ const playfieldFrame: Parameters<typeof ui.resolvePlayfieldParts>[0] = {
   measureLines: [],
   bombs: lanes.map((lane, index) => ({ ...lane, y: 464, elapsedMs: index * 10, seed: index })),
   bga: undefined,
+  nowMs: 0,
   runtime: {
     judgeSides: [{ side: '1P', judge: 'PERFECT' }],
     laneCovers: [{ side: '1P', sudden: 0.2, hidden: 0, lift: 0 }],

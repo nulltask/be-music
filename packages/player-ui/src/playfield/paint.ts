@@ -170,14 +170,26 @@ export function paintBombs(ctx: BeMusicPlayfieldPaintContext, { bombs }: BeMusic
   ctx.globalAlpha = 1;
 }
 
+const JUDGMENT_FONT = 'bold 20px system-ui';
+const COMBO_FONT = '600 16px system-ui';
+const COMBO_OFFSET = 24;
+const COMBO_COLOR = '#e5efff';
+
 export function paintJudgmentDisplay(
   ctx: BeMusicPlayfieldPaintContext,
   { words, y }: BeMusicJudgmentDisplayData,
 ): void {
-  ctx.font = 'bold 20px system-ui';
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#e5efff';
-  for (const word of words) ctx.fillText(word.text, word.x, y);
+  for (const word of words) {
+    ctx.font = JUDGMENT_FONT;
+    ctx.fillStyle = word.color;
+    ctx.fillText(word.text, word.x, y);
+    if (word.combo !== undefined && word.combo > 0) {
+      ctx.font = COMBO_FONT;
+      ctx.fillStyle = COMBO_COLOR;
+      ctx.fillText(String(word.combo), word.x, y + COMBO_OFFSET);
+    }
+  }
 }
 
 /** Paints every part on one stage-sized surface, each clipped to its rect as its own canvas would clip it. */
