@@ -15,6 +15,7 @@ import {
   BeMusicGameplayHUDElement,
   BeMusicResultScreenElement,
   BeMusicDecideScreenElement,
+  BeMusicBGAElement,
   BeMusicLanesElement,
   BeMusicNotesElement,
   BeMusicLaneCoversElement,
@@ -148,6 +149,14 @@ export const BeMusicDecideScreen: ReactWebComponent<BeMusicDecideScreenElement, 
   eventsDecideScreen,
 );
 export type BeMusicDecideScreenProps = React.ComponentProps<typeof BeMusicDecideScreen>;
+
+const eventsBGA = {};
+export const BeMusicBGA: ReactWebComponent<BeMusicBGAElement, typeof eventsBGA> = wrap(
+  'be-music-bga',
+  BeMusicBGAElement,
+  eventsBGA,
+);
+export type BeMusicBGAProps = React.ComponentProps<typeof BeMusicBGA>;
 
 const eventsLanes = {};
 export const BeMusicLanes: ReactWebComponent<BeMusicLanesElement, typeof eventsLanes> = wrap(

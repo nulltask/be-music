@@ -30,6 +30,7 @@ React and Vue are peer dependencies of their respective wrappers. The skin SDK h
 | `be-music-gameplay-hud`     | `frame: BeMusicDOMGameplayFrame`                        |
 | `be-music-result-screen`    | `frame: BeMusicDOMResultFrame`                          |
 | `be-music-decide-screen`    | `frame: BeMusicDOMDecideFrame`                          |
+| `be-music-bga`              | `data: BeMusicBGAData`, `rect: BeMusicRect`             |
 | `be-music-lanes`            | `data: BeMusicLanesData`, `rect: BeMusicRect`           |
 | `be-music-notes`            | `data: BeMusicNotesData`, `rect: BeMusicRect`           |
 | `be-music-lane-covers`      | `data: BeMusicLaneCoversData`, `rect: BeMusicRect`      |
@@ -44,7 +45,7 @@ Each class is exported as `BeMusic…Element`. Wrappers export the same names wi
 
 The playfield elements each draw on their own canvas, sized to the device pixels of the element's box. `rect` is the part of the stage the element covers, in stage design pixels, and `data` is drawn in the same coordinates, so an element can be placed and sized freely by its layout. `be-music-playfield` takes a whole `BeMusicGameplayFrame`, splits it with `resolvePlayfieldParts(frame)`, and places each element on its part of the letterboxed stage, under the gameplay HUD. Give it a frame on every animation frame; the elements own no clock.
 
-`paintPlayfieldParts(context, parts)` paints the same parts on one Canvas 2D context, each clipped to its rect, for a host that offers only a stage-sized surface. Subclass `BeMusicPlayfieldCanvasElement` and implement `paint(context, data)` for a part of your own. The playfield exposes `stage`, `lanes`, `notes`, `lane-covers`, `judge-line`, `bombs` and `judgment-display` parts, and each element a `canvas` part.
+`paintPlayfieldParts(context, parts)` paints the same parts on one Canvas 2D context, each clipped to its rect, for a host that offers only a stage-sized surface. Subclass `BeMusicPlayfieldCanvasElement` and implement `paint(context, data)` for a part of your own. The BGA follows the BMS convention: the POOR image replaces the base and layer while a POOR shows, and a still image that fits the 256x256 BGA canvas keeps its size there. `be-music-playfield` paints the stage with `--be-music-color-background` and the letterbox around it with `--be-music-letterbox-background`. The playfield exposes `stage`, `bga`, `lanes`, `notes`, `lane-covers`, `judge-line`, `bombs` and `judgment-display` parts, and each element a `canvas` part.
 
 ## HTML and TypeScript
 

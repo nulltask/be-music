@@ -51,6 +51,11 @@ export class SkinDOMMount<Frame, Actions, Screen extends BeMusicDOMScreen<Frame>
     if (this.element?.isConnected && !this.disposed) this.screen?.update(frame);
   }
 
+  /** The element the screen is mounted in, once attached. */
+  public get root(): HTMLElement | undefined {
+    return this.element;
+  }
+
   /** The mounted screen while it is in the document, for screen-specific calls beyond {@link update}. */
   public get connectedScreen(): Screen | undefined {
     return this.element?.isConnected && !this.disposed ? this.screen : undefined;
