@@ -25,3 +25,5 @@
 - [再利用するプレイヤー UI を Web Components にする](./0013-player-ui-components.ja.md)
 
 - [Native はプレイフィールドを canvas を持つ component で描く](./0014-native-playfield-components.ja.md)
+
+- [プレビューのシークは AUTO プレイを途中から始めて行う](./0015-preview-seek.ja.md)
