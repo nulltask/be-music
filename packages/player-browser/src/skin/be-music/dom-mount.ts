@@ -1,16 +1,17 @@
 import type { BeMusicDOMFactory, BeMusicDOMScreen } from '@be-music/player-skin-sdk';
 
 /** Native mount independent of Pixi. Detaching keeps screen state; disposing ends its listeners and resources. */
-export class SkinDOMMount<Frame, Actions> {
+export class SkinDOMMount<Frame, Actions, Screen extends BeMusicDOMScreen<Frame> = BeMusicDOMScreen<Frame>> {
   private element: HTMLElement | undefined;
-  private screen: BeMusicDOMScreen<Frame> | undefined;
+  private screen: Screen | undefined;
   private disposed = false;
+  private opacity = 1;
 
-  private readonly factory: BeMusicDOMFactory<Frame, Actions>;
+  private readonly factory: BeMusicDOMFactory<Frame, Actions, Screen>;
   private readonly actions: Actions;
   private readonly kind: string;
 
-  public constructor(factory: BeMusicDOMFactory<Frame, Actions>, actions: Actions, kind: string) {
+  public constructor(factory: BeMusicDOMFactory<Frame, Actions, Screen>, actions: Actions, kind: string) {
     this.factory = factory;
     this.actions = actions;
     this.kind = kind;
@@ -48,6 +49,18 @@ export class SkinDOMMount<Frame, Actions> {
 
   public update(frame: Frame): void {
     if (this.element?.isConnected && !this.disposed) this.screen?.update(frame);
+  }
+
+  /** The mounted screen while it is in the document, for screen-specific calls beyond {@link update}. */
+  public get connectedScreen(): Screen | undefined {
+    return this.element?.isConnected && !this.disposed ? this.screen : undefined;
+  }
+
+  /** Fades the whole mount with the Canvas scene it sits on (0 to 1). */
+  public setOpacity(opacity: number): void {
+    if (!this.element || opacity === this.opacity) return;
+    this.opacity = opacity;
+    this.element.style.opacity = opacity >= 1 ? '' : String(opacity);
   }
 
   public get hasSearchInput(): boolean {
