@@ -2,15 +2,15 @@
 
 # be-music スキンの作り方
 
-このガイドは、ブラウザプレイヤーの組み込み（デフォルト）ファミリー向けにスキンを作りたい人のためのものです。スキンは `@be-music/player-skin-sdk` パッケージに対して書きます。組み込みスキンもまさにこのパッケージだけを使っており、Synesthesia・Phantom・Lattice・Plain はプレイヤーの他の部分を一切 import していません。組み込みスキンにできることは、あなたのスキンにもできます。
+ブラウザープレイヤーの組み込みファミリー向けスキンは、`@be-music/player-skin-sdk` の契約に沿って作ります。Synesthesia・Phantom・Lattice・Plain は Canvas を使い、Native は DOM 画面と Canvas のプレイフィールドを組み合わせます。Native の表示部品は `@be-music/player-ui` から独立して再利用できます。
 
 be-music スキンはデータファイルではなくコードです。LR2 / beatoraja テーマはシーンが解釈しますが、be-music スキンはすべての画面を自分で描きます。それ以外はすべてプレイヤーの担当です。
 
 - 入力、タイミング、オーディオ、判定
 - レーンのレイアウトとノーツの位置
-- 選曲リストの当たり判定
+- Canvas の選曲リストの当たり判定（DOM では要素が操作を受け取り、渡された actions に接続する）
 
-プレイヤーは毎フレーム、キャンバスとそのフレームの内容（プレーンなデータ）をスキンに渡します。見た目はスキンが決めます。
+Canvas の描画には毎フレームのサーフェスとデータを、DOM の表示にはマウント先・表示用フレーム・操作を渡します。スキンが見た目を決め、シーンセッションが振る舞いを共有します。
 
 ## 描画フレームワークはスキンが持ち込む
 
@@ -23,6 +23,41 @@ SDK 自体は描画を行わず、描画フレームワークも import しま�
 | three.js、素の WebGL / WebGPU | `'webgl'` / `'webgl2'` / `'webgpu'` | `setup` でレンダラーやパイプラインを作り、`draw` で描画し、`teardown` で解放       | —                                                                                             |
 
 フレームワークは、スキン自身の依存として同梱します。Plain は意図的に小さく読みやすく作ってあるので、出発点としてコピーして使えます。縦向きの画面への対応の仕方も示しています（[縦向きに対応する](#縦向きに対応する)を参照）。
+
+## Canvas と DOM を組み合わせる
+
+`BeMusicSkin.dom` の `select`・`decide`・`result` は、対応する Canvas 画面を置き換えます。`gameplay` は Canvas のレーン・BGA・即時の判定表示と共存します。各 factory は `(container, actions)` を受け取り、`update(frame)` と `dispose()`、選曲画面では任意の `focusSearch()` を返します。
+
+DOM は factory が呼ばれた時点で作ります。`update` は既存の要素を更新してフォーカスや IME の状態を保ち、`dispose` はイベントと要素を解放します。画面を一時的に離れるとマウントは保持され、再入場で使われます。独自の React / Vue 画面をマウントする場合も、同じ契約からフレームを渡し、`dispose` でフレームワークの root を解放します。
+
+次の factory は既存のリザルト部品をスキンに接続します。返した factory をスキンの `dom.result` に設定してください。
+
+```ts
+import { defineBeMusicElements } from '@be-music/player-ui';
+import type { BeMusicDOMFactory, BeMusicDOMResultFrame, BeMusicDOMResultActions } from '@be-music/player-skin-sdk';
+
+export const mountResult: BeMusicDOMFactory<BeMusicDOMResultFrame, BeMusicDOMResultActions> = (container, actions) => {
+  defineBeMusicElements();
+  const element = document.createElement('be-music-result-screen');
+  const onContinue = () => actions.continue();
+  const onRetry = () => actions.retry();
+  element.addEventListener('continue-request', onContinue);
+  element.addEventListener('retry-request', onRetry);
+  container.append(element);
+  return {
+    update(frame) {
+      element.frame = frame;
+    },
+    dispose() {
+      element.removeEventListener('continue-request', onContinue);
+      element.removeEventListener('retry-request', onRetry);
+      element.remove();
+    },
+  };
+};
+```
+
+独自の DOM UI には Lit は必須ではありません。共通部品を利用する場合は [Player UI ガイド](../packages/player-ui/README.ja.md) にタグ一覧、JavaScript property、操作イベント、React / Vue ラッパー、CSS 変数・parts・slots をまとめています。ホストと controller の接続、描画更新の頻度、DOM を含まない Canvas 録画の制約は [ブラウザープレイヤー](./player-web.ja.md#dom-スキンと独立した-controller) を参照してください。
 
 ## クイックスタート: Canvas 2D スキン
 

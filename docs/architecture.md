@@ -135,7 +135,7 @@ flowchart TD
 - **Judgment strategies** (`play-strategy.ts`) say how a play is judged. `play-manual.ts` feeds the judge core the play clock once per tick and every key event, stamped with the instant the key went down. An input runtime that declares its key releases (`PlayerInputRuntime.reportsKeyReleases`: the browser's, and the TUI's once the terminal has negotiated the kitty keyboard protocol) is key-state input from its first key; for input that reports no releases, `play-key-inference.ts` infers when each key came up until a `kitty-state` command shows otherwise, and the replay records those releases. `play-replay.ts` re-drives a recorded input stream (`PlayerOptions.replayInputs`) with `advanceJudgeCoreReplay`, from one instant to the next: to each recorded input's microsecond and to the microsecond after each timed judgment (a long-note tail, a miss deadline, an AUTO SCRATCH note, a mine check, from `nextTimedJudgmentUs`), so a replay's judgments do not depend on tick timing or `speed`. `play-auto.ts` steps the auto judge core and queues each note's keysound against the write head, ahead of its judgment. `manualPlay` picks the manual or the replay strategy, `autoPlay` the auto one.
 - **Timed judgments** fall due once time has moved past their whole microsecond (the replay's clock). One instant settles long-note tails and held-back releases first, then Hell Charge gauge ticks, then AUTO SCRATCH notes, then misses, then mines, each in channel order; misses are taken at each note's own deadline. `finish` steps through every judgment still pending the same way before it applies the end-of-play rules, and an ESC abort stops where the judge stood (the replay records it as `play.abortedAtUs`). The replay simulator schedules the same judgments in the same order, so the two reach the gauge in the same sequence even where it clamps.
 - **Shared rules.** The rules both the judge core and the replay simulator (`replay/simulate.ts`) apply live in the ruleset: windows and classification (`ruleset/judge.ts`), candidate selection (`ruleset/selection.ts`), the gauge (`ruleset/gauge.ts`), and the long-note rules — the mode a ruleset plays, the missed-charge-tail POOR, LR2's late LN-head BAD and the multi-BAD pruning (`ruleset/long-note.ts`). The simulator keeps its own microsecond event queue, so `replay/equivalence.test.ts` checks that the two reach the same judgments on the same input stream.
-- **Services around the loop**: `engine-preparation.ts` (chart resolution for play, load progress, runtime start-up), `engine-audio.ts` (the built-in Node audio session and mixing), `engine-clock.ts` (the playback clock, and the scheduler the loop reads the time and waits through), `engine-effects.ts` (the judge's effects onto the host), `engine-trace.ts` (no-TUI output) and `engine-types.ts` (the public types). `engine.ts` is the public facade and the package root: the engine and its types only. What a host's runtimes exchange with a play, the lanes and what a host shows are the `./signals`, `./lanes` and `./display` entries ([Player spec — Entry points](./player-spec.md#entry-points)).
+- **Services around the loop**: `engine-preparation.ts` (chart resolution for play, load progress, runtime start-up), `engine-audio.ts` (host audio-session initialization and the silent fallback), `engine-clock.ts` (the playback clock, and the scheduler the loop reads the time and waits through), `engine-effects.ts` (the judge's effects onto the host), `engine-trace.ts` (no-TUI output) and `engine-types.ts` (the public types). `engine.ts` is the public facade and the package root: the engine and its types only. What a host's runtimes exchange with a play, the lanes and what a host shows are the `./signals`, `./lanes` and `./display` entries ([Player spec — Entry points](./player-spec.md#entry-points)).
 
 ### Engine characterization tests
 
@@ -181,7 +181,7 @@ The packages were reshaped on `feat/course-definitions` before it goes to `devel
 ```mermaid
 flowchart TD
   subgraph data["Data"]
-    d["json · chart · parser<br/>chart-writer · chart-audio-renderer · utils"]
+    d["chart-source · chart-model · chart-parser<br/>chart-writer · chart-audio-renderer · shared-utils"]
   end
   subgraph domain["Rules and engine — @be-music/player-engine"]
     rules["ruleset · replay<br/>course · records"]
@@ -191,6 +191,11 @@ flowchart TD
     scene["@be-music/player-scene-model"]
     skins["player-skin-sdk · skin-lr2<br/>skin-beatoraja"]
   end
+  subgraph presentation["Reusable UI"]
+    ui["player-ui (Lit)"]
+    wrappers["player-ui-react · player-ui-vue"]
+  end
+
   subgraph web["Web runtime — @be-music/player-browser"]
     sessions["scene sessions"]
     views["family views"]
@@ -208,6 +213,8 @@ flowchart TD
   engine --> sessions
   scene --> sessions
   skins --> views
+  skins --> ui --> views
+  ui --> wrappers
   sessions --> hostApi
   views --> hostApi
   hostApi --> demo
@@ -221,6 +228,8 @@ An arrow points from a layer to a layer built on it.
 - **Rules and engine** (`@be-music/player-engine`). One vocabulary for gauges, clear lamps, BP and the score (`./ruleset`); course runs, the NONSTOP pipeline and the course stage rules (`./course`); best-record merging per judge ruleset (`./records`); the replay format and its simulator (`./replay`) ([ADR 0004](./adr/0004-domain-rules-in-player.md)). The package root is the engine: one play loop with manual, auto and replay judge strategies ([ADR 0003](./adr/0003-one-play-loop.md)). What a host's runtimes exchange with a play, the lanes and what a host shows are the `./signals`, `./lanes` and `./display` entries ([Player spec — Entry points](./player-spec.md#entry-points)).
 - **Scene models** (`@be-music/player-scene-model`). What every screen shows and how it behaves, independent of the skin family: the library entries (`LibraryChart`, `LibraryFolder`, `LibraryCourse`), the browse state and its snapshot (`BrowseState`, `BrowseSnapshot`), the play options, the play state (`PlayState`), the play result (`PlayResult`), the course view (`CourseView`) and the system sound sets ([ADR 0002](./adr/0002-scene-model-package.md), [Scene models](./scene-model.md)).
 - **Skin models** (`player-skin-sdk`, `skin-lr2`, `skin-beatoraja`). Each parses its skins and maps the scene models to their vocabulary: the be-music skin contract (`@be-music/player-skin-sdk`), one table of LR2-compatible op / number / text / timer ids (`@be-music/skin-lr2/ids`) with the LR2 state resolvers (`@be-music/skin-lr2/state`), and the beatoraja state resolution (`@be-music/skin-beatoraja/scene`).
+- **Reusable UI** (`player-ui`, `player-ui-react`, `player-ui-vue`). Lit Web Components receive SDK presentation data and emit operation requests. Native Skin adapts scene frames and actions to these components; React and Vue wrappers expose their properties, events and refs. The UI owns no play loop or audio, and the SDK does not depend on Lit ([Player UI](../packages/player-ui/README.md), [ADR 0013](./adr/0013-player-ui-components.md)).
+
 - **Web runtime** (`@be-music/player-browser`). A scene session (`session/`) owns each screen's behaviour once, for every skin family: chart preparation, RANDOM / FLIP, audio and BGA, engine options, input, endings. A family view (`view/`) only draws the session's frames and returns intents ([ADR 0001](./adr/0001-skin-families-only-draw.md)). The host API (`./host`) makes every screen with `createSelectScene`, `createDecideScene`, `createPlayScene` or `createResultScene` from a family kit, as a `SessionScene` with the one scene lifecycle (`PixiScene`) that `PixiSceneHost` shows. Every sound outside a play's chart goes through one audio service (`./audio`, [ADR 0007](./adr/0007-one-system-audio-context.md)). See [Browser player — Scene sessions and family views](./player-web.md#scene-sessions-and-family-views).
 - **Hosts.** The web demo is a set of services (`services/`) and routes (`app/routes/`: select, decide, play, result, replay, course and NONSTOP) that its composition root (`app/app.ts`) wires together, with one scene router (`app/scene-router.ts`) owning every transition ([ADR 0006](./adr/0006-scene-router.md)). `main.ts` only boots it, and a service imports no Tweakpane, UI (`ui/`) or app (`app/`) module ([Browser player — How the demo is built](./player-web.md#how-the-demo-is-built)). The terminal player plays through the engine and its `./signals`, `./lanes` and `./display` entries, and the Leaderboard checks and ranks runs with the rules (`./course`, `./replay`, `./ruleset`).
 
