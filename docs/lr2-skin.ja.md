@@ -145,7 +145,7 @@ flowchart LR
 | `pickLR2BarBody`、`resolveLR2BarLevel`、`resolveLR2BarLamp` | 一覧のバー、その譜面、記録のランプ                                                                                                                  | バーに描くボディ、レベル、ランプ                                                   |
 | `resolveLR2DecideState`                                     | これから遊ぶ譜面と、そのコース                                                                                                                      | op、テキスト、コースの数値                                                         |
 | `resolveLR2PlayState`                                       | プレイの準備（`LR2PlaySetup`：譜面、レーン、特徴、オプション、ゲージ、コース）と 1 フレーム（`LR2PlayFrame`：`PlayState` の表示設定、スコア、時刻） | op、数値、テキスト、スライダー、バーグラフ                                         |
-| `resolveLR2PlayTimers`、`resolveLR2LaneTimer`               | プレイの瞬間（シーンの段階、判定、フルコンボ、ゲージ、レーン）、レーン                                                                              | タイマー 0、2、3、40-42、44、46-49、レーンのタイマー列 50-139                      |
+| `resolveLR2PlayTimers`、`resolveLR2LaneTimer`               | プレイの瞬間（シーンの段階、判定、フルコンボ、ゲージ、レーン、シーク）、レーン                                                                      | タイマー 0、2、3、40-42、44、46-49、レーンのタイマー列 50-139                      |
 | `resolveLR2ResultState`                                     | `PlayResult`、そのコース、遊んだスキンの `#FLIPRESULT`、スキンのカスタムオプション                                                                  | op、数値、テキスト、スライダー、バーグラフ                                         |
 | `resolveLR2CourseOps`、`resolveLR2CourseText` など          | `CourseView`、作成中のコース                                                                                                                        | コースの op・数値・テキスト、コース作成の op・テキスト・ボタン                     |
 
