@@ -2,7 +2,7 @@
 
 # Writing a be-music skin
 
-Skins for the browser player's built-in family use the `@be-music/player-skin-sdk` contract. Synesthesia, Phantom, Lattice and Plain use Canvas; Native combines DOM screens with a Canvas playfield. Native's presentation components are also available independently from `@be-music/player-ui`.
+Skins for the browser player's built-in family use the `@be-music/player-skin-sdk` contract. Synesthesia, Phantom, Lattice and Plain use Canvas; Native combines DOM screens with a playfield of canvas components, each drawing on a canvas the size of its part of the stage. Native's presentation components are also available independently from `@be-music/player-ui`.
 
 A be-music skin is code, not a data file. LR2 and beatoraja themes are interpreted by a scene; a be-music skin draws every screen itself. The player keeps ownership of everything else:
 
@@ -27,6 +27,8 @@ Your skin bundles its own framework as a dependency. Plain is deliberately small
 ## Combine Canvas and DOM
 
 `BeMusicSkin.dom.select`, `.decide` and `.result` replace the corresponding Canvas screens. `.gameplay` accompanies Canvas lanes, BGA and immediate judgment feedback. Each factory receives `(container, actions)` and returns `update(frame)`, `dispose()` and, optionally for select screens, `focusSearch()`.
+
+A gameplay screen can also draw the playfield. Set `gameplay.drawsOnDOM` and return `drawPlayfield(frame)` from `dom.gameplay`: the host then calls it once per frame with the full `BeMusicGameplayFrame` (lanes, notes, long notes, mines, measure lines and bombs) and creates no Canvas surface for gameplay. `gameplay.draw` remains the fallback for hosts without DOM screens. The DOM sits above the player's canvas, which keeps only the BGA, so such a skin also sets `drawsMines`, `drawsLaneCover` and `drawsMeasureLines`. Native places `be-music-playfield` from `@be-music/player-ui` under its HUD this way.
 
 Create DOM when the factory is called. Update existing elements to preserve focus and IME state, and release listeners and elements in `dispose`. Leaving a screen temporarily preserves its mount for re-entry. A custom React or Vue screen can use the same contract: deliver frames through its framework and unmount its root on disposal.
 
