@@ -20,10 +20,17 @@ export class BeMusicChartListElement extends BeMusicElement {
   static override styles: CSSResultGroup = [
     baseStyles,
     css`
+      :host {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
       ul {
         list-style: none;
         margin: 0;
         padding: 0;
+        flex: 1 1 auto;
+        min-height: 0;
         max-height: var(--be-music-list-height, 55vh);
         overflow: auto;
         overscroll-behavior: contain;
