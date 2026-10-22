@@ -744,8 +744,8 @@ describe('engine / simulator equivalence', () => {
     expect(summary.gauge?.current).toBe(0);
   });
 
-  // LR2's mine press leg is live up to the reversal instant itself.
-  test('lr2: a press at the reversal instant detonates a mine just before it on both sides', async () => {
+  // LR2beta3 has no late mine window, including a press exactly at the reversal.
+  test('lr2: a press at the reversal instant cannot detonate a passed mine', async () => {
     const json = chart([
       { measure: 1, channel: 'D1', position: [99, 100], value: '0A' },
       { measure: 2, channel: '08', position: [0, 1], value: '02' },
@@ -758,6 +758,8 @@ describe('engine / simulator equivalence', () => {
     const simulated = simulateReplay(replay, { ruleset: 'lr2' });
 
     expect(summary.gauge?.current).toBe(simulated.gauge.final);
+    expect(summary.minePoor ?? 0).toBe(0);
+    expect(simulated.minePoor ?? 0).toBe(0);
   });
 
   // An ESC abort stops judging where the engine stopped; the rest of the chart is neither missed nor failed.

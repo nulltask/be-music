@@ -269,6 +269,8 @@ export interface ReplayRulesetResult {
    */
   noteCount: number;
   maxCombo: number;
+  /** LR2 mine hits included in judge.poor, excluded from the judged-note count. */
+  minePoor?: number;
   /** 200000-max money score where the ruleset defines one. */
   score?: number;
   /** IIDX DJ LEVEL label (`'AAA'`..`'F'`) where the ruleset defines one. */

@@ -183,6 +183,16 @@ describe('judge core', () => {
     });
   });
 
+  test('resetting the score removes mine-POOR state before rebuilding a seek', () => {
+    const state = createCore(NOTES);
+    const score = createInitialPlayerSummary(state.config.ruleset, state.config.ruleset.noteCount);
+    score.summary.poor = 1;
+    score.summary.minePoor = 1;
+    score.reset();
+    expect(score.summary.poor).toBe(0);
+    expect(score.summary).not.toHaveProperty('minePoor');
+  });
+
   test('a note-less press near a note is an empty POOR that never consumes the note', () => {
     const state = createCore(NOTES);
     const effects = stepJudgeCore(state, press(0.5, '11'));
@@ -216,7 +226,7 @@ describe('judge core', () => {
     });
   });
 
-  test('a lane held through a mine detonates it and drains the gauge without a judgment', () => {
+  test('a held LR2 mine drains the gauge and counts one POOR without breaking combo', () => {
     const state = createCore(LONG_AND_MINE, 'lr2');
     stepJudgeCore(state, { kind: 'hold', channels: new Set(['12']) });
     const before = state.summary.gauge!.current;
@@ -224,7 +234,8 @@ describe('judge core', () => {
 
     expect(effects.find((effect) => effect.kind === 'trace' && effect.name === 'mine-hit')).toBeDefined();
     expect(state.summary.gauge!.current).toBeLessThan(before);
-    expect(state.summary.bad + state.summary.poor).toBe(1); // only the LN head missed meanwhile
+    expect(state.summary.bad + state.summary.poor).toBe(2); // the missed LN head plus one mine POOR
+    expect(state.summary.minePoor).toBe(1);
   });
 
   test.each(['lr2', 'beatoraja', 'iidx'] as const)('%s: a lane held through a mine detonates it', (ruleset) => {
@@ -235,12 +246,11 @@ describe('judge core', () => {
   });
 
   test.each([
-    ['lr2', 1],
+    ['lr2', 0],
     ['iidx', 1],
     ['beatoraja', 0],
   ] as const)('%s: a press just after a mine crossed, inside PGREAT, detonates it %i time(s)', (ruleset, hits) => {
-    // LR2 also detonates a mine on a press within the PGREAT window (its changelog); beatoraja only damages when the
-    // key is down as the mine crosses the line (JudgeManager L244). IIDX keeps LR2's model.
+    // LR2beta3 has no late press window; only the provisional IIDX model keeps symmetric PGREAT.
     const state = createCore(LONG_AND_MINE, ruleset);
     const effects = [...stepJudgeCore(state, advance(2.501)), ...stepJudgeCore(state, press(2.505, '12'))];
     effects.push(...stepJudgeCore(state, advance(2.6)));
@@ -355,7 +365,7 @@ describe('judge core', () => {
       ['lr2', 1],
       ['beatoraja', 0],
     ] as const)('%s: a tap pressed and released just before the crossing detonates %i time(s)', (ruleset, hits) => {
-      // Down 3 ms before the mine, up 1 ms before it. LR2 detonates on a press inside PGREAT; beatoraja only when the
+      // Down 3 ms before the mine, up 1 ms before it. LR2 detonates on a press inside ahead-only GREAT; beatoraja only when the
       // key is down as the mine crosses, so the key already being up must count even within the 120 ms hold grace.
       expect(
         mineHits(ruleset, [
@@ -388,7 +398,7 @@ describe('judge core', () => {
     });
 
     test('beatoraja: a key let go at the very µs of the crossing is up as it crosses', () => {
-      // (LR2 would still detonate: the key was down as the mine entered the PGREAT window.)
+      // LR2beta3 also waits for crossing, so release at the same microsecond spares the mine.
       expect(
         mineHits('beatoraja', [
           [2300, 'down'],
@@ -400,7 +410,7 @@ describe('judge core', () => {
           [2300, 'down'],
           [2500, 'up'],
         ]),
-      ).toEqual([1, 1, 1]);
+      ).toEqual([0, 0, 0]);
     });
 
     test.each(['lr2', 'beatoraja'] as const)('%s: a second key on a held lane keeps the hold through', (ruleset) => {

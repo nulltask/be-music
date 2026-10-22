@@ -424,6 +424,7 @@ function buildNativeResult(
       cleared: summary.gauge?.cleared ?? false,
     },
   };
+  if (summary.minePoor !== undefined) result.minePoor = summary.minePoor;
   if (summary.gauge?.failedMidPlay === true) {
     result.gauge.failedMidPlay = true;
   }
