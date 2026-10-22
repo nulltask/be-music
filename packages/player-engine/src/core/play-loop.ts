@@ -18,7 +18,7 @@ import {
 import { emitPlayerLog, writeRuntimeEventLog } from './engine-trace.ts';
 import type { PlayerInterruptReason } from './engine-types.ts';
 import type { PlayControls } from './play-controls.ts';
-import { applySeek } from './play-seek.ts';
+import { applySeek, clampSeekSeconds } from './play-seek.ts';
 import type { PlaySession } from './play-session.ts';
 import type { PlayJudge, PlayTick } from './play-strategy.ts';
 
@@ -147,6 +147,7 @@ async function playChart(
     const nowMs = clock.nowMs();
     const seekSeconds = controls.takeSeek();
     if (seekSeconds !== undefined) {
+      controls.seekReplayTempoChanges(clampSeekSeconds(session, seekSeconds), nowMs);
       const sought = applySeek(session, judge, seekSeconds, nowMs);
       if (sought !== undefined) {
         lastFrameSeconds = sought;

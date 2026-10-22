@@ -1,6 +1,6 @@
 /**
  * The input of a play on the built-in and LR2 play screens (`PlaySession`) that the scene handles itself rather
- * than the engine's web input runtime: ESC and F5 (after the theme's fade-out), Space (pause), the hi-speed arrows,
+ * than the engine's web input runtime: ESC and F5 (after the theme's fade-out), Space (pause), hi-speed and seek arrows,
  * holding Backspace to quit, the auto-pause when the page loses focus, and the touch lanes the view sends as `lane`
  * intents (its fingers on the canvas). Lane keys go straight to the engine through its input runtime.
  *
@@ -46,6 +46,7 @@ export interface PlayInputContext extends PlayEngineContext {
   readonly handleVisibilityChange: () => void;
   readonly handleWindowBlur: () => void;
   readonly handleWindowFocus: () => void;
+  seek(seconds: number): Promise<void>;
   requestExit(): void;
   requestRestart(): void;
   pauseAllBGAVideos(): void;
@@ -216,6 +217,25 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
   if (event.code === 'Space') {
     event.preventDefault();
     togglePause(ctx);
+    return;
+  }
+  if (
+    (event.code === 'ArrowLeft' || event.code === 'ArrowRight') &&
+    (ctx.options.autoPlay === true || ctx.options.replay !== undefined)
+  ) {
+    const target = (event.composedPath?.()[0] ?? event.target) as HTMLElement | null;
+    if (
+      event.defaultPrevented ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.isComposing ||
+      target?.isContentEditable ||
+      /^(INPUT|SELECT|TEXTAREA)$/u.test(target?.tagName ?? '')
+    )
+      return;
+    event.preventDefault();
+    void ctx.seek(ctx.currentSeconds() + (event.code === 'ArrowLeft' ? -5 : 5));
     return;
   }
   // HiSpeed adjustment runs entirely on the view side — the engine has its own `high-speed` input command but

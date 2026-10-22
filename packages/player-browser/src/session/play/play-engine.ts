@@ -63,6 +63,7 @@ import {
   flushReplayView,
   followTempoChange,
   startReplayView,
+  updateReplayView,
   type PlayViewSettingsContext,
 } from './play-view-settings.ts';
 
@@ -622,7 +623,9 @@ export function drainSharedEngineSignals(ctx: PlayEngineContext): void {
  */
 function applyEngineFrame(ctx: PlayEngineContext, frame: Readonly<PlayerUIFramePayload>): void {
   if ((frame.generation ?? 0) < ctx.seekGeneration) return;
-  ctx.engineFrame = frame;
+  // The signal bus reuses its frame object. Keep the applied clock metadata owned by this
+  // session, so publishing a seek cannot move time before its score snapshot is drained.
+  ctx.engineFrame = { ...frame };
   applyEngineSummary(ctx, frame.summary);
 }
 
@@ -790,6 +793,7 @@ function applyEngineSeek(ctx: PlayEngineContext, command: Extract<PlayerUIComman
     judgments: snapshot.judgments,
     at: ctx.playClock(),
   });
+  updateReplayView(ctx, seconds, true);
   resolveSeekWaiters(ctx, seconds);
 }
 
