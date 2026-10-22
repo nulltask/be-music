@@ -161,6 +161,12 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
   let currentBGMDynamicGain = 1;
   let currentKeyDynamicGain = 1;
 
+  /** How fast a sample plays for its NONSTOP stage (FIT); 1 outside a stitched chart. */
+  const stageRateOf = (sampleKey: string): number => {
+    const stage = stageMixer?.stageOf(sampleKey);
+    return stage === undefined ? 1 : stageMixer!.rate(stage);
+  };
+
   const resolveSamplePath = (event: BeMusicEvent): { sampleKey: string; path: string } | undefined => {
     const sampleKey = normalizeObjectKey(event.value, sampleIdBase);
     const path = chart.resources.wav[sampleKey];
@@ -184,9 +190,8 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     const node = audioContext.createBufferSource();
     node.buffer = buffer;
     const stage = stageMixer?.stageOf(sampleKey);
-    let stageRate = 1;
+    const stageRate = stageRateOf(sampleKey);
     if (stage !== undefined) {
-      stageRate = stageMixer!.rate(stage);
       // A stage's background voices go through its fade; the player's keysounds stay on the key bus.
       if (bus === audioBus.bgmMixer) bus = stageMixer!.bgmInput(stage) ?? bus;
     }
@@ -249,11 +254,12 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     }
   };
 
-  const playSampleEvent = (event: BeMusicEvent, audioContextStartSeconds?: number): void => {
+  const playSampleEvent = (event: BeMusicEvent, audioContextStartSeconds?: number, elapsedSeconds = 0): void => {
     if (disposed) return;
     const resolved = resolveSamplePath(event);
     if (!resolved) return;
     const { sampleKey, path } = resolved;
+    if (elapsedSeconds > 0 && !isStillRinging(event, sampleKey, path, elapsedSeconds)) return;
 
     // bmson `c = true` — a previous instance of this slot is still playing, so the chart asked for a sustained
     // continuation rather than a fresh attack. Skip the retrigger and let the existing source ride through.
@@ -272,8 +278,13 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     };
 
     const slice = bmsonSlicePlayback?.get(event);
-    const offsetSeconds = clampSampleOffset(slice?.offsetSeconds, buffer.duration);
-    const durationSeconds = clampSampleDuration(slice?.durationSeconds, buffer.duration, offsetSeconds);
+    const elapsedInBuffer = elapsedSeconds * built.stageRate;
+    const offsetSeconds = clampSampleOffset((slice?.offsetSeconds ?? 0) + elapsedInBuffer, buffer.duration);
+    const durationSeconds = clampSampleDuration(
+      slice?.durationSeconds !== undefined ? slice.durationSeconds - elapsedInBuffer : undefined,
+      buffer.duration,
+      offsetSeconds,
+    );
     // Scheduled BGM cues clamp to "now" so a slightly-late polling tick still fires immediately rather than
     // throwing for a past timestamp; player-input keysounds and immediate triggers go through the no-`when` path.
     const startAt =
@@ -289,6 +300,19 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     activeSources.add(built);
     activeBySlot.set(sampleKey, built);
     if (isPlayerLane) activeByChannel.set(channel, built);
+  };
+
+  /** Whether `event`'s sound, started `elapsedSeconds` ago, still has something left to play. */
+  const isStillRinging = (event: BeMusicEvent, sampleKey: string, path: string, elapsedSeconds: number): boolean => {
+    const buffer = decodedSamples.get(decodedSampleKey(path));
+    if (!buffer) return false;
+    const slice = bmsonSlicePlayback?.get(event);
+    const start = slice?.offsetSeconds ?? 0;
+    const end = Math.min(
+      slice?.durationSeconds !== undefined ? start + slice.durationSeconds : buffer.duration,
+      buffer.duration,
+    );
+    return start + elapsedSeconds * stageRateOf(sampleKey) < end;
   };
 
   const applyDynamicVolumeEvent = (event: BeMusicEvent): void => {
@@ -371,6 +395,13 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
         return;
       }
       playSampleEvent(event);
+    },
+    triggerEventAt: (event: BeMusicEvent, offsetSeconds: number): void => {
+      if (isBmsBGMVolumeChangeChannel(event.channel) || isBMSKeyVolumeChangeChannel(event.channel)) {
+        applyDynamicVolumeEvent(event);
+        return;
+      }
+      playSampleEvent(event, undefined, offsetSeconds);
     },
     scheduleEvent: (event: BeMusicEvent, audioContextStartSeconds: number): void => {
       // Scheduled cues are exclusively BGM-style triggers (player input is by definition immediate), so we don't

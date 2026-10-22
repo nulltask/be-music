@@ -27,6 +27,11 @@ export interface PlayJudge {
   beforeAudio?(tick: PlayTick): void;
   /** Judges the tick, after its realtime audio was queued. */
   judge(tick: PlayTick): void;
+  /**
+   * Judges everything before `seconds` without its effects, and starts the keysounds that still ring there partway, for
+   * a play that starts at `seconds` (`PlayerOptions.startAtSeconds`). Absent: the strategy cannot start partway.
+   */
+  fastForward?(seconds: number): void;
   /** A key command from the input runtime. Absent: the strategy ignores live key input. */
   handleLaneCommand?(command: PlayLaneCommand): void;
   /** The chart second the judge has settled through on this tick. */

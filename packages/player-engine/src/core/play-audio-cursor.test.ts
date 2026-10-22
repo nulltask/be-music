@@ -48,4 +48,20 @@ describe('createRealtimeAudioCursor', () => {
     cursor.triggerUntil(10);
     expect(cursor.done).toBe(true);
   });
+
+  test('skips the items due by a start time, handing each one how long ago it was due', () => {
+    const fired: number[] = [];
+    const ringing: [number, number][] = [];
+    const cursor = createRealtimeAudioCursor(items, (item) => fired.push(item.seconds));
+    cursor.skipUntil(1.25, (item, offsetSeconds) => ringing.push([item.seconds, offsetSeconds]));
+    expect(fired).toEqual([]);
+    expect(ringing).toEqual([
+      [0, 1.25],
+      [0.5, 0.75],
+      [0.5, 0.75],
+      [1, 0.25],
+    ]);
+    cursor.triggerUntil(5);
+    expect(fired).toEqual([2]);
+  });
 });

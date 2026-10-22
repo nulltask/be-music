@@ -19,6 +19,8 @@ import type {
   BeMusicBombsData,
   BeMusicJudgmentDisplayData,
   BeMusicRect,
+  BeMusicPlaybackData,
+  LibraryChart,
 } from '@be-music/player-ui';
 import { wrap, type BeMusicVueEventHandlers, type BeMusicVueElementRef } from './wrap.ts';
 export type { BeMusicVueEventHandlers, BeMusicVueElementRef } from './wrap.ts';
@@ -213,3 +215,41 @@ export const BeMusicPlayfield: DefineComponent<BeMusicPlayfieldProps, BeMusicVue
   { frame?: BeMusicGameplayFrame },
   never
 >('BeMusicPlayfield', 'be-music-playfield', ['frame'], []);
+
+type PlaybackEvents = 'pause-request' | 'seek-request' | 'volume-change' | 'fullscreen-request';
+const PLAYBACK_EVENTS: PlaybackEvents[] = ['pause-request', 'seek-request', 'volume-change', 'fullscreen-request'];
+
+export type BeMusicPlaybackControlsProps = { data?: BeMusicPlaybackData } & BeMusicVueEventHandlers<PlaybackEvents>;
+export const BeMusicPlaybackControls: DefineComponent<BeMusicPlaybackControlsProps, BeMusicVueElementRef> = wrap<
+  { data?: BeMusicPlaybackData },
+  PlaybackEvents
+>('BeMusicPlaybackControls', 'be-music-playback-controls', ['data'], PLAYBACK_EVENTS);
+
+export type BeMusicPreviewHUDProps = {
+  frame?: BeMusicDOMGameplayFrame;
+  volume?: number;
+  muted?: boolean;
+  fullscreen?: boolean;
+} & BeMusicVueEventHandlers<PlaybackEvents>;
+export const BeMusicPreviewHUD: DefineComponent<BeMusicPreviewHUDProps, BeMusicVueElementRef> = wrap<
+  { frame?: BeMusicDOMGameplayFrame; volume?: number; muted?: boolean; fullscreen?: boolean },
+  PlaybackEvents
+>('BeMusicPreviewHUD', 'be-music-preview-hud', ['frame', 'volume', 'muted', 'fullscreen'], PLAYBACK_EVENTS);
+
+export type BeMusicPreviewSelectProps = {
+  charts?: readonly LibraryChart[];
+  heading?: string;
+} & BeMusicVueEventHandlers<'activate-request'>;
+export const BeMusicPreviewSelect: DefineComponent<BeMusicPreviewSelectProps, BeMusicVueElementRef> = wrap<
+  { charts?: readonly LibraryChart[]; heading?: string },
+  'activate-request'
+>('BeMusicPreviewSelect', 'be-music-preview-select', ['charts', 'heading'], ['activate-request']);
+
+export type BeMusicPreviewStartProps = {
+  mode?: 'play' | 'replay';
+  disabled?: boolean;
+} & BeMusicVueEventHandlers<'play-request'>;
+export const BeMusicPreviewStart: DefineComponent<BeMusicPreviewStartProps, BeMusicVueElementRef> = wrap<
+  { mode?: 'play' | 'replay'; disabled?: boolean },
+  'play-request'
+>('BeMusicPreviewStart', 'be-music-preview-start', ['mode', 'disabled'], ['play-request']);

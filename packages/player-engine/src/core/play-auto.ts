@@ -5,6 +5,7 @@ import { printLaneMap, writePlayableSampleTriggerEventLog } from './engine-trace
 import { createRealtimeAudioCursor } from './play-audio-cursor.ts';
 import type { PlaySession } from './play-session.ts';
 import type { JudgeStrategy, PlayJudge } from './play-strategy.ts';
+import type { JudgeCoreEffectSink } from './judge-core-types.ts';
 
 /**
  * The AUTO judge strategy: the auto judge core (`auto-judge-core.ts`) resolves every note as chart time reaches it,
@@ -25,6 +26,9 @@ function writeAutoIntro(session: PlaySession): void {
   writeOutput(`Press ${highSpeedModifierLabel}+odd lane key to decrease HIGH-SPEED.\n`);
   writeOutput(`Press ${highSpeedModifierLabel}+even lane key to increase HIGH-SPEED.\n`);
 }
+
+/** A fast-forward shows and sounds nothing of what it judges; the score and gauge still move. */
+const IGNORE_EFFECTS: JudgeCoreEffectSink = () => {};
 
 function createAutoJudge(session: PlaySession): PlayJudge {
   const { playbackChart, uiEnabled, writeOutput, wavResources, idBase, audioSession, totalSeconds } = session;
@@ -71,6 +75,13 @@ function createAutoJudge(session: PlaySession): PlayJudge {
       noteKeysounds.triggerUntil(tick.scheduledSec);
       step({ kind: 'advance', nowSec: tick.nowSec });
       judgedThroughSeconds = tick.nowSec;
+    },
+    fastForward: (seconds) => {
+      noteKeysounds.skipUntil(seconds, (note, offsetSeconds) =>
+        audioSession?.triggerEventAt?.(note.event, offsetSeconds),
+      );
+      runAutoJudgeStep(autoJudge, { kind: 'advance', nowSec: seconds }, IGNORE_EFFECTS);
+      judgedThroughSeconds = seconds;
     },
     judgedThroughSeconds: (tick) => tick.nowSec,
     isSettled: () => noteKeysounds.done && isAutoJudgeSettled(autoJudge),

@@ -46,12 +46,44 @@ const playfieldFrame: Parameters<typeof ui.resolvePlayfieldParts>[0] = {
   },
 };
 const playfieldParts = ui.resolvePlayfieldParts(playfieldFrame);
+const gameplayFrame = {
+  layout: { ...playfieldFrame.layout },
+  settings: {},
+  effects: 'full',
+  chart: undefined,
+  state: {
+    totalSeconds: 120,
+    gauge: 80,
+    cleared: false,
+    exScore: 420,
+    combo: 96,
+    maxCombo: 140,
+    gaugeHistory: [],
+    scoreHistory: [],
+    judgeTimings: [],
+    earlyLate: {},
+    view: {},
+  },
+  runtime: { totalNotes: 400, perfect: 180, great: 60, good: 4, bad: 1, poor: 2, fast: 20, slow: 30 },
+  playOptions: {},
+  emptyPoor: 1,
+  seconds: 64,
+  bpm: 150,
+  progress: undefined,
+  stage: 'playing',
+  autoPlay: true,
+  replay: false,
+  seekable: true,
+} as unknown as Parameters<typeof ui.resolveGameplayPanels>[0];
 const noopContext = new Proxy({}, { get: () => () => {}, set: () => true }) as ui.BeMusicPlayfieldPaintContext;
 const NON_ELEMENT_EXPORTS = new Set([
   'defineBeMusicElements',
   'resolvePlayfieldParts',
   'paintPlayfieldParts',
   'BeMusicPlayfieldCanvasElement',
+  'formatPlaybackTime',
+  'resolveSeekTarget',
+  'resolveGameplayPanels',
 ]);
 export const playerUIBenchmarkPackage: BenchmarkPackageDefinition = {
   module: ui,
@@ -63,6 +95,21 @@ export const playerUIBenchmarkPackage: BenchmarkPackageDefinition = {
       },
     });
     define('player-ui.paintPlayfieldParts', { run: () => ui.paintPlayfieldParts(noopContext, playfieldParts) });
+    define('player-ui.formatPlaybackTime', {
+      run: () => {
+        ui.formatPlaybackTime(3725.4);
+      },
+    });
+    define('player-ui.resolveSeekTarget', {
+      run: () => {
+        ui.resolveSeekTarget(118, 5, 120);
+      },
+    });
+    define('player-ui.resolveGameplayPanels', {
+      run: () => {
+        ui.resolveGameplayPanels(gameplayFrame);
+      },
+    });
     for (const [name, value] of Object.entries(ui)) {
       if (NON_ELEMENT_EXPORTS.has(name) || typeof value !== 'function') continue;
       define(`player-ui.${name}`, {

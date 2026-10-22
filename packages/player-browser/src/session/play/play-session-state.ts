@@ -559,4 +559,6 @@ export class PlaySessionState {
    * `onExit` callback fires at most once. {@link handleSharedEngineChartFinished} is the only writer.
    */
   chartEnded = false;
+  /** The chart second the engine starts its next run at: 0, or where the play was sought to (`seekPlay`). */
+  startAtSeconds = 0;
 }

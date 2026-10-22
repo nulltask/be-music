@@ -141,6 +141,12 @@ export interface PlayerPlaySettings {
    * and a re-simulation judge with them.
    */
   stageRanks?: ReadonlyArray<PlayerStageRank>;
+  /**
+   * AUTO play only: the chart second the play starts at instead of the chart's beginning, as a preview seeking does.
+   * The notes before it count as AUTO judged them, without their keysounds, flashes or bombs; the volume changes before
+   * it apply; and sounds that started earlier and still ring start partway, through `AudioSession.triggerEventAt`.
+   */
+  startAtSeconds?: number;
 }
 
 /** One judge rank change of {@link PlayerPlaySettings.stageRanks}. */
@@ -435,6 +441,12 @@ export interface AudioSession {
   getActiveAudioFiles?: () => string[];
   getActiveAudioVoiceCount?: () => number;
   triggerEvent?: (event: BeMusicEvent) => void;
+  /**
+   * Plays `event`'s sound as if it had started `offsetSeconds` ago, for a play that starts partway
+   * (`PlayerOptions.startAtSeconds`). A sound shorter than the offset plays nothing. Without it, sounds that started
+   * before such a play's start stay silent.
+   */
+  triggerEventAt?: (event: BeMusicEvent, offsetSeconds: number) => void;
   stopChannel?: (channel: string) => void;
   /**
    * The play tempo changed during the play (see {@link PlayerOptions.onTempoChange}): samples started from now on, and

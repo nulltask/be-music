@@ -1,7 +1,7 @@
 import { html, nothing, type CSSResultGroup, type PropertyValues, type TemplateResult } from 'lit';
 import type { BeMusicDOMGameplayFrame } from '@be-music/player-skin-sdk';
 import { FrameElement } from '../base.ts';
-import type { BeMusicScoreData, BeMusicGaugeData, BeMusicJudgmentData } from '../models.ts';
+import { resolveGameplayPanels } from '../gameplay-data.ts';
 import { screenStyles } from '../styles/screen.ts';
 import { gameplayStyles } from '../styles/gameplay.ts';
 import { stats } from '../templates.ts';
@@ -21,50 +21,7 @@ export class BeMusicGameplayHUDElement extends FrameElement<BeMusicDOMGameplayFr
     const f = this.frame;
     if (!f) return nothing;
     const { state: s, runtime: r, chart } = f;
-    const total = r.totalNotes ?? chart?.totalNotes ?? 0;
-    const judged = (r.perfect ?? 0) + (r.great ?? 0) + (r.good ?? 0) + (r.bad ?? 0) + (r.poor ?? 0);
-    const score: BeMusicScoreData = {
-      exScore: s.exScore,
-      maximum: r.exScoreMax ?? total * 2,
-      combo: s.combo,
-      maxCombo: s.maxCombo,
-      rank: r.rank,
-      score: r.score ?? 0,
-      totalNotes: total,
-      judgedNotes: judged,
-      missCount: (r.bad ?? 0) + (r.poor ?? 0) + f.emptyPoor,
-      courseCombo: s.courseCombo,
-    };
-    const gauge: BeMusicGaugeData = {
-      value: s.gauge,
-      label: s.gaugeType,
-      cleared: s.cleared,
-      threshold: r.clearThreshold,
-      survival: r.gaugeSurvival,
-      history: s.gaugeHistory,
-    };
-    const judgments: BeMusicJudgmentData = {
-      perfect: r.perfect ?? 0,
-      great: r.great ?? 0,
-      good: r.good ?? 0,
-      bad: r.bad ?? 0,
-      poor: r.poor ?? 0,
-      emptyPoor: f.emptyPoor,
-      fast: r.fast ?? 0,
-      slow: r.slow ?? 0,
-      earlyLate: s.earlyLate,
-      lastJudge: r.lastJudge,
-      lastDeltaMs: s.lastJudgeDeltaMs,
-    };
-    const seconds = Math.max(0, Math.min(s.totalSeconds, f.seconds));
-    const title = [chart?.title ?? 'Preparing chart', chart?.subtitle].filter(Boolean).join(' ');
-    const facts = [
-      chart?.genre,
-      r.playVariant ? `${r.playVariant} KEY` : undefined,
-      chart?.playLevel !== undefined ? `Lv. ${chart.playLevel}` : undefined,
-    ]
-      .filter(Boolean)
-      .join(' · ');
+    const { score, gauge, judgments, title, facts, totalNotes: total, seconds } = resolveGameplayPanels(f);
     const course = f.course
       ? `${f.course.title} · Stage ${(f.course.stageIndex ?? 0) + 1}/${f.course.stages.length}`
       : 'Single chart';

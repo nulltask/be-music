@@ -130,6 +130,7 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
   engineFrame: Readonly<PlayerUIFramePayload> | undefined;
   chartEnded: boolean;
   chartEndTimeout: number | undefined;
+  readonly startAtSeconds: number;
   replay: BeMusicReplay | undefined;
   readonly replayWaiters: Array<(replay: BeMusicReplay) => void>;
   replayViewCursor: ReplayViewCursor | undefined;
@@ -478,6 +479,8 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       // immediately so its t=0 lines up with our `audioContextStartTime` anchor instead of imposing the
       // engine's default 1.5 s lead-in on top.
       leadInMs: 0,
+      // A play sought partway starts the engine there; it records no replay of a play it did not see from the start.
+      ...(ctx.startAtSeconds > 0 ? { startAtSeconds: ctx.startAtSeconds } : {}),
       // The play tempo: the engine's clock runs `tempo` times as fast and judges in chart time. A change during the
       // play comes back through `onTempoChange`, at the chart second the engine took it.
       speed: ctx.tempo,
@@ -559,12 +562,16 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
             // replay, then hands the assembled log here right before the play promise settles. The host reads it
             // back through `getResultData().replay` for the result screen's auto-save.
             // What the player sees at the start; the changes during the play go in as `view` commands.
-            recordReplay: resolveReplayRecording(ctx.options, ctx.chart, startReplayView(ctx)),
-            onReplayRecorded: (replay) => {
-              ctx.replay = replay;
-              const waiters = ctx.replayWaiters.splice(0);
-              for (const resolve of waiters) resolve(replay);
-            },
+            ...(ctx.startAtSeconds > 0
+              ? {}
+              : {
+                  recordReplay: resolveReplayRecording(ctx.options, ctx.chart, startReplayView(ctx)),
+                  onReplayRecorded: (replay: BeMusicReplay) => {
+                    ctx.replay = replay;
+                    const waiters = ctx.replayWaiters.splice(0);
+                    for (const resolve of waiters) resolve(replay);
+                  },
+                }),
           }),
     },
   })
