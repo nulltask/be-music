@@ -65,6 +65,13 @@ function loadedFont(): LR2LoadedFont {
 }
 
 describe('makeLR2BitmapTextSprite', () => {
+  test('fades missing-glyph boxes together with the bitmap text', () => {
+    const root = makeLR2BitmapTextSprite('AZ', textElement('left'), { ...destination(), alpha: 0 }, loadedFont());
+    expect(root.alpha).toBe(0);
+    const inner = root.children[0]!;
+    expect(inner.children).toHaveLength(2);
+  });
+
   test('anchors right-aligned text at the destination x coordinate', () => {
     const root = makeLR2BitmapTextSprite('AB', textElement('right'), destination(), loadedFont());
     const inner = root.children[0]!;

@@ -197,17 +197,22 @@ export function resolveLR2MeasureLines(ctx: LR2PlayElementsContext): readonly Pl
   if (skinLines.length === 0) return undefined;
   const lines: PlayfieldMeasureLine[] = [];
   for (const skinLine of skinLines) {
+    if (!isLR2DestinationVisible(ctx, skinLine.destination)) continue;
     const baseTexture = ctx.textures.get(skinLine.source.imagePath);
     if (!baseTexture) continue;
     const lineDst = evaluateLR2ElementDst(ctx, skinLine);
     const cell = pickAnimatedCell(skinLine.source, ctx.timers.elapsed(skinLine.source.timer));
     const cropped = createCroppedTexture(baseTexture, cell);
     if (!cropped) continue;
+    const lane = ctx.skin.laneRects.slice(skinLine.index * 10, skinLine.index * 10 + 10).find(Boolean);
+    const timingY = lane ? lane.y + Math.abs(lane.h) : lineDst.y + Math.abs(lineDst.h);
     lines.push({
       cell: { texture: cropped, width: cell.w, height: cell.h },
       x: lineDst.x,
       width: lineDst.w,
       height: Math.max(1, Math.abs(lineDst.h)),
+      // DST_LINE and DST_NOTE specify their own top edges; both scroll from the note's bottom edge.
+      yOffset: lineDst.y - timingY,
       applyToSprite: (sprite) => applyDestinationToSprite(sprite, lineDst),
     });
   }
