@@ -349,9 +349,10 @@ describe('player', () => {
     });
 
     expect(summary.total).toBe(0);
-    // LR2 — mine hits never emit a verdict: gauge damage + explosion sound only.
+    // LR2beta3 adds one POOR/BP with the raw damage and explosion sound, without a judgment cue.
     expect(summary.bad).toBe(0);
-    expect(summary.poor).toBe(0);
+    expect(summary.poor).toBe(1);
+    expect(summary.minePoor).toBe(1);
     expect(
       output.some(
         (line) =>
@@ -376,7 +377,8 @@ describe('player', () => {
 
     expect(summary.total).toBe(0);
     expect(summary.bad).toBe(0);
-    expect(summary.poor).toBe(0);
+    expect(summary.poor).toBe(1);
+    expect(summary.minePoor).toBe(1);
     // LR2 / beatoraja interpret the mine value directly as the damage percent ('08' = 8 %, NOT the nanasi-memo
     // value/2): gauge 20 → 12.
     expect(summary.gauge?.current).toBeCloseTo(12, 9);
