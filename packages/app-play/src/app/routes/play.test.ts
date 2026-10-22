@@ -205,6 +205,7 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
       hiSpeed: 3,
       keyVolume: 100,
       bgmVolume: 100,
+      peakGain: false,
       compressor: true,
       compressorKey: true,
       compressorBGM: true,
