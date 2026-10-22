@@ -160,7 +160,7 @@ NONSTOP がライブラリを置き換えていても、コースのバーをキ
 beatoraja の LN モードの上書き（LNMODE ボタン）は一覧の状態には含めません。まだ何もそれでプレイしないので、モデルにも
 入れていません。beatoraja の選曲画面のビューが持ちます。
 
-Web 実行層の選曲セッションは、モデルが任せる選択をファミリーの選曲ポリシー（`@be-music/player-browser` の
+Web ランタイムの選曲セッションは、モデルが任せる選択をファミリーの選曲ポリシー（`@be-music/player-browser` の
 `session/select/select-policy.ts`）で決めます。標準と LR2 の画面では、ルートで戻っても何もせず、戻す位置がなければ
 譜面フォルダが一つだけのライブラリはそれを開き、ソートとフィルターはプレイオプションのものとして復元でも保ちます。beatoraja のポリシーはルートでキャンセル音を鳴らして画面を出て、ライブラリをルートで開き、
 MODE と SORT を一覧の位置に含め（復元で戻ります）、beatoraja のキー（ページのキー、Home / End、ランダムなバーへの R）を
@@ -327,5 +327,5 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 どの種類の選曲画面もこれらのモデル（`reduceBrowse`・`browseEntries`・`captureBrowse` / `restoreBrowse`・
 `browseSystemSound`）で一覧をたどります。どのプレイ画面も `PlayState` を一つ持ち、リザルトをそこから読みます
 （`playResultFromPlayState`）。そのため上のプレイ状態の選択に従います。フルコンボの最大コンボはどのプレイでもノーツ数になり、
-リザルトは判定ごとの早い / 遅いの数を持ち、リプレイの表示時間は白数字（`captureReplayView`）です。Web 実行層の画面は、どれもこれらのモデルの上のシーンセッションです。スキンのパッケージはモデルを各スキンの
+リザルトは判定ごとの早い / 遅いの数を持ち、リプレイの表示時間は白数字（`captureReplayView`）です。Web ランタイムの画面は、どれもこれらのモデルの上のシーンセッションです。スキンのパッケージはモデルを各スキンの
 語彙に写します。beatoraja の番号へは `@be-music/skin-beatoraja/scene` が写します（[beatoraja-skin.ja.md](./beatoraja-skin.ja.md#scene-mapping)）。

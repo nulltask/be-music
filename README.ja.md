@@ -22,12 +22,12 @@ TypeScript + pnpm workspaces で構成した BMS/bmson ツールチェーンで�
 - `@be-music/skin-beatoraja`: beatoraja JSON/Lua skin parser、normalizer、theme loader を renderer 非依存で提供する package
 - `@be-music/player-skin-sdk`: browser player 向け be-music スキンを書くための描画フレームワーク非依存の SDK
 - `@be-music/player-ui`, `@be-music/player-ui-react`, `@be-music/player-ui-vue`: [再利用可能な Lit 製 Web Components と、型付き React・Vue ラッパー](./packages/player-ui/README.ja.md)
-- `@be-music/player-browser`: browser の PixiJS 実行層。選曲・決定・プレイ・リザルトの各画面を、built-in・LR2・beatoraja のファミリービューが描くシーンセッションとして 1 つのホスト向け API から作る。音のサービス、譜面のコレクション、スキンの読み込み、gameplay の録画も持つ
+- `@be-music/player-browser`: browser の PixiJS ランタイム。選曲・決定・プレイ・リザルトの各画面を、built-in・LR2・beatoraja のファミリービューが描くシーンセッションとして 1 つのホスト向け API から作る。音のサービス、譜面のコレクション、スキンの読み込み、gameplay の録画も持つ
 - `@be-music/app-play`: folder / ZIP drop、LR2 / beatoraja theme、Debug Menu、browser 再生を、1 つのシーンルーターの下のサービスとして接続する private Vite demo
 - `@be-music/app-leaderboard`: Cloudflare Workers で動く private な Leaderboard API。リプレイの投稿、再シミュレーションによる検証、ランキング
 - `@be-music/chart-editor`: CLI エディタ (インポート・編集・エクスポート)
 
-パッケージは層を成して積み上がっています。矢印は、パッケージからそれに依存するパッケージへ向かいます。ほかの矢印を通じて既に届く依存は重ねて描いていません（`@be-music/shared-utils` はほぼすべてのパッケージの下にあります）。パッケージの内側の同じ層は [アーキテクチャ — 目指す構造](./docs/architecture.ja.md#目指す構造) にあります。
+パッケージはレイヤーごとに積み重なっています。矢印は、パッケージからそれに依存するパッケージへ向かいます。ほかの矢印を通じて既に届く依存は重ねて描いていません（`@be-music/shared-utils` はほぼすべてのパッケージの下にあります）。パッケージの内側の同じレイヤーは [アーキテクチャ — 目指す構造](./docs/architecture.ja.md#目指す構造) にあります。
 
 ```mermaid
 flowchart TD
@@ -50,7 +50,7 @@ flowchart TD
     wrappers["player-ui-react · player-ui-vue"]
   end
 
-  subgraph hosts["実行層とホスト"]
+  subgraph hosts["ランタイムとホスト"]
     editor["chart-editor"]
     tui["player-terminal"]
     nodeaudio["player-node-audio"]
@@ -185,7 +185,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 ### scene models (`@be-music/player-scene-model`)
 
 - スキンの種類によらない、実行環境非依存の各画面のモデル。譜面の言葉で表したライブラリの項目（`LibraryChart`、`LibraryFolder`、`LibraryCourse`）、一覧のモデル（`reduceBrowse`、`BrowseSnapshot`）、プレイオプション、プレイ状態（`PlayState`）、プレイ結果（`PlayResult`）、コースの表示用モデル、効果音セット
-- Web 実行層、スキン SDK、LR2 と beatoraja の状態を求める関数が使う
+- Web ランタイム、スキン SDK、LR2 と beatoraja の状態を求める関数が使う
 - [シーンモデル](docs/scene-model.ja.md) を参照
 
 ### terminal player (`@be-music/player-terminal`)
