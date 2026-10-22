@@ -92,7 +92,7 @@ The reasons behind each reading, and every place where be-music departs from a s
 
 ## Checking the layer
 
-`tests/regression/resolved-chart.test.ts` resolves every chart in `tests/fixtures`, for each `#RANDOM` draw the regression corpus pins. It checks the result against the consumer helpers (`extractTimedNotes`, `collectSampleTriggers`, `createTimingResolver`) and against the pinned engine note list, triggers, tempo map and chart facts in `tests/regression/__expected__` (see the [regression corpus](../tests/regression/README.md)).
+`test/regression/resolved-chart.test.ts` resolves every chart in `test/fixtures`, for each `#RANDOM` draw the regression corpus pins. It checks the result against the consumer helpers (`extractTimedNotes`, `collectSampleTriggers`, `createTimingResolver`) and against the pinned engine note list, triggers, tempo map and chart facts in `test/regression/__expected__` (see the [regression corpus](../test/regression/README.md)).
 
 ## The engine: judge core and one play loop
 

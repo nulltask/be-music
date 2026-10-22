@@ -2,7 +2,7 @@
 
 # Regression Corpus
 
-`corpus.test.ts` pushes every chart in [`tests/fixtures`](../fixtures/README.md) through the whole toolchain and pins what each stage produces in `__expected__/<chart>.json`. Unit tests assert what a function should do; this suite records what the toolchain currently does on real chart files, so a refactor that moves logic between packages fails here as soon as any stage's output shifts.
+`corpus.test.ts` pushes every chart in [`test/fixtures`](../fixtures/README.md) through the whole toolchain and pins what each stage produces in `__expected__/<chart>.json`. Unit tests assert what a function should do; this suite records what the toolchain currently does on real chart files, so a refactor that moves logic between packages fails here as soon as any stage's output shifts.
 
 ## What each expected file records
 
@@ -29,7 +29,7 @@ pnpm test:regression
 pnpm test:regression -u
 ```
 
-A diff in an expected file is not automatically a bug. When the change is intended, regenerate with `-u` and review the diff in the pull request like code. Adding a chart to `tests/fixtures` adds an expected file automatically.
+A diff in an expected file is not automatically a bug. When the change is intended, regenerate with `-u` and review the diff in the pull request like code. Adding a chart to `test/fixtures` adds an expected file automatically.
 
 ## Engine replays
 
@@ -42,7 +42,7 @@ The engine results are pinned next to the simulator results for the same stream,
 `engine-simulator-fuzz.test.ts` holds the engine and the simulator to the same agreement on seeded random charts in every play mode (7 / 14 keys, 5 keys, PMS, 24-key keyboard): taps, long notes in each `#LNMODE`, mines, BPM and `#EXRANK` changes, and input streams that press across and past every window, release long notes early and late, re-press, and hold keys across mines. Each case is replayed under every judge ruleset with a drawn gauge and AUTO SCRATCH setting, and any field that differs fails the test with its seed. It runs 40 seeds per mode; rare corners need more, so raise the count locally when touching the judges:
 
 ```bash
-BE_MUSIC_FUZZ_SEEDS=1000 pnpm exec vp test run tests/regression/engine-simulator-fuzz.test.ts
+BE_MUSIC_FUZZ_SEEDS=1000 pnpm exec vp test run test/regression/engine-simulator-fuzz.test.ts
 ```
 
 A failing seed reproduces exactly; reduce it to a minimal case in `equivalence.test.ts` alongside the fix.
