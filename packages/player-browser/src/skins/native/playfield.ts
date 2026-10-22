@@ -11,7 +11,5 @@ export function drawPlayfield(
 ): void {
   ctx.fillStyle = '#10151f';
   ctx.fillRect(0, 0, width, height);
-  const bga = frame.layout.bga;
-  if (bga && frame.runtime.hasBGA) ctx.clearRect(bga.x, bga.y, bga.w, bga.h);
   paintPlayfieldParts(ctx, resolvePlayfieldParts(frame));
 }

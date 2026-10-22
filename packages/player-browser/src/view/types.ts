@@ -62,6 +62,8 @@ export interface FamilyView<Frame, Intent> {
    * host captures the whole stage.
    */
   getStageInfo?(): { container: Container; width: number; height: number };
+  /** `false` when every screen the view shows is DOM, so the host can take its canvas out (`PixiScene.drawsOnCanvas`). */
+  readonly drawsOnCanvas?: boolean;
 }
 
 /** When a frame is drawn. */

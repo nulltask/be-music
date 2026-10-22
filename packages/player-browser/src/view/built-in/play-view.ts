@@ -104,6 +104,11 @@ export class BuiltInPlayView
     return this.host.app;
   }
 
+  /** Whether the skin's DOM gameplay screen draws the playfield, so nothing of the play is drawn on the canvas. */
+  get drawsOnCanvas(): boolean {
+    return !(this.kit.skin.gameplay.drawsOnDOM === true && this.kit.skin.dom?.gameplay !== undefined);
+  }
+
   /** A be-music skin always paints the chrome: the screen fades up from black as it appears. */
   get paintsThroughBeMusicSkin(): boolean {
     return true;
@@ -164,7 +169,6 @@ export class BuiltInPlayView
 
   public attach(host: PixiSceneHost, emit: IntentSink<PlayIntent>): void {
     build(this, host);
-    this.touchLanes.attach(host, emit);
     const factory = this.kit.skin.dom?.gameplay;
     if (factory && !this.dom)
       this.dom = new SkinDOMMount(
@@ -177,6 +181,10 @@ export class BuiltInPlayView
         'gameplay',
       );
     this.dom?.attach(host.domRoot);
+    // Without the canvas the fingers land on the screen's mount, which covers the same area.
+    const mount = this.drawsOnCanvas ? undefined : this.dom?.root;
+    if (mount) mount.style.pointerEvents = 'auto';
+    this.touchLanes.attach(host, emit, mount);
   }
 
   public draw(frame: PlayFrame): void {

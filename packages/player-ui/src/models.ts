@@ -1,4 +1,5 @@
 import type {
+  BeMusicBGAFrame,
   BeMusicBomb,
   BeMusicDOMGameplayFrame,
   BeMusicGameplayRuntime,
@@ -94,6 +95,11 @@ export interface BeMusicJudgmentDisplayData {
   readonly words: readonly { readonly x: number; readonly text: string }[];
   readonly y: number;
 }
+/** The BGA layers showing this frame; `shown` is false when the chart has no BGA, leaving the rect empty. */
+export interface BeMusicBGAData {
+  readonly frame: BeMusicBGAFrame | undefined;
+  readonly shown: boolean;
+}
 /** One canvas component of the playfield: the stage rect it covers and what it draws there. */
 export interface BeMusicPlayfieldPart<Data> {
   readonly rect: BeMusicRect;
@@ -102,6 +108,7 @@ export interface BeMusicPlayfieldPart<Data> {
 /** The playfield split into its canvas components, in drawing order. */
 export interface BeMusicPlayfieldParts {
   readonly stage: { readonly width: number; readonly height: number };
+  readonly bga: BeMusicPlayfieldPart<BeMusicBGAData>;
   readonly lanes: BeMusicPlayfieldPart<BeMusicLanesData>;
   readonly notes: BeMusicPlayfieldPart<BeMusicNotesData>;
   readonly laneCovers: BeMusicPlayfieldPart<BeMusicLaneCoversData>;

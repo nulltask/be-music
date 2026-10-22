@@ -34,6 +34,7 @@ import { resolveBuiltInDecideTiming } from './decide-view.ts';
 abstract class DOMFamilyView<Frame, Intent, DOMFrame, Actions> implements FamilyView<Frame, Intent> {
   public readonly family = 'built-in' as const;
   public readonly root = new Container();
+  public readonly drawsOnCanvas = false;
   protected presentation: BeMusicDOMPresentation;
   private readonly skin: BuiltInKit['skin'];
   protected emit: IntentSink<Intent> = () => {};

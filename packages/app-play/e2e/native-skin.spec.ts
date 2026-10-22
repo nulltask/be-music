@@ -20,10 +20,20 @@ test('native screens browse, search, play, show results and switch back to Canva
   const hud = page.locator('[data-be-music-screen="gameplay"]');
   await expect(hud.getByRole('heading', { name: 'Fixture A' })).toBeVisible();
   await expect(select).toHaveCount(0);
-  await expect(page.locator('canvas')).toBeVisible();
-  await expect(hud.getByRole('meter', { name: 'Gauge' })).toBeVisible();
+  // The meter is named after the gauge chosen above.
+  await expect(hud.getByRole('meter', { name: 'HARD' }).first()).toBeVisible();
   await hud.getByRole('button', { name: 'Pause', exact: true }).click();
   await expect(hud.getByRole('button', { name: 'Resume', exact: true })).toBeVisible();
+  // Checked while paused, before the short chart ends. No stage-sized canvas: each part of the playfield, BGA
+  // included, draws on a canvas of its own.
+  await expect(page.locator('canvas[aria-label="be-music stage"]')).toHaveCount(0);
+  for (const part of ['be-music-bga', 'be-music-lanes', 'be-music-notes', 'be-music-judge-line']) {
+    await expect(hud.locator(`${part} canvas`)).toBeAttached();
+  }
+  const lanes = await hud.locator('be-music-lanes').boundingBox();
+  const stageBox = await page.locator('#stage').boundingBox();
+  expect(lanes!.width).toBeLessThan(stageBox!.width / 2);
+  await page.screenshot({ path: info.outputPath('native-play-paused.png') });
   await hud.getByRole('button', { name: 'Resume', exact: true }).focus();
   await page.keyboard.press('Space');
   await expect(hud.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();

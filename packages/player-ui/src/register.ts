@@ -10,6 +10,7 @@ import { BeMusicSelectScreenElement } from './components/select-screen.ts';
 import { BeMusicResultScreenElement } from './components/result-screen.ts';
 import { BeMusicDecideScreenElement } from './components/decide-screen.ts';
 import { BeMusicGameplayHUDElement } from './components/gameplay-hud.ts';
+import { BeMusicBGAElement } from './components/bga.ts';
 import { BeMusicLanesElement } from './components/lanes.ts';
 import { BeMusicNotesElement } from './components/notes.ts';
 import { BeMusicLaneCoversElement } from './components/lane-covers.ts';
@@ -34,6 +35,7 @@ export function defineBeMusicElements(registry: CustomElementRegistry | undefine
     ['be-music-result-screen', BeMusicResultScreenElement],
     ['be-music-decide-screen', BeMusicDecideScreenElement],
     ['be-music-gameplay-hud', BeMusicGameplayHUDElement],
+    ['be-music-bga', BeMusicBGAElement],
     ['be-music-lanes', BeMusicLanesElement],
     ['be-music-notes', BeMusicNotesElement],
     ['be-music-lane-covers', BeMusicLaneCoversElement],
@@ -63,6 +65,7 @@ declare global {
     'be-music-result-screen': BeMusicResultScreenElement;
     'be-music-decide-screen': BeMusicDecideScreenElement;
     'be-music-gameplay-hud': BeMusicGameplayHUDElement;
+    'be-music-bga': BeMusicBGAElement;
     'be-music-lanes': BeMusicLanesElement;
     'be-music-notes': BeMusicNotesElement;
     'be-music-lane-covers': BeMusicLaneCoversElement;

@@ -602,8 +602,10 @@ export interface BeMusicGameplaySkin<K extends BeMusicSurfaceContextKind = BeMus
   readonly drawsBGA?: boolean;
   /**
    * Set to `true` when the skin's DOM gameplay screen ({@link BeMusicSkin.dom}) draws the playfield from
-   * `drawPlayfield`. Hosts that mount it create no Canvas surface for gameplay; {@link draw} remains for hosts without
-   * DOM screens. The DOM sits above the player's canvas, so such a skin also draws mines, lane covers and measure lines.
+   * `drawPlayfield`. Hosts that mount it create no Canvas surface for gameplay and may take their own canvas out of the
+   * page; {@link draw} remains for hosts without DOM screens. Nothing the player draws shows then, so such a skin also
+   * draws the BGA, mines, lane covers and measure lines ({@link drawsBGA}, {@link drawsMines}, {@link drawsLaneCover},
+   * {@link drawsMeasureLines}).
    */
   readonly drawsOnDOM?: boolean;
 }
