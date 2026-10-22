@@ -40,7 +40,7 @@ React・Vue はそれぞれのラッパーの peer dependency です。スキン
 | `be-music-playfield`         | `frame: BeMusicGameplayFrame`                                     |
 | `be-music-playback-controls` | `data: BeMusicPlaybackData`                                       |
 | `be-music-preview-hud`       | `frame: BeMusicDOMGameplayFrame`・`volume`・`muted`・`fullscreen` |
-| `be-music-preview-select`    | `charts: readonly LibraryChart[]`・`heading`                      |
+| `be-music-preview-select`    | `charts: readonly LibraryChart[]`・`heading`・任意の `images`     |
 | `be-music-preview-start`     | `mode: 'play' \| 'replay'`・`disabled`                            |
 
 各クラスを `BeMusic…Element` として export します。ラッパーは `BeMusicGameplayHUD`・`BeMusicJudgmentTable` のように `Element` を除いた名前です。個々の部品は自身に必要な表示データだけを受け取り、独立して配置できます。画面コンポーネントはそれらを組み合わせ、既存の DOM スキンフレームを受け取ります。
@@ -53,7 +53,7 @@ React・Vue はそれぞれのラッパーの peer dependency です。スキン
 
 ## プレビュー
 
-`be-music-playback-controls` は動画プレイヤーのコントロールバーです。再生／一時停止（`pause-request`）、ドラッグ中と離したときに `{ seconds }` 付きの `seek-request` を送るシークバー、時間、ミュートと音量（`{ volume, muted }` 付きの `volume-change`）、全画面（`fullscreen-request`）があります。`be-music-preview-hud` は譜面の情報・スコア・コンボ・ゲージ・判定を BGA の範囲の下に、コントロールをステージの下端に置き、それらの要求を伝えます。`be-music-preview-select` はトラックの譜面を一覧し、`activate-request` で 1 つを要求します。`be-music-preview-start` は大きな再生／リプレイボタン（`play-request`）です。`formatPlaybackTime`・`resolveSeekTarget`・`resolveGameplayPanels` はこれらを支える純粋関数です。埋め込みページがこれらを組み合わせています（[ブラウザープレイヤー](../../docs/player-web.ja.md#埋め込みプレビュー)）。
+`be-music-playback-controls` は動画プレイヤーのコントロールバーです。再生／一時停止（`pause-request`）、ドラッグ中と離したときに `{ seconds }` 付きの `seek-request` を送るシークバー、時間、ミュートと音量（`{ volume, muted }` 付きの `volume-change`）、全画面（`fullscreen-request`）があります。`be-music-preview-hud` は譜面の情報・スコア・コンボ・ゲージ・判定を BGA の範囲の下に、コントロールをステージの下端に置き、それらの要求を伝えます。`be-music-preview-select` はトラックの譜面を一覧し、`images` にあればその絵（`#STAGEFILE`、なければ `#BANNER`）を出し、`activate-request` で 1 つを要求します。`be-music-preview-start` は大きな再生／リプレイボタン（`play-request`）です。`formatPlaybackTime`・`resolveSeekTarget`・`resolveGameplayPanels` はこれらを支える純粋関数です。埋め込みページがこれらを組み合わせています（[ブラウザープレイヤー](../../docs/player-web.ja.md#埋め込みプレビュー)）。
 
 ## HTML・TypeScript
 
