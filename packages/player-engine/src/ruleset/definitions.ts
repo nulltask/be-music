@@ -809,7 +809,7 @@ export function resolveRuleset(
 
   if (rulesetId === 'beatoraja') {
     const noteCount = countRulesetNotes(chart, 'per-note');
-    const effectiveTotal = resolveEffectiveTotal('beatoraja', chart, baseNotes);
+    const effectiveTotal = resolveEffectiveTotal('beatoraja', chart, noteCount);
     const tables = constrain(resolveBeatorajaWindowTables(chart));
     const mode = resolveBeatorajaMode(chart.laneMode);
     // FIVEKEYS / PMS break combo on an empty POOR (JudgeProperty combo[MS] = false).
@@ -830,7 +830,7 @@ export function resolveRuleset(
       comboBreaksOnEmptyPoor,
       mineTrigger: 'hold',
       hcnTick: { heldJudge: 1, heldRate: 0.5, releasedJudge: 3, releasedRate: 0.5 },
-      gauge: courseGauge(effectiveTotal) ?? resolveBeatorajaGauge(gaugeId, effectiveTotal, baseNotes),
+      gauge: courseGauge(effectiveTotal) ?? resolveBeatorajaGauge(gaugeId, effectiveTotal, noteCount),
       noteCount,
       effectiveTotal,
       moneyScore: false,
