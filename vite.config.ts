@@ -230,7 +230,7 @@ export default defineConfig({
         test: {
           name: '@be-music/app-leaderboard',
           // The pages' stylesheet, icons and client script are generated, not kept in git.
-          globalSetup: ['packages/app-leaderboard/test/global-setup.ts'],
+          globalSetup: ['packages/app-leaderboard/src/test-support/global-setup.ts'],
           include: ['packages/app-leaderboard/src/**/*.test.ts', 'packages/app-leaderboard/client/**/*.test.ts'],
           // The API tests start a workerd process (Miniflare) for real D1 and R2 bindings.
           testTimeout: 30_000,
@@ -348,6 +348,7 @@ export default defineConfig({
       'packages/*/node_modules/**',
       'packages/*/dist/**',
       'examples/**',
+      'tests/fixtures/**',
       'tmp/**',
       // Real-world beatoraja skins are lenient JSON (missing / trailing commas) and the parser tests depend on them
       // staying byte-for-byte as shipped.
@@ -378,6 +379,7 @@ export default defineConfig({
       'packages/*/node_modules/**',
       'packages/*/dist/**',
       'examples/**',
+      'tests/fixtures/**',
       'tmp/**',
       'packages/app-leaderboard/src/pages/styles.generated.ts',
       'packages/app-leaderboard/src/pages/icons.generated.ts',

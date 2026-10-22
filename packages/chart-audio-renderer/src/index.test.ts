@@ -7,7 +7,7 @@ import { collectSampleTriggers, createTimingResolver } from '@be-music/chart-mod
 import { type RenderResult, renderJSON, renderSingleSample } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const fixtureDir = resolve(rootDir, 'examples/test');
+const fixtureDir = resolve(rootDir, 'tests/fixtures');
 
 function createSingleTriggerChart(samplePath: string) {
   const json = createEmptyJSON('json');
@@ -905,7 +905,7 @@ describe('chart-audio-renderer', () => {
   });
 });
 
-describe('audio-renderer: examples/test chart fixtures', () => {
+describe('audio-renderer: tests/fixtures chart fixtures', () => {
   const SAMPLE_RATE = 44_100;
 
   async function renderFixture(name: string, dropFirstEvent = false) {

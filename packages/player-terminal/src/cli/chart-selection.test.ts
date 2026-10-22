@@ -45,7 +45,7 @@ describe('chart selection', () => {
   });
 
   test('buildChartSelectionEntries: includes chart TITLE and ARTIST metadata', async () => {
-    const chartPath = resolve(rootDir, 'examples/test/sample.bms');
+    const chartPath = resolve(rootDir, 'tests/fixtures/sample.bms');
 
     const entries = await buildChartSelectionEntries(rootDir, [chartPath]);
     const chartEntry = entries.find((entry) => entry.kind === 'chart' && entry.filePath === chartPath);
@@ -57,10 +57,10 @@ describe('chart selection', () => {
     });
   });
 
-  test('listChartFiles: picks up every chart extension the examples/test corpus uses', async () => {
+  test('listChartFiles: picks up every chart extension the tests/fixtures corpus uses', async () => {
     // The allow-list has four BMS-family extensions plus `.bmson`. Pointing it at the shared fixture directory keeps
     // it honest against real files instead of synthetic names — `.bml` in particular had no fixture to open.
-    const files = await listChartFiles(resolve(rootDir, 'examples/test'));
+    const files = await listChartFiles(resolve(rootDir, 'tests/fixtures'));
     const extensions = new Set(files.map((file) => extname(file).toLowerCase()));
 
     expect(extensions).toEqual(new Set(['.bms', '.bme', '.bml', '.pms', '.bmson']));
@@ -68,8 +68,8 @@ describe('chart selection', () => {
   });
 
   test('buildChartSelectionEntries: includes music metadata extras used by music-select', async () => {
-    const bmsPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
-    const bmsonPath = resolve(rootDir, 'examples/test/bmson-strict-features.bmson');
+    const bmsPath = resolve(rootDir, 'tests/fixtures/four-measure-command-combo-test.bms');
+    const bmsonPath = resolve(rootDir, 'tests/fixtures/bmson-strict-features.bmson');
 
     const entries = await buildChartSelectionEntries(rootDir, [bmsPath, bmsonPath]);
     const bmsEntry = entries.find((entry) => entry.kind === 'chart' && entry.filePath === bmsPath);

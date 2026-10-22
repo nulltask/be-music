@@ -7,7 +7,7 @@ import {
   type BeMusicReplay,
   type ReplayCourseStage,
 } from '@be-music/player-engine/replay';
-import { makeChart, makeReplay } from '../../test/support.ts';
+import { makeChart, makeReplay } from '../test-support/support.ts';
 import { checkCourseRun } from './verify.ts';
 
 const CHART = makeChart(['#00111:01010101', '#00211:01010101', '#00311:0101']);

@@ -1,8 +1,14 @@
 import { gunzipSync } from 'node:zlib';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, test } from 'vite-plus/test';
-import { ORIGIN, signInAnonymously, startTestBindings } from '../test/support.ts';
-import { courseBody, courseRun, submitCourse as postCourse, stageChart, type CourseOutcome } from '../test/courses.ts';
+import { ORIGIN, signInAnonymously, startTestBindings } from './test-support/support.ts';
+import {
+  courseBody,
+  courseRun,
+  submitCourse as postCourse,
+  stageChart,
+  type CourseOutcome,
+} from './test-support/courses.ts';
 import { createApp } from './app.ts';
 import { openDatabase } from './db/client.ts';
 import { course, courseScore, score } from './db/schema.ts';

@@ -409,7 +409,7 @@ Outside the judge rulesets be-music follows LR2 first, and beatoraja where LR2 h
 
 These are points where be-music disagrees with a de facto implementation without a recorded reason, or where the evidence is incomplete.
 
-1. **Lane mode from mines and invisible notes** — beatoraja counts them when choosing 5K / 7K / 10K / 14K, be-music does not ([§2.4](#24-lane-modes-and-channel-layouts)). beatoraja's rule is verified, LR2's is not: the OpenLR2 reconstruction lacks the song scanner that stores the key mode. Following beatoraja would turn an SP chart whose only 2P objects are invisible keysounds (`examples/test/invisible-notes.bms`) into a DP chart with an empty 2P side, which is not what its author meant, so this stays open until LR2's rule is known.
+1. **Lane mode from mines and invisible notes** — beatoraja counts them when choosing 5K / 7K / 10K / 14K, be-music does not ([§2.4](#24-lane-modes-and-channel-layouts)). beatoraja's rule is verified, LR2's is not: the OpenLR2 reconstruction lacks the song scanner that stores the key mode. Following beatoraja would turn an SP chart whose only 2P objects are invisible keysounds (`tests/fixtures/invisible-notes.bms`) into a DP chart with an empty 2P side, which is not what its author meant, so this stays open until LR2's rule is known.
 2. **LR2 evidence gaps** — negative STOP, zero BPM, duplicate object lines, `#TOTAL ≤ 0`, and the exact mine detonation window rest on community reports or on a reconstruction, and the sources partly disagree. They need checking against LR2 itself; source code alone cannot settle them. (Negative `#BPMxx` was checked against LR2body.exe as well as OpenLR2; see [§2.8](#28-bpm).)
 
 [bm-parser]: ../packages/chart-parser/src/core/parser.ts

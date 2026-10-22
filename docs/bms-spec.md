@@ -208,7 +208,7 @@ LR2 is the baseline (issue #134; verified against OpenLR2's reconstruction of LR
 - **Ruleset scope:** the LR2 model applies under every judge ruleset (`lr2` / `beatoraja` / `iidx`), deliberately. Negative `#BPMxx` is an LR2-ism — the charts that use it (Sofa $15 → $1, U9, …) were authored and tuned against LR2's reverse scroll, so that is the presentation their authors intended. beatoraja itself rejects negative `#BPMxx` definitions at parse time (`BMSDecoder`: "#negative BPMはサポートされていません"), which would silently turn the gimmick into a plain tempo-continuation; we prefer the de facto behavior the charts were made for over that. The judge ruleset only picks windows, gauge, and scoring — chart timing interpretation, the mirrored judge clock, and the FAILED result are shared, and the offline renderer and the select-scene preview (which have no ruleset) agree with gameplay.
 - Channel 03 (inline hex `01`–`FF`) can express neither zero nor negative values; a `00` pair is a rest.
 
-Fixtures: [`examples/test/negative-bpm-reverse.bms`](../examples/test/negative-bpm-reverse.bms), [`negative-bpm-zero.bms`](../examples/test/negative-bpm-zero.bms), [`negative-bpm-undefined-slot.bms`](../examples/test/negative-bpm-undefined-slot.bms).
+Fixtures: [`tests/fixtures/negative-bpm-reverse.bms`](../tests/fixtures/negative-bpm-reverse.bms), [`negative-bpm-zero.bms`](../tests/fixtures/negative-bpm-zero.bms), [`negative-bpm-undefined-slot.bms`](../tests/fixtures/negative-bpm-undefined-slot.bms).
 
 - [x] Timing interpretation of `#STP` format `xxx[.yyy] zzzz` and abbreviation `xxx zzzz`
 - [x] Browser player: `#BGAxx` interpretation of sub-region cutting and placement parameters

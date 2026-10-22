@@ -26,7 +26,7 @@ import {
 } from './play-scenarios.ts';
 
 /**
- * Regression corpus: every chart in `examples/test` is pushed through the whole pipeline — parse, `#RANDOM` resolution,
+ * Regression corpus: every chart in `tests/fixtures` is pushed through the whole pipeline — parse, `#RANDOM` resolution,
  * timing, sample triggers, the engine's prepared note list, the three ruleset simulators and the live engine's replays
  * under fixed input streams, and stringify — and the observable output of each stage is pinned in
  * `__expected__/<chart>.json`.
@@ -38,7 +38,7 @@ import {
  */
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const fixtureDir = resolve(rootDir, 'examples/test');
+const fixtureDir = resolve(rootDir, 'tests/fixtures');
 const CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson']);
 
 /** Fixed `#RANDOM` draws: the lowest and the highest branch of every block. */

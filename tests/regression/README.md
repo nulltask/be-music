@@ -2,7 +2,7 @@
 
 # Regression Corpus
 
-`corpus.test.ts` pushes every chart in [`examples/test`](../../examples/test/README.md) through the whole toolchain and pins what each stage produces in `__expected__/<chart>.json`. Unit tests assert what a function should do; this suite records what the toolchain currently does on real chart files, so a refactor that moves logic between packages fails here as soon as any stage's output shifts.
+`corpus.test.ts` pushes every chart in [`tests/fixtures`](../fixtures/README.md) through the whole toolchain and pins what each stage produces in `__expected__/<chart>.json`. Unit tests assert what a function should do; this suite records what the toolchain currently does on real chart files, so a refactor that moves logic between packages fails here as soon as any stage's output shifts.
 
 ## What each expected file records
 
@@ -29,7 +29,7 @@ pnpm test:regression
 pnpm test:regression -u
 ```
 
-A diff in an expected file is not automatically a bug. When the change is intended, regenerate with `-u` and review the diff in the pull request like code. Adding a chart to `examples/test` adds an expected file automatically.
+A diff in an expected file is not automatically a bug. When the change is intended, regenerate with `-u` and review the diff in the pull request like code. Adding a chart to `tests/fixtures` adds an expected file automatically.
 
 ## Engine replays
 

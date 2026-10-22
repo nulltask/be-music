@@ -11,7 +11,7 @@ import {
   signInAnonymously,
   startTestBindings,
   submissionBody,
-} from '../../test/support.ts';
+} from '../test-support/support.ts';
 import type { BMSSearchPattern } from './bms-search.ts';
 import {
   RECHECK_LINKED_MS,
