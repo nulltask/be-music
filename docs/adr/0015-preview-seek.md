@@ -2,6 +2,8 @@
 
 # Previews seek by starting AUTO play partway
 
+Superseded by [ADR 0016](./0016-seek-play-loop-command.md): a seek is a command to the running play.
+
 ## Context
 
 The embed page previews a chart in AUTO with video-player controls, so its seek bar must move the play to any second. The play loop runs a chart from its first second: the clock, the realtime audio cursors and the judge only move forward. Restarting the play scene reloads the chart and decodes every sample again, which takes seconds.

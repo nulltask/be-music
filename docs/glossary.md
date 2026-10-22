@@ -174,6 +174,7 @@ Use **chart** in code names for playable arrangements and **track** for musical 
 - **scene lifecycle**: The one contract every scene implements (`PixiScene`): `root`, `identity` (`{ kind, family }`), `enter`, `exit` and `dispose`. A host changes scenes only with `setScene`.
 - **intent**: What a player's action on a view means for the scene: open a folder, start a course, cycle the gauge.
 - **play loop / judge strategy**: The one engine loop every play runs through, and the manual, auto or replay judging plugged into it. See [ADR 0003](./adr/0003-one-play-loop.md).
+- **seek**: Moving a running play to another chart second: a command to the play loop (`{ kind: 'seek' }`), never a new run. The judge state there is the one a play from the start reaches, and every seek starts a new frame generation. A play that seeks is practice and records no replay. See [ADR 0016](./adr/0016-seek-play-loop-command.md).
 - **scene router**: The host's single owner of the current scene and every transition (`app/scene-router.ts` in the web demo). See [ADR 0006](./adr/0006-scene-router.md).
 - **audio service**: The one way the web player plays sounds outside a play's chart (`createAudioService` on `@be-music/player-browser/audio`): the select BGM, cues, jingles, chart preview and skin sounds, on one system `AudioContext`. Each play opens its own context through it (`openPlayGraph`). A scene passes itself as the owner of what it starts and stops it with `stopOwned`. See [ADR 0007](./adr/0007-one-system-audio-context.md).
 
