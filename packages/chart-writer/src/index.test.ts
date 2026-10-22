@@ -13,7 +13,7 @@ import {
 import { stringifyBMS, stringifyBmson } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const unifiedBMSChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
+const unifiedBMSChartPath = resolve(rootDir, 'tests/fixtures/four-measure-command-combo-test.bms');
 describe('chart-writer', () => {
   test('BMS stringify: generates measure resolution from fractional positions', () => {
     const json = createEmptyJSON('json');
@@ -54,7 +54,7 @@ describe('chart-writer', () => {
   });
 
   test('bmson stringify: outputs version/lines/info.resolution', async () => {
-    const chartPath = resolve(rootDir, 'examples/test/bmson-lines-resolution-test.bmson');
+    const chartPath = resolve(rootDir, 'tests/fixtures/bmson-lines-resolution-test.bmson');
     const source = parseBmson(await readFile(chartPath, 'utf8'));
 
     const output = stringifyBmson(source);
@@ -243,7 +243,7 @@ describe('chart-writer', () => {
   });
 
   test('bmson stringify: preserves and outputs bga/info extensions and notes.l/c', async () => {
-    const chartPath = resolve(rootDir, 'examples/test/bmson-strict-features.bmson');
+    const chartPath = resolve(rootDir, 'tests/fixtures/bmson-strict-features.bmson');
     const source = parseBmson(await readFile(chartPath, 'utf8'));
 
     const output = stringifyBmson(source);
@@ -809,7 +809,7 @@ describe('chart-writer', () => {
 
     test('bmson-mine-key-channels.bmson (beat-7k, keys 6 / 7, scratch and mines)', async () => {
       const source = parseBmson(
-        await readFile(resolve(rootDir, 'examples/test/bmson-mine-key-channels.bmson'), 'utf8'),
+        await readFile(resolve(rootDir, 'tests/fixtures/bmson-mine-key-channels.bmson'), 'utf8'),
       );
       expect(toChannels(parseBmson(stringifyBmson(source)))).toEqual(toChannels(source));
     });
@@ -930,7 +930,7 @@ describe('chart-writer', () => {
   });
 
   test('bmson stringify: rescales preserved `lines` to the output resolution', async () => {
-    const chartPath = resolve(rootDir, 'examples/test/bmson-mine-key-channels.bmson');
+    const chartPath = resolve(rootDir, 'tests/fixtures/bmson-mine-key-channels.bmson');
     const parsed = parseBmson(await readFile(chartPath, 'utf8'));
 
     const output = JSON.parse(stringifyBmson(parsed, { resolution: 480 })) as {

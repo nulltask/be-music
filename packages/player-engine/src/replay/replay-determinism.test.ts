@@ -75,7 +75,7 @@ describe('engine replay determinism', () => {
   test.each(LONG_NOTE_CHARTS)(
     '%s: repeated replays at speeds 4, 16 and 64 reach the same summary and replay',
     async (file) => {
-      const json = await parseChartFile(resolve(rootDir, 'examples/test', file));
+      const json = await parseChartFile(resolve(rootDir, 'tests/fixtures', file));
       const inputs = buildInputs((await play(json, [], 64)).replay);
       expect(inputs.length).toBeGreaterThan(0);
 

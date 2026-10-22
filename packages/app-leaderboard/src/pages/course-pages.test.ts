@@ -3,8 +3,8 @@ import { claimAccount } from '../accounts.ts';
 import { createApp } from '../app.ts';
 import { openDatabase } from '../db/client.ts';
 import type { Env } from '../env.ts';
-import { ORIGIN, signInAnonymously, startTestBindings } from '../../test/support.ts';
-import { courseBody, courseRun, stageChart, submitCourse, type CourseOutcome } from '../../test/courses.ts';
+import { ORIGIN, signInAnonymously, startTestBindings } from '../test-support/support.ts';
+import { courseBody, courseRun, stageChart, submitCourse, type CourseOutcome } from '../test-support/courses.ts';
 
 let env: Env;
 let dispose: () => Promise<void>;

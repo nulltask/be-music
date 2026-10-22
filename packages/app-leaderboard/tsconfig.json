@@ -5,5 +5,5 @@
     "jsx": "react-jsx",
     "jsxImportSource": "hono/jsx"
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts", "cloudflare.config.ts", "drizzle.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "cloudflare.config.ts", "drizzle.config.ts"]
 }

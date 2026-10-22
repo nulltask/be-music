@@ -10,9 +10,9 @@ import {
 } from '@be-music/chart-model';
 import { parseBMS } from '@be-music/chart-parser';
 import type { BeMusicReplay, ReplayInputEvent, ReplayNote } from '@be-music/player-engine/replay';
-import type { Env } from '../src/env.ts';
+import type { Env } from '../env.ts';
 
-const MIGRATIONS_DIR = join(import.meta.dirname, '..', 'migrations');
+const MIGRATIONS_DIR = join(import.meta.dirname, '../..', 'migrations');
 export const ORIGIN = 'http://localhost';
 
 /** A workerd-backed D1 database and R2 bucket with every migration applied (test only). */

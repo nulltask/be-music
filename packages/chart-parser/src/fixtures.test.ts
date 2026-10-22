@@ -24,7 +24,7 @@ import {
 import { parseChartFile, resolveBMSControlFlow } from './index.ts';
 
 /**
- * Tests for the shared chart corpus in `examples/test`.
+ * Tests for the shared chart corpus in `tests/fixtures`.
  *
  * Every fixture in that directory is meant to exercise one coherent feature cluster end to end. The per-function unit
  * tests next to each source file stay inline — they need many tiny variations of one input, and a file per case would
@@ -34,12 +34,12 @@ import { parseChartFile, resolveBMSControlFlow } from './index.ts';
  */
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const fixtureDir = resolve(rootDir, 'examples/test');
+const fixtureDir = resolve(rootDir, 'tests/fixtures');
 const fixture = (name: string) => resolve(fixtureDir, name);
 
 const CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson']);
 
-describe('examples/test corpus', () => {
+describe('tests/fixtures corpus', () => {
   test('every chart fixture parses off disk', async () => {
     const entries = await readdir(fixtureDir);
     const charts = entries.filter((entry) => CHART_EXTENSIONS.has(extname(entry).toLowerCase())).sort();

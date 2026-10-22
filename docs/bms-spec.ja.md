@@ -208,7 +208,7 @@ LR2 を基準とします（issue #134。OpenLR2 による LR2 beta3 100201 の�
 - **ルールセットの適用範囲:** この LR2 モデルは判定ルールセット（`lr2` / `beatoraja` / `iidx`）に関わらず常に適用します（意図的）。負の `#BPMxx` は LR2 固有の作法で、これを使う譜面（Sofa $15 → $1、U9 など）は LR2 の逆スクロールを前提に作られ調整されています。beatoraja 本体はパース時に負の `#BPMxx` 定義を拒否し（`BMSDecoder`:「#negative BPMはサポートされていません」）、ギミックは単なるテンポ継続になってしまいますが、本実装は譜面が想定する事実上の挙動を優先します。判定ルールセットが選ぶのは判定幅・ゲージ・スコアリングのみで、譜面タイミングの解釈・鏡映判定クロック・FAILED のリザルトは共通です。ルールセットを持たないオフラインレンダラーと選曲プレビューもゲームプレイと一致します。
 - channel 03（inline hex `01`–`FF`）はゼロも負も表現できません。`00` ペアは休符です。
 
-フィクスチャ: [`examples/test/negative-bpm-reverse.bms`](../examples/test/negative-bpm-reverse.bms)、[`negative-bpm-zero.bms`](../examples/test/negative-bpm-zero.bms)、[`negative-bpm-undefined-slot.bms`](../examples/test/negative-bpm-undefined-slot.bms)
+フィクスチャ: [`tests/fixtures/negative-bpm-reverse.bms`](../tests/fixtures/negative-bpm-reverse.bms)、[`negative-bpm-zero.bms`](../tests/fixtures/negative-bpm-zero.bms)、[`negative-bpm-undefined-slot.bms`](../tests/fixtures/negative-bpm-undefined-slot.bms)
 
 ### `#BASE`
 

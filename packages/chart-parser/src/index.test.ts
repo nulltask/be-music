@@ -15,7 +15,7 @@ import {
 import { drawRandomOutcomes } from '../../chart-model/src/index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const unifiedBMSChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
+const unifiedBMSChartPath = resolve(rootDir, 'tests/fixtures/four-measure-command-combo-test.bms');
 describe('parser', () => {
   test('BMS: parses measure length, BPM, STOP, and BGA channels', async () => {
     const json = await parseChartFile(unifiedBMSChartPath);
@@ -39,10 +39,10 @@ describe('parser', () => {
     // files differ ONLY in `#LNMODE` so renderers / engines can be exercised on each mode
     // with a known-good baseline.
     const fixtures: ReadonlyArray<{ path: string; expectedMode: number; expectedTitle: string }> = [
-      { path: 'examples/test/ln-mode-1-long-note.bms', expectedMode: 1, expectedTitle: 'LN Mode 1 Test (LN)' },
-      { path: 'examples/test/ln-mode-2-charge-note.bms', expectedMode: 2, expectedTitle: 'LN Mode 2 Test (CN)' },
+      { path: 'tests/fixtures/ln-mode-1-long-note.bms', expectedMode: 1, expectedTitle: 'LN Mode 1 Test (LN)' },
+      { path: 'tests/fixtures/ln-mode-2-charge-note.bms', expectedMode: 2, expectedTitle: 'LN Mode 2 Test (CN)' },
       {
-        path: 'examples/test/ln-mode-3-hell-charge-note.bms',
+        path: 'tests/fixtures/ln-mode-3-hell-charge-note.bms',
         expectedMode: 3,
         expectedTitle: 'LN Mode 3 Test (HCN)',
       },
@@ -64,7 +64,7 @@ describe('parser', () => {
     // Verifies the `.bme`-style POPN-9 LN fixture parses with player=3 (the POPN marker) and
     // surfaces LN events on every 9-key channel 11..19. This is the chart the renderer's
     // 9-key `chartVariant` + key-binding stack consumes in manual-play test scenarios.
-    const json = await parseChartFile(resolve(rootDir, 'examples/test/ln-9key-popn.bms'));
+    const json = await parseChartFile(resolve(rootDir, 'tests/fixtures/ln-9key-popn.bms'));
     expect(json.metadata.title).toBe('LN 9-key Test (POPN)');
     expect(json.bms.player).toBe(3);
     expect(json.bms.lnObjs).toContain('ZZ');
@@ -81,7 +81,7 @@ describe('parser', () => {
     // extended `1A..1O` / `2A..2O` columns end to end (taps, `#LNOBJ` long notes, landmines on `DX` / `EX`).
     const lanes = '123456789ABCDEFGHIJKLMNO'.split('');
 
-    const sp = await parseChartFile(resolve(rootDir, 'examples/test/24key-keyboard-sp.bme'));
+    const sp = await parseChartFile(resolve(rootDir, 'tests/fixtures/24key-keyboard-sp.bme'));
     expect(sp.metadata.title).toBe('24 KEY Keyboard Test (SP)');
     expect(sp.bms.player).toBe(1);
     expect(sp.bms.lnObjs).toContain('ZZ');
@@ -93,7 +93,7 @@ describe('parser', () => {
 
     // `#PLAYER 3` on the DP fixture doubles as the regression guard for "extended lanes beat the
     // `#PLAYER 3` + channel `17` POPN-9 rule".
-    const dp = await parseChartFile(resolve(rootDir, 'examples/test/48key-keyboard-dp.bme'));
+    const dp = await parseChartFile(resolve(rootDir, 'tests/fixtures/48key-keyboard-dp.bme'));
     expect(dp.metadata.title).toBe('48 KEY Keyboard Test (DP)');
     expect(dp.bms.player).toBe(3);
     for (const lane of lanes) {
@@ -104,7 +104,7 @@ describe('parser', () => {
   });
 
   test('BMS: auto-detects and reads Shift_JIS files', async () => {
-    const chartPath = resolve(rootDir, 'examples/test/sjis-encoding-test.bms');
+    const chartPath = resolve(rootDir, 'tests/fixtures/sjis-encoding-test.bms');
     const json = await parseChartFile(chartPath);
 
     expect(json.metadata.title).toBe('テスト曲');
@@ -112,7 +112,7 @@ describe('parser', () => {
 
     // `sjis-encoding-test.json` is the checked-in IR for that chart, so the decoded text is pinned as data rather
     // than only as two assertions — an encoding regression shows up as a whole-document diff.
-    const expected = JSON.parse(await readFile(resolve(rootDir, 'examples/test/sjis-encoding-test.json'), 'utf8'));
+    const expected = JSON.parse(await readFile(resolve(rootDir, 'tests/fixtures/sjis-encoding-test.json'), 'utf8'));
     expect(json).toEqual(expected);
   });
 
@@ -339,7 +339,7 @@ describe('parser', () => {
   test('BMS: parses SPEED indexed headers and SP keyframes into bms extensions/events', async () => {
     // `scroll-speed-gimmick.bms` is the fixture for the whole timing / drawing gimmick family; measure 7 is its
     // dedicated `SP` (note-spacing) bar.
-    const parsed = await parseChartFile(resolve(rootDir, 'examples/test/scroll-speed-gimmick.bms'));
+    const parsed = await parseChartFile(resolve(rootDir, 'tests/fixtures/scroll-speed-gimmick.bms'));
 
     expect(parsed.bms.speed['01']).toBe(1);
     expect(parsed.bms.speed['02']).toBe(0.5);
@@ -544,7 +544,7 @@ describe('parser', () => {
   });
 
   test('bmson: maps version/lines/info.resolution into IR', async () => {
-    const chartPath = resolve(rootDir, 'examples/test/bmson-lines-resolution-test.bmson');
+    const chartPath = resolve(rootDir, 'tests/fixtures/bmson-lines-resolution-test.bmson');
     const input = await readFile(chartPath, 'utf8');
     const json = parseBmson(input);
 
@@ -589,7 +589,7 @@ describe('parser', () => {
   });
 
   test('bmson: preserves bga/info extensions and notes.l/c in IR', async () => {
-    const chartPath = resolve(rootDir, 'examples/test/bmson-strict-features.bmson');
+    const chartPath = resolve(rootDir, 'tests/fixtures/bmson-strict-features.bmson');
     const input = await readFile(chartPath, 'utf8');
     const json = parseBmson(input);
 
@@ -1349,7 +1349,7 @@ describe('parser', () => {
   });
 
   test('bmson: mine_channels become mines and key_channels become invisible notes through the mode_hint lane map', async () => {
-    const json = await parseChartFile(resolve(rootDir, 'examples/test/bmson-mine-key-channels.bmson'));
+    const json = await parseChartFile(resolve(rootDir, 'tests/fixtures/bmson-mine-key-channels.bmson'));
 
     const mineEvents = json.events.filter((event) => event.channel.startsWith('D') || event.channel.startsWith('E'));
     expect(mineEvents).toHaveLength(3);
@@ -1734,7 +1734,7 @@ describe('parser', () => {
   });
 
   test('BMS: `#BASE 62` preserves case for indexed-header keys and channel-stream tokens', async () => {
-    const parsed = await parseChartFile(resolve(rootDir, 'examples/test/base62-ids.bms'));
+    const parsed = await parseChartFile(resolve(rootDir, 'tests/fixtures/base62-ids.bms'));
 
     // Base-62 mode is recorded on the JSON.
     expect(parsed.bms.base).toBe(62);

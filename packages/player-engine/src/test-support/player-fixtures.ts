@@ -96,7 +96,7 @@ export function mockAudioSinkModule() {
 }
 
 export const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
-export const unifiedBMSChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
+export const unifiedBMSChartPath = resolve(rootDir, 'tests/fixtures/four-measure-command-combo-test.bms');
 
 export function createLNOBJLongNoteChart(lnMode?: 1 | 2 | 3) {
   const json = createEmptyJSON('bms');
