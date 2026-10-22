@@ -1,7 +1,7 @@
 /**
  * Chart preparation for a play (`PlaySession`), whichever family draws it: resolves the chart's `#RANDOM` / `#SWITCH`
  * control flow, prepares the notes the engine judges and the view draws (one shared `PreparedPlaybackChartData`),
- * applies the lane options (DP FLIP, RANDOM / MIRROR / S-RANDOM / SCATTER) or a replay's recorded arrangement, and
+ * applies the lane options (DP FLIP, RANDOM / MIRROR / S-RANDOM) or a replay's recorded arrangement, and
  * resets the play's state for the new chart.
  *
  * `prepareChart` reads and writes the play's state through {@link PlayChartContext}; the play session passes itself.
@@ -152,6 +152,9 @@ export interface PlayChartContext {
 }
 
 export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): void {
+  if (ctx.options.replay === undefined && (ctx.options.random1P === 'SCATTER' || ctx.options.random2P === 'SCATTER')) {
+    throw new RangeError('SCATTER is disabled until placement and assist policy are implemented.');
+  }
   // Resolve `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow once, first, so every play-time consumer below and the
   // engine see the same chosen branches. The draws are fresh each play (LR2 re-rolls each play); a replay resolves
   // with the draws its log recorded, so it plays the recorded branches.
@@ -246,7 +249,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
         invisible.channel = flipDPChannel(invisible.channel);
       }
     }
-    // RANDOM / MIRROR / S-RANDOM / SCATTER — shuffle the 1P / 2P keyboard lanes independently. Scratch (channels 16 /
+    // RANDOM / MIRROR / S-RANDOM — shuffle the 1P / 2P keyboard lanes independently. Scratch (channels 16 /
     // 26) and the 24 / 48 KEY wheel never move (`resolveLaneOptionChannels`). Per LR2 convention, the shuffle is drawn at chart-prepare time so a single play session has a
     // stable arrangement (F5-restart re-rolls it). Mine channels are included in the same shuffle pass so a mine on
     // lane 4 lands wherever the shuffle moved lane 4 — keeping the mine's visual relationship to the surrounding chord
@@ -512,7 +515,7 @@ export function flipDPChannel(channel: string): string {
  * - `RANDOM` — single chart-wide permutation (Fisher-Yates with the supplied RNG)
  * - `S-RANDOM` — per-chord permutation; chord notes share the beat key, and we re-permute within that group so notes on
  *   the same beat never collide on one lane
- * - `SCATTER` — currently aliased to `RANDOM`; reserved for a future per-measure permutation pass
+ * - `SCATTER` — disabled; new requests fail before any arrangement or recording
  */
 export function applyRandomMode(
   notes: Array<{ channel: string }>,
@@ -525,6 +528,8 @@ export function applyRandomMode(
   // on relative to the surrounding chord.
   ...secondary: Array<Array<{ channel: string }>>
 ): void {
+  if (mode === 'SCATTER')
+    throw new RangeError('SCATTER is disabled until placement and assist policy are implemented.');
   if (mode === 'OFF') return;
   const usedLanes = allLanes.filter((lane) => notes.some((note) => note.channel === lane));
   if (usedLanes.length < 2) return;
@@ -551,7 +556,7 @@ export function applyRandomMode(
     return;
   }
 
-  if (mode === 'RANDOM' || mode === 'SCATTER') {
+  if (mode === 'RANDOM') {
     const perm = shuffleArray([...usedLanes], rng);
     const map = new Map<string, string>();
     for (let index = 0; index < usedLanes.length; index += 1) {

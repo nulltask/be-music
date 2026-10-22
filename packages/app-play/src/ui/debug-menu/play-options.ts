@@ -8,6 +8,7 @@ import {
   HISPEED_MIN,
   HISPEED_STEP,
   KEYS_FILTER_CYCLE,
+  RANDOM_CYCLE,
   SORT_CYCLE,
 } from '@be-music/player-scene-model';
 import { storeReplayView } from '../../replay-view-settings.ts';
@@ -36,24 +37,12 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     ),
   );
   trackPlayOption(
-    selectBinding(folder, this.guiState, 'random1P', 'Random 1P', [
-      'OFF',
-      'MIRROR',
-      'RANDOM',
-      'S-RANDOM',
-      'SCATTER',
-    ]).on('change', ({ value }) => {
+    selectBinding(folder, this.guiState, 'random1P', 'Random 1P', RANDOM_CYCLE).on('change', ({ value }) => {
       this.setPlayOptions({ random1P: value });
     }),
   );
   trackPlayOption(
-    selectBinding(folder, this.guiState, 'random2P', 'Random 2P', [
-      'OFF',
-      'MIRROR',
-      'RANDOM',
-      'S-RANDOM',
-      'SCATTER',
-    ]).on('change', ({ value }) => {
+    selectBinding(folder, this.guiState, 'random2P', 'Random 2P', RANDOM_CYCLE).on('change', ({ value }) => {
       this.setPlayOptions({ random2P: value });
     }),
   );

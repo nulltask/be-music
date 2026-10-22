@@ -493,7 +493,7 @@ const NO_KEYS = { addEventListener: (): void => {}, removeEventListener: (): voi
 
 /**
  * What a beatoraja play runs with over the host's settings: beatoraja's cover keys. The lane options (RANDOM, MIRROR,
- * S-RANDOM, SCATTER), HS-FIX and the lane covers it starts with are the host's, as on every family.
+ * S-RANDOM), HS-FIX and the lane covers it starts with are the host's, as on every family.
  */
 const BEATORAJA_PLAY_SETTINGS: Pick<PlaySessionOptions, 'coverKeys'> = {
   coverKeys: true,

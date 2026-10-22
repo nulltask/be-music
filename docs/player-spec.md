@@ -344,6 +344,10 @@ player's lane layout and lane options, the CLI's lane colours, and the skin SDK'
 | `24`    | `24 KEY SP`          | `1P` / `1Q` (wheel), `11`-`19`, `1A`-`1O`                                    | `keyboard-24k`        |
 | `48`    | `48 KEY DP`          | as `24`, then `21`-`29`, `2A`-`2O`, `2P` / `2Q` (wheel)                      | `keyboard-24k-double` |
 
+### Available lane options
+
+New plays offer OFF, MIRROR, RANDOM and S-RANDOM. SCATTER is disabled until its previous-row/LN placement constraints and assist/record policy are implemented together. A direct new SCATTER request fails before chart preparation or replay recording; it never silently draws RANDOM. Legacy replay files may still contain the SCATTER name and their resolved channels continue to replay unchanged.
+
 ## Compat rulesets
 
 **The player has no judge logic of its own.** Every play runs under one of three compat rulesets — `lr2` (the
