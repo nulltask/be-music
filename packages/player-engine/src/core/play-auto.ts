@@ -1,11 +1,18 @@
 import { resolveAltModifierLabel } from '../utils.ts';
-import { createAutoJudgeState, isAutoJudgeSettled, runAutoJudgeStep, type AutoJudgeInput } from './auto-judge-core.ts';
+import {
+  createAutoJudgeState,
+  isAutoJudgeSettled,
+  runAutoJudgeStep,
+  type AutoJudgeConfig,
+  type AutoJudgeInput,
+} from './auto-judge-core.ts';
 import { clampToReversal } from './judge-core.ts';
+import { resolveLongNoteEndSeconds, resolveRulesetLongNoteMode, toUILongNoteMode } from './judge-rules.ts';
 import { printLaneMap, writePlayableSampleTriggerEventLog } from './engine-trace.ts';
 import { createRealtimeAudioCursor } from './play-audio-cursor.ts';
 import type { PlaySession } from './play-session.ts';
-import type { JudgeStrategy, PlayJudge } from './play-strategy.ts';
-import type { JudgeCoreEffectSink } from './judge-core-types.ts';
+import { createSeekRebuildSink } from './play-seek.ts';
+import type { JudgeStrategy, PlayJudge, PlayJudgeSeek } from './play-strategy.ts';
 
 /**
  * The AUTO judge strategy: the auto judge core (`auto-judge-core.ts`) resolves every note as chart time reaches it,
@@ -27,25 +34,34 @@ function writeAutoIntro(session: PlaySession): void {
   writeOutput(`Press ${highSpeedModifierLabel}+even lane key to increase HIGH-SPEED.\n`);
 }
 
-/** A fast-forward shows and sounds nothing of what it judges; the score and gauge still move. */
-const IGNORE_EFFECTS: JudgeCoreEffectSink = () => {};
+/**
+ * The chart seconds a play from the start judges at up to `seconds`, in order: every note's time and every long note's
+ * end. Stepping a fresh judge through them makes its judgments in the order a play from the start made them.
+ */
+function rebuildSteps(config: AutoJudgeConfig, seconds: number): number[] {
+  const steps = new Set<number>();
+  for (const note of config.scorableNotes) {
+    if (note.seconds <= seconds) steps.add(note.seconds);
+    const endSeconds = resolveLongNoteEndSeconds(note);
+    if (endSeconds !== undefined && endSeconds <= seconds) steps.add(endSeconds);
+  }
+  return [...steps].sort((a, b) => a - b);
+}
 
 function createAutoJudge(session: PlaySession): PlayJudge {
   const { playbackChart, uiEnabled, writeOutput, wavResources, idBase, audioSession, totalSeconds } = session;
   const { scorableNotes } = playbackChart;
-  const autoJudge = createAutoJudgeState(
-    {
-      ruleset: session.ruleset,
-      scorableNotes,
-      landmineNotes: playbackChart.landmineNotes,
-      invisibleNotes: playbackChart.invisibleNotes,
-      keyLabels: new Map(playbackChart.laneBindings.map((binding) => [binding.channel, binding.keyLabel])),
-      // LR2 negative-BPM reversal (#134): AUTO play freezes there like manual play — no judging and no audio past it
-      // (the realtime streams are cut in `collectRealtimeAudioTriggers`), and a mirrored display clock.
-      reversalSeconds: session.resolvedChart.reversal?.seconds,
-    },
-    session.score,
-  );
+  const config: AutoJudgeConfig = {
+    ruleset: session.ruleset,
+    scorableNotes,
+    landmineNotes: playbackChart.landmineNotes,
+    invisibleNotes: playbackChart.invisibleNotes,
+    keyLabels: new Map(playbackChart.laneBindings.map((binding) => [binding.channel, binding.keyLabel])),
+    // LR2 negative-BPM reversal (#134): AUTO play freezes there like manual play — no judging and no audio past it
+    // (the realtime streams are cut in `collectRealtimeAudioTriggers`), and a mirrored display clock.
+    reversalSeconds: session.resolvedChart.reversal?.seconds,
+  };
+  let autoJudge = createAutoJudgeState(config, session.score);
   const step = (input: AutoJudgeInput): void => {
     runAutoJudgeStep(autoJudge, input, session.applyJudgeEffect);
   };
@@ -70,19 +86,34 @@ function createAutoJudge(session: PlaySession): PlayJudge {
   );
   let judgedThroughSeconds = 0;
 
+  /** A fresh judge re-simulated from the start to `seconds`, the keysounds still ringing there started partway. */
+  const seek = (seconds: number): PlayJudgeSeek => {
+    autoJudge = createAutoJudgeState(config, session.score);
+    const rebuild = createSeekRebuildSink(session.summary);
+    for (const at of [...rebuildSteps(config, seconds), seconds]) {
+      runAutoJudgeStep(autoJudge, { kind: 'advance', nowSec: at }, rebuild.emit);
+    }
+    noteKeysounds.seek(seconds, (note, offsetSeconds) => audioSession?.triggerEventAt?.(note.event, offsetSeconds));
+    judgedThroughSeconds = seconds;
+    return {
+      judgments: rebuild.judgments,
+      heldLongNotes: autoJudge.pendingLongNotes.map(({ note }) => ({
+        channel: note.channel,
+        beat: note.beat,
+        endBeat: typeof note.endBeat === 'number' && note.endBeat > note.beat ? note.endBeat : undefined,
+        mode: toUILongNoteMode(resolveRulesetLongNoteMode(config.ruleset.longNoteStyle, note) ?? 2),
+      })),
+    };
+  };
+
   return {
     judge: (tick) => {
       noteKeysounds.triggerUntil(tick.scheduledSec);
       step({ kind: 'advance', nowSec: tick.nowSec });
       judgedThroughSeconds = tick.nowSec;
     },
-    fastForward: (seconds) => {
-      noteKeysounds.skipUntil(seconds, (note, offsetSeconds) =>
-        audioSession?.triggerEventAt?.(note.event, offsetSeconds),
-      );
-      runAutoJudgeStep(autoJudge, { kind: 'advance', nowSec: seconds }, IGNORE_EFFECTS);
-      judgedThroughSeconds = seconds;
-    },
+    // A replay seeks once it re-drives its tempo changes from the second sought too (not yet).
+    ...(session.replay ? {} : { seek }),
     judgedThroughSeconds: (tick) => tick.nowSec,
     isSettled: () => noteKeysounds.done && isAutoJudgeSettled(autoJudge),
     isClosed: () => false,

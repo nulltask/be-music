@@ -81,6 +81,8 @@ export function createUIFramePublisher(params: {
    * runs at the post-reversal |BPM| and a post-reversal STOP pauses it.
    */
   reversal?: TempoReversalPoint;
+  /** The seek generation and the clock a frame at `seconds` holds at (`PlayerUIFramePayload.generation` / `clock`). */
+  resolveClock?: (seconds: number) => Pick<PlayerUIFramePayload, 'generation' | 'clock'>;
 }): (seconds: number, beat: number) => void {
   const {
     uiEnabled,
@@ -93,6 +95,7 @@ export function createUIFramePublisher(params: {
     audioBackend,
     resolveDebugActiveAudioState,
     reversal,
+    resolveClock,
   } = params;
   return (seconds: number, beat: number): void => {
     if (!uiEnabled) {
@@ -116,6 +119,7 @@ export function createUIFramePublisher(params: {
       audioBackend,
       activeAudioFiles: debugState.activeAudioFiles,
       activeAudioVoiceCount: debugState.activeAudioVoiceCount,
+      ...resolveClock?.(seconds),
     });
   };
 }
@@ -200,6 +204,8 @@ export function consumePlaybackInputCommands(params: {
   onViewChange?: (change: ReplayViewState) => void;
   /** A tempo change (`{ kind: 'tempo' }`). */
   onTempoChange?: (tempo: number) => void;
+  /** A seek (`{ kind: 'seek' }`). */
+  onSeek?: (seconds: number) => void;
   onUnhandledCommand?: (command: PlayerInputCommand) => void;
   logInterrupt?: (reason: InterruptCommand['reason']) => void;
 }): void {
@@ -211,6 +217,7 @@ export function consumePlaybackInputCommands(params: {
     onHighSpeedAction,
     onViewChange,
     onTempoChange,
+    onSeek,
     onUnhandledCommand,
     logInterrupt,
   } = params;
@@ -238,6 +245,10 @@ export function consumePlaybackInputCommands(params: {
     }
     if (command.kind === 'tempo') {
       onTempoChange?.(command.tempo);
+      continue;
+    }
+    if (command.kind === 'seek') {
+      onSeek?.(command.seconds);
       continue;
     }
     onUnhandledCommand?.(command);

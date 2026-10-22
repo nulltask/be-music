@@ -14,6 +14,8 @@
       "emptyPoor": 0,
       "exScore": 4,
       "score": 100000,
+      "combo": 5,
+      "maxCombo": 5,
       "gauge": {
         "current": 100,
         "max": 100,
@@ -230,6 +232,8 @@
       "emptyPoor": 0,
       "exScore": 4,
       "score": 100000,
+      "combo": 5,
+      "maxCombo": 5,
       "gauge": {
         "current": 100,
         "max": 100,
@@ -347,6 +351,8 @@
       "emptyPoor": 0,
       "exScore": 10,
       "score": 200000,
+      "combo": 5,
+      "maxCombo": 5,
       "gauge": {
         "current": 100,
         "max": 100,

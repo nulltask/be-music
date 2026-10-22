@@ -1,5 +1,6 @@
 import type { ReplayPlay } from '../replay/format.ts';
 import type { PlayerInputCommand } from './input-signal-bus.ts';
+import type { PlayerUILongNoteMode, PlayerUISeekJudgment } from './ui-signal-bus.ts';
 import type { PlaySession } from './play-session.ts';
 
 /**
@@ -28,10 +29,12 @@ export interface PlayJudge {
   /** Judges the tick, after its realtime audio was queued. */
   judge(tick: PlayTick): void;
   /**
-   * Judges everything before `seconds` without its effects, and starts the keysounds that still ring there partway, for
-   * a play that starts at `seconds` (`PlayerOptions.startAtSeconds`). Absent: the strategy cannot start partway.
+   * Seeks to chart second `seconds`, backwards or forwards: the judge state becomes the one a play from the start
+   * reaches there (the loop resets the score and the notes' marks first, `play-seek.ts`), and the keysounds the judge plays that
+   * still ring there start partway. Returns the judgments it rebuilt and the long notes held across `seconds`. Absent:
+   * the strategy cannot seek.
    */
-  fastForward?(seconds: number): void;
+  seek?(seconds: number): PlayJudgeSeek;
   /** A key command from the input runtime. Absent: the strategy ignores live key input. */
   handleLaneCommand?(command: PlayLaneCommand): void;
   /** The chart second the judge has settled through on this tick. */
@@ -46,6 +49,14 @@ export interface PlayJudge {
   finish(): void;
   /** The chart second the judge had settled through, recorded when the play is aborted. */
   settledThroughSeconds(): number;
+}
+
+/** What a judge rebuilt when it sought ({@link PlayJudge.seek}). */
+export interface PlayJudgeSeek {
+  /** The judgments before the second sought, in the order a play from the start made them. */
+  judgments: PlayerUISeekJudgment[];
+  /** The long notes held across the second sought: their lane, head beat, end beat and the mode they play in. */
+  heldLongNotes: Array<{ channel: string; beat: number; endBeat: number | undefined; mode: PlayerUILongNoteMode }>;
 }
 
 /** How a play is judged: manual play from live input, a replay of a recorded input stream, or AUTO play. */

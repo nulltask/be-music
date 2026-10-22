@@ -142,9 +142,11 @@ export interface PlayerPlaySettings {
    */
   stageRanks?: ReadonlyArray<PlayerStageRank>;
   /**
-   * AUTO play only: the chart second the play starts at instead of the chart's beginning, as a preview seeking does.
-   * The notes before it count as AUTO judged them, without their keysounds, flashes or bombs; the volume changes before
-   * it apply; and sounds that started earlier and still ring start partway, through `AudioSession.triggerEventAt`.
+   * The chart second the play starts at instead of the chart's beginning: the play's first seek (a `{ kind: 'seek' }`
+   * input command, applied as the chart starts). Only a judge that can seek takes it — AUTO play, not a replay, for now.
+   * The judge state there is the one a play from the start reaches (the notes before it judged, without their keysounds,
+   * flashes or bombs), the volume changes before it apply, and sounds that started earlier and still ring start
+   * partway, through `AudioSession.triggerEventAt`. A play that seeks records no replay.
    */
   startAtSeconds?: number;
 }
@@ -298,7 +300,8 @@ export interface PlayerPlayRecording {
    * Enables replay recording: when set, the engine snapshots the resolved chart it actually played
    * (post-`#RANDOM`, post lane-shuffle via `preparedChart`), records every judged key press / release with
    * chart-relative timestamps, and hands the assembled {@link BeMusicReplay} here right before `autoPlay` /
-   * `manualPlay` resolves — including the ESC (aborted) exit. The replay's `results.native` caches this run's
+   * `manualPlay` resolves — including the ESC (aborted) exit. A play that sought (`startAtSeconds`, a `seek` command)
+   * records none: it is discarded at the first seek. The replay's `results.native` caches this run's
    * engine summary; see `@be-music/player-engine/replay` for the format and the LR2 / beatoraja / IIDX re-simulation
    * tools.
    */
@@ -381,6 +384,13 @@ export interface PlayerSummary {
   emptyPoor: number;
   exScore: number;
   score: number;
+  /**
+   * The combo running now: the one the judge cues count, rebuilt with the rest of the summary when the play seeks. The
+   * engine's summaries always carry it; it is optional so a summary a host builds itself need not.
+   */
+  combo?: number;
+  /** The highest combo of the play so far; see {@link combo}. */
+  maxCombo?: number;
   gauge?: PlayerGaugeSummary;
   /** For a course stage: the course-wide combo running now and the course-wide max combo (carried across stages). */
   course?: { combo: number; maxCombo: number };
@@ -442,11 +452,18 @@ export interface AudioSession {
   getActiveAudioVoiceCount?: () => number;
   triggerEvent?: (event: BeMusicEvent) => void;
   /**
-   * Plays `event`'s sound as if it had started `offsetSeconds` ago, for a play that starts partway
-   * (`PlayerOptions.startAtSeconds`). A sound shorter than the offset plays nothing. Without it, sounds that started
-   * before such a play's start stay silent.
+   * Plays `event`'s sound as if it had started `offsetSeconds` ago, for a play that seeks (`PlayerOptions.startAtSeconds`,
+   * a `seek` command). A sound shorter than the offset plays nothing. Without it, sounds that started before the second
+   * sought stay silent.
    */
   triggerEventAt?: (event: BeMusicEvent, offsetSeconds: number) => void;
+  /**
+   * The play seeks to chart second `seconds`: the sounds playing now stop and the gains go back to the chart's start
+   * (the engine then replays the volume changes before `seconds` and starts what still rings there through
+   * {@link triggerEventAt}); a backend that schedules on the chart's time (fades, stage rates) moves it to `seconds`.
+   * The play clock carries on: chart time re-bases in the engine. Without it, sounds playing at the seek ring on.
+   */
+  seek?: (seconds: number) => void;
   stopChannel?: (channel: string) => void;
   /**
    * The play tempo changed during the play (see {@link PlayerOptions.onTempoChange}): samples started from now on, and

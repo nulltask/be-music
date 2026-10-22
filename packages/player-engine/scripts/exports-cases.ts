@@ -22,6 +22,28 @@ const BENCH_PLAYER_OPTIONS: PlayerOptions = {
   inferBmsLNTypeWhenMissing: true,
 };
 
+/** 64 measures of sixteenth notes over four lanes and a long note every other measure, at 150 BPM: 4 128 notes. */
+const SEEK_REBUILD_CHART = parseChart(
+  [
+    '#TITLE seek rebuild',
+    '#BPM 150',
+    '#WAV01 missing01.wav',
+    '#LNTYPE 1',
+    ...Array.from({ length: 64 }, (_, measure) => {
+      const id = String(measure).padStart(3, '0');
+      return [
+        `#${id}11:${'01'.repeat(16)}`,
+        `#${id}12:${'01'.repeat(16)}`,
+        `#${id}13:${'01'.repeat(16)}`,
+        `#${id}14:${'01'.repeat(16)}`,
+        `#${id}55:0100`,
+      ];
+    }).flat(),
+  ].join('\n'),
+  'bms',
+);
+const SEEK_REBUILD_SECONDS = 64 * 1.6;
+
 export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.resolveChartRulesetFacts', {
     run: (fixtures) => {
@@ -36,6 +58,8 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       clock.chartSecondsAt(2500);
       clock.clockMsAt(2.5);
       clock.initialTempoMsAt(2500);
+      clock.rebase(3000, 1.5);
+      clock.chartSecondsAt(3500);
     },
   });
   define('player-engine.resolvePlayChart', {
@@ -65,6 +89,9 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
     run: async (fixtures) => {
       await runSilently(async () => {
         await playerAPI.autoPlay(fixtures.emptyBmsJSON, BENCH_PLAYER_OPTIONS);
+        // The seek rebuild: a play started at the end of a dense chart (`startAtSeconds` is its first seek) re-simulates
+        // its judge over every note before it, then ends at once.
+        await playerAPI.autoPlay(SEEK_REBUILD_CHART, { ...BENCH_PLAYER_OPTIONS, startAtSeconds: SEEK_REBUILD_SECONDS });
       });
     },
     interactive: true,

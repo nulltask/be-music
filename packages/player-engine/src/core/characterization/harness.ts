@@ -38,8 +38,10 @@ export type ScriptStep =
    * wall-clock time the key really went down (the engine judges it there, within 50 ms).
    */
   | { atMs: number; press: readonly string[]; pressedAtMs?: number }
-  /** Any other input command (interrupt, pause, tempo, view, high speed). */
-  | { atMs: number; command: PlayerInputCommand };
+  /** Any other input command (interrupt, pause, tempo, view, high speed, seek). */
+  | { atMs: number; command: PlayerInputCommand }
+  /** Several commands pushed at once, so the engine drains them together (seeks coalesce within a drain). */
+  | { atMs: number; commands: readonly PlayerInputCommand[] };
 
 /** A key going down at `atMs` and up `holdMs` later. */
 export function tap(atMs: number, lanes: string | readonly string[], holdMs = 60): ScriptStep[] {
@@ -86,7 +88,10 @@ export interface CharacterizationPlay {
   ui?: boolean;
   /** Hold the play open after its chart (`holdAfterChart`) and end it this long after `onSettled`. */
   holdAfterChart?: { releaseAfterMs: number };
-  /** Chart seconds to take a {@link snapshotJudgeState} at: on the first frame at or past each. */
+  /**
+   * Chart seconds to take a {@link snapshotJudgeState} at: on the first frame at or past each, of the last seek
+   * generation (a seek takes them again from its own frame on).
+   */
   captureAt?: readonly number[];
 }
 
@@ -106,8 +111,11 @@ export interface PlayObservation {
   judges: string[];
   /** UI commands (lane flashes, long notes, POOR BGA). */
   ui: string[];
-  /** Frames published, the last one, and when each note, mine and invisible note first showed as judged. */
-  frames: { count: number; last?: string; judged: string[] };
+  /**
+   * Frames published, the last one, and when each note, mine and invisible note first showed as judged (again, after a
+   * seek); `generations` lists the first frame of each seek generation with its clock.
+   */
+  frames: { count: number; last?: string; judged: string[]; generations?: string[] };
   /** Host callbacks and runtime lifecycle. */
   host: string[];
   /** `onLog` entries. */
@@ -119,24 +127,23 @@ export interface PlayObservation {
 }
 
 /**
- * The judge state a host can read off a frame: the judgment counts, the scores and the gauge, the combo, and which
+ * The judge state a host can read off a frame: the judgment counts, the scores, the combos and the gauge, and which
  * notes, mines and invisible notes show as judged (a long note with the beat it stays visible until).
  */
 export interface JudgeStateSnapshot {
   counts: Record<string, number>;
   gauge: number | undefined;
-  combo: number;
   notes: string[];
   landmines: string[];
   invisibleNotes: string[];
 }
 
 /**
- * Snapshots the judge state `frame` shows, with `combo` as the host reads it (the last judge cue's). Two plays whose
- * snapshots at a chart second are equal show the same play there.
+ * Snapshots the judge state `frame` shows. Two plays whose snapshots at a chart second are equal show the same play
+ * there.
  */
-export function snapshotJudgeState(frame: Readonly<PlayerUIFramePayload>, combo: number): JudgeStateSnapshot {
-  const { gauge, ...counts } = frame.summary;
+export function snapshotJudgeState(frame: Readonly<PlayerUIFramePayload>): JudgeStateSnapshot {
+  const { gauge, course, ...counts } = frame.summary;
   const judged = (notes: readonly PlayerUIFrameNote[] | undefined): string[] =>
     (notes ?? [])
       .filter((note) => note.judged)
@@ -150,7 +157,7 @@ export function snapshotJudgeState(frame: Readonly<PlayerUIFramePayload>, combo:
       Object.entries(counts).filter((entry): entry is [string, number] => typeof entry[1] === 'number'),
     ),
     gauge: gauge?.current,
-    combo,
+    ...(course !== undefined ? { course: { ...course } } : {}),
     notes: judged(frame.notes),
     landmines: judged(frame.landmineNotes),
     invisibleNotes: judged(frame.invisibleNotes),
@@ -241,6 +248,7 @@ function createTestAudioSession(
           }),
         }),
     triggerEvent: (event) => entry(`trigger ${formatEvent(event)}`),
+    seek: (seconds) => entry(`seek ${formatNumber(seconds)}`),
     triggerEventAt: (event, offsetSeconds) => entry(`trigger-at ${formatEvent(event)} +${formatNumber(offsetSeconds)}`),
     stopChannel: (channel) => entry(`stop ${channel}`),
     setTempo: (tempo) => entry(`tempo ${tempo}`),
@@ -267,6 +275,7 @@ function scriptCommands(
 ): PlayerInputCommand[] {
   // Each lane is its own key: its own commands, in the order the keys are listed.
   if ('command' in step) return [step.command];
+  if ('commands' in step) return [...step.commands];
   const stamp = step.pressedAtMs === undefined ? {} : { pressedAt: wallClockAt(step.pressedAtMs) };
   if ('down' in step) {
     return laneTokens(context, step.down).flatMap((token): PlayerInputCommand[] => [
@@ -303,7 +312,8 @@ export async function observePlay(
   const outputChunks: string[] = [];
   const frames: PlayObservation['frames'] = { count: 0, judged: [] };
   const captured: Record<string, JudgeStateSnapshot> = {};
-  const pendingCaptures = [...(play.captureAt ?? [])].sort((a, b) => a - b);
+  const captureAt = [...(play.captureAt ?? [])].sort((a, b) => a - b);
+  let pendingCaptures = [...captureAt];
   const now = (): string => formatMs(time.now());
   const hostEntry = (text: string): void => {
     host.push(`${now()} ${text}`);
@@ -400,6 +410,18 @@ export async function observePlay(
     };
     const pushCommand = uiSignals.pushCommand;
     uiSignals.pushCommand = (uiCommand: PlayerUICommand) => {
+      if (uiCommand.kind === 'seek') {
+        const { generation, seconds, snapshot } = uiCommand;
+        const last = snapshot.judgments.at(-1);
+        ui.push(
+          `${now()} seek generation=${generation} seconds=${formatNumber(seconds)} combo=${snapshot.combo}` +
+            ` maxCombo=${snapshot.maxCombo} exScore=${snapshot.summary.exScore}` +
+            ` gauge=${formatNumber(snapshot.summary.gauge?.current)} judgments=${snapshot.judgments.length}` +
+            `${last === undefined ? '' : ` last=${last.judge}@${formatNumber(last.seconds)}#${last.combo}`}`,
+        );
+        pushCommand(uiCommand);
+        return;
+      }
       const { kind, ...fields } = uiCommand;
       const details = Object.entries(fields).map(([key, value]) =>
         key === 'channel'
@@ -410,9 +432,24 @@ export async function observePlay(
       pushCommand(uiCommand);
     };
     const seen = new Set<PlayerUIFrameNote>();
+    let generation = 0;
     const publishFrame = uiSignals.publishFrame;
     uiSignals.publishFrame = (frame) => {
       frames.count += 1;
+      if ((frame.generation ?? 0) !== generation) {
+        generation = frame.generation ?? 0;
+        // A seek judges the notes again from the start: each shows as judged anew, and is captured anew.
+        seen.clear();
+        pendingCaptures = [...captureAt];
+        const clock = frame.clock;
+        (frames.generations ??= []).push(
+          `${now()} generation=${generation} seconds=${formatNumber(frame.currentSeconds)}` +
+            (clock === undefined
+              ? ''
+              : ` output=${formatNumber(clock.outputSeconds)} tempo=${formatNumber(clock.tempo)}` +
+                `${clock.paused ? ' paused' : ''}`),
+        );
+      }
       frames.last =
         `${now()} seconds=${formatNumber(frame.currentSeconds)} beat=${formatNumber(frame.currentBeat)}` +
         `${frame.displayBeat === undefined ? '' : ` displayBeat=${formatNumber(frame.displayBeat)}`}`;
@@ -431,7 +468,7 @@ export async function observePlay(
       publishFrame(frame);
       while (pendingCaptures.length > 0 && frame.currentSeconds >= pendingCaptures[0]!) {
         const at = pendingCaptures.shift()!;
-        captured[formatNumber(at)] = snapshotJudgeState(frame, stateSignals.getJudgeCombo().combo);
+        captured[formatNumber(at)] = snapshotJudgeState(frame);
       }
     };
   }
