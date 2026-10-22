@@ -21,8 +21,9 @@ import { isChargeLongNoteMode, resolveEffectiveLongNoteMode } from './long-note.
  * - beatoraja: `exch-bms2/beatoraja` — `play/JudgeProperty.java`, `play/JudgeAlgorithm.java`,
  *   `play/JudgeManager.java`, `play/GaugeProperty.java`, `play/GrooveGauge.java`, `play/BMSPlayerRule.java`.
  * - LR2: `wcko87/lr2oraja` / `seraxis/lr2oraja-endlessdream` (`JudgeProperty.LR2`, `JudgeWindowRule.LR2`,
- *   `GaugeProperty` LR2 variants with `death = 2` / guts `{32, 0.6}`, `MultiBadCollector`) cross-checked against
- *   the OpenLR2 transcription (`GOMazk/OpenLR2` — `Scene04_Play.cpp`, `LR2_bmsload.cpp`).
+ *   `GaugeProperty` LR2 variants with `death = 2` / guts `{32, 0.6}`) cross-checked against
+ *   the OpenLR2 transcription (`GOMazk/OpenLR2` — `Scene04_Play.cpp`, `LR2_bmsload.cpp`,
+ *   `LR2f.cpp` ProcSinglenote for the forward BAD re-judge chain).
  * - IIDX: community measurements (iidx.org compendium; dbm_capture / leisurely1 measurements). IIDX internals are
  *   not public — those values are the current community consensus, not vendor data.
  *
@@ -137,7 +138,7 @@ export interface RulesetConfig {
    */
   windowsAt: (timeUs: number) => RulesetWindowTables;
   selection: BeatorajaJudgeAlgorithm;
-  /** LR2 multi-BAD: one press BADs every other in-BAD-window (but out-of-GOOD-window) note on the lane. */
+  /** LR2: after a tap BAD, re-judge the next tap on that lane with the same press until a non-BAD stops it. */
   multiBad: boolean;
   /** LR2: a long-note head is never judged as a LATE bad — the press is ignored instead. */
   ignoreLateBadOnLNHead: boolean;

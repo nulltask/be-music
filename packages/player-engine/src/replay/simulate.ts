@@ -6,7 +6,6 @@ import {
   ignoresLateLongNoteHeadBad,
   noteLateReachUs,
   addHCNPassing,
-  isMultiBadCollectorTarget,
   judgeWindowLateReachUs,
   longNoteOwesTailMiss,
   pgreatWindowReachUs,
@@ -661,7 +660,7 @@ class ReplaySimulation {
     }
     if (this.config.multiBad) {
       // Only scoreable judgments (PGREAT..BAD) consume a note, so the judge is a real window index here.
-      this.applyMultiBad(lanes, timeUs, windows, note, selected.judge as RulesetJudgeIndex);
+      this.applyLR2RejudgeChain(lane, timeUs, windows, note, selected.judge as RulesetJudgeIndex);
     }
   }
 
@@ -868,43 +867,28 @@ class ReplaySimulation {
     return preferJudgeCandidate(this.config.selection, toSelection(best), toSelection(candidate), timeUs);
   }
 
-  /**
-   * lr2oraja `MultiBadCollector`: after the press consumed `tnote`, every other unjudged note inside the BAD
-   * window but outside the GOOD window also resolves as a BAD — with the collector's own pruning rules.
-   */
-  private applyMultiBad(
-    lanes: readonly SimLane[],
+  /** LR2's forward tap chain: every BAD reuses this press for the next tap, until a non-BAD stops it. */
+  private applyLR2RejudgeChain(
+    lane: SimLane,
     timeUs: number,
     windows: RulesetWindowTables,
-    tnote: SimNote,
-    tnoteJudge: RulesetJudgeIndex,
+    consumed: SimNote,
+    consumedJudge: RulesetJudgeIndex,
   ): void {
-    const extras: Array<{ note: SimNote }> = [];
-    for (const lane of lanes) {
-      const set = selectJudgeWindowSet(windows, { scratch: lane.scratch });
-      const badWindow = set.judges[JUDGE_BAD]!;
-      const goodWindow = set.judges[JUDGE_GOOD]!;
-      for (let index = firstNoteInReach(lane.notes, timeUs, badWindow[0]); index < lane.notes.length; index += 1) {
-        const note = lane.notes[index]!;
-        const dmUs = note.timeUs - timeUs;
-        if (dmUs > badWindow[1]) break;
-        if (note.judged || note.holding || note === tnote) continue;
-        if (dmUs >= goodWindow[0] && dmUs <= goodWindow[1]) continue;
-        extras.push({ note });
-      }
-    }
-    if (extras.length === 0) return;
-    extras.sort((left, right) => left.note.timeUs - right.note.timeUs);
-    const consumed = { time: tnote.timeUs, isLong: tnote.isLong, judge: tnoteJudge };
-    const filtered = extras.filter(({ note }) =>
-      isMultiBadCollectorTarget(consumed, { time: note.timeUs, isLong: note.isLong }),
-    );
-    for (const { note } of filtered) {
+    if (consumedJudge !== JUDGE_BAD || consumed.isLong || this.closed()) return;
+    const set = selectJudgeWindowSet(windows, { scratch: lane.scratch });
+    const bad = set.judges[JUDGE_BAD]!;
+    for (let index = lane.notes.indexOf(consumed) + 1; index < lane.notes.length; index += 1) {
+      const note = lane.notes[index]!;
+      if (note.judged || note.holding) continue;
+      if (note.isLong) break;
+      const deltaUs = note.timeUs - timeUs;
+      if (deltaUs < bad[0] || deltaUs > bad[1]) break;
+      const judge = classifyRulesetJudge(deltaUs, set);
+      if (judge === RULESET_JUDGE_NONE || judge > JUDGE_BAD) break;
       note.judged = true;
-      this.applyJudge(JUDGE_BAD, undefined);
-      if (longNoteOwesTailMiss(this.config, note.isLong ? (note.longStyle ?? 1) : undefined)) {
-        this.applyJudge(JUDGE_MISS_POOR, undefined);
-      }
+      this.applyJudge(judge, deltaUs);
+      if (judge !== JUDGE_BAD || this.closed()) break;
     }
   }
 
