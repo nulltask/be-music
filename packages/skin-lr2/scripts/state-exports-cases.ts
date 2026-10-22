@@ -162,6 +162,7 @@ export function registerLR2SkinStateExportsCases(define: DefineBenchmarkCase): v
     run: () => {
       lr2StateAPI.resolveLR2PlayTimers({ kind: 'gauge', previous: 98, next: 100, at: 0 });
       lr2StateAPI.resolveLR2PlayTimers({ kind: 'lane', bank: 'bomb', lane: BENCH_LANE, at: 0 });
+      lr2StateAPI.resolveLR2PlayTimers({ kind: 'seek', gauge: 100, at: 0 });
     },
   });
   define('skin-lr2.state.resolveLR2ResultState', {
