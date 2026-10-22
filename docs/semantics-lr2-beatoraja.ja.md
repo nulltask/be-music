@@ -725,7 +725,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
   - `#RESOLUTION,N` は SD/HD/FHD/UHD の番号です（[skin/lr2/LR2SkinHeaderLoader.java#L103-L106](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/lr2/LR2SkinHeaderLoader.java#L103-L106)、[Resolution.java#L8-L23](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/Resolution.java#L8-L23)。[endless dream L107-L110](https://github.com/seraxis/lr2oraja-endlessdream/blob/2394f65825994a153b99fbefea1a51476064c283/core/src/bms/player/beatoraja/skin/lr2/LR2SkinHeaderLoader.java#L107-L110) も同じ）。
   - 座標は y を反転してスケールします（[skin/lr2/LR2SkinCSVLoader.java#L230-L234](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/lr2/LR2SkinCSVLoader.java#L230-L234)）。
 - **種類:** パラメータ（構文）ですが、レイアウト全体が壊れます。
-- **be-music の現状:** [`packages/skin-lr2/src/skin/read.ts`](../packages/skin-lr2/src/skin/read.ts) は SD/HD/FHD/UHD の番号を受け付け、`w,h` も拡張として残します。無効な宣言は座標からの自動判定を妨げません。
+- **be-music の現状:** fixed in [#601](https://github.com/nulltask/be-music/issues/601)。[`packages/skin-lr2/src/skin/read.ts`](../packages/skin-lr2/src/skin/read.ts) は SD/HD/FHD/UHD の番号を受け付け、`w,h` も拡張として残します。無効な宣言は先行する有効な指定を維持し、有効な指定がなければ座標からの自動判定を妨げません。すべての番号と設計された描画先座標を回帰テストで確認します。
 - **影響:** 構文の不一致は修正済み。座標の上下反転は別の方言上の違いです。
 
 ### `#DST_*` の 21 列目以降と beatoraja だけの CSV コマンド
