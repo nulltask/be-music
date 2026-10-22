@@ -817,7 +817,7 @@ Overall shape: two separate state mappings. LR2 CSV skins get LR2 vocabulary ([`
 - **beatoraja:**
   - POOR = a missed note, MISS = an empty POOR ([JudgeManager.java#L400-L404](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L400-L404)).
   - Number 420 is MISS, 426 is POOR+MISS, 427 is BAD+POOR+MISS ([skin/property/IntegerPropertyFactory.java#L461-L467](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/property/IntegerPropertyFactory.java#L461-L467)).
-- **be-music today:** [`packages/skin-beatoraja/src/scene/score.ts`](../packages/skin-beatoraja/src/scene/score.ts) reads 420 = POOR, 426 = POOR, 427 = BAD+POOR, although the engine counts `summary.emptyPoor`. The note in the [beatoraja skin notes](./beatoraja-skin.md) that the engine has no MISS judgment is stale.
+- **be-music today:** fixed in [#599](https://github.com/nulltask/be-music/issues/599). The engine and scene model already carry `emptyPoor`. The beatoraja score input now carries it to numbers 420 / 426 / 427, which read empty POOR / POOR + empty POOR / BAD + POOR + empty POOR. Results use `judgedPoor` when LR2 folds empty POORs into its displayed POOR count, avoiding double counting.
 - **Impact:** A/C.
 - **Recommendation:** read the numbers from `emptyPoor` and plumb it through the player-scene-model score. Display only.
 
