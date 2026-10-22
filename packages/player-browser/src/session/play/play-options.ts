@@ -218,6 +218,12 @@ export interface PlaySessionOptions {
   /** The hi-speed cannot be changed during play (a course's `no_speed` constraint). */
   hiSpeedLocked?: boolean;
   /**
+   * When true, every decoded sample of the chart is scaled by one gain so the loudest peak sits near −3 dBFS. Off
+   * when omitted: charts keep the level they were authored at. Applies as the samples load, so a change takes the
+   * next play. `#VOLWAV` still multiplies on top at playback.
+   */
+  peakGain?: boolean;
+  /**
    * When true (default), the audio bus runs through dynamics compressors that soften clipping when many BMS samples
    * fire simultaneously (jacks, dense BGM stacks). Set to `false` to bypass every compressor and feed sample sources
    * directly to `audioContext.destination`.
