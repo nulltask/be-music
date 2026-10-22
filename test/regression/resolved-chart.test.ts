@@ -16,7 +16,7 @@ import { extractTimedNotes, type TimedLandmineNote, type TimedPlayableNote } fro
 import { describe, expect, test } from 'vite-plus/test';
 
 /**
- * Equivalence of the Resolved layer with what the consumers compute: for every chart in `examples/test` and every
+ * Equivalence of the Resolved layer with what the consumers compute: for every chart in `test/fixtures` and every
  * `#RANDOM` draw the corpus pins, `resolveChart` must give the same notes, triggers and tempo map as
  *
  * - the consumer helpers it replaces (`extractTimedNotes`, `collectSampleTriggers`, `createTimingResolver`), under both long-note inference settings, and
@@ -26,7 +26,7 @@ import { describe, expect, test } from 'vite-plus/test';
  */
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const fixtureDir = resolve(rootDir, 'examples/test');
+const fixtureDir = resolve(rootDir, 'test/fixtures');
 const expectedDir = resolve(dirname(fileURLToPath(import.meta.url)), '__expected__');
 const CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson']);
 const RANDOM_VARIANTS: ReadonlyArray<{ id: string; random: () => number }> = [

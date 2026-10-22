@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vite-plus/test';
 import { createApp } from '../app.ts';
 import type { Env } from '../env.ts';
-import { ORIGIN, signInAnonymously, startTestBindings } from '../../test/support.ts';
+import { ORIGIN, signInAnonymously, startTestBindings } from '../test-support/support.ts';
 
 let env: Env;
 let dispose: () => Promise<void>;
