@@ -27,7 +27,7 @@ export type PlayerInputCommand =
    * drain at its next tick: the judge state becomes the one a play from the start reaches there, the audio follows,
    * chart time re-bases on the play clock (a paused play stays paused), the UI gets a `seek` command and a frame at
    * `seconds` with the next generation, and the play records no replay. During the lead-in it sets where the chart
-   * starts. Only a judge that can seek takes it (AUTO play, not a replay, for now); others drop it.
+   * starts. AUTO play and replays rebuild their judgments; manual play starts practice without earlier judgments.
    */
   | { kind: 'seek'; seconds: number }
   | {
