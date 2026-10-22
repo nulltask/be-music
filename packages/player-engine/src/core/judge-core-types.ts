@@ -55,6 +55,8 @@ export interface JudgeCoreConfig {
    * it on, nothing is scored (see `isJudgingClosed`).
    */
   endOnFailure: boolean;
+  /** Practice starts here: earlier note heads (including their tails) are consumed without scoring. */
+  practiceFromSeconds?: number;
 }
 
 /** The play's running result — the same shape as the engine's public `PlayerSummary`. */

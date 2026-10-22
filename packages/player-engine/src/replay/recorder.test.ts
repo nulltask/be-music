@@ -481,3 +481,15 @@ describe('view and tempo changes', () => {
     expect(parseReplay(serializeReplay(replay)).play).toEqual(replay.play);
   });
 });
+
+test('discard stops all recording and rejects finalization', () => {
+  const recorder = createReplayRecorder(makeRecorderOptions());
+  recorder.recordInput('down', 1, [], ['11']);
+  recorder.discard();
+  recorder.discard();
+  recorder.recordInput('down', 2, [], ['12']);
+  recorder.recordEmptyPoor();
+  recorder.recordViewChange(2, { hiSpeed: 2 });
+  recorder.recordTempoChange(2, 2);
+  expect(() => recorder.finalize({ summary: makeSummary() })).toThrow('discarded practice replay');
+});
