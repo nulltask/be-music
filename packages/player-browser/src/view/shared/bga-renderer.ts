@@ -291,6 +291,24 @@ function resolveSkinBGAImage(ctx: BGARendererContext, texture: Texture | undefin
   return undefined;
 }
 
+/** How far (seconds) a BGA video may drift from the chart's time since its cue before it is set back in step. */
+export const BGA_VIDEO_DRIFT_SECONDS = 0.25;
+
+/**
+ * Where a BGA video playing its cue should be set to keep in step with the chart: `expectedSeconds` (the chart time
+ * since the cue, which the video runs at the play tempo) when it has drifted more than {@link BGA_VIDEO_DRIFT_SECONDS}
+ * from it — a seek, a stall, a throttled tab — and the video has not played out; `undefined` while it is in step.
+ */
+export function resolveBGAVideoResync(
+  currentSeconds: number,
+  expectedSeconds: number,
+  durationSeconds: number,
+): number | undefined {
+  if (!Number.isFinite(expectedSeconds) || expectedSeconds < 0) return undefined;
+  if (Number.isFinite(durationSeconds) && expectedSeconds >= durationSeconds) return undefined;
+  return Math.abs(currentSeconds - expectedSeconds) > BGA_VIDEO_DRIFT_SECONDS ? expectedSeconds : undefined;
+}
+
 /**
  * Drives playback of a video BGA on a single track (`base` or `layer`). When the cue's key matches a known video: -
  * first time it fires, `play()` from the cue's start offset - re-firing the same cue is a no-op (video keeps playing)
@@ -329,9 +347,18 @@ function syncBGAVideo(
     }
     return;
   }
-  if (previous?.key === key) {
-    // Same cue still active — nothing to do; the video plays forward on its own and the Pixi VideoSource pulls fresh
-    // frames each tick.
+  if (previous !== undefined && previous.key === key) {
+    // Same cue still active: the video plays forward on its own and the Pixi VideoSource pulls fresh frames each tick;
+    // one that drifted from the chart is set back in step.
+    const video = handle.video;
+    if (video.paused || video.seeking) return;
+    const resync = resolveBGAVideoResync(video.currentTime, seconds - previous.cueSeconds, video.duration);
+    if (resync === undefined) return;
+    try {
+      video.currentTime = resync;
+    } catch {
+      // Not seekable yet: the next frame tries again.
+    }
     return;
   }
   if (previous) {
@@ -351,6 +378,8 @@ function syncBGAVideo(
     // Some browsers throw on currentTime assignment before the video has its initial buffer. Best-effort — play()
     // below will retry once the buffer arrives.
   }
+  // A paused play (one sought while paused) shows the cue's frame; resuming plays the active videos.
+  if (ctx.play.paused) return;
   void handle.video.play().catch(() => {
     // Autoplay policy / codec rejections — silently swallow so the still-image fallback keeps working.
   });

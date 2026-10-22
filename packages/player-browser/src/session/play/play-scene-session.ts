@@ -117,11 +117,10 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
    */
   public frame(nowMs: number): PlayFrame {
     const play = this.play;
+    // A paused play drains too: a seek moves it while it stays paused.
+    if (!play.disposed) drainSharedEngineSignals(play);
     const seconds = play.currentSeconds();
-    if (!play.paused && !play.disposed) {
-      drainSharedEngineSignals(play);
-      updateReplayView(play, seconds);
-    }
+    if (!play.paused && !play.disposed) updateReplayView(play, seconds);
     play.updateDisplayedScore();
     const events = this.pending;
     this.pending = [];

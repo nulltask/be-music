@@ -650,14 +650,34 @@ The web demo plays every play this way, on every family's own play screen: a sin
 
 The play session and the play views share the play's parts. Each module takes the play (or the view) as an explicit context (`ctx`) and reads and writes its state through an interface of its own. The session's state is `PlaySessionState`; a view keeps its layers in `PlayLayers` and reads the running play through `PlayfieldRuntime`.
 
-The running play is one player-scene-model `PlayState` (`playState`): the gauge and EX score with their graphs, the combo, max combo and course combo, the timed judgments with their early / late counts, and the view (the hi-speed under HS-FIX and the lane covers). Every change to it goes through `applyPlayEvent` (`session/play/play-state.ts`), which reduces it with `reducePlayState` and glides the note scroll to a new drawn hi-speed: the engine's frames, judgments and empty POORs, its final summary, the player's hi-speed keys, the host's `setHiSpeed` and a replay's recorded view. The skins' runtime, the LR2 state resolver (`resolveLR2PlayState`), the beatoraja play bridge and the result (`playResultFromPlayState`) read it. The session keeps the engine's judgment counts as the readouts show them (`score`, with LR2's empty POORs in the POOR count) and the engine's gauge summary (`gaugeState`) beside it.
+The running play is one player-scene-model `PlayState` (`playState`): the gauge and EX score with their graphs, the combo, max combo and course combo, the timed judgments with their early / late counts, and the view (the hi-speed under HS-FIX and the lane covers). Every change to it goes through `applyPlayEvent` (`session/play/play-state.ts`), which reduces it with `reducePlayState` and glides the note scroll to a new drawn hi-speed: the engine's frames, judgments and empty POORs, the snapshot of a seek, its final summary, the player's hi-speed keys, the host's `setHiSpeed` and a replay's recorded view. The skins' runtime, the LR2 state resolver (`resolveLR2PlayState`), the beatoraja play bridge and the result (`playResultFromPlayState`) read it. The session keeps the engine's judgment counts as the readouts show them (`score`, with LR2's empty POORs in the POOR count) and the engine's gauge summary (`gaugeState`) beside it.
+
+The engine owns chart time. Every frame carries the chart second it shows, its seek generation and the clock that second holds at (the audio clock's reading, the tempo, whether the play is paused), and the session's chart clock (`currentSeconds`) runs on from the latest frame on `audioContext.currentTime` (`play-clock.ts`); before the engine's first frame it runs from the play-start gate. A seek, a tempo change or a pause shows in the next frame, with no anchor to set again, and a frame of an older generation than the last seek is dropped. What a run shows apart from the play state — the key beams and flashes, bombs, held long notes, judgment plates, the POOR image, the latched moments and the score readout's roll — is one `PlayPresentation` (`play-presentation.ts`), which `resetPresentation` puts back to a new play's.
+
+A seek is a command to the running engine ([ADR 0016](./adr/0016-seek-play-loop-command.md)): `PlayScene.seek(T)` pushes `{ kind: 'seek', seconds: T }` on its input bus (`play-seek.ts`) and resolves once the engine applied it or a later seek. The engine answers with a frame of the next generation at `T` and a `seek` UI command whose snapshot the session takes its score, gauge and play state from (`reducePlayState`'s `seek` event); the presentation is reset, a lead-out under way is cancelled, the BGA videos are synced again, and the view hears a `seek` event (the LR2 view stops its per-judgment and lane timers through `resolveLR2PlayTimers`, the beatoraja bridge through `resolveBeatorajaSeekTimers`, rebuilding its judge-state graph from the snapshot's judgments). The long notes held across `T` come next as the engine announces them again. A paused play stays paused at `T`.
+
+```mermaid
+sequenceDiagram
+  participant H as PlayScene
+  participant S as Play session
+  participant E as Engine
+  participant V as View
+  H->>S: seek(T)
+  S->>E: input seek(T)
+  E-->>S: frame(T, generation)
+  E-->>S: UI command seek(snapshot)
+  S->>S: reset presentation, state from snapshot
+  S->>V: seek event
+  E-->>S: held long notes again
+  S-->>H: seek resolves
+```
 
 - `session/play/`:
   - `play-session.ts`: `PlaySession`, the composition, the clocks, the pause, the recording and the teardown; `play-session-state.ts`: its state; `play-options.ts`: its options (`PlaySessionOptions`); `play-session-theme.ts`: what it asks of its view (`PlaySessionTheme`) and the moments it raises (`PlayMoment`);
   - `play-scene-session.ts`: the session as a `SceneSession`, its frames and intents; `play-view-events.ts`: the moments as view events;
   - `play-chart.ts`: `prepareChart`, the lane options (RANDOM, MIRROR, S-RANDOM, SCATTER, DP FLIP), a replay's arrangement and the decide screen's draws;
   - `play-media.ts`: the audio graph, the samples, the BGA textures and videos, and their teardown;
-  - `play-engine.ts`: the shared engine's launch, its UI signals, the judgements and lane effects, and the start of the ending;
+  - `play-engine.ts`: the shared engine's launch, its UI signals, the judgements and lane effects, a seek's snapshot and the start of the ending; `play-seek.ts`: the seek command and the seeks waiting on it; `play-clock.ts`: the chart clock run on from a frame; `play-presentation.ts`: what a run shows apart from the play state (`PlayPresentation`);
   - `play-input.ts`: ESC, F5, Space and the arrows, the quit hold, the auto-pause and the touch lanes the view sends; `play-cover-keys.ts`: the cover keys of a beatoraja play (`coverKeys`);
   - `play-keys.ts`: `PLAY_SCENE_KEY_CODES`, the keys the play handles itself and the engine's web input runtime skips;
   - `play-state.ts`: `applyPlayEvent`, the one way the play state changes;
@@ -846,7 +866,7 @@ stateDiagram-v2
 - **Ready:** a single chart shows its play screen behind a play button (`be-music-preview-start`), which becomes Replay after the play. There is no result screen.
 - **Playing:** the preview skin (`src/embed/preview-skin.ts`) lays the lanes in the left pane and the BGA in the right, with the chart's facts, score, combo, gauge and judgments under it (`be-music-preview-hud`), and video-player controls along the bottom (`be-music-playback-controls`): play / pause, a seek bar, the time, mute and volume, and full screen. Space plays or pauses, ← / → seek 5 seconds, M mutes and F toggles full screen.
 
-Seeking restarts the engine at the chart second sought (`PlayScene.seek`, `PlayerOptions.startAtSeconds`), with the decoded samples, the prepared notes and the BGA kept. The notes before it count as AUTO judged them, sounds still ringing there start partway (`AudioSession.triggerEventAt`), and a paused play resumes. The gauge and score graphs start again from the point sought. See [ADR 0015](./adr/0015-preview-seek.md). The engine now takes `startAtSeconds` as the play's first seek, a play-loop command ([ADR 0016](./adr/0016-seek-play-loop-command.md)), and announces the long notes held across it; the session moves onto the command itself in a later step.
+Seeking (`PlayScene.seek`) sends the running engine a seek command ([ADR 0016](./adr/0016-seek-play-loop-command.md)); the play is not started again. The engine rebuilds the play from the chart's start to the second sought, so the score, gauge, combo, max combo, graphs and timings read as if the play had run there; the sounds still ringing there start partway (`AudioSession.triggerEventAt`), and the web audio session stops what played, resets the dynamic volumes and moves a NONSTOP chart's fades (`WebAudioSession.seek`). The seek bar and the time follow the frames of the new generation, and a paused play stays paused. See "Where the play's parts live" for the session's side.
 
 ## Native DOM skins and standalone controllers
 

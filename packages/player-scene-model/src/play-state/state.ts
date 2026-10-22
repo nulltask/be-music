@@ -12,6 +12,7 @@ import {
   type PlayFrameInput,
   type PlayJudgeInput,
   type PlayScoreInput,
+  type PlaySeekSnapshot,
   type ScoreHistorySample,
 } from './types.ts';
 
@@ -115,6 +116,12 @@ export type PlayEvent =
   | { type: 'empty-poor'; seconds: number }
   /** The play's final judgment counts: a full combo's max combo is every note. */
   | { type: 'finish'; summary: PlayScoreInput }
+  /**
+   * The play sought to chart second `seconds`, at play-clock `atMs` (chart time running `tempo` times as fast as the play
+   * clock, 1 when absent): the state becomes the one `snapshot` describes — its gauge, EX score, combos and judgments,
+   * the graphs and timings rebuilt from them — keeping the chart's length, the start of the graphs and the view.
+   */
+  | { type: 'seek'; snapshot: PlaySeekSnapshot; seconds: number; atMs: number; tempo?: number }
   | HiSpeedCommand
   | LaneCoverCommand;
 
@@ -145,12 +152,19 @@ function applyFrame(state: PlayState, frame: PlayFrameInput): PlayState {
   const totalSeconds = frame.totalSeconds > 0 ? frame.totalSeconds : state.totalSeconds;
   const cleared = gauge?.cleared ?? state.cleared;
   const gaugeType = gauge?.type ?? state.gaugeType;
+  // The engine's own combos, when the frame carries them, win over what the judgments counted.
+  const combo = frame.summary.combo ?? state.combo;
+  const maxCombo = frame.summary.maxCombo !== undefined ? Math.max(frame.summary.maxCombo, combo) : state.maxCombo;
+  const courseCombo = frameCourseCombo(state.courseCombo, frame.summary.course, combo);
   if (
     value === state.gauge &&
     frame.summary.exScore === state.exScore &&
     totalSeconds === state.totalSeconds &&
     cleared === state.cleared &&
-    gaugeType === state.gaugeType
+    gaugeType === state.gaugeType &&
+    combo === state.combo &&
+    maxCombo === state.maxCombo &&
+    courseCombo === state.courseCombo
   ) {
     return state;
   }
@@ -160,13 +174,31 @@ function applyFrame(state: PlayState, frame: PlayFrameInput): PlayState {
     exScore: frame.summary.exScore,
     totalSeconds,
     cleared,
+    combo,
+    maxCombo,
     ...(gaugeType !== undefined ? { gaugeType } : {}),
+    ...(courseCombo !== undefined ? { courseCombo } : {}),
   };
   // The graphs start at the gauge the play starts with; without a starting gauge given, the first frame tells it.
   if (state.gaugeHistory.length === 0 && gauge !== undefined) {
     return { ...next, gaugeHistory: [{ progress: 0, value }], scoreHistory: [{ progress: 0, exScore: 0 }] };
   }
   return next;
+}
+
+/**
+ * A course stage's course combo after a frame: the engine's course combo and max combo when the frame carries them (the
+ * same state when they did not change), else the one counted from the judgments.
+ */
+function frameCourseCombo(
+  state: CourseComboState | undefined,
+  course: PlayFrameInput['summary']['course'],
+  stageCombo: number,
+): CourseComboState | undefined {
+  if (state === undefined || course === undefined) return state;
+  const maxCombo = Math.max(course.maxCombo, course.combo);
+  if (state.combo === course.combo && state.maxCombo === maxCombo && state.stageCombo === stageCombo) return state;
+  return { combo: course.combo, maxCombo, stageCombo };
 }
 
 function applyJudge(state: PlayState, judge: PlayJudgeInput, seconds: number, atMs: number): PlayState {
@@ -213,6 +245,75 @@ function applyFinish(state: PlayState, summary: PlayScoreInput): PlayState {
 }
 
 /**
+ * The play state a seek rebuilt (see the `seek` {@link PlayEvent}): the graphs from their start sample on, one sample
+ * per judgment with the gauge and EX score right after it, the timed judgments with their early / late counts, and the
+ * gauge, EX score and combos of the snapshot.
+ */
+function applySeek(state: PlayState, event: Extract<PlayEvent, { type: 'seek' }>): PlayState {
+  const { snapshot, seconds, atMs } = event;
+  const tempo = event.tempo !== undefined && event.tempo > 0 ? event.tempo : 1;
+  const { summary } = snapshot;
+  const gauge = summary.gauge;
+  const startGauge =
+    state.gaugeHistory[0]?.value ??
+    (gauge?.initial !== undefined ? gaugePercent({ ...gauge, current: gauge.initial }) : undefined);
+  const gaugeHistory: GaugeHistorySample[] = startGauge !== undefined ? [{ progress: 0, value: startGauge }] : [];
+  const scoreHistory: ScoreHistorySample[] = startGauge !== undefined ? [{ progress: 0, exScore: 0 }] : [];
+  const judgeTimings: JudgmentTiming[] = [];
+  const earlyLate: Record<JudgmentKind, EarlyLateCount> = { ...NO_EARLY_LATE };
+  let lastJudgeDeltaMs: number | undefined;
+  let gaugeValue = startGauge ?? 0;
+  for (const judgment of snapshot.judgments) {
+    if (judgment.judge === 'READY') continue;
+    if (judgment.gauge !== undefined && gauge !== undefined)
+      gaugeValue = gaugePercent({ current: judgment.gauge, max: gauge.max });
+    const progress = playProgress(state, judgment.seconds);
+    gaugeHistory.push({ progress, value: gaugeValue });
+    scoreHistory.push({ progress, exScore: judgment.exScore });
+    const deltaMs = judgment.deltaMs;
+    if (deltaMs === undefined || !Number.isFinite(deltaMs) || !isJudgmentKind(judgment.judge)) continue;
+    const timing: JudgmentTiming = {
+      atMs: atMs - ((seconds - judgment.seconds) * 1000) / tempo,
+      deltaMs,
+      judge: judgment.judge,
+    };
+    if (judgment.channel !== undefined) timing.channel = judgment.channel;
+    judgeTimings.push(timing);
+    lastJudgeDeltaMs = deltaMs;
+    if (deltaMs !== 0) {
+      const count = earlyLate[judgment.judge];
+      earlyLate[judgment.judge] =
+        deltaMs < 0 ? { ...count, early: count.early + 1 } : { ...count, late: count.late + 1 };
+    }
+  }
+  const { lastJudgeDeltaMs: _previousDelta, ...kept } = state;
+  const gaugeType = gauge?.type ?? state.gaugeType;
+  const courseCombo =
+    state.courseCombo !== undefined && summary.course !== undefined
+      ? {
+          combo: summary.course.combo,
+          maxCombo: Math.max(summary.course.maxCombo, summary.course.combo),
+          stageCombo: snapshot.combo,
+        }
+      : state.courseCombo;
+  return {
+    ...kept,
+    gauge: gauge !== undefined ? gaugePercent(gauge) : gaugeValue,
+    cleared: gauge?.cleared ?? false,
+    ...(gaugeType !== undefined ? { gaugeType } : {}),
+    exScore: summary.exScore,
+    combo: snapshot.combo,
+    maxCombo: Math.max(snapshot.maxCombo, snapshot.combo),
+    ...(courseCombo !== undefined ? { courseCombo } : {}),
+    gaugeHistory,
+    scoreHistory,
+    judgeTimings,
+    earlyLate,
+    ...(lastJudgeDeltaMs !== undefined ? { lastJudgeDeltaMs } : {}),
+  };
+}
+
+/**
  * Applies one event to a play state. Pure: the same state and event give the same result, the state given is never
  * changed, and no clock is read — time comes in with the events.
  */
@@ -226,6 +327,8 @@ export function reducePlayState(state: PlayState, event: PlayEvent): PlayState {
       return { ...state, ...sample(state, event.seconds) };
     case 'finish':
       return applyFinish(state, event.summary);
+    case 'seek':
+      return applySeek(state, event);
     case 'hi-speed-step':
     case 'hi-speed-set':
     case 'hi-speed-drawn': {

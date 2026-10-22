@@ -318,6 +318,16 @@ export function registerBeatorajaSkinSceneExportsCases(define: DefineBenchmarkCa
       sceneAPI.resolveBeatorajaJudgeEffect({ judge: 'PERFECT', combo: 321, deltaMs: -3 }, BENCH_PLACEMENT, 1200);
     },
   });
+  define('skin-beatoraja.scene.resolveBeatorajaSeekTimers', {
+    run: () => {
+      sceneAPI.resolveBeatorajaSeekTimers({
+        started: [0, 41, 46, 446, 51, 101, 140],
+        beat: 128.2,
+        gauge: BENCH_GAUGE,
+        lastNoteBeats: { 1: 300 },
+      });
+    },
+  });
   define('skin-beatoraja.scene.resolveBeatorajaFrameTimers', {
     run: () => {
       sceneAPI.resolveBeatorajaFrameTimers({

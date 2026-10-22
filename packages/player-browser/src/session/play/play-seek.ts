@@ -1,113 +1,63 @@
 /**
- * Seeking an AUTO play: the engine running the chart is stopped, the play's per-run state is cleared, and the engine
- * starts again at the chart second sought (`PlayerOptions.startAtSeconds`), reusing the decoded samples, the prepared
- * notes and the BGA. A preview's seek bar drives it; a manual play or a replay cannot seek.
+ * Seeking an AUTO play: a command to the running engine (`{ kind: 'seek' }`, ADR 0016), which moves the play to the
+ * chart second sought without starting it again. The engine answers with a `seek` UI command — what it rebuilt there,
+ * which the session takes its state from (`applyEngineSeek` in `play-engine.ts`) — and frames of the next seek
+ * generation, which the chart's clock runs on from. A preview's seek bar drives it; a manual play or a replay cannot
+ * seek.
  */
 
-import { createPlayState } from '@be-music/player-scene-model';
-import { interruptSharedEngine, launchSharedEngine } from './play-engine.ts';
-import type { PlaySession } from './play-session.ts';
+import type { PlayerInputSignalBus } from '@be-music/player-engine/signals';
+import type { PlaySessionOptions } from './play-options.ts';
 
-/** Seeks waiting on the run being stopped, by play: only the latest target of each counts. */
-const pendingTargets = new WeakMap<PlaySession, number>();
+/** The play's members a seek reads and writes: the play session's members of these names. */
+export interface PlaySeekContext {
+  readonly options: Readonly<Pick<PlaySessionOptions, 'autoPlay' | 'replay'>>;
+  readonly disposed: boolean;
+  readonly exiting: boolean;
+  readonly sharedEngineInputSignals: PlayerInputSignalBus | undefined;
+  readonly seekWaiters: Array<{ seconds: number; resolve: () => void }>;
+}
 
-/** Whether `play` can seek now: an AUTO play whose chart is running (past its intro, not ending). */
-export function canSeekPlay(play: PlaySession): boolean {
+/** Whether `play` can seek now: an AUTO play whose engine runs (past its intro, not leaving). */
+export function canSeekPlay(play: PlaySeekContext): boolean {
   return (
     play.options.autoPlay === true &&
     play.options.replay === undefined &&
     !play.disposed &&
     !play.exiting &&
-    play.sharedEnginePromise !== undefined
+    play.sharedEngineInputSignals !== undefined
   );
 }
 
 /**
- * Moves `play` to chart second `seconds` (clamped to the chart) and plays on from there; a paused play resumes. Seeks
- * made while a previous one is still stopping the engine collapse into the last one. Resolves once the engine runs
- * again, or at once when the play cannot seek.
+ * Asks the engine to move `play` to chart second `seconds`; it clamps the second to the chart and applies the last seek
+ * asked for by its next tick. A paused play stays paused there. Resolves once the engine has applied this seek or a
+ * later one (`resolveSeekWaiters`), or at once when the play cannot seek.
  */
-export async function seekPlay(play: PlaySession, seconds: number): Promise<void> {
-  if (!canSeekPlay(play) || !Number.isFinite(seconds)) return;
-  const target = Math.max(0, Math.min(seconds, play.resolveChartDurationSeconds()));
-  const stopping = pendingTargets.has(play);
-  pendingTargets.set(play, target);
-  // The playfield moves to the target at once, while the engine stops.
-  anchorChartClock(play, target);
-  if (stopping) return;
-  const running = play.sharedEnginePromise;
-  stopRun(play);
-  await running?.catch(() => undefined);
-  const latest = pendingTargets.get(play) ?? target;
-  pendingTargets.delete(play);
-  if (play.disposed || play.exiting) return;
-  resetRunState(play);
-  anchorChartClock(play, latest);
-  play.startAtSeconds = latest;
-  launchSharedEngine(play);
+export function seekPlay(play: PlaySeekContext, seconds: number): Promise<void> {
+  const input = play.sharedEngineInputSignals;
+  if (!canSeekPlay(play) || input === undefined || !Number.isFinite(seconds)) return Promise.resolve();
+  return new Promise((resolve) => {
+    play.seekWaiters.push({ seconds, resolve });
+    input.pushCommand({ kind: 'seek', seconds });
+  });
 }
 
-/** Stops the running engine as F5 does (its sounds cut), and resumes a paused play. */
-function stopRun(play: PlaySession): void {
-  interruptSharedEngine(play, 'restart');
-  play.sharedEngineAbortController?.abort();
-  play.chartEndHold?.abort();
-  play.sharedEngineSignals = undefined;
-  play.sharedEngineInputSignals = undefined;
-  if (play.chartEndTimeout !== undefined) {
-    window.clearTimeout(play.chartEndTimeout);
-    play.chartEndTimeout = undefined;
+/**
+ * The engine applied a seek to chart second `seconds`: it settles the waiters up to the last one that asked for that
+ * second (the earlier ones were coalesced into it), or — when none asked for it, as the engine clamped the second — every
+ * waiter.
+ */
+export function resolveSeekWaiters(play: Pick<PlaySeekContext, 'seekWaiters'>, seconds: number): void {
+  const waiters = play.seekWaiters;
+  let last = -1;
+  for (let index = 0; index < waiters.length; index += 1) {
+    if (Math.abs(waiters[index]!.seconds - seconds) < 1e-9) last = index;
   }
-  if (play.paused) {
-    play.paused = false;
-    play.pauseTotal += performance.now() - play.pauseTime;
-    void play.audioContext?.resume();
-  }
-  play.pauseAllBGAVideos();
-  // The next BGA sync starts each video at the chart time sought.
-  play.bgaActiveVideos = {};
+  for (const waiter of waiters.splice(0, last >= 0 ? last + 1 : waiters.length)) waiter.resolve();
 }
 
-/** Clears what one engine run left on the play, so the next run starts from a clean slate at its start second. */
-function resetRunState(play: PlaySession): void {
-  play.sharedEnginePromise = undefined;
-  play.sharedEngineAbortController = undefined;
-  play.chartEndHold = undefined;
-  play.onHeldPlayEnded = undefined;
-  play.sharedEngineInterrupt = undefined;
-  play.sharedEngineChartSettled = false;
-  play.sharedEngineLastJudgeComboTick = 0;
-  play.engineFrame = undefined;
-  play.chartEnded = false;
-  play.liveTempo.attach(undefined);
-  // The engine marks the shared notes as it judges them; the next run judges them again from its start.
-  for (const note of [...play.notes, ...play.invisibleNotes]) {
-    note.judged = false;
-    note.visibleUntilBeat = undefined;
-  }
-  for (const mine of play.mineNotes) mine.judged = false;
-  play.playState = createPlayState({ totalSeconds: play.playState.totalSeconds, view: play.playState.view });
-  play.longNotes.clear();
-  play.pressedChannels.clear();
-  play.keyBeamStartedAt.clear();
-  play.keyBeamFadeStartedAt.clear();
-  play.bombStartedAt.clear();
-  play.bombJudge.clear();
-  for (const timeout of play.keyFlashTimeouts) window.clearTimeout(timeout);
-  play.keyFlashTimeouts.clear();
-  play.lanePressedAt.clear();
-  play.laneReleasedAt.clear();
-  play.fullComboFired = false;
-  play.lastJudge = '';
-  play.lastJudgeUntil = 0;
-  play.lastPoorAt = -Number.POSITIVE_INFINITY;
-  play.playMoments = {};
-}
-
-/** Sets the play's chart clock so that `currentSeconds()` reads `seconds` now; the engine's first frame confirms it. */
-function anchorChartClock(play: PlaySession, seconds: number): void {
-  const context = play.audioContext;
-  if (context === undefined) return;
-  play.audioContextStartTime = context.currentTime - play.tempoClock.clockMsAt(seconds) / 1000;
-  play.sharedEngineClockAnchored = false;
+/** The engine is gone (the play ended or was disposed): every seek still waiting settles. */
+export function settleSeekWaiters(play: Pick<PlaySeekContext, 'seekWaiters'>): void {
+  for (const waiter of play.seekWaiters.splice(0)) waiter.resolve();
 }

@@ -18,6 +18,7 @@ import {
   resolvePlayfieldParts,
   type BeMusicUIEvent,
 } from '@be-music/player-ui';
+import { ControlsIdleController } from './controls-idle.ts';
 
 /** The lanes stay in the stage's left half; the BGA and the play's facts take what they leave on the right. */
 const PANE_SPLIT = STAGE_WIDTH / 2;
@@ -122,10 +123,12 @@ function mountPreviewGameplay(
   };
   for (const [name, listener] of Object.entries(listeners)) hud.addEventListener(name, listener);
   container.append(playfield, hud);
+  const idle = new ControlsIdleController(hud, document.defaultView!);
   let previous: BeMusicDOMGameplayFrame | undefined;
   let shownAtMs = -Infinity;
   return {
     update(frame) {
+      idle.setPlaying(frame.stage === 'playing');
       const nowMs = performance.now();
       if (
         previous !== undefined &&
@@ -143,6 +146,7 @@ function mountPreviewGameplay(
       playfield.frame = frame;
     },
     dispose() {
+      idle.dispose();
       unsubscribe();
       for (const [name, listener] of Object.entries(listeners)) hud.removeEventListener(name, listener);
       playfield.remove();

@@ -62,6 +62,49 @@ test('a single chart waits behind a play button, plays in AUTO with seekable con
   await page.screenshot({ path: info.outputPath('embed-replay.png') });
 });
 
+test('seeks back and forth: the time follows the second sought, and the combo is the one reached by playing there', async ({
+  page,
+}) => {
+  // Fixture A at 150 BPM: a PGREAT every 0.4 s from 1.6 s to 6.0 s, twelve notes.
+  const notesBy = (seconds: number): number => Math.max(0, Math.min(12, Math.floor((seconds - 1.6) / 0.4 + 1e-9) + 1));
+  await openEmbed(page, ['songs/fixA']);
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  const hud = page.locator('be-music-preview-hud');
+  const seek = hud.getByRole('slider', { name: 'Seek' });
+  await expect(seek).toBeEnabled({ timeout: 30_000 });
+  // Lets the seek bar go at `seconds`, as a drag does (`change`).
+  const seekTo = (seconds: number) =>
+    seek.evaluate((input: HTMLInputElement, value: number) => {
+      input.value = String(value);
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }, seconds);
+  const combo = hud.locator('p.line', { hasText: 'Combo' });
+  const judgments = hud.locator('.judgments');
+  const expectAt = async (seconds: number): Promise<void> => {
+    const notes = notesBy(seconds);
+    await expect.poll(async () => Number(await seek.inputValue())).toBeCloseTo(seconds, 1);
+    // The combo and max combo a play from the start shows there, all PGREAT under AUTO.
+    await expect(combo).toHaveText(new RegExp(`EX SCORE ${notes * 2}\\s[\\s\\S]*Combo ${notes}\\s*/\\s*${notes}\\s*$`));
+    await expect(judgments).toHaveText(new RegExp(`PG\\s*${notes}\\b`));
+  };
+  // Paused, the play stays where it was sought.
+  await page.keyboard.press('Space');
+  await expect(hud.getByRole('status')).toHaveText('Paused');
+  await seekTo(5);
+  await expectAt(5);
+  await expect(hud.getByRole('status')).toHaveText('Paused');
+  // Back: the notes after the second sought are not judged any more, the max combo included.
+  await seekTo(3);
+  await expectAt(3);
+  await seekTo(4.5);
+  await expectAt(4.5);
+  // Played on from there, the time runs on from the second sought and the combo keeps counting.
+  await page.keyboard.press('Space');
+  await expect(hud.getByRole('status')).toHaveCount(0);
+  await expect.poll(async () => Number(await seek.inputValue())).toBeGreaterThan(4.7);
+  await expect(combo).toHaveText(/Combo 12\s*\/\s*12\s*$/, { timeout: 30_000 });
+});
+
 test('several charts list first, play the one picked at once, and return to the list', async ({ page }, info) => {
   await openEmbed(page, ['songs/fixA', 'songs/fixB']);
   const list = page.locator('be-music-preview-select');
@@ -95,6 +138,28 @@ test('a long chart list scrolls to its last chart', async ({ page }) => {
   await expect(last).not.toBeInViewport();
   await last.scrollIntoViewIfNeeded();
   await expect(last).toBeInViewport();
+});
+
+test('a paused play shows a centred play button, and the controls fade out while the viewer is idle', async ({
+  page,
+}) => {
+  await openEmbed(page, ['songs/fixD']);
+  await page.getByRole('button', { name: 'Play', exact: true }).click({ timeout: 60_000 });
+  const hud = page.locator('be-music-preview-hud');
+  await expect(hud.getByRole('slider', { name: 'Seek' })).toBeEnabled({ timeout: 30_000 });
+  await hud.getByRole('button', { name: 'Pause' }).click();
+  const resume = hud.locator('button.resume');
+  await expect(resume).toBeVisible();
+  await expect(hud.getByText('Paused', { exact: true })).toHaveCount(0);
+  // Paused, the controls stay however long the viewer waits.
+  await page.waitForTimeout(3500);
+  await expect(hud).not.toHaveAttribute('controls-hidden');
+  await resume.click();
+  await expect(resume).toHaveCount(0);
+  // Playing untouched, they fade out; moving the pointer brings them back.
+  await expect(hud).toHaveAttribute('controls-hidden', '', { timeout: 6000 });
+  await page.mouse.move(10, 10);
+  await expect(hud).not.toHaveAttribute('controls-hidden');
 });
 
 test('asks the platform audio session for playback, so an iPhone in silent mode still plays the sound', async ({

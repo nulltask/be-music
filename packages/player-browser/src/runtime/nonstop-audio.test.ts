@@ -103,7 +103,8 @@ describe('createNonstopStageMixer', () => {
   test('schedules the fades against the chart start on the audio clock', () => {
     const { context, gains } = fakeContext(3);
     const mixer = createNonstopStageMixer(context, {} as AudioNode, MAP);
-    mixer.schedule(2);
+    // The chart started at 2 on the audio clock: chart second 1 now.
+    mixer.retime(1, (seconds) => 2 + seconds);
     const [out] = gains[0]!.gain.setValueCurveAtTime.mock.calls;
     expect(out?.slice(1)).toEqual([22, 10]);
     const [fadeIn] = gains[1]!.gain.setValueCurveAtTime.mock.calls;
@@ -117,8 +118,9 @@ describe('createNonstopStageMixer', () => {
 describe('play tempo', () => {
   test('schedules the fades at the play tempo: chart seconds take 1 / tempo on the audio clock', () => {
     const { context, gains } = fakeContext(0);
-    const mixer = createNonstopStageMixer(context, {} as AudioNode, MAP, { tempo: 0.5 });
-    mixer.schedule(2);
+    const mixer = createNonstopStageMixer(context, {} as AudioNode, MAP);
+    // The chart starts at 2 on the audio clock, at half speed.
+    mixer.retime(0, (seconds) => 2 + seconds / 0.5);
     expect(gains[0]!.gain.setValueCurveAtTime.mock.calls[0]?.slice(1)).toEqual([42, 20]);
     expect(gains[1]!.gain.setValueCurveAtTime.mock.calls[0]?.slice(1)).toEqual([32, 10]);
   });

@@ -453,6 +453,36 @@ describe('BeatorajaPlayBridge — lane events', () => {
   });
 });
 
+describe('BeatorajaPlayBridge — seek', () => {
+  it("stops the judgments' and the lanes' timers and ops, keeps the scene's, and lets the once-per-play ones start again", () => {
+    const harness = createHarness();
+    harness.update([{ kind: 'load-end', atMs: 0 }]);
+    harness.advance(100);
+    harness.command({ kind: 'press-lane', channel: '13' });
+    harness.judge({ judge: 'PERFECT', combo: 1, channel: '13' });
+    harness.command({ kind: 'hold-lane-until-beat', channel: '14', beat: 8 });
+    expect(harness.bridge.getTimerStart(judgeTimerId(1))).toBe(100);
+    expect(harness.bridge.hasOp(BEATORAJA_OP.P1_JUDGE_PERFECT)).toBe(true);
+    expect(harness.bridge.isLaneLNHeld('14')).toBe(true);
+    harness.advance(100);
+    harness.update([{ kind: 'seek', seconds: 2, gauge: 50, judgments: [], atMs: 200 }]);
+    for (const timer of [
+      judgeTimerId(1),
+      comboTimerId(1),
+      bombTimerId(1, 3)!,
+      keyOnTimerId(1, 3)!,
+      lnHoldTimerId(1, 4)!,
+    ]) {
+      expect(harness.bridge.getTimerStart(timer)).toBeUndefined();
+    }
+    expect(harness.bridge.hasOp(BEATORAJA_OP.P1_JUDGE_PERFECT)).toBe(false);
+    expect(harness.bridge.isLaneLNHeld('14')).toBe(false);
+    for (const timer of [TIMER_SCENE_START, TIMER_READY, TIMER_PLAY]) {
+      expect(harness.bridge.getTimerStart(timer)).toBeDefined();
+    }
+  });
+});
+
 describe('BeatorajaPlayBridge — judgments', () => {
   it('stamps the side-relative judge timer + adds the prop.lua judge op (PERFECT 1P → 241)', () => {
     const harness = createHarness();
