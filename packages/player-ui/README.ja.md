@@ -53,7 +53,7 @@ React・Vue はそれぞれのラッパーの peer dependency です。スキン
 
 ## プレビュー
 
-`be-music-playback-controls` は動画プレイヤーのコントロールバーです。再生／一時停止（`pause-request`）、離したときに `{ seconds }` 付きの `seek-request` を送るシークバー、時間、ミュートと音量（`{ volume, muted }` 付きの `volume-change`）、全画面（`fullscreen-request`）があります。`be-music-preview-hud` は譜面の情報・スコア・コンボ・ゲージ・判定を BGA の範囲の下に、コントロールをステージの下端に置き、それらの要求を伝えます。`be-music-preview-select` はトラックの譜面を一覧し、`activate-request` で 1 つを要求します。`be-music-preview-start` は大きな再生／リプレイボタン（`play-request`）です。`formatPlaybackTime`・`resolveSeekTarget`・`resolveGameplayPanels` はこれらを支える純粋関数です。埋め込みページがこれらを組み合わせています（[ブラウザープレイヤー](../../docs/player-web.ja.md#埋め込みプレビュー)）。
+`be-music-playback-controls` は動画プレイヤーのコントロールバーです。再生／一時停止（`pause-request`）、ドラッグ中と離したときに `{ seconds }` 付きの `seek-request` を送るシークバー、時間、ミュートと音量（`{ volume, muted }` 付きの `volume-change`）、全画面（`fullscreen-request`）があります。`be-music-preview-hud` は譜面の情報・スコア・コンボ・ゲージ・判定を BGA の範囲の下に、コントロールをステージの下端に置き、それらの要求を伝えます。`be-music-preview-select` はトラックの譜面を一覧し、`activate-request` で 1 つを要求します。`be-music-preview-start` は大きな再生／リプレイボタン（`play-request`）です。`formatPlaybackTime`・`resolveSeekTarget`・`resolveGameplayPanels` はこれらを支える純粋関数です。埋め込みページがこれらを組み合わせています（[ブラウザープレイヤー](../../docs/player-web.ja.md#埋め込みプレビュー)）。
 
 ## HTML・TypeScript
 
