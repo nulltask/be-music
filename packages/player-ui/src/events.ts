@@ -19,5 +19,8 @@ export interface BeMusicUIEventMap {
   'activate-request': { index: number };
   'search-change': { value: string };
   'play-option-change': BeMusicPlayOptionChange;
+  'seek-request': { seconds: number };
+  'volume-change': { volume: number; muted: boolean };
+  'fullscreen-request': undefined;
 }
 export type BeMusicUIEvent<K extends keyof BeMusicUIEventMap> = CustomEvent<BeMusicUIEventMap[K]>;

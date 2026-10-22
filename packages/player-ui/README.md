@@ -16,28 +16,32 @@ React and Vue are peer dependencies of their respective wrappers. The skin SDK h
 
 ## Components
 
-| Element                     | Properties                                              |
-| --------------------------- | ------------------------------------------------------- |
-| `be-music-score-summary`    | `data: BeMusicScoreData`, optional `compact`            |
-| `be-music-judgment-table`   | `data: BeMusicJudgmentData`                             |
-| `be-music-gauge-panel`      | `data: BeMusicGaugeData`, optional `compact`            |
-| `be-music-timing-graph`     | `data: BeMusicTimingData`                               |
-| `be-music-play-settings`    | `data: BeMusicSettingsData`                             |
-| `be-music-chart-list`       | `entries`, `selectedIndex`, `disabled`                  |
-| `be-music-chart-details`    | `entry`, `launching`, `readText`                        |
-| `be-music-play-options`     | `options`, `choices`, `disabled`                        |
-| `be-music-select-screen`    | `frame: BeMusicDOMSelectFrame`                          |
-| `be-music-gameplay-hud`     | `frame: BeMusicDOMGameplayFrame`                        |
-| `be-music-result-screen`    | `frame: BeMusicDOMResultFrame`                          |
-| `be-music-decide-screen`    | `frame: BeMusicDOMDecideFrame`                          |
-| `be-music-bga`              | `data: BeMusicBGAData`, `rect: BeMusicRect`             |
-| `be-music-lanes`            | `data: BeMusicLanesData`, `rect: BeMusicRect`           |
-| `be-music-notes`            | `data: BeMusicNotesData`, `rect: BeMusicRect`           |
-| `be-music-lane-covers`      | `data: BeMusicLaneCoversData`, `rect: BeMusicRect`      |
-| `be-music-judge-line`       | `data: BeMusicJudgeLineData`, `rect: BeMusicRect`       |
-| `be-music-bombs`            | `data: BeMusicBombsData`, `rect: BeMusicRect`           |
-| `be-music-judgment-display` | `data: BeMusicJudgmentDisplayData`, `rect: BeMusicRect` |
-| `be-music-playfield`        | `frame: BeMusicGameplayFrame`                           |
+| Element                      | Properties                                                        |
+| ---------------------------- | ----------------------------------------------------------------- |
+| `be-music-score-summary`     | `data: BeMusicScoreData`, optional `compact`                      |
+| `be-music-judgment-table`    | `data: BeMusicJudgmentData`                                       |
+| `be-music-gauge-panel`       | `data: BeMusicGaugeData`, optional `compact`                      |
+| `be-music-timing-graph`      | `data: BeMusicTimingData`                                         |
+| `be-music-play-settings`     | `data: BeMusicSettingsData`                                       |
+| `be-music-chart-list`        | `entries`, `selectedIndex`, `disabled`                            |
+| `be-music-chart-details`     | `entry`, `launching`, `readText`                                  |
+| `be-music-play-options`      | `options`, `choices`, `disabled`                                  |
+| `be-music-select-screen`     | `frame: BeMusicDOMSelectFrame`                                    |
+| `be-music-gameplay-hud`      | `frame: BeMusicDOMGameplayFrame`                                  |
+| `be-music-result-screen`     | `frame: BeMusicDOMResultFrame`                                    |
+| `be-music-decide-screen`     | `frame: BeMusicDOMDecideFrame`                                    |
+| `be-music-bga`               | `data: BeMusicBGAData`, `rect: BeMusicRect`                       |
+| `be-music-lanes`             | `data: BeMusicLanesData`, `rect: BeMusicRect`                     |
+| `be-music-notes`             | `data: BeMusicNotesData`, `rect: BeMusicRect`                     |
+| `be-music-lane-covers`       | `data: BeMusicLaneCoversData`, `rect: BeMusicRect`                |
+| `be-music-judge-line`        | `data: BeMusicJudgeLineData`, `rect: BeMusicRect`                 |
+| `be-music-bombs`             | `data: BeMusicBombsData`, `rect: BeMusicRect`                     |
+| `be-music-judgment-display`  | `data: BeMusicJudgmentDisplayData`, `rect: BeMusicRect`           |
+| `be-music-playfield`         | `frame: BeMusicGameplayFrame`                                     |
+| `be-music-playback-controls` | `data: BeMusicPlaybackData`                                       |
+| `be-music-preview-hud`       | `frame: BeMusicDOMGameplayFrame`, `volume`, `muted`, `fullscreen` |
+| `be-music-preview-select`    | `charts: readonly LibraryChart[]`, `heading`                      |
+| `be-music-preview-start`     | `mode: 'play' \| 'replay'`, `disabled`                            |
 
 Each class is exported as `BeMusic…Element`. Wrappers export the same names without `Element`, for example `BeMusicGameplayHUD` and `BeMusicJudgmentTable`. Leaf components take only their own presentation data and can be arranged independently. Screen components compose those leaves and accept the existing DOM skin frames.
 
@@ -46,6 +50,10 @@ Each class is exported as `BeMusic…Element`. Wrappers export the same names wi
 The playfield elements each draw on their own canvas, sized to the device pixels of the element's box. `rect` is the part of the stage the element covers, in stage design pixels, and `data` is drawn in the same coordinates, so an element can be placed and sized freely by its layout. `be-music-playfield` takes a whole `BeMusicGameplayFrame`, splits it with `resolvePlayfieldParts(frame)`, and places each element on its part of the letterboxed stage, under the gameplay HUD. Give it a frame on every animation frame; the elements own no clock.
 
 `paintPlayfieldParts(context, parts)` paints the same parts on one Canvas 2D context, each clipped to its rect, for a host that offers only a stage-sized surface. Subclass `BeMusicPlayfieldCanvasElement` and implement `paint(context, data)` for a part of your own. The BGA follows the BMS convention: the POOR image replaces the base and layer while a POOR shows, and a still image that fits the 256x256 BGA canvas keeps its size there. `be-music-playfield` paints the stage with `--be-music-color-background` and the letterbox around it with `--be-music-letterbox-background`. The playfield exposes `stage`, `bga`, `lanes`, `notes`, `lane-covers`, `judge-line`, `bombs` and `judgment-display` parts, and each element a `canvas` part.
+
+## Preview
+
+`be-music-playback-controls` is a video player's control bar: play / pause (`pause-request`), a seek bar that requests `seek-request` with `{ seconds }` once let go, the time, mute and volume (`volume-change` with `{ volume, muted }`) and full screen (`fullscreen-request`). `be-music-preview-hud` lays the chart's facts, score, combo, gauge and judgments under the BGA rect and the controls along the bottom of the stage, and forwards their requests. `be-music-preview-select` lists a track's charts and requests one with `activate-request`; `be-music-preview-start` is the large play or replay button (`play-request`). `formatPlaybackTime`, `resolveSeekTarget` and `resolveGameplayPanels` are the pure helpers behind them. The embed page composes them ([browser player](../../docs/player-web.md#embedded-preview)).
 
 ## HTML and TypeScript
 

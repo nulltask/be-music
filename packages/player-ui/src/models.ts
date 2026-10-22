@@ -116,3 +116,15 @@ export interface BeMusicPlayfieldParts {
   readonly bombs: BeMusicPlayfieldPart<BeMusicBombsData>;
   readonly judgmentDisplay: BeMusicPlayfieldPart<BeMusicJudgmentDisplayData>;
 }
+/** What the playback controls show: the position and length in chart seconds, and the player's own controls. */
+export interface BeMusicPlaybackData {
+  readonly currentSeconds: number;
+  readonly durationSeconds: number;
+  readonly playing: boolean;
+  /** Whether the seek bar moves the play now. */
+  readonly seekable: boolean;
+  /** 0..1. */
+  readonly volume: number;
+  readonly muted: boolean;
+  readonly fullscreen: boolean;
+}
