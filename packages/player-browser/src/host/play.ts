@@ -130,6 +130,11 @@ export interface PlayScene extends SessionScene<PlayFrame, PlayIntent> {
   /** Pauses or resumes the play, as Space does. */
   requestTogglePause(): void;
   isPaused(): boolean;
+  /**
+   * Moves an AUTO play to chart second `seconds` and plays on from there, as a preview's seek bar does; a paused play
+   * resumes. A manual play or a replay ignores it (`PlayFrame.seekable`).
+   */
+  seek(seconds: number): Promise<void>;
   /** Changes the play's tempo (pitch mode, not in a replay); whether it was taken. */
   setTempo(tempo: number): boolean;
   getTempo(): number;
@@ -343,6 +348,10 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
 
   public isPaused(): boolean {
     return this.play.isPaused();
+  }
+
+  public seek(seconds: number): Promise<void> {
+    return this.play.seek(seconds);
   }
 
   public setTempo(tempo: number): boolean {

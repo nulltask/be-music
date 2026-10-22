@@ -51,8 +51,8 @@ export interface PixiScene {
    */
   getStageInfo?(): { container: Container; width: number; height: number };
   /**
-   * `false` while the scene draws nothing on the Pixi canvas (its screens are all DOM): the host takes the canvas out of
-   * the page until a scene that draws on it becomes active. Absent means `true`.
+   * `false` while the scene draws nothing on the Pixi canvas (its screens are all DOM). The canvas is in the page only
+   * while the active scene draws on it. Absent means `true`.
    */
   readonly drawsOnCanvas?: boolean;
 }
@@ -94,6 +94,16 @@ export class PixiSceneHost {
   private previousPosition: string | undefined;
   /** Where the canvas goes back while it is out of the page (see {@link PixiScene.drawsOnCanvas}). */
   private canvasSlot: { parent: HTMLElement; next: Node | null } | undefined;
+  private canvasContainer: HTMLElement | undefined;
+
+  /**
+   * The element the host was mounted in. The canvas is in it only while the active scene draws on it, so listen here
+   * for input meant for the whole stage.
+   */
+  public get container(): HTMLElement {
+    if (!this.canvasContainer) throw new Error('Mount the scene host before reading its container');
+    return this.canvasContainer;
+  }
 
   /** The host-owned native layer. DOM screens are siblings of the Canvas, outside the Pixi scene graph. */
   public get domRoot(): HTMLElement {
@@ -209,7 +219,9 @@ export class PixiSceneHost {
     // (song-select buttons, debug menu, result-screen actions) keeps working.
     this.app.canvas.style.contain = 'content';
     this.app.stage.label = 'host/stage';
-    container.appendChild(this.app.canvas);
+    // The canvas goes in once a scene that draws on it becomes active (`placeCanvas`).
+    this.canvasContainer = container;
+    this.canvasSlot = { parent: container, next: null };
     this.domParent = options?.domContainer ?? container;
   }
 
@@ -262,7 +274,7 @@ export class PixiSceneHost {
           this.app.stage.addChild(scene.root);
         }
       }
-      if (!this.disposed) this.placeCanvas(scene?.drawsOnCanvas !== false);
+      if (!this.disposed) this.placeCanvas(scene !== undefined && scene.drawsOnCanvas !== false);
     })();
     this.transitionLock = next.catch(() => undefined);
     return next;

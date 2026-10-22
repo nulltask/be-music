@@ -49,6 +49,7 @@ import type { PlayViewTiming } from '../../view/types.ts';
 import { prepareChart } from './play-chart.ts';
 import { beginExitSequence, getResultData } from './play-ending.ts';
 import { interruptSharedEngine, launchSharedEngine, stopSharedEngine } from './play-engine.ts';
+import { seekPlay } from './play-seek.ts';
 import {
   attachPlayInput,
   detachPlayInput,
@@ -289,6 +290,11 @@ export class PlaySession extends PlaySessionState {
   public requestTogglePause(): void {
     if (this.disposed || this.exiting) return;
     togglePause(this);
+  }
+
+  /** Moves an AUTO play to chart second `seconds` and plays on from there (`seekPlay`); other plays ignore it. */
+  public seek(seconds: number): Promise<void> {
+    return seekPlay(this, seconds);
   }
 
   /** Whether the play is paused (by Space, {@link requestTogglePause}, or the auto-pause on losing focus). */

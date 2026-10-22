@@ -177,6 +177,7 @@ export class BuiltInPlayView
           pause: () => emit({ type: 'pause' }),
           restart: () => emit({ type: 'restart' }),
           quit: () => emit({ type: 'quit' }),
+          seek: (seconds) => emit({ type: 'seek', seconds }),
         },
         'gameplay',
       );
@@ -211,6 +212,7 @@ export class BuiltInPlayView
       stage: frame.stage,
       autoPlay: frame.autoPlay,
       replay: frame.replay,
+      seekable: frame.seekable,
     });
   }
 
