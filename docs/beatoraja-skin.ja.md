@@ -118,7 +118,7 @@ beatoraja 本体はプレイモードをまたいで fallback しません。モ
 
 ## Scene mapping
 
-`@be-music/skin-beatoraja/scene` は、`@be-music/player-scene-model` の skin family に依存しない scene model を beatoraja skin の語彙に写します。
+`@be-music/skin-beatoraja/scene` は、`@be-music/player-scene-model` の skin family に依存しない scene model を beatoraja skin の表現に対応付けます。
 どの op が点くか、各 number と text が何を読むか、どの timer が始まり止まるか、gauge、graph、live offset です（[ADR 0002](./adr/0002-scene-model-package.ja.md)）。
 以前は `@be-music/player-browser` の renderer のそばにあった beatoraja の state 解決で、今は select、decide、play、result の family view が読みます（play の view は play bridge を通して読みます）。
 
@@ -205,7 +205,7 @@ sequenceDiagram
 - rate は beatoraja の `ScoreDataProperty` のとおりです。play 中の 102 / 103 はそれまでに判定した note に対する EX score（最初の note の前は 100 %）、115 / 116 は全 note に対する EX score です。result はどちらも全 note に対して読みます。いずれも 1/100 % 未満を切り捨てます。
 - engine には MISS 判定（beatoraja の空 POOR）がありません。number 420 は POOR の数を読み、その early / late（421 / 422）は `MISS` の early / late の項目を、なければ POOR のものを読みます。play bridge は空の `MISS` の項目を渡すので、play 中は 0 です。
 - result は max combo を combo（104）としても読み、75 は 0（LR2 の自己ベストの max combo）とします。play は 75 で max combo を読みます。
-- play 中の 1P のランクの op（200-207）とその「now」の写し（340-347）は、それまでに判定した note に対する EX score のランクです。最初の note の前は 100 % なので、play は AAA から始まります。beatoraja の `createNowRank` が `ScoreDataProperty.nowrate` を読むとおりで、note のない譜面ではどれも点きません（#430）。
+- play 中の 1P のランクの op（200-207）とその「now」の値（340-347）は、それまでに判定した note に対する EX score のランクです。最初の note の前は 100 % なので、play は AAA から始まります。beatoraja の `createNowRank` が `ScoreDataProperty.nowrate` を読むとおりで、note のない譜面ではどれも点きません（#430）。
 - 汎用のランクの op（220-227）は、全 note に対する EX score が届いたランクをすべて点けます（`beatorajaGenericRankOps`）。beatoraja の `BooleanPropertyFactory` が `ScoreDataProperty.qualifyRank`（`rate >= border / 27`）を読むとおりで、AAA なら 8 つすべて、どの score でも F が点き、note のない譜面ではどれも点きません。`computeGenericRankOp` はそのうち最も高いランクを 1 つ返します。
 - beatoraja にとって別の意味を持つ LR2 の番号がいくつかあります（`IntegerPropertyFactory`、`BooleanPropertyFactory`、`StringPropertyFactory`）。number 92 はメイン BPM（LR2 ではインターネットランキングの順位）、op 400 は CONSTANT のオプション（LR2 ではキーコンフィグのページ）です。beatoraja には number 38-41・93-94、text 17-29、op 34 がないので、何も読みません（result と decide の画面では 0）（#430）。
 

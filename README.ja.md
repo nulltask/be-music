@@ -22,12 +22,12 @@ TypeScript + pnpm workspaces で構成した BMS/bmson ツールチェーンで�
 - `@be-music/skin-beatoraja`: beatoraja JSON/Lua skin parser、normalizer、theme loader を renderer 非依存で提供する package
 - `@be-music/player-skin-sdk`: browser player 向け be-music スキンを書くための描画フレームワーク非依存の SDK
 - `@be-music/player-ui`, `@be-music/player-ui-react`, `@be-music/player-ui-vue`: [再利用可能な Lit 製 Web Components と、型付き React・Vue ラッパー](./packages/player-ui/README.ja.md)
-- `@be-music/player-browser`: browser の PixiJS 実行層。選曲・決定・プレイ・リザルトの各画面を、built-in・LR2・beatoraja のファミリービューが描くシーンセッションとして 1 つのホスト向け API から作る。音のサービス、譜面のコレクション、スキンの読み込み、gameplay の録画も持つ
+- `@be-music/player-browser`: browser の PixiJS ランタイム。選曲・決定・プレイ・リザルトの各画面を、built-in・LR2・beatoraja のファミリービューが描くシーンセッションとして 1 つのホスト向け API から作る。音声サービス、譜面のコレクション、スキンの読み込み、gameplay の録画も持つ
 - `@be-music/app-play`: folder / ZIP drop、LR2 / beatoraja theme、Debug Menu、browser 再生を、1 つのシーンルーターの下のサービスとして接続する private Vite demo
 - `@be-music/app-leaderboard`: Cloudflare Workers で動く private な Leaderboard API。リプレイの投稿、再シミュレーションによる検証、ランキング
 - `@be-music/chart-editor`: CLI エディタ (インポート・編集・エクスポート)
 
-パッケージは層を成して積み上がっています。矢印は、パッケージからそれに依存するパッケージへ向かいます。ほかの矢印を通じて既に届く依存は重ねて描いていません（`@be-music/shared-utils` はほぼすべてのパッケージの下にあります）。パッケージの内側の同じ層は [アーキテクチャ — 目指す構造](./docs/architecture.ja.md#目指す構造) にあります。
+パッケージはレイヤーごとに積み重なっています。矢印は、パッケージからそれに依存するパッケージへ向かいます。ほかの矢印を通じて既に届く依存は重ねて描いていません（`@be-music/shared-utils` はほぼすべてのパッケージの下にあります）。パッケージの内側の同じレイヤーは [アーキテクチャ — 目指す構造](./docs/architecture.ja.md#目指す構造) にあります。
 
 ```mermaid
 flowchart TD
@@ -50,7 +50,7 @@ flowchart TD
     wrappers["player-ui-react · player-ui-vue"]
   end
 
-  subgraph hosts["実行層とホスト"]
+  subgraph hosts["ランタイムとホスト"]
     editor["chart-editor"]
     tui["player-terminal"]
     nodeaudio["player-node-audio"]
@@ -168,12 +168,12 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 
 ### player-engine (`@be-music/player-engine`)
 
-- terminal と browser runtime が共有する `autoPlay()` / `manualPlay()` engine。決定的な判定コアの上の 1 つのプレイループに、手動・AUTO・リプレイの判定の戦略を差し込む（[アーキテクチャ](./docs/architecture.ja.md#エンジン-判定コアと-1-つのプレイループ)）
+- terminal と browser runtime が共有する `autoPlay()` / `manualPlay()` engine。決定的な判定コアの上の 1 つのプレイループに、手動・AUTO・リプレイの判定ストラテジーを差し込む（[アーキテクチャ](./docs/architecture.ja.md#エンジン-判定コアと-1-つのプレイループ)）
 - lane flash、POOR BGA command、frame snapshot、pause、restart、high-speed change を流す UI / input signal bus
 - playable note、legacy long note、`#LNOBJ`、FREE ZONE、mine、invisible note の共通抽出
 - 判定幅、動的 `#EXRANKxx`、score、groove gauge、scroll distance、BGA timeline、result summary の共通意味論
-- エンジンのルートと並ぶ browser-safe な入口：`signals`、`lanes`、`display`、`ruleset`、`replay`、`records`、`course`（[Player 実装仕様 — 公開する入口](./docs/player-spec.ja.md#公開する入口)）
-- `ruleset`: ホスト・スキン・リーダーボードが共有する語彙。ゲージ、クリアランプ、BP、スコア（`ScoreSummary`、`computeScoreRate`、DJ ランク、LR2 のマネースコア）
+- エンジンのルートと並ぶ browser-safe なエントリポイント：`signals`、`lanes`、`display`、`ruleset`、`replay`、`records`、`course`（[Player 実装仕様 — 公開するエントリポイント](./docs/player-spec.ja.md#公開するエントリポイント)）
+- `ruleset`: ホスト・スキン・リーダーボードが共有する定義。ゲージ、クリアランプ、BP、スコア（`ScoreSummary`、`computeScoreRate`、DJ ランク、LR2 のマネースコア）
 - `course`、`records`、`replay`: コースの実行、NONSTOP の流れ、コースのステージの規則、判定ルールセットごとの自己ベスト、リプレイの形式とその記録・シミュレータ
 
 ### Node 音声 (`@be-music/player-node-audio`)
@@ -185,7 +185,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 ### scene models (`@be-music/player-scene-model`)
 
 - スキンの種類によらない、実行環境非依存の各画面のモデル。譜面の言葉で表したライブラリの項目（`LibraryChart`、`LibraryFolder`、`LibraryCourse`）、一覧のモデル（`reduceBrowse`、`BrowseSnapshot`）、プレイオプション、プレイ状態（`PlayState`）、プレイ結果（`PlayResult`）、コースの表示用モデル、効果音セット
-- Web 実行層、スキン SDK、LR2 と beatoraja の状態を求める関数が使う
+- Web ランタイム、スキン SDK、LR2 と beatoraja の状態を求める関数が使う
 - [シーンモデル](docs/scene-model.ja.md) を参照
 
 ### terminal player (`@be-music/player-terminal`)
@@ -236,7 +236,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 
 ### 再利用可能なプレイヤー UI
 
-`@be-music/player-ui` は、選曲・決定・リザルト画面、ゲームプレイ HUD、スコア・判定・ゲージなどのパネルを Lit 製 Web Components として提供します。Native Skin と同じ部品を、`@be-music/player-ui-react` と `@be-music/player-ui-vue` の型付きラッパーからも使えます。表示用データと操作イベントで接続し、再生の時計と音声はホストが所有します。登録、イベント、テーマ、SSR の範囲は [Player UI ガイド](./packages/player-ui/README.ja.md) を参照してください。
+`@be-music/player-ui` は、選曲・決定・リザルト画面、ゲームプレイ HUD、スコア・判定・ゲージなどのパネルを Lit 製 Web Components として提供します。Native Skin と同じ部品を、`@be-music/player-ui-react` と `@be-music/player-ui-vue` の型付きラッパーからも使えます。表示用データと操作イベントで接続し、再生クロックと音声はホストが所有します。登録、イベント、テーマ、SSR の範囲は [Player UI ガイド](./packages/player-ui/README.ja.md) を参照してください。
 
 ### browser player (`@be-music/player-browser` / `@be-music/app-play`)
 
@@ -246,12 +246,12 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - タッチ主体の端末でのタッチ操作とタッチ用 gameplay layout、縦向きステージを持つスキンの縦画面表示、スキンごとの設定
 - LR2 の select / decide / gameplay / result skin を parse して PixiJS で描画
 - beatoraja の select / decide / gameplay / result skin を parse して PixiJS で描画
-- 画面ごとに 1 つのシーンセッションが振る舞い（一覧の操作、譜面の準備、エンジン、入力、音、終わり方）をすべてのファミリーに共通に持ち、built-in・LR2・beatoraja のファミリービューは描いてインテントを返すだけ（[シーンセッションとファミリービュー](./docs/player-web.ja.md#シーンセッションとファミリービュー)）
-- 設計した入口：`@be-music/player-browser/host`（`PixiSceneHost`、`createSelectScene` / `createDecideScene` / `createPlayScene` / `createResultScene`）、`/skin`、`/collection`、`/audio`、`/recording`、`/compute`、`/controller`（[公開する入口](./docs/player-web.ja.md#公開する入口)）
+- 画面ごとに 1 つのシーンセッションが振る舞い（一覧の操作、譜面の準備、エンジン、入力、音、終了処理）をすべてのファミリーに共通に持ち、built-in・LR2・beatoraja のファミリービューは描いてインテントを返すだけ（[シーンセッションとファミリービュー](./docs/player-web.ja.md#シーンセッションとファミリービュー)）
+- 設計したエントリポイント：`@be-music/player-browser/host`（`PixiSceneHost`、`createSelectScene` / `createDecideScene` / `createPlayScene` / `createResultScene`）、`/skin`、`/collection`、`/audio`、`/recording`、`/compute`、`/controller`（[公開するエントリポイント](./docs/player-web.ja.md#公開するエントリポイント)）
 - destination 補間、sprite transform、number、text、slider、bargraph を扱う共通 LR2 Pixi helper
 - destination sampling、source cell selection、text、value、slider、gauge、graph、timing visualizer、note、marker、BGA、runtime op/timer wiring を扱う共通 beatoraja Pixi helper
 - note、timing、scroll distance、BGA cue、score、result は terminal player と共通の再生意味論を使用
-- 選曲 BGM・効果音・ジングル・譜面のプレビュー・スキンの音を 1 つのシステム `AudioContext` で鳴らす音のサービスと、key / BGM / master を分けた compressor control 付きのプレイごとの WebAudio bus
+- 選曲 BGM・効果音・ジングル・譜面のプレビュー・スキンの音を 1 つのシステム `AudioContext` で鳴らす音声サービスと、key / BGM / master を分けた compressor control 付きのプレイごとの WebAudio bus
 - BGA still / video 描画、browser-side video transcode fallback、MP4 / WebM gameplay recording
 - 1 つの renderer context を所有し、一度に 1 つの scene を表示する PixiJS scene host。demo ではシーンルーターがすべての切り替えを受け持ち、去った scene を dispose する
 - hi-speed、BGA mode/size、filter、sort、HS-FIX、lane cover、lift、auto-scratch、DP flip、random/mirror、gauge variant、skin option を扱う LR2 / beatoraja PLAY OPTION control
