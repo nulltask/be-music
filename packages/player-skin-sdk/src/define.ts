@@ -82,6 +82,9 @@ export function validateBeMusicSkin(skin: BeMusicSkin): string[] {
       }
     }
   }
+  if (skin.gameplay?.drawsOnDOM === true && typeof skin.dom?.gameplay !== 'function') {
+    problems.push('gameplay.drawsOnDOM requires a dom.gameplay screen');
+  }
   for (const screen of ['gameplay', 'select', 'result'] as const) {
     if (typeof skin[screen]?.draw !== 'function') problems.push(`${screen}.draw must be a function`);
   }
