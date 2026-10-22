@@ -1005,7 +1005,7 @@
               "gauge": {
                 "current": 2,
                 "max": 100,
-                "clearThreshold": 80,
+                "clearThreshold": 70,
                 "initial": 20,
                 "effectiveTotal": 400,
                 "cleared": false,
@@ -1155,7 +1155,7 @@
               "gauge": {
                 "current": 100,
                 "max": 100,
-                "clearThreshold": 80,
+                "clearThreshold": 70,
                 "initial": 20,
                 "effectiveTotal": 400,
                 "cleared": true,
@@ -1235,8 +1235,8 @@
             "djLevel": "D",
             "gauge": {
               "type": "NORMAL",
-              "final": 58,
-              "cleared": false
+              "final": 72,
+              "cleared": true
             }
           },
           "iidx": {
@@ -1303,12 +1303,12 @@
               "combo": 0,
               "maxCombo": 48,
               "gauge": {
-                "current": 58,
+                "current": 72,
                 "max": 100,
-                "clearThreshold": 80,
+                "clearThreshold": 70,
                 "initial": 20,
                 "effectiveTotal": 400,
-                "cleared": false,
+                "cleared": true,
                 "type": "NORMAL",
                 "survival": false,
                 "failedMidPlay": false

@@ -306,7 +306,7 @@
               "gauge": {
                 "current": 0,
                 "max": 100,
-                "clearThreshold": 80,
+                "clearThreshold": 75,
                 "initial": 20,
                 "effectiveTotal": 300,
                 "cleared": false,
@@ -456,7 +456,7 @@
               "gauge": {
                 "current": 0,
                 "max": 100,
-                "clearThreshold": 80,
+                "clearThreshold": 75,
                 "initial": 20,
                 "effectiveTotal": 300,
                 "cleared": false,
@@ -606,7 +606,7 @@
               "gauge": {
                 "current": 0,
                 "max": 100,
-                "clearThreshold": 80,
+                "clearThreshold": 75,
                 "initial": 20,
                 "effectiveTotal": 300,
                 "cleared": false,
