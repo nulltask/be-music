@@ -9,7 +9,7 @@ import { baseStyles } from '../styles/base.ts';
  * The HUD of a preview: the chart's facts, score, combo, gauge and judgments beside or under the BGA
  * (`resolvePreviewInfoBox`), and video-player controls
  * along the bottom of the stage. Lay it over `be-music-playfield`; the volume, mute and full-screen state are the
- * host's, set as properties.
+ * host's, set as properties, and so is hiding the controls (`controlsHidden`) while the viewer is idle.
  */
 export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFrame> {
   static override properties: PropertyDeclarations = {
@@ -17,6 +17,7 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
     volume: { type: Number },
     muted: { type: Boolean },
     fullscreen: { type: Boolean },
+    controlsHidden: { type: Boolean, attribute: 'controls-hidden', reflect: true },
   };
   static override styles: CSSResultGroup = [
     baseStyles,
@@ -76,16 +77,25 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
       dd {
         margin: 0;
       }
-      .paused {
+      .resume {
         position: absolute;
-        left: 25%;
-        top: 45%;
+        left: 50%;
+        top: 50%;
         transform: translate(-50%, -50%);
-        padding: 0.3em 0.8em;
-        border-radius: 6px;
+        display: grid;
+        place-items: center;
+        width: clamp(56px, 18cqh, 96px);
+        aspect-ratio: 1;
+        border-radius: 50%;
         background: #05070bcc;
-        font-size: 1.6em;
-        font-weight: 700;
+        pointer-events: auto;
+      }
+      .resume svg {
+        width: clamp(30px, 10cqh, 52px);
+        height: clamp(30px, 10cqh, 52px);
+        margin-left: 6%;
+        background: none;
+        fill: currentColor;
       }
       be-music-playback-controls {
         position: absolute;
@@ -93,18 +103,26 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
         right: 0;
         bottom: 0;
         pointer-events: auto;
+        transition: opacity 0.3s ease;
+      }
+      :host([controls-hidden]) be-music-playback-controls {
+        opacity: 0;
+        pointer-events: none;
       }
     `,
   ];
   declare volume: number;
   declare muted: boolean;
   declare fullscreen: boolean;
+  /** Fades the video controls out; the host sets it when the viewer has been idle during a play. */
+  declare controlsHidden: boolean;
 
   constructor() {
     super();
     this.volume = 1;
     this.muted = false;
     this.fullscreen = false;
+    this.controlsHidden = false;
   }
 
   protected override render(): TemplateResult | typeof nothing {
@@ -146,7 +164,18 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
           )}
         </dl>
       </div>
-      ${f.stage === 'paused' ? html`<p class="paused" part="paused" role="status">Paused</p>` : nothing}
+      ${
+        f.stage === 'paused'
+          ? html`<button
+              class="resume"
+              part="resume"
+              aria-label="Play"
+              @click=${() => this.emit('pause-request', undefined)}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+            </button>`
+          : nothing
+      }
       <be-music-playback-controls
         exportparts="bar:controls,seek,play,mute,volume,time,fullscreen"
         .data=${{

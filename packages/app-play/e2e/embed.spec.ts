@@ -139,3 +139,25 @@ test('a long chart list scrolls to its last chart', async ({ page }) => {
   await last.scrollIntoViewIfNeeded();
   await expect(last).toBeInViewport();
 });
+
+test('a paused play shows a centred play button, and the controls fade out while the viewer is idle', async ({
+  page,
+}) => {
+  await openEmbed(page, ['songs/fixD']);
+  await page.getByRole('button', { name: 'Play', exact: true }).click({ timeout: 60_000 });
+  const hud = page.locator('be-music-preview-hud');
+  await expect(hud.getByRole('slider', { name: 'Seek' })).toBeEnabled({ timeout: 30_000 });
+  await hud.getByRole('button', { name: 'Pause' }).click();
+  const resume = hud.locator('button.resume');
+  await expect(resume).toBeVisible();
+  await expect(hud.getByText('Paused', { exact: true })).toHaveCount(0);
+  // Paused, the controls stay however long the viewer waits.
+  await page.waitForTimeout(3500);
+  await expect(hud).not.toHaveAttribute('controls-hidden');
+  await resume.click();
+  await expect(resume).toHaveCount(0);
+  // Playing untouched, they fade out; moving the pointer brings them back.
+  await expect(hud).toHaveAttribute('controls-hidden', '', { timeout: 6000 });
+  await page.mouse.move(10, 10);
+  await expect(hud).not.toHaveAttribute('controls-hidden');
+});
