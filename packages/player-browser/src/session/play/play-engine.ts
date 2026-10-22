@@ -552,11 +552,13 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
             // What the player sees at the start; the changes during the play go in as `view` commands. A play that
             // seeks records none: the engine discards its recorder at the first seek.
             recordReplay: resolveReplayRecording(ctx.options, ctx.chart, startReplayView(ctx)),
-            onReplayRecorded: (replay: BeMusicReplay) => {
-              ctx.replay = replay;
-              const waiters = ctx.replayWaiters.splice(0);
-              for (const resolve of waiters) resolve(replay);
-            },
+            onReplayRecorded: ctx.practice
+              ? undefined
+              : (replay: BeMusicReplay) => {
+                  ctx.replay = replay;
+                  const waiters = ctx.replayWaiters.splice(0);
+                  for (const resolve of waiters) resolve(replay);
+                },
           }),
     },
   })
@@ -776,7 +778,12 @@ function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUICommand): v
 function applyEngineSeek(ctx: PlayEngineContext, command: Extract<PlayerUICommand, { kind: 'seek' }>): void {
   const { snapshot, seconds, generation } = command;
   ctx.seekGeneration = generation;
-  if (ctx.options.autoPlay !== true && ctx.options.replay === undefined) ctx.practice = true;
+  if (
+    (ctx.options.autoPlay !== true && ctx.options.replay === undefined) ||
+    ctx.options.course !== undefined ||
+    ctx.options.nonstop !== undefined
+  )
+    ctx.practice = true;
   ctx.resetPresentation();
   // A play sought back out of its lead-out plays on: the engine settles the chart again.
   if (ctx.chartEndTimeout !== undefined) {

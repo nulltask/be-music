@@ -61,6 +61,8 @@ export type PlaySceneSettings = Omit<
 
 /** The course a play is a stage of: the stage's rules and carried-in state, and the course as a skin shows it. */
 export interface PlaySceneCourse {
+  /** A previous stage sought; the entire course stays practice. */
+  readonly practice?: boolean;
   /** The stage's rules for the engine (`ReplayCourseStage`), with what the previous stage carried in. */
   readonly stage: ReplayCourseStage;
   /** The course and the stage being played, for the skin. */
@@ -456,7 +458,11 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       ...(options.allowSeek !== undefined ? { allowSeek: options.allowSeek } : {}),
       ...(kit.family === 'beatoraja' ? BEATORAJA_PLAY_SETTINGS : {}),
       ...(course !== undefined
-        ? { course: course.stage, ...(course.view !== undefined ? { courseInfo: course.view } : {}) }
+        ? {
+            course: course.stage,
+            ...(course.view !== undefined ? { courseInfo: course.view } : {}),
+            ...(course.practice === true ? { practice: true } : {}),
+          }
         : {}),
       ...(options.replay !== undefined ? { replay: options.replay } : {}),
       ...(options.preResolved !== undefined ? { preResolved: options.preResolved } : {}),
