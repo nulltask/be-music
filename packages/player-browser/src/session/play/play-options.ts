@@ -143,7 +143,7 @@ export interface PlaySessionOptions {
   /**
    * Note-arrangement mode for the 1P keyboard lanes (`#SRC_BUTTON,type=42`). Applied at chart-prepare time so the
    * shuffle is consistent across the play session — pressing F5 (restart) reuses the same `random1P` value but draws a
-   * fresh permutation.
+   * fresh permutation. SCATTER is a legacy value; new requests are rejected until it is fully implemented.
    */
   random1P?: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
   /** 2P side note arrangement (`#SRC_BUTTON,type=43`). */

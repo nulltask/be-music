@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import type { ReplayNote } from '@be-music/player-engine/replay';
+import { parseReplay, serializeReplay, type BeMusicReplay, type ReplayNote } from '@be-music/player-engine/replay';
 import { applyReplayArrangement } from './replay-arrangement.ts';
 
 function note(channel: string, seconds: number, endSeconds?: number) {
@@ -11,6 +11,34 @@ function replayNote(overrides: Partial<ReplayNote> & Pick<ReplayNote, 'channel' 
 }
 
 describe('replay-arrangement', () => {
+  test('legacy SCATTER metadata retains its recorded LN placement without selecting a new option', () => {
+    const replay: BeMusicReplay = {
+      format: 'be-music-replay',
+      version: 0,
+      clock: { unit: 'us', origin: 'chart-zero' },
+      chart: {
+        sourceFormat: 'bms',
+        laneMode: '7keys',
+        lnMode: 1,
+        judgeRank: { percent: 75, sourceRank: 2 },
+        noteCount: 1,
+        notes: [replayNote({ channel: '15', timeUs: 1_000_000, endTimeUs: 2_000_000, type: 'long', lnMode: 1 })],
+      },
+      inputs: [],
+      play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', randomLane: { p1: 'SCATTER' } },
+    };
+    const parsed = parseReplay(serializeReplay(replay));
+    const target = {
+      notes: [note('11', 1, 2)],
+      landmineNotes: [],
+      invisibleNotes: [],
+      activeFreeZoneChannels: new Set<string>(),
+    };
+    expect(parsed.play.randomLane).toEqual({ p1: 'SCATTER' });
+    expect(applyReplayArrangement(parsed.chart.notes, target)).toEqual({ ok: true });
+    expect(target.notes).toEqual([note('15', 1, 2)]);
+  });
+
   test('re-applies a mirrored arrangement onto the original channels', () => {
     // Original chart: lane 11 at 1.0s, lane 13 at 2.0s. Recorded (mirrored): 15 at 1.0s, 13 at 2.0s.
     const target = {
