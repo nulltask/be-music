@@ -1,7 +1,9 @@
 ---
-'@be-music/player-browser': patch
+'@be-music/player-browser': minor
 ---
 
 Prepare the engine during loading and open its chart-start gate at the skin's PLAY START cue, allowing intro seeks to choose the starting position.
 
 Keep beatoraja BGA videos at chart time since their cues through seeks, pauses, tempo changes and NONSTOP crossfades instead of restarting at the beginning.
+
+Allow seeking within course stages and NONSTOP runs, preserve practice across later stages, and omit all course records, ranking and replay auto-save after a seek.

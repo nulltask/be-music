@@ -99,6 +99,7 @@ export class PlaySession extends PlaySessionState {
   public constructor(options: PlaySessionOptions = {}, theme: PlaySessionTheme = NO_THEME) {
     super();
     this.options = options;
+    this.practice = options.practice === true;
     this.theme = theme;
     // A replay plays back at the tempo it was played at, unless its viewer keeps their own (`replayView.tempo`).
     this.replayTempo =
@@ -308,16 +309,20 @@ export class PlaySession extends PlaySessionState {
   public waitForReplay(timeoutMs = 2000): Promise<BeMusicReplay | undefined> {
     if (this.replay !== undefined) return Promise.resolve(this.replay);
     return new Promise((resolve) => {
-      const timer = setTimeout(() => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const settle = (replay: BeMusicReplay | undefined): void => {
+        if (timer !== undefined) clearTimeout(timer);
         const index = this.replayWaiters.indexOf(settle);
         if (index >= 0) this.replayWaiters.splice(index, 1);
-        resolve(undefined);
-      }, timeoutMs);
-      const settle = (replay: BeMusicReplay): void => {
-        clearTimeout(timer);
         resolve(replay);
       };
+      timer = setTimeout(() => settle(undefined), timeoutMs);
       this.replayWaiters.push(settle);
+      // Practice and replay playback produce no recording. Wait for the final summary, then settle without a timeout.
+      void this.sharedEnginePromise?.then(
+        () => settle(this.replay),
+        () => settle(undefined),
+      );
     });
   }
 
