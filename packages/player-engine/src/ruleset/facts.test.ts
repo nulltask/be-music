@@ -245,3 +245,34 @@ describe('ruleset chart-facts adapters agree', () => {
     }
   });
 });
+
+describe('beatoraja TOTAL counts charge tails', () => {
+  test.each([
+    [{ normal: 100, long: { 1: 0, 2: 0, 3: 0 } }, 100],
+    [{ normal: 0, long: { 1: 100, 2: 0, 3: 0 } }, 100],
+    [{ normal: 0, long: { 1: 0, 2: 100, 3: 0 } }, 200],
+    [{ normal: 0, long: { 1: 0, 2: 0, 3: 100 } }, 200],
+    [{ normal: 100, long: { 1: 100, 2: 200, 3: 100 } }, 800],
+  ] as const)('uses every judgment note for recovery: %j', (notes, count) => {
+    const chart = facts({ notes, total: 165 });
+    const rule = resolveRuleset(chart, 'beatoraja');
+    expect(rule.noteCount).toBe(count);
+    expect(rule.gauge.values[0]).toBeCloseTo(165 / count, 12);
+    expect(resolveRuleset(chart, 'beatoraja', { gauge: 'HARD' }).gauge.values[0]).toBeCloseTo(
+      Math.min(0.15, 10 / count),
+      12,
+    );
+    const lr2 = resolveRuleset(chart, 'lr2');
+    expect(lr2.noteCount).toBe(countBaseNotes(notes));
+    expect(lr2.gauge.values[0]).toBeCloseTo(165 / countBaseNotes(notes), 12);
+  });
+
+  test('uses judgment notes for default TOTAL and bmson percentage TOTAL', () => {
+    const notes = { normal: 0, long: { 1: 0, 2: 500, 3: 0 } };
+    expect(resolveRuleset(facts({ notes }), 'beatoraja').effectiveTotal).toBe(resolveBeatorajaDefaultTotal(1000));
+    expect(resolveRuleset(facts({ notes, sourceFormat: 'bmson', total: 150 }), 'beatoraja').effectiveTotal).toBe(
+      resolveBeatorajaDefaultTotal(1000) * 1.5,
+    );
+    expect(resolveRuleset(facts({ notes }), 'lr2').effectiveTotal).toBe(resolveLR2DefaultTotal(500));
+  });
+});

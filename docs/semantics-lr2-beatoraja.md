@@ -459,7 +459,7 @@ Already per ruleset: LR2 death border and guts, the LR2 DEATH table (**fixed in 
 - **LR2:** an LN is one note.
 - **beatoraja:** the TOTAL modifier is `f * total / getTotalNotes()` ([play/GrooveGauge.java#L260](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/GrooveGauge.java#L260)), and `getTotalNotes` counts CN/HCN ends ([jbms-parser TimeLine.java#L139-L156](https://github.com/exch-bms2/jbms-parser/blob/8108cd54a19275810e1f5d2c9586f008eb6db95e/src/bms/model/TimeLine.java#L139-L156)). The same count feeds the default TOTAL and `LIMIT_INCREMENT`.
 - **Kind:** parameter (a modelling bug).
-- **be-music today:** `beatoraja` uses `baseNotes` ([`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) ~L811-L833, [`facts.ts`](../packages/player-engine/src/ruleset/facts.ts) `countBaseNotes`).
+- **be-music today:** fixed in [#586](https://github.com/nulltask/be-music/issues/586). The beatoraja branch uses its judgment-note count (LN heads, CN/HCN heads and tails) for default TOTAL, percentage TOTAL and TOTAL-based recovery, including HARD/EX-HARD `LIMIT_INCREMENT`. LR2 retains base-note counting. Engine and replay gauge checkpoints agree. Existing derived Leaderboard rows require explicit offline re-simulation; replay/ruleset revision 0 is unchanged.
 - **Impact:** B. CN/HCN charts recover up to 2× too fast, which changes lamps.
 - **Recommendation:** pass the ruleset's judgment count under `beatoraja`.
 
