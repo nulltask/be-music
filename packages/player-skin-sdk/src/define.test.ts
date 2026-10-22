@@ -52,6 +52,20 @@ describe('validateBeMusicSkin', () => {
     ]);
   });
 
+  it('requires a DOM gameplay screen for a playfield drawn on DOM', () => {
+    expect(validateBeMusicSkin(skin({ gameplay: { draw: () => {}, drawsOnDOM: true } }))).toEqual([
+      'gameplay.drawsOnDOM requires a dom.gameplay screen',
+    ]);
+    expect(
+      validateBeMusicSkin(
+        skin({
+          gameplay: { draw: () => {}, drawsOnDOM: true },
+          dom: { gameplay: () => ({ update: () => {}, dispose: () => {} }) },
+        }),
+      ),
+    ).toEqual([]);
+  });
+
   it('reports a screen without a draw function', () => {
     expect(validateBeMusicSkin(skin({ result: {} as BeMusicSkin['result'] }))).toEqual([
       'result.draw must be a function',
