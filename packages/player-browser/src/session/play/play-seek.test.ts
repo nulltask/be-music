@@ -41,6 +41,11 @@ interface FakeRun {
   frame(seconds: number, perfect: number): void;
   /** Publishes a judge cue. */
   judge(combo: number, channel: string): void;
+  /**
+   * Announces the run's start partway as the engine does on its first tick: a `seek` command with the snapshot of
+   * `perfect` PGREATs judged before `seconds` (each half a second apart), then a frame there.
+   */
+  start(seconds: number, perfect: number): void;
 }
 
 function summaryOf(perfect: number): PlayerSummary {
@@ -56,6 +61,8 @@ function summaryOf(perfect: number): PlayerSummary {
     emptyPoor: 0,
     exScore: perfect * 2,
     score: Math.round((perfect / 12) * 200_000),
+    combo: perfect,
+    maxCombo: perfect,
   };
 }
 
@@ -94,6 +101,26 @@ function createSeekablePlay() {
       frame: (seconds, perfect) => options.ui.onFrame?.(frameAt(seconds, perfect)),
       judge: (combo, channel) =>
         options.ui.onJudgeCombo?.({ judge: 'PERFECT', combo, channel, updatedAtMs: audioContext.currentTime * 1000 }),
+      start: (seconds, perfect) => {
+        options.ui.onCommand?.({
+          kind: 'seek',
+          generation: 1,
+          seconds,
+          snapshot: {
+            summary: summaryOf(perfect),
+            combo: perfect,
+            maxCombo: perfect,
+            judgments: Array.from({ length: perfect }, (_, index) => ({
+              judge: 'PERFECT',
+              combo: index + 1,
+              channel: '11',
+              seconds: (index + 1) / 2,
+              exScore: (index + 1) * 2,
+            })),
+          },
+        });
+        options.ui.onFrame?.(frameAt(seconds, perfect));
+      },
     });
     return promise as ReturnType<typeof runEngineDriver>;
   });
@@ -132,16 +159,26 @@ describe('seekPlay (relaunching the engine)', () => {
     expect(context.runs[1]!.options.engineOptions?.startAtSeconds).toBe(5);
   });
 
-  // D1: the counts follow the target from the relaunched run's frames, the combo only from judge cues, which a run
-  // started partway publishes none of for the notes before its start.
-  test.fails('shows the combo of the notes before the second sought', async () => {
+  // D1: the counts followed the target from the relaunched run's frames, the combo only from judge cues, which a run
+  // started partway publishes none of for the notes before its start. The engine's seek snapshot rebuilds them.
+  test('shows the combo of the notes before the second sought', async () => {
     const context = createSeekablePlay();
     playFirstThreeSeconds(context);
     await context.play.seek(5);
-    context.runs[1]!.frame(5, 9);
+    context.runs[1]!.start(5, 9);
     expect(context.play.score.perfect).toBe(9);
     expect(context.play.playState.combo).toBe(9);
     expect(context.play.playState.maxCombo).toBe(9);
+    expect(context.play.playState.scoreHistory.at(-1)).toEqual({ progress: 0.45, exScore: 18 });
+  });
+
+  test('shows a lower combo after seeking back', async () => {
+    const context = createSeekablePlay();
+    playFirstThreeSeconds(context);
+    await context.play.seek(1);
+    context.runs[1]!.start(1, 2);
+    expect(context.play.playState.combo).toBe(2);
+    expect(context.play.playState.maxCombo).toBe(2);
   });
 
   // D2: the run being stopped can still publish a frame once the next run is anchored; the view's clock then
