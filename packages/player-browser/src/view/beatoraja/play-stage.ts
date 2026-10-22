@@ -184,6 +184,7 @@ export class BeatorajaPlayStage {
     clock: BeatorajaPlayLayerClock | undefined,
     hiSpeed: number,
     lanes: { isLaneLNHeld(channel: string): boolean; isPoorBGAActive(seconds: number): boolean },
+    playback: { tempo?: number; paused?: boolean; started?: boolean } = {},
   ): void {
     const view = this.stage.view;
     view.update(context);
@@ -223,6 +224,7 @@ export class BeatorajaPlayStage {
       Math.min(clock.currentSeconds, clock.reversalSeconds ?? Number.POSITIVE_INFINITY),
       context,
       lanes.isPoorBGAActive(clock.currentSeconds),
+      { ...playback, seconds: clock.currentSeconds },
     );
   }
 
