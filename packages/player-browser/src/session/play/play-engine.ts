@@ -76,6 +76,7 @@ export interface PlayEngineContext
     Pick<
       PlaySessionOptions,
       | 'autoPlay'
+      | 'allowSeek'
       | 'autoScratch1P'
       | 'autoScratch2P'
       | 'chartMD5'
@@ -132,6 +133,7 @@ export interface PlayEngineContext
   sharedEngineChartSettled: boolean;
   engineFrame: Readonly<PlayerUIFramePayload> | undefined;
   seekGeneration: number;
+  practice: boolean;
   readonly seekWaiters: Array<{ seconds: number; resolve: () => void }>;
   bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } };
   chartEnded: boolean;
@@ -770,6 +772,7 @@ function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUICommand): v
 function applyEngineSeek(ctx: PlayEngineContext, command: Extract<PlayerUICommand, { kind: 'seek' }>): void {
   const { snapshot, seconds, generation } = command;
   ctx.seekGeneration = generation;
+  if (ctx.options.autoPlay !== true && ctx.options.replay === undefined) ctx.practice = true;
   ctx.resetPresentation();
   // A play sought back out of its lead-out plays on: the engine settles the chart again.
   if (ctx.chartEndTimeout !== undefined) {

@@ -2,7 +2,7 @@
  * Seeking an AUTO play or replay: a command to the running engine (`{ kind: 'seek' }`, ADR 0016), which moves the play to the
  * chart second sought without starting it again. The engine answers with a `seek` UI command — what it rebuilt there,
  * which the session takes its state from (`applyEngineSeek` in `play-engine.ts`) — and frames of the next seek
- * generation, which the chart's clock runs on from. A preview's seek bar drives it; manual play cannot seek.
+ * generation, which the chart's clock runs on from. Manual seeking requires the host's practice opt-in.
  */
 
 import type { PlayerInputSignalBus } from '@be-music/player-engine/signals';
@@ -10,17 +10,17 @@ import type { PlaySessionOptions } from './play-options.ts';
 
 /** The play's members a seek reads and writes: the play session's members of these names. */
 export interface PlaySeekContext {
-  readonly options: Readonly<Pick<PlaySessionOptions, 'autoPlay' | 'replay'>>;
+  readonly options: Readonly<Pick<PlaySessionOptions, 'autoPlay' | 'replay' | 'allowSeek'>>;
   readonly disposed: boolean;
   readonly exiting: boolean;
   readonly sharedEngineInputSignals: PlayerInputSignalBus | undefined;
   readonly seekWaiters: Array<{ seconds: number; resolve: () => void }>;
 }
 
-/** Whether `play` can seek now: an AUTO play or replay whose engine runs (past its intro, not leaving). */
+/** Whether `play` can seek now: an AUTO play, replay or opted-in practice play whose engine runs (past its intro, not leaving). */
 export function canSeekPlay(play: PlaySeekContext): boolean {
   return (
-    (play.options.autoPlay === true || play.options.replay !== undefined) &&
+    (play.options.autoPlay === true || play.options.replay !== undefined || play.options.allowSeek === 'practice') &&
     !play.disposed &&
     !play.exiting &&
     play.sharedEngineInputSignals !== undefined
