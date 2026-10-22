@@ -29,7 +29,7 @@ import {
 const DETERMINISM_SPEED = 1024;
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const fixtureDir = resolve(rootDir, 'tests/fixtures');
+const fixtureDir = resolve(rootDir, 'test/fixtures');
 const expectedDir = resolve(dirname(fileURLToPath(import.meta.url)), '__expected__');
 const CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson']);
 const RANDOM_VARIANTS: ReadonlyArray<{ id: string; random: () => number }> = [
