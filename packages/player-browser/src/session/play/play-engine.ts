@@ -635,6 +635,8 @@ function applyEngineSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSumm
   // the engine's smaller scorable count) and the FC presentation never fires. Sync `score.total` to the
   // engine's value here so the view always agrees with the authority on the scorable population.
   ctx.score.total = summary.total;
+  if (summary.fullCombo !== undefined) ctx.score.fullCombo = summary.fullCombo;
+  else delete ctx.score.fullCombo;
   ctx.score.perfect = summary.perfect;
   ctx.score.great = summary.great;
   ctx.score.good = summary.good;

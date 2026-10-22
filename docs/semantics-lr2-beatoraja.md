@@ -51,7 +51,7 @@ Top risks, most serious first:
    - TOTAL divides by base notes, but beatoraja counts CN/HCN tails, so recovery is up to 2× too fast.
    - For judgerank > 100 the BAD window is clamped to the unscaled leg.
    - Every mode uses the 7K gauge table.
-   - A full combo ignores empty-POOR combo breaks on 5K/PMS.
+   - Full-combo eligibility after empty POOR on 5K/PMS is fixed in [#588](https://github.com/nulltask/be-music/issues/588).
    - Gauge arithmetic is double, not float.
 
    (B)
@@ -132,7 +132,7 @@ Most fixes below move a rule into the right box. The assist class and LR2 mine c
 | 3   | Failed run re-simulated under other rulesets        | B           | Ranked under all three                                  | Rank failed survival runs only under the played ruleset (or mark them) |
 | 4   | LIGHT ASSIST EASY lamp                              | A, B        | Missing; ASSIST-EASY gauge → ASSIST_EASY                | Add lamp; append-only rank or migration                                |
 | 5   | LR2 FC before gauge check                           | B           | FAILED first (beatoraja-style)                          | Per ruleset                                                            |
-| 6   | FC vs empty-POOR combo break (bea 5K/PMS)           | B           | Ignored                                                 | Per ruleset                                                            |
+| 6   | FC vs empty-POOR combo break (bea 5K/PMS)           | B           | Fixed in #588                                           | Per ruleset                                                            |
 | 7   | beatoraja TOTAL note count (CN/HCN tails)           | B           | Base notes                                              | Per ruleset (bug fix)                                                  |
 | 8   | beatoraja BAD scaling for judgerank > 100           | B           | Clamped to unscaled BAD                                 | Per ruleset (bug fix)                                                  |
 | 9   | beatoraja per-mode gauge tables                     | B, A        | 7K table everywhere                                     | Per mode inside `beatoraja`                                            |
@@ -401,11 +401,11 @@ Already per ruleset: the windows, LR2's re-judge or empty POOR on a reversal, an
 ### Full combo vs empty-POOR combo breaks (beatoraja 5K/PMS)
 
 - **LR2:** FC = `totalnotes == max_combo` ([#L1838](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1838)); an empty POOR never breaks combo.
-- **beatoraja:** FC = `pastNotes == combo` (L868), and on 5K/PMS an empty POOR resets combo.
+- **beatoraja:** FC requires the final running combo to equal the judged-note count ([BMSPlayer](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L818-L834)). Empty POOR resets combo in FIVEKEYS/PMS, while SEVENKEYS/KEYBOARD preserve it ([JudgeProperty](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeProperty.java#L10-L53)).
 - **Kind:** semantic.
-- **be-music today:** `isFullCombo` counts PG+GR+GD ≥ total and ignores `comboBreaksOnEmptyPoor`.
+- **be-music today:** fixed in [#588](https://github.com/nulltask/be-music/issues/588). When empty POOR occurs in a mode that breaks combo on it, the engine and simulator derive `fullCombo` from the final running combo. The shared lamp resolver requires both all notes GOOD or better and this eligibility; results, local records, course aggregation and Leaderboard re-simulation share it. A pre-first-note empty POOR does not prevent a subsequent full combo.
 - **Impact:** B.
-- **Recommendation:** per ruleset: when `comboBreaksOnEmptyPoor` is set, FC also needs max combo = note count.
+- **Recommendation:** keep the final-combo condition per ruleset. A peak combo cannot rule out a later break. Old replay caches without `fullCombo` retain count-based compatibility and should be re-simulated; historical Leaderboard derived lamps and aggregate bests need an explicit offline rebuild from replay inputs. Aggregate-only local records cannot reconstruct input order and improve on the next qualifying play. No production data is changed.
 
 ### EX score, money score, DJ level
 

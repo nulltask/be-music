@@ -130,10 +130,16 @@ function finishClearLamp(play: {
 
 /**
  * Whether a play is a full combo: it has notes and judged every one of them GOOD or better. A play that stopped before
- * its last note is none. Empty POORs never touch a note, so they don't cost a full combo.
+ * its last note is none. A mode that breaks combo on empty POOR also supplies its final combo eligibility.
  */
-export function isFullCombo(score: { total: number; perfect: number; great: number; good: number }): boolean {
-  return score.total > 0 && score.perfect + score.great + score.good >= score.total;
+export function isFullCombo(score: {
+  total: number;
+  perfect: number;
+  great: number;
+  good: number;
+  fullCombo?: boolean;
+}): boolean {
+  return score.fullCombo !== false && score.total > 0 && score.perfect + score.great + score.good >= score.total;
 }
 
 /** What the clear lamp of a single play is read from. */
@@ -145,7 +151,7 @@ export interface PlayClearLampFacts {
   /** The gauge the play ran on, by the ruleset's gauge id (`GROOVE`, `HARD`, `EX-HARD`, …); none counts as NORMAL. */
   gauge?: string;
   /** The judgments over the ruleset's `total` judgment notes (PGREATs are `perfect`). */
-  score: { total: number; perfect: number; great: number; good: number };
+  score: { total: number; perfect: number; great: number; good: number; fullCombo?: boolean };
 }
 
 /**
@@ -178,6 +184,8 @@ export interface CourseClearLampFacts {
   noteCount: number;
   /** The course-wide max combo. */
   maxCombo: number;
+  /** The final combo eligibility, where the mode breaks combo on empty POOR. */
+  fullCombo?: boolean;
   /** The judgments summed over the stages played. */
   judge: { great: number; good: number };
 }
@@ -194,7 +202,7 @@ export function resolveCourseClearLamp(run: CourseClearLampFacts): ClearLamp {
     top: known ? topClearLamp(run.ruleset) : 'FULL_COMBO',
     cleared: run.cleared,
     gaugeLamp: courseGaugeClearLamp(run.gauge, run.ruleset, run.gaugeType),
-    fullCombo: run.noteCount > 0 && run.maxCombo >= run.noteCount,
+    fullCombo: run.fullCombo !== false && run.noteCount > 0 && run.maxCombo >= run.noteCount,
     great: run.judge.great,
     good: run.judge.good,
   });
