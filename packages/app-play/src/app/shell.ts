@@ -117,7 +117,8 @@ export class DemoShell {
   };
 
   /**
-   * Double-click the Pixi canvas to toggle the demo shell into (and out of) fullscreen.
+   * Double-click the stage (the Pixi canvas, or the background of a native screen) to toggle the demo shell into (and
+   * out of) fullscreen.
    * Escape while fullscreen is consumed here so the active scene's Esc handler — quit play,
    * dismiss result, close a select folder — does not fire on the same keypress that leaves
    * fullscreen. Where the browser has Keyboard Lock (Chrome / Edge), Escape is locked while
@@ -126,9 +127,15 @@ export class DemoShell {
    */
   public wireCanvasFullscreen(): void {
     const canvas = this.sceneHost.app.canvas;
+    // The stage, not the canvas: the host takes the canvas out while a native screen is showing.
+    const stage = canvas.parentElement ?? canvas;
+    const isStageBackground = (target: EventTarget | null): boolean =>
+      target === canvas ||
+      target === stage ||
+      (target instanceof HTMLElement && target.dataset.beMusicScreen !== undefined);
     let lastPointerType = 'mouse';
     let autoFullscreenTried = false;
-    canvas.addEventListener('pointerdown', (event) => {
+    stage.addEventListener('pointerdown', (event) => {
       lastPointerType = event.pointerType;
       // A phone gives the stage the whole screen on the first tap: the browser bars eat a large share of a landscape
       // phone's height, and the stage is fitted to that height. The whole page goes fullscreen (not just the shell) so the
@@ -139,7 +146,8 @@ export class DemoShell {
         void enterTouchFullscreen(document.documentElement);
       }
     });
-    canvas.addEventListener('dblclick', (event) => {
+    stage.addEventListener('dblclick', (event) => {
+      if (!isStageBackground(event.target)) return;
       event.preventDefault();
       // Double taps are lane presses during play, not a fullscreen toggle.
       if (lastPointerType !== 'mouse' && this.elements.shell.classList.contains('in-gameplay')) return;
