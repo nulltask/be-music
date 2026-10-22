@@ -183,6 +183,57 @@ describe('judge core', () => {
     });
   });
 
+  test.each([
+    [150, 'perfect', 2],
+    [175, 'great', 1],
+    [225, 'good', 0],
+  ] as const)('LR2 re-judges the next tap at its own offset (%d ms)', (nextMs, kind, exScore) => {
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 1, channel: '11', position: [nextMs, 1000], value: '02' },
+      { measure: 1, channel: '11', position: [nextMs + 5, 1000], value: '03' },
+    ]);
+    const state = createCore(json, 'lr2');
+    const effects = stepJudgeCore(state, press(1.15, '11'));
+    expect(state.summary.bad).toBe(1);
+    expect(state.summary[kind]).toBe(1);
+    expect(state.summary.exScore).toBe(exScore);
+    expect(state.combo).toBe(1);
+    expect(state.config.scorableNotes[2]!.judged).toBe(false);
+    expect(effects.filter((effect) => effect.kind === 'sound' && effect.source === 'manual-note')).toHaveLength(2);
+  });
+
+  test('LR2 follows only the consumed lane and stops at a long-note head', () => {
+    const json = chart(
+      [
+        { measure: 1, channel: '11', position: [0, 1000], value: '01' },
+        { measure: 1, channel: '12', position: [10, 1000], value: '01' },
+        { measure: 1, channel: '51', position: [100, 1000], value: '01' },
+        { measure: 1, channel: '11', position: [450, 1000], value: '01' },
+        { measure: 1, channel: '51', position: [400, 1000], value: '01' },
+      ],
+      (json) => {
+        json.bms.lnType = 1;
+      },
+    );
+    const state = createCore(json, 'lr2');
+    stepJudgeCore(state, press(1.15, '11', '12'));
+    expect(state.summary).toMatchObject({ bad: 1, perfect: 0 });
+    expect(state.config.scorableNotes.filter((note) => note.judged)).toHaveLength(1);
+    expect(state.activeLongNotes.size).toBe(0);
+  });
+
+  test.each(['beatoraja', 'iidx'] as const)('%s does not reuse a BAD press', (ruleset) => {
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 1000], value: '01' },
+      { measure: 1, channel: '11', position: [150, 1000], value: '02' },
+    ]);
+    const state = createCore(json, ruleset);
+    stepJudgeCore(state, press(1.15, '11'));
+    expect(state.config.scorableNotes.filter((note) => note.judged)).toHaveLength(1);
+    expect(state.summary.bad + state.summary.perfect).toBe(1);
+  });
+
   test('a note-less press near a note is an empty POOR that never consumes the note', () => {
     const state = createCore(NOTES);
     const effects = stepJudgeCore(state, press(0.5, '11'));

@@ -498,12 +498,12 @@
             "judge": {
               "pgreat": 7,
               "great": 4,
-              "good": 1,
+              "good": 2,
               "bad": 3,
-              "poor": 2,
+              "poor": 1,
               "emptyPoor": 0
             },
-            "fast": 2,
+            "fast": 3,
             "slow": 3,
             "exScore": 18,
             "noteCount": 17,
@@ -511,10 +511,10 @@
             "djLevel": "C",
             "gauge": {
               "type": "GROOVE",
-              "final": 95.571765,
+              "final": 100,
               "cleared": true
             },
-            "score": 108823
+            "score": 111764
           },
           "beatoraja": {
             "ruleset": "beatoraja/0",
@@ -564,19 +564,19 @@
             "lr2": {
               "total": 17,
               "perfect": 7,
-              "fast": 2,
+              "fast": 3,
               "slow": 3,
               "great": 4,
-              "good": 1,
+              "good": 2,
               "bad": 3,
-              "poor": 2,
+              "poor": 1,
               "emptyPoor": 0,
               "exScore": 18,
-              "score": 108823,
+              "score": 111764,
               "combo": 1,
               "maxCombo": 6,
               "gauge": {
-                "current": 95.571765,
+                "current": 100,
                 "max": 100,
                 "clearThreshold": 80,
                 "initial": 20,
