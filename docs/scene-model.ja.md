@@ -4,7 +4,7 @@
 
 `@be-music/player-scene-model` は、プレイヤーの各画面が何を表示し、どう振る舞うかを、それを描くスキンの種類に関係なく
 保持します（[ADR 0002](./adr/0002-scene-model-package.ja.md)）。標準・LR2・beatoraja の各スキンの種類はこれまで
-一覧のモデルを二つ、プレイ状態の記録を二通り、結果の形を二つ持っていて、そのずれがコース対応で見つかった不具合の
+一覧のモデルを二つ、プレイ状態の記録を二通り、結果の型を二つ持っていて、そのずれがコース対応で見つかった不具合の
 大半の原因でした（[ADR 0001](./adr/0001-skin-families-only-draw.ja.md)）。ここにあるモデルが、各画面のセッションが
 扱う唯一の実装です。スキンの種類は描画だけを受け持ちます。
 
@@ -12,7 +12,7 @@
 flowchart TD
   player["@be-music/player-engine<br/>ルールセット・コース・記録・エンジン"]
   model["@be-music/player-scene-model<br/>ライブラリ・ブラウズ・プレイオプション<br/>プレイ状態・プレイ結果・コース・効果音"]
-  skins["player-skin-sdk・skin-lr2・skin-beatoraja<br/>モデルを各スキンの語彙へ写す"]
+  skins["player-skin-sdk・skin-lr2・skin-beatoraja<br/>モデルを各スキンの表現へ対応付ける"]
   sessions["@be-music/player-browser<br/>シーンセッション・ファミリービュー"]
 
   player --> model
@@ -21,9 +21,9 @@ flowchart TD
   skins --> sessions
 ```
 
-このパッケージは実行環境に依存しません。レンダラーを import せず、DOM や Node のグローバルも時計も読まず、乱数も
+このパッケージは実行環境に依存しません。レンダラーを import せず、DOM や Node のグローバルもクロックも読まず、乱数も
 引きません。時刻と乱数は入力として受け取ります。`pnpm run check` が実行環境に依存しないコードの lint 規則で Node の
-組み込みモジュールと DOM や Node のグローバルを、決定的な判定の lint 規則で時計、タイマー、`Math.random` を禁じ、
+組み込みモジュールと DOM や Node のグローバルを、決定的な判定の lint 規則でクロック、タイマー、`Math.random` を禁じ、
 テストが `@be-music/chart-model`・`@be-music/chart-source`・`@be-music/player-engine` 以外に依存していないことを確かめます。
 
 モデルは、これまでの各シーンの振る舞いから導いています。標準 / LR2 のシーンと beatoraja のシーンで違っていた
@@ -188,9 +188,9 @@ export します。
 
 プレイ状態（`PlayState`）は、どのプレイ画面も読むプレイの状態です。進行中のゲージと EX スコアとそのグラフ、コンボと
 最大コンボ（コースのステージではコース全体のコンボも）、判定タイミングつきのすべての判定と判定ごとの早い / 遅いの数、
-そして見え方（ハイスピードとレーンカバー）です。状態はイミュータブルで、`reducePlayState` にイベントを渡して進めます。
+そして表示設定（ハイスピードとレーンカバー）です。状態はイミュータブルで、`reducePlayState` にイベントを渡して進めます。
 エンジンのフレームと判定、`trigger-poor-bga` コマンド（空 POOR。`playEventFromUICommand` で変換）、最後の集計、
-プレイヤーとホストによるハイスピードとカバーの変更です。時計は読みません。譜面上の時刻とプレイの時計の時刻はイベントと
+プレイヤーとホストによるハイスピードとカバーの変更です。クロックは読みません。譜面上の時刻とプレイのクロックの時刻はイベントと
 一緒に渡します。
 
 ```mermaid
@@ -216,13 +216,13 @@ flowchart LR
 - **コンボ**。エンジンが知らせるコンボで、最長のものを最大コンボとして保ちます。最後の集計がフルコンボ（すべてのノーツが
   GOOD 以上で、BAD も POOR もない）なら、コンボは途切れていないので最大コンボはノーツ数です。コースのステージは、
   引き継いだコースのコンボを進めます（`reduceCourseCombo`）。
-- **判定タイミング**。タイミングのある PERFECT〜POOR の判定を、プレイの時計の時刻とレーンとともに記録します。
+- **判定タイミング**。タイミングのある PERFECT〜POOR の判定を、プレイのクロックの時刻とレーンとともに記録します。
   `recentJudgeTimings` は実時間のメーター用の直近 64 件です（判定の一覧ごとに同じ配列を返します）。判定ごとの
   早い / 遅いの数（beatoraja のもの）も数えます。
 - **ハイスピード**（`HiSpeedState`）。プレイヤー自身の尺度でのハイスピードと、ノーツの流れに使う描画用の値です。描画用は
   プレイヤーの値に譜面の HS-FIX 倍率を掛けたものです（`resolveHSFixMultiplier`。MAXBPM・MINBPM・AVERAGE はその BPM で
   プレイヤーのハイスピードになるように保ち、CONSTANT は当面 AVERAGE と同じ）。プレイヤーのキーはプレイヤーの値を動かし、
-  リプレイが記録した見え方の描画用の値（`hi-speed-drawn`）はそのまま受け取ります。コースの `no_speed` はプレイヤーの
+  リプレイが記録した表示設定の描画用の値（`hi-speed-drawn`）はそのまま受け取ります。コースの `no_speed` はプレイヤーの
   変更を止めますが、ホストの設定と、リプレイが記録したハイスピードは、リプレイが記録したカバーと同じく効きます。
   beatoraja の `no_speed` はハイスピードとカバーをいっしょに固定する（`LaneRenderer`）ので、リプレイはどちらも
   プレイしたときのとおりに見せます。
@@ -232,11 +232,11 @@ flowchart LR
   そのまま設定する（リプレイ）ができ、片方のサイドにもすべてのサイドにも効きます。ハイスピードと同じく `no_speed` はプレイヤーの変更を止めますが、
   そのまま設定するカバー（`cover-set`。リプレイが記録したカバーやホストの設定）は効きます。
   `resolveLaneCover` は描かれるカバーをレーンに対する割合で返し、HIDDEN+ は LIFT より上の部分に対する割合にします。
-- **見え方の設定**。`captureReplayView` はリプレイの単位での見え方です。シーンのハイスピードの尺度での描画用の
+- **表示設定**。`captureReplayView` はリプレイの単位での表示設定です。シーンのハイスピードの尺度での描画用の
   ハイスピード、HS-FIX、サイドごとのカバー、メイン BPM での表示時間（`resolveWhiteNumber`。指定した拍数の長さの
   レーンに対する白数字で、beatoraja は 4 拍。beatoraja と同じく LIFT は差し引きません）です。
   `resolveHiSpeedForWhiteNumber` はその逆で、記録された表示時間になるハイスピードを返します。ハイスピードの尺度が
-  違うリプレイに使います。`ReplayViewCursor` はリプレイするログの見え方を再生位置に沿ってたどります。
+  違うリプレイに使います。`ReplayViewCursor` はリプレイするログの表示設定を再生位置に沿ってたどります。
 
 ### 振る舞いの選択
 
@@ -260,7 +260,7 @@ flowchart LR
 
 ## プレイ結果
 
-`PlayResult` は、どの結果画面も読む唯一の結果の形です。単独のプレイ、コースのステージ、EXPERT / GRADE のコース全体、
+`PlayResult` は、どの結果画面も読む唯一の結果の型です。単独のプレイ、コースのステージ、EXPERT / GRADE のコース全体、
 NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）のいずれも表します。スコアとゲージの判定、唯一の
 クリアランプの規則によるランプ、グラフ、判定タイミングと早い / 遅いの数、リプレイ、ステージやコースが属するコース
 （`course`、コースの表示用モデル）を持ちます。`@be-music/player-skin-sdk` はこれを `BeMusicResultData` として export します。
@@ -320,7 +320,7 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 | `SceneCourseInfo`・`resolveSceneCourseInfo`                                       | `player-browser` の `scene/course-info.ts`       | `CourseView`・`resolveCourseView`（旧名は削除）                                        |
 | `PixiPlayOptions` などの `Pixi*` のプレイオプションの型・`PixiGameplayResultData` | `player-browser` の scene                        | `PlayOptions` など・`PlayResult`（旧名は削除）                                         |
 | `CourseComboState`・`createCourseCombo`・`advanceCourseCombo`                     | `player-browser` の `scene/core/course-combo.ts` | 同じ名前。ただし `advanceCourseCombo` は純粋な `reduceCourseCombo` に置き換え          |
-| `ReplayViewCursor`・`resolveBeatorajaReplayView`                                  | `player-browser` の `scene/replay-view.ts`       | `ReplayViewCursor`。どのプレイのビューも `captureReplayView` で見え方を求める          |
+| `ReplayViewCursor`・`resolveBeatorajaReplayView`                                  | `player-browser` の `scene/replay-view.ts`       | `ReplayViewCursor`。どのプレイのビューも `captureReplayView` で表示設定を求める        |
 | `buildCourseResultData`・`joinCourseStageHistories`・`resolveResultPresentation`  | `app-play` の `course-result.ts`                 | `playResultFromCourseRun` など（旧名で再 export）                                      |
 | `resolveResultViewJingles`                                                        | `app-play` の `result-jingles.ts`                | そのまま。`resolveResultJingles` の上に実装                                            |
 
@@ -328,4 +328,4 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 `browseSystemSound`）で一覧をたどります。どのプレイ画面も `PlayState` を一つ持ち、リザルトをそこから読みます
 （`playResultFromPlayState`）。そのため上のプレイ状態の選択に従います。フルコンボの最大コンボはどのプレイでもノーツ数になり、
 リザルトは判定ごとの早い / 遅いの数を持ち、リプレイの表示時間は白数字（`captureReplayView`）です。Web ランタイムの画面は、どれもこれらのモデルの上のシーンセッションです。スキンのパッケージはモデルを各スキンの
-語彙に写します。beatoraja の番号へは `@be-music/skin-beatoraja/scene` が写します（[beatoraja-skin.ja.md](./beatoraja-skin.ja.md#scene-mapping)）。
+表現に対応付けます。beatoraja の番号へは `@be-music/skin-beatoraja/scene` が対応付けます（[beatoraja-skin.ja.md](./beatoraja-skin.ja.md#scene-mapping)）。

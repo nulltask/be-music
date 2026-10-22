@@ -6,7 +6,7 @@ be-music のテストスイートが共有する譜面・音声フィクスチ�
 かつ必ずどこかのテストから読まれます。どのテストからも読まれないフィクスチャは誰にも気づかれないまま古くなり、
 実際にこのディレクトリで見つかった不具合はすべてそれが原因でした。
 
-コーパス全体の番人は [`packages/chart-parser/src/fixtures.test.ts`](../../packages/chart-parser/src/fixtures.test.ts) です。
+コーパス全体のガードは [`packages/chart-parser/src/fixtures.test.ts`](../../packages/chart-parser/src/fixtures.test.ts) です。
 このディレクトリを走査してすべての譜面をディスクから読み、制御フロー解決後にプレイ可能なイベントが残ることを要求します。
 譜面を追加すれば自動的に対象に入り、壊せばこのテストが落ちます。
 
