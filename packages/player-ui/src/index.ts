@@ -21,6 +21,12 @@ export { BeMusicJudgeLineElement } from './components/judge-line.ts';
 export { BeMusicBombsElement } from './components/bombs.ts';
 export { BeMusicJudgmentDisplayElement } from './components/judgment-display.ts';
 export { BeMusicPlayfieldElement } from './components/playfield.ts';
+export { BeMusicPlaybackControlsElement } from './components/playback-controls.ts';
+export { BeMusicPreviewHUDElement } from './components/preview-hud.ts';
+export { BeMusicPreviewSelectElement } from './components/preview-select.ts';
+export { BeMusicPreviewStartElement } from './components/preview-start.ts';
+export { formatPlaybackTime, resolveSeekTarget } from './playback.ts';
+export { resolveGameplayPanels, type BeMusicGameplayPanels } from './gameplay-data.ts';
 export { BeMusicPlayfieldCanvasElement } from './playfield/canvas-element.ts';
 export { resolvePlayfieldParts } from './playfield/parts.ts';
 export { paintPlayfieldParts, type BeMusicPlayfieldPaintContext } from './playfield/paint.ts';
@@ -32,5 +38,6 @@ export type {
   BeMusicDOMDecideFrame,
   BeMusicGameplayFrame,
   BeMusicRect,
+  LibraryChart,
   LibraryEntry,
 } from '@be-music/player-skin-sdk';

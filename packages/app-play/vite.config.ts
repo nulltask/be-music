@@ -413,6 +413,15 @@ export default defineConfig({
       resolve(repositoryDir, 'packages/player-browser/package.json'),
     ]),
   ],
+  // The player, and the preview the embed page (`/embed/?track=…`) shows inside an iframe.
+  build: {
+    rolldownOptions: {
+      input: {
+        main: resolve(import.meta.dirname, 'index.html'),
+        embed: resolve(import.meta.dirname, 'embed/index.html'),
+      },
+    },
+  },
   define: {
     __BE_MUSIC_BUILD_TIME__: JSON.stringify(buildInfo.builtAt),
     __BE_MUSIC_BUILD_REVISION__: JSON.stringify(buildInfo.revision),

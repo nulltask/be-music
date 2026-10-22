@@ -128,7 +128,7 @@ export class DemoShell {
   public wireCanvasFullscreen(): void {
     const canvas = this.sceneHost.app.canvas;
     // The stage, not the canvas: the host takes the canvas out while a native screen is showing.
-    const stage = canvas.parentElement ?? canvas;
+    const stage = this.sceneHost.container;
     const isStageBackground = (target: EventTarget | null): boolean =>
       target === canvas ||
       target === stage ||

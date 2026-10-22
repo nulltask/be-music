@@ -816,6 +816,38 @@ The browser player consumes `chart-parser`, `chart-model`, `player-engine`, `pla
 When browser behavior diverges from the terminal player, prefer moving pure path, timing, scroll, lookup, or event-mapping helpers into shared packages and covering them with package-local tests.
 PixiJS scene wiring can remain in `player-browser` when the behavior depends on browser rendering or WebAudio resources.
 
+## Embedded preview
+
+`/embed/?track=<URL>` (`play.be-music.app`, and `play.preview.be-music.app` for the preview environment) previews a chart archive inside an iframe. It is a second entry of `@be-music/app-play` (`embed/index.html`, `src/embed/`), served by the same Worker; the Worker starts no automatic sign-in for an iframe. The archive is fetched like `?music=`: directly from this origin, through `/__url-load-proxy` from another https origin.
+
+```html
+<iframe
+  src="https://play.be-music.app/embed/?track=https%3A%2F%2Fexample.com%2Fsong.zip"
+  width="854"
+  height="480"
+  allow="autoplay; fullscreen"
+></iframe>
+```
+
+The preview plays in AUTO; it judges no input and records no replay.
+
+```mermaid
+stateDiagram-v2
+  [*] --> Loading
+  Loading --> List: several charts
+  Loading --> Ready: one chart
+  List --> Playing: pick a chart
+  Ready --> Playing: Play
+  Playing --> List: ends, several charts
+  Playing --> Ready: ends, one chart (Replay)
+```
+
+- **List:** a track with several charts lists them (`be-music-preview-select`); picking one plays it at once.
+- **Ready:** a single chart shows its play screen behind a play button (`be-music-preview-start`), which becomes Replay after the play. There is no result screen.
+- **Playing:** the preview skin (`src/embed/preview-skin.ts`) lays the lanes in the left pane and the BGA in the right, with the chart's facts, score, combo, gauge and judgments under it (`be-music-preview-hud`), and video-player controls along the bottom (`be-music-playback-controls`): play / pause, a seek bar, the time, mute and volume, and full screen. Space plays or pauses, ← / → seek 5 seconds, M mutes and F toggles full screen.
+
+Seeking restarts the engine at the chart second sought (`PlayScene.seek`, `PlayerOptions.startAtSeconds`), with the decoded samples, the prepared notes and the BGA kept. The notes before it count as AUTO judged them, sounds still ringing there start partway (`AudioSession.triggerEventAt`), and a paused play resumes. The gauge and score graphs start again from the point sought. See [ADR 0015](./adr/0015-preview-seek.md).
+
 ## Native DOM skins and standalone controllers
 
 Choose **Native (DOM + Canvas)** under Debug Menu → Skin & display → Built-in → Built-in skin. Native uses HTML for the collection, search, play options, loading card, score HUD and results, including a meter and an SVG gauge history. The BGA, lanes, notes, lane covers, judge line, bombs and judgment words are separate components, each drawing on a canvas the size of its part of the stage. While a Native screen is showing, the host takes its stage-sized canvas out of the page, and touch lanes follow the fingers on the native screen instead. Choose Synesthesia or Plain to return to full Canvas; the choice is remembered. Native inputs keep browser focus, scrolling and IME behavior. The `/` shortcut focuses the native search input.
@@ -824,7 +856,7 @@ Native uses the space beside the lanes for its landscape HUD and uses a compact 
 
 The gameplay dashboard shows EX score, rank and score rate, combo, BPM, time and progress, plus judgment counts with early/late splits, BP (including empty POOR), the latest timing offset, gauge history and recent timing graphs. It also lists the current hi-speed and drawn speed, HS-FIX, green number, visible time, BPM range, lane covers, random and gauge choices, auto scratch, DP flip, BGA mode, chart metadata and course stage. Landscape uses the space beside the lanes and opens the information cards by default. In portrait, **All play information** opens the detailed cards over the playfield without shortening it. Live DOM updates are limited to roughly 12 updates per second; graphs sample at most 96 gauge points and 32 timed hits.
 
-A `BeMusicSkin` declares optional `dom.select`, `dom.decide`, `dom.result` and `dom.gameplay` factories (`player-skin-sdk/src/dom.ts`). Each receives an `HTMLElement` and actions that reach the existing session, and returns `update(frame)` and `dispose()`. The first three replace Canvas drawing; gameplay supplements the Canvas playfield, or draws it through `drawPlayfield(frame)` when the skin sets `gameplay.drawsOnDOM` (the host then creates no gameplay surface). A scene whose screens are all DOM reports `drawsOnCanvas: false`, and `PixiSceneHost` takes its canvas out of the page until a scene that draws on it becomes active. Frames carry skin settings and effect preferences. A select screen can return `focusSearch()` to own the search input and suppress the host's overlay. Factories create DOM only when attached; skin modules remain safe to import before a document exists. Detaching preserves the mount and its local state for re-entry; disposing releases listeners, framework roots and resources. Native uses shadow DOM for style isolation. `PixiSceneHost.mount` accepts `domContainer` when a host wants to place native screens elsewhere.
+A `BeMusicSkin` declares optional `dom.select`, `dom.decide`, `dom.result` and `dom.gameplay` factories (`player-skin-sdk/src/dom.ts`). Each receives an `HTMLElement` and actions that reach the existing session, and returns `update(frame)` and `dispose()`. The first three replace Canvas drawing; gameplay supplements the Canvas playfield, or draws it through `drawPlayfield(frame)` when the skin sets `gameplay.drawsOnDOM` (the host then creates no gameplay surface). A scene whose screens are all DOM reports `drawsOnCanvas: false`: `PixiSceneHost` keeps its canvas in the page only while the active scene draws on it, so listen on `PixiSceneHost.container` for input meant for the whole stage. Frames carry skin settings and effect preferences. A select screen can return `focusSearch()` to own the search input and suppress the host's overlay. Factories create DOM only when attached; skin modules remain safe to import before a document exists. Detaching preserves the mount and its local state for re-entry; disposing releases listeners, framework roots and resources. Native uses shadow DOM for style isolation. `PixiSceneHost.mount` accepts `domContainer` when a host wants to place native screens elsewhere.
 
 `@be-music/player-browser/controller` exposes `SceneController` and `createSelectController` without importing Pixi at runtime. A controller has explicit `enter(nowMs)`, `advance(nowMs)`, `dispatch(intent)`, `exit()` and `dispose()` operations. One owner advances it; `getSnapshot()` and subscribers share that frame, including its transient events. Call `createStore(selector, equals?)` for a stable selected snapshot: its `getSnapshot()` returns `undefined` before the first advance and its `subscribe(listener)` returns an unsubscribe function. Removing a subscription does not end the session. React or Vue adapters can bind these stores to their own component lifecycle while the Canvas renderer keeps its frame loop.
 

@@ -153,6 +153,25 @@ describe('createWebAudioSession', () => {
     expect(trackedBufferSources[1]!.connectedTo).toBe(bgmMixer);
   });
 
+  test('starts a sound that started earlier partway, and skips one that already ended', () => {
+    const { audioContext, audioBus, trackedBufferSources } = createMocks();
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples: new Map([
+        ['bgm.wav', makeMockAudioBuffer(10)],
+        ['kick.wav', makeMockAudioBuffer(0.5)],
+      ]),
+      wavCmdVolumeMultipliers: new Map(),
+    });
+    session.start();
+    session.triggerEventAt?.(mkEvent('01', '03'), 4);
+    session.triggerEventAt?.(mkEvent('11', '01'), 2);
+    expect(trackedBufferSources).toHaveLength(1);
+    expect(trackedBufferSources[0]!.node.start).toHaveBeenCalledWith(0, 4);
+  });
+
   test("plays a stitched NONSTOP stage's samples at its rate and its background through its fade", () => {
     const { audioContext, audioBus, trackedBufferSources, keyMixer } = createMocks();
     const stageFade = { connect: vi.fn() } as unknown as GainNode;

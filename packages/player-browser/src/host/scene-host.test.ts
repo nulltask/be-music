@@ -94,7 +94,9 @@ describe('PixiSceneHost', () => {
       await host.mount(container);
 
       expect(init).toHaveBeenCalledTimes(1);
-      expect(container.appendChild).toHaveBeenCalledWith(canvas);
+      // The canvas goes in with the first scene that draws on it.
+      expect(container.appendChild).not.toHaveBeenCalled();
+      expect(host.container).toBe(container);
     } finally {
       info.mockRestore();
       init.mockRestore();
@@ -124,7 +126,7 @@ describe('PixiSceneHost', () => {
 });
 
 describe('PixiSceneHost scene lifecycle', () => {
-  it('takes the canvas out of the page while a scene draws only on DOM, and puts it back in its place', async () => {
+  it('keeps the canvas in the page only while the active scene draws on it, putting it back in its place', async () => {
     const host = new PixiSceneHost();
     const children: object[] = [];
     const parent = {
@@ -155,9 +157,8 @@ describe('PixiSceneHost scene lifecycle', () => {
     expect(placed()).toEqual(['dom']);
     await host.setScene(makeScene());
     expect(placed()).toEqual(['canvas', 'dom']);
-    await host.setScene(makeScene({ drawsOnCanvas: false }));
     await host.setScene(undefined);
-    expect(placed()).toEqual(['canvas', 'dom']);
+    expect(placed()).toEqual(['dom']);
   });
 
   it('exits the previous scene and takes its root off the stage before the next one enters and goes on', async () => {

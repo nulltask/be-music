@@ -16,6 +16,10 @@ import {
   BeMusicResultScreenElement,
   BeMusicDecideScreenElement,
   BeMusicBGAElement,
+  BeMusicPlaybackControlsElement,
+  BeMusicPreviewHUDElement,
+  BeMusicPreviewSelectElement,
+  BeMusicPreviewStartElement,
   BeMusicLanesElement,
   BeMusicNotesElement,
   BeMusicLaneCoversElement,
@@ -210,3 +214,40 @@ export const BeMusicPlayfield: ReactWebComponent<BeMusicPlayfieldElement, typeof
   eventsPlayfield,
 );
 export type BeMusicPlayfieldProps = React.ComponentProps<typeof BeMusicPlayfield>;
+
+const eventsPlaybackControls = {
+  onPauseRequest: 'pause-request' as EventName<BeMusicUIEvent<'pause-request'>>,
+  onSeekRequest: 'seek-request' as EventName<BeMusicUIEvent<'seek-request'>>,
+  onVolumeChange: 'volume-change' as EventName<BeMusicUIEvent<'volume-change'>>,
+  onFullscreenRequest: 'fullscreen-request' as EventName<BeMusicUIEvent<'fullscreen-request'>>,
+};
+export const BeMusicPlaybackControls: ReactWebComponent<BeMusicPlaybackControlsElement, typeof eventsPlaybackControls> =
+  wrap('be-music-playback-controls', BeMusicPlaybackControlsElement, eventsPlaybackControls);
+export type BeMusicPlaybackControlsProps = React.ComponentProps<typeof BeMusicPlaybackControls>;
+
+export const BeMusicPreviewHUD: ReactWebComponent<BeMusicPreviewHUDElement, typeof eventsPlaybackControls> = wrap(
+  'be-music-preview-hud',
+  BeMusicPreviewHUDElement,
+  eventsPlaybackControls,
+);
+export type BeMusicPreviewHUDProps = React.ComponentProps<typeof BeMusicPreviewHUD>;
+
+const eventsPreviewSelect = {
+  onActivateRequest: 'activate-request' as EventName<BeMusicUIEvent<'activate-request'>>,
+};
+export const BeMusicPreviewSelect: ReactWebComponent<BeMusicPreviewSelectElement, typeof eventsPreviewSelect> = wrap(
+  'be-music-preview-select',
+  BeMusicPreviewSelectElement,
+  eventsPreviewSelect,
+);
+export type BeMusicPreviewSelectProps = React.ComponentProps<typeof BeMusicPreviewSelect>;
+
+const eventsPreviewStart = {
+  onPlayRequest: 'play-request' as EventName<BeMusicUIEvent<'play-request'>>,
+};
+export const BeMusicPreviewStart: ReactWebComponent<BeMusicPreviewStartElement, typeof eventsPreviewStart> = wrap(
+  'be-music-preview-start',
+  BeMusicPreviewStartElement,
+  eventsPreviewStart,
+);
+export type BeMusicPreviewStartProps = React.ComponentProps<typeof BeMusicPreviewStart>;
