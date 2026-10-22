@@ -12,7 +12,6 @@
  */
 
 import { mirrorBeatAtTempoReversal } from '@be-music/chart-model';
-import { createTempoClock, type TempoClock } from '@be-music/player-engine';
 import { nonstopBPMAt } from '@be-music/player-engine/course';
 import { DEFAULT_REPLAY_PLAYBACK_OPTIONS, type BeMusicReplay } from '@be-music/player-engine/replay';
 import type { GaugeType } from '@be-music/player-engine/ruleset';
@@ -49,6 +48,7 @@ import type { PlayViewTiming } from '../../view/types.ts';
 import { prepareChart } from './play-chart.ts';
 import { beginExitSequence, getResultData } from './play-ending.ts';
 import { interruptSharedEngine, launchSharedEngine, stopSharedEngine } from './play-engine.ts';
+import { chartSecondsFromFrame } from './play-clock.ts';
 import { seekPlay } from './play-seek.ts';
 import {
   attachPlayInput,
@@ -85,11 +85,6 @@ export class PlaySession extends PlaySessionState {
   tempo: number;
   /** The tempo a replay plays at and the changes it follows (`resolveReplayTempo`). */
   readonly replayTempo: ReplayTempo | undefined;
-  /**
-   * The play tempo over the view's clock (seconds since `audioContextStartTime`, in ms): re-anchored at the chart second
-   * of every change the engine reports, so the view's chart time stays the engine's.
-   */
-  tempoClock: TempoClock;
   /** The live tempo changes asked for ({@link setTempo}), pushed to the engine (held until its input bus is up). */
   readonly liveTempo: LiveTempo;
   readonly options: PlaySessionOptions;
@@ -116,7 +111,6 @@ export class PlaySession extends PlaySessionState {
           })
         : undefined;
     this.tempo = this.replayTempo?.tempo ?? clampPlayTempo(options.tempo);
-    this.tempoClock = createTempoClock(this.tempo);
     // Only in pitch mode (kept pitch stretched the samples to the tempo they loaded at), and not for a replay.
     this.liveTempo = new LiveTempo(
       this.tempo,
@@ -255,12 +249,10 @@ export class PlaySession extends PlaySessionState {
       // `startTime` is consumed by `isIntroPlaying` and `currentSeconds`, both of which work in raw wall-clock units
       // (with `currentSeconds` subtracting `pauseTotal` explicitly), so it MUST stay on `performance.now()`.
       this.startTime = performance.now();
-      if (this.audioContext) {
-        this.audioContextStartTime = this.audioContext.currentTime;
-        this.nonstopMixer?.schedule(this.audioContextStartTime);
-      }
+      // The chart's clock until the engine's first frame; the engine's audio session schedules a NONSTOP chart's fades.
+      if (this.audioContext) this.audioContextStartTime = this.audioContext.currentTime;
       // Hand chart playback over to `@be-music/player-engine`'s engine. Fires only after the play-start gate, so the engine's
-      // chart-time t=0 lines up with the `audioContextStartTime` anchor — no double lead-in.
+      // chart-time t=0 lines up with the gate — no double lead-in.
       launchSharedEngine(this);
     });
     this.host?.app.canvas.focus();
@@ -292,7 +284,10 @@ export class PlaySession extends PlaySessionState {
     togglePause(this);
   }
 
-  /** Moves an AUTO play to chart second `seconds` and plays on from there (`seekPlay`); other plays ignore it. */
+  /**
+   * Moves an AUTO play to chart second `seconds` (`seekPlay`): the engine seeks the running play, and the promise resolves
+   * once it has (its frames are of the new seek generation). A paused play stays paused there. Other plays ignore it.
+   */
   public seek(seconds: number): Promise<void> {
     return seekPlay(this, seconds);
   }
@@ -777,21 +772,24 @@ export class PlaySession extends PlaySessionState {
   }
 
   /**
-   * Chart-time seconds since the first beat, derived from the audio context clock so it stays *bit-exact* with
-   * scheduled `node.start()` times across pause / resume cycles. The wall-clock approach we used previously
-   * (`performance.now() - pauseTotal`) drifted out of sync with the audio context on every pause because `suspend()`
-   * and `resume()` are asynchronous: the audio clock paused a few ms after we recorded `pauseTime` and resumed a few ms
-   * before we credited `pauseTotal`, so each toggle slid the two clocks apart by ~10–30 ms.
-   *
-   * Anchoring everything on `audioContext.currentTime` removes that accumulating drift entirely. For environments where
-   * the audio context isn't ready yet we fall back to the wall-clock model.
+   * The chart second the play is at now. The engine owns chart time: each of its frames carries the second it shows and
+   * the audio-clock reading that second holds at (`chartSecondsFromFrame`), so the playfield runs on from the latest
+   * frame on `audioContext.currentTime` — bit-exact with the scheduled sounds, through pauses, tempo changes and seeks.
+   * Before the engine's first frame, the chart runs from the play-start gate at the play's tempo (audio clock, else wall
+   * clock while the audio context is not up).
    */
   currentSeconds(): number {
-    if (this.audioContext && this.audioContextStartTime > 0) {
-      return this.tempoClock.chartSecondsAt((this.audioContext.currentTime - this.audioContextStartTime) * 1000);
+    const context = this.audioContext;
+    const frame = this.engineFrame;
+    if (context !== undefined && frame !== undefined) {
+      const seconds = chartSecondsFromFrame(frame, context.currentTime);
+      if (seconds !== undefined) return seconds;
+    }
+    if (context !== undefined && this.audioContextStartTime > 0) {
+      return (context.currentTime - this.audioContextStartTime) * this.tempo;
     }
     const nowMs = this.paused ? this.pauseTime : performance.now();
-    return this.tempoClock.chartSecondsAt(nowMs - this.startTime - this.pauseTotal);
+    return ((nowMs - this.startTime - this.pauseTotal) / 1000) * this.tempo;
   }
 
   /** The play tempo in force: the one the play started at, or the last change. */
@@ -821,8 +819,7 @@ export class PlaySession extends PlaySessionState {
    */
   resolveChartMs(): number | undefined {
     if (this.startTime === 0) return undefined;
-    if (Number.isFinite(this.startTime))
-      return this.tempoClock.chartSecondsAt(performance.now() - this.startTime) * 1000;
+    if (Number.isFinite(this.startTime)) return this.currentSeconds() * 1000;
     return Math.min(-1, this.playClock() - this.sceneStartTime - this.scheduledIntroMs);
   }
 

@@ -188,6 +188,38 @@ describe('LR2PlayTimers', () => {
     expect(timers.isActive(hold)).toBe(false);
   });
 
+  test("a seek stops the judgments' and the lanes' timers and their deferred work, and keeps the scene's", () => {
+    vi.useFakeTimers();
+    const { timers, state } = createPlay();
+    timers.handle({ kind: 'scene-start', atMs: 0 }, undefined);
+    timers.handle({ kind: 'play-start', atMs: 10 }, undefined);
+    timers.handle({ kind: 'judge', side: '1P', judge: 'PERFECT', atMs: 20 }, undefined);
+    timers.handle({ kind: 'bomb', channel: '12', atMs: 20 }, undefined);
+    timers.handle({ kind: 'full-combo', atMs: 20 }, undefined);
+    timers.handle({ kind: 'gauge', previous: 98, next: 100, atMs: 20 }, undefined);
+    state.now = 30;
+    timers.handle({ kind: 'lane-hold', channel: '13', untilBeat: 8 }, undefined);
+    timers.handle({ kind: 'lane', channel: '13', action: 'release' }, undefined);
+    state.now = 40;
+    timers.handle({ kind: 'seek', seconds: 5, gauge: 80, judgments: [], atMs: 40 }, undefined);
+    for (const timer of [
+      LR2_TIMER.BOMB_1P + 2,
+      LR2_TIMER.FULL_COMBO_1P,
+      LR2_TIMER.GAUGE_UP_1P,
+      LR2_TIMER.GAUGE_MAX_1P,
+    ]) {
+      expect(timers.isActive(timer)).toBe(false);
+    }
+    // The judge timer counts from the scene start again, as before the first judgment.
+    expect(timers.startedAt(LR2_TIMER.JUDGE_1P)).toBeUndefined();
+    expect(timers.releaseFadeAlpha(LR2_TIMER.LN_HOLD_1P + 3)).toBeUndefined();
+    expect(timers.startedAt(LR2_TIMER.SCENE_START)).toBe(0);
+    expect(timers.startedAt(LR2_TIMER.PLAY)).toBe(10);
+    // A full gauge there runs its timer again from the seek.
+    timers.handle({ kind: 'seek', seconds: 9, gauge: 100, judgments: [], atMs: 50 }, undefined);
+    expect(timers.startedAt(LR2_TIMER.GAUGE_MAX_1P)).toBe(50);
+  });
+
   test("reads the play's key beams on the key-on bank, and retires a faded beam unless its key is still down", () => {
     const { timers, play, state } = createPlay();
     const keyOn = LR2_TIMER.KEY_ON_1P + 1;

@@ -40,6 +40,7 @@ import {
   createBeatorajaJudgeStateGraph,
   resolveBeatorajaCoverOps,
   resolveBeatorajaFrameTimers,
+  resolveBeatorajaSeekTimers,
   resolveBeatorajaGaugeState,
   resolveBeatorajaJudgeEffect,
   resolveBeatorajaJudgeStateMove,
@@ -451,8 +452,54 @@ export class BeatorajaPlayBridge {
       case 'judge':
         this.applyJudge(event);
         return;
+      case 'seek':
+        this.applySeek(event);
+        return;
       default:
         return;
+    }
+  }
+
+  /**
+   * The play sought: every timer but the scene's stops and the once-per-play ones may start again
+   * ({@link resolveBeatorajaSeekTimers}); the plates' judgment and FAST / SLOW ops, the lanes' latest judgments, the held
+   * long notes, the flashes still to end and the miss window go; and the judge-state graph is rebuilt from the
+   * judgments before the second sought. The long notes held across it come next, as their own events.
+   */
+  private applySeek(event: Extract<PlayViewEvent, { kind: 'seek' }>): void {
+    const engine = this.engine;
+    const changes = resolveBeatorajaSeekTimers({
+      started: [...this.timerStartedAt.keys()],
+      beat: engine?.currentBeat ?? Number.NaN,
+      ...(engine?.summary.gauge !== undefined ? { gauge: engine.summary.gauge } : {}),
+      lastNoteBeats: this.lastNoteBeats,
+    });
+    for (const id of changes.stop) this.firedOnce.delete(id);
+    this.applyTimers(changes);
+    if (engine !== undefined && Number.isFinite(engine.currentBeat)) this.lastFrameBeat = engine.currentBeat;
+    for (const plate of [1, 2, 3] as const) {
+      const ops = this.plates[plate];
+      if (ops.lastJudgeOp !== undefined) this.activeOps.delete(ops.lastJudgeOp);
+      if (ops.lastFastSlowOp !== undefined) this.activeOps.delete(ops.lastFastSlowOp);
+      ops.lastJudgeOp = undefined;
+      ops.lastFastSlowOp = undefined;
+      this.lastJudgeOnLane[plate] = createEmptyLaneJudgeRing();
+    }
+    this.lnHoldHeldByChannel.clear();
+    this.lnTailVerdictLatch.clear();
+    this.pressedChannels.clear();
+    this.pending = [];
+    this.lastMissSeconds = undefined;
+    this.initJudgeState();
+    const graph = this.judgeState;
+    if (graph === undefined) return;
+    for (const judgment of event.judgments) {
+      const noteMs = judgment.seconds * 1000 - (judgment.deltaMs ?? 0);
+      const move = resolveBeatorajaJudgeStateMove(graph, judgment.judge, noteMs);
+      if (move === undefined) continue;
+      const bucket = graph.buckets[move.bucket]!;
+      bucket[0] = bucket[0]! - 1;
+      bucket[move.slot] = bucket[move.slot]! + 1;
     }
   }
 

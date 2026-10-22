@@ -30,7 +30,7 @@ SDK 自体は描画を行わず、描画フレームワークも import しま�
 
 ゲームプレイ画面はプレイフィールドも描画できます。`gameplay.drawsOnDOM` を設定し、`dom.gameplay` から `drawPlayfield(frame)` を返すと、ホストは毎フレーム一度、完全な `BeMusicGameplayFrame`（レーン・ノート・ロングノート・地雷・小節線・ボム）を渡してこれを呼び、ゲームプレイ用の Canvas surface を作りません。`gameplay.draw` は DOM 画面を持たないホスト向けの代替として残ります。このときプレイヤーが描くものは表示されない（ブラウザープレイヤーは canvas をページから外す）ため、このスキンは `drawsBGA`・`drawsMines`・`drawsLaneCover`・`drawsMeasureLines` も設定します。Native はこの方法で `@be-music/player-ui` の `be-music-playfield` を HUD の下に配置します。
 
-ゲームプレイの操作は `pause()`・`restart()`・`quit()`・`seek(seconds)` です。`seek` は AUTO プレイを譜面の指定した秒数へ動かし、そこから再生を続けます。frame が `seekable` でないときは何もしません。frame の `layout` は、ステージとレーンの範囲に加えて BGA の範囲（`bga`）も持ちます。埋め込みのプレビュー用スキン（`packages/app-play/src/embed/preview-skin.ts`）は、これらを `be-music-preview-hud` と組み合わせて使います。
+ゲームプレイの操作は `pause()`・`restart()`・`quit()`・`seek(seconds)` です。`seek` は AUTO プレイを譜面の指定した秒数へ動かし、そこから再生を続けます（一時停止中のプレイは一時停止したままです）。frame が `seekable` でないときは何もしません。frame の `layout` は、ステージとレーンの範囲に加えて BGA の範囲（`bga`）も持ちます。埋め込みのプレビュー用スキン（`packages/app-play/src/embed/preview-skin.ts`）は、これらを `be-music-preview-hud` と組み合わせて使います。
 
 DOM は factory が呼ばれた時点で作ります。`update` は既存の要素を更新してフォーカスや IME の状態を保ち、`dispose` はイベントと要素を解放します。画面を一時的に離れるとマウントは保持され、再入場で使われます。独自の React / Vue 画面をマウントする場合も、同じ契約からフレームを渡し、`dispose` でフレームワークの root を解放します。
 

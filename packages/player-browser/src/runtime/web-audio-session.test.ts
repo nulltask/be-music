@@ -279,6 +279,95 @@ describe('createWebAudioSession', () => {
     expect(trackedBufferSources[1]!.node.playbackRate.value).toBe(1);
   });
 
+  test('starts a sound partway at the time it has played: with kept pitch the samples were stretched to the tempo', () => {
+    const decodedSamples = new Map([['bgm.wav', makeMockAudioBuffer(30)]]);
+    // Pitch: the samples play at the tempo, so 4 chart seconds are 4 s of the sample.
+    const pitch = createMocks();
+    const pitched = createWebAudioSession({
+      audioContext: pitch.audioContext,
+      audioBus: pitch.audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples,
+      wavCmdVolumeMultipliers: new Map(),
+      playbackRate: 2,
+      playbackRateFollowsTempo: true,
+    });
+    pitched.start();
+    pitched.triggerEventAt?.(mkEvent('01', '03'), 4);
+    expect(pitch.trackedBufferSources[0]!.node.start).toHaveBeenCalledWith(0, 4);
+    // Kept pitch: the samples were stretched to half their length and play at rate 1, so 4 chart seconds at tempo 2
+    // are 2 s of the stretched sample.
+    const kept = createMocks();
+    const stretched = createWebAudioSession({
+      audioContext: kept.audioContext,
+      audioBus: kept.audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples,
+      wavCmdVolumeMultipliers: new Map(),
+      tempo: 2,
+    });
+    stretched.start();
+    stretched.triggerEventAt?.(mkEvent('01', '03'), 4);
+    expect(kept.trackedBufferSources[0]!.node.start).toHaveBeenCalledWith(0, 2);
+  });
+
+  test('a seek stops what plays and puts the dynamic volumes back to the chart start', () => {
+    const { audioContext, audioBus, trackedBufferSources } = createMocks();
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples: new Map([
+        ['kick.wav', makeMockAudioBuffer()],
+        ['bgm.wav', makeMockAudioBuffer()],
+      ]),
+      wavCmdVolumeMultipliers: new Map(),
+    });
+    session.start();
+    session.triggerEvent?.(mkEvent('11', '01'));
+    session.triggerEvent?.(mkEvent('01', '03'));
+    session.triggerEvent?.(mkEvent('97', '40'));
+    session.seek?.(12);
+    expect(trackedBufferSources.every((source) => vi.mocked(source.node.stop).mock.calls.length === 1)).toBe(true);
+    // Nothing is left for a lane's long-note release to stop.
+    session.stopChannel?.('11');
+    expect(vi.mocked(trackedBufferSources[0]!.node.stop).mock.calls).toHaveLength(1);
+    // The BGM plays at full volume again until the engine replays the changes before the second sought.
+    session.triggerEvent?.(mkEvent('01', '03'));
+    expect(trackedBufferSources[2]!.connectedTo).toBe(audioBus.bgmMixer);
+  });
+
+  test("schedules a NONSTOP chart's fades from its start, a seek and a tempo change", () => {
+    const { audioContext, audioBus } = createMocks();
+    const retime = vi.fn();
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples: new Map(),
+      wavCmdVolumeMultipliers: new Map(),
+      playbackRate: 2,
+      playbackRateFollowsTempo: true,
+      stageMixer: { stageOf: () => undefined, rate: () => 1, bgmInput: () => undefined, retime },
+    });
+    const clock = audioContext as { currentTime: number };
+    clock.currentTime = 5;
+    session.start();
+    const contextTimeAt = (call: number) => retime.mock.calls[call]![1] as (seconds: number) => number;
+    expect(retime.mock.calls[0]![0]).toBe(0);
+    // At tempo 2 chart second 10 is 5 s after the start.
+    expect(contextTimeAt(0)(10)).toBe(10);
+    clock.currentTime = 7;
+    session.seek?.(30);
+    expect(retime.mock.calls[1]![0]).toBe(30);
+    expect(contextTimeAt(1)(40)).toBe(12);
+    clock.currentTime = 8;
+    // One second at tempo 2 later the chart is at 32; from there it runs at tempo 1.
+    session.setTempo?.(1);
+    expect(retime.mock.calls[2]![0]).toBe(32);
+    expect(contextTimeAt(2)(40)).toBe(16);
+  });
+
   test('applies #WAVCMD per-slot gain via an intermediate GainNode', () => {
     const { audioContext, audioBus, trackedBufferSources, keyMixer } = createMocks();
     const session = createWebAudioSession({

@@ -650,6 +650,26 @@ Web のデモはどの種類のプレイもすべてこの方法で、その種�
 
 進行中のプレイは player-scene-model の `PlayState`（`playState`）一つです。ゲージと EX スコアとそのグラフ、コンボ、最大コンボ、コースのコンボ、時刻つきの判定と判定ごとの早い / 遅いの数、表示設定（HS-FIX のかかったハイスピードとレーンカバー）を持ちます。これを変えるものはすべて `applyPlayEvent`（`session/play/play-state.ts`）を通ります。`applyPlayEvent` は `reducePlayState` で状態を進め、描くハイスピードが変わればノートのスクロールをそこへなめらかに移します。エンジンのフレーム、判定、空 POOR、シークのスナップショット、最終の集計、プレイヤーのハイスピードのキー、ホストの `setHiSpeed`、リプレイが記録した表示設定がこれを通ります。スキンのランタイム、LR2 の状態の解決（`resolveLR2PlayState`）、beatoraja のプレイのブリッジ、リザルト（`playResultFromPlayState`）はこれを読みます。セッションはその横に、表示のとおりのエンジンの判定数（`score`。LR2 では空 POOR を POOR の数に含めます）と、エンジンのゲージの集計（`gaugeState`）を持ちます。
 
+譜面上の時刻はエンジンが持ちます。どのフレームも、表示する譜面の秒、シークの世代、その秒がどのクロックの値にあたるか（音声クロックの値、テンポ、一時停止中か）を持ち、セッションの譜面のクロック（`currentSeconds`）は最新のフレームから `audioContext.currentTime` で進めます（`play-clock.ts`）。エンジンの最初のフレームより前は、プレイ開始のゲートから進めます。シーク、テンポの変更、一時停止は次のフレームに現れ、合わせ直す基準点はありません。最後のシークより古い世代のフレームは捨てます。プレイ状態のほかに 1 回の実行が表示するもの（キービームと点滅、ボム、押さえているロングノート、判定の表示、POOR の画像、一度だけの瞬間、スコア表示の繰り上がり）は 1 つの `PlayPresentation`（`play-presentation.ts`）にまとめ、`resetPresentation` で新しいプレイの状態に戻します。
+
+シークは動いているエンジンへのコマンドです（[ADR 0016](./adr/0016-seek-play-loop-command.ja.md)）。`PlayScene.seek(T)` は入力バスに `{ kind: 'seek', seconds: T }` を送り（`play-seek.ts`）、エンジンがそれか後のシークを適用したら解決します。エンジンは `T` での次の世代のフレームと `seek` の UI コマンドを返し、セッションはそのスナップショットからスコア、ゲージ、プレイ状態を取ります（`reducePlayState` の `seek` イベント）。表示は戻し、進行中のリードアウトは取り消し、BGA の動画は合わせ直し、ビューには `seek` イベントを知らせます（LR2 のビューは `resolveLR2PlayTimers` で、beatoraja のブリッジは `resolveBeatorajaSeekTimers` で判定とレーンのタイマーを止め、ブリッジは判定状態のグラフをスナップショットの判定から組み直します）。`T` をまたいで押さえているロングノートは、エンジンが再通知するとそのあとに続きます。一時停止中のプレイは `T` で一時停止したままです。
+
+```mermaid
+sequenceDiagram
+  participant H as PlayScene
+  participant S as プレイのセッション
+  participant E as エンジン
+  participant V as ビュー
+  H->>S: seek(T)
+  S->>E: 入力 seek(T)
+  E-->>S: フレーム(T, 世代)
+  E-->>S: UI コマンド seek(スナップショット)
+  S->>S: 表示を戻し、状態をスナップショットから
+  S->>V: seek イベント
+  E-->>S: 押さえているロングノートを再通知
+  S-->>H: seek が解決
+```
+
 - `session/play/`：
   - `play-session.ts`：`PlaySession`。部品の組み立て、クロック、一時停止、録画、後片付け。`play-session-state.ts`：その状態。`play-options.ts`：そのオプション（`PlaySessionOptions`）。`play-session-theme.ts`：ビューに求めるもの（`PlaySessionTheme`）と、知らせるきっかけ（`PlayMoment`）
   - `play-scene-session.ts`：`SceneSession` としてのセッション、そのフレームとインテント。`play-view-events.ts`：ビューのイベントとしてのきっかけ
@@ -658,6 +678,7 @@ Web のデモはどの種類のプレイもすべてこの方法で、その種�
   - `play-engine.ts`：共通エンジンの起動、その UI シグナル、判定とレーンの演出、エンディングの開始
   - `play-input.ts`：ESC、F5、Space、矢印キー、長押しでの終了、自動一時停止、ビューが送るタッチのレーン。`play-cover-keys.ts`：beatoraja のプレイのカバーのキー（`coverKeys`）
   - `play-keys.ts`：`PLAY_SCENE_KEY_CODES`。プレイが自分で扱い、エンジンの Web 入力ランタイムが読み飛ばすキーの一覧です
+  - `play-seek.ts`：シークのコマンドと、それを待つシーク。`play-clock.ts`：フレームから進める譜面のクロック。`play-presentation.ts`：プレイ状態のほかに 1 回の実行が表示するもの（`PlayPresentation`）
   - `play-state.ts`：`applyPlayEvent`。プレイの状態を変える唯一の道です
   - `play-view-settings.ts`：ハイスピードのキー、エンジンが従うテンポ、描くとおりのレーンカバー、リプレイの表示設定
   - `play-ending.ts`：退出のタイムラインと、結果のスナップショット
@@ -842,7 +863,7 @@ stateDiagram-v2
 - **再生待ち:** 譜面が 1 つのときは、プレイ画面の上に再生ボタン（`be-music-preview-start`）を表示する。再生後はリプレイボタンになる。リザルト画面はない。
 - **再生中:** プレビュー用スキン（`src/embed/preview-skin.ts`）は、左ペインにレーン、右ペインに BGA を置き、その下に譜面の情報・スコア・コンボ・ゲージ・判定（`be-music-preview-hud`）、下端に動画プレイヤー風のコントロール（`be-music-playback-controls`）を置く。コントロールは再生／一時停止・シークバー・時間・ミュートと音量・全画面である。Space で再生／一時停止、← / → で 5 秒シーク、M でミュート、F で全画面を切り替える。
 
-シークは、デコード済みの音声・準備済みのノート・BGA を保ったまま、エンジンを指定した譜面の秒数から再開する（`PlayScene.seek`、`PlayerOptions.startAtSeconds`）。それより前のノートは AUTO が判定した扱いになり、その時点で鳴っている音は途中から鳴らす（`AudioSession.triggerEventAt`）。一時停止中のプレイは再開する。エンジンの `seek` コマンドは譜面の頭から組み直した状態（`PlaySeekSnapshot`）を持ち、セッションはスコア・ゲージ・コンボ・最大コンボ・グラフ・タイミングをそこから取るので、シークした位置までプレイしたときと同じ表示になる。[ADR 0015](./adr/0015-preview-seek.ja.md) を参照。エンジンはいま `startAtSeconds` をプレイの最初のシーク、つまりプレイループのコマンドとして扱い（[ADR 0016](./adr/0016-seek-play-loop-command.ja.md)）、その位置をまたいで押さえているロングノートを知らせる。セッションがこのコマンドへ移るのは後の段階である。
+シーク（`PlayScene.seek`）は、動いているエンジンにシークのコマンドを送る（[ADR 0016](./adr/0016-seek-play-loop-command.ja.md)）。プレイを始め直すことはない。エンジンは譜面の頭からシークした秒までプレイを組み直すので、スコア・ゲージ・コンボ・最大コンボ・グラフ・タイミングはそこまでプレイしたときと同じになる。その時点で鳴っている音は途中から鳴らし（`AudioSession.triggerEventAt`）、Web の音声セッションは鳴っていた音を止め、音量の変化を戻し、NONSTOP の譜面のフェードを動かす（`WebAudioSession.seek`）。シークバーと時間は新しい世代のフレームに従い、一時停止中のプレイは一時停止したままになる。セッションの側は「プレイの部品の置き場所」を参照。
 
 ## DOM スキンと独立した controller
 

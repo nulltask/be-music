@@ -41,6 +41,8 @@ export function playViewEventFromMoment(event: PlayMoment): PlayViewEvent | unde
       return { kind: 'bomb', channel: event.channel, atMs: event.at };
     case 'view-setting':
       return { kind: 'view-setting', setting: event.setting, atMs: event.at };
+    case 'seek':
+      return { kind: 'seek', seconds: event.seconds, gauge: event.gauge, judgments: event.judgments, atMs: event.at };
     case 'lane-command': {
       const command = event.command;
       switch (command.kind) {
