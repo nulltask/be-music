@@ -817,7 +817,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 - **beatoraja:**
   - POOR = 見逃したノート、MISS = 空 POOR（[JudgeManager.java#L400-L404](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L400-L404)）。
   - 数値 420 は MISS、426 は POOR+MISS、427 は BAD+POOR+MISS です（[skin/property/IntegerPropertyFactory.java#L461-L467](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/property/IntegerPropertyFactory.java#L461-L467)）。
-- **be-music の現状:** [`packages/skin-beatoraja/src/scene/score.ts`](../packages/skin-beatoraja/src/scene/score.ts) は 420 = POOR、426 = POOR、427 = BAD+POOR として読みますが、エンジンは `summary.emptyPoor` を数えています。[beatoraja skin 実装メモ](./beatoraja-skin.ja.md) にある、エンジンに MISS の判定がないという注記は古くなっています。
+- **be-music の現状:** fixed in [#599](https://github.com/nulltask/be-music/issues/599)。engine と scene model は既に `emptyPoor` を持ちます。beatoraja のスコア入力でもこれを渡し、420 / 426 / 427 を空 POOR / POOR + 空 POOR / BAD + POOR + 空 POOR として読みます。LR2 の表示上の POOR に空 POOR が含まれる結果では、`judgedPoor` を使って二重計上を防ぎます。
 - **影響:** A/C。
 - **推奨:** 数値を `emptyPoor` から読み、player-scene-model のスコアまで通す。表示だけの話です。
 
