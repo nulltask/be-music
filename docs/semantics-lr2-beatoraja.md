@@ -153,7 +153,7 @@ Most fixes below move a rule into the right box. The assist class and LR2 mine c
 | 24  | Seeds vs resolved pattern; retry same pattern       | C, A        | Resolved channels logged; no seed                       | Keep; add "retry keeps pattern" option                                 |
 | 25  | Option vocabulary / index order                     | A, C        | LR2 order, no CONVERGE / beatoraja set                  | Options by name, per-family index tables                               |
 | 26  | S-RANDOM / SCATTER / CONVERGE / H-RANDOM algorithms | B           | Neither engine; bugs                                    | Implement LR2 S-RAN/SCATTER + beatoraja S-RANDOM as a pure helper      |
-| 27  | MIRROR / RANDOM lane domain                         | B           | Used lanes only                                         | Full key-lane set                                                      |
+| 27  | MIRROR / RANDOM lane domain                         | B           | Fixed in #594                                           | Full mode key-lane set                                                 |
 | 28  | DP FLIP / BATTLE / option packing                   | C, A        | dpFlip only                                             | Keep; decode on import                                                 |
 | 29  | Hi-speed scale / range                              | C           | 0.1-6.0, two scales                                     | Raise cap per family                                                   |
 | 30  | HS-FIX semantics (150-BPM norm vs duration)         | C, B        | Chart-relative                                          | Per skin family; CONSTANT as assist or removed                         |
@@ -559,7 +559,7 @@ Already per ruleset: LR2 death border and guts, the LR2 DEATH table (**fixed in 
 - **be-music today** ([`packages/player-browser/src/session/play/play-chart.ts`](../packages/player-browser/src/session/play/play-chart.ts) `applyRandomMode`):
   - S-RANDOM draws a new permutation of the used lanes for each chord, with no LN-occupancy check, so a note can land inside a held LN.
   - SCATTER is aliased to RANDOM but logged as `'SCATTER'`.
-  - MIRROR and RANDOM permute only `usedLanes`, so a 7K chart without lane 1 mirrors 2↔7. Both engines permute the full key-lane set ([#L27099-L27236](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27099-L27236), [pattern/PatternModifier.java#L104-L123](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/pattern/PatternModifier.java#L104-L123)).
+  - MIRROR and RANDOM now use the full mode key set, fixed in [#594](https://github.com/nulltask/be-music/issues/594): a sparse 7K lane 2 mirrors to lane 6. Domains come from the play-mode table for 5/7/9/10/14/24/48 keys, including both PMS encodings; PMS-STD right-bank columns belong to 1P. Scratch/wheels and the other side stay fixed. Both engines permute the full key-lane set ([#L27099-L27236](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27099-L27236), [pattern/PatternModifier.java#L104-L123](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/pattern/PatternModifier.java#L104-L123)).
 - **Impact:** B. Patterns sold under LR2 names match neither engine.
 - **Recommendation:**
   - Move the randomizers into `@be-music/player-engine` as pure helpers with an injected RNG, and add tests.

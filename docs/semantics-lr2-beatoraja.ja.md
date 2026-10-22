@@ -77,7 +77,7 @@ LR2 と beatoraja は、同じ譜面、オプション、スキンの番号を�
 9. **レーンオプションがどちらのエンジンとも一致しない。**
    - S-RANDOM が、LN を押しているレーンにノートを落とすことがある。
    - SCATTER は単なる RANDOM なのに `SCATTER` として記録される。
-   - MIRROR と RANDOM が譜面で使われているレーンだけを入れ替える。
+   - MIRROR / RANDOM のモード全体の鍵盤への対応は [#594](https://github.com/nulltask/be-music/issues/594) で修正。
    - オプション番号の意味がスキンファミリーで違う：LR2 の 3 = S-RANDOM、beatoraja の 3 = R-RANDOM。
 
    (B, A)
@@ -153,7 +153,7 @@ flowchart TD
 | 24  | シードと解決済みパターン。同じパターンで再挑戦          | C, A           | 解決済みのチャンネルを記録。シードなし             | 維持。「再挑戦でパターンを保つ」オプションを追加                                      |
 | 25  | オプションの種類 / 番号の順序                           | A, C           | LR2 の順序。CONVERGE / beatoraja のセットなし      | オプションは名前で持ち、ファミリーごとの番号表                                        |
 | 26  | S-RANDOM / SCATTER / CONVERGE / H-RANDOM のアルゴリズム | B              | どちらのエンジンとも違う。バグあり                 | LR2 の S-RAN/SCATTER と beatoraja の S-RANDOM を純粋なヘルパーとして実装              |
-| 27  | MIRROR / RANDOM の対象レーン                            | B              | 使われているレーンだけ                             | 鍵盤レーン全体                                                                        |
+| 27  | MIRROR / RANDOM の対象レーン                            | B              | #594 で修正                                        | モード全体の鍵盤                                                                      |
 | 28  | DP FLIP / BATTLE / オプションの詰め方                   | C, A           | dpFlip だけ                                        | 維持。取り込み時に復号                                                                |
 | 29  | ハイスピードの尺度と範囲                                | C              | 0.1-6.0、2 つの尺度                                | ファミリーごとに上限を上げる                                                          |
 | 30  | HS-FIX の意味（150 BPM 正規化と表示時間）               | C, B           | 譜面基準                                           | スキンファミリーごと。CONSTANT はアシスト扱いか削除                                   |
@@ -559,7 +559,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 - **be-music の現状**（[`packages/player-browser/src/session/play/play-chart.ts`](../packages/player-browser/src/session/play/play-chart.ts) の `applyRandomMode`）：
   - S-RANDOM は和音ごとに使われているレーンの新しい順列を引き、LN の占有を確かめないので、押されている LN の中にノートが落ちることがあります。
   - SCATTER は RANDOM の別名なのに `'SCATTER'` として記録されます。
-  - MIRROR と RANDOM は `usedLanes` だけを入れ替えるので、レーン 1 のない 7K の譜面は 2↔7 でミラーされます。どちらのエンジンも鍵盤レーン全体を入れ替えます（[#L27099-L27236](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27099-L27236)、[pattern/PatternModifier.java#L104-L123](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/pattern/PatternModifier.java#L104-L123)）。
+  - MIRROR と RANDOM は [#594](https://github.com/nulltask/be-music/issues/594) で修正し、モード全体の鍵盤を対象にします。疎な7鍵の2番レーンは6番レーンに写ります。5/7/9/10/14/24/48鍵と PMS の2形式をモード表から解決し、PMS-STD の右バンクの列も1Pの鍵盤として扱います。スクラッチ・ホイール・反対側は固定します。根拠：[OpenLR2](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27099-L27236)、[PatternModifier](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/pattern/PatternModifier.java#L132-L137)。
 - **影響:** B。LR2 の名前で出しているパターンがどちらのエンジンとも一致しません。
 - **推奨:**
   - ランダマイザーを `@be-music/player-engine` に移し、RNG を注入する純粋なヘルパーにしてテストを足す。
