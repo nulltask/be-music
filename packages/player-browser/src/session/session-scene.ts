@@ -102,6 +102,11 @@ export class SessionScene<Frame, Intent> implements PixiScene {
     return this.view.root;
   }
 
+  /** Whether the view draws on the Pixi canvas; the host takes the canvas out while it does not. */
+  public get drawsOnCanvas(): boolean {
+    return this.view.drawsOnCanvas !== false;
+  }
+
   /** Whether the scene is on the stage: attached, ticking and listening. */
   public get entered(): boolean {
     return this.state === 'entered';
