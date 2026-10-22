@@ -132,6 +132,34 @@ describe('LR2PlayTimers', () => {
     expect(timers.keyOnFadeMsOfTimer(LR2_TIMER.KEY_ON_1P + 1)).toBe(90);
   });
 
+  test('switches an authored beam from key-on to key-off without leaving the held sprite visible', () => {
+    const { timers, play, state } = createPlay();
+    const keyOn = LR2_TIMER.KEY_ON_1P + 1;
+    const keyOff = LR2_TIMER.KEY_OFF_1P + 1;
+    timers.setSpans(skinWithSpans([keyOff], 100));
+    play.keyBeamStartedAt.set('11', 10);
+    expect(timers.isActive(keyOn)).toBe(true);
+    state.now = 20;
+    timers.handle({ kind: 'lane', channel: '11', action: 'release' }, undefined);
+    expect(timers.isActive(keyOn)).toBe(false);
+    expect(timers.isActive(keyOff)).toBe(true);
+    timers.handle({ kind: 'lane', channel: '11', action: 'press' }, undefined);
+    expect(timers.isActive(keyOn)).toBe(true);
+    expect(timers.isActive(keyOff)).toBe(false);
+  });
+
+  test('starts a key-off timer on release and cancels it when the key is pressed again', () => {
+    const { timers, state } = createPlay();
+    state.now = 200;
+    timers.handle({ kind: 'lane', channel: '11', action: 'release' }, undefined);
+    expect(timers.isActive(LR2_TIMER.KEY_OFF_1P + 1)).toBe(true);
+    expect(timers.elapsed(LR2_TIMER.KEY_OFF_1P + 1)).toBe(0);
+    state.now = 250;
+    expect(timers.elapsed(LR2_TIMER.KEY_OFF_1P + 1)).toBe(50);
+    timers.handle({ kind: 'lane', channel: '11', action: 'press' }, undefined);
+    expect(timers.isActive(LR2_TIMER.KEY_OFF_1P + 1)).toBe(false);
+  });
+
   test('a gauge rise starts timer 42 until the rise flash has played out; reaching 100 % starts 44', () => {
     vi.useFakeTimers();
     const { timers } = createPlay();

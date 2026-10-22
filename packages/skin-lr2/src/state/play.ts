@@ -5,7 +5,14 @@ import {
   type GaugeType,
   type ScoreSummary,
 } from '@be-music/player-engine/ruleset';
-import type { CourseView, LibraryChart, PlayOptions, PlaySide, PlayState } from '@be-music/player-scene-model';
+import type {
+  CourseView,
+  JudgmentKind,
+  LibraryChart,
+  PlayOptions,
+  PlaySide,
+  PlayState,
+} from '@be-music/player-scene-model';
 import { LR2_LANE_TIMER_BANK_SIZE, LR2_NUM, LR2_OP, LR2_SLIDER, LR2_TEXT, LR2_TIMER } from '../ids/index.ts';
 import { resolveLR2ChartText } from './chart.ts';
 import { lr2ShowsCourseCombo, resolveLR2CourseNumber, resolveLR2CourseOps, resolveLR2CourseText } from './course.ts';
@@ -74,6 +81,8 @@ export interface LR2PlayFrame {
   readonly bpm?: number;
   /** The frame rate (number 20). */
   readonly fps?: number;
+  /** Latest displayed judgment per side; retained after the judge plate fades. */
+  readonly judgments?: Readonly<Partial<Record<PlaySide, JudgmentKind | 'EMPTY_POOR'>>>;
 }
 
 /** The LR2 play screen's state: a {@link LR2SceneState} and the fill of each bar graph. */
@@ -305,6 +314,15 @@ function playBargraph(type: number, frame: LR2PlayFrame): number {
   }
 }
 
+const JUDGMENT_OPS: Record<JudgmentKind | 'EMPTY_POOR', number> = {
+  PERFECT: LR2_OP.JUDGE_1P_PERFECT,
+  GREAT: LR2_OP.JUDGE_1P_GREAT,
+  GOOD: LR2_OP.JUDGE_1P_GOOD,
+  BAD: LR2_OP.JUDGE_1P_BAD,
+  POOR: LR2_OP.JUDGE_1P_POOR,
+  EMPTY_POOR: LR2_OP.JUDGE_1P_MISS,
+};
+
 const SETUP_OPS = new WeakMap<LR2PlaySetup, readonly number[]>();
 
 /**
@@ -325,6 +343,8 @@ export function resolveLR2PlayState(setup: LR2PlaySetup, frame: LR2PlayFrame): L
   const rank = resolveLR2RankOp(frame.score);
   if (rank !== undefined) ops.add(rank);
   ops.add(resolveLR2GaugeRangeOp(frame.play.gauge));
+  ops.add(JUDGMENT_OPS[frame.judgments?.['1P'] ?? 'EMPTY_POOR']);
+  ops.add(JUDGMENT_OPS[frame.judgments?.['2P'] ?? 'EMPTY_POOR'] + 20);
   const course = frameCourse(setup, frame);
   if (course !== undefined) for (const op of resolveLR2CourseOps(course)) ops.add(op);
   return {

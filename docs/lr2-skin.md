@@ -40,6 +40,16 @@ Asset and bitmap-font lookup prefer the longest matching directory suffix, so a 
 
 The supplied LITONE4 (1080p) and WMIX_HD_set_0321 distributions provide 1920×1080 and 1280×720 layouts respectively. Their files remain external to this repository. Full third-party skin behavior still depends on the implemented LR2 directives and runtime features.
 
+## Destination controls and play feedback
+
+The first `#DST_*` row sets the element's loop point, timer and display conditions, including the turntable marker. Later rows animate geometry, color and opacity; explicit zeroes in their control columns do not reset the first row's controls. This keeps spdframe's intro frames from replaying and prevents lane frames and loading overlays from blinking during play.
+
+`LR2PlayFrame.judgments` optionally supplies each side's latest judgment. `resolveLR2PlayState` exposes ops 241–246 and 261–266 for judgment-colored lasers such as LITONE4's. The browser view connects key-on timers 100–119 and key-off timers 120–139, switching to an authored release animation when the key comes up. Measure lines use their authored offset from the note timing origin and obey destination conditions.
+
+Bitmap fonts can mix TGA, DDS and browser-supported image sheets. PNG sheets use the shared byte decoder so extensionless blob URLs do not prevent them from loading; missing-glyph boxes follow the same fade as the text.
+
+When a requested key mode is absent, discovery prefers an SP skin for SP charts and a DP skin for DP charts before borrowing the opposite layout. spdframe uses a 640×480 canvas; WMIX_HD uses 1280×720 and the supplied LITONE4 uses 1920×1080. These distributions are local compatibility inputs and are not bundled with Be-Music.
+
 ## Courses
 
 LR2 has a scene of its own for the result of a whole course: `#INFORMATION` type 15, conventionally under `CourseResult/`. `loadLR2ThemeSkinsFromFiles` loads it as `courseResultSkin`, along with the course-result jingles. A `result` lookup never picks it.

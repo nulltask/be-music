@@ -98,7 +98,7 @@ export function renderMeasureLines(ctx: PlayfieldContext, drawWindow: NoteDrawWi
         const sprite = ctx.noteLayerPool.acquireSprite();
         sprite.texture = texture;
         sprite.label = `measure-line[idx=${lineIndex},beat=${beat}]`;
-        sprite.position.set(line.x, Math.round(y));
+        sprite.position.set(line.x, Math.round(y + (line.yOffset ?? 0)));
         sprite.width = line.width;
         sprite.height = line.height;
         line.applyToSprite?.(sprite);
