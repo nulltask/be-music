@@ -1,3 +1,4 @@
+import { throwIfAborted } from '@be-music/shared-utils/core';
 import { formatSeconds } from '../utils.ts';
 import { maxJudgeReachSeconds } from './judge-core.ts';
 import { createInputWakeUp, type InputWakeUp } from './input-wakeup.ts';
@@ -71,11 +72,12 @@ async function waitOutLeadIn(session: PlaySession, controls: PlayControls, wakeU
   const scheduler = getEngineScheduler();
   const endMs = scheduler.now() + session.leadInMs;
   for (;;) {
+    throwIfAborted(session.options.signal);
     controls.consume();
     if (controls.interruptedReason !== undefined) return;
     const remainingMs = endMs - scheduler.now();
-    if (remainingMs <= 0) return;
-    await waitPreciseOrInput(remainingMs, wakeUp);
+    if (remainingMs <= 0 && controls.startRequested) return;
+    await waitPreciseOrInput(remainingMs > 0 ? remainingMs : PAUSE_POLL_INTERVAL_MS, wakeUp);
   }
 }
 
@@ -152,7 +154,7 @@ async function playChart(
       if (sought !== undefined) {
         lastFrameSeconds = sought;
         // A play sought back out of its hold after the chart settles again; the host's outro is its to cancel.
-        settled = false;
+        if (sought < totalSeconds) settled = false;
       }
     }
     if (clock.isPaused()) {

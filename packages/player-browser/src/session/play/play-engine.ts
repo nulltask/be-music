@@ -134,6 +134,8 @@ export interface PlayEngineContext
   engineFrame: Readonly<PlayerUIFramePayload> | undefined;
   seekGeneration: number;
   practice: boolean;
+  engineStartRequested: boolean;
+  readonly paused: boolean;
   readonly seekWaiters: Array<{ seconds: number; resolve: () => void }>;
   bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } };
   chartEnded: boolean;
@@ -453,6 +455,8 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       ctx.sharedEngineChartSettled = false;
       // A tempo asked for while the engine was starting.
       ctx.liveTempo.attach(signals.inputSignals);
+      if (ctx.paused) signals.inputSignals.pushCommand({ kind: 'toggle-pause' });
+      if (ctx.engineStartRequested) signals.inputSignals.pushCommand({ kind: 'start' });
     },
     // Listen on the window (default) so the runtime sees keyboard events regardless of which DOM element
     // currently holds focus — matches the legacy `window.addEventListener('keydown', ...)` behaviour. The
@@ -462,9 +466,9 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
     engineOptions: {
       // The draws `resolvedChart` was resolved with; the engine plays that chart as is and names them in its summary.
       ...(ctx.randomDraws !== undefined ? { randomDraws: ctx.randomDraws } : {}),
-      // The view's own intro timing already gated the chart to PLAYSTART; tell the engine to start its chart
-      // immediately instead of imposing the engine's default 1.5 s lead-in on top.
+      // Prepare during the skin intro; chart time and audio wait for its PLAY START command.
       leadInMs: 0,
+      waitForStart: true,
       // The play tempo: the engine's clock runs `tempo` times as fast and judges in chart time. A change during the
       // play comes back through `onTempoChange`, at the chart second the engine took it.
       speed: ctx.tempo,
