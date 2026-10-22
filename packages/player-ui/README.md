@@ -124,6 +124,8 @@ Vue emits the event detail directly: `@selection-change="({ index }) => select(i
 
 The elements use shadow roots. Theme tokens inherit across them: `--be-music-color-text`, `--be-music-color-muted`, `--be-music-color-background`, `--be-music-color-accent`, `--be-music-panel-background`, `--be-music-control-background`, `--be-music-focus-color`, `--be-music-timing-color`, `--be-music-font`, and `--be-music-radius`.
 
+Layout follows each element's own width. Every element is an inline-size container named `be-music`; a screen renames it `be-music-screen`. Below 40rem, a collection's columns stack and its chart list caps at 18rem. Above that, the list fills the column beside the chart details, and the list column stays wider than the details. Below 22rem, a judgment table hides its Early and Late columns, playback controls hide the volume slider, a preview chart row places the level and genre under the title, and a landscape gameplay HUD tightens its actions and detail cards. Below 16rem, a compact score puts its value on its own line and play options stack. The `compact` property stays explicit. Gameplay and preview stages still size themselves with `cqw` and `cqh`, and portrait play layout follows the stage orientation.
+
 The gameplay HUD exposes `hud`, `heading`, `primary`, `actions`, `details`, `score-summary`, `score-value`, `score-panel`, `judgment-panel`, `judgment-table`, `gauge-meter`, `gauge-panel`, `gauge-graph`, `timing-panel`, `timing-graph` and `settings-panel` parts, and a `paused` part while paused. Leaf panels expose their own `panel` and applicable `table` / `graph` / `meter` / `value` parts. Gameplay and chart details have an `actions` slot and a default slot. Other screens have a default slot.
 
 ```css

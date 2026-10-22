@@ -55,6 +55,17 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
         color: var(--be-music-color-muted, #b8c7da);
         font-size: 0.85em;
       }
+      @container be-music (max-width: 22rem) {
+        button {
+          grid-template-columns: auto minmax(0, 1fr);
+        }
+        .play {
+          grid-row: span 2;
+        }
+        .facts {
+          grid-column: 2;
+        }
+      }
     `,
   ];
   declare charts: readonly LibraryChart[] | undefined;

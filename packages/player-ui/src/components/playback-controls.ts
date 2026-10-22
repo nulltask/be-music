@@ -81,6 +81,11 @@ export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackD
       .spacer {
         flex: 1;
       }
+      @container be-music (max-width: 22rem) {
+        .volume {
+          display: none;
+        }
+      }
     `,
   ];
   /** Set from the moment the thumb is pressed until it is let go, so a frame cannot overwrite it mid-drag. */

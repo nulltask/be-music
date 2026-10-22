@@ -124,6 +124,8 @@ Vue は detail を直接 emit するため、`@selection-change="({ index }) => 
 
 各要素は Shadow DOM を使います。`--be-music-color-text`・`--be-music-color-muted`・`--be-music-color-background`・`--be-music-color-accent`・`--be-music-panel-background`・`--be-music-control-background`・`--be-music-focus-color`・`--be-music-timing-color`・`--be-music-font`・`--be-music-radius` が継承されるテーマ用トークンです。
 
+配置は各要素自身の表示幅に従います。各要素は `be-music` という名前の inline-size コンテナで、画面は `be-music-screen` に変えます。40rem 未満ではコレクションのカラムが縦に積み、譜面リストの高さを 18rem に抑えます。それ以上の幅では、リストが譜面詳細の隣の列いっぱいになり、リストの列は詳細より広く残します。22rem 未満では、判定表が Early / Late 列を隠し、再生コントロールが音量スライダーを隠し、プレビューの譜面行はレベルとジャンルをタイトルの下に置き、横画面の Gameplay HUD は操作と詳細カードを詰めます。16rem 未満では、コンパクトなスコアの数値が単独の行になり、プレイオプションが縦に積まれます。`compact` は呼び出し側が明示する property のままです。Gameplay とプレビューのステージは `cqw` と `cqh` で大きさを決め、縦画面の配置はステージの向きに従います。
+
 Gameplay HUD は `hud`・`heading`・`primary`・`actions`・`details`・`score-summary`・`score-value`・`score-panel`・`judgment-panel`・`judgment-table`・`gauge-meter`・`gauge-panel`・`gauge-graph`・`timing-panel`・`timing-graph`・`settings-panel` を、一時停止中は `paused` も part として公開します。各部品は `panel` と、該当する `table`・`graph`・`meter`・`value` を公開します。Gameplay と譜面詳細には `actions` slot と既定 slot があり、ほかの画面には既定 slot があります。
 
 ```css

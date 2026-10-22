@@ -46,6 +46,13 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
         align-content: start;
         gap: 0.4em;
         overflow: hidden;
+        container-type: inline-size;
+        container-name: preview-info;
+      }
+      @container preview-info (max-width: 22rem) {
+        .judgments {
+          gap: 0 0.45em;
+        }
       }
       h2 {
         font-size: 1.15em;
