@@ -25,6 +25,9 @@ This directory is a Markdown collection of specifications used in the `be-music`
 - [beatoraja skin implementation notes](./beatoraja-skin.md)
 - [Writing a be-music skin](./be-music-skin.md)
 - [BMS/bmson intermediate representation (`@be-music/chart-source`) implementation specification](./json-spec.md)
+- [Package names and responsibilities](./packages.md)
+- [Shared utilities](./shared-utils.md)
+- [Reusable Player UI and React / Vue integration](../packages/player-ui/README.md)
 - [Glossary](./glossary.md)
 
 Supplement:

@@ -15,6 +15,7 @@ TypeScript + pnpm workspaces で構成した BMS/bmson ツールチェーンで�
 - `@be-music/chart-writer`: JSON から `.bms` / `.bmson` への文字列化
 - `@be-music/chart-audio-renderer`: 譜面をレンダリングして `.wav` / `.aiff` を出力
 - `@be-music/player-engine`: 規則と再生 engine を共有する package。1 つのプレイループ（手動・AUTO・リプレイ）、判定、score、gauge とクリアランプ、自己ベスト、コースの実行と NONSTOP、リプレイの形式、ホストが差し込む runtime 契約
+- `@be-music/player-node-audio`: Node 用の音声セッション、サンプルデコード、PCM 出力を提供するホストアダプター
 - `@be-music/player-terminal`: autoplay、keyboard play、Music Select、BGA、SEA build を扱う terminal UI と `bms-player` CLI frontend、およびリプレイ再シミュレータ `bms-replay`
 - `@be-music/player-scene-model`: ライブラリの項目・一覧・プレイオプション・プレイ状態と結果・コース・効果音など、スキンの種類によらず共有する実行環境非依存のシーンモデル
 - `@be-music/skin-lr2`: Lunatic Rave 2 skin parser、asset resolver、theme loader を renderer 非依存で提供する package
@@ -44,6 +45,11 @@ flowchart TD
     lr2["skin-lr2"]
     beatoraja["skin-beatoraja"]
   end
+  subgraph presentation["再利用する UI"]
+    ui["player-ui"]
+    wrappers["player-ui-react · player-ui-vue"]
+  end
+
   subgraph hosts["実行層とホスト"]
     editor["chart-editor"]
     tui["player-terminal"]
@@ -61,6 +67,8 @@ flowchart TD
   player --> lb
   scene --> sdk
   scene --> lr2 --> beatoraja
+  sdk --> ui --> web
+  ui --> wrappers
   sdk --> web
   beatoraja --> web
   web --> demo
@@ -209,6 +217,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - `#INCLUDE`、`#CUSTOMOPTION`、`#CUSTOMFILE`、`#LR2FONT`、system font、skin timer、op condition、play-skin variant を解決
 - image、number、text、slider、bargraph、button、BGA、judge line、measure line、gauge、score chart、result graph element を parse
 - case-insensitive / wildcard asset lookup、TGA decode、DXA archive extraction で theme asset を読み込み
+- HD スキンの解像度、coordinate-based canvas 判定、include 間の画像継承を扱う（[HD 対応と制約](./docs/lr2-skin.ja.md#hd-の座標系と素材)）
 
 ### beatoraja skin (`@be-music/skin-beatoraja`)
 
@@ -220,21 +229,25 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 
 ### be-music skin SDK (`@be-music/player-skin-sdk`)
 
-- browser player の built-in family 向けスキンの契約。スキンは毎フレームのデータからキャンバスに各画面を描く
+- browser player の built-in family 向けスキンの契約。スキンは表示用データから Canvas と任意の DOM 画面を組み合わせる
 - 描画フレームワークを import しない。フレームワークはスキンが持ち込む（Canvas 2D、WebGL / WebGPU、PixiJS、three.js など）
 - stage、lane layout、touch / portrait layout、moment、判定表示、loading、audio drive、曲情報、result track、skin settings、motion の helper
 - [be-music スキンの作り方](docs/be-music-skin.ja.md) を参照
+
+### 再利用可能なプレイヤー UI
+
+`@be-music/player-ui` は、選曲・決定・リザルト画面、ゲームプレイ HUD、スコア・判定・ゲージなどのパネルを Lit 製 Web Components として提供します。Native Skin と同じ部品を、`@be-music/player-ui-react` と `@be-music/player-ui-vue` の型付きラッパーからも使えます。表示用データと操作イベントで接続し、再生の時計と音声はホストが所有します。登録、イベント、テーマ、SSR の範囲は [Player UI ガイド](./packages/player-ui/README.ja.md) を参照してください。
 
 ### browser player (`@be-music/player-browser` / `@be-music/app-play`)
 
 - dropped folder、ZIP、song / LR2 / beatoraja theme 混在 drop を扱う browser song library
 - 大きな audio / video file を lazy に扱い、case-insensitive に path lookup
-- select、gameplay、result（スキンが宣言していれば decide も）を描く built-in be-music skin（既定の Synesthesia、Phantom、Plain と、opt-in の Lattice）
+- select、gameplay、result（スキンが宣言していれば decide も）を描く built-in be-music skin（既定の Synesthesia、Phantom、Plain、Native（DOM + Canvas）と、opt-in の Lattice）
 - タッチ主体の端末でのタッチ操作とタッチ用 gameplay layout、縦向きステージを持つスキンの縦画面表示、スキンごとの設定
 - LR2 の select / decide / gameplay / result skin を parse して PixiJS で描画
 - beatoraja の select / decide / gameplay / result skin を parse して PixiJS で描画
 - 画面ごとに 1 つのシーンセッションが振る舞い（一覧の操作、譜面の準備、エンジン、入力、音、終わり方）をすべてのファミリーに共通に持ち、built-in・LR2・beatoraja のファミリービューは描いてインテントを返すだけ（[シーンセッションとファミリービュー](./docs/player-web.ja.md#シーンセッションとファミリービュー)）
-- 設計した入口：`@be-music/player-browser/host`（`PixiSceneHost`、`createSelectScene` / `createDecideScene` / `createPlayScene` / `createResultScene`）、`/skin`、`/collection`、`/audio`、`/recording`（[公開する入口](./docs/player-web.ja.md#公開する入口)）
+- 設計した入口：`@be-music/player-browser/host`（`PixiSceneHost`、`createSelectScene` / `createDecideScene` / `createPlayScene` / `createResultScene`）、`/skin`、`/collection`、`/audio`、`/recording`、`/compute`、`/controller`（[公開する入口](./docs/player-web.ja.md#公開する入口)）
 - destination 補間、sprite transform、number、text、slider、bargraph を扱う共通 LR2 Pixi helper
 - destination sampling、source cell selection、text、value、slider、gauge、graph、timing visualizer、note、marker、BGA、runtime op/timer wiring を扱う共通 beatoraja Pixi helper
 - note、timing、scroll distance、BGA cue、score、result は terminal player と共通の再生意味論を使用

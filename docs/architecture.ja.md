@@ -135,7 +135,7 @@ flowchart TD
 - **判定の戦略**（`play-strategy.ts`）は、プレイをどう判定するかを決めます。`play-manual.ts` は、再生の時計をティックごとに、キーの出来事をそのたびに、キーが押された瞬間の時刻を付けて判定コアに渡します。キーの解放を伝えると宣言した入力ランタイム（`PlayerInputRuntime.reportsKeyReleases`。ブラウザのものと、端末が kitty キーボードプロトコルに応えたあとの TUI のもの）は、最初のキーからキー状態の入力です。解放を伝えない入力では、`kitty-state` コマンドが来るまで `play-key-inference.ts` が各キーを離した時刻を推定し、リプレイはその解放を記録します。`play-replay.ts` は、記録された入力列（`PlayerOptions.replayInputs`）を `advanceJudgeCoreReplay` で、ある瞬間から次の瞬間へ進めます。進める先は、記録された各入力のマイクロ秒と、各時刻つき判定（LN の終点、見逃しの期限、AUTO SCRATCH のノート、地雷の判定。`nextTimedJudgmentUs` が求める）の 1 マイクロ秒後です。そのため、リプレイの判定はティックのタイミングや `speed` に左右されません。`play-auto.ts` は AUTO の判定コアを進め、各ノートのキー音を判定より先に、書き込み位置に合わせて送ります。`manualPlay` は手動かリプレイの戦略を、`autoPlay` は AUTO の戦略を選びます。
 - **時刻つき判定**は、その整数マイクロ秒（replay の時計）を時間が過ぎたときに確定します。同じ瞬間では、ロングノートの終点と保留していた離鍵、Hell Charge のゲージの刻み、AUTO SCRATCH のノート、見逃し、地雷の順に、それぞれチャンネル順で確定します。見逃しは各ノートそれぞれの期限で判定します。`finish` は残っている判定をすべて同じように進めてからプレイ終了時の規則を適用し、ESC での中断は判定が済んだ時点で止まります（replay には `play.abortedAtUs` として記録します）。replay シミュレータも同じ判定を同じ順で扱うので、ゲージが上限・下限で頭打ちになる場合も、両者はゲージに同じ順で到達します。
 - **共有する規則**：判定コアとリプレイのシミュレータ（`replay/simulate.ts`）の両方が使う規則は、ルールセットに置いています。判定幅と分類（`ruleset/judge.ts`）、候補の選択（`ruleset/selection.ts`）、ゲージ（`ruleset/gauge.ts`）、ロングノートの規則（ルールセットが演奏するモード、見逃したチャージノート終端の POOR、LR2 の LN 始点の遅い BAD、マルチ BAD の絞り込み。`ruleset/long-note.ts`）です。シミュレータはマイクロ秒単位の独自のイベントキューを持つので、同じ入力列で両者が同じ判定になることは `replay/equivalence.test.ts` が確かめます。
-- **ループの周りのサービス**：`engine-preparation.ts`（演奏用の譜面の解決、読み込みの進捗、ランタイムの起動）、`engine-audio.ts`（組み込みの Node 用音声セッションとミックス）、`engine-clock.ts`（再生の時計と、ループが時刻を読み、待機に使うスケジューラ）、`engine-effects.ts`（判定の effect をホストへ）、`engine-trace.ts`（TUI なしの出力）、`engine-types.ts`（公開する型）です。`engine.ts` は公開用の入口で、パッケージのルートです。エンジンとその型だけを公開します。ホストのランタイムがプレイとやり取りするもの、レーン、ホストが表示するものは `./signals`、`./lanes`、`./display` の入口です（[Player 実装仕様 — 公開する入口](./player-spec.ja.md#公開する入口)）。
+- **ループの周りのサービス**：`engine-preparation.ts`（演奏用の譜面の解決、読み込みの進捗、ランタイムの起動）、`engine-audio.ts`（ホストの音声セッションの起動と、無音時のフォールバック）、`engine-clock.ts`（再生の時計と、ループが時刻を読み、待機に使うスケジューラ）、`engine-effects.ts`（判定の effect をホストへ）、`engine-trace.ts`（TUI なしの出力）、`engine-types.ts`（公開する型）です。`engine.ts` は公開用の入口で、パッケージのルートです。エンジンとその型だけを公開します。ホストのランタイムがプレイとやり取りするもの、レーン、ホストが表示するものは `./signals`、`./lanes`、`./display` の入口です（[Player 実装仕様 — 公開する入口](./player-spec.ja.md#公開する入口)）。
 
 ### エンジンの特性テスト
 
@@ -181,7 +181,7 @@ flowchart TD
 ```mermaid
 flowchart TD
   subgraph data["データ"]
-    d["json · chart · parser<br/>chart-writer · chart-audio-renderer · utils"]
+    d["chart-source · chart-model · chart-parser<br/>chart-writer · chart-audio-renderer · shared-utils"]
   end
   subgraph domain["規則とエンジン — @be-music/player-engine"]
     rules["ruleset · replay<br/>course · records"]
@@ -191,6 +191,11 @@ flowchart TD
     scene["@be-music/player-scene-model"]
     skins["player-skin-sdk · skin-lr2<br/>skin-beatoraja"]
   end
+  subgraph presentation["再利用する UI"]
+    ui["player-ui (Lit)"]
+    wrappers["player-ui-react · player-ui-vue"]
+  end
+
   subgraph web["Web 実行層 — @be-music/player-browser"]
     sessions["シーンセッション"]
     views["ファミリービュー"]
@@ -208,6 +213,8 @@ flowchart TD
   engine --> sessions
   scene --> sessions
   skins --> views
+  skins --> ui --> views
+  ui --> wrappers
   sessions --> hostApi
   views --> hostApi
   hostApi --> demo
@@ -221,6 +228,8 @@ flowchart TD
 - **規則とエンジン**（`@be-music/player-engine`）。ゲージ・クリアランプ・BP・スコアの語彙（`./ruleset`）、コースの実行、NONSTOP の流れ、コースのステージの規則（`./course`）、判定ルールセットごとの自己ベストの統合（`./records`）、リプレイの形式とそのシミュレータ（`./replay`）を持ちます（[ADR 0004](./adr/0004-domain-rules-in-player.ja.md)）。パッケージのルートはエンジンで、プレイループは 1 つ、手動・AUTO・リプレイの判定の戦略を差し込みます（[ADR 0003](./adr/0003-one-play-loop.ja.md)）。ホストの実行環境がプレイとやり取りするもの、レーン、ホストが表示するものは、入口の `./signals`、`./lanes`、`./display` です（[Player 実装仕様 — 公開する入口](./player-spec.ja.md#公開する入口)）。
 - **シーンモデル**（`@be-music/player-scene-model`）。スキンの種類によらず、各画面が何を見せ、どう振る舞うか。ライブラリの項目（`LibraryChart`、`LibraryFolder`、`LibraryCourse`）、一覧の状態とその保存形（`BrowseState`、`BrowseSnapshot`）、プレイオプション、プレイ状態（`PlayState`）、プレイ結果（`PlayResult`）、コースの表示用モデル（`CourseView`）、効果音セットです（[ADR 0002](./adr/0002-scene-model-package.ja.md)、[シーンモデル](./scene-model.ja.md)）。
 - **スキンモデル**（`player-skin-sdk`、`skin-lr2`、`skin-beatoraja`）。それぞれのスキンを解析し、シーンモデルをそのスキンの語彙に写します。be-music スキンの契約（`@be-music/player-skin-sdk`）、LR2 互換の op・数値・テキスト・タイマーの番号表 1 つ（`@be-music/skin-lr2/ids`）と LR2 の状態を求める関数（`@be-music/skin-lr2/state`）、beatoraja の状態の計算（`@be-music/skin-beatoraja/scene`）です。
+- **再利用する UI**（`player-ui`、`player-ui-react`、`player-ui-vue`）。Lit 製 Web Components は SDK の表示用データを受け取り、操作要求をイベントで通知します。Native Skin はシーンのフレームと操作を部品に接続し、React / Vue は同じ部品の property・イベント・ref を公開します。UI は再生ループや音声を所有せず、SDK は Lit に依存しません（[Player UI](../packages/player-ui/README.ja.md)、[ADR 0013](./adr/0013-player-ui-components.ja.md)）。
+
 - **Web 実行層**（`@be-music/player-browser`）。シーンセッション（`session/`）が各画面の振る舞いを、どのスキンの種類にも共通に 1 つだけ持ちます。譜面の準備、RANDOM / FLIP、音と BGA、エンジンの設定、入力、終わり方です。ファミリービュー（`view/`）はセッションのフレームを描いてインテントを返すだけです（[ADR 0001](./adr/0001-skin-families-only-draw.ja.md)）。ホスト向けの API（`./host`）は、どの画面もファミリーキットから `createSelectScene`、`createDecideScene`、`createPlayScene`、`createResultScene` で作り、`PixiSceneHost` が表示する 1 つの画面のライフサイクル（`PixiScene`）を持つ `SessionScene` にします。プレイの譜面の音以外はすべて 1 つの音のサービス（`./audio`、[ADR 0007](./adr/0007-one-system-audio-context.ja.md)）を通ります。[ブラウザプレイヤー — シーンセッションとファミリービュー](./player-web.ja.md#シーンセッションとファミリービュー)を参照してください。
 - **ホスト**。Web のデモは、構成の根（`app/app.ts`）がつなぐサービス（`services/`）とルート（`app/routes/`）の集まりで、画面の切り替えはすべて 1 つのシーンルーター（`app/scene-router.ts`）が受け持ちます（[ADR 0006](./adr/0006-scene-router.ja.md)）。ルートは選曲、決定、プレイ、リザルト、リプレイ、コース、NONSTOP です。`main.ts` はアプリを起動するだけで、サービスは Tweakpane、UI（`ui/`）、アプリ（`app/`）のモジュールを import しません（[ブラウザプレイヤー — demo の作り](./player-web.ja.md#demo-の作り)）。ターミナルプレイヤーはエンジンと入口の `./signals`、`./lanes`、`./display` で遊び、Leaderboard は規則（`./course`、`./replay`、`./ruleset`）で記録を確かめて順位を付けます。
 
