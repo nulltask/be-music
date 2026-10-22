@@ -14,6 +14,7 @@ import type { SceneSession, SessionKeyEvent } from '../session-scene.ts';
 import { drainSharedEngineSignals } from './play-engine.ts';
 import { handleTouchLaneIntent } from './play-input.ts';
 import type { PlaySession } from './play-session.ts';
+import { canSeekPlay } from './play-seek.ts';
 import { applyPlayEvent } from './play-state.ts';
 import type { PlayMoment } from './play-session-theme.ts';
 import { playViewEventFromMoment } from './play-view-events.ts';
@@ -100,6 +101,9 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       case 'restart':
         play.requestRestart();
         return;
+      case 'seek':
+        void play.seek(intent.seconds);
+        return;
       case 'lane':
         // A touch lane the view's fingers pressed or let go: the engine takes it as the keyboard's lane keys.
         handleTouchLaneIntent(play, intent.channel, intent.pressed, intent.atMs);
@@ -132,6 +136,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       stage,
       ...(stage === 'loading' && this.loadProgress !== undefined ? { progress: this.loadProgress } : {}),
       seconds,
+      seekable: canSeekPlay(play),
       beat: play.currentBeat(seconds),
       ...(bpm !== undefined ? { bpm } : {}),
       autoPlay: play.options.autoPlay === true,
