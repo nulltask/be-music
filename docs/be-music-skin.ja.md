@@ -2,7 +2,7 @@
 
 # be-music スキンの作り方
 
-ブラウザープレイヤーの組み込みファミリー向けスキンは、`@be-music/player-skin-sdk` の契約に沿って作ります。Synesthesia・Phantom・Lattice・Plain は Canvas を使い、Native は DOM 画面と Canvas のプレイフィールドを組み合わせます。Native の表示部品は `@be-music/player-ui` から独立して再利用できます。
+ブラウザープレイヤーの組み込みファミリー向けスキンは、`@be-music/player-skin-sdk` の契約に沿って作ります。Synesthesia・Phantom・Lattice・Plain は Canvas を使い、Native は DOM 画面と、canvas を持つ component で組んだプレイフィールドを組み合わせます。各 component はステージ上の自分の範囲と同じ大きさの canvas に描画します。Native の表示部品は `@be-music/player-ui` から独立して再利用できます。
 
 be-music スキンはデータファイルではなくコードです。LR2 / beatoraja テーマはシーンが解釈しますが、be-music スキンはすべての画面を自分で描きます。それ以外はすべてプレイヤーの担当です。
 
@@ -27,6 +27,8 @@ SDK 自体は描画を行わず、描画フレームワークも import しま�
 ## Canvas と DOM を組み合わせる
 
 `BeMusicSkin.dom` の `select`・`decide`・`result` は、対応する Canvas 画面を置き換えます。`gameplay` は Canvas のレーン・BGA・即時の判定表示と共存します。各 factory は `(container, actions)` を受け取り、`update(frame)` と `dispose()`、選曲画面では任意の `focusSearch()` を返します。
+
+ゲームプレイ画面はプレイフィールドも描画できます。`gameplay.drawsOnDOM` を設定し、`dom.gameplay` から `drawPlayfield(frame)` を返すと、ホストは毎フレーム一度、完全な `BeMusicGameplayFrame`（レーン・ノート・ロングノート・地雷・小節線・ボム）を渡してこれを呼び、ゲームプレイ用の Canvas surface を作りません。`gameplay.draw` は DOM 画面を持たないホスト向けの代替として残ります。DOM はプレイヤーの canvas（BGA だけを描く）より上に重なるため、このスキンは `drawsMines`・`drawsLaneCover`・`drawsMeasureLines` も設定します。Native はこの方法で `@be-music/player-ui` の `be-music-playfield` を HUD の下に配置します。
 
 DOM は factory が呼ばれた時点で作ります。`update` は既存の要素を更新してフォーカスや IME の状態を保ち、`dispose` はイベントと要素を解放します。画面を一時的に離れるとマウントは保持され、再入場で使われます。独自の React / Vue 画面をマウントする場合も、同じ契約からフレームを渡し、`dispose` でフレームワークの root を解放します。
 
