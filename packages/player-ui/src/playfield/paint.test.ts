@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vite-plus/test';
 import type { BeMusicPlayfieldParts } from '../models.ts';
 import {
+  paintBGA,
   paintBombs,
   paintJudgeLine,
   paintLaneCovers,
   paintLanes,
   paintNotes,
   paintPlayfieldParts,
+  placeBGAImage,
   type BeMusicPlayfieldPaintContext,
 } from './paint.ts';
 
@@ -25,6 +27,8 @@ function recorder(): BeMusicPlayfieldPaintContext & { calls: string[] } {
     rect: (x: number, y: number, w: number, h: number) => calls.push(`rect ${x},${y},${w},${h}`),
     stroke: () => calls.push('stroke'),
     clip: () => calls.push('clip'),
+    drawImage: (image: { id: string }, x: number, y: number, w: number, h: number) =>
+      calls.push(`drawImage ${image.id} ${x},${y},${w},${h}`),
     save: () => calls.push('save'),
     restore: () => calls.push('restore'),
   };
@@ -94,6 +98,7 @@ describe('playfield painters', () => {
     const empty = { x: 0, y: 0, w: 0, h: 0 };
     const parts: BeMusicPlayfieldParts = {
       stage: { width: 100, height: 100 },
+      bga: { rect: empty, data: { frame: undefined, shown: false } },
       lanes: { rect: empty, data: { lanes: [] } },
       notes: { rect: empty, data: { notes: [], longNotes: [], mines: [], measureLines: [] } },
       laneCovers: { rect: empty, data: { areas: [] } },
@@ -113,5 +118,30 @@ describe('playfield painters', () => {
     const line = recorder();
     paintJudgeLine(line, parts.judgeLine.data);
     expect(line.calls).toEqual(['fillRect 0,90,50,2 #ffa8b3 1']);
+  });
+
+  it('keeps a still image that fits the 256 canvas at its size, top-centered, and stretches anything larger', () => {
+    const rect = { x: 100, y: 10, w: 128, h: 128 };
+    expect(placeBGAImage(128, 64, false, rect)).toEqual({ x: 132, y: 10, w: 64, h: 32 });
+    expect(placeBGAImage(512, 512, false, rect)).toEqual(rect);
+    expect(placeBGAImage(128, 64, true, rect)).toEqual(rect);
+  });
+
+  it('shows the POOR image in place of the base and layer, over black', () => {
+    const rect = { x: 0, y: 0, w: 256, h: 256 };
+    const image = (id: string) => ({ id, width: 256, height: 256 }) as unknown as CanvasImageSource;
+    const ctx = recorder();
+    paintBGA(
+      ctx,
+      { shown: true, frame: { base: image('base'), layer: image('layer'), poor: image('poor'), poorActive: true } },
+      rect,
+    );
+    expect(ctx.calls).toEqual(['fillRect 0,0,256,256 #000000 1', 'drawImage poor 0,0,256,256']);
+    const layered = recorder();
+    paintBGA(layered, { shown: true, frame: { base: image('base'), layer: image('layer'), poorActive: false } }, rect);
+    expect(layered.calls.slice(1)).toEqual(['drawImage base 0,0,256,256', 'drawImage layer 0,0,256,256']);
+    const none = recorder();
+    paintBGA(none, { shown: false, frame: undefined }, rect);
+    expect(none.calls).toEqual([]);
   });
 });

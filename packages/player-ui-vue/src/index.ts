@@ -11,6 +11,7 @@ import type {
   BeMusicDOMResultFrame,
   BeMusicDOMDecideFrame,
   BeMusicGameplayFrame,
+  BeMusicBGAData,
   BeMusicLanesData,
   BeMusicNotesData,
   BeMusicLaneCoversData,
@@ -155,6 +156,12 @@ export const BeMusicDecideScreen: DefineComponent<BeMusicDecideScreenProps, BeMu
   { frame?: BeMusicDOMDecideFrame },
   'continue-request' | 'cancel-request'
 >('BeMusicDecideScreen', 'be-music-decide-screen', ['frame'], ['continue-request', 'cancel-request']);
+
+export type BeMusicBGAProps = { data?: BeMusicBGAData; rect?: BeMusicRect } & BeMusicVueEventHandlers<never>;
+export const BeMusicBGA: DefineComponent<BeMusicBGAProps, BeMusicVueElementRef> = wrap<
+  { data?: BeMusicBGAData; rect?: BeMusicRect },
+  never
+>('BeMusicBGA', 'be-music-bga', ['data', 'rect'], []);
 
 export type BeMusicLanesProps = { data?: BeMusicLanesData; rect?: BeMusicRect } & BeMusicVueEventHandlers<never>;
 export const BeMusicLanes: DefineComponent<BeMusicLanesProps, BeMusicVueElementRef> = wrap<
