@@ -2,7 +2,6 @@ import { formatSeconds } from '../utils.ts';
 import { maxJudgeReachSeconds } from './judge-core.ts';
 import { createInputWakeUp, type InputWakeUp } from './input-wakeup.ts';
 import {
-  createAudioPlaybackClockSource,
   createPlaybackClock,
   getEngineScheduler,
   PAUSE_POLL_INTERVAL_MS,
@@ -19,13 +18,15 @@ import {
 import { emitPlayerLog, writeRuntimeEventLog } from './engine-trace.ts';
 import type { PlayerInterruptReason } from './engine-types.ts';
 import type { PlayControls } from './play-controls.ts';
+import { applySeek } from './play-seek.ts';
 import type { PlaySession } from './play-session.ts';
 import type { PlayJudge, PlayTick } from './play-strategy.ts';
 
 /**
  * The play loop: one for every judge strategy. It opens the play (the UI or the no-TUI introduction), waits out the
  * lead-in, starts the chart's audio and the play clock, and then ticks at 60 Hz (or sooner, when input arrives): input
- * commands, realtime audio against the audio write head, the judge, a UI frame. It ends at an interrupt, when judging
+ * commands, a seek (the last one asked for, `play-seek.ts`), realtime audio against the audio write head, the judge, a
+ * UI frame. It ends at an interrupt, when judging
  * closes on a failed gauge, once the chart is over and judged, or at its horizon — held open past it while the host
  * holds the play (`holdAfterChart`) — and always closes the audio session, the input runtime and the UI runtime.
  */
@@ -64,7 +65,7 @@ function openPlay(session: PlaySession): void {
 /**
  * Waits out the lead-in, taking the commands sent during it: an interrupt ends it at once, a tempo or HIGH-SPEED
  * change sets what the chart starts with, a view change is recorded at the chart's start, a pause holds the chart at
- * its start, and lane input is dropped (there is nothing to judge yet).
+ * its start, a seek sets where it starts, and lane input is dropped (there is nothing to judge yet).
  */
 async function waitOutLeadIn(session: PlaySession, controls: PlayControls, wakeUp: InputWakeUp): Promise<void> {
   const scheduler = getEngineScheduler();
@@ -78,7 +79,7 @@ async function waitOutLeadIn(session: PlaySession, controls: PlayControls, wakeU
   }
 }
 
-/** Starts the chart's audio and the play clock (chart second 0). */
+/** Starts the chart's audio and the play clock (chart second 0; a play starting partway seeks on its first tick). */
 function startChart(session: PlaySession): PlaybackClock {
   const { options, strategy, audioSession, uiEnabled } = session;
   emitPlayerLog(options, 'info', 'audio.start', { mode: strategy.mode });
@@ -89,30 +90,13 @@ function startChart(session: PlaySession): PlaybackClock {
       ['mode', strategy.mode === 'auto' ? 'auto' : session.autoScratch ? 'auto-scratch' : 'manual'],
     ]);
   }
-  // A play starting partway starts its clock where that chart second falls.
   const clock = createPlaybackClock(
-    createAudioPlaybackClockSource(audioSession),
-    session.audioOffsetMs +
-      (audioSession?.chartStartDelayMs ?? 0) -
-      session.tempoClock.clockMsAt(session.startAtSeconds),
+    session.clockSource,
+    session.audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0),
   );
   session.clock = clock;
   session.tracer.flushUntil(0);
   return clock;
-}
-
-/**
- * Brings a play that starts partway up to `seconds`: the volume changes before it apply, the judge settles everything
- * before it, and the background sounds still ringing there start partway.
- */
-function fastForwardTo(session: PlaySession, judge: PlayJudge, seconds: number): void {
-  const { audioSession } = session;
-  session.volumeChanges.triggerUntil(seconds);
-  judge.fastForward?.(seconds);
-  session.backgroundAudio.skipUntil(seconds, (sound, offsetSeconds) =>
-    audioSession?.triggerEventAt?.(sound.event, offsetSeconds),
-  );
-  session.tracer.flushUntil(seconds);
 }
 
 /**
@@ -128,7 +112,6 @@ async function playChart(
 ): Promise<boolean> {
   const { options, tempoClock, totalSeconds, tracer, publishUIFrame, beatAtSeconds } = session;
   const clock = startChart(session);
-  if (session.startAtSeconds > 0) fastForwardTo(session, judge, session.startAtSeconds);
   controls.chartStarted();
 
   // A held play (`holdAfterChart`) runs past its horizon until the host ends it.
@@ -162,6 +145,15 @@ async function playChart(
       return false;
     }
     const nowMs = clock.nowMs();
+    const seekSeconds = controls.takeSeek();
+    if (seekSeconds !== undefined) {
+      const sought = applySeek(session, judge, seekSeconds, nowMs);
+      if (sought !== undefined) {
+        lastFrameSeconds = sought;
+        // A play sought back out of its hold after the chart settles again; the host's outro is its to cancel.
+        settled = false;
+      }
+    }
     if (clock.isPaused()) {
       const nowSec = tempoClock.chartSecondsAt(nowMs);
       publishUIFrame(nowSec, beatAtSeconds(nowSec));

@@ -60,4 +60,33 @@ describe('createTempoClock', () => {
     expect(clock.chartSecondsAt(3000)).toBeCloseTo(3, 9);
     expect(clock.clockMsAt(3)).toBeCloseTo(3000, 9);
   });
+
+  test('a rebase moves chart time to a second at a clock time and keeps the tempo in force', () => {
+    const clock = createTempoClock(1);
+    clock.setTempoAtClockMs(1000, 1.5);
+    clock.rebase(3000, 0.5);
+    expect(clock.tempo).toBe(1.5);
+    expect(clock.segments).toEqual([{ clockMs: 3000, chartSeconds: 0.5, tempo: 1.5 }]);
+    expect(clock.chartSecondsAt(3000)).toBe(0.5);
+    expect(clock.chartSecondsAt(5000)).toBeCloseTo(3.5, 9);
+    expect(clock.clockMsAt(3.5)).toBeCloseTo(5000, 9);
+    // Before the rebase it reads back from the new segment, never below the chart's start.
+    expect(clock.chartSecondsAt(0)).toBe(0);
+    expect(clock.initialTempo).toBe(1);
+  });
+
+  test('a rebase forwards, with a tempo, and a tempo change after it', () => {
+    const clock = createTempoClock(2);
+    clock.rebase(500, 10, 0.5);
+    expect(clock.tempo).toBe(0.5);
+    expect(clock.chartSecondsAt(2500)).toBeCloseTo(11, 9);
+    // The milliseconds at the initial tempo stay linear in chart time across the rebase.
+    expect(clock.initialTempoMsAt(2500)).toBeCloseTo(5500, 9);
+    expect(clock.setTempoAtClockMs(2500, 1)).toBeCloseTo(11, 9);
+    expect(clock.chartSecondsAt(3500)).toBeCloseTo(12, 9);
+    // An unusable tempo keeps the one in force.
+    clock.rebase(4000, 1, Number.NaN);
+    expect(clock.tempo).toBe(1);
+    expect(clock.chartSecondsAt(5000)).toBeCloseTo(2, 9);
+  });
 });

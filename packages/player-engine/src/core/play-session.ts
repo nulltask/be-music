@@ -26,7 +26,7 @@ import {
   collectRealtimeAudioTriggers,
   createDebugActiveAudioEstimator,
 } from './engine-audio.ts';
-import { type PlaybackClock } from './engine-clock.ts';
+import { createAudioPlaybackClockSource, type PlaybackClock, type PlaybackClockSource } from './engine-clock.ts';
 import { createJudgeEffectHandler } from './engine-effects.ts';
 import { createTempoClock, type TempoClock } from './tempo-clock.ts';
 import {
@@ -89,7 +89,7 @@ export interface PlaySession {
   /** The play tempo over the play clock: `speed` at the start, re-anchored by every tempo change. */
   readonly tempoClock: TempoClock;
   readonly leadInMs: number;
-  /** The chart second the play starts at (`PlayerOptions.startAtSeconds`): 0 unless an AUTO play asked for later. */
+  /** The chart second the play starts at (`PlayerOptions.startAtSeconds`, its first seek): 0 unless asked for later. */
   readonly startAtSeconds: number;
   readonly audioOffsetMs: number;
   readonly beatAtSeconds: (seconds: number) => number;
@@ -119,8 +119,14 @@ export interface PlaySession {
   readonly volumeChanges: RealtimeAudioCursor<TimedChartSound>;
   /** The chart's background sounds, queued against the audio write head. */
   readonly backgroundAudio: RealtimeAudioCursor<TimedChartSound>;
+  /** What the play clock runs on: the audio session's output clock, or the engine scheduler's. */
+  readonly clockSource: PlaybackClockSource;
   /** The play clock, from the moment the chart starts (after the lead-in). */
   clock: PlaybackClock | undefined;
+  /** The seek generation: one more for every seek applied (`play-seek.ts`); a play that sought records no replay. */
+  seekGeneration: number;
+  /** Puts the score, the gauge and the combos back to the play's start, in place (a seek rebuilds from there). */
+  readonly resetScore: () => void;
 }
 
 /** The UI runtime's label for the mode. */
@@ -149,9 +155,7 @@ export async function createPlaySession(
   const leadInMs = options.leadInMs ?? 1500;
   const requestedStartAtSeconds = options.startAtSeconds ?? 0;
   const startAtSeconds =
-    mode === 'auto' && Number.isFinite(requestedStartAtSeconds) && requestedStartAtSeconds > 0
-      ? requestedStartAtSeconds
-      : 0;
+    Number.isFinite(requestedStartAtSeconds) && requestedStartAtSeconds > 0 ? requestedStartAtSeconds : 0;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const replay = options.replayInputs !== undefined;
   const resolvedChart = resolveEngineChart(resolvedJSON, options);
@@ -195,18 +199,35 @@ export async function createPlaySession(
   reportResolvedRuleset(options, ruleset);
   const endOnFailure = options.endOnFailure ?? true;
 
+  const { reset: resetSummary, ...initialSummary } = createInitialPlayerSummary(ruleset, ruleset.noteCount);
+  const courseCarry = options.course !== undefined ? courseStageCarryCombo(options.course) : undefined;
   const score: JudgeCoreScore = {
-    ...createInitialPlayerSummary(ruleset, ruleset.noteCount),
+    ...initialSummary,
     scoreTracker: createScoreTracker({
       moneyScore: ruleset.moneyScore,
-      ...(options.course !== undefined ? { course: courseStageCarryCombo(options.course) } : {}),
+      ...(courseCarry !== undefined ? { course: courseCarry } : {}),
     }),
   };
   const summary: PlayerSummary = score.summary;
-  if (score.scoreTracker.course !== undefined) {
+  const tracker = score.scoreTracker;
+  // The summary reads the combos off the tracker the judges update, so it always shows the live ones.
+  Object.defineProperties(summary, {
+    combo: { get: () => tracker.combo, enumerable: true, configurable: true },
+    maxCombo: { get: () => tracker.maxCombo, enumerable: true, configurable: true },
+  });
+  if (tracker.course !== undefined) {
     // The same object the tracker updates, so the summary always shows the live course combo.
-    summary.course = score.scoreTracker.course;
+    summary.course = tracker.course;
   }
+  const resetScore = (): void => {
+    resetSummary();
+    tracker.combo = 0;
+    tracker.maxCombo = 0;
+    if (tracker.course !== undefined && courseCarry !== undefined) {
+      tracker.course.combo = courseCarry.combo;
+      tracker.course.maxCombo = Math.max(courseCarry.maxCombo, courseCarry.combo);
+    }
+  };
   const replayRecorder = options.onReplayRecorded
     ? (() => {
         const { chartSHA256, chartMD5, recorder, sourceChart, ...hostPlaySettings } = options.recordReplay ?? {};
@@ -307,6 +328,9 @@ export async function createPlaySession(
     audioEnabled: audioSession !== undefined,
     totalSeconds,
   });
+  const clockSource = createAudioPlaybackClockSource(audioSession);
+  // `session` is returned below; the frames read its clock and seek generation as they are published.
+  let session: PlaySession | undefined;
   const publishUIFrame = createUIFramePublisher({
     uiEnabled,
     uiSignals,
@@ -332,6 +356,18 @@ export async function createPlaySession(
       };
     },
     reversal: resolvedChart.reversal,
+    resolveClock: (seconds) => {
+      const clock = session?.clock;
+      return {
+        generation: session?.seekGeneration ?? 0,
+        clock: {
+          outputSeconds:
+            (clock === undefined ? clockSource.nowMs() : clock.sourceMsAt(tempoClock.clockMsAt(seconds))) / 1000,
+          tempo: tempoClock.tempo,
+          paused: clock?.isPaused() ?? false,
+        },
+      };
+    },
   });
   const applyJudgeEffect = createJudgeEffectHandler({
     uiEnabled,
@@ -363,7 +399,7 @@ export async function createPlaySession(
     audioSession!.triggerEvent!(trigger.event);
   });
 
-  return {
+  session = {
     options,
     strategy,
     writeOutput,
@@ -402,6 +438,10 @@ export async function createPlaySession(
     applyJudgeEffect,
     volumeChanges,
     backgroundAudio,
+    clockSource,
     clock: undefined,
+    seekGeneration: 0,
+    resetScore,
   };
+  return session;
 }

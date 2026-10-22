@@ -10,10 +10,11 @@ export interface RealtimeAudioCursor<T = unknown> {
   /** Fires every item due by `referenceSeconds` (chart seconds), in order. */
   triggerUntil(referenceSeconds: number): void;
   /**
-   * Passes every item due by `referenceSeconds` without firing it, for a play that starts there; `ringing` gets each one
-   * with how long ago it was due, to start what still sounds partway.
+   * Moves the cursor to `referenceSeconds`, backwards or forwards (a seek): it starts over from the first item and passes
+   * every item due by then, handing each to `passed` with how long ago it was due (to start what still sounds partway).
+   * Without `passed` the items passed are fired, as {@link triggerUntil} fires them (state such as volume changes).
    */
-  skipUntil(referenceSeconds: number, ringing?: (item: T, offsetSeconds: number) => void): void;
+  seek(referenceSeconds: number, passed?: (item: T, offsetSeconds: number) => void): void;
   /** Every item has fired. */
   readonly done: boolean;
 }
@@ -44,8 +45,12 @@ export function createRealtimeAudioCursor<T extends { readonly seconds: number }
     triggerUntil(referenceSeconds: number): void {
       walk(referenceSeconds, fire);
     },
-    skipUntil(referenceSeconds: number, ringing?: (item: T, offsetSeconds: number) => void): void {
-      walk(referenceSeconds, (item, reference) => ringing?.(item, Math.max(0, reference - item.seconds)));
+    seek(referenceSeconds: number, passed?: (item: T, offsetSeconds: number) => void): void {
+      index = 0;
+      walk(
+        referenceSeconds,
+        passed === undefined ? fire : (item, reference) => passed(item, Math.max(0, reference - item.seconds)),
+      );
     },
     get done(): boolean {
       return index >= items.length;

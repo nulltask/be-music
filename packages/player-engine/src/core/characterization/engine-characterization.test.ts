@@ -372,6 +372,70 @@ describe('engine characterization: play scenarios', () => {
     await expectSnapshot('scenarios/seek-start-at', observations);
   });
 
+  test('seek commands', async () => {
+    const seek = (atMs: number, seconds: number): ScriptStep => command(atMs, { kind: 'seek', seconds });
+    const observations = {
+      // Forwards past eight notes and both BGM starts, then back before the chord.
+      forwardsAndBack: await observePlay({
+        driver: 'auto',
+        chart: basicChart(),
+        script: [seek(300, 2.2), seek(900, 1.4)],
+      }),
+      // Into a charge note: its keysound rings on partway, and the hold is announced again.
+      intoAHeldNote: await observePlay({ driver: 'auto', chart: longNoteChart(2), script: [seek(300, 1.6)] }),
+      // Three seeks in one drain: only the last applies.
+      coalesced: await observePlay({
+        driver: 'auto',
+        chart: basicChart(),
+        script: [
+          {
+            atMs: 300,
+            commands: [
+              { kind: 'seek', seconds: 3 },
+              { kind: 'seek', seconds: 0.2 },
+              { kind: 'seek', seconds: 2.2 },
+            ],
+          },
+        ],
+      }),
+      // Sought while paused: it stays paused at the second sought, and plays on from there on resume.
+      paused: await observePlay({
+        driver: 'auto',
+        chart: basicChart(),
+        script: [command(600, { kind: 'toggle-pause' }), seek(800, 2.2), command(1200, { kind: 'toggle-pause' })],
+      }),
+      // During the lead-in a seek sets where the chart starts.
+      leadIn: await observePlay({
+        driver: 'auto',
+        chart: basicChart(),
+        script: [seek(200, 2.2)],
+        options: { leadInMs: 500 },
+      }),
+      // Out of the hold after the chart: the play settles again at its new horizon.
+      outOfTheHold: await observePlay({
+        driver: 'auto',
+        chart: basicChart(),
+        script: [seek(5000, 3)],
+        holdAfterChart: { releaseAfterMs: 3000 },
+      }),
+      // After a tempo change: the tempo in force is kept.
+      afterATempoChange: await observePlay({
+        driver: 'auto',
+        chart: basicChart(),
+        script: [command(500, { kind: 'tempo', tempo: 0.5 }), seek(1000, 2.2)],
+      }),
+      // Past the chart's end and before its start: clamped.
+      clamped: await observePlay({ driver: 'auto', chart: basicChart(), script: [seek(300, 99), seek(400, -5)] }),
+      // Without a UI runtime the no-TUI trace records it.
+      noUI: await observePlay({ driver: 'auto', chart: basicChart(), script: [seek(300, 2.2)], ui: false }),
+      // A manual play cannot seek yet: the command is dropped.
+      manual: await observePlay({ driver: 'manual', chart: basicChart(), script: [...BASIC_SCRIPT, seek(300, 2.2)] }),
+    };
+    expect(observations.coalesced.frames.generations).toHaveLength(1);
+    expect(observations.manual.frames.generations).toBeUndefined();
+    await expectSnapshot('scenarios/seek', observations);
+  });
+
   test('lead-in', async () => {
     const chart = basicChart();
     const manual = await observePlay({

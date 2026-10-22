@@ -579,6 +579,8 @@
               "emptyPoor": 0,
               "exScore": 0,
               "score": 0,
+              "combo": 0,
+              "maxCombo": 0,
               "gauge": {
                 "current": 2,
                 "max": 100,
@@ -589,8 +591,7 @@
                 "type": "GROOVE",
                 "survival": false,
                 "failedMidPlay": false
-              },
-              "maxCombo": 0
+              }
             },
             "beatoraja": {
               "total": 100,
@@ -604,6 +605,8 @@
               "emptyPoor": 0,
               "exScore": 0,
               "score": 0,
+              "combo": 0,
+              "maxCombo": 0,
               "gauge": {
                 "current": 2,
                 "max": 100,
@@ -614,8 +617,7 @@
                 "type": "NORMAL",
                 "survival": false,
                 "failedMidPlay": false
-              },
-              "maxCombo": 0
+              }
             },
             "iidx": {
               "total": 104,
@@ -629,6 +631,8 @@
               "emptyPoor": 0,
               "exScore": 0,
               "score": 0,
+              "combo": 0,
+              "maxCombo": 0,
               "gauge": {
                 "current": 0,
                 "max": 100,
@@ -639,8 +643,7 @@
                 "type": "NORMAL",
                 "survival": false,
                 "failedMidPlay": false
-              },
-              "maxCombo": 0
+              }
             }
           }
         },
@@ -726,6 +729,8 @@
               "emptyPoor": 0,
               "exScore": 200,
               "score": 200000,
+              "combo": 100,
+              "maxCombo": 100,
               "gauge": {
                 "current": 100,
                 "max": 100,
@@ -736,8 +741,7 @@
                 "type": "GROOVE",
                 "survival": false,
                 "failedMidPlay": false
-              },
-              "maxCombo": 100
+              }
             },
             "beatoraja": {
               "total": 100,
@@ -751,6 +755,8 @@
               "emptyPoor": 0,
               "exScore": 200,
               "score": 200,
+              "combo": 100,
+              "maxCombo": 100,
               "gauge": {
                 "current": 100,
                 "max": 100,
@@ -761,8 +767,7 @@
                 "type": "NORMAL",
                 "survival": false,
                 "failedMidPlay": false
-              },
-              "maxCombo": 100
+              }
             },
             "iidx": {
               "total": 104,
@@ -776,6 +781,8 @@
               "emptyPoor": 0,
               "exScore": 208,
               "score": 208,
+              "combo": 104,
+              "maxCombo": 104,
               "gauge": {
                 "current": 100,
                 "max": 100,
@@ -786,8 +793,7 @@
                 "type": "NORMAL",
                 "survival": false,
                 "failedMidPlay": false
-              },
-              "maxCombo": 104
+              }
             }
           }
         },
@@ -873,6 +879,8 @@
               "emptyPoor": 0,
               "exScore": 87,
               "score": 97500,
+              "combo": 0,
+              "maxCombo": 22,
               "gauge": {
                 "current": 64,
                 "max": 100,
@@ -883,8 +891,7 @@
                 "type": "GROOVE",
                 "survival": false,
                 "failedMidPlay": false
-              },
-              "maxCombo": 22
+              }
             },
             "beatoraja": {
               "total": 100,
@@ -898,6 +905,8 @@
               "emptyPoor": 0,
               "exScore": 88,
               "score": 88,
+              "combo": 0,
+              "maxCombo": 24,
               "gauge": {
                 "current": 76,
                 "max": 100,
@@ -908,8 +917,7 @@
                 "type": "NORMAL",
                 "survival": false,
                 "failedMidPlay": false
-              },
-              "maxCombo": 24
+              }
             },
             "iidx": {
               "total": 104,
@@ -923,6 +931,8 @@
               "emptyPoor": 0,
               "exScore": 93,
               "score": 93,
+              "combo": 0,
+              "maxCombo": 22,
               "gauge": {
                 "current": 70,
                 "max": 100,
@@ -933,8 +943,7 @@
                 "type": "NORMAL",
                 "survival": false,
                 "failedMidPlay": false
-              },
-              "maxCombo": 22
+              }
             }
           }
         }
