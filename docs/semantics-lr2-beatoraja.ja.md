@@ -817,9 +817,9 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 - **beatoraja:**
   - POOR = 見逃したノート、MISS = 空 POOR（[JudgeManager.java#L400-L404](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L400-L404)）。
   - 数値 420 は MISS、426 は POOR+MISS、427 は BAD+POOR+MISS です（[skin/property/IntegerPropertyFactory.java#L461-L467](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/property/IntegerPropertyFactory.java#L461-L467)）。
-- **be-music の現状:** [`packages/skin-beatoraja/src/scene/score.ts`](../packages/skin-beatoraja/src/scene/score.ts) は 420 = POOR、426 = POOR、427 = BAD+POOR として読みますが、エンジンは `summary.emptyPoor` を数えています。[beatoraja skin 実装メモ](./beatoraja-skin.ja.md) にある、エンジンに MISS の判定がないという注記は古くなっています。
+- **be-music の現状:** fixed in [#585](https://github.com/nulltask/be-music/issues/585)。`scaleBeatorajaWindows` は、NORMAL では倍率を適用した BAD、PMS では固定 BAD を上限にします。7K の `#RANK 4` はエンジンの判定とリプレイの再計算の両方で BAD が -350/+275 ms になります。
 - **影響:** A/C。
-- **推奨:** 数値を `emptyPoor` から読み、player-scene-model のスコアまで通す。表示だけの話です。
+- **保存済みの結果:** リプレイと ruleset のリビジョン 0 は変更しません。Leaderboard の投稿検証は同じ記録済み入力をこの判定表で再計算します。保存済みの派生結果と過去のランキングを更新するには、明示的なオフライン再計算が必要です。この変更では本番への書き込みを行いません。
 
 ### ゲージ種別の op 42/43/1046（バグ）
 
