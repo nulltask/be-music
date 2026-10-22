@@ -15,6 +15,7 @@ const workspacePackages = [
   'skin-lr2',
   'skin-beatoraja',
   'player-skin-sdk',
+  'player-ui',
   'chart-editor',
   'player-browser',
   'app-accounts',

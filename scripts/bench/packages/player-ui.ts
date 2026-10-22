@@ -80,10 +80,12 @@ const NON_ELEMENT_EXPORTS = new Set([
   'defineBeMusicElements',
   'resolvePlayfieldParts',
   'paintPlayfieldParts',
-  'BeMusicPlayfieldCanvasElement',
   'formatPlaybackTime',
   'resolveSeekTarget',
   'resolveGameplayPanels',
+  'previewContentBottom',
+  'resolvePreviewBGARect',
+  'resolvePreviewInfoBox',
 ]);
 export const playerUIBenchmarkPackage: BenchmarkPackageDefinition = {
   module: ui,
@@ -108,6 +110,23 @@ export const playerUIBenchmarkPackage: BenchmarkPackageDefinition = {
     define('player-ui.resolveGameplayPanels', {
       run: () => {
         ui.resolveGameplayPanels(gameplayFrame);
+      },
+    });
+    const previewStage = { width: 854, height: 480 };
+    define('player-ui.previewContentBottom', {
+      run: () => {
+        ui.previewContentBottom(previewStage.height);
+      },
+    });
+    define('player-ui.resolvePreviewBGARect', {
+      run: () => {
+        ui.resolvePreviewBGARect(previewStage, 184);
+      },
+    });
+    const previewBGA = ui.resolvePreviewBGARect(previewStage, 184);
+    define('player-ui.resolvePreviewInfoBox', {
+      run: () => {
+        ui.resolvePreviewInfoBox({ stage: previewStage, bga: previewBGA, playfield: { right: 184 } });
       },
     });
     for (const [name, value] of Object.entries(ui)) {
