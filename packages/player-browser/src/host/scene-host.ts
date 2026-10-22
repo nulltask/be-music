@@ -50,6 +50,11 @@ export interface PixiScene {
    * back to capturing the entire stage at its visible (window) size.
    */
   getStageInfo?(): { container: Container; width: number; height: number };
+  /**
+   * `false` while the scene draws nothing on the Pixi canvas (its screens are all DOM): the host takes the canvas out of
+   * the page until a scene that draws on it becomes active. Absent means `true`.
+   */
+  readonly drawsOnCanvas?: boolean;
 }
 
 export interface PixiSceneHostMountOptions {
@@ -87,6 +92,8 @@ export class PixiSceneHost {
   private domLayer: HTMLElement | undefined;
   private domParent: HTMLElement | undefined;
   private previousPosition: string | undefined;
+  /** Where the canvas goes back while it is out of the page (see {@link PixiScene.drawsOnCanvas}). */
+  private canvasSlot: { parent: HTMLElement; next: Node | null } | undefined;
 
   /** The host-owned native layer. DOM screens are siblings of the Canvas, outside the Pixi scene graph. */
   public get domRoot(): HTMLElement {
@@ -255,6 +262,7 @@ export class PixiSceneHost {
           this.app.stage.addChild(scene.root);
         }
       }
+      if (!this.disposed) this.placeCanvas(scene?.drawsOnCanvas !== false);
     })();
     this.transitionLock = next.catch(() => undefined);
     return next;
@@ -271,6 +279,24 @@ export class PixiSceneHost {
     return () => {
       ticker.remove(callback);
     };
+  }
+
+  /** Puts the canvas in the page, or takes it out while the active scene draws only on DOM. */
+  private placeCanvas(placed: boolean): void {
+    // Before `mount` there is no canvas yet.
+    if (!this.domParent) return;
+    const canvas = this.app.canvas;
+    if (placed) {
+      const slot = this.canvasSlot;
+      if (!slot) return;
+      this.canvasSlot = undefined;
+      slot.parent.insertBefore(canvas, slot.next?.parentNode === slot.parent ? slot.next : null);
+      return;
+    }
+    const parent = canvas.parentElement;
+    if (this.canvasSlot || !parent) return;
+    this.canvasSlot = { parent, next: canvas.nextSibling };
+    canvas.remove();
   }
 
   /** Called by the active scene with the orientation of the stage it draws on (see {@link getStageOrientation}). */

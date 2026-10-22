@@ -124,6 +124,42 @@ describe('PixiSceneHost', () => {
 });
 
 describe('PixiSceneHost scene lifecycle', () => {
+  it('takes the canvas out of the page while a scene draws only on DOM, and puts it back in its place', async () => {
+    const host = new PixiSceneHost();
+    const children: object[] = [];
+    const parent = {
+      insertBefore(node: object, next: object | null) {
+        children.splice(next ? children.indexOf(next) : children.length, 0, node);
+      },
+    };
+    const domLayer = { parentNode: parent };
+    const canvas = {
+      get parentElement() {
+        return children.includes(canvas) ? parent : null;
+      },
+      get nextSibling() {
+        return children[children.indexOf(canvas) + 1] ?? null;
+      },
+      remove() {
+        children.splice(children.indexOf(canvas), 1);
+      },
+    };
+    children.push(canvas, domLayer);
+    const placed = (): string[] => children.map((node) => (node === canvas ? 'canvas' : 'dom'));
+    Object.defineProperty(host.app, 'canvas', { value: canvas });
+    Object.assign(host as unknown as { domParent: object }, { domParent: parent });
+
+    await host.setScene(makeScene({ drawsOnCanvas: false }));
+    expect(placed()).toEqual(['dom']);
+    await host.setScene(makeScene({ drawsOnCanvas: false }));
+    expect(placed()).toEqual(['dom']);
+    await host.setScene(makeScene());
+    expect(placed()).toEqual(['canvas', 'dom']);
+    await host.setScene(makeScene({ drawsOnCanvas: false }));
+    await host.setScene(undefined);
+    expect(placed()).toEqual(['canvas', 'dom']);
+  });
+
   it('exits the previous scene and takes its root off the stage before the next one enters and goes on', async () => {
     const host = new PixiSceneHost();
     const log: string[] = [];

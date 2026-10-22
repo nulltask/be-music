@@ -12,8 +12,8 @@ import { mountGameplay } from './play.ts';
 import { mountDecide, mountResult } from './result.ts';
 
 /**
- * Responsive native screens and HUD. The playfield is a set of components, each drawing on a canvas the size of its
- * part of the stage; the player's own canvas keeps only the BGA.
+ * Responsive native screens and HUD. The playfield, BGA included, is a set of components, each drawing on a canvas the
+ * size of its part of the stage, so the player's own canvas is not used.
  */
 export const nativeSkin: BeMusicSkin = defineBeMusicSkin({
   apiVersion: BE_MUSIC_SKIN_API_VERSION,
@@ -44,7 +44,14 @@ export const nativeSkin: BeMusicSkin = defineBeMusicSkin({
   id: 'native',
   label: 'Native (DOM + Canvas)',
   description: 'Native HTML collection, settings, results and score HUD with a playfield of canvas components.',
-  gameplay: { draw: drawPlayfield, drawsOnDOM: true, drawsMines: true, drawsLaneCover: true, drawsMeasureLines: true },
+  gameplay: {
+    draw: drawPlayfield,
+    drawsOnDOM: true,
+    drawsBGA: true,
+    drawsMines: true,
+    drawsLaneCover: true,
+    drawsMeasureLines: true,
+  },
   decide: { durationMs: 2000, draw: drawDOMRequired },
   dom: { select: mountSelect, gameplay: mountGameplay, decide: mountDecide, result: mountResult },
 });
