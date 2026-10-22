@@ -17,6 +17,7 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
         display: grid;
         grid-template-rows: auto minmax(0, 1fr);
         gap: 10px;
+        box-sizing: border-box;
         height: 100%;
         padding: 16px;
         background: var(--be-music-color-background, #10151f);

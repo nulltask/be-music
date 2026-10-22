@@ -2,10 +2,12 @@ import { css, html, nothing, type CSSResultGroup, type PropertyDeclarations, typ
 import type { BeMusicDOMGameplayFrame } from '@be-music/player-skin-sdk';
 import { FrameElement } from '../base.ts';
 import { resolveGameplayPanels } from '../gameplay-data.ts';
+import { resolvePreviewInfoBox } from '../preview-layout.ts';
 import { baseStyles } from '../styles/base.ts';
 
 /**
- * The HUD of a preview: the chart's facts, score, combo, gauge and judgments under the BGA, and video-player controls
+ * The HUD of a preview: the chart's facts, score, combo, gauge and judgments beside or under the BGA
+ * (`resolvePreviewInfoBox`), and video-player controls
  * along the bottom of the stage. Lay it over `be-music-playfield`; the volume, mute and full-screen state are the
  * host's, set as properties.
  */
@@ -109,11 +111,9 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
     const f = this.frame;
     if (!f) return nothing;
     const { score, gauge, judgments, title, facts, seconds } = resolveGameplayPanels(f);
-    const { stage, bga, playfield } = f.layout;
-    const left = bga ? bga.x : playfield.right + 24;
-    const top = bga ? bga.y + bga.h + 12 : 16;
-    const right = bga ? bga.x + bga.w : stage.width - 16;
-    const box = `left:${(left / stage.width) * 100}%;top:${(top / stage.height) * 100}%;width:${((right - left) / stage.width) * 100}%;bottom:14%`;
+    const { stage } = f.layout;
+    const info = resolvePreviewInfoBox(f.layout);
+    const box = `left:${(info.left / stage.width) * 100}%;top:${(info.top / stage.height) * 100}%;width:${((info.right - info.left) / stage.width) * 100}%;bottom:${((stage.height - info.bottom) / stage.height) * 100}%`;
     const bpm = f.bpm === undefined ? undefined : `BPM ${Math.round(f.bpm)}`;
     const rate = score.maximum > 0 ? `${((score.exScore / score.maximum) * 100).toFixed(2)}%` : '—';
     return html`<section class="stage" part="stage" style=${`--stage-ratio:${stage.width / stage.height}`}>
