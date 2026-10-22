@@ -824,7 +824,7 @@ Overall shape: two separate state mappings. LR2 CSV skins get LR2 vocabulary ([`
 ### Gauge-type ops 42/43/1046 (bug)
 
 - **beatoraja:** 42 = gauge ≤ NORMAL, 43 = HARD and above, 1046 = the EX gauges ([skin/property/BooleanPropertyFactory.java#L394-L416](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/property/BooleanPropertyFactory.java#L394-L416)).
-- **be-music today:** 42 is always lit; 43 and 1046 never are ([`packages/skin-beatoraja/src/scene/play-ops.ts`](../packages/skin-beatoraja/src/scene/play-ops.ts)).
+- **be-music today:** fixed in [#600](https://github.com/nulltask/be-music/issues/600). Play frames and results share `resolveBeatorajaGaugeTypeOps`, using the gauge element’s runtime class mapping. Op 42 selects classes 0–2, 43 selects 3–8, and 1046 selects 0 / 1 / 4 / 5 / 7 / 8, including ASSIST-EASY and EASY. Gauge values and key modes do not change these flags.
 - **Impact:** A/C. HARD plays show the groove frame.
 - **Recommendation:** derive the ops from the gauge type, in play and on the result screen.
 

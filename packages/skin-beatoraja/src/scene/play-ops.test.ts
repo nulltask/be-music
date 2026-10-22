@@ -9,6 +9,7 @@ import {
   resolveBeatorajaChartTraitOps,
   resolveBeatorajaCoverOps,
   resolveBeatorajaPlayStartOps,
+  resolveBeatorajaGaugeTypeOps,
 } from './play-ops.ts';
 
 describe('resolveBeatorajaChartTraitOps', () => {
@@ -62,14 +63,12 @@ describe('resolveBeatorajaPlayStartOps', () => {
     expect(resolveBeatorajaPlayStartOps({ playVariant: '7', autoPlay: false, traits: { longNote: false } })).toEqual([
       BEATORAJA_OP.AUTOPLAY_OFF,
       BEATORAJA_OP.NOW_LOADING,
-      BEATORAJA_OP.GAUGE_GROOVE,
       BEATORAJA_OP.KEYSONG_7K,
       BEATORAJA_OP.NO_LN,
     ]);
     expect(resolveBeatorajaPlayStartOps({ playVariant: '48', autoPlay: true })).toEqual([
       BEATORAJA_OP.AUTOPLAY_ON,
       BEATORAJA_OP.NOW_LOADING,
-      BEATORAJA_OP.GAUGE_GROOVE,
       BEATORAJA_OP.KEYSONG_24K_DP,
     ]);
     expect(BEATORAJA_PLAY_STARTED_OPS).toEqual({ on: BEATORAJA_OP.LOADED, off: BEATORAJA_OP.NOW_LOADING });
@@ -114,4 +113,20 @@ describe('beatorajaFastSlowOp', () => {
     expect(beatorajaFastSlowOp(3, 1)).toBe(BEATORAJA_OP.P3_JUDGE_LATE);
     expect(beatorajaFastSlowOp(1, 0)).toBeUndefined();
   });
+});
+
+it.each([
+  ['GROOVE', [42]],
+  ['ASSISTED-EASY', [42, 1046]],
+  ['DEATH', [43, 1046]],
+  ['GRADE', [43]],
+  ['COURSE', [43]],
+  ['COURSE-EASY', [43]],
+  ['GRADE-HARD', [43, 1046]],
+  ['COURSE-HARD', [43, 1046]],
+  ['GRADE-DEATH', [43, 1046]],
+  ['COURSE-DEATH', [43, 1046]],
+  [undefined, []],
+] as const)('shares the gauge renderer mapping for %s', (type, expected) => {
+  expect(resolveBeatorajaGaugeTypeOps(type)).toEqual(expected);
 });

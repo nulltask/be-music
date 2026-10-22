@@ -130,6 +130,7 @@ describe('resolveBeatorajaResultNumber', () => {
 describe('resolveBeatorajaResultOps', () => {
   it('lights the ranks, the verdict, the lamp and the judgment-exists ops', () => {
     expect(resolveBeatorajaResultOps(input())).toEqual([
+      BEATORAJA_OP.GAUGE_HARD,
       BEATORAJA_OP.P1_RANK_A,
       // Every generic rank the EX score reaches, A down to F.
       BEATORAJA_OP.RANK_A,
@@ -235,4 +236,17 @@ describe('timing statistics', () => {
     expect(beatorajaTimingStats([])).toEqual({ mean: 0, stddev: 0 });
     expect(beatorajaTimingStats([{ deltaMs: 2 }, { deltaMs: 6 }])).toEqual({ mean: 4, stddev: 2 });
   });
+});
+
+it.each([
+  ['NORMAL', [42]],
+  ['EASY', [42, 1046]],
+  ['HARD', [43]],
+  ['EX-HARD', [43, 1046]],
+  ['CLASS', [43]],
+  ['EXCLASS', [43, 1046]],
+  ['EXHARDCLASS', [43, 1046]],
+] as const)('uses the final %s gauge class for result ops', (type, expected) => {
+  const result = input({ gauge: undefined, result: facts({ gauge: 50, gaugeType: type }) });
+  expect(resolveBeatorajaResultOps(result).filter((op) => [42, 43, 1046].includes(op))).toEqual(expected);
 });
