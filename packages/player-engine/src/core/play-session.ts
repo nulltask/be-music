@@ -4,7 +4,7 @@ import {
   type ResolvedChart,
 } from '@be-music/chart-model';
 import { throwIfAborted } from '@be-music/shared-utils/core';
-import { type BeMusicJSON, resolveBMSBase } from '@be-music/chart-source';
+import { type BeMusicEvent, type BeMusicJSON, resolveBMSBase } from '@be-music/chart-source';
 import { createPlayerStateSignals, type PlayerStateSignals } from '../state-signals.ts';
 import { resolveHighSpeedMultiplier } from './high-speed-control.ts';
 import { createPlayerUISignalBus, type PlayerUISignalBus } from './ui-signal-bus.ts';
@@ -60,6 +60,9 @@ import type {
 import { createRealtimeAudioCursor, type RealtimeAudioCursor } from './play-audio-cursor.ts';
 import type { JudgeStrategy } from './play-strategy.ts';
 
+/** A chart sound the realtime audio fires at its time. */
+type TimedChartSound = { readonly event: BeMusicEvent; readonly seconds: number };
+
 /**
  * A play session: everything a play is set up with before its loop runs — the chart resolved for play, the tempo clock,
  * the ruleset, the score, the replay recorder, the UI / input buses and runtimes, the audio session, the no-TUI
@@ -86,6 +89,8 @@ export interface PlaySession {
   /** The play tempo over the play clock: `speed` at the start, re-anchored by every tempo change. */
   readonly tempoClock: TempoClock;
   readonly leadInMs: number;
+  /** The chart second the play starts at (`PlayerOptions.startAtSeconds`): 0 unless an AUTO play asked for later. */
+  readonly startAtSeconds: number;
   readonly audioOffsetMs: number;
   readonly beatAtSeconds: (seconds: number) => number;
   readonly idBase: 36 | 62;
@@ -111,9 +116,9 @@ export interface PlaySession {
   /** Maps the judge's effects onto audio, the UI buses, the replay and the trace. */
   readonly applyJudgeEffect: JudgeCoreEffectSink;
   /** The chart's volume changes (`#97` / `#98`), queued against the audio write head. */
-  readonly volumeChanges: RealtimeAudioCursor;
+  readonly volumeChanges: RealtimeAudioCursor<TimedChartSound>;
   /** The chart's background sounds, queued against the audio write head. */
-  readonly backgroundAudio: RealtimeAudioCursor;
+  readonly backgroundAudio: RealtimeAudioCursor<TimedChartSound>;
   /** The play clock, from the moment the chart starts (after the lead-in). */
   clock: PlaybackClock | undefined;
 }
@@ -142,6 +147,11 @@ export async function createPlaySession(
   const speed = options.speed ?? 1;
   const tempoClock = createTempoClock(speed);
   const leadInMs = options.leadInMs ?? 1500;
+  const requestedStartAtSeconds = options.startAtSeconds ?? 0;
+  const startAtSeconds =
+    mode === 'auto' && Number.isFinite(requestedStartAtSeconds) && requestedStartAtSeconds > 0
+      ? requestedStartAtSeconds
+      : 0;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const replay = options.replayInputs !== undefined;
   const resolvedChart = resolveEngineChart(resolvedJSON, options);
@@ -369,6 +379,7 @@ export async function createPlaySession(
     highSpeed,
     tempoClock,
     leadInMs,
+    startAtSeconds,
     audioOffsetMs,
     beatAtSeconds,
     idBase,

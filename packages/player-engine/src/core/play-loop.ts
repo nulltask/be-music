@@ -89,13 +89,30 @@ function startChart(session: PlaySession): PlaybackClock {
       ['mode', strategy.mode === 'auto' ? 'auto' : session.autoScratch ? 'auto-scratch' : 'manual'],
     ]);
   }
+  // A play starting partway starts its clock where that chart second falls.
   const clock = createPlaybackClock(
     createAudioPlaybackClockSource(audioSession),
-    session.audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0),
+    session.audioOffsetMs +
+      (audioSession?.chartStartDelayMs ?? 0) -
+      session.tempoClock.clockMsAt(session.startAtSeconds),
   );
   session.clock = clock;
   session.tracer.flushUntil(0);
   return clock;
+}
+
+/**
+ * Brings a play that starts partway up to `seconds`: the volume changes before it apply, the judge settles everything
+ * before it, and the background sounds still ringing there start partway.
+ */
+function fastForwardTo(session: PlaySession, judge: PlayJudge, seconds: number): void {
+  const { audioSession } = session;
+  session.volumeChanges.triggerUntil(seconds);
+  judge.fastForward?.(seconds);
+  session.backgroundAudio.skipUntil(seconds, (sound, offsetSeconds) =>
+    audioSession?.triggerEventAt?.(sound.event, offsetSeconds),
+  );
+  session.tracer.flushUntil(seconds);
 }
 
 /**
@@ -111,6 +128,7 @@ async function playChart(
 ): Promise<boolean> {
   const { options, tempoClock, totalSeconds, tracer, publishUIFrame, beatAtSeconds } = session;
   const clock = startChart(session);
+  if (session.startAtSeconds > 0) fastForwardTo(session, judge, session.startAtSeconds);
   controls.chartStarted();
 
   // A held play (`holdAfterChart`) runs past its horizon until the host ends it.
