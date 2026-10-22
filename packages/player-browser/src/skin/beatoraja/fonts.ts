@@ -27,6 +27,7 @@ import {
 } from '@be-music/skin-beatoraja';
 import { BitmapFont, Cache, Texture, bitmapFontTextParser } from 'pixi.js';
 import { logger } from '../../logger.ts';
+import { loadTextureFromBytes } from '../../media/textures.ts';
 
 const log = logger('beatoraja-fonts');
 
@@ -257,11 +258,9 @@ async function registerBitmapFont(args: {
       continue;
     }
     try {
-      // Same Blob → ImageBitmap → Texture path the source-bundle decoder uses, so the visual
-      // result is consistent with how skin sources render.
-      const blob = new Blob([pageBytes as Uint8Array<ArrayBuffer>]);
-      const bitmap = await createImageBitmap(blob);
-      const texture = Texture.from(bitmap);
+      // BMFont sheets can be TGA (WMII_FHD); browsers cannot decode those directly.
+      const texture = await loadTextureFromBytes(resolvedPagePath, pageBytes);
+      if (texture === undefined) throw new Error('Unsupported bitmap font page');
       texture.label = resolvedPagePath;
       texture.source.label = resolvedPagePath;
       pageTextures.push(texture);
