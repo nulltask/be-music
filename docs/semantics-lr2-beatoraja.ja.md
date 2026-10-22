@@ -788,7 +788,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 ### GAUGE_MAX タイマー（バグ）
 
 - **beatoraja:** `switchTimer(TIMER_GAUGE_MAX_1P, gauge.isMax())` を毎フレーム実行します（[BMSPlayer.java#L636](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L636)）。
-- **be-music の現状:** 止まらない `startOnce`（[`packages/skin-beatoraja/src/scene/play-timers.ts`](../packages/skin-beatoraja/src/scene/play-timers.ts) ~L248）。LR2 側は止めています。
+- **be-music の現状:** fixed in [#598](https://github.com/nulltask/be-music/issues/598)。純粋なフレーム resolver は実際のゲージ最大値に達するたびにタイマー 44 を開始し、満タンの間は開始時刻を保ち、最大値未満では停止します。LR2 側は既に対応するタイマーを停止しています。
 - **影響:** A/C。ゲージが下がった後もゲージ最大の演出が残ります。
 - **推奨:** 最大に達したら開始し、離れたら止める。
 

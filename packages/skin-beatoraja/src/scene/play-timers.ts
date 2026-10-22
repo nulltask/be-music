@@ -26,7 +26,7 @@ import { beatorajaFastSlowOp } from './play-ops.ts';
 
 /**
  * Timers a change of the play starts and stops, as data: `start` (re)starts each timer now, `startOnce` starts each one
- * unless it already started during this play (the failure, the end of the notes, the full combo, the full gauge), and
+ * unless it already started during this play (the failure, the end of the notes, the full combo), and
  * `stop` turns each off, hiding what is gated on it.
  */
 export interface BeatorajaTimerChanges {
@@ -234,12 +234,14 @@ export interface BeatorajaFrameTimerInput {
 /**
  * The timers an engine frame starts: the rhythm timer (140) on the first frame and whenever the beat crosses a whole
  * beat either way; once each, the failure timer (3) when the gauge drops from above 0 to 0 (a survival gauge failing
- * mid-play), each side's end-of-notes timer (143 / 144) once the beat passes its last note, and the full-gauge timer
- * (44) when the gauge reaches its maximum. A non-finite beat starts no beat timer.
+ * mid-play), and each side's end-of-notes timer (143 / 144) once the beat passes its last note. The full-gauge timer
+ * (44) starts on each transition to maximum, keeps its age while full and stops below maximum.
+ * A non-finite beat starts no beat timer.
  */
 export function resolveBeatorajaFrameTimers(input: BeatorajaFrameTimerInput): BeatorajaTimerChanges {
   const start: number[] = [];
   const startOnce: number[] = [];
+  const stop: number[] = [];
   const { beat, previousBeat, gauge } = input;
   if (Number.isFinite(beat)) {
     if (previousBeat === undefined || Math.floor(beat) !== Math.floor(previousBeat)) start.push(TIMER_RHYTHM);
@@ -251,9 +253,11 @@ export function resolveBeatorajaFrameTimers(input: BeatorajaFrameTimerInput): Be
   if (gauge !== undefined) {
     if (input.previousGauge !== undefined && input.previousGauge > 0 && gauge.current <= 0)
       startOnce.push(TIMER_FAILED);
-    if (gauge.max > 0 && gauge.current >= gauge.max) startOnce.push(TIMER_GAUGE_MAX_1P);
+    if (gauge.max > 0 && gauge.current >= gauge.max) {
+      if (input.previousGauge === undefined || input.previousGauge < gauge.max) start.push(TIMER_GAUGE_MAX_1P);
+    } else stop.push(TIMER_GAUGE_MAX_1P);
   }
-  return start.length === 0 && startOnce.length === 0 ? NO_TIMERS : { start, startOnce, stop: [] };
+  return start.length === 0 && startOnce.length === 0 && stop.length === 0 ? NO_TIMERS : { start, startOnce, stop };
 }
 
 /** The scene's timers, which a seek leaves running: the scene start, input, fade-out, failure, READY, play and preview. */
