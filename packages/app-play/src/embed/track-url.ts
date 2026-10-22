@@ -8,11 +8,17 @@ export interface EmbedTrack {
   readonly fetchURL: string;
   /** The archive's file name, for the collection's source label. */
   readonly fileName: string;
+  /** `?chart=`: the chart to play on its own (`findEmbedChart`); the whole track's list without one. */
+  readonly chart?: string;
 }
 
-/** Reads `?track=` from `href`; `undefined` without one, or when it is not an http(s) URL the embed can fetch. */
+/**
+ * Reads `?track=` (and `?chart=`) from `href`; `undefined` without a track, or when it is not an http(s) URL the embed
+ * can fetch.
+ */
 export function parseEmbedTrack(href: string): EmbedTrack | undefined {
-  const raw = new URL(href).searchParams.get('track');
+  const params = new URL(href).searchParams;
+  const raw = params.get('track');
   if (!raw) return undefined;
   let url: URL;
   try {
@@ -36,5 +42,6 @@ export function parseEmbedTrack(href: string): EmbedTrack | undefined {
     }
   }
   if (!/\.zip$/iu.test(fileName)) fileName = `${fileName}.zip`;
-  return { url: url.href, fetchURL, fileName };
+  const chart = params.get('chart')?.trim();
+  return { url: url.href, fetchURL, fileName, ...(chart ? { chart } : {}) };
 }
