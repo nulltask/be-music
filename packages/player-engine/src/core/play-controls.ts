@@ -19,6 +19,8 @@ import type { PlayJudge } from './play-strategy.ts';
 export interface PlayControls {
   /** Drains the input bus and applies every command on it. */
   consume(): void;
+  /** The host opened the chart-start gate, or no command gate was configured. */
+  readonly startRequested: boolean;
   /**
    * The seek to apply on this tick, if one is waiting: the last `seek` command drained so far (seeks coalesce, the last
    * one wins), or the play's start (`PlayerOptions.startAtSeconds`) until the chart starts. Taking it clears it.
@@ -50,6 +52,7 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
     inputSignals,
   } = session;
   let highSpeed = session.highSpeed;
+  let startRequested = options.waitForStart !== true;
   let interruptedReason: PlayerInterruptReason | undefined;
   // The chart second a command takes effect at: the play clock's, or the chart's start before it runs.
   const commandSeconds = (): number => (session.clock ? tempoClock.chartSecondsAt(session.clock.nowMs()) : 0);
@@ -146,12 +149,10 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
           if (judge.seek !== undefined) pendingSeek = seconds;
         },
         // Lane and key-state commands go to the judge; a strategy without live key input drops them.
-        onUnhandledCommand:
-          handleLaneCommand === undefined
-            ? undefined
-            : (command) => {
-                if (command.kind === 'lane-input' || command.kind === 'kitty-state') handleLaneCommand(command);
-              },
+        onUnhandledCommand: (command) => {
+          if (command.kind === 'start') startRequested = true;
+          else if (command.kind === 'lane-input' || command.kind === 'kitty-state') handleLaneCommand?.(command);
+        },
         logInterrupt: (reason) => traceInterrupt(reason, commandSeconds()),
       });
     },
@@ -194,6 +195,9 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
     },
     recordPendingViewChanges: () => {
       recordPendingViewChanges(inputSignals, replayRecorder, Math.max(0, commandSeconds()));
+    },
+    get startRequested() {
+      return startRequested;
     },
     get interruptedReason() {
       return interruptedReason;

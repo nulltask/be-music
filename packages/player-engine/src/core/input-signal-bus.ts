@@ -8,6 +8,8 @@ type WritableSignal<T> = {
 };
 
 export type PlayerInputCommand =
+  /** Opens a play configured with `waitForStart`; repeated commands have no effect. */
+  | { kind: 'start' }
   | { kind: 'interrupt'; reason: 'escape' | 'ctrl-c' | 'restart' }
   | { kind: 'toggle-pause' }
   | { kind: 'high-speed'; action: HighSpeedControlAction }

@@ -250,6 +250,8 @@ export interface PlayerPlayTuning {
   limiterCeilingDb?: number;
   limiterReleaseMs?: number;
   leadInMs?: number;
+  /** Wait for a `start` input command as well as the lead-in before starting chart time and audio. */
+  waitForStart?: boolean;
   audioOffsetMs?: number;
   audioHeadPaddingMs?: number;
   audioTailSeconds?: number;
