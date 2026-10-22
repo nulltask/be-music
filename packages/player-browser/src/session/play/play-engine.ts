@@ -733,8 +733,10 @@ export function applyFinalSummary(ctx: PlayEngineContext, summary: Readonly<Play
  * drives its LN-hold timers and turntable from it).
  */
 function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUICommand): void {
-  // A run started partway announces its start as a seek; the session cleared its state before launching it.
-  if (command.kind === 'seek') return;
+  if (command.kind === 'seek') {
+    applyEngineSeek(ctx, command);
+    return;
+  }
   switch (command.kind) {
     case 'flash-lane':
       noteImpulse(ctx, command.channel);
@@ -786,6 +788,17 @@ function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUICommand): v
       break;
   }
   ctx.theme.moment({ kind: 'lane-command', command });
+}
+
+/**
+ * The engine sought (a run started partway announces its start as one): the score, the gauge and the play state become
+ * the snapshot it rebuilt — the combo, the max combo, the graphs and the timings of the judgments before the second
+ * sought included — instead of starting again from 0.
+ */
+function applyEngineSeek(ctx: PlayEngineContext, command: Extract<PlayerUICommand, { kind: 'seek' }>): void {
+  const { snapshot, seconds } = command;
+  applyEngineSummary(ctx, snapshot.summary);
+  applyPlayEvent(ctx, { type: 'seek', snapshot, seconds, atMs: ctx.playClock(), tempo: ctx.tempo });
 }
 
 /** Keeps the engine's long-note style and its judge windows (converted to ms) for the skin runtime. */

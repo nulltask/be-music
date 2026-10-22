@@ -332,6 +332,8 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       let state = sceneModelAPI.reducePlayState(BENCH_PLAY_STATE, BENCH_FRAME);
       state = sceneModelAPI.reducePlayState(state, BENCH_JUDGE);
       sceneModelAPI.reducePlayState(state, { type: 'hi-speed-step', delta: 0.1 });
+      // A seek rebuilding 200 judgments.
+      sceneModelAPI.reducePlayState(BENCH_PLAYED, BENCH_SEEK);
     },
   });
   define('player-scene-model.recentJudgeTimings', {
@@ -490,6 +492,24 @@ const BENCH_PLAYED = Array.from({ length: 200 }, (_, index): sceneModelAPI.PlayE
   seconds: index / 2,
   atMs: index * 500,
 })).reduce(sceneModelAPI.reducePlayState, sceneModelAPI.reducePlayState(BENCH_PLAY_STATE, BENCH_FRAME));
+const BENCH_SEEK: sceneModelAPI.PlayEvent = {
+  type: 'seek',
+  seconds: 100,
+  atMs: 100_000,
+  snapshot: {
+    summary: { exScore: 334, gauge: { current: 80, max: 100, initial: 20, cleared: true, type: 'GROOVE' } },
+    combo: 200,
+    maxCombo: 200,
+    judgments: Array.from({ length: 200 }, (_, index) => ({
+      judge: index % 3 === 0 ? 'GREAT' : 'PERFECT',
+      combo: index + 1,
+      deltaMs: (index % 21) - 10,
+      seconds: index / 2,
+      gauge: Math.min(100, 20 + index),
+      exScore: index * 2,
+    })),
+  },
+};
 const BENCH_SCORE = {
   total: 200,
   perfect: 133,
