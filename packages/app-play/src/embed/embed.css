@@ -79,3 +79,8 @@ body {
   border-radius: 3px;
   background: #abcaff;
 }
+
+/* The pointer hides with the video controls while a play runs untouched. */
+.preview:has(be-music-preview-hud[controls-hidden]) {
+  cursor: none;
+}
