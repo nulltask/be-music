@@ -32,6 +32,6 @@
     "@tweakpane/core": "^2.0.5",
     "vite": "catalog:",
     "vite-plus": "catalog:",
-    "wrangler": "^4.151.0"
+    "wrangler": "^4.151.3"
   }
 }
