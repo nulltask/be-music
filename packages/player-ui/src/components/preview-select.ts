@@ -9,6 +9,8 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
   static override properties: PropertyDeclarations = {
     charts: { attribute: false },
     heading: {},
+    /** Object URLs of each chart's `#STAGEFILE`, or its `#BANNER` when it has no stage file. Keyed by chart id. */
+    images: { attribute: false },
   };
   static override styles: CSSResultGroup = [
     baseStyles,
@@ -34,14 +36,20 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
       }
       button {
         display: grid;
-        grid-template-columns: auto minmax(0, 1fr) auto;
+        grid-template-columns: 128px minmax(0, 1fr) auto;
         align-items: center;
-        gap: 10px;
+        gap: 12px;
         width: 100%;
+        padding: 6px;
         text-align: left;
       }
-      .play {
-        color: var(--be-music-color-accent, #abcaff);
+      .thumb {
+        display: block;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        object-fit: contain;
+        background: #0c1018;
+        border-radius: 4px;
       }
       .title,
       .artist {
@@ -70,6 +78,7 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
   ];
   declare charts: readonly LibraryChart[] | undefined;
   declare heading: string | undefined;
+  declare images: ReadonlyMap<string, string> | undefined;
 
   protected override render(): TemplateResult {
     const charts = this.charts ?? [];
@@ -78,10 +87,15 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
         ${repeat(
           charts,
           (chart) => chart.id,
-          (chart, index) =>
-            html`<li>
+          (chart, index) => {
+            const artwork = this.images?.get(chart.id);
+            return html`<li>
               <button part="row" @click=${() => this.emit('activate-request', { index })}>
-                <span class="play" aria-hidden="true">▶</span>
+                ${
+                  artwork
+                    ? html`<img class="thumb" part="artwork" alt="" src=${artwork} />`
+                    : html`<span class="thumb" part="artwork"></span>`
+                }
                 <span
                   ><span class="title">${[chart.title, chart.subtitle].filter(Boolean).join(' ')}</span
                   ><span class="artist">${chart.artist ?? ''}</span></span
@@ -92,7 +106,8 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
                     .join(' · ')}</span
                 >
               </button>
-            </li>`,
+            </li>`;
+          },
         )}
       </ul>`;
   }

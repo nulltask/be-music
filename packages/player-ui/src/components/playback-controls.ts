@@ -33,14 +33,20 @@ export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackD
       }
       .bar {
         display: grid;
-        gap: 2px;
-        padding: 0 8px 4px;
-        background: linear-gradient(transparent, #05070bcc 40%);
+        gap: 0;
+        padding: 0 0 6px;
+        background: linear-gradient(transparent, #05070be6 32%);
       }
       .row {
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: 2px;
+        padding: 0 6px;
+      }
+      .sound {
+        display: flex;
+        align-items: center;
+        min-width: 0;
       }
       button {
         display: grid;
@@ -64,15 +70,111 @@ export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackD
         padding: 0;
         border: 0;
         background: transparent;
-        accent-color: var(--be-music-color-accent, #abcaff);
+        accent-color: transparent;
       }
       .seek {
         width: 100%;
-        height: 14px;
+        height: 16px;
         margin: 0;
+        appearance: none;
+        cursor: pointer;
+        --seek: 0%;
+      }
+      .seek::-webkit-slider-runnable-track {
+        height: 3px;
+        border-radius: 999px;
+        background: linear-gradient(to right, var(--be-music-color-accent, #abcaff) var(--seek), #ffffff3d var(--seek));
+      }
+      .bar:hover .seek::-webkit-slider-runnable-track,
+      .seek:focus-visible::-webkit-slider-runnable-track {
+        height: 5px;
+      }
+      .seek::-webkit-slider-thumb {
+        appearance: none;
+        width: 13px;
+        height: 13px;
+        margin-top: -5px;
+        border: 0;
+        border-radius: 50%;
+        background: var(--be-music-color-accent, #abcaff);
+        opacity: 0;
+      }
+      .bar:hover .seek::-webkit-slider-thumb,
+      .seek:active::-webkit-slider-thumb,
+      .seek:focus-visible::-webkit-slider-thumb {
+        opacity: 1;
+      }
+      .bar:hover .seek::-webkit-slider-thumb {
+        margin-top: -4px;
+      }
+      .seek::-moz-range-track {
+        height: 3px;
+        border: 0;
+        border-radius: 999px;
+        background: #ffffff3d;
+      }
+      .seek::-moz-range-progress {
+        height: 3px;
+        border-radius: 999px;
+        background: var(--be-music-color-accent, #abcaff);
+      }
+      .seek::-moz-range-thumb {
+        width: 13px;
+        height: 13px;
+        border: 0;
+        border-radius: 50%;
+        background: var(--be-music-color-accent, #abcaff);
+        opacity: 0;
+      }
+      .bar:hover .seek::-moz-range-thumb,
+      .seek:active::-moz-range-thumb,
+      .seek:focus-visible::-moz-range-thumb {
+        opacity: 1;
       }
       .volume {
+        width: 0;
+        height: 14px;
+        margin: 0;
+        opacity: 0;
+        pointer-events: none;
+        appearance: none;
+        cursor: pointer;
+        transition:
+          width 0.15s ease,
+          opacity 0.15s ease;
+      }
+      .sound:hover .volume,
+      .sound:focus-within .volume {
         width: 72px;
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .volume::-webkit-slider-runnable-track {
+        height: 3px;
+        border-radius: 999px;
+        background: #ffffff3d;
+      }
+      .volume::-webkit-slider-thumb {
+        appearance: none;
+        width: 12px;
+        height: 12px;
+        margin-top: -4.5px;
+        border: 0;
+        border-radius: 50%;
+        background: #edf2fa;
+      }
+      .volume::-moz-range-track {
+        height: 3px;
+        border: 0;
+        border-radius: 999px;
+        background: #ffffff3d;
+      }
+      .volume::-moz-range-thumb {
+        width: 12px;
+        height: 12px;
+        border: 0;
+        border-radius: 50%;
+        background: #edf2fa;
       }
       .time {
         margin-left: 6px;
@@ -93,11 +195,16 @@ export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackD
   private scrubSeconds: number | undefined;
 
   protected override updated(): void {
-    if (this.scrubbing) return;
     const input = this.renderRoot.querySelector<HTMLInputElement>('input.seek');
     if (!input) return;
-    const next = String(this.shownSeconds());
-    if (input.value !== next) input.value = next;
+    if (!this.scrubbing) {
+      const next = String(this.shownSeconds());
+      if (input.value !== next) input.value = next;
+    }
+    const duration = Math.max(0, this.data?.durationSeconds ?? 0);
+    const value = Number(input.value);
+    const progress = duration > 0 && Number.isFinite(value) ? Math.min(100, Math.max(0, (value / duration) * 100)) : 0;
+    input.style.setProperty('--seek', `${progress}%`);
   }
 
   /** The second the bar and the time show: the held thumb, or the play clock. */
@@ -166,27 +273,29 @@ export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackD
         >
           ${icon(playing ? 'pause' : 'play')}
         </button>
-        <button
-          part="mute"
-          aria-label=${muted ? 'Unmute' : 'Mute'}
-          @click=${() => this.emit('volume-change', { volume, muted: !muted })}
-        >
-          ${icon(muted || volume === 0 ? 'muted' : 'volume')}
-        </button>
-        <input
-          class="volume"
-          part="volume"
-          type="range"
-          aria-label="Volume"
-          min="0"
-          max="1"
-          step="0.01"
-          .value=${String(muted ? 0 : volume)}
-          @input=${(event: Event) => {
-            const value = Number((event.currentTarget as HTMLInputElement).value);
-            this.emit('volume-change', { volume: value, muted: value === 0 });
-          }}
-        />
+        <div class="sound">
+          <button
+            part="mute"
+            aria-label=${muted ? 'Unmute' : 'Mute'}
+            @click=${() => this.emit('volume-change', { volume, muted: !muted })}
+          >
+            ${icon(muted || volume === 0 ? 'muted' : 'volume')}
+          </button>
+          <input
+            class="volume"
+            part="volume"
+            type="range"
+            aria-label="Volume"
+            min="0"
+            max="1"
+            step="0.01"
+            .value=${String(muted ? 0 : volume)}
+            @input=${(event: Event) => {
+              const value = Number((event.currentTarget as HTMLInputElement).value);
+              this.emit('volume-change', { volume: value, muted: value === 0 });
+            }}
+          />
+        </div>
         <span class="time" part="time">${formatPlaybackTime(current)} / ${formatPlaybackTime(duration)}</span>
         <span class="spacer"></span>
         <button
