@@ -61,13 +61,41 @@ export interface PlayGaugeInput {
   readonly type?: string;
 }
 
-/** What a play state reads of an engine frame (`PlayerUIFramePayload`): the chart's length and the running score. */
+/**
+ * What a play state reads of an engine frame (`PlayerUIFramePayload`): the chart's length and the running score. The
+ * combo, the max combo and a course stage's course combo, when the frame carries them, are the engine's own and win over
+ * what the judgments counted.
+ */
 export interface PlayFrameInput {
   readonly totalSeconds: number;
   readonly summary: {
     readonly exScore: number;
     readonly gauge?: PlayGaugeInput;
+    readonly combo?: number;
+    readonly maxCombo?: number;
+    readonly course?: { readonly combo: number; readonly maxCombo: number };
   };
+}
+
+/** One judgment a seek rebuilt (`PlayerUISeekJudgment`), in the order the play made it. */
+export interface PlaySeekJudgment extends PlayJudgeInput {
+  /** The chart second it was made at. */
+  readonly seconds: number;
+  /** The gauge right after it, out of the gauge's `max`. */
+  readonly gauge?: number;
+  /** The EX score right after it. */
+  readonly exScore: number;
+}
+
+/**
+ * What the engine rebuilt a play to when it sought (`PlayerUISeekSnapshot`): the summary at the second sought, with the
+ * combo and max combo, and every judgment before it.
+ */
+export interface PlaySeekSnapshot {
+  readonly summary: PlayFrameInput['summary'];
+  readonly combo: number;
+  readonly maxCombo: number;
+  readonly judgments: readonly PlaySeekJudgment[];
 }
 
 /** What a play state reads of a judgment the engine published (`PlayerJudgeComboSignalState`). */
