@@ -42,7 +42,7 @@ React・Vue はそれぞれのラッパーの peer dependency です。スキン
 
 ## プレイフィールド
 
-プレイフィールドの各要素は、要素の box のデバイスピクセルに合わせた自分専用の canvas に描画します。`rect` は要素が受け持つステージ上の範囲（ステージのデザイン座標）で、`data` も同じ座標で描くため、要素の位置と大きさはレイアウト側で自由に決められます。`be-music-playfield` は `BeMusicGameplayFrame` 全体を受け取り、`resolvePlayfieldParts(frame)` で分割して、レターボックスしたステージ上の各範囲に要素を配置します。ゲームプレイ HUD の下に重ねて使います。要素は時計を持たないため、毎アニメーションフレーム frame を渡してください。
+プレイフィールドの各要素は、要素の box のデバイスピクセルに合わせた自分専用の canvas に描画します。`rect` は要素が受け持つステージ上の範囲（ステージのデザイン座標）で、`data` も同じ座標で描くため、要素の位置と大きさはレイアウト側で自由に決められます。`be-music-playfield` は `BeMusicGameplayFrame` 全体を受け取り、`resolvePlayfieldParts(frame)` で分割して、レターボックスしたステージ上の各範囲に要素を配置します。ゲームプレイ HUD の下に重ねて使います。要素はクロックを持たないため、毎アニメーションフレーム frame を渡してください。
 
 `paintPlayfieldParts(context, parts)` は、ステージ全体の surface しか持たない host 向けに、同じ部品を一つの Canvas 2D context に各範囲で clip して描きます。独自の部品は `BeMusicPlayfieldCanvasElement` を継承して `paint(context, data)` を実装します。プレイフィールドは `stage`・`lanes`・`notes`・`lane-covers`・`judge-line`・`bombs`・`judgment-display` の parts を、各要素は `canvas` part を公開します。
 
