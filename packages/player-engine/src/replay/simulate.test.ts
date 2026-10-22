@@ -80,10 +80,10 @@ describe('simulateReplay mines', () => {
     return Math.round((without.gauge.final - withMine.gauge.final) * 1000) / 1000;
   }
 
-  test('a press inside the PGREAT window detonates a mine under LR2 (and IIDX), not under beatoraja', () => {
+  test('LR2beta3 and provisional IIDX distinguish ahead-only and symmetric mine press reach', () => {
     // Pressed 3 ms after the crossing: beatoraja damages only a key that is down as the mine crosses the line.
     const late = [down(1_003_000), up(1_020_000)];
-    expect(mineDamage('lr2', late)).toBe(10);
+    expect(mineDamage('lr2', late)).toBe(0);
     expect(mineDamage('iidx', late)).toBeGreaterThan(0);
     expect(mineDamage('beatoraja', late)).toBe(0);
     // Pressed 3 ms before and let go before the crossing: the same.
