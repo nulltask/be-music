@@ -7,7 +7,7 @@ export interface ControlsVisibility {
   readonly idle: boolean;
   /** The play is running: not paused, ending or not started. */
   readonly playing: boolean;
-  /** The pointer is over the controls. */
+  /** The pointer is over the video controls. */
   readonly hovered: boolean;
   /** A control holds the keyboard focus. */
   readonly focused: boolean;
@@ -17,6 +17,9 @@ export interface ControlsVisibility {
 export function resolveControlsHidden(visibility: ControlsVisibility): boolean {
   return visibility.idle && visibility.playing && !visibility.hovered && !visibility.focused;
 }
+
+/** The video controls inside the preview HUD. */
+const CONTROLS = 'be-music-playback-controls';
 
 /** The input that wakes the controls. */
 const WAKE_EVENTS = ['pointermove', 'pointerdown', 'wheel', 'keydown', 'touchstart'] as const;
@@ -37,8 +40,6 @@ export class ControlsIdleController {
     this.hud = hud;
     this.window = view;
     for (const name of WAKE_EVENTS) view.addEventListener(name, this.wake, { capture: true, passive: true });
-    hud.addEventListener('pointerover', this.enter);
-    hud.addEventListener('pointerout', this.leave);
     hud.addEventListener('focusin', this.update);
     hud.addEventListener('focusout', this.update);
     this.wake();
@@ -52,30 +53,23 @@ export class ControlsIdleController {
 
   public dispose(): void {
     for (const name of WAKE_EVENTS) this.window.removeEventListener(name, this.wake, { capture: true });
-    this.hud.removeEventListener('pointerover', this.enter);
-    this.hud.removeEventListener('pointerout', this.leave);
     this.hud.removeEventListener('focusin', this.update);
     this.hud.removeEventListener('focusout', this.update);
     if (this.timer !== undefined) clearTimeout(this.timer);
   }
 
-  private readonly wake = (): void => {
+  private readonly wake = (event?: Event): void => {
+    // Where the pointer is, from what it moved over: an element under it can vanish (the play button a click removes)
+    // without a `pointerout`.
+    if (event instanceof PointerEvent && event.type === 'pointermove') {
+      this.hovered = event.composedPath().some((target) => target instanceof Element && target.localName === CONTROLS);
+    }
     this.idle = false;
     if (this.timer !== undefined) clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       this.idle = true;
       this.update();
     }, CONTROLS_IDLE_MS);
-    this.update();
-  };
-
-  private readonly enter = (): void => {
-    this.hovered = true;
-    this.update();
-  };
-
-  private readonly leave = (): void => {
-    this.hovered = false;
     this.update();
   };
 
