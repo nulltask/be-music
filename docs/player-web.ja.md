@@ -812,6 +812,38 @@ flowchart LR
 browser behavior が terminal player と分岐する場合は、pure な path、timing、scroll、lookup、event mapping helper を shared package へ移し、package-local test で覆う方針を優先します。
 PixiJS scene wiring は browser rendering や WebAudio resource に依存する場合、`player-browser` に残してかまいません。
 
+## 埋め込みプレビュー
+
+`/embed/?track=<URL>`（`play.be-music.app`、プレビュー環境は `play.preview.be-music.app`）は、譜面のアーカイブを iframe の中でプレビューする。`@be-music/app-play` の 2 つ目のエントリ（`embed/index.html`、`src/embed/`）で、同じ Worker が配信する。Worker は iframe では自動サインインを始めない。アーカイブは `?music=` と同じく、同じオリジンからは直接、別の https オリジンからは `/__url-load-proxy` を経由して取得する。
+
+```html
+<iframe
+  src="https://play.be-music.app/embed/?track=https%3A%2F%2Fexample.com%2Fsong.zip"
+  width="854"
+  height="480"
+  allow="autoplay; fullscreen"
+></iframe>
+```
+
+プレビューは AUTO で再生し、入力を判定せず、リプレイも記録しない。
+
+```mermaid
+stateDiagram-v2
+  [*] --> Loading: 読み込み
+  Loading --> List: 譜面が複数
+  Loading --> Ready: 譜面が 1 つ
+  List --> Playing: 譜面を選ぶ
+  Ready --> Playing: 再生
+  Playing --> List: 終了（複数）
+  Playing --> Ready: 終了（1 つ、リプレイ）
+```
+
+- **選曲:** 譜面が複数あるトラックは一覧を表示し（`be-music-preview-select`）、選んだ譜面をすぐに再生する。
+- **再生待ち:** 譜面が 1 つのときは、プレイ画面の上に再生ボタン（`be-music-preview-start`）を表示する。再生後はリプレイボタンになる。リザルト画面はない。
+- **再生中:** プレビュー用スキン（`src/embed/preview-skin.ts`）は、左ペインにレーン、右ペインに BGA を置き、その下に譜面の情報・スコア・コンボ・ゲージ・判定（`be-music-preview-hud`）、下端に動画プレイヤー風のコントロール（`be-music-playback-controls`）を置く。コントロールは再生／一時停止・シークバー・時間・ミュートと音量・全画面である。Space で再生／一時停止、← / → で 5 秒シーク、M でミュート、F で全画面を切り替える。
+
+シークは、デコード済みの音声・準備済みのノート・BGA を保ったまま、エンジンを指定した譜面の秒数から再開する（`PlayScene.seek`、`PlayerOptions.startAtSeconds`）。それより前のノートは AUTO が判定した扱いになり、その時点で鳴っている音は途中から鳴らす（`AudioSession.triggerEventAt`）。一時停止中のプレイは再開する。ゲージとスコアのグラフはシークした位置から描き直す。[ADR 0015](./adr/0015-preview-seek.ja.md) を参照。
+
 ## DOM スキンと独立した controller
 
 Debug Menu → Skin & display → Built-in → Built-in skin で **Native (DOM + Canvas)** を選ぶ。Native はコレクション、検索、プレイオプション、ロード画面、スコア HUD、結果画面を HTML で表示し、メーターと SVG のゲージ履歴も使う。BGA・レーン・ノート・レーンカバー・判定ライン・ボム・判定文字はそれぞれ独立した component で、ステージ上の自分の範囲と同じ大きさの canvas に描画する。Native の画面を表示している間、host はステージ全体の canvas をページから外し、タッチレーンは DOM の画面で指を追う。Synesthesia または Plain を選ぶとフル Canvas に戻り、選択は保存される。入力にはブラウザーのフォーカス、スクロール、IME の挙動を使い、`/` ショートカットは DOM の検索欄にフォーカスする。
@@ -820,7 +852,7 @@ Native は横画面では HUD をレーン横の空間に、縦画面ではコ�
 
 ゲームプレイのダッシュボードには EX スコア・ランク・スコア率、コンボ、BPM、時間・進行状況に加え、判定内訳と早遅の件数、空 POOR を含む BP、直近の判定ずれ、ゲージ推移と判定タイミングのグラフを表示します。ハイスピードと描画速度、HS-FIX、緑数字、表示時間、BPM 範囲、レーンカバー、ランダム・ゲージ設定、オートスクラッチ、DP フリップ、BGA モード、譜面情報とコースのステージも確認できます。横画面ではレーン横の空間を使い、情報カードを最初から展開します。縦画面では **All play information** から詳細カードをレーンに重ねて開き、レーンを短くしません。DOM の更新はおよそ毎秒12回に抑え、グラフはゲージ最大96点・タイミング最大32件を表示します。
 
-`BeMusicSkin` は任意の `dom.select`・`dom.decide`・`dom.result`・`dom.gameplay` factory を宣言できる（`player-skin-sdk/src/dom.ts`）。それぞれ `HTMLElement` と既存 session に届く操作を受け取り、`update(frame)` と `dispose()` を返す。先頭の三つは Canvas の描画を置き換え、gameplay は Canvas のプレイフィールドを補う。スキンが `gameplay.drawsOnDOM` を設定すると、gameplay は `drawPlayfield(frame)` でプレイフィールドを描画し、host はゲームプレイ用の surface を作らない。画面がすべて DOM の scene は `drawsOnCanvas: false` を返し、`PixiSceneHost` は canvas に描く scene が有効になるまで canvas をページから外す。frame はスキン設定とエフェクトの設定も持つ。select 画面が `focusSearch()` を返すと、自分で検索欄を所有して host の重複する入力欄を隠せる。DOM は attach 時に作り、document が存在する前でもスキンの module を import できる。detach は mount とローカル状態を再入場まで保持し、dispose は listener、フレームワークの root、リソースを解放する。Native は shadow DOM でスタイルを分離する。別の場所に DOM を置く host は `PixiSceneHost.mount` に `domContainer` を渡す。
+`BeMusicSkin` は任意の `dom.select`・`dom.decide`・`dom.result`・`dom.gameplay` factory を宣言できる（`player-skin-sdk/src/dom.ts`）。それぞれ `HTMLElement` と既存 session に届く操作を受け取り、`update(frame)` と `dispose()` を返す。先頭の三つは Canvas の描画を置き換え、gameplay は Canvas のプレイフィールドを補う。スキンが `gameplay.drawsOnDOM` を設定すると、gameplay は `drawPlayfield(frame)` でプレイフィールドを描画し、host はゲームプレイ用の surface を作らない。画面がすべて DOM の scene は `drawsOnCanvas: false` を返す。`PixiSceneHost` は、有効な scene が canvas に描く間だけ canvas をページに置くため、ステージ全体への入力は `PixiSceneHost.container` で受ける。frame はスキン設定とエフェクトの設定も持つ。select 画面が `focusSearch()` を返すと、自分で検索欄を所有して host の重複する入力欄を隠せる。DOM は attach 時に作り、document が存在する前でもスキンの module を import できる。detach は mount とローカル状態を再入場まで保持し、dispose は listener、フレームワークの root、リソースを解放する。Native は shadow DOM でスタイルを分離する。別の場所に DOM を置く host は `PixiSceneHost.mount` に `domContainer` を渡す。
 
 `@be-music/player-browser/controller` は Pixi を実行時に import せず、`SceneController` と `createSelectController` を公開する。controller の操作は明示的な `enter(nowMs)`・`advance(nowMs)`・`dispatch(intent)`・`exit()`・`dispose()` で、所有者一つが進行させる。`getSnapshot()` と購読者は一時イベントも含め同じ frame を共有する。`createStore(selector, equals?)` は選択した値の安定した snapshot を提供し、最初の advance 前の `getSnapshot()` は `undefined`、`subscribe(listener)` の戻り値は購読解除関数になる。購読を解除しても session は終了しない。React・Vue の adapter は store をコンポーネントのライフサイクルにつなぎ、Canvas renderer は独自の frame loop を使える。
 
