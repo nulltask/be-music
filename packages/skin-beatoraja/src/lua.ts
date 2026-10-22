@@ -374,7 +374,7 @@ export function evaluateBeatorajaLuaSkin(options: EvaluateBeatorajaLuaSkinOption
     setupCustomRequire(L, options.modules, owner, options.skinConfig !== undefined);
     setupSkinConfig(L, options.skinConfig, options.skinBaseDir ?? '');
     setupDofile(L, owner, options.dofileResolver);
-    setupCompatStubs(L);
+    setupCompatStubs(L, owner);
 
     // Wire the host's runtime context (if any) so `main_state.option(...)` / `.number(...)` /
     // etc. invoked at skin-load time see chart-aware values rather than the stub fallbacks.
@@ -817,8 +817,8 @@ function setupDofile(
  * Restore stripped globals as inert stubs so theme code that touches `io`, `os`, or
  * `luajava` (typically inside utility modules that use them for "rotation" features —
  * picking a random background image, persisting state across runs) loads without
- * crashing. The stubs satisfy the Lua surface but do nothing useful — features built on
- * top either silently no-op (file persistence) or fall back to time-based defaults
+ * crashing. File and process operations are inert; the clock reads the runtime context.
+ * Other helpers either silently no-op (file persistence) or fall back to time-based defaults
  * (`os.time()`, `os.date(...)`).
  *
  * Without these, `customfunction.lua` modules in community skins crash at module-load
@@ -826,7 +826,7 @@ function setupDofile(
  * `luajava.bindClass("java.io.File")` raises before any rendering helper has a chance to
  * pcall around it.
  */
-function setupCompatStubs(L: lua_State): void {
+function setupCompatStubs(L: lua_State, owner: LuaRuntimeOwner): void {
   // ── `os` ────────────────────────────────────────────────────────────────────────
   // Tiny shim covering `os.time()` and `os.date()` which themes use for log file naming
   // and "today's banner" effects. Other `os.*` calls (`execute`, `remove`, `rename`)
@@ -857,6 +857,11 @@ function setupCompatStubs(L: lua_State): void {
     return 1;
   };
   const noOpReturnNil: LuaCFunction = () => 0;
+  // Skin delays use seconds; the host supplies the current scene time in microseconds.
+  pushClosureField(L, 'clock', (state) => {
+    lua_pushnumber(state, (owner.context?.time?.() ?? 0) / 1_000_000);
+    return 1;
+  });
   pushClosureField(L, 'time', osTimeFn);
   pushClosureField(L, 'date', osDateFn);
   pushClosureField(L, 'execute', noOpReturnNil);

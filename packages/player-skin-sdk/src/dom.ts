@@ -4,6 +4,7 @@ import type { BeMusicResultData } from './result-data.ts';
 import type { BeMusicSkinSettingValues } from './settings.ts';
 import type {
   BeMusicEffectLevel,
+  BeMusicGameplayFrame,
   BeMusicGameplayLayout,
   BeMusicGameplayRuntime,
   BeMusicPlayOptionChoices,
@@ -18,7 +19,19 @@ export interface BeMusicDOMScreen<Frame> {
 }
 
 /** The host owns the mount element; the skin owns its children and event listeners. No Pixi object crosses here. */
-export type BeMusicDOMFactory<Frame, Actions> = (container: HTMLElement, actions: Actions) => BeMusicDOMScreen<Frame>;
+export type BeMusicDOMFactory<Frame, Actions, Screen extends BeMusicDOMScreen<Frame> = BeMusicDOMScreen<Frame>> = (
+  container: HTMLElement,
+  actions: Actions,
+) => Screen;
+
+/**
+ * A gameplay screen. For a skin that sets `gameplay.drawsOnDOM`, the host hands it every frame's playfield through
+ * {@link drawPlayfield} instead of drawing the skin on a Canvas surface, and allocates no surface for gameplay.
+ */
+export interface BeMusicDOMGameplayScreen extends BeMusicDOMScreen<BeMusicDOMGameplayFrame> {
+  /** Called once per frame, before the player renders, with the lanes, notes and hit effects collected for it. */
+  drawPlayfield?(frame: BeMusicGameplayFrame): void;
+}
 
 export interface BeMusicDOMPresentation {
   readonly settings: BeMusicSkinSettingValues;
@@ -94,10 +107,13 @@ export interface BeMusicDOMDecideActions {
   cancel(): void;
 }
 
-/** DOM replaces select/decide/result drawing when provided; gameplay DOM accompanies the Canvas playfield. */
+/**
+ * DOM replaces select/decide/result drawing when provided. Gameplay DOM accompanies the Canvas playfield, or replaces
+ * it for a skin that sets `gameplay.drawsOnDOM`.
+ */
 export interface BeMusicDOMSkin {
   readonly select?: BeMusicDOMFactory<BeMusicDOMSelectFrame, BeMusicDOMSelectActions>;
   readonly decide?: BeMusicDOMFactory<BeMusicDOMDecideFrame, BeMusicDOMDecideActions>;
   readonly result?: BeMusicDOMFactory<BeMusicDOMResultFrame, BeMusicDOMResultActions>;
-  readonly gameplay?: BeMusicDOMFactory<BeMusicDOMGameplayFrame, BeMusicDOMGameplayActions>;
+  readonly gameplay?: BeMusicDOMFactory<BeMusicDOMGameplayFrame, BeMusicDOMGameplayActions, BeMusicDOMGameplayScreen>;
 }

@@ -23,3 +23,5 @@ Decisions that shape the code and would be costly to reverse, with why they were
 - [Native screens share the scene sessions](./0012-native-skin-screens.md)
 
 - [Reusable player interfaces are Web Components](./0013-player-ui-components.md)
+
+- [Native draws its playfield with canvas components](./0014-native-playfield-components.md)

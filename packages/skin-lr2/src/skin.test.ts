@@ -1001,6 +1001,33 @@ describe('loadLR2SkinFromSourceFiles', () => {
   // -- resolveLR2AssetBytes case-insensitive lookup ----------------- Real LR2 themes routinely mix `parts.tga` /
   // `Parts.TGA`, and the chart side has the same problem with `#WAVxx kick.WAV`. Verify the resolver picks up a
   // case-mismatched key without the caller having to enumerate variants.
+  it('keeps first-row controls when later DST rows explicitly contain zeroes', () => {
+    const skin = loadLR2SkinFromSourceFiles(
+      new Map([
+        [
+          'skin/main.csv',
+          lines(
+            '#IMAGE,frame.png',
+            '#SRC_IMAGE,0,0,3,0,170,377,1,1,0,0',
+            '#DST_IMAGE,0,600,3,-377,170,377,0,0,255,255,255,1,0,0,0,800,101,32,0,0,1',
+            '#DST_IMAGE,0,800,3,0,170,377,0,255,255,255,255,1,0,0,0,0,0,0,0,0,0',
+          ),
+        ],
+      ]),
+    );
+    expect(skin?.images[0]?.destination).toMatchObject({ loop: 800, timer: 101, ops: [32], op4: 1 });
+    expect(skin?.images[0]?.keyframes[1]).toMatchObject({ y: 0, alpha: 1, loop: 800, timer: 101, ops: [32], op4: 1 });
+  });
+
+  it('uses an SP fallback for five-key charts when only SP and DP headers exist', () => {
+    const files = new Map([
+      ['skin/double_AC.lr2skin', lines('#INFORMATION,2,DP', ...new TextDecoder().decode(imageCSV('dp')).split('\n'))],
+      ['skin/single_AC.lr2skin', lines('#INFORMATION,0,SP', ...new TextDecoder().decode(imageCSV('sp')).split('\n'))],
+    ]);
+    expect(imagePathsOf(loadLR2SkinFromSourceFiles(files, { kind: 'play', playVariant: '5' }))).toEqual(['sp.png']);
+    expect(imagePathsOf(loadLR2SkinFromSourceFiles(files, { kind: 'play', playVariant: '10' }))).toEqual(['dp.png']);
+  });
+
   describe('keyframe inheritance', () => {
     it('inherits op4 (turntable spin marker) from the previous keyframe when blank', () => {
       // Mirrors the LR2 default 7-keys skin's turntable-disc declaration (`Theme/LR2/Play/7keys/7_LL0.csv` line 299):
@@ -1025,9 +1052,8 @@ describe('loadLR2SkinFromSourceFiles', () => {
       expect(image?.keyframes[1]?.op4).toBe(1);
     });
 
-    it('preserves an explicit op4=0 reset on a later keyframe', () => {
-      // Inverse of the above: if a row genuinely sets op4=0 (not blank), inheritance must NOT clobber it back to a
-      // previous op4=1. Defensive — no real-world skin does this, but a future one might.
+    it('keeps the first-row turntable marker when later keyframes contain zero', () => {
+      // ReadDST reads op4 only from the first destination row, even when later rows supply explicit zeroes.
       const files = new Map<string, Uint8Array>([
         [
           'skin/main.csv',
@@ -1041,7 +1067,7 @@ describe('loadLR2SkinFromSourceFiles', () => {
       ]);
       const skin = loadLR2SkinFromSourceFiles(files);
       const image = skin?.images[0];
-      expect(image?.destination.op4).toBe(0);
+      expect(image?.destination.op4).toBe(1);
     });
   });
 

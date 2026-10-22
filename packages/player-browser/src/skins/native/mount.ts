@@ -4,7 +4,12 @@ import type { BeMusicDOMScreen } from '@be-music/player-skin-sdk';
 /** Native only adapts scene frames and intents to the reusable presentation elements. */
 export function mountElement<Frame>(
   container: HTMLElement,
-  tag: 'be-music-select-screen' | 'be-music-gameplay-hud' | 'be-music-result-screen' | 'be-music-decide-screen',
+  tag:
+    | 'be-music-select-screen'
+    | 'be-music-gameplay-hud'
+    | 'be-music-playfield'
+    | 'be-music-result-screen'
+    | 'be-music-decide-screen',
   listeners: Readonly<Record<string, EventListener>>,
   shouldUpdate?: (frame: Frame) => boolean,
 ): BeMusicDOMScreen<Frame> {

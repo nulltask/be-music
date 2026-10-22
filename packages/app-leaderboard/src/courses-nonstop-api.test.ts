@@ -10,7 +10,7 @@ import {
   prepareNonstopCourse,
 } from '@be-music/player-engine/course';
 import type { BeMusicCourseReplay, BeMusicReplay, ReplayInputEvent } from '@be-music/player-engine/replay';
-import { ORIGIN, signInAnonymously, startTestBindings } from '../test/support.ts';
+import { ORIGIN, signInAnonymously, startTestBindings } from './test-support/support.ts';
 import { createApp } from './app.ts';
 import { openDatabase } from './db/client.ts';
 import { course, courseScore } from './db/schema.ts';
