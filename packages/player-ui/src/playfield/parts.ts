@@ -22,7 +22,7 @@ const JUDGE_LINE_HEIGHT = 2;
 export function resolvePlayfieldParts(
   frame: Pick<
     BeMusicGameplayFrame,
-    'layout' | 'lanes' | 'notes' | 'longNotes' | 'mines' | 'measureLines' | 'bombs' | 'runtime'
+    'layout' | 'lanes' | 'notes' | 'longNotes' | 'mines' | 'measureLines' | 'bombs' | 'bga' | 'runtime'
   >,
 ): BeMusicPlayfieldParts {
   const { layout, lanes } = frame;
@@ -50,6 +50,10 @@ export function resolvePlayfieldParts(
   }
   return {
     stage: { width: stage.width, height: stage.height },
+    bga: {
+      rect: layout.bga ? rect(layout.bga.x, layout.bga.y, layout.bga.w, layout.bga.h) : rect(0, 0, 0, 0),
+      data: { frame: frame.bga, shown: frame.runtime.hasBGA === true },
+    },
     lanes: { rect: laneRect, data: { lanes } },
     // Notes may scroll below the judge line under a negative `#SCROLL`, down to the stage's bottom edge.
     notes: {

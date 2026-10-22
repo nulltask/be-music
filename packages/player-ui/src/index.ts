@@ -13,6 +13,7 @@ export { BeMusicSelectScreenElement } from './components/select-screen.ts';
 export { BeMusicResultScreenElement } from './components/result-screen.ts';
 export { BeMusicDecideScreenElement } from './components/decide-screen.ts';
 export { BeMusicGameplayHUDElement } from './components/gameplay-hud.ts';
+export { BeMusicBGAElement } from './components/bga.ts';
 export { BeMusicLanesElement } from './components/lanes.ts';
 export { BeMusicNotesElement } from './components/notes.ts';
 export { BeMusicLaneCoversElement } from './components/lane-covers.ts';
@@ -24,6 +25,7 @@ export { BeMusicPlayfieldCanvasElement } from './playfield/canvas-element.ts';
 export { resolvePlayfieldParts } from './playfield/parts.ts';
 export { paintPlayfieldParts, type BeMusicPlayfieldPaintContext } from './playfield/paint.ts';
 export type {
+  BeMusicBGAFrame,
   BeMusicDOMGameplayFrame,
   BeMusicDOMSelectFrame,
   BeMusicDOMResultFrame,

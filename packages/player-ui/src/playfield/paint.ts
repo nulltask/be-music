@@ -1,5 +1,6 @@
 import type { BeMusicLaneKind, BeMusicRect } from '@be-music/player-skin-sdk';
 import type {
+  BeMusicBGAData,
   BeMusicBombsData,
   BeMusicJudgeLineData,
   BeMusicJudgmentDisplayData,
@@ -27,6 +28,7 @@ export type BeMusicPlayfieldPaintContext = Pick<
   | 'clip'
   | 'save'
   | 'restore'
+  | 'drawImage'
 >;
 
 const NOTE_COLORS: Record<BeMusicLaneKind, string> = {
@@ -38,6 +40,59 @@ const NOTE_COLORS: Record<BeMusicLaneKind, string> = {
 };
 const NOTE_HEIGHT = 6;
 const BOMB_LIFETIME_MS = 300;
+
+/** The BMS BGA canvas the BGA rect stands for. */
+const BGA_CANVAS_SIZE = 256;
+
+/**
+ * The BGA as BMS players composite it: the POOR image in place of the base and layer while a POOR shows, the base
+ * opaque over black, the layer over it. A still image whose long edge fits the 256x256 BGA canvas keeps its size there,
+ * centered horizontally against the top edge; a larger image or a video fills the rect.
+ */
+export function paintBGA(ctx: BeMusicPlayfieldPaintContext, data: BeMusicBGAData, rect: BeMusicRect): void {
+  if (!data.shown) return;
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  const frame = data.frame;
+  if (!frame) return;
+  if (frame.poorActive) {
+    if (frame.poor) drawBGAImage(ctx, frame.poor, rect);
+    return;
+  }
+  if (frame.base) drawBGAImage(ctx, frame.base, rect);
+  if (frame.layer) drawBGAImage(ctx, frame.layer, rect);
+}
+
+/** Where `image` of `width` x `height` goes in the BGA `rect` (see {@link paintBGA}). */
+export function placeBGAImage(width: number, height: number, isVideo: boolean, rect: BeMusicRect): BeMusicRect {
+  if (isVideo || !(width > 0) || !(height > 0) || Math.max(width, height) > BGA_CANVAS_SIZE) return { ...rect };
+  const scaleX = rect.w / BGA_CANVAS_SIZE;
+  const scaleY = rect.h / BGA_CANVAS_SIZE;
+  return {
+    x: rect.x + Math.floor((BGA_CANVAS_SIZE - width) / 2) * scaleX,
+    y: rect.y,
+    w: width * scaleX,
+    h: height * scaleY,
+  };
+}
+
+function drawBGAImage(ctx: BeMusicPlayfieldPaintContext, image: CanvasImageSource, rect: BeMusicRect): void {
+  const { width, height, isVideo } = imageSize(image);
+  const placed = placeBGAImage(width, height, isVideo, rect);
+  ctx.drawImage(image, placed.x, placed.y, placed.w, placed.h);
+}
+
+function imageSize(image: CanvasImageSource): { width: number; height: number; isVideo: boolean } {
+  if ('videoWidth' in image) return { width: image.videoWidth, height: image.videoHeight, isVideo: true };
+  if ('displayWidth' in image) return { width: image.displayWidth, height: image.displayHeight, isVideo: true };
+  if ('naturalWidth' in image) return { width: image.naturalWidth, height: image.naturalHeight, isVideo: false };
+  const { width, height } = image as { width: unknown; height: unknown };
+  return {
+    width: typeof width === 'number' ? width : 0,
+    height: typeof height === 'number' ? height : 0,
+    isVideo: false,
+  };
+}
 
 export function paintLanes(ctx: BeMusicPlayfieldPaintContext, { lanes }: BeMusicLanesData): void {
   for (const lane of lanes) {
@@ -127,6 +182,7 @@ export function paintJudgmentDisplay(
 
 /** Paints every part on one stage-sized surface, each clipped to its rect as its own canvas would clip it. */
 export function paintPlayfieldParts(ctx: BeMusicPlayfieldPaintContext, parts: BeMusicPlayfieldParts): void {
+  clipped(ctx, parts.bga.rect, () => paintBGA(ctx, parts.bga.data, parts.bga.rect));
   clipped(ctx, parts.lanes.rect, () => paintLanes(ctx, parts.lanes.data));
   clipped(ctx, parts.notes.rect, () => paintNotes(ctx, parts.notes.data));
   clipped(ctx, parts.laneCovers.rect, () => paintLaneCovers(ctx, parts.laneCovers.data));

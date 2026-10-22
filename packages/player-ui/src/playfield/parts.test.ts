@@ -26,7 +26,7 @@ function frame(overrides: Partial<PartsInput> = {}): PartsInput {
         judgementY: 464,
         sides: { '1P': { left: 20, right: 90 }, '2P': { left: 300, right: 340 } },
       },
-      bga: undefined,
+      bga: { x: 724, y: 8, w: 106, h: 106 },
     },
     lanes,
     notes: [],
@@ -34,6 +34,7 @@ function frame(overrides: Partial<PartsInput> = {}): PartsInput {
     mines: [],
     measureLines: [],
     bombs: [],
+    bga: undefined,
     runtime: {},
     ...overrides,
   };
@@ -43,6 +44,7 @@ describe('resolvePlayfieldParts', () => {
   it('gives each part only the stage rect it draws in', () => {
     const parts = resolvePlayfieldParts(frame());
     expect(parts.stage).toEqual({ width: 854, height: 480 });
+    expect(parts.bga.rect).toEqual({ x: 724, y: 8, w: 106, h: 106 });
     expect(parts.lanes.rect).toEqual({ x: 20, y: 8, w: 320, h: 456 });
     expect(parts.notes.rect).toEqual({ x: 20, y: 8, w: 320, h: 472 });
     expect(parts.laneCovers.rect).toEqual(parts.lanes.rect);
@@ -92,6 +94,16 @@ describe('resolvePlayfieldParts', () => {
     expect(parts.laneCovers.data.areas).toEqual([
       { left: 20, right: 90, top: 8, bottom: 464, sudden: 0.25, hidden: 0.1 },
     ]);
+  });
+
+  it('shows the BGA only for a chart that has one', () => {
+    const image = {} as CanvasImageSource;
+    const bga = { base: image, poorActive: false };
+    expect(resolvePlayfieldParts(frame({ bga, runtime: { hasBGA: true } })).bga.data).toEqual({
+      frame: bga,
+      shown: true,
+    });
+    expect(resolvePlayfieldParts(frame()).bga.data.shown).toBe(false);
   });
 
   it('keeps empty rects when the chart has no lanes yet', () => {
