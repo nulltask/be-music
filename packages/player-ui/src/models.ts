@@ -1,8 +1,16 @@
 import type {
+  BeMusicBomb,
   BeMusicDOMGameplayFrame,
   BeMusicGameplayRuntime,
+  BeMusicLaneFrame,
+  BeMusicLongNote,
+  BeMusicMeasureLine,
+  BeMusicMine,
+  BeMusicNote,
+  BeMusicRect,
   GaugeHistorySample,
   BeMusicJudgmentTiming,
+  LaneRun,
 } from '@be-music/player-skin-sdk';
 
 export interface BeMusicScoreData {
@@ -48,4 +56,56 @@ export interface BeMusicSettingsData {
     BeMusicGameplayRuntime,
     'greenNumber' | 'visibleMs' | 'minBPM' | 'maxBPM' | 'mainBPM' | 'rulesetLabel'
   >;
+}
+
+/** Lane backgrounds, key beams and held long-note markers, in stage design pixels. */
+export interface BeMusicLanesData {
+  readonly lanes: readonly BeMusicLaneFrame[];
+}
+/** Everything that scrolls down the lanes, in stage design pixels. */
+export interface BeMusicNotesData {
+  readonly notes: readonly BeMusicNote[];
+  readonly longNotes: readonly BeMusicLongNote[];
+  readonly mines: readonly BeMusicMine[];
+  readonly measureLines: readonly BeMusicMeasureLine[];
+}
+/** One play side's lane area with its SUDDEN (top) and HIDDEN (bottom) cover fractions. */
+export interface BeMusicLaneCoverArea {
+  readonly left: number;
+  readonly right: number;
+  readonly top: number;
+  readonly bottom: number;
+  readonly sudden: number;
+  readonly hidden: number;
+}
+export interface BeMusicLaneCoversData {
+  readonly areas: readonly BeMusicLaneCoverArea[];
+}
+/** The judge line, drawn once per lane run so it never crosses the gap between double-play sides. */
+export interface BeMusicJudgeLineData {
+  readonly runs: readonly LaneRun[];
+  readonly y: number;
+}
+export interface BeMusicBombsData {
+  readonly bombs: readonly BeMusicBomb[];
+}
+/** The judgment words showing this frame, centered on `x`, on the text baseline `y`. */
+export interface BeMusicJudgmentDisplayData {
+  readonly words: readonly { readonly x: number; readonly text: string }[];
+  readonly y: number;
+}
+/** One canvas component of the playfield: the stage rect it covers and what it draws there. */
+export interface BeMusicPlayfieldPart<Data> {
+  readonly rect: BeMusicRect;
+  readonly data: Data;
+}
+/** The playfield split into its canvas components, in drawing order. */
+export interface BeMusicPlayfieldParts {
+  readonly stage: { readonly width: number; readonly height: number };
+  readonly lanes: BeMusicPlayfieldPart<BeMusicLanesData>;
+  readonly notes: BeMusicPlayfieldPart<BeMusicNotesData>;
+  readonly laneCovers: BeMusicPlayfieldPart<BeMusicLaneCoversData>;
+  readonly judgeLine: BeMusicPlayfieldPart<BeMusicJudgeLineData>;
+  readonly bombs: BeMusicPlayfieldPart<BeMusicBombsData>;
+  readonly judgmentDisplay: BeMusicPlayfieldPart<BeMusicJudgmentDisplayData>;
 }
