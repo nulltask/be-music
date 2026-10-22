@@ -3,6 +3,7 @@ import type { BeMusicPlayfieldParts } from '../models.ts';
 import {
   paintBGA,
   paintBombs,
+  paintJudgmentDisplay,
   paintJudgeLine,
   paintLaneCovers,
   paintLanes,
@@ -21,7 +22,7 @@ function recorder(): BeMusicPlayfieldPaintContext & { calls: string[] } {
     calls,
     fillRect: (x: number, y: number, w: number, h: number) =>
       calls.push(`fillRect ${x},${y},${w},${h} ${String(ctx.fillStyle)} ${ctx.globalAlpha}`),
-    fillText: (text: string, x: number, y: number) => calls.push(`fillText ${text} ${x},${y}`),
+    fillText: (text: string, x: number, y: number) => calls.push(`fillText ${text} ${x},${y} ${String(ctx.fillStyle)}`),
     beginPath: () => calls.push('beginPath'),
     arc: (x: number, y: number, r: number) => calls.push(`arc ${x},${y},${r} ${ctx.globalAlpha}`),
     rect: (x: number, y: number, w: number, h: number) => calls.push(`rect ${x},${y},${w},${h}`),
@@ -91,6 +92,22 @@ describe('playfield painters', () => {
       bombs: [{ channel: '11', kind: 'white', x: 0, w: 20, y: 100, elapsedMs: 150, seed: 1 }],
     });
     expect(ctx.calls).toEqual(['beginPath', 'arc 10,100,15 0.5', 'stroke']);
+  });
+
+  it('paints the judgment in its colour and the combo under a word that keeps one', () => {
+    const ctx = recorder();
+    paintJudgmentDisplay(ctx, {
+      y: 100,
+      words: [
+        { x: 40, text: 'GREAT', color: '#ffffff', combo: 12 },
+        { x: 80, text: 'BAD', color: '#ff5c6c' },
+      ],
+    });
+    expect(ctx.calls).toEqual([
+      'fillText GREAT 40,100 #ffffff',
+      'fillText 12 40,124 #e5efff',
+      'fillText BAD 80,100 #ff5c6c',
+    ]);
   });
 
   it('clips every part to its rect on a shared surface and skips empty ones', () => {

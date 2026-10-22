@@ -1,18 +1,27 @@
 import {
+  flashingGreatColor,
+  isFlashingGreat,
   judgeDisplayWord,
   resolveLaneRuns,
   type BeMusicGameplayFrame,
   type BeMusicRect,
   type BeMusicSide,
 } from '@be-music/player-skin-sdk';
-import type { BeMusicLaneCoverArea, BeMusicPlayfieldParts } from '../models.ts';
+import type { BeMusicJudgmentWord, BeMusicLaneCoverArea, BeMusicPlayfieldParts } from '../models.ts';
 
 /** Room a bomb's ring needs around the judge line: its largest radius plus half its stroke. */
 const BOMB_REACH = 26;
-/** How far above the judge line the judgment word's baseline sits, and the band its glyphs take. */
+/** How far above the judge line the judgment word's baseline sits, and the band the word and its combo take. */
 const JUDGMENT_OFFSET = 90;
 const JUDGMENT_ASCENT = 22;
-const JUDGMENT_DESCENT = 6;
+/** Baseline of the combo under the word, then the room its glyphs need below that. */
+const COMBO_OFFSET = 24;
+const COMBO_DESCENT = 6;
+/** Colours a PGREAT's GREAT steps through. A steady GREAT keeps {@link JUDGMENT_COLOR}. */
+const FLASHING_GREAT = [0xffffff, 0x5b8cff, 0xffd84d] as const;
+const JUDGMENT_COLOR = '#e5efff';
+const GOOD_COLOR = '#88b9ff';
+const MISS_COLOR = '#ff5c6c';
 const JUDGE_LINE_HEIGHT = 2;
 
 /**
@@ -22,7 +31,7 @@ const JUDGE_LINE_HEIGHT = 2;
 export function resolvePlayfieldParts(
   frame: Pick<
     BeMusicGameplayFrame,
-    'layout' | 'lanes' | 'notes' | 'longNotes' | 'mines' | 'measureLines' | 'bombs' | 'bga' | 'runtime'
+    'layout' | 'lanes' | 'notes' | 'longNotes' | 'mines' | 'measureLines' | 'bombs' | 'bga' | 'runtime' | 'nowMs'
   >,
 ): BeMusicPlayfieldParts {
   const { layout, lanes } = frame;
@@ -39,13 +48,16 @@ export function resolvePlayfieldParts(
   }
   const laneRect = lanes.length > 0 ? rect(left, top, width, bottom - top) : rect(left, playfield.top, 0, 0);
   const judgmentY = playfield.judgementY - JUDGMENT_OFFSET;
-  const words: { x: number; text: string }[] = [];
+  const words: BeMusicJudgmentWord[] = [];
   for (const side of frame.runtime.judgeSides ?? []) {
     if (!side.judge) continue;
     const bounds = playfield.sides[side.side];
+    const combo = side.combo ?? 0;
     words.push({
       x: bounds ? (bounds.left + bounds.right) / 2 : playfield.centerX,
       text: judgeDisplayWord(side.judge),
+      color: judgmentColor(side.judge, frame.nowMs),
+      ...(keepsCombo(side.judge) && combo > 0 ? { combo } : {}),
     });
   }
   return {
@@ -70,7 +82,7 @@ export function resolvePlayfieldParts(
       data: { bombs: frame.bombs },
     },
     judgmentDisplay: {
-      rect: rect(left, judgmentY - JUDGMENT_ASCENT, width, JUDGMENT_ASCENT + JUDGMENT_DESCENT),
+      rect: rect(left, judgmentY - JUDGMENT_ASCENT, width, JUDGMENT_ASCENT + COMBO_OFFSET + COMBO_DESCENT),
       data: { words, y: judgmentY },
     },
   };
@@ -100,6 +112,23 @@ function resolveLaneCoverAreas(
     areas.push({ left: bounds.left, right: bounds.right, top, bottom, sudden: cover.sudden, hidden: cover.hidden });
   }
   return areas;
+}
+
+/** PERFECT, GREAT and GOOD keep the combo; BAD and POOR break it. */
+function keepsCombo(judge: string): boolean {
+  return judge === 'PERFECT' || judge === 'GREAT' || judge === 'GOOD';
+}
+
+/** A PGREAT prints as a GREAT whose colour steps with the play clock. The other words stay one colour. */
+function judgmentColor(judge: string, nowMs: number): string {
+  if (isFlashingGreat(judge)) return cssColor(flashingGreatColor(nowMs, FLASHING_GREAT));
+  if (judge === 'GOOD') return GOOD_COLOR;
+  if (judge === 'BAD' || judge === 'POOR') return MISS_COLOR;
+  return JUDGMENT_COLOR;
+}
+
+function cssColor(color: number): string {
+  return `#${color.toString(16).padStart(6, '0')}`;
 }
 
 function rect(x: number, y: number, w: number, h: number): BeMusicRect {

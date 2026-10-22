@@ -90,9 +90,17 @@ export interface BeMusicJudgeLineData {
 export interface BeMusicBombsData {
   readonly bombs: readonly BeMusicBomb[];
 }
-/** The judgment words showing this frame, centered on `x`, on the text baseline `y`. */
+/** One side's judgment word, centered on `x`. `combo` is the count under it when the judgment keeps the combo. */
+export interface BeMusicJudgmentWord {
+  readonly x: number;
+  readonly text: string;
+  /** Colour this frame. A PGREAT's GREAT cycles; the other words stay put. */
+  readonly color: string;
+  readonly combo?: number;
+}
+/** The judgment words showing this frame, on the text baseline `y`. */
 export interface BeMusicJudgmentDisplayData {
-  readonly words: readonly { readonly x: number; readonly text: string }[];
+  readonly words: readonly BeMusicJudgmentWord[];
   readonly y: number;
 }
 /** The BGA layers showing this frame; `shown` is false when the chart has no BGA, leaving the rect empty. */
