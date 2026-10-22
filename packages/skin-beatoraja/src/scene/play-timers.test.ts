@@ -26,6 +26,7 @@ import {
   isBeatorajaCleanHit,
   isBeatorajaComboJudge,
   resolveBeatorajaFrameTimers,
+  resolveBeatorajaSeekTimers,
   resolveBeatorajaJudgeEffect,
   resolveBeatorajaLanePlacement,
   resolveBeatorajaLaneTimers,
@@ -209,5 +210,27 @@ describe('resolveBeatorajaFrameTimers', () => {
       startOnce: [],
       stop: [],
     });
+  });
+});
+
+describe('resolveBeatorajaSeekTimers', () => {
+  it("stops every running timer but the scene's, and starts the rhythm again", () => {
+    const changes = resolveBeatorajaSeekTimers({
+      started: [0, 1, 3, 40, 41, 141, 46, 446, 51, 101, 71, 48, 143, 140],
+      beat: 4,
+    });
+    expect(changes.stop).toEqual([46, 446, 51, 101, 71, 48, 143, 140]);
+    expect(changes.start).toEqual([TIMER_RHYTHM]);
+    expect(changes.startOnce).toEqual([]);
+  });
+
+  it('starts the full gauge and the end of the notes once when the second sought is past them', () => {
+    const changes = resolveBeatorajaSeekTimers({
+      started: [],
+      beat: 18,
+      gauge: { current: 100, max: 100 },
+      lastNoteBeats: { 1: 16, 2: 20 },
+    });
+    expect(changes.startOnce).toEqual([TIMER_GAUGE_MAX_1P, TIMER_ENDOFNOTE_1P]);
   });
 });

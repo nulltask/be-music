@@ -131,8 +131,10 @@ export interface PlayScene extends SessionScene<PlayFrame, PlayIntent> {
   requestTogglePause(): void;
   isPaused(): boolean;
   /**
-   * Moves an AUTO play to chart second `seconds` and plays on from there, as a preview's seek bar does; a paused play
-   * resumes. A manual play or a replay ignores it (`PlayFrame.seekable`).
+   * Moves an AUTO play to chart second `seconds` (clamped to the chart) and plays on from there, as a preview's seek bar
+   * does; a paused play stays paused there. The running play seeks — it is not started again — and the promise resolves
+   * once the play shows the second sought (its frames are of the new seek generation). A manual play or a replay
+   * ignores it (`PlayFrame.seekable`).
    */
   seek(seconds: number): Promise<void>;
   /** Changes the play's tempo (pitch mode, not in a replay); whether it was taken. */

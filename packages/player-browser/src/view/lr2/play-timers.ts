@@ -167,6 +167,9 @@ export class LR2PlayTimers {
       case 'lane-hold':
         this.startLNHold(event.channel);
         return;
+      case 'seek':
+        this.sought(event.gauge, event.atMs);
+        return;
       default:
         return;
     }
@@ -286,6 +289,20 @@ export class LR2PlayTimers {
     if (this.play.playClock() - startedAt < this.fullComboSpan) return;
     this.started.delete(LR2_TIMER.FULL_COMBO_1P);
     this.started.delete(LR2_TIMER.FULL_COMBO_2P);
+  }
+
+  /**
+   * The play sought: the timers the judgments and the lanes started stop, with the deferred work that would have stopped
+   * them (`resolveLR2PlayTimers`), and the gauge-max timer runs again from `at` when the gauge is full there. The scene's
+   * timers run on.
+   */
+  private sought(gauge: number, at: number): void {
+    if (this.gaugeRiseTimeout !== undefined) clearTimeout(this.gaugeRiseTimeout);
+    this.gaugeRiseTimeout = undefined;
+    for (const timeout of this.lnHoldTimeouts) clearTimeout(timeout);
+    this.lnHoldTimeouts.clear();
+    this.lnHoldFadeOutStart.clear();
+    this.apply(resolveLR2PlayTimers({ kind: 'seek', gauge, at }));
   }
 
   /** Cancels the timers' deferred work; the play is gone. */

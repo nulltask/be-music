@@ -303,6 +303,17 @@ describe('resolveLR2PlayTimers', () => {
     });
   });
 
+  it('stops what the judgments and lanes started on a seek, and keeps the scene timers', () => {
+    const update = resolveLR2PlayTimers({ kind: 'seek', gauge: 80, at: 10 });
+    expect(update.start.size).toBe(0);
+    for (const timer of [42, 44, 46, 47, 48, 49, 50, 59, 69, 70, 89, 100, 119, 120, 139]) {
+      expect(update.stop).toContain(timer);
+    }
+    for (const timer of [0, 1, 2, 3, 40, 41, 140]) expect(update.stop).not.toContain(timer);
+    // A full gauge runs its timer again from the seek.
+    expect(resolveLR2PlayTimers({ kind: 'seek', gauge: 100, at: 11 }).start.get(LR2_TIMER.GAUGE_MAX_1P)).toBe(11);
+  });
+
   it('starts a lane’s bank timer', () => {
     const lane = { channel: '12', laneIndex: 2, playVariant: '7' as const };
     expect(resolveLR2PlayTimers({ kind: 'lane', bank: 'bomb', lane, at: 9 }).start.get(52)).toBe(9);
