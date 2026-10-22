@@ -6,7 +6,11 @@
  * touch lanes and sends them as `lane` intents.
  */
 
-import type { BeMusicDOMGameplayFrame, BeMusicDOMGameplayActions } from '@be-music/player-skin-sdk';
+import type {
+  BeMusicDOMGameplayFrame,
+  BeMusicDOMGameplayActions,
+  BeMusicDOMGameplayScreen,
+} from '@be-music/player-skin-sdk';
 import { SkinDOMMount } from '../../skin/be-music/dom-mount.ts';
 import {
   resolveBeMusicSkinSettings,
@@ -82,7 +86,7 @@ export class BuiltInPlayView
   private readonly touchLanes: TouchLaneInput = new TouchLaneInput(playfieldTouchLanes(this));
   private domSettings: ReturnType<typeof resolveBeMusicSkinSettings>;
   private kit: BuiltInKit;
-  private dom: SkinDOMMount<BeMusicDOMGameplayFrame, BeMusicDOMGameplayActions> | undefined;
+  private dom: SkinDOMMount<BeMusicDOMGameplayFrame, BeMusicDOMGameplayActions, BeMusicDOMGameplayScreen> | undefined;
 
   public constructor(kit: BuiltInKit, play: PlayfieldRuntime, options: BuiltInPlayViewOptions = {}) {
     super(play);
@@ -147,6 +151,7 @@ export class BuiltInPlayView
         chartImage: this.chartImages.lookup,
         settings: this.kit.settings,
         renderer: this.host?.app.renderer,
+        drawPlayfield: (frame) => this.dom?.connectedScreen?.drawPlayfield?.(frame),
       });
     }
     return this.skinBindingInstance;
@@ -179,8 +184,9 @@ export class BuiltInPlayView
     this.root.visible = frame.shown;
     if (!frame.shown) return;
     render(this, frame.seconds, frame.playfield.audioAnalyzer !== undefined ? frame.audio : undefined);
-    // A skin drawing through the player's renderer draws the frame just collected now, before Pixi renders.
+    // A skin drawing through the player's renderer or on its DOM screen draws the frame just collected now.
     this.skinBindingInstance?.flush();
+    this.dom?.setOpacity(this.designRoot.alpha);
     this.dom?.update({
       layout: resolveBeMusicLayout(this),
       settings: this.domSettings,
