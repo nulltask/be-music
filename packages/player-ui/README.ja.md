@@ -16,28 +16,32 @@ React・Vue はそれぞれのラッパーの peer dependency です。スキン
 
 ## コンポーネント
 
-| 要素                        | property                                                |
-| --------------------------- | ------------------------------------------------------- |
-| `be-music-score-summary`    | `data: BeMusicScoreData`、任意の `compact`              |
-| `be-music-judgment-table`   | `data: BeMusicJudgmentData`                             |
-| `be-music-gauge-panel`      | `data: BeMusicGaugeData`、任意の `compact`              |
-| `be-music-timing-graph`     | `data: BeMusicTimingData`                               |
-| `be-music-play-settings`    | `data: BeMusicSettingsData`                             |
-| `be-music-chart-list`       | `entries`・`selectedIndex`・`disabled`                  |
-| `be-music-chart-details`    | `entry`・`launching`・`readText`                        |
-| `be-music-play-options`     | `options`・`choices`・`disabled`                        |
-| `be-music-select-screen`    | `frame: BeMusicDOMSelectFrame`                          |
-| `be-music-gameplay-hud`     | `frame: BeMusicDOMGameplayFrame`                        |
-| `be-music-result-screen`    | `frame: BeMusicDOMResultFrame`                          |
-| `be-music-decide-screen`    | `frame: BeMusicDOMDecideFrame`                          |
-| `be-music-bga`              | `data: BeMusicBGAData`・`rect: BeMusicRect`             |
-| `be-music-lanes`            | `data: BeMusicLanesData`・`rect: BeMusicRect`           |
-| `be-music-notes`            | `data: BeMusicNotesData`・`rect: BeMusicRect`           |
-| `be-music-lane-covers`      | `data: BeMusicLaneCoversData`・`rect: BeMusicRect`      |
-| `be-music-judge-line`       | `data: BeMusicJudgeLineData`・`rect: BeMusicRect`       |
-| `be-music-bombs`            | `data: BeMusicBombsData`・`rect: BeMusicRect`           |
-| `be-music-judgment-display` | `data: BeMusicJudgmentDisplayData`・`rect: BeMusicRect` |
-| `be-music-playfield`        | `frame: BeMusicGameplayFrame`                           |
+| 要素                         | property                                                          |
+| ---------------------------- | ----------------------------------------------------------------- |
+| `be-music-score-summary`     | `data: BeMusicScoreData`、任意の `compact`                        |
+| `be-music-judgment-table`    | `data: BeMusicJudgmentData`                                       |
+| `be-music-gauge-panel`       | `data: BeMusicGaugeData`、任意の `compact`                        |
+| `be-music-timing-graph`      | `data: BeMusicTimingData`                                         |
+| `be-music-play-settings`     | `data: BeMusicSettingsData`                                       |
+| `be-music-chart-list`        | `entries`・`selectedIndex`・`disabled`                            |
+| `be-music-chart-details`     | `entry`・`launching`・`readText`                                  |
+| `be-music-play-options`      | `options`・`choices`・`disabled`                                  |
+| `be-music-select-screen`     | `frame: BeMusicDOMSelectFrame`                                    |
+| `be-music-gameplay-hud`      | `frame: BeMusicDOMGameplayFrame`                                  |
+| `be-music-result-screen`     | `frame: BeMusicDOMResultFrame`                                    |
+| `be-music-decide-screen`     | `frame: BeMusicDOMDecideFrame`                                    |
+| `be-music-bga`               | `data: BeMusicBGAData`・`rect: BeMusicRect`                       |
+| `be-music-lanes`             | `data: BeMusicLanesData`・`rect: BeMusicRect`                     |
+| `be-music-notes`             | `data: BeMusicNotesData`・`rect: BeMusicRect`                     |
+| `be-music-lane-covers`       | `data: BeMusicLaneCoversData`・`rect: BeMusicRect`                |
+| `be-music-judge-line`        | `data: BeMusicJudgeLineData`・`rect: BeMusicRect`                 |
+| `be-music-bombs`             | `data: BeMusicBombsData`・`rect: BeMusicRect`                     |
+| `be-music-judgment-display`  | `data: BeMusicJudgmentDisplayData`・`rect: BeMusicRect`           |
+| `be-music-playfield`         | `frame: BeMusicGameplayFrame`                                     |
+| `be-music-playback-controls` | `data: BeMusicPlaybackData`                                       |
+| `be-music-preview-hud`       | `frame: BeMusicDOMGameplayFrame`・`volume`・`muted`・`fullscreen` |
+| `be-music-preview-select`    | `charts: readonly LibraryChart[]`・`heading`                      |
+| `be-music-preview-start`     | `mode: 'play' \| 'replay'`・`disabled`                            |
 
 各クラスを `BeMusic…Element` として export します。ラッパーは `BeMusicGameplayHUD`・`BeMusicJudgmentTable` のように `Element` を除いた名前です。個々の部品は自身に必要な表示データだけを受け取り、独立して配置できます。画面コンポーネントはそれらを組み合わせ、既存の DOM スキンフレームを受け取ります。
 
@@ -46,6 +50,10 @@ React・Vue はそれぞれのラッパーの peer dependency です。スキン
 プレイフィールドの各要素は、要素の box のデバイスピクセルに合わせた自分専用の canvas に描画します。`rect` は要素が受け持つステージ上の範囲（ステージのデザイン座標）で、`data` も同じ座標で描くため、要素の位置と大きさはレイアウト側で自由に決められます。`be-music-playfield` は `BeMusicGameplayFrame` 全体を受け取り、`resolvePlayfieldParts(frame)` で分割して、レターボックスしたステージ上の各範囲に要素を配置します。ゲームプレイ HUD の下に重ねて使います。要素はクロックを持たないため、毎アニメーションフレーム frame を渡してください。
 
 `paintPlayfieldParts(context, parts)` は、ステージ全体の surface しか持たない host 向けに、同じ部品を一つの Canvas 2D context に各範囲で clip して描きます。独自の部品は `BeMusicPlayfieldCanvasElement` を継承して `paint(context, data)` を実装します。BGA は BMS の慣例に従い、POOR の表示中はベースとレイヤーの代わりに POOR の画像を描き、256x256 の BGA キャンバスに収まる静止画はその大きさのまま置きます。`be-music-playfield` はステージを `--be-music-color-background`、周囲のレターボックスを `--be-music-letterbox-background` で塗ります。プレイフィールドは `stage`・`bga`・`lanes`・`notes`・`lane-covers`・`judge-line`・`bombs`・`judgment-display` の parts を、各要素は `canvas` part を公開します。
+
+## プレビュー
+
+`be-music-playback-controls` は動画プレイヤーのコントロールバーです。再生／一時停止（`pause-request`）、離したときに `{ seconds }` 付きの `seek-request` を送るシークバー、時間、ミュートと音量（`{ volume, muted }` 付きの `volume-change`）、全画面（`fullscreen-request`）があります。`be-music-preview-hud` は譜面の情報・スコア・コンボ・ゲージ・判定を BGA の範囲の下に、コントロールをステージの下端に置き、それらの要求を伝えます。`be-music-preview-select` はトラックの譜面を一覧し、`activate-request` で 1 つを要求します。`be-music-preview-start` は大きな再生／リプレイボタン（`play-request`）です。`formatPlaybackTime`・`resolveSeekTarget`・`resolveGameplayPanels` はこれらを支える純粋関数です。埋め込みページがこれらを組み合わせています（[ブラウザープレイヤー](../../docs/player-web.ja.md#埋め込みプレビュー)）。
 
 ## HTML・TypeScript
 

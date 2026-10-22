@@ -11,6 +11,10 @@ import { BeMusicResultScreenElement } from './components/result-screen.ts';
 import { BeMusicDecideScreenElement } from './components/decide-screen.ts';
 import { BeMusicGameplayHUDElement } from './components/gameplay-hud.ts';
 import { BeMusicBGAElement } from './components/bga.ts';
+import { BeMusicPlaybackControlsElement } from './components/playback-controls.ts';
+import { BeMusicPreviewHUDElement } from './components/preview-hud.ts';
+import { BeMusicPreviewSelectElement } from './components/preview-select.ts';
+import { BeMusicPreviewStartElement } from './components/preview-start.ts';
 import { BeMusicLanesElement } from './components/lanes.ts';
 import { BeMusicNotesElement } from './components/notes.ts';
 import { BeMusicLaneCoversElement } from './components/lane-covers.ts';
@@ -43,6 +47,10 @@ export function defineBeMusicElements(registry: CustomElementRegistry | undefine
     ['be-music-bombs', BeMusicBombsElement],
     ['be-music-judgment-display', BeMusicJudgmentDisplayElement],
     ['be-music-playfield', BeMusicPlayfieldElement],
+    ['be-music-playback-controls', BeMusicPlaybackControlsElement],
+    ['be-music-preview-hud', BeMusicPreviewHUDElement],
+    ['be-music-preview-select', BeMusicPreviewSelectElement],
+    ['be-music-preview-start', BeMusicPreviewStartElement],
   ] as const) {
     const existing = registry.get(tag);
     if (existing && existing !== constructor)
@@ -73,5 +81,9 @@ declare global {
     'be-music-bombs': BeMusicBombsElement;
     'be-music-judgment-display': BeMusicJudgmentDisplayElement;
     'be-music-playfield': BeMusicPlayfieldElement;
+    'be-music-playback-controls': BeMusicPlaybackControlsElement;
+    'be-music-preview-hud': BeMusicPreviewHUDElement;
+    'be-music-preview-select': BeMusicPreviewSelectElement;
+    'be-music-preview-start': BeMusicPreviewStartElement;
   }
 }
