@@ -9,7 +9,7 @@ import {
   type PlayerSummary,
 } from '../engine-types.ts';
 import type { PlayerInputCommand } from '../input-signal-bus.ts';
-import type { PlayerUICommand, PlayerUIFrameNote } from '../ui-signal-bus.ts';
+import type { PlayerUICommand, PlayerUIFrameNote, PlayerUIFramePayload } from '../ui-signal-bus.ts';
 import type { BeMusicReplay, ReplayRulesetResult } from '../../replay/format.ts';
 import { simulateReplayRulesets } from '../../replay/simulate.ts';
 import { createVirtualClock } from './virtual-clock.ts';
@@ -86,6 +86,8 @@ export interface CharacterizationPlay {
   ui?: boolean;
   /** Hold the play open after its chart (`holdAfterChart`) and end it this long after `onSettled`. */
   holdAfterChart?: { releaseAfterMs: number };
+  /** Chart seconds to take a {@link snapshotJudgeState} at: on the first frame at or past each. */
+  captureAt?: readonly number[];
 }
 
 /** What a host could observe of one play. */
@@ -112,6 +114,47 @@ export interface PlayObservation {
   log: string[];
   /** Text written to `writeOutput`. */
   output: string[];
+  /** The judge state at each of {@link CharacterizationPlay.captureAt}, by its chart second. */
+  captured?: Record<string, JudgeStateSnapshot>;
+}
+
+/**
+ * The judge state a host can read off a frame: the judgment counts, the scores and the gauge, the combo, and which
+ * notes, mines and invisible notes show as judged (a long note with the beat it stays visible until).
+ */
+export interface JudgeStateSnapshot {
+  counts: Record<string, number>;
+  gauge: number | undefined;
+  combo: number;
+  notes: string[];
+  landmines: string[];
+  invisibleNotes: string[];
+}
+
+/**
+ * Snapshots the judge state `frame` shows, with `combo` as the host reads it (the last judge cue's). Two plays whose
+ * snapshots at a chart second are equal show the same play there.
+ */
+export function snapshotJudgeState(frame: Readonly<PlayerUIFramePayload>, combo: number): JudgeStateSnapshot {
+  const { gauge, ...counts } = frame.summary;
+  const judged = (notes: readonly PlayerUIFrameNote[] | undefined): string[] =>
+    (notes ?? [])
+      .filter((note) => note.judged)
+      .map(
+        (note) =>
+          `${note.channel}@${formatNumber(note.seconds)}` +
+          `${note.visibleUntilBeat === undefined ? '' : ` until=${formatNumber(note.visibleUntilBeat)}`}`,
+      );
+  return {
+    counts: Object.fromEntries(
+      Object.entries(counts).filter((entry): entry is [string, number] => typeof entry[1] === 'number'),
+    ),
+    gauge: gauge?.current,
+    combo,
+    notes: judged(frame.notes),
+    landmines: judged(frame.landmineNotes),
+    invisibleNotes: judged(frame.invisibleNotes),
+  };
 }
 
 /** Where a play takes its time from: the virtual clock, or the host's own (to check the two agree). */
@@ -198,6 +241,7 @@ function createTestAudioSession(
           }),
         }),
     triggerEvent: (event) => entry(`trigger ${formatEvent(event)}`),
+    triggerEventAt: (event, offsetSeconds) => entry(`trigger-at ${formatEvent(event)} +${formatNumber(offsetSeconds)}`),
     stopChannel: (channel) => entry(`stop ${channel}`),
     setTempo: (tempo) => entry(`tempo ${tempo}`),
   };
@@ -258,6 +302,8 @@ export async function observePlay(
   const log: string[] = [];
   const outputChunks: string[] = [];
   const frames: PlayObservation['frames'] = { count: 0, judged: [] };
+  const captured: Record<string, JudgeStateSnapshot> = {};
+  const pendingCaptures = [...(play.captureAt ?? [])].sort((a, b) => a - b);
   const now = (): string => formatMs(time.now());
   const hostEntry = (text: string): void => {
     host.push(`${now()} ${text}`);
@@ -383,6 +429,10 @@ export async function observePlay(
       scan('mine', frame.landmineNotes);
       scan('invisible', frame.invisibleNotes);
       publishFrame(frame);
+      while (pendingCaptures.length > 0 && frame.currentSeconds >= pendingCaptures[0]!) {
+        const at = pendingCaptures.shift()!;
+        captured[formatNumber(at)] = snapshotJudgeState(frame, stateSignals.getJudgeCombo().combo);
+      }
     };
   }
 
@@ -412,6 +462,7 @@ export async function observePlay(
     frames,
     host,
     log,
+    ...(play.captureAt === undefined ? {} : { captured }),
     // The HIGH-SPEED hint names the host platform's modifier key (Option on macOS, Alt elsewhere).
     output: outputChunks
       .join('')
