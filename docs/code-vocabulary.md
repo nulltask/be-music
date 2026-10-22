@@ -52,15 +52,18 @@ This document maps current code vocabulary to domain concepts and separates diff
 
 ## Library and presentation
 
-| Concept                     | Current code                                         | Meaning and distinction                                                                                                  |
-| --------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| library / ライブラリ        | `Library`, `LibraryChart`, `LibraryEntry`            | Browsable collection, chart entry and list item; list items can also be folders or courses.                              |
-| browse state / ブラウズ状態 | `BrowseState`, `BrowseSnapshot`                      | Navigation/filter state versus a snapshot used for restoration.                                                          |
-| play options / プレイ設定   | `PlayOptions`, `PlayerOptions`, `PlayerPlaySettings` | Selection UI choices, engine execution configuration and recorded play settings differ. Do not merge them by name alone. |
-| scene / シーン              | `SessionScene`, `PixiSceneHost`, `SceneFamily`       | A screen execution, its host and the skin family are separate roles.                                                     |
-| scene model / シーンモデル  | `BrowseState`, `PlayState`, `PlayResult`             | State/data independent of a particular renderer; not the scene controller itself.                                        |
-| skin / スキン               | `BeMusicSkin`, LR2 and beatoraja skins               | Appearance implementation; a theme can bundle multiple skins and sounds.                                                 |
-| frame / フレーム            | `BeMusicGameplayFrame`, `BeMusicAudioFrame`          | Qualify scene frame or audio frame; they are different data and clocks.                                                  |
+| Concept                     | Current code                                                       | Meaning and distinction                                                                                                  |
+| --------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| library / ライブラリ        | `Library`, `LibraryChart`, `LibraryEntry`                          | Browsable collection, chart entry and list item; list items can also be folders or courses.                              |
+| browse state / ブラウズ状態 | `BrowseState`, `BrowseSnapshot`                                    | Navigation/filter state versus a snapshot used for restoration.                                                          |
+| play options / プレイ設定   | `PlayOptions`, `PlayerOptions`, `PlayerPlaySettings`               | Selection UI choices, engine execution configuration and recorded play settings differ. Do not merge them by name alone. |
+| scene / シーン              | `SessionScene`, `PixiSceneHost`, `SceneFamily`                     | A screen execution, its host and the skin family are separate roles.                                                     |
+| scene model / シーンモデル  | `BrowseState`, `PlayState`, `PlayResult`                           | State/data independent of a particular renderer; not the scene controller itself.                                        |
+| skin / スキン               | `BeMusicSkin`, LR2 and beatoraja skins                             | Appearance implementation; a theme can bundle multiple skins and sounds.                                                 |
+| frame / フレーム            | `BeMusicGameplayFrame`, `BeMusicAudioFrame`                        | Qualify scene frame or audio frame; they are different data and clocks.                                                  |
+| scene controller            | `SceneController`, `createSelectController`                        | Connects presentation snapshots and intents; its owner supplies `advance(nowMs)`, while UI components own no clock.      |
+| DOM screen                  | `BeMusicDOMFactory`, `BeMusicDOMScreen`, `BeMusicDOMGameplayFrame` | Skin mount/update/dispose contract; distinct from a Canvas drawing frame or a scene session.                             |
+| reusable UI component       | `BeMusicGameplayHUDElement`, `BeMusicGameplayHUD`                  | Web Component class and React/Vue wrappers; receive presentation properties and emit operation requests.                 |
 
 ## Identity and authentication
 

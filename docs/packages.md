@@ -32,6 +32,21 @@ Package names describe their role. Libraries use domain or runtime names; applic
 
 Update imports, package-manager filters, and source paths to the current names. Former package aliases are not provided.
 
+## Player package responsibilities
+
+The added packages separate runtime and presentation responsibilities; they are not aliases for former packages.
+
+| Package                             | Responsibility                                                                                                                                                         |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `player-engine`                     | Judgment, the play loop, and audio/input/UI host contracts. Hosts supply the audio implementation.                                                                     |
+| `player-node-audio`                 | Node audio sessions and PCM output; owns decoding through `chart-audio-renderer`.                                                                                      |
+| `player-skin-sdk`                   | Canvas and DOM skin contracts without Lit, React or Vue dependencies.                                                                                                  |
+| `player-ui`                         | Lit Web Components connected through presentation data and request events.                                                                                             |
+| `player-ui-react` / `player-ui-vue` | Typed framework wrappers around the same Web Components.                                                                                                               |
+| `player-browser`                    | Browser audio, Canvas/DOM views, scene sessions and hosting. `./controller` exposes renderer-independent collection browsing; `./compute` exposes the CPU worker pool. |
+
+See [audio adapters](./player-spec.md#node-audio-adapter), [skin authoring](./be-music-skin.md), [Player UI](../packages/player-ui/README.md), and [shared utilities](./shared-utils.md).
+
 ## Historical releases
 
 GitHub Release titles and descriptions use the current package names. A note identifies the former name under which each historical version was published. Original Git tags, release URLs, and downloadable assets remain unchanged. Renaming the source packages does not republish historical npm versions under the current names.

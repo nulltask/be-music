@@ -37,7 +37,7 @@ when the host supplies a `PlayerOptions.createAudioSession` factory (e.g. `creat
 
 ## CPU workers
 
-The browser host installs one shared worker pool for chart parsing/counting/packing, ZIP expansion, and WSOLA. Set **Developer → CPU workers** in the Debug Panel; the default is half the reported logical CPU count, rounded down with a minimum of one. The override is remembered. Signalsmith already uses an AudioWorklet and keeps its existing path. See [ADR 0010](./adr/0010-browser-task-pool.md) for task boundaries and failure handling.
+The browser host installs one shared worker pool for chart parsing/counting/packing, ZIP expansion, and WSOLA. Set **Developer → CPU workers** in the Debug Menu; the default is half the reported logical CPU count, rounded down with a minimum of one. The override is remembered. Signalsmith already uses an AudioWorklet and keeps its existing path. See [ADR 0010](./adr/0010-browser-task-pool.md) for task boundaries and failure handling.
 
 ## Entry points
 
@@ -812,7 +812,7 @@ flowchart LR
 
 ## Compatibility boundary
 
-The browser player is a runtime consumer of the repository's shared parser, chart, chart-audio-renderer, player, utils, LR2 skin, and beatoraja skin packages.
+The browser player consumes `chart-parser`, `chart-model`, `player-engine`, `player-scene-model`, `player-skin-sdk`, `shared-utils`, and the LR2/beatoraja skin packages. Native Skin uses `player-ui` for presentation. Node decoding and output belong to `player-node-audio` through `chart-audio-renderer`; browser audio uses its Web Audio adapter.
 When browser behavior diverges from the terminal player, prefer moving pure path, timing, scroll, lookup, or event-mapping helpers into shared packages and covering them with package-local tests.
 PixiJS scene wiring can remain in `player-browser` when the behavior depends on browser rendering or WebAudio resources.
 

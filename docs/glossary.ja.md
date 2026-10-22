@@ -82,12 +82,13 @@
 ## Runtime Package
 
 - **player core**: `@be-music/player-engine` の共有の規則と engine です。パッケージのルートは engine（`manualPlay`、`autoPlay`）で、解決済みの譜面からプレイを準備して判定し、UI / audio / input の runtime 契約を持ちます。ほかの入口は規則（`./ruleset`、`./course`、`./records`、`./replay`）と、ホストがプレイと共有するもの（`./signals`、`./lanes`、`./display`）です。timing、ノートの解決、timeline は `@be-music/chart-model` にあります。
+- **Node 音声アダプター**: `@be-music/player-node-audio` が提供する Node 用の音声実装です。ホストが `createAudioSession: createNodeAudioSession` としてエンジンに渡します。エンジンは音声契約を所有し、アダプターがデコードと出力を担当します。
 - **terminal player**: `@be-music/player-terminal` の CLI / TUI frontend です。core engine の上に Music Select、terminal gameplay、terminal BGA、loading screen、SEA build を提供します。
 - **browser player**: `@be-music/player-browser` の PixiJS/WebAudio runtime と `@be-music/app-play` の Vite host です。runtime はホスト向けの API から、どの画面もファミリービューが描くシーンセッションとして作り、ライブラリとスキンの読み込みとプレイの録画も持ちます。demo は browser drop、theme、Debug Menu、シーンルーターを扱います。
 - **skin family**: browser player の scene を描くスキンの種類です。`built-in`（be-music skin）、`lr2`、`beatoraja` があります（`SceneFamily`）。host は読み込んだ theme とプレイヤーの選択から選びます。
 - **built-in family（default skin family）**: 外部 theme がない場合、または host が明示的に選ぶ場合に使う skin family です。select、play、result（スキンが宣言していれば decide も）を be-music skin で描きます。play view は LR2 と同じく共通のプレイフィールドを描き、そのまわりの chrome はスキンが描きます。
-- **be-music skin**: `@be-music/player-skin-sdk` に沿って書くコードベースのスキンです。player はキャンバスと毎フレームのデータを渡し、スキンは自分が持ち込んだ renderer で各画面を描きます。
-- **built-in skins**: browser player に同梱する be-music skin です。既定の Synesthesia、Phantom、Plain と、opt-in の Lattice があります。
+- **be-music skin**: `@be-music/player-skin-sdk` に沿って書くコードベースのスキンです。表示用フレームを受け取り、Canvas 描画と任意の DOM 画面を組み合わせます。DOM は選曲・決定・リザルトを置き換え、ゲームプレイでは Canvas のプレイフィールドに HUD を追加します。
+- **built-in skins**: browser player に同梱する be-music skin です。既定の Synesthesia、Phantom、Plain、Native（DOM + Canvas）と、opt-in の Lattice があります。Native は `@be-music/player-ui` の再利用可能な部品を使います。
 - **touch layout / portrait stage**: タッチ主体の端末向けの gameplay layout です。touch layout は等幅のレーンをステージいっぱいに並べます。`portraitStage` を持つスキンは縦向き（9:16）のステージでも表示できます。
 - **LR2 skin**: `@be-music/skin-lr2` が扱う Lunatic Rave 2 CSV skin format です。この package は PixiJS に依存せず、skin file の parse と theme asset 解決を行います。
 - **beatoraja skin**: `@be-music/skin-beatoraja` が扱う beatoraja JSON / Lua skin format です。この package は PixiJS に依存せず、header / full skin の parse、option / asset 解決、element normalization を行います。
@@ -160,7 +161,7 @@
 ## アーキテクチャ
 
 - **シーンモデル（scene model）**: スキンの種類によらない 1 画面の状態と規則。何を見せ、どう応えるか。[ADR 0002](./adr/0002-scene-model-package.ja.md) と [シーンモデル](./scene-model.ja.md) を参照。
-- **設計した入口（designed entry point）**: ファイル構成ではなく、使う側のために作ったパッケージの subpath。`@be-music/player-engine` は `.`（エンジン）、`./signals`、`./lanes`、`./display`、`./ruleset`、`./replay`、`./records`、`./course` を、`@be-music/player-browser` は `.`、`./host`、`./skin`、`./collection`、`./audio`、`./recording` を公開します。それ以外は内部です。[ADR 0005](./adr/0005-public-entry-points.ja.md) を参照。
+- **設計した入口（designed entry point）**: ファイル構成ではなく、使う側のために作ったパッケージの subpath。`@be-music/player-engine` は `.`（エンジン）、`./signals`、`./lanes`、`./display`、`./ruleset`、`./replay`、`./records`、`./course` を、`@be-music/player-browser` は `.`、`./host`、`./skin`、`./collection`、`./audio`、`./recording`、`./compute`、`./controller` を公開します。それ以外は内部です。[ADR 0005](./adr/0005-public-entry-points.ja.md) を参照。
 - **ライブラリ / ライブラリの譜面 / ライブラリの項目（library / library chart / library entry）**: 選曲画面が一覧する対象。ルートでフォルダにまとめた譜面と、コースフォルダです（`Library`）。その中の 1 つの譜面がライブラリの譜面（`LibraryChart`）で、一覧の 1 本のバーは譜面・フォルダ・コースのいずれかです（`LibraryEntry`、`kind: 'chart' | 'folder' | 'course'`）。
 - **一覧の状態（browse state）**: プレイヤーがライブラリのどこにいて、一覧がどんな形か。開いているフォルダ、各階層のカーソル、検索、ソートとフィルター（一覧のオプション）、お気に入りです（`BrowseState`）。その保存形（`BrowseSnapshot`。`captureBrowse` で取り、`restoreBrowse` で戻します）がプレイの通るシーンをまたいで状態を保ちます。
 - **プレイ状態（play state）**: どのプレイ画面も読むプレイの状態で、エンジンのフレームと判定で進みます。進行中のゲージと EX スコアとそのグラフ、コンボ、判定タイミング、見え方の設定です（`PlayState`。変えるのは `reducePlayState` だけです）。
