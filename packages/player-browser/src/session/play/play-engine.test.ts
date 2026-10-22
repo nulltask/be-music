@@ -400,3 +400,13 @@ describe('the key beams of a play, by channel', () => {
     expect([...play.ctx.keyBeamFadeStartedAt.keys()]).toEqual(['1A']);
   });
 });
+
+test('keeps a raw PMS maximum for the skin and normalizes the result gauge and border', () => {
+  const play = createPlay({ total: 2, judgeRuleset: 'beatoraja', chartPlayVariant: '9' });
+  const final = summary({}, 30);
+  final.gauge = { ...final.gauge!, current: 30, max: 120, initial: 30, clearThreshold: 85, type: 'NORMAL' };
+  applyFinalSummary(play.ctx, final);
+  expect(play.ctx.gaugeState).toMatchObject({ current: 30, max: 120, clearThreshold: 85 });
+  expect(play.state().gauge).toBe(25);
+  expect(getResultData(play.ctx)).toMatchObject({ gauge: 25, gaugeBorder: (85 / 120) * 100 });
+});

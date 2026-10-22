@@ -420,7 +420,12 @@ function buildNativeResult(
     djLevel: resolveIIDXRankLabel(summary.exScore, summary.total),
     gauge: {
       type: summary.gauge?.type ?? declaredGauge,
-      final: summary.gauge?.current ?? 0,
+      final:
+        summary.gauge?.max === 100
+          ? summary.gauge.current
+          : summary.gauge !== undefined && summary.gauge.max > 0
+            ? (summary.gauge.current / summary.gauge.max) * 100
+            : 0,
       cleared: summary.gauge?.cleared ?? false,
     },
   };

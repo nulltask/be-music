@@ -468,7 +468,7 @@ Already per ruleset: LR2 death border and guts, the LR2 DEATH table (**fixed in 
 - **LR2:** one set of tables.
 - **beatoraja:** separate FIVEKEYS, SEVENKEYS, PMS and KEYBOARD tables. Examples: 5K borders 75/50; HARD_5 has no recovery; PMS max 120, initial 30, border 85 ([play/GaugeProperty.java#L77-L105](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/GaugeProperty.java#L77-L105)). The 24K default TOTAL also differs.
 - **Kind:** parameter.
-- **be-music today:** the 7K table for every mode (documented in [replay — Fidelity notes](./replay.md#fidelity-notes)). Course class gauges already switch per mode.
+- **be-music today:** fixed in [#587](https://github.com/nulltask/be-music/issues/587). Single-play gauges select FIVEKEYS, SEVENKEYS, PMS or KEYBOARD properties, including the keyboard default TOTAL and five-key EX-HARD damage modifier. Course class gauges retain their separate per-mode tables. Live skin inputs retain raw bounds (PMS maximum 120); result and replay gauge values remain percentages. Historical derived Leaderboard results require explicit offline re-simulation; revision 0 is unchanged.
 - **Impact:** B; A, because a PMS gauge max of 120 changes how skins render the gauge.
 - **Recommendation:** pick the table per mode inside `beatoraja`.
 
