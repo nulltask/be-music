@@ -52,18 +52,18 @@
 
 ## ライブラリと表示
 
-| 概念                        | 現行のコード名                                                     | 意味・区別                                                                                          |
-| --------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| library / ライブラリ        | `Library`, `LibraryChart`, `LibraryEntry`                          | 一覧する集合・譜面項目・一覧の 1 項目。一覧の項目にはフォルダやコースも含む。                       |
-| browse state / ブラウズ状態 | `BrowseState`, `BrowseSnapshot`                                    | 現在の移動・絞り込み状態と、復元用スナップショット。                                                |
-| play options / プレイ設定   | `PlayOptions`, `PlayerOptions`, `PlayerPlaySettings`               | 選曲画面の選択肢・エンジンの実行設定・記録される設定を区別する。                                    |
-| scene / シーン              | `SessionScene`, `PixiSceneHost`, `SceneFamily`                     | 画面の実行・そのホスト・スキンの種類という役割を分ける。                                            |
-| scene model / シーンモデル  | `BrowseState`, `PlayState`, `PlayResult`                           | レンダラーに依存しない状態・データ。画面の制御自体とは別。                                          |
-| skin / スキン               | `BeMusicSkin`, LR2 and beatoraja skins                             | 表示の実装。テーマは複数のスキンや音をまとめられる。                                                |
-| frame / フレーム            | `BeMusicGameplayFrame`, `BeMusicAudioFrame`                        | 画面フレーム・音声フレームを明示する。データも時間軸も異なる。                                      |
-| シーン controller           | `SceneController`, `createSelectController`                        | 表示用 snapshot と intent の接続。時刻は所有者が `advance(nowMs)` に渡し、UI 部品は時計を持たない。 |
-| DOM 画面                    | `BeMusicDOMFactory`, `BeMusicDOMScreen`, `BeMusicDOMGameplayFrame` | スキンの mount / update / dispose 契約。描画用 Canvas フレームやシーンセッションとは別のもの。      |
-| 再利用する UI 部品          | `BeMusicGameplayHUDElement`, `BeMusicGameplayHUD`                  | Web Component のクラスと React / Vue ラッパー。表示用 property を受け、操作要求を通知する。         |
+| 概念                        | 現行のコード名                                                     | 意味・区別                                                                                              |
+| --------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| library / ライブラリ        | `Library`, `LibraryChart`, `LibraryEntry`                          | 一覧する集合・譜面項目・一覧の 1 項目。一覧の項目にはフォルダやコースも含む。                           |
+| browse state / ブラウズ状態 | `BrowseState`, `BrowseSnapshot`                                    | 現在の移動・絞り込み状態と、復元用スナップショット。                                                    |
+| play options / プレイ設定   | `PlayOptions`, `PlayerOptions`, `PlayerPlaySettings`               | 選曲画面の選択肢・エンジンの実行設定・記録される設定を区別する。                                        |
+| scene / シーン              | `SessionScene`, `PixiSceneHost`, `SceneFamily`                     | 画面の実行・そのホスト・スキンの種類という役割を分ける。                                                |
+| scene model / シーンモデル  | `BrowseState`, `PlayState`, `PlayResult`                           | レンダラーに依存しない状態・データ。画面の制御自体とは別。                                              |
+| skin / スキン               | `BeMusicSkin`, LR2 and beatoraja skins                             | 表示の実装。テーマは複数のスキンや音をまとめられる。                                                    |
+| frame / フレーム            | `BeMusicGameplayFrame`, `BeMusicAudioFrame`                        | 画面フレーム・音声フレームを明示する。データも時間軸も異なる。                                          |
+| シーン controller           | `SceneController`, `createSelectController`                        | 表示用 snapshot と intent の接続。時刻は所有者が `advance(nowMs)` に渡し、UI 部品はクロックを持たない。 |
+| DOM 画面                    | `BeMusicDOMFactory`, `BeMusicDOMScreen`, `BeMusicDOMGameplayFrame` | スキンの mount / update / dispose 契約。描画用 Canvas フレームやシーンセッションとは別のもの。          |
+| 再利用する UI 部品          | `BeMusicGameplayHUDElement`, `BeMusicGameplayHUD`                  | Web Component のクラスと React / Vue ラッパー。表示用 property を受け、操作要求を通知する。             |
 
 ## ユーザーと認証
 
@@ -77,7 +77,7 @@
 
 ## API の命名
 
-- リプレイ: `BeMusicReplay`、`parseReplay`、`serializeReplay`、`simulateReplay`。公開入口は `@be-music/player-engine/replay`。
+- リプレイ: `BeMusicReplay`、`parseReplay`、`serializeReplay`、`simulateReplay`。公開エントリポイントは `@be-music/player-engine/replay`。
 - 譜面: `PlayResult.chart`、`BrowserChartCollection`、`BrowserChartCollectionStore`。
 - アセット供給元: `BrowserAssetSource`、`BrowserAssetEntry`。
 - 譜面の自己ベスト: `BeMusicChartBestRecord`、`chartBestRecord`、`parseChartBestRecords`。

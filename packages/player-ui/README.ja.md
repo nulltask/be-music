@@ -2,7 +2,7 @@
 
 # Player UI
 
-Be-Music の表示を再利用する Lit 製 Web Components です。表示データを JavaScript の property で受け取り、操作要求を bubbling・composed な `CustomEvent` で通知します。エンジン・時計・AudioContext・購読は所有しません。Native Skin も DOM スキンのアダプターを介して同じ部品を使います。
+Be-Music の表示を再利用する Lit 製 Web Components です。表示データを JavaScript の property で受け取り、操作要求を bubbling・composed な `CustomEvent` で通知します。エンジン・クロック・AudioContext・購読は所有しません。Native Skin も DOM スキンのアダプターを介して同じ部品を使います。
 
 ## パッケージ
 
