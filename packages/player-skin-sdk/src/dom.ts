@@ -63,8 +63,8 @@ export interface BeMusicDOMSelectActions {
 
 /** Small HUD state: note arrays, textures and rendering caches stay with the Canvas renderer. */
 export interface BeMusicDOMGameplayFrame extends BeMusicDOMPresentation {
-  /** Design stage and lane bounds, for placing DOM controls clear of the playfield. */
-  readonly layout: Pick<BeMusicGameplayLayout, 'stage' | 'orientation' | 'playfield'>;
+  /** Design stage, lane bounds and BGA rect, for placing DOM controls clear of the playfield. */
+  readonly layout: Pick<BeMusicGameplayLayout, 'stage' | 'orientation' | 'playfield' | 'bga'>;
   readonly chart: LibraryChart | undefined;
   readonly state: Readonly<PlayState>;
   /** The same resource-free HUD values available to Canvas skins. */
@@ -78,12 +78,16 @@ export interface BeMusicDOMGameplayFrame extends BeMusicDOMPresentation {
   readonly stage: 'loading' | 'intro' | 'playing' | 'paused' | 'ending';
   readonly autoPlay: boolean;
   readonly replay: boolean;
+  /** Whether {@link BeMusicDOMGameplayActions.seek} moves the play now: an AUTO play whose chart is running. */
+  readonly seekable: boolean;
 }
 
 export interface BeMusicDOMGameplayActions {
   pause(): void;
   restart(): void;
   quit(): void;
+  /** Moves the play to chart second `seconds` and plays on from there; ignored unless the frame is `seekable`. */
+  seek(seconds: number): void;
 }
 
 export interface BeMusicDOMResultFrame extends BeMusicDOMPresentation {
