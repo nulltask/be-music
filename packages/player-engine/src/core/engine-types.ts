@@ -389,6 +389,9 @@ export interface PlayerSummary {
    * engine's summaries always carry it; it is optional so a summary a host builds itself need not.
    */
   combo?: number;
+  /** Final combo eligibility when empty POOR can break combo; absent in legacy/count-only results. */
+  fullCombo?: boolean;
+
   /** The highest combo of the play so far; see {@link combo}. */
   maxCombo?: number;
   gauge?: PlayerGaugeSummary;

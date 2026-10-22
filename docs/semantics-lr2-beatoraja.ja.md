@@ -51,7 +51,7 @@ LR2 と beatoraja は、同じ譜面、オプション、スキンの番号を�
    - TOTAL を基本ノート数で割っているが、beatoraja は CN/HCN の終端も数えるので、回復が最大 2 倍速すぎる。
    - judgerank > 100 で BAD の判定幅がスケール前の値に抑えられる。
    - どのモードでも 7K のゲージ表を使う。
-   - フルコンボが 5K/PMS の空 POOR によるコンボ切れを無視する。
+   - 5K/PMS の空 POOR 後のフルコンボ判定は [#588](https://github.com/nulltask/be-music/issues/588) で修正。
    - ゲージの計算が float ではなく double。
 
    (B)
@@ -132,7 +132,7 @@ flowchart TD
 | 3   | 失敗したランを別 ruleset で再シミュレーション           | B              | 3 つすべてでランキング                             | 失敗したサバイバルのランはプレイした ruleset でだけランキングする（または印を付ける） |
 | 4   | LIGHT ASSIST EASY ランプ                                | A, B           | なし。ASSIST-EASY ゲージ → ASSIST_EASY             | ランプを追加。追加のみの rank かマイグレーション                                      |
 | 5   | LR2 はゲージ判定より先に FC                             | B              | FAILED が先（beatoraja 方式）                      | ruleset ごと                                                                          |
-| 6   | FC と空 POOR のコンボ切れ（bea 5K/PMS）                 | B              | 無視                                               | ruleset ごと                                                                          |
+| 6   | FC と空 POOR のコンボ切れ（bea 5K/PMS）                 | B              | #588 で修正                                        | ruleset ごと                                                                          |
 | 7   | beatoraja の TOTAL のノート数（CN/HCN の終端）          | B              | 基本ノート数                                       | ruleset ごと（バグ修正）                                                              |
 | 8   | judgerank > 100 での beatoraja の BAD のスケーリング    | B              | スケール前の BAD に抑える                          | ruleset ごと（バグ修正）                                                              |
 | 9   | beatoraja のモード別ゲージ表                            | B, A           | どこでも 7K の表                                   | `beatoraja` の中でモードごと                                                          |
@@ -401,11 +401,11 @@ flowchart TD
 ### フルコンボと空 POOR のコンボ切れ（beatoraja 5K/PMS）
 
 - **LR2:** FC = `totalnotes == max_combo`（[#L1838](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1838)）。空 POOR がコンボを切ることはありません。
-- **beatoraja:** FC = `pastNotes == combo`（L868）。5K/PMS では空 POOR がコンボをリセットします。
+- **beatoraja:** FC は終了時のコンボと判定済みノート数の一致を要します（[BMSPlayer](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L818-L834)）。FIVEKEYS/PMS では空 POOR がコンボをリセットし、SEVENKEYS/KEYBOARD では維持します（[JudgeProperty](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeProperty.java#L10-L53)）。
 - **種類:** セマンティクス。
-- **be-music の現状:** `isFullCombo` は PG+GR+GD ≥ 総数を数え、`comboBreaksOnEmptyPoor` を無視します。
+- **be-music の現状:** [#588](https://github.com/nulltask/be-music/issues/588) で修正。空 POOR でコンボが切れるモードで空 POOR が発生した場合、エンジンとシミュレータが終了時のコンボから `fullCombo` を確定します。共通ランプ判定は全ノート GOOD 以上とこの可否の両方を要求し、結果・ローカル記録・コース集計・Leaderboard の再シミュレーションで共有します。最初のノートより前の空 POOR は、その後のフルコンボを妨げません。
 - **影響:** B。
-- **推奨:** ruleset ごと：`comboBreaksOnEmptyPoor` が立っているときは、FC に最大コンボ = ノート数も必要にする。
+- **推奨:** 終了時のコンボ条件を ruleset ごとに保ちます。最大コンボだけでは、その後の切断を検出できません。`fullCombo` のない旧キャッシュは判定数による互換動作を保つため、再シミュレーションが必要です。保存済みの Leaderboard 派生ランプ・ベスト記録は入力列から明示的にオフライン再集計します。集計値だけのローカル記録は入力順を復元できず、次の適格なプレイで更新されます。本番データは変更しません。
 
 ### EX スコア、マネースコア、DJ レベル
 

@@ -51,6 +51,12 @@ describe('clear lamp ranks', () => {
 });
 
 describe('isFullCombo', () => {
+  it('honors final combo eligibility without granting an incomplete play a full combo', () => {
+    expect(isFullCombo({ ...score(100, 0, 0), fullCombo: false })).toBe(false);
+    expect(isFullCombo({ ...score(100, 0, 0), fullCombo: true })).toBe(true);
+    expect(isFullCombo({ ...score(99, 0, 0), fullCombo: true })).toBe(false);
+  });
+
   it('needs every note judged GOOD or better', () => {
     expect(isFullCombo(score(80, 15, 5))).toBe(true);
     expect(isFullCombo(score(80, 15, 4))).toBe(false);

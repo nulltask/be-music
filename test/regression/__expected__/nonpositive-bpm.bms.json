@@ -397,7 +397,8 @@
               "type": "NORMAL",
               "final": 0,
               "cleared": false
-            }
+            },
+            "fullCombo": false
           },
           "iidx": {
             "ruleset": "iidx/0",
@@ -472,7 +473,8 @@
                 "type": "NORMAL",
                 "survival": false,
                 "failedMidPlay": false
-              }
+              },
+              "fullCombo": false
             },
             "iidx": {
               "total": 24,
@@ -547,7 +549,8 @@
               "type": "NORMAL",
               "final": 0,
               "cleared": false
-            }
+            },
+            "fullCombo": false
           },
           "iidx": {
             "ruleset": "iidx/0",
@@ -622,7 +625,8 @@
                 "type": "NORMAL",
                 "survival": false,
                 "failedMidPlay": false
-              }
+              },
+              "fullCombo": false
             },
             "iidx": {
               "total": 24,
