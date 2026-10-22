@@ -62,6 +62,10 @@ host は entry script の directory とその sub-directory、および 1 階層
 module は cache されるので、後続の `require()` は同じ table を返します。
 beatoraja の `timer_util` / `event_util` helper module は組み込みで用意しており、theme に同梱しなくても `require()` できます。
 
+`os.clock()` は host が渡す scene の経過時間を秒単位で返します。これにより、WMII_FHD のレーザーやキー発光など、遅延付き Lua draw 条件が描画とともに進みます。標準ライブラリーを除外した後、限定的な `os` / `io` 互換 shim を用意します。ファイルシステムやプロセスの操作は何も実行しません。
+
+ビットマップフォントの各ページには共通のブラウザー画像デコーダーを使用し、ブラウザーが直接扱えない TGA シートも読み込みます。
+
 2-phase 契約:
 
 ```lua

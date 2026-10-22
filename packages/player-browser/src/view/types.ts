@@ -478,6 +478,8 @@ export interface PlayfieldMeasureLine {
   readonly x: number;
   readonly width: number;
   readonly height: number;
+  /** Authored top-edge offset from the note timing origin. Defaults to zero. */
+  readonly yOffset?: number;
   /** Applies the line's alpha, tint and blend to a placed sprite. */
   applyToSprite?(sprite: Sprite): void;
 }

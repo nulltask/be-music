@@ -69,6 +69,10 @@ in the entry script's directory and its sub-directories (and one level up — be
 `play_parts.lua`). Modules are cached so a `require()` call always returns the same table on subsequent invocations.
 beatoraja's `timer_util` / `event_util` helper modules are built in and can be required without shipping them.
 
+`os.clock()` reads the host-provided scene clock in seconds, so delayed Lua draw predicates (including WMII_FHD key beams and key flashes) advance with rendering. Limited `os` and `io` compatibility shims are restored after the standard libraries are removed; filesystem and process operations remain inert.
+
+Bitmap font pages use the shared browser image decoder, including TGA sheets that browsers cannot decode natively.
+
 The two-phase contract:
 
 ```lua

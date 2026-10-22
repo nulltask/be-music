@@ -44,6 +44,16 @@ function frame(overrides: Partial<LR2PlayFrame> = {}): LR2PlayFrame {
 }
 
 describe('resolveLR2PlayState ops', () => {
+  it('lights per-side judgment gates used by LITONE4 lasers, including the initial miss state', () => {
+    const initial = resolveLR2PlayState(SETUP, frame()).ops;
+    expect(initial.has(LR2_OP.JUDGE_1P_MISS)).toBe(true);
+    const judged = resolveLR2PlayState(SETUP, frame({ judgments: { '1P': 'PERFECT', '2P': 'BAD' } })).ops;
+    expect(judged.has(LR2_OP.JUDGE_1P_PERFECT)).toBe(true);
+    expect(judged.has(LR2_OP.JUDGE_2P_BAD)).toBe(true);
+    expect(judged.has(LR2_OP.JUDGE_1P_MISS)).toBe(false);
+    expect(judged.has(LR2_OP.JUDGE_2P_PERFECT)).toBe(false);
+  });
+
   it('lights the play’s fixed ops from its setup', () => {
     const { ops } = resolveLR2PlayState(SETUP, frame());
     for (const op of [
