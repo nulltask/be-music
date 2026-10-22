@@ -50,6 +50,14 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
         pointer-events: auto;
         cursor: pointer;
       }
+      /* The shared button hover fills the control; this hit target must stay clear of the lanes and BGA. */
+      .stage-hit:hover,
+      .stage-hit:active,
+      .stage-hit:focus,
+      .stage-hit:focus-visible {
+        background: transparent;
+        border-color: transparent;
+      }
       .info {
         position: absolute;
         display: grid;
