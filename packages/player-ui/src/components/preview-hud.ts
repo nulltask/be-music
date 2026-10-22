@@ -9,7 +9,7 @@ import { baseStyles } from '../styles/base.ts';
  * The HUD of a preview: the chart's facts, score, combo, gauge and judgments beside or under the BGA
  * (`resolvePreviewInfoBox`), and video-player controls
  * along the bottom of the stage. Lay it over `be-music-playfield`; the volume, mute and full-screen state are the
- * host's, set as properties.
+ * host's, set as properties, and so is hiding the controls (`controlsHidden`) while the viewer is idle.
  */
 export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFrame> {
   static override properties: PropertyDeclarations = {
@@ -17,6 +17,7 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
     volume: { type: Number },
     muted: { type: Boolean },
     fullscreen: { type: Boolean },
+    controlsHidden: { type: Boolean, attribute: 'controls-hidden', reflect: true },
   };
   static override styles: CSSResultGroup = [
     baseStyles,
@@ -93,18 +94,26 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
         right: 0;
         bottom: 0;
         pointer-events: auto;
+        transition: opacity 0.3s ease;
+      }
+      :host([controls-hidden]) be-music-playback-controls {
+        opacity: 0;
+        pointer-events: none;
       }
     `,
   ];
   declare volume: number;
   declare muted: boolean;
   declare fullscreen: boolean;
+  /** Fades the video controls out; the host sets it when the viewer has been idle during a play. */
+  declare controlsHidden: boolean;
 
   constructor() {
     super();
     this.volume = 1;
     this.muted = false;
     this.fullscreen = false;
+    this.controlsHidden = false;
   }
 
   protected override render(): TemplateResult | typeof nothing {
