@@ -42,7 +42,7 @@ test('makes, saves, cancels, renames, deletes and exports courses', async ({ dem
   await startMaking(demo, 'MY COURSES', 'expert');
   expect(await decide(demo, 'Fixture A')).toBe('Added Fixture A to the course (1 / 5)');
   expect(await decide(demo, 'Fixture 5KEY')).toBe(
-    'Could not add Fixture 5KEY: its key mode differs from the first song’s',
+    'Could not add Fixture 5KEY: its key mode differs from the first chart’s',
   );
   for (const [index, title] of ['Fixture B', 'Fixture C', 'Fixture E', 'Fixture F'].entries()) {
     expect(await decide(demo, title)).toBe(`Added ${title} to the course (${index + 2} / 5)`);
