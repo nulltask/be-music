@@ -481,3 +481,20 @@ describe('view and tempo changes', () => {
     expect(parseReplay(serializeReplay(replay)).play).toEqual(replay.play);
   });
 });
+
+test('records a non-100 gauge maximum as a percentage in native results', () => {
+  const recorder = createReplayRecorder(makeRecorderOptions());
+  const summary = makeSummary({
+    gauge: {
+      type: 'NORMAL',
+      current: 90,
+      max: 120,
+      initial: 30,
+      clearThreshold: 85,
+      effectiveTotal: 300,
+      cleared: true,
+    },
+  });
+  const replay = recorder.finalize({ summary, maxCombo: 0 });
+  expect(replay.results?.native?.gauge.final).toBe(75);
+});

@@ -468,7 +468,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 - **LR2:** 表は 1 組です。
 - **beatoraja:** FIVEKEYS、SEVENKEYS、PMS、KEYBOARD で別の表があります。例：5K の境界は 75/50、HARD_5 は回復なし、PMS は最大 120・初期値 30・境界 85（[play/GaugeProperty.java#L77-L105](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/GaugeProperty.java#L77-L105)）。24K の既定の TOTAL も違います。
 - **種類:** パラメータ。
-- **be-music の現状:** すべてのモードで 7K の表です（[リプレイ — 再現度に関する注意](./replay.ja.md#再現度に関する注意) に記載）。コースの段位ゲージはすでにモードごとに切り替わります。
+- **be-music の現状:** fixed in [#587](https://github.com/nulltask/be-music/issues/587)。単曲のゲージは FIVEKEYS、SEVENKEYS、PMS、KEYBOARD の表を選び、24鍵のデフォルト TOTAL と5鍵 EX-HARD のダメージ補正にも対応します。コースの段位ゲージは既存のモード別の表を維持します。プレイ中のスキン入力には実際の範囲（PMS の最大値 120）を渡し、結果とリプレイのゲージ値は百分率で保ちます。保存済みの Leaderboard 派生結果には明示的なオフライン再計算が必要で、リビジョン 0 は変更しません。
 - **影響:** B。PMS のゲージ最大 120 はスキンでのゲージの描き方を変えるので A も。
 - **推奨:** `beatoraja` の中でモードごとに表を選ぶ。
 

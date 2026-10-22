@@ -271,7 +271,7 @@ long note's head and tail as two judgment notes (`result.noteCount` reports each
   consensus; the empty-POOR window and CN release windows are unmeasured and use beatoraja's values as stand-ins,
   and the HCN gauge tick uses a fixed 200 ms interval instead of IIDX's measured 16th-note interval. Expect
   close — not bit-exact — reproduction.
-- beatoraja niceties not modeled: PMS's one-empty-POOR-per-note rule and per-mode gauge tables other than SEVENKEYS (the 7K gauge constants are used for every mode).
+- beatoraja uses separate FIVEKEYS, SEVENKEYS, PMS and KEYBOARD gauge tables and mode-specific default TOTAL. Engine frames carry raw gauge bounds, including PMS maximum 120; replay `gauge.final` and result gauges are percentages of that maximum. PMS's one-empty-POOR-per-note rule remains unmodeled.
 - Because the replay stores the resolved chart, `#RANDOM` and lane-shuffle differences between players never
   affect re-simulation.
 - A play from input without key releases records the releases the engine inferred ([Input without key
