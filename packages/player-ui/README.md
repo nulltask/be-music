@@ -40,7 +40,7 @@ React and Vue are peer dependencies of their respective wrappers. The skin SDK h
 | `be-music-playfield`         | `frame: BeMusicGameplayFrame`                                     |
 | `be-music-playback-controls` | `data: BeMusicPlaybackData`                                       |
 | `be-music-preview-hud`       | `frame: BeMusicDOMGameplayFrame`, `volume`, `muted`, `fullscreen` |
-| `be-music-preview-select`    | `charts: readonly LibraryChart[]`, `heading`                      |
+| `be-music-preview-select`    | `charts: readonly LibraryChart[]`, `heading`, optional `images`   |
 | `be-music-preview-start`     | `mode: 'play' \| 'replay'`, `disabled`                            |
 
 Each class is exported as `BeMusic…Element`. Wrappers export the same names without `Element`, for example `BeMusicGameplayHUD` and `BeMusicJudgmentTable`. Leaf components take only their own presentation data and can be arranged independently. Screen components compose those leaves and accept the existing DOM skin frames.
@@ -53,7 +53,7 @@ The playfield elements each draw on their own canvas, sized to the device pixels
 
 ## Preview
 
-`be-music-playback-controls` is a video player's control bar: play / pause (`pause-request`), a seek bar that requests `seek-request` with `{ seconds }` while it is dragged and again when let go, the time, mute and volume (`volume-change` with `{ volume, muted }`) and full screen (`fullscreen-request`). `be-music-preview-hud` lays the chart's facts, score, combo, gauge and judgments under the BGA rect and the controls along the bottom of the stage, and forwards their requests. `be-music-preview-select` lists a track's charts and requests one with `activate-request`; `be-music-preview-start` is the large play or replay button (`play-request`). `formatPlaybackTime`, `resolveSeekTarget` and `resolveGameplayPanels` are the pure helpers behind them. The embed page composes them ([browser player](../../docs/player-web.md#embedded-preview)).
+`be-music-playback-controls` is a video player's control bar: play / pause (`pause-request`), a seek bar that requests `seek-request` with `{ seconds }` while it is dragged and again when let go, the time, mute and volume (`volume-change` with `{ volume, muted }`) and full screen (`fullscreen-request`). `be-music-preview-hud` lays the chart's facts, score, combo, gauge and judgments under the BGA rect and the controls along the bottom of the stage, and forwards their requests. `be-music-preview-select` lists a track's charts, showing each chart's picture from `images` (a `#STAGEFILE`, or a `#BANNER` when the host supplies one), and requests one with `activate-request`; `be-music-preview-start` is the large play or replay button (`play-request`). `formatPlaybackTime`, `resolveSeekTarget` and `resolveGameplayPanels` are the pure helpers behind them. The embed page composes them ([browser player](../../docs/player-web.md#embedded-preview)).
 
 ## HTML and TypeScript
 
