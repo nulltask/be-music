@@ -15,6 +15,13 @@ import {
   BeMusicGameplayHUDElement,
   BeMusicResultScreenElement,
   BeMusicDecideScreenElement,
+  BeMusicLanesElement,
+  BeMusicNotesElement,
+  BeMusicLaneCoversElement,
+  BeMusicJudgeLineElement,
+  BeMusicBombsElement,
+  BeMusicJudgmentDisplayElement,
+  BeMusicPlayfieldElement,
 } from '@be-music/player-ui';
 import type { BeMusicUIEvent } from '@be-music/player-ui';
 import { wrap } from './wrap.ts';
@@ -141,3 +148,56 @@ export const BeMusicDecideScreen: ReactWebComponent<BeMusicDecideScreenElement, 
   eventsDecideScreen,
 );
 export type BeMusicDecideScreenProps = React.ComponentProps<typeof BeMusicDecideScreen>;
+
+const eventsLanes = {};
+export const BeMusicLanes: ReactWebComponent<BeMusicLanesElement, typeof eventsLanes> = wrap(
+  'be-music-lanes',
+  BeMusicLanesElement,
+  eventsLanes,
+);
+export type BeMusicLanesProps = React.ComponentProps<typeof BeMusicLanes>;
+
+const eventsNotes = {};
+export const BeMusicNotes: ReactWebComponent<BeMusicNotesElement, typeof eventsNotes> = wrap(
+  'be-music-notes',
+  BeMusicNotesElement,
+  eventsNotes,
+);
+export type BeMusicNotesProps = React.ComponentProps<typeof BeMusicNotes>;
+
+const eventsLaneCovers = {};
+export const BeMusicLaneCovers: ReactWebComponent<BeMusicLaneCoversElement, typeof eventsLaneCovers> = wrap(
+  'be-music-lane-covers',
+  BeMusicLaneCoversElement,
+  eventsLaneCovers,
+);
+export type BeMusicLaneCoversProps = React.ComponentProps<typeof BeMusicLaneCovers>;
+
+const eventsJudgeLine = {};
+export const BeMusicJudgeLine: ReactWebComponent<BeMusicJudgeLineElement, typeof eventsJudgeLine> = wrap(
+  'be-music-judge-line',
+  BeMusicJudgeLineElement,
+  eventsJudgeLine,
+);
+export type BeMusicJudgeLineProps = React.ComponentProps<typeof BeMusicJudgeLine>;
+
+const eventsBombs = {};
+export const BeMusicBombs: ReactWebComponent<BeMusicBombsElement, typeof eventsBombs> = wrap(
+  'be-music-bombs',
+  BeMusicBombsElement,
+  eventsBombs,
+);
+export type BeMusicBombsProps = React.ComponentProps<typeof BeMusicBombs>;
+
+const eventsJudgmentDisplay = {};
+export const BeMusicJudgmentDisplay: ReactWebComponent<BeMusicJudgmentDisplayElement, typeof eventsJudgmentDisplay> =
+  wrap('be-music-judgment-display', BeMusicJudgmentDisplayElement, eventsJudgmentDisplay);
+export type BeMusicJudgmentDisplayProps = React.ComponentProps<typeof BeMusicJudgmentDisplay>;
+
+const eventsPlayfield = {};
+export const BeMusicPlayfield: ReactWebComponent<BeMusicPlayfieldElement, typeof eventsPlayfield> = wrap(
+  'be-music-playfield',
+  BeMusicPlayfieldElement,
+  eventsPlayfield,
+);
+export type BeMusicPlayfieldProps = React.ComponentProps<typeof BeMusicPlayfield>;

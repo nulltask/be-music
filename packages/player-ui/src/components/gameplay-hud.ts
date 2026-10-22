@@ -152,6 +152,7 @@ export class BeMusicGameplayHUDElement extends FrameElement<BeMusicDOMGameplayFr
           </div>
         </details>
       </aside>
+      ${f.stage === 'paused' ? html`<p class="paused" part="paused" role="status">Paused</p>` : nothing}
     </section>`;
   }
 }
