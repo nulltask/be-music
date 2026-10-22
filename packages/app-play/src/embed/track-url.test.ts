@@ -24,6 +24,12 @@ describe('parseEmbedTrack', () => {
     expect(parseEmbedTrack(`${PAGE}?track=https://example.com/download?id=3`)?.fileName).toBe('download.zip');
   });
 
+  it('reads the chart to play on its own from ?chart=', () => {
+    expect(parseEmbedTrack(`${PAGE}?track=/tracks/demo.zip&chart=codebmp.bms`)?.chart).toBe('codebmp.bms');
+    expect(parseEmbedTrack(`${PAGE}?track=/tracks/demo.zip&chart=%20`)).not.toHaveProperty('chart');
+    expect(parseEmbedTrack(`${PAGE}?track=/tracks/demo.zip`)).not.toHaveProperty('chart');
+  });
+
   it('refuses a missing track and URLs the embed cannot fetch', () => {
     expect(parseEmbedTrack(PAGE)).toBeUndefined();
     expect(parseEmbedTrack(`${PAGE}?track=javascript:alert(1)`)).toBeUndefined();
