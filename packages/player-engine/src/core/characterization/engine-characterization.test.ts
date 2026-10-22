@@ -357,6 +357,21 @@ describe('engine characterization: play scenarios', () => {
     await expectSnapshot('scenarios/audio-clock', observations);
   });
 
+  test('AUTO play started partway (startAtSeconds)', async () => {
+    // 2.2 s: past the basic chart's first eight notes and both BGM starts; 1.6 s: inside the charge note on 12.
+    const observations = {
+      basic: await observePlay({ driver: 'auto', chart: basicChart(), options: { startAtSeconds: 2.2 } }),
+      heldChargeNote: await observePlay({ driver: 'auto', chart: longNoteChart(2), options: { startAtSeconds: 1.6 } }),
+      tempo: await observePlay({ driver: 'auto', chart: basicChart(), options: { startAtSeconds: 2.2, speed: 1.5 } }),
+      leadIn: await observePlay({
+        driver: 'auto',
+        chart: basicChart(),
+        options: { startAtSeconds: 2.2, leadInMs: 500 },
+      }),
+    };
+    await expectSnapshot('scenarios/seek-start-at', observations);
+  });
+
   test('lead-in', async () => {
     const chart = basicChart();
     const manual = await observePlay({
