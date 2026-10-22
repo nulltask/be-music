@@ -146,7 +146,6 @@ export async function prepareAudio(ctx: PlayMediaContext): Promise<void> {
       ctx.options.nonstop !== undefined
         ? createNonstopStageMixer(ctx.audioContext, ctx.audioBus.bgmMixer, ctx.options.nonstop, {
             keepPitch: pitchMode === 'keep-pitch',
-            tempo: ctx.tempo,
           })
         : undefined;
     ctx.webAudioSession = createWebAudioSession({

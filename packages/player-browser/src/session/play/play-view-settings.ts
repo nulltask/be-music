@@ -6,7 +6,7 @@
  * The functions read and write the scene's state through {@link PlayViewSettingsContext}; the play session passes itself.
  */
 
-import type { PlayerTempoChange, TempoClock } from '@be-music/player-engine';
+import type { PlayerTempoChange } from '@be-music/player-engine';
 import type { PlayerInputSignalBus } from '@be-music/player-engine/signals';
 import {
   createReplayViewCoalescer,
@@ -26,7 +26,6 @@ import {
   type LaneCoverState,
   type ReplayViewCursor,
 } from '@be-music/player-scene-model';
-import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { setVideoPlaybackTempo } from '../../runtime/play-tempo.ts';
 import type { PlaySessionOptions } from './play-options.ts';
 import type { PlayTempoRange } from './tempo-range.ts';
@@ -41,10 +40,6 @@ export interface PlayViewSettingsContext extends PlayStateContext {
   readonly options: Readonly<Pick<PlaySessionOptions, 'onHiSpeedChange' | 'onTempoChange' | 'replayView'>>;
   readonly disposed: boolean;
   tempo: number;
-  readonly tempoClock: TempoClock;
-  readonly audioContext: AudioContext | undefined;
-  readonly audioContextStartTime: number;
-  readonly nonstopMixer: NonstopStageMixer | undefined;
   readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string }>;
   readonly laneX: Map<string, PlayfieldLaneRect>;
   readonly chartBPMRange: PlayTempoRange | undefined;
@@ -69,19 +64,17 @@ export function adjustHiSpeed(ctx: PlayViewSettingsContext, delta: number): bool
   return true;
 }
 
-/** Follows a tempo change the engine made: the view's clock, the BGA videos, the NONSTOP fades and the host. */
+/**
+ * Follows a tempo change the engine made: the BGA videos and the host. The chart's clock follows from the engine's next
+ * frame, and the engine's audio session moves a NONSTOP chart's fades.
+ */
 export function followTempoChange(ctx: PlayViewSettingsContext, change: PlayerTempoChange): void {
   if (ctx.disposed) return;
   ctx.tempo = change.tempo;
-  ctx.tempoClock.setTempoAtChartSeconds(change.seconds, change.tempo);
   setVideoPlaybackTempo(
     [...ctx.bgaVideos.values()].map((handle) => handle.video),
     change.tempo,
   );
-  if (ctx.audioContext && ctx.audioContextStartTime > 0) {
-    const chartStart = ctx.audioContextStartTime;
-    ctx.nonstopMixer?.retime(ctx.currentSeconds(), (seconds) => chartStart + ctx.tempoClock.clockMsAt(seconds) / 1000);
-  }
   ctx.options.onTempoChange?.(change.tempo);
 }
 
