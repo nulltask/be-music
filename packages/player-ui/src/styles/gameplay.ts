@@ -30,6 +30,18 @@ export const gameplayStyles: CSSResult = css`
     font-size: clamp(10px, 1.35cqw, 14px);
     font-variant-numeric: tabular-nums;
   }
+  .paused {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    margin: 0;
+    padding: 6px 14px;
+    border-radius: 6px;
+    background: #05070bcc;
+    font-size: clamp(16px, 4cqh, 28px);
+    font-weight: 700;
+  }
   .hud-heading {
     min-width: 0;
     min-height: 23cqh;
