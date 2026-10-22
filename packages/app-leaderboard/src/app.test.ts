@@ -8,7 +8,7 @@ import {
   startTestBindings,
   submissionBody,
   type TestChart,
-} from '../test/support.ts';
+} from './test-support/support.ts';
 import { createApp } from './app.ts';
 import { eq } from 'drizzle-orm';
 import { openDatabase } from './db/client.ts';

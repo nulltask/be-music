@@ -13,7 +13,7 @@ import {
   startTestBindings,
   submissionBody,
   type TestChart,
-} from '../../test/support.ts';
+} from '../test-support/support.ts';
 
 // Tests never reach BMS Search: a submission's background chartset lookup finds nothing.
 const noChartsets = async () => undefined;

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { makeChart, makeReplay } from '../../test/support.ts';
+import { makeChart, makeReplay } from '../test-support/support.ts';
 import { identifyPlay } from './submit.ts';
 
 const chart = makeChart(['#00111:0101']);
