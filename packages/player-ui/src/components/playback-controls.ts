@@ -1,7 +1,7 @@
 import { css, html, svg, type CSSResultGroup, type TemplateResult } from 'lit';
 import { DataElement } from '../base.ts';
 import type { BeMusicPlaybackData } from '../models.ts';
-import { formatPlaybackTime } from '../playback.ts';
+import { formatPlaybackTime, resolvePlaybackSeconds } from '../playback.ts';
 import { baseStyles } from '../styles/base.ts';
 
 const ICONS = {
@@ -18,8 +18,9 @@ function icon(name: keyof typeof ICONS): TemplateResult {
 }
 
 /**
- * Video-player controls for a preview: play / pause, a seek bar, the time, mute and volume, and full screen. Seeking is
- * requested once the bar is let go (`seek-request`); while it is dragged the time follows the thumb.
+ * Video-player controls for a preview: play / pause, a seek bar, the time, mute and volume, and full screen. Dragging
+ * the bar requests `seek-request` as the thumb moves, and again when it is let go. While it is held, the thumb stays
+ * where it was dragged instead of being pulled back by the play clock.
  */
 export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackData> {
   static override styles: CSSResultGroup = [
@@ -82,12 +83,53 @@ export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackD
       }
     `,
   ];
+  /** Set from the moment the thumb is pressed until it is let go, so a frame cannot overwrite it mid-drag. */
+  private scrubbing = false;
   private scrubSeconds: number | undefined;
+
+  protected override updated(): void {
+    if (this.scrubbing) return;
+    const input = this.renderRoot.querySelector<HTMLInputElement>('input.seek');
+    if (!input) return;
+    const next = String(this.shownSeconds());
+    if (input.value !== next) input.value = next;
+  }
+
+  /** The second the bar and the time show: the held thumb, or the play clock. */
+  private shownSeconds(): number {
+    return resolvePlaybackSeconds(this.data?.currentSeconds ?? 0, this.data?.durationSeconds ?? 0, this.scrubSeconds);
+  }
+
+  private readSeconds(event: Event): number {
+    return Number((event.currentTarget as HTMLInputElement).value);
+  }
+
+  /** The thumb moved. Seek there now and keep the bar on that second until the drag ends. */
+  private previewSeek(event: Event): void {
+    const seconds = this.readSeconds(event);
+    this.scrubbing = true;
+    this.scrubSeconds = seconds;
+    this.emit('seek-request', { seconds });
+    this.requestUpdate();
+  }
+
+  /**
+   * The drag ended. A `change` always seeks, including a host that only dispatches that event. A pointer release seeks
+   * only after the thumb actually moved, then the bar follows the play clock again.
+   */
+  private finishSeek(event: Event): void {
+    const seconds = this.readSeconds(event);
+    const moved = this.scrubSeconds !== undefined;
+    this.scrubbing = false;
+    this.scrubSeconds = undefined;
+    if (event.type === 'change' || moved) this.emit('seek-request', { seconds });
+    this.requestUpdate();
+  }
 
   protected override render(): TemplateResult {
     const data = this.data;
     const duration = Math.max(0, data?.durationSeconds ?? 0);
-    const current = this.scrubSeconds ?? Math.min(duration, Math.max(0, data?.currentSeconds ?? 0));
+    const current = this.shownSeconds();
     const playing = data?.playing === true;
     const muted = data?.muted === true;
     const volume = data?.volume ?? 1;
@@ -102,17 +144,14 @@ export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackD
         min="0"
         max=${duration}
         step="0.1"
-        .value=${String(current)}
         ?disabled=${data?.seekable !== true || duration <= 0}
-        @input=${(event: Event) => {
-          this.scrubSeconds = Number((event.currentTarget as HTMLInputElement).value);
-          this.requestUpdate();
+        @pointerdown=${() => {
+          this.scrubbing = true;
         }}
-        @change=${(event: Event) => {
-          const seconds = Number((event.currentTarget as HTMLInputElement).value);
-          this.scrubSeconds = undefined;
-          this.emit('seek-request', { seconds });
-        }}
+        @input=${(event: Event) => this.previewSeek(event)}
+        @change=${(event: Event) => this.finishSeek(event)}
+        @pointerup=${(event: Event) => this.finishSeek(event)}
+        @pointercancel=${(event: Event) => this.finishSeek(event)}
       />
       <div class="row">
         <button
