@@ -96,3 +96,16 @@ test('a long chart list scrolls to its last chart', async ({ page }) => {
   await last.scrollIntoViewIfNeeded();
   await expect(last).toBeInViewport();
 });
+
+test('asks the platform audio session for playback, so an iPhone in silent mode still plays the sound', async ({
+  page,
+}) => {
+  // Chromium has no `navigator.audioSession` (Safari's Audio Session API); stand one in to see what the embed asks for.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'audioSession', { value: { type: 'auto' }, configurable: true });
+  });
+  await openEmbed(page, ['songs/fixA']);
+  await expect
+    .poll(() => page.evaluate(() => (navigator as { audioSession?: { type: string } }).audioSession?.type))
+    .toBe('playback');
+});
