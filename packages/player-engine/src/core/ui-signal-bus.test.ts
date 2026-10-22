@@ -86,4 +86,36 @@ describe('player ui signal bus', () => {
     expect(uiBus.getFrame().displayBeat).toBeUndefined();
     expect(uiBus.getFrame().reversalSeconds).toBeUndefined();
   });
+
+  test('publishFrame copies the seek generation and the clock, per frame', () => {
+    const summary = {
+      total: 1,
+      perfect: 0,
+      fast: 0,
+      slow: 0,
+      great: 0,
+      good: 0,
+      bad: 0,
+      poor: 0,
+      emptyPoor: 0,
+      exScore: 0,
+      score: 0,
+    };
+    const uiBus = createPlayerUISignalBus({ currentBeat: 0, currentSeconds: 0, totalSeconds: 10, summary, notes: [] });
+    const clock = { outputSeconds: 1.25, tempo: 1.5, paused: true };
+    uiBus.publishFrame({
+      currentBeat: 4,
+      currentSeconds: 2,
+      totalSeconds: 10,
+      summary,
+      notes: [],
+      generation: 2,
+      clock,
+    });
+    expect(uiBus.getFrame().generation).toBe(2);
+    expect(uiBus.getFrame().clock).toEqual(clock);
+    uiBus.publishFrame({ currentBeat: 5, currentSeconds: 2.5, totalSeconds: 10, summary, notes: [] });
+    expect(uiBus.getFrame().generation).toBeUndefined();
+    expect(uiBus.getFrame().clock).toBeUndefined();
+  });
 });

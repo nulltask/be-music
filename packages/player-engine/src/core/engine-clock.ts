@@ -79,9 +79,12 @@ export interface PlaybackClock {
   isPaused: () => boolean;
   pause: () => boolean;
   resume: () => boolean;
+  /** The source's reading (ms) at which the clock reads `clockMs`, as the clock runs now (paused time left out). */
+  sourceMsAt: (clockMs: number) => number;
 }
 
-interface PlaybackClockSource {
+/** What a {@link PlaybackClock} runs on: the audio session's output clock, or the engine scheduler's. */
+export interface PlaybackClockSource {
   nowMs: () => number;
   scheduledMs?: () => number;
 }
@@ -139,6 +142,7 @@ export function createPlaybackClock(source: PlaybackClockSource, startOffsetMs =
     nowMs,
     scheduledMs: () => resolveScheduledMs(),
     isPaused: () => paused,
+    sourceMsAt: (clockMs) => clockMs + anchorMs + pausedSourceDurationMs,
     pause: () => {
       if (paused) {
         return false;

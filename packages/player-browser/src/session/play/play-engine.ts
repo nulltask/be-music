@@ -733,6 +733,8 @@ export function applyFinalSummary(ctx: PlayEngineContext, summary: Readonly<Play
  * drives its LN-hold timers and turntable from it).
  */
 function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUICommand): void {
+  // A run started partway announces its start as a seek; the session cleared its state before launching it.
+  if (command.kind === 'seek') return;
   switch (command.kind) {
     case 'flash-lane':
       noteImpulse(ctx, command.channel);

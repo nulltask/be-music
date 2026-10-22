@@ -14,11 +14,14 @@ export {
   createPlayerUISignalBus,
   type PlayerGaugeSummary,
   type PlayerUICommand,
+  type PlayerUIFrameClock,
   type PlayerUIFrameNote,
   type PlayerUIFramePayload,
   type PlayerUIFrameSummary,
   type PlayerUILongNoteMode,
   type PlayerUILongNoteOutcome,
+  type PlayerUISeekJudgment,
+  type PlayerUISeekSnapshot,
   type PlayerUISignalBus,
 } from './core/ui-signal-bus.ts';
 export {

@@ -174,6 +174,7 @@
 - **画面のライフサイクル（scene lifecycle）**: どの画面も実装する唯一の契約（`PixiScene`）。`root`、`identity`（`{ kind, family }`）、`enter`、`exit`、`dispose` です。ホストは `setScene` でだけ画面を切り替えます。
 - **インテント（intent）**: ビューへの操作が画面にとって何を意味するか。フォルダを開く、コースを始める、ゲージを切り替える、など。
 - **プレイループ / 判定ストラテジー（play loop / judge strategy）**: すべてのプレイが通る 1 つのエンジンのループと、そこに差し込む手動・AUTO・リプレイの判定。[ADR 0003](./adr/0003-one-play-loop.ja.md) を参照。
+- **シーク（seek）**: 動いているプレイを譜面の別の秒数へ動かすこと。プレイループへのコマンド（`{ kind: 'seek' }`）で、プレイを始め直すことはありません。その位置の判定の状態は先頭からのプレイがそこで持つもので、シークのたびにフレームの世代が 1 つ進みます。シークしたプレイは練習扱いで、リプレイを記録しません。[ADR 0016](./adr/0016-seek-play-loop-command.ja.md) を参照。
 - **シーンルーター（scene router）**: ホストで今の画面とすべての切り替えを受け持つ唯一の部品（Web のデモの `app/scene-router.ts`）。[ADR 0006](./adr/0006-scene-router.ja.md) を参照。
 - **音声サービス（audio service）**: Web のプレイヤーがプレイの譜面以外の音を鳴らす唯一の手段（`@be-music/player-browser/audio` の `createAudioService`）。選曲の BGM、効果音、ジングル、譜面のプレビュー、スキンの音を 1 つのシステム `AudioContext` で鳴らします。プレイはこれを通して自分のコンテキストを開きます（`openPlayGraph`）。画面は自分が鳴らす音の所有者（owner）として自分を渡し、`stopOwned` で止めます。[ADR 0007](./adr/0007-one-system-audio-context.ja.md) を参照。
 

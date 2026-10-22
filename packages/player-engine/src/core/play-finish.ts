@@ -9,7 +9,7 @@ import type { PlayJudge } from './play-strategy.ts';
 /**
  * Ends a play the same way whatever judged it: an ESC returns the summary of an aborted play, a restart or Ctrl+C
  * throws {@link PlayerInterruptedError}, anything else completes (or fails). The replay is finalized and handed to
- * the host, the no-TUI trace records the end, and the summary is written out.
+ * the host (unless the play sought), the no-TUI trace records the end, and the summary is written out.
  */
 export function finishPlay(
   session: PlaySession,
@@ -33,7 +33,8 @@ export function finishPlay(
     ]);
     session.stateLogger.logResult(totalSeconds, { reason, summary });
   }
-  if (replayRecorder) {
+  // A play that sought is practice: its replay was discarded at the first seek.
+  if (replayRecorder && session.seekGeneration === 0) {
     options.onReplayRecorded?.(
       replayRecorder.finalize({
         summary,

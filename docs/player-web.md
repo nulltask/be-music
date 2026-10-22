@@ -846,7 +846,7 @@ stateDiagram-v2
 - **Ready:** a single chart shows its play screen behind a play button (`be-music-preview-start`), which becomes Replay after the play. There is no result screen.
 - **Playing:** the preview skin (`src/embed/preview-skin.ts`) lays the lanes in the left pane and the BGA in the right, with the chart's facts, score, combo, gauge and judgments under it (`be-music-preview-hud`), and video-player controls along the bottom (`be-music-playback-controls`): play / pause, a seek bar, the time, mute and volume, and full screen. Space plays or pauses, ← / → seek 5 seconds, M mutes and F toggles full screen.
 
-Seeking restarts the engine at the chart second sought (`PlayScene.seek`, `PlayerOptions.startAtSeconds`), with the decoded samples, the prepared notes and the BGA kept. The notes before it count as AUTO judged them, sounds still ringing there start partway (`AudioSession.triggerEventAt`), and a paused play resumes. The gauge and score graphs start again from the point sought. See [ADR 0015](./adr/0015-preview-seek.md).
+Seeking restarts the engine at the chart second sought (`PlayScene.seek`, `PlayerOptions.startAtSeconds`), with the decoded samples, the prepared notes and the BGA kept. The notes before it count as AUTO judged them, sounds still ringing there start partway (`AudioSession.triggerEventAt`), and a paused play resumes. The gauge and score graphs start again from the point sought. See [ADR 0015](./adr/0015-preview-seek.md). The engine now takes `startAtSeconds` as the play's first seek, a play-loop command ([ADR 0016](./adr/0016-seek-play-loop-command.md)), and announces the long notes held across it; the session moves onto the command itself in a later step.
 
 ## Native DOM skins and standalone controllers
 
