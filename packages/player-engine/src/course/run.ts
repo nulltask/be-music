@@ -1,8 +1,15 @@
 import type { BeMusicJSON } from '@be-music/chart-source';
 import { resolveChartRulesetFacts } from '../core/play-chart.ts';
-import { createCourseReplay, type BeMusicCourseReplay, type ReplayCourseStageEntry } from '../replay/course.ts';
-import type { BeMusicReplay, ReplayCourseStage, ReplayRecorderInfo } from '../replay/format.ts';
+import {
+  aggregateCourseResult,
+  createCourseReplay,
+  type ReplayCourseResult,
+  type BeMusicCourseReplay,
+  type ReplayCourseStageEntry,
+} from '../replay/course.ts';
+import type { BeMusicReplay, ReplayCourseStage, ReplayRecorderInfo, ReplayRulesetResult } from '../replay/format.ts';
 import { computeStageChartFingerprint, resolveReplayCourseInfo } from './course-replay.ts';
+import { resolveRuleset } from '../ruleset/index.ts';
 import type { CourseDefinition } from './definition.ts';
 import { applyCourseLongNoteConstraint } from './long-note.ts';
 import {
@@ -25,6 +32,10 @@ export interface CourseRunStage {
 
 /** What a host keeps of a played stage besides its replay, such as its result graphs. */
 export interface CourseRunStageExtras {
+  /** A seek makes the entire course practice and discards every stage replay. */
+  practice?: boolean;
+  /** The live stage result, retained independently of replay recording for practice continuation. */
+  stageOutcome?: ReplayRulesetResult;
   /** The stage's play time in seconds, when known. It adds up to {@link CourseRun.playSeconds}. */
   playSeconds?: number;
 }
@@ -43,7 +54,8 @@ export interface CourseRunStagePlan<S extends CourseRunStage = CourseRunStage> {
 }
 
 interface PlayedStage<H> {
-  replay: BeMusicReplay;
+  replay?: BeMusicReplay;
+  outcome: ReplayRulesetResult;
   playSeconds?: number;
   extras?: H;
 }
@@ -69,6 +81,11 @@ export class CourseRun<
   readonly stages: readonly S[];
   private readonly played: PlayedStage<H>[] = [];
   private ended = false;
+  private practiceMode = false;
+
+  get practice(): boolean {
+    return this.practiceMode;
+  }
 
   /** Throws when a stage has no chart: a course with a missing stage cannot be started. */
   constructor(definition: CourseDefinition, stages: ReadonlyArray<S | undefined>) {
@@ -102,7 +119,7 @@ export class CourseRun<
     const index = this.played.length;
     if (this.ended || index >= this.stages.length) return undefined;
     const course: ReplayCourseStage = resolveCourseStageSettings(this.definition);
-    const previous = this.played.at(-1)?.replay.results?.native;
+    const previous = this.played.at(-1)?.outcome;
     if (previous !== undefined) {
       course.carryIn = {
         gauge: previous.gauge.final,
@@ -126,15 +143,18 @@ export class CourseRun<
 
   /**
    * Records a finished stage's replay, with what the host keeps of it (`extras`). Returns whether the run goes on: it
-   * ends when the stage's gauge emptied, when it was the last stage, or when the stage left no replay with a result
-   * (nothing to carry on from).
+   * ends when the stage's gauge emptied, when it was the last stage, or when neither the replay nor the live practice
+   * outcome supplies a result to carry on from.
    */
   recordStage(replay: BeMusicReplay | undefined, extras?: H): 'next' | 'finished' {
     if (this.ended) return 'finished';
-    const goesOn = this.goesOnAfter(replay);
-    if (replay?.results?.native !== undefined) {
+    const native = replay?.results?.native ?? extras?.stageOutcome;
+    const goesOn = this.goesOnAfter(replay, native);
+    this.markPractice(extras, replay);
+    if (native !== undefined) {
       this.played.push({
-        replay,
+        ...(!this.practiceMode && replay !== undefined ? { replay } : {}),
+        outcome: { ...native, ruleset: replay?.play?.judgeRuleset ?? native.ruleset },
         ...(extras?.playSeconds !== undefined ? { playSeconds: extras.playSeconds } : {}),
         ...(extras !== undefined ? { extras } : {}),
       });
@@ -147,9 +167,9 @@ export class CourseRun<
   }
 
   /** Whether the run would go on after recording `replay` as the next stage ({@link recordStage} returning `next`). */
-  goesOnAfter(replay: BeMusicReplay | undefined): boolean {
+  goesOnAfter(replay: BeMusicReplay | undefined, outcome?: ReplayRulesetResult): boolean {
     if (this.ended) return false;
-    const native = replay?.results?.native;
+    const native = replay?.results?.native ?? outcome;
     if (native === undefined) return false;
     const failed = native.gauge.failedMidPlay === true || native.gauge.final <= 0;
     return !failed && this.played.length + 1 < this.stages.length;
@@ -160,13 +180,53 @@ export class CourseRun<
    * up is a failed run, as LR2 records it. Its play time runs up to where it was left ({@link resolveGivenUpPlaySeconds}).
    * A stage without a replay just ends the run.
    */
-  giveUp(replay: BeMusicReplay | undefined): void {
+  giveUp(replay: BeMusicReplay | undefined, extras?: H): void {
     if (this.ended) return;
-    if (replay?.results?.native !== undefined) {
-      const playSeconds = resolveGivenUpPlaySeconds(replay);
-      this.played.push({ replay, ...(playSeconds !== undefined ? { playSeconds } : {}) });
+    this.markPractice(extras, replay);
+    const native = replay?.results?.native ?? extras?.stageOutcome;
+    if (native !== undefined) {
+      const playSeconds = replay !== undefined ? resolveGivenUpPlaySeconds(replay) : extras?.playSeconds;
+      this.played.push({
+        ...(!this.practiceMode && replay !== undefined ? { replay } : {}),
+        outcome: {
+          ...native,
+          ruleset: replay?.play?.judgeRuleset ?? native.ruleset,
+          gauge: { ...native.gauge, cleared: false },
+        },
+        ...(playSeconds !== undefined ? { playSeconds } : {}),
+        ...(extras !== undefined ? { extras } : {}),
+      });
     }
     this.ended = true;
+  }
+
+  private markPractice(extras: H | undefined, replay: BeMusicReplay | undefined): void {
+    if (extras?.practice !== true && (replay !== undefined || extras?.stageOutcome === undefined)) return;
+    this.practiceMode = true;
+    for (const stage of this.played) stage.replay = undefined;
+  }
+
+  /** A practice run's live result, without manufacturing or retaining a replay. */
+  buildPracticeResult(): ReplayCourseResult | undefined {
+    if (!this.practiceMode || this.played.length === 0) return undefined;
+    const id = this.played.at(-1)!.outcome.ruleset.split('/')[0];
+    const ruleset = id === 'beatoraja' || id === 'iidx' ? id : 'lr2';
+    const outcomes = this.played.map((stage) => stage.outcome);
+    const counts = this.stages.map(
+      (stage, index) =>
+        outcomes[index]?.noteCount ??
+        resolveRuleset(resolveChartRulesetFacts(stage.chart, { laneModeExtension: stage.chartPath }), ruleset)
+          .noteCount,
+    );
+    const gauge = outcomes.at(-1)!.gauge.type;
+    const pick = gauge.endsWith('-EASY')
+      ? 'EASY'
+      : gauge.endsWith('-HARD')
+        ? 'HARD'
+        : gauge.endsWith('-DEATH')
+          ? 'DEATH'
+          : 'GROOVE';
+    return aggregateCourseResult(ruleset, resolveReplayCourseInfo(this.definition), outcomes, counts, pick);
   }
 
   /** The play time of every stage played, in seconds: what a course result shows as its PLAY TIME. */
@@ -185,6 +245,7 @@ export class CourseRun<
    * course on the Leaderboard), all read from the chart as the course plays it.
    */
   buildReplay(options: { createdAt?: string; recorder?: ReplayRecorderInfo } = {}): BeMusicCourseReplay {
+    if (this.practiceMode) throw new Error('A practice course cannot produce a replay');
     const stages = this.stages.map((stage, index): ReplayCourseStageEntry => {
       const replay = this.played[index]?.replay;
       if (replay !== undefined) return { played: true, replay };

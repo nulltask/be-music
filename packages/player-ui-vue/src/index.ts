@@ -239,11 +239,12 @@ export const BeMusicPreviewHUD: DefineComponent<BeMusicPreviewHUDProps, BeMusicV
 export type BeMusicPreviewSelectProps = {
   charts?: readonly LibraryChart[];
   heading?: string;
+  images?: ReadonlyMap<string, string>;
 } & BeMusicVueEventHandlers<'activate-request'>;
 export const BeMusicPreviewSelect: DefineComponent<BeMusicPreviewSelectProps, BeMusicVueElementRef> = wrap<
-  { charts?: readonly LibraryChart[]; heading?: string },
+  { charts?: readonly LibraryChart[]; heading?: string; images?: ReadonlyMap<string, string> },
   'activate-request'
->('BeMusicPreviewSelect', 'be-music-preview-select', ['charts', 'heading'], ['activate-request']);
+>('BeMusicPreviewSelect', 'be-music-preview-select', ['charts', 'heading', 'images'], ['activate-request']);
 
 export type BeMusicPreviewStartProps = {
   mode?: 'play' | 'replay';

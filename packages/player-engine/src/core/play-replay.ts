@@ -1,7 +1,9 @@
-import { advanceJudgeCoreReplay, createJudgeCoreReplay } from './judge-core.ts';
+import { advanceJudgeCoreReplay, createJudgeCoreReplay, type JudgeCoreEffect } from './judge-core.ts';
 import type { PlaySession } from './play-session.ts';
 import type { JudgeStrategy, PlayJudge } from './play-strategy.ts';
 import { createPlayJudgeCore, judgeCoreJudge, writeManualIntro } from './play-manual.ts';
+import { createSeekRebuildSink } from './play-seek.ts';
+import { resolveRulesetLongNoteMode, toUILongNoteMode } from './judge-rules.ts';
 
 /**
  * The replay judge strategy: the manual judge core re-driven by a recorded replay input stream
@@ -15,10 +17,52 @@ import { createPlayJudgeCore, judgeCoreJudge, writeManualIntro } from './play-ma
  */
 function createReplayJudge(session: PlaySession): PlayJudge {
   const { applyJudgeEffect } = session;
-  const judgeCore = createPlayJudgeCore(session, 1000);
-  const replay = createJudgeCoreReplay(session.options.replayInputs ?? []);
+  let judgeCore = createPlayJudgeCore(session, 1000);
+  let replay = createJudgeCoreReplay(session.options.replayInputs ?? []);
+  let coreJudge = judgeCoreJudge(session, judgeCore);
   return {
-    ...judgeCoreJudge(session, judgeCore),
+    isSettled: () => coreJudge.isSettled(),
+    isClosed: () => coreJudge.isClosed(),
+    finish: () => coreJudge.finish(),
+    seek: (seconds) => {
+      judgeCore = createPlayJudgeCore(session, 1000);
+      coreJudge = judgeCoreJudge(session, judgeCore);
+      replay = createJudgeCoreReplay(session.options.replayInputs ?? []);
+      const rebuilt = createSeekRebuildSink(session.summary);
+      // Rebuild silently, retaining keysounds not cut by a later stop on their lane.
+      const sounds = new Map<string, Array<Extract<JudgeCoreEffect, { kind: 'sound' }>>>();
+      advanceJudgeCoreReplay(judgeCore, replay, seconds, (effect) => {
+        rebuilt.emit(effect);
+        if (effect.kind === 'sound') {
+          const lane = sounds.get(effect.channel) ?? [];
+          lane.push(effect);
+          sounds.set(effect.channel, lane);
+        } else if (effect.kind === 'stop-sound') sounds.delete(effect.channel);
+      });
+      for (const lane of sounds.values()) {
+        for (const sound of lane)
+          session.audioSession?.triggerEventAt?.(sound.event, Math.max(0, seconds - sound.seconds));
+      }
+      return {
+        judgments: rebuilt.judgments,
+        heldLongNotes: [
+          ...[...judgeCore.activeLongNotes.values()]
+            .filter(({ note }) => judgeCore.heldChannels.has(note.channel))
+            .map(({ note, mode }) => ({
+              channel: note.channel,
+              beat: note.beat,
+              endBeat: note.endBeat,
+              mode: toUILongNoteMode(mode),
+            })),
+          ...judgeCore.pendingAutoScratchLongNotes.map(({ note }) => ({
+            channel: note.channel,
+            beat: note.beat,
+            endBeat: note.endBeat,
+            mode: toUILongNoteMode(resolveRulesetLongNoteMode(session.ruleset.longNoteStyle, note) ?? 2),
+          })),
+        ],
+      };
+    },
     beforeAudio: (tick) => {
       advanceJudgeCoreReplay(judgeCore, replay, tick.nowSec, applyJudgeEffect);
     },

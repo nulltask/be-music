@@ -132,6 +132,8 @@ export interface ReplayRecorderFinalizeInput {
 }
 
 export interface ReplayRecorder {
+  /** Discards recorded data and ignores later input after a practice seek. Finalization is no longer allowed. */
+  discard(): void;
   /** Records a press or release; `inferred` marks a release the engine inferred from input without releases. */
   recordInput(
     action: ReplayInputAction,
@@ -152,6 +154,7 @@ export interface ReplayRecorder {
 export function createReplayRecorder(options: ReplayRecorderOptions): ReplayRecorder {
   const chart = buildReplayChart(options);
   const inputs: ReplayInputEvent[] = [];
+  let discarded = false;
   let seq = 0;
   let emptyPoorCount = 0;
   const viewChanges: ReplayViewChange[] = [];
@@ -159,7 +162,15 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
   let currentTempo = options.play.tempo ?? 1;
 
   return {
+    discard: () => {
+      discarded = true;
+      inputs.length = 0;
+      viewChanges.length = 0;
+      tempoChanges.length = 0;
+      emptyPoorCount = 0;
+    },
     recordInput: (action, timeSeconds, tokens, channels, inferred): void => {
+      if (discarded) return;
       const channelList = [...channels];
       if (channelList.length === 0) {
         return;
@@ -179,9 +190,11 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       inputs.push(event);
     },
     recordEmptyPoor: (): void => {
+      if (discarded) return;
       emptyPoorCount += 1;
     },
     recordViewChange: (timeSeconds, change): void => {
+      if (discarded) return;
       const entries = Object.entries(change).filter(([, value]) => value !== undefined);
       if (entries.length === 0) return;
       const recorded: ReplayViewChange = { timeUs: secondsToMicroseconds(timeSeconds), ...change };
@@ -189,11 +202,13 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       viewChanges.push(recorded);
     },
     recordTempoChange: (timeSeconds, tempo): void => {
+      if (discarded) return;
       if (!(tempo > 0) || tempo === currentTempo) return;
       currentTempo = tempo;
       tempoChanges.push({ timeUs: secondsToMicroseconds(timeSeconds), tempo });
     },
     finalize: ({ summary, maxCombo, aborted, abortedAtSeconds }): BeMusicReplay => {
+      if (discarded) throw new Error('Cannot finalize a discarded practice replay');
       const play: ReplayPlay = {
         mode: options.play.mode,
         autoScratch: options.play.autoScratch,

@@ -202,14 +202,57 @@ describe('resolveBeatorajaFrameTimers', () => {
   });
 
   it('starts the full-gauge timer at the maximum', () => {
-    expect(
-      resolveBeatorajaFrameTimers({ beat: 3, previousBeat: 3, gauge: { current: 100, max: 100 } }).startOnce,
-    ).toEqual([TIMER_GAUGE_MAX_1P]);
+    expect(resolveBeatorajaFrameTimers({ beat: 3, previousBeat: 3, gauge: { current: 100, max: 100 } }).start).toEqual([
+      TIMER_GAUGE_MAX_1P,
+    ]);
     expect(resolveBeatorajaFrameTimers({ beat: 3, previousBeat: 3, gauge: { current: 0, max: 0 } })).toEqual({
       start: [],
       startOnce: [],
-      stop: [],
+      stop: [TIMER_GAUGE_MAX_1P],
     });
+  });
+});
+
+describe('GAUGE_MAX transitions', () => {
+  it.each([100, 200])('stops below max and restarts each full interval with max %s', (max) => {
+    let previousGauge: number | undefined;
+    const frames = [max - 1, max, max, max - 1, max, max];
+    const changes = frames.map((current) => {
+      const change = resolveBeatorajaFrameTimers({
+        beat: 3,
+        previousBeat: 3,
+        gauge: { current, max },
+        ...(previousGauge !== undefined ? { previousGauge } : {}),
+      });
+      previousGauge = current;
+      return change;
+    });
+    expect(changes.map((change) => change.start.includes(TIMER_GAUGE_MAX_1P))).toEqual([
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+    ]);
+    expect(changes.map((change) => change.stop.includes(TIMER_GAUGE_MAX_1P))).toEqual([
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+    ]);
+    expect(changes.every((change) => !change.startOnce.includes(TIMER_GAUGE_MAX_1P))).toBe(true);
+  });
+
+  it('starts at full on a fresh scene and treats invalid maximum as off', () => {
+    expect(resolveBeatorajaFrameTimers({ beat: 3, previousBeat: 3, gauge: { current: 50, max: 50 } }).start).toEqual([
+      TIMER_GAUGE_MAX_1P,
+    ]);
+    expect(resolveBeatorajaFrameTimers({ beat: 3, previousBeat: 3, gauge: { current: 0, max: 0 } }).stop).toEqual([
+      TIMER_GAUGE_MAX_1P,
+    ]);
   });
 });
 

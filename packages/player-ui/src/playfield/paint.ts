@@ -1,4 +1,4 @@
-import type { BeMusicLaneKind, BeMusicRect } from '@be-music/player-skin-sdk';
+import { layoutTabularRun, type BeMusicLaneKind, type BeMusicRect } from '@be-music/player-skin-sdk';
 import type {
   BeMusicBGAData,
   BeMusicBombsData,
@@ -21,6 +21,7 @@ export type BeMusicPlayfieldPaintContext = Pick<
   | 'textAlign'
   | 'fillRect'
   | 'fillText'
+  | 'measureText'
   | 'beginPath'
   | 'arc'
   | 'rect'
@@ -187,9 +188,22 @@ export function paintJudgmentDisplay(
     if (word.combo !== undefined && word.combo > 0) {
       ctx.font = COMBO_FONT;
       ctx.fillStyle = COMBO_COLOR;
-      ctx.fillText(String(word.combo), word.x, y + COMBO_OFFSET);
+      paintTabular(ctx, String(word.combo), word.x, y + COMBO_OFFSET);
     }
   }
+}
+
+/**
+ * Digits in fixed-width cells, the run centred on `x`. Canvas 2D exposes no `font-feature-settings`, so OpenType
+ * `tnum` cannot be turned on; each digit takes the widest digit's advance instead.
+ */
+function paintTabular(ctx: BeMusicPlayfieldPaintContext, text: string, x: number, y: number): void {
+  const run = layoutTabularRun(text, (char) => ctx.measureText(char).width);
+  const left = x - run.width / 2;
+  const align = ctx.textAlign;
+  ctx.textAlign = 'center';
+  for (const glyph of run.glyphs) ctx.fillText(glyph.char, left + glyph.x + glyph.w / 2, y);
+  ctx.textAlign = align;
 }
 
 /** Paints every part on one stage-sized surface, each clipped to its rect as its own canvas would clip it. */

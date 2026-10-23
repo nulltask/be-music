@@ -66,3 +66,43 @@ describe('ruleset judge windows', () => {
     expect(judgeWindowEarlyReachUs(veryHard)).toBe(250_000);
   });
 });
+
+describe('beatoraja scaled BAD limits', () => {
+  test.each([
+    ['5K', [-187500, 187500], [-200000, 200000], [-312500, 312500], [-325000, 325000]],
+    ['7K', [-350000, 275000], [-362500, 287500], [-350000, 275000], [-362500, 287500]],
+    ['24K', [-400000, 300000], [-400000, 300000], [-400000, 300000], [-400000, 300000]],
+  ] as const)('scales all %s contexts above 100%%', (laneMode, note, scratch, tail, scratchTail) => {
+    const windows = resolveRuleset(facts({ laneMode, judgeRank: { percent: 75, sourceRank: 4 } }), 'beatoraja').windows;
+    expect(windows.note.judges[3]).toEqual(note);
+    expect(windows.scratch.judges[3]).toEqual(scratch);
+    expect(windows.longNoteEnd.judges[3]).toEqual(tail);
+    expect(windows.longScratchEnd.judges[3]).toEqual(scratchTail);
+  });
+
+  test('includes both scaled BAD boundaries and excludes the next microsecond', () => {
+    const set = resolveRuleset(facts({ judgeRank: { percent: 75, sourceRank: 4 } }), 'beatoraja').windows.note;
+    expect([-350001, -350000, 275000, 275001].map((dm) => classifyRulesetJudge(dm, set))).toEqual([-1, 3, 3, -1]);
+  });
+
+  test('uses the same scaling for bmson judge_rank and BMS DEFEXRANK', () => {
+    const bmson = resolveRuleset(
+      facts({ sourceFormat: 'bmson', judgeRank: { percent: 75, sourceExRank: 150 } }),
+      'beatoraja',
+    ).windows;
+    const bms = resolveRuleset(facts({ judgeRank: { percent: 150, sourceExRank: 200 } }), 'beatoraja').windows;
+    expect(bms).toEqual(bmson);
+    expect(bms.note.judges[3]).toEqual([-420000, 330000]);
+  });
+
+  test('keeps ordinary-rank scaling and PMS fixed BAD limits', () => {
+    expect(resolveRuleset(facts(), 'beatoraja').windows.note.judges[3]).toEqual([-210000, 165000]);
+    const pms = resolveRuleset(
+      facts({ laneMode: '9K', judgeRank: { percent: 75, sourceRank: 4 } }),
+      'beatoraja',
+    ).windows;
+    expect(pms.note.judges[0]).toEqual([-20000, 20000]);
+    expect(pms.note.judges[3]).toEqual([-183000, 183000]);
+    expect(pms.longNoteEnd.judges[3]).toEqual([-283000, 283000]);
+  });
+});
