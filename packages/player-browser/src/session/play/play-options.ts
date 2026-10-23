@@ -51,6 +51,10 @@ export interface PlaySessionOptions {
   onChartFinished?: (result: PlayResult) => void;
   /** When true, every note is auto-judged as PERFECT at its scheduled time. */
   autoPlay?: boolean;
+  /** Opt in to manual seeking; seeking turns the play into practice. */
+  allowSeek?: 'practice';
+  /** A previous course stage sought: keep this stage out of recording and records too. */
+  practice?: boolean;
   /**
    * When true, the gameplay automatically pauses on tab visibility change (`document.hidden`) and window blur, and
    * auto-resumes on focus / `pageshow`. When false (the default), the play scene keeps running in the background —
@@ -143,7 +147,7 @@ export interface PlaySessionOptions {
   /**
    * Note-arrangement mode for the 1P keyboard lanes (`#SRC_BUTTON,type=42`). Applied at chart-prepare time so the
    * shuffle is consistent across the play session — pressing F5 (restart) reuses the same `random1P` value but draws a
-   * fresh permutation.
+   * fresh permutation. SCATTER is a legacy value; new requests are rejected until it is fully implemented.
    */
   random1P?: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
   /** 2P side note arrangement (`#SRC_BUTTON,type=43`). */
@@ -217,6 +221,12 @@ export interface PlaySessionOptions {
   tempoStretchAlgorithm?: TimeStretchAlgorithm;
   /** The hi-speed cannot be changed during play (a course's `no_speed` constraint). */
   hiSpeedLocked?: boolean;
+  /**
+   * When true, every decoded sample of the chart is scaled by one gain so the loudest peak sits near −3 dBFS. Off
+   * when omitted: charts keep the level they were authored at. Applies as the samples load, so a change takes the
+   * next play. `#VOLWAV` still multiplies on top at playback.
+   */
+  peakGain?: boolean;
   /**
    * When true (default), the audio bus runs through dynamics compressors that soften clipping when many BMS samples
    * fire simultaneously (jacks, dense BGM stacks). Set to `false` to bypass every compressor and feed sample sources

@@ -232,9 +232,7 @@ sequenceDiagram
   displayed score (#430).
 - The rates are beatoraja's `ScoreDataProperty`: 102 / 103 the EX score over the notes judged so far during a play (100 %
   before the first), 115 / 116 over every note; a result reads both over every note. Each is truncated to hundredths.
-- The engine has no MISS judgment (beatoraja's empty POOR): number 420 reads the POOR count; its early / late rows
-  (421 / 422) read the `MISS` early / late entry, else POOR's; the play bridge passes an empty `MISS` entry, so they
-  read 0 during a play.
+- Number 420 reads the engine's `emptyPoor` count (beatoraja MISS); 426 reads POOR + MISS and 427 reads BAD + POOR + MISS. Results use `judgedPoor` when LR2's displayed POOR already includes empty POORs. The early / late rows (421 / 422) read the `MISS` entry, else POOR's; the play bridge passes an empty `MISS` entry, so those rows read 0 during a play.
 - A result reads its max combo as the combo (104) too, and 75 as 0 (LR2's best-record max combo); the play reads the
   max combo on 75.
 - During a play, the 1P rank ops (200-207) and their "now" copies (340-347) rank the EX score over the notes judged so

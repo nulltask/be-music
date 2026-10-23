@@ -167,7 +167,7 @@ export class ResultRoute {
     const active = this.activeCourse;
     if (courseStage && active !== undefined) {
       active.run.recordStage(data.replay, data);
-      this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
+      if (!data.practice) this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
       const mounted = await this.showBeatorajaResult(data, {
         run: 'stage',
         course: { info: activeCourseInfo(active) },
@@ -176,12 +176,14 @@ export class ResultRoute {
       this.unlockReplayOptions();
       return;
     }
-    this.records.recordActivePlay(recordPlayFromResult(data));
+    if (!data.practice) this.records.recordActivePlay(recordPlayFromResult(data));
     const mounted = await this.showBeatorajaResult(data, { run: 'single' });
     if (!mounted) await this.showSelect();
     // Auto-save fires even when the theme ships no result skin, so going back to select costs no replay file.
-    this.replayAutoSave.savePlay(data.replay);
-    this.leaderboard.maybeSubmit(data.replay, data.chart);
+    if (!data.practice) {
+      this.replayAutoSave.savePlay(data.replay);
+      this.leaderboard.maybeSubmit(data.replay, data.chart);
+    }
     this.unlockReplayOptions();
   }
 
@@ -307,7 +309,7 @@ export class ResultRoute {
     const presentation = resolveResultPresentation(run);
     if (courseStage) {
       this.activeCourse!.run.recordStage(data.replay, data);
-      this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
+      if (!data.practice) this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
     }
     // Family dispatch for result. Only the LR2 / default split is modelled here — a play on the beatoraja play screen
     // shows its result on the beatoraja skin (`showBeatorajaPlayResult`), a NONSTOP run on a beatoraja theme too
@@ -406,9 +408,9 @@ export class ResultRoute {
         );
       }
     }
-    this.records.recordActivePlay(recordPlayFromResult(data));
+    if (!data.practice) this.records.recordActivePlay(recordPlayFromResult(data));
     // A course's stages are saved and ranked as the course, not one by one (a NONSTOP run's course log already was).
-    if (presentation.quickRetry && mode.nonstop === undefined) {
+    if (!data.practice && presentation.quickRetry && mode.nonstop === undefined) {
       this.replayAutoSave.savePlay(data.replay);
       this.leaderboard.maybeSubmit(data.replay, data.chart);
     }

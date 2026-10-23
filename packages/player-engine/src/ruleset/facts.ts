@@ -64,7 +64,7 @@ export function createEmptyRulesetNoteCounts(): RulesetNoteCounts {
   return { normal: 0, long: { 1: 0, 2: 0, 3: 0 } };
 }
 
-/** Total scorable note OBJECTS — every long note counts once. The denominator every TOTAL formula uses. */
+/** Total scorable note OBJECTS — every long note counts once. LR2 uses this count for TOTAL; beatoraja counts charge tails too. */
 export function countBaseNotes(notes: RulesetNoteCounts): number {
   return notes.normal + notes.long[1] + notes.long[2] + notes.long[3];
 }

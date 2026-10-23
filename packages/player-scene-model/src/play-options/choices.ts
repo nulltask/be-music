@@ -62,10 +62,10 @@ export const HIDDEN_SUDDEN_CYCLE: readonly HiddenSuddenMode[] = ['OFF', 'HIDDEN'
 export const BOOLEAN_CYCLE: readonly boolean[] = [false, true];
 
 /**
- * Cycle order for {@link PlayOptions.random1P} / `random2P`. LR2 button cells 0..4 on `#SRC_BUTTON,type=42 / 43`: off /
- * mirror / random / s-random / scatter.
+ * Cycle order for {@link PlayOptions.random1P} / `random2P`. LR2 button cells 0..3 on `#SRC_BUTTON,type=42 / 43`: off /
+ * mirror / random / s-random. SCATTER is disabled until placement and assist policy are implemented.
  */
-export const RANDOM_CYCLE: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'];
+export const RANDOM_CYCLE: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM'];
 
 /** The play options a player starts with. */
 export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {

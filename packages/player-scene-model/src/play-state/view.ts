@@ -103,6 +103,12 @@ export class ReplayViewCursor {
     this.changes = changes;
   }
 
+  /** The view at a seek, returned even when the target shares the last call's change interval. */
+  seek(timeUs: number): ReplayViewState {
+    this.applied = -1;
+    return this.next(timeUs)!;
+  }
+
   /**
    * The recorded view in force at `timeUs` (chart time, µs) when it differs from the one the last call returned — the
    * first call always returns it — else `undefined`. The playhead may move back (a restart): the view follows it.

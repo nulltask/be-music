@@ -304,7 +304,7 @@
               "gauge": {
                 "current": 2,
                 "max": 100,
-                "clearThreshold": 80,
+                "clearThreshold": 75,
                 "initial": 20,
                 "effectiveTotal": 300,
                 "cleared": false,
@@ -454,7 +454,7 @@
               "gauge": {
                 "current": 100,
                 "max": 100,
-                "clearThreshold": 80,
+                "clearThreshold": 75,
                 "initial": 20,
                 "effectiveTotal": 300,
                 "cleared": true,
@@ -536,7 +536,8 @@
               "type": "NORMAL",
               "final": 100,
               "cleared": true
-            }
+            },
+            "fullCombo": false
           },
           "iidx": {
             "ruleset": "iidx/0",
@@ -604,14 +605,15 @@
               "gauge": {
                 "current": 100,
                 "max": 100,
-                "clearThreshold": 80,
+                "clearThreshold": 75,
                 "initial": 20,
                 "effectiveTotal": 300,
                 "cleared": true,
                 "type": "NORMAL",
                 "survival": false,
                 "failedMidPlay": false
-              }
+              },
+              "fullCombo": false
             },
             "iidx": {
               "total": 23,

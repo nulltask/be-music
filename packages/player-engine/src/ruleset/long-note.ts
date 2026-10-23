@@ -207,6 +207,7 @@ export interface MultiBadCandidateNote {
 }
 
 /**
+ * @deprecated Legacy lr2oraja predicate; LR2 gameplay uses a forward re-judge chain.
  * lr2oraja `MultiBadCollector` pruning: once a press consumed `consumed`, a note sitting in the BAD-but-not-GOOD band
  * on the pressed lanes also resolves as a BAD — except that notes AFTER the consumed one only fall when the consumed
  * note was itself a BAD and not a long note, and long notes BEFORE the consumed one are always spared.

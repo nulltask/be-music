@@ -378,7 +378,7 @@ export async function createPlaySession(
           outputSeconds:
             (clock === undefined ? clockSource.nowMs() : clock.sourceMsAt(tempoClock.clockMsAt(seconds))) / 1000,
           tempo: tempoClock.tempo,
-          paused: clock?.isPaused() ?? false,
+          paused: clock?.isPaused() ?? true,
         },
       };
     },
