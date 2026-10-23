@@ -1563,6 +1563,13 @@ describe('BeatorajaPlayBridge — chart TOTAL (368)', () => {
   });
 });
 
+it('passes PMS raw gauge bounds to the skin and percentage to its number', () => {
+  const harness = createHarness({ chartPlayVariant: '9' });
+  harness.frame({ summary: { gauge: { current: 30, max: 120, clearThreshold: 85, type: 'NORMAL' } } });
+  expect(harness.bridge.resolveGaugeState()).toMatchObject({ value: 30, max: 120, border: 85 });
+  expect(harness.bridge.resolveGaugePercent()).toBe(25);
+});
+
 it('switches skin gauge frame conditions when the reported gauge changes', () => {
   const harness = createHarness();
   for (const [type, expected] of [

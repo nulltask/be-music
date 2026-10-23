@@ -532,79 +532,91 @@ const BEATORAJA_HARD_GUTS: readonly GaugeGutsStep[] = [
   { threshold: 50, multiplier: 0.8 },
 ];
 
-function resolveBeatorajaGauge(gaugeId: string, total: number, noteCount: number): GaugeSpec {
-  switch (gaugeId) {
-    case 'ASSIST-EASY':
-      return {
-        id: 'ASSIST-EASY',
-        min: 2,
-        max: 100,
-        initial: 20,
-        border: 60,
-        survival: false,
-        values: totalModifier([1.0, 1.0, 0.5, -1.5, -3.0, -0.5], total, noteCount),
-        guts: [],
-      };
-    case 'EASY':
-      return {
-        id: 'EASY',
-        min: 2,
-        max: 100,
-        initial: 20,
-        border: 80,
-        survival: false,
-        values: totalModifier([1.0, 1.0, 0.5, -1.5, -4.5, -1.0], total, noteCount),
-        guts: [],
-      };
-    case 'HARD': {
-      const recover = resolveBeatorajaHardRecoverMultiplier(total, noteCount);
-      return {
-        id: 'HARD',
-        min: 0,
-        max: 100,
-        initial: 100,
-        border: 0,
-        survival: true,
-        values: scalePositive([0.15, 0.12, 0.03, -5.0, -10.0, -5.0], recover),
-        guts: BEATORAJA_HARD_GUTS,
-      };
-    }
-    case 'EX-HARD': {
-      const recover = resolveBeatorajaHardRecoverMultiplier(total, noteCount);
-      return {
-        id: 'EX-HARD',
-        min: 0,
-        max: 100,
-        initial: 100,
-        border: 0,
-        survival: true,
-        values: scalePositive([0.15, 0.06, 0, -8.0, -16.0, -8.0], recover),
-        guts: [],
-      };
-    }
-    case 'HAZARD':
-      return {
-        id: 'HAZARD',
-        min: 0,
-        max: 100,
-        initial: 100,
-        border: 0,
-        survival: true,
-        values: [0.15, 0.06, 0, -100, -100, -10],
-        guts: [],
-      };
-    default:
-      return {
-        id: 'NORMAL',
-        min: 2,
-        max: 100,
-        initial: 20,
-        border: 80,
-        survival: false,
-        values: totalModifier([1.0, 1.0, 0.5, -3.0, -6.0, -2.0], total, noteCount),
-        guts: [],
-      };
+// GaugeProperty.java: modifier, minimum, maximum, initial value, clear border, judge deltas and guts.
+type BeatorajaGaugeProperty = readonly [
+  modifier: 'total' | 'limit' | 'damage' | undefined,
+  min: number,
+  max: number,
+  initial: number,
+  border: number,
+  values: GaugeValues,
+  guts?: readonly GaugeGutsStep[],
+];
+const BEATORAJA_SINGLE_GAUGES: Record<keyof typeof BEATORAJA_MODES, readonly BeatorajaGaugeProperty[]> = {
+  FIVEKEYS: [
+    ['total', 2, 100, 20, 50, [1, 1, 0.5, -1.5, -3, -0.5]],
+    ['total', 2, 100, 20, 75, [1, 1, 0.5, -1.5, -4.5, -1]],
+    ['total', 2, 100, 20, 75, [1, 1, 0.5, -3, -6, -2]],
+    ['limit', 0, 100, 100, 0, [0, 0, 0, -5, -10, -5]],
+    ['damage', 0, 100, 100, 0, [0, 0, 0, -10, -20, -10]],
+    [undefined, 0, 100, 100, 0, [0, 0, 0, -100, -100, -100]],
+  ],
+  SEVENKEYS: [
+    ['total', 2, 100, 20, 60, [1, 1, 0.5, -1.5, -3, -0.5]],
+    ['total', 2, 100, 20, 80, [1, 1, 0.5, -1.5, -4.5, -1]],
+    ['total', 2, 100, 20, 80, [1, 1, 0.5, -3, -6, -2]],
+    ['limit', 0, 100, 100, 0, [0.15, 0.12, 0.03, -5, -10, -5], BEATORAJA_HARD_GUTS],
+    ['limit', 0, 100, 100, 0, [0.15, 0.06, 0, -8, -16, -8]],
+    [undefined, 0, 100, 100, 0, [0.15, 0.06, 0, -100, -100, -10]],
+  ],
+  PMS: [
+    ['total', 2, 120, 30, 65, [1, 1, 0.5, -1, -2, -2]],
+    ['total', 2, 120, 30, 85, [1, 1, 0.5, -1, -3, -3]],
+    ['total', 2, 120, 30, 85, [1, 1, 0.5, -2, -6, -6]],
+    ['limit', 0, 100, 100, 0, [0.15, 0.12, 0.03, -5, -10, -10], BEATORAJA_HARD_GUTS],
+    ['limit', 0, 100, 100, 0, [0.15, 0.06, 0, -10, -15, -15]],
+    [undefined, 0, 100, 100, 0, [0.15, 0.06, 0, -100, -100, -100]],
+  ],
+  KEYBOARD: [
+    ['total', 2, 100, 30, 50, [1, 1, 0.5, -1, -2, -1]],
+    ['total', 2, 100, 20, 70, [1, 1, 0.5, -1, -3, -1]],
+    ['total', 2, 100, 20, 70, [1, 1, 0.5, -2, -4, -2]],
+    ['limit', 0, 100, 100, 0, [0.2, 0.2, 0.1, -4, -8, -4], BEATORAJA_HARD_GUTS],
+    ['limit', 0, 100, 100, 0, [0.2, 0.1, 0, -6, -12, -6]],
+    [undefined, 0, 100, 100, 0, [0.2, 0.1, 0, -100, -100, -100]],
+  ],
+};
+const BEATORAJA_SINGLE_GAUGE_IDS = ['ASSIST-EASY', 'EASY', 'NORMAL', 'HARD', 'EX-HARD', 'HAZARD'];
+
+/** beatoraja MODIFY_DAMAGE, used by five-key EX-HARD (distinct from LR2's damage formula). */
+function beatorajaFiveKeyDamageMultiplier(total: number, noteCount: number): number {
+  const totals = [240, 230, 210, 200, 180, 160, 150, 130, 120, 0];
+  const multipliers = [1, 1.11, 1.25, 1.5, 1.666, 2, 2.5, 3.333, 5, 10];
+  let index = 0;
+  while (index < totals.length - 1 && total < totals[index]!) index++;
+  let countMultiplier = 1;
+  let notes = 1000;
+  let step = 0.002;
+  // Preserve upstream's OR condition and integer halving, including its treatment of sparse charts.
+  while (notes > noteCount || notes > 1) {
+    countMultiplier += step * (notes - Math.max(noteCount, Math.trunc(notes / 2)));
+    notes = Math.trunc(notes / 2);
+    step *= 2;
   }
+  return Math.max(multipliers[index]!, countMultiplier);
+}
+
+function resolveBeatorajaGauge(gaugeId: string, total: number, noteCount: number, laneMode: string): GaugeSpec {
+  const mode = resolveBeatorajaMode(laneMode);
+  const rows =
+    mode === BEATORAJA_MODES.FIVEKEYS
+      ? BEATORAJA_SINGLE_GAUGES.FIVEKEYS
+      : mode === BEATORAJA_MODES.PMS
+        ? BEATORAJA_SINGLE_GAUGES.PMS
+        : mode === BEATORAJA_MODES.KEYBOARD
+          ? BEATORAJA_SINGLE_GAUGES.KEYBOARD
+          : BEATORAJA_SINGLE_GAUGES.SEVENKEYS;
+  const index = BEATORAJA_SINGLE_GAUGE_IDS.indexOf(gaugeId);
+  const [modifier, min, max, initial, border, base, guts = []] = rows[index >= 0 ? index : 2]!;
+  const values =
+    modifier === 'total'
+      ? totalModifier(base, total, noteCount)
+      : modifier === 'limit'
+        ? scalePositive(base, resolveBeatorajaHardRecoverMultiplier(total, noteCount))
+        : modifier === 'damage'
+          ? scaleNegative(base, beatorajaFiveKeyDamageMultiplier(total, noteCount))
+          : base;
+  return { id: index >= 0 ? gaugeId : 'NORMAL', min, max, initial, border, survival: min === 0, values, guts };
 }
 
 function resolveIIDXGauge(gaugeId: string, noteCount: number): GaugeSpec {
@@ -701,7 +713,9 @@ function countRulesetNotes(chart: RulesetChartFacts, style: LongNoteStyle): numb
  * for `beatoraja`. The `iidx` gauge never reads TOTAL (its recovery comes from {@link resolveIIDXGaugeUnit}), so its
  * reported TOTAL follows the `lr2` curve.
  */
-function resolveDefaultTotal(rulesetId: RulesetId, baseNoteCount: number): number {
+function resolveDefaultTotal(rulesetId: RulesetId, baseNoteCount: number, laneMode: string): number {
+  if (rulesetId === 'beatoraja' && resolveBeatorajaMode(laneMode) === BEATORAJA_MODES.KEYBOARD)
+    return Math.max(300, (7.605 * (baseNoteCount + 100)) / (0.01 * baseNoteCount + 6.5));
   return rulesetId === 'beatoraja'
     ? resolveBeatorajaDefaultTotal(baseNoteCount)
     : resolveLR2DefaultTotal(baseNoteCount);
@@ -713,7 +727,7 @@ function resolveDefaultTotal(rulesetId: RulesetId, baseNoteCount: number): numbe
  * Either way a value ≤ 0 means "use the default", so bmson `total: 0` does not freeze the gauge.
  */
 function resolveEffectiveTotal(rulesetId: RulesetId, chart: RulesetChartFacts, baseNoteCount: number): number {
-  const fallback = resolveDefaultTotal(rulesetId, baseNoteCount);
+  const fallback = resolveDefaultTotal(rulesetId, baseNoteCount, chart.laneMode);
   const raw = chart.total;
   if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) {
     return fallback;
@@ -831,7 +845,7 @@ export function resolveRuleset(
       comboBreaksOnEmptyPoor,
       mineTrigger: 'hold',
       hcnTick: { heldJudge: 1, heldRate: 0.5, releasedJudge: 3, releasedRate: 0.5 },
-      gauge: courseGauge(effectiveTotal) ?? resolveBeatorajaGauge(gaugeId, effectiveTotal, noteCount),
+      gauge: courseGauge(effectiveTotal) ?? resolveBeatorajaGauge(gaugeId, effectiveTotal, noteCount, chart.laneMode),
       noteCount,
       effectiveTotal,
       moneyScore: false,
