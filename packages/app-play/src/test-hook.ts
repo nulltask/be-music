@@ -101,6 +101,7 @@ export interface TestHookStageResult {
 
 /** A result screen, as the host showed it. */
 export interface TestHookResult {
+  practice?: boolean;
   /** A single play, a course stage, a whole EXPERT / GRADE course, or a NONSTOP run. */
   run: 'single' | 'stage' | 'course' | 'nonstop';
   family: TestHookFamily;
@@ -269,6 +270,7 @@ export function resultFromData(
     run,
     family,
     title: data.chart.title,
+    ...(data.practice === true ? { practice: true } : {}),
     ...(data.lamp !== undefined ? { lamp: data.lamp } : {}),
     cleared: data.cleared,
     exScore: data.score.exScore,

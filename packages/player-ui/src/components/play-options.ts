@@ -32,6 +32,12 @@ export class BeMusicPlayOptionsElement extends BeMusicElement {
         color: #b8c7da;
         font-size: 12px;
       }
+      @container be-music (max-width: 16rem) {
+        label,
+        select {
+          width: 100%;
+        }
+      }
     `,
   ];
   declare options: BeMusicDOMSelectFrame['playOptions'] | undefined;

@@ -2,7 +2,7 @@ import type { BeMusicJSON } from '@be-music/chart-source';
 import { describe, expect, test } from 'vite-plus/test';
 import type { PlayerOptions } from '../engine-types.ts';
 import type { RulesetId } from '../../ruleset/definitions.ts';
-import { basicChart, exRankChart, longNoteChart } from './charts.ts';
+import { basicChart, exRankChart, longNoteChart, nonstopCourse } from './charts.ts';
 import { command, observePlay, type PlayObservation } from './harness.ts';
 
 /**
@@ -19,7 +19,14 @@ interface StartCase {
   options?: PlayerOptions;
 }
 
+const nonstop = nonstopCourse();
 const CASES: readonly StartCase[] = [
+  {
+    name: 'NONSTOP stage rank changes',
+    chart: () => nonstopCourse().chart,
+    at: nonstop.map.stageRanks[0]!.seconds + 0.6,
+    options: { stageRanks: nonstop.map.stageRanks, course: { kind: 'nonstop' } },
+  },
   { name: 'basic', chart: basicChart, at: 2.2 },
   { name: 'a charge note held across the start', chart: () => longNoteChart(2), at: 1.6 },
   { name: 'mines and invisible notes', chart: () => exRankChart(), at: 2.6 },
@@ -32,7 +39,9 @@ const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', 'iidx'];
 const WAYS = {
   'started there': (startCase: StartCase) => ({ options: { startAtSeconds: startCase.at } }),
   'sought forwards': (startCase: StartCase) => ({ script: [command(300, { kind: 'seek', seconds: startCase.at })] }),
-  'sought backwards': (startCase: StartCase) => ({ script: [command(3000, { kind: 'seek', seconds: startCase.at })] }),
+  'sought backwards': (startCase: StartCase) => ({
+    script: [command(Math.max(3000, (startCase.at + 0.5) * 1000), { kind: 'seek', seconds: startCase.at })],
+  }),
 } as const;
 
 async function playBothWays(

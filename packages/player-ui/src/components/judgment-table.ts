@@ -1,6 +1,7 @@
-import { html, nothing, type TemplateResult } from 'lit';
+import { css, html, nothing, type CSSResultGroup, type TemplateResult } from 'lit';
 import { DataElement } from '../base.ts';
 import type { BeMusicJudgmentData } from '../models.ts';
+import { baseStyles } from '../styles/base.ts';
 import { stats } from '../templates.ts';
 
 const JUDGES = [
@@ -11,6 +12,17 @@ const JUDGES = [
   ['POOR', 'poor'],
 ] as const;
 export class BeMusicJudgmentTableElement extends DataElement<BeMusicJudgmentData> {
+  static override styles: CSSResultGroup = [
+    baseStyles,
+    css`
+      @container be-music (max-width: 22rem) {
+        th:nth-child(n + 3),
+        td:nth-child(n + 3) {
+          display: none;
+        }
+      }
+    `,
+  ];
   protected override render(): TemplateResult | typeof nothing {
     const d = this.data;
     if (!d) return nothing;

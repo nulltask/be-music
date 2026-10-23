@@ -195,6 +195,9 @@ export function createDemoGUIState(inputs: DemoGUIStateInputs): DemoGUIState {
     // an unprocessed signal path can still flip it via `?compressor=off` or the GUI.
     ...readStoredVolumes(storage),
     playInSilentMode: readPlayInSilentMode(storage),
+    // Peak gain is off until the Debug Menu turns it on for this visit. It changes how loud a chart is, so a reload
+    // returns to the level the chart was authored at.
+    peakGain: false,
     compressor: true,
     compressorKey: true,
     compressorBGM: true,

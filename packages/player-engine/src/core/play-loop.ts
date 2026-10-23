@@ -1,3 +1,4 @@
+import { throwIfAborted } from '@be-music/shared-utils/core';
 import { formatSeconds } from '../utils.ts';
 import { maxJudgeReachSeconds } from './judge-core.ts';
 import { createInputWakeUp, type InputWakeUp } from './input-wakeup.ts';
@@ -18,7 +19,7 @@ import {
 import { emitPlayerLog, writeRuntimeEventLog } from './engine-trace.ts';
 import type { PlayerInterruptReason } from './engine-types.ts';
 import type { PlayControls } from './play-controls.ts';
-import { applySeek } from './play-seek.ts';
+import { applySeek, clampSeekSeconds } from './play-seek.ts';
 import type { PlaySession } from './play-session.ts';
 import type { PlayJudge, PlayTick } from './play-strategy.ts';
 
@@ -71,11 +72,12 @@ async function waitOutLeadIn(session: PlaySession, controls: PlayControls, wakeU
   const scheduler = getEngineScheduler();
   const endMs = scheduler.now() + session.leadInMs;
   for (;;) {
+    throwIfAborted(session.options.signal);
     controls.consume();
     if (controls.interruptedReason !== undefined) return;
     const remainingMs = endMs - scheduler.now();
-    if (remainingMs <= 0) return;
-    await waitPreciseOrInput(remainingMs, wakeUp);
+    if (remainingMs <= 0 && controls.startRequested) return;
+    await waitPreciseOrInput(remainingMs > 0 ? remainingMs : PAUSE_POLL_INTERVAL_MS, wakeUp);
   }
 }
 
@@ -147,11 +149,12 @@ async function playChart(
     const nowMs = clock.nowMs();
     const seekSeconds = controls.takeSeek();
     if (seekSeconds !== undefined) {
+      controls.seekReplayTempoChanges(clampSeekSeconds(session, seekSeconds), nowMs);
       const sought = applySeek(session, judge, seekSeconds, nowMs);
       if (sought !== undefined) {
         lastFrameSeconds = sought;
         // A play sought back out of its hold after the chart settles again; the host's outro is its to cancel.
-        settled = false;
+        if (sought < totalSeconds) settled = false;
       }
     }
     if (clock.isPaused()) {

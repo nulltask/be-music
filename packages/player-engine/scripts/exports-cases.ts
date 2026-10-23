@@ -537,20 +537,20 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.replay.createReplayRecorder', {
     run: () => {
       const json = parseChart('#BPM 120\n#00111:01\n');
-      replayAPI
-        .createReplayRecorder({
-          json,
-          chart: {
-            notes: [],
-            landmineNotes: [],
-            invisibleNotes: [],
-            activeFreeZoneChannels: new Set<string>(),
-            scorableNotes: [],
-            laneDisplayMode: '7keys',
-          },
-          play: { mode: 'manual', autoScratch: false },
-        })
-        .recordInput('down', 0.5, ['z'], ['11']);
+      const recorder = replayAPI.createReplayRecorder({
+        json,
+        chart: {
+          notes: [],
+          landmineNotes: [],
+          invisibleNotes: [],
+          activeFreeZoneChannels: new Set<string>(),
+          scorableNotes: [],
+          laneDisplayMode: '7keys',
+        },
+        play: { mode: 'manual', autoScratch: false },
+      });
+      recorder.recordInput('down', 0.5, ['z'], ['11']);
+      recorder.discard();
     },
   });
   define('player-engine.replay.ReplayParseError', {
@@ -635,6 +635,8 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       run.recordStage(benchRunStageLog, { playSeconds: 16 });
       run.nextStage();
       run.buildReplay();
+      run.recordStage(undefined, { practice: true, stageOutcome: benchStageResult });
+      run.buildPracticeResult();
     },
   });
   define('player-engine.course.resolveGivenUpPlaySeconds', {
