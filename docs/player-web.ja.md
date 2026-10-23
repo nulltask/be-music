@@ -90,6 +90,8 @@ Chrome と Edge ではフルスクリーン中に Keyboard Lock API で `Esc` �
 - **Leaderboard**（既定で閉じる）: Submit to Leaderboard、Account（ログイン中の handle、または「Not signed in」）、Create passkey (keep this account)、Sign in with passkey、Sign out。
 - **Developer**（既定で閉じる）: Judgment windows（曲の開始時に確定。選曲画面に出す[ベスト記録](#ベスト記録)のルールセットもこれで決まります）、Auto pause on blur、Show invisible notes、FPS（500 ms ごとに計測し、60 サンプルを保持するネイティブの履歴グラフ）、Reset settings and reload（ベストレコード以外の demo の保存設定をすべて消去して再読み込み）。
 
+**Developer → Show invisible notes** は既定で無効です。有効にすると、beatoraja を含むすべてのスキンで不可視のキーサウンドオブジェクトを表示します。プレイ中にも切り替えられます。この確認用マーカーは、キーサウンドの再生、判定、スコアには影響しません。
+
 Status と Account は読み取り専用の複数行モニターです。別の **Skin Config** パネルは **Options**、**Files**（定義がある場合）、**Timing & offsets** のタブで構成し、タブ内でカテゴリをまとめます。カスタムオフセットに `x` と `y` の両方がある場合はネイティブの 2D 位置入力を使い、ほかの定義済み軸は数値スライダーで調整します。**Reset all to 0** はネイティブ入力を更新し、設定変更を一度だけ適用します。シーンの切り替えではスキーマを作り直し、同じスキンエントリーの編集では選択中のタブとフォルダーの状態を維持します。
 
 ### ベスト記録
