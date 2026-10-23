@@ -32,7 +32,7 @@ export class BeMusicGameplayHUDElement extends FrameElement<BeMusicDOMGameplayFr
       data-bga=${r.hasBGA ? 'on' : 'off'}
       style=${style}
     >
-      <aside class="hud" part="hud" aria-label="Play status">
+      <aside class="hud" part="hud" data-orientation=${f.layout.orientation} aria-label="Play status">
         <div class="hud-heading" part="heading">
           <div>
             <span class="eyebrow">${f.replay ? 'Replay' : f.autoPlay ? 'Auto play' : 'Live'}</span>

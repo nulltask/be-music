@@ -12,3 +12,14 @@ export function resolveSeekTarget(currentSeconds: number, deltaSeconds: number, 
   const end = Number.isFinite(durationSeconds) ? Math.max(0, durationSeconds) : 0;
   return Math.max(0, Math.min(end, currentSeconds + deltaSeconds));
 }
+
+/**
+ * The second the seek bar shows. While the thumb is held, `heldSeconds` wins so the play clock cannot pull it back;
+ * otherwise the bar follows `currentSeconds`. Both are kept inside the chart.
+ */
+export function resolvePlaybackSeconds(currentSeconds: number, durationSeconds: number, heldSeconds?: number): number {
+  const end = Number.isFinite(durationSeconds) ? Math.max(0, durationSeconds) : 0;
+  const held = heldSeconds !== undefined && Number.isFinite(heldSeconds) ? heldSeconds : currentSeconds;
+  const seconds = Number.isFinite(held) ? held : 0;
+  return Math.max(0, Math.min(end, seconds));
+}

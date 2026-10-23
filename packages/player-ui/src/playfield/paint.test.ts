@@ -23,6 +23,7 @@ function recorder(): BeMusicPlayfieldPaintContext & { calls: string[] } {
     fillRect: (x: number, y: number, w: number, h: number) =>
       calls.push(`fillRect ${x},${y},${w},${h} ${String(ctx.fillStyle)} ${ctx.globalAlpha}`),
     fillText: (text: string, x: number, y: number) => calls.push(`fillText ${text} ${x},${y} ${String(ctx.fillStyle)}`),
+    measureText: (text: string) => ({ width: text === '1' ? 4 : 10 }) as TextMetrics,
     beginPath: () => calls.push('beginPath'),
     arc: (x: number, y: number, r: number) => calls.push(`arc ${x},${y},${r} ${ctx.globalAlpha}`),
     rect: (x: number, y: number, w: number, h: number) => calls.push(`rect ${x},${y},${w},${h}`),
@@ -105,7 +106,9 @@ describe('playfield painters', () => {
     });
     expect(ctx.calls).toEqual([
       'fillText GREAT 40,100 #ffffff',
-      'fillText 12 40,124 #e5efff',
+      // "1" is narrower than the other digits; both still sit in a 10px cell, centred on x 40.
+      'fillText 1 35,124 #e5efff',
+      'fillText 2 45,124 #e5efff',
       'fillText BAD 80,100 #ff5c6c',
     ]);
   });

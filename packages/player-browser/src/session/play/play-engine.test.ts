@@ -218,6 +218,10 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     expect(play.ctx.judgeSideState['1P'].courseCombo).toBe(7);
     play.step(3, {}, [{ judge: 'POOR', combo: 0 }]);
     expect(play.state().courseCombo).toMatchObject({ combo: 0, maxCombo: 10 });
+    expect(getResultData(play.ctx)?.stageOutcome).toMatchObject({
+      noteCount: 4,
+      course: { combo: 0, maxCombo: 10 },
+    });
   });
 
   test('the full combo event fires once the combo reaches every note', () => {
@@ -280,6 +284,11 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     expect(play.ctx.score.minePoor).toBe(1);
     applyFinalSummary(play.ctx, summary({ perfect: 4, exScore: 8 }, 30));
     expect(play.ctx.score).not.toHaveProperty('minePoor');
+    applyFinalSummary(play.ctx, summary({ perfect: 4, exScore: 8, fullCombo: false }, 30));
+    expect(play.ctx.score.fullCombo).toBe(false);
+    applyFinalSummary(play.ctx, summary({ perfect: 4, exScore: 8 }, 30));
+    expect(play.ctx.score).not.toHaveProperty('fullCombo');
+
     expect(play.state().maxCombo).toBe(4);
     expect(play.state().combo).toBe(4);
     expect(getResultData(play.ctx)!.maxCombo).toBe(4);
@@ -402,4 +411,14 @@ describe('the key beams of a play, by channel', () => {
     play.step(1.2, {}, [], [{ kind: 'release-lane', channel: '1A' }]);
     expect([...play.ctx.keyBeamFadeStartedAt.keys()]).toEqual(['1A']);
   });
+});
+
+test('keeps a raw PMS maximum for the skin and normalizes the result gauge and border', () => {
+  const play = createPlay({ total: 2, judgeRuleset: 'beatoraja', chartPlayVariant: '9' });
+  const final = summary({}, 30);
+  final.gauge = { ...final.gauge!, current: 30, max: 120, initial: 30, clearThreshold: 85, type: 'NORMAL' };
+  applyFinalSummary(play.ctx, final);
+  expect(play.ctx.gaugeState).toMatchObject({ current: 30, max: 120, clearThreshold: 85 });
+  expect(play.state().gauge).toBe(25);
+  expect(getResultData(play.ctx)).toMatchObject({ gauge: 25, gaugeBorder: (85 / 120) * 100 });
 });

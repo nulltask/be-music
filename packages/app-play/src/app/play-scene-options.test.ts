@@ -78,6 +78,7 @@ function gui(changes: Partial<PlaySceneGUIState> = {}): PlaySceneGUIState {
     hiSpeed: 2.5,
     keyVolume: 80,
     bgmVolume: 60,
+    peakGain: false,
     compressor: true,
     compressorKey: true,
     compressorBGM: false,
@@ -164,6 +165,11 @@ describe('resolvePlaySceneOptions: a single play', () => {
       showInvisibleNotes: false,
       judgedNoteDisplay: 'KEEP_SCROLLING',
     });
+  });
+
+  test('passes peak gain only when the Debug Menu turned it on', () => {
+    expect(resolvePlaySceneOptions(input()).settings.peakGain).toBeUndefined();
+    expect(resolvePlaySceneOptions(input({ guiState: gui({ peakGain: true }) })).settings.peakGain).toBe(true);
   });
 
   test('bypasses the stored percentage when disabled but preserves replay tempo', () => {

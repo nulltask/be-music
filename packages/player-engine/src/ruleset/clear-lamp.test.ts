@@ -51,6 +51,12 @@ describe('clear lamp ranks', () => {
 });
 
 describe('isFullCombo', () => {
+  it('honors final combo eligibility without granting an incomplete play a full combo', () => {
+    expect(isFullCombo({ ...score(100, 0, 0), fullCombo: false })).toBe(false);
+    expect(isFullCombo({ ...score(100, 0, 0), fullCombo: true })).toBe(true);
+    expect(isFullCombo({ ...score(99, 0, 0), fullCombo: true })).toBe(false);
+  });
+
   it('needs every note judged GOOD or better', () => {
     expect(isFullCombo(score(80, 15, 5))).toBe(true);
     expect(isFullCombo(score(80, 15, 4))).toBe(false);
@@ -182,4 +188,12 @@ describe('resolveMissCount', () => {
     expect(resolveMissCount({ bad: 2, poor: 3, emptyPoor: 1 }, 50)).toBe(56);
     expect(resolveMissCount({ bad: 2, poor: 3, emptyPoor: 1 }, -3)).toBe(6);
   });
+});
+
+it('awards LR2 FULL COMBO before a failed GROOVE gauge, while other rulesets still require a clear', () => {
+  const play = { cleared: false, gauge: 'GROOVE', score: score(80, 15, 5) };
+  expect(resolveClearLamp({ ...play, ruleset: 'lr2' })).toBe('FULL_COMBO');
+  expect(resolveClearLamp({ ...play, ruleset: 'beatoraja' })).toBe('FAILED');
+  expect(resolveClearLamp({ ...play, ruleset: 'iidx' })).toBe('FAILED');
+  expect(resolveClearLamp({ ...play, ruleset: 'lr2', score: score(80, 15, 4) })).toBe('FAILED');
 });

@@ -54,10 +54,15 @@ export function resetPlayNotes(chart: PreparedPlaybackChartData): void {
   for (const mine of chart.landmineNotes) mine.judged = false;
 }
 
-/** The chart second a seek to `seconds` goes to: within the chart, the start for a value that is not a number. */
+/** The seek target within the chart or an aborted replay's recorded end; a non-finite value goes to the start. */
 export function clampSeekSeconds(session: PlaySession, seconds: number): number {
   if (!Number.isFinite(seconds)) return 0;
-  return Math.max(0, Math.min(seconds, session.totalSeconds));
+  const replayEnd = session.replay ? session.options.replayAbortedAtUs : undefined;
+  const endSeconds =
+    replayEnd !== undefined && Number.isFinite(replayEnd)
+      ? Math.min(session.totalSeconds, Math.max(0, replayEnd / 1_000_000))
+      : session.totalSeconds;
+  return Math.max(0, Math.min(seconds, endSeconds));
 }
 
 /**
@@ -72,6 +77,7 @@ export function applySeek(session: PlaySession, judge: PlayJudge, seconds: numbe
   if (judge.seek === undefined) return undefined;
   const { audioSession, uiEnabled, uiSignals, summary } = session;
   const target = clampSeekSeconds(session, seconds);
+  session.replayRecorder?.discard();
   session.seekGeneration += 1;
   const generation = session.seekGeneration;
 

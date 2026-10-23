@@ -343,7 +343,7 @@ export interface PlayFrame {
   readonly progress?: number;
   /** Chart time in seconds; negative during the intro. */
   readonly seconds: number;
-  /** Whether a `seek` intent moves the play now: an AUTO play whose chart is running (paused or not). */
+  /** Whether a `seek` intent moves the play now: an AUTO play or replay whose chart is running (paused or not). */
   readonly seekable: boolean;
   /** The beat the playfield scrolls from (mirrored past an LR2 negative-BPM reversal). */
   readonly beat: number;
@@ -389,7 +389,7 @@ export type PlayIntent =
   | { readonly type: 'quit' }
   /** Play the chart again from the start. */
   | { readonly type: 'restart' }
-  /** Move an AUTO play to chart second `seconds` (a preview's seek bar). */
+  /** Move an AUTO play or replay to chart second `seconds` (a preview's seek bar). */
   | { readonly type: 'seek'; readonly seconds: number };
 
 /**

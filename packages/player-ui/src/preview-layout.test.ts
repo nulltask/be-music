@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { resolvePreviewBGARect, resolvePreviewInfoBox } from './preview-layout.ts';
+import { resolvePreviewBGARect, resolvePreviewInfoBox, resolvePreviewPortrait } from './preview-layout.ts';
 
 const stage = { width: 854, height: 480 };
 
@@ -29,6 +29,30 @@ describe('resolvePreviewBGARect', () => {
   });
 });
 
+describe('resolvePreviewPortrait', () => {
+  const stage = { width: 480, height: 854 };
+
+  it('puts the BGA square across the top and the lanes below it', () => {
+    expect(resolvePreviewPortrait(stage)).toEqual({
+      bga: { x: 19, y: 16, w: 442, h: 442 },
+      laneTop: 474,
+      judgementY: 698,
+    });
+    expect(resolvePreviewBGARect(stage, 427)).toEqual({ x: 19, y: 16, w: 442, h: 442 });
+  });
+
+  it('keeps the BGA above the lanes and clear of the video controls', () => {
+    const portrait = resolvePreviewPortrait(stage)!;
+    expect(portrait.bga.y + portrait.bga.h).toBeLessThan(portrait.laneTop);
+    expect(portrait.laneTop).toBeLessThan(portrait.judgementY);
+    expect(portrait.judgementY).toBeLessThan(Math.round(stage.height * 0.86));
+  });
+
+  it('is unused on a landscape stage', () => {
+    expect(resolvePreviewPortrait({ width: 854, height: 480 })).toBeUndefined();
+  });
+});
+
 describe('resolvePreviewInfoBox', () => {
   it('puts the facts beside a BGA that leaves room on its right', () => {
     const bga = resolvePreviewBGARect(stage, 184);
@@ -48,6 +72,14 @@ describe('resolvePreviewInfoBox', () => {
       right: 838,
       bottom: 413,
     });
+  });
+
+  it('puts the facts on the BGA when the lanes sit under it', () => {
+    const stage = { width: 480, height: 854 };
+    const portrait = resolvePreviewPortrait(stage)!;
+    expect(
+      resolvePreviewInfoBox({ stage, bga: portrait.bga, playfield: { right: 427, top: portrait.laneTop } }),
+    ).toEqual({ left: 19, top: 318, right: 461, bottom: 458 });
   });
 
   it('puts the facts right of the lanes without a BGA', () => {

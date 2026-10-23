@@ -52,6 +52,12 @@ export function parseResults(
     };
     if (record.minePoor !== undefined)
       result.minePoor = expectNonNegativeInteger(record.minePoor, `${prefix}.${key}.minePoor`);
+    if (record.fullCombo !== undefined) {
+      if (typeof record.fullCombo !== 'boolean')
+        throw new ReplayParseError(`${prefix}.${key}.fullCombo: expected a boolean`);
+      result.fullCombo = record.fullCombo;
+    }
+
     if (gauge.failedMidPlay !== undefined) result.gauge.failedMidPlay = gauge.failedMidPlay === true;
     const score = optionalFiniteNumber(record.score, `${prefix}.${key}.score`);
     if (score !== undefined) result.score = score;

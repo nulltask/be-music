@@ -1,5 +1,6 @@
 import { resolveLaneCover, type LaneCoverState } from '@be-music/player-scene-model';
 import { BEATORAJA_OP, type BeatorajaSide } from '../runtime-ids.ts';
+import { beatorajaGaugeModeFromString } from '../elements/gauge.ts';
 
 /**
  * What a chart has, for the ops that show or hide chrome by it. A trait left out lights neither of its ops (the select
@@ -64,6 +65,19 @@ export function beatorajaKeysongOp(playVariant: string | undefined): number | un
   }
 }
 
+/**
+ * Gauge frame conditions from beatoraja's runtime class: groove (42) for classes 0–2, hard (43) for 3–8,
+ * and EX (1046) for ASSIST-EASY, EASY, EX-HARD, HAZARD, EXCLASS and EXHARDCLASS. No class lights no frame.
+ * Shares the gauge element's type mapping, including LR2 and IIDX aliases; independent of gauge value and mode.
+ */
+export function resolveBeatorajaGaugeTypeOps(type: string | undefined): number[] {
+  if (type === undefined) return [];
+  const mode = beatorajaGaugeModeFromString(type);
+  const ops: number[] = [mode <= 2 ? BEATORAJA_OP.GAUGE_GROOVE : BEATORAJA_OP.GAUGE_HARD];
+  if (mode === 0 || mode === 1 || mode === 4 || mode === 5 || mode === 7 || mode === 8) ops.push(BEATORAJA_OP.GAUGE_EX);
+  return ops;
+}
+
 /** How a play starts on a play skin. */
 export interface BeatorajaPlayStartInput {
   readonly playVariant: string;
@@ -74,14 +88,13 @@ export interface BeatorajaPlayStartInput {
 
 /**
  * The ops a play skin starts a play with, before the engine's first frame: the autoplay op (`AUTOPLAY_ON` or
- * `AUTOPLAY_OFF`), `NOW_LOADING`, `GAUGE_GROOVE`, the key-mode op and the chart-trait ops. `NOW_LOADING` gives way to
+ * `AUTOPLAY_OFF`), `NOW_LOADING`, the key-mode op and the chart-trait ops. `NOW_LOADING` gives way to
  * `LOADED` when playback starts ({@link BEATORAJA_PLAY_STARTED_OPS}).
  */
 export function resolveBeatorajaPlayStartOps(input: BeatorajaPlayStartInput): number[] {
   const ops: number[] = [
     input.autoPlay ? BEATORAJA_OP.AUTOPLAY_ON : BEATORAJA_OP.AUTOPLAY_OFF,
     BEATORAJA_OP.NOW_LOADING,
-    BEATORAJA_OP.GAUGE_GROOVE,
   ];
   const keysong = beatorajaKeysongOp(input.playVariant);
   if (keysong !== undefined) ops.push(keysong);
