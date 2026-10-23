@@ -10,6 +10,7 @@ import type { LibraryChart } from '@be-music/player-scene-model';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { runEngineDriver, type EngineDriverOptions } from '../../runtime/engine-driver.ts';
 import { launchSharedEngine } from './play-engine.ts';
+import { handleSharedEngineExitKey } from './play-input.ts';
 import { canSeekPlay } from './play-seek.ts';
 import { PlaySession } from './play-session.ts';
 
@@ -221,6 +222,62 @@ describe('PlaySession.seek (a play-loop command)', () => {
     const manual = new PlaySession({ autoPlay: false });
     expect(canSeekPlay(manual)).toBe(false);
     await manual.seek(3);
+  });
+
+  test('a replay can seek with the scene arrows', async () => {
+    const context = createSeekablePlay();
+    playFirstThreeSeconds(context);
+    Object.assign(context.play.options, { autoPlay: false, replay: { play: {} } });
+    expect(canSeekPlay(context.play)).toBe(true);
+    const event = { code: 'ArrowLeft', preventDefault: vi.fn() } as unknown as KeyboardEvent;
+    handleSharedEngineExitKey(context.play, event);
+    context.runs[0]!.tick();
+    expect(context.runs[0]!.seeks).toEqual([-2]);
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+  });
+
+  test.each([
+    { altKey: true },
+    { ctrlKey: true },
+    { metaKey: true },
+    { isComposing: true },
+    { defaultPrevented: true },
+    { target: { tagName: 'INPUT' } },
+    { target: { tagName: 'TEXTAREA' } },
+    { target: { tagName: 'SELECT' } },
+    { target: { isContentEditable: true } },
+  ])('seeking arrows leave modified keys and editable fields alone: %j', (overrides) => {
+    const context = createSeekablePlay();
+    playFirstThreeSeconds(context);
+    const event = { code: 'ArrowRight', preventDefault: vi.fn(), ...overrides } as unknown as KeyboardEvent;
+    handleSharedEngineExitKey(context.play, event);
+    context.runs[0]!.tick();
+    expect(context.runs[0]!.seeks).toEqual([]);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+  });
+
+  test('keeps the applied clock stable when the engine reuses its frame bus before the next drain', () => {
+    const context = createSeekablePlay();
+    const frame: PlayerUIFramePayload = {
+      currentBeat: 6,
+      currentSeconds: 3,
+      totalSeconds: 10,
+      notes: [],
+      summary: summaryOf(6),
+      generation: 0,
+      clock: { outputSeconds: context.audioContext.currentTime, tempo: 1, paused: true },
+    };
+    const onFrame = context.runs[0]!.options.ui.onFrame!;
+    onFrame(frame);
+    frame.currentSeconds = 0;
+    frame.currentBeat = 0;
+    frame.summary = summaryOf(0);
+    frame.generation = 1;
+    expect(context.play.currentSeconds()).toBe(3);
+    expect(context.play.score.perfect).toBe(6);
+    onFrame(frame);
+    expect(context.play.currentSeconds()).toBe(0);
+    expect(context.play.score.perfect).toBe(0);
   });
 
   // D1: the relaunched run's frames moved the counts to the target, while the combo only followed judge cues, which a

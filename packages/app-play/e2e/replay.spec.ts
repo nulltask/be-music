@@ -81,6 +81,27 @@ test("a replay follows the log's tempo and hi-speed with Replay / ghost on, and 
     (current) => current.play?.tempo === 1.2 && Math.abs((current.play.hiSpeed ?? 0) - recordedHiSpeed) < 0.05,
     'the replay to follow the recorded tempo and hi-speed',
   );
+  // Seeking a paused replay rebuilds counts and restores the view and tempo at the target.
+  await demo.key('Space');
+  await demo.key('ArrowLeft');
+  state = await demo.waitFor((current) => current.play?.seconds === 0, 'the replay sought to its start');
+  expect(state.play?.judged?.pgreat).toBe(0);
+  expect(state.play?.tempo).toBe(1);
+  expect(state.play?.hiSpeed).toBe(replay.play.view?.hiSpeed);
+  await demo.key('ArrowRight');
+  state = await demo.waitFor(
+    (current) => Math.abs((current.play?.seconds ?? -1) - 5) < 0.01,
+    'the replay sought forwards',
+  );
+  expect(state.play?.judged?.pgreat).toBe(9);
+  expect(state.play?.tempo).toBe(1.2);
+  expect(state.play?.hiSpeed).toBeCloseTo(recordedHiSpeed, 1);
+  await demo.key('ArrowLeft');
+  state = await demo.waitFor((current) => current.play?.seconds === 0, 'the replay sought back again');
+  expect(state.play?.judged?.pgreat).toBe(0);
+  expect(state.play?.tempo).toBe(1);
+  await demo.key('Space');
+  await demo.waitFor((current) => (current.play?.judged?.pgreat ?? 0) >= 1, 'the replay to judge again after resuming');
   await demo.key('Escape');
   await demo.waitFor((current) => current.scene.kind === 'select', 'the select screen');
 
@@ -98,6 +119,18 @@ test("a replay follows the log's tempo and hi-speed with Replay / ghost on, and 
   state = await demo.waitFor(
     (current) => current.scene.kind !== 'play' || (current.play?.seconds ?? 0) > after,
     'the replay to pass the recorded change',
+  );
+  expect(state.play?.tempo).toBe(0.9);
+  expect(state.play?.hiSpeed).toBe(4);
+  await demo.key('Space');
+  await demo.key('ArrowLeft');
+  state = await demo.waitFor((current) => current.play?.seconds === 0, 'the replay sought with recorded settings off');
+  expect(state.play?.tempo).toBe(0.9);
+  expect(state.play?.hiSpeed).toBe(4);
+  await demo.key('ArrowRight');
+  state = await demo.waitFor(
+    (current) => Math.abs((current.play?.seconds ?? -1) - 5) < 0.01,
+    'the replay sought forwards with recorded settings off',
   );
   expect(state.play?.tempo).toBe(0.9);
   expect(state.play?.hiSpeed).toBe(4);

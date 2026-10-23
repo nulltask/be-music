@@ -112,8 +112,7 @@ function createAutoJudge(session: PlaySession): PlayJudge {
       step({ kind: 'advance', nowSec: tick.nowSec });
       judgedThroughSeconds = tick.nowSec;
     },
-    // A replay seeks once it re-drives its tempo changes from the second sought too (not yet).
-    ...(session.replay ? {} : { seek }),
+    seek,
     judgedThroughSeconds: (tick) => tick.nowSec,
     isSettled: () => noteKeysounds.done && isAutoJudgeSettled(autoJudge),
     isClosed: () => false,
