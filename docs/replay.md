@@ -192,6 +192,8 @@ Replay re-drives the recorded input stream deterministically inside the shared e
 input is ignored (ESC / pause / hi-speed keep working), and no new replay is recorded for the run. Because the
 log stores the resolved note arrangement, the chart prepare re-applies the recorded channels onto the freshly
 loaded chart (`applyReplayArrangement`) instead of re-rolling RANDOM / MIRROR — so shuffled plays replay exactly.
+New MIRROR/RANDOM plays use the complete key set of the resolved mode, including empty lanes; scratch/wheel lanes stay fixed. Previously recorded subset arrangements still replay their stored channels and are never reinterpreted under the corrected shuffle.
+
 The chart's `#RANDOM` / `#SWITCH` lines are resolved with the log's `play.randomDraws`, so a replay plays the
 recorded branches: the browser's play session (`session/play/play-chart.ts`) resolves with them itself (`resolvePlayChart(chart,
 { randomDraws })`), and a host that lets the engine resolve the source chart passes them as
