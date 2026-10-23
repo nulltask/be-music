@@ -1,3 +1,4 @@
+import type { PlayerHCNLaneState } from './ui-signal-bus.ts';
 import { resolveAltModifierLabel } from '../utils.ts';
 import {
   createAutoJudgeState,
@@ -62,6 +63,21 @@ function createAutoJudge(session: PlaySession): PlayJudge {
     reversalSeconds: session.resolvedChart.reversal?.seconds,
   };
   let autoJudge = createAutoJudgeState(config, session.score);
+  const empty: readonly PlayerHCNLaneState[] = [];
+  session.readHCNLanes = (seconds) => {
+    if (autoJudge.pendingLongNotes.length === 0) return empty;
+    const lanes: PlayerHCNLaneState[] = [];
+    for (const { note, endSeconds } of autoJudge.pendingLongNotes) {
+      if (
+        seconds >= note.seconds &&
+        seconds < endSeconds &&
+        resolveRulesetLongNoteMode(config.ruleset.longNoteStyle, note) === 3
+      ) {
+        lanes.push({ channel: note.channel, gaining: true });
+      }
+    }
+    return lanes;
+  };
   const step = (input: AutoJudgeInput): void => {
     runAutoJudgeStep(autoJudge, input, session.applyJudgeEffect);
   };

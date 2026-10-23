@@ -1,3 +1,5 @@
+import type { PlayerHCNLaneState } from './ui-signal-bus.ts';
+import { resolveRulesetLongNoteMode } from './judge-rules.ts';
 import { formatSeconds, resolveAltModifierLabel } from '../utils.ts';
 import {
   createJudgeCoreState,
@@ -62,6 +64,31 @@ export function judgeCoreJudge(
   session: PlaySession,
   judgeCore: JudgeCoreState,
 ): Pick<PlayJudge, 'isSettled' | 'isClosed' | 'finish' | 'settledThroughSeconds'> {
+  const empty: readonly PlayerHCNLaneState[] = [];
+  session.readHCNLanes = (seconds) => {
+    if (judgeCore.hcnPassing.size === 0 && judgeCore.pendingAutoScratchLongNotes.length === 0) return empty;
+    const lanes: PlayerHCNLaneState[] = [];
+    for (const [channel, first] of judgeCore.hcnPassing) {
+      for (let passing: typeof first | undefined = first; passing !== undefined; passing = passing.next) {
+        if (seconds < passing.note.seconds || seconds >= passing.endUs / 1e6) continue;
+        lanes.push({
+          channel,
+          gaining: passing.tailGood || (judgeCore.laneHolds.get(channel)?.activeTokens.size ?? 0) > 0,
+        });
+        break;
+      }
+    }
+    for (const { note, endSeconds } of judgeCore.pendingAutoScratchLongNotes) {
+      if (
+        seconds >= note.seconds &&
+        seconds < endSeconds &&
+        resolveRulesetLongNoteMode(session.ruleset.longNoteStyle, note) === 3
+      ) {
+        lanes.push({ channel: note.channel, gaining: true });
+      }
+    }
+    return lanes;
+  };
   return {
     isSettled: () => isJudgeCoreSettled(judgeCore),
     isClosed: () => isJudgingClosed(judgeCore),
