@@ -157,9 +157,13 @@ export class LibraryService {
     const pad = (value: number): string => String(value).padStart(2, '0');
     const suffix = `${at.getFullYear()}${pad(at.getMonth() + 1)}${pad(at.getDate())}_${pad(at.getHours())}${pad(at.getMinutes())}${pad(at.getSeconds())}`;
     const { random: _random, ...fixed } = drawn;
+    let id: string;
+    do {
+      id = `be-music:drawn-random:${++this.nextDrawId}`;
+    } while (this.collection.courseFolders?.some((folder) => folder.courses?.some((entry) => entry.id === id)));
     const course: LibraryCourse = {
       ...fixed,
-      id: `be-music:drawn-random:${++this.nextDrawId}`,
+      id,
       definition: { ...drawn.definition, name: `${drawn.definition.name} ${suffix}`, release: false },
     };
     let remembered = false;
@@ -168,21 +172,24 @@ export class LibraryService {
       remember: () => {
         if (remembered || folderLabel === undefined) return;
         remembered = true;
+        const replacedIds = new Set(this.keptRandomCourses.map((entry) => entry.course.id));
         this.keptRandomCourses.push({ folderLabel, course });
         if (this.keptRandomCourses.length > 100) this.keptRandomCourses.shift();
-        this.appendKeptRandomCourses();
+        this.appendKeptRandomCourses(replacedIds);
       },
     };
   }
 
   /** Reprojects the history after imports, maker edits and each draw; fixed bars retain their authored order. */
-  private appendKeptRandomCourses(): void {
+  private appendKeptRandomCourses(
+    replacedIds: ReadonlySet<string> = new Set(this.keptRandomCourses.map((entry) => entry.course.id)),
+  ): void {
     this.collection = {
       ...this.collection,
       courseFolders: this.collection.courseFolders?.map((folder) => ({
         ...folder,
         courses: [
-          ...(folder.courses ?? []).filter((course) => !course.id.startsWith('be-music:drawn-random:')),
+          ...(folder.courses ?? []).filter((course) => !replacedIds.has(course.id)),
           ...this.keptRandomCourses.filter((entry) => entry.folderLabel === folder.label).map((entry) => entry.course),
         ],
       })),

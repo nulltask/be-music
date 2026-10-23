@@ -358,6 +358,16 @@ describe('LibraryService kept random courses', () => {
     expect(folders[1]!.courses).toEqual([drawn, ...kept.filter((_, i) => i % 2 === 1)]);
   });
 
+  test('preserves imported bars with similar IDs and avoids an existing ID', () => {
+    const { library } = historyLibrary();
+    const imported = { ...drawn, id: 'be-music:drawn-random:1' };
+    library.collection.courseFolders![0]!.courses = [imported];
+    const prepared = library.prepareDrawnCourse(drawn, navigation('MY COURSES'), at);
+    expect(prepared.course.id).not.toBe(imported.id);
+    prepared.remember();
+    expect(library.collection.courseFolders![0]!.courses).toEqual([imported, prepared.course]);
+  });
+
   test('survives course-folder rebuilds, but a new session has no history', async () => {
     const { library } = historyLibrary();
     const prepared = library.prepareDrawnCourse(drawn, undefined, at);
