@@ -1,7 +1,7 @@
 {
   "manual": {
     "outcome": "completed",
-    "endedAtMs": 2741.667,
+    "endedAtMs": 2241.667,
     "summary": {
       "total": 32,
       "perfect": 4,
@@ -10,7 +10,7 @@
       "great": 0,
       "good": 0,
       "bad": 0,
-      "poor": 14,
+      "poor": 10,
       "emptyPoor": 0,
       "exScore": 8,
       "score": 8,
@@ -92,7 +92,7 @@
       "results": {
         "native": {
           "ruleset": "be-music/native",
-          "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":14,"emptyPoor":0},
+          "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":10,"emptyPoor":0},
           "fast": 0,
           "slow": 0,
           "exScore": 8,
@@ -118,7 +118,7 @@
       },
       "beatoraja": {
         "ruleset": "beatoraja/0",
-        "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":14,"emptyPoor":0},
+        "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":10,"emptyPoor":0},
         "fast": 0,
         "slow": 0,
         "exScore": 8,
@@ -146,7 +146,7 @@
       "625.000 trigger 12:02@0+5/16",
       "750.000 trigger 13:02@0+6/16",
       "875.000 trigger 14:02@0+7/16",
-      "2741.667 dispose"
+      "2241.667 dispose"
     ],
     "judges": [
       "0.000 READY combo=0 gauge=100",
@@ -160,14 +160,10 @@
       "1491.667 POOR combo=0 ch=14 delta=116.666667 gauge=60",
       "1625.000 POOR combo=0 ch=11 delta=125 gauge=50",
       "1741.667 POOR combo=0 ch=12 delta=116.666667 gauge=40",
-      "1875.000 POOR combo=0 ch=13 delta=125 gauge=32",
-      "1991.667 POOR combo=0 ch=14 delta=116.666667 gauge=25",
-      "2125.000 POOR combo=0 ch=11 delta=125 gauge=19",
-      "2241.667 POOR combo=0 ch=12 delta=116.666667 gauge=14",
-      "2375.000 POOR combo=0 ch=13 delta=125 gauge=9",
-      "2491.667 POOR combo=0 ch=14 delta=116.666667 gauge=5",
-      "2625.000 POOR combo=0 ch=11 delta=125 gauge=1",
-      "2741.667 POOR combo=0 ch=12 delta=116.666667 gauge=0"
+      "1875.000 POOR combo=0 ch=13 delta=125 gauge=30",
+      "1991.667 POOR combo=0 ch=14 delta=116.666667 gauge=20",
+      "2125.000 POOR combo=0 ch=11 delta=125 gauge=10",
+      "2241.667 POOR combo=0 ch=12 delta=116.666667 gauge=0"
     ],
     "ui": [
       "500.000 flash-lane 11",
@@ -199,14 +195,10 @@
       "1875.000 trigger-poor-bga seconds=1.875",
       "1991.667 trigger-poor-bga seconds=1.991667",
       "2125.000 trigger-poor-bga seconds=2.125",
-      "2241.667 trigger-poor-bga seconds=2.241667",
-      "2375.000 trigger-poor-bga seconds=2.375",
-      "2491.667 trigger-poor-bga seconds=2.491667",
-      "2625.000 trigger-poor-bga seconds=2.625",
-      "2741.667 trigger-poor-bga seconds=2.741667"
+      "2241.667 trigger-poor-bga seconds=2.241667"
     ],
     "frames": {
-      "count": 177,
+      "count": 147,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "625.000 seconds=0.625 note 12@0.625",
@@ -221,13 +213,9 @@
         "1875.000 seconds=1.875 note 13@1.75",
         "1991.667 seconds=1.991667 note 14@1.875",
         "2125.000 seconds=2.125 note 11@2",
-        "2241.667 seconds=2.241667 note 12@2.125",
-        "2375.000 seconds=2.375 note 13@2.25",
-        "2491.667 seconds=2.491667 note 14@2.375",
-        "2625.000 seconds=2.625 note 11@2.5",
-        "2741.667 seconds=2.741667 note 12@2.625"
+        "2241.667 seconds=2.241667 note 12@2.125"
       ],
-      "last": "2741.667 seconds=2.741667 beat=5.483333"
+      "last": "2241.667 seconds=2.241667 beat=4.483333"
     },
     "host": [
       "0.000 ruleset beatoraja/0 per-note note={\"judges\":[[-15000,15000],[-37500,37500],[-75000,75000],[-112500,112500]],\"ms\":[-150000,500000]}",
@@ -235,9 +223,9 @@
       "0.000 load-complete",
       "0.000 ui start",
       "0.000 input-runtime start",
-      "2741.667 input-runtime stop",
-      "2741.667 ui stop",
-      "2741.667 ui dispose"
+      "2241.667 input-runtime stop",
+      "2241.667 ui stop",
+      "2241.667 ui dispose"
     ],
     "log": [
       "0.000 info playback.prepared {\"mode\":\"manual\",\"uiEnabled\":true,\"audioEnabled\":true,\"totalSeconds\":4.375}",
@@ -254,7 +242,7 @@
       "GREAT  : 0",
       "GOOD   : 0",
       "BAD    : 0",
-      "POOR   : 14",
+      "POOR   : 10",
       "EMPTY  : 0",
       "FAST   : 0",
       "SLOW   : 0",
@@ -263,7 +251,7 @@
   },
   "replay": {
     "outcome": "completed",
-    "endedAtMs": 2750,
+    "endedAtMs": 2250,
     "summary": {
       "total": 32,
       "perfect": 4,
@@ -272,7 +260,7 @@
       "great": 0,
       "good": 0,
       "bad": 0,
-      "poor": 14,
+      "poor": 10,
       "emptyPoor": 0,
       "exScore": 8,
       "score": 8,
@@ -307,7 +295,7 @@
       "633.333 trigger 12:02@0+5/16",
       "750.000 trigger 13:02@0+6/16",
       "883.333 trigger 14:02@0+7/16",
-      "2750.000 dispose"
+      "2250.000 dispose"
     ],
     "judges": [
       "0.000 READY combo=0 gauge=100",
@@ -321,14 +309,10 @@
       "1500.000 POOR combo=0 ch=14 delta=112.501 gauge=60",
       "1616.667 POOR combo=0 ch=11 delta=112.501 gauge=50",
       "1750.000 POOR combo=0 ch=12 delta=112.501 gauge=40",
-      "1866.667 POOR combo=0 ch=13 delta=112.501 gauge=32",
-      "2000.000 POOR combo=0 ch=14 delta=112.501 gauge=25",
-      "2116.667 POOR combo=0 ch=11 delta=112.501 gauge=19",
-      "2250.000 POOR combo=0 ch=12 delta=112.501 gauge=14",
-      "2366.667 POOR combo=0 ch=13 delta=112.501 gauge=9",
-      "2500.000 POOR combo=0 ch=14 delta=112.501 gauge=5",
-      "2616.667 POOR combo=0 ch=11 delta=112.501 gauge=1",
-      "2750.000 POOR combo=0 ch=12 delta=112.501 gauge=0"
+      "1866.667 POOR combo=0 ch=13 delta=112.501 gauge=30",
+      "2000.000 POOR combo=0 ch=14 delta=112.501 gauge=20",
+      "2116.667 POOR combo=0 ch=11 delta=112.501 gauge=10",
+      "2250.000 POOR combo=0 ch=12 delta=112.501 gauge=0"
     ],
     "ui": [
       "500.000 press-lane 11",
@@ -360,14 +344,10 @@
       "1866.667 trigger-poor-bga seconds=1.862501",
       "2000.000 trigger-poor-bga seconds=1.987501",
       "2116.667 trigger-poor-bga seconds=2.112501",
-      "2250.000 trigger-poor-bga seconds=2.237501",
-      "2366.667 trigger-poor-bga seconds=2.362501",
-      "2500.000 trigger-poor-bga seconds=2.487501",
-      "2616.667 trigger-poor-bga seconds=2.612501",
-      "2750.000 trigger-poor-bga seconds=2.737501"
+      "2250.000 trigger-poor-bga seconds=2.237501"
     ],
     "frames": {
-      "count": 168,
+      "count": 138,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "633.333 seconds=0.633333 note 12@0.625",
@@ -382,13 +362,9 @@
         "1866.667 seconds=1.866667 note 13@1.75",
         "2000.000 seconds=2 note 14@1.875",
         "2116.667 seconds=2.116667 note 11@2",
-        "2250.000 seconds=2.25 note 12@2.125",
-        "2366.667 seconds=2.366667 note 13@2.25",
-        "2500.000 seconds=2.5 note 14@2.375",
-        "2616.667 seconds=2.616667 note 11@2.5",
-        "2750.000 seconds=2.75 note 12@2.625"
+        "2250.000 seconds=2.25 note 12@2.125"
       ],
-      "last": "2750.000 seconds=2.75 beat=5.5"
+      "last": "2250.000 seconds=2.25 beat=4.5"
     },
     "host": [
       "0.000 ruleset beatoraja/0 per-note note={\"judges\":[[-15000,15000],[-37500,37500],[-75000,75000],[-112500,112500]],\"ms\":[-150000,500000]}",
@@ -396,9 +372,9 @@
       "0.000 load-complete",
       "0.000 ui start",
       "0.000 input-runtime start",
-      "2750.000 input-runtime stop",
-      "2750.000 ui stop",
-      "2750.000 ui dispose"
+      "2250.000 input-runtime stop",
+      "2250.000 ui stop",
+      "2250.000 ui dispose"
     ],
     "log": "(same as manual)",
     "output": "(same as manual)"

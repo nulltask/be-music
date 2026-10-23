@@ -259,7 +259,12 @@ class ReplaySimulation {
       djLevel: resolveIIDXRankLabel(this.exScore, this.config.noteCount),
       gauge: {
         type: this.config.gauge.id,
-        final: this.gauge.value,
+        final:
+          this.config.gauge.max === 100
+            ? this.gauge.value
+            : this.config.gauge.max > 0
+              ? (this.gauge.value / this.config.gauge.max) * 100
+              : 0,
         cleared: this.gauge.cleared(),
       },
     };
