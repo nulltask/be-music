@@ -72,7 +72,7 @@ test('seeks back and forth: the time follows the second sought, and the combo is
   const hud = page.locator('be-music-preview-hud');
   const seek = hud.getByRole('slider', { name: 'Seek' });
   await expect(seek).toBeEnabled({ timeout: 30_000 });
-  // Lets the seek bar go at `seconds`, as a drag does (`change`).
+  // Lets the seek bar go at `seconds`. A drag also seeks on `input`; `change` is the release.
   const seekTo = (seconds: number) =>
     seek.evaluate((input: HTMLInputElement, value: number) => {
       input.value = String(value);

@@ -2,6 +2,8 @@ import {
   BE_MUSIC_SKIN_API_VERSION,
   STAGE_HEIGHT,
   STAGE_WIDTH,
+  TALL_STAGE_HEIGHT,
+  TALL_STAGE_WIDTH,
   defineBeMusicSkin,
   type BeMusicDOMGameplayActions,
   type BeMusicDOMGameplayFrame,
@@ -15,6 +17,7 @@ import {
   paintPlayfieldParts,
   PREVIEW_GUTTER,
   resolvePreviewBGARect as resolvePreviewBGARectOnStage,
+  resolvePreviewPortrait,
   resolvePlayfieldParts,
   type BeMusicUIEvent,
 } from '@be-music/player-ui';
@@ -22,6 +25,9 @@ import { ControlsIdleController } from './controls-idle.ts';
 
 /** The lanes stay in the stage's left half; the BGA and the play's facts take what they leave on the right. */
 const PANE_SPLIT = STAGE_WIDTH / 2;
+/** A tall screen: the BGA square across the top, the lanes in the band under it. */
+const PORTRAIT = resolvePreviewPortrait({ width: TALL_STAGE_WIDTH, height: TALL_STAGE_HEIGHT })!;
+const PORTRAIT_PLAYFIELD = { top: PORTRAIT.laneTop, judgementY: PORTRAIT.judgementY };
 /** The controls bar along the bottom of the stage takes this much below the judge line. */
 const JUDGEMENT_Y = STAGE_HEIGHT - 60;
 /** Between HUD redraws (12 a second); a stage, view or seekability change redraws at once. */
@@ -54,7 +60,8 @@ export function createPreviewSkin(chrome: PreviewChrome): BeMusicSkin {
     apiVersion: BE_MUSIC_SKIN_API_VERSION,
     id: 'preview',
     label: 'Preview',
-    description: 'The embed preview: lanes on the left, the BGA and the play on the right, and video controls.',
+    description:
+      'The embed preview: lanes on the left and the BGA on the right, or the BGA above the lanes on a tall screen, and video controls.',
     version: '1.0.0',
     author: { name: 'be-music' },
     license: 'MIT',
@@ -65,6 +72,12 @@ export function createPreviewSkin(chrome: PreviewChrome): BeMusicSkin {
       height: STAGE_HEIGHT,
       playfield: { standard: playfield, touch: playfield },
       resolveBGARect: resolvePreviewBGARect,
+    },
+    portraitStage: {
+      width: TALL_STAGE_WIDTH,
+      height: TALL_STAGE_HEIGHT,
+      playfield: { standard: PORTRAIT_PLAYFIELD, touch: PORTRAIT_PLAYFIELD },
+      resolveBGARect: () => PORTRAIT.bga,
     },
     gameplay: {
       draw: drawPlayfield,

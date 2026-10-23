@@ -1,5 +1,6 @@
 import type { ReplayInputEvent } from '../replay/format.ts';
 import { advanceJudgeState, finishJudgeState, nextTimedJudgmentUs } from './judge-core-advance.ts';
+import { markScorableJudged, markLandmineJudged, markInvisibleJudged } from './judge-core-score.ts';
 import { handleLanePress, handleLaneRelease } from './judge-core-press.ts';
 import {
   type JudgeCoreConfig,
@@ -52,7 +53,7 @@ export function createJudgeCoreState(config: JudgeCoreConfig, score: JudgeCoreSc
       scorableNoteSecondsByChannel.set(note.channel, [note.seconds]);
     }
   }
-  return {
+  const state: JudgeCoreState = {
     config,
     summary: score.summary,
     scoreTracker: score.scoreTracker,
@@ -82,6 +83,20 @@ export function createJudgeCoreState(config: JudgeCoreConfig, score: JudgeCoreSc
     remainingLandmineNotes: config.landmineNotes.length,
     remainingInvisibleNotes: config.invisibleNotes.length,
   };
+  const from = config.practiceFromSeconds;
+  if (from !== undefined && Number.isFinite(from) && from > 0) {
+    for (const note of config.scorableNotes) {
+      if (note.seconds < from) {
+        markScorableJudged(state, note);
+        // Hide a skipped long note even when its tail lies after the practice start.
+        note.visibleUntilBeat = note.beat;
+      }
+    }
+    for (const note of config.landmineNotes) if (note.seconds < from) markLandmineJudged(state, note);
+    for (const note of config.invisibleNotes) if (note.seconds < from) markInvisibleJudged(state, note);
+    state.advancedThroughSeconds = from;
+  }
+  return state;
 }
 
 /** Applies one input to the state, delivering the effects to `emit` in the order they happen. */

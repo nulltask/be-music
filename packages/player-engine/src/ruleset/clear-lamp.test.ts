@@ -183,3 +183,11 @@ describe('resolveMissCount', () => {
     expect(resolveMissCount({ bad: 2, poor: 3, emptyPoor: 1 }, -3)).toBe(6);
   });
 });
+
+it('awards LR2 FULL COMBO before a failed GROOVE gauge, while other rulesets still require a clear', () => {
+  const play = { cleared: false, gauge: 'GROOVE', score: score(80, 15, 5) };
+  expect(resolveClearLamp({ ...play, ruleset: 'lr2' })).toBe('FULL_COMBO');
+  expect(resolveClearLamp({ ...play, ruleset: 'beatoraja' })).toBe('FAILED');
+  expect(resolveClearLamp({ ...play, ruleset: 'iidx' })).toBe('FAILED');
+  expect(resolveClearLamp({ ...play, ruleset: 'lr2', score: score(80, 15, 4) })).toBe('FAILED');
+});

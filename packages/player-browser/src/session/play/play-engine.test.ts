@@ -218,6 +218,10 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     expect(play.ctx.judgeSideState['1P'].courseCombo).toBe(7);
     play.step(3, {}, [{ judge: 'POOR', combo: 0 }]);
     expect(play.state().courseCombo).toMatchObject({ combo: 0, maxCombo: 10 });
+    expect(getResultData(play.ctx)?.stageOutcome).toMatchObject({
+      noteCount: 4,
+      course: { combo: 0, maxCombo: 10 },
+    });
   });
 
   test('the full combo event fires once the combo reaches every note', () => {

@@ -32,7 +32,7 @@ Consumers read only the fields that make sense for their scene.
 
 The browser gameplay view uses the skin's authored canvas for every layer, including notes, measure lines, BGA, covers and effects, and letterboxes that canvas once at the viewport. HD skins no longer pass through a fixed 640×480 gameplay stage. Scroll distance and replay-visible time use the same canvas scale.
 
-`#RESOLUTION,0` / `1` / `2` / `3` select 640×480 / 1280×720 / 1920×1080 / 3840×2160. The explicit `#RESOLUTION,width,height` extension also works. Missing or invalid declarations leave coordinate-based detection enabled. `#INFORMATION` play types are 0=7KEY, 1=5KEY, 2=14KEY, 3=10KEY and 4=9KEY; parse-time key-mode conditions follow the selected skin.
+`#RESOLUTION,0` / `1` / `2` / `3` select 640×480 / 1280×720 / 1920×1080 / 3840×2160. The explicit `#RESOLUTION,width,height` extension also works. An empty trailing height still selects the indexed form. Missing or invalid declarations leave coordinate-based detection enabled unless an earlier valid declaration already set the canvas. A skin without either a declaration or HD coordinates retains 640×480. `#INFORMATION` play types are 0=7KEY, 1=5KEY, 2=14KEY, 3=10KEY and 4=9KEY; parse-time key-mode conditions follow the selected skin.
 
 Asset and bitmap-font lookup prefer the longest matching directory suffix, so a standalone `LITONE4/` distribution can retain its original `LR2files/Theme/LITONE4/…` references without confusing Play and Result assets with identical filenames. DXA expansion remains automatic.
 
