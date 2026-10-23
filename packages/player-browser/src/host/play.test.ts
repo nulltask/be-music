@@ -412,12 +412,30 @@ describe('createPlayScene with a beatoraja kit', () => {
     expect(scene.identity).toEqual({ kind: 'play', family: 'beatoraja' });
     expect(scene.getHiSpeed()).toBe(2);
     expect(resolveBeatorajaPlayTiming({ fadeout: 300 })).toEqual({
+      inputStartOffsetMs: 0,
       loadEndOffsetMs: 0,
-      playStartOffsetMs: 1500,
+      playStartOffsetMs: 0,
+      playStartAfterLoadEndMs: 0,
       fadeOutMs: 300,
       closeMs: 0,
     });
     expect(resolveBeatorajaPlayTiming({}).fadeOutMs).toBe(500);
+    expect(resolveBeatorajaPlayTiming({ input: 250, loadstart: 100, loadend: 3500, playstart: 1000 })).toMatchObject({
+      inputStartOffsetMs: 250,
+      loadEndOffsetMs: 3600,
+      playStartOffsetMs: 4600,
+      playStartAfterLoadEndMs: 1000,
+    });
+    for (const value of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(
+        resolveBeatorajaPlayTiming({ input: value, loadstart: value, loadend: value, playstart: value }),
+      ).toMatchObject({
+        inputStartOffsetMs: 0,
+        loadEndOffsetMs: 0,
+        playStartOffsetMs: 0,
+        playStartAfterLoadEndMs: 0,
+      });
+    }
     // A failed play waits for the skin's `close` (1500 ms on beatoraja's default skins).
     expect(resolveBeatorajaPlayTiming({ close: 1500 }).closeMs).toBe(1500);
     expect(resolveBeatorajaPlayTiming({ close: -1 }).closeMs).toBe(0);
@@ -517,7 +535,7 @@ describe('createPlayScene with a beatoraja kit', () => {
     scene.dispose();
   });
 
-  it("starts READY and the play at once, and leaves over the skin's fadeout", async () => {
+  it("starts READY and PLAY with zero authored timings, and leaves over the skin's fadeout", async () => {
     vi.useFakeTimers();
     const update = vi.spyOn(BeatorajaPlaySkinView.prototype, 'update');
     const fake = createFakeHost();
