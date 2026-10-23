@@ -388,6 +388,9 @@ export function resolveReplayRecording(
   chartEntry: Pick<LibraryChart, 'chart' | 'chartPath'> | undefined,
   view: ReplayViewState,
 ): ReplayRecordingOptions {
+  if (options.random1P === 'SCATTER' || options.random2P === 'SCATTER') {
+    throw new RangeError('SCATTER is disabled until placement and assist policy are implemented.');
+  }
   return {
     gauge: options.gauge,
     ...(options.chartSHA256 !== undefined ? { chartSHA256: options.chartSHA256 } : {}),
