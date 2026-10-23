@@ -862,7 +862,11 @@ export class BeatorajaPlaySkinView {
   update(context: BeatorajaRenderContext): void {
     if (this.disposed) return;
     const luaContext = this.lua.buildLuaRuntimeContext(context);
-    const renderContext: BeatorajaRenderContext = { ...context, lua: luaContext };
+    const renderContext: BeatorajaRenderContext = {
+      ...context,
+      lua: luaContext,
+      getTimerStart: this.lua.getTimerStart,
+    };
     // customEvents / customTimers (audit 2.2). Fire any condition-flipped event actions and
     // stamp any updated custom timers BEFORE walking the destination entries — that way
     // BooleanProperty closures evaluated during destination paint observe the freshly-fired
@@ -871,9 +875,7 @@ export class BeatorajaPlaySkinView {
       evaluateBeatorajaCustomEvents(this.customEvents, this.customEventState, luaContext, context.nowMs);
     }
     if (this.customTimers.length > 0) {
-      // customTimers stamp host engine timers — the host wires that via
-      // `BeatorajaLuaRuntimeContext.setTimer`. When the host omits the wiring (Node tests,
-      // hosts that don't carry a per-side timer table) the timer slot just doesn't update.
+      // Custom animation timers share the per-skin Lua overlay; destinations observe writes in this frame.
       evaluateBeatorajaCustomTimers(this.customTimers, this.customTimerState, luaContext, (id, value) => {
         luaContext.setTimer?.(id, value);
       });

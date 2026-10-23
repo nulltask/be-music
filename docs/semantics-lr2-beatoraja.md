@@ -66,7 +66,7 @@ Top risks, most serious first:
 6. **The player LN mode (LN/CN/HCN) is missing and is not part of any record key.** beatoraja keys scores by `(sha256, lnmode)`. Imported CN/HCN scores have nowhere to go, and adding the option later would merge the three modes' records. (A+B)
 7. **beatoraja play timing (fixed in #595).** Input and READY use the skin timings; PLAY starts with the chart after the READY interval and follows chart time. (A)
 8. **beatoraja skin state is unwired or LR2-shaped.**
-   - Lua `event_index` and `set_timer` are not wired.
+   - Lua `event_index`, `set_timer` and custom timers are fixed in #596.
    - Result timers 150-152, score timers 348-352, HCN, PM-chara and custom timers are never set.
    - GAUGE_MAX never switches off.
    - MISS (420) shows POOR, and empty POOR is dropped.
@@ -176,7 +176,7 @@ Most fixes below move a rule into the right box. The assist class and LR2 mine c
 | 46  | TIMER_PLAY / `skin.playstart`                       | A           | Load end + 1.5 s                                        | Stamp at chart start                                                   |
 | 47  | GAUGE_MAX timer switch                              | A, C        | Never stops (bug)                                       | Start/stop                                                             |
 | 48  | beatoraja-only timers                               | A           | Not driven                                              | Add to mapping                                                         |
-| 49  | Lua `event_index` / `set_timer`                     | A           | nil                                                     | Wire                                                                   |
+| 49  | Lua `event_index` / `set_timer`                     | A           | fixed in #596                                           | Wire                                                                   |
 | 50  | MISS vs POOR numbers                                | A, C        | 420 = POOR (bug)                                        | Use emptyPoor                                                          |
 | 51  | Gauge ops 42/43/1046                                | A, C        | 42 always (bug)                                         | Derive from gauge type                                                 |
 | 52  | Song-list lamp images (JSON)                        | A, C        | Not rendered                                            | Render with 0-10 ids                                                   |
@@ -795,17 +795,17 @@ Overall shape: two separate state mappings. LR2 CSV skins get LR2 vocabulary ([`
   - HCN active/damage timers 250-289 and 1800-2110.
   - PM chara 900-909, and MUSIC_END 908.
   - Result timers 150/151/152 ([result/MusicResult.java#L160-L167](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/result/MusicResult.java#L160-L167)).
-  - Custom timers 10000-19999.
+  - Custom timers 10000-19999 (fixed in #596).
 - **be-music today:** no producers. Result timers are only 0/1/2/40/41 ([`packages/player-browser/src/view/beatoraja/scene-frame.ts`](../packages/player-browser/src/view/beatoraja/scene-frame.ts)).
 - **Impact:** A. Elements gated on these timers never draw.
 - **Recommendation:** add them to the beatoraja mapping as data. They are deterministic.
 
-### Lua `main_state` coverage
+### Lua `main_state` coverage (option indices and custom timers fixed in #596)
 
-- **beatoraja:** `option`, `number`, `text`, `offset`, `timer`, `set_timer`, `event_exec`, `event_index`, `rate`/`exscore` with `_best`/`_rival`, gauge, … ([MainStatePropertyLuaApiExporter.java#L33-L67](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/lua/MainStatePropertyLuaApiExporter.java#L33-L67), [#L257-L267](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/lua/MainStatePropertyLuaApiExporter.java#L257-L267)).
-- **be-music today:** the bridge declares all of them, but [`lua-context.ts`](../packages/player-browser/src/view/beatoraja/skin-view/lua-context.ts) wires no `eventIndex` or `setTimer`, and the `_best`/`_rival` functions return nil. ModernChic calls `event_index` 14 times (LN mode, HS-FIX, the result CLEAR list), so those elements stay hidden.
-- **Impact:** A.
-- **Recommendation:** wire `eventIndex` to the button/ref values the select scene already computes, and `setTimer` to the timer map (10000-19999).
+- **beatoraja:** `event_index` reads image-index properties; `set_timer` writes microsecond starts only to custom timer IDs 10000–19999 ([MainStatePropertyLuaApiExporter.java#L257-L303](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/lua/MainStatePropertyLuaApiExporter.java#L257-L303), [SkinPropertyMapper.java#L159-L166](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/SkinPropertyMapper.java#L159-L166)).
+- **be-music today:** fixed in [#596](https://github.com/nulltask/be-music/issues/596). `event_index` shares the image-ref resolver: MODE/SORT, LNMODE, HS-FIX, lane judgments and result/selected-record CLEAR use their external image indices. HS-FIX `AVERAGE` uses main BPM (index 3); the existing `CONSTANT` fallback reports that same effective reference. The result lamp uses the beatoraja index (0–10), including the reserved LIGHT ASSIST EASY gap, without adding that lamp to records.
+- **Custom animation state:** each skin instance owns a timer overlay. Lua `timer` and numeric destinations read the same overlay immediately, including writes from `customTimers`. `set_timer` accepts finite int64-range starts in microseconds (truncated to integer microseconds); `timer_off_value` stops a timer. Invalid values or protected IDs return false and leave the timers unchanged. The upstream Java implementation throws for protected IDs; the browser's boolean command API rejects them without throwing. Scene and gameplay timers remain owned by the scene/engine, and a new skin instance begins with no custom timer state.
+- **Remaining coverage:** `_best`/`_rival` accessors and unrelated event commands still require their own backing state. This fix does not introduce them.
 
 ### MISS vs POOR (bug)
 
