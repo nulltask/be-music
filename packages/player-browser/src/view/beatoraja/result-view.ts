@@ -10,6 +10,7 @@
  * with no keyboard can leave it ({@link resolveBeatorajaResultPointerIntent}).
  */
 
+import { resolveChartLongNoteMode } from '@be-music/chart-model';
 import { buildBaseOpSet, type BeatorajaSkin } from '@be-music/skin-beatoraja';
 import {
   resolveBeatorajaGaugePolyline,
@@ -18,6 +19,7 @@ import {
   resolveBeatorajaResultGraphValue,
   resolveBeatorajaResultJudgeGraph,
   resolveBeatorajaResultNumber,
+  resolveBeatorajaOptionIndex,
   resolveBeatorajaResultOps,
   resolveBeatorajaResultPolyline,
   resolveBeatorajaResultText,
@@ -121,6 +123,12 @@ export class BeatorajaResultView implements ResultView {
       new BeatorajaPlaySkinView({
         skin,
         textures,
+        resolveRefValue: (ref) =>
+          resolveBeatorajaOptionIndex(ref, {
+            lnMode:
+              this.reading?.playChart === undefined ? undefined : resolveChartLongNoteMode(this.reading.playChart),
+            lamp: this.reading?.result.lamp,
+          }) ?? 0,
         resolveTextContent: (ref) => this.read((input) => resolveBeatorajaResultText(ref, input)),
         resolveNumberValue: (ref) => this.read((input) => resolveBeatorajaResultNumber(ref, input)),
         resolveFontFamily: fonts !== undefined ? (id) => fonts.family(id) : undefined,
@@ -196,7 +204,7 @@ export class BeatorajaResultView implements ResultView {
     if (host === undefined || this.disposed) return;
     this.stage.fitTo(host);
     const reading = this.readingOf(frame);
-    const timers = resolveBeatorajaSceneTimers(frame, 'entry');
+    const timers = resolveBeatorajaSceneTimers(frame, 'entry', 'result');
     const skinSounds = this.options.skinSounds;
     this.stage.view.update({
       activeOps: this.opsOf(reading),

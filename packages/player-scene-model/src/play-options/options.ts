@@ -113,7 +113,7 @@ export interface PlayOptions {
    * - `MIRROR` — reverse the lane order (1↔7, 2↔6, 3↔5)
    * - `RANDOM` — chart-wide random permutation of the lanes
    * - `S-RANDOM` — per-chord random assignment (chord shapes are NOT preserved)
-   * - `SCATTER` — currently aliased to `RANDOM`; reserved for a future per-measure permutation pass
+   * - `SCATTER` — legacy value, disabled until placement and assist policy are implemented
    */
   random1P: RandomMode;
   /** 2P side note arrangement (channels 21..25 + 28 + 29). */
@@ -137,7 +137,7 @@ export type HSFix = 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT';
 /** Allowed values for {@link PlayOptions.hiddenSudden1P} / `hiddenSudden2P`: which ends of the lanes are covered. */
 export type HiddenSuddenMode = 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
 
-/** Allowed values for {@link PlayOptions.random1P} / `random2P`. */
+/** Lane-option names. Legacy SCATTER stays representable but is not an accepted new play choice. */
 export type RandomMode = 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
 
 /** Allowed values for {@link PlayOptions.bga}. */

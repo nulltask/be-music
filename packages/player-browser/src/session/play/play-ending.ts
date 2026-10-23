@@ -55,6 +55,11 @@ export interface PlayEndingInput {
   currentSeconds: number;
   /** The play tempo: the lead-out is chart time, so at another tempo it takes 1 / tempo as long. */
   tempo: number;
+  /** Optional family timing: chart seconds to music end, then a wall-clock finish margin. */
+  musicEndDelayMs?: number;
+  finishMarginMs?: number;
+  /** AUTO's last chart event; manual play defaults to its last judged note/tail. */
+  chartEndSeconds?: number;
 }
 
 export interface PlayEnding {
@@ -62,12 +67,38 @@ export interface PlayEnding {
   failed: boolean;
   /** Wall-clock ms to hold the scene before the exit starts. */
   leadOutMs: number;
+  musicEndAtSeconds?: number;
+  finishMarginMs?: number;
 }
 
 export function resolvePlayEnding(input: PlayEndingInput): PlayEnding {
   const { notes, currentSeconds } = input;
   const failed = input.summary?.gauge?.failedMidPlay === true && notes.some((note) => note.seconds > currentSeconds);
   if (failed) return { failed, leadOutMs: 0 };
+  if (input.musicEndDelayMs !== undefined && Number.isFinite(input.musicEndDelayMs) && input.musicEndDelayMs >= 0) {
+    const lastNote = notes.reduce(
+      (last, note) =>
+        Math.max(
+          last,
+          note.endSeconds ??
+            (note.endBeat !== undefined ? input.timing?.beatToSeconds(note.endBeat) : undefined) ??
+            note.seconds,
+        ),
+      0,
+    );
+    const musicEndAtSeconds = (input.chartEndSeconds ?? lastNote) + input.musicEndDelayMs / 1000;
+    const finishMarginMs =
+      input.finishMarginMs !== undefined && Number.isFinite(input.finishMarginMs) && input.finishMarginMs > 0
+        ? input.finishMarginMs
+        : 0;
+    return {
+      failed,
+      musicEndAtSeconds,
+      finishMarginMs,
+      leadOutMs:
+        chartToElapsedSeconds(Math.max(0, (musicEndAtSeconds - currentSeconds) * 1000), input.tempo) + finishMarginMs,
+    };
+  }
   return {
     failed,
     leadOutMs: chartToElapsedSeconds(resolvePostChartResultDelayMs(notes, input.timing, currentSeconds), input.tempo),
@@ -92,6 +123,7 @@ export interface PlayEndingContext {
   readonly fastCount: number;
   readonly slowCount: number;
   readonly replay: BeMusicReplay | undefined;
+  readonly practice?: boolean;
   playClock(): number;
   currentSeconds(): number;
   resolveChartDurationSeconds(): number;
@@ -188,6 +220,7 @@ export function getResultData(ctx: PlayEndingContext): PlayResult | undefined {
   const gauge = ctx.gaugeState;
   const result = playResultFromPlayState(ctx.playState, {
     chart: ctx.chart,
+    ...(ctx.practice === true ? { practice: true } : {}),
     score: ctx.score,
     seconds: ctx.currentSeconds(),
     judgeRuleset: ctx.resolveJudgeRuleset(),
@@ -197,6 +230,33 @@ export function getResultData(ctx: PlayEndingContext): PlayResult | undefined {
   });
   return {
     ...result,
+    ...(ctx.playState.courseCombo !== undefined
+      ? {
+          stageOutcome: {
+            ruleset: ctx.resolveJudgeRuleset(),
+            judge: {
+              pgreat: ctx.score.perfect,
+              great: ctx.score.great,
+              good: ctx.score.good,
+              bad: ctx.score.bad,
+              poor: ctx.score.poor - (ctx.resolveEmptyPoorCountsInPoorDisplay() ? ctx.score.emptyPoor : 0),
+              emptyPoor: ctx.score.emptyPoor,
+            },
+            fast: ctx.fastCount,
+            slow: ctx.slowCount,
+            exScore: ctx.score.exScore,
+            noteCount: ctx.score.total,
+            maxCombo: ctx.playState.maxCombo,
+            gauge: {
+              type: gauge.type ?? 'GROOVE',
+              final: ctx.playState.gauge,
+              cleared: ctx.playState.cleared,
+              ...(gauge.failedMidPlay ? { failedMidPlay: true } : {}),
+            },
+            course: { combo: ctx.playState.courseCombo.combo, maxCombo: ctx.playState.courseCombo.maxCombo },
+          },
+        }
+      : {}),
     // Folded, `score.poor` is the engine's `poor + emptyPoor` (`resolveDisplayedPoor`).
     ...(ctx.resolveEmptyPoorCountsInPoorDisplay() ? { judgedPoor: ctx.score.poor - ctx.score.emptyPoor } : {}),
     ...(gauge.max > 0 ? { gaugeBorder: gaugePercent({ current: gauge.clearThreshold, max: gauge.max }) } : {}),

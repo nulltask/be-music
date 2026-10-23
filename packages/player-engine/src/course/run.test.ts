@@ -2,7 +2,7 @@ import { computeChartFingerprint } from '@be-music/chart-model';
 import { createEmptyJSON, type BeMusicJSON } from '@be-music/chart-source';
 import { describe, expect, test } from 'vite-plus/test';
 import type { BeMusicReplay, ReplayRulesetResult } from '../replay/format.ts';
-import { CourseRun, parseBeatorajaCourseData, resolveGivenUpPlaySeconds } from './index.ts';
+import { type CourseRunStageExtras, CourseRun, parseBeatorajaCourseData, resolveGivenUpPlaySeconds } from './index.ts';
 
 const MD5 = ['1', '2', '3'].map((digit) => digit.repeat(32));
 
@@ -214,4 +214,62 @@ describe('resolveGivenUpPlaySeconds', () => {
   test('says nothing for a log without notes', () => {
     expect(resolveGivenUpPlaySeconds({})).toBeUndefined();
   });
+});
+
+describe('course practice', () => {
+  test('continues without a replay, carries gauge and combo and forbids exporting a partial course replay', () => {
+    const course = new CourseRun<Stage, CourseRunStageExtras>(definition([]), ['a', 'b', 'c'].map(stage));
+    course.recordStage(stageLog({}));
+    const outcome = stageLog({
+      ruleset: 'beatoraja/0',
+      gauge: { type: 'CLASS', final: 61, cleared: true },
+      course: { combo: 3, maxCombo: 10 },
+    }).results!.native!;
+    expect(course.recordStage(undefined, { practice: true, stageOutcome: outcome, playSeconds: 12 })).toBe('next');
+    expect(course.practice).toBe(true);
+    expect(course.nextStage()?.course.carryIn).toEqual({ gauge: 61, combo: 3, maxCombo: 10 });
+    expect(() => course.buildReplay()).toThrow('practice course');
+    expect(course.recordStage(undefined, { practice: true, stageOutcome: outcome, playSeconds: 11 })).toBe('finished');
+    expect(course.stagesPlayed).toBe(3);
+    expect(course.playSeconds).toBe(23);
+    expect(course.buildPracticeResult()).toMatchObject({
+      ruleset: 'beatoraja',
+      stagesPlayed: 3,
+      exScore: 60,
+      gauge: { final: 61, cleared: true },
+    });
+  });
+  test('giving up a practice stage retains its outcome but fails the run without recording', () => {
+    const course = new CourseRun<Stage, CourseRunStageExtras>(definition([]), ['a', 'b', 'c'].map(stage));
+    const outcome = stageLog({}).results!.native!;
+    course.giveUp(undefined, { practice: true, stageOutcome: outcome, playSeconds: 2 });
+    expect(course.finished).toBe(true);
+    expect(course.buildPracticeResult()).toMatchObject({ stagesPlayed: 1, gauge: { cleared: false }, lamp: 'FAILED' });
+    expect(() => course.buildReplay()).toThrow('practice course');
+  });
+});
+
+for (const [type, lamp] of [
+  ['COURSE-EASY', 'EASY'],
+  ['COURSE-HARD', 'HARD'],
+  ['COURSE-DEATH', 'NORMAL'],
+] as const) {
+  test(`practice preserves the ${type} course lamp`, () => {
+    const course = new CourseRun<Stage, CourseRunStageExtras>(definition([]), [stage('a')]);
+    const outcome = stageLog({
+      ruleset: 'lr2/0',
+      maxCombo: 1,
+      course: { combo: 0, maxCombo: 1 },
+      gauge: { type, final: 60, cleared: true },
+    }).results!.native!;
+    course.recordStage(undefined, { practice: true, stageOutcome: outcome });
+    expect(course.buildPracticeResult()?.lamp).toBe(lamp);
+  });
+}
+
+test('an outcome supplied without a replay is always practice, even without an explicit flag', () => {
+  const course = new CourseRun<Stage, CourseRunStageExtras>(definition([]), [stage('a')]);
+  course.recordStage(undefined, { stageOutcome: stageLog({}).results!.native! });
+  expect(course.practice).toBe(true);
+  expect(() => course.buildReplay()).toThrow('practice course');
 });

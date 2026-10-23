@@ -74,7 +74,11 @@ export interface PlayRouteDeps {
   /** The chart hashes the play's log records, and the record keys of the play in flight. */
   readonly records: Pick<
     RecordsService,
-    'resolveChartHashes' | 'activePlayRecordKey' | 'activeStageRecordKey' | 'recordActiveCourseStage'
+    | 'resolveChartHashes'
+    | 'lookupChartBestRecord'
+    | 'activePlayRecordKey'
+    | 'activeStageRecordKey'
+    | 'recordActiveCourseStage'
   >;
   /** The kit the play is drawn with. */
   readonly familyKits: Pick<FamilyKits, 'resolvePlayKit'>;
@@ -282,7 +286,7 @@ export class PlayRoute {
           void (async () => {
             const replay = await view?.waitForReplay();
             this.testHook?.recordReplay(replay);
-            this.courses.giveUp(active!, replay);
+            this.courses.giveUp(active!, replay, view?.progress());
             await this.courseRoute.showCourseResult();
           })();
           return;
@@ -291,7 +295,12 @@ export class PlayRoute {
           // The stitched chart as the play played it, for a beatoraja result skin's graphs.
           const resolved = view?.resolved;
           void (async () => {
-            await this.nonstopRoute.showNonstopCourseResult(nonstop!, await view?.waitForReplay(), undefined, resolved);
+            await this.nonstopRoute.showNonstopCourseResult(
+              nonstop!,
+              await view?.waitForReplay(),
+              view?.progress(),
+              resolved,
+            );
           })();
           return;
         }
@@ -311,13 +320,13 @@ export class PlayRoute {
           skipsCourseStageResult({
             skipStageResults: this.guiState.courseAutoAdvance,
             autoPlay,
-            courseGoesOn: this.activeCourse.run.goesOnAfter(result.replay),
+            courseGoesOn: this.activeCourse.run.goesOnAfter(result.replay, result.stageOutcome),
           })
         ) {
           void (async () => {
             this.testHook?.recordReplay(result.replay);
             this.activeCourse?.run.recordStage(result.replay, result);
-            this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(result));
+            if (!result.practice) this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(result));
             // No screen comes between the stages: the play leaves the stage, its last samples ringing out, and the next
             // stage (or the course result) shows.
             if (!(await this.router.leave({ playDispose: disposeKeepingAudioTail, continuesRun: true }))) return;
@@ -358,17 +367,21 @@ export class PlayRoute {
     const source = resolveChartSource(this.library.collection, chartEntry);
     const view = createPlayScene(kit, {
       chart: chartEntry,
+      allowSeek: 'practice',
       ...(source !== undefined ? { source } : {}),
       settings:
         kit.family === 'built-in'
           ? { ...settings, layoutMode: resolvePlayLayoutMode(this.guiState.playLayout, this.deviceProfile) }
           : settings,
-      ...(course !== undefined ? { course } : {}),
+      ...(course !== undefined
+        ? { course: { ...course, ...(this.activeCourse?.run.practice === true ? { practice: true } : {}) } }
+        : {}),
       ...(replay !== undefined ? { replay } : {}),
       ...(overrides.preResolved !== undefined ? { preResolved: overrides.preResolved } : {}),
       audio: this.audio,
       host: this.sceneHost,
       playOptions,
+      scoreTargets: { bestEXScore: this.records.lookupChartBestRecord(chartEntry)?.exScore ?? 0 },
       on: {
         exit: onExit,
         finish: (result) => onChartFinished(result),

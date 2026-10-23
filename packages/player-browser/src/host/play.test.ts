@@ -412,12 +412,32 @@ describe('createPlayScene with a beatoraja kit', () => {
     expect(scene.identity).toEqual({ kind: 'play', family: 'beatoraja' });
     expect(scene.getHiSpeed()).toBe(2);
     expect(resolveBeatorajaPlayTiming({ fadeout: 300 })).toEqual({
+      inputStartOffsetMs: 0,
       loadEndOffsetMs: 0,
-      playStartOffsetMs: 1500,
+      playStartOffsetMs: 0,
+      playStartAfterLoadEndMs: 0,
+      musicEndDelayMs: 5000,
+      finishMarginMs: 0,
       fadeOutMs: 300,
       closeMs: 0,
     });
     expect(resolveBeatorajaPlayTiming({}).fadeOutMs).toBe(500);
+    expect(resolveBeatorajaPlayTiming({ input: 250, loadstart: 100, loadend: 3500, playstart: 1000 })).toMatchObject({
+      inputStartOffsetMs: 250,
+      loadEndOffsetMs: 3600,
+      playStartOffsetMs: 4600,
+      playStartAfterLoadEndMs: 1000,
+    });
+    for (const value of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(
+        resolveBeatorajaPlayTiming({ input: value, loadstart: value, loadend: value, playstart: value }),
+      ).toMatchObject({
+        inputStartOffsetMs: 0,
+        loadEndOffsetMs: 0,
+        playStartOffsetMs: 0,
+        playStartAfterLoadEndMs: 0,
+      });
+    }
     // A failed play waits for the skin's `close` (1500 ms on beatoraja's default skins).
     expect(resolveBeatorajaPlayTiming({ close: 1500 }).closeMs).toBe(1500);
     expect(resolveBeatorajaPlayTiming({ close: -1 }).closeMs).toBe(0);
@@ -511,13 +531,13 @@ describe('createPlayScene with a beatoraja kit', () => {
     });
     await scene.prepare();
     expect(play.options).toMatchObject({ random1P: 'MIRROR', random2P: 'OFF' });
-    // MIRROR swaps the chart's two lanes: lane 1's note plays on lane 2 and lane 2's on lane 1.
-    expect(play.notes.map((note) => note.channel)).toEqual(['12', '11']);
+    // MIRROR uses the complete five-key domain even though this chart only uses lanes 1 and 2.
+    expect(play.notes.map((note) => note.channel)).toEqual(['15', '14']);
     expect(resolveReplayRecording(play.options, play.chart, {}).randomLane).toEqual({ p1: 'MIRROR', p2: 'OFF' });
     scene.dispose();
   });
 
-  it("starts READY and the play at once, and leaves over the skin's fadeout", async () => {
+  it("starts READY and PLAY with zero authored timings, and leaves over the skin's fadeout", async () => {
     vi.useFakeTimers();
     const update = vi.spyOn(BeatorajaPlaySkinView.prototype, 'update');
     const fake = createFakeHost();

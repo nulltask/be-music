@@ -111,7 +111,8 @@
         "noteCount": 9,
         "maxCombo": 5,
         "djLevel": "B",
-        "gauge": {"type":"NORMAL","final":100,"cleared":true}
+        "gauge": {"type":"NORMAL","final":100,"cleared":true},
+        "fullCombo": false
       },
       "iidx": {
         "ruleset": "iidx/0",

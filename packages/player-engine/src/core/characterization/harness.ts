@@ -93,6 +93,8 @@ export interface CharacterizationPlay {
    * generation (a seek takes them again from its own frame on).
    */
   captureAt?: readonly number[];
+  /** Observe a frame synchronously without retaining its mutable notes or summary. */
+  onFrame?: (frame: Readonly<PlayerUIFramePayload>) => void;
 }
 
 /** What a host could observe of one play. */
@@ -435,6 +437,7 @@ export async function observePlay(
     let generation = 0;
     const publishFrame = uiSignals.publishFrame;
     uiSignals.publishFrame = (frame) => {
+      play.onFrame?.(frame);
       frames.count += 1;
       if ((frame.generation ?? 0) !== generation) {
         generation = frame.generation ?? 0;

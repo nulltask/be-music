@@ -64,6 +64,10 @@ beatoraja の `timer_util` / `event_util` helper module は組み込みで用意
 
 `os.clock()` は host が渡す scene の経過時間を秒単位で返します。これにより、WMII_FHD のレーザーやキー発光など、遅延付き Lua draw 条件が描画とともに進みます。標準ライブラリーを除外した後、限定的な `os` / `io` 互換 shim を用意します。ファイルシステムやプロセスの操作は何も実行しません。
 
+ブラウザの `main_state.event_index(id)` は `image.ref` と同じ画像番号の解決処理を使います。MODE/SORT と LNMODE はゼロ始まり、HS-FIX と CLEAR は beatoraja の番号順です。`main_state.set_timer(id, start)` はカスタムアニメーション用タイマー 10000–19999 だけを書き換え、開始時刻はマイクロ秒です。`main_state.timer_off_value` で停止します。Lua と数値指定の描画先タイマーには同じフレームで反映します。不正な書き込みは false を返し、保護されたエンジン・シーン用タイマーは変更しません。カスタムタイマーの状態は1つのスキンインスタンスだけに属します。
+
+JSON／Lua スキンのリザルト用タイマー 150–152 は画面表示時に開始します。プレイスキンにはスコアの条件 348–352、判定エンジンに従う HCN の active/damage、POMYU キャラクターのタイマーを渡します。`PlaySceneOptions.scoreTargets` で `bestEXScore` と `targetEXScore` を指定でき、省略時はゼロです。デモは譜面の記録を自己ベストとして渡します。beatoraja の通常の終了処理は最終ノート・イベントから譜面時間で5秒待ち、MUSIC_END（908）を通知した後に `finishmargin` を待ってフェードします。既存のエンジンループで判定するので、一時停止・速度変更・シークに追従します。POMYU のタイマーの対応表はモーション時間を受け取れますが、既存のキャラクターパックの描画は静止スプライトのままです。
+
 ビットマップフォントの各ページには共通のブラウザー画像デコーダーを使用し、ブラウザーが直接扱えない TGA シートも読み込みます。
 
 2-phase 契約:
@@ -203,7 +207,7 @@ sequenceDiagram
 - op 230-240 は 1P gauge の 10 % 刻みの範囲（240 は満タン）で、1240 は gauge がクリアできる間（0 より大きく border 以上）点きます。beatoraja の `GaugeDrawCondition` / `Gauge.isQualified` と LR2 の読み方です（#430）。
 - number 101（`SCORE2`）は EX score です。beatoraja の `createScoreProperty` と LR2 の 101 の読み方です。100（`POINT`）は表示用の score です（#430）。
 - rate は beatoraja の `ScoreDataProperty` のとおりです。play 中の 102 / 103 はそれまでに判定した note に対する EX score（最初の note の前は 100 %）、115 / 116 は全 note に対する EX score です。result はどちらも全 note に対して読みます。いずれも 1/100 % 未満を切り捨てます。
-- engine には MISS 判定（beatoraja の空 POOR）がありません。number 420 は POOR の数を読み、その early / late（421 / 422）は `MISS` の early / late の項目を、なければ POOR のものを読みます。play bridge は空の `MISS` の項目を渡すので、play 中は 0 です。
+- number 420 は engine の `emptyPoor`（beatoraja の MISS）を読み、426 は POOR + MISS、427 は BAD + POOR + MISS を読みます。LR2 の表示上の POOR に空 POOR が含まれる結果では `judgedPoor` を使います。early / late（421 / 422）は `MISS` の項目を、なければ POOR のものを読みます。play bridge は空の `MISS` の項目を渡すので、play 中のこれらの行は 0 です。
 - result は max combo を combo（104）としても読み、75 は 0（LR2 の自己ベストの max combo）とします。play は 75 で max combo を読みます。
 - play 中の 1P のランクの op（200-207）とその「now」の値（340-347）は、それまでに判定した note に対する EX score のランクです。最初の note の前は 100 % なので、play は AAA から始まります。beatoraja の `createNowRank` が `ScoreDataProperty.nowrate` を読むとおりで、note のない譜面ではどれも点きません（#430）。
 - 汎用のランクの op（220-227）は、全 note に対する EX score が届いたランクをすべて点けます（`beatorajaGenericRankOps`）。beatoraja の `BooleanPropertyFactory` が `ScoreDataProperty.qualifyRank`（`rate >= border / 27`）を読むとおりで、AAA なら 8 つすべて、どの score でも F が点き、note のない譜面ではどれも点きません。`computeGenericRankOp` はそのうち最も高いランクを 1 つ返します。

@@ -38,6 +38,26 @@ const SUMMARY: PlayerUIFramePayload['summary'] = {
 };
 
 describe('createUIFramePublisher', () => {
+  test('publishes authoritative HCN and judged-note facts and clears missing providers', () => {
+    const { uiSignals, frames } = createCapturingUISignals();
+    const publish = createUIFramePublisher({
+      uiEnabled: true,
+      uiSignals,
+      totalSeconds: 10,
+      summary: SUMMARY,
+      notes: [],
+      audioBackend: 'test',
+      resolveDebugActiveAudioState: () => ({}),
+      resolveHCNLanes: (seconds) => (seconds < 1 ? [{ channel: '11', gaining: false }] : []),
+      resolveJudgedNoteCount: () => 7,
+    });
+    publish(0.5, 1);
+    publish(1.5, 3);
+    expect(frames[0]?.hcnLanes).toEqual([{ channel: '11', gaining: false }]);
+    expect(frames[1]?.hcnLanes).toEqual([]);
+    expect(frames[1]?.judgedNoteCount).toBe(7);
+  });
+
   test('mirrors the display beat in chart-position space past the LR2 reversal and pins it at the chart head', () => {
     const { uiSignals, frames } = createCapturingUISignals();
     const publish = createUIFramePublisher({

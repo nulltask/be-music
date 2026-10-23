@@ -1,3 +1,4 @@
+import type { PlayerHCNLaneState } from './ui-signal-bus.ts';
 import { resolveAltModifierLabel } from '../utils.ts';
 import {
   createAutoJudgeState,
@@ -62,6 +63,21 @@ function createAutoJudge(session: PlaySession): PlayJudge {
     reversalSeconds: session.resolvedChart.reversal?.seconds,
   };
   let autoJudge = createAutoJudgeState(config, session.score);
+  const empty: readonly PlayerHCNLaneState[] = [];
+  session.readHCNLanes = (seconds) => {
+    if (autoJudge.pendingLongNotes.length === 0) return empty;
+    const lanes: PlayerHCNLaneState[] = [];
+    for (const { note, endSeconds } of autoJudge.pendingLongNotes) {
+      if (
+        seconds >= note.seconds &&
+        seconds < endSeconds &&
+        resolveRulesetLongNoteMode(config.ruleset.longNoteStyle, note) === 3
+      ) {
+        lanes.push({ channel: note.channel, gaining: true });
+      }
+    }
+    return lanes;
+  };
   const step = (input: AutoJudgeInput): void => {
     runAutoJudgeStep(autoJudge, input, session.applyJudgeEffect);
   };
@@ -112,8 +128,7 @@ function createAutoJudge(session: PlaySession): PlayJudge {
       step({ kind: 'advance', nowSec: tick.nowSec });
       judgedThroughSeconds = tick.nowSec;
     },
-    // A replay seeks once it re-drives its tempo changes from the second sought too (not yet).
-    ...(session.replay ? {} : { seek }),
+    seek,
     judgedThroughSeconds: (tick) => tick.nowSec,
     isSettled: () => noteKeysounds.done && isAutoJudgeSettled(autoJudge),
     isClosed: () => false,

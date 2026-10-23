@@ -99,6 +99,7 @@ export class PlaySession extends PlaySessionState {
   public constructor(options: PlaySessionOptions = {}, theme: PlaySessionTheme = NO_THEME) {
     super();
     this.options = options;
+    this.practice = options.practice === true;
     this.theme = theme;
     // A replay plays back at the tempo it was played at, unless its viewer keeps their own (`replayView.tempo`).
     this.replayTempo =
@@ -172,6 +173,8 @@ export class PlaySession extends PlaySessionState {
     if (this.disposed) return;
     await prepareAudio(this);
     if (this.disposed) return;
+    // Build the engine while BGA and the skin intro are still loading; START opens its chart gate.
+    launchSharedEngine(this);
     this.bgaReadyPromise = prepareBGA(this).catch((error) => {
       log.warn('BGA preload failed; continuing without it', error);
     });
@@ -216,10 +219,15 @@ export class PlaySession extends PlaySessionState {
     // as the pause-aware reads further below.
     const now = this.playClock();
     this.sceneStartTime = now;
-    const { loadEndOffsetMs, playStartOffsetMs } = this.theme.timing();
+    const { loadEndOffsetMs, playStartOffsetMs, inputStartOffsetMs, playStartAfterLoadEndMs } = this.theme.timing();
     // Skinless / non-LR2 demos have no timing directives; fall back to the legacy 3-second wait so the slide-in chrome
     // of the built-in fallback frame still has room to land before notes begin.
-    const introMs = playStartOffsetMs > 0 ? playStartOffsetMs : FALLBACK_INTRO_DELAY_MS;
+    const introMs =
+      playStartAfterLoadEndMs !== undefined
+        ? loadEndOffsetMs + playStartAfterLoadEndMs
+        : playStartOffsetMs > 0
+          ? playStartOffsetMs
+          : FALLBACK_INTRO_DELAY_MS;
     this.scheduledIntroMs = introMs;
     // The chart waits on BOTH the configured PLAY START delay AND the BGA preload (which may still be transcoding video
     // in the background — see `load()`). Until the gate opens below, `startTime = +Infinity` keeps `isIntroPlaying`
@@ -229,31 +237,41 @@ export class PlaySession extends PlaySessionState {
     // later via the `Promise.all` gates below so they wait for the BGA preload too. Exit-phase events are deliberately
     // NOT raised here: `beginExitSequence` raises them at the actual transition moment (ESC / chart end / failure).
     this.theme.moment({ kind: 'scene-start', at: now });
+    launchSharedEngine(this);
     // The `start()` invocation we belong to — captured so the gate handlers below can detect a dispose-and-re-mount and
     // bail out instead of mutating a fresh play's state.
     const sceneEpoch = this.sceneStartTime;
     const bgaReady = this.bgaReadyPromise ?? Promise.resolve();
     // LOAD END gate — both the configured load-end delay AND the BGA preload need to finish.
-    void Promise.all([bgaReady, this.delaySceneStage(loadEndOffsetMs)]).then(() => {
-      if (this.disposed) return;
-      if (this.sceneStartTime !== sceneEpoch) return;
+    const isCurrent = () => !this.disposed && !this.exiting && this.sceneStartTime === sceneEpoch;
+    if (inputStartOffsetMs !== undefined) {
+      void this.delaySceneStage(inputStartOffsetMs).then(() => {
+        if (isCurrent()) this.theme.moment({ kind: 'input-start', at: this.playClock() });
+      });
+    }
+    const loadEnd = Promise.all([bgaReady, this.delaySceneStage(loadEndOffsetMs)]).then(() => {
+      if (!isCurrent()) return;
       this.theme.moment({ kind: 'load-end', at: this.playClock() });
     });
-    // PLAY START gate — same pattern, but for the configured play-start (or fallback intro). Raises the theme's
-    // play-start event (animation clock) and anchors the wall-clock + audio-context start times (chart-engine clock) so
-    // the chart engine and BGM samples share a single t=0.
-    void Promise.all([bgaReady, this.delaySceneStage(introMs)]).then(() => {
-      if (this.disposed) return;
-      if (this.sceneStartTime !== sceneEpoch) return;
+    // beatoraja's READY interval starts at actual load end, so a slow preload cannot consume it. LR2 keeps its
+    // absolute PLAY START gate. Both anchor the animation, engine and BGM clocks at the same chart start.
+    const playStart =
+      playStartAfterLoadEndMs === undefined
+        ? Promise.all([bgaReady, this.delaySceneStage(introMs)])
+        : loadEnd.then(() => {
+            if (isCurrent() && playStartAfterLoadEndMs > 0) return this.delaySceneStage(playStartAfterLoadEndMs);
+          });
+    void playStart.then(() => {
+      if (!isCurrent()) return;
       this.theme.moment({ kind: 'play-start', at: this.playClock() });
       // `startTime` is consumed by `isIntroPlaying` and `currentSeconds`, both of which work in raw wall-clock units
       // (with `currentSeconds` subtracting `pauseTotal` explicitly), so it MUST stay on `performance.now()`.
       this.startTime = performance.now();
       // The chart's clock until the engine's first frame; the engine's audio session schedules a NONSTOP chart's fades.
       if (this.audioContext) this.audioContextStartTime = this.audioContext.currentTime;
-      // Hand chart playback over to `@be-music/player-engine`'s engine. Fires only after the play-start gate, so the engine's
-      // chart-time t=0 lines up with the gate — no double lead-in.
-      launchSharedEngine(this);
+      // The engine is prepared already; opening its gate starts chart time and audio together.
+      this.engineStartRequested = true;
+      this.sharedEngineInputSignals?.pushCommand({ kind: 'start' });
     });
     this.host?.app.canvas.focus();
   }
@@ -285,8 +303,8 @@ export class PlaySession extends PlaySessionState {
   }
 
   /**
-   * Moves an AUTO play to chart second `seconds` (`seekPlay`): the engine seeks the running play, and the promise resolves
-   * once it has (its frames are of the new seek generation). A paused play stays paused there. Other plays ignore it.
+   * Moves an AUTO play or replay to chart second `seconds` (`seekPlay`): the engine seeks the running play, and the promise resolves
+   * once it has (its frames are of the new seek generation). A paused play stays paused there. Manual play requires `allowSeek: 'practice'`.
    */
   public seek(seconds: number): Promise<void> {
     return seekPlay(this, seconds);
@@ -305,16 +323,20 @@ export class PlaySession extends PlaySessionState {
   public waitForReplay(timeoutMs = 2000): Promise<BeMusicReplay | undefined> {
     if (this.replay !== undefined) return Promise.resolve(this.replay);
     return new Promise((resolve) => {
-      const timer = setTimeout(() => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const settle = (replay: BeMusicReplay | undefined): void => {
+        if (timer !== undefined) clearTimeout(timer);
         const index = this.replayWaiters.indexOf(settle);
         if (index >= 0) this.replayWaiters.splice(index, 1);
-        resolve(undefined);
-      }, timeoutMs);
-      const settle = (replay: BeMusicReplay): void => {
-        clearTimeout(timer);
         resolve(replay);
       };
+      timer = setTimeout(() => settle(undefined), timeoutMs);
       this.replayWaiters.push(settle);
+      // Practice and replay playback produce no recording. Wait for the final summary, then settle without a timeout.
+      void this.sharedEnginePromise?.then(
+        () => settle(this.replay),
+        () => settle(undefined),
+      );
     });
   }
 
@@ -490,6 +512,7 @@ export class PlaySession extends PlaySessionState {
       window.clearTimeout(timeout);
     }
     this.sceneStageTimeouts.clear();
+    this.chartEndGate = undefined;
     if (this.chartEndTimeout !== undefined) {
       window.clearTimeout(this.chartEndTimeout);
       this.chartEndTimeout = undefined;
