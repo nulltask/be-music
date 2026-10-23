@@ -57,7 +57,7 @@ LR2 と beatoraja は、同じ譜面、オプション、スキンの番号を�
    (B)
 
 5. **LR2 ruleset の再現度のバグ。**
-   - multi-BAD が lr2oraja のコレクターに従っているが、バイナリは同じ押下で次のノートを再判定する。
+   - タップを前方へ再判定する連鎖は [#589](https://github.com/nulltask/be-music/issues/589) で修正。
    - 地雷が遅い側も含む PGREAT の押下幅を使っている。LR2 は手前側だけの GREAT 幅で、当たると POOR として数え、BP に加わる。
    - LR2 はゲージを調べる前に FULL COMBO を与える。
 
@@ -138,7 +138,7 @@ flowchart TD
 | 9   | beatoraja のモード別ゲージ表                            | B, A           | どこでも 7K の表                                   | `beatoraja` の中でモードごと                                                          |
 | 10  | ゲージの float と double                                | B              | double                                             | `beatoraja` で `Math.fround`                                                          |
 | 11  | `#DEFEXRANK` の int 切り捨て（bea）                     | B              | 四捨五入                                           | `beatoraja` で `Math.trunc`                                                           |
-| 12  | LR2 の multi-BAD の連鎖                                 | B              | lr2oraja のコレクター                              | `lr2` をバイナリの連鎖に切り替える                                                    |
+| 12  | LR2 の multi-BAD の連鎖                                 | B              | #589 で修正                                        | 前方への再判定の連鎖を維持                                                            |
 | 13  | LR2 の地雷の判定幅、遅い側、POOR の加算                 | B              | 両側 PGREAT、カウンターなし                        | `lr2` をバイナリに合わせる                                                            |
 | 14  | PMS の MissCondition.ONE / judgeVanish                  | B              | 未実装（既知の差として記載、judgeVanish は未記載） | PMS が重要になったら ruleset ごと                                                     |
 | 15  | プレイヤーの LN モード + 記録キー                       | A, B           | 譜面の `#LNMODE` だけ。キーに LN モードなし        | `beatoraja` でオプション化してログに残す。記録 / ランキングのキーに LN モード         |
@@ -282,9 +282,9 @@ flowchart TD
 - **LR2:** BAD の後、同じ押下を、そのレーンの次のノートが BAD の判定幅にあればそのノートに渡します。そのノートは自分のずれで判定され、PGREAT/GREAT/GOOD になることもあります。連鎖は前にしか進まず、通常ノートだけに適用され、各段階が BAD である間だけ続きます。ソース：[#L7509-L7521](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L7509-L7521)、バイナリの VA 0x418d3b-0x418d55（`cmpl 0x97a30` = `judgetime[2]`、`calll 0x418850`）。
 - **beatoraja:** multi-BAD はありません。
 - **種類:** セマンティクス。
-- **be-music の現状:** lr2oraja の `MultiBadCollector` に従っています（[`core/judge-core-press.ts`](../packages/player-engine/src/core/judge-core-press.ts) の `applyMultiBadCollector`、[`ruleset/long-note.ts`](../packages/player-engine/src/ruleset/long-note.ts)、[`replay/simulate.ts`](../packages/player-engine/src/replay/simulate.ts) にも同じもの）。
+- **be-music の現状:** [#589](https://github.com/nulltask/be-music/issues/589) で修正。タップの BAD 後、判定コアとリプレイシミュレータが同じレーンの次の未判定タップを同じ押下時刻で再判定し、BAD の場合だけ連鎖を続けます。BAD 以外・LN 始端・BAD 幅の外（境界は含む）で止まります。各タップの音と判定を通知し、入力は1回だけ記録します。
 - **影響:** B。`lr2` で縦連と同時押しの EX とコンボが変わります。
-- **推奨:** LR2 優先ではバイナリが基準なので、`lr2` を連鎖に切り替える。`lr2/0` の再シミュレーション結果が変わりますが、ログの形式は変わりません。
+- **推奨:** 一次資料に沿う連鎖を維持します。リビジョン 0 と入力形式は変えません。過去の EX スコア・コンボ・ゲージ・BP・ランプには、入力列からの明示的なオフライン再シミュレーションとベスト記録の再集計が必要です。本番データは変更しません。
 
 ### 地雷：LR2 の窓、遅い側、POOR の加算
 

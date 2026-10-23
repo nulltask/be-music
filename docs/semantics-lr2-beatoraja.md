@@ -57,7 +57,7 @@ Top risks, most serious first:
    (B)
 
 5. **LR2-ruleset fidelity bugs.**
-   - Multi-BAD follows lr2oraja's collector, where the binary re-judges the next note with the same press.
+   - The forward tap re-judge chain is fixed in [#589](https://github.com/nulltask/be-music/issues/589).
    - Mines use a PGREAT press window with a late leg. LR2 uses a GREAT window ahead only, and a hit counts as a POOR, which adds to BP.
    - LR2 awards FULL COMBO before it checks the gauge.
 
@@ -138,7 +138,7 @@ Most fixes below move a rule into the right box. The assist class and LR2 mine c
 | 9   | beatoraja per-mode gauge tables                     | B, A        | 7K table everywhere                                     | Per mode inside `beatoraja`                                            |
 | 10  | Gauge float vs double                               | B           | double                                                  | `Math.fround` under `beatoraja`                                        |
 | 11  | `#DEFEXRANK` int truncation (bea)                   | B           | Rounded                                                 | `Math.trunc` under `beatoraja`                                         |
-| 12  | LR2 multi-BAD chain                                 | B           | lr2oraja collector                                      | Switch `lr2` to the binary's chain                                     |
+| 12  | LR2 multi-BAD chain                                 | B           | Fixed in #589                                           | Keep the forward re-judge chain                                        |
 | 13  | LR2 mine window, late leg, POOR count               | B           | PGREAT both sides, no counter                           | Switch `lr2` to the binary                                             |
 | 14  | PMS MissCondition.ONE / judgeVanish                 | B           | Not modelled (documented gap, judgeVanish undocumented) | Per ruleset when PMS matters                                           |
 | 15  | Player LN mode + record key                         | A, B        | Chart `#LNMODE` only; key without LN mode               | Option under `beatoraja`, logged; LN mode in record / ranking key      |
@@ -282,9 +282,9 @@ Already modelled per ruleset ([`packages/player-engine/src/ruleset/definitions.t
 - **LR2:** after a BAD, the same press is fed to the lane's next note if that note lies within the BAD window. The note is judged on its own gap and can come out PGREAT/GREAT/GOOD. The chain moves forward only, applies to taps only, and continues only while each step is a BAD. Sources: [#L7509-L7521](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L7509-L7521); binary VA 0x418d3b-0x418d55 (`cmpl 0x97a30` = `judgetime[2]`, `calll 0x418850`).
 - **beatoraja:** no multi-BAD.
 - **Kind:** semantic.
-- **be-music today:** follows lr2oraja's `MultiBadCollector` ([`core/judge-core-press.ts`](../packages/player-engine/src/core/judge-core-press.ts) `applyMultiBadCollector`, [`ruleset/long-note.ts`](../packages/player-engine/src/ruleset/long-note.ts), mirrored in [`replay/simulate.ts`](../packages/player-engine/src/replay/simulate.ts)).
+- **be-music today:** fixed in [#589](https://github.com/nulltask/be-music/issues/589). After a tap BAD, the live judge and replay simulator visit the next unjudged tap on that lane, classify it at the same press time, and continue only after another BAD. A non-BAD, long-note head or note outside the inclusive BAD window stops the chain. Each judged tap emits its own keysound and judgment; the input is recorded once.
 - **Impact:** B. EX and combo change on jacks and chords under `lr2`.
-- **Recommendation:** under LR2-first, the binary is the authority, so switch `lr2` to the chain. That changes `lr2/0` re-simulations; the log format is unchanged.
+- **Recommendation:** keep the source-backed chain. Revision 0 and replay inputs stay unchanged; historical EX score, combo, gauge, BP and lamps require explicit offline replay re-simulation and best-record rebuilds. No production data is changed.
 
 ### Mines: LR2 window, late side, POOR count
 
