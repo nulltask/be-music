@@ -305,7 +305,8 @@ function resolveBeatorajaMode(laneMode: string): BeatorajaModeWindows {
 
 /**
  * Applies beatoraja's `JudgeWindowRule.create` to one flat window table: scale the non-fixed judges by
- * `judgerank / 100`, clamp every leg to the BAD leg, then enforce inner-to-outer monotonicity.
+ * `judgerank / 100`, clamp every leg to the resolved BAD leg, then enforce inner-to-outer monotonicity.
+ * NORMAL scales BAD too; PMS keeps it fixed.
  */
 function scaleBeatorajaWindows(
   flat: readonly number[],
@@ -320,7 +321,7 @@ function scaleBeatorajaWindows(
       if (scaled[judge]) {
         value = (value * judgeRank) / 100;
       }
-      const badLeg = flat[3 * 2 + side]!;
+      const badLeg = flat[3 * 2 + side]! * (scaled[3] ? judgeRank / 100 : 1);
       if (Math.abs(value) > Math.abs(badLeg)) {
         value = badLeg;
       }

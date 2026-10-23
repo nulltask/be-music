@@ -256,9 +256,9 @@ flowchart TD
 - **LR2:** 固定の表。BAD は 200 ms 固定で、スケールした判定幅がそれを超えることはありません（[#L27586-L27610](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27586-L27610)）。
 - **beatoraja:** `JudgeWindowRule.NORMAL` は PG/GR/GD **と BAD** を judgerank でスケールし、内側の判定幅を**スケール後の** BAD に抑えます（[play/JudgeProperty.java#L210-L273](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeProperty.java#L210-L273)）。そのため 7K の `#RANK 4` では BAD が -350/+275 ms になります。
 - **種類:** パラメータ（モデル化のバグ）。
-- **be-music の現状:** `scaleBeatorajaWindows`（[`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) ~L310-L343）がどの側も**スケール前の** BAD に抑えるので、`beatoraja` の BAD は -280/+220 のままです。これが正しいのは BAD が固定の PMS だけです。
+- **be-music の現状:** fixed in [#585](https://github.com/nulltask/be-music/issues/585)。`scaleBeatorajaWindows` は、NORMAL では倍率を適用した BAD、PMS では固定 BAD を上限にします。7K の `#RANK 4` はエンジンの判定とリプレイの再計算の両方で BAD が -350/+275 ms になります。
 - **影響:** B。VERY EASY の譜面、`#DEFEXRANK` > 133、bmson の `judge_rank` > 100 に効きます。
-- **推奨:** ruleset が BAD を固定していない限り、スケール後の BAD に抑える。再シミュレーションで `beatoraja/0` の結果が更新されます。
+- **保存済みの結果:** リプレイと ruleset のリビジョン 0 は変更しません。Leaderboard の投稿検証は同じ記録済み入力をこの判定表で再計算します。保存済みの派生結果と過去のランキングを更新するには、明示的なオフライン再計算が必要です。この変更では本番への書き込みを行いません。
 
 ### `#DEFEXRANK` の整数切り捨て（beatoraja）
 
@@ -819,7 +819,6 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
   - 数値 420 は MISS、426 は POOR+MISS、427 は BAD+POOR+MISS です（[skin/property/IntegerPropertyFactory.java#L461-L467](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/property/IntegerPropertyFactory.java#L461-L467)）。
 - **be-music の現状:** fixed in [#599](https://github.com/nulltask/be-music/issues/599)。engine と scene model は既に `emptyPoor` を持ちます。beatoraja のスコア入力でもこれを渡し、420 / 426 / 427 を空 POOR / POOR + 空 POOR / BAD + POOR + 空 POOR として読みます。LR2 の表示上の POOR に空 POOR が含まれる結果では、`judgedPoor` を使って二重計上を防ぎます。
 - **影響:** A/C。
-- **推奨:** 数値を `emptyPoor` から読み、player-scene-model のスコアまで通す。表示だけの話です。
 
 ### ゲージ種別の op 42/43/1046（バグ）
 

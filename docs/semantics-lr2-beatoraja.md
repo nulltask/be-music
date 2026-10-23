@@ -256,9 +256,9 @@ Already modelled per ruleset ([`packages/player-engine/src/ruleset/definitions.t
 - **LR2:** fixed table; BAD is a fixed 200 ms, and scaled windows never exceed it ([#L27586-L27610](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27586-L27610)).
 - **beatoraja:** `JudgeWindowRule.NORMAL` scales PG/GR/GD **and BAD** by judgerank, then clamps the inner windows to the **scaled** BAD ([play/JudgeProperty.java#L210-L273](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeProperty.java#L210-L273)). So 7K `#RANK 4` gives BAD -350/+275 ms.
 - **Kind:** parameter (a modelling bug).
-- **be-music today:** `scaleBeatorajaWindows` ([`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) ~L310-L343) clamps every leg to the **unscaled** BAD, so `beatoraja` BAD stays at -280/+220. This is correct only for PMS, where BAD is fixed.
+- **be-music today:** fixed in [#585](https://github.com/nulltask/be-music/issues/585). `scaleBeatorajaWindows` clamps to the resolved BAD leg: scaled under NORMAL, fixed under PMS. At 7K `#RANK 4`, BAD reaches -350/+275 ms across engine judging and replay re-simulation.
 - **Impact:** B. It affects VERY EASY charts, `#DEFEXRANK` > 133 and bmson `judge_rank` > 100.
-- **Recommendation:** clamp to the scaled BAD unless the ruleset fixes BAD. Re-simulation updates `beatoraja/0` results.
+- **Stored results:** replay/ruleset revision 0 remains unchanged. Leaderboard submission re-simulates the same recorded inputs through these tables; existing stored derived results require an explicit offline re-simulation to update historical rankings. This change performs no production writes.
 
 ### `#DEFEXRANK` integer truncation (beatoraja)
 
