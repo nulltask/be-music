@@ -665,7 +665,7 @@ describe('createPlayScene with a beatoraja kit', () => {
     });
     await scene.prepare();
     expect(scene.identity).toEqual({ kind: 'play', family: 'beatoraja' });
-    expect(play.notes.map((note) => note.channel)).toEqual(['15', '14']);
+    expect(play.notes.map((note) => note.channel)).toEqual(['12', '11']);
     expect(play.resolveSelectedGauge()).toBe('HARD');
     scene.dispose();
   });
