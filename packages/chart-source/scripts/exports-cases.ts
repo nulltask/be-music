@@ -15,6 +15,7 @@ export function registerJSONExportsCases(define: DefineBenchmarkCase): void {
   define('chart-source.normalizeObjectKey', {
     run: () => {
       jsonAPI.normalizeObjectKey('aZ');
+      jsonAPI.normalizeObjectKey('aZ1', 62, true);
     },
   });
   define('chart-source.normalizeChannel', {

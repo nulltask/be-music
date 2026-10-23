@@ -95,6 +95,7 @@ describe('createNonstopStageMixer', () => {
     const mixer = createNonstopStageMixer(context, destination, MAP);
     expect([mixer.stageOf('01'), mixer.stageOf('03'), mixer.stageOf('zz')]).toEqual([0, 1, undefined]);
     expect([mixer.rate(0), mixer.rate(1)]).toEqual([1, 1.25]);
+    expect([mixer.sliceRate!(0), mixer.sliceRate!(1)]).toEqual([1, 1]);
     expect(gains.map((gain) => gain.gain.value)).toEqual([1, 0]);
     expect(gains.every((gain) => gain.connect.mock.calls[0]?.[0] === destination)).toBe(true);
     expect(mixer.bgmInput(1)).toBe(gains[1]);
@@ -131,6 +132,7 @@ describe('keep pitch', () => {
     const { context } = fakeContext();
     const mixer = createNonstopStageMixer(context, {} as AudioNode, MAP, { keepPitch: true });
     expect([mixer.rate(0), mixer.rate(1)]).toEqual([1, 1]);
+    expect([mixer.sliceRate!(0), mixer.sliceRate!(1)]).toEqual([1, 1.25]);
   });
 });
 

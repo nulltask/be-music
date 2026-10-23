@@ -106,8 +106,10 @@ interface MutableNote {
 export function resolveJudgedNotes(context: ResolvedNoteContext): ResolvedNoteLists {
   const { notes, shadowed } = resolveMutableJudgedNotes(context);
   return {
-    notes: notes.map((note) => freezeJudgedNote(note, context.idBase)),
-    shadowedNotes: shadowed.map((note) => freezeJudgedNote(note, context.idBase)),
+    notes: notes.map((note) => freezeJudgedNote(note, context.idBase, context.json.sourceFormat === 'bmson')),
+    shadowedNotes: shadowed.map((note) =>
+      freezeJudgedNote(note, context.idBase, context.json.sourceFormat === 'bmson'),
+    ),
   };
 }
 
@@ -175,7 +177,7 @@ export function resolveMineNotes(context: ResolvedNoteContext): ResolvedNote[] {
       channel: `${side === 0x44 ? '1' : '2'}${channel[1]!}`,
       beat,
       seconds: context.timing.beatToSeconds(beat),
-      sampleKey: normalizeObjectKey(event.value, context.idBase),
+      sampleKey: normalizeObjectKey(event.value, context.idBase, context.json.sourceFormat === 'bmson'),
       damage: resolveLandmineDamage(event, context.idBase, context.json.sourceFormat),
       event,
     });
@@ -198,7 +200,7 @@ export function resolveInvisibleNotes(context: ResolvedNoteContext): ResolvedNot
       channel: `${side === 0x33 ? '1' : '2'}${channel[1]!}`,
       beat,
       seconds: context.timing.beatToSeconds(beat),
-      sampleKey: normalizeObjectKey(event.value, context.idBase),
+      sampleKey: normalizeObjectKey(event.value, context.idBase, context.json.sourceFormat === 'bmson'),
       event,
     });
   }
@@ -239,8 +241,8 @@ function isLaneChannel(normalizedChannel: string): boolean {
   return (laneCode >= 0x31 && laneCode <= 0x39) || (laneCode >= 0x41 && laneCode <= 0x5a);
 }
 
-function freezeJudgedNote(note: MutableNote, idBase: 36 | 62): ResolvedNote {
-  const sampleKey = normalizeObjectKey(note.event.value, idBase);
+function freezeJudgedNote(note: MutableNote, idBase: 36 | 62, allowLongKeys: boolean): ResolvedNote {
+  const sampleKey = normalizeObjectKey(note.event.value, idBase, allowLongKeys);
   if (note.endBeat === undefined) {
     return { kind: 'tap', channel: note.channel, beat: note.beat, seconds: note.seconds, sampleKey, event: note.event };
   }
