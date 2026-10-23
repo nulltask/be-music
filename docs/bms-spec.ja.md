@@ -97,8 +97,8 @@
 - [x] `#PLAYER=4` (BATTLE) はメタ情報として保持し、現状は専用の 2 人対戦プレイを実装しない
 - [x] チャンネル `D1-D9` (地雷) を解釈
 - [x] チャンネル `E1-E9` (地雷) を解釈
-- [x] LR2beta3 の地雷は早い側の GREAT 境界の手前の押下、または押したままの通過で爆発。beatoraja の通過時のみのモデルと、暫定 That-Which-Must-Not-Be-Named の左右対称 PGREAT モデルを維持。
-- [x] 地雷ダメージを直接適用し、コンボと EX-SCORE を維持。LR2 は被弾ごとに POOR/BP を1回加算し、beatoraja と暫定 That-Which-Must-Not-Be-Named はゲージのみを変更。
+- [x] LR2beta3 の地雷は早い側の GREAT 境界の手前の押下、または押したままの通過で爆発。beatoraja の通過時のみのモデルと、暫定 名前を言ってはいけないあのゲームの左右対称 PGREAT モデルを維持。
+- [x] 地雷ダメージを直接適用し、コンボと EX-SCORE を維持。LR2 は被弾ごとに POOR/BP を1回加算し、beatoraja と暫定 名前を言ってはいけないあのゲームはゲージのみを変更。
 - [x] 地雷のオブジェクト値が 2 文字の大文字 base36 ID でない場合や `00` の場合は既定ダメージ `4%` にフォールバック（`#BASE 62` の小文字の値もこの既定値になる）
 - [x] `#WAV00` が定義されている場合、MANUAL モードの地雷ヒットで爆発音として使用
 - [x] 地雷を `TOTAL` / `EX-SCORE` の対象ノート数から除外
@@ -344,8 +344,8 @@ runtime と round-trip の扱い:
 - 拡張レーンチャンネル (`1A..1O` / `2A..2O`) は他のどのルールよりも優先して `24 KEY SP` / `48 KEY DP` を選びます
 - be-music 独自: チャンネル `1P` / `1Q`（2P 側は `2P` / `2Q`）は 24 / 48 KEY のホイールの上 / 下で、bmson `keyboard-24k` のホイールレーン（`x` = 25 / 26）の BMS 表記です。ほかの BMS プレイヤーはこれらのチャンネルを定義していません。拡張レーンとして数えるため、これらもキーボードモードを選びます
 - `.pms` 譜面はチャンネルにかかわらず `9 KEY` です。この判定は拡張レーンの次、内容による判定より前に行います
-- `9 KEY` は内容からも判定します: `#PLAYER 3` でチャンネル `17` を使う譜面（That-Which-Must-Not-Be-Named の 2P 側 `21` / `26..29` がない場合。ある場合は FREE ZONE 付きの That-Which-Must-Not-Be-Named DP 譜面）、`11..19` をすべて使う 1P 譜面、`21` / `26..29` を使わずに `22..25` を使う譜面（`.bms` / `.bme` で書かれた PMS-STD）
-- それ以外は That-Which-Must-Not-Be-Named 系として判定します: 6 / 7 鍵の列 (`18` / `19` / `28` / `29`) があれば `7 KEY SP` / `14 KEY DP`、なければ `5 KEY SP` / `5 KEY DP` です。拡張子にかかわらず使われているレーンで決め、6 / 7 鍵の列がない `.bme` 譜面も beatoraja と同じく `5 KEY SP` / `5 KEY DP` です（be-music の判断。[format-compat §5](./format-compat.ja.md#5-be-music-の判断のまとめ) を参照）
+- `9 KEY` は内容からも判定します: `#PLAYER 3` でチャンネル `17` を使う譜面（名前を言ってはいけないあのゲームの 2P 側 `21` / `26..29` がない場合。ある場合は FREE ZONE 付きの 名前を言ってはいけないあのゲーム DP 譜面）、`11..19` をすべて使う 1P 譜面、`21` / `26..29` を使わずに `22..25` を使う譜面（`.bms` / `.bme` で書かれた PMS-STD）
+- それ以外は 名前を言ってはいけないあのゲーム 系として判定します: 6 / 7 鍵の列 (`18` / `19` / `28` / `29`) があれば `7 KEY SP` / `14 KEY DP`、なければ `5 KEY SP` / `5 KEY DP` です。拡張子にかかわらず使われているレーンで決め、6 / 7 鍵の列がない `.bme` 譜面も beatoraja と同じく `5 KEY SP` / `5 KEY DP` です（be-music の判断。[format-compat §5](./format-compat.ja.md#5-be-music-の判断のまとめ) を参照）
 - `.pms` 譜面の 9KEY は標準配列 (`PMS-STD`) / 互換配列 (`PMS-COMPAT`) をチャンネル分布から推定し、`LANE` 表示に反映
 - FREE ZONE (`17` / `27`) は独立レーンを作らずスクラッチレーン (`16` / `26`) 上に描画。`9 KEY` と `24 KEY` / `48 KEY` の keyboard mode では通常レーンとして扱う
 - FREE ZONE ノート長は 4 分音符固定
@@ -353,7 +353,7 @@ runtime と round-trip の扱い:
 - BGA ビューポート背景は黒を使用（透明領域・BGA 未表示中も黒）
 - 制御構文を含む譜面では、選択された `#RANDOM` パターンを `RANDOM 現在/総数` 形式で表示
 - プレイ中に `Shift+R` で演奏を最初から再開し、`#RANDOM` は再抽選する
-- That-Which-Must-Not-Be-Named 系の既定キーボード配置は、1P を `Z S X D C F V`、2P を `B H N J M K ,` とする
+- 名前を言ってはいけないあのゲーム 系の既定キーボード配置は、1P を `Z S X D C F V`、2P を `B H N J M K ,` とする
 - キー入力は kitty keyboard protocol を自動オプトインし、1P/2P スクラッチに左/右 `Shift`、reverse scratch に左/右 `Ctrl` を利用する
 - macOS では reverse scratch に左/右 `Ctrl` の代わりに左/右 `Option` を利用する
 - kitty 非対応端末では既存入力へフォールバックし、reverse scratch の side-specific 入力は保証しない

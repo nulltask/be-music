@@ -3,7 +3,7 @@
 # リプレイ（プレイ履歴）仕様
 
 このドキュメントは be-music のリプレイ（ゲームプレイ中に記録されるプレイ履歴ファイル）と、そこから
-LR2 / beatoraja / That-Which-Must-Not-Be-Named のリザルトを再現するツールについて説明します。
+LR2 / beatoraja / 名前を言ってはいけないあのゲームのリザルトを再現するツールについて説明します。
 
 ## 設計原則: 「結果ログ」ではなく「入力リプレイ」
 
@@ -116,7 +116,7 @@ TypeScript 型・シリアライザ・防御的パーサは
   オプションは曲の開始時にラッチされ、曲の途中では変更できません — プレイ中はコントロールが disabled
   になり、曲開始時点の値がそのプレイに適用されます。
 - Debug Menu の **Play options** フォルダが記録対象のプレイ設定（オートプレイ、ゲージ、Random 1P/2P、DP FLIP、
-  オートスクラッチ）を持ちます。判定幅（LR2 / beatoraja / That-Which-Must-Not-Be-Named）は **Developer** フォルダにあります。LR2 の選曲画面の
+  オートスクラッチ）を持ちます。判定幅（LR2 / beatoraja / 名前を言ってはいけないあのゲーム）は **Developer** フォルダにあります。LR2 の選曲画面の
   PLAY OPTION パネルに対応項目がある設定は双方向に同期します。その中の **Replay / ghost** フォルダで、リプレイが
   記録された表示設定のどこまでを再現するかを選びます（[プレイヤーが見ていたもの](#プレイヤーが見ていたもの)）。
 
@@ -163,7 +163,7 @@ kitty キーボードプロトコルのない端末は、キーを 1 回の押�
 
 - 判定幅（符号付き・文脈別: 鍵盤 / スクラッチ、通常ノート / ロングノート終端）。LR2 の `#EXRANKxx` タイムラインを含む
 - 押下がどのノートを取るか（`lowest` / `combo` / `duration` / `score`）と LR2 のタップを前方へ再判定する連鎖
-- ロングノートの扱い: LR2 はすべて LN、beatoraja は譜面の `#LNMODE` に従う、That-Which-Must-Not-Be-Named はすべて CN。
+- ロングノートの扱い: LR2 はすべて LN、beatoraja は譜面の `#LNMODE` に従う、名前を言ってはいけないあのゲームはすべて CN。
   チャージ系は始点と終点を別々に判定します
 - 空 POOR の窓と、コンボが切れるかどうか
 - ゲージの種類とカーブ、TOTAL のデフォルト、guts 緩和、クリア判定
@@ -176,7 +176,7 @@ kitty キーボードプロトコルのない端末は、キーを 1 回の押�
 
 ゲージ選択は独立したオプション（`PlayerOptions.gauge`）で、LR2 の名前（`GROOVE` / `EASY` / `HARD` / `DEATH`）
 で指定します。各ルールセットが自分のラインナップへ対応付けます（`GROOVE` は beatoraja の `NORMAL`、`DEATH` は
-`HAZARD`。That-Which-Must-Not-Be-Named に HAZARD 相当は無いため `DEATH` は `EX-HARD` に丸められます）。
+`HAZARD`。名前を言ってはいけないあのゲームに HAZARD 相当は無いため `DEATH` は `EX-HARD` に丸められます）。
 
 `bms-player` では `--ruleset <lr2|beatoraja|____>` と `--gauge <GROOVE|EASY|HARD|DEATH>` で指定できます。
 
@@ -248,14 +248,14 @@ flowchart TD
 
 同じスケール（または `hiSpeedScale` のないログ）なら、記録されたハイスピードを HS-FIX 込みで描かれたとおりに使い、見る人の HS-FIX は重ねません。スケールが違うと同じ数値でも速さが違うため、記録された表示時間になるハイスピードを、自分のレーンと表示している SUDDEN+ から求めます（`resolveHiSpeedForWhiteNumber`。組み込みと LR2 では配置したレーン、beatoraja では 4 拍のレーン）。リプレイはどの種類のプレイ画面でも再生されます。beatoraja の画面は LIFT を描くので記録された LIFT を見せます（HIDDEN+ はその上のレーンに対して設定し、カバーは記録されたレーンの割合で描かれます）。組み込みと LR2 の画面は LIFT を描かないので、`lift` の切り替えはそこでは何も変えません。`tempo` の切り替えは記録されたテンポ（`play.tempo`、`play.tempoChanges`）を扱います。ブラウザプレイヤーにはまだゴースト表示がありません。ゴーストも同じように表示設定を読みます。
 
-## LR2 / beatoraja / That-Which-Must-Not-Be-Named リザルトの再現
+## LR2 / beatoraja / 名前を言ってはいけないあのゲーム リザルトの再現
 
 `@be-music/player-engine/replay` の `simulateReplay(replay, { ruleset })` が 1 ルールセットで入力列を再生し、
 `simulateReplayRulesets(replay)` が 3 つ全てを実行します。判定幅・ノート選択・ロングノート仕様・
 空 POOR・ゲージ表がルールセットごとに異なります。定数の出典は
 [`packages/player-engine/src/ruleset/definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) に記載しています。
 
-| 項目                  | LR2 (`lr2/0`)                                           | beatoraja (`beatoraja/0`)                                    | That-Which-Must-Not-Be-Named (`____/0`)                          |
+| 項目                  | LR2 (`lr2/0`)                                           | beatoraja (`beatoraja/0`)                                    | 名前を言ってはいけないあのゲーム (`____/0`)                      |
 | --------------------- | ------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------- |
 | 出典                  | lr2oraja / OpenLR2                                      | beatoraja master                                             | コミュニティ実測 (https://iidx.org)                              |
 | 判定幅（RANK NORMAL） | ±18/±40/±100/±200 ms                                    | ±15/±45/±112.5/late 210 · early 165 ms（7K, judgerank 75 %） | ±16.67/±33.33/±116.67/±250 ms                                    |
@@ -267,7 +267,7 @@ flowchart TD
 | マネースコア          | `(4·PG + 2·GR + GD) × 50000 / notes`                    | —                                                            | —（BISTROVER で廃止）                                            |
 | ゲージ                | lr2oraja LR2 表（2 % 未満即死、32 % 未満ダメージ ×0.6） | beatoraja ネイティブ表                                       | https://iidx.org 表（a 値回復、HARD は 30 % 以下でダメージ半減） |
 
-EX スコアは全ルールセットで PGREAT × 2 + GREAT × 1、DJ LEVEL は That-Which-Must-Not-Be-Named の 9 分率です。チャージノート系の
+EX スコアは全ルールセットで PGREAT × 2 + GREAT × 1、DJ LEVEL は 名前を言ってはいけないあのゲームの 9 分率です。チャージノート系の
 ルールセットはロングノートの始点・終端を 2 判定ノートとして数えます（各ルールセットの分母は
 `result.noteCount` が報告します）。
 
@@ -276,7 +276,7 @@ EX スコアは全ルールセットで PGREAT × 2 + GREAT × 1、DJ LEVEL は 
 - LR2 ルールセットは lr2oraja に従い、OpenLR2 の書き起こしと相互検証しています。両者が食い違う LN 頭の
   見逃し POOR 閾値は lr2oraja の挙動を採用しています。DEATH ゲージは lr2oraja の beatoraja 由来の `HAZARD_LR2` 表では
   なく LR2 本体に従います（回復なし、空 POOR は減少なし）。
-- That-Which-Must-Not-Be-Named の内部仕様は非公開です。判定幅・ゲージ表・DJ LEVEL 境界は現在のコミュニティ実測の合意値であり、
+- 名前を言ってはいけないあのゲームの内部仕様は非公開です。判定幅・ゲージ表・DJ LEVEL 境界は現在のコミュニティ実測の合意値であり、
   空 POOR 窓と CN 終端窓は未測定のため beatoraja の値を代用、HCN のゲージ tick は実測されている
   16 分音符間隔の代わりに固定 200 ms を使用しています。「ほぼ一致」は期待できますが、ビット単位の
   完全一致は保証されません。

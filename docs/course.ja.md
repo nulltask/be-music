@@ -270,7 +270,7 @@ stateDiagram-v2
 
 コースの結果はステージを合計し（[リプレイ — コースのリプレイ](./replay.ja.md#コースのリプレイ) を参照）、そのうえで次を決めます。
 
-- **ランプ**：ゲージが尽きて終わったステージがあるか、到達しなかったステージがあれば FAILED。コースの最大コンボがコースの全ノートに届いていれば（LR2 と beatoraja と同じく Σ ノート数 == コースの最大コンボ）FULL COMBO、GOOD がなければ PERFECT、PGREAT だけなら MAX（LR2 と That-Which-Must-Not-Be-Named は FULL COMBO が上限）。それ以外はゲージのランプです。LR2 はプレイヤーの選んだゲージに従い（EASY → EASY、HARD → HARD、それ以外は NORMAL。LR2 が HARD を出すのは HARD 系のゲージだけなので、DEATH でのクリアは NORMAL です。LR2body.exe の `CheckCourseClear`）、beatoraja と That-Which-Must-Not-Be-Named は段位ゲージに従います（`CLASS` は NORMAL、`EXCLASS` は HARD、`EXHARDCLASS` は EX-HARD）。
+- **ランプ**：ゲージが尽きて終わったステージがあるか、到達しなかったステージがあれば FAILED。コースの最大コンボがコースの全ノートに届いていれば（LR2 と beatoraja と同じく Σ ノート数 == コースの最大コンボ）FULL COMBO、GOOD がなければ PERFECT、PGREAT だけなら MAX（LR2 と 名前を言ってはいけないあのゲームは FULL COMBO が上限）。それ以外はゲージのランプです。LR2 はプレイヤーの選んだゲージに従い（EASY → EASY、HARD → HARD、それ以外は NORMAL。LR2 が HARD を出すのは HARD 系のゲージだけなので、DEATH でのクリアは NORMAL です。LR2body.exe の `CheckCourseClear`）、beatoraja と 名前を言ってはいけないあのゲームは段位ゲージに従います（`CLASS` は NORMAL、`EXCLASS` は HARD、`EXHARDCLASS` は EX-HARD）。
 - **BP**（`missCount`）：BAD・POOR・空 POOR（LR2 も空 POOR を POOR の数に足すので BP に含まれます）に、未到達のステージを含め判定されなかったノートをすべて加えます（LR2 の `CheckCourseClear`、beatoraja の `MusicResult`）。
 - **トロフィー**（beatoraja の `GradeBar.getTrophy`）：`missRate` ≥ BP × 100 / ノート数、かつ `scoreRate` ≤ EX スコア × 100 / (2 × ノート数) を満たす最後のトロフィー。
 

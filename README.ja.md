@@ -197,7 +197,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - HIGH-SPEED (`0.5` 〜 `10.0`, `0.5` 刻み)
 - TUI refresh rate 設定 (`--tui-fps`, default `60`)
 - 判定: `PERFECT` / `GREAT` / `GOOD` / `BAD` / `POOR`（`FAST` / `SLOW` 集計あり）
-- 20 万点満点 SCORE と That-Which-Must-Not-Be-Named 準拠 EX-SCORE
+- 20 万点満点 SCORE と 名前を言ってはいけないあのゲーム 準拠 EX-SCORE
 - 不可視ノート表示 (`--show-invisible-notes`)
 - FREE ZONE (`17` / `27`) の専用扱い
 - BGA 画像描画 (`BMP` / `PNG` / `JPEG`) と動画描画 (`mpeg1video` / `h264` / `mjpeg`)
@@ -209,7 +209,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - compressor / limiter の有効化切り替えと threshold / release 系の出力ダイナミクス調整
 - 構造化ログ出力 (`~/.be-music/logs/player.ndjson`, `--log-file` で上書き)
 - gameplay、TUI 描画、video BGA decode を分離する Node worker 構成
-- 記録したリプレイから LR2 / beatoraja / That-Which-Must-Not-Be-Named の結果を再計算する `bms-replay` CLI（[リプレイ仕様](docs/replay.ja.md) を参照）
+- 記録したリプレイから LR2 / beatoraja / 名前を言ってはいけないあのゲームの結果を再計算する `bms-replay` CLI（[リプレイ仕様](docs/replay.ja.md) を参照）
 
 ### LR2 skin (`@be-music/skin-lr2`)
 
@@ -416,7 +416,7 @@ pnpm run replay -- /path/to/Song.bmplay.json --ruleset=lr2,beatoraja --json
 
 拡張子で判定に関わるのは `.pms` だけです。`.pms` のファイルはレーンの規則より先に `9 KEY` になります。`.bms`、`.bme`、`.bml` は使っているレーンで決まるので、6 / 7 鍵の列がない `.bme` の譜面は `5 KEY` です。
 
-- `11..19` をすべて使う 1P keyboard、または従来 That-Which-Must-Not-Be-Named 2P channel を含まない PMS-STD `22..25` も `9 KEY` として判定します。
+- `11..19` をすべて使う 1P keyboard、または従来 名前を言ってはいけないあのゲーム 2P channel を含まない PMS-STD `22..25` も `9 KEY` として判定します。
 - 拡張レーンチャンネル (`1A..1O` / `2A..2O`、またはホイールの `1P` / `1Q` / `2P` / `2Q`) があれば、他のどのルールよりも優先して `24 KEY SP` / `48 KEY DP` と判定します。bmson の `mode_hint` が `keyboard-24k` / `keyboard-24k-double` の場合も同じです。
 
 判定規則（`@be-music/chart-model` の `resolveChartPlayVariant`）は次の順に調べ、最初に当てはまったものを採ります。「9 KEY のレーン配置」は次の 3 つの内容規則のいずれかです。`17` があり `21` / `26..29` がない `#PLAYER 3`、2P のレーンがなく `11..19` をすべて使う譜面、`21` / `26..29` なしで `22..25` を使う譜面です。「2P」は `2x` のレーンを 1 つでも使うことを指します。レーンの使用は `1x` / `2x` のレーンと `5x` / `6x` のロングノートで数え、地雷と不可視オブジェクトは数えません。

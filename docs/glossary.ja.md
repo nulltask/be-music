@@ -37,7 +37,7 @@
 
 譜面を指すコード名は chart、楽曲は track に揃えます。beatoraja の `song` テーブルや `BMSONDecoder` などの外部名は原文を維持します。
 
-ソースの識別子と本プロジェクトの出力値には `____`、画面上のゲーム名には `????`、ゲーム自体の説明には「**That-Which-Must-Not-Be-Named**」を使います。旧識別子の互換読み込み・移行は行いません。
+ソースの識別子と本プロジェクトの出力値には `____`、画面上のゲーム名には `????`、ゲーム自体の説明には日本語では「**名前を言ってはいけないあのゲーム**」、英語では **That-Which-Must-Not-Be-Named** を使います。旧識別子の互換読み込み・移行は行いません。
 
 ## 譜面とリソース
 
@@ -72,7 +72,7 @@
 - **地雷 (mine)**: 押すとダメージを受けるノートです。LR2 に合わせ、レーンを押したまま判定線を通過するか、`PGREAT` 窓内で押すと爆発します。爆発は譜面値ベースの gauge damage を与えるだけで、判定にはなりません。
 - **判定（judgment）**: `PERFECT`・`GREAT`・`GOOD`・`BAD`・`POOR` など、ノートに対する評価です。結果は judgment、判定する動作は judge と呼びます。種類は `JudgmentKind`、時刻付きの結果は `JudgmentTiming` です。エンジンの動作名やフォーマットのフィールドである `judge`・`judgeRuleset` は役割を区別して扱います。
 - **FAST / SLOW**: 判定タイミングの早押し/遅押しの補助表示です。現行実装では `GREAT` と `GOOD` のみ集計します。
-- **EX-SCORE**: That-Which-Must-Not-Be-Named 互換のスコアです。一般に `PERFECT=2`、`GREAT=1`、それ以外 `0` で集計します。
+- **EX-SCORE**: 名前を言ってはいけないあのゲーム互換のスコアです。一般に `PERFECT=2`、`GREAT=1`、それ以外 `0` で集計します。
 - **SCORE**: 画面に表示する得点です。LR2 では 20 万点満点の通常スコア、ほかの現行ルールセットでは EX-SCORE を使います。
 - **groove gauge**: クリア判定に使うゲージです。shared core の既定は LR2 互換の `GROOVE` (`NORMAL`) で、export された helper は browser play option 向けに `HARD`、`DEATH`、`EASY` も扱います。
 - **ハイスピード（hi-speed）**: ノートのスクロール表示を調整する設定です。表示や見える時間の範囲を変えますが、ノートの時刻や再生テンポは変えません。外部スキンの `HI-SPEED`・`HIGH-SPEED` や既存の `hiSpeed` という名前は維持します。
@@ -142,7 +142,7 @@
 - **Sound / Visual status**: loading screen で audio 側と visual 側の進捗を別々に表示する状態です。
 - **structured log**: TUI 出力とは分離して書き出す NDJSON 実行ログです。通常は `~/.be-music/logs/player.ndjson` に出力します。
 - **video BGA streaming**: gameplay 開始前には動画 BGA の最初の frame だけを確保し、残りを gameplay 開始後に段階的に decode する方針です。
-- **リプレイ（replay）**: 1 回のプレイを決定的に再現するための記録（`*.bmplay.json`）です。解決済み譜面・入力イベント・プレイ設定を持ち、プレイ結果の集計や、複数のプレイからなるプレイ履歴とは区別します。`bms-replay` は LR2、beatoraja、That-Which-Must-Not-Be-Named のルールセットでこれを再シミュレーションします。
+- **リプレイ（replay）**: 1 回のプレイを決定的に再現するための記録（`*.bmplay.json`）です。解決済み譜面・入力イベント・プレイ設定を持ち、プレイ結果の集計や、複数のプレイからなるプレイ履歴とは区別します。`bms-replay` は LR2、beatoraja、名前を言ってはいけないあのゲームのルールセットでこれを再シミュレーションします。
 - **PlayerSummary**: 再生終了後の集計結果です。判定数、FAST/SLOW、EX-SCORE、SCORE、gauge、clear state などを含みます。
 
 ## コース・記録・表示

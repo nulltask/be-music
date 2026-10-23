@@ -320,7 +320,7 @@ const ja: HelpContent = {
             ],
             [
               t.rules.name(RULESET_LABELS.____!),
-              'That-Which-Must-Not-Be-Named のもの（チャージノート付き）。最上位のランプは FULL COMBO。',
+              '名前を言ってはいけないあのゲームのもの（チャージノート付き）。最上位のランプは FULL COMBO。',
             ],
             [t.score.selected, 'プレイのページで、ページの表示に使っているルール。'],
             [t.score.playedWith, 'プレイヤーが遊んだルール。'],
