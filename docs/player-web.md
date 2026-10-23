@@ -900,3 +900,5 @@ controller.dispose();
 The existing Pixi scenes expose the same controller as `scene.controller`. The host already advances it; observers must not advance it again. Gameplay preparation and its internal `PlayfieldRuntime` still contain rendering resources and are not a standalone public gameplay controller. Canvas screenshots and video recording capture the player's canvas; they do not capture DOM screens, so they show nothing of Native's screens. See [ADR 0012](./adr/0012-native-skin-screens.md) and [ADR 0014](./adr/0014-native-playfield-components.md).
 
 Native screens are composed from the Lit Web Components in `@be-music/player-ui`; the skin modules only adapt frame delivery and request events. The same screen and panel elements are available through `@be-music/player-ui-react` and `@be-music/player-ui-vue`. See the [Player UI guide](../packages/player-ui/README.md) and [ADR 0013](./adr/0013-player-ui-components.md).
+
+See [browser player performance measurements](./player-performance.md) for the profiling procedure, Lua cache decision and gameplay allocation comparison.
