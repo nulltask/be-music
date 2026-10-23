@@ -5,6 +5,7 @@ import { HI_SPEED_STORAGE_KEY } from '../hi-speed-storage.ts';
 import { PLAY_TEMPO_STORAGE_KEY } from '../play-tempo-settings.ts';
 import { RENDER_RESOLUTION_STORAGE_KEY } from '../render-resolution.ts';
 import { PLAY_IN_SILENT_MODE_STORAGE_KEY } from '../silent-mode-playback.ts';
+import { DEBUG_MENU_SETTINGS_STORAGE_KEY } from '../debug-menu-settings.ts';
 import {
   BUILT_IN_SKIN_STORAGE_KEY,
   createDemoGUIState,
@@ -259,6 +260,19 @@ describe('createDemoGUIState', () => {
     ).toBe(2);
     expect(create(memoryStorage(), { devicePixelRatio: 1 }).renderResolution).toBe(1);
     expect(create(memoryStorage(), { signals: phone }).skinEffects).toBe('reduced');
+  });
+
+  test('a saved Debug Menu document replaces the visit defaults', () => {
+    const state = create(
+      memoryStorage({
+        [DEBUG_MENU_SETTINGS_STORAGE_KEY]: JSON.stringify({
+          version: 1,
+          updatedAt: 1,
+          settings: { gauge: 'HARD', autoPlay: true, peakGain: true, judgeRuleset: 'beatoraja' },
+        }),
+      }),
+    );
+    expect(state).toMatchObject({ gauge: 'HARD', autoPlay: true, peakGain: true, judgeRuleset: 'beatoraja' });
   });
 
   test('starts from the defaults when storage is blocked', () => {

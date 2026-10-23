@@ -29,7 +29,7 @@ export function buildCourseFolder(this: DebugMenu, folder: FolderApi): void {
         this.setStatus('Enter a difficulty-table URL first');
         return;
       }
-      void this.library.importCourseTables([url], true);
+      void this.library.importCourseTables([url], true).finally(() => this.scheduleSettingsSave());
     },
   };
   folder.addBinding(courseTable, 'url', { label: 'Table URL' });

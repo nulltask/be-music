@@ -141,6 +141,7 @@ export function folderEntries(root: FolderNode): { folder: FolderNode; titles: r
 export function rememberFolderOpenStates(
   root: FolderNode,
   storage: DebugMenuStorage | undefined = defaultStorage(),
+  onFold?: () => void,
 ): void {
   const states = readFolderOpenStates(storage);
   const entries = folderEntries(root).filter(({ folder }) => folder !== root);
@@ -152,6 +153,7 @@ export function rememberFolderOpenStates(
     folder.on('fold', () => {
       states[folderPath(titles)] = folder.expanded;
       storeFolderOpenStates(states, storage);
+      onFold?.();
     });
   }
 }

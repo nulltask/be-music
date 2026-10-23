@@ -3,7 +3,6 @@ import { getBrowserWorkerCount, setBrowserWorkerCount } from '@be-music/player-b
 import { storeWorkerCount } from '../../worker-settings.ts';
 // The Debug Menu's Developer folder. It is built with the menu as `this` (`DebugMenu`).
 import type { FolderApi } from 'tweakpane';
-import { clearDemoSettings } from './folders.ts';
 import type { DebugMenu } from './index.ts';
 /** Diagnostics and session behaviour most players never touch, plus the reset for every remembered setting. */
 export function buildDeveloperFolder(this: DebugMenu, developer: FolderApi): void {
@@ -64,14 +63,6 @@ export function buildDeveloperFolder(this: DebugMenu, developer: FolderApi): voi
     bufferSize: 60,
   });
   developer.addButton({ title: 'Reset settings and reload' }).on('click', () => {
-    if (
-      !window.confirm(
-        'Reset every Debug Menu setting (volumes, skins, skin settings, compressor tuning, folders) to its default and reload? Best records are kept.',
-      )
-    ) {
-      return;
-    }
-    clearDemoSettings();
-    window.location.reload();
+    void this.resetSettings();
   });
 }

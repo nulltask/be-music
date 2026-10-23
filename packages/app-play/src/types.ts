@@ -96,8 +96,7 @@ export interface DemoGUIState extends PlayTempoSettings {
   playInSilentMode: boolean;
   /**
    * When true, the next play scales every decoded sample by one gain so the loudest peak sits near −3 dBFS. Off by
-   * default, and not remembered: a reload plays charts at the level they were authored at. Takes the next play, not
-   * the one already loaded.
+   * default. Remembered with the other Debug Menu settings. Takes the next play, not the one already loaded.
    */
   peakGain: boolean;
   compressor: boolean;
