@@ -24,6 +24,7 @@ import { resolveBMSBase, type BeMusicEvent, type BeMusicJSON } from '@be-music/c
 import { preparePlaybackChart, resolvePlayChart, type PreparedPlaybackChartData } from '@be-music/player-engine';
 import {
   isPlayableInputChannel,
+  randomizeSRandomNotes,
   resolveLaneOptionChannels,
   resolvePlayVariantLaneChannels,
 } from '@be-music/player-engine/lanes';
@@ -37,6 +38,7 @@ import type { PlayerGaugeSummary } from '@be-music/player-engine/signals';
 import {
   createEmptyScore,
   type GaugeType,
+  type RulesetId,
   type JudgmentKind,
   type ScoreSummary,
 } from '@be-music/player-engine/ruleset';
@@ -256,6 +258,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       resolveLaneOptionChannels('1P', hostPlayVariant, prepared.laneBindings),
       ctx.options.random1P ?? 'OFF',
       Math.random,
+      { ruleset: ctx.options.judgeRuleset ?? 'lr2' },
       ctx.mineNotes as Array<{ channel: string }>,
       ctx.invisibleNotes as Array<{ channel: string }>,
     );
@@ -264,6 +267,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       resolveLaneOptionChannels('2P', hostPlayVariant, prepared.laneBindings),
       ctx.options.random2P ?? 'OFF',
       Math.random,
+      { ruleset: ctx.options.judgeRuleset ?? 'lr2' },
       ctx.mineNotes as Array<{ channel: string }>,
       ctx.invisibleNotes as Array<{ channel: string }>,
     );
@@ -510,8 +514,7 @@ export function flipDPChannel(channel: string): string {
  *
  * - `MIRROR` — deterministic reversal of the full mode key set
  * - `RANDOM` — chart-wide permutation of the full mode key set (Fisher-Yates with the supplied RNG)
- * - `S-RANDOM` — per-chord permutation; chord notes share the beat key, and we re-permute within that group so notes on
- *   the same beat never collide on one lane
+ * - `S-RANDOM` — ruleset-specific pure randomizer with active-LN reservations and beatoraja jack avoidance
  * - `SCATTER` — legacy chart-wide permutation of occupied lanes
  */
 export function applyRandomMode(
@@ -519,12 +522,45 @@ export function applyRandomMode(
   allLanes: readonly string[],
   mode: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER',
   rng: () => number,
-  // Extra channel-bearing arrays (e.g. mine notes) that should follow the same lane shuffle as the playable notes. The
-  // Secondary entries follow the same mode-wide map / chord permutation, even when no playable note occupies their
-  // lane, so their authored relationship to the keys is preserved.
+  options: { ruleset?: RulesetId } = {},
+  // Extra channel-bearing arrays: mines first, then invisible notes. Chart permutations share the same lane map;
+  // S-RANDOM applies the active ruleset's policy for each event kind.
   ...secondary: Array<Array<{ channel: string }>>
 ): void {
   if (mode === 'OFF') return;
+  if (mode === 'S-RANDOM') {
+    const entries = [
+      ...notes.map((note) => ({ note, kind: 'note' as const })),
+      ...secondary.flatMap((arr, index) =>
+        arr.map((note) => ({ note, kind: index === 0 ? ('mine' as const) : ('invisible' as const) })),
+      ),
+    ];
+    const channels = randomizeSRandomNotes(
+      entries.map(({ note, kind }) => {
+        const timed = note as {
+          channel: string;
+          seconds?: number;
+          endSeconds?: number;
+          beat?: number;
+          endBeat?: number;
+        };
+        return {
+          channel: timed.channel,
+          timeMs: (timed.seconds ?? timed.beat ?? 0) * 1000,
+          ...(timed.endSeconds !== undefined || timed.endBeat !== undefined
+            ? { endTimeMs: (timed.endSeconds ?? timed.endBeat!) * 1000 }
+            : {}),
+          kind,
+        };
+      }),
+      allLanes,
+      { ruleset: options.ruleset ?? 'lr2', random: rng },
+    );
+    entries.forEach(({ note }, index) => {
+      note.channel = channels[index]!;
+    });
+    return;
+  }
   const domainLanes =
     mode === 'MIRROR' || mode === 'RANDOM'
       ? allLanes
@@ -561,43 +597,6 @@ export function applyRandomMode(
     }
     remapAll(map);
     return;
-  }
-
-  if (mode === 'S-RANDOM') {
-    // Group keyboard-lane notes by beat — every note in a chord shares the same `beat` key, so a fresh permutation per
-    // group gives each note a distinct lane within that chord. The secondary arrays (mines) get the chord-local map too
-    // so an adjacent mine in the same beat ends up beside the re-arranged chord, not floating to a stale lane.
-    const grouped = new Map<number, Array<{ channel: string }>>();
-    const beatOf = (note: { channel: string }): number | undefined => {
-      const beat = (note as { beat?: number }).beat;
-      return typeof beat === 'number' ? beat : undefined;
-    };
-    const groupBy = (arr: Array<{ channel: string }>): void => {
-      for (const note of arr) {
-        if (!domainLanes.includes(note.channel)) continue;
-        const beat = beatOf(note);
-        if (beat === undefined) continue;
-        const group = grouped.get(beat);
-        if (group) {
-          group.push(note);
-        } else {
-          grouped.set(beat, [note]);
-        }
-      }
-    };
-    groupBy(notes);
-    for (const arr of secondary) groupBy(arr);
-    for (const chord of grouped.values()) {
-      const perm = shuffleArray([...domainLanes], rng);
-      const map = new Map<string, string>();
-      for (let index = 0; index < domainLanes.length; index += 1) {
-        map.set(domainLanes[index]!, perm[index]!);
-      }
-      for (const note of chord) {
-        const target = map.get(note.channel);
-        if (target) note.channel = target;
-      }
-    }
   }
 }
 

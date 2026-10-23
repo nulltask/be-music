@@ -29,7 +29,7 @@ function notesOn(channels: readonly string[], beat = 0): TestNote[] {
   return channels.map((channel) => ({ channel, beat }));
 }
 
-function channelsOf(notes: readonly TestNote[]): string[] {
+function channelsOf(notes: readonly { channel: string }[]): string[] {
   return notes.map((note) => note.channel);
 }
 
@@ -77,7 +77,7 @@ describe('applyRandomMode', () => {
     const notes = notesOn(['11', '12', '13']);
     const mines = notesOn(['11']);
     const invisible = notesOn(['13', '14']);
-    applyRandomMode(notes, KEYS_1P, 'MIRROR', seededRandom(1), mines, invisible);
+    applyRandomMode(notes, KEYS_1P, 'MIRROR', seededRandom(1), {}, mines, invisible);
     expect(channelsOf(mines)).toEqual(['19']);
     // Unused lanes take part in the same full-mode permutation.
     expect(channelsOf(invisible)).toEqual(['15', '14']);
@@ -100,15 +100,34 @@ describe('applyRandomMode', () => {
     expect(channelsOf(scatter)).toEqual(channelsOf(random));
   });
 
-  test('S-RANDOM draws a permutation per chord, so the notes of a chord never share a lane', () => {
+  test('S-RANDOM selects the active judge ruleset instead of the drawing family', () => {
+    const lr2 = [
+      { channel: '11', seconds: 0 },
+      { channel: '11', seconds: 0.02 },
+    ];
+    const beatoraja = structuredClone(lr2);
+    applyRandomMode(lr2, KEYS_1P, 'S-RANDOM', () => 0, { ruleset: 'lr2' });
+    applyRandomMode(beatoraja, KEYS_1P, 'S-RANDOM', () => 0, { ruleset: 'beatoraja' });
+    expect(channelsOf(lr2)).toEqual(['11', '11']);
+    expect(channelsOf(beatoraja)).toEqual(['11', '12']);
+  });
+
+  test('S-RANDOM never places a later tap inside a held LN', () => {
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const long = { channel: '11', beat: 0, seconds: 0, endBeat: 4, endSeconds: 2 };
+      const taps = [1, 2, 3].map((beat) => ({ channel: '12', beat, seconds: beat / 2 }));
+      applyRandomMode([long, ...taps], KEYS_1P, 'S-RANDOM', seededRandom(seed));
+      expect(taps.every((note) => note.channel !== long.channel)).toBe(true);
+    }
+  });
+
+  test('S-RANDOM keeps simultaneous notes unique within the full mode', () => {
     const chords = [0, 1, 2, 3].map((beat) => notesOn(['11', '12', '13'], beat));
     const notes = chords.flat();
     applyRandomMode(notes, KEYS_1P, 'S-RANDOM', seededRandom(3));
-    const random = seededRandom(3);
     for (const chord of chords) {
-      const perm = shuffleArray(['11', '12', '13'], random);
-      expect(channelsOf(chord)).toEqual(perm);
       expect(new Set(channelsOf(chord)).size).toBe(3);
+      expect(channelsOf(chord).every((channel) => KEYS_1P.includes(channel))).toBe(true);
     }
     expect(new Set(chords.map((chord) => channelsOf(chord).join())).size).toBeGreaterThan(1);
   });

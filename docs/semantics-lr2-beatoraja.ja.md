@@ -75,7 +75,7 @@ LR2 と beatoraja は、同じ譜面、オプション、スキンの番号を�
    (A)
 
 9. **レーンオプションがどちらのエンジンとも一致しない。**
-   - S-RANDOM が、LN を押しているレーンにノートを落とすことがある。
+   - S-RANDOM の LN 予約とルールセットごとの条件は [#592](https://github.com/nulltask/be-music/issues/592) で修正。
    - SCATTER は単なる RANDOM なのに `SCATTER` として記録される。
    - MIRROR / RANDOM のモード全体の鍵盤への対応は [#594](https://github.com/nulltask/be-music/issues/594) で修正。
    - オプション番号の意味がスキンファミリーで違う：LR2 の 3 = S-RANDOM、beatoraja の 3 = R-RANDOM。
@@ -557,13 +557,13 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
   - ソース：[pattern/Randomizer.java#L140-L250](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/pattern/Randomizer.java#L140-L250)。
 - **種類:** セマンティクス。
 - **be-music の現状**（[`packages/player-browser/src/session/play/play-chart.ts`](../packages/player-browser/src/session/play/play-chart.ts) の `applyRandomMode`）：
-  - S-RANDOM は和音ごとに使われているレーンの新しい順列を引き、LN の占有を確かめないので、押されている LN の中にノートが落ちることがあります。
+  - S-RANDOM は [#592](https://github.com/nulltask/be-music/issues/592) で修正。エンジンの純粋なヘルパーが LN の終端の行まで配置先を予約します。LR2 には連打間隔の制限がなく、beatoraja は整数 ms で40msを超える間隔を優先し、不足時は最も古い空きレーンを選びます。ブラウザはスキンファミリーに関係なく判定ルールセットを選び、暫定 IIDX は LR2 の規則を使います。モード全体の鍵盤範囲を使い、記録済みの確定配置は変更しません。
   - SCATTER は RANDOM の別名なのに `'SCATTER'` として記録されます。
   - MIRROR と RANDOM は [#594](https://github.com/nulltask/be-music/issues/594) で修正し、モード全体の鍵盤を対象にします。疎な7鍵の2番レーンは6番レーンに写ります。5/7/9/10/14/24/48鍵と PMS の2形式をモード表から解決し、PMS-STD の右バンクの列も1Pの鍵盤として扱います。スクラッチ・ホイール・反対側は固定します。根拠：[OpenLR2](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27099-L27236)、[PatternModifier](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/pattern/PatternModifier.java#L132-L137)。
 - **影響:** B。LR2 の名前で出しているパターンがどちらのエンジンとも一致しません。
 - **推奨:**
-  - ランダマイザーを `@be-music/player-engine` に移し、RNG を注入する純粋なヘルパーにしてテストを足す。
-  - LR2 ファミリー向けに LR2 の S-RAN と SCATTER を、別のオプションとして beatoraja の S-RANDOM を実装する。
+  - S-RANDOM は [#592](https://github.com/nulltask/be-music/issues/592) で `@be-music/player-engine/lanes` の乱数を外から渡す純粋なヘルパーへ移動し、モード・左右・LN・境界・不足時の選択・決定性をテストしています。
+  - 選択した判定ルールセットごとの S-RANDOM を維持し、SCATTER は #593 で別途扱います。
   - SCATTER は本物になるまで隠す。
   - ログは解決済みのチャンネルを保存するので、再シミュレーションのリスクはありません。
 
