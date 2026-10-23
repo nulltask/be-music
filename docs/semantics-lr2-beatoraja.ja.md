@@ -64,7 +64,7 @@ LR2 と beatoraja は、同じ譜面、オプション、スキンの番号を�
    (B)
 
 6. **プレイヤーの LN モード（LN/CN/HCN）がなく、どの記録キーにも入っていない。** beatoraja はスコアを `(sha256, lnmode)` で区別します。取り込んだ CN/HCN のスコアには行き場がなく、後からオプションを足すと 3 つのモードの記録が混ざります。(A+B)
-7. **beatoraja の TIMER_PLAY がロード完了時に始まり、その後に固定の 1.5 秒の助走がある。** be-music は `skin.playstart` を無視するので、TIMER_PLAY を基準にする beatoraja の要素はどれもノートより早く動きます。(A)
+7. **beatoraja の開始タイミング（#595 で修正）。** 入力と READY はスキンの指定に従い、PLAY は READY の待ち時間の後に譜面と同時に始まって譜面時刻に従います。(A)
 8. **beatoraja スキンの状態が配線されていないか、LR2 の形をしている。**
    - Lua の `event_index` と `set_timer` が配線されていない。
    - リザルトのタイマー 150-152、スコアのタイマー 348-352、HCN、PM キャラ、カスタムタイマーが設定されない。
@@ -172,7 +172,7 @@ flowchart TD
 | 43  | DST の 21 列目以降のオフセット                          | A              | LR2 の op4 だけ                                    | 3/4/5/10 を受け付ける                                                                 |
 | 44  | beatoraja の CSV 方言のコマンド                         | A              | 読まない                                           | 方言を任意で対応                                                                      |
 | 45  | `#SRC_BAR_LAMP` の番号の意味                            | A              | LR2                                                | beatoraja の方言を検出したら切り替える                                                |
-| 46  | TIMER_PLAY / `skin.playstart`                           | A              | ロード完了 + 1.5 秒                                | 譜面の開始時刻を刻む                                                                  |
+| 46  | TIMER_PLAY / `skin.playstart`                           | A              | #595 で修正                                        | 譜面の開始時刻を刻む                                                                  |
 | 47  | GAUGE_MAX タイマーの切り替え                            | A, C           | 止まらない（バグ）                                 | 開始 / 停止                                                                           |
 | 48  | beatoraja だけのタイマー                                | A              | 駆動しない                                         | 対応表に追加                                                                          |
 | 49  | Lua の `event_index` / `set_timer`                      | A              | nil                                                | 配線する                                                                              |
@@ -772,18 +772,12 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 - **be-music の現状:** 内部は ms で、Lua には µs に変換して渡します。beatoraja 方式で正しい。
 - **推奨:** 維持。
 
-### TIMER_PLAY と `skin.playstart`（バグ）
+### TIMER_PLAY と `skin.playstart`（#595 で修正）
 
-- **LR2:** ロード完了時にタイマー 40、プレイ開始時に 41。be-music の LR2 側も同じです（[`packages/skin-lr2/src/state/play.ts`](../packages/skin-lr2/src/state/play.ts)）。
-- **beatoraja:** STARTINPUT、次に `loadstart + loadend` の後に READY、そして **READY が `skin.playstart` だけ動いた後にはじめて PLAY**。PLAY はその後、再生速度に合わせて進みます（[play/BMSPlayer.java#L499-L516](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L499-L516)、[#L604-L625](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L604-L625)）。
-- **種類:** セマンティクス：TIMER_PLAY は譜面のクロックの始まり。
-- **be-music の現状:**
-  - STARTINPUT、READY、PLAY がロード完了時に一緒に始まります（[`packages/player-browser/src/view/beatoraja/play-bridge.ts`](../packages/player-browser/src/view/beatoraja/play-bridge.ts)）。
-  - 譜面は固定の `BEATORAJA_PLAY_LEAD_IN_MS = 1500` の後に始まります（[`play-view.ts`](../packages/player-browser/src/view/beatoraja/play-view.ts)）。
-  - `skin.playstart` は読み込むが使っていません。
-  - [#560](https://github.com/nulltask/be-music/issues/560) が直したのはプレイ終了のタイマー（TIMER_FAILED とスキンの `close`）だけで、開始は直していません。
-- **影響:** A。TIMER_PLAY を基準にする要素（ModernChic では 48 個）がノートより約 1.5 秒早く動きます。
-- **推奨:** TIMER_PLAY を譜面の開始時に刻み、スキンの `playstart`、`loadstart + loadend`、`input` を使う。表示のタイミングだけの話で、エンジンの開始オフセットは引き続き記録されます。
+- **LR2:** ロード完了時にタイマー 40、譜面開始時に 41 が始まります。シーン開始からの絶対オフセットと組み込みスキンのイントロは従来どおりです。
+- **beatoraja:** `skin.input` の後に STARTINPUT、メディア読み込みと `loadstart + loadend` の後に READY、READY が `skin.playstart` だけ動いてから譜面と同時に PLAY が始まります。その後の PLAY は再生速度を含む譜面時刻に従います（[BMSPlayer.java#L465-L471](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L465-L471)、[#L499-L516](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L499-L516)、[#L604-L625](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L604-L625)）。
+- **be-music の現状:** [#595](https://github.com/nulltask/be-music/issues/595) で修正。入力・READY・譜面開始の段階はシーンセッションが管理します。メディア読み込みが遅くても READY の指定時間を確保します。beatoraja の時間指定の省略とゼロはゼロとして扱い、組み込みスキンの3秒イントロに切り替えません。ブリッジは各段階を別々に記録し、PLAY は一時停止・シークを含むエンジンの譜面時刻から求めます。
+- **記録:** エンジンの実際の開始オフセットは引き続き記録します。判定ルール・リプレイ形式・Leaderboard の導出は変わりません。
 
 ### GAUGE_MAX タイマー（バグ）
 
