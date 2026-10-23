@@ -32,6 +32,7 @@ export type PlaySceneGUIState = Pick<
   | 'hiSpeed'
   | 'keyVolume'
   | 'bgmVolume'
+  | 'peakGain'
   | 'compressor'
   | 'compressorKey'
   | 'compressorBGM'
@@ -157,6 +158,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     // What the replay shows of the recorded view (the Debug Menu's "Replay / ghost" toggles, latched at song start).
     replayView: { ...guiState.replayView },
     audioVolumes: { key: guiState.keyVolume / 100, bgm: guiState.bgmVolume / 100 },
+    ...(guiState.peakGain ? { peakGain: true } : {}),
     audioCompressorParams: input.audioCompressorParams,
     audioCompressor: guiState.compressor,
     audioCompressorMode: input.audioCompressorMode,

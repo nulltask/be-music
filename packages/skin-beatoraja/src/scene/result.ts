@@ -37,6 +37,8 @@ import {
 /** What a result skin reads of a run's result: the parts of `PlayResult` it shows (a `PlayResult` is one). */
 export interface BeatorajaResultFacts {
   readonly score: BeatorajaScoreInput;
+  /** Note POORs alone when the result display folds empty POORs into `score.poor` (LR2). */
+  readonly judgedPoor?: number;
   readonly fast?: number;
   readonly slow?: number;
   readonly maxCombo: number;
@@ -167,6 +169,7 @@ function scoreNumberInput(input: BeatorajaResultInput): BeatorajaScoreNumberInpu
     numbers = {
       score: {
         ...result.score,
+        ...(result.judgedPoor !== undefined ? { poor: result.judgedPoor } : {}),
         ...(result.fast !== undefined ? { fast: result.fast } : {}),
         ...(result.slow !== undefined ? { slow: result.slow } : {}),
       },

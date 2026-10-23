@@ -438,3 +438,18 @@ describe('ResultRoute: the beatoraja result', () => {
     expect(themed.deps.courseRoute.continueCourse).not.toHaveBeenCalled();
   });
 });
+
+describe('practice results', () => {
+  for (const family of ['none', 'lr2', 'beatoraja'] as const) {
+    test(`${family}: shows a result without writing records, ranking or auto-saving`, async () => {
+      const h = await harness({ family });
+      const data = { ...resultOf(chartEntry('a')), practice: true };
+      if (family === 'beatoraja') await h.route.showBeatorajaPlayResult(data, false);
+      else await h.route.showResult(data);
+      expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
+      expect(h.deps.records.recordActiveCourseStage).not.toHaveBeenCalled();
+      expect(h.deps.replayAutoSave.savePlay).not.toHaveBeenCalled();
+      expect(h.deps.leaderboard.maybeSubmit).not.toHaveBeenCalled();
+    });
+  }
+});

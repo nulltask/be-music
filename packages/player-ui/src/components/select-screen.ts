@@ -54,7 +54,7 @@ export class BeMusicSelectScreenElement extends FrameElement<BeMusicDOMSelectFra
         />
       </header>
       <div class="columns">
-        <section>
+        <section class="browse">
           <div class="actions">
             <button ?disabled=${f.launching} @click=${() => this.emit('back-request', undefined)}>Back</button>
             <p class="muted">${f.folderLabel ?? 'All folders'}</p>

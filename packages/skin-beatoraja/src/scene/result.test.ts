@@ -250,3 +250,16 @@ it.each([
   const result = input({ gauge: undefined, result: facts({ gauge: 50, gaugeType: type }) });
   expect(resolveBeatorajaResultOps(result).filter((op) => [42, 43, 1046].includes(op))).toEqual(expected);
 });
+
+it('reads empty POOR separately on results, including an LR2 folded POOR display', () => {
+  const score = { ...facts().score, bad: 2, poor: 3, emptyPoor: 7 };
+  const result = input({ result: facts({ score }) });
+  expect([BEATORAJA_NUM.POOR, 420, 426, 427].map((id) => resolveBeatorajaResultNumber(id, result))).toEqual([
+    3, 7, 10, 12,
+  ]);
+  const lr2 = input({ result: facts({ score: { ...score, poor: 10 }, judgedPoor: 3 }) });
+  expect([BEATORAJA_NUM.POOR, 420, 426, 427].map((id) => resolveBeatorajaResultNumber(id, lr2))).toEqual([
+    3, 7, 10, 12,
+  ]);
+  expect(lr2.result.score.poor).toBe(10);
+});
