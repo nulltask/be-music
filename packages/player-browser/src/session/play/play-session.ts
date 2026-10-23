@@ -219,10 +219,15 @@ export class PlaySession extends PlaySessionState {
     // as the pause-aware reads further below.
     const now = this.playClock();
     this.sceneStartTime = now;
-    const { loadEndOffsetMs, playStartOffsetMs } = this.theme.timing();
+    const { loadEndOffsetMs, playStartOffsetMs, inputStartOffsetMs, playStartAfterLoadEndMs } = this.theme.timing();
     // Skinless / non-LR2 demos have no timing directives; fall back to the legacy 3-second wait so the slide-in chrome
     // of the built-in fallback frame still has room to land before notes begin.
-    const introMs = playStartOffsetMs > 0 ? playStartOffsetMs : FALLBACK_INTRO_DELAY_MS;
+    const introMs =
+      playStartAfterLoadEndMs !== undefined
+        ? loadEndOffsetMs + playStartAfterLoadEndMs
+        : playStartOffsetMs > 0
+          ? playStartOffsetMs
+          : FALLBACK_INTRO_DELAY_MS;
     this.scheduledIntroMs = introMs;
     // The chart waits on BOTH the configured PLAY START delay AND the BGA preload (which may still be transcoding video
     // in the background — see `load()`). Until the gate opens below, `startTime = +Infinity` keeps `isIntroPlaying`
@@ -238,17 +243,26 @@ export class PlaySession extends PlaySessionState {
     const sceneEpoch = this.sceneStartTime;
     const bgaReady = this.bgaReadyPromise ?? Promise.resolve();
     // LOAD END gate — both the configured load-end delay AND the BGA preload need to finish.
-    void Promise.all([bgaReady, this.delaySceneStage(loadEndOffsetMs)]).then(() => {
-      if (this.disposed) return;
-      if (this.sceneStartTime !== sceneEpoch) return;
+    const isCurrent = () => !this.disposed && !this.exiting && this.sceneStartTime === sceneEpoch;
+    if (inputStartOffsetMs !== undefined) {
+      void this.delaySceneStage(inputStartOffsetMs).then(() => {
+        if (isCurrent()) this.theme.moment({ kind: 'input-start', at: this.playClock() });
+      });
+    }
+    const loadEnd = Promise.all([bgaReady, this.delaySceneStage(loadEndOffsetMs)]).then(() => {
+      if (!isCurrent()) return;
       this.theme.moment({ kind: 'load-end', at: this.playClock() });
     });
-    // PLAY START gate — same pattern, but for the configured play-start (or fallback intro). Raises the theme's
-    // play-start event (animation clock) and anchors the wall-clock + audio-context start times (chart-engine clock) so
-    // the chart engine and BGM samples share a single t=0.
-    void Promise.all([bgaReady, this.delaySceneStage(introMs)]).then(() => {
-      if (this.disposed) return;
-      if (this.sceneStartTime !== sceneEpoch) return;
+    // beatoraja's READY interval starts at actual load end, so a slow preload cannot consume it. LR2 keeps its
+    // absolute PLAY START gate. Both anchor the animation, engine and BGM clocks at the same chart start.
+    const playStart =
+      playStartAfterLoadEndMs === undefined
+        ? Promise.all([bgaReady, this.delaySceneStage(introMs)])
+        : loadEnd.then(() => {
+            if (isCurrent() && playStartAfterLoadEndMs > 0) return this.delaySceneStage(playStartAfterLoadEndMs);
+          });
+    void playStart.then(() => {
+      if (!isCurrent()) return;
       this.theme.moment({ kind: 'play-start', at: this.playClock() });
       // `startTime` is consumed by `isIntroPlaying` and `currentSeconds`, both of which work in raw wall-clock units
       // (with `currentSeconds` subtracting `pauseTotal` explicitly), so it MUST stay on `performance.now()`.

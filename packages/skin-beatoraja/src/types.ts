@@ -210,10 +210,13 @@ export interface BeatorajaSkinHeader {
   /** Native skin height in pixels. */
   h: number;
   /**
-   * Built-in scene timers (milliseconds since the scene started). The Java side reads these directly into
+   * Built-in scene timings in milliseconds (`playstart` is the READY interval). The Java side reads these into
    * `SkinObject` time fields. Names mirror the upstream JSON keys.
    */
   playstart?: number;
+  /** Minimum loading interval before READY; external beatoraja timing names. */
+  loadstart?: number;
+  loadend?: number;
   scene?: number;
   input?: number;
   close?: number;

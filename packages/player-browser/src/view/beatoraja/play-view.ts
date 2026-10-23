@@ -11,8 +11,8 @@
  *
  * The skin's cover buttons and the mouse wheel come back as cover intents; the cover keys and the hi-speed keys are the
  * session's (`PlaySessionOptions.coverKeys`), and the view shows what they set for a moment. The session times the
- * play from the view's timing ({@link resolveBeatorajaPlayTiming}): the loading ends at once, the chart starts
- * {@link BEATORAJA_PLAY_LEAD_IN_MS} later, and the play ends over the skin's `fadeout`, or, failed, after its `close`.
+ * play from the view's timing ({@link resolveBeatorajaPlayTiming}): READY follows loading, the chart starts
+ * after the skin's `playstart` interval, and the play ends over the skin's `fadeout`, or, failed, after its `close`.
  */
 
 import {
@@ -67,10 +67,7 @@ import { BeatorajaViewChartImages, resolveBeatorajaFadeOutMs } from './scene-fra
 
 const log = logger('beatoraja-gameplay');
 
-/**
- * How long the chart waits after the play has loaded: the 1.5 s the engine's lead-in held a beatoraja play at READY
- * before the chart's start.
- */
+/** @deprecated The legacy fixed lead-in. Play timing now uses the skin's `playstart` (zero when omitted). */
 export const BEATORAJA_PLAY_LEAD_IN_MS = 1500;
 
 /** How far the skin's cover buttons move a cover: 5 % of the lane per click (Shift reverses). */
@@ -92,17 +89,21 @@ const BUTTON_HIDDEN = 332;
 /** The beatoraja scale the replay reads the hi-speed on: a lane is four beats at hi-speed 1. */
 const BEATORAJA_REPLAY_VIEW: PlayReplayViewScale = { scale: BEATORAJA_HI_SPEED_SCALE, laneBeats: 4 };
 
-/**
- * The beatoraja play skin's timing: the play has loaded once it shows (READY and the play timers start then), the chart
- * starts {@link BEATORAJA_PLAY_LEAD_IN_MS} later, and the play ends over the skin's `fadeout` (500 ms without one) or,
- * failed, after its `close` (`BMSPlayer` opens the result once `TIMER_FAILED` passes it; 0 without one).
- */
-export function resolveBeatorajaPlayTiming(skin: Pick<BeatorajaSkin, 'fadeout' | 'close'>): PlayViewTiming {
+/** The skin's input/loading offsets and its READY interval; omitted beatoraja timings default to zero. */
+export function resolveBeatorajaPlayTiming(
+  skin: Pick<BeatorajaSkin, 'fadeout' | 'close' | 'input' | 'loadstart' | 'loadend' | 'playstart'>,
+): PlayViewTiming {
+  const duration = (value: number | undefined) =>
+    typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+  const loadEndOffsetMs = duration(skin.loadstart) + duration(skin.loadend);
+  const playStartAfterLoadEndMs = duration(skin.playstart);
   return {
-    loadEndOffsetMs: 0,
-    playStartOffsetMs: BEATORAJA_PLAY_LEAD_IN_MS,
+    inputStartOffsetMs: duration(skin.input),
+    loadEndOffsetMs,
+    playStartOffsetMs: loadEndOffsetMs + playStartAfterLoadEndMs,
+    playStartAfterLoadEndMs,
     fadeOutMs: resolveBeatorajaFadeOutMs(skin.fadeout),
-    closeMs: typeof skin.close === 'number' && Number.isFinite(skin.close) && skin.close > 0 ? skin.close : 0,
+    closeMs: duration(skin.close),
   };
 }
 
