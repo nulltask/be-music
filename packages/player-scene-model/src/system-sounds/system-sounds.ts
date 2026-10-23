@@ -10,6 +10,7 @@ export type SystemSoundSlot =
   | 'cursor'
   | 'decide'
   | 'cancel'
+  | 'playStop'
   | 'folderOpen'
   | 'folderClose'
   | 'optionOpen'
@@ -28,6 +29,7 @@ export const SYSTEM_SOUND_SLOTS: readonly SystemSoundSlot[] = [
   'cursor',
   'decide',
   'cancel',
+  'playStop',
   'folderOpen',
   'folderClose',
   'optionOpen',
@@ -69,6 +71,7 @@ export const LR2_SOUND_SET_SLOTS: Readonly<Record<string, SystemSoundSlot>> = {
   CLEAR: 'clear',
   FAIL: 'fail',
   SCRATCH: 'cursor',
+  STOP: 'playStop',
   COURSECLEAR: 'courseClear',
   COURSEFAIL: 'courseFail',
 };
@@ -86,6 +89,7 @@ export interface BeatorajaThemeSounds {
   /** The cue paths found in the theme's files (`BeatorajaSelectSystemSoundPaths`). */
   readonly paths?: {
     readonly cursor?: string;
+    readonly playStop?: string;
     readonly decide?: string;
     readonly cancel?: string;
     readonly folderOpen?: string;
@@ -121,6 +125,7 @@ export function systemSoundSetFromBeatoraja(theme: BeatorajaThemeSounds): System
   const bgm = theme.bgm ?? {};
   return compact([
     ['cursor', fromPath(paths.cursor)],
+    ['playStop', fromPath(paths.playStop)],
     ['decide', fromPath(paths.decide)],
     ['cancel', fromPath(paths.cancel)],
     ['folderOpen', fromPath(paths.folderOpen)],

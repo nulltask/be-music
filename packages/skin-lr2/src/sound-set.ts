@@ -17,6 +17,7 @@ export type LR2SoundSetKey =
   | 'CLEAR'
   | 'FAIL'
   | 'SCRATCH'
+  | 'STOP'
   | 'COURSECLEAR'
   | 'COURSEFAIL';
 

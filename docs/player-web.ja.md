@@ -604,6 +604,8 @@ Web のデモは、リザルトをすべてこの画面で表示します。単�
 
 `createPlayScene(kit, options)`（`@be-music/player-browser/host`）はどの種類のプレイ画面も作ります。プレイのセッション（`session/play/play-session.ts`）を kit の種類のビューが描く `SessionScene` で、読み込み、`setScene` で表示し、開始します。標準の kit（`{ family: 'built-in', skin }`）は組み込みのプレイビュー（`view/built-in/play-view.ts`）が、LR2 の kit（`{ family: 'lr2', skin, invisibleNoteSkin? }`。譜面のプレイスキンと、見えないノート用のテーマの 9 鍵スキン）は LR2 のプレイビュー（`view/lr2/play-view.ts`）が、beatoraja の kit（`{ family: 'beatoraja', kit }`。譜面の鍵盤数に合うテーマのプレイのエントリ）は beatoraja のプレイビュー（`view/beatoraja/play-view.ts`）が描きます。
 
+プレイには任意の `sounds: SystemSoundSet` を渡せます。途中で失敗して終了すると `sounds.playStop` をオーディオサービスで 1 回だけ、プレイ画面が所有する音として鳴らします。LR2 テーマではサウンドセットの `#STOP` を読み、なければ `Sound/lr2/playstop` を探します。beatoraja テーマでは `sound/playstop` を探します。通常終了・Escape・リトライでは鳴らしません。音のないテーマでは何も再生せず、画面を離れると再生中の停止音も止まります。
+
 ```mermaid
 flowchart LR
   subgraph scene["PlayScene（SessionScene）"]
