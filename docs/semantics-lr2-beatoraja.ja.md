@@ -459,7 +459,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 - **LR2:** LN は 1 ノートです。
 - **beatoraja:** TOTAL の補正は `f * total / getTotalNotes()` で（[play/GrooveGauge.java#L260](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/GrooveGauge.java#L260)）、`getTotalNotes` は CN/HCN の終端を数えます（[jbms-parser TimeLine.java#L139-L156](https://github.com/exch-bms2/jbms-parser/blob/8108cd54a19275810e1f5d2c9586f008eb6db95e/src/bms/model/TimeLine.java#L139-L156)）。同じ数が既定の TOTAL と `LIMIT_INCREMENT` にも使われます。
 - **種類:** パラメータ（モデル化のバグ）。
-- **be-music の現状:** `beatoraja` は `baseNotes` を使います（[`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) ~L811-L833、[`facts.ts`](../packages/player-engine/src/ruleset/facts.ts) `countBaseNotes`）。
+- **be-music の現状:** fixed in [#586](https://github.com/nulltask/be-music/issues/586)。beatoraja は判定ノート数（LN の始点、CN/HCN の始点と終点）をデフォルト TOTAL、割合指定 TOTAL、HARD/EX-HARD の `LIMIT_INCREMENT` を含む TOTAL 由来の回復量に使います。LR2 は従来のノート数を維持します。エンジンとリプレイのゲージ値は各確認時点で一致します。保存済みの Leaderboard 派生結果には明示的なオフライン再計算が必要で、リプレイと ruleset のリビジョン 0 は変更しません。
 - **影響:** B。CN/HCN の譜面で回復が最大 2 倍速すぎ、ランプが変わります。
 - **推奨:** `beatoraja` では ruleset の判定数を渡す。
 
