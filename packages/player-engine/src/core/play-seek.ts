@@ -77,6 +77,7 @@ export function applySeek(session: PlaySession, judge: PlayJudge, seconds: numbe
   if (judge.seek === undefined) return undefined;
   const { audioSession, uiEnabled, uiSignals, summary } = session;
   const target = clampSeekSeconds(session, seconds);
+  session.replayRecorder?.discard();
   session.seekGeneration += 1;
   const generation = session.seekGeneration;
 

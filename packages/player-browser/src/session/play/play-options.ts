@@ -51,6 +51,8 @@ export interface PlaySessionOptions {
   onChartFinished?: (result: PlayResult) => void;
   /** When true, every note is auto-judged as PERFECT at its scheduled time. */
   autoPlay?: boolean;
+  /** Opt in to manual seeking; seeking turns the play into practice. */
+  allowSeek?: 'practice';
   /**
    * When true, the gameplay automatically pauses on tab visibility change (`document.hidden`) and window blur, and
    * auto-resumes on focus / `pageshow`. When false (the default), the play scene keeps running in the background —

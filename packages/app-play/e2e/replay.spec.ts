@@ -135,3 +135,27 @@ test("a replay follows the log's tempo and hi-speed with Replay / ghost on, and 
   expect(state.play?.tempo).toBe(0.9);
   expect(state.play?.hiSpeed).toBe(4);
 });
+
+test('manual seeking stays paused, resets judgments and finishes without a replay', async ({ demo }) => {
+  await openWithLibrary(demo);
+  await demo.setOption(['Play options'], 'Auto play', false);
+  await demo.browseTo(SONGS, 'Fixture A');
+  await demo.key('Enter');
+  await demo.waitFor(
+    (state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 1.5,
+    'manual play under way',
+  );
+  await demo.key('Space');
+  await demo.key('ArrowLeft');
+  let state = await demo.waitFor((current) => current.play?.seconds === 0, 'practice sought to the start');
+  expect(state.play?.judged?.pgreat).toBe(0);
+  await demo.key('ArrowRight');
+  state = await demo.waitFor(
+    (current) => Math.abs((current.play?.seconds ?? -1) - 5) < 0.01,
+    'practice sought forwards while paused',
+  );
+  expect(state.play?.judged?.pgreat).toBe(0);
+  await demo.key('Space');
+  await demo.waitForResult(0);
+  expect(await demo.lastReplay()).toBeUndefined();
+});

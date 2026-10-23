@@ -202,7 +202,9 @@ there as an ESC, with the live play's result. A replay of an AUTO-played log pas
 `replayInputs` too, so it is a replay as well: it follows `replayTempoChanges`, and neither kind of replay records the
 tempo it is re-driven at.
 
-Browser replays can seek through `PlayScene.seek(seconds)` or ← / → (five seconds). The same engine re-drives recorded inputs from the start, restoring judgments, gauge, combo, held long notes, the recorded tempo and the view at the target. A paused replay stays paused, and a replay aborted early cannot seek past its recorded end. Replay / ghost options still decide whether recorded tempo and view settings override the viewer's. Seeking produces no new replay. Manual practice and course practice are later phases of [ADR 0016](./adr/0016-seek-play-loop-command.md).
+Browser replays can seek through `PlayScene.seek(seconds)` or ← / → (five seconds). The same engine re-drives recorded inputs from the start, restoring judgments, gauge, combo, held long notes, the recorded tempo and the view at the target. A paused replay stays paused, and a replay aborted early cannot seek past its recorded end. Replay / ghost options still decide whether recorded tempo and view settings override the viewer's. Seeking produces no new replay. Course practice is a later phase of [ADR 0016](./adr/0016-seek-play-loop-command.md).
+
+Manual seeking requires `PlaySceneOptions.allowSeek: 'practice'`. The first seek discards the replay recorder. Notes with heads before the target, including their long-note tails, are consumed without scoring; score, combo and gauge reset to their play-start values. A paused play stays paused. The result carries `practice: true` and cannot be saved as a best record, submitted to the Leaderboard or auto-saved as a replay. The demo enables this for single-chart manual play.
 
 ## What the player saw
 
