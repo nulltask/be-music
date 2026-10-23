@@ -188,15 +188,19 @@ describe('BeatorajaPlayBridge — construction', () => {
 });
 
 describe('BeatorajaPlayBridge — built-in timers', () => {
-  it('stamps `startinput` / `ready` / `play` at load-end, flips the loading gate, and `fadeout` at the exit fade', () => {
+  it('stamps input, READY and PLAY at their own stages, and fadeout at exit', () => {
     // The adapter stamped them as the engine came up (its input bus, then its start); the play session raises one
-    // `load-end` moment when the play has loaded and is about to start, and the three start then.
+    // The session raises each stage independently; READY precedes chart time.
     const { bridge, advance, update } = createHarness();
     advance(120);
     update([{ kind: 'load-end', atMs: 120 }]);
-    expect(bridge.getTimerStart(TIMER_STARTINPUT)).toBe(120);
+    expect(bridge.getTimerStart(TIMER_STARTINPUT)).toBeUndefined();
     expect(bridge.getTimerStart(TIMER_READY)).toBe(120);
-    expect(bridge.getTimerStart(TIMER_PLAY)).toBe(120);
+    expect(bridge.getTimerStart(TIMER_PLAY)).toBeUndefined();
+    update([{ kind: 'input-start', atMs: 150 }]);
+    expect(bridge.getTimerStart(TIMER_STARTINPUT)).toBe(150);
+    update([{ kind: 'play-start', atMs: 1120 }]);
+    expect(bridge.getTimerStart(TIMER_PLAY)).toBe(1120);
     expect(bridge.hasOp(BEATORAJA_OP.NOW_LOADING)).toBe(false);
     expect(bridge.hasOp(BEATORAJA_OP.LOADED)).toBe(true);
 
@@ -206,6 +210,26 @@ describe('BeatorajaPlayBridge — built-in timers', () => {
     // A second fade (the engine's stop after the held outro) does not restart it.
     update([{ kind: 'exit-fade-out', atMs: 62_000 }]);
     expect(bridge.getTimerStart(TIMER_FADEOUT)).toBe(61_420);
+  });
+
+  it('keeps PLAY elapsed time on the chart clock through tempo changes and seeks', () => {
+    const { bridge, update, advance, frame } = createHarness();
+    frame({ currentSeconds: -1 });
+    expect(bridge.getTimerStart(TIMER_PLAY)).toBeUndefined();
+    update([{ kind: 'play-start', atMs: 0 }]);
+    advance(1000);
+    frame({ currentSeconds: 2 });
+    expect(1000 - bridge.getTimerStart(TIMER_PLAY)!).toBe(2000);
+    advance(1000);
+    frame({ currentSeconds: 2.5 });
+    expect(2000 - bridge.getTimerStart(TIMER_PLAY)!).toBe(2500);
+    // A seek or pause is represented by the engine's chart clock too.
+    advance(1000);
+    frame({ currentSeconds: 1 });
+    expect(3000 - bridge.getTimerStart(TIMER_PLAY)!).toBe(1000);
+    advance(1000);
+    frame({ currentSeconds: 1 });
+    expect(4000 - bridge.getTimerStart(TIMER_PLAY)!).toBe(1000);
   });
 
   it('starts `TIMER_FAILED` (3), not `fadeout`, as a failed play stops', () => {
@@ -457,7 +481,10 @@ describe('BeatorajaPlayBridge — lane events', () => {
 describe('BeatorajaPlayBridge — seek', () => {
   it("stops the judgments' and the lanes' timers and ops, keeps the scene's, and lets the once-per-play ones start again", () => {
     const harness = createHarness();
-    harness.update([{ kind: 'load-end', atMs: 0 }]);
+    harness.update([
+      { kind: 'load-end', atMs: 0 },
+      { kind: 'play-start', atMs: 1000 },
+    ]);
     harness.advance(100);
     harness.command({ kind: 'press-lane', channel: '13' });
     harness.judge({ judge: 'PERFECT', combo: 1, channel: '13' });

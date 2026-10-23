@@ -400,6 +400,10 @@ export class BeatorajaPlayBridge {
     this.endDueLanes(frame.nowMs);
     if (frame.engine !== undefined) this.applyEngine(frame.engine, frame.hostNowMs ?? frame.nowMs);
     for (const event of frame.events) this.handle(event);
+    // PLAY is chart time: tempo changes, replay tempo, pauses and seeks all come from the same engine clock.
+    if (this.timerStartedAt.has(TIMER_PLAY) && frame.engine !== undefined) {
+      this.timerStartedAt.set(TIMER_PLAY, frame.nowMs - Math.max(0, frame.engine.currentSeconds) * 1000);
+    }
     this.applyState(frame.state);
     this.judgeWindows = frame.judgeWindows;
     return this.renderContextAt(frame.nowMs);
@@ -421,6 +425,12 @@ export class BeatorajaPlayBridge {
     switch (event.kind) {
       case 'scene-start':
         this.startScene(event.atMs);
+        return;
+      case 'input-start':
+        if (!this.timerStartedAt.has(TIMER_STARTINPUT)) this.timerStartedAt.set(TIMER_STARTINPUT, event.atMs);
+        return;
+      case 'play-start':
+        if (!this.timerStartedAt.has(TIMER_PLAY)) this.timerStartedAt.set(TIMER_PLAY, event.atMs);
         return;
       case 'load-end':
         this.markLoaded(event.atMs);
@@ -504,15 +514,13 @@ export class BeatorajaPlayBridge {
   }
 
   /**
-   * The chart has loaded and the play is about to start: the input (1), READY (40) and play (41) timers start, and
+   * The chart has loaded: READY (40) starts, and
    * `LOADED` lights in place of `NOW_LOADING`.
    */
   private markLoaded(atMs: number): void {
     if (this.loaded) return;
     this.loaded = true;
-    this.timerStartedAt.set(TIMER_STARTINPUT, atMs);
     this.timerStartedAt.set(TIMER_READY, atMs);
-    this.timerStartedAt.set(TIMER_PLAY, atMs);
     this.activeOps.delete(BEATORAJA_PLAY_STARTED_OPS.off);
     this.activeOps.add(BEATORAJA_PLAY_STARTED_OPS.on);
   }

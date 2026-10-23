@@ -276,7 +276,10 @@ export interface PlayfieldNote {
  * play clock.
  */
 export type PlayViewEvent =
-  | { readonly kind: 'scene-start' | 'load-end' | 'play-start' | 'exit-fade-out' | 'exit-close'; readonly atMs: number }
+  | {
+      readonly kind: 'scene-start' | 'input-start' | 'load-end' | 'play-start' | 'exit-fade-out' | 'exit-close';
+      readonly atMs: number;
+    }
   | {
       readonly kind: 'judge';
       readonly judge: JudgmentKind;
@@ -401,6 +404,10 @@ export interface PlayViewTiming {
   readonly loadEndOffsetMs: number;
   /** When the chart begins; `0` uses the player's own intro length. */
   readonly playStartOffsetMs: number;
+  /** Optional input-ready stage, in milliseconds from scene start. */
+  readonly inputStartOffsetMs?: number;
+  /** When present, wait this long after actual load end, including media loading; zero starts immediately. */
+  readonly playStartAfterLoadEndMs?: number;
   /** The fade-out as the play ends; `0` skips it. */
   readonly fadeOutMs: number;
   /** The hold after the fade before the scene moves on; `0` skips it. */

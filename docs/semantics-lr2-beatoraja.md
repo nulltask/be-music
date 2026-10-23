@@ -64,7 +64,7 @@ Top risks, most serious first:
    (B)
 
 6. **The player LN mode (LN/CN/HCN) is missing and is not part of any record key.** beatoraja keys scores by `(sha256, lnmode)`. Imported CN/HCN scores have nowhere to go, and adding the option later would merge the three modes' records. (A+B)
-7. **beatoraja TIMER_PLAY starts at load end, followed by a fixed 1.5 s lead-in.** be-music ignores `skin.playstart`, so every TIMER_PLAY-keyed beatoraja element runs early relative to the notes. (A)
+7. **beatoraja play timing (fixed in #595).** Input and READY use the skin timings; PLAY starts with the chart after the READY interval and follows chart time. (A)
 8. **beatoraja skin state is unwired or LR2-shaped.**
    - Lua `event_index` and `set_timer` are not wired.
    - Result timers 150-152, score timers 348-352, HCN, PM-chara and custom timers are never set.
@@ -774,18 +774,12 @@ Overall shape: two separate state mappings. LR2 CSV skins get LR2 vocabulary ([`
 - **be-music today:** ms internally, converted to µs for Lua. beatoraja-style and correct.
 - **Recommendation:** keep.
 
-### TIMER_PLAY and `skin.playstart` (bug)
+### TIMER_PLAY and `skin.playstart` (fixed in #595)
 
-- **LR2:** timer 40 at load end and 41 when play starts; be-music's LR2 path does the same ([`packages/skin-lr2/src/state/play.ts`](../packages/skin-lr2/src/state/play.ts)).
-- **beatoraja:** STARTINPUT, then READY after `loadstart + loadend`, then **PLAY only after READY has run for `skin.playstart`**. PLAY then advances with play speed ([play/BMSPlayer.java#L499-L516](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L499-L516), [#L604-L625](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L604-L625)).
-- **Kind:** semantic: TIMER_PLAY is the start of the chart clock.
-- **be-music today:**
-  - STARTINPUT, READY and PLAY start together at load end ([`packages/player-browser/src/view/beatoraja/play-bridge.ts`](../packages/player-browser/src/view/beatoraja/play-bridge.ts)).
-  - The chart starts after a fixed `BEATORAJA_PLAY_LEAD_IN_MS = 1500` ([`play-view.ts`](../packages/player-browser/src/view/beatoraja/play-view.ts)).
-  - `skin.playstart` is parsed but not used.
-  - [#560](https://github.com/nulltask/be-music/issues/560) fixed only the play-ending timers (TIMER_FAILED and the skin's `close`), not the start.
-- **Impact:** A. TIMER_PLAY-keyed elements (48 in ModernChic) run about 1.5 s early relative to the notes.
-- **Recommendation:** stamp TIMER_PLAY at chart start and use the skin's `playstart`, `loadstart + loadend` and `input`. This is view timing only; the engine's start offset stays recorded.
+- **LR2:** timer 40 starts at load end and 41 when play starts. Its absolute scene offsets and the built-in fallback intro are unchanged.
+- **beatoraja:** STARTINPUT follows `skin.input`; READY waits for media and `loadstart + loadend`; PLAY starts with the chart after READY has run for `skin.playstart`. PLAY then advances with chart time, including playback speed ([BMSPlayer.java#L465-L471](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L465-L471), [#L499-L516](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L499-L516), [#L604-L625](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L604-L625)).
+- **be-music today:** fixed in [#595](https://github.com/nulltask/be-music/issues/595). The scene session owns input, READY and chart-start stages. Slow media loading preserves the full READY interval. Omitted or zero beatoraja timing values mean zero; they do not select the built-in three-second intro. The bridge stamps each stage separately and projects PLAY from the engine's chart clock, including pauses and seeks.
+- **Recording:** the engine's actual start offset remains recorded; judgment rules, replay format and Leaderboard derivation do not change.
 
 ### GAUGE_MAX timer (bug)
 

@@ -16,6 +16,7 @@ import type { PlayViewSetting, PlayViewTiming } from '../../view/types.ts';
  */
 export type PlayMoment =
   | { readonly kind: 'scene-start'; readonly at: number }
+  | { readonly kind: 'input-start'; readonly at: number }
   | { readonly kind: 'load-end'; readonly at: number }
   | { readonly kind: 'play-start'; readonly at: number }
   | { readonly kind: 'exit-fade-out'; readonly at: number }

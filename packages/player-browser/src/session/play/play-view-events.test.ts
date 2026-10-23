@@ -3,7 +3,14 @@ import { playViewEventFromMoment } from './play-view-events.ts';
 
 describe('playViewEventFromMoment', () => {
   test('passes the scene stages and exit phases on with their play-clock time', () => {
-    for (const kind of ['scene-start', 'load-end', 'play-start', 'exit-fade-out', 'exit-close'] as const) {
+    for (const kind of [
+      'scene-start',
+      'input-start',
+      'load-end',
+      'play-start',
+      'exit-fade-out',
+      'exit-close',
+    ] as const) {
       expect(playViewEventFromMoment({ kind, at: 1200 })).toEqual({ kind, atMs: 1200 });
     }
   });
