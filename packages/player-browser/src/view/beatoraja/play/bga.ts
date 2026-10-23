@@ -36,6 +36,7 @@ import {
 
 export interface BeatorajaBGALayerOptions {
   skin: BeatorajaSkin;
+  poorBGAMode?: 0 | 1 | 2;
   /**
    * Decoded BGA textures keyed by `#BMPxx` slot label (`'00'`..`'ZZ'`). Same map the LR2 path's BGA
    * loader produces; the demo can build it once and share it across the gameplay views.
@@ -76,6 +77,7 @@ interface BGASpritePair {
   readonly canvas: Sprite;
   readonly sprite: Sprite;
   readonly layer: Sprite;
+  readonly poor: Sprite;
 }
 
 type BGADestinationProps = ReturnType<typeof destinationToSpriteProps>;
@@ -102,8 +104,10 @@ export class BeatorajaBGALayer {
   /** The keys the stacks show now, whose videos play. */
   private currentKeys = new Map<string, number>();
   private disposed = false;
+  private readonly poorBGAMode: 0 | 1 | 2;
 
   constructor(options: BeatorajaBGALayerOptions) {
+    this.poorBGAMode = options.poorBGAMode ?? 0;
     this.textures = options.textures;
     this.layerTextures = options.layerTextures ?? new Map();
     this.videoElements = options.videoElements ?? new Map();
@@ -133,12 +137,14 @@ export class BeatorajaBGALayer {
       pair.canvas.visible = false;
       pair.sprite.visible = false;
       pair.layer.visible = false;
+      pair.poor.visible = false;
     }
     if (this.group === undefined) return;
     const props = destinationToSpriteProps(this.group, context, this.canvasHeight);
     // One stack, or a NONSTOP chart's stages at their crossfade opacity, earlier stages behind.
     const stacks = resolveBGAStacks({
       timeline: this.cues,
+      poorBGAMode: this.poorBGAMode,
       nonstop: this.nonstop,
       seconds,
       inPoorWindow: poorBGAActive,
@@ -147,7 +153,7 @@ export class BeatorajaBGALayer {
     stacks.forEach((stack, index) => {
       const pair = this.pairAt(index);
       // The miss layer replaces both the base and the layer; outside it the layer draws over the base.
-      if (stack.poorKey !== undefined) {
+      if (stack.poorKey !== undefined && !stack.poorOverlays) {
         let cueSeconds = seconds;
         for (const cue of this.cues.poor) {
           if (cue.seconds > seconds) break;
@@ -166,6 +172,15 @@ export class BeatorajaBGALayer {
       if (layerKey !== undefined) {
         keys.set(layerKey, stack.layerCue!.seconds);
         this.drawImage(pair.layer, undefined, layerKey, this.layerTextures, props, stack.alpha);
+      }
+      if (stack.poorKey !== undefined && stack.poorOverlays) {
+        let cueSeconds = seconds;
+        for (const cue of this.cues.poor) {
+          if (cue.seconds > seconds) break;
+          if (cue.bmpKey === stack.poorKey) cueSeconds = cue.seconds;
+        }
+        keys.set(stack.poorKey, cueSeconds);
+        this.drawImage(pair.poor, undefined, stack.poorKey, this.textures, props, stack.alpha);
       }
     });
     this.syncVideos(keys, playback.seconds ?? seconds, playback);
@@ -211,9 +226,10 @@ export class BeatorajaBGALayer {
         canvas: new Sprite({ texture: Texture.WHITE, tint: 0x000000, visible: false, label: 'bga/canvas' }),
         sprite: new Sprite({ visible: false, label: 'bga/base' }),
         layer: new Sprite({ visible: false, label: 'bga/layer' }),
+        poor: new Sprite({ visible: false, label: 'bga/poor' }),
       };
       this.pairs.push(pair);
-      this.container.addChild(pair.canvas, pair.sprite, pair.layer);
+      this.container.addChild(pair.canvas, pair.sprite, pair.layer, pair.poor);
     }
     return this.pairs[index]!;
   }

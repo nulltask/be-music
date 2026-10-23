@@ -1,7 +1,7 @@
 import { availableParallelism } from 'node:os';
 import { runWithConcurrency, throwIfAborted } from '@be-music/shared-utils/core';
 import type { BeMusicJSON } from '@be-music/chart-source';
-import { resolveChart, type BGACue } from '@be-music/chart-model';
+import { resolvePoorBGAMode, type PoorBGAMode, resolveChart, type BGACue } from '@be-music/chart-model';
 import {
   DEFAULT_IMAGE_RESIZE_ALGORITHM,
   DEFAULT_POOR_BGA_DISPLAY_SECONDS,
@@ -208,6 +208,7 @@ export class BgaANSIRenderer {
 
   private blackBackgroundLines: string[];
 
+  private readonly poorBGAMode: PoorBGAMode;
   private poorActiveUntilSeconds = Number.NEGATIVE_INFINITY;
 
   /**
@@ -229,6 +230,7 @@ export class BgaANSIRenderer {
     missingBaseSourceFrame: ANSIFrame;
     missingPoorSourceFrame: ANSIFrame;
     missingLayerSourceFrame: ANSIFrame;
+    poorBGAMode?: PoorBGAMode;
     poorFallbackKey?: string;
     poorFallbackUntilSeconds: number;
     playbackEndSeconds: number;
@@ -249,6 +251,7 @@ export class BgaANSIRenderer {
     this.missingBaseSourceFrame = params.missingBaseSourceFrame;
     this.missingPoorSourceFrame = params.missingPoorSourceFrame;
     this.missingLayerSourceFrame = params.missingLayerSourceFrame;
+    this.poorBGAMode = params.poorBGAMode ?? 0;
     this.poorFallbackKey = params.poorFallbackKey;
     this.poorFallbackUntilSeconds = params.poorFallbackUntilSeconds;
     this.playbackEndSeconds = params.playbackEndSeconds;
@@ -279,6 +282,7 @@ export class BgaANSIRenderer {
   }
 
   triggerPoor(currentSeconds: number): void {
+    if (this.poorBGAMode === 2) return;
     const safeCurrentSeconds = Number.isFinite(currentSeconds) ? currentSeconds : 0;
     const nextPoorActiveUntilSeconds = safeCurrentSeconds + DEFAULT_POOR_BGA_DISPLAY_SECONDS;
     if (nextPoorActiveUntilSeconds <= this.poorActiveUntilSeconds) {
@@ -371,16 +375,21 @@ export class BgaANSIRenderer {
       return this.cachedKittyImage;
     }
 
-    const composite =
+    const normalFrames = [baseSelection.frame, layerSelection.frame, layer2Selection.frame].slice(
+      0,
+      MAX_NORMAL_BGA_COMPOSITE_LAYERS,
+    );
+    const frames =
       state.poorActive && poorSelection.frame
-        ? mergeCompositeFrames(resizeANSIFrame(poorSelection.frame, pixelWidth, pixelHeight, this.resizeAlgorithm))
-        : mergeCompositeFrames(
-            ...[baseSelection.frame, layerSelection.frame, layer2Selection.frame]
-              .slice(0, MAX_NORMAL_BGA_COMPOSITE_LAYERS)
-              .map((frame) =>
-                frame ? resizeANSIFrame(frame, pixelWidth, pixelHeight, this.resizeAlgorithm) : undefined,
-              ),
-          );
+        ? this.poorBGAMode === 1
+          ? [...normalFrames, poorSelection.frame]
+          : [poorSelection.frame]
+        : normalFrames;
+    const composite = mergeCompositeFrames(
+      ...frames.map((frame) =>
+        frame ? resizeANSIFrame(frame, pixelWidth, pixelHeight, this.resizeAlgorithm) : undefined,
+      ),
+    );
     const filledFrame = composite
       ? fillANSIFrameBackground(composite, 0, 0, 0)
       : createSolidANSIFrame(1, 1, 0, 0, 0, 1);
@@ -490,15 +499,17 @@ export class BgaANSIRenderer {
     this.cachedLayer2FrameIndex = layer2Selection.index;
     this.cachedPoorFrameIndex = poorSelection.index;
     this.cachedPoorActive = state.poorActive;
-    this.cachedComposite =
-      state.poorActive && poorSelection.frame
-        ? mergeCompositeFrames(poorSelection.frame)
-        : mergeCompositeFrames(
-            ...[baseSelection.frame, layerSelection.frame, layer2Selection.frame].slice(
-              0,
-              MAX_NORMAL_BGA_COMPOSITE_LAYERS,
-            ),
-          );
+    const normalFrames = [baseSelection.frame, layerSelection.frame, layer2Selection.frame].slice(
+      0,
+      MAX_NORMAL_BGA_COMPOSITE_LAYERS,
+    );
+    this.cachedComposite = mergeCompositeFrames(
+      ...(state.poorActive && poorSelection.frame
+        ? this.poorBGAMode === 1
+          ? [...normalFrames, poorSelection.frame]
+          : [poorSelection.frame]
+        : normalFrames),
+    );
     this.cachedLines = undefined;
     this.cachedKittyImage = undefined;
   }
@@ -519,7 +530,7 @@ export class BgaANSIRenderer {
     const layerCue = pickActiveBGACue(this.layerTimeline, cueSeconds);
     const layer2Cue = pickActiveBGACue(this.layer2Timeline, cueSeconds);
     const poorCue = pickActiveBGACue(this.poorTimeline, cueSeconds);
-    const poorActive = currentSeconds < this.poorActiveUntilSeconds;
+    const poorActive = this.poorBGAMode !== 2 && currentSeconds < this.poorActiveUntilSeconds;
     return {
       baseKey: baseCue?.key ?? '',
       layerKey: layerCue?.key ?? '',
@@ -572,7 +583,7 @@ export async function createBgaANSIRenderer(
   const layer2Keys = new Set(layer2Timeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   // LR2 starts its miss layer from `#BMP00`; only `#POORBGA 2` (no POOR image) turns that off.
   const shouldUsePoorBMP00Fallback =
-    !isPoorBGAHidden(json.bms.poorBGA) &&
+    resolvePoorBGAMode(json.bms.poorBGA) !== 2 &&
     typeof json.resources.bmp['00'] === 'string' &&
     json.resources.bmp['00'].length > 0;
   const poorFallbackKey = shouldUsePoorBMP00Fallback ? '00' : undefined;
@@ -621,7 +632,7 @@ export async function createBgaANSIRenderer(
         keys: poorKeys,
         resources: json.resources.bmp,
         baseDir: options.baseDir,
-        mode: 'base',
+        mode: resolvePoorBGAMode(json.bms.poorBGA) === 1 ? 'bmson-layer' : 'base',
         width: displaySize.width,
         height: displaySize.height,
         imageResizeAlgorithm: resizeAlgorithm,
@@ -688,6 +699,7 @@ export async function createBgaANSIRenderer(
     missingBaseSourceFrame,
     missingPoorSourceFrame,
     missingLayerSourceFrame,
+    poorBGAMode: resolvePoorBGAMode(json.bms.poorBGA),
     poorFallbackKey,
     poorFallbackUntilSeconds,
     playbackEndSeconds: Math.max(
@@ -773,14 +785,6 @@ async function loadFramesByKeys(params: {
   );
 
   return map;
-}
-
-/**
- * Whether `#POORBGA` is `2`, which never shows a POOR image (hitkey's command memo). A missing, unparsable or
- * out-of-range value is `0`, the usual behaviour.
- */
-function isPoorBGAHidden(value: string | undefined): boolean {
-  return value !== undefined && Number.parseInt(value.trim(), 10) === 2;
 }
 
 function countMappedBMPResourceTargets(keys: ReadonlySet<string>, resources: Record<string, string>): number {
