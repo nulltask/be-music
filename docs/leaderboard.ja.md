@@ -224,7 +224,7 @@ play document の位置とタイムラインから、エンジンと一致する
   トレーナーがスコアを保存しないのと同じく、練習として扱います。**落ちたプレイ**（ゲージが尽きたもの）
   は保存し、プレイ回数に数えます。
 - **ランプと BP はルールセットごとに各ゲームに従います**: `lr2` では DEATH でのクリアは NORMAL です（LR2body.exe の
-  `CheckClear`）。beatoraja と That-Which-Must-Not-Be-Named では DEATH（`HAZARD`）のクリアは EX HARD です。BP には LR2 も含めどのルールセットでも
+  `CheckClear`）。beatoraja と 名前を言ってはいけないあのゲームでは DEATH（`HAZARD`）のクリアは EX HARD です。BP には LR2 も含めどのルールセットでも
   空 POOR を数えます。この規則より前に保存された `lr2` の結果は、マイグレーション `0012` で書き直しました。
   ランプと BP はどのクライアントとも同じ規則で決めます（`@be-music/player-engine/replay` の `resolveRulesetResultLamp`、`@be-music/player-engine/ruleset` の `resolveClearLamp` と `resolveMissCount`）。フルコンボにはすべてのノートが GOOD 以上である必要があるので、ノートのない譜面はゲージのランプになります。ランプはその順位（`clearLampRank`）で保存します。1 FAILED、2 ASSIST EASY、3 EASY、4 NORMAL、5 HARD、6 EX HARD、7 FULL COMBO、8 PERFECT、9 MAX です。
 - **自己ベストは beatoraja 方式**: EX スコア、クリアランプ、ミス数のベストを別々に持ち、それぞれ達成したスコアを
@@ -470,7 +470,7 @@ Tailwind CSS v4 と Basecoat（フレームワークのランタイムなしの 
 - `/courses/:courseFp` — コースのランキング（各プレイヤーのベスト EX スコア、ランプ、BP、トロフィー。アシストありのプレイと匿名プレイヤーは譜面のページと同じスイッチで切り替え）、譜面のページへリンクしたステージ、プレイ数とランプの分布、詳細（種類、制約）。アカウントを持つプレイヤーが誰も遊んでいないコースは検索エンジンに載せません
 - `/course-scores/:id` — コースのプレイをすべてのルールセットで（到達したステージ数、トロフィー）、表示ルールセットでステージごとに（判定、BP、各ステージが引き継いだゲージ、到達しなかったステージ）表示し、リプレイと、本人には非表示にするスイッチを付けます。トップページはプレイの下に最新のコースのプレイを並べます
 
-どのページも、ヘッダーで選んで Cookie に保存する 1 つの**表示ルールセット**（LR2、beatoraja、That-Which-Must-Not-Be-Named）で値を表示し、
+どのページも、ヘッダーで選んで Cookie に保存する 1 つの**表示ルールセット**（LR2、beatoraja、名前を言ってはいけないあのゲーム）で値を表示し、
 プレイ自体のルールセットは「played with」として併記します。切り替えは専用の URL（`/ruleset/:id?next=…`。
 戻り先は Leaderboard のページに限る）で行うので、ページの URL を共有しても、開いた人の設定は変わりません。ページが
 Cookie に依存するので、`Cache-Control: private, max-age=0` を返します。譜面のページには、既知のファイルごとに、BMS Search 自身が使う形式で他のサイトへのリンクを置きます。ファイルの

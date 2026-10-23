@@ -184,7 +184,7 @@ const ja: AboutContent = {
     },
     {
       title: '1 プレイを 3 つのルールで採点',
-      text: 'すべてのプレイを LR2・beatoraja・That-Which-Must-Not-Be-Named のルールで同時に採点します。どのルールで遊んだプレイも、同じ基準で 1 つのランキングに並びます。',
+      text: 'すべてのプレイを LR2・beatoraja・名前を言ってはいけないあのゲームのルールで同時に採点します。どのルールで遊んだプレイも、同じ基準で 1 つのランキングに並びます。',
       more: 'scoring',
     },
     {
@@ -225,7 +225,7 @@ const ja: AboutContent = {
           be-music エンジンで再生してスコアを計算し直します。
         </p>
         <p>
-          この計算を <strong>LR2</strong>・<strong>beatoraja</strong>・<strong>That-Which-Must-Not-Be-Named</strong>{' '}
+          この計算を <strong>LR2</strong>・<strong>beatoraja</strong>・<strong>名前を言ってはいけないあのゲーム</strong>{' '}
           の採点ルール（判定幅・ゲージ・クリアランプ）でそれぞれ行うので、どのプレイも 3
           つのランキングすべてに載ります。プレイヤーが<em>実際に遊んだ</em>
           ルールはプレイごとに表示され、ページに表示するルールはヘッダーで切り替えられます。ルールはスコアの計算方法を表すもので、プレイしたソフトとは関係ありません。

@@ -37,7 +37,7 @@ Use **replay** for recorded playback data: `BeMusicReplay` for its type, `replay
 
 Use **chart** in code names for playable arrangements and **track** for musical works. Keep external names such as beatoraja’s `song` table and `BMSONDecoder` unchanged.
 
-Use `____` in source identifiers and project-owned serialized values, `????` for the displayed game name, and **That-Which-Must-Not-Be-Named** when describing the game. Previous identifiers are not supported or migrated.
+Use `____` in source identifiers and project-owned serialized values, `????` for the displayed game name, and **That-Which-Must-Not-Be-Named** in English or **名前を言ってはいけないあのゲーム** in Japanese when describing the game. Previous identifiers are not supported or migrated.
 
 ## Score And Resources
 

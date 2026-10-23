@@ -377,7 +377,7 @@ runtime のフィールドはすべて省略可能です。ホストが提供で
 `result.draw(surface, frame)` は `BeMusicResultFrame` を受け取ります。
 
 - `result`（`BeMusicResultData`）: スコア、判定数、ゲージとスコアの推移、リプレイ。ホストが提供する場合は、`lamp`（クリアランプ: `FAILED`、クリアしたゲージ、`FULL_COMBO`、`PERFECT`、`MAX`）、`gaugeType`、`judgeRuleset`、`fast` / `slow`、`judgeTimings`（プレイ中のタイミング付き判定すべて）、`run`（`'single'`、コースのステージなら `'stage'`、ステージを合計した EXPERT / GRADE コース全体なら `'course'`、`'nonstop'`）、`course`（ステージやコースの実行が属するコース）、`courseRun`（コースの実行で遊んだステージ数とトロフィー）も入ります。
-- `rankLabel`（That-Which-Must-Not-Be-Named の DJ LEVEL）、`ratePercent`。
+- `rankLabel`（名前を言ってはいけないあのゲームの DJ LEVEL）、`ratePercent`。
 - `elapsedMs`: シーン開始からの経過。登場演出をスキップした後は `Infinity`。
 - `nowMs`、`effects`。
 - `settings` と `chartImage`: [スキン設定](#スキン設定)と[曲の画像](#曲の画像)を参照。

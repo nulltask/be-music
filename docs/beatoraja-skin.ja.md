@@ -118,7 +118,7 @@ play skin は variant ごと (`'7' / '5' / '9' / '10' / '14' / '24' / '24d'`) �
 `pickBeatorajaPlaySkin` はその variant の entry を返し、web player も同じ list で選びます（`pickBeatorajaPlayableSkinVariant`）。
 beatoraja 本体はプレイモードをまたいで fallback しません。モードごとに設定した skin か、そのモードに組み込まれた既定の skin を読みます。
 モードをまたぐ唯一の流用は、LR2 の 7 KEY / 14 KEY skin を 5 KEY / 10 KEY にも出すことで、これに合わせて 5 KEY の list は 7 から、10 KEY の list は 14 から始まります。
-ほかの list は、That-Which-Must-Not-Be-Named と POPN の chart では That-Which-Must-Not-Be-Named と POPN の variant を鍵盤モードより先に、鍵盤モードの chart ではもう一方の鍵盤モードを先に試します。
+ほかの list は、名前を言ってはいけないあのゲーム と POPN の chart では 名前を言ってはいけないあのゲーム と POPN の variant を鍵盤モードより先に、鍵盤モードの chart ではもう一方の鍵盤モードを先に試します。
 
 ## Scene mapping
 

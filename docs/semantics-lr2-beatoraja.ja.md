@@ -296,7 +296,7 @@ flowchart TD
   - コース中でも 2 % の下限がかかるかは **(unverified in binary)** です。
 - **beatoraja:** 地雷が通過するときに押されているキーだけが起爆させます。ゲージが減るだけで、どのカウンターにも触れません（[play/JudgeManager.java#L244-L248](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L244-L248)）。
 - **種類:** セマンティクス（カウンター）+ パラメータ（判定幅）。
-- **be-music の現状:** [#590](https://github.com/nulltask/be-music/issues/590) で修正。LR2beta3 は早い側の GREAT 境界の手前の押下、押したままの通過、通過後の即時消費、被弾ごとの POOR/BP 1回加算を使います。コンボ切断や通常 POOR の追加ダメージは発生しません。`minePoor` で `poor` に含まれる地雷数を区別し、未判定ノートの BP も正しく数えます。beatoraja はゲージのみ、暫定 That-Which-Must-Not-Be-Named は従来のモデルを維持します。#141 の2008年の告知より beta3 本体を優先します。
+- **be-music の現状:** [#590](https://github.com/nulltask/be-music/issues/590) で修正。LR2beta3 は早い側の GREAT 境界の手前の押下、押したままの通過、通過後の即時消費、被弾ごとの POOR/BP 1回加算を使います。コンボ切断や通常 POOR の追加ダメージは発生しません。`minePoor` で `poor` に含まれる地雷数を区別し、未判定ノートの BP も正しく数えます。beatoraja はゲージのみ、暫定 名前を言ってはいけないあのゲームは従来のモデルを維持します。#141 の2008年の告知より beta3 本体を優先します。
 - **影響:** B。地雷のある譜面での `lr2` の BP と POOR、Leaderboard の BP。
 - **推奨:** beta3 の挙動を保ちます。既存の入力で再現でき、リビジョン 0 は維持します。過去の派生結果とベスト記録は明示的なオフライン再シミュレーション・再集計が必要です。本番データと未検証のコースゲージ下限は変更しません。
 
@@ -558,7 +558,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
   - ソース：[pattern/Randomizer.java#L140-L250](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/pattern/Randomizer.java#L140-L250)。
 - **種類:** セマンティクス。
 - **be-music の現状**（[`packages/player-browser/src/session/play/play-chart.ts`](../packages/player-browser/src/session/play/play-chart.ts) の `applyRandomMode`）：
-  - S-RANDOM は [#592](https://github.com/nulltask/be-music/issues/592) で修正。エンジンの純粋なヘルパーが LN の終端の行まで配置先を予約します。LR2 には連打間隔の制限がなく、beatoraja は整数 ms で40msを超える間隔を優先し、不足時は最も古い空きレーンを選びます。ブラウザはスキンファミリーに関係なく判定ルールセットを選び、暫定 That-Which-Must-Not-Be-Named は LR2 の規則を使います。モード全体の鍵盤範囲を使い、記録済みの確定配置は変更しません。
+  - S-RANDOM は [#592](https://github.com/nulltask/be-music/issues/592) で修正。エンジンの純粋なヘルパーが LN の終端の行まで配置先を予約します。LR2 には連打間隔の制限がなく、beatoraja は整数 ms で40msを超える間隔を優先し、不足時は最も古い空きレーンを選びます。ブラウザはスキンファミリーに関係なく判定ルールセットを選び、暫定 名前を言ってはいけないあのゲームは LR2 の規則を使います。モード全体の鍵盤範囲を使い、記録済みの確定配置は変更しません。
   - SCATTER は [#593](https://github.com/nulltask/be-music/issues/593) で新しい選択・配置・記録を無効化しました。新規要求は譜面変更やリプレイ作成より前に失敗します。既存リプレイは LN 終端を含む確定チャンネルを読み取り、そのまま適用できます。本来の SCATTER 配置とアシスト・記録の扱いは方針決定後に実装し、RANDOM の別名としては提供しません。
   - MIRROR と RANDOM は [#594](https://github.com/nulltask/be-music/issues/594) で修正し、モード全体の鍵盤を対象にします。疎な7鍵の2番レーンは6番レーンに写ります。5/7/9/10/14/24/48鍵と PMS の2形式をモード表から解決し、PMS-STD の右バンクの列も1Pの鍵盤として扱います。スクラッチ・ホイール・反対側は固定します。根拠：[OpenLR2](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27099-L27236)、[PatternModifier](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/pattern/PatternModifier.java#L132-L137)。
 - **影響:** B。LR2 の名前で出しているパターンがどちらのエンジンとも一致しません。
