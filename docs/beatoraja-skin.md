@@ -73,6 +73,8 @@ beatoraja's `timer_util` / `event_util` helper modules are built in and can be r
 
 The browser wires `main_state.event_index(id)` to the same image-index resolver as `image.ref`. MODE/SORT and LNMODE are zero based; HS-FIX and CLEAR use beatoraja's index ordering. `main_state.set_timer(id, start)` writes only custom animation timers 10000–19999, with starts in microseconds. `main_state.timer_off_value` stops one. Lua and numeric destination timers observe writes in the same frame. Invalid writes return false; protected engine/scene timers are unchanged. Custom timer state belongs to one skin instance.
 
+Result timers 150–152 start at entry for JSON/Lua skins. Play skins receive score thresholds 348–352, authoritative HCN active/damage timers and POMYU character timers. `PlaySceneOptions.scoreTargets` supplies optional `bestEXScore` and `targetEXScore` (zero when absent); the demo supplies its chart record. Beatoraja's normal ending waits five chart seconds after the last note/event, raises MUSIC_END (908), then waits `finishmargin` before fade-out. The existing engine loop drives that gate through pauses, speed changes and seeks. The POMYU timer resolver accepts motion durations, but the existing character-pack renderer still draws static sprites.
+
 Bitmap font pages use the shared browser image decoder, including TGA sheets that browsers cannot decode natively.
 
 The two-phase contract:

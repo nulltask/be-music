@@ -67,7 +67,7 @@ LR2 と beatoraja は、同じ譜面、オプション、スキンの番号を�
 7. **beatoraja の開始タイミング（#595 で修正）。** 入力と READY はスキンの指定に従い、PLAY は READY の待ち時間の後に譜面と同時に始まって譜面時刻に従います。(A)
 8. **beatoraja スキンの状態が配線されていないか、LR2 の形をしている。**
    - Lua の `event_index`・`set_timer`・カスタムタイマーは #596 で修正。
-   - リザルトのタイマー 150-152、スコアのタイマー 348-352、HCN、PM キャラ、カスタムタイマーが設定されない。
+   - リザルト・スコア・HCN・PM キャラのタイマーは #597、カスタムタイマーは #596 で修正。
    - GAUGE_MAX が切れない。
    - MISS（420）が POOR を表示し、空 POOR が抜け落ちる。
    - op 42 が常に点灯し、43 / 1046 は点灯しない。
@@ -175,7 +175,7 @@ flowchart TD
 | 45  | `#SRC_BAR_LAMP` の番号の意味                            | A              | LR2                                                | beatoraja の方言を検出したら切り替える                                                |
 | 46  | TIMER_PLAY / `skin.playstart`                           | A              | #595 で修正                                        | 譜面の開始時刻を刻む                                                                  |
 | 47  | GAUGE_MAX タイマーの切り替え                            | A, C           | 止まらない（バグ）                                 | 開始 / 停止                                                                           |
-| 48  | beatoraja だけのタイマー                                | A              | 駆動しない                                         | 対応表に追加                                                                          |
+| 48  | beatoraja だけのタイマー                                | A              | #597 で修正                                        | リザルト・スコア・HCN・キャラクターのタイマーを駆動                                   |
 | 49  | Lua の `event_index` / `set_timer`                      | A              | #596 で修正                                        | 配線する                                                                              |
 | 50  | MISS と POOR の数値                                     | A, C           | 420 = POOR（バグ）                                 | emptyPoor を使う                                                                      |
 | 51  | ゲージの op 42/43/1046                                  | A, C           | 常に 42（バグ）                                    | ゲージ種別から導く                                                                    |
@@ -788,17 +788,24 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 - **影響:** A/C。ゲージが下がった後もゲージ最大の演出が残ります。
 - **推奨:** 最大に達したら開始し、離れたら止める。
 
-### 駆動されない beatoraja だけのタイマー
+### beatoraja 固有のアニメーション用タイマー（#597 で修正）
 
-- **beatoraja:**
-  - スコアのタイマー 348-352（[SkinProperty.java#L49-L53](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/SkinProperty.java#L49-L53)、[BMSPlayer.java#L1033-L1037](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L1033-L1037)）。
-  - HCN の active/damage タイマー 250-289 と 1800-2110。
-  - PM キャラ 900-909 と MUSIC_END 908。
-  - リザルトのタイマー 150/151/152（[result/MusicResult.java#L160-L167](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/result/MusicResult.java#L160-L167)）。
-  - カスタムタイマー 10000-19999（#596 で修正）。
-- **be-music の現状:** 値を作るところがありません。リザルトのタイマーは 0/1/2/40/41 だけです（[`packages/player-browser/src/view/beatoraja/scene-frame.ts`](../packages/player-browser/src/view/beatoraja/scene-frame.ts)）。
-- **影響:** A。これらのタイマーを条件にする要素は描かれません。
-- **推奨:** beatoraja の対応表にデータとして足す。どれも決定的です。
+- **一次資料:** [スコア用タイマー](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L1031-L1039)、[HCN の active/damage](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L288-L340)、[POMYU キャラクターの状態](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/PomyuCharaProcessor.java)、[リザルト用タイマー](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/result/MusicResult.java#L160-L167)。
+- **be-music の現状:** [#597](https://github.com/nulltask/be-music/issues/597) で修正。シーンの対応表が決定的な開始・停止の差分を返し、条件が真のままなら開始時刻を維持します。
+
+| タイマー                  | 入力と切り替え条件                                                                                                                                                                                                                      |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| リザルト 150–152          | リザルト表示時に開始します。対応する JSON／Lua スキンでは上流の `ranktime` はゼロのままで、LR2 のリザルト操作段階とは別です。                                                                                                           |
+| スコア 348–350            | 判定後、EX スコアが譜面全体の最大値の 18/27、21/27、24/27（A・AA・AAA）に達すると開始します。                                                                                                                                           |
+| スコア 351–352            | 判定後、ホストの自己ベストまたは目標 EX スコア以上で開始します。指定がなければゼロです。デモはその譜面の自己ベストを渡します。                                                                                                          |
+| HCN 250–289 / 1810–2199   | 判定エンジンのレーン状態を使い、ゲージ増加中は active、減少中は damage、判定済みの先頭が通過する前と終端後は停止します。手動・AUTO・リプレイ・AUTO SCRATCH・シークは同じエンジンの状態に従います。                                      |
+| キャラクター 900–907      | neutral で始まり、指定された neutral モーションの区切りで最新の判定に応じた反応へ移り、反応の時間が過ぎると neutral に戻ります。2P は対戦相手として逆の反応をします。                                                                   |
+| dance 909 / music end 908 | プレイ中は dance が動きます。シーンは最終ノート（AUTO は準備済み譜面の最終イベント）から譜面時間で5秒後に music end を通知し、908 を開始してキャラクターと dance を停止します。その後、スキンの `finishmargin` を待ってフェードします。 |
+
+- **時計の管理:** music end の待機は既存のエンジンループの譜面時刻で判定するので、一時停止・速度変更・シークに追従します。シーク・破棄時には古い待機条件と finishmargin の待機を取り消します。判定や再生のループは追加しません。finishmargin はシーン時間です。
+- **キャラクターパックの範囲:** 純粋な対応表は8種類のモーション時間を受け取り、パックから指定されなければ上流と同じ各1ミリ秒を使います。既存の POMYU パックの描画は静止表示のままで、パックの解析とアニメーションはタイマーの接続とは別の機能です。
+- **カスタムタイマー:** 10000–19999 と Lua の即時書き込みは、別途 [#596](https://github.com/nulltask/be-music/issues/596) で修正しています。
+- **記録:** 判定・得点のルールは変わりません。新しい beatoraja プレイでは終了待ちが変わるため記録される終了時刻が変わる場合がありますが、過去の結果の再シミュレーションは不要です。
 
 ### Lua の `main_state` の対応範囲（オプション番号とカスタムタイマーは #596 で修正）
 

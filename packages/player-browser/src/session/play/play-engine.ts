@@ -140,6 +140,7 @@ export interface PlayEngineContext
   bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } };
   chartEnded: boolean;
   chartEndTimeout: number | undefined;
+  chartEndGate?: (seconds: number) => void;
   replay: BeMusicReplay | undefined;
   readonly replayWaiters: Array<(replay: BeMusicReplay) => void>;
   replayViewCursor: ReplayViewCursor | undefined;
@@ -638,6 +639,7 @@ function applyEngineFrame(ctx: PlayEngineContext, frame: Readonly<PlayerUIFrameP
   // session, so publishing a seek cannot move time before its score snapshot is drained.
   ctx.engineFrame = { ...frame };
   applyEngineSummary(ctx, frame.summary);
+  ctx.chartEndGate?.(frame.currentSeconds);
 }
 
 function applyEngineSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSummary>): void {
@@ -797,6 +799,7 @@ function applyEngineSeek(ctx: PlayEngineContext, command: Extract<PlayerUIComman
     window.clearTimeout(ctx.chartEndTimeout);
     ctx.chartEndTimeout = undefined;
   }
+  ctx.chartEndGate = undefined;
   ctx.chartEnded = false;
   ctx.sharedEngineChartSettled = false;
   ctx.onHeldPlayEnded = undefined;
@@ -871,19 +874,22 @@ function handleSharedEngineChartFinished(
   ctx.playMoments.outroAtMs ??= ctx.playClock();
   // The end-of-play policy every gameplay family shares (`resolvePlayEnding`): a lead-out after the last note, then the
   // fade-out, or — for a play cut short by its gauge emptying — a stop at once (`beginExitSequence`).
+  const viewTiming = ctx.theme.timing();
   const ending = resolvePlayEnding({
     summary: finalSummary,
     notes: ctx.notes,
     timing: ctx.timingResolver,
     currentSeconds: ctx.currentSeconds(),
     tempo: ctx.tempo,
+    musicEndDelayMs: viewTiming.musicEndDelayMs,
+    finishMarginMs: viewTiming.finishMarginMs,
+    ...(ctx.options.autoPlay ? { chartEndSeconds: ctx.resolveChartDurationSeconds() } : {}),
   });
-  // Hold the play scene for roughly two measures after the final note. This keeps the last hit / final keysound from
-  // being swallowed by an immediate result transition while still falling back to a one-frame defer on empty charts or
-  // charts whose non-note tail has already carried us past the target.
-  ctx.chartEndTimeout = window.setTimeout(() => {
+  // Families without a music-end stage retain the two-measure lead-out. A family with that stage waits on the
+  // engine's chart clock, then holds its finish margin on the scene clock before fading.
+  const beginFade = () => {
     ctx.chartEndTimeout = undefined;
-    if (ctx.disposed) return;
+    if (ctx.disposed || ctx.exiting) return;
     drainSharedEngineSignals(ctx);
     if (finalSummary !== undefined) applyFinalSummary(ctx, finalSummary);
     const finish = (): void => {
@@ -911,11 +917,32 @@ function handleSharedEngineChartFinished(
       // A normal end lets its last keysounds ring through the fade-out; a failure cuts them.
       { failed: ending.failed, fadeAudio: false },
     );
-  }, ending.leadOutMs);
+  };
+  if (ending.musicEndAtSeconds !== undefined) {
+    const target = ending.musicEndAtSeconds;
+    const musicEnd = () => {
+      ctx.chartEndGate = undefined;
+      if (ctx.disposed || ctx.exiting || !ctx.chartEnded) return;
+      ctx.theme.moment({ kind: 'music-end', at: ctx.playClock() });
+      ctx.chartEndTimeout = window.setTimeout(beginFade, ending.finishMarginMs ?? 0);
+    };
+    if (held) {
+      // The one engine loop drives this gate: pause, tempo changes and seeks keep their chart-time meaning.
+      ctx.chartEndGate = (seconds) => {
+        if (seconds >= target) musicEnd();
+      };
+      ctx.chartEndGate(ctx.currentSeconds());
+    } else {
+      ctx.chartEndTimeout = window.setTimeout(musicEnd, Math.max(0, ending.leadOutMs - (ending.finishMarginMs ?? 0)));
+    }
+  } else {
+    ctx.chartEndTimeout = window.setTimeout(beginFade, ending.leadOutMs);
+  }
 }
 
 /** Stops the shared engine as the play is disposed (`PlaySession.dispose`) and lets go of its buses. */
 export function stopSharedEngine(ctx: PlayEngineContext): void {
+  ctx.chartEndGate = undefined;
   // Abort the shared engine driver BEFORE the audio session tear-down so engine ticks don't fire fresh
   // sample triggers onto a session that's about to lose its bus references. The engine catches the abort via
   // `throwIfAborted` and unwinds; our launchSharedEngine catch swallows the resulting `AbortError` because

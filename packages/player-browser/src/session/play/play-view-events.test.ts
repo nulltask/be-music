@@ -8,6 +8,7 @@ describe('playViewEventFromMoment', () => {
       'input-start',
       'load-end',
       'play-start',
+      'music-end',
       'exit-fade-out',
       'exit-close',
     ] as const) {

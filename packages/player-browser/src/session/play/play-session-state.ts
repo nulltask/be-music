@@ -354,6 +354,7 @@ export class PlaySessionState extends PlayPresentation {
   /** A replay's recorded view along the playhead ({@link updateReplayView}). */
   replayViewCursor: ReplayViewCursor | undefined;
   chartEndTimeout: number | undefined;
+  chartEndGate: ((seconds: number) => void) | undefined;
   /**
    * `setTimeout` handles for the scene-exit sequence (fade-out → close, LR2 timers 2 / 3). Cleared on dispose so the
    * deferred host callback can't fire onto a torn-down view.

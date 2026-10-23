@@ -17,12 +17,21 @@
  * timer: a flash and a long note's tail bomb end when a later frame reaches their end.
  */
 
+import {
+  resolveBeatorajaScoreTimers,
+  resolveBeatorajaHCNTimers,
+  resolveBeatorajaCharacterTimers,
+  type BeatorajaCharacterTimerState,
+} from '@be-music/skin-beatoraja/scene';
+import type { PlayerHCNLaneState } from '@be-music/player-engine/signals';
+import type { PlayFrame } from '../types.ts';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import {
   JUDGE_LANE_REF_RANGE,
   TIMER_FADEOUT,
   TIMER_FAILED,
   TIMER_PLAY,
+  TIMER_MUSIC_END,
   TIMER_PREVIEW,
   TIMER_READY,
   TIMER_SCENE_START,
@@ -99,6 +108,8 @@ export interface BeatorajaPlayBridgeOptions {
   readonly baseOps: ReadonlySet<number>;
   /** The play is AUTO PLAY (`AUTOPLAY_ON`). */
   readonly autoPlay?: boolean;
+  /** Motion periods from a character pack; the upstream default is 1 ms for every motion. */
+  readonly pmCharaMotionDurationsMs?: readonly number[];
   /**
    * The chart as the play plays it (its `#RANDOM` branches drawn, DP FLIP applied): its texts, BPM, last notes, note
    * kinds and the judge-state graph's seconds. Without it every text renders empty.
@@ -138,12 +149,16 @@ export interface BeatorajaPlayEngineInput {
   /** Chart time of an LR2 negative-BPM reversal, when the chart has one. */
   readonly reversalSeconds?: number;
   readonly summary: BeatorajaPlaySummaryInput;
+  readonly hcnLanes?: readonly PlayerHCNLaneState[];
+  readonly judgedNoteCount?: number;
 }
 
 /** What the bridge reads of one frame of the play. */
 export interface BeatorajaPlayBridgeFrame {
   /** The play clock, in ms: the skin's timers count on it. */
   readonly nowMs: number;
+  readonly exiting?: boolean;
+  readonly scoreTargets?: PlayFrame['scoreTargets'];
   /** The host's clock, in ms, for the frame rate; the play clock without it. */
   readonly hostNowMs?: number;
   readonly state: PlayState;
@@ -236,7 +251,11 @@ export class BeatorajaPlayBridge {
   private readonly texts: BeatorajaPlayTextInput;
   private readonly play: PlayInput;
   private readonly lastNoteBeats: { 1?: number; 2?: number };
+  private readonly pmCharaMotionDurationsMs: readonly number[] | undefined;
   private nowMs = 0;
+  private hasJudgment = false;
+  private characterJudge: string | undefined;
+  private characterState: BeatorajaCharacterTimerState = { lastNotes: [0, 0] };
   private engine: BeatorajaPlayEngineInput | undefined;
   private state: PlayState | undefined;
   private sceneStarted = false;
@@ -303,6 +322,7 @@ export class BeatorajaPlayBridge {
   private readonly unresolvedTextRefs = new Set<number>();
 
   public constructor(options: BeatorajaPlayBridgeOptions) {
+    this.pmCharaMotionDurationsMs = options.pmCharaMotionDurationsMs;
     this.chartPlayVariant = options.chartPlayVariant;
     this.baseOps = options.baseOps;
     this.activeOps = new Set(options.baseOps);
@@ -404,9 +424,50 @@ export class BeatorajaPlayBridge {
     if (this.timerStartedAt.has(TIMER_PLAY) && frame.engine !== undefined) {
       this.timerStartedAt.set(TIMER_PLAY, frame.nowMs - Math.max(0, frame.engine.currentSeconds) * 1000);
     }
+    this.applyAnimationTimers(frame);
     this.applyState(frame.state);
     this.judgeWindows = frame.judgeWindows;
     return this.renderContextAt(frame.nowMs);
+  }
+
+  private applyAnimationTimers(frame: BeatorajaPlayBridgeFrame): void {
+    const engine = frame.engine;
+    const score = engine?.summary;
+    const pastNotes =
+      engine?.judgedNoteCount ??
+      (score === undefined ? 0 : score.perfect + score.great + score.good + score.bad + score.poor);
+    if (score !== undefined) {
+      this.applyTimers(
+        resolveBeatorajaScoreTimers({
+          exScore: score.exScore,
+          totalNotes: score.total,
+          hasJudgment: this.hasJudgment || pastNotes > 0,
+          ...frame.scoreTargets,
+          started: new Set(this.timerStartedAt.keys()),
+        }),
+      );
+      this.applyTimers(
+        resolveBeatorajaHCNTimers({
+          lanes: (engine?.hcnLanes ?? []).map((lane) => ({ ...this.placementOf(lane.channel), gaining: lane.gaining })),
+          started: this.timerStartedAt.keys(),
+        }),
+      );
+    }
+    const playing = this.timerStartedAt.has(TIMER_PLAY);
+    const finished = this.timerStartedAt.has(TIMER_MUSIC_END);
+    const stopped = frame.exiting === true && !finished;
+    const character = resolveBeatorajaCharacterTimers({
+      nowMs: frame.nowMs,
+      timers: this.timerStartedAt,
+      state: this.characterState,
+      stage: finished ? 'finished' : stopped ? 'stopped' : playing ? 'playing' : 'loading',
+      pastNotes,
+      motionDurationsMs: this.pmCharaMotionDurationsMs,
+      latestJudge: this.characterJudge,
+      gaugeMax: score?.gauge !== undefined && score.gauge.max > 0 && score.gauge.current >= score.gauge.max,
+    });
+    this.characterState = character.state;
+    this.applyTimers(character.changes);
   }
 
   /**
@@ -431,6 +492,9 @@ export class BeatorajaPlayBridge {
         return;
       case 'play-start':
         if (!this.timerStartedAt.has(TIMER_PLAY)) this.timerStartedAt.set(TIMER_PLAY, event.atMs);
+        return;
+      case 'music-end':
+        if (!this.timerStartedAt.has(TIMER_MUSIC_END)) this.timerStartedAt.set(TIMER_MUSIC_END, event.atMs);
         return;
       case 'load-end':
         this.markLoaded(event.atMs);
@@ -500,6 +564,9 @@ export class BeatorajaPlayBridge {
     this.pressedChannels.clear();
     this.pending = [];
     this.lastMissSeconds = undefined;
+    this.hasJudgment = event.judgments.length > 0;
+    this.characterJudge = event.judgments.at(-1)?.judge;
+    this.characterState = { lastNotes: [0, 0] };
     this.initJudgeState();
     const graph = this.judgeState;
     if (graph === undefined) return;
@@ -655,6 +722,8 @@ export class BeatorajaPlayBridge {
    * the plate's combo, the lane's latest judgment, a long note's tail bomb and the judge-state graph.
    */
   private applyJudge(event: Extract<PlayViewEvent, { kind: 'judge' }>): void {
+    this.hasJudgment = true;
+    this.characterJudge = event.judge;
     const channel = event.channel;
     const placement = channel !== undefined ? this.placementOf(channel) : undefined;
     const combo = event.combo ?? this.state?.combo ?? 0;

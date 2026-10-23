@@ -4,6 +4,7 @@
  * off a frame, and the song and skin texts and timing fields they read off the skin.
  */
 
+import { TIMER_RESULTGRAPH_BEGIN, TIMER_RESULTGRAPH_END, TIMER_RESULT_UPDATESCORE } from '@be-music/skin-beatoraja';
 import {
   BEATORAJA_TEXT,
   TIMER_FADEOUT,
@@ -152,6 +153,7 @@ export function resolveBeatorajaSceneTimers(
     readonly leaving?: { readonly atMs: number };
   },
   readyAt: 'input' | 'entry',
+  scene?: 'result',
 ): Map<number, number> {
   const inputAtMs = frame.inputOpenAtMs - frame.clock.enteredAtMs;
   const readyAtMs = readyAt === 'input' ? inputAtMs : 0;
@@ -161,6 +163,12 @@ export function resolveBeatorajaSceneTimers(
     [TIMER_READY, readyAtMs],
     [TIMER_PLAY, readyAtMs],
   ]);
+  if (scene === 'result') {
+    // JSON/Lua result skins leave MusicResultSkin.ranktime at its upstream zero default.
+    timers.set(TIMER_RESULTGRAPH_BEGIN, 0);
+    timers.set(TIMER_RESULTGRAPH_END, 0);
+    timers.set(TIMER_RESULT_UPDATESCORE, 0);
+  }
   if (frame.leaving !== undefined) timers.set(TIMER_FADEOUT, frame.leaving.atMs - frame.clock.enteredAtMs);
   return timers;
 }

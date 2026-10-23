@@ -738,6 +738,16 @@ export function registerBeatorajaSkinExportsCases(define: DefineBenchmarkCase): 
   });
 
   // Runtime ids
+  define('skin-beatoraja.hcnActiveTimerId', {
+    run: () => {
+      skinAPI.hcnActiveTimerId(2, 26);
+    },
+  });
+  define('skin-beatoraja.hcnDamageTimerId', {
+    run: () => {
+      skinAPI.hcnDamageTimerId(1, 9);
+    },
+  });
   define('skin-beatoraja.bombTimerId', {
     run: () => {
       skinAPI.bombTimerId(1, 3);

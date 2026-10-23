@@ -162,6 +162,7 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
     elements: { shell } as Pick<PlayerWebDemoElements, 'shell'>,
     library: { collection: { sources: [], charts: [chartEntry('a')], errors: [] } as BrowserChartCollection },
     records: {
+      lookupChartBestRecord: vi.fn<PlayRouteDeps['records']['lookupChartBestRecord']>(() => undefined),
       resolveChartHashes: vi.fn<PlayRouteDeps['records']['resolveChartHashes']>(async () => HASHES),
       activePlayRecordKey: undefined as string | undefined,
       activeStageRecordKey: undefined as string | undefined,
@@ -275,6 +276,13 @@ async function afterAPlay(): Promise<Harness> {
 }
 
 describe('PlayRoute: what a play puts in force, and when', () => {
+  test('passes the selected chart best EX score to the play frame facts', async () => {
+    const h = await harness();
+    vi.mocked(h.deps.records.lookupChartBestRecord).mockReturnValue({ lamp: 'NORMAL', exScore: 42 });
+    const play = await playing(h, chartEntry('a'));
+    expect(play.options.scoreTargets).toEqual({ bestEXScore: 42 });
+  });
+
   test('a play loading behind a decide screen, or one backed out of, puts nothing in force', async () => {
     const h = await afterAPlay();
     const before = inForce(h);
