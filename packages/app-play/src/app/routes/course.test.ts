@@ -89,6 +89,10 @@ function harness(options: { family?: 'built-in' | 'beatoraja'; beatorajaMounts?:
   const deps = {
     courses,
     library: {
+      prepareDrawnCourse: vi.fn<CourseRouteDeps['library']['prepareDrawnCourse']>((course) => ({
+        course,
+        remember: vi.fn(),
+      })),
       collection: { sources: [], charts: [chartEntry('a'), chartEntry('b')], errors: [] } as BrowserChartCollection,
     },
     records: {
@@ -313,4 +317,39 @@ test('a practice course shows its summed result without recording, ranking or au
   expect(h.deps.records.recordCourseResult).not.toHaveBeenCalled();
   expect(h.deps.replayAutoSave.saveCourse).not.toHaveBeenCalled();
   expect(h.deps.leaderboard.maybeSubmitCourse).not.toHaveBeenCalled();
+});
+
+describe('CourseRoute kept draws', () => {
+  test.each([undefined, true])('keeps a draw only when the decide screen shows (AUTO %s)', async (autoPlay) => {
+    const h = harness();
+    const random = grade(['a'], { random: {} as LibraryCourse['random'] });
+    const drawn = grade(['b']);
+    const kept = {
+      ...drawn,
+      id: 'kept-draw',
+      definition: { ...drawn.definition, name: 'Dan 20261024_123456', release: false },
+    };
+    const remember = vi.fn();
+    h.deps.library.prepareDrawnCourse.mockReturnValueOnce({ course: kept, remember });
+    vi.mocked(drawBrowserRandomCourse).mockReturnValueOnce({ ok: true, course: drawn });
+    await h.route.startCourse(random, { autoPlay });
+    expect(h.courses.active?.course).toBe(kept);
+    expect(h.courses.autoPlay).toBe(autoPlay);
+    expect(remember).not.toHaveBeenCalled();
+    const continuation = h.deps.showDecide.mock.calls[0]![2];
+    continuation.shown!();
+    expect(remember).toHaveBeenCalledOnce();
+    h.courses.finishRun();
+    expect(h.courses.takeReturnNavigation()).toMatchObject({ folderPath: ['courses'], focusKey: 'course:kept-draw' });
+  });
+
+  test('does not keep a stale draw after the run was interrupted', async () => {
+    const h = harness();
+    vi.mocked(drawBrowserRandomCourse).mockReturnValueOnce({ ok: true, course: grade(['b']) });
+    await h.route.startCourse(grade(['a'], { random: {} as LibraryCourse['random'] }));
+    const prepared = h.deps.library.prepareDrawnCourse.mock.results[0]!.value;
+    h.courses.endRun();
+    h.deps.showDecide.mock.calls[0]![2].shown!();
+    expect(prepared.remember).not.toHaveBeenCalled();
+  });
 });

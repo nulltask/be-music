@@ -1,6 +1,6 @@
 import type { BrowserChartCollection } from '@be-music/player-browser/collection';
 import type { SceneKind, SelectScene } from '@be-music/player-browser/host';
-import type { BrowseSnapshot } from '@be-music/player-scene-model';
+import type { BrowseSnapshot, LibraryCourse } from '@be-music/player-scene-model';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { COURSE_TABLE_URLS_STORAGE_KEY } from '../course-table-import.ts';
 import { LibraryService, type LibraryServiceOptions } from './library.ts';
@@ -293,5 +293,79 @@ describe('LibraryService made courses', () => {
       'MY DAN',
     ]);
     expect(view.restore).toHaveBeenCalledWith(navigation);
+  });
+});
+
+describe('LibraryService kept random courses', () => {
+  const drawn: LibraryCourse = {
+    id: 'random',
+    playable: true,
+    stages: [],
+    definition: {
+      name: 'Random',
+      kind: 'expert',
+      stages: [],
+      constraints: [],
+      trophies: [],
+      release: true,
+      source: { format: 'beatoraja-random' },
+    },
+  };
+  const at = new Date(2026, 9, 24, 12, 34, 56);
+  function historyLibrary() {
+    const h = harness();
+    h.library.collection = {
+      sources: [],
+      charts: [],
+      errors: [],
+      courseFolders: [
+        { label: 'MY COURSES', charts: [], courses: [drawn] },
+        { label: 'MY DAN', charts: [], courses: [drawn] },
+      ],
+    };
+    return h;
+  }
+  const navigation = (label: string): BrowseSnapshot => ({ folderPath: [label], cursors: [0, 0] });
+
+  test('names a fixed draw in local time, defers listing, and remembers it once after the original bars', () => {
+    const { library } = historyLibrary();
+    const first = library.prepareDrawnCourse(drawn, navigation('MY COURSES'), at);
+    const second = library.prepareDrawnCourse(drawn, navigation('MY COURSES'), at);
+    expect(first.course.definition).toMatchObject({ name: 'Random 20261024_123456', release: false });
+    expect(first.course.random).toBeUndefined();
+    expect(first.course.stages).toBe(drawn.stages);
+    expect(first.course.id).not.toBe(second.course.id);
+    expect(library.collection.courseFolders![0]!.courses).toEqual([drawn]);
+    first.remember();
+    first.remember();
+    second.remember();
+    expect(library.collection.courseFolders![0]!.courses).toEqual([drawn, first.course, second.course]);
+    expect(library.collection.courseFolders![1]!.courses).toEqual([drawn]);
+    expect(drawn.definition.name).toBe('Random');
+    expect(drawn.definition.release).toBe(true);
+  });
+
+  test('keeps at most 100 across folders, evicting the oldest without touching the original bars', () => {
+    const { library } = historyLibrary();
+    const kept = Array.from({ length: 101 }, (_, i) => {
+      const prepared = library.prepareDrawnCourse(drawn, navigation(i % 2 === 0 ? 'MY COURSES' : 'MY DAN'), at);
+      prepared.remember();
+      return prepared.course;
+    });
+    const folders = library.collection.courseFolders!;
+    expect(folders.flatMap((folder) => folder.courses!.slice(1))).toHaveLength(100);
+    expect(folders[0]!.courses).toEqual([drawn, ...kept.filter((_, i) => i > 0 && i % 2 === 0)]);
+    expect(folders[1]!.courses).toEqual([drawn, ...kept.filter((_, i) => i % 2 === 1)]);
+  });
+
+  test('survives course-folder rebuilds, but a new session has no history', async () => {
+    const { library } = historyLibrary();
+    const prepared = library.prepareDrawnCourse(drawn, undefined, at);
+    prepared.remember();
+    await library.refreshMadeCourses();
+    expect(library.collection.courseFolders!.find((folder) => folder.label === 'MY COURSES')!.courses!.at(-1)).toBe(
+      prepared.course,
+    );
+    expect(harness().library.collection.courseFolders).toBeUndefined();
   });
 });
