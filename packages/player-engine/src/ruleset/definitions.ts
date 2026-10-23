@@ -735,7 +735,9 @@ function resolveEffectiveTotal(rulesetId: RulesetId, chart: RulesetChartFacts, b
   if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) {
     return fallback;
   }
-  return chart.sourceFormat === 'bmson' ? (raw / 100) * fallback : raw;
+  return (chart.totalUnit ?? (chart.sourceFormat === 'bmson' ? 'percent' : 'absolute')) === 'percent'
+    ? (raw / 100) * fallback
+    : raw;
 }
 
 /**
@@ -775,7 +777,18 @@ export function resolveRuleset(
     const noteCount = countRulesetNotes(chart, 'ln');
     const effectiveTotal = resolveEffectiveTotal('lr2', chart, baseNotes);
     const timeline = chart.judgeRank.timeline ?? [];
-    const staticTables = constrain(resolveLR2WindowTables(chart.judgeRank.percent, overrideBadMs));
+    const initialStage =
+      chart.sourceFormat === 'bmson' ? chart.judgeRank.stageRanks?.find((change) => change.timeUs === 0) : undefined;
+    const stagePercent = (rank: number, table: string): number =>
+      table === 'bmson' || table === 'bms-exrank'
+        ? bmsExRankValueToJudgeRankPercent(rank)
+        : resolveBMSRankJudgeRankPercent(rank);
+    const staticTables = constrain(
+      resolveLR2WindowTables(
+        initialStage !== undefined ? stagePercent(initialStage.rank, initialStage.table) : chart.judgeRank.percent,
+        overrideBadMs,
+      ),
+    );
     const timelineTables = [
       ...timeline.map((change) => ({
         timeUs: change.timeUs,
@@ -787,7 +800,7 @@ export function resolveRuleset(
         tables: constrain(
           change.table === 'lr2-nonstop'
             ? lr2WindowTables(resolveLR2NonstopRankWindowsMs(change.rank, overrideBadMs))
-            : resolveLR2WindowTables(resolveBMSRankJudgeRankPercent(change.rank), overrideBadMs),
+            : resolveLR2WindowTables(stagePercent(change.rank, change.table), overrideBadMs),
         ),
       })),
     ].sort((left, right) => left.timeUs - right.timeUs);
@@ -828,7 +841,27 @@ export function resolveRuleset(
   if (rulesetId === 'beatoraja') {
     const noteCount = countRulesetNotes(chart, 'per-note');
     const effectiveTotal = resolveEffectiveTotal('beatoraja', chart, noteCount);
-    const tables = constrain(resolveBeatorajaWindowTables(chart));
+    // Legacy BMS NONSTOP stage ranks apply only to LR2. Mixed bmson courses explicitly carry each stage's units.
+    const stageTables =
+      chart.sourceFormat === 'bmson'
+        ? (chart.judgeRank.stageRanks ?? []).map((change) => ({
+            timeUs: change.timeUs,
+            tables: constrain(
+              resolveBeatorajaWindowTables({
+                ...chart,
+                sourceFormat: change.table === 'bmson' ? 'bmson' : 'bms',
+                judgeRank: {
+                  percent: chart.judgeRank.percent,
+                  ...(change.table === 'bmson' || change.table === 'bms-exrank'
+                    ? { sourceExRank: change.rank }
+                    : { sourceRank: change.rank }),
+                },
+              }),
+            ),
+          }))
+        : [];
+    const tables =
+      stageTables.find((change) => change.timeUs === 0)?.tables ?? constrain(resolveBeatorajaWindowTables(chart));
     const mode = resolveBeatorajaMode(chart.laneMode);
     // FIVEKEYS / PMS break combo on an empty POOR (JudgeProperty combo[MS] = false).
     const comboBreaksOnEmptyPoor = mode === BEATORAJA_MODES.FIVEKEYS || mode === BEATORAJA_MODES.PMS;
@@ -836,7 +869,14 @@ export function resolveRuleset(
       id: 'beatoraja/0',
       rulesetId: 'beatoraja',
       windows: tables,
-      windowsAt: () => tables,
+      windowsAt: (timeUs) => {
+        let active = tables;
+        for (const change of stageTables) {
+          if (change.timeUs > timeUs) break;
+          active = change.tables;
+        }
+        return active;
+      },
       selection: options.judgeAlgorithm ?? 'combo',
       multiBad: false,
       ignoreLateBadOnLNHead: false,

@@ -128,10 +128,11 @@ export function buildBMSObjectLineEntry(
 export function sortAndNormalizeEvents(
   events: Array<BeMusicEvent | Record<string, unknown>>,
   base: 36 | 62 = 36,
+  allowLongKeys = false,
 ): BeMusicEvent[] {
   const normalized: BeMusicEvent[] = [];
   for (const event of events) {
-    const parsed = normalizeRawEvent(event, base);
+    const parsed = normalizeRawEvent(event, base, allowLongKeys);
     if (parsed) {
       normalized.push(parsed);
     }
@@ -169,11 +170,12 @@ export function upsertMeasureLength(
 function normalizeRawEvent(
   event: BeMusicEvent | Record<string, unknown>,
   base: 36 | 62 = 36,
+  allowLongKeys = false,
 ): BeMusicEvent | undefined {
   const raw = event as Record<string, unknown>;
   const measure = normalizeMeasure(raw.measure);
   const channel = normalizeEventChannel(raw.channel);
-  const value = normalizeEventValue(raw.value, base);
+  const value = normalizeEventValue(raw.value, base, allowLongKeys);
   const position = normalizePosition(raw.position);
   if (measure === undefined || channel === undefined || value === undefined || position === undefined) {
     return undefined;
@@ -202,11 +204,11 @@ function normalizeEventChannel(value: unknown): string | undefined {
   return normalizeChannel(value);
 }
 
-function normalizeEventValue(value: unknown, base: 36 | 62 = 36): string | undefined {
+function normalizeEventValue(value: unknown, base: 36 | 62 = 36, allowLongKeys = false): string | undefined {
   if (typeof value !== 'string') {
     return undefined;
   }
-  return normalizeObjectKey(value, base);
+  return normalizeObjectKey(value, base, allowLongKeys);
 }
 
 function normalizePosition(position: unknown): BeMusicPosition | undefined {
@@ -244,6 +246,10 @@ function normalizeEventBmsonExtension(value: unknown): BeMusicEvent['bmson'] | u
   }
   const raw = value as Record<string, unknown>;
   const extension: NonNullable<BeMusicEvent['bmson']> = {};
+  for (const key of ['sampleOffsetSeconds', 'sampleDurationSeconds'] as const) {
+    const seconds = raw[key];
+    if (typeof seconds === 'number' && Number.isFinite(seconds) && seconds >= 0) extension[key] = seconds;
+  }
   const length = normalizeBmsonNoteLength(raw.l);
   if (length !== undefined) {
     extension.l = length;

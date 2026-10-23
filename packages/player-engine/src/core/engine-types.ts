@@ -137,7 +137,7 @@ export interface PlayerPlaySettings {
   /**
    * The judge rank changes of a stitched LR2 NONSTOP chart's later stages (`NonstopStitchMap.stageRanks` from
    * `@be-music/player-engine/course`), in chart seconds: from each change on, the windows of that stage's `#RANK`. Applied under
-   * the LR2 ruleset only (as `#EXRANKxx`) and recorded into the replay (`chart.judgeRank.stageRanks`), so a replay
+   * LR2 (and beatoraja for mixed bmson courses) and recorded into the replay (`chart.judgeRank.stageRanks`), so a replay
    * and a re-simulation judge with them.
    */
   stageRanks?: ReadonlyArray<PlayerStageRank>;
@@ -155,7 +155,7 @@ export interface PlayerPlaySettings {
 export interface PlayerStageRank {
   seconds: number;
   rank: number;
-  table: 'chart' | 'lr2-nonstop';
+  table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank';
 }
 
 /**

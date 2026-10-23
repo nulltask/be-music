@@ -110,7 +110,7 @@ export interface ReplayJudgeRank {
    * `timeUs` on, the windows a chart opening with `rank` gets (`'chart'`) or LR2's NONSTOP rank table
    * (`'lr2-nonstop'`). Absent in logs recorded before it existed, which played with the first stage's rank throughout.
    */
-  stageRanks?: Array<{ timeUs: number; rank: number; table: 'chart' | 'lr2-nonstop' }>;
+  stageRanks?: Array<{ timeUs: number; rank: number; table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank' }>;
 }
 
 export interface ReplayChart {
@@ -139,6 +139,8 @@ export interface ReplayChart {
    */
   playFingerprint?: string;
   sourceFormat: 'bms' | 'bmson';
+  /** Explicit TOTAL units for mixed-format NONSTOP charts; otherwise derived from sourceFormat. */
+  totalUnit?: 'absolute' | 'percent';
   /** Engine lane display mode (`'7keys'` / `'14keys'` / ... — `resolveLaneDisplayMode` output). */
   laneMode: string;
   /**
@@ -386,6 +388,8 @@ export function parseReplay(source: unknown): BeMusicReplay {
 
 function parseChart(chart: Record<string, unknown>): ReplayChart {
   const sourceFormat = chart.sourceFormat;
+  if (chart.totalUnit !== undefined && chart.totalUnit !== 'absolute' && chart.totalUnit !== 'percent')
+    throw new ReplayParseError('chart.totalUnit: expected absolute or percent');
   if (sourceFormat !== 'bms' && sourceFormat !== 'bmson') {
     throw new ReplayParseError(`chart.sourceFormat: expected 'bms' | 'bmson'`);
   }
@@ -427,6 +431,7 @@ function parseChart(chart: Record<string, unknown>): ReplayChart {
     sourceFormat,
     laneMode: expectString(chart.laneMode, 'chart.laneMode'),
     total: optionalFiniteNumber(chart.total, 'chart.total'),
+    ...(chart.totalUnit !== undefined ? { totalUnit: chart.totalUnit as 'absolute' | 'percent' } : {}),
     lnMode,
     judgeRank,
     noteCount: expectFiniteNumber(chart.noteCount, 'chart.noteCount'),
@@ -475,8 +480,8 @@ function parseStageRanks(value: unknown): ReplayJudgeRank['stageRanks'] {
     const path = `chart.judgeRank.stageRanks[${index}]`;
     const record = expectRecord(entry, path);
     const table = record.table;
-    if (table !== 'chart' && table !== 'lr2-nonstop') {
-      throw new ReplayParseError(`${path}.table: expected 'chart' or 'lr2-nonstop'`);
+    if (table !== 'chart' && table !== 'lr2-nonstop' && table !== 'bmson' && table !== 'bms-exrank') {
+      throw new ReplayParseError(`${path}.table: expected 'chart', 'lr2-nonstop', 'bmson' or 'bms-exrank'`);
     }
     return {
       timeUs: expectFiniteNumber(record.timeUs, `${path}.timeUs`),

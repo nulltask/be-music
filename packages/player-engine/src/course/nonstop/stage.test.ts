@@ -52,3 +52,26 @@ describe('createNonstopStageTiming', () => {
     expect(timing.lr2FirstNote).toBeUndefined();
   });
 });
+
+test('intended bmson timing includes extended keyboard lanes', () => {
+  const chart = parseChart(
+    JSON.stringify({
+      version: '1.0.0',
+      info: { init_bpm: 120, resolution: 240, mode_hint: 'keyboard-24k' },
+      sound_channels: [
+        {
+          name: 'key.wav',
+          notes: [
+            { x: 24, y: 240 },
+            { x: 25, y: 960 },
+          ],
+        },
+      ],
+    }),
+    'bmson',
+  );
+  const stage = createNonstopStageTiming(chart);
+  expect(stage.firstNote).toBe(0.25);
+  expect(stage.lastNote).toBe(1);
+  expect(stage.secondsAt(stage.firstNote)).toBe(0.5);
+});

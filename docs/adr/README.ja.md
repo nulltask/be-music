@@ -29,3 +29,5 @@
 - [プレビューのシークは AUTO プレイを途中から始めて行う](./0015-preview-seek.ja.md)（0016 に置き換え）
 
 - [シークはプレイループのコマンドにする](./0016-seek-play-loop-command.ja.md)
+
+- [混在する NONSTOP は bmson の IR に元の単位を保持する](./0017-bmson-nonstop.ja.md)

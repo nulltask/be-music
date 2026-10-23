@@ -587,3 +587,25 @@ describe('decodedSampleKey', () => {
     expect(decodedSampleKey('kick.wav')).toBe(decodedSampleKey('KICK.wav'));
   });
 });
+
+test('maps extended bmson resource keys and source slices into keep-pitch FIT buffers', async () => {
+  const { audioContext, audioBus, trackedBufferSources } = createMocks();
+  const event = mkEvent('11', '100');
+  const chart = makeChartWithSamples();
+  chart.sourceFormat = 'bmson';
+  chart.bms.base = 62;
+  chart.resources.wav['100'] = 'kick.wav';
+  const session = createWebAudioSession({
+    audioContext,
+    audioBus,
+    chart,
+    decodedSamples: new Map([['kick.wav', makeMockAudioBuffer(5)]]),
+    wavCmdVolumeMultipliers: new Map(),
+    bmsonSlicePlayback: new Map([[event, { offsetSeconds: 2, durationSeconds: 1 }]]),
+    stageMixer: { stageOf: () => 0, rate: () => 1, sliceRate: () => 2, bgmInput: () => undefined },
+  });
+  session.start();
+  session.triggerEvent?.(event);
+  expect(trackedBufferSources[0]!.node.start).toHaveBeenCalledWith(0, 1, 0.5);
+  await session.dispose();
+});

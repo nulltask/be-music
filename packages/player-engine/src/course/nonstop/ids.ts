@@ -8,6 +8,11 @@ export const NONSTOP_KEY_SPACE: number = 62 * 62 - 1;
  * distinct source key of each stage. Returns `undefined` once the key space is used up.
  */
 export class NonstopKeyAllocator {
+  private readonly unlimited: boolean;
+  constructor(unlimited = false) {
+    this.unlimited = unlimited;
+  }
+
   private next = 1;
   private readonly keys = new Map<string, string>();
 
@@ -16,8 +21,14 @@ export class NonstopKeyAllocator {
     const id = `${stage}:${sourceKey}`;
     const known = this.keys.get(id);
     if (known !== undefined) return known;
-    if (this.next > NONSTOP_KEY_SPACE) return undefined;
-    const key = `${BASE62_DIGITS[Math.floor(this.next / 62)]}${BASE62_DIGITS[this.next % 62]}`;
+    if (!this.unlimited && this.next > NONSTOP_KEY_SPACE) return undefined;
+    let value = this.next;
+    let key = '';
+    do {
+      key = BASE62_DIGITS[value % 62]! + key;
+      value = Math.floor(value / 62);
+    } while (value > 0);
+    key = key.padStart(2, '0');
     this.next += 1;
     this.keys.set(id, key);
     return key;

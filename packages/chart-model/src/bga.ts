@@ -33,10 +33,10 @@ export function buildBGATimelines(chart: BeMusicJSON, resolver: BGATimingResolve
   const idBase = resolveBMSBase(chart);
   const sortedEvents = sortEvents(chart.events);
   const timelines: BGATimelines = {
-    base: buildBmsBGATimeline(sortedEvents, resolver, BGA_BASE_CHANNEL, idBase),
-    poor: buildBmsBGATimeline(sortedEvents, resolver, BGA_POOR_CHANNEL, idBase),
-    layer: buildBmsBGATimeline(sortedEvents, resolver, BGA_LAYER_CHANNEL, idBase),
-    layer2: buildBmsBGATimeline(sortedEvents, resolver, BGA_LAYER2_CHANNEL, idBase),
+    base: buildBmsBGATimeline(sortedEvents, resolver, BGA_BASE_CHANNEL, idBase, chart.sourceFormat === 'bmson'),
+    poor: buildBmsBGATimeline(sortedEvents, resolver, BGA_POOR_CHANNEL, idBase, chart.sourceFormat === 'bmson'),
+    layer: buildBmsBGATimeline(sortedEvents, resolver, BGA_LAYER_CHANNEL, idBase, chart.sourceFormat === 'bmson'),
+    layer2: buildBmsBGATimeline(sortedEvents, resolver, BGA_LAYER2_CHANNEL, idBase, chart.sourceFormat === 'bmson'),
   };
 
   const bgaSection = chart.bmson.bga;
@@ -63,6 +63,7 @@ export function buildBmsBGATimeline(
   resolver: Pick<BGATimingResolver, 'eventToSeconds'>,
   channel: string,
   base: 36 | 62 = 36,
+  allowLongKeys = false,
 ): BGACue[] {
   const normalized = normalizeChannel(channel);
   const timeline: BGACue[] = [];
@@ -70,7 +71,7 @@ export function buildBmsBGATimeline(
     if (normalizeChannel(event.channel) !== normalized) {
       continue;
     }
-    const key = normalizeObjectKey(event.value, base);
+    const key = normalizeObjectKey(event.value, base, allowLongKeys);
     timeline.push({
       seconds: resolver.eventToSeconds(event),
       key: key === '00' ? undefined : key,

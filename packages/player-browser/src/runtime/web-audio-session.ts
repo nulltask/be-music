@@ -200,8 +200,13 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     return stage === undefined ? 1 : stageMixer!.rate(stage);
   };
 
+  const sliceRateOf = (sampleKey: string): number => {
+    const stage = stageMixer?.stageOf(sampleKey);
+    return stage === undefined ? 1 : (stageMixer?.sliceRate?.(stage) ?? 1);
+  };
+
   const resolveSamplePath = (event: BeMusicEvent): { sampleKey: string; path: string } | undefined => {
-    const sampleKey = normalizeObjectKey(event.value, sampleIdBase);
+    const sampleKey = normalizeObjectKey(event.value, sampleIdBase, chart.sourceFormat === 'bmson');
     const path = chart.resources.wav[sampleKey];
     if (typeof path !== 'string') return undefined;
     return { sampleKey, path };
@@ -312,9 +317,10 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
 
     const slice = bmsonSlicePlayback?.get(event);
     const elapsed = elapsedSeconds > 0 ? elapsedInBuffer(sampleKey, elapsedSeconds) : 0;
-    const offsetSeconds = clampSampleOffset((slice?.offsetSeconds ?? 0) + elapsed, buffer.duration);
+    const sliceRate = sliceRateOf(sampleKey);
+    const offsetSeconds = clampSampleOffset((slice?.offsetSeconds ?? 0) / sliceRate + elapsed, buffer.duration);
     const durationSeconds = clampSampleDuration(
-      slice?.durationSeconds !== undefined ? slice.durationSeconds - elapsed : undefined,
+      slice?.durationSeconds !== undefined ? slice.durationSeconds / sliceRate - elapsed : undefined,
       buffer.duration,
       offsetSeconds,
     );
@@ -340,9 +346,10 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     const buffer = decodedSamples.get(decodedSampleKey(path));
     if (!buffer) return false;
     const slice = bmsonSlicePlayback?.get(event);
-    const start = slice?.offsetSeconds ?? 0;
+    const sliceRate = sliceRateOf(sampleKey);
+    const start = (slice?.offsetSeconds ?? 0) / sliceRate;
     const end = Math.min(
-      slice?.durationSeconds !== undefined ? start + slice.durationSeconds : buffer.duration,
+      slice?.durationSeconds !== undefined ? start + slice.durationSeconds / sliceRate : buffer.duration,
       buffer.duration,
     );
     return start + elapsedInBuffer(sampleKey, elapsedSeconds) < end;

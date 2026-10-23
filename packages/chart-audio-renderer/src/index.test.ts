@@ -1,7 +1,8 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createEmptyJSON } from '../../chart-source/src/index.ts';
-import { parseChartFile } from '../../chart-parser/src/index.ts';
+import { stitchNonstopCourse } from '../../player-engine/src/course/nonstop/compose.ts';
+import { parseChart, parseChartFile } from '../../chart-parser/src/index.ts';
 import { describe, expect, test } from 'vite-plus/test';
 import { collectSampleTriggers, createTimingResolver } from '@be-music/chart-model';
 import { type RenderResult, renderJSON, renderSingleSample } from './index.ts';
@@ -968,4 +969,37 @@ describe('audio-renderer: test/fixtures chart fixtures', () => {
     expect(result.durationSeconds).toBeGreaterThan(0);
     expect(peakBetween(result, 0, result.durationSeconds)).toBeGreaterThan(0);
   });
+});
+
+test('audio-renderer: a stitched bmson stage preserves its source audio slices', async () => {
+  const source = parseChart(
+    JSON.stringify({
+      version: '1.0.0',
+      info: { init_bpm: 1200, resolution: 240 },
+      sound_channels: [
+        {
+          name: 'render-codec-test.mp3',
+          notes: [
+            { x: 1, y: 0 },
+            { x: 2, y: 240, c: true },
+            { x: 3, y: 480, c: true },
+            { x: 4, y: 960 },
+          ],
+        },
+      ],
+    }),
+    'bmson',
+  );
+  const result = stitchNonstopCourse([{ chart: source }], { connections: [] });
+  if (!result.ok) throw new Error(result.reason);
+  const options = { baseDir: fixtureDir, sampleRate: 8000, normalize: false, tailSeconds: 0 };
+  const expected = await renderJSON(source, options);
+  const actual = await renderJSON(result.chart, options);
+  expect(actual.peak).toBeGreaterThan(0);
+  expect(actual.left.length).toBe(expected.left.length);
+  expect(actual.right.length).toBe(expected.right.length);
+  for (let frame = 0; frame < actual.left.length; frame += 1) {
+    expect(actual.left[frame]).toBeCloseTo(expected.left[frame]!, 5);
+    expect(actual.right[frame]).toBeCloseTo(expected.right[frame]!, 5);
+  }
 });
