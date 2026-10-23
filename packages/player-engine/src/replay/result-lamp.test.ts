@@ -21,6 +21,13 @@ function result(
 }
 
 describe('resolveRulesetResultLamp', () => {
+  test('a final combo break overrides even a maximum combo covering every note', () => {
+    const broken = result({ type: 'NORMAL', cleared: true }, { bad: 0, poor: 0, good: 0, great: 0 });
+    broken.maxCombo = broken.noteCount;
+    broken.fullCombo = false;
+    expect(resolveRulesetResultLamp(broken, 'beatoraja')).toBe('NORMAL');
+  });
+
   test('LR2 awards a full combo before gauge failure, while other rulesets still require a clear', () => {
     expect(resolveRulesetResultLamp(result({ type: 'HARD', cleared: false }, { bad: 0, poor: 0 }), 'lr2')).toBe(
       'FULL_COMBO',

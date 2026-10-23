@@ -280,7 +280,10 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     play.step(1, {}, [{ judge: 'PERFECT', combo: 1 }]);
     play.step(2, {}, [{ judge: 'PERFECT', combo: 3 }]);
     expect(play.state().maxCombo).toBe(3);
+    applyFinalSummary(play.ctx, summary({ perfect: 4, exScore: 8, fullCombo: false }, 30));
+    expect(play.ctx.score.fullCombo).toBe(false);
     applyFinalSummary(play.ctx, summary({ perfect: 4, exScore: 8 }, 30));
+    expect(play.ctx.score).not.toHaveProperty('fullCombo');
     expect(play.state().maxCombo).toBe(4);
     expect(play.state().combo).toBe(4);
     expect(getResultData(play.ctx)!.maxCombo).toBe(4);

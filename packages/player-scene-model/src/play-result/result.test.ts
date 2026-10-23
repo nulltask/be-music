@@ -53,6 +53,14 @@ describe('playResultFromPlayState', () => {
   });
 
   test('lamps the play by the one clear-lamp rule', () => {
+    const broken = playResultFromPlayState(played(frame(7, 82, true)), {
+      chart: chartEntry,
+      score: { ...score, fullCombo: false },
+      seconds: 100,
+      judgeRuleset: 'beatoraja',
+    });
+    expect(broken.lamp).toBe('NORMAL');
+
     const cleared = played(frame(7, 82, true));
     // Every note judged GREAT or better on a cleared gauge: LR2 tops out at FULL COMBO.
     expect(playResultFromPlayState(cleared, { chart: chartEntry, score, seconds: 100, judgeRuleset: 'lr2' }).lamp).toBe(
