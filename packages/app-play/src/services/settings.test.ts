@@ -194,6 +194,7 @@ describe('createDemoGUIState', () => {
       keyVolume: 100,
       bgmVolume: 100,
       playInSilentMode: true,
+      peakGain: false,
       compressor: true,
       autoSaveReplay: false,
       tempoEnabled: false,

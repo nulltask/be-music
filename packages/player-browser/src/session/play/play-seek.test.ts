@@ -10,6 +10,7 @@ import type { LibraryChart } from '@be-music/player-scene-model';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { runEngineDriver, type EngineDriverOptions } from '../../runtime/engine-driver.ts';
 import { launchSharedEngine } from './play-engine.ts';
+import { handleSharedEngineExitKey } from './play-input.ts';
 import { canSeekPlay } from './play-seek.ts';
 import { PlaySession } from './play-session.ts';
 
@@ -78,7 +79,9 @@ interface FakeContext {
 }
 
 /** An AUTO play on a fake audio clock and a fake engine; every launched run is kept in `runs`. */
-function createSeekablePlay(): FakeContext {
+function createSeekablePlay(
+  setup: { startRequested?: boolean; paused?: boolean; practice?: boolean } = {},
+): FakeContext {
   const audioContext = { currentTime: 100, resume: async () => {}, suspend: async () => {} };
   const engine = { paused: false };
   const runs: FakeRun[] = [];
@@ -154,9 +157,11 @@ function createSeekablePlay(): FakeContext {
     runs.push(run);
     return promise as ReturnType<typeof runEngineDriver>;
   });
-  const play = new PlaySession({ autoPlay: true });
+  const play = new PlaySession({ autoPlay: true, practice: setup.practice });
   Object.assign(play, {
     chart: CHART,
+    engineStartRequested: setup.startRequested ?? false,
+    paused: setup.paused ?? false,
     audioContext,
     audioBus: {},
     chartDurationSeconds: 10,
@@ -221,6 +226,62 @@ describe('PlaySession.seek (a play-loop command)', () => {
     const manual = new PlaySession({ autoPlay: false });
     expect(canSeekPlay(manual)).toBe(false);
     await manual.seek(3);
+  });
+
+  test('a replay can seek with the scene arrows', async () => {
+    const context = createSeekablePlay();
+    playFirstThreeSeconds(context);
+    Object.assign(context.play.options, { autoPlay: false, replay: { play: {} } });
+    expect(canSeekPlay(context.play)).toBe(true);
+    const event = { code: 'ArrowLeft', preventDefault: vi.fn() } as unknown as KeyboardEvent;
+    handleSharedEngineExitKey(context.play, event);
+    context.runs[0]!.tick();
+    expect(context.runs[0]!.seeks).toEqual([-2]);
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+  });
+
+  test.each([
+    { altKey: true },
+    { ctrlKey: true },
+    { metaKey: true },
+    { isComposing: true },
+    { defaultPrevented: true },
+    { target: { tagName: 'INPUT' } },
+    { target: { tagName: 'TEXTAREA' } },
+    { target: { tagName: 'SELECT' } },
+    { target: { isContentEditable: true } },
+  ])('seeking arrows leave modified keys and editable fields alone: %j', (overrides) => {
+    const context = createSeekablePlay();
+    playFirstThreeSeconds(context);
+    const event = { code: 'ArrowRight', preventDefault: vi.fn(), ...overrides } as unknown as KeyboardEvent;
+    handleSharedEngineExitKey(context.play, event);
+    context.runs[0]!.tick();
+    expect(context.runs[0]!.seeks).toEqual([]);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+  });
+
+  test('keeps the applied clock stable when the engine reuses its frame bus before the next drain', () => {
+    const context = createSeekablePlay();
+    const frame: PlayerUIFramePayload = {
+      currentBeat: 6,
+      currentSeconds: 3,
+      totalSeconds: 10,
+      notes: [],
+      summary: summaryOf(6),
+      generation: 0,
+      clock: { outputSeconds: context.audioContext.currentTime, tempo: 1, paused: true },
+    };
+    const onFrame = context.runs[0]!.options.ui.onFrame!;
+    onFrame(frame);
+    frame.currentSeconds = 0;
+    frame.currentBeat = 0;
+    frame.summary = summaryOf(0);
+    frame.generation = 1;
+    expect(context.play.currentSeconds()).toBe(3);
+    expect(context.play.score.perfect).toBe(6);
+    onFrame(frame);
+    expect(context.play.currentSeconds()).toBe(0);
+    expect(context.play.score.perfect).toBe(0);
   });
 
   // D1: the relaunched run's frames moved the counts to the target, while the combo only followed judge cues, which a
@@ -304,4 +365,42 @@ describe('PlaySession.seek (a play-loop command)', () => {
     expect(context.play.chartEndTimeout).toBeUndefined();
     expect(context.play.sharedEngineChartSettled).toBe(false);
   });
+});
+
+test('manual seeking requires the practice option and marks the result', async () => {
+  const context = createSeekablePlay();
+  playFirstThreeSeconds(context);
+  Object.assign(context.play.options, { autoPlay: false, allowSeek: 'practice' });
+  expect(canSeekPlay(context.play)).toBe(true);
+  const waiting = context.play.seek(5);
+  context.runs[0]!.tick();
+  await waiting;
+  expect(context.play.practice).toBe(true);
+  expect(context.play.getResultData()?.practice).toBe(true);
+});
+
+test('prepares the engine behind a command gate and forwards a start already requested by the skin', () => {
+  const waiting = createSeekablePlay();
+  expect(waiting.runs[0]!.options.engineOptions).toMatchObject({ leadInMs: 0, waitForStart: true });
+  expect(waiting.runs[0]!.inputSignals.drainCommands()).toEqual([]);
+  const ready = createSeekablePlay({ startRequested: true, paused: true });
+  expect(ready.runs[0]!.inputSignals.drainCommands()).toEqual([{ kind: 'toggle-pause' }, { kind: 'start' }]);
+});
+
+test('later practice stages do not create a replay recorder and no replay waiter survives engine completion', async () => {
+  const context = createSeekablePlay({ practice: true });
+  expect(context.play.practice).toBe(true);
+  expect(context.runs[0]!.options.engineOptions?.onReplayRecorded).toBeUndefined();
+  context.play.sharedEnginePromise = Promise.resolve();
+  expect(await context.play.waitForReplay()).toBeUndefined();
+  expect(context.play.replayWaiters).toHaveLength(0);
+});
+
+test('seeking an AUTO course stage also makes its result practice', async () => {
+  const context = createSeekablePlay();
+  Object.assign(context.play.options, { course: { kind: 'grade' } });
+  const waiting = context.play.seek(5);
+  context.runs[0]!.tick();
+  await waiting;
+  expect(context.play.getResultData()?.practice).toBe(true);
 });

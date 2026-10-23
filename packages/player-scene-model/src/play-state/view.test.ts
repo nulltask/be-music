@@ -36,6 +36,15 @@ describe('ReplayViewCursor', () => {
     expect(cursor.next(0)).toEqual({ hiSpeed: 2 });
   });
 
+  test('seeking forces the view to be reapplied even inside the same change interval', () => {
+    const cursor = new ReplayViewCursor({ hiSpeed: 2 }, changes);
+    cursor.next(1_500_000);
+    expect(cursor.seek(1_250_000)).toEqual({ hiSpeed: 2.5 });
+    expect(cursor.next(1_300_000)).toBeUndefined();
+    expect(cursor.seek(0)).toEqual({ hiSpeed: 2 });
+    expect(cursor.next(500_000)).toBeUndefined();
+  });
+
   test('a log without a view gives an empty one once', () => {
     const cursor = new ReplayViewCursor(undefined);
     expect(cursor.next(0)).toEqual({});

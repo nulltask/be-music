@@ -40,12 +40,38 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
         font-size: clamp(9px, 2.6cqh, 15px);
         font-variant-numeric: tabular-nums;
       }
+      .stage-hit {
+        position: absolute;
+        inset: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        pointer-events: auto;
+        cursor: pointer;
+      }
+      /* The shared button hover fills the control; this hit target must stay clear of the lanes and BGA. */
+      .stage-hit:hover,
+      .stage-hit:active,
+      .stage-hit:focus,
+      .stage-hit:focus-visible {
+        background: transparent;
+        border-color: transparent;
+      }
       .info {
         position: absolute;
         display: grid;
         align-content: start;
         gap: 0.4em;
         overflow: hidden;
+        pointer-events: none;
+        container-type: inline-size;
+        container-name: preview-info;
+      }
+      @container preview-info (max-width: 22rem) {
+        .judgments {
+          gap: 0 0.45em;
+        }
       }
       h2 {
         font-size: 1.15em;
@@ -134,7 +160,14 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
     const box = `left:${(info.left / stage.width) * 100}%;top:${(info.top / stage.height) * 100}%;width:${((info.right - info.left) / stage.width) * 100}%;bottom:${((stage.height - info.bottom) / stage.height) * 100}%`;
     const bpm = f.bpm === undefined ? undefined : `BPM ${Math.round(f.bpm)}`;
     const rate = score.maximum > 0 ? `${((score.exScore / score.maximum) * 100).toFixed(2)}%` : '—';
+    const playing = f.stage !== 'paused' && f.stage !== 'ending';
     return html`<section class="stage" part="stage" style=${`--stage-ratio:${stage.width / stage.height}`}>
+      <button
+        class="stage-hit"
+        part="stage-hit"
+        aria-label=${playing ? 'Pause' : 'Play'}
+        @click=${() => this.emit('pause-request', undefined)}
+      ></button>
       <div class="info" part="info" style=${box} aria-label="Chart and play status">
         <h2 title=${title}>${title}</h2>
         <p class="line muted">${f.chart?.artist ?? ''}</p>
@@ -181,7 +214,7 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
         .data=${{
           currentSeconds: seconds,
           durationSeconds: f.state.totalSeconds,
-          playing: f.stage !== 'paused' && f.stage !== 'ending',
+          playing,
           seekable: f.seekable,
           volume: this.volume,
           muted: this.muted,

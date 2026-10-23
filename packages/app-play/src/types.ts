@@ -94,6 +94,12 @@ export interface DemoGUIState extends PlayTempoSettings {
    * apps' music). Off by default; only offered where `navigator.audioSession` exists. Remembered across reloads.
    */
   playInSilentMode: boolean;
+  /**
+   * When true, the next play scales every decoded sample by one gain so the loudest peak sits near −3 dBFS. Off by
+   * default, and not remembered: a reload plays charts at the level they were authored at. Takes the next play, not
+   * the one already loaded.
+   */
+  peakGain: boolean;
   compressor: boolean;
   compressorKey: boolean;
   compressorBGM: boolean;

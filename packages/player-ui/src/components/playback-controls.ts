@@ -1,7 +1,7 @@
 import { css, html, svg, type CSSResultGroup, type TemplateResult } from 'lit';
 import { DataElement } from '../base.ts';
 import type { BeMusicPlaybackData } from '../models.ts';
-import { formatPlaybackTime } from '../playback.ts';
+import { formatPlaybackTime, resolvePlaybackSeconds } from '../playback.ts';
 import { baseStyles } from '../styles/base.ts';
 
 const ICONS = {
@@ -18,8 +18,9 @@ function icon(name: keyof typeof ICONS): TemplateResult {
 }
 
 /**
- * Video-player controls for a preview: play / pause, a seek bar, the time, mute and volume, and full screen. Seeking is
- * requested once the bar is let go (`seek-request`); while it is dragged the time follows the thumb.
+ * Video-player controls for a preview: play / pause, a seek bar, the time, mute and volume, and full screen. Dragging
+ * the bar requests `seek-request` as the thumb moves, and again when it is let go. While it is held, the thumb stays
+ * where it was dragged instead of being pulled back by the play clock.
  */
 export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackData> {
   static override styles: CSSResultGroup = [
@@ -32,14 +33,20 @@ export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackD
       }
       .bar {
         display: grid;
-        gap: 2px;
-        padding: 0 8px 4px;
-        background: linear-gradient(transparent, #05070bcc 40%);
+        gap: 0;
+        padding: 0 0 6px;
+        background: linear-gradient(transparent, #05070be6 32%);
       }
       .row {
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: 2px;
+        padding: 0 6px;
+      }
+      .sound {
+        display: flex;
+        align-items: center;
+        min-width: 0;
       }
       button {
         display: grid;
@@ -63,15 +70,111 @@ export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackD
         padding: 0;
         border: 0;
         background: transparent;
-        accent-color: var(--be-music-color-accent, #abcaff);
+        accent-color: transparent;
       }
       .seek {
         width: 100%;
-        height: 14px;
+        height: 16px;
         margin: 0;
+        appearance: none;
+        cursor: pointer;
+        --seek: 0%;
+      }
+      .seek::-webkit-slider-runnable-track {
+        height: 3px;
+        border-radius: 999px;
+        background: linear-gradient(to right, var(--be-music-color-accent, #abcaff) var(--seek), #ffffff3d var(--seek));
+      }
+      .bar:hover .seek::-webkit-slider-runnable-track,
+      .seek:focus-visible::-webkit-slider-runnable-track {
+        height: 5px;
+      }
+      .seek::-webkit-slider-thumb {
+        appearance: none;
+        width: 13px;
+        height: 13px;
+        margin-top: -5px;
+        border: 0;
+        border-radius: 50%;
+        background: var(--be-music-color-accent, #abcaff);
+        opacity: 0;
+      }
+      .bar:hover .seek::-webkit-slider-thumb,
+      .seek:active::-webkit-slider-thumb,
+      .seek:focus-visible::-webkit-slider-thumb {
+        opacity: 1;
+      }
+      .bar:hover .seek::-webkit-slider-thumb {
+        margin-top: -4px;
+      }
+      .seek::-moz-range-track {
+        height: 3px;
+        border: 0;
+        border-radius: 999px;
+        background: #ffffff3d;
+      }
+      .seek::-moz-range-progress {
+        height: 3px;
+        border-radius: 999px;
+        background: var(--be-music-color-accent, #abcaff);
+      }
+      .seek::-moz-range-thumb {
+        width: 13px;
+        height: 13px;
+        border: 0;
+        border-radius: 50%;
+        background: var(--be-music-color-accent, #abcaff);
+        opacity: 0;
+      }
+      .bar:hover .seek::-moz-range-thumb,
+      .seek:active::-moz-range-thumb,
+      .seek:focus-visible::-moz-range-thumb {
+        opacity: 1;
       }
       .volume {
+        width: 0;
+        height: 14px;
+        margin: 0;
+        opacity: 0;
+        pointer-events: none;
+        appearance: none;
+        cursor: pointer;
+        transition:
+          width 0.15s ease,
+          opacity 0.15s ease;
+      }
+      .sound:hover .volume,
+      .sound:focus-within .volume {
         width: 72px;
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .volume::-webkit-slider-runnable-track {
+        height: 3px;
+        border-radius: 999px;
+        background: #ffffff3d;
+      }
+      .volume::-webkit-slider-thumb {
+        appearance: none;
+        width: 12px;
+        height: 12px;
+        margin-top: -4.5px;
+        border: 0;
+        border-radius: 50%;
+        background: #edf2fa;
+      }
+      .volume::-moz-range-track {
+        height: 3px;
+        border: 0;
+        border-radius: 999px;
+        background: #ffffff3d;
+      }
+      .volume::-moz-range-thumb {
+        width: 12px;
+        height: 12px;
+        border: 0;
+        border-radius: 50%;
+        background: #edf2fa;
       }
       .time {
         margin-left: 6px;
@@ -80,14 +183,65 @@ export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackD
       .spacer {
         flex: 1;
       }
+      @container be-music (max-width: 22rem) {
+        .volume {
+          display: none;
+        }
+      }
     `,
   ];
+  /** Set from the moment the thumb is pressed until it is let go, so a frame cannot overwrite it mid-drag. */
+  private scrubbing = false;
   private scrubSeconds: number | undefined;
+
+  protected override updated(): void {
+    const input = this.renderRoot.querySelector<HTMLInputElement>('input.seek');
+    if (!input) return;
+    if (!this.scrubbing) {
+      const next = String(this.shownSeconds());
+      if (input.value !== next) input.value = next;
+    }
+    const duration = Math.max(0, this.data?.durationSeconds ?? 0);
+    const value = Number(input.value);
+    const progress = duration > 0 && Number.isFinite(value) ? Math.min(100, Math.max(0, (value / duration) * 100)) : 0;
+    input.style.setProperty('--seek', `${progress}%`);
+  }
+
+  /** The second the bar and the time show: the held thumb, or the play clock. */
+  private shownSeconds(): number {
+    return resolvePlaybackSeconds(this.data?.currentSeconds ?? 0, this.data?.durationSeconds ?? 0, this.scrubSeconds);
+  }
+
+  private readSeconds(event: Event): number {
+    return Number((event.currentTarget as HTMLInputElement).value);
+  }
+
+  /** The thumb moved. Seek there now and keep the bar on that second until the drag ends. */
+  private previewSeek(event: Event): void {
+    const seconds = this.readSeconds(event);
+    this.scrubbing = true;
+    this.scrubSeconds = seconds;
+    this.emit('seek-request', { seconds });
+    this.requestUpdate();
+  }
+
+  /**
+   * The drag ended. A `change` always seeks, including a host that only dispatches that event. A pointer release seeks
+   * only after the thumb actually moved, then the bar follows the play clock again.
+   */
+  private finishSeek(event: Event): void {
+    const seconds = this.readSeconds(event);
+    const moved = this.scrubSeconds !== undefined;
+    this.scrubbing = false;
+    this.scrubSeconds = undefined;
+    if (event.type === 'change' || moved) this.emit('seek-request', { seconds });
+    this.requestUpdate();
+  }
 
   protected override render(): TemplateResult {
     const data = this.data;
     const duration = Math.max(0, data?.durationSeconds ?? 0);
-    const current = this.scrubSeconds ?? Math.min(duration, Math.max(0, data?.currentSeconds ?? 0));
+    const current = this.shownSeconds();
     const playing = data?.playing === true;
     const muted = data?.muted === true;
     const volume = data?.volume ?? 1;
@@ -102,17 +256,14 @@ export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackD
         min="0"
         max=${duration}
         step="0.1"
-        .value=${String(current)}
         ?disabled=${data?.seekable !== true || duration <= 0}
-        @input=${(event: Event) => {
-          this.scrubSeconds = Number((event.currentTarget as HTMLInputElement).value);
-          this.requestUpdate();
+        @pointerdown=${() => {
+          this.scrubbing = true;
         }}
-        @change=${(event: Event) => {
-          const seconds = Number((event.currentTarget as HTMLInputElement).value);
-          this.scrubSeconds = undefined;
-          this.emit('seek-request', { seconds });
-        }}
+        @input=${(event: Event) => this.previewSeek(event)}
+        @change=${(event: Event) => this.finishSeek(event)}
+        @pointerup=${(event: Event) => this.finishSeek(event)}
+        @pointercancel=${(event: Event) => this.finishSeek(event)}
       />
       <div class="row">
         <button
@@ -122,27 +273,29 @@ export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackD
         >
           ${icon(playing ? 'pause' : 'play')}
         </button>
-        <button
-          part="mute"
-          aria-label=${muted ? 'Unmute' : 'Mute'}
-          @click=${() => this.emit('volume-change', { volume, muted: !muted })}
-        >
-          ${icon(muted || volume === 0 ? 'muted' : 'volume')}
-        </button>
-        <input
-          class="volume"
-          part="volume"
-          type="range"
-          aria-label="Volume"
-          min="0"
-          max="1"
-          step="0.01"
-          .value=${String(muted ? 0 : volume)}
-          @input=${(event: Event) => {
-            const value = Number((event.currentTarget as HTMLInputElement).value);
-            this.emit('volume-change', { volume: value, muted: value === 0 });
-          }}
-        />
+        <div class="sound">
+          <button
+            part="mute"
+            aria-label=${muted ? 'Unmute' : 'Mute'}
+            @click=${() => this.emit('volume-change', { volume, muted: !muted })}
+          >
+            ${icon(muted || volume === 0 ? 'muted' : 'volume')}
+          </button>
+          <input
+            class="volume"
+            part="volume"
+            type="range"
+            aria-label="Volume"
+            min="0"
+            max="1"
+            step="0.01"
+            .value=${String(muted ? 0 : volume)}
+            @input=${(event: Event) => {
+              const value = Number((event.currentTarget as HTMLInputElement).value);
+              this.emit('volume-change', { volume: value, muted: value === 0 });
+            }}
+          />
+        </div>
         <span class="time" part="time">${formatPlaybackTime(current)} / ${formatPlaybackTime(duration)}</span>
         <span class="spacer"></span>
         <button

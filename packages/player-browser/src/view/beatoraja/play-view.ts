@@ -149,6 +149,7 @@ export interface BeatorajaPlayRuntime {
   readonly judgeWindows: BeMusicJudgeWindows | undefined;
   readonly disposed: boolean;
   playClock(): number;
+  isIntroPlaying(): boolean;
   resolveChartDurationSeconds(): number;
 }
 
@@ -422,7 +423,11 @@ export class BeatorajaPlayView implements PlayView {
     // The notes stand at the chart's start from READY until the engine's first frame, as the engine's lead-in held them.
     const engineFrame = play.engineFrame;
     const clock = engineFrame ?? (this.loaded ? { notes: play.notes, currentSeconds: 0, currentBeat: 0 } : undefined);
-    stage.draw(context, clock, play.scrollHiSpeed.valueAt(performance.now()), bridge);
+    stage.draw(context, clock, play.scrollHiSpeed.valueAt(performance.now()), bridge, {
+      tempo: engineFrame?.clock?.tempo ?? 1,
+      paused,
+      started: !play.isIntroPlaying(),
+    });
     // A failed play's picture fades with its sound; on a normal end the skin draws its own fade-out.
     if (play.exiting && play.playMoments.failedAtMs !== undefined && play.exitFadeStartedAt !== undefined) {
       stage.canvas.alpha = playEndingFadeAlpha(play.playClock() - play.exitFadeStartedAt, play.exitFadeOutMs);
