@@ -81,7 +81,7 @@ export function collectSampleTriggersWithContext(
   const triggers: TimedSampleTrigger[] = [];
   for (const item of selectedEvents) {
     const event = item.event;
-    const sampleKey = normalizeObjectKey(event.value, idBase);
+    const sampleKey = normalizeObjectKey(event.value, idBase, json.sourceFormat === 'bmson');
     const playback = bmsonPlaybackMap?.get(event);
     const beat = beatResolver.eventToBeat(event);
     triggers.push({
@@ -111,7 +111,7 @@ export function createBmsonSamplePlaybackMap(
   >();
   const idBase = resolveBMSBase(json);
   for (const event of sampleEvents) {
-    const sampleKey = normalizeObjectKey(event.value, idBase);
+    const sampleKey = normalizeObjectKey(event.value, idBase, json.sourceFormat === 'bmson');
     let entries = perSampleKey.get(sampleKey);
     if (!entries) {
       entries = [];
@@ -163,7 +163,14 @@ export function createBmsonSamplePlaybackMap(
       const durationSeconds = boundary ? Math.max(0, boundary.seconds - firstEntry.seconds) : undefined;
       const sliceId = `${firstEntry.sampleKey}:${sliceIndex}`;
       sliceIndex += 1;
-      const playback = { offsetSeconds, durationSeconds, sliceId };
+      const playback = {
+        offsetSeconds: firstEntry.event.bmson?.sampleOffsetSeconds ?? offsetSeconds,
+        durationSeconds:
+          firstEntry.event.bmson?.sampleOffsetSeconds !== undefined
+            ? firstEntry.event.bmson.sampleDurationSeconds
+            : durationSeconds,
+        sliceId,
+      };
 
       for (let cursor = index; cursor < end; cursor += 1) {
         playbackMap.set(entries[cursor]!.event, playback);

@@ -116,7 +116,11 @@ export interface ReplayRecorderOptions {
   /** Dynamic `#EXRANKxx` changes the engine collected (chart order). */
   dynamicJudgeRankChanges?: ReadonlyArray<{ seconds: number; exRankValue: number }>;
   /** A stitched NONSTOP chart's later stages taking over the judge rank (`PlayerPlaySettings.stageRanks`). */
-  stageRanks?: ReadonlyArray<{ seconds: number; rank: number; table: 'chart' | 'lr2-nonstop' }>;
+  stageRanks?: ReadonlyArray<{
+    seconds: number;
+    rank: number;
+    table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank';
+  }>;
   /** LR2 negative-BPM reversal (chart seconds, #134) — recorded so re-simulations freeze judging at the same point. */
   reversalSeconds?: number;
   /** Clock source for `createdAt` — injectable for tests. Defaults to `Date`. */
@@ -324,6 +328,7 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
     noteCount: chart.scorableNotes.length,
     notes,
   };
+  if (json.bmson.info.totalUnit !== undefined) result.totalUnit = json.bmson.info.totalUnit;
   if (typeof options.reversalSeconds === 'number' && Number.isFinite(options.reversalSeconds)) {
     result.reversalTimeUs = secondsToMicroseconds(options.reversalSeconds);
   }

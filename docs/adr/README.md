@@ -29,3 +29,5 @@ Decisions that shape the code and would be costly to reverse, with why they were
 - [Previews seek by starting AUTO play partway](./0015-preview-seek.md) (superseded by 0016)
 
 - [Seek is a play-loop command](./0016-seek-play-loop-command.md)
+
+- [Mixed NONSTOP courses retain source units in the bmson IR](./0017-bmson-nonstop.md)

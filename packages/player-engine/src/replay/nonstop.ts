@@ -164,7 +164,8 @@ export function splitNonstopReplay(
       clock: replay.clock,
       chart: {
         ...facts,
-        sourceFormat: 'bms',
+        sourceFormat: replay.chart.sourceFormat,
+        ...(replay.chart.totalUnit !== undefined ? { totalUnit: replay.chart.totalUnit } : {}),
         laneMode: replay.chart.laneMode,
         lnMode: replay.chart.lnMode,
         judgeRank: shiftJudgeRank(replay.chart.judgeRank, stage.offsetUs),

@@ -130,7 +130,11 @@ describe('prepareNonstopCourse', () => {
 
   test('refuses what it cannot stitch, naming the stage', () => {
     expect(
-      prepareNonstopCourse([STAGES[0]!, { chart: createEmptyJSON('bmson') }], { constraints: [], connections: [] }),
+      prepareNonstopCourse([STAGES[0]!, { chart: createEmptyJSON('bmson') }], {
+        constraints: [],
+        connections: [],
+        placement: 'lr2',
+      }),
     ).toEqual({
       ok: false,
       reason: 'bmson',

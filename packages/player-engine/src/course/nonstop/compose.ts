@@ -22,7 +22,7 @@ import {
 } from './readouts.ts';
 import { createNonstopStageTiming } from './stage.ts';
 
-/** One stage to stitch: its BMS chart with control flow resolved, and whether it is a `.pms` chart. */
+/** One stage to stitch: its BMS or bmson chart with control flow resolved, and whether it is a `.pms` chart. */
 export interface NonstopStageInput {
   chart: BeMusicJSON;
   pms?: boolean;
@@ -124,6 +124,8 @@ interface StitchedObject {
   channel: string;
   value: string;
   stage: number;
+  bmson?: BeMusicEvent['bmson'];
+  endSeconds?: number;
 }
 
 interface StitchedStop {
@@ -132,7 +134,7 @@ interface StitchedStop {
 }
 
 /**
- * Stitches the stages of an LR2 NONSTOP course into one BMS chart, placed by {@link planNonstopCourse}.
+ * Stitches a NONSTOP course into one BMS chart (bmson when any stage is bmson), placed by {@link planNonstopCourse}.
  *
  * LR2 scrolls a NONSTOP play by time (a constant 150-BPM scroll, OpenLR2 `LR2f.cpp` L26529 / L27067), so the stitched
  * chart runs at 150 BPM and each object sits where its stage's own timing puts it: notes keep their judge times
@@ -144,7 +146,7 @@ interface StitchedStop {
  *
  * A note of a later stage that lands before the previous stage's last note, or within 0.1 s of it on a lane that
  * note's stage also used there, becomes background sound, as LR2 does at the seam. Keysound and BGA keys are renumbered
- * into one base-62 space (`#BASE 62`); a course needing more than 3843 of either is refused (`id-space`). The chart's
+ * into one base-62 space (`#BASE 62`); BMS output refuses more than 3843 of either (`id-space`), while bmson output uses longer keys. The chart's
  * judge rank is the first stage's (the map's `stageRanks` change it for later stages) and TOTAL the last stage's, as LR2
  * overwrites it. A stitching rule version it does not know (`options.stitch`) is refused (`stitch-version`).
  */
@@ -156,10 +158,16 @@ export function stitchNonstopCourse(
     return { ok: false, reason: 'stitch-version' };
   }
   if (stages.length === 0) return { ok: false, reason: 'no-stage' };
-  const bmsonStage = stages.findIndex((stage) => stage.chart.sourceFormat !== 'bms');
-  if (bmsonStage >= 0) return { ok: false, reason: 'bmson', stage: bmsonStage };
+  const unsupported = stages.findIndex(
+    (stage) => stage.chart.sourceFormat !== 'bms' && stage.chart.sourceFormat !== 'bmson',
+  );
+  if (unsupported >= 0) return { ok: false, reason: 'bmson', stage: unsupported };
+  const bmsonStage = stages.findIndex((stage) => stage.chart.sourceFormat === 'bmson');
+  if (bmsonStage >= 0 && options.placement === 'lr2') return { ok: false, reason: 'bmson', stage: bmsonStage };
   const assetPath = options.assetPath ?? ((_stage, _kind, path) => path);
-  const resolved = stages.map((stage) => resolveChart(stage.chart));
+  const resolved = stages.map((stage) =>
+    resolveChart(stage.chart, bmsonStage >= 0 && stage.pms === true ? { chartPath: '.pms' } : {}),
+  );
   const timings = stages.map((stage) => createNonstopStageTiming(stage.chart, { pms: stage.pms === true }));
   const placements = planNonstopCourse(timings, options.connections, options);
   const windows = placements.map((placement, index) => ({
@@ -169,10 +177,27 @@ export function stitchNonstopCourse(
   const stitchedSeconds = (stage: number, seconds: number): number =>
     placements[stage]!.offsetSeconds + seconds / placements[stage]!.rate;
 
-  const wavKeys = new NonstopKeyAllocator();
-  const bmpKeys = new NonstopKeyAllocator();
-  const stopKeys = new NonstopKeyAllocator();
-  const chart = createEmptyJSON('bms');
+  const asBmson = bmsonStage >= 0;
+  const wavKeys = new NonstopKeyAllocator(asBmson);
+  const bmpKeys = new NonstopKeyAllocator(asBmson);
+  const stopKeys = new NonstopKeyAllocator(asBmson);
+  const chart = createEmptyJSON(asBmson ? 'bmson' : 'bms');
+  if (asBmson) {
+    chart.bmson.info.resolution = 2400;
+    const variant = resolved[0]!.playVariant;
+    chart.bmson.info.modeHint = (
+      {
+        '5': 'beat-5k',
+        '7': 'beat-7k',
+        '9': 'popn-9k',
+        '10': 'beat-10k',
+        '14': 'beat-14k',
+        '24': 'keyboard-24k',
+        '48': 'keyboard-24k-double',
+      } as const
+    )[variant];
+    chart.bmson.info.totalUnit = resolved.at(-1)!.total.unit;
+  }
   chart.bms.base = 62;
   const objects: StitchedObject[] = [];
   const stops: StitchedStop[] = [];
@@ -204,18 +229,32 @@ export function stitchNonstopCourse(
       if (!known.has(`b${stitched}`)) {
         known.add(`b${stitched}`);
         stageBMP[index]!.push(stitched);
-        const path = source.resources.bmp[key];
+        const path =
+          source.resources.bmp[key] ?? (source.bmson.bga.header.some((entry) => entry.name === key) ? key : undefined);
         if (path !== undefined) chart.resources.bmp[stitched] = assetPath(index, 'bmp', path);
       }
       return stitched;
     };
-    const push = (seconds: number, channel: string, value: string | undefined): boolean => {
+    const push = (
+      seconds: number,
+      channel: string,
+      value: string | undefined,
+      bmson?: BeMusicEvent['bmson'],
+      endSeconds?: number,
+    ): boolean => {
       if (value === undefined) return false;
-      objects.push({ seconds: stitchedSeconds(index, seconds), channel, value, stage: index });
+      objects.push({
+        seconds: stitchedSeconds(index, seconds),
+        channel,
+        value,
+        stage: index,
+        ...(bmson !== undefined ? { bmson } : {}),
+        ...(endSeconds !== undefined ? { endSeconds: stitchedSeconds(index, endSeconds) } : {}),
+      });
       return true;
     };
 
-    if (!addStageObjects(chartIndex, push, wav, bmp)) return { ok: false, reason: 'id-space', stage: index };
+    if (!addStageObjects(chartIndex, push, wav, bmp, asBmson)) return { ok: false, reason: 'id-space', stage: index };
 
     for (const stop of chartIndex.timing.stopPoints) {
       // `beatToSeconds` at a STOP's own beat is its start (the STOP counts from just after it).
@@ -255,14 +294,37 @@ export function stitchNonstopCourse(
     })),
     headerBPM: stage.chart.metadata.bpm,
     ...(stage.chart.metadata.rank !== undefined ? { rank: stage.chart.metadata.rank } : {}),
+    ...(asBmson
+      ? {
+          sourceFormat: stage.chart.sourceFormat === 'bmson' ? ('bmson' as const) : ('bms' as const),
+          ...(stage.chart.bms.defExRank !== undefined ? { exRank: stage.chart.bms.defExRank } : {}),
+          ...(stage.chart.bmson.info.judgeRank !== undefined
+            ? { bmsonJudgeRank: stage.chart.bmson.info.judgeRank }
+            : {}),
+        }
+      : {}),
   }));
 
+  const stageRanks = resolveNonstopStageRanks(readouts, placements, options);
+  if (asBmson) {
+    const firstStage = stages[0]!.chart;
+    const table =
+      firstStage.sourceFormat === 'bmson' ? 'bmson' : firstStage.bms.defExRank !== undefined ? 'bms-exrank' : 'chart';
+    const rank =
+      table === 'bmson'
+        ? (firstStage.bmson.info.judgeRank ?? 100)
+        : table === 'bms-exrank'
+          ? firstStage.bms.defExRank!
+          : (firstStage.metadata.rank ?? 2);
+    stageRanks.unshift({ seconds: 0, rank, table });
+    chart.bmson.info.judgeRank = firstStage.sourceFormat === 'bmson' ? (firstStage.bmson.info.judgeRank ?? 100) : 100;
+  }
   return {
     ok: true,
     chart,
     map: {
       tempo: resolveNonstopTempo(readouts, placements, options),
-      stageRanks: resolveNonstopStageRanks(readouts, placements, options),
+      stageRanks,
       stages: placements.map((placement, index) => {
         const after = index < placements.length - 1 ? (options.connections[index] ?? 'fade') : undefined;
         const before = index > 0 ? (options.connections[index - 1] ?? 'fade') : undefined;
@@ -299,18 +361,48 @@ export function stitchNonstopCourse(
  */
 function addStageObjects(
   chart: ResolvedChart,
-  push: (seconds: number, channel: string, value: string | undefined) => boolean,
+  push: (
+    seconds: number,
+    channel: string,
+    value: string | undefined,
+    bmson?: BeMusicEvent['bmson'],
+    endSeconds?: number,
+  ) => boolean,
   wav: (key: string) => string | undefined,
   bmp: (key: string) => string | undefined,
+  asBmson: boolean,
 ): boolean {
   let ok = true;
-  const add = (seconds: number, channel: string, value: string | undefined): void => {
-    if (!push(seconds, channel, value)) ok = false;
+  const triggers = asBmson ? new Map(chart.sampleTriggers.map((trigger) => [trigger.event, trigger])) : undefined;
+  const add = (
+    seconds: number,
+    channel: string,
+    value: string | undefined,
+    event?: BeMusicEvent,
+    endSeconds?: number,
+    lnMode?: number,
+  ): void => {
+    const trigger = event !== undefined ? triggers?.get(event) : undefined;
+    const bmson =
+      asBmson && event !== undefined
+        ? {
+            ...event.bmson,
+            c: event.bmson?.c === true,
+            sampleOffsetSeconds: trigger?.sampleOffsetSeconds ?? 0,
+            ...(trigger?.sampleDurationSeconds !== undefined
+              ? { sampleDurationSeconds: trigger.sampleDurationSeconds }
+              : {}),
+            ...(lnMode !== undefined ? { t: lnMode } : {}),
+          }
+        : undefined;
+    if (!push(seconds, channel, value, bmson, endSeconds)) ok = false;
   };
   for (const note of chart.notes) {
     if (note.freeZone === true) continue;
     const key = wav(note.sampleKey);
-    if (note.kind === 'ln' && note.endSeconds !== undefined) {
+    if (asBmson) {
+      add(note.seconds, note.channel, key, note.event, note.endSeconds, note.lnMode);
+    } else if (note.kind === 'ln' && note.endSeconds !== undefined) {
       const lane = `${note.channel[0] === '2' ? '6' : '5'}${note.channel[1]}`;
       add(note.seconds, lane, key);
       add(note.endSeconds, lane, key);
@@ -318,16 +410,40 @@ function addStageObjects(
       add(note.seconds, note.channel, key);
     }
   }
-  for (const note of chart.shadowedNotes) add(note.seconds, '01', wav(note.sampleKey));
-  for (const note of chart.invisibleNotes) add(note.seconds, normalizeChannel(note.event.channel), wav(note.sampleKey));
+  for (const note of chart.shadowedNotes) add(note.seconds, '01', wav(note.sampleKey), note.event);
+  for (const note of chart.invisibleNotes)
+    add(note.seconds, normalizeChannel(note.event.channel), wav(note.sampleKey), note.event);
   for (const mine of chart.mines) {
-    add(mine.seconds, normalizeChannel(mine.event.channel), mine.event.value.toUpperCase());
+    if (asBmson) {
+      if (
+        !push(
+          mine.seconds,
+          normalizeChannel(mine.event.channel),
+          wav(chart.sourceFormat === 'bmson' ? mine.sampleKey : '00'),
+          { damage: mine.damage },
+        )
+      )
+        ok = false;
+    } else add(mine.seconds, normalizeChannel(mine.event.channel), mine.event.value.toUpperCase());
   }
   for (const event of chart.sortedEvents) {
     const channel = normalizeChannel(event.channel);
-    const value = normalizeObjectKey(event.value, chart.idBase);
-    if (channel === '01') add(chart.timing.eventToSeconds(event), '01', wav(value));
-    else if (BGA_CHANNELS.has(channel)) add(chart.timing.eventToSeconds(event), channel, bmp(value));
+    const value = normalizeObjectKey(event.value, chart.idBase, chart.sourceFormat === 'bmson');
+    if (channel === '01') add(chart.timing.eventToSeconds(event), '01', wav(value), event);
+    else if (!asBmson && BGA_CHANNELS.has(channel)) add(chart.timing.eventToSeconds(event), channel, bmp(value));
+  }
+  if (asBmson) {
+    for (const [layer, channel] of [
+      ['base', '04'],
+      ['layer', '07'],
+      ['layer2', '0A'],
+      ['poor', '06'],
+    ] as const) {
+      for (const cue of chart.bga[layer]) {
+        // An explicit zero clears the layer without consuming a resource key.
+        add(cue.seconds, channel, cue.key === undefined ? '00' : bmp(cue.key));
+      }
+    }
   }
   return ok;
 }
@@ -445,7 +561,19 @@ function layOnGrid(
     return { measure, position: reduce(Math.max(0, step), grid) };
   };
   for (const object of objects) {
-    chart.events.push({ ...place(object.seconds), channel: object.channel, value: object.value });
+    const bmson = object.bmson !== undefined ? { ...object.bmson } : undefined;
+    if (bmson !== undefined && object.endSeconds !== undefined && laneOf(object) !== undefined) {
+      bmson.l = Math.max(
+        0,
+        (toMeasures(object.endSeconds) - toMeasures(object.seconds)) * 4 * (chart.bmson.info.resolution ?? 240),
+      );
+    } else if (bmson !== undefined) delete bmson.l;
+    chart.events.push({
+      ...place(object.seconds),
+      channel: object.channel,
+      value: object.value,
+      ...(bmson !== undefined ? { bmson } : {}),
+    });
   }
   for (const stop of stops) {
     const key = stopKeys.fresh();

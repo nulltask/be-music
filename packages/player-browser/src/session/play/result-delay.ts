@@ -76,7 +76,11 @@ function resolveSamplePlaybackDurationSeconds(
     'chart' | 'decodedSamples' | 'bmsonSlicePlayback'
   >,
 ): number | undefined {
-  const sampleKey = normalizeObjectKey(event.value, resolveBMSBase(context.chart));
+  const sampleKey = normalizeObjectKey(
+    event.value,
+    resolveBMSBase(context.chart),
+    context.chart.sourceFormat === 'bmson',
+  );
   const path = context.chart.resources.wav[sampleKey];
   if (typeof path !== 'string') return undefined;
   const buffer = context.decodedSamples.get(normalizeSamplePath(path));

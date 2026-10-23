@@ -801,6 +801,7 @@ function normalizeBmsonInfoFromIR(input: unknown): BeMusicJSON['bmson']['info'] 
   }
 
   const raw = input as Record<string, unknown>;
+  if (raw.totalUnit === 'absolute' || raw.totalUnit === 'percent') info.totalUnit = raw.totalUnit;
   copyIfString(info, 'title', raw.title);
   copyIfString(info, 'subtitle', raw.subtitle);
   copyIfString(info, 'artist', raw.artist);
