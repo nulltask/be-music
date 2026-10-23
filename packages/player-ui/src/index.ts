@@ -52,5 +52,6 @@ export type {
   BeMusicGameplayFrame,
   BeMusicRect,
   LibraryChart,
+  LibraryCourse,
   LibraryEntry,
 } from '@be-music/player-skin-sdk';
