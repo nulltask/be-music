@@ -110,3 +110,54 @@ test('beatoraja draws a landmine from the engine frame', async ({ demo }, info) 
   }, screenshot.toString('base64'));
   expect(minePixels).toBeGreaterThan(30);
 });
+
+test('beatoraja shows invisible objects only when enabled, with live toggling', async ({ demo }, info) => {
+  await demo.open();
+  await demo.page.evaluate(() => {
+    const file = new File(
+      ['#PLAYER 1\n#TITLE Invisible display\n#BPM 120\n#00031:0001\n#00811:01\n#00819:01\n'],
+      'invisible.bms',
+    );
+    const event = new Event('drop', { cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: { items: [], files: [file], types: ['Files'] } });
+    window.dispatchEvent(event);
+  });
+  await demo.waitFor((state) => !state.loading && state.loads > 0, 'the invisible chart');
+  await demo.drop('skins/beatoraja');
+  await demo.setOption(['Developer'], 'Show invisible notes', true);
+  await demo.cursorTo((bar) => bar.kind === 'chart' && bar.title === 'Invisible display', 'the invisible chart');
+  await demo.clickSkin(AUTO_BUTTON.x, AUTO_BUTTON.y, SELECT_SKIN.width, SELECT_SKIN.height);
+  await demo.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? -1) > 0.2, 'invisible object');
+  await demo.key('Space');
+  const canvas = demo.page.locator('canvas[aria-label="be-music stage"]');
+  async function greenPixels() {
+    const screenshot = await canvas.screenshot();
+    return demo.page.evaluate(async (base64) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${base64}`;
+      await image.decode();
+      const surface = document.createElement('canvas');
+      surface.width = image.width;
+      surface.height = image.height;
+      const ctx = surface.getContext('2d')!;
+      ctx.drawImage(image, 0, 0);
+      const scale = Math.min(image.width / 640, image.height / 480);
+      const x = Math.round((image.width - 640 * scale) / 2 + 62 * scale);
+      const y = Math.round((image.height - 480 * scale) / 2 + 10 * scale);
+      const pixels = ctx.getImageData(x, y, Math.round(30 * scale), Math.round(380 * scale)).data;
+      let count = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        if (pixels[i + 1]! > 100 && pixels[i + 1]! > pixels[i]! * 1.5 && pixels[i + 1]! > pixels[i + 2]! * 1.5) count++;
+      }
+      return count;
+    }, screenshot.toString('base64'));
+  }
+  expect(await greenPixels()).toBeGreaterThan(30);
+  await canvas.screenshot({ path: info.outputPath('beatoraja-invisible-on.png') });
+  await demo.setOption(['Developer'], 'Show invisible notes', false);
+  expect(await greenPixels()).toBe(0);
+  await demo.setOption(['Developer'], 'Show invisible notes', true);
+  expect(await greenPixels()).toBeGreaterThan(30);
+  await demo.setOption(['Developer'], 'Show invisible notes', false);
+  expect(await greenPixels()).toBe(0);
+});

@@ -129,6 +129,7 @@ export interface BeatorajaPlayRuntime {
   readonly chartPlayVariant: ChartPlayVariant;
   readonly notes: readonly PlayerUIFrameNote[];
   readonly mineNotes: readonly PlayerUIFrameNote[];
+  readonly invisibleNotes: readonly PlayerUIFrameNote[];
   /** The engine's latest frame; `undefined` before its first. */
   readonly engineFrame: Readonly<PlayerUIFramePayload> | undefined;
   /** The engine's counts as the play started (all 0 but the total), for the intro before its first frame. */
@@ -159,6 +160,8 @@ export interface BeatorajaPlayRuntime {
 
 /** What the beatoraja play view draws with besides its kit. */
 export interface BeatorajaPlayViewOptions {
+  /** Show hidden keysound objects as green inspection markers. Off by default. */
+  readonly showInvisibleNotes?: boolean;
   /** The play is AUTO PLAY. */
   readonly autoPlay?: boolean;
   /** DP FLIP: the chart's sides swap, for the skin's per-side readouts (the notes come flipped from the session). */
@@ -200,6 +203,7 @@ export class BeatorajaPlayView implements PlayView {
   private kit: BeatorajaKit;
   private readonly play: BeatorajaPlayRuntime;
   private readonly options: BeatorajaPlayViewOptions;
+  private showInvisibleNotes: boolean;
   private readonly chartImages: BeatorajaViewChartImages;
   private prepared: PreparedChart | undefined;
   private bridge: BeatorajaPlayBridge | undefined;
@@ -221,6 +225,7 @@ export class BeatorajaPlayView implements PlayView {
     this.kit = kit;
     this.play = play;
     this.options = options;
+    this.showInvisibleNotes = options.showInvisibleNotes === true;
     this.timing = resolveBeatorajaPlayTiming(kit.kit.skin);
     this.chartImages = new BeatorajaViewChartImages(play.chart, options.source);
     const skin = kit.kit.skin;
@@ -243,6 +248,11 @@ export class BeatorajaPlayView implements PlayView {
   /** Keeps `host` for the GPU upload of what the play loads before the view is attached. */
   public prepareOn(host: PixiSceneHost): void {
     this.uploadHost = host;
+  }
+
+  /** Toggles the inspection overlay without restarting the play. */
+  public setShowInvisibleNotes(enabled: boolean): void {
+    this.showInvisibleNotes = enabled;
   }
 
   /**
@@ -437,12 +447,19 @@ export class BeatorajaPlayView implements PlayView {
     const clock =
       engineFrame ??
       (this.loaded
-        ? { notes: play.notes, landmineNotes: play.mineNotes, currentSeconds: 0, currentBeat: 0 }
+        ? {
+            notes: play.notes,
+            landmineNotes: play.mineNotes,
+            invisibleNotes: play.invisibleNotes,
+            currentSeconds: 0,
+            currentBeat: 0,
+          }
         : undefined);
     stage.draw(context, clock, play.scrollHiSpeed.valueAt(performance.now()), bridge, {
       tempo: engineFrame?.clock?.tempo ?? 1,
       paused,
       started: !play.isIntroPlaying(),
+      showInvisibleNotes: this.showInvisibleNotes,
     });
     // A failed play's picture fades with its sound; on a normal end the skin draws its own fade-out.
     if (play.exiting && play.playMoments.failedAtMs !== undefined && play.exitFadeStartedAt !== undefined) {
