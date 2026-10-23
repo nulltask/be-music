@@ -16,6 +16,7 @@ import {
 } from '@be-music/player-scene-model';
 import { describe, expect, it } from 'vite-plus/test';
 import {
+  BEATORAJA_NUM,
   BEATORAJA_OP,
   bombTimerId,
   comboTimerId,
@@ -1560,6 +1561,14 @@ describe('BeatorajaPlayBridge — chart TOTAL (368)', () => {
     const { bridge } = createHarness({ chart: { metadata: { total: 320 } } as unknown as BeMusicJSON });
     expect(bridge.resolveNumberValue(368)).toBe(320);
   });
+});
+
+it('forwards the engine empty-POOR count to beatoraja play numbers', () => {
+  const harness = createHarness();
+  harness.frame({ summary: { bad: 2, poor: 3, emptyPoor: 7 } });
+  expect([BEATORAJA_NUM.POOR, 420, 426, 427].map((id) => harness.bridge.resolveNumberValue(id))).toEqual([
+    3, 7, 10, 12,
+  ]);
 });
 
 describe('BeatorajaPlayBridge — GAUGE_MAX intervals', () => {
