@@ -51,6 +51,8 @@ interface TestEngineFrame {
   readonly currentBeat?: number;
   readonly totalSeconds?: number;
   readonly reversalSeconds?: number;
+  readonly hcnLanes?: BeatorajaPlayEngineInput['hcnLanes'];
+  readonly judgedNoteCount?: number;
   readonly summary?: Partial<BeatorajaPlaySummaryInput>;
 }
 
@@ -59,6 +61,8 @@ function engineOf(frame: TestEngineFrame): BeatorajaPlayEngineInput {
     currentSeconds: frame.currentSeconds ?? 0,
     currentBeat: frame.currentBeat ?? 0,
     totalSeconds: frame.totalSeconds ?? 100,
+    hcnLanes: frame.hcnLanes,
+    judgedNoteCount: frame.judgedNoteCount,
     ...(frame.reversalSeconds !== undefined ? { reversalSeconds: frame.reversalSeconds } : {}),
     summary: {
       total: 0,
@@ -1586,5 +1590,69 @@ describe('BeatorajaPlayBridge — chart TOTAL (368)', () => {
   it('falls back to the chart header before the first frame', () => {
     const { bridge } = createHarness({ chart: { metadata: { total: 320 } } as unknown as BeMusicJSON });
     expect(bridge.resolveNumberValue(368)).toBe(320);
+  });
+});
+
+describe('beatoraja animation timer producers', () => {
+  it('uses the judge HCN state for active/damage, rehold, end, DP and extended keys', () => {
+    const h = createHarness({ chartPlayVariant: '48' });
+    h.frame({ hcnLanes: [{ channel: '11', gaining: true }] });
+    expect(h.bridge.getTimerStart(251)).toBeDefined();
+    h.advance(100);
+    h.frame({ hcnLanes: [{ channel: '11', gaining: false }] });
+    expect(h.bridge.getTimerStart(251)).toBeUndefined();
+    expect(h.bridge.getTimerStart(271)).toBe(100);
+    h.advance(100);
+    h.frame({ hcnLanes: [{ channel: '11', gaining: true }] });
+    expect(h.bridge.getTimerStart(251)).toBe(200);
+    expect(h.bridge.getTimerStart(271)).toBeUndefined();
+    h.frame({ hcnLanes: [{ channel: '21', gaining: true }] });
+    expect(h.bridge.getTimerStart(261)).toBeDefined();
+    expect(h.bridge.getTimerStart(251)).toBeUndefined();
+    h.frame({ hcnLanes: [{ channel: '2Q', gaining: true }] });
+    expect(h.bridge.getTimerStart(1926)).toBeDefined();
+    h.frame({ hcnLanes: [{ channel: '2Q', gaining: false }] });
+    expect(h.bridge.getTimerStart(1926)).toBeUndefined();
+    expect(h.bridge.getTimerStart(2126)).toBeDefined();
+    h.frame({ hcnLanes: [] });
+    expect(h.bridge.getTimerStart(261)).toBeUndefined();
+    expect(h.bridge.getTimerStart(2126)).toBeUndefined();
+  });
+  it('starts score thresholds on a judgment, preserves their start and resets them on seek', () => {
+    const h = createHarness();
+    h.frame({ summary: { total: 27, exScore: 0 } });
+    expect(h.bridge.getTimerStart(351)).toBeUndefined();
+    h.advance(100);
+    h.judge({ judge: 'GREAT', combo: 1 });
+    h.frame({ judgedNoteCount: 1, summary: { total: 27, exScore: 36 } });
+    expect(h.bridge.getTimerStart(348)).toBe(100);
+    expect(h.bridge.getTimerStart(351)).toBe(100);
+    h.advance(100);
+    h.frame({ judgedNoteCount: 1, summary: { total: 27, exScore: 36 } });
+    expect(h.bridge.getTimerStart(348)).toBe(100);
+    h.frame({ judgedNoteCount: 0, summary: { total: 27, exScore: 0 } });
+    h.update([{ kind: 'seek', seconds: 0, gauge: 20, atMs: 200, judgments: [] }]);
+    expect(h.bridge.getTimerStart(348)).toBeUndefined();
+    expect(h.bridge.getTimerStart(351)).toBeUndefined();
+  });
+  it('starts MUSIC_END only at chart completion and stops neutral/dance timers', () => {
+    const h = createHarness();
+    h.update([
+      { kind: 'load-end', atMs: 0 },
+      { kind: 'play-start', atMs: 0 },
+    ]);
+    h.frame({ currentSeconds: 1, totalSeconds: 2 });
+    expect(h.bridge.getTimerStart(909)).toBeDefined();
+    expect(h.bridge.getTimerStart(908)).toBeUndefined();
+    h.advance(1000);
+    h.frame({ currentSeconds: 2, totalSeconds: 2 });
+    expect(h.bridge.getTimerStart(908)).toBeUndefined();
+    h.update([{ kind: 'music-end', atMs: 1000 }]);
+    expect(h.bridge.getTimerStart(908)).toBe(1000);
+    expect(h.bridge.getTimerStart(900)).toBeUndefined();
+    expect(h.bridge.getTimerStart(909)).toBeUndefined();
+    h.advance(1000);
+    h.frame({ currentSeconds: 3, totalSeconds: 2 });
+    expect(h.bridge.getTimerStart(908)).toBe(1000);
   });
 });

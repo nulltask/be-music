@@ -19,6 +19,7 @@ export type PlayMoment =
   | { readonly kind: 'input-start'; readonly at: number }
   | { readonly kind: 'load-end'; readonly at: number }
   | { readonly kind: 'play-start'; readonly at: number }
+  | { readonly kind: 'music-end'; readonly at: number }
   | { readonly kind: 'exit-fade-out'; readonly at: number }
   | { readonly kind: 'exit-close'; readonly at: number }
   | {

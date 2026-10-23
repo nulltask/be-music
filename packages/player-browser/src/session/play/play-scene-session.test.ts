@@ -52,6 +52,17 @@ describe('PlaySceneSession', () => {
     expect(session.frame(20).events).toEqual([]);
   });
 
+  test('hands immutable score targets from the host to the frame', () => {
+    const targets = { bestEXScore: 120, targetEXScore: 144 };
+    const play = new PlaySession();
+    const session = new PlaySceneSession(play, {
+      chart: CHART,
+      playOptions: DEFAULT_PLAY_OPTIONS,
+      scoreTargets: targets,
+    });
+    expect(session.frame(10).scoreTargets).toBe(targets);
+  });
+
   test('reports the load progress while the play loads', () => {
     const { play, session } = createSceneSession();
     play.assetsLoading = true;
