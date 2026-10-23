@@ -71,8 +71,8 @@ export class PlayPresentation {
   lastJudgeAt: number | undefined;
   lastImpulseAt: number | undefined;
   lastImpulseKind: BeMusicLaneKind | undefined;
-  /** When the POOR image last came up (chart seconds), which drives its window; `-Infinity` once it is cleared. */
-  lastPoorAt = 0;
+  /** When the POOR image last came up, in pause-aware play-clock milliseconds; `-Infinity` means inactive. */
+  lastPoorAt = -Number.POSITIVE_INFINITY;
   /**
    * Per-side judge / combo snapshots: the verdict, the chart-time at which the plate should disappear, and the running
    * combo *at the moment that side's note was judged*, so the DP renderer shows each side's own combo. SP charts only
@@ -105,7 +105,7 @@ export class PlayPresentation {
     this.lastJudgeAt = undefined;
     this.lastImpulseAt = undefined;
     this.lastImpulseKind = undefined;
-    this.lastPoorAt = 0;
+    this.lastPoorAt = -Number.POSITIVE_INFINITY;
     this.judgeSideState = createJudgeSideState();
     this.playMoments = {};
     this.displayedScore = 0;

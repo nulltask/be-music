@@ -626,6 +626,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 - **be-music の現状:**
   - 上位互換：`04` < `07` < `0A`、黒をキー抜き。
   - `#POORBGA 0` は BMP00 を保ちます（**[#561](https://github.com/nulltask/be-music/issues/561) で修正済み**）。
+  - 組み込み／LR2 共通の POOR 画像は、空 POOR のコマンドも含め、一時停止に追従するミリ秒のプレイクロックを使います。時刻ゼロのミスは有効で、未発生・未来・期限切れの時刻では表示しません（**[#680](https://github.com/nulltask/be-music/issues/680) で修正**）。beatoraja は独立した譜面時刻のミスレイヤーを維持します。
   - beatoraja のミスレイヤーは時間で切り替わり、ベースの上に描かれます（**[#562](https://github.com/nulltask/be-music/issues/562) で修正済み**）。
   - `BGA_CYCLE` に NO MISS がありません。
 - **影響:** C。
