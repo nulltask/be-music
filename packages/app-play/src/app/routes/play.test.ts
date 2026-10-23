@@ -169,6 +169,7 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
       recordActiveCourseStage: vi.fn<PlayRouteDeps['records']['recordActiveCourseStage']>(),
     },
     familyKits: {
+      selectSoundSet: vi.fn(() => ({})),
       resolvePlayKit: vi.fn<PlayRouteDeps['familyKits']['resolvePlayKit']>(async (): Promise<ResolvedPlayKit> => ({
         kit: kitOf(family),
         ...(options.beatorajaPlay !== undefined ? { beatorajaPlay: options.beatorajaPlay } : {}),
@@ -719,3 +720,16 @@ test('an interrupted practice stage keeps its live outcome without a replay', as
   expect(active.run.stagesPlayed).toBe(1);
   expect(() => active.run.buildReplay()).toThrow('practice course');
 });
+
+test.each(['built-in', 'lr2', 'beatoraja'] as const)(
+  'passes the %s theme stop cue to the play scene',
+  async (family) => {
+    const h = await harness({ family });
+    const sound = { path: 'sound/playstop.wav' };
+    vi.mocked(h.deps.familyKits.selectSoundSet).mockReturnValue({ playStop: sound });
+    const play = await playing(h, chartEntry('a'));
+    expect(h.deps.familyKits.selectSoundSet).toHaveBeenCalledWith(family);
+    expect(play.options.sounds).toEqual({ playStop: sound });
+    play.load.resolve();
+  },
+);
