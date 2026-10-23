@@ -29,7 +29,7 @@ import {
 import { summarizeLR2PlaySkins, type LR2PlaySkinMap, type LR2Skin } from '@be-music/skin-lr2';
 import { countLR2UnplayedStages, LR2_MAX_PLAYED_STAGES } from '@be-music/player-engine/course';
 import { REPLAY_FILE_SUFFIX } from '@be-music/player-engine/replay';
-import type { BrowseSnapshot, LibraryChart } from '@be-music/player-scene-model';
+import type { BrowseSnapshot, LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
 import {
   describeCourseTableImportError,
   importCourseTable,
@@ -102,6 +102,9 @@ export class LibraryService {
    * resolved into `collection.courseFolders`.
    */
   private courseGroups: CourseDefinitionGroup[] = [];
+  /** Session-only draws, oldest first across every source folder. */
+  private keptRandomCourses: Array<{ folderLabel: string; course: LibraryCourse }> = [];
+  private nextDrawId = 0;
   private readonly elements: LibraryServiceOptions['elements'];
   private readonly resolveChartHashes: LibraryServiceOptions['resolveChartHashes'];
   private readonly courseMaker: LibraryServiceOptions['courseMaker'];
@@ -140,6 +143,50 @@ export class LibraryService {
     this.beatorajaTheme = options.beatorajaTheme;
     this.confirmSkinDrop = options.confirmSkinDrop;
     this.applyDroppedSkin = options.applyDroppedSkin;
+  }
+
+  /** Names a draw now, but lists it only once the decide screen (or direct play) has loaded. */
+  public prepareDrawnCourse(
+    drawn: LibraryCourse,
+    navigation: BrowseSnapshot | undefined,
+    at: Date = new Date(),
+  ): { course: LibraryCourse; remember: () => void } {
+    const folderLabel =
+      navigation?.folderPath.at(-1) ??
+      this.collection.courseFolders?.find((folder) => folder.courses?.some((course) => course.id === drawn.id))?.label;
+    const pad = (value: number): string => String(value).padStart(2, '0');
+    const suffix = `${at.getFullYear()}${pad(at.getMonth() + 1)}${pad(at.getDate())}_${pad(at.getHours())}${pad(at.getMinutes())}${pad(at.getSeconds())}`;
+    const { random: _random, ...fixed } = drawn;
+    const course: LibraryCourse = {
+      ...fixed,
+      id: `be-music:drawn-random:${++this.nextDrawId}`,
+      definition: { ...drawn.definition, name: `${drawn.definition.name} ${suffix}`, release: false },
+    };
+    let remembered = false;
+    return {
+      course,
+      remember: () => {
+        if (remembered || folderLabel === undefined) return;
+        remembered = true;
+        this.keptRandomCourses.push({ folderLabel, course });
+        if (this.keptRandomCourses.length > 100) this.keptRandomCourses.shift();
+        this.appendKeptRandomCourses();
+      },
+    };
+  }
+
+  /** Reprojects the history after imports, maker edits and each draw; fixed bars retain their authored order. */
+  private appendKeptRandomCourses(): void {
+    this.collection = {
+      ...this.collection,
+      courseFolders: this.collection.courseFolders?.map((folder) => ({
+        ...folder,
+        courses: [
+          ...(folder.courses ?? []).filter((course) => !course.id.startsWith('be-music:drawn-random:')),
+          ...this.keptRandomCourses.filter((entry) => entry.folderLabel === folder.label).map((entry) => entry.course),
+        ],
+      })),
+    };
   }
 
   /**
@@ -395,6 +442,7 @@ export class LibraryService {
         ...resolveCourseMakerFolders(this.courseMaker.courses, createChartHashLookup(hashed)),
       ],
     };
+    this.appendKeptRandomCourses();
   }
 
   /** Relists the course folders after the player's own courses changed, keeping the select screen where it was. */

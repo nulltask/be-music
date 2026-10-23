@@ -448,3 +448,42 @@ describe('DecideRoute: the other families', () => {
     expect(playingFamily({ identity: { kind: 'play', family: 'built-in' } } as PlayScene)).toEqual({});
   });
 });
+
+describe('DecideRoute continuation visibility', () => {
+  test('notifies only after the decide scene is shown', async () => {
+    const h = await harness();
+    const shown = vi.fn();
+    await h.route.showDecide(chartEntry('a'), {}, { start: vi.fn(async () => {}), shown });
+    expect(shown).toHaveBeenCalledOnce();
+  });
+  test('does not notify when the navigation was superseded', async () => {
+    const h = await harness();
+    vi.spyOn(h.router, 'show').mockResolvedValueOnce(false);
+    const shown = vi.fn();
+    await h.route.showDecide(chartEntry('a'), {}, { start: vi.fn(async () => {}), shown });
+    expect(shown).not.toHaveBeenCalled();
+  });
+  test('without a decide screen waits for direct play, and does not notify on load failure', async () => {
+    const h = await harness({ decideFamily: null });
+    const shown = vi.fn();
+    const start = vi.fn(async () => {
+      expect(shown).not.toHaveBeenCalled();
+    });
+    await h.route.showDecide(chartEntry('a'), {}, { start, shown });
+    expect(shown).toHaveBeenCalledOnce();
+    shown.mockClear();
+    await expect(
+      h.route.showDecide(
+        chartEntry('a'),
+        {},
+        {
+          start: async () => {
+            throw new Error('load failed');
+          },
+          shown,
+        },
+      ),
+    ).rejects.toThrow('load failed');
+    expect(shown).not.toHaveBeenCalled();
+  });
+});
