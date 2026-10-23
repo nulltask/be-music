@@ -106,7 +106,7 @@ function reversalScenarioChart(): BeMusicJSON {
   return json;
 }
 
-const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', 'iidx'];
+const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', '____'];
 
 describe('engine / simulator equivalence', () => {
   test.each(RULESETS)('%s: a mixed-timing pass over a key cluster agrees judge for judge', async (ruleset) => {
@@ -188,7 +188,7 @@ describe('engine / simulator equivalence', () => {
     ]);
     expect(summary.exScore).toBe(simulated.exScore);
     // The ruleset decides how many judgments one long note is worth: LR2 plays it as an LN (one), beatoraja
-    // honours `#LNMODE 2` as a CN and IIDX charges everything (head and tail, so two).
+    // honours `#LNMODE 2` as a CN and That-Which-Must-Not-Be-Named charges everything (head and tail, so two).
     expect(summary.total).toBe(simulated.noteCount);
     expect(summary.total).toBe(ruleset === 'lr2' ? 2 : 3);
   });
@@ -399,9 +399,9 @@ describe('engine / simulator equivalence', () => {
     }
   });
 
-  // `#EXRANK` changes are recorded whatever ruleset the play ran under, so re-simulating a beatoraja or IIDX log under
+  // `#EXRANK` changes are recorded whatever ruleset the play ran under, so re-simulating a beatoraja or That-Which-Must-Not-Be-Named log under
   // LR2 uses the windows an LR2 play of the same inputs used.
-  test.each(['beatoraja', 'iidx'] as const)(
+  test.each(['beatoraja', '____'] as const)(
     'a %s log re-simulates under lr2 with the #EXRANK changes',
     async (ruleset) => {
       const json = chart([
@@ -554,7 +554,7 @@ describe('engine / simulator equivalence', () => {
   });
 
   // A second key pressing a lane whose long note is held never judges the lane's next note: LR2 charges an empty POOR,
-  // beatoraja and IIDX ignore the press.
+  // beatoraja and That-Which-Must-Not-Be-Named ignore the press.
   test.each(RULESETS)('%s: a second key on a held long note agrees on both sides', async (ruleset) => {
     const json = longNoteChart(1);
     json.events.push({ measure: 2, channel: '11', position: [1, 20], value: '01' });
@@ -648,7 +648,7 @@ describe('engine / simulator equivalence', () => {
     }
   });
 
-  // FREE ZONE has no judging effect in any reference (LR2 and beatoraja drop channel 17 from 7-key charts; IIDX never had
+  // FREE ZONE has no judging effect in any reference (LR2 and beatoraja drop channel 17 from 7-key charts; That-Which-Must-Not-Be-Named never had
   // it): a scratch press there is an ordinary press, and charges an empty POOR when a scratch note is in reach.
   test.each(RULESETS)('%s: a scratch press in a FREE ZONE is judged as any other press', async (ruleset) => {
     const json = chart([

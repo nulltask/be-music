@@ -210,7 +210,7 @@ export class CourseRun<
   buildPracticeResult(): ReplayCourseResult | undefined {
     if (!this.practiceMode || this.played.length === 0) return undefined;
     const id = this.played.at(-1)!.outcome.ruleset.split('/')[0];
-    const ruleset = id === 'beatoraja' || id === 'iidx' ? id : 'lr2';
+    const ruleset = id === 'beatoraja' || id === '____' ? id : 'lr2';
     const outcomes = this.played.map((stage) => stage.outcome);
     const counts = this.stages.map(
       (stage, index) =>

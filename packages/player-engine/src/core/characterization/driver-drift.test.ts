@@ -285,7 +285,7 @@ describe('driver drift', () => {
       ],
     });
     for (const { name, chart, script } of cases) {
-      for (const judgeRuleset of ['lr2', 'beatoraja', 'iidx'] as const) {
+      for (const judgeRuleset of ['lr2', 'beatoraja', '____'] as const) {
         const play = `${name} / ${judgeRuleset}`;
         const live = await observePlay({ driver: 'manual', chart, script, options: { judgeRuleset } });
         expect(

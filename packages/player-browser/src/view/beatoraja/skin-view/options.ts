@@ -185,7 +185,7 @@ export interface BeatorajaPlaySkinViewOptions {
    * not reported its windows yet) paints no bands.
    *
    * When omitted (decide / select scenes, headless tests), the renderer falls through to
-   * IIDX-NORMAL defaults (`{16.67, 33.33, 116.67, 250}`) so the bands still render
+   * That-Which-Must-Not-Be-Named-NORMAL defaults (`{16.67, 33.33, 116.67, 250}`) so the bands still render
    * approximately correct.
    */
   resolveTimingJudgeWindows?: () => BeMusicJudgeWindowSet | undefined;

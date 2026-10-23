@@ -19,12 +19,12 @@ export { resolveJudgeWindowsMs, type JudgeWindowsMs } from '../core/judge-window
 export {
   computeScoreRate,
   createEmptyScore,
-  IIDX_RANK_LABELS,
+  _____RANK_LABELS,
   resolveDisplayedPoor,
-  resolveIIDXRankIndexFromScore,
-  resolveIIDXRankLabel,
+  resolve____RankIndexFromScore,
+  resolve____RankLabel,
   resolveLR2MoneyScore,
-  type IIDXRankLabel,
+  type ____RankLabel,
   type JudgmentKind,
   type ScoreSummary,
 } from './score.ts';

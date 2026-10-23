@@ -24,7 +24,7 @@ describe('designed entries', () => {
   });
 
   it('@be-music/player-engine/replay leaves the score vocabulary to @be-music/player-engine/ruleset', () => {
-    for (const name of ['computeScoreRate', 'resolveIIDXRankLabel', 'IIDX_RANK_LABELS']) {
+    for (const name of ['computeScoreRate', 'resolve____RankLabel', '_____RANK_LABELS']) {
       expect(replay).not.toHaveProperty(name);
     }
   });

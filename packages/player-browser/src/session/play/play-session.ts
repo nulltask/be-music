@@ -601,7 +601,7 @@ export class PlaySession extends PlaySessionState {
 
   /**
    * Does the ruleset this run judges under show empty POORs inside its POOR counter? LR2 does; beatoraja shows a
-   * figure of its own, and IIDX's counter is unmeasured, so both keep them apart.
+   * figure of its own, and That-Which-Must-Not-Be-Named's counter is unmeasured, so both keep them apart.
    */
   resolveEmptyPoorCountsInPoorDisplay(): boolean {
     const ruleset = this.options.replay?.play.judgeRuleset ?? this.options.judgeRuleset ?? 'lr2';

@@ -122,8 +122,8 @@
         "gauge": {"type":"EXCLASS","final":47.13,"cleared":true},
         "course": {"combo":0,"maxCombo":30}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":3,"great":1,"good":1,"bad":1,"poor":5,"emptyPoor":0},
         "fast": 1,
         "slow": 1,
@@ -448,8 +448,8 @@
         "gauge": {"type":"EXCLASS","final":78.15,"cleared":true},
         "course": {"combo":18,"maxCombo":30}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":11,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
         "fast": 0,
         "slow": 0,

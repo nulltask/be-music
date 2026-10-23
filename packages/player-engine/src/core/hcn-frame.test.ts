@@ -84,7 +84,7 @@ describe('HCN UI frame facts from the existing judge', () => {
     expect(samples.find((sample) => sample.generation === 2)?.channel).toBeUndefined();
   });
   test('the judged-note count excludes empty POOR under every ruleset', async () => {
-    for (const judgeRuleset of ['lr2', 'beatoraja', 'iidx'] as const) {
+    for (const judgeRuleset of ['lr2', 'beatoraja', '____'] as const) {
       let atEarlyPress: number | undefined;
       await observePlay({
         driver: 'manual',

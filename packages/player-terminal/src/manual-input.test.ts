@@ -27,7 +27,7 @@ describe('manual input', () => {
   });
 
   test('manual-input: builds full 5-key DP lanes when 2P channels are used', () => {
-    // `21` marks the IIDX 2P side; bare `22..25` without it is PMS-STD (9 KEY) under the shared play-variant rule.
+    // `21` marks the That-Which-Must-Not-Be-Named 2P side; bare `22..25` without it is PMS-STD (9 KEY) under the shared play-variant rule.
     const bindings = createLaneBindings(['11', '21'], { platform: 'linux' });
     expect(bindings.map((binding) => binding.channel)).toEqual([
       '16',

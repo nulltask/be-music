@@ -273,8 +273,8 @@
               "cleared": false
             }
           },
-          "iidx": {
-            "ruleset": "iidx/0",
+          "____": {
+            "ruleset": "____/0",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -348,7 +348,7 @@
                 "failedMidPlay": false
               }
             },
-            "iidx": {
+            "____": {
               "total": 12,
               "perfect": 0,
               "fast": 0,
@@ -423,8 +423,8 @@
               "cleared": true
             }
           },
-          "iidx": {
-            "ruleset": "iidx/0",
+          "____": {
+            "ruleset": "____/0",
             "judge": {
               "pgreat": 12,
               "great": 0,
@@ -498,7 +498,7 @@
                 "failedMidPlay": false
               }
             },
-            "iidx": {
+            "____": {
               "total": 12,
               "perfect": 12,
               "fast": 0,
@@ -574,8 +574,8 @@
             },
             "fullCombo": false
           },
-          "iidx": {
-            "ruleset": "iidx/0",
+          "____": {
+            "ruleset": "____/0",
             "judge": {
               "pgreat": 6,
               "great": 3,
@@ -650,7 +650,7 @@
               },
               "fullCombo": false
             },
-            "iidx": {
+            "____": {
               "total": 12,
               "perfect": 6,
               "fast": 1,

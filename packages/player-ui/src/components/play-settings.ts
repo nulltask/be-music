@@ -26,7 +26,7 @@ export class BeMusicPlaySettingsElement extends DataElement<BeMusicSettingsData>
       <section class="card" part="panel">
         <h3>Play settings</h3>
         ${stats([
-          ['Ruleset', r.rulesetLabel ?? '—'],
+          ['Ruleset', r.rulesetLabel === '____' ? '????' : (r.rulesetLabel ?? '—')],
           ['Random 1P / 2P', `${o.random1P} / ${o.random2P}`],
           ['Gauge 1P / 2P', `${o.gauge1P} / ${o.gauge2P}`],
           ['Auto scratch', `1P ${o.autoScratch1P ? 'ON' : 'OFF'} / 2P ${o.autoScratch2P ? 'ON' : 'OFF'}`],

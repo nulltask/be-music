@@ -18,7 +18,7 @@ import { findEngineSimulatorMismatches } from './play-scenarios.ts';
  */
 
 const MODES: readonly FuzzMode[] = ['7', '14', '5', '9', '24'];
-const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', 'iidx'];
+const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', '____'];
 // Rare corners need far more cases than a test run can afford: raise the count locally, e.g.
 // `BE_MUSIC_FUZZ_SEEDS=1000 pnpm exec vp test run test/regression/engine-simulator-fuzz.test.ts`.
 const SEEDS_PER_MODE = Number(process.env.BE_MUSIC_FUZZ_SEEDS ?? 40);

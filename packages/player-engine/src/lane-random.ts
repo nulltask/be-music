@@ -16,7 +16,7 @@ export interface SRandomOptions {
 
 /**
  * Resolve S-RANDOM channels without mutating the input. Active LN destinations stay reserved through the tail row.
- * LR2 (and the provisional IIDX option) chooses free lanes without a jack threshold. beatoraja prefers lanes more
+ * LR2 (and the provisional That-Which-Must-Not-Be-Named option) chooses free lanes without a jack threshold. beatoraja prefers lanes more
  * than 40 integer milliseconds after their last scoring note, falling back to the oldest available lanes.
  * `lanes` is one complete mode/side key domain; every event outside it passes through unchanged.
  */

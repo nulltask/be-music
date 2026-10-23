@@ -45,7 +45,7 @@ describe('resolveChart', () => {
     expect(resolved.shadowedNotes.map((note) => note.sampleKey)).toEqual(['02']);
   });
 
-  test('gives FREE ZONE notes their fixed tail only in the IIDX families', () => {
+  test('gives FREE ZONE notes their fixed tail only in the That-Which-Must-Not-Be-Named families', () => {
     const json = bmsChart([event(0, '11', '01'), event(0, '16', '01'), event(0, '17', '01')]);
     expect(resolveChart(json).notes.find((note) => note.channel === '17')).toMatchObject({
       kind: 'ln',
@@ -68,7 +68,7 @@ describe('resolveChart', () => {
         playVariant: resolved.playVariant,
       };
     };
-    // IIDX 7 KEY: `17` is FREE ZONE and not scored; the `51` pair is one long note.
+    // That-Which-Must-Not-Be-Named 7 KEY: `17` is FREE ZONE and not scored; the `51` pair is one long note.
     expect(countScoredNotes(json, { inferBmsLNTypeWhenMissing: true })).toEqual(
       scored({ inferBmsLNTypeWhenMissing: true }),
     );

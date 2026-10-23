@@ -121,7 +121,7 @@ describe('POST /api/v0/scores', () => {
       results: Array<{ ruleset: string; rulesetRevision: string; exScore: number; clearLamp: number; rank: number }>;
     };
     expect(body.chartFingerprint).toBe(chart.chartFingerprint);
-    expect(body.results.map((result) => result.ruleset)).toEqual(['lr2', 'beatoraja', 'iidx']);
+    expect(body.results.map((result) => result.ruleset)).toEqual(['lr2', 'beatoraja', '____']);
     for (const result of body.results) {
       expect(result.exScore).toBe(20); // ten PGREATs
       expect(result.rank).toBe(1);
@@ -383,7 +383,7 @@ describe('reassignScores', () => {
       const rows = await db.select().from(bestScore).where(eq(bestScore.userId, linkedId));
       expect(rows).toHaveLength(charts.length * 3);
       for (const row of rows) {
-        expect(row).toMatchObject({ bestEx: 16, playCount: 2, playedHere: row.ruleset !== 'iidx' });
+        expect(row).toMatchObject({ bestEx: 16, playCount: 2, playedHere: row.ruleset !== '____' });
       }
     };
     await expectBests();

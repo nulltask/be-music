@@ -62,7 +62,7 @@ export interface PlayResult {
   course?: CourseView;
   /** A course run's facts beside the summed score: the stages reached and the trophy earned. */
   courseRun?: PlayResultCourseRun;
-  /** The judge ruleset the play ran under (`lr2` / `beatoraja` / `iidx`). */
+  /** The judge ruleset the play ran under (`lr2` / `beatoraja` / `____`). */
   judgeRuleset?: string;
   /** FAST (early) and SLOW (late) GREAT / GOOD counts. */
   fast?: number;

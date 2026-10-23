@@ -723,7 +723,7 @@ describe('player', () => {
     expect(summary.total).toBe(1);
   });
 
-  test('player: FREE ZONE (17 / 27) only applies to the IIDX families', () => {
+  test('player: FREE ZONE (17 / 27) only applies to the That-Which-Must-Not-Be-Named families', () => {
     const createChart = (channels: string[]) => {
       const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
@@ -731,9 +731,9 @@ describe('player', () => {
       return json;
     };
 
-    // IIDX 7 KEY — `17` keeps the quarter-note FREE ZONE tail.
-    const iidx = extractPlayableNotes(createChart(['11', '17', '18']));
-    expect(iidx.find((note) => note.channel === '17')?.endBeat).toBeCloseTo(1, 6);
+    // That-Which-Must-Not-Be-Named 7 KEY — `17` keeps the quarter-note FREE ZONE tail.
+    const ____ = extractPlayableNotes(createChart(['11', '17', '18']));
+    expect(____.find((note) => note.channel === '17')?.endBeat).toBeCloseTo(1, 6);
 
     // 24 KEY — `17` is lane 7 of the keyboard bank, so it stays an ordinary tap. Classified from the
     // chart's own extended lane channel, without the host passing a variant.

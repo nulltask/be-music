@@ -13,7 +13,7 @@ test.each([
   ['7', 'beatoraja', 2600, 'MAX'],
   ['24', 'beatoraja', 2600, 'MAX'],
   ['5', 'lr2', 2600, 'FULL_COMBO'],
-  ['7', 'iidx', 2600, 'FULL_COMBO'],
+  ['7', '____', 2600, 'FULL_COMBO'],
 ] as const)('%s/%s with empty POOR at %d ms earns %s', async (playVariant, judgeRuleset, extraAtMs, lamp) => {
   const chart = parseChart('#PLAYER 1\n#BPM 120\n#TOTAL 300\n#00011:0001\n#00111:0001', 'bms');
   const play = await observePlay({

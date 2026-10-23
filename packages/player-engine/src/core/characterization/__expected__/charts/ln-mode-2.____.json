@@ -35,20 +35,20 @@
       "chart": {
         "sourceFormat": "bms",
         "laneMode": "5 KEY SP",
-        "lnMode": 1,
+        "lnMode": 2,
         "judgeRank": {"percent":75,"sourceRank":2},
         "noteCount": 6,
         "notes": [
-          {"id":0,"channel":"11","type":"long","timeUs":500000,"endTimeUs":1500000,"lnMode":1},
-          {"id":1,"channel":"12","type":"long","timeUs":1000000,"endTimeUs":2000000,"lnMode":1},
+          {"id":0,"channel":"11","type":"long","timeUs":500000,"endTimeUs":1500000,"lnMode":2},
+          {"id":1,"channel":"12","type":"long","timeUs":1000000,"endTimeUs":2000000,"lnMode":2},
           {"id":2,"channel":"13","type":"normal","timeUs":1250000},
-          {"id":3,"channel":"16","type":"long","timeUs":2000000,"endTimeUs":2500000,"lnMode":1},
-          {"id":4,"channel":"14","type":"long","timeUs":2500000,"endTimeUs":3500000,"lnMode":1},
+          {"id":3,"channel":"16","type":"long","timeUs":2000000,"endTimeUs":2500000,"lnMode":2},
+          {"id":4,"channel":"14","type":"long","timeUs":2500000,"endTimeUs":3500000,"lnMode":2},
           {"id":5,"channel":"15","type":"normal","timeUs":3500000}
         ],
-        "chartFingerprint": "bmfp0:a3e7e6c303de032ab41f6c22d86d5eb0053eb67c37958894a684848d366817c1",
-        "playFingerprint": "bmfp0:a3e7e6c303de032ab41f6c22d86d5eb0053eb67c37958894a684848d366817c1",
-        "title": "long notes LNMODE 1",
+        "chartFingerprint": "bmfp0:a3bb37603d3726043106b8680f51e301ff8a1c0a75fd23acc8f0d2378cb5bdc0",
+        "playFingerprint": "bmfp0:a3bb37603d3726043106b8680f51e301ff8a1c0a75fd23acc8f0d2378cb5bdc0",
+        "title": "long notes LNMODE 2",
         "artist": "characterization"
       },
       "inputs": [
@@ -63,7 +63,7 @@
         {"seq":8,"timeUs":3480000,"action":"down","channels":["15"],"tokens":["c"]},
         {"seq":9,"timeUs":3540000,"action":"up","channels":["15"],"tokens":["c"]}
       ],
-      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"iidx","endOnFailure":true},
+      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"____","endOnFailure":true},
       "results": {
         "native": {
           "ruleset": "be-music/native",
@@ -93,17 +93,17 @@
       },
       "beatoraja": {
         "ruleset": "beatoraja/0",
-        "judge": {"pgreat":3,"great":1,"good":0,"bad":1,"poor":1,"emptyPoor":0},
+        "judge": {"pgreat":6,"great":1,"good":0,"bad":0,"poor":3,"emptyPoor":0},
         "fast": 1,
         "slow": 0,
-        "exScore": 7,
-        "noteCount": 6,
-        "maxCombo": 2,
+        "exScore": 13,
+        "noteCount": 10,
+        "maxCombo": 4,
         "djLevel": "B",
         "gauge": {"type":"NORMAL","final":100,"cleared":true}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":6,"great":1,"good":0,"bad":0,"poor":2,"emptyPoor":0},
         "fast": 1,
         "slow": 0,
@@ -195,7 +195,7 @@
       "last": "4790.000 seconds=4.773333 beat=9.546667"
     },
     "host": [
-      "0.000 ruleset iidx/0 charge note={\"judges\":[[-16667,16667],[-33333,33333],[-116667,116667],[-250000,250000]],\"ms\":[-150000,500000]}",
+      "0.000 ruleset ____/0 charge note={\"judges\":[[-16667,16667],[-33333,33333],[-116667,116667],[-250000,250000]],\"ms\":[-150000,500000]}",
       "0.000 input-runtime create manual",
       "0.000 load-complete",
       "0.000 ui start",
@@ -261,7 +261,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": "(same as manual)",
-      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"iidx","endOnFailure":true},
+      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"____","endOnFailure":true},
       "results": "(same as manual)"
     },
     "simulated": "(same as manual)",
@@ -346,7 +346,7 @@
       "last": "4783.333 seconds=4.766667 beat=9.533333"
     },
     "host": [
-      "0.000 ruleset iidx/0 charge note={\"judges\":[[-16667,16667],[-33333,33333],[-116667,116667],[-250000,250000]],\"ms\":[-150000,500000]}",
+      "0.000 ruleset ____/0 charge note={\"judges\":[[-16667,16667],[-33333,33333],[-116667,116667],[-250000,250000]],\"ms\":[-150000,500000]}",
       "0.000 input-runtime create manual",
       "0.000 load-complete",
       "0.000 ui start",
@@ -393,7 +393,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": [],
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"iidx","endOnFailure":true},
+      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"____","endOnFailure":true},
       "results": {
         "native": {
           "ruleset": "be-music/native",
@@ -423,17 +423,17 @@
       },
       "beatoraja": {
         "ruleset": "beatoraja/0",
-        "judge": {"pgreat":6,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+        "judge": {"pgreat":10,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
         "fast": 0,
         "slow": 0,
-        "exScore": 12,
-        "noteCount": 6,
-        "maxCombo": 6,
+        "exScore": 20,
+        "noteCount": 10,
+        "maxCombo": 10,
         "djLevel": "AAA",
         "gauge": {"type":"NORMAL","final":100,"cleared":true}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":10,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
         "fast": 0,
         "slow": 0,
@@ -506,7 +506,7 @@
       "last": "4783.333 seconds=4.766667 beat=9.533333"
     },
     "host": [
-      "0.000 ruleset iidx/0 charge note={\"judges\":[[-16667,16667],[-33333,33333],[-116667,116667],[-250000,250000]],\"ms\":[-150000,500000]}",
+      "0.000 ruleset ____/0 charge note={\"judges\":[[-16667,16667],[-33333,33333],[-116667,116667],[-250000,250000]],\"ms\":[-150000,500000]}",
       "0.000 input-runtime create auto",
       "0.000 load-complete",
       "0.000 ui start",

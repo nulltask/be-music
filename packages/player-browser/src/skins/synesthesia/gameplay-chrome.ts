@@ -1030,7 +1030,7 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
     { ...displayStyle(8, SYN_MIST), anchorX: 1, maxWidth: 46 },
     pool,
   );
-  // Rate meter as a light filament with the IIDX ninth ticks.
+  // Rate meter as a light filament with the That-Which-Must-Not-Be-Named ninth ticks.
   const rate =
     runtime.exScore !== undefined && runtime.exScoreMax !== undefined && runtime.exScoreMax > 0
       ? Math.max(0, Math.min(1, runtime.exScore / runtime.exScoreMax))
@@ -1472,8 +1472,8 @@ function formatRuleset(value: string | undefined): string {
   switch (value) {
     case 'beatoraja':
       return 'BEATORAJA';
-    case 'iidx':
-      return 'IIDX';
+    case '____':
+      return '????';
     default:
       return 'LR2';
   }

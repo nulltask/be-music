@@ -839,7 +839,7 @@ describe('parser', () => {
     expect(sortEventsByTime(json.events)).toEqual(['11', '14', '32', 'D3']);
   });
 
-  test.each(['beat-9k', 'BEAT-7K', 'iidx-7k'])(
+  test.each(['beat-9k', 'BEAT-7K', 'unsupported-7k'])(
     'bmson: an unknown mode_hint (%s) whose lanes fit beat-7k reads as beat-7k, as beatoraja, Qwilight and Bemuse do',
     (modeHint) => {
       const json = parseBmson(

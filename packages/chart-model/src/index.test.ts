@@ -596,7 +596,7 @@ describe('chart', () => {
     expect(mapBMSLongNoteChannelToPlayable(' 61 ')).toBe('21');
   });
 
-  test('resolveChartPlayVariant classifies IIDX and PMS chart families', () => {
+  test('resolveChartPlayVariant classifies That-Which-Must-Not-Be-Named and PMS chart families', () => {
     const chart = (chartPath: string, channels: string[], player?: number) => ({
       chartPath,
       events: channels.map((channel) => ({ channel })),
@@ -609,9 +609,9 @@ describe('chart', () => {
     expect(resolveChartPlayVariant(chart('main.bme', ['11', '18', '21', '28']))).toBe('14');
     expect(resolveChartPlayVariant(chart('main.pms', ['11', '15', '22', '23', '24', '25']))).toBe('9');
     expect(resolveChartPlayVariant(chart('main.bms', ['11', '15', '17', '18', '19'], 3))).toBe('9');
-    // PMS-STD content authored as `.bme` — uses any of `22..25` AND no traditional IIDX 2P channels
+    // PMS-STD content authored as `.bme` — uses any of `22..25` AND no traditional That-Which-Must-Not-Be-Named 2P channels
     // (`21`/`26..29`). Classified as `'9'` regardless of `.pms` extension so the engine picks up
-    // POPN-9 bindings (`22..25` → lanes 6..9). Before this rule the chart fell through to the IIDX
+    // POPN-9 bindings (`22..25` → lanes 6..9). Before this rule the chart fell through to the That-Which-Must-Not-Be-Named
     // 5K DP heuristic and the f/v/g/b lane bindings were lost.
     expect(resolveChartPlayVariant(chart('main.bme', ['11', '12', '13', '14', '15', '22', '23', '24', '25']))).toBe(
       '9',
@@ -628,9 +628,9 @@ describe('chart', () => {
       resolveChartPlayVariant(chart('main.bme', ['11', '12', '13', '14', '15', '16', '22', '23', '24', '25'])),
     ).toBe('9');
     // Sparse PMS-STD authoring — single `22` channel use without any `21`/`26..29`. Still routes to
-    // `'9'` (a real IIDX 5K DP chart would have `21` and / or `26` for the leftmost 2P column / scratch).
+    // `'9'` (a real That-Which-Must-Not-Be-Named 5K DP chart would have `21` and / or `26` for the leftmost 2P column / scratch).
     expect(resolveChartPlayVariant(chart('main.bme', ['11', '15', '22']))).toBe('9');
-    // Real IIDX 5K DP — has scratch on both sides AND `21`. Stays at `'10'` (presence of `21`/`26..29`
+    // Real That-Which-Must-Not-Be-Named 5K DP — has scratch on both sides AND `21`. Stays at `'10'` (presence of `21`/`26..29`
     // beats the PMS-STD signal).
     expect(resolveChartPlayVariant(chart('main.bms', ['11', '15', '16', '21', '22', '25', '26']))).toBe('10');
   });
@@ -679,7 +679,7 @@ describe('chart', () => {
     expect(resolveChartPlayVariant(chart('.pms', ['11']))).toBe('9');
   });
 
-  test('resolveChartPlayVariant keeps `#PLAYER 3` double-play charts with a FREE ZONE on `17` as IIDX DP', () => {
+  test('resolveChartPlayVariant keeps `#PLAYER 3` double-play charts with a FREE ZONE on `17` as That-Which-Must-Not-Be-Named DP', () => {
     const chart = (channels: string[]) => ({
       chartPath: 'main.bms',
       events: channels.map((channel) => ({ channel })),
@@ -688,7 +688,7 @@ describe('chart', () => {
 
     expect(resolveChartPlayVariant(chart(['11', '17', '21', '26']))).toBe('10');
     expect(resolveChartPlayVariant(chart(['11', '17', '18', '21', '28']))).toBe('14');
-    // Without the IIDX 2P side `#PLAYER 3` + `17` is still POPN-9.
+    // Without the That-Which-Must-Not-Be-Named 2P side `#PLAYER 3` + `17` is still POPN-9.
     expect(resolveChartPlayVariant(chart(['11', '17']))).toBe('9');
   });
 

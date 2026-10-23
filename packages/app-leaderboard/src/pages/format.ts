@@ -1,4 +1,4 @@
-import { clearLampRank, computeScoreRate, resolveIIDXRankLabel } from '@be-music/player-engine/ruleset';
+import { clearLampRank, computeScoreRate, resolve____RankLabel } from '@be-music/player-engine/ruleset';
 import { en, type Messages } from './i18n/en.ts';
 
 /** Display name and colour of each clear lamp, LR2 / beatoraja style, by the rank the Leaderboard stores it as. */
@@ -24,7 +24,8 @@ export const LAMP_STYLES: Readonly<Record<number, { label: string; color: string
   [clearLampRank('FULL_COMBO')]: {
     label: 'FULL COMBO',
     color: '#22d3ee',
-    meaning: 'No BAD and no missed POOR (empty POORs do not count). The top lamp under LR2 and IIDX.',
+    meaning:
+      'No BAD and no missed POOR (empty POORs do not count). The top lamp under LR2 and That-Which-Must-Not-Be-Named.',
   },
   [clearLampRank('PERFECT')]: {
     label: 'PERFECT',
@@ -38,7 +39,7 @@ export function lampStyle(lamp: number): { label: string; color: string; meaning
   return LAMP_STYLES[lamp] ?? { label: 'NO PLAY', color: '#6b7280', meaning: 'Not played.' };
 }
 
-export const RULESET_LABELS: Readonly<Record<string, string>> = { lr2: 'LR2', beatoraja: 'beatoraja', iidx: 'IIDX' };
+export const RULESET_LABELS: Readonly<Record<string, string>> = { lr2: 'LR2', beatoraja: 'beatoraja', ____: '????' };
 
 /**
  * A ruleset as the pages name it: "LR2 rules". The bare name reads like the software a play came from; a ruleset is
@@ -50,7 +51,7 @@ export function rulesetName(ruleset: string): string {
 
 /** What a ruleset is, for tooltips next to ruleset names. */
 export const RULESET_MEANING =
-  'Every play is scored under each ruleset: the judgment windows, gauges and clear lamps of LR2, beatoraja or IIDX, applied by the be-music engine to the replay. It is how the score is counted, not the software the play came from.';
+  'Every play is scored under each ruleset: the judgment windows, gauges and clear lamps of LR2, beatoraja or That-Which-Must-Not-Be-Named, applied by the be-music engine to the replay. It is how the score is counted, not the software the play came from.';
 
 /** EX score rate in percent with two decimals (`ex / (notes × 2)`), or `-` without notes. */
 export function formatScoreRate(exScore: number, noteCount: number): string {
@@ -58,8 +59,8 @@ export function formatScoreRate(exScore: number, noteCount: number): string {
   return `${(computeScoreRate({ exScore, total: noteCount }) * 100).toFixed(2)}%`;
 }
 
-/** DJ LEVEL on the IIDX ninths (AAA from 8/9 of the maximum EX score down to F), or `-` without notes. */
-export const djLevel = (exScore: number, noteCount: number): string => resolveIIDXRankLabel(exScore, noteCount);
+/** DJ LEVEL on the That-Which-Must-Not-Be-Named ninths (AAA from 8/9 of the maximum EX score down to F), or `-` without notes. */
+export const djLevel = (exScore: number, noteCount: number): string => resolve____RankLabel(exScore, noteCount);
 
 /** A length of time for totals: `3h 25m`, `25m 12s`, `48s`. */
 export function formatPlayTime(ms: number, duration: Messages['duration'] = en.duration): string {

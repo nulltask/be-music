@@ -390,7 +390,7 @@ export const BEATORAJA_OP = {
   // ─── Live rank ops (prop.lua `_1p_aaa = 200` ... `_1p_f = 207`) ────────────────────────────
   // Set live during gameplay from the EX score over the notes judged so far (beatoraja
   // `createNowRank`, `resolveBeatorajaPlayScoreOps`); `computeRankOp` ranks a finished run over
-  // every note. Beatoraja's IIDX-derived rank thresholds are (max = notes × 2):
+  // every note. Beatoraja's That-Which-Must-Not-Be-Named-derived rank thresholds are (max = notes × 2):
   //
   //   AAA = exScore / max >= 8/9   (~88.9%)
   //   AA  = exScore / max >= 7/9   (~77.8%)
@@ -753,7 +753,7 @@ export type BeatorajaButtonCode = (typeof BEATORAJA_BUTTON)[keyof typeof BEATORA
 
 /**
  * Letter-rank classification from `(exScore, maxExScore)`. Returns the matching `BEATORAJA_OP`
- * code (`P1_RANK_*` for `side: 1`, `P2_RANK_*` for `side: 2`). Beatoraja's IIDX-derived rank
+ * code (`P1_RANK_*` for `side: 1`, `P2_RANK_*` for `side: 2`). Beatoraja's That-Which-Must-Not-Be-Named-derived rank
  * thresholds are 8/9, 7/9, ... down to 2/9 of the theoretical max EX-score (= `total * 2`).
  *
  * Returns `BEATORAJA_OP.P1_RANK_F` when `maxExScore <= 0` (no scorable notes — degenerate chart);

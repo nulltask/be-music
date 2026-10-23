@@ -1,6 +1,6 @@
 import {
-  IIDX_EX_SCORE_PER_GREAT,
-  IIDX_EX_SCORE_PER_PGREAT,
+  _____EX_SCORE_PER_GREAT,
+  _____EX_SCORE_PER_PGREAT,
   resolveLR2MoneyScore,
   type JudgmentKind,
   type ScoreSummary,
@@ -11,16 +11,16 @@ import {
 export {
   computeScoreRate,
   createEmptyScore,
-  IIDX_EX_SCORE_PER_GREAT,
-  IIDX_EX_SCORE_PER_PGREAT,
-  IIDX_RANK_LABELS,
+  _____EX_SCORE_PER_GREAT,
+  _____EX_SCORE_PER_PGREAT,
+  _____RANK_LABELS,
   LR2_MONEY_SCORE_MAX,
   resolveDisplayedPoor,
-  resolveIIDXRankIndexFromRate,
-  resolveIIDXRankIndexFromScore,
-  resolveIIDXRankLabel,
+  resolve____RankIndexFromRate,
+  resolve____RankIndexFromScore,
+  resolve____RankLabel,
   resolveLR2MoneyScore,
-  type IIDXRankLabel,
+  type ____RankLabel,
   type JudgmentKind,
   type ScoreSummary,
 } from '../ruleset/score.ts';
@@ -31,7 +31,7 @@ export interface ScoreTracker {
   maxCombo: number;
   /**
    * True when the active ruleset defines LR2's 200000-point "money score". Rulesets without one report EX-SCORE in
-   * `ScoreSummary.score` instead — that is what beatoraja shows, and what IIDX has shown since BISTROVER retired
+   * `ScoreSummary.score` instead — that is what beatoraja shows, and what That-Which-Must-Not-Be-Named has shown since BISTROVER retired
    * its own money score.
    */
   moneyScore: boolean;
@@ -98,10 +98,10 @@ export function applyJudgeToSummary(summary: ScoreSummary, judge: JudgmentKind, 
 
 function resolveExScoreDelta(judge: JudgmentKind): number {
   if (judge === 'PERFECT') {
-    return IIDX_EX_SCORE_PER_PGREAT;
+    return _____EX_SCORE_PER_PGREAT;
   }
   if (judge === 'GREAT') {
-    return IIDX_EX_SCORE_PER_GREAT;
+    return _____EX_SCORE_PER_GREAT;
   }
   return 0;
 }

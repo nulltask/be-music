@@ -457,7 +457,7 @@ describe('Leaderboard pages', () => {
     expect(score.html).toContain('LR2 rules');
     expect(score.html).toContain('Scored with');
     expect(score.html).toContain('beatoraja');
-    expect(score.html).toContain('IIDX');
+    expect(score.html).toContain('????');
     expect(score.html).toContain(`/api/v0/scores/${firstScore}/replay`);
 
     const ranking = await page(`/charts/${encodeURIComponent(chart.chartFingerprint)}`);

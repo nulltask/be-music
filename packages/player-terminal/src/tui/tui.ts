@@ -25,7 +25,7 @@ import {
   type MeasureTimelinePoint,
   type BPMTimelinePoint,
   type StopWindowPoint,
-  IIDX_MEASURE_BEATS,
+  _____MEASURE_BEATS,
   findCurrentMeasure,
   findTotalMeasures,
   resolveMeasureLength,
@@ -156,7 +156,7 @@ interface NoteWindowState {
   beat: number;
 }
 
-const MAX_SCROLL_LOOKAHEAD_BEATS = IIDX_MEASURE_BEATS * 64;
+const MAX_SCROLL_LOOKAHEAD_BEATS = _____MEASURE_BEATS * 64;
 const DEFAULT_VISIBLE_NOTES_LIMIT = 8192;
 const DEFAULT_LANDMINE_NOTES_PER_CELL = 2;
 const DEFAULT_INVISIBLE_NOTES_PER_CELL = 2;
@@ -1231,7 +1231,7 @@ function canDropNoteFromRenderWindow(note: TUINote, currentBeat: number, scrollW
     return false;
   }
 
-  return note.beat < currentBeat - Math.max(IIDX_MEASURE_BEATS, scrollWindowBeats);
+  return note.beat < currentBeat - Math.max(_____MEASURE_BEATS, scrollWindowBeats);
 }
 
 function inferLaneSideByChannel(channel: string): '1P' | '2P' {

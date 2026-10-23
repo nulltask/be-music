@@ -239,7 +239,7 @@ describe('judge core', () => {
     expect(state.activeLongNotes.size).toBe(0);
   });
 
-  test.each(['beatoraja', 'iidx'] as const)('%s does not reuse a BAD press', (ruleset) => {
+  test.each(['beatoraja', '____'] as const)('%s does not reuse a BAD press', (ruleset) => {
     const json = chart([
       { measure: 1, channel: '11', position: [0, 1000], value: '01' },
       { measure: 1, channel: '11', position: [150, 1000], value: '02' },
@@ -295,7 +295,7 @@ describe('judge core', () => {
     expect(state.summary.minePoor).toBe(1);
   });
 
-  test.each(['lr2', 'beatoraja', 'iidx'] as const)('%s: a lane held through a mine detonates it', (ruleset) => {
+  test.each(['lr2', 'beatoraja', '____'] as const)('%s: a lane held through a mine detonates it', (ruleset) => {
     const state = createCore(LONG_AND_MINE, ruleset);
     stepJudgeCore(state, { kind: 'hold', channels: new Set(['12']) });
     const effects = [...stepJudgeCore(state, advance(2.49)), ...stepJudgeCore(state, advance(2.6))];
@@ -304,10 +304,10 @@ describe('judge core', () => {
 
   test.each([
     ['lr2', 0],
-    ['iidx', 1],
+    ['____', 1],
     ['beatoraja', 0],
   ] as const)('%s: a press just after a mine crossed, inside PGREAT, detonates it %i time(s)', (ruleset, hits) => {
-    // LR2beta3 has no late press window; only the provisional IIDX model keeps symmetric PGREAT.
+    // LR2beta3 has no late press window; only the provisional That-Which-Must-Not-Be-Named model keeps symmetric PGREAT.
     const state = createCore(LONG_AND_MINE, ruleset);
     const effects = [...stepJudgeCore(state, advance(2.501)), ...stepJudgeCore(state, press(2.505, '12'))];
     effects.push(...stepJudgeCore(state, advance(2.6)));
@@ -583,7 +583,7 @@ describe('judge core', () => {
     expect(state.activeLongNotes.size).toBe(0);
   });
 
-  test.each(['lr2', 'beatoraja', 'iidx'] as const)(
+  test.each(['lr2', 'beatoraja', '____'] as const)(
     '%s: a replay produces the same effects however its advances are spaced',
     (ruleset) => {
       const stream = inputs(
@@ -611,7 +611,7 @@ describe('judge core', () => {
 });
 
 describe('practice start', () => {
-  for (const ruleset of ['lr2', 'beatoraja', 'iidx'] as const) {
+  for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
     test(`${ruleset}: consumes earlier heads and tails without judgments or gauge changes`, () => {
       const state = createCore(LONG_AND_MINE, ruleset, { practiceFromSeconds: 2.75 });
       const gauge = state.summary.gauge?.current;

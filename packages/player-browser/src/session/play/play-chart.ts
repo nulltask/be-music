@@ -192,7 +192,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // This is the structural fix for the whole class of view ↔ engine drift bugs the Phase-4c shared-engine
   // migration kept tripping over: an `inferBmsLNTypeWhenMissing` flag missing on one side, a
   // `bms.controlFlow` array re-resolved on the engine side, a `random1P: 'OFF'` truthy-check evaluating to
-  // `false` because `'OFF'` is a non-empty string, a missing `laneModeExtension` mapping PMS to IIDX 10-key
+  // `false` because `'OFF'` is a non-empty string, a missing `laneModeExtension` mapping PMS to That-Which-Must-Not-Be-Named 10-key
   // DP, … each one shifted the index alignment of the renderer's parallel `this.notes` arrays vs the
   // engine's, and `applyEngineFrame` ended up mirroring `judged` flags onto the wrong note. Sharing the
   // instance means the parallel arrays are no longer parallel — they're the same array, the engine mutates
@@ -202,7 +202,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   //   - `.bme` POPN-9 charts (full `11..19` on `#PLAYER 1`) classify as `'7'` via the engine's heuristic
   //     and lose the POPN-9 `f/v/g/b` lane bindings on channels `16..19`.
   //   - `.bms` / `.bme` charts that author PMS-STD content (`11..15 + 22..25`, no scratch) classify as
-  //     `'10'` (IIDX 5K DP) and route the right-side POPN columns through the IIDX 2P key bindings.
+  //     `'10'` (That-Which-Must-Not-Be-Named 5K DP) and route the right-side POPN columns through the That-Which-Must-Not-Be-Named 2P key bindings.
   // `resolveChartPlayVariant` already encodes the right rules for both (see `@be-music/chart-model`); threading
   // the result here gives the engine + adapter + renderer a single source of truth without each one
   // re-running its own heuristic. Classify the RESOLVED chart: lanes that only a chosen `#RANDOM` / `#SWITCH`
@@ -290,7 +290,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
 
   // Lay out the whole keyboard of the chart's play variant (5 / 7 / 9 / 10 / 14 / 24 / 48 KEY), not just the lanes
   // the chart happens to use, so a sparse chart still plays on full lanes. The variant also decides channel `17`
-  // (a lane in 9 KEY, FREE ZONE in IIDX) and the 9 KEY layout the LR2 default 9-keys play skin expects.
+  // (a lane in 9 KEY, FREE ZONE in That-Which-Must-Not-Be-Named) and the 9 KEY layout the LR2 default 9-keys play skin expects.
   ctx.chartPlayVariant = hostPlayVariant;
   ctx.laneChannels = resolvePlayVariantLaneChannels(ctx.notes, ctx.chartPlayVariant);
   // Initialize from `prepared.scorableNotes.length` so the view's initial `score.total` matches the engine's

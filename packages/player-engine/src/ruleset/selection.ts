@@ -19,7 +19,7 @@ export interface JudgeSelectionCandidate {
  * beatoraja `JudgeAlgorithm` (`JudgeManager.java`), with the caller supplying candidates in ascending note order:
  *
  * - `lowest` — never displace. The earliest note in reach wins, so a press always clears the oldest pending note
- *   even when a later one is closer in time. LR2 and IIDX both work this way.
+ *   even when a later one is closer in time. LR2 and That-Which-Must-Not-Be-Named both work this way.
  * - `duration` — the note closest in absolute time wins.
  * - `combo` (beatoraja's default) / `score` — displace only once `best` has fallen out of the late side of its own
  *   GOOD (`combo`) or GREAT (`score`) window while the candidate is still inside the early side of its. This keeps

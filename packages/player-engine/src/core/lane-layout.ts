@@ -31,7 +31,7 @@ export interface KeyboardCodeLike {
  * per-variant slot arithmetic the skins use.
  */
 
-/** Physical key codes of the IIDX default keys, for hosts that receive DOM `KeyboardEvent.code`s. */
+/** Physical key codes of the That-Which-Must-Not-Be-Named default keys, for hosts that receive DOM `KeyboardEvent.code`s. */
 const CHANNEL_KEY_BINDINGS: Record<string, ReadonlySet<string>> = {
   '16': new Set(['ShiftLeft']),
   '11': new Set(['KeyZ']),
@@ -158,7 +158,7 @@ export function resolveSideKeySlot(channel: string, playVariant?: ChartPlayVaria
 export function resolveLR2LaneIndex(channel: string, playVariant?: ChartPlayVariant): number {
   const slot = resolveSideKeySlot(channel, playVariant);
   if (slot < 0) return -1;
-  // LR2 skins only define the 20 IIDX lane rects (`0`/`10` scratch + `1..9`/`11..19` keys) — there is no
+  // LR2 skins only define the 20 That-Which-Must-Not-Be-Named lane rects (`0`/`10` scratch + `1..9`/`11..19` keys) — there is no
   // `play_24.lr2skin`. Returning `-1` routes keyboard-mode charts through the caller's fallback playfield instead of
   // squeezing 26 lanes into the 7-key rect table.
   if (playVariant === '24' || playVariant === '48') return -1;
@@ -171,13 +171,13 @@ export function resolveSideRelativeLaneIndex(channel: string, playVariant?: Char
   return slot < 0 ? 0 : slot;
 }
 
-/** The IIDX scratch lanes (`16` / `26`), whatever the play variant. */
-const IIDX_SCRATCH_CHANNELS: ReadonlySet<string> = new Set(
+/** The That-Which-Must-Not-Be-Named scratch lanes (`16` / `26`), whatever the play variant. */
+const _____SCRATCH_CHANNELS: ReadonlySet<string> = new Set(
   PLAY_MODE_LAYOUTS['14'].lanes.filter((lane) => lane.kind === 'scratch').map((lane) => lane.channel),
 );
 
 export function isScratch(channel: string): boolean {
-  return IIDX_SCRATCH_CHANNELS.has(channel);
+  return _____SCRATCH_CHANNELS.has(channel);
 }
 
 /**
@@ -241,21 +241,21 @@ export function resolveLaneChannels(notes: ReadonlyArray<ChannelLike>, playVaria
 
 /**
  * The order lanes are indexed in, for every lane a play variant can use. The keyboard modes keep the table's drawing
- * order (1P wheel, 1P keys, 2P keys, 2P wheel). 9 KEY lists the BME-type `11..19`, then the PMS-STD `22..25`. The IIDX
+ * order (1P wheel, 1P keys, 2P keys, 2P wheel). 9 KEY lists the BME-type `11..19`, then the PMS-STD `22..25`. The That-Which-Must-Not-Be-Named
  * families list each side by slot — the scratch first — so the 2P scratch `26` comes before `21` here; the skins put it
  * on the outer edge when they draw.
  */
 function preferredLaneOrder(playVariant?: ChartPlayVariant): readonly string[] {
   if (playVariant === '24' || playVariant === '48') return KEYBOARD_LANE_ORDER[playVariant];
   if (playVariant === '9') return POPN_9KEY_LANE_ORDER;
-  return IIDX_LANE_ORDER;
+  return _____LANE_ORDER;
 }
 
 function layoutChannels(layout: PlayModeLayout): readonly string[] {
   return layout.lanes.map((lane) => lane.channel);
 }
 
-const IIDX_LANE_ORDER: readonly string[] = [...PLAY_MODE_LAYOUTS['14'].lanes]
+const _____LANE_ORDER: readonly string[] = [...PLAY_MODE_LAYOUTS['14'].lanes]
   .sort((left, right) => left.side.localeCompare(right.side) || left.slot - right.slot)
   .map((lane) => lane.channel);
 const KEYBOARD_LANE_ORDER: Record<'24' | '48', readonly string[]> = {
@@ -293,8 +293,8 @@ export function resolvePlayVariantLaneChannels(
   return preferredLaneOrder(playVariant).filter((channel) => lanes.has(channel));
 }
 
-/** Default keys of the IIDX lanes: `Z S X D C F V` (1P) and `B H N J M K ,` (2P), the scratches on the Shift keys. */
-const IIDX_DEFAULT_KEYS: Record<string, { keyLabel: string; token: string }> = {
+/** Default keys of the That-Which-Must-Not-Be-Named lanes: `Z S X D C F V` (1P) and `B H N J M K ,` (2P), the scratches on the Shift keys. */
+const _____DEFAULT_KEYS: Record<string, { keyLabel: string; token: string }> = {
   '16': { keyLabel: 'LShift', token: 'shift-left' },
   '11': { keyLabel: 'z', token: 'z' },
   '12': { keyLabel: 's', token: 's' },
@@ -346,7 +346,7 @@ function createFixedBindings(layout: PlayModeLayout): FixedLaneDefinition[] {
       const key = POPN_DEFAULT_KEYS[lane.slot - 1]!;
       return { keyLabel: key, token: key };
     }
-    return IIDX_DEFAULT_KEYS[lane.channel]!;
+    return _____DEFAULT_KEYS[lane.channel]!;
   };
   return layout.lanes.map((lane) => {
     const key = defaultKey(lane);
@@ -454,7 +454,7 @@ export function appendFreeZoneInputChannels(
     }
   };
 
-  for (const zone of IIDX_FREE_ZONES) {
+  for (const zone of _____FREE_ZONES) {
     appendAlias(zone.channel, zone.scratch);
   }
 }
@@ -544,12 +544,12 @@ function isPMSExtension(chartExtension: string | undefined): boolean {
   return typeof chartExtension === 'string' && chartExtension.trim().toLowerCase() === '.pms';
 }
 
-/** The IIDX FREE ZONE channels, each played on its side's scratch (`17` → `16`, `27` → `26`). */
-const IIDX_FREE_ZONES = PLAY_MODE_LAYOUTS['14'].freeZones;
+/** The That-Which-Must-Not-Be-Named FREE ZONE channels, each played on its side's scratch (`17` → `16`, `27` → `26`). */
+const _____FREE_ZONES = PLAY_MODE_LAYOUTS['14'].freeZones;
 
 function resolveFreeZoneScratchChannel(channel: string): string | undefined {
   const normalized = normalizeChannel(channel);
-  return IIDX_FREE_ZONES.find((zone) => zone.channel === normalized)?.scratch;
+  return _____FREE_ZONES.find((zone) => zone.channel === normalized)?.scratch;
 }
 
 const EXTENDED_LANE_DIGITS = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';

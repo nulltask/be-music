@@ -68,7 +68,7 @@ export function beatorajaKeysongOp(playVariant: string | undefined): number | un
 /**
  * Gauge frame conditions from beatoraja's runtime class: groove (42) for classes 0–2, hard (43) for 3–8,
  * and EX (1046) for ASSIST-EASY, EASY, EX-HARD, HAZARD, EXCLASS and EXHARDCLASS. No class lights no frame.
- * Shares the gauge element's type mapping, including LR2 and IIDX aliases; independent of gauge value and mode.
+ * Shares the gauge element's type mapping, including LR2 and That-Which-Must-Not-Be-Named aliases; independent of gauge value and mode.
  */
 export function resolveBeatorajaGaugeTypeOps(type: string | undefined): number[] {
   if (type === undefined) return [];

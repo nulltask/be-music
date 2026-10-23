@@ -32,8 +32,8 @@ describe('score card excerpt', () => {
     expect(excerptLanes('9 KEY (PMS-STD)').every((lane) => lane.side === '1P')).toBe(true);
     expect(excerptLanes('9 KEY (PMS-COMPAT)')).toHaveLength(9);
     expect(excerptLaneWidths('9 KEY (PMS-STD)')).toBe('shared');
-    expect(excerptLaneWidths('7 KEY SP')).toBe('iidx');
-    expect(excerptLaneWidths('14 KEY DP')).toBe('iidx');
+    expect(excerptLaneWidths('7 KEY SP')).toBe('____');
+    expect(excerptLaneWidths('14 KEY DP')).toBe('____');
     expect(excerptLanes('14 KEY DP').map((lane) => lane.side)).toEqual([
       ...Array.from({ length: 8 }, () => '1P'),
       ...Array.from({ length: 8 }, () => '2P'),
@@ -49,7 +49,7 @@ describe('score card excerpt', () => {
     // Measure 1 holds one note; measure 3 eighths and a scratch, whose first 2.23 beats make the window.
     const chart = makeChart(['#00111:01', '#00311:0101010101010101', '#00316:01', '#00412:0101']);
     const excerpt = scoreCardExcerpt(chart.chartDocument, '7 KEY SP');
-    expect(excerpt?.widths).toBe('iidx');
+    expect(excerpt?.widths).toBe('____');
     expect(excerpt?.notes).toEqual([
       { lane: 1, beat: 0 },
       { lane: 0, beat: 0 },

@@ -66,7 +66,7 @@ const BEATS_PER_STANDARD_MEASURE = 4;
 
 /**
  * The beatoraja skin lane (index into the play skin's `note[]` / `lane[]` tables) a note on `channel` draws in, or
- * `undefined` for a channel the variant has no lane for. IIDX: keys `0..N-1`, then the scratch, per side; POPN-9: the
+ * `undefined` for a channel the variant has no lane for. That-Which-Must-Not-Be-Named: keys `0..N-1`, then the scratch, per side; POPN-9: the
  * nine buttons. The keyboard modes have no scratch: each side is 26 lanes, the 24 keys (`0..23`) then the wheel up /
  * down (`1P` / `1Q` → `24` / `25`), with the 2P side from `26` (its wheel on `50` / `51`) — the skin lanes beatoraja's
  * `play24` / `play24d` skins author.

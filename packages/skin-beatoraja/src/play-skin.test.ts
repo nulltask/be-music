@@ -176,7 +176,7 @@ describe('pickBeatorajaPlaySkinVariant', () => {
     expect(pickBeatorajaPlaySkinVariant(themeWith('7', '14', '9'), '10')).toBe('14');
   });
 
-  it('keeps a 14 KEY chart on an IIDX skin before the keyboard ones', () => {
+  it('keeps a 14 KEY chart on a That-Which-Must-Not-Be-Named skin before the keyboard ones', () => {
     expect(pickBeatorajaPlaySkinVariant(themeWith('24d', '7'), '14')).toBe('7');
   });
 
