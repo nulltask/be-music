@@ -1563,6 +1563,19 @@ describe('BeatorajaPlayBridge — chart TOTAL (368)', () => {
   });
 });
 
+it('switches skin gauge frame conditions when the reported gauge changes', () => {
+  const harness = createHarness();
+  for (const [type, expected] of [
+    ['NORMAL', [42]],
+    ['HARD', [43]],
+    ['EX-HARD', [43, 1046]],
+    ['EASY', [42, 1046]],
+  ] as const) {
+    harness.frame({ summary: { gauge: { type, current: 50, max: 100 } } });
+    expect([42, 43, 1046].filter((op) => harness.bridge.hasOp(op))).toEqual(expected);
+  }
+});
+
 it('forwards the engine empty-POOR count to beatoraja play numbers', () => {
   const harness = createHarness();
   harness.frame({ summary: { bad: 2, poor: 3, emptyPoor: 7 } });

@@ -1,3 +1,4 @@
+import { resolveBeatorajaGaugeTypeOps } from './play-ops.ts';
 import { gaugePercent } from '@be-music/player-scene-model';
 import { BEATORAJA_NUM, BEATORAJA_OP, computeJudgeExistOps } from '../runtime-ids.ts';
 import type { BeatorajaEarlyLate, BeatorajaGaugeInput, BeatorajaScoreInput } from './inputs.ts';
@@ -247,10 +248,11 @@ function nowRankOp(sideRank: number): number {
  */
 export function resolveBeatorajaPlayScoreOps(
   score: BeatorajaScoreInput,
-  gauge: Pick<BeatorajaGaugeInput, 'current' | 'max' | 'clearThreshold'> | undefined,
+  gauge: Pick<BeatorajaGaugeInput, 'current' | 'max' | 'clearThreshold' | 'type'> | undefined,
 ): number[] {
   const sideRank = beatorajaPlayRankOp(score);
   const ops = [
+    ...resolveBeatorajaGaugeTypeOps(gauge?.type),
     ...(sideRank !== undefined ? [sideRank, nowRankOp(sideRank)] : []),
     ...beatorajaGenericRankOps(score),
     ...computeJudgeExistOps(score),

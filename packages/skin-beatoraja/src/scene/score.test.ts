@@ -300,6 +300,23 @@ describe('resolveBeatorajaPlayScoreOps', () => {
   });
 });
 
+it.each([
+  ['ASSIST-EASY', [42, 1046]],
+  ['EASY', [42, 1046]],
+  ['NORMAL', [42]],
+  ['HARD', [43]],
+  ['EX-HARD', [43, 1046]],
+  ['HAZARD', [43, 1046]],
+  ['CLASS', [43]],
+  ['EXCLASS', [43, 1046]],
+  ['EXHARDCLASS', [43, 1046]],
+] as const)('uses the actual %s gauge class for play frame ops', (type, expected) => {
+  for (const max of [100, 200]) {
+    const ops = resolveBeatorajaPlayScoreOps(SCORE, { current: 50, max, type });
+    expect(ops.filter((op) => [42, 43, 1046].includes(op))).toEqual(expected);
+  }
+});
+
 it('keeps note POOR, empty POOR and the combined miss readouts distinct', () => {
   const numbers = input({ score: { ...SCORE, bad: 2, poor: 3, emptyPoor: 7 } });
   expect([BEATORAJA_NUM.POOR, 420, 425, 426, 427].map((id) => resolveBeatorajaScoreNumber(id, numbers))).toEqual([
