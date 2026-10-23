@@ -271,6 +271,8 @@ export interface ReplayRulesetResult {
   /** Final combo eligibility when empty POOR can break combo; absent in legacy/count-only results. */
   fullCombo?: boolean;
   maxCombo: number;
+  /** LR2 mine hits included in judge.poor, excluded from the judged-note count. */
+  minePoor?: number;
   /** 200000-max money score where the ruleset defines one. */
   score?: number;
   /** IIDX DJ LEVEL label (`'AAA'`..`'F'`) where the ruleset defines one. */

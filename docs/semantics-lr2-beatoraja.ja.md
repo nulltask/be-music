@@ -58,7 +58,7 @@ LR2 と beatoraja は、同じ譜面、オプション、スキンの番号を�
 
 5. **LR2 ruleset の再現度のバグ。**
    - タップを前方へ再判定する連鎖は [#589](https://github.com/nulltask/be-music/issues/589) で修正。
-   - 地雷が遅い側も含む PGREAT の押下幅を使っている。LR2 は手前側だけの GREAT 幅で、当たると POOR として数え、BP に加わる。
+   - LR2beta3 の地雷判定幅・消費・POOR/BP 加算は [#590](https://github.com/nulltask/be-music/issues/590) で修正。
    - LR2 はゲージを調べる前に FULL COMBO を与える。
 
    (B)
@@ -139,7 +139,7 @@ flowchart TD
 | 10  | ゲージの float と double                                | B              | double                                             | `beatoraja` で `Math.fround`                                                          |
 | 11  | `#DEFEXRANK` の int 切り捨て（bea）                     | B              | 四捨五入                                           | `beatoraja` で `Math.trunc`                                                           |
 | 12  | LR2 の multi-BAD の連鎖                                 | B              | #589 で修正                                        | 前方への再判定の連鎖を維持                                                            |
-| 13  | LR2 の地雷の判定幅、遅い側、POOR の加算                 | B              | 両側 PGREAT、カウンターなし                        | `lr2` をバイナリに合わせる                                                            |
+| 13  | LR2 の地雷の判定幅、遅い側、POOR の加算                 | B              | #590 で修正                                        | LR2beta3 の挙動を維持                                                                 |
 | 14  | PMS の MissCondition.ONE / judgeVanish                  | B              | 未実装（既知の差として記載、judgeVanish は未記載） | PMS が重要になったら ruleset ごと                                                     |
 | 15  | プレイヤーの LN モード + 記録キー                       | A, B           | 譜面の `#LNMODE` だけ。キーに LN モードなし        | `beatoraja` でオプション化してログに残す。記録 / ランキングのキーに LN モード         |
 | 16  | ゲージの種類（EX-HARD、ASSIST、P/G.ATTACK）             | A, B           | LR2 系の 4 つの名前を対応付け                      | オプションに ruleset ごとのゲージ id                                                  |
@@ -295,9 +295,9 @@ flowchart TD
   - コース中でも 2 % の下限がかかるかは **(unverified in binary)** です。
 - **beatoraja:** 地雷が通過するときに押されているキーだけが起爆させます。ゲージが減るだけで、どのカウンターにも触れません（[play/JudgeManager.java#L244-L248](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L244-L248)）。
 - **種類:** セマンティクス（カウンター）+ パラメータ（判定幅）。
-- **be-music の現状:** `press-or-hold` は LR2 の history.txt 080114 に基づき両側に PGREAT の判定幅を使い、カウンターには触れません（[`core/judge-core-advance.ts`](../packages/player-engine/src/core/judge-core-advance.ts)）。
+- **be-music の現状:** [#590](https://github.com/nulltask/be-music/issues/590) で修正。LR2beta3 は早い側の GREAT 境界の手前の押下、押したままの通過、通過後の即時消費、被弾ごとの POOR/BP 1回加算を使います。コンボ切断や通常 POOR の追加ダメージは発生しません。`minePoor` で `poor` に含まれる地雷数を区別し、未判定ノートの BP も正しく数えます。beatoraja はゲージのみ、暫定 IIDX は従来のモデルを維持します。#141 の2008年の告知より beta3 本体を優先します。
 - **影響:** B。地雷のある譜面での `lr2` の BP と POOR、Leaderboard の BP。
-- **推奨:** `lr2` をバイナリに合わせる。入力はすでにログにあります。
+- **推奨:** beta3 の挙動を保ちます。既存の入力で再現でき、リビジョン 0 は維持します。過去の派生結果とベスト記録は明示的なオフライン再シミュレーション・再集計が必要です。本番データと未検証のコースゲージ下限は変更しません。
 
 ### PMS：ノートごとに空 POOR 1 回、消えない BAD
 

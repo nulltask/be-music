@@ -58,7 +58,7 @@ Top risks, most serious first:
 
 5. **LR2-ruleset fidelity bugs.**
    - The forward tap re-judge chain is fixed in [#589](https://github.com/nulltask/be-music/issues/589).
-   - Mines use a PGREAT press window with a late leg. LR2 uses a GREAT window ahead only, and a hit counts as a POOR, which adds to BP.
+   - The LR2beta3 mine window, retirement and POOR/BP accounting are fixed in [#590](https://github.com/nulltask/be-music/issues/590).
    - LR2 awards FULL COMBO before it checks the gauge.
 
    (B)
@@ -139,7 +139,7 @@ Most fixes below move a rule into the right box. The assist class and LR2 mine c
 | 10  | Gauge float vs double                               | B           | double                                                  | `Math.fround` under `beatoraja`                                        |
 | 11  | `#DEFEXRANK` int truncation (bea)                   | B           | Rounded                                                 | `Math.trunc` under `beatoraja`                                         |
 | 12  | LR2 multi-BAD chain                                 | B           | Fixed in #589                                           | Keep the forward re-judge chain                                        |
-| 13  | LR2 mine window, late leg, POOR count               | B           | PGREAT both sides, no counter                           | Switch `lr2` to the binary                                             |
+| 13  | LR2 mine window, late leg, POOR count               | B           | Fixed in #590                                           | Keep LR2beta3 behavior                                                 |
 | 14  | PMS MissCondition.ONE / judgeVanish                 | B           | Not modelled (documented gap, judgeVanish undocumented) | Per ruleset when PMS matters                                           |
 | 15  | Player LN mode + record key                         | A, B        | Chart `#LNMODE` only; key without LN mode               | Option under `beatoraja`, logged; LN mode in record / ranking key      |
 | 16  | Gauge line-up (EX-HARD, ASSIST, P/G.ATTACK)         | A, B        | 4 LR2-family names mapped                               | Ruleset-scoped gauge ids in the option                                 |
@@ -295,9 +295,9 @@ Already modelled per ruleset ([`packages/player-engine/src/ruleset/definitions.t
   - The 2 % floor also inside courses is **(unverified in binary)**.
 - **beatoraja:** only a key held down as the mine passes detonates it; it costs gauge only and touches no counter ([play/JudgeManager.java#L244-L248](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L244-L248)).
 - **Kind:** semantic (counter) + parameter (window).
-- **be-music today:** `press-or-hold` uses the PGREAT window on both sides, from LR2 history.txt 080114, and never touches counters ([`core/judge-core-advance.ts`](../packages/player-engine/src/core/judge-core-advance.ts)).
+- **be-music today:** fixed in [#590](https://github.com/nulltask/be-music/issues/590). LR2beta3 uses strict ahead-only GREAT on key-down, held crossing, immediate retirement after crossing, and one POOR/BP per hit without breaking combo or adding ordinary POOR damage. `minePoor` identifies hits already included in `poor` so unjudged-note BP stays correct. beatoraja stays gauge-only; the provisional IIDX model remains unchanged. The beta3 executable supersedes the original 2008 announcement used by #141.
 - **Impact:** B. `lr2` BP and POOR on mine charts, and the Leaderboard BP.
-- **Recommendation:** switch `lr2` to the binary. The inputs are already logged.
+- **Recommendation:** keep the beta3 behavior. Existing inputs suffice; revision 0 is retained. Historical derived results and best records require an explicit offline re-simulation/rebuild. No production data or unverified course gauge floor is changed.
 
 ### PMS: one empty POOR per note, and BAD that does not vanish
 
