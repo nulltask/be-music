@@ -11,6 +11,7 @@ import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player-engine/displa
 import { Texture } from 'pixi.js';
 import {
   buildSkinBGAFrame,
+  isMissLayerShown,
   pickActiveBGAKey,
   resolveBGAImageRect,
   resolveBGAStacks as resolveBGAStacksOf,
@@ -79,9 +80,9 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
   // is fine in practice: the LR2 default skin uses identical flags on every rect, and a future skin that mixes them
   // per-rect would still get a consistent global playback state from this single sync point.
   const controllingBGA = visibleBGAs[0]!;
-  const poorWindowMs = DEFAULT_POOR_BGA_DISPLAY_SECONDS * 1000;
   const inPoorWindow =
-    !controllingBGA.noPoor && ctx.play.lastPoorAt > 0 && ctx.play.playClock() - ctx.play.lastPoorAt < poorWindowMs;
+    !controllingBGA.noPoor &&
+    isMissLayerShown(ctx.play.lastPoorAt / 1000, ctx.play.playClock() / 1000, DEFAULT_POOR_BGA_DISPLAY_SECONDS);
   // A stitched NONSTOP chart shows one BGA stack per stage, crossfading at the seams; any other chart one stack.
   const stacks = resolveBGAStacks(
     ctx,

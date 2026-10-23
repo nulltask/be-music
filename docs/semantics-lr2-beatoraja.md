@@ -624,6 +624,7 @@ Already per ruleset: LR2 death border and guts, the LR2 DEATH table (**fixed in 
 - **be-music today:**
   - A superset: `04` < `07` < `0A`, black keyed.
   - `#POORBGA 0` keeps BMP00 (**fixed in [#561](https://github.com/nulltask/be-music/issues/561)**).
+  - Shared built-in/LR2 POOR images use the pause-aware millisecond play clock, including empty POOR commands. A miss at clock zero is valid; inactive, future and expired stamps do not display (**fixed in [#680](https://github.com/nulltask/be-music/issues/680)**). Beatoraja keeps its separate chart-time miss layer.
   - The beatoraja miss layer is timed and drawn over the base (**fixed in [#562](https://github.com/nulltask/be-music/issues/562)**).
   - `BGA_CYCLE` lacks NO MISS.
 - **Impact:** C.

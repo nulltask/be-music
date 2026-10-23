@@ -175,6 +175,15 @@ afterEach(() => {
 });
 
 describe('the play state of a built-in / LR2 play, fed from the engine', () => {
+  test('an empty POOR stamps the pause-aware millisecond clock even when chart time differs', () => {
+    const play = createPlay({ total: 4 });
+    // At tempo 2, chart second 10 is not play-clock millisecond 10. A queued command has no judgment overwrite.
+    play.step(10, {}, [], [{ kind: 'trigger-poor-bga', seconds: 20 }]);
+    expect(play.ctx.lastPoorAt).toBe(10000);
+    play.step(10.2, {}, [], [{ kind: 'clear-poor-bga' }]);
+    expect(play.ctx.lastPoorAt).toBe(-Number.POSITIVE_INFINITY);
+  });
+
   test('frames, judgments and empty POORs reach one PlayState', () => {
     const play = createPlay({ total: 4 });
     play.step(1, { exScore: 2, gauge: 22 }, [{ judge: 'PERFECT', combo: 1, channel: '11', deltaMs: -3 }]);

@@ -209,9 +209,9 @@ export function resolveNonstopBGAAlpha(stage: NonstopBGAStage, seconds: number):
 }
 
 /**
- * Whether beatoraja's miss layer shows at `seconds`: from the last miss (`missSeconds`, chart seconds) for
+ * Whether a miss layer shows at `seconds`: from the last miss (`missSeconds`, on the same second clock) for
  * `durationSeconds`, whatever is judged in between, as `BGAProcessor.drawBGA` draws it for `misslayerDuration` ms from
- * `misslayertime`. A later miss restarts the window.
+ * `misslayertime`. The shared built-in/LR2 renderer supplies pause-aware elapsed seconds. A later miss restarts the window.
  */
 export function isMissLayerShown(missSeconds: number | undefined, seconds: number, durationSeconds: number): boolean {
   return missSeconds !== undefined && seconds >= missSeconds && seconds - missSeconds < durationSeconds;
