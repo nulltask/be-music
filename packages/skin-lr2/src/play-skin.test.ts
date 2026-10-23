@@ -234,11 +234,13 @@ describe('loadLR2ThemeSkinsFromFiles progress events', () => {
     };
     const jingles = [
       file('LR2files/Sound/lr2/clear.wav'),
+      file('LR2files/Sound/lr2/playstop.wav'),
       file('LR2files/Sound/lr2/fail.wav'),
       file('LR2files/Sound/lr2/course_clear.wav'),
       file('LR2files/Sound/lr2/course_fail.wav'),
     ];
     const withoutSet = await loadLR2ThemeSkinsFromFiles(jingles);
+    expect(withoutSet.systemSounds.playStop?.path).toBe('LR2files/Sound/lr2/playstop.wav');
     expect(withoutSet.courseClearBGM?.path).toBe('LR2files/Sound/lr2/course_clear.wav');
     expect(withoutSet.courseFailBGM?.path).toBe('LR2files/Sound/lr2/course_fail.wav');
     const withSet = await loadLR2ThemeSkinsFromFiles([
@@ -247,10 +249,11 @@ describe('loadLR2ThemeSkinsFromFiles progress events', () => {
       file('LR2files/Sound/my/click.wav'),
       file(
         'LR2files/Sound/lr2.lr2ss',
-        '#COURSECLEAR,LR2files\\Sound\\my\\win.wav,\n#SCRATCH,LR2files\\Sound\\my\\click.wav,',
+        '#STOP,LR2files\\Sound\\my\\click.wav,\n#COURSECLEAR,LR2files\\Sound\\my\\win.wav,\n#SCRATCH,LR2files\\Sound\\my\\click.wav,',
       ),
     ]);
     expect(withSet.courseClearBGM?.path).toBe('LR2files/Sound/my/win.ogg');
+    expect(withSet.systemSounds.playStop?.path).toBe('LR2files/Sound/my/click.wav');
     expect(withSet.systemSounds.cursorMove?.path).toBe('LR2files/Sound/my/click.wav');
     // Commands the set leaves out keep the stem lookup.
     expect(withSet.courseFailBGM?.path).toBe('LR2files/Sound/lr2/course_fail.wav');

@@ -8,6 +8,7 @@
  */
 
 import {
+  resolvePoorBGAMode,
   parseBMSSwBGA,
   resolveChart,
   resolveChartReferenceBPM,
@@ -144,6 +145,7 @@ export interface PlayChartContext {
   timingResolver: TimingResolver | undefined;
   nonstopBGATimelines: NonstopStageBGATimeline[] | undefined;
   bgaTimeline: { base: BGACue[]; layer: BGACue[]; poor: BGACue[] };
+  poorBGAMode: 0 | 1 | 2;
   poorBGAFallbackKey: string | undefined;
   poorBGAFallbackUntilSeconds: number;
   hasBGA: boolean;
@@ -382,6 +384,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // BMS spec — when `#BMP00` exists (and `#POORBGA` is not 2), BMP00 becomes the implicit POOR placeholder until an
   // explicit `#xxx06` cue fires. Mirrors the TUI BGA renderer's `poorFallbackKey` so the web side stops showing a
   // black POOR plate on misses for charts that rely on this convention.
+  ctx.poorBGAMode = resolvePoorBGAMode(resolved.bms.poorBGA);
   ctx.poorBGAFallbackKey = resolvePoorBGAFallbackKey(resolved);
   ctx.poorBGAFallbackUntilSeconds = ctx.bgaTimeline.poor[0]?.seconds ?? Number.POSITIVE_INFINITY;
   ctx.hasBGA = ctx.bgaTimeline.base.length > 0 || ctx.bgaTimeline.layer.length > 0 || ctx.bgaTimeline.poor.length > 0;

@@ -126,6 +126,7 @@ export interface ActiveBGAKeys {
   layer: string | undefined;
   /** Set only while a POOR is being shown. */
   poor: string | undefined;
+  poorOverlays?: boolean;
 }
 
 /**
@@ -135,7 +136,7 @@ export interface ActiveBGAKeys {
 export function buildSkinBGAFrame<Image>(
   keys: ActiveBGAKeys,
   resolve: (key: string, track: 'base' | 'layer') => Image | undefined,
-): { base?: Image; layer?: Image; poor?: Image; poorActive: boolean } {
+): { base?: Image; layer?: Image; poor?: Image; poorActive: boolean; poorOverlays?: boolean } {
   const base = keys.base !== undefined ? resolve(keys.base, 'base') : undefined;
   const layer = keys.layer !== undefined ? resolve(keys.layer, 'layer') : undefined;
   // POOR images decode like the base (no chroma key), so they live in the base map.
@@ -145,11 +146,13 @@ export function buildSkinBGAFrame<Image>(
     ...(layer !== undefined ? { layer } : {}),
     ...(poor !== undefined ? { poor } : {}),
     poorActive: poor !== undefined,
+    ...(keys.poorOverlays ? { poorOverlays: true } : {}),
   };
 }
 
 /** One stage of a stitched NONSTOP chart as its BGA needs it (`NonstopStitchStage` from `@be-music/player-engine/course`). */
 export interface NonstopBGAStage {
+  poorBGAMode?: 0 | 1 | 2;
   windowStart: number;
   windowEnd: number;
   bmpKeys: readonly string[];
@@ -219,6 +222,7 @@ export function isMissLayerShown(missSeconds: number | undefined, seconds: numbe
 
 /** One BGA stack to draw: its base and layer cues (and a POOR image in place of them) at `alpha`. */
 export interface BGAStack {
+  poorOverlays?: boolean;
   alpha: number;
   baseCue: BGACue | undefined;
   layerCue: BGACue | undefined;
@@ -228,6 +232,7 @@ export interface BGAStack {
 
 /** What {@link resolveBGAStacks} reads: the chart's cues, a stitched NONSTOP chart's stages and the BGA rect's flags. */
 export interface BGAStacksInput {
+  poorBGAMode?: 0 | 1 | 2;
   /** The chart's cues; its POOR cues, when given, are picked during a POOR. */
   timeline: { base: readonly BGACue[]; layer: readonly BGACue[]; poor?: readonly BGACue[] };
   /** A stitched NONSTOP chart's stages and their own cues (`splitNonstopBGATimeline`), in stage order. */
@@ -250,17 +255,21 @@ export function resolveBGAStacks(input: BGAStacksInput): BGAStack[] {
   const pick = (
     timeline: { base: readonly BGACue[]; layer: readonly BGACue[]; poor?: readonly BGACue[] },
     alpha: number,
+    mode: 0 | 1 | 2 = 0,
   ): BGAStack => ({
     alpha,
     baseCue: input.noBase ? undefined : pickActiveBGACue(timeline.base, seconds),
     layerCue: input.noLayer ? undefined : pickActiveBGACue(timeline.layer, seconds),
-    ...(input.inPoorWindow && timeline.poor !== undefined ? { poorKey: pickActiveBGAKey(timeline.poor, seconds) } : {}),
+    ...(mode === 1 ? { poorOverlays: true } : {}),
+    ...(input.inPoorWindow && mode !== 2 && timeline.poor !== undefined
+      ? { poorKey: pickActiveBGAKey(timeline.poor, seconds) }
+      : {}),
   });
   const nonstop = input.nonstop;
-  if (nonstop === undefined) return [pick(input.timeline, 1)];
+  if (nonstop === undefined) return [pick(input.timeline, 1, input.poorBGAMode)];
   return nonstop.stages.flatMap((stage, index) => {
     const timeline = nonstop.timelines[index];
     const alpha = resolveNonstopBGAAlpha(stage, seconds);
-    return timeline !== undefined && alpha > 0 ? [pick(timeline, alpha)] : [];
+    return timeline !== undefined && alpha > 0 ? [pick(timeline, alpha, stage.poorBGAMode)] : [];
   });
 }

@@ -1,4 +1,4 @@
-import { resolveChart, type ResolvedChart } from '@be-music/chart-model';
+import { resolvePoorBGAMode, type PoorBGAMode, resolveChart, type ResolvedChart } from '@be-music/chart-model';
 import {
   createEmptyJSON,
   normalizeChannel,
@@ -70,6 +70,8 @@ export interface NonstopStitchStage {
    */
   wavKeys: string[];
   bmpKeys: string[];
+  /** This stage’s miss-image mode; omitted means replacement. */
+  poorBGAMode?: PoorBGAMode;
   /** Fades of the stage's background sound (LR2 fades the stage BGM channel; keysounds play at full level). */
   soundFadeIn?: NonstopFade;
   soundFadeOut?: NonstopFade;
@@ -336,6 +338,9 @@ export function stitchNonstopCourse(
           windowEnd: windows[index]!.end,
           wavKeys: stageWAV[index]!,
           bmpKeys: stageBMP[index]!,
+          ...(resolvePoorBGAMode(stages[index]!.chart.bms.poorBGA) !== 0
+            ? { poorBGAMode: resolvePoorBGAMode(stages[index]!.chart.bms.poorBGA) }
+            : {}),
           ...(fadeOut !== undefined ? { soundFadeOut: { start: boundary, end: boundary + fadeOut } } : {}),
           ...(fadeIn !== undefined ? { soundFadeIn: { start: previousBoundary - fadeIn, end: previousBoundary } } : {}),
           ...(after !== undefined ? { bgaFadeOut: { start: boundary, end: boundary + BGA_FADE_SECONDS } } : {}),

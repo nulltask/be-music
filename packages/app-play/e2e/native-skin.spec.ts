@@ -84,3 +84,48 @@ test('native collection fits a portrait screen and waits for IME composition to 
   expect(await screen.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   await demo.page.screenshot({ path: info.outputPath('native-portrait.png') });
 });
+
+test('Native BGA canvases replace, overlay and hide POOR frames', async ({ demo }, info) => {
+  await openWithLibrary(demo, { 'be-music-demo.built-in-skin': 'native' });
+  const samples = await demo.page.evaluate(async () => {
+    await customElements.whenDefined('be-music-bga');
+    const image = (color: string, half = false) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 256;
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = color;
+      ctx.fillRect(half ? 128 : 0, 0, half ? 128 : 256, 256);
+      return canvas;
+    };
+    const bga = document.createElement('be-music-bga');
+    bga.style.cssText = 'position:fixed;inset:0 auto auto 0;width:256px;height:256px;z-index:99999';
+    bga.rect = { x: 0, y: 0, w: 256, h: 256 };
+    document.body.append(bga);
+    const base = image('red'),
+      poor = image('lime', true);
+    const samples = [];
+    for (const mode of [0, 1, 2]) {
+      bga.data = {
+        shown: true,
+        frame: { base, poor: mode === 2 ? undefined : poor, poorActive: mode !== 2, poorOverlays: mode === 1 },
+      };
+      await bga.updateComplete;
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      const canvas = bga.shadowRoot!.querySelector('canvas')!;
+      const ctx = canvas.getContext('2d')!;
+      const rgb = (x: number) =>
+        Array.from(ctx.getImageData(Math.floor(canvas.width * x), Math.floor(canvas.height / 2), 1, 1).data).slice(
+          0,
+          3,
+        );
+      samples.push({ mode, left: rgb(0.25), right: rgb(0.75) });
+    }
+    return samples;
+  });
+  expect(samples).toEqual([
+    { mode: 0, left: [0, 0, 0], right: [0, 255, 0] },
+    { mode: 1, left: [255, 0, 0], right: [0, 255, 0] },
+    { mode: 2, left: [255, 0, 0], right: [255, 0, 0] },
+  ]);
+  await demo.page.screenshot({ path: info.outputPath('native-bga-hidden.png') });
+});

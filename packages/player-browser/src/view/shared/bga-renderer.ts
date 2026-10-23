@@ -12,7 +12,6 @@ import { Texture } from 'pixi.js';
 import {
   buildSkinBGAFrame,
   isMissLayerShown,
-  pickActiveBGAKey,
   resolveBGAImageRect,
   resolveBGAStacks as resolveBGAStacksOf,
   type BGACue,
@@ -81,6 +80,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
   // per-rect would still get a consistent global playback state from this single sync point.
   const controllingBGA = visibleBGAs[0]!;
   const inPoorWindow =
+    (ctx.options.nonstop !== undefined || ctx.play.poorBGAMode !== 2) &&
     !controllingBGA.noPoor &&
     isMissLayerShown(ctx.play.lastPoorAt / 1000, ctx.play.playClock() / 1000, DEFAULT_POOR_BGA_DISPLAY_SECONDS);
   // A stitched NONSTOP chart shows one BGA stack per stage, crossfading at the seams; any other chart one stack.
@@ -101,7 +101,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
   const layerKey = layerCue?.bmpKey;
   let poorKey = ctx.play.nonstopBGATimelines !== undefined ? leading?.poorKey : undefined;
   if (inPoorWindow && ctx.play.nonstopBGATimelines === undefined) {
-    poorKey = pickActiveBGAKey(ctx.play.bgaTimeline.poor, cueSeconds);
+    poorKey = leading?.poorKey;
   }
   // BMP00 fallback: when no explicit POOR cue is active but the chart has a `#BMP00` (and no `#POORBGA 2`),
   // paint BMP00 during the miss window. Capped at the first authored POOR cue's chart-time so a chart that does
@@ -127,6 +127,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
           base: baseKey !== undefined ? resolveBGAFrameKey(ctx, baseKey, baseCue?.seconds, seconds) : undefined,
           layer: layerKey !== undefined ? resolveBGAFrameKey(ctx, layerKey, layerCue?.seconds, seconds) : undefined,
           poor: poorKey,
+          poorOverlays: leading?.poorOverlays,
         },
         (key, track) =>
           resolveSkinBGAImage(ctx, (track === 'layer' ? ctx.play.bgaLayerTextures : ctx.play.bgaTextures).get(key)),
@@ -144,6 +145,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
       layerName: 'base' | 'layer' | 'poor',
       cueSeconds: number | undefined,
       alpha = 1,
+      overlay = false,
     ): void => {
       if (!key) return;
       const resolvedKey = resolveBGAFrameKey(ctx, key, cueSeconds, seconds);
@@ -160,7 +162,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
             bga,
             ctx.play.bgaSubRegionOrigins.get(resolvedKey),
           );
-      if (layerName !== 'layer' && (placed.w < bga.w || placed.h < bga.h)) {
+      if (layerName !== 'layer' && !overlay && (placed.w < bga.w || placed.h < bga.h)) {
         // The base canvas around a small image is black (a 1x1 black BMP blanks the BGA in LR2 and beatoraja), so
         // fill the rect before drawing the image; the layer track's canvas stays transparent.
         const backdrop = ctx.bgaLayerPool.acquireSprite();
@@ -204,7 +206,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
       }
     };
     for (const stack of stacks) {
-      if (stack.poorKey) {
+      if (stack.poorKey && !stack.poorOverlays) {
         // POOR uses base-mode decoding (no chroma key) since it replaces the stack's base+layer composite during its
         // window. POOR has no per-cue origin time we can hand to `drawLayer` for `#SWBGAxx` frame timing; chart
         // authors don't typically pair POOR with switching BGA, and a static frame is the safer fallback.
@@ -217,6 +219,8 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
       // Layer track is composited on top with black→transparent so the base track shows through where the
       // foreground BMP is empty.
       drawLayer(stack.layerCue?.bmpKey, ctx.play.bgaLayerTextures, 'layer', stack.layerCue?.seconds, stack.alpha);
+      if (stack.poorKey && stack.poorOverlays)
+        drawLayer(stack.poorKey, ctx.play.bgaTextures, 'poor', undefined, stack.alpha, true);
     }
   }
   ctx.bgaLayerPool.end();
@@ -236,7 +240,8 @@ function resolveBGAStacks(
   const stages = ctx.options.nonstop?.stages;
   const timelines = ctx.play.nonstopBGATimelines;
   return resolveBGAStacksOf({
-    timeline: { base: ctx.play.bgaTimeline.base, layer: ctx.play.bgaTimeline.layer },
+    timeline: ctx.play.bgaTimeline,
+    poorBGAMode: ctx.play.poorBGAMode,
     nonstop: stages !== undefined && timelines !== undefined ? { stages, timelines } : undefined,
     seconds: cueSeconds,
     noBase,

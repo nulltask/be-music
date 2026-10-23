@@ -81,6 +81,7 @@ export class LR2ThemeService {
    * (`selectSoundSet`).
    */
   private systemSoundBundle: {
+    playStop?: Uint8Array;
     cursorMove?: Uint8Array;
     folderOpen?: Uint8Array;
     folderClose?: Uint8Array;
@@ -186,6 +187,7 @@ export class LR2ThemeService {
     this.courseClearBGMBytes = loadedTheme.courseClearBGM?.bytes;
     this.courseFailBGMBytes = loadedTheme.courseFailBGM?.bytes;
     this.systemSoundBundle = {
+      playStop: loadedTheme.systemSounds.playStop?.bytes,
       cursorMove: loadedTheme.systemSounds.cursorMove?.bytes,
       folderOpen: loadedTheme.systemSounds.folderOpen?.bytes,
       folderClose: loadedTheme.systemSounds.folderClose?.bytes,
@@ -230,6 +232,7 @@ export class LR2ThemeService {
     };
     add('selectBGM', this.selectBGMBytes);
     add('decideBGM', this.decideBGMBytes);
+    add('playStop', this.systemSoundBundle.playStop);
     add('cursor', this.systemSoundBundle.cursorMove);
     add('folderOpen', this.systemSoundBundle.folderOpen);
     add('folderClose', this.systemSoundBundle.folderClose);

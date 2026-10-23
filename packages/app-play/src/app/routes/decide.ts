@@ -38,6 +38,8 @@ interface DecidePlayOverrides {
 export interface DecideContinuation {
   start: () => Promise<void>;
   cancel?: () => void;
+  /** The decide screen mounted, or a direct play loaded successfully. */
+  shown?: () => void;
 }
 
 /** The family a play's status line names: the beatoraja play's; the built-in and LR2 plays name none. */
@@ -177,6 +179,7 @@ export class DecideRoute {
       // No decide splash: a be-music skin without one, an LR2-only setup that didn't ship a decide skin, or a beatoraja
       // theme without a decide skin (or one that failed to load). The select screen's decide jingle still plays.
       await start();
+      then?.shown?.();
       return;
     }
     // One navigation from here into the play: the play loading behind the splash, the splash and the play share it. A
@@ -233,6 +236,7 @@ export class DecideRoute {
       preload = { options, play: this.preloadGameplay(chartEntry, options, token) };
     }
     const shown = await this.router.show(decide, { role: 'decide', token });
+    if (shown) then?.shown?.();
     if (shown && kit.family === 'beatoraja') this.setStatus(`Decide (beatoraja): ${chartEntry.title}`);
   }
 
