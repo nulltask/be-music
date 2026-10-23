@@ -204,7 +204,7 @@ export class BeatorajaResultView implements ResultView {
     if (host === undefined || this.disposed) return;
     this.stage.fitTo(host);
     const reading = this.readingOf(frame);
-    const timers = resolveBeatorajaSceneTimers(frame, 'entry');
+    const timers = resolveBeatorajaSceneTimers(frame, 'entry', 'result');
     const skinSounds = this.options.skinSounds;
     this.stage.view.update({
       activeOps: this.opsOf(reading),

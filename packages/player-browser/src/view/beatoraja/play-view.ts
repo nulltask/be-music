@@ -91,7 +91,7 @@ const BEATORAJA_REPLAY_VIEW: PlayReplayViewScale = { scale: BEATORAJA_HI_SPEED_S
 
 /** The skin's input/loading offsets and its READY interval; omitted beatoraja timings default to zero. */
 export function resolveBeatorajaPlayTiming(
-  skin: Pick<BeatorajaSkin, 'fadeout' | 'close' | 'input' | 'loadstart' | 'loadend' | 'playstart'>,
+  skin: Pick<BeatorajaSkin, 'fadeout' | 'close' | 'input' | 'loadstart' | 'loadend' | 'playstart' | 'finishmargin'>,
 ): PlayViewTiming {
   const duration = (value: number | undefined) =>
     typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
@@ -102,6 +102,8 @@ export function resolveBeatorajaPlayTiming(
     loadEndOffsetMs,
     playStartOffsetMs: loadEndOffsetMs + playStartAfterLoadEndMs,
     playStartAfterLoadEndMs,
+    musicEndDelayMs: 5000,
+    finishMarginMs: duration(skin.finishmargin),
     fadeOutMs: resolveBeatorajaFadeOutMs(skin.fadeout),
     closeMs: duration(skin.close),
   };
@@ -426,6 +428,8 @@ export class BeatorajaPlayView implements PlayView {
       ...withEngine(this.engineInput()),
       ...(play.judgeWindows !== undefined ? { judgeWindows: play.judgeWindows } : {}),
       events: frame.events,
+      exiting: play.exiting,
+      scoreTargets: frame.scoreTargets,
     });
     // The notes stand at the chart's start from READY until the engine's first frame, as the engine's lead-in held them.
     const engineFrame = play.engineFrame;
@@ -457,6 +461,8 @@ export class BeatorajaPlayView implements PlayView {
         totalSeconds,
         ...(frame.reversalSeconds !== undefined ? { reversalSeconds: frame.reversalSeconds } : {}),
         summary: frame.summary,
+        hcnLanes: frame.hcnLanes,
+        judgedNoteCount: frame.judgedNoteCount,
       };
     }
     if (!this.loaded) return undefined;

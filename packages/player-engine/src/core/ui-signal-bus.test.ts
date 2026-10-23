@@ -74,16 +74,22 @@ describe('player ui signal bus', () => {
       currentSeconds: 6,
       displayBeat: 4,
       reversalSeconds: 4,
+      hcnLanes: [{ channel: '11', gaining: false }],
+      judgedNoteCount: 3,
       totalSeconds: 10,
       summary,
       notes: [],
     });
     expect(uiBus.getFrame().displayBeat).toBe(4);
+    expect(uiBus.getFrame().hcnLanes).toEqual([{ channel: '11', gaining: false }]);
+    expect(uiBus.getFrame().judgedNoteCount).toBe(3);
     expect(uiBus.getFrame().reversalSeconds).toBe(4);
 
     // The fields are per-frame: a frame published without them clears the previous ones.
     uiBus.publishFrame({ currentBeat: 13, currentSeconds: 6.5, totalSeconds: 10, summary, notes: [] });
     expect(uiBus.getFrame().displayBeat).toBeUndefined();
+    expect(uiBus.getFrame().hcnLanes).toBeUndefined();
+    expect(uiBus.getFrame().judgedNoteCount).toBeUndefined();
     expect(uiBus.getFrame().reversalSeconds).toBeUndefined();
   });
 

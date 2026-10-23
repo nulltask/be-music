@@ -416,6 +416,8 @@ describe('createPlayScene with a beatoraja kit', () => {
       loadEndOffsetMs: 0,
       playStartOffsetMs: 0,
       playStartAfterLoadEndMs: 0,
+      musicEndDelayMs: 5000,
+      finishMarginMs: 0,
       fadeOutMs: 300,
       closeMs: 0,
     });

@@ -100,6 +100,21 @@ describe('resolveBeatorajaSceneTimers', () => {
     expect(timers.has(TIMER_FADEOUT)).toBe(false);
   });
 
+  it('starts supported JSON/Lua result graph and score-update timers at entry, independently of input', () => {
+    const timers = resolveBeatorajaSceneTimers({ clock, inputOpenAtMs: 1500 }, 'entry', 'result');
+    expect(timers.get(150)).toBe(0);
+    expect(timers.get(151)).toBe(0);
+    expect(timers.get(152)).toBe(0);
+    expect(resolveBeatorajaSceneTimers({ clock, inputOpenAtMs: 1500 }, 'input').has(150)).toBe(false);
+    const next = resolveBeatorajaSceneTimers(
+      { clock: { enteredAtMs: 9000, nowMs: 9100 }, inputOpenAtMs: 9500 },
+      'entry',
+      'result',
+    );
+    expect(next.get(150)).toBe(0);
+    expect(next.get(152)).toBe(0);
+  });
+
   it('starts READY and PLAY at the entry, and the fade-out once the screen leaves', () => {
     const timers = resolveBeatorajaSceneTimers({ clock, inputOpenAtMs: 1500, leaving: { atMs: 1800 } }, 'entry');
     expect(timers.get(TIMER_READY)).toBe(0);

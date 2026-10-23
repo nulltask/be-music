@@ -104,6 +104,7 @@ export interface PlaySceneOptions extends SessionSceneOptions {
   readonly audio: AudioService;
   /** The play options as the select screen set them, for the frames a view reads. Defaults to `DEFAULT_PLAY_OPTIONS`. */
   readonly playOptions?: PlayOptions;
+  readonly scoreTargets?: PlayFrame['scoreTargets'];
   /**
    * The host the scene will show on. With it the scene builds its layers as it loads, so the BGA uploads to the GPU
    * behind a decide screen instead of on its first cue.
@@ -479,6 +480,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
     chart: options.chart,
     ...(course?.view !== undefined ? { course: course.view } : {}),
     playOptions: options.playOptions ?? DEFAULT_PLAY_OPTIONS,
+    ...(options.scoreTargets !== undefined ? { scoreTargets: options.scoreTargets } : {}),
     audio: options.audio,
   });
   family = createPlayView(kit, play, options, sceneSession);

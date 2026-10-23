@@ -67,7 +67,7 @@ Top risks, most serious first:
 7. **beatoraja play timing (fixed in #595).** Input and READY use the skin timings; PLAY starts with the chart after the READY interval and follows chart time. (A)
 8. **beatoraja skin state is unwired or LR2-shaped.**
    - Lua `event_index`, `set_timer` and custom timers are fixed in #596.
-   - Result timers 150-152, score timers 348-352, HCN, PM-chara and custom timers are never set.
+   - Result, score, HCN and PM-chara timers are fixed in #597; custom timers are fixed in #596.
    - GAUGE_MAX never switches off.
    - MISS (420) shows POOR, and empty POOR is dropped.
    - Op 42 is always lit, and 43 / 1046 never light.
@@ -173,9 +173,9 @@ Most fixes below move a rule into the right box. The assist class and LR2 mine c
 | 43  | DST offset columns 21+                              | A           | LR2 op4 only                                            | Accept 3/4/5/10                                                        |
 | 44  | beatoraja CSV-dialect commands                      | A           | Not parsed                                              | Optional dialect support                                               |
 | 45  | `#SRC_BAR_LAMP` index meaning                       | A           | LR2                                                     | Switch on detected beatoraja dialect                                   |
-| 46  | TIMER_PLAY / `skin.playstart`                       | A           | Load end + 1.5 s                                        | Stamp at chart start                                                   |
+| 46  | TIMER_PLAY / `skin.playstart`                       | A           | Fixed in #595                                           | Stamp at chart start                                                   |
 | 47  | GAUGE_MAX timer switch                              | A, C        | Never stops (bug)                                       | Start/stop                                                             |
-| 48  | beatoraja-only timers                               | A           | Not driven                                              | Add to mapping                                                         |
+| 48  | beatoraja-only timers                               | A           | Fixed in #597                                           | Drive result, score, HCN and character timers                          |
 | 49  | Lua `event_index` / `set_timer`                     | A           | fixed in #596                                           | Wire                                                                   |
 | 50  | MISS vs POOR numbers                                | A, C        | 420 = POOR (bug)                                        | Use emptyPoor                                                          |
 | 51  | Gauge ops 42/43/1046                                | A, C        | 42 always (bug)                                         | Derive from gauge type                                                 |
@@ -788,17 +788,24 @@ Overall shape: two separate state mappings. LR2 CSV skins get LR2 vocabulary ([`
 - **Impact:** A/C. Gauge-max effects stay on after the gauge drops.
 - **Recommendation:** start the timer on reaching max and stop it on leaving.
 
-### beatoraja-only timers never driven
+### beatoraja-only animation timers (fixed in #597)
 
-- **beatoraja:**
-  - Score timers 348-352 ([SkinProperty.java#L49-L53](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/SkinProperty.java#L49-L53), [BMSPlayer.java#L1033-L1037](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L1033-L1037)).
-  - HCN active/damage timers 250-289 and 1800-2110.
-  - PM chara 900-909, and MUSIC_END 908.
-  - Result timers 150/151/152 ([result/MusicResult.java#L160-L167](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/result/MusicResult.java#L160-L167)).
-  - Custom timers 10000-19999 (fixed in #596).
-- **be-music today:** no producers. Result timers are only 0/1/2/40/41 ([`packages/player-browser/src/view/beatoraja/scene-frame.ts`](../packages/player-browser/src/view/beatoraja/scene-frame.ts)).
-- **Impact:** A. Elements gated on these timers never draw.
-- **Recommendation:** add them to the beatoraja mapping as data. They are deterministic.
+- **Sources:** [score timers](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L1031-L1039), [HCN active/damage](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L288-L340), [POMYU character state](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/PomyuCharaProcessor.java), [result timers](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/result/MusicResult.java#L160-L167).
+- **be-music today:** fixed in [#597](https://github.com/nulltask/be-music/issues/597). The scene mapping returns deterministic start/stop changes; a continuously true condition preserves its timer start.
+
+| Timers                    | Inputs and transitions                                                                                                                                                                                                                   |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Result 150–152            | Start at result entry. Supported JSON/Lua skins leave upstream `ranktime` at zero; LR2's result steps stay separate.                                                                                                                     |
+| Score 348–350             | After a judgment, EX score reaches 18/27, 21/27 or 24/27 of the entire chart maximum (A, AA, AAA).                                                                                                                                       |
+| Score 351–352             | After a judgment, EX score reaches the host's personal best or target, inclusively; absent targets default to zero. The demo supplies the chart's best EX score.                                                                         |
+| HCN 250–289 / 1810–2199   | Use authoritative judge lane state: active while gaining, damage while losing, off before a judged passing head and after its tail. Manual, AUTO, replay, AUTO SCRATCH and seeks share the same engine state.                            |
+| Character 900–907         | Begin neutral. At the authored neutral-motion boundary, choose the latest judgment's reaction; return to neutral after the reaction's duration. 2P is the opponent and reacts inversely.                                                 |
+| Dance 909 / music end 908 | Dance while playing. The session raises music end after the last note (AUTO: the prepared chart's last event) plus five chart seconds; 908 starts and character/dance timers stop. The skin's `finishmargin` then holds before fade-out. |
+
+- **Clock ownership:** the existing engine loop drives the music-end gate, so pause, tempo changes and seeks keep chart-time meaning. A seek/dispose cancels the old gate and finish-margin timeout. No second judge or playback loop is introduced. The finish margin uses scene time.
+- **Character-pack boundary:** the pure character resolver accepts eight motion durations and uses upstream's 1 ms defaults when no pack supplies them. The existing POMYU pack renderer remains static; adding pack parsing and animation is separate from these timer producers.
+- **Custom timers:** IDs 10000–19999 and synchronous Lua writes are fixed separately in [#596](https://github.com/nulltask/be-music/issues/596).
+- **Records:** no judgment or scoring rule changes. New beatoraja plays use the corrected ending interval, so the recorded end time can change; historical results need no re-simulation.
 
 ### Lua `main_state` coverage (option indices and custom timers fixed in #596)
 

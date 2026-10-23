@@ -277,7 +277,14 @@ export interface PlayfieldNote {
  */
 export type PlayViewEvent =
   | {
-      readonly kind: 'scene-start' | 'input-start' | 'load-end' | 'play-start' | 'exit-fade-out' | 'exit-close';
+      readonly kind:
+        | 'scene-start'
+        | 'input-start'
+        | 'load-end'
+        | 'play-start'
+        | 'music-end'
+        | 'exit-fade-out'
+        | 'exit-close';
       readonly atMs: number;
     }
   | {
@@ -341,6 +348,8 @@ export interface PlayFrame {
   readonly playOptions: PlayOptions;
   /** The running play: gauge, score, combo, judgments, hi-speed and lane covers. */
   readonly state: PlayState;
+  /** Optional personal best and target EX scores for skin comparison animations; missing values mean zero. */
+  readonly scoreTargets?: { readonly bestEXScore?: number; readonly targetEXScore?: number };
   readonly stage: PlayStage;
   /** How far the play has loaded, 0..1, while loading. */
   readonly progress?: number;
@@ -412,6 +421,10 @@ export interface PlayViewTiming {
   readonly fadeOutMs: number;
   /** The hold after the fade before the scene moves on; `0` skips it. */
   readonly closeMs: number;
+  /** Optional chart-time delay after the last note/event before the music-end stage. */
+  readonly musicEndDelayMs?: number;
+  /** Wall-clock hold after music end, before fade-out. */
+  readonly finishMarginMs?: number;
 }
 
 export interface PlayView extends FamilyView<PlayFrame, PlayIntent> {
