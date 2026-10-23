@@ -44,8 +44,7 @@ export class PointLayer {
     particle.scaleX = size / this.texture.width;
     particle.scaleY = size / this.texture.height;
     particle.rotation = 0;
-    particle.tint = color;
-    particle.alpha = alpha;
+    this.setColor(particle, color, alpha);
   }
 
   /** Writes one straight segment from `(x0, y0)` to `(x1, y1)`, `width` px thick (a rotated thin quad). */
@@ -58,8 +57,14 @@ export class PointLayer {
     particle.scaleX = Math.hypot(dx, dy) / this.texture.width;
     particle.scaleY = width / this.texture.height;
     particle.rotation = Math.atan2(dy, dx);
-    particle.tint = color;
-    particle.alpha = alpha;
+    this.setColor(particle, color, alpha);
+  }
+
+  private setColor(particle: Particle, color: number, alpha: number): void {
+    // Keep Pixi's public color/alpha state consistent while avoiding repeated color normalization.
+    if (particle.tint !== color) particle.tint = color;
+    const opacity = Math.min(Math.max(alpha, 0), 1);
+    if (particle.alpha !== opacity) particle.alpha = opacity;
   }
 
   private next(): Particle {
@@ -98,8 +103,10 @@ export class PointLayer {
     const count = this.touched ? this.cursor : 0;
     if (count !== this.shown) {
       const children = this.container.particleChildren;
-      children.length = 0;
-      for (let index = 0; index < count; index += 1) children.push(this.particles[index]!);
+      // The active list is always a prefix of the pool. Preserve its backing storage and unchanged entries.
+      const previous = children.length;
+      children.length = count;
+      for (let index = previous; index < count; index += 1) children[index] = this.particles[index]!;
       this.container.update();
       this.shown = count;
     }
