@@ -24,6 +24,9 @@ export function finishPlay(
   if (interruptedReason === 'ctrl-c' || interruptedReason === 'restart') {
     throw new PlayerInterruptedError(interruptedReason);
   }
+  if (session.ruleset.comboBreaksOnEmptyPoor && summary.emptyPoor > 0) {
+    summary.fullCombo = summary.total > 0 && session.score.scoreTracker.combo === summary.total;
+  }
   const aborted = interruptedReason === 'escape';
   const reason = aborted ? 'escape' : endedOnFailure ? 'failed' : 'complete';
   if (!session.uiEnabled) {

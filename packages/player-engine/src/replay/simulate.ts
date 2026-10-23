@@ -268,6 +268,9 @@ class ReplaySimulation {
         cleared: this.gauge.cleared(),
       },
     };
+    if (this.config.comboBreaksOnEmptyPoor && this.counts[JUDGE_EMPTY_POOR]! > 0) {
+      result.fullCombo = this.config.noteCount > 0 && this.combo === this.config.noteCount;
+    }
     if (this.gauge.failedMidPlay) {
       result.gauge.failedMidPlay = true;
     }

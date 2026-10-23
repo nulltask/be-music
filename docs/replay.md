@@ -71,6 +71,8 @@ judgment count (a charge note counts twice), `djLevel` is always set, `score` on
 engine and the simulators reach the same entry for the same inputs. Because the canonical data is the input stream, a
 later fix to any ruleset re-scores every previously recorded play without re-recording anything.
 
+`results.*.fullCombo` optionally records final combo eligibility after an empty POOR in beatoraja FIVEKEYS/PMS. Every note must still be GOOD or better. The engine and simulator derive this from the running combo, so an empty POOR before the first note permits a later full combo. Legacy caches without the field use judgment counts; re-simulate them to apply the corrected mode rule. Course results preserve the eligibility and still require the course combo to cover every note.
+
 Timestamps are integer microseconds relative to chart zero (the same t = 0 the engine's note timing uses).
 
 The TypeScript types, serializer, and defensive parser live in

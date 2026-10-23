@@ -444,6 +444,7 @@ function buildNativeResult(
       cleared: summary.gauge?.cleared ?? false,
     },
   };
+  if (summary.fullCombo !== undefined) result.fullCombo = summary.fullCombo;
   if (summary.gauge?.failedMidPlay === true) {
     result.gauge.failedMidPlay = true;
   }

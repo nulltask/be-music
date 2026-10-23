@@ -546,7 +546,8 @@
               "type": "NORMAL",
               "final": 92,
               "cleared": true
-            }
+            },
+            "fullCombo": false
           },
           "iidx": {
             "ruleset": "iidx/0",
@@ -621,7 +622,8 @@
                 "type": "NORMAL",
                 "survival": false,
                 "failedMidPlay": false
-              }
+              },
+              "fullCombo": false
             },
             "iidx": {
               "total": 16,
