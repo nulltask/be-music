@@ -28,6 +28,11 @@ function getBenchFingerprintDocument(
 }
 
 export function registerChartExportsCases(define: DefineBenchmarkCase): void {
+  define('chart-model.resolvePoorBGAMode', {
+    run: () => {
+      chartAPI.resolvePoorBGAMode('1');
+    },
+  });
   define('chart-model.parseBPMFrom03Token', {
     run: () => {
       chartAPI.parseBPMFrom03Token('7F');

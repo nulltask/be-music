@@ -5,7 +5,7 @@
 
 import { Rectangle, Texture } from 'pixi.js';
 import { runWithConcurrency } from '@be-music/shared-utils/core';
-import { parseBmsBGA } from '@be-music/chart-model';
+import { parseBmsBGA, resolvePoorBGAMode } from '@be-music/chart-model';
 import { normalizeObjectKey, resolveBMSBase, type BeMusicJSON } from '@be-music/chart-source';
 import { loadAssetBytes, resolveChartBGAAsset } from '../collection/collection.ts';
 import type { BrowserAssetSource } from '../collection/types.ts';
@@ -41,19 +41,7 @@ export interface PlayBGAResources {
   subRegionOrigins: Map<string, { x: number; y: number }>;
 }
 
-/**
- * The `#POORBGA` mode (hitkey's command memo): `0` shows the POOR image on a miss as usual, `1` draws it over the BGA
- * layers instead of replacing them, `2` never shows it. A missing value, one that does not parse as an integer, or one
- * outside 0..2 is `0`, which is what LR2 always does (it does not read the header).
- */
-export type PoorBGAMode = 0 | 1 | 2;
-
-/** Parses a chart's `#POORBGA` value into its {@link PoorBGAMode}. */
-export function resolvePoorBGAMode(value: string | undefined): PoorBGAMode {
-  if (value === undefined) return 0;
-  const parsed = Number.parseInt(value.trim(), 10);
-  return parsed === 1 || parsed === 2 ? parsed : 0;
-}
+export { resolvePoorBGAMode, type PoorBGAMode } from '@be-music/chart-model';
 
 /**
  * BMS: a `#BMP00` is the implicit POOR image until an explicit `#xxx06` cue fires, as LR2 starts its miss layer from

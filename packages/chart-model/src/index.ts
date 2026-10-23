@@ -66,6 +66,8 @@ export {
 } from './timelines.ts';
 
 export {
+  resolvePoorBGAMode,
+  type PoorBGAMode,
   buildBGATimelines,
   buildBmsBGATimeline,
   type BGACue,
