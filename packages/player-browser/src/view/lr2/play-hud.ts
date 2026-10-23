@@ -1,3 +1,4 @@
+import { drawLabel } from '../../stage/draw-label.ts';
 import { Texture } from 'pixi.js';
 import {
   type LR2DestinationRect,
@@ -89,7 +90,7 @@ export function renderNowComboElement(
     }
     const sprite = sink.acquireSprite();
     sprite.texture = cellTexture;
-    sprite.label = `nowcombo[digit=${digit}]`;
+    sprite.label = drawLabel(element, 'nowcombo', digit);
     sprite.position.set(startX + dstWidth * index, absY);
     sprite.width = dstWidth;
     sprite.height = dst.h;

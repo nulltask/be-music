@@ -1,3 +1,4 @@
+import { drawLabel } from '../../../stage/draw-label.ts';
 /** The mines of the shared playfield: one mine with the skin's cell, the be-music skin, or a caution-striped bar. */
 
 import { resolveBeMusicLaneKind } from '../../../skin/be-music/registry.ts';
@@ -21,7 +22,7 @@ export function renderMineNote(
   if (cell?.texture) {
     const sprite = ctx.noteLayerPool.acquireSprite();
     sprite.texture = cell.texture;
-    sprite.label = `mine[lane=${laneIndex},ch=${channel}]`;
+    sprite.label = drawLabel(ctx, 'mine', laneIndex, channel);
     sprite.x = lane.x + (lane.w - cell.width) / 2;
     sprite.y = y - cell.height;
     sprite.width = cell.width;
@@ -39,6 +40,6 @@ export function renderMineNote(
     return;
   }
   const graphic = ctx.noteLayerPool.acquireGraphics();
-  graphic.label = `mine-fallback[lane=${laneIndex},ch=${channel}]`;
+  graphic.label = drawLabel(ctx, 'mine-fallback', laneIndex, channel);
   drawCautionMine(graphic, lane.x, lane.w, y);
 }

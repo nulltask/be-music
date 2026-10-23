@@ -1,3 +1,4 @@
+import { drawLabel } from '../../stage/draw-label.ts';
 /**
  * The elements of an LR2 play skin, drawn for one frame: `#DST_IMAGE` (with the scratch turntable and the key-beam and
  * long-note-hold release fades), `#DST_JUDGELINE`, numbers, the groove gauge, bar graphs, sliders, texts (bitmap fonts
@@ -378,7 +379,7 @@ function drawImage(ctx: LR2PlayElementsContext, image: LR2ImageElement): void {
   const targetPool = image.destination.ops.includes(LR2_OP.AUTOPLAY_ON) ? ctx.overlayLayerPool : ctx.skinLayerPool;
   const sprite = targetPool.acquireSprite();
   sprite.texture = texture;
-  sprite.label = `image[${image.source.imagePath}]`;
+  sprite.label = drawLabel(image, 'image', image.source.imagePath);
   const { x, y, w, h } = normalizeRect(dst);
   // op4 = 1 / 2 mark the 1P / 2P scratch turntable: the sprite spins about its centre with the turntable's angle.
   if (dst.op4 === 1 || dst.op4 === 2) {
@@ -407,7 +408,7 @@ function drawJudgeLine(ctx: LR2PlayElementsContext, judgeLine: LR2JudgeLineEleme
   if (!texture) return;
   const sprite = ctx.skinLayerPool.acquireSprite();
   sprite.texture = texture;
-  sprite.label = `judgeline[idx=${judgeLine.index}]`;
+  sprite.label = drawLabel(judgeLine, 'judgeline', judgeLine.index);
   sprite.position.set(dst.x, dst.y);
   sprite.width = dst.w;
   sprite.height = dst.h;
@@ -435,7 +436,7 @@ function drawText(ctx: LR2PlayElementsContext, text: LR2TextElement): void {
   const style = ctx.text.textStyle(text.st, fontSize, tint);
   if (node.style !== style) node.style = style;
   node.text = value;
-  node.label = `text[st=${text.st}]`;
+  node.label = drawLabel(text, 'text', text.st);
   node.alpha = interpolated.alpha;
   node.scale.set(1, 1);
   // `#SRC_TEXT` align: 0 puts the left edge at the DST x, 1 the centre, 2 the right edge.
@@ -469,7 +470,7 @@ function drawBarGraph(ctx: LR2PlayElementsContext, bargraph: LR2BarGraphElement)
   if (!cropTexture) return;
   const sprite = ctx.skinLayerPool.acquireSprite();
   sprite.texture = cropTexture;
-  sprite.label = `bargraph[type=${bargraph.type}]`;
+  sprite.label = drawLabel(bargraph, 'bargraph', bargraph.type);
   if (bargraph.muki === 'vertical') {
     const filledHeight = Math.round(h * progress);
     sprite.position.set(x, y + (h - filledHeight));
@@ -511,7 +512,7 @@ function drawSlider(ctx: LR2PlayElementsContext, slider: LR2SliderElement): void
   }
   const sprite = ctx.skinLayerPool.acquireSprite();
   sprite.texture = cropTexture;
-  sprite.label = `slider[type=${slider.type}]`;
+  sprite.label = drawLabel(slider, 'slider', slider.type);
   sprite.position.set(drawX, drawY);
   sprite.width = w;
   sprite.height = h;

@@ -1,3 +1,4 @@
+import { drawLabel } from '../../../stage/draw-label.ts';
 /**
  * The bombs (hit explosions) of the shared playfield: retires each bomb once its effect has played out, and draws the
  * live ones with the skin's cells, or by default through the be-music skin (or Phantom's).
@@ -62,7 +63,7 @@ function renderBombEffects(ctx: PlayfieldContext): void {
     if (cell?.texture) {
       const sprite = ctx.bombLayerPool.acquireSprite();
       sprite.texture = cell.texture;
-      sprite.label = `bomb[ch=${channel}]`;
+      sprite.label = drawLabel(ctx, 'bomb', channel);
       sprite.position.set(lane.x + (lane.w - cell.width) / 2, lane.bottom - cell.height / 2);
       sprite.width = cell.width;
       sprite.height = cell.height;
