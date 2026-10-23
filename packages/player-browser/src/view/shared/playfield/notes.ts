@@ -1,3 +1,4 @@
+import { drawLabel } from '../../../stage/draw-label.ts';
 /**
  * The notes of the shared playfield: walks the chart's notes, mines and invisible notes from the playhead under LR2's
  * or beatoraja's drawing rules (`note-draw-window.ts`) and draws each tap note, long note, mine and invisible-note
@@ -91,7 +92,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
       if (cell?.texture) {
         const sprite = ctx.noteLayerPool.acquireSprite();
         sprite.texture = cell.texture;
-        sprite.label = `invisible-note[ch=${invisible.channel}]`;
+        sprite.label = drawLabel(ctx, 'invisible-note', invisible.channel);
         sprite.x = lane.x + (lane.w - cell.width) / 2;
         sprite.y = y - cell.height;
         sprite.width = cell.width;
@@ -99,7 +100,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
         continue;
       }
       const graphic = ctx.noteLayerPool.acquireGraphics();
-      graphic.label = `invisible-note-fallback[ch=${invisible.channel}]`;
+      graphic.label = drawLabel(ctx, 'invisible-note-fallback', invisible.channel);
       graphic.rect(lane.x + 2, y - 4, Math.max(4, lane.w - 4), 4).fill({ color: 0x33dd66, alpha: 0.7 });
     }
   }
@@ -234,7 +235,7 @@ function renderSingleNote(
   if (cell?.texture) {
     const sprite = ctx.noteLayerPool.acquireSprite();
     sprite.texture = cell.texture;
-    sprite.label = `note[lane=${laneIndex},ch=${channel}]`;
+    sprite.label = drawLabel(ctx, 'note', laneIndex, channel);
     sprite.x = lane.x + (lane.w - cell.width) / 2;
     sprite.y = y - cell.height;
     sprite.width = cell.width;
@@ -248,6 +249,6 @@ function renderSingleNote(
     return;
   }
   const graphic = ctx.noteLayerPool.acquireGraphics();
-  graphic.label = `note-fallback[lane=${laneIndex},ch=${channel}]`;
+  graphic.label = drawLabel(ctx, 'note-fallback', laneIndex, channel);
   renderPhantomNote({ graphics: graphic, kind, x: lane.x, w: lane.w, y, nowMs: ctx.play.playClock() });
 }

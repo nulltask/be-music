@@ -1,3 +1,4 @@
+import { drawLabel } from '../../../stage/draw-label.ts';
 /**
  * The measure lines of the shared playfield: the chart's bar lines from the playhead, drawn with the skin's lines, by the
  * be-music skin, or as a thin bar across each run of adjacent lanes.
@@ -97,7 +98,7 @@ export function renderMeasureLines(ctx: PlayfieldContext, drawWindow: NoteDrawWi
         }
         const sprite = ctx.noteLayerPool.acquireSprite();
         sprite.texture = texture;
-        sprite.label = `measure-line[idx=${lineIndex},beat=${beat}]`;
+        sprite.label = drawLabel(ctx, 'measure-line', lineIndex, beat);
         sprite.position.set(line.x, Math.round(y + (line.yOffset ?? 0)));
         sprite.width = line.width;
         sprite.height = line.height;

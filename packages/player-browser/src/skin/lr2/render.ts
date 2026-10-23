@@ -1,3 +1,4 @@
+import { drawLabel } from '../../stage/draw-label.ts';
 import { type BLEND_MODES, type Container, Sprite, Texture } from 'pixi.js';
 import type {
   LR2BarGraphElement,
@@ -215,7 +216,7 @@ export function makeLR2StaticImageSprite(
     cropped = cellTexture;
   }
   const sprite = new Sprite(cropped);
-  sprite.label = `image[${path}]`;
+  sprite.label = drawLabel(image, 'image', path);
   sprite.position.set(rect.x, rect.y);
   sprite.width = rect.w;
   sprite.height = rect.h;
@@ -603,7 +604,7 @@ export function renderNumberElement(
     }
     const sprite = sink.acquireSprite();
     sprite.texture = cellTexture;
-    sprite.label = `number[num=${element.source.num},cell=${cellIndex}]`;
+    sprite.label = drawLabel(element, 'number', element.source.num, cellIndex);
     sprite.position.set(startX + dstWidth * index, dst.y);
     sprite.width = dstWidth;
     sprite.height = dst.h || cellHeight;
