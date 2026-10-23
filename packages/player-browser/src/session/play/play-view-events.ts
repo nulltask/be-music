@@ -17,6 +17,7 @@ import type { PlayMoment } from './play-session-theme.ts';
 export function playViewEventFromMoment(event: PlayMoment): PlayViewEvent | undefined {
   switch (event.kind) {
     case 'scene-start':
+    case 'input-start':
     case 'load-end':
     case 'play-start':
     case 'exit-fade-out':
