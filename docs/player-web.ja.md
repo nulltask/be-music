@@ -856,15 +856,34 @@ PixiJS scene wiring は browser rendering や WebAudio resource に依存する�
 
 プレビューは AUTO で再生し、入力を判定せず、リプレイも記録しない。
 
+### 譜面・コースの指定
+
+`track` が指定するアーカイブには、譜面と音声・BGA アセットをまとめて入れる。次のクエリパラメーターで再生対象を選ぶ。
+
+| パラメーター | 意味                                                                                                 |
+| ------------ | ---------------------------------------------------------------------------------------------------- |
+| `chart`      | アーカイブ内の譜面のファイル名またはパス。一致しなければ譜面一覧を表示する。                         |
+| `course`     | アーカイブ内の LR2 `.lr2crs` または beatoraja `.json` コースファイル。`chart` より優先する。         |
+| `courseName` | 指定したファイル内のコース名（完全一致）。省略時は複数ならコース一覧、1 つならそのコースを表示する。 |
+
+例えば `/embed/?track=https%3A%2F%2Fexample.com%2Fpack.zip&course=courses%2Fexpert.lr2crs&courseName=Expert` は、`courses/expert.lr2crs` 内の `Expert` コースを指定する。各パラメーターの値は `encodeURIComponent` でエンコードする。ファイルの照合では大文字・小文字を区別せず、パス区切りはどちらも使える。一意ならファイル名だけ、またはパスの末尾でも指定できる。複数のファイルに一致する場合は、より長いパスを指定する。`course` で明示した beatoraja JSON は `course/` ディレクトリの外にも置ける。
+
+各ステージは元の譜面ファイルの MD5 または SHA-256 でアーカイブ内の譜面と照合する。コースファイルがない場合、不正な場合、コース名が見つからない場合はエラーを表示し、譜面が欠けたコースは開始できない。複数コースの一覧には種類とステージを表示し、譜面が欠けた行は選択できない。`be-music-preview-select` の `courses` プロパティでこの一覧を渡し、React・Vue のラッパーでも指定できる。
+
+EXPERT・GRADE はリザルト画面を挟まず順に再生し、既存のコース実行処理でゲージとコースコンボを引き継ぐ。ロングノートのモードやハイスピード固定を含む制約も適用する。LR2 NONSTOP は共通の NONSTOP パイプラインで連結し、BGA の切り替え、FIT の音声処理、シーク操作を利用する。ステージごとに再生するコースのシークは、そのステージ内に限る。指定したコースが終了した場合や途中で抜けた場合は、Replay で最初のステージから再び再生できる状態になる。一覧から選んだコースは、終了すると一覧に戻る。
+
+### プレビューの画面
+
 ```mermaid
 stateDiagram-v2
   [*] --> Loading: 読み込み
-  Loading --> List: 譜面が複数
-  Loading --> Ready: 譜面が 1 つ
-  List --> Playing: 譜面を選ぶ
+  Loading --> List: 譜面またはコースが複数
+  Loading --> Ready: 譜面またはコースが 1 つ
+  List --> Playing: 譜面またはコースを選ぶ
   Ready --> Playing: 再生
-  Playing --> List: 終了（複数）
-  Playing --> Ready: 終了（1 つ、リプレイ）
+  Playing --> Playing: コースの次ステージ
+  Playing --> List: 終了（一覧から選択）
+  Playing --> Ready: 終了（単独指定、リプレイ）
 ```
 
 - **選曲:** 譜面が複数あるトラックは一覧を表示し（`be-music-preview-select`）、各行にその譜面の `#STAGEFILE`、なければ `#BANNER` を出す。選んだ譜面はすぐに再生する。
