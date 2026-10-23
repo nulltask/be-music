@@ -11,6 +11,7 @@ import {
   type LibraryChart,
   type PlayOptions,
   type PlayResult,
+  type SystemSoundSet,
 } from '@be-music/player-scene-model';
 import type { Texture } from 'pixi.js';
 import type { BrowserAssetSource } from '../collection/types.ts';
@@ -102,6 +103,8 @@ export interface PlaySceneOptions extends SessionSceneOptions {
   readonly preResolved?: ResolvedPlayChart;
   /** The host's audio service: the play opens its own context and bus through it. */
   readonly audio: AudioService;
+  /** Optional theme sounds; `playStop` plays once when the play fails. */
+  readonly sounds?: SystemSoundSet;
   /** The play options as the select screen set them, for the frames a view reads. Defaults to `DEFAULT_PLAY_OPTIONS`. */
   readonly playOptions?: PlayOptions;
   readonly scoreTargets?: PlayFrame['scoreTargets'];
@@ -482,6 +485,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
     playOptions: options.playOptions ?? DEFAULT_PLAY_OPTIONS,
     ...(options.scoreTargets !== undefined ? { scoreTargets: options.scoreTargets } : {}),
     audio: options.audio,
+    ...(options.sounds !== undefined ? { sounds: options.sounds } : {}),
   });
   family = createPlayView(kit, play, options, sceneSession);
   return new FamilyPlayScene(

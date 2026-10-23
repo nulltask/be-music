@@ -606,6 +606,8 @@ The web demo shows every result this way: a single play, a replay, a course stag
 
 `createPlayScene(kit, options)` (`@be-music/player-browser/host`) makes every family's play screen: a play session (`session/play/play-session.ts`) drawn by the view of the kit's family, as a `SessionScene` to load, show with `setScene` and start. A built-in kit (`{ family: 'built-in', skin }`) is drawn by the built-in play view (`view/built-in/play-view.ts`), an LR2 kit (`{ family: 'lr2', skin, invisibleNoteSkin? }`, the chart's play skin and the theme's 9-keys skin for invisible notes) by the LR2 play view (`view/lr2/play-view.ts`), and a beatoraja kit (`{ family: 'beatoraja', kit }`, the theme's play entry for the chart's variant) by the beatoraja play view (`view/beatoraja/play-view.ts`).
 
+A play accepts an optional `sounds: SystemSoundSet`. On early stage failure it plays `sounds.playStop` once through the audio service, owned by the play scene. LR2 themes resolve this from the sound set’s `#STOP` command, falling back to `Sound/lr2/playstop`; beatoraja themes discover `sound/playstop`. Normal completion, Escape and retry play no stop cue. A theme without the sound stays silent, and leaving the scene stops its cue.
+
 ```mermaid
 flowchart LR
   subgraph scene["PlayScene (a SessionScene)"]

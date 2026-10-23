@@ -81,7 +81,7 @@ export interface PlayRouteDeps {
     | 'recordActiveCourseStage'
   >;
   /** The kit the play is drawn with. */
-  readonly familyKits: Pick<FamilyKits, 'resolvePlayKit'>;
+  readonly familyKits: Pick<FamilyKits, 'resolvePlayKit' | 'selectSoundSet'>;
   /** The beatoraja play entry in force, which the Debug Menu's skin pickers and the skin-options panel apply to. */
   readonly beatoraja: Pick<BeatorajaThemeService, 'activeBeatorajaPlay'>;
   /** The course run in progress: a stage's lane limits, and giving the course up. */
@@ -379,6 +379,7 @@ export class PlayRoute {
       ...(replay !== undefined ? { replay } : {}),
       ...(overrides.preResolved !== undefined ? { preResolved: overrides.preResolved } : {}),
       audio: this.audio,
+      sounds: this.familyKits.selectSoundSet(kit.family),
       host: this.sceneHost,
       playOptions,
       scoreTargets: { bestEXScore: this.records.lookupChartBestRecord(chartEntry)?.exScore ?? 0 },

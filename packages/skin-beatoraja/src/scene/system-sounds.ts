@@ -11,6 +11,8 @@ import { findCaseInsensitivePath, type BeatorajaSkinFileEntry } from '../file-lo
  * root. A theme without a file for a cue has none.
  */
 export interface BeatorajaSystemSoundPaths {
+  /** Stage-failure stop cue. */
+  playStop?: string;
   cursor?: string;
   folderOpen?: string;
   folderClose?: string;
@@ -24,6 +26,7 @@ export interface BeatorajaSystemSoundPaths {
  * `LR2files/Sound/lr2/*.wav` layout for LR2-compatible themes.
  */
 const CUE_CANDIDATES: Readonly<Record<keyof BeatorajaSystemSoundPaths, readonly string[]>> = {
+  playStop: ['sound/playstop.wav', 'sound/playstop.ogg', 'LR2files/Sound/lr2/playstop.wav'],
   cursor: [
     'sound/cursor.wav',
     'sound/cursor.ogg',
