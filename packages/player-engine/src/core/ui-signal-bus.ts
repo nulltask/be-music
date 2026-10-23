@@ -49,6 +49,7 @@ export interface PlayerUIFrameClock {
  * `PlayerSummary` (`PlayerSummary.gauge`) so the two can never drift.
  */
 export interface PlayerGaugeSummary {
+  /** Raw gauge units, relative to `max`; PMS normal gauges use a maximum of 120. */
   current: number;
   max: number;
   clearThreshold: number;
@@ -98,6 +99,12 @@ export interface PlayerUIFrameNote {
   longNoteMode?: 1 | 2 | 3;
 }
 
+/** A Hell Charge note passing the judgment line and whether its gauge currently gains. */
+export interface PlayerHCNLaneState {
+  readonly channel: string;
+  readonly gaining: boolean;
+}
+
 export interface PlayerUIFramePayload {
   currentBeat: number;
   currentSeconds: number;
@@ -112,6 +119,10 @@ export interface PlayerUIFramePayload {
   totalSeconds: number;
   summary: PlayerUIFrameSummary;
   notes: PlayerUIFrameNote[];
+  /** Authoritative HCN animation state; absent before a judge is created. */
+  hcnLanes?: readonly PlayerHCNLaneState[];
+  /** Scored note judgments, excluding empty POOR and mine-only POOR. */
+  judgedNoteCount?: number;
   landmineNotes?: PlayerUIFrameNote[];
   invisibleNotes?: PlayerUIFrameNote[];
   audioBackend?: string;
@@ -206,6 +217,8 @@ export function createPlayerUISignalBus(initialFrame: PlayerUIFramePayload): Pla
     frameState.totalSeconds = frame.totalSeconds;
     frameState.summary = frame.summary;
     frameState.notes = frame.notes;
+    frameState.hcnLanes = frame.hcnLanes;
+    frameState.judgedNoteCount = frame.judgedNoteCount;
     frameState.landmineNotes = frame.landmineNotes;
     frameState.invisibleNotes = frame.invisibleNotes;
     frameState.audioBackend = frame.audioBackend;

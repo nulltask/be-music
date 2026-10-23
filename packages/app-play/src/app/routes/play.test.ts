@@ -105,6 +105,7 @@ interface FakePlay {
   readonly start: ReturnType<typeof vi.fn<() => void>>;
   readonly getTempo: () => number;
   readonly setHiSpeed: ReturnType<typeof vi.fn<(hiSpeed: number) => void>>;
+  readonly progress: ReturnType<typeof vi.fn<() => PlayResult | undefined>>;
   readonly waitForReplay: ReturnType<typeof vi.fn<() => Promise<BeMusicReplay | undefined>>>;
   readonly resolved: ResolvedPlayChart;
   readonly dispose: ReturnType<typeof vi.fn<(options?: { preserveAudioTail?: boolean }) => void>>;
@@ -143,6 +144,7 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
       start: vi.fn(),
       getTempo: () => sceneOptions.settings.tempo ?? 1,
       setHiSpeed: vi.fn(),
+      progress: vi.fn(() => undefined),
       waitForReplay: vi.fn(async () => undefined),
       resolved: { chart: createEmptyJSON('bms'), draws: [] } as unknown as ResolvedPlayChart,
       dispose: vi.fn(),
@@ -160,6 +162,7 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
     elements: { shell } as Pick<PlayerWebDemoElements, 'shell'>,
     library: { collection: { sources: [], charts: [chartEntry('a')], errors: [] } as BrowserChartCollection },
     records: {
+      lookupChartBestRecord: vi.fn<PlayRouteDeps['records']['lookupChartBestRecord']>(() => undefined),
       resolveChartHashes: vi.fn<PlayRouteDeps['records']['resolveChartHashes']>(async () => HASHES),
       activePlayRecordKey: undefined as string | undefined,
       activeStageRecordKey: undefined as string | undefined,
@@ -205,6 +208,7 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
       hiSpeed: 3,
       keyVolume: 100,
       bgmVolume: 100,
+      peakGain: false,
       compressor: true,
       compressorKey: true,
       compressorBGM: true,
@@ -272,6 +276,13 @@ async function afterAPlay(): Promise<Harness> {
 }
 
 describe('PlayRoute: what a play puts in force, and when', () => {
+  test('passes the selected chart best EX score to the play frame facts', async () => {
+    const h = await harness();
+    vi.mocked(h.deps.records.lookupChartBestRecord).mockReturnValue({ lamp: 'NORMAL', exScore: 42 });
+    const play = await playing(h, chartEntry('a'));
+    expect(play.options.scoreTargets).toEqual({ bestEXScore: 42 });
+  });
+
   test('a play loading behind a decide screen, or one backed out of, puts nothing in force', async () => {
     const h = await afterAPlay();
     const before = inForce(h);
@@ -684,4 +695,27 @@ describe('PlayRoute: the hi-speed and the tempo', () => {
     expect(h.deps.records.activeStageRecordKey).toBeUndefined();
     await settle();
   });
+});
+
+test('an interrupted practice stage keeps its live outcome without a replay', async () => {
+  const h = await harness();
+  const active = h.deps.courses.beginRun(course());
+  const play = await started(h, chartEntry('a'), { courseStage: nextCourseStagePlay(active)! });
+  const outcome = {
+    ruleset: 'lr2',
+    judge: { pgreat: 1, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0 },
+    fast: 0,
+    slow: 0,
+    exScore: 2,
+    noteCount: 10,
+    maxCombo: 1,
+    gauge: { type: 'GRADE', final: 90, cleared: true },
+    course: { combo: 1, maxCombo: 1 },
+  };
+  play.progress.mockReturnValue({ ...resultOf(chartEntry('a')), practice: true, stageOutcome: outcome });
+  play.options.on.exit();
+  await vi.waitFor(() => expect(h.deps.courseRoute.showCourseResult).toHaveBeenCalledOnce());
+  expect(active.run.practice).toBe(true);
+  expect(active.run.stagesPlayed).toBe(1);
+  expect(() => active.run.buildReplay()).toThrow('practice course');
 });

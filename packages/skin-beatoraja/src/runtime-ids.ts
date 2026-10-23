@@ -156,6 +156,38 @@ export const TIMER_KEY_OFF_1P_BASE: typeof LR2_TIMER.KEY_OFF_1P = LR2_TIMER.KEY_
 /** prop.lua `keyoff_2p_scratch = 130` … `keyoff_2p_key9 = 139`. */
 export const TIMER_KEY_OFF_2P_BASE: typeof LR2_TIMER.KEY_OFF_2P = LR2_TIMER.KEY_OFF_2P;
 
+/** beatoraja-only score, result and character animation timers. */
+export const TIMER_SCORE_A = 348;
+export const TIMER_SCORE_AA = 349;
+export const TIMER_SCORE_AAA = 350;
+export const TIMER_SCORE_BEST = 351;
+export const TIMER_SCORE_TARGET = 352;
+export const TIMER_RESULTGRAPH_BEGIN = 150;
+export const TIMER_RESULTGRAPH_END = 151;
+export const TIMER_RESULT_UPDATESCORE = 152;
+export const TIMER_PM_CHARA_1P_NEUTRAL = 900;
+export const TIMER_PM_CHARA_1P_FEVER = 901;
+export const TIMER_PM_CHARA_1P_GREAT = 902;
+export const TIMER_PM_CHARA_1P_GOOD = 903;
+export const TIMER_PM_CHARA_1P_BAD = 904;
+export const TIMER_PM_CHARA_2P_NEUTRAL = 905;
+export const TIMER_PM_CHARA_2P_GREAT = 906;
+export const TIMER_PM_CHARA_2P_BAD = 907;
+export const TIMER_MUSIC_END = 908;
+export const TIMER_PM_CHARA_DANCE = 909;
+
+/** An HCN lane's active timer; keys 10–99 use the extended bank. */
+export function hcnActiveTimerId(side: BeatorajaSide, lane: number): number | undefined {
+  if (!Number.isInteger(lane) || lane < 0 || lane >= 100) return undefined;
+  return (lane < 10 ? 250 + (side === 2 ? 10 : 0) : 1800 + (side === 2 ? 100 : 0)) + lane;
+}
+
+/** An HCN lane's damage timer; keys 10–99 use the extended bank. */
+export function hcnDamageTimerId(side: BeatorajaSide, lane: number): number | undefined {
+  if (!Number.isInteger(lane) || lane < 0 || lane >= 100) return undefined;
+  return (lane < 10 ? 270 + (side === 2 ? 10 : 0) : 2000 + (side === 2 ? 100 : 0)) + lane;
+}
+
 // ─── 24-key extensions ─────────────────────────────────────────────────────────────────────────
 //
 // Lane indices ≥ 10 fall outside the single-digit range. prop.lua names the bases via `bomb_1p_key10 =

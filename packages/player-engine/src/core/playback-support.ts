@@ -83,6 +83,8 @@ export function createUIFramePublisher(params: {
   reversal?: TempoReversalPoint;
   /** The seek generation and the clock a frame at `seconds` holds at (`PlayerUIFramePayload.generation` / `clock`). */
   resolveClock?: (seconds: number) => Pick<PlayerUIFramePayload, 'generation' | 'clock'>;
+  resolveHCNLanes?: (seconds: number) => PlayerUIFramePayload['hcnLanes'];
+  resolveJudgedNoteCount?: () => number;
 }): (seconds: number, beat: number) => void {
   const {
     uiEnabled,
@@ -96,6 +98,8 @@ export function createUIFramePublisher(params: {
     resolveDebugActiveAudioState,
     reversal,
     resolveClock,
+    resolveHCNLanes,
+    resolveJudgedNoteCount,
   } = params;
   return (seconds: number, beat: number): void => {
     if (!uiEnabled) {
@@ -114,6 +118,8 @@ export function createUIFramePublisher(params: {
       totalSeconds,
       summary,
       notes,
+      hcnLanes: resolveHCNLanes?.(seconds),
+      judgedNoteCount: resolveJudgedNoteCount?.(),
       landmineNotes,
       invisibleNotes,
       audioBackend,

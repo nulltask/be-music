@@ -13,6 +13,7 @@ export {
 export {
   createPlayerUISignalBus,
   type PlayerGaugeSummary,
+  type PlayerHCNLaneState,
   type PlayerUICommand,
   type PlayerUIFrameClock,
   type PlayerUIFrameNote,

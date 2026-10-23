@@ -42,6 +42,12 @@ describe('resolvePlayOptionValue', () => {
 
   test("rejects a value outside the option's choices", () => {
     expect(resolvePlayOptionValue('random1P', 'R-RANDOM')).toBeUndefined();
+    expect(resolvePlayOptionValue('random1P', 'SCATTER')).toBeUndefined();
+    expect(resolvePlayOptionValue('random2P', 'SCATTER')).toBeUndefined();
+    expect(resolvePlayOptions({ random1P: 'SCATTER', random2P: 'SCATTER' })).toMatchObject({
+      random1P: 'OFF',
+      random2P: 'OFF',
+    });
     expect(resolvePlayOptionValue('autoScratch1P', 1)).toBeUndefined();
     expect(resolvePlayOptionValue('gauge1P', undefined)).toBeUndefined();
     // beatoraja's own sorts and key modes are not on the LR2 buttons a skin cycles.
@@ -73,7 +79,7 @@ describe('cyclePlayOptionValue', () => {
   test('moves backwards with a negative step and wraps past the first choice', () => {
     expect(cyclePlayOptionValue('gauge1P', 'HARD', -1)).toBe('GROOVE');
     expect(cyclePlayOptionValue('gauge1P', 'GROOVE', -1)).toBe('EASY');
-    expect(cyclePlayOptionValue('random1P', 'OFF', -1)).toBe('SCATTER');
+    expect(cyclePlayOptionValue('random1P', 'OFF', -1)).toBe('S-RANDOM');
   });
 
   test('treats any other step as one choice in its direction', () => {

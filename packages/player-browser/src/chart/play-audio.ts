@@ -17,6 +17,7 @@ import {
 } from '../runtime/play-tempo.ts';
 import { decodedSampleKey } from '../runtime/web-audio-session.ts';
 import { logger } from '../logger.ts';
+import { applyChartPeakGain } from './peak-gain.ts';
 
 const log = logger('play-audio');
 
@@ -51,6 +52,11 @@ export interface LoadPlaySamplesOptions {
   nonstop?: NonstopStitchMap;
   /** True once the play was abandoned: the remaining decodes and stretches are skipped. */
   isCancelled?: () => boolean;
+  /**
+   * Scale every decoded sample by one gain so the loudest peak sits near −3 dBFS. Off unless the host asks: charts
+   * keep the level they were authored at.
+   */
+  peakGain?: boolean;
 }
 
 /**
@@ -80,9 +86,15 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
       log.debug('decode skipped', { path, error });
     }
   });
-  if (options.tempoPitchMode !== 'keep-pitch' || isCancelled()) return false;
-  const rates = resolveSampleStretchRates(chart.resources.wav, decodedSampleKey, options.tempo, options.nonstop);
-  if (rates.size === 0) return false;
-  await stretchDecodedSamples(audioContext, samples, rates, options.tempoStretchAlgorithm, isCancelled);
-  return true;
+  let stretched = false;
+  if (options.tempoPitchMode === 'keep-pitch' && !isCancelled()) {
+    const rates = resolveSampleStretchRates(chart.resources.wav, decodedSampleKey, options.tempo, options.nonstop);
+    if (rates.size > 0) {
+      await stretchDecodedSamples(audioContext, samples, rates, options.tempoStretchAlgorithm, isCancelled);
+      stretched = true;
+    }
+  }
+  // After stretch, so a keep-pitch resample's new peak is what the gain sees. `#VOLWAV` still applies at playback.
+  if (options.peakGain === true && !isCancelled()) applyChartPeakGain(samples.values());
+  return stretched;
 }

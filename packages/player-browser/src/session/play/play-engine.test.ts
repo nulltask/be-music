@@ -1,3 +1,4 @@
+import { PlaySession } from './play-session.ts';
 import {
   createPlayerUISignalBus,
   type PlayerUICommand,
@@ -184,6 +185,54 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     expect(play.ctx.lastPoorAt).toBe(-Number.POSITIVE_INFINITY);
   });
 
+  test('a paused seek cancels the old music-end gate and finish-margin timeout', () => {
+    const play = new PlaySession();
+    const frame = frameAt(0, { gauge: createPlaceholderGaugeState('GROOVE') });
+    const bus = createPlayerUISignalBus(frame);
+    play.sharedEngineSignals = { uiSignals: bus };
+    play.paused = true;
+    play.chartEnded = true;
+    const ended = vi.fn();
+    play.chartEndGate = (seconds) => {
+      if (seconds >= 5) ended();
+    };
+    play.chartEndTimeout = window.setTimeout(ended, 10);
+    bus.pushCommand({
+      kind: 'seek',
+      generation: 1,
+      seconds: 2,
+      snapshot: { summary: frame.summary, combo: 0, maxCombo: 0, judgments: [] },
+    });
+    drainSharedEngineSignals(play);
+    expect(play.chartEndGate).toBeUndefined();
+    expect(play.chartEndTimeout).toBeUndefined();
+    expect(play.chartEnded).toBe(false);
+    expect(play.paused).toBe(true);
+    vi.advanceTimersByTime(20);
+    expect(ended).not.toHaveBeenCalled();
+    play.dispose();
+  });
+
+  test('drives a chart-end milestone from authoritative frames and allows the gate to clear itself once', () => {
+    const h = createPlay({ total: 1 });
+    const reached = vi.fn();
+    h.ctx.chartEndGate = (seconds) => {
+      if (seconds >= 5) {
+        h.ctx.chartEndGate = undefined;
+        reached(seconds);
+      }
+    };
+    h.step(1, {});
+    h.step(4.9, {});
+    expect(reached).not.toHaveBeenCalled();
+    // A paused clock produces no progress; a faster playback simply reaches the same chart second sooner.
+    h.step(4.9, {});
+    expect(reached).not.toHaveBeenCalled();
+    h.step(5, {});
+    h.step(6, {});
+    expect(reached).toHaveBeenCalledExactlyOnceWith(5);
+  });
+
   test('frames, judgments and empty POORs reach one PlayState', () => {
     const play = createPlay({ total: 4 });
     play.step(1, { exScore: 2, gauge: 22 }, [{ judge: 'PERFECT', combo: 1, channel: '11', deltaMs: -3 }]);
@@ -227,6 +276,10 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     expect(play.ctx.judgeSideState['1P'].courseCombo).toBe(7);
     play.step(3, {}, [{ judge: 'POOR', combo: 0 }]);
     expect(play.state().courseCombo).toMatchObject({ combo: 0, maxCombo: 10 });
+    expect(getResultData(play.ctx)?.stageOutcome).toMatchObject({
+      noteCount: 4,
+      course: { combo: 0, maxCombo: 10 },
+    });
   });
 
   test('the full combo event fires once the combo reaches every note', () => {
@@ -285,7 +338,15 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     play.step(1, {}, [{ judge: 'PERFECT', combo: 1 }]);
     play.step(2, {}, [{ judge: 'PERFECT', combo: 3 }]);
     expect(play.state().maxCombo).toBe(3);
+    applyFinalSummary(play.ctx, summary({ perfect: 4, exScore: 8, minePoor: 1 }, 30));
+    expect(play.ctx.score.minePoor).toBe(1);
     applyFinalSummary(play.ctx, summary({ perfect: 4, exScore: 8 }, 30));
+    expect(play.ctx.score).not.toHaveProperty('minePoor');
+    applyFinalSummary(play.ctx, summary({ perfect: 4, exScore: 8, fullCombo: false }, 30));
+    expect(play.ctx.score.fullCombo).toBe(false);
+    applyFinalSummary(play.ctx, summary({ perfect: 4, exScore: 8 }, 30));
+    expect(play.ctx.score).not.toHaveProperty('fullCombo');
+
     expect(play.state().maxCombo).toBe(4);
     expect(play.state().combo).toBe(4);
     expect(getResultData(play.ctx)!.maxCombo).toBe(4);
@@ -408,4 +469,14 @@ describe('the key beams of a play, by channel', () => {
     play.step(1.2, {}, [], [{ kind: 'release-lane', channel: '1A' }]);
     expect([...play.ctx.keyBeamFadeStartedAt.keys()]).toEqual(['1A']);
   });
+});
+
+test('keeps a raw PMS maximum for the skin and normalizes the result gauge and border', () => {
+  const play = createPlay({ total: 2, judgeRuleset: 'beatoraja', chartPlayVariant: '9' });
+  const final = summary({}, 30);
+  final.gauge = { ...final.gauge!, current: 30, max: 120, initial: 30, clearThreshold: 85, type: 'NORMAL' };
+  applyFinalSummary(play.ctx, final);
+  expect(play.ctx.gaugeState).toMatchObject({ current: 30, max: 120, clearThreshold: 85 });
+  expect(play.state().gauge).toBe(25);
+  expect(getResultData(play.ctx)).toMatchObject({ gauge: 25, gaugeBorder: (85 / 120) * 100 });
 });

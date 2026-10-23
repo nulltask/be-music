@@ -15,9 +15,10 @@ import {
   resolveBeatorajaSelectNumber,
   resolveBeatorajaSelectRefValue,
   resolveBeatorajaSelectText,
+  resolveBeatorajaOptionIndex,
   type BeatorajaSelectInput,
 } from '@be-music/skin-beatoraja/scene';
-import type { BrowseListOptions, LibraryEntry } from '@be-music/player-scene-model';
+import type { BrowseListOptions, LibraryEntry, PlayOptions } from '@be-music/player-scene-model';
 import type { BeatorajaSceneKit } from '../../../skin/beatoraja/scene-kit.ts';
 import { selectChartFacts } from './chart-facts.ts';
 
@@ -34,6 +35,7 @@ const BUTTON_PRESS_WINDOW_MS = 200;
 export interface BeatorajaSelectSkinStateContext {
   /** The skin and the player's options for it. */
   readonly options: Pick<BeatorajaSceneKit, 'skin' | 'skinConfig'>;
+  readonly playOptions?: Pick<PlayOptions, 'hsFix'>;
   readonly entries: ReadonlyArray<LibraryEntry>;
   /** The cursor: `entries[currentIndex]` is the focused bar. */
   readonly currentIndex: number;
@@ -155,6 +157,13 @@ export class BeatorajaSelectSkinState {
   }
 
   resolveSelectionRefValue(refOp: number): number {
-    return resolveBeatorajaSelectRefValue(refOp, this.selectInput());
+    const input = this.selectInput();
+    return (
+      resolveBeatorajaOptionIndex(refOp, {
+        lnMode: input.lnMode !== undefined ? input.lnMode + 1 : input.chart?.lnMode,
+        hsFix: this.ctx.playOptions?.hsFix,
+        lampOp: input.lampOp,
+      }) ?? resolveBeatorajaSelectRefValue(refOp, input)
+    );
   }
 }

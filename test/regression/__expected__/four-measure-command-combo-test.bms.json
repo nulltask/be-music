@@ -1038,7 +1038,7 @@
               "great": 0,
               "good": 0,
               "bad": 0,
-              "poor": 0,
+              "poor": 2,
               "emptyPoor": 0
             },
             "fast": 0,
@@ -1052,6 +1052,7 @@
               "final": 100,
               "cleared": true
             },
+            "minePoor": 2,
             "score": 200000
           },
           "beatoraja": {
@@ -1107,7 +1108,7 @@
               "great": 0,
               "good": 0,
               "bad": 0,
-              "poor": 0,
+              "poor": 2,
               "emptyPoor": 0,
               "exScore": 168,
               "score": 200000,
@@ -1123,7 +1124,8 @@
                 "type": "GROOVE",
                 "survival": false,
                 "failedMidPlay": false
-              }
+              },
+              "minePoor": 2
             },
             "beatoraja": {
               "total": 84,
@@ -1188,7 +1190,7 @@
               "great": 16,
               "good": 17,
               "bad": 6,
-              "poor": 15,
+              "poor": 16,
               "emptyPoor": 2
             },
             "fast": 17,
@@ -1202,6 +1204,7 @@
               "final": 97.809524,
               "cleared": true
             },
+            "minePoor": 1,
             "score": 100595
           },
           "beatoraja": {
@@ -1257,7 +1260,7 @@
               "great": 16,
               "good": 17,
               "bad": 6,
-              "poor": 15,
+              "poor": 16,
               "emptyPoor": 2,
               "exScore": 76,
               "score": 100595,
@@ -1273,7 +1276,8 @@
                 "type": "GROOVE",
                 "survival": false,
                 "failedMidPlay": false
-              }
+              },
+              "minePoor": 1
             },
             "beatoraja": {
               "total": 84,
@@ -1759,7 +1763,7 @@
               "great": 0,
               "good": 0,
               "bad": 0,
-              "poor": 0,
+              "poor": 2,
               "emptyPoor": 0
             },
             "fast": 0,
@@ -1773,6 +1777,7 @@
               "final": 100,
               "cleared": true
             },
+            "minePoor": 2,
             "score": 200000
           },
           "beatoraja": {
@@ -1828,7 +1833,7 @@
               "great": 0,
               "good": 0,
               "bad": 0,
-              "poor": 0,
+              "poor": 2,
               "emptyPoor": 0,
               "exScore": 168,
               "score": 200000,
@@ -1844,7 +1849,8 @@
                 "type": "GROOVE",
                 "survival": false,
                 "failedMidPlay": false
-              }
+              },
+              "minePoor": 2
             },
             "beatoraja": {
               "total": 84,
@@ -1909,7 +1915,7 @@
               "great": 16,
               "good": 17,
               "bad": 6,
-              "poor": 15,
+              "poor": 16,
               "emptyPoor": 2
             },
             "fast": 17,
@@ -1923,6 +1929,7 @@
               "final": 97.809524,
               "cleared": true
             },
+            "minePoor": 1,
             "score": 100595
           },
           "beatoraja": {
@@ -1978,7 +1985,7 @@
               "great": 16,
               "good": 17,
               "bad": 6,
-              "poor": 15,
+              "poor": 16,
               "emptyPoor": 2,
               "exScore": 76,
               "score": 100595,
@@ -1994,7 +2001,8 @@
                 "type": "GROOVE",
                 "survival": false,
                 "failedMidPlay": false
-              }
+              },
+              "minePoor": 1
             },
             "beatoraja": {
               "total": 84,

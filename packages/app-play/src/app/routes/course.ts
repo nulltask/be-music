@@ -77,14 +77,14 @@ export interface CourseRouteDeps {
     overrides: { courseStage: CourseStagePlay; autoPlay?: boolean },
   ) => Promise<void>;
   /** Shows the course result on the LR2 or built-in result screen. */
-  readonly showResult: (data: PlayResult, mode: { course: CourseView; courseLog: CourseResultLog }) => Promise<void>;
+  readonly showResult: (data: PlayResult, mode: { course: CourseView; courseLog?: CourseResultLog }) => Promise<void>;
   /**
    * Shows the course result on the beatoraja theme's course-result (or result) skin. Resolves `false` when the theme has
    * neither or it failed to load.
    */
   readonly showBeatorajaResult: (
     data: PlayResult,
-    options: { run: 'course'; course: { info: CourseView; result: CourseResultLog } },
+    options: { run: 'course'; course: { info: CourseView; result?: CourseResultLog } },
   ) => Promise<boolean>;
   /** Re-enables the options a play latched, once its result shows. */
   readonly unlockReplayOptions: () => void;
@@ -221,16 +221,20 @@ export class CourseRoute {
       return;
     }
     const { course, run } = active;
-    const courseLog = run.buildReplay({ createdAt: new Date().toISOString(), recorder: this.replayRecorder });
-    const result = courseLog.results?.native;
+    const courseLog = run.practice
+      ? undefined
+      : run.buildReplay({ createdAt: new Date().toISOString(), recorder: this.replayRecorder });
+    const result = run.practice ? run.buildPracticeResult() : courseLog?.results?.native;
     if (result === undefined) {
       await this.showSelect();
       return;
     }
-    this.records.recordCourseResult(resolveCourseBestRecordUpdate(courseLog, result, courseBestRecordKey(course)));
-    this.replayAutoSave.saveCourse(courseLog);
-    // The course is ranked as one run (its stages never go one by one); the rank lands in the status line.
-    this.leaderboard.maybeSubmitCourse(courseLog, run.stages);
+    if (courseLog !== undefined) {
+      this.records.recordCourseResult(resolveCourseBestRecordUpdate(courseLog, result, courseBestRecordKey(course)));
+      this.replayAutoSave.saveCourse(courseLog);
+      // The course is ranked as one run; a practice run has no replay and never reaches these writers.
+      this.leaderboard.maybeSubmitCourse(courseLog, run.stages);
+    }
     const courseInfo = resolveCourseView(course);
     const histories = courseStageHistories(active);
     // A beatoraja theme shows the course result on its COURSE_RESULT skin (or its result skin).
@@ -244,10 +248,14 @@ export class CourseRoute {
       const runResult = buildCourseResultData(course, result, courseLog, joined, {
         playSeconds: run.playSeconds,
         stageHistories: histories,
+        practice: run.practice,
       });
       const mounted = await this.showBeatorajaResult(runResult, {
         run: 'course',
-        course: { info: courseInfo, result: { log: courseLog, native: result } },
+        course: {
+          info: courseInfo,
+          ...(courseLog !== undefined ? { result: { log: courseLog, native: result } } : {}),
+        },
       });
       if (mounted) {
         this.unlockReplayOptions();
@@ -256,9 +264,12 @@ export class CourseRoute {
     }
     // LR2 (and the built-in result) shows the last stage's graph.
     const playSeconds = run.playSeconds;
-    await this.showResult(buildCourseResultData(course, result, courseLog, histories.at(-1), { playSeconds }), {
-      course: courseInfo,
-      courseLog: { log: courseLog, native: result },
-    });
+    await this.showResult(
+      buildCourseResultData(course, result, courseLog, histories.at(-1), { playSeconds, practice: run.practice }),
+      {
+        course: courseInfo,
+        ...(courseLog !== undefined ? { courseLog: { log: courseLog, native: result } } : {}),
+      },
+    );
   }
 }

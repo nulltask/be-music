@@ -113,6 +113,7 @@ export interface PlayJudgeInput {
  * read from.
  */
 export interface PlayScoreInput {
+  readonly fullCombo?: boolean;
   readonly total: number;
   readonly perfect: number;
   readonly great: number;

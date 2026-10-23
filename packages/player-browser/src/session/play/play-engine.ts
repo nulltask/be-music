@@ -63,6 +63,7 @@ import {
   flushReplayView,
   followTempoChange,
   startReplayView,
+  updateReplayView,
   type PlayViewSettingsContext,
 } from './play-view-settings.ts';
 
@@ -75,6 +76,7 @@ export interface PlayEngineContext
     Pick<
       PlaySessionOptions,
       | 'autoPlay'
+      | 'allowSeek'
       | 'autoScratch1P'
       | 'autoScratch2P'
       | 'chartMD5'
@@ -131,10 +133,14 @@ export interface PlayEngineContext
   sharedEngineChartSettled: boolean;
   engineFrame: Readonly<PlayerUIFramePayload> | undefined;
   seekGeneration: number;
+  practice: boolean;
+  engineStartRequested: boolean;
+  readonly paused: boolean;
   readonly seekWaiters: Array<{ seconds: number; resolve: () => void }>;
   bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } };
   chartEnded: boolean;
   chartEndTimeout: number | undefined;
+  chartEndGate?: (seconds: number) => void;
   replay: BeMusicReplay | undefined;
   readonly replayWaiters: Array<(replay: BeMusicReplay) => void>;
   replayViewCursor: ReplayViewCursor | undefined;
@@ -383,6 +389,9 @@ export function resolveReplayRecording(
   chartEntry: Pick<LibraryChart, 'chart' | 'chartPath'> | undefined,
   view: ReplayViewState,
 ): ReplayRecordingOptions {
+  if (options.random1P === 'SCATTER' || options.random2P === 'SCATTER') {
+    throw new RangeError('SCATTER is disabled until placement and assist policy are implemented.');
+  }
   return {
     gauge: options.gauge,
     ...(options.chartSHA256 !== undefined ? { chartSHA256: options.chartSHA256 } : {}),
@@ -450,6 +459,8 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       ctx.sharedEngineChartSettled = false;
       // A tempo asked for while the engine was starting.
       ctx.liveTempo.attach(signals.inputSignals);
+      if (ctx.paused) signals.inputSignals.pushCommand({ kind: 'toggle-pause' });
+      if (ctx.engineStartRequested) signals.inputSignals.pushCommand({ kind: 'start' });
     },
     // Listen on the window (default) so the runtime sees keyboard events regardless of which DOM element
     // currently holds focus — matches the legacy `window.addEventListener('keydown', ...)` behaviour. The
@@ -459,9 +470,9 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
     engineOptions: {
       // The draws `resolvedChart` was resolved with; the engine plays that chart as is and names them in its summary.
       ...(ctx.randomDraws !== undefined ? { randomDraws: ctx.randomDraws } : {}),
-      // The view's own intro timing already gated the chart to PLAYSTART; tell the engine to start its chart
-      // immediately instead of imposing the engine's default 1.5 s lead-in on top.
+      // Prepare during the skin intro; chart time and audio wait for its PLAY START command.
       leadInMs: 0,
+      waitForStart: true,
       // The play tempo: the engine's clock runs `tempo` times as fast and judges in chart time. A change during the
       // play comes back through `onTempoChange`, at the chart second the engine took it.
       speed: ctx.tempo,
@@ -545,11 +556,13 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
             // What the player sees at the start; the changes during the play go in as `view` commands. A play that
             // seeks records none: the engine discards its recorder at the first seek.
             recordReplay: resolveReplayRecording(ctx.options, ctx.chart, startReplayView(ctx)),
-            onReplayRecorded: (replay: BeMusicReplay) => {
-              ctx.replay = replay;
-              const waiters = ctx.replayWaiters.splice(0);
-              for (const resolve of waiters) resolve(replay);
-            },
+            onReplayRecorded: ctx.practice
+              ? undefined
+              : (replay: BeMusicReplay) => {
+                  ctx.replay = replay;
+                  const waiters = ctx.replayWaiters.splice(0);
+                  for (const resolve of waiters) resolve(replay);
+                },
           }),
     },
   })
@@ -622,8 +635,11 @@ export function drainSharedEngineSignals(ctx: PlayEngineContext): void {
  */
 function applyEngineFrame(ctx: PlayEngineContext, frame: Readonly<PlayerUIFramePayload>): void {
   if ((frame.generation ?? 0) < ctx.seekGeneration) return;
-  ctx.engineFrame = frame;
+  // The signal bus reuses its frame object. Keep the applied clock metadata owned by this
+  // session, so publishing a seek cannot move time before its score snapshot is drained.
+  ctx.engineFrame = { ...frame };
   applyEngineSummary(ctx, frame.summary);
+  ctx.chartEndGate?.(frame.currentSeconds);
 }
 
 function applyEngineSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSummary>): void {
@@ -635,11 +651,15 @@ function applyEngineSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSumm
   // the engine's smaller scorable count) and the FC presentation never fires. Sync `score.total` to the
   // engine's value here so the view always agrees with the authority on the scorable population.
   ctx.score.total = summary.total;
+  if (summary.fullCombo !== undefined) ctx.score.fullCombo = summary.fullCombo;
+  else delete ctx.score.fullCombo;
   ctx.score.perfect = summary.perfect;
   ctx.score.great = summary.great;
   ctx.score.good = summary.good;
   ctx.score.bad = summary.bad;
   ctx.score.emptyPoor = summary.emptyPoor;
+  if (summary.minePoor !== undefined) ctx.score.minePoor = summary.minePoor;
+  else delete ctx.score.minePoor;
   // `this.score` is the DISPLAY copy: under LR2 the POOR counter folds empty POORs in, matching the real thing
   // (OpenLR2 `ApplyJudgeNote` increments `playerstat.poor` for the empty-POOR branch, and LR2 exposes no
   // separate stat). Every LR2 read-out — the POOR row, BP, the per-judge rates, the skin's num 84 / 89 / 114 —
@@ -768,12 +788,19 @@ function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUICommand): v
 function applyEngineSeek(ctx: PlayEngineContext, command: Extract<PlayerUICommand, { kind: 'seek' }>): void {
   const { snapshot, seconds, generation } = command;
   ctx.seekGeneration = generation;
+  if (
+    (ctx.options.autoPlay !== true && ctx.options.replay === undefined) ||
+    ctx.options.course !== undefined ||
+    ctx.options.nonstop !== undefined
+  )
+    ctx.practice = true;
   ctx.resetPresentation();
   // A play sought back out of its lead-out plays on: the engine settles the chart again.
   if (ctx.chartEndTimeout !== undefined) {
     window.clearTimeout(ctx.chartEndTimeout);
     ctx.chartEndTimeout = undefined;
   }
+  ctx.chartEndGate = undefined;
   ctx.chartEnded = false;
   ctx.sharedEngineChartSettled = false;
   ctx.onHeldPlayEnded = undefined;
@@ -791,6 +818,7 @@ function applyEngineSeek(ctx: PlayEngineContext, command: Extract<PlayerUIComman
     judgments: snapshot.judgments,
     at: ctx.playClock(),
   });
+  updateReplayView(ctx, seconds, true);
   resolveSeekWaiters(ctx, seconds);
 }
 
@@ -847,19 +875,22 @@ function handleSharedEngineChartFinished(
   ctx.playMoments.outroAtMs ??= ctx.playClock();
   // The end-of-play policy every gameplay family shares (`resolvePlayEnding`): a lead-out after the last note, then the
   // fade-out, or — for a play cut short by its gauge emptying — a stop at once (`beginExitSequence`).
+  const viewTiming = ctx.theme.timing();
   const ending = resolvePlayEnding({
     summary: finalSummary,
     notes: ctx.notes,
     timing: ctx.timingResolver,
     currentSeconds: ctx.currentSeconds(),
     tempo: ctx.tempo,
+    musicEndDelayMs: viewTiming.musicEndDelayMs,
+    finishMarginMs: viewTiming.finishMarginMs,
+    ...(ctx.options.autoPlay ? { chartEndSeconds: ctx.resolveChartDurationSeconds() } : {}),
   });
-  // Hold the play scene for roughly two measures after the final note. This keeps the last hit / final keysound from
-  // being swallowed by an immediate result transition while still falling back to a one-frame defer on empty charts or
-  // charts whose non-note tail has already carried us past the target.
-  ctx.chartEndTimeout = window.setTimeout(() => {
+  // Families without a music-end stage retain the two-measure lead-out. A family with that stage waits on the
+  // engine's chart clock, then holds its finish margin on the scene clock before fading.
+  const beginFade = () => {
     ctx.chartEndTimeout = undefined;
-    if (ctx.disposed) return;
+    if (ctx.disposed || ctx.exiting) return;
     drainSharedEngineSignals(ctx);
     if (finalSummary !== undefined) applyFinalSummary(ctx, finalSummary);
     const finish = (): void => {
@@ -887,11 +918,32 @@ function handleSharedEngineChartFinished(
       // A normal end lets its last keysounds ring through the fade-out; a failure cuts them.
       { failed: ending.failed, fadeAudio: false },
     );
-  }, ending.leadOutMs);
+  };
+  if (ending.musicEndAtSeconds !== undefined) {
+    const target = ending.musicEndAtSeconds;
+    const musicEnd = () => {
+      ctx.chartEndGate = undefined;
+      if (ctx.disposed || ctx.exiting || !ctx.chartEnded) return;
+      ctx.theme.moment({ kind: 'music-end', at: ctx.playClock() });
+      ctx.chartEndTimeout = window.setTimeout(beginFade, ending.finishMarginMs ?? 0);
+    };
+    if (held) {
+      // The one engine loop drives this gate: pause, tempo changes and seeks keep their chart-time meaning.
+      ctx.chartEndGate = (seconds) => {
+        if (seconds >= target) musicEnd();
+      };
+      ctx.chartEndGate(ctx.currentSeconds());
+    } else {
+      ctx.chartEndTimeout = window.setTimeout(musicEnd, Math.max(0, ending.leadOutMs - (ending.finishMarginMs ?? 0)));
+    }
+  } else {
+    ctx.chartEndTimeout = window.setTimeout(beginFade, ending.leadOutMs);
+  }
 }
 
 /** Stops the shared engine as the play is disposed (`PlaySession.dispose`) and lets go of its buses. */
 export function stopSharedEngine(ctx: PlayEngineContext): void {
+  ctx.chartEndGate = undefined;
   // Abort the shared engine driver BEFORE the audio session tear-down so engine ticks don't fire fresh
   // sample triggers onto a session that's about to lose its bus references. The engine catches the abort via
   // `throwIfAborted` and unwinds; our launchSharedEngine catch swallows the resulting `AbortError` because

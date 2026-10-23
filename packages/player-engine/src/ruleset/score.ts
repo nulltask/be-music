@@ -7,6 +7,8 @@
 export type JudgmentKind = 'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'POOR';
 
 export interface ScoreSummary {
+  /** Final combo eligibility when empty POOR can break combo; absent in legacy/count-only results. */
+  fullCombo?: boolean;
   total: number;
   perfect: number;
   great: number;
@@ -16,6 +18,8 @@ export interface ScoreSummary {
   /** Empty POOR (空POOR) count — see `PlayerSummary.emptyPoor`. Never a note judgment, so `applyJudgeToSummary`
    * does not touch it; the engine increments it on the empty-POOR path. */
   emptyPoor: number;
+  /** LR2 mine hits already included in `poor`; not judgment notes and never a combo break. */
+  minePoor?: number;
   exScore: number;
   score: number;
 }

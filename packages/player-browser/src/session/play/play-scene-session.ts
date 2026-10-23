@@ -29,6 +29,7 @@ export interface PlaySceneFacts {
   readonly chart: LibraryChart;
   readonly course?: CourseView;
   readonly playOptions: PlayOptions;
+  readonly scoreTargets?: PlayFrame['scoreTargets'];
   readonly audio?: Pick<AudioService, 'stopOwned'>;
 }
 
@@ -131,6 +132,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       chart: play.chart ?? this.facts.chart,
       ...(this.facts.course !== undefined ? { course: this.facts.course } : {}),
       playOptions: this.facts.playOptions,
+      ...(this.facts.scoreTargets !== undefined ? { scoreTargets: this.facts.scoreTargets } : {}),
       state: play.playState,
       stage,
       ...(stage === 'loading' && this.loadProgress !== undefined ? { progress: this.loadProgress } : {}),

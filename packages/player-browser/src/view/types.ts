@@ -276,7 +276,17 @@ export interface PlayfieldNote {
  * play clock.
  */
 export type PlayViewEvent =
-  | { readonly kind: 'scene-start' | 'load-end' | 'play-start' | 'exit-fade-out' | 'exit-close'; readonly atMs: number }
+  | {
+      readonly kind:
+        | 'scene-start'
+        | 'input-start'
+        | 'load-end'
+        | 'play-start'
+        | 'music-end'
+        | 'exit-fade-out'
+        | 'exit-close';
+      readonly atMs: number;
+    }
   | {
       readonly kind: 'judge';
       readonly judge: JudgmentKind;
@@ -338,12 +348,14 @@ export interface PlayFrame {
   readonly playOptions: PlayOptions;
   /** The running play: gauge, score, combo, judgments, hi-speed and lane covers. */
   readonly state: PlayState;
+  /** Optional personal best and target EX scores for skin comparison animations; missing values mean zero. */
+  readonly scoreTargets?: { readonly bestEXScore?: number; readonly targetEXScore?: number };
   readonly stage: PlayStage;
   /** How far the play has loaded, 0..1, while loading. */
   readonly progress?: number;
   /** Chart time in seconds; negative during the intro. */
   readonly seconds: number;
-  /** Whether a `seek` intent moves the play now: an AUTO play whose chart is running (paused or not). */
+  /** Whether a `seek` intent moves the play now: an AUTO play or replay whose chart is running (paused or not). */
   readonly seekable: boolean;
   /** The beat the playfield scrolls from (mirrored past an LR2 negative-BPM reversal). */
   readonly beat: number;
@@ -389,7 +401,7 @@ export type PlayIntent =
   | { readonly type: 'quit' }
   /** Play the chart again from the start. */
   | { readonly type: 'restart' }
-  /** Move an AUTO play to chart second `seconds` (a preview's seek bar). */
+  /** Move an AUTO play or replay to chart second `seconds` (a preview's seek bar). */
   | { readonly type: 'seek'; readonly seconds: number };
 
 /**
@@ -401,10 +413,18 @@ export interface PlayViewTiming {
   readonly loadEndOffsetMs: number;
   /** When the chart begins; `0` uses the player's own intro length. */
   readonly playStartOffsetMs: number;
+  /** Optional input-ready stage, in milliseconds from scene start. */
+  readonly inputStartOffsetMs?: number;
+  /** When present, wait this long after actual load end, including media loading; zero starts immediately. */
+  readonly playStartAfterLoadEndMs?: number;
   /** The fade-out as the play ends; `0` skips it. */
   readonly fadeOutMs: number;
   /** The hold after the fade before the scene moves on; `0` skips it. */
   readonly closeMs: number;
+  /** Optional chart-time delay after the last note/event before the music-end stage. */
+  readonly musicEndDelayMs?: number;
+  /** Wall-clock hold after music end, before fade-out. */
+  readonly finishMarginMs?: number;
 }
 
 export interface PlayView extends FamilyView<PlayFrame, PlayIntent> {
