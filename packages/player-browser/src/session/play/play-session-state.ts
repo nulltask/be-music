@@ -452,6 +452,7 @@ export class PlaySessionState extends PlayPresentation {
    * paint BMP00 on a miss before any authored POOR event fires; left `undefined` when the chart already authors a
    * proper POOR track or doesn't ship a BMP00 fallback. Mirrors the TUI BGA renderer's `poorFallbackKey` plumbing.
    */
+  poorBGAMode: 0 | 1 | 2 = 0;
   poorBGAFallbackKey: string | undefined;
   /**
    * Chart-time after which the BMP00 POOR fallback yields to the explicit POOR timeline. Equal to the first authored

@@ -529,8 +529,10 @@ export interface BeMusicBGAFrame {
   layer?: BeMusicImage;
   /** The miss image (channel 06), shown while {@link poorActive}. */
   poor?: BeMusicImage;
-  /** True while a POOR is being shown: draw {@link poor} in place of the base and layer. */
+  /** True while a POOR is being shown: replace the base/layer unless {@link poorOverlays} is true. */
   poorActive: boolean;
+  /** Draw the miss image over the normal layers (`#POORBGA 1`), instead of replacing them. */
+  poorOverlays?: boolean;
 }
 
 /**

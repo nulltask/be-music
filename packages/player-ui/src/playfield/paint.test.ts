@@ -160,6 +160,26 @@ describe('playfield painters', () => {
     const layered = recorder();
     paintBGA(layered, { shown: true, frame: { base: image('base'), layer: image('layer'), poorActive: false } }, rect);
     expect(layered.calls.slice(1)).toEqual(['drawImage base 0,0,256,256', 'drawImage layer 0,0,256,256']);
+    const overlay = recorder();
+    paintBGA(
+      overlay,
+      {
+        shown: true,
+        frame: {
+          base: image('base'),
+          layer: image('layer'),
+          poor: image('poor'),
+          poorActive: true,
+          poorOverlays: true,
+        },
+      },
+      rect,
+    );
+    expect(overlay.calls.slice(1)).toEqual([
+      'drawImage base 0,0,256,256',
+      'drawImage layer 0,0,256,256',
+      'drawImage poor 0,0,256,256',
+    ]);
     const none = recorder();
     paintBGA(none, { shown: false, frame: undefined }, rect);
     expect(none.calls).toEqual([]);

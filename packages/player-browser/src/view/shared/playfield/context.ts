@@ -115,6 +115,7 @@ export interface PlayfieldRuntime {
   readonly hasBGA: boolean;
   readonly bgaTimeline: { base: BGACue[]; layer: BGACue[]; poor: BGACue[] };
   readonly nonstopBGATimelines: NonstopStageBGATimeline[] | undefined;
+  readonly poorBGAMode?: 0 | 1 | 2;
   readonly poorBGAFallbackKey: string | undefined;
   readonly poorBGAFallbackUntilSeconds: number;
   readonly lastPoorAt: number;

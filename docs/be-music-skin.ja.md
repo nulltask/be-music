@@ -307,7 +307,7 @@ flowchart LR
 - `mines`: 地雷ノーツ `{ kind, x, w, y }`。`y` は下端です。レーンを押したまま判定ラインを通過するか、LR2 ruleset では PGREAT 窓内で押しても地雷が爆発してゲージが減ります（判定にはなりません）。スキンが `gameplay.drawsMines`（後述）を設定したときだけ中身が入ります。
 - `bombs`: 生きているヒットエフェクト。`elapsedMs`、固定の `seed`、発生させた判定 `judge` を持ちます。
 - `measureLines`: 小節線 `{ side, x, w, y }`。横切るレーンランごとに 1 本です。スキンが `gameplay.drawsMeasureLines` を設定したときだけ中身が入ります。
-- `bga`: 合成する BGA のレイヤー（`{ base?, layer?, poor?, poorActive }`）。スキンが `gameplay.drawsBGA` を設定したとき以外は `undefined` です。
+- `bga`: 合成する BGA のレイヤー（`{ base?, layer?, poor?, poorActive, poorOverlays? }`）。スキンが `gameplay.drawsBGA` を設定したとき以外は `undefined` です。
 - `runtime`: HUD の値（下記）。
 - `beatPhase`、`nowMs`、`effects`、`audio`。
 - `settings` と `chartImage`: [スキン設定](#スキン設定)と[曲の画像](#曲の画像)を参照。
@@ -327,7 +327,7 @@ flowchart LR
 | `drawsMeasureLines` | `frame.measureLines` | プレイヤーが自前の小節線を描きます。                                   |
 | `drawsBGA`          | `frame.bga`          | プレイヤーが BGA をキャンバスの後ろ、`layout.bga` の位置に表示します。 |
 
-どのフラグも既定は `false` で、解禁されるフレームのフィールドは設定するまで空（または `undefined`）のままです。既存のスキンの見た目は変わりません。`drawsBGA` では、`layer` の画像は BMS のレイヤーの慣習どおり純粋な黒が透明になった状態で渡され、`base` と `poor` は不透明です。通常のアルファブレンドで描き、`poorActive` の間は他の代わりに `poor` を表示してください。bmson のレイヤー（仕様で黒は不透明のまま）と動画のレイヤーは作者が作ったとおりに渡されます。画像は `ImageBitmap`、動画の BGA なら再生中の `<video>` 要素です。`#BGA` の部分領域は切り出した画像として渡されます（切り出しが終わるまでの最初の 1〜2 フレームは渡されません）。`#SWBGA` のアニメーションのフレームはプレイヤーが選びますが、スロットの `#ARGB` による色と不透明度はスキンに任されます。
+どのフラグも既定は `false` で、解禁されるフレームのフィールドは設定するまで空（または `undefined`）のままです。既存のスキンの見た目は変わりません。`drawsBGA` では、`layer` の画像は BMS のレイヤーの慣習どおり純粋な黒が透明になった状態で渡され、`base` と `poor` は黒を残した状態です。通常のアルファブレンドで描き、`poorActive` の間は、`poorOverlays` が `true`（`#POORBGA 1`）なら通常のレイヤーの上に `poor` を描き、それ以外は他の代わりに `poor` を表示してください。`#POORBGA 2` ではミス画像を渡しません。bmson のレイヤー（仕様で黒は不透明のまま）と動画のレイヤーは作者が作ったとおりに渡されます。画像は `ImageBitmap`、動画の BGA なら再生中の `<video>` 要素です。`#BGA` の部分領域は切り出した画像として渡されます（切り出しが終わるまでの最初の 1〜2 フレームは渡されません）。`#SWBGA` のアニメーションのフレームはプレイヤーが選びますが、スロットの `#ARGB` による色と不透明度はスキンに任されます。
 
 `runtime`（`BeMusicGameplayRuntime`）の値:
 
