@@ -993,8 +993,8 @@ function formatRuleset(value: string | undefined): string {
   switch (value) {
     case 'beatoraja':
       return 'BEATORAJA';
-    case 'iidx':
-      return 'IIDX';
+    case '____':
+      return '????';
     default:
       return 'LR2';
   }

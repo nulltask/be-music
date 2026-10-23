@@ -11,7 +11,7 @@ import {
 } from '@be-music/player-engine/replay';
 
 /**
- * `bms-replay` — re-derives LR2 / beatoraja / IIDX scores from a recorded replay (`*.bmplay.json`).
+ * `bms-replay` — re-derives LR2 / beatoraja / That-Which-Must-Not-Be-Named scores from a recorded replay (`*.bmplay.json`).
  *
  * The replay is an input replay: the resolved chart, every raw key press / release, and the play settings. Each
  * ruleset simulator replays the same input stream through its own judge windows, note-selection algorithm,
@@ -29,10 +29,10 @@ export interface ReplayCLIArgs {
 
 const USAGE = `Usage: bms-replay [options] <file.bmplay.json> [...more files]
 
-Re-derives LR2 / beatoraja / IIDX results from a recorded be-music replay.
+Re-derives LR2 / beatoraja / That-Which-Must-Not-Be-Named results from a recorded be-music replay.
 
 Options:
-  --ruleset=<list>    Comma-separated rulesets to simulate: lr2, beatoraja, iidx, all (default: all)
+  --ruleset=<list>    Comma-separated rulesets to simulate: lr2, beatoraja, ____, all (default: all)
   --gauge=<id>        Override the simulated gauge (ruleset-scoped id, e.g. GROOVE / NORMAL / HARD / EX-HARD)
   --algorithm=<name>  beatoraja note-selection algorithm: combo (default) / duration / lowest / score
   --json              Emit the raw result objects as JSON instead of the text table
@@ -61,10 +61,10 @@ export function parseReplayCLIArgs(argv: readonly string[]): ReplayCLIArgs {
         const parsed: RulesetId[] = [];
         for (const entry of value.split(',')) {
           const id = entry.trim();
-          if (id === 'lr2' || id === 'beatoraja' || id === 'iidx') {
+          if (id === 'lr2' || id === 'beatoraja' || id === '____') {
             parsed.push(id);
           } else if (id.length > 0) {
-            throw new Error(`unknown ruleset '${id}' (expected lr2 / beatoraja / iidx / all)`);
+            throw new Error(`unknown ruleset '${id}' (expected lr2 / beatoraja / ____ / all)`);
           }
         }
         args.rulesets = parsed;
@@ -135,7 +135,7 @@ export function buildReplayReport(fileLabel: string, replay: BeMusicReplay, rows
     }`;
     lines.push(
       [
-        pad(label, 14),
+        pad(label.replace(/^____(?=\/|$)/, '????'), 14),
         pad(String(result.exScore), 6),
         pad(formatRate(result.exScore, result.noteCount), 8),
         pad(result.djLevel ?? '-', 4),

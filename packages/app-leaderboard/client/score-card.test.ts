@@ -24,7 +24,7 @@ import {
 const tone = (i: number): ExcerptLane['tone'] => (i === 0 ? 'red' : i % 2 === 0 ? 'blue' : 'white');
 /** 7 KEY: the scratch on the left, then keys 1..7. */
 const lanes7: Pick<ChartExcerpt, 'lanes' | 'widths'> = {
-  widths: 'iidx',
+  widths: '____',
   lanes: Array.from({ length: 8 }, (_, i) => ({ tone: tone(i), side: '1P' })),
 };
 const excerpt7: ChartExcerpt = { ...lanes7, beats: EXCERPT_BEATS, notes: [], bars: [] };
@@ -169,7 +169,7 @@ describe('score card layout', () => {
     }));
     const rects = excerptRects({
       lanes,
-      widths: count === 9 ? 'shared' : 'iidx',
+      widths: count === 9 ? 'shared' : '____',
       beats: EXCERPT_BEATS,
       // A note on every lane at the window's start and its end, and a long note running far past it.
       notes: lanes.flatMap((_, lane) => [

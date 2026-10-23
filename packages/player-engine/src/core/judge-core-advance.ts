@@ -117,7 +117,7 @@ function detonateLandmine(
     });
   }
   // LR2beta3 counts one POOR without applying an ordinary POOR judgment: no combo break or judge gauge damage.
-  // beatoraja and the provisional IIDX model remain gauge-only. Raw damage bypasses guts and TOTAL modifiers.
+  // beatoraja and the provisional That-Which-Must-Not-Be-Named model remain gauge-only. Raw damage bypasses guts and TOTAL modifiers.
   if (config.ruleset.mineTrigger === 'press-ahead-or-hold') {
     state.summary.poor += 1;
     state.summary.minePoor = (state.summary.minePoor ?? 0) + 1;
@@ -139,7 +139,7 @@ function detonateLandmine(
 const LANDMINE_SCAN_AHEAD_US = 1_000_000;
 
 /**
- * Held mines detonate at crossing, then retire. The provisional IIDX model also checks PGREAT entry and waits
+ * Held mines detonate at crossing, then retire. The provisional That-Which-Must-Not-Be-Named model also checks PGREAT entry and waits
  * for its late window to close; LR2beta3 has neither extra phase. The same timed events run in the simulator.
  */
 export function processLandminePassage(
@@ -176,7 +176,7 @@ export function processLandminePassage(
     if (phase < 2 && mineUs < nowUs) {
       due.push({ atUs: mineUs, landmine, phase: 2 });
     }
-    // LR2beta3 and hold-only settle at crossing; only the provisional IIDX model keeps a late window.
+    // LR2beta3 and hold-only settle at crossing; only the provisional That-Which-Must-Not-Be-Named model keeps a late window.
     const settleUs = pressDetonates ? mineUs + pgreatLateUs : mineUs;
     if (settleUs < nowUs) {
       due.push({ atUs: settleUs, landmine, phase: 3 });
@@ -208,7 +208,7 @@ export function processLandminePassage(
 }
 
 /**
- * LR2beta3 key-down detonates only ahead of the line, strictly inside GREAT. The provisional IIDX model keeps
+ * LR2beta3 key-down detonates only ahead of the line, strictly inside GREAT. The provisional That-Which-Must-Not-Be-Named model keeps
  * its historical symmetric PGREAT window. Detonation never consumes the press: note judgment still runs.
  */
 export function detonateLandminesOnPress(
@@ -862,7 +862,7 @@ export function nextTimedJudgmentUs(state: JudgeCoreState, afterUs: number): num
 /**
  * Safety net for notes the per-step sweep never reached (an audio tail that outran the loop, a hold still open at the
  * end). Counted from the notes themselves rather than from `summary.total`: the total is the ruleset's EX-SCORE
- * denominator, and under IIDX a missed charge note owes only ONE judgment even though it counts for two.
+ * denominator, and under That-Which-Must-Not-Be-Named a missed charge note owes only ONE judgment even though it counts for two.
  */
 export function finishJudgeState(state: JudgeCoreState, totalSeconds: number, emit: JudgeCoreEffectSink): void {
   const { config } = state;

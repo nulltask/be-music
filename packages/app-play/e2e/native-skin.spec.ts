@@ -3,6 +3,7 @@ import { expect, openWithLibrary, test } from './support.ts';
 test('native screens browse, search, play, show results and switch back to Canvas', async ({ demo }, info) => {
   await openWithLibrary(demo, { 'be-music-demo.built-in-skin': 'native' });
   const { page } = demo;
+  await demo.setOption(['Developer'], 'Judgment windows', '????');
   const select = page.locator('[data-be-music-screen="select"]');
   await expect(select.getByRole('heading', { name: 'Collection' })).toBeVisible();
   await expect(page.locator('#search')).toBeHidden();
@@ -24,6 +25,8 @@ test('native screens browse, search, play, show results and switch back to Canva
   await expect(hud.getByRole('meter', { name: 'HARD' }).first()).toBeVisible();
   await hud.getByRole('button', { name: 'Pause', exact: true }).click();
   await expect(hud.getByRole('button', { name: 'Resume', exact: true })).toBeVisible();
+  await expect(hud.locator('be-music-play-settings')).toContainText('????');
+  await expect(hud.locator('be-music-play-settings')).not.toContainText('____');
   // Checked while paused, before the short chart ends. No stage-sized canvas: each part of the playfield, BGA
   // included, draws on a canvas of its own.
   await expect(page.locator('canvas[aria-label="be-music stage"]')).toHaveCount(0);
@@ -39,6 +42,9 @@ test('native screens browse, search, play, show results and switch back to Canva
   await expect(hud.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath('native-play.png') });
   await demo.waitForResult(0);
+  const replay = await demo.lastReplay();
+  expect(replay?.play.judgeRuleset).toBe('____');
+  expect(replay?.results?.native?.ruleset).toBe('be-music/native');
   const result = page.locator('[data-be-music-screen="result"]');
   await expect(result.getByRole('heading', { name: 'Fixture A' })).toBeVisible();
   await expect(result.getByRole('img', { name: 'Gauge history' })).toBeVisible();

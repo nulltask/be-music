@@ -16,7 +16,7 @@ import type {
  */
 
 /** The judge rulesets the engine runs under (and the simulators reproduce). */
-export const JUDGE_RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', 'iidx'];
+export const JUDGE_RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', '____'];
 
 /**
  * Playback speed of the corpus's pinned engine replays. A replay is judged on the judge core's fixed chart-time grid,

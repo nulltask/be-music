@@ -10,7 +10,7 @@ The be-music Leaderboard API: a Hono app on Cloudflare Workers with D1 and R2. T
 - OIDC sign-in through the independent Accounts service, with guest accounts, passkeys and configured Discord/Google providers.
 - `POST /api/v0/scores`: submits a replay (gzip). The server checks eligibility and the play and chart fingerprint
   documents (verification layers L1–L3, and L4 for charts without `#RANDOM`), re-simulates the play under `lr2`,
-  `beatoraja` and `iidx`, stores the log in R2 and updates personal bests. A retried play is recognised; the same play
+  `beatoraja` and `____`, stores the log in R2 and updates personal bests. A retried play is recognised; the same play
   from a second account is refused.
 - `GET /api/v0/charts/:chartFingerprint/leaderboard` and `.../leaderboard/me`: rankings, with filters for assisted
   plays, anonymous players, and "played under this ruleset".
@@ -38,7 +38,7 @@ flowchart TD
   dup -->|"yes, another account"| e409["409"]
   dup -->|no| docs{"documents match the<br/>fingerprints (L1–L4)?"}
   docs -->|no| reject["409 / 422"]
-  docs -->|yes| sim["re-simulate under<br/>lr2 · beatoraja · iidx"]
+  docs -->|yes| sim["re-simulate under<br/>lr2 · beatoraja · ____"]
   sim --> store["R2: replay<br/>D1: score, results, bests"]
   store --> r201["201: results and ranks"]
 ```

@@ -40,7 +40,7 @@ const en: AboutContent = {
     },
     {
       title: 'One play, three sets of rules',
-      text: 'Every play is scored under LR2, beatoraja and IIDX rules at once, so plays from any of them meet in one ranking, measured the same way.',
+      text: 'Every play is scored under LR2, beatoraja and That-Which-Must-Not-Be-Named rules at once, so plays from any of them meet in one ranking, measured the same way.',
       more: 'scoring',
     },
     {
@@ -81,10 +81,10 @@ const en: AboutContent = {
           the result itself.
         </p>
         <p>
-          It does so three times, under the <strong>LR2</strong>, <strong>beatoraja</strong> and <strong>IIDX</strong>{' '}
-          scoring rules: their judgment windows, gauges and clear lamps. Every play is in all three rankings. The rules
-          a play was <em>played with</em> are marked on it; the rules the pages show are yours to pick in the header.
-          They are how a play is counted, not the software it came from.
+          It does so three times, under the <strong>LR2</strong>, <strong>beatoraja</strong> and{' '}
+          <strong>That-Which-Must-Not-Be-Named</strong> scoring rules: their judgment windows, gauges and clear lamps.
+          Every play is in all three rankings. The rules a play was <em>played with</em> are marked on it; the rules the
+          pages show are yours to pick in the header. They are how a play is counted, not the software it came from.
         </p>
       </Section>
       <Section id="charts" title="Charts">
@@ -184,7 +184,7 @@ const ja: AboutContent = {
     },
     {
       title: '1 プレイを 3 つのルールで採点',
-      text: 'すべてのプレイを LR2・beatoraja・IIDX のルールで同時に採点します。どのルールで遊んだプレイも、同じ基準で 1 つのランキングに並びます。',
+      text: 'すべてのプレイを LR2・beatoraja・名前を言ってはいけないあのゲームのルールで同時に採点します。どのルールで遊んだプレイも、同じ基準で 1 つのランキングに並びます。',
       more: 'scoring',
     },
     {
@@ -225,7 +225,7 @@ const ja: AboutContent = {
           be-music エンジンで再生してスコアを計算し直します。
         </p>
         <p>
-          この計算を <strong>LR2</strong>・<strong>beatoraja</strong>・<strong>IIDX</strong>{' '}
+          この計算を <strong>LR2</strong>・<strong>beatoraja</strong>・<strong>名前を言ってはいけないあのゲーム</strong>{' '}
           の採点ルール（判定幅・ゲージ・クリアランプ）でそれぞれ行うので、どのプレイも 3
           つのランキングすべてに載ります。プレイヤーが<em>実際に遊んだ</em>
           ルールはプレイごとに表示され、ページに表示するルールはヘッダーで切り替えられます。ルールはスコアの計算方法を表すもので、プレイしたソフトとは関係ありません。

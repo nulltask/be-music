@@ -33,7 +33,7 @@ export function buildLibraryFolder(
   library.addButton({ title: 'Load from URLs' }).on('click', () => urls['load']());
   // Play-history auto-save — OFF by default. When enabled, every finished play downloads its replay
   // (`*.bmplay.json`, the raw input replay defined in `@be-music/player-engine/replay`) as soon as the result scene
-  // mounts. The file feeds the `bms-replay` CLI, which re-derives LR2 / beatoraja / IIDX scores from the replay.
+  // mounts. The file feeds the `bms-replay` CLI, which re-derives LR2 / beatoraja / That-Which-Must-Not-Be-Named scores from the replay.
   // The value is LATCHED at song start (`lockReplayOptionsForPlay`) and the controller is disabled while a song
   // is playing — replay options cannot change mid-play.
   this.replaySaveController = library

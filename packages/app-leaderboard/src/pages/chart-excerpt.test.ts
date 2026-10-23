@@ -75,10 +75,10 @@ describe('chart excerpt', () => {
         { m: '4', p: '1/2', lane: '11' },
       ],
     };
-    const excerpt = chartExcerpt(document, lanes7, 'iidx', 8);
+    const excerpt = chartExcerpt(document, lanes7, '____', 8);
     expect(tones(excerpt)).toEqual(['red', 'white', 'blue', 'white', 'blue', 'white', 'blue', 'white']);
     expect(excerpt).toMatchObject({
-      widths: 'iidx',
+      widths: '____',
       beats: 8,
       notes: [
         { lane: 0, beat: 0, end: 12 },
@@ -92,7 +92,7 @@ describe('chart excerpt', () => {
 
   test('chartExcerpt has nothing to draw without lanes, with too many, or without notes on them', () => {
     const document: ExcerptDocument = { measures: { lengths: [] }, notes: [{ m: '0', p: '0', lane: '11' }] };
-    expect(chartExcerpt(document, [], 'iidx')).toBeNull();
+    expect(chartExcerpt(document, [], '____')).toBeNull();
     const wide = Array.from({ length: MAX_EXCERPT_LANES + 1 }, (_, i) => ({
       channel: `1${i}`,
       tone: 'white' as const,
@@ -100,7 +100,7 @@ describe('chart excerpt', () => {
     }));
     expect(chartExcerpt(document, wide, 'shared')).toBeNull();
     const elsewhere = { measures: { lengths: [] }, notes: [{ m: '0', p: '0', lane: '29' }] };
-    expect(chartExcerpt(elsewhere, lanes7, 'iidx')).toBeNull();
+    expect(chartExcerpt(elsewhere, lanes7, '____')).toBeNull();
   });
 
   test("the window spans the beats Synesthesia's playfield shows at HIGH SPEED 2.0", () => {
@@ -114,7 +114,7 @@ describe('chart excerpt', () => {
       p: `${(beat % 4) * 4}/16`,
       lane: '11',
     }));
-    const excerpt = chartExcerpt({ measures: { lengths: [] }, notes }, lanes7, 'iidx');
+    const excerpt = chartExcerpt({ measures: { lengths: [] }, notes }, lanes7, '____');
     expect(excerpt?.beats).toBe(EXCERPT_BEATS);
     expect(excerpt?.notes.map((note) => note.beat)).toEqual([0, 0.25, 0.5, 0.75, 1, 1.25, 2]);
     expect(excerpt?.bars).toEqual([]);

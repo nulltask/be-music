@@ -128,8 +128,8 @@
         "djLevel": "F",
         "gauge": {"type":"HAZARD","final":0,"cleared":false,"failedMidPlay":true}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":6,"emptyPoor":0},
         "fast": 0,
         "slow": 0,
@@ -299,8 +299,8 @@
         "djLevel": "F",
         "gauge": {"type":"HAZARD","final":0,"cleared":false,"failedMidPlay":true}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":28,"emptyPoor":0},
         "fast": 0,
         "slow": 0,
@@ -547,8 +547,8 @@
         "djLevel": "AAA",
         "gauge": {"type":"HAZARD","final":100,"cleared":true}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":32,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
         "fast": 0,
         "slow": 0,

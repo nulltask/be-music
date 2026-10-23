@@ -3,7 +3,7 @@ import type { PlayerUILongNoteMode, PlayerUILongNoteOutcome } from '@be-music/pl
 import type { BeMusicLongNoteMode, BeMusicLongNoteState } from '@be-music/player-skin-sdk';
 
 /**
- * How a ruleset plays a chart long note, mirroring the engine: LR2 plays every one as an LN, IIDX as a charge note
+ * How a ruleset plays a chart long note, mirroring the engine: LR2 plays every one as an LN, That-Which-Must-Not-Be-Named as a charge note
  * (hell charge where the chart says 3), beatoraja follows the chart. A chart note without a mode is a CN, as in the
  * engine.
  */

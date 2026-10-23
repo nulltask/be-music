@@ -257,7 +257,7 @@ export interface ReplayGaugeResult {
 }
 
 export interface ReplayRulesetResult {
-  /** Ruleset identifier + revision (e.g. `'lr2/0'`, `'beatoraja/0'`, `'iidx/0'`, `'be-music/native'`). */
+  /** Ruleset identifier + revision (e.g. `'lr2/0'`, `'beatoraja/0'`, `'____/0'`, `'be-music/native'`). */
   ruleset: string;
   judge: ReplayJudgmentCounts;
   fast: number;
@@ -265,7 +265,7 @@ export interface ReplayRulesetResult {
   exScore: number;
   /**
    * The ruleset's judgment-note count (EX-SCORE denominator ÷ 2). Differs per ruleset: charge-note styles
-   * (beatoraja CN/HCN, IIDX CN) count a long note's head and tail as two judgments, LN styles as one.
+   * (beatoraja CN/HCN, That-Which-Must-Not-Be-Named CN) count a long note's head and tail as two judgments, LN styles as one.
    */
   noteCount: number;
   /** Final combo eligibility when empty POOR can break combo; absent in legacy/count-only results. */
@@ -275,7 +275,7 @@ export interface ReplayRulesetResult {
   minePoor?: number;
   /** 200000-max money score where the ruleset defines one. */
   score?: number;
-  /** IIDX DJ LEVEL label (`'AAA'`..`'F'`) where the ruleset defines one. */
+  /** That-Which-Must-Not-Be-Named DJ LEVEL label (`'AAA'`..`'F'`) where the ruleset defines one. */
   djLevel?: string;
   gauge: ReplayGaugeResult;
   /** For a course stage: the course-wide combo and max combo the stage left, which the next stage carries in. */
@@ -575,8 +575,8 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
   const judgeWindowOverrideMs = optionalFiniteNumber(play.judgeWindowOverrideMs, 'play.judgeWindowOverrideMs');
   if (judgeWindowOverrideMs !== undefined) parsed.judgeWindowOverrideMs = judgeWindowOverrideMs;
   if (play.judgeRuleset !== undefined) {
-    if (play.judgeRuleset !== 'lr2' && play.judgeRuleset !== 'beatoraja' && play.judgeRuleset !== 'iidx') {
-      throw new ReplayParseError(`play.judgeRuleset: expected 'lr2' | 'beatoraja' | 'iidx'`);
+    if (play.judgeRuleset !== 'lr2' && play.judgeRuleset !== 'beatoraja' && play.judgeRuleset !== '____') {
+      throw new ReplayParseError(`play.judgeRuleset: expected 'lr2' | 'beatoraja' | '____'`);
     }
     parsed.judgeRuleset = play.judgeRuleset;
   }

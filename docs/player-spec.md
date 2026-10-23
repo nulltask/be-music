@@ -250,8 +250,8 @@ When a mine detonates belongs to the judge ruleset (`mineTrigger` in [`definitio
 - `lr2` ruleset — LR2beta3 executable behavior: a key-down hits a mine from the judge line up to, but excluding, the early GREAT boundary. A held key detonates at crossing. A passed mine retires at the first poll; late presses and held-key early-window entry do not detonate it.
 - `beatoraja` ruleset — beatoraja's model (`JudgeManager` L244): a mine explodes only when **the lane's key is down at the moment the mine crosses the judge line**. A press shortly before (released before the crossing) or after does nothing.
 - "Held" is read off each lane's recorded presses and releases, so live play, replays and the simulators agree however late the mine is settled; a lane held by two keys stays held while either is down. An input at the very instant of a crossing counts before the crossing: a key pressed at that µs is down, one released at that µs is up. For input that sends no releases the engine infers them before the judge sees the press, holding the lane for 120 ms after each press (380 ms after one that hits a long note's head) ([Input without key releases](./replay.md#input-without-key-releases)).
-- `iidx` ruleset — IIDX has no mines. Its existing provisional symmetric PGREAT press/hold model is retained; it is not evidence of IIDX behavior.
-- Every explosion drains the gauge and plays `#WAV00`. LR2 also increments POOR/BP once, without a judgment cue, combo break, EX-SCORE change or extra ordinary-POOR gauge damage. `minePoor` records the hits already included in `poor`, so they never replace unjudged notes in course BP. beatoraja and the provisional IIDX model keep gauge-only accounting. Note judgment runs independently; a mine never consumes a nearby note press.
+- `____` ruleset — That-Which-Must-Not-Be-Named has no mines. Its existing provisional symmetric PGREAT press/hold model is retained; it is not evidence of That-Which-Must-Not-Be-Named behavior.
+- Every explosion drains the gauge and plays `#WAV00`. LR2 also increments POOR/BP once, without a judgment cue, combo break, EX-SCORE change or extra ordinary-POOR gauge damage. `minePoor` records the hits already included in `poor`, so they never replace unjudged notes in course BP. beatoraja and the provisional That-Which-Must-Not-Be-Named model keep gauge-only accounting. Note judgment runs independently; a mine never consumes a nearby note press.
 - Damage interprets the mine object value (upper-case base36) **directly as a percentage** (LR2 / beatoraja behavior; this differs from the nanasi-lineage `value / 2` rule). A bmson mine with `mine_channels[].notes[].damage` uses that value instead; a bmson mine without `damage` deals the default `4%` (its object value is the WAV slot the parser assigned, not a damage encoding, so it is never read as damage).
 - Mine damage bypasses the HARD sub-30% softening and the `#TOTAL` damage multiplier (same as beatoraja's direct `gauge.addValue()`).
 - `ZZ` (= 1295 %) instantly FAILs survival gauges (HARD / DEATH); GROOVE / EASY stop at the `2%` floor.
@@ -269,9 +269,9 @@ bmson `key_channels` (beatoraja's hidden notes) are read as invisible notes, and
 FREE ZONE (`17` / `27`) is treated as a note with a 1 beat ending.
 It is excluded from the normal score/gauge target and treated as a keysound fallback and a drawing aid target.
 It has no judging effect: a scratch press during it is judged as any other press and can charge an empty `POOR`, as in
-LR2 and beatoraja (both drop channel `17` / `27` from 7-key and 14-key charts) and IIDX (which never had FREE ZONE; it
+LR2 and beatoraja (both drop channel `17` / `27` from 7-key and 14-key charts) and That-Which-Must-Not-Be-Named (which never had FREE ZONE; it
 belongs to beatmania 1st / 2ndMIX).
-This only applies to the IIDX families — under `9 KEY` and the `24 KEY` / `48 KEY` keyboard modes those channels are
+This only applies to the That-Which-Must-Not-Be-Named families — under `9 KEY` and the `24 KEY` / `48 KEY` keyboard modes those channels are
 ordinary key columns, so they keep whatever length the chart authored (a plain tap stays a tap).
 
 ## Lane mode and input
@@ -303,7 +303,7 @@ FREE ZONE also shares the input tokens of the corresponding scratch lanes (`17 -
 `24 KEY SP` / `48 KEY DP` are the Keyboardmania-style keyboard modes. Each side has 26 lanes: 24 keys on channels
 `11..19` + `1A..1O` (`21..29` + `2A..2O` for the 2P side) and the wheel, up on `1P` and down on `1Q` (`2P` / `2Q`).
 There is no scratch column. The keys are laid out left to right in ascending channel order, and the wheel sits on the
-side's outer edge where the IIDX modes keep their scratch: left of the 1P keys, right of the 2P keys. Detection is
+side's outer edge where the That-Which-Must-Not-Be-Named modes keep their scratch: left of the 1P keys, right of the 2P keys. Detection is
 content-based: one extended lane channel (the wheel included) selects the mode ahead of every other rule, including the
 `.pms` extension and the `#PLAYER 3` + `17` POPN-9 signature, and a bmson keyboard `mode_hint` selects it outright.
 
@@ -316,7 +316,7 @@ right `Shift` the 2P wheel. (beatoraja plays the wheel from a MIDI controller's 
 A 48-key DP chart runs past the printable-key pool and the tail of its keys lands on function keys, which is a
 deliberate trade — 48 keys are an AUTO PLAY / rendering target, not a hand-playable one.
 
-The default keyboard layout for the IIDX series is 1P as `Z S X D C F V` and 2P as `B H N J M K ,`.
+The default keyboard layout for the That-Which-Must-Not-Be-Named series is 1P as `Z S X D C F V` and 2P as `B H N J M K ,`.
 For scratch, 1P is left `Shift`, 2P is right `Shift`.
 For reverse scratch, 1P uses left `Ctrl` and 2P uses right `Ctrl`. On macOS, use left/right `Option` instead of `Ctrl`.
 
@@ -352,7 +352,7 @@ New plays offer OFF, MIRROR, RANDOM and S-RANDOM. SCATTER is disabled until its 
 
 `randomizeSRandomNotes` (`@be-music/player-engine/lanes`) is a runtime-neutral pure helper: it takes resolved event times in milliseconds, a complete mode/side key domain, the selected judge ruleset and an injected random source, and returns channels in input order without mutating notes. The browser applies the channels to the same note objects the engine judges, preserving long-note endpoints. Scratch/wheel and other-side events stay fixed.
 
-| Rule                      | LR2 and provisional IIDX                                             | beatoraja                                                                     |
+| Rule                      | LR2 and provisional That-Which-Must-Not-Be-Named                     | beatoraja                                                                     |
 | ------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | Active LN                 | Reserve its destination through the tail row                         | Preserve its source/destination map through the tail row                      |
 | Ordinary notes            | Choose unused, unheld destinations                                   | Prefer destinations more than 40 integer ms after their previous scoring note |
@@ -364,7 +364,7 @@ The selected judge ruleset controls these rules independently of the drawing fam
 ## Compat rulesets
 
 **The player has no judge logic of its own.** Every play runs under one of three compat rulesets — `lr2` (the
-default), `beatoraja`, or `iidx` — chosen with `PlayerOptions.judgeRuleset`. The ruleset owns the judge windows,
+default), `beatoraja`, or `____` — chosen with `PlayerOptions.judgeRuleset`. The ruleset owns the judge windows,
 which note a press resolves against, the long-note style, the empty-POOR rule, the gauge line-up and its curve,
 and the score formula. The tables and their primary sources live in
 [`packages/player-engine/src/ruleset/definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) and are compared
@@ -549,7 +549,7 @@ Empty POOR mirrors LR2's phantom-press behaviour:
 
 - Increment `summary.emptyPoor`, and do NOT touch the note-judgment counters (`perfect` / `great` / `good` / `bad` / `poor`) — no note was consumed. Whether a player's POOR counter displays the two summed is a presentation choice; LR2's does (OpenLR2 `ApplyJudgeNote` increments `playerstat.poor` for the empty-POOR branch).
 - Do NOT change EX-SCORE or the score.
-- Cut the combo only where the ruleset says to (`comboBreaksOnEmptyPoor`): beatoraja's five-key and PMS rules do, LR2 and IIDX do not.
+- Cut the combo only where the ruleset says to (`comboBreaksOnEmptyPoor`): beatoraja's five-key and PMS rules do, LR2 and That-Which-Must-Not-Be-Named do not.
 - Apply `EMPTY_POOR` to the gauge — the delta lives in the ruleset's gauge table ([`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts)). Under `lr2`: GROOVE `-2`, HARD `-2` (subject to the TOTAL multiplier), EASY `-1.6`, DEATH `-10`. Nearly harmless on GROOVE / EASY; meaningful drain on HARD / DEATH.
 - Trigger POOR BGA (`trigger-poor-bga`).
 - Flash the judge display as `POOR` for 0.6 s (`publishJudgeCombo('POOR', combo)`). The LR2 spec separates op 246 (1P empty POOR) / 266 (2P empty POOR) from op 245 / 265 (missed POOR), but both NOWJUDGE indices currently resolve to the same `'poor'` skin slot in this implementation, so the rendered sprite is identical.
@@ -588,7 +588,7 @@ combo is increased only by `PERFECT` / `GREAT` / `GOOD`.
 
 ### EX-SCORE
 
-EX-SCORE is IIDX compatible.
+EX-SCORE is That-Which-Must-Not-Be-Named compatible.
 
 - `PERFECT`: `+2`
 - `GREAT`: `+1`
@@ -600,12 +600,12 @@ EX-SCORE is IIDX compatible.
 
 - `lr2` reports LR2's money score, `floor((4 × PGREAT + 2 × GREAT + GOOD) × 50000 / notes)`, capped at `200000`.
   It is purely a function of the judge tally — there is no combo term.
-- `beatoraja` and `iidx` report EX-SCORE, which is what they display. IIDX retired its own money score in
+- `beatoraja` and `____` report EX-SCORE, which is what they display. That-Which-Must-Not-Be-Named retired its own money score in
   BISTROVER.
 
 The score vocabulary is the ruleset's, exported from `@be-music/player-engine/ruleset`: `ScoreSummary`, `JudgmentKind`,
-`createEmptyScore`, `computeScoreRate`, the DJ Ranks (`resolveIIDXRankIndexFromScore`, `resolveIIDXRankLabel`,
-`IIDX_RANK_LABELS`), `resolveLR2MoneyScore` and `resolveDisplayedPoor`.
+`createEmptyScore`, `computeScoreRate`, the DJ Ranks (`resolve____RankIndexFromScore`, `resolve____RankLabel`,
+`_____RANK_LABELS`), `resolveLR2MoneyScore` and `resolveDisplayedPoor`.
 
 ### Empty POOR
 
@@ -613,13 +613,13 @@ An empty POOR (空POOR) is a press with no note in reach but one inside the rule
 and fires the POOR cue without consuming a note, so it never reaches EX-SCORE and is counted in
 `summary.emptyPoor` rather than `summary.poor`. LR2's miss window is early-only (`{0, 1 s}`) — a press up to a
 second before a note charges one, a press after never does; beatoraja's reaches 500 ms early and 150 ms late.
-Whether it breaks the combo is the ruleset's call: beatoraja's five-key and PMS rules say yes, LR2 and IIDX say no.
+Whether it breaks the combo is the ruleset's call: beatoraja's five-key and PMS rules say yes, LR2 and That-Which-Must-Not-Be-Named say no.
 
 Whether a player's POOR counter displays `poor` and `emptyPoor` summed is a presentation choice, carried by the
 ruleset as `emptyPoorCountsInPoorDisplay`. LR2's counter does sum them (OpenLR2 `ApplyJudgeNote` increments
 `playerstat.poor` for the empty-POOR branch, and LR2 exposes no separate stat), so the web play session folds
 them into its display copy under `lr2` — the POOR row, BP, and the per-judge rates all follow. beatoraja shows an empty-POOR
-figure of its own and IIDX's counter is unmeasured, so both keep them apart. `PlayerSummary` always reports the
+figure of its own and That-Which-Must-Not-Be-Named's counter is unmeasured, so both keep them apart. `PlayerSummary` always reports the
 split.
 
 ## Groove Gauge
@@ -628,7 +628,7 @@ split.
 
 - The gauge is picked with `PlayerOptions.gauge`, spelled in LR2's names (`GROOVE` / `EASY` / `HARD` / `DEATH`),
   and each ruleset maps that pick onto its own line-up: `GROOVE` is beatoraja's `NORMAL`, `DEATH` its `HAZARD`,
-  and IIDX — which has no HAZARD equivalent — folds `DEATH` onto `EX-HARD`.
+  and That-Which-Must-Not-Be-Named — which has no HAZARD equivalent — folds `DEATH` onto `EX-HARD`.
 - The ruleset owns the curve: per-judge deltas, TOTAL scaling, guts softening, the death border, and the clear
   rule (a threshold for the recovery gauges, "never bottomed out" for the survival gauges).
 - The selected gauge governs the run. It is not a colour: HARD really drains, and a HARD run that bottoms out
@@ -652,7 +652,7 @@ split.
 - When `#TOTAL` is specified (and above 0), use that value as is
 - When `#TOTAL` is absent or ≤ 0, LR2's note-count formula supplies it (`LR2_bmsload.cpp`): `(n / 5 + 200) × 0.8` below
   400 notes, `((n - 400) / 2.5 + 280) × 0.8` below 600, `((n - 600) / 5 + 360) × 0.8` above. beatoraja uses its own
-  default (`max(260, 7.605 n / (0.01 n + 6.5))`); the IIDX gauge does not read TOTAL at all (its recovery comes from
+  default (`max(260, 7.605 n / (0.01 n + 6.5))`); the That-Which-Must-Not-Be-Named gauge does not read TOTAL at all (its recovery comes from
   the note count), and the TOTAL it reports follows the LR2 curve.
 - bmson `info.total` is not an absolute TOTAL but a percentage of the ruleset's default: every ruleset plays it as
   `total / 100 ×` its own default, and a value ≤ 0 means 100 % (beatoraja `BMSPlayerRule.validate`). A bmson chart
@@ -702,7 +702,7 @@ The chart's `#LNMODE` is a request, not a decision — the ruleset maps it to wh
 
 - `lr2` (`ln`): every long note is an LN, whatever `#LNMODE` says. One deferred judgment; a release more than the `GOOD` window before the tail is a `BAD`.
 - `beatoraja` (`per-note`): honours the chart — `1` is an LN, `2` a CN, `3` an HCN.
-- `iidx` (`charge`): every long note is a charge note, an HCN where the chart says `3`. A `BAD` or `POOR` on the
+- `____` (`charge`): every long note is a charge note, an HCN where the chart says `3`. A `BAD` or `POOR` on the
   head cancels the tail judgment entirely.
 
 If `#LNMODE` of BMS is not specified, it is treated as `1`.
@@ -740,7 +740,7 @@ A release is settled at its own instant. The one exception is the ruleset's long
 (`longNoteReleaseMarginUs`, beatoraja's `longnoteMargin` / `longscratchMargin`): under beatoraja's PMS rule a release
 that would score an early `BAD` or worse before the tail waits 200 ms (for an LN the timing is the head's when the head
 was further off than the release, so a late `BAD` head settles at once), and pressing the lane again inside it resumes the hold as
-if it had never been let go. LR2, IIDX and beatoraja's other modes have no margin. For input without release events (a terminal without the kitty
+if it had never been let go. LR2, That-Which-Must-Not-Be-Named and beatoraja's other modes have no margin. For input without release events (a terminal without the kitty
 keyboard protocol) the engine infers the release: 120 ms after the key's last repeat, or 380 ms after the press that
 hit the long note's head when no repeat followed.
 
@@ -748,10 +748,10 @@ A press on a lane whose long note is held (a second key bound to the lane, such 
 never judges another note on that lane: the lane's current note is the long note. What it does instead is the
 ruleset's (`pressDuringLongNote`): `lr2` judges the LN's head again when the press falls within its `BAD` window and
 charges an empty `POOR` otherwise (OpenLR2 `ProcLongnote`); `beatoraja` ignores it as a re-press (`JudgeManager`
-L355-377), and `iidx` does the same.
+L355-377), and `____` does the same.
 
 A long note the player never touched owes one `POOR` for the head, plus a second for the tail under charge modes —
-except under IIDX, where the cancelled tail owes nothing.
+except under That-Which-Must-Not-Be-Named, where the cancelled tail owes nothing.
 
 The life of a long note in manual play, by the effective mode:
 
@@ -765,7 +765,7 @@ stateDiagram-v2
   [*] --> Pending
   Pending --> Missed: head window passes
   Pending --> Held: head pressed
-  Pending --> Done: head BAD / POOR (iidx charge)
+  Pending --> Done: head BAD / POOR (That-Which-Must-Not-Be-Named charge)
   Held --> Margin: early release under a margin
   Margin --> Held: pressed again
   Margin --> Done: margin elapses

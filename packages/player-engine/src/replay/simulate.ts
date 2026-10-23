@@ -1,5 +1,5 @@
 import { PLAY_MODE_LAYOUTS, type PlayModeLayoutId } from '@be-music/chart-model';
-import { resolveIIDXRankLabel } from '../ruleset/score.ts';
+import { resolve____RankLabel } from '../ruleset/score.ts';
 import type { BeMusicReplay, ReplayInputEvent, ReplayRulesetResult } from './format.ts';
 import {
   classifyRulesetJudge,
@@ -36,7 +36,7 @@ export {
   resolveRulesetConfig,
   resolveLR2DefaultTotal,
   resolveBeatorajaDefaultTotal,
-  resolveIIDXGaugeUnit,
+  resolve____GaugeUnit,
   resolveLR2HardDamageMultiplier,
   resolveBeatorajaHardRecoverMultiplier,
 } from './rulesets.ts';
@@ -48,14 +48,14 @@ export interface SimulateReplayOptions extends ResolveRulesetOptions {
 }
 
 /** The rulesets `simulateReplay` scores under, in display order. */
-export const REPLAY_SIMULATOR_RULESETS: readonly ['lr2', 'beatoraja', 'iidx'] = ['lr2', 'beatoraja', 'iidx'];
+export const REPLAY_SIMULATOR_RULESETS: readonly ['lr2', 'beatoraja', '____'] = ['lr2', 'beatoraja', '____'];
 
 /**
  * Re-derives one ruleset's judgments / EX-SCORE / combo / gauge from a replay's canonical data (resolved chart +
  * raw input stream + play settings). Pure function — never mutates the replay.
  *
  * The LR2 simulation follows lr2oraja / OpenLR2 semantics, the beatoraja simulation the current beatoraja master,
- * and the IIDX simulation the community-measured behavior of recent arcade versions (with documented stand-ins
+ * and the That-Which-Must-Not-Be-Named simulation the community-measured behavior of recent arcade versions (with documented stand-ins
  * where no measurement exists — see `rulesets.ts`).
  */
 export function simulateReplay(replay: BeMusicReplay, options: SimulateReplayOptions): ReplayRulesetResult {
@@ -63,7 +63,7 @@ export function simulateReplay(replay: BeMusicReplay, options: SimulateReplayOpt
   return new ReplaySimulation(replay, config, options.endOnFailure ?? replay.play.endOnFailure === true).run();
 }
 
-/** Runs {@link simulateReplay} for each requested ruleset (default: LR2, beatoraja, IIDX). */
+/** Runs {@link simulateReplay} for each requested ruleset (default: LR2, beatoraja, That-Which-Must-Not-Be-Named). */
 export function simulateReplayRulesets(
   replay: BeMusicReplay,
   rulesets: readonly RulesetId[] = REPLAY_SIMULATOR_RULESETS,
@@ -143,7 +143,7 @@ interface ActiveHold {
   /** Deferred LN head judge (style 1). */
   headJudge?: GaugeJudgeIndex;
   headDmUs?: number;
-  /** IIDX charge heads that BAD/POOR'd skip the tail — such notes never become holds. */
+  /** That-Which-Must-Not-Be-Named charge heads that BAD/POOR'd skip the tail — such notes never become holds. */
   /** Held-past-end deadline for charge tails. */
   tailMissDeadlineUs: number;
   /**
@@ -256,7 +256,7 @@ class ReplaySimulation {
       exScore: this.exScore,
       noteCount: this.config.noteCount,
       maxCombo: this.maxCombo,
-      djLevel: resolveIIDXRankLabel(this.exScore, this.config.noteCount),
+      djLevel: resolve____RankLabel(this.exScore, this.config.noteCount),
       gauge: {
         type: this.config.gauge.id,
         final:
@@ -433,7 +433,7 @@ class ReplaySimulation {
         const due = (timeUs: number): boolean => timeUs >= this.lastAdvanceUs && timeUs < untilUs;
         const enterUs = mine.timeUs - earlyUs;
         if (this.config.mineTrigger === 'press-or-hold' && due(enterUs)) {
-          // The provisional IIDX model also detonates on held PGREAT entry.
+          // The provisional That-Which-Must-Not-Be-Named model also detonates on held PGREAT entry.
           events.push({ timeUs: enterUs, kind: 'mine-enter', lane, mine });
         }
         if (due(mine.timeUs)) events.push({ timeUs: mine.timeUs, kind: 'mine', lane, mine });
@@ -494,7 +494,7 @@ class ReplaySimulation {
         note.judged = true;
         this.applyJudge(JUDGE_MISS_POOR, undefined);
         if (longNoteOwesTailMiss(this.config, note.isLong ? note.longStyle : undefined)) {
-          // beatoraja: a missed CN/HCN head also POORs the tail. IIDX (headBadSkipsTail) skips it.
+          // beatoraja: a missed CN/HCN head also POORs the tail. That-Which-Must-Not-Be-Named (headBadSkipsTail) skips it.
           this.applyJudge(JUDGE_MISS_POOR, undefined);
         }
       } else if (event.kind === 'mine' || event.kind === 'mine-enter') {
@@ -521,7 +521,7 @@ class ReplaySimulation {
         hold.note.judged = true;
         this.applyJudge(hold.headJudge ?? JUDGE_BAD, hold.headDmUs);
       } else {
-        // Charge tail held past its late window — the tail resolves as a missed POOR (beatoraja / IIDX).
+        // Charge tail held past its late window — the tail resolves as a missed POOR (beatoraja / That-Which-Must-Not-Be-Named).
         const lane = event.lane;
         const hold = lane.hold;
         if (!hold || hold.note !== event.note) continue;
@@ -569,7 +569,7 @@ class ReplaySimulation {
     this.gauge.applyRawDelta(-mine.damage);
   }
 
-  /** LR2beta3 uses strict ahead-only GREAT; the provisional IIDX model keeps symmetric PGREAT. */
+  /** LR2beta3 uses strict ahead-only GREAT; the provisional That-Which-Must-Not-Be-Named model keeps symmetric PGREAT. */
   private detonateMinesOnPress(lanes: readonly SimLane[], timeUs: number): void {
     if (this.config.mineTrigger === 'hold') return;
     const reversalUs = this.replay.chart.reversalTimeUs;
@@ -788,7 +788,7 @@ class ReplaySimulation {
     // Charge styles score the head immediately.
     this.applyJudge(judge, dmUs);
     if (this.config.headBadSkipsTail && judge >= JUDGE_BAD) {
-      // IIDX: a BAD head cancels the tail judgment entirely.
+      // That-Which-Must-Not-Be-Named: a BAD head cancels the tail judgment entirely.
       note.judged = true;
       return;
     }

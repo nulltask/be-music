@@ -8,7 +8,7 @@
  */
 
 import type { ChartPlayVariant } from '@be-music/chart-model';
-import { resolveIIDXRankLabel } from '@be-music/player-engine/ruleset';
+import { resolve____RankLabel } from '@be-music/player-engine/ruleset';
 import { resolveGameplayLaneGeometry, resolveGameplayLayout, type GameplayLayoutMode } from '@be-music/player-skin-sdk';
 import { recentJudgeTimings, resolveGreenNumber } from '@be-music/player-scene-model';
 import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
@@ -174,7 +174,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     playVariant: ctx.play.chartPlayVariant,
     lastJudge: seconds <= ctx.play.lastJudgeUntil ? ctx.play.lastJudge : undefined,
     judgeSides,
-    rank: total <= 0 ? undefined : resolveIIDXRankLabel(ctx.play.score.exScore, total),
+    rank: total <= 0 ? undefined : resolve____RankLabel(ctx.play.score.exScore, total),
     autoplay: ctx.options.autoPlay === true,
     hasBGA: ctx.play.hasBGA,
     nowMs: ctx.play.playClock(),

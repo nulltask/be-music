@@ -133,7 +133,7 @@ export class PlaySessionState extends PlayPresentation {
   /**
    * Cached `resolveChartPlayVariant` result for the loaded chart. Used to pick the right per-variant theme layout (LR2
    * `play_<variant>` skin, keymode op 160..164), and to switch lane-channel detection to the PMS layout (`17` is a lane
-   * note, `22..25` are 1P-side lanes) instead of the default IIDX layout. Defaults to `'7'` before any chart is loaded so the existing
+   * note, `22..25` are 1P-side lanes) instead of the default That-Which-Must-Not-Be-Named layout. Defaults to `'7'` before any chart is loaded so the existing
    * 7K-flavored fallbacks keep behaving as before for skinless / pre-prepare code paths.
    */
   chartPlayVariant: ChartPlayVariant = '7';
@@ -380,7 +380,7 @@ export class PlaySessionState extends PlayPresentation {
   /**
    * Mirror of the engine's gauge state, refreshed from every `summary.gauge` frame. The gauge model itself
    * (per-judge deltas, TOTAL scaling, guts softening, clear rule) lives entirely in the active ruleset — this view
-   * only renders what the engine reports, so LR2 / beatoraja / IIDX differences need no change here. The placeholder
+   * only renders what the engine reports, so LR2 / beatoraja / That-Which-Must-Not-Be-Named differences need no change here. The placeholder
    * below is what renders between scene construction and the first frame.
    */
   gaugeState: PlayerGaugeSummary = createPlaceholderGaugeState();

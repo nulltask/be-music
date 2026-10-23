@@ -31,7 +31,7 @@ function createPlay(options: {
   total: number;
   autoPlay?: boolean;
   courseCarryIn?: { combo: number; maxCombo: number };
-  judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
+  judgeRuleset?: 'lr2' | 'beatoraja' | '____';
   chartPlayVariant?: string;
 }) {
   const judgeRuleset = options.judgeRuleset ?? 'lr2';
@@ -381,7 +381,7 @@ describe('the BP a play records from its result', () => {
   test.each([
     { judgeRuleset: 'lr2', displayedPoor: 5 },
     { judgeRuleset: 'beatoraja', displayedPoor: 2 },
-    { judgeRuleset: 'iidx', displayedPoor: 2 },
+    { judgeRuleset: '____', displayedPoor: 2 },
   ] as const)('counts each empty POOR once under $judgeRuleset', ({ judgeRuleset, displayedPoor }) => {
     const play = createPlay({ total: 6, judgeRuleset });
     applyFinalSummary(play.ctx, summary(counts, 30));

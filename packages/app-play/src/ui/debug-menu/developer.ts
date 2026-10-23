@@ -29,7 +29,7 @@ export function buildDeveloperFolder(this: DebugMenu, developer: FolderApi): voi
     selectBinding(developer, this.guiState, 'judgeRuleset', 'Judgment windows', {
       LR2: 'lr2',
       beatoraja: 'beatoraja',
-      IIDX: 'iidx',
+      '????': '____',
     }).on('change', () => this.deps.refreshSelectRecords()),
   );
   developer.addBinding(this.guiState, 'autoPauseOnBlur', { label: 'Auto pause on blur' }).on('change', ({ value }) => {

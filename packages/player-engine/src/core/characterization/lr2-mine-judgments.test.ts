@@ -36,7 +36,7 @@ test.each([
   ['lr2', 960, 990, 0],
   ['beatoraja', 200, 1200, 0],
   ['beatoraja', 970, 980, 0],
-  ['iidx', 970, 980, 0],
+  ['____', 970, 980, 0],
 ] as const)('%s held from %d to %d ms counts %d POOR', async (judgeRuleset, downMs, upMs, poor) => {
   const chart = createEmptyJSON('bms');
   chart.metadata.bpm = 240;

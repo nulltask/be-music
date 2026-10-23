@@ -60,7 +60,7 @@ describe('POST /api/v0/course-scores', () => {
     expect(accepted.status).toBe(201);
     const body = (await accepted.json()) as CourseOutcome;
     expect(body.courseFingerprint).toMatch(/^bmcourse0:[0-9a-f]{64}$/);
-    expect(body.results.map((result) => result.ruleset)).toEqual(['lr2', 'beatoraja', 'iidx']);
+    expect(body.results.map((result) => result.ruleset)).toEqual(['lr2', 'beatoraja', '____']);
     for (const result of body.results) {
       expect(result).toMatchObject({ exScore: 60, noteCount: 30, missCount: 0, stagesPlayed: 3, rank: 1, players: 1 });
       expect(result.clearLamp).toBeGreaterThanOrEqual(clearLampRank('FULL_COMBO'));
@@ -254,7 +254,7 @@ describe('course read endpoints', () => {
       courseFingerprint: submitted.courseFingerprint,
       playedRuleset: 'lr2',
       stagesPlayed: 2,
-      results: [{ ruleset: 'lr2', exScore: 36 }, { ruleset: 'beatoraja' }, { ruleset: 'iidx' }],
+      results: [{ ruleset: 'lr2', exScore: 36 }, { ruleset: 'beatoraja' }, { ruleset: '____' }],
     });
     expect((await fetchApp('/api/v0/course-scores/nothing')).status).toBe(404);
   });

@@ -3,7 +3,7 @@
  * cycling exposes. Each judge ruleset plays it on a gauge of its own line-up, its gauge id (`resolveRuleset`; a course
  * stage's by `resolveCourseGaugeId`):
  *
- * - `'GROOVE'` — the default recovery gauge; beatoraja and IIDX call the same one `NORMAL`.
+ * - `'GROOVE'` — the default recovery gauge; beatoraja and That-Which-Must-Not-Be-Named call the same one `NORMAL`.
  * - `'EASY'` — gentler recovery with a lower clear threshold.
  * - `'HARD'` — starts full, drains on misses, fails at the ruleset's death border.
  * - `'DEATH'` — starts full and ends the run on the first break; beatoraja calls it `HAZARD`.

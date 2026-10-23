@@ -330,7 +330,7 @@ export function handleLanePress(
       applyResolvedManualJudge(state, channel, headJudge, nowSec, emit);
       startHCNPassing(state, candidate, toJudgeUs(nowSec));
       if (ruleset.headBadSkipsTail && (headJudge.kind === 'BAD' || headJudge.kind === 'POOR')) {
-        // IIDX: a broken charge-note head cancels the tail; the note is finished with a single judgment.
+        // That-Which-Must-Not-Be-Named: a broken charge-note head cancels the tail; the note is finished with a single judgment.
         state.activeLongNotes.delete(channel);
         state.longNoteSettleMs.delete(channel);
         emit({ kind: 'ui', command: { kind: 'long-note-end', channel, outcome: 'dropped' } });
@@ -385,7 +385,7 @@ export function handleLanePress(
 
 /**
  * A press on a lane whose long note is held, by the ruleset's {@link PressDuringLongNoteRule}: LR2 judges the LN's head
- * again when the press is within its BAD window and charges an empty POOR otherwise; beatoraja and IIDX ignore it.
+ * again when the press is within its BAD window and charges an empty POOR otherwise; beatoraja and That-Which-Must-Not-Be-Named ignore it.
  */
 function applyPressDuringLongNote(
   state: JudgeCoreState,

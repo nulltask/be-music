@@ -18,7 +18,7 @@ interface LaneTone {
   capLit: number;
 }
 
-// IIDX-convention tones: white keys white, black keys blue, scratch red — and the 24 / 48 KEY wheel, which stands where
+// That-Which-Must-Not-Be-Named-convention tones: white keys white, black keys blue, scratch red — and the 24 / 48 KEY wheel, which stands where
 // the scratch would, red too. Notes stay plain so reading is never traded for style; the poster styling lives in the
 // surrounding chrome.
 const SCRATCH_TONE: LaneTone = { top: 0xff9aa6, body: 0xe60019, bottom: 0x7a0010, cap: 0x24090d, capLit: 0xff2b45 };
@@ -119,7 +119,7 @@ export function renderPhantomLongNote({ graphics, kind, x, w, top, bottom }: Pix
   drawNoteBody(graphics, bodyX, top, bodyW, tone);
 }
 
-/** Plain IIDX-style hit flash: an expanding ring over a white core. */
+/** Plain That-Which-Must-Not-Be-Named-style hit flash: an expanding ring over a white core. */
 export function renderPhantomBombs({ pool, bombs }: PixiBombsContext): void {
   for (const bomb of bombs) {
     const progress = Math.max(0, Math.min(1, bomb.elapsedMs / PHANTOM_BOMB_DURATION_MS));

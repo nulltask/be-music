@@ -81,7 +81,7 @@ describe('play-mode table', () => {
     expect(findPlayModeLane('5', '18')).toBeUndefined();
   });
 
-  test('keeps the IIDX FREE ZONE on its side’s scratch', () => {
+  test('keeps the That-Which-Must-Not-Be-Named FREE ZONE on its side’s scratch', () => {
     expect(PLAY_MODE_LAYOUTS['7'].freeZones).toEqual([{ channel: '17', scratch: '16' }]);
     expect(PLAY_MODE_LAYOUTS['14'].freeZones).toEqual([
       { channel: '17', scratch: '16' },

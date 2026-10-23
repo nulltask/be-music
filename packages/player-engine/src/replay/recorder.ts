@@ -12,7 +12,7 @@ import type { PlayerSummary } from '../core/engine.ts';
 import type { PreparedPlaybackChartData } from '../core/bootstrap.ts';
 import { resolveChartJudgeRankFacts } from '../ruleset/index.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
-import { resolveIIDXRankLabel } from '../ruleset/score.ts';
+import { resolve____RankLabel } from '../ruleset/score.ts';
 import type { GaugeType } from '../ruleset/gauge-type.ts';
 import type { RulesetId } from '../ruleset/definitions.ts';
 import packageJSON from '../../package.json' with { type: 'json' };
@@ -432,7 +432,7 @@ function buildNativeResult(
     exScore: summary.exScore,
     noteCount: summary.total,
     maxCombo: maxCombo ?? 0,
-    djLevel: resolveIIDXRankLabel(summary.exScore, summary.total),
+    djLevel: resolve____RankLabel(summary.exScore, summary.total),
     gauge: {
       type: summary.gauge?.type ?? declaredGauge,
       final:

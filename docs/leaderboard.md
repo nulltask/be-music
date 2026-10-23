@@ -16,7 +16,7 @@ beatoraja skin's IR ops).
 
 Goals:
 
-- Rank plays per chart, under each of the three compat rulesets (`lr2`, `beatoraja`, `iidx`).
+- Rank plays per chart, under each of the three compat rulesets (`lr2`, `beatoraja`, `____`).
 - Trust the server, not the client: the client sends its replay, and the server re-derives the result.
 - Identify charts by content (the Be-Music Fingerprint), so re-saved, re-encoded or converted copies of a chart share
   one ranking.
@@ -108,7 +108,7 @@ Charts are identified by the **Be-Music Fingerprint** ([fingerprint-spec.md](./f
   its SHA-256.
 
 **Development versions.** The fingerprint is versioned `bmfp0` and the ruleset result ids are `lr2/0`, `beatoraja/0`
-and `iidx/0`. Version `0` means the definition may still change between releases. Every ranking keyed by `bmfp0` is
+and `____/0`. Version `0` means the definition may still change between releases. Every ranking keyed by `bmfp0` is
 therefore provisional: the UI marks the Leaderboard as a beta that may be reset, and moving to `bmfp1` may discard the
 data (section 15).
 
@@ -172,7 +172,7 @@ sequenceDiagram
     alt mismatch
         A-->>C: 422 chart_mismatch
     end
-    A->>A: simulateReplay under lr2, beatoraja, iidx
+    A->>A: simulateReplay under lr2, beatoraja, ____
     A->>R: PUT replay, ghost, OG card
     A->>D: batch: INSERT score + results, UPSERT best scores
     A->>D: rank and player count per ruleset
@@ -212,7 +212,7 @@ turning a play document's positions and timeline into note times that match the 
 
 A manual play that seeks is practice (`PlayResult.practice`). Its first seek discards the replay recorder. The web app skips best-record writes, Leaderboard submission and replay auto-save for that result, even if a host supplies replay data alongside it. Seeking a course stage or NONSTOP run also excludes the entire course and every later stage; course results remain available without a replay.
 
-- **Three rulesets.** Every play is re-simulated under `lr2`, `beatoraja` and `iidx`, and appears in all three
+- **Three rulesets.** Every play is re-simulated under `lr2`, `beatoraja` and `____`, and appears in all three
   rankings. The ruleset the player actually played (`play.judgeRuleset`) is stored and shown as a mark, and a ranking
   can be filtered to "played under this ruleset" only.
 - **Gauges** map across rulesets as the replay already does (`GROOVE` is beatoraja's `NORMAL`, `DEATH` its
@@ -225,7 +225,7 @@ A manual play that seeks is practice (`PlayResult.practice`). Its first seek dis
   frequency trainer does not save its scores. **Failed plays** (the gauge
   emptied) are stored and count as plays.
 - **Lamps and BP per ruleset** follow each game: under `lr2` a DEATH clear is a NORMAL clear (LR2body.exe `CheckClear`);
-  beatoraja and IIDX give DEATH (`HAZARD`) an EX HARD lamp. Every ruleset counts empty POORs in BP, LR2 included. Migration `0012` rewrote the `lr2` results stored before this rule.
+  beatoraja and That-Which-Must-Not-Be-Named give DEATH (`HAZARD`) an EX HARD lamp. Every ruleset counts empty POORs in BP, LR2 included. Migration `0012` rewrote the `lr2` results stored before this rule.
   The lamp and BP come from the rules every client uses (`resolveRulesetResultLamp` in `@be-music/player-engine/replay`, `resolveClearLamp` and `resolveMissCount` in `@be-music/player-engine/ruleset`): a full combo needs every note judged GOOD or better, so a chart without notes takes its gauge's lamp. Lamps are stored as their rank (`clearLampRank`): 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 NORMAL, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX.
 - **Personal bests, beatoraja style**: the best EX score, the best clear lamp and the fewest misses are kept separately,
   each pointing at the score that set it, so each best's replay and ghost are one click away. Misses count for every
@@ -263,7 +263,7 @@ with its own rankings per ruleset, and never as single-chart plays.
   be here, not a reason to refuse it. The stages must be judged under one ruleset, play under the course's constraints
   (its gauge set and judge constraint, and a lane option the course allows), and carry in exactly what the previous
   stage left once re-simulated (gauge, course combo and course max combo; the first stage carries in nothing). The run
-  is re-simulated under `lr2`, `beatoraja` and `iidx` with `simulateCourseReplay`; the client's cached results are
+  is re-simulated under `lr2`, `beatoraja` and `____` with `simulateCourseReplay`; the client's cached results are
   ignored.
 - **Unreached stages.** Their notes count as BP, so their note counts must not be the client's word. Every unreached
   stage's chart is required (`stage-chart-required`), must hash to the chart fingerprint the log names for the stage
@@ -333,7 +333,7 @@ sequenceDiagram
     end
     A->>A: simulateCourseReplay under the played ruleset
     A->>A: constraints, carry-in, failed vs given up
-    A->>A: simulateCourseReplay under lr2, beatoraja, iidx
+    A->>A: simulateCourseReplay under lr2, beatoraja, ____
     A->>R: PUT course replay, new chart documents
     A->>D: batch: charts, course, course score + results, course bests
     A-->>C: 201 { courseScoreId, courseFingerprint, results, ranks }
@@ -490,7 +490,7 @@ Tailwind CSS v4 and Basecoat (the shadcn/ui design without a framework runtime),
   stage under the display ruleset (judgments, BP, the gauge each stage handed on, the stages never reached), with its
   replay and, for its player, the switch that hides it. The top page lists the latest course runs below the plays.
 
-Every page shows its figures under one **display ruleset** (LR2, beatoraja or IIDX), chosen in the header and kept in a
+Every page shows its figures under one **display ruleset** (LR2, beatoraja or That-Which-Must-Not-Be-Named), chosen in the header and kept in a
 cookie; a play's own ruleset is shown alongside as "played with". The switch is its own URL
 (`/ruleset/:id?next=…`, which only returns to Leaderboard pages), so page URLs stay shareable without
 changing the setting of whoever opens them. Since a page depends on that cookie, pages are `Cache-Control: private,

@@ -15,7 +15,7 @@ export type RulesetLongNoteMode = 1 | 2 | 3;
  *
  * - LR2 (`'ln'`) plays every long note as an LN — one deferred judgment (an early release follows `lnEarlyRelease`).
  * - beatoraja (`'per-note'`) honours the chart: 1 = LN, 2 = CN, 3 = HCN.
- * - IIDX (`'charge'`) has no LN at all — every long note is a charge note, HCN where the chart says 3.
+ * - That-Which-Must-Not-Be-Named (`'charge'`) has no LN at all — every long note is a charge note, HCN where the chart says 3.
  */
 export function resolveEffectiveLongNoteMode(
   style: LongNoteStyle,
@@ -38,7 +38,7 @@ export function isChargeLongNoteMode(mode: RulesetLongNoteMode): boolean {
 
 /**
  * True when a long note the player never held owes a SECOND miss for its tail. Charge modes score head and tail
- * separately, so a note missed at the head owes two POORs — except under IIDX, where a broken head cancels the tail
+ * separately, so a note missed at the head owes two POORs — except under That-Which-Must-Not-Be-Named, where a broken head cancels the tail
  * outright (`headBadSkipsTail`). `playedMode` is the mode the ruleset plays the note as, `undefined` for a tap.
  */
 export function longNoteOwesTailMiss(

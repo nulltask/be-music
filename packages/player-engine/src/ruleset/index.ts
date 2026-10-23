@@ -1,5 +1,5 @@
 /**
- * Ruleset definitions — the single source of truth for how LR2, beatoraja, and IIDX judge a play.
+ * Ruleset definitions — the single source of truth for how LR2, beatoraja, and That-Which-Must-Not-Be-Named judge a play.
  *
  * Both the live engine and the replay simulator resolve their behavior from here: each builds a
  * {@link RulesetChartFacts} from its own chart representation and calls {@link resolveRuleset}. The numeric

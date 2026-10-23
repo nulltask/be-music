@@ -26,7 +26,7 @@
 - b2818d0: Provide `@be-music/skin-beatoraja/scene` with deterministic resolvers for select, decide, play, result and course screens, including numbers, text, options, timers, graphs, offsets and system sounds.
   
   - Extend named skin IDs for course constraints, stages, random-course bars, folder statistics and note density.
-  - Resolve skin fallback consistently across IIDX, PMS and keyboard modes, and expose the selected fallback variant.
+  - Resolve skin fallback consistently across That-Which-Must-Not-Be-Named, PMS and keyboard modes, and expose the selected fallback variant.
   - Match beatoraja's rank, main BPM, lane-cover and LIFT values, including per-mille cover readouts.
   - Load Lua skins without unnecessary console output.
   
@@ -46,7 +46,7 @@
 - 0103435: Run the selected gauge through the active compat ruleset instead of a hardcoded LR2 groove curve.
   
   `PlayerOptions.gauge` now picks a gauge out of the ruleset's own line-up (LR2 `GROOVE` / `EASY` / `HARD` / `EX-HARD` /
-  `DEATH`, beatoraja `NORMAL` / `ASSIST-EASY` / `EASY` / `HARD` / `EX-HARD` / `HAZARD`, IIDX `NORMAL` / `EASY` /
+  `DEATH`, beatoraja `NORMAL` / `ASSIST-EASY` / `EASY` / `HARD` / `EX-HARD` / `HAZARD`, That-Which-Must-Not-Be-Named `NORMAL` / `EASY` /
   `ASSISTED-EASY` / `HARD` / `EX-HARD`) and the engine runs that gauge's real curve — per-judge deltas, TOTAL scaling,
   guts softening, death border, and the survival-vs-threshold clear rule. Previously the picker was cosmetic: HARD
   rendered red but ran GROOVE's numbers and reported CLEARED at 2 %.
