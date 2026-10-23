@@ -49,6 +49,7 @@ export interface PlayerUIFrameClock {
  * `PlayerSummary` (`PlayerSummary.gauge`) so the two can never drift.
  */
 export interface PlayerGaugeSummary {
+  /** Raw gauge units, relative to `max`; PMS normal gauges use a maximum of 120. */
   current: number;
   max: number;
   clearThreshold: number;

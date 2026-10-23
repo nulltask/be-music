@@ -116,9 +116,12 @@ function detonateLandmine(
       channel: landmine.channel,
     });
   }
-  // LR2 — a mine hit drains the gauge and plays the explosion sample, nothing else: no verdict, no combo break, no
-  // judge-counter change (beatoraja's JudgeManager likewise only calls `gauge.addValue`). The raw-delta path also
-  // bypasses the HARD guts softening and #TOTAL damage multiplier, matching `GrooveGauge.addValue`.
+  // LR2beta3 counts one POOR without applying an ordinary POOR judgment: no combo break or judge gauge damage.
+  // beatoraja and the provisional IIDX model remain gauge-only. Raw damage bypasses guts and TOTAL modifiers.
+  if (config.ruleset.mineTrigger === 'press-ahead-or-hold') {
+    state.summary.poor += 1;
+    state.summary.minePoor = (state.summary.minePoor ?? 0) + 1;
+  }
   applyGaugeDelta(state, nowSec, landmineGaugeEffect.gaugeDelta, 'mine-hit', emit);
   emit({
     kind: 'trace',
@@ -132,19 +135,12 @@ function detonateLandmine(
   });
 }
 
-/** Upper bound (µs) on any ruleset's PGREAT reach, so a mine scan can stop at mines too far ahead to matter. */
+/** Upper bound (µs) on the scanned mine reach, so a mine scan can stop at mines too far ahead to matter. */
 const LANDMINE_SCAN_AHEAD_US = 1_000_000;
 
 /**
- * Mines, by the ruleset's `mineTrigger`. LR2 (`'press-or-hold'`, LR2's own changelog, 080114 entry): a mine explodes
- * when its lane's key is down as the mine enters the PGREAT window or crosses the judge line ("キー押したまま地雷通過"),
- * or on a press within the PGREAT window ("ピカグレ範囲内でキーを押す", {@link detonateLandminesOnPress}); it settles
- * once the window closes behind it. beatoraja (`'hold'`, `JudgeManager` L244): only the key being down as the mine
- * crosses counts, and the mine settles there.
- *
- * Each check is a timed judgment at its own microsecond (the entry, the crossing, the settling), taken once time has
- * moved past it and in time order with the other mines, asking whether the lane was down at that instant. The replay
- * simulator schedules the same checks, so both detonate the same mines in the same order.
+ * Held mines detonate at crossing, then retire. The provisional IIDX model also checks PGREAT entry and waits
+ * for its late window to close; LR2beta3 has neither extra phase. The same timed events run in the simulator.
  */
 export function processLandminePassage(
   state: JudgeCoreState,
@@ -180,7 +176,7 @@ export function processLandminePassage(
     if (phase < 2 && mineUs < nowUs) {
       due.push({ atUs: mineUs, landmine, phase: 2 });
     }
-    // Under the hold-only rule a mine settles as it crosses; LR2 waits for the PGREAT window to close.
+    // LR2beta3 and hold-only settle at crossing; only the provisional IIDX model keeps a late window.
     const settleUs = pressDetonates ? mineUs + pgreatLateUs : mineUs;
     if (settleUs < nowUs) {
       due.push({ atUs: settleUs, landmine, phase: 3 });
@@ -212,8 +208,8 @@ export function processLandminePassage(
 }
 
 /**
- * LR2's press leg (`mineTrigger: 'press-or-hold'`): a press detonates every unsettled mine on the pressed lanes whose
- * PGREAT window contains it. Detonation never consumes the press: the note judgment still runs.
+ * LR2beta3 key-down detonates only ahead of the line, strictly inside GREAT. The provisional IIDX model keeps
+ * its historical symmetric PGREAT window. Detonation never consumes the press: note judgment still runs.
  */
 export function detonateLandminesOnPress(
   state: JudgeCoreState,
@@ -222,7 +218,7 @@ export function detonateLandminesOnPress(
   emit: JudgeCoreEffectSink,
 ): void {
   const { config } = state;
-  if (config.ruleset.mineTrigger !== 'press-or-hold') {
+  if (config.ruleset.mineTrigger === 'hold') {
     return;
   }
   const reversalSeconds = config.reversalSeconds;
@@ -245,9 +241,13 @@ export function detonateLandminesOnPress(
     if (landmine.judged || !channels.has(landmine.channel)) {
       continue;
     }
-    // LR2 reads the PGREAT window in force at the press (`#EXRANK` can change it).
+    // Read the window in force at the press (`#EXRANK` can change it).
     const [pgreatLateUs, pgreatEarlyUs] = pgreatWindowReachUs(windowTablesAt(config, nowSec).note);
-    if (mineUs - pgreatEarlyUs <= nowUs && nowUs - mineUs <= pgreatLateUs) {
+    const hit =
+      config.ruleset.mineTrigger === 'press-ahead-or-hold'
+        ? mineUs >= nowUs && mineUs - nowUs < windowTablesAt(config, nowSec).note.judges[1][1]
+        : mineUs - pgreatEarlyUs <= nowUs && nowUs - mineUs <= pgreatLateUs;
+    if (hit) {
       detonateLandmine(state, landmine, nowSec, emit);
     }
   }

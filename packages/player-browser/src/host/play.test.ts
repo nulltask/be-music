@@ -531,8 +531,8 @@ describe('createPlayScene with a beatoraja kit', () => {
     });
     await scene.prepare();
     expect(play.options).toMatchObject({ random1P: 'MIRROR', random2P: 'OFF' });
-    // MIRROR swaps the chart's two lanes: lane 1's note plays on lane 2 and lane 2's on lane 1.
-    expect(play.notes.map((note) => note.channel)).toEqual(['12', '11']);
+    // MIRROR uses the complete five-key domain even though this chart only uses lanes 1 and 2.
+    expect(play.notes.map((note) => note.channel)).toEqual(['15', '14']);
     expect(resolveReplayRecording(play.options, play.chart, {}).randomLane).toEqual({ p1: 'MIRROR', p2: 'OFF' });
     scene.dispose();
   });

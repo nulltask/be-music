@@ -65,10 +65,8 @@ describe('player', () => {
     expect(summary.bad + summary.poor).toBe(1);
   });
 
-  test('player: mine notes inside an active LN hold deal silent gauge damage (upstream JudgeManager.java:253-259)', async () => {
-    // When a mine passes the judge line while the same lane's LN is being held, upstream
-    // beatoraja applies the mine's gauge damage but emits NO verdict — the player's combo
-    // and score are preserved. Without this guard, an HCN-style chart that routes mine
+  test('player: an LR2 mine inside an LN counts POOR without breaking the hold', async () => {
+    // LR2beta3 applies raw mine damage and increments POOR once while preserving the LN hold, combo and score. Without this guard, an HCN-style chart that routes mine
     // columns through active holds was unclear-able: every mine inside a hold cost a BAD
     // (combo reset + scoreboard slot waste) on top of the gauge hit.
     //
@@ -120,15 +118,17 @@ describe('player', () => {
       createInputRuntime: createScheduledInputRuntime(inputSchedule),
     });
 
-    // Verdict counts MATCH the mine-free baseline — adding a mine inside the hold doesn't
-    // add a BAD/POOR slot, doesn't reset combo. We compare against the baseline (rather
+    // Scoring judgments match the mine-free baseline; POOR additionally counts the mine.
+    // Combo and target-note count stay unchanged. We compare against the baseline (rather
     // than pinning specific values) because the LN's tail-finalize verdict depends on
     // tick alignment that's independent of the mine-handling code path being verified.
     expect(summary.perfect).toBe(baselineSummary.perfect);
     expect(summary.great).toBe(baselineSummary.great);
     expect(summary.good).toBe(baselineSummary.good);
     expect(summary.bad).toBe(baselineSummary.bad);
-    expect(summary.poor).toBe(baselineSummary.poor);
+    expect(summary.poor).toBe(baselineSummary.poor + 1);
+    expect(summary.minePoor).toBe(1);
+    expect(summary.maxCombo).toBe(baselineSummary.maxCombo);
     expect(summary.total).toBe(baselineSummary.total);
     // Gauge took the mine's damage despite the silent treatment — strictly below the
     // mine-free baseline. This is the affirmative half: silent doesn't mean free.

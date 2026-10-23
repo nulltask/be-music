@@ -19,7 +19,7 @@
       "gauge": {
         "current": 90,
         "max": 100,
-        "clearThreshold": 80,
+        "clearThreshold": 75,
         "initial": 20,
         "effectiveTotal": 260,
         "cleared": true,
@@ -79,7 +79,7 @@
     "simulated": {
       "lr2": {
         "ruleset": "lr2/0",
-        "judge": {"pgreat":2,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+        "judge": {"pgreat":2,"great":0,"good":0,"bad":0,"poor":3,"emptyPoor":0},
         "fast": 0,
         "slow": 0,
         "exScore": 4,
@@ -87,6 +87,7 @@
         "maxCombo": 2,
         "djLevel": "AAA",
         "gauge": {"type":"GROOVE","final":90,"cleared":true},
+        "minePoor": 3,
         "score": 200000
       },
       "beatoraja": {
@@ -211,7 +212,7 @@
       "gauge": {
         "current": 90,
         "max": 100,
-        "clearThreshold": 80,
+        "clearThreshold": 75,
         "initial": 20,
         "effectiveTotal": 260,
         "cleared": true,
@@ -310,7 +311,7 @@
       "gauge": {
         "current": 100,
         "max": 100,
-        "clearThreshold": 80,
+        "clearThreshold": 75,
         "initial": 20,
         "effectiveTotal": 260,
         "cleared": true,

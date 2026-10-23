@@ -266,7 +266,7 @@
             "djLevel": "F",
             "gauge": {
               "type": "NORMAL",
-              "final": 2,
+              "final": 1.666667,
               "cleared": false
             }
           },
@@ -335,9 +335,9 @@
               "maxCombo": 0,
               "gauge": {
                 "current": 2,
-                "max": 100,
-                "clearThreshold": 80,
-                "initial": 20,
+                "max": 120,
+                "clearThreshold": 85,
+                "initial": 30,
                 "effectiveTotal": 200,
                 "cleared": false,
                 "type": "NORMAL",
@@ -484,10 +484,10 @@
               "combo": 26,
               "maxCombo": 26,
               "gauge": {
-                "current": 100,
-                "max": 100,
-                "clearThreshold": 80,
-                "initial": 20,
+                "current": 120,
+                "max": 120,
+                "clearThreshold": 85,
+                "initial": 30,
                 "effectiveTotal": 200,
                 "cleared": true,
                 "type": "NORMAL",
@@ -634,10 +634,10 @@
               "combo": 2,
               "maxCombo": 6,
               "gauge": {
-                "current": 100,
-                "max": 100,
-                "clearThreshold": 80,
-                "initial": 20,
+                "current": 120,
+                "max": 120,
+                "clearThreshold": 85,
+                "initial": 30,
                 "effectiveTotal": 200,
                 "cleared": true,
                 "type": "NORMAL",

@@ -143,7 +143,7 @@ export interface PlayerPlaySettings {
   stageRanks?: ReadonlyArray<PlayerStageRank>;
   /**
    * The chart second the play starts at instead of the chart's beginning: the play's first seek (a `{ kind: 'seek' }`
-   * input command, applied as the chart starts). Only a judge that can seek takes it — AUTO play, not a replay, for now.
+   * input command, applied as the chart starts). AUTO play and replays rebuild their judgments; manual play starts practice and skips earlier note heads and tails without scoring.
    * The judge state there is the one a play from the start reaches (the notes before it judged, without their keysounds,
    * flashes or bombs), the volume changes before it apply, and sounds that started earlier and still ring start
    * partway, through `AudioSession.triggerEventAt`. A play that seeks records no replay.
@@ -250,6 +250,8 @@ export interface PlayerPlayTuning {
   limiterCeilingDb?: number;
   limiterReleaseMs?: number;
   leadInMs?: number;
+  /** Wait for a `start` input command as well as the lead-in before starting chart time and audio. */
+  waitForStart?: boolean;
   audioOffsetMs?: number;
   audioHeadPaddingMs?: number;
   audioTailSeconds?: number;
@@ -373,7 +375,7 @@ export interface PlayerSummary {
   great: number;
   good: number;
   bad: number;
-  /** Notes that were missed or hit outside every scoring window. Empty POORs are counted separately. */
+  /** Missed notes, plus LR2 mine hits (`minePoor`). Empty POORs are counted separately. */
   poor: number;
   /**
    * Empty POOR (空POOR) — a press with no note in reach but one inside the ruleset's miss window. It costs gauge
@@ -382,6 +384,8 @@ export interface PlayerSummary {
    * (OpenLR2 `ApplyJudgeNote` increments `playerstat.poor` for it), which is why the split is exposed here.
    */
   emptyPoor: number;
+  /** LR2 mine hits already included in `poor`; not judgment notes and never a combo break. */
+  minePoor?: number;
   exScore: number;
   score: number;
   /**
@@ -389,6 +393,9 @@ export interface PlayerSummary {
    * engine's summaries always carry it; it is optional so a summary a host builds itself need not.
    */
   combo?: number;
+  /** Final combo eligibility when empty POOR can break combo; absent in legacy/count-only results. */
+  fullCombo?: boolean;
+
   /** The highest combo of the play so far; see {@link combo}. */
   maxCombo?: number;
   gauge?: PlayerGaugeSummary;

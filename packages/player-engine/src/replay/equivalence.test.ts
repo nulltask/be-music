@@ -744,8 +744,8 @@ describe('engine / simulator equivalence', () => {
     expect(summary.gauge?.current).toBe(0);
   });
 
-  // LR2's mine press leg is live up to the reversal instant itself.
-  test('lr2: a press at the reversal instant detonates a mine just before it on both sides', async () => {
+  // LR2beta3 has no late mine window, including a press exactly at the reversal.
+  test('lr2: a press at the reversal instant cannot detonate a passed mine', async () => {
     const json = chart([
       { measure: 1, channel: 'D1', position: [99, 100], value: '0A' },
       { measure: 2, channel: '08', position: [0, 1], value: '02' },
@@ -758,6 +758,8 @@ describe('engine / simulator equivalence', () => {
     const simulated = simulateReplay(replay, { ruleset: 'lr2' });
 
     expect(summary.gauge?.current).toBe(simulated.gauge.final);
+    expect(summary.minePoor ?? 0).toBe(0);
+    expect(simulated.minePoor ?? 0).toBe(0);
   });
 
   // An ESC abort stops judging where the engine stopped; the rest of the chart is neither missed nor failed.
@@ -833,7 +835,8 @@ describe('engine / simulator equivalence', () => {
     expect(summary.bad).toBe(1);
     expect(summary.emptyPoor).toBe(1);
     expect(simulated.judge.emptyPoor).toBe(summary.emptyPoor);
-    expect(simulated.gauge.final).toBe(summary.gauge?.current);
+    expect(summary.gauge).toMatchObject({ max: 120, current: 16 });
+    expect(simulated.gauge.final).toBe((summary.gauge!.current / summary.gauge!.max) * 100);
   });
 
   // beatoraja ticks the Hell Charge note crossing the judge line. Pressing the lane's next HCN early, before the one

@@ -271,7 +271,10 @@ export class PlaySessionState extends PlayPresentation {
    */
   engineFrame: Readonly<PlayerUIFramePayload> | undefined;
   /** The seek generation of the engine's last `seek` command (0 before the first): older frames are stale. */
+  /** The skin opened PLAY START, even if engine preparation has not delivered its input bus yet. */
+  engineStartRequested = false;
   seekGeneration = 0;
+  practice = false;
   /** The seeks asked for and not yet applied (`seekPlay`): each resolves once the engine applies its seek or a later one. */
   readonly seekWaiters: Array<{ seconds: number; resolve: () => void }> = [];
   decodedSamples: Map<string, AudioBuffer> = new Map<string, AudioBuffer>();

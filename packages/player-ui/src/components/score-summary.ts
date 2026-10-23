@@ -25,6 +25,12 @@ export class BeMusicScoreSummaryElement extends DataElement<BeMusicScoreData> {
         margin-top: 3px;
         font-size: 0.85em;
       }
+      @container be-music (max-width: 16rem) {
+        .summary strong {
+          flex-basis: 100%;
+          margin-right: 0;
+        }
+      }
     `,
   ];
   declare compact: boolean;

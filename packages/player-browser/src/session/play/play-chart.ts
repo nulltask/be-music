@@ -1,7 +1,7 @@
 /**
  * Chart preparation for a play (`PlaySession`), whichever family draws it: resolves the chart's `#RANDOM` / `#SWITCH`
  * control flow, prepares the notes the engine judges and the view draws (one shared `PreparedPlaybackChartData`),
- * applies the lane options (DP FLIP, RANDOM / MIRROR / S-RANDOM / SCATTER) or a replay's recorded arrangement, and
+ * applies the lane options (DP FLIP, RANDOM / MIRROR / S-RANDOM) or a replay's recorded arrangement, and
  * resets the play's state for the new chart.
  *
  * `prepareChart` reads and writes the play's state through {@link PlayChartContext}; the play session passes itself.
@@ -24,6 +24,7 @@ import { resolveBMSBase, type BeMusicEvent, type BeMusicJSON } from '@be-music/c
 import { preparePlaybackChart, resolvePlayChart, type PreparedPlaybackChartData } from '@be-music/player-engine';
 import {
   isPlayableInputChannel,
+  randomizeSRandomNotes,
   resolveLaneOptionChannels,
   resolvePlayVariantLaneChannels,
 } from '@be-music/player-engine/lanes';
@@ -37,6 +38,7 @@ import type { PlayerGaugeSummary } from '@be-music/player-engine/signals';
 import {
   createEmptyScore,
   type GaugeType,
+  type RulesetId,
   type JudgmentKind,
   type ScoreSummary,
 } from '@be-music/player-engine/ruleset';
@@ -152,6 +154,9 @@ export interface PlayChartContext {
 }
 
 export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): void {
+  if (ctx.options.replay === undefined && (ctx.options.random1P === 'SCATTER' || ctx.options.random2P === 'SCATTER')) {
+    throw new RangeError('SCATTER is disabled until placement and assist policy are implemented.');
+  }
   // Resolve `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow once, first, so every play-time consumer below and the
   // engine see the same chosen branches. The draws are fresh each play (LR2 re-rolls each play); a replay resolves
   // with the draws its log recorded, so it plays the recorded branches.
@@ -246,24 +251,26 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
         invisible.channel = flipDPChannel(invisible.channel);
       }
     }
-    // RANDOM / MIRROR / S-RANDOM / SCATTER — shuffle the 1P / 2P keyboard lanes independently. Scratch (channels 16 /
+    // RANDOM / MIRROR / S-RANDOM — shuffle the 1P / 2P keyboard lanes independently. Scratch (channels 16 /
     // 26) and the 24 / 48 KEY wheel never move (`resolveLaneOptionChannels`). Per LR2 convention, the shuffle is drawn at chart-prepare time so a single play session has a
     // stable arrangement (F5-restart re-rolls it). Mine channels are included in the same shuffle pass so a mine on
     // lane 4 lands wherever the shuffle moved lane 4 — keeping the mine's visual relationship to the surrounding chord
     // intact.
     applyRandomMode(
       ctx.notes as Array<{ channel: string }>,
-      resolveLaneOptionChannels('1P', hostPlayVariant),
+      resolveLaneOptionChannels('1P', hostPlayVariant, prepared.laneBindings),
       ctx.options.random1P ?? 'OFF',
       Math.random,
+      { ruleset: ctx.options.judgeRuleset ?? 'lr2' },
       ctx.mineNotes as Array<{ channel: string }>,
       ctx.invisibleNotes as Array<{ channel: string }>,
     );
     applyRandomMode(
       ctx.notes as Array<{ channel: string }>,
-      resolveLaneOptionChannels('2P', hostPlayVariant),
+      resolveLaneOptionChannels('2P', hostPlayVariant, prepared.laneBindings),
       ctx.options.random2P ?? 'OFF',
       Math.random,
+      { ruleset: ctx.options.judgeRuleset ?? 'lr2' },
       ctx.mineNotes as Array<{ channel: string }>,
       ctx.invisibleNotes as Array<{ channel: string }>,
     );
@@ -505,29 +512,62 @@ export function flipDPChannel(channel: string): string {
 /**
  * Shuffles `notes` in place per the chosen arrangement mode. Only `allLanes` — one side's keyboard lanes, from
  * `resolveLaneOptionChannels` — are touched; scratches, the keyboard modes' wheel, and the other side pass through
- * untouched, matching LR2 / beatoraja where the lane options shuffle the keys only. The `usedLanes` filter trims the permutation domain to the lanes actually
- * present in the chart so 5K charts (lanes 1..5 only) MIRROR / RANDOM cleanly inside that subset.
+ * untouched. Every supported mode uses the complete mode domain, even on sparse charts.
  *
- * - `MIRROR` — deterministic reversal of `usedLanes`
- * - `RANDOM` — single chart-wide permutation (Fisher-Yates with the supplied RNG)
- * - `S-RANDOM` — per-chord permutation; chord notes share the beat key, and we re-permute within that group so notes on
- *   the same beat never collide on one lane
- * - `SCATTER` — currently aliased to `RANDOM`; reserved for a future per-measure permutation pass
+ * - `MIRROR` — deterministic reversal of the full mode key set
+ * - `RANDOM` — chart-wide permutation of the full mode key set (Fisher-Yates with the supplied RNG)
+ * - `S-RANDOM` — ruleset-specific pure randomizer with active-LN reservations and beatoraja jack avoidance
+ * - `SCATTER` — disabled; new requests fail before any arrangement or recording
+
  */
 export function applyRandomMode(
   notes: Array<{ channel: string }>,
   allLanes: readonly string[],
   mode: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER',
   rng: () => number,
-  // Extra channel-bearing arrays (e.g. mine notes) that should follow the same lane shuffle as the playable notes. The
-  // `usedLanes` set is computed from `notes` only — secondary entries on a lane that has no playable notes get remapped
-  // through the same chart-wide map / chord permutation, so mines stay anchored to the visual lane they were authored
-  // on relative to the surrounding chord.
+  options: { ruleset?: RulesetId } = {},
+  // Extra channel-bearing arrays: mines first, then invisible notes. Chart permutations share the same lane map;
+  // S-RANDOM applies the active ruleset's policy for each event kind.
   ...secondary: Array<Array<{ channel: string }>>
 ): void {
+  if (mode === 'SCATTER')
+    throw new RangeError('SCATTER is disabled until placement and assist policy are implemented.');
   if (mode === 'OFF') return;
-  const usedLanes = allLanes.filter((lane) => notes.some((note) => note.channel === lane));
-  if (usedLanes.length < 2) return;
+  if (mode === 'S-RANDOM') {
+    const entries = [
+      ...notes.map((note) => ({ note, kind: 'note' as const })),
+      ...secondary.flatMap((arr, index) =>
+        arr.map((note) => ({ note, kind: index === 0 ? ('mine' as const) : ('invisible' as const) })),
+      ),
+    ];
+    const channels = randomizeSRandomNotes(
+      entries.map(({ note, kind }) => {
+        const timed = note as {
+          channel: string;
+          seconds?: number;
+          endSeconds?: number;
+          beat?: number;
+          endBeat?: number;
+        };
+        return {
+          channel: timed.channel,
+          timeMs: (timed.seconds ?? timed.beat ?? 0) * 1000,
+          ...(timed.endSeconds !== undefined || timed.endBeat !== undefined
+            ? { endTimeMs: (timed.endSeconds ?? timed.endBeat!) * 1000 }
+            : {}),
+          kind,
+        };
+      }),
+      allLanes,
+      { ruleset: options.ruleset ?? 'lr2', random: rng },
+    );
+    entries.forEach(({ note }, index) => {
+      note.channel = channels[index]!;
+    });
+    return;
+  }
+  const domainLanes = allLanes;
+  if (domainLanes.length < 2) return;
 
   const remapAll = (map: Map<string, string>): void => {
     for (const note of notes) {
@@ -544,58 +584,22 @@ export function applyRandomMode(
 
   if (mode === 'MIRROR') {
     const map = new Map<string, string>();
-    for (let index = 0; index < usedLanes.length; index += 1) {
-      map.set(usedLanes[index]!, usedLanes[usedLanes.length - 1 - index]!);
+    for (let index = 0; index < domainLanes.length; index += 1) {
+      map.set(domainLanes[index]!, domainLanes[domainLanes.length - 1 - index]!);
     }
     remapAll(map);
     return;
   }
 
-  if (mode === 'RANDOM' || mode === 'SCATTER') {
-    const perm = shuffleArray([...usedLanes], rng);
+  if (mode === 'RANDOM') {
+    const perm = shuffleArray([...domainLanes], rng);
+
     const map = new Map<string, string>();
-    for (let index = 0; index < usedLanes.length; index += 1) {
-      map.set(usedLanes[index]!, perm[index]!);
+    for (let index = 0; index < domainLanes.length; index += 1) {
+      map.set(domainLanes[index]!, perm[index]!);
     }
     remapAll(map);
     return;
-  }
-
-  if (mode === 'S-RANDOM') {
-    // Group keyboard-lane notes by beat — every note in a chord shares the same `beat` key, so a fresh permutation per
-    // group gives each note a distinct lane within that chord. The secondary arrays (mines) get the chord-local map too
-    // so an adjacent mine in the same beat ends up beside the re-arranged chord, not floating to a stale lane.
-    const grouped = new Map<number, Array<{ channel: string }>>();
-    const beatOf = (note: { channel: string }): number | undefined => {
-      const beat = (note as { beat?: number }).beat;
-      return typeof beat === 'number' ? beat : undefined;
-    };
-    const groupBy = (arr: Array<{ channel: string }>): void => {
-      for (const note of arr) {
-        if (!usedLanes.includes(note.channel)) continue;
-        const beat = beatOf(note);
-        if (beat === undefined) continue;
-        const group = grouped.get(beat);
-        if (group) {
-          group.push(note);
-        } else {
-          grouped.set(beat, [note]);
-        }
-      }
-    };
-    groupBy(notes);
-    for (const arr of secondary) groupBy(arr);
-    for (const chord of grouped.values()) {
-      const perm = shuffleArray([...usedLanes], rng);
-      const map = new Map<string, string>();
-      for (let index = 0; index < usedLanes.length; index += 1) {
-        map.set(usedLanes[index]!, perm[index]!);
-      }
-      for (const note of chord) {
-        const target = map.get(note.channel);
-        if (target) note.channel = target;
-      }
-    }
   }
 }
 

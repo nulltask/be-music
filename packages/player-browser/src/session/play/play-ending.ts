@@ -123,6 +123,7 @@ export interface PlayEndingContext {
   readonly fastCount: number;
   readonly slowCount: number;
   readonly replay: BeMusicReplay | undefined;
+  readonly practice?: boolean;
   playClock(): number;
   currentSeconds(): number;
   resolveChartDurationSeconds(): number;
@@ -219,6 +220,7 @@ export function getResultData(ctx: PlayEndingContext): PlayResult | undefined {
   const gauge = ctx.gaugeState;
   const result = playResultFromPlayState(ctx.playState, {
     chart: ctx.chart,
+    ...(ctx.practice === true ? { practice: true } : {}),
     score: ctx.score,
     seconds: ctx.currentSeconds(),
     judgeRuleset: ctx.resolveJudgeRuleset(),
@@ -228,6 +230,33 @@ export function getResultData(ctx: PlayEndingContext): PlayResult | undefined {
   });
   return {
     ...result,
+    ...(ctx.playState.courseCombo !== undefined
+      ? {
+          stageOutcome: {
+            ruleset: ctx.resolveJudgeRuleset(),
+            judge: {
+              pgreat: ctx.score.perfect,
+              great: ctx.score.great,
+              good: ctx.score.good,
+              bad: ctx.score.bad,
+              poor: ctx.score.poor - (ctx.resolveEmptyPoorCountsInPoorDisplay() ? ctx.score.emptyPoor : 0),
+              emptyPoor: ctx.score.emptyPoor,
+            },
+            fast: ctx.fastCount,
+            slow: ctx.slowCount,
+            exScore: ctx.score.exScore,
+            noteCount: ctx.score.total,
+            maxCombo: ctx.playState.maxCombo,
+            gauge: {
+              type: gauge.type ?? 'GROOVE',
+              final: ctx.playState.gauge,
+              cleared: ctx.playState.cleared,
+              ...(gauge.failedMidPlay ? { failedMidPlay: true } : {}),
+            },
+            course: { combo: ctx.playState.courseCombo.combo, maxCombo: ctx.playState.courseCombo.maxCombo },
+          },
+        }
+      : {}),
     // Folded, `score.poor` is the engine's `poor + emptyPoor` (`resolveDisplayedPoor`).
     ...(ctx.resolveEmptyPoorCountsInPoorDisplay() ? { judgedPoor: ctx.score.poor - ctx.score.emptyPoor } : {}),
     ...(gauge.max > 0 ? { gaugeBorder: gaugePercent({ current: gauge.clearThreshold, max: gauge.max }) } : {}),

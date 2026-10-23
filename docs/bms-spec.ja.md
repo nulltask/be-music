@@ -97,8 +97,8 @@
 - [x] `#PLAYER=4` (BATTLE) はメタ情報として保持し、現状は専用の 2 人対戦プレイを実装しない
 - [x] チャンネル `D1-D9` (地雷) を解釈
 - [x] チャンネル `E1-E9` (地雷) を解釈
-- [x] MANUAL モードで「押したまま判定線を通過」または「`PGREAT` 窓以内での押下」で地雷を爆発させる（LR2 準拠。`lr2` と `iidx` ruleset）。`beatoraja` ruleset では「押したまま判定線を通過」だけで爆発させる（beatoraja 準拠）
-- [x] 地雷ダメージはオブジェクト値（大文字 base36）をそのままパーセントとして適用し、判定・コンボには影響させない（LR2 / beatoraja 準拠）
+- [x] LR2beta3 の地雷は早い側の GREAT 境界の手前の押下、または押したままの通過で爆発。beatoraja の通過時のみのモデルと、暫定 IIDX の左右対称 PGREAT モデルを維持。
+- [x] 地雷ダメージを直接適用し、コンボと EX-SCORE を維持。LR2 は被弾ごとに POOR/BP を1回加算し、beatoraja と暫定 IIDX はゲージのみを変更。
 - [x] 地雷のオブジェクト値が 2 文字の大文字 base36 ID でない場合や `00` の場合は既定ダメージ `4%` にフォールバック（`#BASE 62` の小文字の値もこの既定値になる）
 - [x] `#WAV00` が定義されている場合、MANUAL モードの地雷ヒットで爆発音として使用
 - [x] 地雷を `TOTAL` / `EX-SCORE` の対象ノート数から除外
@@ -107,7 +107,7 @@
 
 地雷ダメージは BM98 時代の基礎 BMS 仕様には含まれていないため、現実装では後年公開された地雷拡張系の資料と LR2 互換実装を根拠にしています。
 
-- 発動窓は LR2 自身の changelog（`history.txt` 080114 の地雷実装エントリ「キー押したまま地雷通過、もしくはピカグレ範囲内でキーを押すと爆発します」）に従い、**`PGREAT`（ピカグレ）範囲**とします。以降のエントリに変更はありません。losak「地雷オブジェに関するアレコレ (LR2)」は `GOOD` 窓としていますが、一次資料を優先し `GOOD` は採用しません。
+- #141 が根拠とした `history.txt` の2008年1月14日の告知より、互換対象である LR2beta3 本体を優先します。[ProcSinglenote](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L7434-L7460) と VA 0x4188ad–0x4188d2 は GREAT の早い側の厳密な境界を使います。[ApplyJudgeMine](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2043-L2060) を VA 0x40659c–0x4065bd と照合すると POOR は1回加算です。転記にある2回目の加算はバイナリにはありません。[#590](https://github.com/nulltask/be-music/issues/590) で修正。
 - 「ダメージ = 指定値そのまま（10進換算%）」は losak の資料の LR2 実機検証に従います。beatoraja（jbms-parser `Section.java` / `JudgeManager`）も生値をダメージとして直接適用しており一致します。
 - Hitkey command memo の `value / 2` は nanasi 系統の仕様であり、LR2 の実挙動とは異なるため採用していません。
 - `#WAV00` を地雷リアクション専用とする扱いは Hitkey memo / Obj Tech Lovers chapter3-2 / chapter4-7 で補強しています。

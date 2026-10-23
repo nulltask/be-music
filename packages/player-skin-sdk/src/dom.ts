@@ -78,7 +78,7 @@ export interface BeMusicDOMGameplayFrame extends BeMusicDOMPresentation {
   readonly stage: 'loading' | 'intro' | 'playing' | 'paused' | 'ending';
   readonly autoPlay: boolean;
   readonly replay: boolean;
-  /** Whether {@link BeMusicDOMGameplayActions.seek} moves the play now: an AUTO play whose chart is running. */
+  /** Whether {@link BeMusicDOMGameplayActions.seek} moves the play now: an AUTO play, replay or opted-in manual practice play. */
   readonly seekable: boolean;
 }
 
