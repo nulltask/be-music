@@ -63,6 +63,7 @@ import {
   flushReplayView,
   followTempoChange,
   startReplayView,
+  updateReplayView,
   type PlayViewSettingsContext,
 } from './play-view-settings.ts';
 
@@ -75,6 +76,7 @@ export interface PlayEngineContext
     Pick<
       PlaySessionOptions,
       | 'autoPlay'
+      | 'allowSeek'
       | 'autoScratch1P'
       | 'autoScratch2P'
       | 'chartMD5'
@@ -131,6 +133,9 @@ export interface PlayEngineContext
   sharedEngineChartSettled: boolean;
   engineFrame: Readonly<PlayerUIFramePayload> | undefined;
   seekGeneration: number;
+  practice: boolean;
+  engineStartRequested: boolean;
+  readonly paused: boolean;
   readonly seekWaiters: Array<{ seconds: number; resolve: () => void }>;
   bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } };
   chartEnded: boolean;
@@ -453,6 +458,8 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       ctx.sharedEngineChartSettled = false;
       // A tempo asked for while the engine was starting.
       ctx.liveTempo.attach(signals.inputSignals);
+      if (ctx.paused) signals.inputSignals.pushCommand({ kind: 'toggle-pause' });
+      if (ctx.engineStartRequested) signals.inputSignals.pushCommand({ kind: 'start' });
     },
     // Listen on the window (default) so the runtime sees keyboard events regardless of which DOM element
     // currently holds focus — matches the legacy `window.addEventListener('keydown', ...)` behaviour. The
@@ -462,9 +469,9 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
     engineOptions: {
       // The draws `resolvedChart` was resolved with; the engine plays that chart as is and names them in its summary.
       ...(ctx.randomDraws !== undefined ? { randomDraws: ctx.randomDraws } : {}),
-      // The view's own intro timing already gated the chart to PLAYSTART; tell the engine to start its chart
-      // immediately instead of imposing the engine's default 1.5 s lead-in on top.
+      // Prepare during the skin intro; chart time and audio wait for its PLAY START command.
       leadInMs: 0,
+      waitForStart: true,
       // The play tempo: the engine's clock runs `tempo` times as fast and judges in chart time. A change during the
       // play comes back through `onTempoChange`, at the chart second the engine took it.
       speed: ctx.tempo,
@@ -548,11 +555,13 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
             // What the player sees at the start; the changes during the play go in as `view` commands. A play that
             // seeks records none: the engine discards its recorder at the first seek.
             recordReplay: resolveReplayRecording(ctx.options, ctx.chart, startReplayView(ctx)),
-            onReplayRecorded: (replay: BeMusicReplay) => {
-              ctx.replay = replay;
-              const waiters = ctx.replayWaiters.splice(0);
-              for (const resolve of waiters) resolve(replay);
-            },
+            onReplayRecorded: ctx.practice
+              ? undefined
+              : (replay: BeMusicReplay) => {
+                  ctx.replay = replay;
+                  const waiters = ctx.replayWaiters.splice(0);
+                  for (const resolve of waiters) resolve(replay);
+                },
           }),
     },
   })
@@ -625,7 +634,9 @@ export function drainSharedEngineSignals(ctx: PlayEngineContext): void {
  */
 function applyEngineFrame(ctx: PlayEngineContext, frame: Readonly<PlayerUIFramePayload>): void {
   if ((frame.generation ?? 0) < ctx.seekGeneration) return;
-  ctx.engineFrame = frame;
+  // The signal bus reuses its frame object. Keep the applied clock metadata owned by this
+  // session, so publishing a seek cannot move time before its score snapshot is drained.
+  ctx.engineFrame = { ...frame };
   applyEngineSummary(ctx, frame.summary);
 }
 
@@ -638,11 +649,15 @@ function applyEngineSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSumm
   // the engine's smaller scorable count) and the FC presentation never fires. Sync `score.total` to the
   // engine's value here so the view always agrees with the authority on the scorable population.
   ctx.score.total = summary.total;
+  if (summary.fullCombo !== undefined) ctx.score.fullCombo = summary.fullCombo;
+  else delete ctx.score.fullCombo;
   ctx.score.perfect = summary.perfect;
   ctx.score.great = summary.great;
   ctx.score.good = summary.good;
   ctx.score.bad = summary.bad;
   ctx.score.emptyPoor = summary.emptyPoor;
+  if (summary.minePoor !== undefined) ctx.score.minePoor = summary.minePoor;
+  else delete ctx.score.minePoor;
   // `this.score` is the DISPLAY copy: under LR2 the POOR counter folds empty POORs in, matching the real thing
   // (OpenLR2 `ApplyJudgeNote` increments `playerstat.poor` for the empty-POOR branch, and LR2 exposes no
   // separate stat). Every LR2 read-out — the POOR row, BP, the per-judge rates, the skin's num 84 / 89 / 114 —
@@ -770,6 +785,12 @@ function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUICommand): v
 function applyEngineSeek(ctx: PlayEngineContext, command: Extract<PlayerUICommand, { kind: 'seek' }>): void {
   const { snapshot, seconds, generation } = command;
   ctx.seekGeneration = generation;
+  if (
+    (ctx.options.autoPlay !== true && ctx.options.replay === undefined) ||
+    ctx.options.course !== undefined ||
+    ctx.options.nonstop !== undefined
+  )
+    ctx.practice = true;
   ctx.resetPresentation();
   // A play sought back out of its lead-out plays on: the engine settles the chart again.
   if (ctx.chartEndTimeout !== undefined) {
@@ -793,6 +814,7 @@ function applyEngineSeek(ctx: PlayEngineContext, command: Extract<PlayerUIComman
     judgments: snapshot.judgments,
     at: ctx.playClock(),
   });
+  updateReplayView(ctx, seconds, true);
   resolveSeekWaiters(ctx, seconds);
 }
 

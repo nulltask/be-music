@@ -23,3 +23,5 @@ export {
   type LaneBinding,
   type LaneModeOptions,
 } from './core/lane-layout.ts';
+
+export { randomizeSRandomNotes, type SRandomNote, type SRandomOptions } from './lane-random.ts';

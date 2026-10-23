@@ -6,18 +6,35 @@
 import { createAudioService, setMasterVolume, type AudioService } from '@be-music/player-browser/audio';
 import {
   BrowserChartCollectionStore,
+  loadAssetBytes,
+  resolveChartImageAsset,
   resolveChartSource,
   type BrowserChartCollection,
 } from '@be-music/player-browser/collection';
 import { createPlayScene, PixiSceneHost, type PlayScene } from '@be-music/player-browser/host';
 import type { LibraryChart } from '@be-music/player-scene-model';
-import { defineBeMusicElements, resolveSeekTarget, type BeMusicUIEvent } from '@be-music/player-ui';
+import {
+  defineBeMusicElements,
+  resolveSeekTarget,
+  type BeMusicPreviewSelectElement,
+  type BeMusicUIEvent,
+} from '@be-music/player-ui';
+import { previewArtworkPath } from './artwork.ts';
 import { findEmbedChart } from './chart-match.ts';
 import { createPreviewSkin, type PreviewChrome, type PreviewChromeState } from './preview-skin.ts';
 import type { EmbedTrack } from './track-url.ts';
 
 /** How far ← / → seek. */
 const SEEK_STEP_SECONDS = 5;
+
+function imageType(path: string): string {
+  const extension = path.split('.').pop()?.toLowerCase();
+  if (extension === 'jpg' || extension === 'jpeg') return 'image/jpeg';
+  if (extension === 'gif') return 'image/gif';
+  if (extension === 'webp') return 'image/webp';
+  if (extension === 'bmp') return 'image/bmp';
+  return 'image/png';
+}
 
 export interface PreviewAppElements {
   /** Fills the page; the full-screen target. */
@@ -42,6 +59,8 @@ export class PreviewApp {
   private current: { chart: LibraryChart; started: boolean } | undefined;
   /** The chart played on its own (`?chart=`, or a track of one chart): its play ends on a replay button. */
   private single: LibraryChart | undefined;
+  /** Object URLs of the list's stage files and banners. Revoked when the list is built again. */
+  private artworkUrls: string[] = [];
 
   public constructor(elements: PreviewAppElements) {
     this.elements = elements;
@@ -87,14 +106,41 @@ export class PreviewApp {
   }
 
   private showSelect(): void {
+    this.revokeArtwork();
     const list = document.createElement('be-music-preview-select');
     list.charts = this.charts;
     list.heading = this.trackName;
+    const images = new Map<string, string>();
+    list.images = images;
     list.addEventListener('activate-request', (event) => {
       const chart = this.charts[(event as BeMusicUIEvent<'activate-request'>).detail.index];
       if (chart !== undefined) void this.play(chart);
     });
     this.showOverlay(list);
+    void this.fillArtwork(list, images);
+  }
+
+  /** Loads each chart's `#STAGEFILE`, or its `#BANNER`, and puts the picture on its row. */
+  private async fillArtwork(list: BeMusicPreviewSelectElement, images: Map<string, string>): Promise<void> {
+    const collection = this.collection;
+    if (collection === undefined) return;
+    for (const chart of this.charts) {
+      if (this.elements.overlay.firstElementChild !== list) return;
+      const path = previewArtworkPath(chart);
+      const source = path === undefined ? undefined : resolveChartSource(collection, chart);
+      if (path === undefined || source === undefined) continue;
+      const bytes = await loadAssetBytes(resolveChartImageAsset(source, chart.chartPath, path));
+      if (this.elements.overlay.firstElementChild !== list || bytes === undefined) continue;
+      const url = URL.createObjectURL(new Blob([bytes.slice()], { type: imageType(path) }));
+      this.artworkUrls.push(url);
+      images.set(chart.id, url);
+      list.images = new Map(images);
+    }
+  }
+
+  private revokeArtwork(): void {
+    for (const url of this.artworkUrls) URL.revokeObjectURL(url);
+    this.artworkUrls = [];
   }
 
   /** Plays `chart` at once: picking it from the list is the gesture that lets the audio start. */

@@ -84,7 +84,7 @@ Chrome と Edge ではフルスクリーン中に Keyboard Lock API で `Esc` �
 - **Tempo**（既定で開く）: Tempo (%)、Pitch、Keep-pitch stretcher（[プレイテンポ](#プレイテンポ) を参照）。曲の開始時に確定し、プレイ中は無効になります。ただしピッチがテンポに追従するときの Tempo (%) はプレイ中も有効で、プレイのテンポをその場で変えます。
 - **Course**（既定で開く）: Skip stage results、My courses…、NONSTOP placement（曲の開始時に確定し、プレイ中は無効）、Table URL と Import table courses。
 - **Skin & display**（既定で閉じる）: Skin system で使用するファミリーを選び、未読み込みの場合はドロップを促します。**Built-in** タブには Built-in skin、Skin effects、**Skin settings**、**Add skin**、**LR2** タブには Load LR2 skin と検出したテーマの選択、**beatoraja** タブには Load beatoraja skin とシーンごとの選択を配置します。タブは設定の分類であり、開いただけでは使用中のスキンは切り替わりません。Render resolution、Play layout、Judged notes、Toggle fullscreen は共通です。スキンを検知すると、テーマのアセットを置き換える前に確認ダイアログを表示します。キャンセルすると現在のスキンを維持し、同じドロップに含まれる譜面は読み込みます。LR2 と beatoraja が両方含まれる場合は、どちらを使用するか選べます。
-- **Audio**（既定で開く）: Mute、Master / Key sound / BGM の音量 (%)、Play in silent mode（Audio Session API があるブラウザーのみ。後述）、 **Compressor** フォルダー（Enabled、stage ごとの切り替え、各 compressor の threshold / knee / ratio / attack / release とリセット）。Mute はマスター音量を保持したまま、プレイヤーの音声をすべて消音します。
+- **Audio**（既定で開く）: Mute、Master / Key sound / BGM の音量 (%)、Play in silent mode（Audio Session API があるブラウザーのみ。後述）、Peak gain (next play)、**Compressor** フォルダー（Enabled、stage ごとの切り替え、各 compressor の threshold / knee / ratio / attack / release とリセット）。Mute はマスター音量を保持したまま、プレイヤーの音声をすべて消音します。Peak gain はオンにするまでオフで、再読み込みでは保持されません。次のプレイで、デコードした全サンプルを一つのゲインで揃え、一番大きいピークを約 −3 dBFS にします。再読み込みすると、譜面は作られたときの音量で再生されます。
 - **Library & records**（既定で閉じる）: Music / Skin ZIP URL と Load from URLs（`?music=` / `?skin=` と同じ読み込みをその場で実行）、Auto-save play history、Clear best records、**BGA video transcode** フォルダー。
 - **Capture**（既定で閉じる）: ● Record gameplay video、Video format（既定は MP4 · H.264。MP4 / WebM と H.264 / H.265 / AV1 / VP9 / VP8 から選択）、📸 Screenshot。
 - **Leaderboard**（既定で閉じる）: Submit to Leaderboard、Account（ログイン中の handle、または「Not signed in」）、Create passkey (keep this account)、Sign in with passkey、Sign out。
@@ -654,6 +654,10 @@ Web のデモはどの種類のプレイもすべてこの方法で、その種�
 
 シークは動いているエンジンへのコマンドです（[ADR 0016](./adr/0016-seek-play-loop-command.ja.md)）。`PlayScene.seek(T)` は入力バスに `{ kind: 'seek', seconds: T }` を送り（`play-seek.ts`）、エンジンがそれか後のシークを適用したら解決します。エンジンは `T` での次の世代のフレームと `seek` の UI コマンドを返し、セッションはそのスナップショットからスコア、ゲージ、プレイ状態を取ります（`reducePlayState` の `seek` イベント）。表示は戻し、進行中のリードアウトは取り消し、BGA の動画は合わせ直し、ビューには `seek` イベントを知らせます（LR2 のビューは `resolveLR2PlayTimers` で、beatoraja のブリッジは `resolveBeatorajaSeekTimers` で判定とレーンのタイマーを止め、ブリッジは判定状態のグラフをスナップショットの判定から組み直します）。`T` をまたいで押さえているロングノートは、エンジンが再通知するとそのあとに続きます。一時停止中のプレイは `T` で一時停止したままです。
 
+AUTO プレイとリプレイはシークできます。ホストは `PlaySceneOptions.allowSeek: 'practice'` で手動練習も有効にできます。目標より前のノートを得点なしで消化済みにし、スコアとゲージを開始時に戻します。最初のシークで記録を破棄し、`PlayResult.practice` により記録更新・ランキング・リプレイ自動保存を行いません。リプレイでは記録された入力を先頭から目標まで再適用し、その位置のテンポとテンポ変更カーソルを復元します。記録された表示設定も、ホストの Replay / ghost 設定に従って目標位置の値を再適用します。通常のプレイ画面でも AUTO・リプレイ・有効にした手動練習中の ← / → で 5 秒シークできます。シークしたプレイは新しいリプレイを記録しません。コースのステージや NONSTOP でシークすると、後続ステージも含むコース全体を練習扱いにします。ステージの結果からリプレイとは独立してゲージとコンボを引き継ぎ、コース結果を表示しますが、記録更新・送信・リプレイ自動保存は行いません。
+
+セッションは音声のデコード後、BGA の読み込みとスキンのイントロ中にエンジンを準備します。`PlayerOptions.waitForStart` により、スキンの PLAY START ゲートが `{ kind: 'start' }` を送るまで譜面時刻と音声を開始しません。イントロ中のシークは開始位置を選び、START 後に適用します。イントロ中に一時停止した場合も停止したままです。曲末の余韻中に前へ戻ると余韻を取り消して終了通知を再度有効にし、終了済みの譜面の終端にシークした場合は終了通知を重複させません。
+
 ```mermaid
 sequenceDiagram
   participant H as PlayScene
@@ -859,9 +863,9 @@ stateDiagram-v2
   Playing --> Ready: 終了（1 つ、リプレイ）
 ```
 
-- **選曲:** 譜面が複数あるトラックは一覧を表示し（`be-music-preview-select`）、選んだ譜面をすぐに再生する。
+- **選曲:** 譜面が複数あるトラックは一覧を表示し（`be-music-preview-select`）、各行にその譜面の `#STAGEFILE`、なければ `#BANNER` を出す。選んだ譜面はすぐに再生する。
 - **再生待ち:** 譜面が 1 つのときは、プレイ画面の上に再生ボタン（`be-music-preview-start`）を表示する。再生後はリプレイボタンになる。リザルト画面はない。
-- **再生中:** プレビュー用スキン（`src/embed/preview-skin.ts`）は、左ペインにレーン、右ペインに BGA を置き、その下に譜面の情報・スコア・コンボ・ゲージ・判定（`be-music-preview-hud`）、下端に動画プレイヤー風のコントロール（`be-music-playback-controls`）を置く。コントロールは再生／一時停止・シークバー・時間・ミュートと音量・全画面である。Space で再生／一時停止、← / → で 5 秒シーク、M でミュート、F で全画面を切り替える。
+- **再生中:** プレビュー用スキン（`src/embed/preview-skin.ts`）は、左ペインにレーン、右ペインに BGA を置く。縦長の画面では BGA を上、レーンをその下に置く。譜面の情報・スコア・コンボ・ゲージ・判定は BGA 側に置き（`be-music-preview-hud`）、下端に動画プレイヤー風のコントロール（`be-music-playback-controls`）を置く。細いシークバー、再生／一時停止、ミュートの横に開く音量、時間、全画面である。画面をクリックすると再生／一時停止する。Space で再生／一時停止、← / → で 5 秒シーク、M でミュート、F で全画面を切り替える。
 
 シーク（`PlayScene.seek`）は、動いているエンジンにシークのコマンドを送る（[ADR 0016](./adr/0016-seek-play-loop-command.ja.md)）。プレイを始め直すことはない。エンジンは譜面の頭からシークした秒までプレイを組み直すので、スコア・ゲージ・コンボ・最大コンボ・グラフ・タイミングはそこまでプレイしたときと同じになる。その時点で鳴っている音は途中から鳴らし（`AudioSession.triggerEventAt`）、Web の音声セッションは鳴っていた音を止め、音量の変化を戻し、NONSTOP の譜面のフェードを動かす（`WebAudioSession.seek`）。シークバーと時間は新しい世代のフレームに従い、一時停止中のプレイは一時停止したままになる。セッションの側は「プレイの部品の置き場所」を参照。
 

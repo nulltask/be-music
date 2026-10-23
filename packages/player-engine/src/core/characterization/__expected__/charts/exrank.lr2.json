@@ -161,11 +161,11 @@
       "judged": [
         "535.000 seconds=0.535 note 11@0.5",
         "1535.000 seconds=1.535 note 12@1.5",
-        "1768.333 seconds=1.768333 mine 15@1.75",
+        "1751.667 seconds=1.751667 mine 15@1.75",
         "2451.667 seconds=2.451667 invisible 16@2.25",
         "2535.000 seconds=2.535 note 13@2.5",
         "3035.000 seconds=3.035 note 14@3",
-        "3285.000 seconds=3.285 mine 15@3.25"
+        "3251.667 seconds=3.251667 mine 15@3.25"
       ],
       "last": "4451.667 seconds=4.435 beat=8.87"
     },
@@ -288,7 +288,7 @@
         "2550.000 seconds=2.55 note 13@2.5",
         "2550.000 seconds=2.55 invisible 16@2.25",
         "3050.000 seconds=3.05 note 14@3",
-        "3283.333 seconds=3.283333 mine 15@3.25"
+        "3266.667 seconds=3.266667 mine 15@3.25"
       ],
       "last": "4466.667 seconds=4.45 beat=8.9"
     },

@@ -366,6 +366,9 @@ describe('createWebAudioSession', () => {
     session.setTempo?.(1);
     expect(retime.mock.calls[2]![0]).toBe(32);
     expect(contextTimeAt(2)(40)).toBe(16);
+    session.seek?.(2);
+    expect(retime.mock.calls[3]![0]).toBe(2);
+    expect(contextTimeAt(3)(5)).toBe(11);
   });
 
   test('applies #WAVCMD per-slot gain via an intermediate GainNode', () => {

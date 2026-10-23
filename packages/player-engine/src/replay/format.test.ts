@@ -95,6 +95,35 @@ function corrupt(mutate: (value: any) => void): unknown {
 }
 
 describe('replay format', () => {
+  test('preserves mine POOR counts and rejects negative or fractional counts', () => {
+    const replay = makeReplay();
+    replay.results!.native!.minePoor = 1;
+    expect(parseReplay(serializeReplay(replay))).toEqual(replay);
+    for (const value of [-1, 0.5, '1']) {
+      expect(() =>
+        parseReplay(
+          corrupt((log) => {
+            log.results.native.minePoor = value;
+          }),
+        ),
+      ).toThrow(/minePoor: expected a non-negative integer/);
+    }
+  });
+
+  test.each([true, false])('preserves fullCombo=%s and rejects non-boolean values', (fullCombo) => {
+    const replay = makeReplay();
+    replay.results!.native!.fullCombo = fullCombo;
+    expect(parseReplay(serializeReplay(replay)).results!.native!.fullCombo).toBe(fullCombo);
+    expect(() =>
+      parseReplay(
+        corrupt((value) => {
+          value.results.native.fullCombo = 0;
+        }),
+      ),
+    ).toThrow(/fullCombo: expected a boolean/);
+    expect(parseReplay(serializeReplay(makeReplay())).results!.native).not.toHaveProperty('fullCombo');
+  });
+
   test('serializeReplay → parseReplay round-trips every field', () => {
     const replay = makeReplay();
     expect(parseReplay(serializeReplay(replay))).toEqual(replay);

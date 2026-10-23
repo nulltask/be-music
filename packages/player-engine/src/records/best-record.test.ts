@@ -139,6 +139,12 @@ describe('recordPlayFromSummary', () => {
 });
 
 describe('course stage record plays', () => {
+  it('counts mine POORs as BP without counting them as judged notes', () => {
+    const score = { total: 10, perfect: 8, great: 0, good: 0, bad: 0, poor: 2, minePoor: 2, emptyPoor: 0, exScore: 16 };
+    expect(courseStageRecordPlayFromResult({ score, maxCombo: 8, cleared: false }).missCount).toBe(4);
+    expect(courseStageRecordPlayFromSummary(score, 8).missCount).toBe(4);
+  });
+
   it('count the notes a failed stage never judged in its BP', () => {
     const score = { total: 100, perfect: 30, great: 10, good: 5, bad: 2, poor: 3, emptyPoor: 1, exScore: 70 };
     // BAD + POOR + empty POOR (6), plus the 50 notes never judged.
@@ -242,4 +248,28 @@ describe('isCourseRunAutoPlayed / courseRunKeepsRecord', () => {
     expect(courseRunKeepsRecord({ stages: [played({ mode: 'auto' }), played()] })).toBe(false);
     expect(courseRunKeepsRecord({ stages: [played({ tempo: 1.2 }), played()] })).toBe(false);
   });
+});
+
+it('keeps an LR2 full combo below the gauge border, using the same lamp rule as replay results', () => {
+  const summary: RecordPlaySummary = {
+    total: 10,
+    perfect: 8,
+    great: 1,
+    good: 1,
+    bad: 0,
+    poor: 0,
+    emptyPoor: 30,
+    exScore: 17,
+    gauge: {
+      type: 'GROOVE',
+      current: 40,
+      max: 100,
+      initial: 20,
+      clearThreshold: 80,
+      effectiveTotal: 160,
+      cleared: false,
+    },
+  };
+  expect(recordPlayFromSummary(summary, 10, 'lr2').lamp).toBe('FULL_COMBO');
+  expect(recordPlayFromSummary(summary, 10, 'beatoraja').lamp).toBe('FAILED');
 });

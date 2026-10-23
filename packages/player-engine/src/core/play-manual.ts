@@ -30,7 +30,11 @@ import type { JudgeStrategy, PlayJudge } from './play-strategy.ts';
  * chart time); a replay has no wall clock to honour, so it runs them on chart time and its judgments do not depend on
  * `speed`.
  */
-export function createPlayJudgeCore(session: PlaySession, judgeMsPerChartSecond: number): JudgeCoreState {
+export function createPlayJudgeCore(
+  session: PlaySession,
+  judgeMsPerChartSecond: number,
+  practiceFromSeconds?: number,
+): JudgeCoreState {
   const { playbackChart, resolvedJSON } = session;
   return createJudgeCoreState(
     {
@@ -52,6 +56,7 @@ export function createPlayJudgeCore(session: PlaySession, judgeMsPerChartSecond:
       // already cut there (`collectRealtimeAudioTriggers` / `collectRealtimeAudioVolumeEvents`).
       reversalSeconds: session.resolvedChart.reversal?.seconds,
       endOnFailure: session.endOnFailure,
+      ...(practiceFromSeconds !== undefined ? { practiceFromSeconds } : {}),
     },
     session.score,
   );
@@ -96,7 +101,8 @@ export function writeManualIntro(session: PlaySession): void {
 function createManualJudge(session: PlaySession): PlayJudge {
   const { tempoClock, uiEnabled, writeOutput, tracer, applyJudgeEffect } = session;
   const { inputTokenToChannels } = session.playbackChart;
-  const judgeCore = createPlayJudgeCore(session, 1000 / tempoClock.initialTempo);
+  let judgeCore = createPlayJudgeCore(session, 1000 / tempoClock.initialTempo);
+  let coreJudge = judgeCoreJudge(session, judgeCore);
   // Input that reports its key releases: declared by the input runtime before the play, or else detected from the first
   // `kitty-state` command. Until then when each key came up is inferred, and the inference watches the judge's effects.
   let inputReportsReleases = session.inputRuntime?.reportsKeyReleases === true;
@@ -123,11 +129,13 @@ function createManualJudge(session: PlaySession): PlayJudge {
       ['tokens', tokens.join(',')],
     ]);
   };
-  const keyState = createKeyStateInference(
-    judgeCore,
-    step,
-    uiEnabled ? undefined : (seconds, tokens) => traceInput(seconds, 'inferred-release', tokens),
-  );
+  const createKeyState = () =>
+    createKeyStateInference(
+      judgeCore,
+      step,
+      uiEnabled ? undefined : (seconds, tokens) => traceInput(seconds, 'inferred-release', tokens),
+    );
+  let keyState = createKeyState();
   // The instant (playback-clock ms) the last press or release was stamped at. Each lane command is stamped as it is
   // drained: the playback clock read then, moved back by the age of its `pressedAt` on the wall clock. The playback
   // clock follows the audio clock, which moves a render quantum at a time (Web Audio's `currentTime`), while the wall
@@ -141,7 +149,18 @@ function createManualJudge(session: PlaySession): PlayJudge {
   };
 
   return {
-    ...judgeCoreJudge(session, judgeCore),
+    isSettled: () => coreJudge.isSettled(),
+    isClosed: () => coreJudge.isClosed(),
+    finish: () => coreJudge.finish(),
+    settledThroughSeconds: () => coreJudge.settledThroughSeconds(),
+    seek: (seconds) => {
+      keyState.stop();
+      judgeCore = createPlayJudgeCore(session, 1000 / tempoClock.initialTempo, seconds);
+      coreJudge = judgeCoreJudge(session, judgeCore);
+      keyState = createKeyState();
+      lastStampMs = Number.NEGATIVE_INFINITY;
+      return { judgments: [], heldLongNotes: [] };
+    },
     judge: (tick) => {
       if (!inputReportsReleases) {
         keyState.releaseBefore(tick.nowSec);
