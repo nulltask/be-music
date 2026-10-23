@@ -736,7 +736,8 @@ function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUICommand): v
       triggerBomb(ctx, command.channel);
       break;
     case 'trigger-poor-bga': {
-      ctx.lastPoorAt = command.seconds;
+      // Commands carry chart seconds, but the shared miss-image window runs on the pause-aware play clock.
+      ctx.lastPoorAt = ctx.playClock();
       // An empty POOR (the engine fires `trigger-poor-bga` for real POOR judgments too, and for empty presses and
       // misses past the window) moves the gauge without a judgment: the play state samples its graphs here. A real
       // POOR that also publishes a judgment gets a second sample at almost the same progress.
