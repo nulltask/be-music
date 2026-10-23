@@ -358,6 +358,7 @@ export class PlayRoute {
     const source = resolveChartSource(this.library.collection, chartEntry);
     const view = createPlayScene(kit, {
       chart: chartEntry,
+      ...(course === undefined ? { allowSeek: 'practice' as const } : {}),
       ...(source !== undefined ? { source } : {}),
       settings:
         kit.family === 'built-in'

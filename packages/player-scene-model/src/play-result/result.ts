@@ -18,6 +18,8 @@ export type PlayRunKind = 'single' | 'stage' | 'course' | 'nonstop';
  * run belongs to.
  */
 export interface PlayResult {
+  /** A seek made this play practice: never save a record, rank it or auto-save its replay. */
+  practice?: boolean;
   /** Per-judgment counts, total notes, EX score and the displayed score (LR2's money score, else the EX score). */
   score: ScoreSummary;
   /**
@@ -111,6 +113,7 @@ export function resolveResultPresentation(run: PlayRunKind): ResultPresentation 
 
 /** What a play's result adds to its final play state. */
 export interface PlayResultFacts {
+  practice?: boolean;
   chart: LibraryChart;
   /** The final judgment counts and scores (the engine's final summary). */
   score: ScoreSummary;
@@ -135,6 +138,7 @@ export function playResultFromPlayState(state: PlayState, facts: PlayResultFacts
   const progress = state.totalSeconds > 0 ? Math.max(0, Math.min(1, facts.seconds / state.totalSeconds)) : 1;
   return {
     score: { ...facts.score },
+    ...(facts.practice === true ? { practice: true } : {}),
     maxCombo: state.maxCombo,
     gauge: state.gauge,
     cleared: state.cleared,
@@ -142,7 +146,7 @@ export function playResultFromPlayState(state: PlayState, facts: PlayResultFacts
     chart: facts.chart,
     gaugeHistory: [...state.gaugeHistory, { progress, value: state.gauge }],
     scoreHistory: [...state.scoreHistory, { progress, exScore: state.exScore }],
-    ...(facts.replay !== undefined ? { replay: facts.replay } : {}),
+    ...(facts.practice !== true && facts.replay !== undefined ? { replay: facts.replay } : {}),
     lamp: resolveClearLamp({
       cleared: state.cleared,
       score: facts.score,

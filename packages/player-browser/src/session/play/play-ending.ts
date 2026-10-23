@@ -92,6 +92,7 @@ export interface PlayEndingContext {
   readonly fastCount: number;
   readonly slowCount: number;
   readonly replay: BeMusicReplay | undefined;
+  readonly practice?: boolean;
   playClock(): number;
   currentSeconds(): number;
   resolveChartDurationSeconds(): number;
@@ -188,6 +189,7 @@ export function getResultData(ctx: PlayEndingContext): PlayResult | undefined {
   const gauge = ctx.gaugeState;
   const result = playResultFromPlayState(ctx.playState, {
     chart: ctx.chart,
+    ...(ctx.practice === true ? { practice: true } : {}),
     score: ctx.score,
     seconds: ctx.currentSeconds(),
     judgeRuleset: ctx.resolveJudgeRuleset(),

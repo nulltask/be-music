@@ -362,3 +362,15 @@ describe('PlaySession.seek (a play-loop command)', () => {
     expect(context.play.sharedEngineChartSettled).toBe(false);
   });
 });
+
+test('manual seeking requires the practice option and marks the result', async () => {
+  const context = createSeekablePlay();
+  playFirstThreeSeconds(context);
+  Object.assign(context.play.options, { autoPlay: false, allowSeek: 'practice' });
+  expect(canSeekPlay(context.play)).toBe(true);
+  const waiting = context.play.seek(5);
+  context.runs[0]!.tick();
+  await waiting;
+  expect(context.play.practice).toBe(true);
+  expect(context.play.getResultData()?.practice).toBe(true);
+});

@@ -87,6 +87,8 @@ export interface PlaySceneOptions extends SessionSceneOptions {
   /** Where the chart's files are: its samples, BGA and images. */
   readonly source?: BrowserAssetSource;
   readonly settings: PlaySceneSettings;
+  /** Allow manual seeking; the first seek makes the play practice and disables saved results. */
+  readonly allowSeek?: 'practice';
   /** The course stage this play is, if any. */
   readonly course?: PlaySceneCourse;
   /** A replay to play back instead of the player's input: its recorded setup, arrangement, tempo and view. */
@@ -133,8 +135,8 @@ export interface PlayScene extends SessionScene<PlayFrame, PlayIntent> {
   /**
    * Moves an AUTO play or replay to chart second `seconds` (clamped to the chart) and plays on from there, as a preview's seek bar
    * does; a paused play stays paused there. The running play seeks — it is not started again — and the promise resolves
-   * once the play shows the second sought (its frames are of the new seek generation). A manual play
-   * ignores it (`PlayFrame.seekable`).
+   * once the play shows the second sought (its frames are of the new seek generation). Manual play requires
+   * `allowSeek: 'practice'` and the first seek disables result persistence (`PlayFrame.seekable`).
    */
   seek(seconds: number): Promise<void>;
   /** Changes the play's tempo (pitch mode, not in a replay); whether it was taken. */
@@ -451,6 +453,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
   const play = new PlaySession(
     {
       ...settings,
+      ...(options.allowSeek !== undefined ? { allowSeek: options.allowSeek } : {}),
       ...(kit.family === 'beatoraja' ? BEATORAJA_PLAY_SETTINGS : {}),
       ...(course !== undefined
         ? { course: course.stage, ...(course.view !== undefined ? { courseInfo: course.view } : {}) }
