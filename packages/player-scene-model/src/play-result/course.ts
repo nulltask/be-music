@@ -1,3 +1,4 @@
+import type { CourseRunStageExtras } from '@be-music/player-engine/course';
 import { resolveLR2MoneyScore } from '@be-music/player-engine/ruleset';
 import type { BeMusicCourseReplay, ReplayCourseResult } from '@be-music/player-engine/replay';
 import { resolveCourseView } from '../course-view/course-view.ts';
@@ -6,7 +7,7 @@ import type { GaugeHistorySample, ScoreHistorySample } from '../play-state/types
 import type { PlayResult } from './result.ts';
 
 /** A stage's gauge and EX-score graphs (`progress` 0..1 over the stage), as its result shows them. */
-export interface CourseStageHistory {
+export interface CourseStageHistory extends CourseRunStageExtras {
   gaugeHistory: readonly GaugeHistorySample[];
   scoreHistory: readonly ScoreHistorySample[];
   /** The stage's play time in seconds (its result's `playSeconds`), when known. */
@@ -67,13 +68,20 @@ export function joinCourseStageHistories(
 export function playResultFromCourseRun(
   course: LibraryCourse,
   result: ReplayCourseResult,
-  courseLog: BeMusicCourseReplay,
+  courseLog: BeMusicCourseReplay | undefined,
   history: CourseStageHistory = EMPTY_COURSE_STAGE_HISTORY,
-  options: { playSeconds?: number; stageHistories?: readonly CourseStageHistory[] } = {},
+  options: { playSeconds?: number; stageHistories?: readonly CourseStageHistory[]; practice?: boolean } = {},
 ): PlayResult {
   const first = course.stages[0]!.chart!;
-  const lastStage = [...courseLog.stages].reverse().find((entry) => entry.played);
-  const judgeRuleset = lastStage?.played === true ? (lastStage.replay.play.judgeRuleset ?? 'lr2') : 'lr2';
+  const lastStage = [...(courseLog?.stages ?? [])].reverse().find((entry) => entry.played);
+  const judgeRuleset =
+    lastStage?.played === true
+      ? (lastStage.replay.play.judgeRuleset ?? 'lr2')
+      : result.ruleset.startsWith('beatoraja')
+        ? 'beatoraja'
+        : result.ruleset.startsWith('iidx')
+          ? 'iidx'
+          : 'lr2';
   const score =
     judgeRuleset === 'lr2'
       ? resolveLR2MoneyScore({
@@ -84,6 +92,7 @@ export function playResultFromCourseRun(
         })
       : result.exScore;
   return {
+    ...(options.practice === true ? { practice: true } : {}),
     score: {
       total: result.noteCount,
       perfect: result.judge.pgreat,

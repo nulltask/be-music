@@ -85,7 +85,7 @@ describe('resolveBeatorajaScoreNumber', () => {
         BEATORAJA_NUM.POOR,
         BEATORAJA_NUM.MISS,
       ].map((id) => resolveBeatorajaScoreNumber(id, numbers)),
-    ).toEqual([60, 20, 10, 4, 6, 6]);
+    ).toEqual([60, 20, 10, 4, 6, 0]);
     expect(resolveBeatorajaScoreNumber(BEATORAJA_NUM.COMBOBREAK, numbers)).toBe(10);
     expect(resolveBeatorajaScoreNumber(BEATORAJA_NUM.BAD_PLUS_POOR_PLUS_MISS, numbers)).toBe(10);
     expect(resolveBeatorajaScoreNumber(BEATORAJA_NUM.POOR_PLUS_MISS, numbers)).toBe(6);
@@ -315,4 +315,12 @@ it.each([
     const ops = resolveBeatorajaPlayScoreOps(SCORE, { current: 50, max, type });
     expect(ops.filter((op) => [42, 43, 1046].includes(op))).toEqual(expected);
   }
+});
+
+it('keeps note POOR, empty POOR and the combined miss readouts distinct', () => {
+  const numbers = input({ score: { ...SCORE, bad: 2, poor: 3, emptyPoor: 7 } });
+  expect([BEATORAJA_NUM.POOR, 420, 425, 426, 427].map((id) => resolveBeatorajaScoreNumber(id, numbers))).toEqual([
+    3, 7, 5, 10, 12,
+  ]);
+  expect(resolveBeatorajaScoreNumber(420, input({ score: undefined }))).toBe(0);
 });

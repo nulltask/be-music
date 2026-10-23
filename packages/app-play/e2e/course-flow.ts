@@ -134,6 +134,52 @@ export function courseFlowTests(setup: FamilyCase): void {
       expect(await demo.readOption(PLAY_OPTIONS, 'Random 1P')).toBe('MIRROR');
     });
 
+    test('seeking a course stage makes every later stage and the course result practice', async ({ demo }) => {
+      await setup.open(demo);
+      await startCourse(demo, setup, 'FIX GRADE', true);
+      await playingStage(demo, 'FIX GRADE', 1);
+      await demo.waitFor((state) => (state.play?.seconds ?? 0) > 0.5, 'the stage clock to start');
+      await demo.key('Space');
+      await demo.key('ArrowRight');
+      await demo.waitFor((state) => (state.play?.seconds ?? 0) > 5, 'the paused stage to seek forwards');
+      await demo.key('ArrowLeft');
+      await demo.key('Space');
+      await playingStage(demo, 'FIX GRADE', 2);
+      await playingStage(demo, 'FIX GRADE', 3);
+      let state = await demo.waitForResult(0);
+      expect(state.results[0]).toMatchObject({ run: 'stage', practice: true });
+      expect(await demo.lastReplay()).toBeUndefined();
+      await demo.leaveResult();
+      state = await demo.waitForResult(1);
+      expect(state.results[1]).toMatchObject({ run: 'course', practice: true, cleared: true });
+      await expectBackOnCourseBar(demo, 'FIX GRADE');
+    });
+
+    test('seeks a NONSTOP run across stages and retains practice and course retry', async ({ demo }) => {
+      await setup.open(demo);
+      await startCourse(demo, setup, 'FIX NONSTOP', true);
+      await demo.waitFor(
+        (state) => state.play?.title === 'FIX NONSTOP' && (state.play.seconds ?? 0) > 0.5,
+        'NONSTOP under way',
+      );
+      await demo.key('Space');
+      for (let i = 0; i < 3; i++) {
+        await demo.key('ArrowRight');
+        await demo.waitFor((state) => (state.play?.seconds ?? 0) > 5 * (i + 1), 'the next forward seek');
+      }
+      await demo.waitFor((state) => (state.play?.seconds ?? 0) > 15, 'NONSTOP sought across a stage seam');
+      for (let i = 0; i < 3; i++) {
+        await demo.key('ArrowLeft');
+        await demo.waitFor((state) => (state.play?.seconds ?? Infinity) < 16 - 5 * (i + 1), 'the next backward seek');
+      }
+      await demo.key('Space');
+      const state = await demo.waitForResult(0);
+      expect(state.results[0]).toMatchObject({ run: 'nonstop', practice: true, cleared: true });
+      expect(await demo.lastReplay()).toBeUndefined();
+      await demo.leaveResult('KeyR');
+      await demo.waitFor((current) => current.play?.title === 'FIX NONSTOP', 'course retry to restitch NONSTOP');
+    });
+
     test('fails a GRADE course whose gauge empties in a stage played with no input', async ({ demo }) => {
       await setup.open(demo);
       await startCourse(demo, setup, 'FIX GRADE FAIL', false);
