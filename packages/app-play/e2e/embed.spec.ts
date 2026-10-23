@@ -1,7 +1,9 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { zipSync } from 'fflate';
+import { unzipSync, zipSync } from 'fflate';
+import { createHash } from 'node:crypto';
+import { lr2CourseList } from '../../../scripts/course-checklist/fixtures.ts';
 
 /** Where the specs serve the zipped fixture folders on the embed's own origin. */
 const TRACK_ROUTE = '/__e2e/track/';
@@ -173,4 +175,108 @@ test('asks the platform audio session for playback, so an iPhone in silent mode 
   await expect
     .poll(() => page.evaluate(() => (navigator as { audioSession?: { type: string } }).audioSession?.type))
     .toBe('playback');
+});
+
+/** A course pack with both stages' assets; beatoraja is deliberately outside a `course/` folder. */
+async function openCourseEmbed(
+  page: Page,
+  options: {
+    format: 'lr2' | 'beatoraja';
+    many?: boolean;
+    missing?: boolean;
+    kind?: 0 | 1 | 2;
+    name?: string;
+    query?: string;
+  },
+): Promise<void> {
+  const files = unzipSync(await zipFolders(['songs/fixA', 'songs/fixB']));
+  const paths = ['songs/fixA/fixA.bms', 'songs/fixB/fixB.bms'];
+  const hashes = paths.map((path) => {
+    const bytes = files[path]!;
+    return {
+      md5: createHash('md5').update(bytes).digest('hex'),
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+    };
+  });
+  if (options.missing) hashes[1] = { md5: '0'.repeat(32), sha256: '0'.repeat(64) };
+  const names = options.many ? ['Preview course', 'Other course'] : ['Preview course'];
+  const path = options.format === 'lr2' ? 'courses/preview.lr2crs' : 'preview.json';
+  const content =
+    options.format === 'lr2'
+      ? lr2CourseList(names.map((title) => ({ title, type: options.kind ?? 0, md5s: hashes.map((hash) => hash.md5) })))
+      : JSON.stringify(
+          names.map((name) => ({
+            name,
+            hash: hashes.map(({ sha256 }) => ({ sha256 })),
+            constraint: ['CLASS', 'NO_SPEED'],
+          })),
+        );
+  files[path] = new TextEncoder().encode(content);
+  const body = Buffer.from(zipSync(files));
+  await page.route(`**${TRACK_ROUTE}course.zip`, (route) => route.fulfill({ body, contentType: 'application/zip' }));
+  const query = options.query ?? path;
+  await page.goto(
+    `/embed/?track=${encodeURIComponent(`${TRACK_ROUTE}course.zip`)}&course=${encodeURIComponent(query)}${options.name === undefined ? '' : `&courseName=${encodeURIComponent(options.name)}`}`,
+  );
+}
+
+for (const format of ['lr2', 'beatoraja'] as const) {
+  test(`${format} course preview advances through its stages and Replay restarts the course`, async ({ page }) => {
+    await openCourseEmbed(page, { format });
+    const hud = page.locator('be-music-preview-hud');
+    await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled({ timeout: 60_000 });
+    await expect(hud.getByRole('heading', { name: 'Fixture A' })).toBeVisible();
+    await expect(hud.getByText('Preview course · Stage 1 / 2', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await expect(hud.getByRole('heading', { name: 'Fixture B' })).toBeVisible({ timeout: 60_000 });
+    await expect(hud.getByText('Preview course · Stage 2 / 2', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Replay', exact: true })).toBeEnabled({ timeout: 60_000 });
+    await expect(hud.getByRole('heading', { name: 'Fixture A' })).toBeVisible();
+    await expect(page.locator('be-music-preview-select')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Replay', exact: true }).click();
+    await expect(hud.getByRole('slider', { name: 'Seek' })).toBeEnabled();
+  });
+}
+
+test('a course file with several definitions lists courses and returns there after playing', async ({ page }) => {
+  await openCourseEmbed(page, { format: 'beatoraja', many: true });
+  const list = page.getByRole('list', { name: 'Courses' });
+  await expect(list.getByRole('button')).toHaveCount(2, { timeout: 60_000 });
+  await expect(list.getByRole('button', { name: /Preview course/ })).toContainText('GRADE · 2 stages');
+  await list.getByRole('button', { name: /Preview course/ }).click();
+  await expect(page.locator('be-music-preview-hud').getByRole('heading', { name: 'Fixture B' })).toBeVisible({
+    timeout: 60_000,
+  });
+  await expect(list.getByRole('button')).toHaveCount(2, { timeout: 60_000 });
+});
+
+test('a named LR2 NONSTOP course uses the stitched chart with seeking and replay', async ({ page }) => {
+  await openCourseEmbed(page, { format: 'lr2', many: true, kind: 1, name: 'Other course' });
+  await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled({ timeout: 60_000 });
+  const hud = page.locator('be-music-preview-hud');
+  await expect(hud.getByRole('heading', { name: 'Other course' })).toBeVisible();
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  const seek = hud.getByRole('slider', { name: 'Seek' });
+  await expect(seek).toBeEnabled();
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(async () => Number(await seek.inputValue())).toBeGreaterThanOrEqual(4);
+  await expect(page.getByRole('button', { name: 'Replay', exact: true })).toBeEnabled({ timeout: 60_000 });
+});
+
+test('missing course files and missing stage charts show an error instead of playing a different chart', async ({
+  page,
+}) => {
+  await openCourseEmbed(page, { format: 'beatoraja', query: 'missing.json' });
+  await expect(page.getByText('Course file not found: missing.json', { exact: true })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole('button', { name: 'Play', exact: true })).toHaveCount(0);
+  await openCourseEmbed(page, { format: 'lr2', name: 'Missing course' });
+  await expect(page.getByText('Course not found: Missing course', { exact: true })).toBeVisible({ timeout: 60_000 });
+  await openCourseEmbed(page, { format: 'lr2', missing: true });
+  await expect(page.getByText('Preview course: 1 stage is not in the collection', { exact: true })).toBeVisible({
+    timeout: 60_000,
+  });
+  await openCourseEmbed(page, { format: 'beatoraja', many: true, missing: true });
+  await expect(page.getByRole('list', { name: 'Courses' }).getByRole('button').first()).toBeDisabled({
+    timeout: 60_000,
+  });
 });

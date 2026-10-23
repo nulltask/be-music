@@ -30,6 +30,15 @@ describe('parseEmbedTrack', () => {
     expect(parseEmbedTrack(`${PAGE}?track=/tracks/demo.zip`)).not.toHaveProperty('chart');
   });
 
+  it('reads course file and course name selectors, preserving chart selection when both are supplied', () => {
+    expect(
+      parseEmbedTrack(`${PAGE}?track=/pack.zip&course=%20courses%2Fdan.lr2crs%20&courseName=Dan&chart=a.bms`),
+    ).toMatchObject({ course: 'courses/dan.lr2crs', courseName: 'Dan', chart: 'a.bms' });
+    expect(parseEmbedTrack(`${PAGE}?track=/pack.zip&course=%20&courseName=Dan`)).not.toHaveProperty('course');
+    expect(parseEmbedTrack(`${PAGE}?track=/pack.zip&courseName=Dan`)).not.toHaveProperty('courseName');
+    expect(parseEmbedTrack(`${PAGE}?track=/pack.zip&course=dan.json&courseName=%20`)).not.toHaveProperty('courseName');
+  });
+
   it('refuses a missing track and URLs the embed cannot fetch', () => {
     expect(parseEmbedTrack(PAGE)).toBeUndefined();
     expect(parseEmbedTrack(`${PAGE}?track=javascript:alert(1)`)).toBeUndefined();

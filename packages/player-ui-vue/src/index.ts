@@ -21,6 +21,7 @@ import type {
   BeMusicRect,
   BeMusicPlaybackData,
   LibraryChart,
+  LibraryCourse,
 } from '@be-music/player-ui';
 import { wrap, type BeMusicVueEventHandlers, type BeMusicVueElementRef } from './wrap.ts';
 export type { BeMusicVueEventHandlers, BeMusicVueElementRef } from './wrap.ts';
@@ -238,13 +239,19 @@ export const BeMusicPreviewHUD: DefineComponent<BeMusicPreviewHUDProps, BeMusicV
 
 export type BeMusicPreviewSelectProps = {
   charts?: readonly LibraryChart[];
+  courses?: readonly LibraryCourse[];
   heading?: string;
   images?: ReadonlyMap<string, string>;
 } & BeMusicVueEventHandlers<'activate-request'>;
 export const BeMusicPreviewSelect: DefineComponent<BeMusicPreviewSelectProps, BeMusicVueElementRef> = wrap<
-  { charts?: readonly LibraryChart[]; heading?: string; images?: ReadonlyMap<string, string> },
+  {
+    charts?: readonly LibraryChart[];
+    courses?: readonly LibraryCourse[];
+    heading?: string;
+    images?: ReadonlyMap<string, string>;
+  },
   'activate-request'
->('BeMusicPreviewSelect', 'be-music-preview-select', ['charts', 'heading', 'images'], ['activate-request']);
+>('BeMusicPreviewSelect', 'be-music-preview-select', ['charts', 'courses', 'heading', 'images'], ['activate-request']);
 
 export type BeMusicPreviewStartProps = {
   mode?: 'play' | 'replay';
