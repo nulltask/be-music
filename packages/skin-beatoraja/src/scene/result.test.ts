@@ -236,3 +236,16 @@ describe('timing statistics', () => {
     expect(beatorajaTimingStats([{ deltaMs: 2 }, { deltaMs: 6 }])).toEqual({ mean: 4, stddev: 2 });
   });
 });
+
+it('reads empty POOR separately on results, including an LR2 folded POOR display', () => {
+  const score = { ...facts().score, bad: 2, poor: 3, emptyPoor: 7 };
+  const result = input({ result: facts({ score }) });
+  expect([BEATORAJA_NUM.POOR, 420, 426, 427].map((id) => resolveBeatorajaResultNumber(id, result))).toEqual([
+    3, 7, 10, 12,
+  ]);
+  const lr2 = input({ result: facts({ score: { ...score, poor: 10 }, judgedPoor: 3 }) });
+  expect([BEATORAJA_NUM.POOR, 420, 426, 427].map((id) => resolveBeatorajaResultNumber(id, lr2))).toEqual([
+    3, 7, 10, 12,
+  ]);
+  expect(lr2.result.score.poor).toBe(10);
+});
