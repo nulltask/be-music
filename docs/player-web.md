@@ -92,6 +92,8 @@ The Tweakpane **Debug Menu** (top-right, collapsed on arrival) puts the everyday
 - **Leaderboard** (closed): Submit to Leaderboard, Account (the signed-in handle, or "Not signed in"), Create passkey (keep this account), Sign in with passkey, and Sign out.
 - **Developer** (closed): Judgment windows (latched at song start; it also picks which ruleset's [best records](#best-records) the select screen shows), Auto pause on blur, Show invisible notes, FPS (native history graph, sampled every 500 ms with 60 samples), and Reset settings and reload, which clears every stored demo setting except the best records.
 
+**Developer → Show invisible notes** is off by default. Enabling it shows hidden keysound objects in every skin family, including beatoraja; it can be toggled during play. The inspection markers do not affect keysound playback, judgment, or scoring.
+
 The Status and Account rows use read-only multiline monitors. The separate **Skin Config** pane uses **Options**, **Files** (when declared), and **Timing & offsets** tabs. Categories remain grouped within each tab. A custom offset with both `x` and `y` exposes a native 2D position control; other authored axes keep their numeric sliders. **Reset all to 0** refreshes the native controls and applies one configuration update. Switching scenes rebuilds the schema; editing the same skin entry preserves the selected tab and folder state.
 
 ### Best records

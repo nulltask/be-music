@@ -73,7 +73,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
     ? (toBeat: number): number => ctx.play.scrollMapper!.distanceBetween(currentBeat, toBeat)
     : (toBeat: number): number => toBeat - currentBeat;
   // Debug visualization — paint invisible / keysound notes FIRST so playable notes + mines paint over them. Skipped
-  // entirely (and the array stays empty) when the option is off.
+  // entirely when the option is off; keeping the array lets the option toggle during play.
   if (ctx.options.showInvisibleNotes && ctx.play.invisibleNotes.length > 0) {
     // Themes can supply a sprite for the overlay (the LR2 family uses the Pop'n green wide note of its 9-keys play
     // skin). When unavailable we fall through to a flat green rectangle so the overlay still reads.

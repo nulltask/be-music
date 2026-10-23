@@ -186,13 +186,19 @@ export class BeatorajaPlayStage {
     clock: BeatorajaPlayLayerClock | undefined,
     hiSpeed: number,
     lanes: { isLaneLNHeld(channel: string): boolean; isPoorBGAActive(seconds: number): boolean },
-    playback: { tempo?: number; paused?: boolean; started?: boolean } = {},
+    playback: { tempo?: number; paused?: boolean; started?: boolean; showInvisibleNotes?: boolean } = {},
   ): void {
     const view = this.stage.view;
     view.update(context);
     if (clock === undefined) return;
     const activeOps = context.activeOps;
-    this.noteLayer.update(clock, hiSpeed, activeOps, (channel) => lanes.isLaneLNHeld(channel));
+    this.noteLayer.update(
+      clock,
+      hiSpeed,
+      activeOps,
+      (channel) => lanes.isLaneLNHeld(channel),
+      playback.showInvisibleNotes,
+    );
     // The markers scroll with the notes' per-beat distance (`rxhs / 4 * hispeed`, `LaneRenderer.java:271-276`) on the
     // lane the active dst block resolves; skin-canvas defaults when no lane matched.
     const laneBounds = this.noteLayer.getLaneBounds(activeOps) ?? { topY: 0, bottomY: view.height };

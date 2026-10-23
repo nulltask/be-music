@@ -15,6 +15,7 @@
 //      so a partial-asset theme still plays — better than silent blanks.
 
 import { Container, Graphics, Sprite, type Texture, TilingSprite } from 'pixi.js';
+import { findFirstIndexAtOrAfter } from '@be-music/shared-utils/core';
 import { resolveSideKeySlot } from '@be-music/player-engine/lanes';
 import type { PlayerUIFrameNote, PlayerUIFramePayload } from '@be-music/player-engine/signals';
 import type { ScrollDistanceMapperLike } from '@be-music/player-engine/display';
@@ -133,6 +134,8 @@ export function beatorajaDisplayScrollBeat(frame: Pick<PlayerUIFramePayload, 'cu
  */
 export interface BeatorajaNoteClock {
   readonly notes: readonly PlayerUIFrameNote[];
+  readonly landmineNotes?: readonly PlayerUIFrameNote[];
+  readonly invisibleNotes?: readonly PlayerUIFrameNote[];
   readonly currentSeconds: number;
   readonly currentBeat: number;
   readonly displayBeat?: number;
@@ -222,6 +225,8 @@ interface CroppedSprite {
 
 export class BeatorajaNoteLayer {
   readonly container: Container = new Container();
+  /** Inspection markers stay behind the skin's regular notes and long-note bodies. */
+  private readonly invisibleLayer = new Graphics({ label: 'invisible-notes', visible: false });
   /**
    * Two-tier layering so LN bodies always sit BEHIND head/tail caps and tap notes,
    * regardless of pool-reuse order across frames.
@@ -276,6 +281,27 @@ export class BeatorajaNoteLayer {
    */
   private readonly croppedTextureCache = new Map<BeatorajaImageId, CroppedSprite | undefined>();
   private firstFrameLogged = false;
+  private noteSources:
+    | {
+        notes: readonly PlayerUIFrameNote[];
+        mines: readonly PlayerUIFrameNote[];
+        merged: readonly PlayerUIFrameNote[];
+      }
+    | undefined;
+
+  /** Engine frames keep mines separate; merge once without copying the live judgment objects. */
+  private drawingNotes(frame: BeatorajaNoteClock): readonly PlayerUIFrameNote[] {
+    const mines = frame.landmineNotes;
+    if (mines === undefined || mines.length === 0) return frame.notes;
+    if (this.noteSources?.notes !== frame.notes || this.noteSources.mines !== mines) {
+      this.noteSources = {
+        notes: frame.notes,
+        mines,
+        merged: [...frame.notes, ...mines].sort((a, b) => a.beat - b.beat),
+      };
+    }
+    return this.noteSources.merged;
+  }
 
   constructor(options: BeatorajaNoteLayerOptions) {
     this.noteSection = options.noteSection;
@@ -288,7 +314,8 @@ export class BeatorajaNoteLayer {
     this.timelineBeats = options.timelineBeats;
     this.autoplay = options.autoplay === true;
     this.reversal = options.reversal;
-    // bodyLayer first (= back), noteLayer second (= front). See field doc for rationale.
+    // Inspection markers behind bodies, then caps / taps in front. See field doc for rationale.
+    this.container.addChild(this.invisibleLayer);
     this.container.addChild(this.bodyLayer);
     this.container.addChild(this.noteLayer);
   }
@@ -305,7 +332,10 @@ export class BeatorajaNoteLayer {
      * resolves to the same sprite as `lnBodyUnheld`.
      */
     isLaneLNHeld?: (channel: string) => boolean,
+    showInvisibleNotes = false,
   ): void {
+    this.invisibleLayer.clear();
+    this.invisibleLayer.visible = false;
     const rects = this.resolveLaneRects(activeOps);
     if (rects.length === 0) {
       this.releaseAll();
@@ -369,8 +399,26 @@ export class BeatorajaNoteLayer {
       );
     }
 
-    const notes = frame.notes;
-    const firstIndex = this.advanceLR2DrawCursor(frame, drawWindow);
+    // Keysound objects are inspection markers, never judged notes. Keep their own layer behind the skin's notes.
+    const invisible = frame.invisibleNotes;
+    if (showInvisibleNotes && invisible !== undefined) {
+      const first = findFirstIndexAtOrAfter(invisible, drawWindow.currentBeat, (note) => note.beat);
+      for (let i = first; i < invisible.length; i += 1) {
+        const note = invisible[i]!;
+        if (isPastDrawWindow(drawWindow, note.beat)) break;
+        if (!isDrawnAtTime(drawWindow, note.seconds)) continue;
+        const lane = resolveBeatorajaNoteLane(note.channel, this.variant);
+        const rect = lane === undefined ? undefined : rects[lane];
+        if (rect === undefined) continue;
+        const y = judgementY - distance(note.beat) * pixelsPerBeat;
+        if (y < rect.y - TAP_LEAD_IN_PX || y > drawBottom) continue;
+        this.invisibleLayer.rect(rect.x + 2, y - 4, Math.max(4, rect.w - 4), 4).fill({ color: 0x33dd66, alpha: 0.7 });
+        this.invisibleLayer.visible = true;
+      }
+    }
+
+    const notes = this.drawingNotes(frame);
+    const firstIndex = this.advanceLR2DrawCursor(frame, drawWindow, notes);
     const lr2LastBeat = lr2LastWalkedBeat(drawWindow, pixelsPerBeat);
     for (let noteIndex = firstIndex; noteIndex < notes.length; noteIndex += 1) {
       const note = notes[noteIndex]!;
@@ -448,17 +496,21 @@ export class BeatorajaNoteLayer {
    * Under LR2's drawing rules without a negative-BPM reversal, moves {@link drawCursor} past the notes gone by this
    * frame and returns where the walk starts; 0 otherwise, as before.
    */
-  private advanceLR2DrawCursor(frame: BeatorajaNoteClock, drawWindow: NoteDrawWindow): number {
+  private advanceLR2DrawCursor(
+    frame: BeatorajaNoteClock,
+    drawWindow: NoteDrawWindow,
+    notes: readonly PlayerUIFrameNote[],
+  ): number {
     if (drawWindow.rules !== 'lr2' || this.reversal !== undefined) {
       this.drawCursor = undefined;
       return 0;
     }
     let cursor = this.drawCursor;
-    if (!cursor || cursor.notes !== frame.notes || frame.currentSeconds < cursor.seconds) {
-      cursor = { notes: frame.notes, seconds: frame.currentSeconds, index: 0 };
+    if (!cursor || cursor.notes !== notes || frame.currentSeconds < cursor.seconds) {
+      cursor = { notes, seconds: frame.currentSeconds, index: 0 };
     }
     cursor.index = advanceDrawCursor(
-      frame.notes,
+      notes,
       cursor.index,
       (note) => !isDrawnUntilJudged(drawWindow, note, this.autoplay),
     );
@@ -475,6 +527,7 @@ export class BeatorajaNoteLayer {
     this.spritePool.length = 0;
     this.tilingPool.length = 0;
     this.croppedTextureCache.clear();
+    this.noteSources = undefined;
   }
 
   /**
