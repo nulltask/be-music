@@ -25,7 +25,7 @@ import { confirmSkinDrop, promptSkinDrop } from '../ui/skin-drop-prompt.ts';
 import { readDeviceSignals, type DeviceProfile } from '../device-profile.ts';
 import { captureScreenshot, finalizeRecordingIfActive, toggleRecording } from '../recording-controller.ts';
 import type { DemoGUIState, DemoScene, PlayerWebDemoElements, SkinFamilyOverride } from '../types.ts';
-import { createDemoGUIState, resolveCompressorMode, storeBuiltInSkinId } from '../services/settings.ts';
+import { createDemoGUIState, readCompressorRequest, storeBuiltInSkinId } from '../services/settings.ts';
 import { BE_MUSIC_SKINS } from '../services/built-in-skins.ts';
 import { SilentModeSetting } from '../services/silent-mode.ts';
 import { playOptionsFromGUI, PlayOptionsService } from '../services/play-options.ts';
@@ -255,12 +255,18 @@ export class PlayerWebDemoApp {
     // Every sound plays through the master volume; start from the remembered level and mute state.
     setMasterVolume(this.guiState.muted ? 0 : this.guiState.masterVolume / 100);
     this.playOptions = new PlayOptionsService(playOptionsFromGUI(this.guiState));
-    this.silentMode = new SilentModeSetting({ settings: this.guiState, touchFirst: deviceProfile.touchFirst });
+    this.silentMode = new SilentModeSetting({
+      settings: this.guiState,
+      touchFirst: deviceProfile.touchFirst,
+      onRemember: () => this.debugMenu.scheduleSettingsSave(),
+    });
     this.silentMode.install();
-    // The `?compressor=split|legacy|off` URL flag, read once at boot.
-    const compressor = resolveCompressorMode(window.location.href);
-    this.compressorMode = compressor.mode;
-    this.guiState.compressor = compressor.enabled;
+    // `?compressor=split|legacy|off` wins for this visit. With no flag, the remembered checkbox stays.
+    const compressor = readCompressorRequest(window.location.href);
+    if (compressor) {
+      this.compressorMode = compressor.mode;
+      this.guiState.compressor = compressor.enabled;
+    }
     this.lr2 = new LR2ThemeService({
       elements,
       setStatus: (text) => this.status.set(text),

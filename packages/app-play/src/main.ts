@@ -4,6 +4,7 @@ import {
   disposeBrowserWorkers,
 } from '@be-music/player-browser/compute';
 import { readWorkerCount } from './worker-settings.ts';
+import { reconcileDebugMenuSettings } from './debug-menu-settings-sync.ts';
 // The demo's bootstrap: the page's markup, the browser check, the device classes and the Help modal, then the app
 // (`app/app.ts`) once the UI fonts are ready, with the test hook installed over it before it starts.
 import { checkBrowserCompat } from '@be-music/player-browser/collection';
@@ -51,28 +52,31 @@ document.documentElement.classList.toggle('phone', deviceProfile.phone);
 // open of the OSS tab, so the initial paint isn't blocked on rendering ~30 dependency cards.
 wireHelpModal();
 
-void waitForDefaultUIFonts().finally(() => {
-  // `window.__beMusicTest` for the end-to-end suite (`?e2e=1` or a development build; `test-hook.ts`).
-  const testHook = isTestHookEnabled(window.location.href, import.meta.env.DEV) ? new TestHookRecorder() : undefined;
-  const demo = new PlayerWebDemoApp({
-    elements: {
-      stage: document.querySelector<HTMLDivElement>('#stage')!,
-      shell: document.querySelector<HTMLDivElement>('.shell')!,
-      chartInput: document.querySelector<HTMLInputElement>('#songs')!,
-      filesInput: document.querySelector<HTMLInputElement>('#files')!,
-      searchInput: document.querySelector<HTMLInputElement>('#search')!,
-      loadingOverlay: document.querySelector<HTMLDivElement>('#loading-overlay')!,
-      loadingLabel: document.querySelector<HTMLDivElement>('#loading-label')!,
-      loadingBarFill: document.querySelector<HTMLDivElement>('#loading-bar-fill')!,
-      loadingCounter: document.querySelector<HTMLDivElement>('#loading-counter')!,
-    },
-    deviceProfile,
-    testHook,
+void waitForDefaultUIFonts()
+  .then(() => reconcileDebugMenuSettings())
+  .finally(() => {
+    setBrowserWorkerCount(readWorkerCount(workerStorage, navigator.hardwareConcurrency));
+    // `window.__beMusicTest` for the end-to-end suite (`?e2e=1` or a development build; `test-hook.ts`).
+    const testHook = isTestHookEnabled(window.location.href, import.meta.env.DEV) ? new TestHookRecorder() : undefined;
+    const demo = new PlayerWebDemoApp({
+      elements: {
+        stage: document.querySelector<HTMLDivElement>('#stage')!,
+        shell: document.querySelector<HTMLDivElement>('.shell')!,
+        chartInput: document.querySelector<HTMLInputElement>('#songs')!,
+        filesInput: document.querySelector<HTMLInputElement>('#files')!,
+        searchInput: document.querySelector<HTMLInputElement>('#search')!,
+        loadingOverlay: document.querySelector<HTMLDivElement>('#loading-overlay')!,
+        loadingLabel: document.querySelector<HTMLDivElement>('#loading-label')!,
+        loadingBarFill: document.querySelector<HTMLDivElement>('#loading-bar-fill')!,
+        loadingCounter: document.querySelector<HTMLDivElement>('#loading-counter')!,
+      },
+      deviceProfile,
+      testHook,
+    });
+    // Installed before the app starts, so the hook sees the first select screen come up.
+    if (testHook !== undefined) {
+      const testHookDeps = demo.testHookDeps();
+      testHook.install(window, () => liveTestHookState(testHookDeps));
+    }
+    demo.start();
   });
-  // Installed before the app starts, so the hook sees the first select screen come up.
-  if (testHook !== undefined) {
-    const testHookDeps = demo.testHookDeps();
-    testHook.install(window, () => liveTestHookState(testHookDeps));
-  }
-  demo.start();
-});

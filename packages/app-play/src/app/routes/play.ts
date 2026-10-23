@@ -511,6 +511,7 @@ export class PlayRoute {
     if (hiSpeed === undefined) return;
     this.guiState.hiSpeed = hiSpeed;
     storeHiSpeed(hiSpeed);
+    this.debugMenu.scheduleSettingsSave?.();
     if (source !== 'menu') this.debugMenu.refreshHiSpeed();
     if (source !== 'select') this.setPlayOptions({ hiSpeed });
     if (source === 'menu') {

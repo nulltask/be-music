@@ -14,6 +14,7 @@ import {
   renderResolutionSteps,
 } from '../render-resolution.ts';
 import { readStoredReplayView } from '../replay-view-settings.ts';
+import { overlayDebugMenuSettings, readStoredDebugMenuSettings } from '../debug-menu-settings.ts';
 import { readPlayInSilentMode } from '../silent-mode-playback.ts';
 import type { DemoGUIState } from '../types.ts';
 import {
@@ -186,7 +187,7 @@ export interface DemoGUIStateInputs {
  */
 export function createDemoGUIState(inputs: DemoGUIStateInputs): DemoGUIState {
   const storage = inputs.storage ?? defaultSettingStorage();
-  return {
+  const state: DemoGUIState = {
     autoPlay: false,
     autoPauseOnBlur: false,
     // Compressor stack ON by default — without it, multiple simultaneous `#WAV` samples sum past full scale and
@@ -195,8 +196,7 @@ export function createDemoGUIState(inputs: DemoGUIStateInputs): DemoGUIState {
     // an unprocessed signal path can still flip it via `?compressor=off` or the GUI.
     ...readStoredVolumes(storage),
     playInSilentMode: readPlayInSilentMode(storage),
-    // Peak gain is off until the Debug Menu turns it on for this visit. It changes how loud a chart is, so a reload
-    // returns to the level the chart was authored at.
+    // Peak gain is off until the Debug Menu turns it on. The choice is remembered with the other Debug Menu settings.
     peakGain: false,
     compressor: true,
     compressorKey: true,
@@ -261,6 +261,9 @@ export function createDemoGUIState(inputs: DemoGUIStateInputs): DemoGUIState {
     record: inputs.actions.record,
     screenshot: inputs.actions.screenshot,
   };
+  const saved = readStoredDebugMenuSettings(storage);
+  if (saved) overlayDebugMenuSettings(state, saved.settings);
+  return state;
 }
 
 /** The compressor a visit starts with: its architecture, and whether it is on (the Debug Menu's "Enabled"). */
@@ -280,4 +283,11 @@ export function resolveCompressorMode(href: string): CompressorStart {
   const flag: CompressorMode | undefined = parseCompressorMode(new URL(href).searchParams.get('compressor'));
   if (flag === 'split' || flag === 'legacy') return { mode: flag, enabled: true };
   return { mode: 'split', enabled: flag !== 'off' };
+}
+
+/** The `?compressor=` flag when the URL sets one. Absent, the remembered Debug Menu value stays. */
+export function readCompressorRequest(href: string): CompressorStart | undefined {
+  const raw = new URL(href).searchParams.get('compressor');
+  if (raw === null || raw.trim() === '') return undefined;
+  return resolveCompressorMode(href);
 }
