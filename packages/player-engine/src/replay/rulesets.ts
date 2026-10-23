@@ -37,6 +37,7 @@ export function rulesetChartFactsFromReplay(replay: BeMusicReplay): RulesetChart
     judgeRank: chart.judgeRank,
     notes: { ...notes, normal, long },
   };
+  if (chart.totalUnit !== undefined) facts.totalUnit = chart.totalUnit;
   if (chart.total !== undefined) facts.total = chart.total;
   return facts;
 }

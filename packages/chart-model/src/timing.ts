@@ -230,7 +230,7 @@ export function collectTempoChanges(json: BeMusicJSON, sortedEvents: ReadonlyArr
       }
       continue;
     }
-    const bpm = json.resources.bpm[normalizeObjectKey(event.value, idBase)];
+    const bpm = json.resources.bpm[normalizeObjectKey(event.value, idBase, json.sourceFormat === 'bmson')];
     if (typeof bpm !== 'number' || !Number.isFinite(bpm) || bpm === 0) {
       // Zero and undefined slot references stay dropped (previous tempo continues). Real LR2 degenerates on both —
       // a zero slot puts +inf into its precomputed table and an undefined slot hits its -1.0 sentinel (behaving
@@ -267,7 +267,7 @@ export function collectStopChanges(
     if (!isStopChannel(normalizeChannel(event.channel))) {
       continue;
     }
-    const duration = json.resources.stop[normalizeObjectKey(event.value, idBase)];
+    const duration = json.resources.stop[normalizeObjectKey(event.value, idBase, json.sourceFormat === 'bmson')];
     if (typeof duration !== 'number' || duration <= 0) {
       continue;
     }

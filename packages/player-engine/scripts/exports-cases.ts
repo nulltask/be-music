@@ -1,3 +1,4 @@
+import { cloneJSON } from '@be-music/chart-source';
 import { resolveChart } from '@be-music/chart-model';
 import { parseChart } from '@be-music/chart-parser';
 import * as playerAPI from '@be-music/player-engine';
@@ -191,9 +192,15 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
     },
   });
   const benchNonstopInputs = [benchNonstopChart, benchNonstopChart, benchNonstopChart].map((chart) => ({ chart }));
+  const bmsonNonstopChart = cloneJSON(benchNonstopChart);
+  bmsonNonstopChart.sourceFormat = 'bmson';
+  bmsonNonstopChart.bmson.info.resolution = 240;
   define('player-engine.course.stitchNonstopCourse', {
     run: () => {
       courseAPI.stitchNonstopCourse(benchNonstopInputs, { connections: ['fade', 'cut-fit'] });
+      courseAPI.stitchNonstopCourse([{ chart: benchNonstopChart }, { chart: bmsonNonstopChart }], {
+        connections: ['cut'],
+      });
     },
   });
   define('player-engine.course.applyCourseLongNoteConstraint', {

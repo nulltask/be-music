@@ -377,6 +377,8 @@ interface BeMusicEvent {
     c?: boolean;
     t?: number;
     damage?: number;
+    sampleOffsetSeconds?: number;
+    sampleDurationSeconds?: number;
   };
 }
 ```
@@ -384,6 +386,8 @@ interface BeMusicEvent {
 `bmson.damage` は beatoraja の bmson 拡張 `mine_channels` の地雷に使います。
 譜面で authoring された gauge damage を非負数で保持し、それ以外の event（`key_channels`（beatoraja の隠しノート）から読んだ不可視オブジェクトを含む）では省略します。
 `bmson.t` は beatoraja のノート単位のロングノート種別（`notes[].t`: `1` = LN、`2` = CN、`3` = HCN）です。ロングノート（`l > 0`）のときだけ保持し、`bmson.info.lnType` より優先されます。
+
+結合済みの bmson NONSTOP 譜面は、2文字を超えるリソースキーを使えます。`normalizeObjectKey(value, base, true)` はそのキーを保持し、BMS のトークンの正規化は従来どおりです。`bmson.sampleOffsetSeconds` と `bmson.sampleDurationSeconds` は、配置後の譜面時刻とは独立に元の音声座標を保持します。オフセットが明示され長さがない場合はサンプルの末尾まで再生します。`bmson.info.totalUnit` は最後のステージの TOTAL の単位（`absolute` または `percent`）を保持します。これらは Be-Music の IR のフィールドで、外部の bmson のキーではありません。
 
 ## `position` の意味
 

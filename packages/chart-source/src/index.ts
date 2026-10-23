@@ -42,6 +42,9 @@ export interface BeMusicMeasure {
 export type BeMusicPosition = readonly [numerator: number, denominator: number];
 
 export interface BmsonEventExtensions {
+  /** Source-audio slice coordinates retained by a stitched NONSTOP chart, independent of FIT placement. */
+  sampleOffsetSeconds?: number;
+  sampleDurationSeconds?: number;
   l?: number;
   c?: boolean;
   /**
@@ -83,6 +86,8 @@ export interface BmsonInfoExtensions {
   resolution?: number;
   modeHint?: string;
   judgeRank?: number;
+  /** A stitched mixed-format course can retain the last BMS stage's absolute TOTAL. */
+  totalUnit?: 'absolute' | 'percent';
   total?: number;
   /**
    * Chart-level long-note type (beatoraja bmson extension `info.ln_type`): `1` = LN, `2` = CN, `3` = HCN. A per-note
@@ -524,7 +529,12 @@ export function parseBmsonSubartist(entry: string): BmsonSubartistEntry {
   return { role, name };
 }
 
-export function normalizeObjectKey(value: string, base: 36 | 62 = 36): string {
+export function normalizeObjectKey(value: string, base: 36 | 62 = 36, allowLongKeys = false): string {
+  // bmson has no two-character resource limit. BMS callers retain their original token normalization.
+  if (allowLongKeys && value.length > 2) {
+    const trimmed = value.trim();
+    if (trimmed.length > 2) return base === 62 ? trimmed : trimmed.toUpperCase();
+  }
   if (base === 62) {
     return normalizeObjectKeyBase62(value);
   }

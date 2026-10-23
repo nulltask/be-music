@@ -418,3 +418,26 @@ describe('replay format', () => {
     expect(resolveReplayFilename(badDate).endsWith('.bmplay.json')).toBe(true);
   });
 });
+
+test('replay round-trip preserves mixed NONSTOP rank units and absolute TOTAL', () => {
+  const replay = makeReplay();
+  replay.chart.sourceFormat = 'bmson';
+  replay.chart.totalUnit = 'absolute';
+  replay.chart.judgeRank.stageRanks = [
+    { timeUs: 0, rank: 125, table: 'bmson' },
+    { timeUs: 1e6, rank: 150, table: 'bms-exrank' },
+  ];
+  const parsed = parseReplay(serializeReplay(replay));
+  expect(parsed.chart.totalUnit).toBe('absolute');
+  expect(parsed.chart.judgeRank.stageRanks).toEqual(replay.chart.judgeRank.stageRanks);
+  expect(() => parseReplay({ ...replay, chart: { ...replay.chart, totalUnit: 'bad' } })).toThrow(/totalUnit/);
+  expect(() =>
+    parseReplay({
+      ...replay,
+      chart: {
+        ...replay.chart,
+        judgeRank: { ...replay.chart.judgeRank, stageRanks: [{ timeUs: 0, rank: 125, table: 'bad' }] },
+      },
+    }),
+  ).toThrow(/stageRanks/);
+});

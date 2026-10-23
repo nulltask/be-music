@@ -18,6 +18,8 @@ export interface RulesetChartFacts {
    * specified none; each ruleset applies its own default.
    */
   total?: number;
+  /** Override for a mixed-format stitched chart; absent on ordinary charts. */
+  totalUnit?: 'absolute' | 'percent';
   /** Chart-level long-note mode after `#LNMODE` / `info.ln_type` resolution. */
   lnMode: LongNoteMode;
   judgeRank: RulesetJudgeRankFacts;
@@ -39,13 +41,13 @@ export interface RulesetJudgeRankFacts {
 
 /**
  * A later NONSTOP stage's `#RANK` setting the judge windows from `timeUs` on: as a chart opening with it does
- * (`'chart'`), or by LR2's NONSTOP rank table (`'lr2-nonstop'`, `resolveLR2NonstopRankWindowsMs`). Only the LR2 ruleset
- * applies it, as with `#EXRANKxx`.
+ * (`'chart'`), or by LR2's NONSTOP rank table (`'lr2-nonstop'`, `resolveLR2NonstopRankWindowsMs`). The legacy BMS tables apply only to LR2; mixed bmson courses
+ * also carry `bmson` (raw judge_rank) and `bms-exrank` units and apply stage windows to LR2 and beatoraja.
  */
 export interface RulesetStageRank {
   timeUs: number;
   rank: number;
-  table: 'chart' | 'lr2-nonstop';
+  table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank';
 }
 
 /**

@@ -332,6 +332,8 @@ So `extractCourseStage` still gives a single-chart log that replays on its own; 
 
 `checkCourseReplayEligibility` checks a NONSTOP run on its stitched play: it must pass the single-play check (auto play is refused; an ESC abort is a failed run), carry `play.course.kind: 'nonstop'`, and its `nonstop.stages` must cover every stage of the course. Every stage must still name its chart. The result carries the stitched play's fingerprints as `nonstop`, and `stages` is empty: the stages were not played on their own, so a verifier rebuilds them from their charts (`prepareNonstopCourse` with the recorded draws, the course's constraints and the recorded connections, placement and stitching rules, then `resolveNonstopRun`; see [Courses and dan certification](./course.md#nonstop-courses) and [Leaderboard design](./leaderboard.md#61-course-rankings)).
 
+Mixed bmson NONSTOP replays also accept `table: "bmson"` (raw `judge_rank`) and `table: "bms-exrank"` (raw `#DEFEXRANK`) in `chart.judgeRank.stageRanks`, with an initial entry at time zero. LR2 and beatoraja apply these stage windows. Optional `chart.totalUnit` selects `absolute` or `percent` for TOTAL; ordinary replays continue to derive the unit from `sourceFormat`.
+
 ## CLI
 
 `@be-music/player-terminal` ships a second binary, `bms-replay`:

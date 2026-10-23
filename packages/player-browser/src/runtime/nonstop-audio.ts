@@ -8,6 +8,8 @@ import type { NonstopFade, NonstopStitchMap, NonstopStitchStage } from '@be-musi
 export interface WebAudioStageMixer {
   stageOf(sampleKey: string): number | undefined;
   rate(stage: number): number;
+  /** Source-audio seconds per decoded-buffer second after keep-pitch FIT stretching. */
+  sliceRate?(stage: number): number;
   /** The node a stage's background (non-lane) voices connect to; `undefined` leaves them on the BGM bus. */
   bgmInput(stage: number): AudioNode | undefined;
   /**
@@ -85,6 +87,7 @@ export function createNonstopStageMixer(
     // With keep pitch the samples were stretched to the stage's tempo already (`resolveSampleStretchRates`); the play
     // tempo is the audio session's own rate.
     rate: (stage) => (options.keepPitch === true ? 1 : (map.stages[stage]?.placement.rate ?? 1)),
+    sliceRate: (stage) => (options.keepPitch === true ? (map.stages[stage]?.placement.rate ?? 1) : 1),
     bgmInput: (stage) => gains[stage],
     retime: (nowChartSeconds, contextTimeAt) => {
       const now = audioContext.currentTime;
