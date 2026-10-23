@@ -7,7 +7,7 @@ import { throwIfAborted } from '@be-music/shared-utils/core';
 import { type BeMusicEvent, type BeMusicJSON, resolveBMSBase } from '@be-music/chart-source';
 import { createPlayerStateSignals, type PlayerStateSignals } from '../state-signals.ts';
 import { resolveHighSpeedMultiplier } from './high-speed-control.ts';
-import { createPlayerUISignalBus, type PlayerUISignalBus } from './ui-signal-bus.ts';
+import { createPlayerUISignalBus, type PlayerUISignalBus, type PlayerHCNLaneState } from './ui-signal-bus.ts';
 import { createPlayerInputSignalBus, type PlayerInputSignalBus } from './input-signal-bus.ts';
 import { createNoopPlaybackStateLogger, createUIFramePublisher, type PlaybackStateLogger } from './playback-support.ts';
 import { createScoreTracker } from './scoring.ts';
@@ -113,6 +113,8 @@ export interface PlaySession {
   readonly tracer: NoTUIPlaybackEventTracer;
   readonly stateLogger: PlaybackStateLogger;
   readonly publishUIFrame: (seconds: number, beat: number) => void;
+  /** The judge supplies HCN display facts from its existing state; no second simulation. */
+  readHCNLanes?: (seconds: number) => readonly PlayerHCNLaneState[];
   /** Maps the judge's effects onto audio, the UI buses, the replay and the trace. */
   readonly applyJudgeEffect: JudgeCoreEffectSink;
   /** The chart's volume changes (`#97` / `#98`), queued against the audio write head. */
@@ -340,6 +342,18 @@ export async function createPlaySession(
     landmineNotes,
     invisibleNotes,
     audioBackend: audioBackendLabel,
+    resolveHCNLanes: (seconds) => session?.readHCNLanes?.(seconds),
+    resolveJudgedNoteCount: () =>
+      Math.max(
+        0,
+        summary.perfect +
+          summary.great +
+          summary.good +
+          summary.bad +
+          summary.poor -
+          (ruleset.emptyPoorCountsInPoorDisplay ? summary.emptyPoor : 0) -
+          ('minePoor' in summary && typeof summary.minePoor === 'number' ? summary.minePoor : 0),
+      ),
     resolveDebugActiveAudioState: (seconds) => {
       if (options.debugActiveAudio !== true) {
         return {};
