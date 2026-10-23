@@ -128,6 +128,7 @@ export interface BeatorajaPlayRuntime {
   readonly resolvedPlayChart: { readonly reversal?: BeatorajaPlayChartLayout['reversal'] } | undefined;
   readonly chartPlayVariant: ChartPlayVariant;
   readonly notes: readonly PlayerUIFrameNote[];
+  readonly mineNotes: readonly PlayerUIFrameNote[];
   /** The engine's latest frame; `undefined` before its first. */
   readonly engineFrame: Readonly<PlayerUIFramePayload> | undefined;
   /** The engine's counts as the play started (all 0 but the total), for the intro before its first frame. */
@@ -433,7 +434,11 @@ export class BeatorajaPlayView implements PlayView {
     });
     // The notes stand at the chart's start from READY until the engine's first frame, as the engine's lead-in held them.
     const engineFrame = play.engineFrame;
-    const clock = engineFrame ?? (this.loaded ? { notes: play.notes, currentSeconds: 0, currentBeat: 0 } : undefined);
+    const clock =
+      engineFrame ??
+      (this.loaded
+        ? { notes: play.notes, landmineNotes: play.mineNotes, currentSeconds: 0, currentBeat: 0 }
+        : undefined);
     stage.draw(context, clock, play.scrollHiSpeed.valueAt(performance.now()), bridge, {
       tempo: engineFrame?.clock?.tempo ?? 1,
       paused,
