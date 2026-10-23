@@ -1,5 +1,5 @@
-// The Debug Menu's Audio folder: the volumes, "Play in silent mode" and the Compressor folder. It is built with the menu
-// as `this` (`DebugMenu`).
+// The Debug Menu's Audio folder: the volumes, "Play in silent mode", peak gain and the Compressor folder. It is built
+// with the menu as `this` (`DebugMenu`).
 import type { FolderApi } from 'tweakpane';
 import { setMasterVolume, supportsSystemAudioSession } from '@be-music/player-browser/audio';
 import { storeVolumes } from '../../services/settings.ts';
@@ -12,8 +12,8 @@ import { DEBUG_MENU_FOLDERS, type DebugMenuFolder } from './folders.ts';
 import type { DebugMenu } from './index.ts';
 /**
  * Volumes (master over every sound, then the keysound / BGM balance; all three apply live and are remembered for the
- * next visit), then the compressor: the master switch, the split-mode stage toggles, and every compressor's
- * parameters.
+ * next visit), then peak gain (the next play only; off until turned on), then the compressor: the master switch, the
+ * split-mode stage toggles, and every compressor's parameters.
  */
 export function buildAudioFolder(
   this: DebugMenu,
@@ -71,6 +71,7 @@ export function buildAudioFolder(
       });
     }
   }
+  audio.addBinding(this.guiState, 'peakGain', { label: 'Peak gain (next play)' });
   const compressor = addFolder(audio, DEBUG_MENU_FOLDERS.compressor);
   compressor.addBinding(this.guiState, 'compressor', { label: 'Enabled' }).on('change', ({ value }) => {
     this.gameplayView?.setAudioCompressor(value);
