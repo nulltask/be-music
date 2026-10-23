@@ -44,7 +44,7 @@ function themeSkins(overrides: Partial<LR2ThemeSkins> = {}): LR2ThemeSkins {
     resultBGM: bytes(5),
     courseClearBGM: bytes(6),
     courseFailBGM: bytes(7),
-    systemSounds: { cursorMove: bytes(8), folderOpen: bytes(9), optionChange: bytes(10) },
+    systemSounds: { playStop: bytes(12), cursorMove: bytes(8), folderOpen: bytes(9), optionChange: bytes(10) },
     ...overrides,
   } as LR2ThemeSkins;
 }
@@ -168,6 +168,7 @@ describe('LR2ThemeService.mountLR2Theme', () => {
     expect(service.selectSoundSet()).toEqual({
       selectBGM: { bytes: new Uint8Array([1]) },
       decideBGM: { bytes: new Uint8Array([2]) },
+      playStop: { bytes: new Uint8Array([12]) },
       cursor: { bytes: new Uint8Array([8]) },
       folderOpen: { bytes: new Uint8Array([9]) },
       optionChange: { bytes: new Uint8Array([10]) },

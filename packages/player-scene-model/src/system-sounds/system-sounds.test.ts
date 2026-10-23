@@ -16,6 +16,7 @@ const bytes = (value: number): Uint8Array => new Uint8Array([value]);
 
 describe('LR2_SOUND_SET_SLOTS', () => {
   test('maps each LR2 sound set command to a slot', () => {
+    expect(LR2_SOUND_SET_SLOTS.STOP).toBe('playStop');
     expect(LR2_SOUND_SET_SLOTS.SCRATCH).toBe('cursor');
     expect(LR2_SOUND_SET_SLOTS.PANEL_OPEN).toBe('optionOpen');
     expect(LR2_SOUND_SET_SLOTS.COURSEFAIL).toBe('courseFail');
@@ -26,11 +27,12 @@ describe('LR2_SOUND_SET_SLOTS', () => {
 describe('systemSoundSetFromBeatoraja', () => {
   test('takes the cues and the select BGM by path, the jingles by bytes', () => {
     const set = systemSoundSetFromBeatoraja({
-      paths: { cursor: 'sound/cursor.wav', cancel: 'sound/cancel.wav', decide: '' },
+      paths: { playStop: 'sound/playstop.wav', cursor: 'sound/cursor.wav', cancel: 'sound/cancel.wav', decide: '' },
       selectBGMPath: 'BGM/select.wav',
       bgm: { clear: bytes(1), courseFail: bytes(2) },
     });
     expect(set).toEqual({
+      playStop: { path: 'sound/playstop.wav' },
       cursor: { path: 'sound/cursor.wav' },
       cancel: { path: 'sound/cancel.wav' },
       selectBGM: { path: 'BGM/select.wav' },

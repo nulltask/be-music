@@ -13,6 +13,7 @@ describe('discoverBeatorajaSystemSoundPaths', () => {
   it('picks the first canonical filename it finds for each slot', () => {
     const files = fakeFiles([
       'sound/cursor.wav',
+      'sound/playstop.wav',
       'sound/decide.wav',
       'sound/cancel.wav',
       'sound/folder_open.wav',
@@ -20,6 +21,7 @@ describe('discoverBeatorajaSystemSoundPaths', () => {
       'sound/option.wav',
     ]);
     expect(discoverBeatorajaSystemSoundPaths(files)).toEqual({
+      playStop: 'sound/playstop.wav',
       cursor: 'sound/cursor.wav',
       decide: 'sound/decide.wav',
       cancel: 'sound/cancel.wav',

@@ -212,3 +212,42 @@ describe('resolvePlayStage', () => {
     expect(resolvePlayStage(play)).toBe('playing');
   });
 });
+
+describe('stage-failure sound', () => {
+  test('plays the configured stop cue once, only on failure, owned by the scene', () => {
+    const play = new PlaySession();
+    const playCue = vi.fn(async () => true);
+    const stopOwned = vi.fn();
+    const sound = { path: 'sound/playstop.wav' };
+    const session = new PlaySceneSession(play, {
+      chart: CHART,
+      playOptions: DEFAULT_PLAY_OPTIONS,
+      audio: { playCue, stopOwned },
+      sounds: { playStop: sound },
+    });
+    session.queueEvent({ kind: 'scene-start', at: 0 });
+    session.queueEvent({ kind: 'exit-fade-out', at: 100 });
+    expect(playCue).not.toHaveBeenCalled();
+    session.queueEvent({ kind: 'exit-close', at: 200 });
+    session.queueEvent({ kind: 'exit-close', at: 201 });
+    expect(playCue).toHaveBeenCalledTimes(1);
+    expect(playCue).toHaveBeenCalledWith(sound, { owner: session });
+    session.exit();
+    expect(stopOwned).toHaveBeenCalledWith(session);
+    session.dispose();
+  });
+
+  test('a theme without a stop cue stays silent', () => {
+    const play = new PlaySession();
+    const playCue = vi.fn(async () => true);
+    const session = new PlaySceneSession(play, {
+      chart: CHART,
+      playOptions: DEFAULT_PLAY_OPTIONS,
+      audio: { playCue, stopOwned: vi.fn() },
+    });
+    session.queueEvent({ kind: 'exit-close', at: 0 });
+    expect(playCue).not.toHaveBeenCalled();
+    expect(session.frame(0).events).toContainEqual({ kind: 'exit-close', atMs: 0 });
+    session.dispose();
+  });
+});
