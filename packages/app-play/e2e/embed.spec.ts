@@ -147,7 +147,7 @@ test('a paused play shows a centred play button, and the controls fade out while
   await page.getByRole('button', { name: 'Play', exact: true }).click({ timeout: 60_000 });
   const hud = page.locator('be-music-preview-hud');
   await expect(hud.getByRole('slider', { name: 'Seek' })).toBeEnabled({ timeout: 30_000 });
-  await hud.getByRole('button', { name: 'Pause' }).click();
+  await hud.locator('be-music-playback-controls').getByRole('button', { name: 'Pause', exact: true }).click();
   const resume = hud.locator('button.resume');
   await expect(resume).toBeVisible();
   await expect(hud.getByText('Paused', { exact: true })).toHaveCount(0);
