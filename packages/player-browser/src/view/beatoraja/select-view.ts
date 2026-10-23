@@ -15,6 +15,7 @@
  * and hands the options to the host.
  */
 
+import { resolveChartLongNoteMode } from '@be-music/chart-model';
 import {
   BEATORAJA_BUTTON,
   parseBeatorajaSongList,
@@ -426,7 +427,7 @@ export class BeatorajaSelectView implements SelectView {
     const focused = this.frame?.entries[this.frame.cursor];
     const current =
       this.lnModeOverride ??
-      beatorajaLNModeIndex(focused?.kind === 'chart' ? focused.chart.chart.bms?.lnMode : undefined);
+      beatorajaLNModeIndex(focused?.kind === 'chart' ? resolveChartLongNoteMode(focused.chart.chart) : undefined);
     this.lnModeOverride = ((((current + step) % 3) + 3) % 3) as 0 | 1 | 2;
   }
 
@@ -490,6 +491,9 @@ export class BeatorajaSelectView implements SelectView {
       },
       get list() {
         return view.frame?.browse.list ?? { keysFilter: 'ALL' as const, sort: 'OFF' as const };
+      },
+      get playOptions() {
+        return view.frame?.playOptions;
       },
       get lnModeOverride(): 0 | 1 | 2 | undefined {
         return view.lnModeOverride;
