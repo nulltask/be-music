@@ -1100,6 +1100,22 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
       lanesAPI.resolveWheelLaneDirection('1P', '24');
     },
   });
+  define('player-engine.lanes.randomizeSRandomNotes', {
+    run: () => {
+      for (const ruleset of ['lr2', 'beatoraja'] as const) {
+        lanesAPI.randomizeSRandomNotes(
+          [
+            { channel: '11', timeMs: 0, endTimeMs: 1000 },
+            { channel: '12', timeMs: 10 },
+            { channel: '12', timeMs: 30 },
+            { channel: '12', timeMs: 1100 },
+          ],
+          ['11', '12', '13', '14', '15'],
+          { ruleset, random: () => 0.5 },
+        );
+      }
+    },
+  });
   define('player-engine.lanes.resolveLaneOptionChannels', {
     run: () => {
       lanesAPI.resolveLaneOptionChannels('1P', '7');
