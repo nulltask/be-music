@@ -1,5 +1,6 @@
+import { Sprite, Texture, TextureSource } from 'pixi.js';
 import { describe, expect, it } from 'vite-plus/test';
-import { BEATORAJA_OP, normalizeBeatorajaNote } from '@be-music/skin-beatoraja';
+import { BEATORAJA_OP, normalizeBeatorajaNote, normalizeBeatorajaImages } from '@be-music/skin-beatoraja';
 import type { BeatorajaTextureCache } from '../../../skin/beatoraja/textures.ts';
 import {
   BeatorajaNoteLayer,
@@ -140,5 +141,78 @@ describe('BeatorajaNoteLayer lane geometry under a mutated activeOps Set', () =>
     activeOps.delete(BEATORAJA_OP.LIFT1_ON);
     expect(layer.getLaneBounds(activeOps)).toEqual({ topY: 300, bottomY: 800 });
     layer.dispose();
+  });
+});
+
+describe('BeatorajaNoteLayer landmines', () => {
+  it('draws engine landmineNotes even when the next regular note is outside the lane', () => {
+    const layer = new BeatorajaNoteLayer({
+      noteSection: normalizeBeatorajaNote({ dst: [{ values: [{ x: 0, y: 200, w: 50, h: 600 }] }] }),
+      variant: '7',
+      images: new Map(),
+      textures: { get: () => undefined, values: () => [][Symbol.iterator](), pathOf: () => undefined },
+      canvasHeight: 1000,
+    });
+    const mine = { channel: '11', beat: 1, seconds: 0.5, judged: false, mine: true };
+    const frame = {
+      notes: [{ channel: '11', beat: 100, seconds: 50, judged: false }],
+      landmineNotes: [mine],
+      currentBeat: 0,
+      currentSeconds: 0,
+    };
+    layer.update(frame, 1, new Set());
+    const noteLayer = layer.container.children[1]!;
+    expect(noteLayer.children.filter((child) => child.visible)).toHaveLength(1);
+    expect(noteLayer.children[0]!.getBounds().minY).toBe(644);
+    mine.judged = true;
+    layer.update({ ...frame, currentBeat: 2, currentSeconds: 1 }, 1, new Set());
+    expect(noteLayer.children.filter((child) => child.visible)).toHaveLength(0);
+    layer.update(frame, 1, new Set());
+    expect(noteLayer.children.filter((child) => child.visible)).toHaveLength(1);
+    layer.dispose();
+  });
+});
+
+describe('BeatorajaNoteLayer mine sprites', () => {
+  it.each([
+    ['7', '11', 0],
+    ['7', '16', 7],
+    ['14', '21', 8],
+    ['14', '26', 15],
+    ['9', '25', 8],
+    ['24', '1P', 24],
+    ['48', '2Q', 51],
+  ] as const)('uses the mine image on variant %s channel %s', (variant, channel, lane) => {
+    const texture = new Texture({
+      source: new TextureSource({ resource: new Uint8Array(16 * 16 * 4), width: 16, height: 16 }),
+    });
+    const images = normalizeBeatorajaImages([{ id: 'mine', src: 0, x: 0, y: 0, w: 16, h: 8 }]);
+    const layer = new BeatorajaNoteLayer({
+      noteSection: normalizeBeatorajaNote({
+        mine: Array(52).fill('mine'),
+        dst: Array.from({ length: 52 }, (_, i) => ({ x: i * 30, y: 200, w: 30, h: 600 })),
+      }),
+      variant,
+      images: new Map(images.map((image) => [image.id, image])),
+      textures: { get: () => texture, values: () => [texture][Symbol.iterator](), pathOf: () => undefined },
+      canvasHeight: 1000,
+    });
+    const mine = { channel, beat: 1, seconds: 0.5, judged: false, mine: true };
+    const frame = { notes: [], landmineNotes: [mine], currentBeat: 0, currentSeconds: 0 };
+    layer.update(frame, 1, new Set());
+    const sprite = layer.container.children[1]!.children[0] as Sprite;
+    expect(sprite).toBeInstanceOf(Sprite);
+    expect(sprite.visible).toBe(true);
+    expect(sprite.x).toBe(lane * 30);
+    expect(sprite.y).toBe(642);
+    expect(sprite.texture.frame.height).toBe(8);
+    layer.update(
+      { ...frame, landmineNotes: [], notes: [{ channel, beat: 100, seconds: 50, judged: false }] },
+      1,
+      new Set(),
+    );
+    expect(sprite.visible).toBe(false);
+    layer.dispose();
+    texture.destroy(true);
   });
 });

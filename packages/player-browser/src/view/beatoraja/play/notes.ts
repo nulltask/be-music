@@ -133,6 +133,7 @@ export function beatorajaDisplayScrollBeat(frame: Pick<PlayerUIFramePayload, 'cu
  */
 export interface BeatorajaNoteClock {
   readonly notes: readonly PlayerUIFrameNote[];
+  readonly landmineNotes?: readonly PlayerUIFrameNote[];
   readonly currentSeconds: number;
   readonly currentBeat: number;
   readonly displayBeat?: number;
@@ -276,6 +277,27 @@ export class BeatorajaNoteLayer {
    */
   private readonly croppedTextureCache = new Map<BeatorajaImageId, CroppedSprite | undefined>();
   private firstFrameLogged = false;
+  private noteSources:
+    | {
+        notes: readonly PlayerUIFrameNote[];
+        mines: readonly PlayerUIFrameNote[];
+        merged: readonly PlayerUIFrameNote[];
+      }
+    | undefined;
+
+  /** Engine frames keep mines separate; merge once without copying the live judgment objects. */
+  private drawingNotes(frame: BeatorajaNoteClock): readonly PlayerUIFrameNote[] {
+    const mines = frame.landmineNotes;
+    if (mines === undefined || mines.length === 0) return frame.notes;
+    if (this.noteSources?.notes !== frame.notes || this.noteSources.mines !== mines) {
+      this.noteSources = {
+        notes: frame.notes,
+        mines,
+        merged: [...frame.notes, ...mines].sort((a, b) => a.beat - b.beat),
+      };
+    }
+    return this.noteSources.merged;
+  }
 
   constructor(options: BeatorajaNoteLayerOptions) {
     this.noteSection = options.noteSection;
@@ -369,8 +391,8 @@ export class BeatorajaNoteLayer {
       );
     }
 
-    const notes = frame.notes;
-    const firstIndex = this.advanceLR2DrawCursor(frame, drawWindow);
+    const notes = this.drawingNotes(frame);
+    const firstIndex = this.advanceLR2DrawCursor(frame, drawWindow, notes);
     const lr2LastBeat = lr2LastWalkedBeat(drawWindow, pixelsPerBeat);
     for (let noteIndex = firstIndex; noteIndex < notes.length; noteIndex += 1) {
       const note = notes[noteIndex]!;
@@ -448,17 +470,21 @@ export class BeatorajaNoteLayer {
    * Under LR2's drawing rules without a negative-BPM reversal, moves {@link drawCursor} past the notes gone by this
    * frame and returns where the walk starts; 0 otherwise, as before.
    */
-  private advanceLR2DrawCursor(frame: BeatorajaNoteClock, drawWindow: NoteDrawWindow): number {
+  private advanceLR2DrawCursor(
+    frame: BeatorajaNoteClock,
+    drawWindow: NoteDrawWindow,
+    notes: readonly PlayerUIFrameNote[],
+  ): number {
     if (drawWindow.rules !== 'lr2' || this.reversal !== undefined) {
       this.drawCursor = undefined;
       return 0;
     }
     let cursor = this.drawCursor;
-    if (!cursor || cursor.notes !== frame.notes || frame.currentSeconds < cursor.seconds) {
-      cursor = { notes: frame.notes, seconds: frame.currentSeconds, index: 0 };
+    if (!cursor || cursor.notes !== notes || frame.currentSeconds < cursor.seconds) {
+      cursor = { notes, seconds: frame.currentSeconds, index: 0 };
     }
     cursor.index = advanceDrawCursor(
-      frame.notes,
+      notes,
       cursor.index,
       (note) => !isDrawnUntilJudged(drawWindow, note, this.autoplay),
     );
@@ -475,6 +501,7 @@ export class BeatorajaNoteLayer {
     this.spritePool.length = 0;
     this.tilingPool.length = 0;
     this.croppedTextureCache.clear();
+    this.noteSources = undefined;
   }
 
   /**

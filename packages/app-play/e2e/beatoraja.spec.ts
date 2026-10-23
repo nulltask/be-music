@@ -60,3 +60,53 @@ test('skin configuration uses tabs and native position controls, with a working 
   await expect(pane.locator('input').first()).toBeVisible();
   await pane.screenshot({ path: info.outputPath('skin-config.png') });
 });
+
+test('beatoraja draws a landmine from the engine frame', async ({ demo }, info) => {
+  await demo.open();
+  await demo.page.evaluate(() => {
+    const file = new File(
+      ['#PLAYER 1\n#TITLE Landmine display\n#BPM 120\n#000D1:0001\n#00811:01\n#00819:01\n'],
+      'mine.bms',
+    );
+    const event = new Event('drop', { cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: { items: [], files: [file], types: ['Files'] } });
+    window.dispatchEvent(event);
+  });
+  await demo.waitFor((state) => !state.loading && state.loads > 0, 'the mine chart');
+  await demo.drop('skins/beatoraja');
+  await demo.cursorTo((bar) => bar.kind === 'chart' && bar.title === 'Landmine display', 'the mine chart');
+  await demo.clickSkin(AUTO_BUTTON.x, AUTO_BUTTON.y, SELECT_SKIN.width, SELECT_SKIN.height);
+  await demo.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? -1) > 0.2, 'falling mine');
+  await demo.key('Space');
+  const canvas = demo.page.locator('canvas[aria-label="be-music stage"]');
+  const screenshot = await canvas.screenshot({ path: info.outputPath('beatoraja-landmine.png') });
+  const minePixels = await demo.page.evaluate(async (base64) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${base64}`;
+    await image.decode();
+    const surface = document.createElement('canvas');
+    surface.width = image.width;
+    surface.height = image.height;
+    const ctx = surface.getContext('2d')!;
+    ctx.drawImage(image, 0, 0);
+    // The first key lane, above the gauge: normal notes are far outside this window.
+    const scale = Math.min(image.width / 640, image.height / 480);
+    const x = Math.round((image.width - 640 * scale) / 2 + 62 * scale);
+    const y = Math.round((image.height - 480 * scale) / 2 + 10 * scale);
+    const pixels = ctx.getImageData(x, y, Math.round(30 * scale), Math.round(380 * scale)).data;
+    let count = 0;
+    for (let i = 0; i < pixels.length; i += 4) {
+      if (
+        pixels[i]! >= 45 &&
+        pixels[i]! <= 51 &&
+        pixels[i + 1]! >= 27 &&
+        pixels[i + 1]! <= 33 &&
+        pixels[i + 2]! >= 59 &&
+        pixels[i + 2]! <= 66
+      )
+        count++;
+    }
+    return count;
+  }, screenshot.toString('base64'));
+  expect(minePixels).toBeGreaterThan(30);
+});
