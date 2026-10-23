@@ -33,7 +33,7 @@ export interface PlayResult {
   maxCombo: number;
   /** The final gauge in percent (0..100). */
   gauge: number;
-  /** The ruleset's verdict on the gauge (a course run: whether the run cleared). */
+  /** The ruleset's clear verdict, including full-combo precedence (a course run: whether the run cleared). */
   cleared: boolean;
   /** The time played, in seconds (a course run: every stage's). */
   playSeconds: number;
@@ -137,24 +137,25 @@ export interface PlayResultFacts {
  * clear-lamp rule (`resolveClearLamp`), the timed judgments and their early / late counts.
  */
 export function playResultFromPlayState(state: PlayState, facts: PlayResultFacts): PlayResult {
+  const lamp = resolveClearLamp({
+    cleared: state.cleared,
+    score: facts.score,
+    ...(state.gaugeType !== undefined ? { gauge: state.gaugeType } : {}),
+    ...(facts.judgeRuleset !== undefined ? { ruleset: facts.judgeRuleset } : {}),
+  });
   const progress = state.totalSeconds > 0 ? Math.max(0, Math.min(1, facts.seconds / state.totalSeconds)) : 1;
   return {
     score: { ...facts.score },
     ...(facts.practice === true ? { practice: true } : {}),
     maxCombo: state.maxCombo,
     gauge: state.gauge,
-    cleared: state.cleared,
+    cleared: lamp !== 'FAILED',
     playSeconds: facts.playSeconds ?? facts.seconds,
     chart: facts.chart,
     gaugeHistory: [...state.gaugeHistory, { progress, value: state.gauge }],
     scoreHistory: [...state.scoreHistory, { progress, exScore: state.exScore }],
     ...(facts.practice !== true && facts.replay !== undefined ? { replay: facts.replay } : {}),
-    lamp: resolveClearLamp({
-      cleared: state.cleared,
-      score: facts.score,
-      ...(state.gaugeType !== undefined ? { gauge: state.gaugeType } : {}),
-      ...(facts.judgeRuleset !== undefined ? { ruleset: facts.judgeRuleset } : {}),
-    }),
+    lamp,
     ...(state.gaugeType !== undefined ? { gaugeType: state.gaugeType } : {}),
     ...(facts.run !== undefined ? { run: facts.run } : {}),
     ...(facts.course !== undefined ? { course: facts.course } : {}),

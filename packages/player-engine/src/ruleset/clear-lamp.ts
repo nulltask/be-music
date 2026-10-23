@@ -151,14 +151,17 @@ export interface PlayClearLampFacts {
 /**
  * The clear lamp of a single play: FAILED when its gauge did not clear, FULL COMBO / PERFECT / MAX for a cleared full
  * combo ({@link isFullCombo}), else the lamp of the gauge it cleared on, kept to the judge ruleset's own lamps: under
- * LR2 and IIDX a full combo is the top lamp, and under LR2 a DEATH clear is NORMAL.
+ * LR2 and IIDX a full combo is the top lamp. LR2 awards it before the gauge check; a DEATH clear is NORMAL.
  */
 export function resolveClearLamp(play: PlayClearLampFacts): ClearLamp {
+  const fullCombo = isFullCombo(play.score);
+  // LR2 CheckClear (0x405da4–0x405dc9) returns FULL COMBO before inspecting the gauge.
+  if (play.ruleset === 'lr2' && fullCombo) return 'FULL_COMBO';
   return finishClearLamp({
     top: topClearLamp(play.ruleset),
     cleared: play.cleared,
     gaugeLamp: gaugeClearLamp(play.gauge, play.ruleset),
-    fullCombo: isFullCombo(play.score),
+    fullCombo,
     great: play.score.great,
     good: play.score.good,
   });
