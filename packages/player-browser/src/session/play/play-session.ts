@@ -99,6 +99,7 @@ export class PlaySession extends PlaySessionState {
   public constructor(options: PlaySessionOptions = {}, theme: PlaySessionTheme = NO_THEME) {
     super();
     this.options = options;
+    this.practice = options.practice === true;
     this.theme = theme;
     // A replay plays back at the tempo it was played at, unless its viewer keeps their own (`replayView.tempo`).
     this.replayTempo =
@@ -172,6 +173,8 @@ export class PlaySession extends PlaySessionState {
     if (this.disposed) return;
     await prepareAudio(this);
     if (this.disposed) return;
+    // Build the engine while BGA and the skin intro are still loading; START opens its chart gate.
+    launchSharedEngine(this);
     this.bgaReadyPromise = prepareBGA(this).catch((error) => {
       log.warn('BGA preload failed; continuing without it', error);
     });
@@ -229,6 +232,7 @@ export class PlaySession extends PlaySessionState {
     // later via the `Promise.all` gates below so they wait for the BGA preload too. Exit-phase events are deliberately
     // NOT raised here: `beginExitSequence` raises them at the actual transition moment (ESC / chart end / failure).
     this.theme.moment({ kind: 'scene-start', at: now });
+    launchSharedEngine(this);
     // The `start()` invocation we belong to — captured so the gate handlers below can detect a dispose-and-re-mount and
     // bail out instead of mutating a fresh play's state.
     const sceneEpoch = this.sceneStartTime;
@@ -251,9 +255,9 @@ export class PlaySession extends PlaySessionState {
       this.startTime = performance.now();
       // The chart's clock until the engine's first frame; the engine's audio session schedules a NONSTOP chart's fades.
       if (this.audioContext) this.audioContextStartTime = this.audioContext.currentTime;
-      // Hand chart playback over to `@be-music/player-engine`'s engine. Fires only after the play-start gate, so the engine's
-      // chart-time t=0 lines up with the gate — no double lead-in.
-      launchSharedEngine(this);
+      // The engine is prepared already; opening its gate starts chart time and audio together.
+      this.engineStartRequested = true;
+      this.sharedEngineInputSignals?.pushCommand({ kind: 'start' });
     });
     this.host?.app.canvas.focus();
   }
@@ -305,16 +309,20 @@ export class PlaySession extends PlaySessionState {
   public waitForReplay(timeoutMs = 2000): Promise<BeMusicReplay | undefined> {
     if (this.replay !== undefined) return Promise.resolve(this.replay);
     return new Promise((resolve) => {
-      const timer = setTimeout(() => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const settle = (replay: BeMusicReplay | undefined): void => {
+        if (timer !== undefined) clearTimeout(timer);
         const index = this.replayWaiters.indexOf(settle);
         if (index >= 0) this.replayWaiters.splice(index, 1);
-        resolve(undefined);
-      }, timeoutMs);
-      const settle = (replay: BeMusicReplay): void => {
-        clearTimeout(timer);
         resolve(replay);
       };
+      timer = setTimeout(() => settle(undefined), timeoutMs);
       this.replayWaiters.push(settle);
+      // Practice and replay playback produce no recording. Wait for the final summary, then settle without a timeout.
+      void this.sharedEnginePromise?.then(
+        () => settle(this.replay),
+        () => settle(undefined),
+      );
     });
   }
 

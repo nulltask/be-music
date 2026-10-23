@@ -1,4 +1,4 @@
-import type { BeMusicReplay } from '@be-music/player-engine/replay';
+import type { BeMusicReplay, ReplayRulesetResult } from '@be-music/player-engine/replay';
 import { resolveClearLamp, type ClearLamp, type ScoreSummary } from '@be-music/player-engine/ruleset';
 import type { CourseView } from '../course-view/course-view.ts';
 import type { LibraryChart } from '../library/entries.ts';
@@ -20,6 +20,8 @@ export type PlayRunKind = 'single' | 'stage' | 'course' | 'nonstop';
 export interface PlayResult {
   /** A seek made this play practice: never save a record, rank it or auto-save its replay. */
   practice?: boolean;
+  /** A live course-stage outcome for carrying practice into the next stage without a replay. */
+  stageOutcome?: ReplayRulesetResult;
   /** Per-judgment counts, total notes, EX score and the displayed score (LR2's money score, else the EX score). */
   score: ScoreSummary;
   /**

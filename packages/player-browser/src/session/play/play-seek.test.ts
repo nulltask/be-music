@@ -79,7 +79,9 @@ interface FakeContext {
 }
 
 /** An AUTO play on a fake audio clock and a fake engine; every launched run is kept in `runs`. */
-function createSeekablePlay(): FakeContext {
+function createSeekablePlay(
+  setup: { startRequested?: boolean; paused?: boolean; practice?: boolean } = {},
+): FakeContext {
   const audioContext = { currentTime: 100, resume: async () => {}, suspend: async () => {} };
   const engine = { paused: false };
   const runs: FakeRun[] = [];
@@ -155,9 +157,11 @@ function createSeekablePlay(): FakeContext {
     runs.push(run);
     return promise as ReturnType<typeof runEngineDriver>;
   });
-  const play = new PlaySession({ autoPlay: true });
+  const play = new PlaySession({ autoPlay: true, practice: setup.practice });
   Object.assign(play, {
     chart: CHART,
+    engineStartRequested: setup.startRequested ?? false,
+    paused: setup.paused ?? false,
     audioContext,
     audioBus: {},
     chartDurationSeconds: 10,
@@ -372,5 +376,31 @@ test('manual seeking requires the practice option and marks the result', async (
   context.runs[0]!.tick();
   await waiting;
   expect(context.play.practice).toBe(true);
+  expect(context.play.getResultData()?.practice).toBe(true);
+});
+
+test('prepares the engine behind a command gate and forwards a start already requested by the skin', () => {
+  const waiting = createSeekablePlay();
+  expect(waiting.runs[0]!.options.engineOptions).toMatchObject({ leadInMs: 0, waitForStart: true });
+  expect(waiting.runs[0]!.inputSignals.drainCommands()).toEqual([]);
+  const ready = createSeekablePlay({ startRequested: true, paused: true });
+  expect(ready.runs[0]!.inputSignals.drainCommands()).toEqual([{ kind: 'toggle-pause' }, { kind: 'start' }]);
+});
+
+test('later practice stages do not create a replay recorder and no replay waiter survives engine completion', async () => {
+  const context = createSeekablePlay({ practice: true });
+  expect(context.play.practice).toBe(true);
+  expect(context.runs[0]!.options.engineOptions?.onReplayRecorded).toBeUndefined();
+  context.play.sharedEnginePromise = Promise.resolve();
+  expect(await context.play.waitForReplay()).toBeUndefined();
+  expect(context.play.replayWaiters).toHaveLength(0);
+});
+
+test('seeking an AUTO course stage also makes its result practice', async () => {
+  const context = createSeekablePlay();
+  Object.assign(context.play.options, { course: { kind: 'grade' } });
+  const waiting = context.play.seek(5);
+  context.runs[0]!.tick();
+  await waiting;
   expect(context.play.getResultData()?.practice).toBe(true);
 });

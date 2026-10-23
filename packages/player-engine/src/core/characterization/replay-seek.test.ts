@@ -1,7 +1,7 @@
 import { resolveChart } from '@be-music/chart-model';
 import { describe, expect, test } from 'vite-plus/test';
 import type { PlayerOptions } from '../engine-types.ts';
-import { basicChart, exRankChart, longNoteChart, mineChart } from './charts.ts';
+import { basicChart, exRankChart, longNoteChart, mineChart, nonstopCourse } from './charts.ts';
 import { command, observePlay, tap } from './harness.ts';
 
 const cases = [
@@ -135,3 +135,40 @@ describe('a replay that seeks', () => {
     },
   );
 });
+
+for (const judgeRuleset of ['lr2', 'beatoraja', 'iidx'] as const) {
+  test(`${judgeRuleset}: NONSTOP replay seeks across a stage's different judge rank`, async () => {
+    const { chart, map } = nonstopCourse();
+    const at = map.stageRanks[0]!.seconds + 1.7;
+    const options: PlayerOptions = {
+      judgeRuleset,
+      endOnFailure: false,
+      stageRanks: map.stageRanks,
+      course: { kind: 'nonstop' },
+    };
+    const original = await observePlay({
+      driver: 'manual',
+      chart,
+      options,
+      script: resolveChart(chart).notes.flatMap((note) => tap(note.seconds * 1000 + 80, note.channel)),
+    });
+    const playback = { ...options, replayInputs: original.replay!.inputs };
+    const baseline = await observePlay({
+      driver: 'manual',
+      chart: nonstopCourse().chart,
+      options: playback,
+      captureAt: [at],
+    });
+    for (const atMs of [300, (at + 0.4) * 1000]) {
+      const sought = await observePlay({
+        driver: 'manual',
+        chart: nonstopCourse().chart,
+        options: playback,
+        captureAt: [at],
+        script: [command(atMs, { kind: 'seek', seconds: at })],
+      });
+      expect(sought.captured).toEqual(baseline.captured);
+      expect(sought.summary).toEqual(baseline.summary);
+    }
+  });
+}
