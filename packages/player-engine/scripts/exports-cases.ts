@@ -1103,6 +1103,9 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
   define('player-engine.lanes.resolveLaneOptionChannels', {
     run: () => {
       lanesAPI.resolveLaneOptionChannels('1P', '7');
+      lanesAPI.resolveLaneOptionChannels('1P', '5');
+      lanesAPI.resolveLaneOptionChannels('1P', '9', [{ channel: '22' }]);
+      lanesAPI.resolveLaneOptionChannels('2P', '48');
     },
   });
   define('player-engine.lanes.isPlayableInputChannel', {
