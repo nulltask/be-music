@@ -26,6 +26,8 @@ export interface PlayControls {
   takeSeek(): number | undefined;
   /** Applies the replay's recorded tempo changes due by `nowSec`. */
   followReplayTempoChanges(nowSec: number): void;
+  /** Restores the replay tempo and cursor at a seek, including while paused. */
+  seekReplayTempoChanges(seconds: number, nowMs: number): void;
   /** Interrupts the play at chart second `seconds` (a replay reaching the instant its log was aborted at). */
   interrupt(reason: PlayerInterruptReason, seconds: number): void;
   /** The chart has started: applies a pause sent during the lead-in. */
@@ -170,6 +172,19 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
         replayTempoChangeIndex += 1;
         changeTempo(change.tempo);
       }
+    },
+    seekReplayTempoChanges: (seconds, nowMs) => {
+      if (!session.replay) return;
+      replayTempoChangeIndex = 0;
+      let tempo = tempoClock.initialTempo;
+      while (replayTempoChangeIndex < replayTempoChanges.length) {
+        const change = replayTempoChanges[replayTempoChangeIndex]!;
+        if (change.timeUs / 1_000_000 > seconds) break;
+        if (Number.isFinite(change.tempo) && change.tempo > 0) tempo = change.tempo;
+        replayTempoChangeIndex += 1;
+      }
+      tempoClock.rebase(nowMs, seconds);
+      changeTempo(tempo);
     },
     chartStarted: () => {
       if (pauseAtStart) {

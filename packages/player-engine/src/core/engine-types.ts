@@ -143,7 +143,7 @@ export interface PlayerPlaySettings {
   stageRanks?: ReadonlyArray<PlayerStageRank>;
   /**
    * The chart second the play starts at instead of the chart's beginning: the play's first seek (a `{ kind: 'seek' }`
-   * input command, applied as the chart starts). Only a judge that can seek takes it — AUTO play, not a replay, for now.
+   * input command, applied as the chart starts). Only a judge that can seek takes it — AUTO play and replays.
    * The judge state there is the one a play from the start reaches (the notes before it judged, without their keysounds,
    * flashes or bombs), the volume changes before it apply, and sounds that started earlier and still ring start
    * partway, through `AudioSession.triggerEventAt`. A play that seeks records no replay.

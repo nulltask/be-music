@@ -285,7 +285,7 @@ export class PlaySession extends PlaySessionState {
   }
 
   /**
-   * Moves an AUTO play to chart second `seconds` (`seekPlay`): the engine seeks the running play, and the promise resolves
+   * Moves an AUTO play or replay to chart second `seconds` (`seekPlay`): the engine seeks the running play, and the promise resolves
    * once it has (its frames are of the new seek generation). A paused play stays paused there. Other plays ignore it.
    */
   public seek(seconds: number): Promise<void> {
