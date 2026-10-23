@@ -231,7 +231,7 @@ describe('simulateReplay', () => {
     expect(beatoraja.judge.poor).toBe(1);
   });
 
-  test('LR2 multi-BAD: one press BADs every note inside BAD but outside GOOD', () => {
+  test('LR2 re-judge chain continues through BADs inside reach', () => {
     const replay = makeReplay({
       notes: [note(1_000_000), note(1_050_000), note(1_100_000)],
       inputs: [down(850_000)], // dm = +150ms / +200ms / +250ms

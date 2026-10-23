@@ -21,10 +21,26 @@ function result(
 }
 
 describe('resolveRulesetResultLamp', () => {
-  test('a run that did not clear is FAILED whatever its judgments', () => {
+  test('a final combo break overrides even a maximum combo covering every note', () => {
+    const broken = result({ type: 'NORMAL', cleared: true }, { bad: 0, poor: 0, good: 0, great: 0 });
+    broken.maxCombo = broken.noteCount;
+    broken.fullCombo = false;
+    expect(resolveRulesetResultLamp(broken, 'beatoraja')).toBe('NORMAL');
+  });
+
+  test('LR2 awards a full combo before gauge failure, while other rulesets still require a clear', () => {
     expect(resolveRulesetResultLamp(result({ type: 'HARD', cleared: false }, { bad: 0, poor: 0 }), 'lr2')).toBe(
-      'FAILED',
+      'FULL_COMBO',
     );
+  });
+
+  test('an incomplete LR2 play and an uncleared beatoraja or IIDX full combo still fail', () => {
+    expect(resolveRulesetResultLamp(result({ type: 'GROOVE', cleared: false }), 'lr2')).toBe('FAILED');
+    for (const ruleset of ['beatoraja', 'iidx'] as const) {
+      expect(resolveRulesetResultLamp(result({ type: 'NORMAL', cleared: false }, { bad: 0, poor: 0 }), ruleset)).toBe(
+        'FAILED',
+      );
+    }
   });
 
   test.each([

@@ -51,13 +51,13 @@ Top risks, most serious first:
    - TOTAL divides by base notes, but beatoraja counts CN/HCN tails, so recovery is up to 2× too fast.
    - For judgerank > 100 the BAD window is clamped to the unscaled leg.
    - Every mode uses the 7K gauge table.
-   - A full combo ignores empty-POOR combo breaks on 5K/PMS.
+   - Full-combo eligibility after empty POOR on 5K/PMS is fixed in [#588](https://github.com/nulltask/be-music/issues/588).
    - Gauge arithmetic is double, not float.
 
    (B)
 
 5. **LR2-ruleset fidelity bugs.**
-   - Multi-BAD follows lr2oraja's collector, where the binary re-judges the next note with the same press.
+   - The forward tap re-judge chain is fixed in [#589](https://github.com/nulltask/be-music/issues/589).
    - The LR2beta3 mine window, retirement and POOR/BP accounting are fixed in [#590](https://github.com/nulltask/be-music/issues/590).
    - LR2 awards FULL COMBO before it checks the gauge.
 
@@ -131,14 +131,14 @@ Most fixes below move a rule into the right box. The assist class and LR2 mine c
 | 2   | BP includes unjudged notes (single play)            | B           | Course only                                             | Fix for all rulesets + Leaderboard migration                           |
 | 3   | Failed run re-simulated under other rulesets        | B           | Ranked under all three                                  | Rank failed survival runs only under the played ruleset (or mark them) |
 | 4   | LIGHT ASSIST EASY lamp                              | A, B        | Missing; ASSIST-EASY gauge → ASSIST_EASY                | Add lamp; append-only rank or migration                                |
-| 5   | LR2 FC before gauge check                           | B           | FAILED first (beatoraja-style)                          | Per ruleset                                                            |
-| 6   | FC vs empty-POOR combo break (bea 5K/PMS)           | B           | Ignored                                                 | Per ruleset                                                            |
+| 5   | LR2 FC before gauge check                           | B           | Per-ruleset precedence (fixed in #591)                  | Per ruleset                                                            |
+| 6   | FC vs empty-POOR combo break (bea 5K/PMS)           | B           | Fixed in #588                                           | Per ruleset                                                            |
 | 7   | beatoraja TOTAL note count (CN/HCN tails)           | B           | Base notes                                              | Per ruleset (bug fix)                                                  |
 | 8   | beatoraja BAD scaling for judgerank > 100           | B           | Clamped to unscaled BAD                                 | Per ruleset (bug fix)                                                  |
 | 9   | beatoraja per-mode gauge tables                     | B, A        | 7K table everywhere                                     | Per mode inside `beatoraja`                                            |
 | 10  | Gauge float vs double                               | B           | double                                                  | `Math.fround` under `beatoraja`                                        |
 | 11  | `#DEFEXRANK` int truncation (bea)                   | B           | Rounded                                                 | `Math.trunc` under `beatoraja`                                         |
-| 12  | LR2 multi-BAD chain                                 | B           | lr2oraja collector                                      | Switch `lr2` to the binary's chain                                     |
+| 12  | LR2 multi-BAD chain                                 | B           | Fixed in #589                                           | Keep the forward re-judge chain                                        |
 | 13  | LR2 mine window, late leg, POOR count               | B           | Fixed in #590                                           | Keep LR2beta3 behavior                                                 |
 | 14  | PMS MissCondition.ONE / judgeVanish                 | B           | Not modelled (documented gap, judgeVanish undocumented) | Per ruleset when PMS matters                                           |
 | 15  | Player LN mode + record key                         | A, B        | Chart `#LNMODE` only; key without LN mode               | Option under `beatoraja`, logged; LN mode in record / ranking key      |
@@ -256,9 +256,9 @@ Already modelled per ruleset ([`packages/player-engine/src/ruleset/definitions.t
 - **LR2:** fixed table; BAD is a fixed 200 ms, and scaled windows never exceed it ([#L27586-L27610](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27586-L27610)).
 - **beatoraja:** `JudgeWindowRule.NORMAL` scales PG/GR/GD **and BAD** by judgerank, then clamps the inner windows to the **scaled** BAD ([play/JudgeProperty.java#L210-L273](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeProperty.java#L210-L273)). So 7K `#RANK 4` gives BAD -350/+275 ms.
 - **Kind:** parameter (a modelling bug).
-- **be-music today:** `scaleBeatorajaWindows` ([`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) ~L310-L343) clamps every leg to the **unscaled** BAD, so `beatoraja` BAD stays at -280/+220. This is correct only for PMS, where BAD is fixed.
+- **be-music today:** fixed in [#585](https://github.com/nulltask/be-music/issues/585). `scaleBeatorajaWindows` clamps to the resolved BAD leg: scaled under NORMAL, fixed under PMS. At 7K `#RANK 4`, BAD reaches -350/+275 ms across engine judging and replay re-simulation.
 - **Impact:** B. It affects VERY EASY charts, `#DEFEXRANK` > 133 and bmson `judge_rank` > 100.
-- **Recommendation:** clamp to the scaled BAD unless the ruleset fixes BAD. Re-simulation updates `beatoraja/0` results.
+- **Stored results:** replay/ruleset revision 0 remains unchanged. Leaderboard submission re-simulates the same recorded inputs through these tables; existing stored derived results require an explicit offline re-simulation to update historical rankings. This change performs no production writes.
 
 ### `#DEFEXRANK` integer truncation (beatoraja)
 
@@ -282,9 +282,9 @@ Already modelled per ruleset ([`packages/player-engine/src/ruleset/definitions.t
 - **LR2:** after a BAD, the same press is fed to the lane's next note if that note lies within the BAD window. The note is judged on its own gap and can come out PGREAT/GREAT/GOOD. The chain moves forward only, applies to taps only, and continues only while each step is a BAD. Sources: [#L7509-L7521](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L7509-L7521); binary VA 0x418d3b-0x418d55 (`cmpl 0x97a30` = `judgetime[2]`, `calll 0x418850`).
 - **beatoraja:** no multi-BAD.
 - **Kind:** semantic.
-- **be-music today:** follows lr2oraja's `MultiBadCollector` ([`core/judge-core-press.ts`](../packages/player-engine/src/core/judge-core-press.ts) `applyMultiBadCollector`, [`ruleset/long-note.ts`](../packages/player-engine/src/ruleset/long-note.ts), mirrored in [`replay/simulate.ts`](../packages/player-engine/src/replay/simulate.ts)).
+- **be-music today:** fixed in [#589](https://github.com/nulltask/be-music/issues/589). After a tap BAD, the live judge and replay simulator visit the next unjudged tap on that lane, classify it at the same press time, and continue only after another BAD. A non-BAD, long-note head or note outside the inclusive BAD window stops the chain. Each judged tap emits its own keysound and judgment; the input is recorded once.
 - **Impact:** B. EX and combo change on jacks and chords under `lr2`.
-- **Recommendation:** under LR2-first, the binary is the authority, so switch `lr2` to the chain. That changes `lr2/0` re-simulations; the log format is unchanged.
+- **Recommendation:** keep the source-backed chain. Revision 0 and replay inputs stay unchanged; historical EX score, combo, gauge, BP and lamps require explicit offline replay re-simulation and best-record rebuilds. No production data is changed.
 
 ### Mines: LR2 window, late side, POOR count
 
@@ -394,18 +394,18 @@ Already per ruleset: the windows, LR2's re-judge or empty POOR on a reversal, an
 - **LR2:** `CheckClear` returns FC when `totalnotes == max_combo`, before any gauge test ([#L1834-L1840](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1834-L1840); binary 0x405da4-0x405dc9).
 - **beatoraja:** FC only when the play did not fail and the gauge qualifies ([BMSPlayer.java#L864-L868](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L864-L868)).
 - **Kind:** semantic.
-- **be-music today:** FAILED first for every ruleset ([`ruleset/clear-lamp.ts`](../packages/player-engine/src/ruleset/clear-lamp.ts) `finishClearLamp`).
+- **be-music today:** fixed in [#591](https://github.com/nulltask/be-music/issues/591). `resolveClearLamp` awards an LR2 full combo before checking the gauge; other rulesets retain their gauge requirement. The result screen uses the resolved lamp for its clear verdict.
 - **Impact:** B. Rare `lr2` lamps, for example a GROOVE full combo that ends below 80 % because of empty POORs.
-- **Recommendation:** per ruleset. The lamp is a pure function of stored results, so re-deriving is enough.
+- **Stored results:** replay simulation, local records and Leaderboard validation share this resolver. Migration `0016_lr2_full_combo_precedence.sql` re-derives stored LR2 lamps from judgment totals and rebuilds the best shown lamp references without changing EX score, BP or gauge measurements. It does not change replay revision 0. Historical local aggregate bests lack judgment totals, so they update on the next qualifying play rather than through a speculative migration.
 
 ### Full combo vs empty-POOR combo breaks (beatoraja 5K/PMS)
 
 - **LR2:** FC = `totalnotes == max_combo` ([#L1838](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1838)); an empty POOR never breaks combo.
-- **beatoraja:** FC = `pastNotes == combo` (L868), and on 5K/PMS an empty POOR resets combo.
+- **beatoraja:** FC requires the final running combo to equal the judged-note count ([BMSPlayer](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L818-L834)). Empty POOR resets combo in FIVEKEYS/PMS, while SEVENKEYS/KEYBOARD preserve it ([JudgeProperty](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeProperty.java#L10-L53)).
 - **Kind:** semantic.
-- **be-music today:** `isFullCombo` counts PG+GR+GD ≥ total and ignores `comboBreaksOnEmptyPoor`.
+- **be-music today:** fixed in [#588](https://github.com/nulltask/be-music/issues/588). When empty POOR occurs in a mode that breaks combo on it, the engine and simulator derive `fullCombo` from the final running combo. The shared lamp resolver requires both all notes GOOD or better and this eligibility; results, local records, course aggregation and Leaderboard re-simulation share it. A pre-first-note empty POOR does not prevent a subsequent full combo.
 - **Impact:** B.
-- **Recommendation:** per ruleset: when `comboBreaksOnEmptyPoor` is set, FC also needs max combo = note count.
+- **Recommendation:** keep the final-combo condition per ruleset. A peak combo cannot rule out a later break. Old replay caches without `fullCombo` retain count-based compatibility and should be re-simulated; historical Leaderboard derived lamps and aggregate bests need an explicit offline rebuild from replay inputs. Aggregate-only local records cannot reconstruct input order and improve on the next qualifying play. No production data is changed.
 
 ### EX score, money score, DJ level
 
@@ -459,7 +459,7 @@ Already per ruleset: LR2 death border and guts, the LR2 DEATH table (**fixed in 
 - **LR2:** an LN is one note.
 - **beatoraja:** the TOTAL modifier is `f * total / getTotalNotes()` ([play/GrooveGauge.java#L260](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/GrooveGauge.java#L260)), and `getTotalNotes` counts CN/HCN ends ([jbms-parser TimeLine.java#L139-L156](https://github.com/exch-bms2/jbms-parser/blob/8108cd54a19275810e1f5d2c9586f008eb6db95e/src/bms/model/TimeLine.java#L139-L156)). The same count feeds the default TOTAL and `LIMIT_INCREMENT`.
 - **Kind:** parameter (a modelling bug).
-- **be-music today:** `beatoraja` uses `baseNotes` ([`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) ~L811-L833, [`facts.ts`](../packages/player-engine/src/ruleset/facts.ts) `countBaseNotes`).
+- **be-music today:** fixed in [#586](https://github.com/nulltask/be-music/issues/586). The beatoraja branch uses its judgment-note count (LN heads, CN/HCN heads and tails) for default TOTAL, percentage TOTAL and TOTAL-based recovery, including HARD/EX-HARD `LIMIT_INCREMENT`. LR2 retains base-note counting. Engine and replay gauge checkpoints agree. Existing derived Leaderboard rows require explicit offline re-simulation; replay/ruleset revision 0 is unchanged.
 - **Impact:** B. CN/HCN charts recover up to 2× too fast, which changes lamps.
 - **Recommendation:** pass the ruleset's judgment count under `beatoraja`.
 
@@ -468,7 +468,7 @@ Already per ruleset: LR2 death border and guts, the LR2 DEATH table (**fixed in 
 - **LR2:** one set of tables.
 - **beatoraja:** separate FIVEKEYS, SEVENKEYS, PMS and KEYBOARD tables. Examples: 5K borders 75/50; HARD_5 has no recovery; PMS max 120, initial 30, border 85 ([play/GaugeProperty.java#L77-L105](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/GaugeProperty.java#L77-L105)). The 24K default TOTAL also differs.
 - **Kind:** parameter.
-- **be-music today:** the 7K table for every mode (documented in [replay — Fidelity notes](./replay.md#fidelity-notes)). Course class gauges already switch per mode.
+- **be-music today:** fixed in [#587](https://github.com/nulltask/be-music/issues/587). Single-play gauges select FIVEKEYS, SEVENKEYS, PMS or KEYBOARD properties, including the keyboard default TOTAL and five-key EX-HARD damage modifier. Course class gauges retain their separate per-mode tables. Live skin inputs retain raw bounds (PMS maximum 120); result and replay gauge values remain percentages. Historical derived Leaderboard results require explicit offline re-simulation; revision 0 is unchanged.
 - **Impact:** B; A, because a PMS gauge max of 120 changes how skins render the gauge.
 - **Recommendation:** pick the table per mode inside `beatoraja`.
 
@@ -725,7 +725,7 @@ Overall shape: two separate state mappings. LR2 CSV skins get LR2 vocabulary ([`
   - `#RESOLUTION,N` is an index into SD/HD/FHD/UHD ([skin/lr2/LR2SkinHeaderLoader.java#L103-L106](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/lr2/LR2SkinHeaderLoader.java#L103-L106), [Resolution.java#L8-L23](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/Resolution.java#L8-L23); the same in [endless dream L107-L110](https://github.com/seraxis/lr2oraja-endlessdream/blob/2394f65825994a153b99fbefea1a51476064c283/core/src/bms/player/beatoraja/skin/lr2/LR2SkinHeaderLoader.java#L107-L110)).
   - Coordinates are y-flipped and scaled ([skin/lr2/LR2SkinCSVLoader.java#L230-L234](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/lr2/LR2SkinCSVLoader.java#L230-L234)).
 - **Kind:** parameter (syntax), but it breaks the whole layout.
-- **be-music today:** [`packages/skin-lr2/src/skin/read.ts`](../packages/skin-lr2/src/skin/read.ts) accepts the SD/HD/FHD/UHD index and retains `w,h` as an extension. Invalid declarations do not disable coordinate-based detection.
+- **be-music today:** fixed in [#601](https://github.com/nulltask/be-music/issues/601). [`packages/skin-lr2/src/skin/read.ts`](../packages/skin-lr2/src/skin/read.ts) accepts the SD/HD/FHD/UHD index and retains `w,h` as an extension. Invalid declarations preserve any earlier valid declaration; without one, they leave coordinate-based detection enabled. Regression tests cover every index and the authored destination coordinates.
 - **Impact:** the syntax mismatch is fixed; vertical coordinate conversion remains a separate dialect difference.
 
 ### `#DST_*` columns 21+ and beatoraja-only CSV commands
@@ -788,7 +788,7 @@ Overall shape: two separate state mappings. LR2 CSV skins get LR2 vocabulary ([`
 ### GAUGE_MAX timer (bug)
 
 - **beatoraja:** `switchTimer(TIMER_GAUGE_MAX_1P, gauge.isMax())` runs every frame ([BMSPlayer.java#L636](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L636)).
-- **be-music today:** `startOnce` that never stops ([`packages/skin-beatoraja/src/scene/play-timers.ts`](../packages/skin-beatoraja/src/scene/play-timers.ts) ~L248). The LR2 path does stop it.
+- **be-music today:** fixed in [#598](https://github.com/nulltask/be-music/issues/598). The pure frame resolver starts timer 44 on each transition to the actual gauge maximum, preserves its timestamp while full and stops it below maximum. The LR2 path already stops its corresponding timer.
 - **Impact:** A/C. Gauge-max effects stay on after the gauge drops.
 - **Recommendation:** start the timer on reaching max and stop it on leaving.
 
@@ -817,14 +817,14 @@ Overall shape: two separate state mappings. LR2 CSV skins get LR2 vocabulary ([`
 - **beatoraja:**
   - POOR = a missed note, MISS = an empty POOR ([JudgeManager.java#L400-L404](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L400-L404)).
   - Number 420 is MISS, 426 is POOR+MISS, 427 is BAD+POOR+MISS ([skin/property/IntegerPropertyFactory.java#L461-L467](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/property/IntegerPropertyFactory.java#L461-L467)).
-- **be-music today:** [`packages/skin-beatoraja/src/scene/score.ts`](../packages/skin-beatoraja/src/scene/score.ts) reads 420 = POOR, 426 = POOR, 427 = BAD+POOR, although the engine counts `summary.emptyPoor`. The note in the [beatoraja skin notes](./beatoraja-skin.md) that the engine has no MISS judgment is stale.
+- **be-music today:** fixed in [#599](https://github.com/nulltask/be-music/issues/599). The engine and scene model already carry `emptyPoor`. The beatoraja score input now carries it to numbers 420 / 426 / 427, which read empty POOR / POOR + empty POOR / BAD + POOR + empty POOR. Results use `judgedPoor` when LR2 folds empty POORs into its displayed POOR count, avoiding double counting.
 - **Impact:** A/C.
 - **Recommendation:** read the numbers from `emptyPoor` and plumb it through the player-scene-model score. Display only.
 
 ### Gauge-type ops 42/43/1046 (bug)
 
 - **beatoraja:** 42 = gauge ≤ NORMAL, 43 = HARD and above, 1046 = the EX gauges ([skin/property/BooleanPropertyFactory.java#L394-L416](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/property/BooleanPropertyFactory.java#L394-L416)).
-- **be-music today:** 42 is always lit; 43 and 1046 never are ([`packages/skin-beatoraja/src/scene/play-ops.ts`](../packages/skin-beatoraja/src/scene/play-ops.ts)).
+- **be-music today:** fixed in [#600](https://github.com/nulltask/be-music/issues/600). Play frames and results share `resolveBeatorajaGaugeTypeOps`, using the gauge element’s runtime class mapping. Op 42 selects classes 0–2, 43 selects 3–8, and 1046 selects 0 / 1 / 4 / 5 / 7 / 8, including ASSIST-EASY and EASY. Gauge values and key modes do not change these flags.
 - **Impact:** A/C. HARD plays show the groove frame.
 - **Recommendation:** derive the ops from the gauge type, in play and on the result screen.
 

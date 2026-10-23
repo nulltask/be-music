@@ -65,6 +65,15 @@ describe('playResultFromCourseRun', () => {
     expect(data.judgeRuleset).toBe('lr2');
   });
 
+  test('shows a practice run without manufacturing a replay, preserving its played ruleset', () => {
+    const data = playResultFromCourseRun(course(), { ...result, ruleset: 'beatoraja/0' }, undefined, undefined, {
+      practice: true,
+    });
+    expect(data).toMatchObject({ practice: true, judgeRuleset: 'beatoraja', run: 'course' });
+    expect(data.replay).toBeUndefined();
+    expect(data.score.score).toBe(result.exScore);
+  });
+
   test('names the course in the song panel and carries the course view and the stages reached', () => {
     const data = playResultFromCourseRun(course(), result, courseLog());
     expect(data.chart).toMatchObject({ id: 'course:dan#0', title: 'Dan', subtitle: '3 / 3 STAGES · goldmedal' });

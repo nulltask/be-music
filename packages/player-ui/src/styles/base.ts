@@ -1,10 +1,16 @@
 import { css, type CSSResult } from 'lit';
 
-/** Shared tokens cross shadow roots; each component owns its structural styles. */
+/**
+ * Shared tokens cross shadow roots; each component owns its structural styles.
+ * Each element is an inline-size container named `be-music`, so its layout follows its own width.
+ * Screens rename that container to `be-music-screen`.
+ */
 export const baseStyles: CSSResult = css`
   :host {
     display: block;
     min-width: 0;
+    container-type: inline-size;
+    container-name: be-music;
     color-scheme: dark;
     color: var(--be-music-color-text, #edf2fa);
     font: inherit;

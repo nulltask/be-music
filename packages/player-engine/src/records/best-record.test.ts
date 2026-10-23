@@ -249,3 +249,27 @@ describe('isCourseRunAutoPlayed / courseRunKeepsRecord', () => {
     expect(courseRunKeepsRecord({ stages: [played({ tempo: 1.2 }), played()] })).toBe(false);
   });
 });
+
+it('keeps an LR2 full combo below the gauge border, using the same lamp rule as replay results', () => {
+  const summary: RecordPlaySummary = {
+    total: 10,
+    perfect: 8,
+    great: 1,
+    good: 1,
+    bad: 0,
+    poor: 0,
+    emptyPoor: 30,
+    exScore: 17,
+    gauge: {
+      type: 'GROOVE',
+      current: 40,
+      max: 100,
+      initial: 20,
+      clearThreshold: 80,
+      effectiveTotal: 160,
+      cleared: false,
+    },
+  };
+  expect(recordPlayFromSummary(summary, 10, 'lr2').lamp).toBe('FULL_COMBO');
+  expect(recordPlayFromSummary(summary, 10, 'beatoraja').lamp).toBe('FAILED');
+});

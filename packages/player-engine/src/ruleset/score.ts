@@ -7,6 +7,8 @@
 export type JudgmentKind = 'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'POOR';
 
 export interface ScoreSummary {
+  /** Final combo eligibility when empty POOR can break combo; absent in legacy/count-only results. */
+  fullCombo?: boolean;
   total: number;
   perfect: number;
   great: number;

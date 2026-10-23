@@ -51,13 +51,13 @@ LR2 と beatoraja は、同じ譜面、オプション、スキンの番号を�
    - TOTAL を基本ノート数で割っているが、beatoraja は CN/HCN の終端も数えるので、回復が最大 2 倍速すぎる。
    - judgerank > 100 で BAD の判定幅がスケール前の値に抑えられる。
    - どのモードでも 7K のゲージ表を使う。
-   - フルコンボが 5K/PMS の空 POOR によるコンボ切れを無視する。
+   - 5K/PMS の空 POOR 後のフルコンボ判定は [#588](https://github.com/nulltask/be-music/issues/588) で修正。
    - ゲージの計算が float ではなく double。
 
    (B)
 
 5. **LR2 ruleset の再現度のバグ。**
-   - multi-BAD が lr2oraja のコレクターに従っているが、バイナリは同じ押下で次のノートを再判定する。
+   - タップを前方へ再判定する連鎖は [#589](https://github.com/nulltask/be-music/issues/589) で修正。
    - LR2beta3 の地雷判定幅・消費・POOR/BP 加算は [#590](https://github.com/nulltask/be-music/issues/590) で修正。
    - LR2 はゲージを調べる前に FULL COMBO を与える。
 
@@ -131,14 +131,14 @@ flowchart TD
 | 2   | BP に未判定ノートを含める（シングルプレイ）             | B              | コースだけ                                         | 全 ruleset で修正 + Leaderboard のマイグレーション                                    |
 | 3   | 失敗したランを別 ruleset で再シミュレーション           | B              | 3 つすべてでランキング                             | 失敗したサバイバルのランはプレイした ruleset でだけランキングする（または印を付ける） |
 | 4   | LIGHT ASSIST EASY ランプ                                | A, B           | なし。ASSIST-EASY ゲージ → ASSIST_EASY             | ランプを追加。追加のみの rank かマイグレーション                                      |
-| 5   | LR2 はゲージ判定より先に FC                             | B              | FAILED が先（beatoraja 方式）                      | ruleset ごと                                                                          |
-| 6   | FC と空 POOR のコンボ切れ（bea 5K/PMS）                 | B              | 無視                                               | ruleset ごと                                                                          |
+| 5   | LR2 はゲージ判定より先に FC                             | B              | ruleset ごとの優先順位（fixed in #591）            | ruleset ごと                                                                          |
+| 6   | FC と空 POOR のコンボ切れ（bea 5K/PMS）                 | B              | #588 で修正                                        | ruleset ごと                                                                          |
 | 7   | beatoraja の TOTAL のノート数（CN/HCN の終端）          | B              | 基本ノート数                                       | ruleset ごと（バグ修正）                                                              |
 | 8   | judgerank > 100 での beatoraja の BAD のスケーリング    | B              | スケール前の BAD に抑える                          | ruleset ごと（バグ修正）                                                              |
 | 9   | beatoraja のモード別ゲージ表                            | B, A           | どこでも 7K の表                                   | `beatoraja` の中でモードごと                                                          |
 | 10  | ゲージの float と double                                | B              | double                                             | `beatoraja` で `Math.fround`                                                          |
 | 11  | `#DEFEXRANK` の int 切り捨て（bea）                     | B              | 四捨五入                                           | `beatoraja` で `Math.trunc`                                                           |
-| 12  | LR2 の multi-BAD の連鎖                                 | B              | lr2oraja のコレクター                              | `lr2` をバイナリの連鎖に切り替える                                                    |
+| 12  | LR2 の multi-BAD の連鎖                                 | B              | #589 で修正                                        | 前方への再判定の連鎖を維持                                                            |
 | 13  | LR2 の地雷の判定幅、遅い側、POOR の加算                 | B              | #590 で修正                                        | LR2beta3 の挙動を維持                                                                 |
 | 14  | PMS の MissCondition.ONE / judgeVanish                  | B              | 未実装（既知の差として記載、judgeVanish は未記載） | PMS が重要になったら ruleset ごと                                                     |
 | 15  | プレイヤーの LN モード + 記録キー                       | A, B           | 譜面の `#LNMODE` だけ。キーに LN モードなし        | `beatoraja` でオプション化してログに残す。記録 / ランキングのキーに LN モード         |
@@ -256,9 +256,9 @@ flowchart TD
 - **LR2:** 固定の表。BAD は 200 ms 固定で、スケールした判定幅がそれを超えることはありません（[#L27586-L27610](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27586-L27610)）。
 - **beatoraja:** `JudgeWindowRule.NORMAL` は PG/GR/GD **と BAD** を judgerank でスケールし、内側の判定幅を**スケール後の** BAD に抑えます（[play/JudgeProperty.java#L210-L273](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeProperty.java#L210-L273)）。そのため 7K の `#RANK 4` では BAD が -350/+275 ms になります。
 - **種類:** パラメータ（モデル化のバグ）。
-- **be-music の現状:** `scaleBeatorajaWindows`（[`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) ~L310-L343）がどの側も**スケール前の** BAD に抑えるので、`beatoraja` の BAD は -280/+220 のままです。これが正しいのは BAD が固定の PMS だけです。
+- **be-music の現状:** fixed in [#585](https://github.com/nulltask/be-music/issues/585)。`scaleBeatorajaWindows` は、NORMAL では倍率を適用した BAD、PMS では固定 BAD を上限にします。7K の `#RANK 4` はエンジンの判定とリプレイの再計算の両方で BAD が -350/+275 ms になります。
 - **影響:** B。VERY EASY の譜面、`#DEFEXRANK` > 133、bmson の `judge_rank` > 100 に効きます。
-- **推奨:** ruleset が BAD を固定していない限り、スケール後の BAD に抑える。再シミュレーションで `beatoraja/0` の結果が更新されます。
+- **保存済みの結果:** リプレイと ruleset のリビジョン 0 は変更しません。Leaderboard の投稿検証は同じ記録済み入力をこの判定表で再計算します。保存済みの派生結果と過去のランキングを更新するには、明示的なオフライン再計算が必要です。この変更では本番への書き込みを行いません。
 
 ### `#DEFEXRANK` の整数切り捨て（beatoraja）
 
@@ -282,9 +282,9 @@ flowchart TD
 - **LR2:** BAD の後、同じ押下を、そのレーンの次のノートが BAD の判定幅にあればそのノートに渡します。そのノートは自分のずれで判定され、PGREAT/GREAT/GOOD になることもあります。連鎖は前にしか進まず、通常ノートだけに適用され、各段階が BAD である間だけ続きます。ソース：[#L7509-L7521](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L7509-L7521)、バイナリの VA 0x418d3b-0x418d55（`cmpl 0x97a30` = `judgetime[2]`、`calll 0x418850`）。
 - **beatoraja:** multi-BAD はありません。
 - **種類:** セマンティクス。
-- **be-music の現状:** lr2oraja の `MultiBadCollector` に従っています（[`core/judge-core-press.ts`](../packages/player-engine/src/core/judge-core-press.ts) の `applyMultiBadCollector`、[`ruleset/long-note.ts`](../packages/player-engine/src/ruleset/long-note.ts)、[`replay/simulate.ts`](../packages/player-engine/src/replay/simulate.ts) にも同じもの）。
+- **be-music の現状:** [#589](https://github.com/nulltask/be-music/issues/589) で修正。タップの BAD 後、判定コアとリプレイシミュレータが同じレーンの次の未判定タップを同じ押下時刻で再判定し、BAD の場合だけ連鎖を続けます。BAD 以外・LN 始端・BAD 幅の外（境界は含む）で止まります。各タップの音と判定を通知し、入力は1回だけ記録します。
 - **影響:** B。`lr2` で縦連と同時押しの EX とコンボが変わります。
-- **推奨:** LR2 優先ではバイナリが基準なので、`lr2` を連鎖に切り替える。`lr2/0` の再シミュレーション結果が変わりますが、ログの形式は変わりません。
+- **推奨:** 一次資料に沿う連鎖を維持します。リビジョン 0 と入力形式は変えません。過去の EX スコア・コンボ・ゲージ・BP・ランプには、入力列からの明示的なオフライン再シミュレーションとベスト記録の再集計が必要です。本番データは変更しません。
 
 ### 地雷：LR2 の窓、遅い側、POOR の加算
 
@@ -394,18 +394,18 @@ flowchart TD
 - **LR2:** `CheckClear` は、ゲージを調べる前に `totalnotes == max_combo` なら FC を返します（[#L1834-L1840](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1834-L1840)。バイナリ 0x405da4-0x405dc9）。
 - **beatoraja:** プレイが失敗しておらず、ゲージが条件を満たすときだけ FC です（[BMSPlayer.java#L864-L868](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L864-L868)）。
 - **種類:** セマンティクス。
-- **be-music の現状:** すべての ruleset で FAILED が先です（[`ruleset/clear-lamp.ts`](../packages/player-engine/src/ruleset/clear-lamp.ts) の `finishClearLamp`）。
+- **be-music の現状:** fixed in [#591](https://github.com/nulltask/be-music/issues/591)。`resolveClearLamp` は LR2 のフルコンボをゲージ判定より先に評価します。他の ruleset はゲージ条件を維持します。結果画面のクリア判定も、解決したランプに合わせます。
 - **影響:** B。まれな `lr2` のランプ。たとえば空 POOR のせいで 80 % 未満で終わった GROOVE のフルコンボ。
-- **推奨:** ruleset ごと。ランプは保存済みの結果の純粋な関数なので、導き直すだけで足ります。
+- **保存済みの結果:** リプレイのシミュレーション、ローカル記録、Leaderboard の検証は同じ resolver を使います。`0016_lr2_full_combo_precedence.sql` は判定数から保存済み LR2 ランプを再導出し、公開スコアのベストランプ参照を更新します。EX スコア、BP、ゲージ実測値とリプレイのリビジョン 0 は変更しません。過去のローカル集計ベストには判定数がないため、推測による移行はせず、次の該当プレイで更新します。
 
 ### フルコンボと空 POOR のコンボ切れ（beatoraja 5K/PMS）
 
 - **LR2:** FC = `totalnotes == max_combo`（[#L1838](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1838)）。空 POOR がコンボを切ることはありません。
-- **beatoraja:** FC = `pastNotes == combo`（L868）。5K/PMS では空 POOR がコンボをリセットします。
+- **beatoraja:** FC は終了時のコンボと判定済みノート数の一致を要します（[BMSPlayer](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L818-L834)）。FIVEKEYS/PMS では空 POOR がコンボをリセットし、SEVENKEYS/KEYBOARD では維持します（[JudgeProperty](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeProperty.java#L10-L53)）。
 - **種類:** セマンティクス。
-- **be-music の現状:** `isFullCombo` は PG+GR+GD ≥ 総数を数え、`comboBreaksOnEmptyPoor` を無視します。
+- **be-music の現状:** [#588](https://github.com/nulltask/be-music/issues/588) で修正。空 POOR でコンボが切れるモードで空 POOR が発生した場合、エンジンとシミュレータが終了時のコンボから `fullCombo` を確定します。共通ランプ判定は全ノート GOOD 以上とこの可否の両方を要求し、結果・ローカル記録・コース集計・Leaderboard の再シミュレーションで共有します。最初のノートより前の空 POOR は、その後のフルコンボを妨げません。
 - **影響:** B。
-- **推奨:** ruleset ごと：`comboBreaksOnEmptyPoor` が立っているときは、FC に最大コンボ = ノート数も必要にする。
+- **推奨:** 終了時のコンボ条件を ruleset ごとに保ちます。最大コンボだけでは、その後の切断を検出できません。`fullCombo` のない旧キャッシュは判定数による互換動作を保つため、再シミュレーションが必要です。保存済みの Leaderboard 派生ランプ・ベスト記録は入力列から明示的にオフライン再集計します。集計値だけのローカル記録は入力順を復元できず、次の適格なプレイで更新されます。本番データは変更しません。
 
 ### EX スコア、マネースコア、DJ レベル
 
@@ -459,7 +459,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 - **LR2:** LN は 1 ノートです。
 - **beatoraja:** TOTAL の補正は `f * total / getTotalNotes()` で（[play/GrooveGauge.java#L260](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/GrooveGauge.java#L260)）、`getTotalNotes` は CN/HCN の終端を数えます（[jbms-parser TimeLine.java#L139-L156](https://github.com/exch-bms2/jbms-parser/blob/8108cd54a19275810e1f5d2c9586f008eb6db95e/src/bms/model/TimeLine.java#L139-L156)）。同じ数が既定の TOTAL と `LIMIT_INCREMENT` にも使われます。
 - **種類:** パラメータ（モデル化のバグ）。
-- **be-music の現状:** `beatoraja` は `baseNotes` を使います（[`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) ~L811-L833、[`facts.ts`](../packages/player-engine/src/ruleset/facts.ts) `countBaseNotes`）。
+- **be-music の現状:** fixed in [#586](https://github.com/nulltask/be-music/issues/586)。beatoraja は判定ノート数（LN の始点、CN/HCN の始点と終点）をデフォルト TOTAL、割合指定 TOTAL、HARD/EX-HARD の `LIMIT_INCREMENT` を含む TOTAL 由来の回復量に使います。LR2 は従来のノート数を維持します。エンジンとリプレイのゲージ値は各確認時点で一致します。保存済みの Leaderboard 派生結果には明示的なオフライン再計算が必要で、リプレイと ruleset のリビジョン 0 は変更しません。
 - **影響:** B。CN/HCN の譜面で回復が最大 2 倍速すぎ、ランプが変わります。
 - **推奨:** `beatoraja` では ruleset の判定数を渡す。
 
@@ -468,7 +468,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 - **LR2:** 表は 1 組です。
 - **beatoraja:** FIVEKEYS、SEVENKEYS、PMS、KEYBOARD で別の表があります。例：5K の境界は 75/50、HARD_5 は回復なし、PMS は最大 120・初期値 30・境界 85（[play/GaugeProperty.java#L77-L105](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/GaugeProperty.java#L77-L105)）。24K の既定の TOTAL も違います。
 - **種類:** パラメータ。
-- **be-music の現状:** すべてのモードで 7K の表です（[リプレイ — 再現度に関する注意](./replay.ja.md#再現度に関する注意) に記載）。コースの段位ゲージはすでにモードごとに切り替わります。
+- **be-music の現状:** fixed in [#587](https://github.com/nulltask/be-music/issues/587)。単曲のゲージは FIVEKEYS、SEVENKEYS、PMS、KEYBOARD の表を選び、24鍵のデフォルト TOTAL と5鍵 EX-HARD のダメージ補正にも対応します。コースの段位ゲージは既存のモード別の表を維持します。プレイ中のスキン入力には実際の範囲（PMS の最大値 120）を渡し、結果とリプレイのゲージ値は百分率で保ちます。保存済みの Leaderboard 派生結果には明示的なオフライン再計算が必要で、リビジョン 0 は変更しません。
 - **影響:** B。PMS のゲージ最大 120 はスキンでのゲージの描き方を変えるので A も。
 - **推奨:** `beatoraja` の中でモードごとに表を選ぶ。
 
@@ -725,7 +725,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
   - `#RESOLUTION,N` は SD/HD/FHD/UHD の番号です（[skin/lr2/LR2SkinHeaderLoader.java#L103-L106](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/lr2/LR2SkinHeaderLoader.java#L103-L106)、[Resolution.java#L8-L23](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/Resolution.java#L8-L23)。[endless dream L107-L110](https://github.com/seraxis/lr2oraja-endlessdream/blob/2394f65825994a153b99fbefea1a51476064c283/core/src/bms/player/beatoraja/skin/lr2/LR2SkinHeaderLoader.java#L107-L110) も同じ）。
   - 座標は y を反転してスケールします（[skin/lr2/LR2SkinCSVLoader.java#L230-L234](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/lr2/LR2SkinCSVLoader.java#L230-L234)）。
 - **種類:** パラメータ（構文）ですが、レイアウト全体が壊れます。
-- **be-music の現状:** [`packages/skin-lr2/src/skin/read.ts`](../packages/skin-lr2/src/skin/read.ts) は SD/HD/FHD/UHD の番号を受け付け、`w,h` も拡張として残します。無効な宣言は座標からの自動判定を妨げません。
+- **be-music の現状:** fixed in [#601](https://github.com/nulltask/be-music/issues/601)。[`packages/skin-lr2/src/skin/read.ts`](../packages/skin-lr2/src/skin/read.ts) は SD/HD/FHD/UHD の番号を受け付け、`w,h` も拡張として残します。無効な宣言は先行する有効な指定を維持し、有効な指定がなければ座標からの自動判定を妨げません。すべての番号と設計された描画先座標を回帰テストで確認します。
 - **影響:** 構文の不一致は修正済み。座標の上下反転は別の方言上の違いです。
 
 ### `#DST_*` の 21 列目以降と beatoraja だけの CSV コマンド
@@ -788,7 +788,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 ### GAUGE_MAX タイマー（バグ）
 
 - **beatoraja:** `switchTimer(TIMER_GAUGE_MAX_1P, gauge.isMax())` を毎フレーム実行します（[BMSPlayer.java#L636](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L636)）。
-- **be-music の現状:** 止まらない `startOnce`（[`packages/skin-beatoraja/src/scene/play-timers.ts`](../packages/skin-beatoraja/src/scene/play-timers.ts) ~L248）。LR2 側は止めています。
+- **be-music の現状:** fixed in [#598](https://github.com/nulltask/be-music/issues/598)。純粋なフレーム resolver は実際のゲージ最大値に達するたびにタイマー 44 を開始し、満タンの間は開始時刻を保ち、最大値未満では停止します。LR2 側は既に対応するタイマーを停止しています。
 - **影響:** A/C。ゲージが下がった後もゲージ最大の演出が残ります。
 - **推奨:** 最大に達したら開始し、離れたら止める。
 
@@ -817,14 +817,13 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 - **beatoraja:**
   - POOR = 見逃したノート、MISS = 空 POOR（[JudgeManager.java#L400-L404](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L400-L404)）。
   - 数値 420 は MISS、426 は POOR+MISS、427 は BAD+POOR+MISS です（[skin/property/IntegerPropertyFactory.java#L461-L467](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/property/IntegerPropertyFactory.java#L461-L467)）。
-- **be-music の現状:** [`packages/skin-beatoraja/src/scene/score.ts`](../packages/skin-beatoraja/src/scene/score.ts) は 420 = POOR、426 = POOR、427 = BAD+POOR として読みますが、エンジンは `summary.emptyPoor` を数えています。[beatoraja skin 実装メモ](./beatoraja-skin.ja.md) にある、エンジンに MISS の判定がないという注記は古くなっています。
+- **be-music の現状:** fixed in [#599](https://github.com/nulltask/be-music/issues/599)。engine と scene model は既に `emptyPoor` を持ちます。beatoraja のスコア入力でもこれを渡し、420 / 426 / 427 を空 POOR / POOR + 空 POOR / BAD + POOR + 空 POOR として読みます。LR2 の表示上の POOR に空 POOR が含まれる結果では、`judgedPoor` を使って二重計上を防ぎます。
 - **影響:** A/C。
-- **推奨:** 数値を `emptyPoor` から読み、player-scene-model のスコアまで通す。表示だけの話です。
 
 ### ゲージ種別の op 42/43/1046（バグ）
 
 - **beatoraja:** 42 = ゲージが NORMAL 以下、43 = HARD 以上、1046 = EX 系のゲージ（[skin/property/BooleanPropertyFactory.java#L394-L416](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/property/BooleanPropertyFactory.java#L394-L416)）。
-- **be-music の現状:** 42 が常に点灯し、43 と 1046 は点灯しません（[`packages/skin-beatoraja/src/scene/play-ops.ts`](../packages/skin-beatoraja/src/scene/play-ops.ts)）。
+- **be-music の現状:** fixed in [#600](https://github.com/nulltask/be-music/issues/600)。プレイ中と結果画面は `resolveBeatorajaGaugeTypeOps` を共有し、ゲージ要素と同じ実行時の種別対応を使います。42 は種別 0–2、43 は 3–8、1046 は ASSIST-EASY と EASY を含む 0 / 1 / 4 / 5 / 7 / 8 で有効になります。ゲージ値やキーモードでは変わりません。
 - **影響:** A/C。HARD のプレイで GROOVE の枠が出ます。
 - **推奨:** プレイとリザルトの両方で、ゲージ種別から op を導く。
 

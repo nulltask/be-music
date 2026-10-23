@@ -101,6 +101,9 @@ export interface ReplayCourseResult {
   maxCombo: number;
   /** Mine POORs included in judge.poor, not consumed judgment notes. */
   minePoor?: number;
+  /** Final combo eligibility for modes that break combo on empty POOR. */
+  fullCombo?: boolean;
+
   djLevel: string;
   /** The gauge the course ended on. */
   gauge: { type: string; final: number; cleared: boolean };
@@ -120,7 +123,7 @@ export interface ReplayCourseResult {
  */
 export function resolveCourseLamp(
   ruleset: string,
-  result: Pick<ReplayCourseResult, 'judge' | 'noteCount' | 'maxCombo' | 'gauge'>,
+  result: Pick<ReplayCourseResult, 'judge' | 'noteCount' | 'maxCombo' | 'gauge' | 'fullCombo'>,
   pick: GaugeType,
 ): CourseClearLamp {
   return resolveCourseClearLamp({
@@ -130,6 +133,7 @@ export function resolveCourseLamp(
     gaugeType: pick,
     noteCount: result.noteCount,
     maxCombo: result.maxCombo,
+    ...(result.fullCombo !== undefined ? { fullCombo: result.fullCombo } : {}),
     judge: result.judge,
   }) as CourseClearLamp;
 }
@@ -225,6 +229,13 @@ export function aggregateCourseResult(
     judge,
     noteCount,
     maxCombo: last?.course?.maxCombo ?? last?.maxCombo ?? 0,
+    ...(stageResults.some((stage) => stage.fullCombo !== undefined)
+      ? {
+          fullCombo:
+            stageResults.every((stage) => stage.fullCombo !== false) &&
+            (last?.course?.combo ?? last?.maxCombo ?? 0) === noteCount,
+        }
+      : {}),
     gauge,
   };
   const missCount = resolveMissCount(judge, noteCount - judged);
@@ -238,6 +249,8 @@ export function aggregateCourseResult(
     missCount,
     maxCombo: partial.maxCombo,
     ...(minePoor > 0 ? { minePoor } : {}),
+    ...(partial.fullCombo !== undefined ? { fullCombo: partial.fullCombo } : {}),
+
     djLevel: resolveIIDXRankLabel(exScore, noteCount),
     gauge,
     stagesPlayed: stageResults.length,
@@ -346,12 +359,20 @@ function nonstopCourseResult(
     missCount: resolveMissCount(judge, noteCount - judged),
     maxCombo: run.maxCombo,
     ...(run.minePoor !== undefined ? { minePoor: run.minePoor } : {}),
+    ...(run.fullCombo !== undefined ? { fullCombo: run.fullCombo } : {}),
+
     djLevel: resolveIIDXRankLabel(run.exScore, noteCount),
     gauge,
     stagesPlayed: courseLog.stages.filter((entry) => entry.played).length,
     lamp: resolveCourseLamp(
       run.ruleset.split('/')[0]!,
-      { judge, noteCount, maxCombo: run.maxCombo, gauge },
+      {
+        judge,
+        noteCount,
+        maxCombo: run.maxCombo,
+        gauge,
+        ...(run.fullCombo !== undefined ? { fullCombo: run.fullCombo } : {}),
+      },
       courseLog.nonstop!.replay.play.gauge,
     ),
     stages: [...stageResults],
@@ -680,6 +701,7 @@ function parseCourseResults(results: Record<string, unknown>): Record<string, Re
       stagesPlayed: expectFiniteNumber(record.stagesPlayed, `${path}.stagesPlayed`),
       lamp: lamp as CourseClearLamp,
       stages: Object.values(parseResults(stageMap, `${path}.stages`)),
+      ...(base!.fullCombo !== undefined ? { fullCombo: base!.fullCombo } : {}),
     };
     const trophy = optionalString(record.trophy, `${path}.trophy`);
     if (trophy !== undefined) result.trophy = trophy;

@@ -54,6 +54,15 @@ describe('course results', () => {
     });
   });
 
+  test('an empty-POOR break after the peak combo prevents a course full-combo lamp', () => {
+    const stage = stageResult({ fullCombo: false, course: { combo: 0, maxCombo: 10 } });
+    const result = aggregateCourseResult('beatoraja/0', COURSE, [stage], [10], 'GROOVE');
+    expect(result).toMatchObject({ fullCombo: false, maxCombo: 10, lamp: 'NORMAL' });
+    expect(resolveCourseLamp('beatoraja', result, 'GROOVE')).toBe('NORMAL');
+    const full = aggregateCourseResult('beatoraja/0', COURSE, [stageResult({ fullCombo: true })], [10], 'GROOVE');
+    expect(full).toMatchObject({ fullCombo: true, lamp: 'FULL_COMBO' });
+  });
+
   test('resolveCourseLamp follows the LR2 pick, the beatoraja class gauge, and full-combo upgrades', () => {
     const base = {
       judge: { pgreat: 5, great: 1, good: 1, bad: 1, poor: 0, emptyPoor: 0 },
@@ -286,6 +295,10 @@ describe('course replays', () => {
     // The course log round-trips, including the optional mine count.
     expect(parseCourseReplay(serializeCourseReplay(log))).toEqual(log);
     log.results!.native!.minePoor = 1;
+    // The course log round-trips, including optional final combo eligibility.
+    expect(parseCourseReplay(serializeCourseReplay(log))).toEqual(log);
+    log.results!.native!.fullCombo = false;
+
     expect(parseCourseReplay(serializeCourseReplay(log))).toEqual(log);
   });
 

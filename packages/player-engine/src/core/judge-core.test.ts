@@ -60,7 +60,12 @@ const LONG_AND_MINE = chart(
 function createCore(
   json: BeMusicJSON,
   ruleset: RulesetId = 'lr2',
-  options: { autoScratch?: boolean; judgeMsPerChartSecond?: number; endOnFailure?: boolean } = {},
+  options: {
+    autoScratch?: boolean;
+    judgeMsPerChartSecond?: number;
+    endOnFailure?: boolean;
+    practiceFromSeconds?: number;
+  } = {},
 ): JudgeCoreState {
   const source = structuredClone(json);
   const resolved = resolveChart(source);
@@ -79,6 +84,7 @@ function createCore(
       autoScratch: options.autoScratch ?? false,
       judgeMsPerChartSecond: options.judgeMsPerChartSecond ?? 1000,
       endOnFailure: options.endOnFailure ?? false,
+      practiceFromSeconds: options.practiceFromSeconds,
       wavResources: source.resources.wav,
       idBase: resolveBMSBase(source),
       sourceFormat: source.sourceFormat,
@@ -191,6 +197,57 @@ describe('judge core', () => {
     score.reset();
     expect(score.summary.poor).toBe(0);
     expect(score.summary).not.toHaveProperty('minePoor');
+  });
+
+  test.each([
+    [150, 'perfect', 2],
+    [175, 'great', 1],
+    [225, 'good', 0],
+  ] as const)('LR2 re-judges the next tap at its own offset (%d ms)', (nextMs, kind, exScore) => {
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 1, channel: '11', position: [nextMs, 1000], value: '02' },
+      { measure: 1, channel: '11', position: [nextMs + 5, 1000], value: '03' },
+    ]);
+    const state = createCore(json, 'lr2');
+    const effects = stepJudgeCore(state, press(1.15, '11'));
+    expect(state.summary.bad).toBe(1);
+    expect(state.summary[kind]).toBe(1);
+    expect(state.summary.exScore).toBe(exScore);
+    expect(state.combo).toBe(1);
+    expect(state.config.scorableNotes[2]!.judged).toBe(false);
+    expect(effects.filter((effect) => effect.kind === 'sound' && effect.source === 'manual-note')).toHaveLength(2);
+  });
+
+  test('LR2 follows only the consumed lane and stops at a long-note head', () => {
+    const json = chart(
+      [
+        { measure: 1, channel: '11', position: [0, 1000], value: '01' },
+        { measure: 1, channel: '12', position: [10, 1000], value: '01' },
+        { measure: 1, channel: '51', position: [100, 1000], value: '01' },
+        { measure: 1, channel: '11', position: [450, 1000], value: '01' },
+        { measure: 1, channel: '51', position: [400, 1000], value: '01' },
+      ],
+      (json) => {
+        json.bms.lnType = 1;
+      },
+    );
+    const state = createCore(json, 'lr2');
+    stepJudgeCore(state, press(1.15, '11', '12'));
+    expect(state.summary).toMatchObject({ bad: 1, perfect: 0 });
+    expect(state.config.scorableNotes.filter((note) => note.judged)).toHaveLength(1);
+    expect(state.activeLongNotes.size).toBe(0);
+  });
+
+  test.each(['beatoraja', 'iidx'] as const)('%s does not reuse a BAD press', (ruleset) => {
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 1000], value: '01' },
+      { measure: 1, channel: '11', position: [150, 1000], value: '02' },
+    ]);
+    const state = createCore(json, ruleset);
+    stepJudgeCore(state, press(1.15, '11'));
+    expect(state.config.scorableNotes.filter((note) => note.judged)).toHaveLength(1);
+    expect(state.summary.bad + state.summary.perfect).toBe(1);
   });
 
   test('a note-less press near a note is an empty POOR that never consumes the note', () => {
@@ -551,4 +608,46 @@ describe('judge core', () => {
       expect(once.summary.total).toBeGreaterThan(0);
     },
   );
+});
+
+describe('practice start', () => {
+  for (const ruleset of ['lr2', 'beatoraja', 'iidx'] as const) {
+    test(`${ruleset}: consumes earlier heads and tails without judgments or gauge changes`, () => {
+      const state = createCore(LONG_AND_MINE, ruleset, { practiceFromSeconds: 2.75 });
+      const gauge = state.summary.gauge?.current;
+      expect(state.config.scorableNotes[0]!.judged).toBe(true);
+      expect(state.config.landmineNotes[0]!.judged).toBe(true);
+      expect(state.remainingScorableNotes).toBe(1);
+      const effects = stepJudgeCore(state, advance(2.75));
+      expect(effects.some((effect) => effect.kind === 'judge-combo')).toBe(false);
+      expect(state.summary.exScore).toBe(0);
+      expect(state.summary.poor).toBe(0);
+      expect(state.summary.gauge?.current).toBe(gauge);
+      stepJudgeCore(state, press(3, '12'));
+      expect(state.summary.perfect).toBe(1);
+      expect(state.summary.poor).toBe(0);
+      expect(isJudgeCoreSettled(state)).toBe(true);
+    });
+  }
+  test('keeps notes exactly at the target playable and skips an LN crossing the target', () => {
+    const state = createCore(LONG_AND_MINE, 'beatoraja', { practiceFromSeconds: 1.5 });
+    stepJudgeCore(state, advance(2.1));
+    expect(state.summary.poor).toBe(0);
+    expect(state.activeLongNotes.size).toBe(0);
+    const boundary = createCore(NOTES, 'lr2', { practiceFromSeconds: 1.5 });
+    stepJudgeCore(boundary, press(1.5, '12'));
+    expect(boundary.summary.perfect).toBe(1);
+    expect(boundary.summary.poor).toBe(0);
+  });
+  test('skips scratch and invisible notes without leaving outstanding work', () => {
+    const json = chart([
+      { measure: 1, channel: '16', position: [0, 1], value: '01' },
+      { measure: 1, channel: '31', position: [0, 1], value: '01' },
+    ]);
+    const state = createCore(json, 'lr2', { autoScratch: true, practiceFromSeconds: 2 });
+    stepJudgeCore(state, advance(2));
+    expect(state.summary.exScore).toBe(0);
+    expect(state.summary.poor).toBe(0);
+    expect(isJudgeCoreSettled(state)).toBe(true);
+  });
 });

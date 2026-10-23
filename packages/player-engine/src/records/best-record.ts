@@ -109,7 +109,7 @@ export function recordPlayFromResult(result: RecordPlayResult): RecordPlay {
 /** A play's final engine summary, as the facts a record reads from it. */
 export type RecordPlaySummary = Pick<
   PlayerSummary,
-  'total' | 'perfect' | 'great' | 'good' | 'bad' | 'poor' | 'emptyPoor' | 'minePoor' | 'exScore' | 'gauge'
+  'total' | 'perfect' | 'great' | 'good' | 'bad' | 'poor' | 'emptyPoor' | 'minePoor' | 'exScore' | 'gauge' | 'fullCombo'
 >;
 
 /**
