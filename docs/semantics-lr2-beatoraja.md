@@ -172,9 +172,9 @@ Most fixes below move a rule into the right box. The assist class and LR2 mine c
 | 43  | DST offset columns 21+                              | A           | LR2 op4 only                                            | Accept 3/4/5/10                                                        |
 | 44  | beatoraja CSV-dialect commands                      | A           | Not parsed                                              | Optional dialect support                                               |
 | 45  | `#SRC_BAR_LAMP` index meaning                       | A           | LR2                                                     | Switch on detected beatoraja dialect                                   |
-| 46  | TIMER_PLAY / `skin.playstart`                       | A           | Load end + 1.5 s                                        | Stamp at chart start                                                   |
+| 46  | TIMER_PLAY / `skin.playstart`                       | A           | Fixed in #595                                           | Stamp at chart start                                                   |
 | 47  | GAUGE_MAX timer switch                              | A, C        | Never stops (bug)                                       | Start/stop                                                             |
-| 48  | beatoraja-only timers                               | A           | Not driven                                              | Add to mapping                                                         |
+| 48  | beatoraja-only timers                               | A           | Fixed in #597                                           | Drive result, score, HCN and character timers                          |
 | 49  | Lua `event_index` / `set_timer`                     | A           | fixed in #596                                           | Wire                                                                   |
 | 50  | MISS vs POOR numbers                                | A, C        | 420 = POOR (bug)                                        | Use emptyPoor                                                          |
 | 51  | Gauge ops 42/43/1046                                | A, C        | 42 always (bug)                                         | Derive from gauge type                                                 |

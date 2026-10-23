@@ -174,7 +174,7 @@ flowchart TD
 | 45  | `#SRC_BAR_LAMP` の番号の意味                            | A              | LR2                                                | beatoraja の方言を検出したら切り替える                                                |
 | 46  | TIMER_PLAY / `skin.playstart`                           | A              | #595 で修正                                        | 譜面の開始時刻を刻む                                                                  |
 | 47  | GAUGE_MAX タイマーの切り替え                            | A, C           | 止まらない（バグ）                                 | 開始 / 停止                                                                           |
-| 48  | beatoraja だけのタイマー                                | A              | 駆動しない                                         | 対応表に追加                                                                          |
+| 48  | beatoraja だけのタイマー                                | A              | #597 で修正                                        | リザルト・スコア・HCN・キャラクターのタイマーを駆動                                   |
 | 49  | Lua の `event_index` / `set_timer`                      | A              | #596 で修正                                        | 配線する                                                                              |
 | 50  | MISS と POOR の数値                                     | A, C           | 420 = POOR（バグ）                                 | emptyPoor を使う                                                                      |
 | 51  | ゲージの op 42/43/1046                                  | A, C           | 常に 42（バグ）                                    | ゲージ種別から導く                                                                    |
