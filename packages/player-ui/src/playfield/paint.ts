@@ -56,12 +56,13 @@ export function paintBGA(ctx: BeMusicPlayfieldPaintContext, data: BeMusicBGAData
   ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
   const frame = data.frame;
   if (!frame) return;
-  if (frame.poorActive) {
+  if (frame.poorActive && !frame.poorOverlays) {
     if (frame.poor) drawBGAImage(ctx, frame.poor, rect);
     return;
   }
   if (frame.base) drawBGAImage(ctx, frame.base, rect);
   if (frame.layer) drawBGAImage(ctx, frame.layer, rect);
+  if (frame.poorActive && frame.poorOverlays && frame.poor) drawBGAImage(ctx, frame.poor, rect);
 }
 
 /** Where `image` of `width` x `height` goes in the BGA `rect` (see {@link paintBGA}). */

@@ -53,6 +53,7 @@ export interface BeatorajaPlayBGA {
   /** Layer track textures (black keyed out for a BMS chart). */
   readonly layerTextures: ReadonlyMap<string, Texture>;
   readonly videos: ReadonlyMap<string, HTMLVideoElement>;
+  readonly poorBGAMode?: 0 | 1 | 2;
   readonly cues: { base: readonly BGACue[]; layer: readonly BGACue[]; poor: readonly BGACue[] };
   readonly nonstop?: {
     readonly stages: readonly NonstopBGAStage[];
@@ -151,6 +152,7 @@ export class BeatorajaPlayStage {
       layerTextures: bga.layerTextures,
       videoElements: bga.videos,
       cues: bga.cues,
+      poorBGAMode: bga.poorBGAMode,
       nonstop: bga.nonstop,
       skinConfigOps: this.skinConfigOps,
     });

@@ -137,6 +137,7 @@ export interface BeatorajaPlayRuntime {
   readonly bgaTextures: ReadonlyMap<string, Texture>;
   readonly bgaLayerTextures: ReadonlyMap<string, Texture>;
   readonly bgaVideos: ReadonlyMap<string, { video: HTMLVideoElement }>;
+  readonly poorBGAMode?: 0 | 1 | 2;
   readonly bgaTimeline: { base: BGACue[]; layer: BGACue[]; poor: BGACue[] };
   /** A stitched NONSTOP chart's cues split by stage (`splitNonstopBGATimeline`), for the BGA's crossfade at a seam. */
   readonly nonstopBGATimelines: readonly NonstopStageBGATimeline[] | undefined;
@@ -381,6 +382,7 @@ export class BeatorajaPlayView implements PlayView {
       layerTextures: play.bgaLayerTextures,
       videos: new Map([...play.bgaVideos].map(([key, { video }]) => [key, video] as const)),
       cues: play.bgaTimeline,
+      poorBGAMode: play.poorBGAMode,
       ...(nonstop !== undefined && play.nonstopBGATimelines !== undefined
         ? { nonstop: { stages: nonstop.stages, timelines: play.nonstopBGATimelines } }
         : {}),

@@ -266,3 +266,34 @@ it('synchronizes both videos of a NONSTOP crossfade to their own cues', () => {
   expect(second.play).toHaveBeenCalledOnce();
   layer.dispose();
 });
+
+it.each([0, 1, 2] as const)('draws POOR BGA mode %s using its replacement/overlay/hidden policy', (mode) => {
+  const base = fakeTexture(),
+    overlay = fakeTexture(),
+    poor = fakeTexture();
+  const layer = new BeatorajaBGALayer({
+    skin: skin(),
+    poorBGAMode: mode,
+    textures: new Map([
+      ['b', base],
+      ['p', poor],
+    ]),
+    layerTextures: new Map([['l', overlay]]),
+    cues: {
+      base: [{ seconds: 0, bmpKey: 'b' }],
+      layer: [{ seconds: 0, bmpKey: 'l' }],
+      poor: [{ seconds: 0, bmpKey: 'p' }],
+    },
+  });
+  const context = { activeOps: new Set<number>(), getTimerStart: () => 0, nowMs: 0 };
+  layer.update(1, context, true);
+  const textures = (layer.container.children as Sprite[])
+    .filter((sprite) => sprite.visible && sprite.label !== 'bga/canvas')
+    .map((sprite) => sprite.texture);
+  expect(textures).toEqual(mode === 0 ? [poor] : mode === 1 ? [base, overlay, poor] : [base, overlay]);
+  layer.update(2, context, false);
+  expect(
+    (layer.container.children as Sprite[]).filter((sprite) => sprite.visible && sprite.label === 'bga/poor'),
+  ).toHaveLength(0);
+  layer.dispose();
+});

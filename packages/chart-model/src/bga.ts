@@ -86,3 +86,12 @@ function sortBGATimelines(timelines: BGATimelines): void {
   timelines.layer2.sort(sortBySeconds);
   timelines.poor.sort(sortBySeconds);
 }
+
+/** How a BMS chart displays its miss image: replace, overlay, or hide. */
+export type PoorBGAMode = 0 | 1 | 2;
+
+/** Parses `#POORBGA`; missing, invalid and out-of-range values use the normal replacement mode. */
+export function resolvePoorBGAMode(value: string | undefined): PoorBGAMode {
+  const parsed = value === undefined ? 0 : Number.parseInt(value.trim(), 10);
+  return parsed === 1 || parsed === 2 ? parsed : 0;
+}

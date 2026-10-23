@@ -26,6 +26,7 @@ describe('POOR BGA on the pause-aware millisecond clock', () => {
     const frames: Array<{ poorActive: boolean }> = [];
     const texture = new Texture({ source: new TextureSource({ resource: new Uint8Array(4), width: 1, height: 1 }) });
     const play = {
+      poorBGAMode: 0 as 0 | 1 | 2,
       hasBGA: true,
       lastPoorAt: 0,
       playClock: () => nowMs,
@@ -48,6 +49,12 @@ describe('POOR BGA on the pause-aware millisecond clock', () => {
       return frames.at(-1)?.poorActive;
     };
     expect(shown()).toBe(true);
+    play.poorBGAMode = 2;
+    expect(shown()).toBe(false);
+    play.poorBGAMode = 1;
+    expect(shown()).toBe(true);
+    expect(frames.at(-1)).toMatchObject({ poorOverlays: true });
+    play.poorBGAMode = 0;
     nowMs = DEFAULT_POOR_BGA_DISPLAY_SECONDS * 1000 - 1;
     expect(shown()).toBe(true);
     nowMs += 1;
