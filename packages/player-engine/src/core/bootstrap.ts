@@ -147,6 +147,7 @@ export function createInitialPlayerSummary(
     reset: (): void => {
       gauge = new RulesetGauge(ruleset.gauge);
       syncGaugeSummary();
+      delete summary.minePoor;
       for (const key of ['perfect', 'fast', 'slow', 'great', 'good', 'bad', 'poor', 'emptyPoor', 'exScore'] as const) {
         summary[key] = 0;
       }

@@ -5,7 +5,7 @@
 // (`@be-music/player-engine/course`).
 
 import type { BeMusicReplay } from '@be-music/player-engine/replay';
-import type { BrowseSnapshot, LibraryCourse } from '@be-music/player-scene-model';
+import type { BrowseSnapshot, LibraryCourse, PlayResult } from '@be-music/player-scene-model';
 import { startCourseRun, type ActiveCourse } from '../course-flow.ts';
 
 /**
@@ -63,8 +63,8 @@ export class CourseRunService {
    * ESC gave `active` up: the stage given up is recorded, with its replay once the engine has handed it over, and the
    * run is the running one again, so that its course result shows it as a failed run.
    */
-  public giveUp(active: ActiveCourse, replay: BeMusicReplay | undefined): void {
-    active.run.giveUp(replay);
+  public giveUp(active: ActiveCourse, replay: BeMusicReplay | undefined, result?: PlayResult): void {
+    active.run.giveUp(replay, result);
     this.activeCourse = active;
   }
 

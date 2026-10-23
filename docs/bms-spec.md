@@ -97,8 +97,8 @@ However, the exact specification of control syntax compatibility for files conta
 - [x] `#PLAYER=4` (BATTLE) will be retained as meta information, and dedicated two-player competitive play will not be implemented at this time.
 - [x] Interpret channel `D1-D9` (mine)
 - [x] Interpret channel `E1-E9` (mine)
-- [x] Detonate mines in MANUAL mode on a held crossing of the judge line or a press within the `PGREAT` window (LR2 behavior; the `lr2` and `iidx` rulesets), or on a held crossing only (beatoraja behavior; the `beatoraja` ruleset)
-- [x] Apply the mine object value (upper-case base36) directly as the gauge-damage percentage, with no effect on judgments or combo (LR2 / beatoraja behavior)
+- [x] Detonate LR2beta3 mines on a key-down strictly inside ahead-only GREAT, or a held crossing; retain hold-only beatoraja and the provisional IIDX symmetric-PGREAT model.
+- [x] Apply mine damage directly, preserving combo and EX-SCORE. LR2 also counts one POOR/BP per hit; beatoraja and provisional IIDX keep gauge-only accounting.
 - [x] Fall back to a default damage of `4%` when the mine object value is not a two-character upper-case base36 ID or is `00` (under `#BASE 62`, lower-case values also take this default)
 - [x] When `#WAV00` is defined, use it as the landmine explosion sound on manual mine hit
 - [x] Exclude landmines from the number of target notes for `TOTAL` / `EX-SCORE`
@@ -107,7 +107,7 @@ However, the exact specification of control syntax compatibility for files conta
 
 The original BM98-era core BMS specifications do not define landmine damage as part of the base format, so this implementation follows later public extension references and LR2-compatible implementations.
 
-- The detonation window follows LR2's own changelog (`history.txt`, the 080114 mine-implementation entry): a mine explodes on hold-through passage or on a press within the **`PGREAT` (ピカグレ) range**, and no later entry revises this. losak's LR2 mine writeup ("地雷オブジェに関するアレコレ") claims the `GOOD` window instead, but the primary source wins, so `GOOD` is not adopted.
+- LR2beta3 executable behavior supersedes the 2008-01-14 `history.txt` announcement used by #141: [ProcSinglenote](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L7434-L7460), corroborated by VA 0x4188ad–0x4188d2, reads GREAT with a strict ahead-only boundary. [ApplyJudgeMine](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2043-L2060), reconciled with VA 0x40659c–0x4065bd, adds POOR once. The transcription's second counter increment is not in the binary. Fixed in [#590](https://github.com/nulltask/be-music/issues/590).
 - "Damage = the value itself (as a decimal percentage)" follows losak's writeup, verified against the real LR2. beatoraja (jbms-parser `Section.java` / `JudgeManager`) applies the raw value directly as damage, matching this.
 - Hitkey command memo's `value / 2` is the nanasi-lineage rule and differs from LR2's actual behavior, so it is not adopted.
 - `#WAV00` as the dedicated landmine reaction sound is corroborated by Hitkey's memo and Obj Tech Lovers chapter3-2 / chapter4-7.

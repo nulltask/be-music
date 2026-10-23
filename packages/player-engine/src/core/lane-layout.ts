@@ -194,15 +194,22 @@ export function resolveWheelLaneDirection(channel: string, playVariant?: ChartPl
 }
 
 /**
- * The lanes of one side the lane options (MIRROR / RANDOM / S-RANDOM / …) permute, in lane order. The IIDX families
- * move the keys `11..15` / `18` / `19` (`21..` on 2P) and leave the scratch alone; the keyboard modes move their 24 keys
- * and leave the wheel alone. Lanes the chart does not use are the caller's to drop.
+ * The complete key domain of one side, including unused lanes. Scratch and wheel lanes stay in place.
+ * For 9 KEY, `channels` identifies PMS-STD versus PMS-COMPAT; passing full prepared bindings also resolves sparse
+ * charts with no notes on the distinguishing columns. An omitted variant preserves the legacy 14-key side domains.
  */
-export function resolveLaneOptionChannels(side: '1P' | '2P', playVariant?: ChartPlayVariant): readonly string[] {
-  if (playVariant === '24' || playVariant === '48') {
-    return side === '2P' && playVariant === '24' ? [] : KEYBOARD_MODE_KEY_CHANNELS[side];
-  }
-  return IIDX_LANE_OPTION_CHANNELS[side];
+export function resolveLaneOptionChannels(
+  side: '1P' | '2P',
+  playVariant?: ChartPlayVariant,
+  channels: ReadonlyArray<ChannelLike> = [],
+): readonly string[] {
+  const layoutId: PlayModeLayoutId =
+    playVariant === '9'
+      ? channels.some(({ channel }) => PMS_STD_ONLY_CHANNELS.includes(channel))
+        ? '9-pms'
+        : '9-bme'
+      : (playVariant ?? '14');
+  return LANE_OPTION_CHANNELS_BY_LAYOUT[layoutId][side];
 }
 
 /** The keys of one side of a layout, by key number. */
@@ -213,15 +220,15 @@ function sideKeyChannels(layoutId: PlayModeLayoutId, side: '1P' | '2P'): readonl
     .map((lane) => lane.channel);
 }
 
-const IIDX_LANE_OPTION_CHANNELS: Record<'1P' | '2P', readonly string[]> = {
-  '1P': sideKeyChannels('14', '1P'),
-  '2P': sideKeyChannels('14', '2P'),
-};
-
-const KEYBOARD_MODE_KEY_CHANNELS: Record<'1P' | '2P', readonly string[]> = {
-  '1P': sideKeyChannels('48', '1P'),
-  '2P': sideKeyChannels('48', '2P'),
-};
+const LANE_OPTION_CHANNELS_BY_LAYOUT = Object.fromEntries(
+  (Object.keys(PLAY_MODE_LAYOUTS) as PlayModeLayoutId[]).map((layoutId) => [
+    layoutId,
+    {
+      '1P': sideKeyChannels(layoutId, '1P'),
+      '2P': sideKeyChannels(layoutId, '2P'),
+    },
+  ]),
+) as Record<PlayModeLayoutId, Record<'1P' | '2P', readonly string[]>>;
 
 export function isPlayableInputChannel(channel: string): boolean {
   return channel.startsWith('1') || channel.startsWith('2');

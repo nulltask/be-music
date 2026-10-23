@@ -100,6 +100,13 @@ describe('combo', () => {
     expect(reducePlayState(state, judge('READY', 0, 2))).toBe(state);
   });
 
+  test('does not fabricate a full combo when empty POOR broke it', () => {
+    const state = run(createPlayState(), judge('PERFECT', 3, 1), {
+      type: 'finish',
+      summary: { total: 5, perfect: 5, great: 0, good: 0, bad: 0, poor: 0, fullCombo: false },
+    });
+    expect(state.maxCombo).toBe(3);
+  });
   test('reads a full combo as every note once the play is over, even when combos went unpublished', () => {
     const state = run(createPlayState(), judge('PERFECT', 3, 1), {
       type: 'finish',

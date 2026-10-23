@@ -234,7 +234,7 @@ function applyFinish(state: PlayState, summary: PlayScoreInput): PlayState {
   // the engine published no combo for some of them (an autoplayed chord).
   const judged = summary.perfect + summary.great + summary.good + summary.bad + summary.poor;
   const fullCombo = summary.total > 0 && judged >= summary.total && summary.bad === 0 && summary.poor === 0;
-  if (!fullCombo || state.maxCombo >= summary.total) return state;
+  if (summary.fullCombo === false || !fullCombo || state.maxCombo >= summary.total) return state;
   const combo = Math.max(state.combo, summary.total);
   return {
     ...state,

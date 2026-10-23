@@ -1300,10 +1300,10 @@ describe('player', () => {
     expect(scratch.good).toBe(0);
   });
 
-  test('player: note selection follows the ruleset — LR2 takes the oldest note, beatoraja keeps the combo', async () => {
+  test('player: LR2 BAD re-judges the next GREAT, while beatoraja selects it first', async () => {
     // Two notes 160 ms apart on one lane, pressed 130 ms after the first. Under `#RANK 2` that press is a BAD on
-    // the first note and a GREAT on the second under both rulesets' windows, so only the SELECTION differs:
-    // LR2 (`lowest`) always clears the oldest note in reach, while beatoraja (`combo`) hands the press to the
+    // the first note and a GREAT on the second under both rulesets' windows:
+    // LR2 (`lowest`) BADs the oldest note then re-judges the second as GREAT, while beatoraja (`combo`) selects the
     // second note once the first has fallen out of the late side of its GOOD window. The `19` note only puts the
     // chart in 7-key mode.
     const json = createEmptyJSON('bms');
@@ -1326,8 +1326,10 @@ describe('player', () => {
     const beatoraja = await manualPlay(json, { ...base, judgeRuleset: 'beatoraja' });
 
     expect(lr2.bad).toBe(1);
-    expect(lr2.great).toBe(0);
+    expect(lr2.great).toBe(1);
+    expect(lr2.poor).toBe(1);
     expect(beatoraja.great).toBe(1);
+    expect(beatoraja.poor).toBe(2);
     expect(beatoraja.bad).toBe(0);
   });
 });

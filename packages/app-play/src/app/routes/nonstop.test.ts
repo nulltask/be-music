@@ -241,6 +241,18 @@ describe('NonstopRoute: the run’s result', () => {
     expect(h.deps.showResult).not.toHaveBeenCalled();
   });
 
+  test('a practice NONSTOP run preserves retry and skips course record, ranking and replay writes', async () => {
+    const h = harness();
+    const nonstop = await playing(h);
+    const data = { practice: true, chart: chartEntry('a') } as unknown as PlayResult;
+    await h.route.showNonstopCourseResult(nonstop, undefined, data);
+    expect(h.deps.showResult.mock.calls[0]?.[0]).toMatchObject({ practice: true, run: 'nonstop' });
+    expect(h.deps.showResult.mock.calls[0]?.[1]?.nonstop.retry).toBeTypeOf('function');
+    expect(h.deps.records.recordCourseResult).not.toHaveBeenCalled();
+    expect(h.deps.replayAutoSave.saveCourse).not.toHaveBeenCalled();
+    expect(h.deps.leaderboard.maybeSubmitCourse).not.toHaveBeenCalled();
+  });
+
   test('a play that left no replay shows its own result, or goes back to the select screen', async () => {
     const h = harness();
     const nonstop = await playing(h);

@@ -537,20 +537,20 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.replay.createReplayRecorder', {
     run: () => {
       const json = parseChart('#BPM 120\n#00111:01\n');
-      replayAPI
-        .createReplayRecorder({
-          json,
-          chart: {
-            notes: [],
-            landmineNotes: [],
-            invisibleNotes: [],
-            activeFreeZoneChannels: new Set<string>(),
-            scorableNotes: [],
-            laneDisplayMode: '7keys',
-          },
-          play: { mode: 'manual', autoScratch: false },
-        })
-        .recordInput('down', 0.5, ['z'], ['11']);
+      const recorder = replayAPI.createReplayRecorder({
+        json,
+        chart: {
+          notes: [],
+          landmineNotes: [],
+          invisibleNotes: [],
+          activeFreeZoneChannels: new Set<string>(),
+          scorableNotes: [],
+          laneDisplayMode: '7keys',
+        },
+        play: { mode: 'manual', autoScratch: false },
+      });
+      recorder.recordInput('down', 0.5, ['z'], ['11']);
+      recorder.discard();
     },
   });
   define('player-engine.replay.ReplayParseError', {
@@ -635,6 +635,8 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       run.recordStage(benchRunStageLog, { playSeconds: 16 });
       run.nextStage();
       run.buildReplay();
+      run.recordStage(undefined, { practice: true, stageOutcome: benchStageResult });
+      run.buildPracticeResult();
     },
   });
   define('player-engine.course.resolveGivenUpPlaySeconds', {
@@ -1098,9 +1100,28 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
       lanesAPI.resolveWheelLaneDirection('1P', '24');
     },
   });
+  define('player-engine.lanes.randomizeSRandomNotes', {
+    run: () => {
+      for (const ruleset of ['lr2', 'beatoraja'] as const) {
+        lanesAPI.randomizeSRandomNotes(
+          [
+            { channel: '11', timeMs: 0, endTimeMs: 1000 },
+            { channel: '12', timeMs: 10 },
+            { channel: '12', timeMs: 30 },
+            { channel: '12', timeMs: 1100 },
+          ],
+          ['11', '12', '13', '14', '15'],
+          { ruleset, random: () => 0.5 },
+        );
+      }
+    },
+  });
   define('player-engine.lanes.resolveLaneOptionChannels', {
     run: () => {
       lanesAPI.resolveLaneOptionChannels('1P', '7');
+      lanesAPI.resolveLaneOptionChannels('1P', '5');
+      lanesAPI.resolveLaneOptionChannels('1P', '9', [{ channel: '22' }]);
+      lanesAPI.resolveLaneOptionChannels('2P', '48');
     },
   });
   define('player-engine.lanes.isPlayableInputChannel', {

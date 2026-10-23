@@ -268,7 +268,11 @@ export interface ReplayRulesetResult {
    * (beatoraja CN/HCN, IIDX CN) count a long note's head and tail as two judgments, LN styles as one.
    */
   noteCount: number;
+  /** Final combo eligibility when empty POOR can break combo; absent in legacy/count-only results. */
+  fullCombo?: boolean;
   maxCombo: number;
+  /** LR2 mine hits included in judge.poor, excluded from the judged-note count. */
+  minePoor?: number;
   /** 200000-max money score where the ruleset defines one. */
   score?: number;
   /** IIDX DJ LEVEL label (`'AAA'`..`'F'`) where the ruleset defines one. */

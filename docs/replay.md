@@ -71,6 +71,10 @@ judgment count (a charge note counts twice), `djLevel` is always set, `score` on
 engine and the simulators reach the same entry for the same inputs. Because the canonical data is the input stream, a
 later fix to any ruleset re-scores every previously recorded play without re-recording anything.
 
+`results.*.minePoor` counts LR2 mine hits already included in `judge.poor`. They never consume judgment notes or break combo. Course BP subtracts them from the judged-note count, then includes each hit once as POOR. The live summary and result score carry the same optional field. Re-simulate older caches and rebuild historical derived records to apply the corrected beta3 mine rules.
+
+`results.*.fullCombo` optionally records final combo eligibility after an empty POOR in beatoraja FIVEKEYS/PMS. Every note must still be GOOD or better. The engine and simulator derive this from the running combo, so an empty POOR before the first note permits a later full combo. Legacy caches without the field use judgment counts; re-simulate them to apply the corrected mode rule. Course results preserve the eligibility and still require the course combo to cover every note.
+
 Timestamps are integer microseconds relative to chart zero (the same t = 0 the engine's note timing uses).
 
 The TypeScript types, serializer, and defensive parser live in
@@ -158,7 +162,7 @@ owns the whole decision surface:
 
 - judge windows, signed and per context (key vs scratch, note vs long-note end), including LR2's `#EXRANKxx`
   timeline
-- which note a press resolves against (`lowest` / `combo` / `duration` / `score`) and LR2's multi-BAD collector
+- which note a press resolves against (`lowest` / `combo` / `duration` / `score`) and LR2's forward tap re-judge chain
 - long-note style: LR2 plays every long note as an LN, beatoraja honours the chart's `#LNMODE`, IIDX charges
   everything — charge modes judge the head and the tail separately
 - the empty-POOR window and whether it breaks the combo
@@ -188,6 +192,8 @@ Replay re-drives the recorded input stream deterministically inside the shared e
 input is ignored (ESC / pause / hi-speed keep working), and no new replay is recorded for the run. Because the
 log stores the resolved note arrangement, the chart prepare re-applies the recorded channels onto the freshly
 loaded chart (`applyReplayArrangement`) instead of re-rolling RANDOM / MIRROR — so shuffled plays replay exactly.
+New MIRROR/RANDOM plays use the complete key set of the resolved mode, including empty lanes; scratch/wheel lanes stay fixed. Previously recorded subset arrangements still replay their stored channels and are never reinterpreted under the corrected shuffle.
+
 The chart's `#RANDOM` / `#SWITCH` lines are resolved with the log's `play.randomDraws`, so a replay plays the
 recorded branches: the browser's play session (`session/play/play-chart.ts`) resolves with them itself (`resolvePlayChart(chart,
 { randomDraws })`), and a host that lets the engine resolve the source chart passes them as
@@ -201,6 +207,10 @@ A replay of an ESC-aborted log stops where the play was aborted, as the re-simul
 there as an ESC, with the live play's result. A replay of an AUTO-played log passes its (empty) inputs as
 `replayInputs` too, so it is a replay as well: it follows `replayTempoChanges`, and neither kind of replay records the
 tempo it is re-driven at.
+
+Browser replays can seek through `PlayScene.seek(seconds)` or ← / → (five seconds). The same engine re-drives recorded inputs from the start, restoring judgments, gauge, combo, held long notes, the recorded tempo and the view at the target. A paused replay stays paused, and a replay aborted early cannot seek past its recorded end. Replay / ghost options still decide whether recorded tempo and view settings override the viewer's. Seeking produces no new replay. A course-stage or NONSTOP seek makes the entire course practice under [ADR 0016](./adr/0016-seek-play-loop-command.md); later stages do not record replays, and the course cannot export a replay.
+
+Manual seeking requires `PlaySceneOptions.allowSeek: 'practice'`. The first seek discards the replay recorder. Notes with heads before the target, including their long-note tails, are consumed without scoring; score, combo and gauge reset to their play-start values. A paused play stays paused. The result carries `practice: true` and cannot be saved as a best record, submitted to the Leaderboard or auto-saved as a replay. The demo enables manual seeking for single charts and course stages. Course progression uses live stage outcomes independently of replay recording.
 
 ## What the player saw
 
@@ -271,7 +281,7 @@ long note's head and tail as two judgment notes (`result.noteCount` reports each
   consensus; the empty-POOR window and CN release windows are unmeasured and use beatoraja's values as stand-ins,
   and the HCN gauge tick uses a fixed 200 ms interval instead of IIDX's measured 16th-note interval. Expect
   close — not bit-exact — reproduction.
-- beatoraja niceties not modeled: PMS's one-empty-POOR-per-note rule and per-mode gauge tables other than SEVENKEYS (the 7K gauge constants are used for every mode).
+- beatoraja uses separate FIVEKEYS, SEVENKEYS, PMS and KEYBOARD gauge tables and mode-specific default TOTAL. Engine frames carry raw gauge bounds, including PMS maximum 120; replay `gauge.final` and result gauges are percentages of that maximum. PMS's one-empty-POOR-per-note rule remains unmodeled.
 - Because the replay stores the resolved chart, `#RANDOM` and lane-shuffle differences between players never
   affect re-simulation.
 - A play from input without key releases records the releases the engine inferred ([Input without key
@@ -358,6 +368,6 @@ Only the current revision of each ruleset is implemented. A log whose cached `re
 (the ids are kept as written), and re-simulating or replaying it applies the current rules; there is no compatibility path that
 replays the old ones, so its numbers can change. The cache is never authoritative, so such entries are simply stale.
 
-| Revision                         | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `lr2/0`, `beatoraja/0`, `iidx/0` | Development revision (see above). Since `/1`, mines follow the ruleset's rule: the `lr2` / `iidx` simulators add LR2's press-inside-PGREAT and window-entry legs; under `beatoraja` only a key down as the mine crosses detonates it (engine). Negative-BPM charts follow LR2's reverse scroll: inputs past the reversal are judged on the mirrored clock, mines there stay frozen, and a run left with notes unjudged is FAILED. Under `lr2` the DEATH gauge follows LR2: no recovery, and an empty POOR costs nothing. |
+| Revision                         | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lr2/0`, `beatoraja/0`, `iidx/0` | Development revision (see above). Since `/1`, mines follow the ruleset's rule: LR2beta3 now uses strict ahead-only GREAT on key-down, held crossing and one POOR/BP per mine; the provisional `iidx` model keeps symmetric PGREAT and held-window entry; under `beatoraja` only a key down as the mine crosses detonates it (engine). Negative-BPM charts follow LR2's reverse scroll: inputs past the reversal are judged on the mirrored clock, mines there stay frozen, and a run left with notes unjudged is FAILED. Under `lr2` the DEATH gauge follows LR2: no recovery, and an empty POOR costs nothing. |
