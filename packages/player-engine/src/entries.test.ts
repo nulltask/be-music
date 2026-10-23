@@ -51,6 +51,7 @@ describe('designed entries', () => {
       'createLaneBindings',
       'isPlayableInputChannel',
       'isScratch',
+      'randomizeSRandomNotes',
       'resolveKeyChannel',
       'resolveLR2LaneIndex',
       'resolveLaneChannels',
