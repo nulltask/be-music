@@ -160,7 +160,7 @@ owns the whole decision surface:
 
 - judge windows, signed and per context (key vs scratch, note vs long-note end), including LR2's `#EXRANKxx`
   timeline
-- which note a press resolves against (`lowest` / `combo` / `duration` / `score`) and LR2's multi-BAD collector
+- which note a press resolves against (`lowest` / `combo` / `duration` / `score`) and LR2's forward tap re-judge chain
 - long-note style: LR2 plays every long note as an LN, beatoraja honours the chart's `#LNMODE`, IIDX charges
   everything — charge modes judge the head and the tail separately
 - the empty-POOR window and whether it breaks the combo
