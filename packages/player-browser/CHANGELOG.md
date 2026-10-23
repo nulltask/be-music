@@ -167,7 +167,7 @@
   - 24 KEY and 48 KEY charts no longer squeeze 24 lanes per side into the 7K playfield (8 px each): 24 KEY fills the column left of the BGA monitor (about 10.5 px a lane, the monitor stays), and 48 KEY spreads both banks across 616 px (about 12.8 px a lane). The core lane renderer and every built-in skin share the new layout, so chrome, notes, and judgements line up.
   - Key beams read more clearly in every built-in skin: a pressed lane lights a laser in its colour (cool white, electric blue, and red in Phantom; each lane's light in Synesthesia; graphite, cobalt, and vermilion ink in Lattice) that stands near solid at the judgement line and eases out up the lane, so the upper lane where notes are still falling only carries a faint tint.
   - 5 / 7 / 10 / 14 KEY lanes now have fixed widths in proportions taken from the arcade cabinet — a 41 px scratch, 24 px white keys, 19 px black keys (a 7K side stays 194 px) — so a 5K or DP chart never stretches its lanes sideways; the playfield narrows or widens instead. White-key lanes also get their own background tone in every built-in skin, while the scratch lane shares the black keys' background.
-  - Skinless lanes now sit edge to edge (the 2 px gaps between lanes are gone) and every built-in skin draws notes and long notes across the full lane width. In IIDX double play (10 / 14 KEY) the 1P and 2P banks stand 60 px apart, about 0.31 of a side as on the arcade cabinet (`IIDX_DP_SIDE_GAP`), and every built-in skin draws the judgement line and lane grid per side (`resolveLaneRuns` in the skin SDK) so nothing crosses the gap; 48 KEY keeps its banks together.
+  - Skinless lanes now sit edge to edge (the 2 px gaps between lanes are gone) and every built-in skin draws notes and long notes across the full lane width. In That-Which-Must-Not-Be-Named double play (10 / 14 KEY) the 1P and 2P banks stand 60 px apart, about 0.31 of a side as on the arcade cabinet (`_____DP_SIDE_GAP`), and every built-in skin draws the judgement line and lane grid per side (`resolveLaneRuns` in the skin SDK) so nothing crosses the gap; 48 KEY keeps its banks together.
   - Built-in skin text is now vertically aligned by its capitals: Pixi sizes a line box from accent and descender ink, so faces like Anton and Michroma sat visibly low in every plate and button; each face's offset is measured once and corrected through the text pivot.
   - Built-in skin text now rasterizes at the final device density (viewport scale x renderer resolution) instead of being magnified from the 640x480 design canvas, so labels and numbers stay crisp at any window size; glow shadows get texture padding so they no longer clip into hard rectangles.
   - The Pixi renderer now uses the display's full `devicePixelRatio` instead of capping it at 2x, so 3x displays render the scenes at native density.
@@ -196,7 +196,7 @@
 - 2c368ed: Redesign the default (skinless) skin family in a "Phantom" poster style: ink-black ground, blood-red slabs and halftone fields, slanted paper plates, jagged starbursts, and condensed italic type. Gameplay, song select, and result all share the new look while keeping the same geometry contract (LR2 default 7-keys lane positions, 640x480 design canvas, unchanged select hit areas).
   
   - Gameplay chrome: sawtooth header kicker that swells on the beat, slanted mode / ruleset tags, a halftone floor wedge under a slanted score plate with a starburst rank badge, a segmented slanted-cell groove gauge, a paper "track card" song plate, ransom-note judge tally chips, and a BGA monitor that idles on a turning starburst "STAND BY" screen.
-  - The playfield stays deliberately plain and IIDX-like: flat white / blue / red notes, solid-rail long notes, a red judgement line, and a simple ring-and-core hit flash, so reading is never traded for style.
+  - The playfield stays deliberately plain and That-Which-Must-Not-Be-Named-like: flat white / blue / red notes, solid-rail long notes, a red judgement line, and a simple ring-and-core hit flash, so reading is never traded for style.
   - Judgement words and all live numerals (score, EX score, combo, gauge, tally, BPM / HI-SPEED) use Anton with tabular figures, laid out per glyph in fixed-width cells so changing values never jitter sideways.
   - Song select: red halftone slab with a drifting dot field, a starburst that pulses at the focused chart's BPM, speed streaks, a scrolling header kicker, a beat-kicking row pointer, a glint sweeping the focused card, a staggered fly-in of the song list on entry, and a slide-in of the focused card and title on every cursor move. PLAY is now the primary (larger) action and AUTO PLAY secondary.
   - Result: an entrance timeline — the red halftone slash sweeps in, the STAGE CLEAR / FAILED tag slams down, metric plates and judgement rows slide in one after another while every counter rolls up, count bars grow, run graphs draw left to right, and the rank burst pops before its letter stamps down. Afterwards the burst keeps turning and pulsing, the halftone drifts, the header kicker scrolls, speed streaks rake across, and a glint sweeps the verdict tag; a skip jumps straight to the settled layout.
@@ -217,7 +217,7 @@
 - 0103435: Run the selected gauge through the active compat ruleset instead of a hardcoded LR2 groove curve.
   
   `PlayerOptions.gauge` now picks a gauge out of the ruleset's own line-up (LR2 `GROOVE` / `EASY` / `HARD` / `EX-HARD` /
-  `DEATH`, beatoraja `NORMAL` / `ASSIST-EASY` / `EASY` / `HARD` / `EX-HARD` / `HAZARD`, IIDX `NORMAL` / `EASY` /
+  `DEATH`, beatoraja `NORMAL` / `ASSIST-EASY` / `EASY` / `HARD` / `EX-HARD` / `HAZARD`, That-Which-Must-Not-Be-Named `NORMAL` / `EASY` /
   `ASSISTED-EASY` / `HARD` / `EX-HARD`) and the engine runs that gauge's real curve — per-judge deltas, TOTAL scaling,
   guts softening, death border, and the survival-vs-threshold clear rule. Previously the picker was cosmetic: HARD
   rendered red but ran GROOVE's numbers and reported CLEARED at 2 %.
@@ -246,7 +246,7 @@
   `RulesetConfig` gains `emptyPoorCountsInPoorDisplay` — a presentation rule, not a scoring one. LR2 is `true`:
   OpenLR2's `ApplyJudgeNote` increments `playerstat.poor` for the empty-POOR branch and LR2 exposes no separate stat,
   so a run judged under LR2 now folds `emptyPoor` into the POOR figure its result screen, BP, and per-judge rates
-  read. beatoraja shows an empty-POOR figure of its own and IIDX's counter is unmeasured, so both keep them apart.
+  read. beatoraja shows an empty-POOR figure of its own and That-Which-Must-Not-Be-Named's counter is unmeasured, so both keep them apart.
   
   `ScoreSummary` gains `emptyPoor` and `@be-music/player-engine/core/scoring` exports `resolveDisplayedPoor`.
   `PlayerSummary` always reports the split; only the display copy folds.
@@ -440,7 +440,7 @@
 
 - 5ea9072: `PixiGameplayView.prepareSong` now builds a `PreparedPlaybackChartData` and forwards it to the engine through `engineOptions.preparedChart`, so the renderer and the engine share the same note instances instead of mirroring `note.hit` through an index-based sync.
 
-  That removes the class of view ↔ engine drift bugs: notes vanishing mid-lane (HIDE-on-judge dropouts), mid-chart full-combo cues, AUTO PLAY falling short of EX-MAX, PMS keys 6-9 mapping to IIDX 2P, chord bombs only on the right-most lane, AUTO LN lasers staying lit after the tail, and MANUAL LN BAD-failing mid-sustain while the key is held. Simultaneously-judged AUTO PLAY chords now produce one bomb sprite per chord note via `drainPendingJudgeCombos`.
+  That removes the class of view ↔ engine drift bugs: notes vanishing mid-lane (HIDE-on-judge dropouts), mid-chart full-combo cues, AUTO PLAY falling short of EX-MAX, PMS keys 6-9 mapping to That-Which-Must-Not-Be-Named 2P, chord bombs only on the right-most lane, AUTO LN lasers staying lit after the tail, and MANUAL LN BAD-failing mid-sustain while the key is held. Simultaneously-judged AUTO PLAY chords now produce one bomb sprite per chord note via `drainPendingJudgeCombos`.
 
 ### Patch Changes
 
@@ -456,7 +456,7 @@
   Headline capabilities:
 
   - LR2 skin rendering: frame chrome, BGA, lane lasers, scratch turntable, bomb / FC / hold timers, animated bitmap fonts, gauge / combo / score, scroll slider.
-  - PMS / 9 KEY (Pop'n) skin support alongside IIDX 7 / 14-key layouts, with single-side judge / combo plate rendering for PMS-STD charts that source lanes from the `2X` channel block.
+  - PMS / 9 KEY (Pop'n) skin support alongside That-Which-Must-Not-Be-Named 7 / 14-key layouts, with single-side judge / combo plate rendering for PMS-STD charts that source lanes from the `2X` channel block.
   - BGA pipeline: native `<video>` decode with an ffmpeg.wasm transcode fallback, held until the chart-start gate.
   - Web Audio bus: split key / BGM / master compressor topology, per-sample latency tuning, and `MediaRecorder` + canvas `captureStream` for WebM gameplay capture.
   - LR2 button wiring: RANDOM / MIRROR, AUTO-SCRATCH, gauge type, HIDDEN / SUDDEN + shutter, HS-FIX, DP FLIP, BGA / score-graph / filter controls.

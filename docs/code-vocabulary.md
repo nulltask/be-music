@@ -35,7 +35,7 @@ This document maps current code vocabulary to domain concepts and separates diff
 | arrangement / レーン配置                            | `randomLane`, `laneOption`, `randomDraws`                | Lane randomization differs from BMS control-flow branch selection.                                                                    |
 | tempo / テンポ                                      | `speed`, `PlayerTempoChange`, `hiSpeed`, `hsFix`         | Playback tempo differs from visual scroll speed and its normalization.                                                                |
 | judgment rank / 判定ランク                          | `judgeRank`, `rank`, `exRank`, `RulesetJudgeRankFacts`   | Timing strictness from chart metadata; not a leaderboard position or DJ Rank.                                                         |
-| DJ Rank / DJ RANK                                   | `IIDXRankLabel`, `resolveIIDXRankLabel`                  | Performance grade derived from EX-SCORE rate; not the course kind named grade.                                                        |
+| DJ Rank / DJ RANK                                   | `____RankLabel`, `resolve____RankLabel`                  | Performance grade derived from EX-SCORE rate; not the course kind named grade.                                                        |
 | chart level and difficulty / 譜面レベルと難易度区分 | `playLevel`, `difficulty`, `difficultyFilter`            | Authored numeric/string level differs from BEGINNER through INSANE categories.                                                        |
 
 ## Courses and layouts

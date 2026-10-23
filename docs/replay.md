@@ -3,7 +3,7 @@
 # Replay (play history) specification
 
 This document describes the be-music replay ("replay") — the play-history file recorded during gameplay — and
-the tools that re-derive LR2 / beatoraja / IIDX results from it.
+the tools that re-derive LR2 / beatoraja / That-Which-Must-Not-Be-Named results from it.
 
 ## Design principle: an input replay, not a result log
 
@@ -115,7 +115,7 @@ In the browser player:
   and cannot change mid-play — the controls are disabled while a chart is playing, and the values in effect when
   the chart started govern that play.
 - The Debug Menu's **Play options** folder covers the recorded play settings: auto play, gauge, Random 1P/2P, DP
-  flip, and auto scratch; the judge windows (LR2 / beatoraja / IIDX) are in its **Developer** folder. Where the LR2
+  flip, and auto scratch; the judge windows (LR2 / beatoraja / That-Which-Must-Not-Be-Named) are in its **Developer** folder. Where the LR2
   select screen's PLAY OPTION panel has a counterpart, the two surfaces two-way sync. Its **Replay / ghost** subfolder picks what a
   replay reproduces of the recorded view ([What the player saw](#what-the-player-saw)).
 
@@ -157,13 +157,13 @@ releases, and the live play, its replay and the simulators agree.
 ## Compat rulesets
 
 **The player has no judge logic of its own.** Every live play runs under one of three compat rulesets —
-`'lr2'` (the default), `'beatoraja'`, or `'iidx'` — selected with `PlayerOptions.judgeRuleset`, and the ruleset
+`'lr2'` (the default), `'beatoraja'`, or `'____'` — selected with `PlayerOptions.judgeRuleset`, and the ruleset
 owns the whole decision surface:
 
 - judge windows, signed and per context (key vs scratch, note vs long-note end), including LR2's `#EXRANKxx`
   timeline
 - which note a press resolves against (`lowest` / `combo` / `duration` / `score`) and LR2's forward tap re-judge chain
-- long-note style: LR2 plays every long note as an LN, beatoraja honours the chart's `#LNMODE`, IIDX charges
+- long-note style: LR2 plays every long note as an LN, beatoraja honours the chart's `#LNMODE`, That-Which-Must-Not-Be-Named charges
   everything — charge modes judge the head and the tail separately
 - the empty-POOR window and whether it breaks the combo
 - the gauge line-up and its curve, TOTAL default, guts softening, and clear rule
@@ -176,9 +176,9 @@ and replays re-apply it automatically.
 
 Gauge selection is separate (`PlayerOptions.gauge`) and spelled in LR2's names — `GROOVE` / `EASY` / `HARD` /
 `DEATH` — which each ruleset maps onto its own line-up (`GROOVE` is beatoraja's `NORMAL`, `DEATH` its `HAZARD`,
-and IIDX has no HAZARD so `DEATH` folds onto `EX-HARD`).
+and That-Which-Must-Not-Be-Named has no HAZARD so `DEATH` folds onto `EX-HARD`).
 
-`bms-player` exposes both as `--ruleset <lr2|beatoraja|iidx>` and `--gauge <GROOVE|EASY|HARD|DEATH>`.
+`bms-player` exposes both as `--ruleset <lr2|beatoraja|____>` and `--gauge <GROOVE|EASY|HARD|DEATH>`.
 
 ## Replay playback
 
@@ -250,26 +250,26 @@ flowchart TD
 
 On the same scale (or a log without `hiSpeedScale`) the replay draws the recorded hi-speed as it was drawn, HS-FIX included, and does not apply the viewer's HS-FIX on top. Across scales a hi-speed number means another speed, so the replay works out the hi-speed that shows the recorded visible time with its own lane and the SUDDEN+ it shows (`resolveHiSpeedForWhiteNumber`, over the built-in and LR2 lanes laid out or the beatoraja lane of four beats). Replays run on every family's play screen. The beatoraja one draws the LIFT, so it shows the recorded one (with HIDDEN+ set over the lane above it, so the cover draws the recorded fraction of the lane); the built-in and LR2 screens draw none, so the `lift` toggle has nothing to show there; the `tempo` toggle governs the recorded tempo (`play.tempo`, `play.tempoChanges`). The browser player has no ghost display yet; a ghost would read the view the same way.
 
-## Re-deriving LR2 / beatoraja / IIDX results
+## Re-deriving LR2 / beatoraja / That-Which-Must-Not-Be-Named results
 
 `simulateReplay(replay, { ruleset })` (from `@be-music/player-engine/replay`) replays the input stream through one
 ruleset; `simulateReplayRulesets(replay)` runs all three. Each ruleset differs in judge windows, note selection,
 long-note semantics, empty-POOR behavior, and gauge tables — the constants are documented per source in
 [`packages/player-engine/src/ruleset/definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts):
 
-| aspect                  | LR2 (`lr2/0`)                                     | beatoraja (`beatoraja/0`)                                   | IIDX (`iidx/0`)                                                |
-| ----------------------- | ------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------- |
-| source                  | lr2oraja / OpenLR2                                | beatoraja master                                            | community measurements (iidx.org)                              |
-| windows (NORMAL-rank)   | ±18/±40/±100/±200 ms                              | ±15/±45/±112.5/late 210 · early 165 ms (7K, judgerank 75 %) | ±16.67/±33.33/±116.67/±250 ms                                  |
-| rank scaling            | LR2 anchor interpolation, BAD fixed               | linear × judgerank, MS fixed                                | none                                                           |
-| note selection          | Lowest + multi-BAD chain                          | Combo (default; duration / lowest / score selectable)       | Lowest                                                         |
-| long notes              | all LN (deferred single judgment)                 | per-note LN / CN / HCN                                      | all CN (HCN gauge when mode 3)                                 |
-| empty POOR window       | early-only 1000 ms                                | late 150 / early 500 ms (7K)                                | unmeasured — beatoraja window used                             |
-| empty POOR breaks combo | no                                                | 5K / PMS only                                               | no                                                             |
-| money score             | `(4·PG + 2·GR + GD) × 50000 / notes`              | —                                                           | — (abolished in BISTROVER)                                     |
-| gauges                  | lr2oraja LR2 tables (death 2 %, guts < 32 % ×0.6) | beatoraja native tables                                     | iidx.org tables (a-value recovery, ≤ 30 % half damage on HARD) |
+| aspect                  | LR2 (`lr2/0`)                                     | beatoraja (`beatoraja/0`)                                   | That-Which-Must-Not-Be-Named (`____/0`)                                |
+| ----------------------- | ------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------- |
+| source                  | lr2oraja / OpenLR2                                | beatoraja master                                            | community measurements (https://iidx.org)                              |
+| windows (NORMAL-rank)   | ±18/±40/±100/±200 ms                              | ±15/±45/±112.5/late 210 · early 165 ms (7K, judgerank 75 %) | ±16.67/±33.33/±116.67/±250 ms                                          |
+| rank scaling            | LR2 anchor interpolation, BAD fixed               | linear × judgerank, MS fixed                                | none                                                                   |
+| note selection          | Lowest + multi-BAD chain                          | Combo (default; duration / lowest / score selectable)       | Lowest                                                                 |
+| long notes              | all LN (deferred single judgment)                 | per-note LN / CN / HCN                                      | all CN (HCN gauge when mode 3)                                         |
+| empty POOR window       | early-only 1000 ms                                | late 150 / early 500 ms (7K)                                | unmeasured — beatoraja window used                                     |
+| empty POOR breaks combo | no                                                | 5K / PMS only                                               | no                                                                     |
+| money score             | `(4·PG + 2·GR + GD) × 50000 / notes`              | —                                                           | — (abolished in BISTROVER)                                             |
+| gauges                  | lr2oraja LR2 tables (death 2 %, guts < 32 % ×0.6) | beatoraja native tables                                     | https://iidx.org tables (a-value recovery, ≤ 30 % half damage on HARD) |
 
-EX-SCORE is PGREAT × 2 + GREAT × 1 everywhere; DJ LEVEL uses the IIDX ninths table. Charge-note rulesets count a
+EX-SCORE is PGREAT × 2 + GREAT × 1 everywhere; DJ LEVEL uses the That-Which-Must-Not-Be-Named ninths table. Charge-note rulesets count a
 long note's head and tail as two judgment notes (`result.noteCount` reports each ruleset's denominator).
 
 ### Fidelity notes
@@ -277,9 +277,9 @@ long note's head and tail as two judgment notes (`result.noteCount` reports each
 - The LR2 ruleset follows lr2oraja, cross-checked against the OpenLR2 transcription; where the two disagree on the
   missed-POOR threshold for LN heads, the lr2oraja behavior is used. The DEATH gauge follows LR2 itself (no recovery,
   an empty POOR costs nothing), not lr2oraja's beatoraja-derived `HAZARD_LR2` table.
-- IIDX internals are not public. The judge windows, gauge tables, and DJ LEVEL boundaries are current community
+- That-Which-Must-Not-Be-Named internals are not public. The judge windows, gauge tables, and DJ LEVEL boundaries are current community
   consensus; the empty-POOR window and CN release windows are unmeasured and use beatoraja's values as stand-ins,
-  and the HCN gauge tick uses a fixed 200 ms interval instead of IIDX's measured 16th-note interval. Expect
+  and the HCN gauge tick uses a fixed 200 ms interval instead of That-Which-Must-Not-Be-Named's measured 16th-note interval. Expect
   close — not bit-exact — reproduction.
 - beatoraja uses separate FIVEKEYS, SEVENKEYS, PMS and KEYBOARD gauge tables and mode-specific default TOTAL. Engine frames carry raw gauge bounds, including PMS maximum 120; replay `gauge.final` and result gauges are percentages of that maximum. PMS's one-empty-POOR-per-note rule remains unmodeled.
 - Because the replay stores the resolved chart, `#RANDOM` and lane-shuffle differences between players never
@@ -345,10 +345,10 @@ RULESET        EX     RATE     DJ   PG     GR     GD    BD    PR    EPR   FAST  
 be-music/native 1180  83.10%  AA   ...
 lr2/0          1180   83.10%   AA   ...                                          ...    140000  96.0% GROOVE CLEAR
 beatoraja/0    1174   82.68%   AA   ...
-iidx/0         1102   77.61%   AA   ...
+????/0         1102   77.61%   AA   ...
 ```
 
-Options: `--ruleset=lr2,beatoraja,iidx|all`, `--gauge=<id>` (ruleset-scoped gauge override),
+Options: `--ruleset=lr2,beatoraja,____|all`, `--gauge=<id>` (ruleset-scoped gauge override),
 `--algorithm=combo|duration|lowest|score` (beatoraja note selection), `--json`.
 
 ## Versioning
@@ -370,4 +370,4 @@ replays the old ones, so its numbers can change. The cache is never authoritativ
 
 | Revision                         | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lr2/0`, `beatoraja/0`, `iidx/0` | Development revision (see above). Since `/1`, mines follow the ruleset's rule: LR2beta3 now uses strict ahead-only GREAT on key-down, held crossing and one POOR/BP per mine; the provisional `iidx` model keeps symmetric PGREAT and held-window entry; under `beatoraja` only a key down as the mine crosses detonates it (engine). Negative-BPM charts follow LR2's reverse scroll: inputs past the reversal are judged on the mirrored clock, mines there stay frozen, and a run left with notes unjudged is FAILED. Under `lr2` the DEATH gauge follows LR2: no recovery, and an empty POOR costs nothing. |
+| `lr2/0`, `beatoraja/0`, `____/0` | Development revision (see above). Since `/1`, mines follow the ruleset's rule: LR2beta3 now uses strict ahead-only GREAT on key-down, held crossing and one POOR/BP per mine; the provisional `____` model keeps symmetric PGREAT and held-window entry; under `beatoraja` only a key down as the mine crosses detonates it (engine). Negative-BPM charts follow LR2's reverse scroll: inputs past the reversal are judged on the mirrored clock, mines there stay frozen, and a run left with notes unjudged is FAILED. Under `lr2` the DEATH gauge follows LR2: no recovery, and an empty POOR costs nothing. |

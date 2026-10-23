@@ -64,22 +64,22 @@
   `RulesetConfig` gains `emptyPoorCountsInPoorDisplay` — a presentation rule, not a scoring one. LR2 is `true`:
   OpenLR2's `ApplyJudgeNote` increments `playerstat.poor` for the empty-POOR branch and LR2 exposes no separate stat,
   so a run judged under LR2 now folds `emptyPoor` into the POOR figure its result screen, BP, and per-judge rates
-  read. beatoraja shows an empty-POOR figure of its own and IIDX's counter is unmeasured, so both keep them apart.
+  read. beatoraja shows an empty-POOR figure of its own and That-Which-Must-Not-Be-Named's counter is unmeasured, so both keep them apart.
   
   `ScoreSummary` gains `emptyPoor` and `@be-music/player-engine/core/scoring` exports `resolveDisplayedPoor`.
   `PlayerSummary` always reports the split; only the display copy folds.
 - 202a28b: Drive 24 KEY SP / 48 KEY DP charts end to end — the extended lane channels are now scorable notes, not just a display-mode guess.
   
-  `extractTimedNotes` / `extractPlayableNotes` accept objects on the extended lane columns (`1A..1O` / `2A..2O`, plus the matching `3X`/`4X` invisible, `5X`/`6X` long-note, and `DX`/`EX` landmine families), so they land in `summary.total`, get judged, and reach the renderer. `ChartPlayVariant` gains `'24'` / `'48'`, and `resolveSideKeySlot`, `resolveLaneChannels`, and `createLaneBindings` resolve the 24 scratch-less columns per side in ascending channel order. `resolveLr2LaneIndex` returns `-1` for these variants because LR2 skins only define the 20 IIDX lane rects — hosts fall back to their own playfield instead of squeezing 24 lanes into the 7-key table.
+  `extractTimedNotes` / `extractPlayableNotes` accept objects on the extended lane columns (`1A..1O` / `2A..2O`, plus the matching `3X`/`4X` invisible, `5X`/`6X` long-note, and `DX`/`EX` landmine families), so they land in `summary.total`, get judged, and reach the renderer. `ChartPlayVariant` gains `'24'` / `'48'`, and `resolveSideKeySlot`, `resolveLaneChannels`, and `createLaneBindings` resolve the 24 scratch-less columns per side in ascending channel order. `resolveLr2LaneIndex` returns `-1` for these variants because LR2 skins only define the 20 That-Which-Must-Not-Be-Named lane rects — hosts fall back to their own playfield instead of squeezing 24 lanes into the 7-key table.
   
-  FREE ZONE is now variant-aware. Channels `17` / `27` only get the quarter-note FREE ZONE tail on the IIDX families; under `9 KEY` and the keyboard modes they are ordinary key columns, so a tap stays a tap and a `#LNOBJ` tail is no longer shadowed by the phantom one-beat tail. The variant is taken from the new `playVariant` extraction option when the host supplies one (`preparePlaybackChartData` forwards `PlayerOptions.playVariant`), and is otherwise classified from the chart the first time a `17` / `27` object appears.
+  FREE ZONE is now variant-aware. Channels `17` / `27` only get the quarter-note FREE ZONE tail on the That-Which-Must-Not-Be-Named families; under `9 KEY` and the keyboard modes they are ordinary key columns, so a tap stays a tap and a `#LNOBJ` tail is no longer shadowed by the phantom one-beat tail. The variant is taken from the new `playVariant` extraction option when the host supplies one (`preparePlaybackChartData` forwards `PlayerOptions.playVariant`), and is otherwise classified from the chart the first time a `17` / `27` object appears.
 - 750c47d: Add `resolvePlayVariantLaneChannels` to `@be-music/player-engine/core/lane-layout`: the full lane set of a chart's play variant (5 / 7 / 9 / 10 / 14 / 24 / 48 KEY) in rendering order, whether or not the chart puts notes on every lane. 9 KEY picks the PMS layout when the chart uses `22..25` and the BME layout otherwise, and lanes in use outside the variant are kept.
 - 2d7652c: Charge empty POORs from the ruleset's own miss window, and surface the count.
   
   The engine hardcoded LR2's one-second early window for every ruleset and never reported the tally. It now reads the
   active ruleset's miss (`ms`) window — LR2's is early-only (`{0, 1 s}`), beatoraja's reaches 500 ms early and 150 ms
   late — and checks both neighbours of the press so the late side is honoured where a ruleset has one. Whether an empty
-  POOR breaks the combo is the ruleset's call too: beatoraja's five-key and PMS rules say yes, LR2 and IIDX say no.
+  POOR breaks the combo is the ruleset's call too: beatoraja's five-key and PMS rules say yes, LR2 and That-Which-Must-Not-Be-Named say no.
   
   `PlayerSummary` and the UI frame summary gain a required `emptyPoor` field. It is tracked apart from `poor` because an
   empty POOR consumes no note and never reaches EX-SCORE; whether a player's POOR counter displays the two summed is a
@@ -87,7 +87,7 @@
 - 0103435: Run the selected gauge through the active compat ruleset instead of a hardcoded LR2 groove curve.
   
   `PlayerOptions.gauge` now picks a gauge out of the ruleset's own line-up (LR2 `GROOVE` / `EASY` / `HARD` / `EX-HARD` /
-  `DEATH`, beatoraja `NORMAL` / `ASSIST-EASY` / `EASY` / `HARD` / `EX-HARD` / `HAZARD`, IIDX `NORMAL` / `EASY` /
+  `DEATH`, beatoraja `NORMAL` / `ASSIST-EASY` / `EASY` / `HARD` / `EX-HARD` / `HAZARD`, That-Which-Must-Not-Be-Named `NORMAL` / `EASY` /
   `ASSISTED-EASY` / `HARD` / `EX-HARD`) and the engine runs that gauge's real curve — per-judge deltas, TOTAL scaling,
   guts softening, death border, and the survival-vs-threshold clear rule. Previously the picker was cosmetic: HARD
   rendered red but ran GROOVE's numbers and reported CLEARED at 2 %.
@@ -109,10 +109,10 @@
   
   - LR2 (`ln`) plays every long note as an LN — one deferred judgment, no CN or HCN, whatever `#LNMODE` asks for.
   - beatoraja (`per-note`) honours the chart: mode 1 is an LN, modes 2 and 3 are CN / HCN.
-  - IIDX (`charge`) has no LN — every long note is a charge note (HCN where the chart says 3).
+  - That-Which-Must-Not-Be-Named (`charge`) has no LN — every long note is a charge note (HCN where the chart says 3).
   
   Charge modes score the head on the press and the tail on the release, so one long note contributes two judgments,
-  which is what `PlayerSummary.total` (the ruleset's EX-SCORE denominator) has always counted. Under IIDX a broken
+  which is what `PlayerSummary.total` (the ruleset's EX-SCORE denominator) has always counted. Under That-Which-Must-Not-Be-Named a broken
   head cancels the tail (`headBadSkipsTail`).
   
   Two timing fixes fall out of this:
@@ -123,11 +123,11 @@
     closes to let go, matching the play-log simulator and the reference players.
   
   The end-of-play backfill now counts unjudged notes instead of topping the tally up to `summary.total`, which was
-  inventing a POOR for every IIDX charge note whose tail was cancelled.
+  inventing a POOR for every That-Which-Must-Not-Be-Named charge note whose tail was cancelled.
 - 1589105: Select the judged note with the ruleset's own algorithm, and add LR2's multi-BAD collector.
   
   The engine always resolved a press against the note closest in time (beatoraja's non-default `duration` behaviour).
-  It now runs the active ruleset's `JudgeAlgorithm`: LR2 and IIDX use `lowest` (the oldest note in reach always wins),
+  It now runs the active ruleset's `JudgeAlgorithm`: LR2 and That-Which-Must-Not-Be-Named use `lowest` (the oldest note in reach always wins),
   beatoraja uses `combo` (the press moves to the next note once the current one has fallen out of the late side of its
   GOOD window). LR2's `ignoreLateBadOnLnHead` is honoured too — a late BAD on a long-note head falls through instead of
   consuming the head.
@@ -145,9 +145,9 @@
   
   - LR2 reports its money score, `floor((4×PGREAT + 2×GREAT + GOOD) × 50000 / notes)`, capped at 200000. Purely a
     function of the judge tally: no combo term.
-  - beatoraja and IIDX report EX-SCORE, which is what they display (IIDX retired its own money score in BISTROVER).
+  - beatoraja and That-Which-Must-Not-Be-Named report EX-SCORE, which is what they display (That-Which-Must-Not-Be-Named retired its own money score in BISTROVER).
   
-  `createScoreTracker` takes `{ moneyScore }`, `LR2_MONEY_SCORE_MAX` replaces `IIDX_SCORE_MAX`, and the invented
+  `createScoreTracker` takes `{ moneyScore }`, `LR2_MONEY_SCORE_MAX` replaces `_____SCORE_MAX`, and the invented
   combo-bonus helpers are gone. The TUI result block prints the SCORE line only for rulesets that define one, and now
   also prints the empty-POOR count.
 - 08e62d0: Judge with the active ruleset's signed, per-context judge windows instead of one symmetric width.
@@ -189,10 +189,10 @@
   miss-BGA default, so the previous 2-second window held the miss layer four times longer than LR2.
   `DEFAULT_POOR_BGA_DISPLAY_SECONDS` is shared by the TUI compositor and the web LR2 scene, so both
   runtimes pick up the corrected timing.
-- 41f5efb: Cap every inner judge window at the BAD gate under the IIDX ruleset. Classification walks PGREAT → GREAT → GOOD → BAD in order, so the uncapped GOOD window (116.67 ms) swallowed every press a `judgeWindowMs` debug override below it was meant to reject — a 50 ms override left the effective window at 116.67 ms. LR2 and beatoraja already capped; all three now share one code path.
+- 41f5efb: Cap every inner judge window at the BAD gate under the That-Which-Must-Not-Be-Named ruleset. Classification walks PGREAT → GREAT → GOOD → BAD in order, so the uncapped GOOD window (116.67 ms) swallowed every press a `judgeWindowMs` debug override below it was meant to reject — a 50 ms override left the effective window at 116.67 ms. LR2 and beatoraja already capped; all three now share one code path.
   
   Resolve each note's miss deadline from the judge rank in force at that note's own time instead of the live window. The LR2 BAD gate is rank-invariant, so this is behaviour-neutral today; it stops a rank change from retroactively moving the deadline of already-passed notes once a ruleset whose BAD width scales with judgerank is wired in.
-- 40f1050: Move the LR2 / beatoraja / IIDX ruleset tables out of the play-log simulator into a shared `src/ruleset/` module so the live engine and the simulator can resolve behaviour from one source of truth. The tables now take a neutral `RulesetChartFacts` record instead of reading a `PlaylogChart` directly, and each caller supplies an adapter — `rulesetChartFactsFromPlaylog` for recorded plays. `@be-music/player-engine/playlog` re-exports the ruleset surface unchanged, so this is behaviour-neutral for consumers.
+- 40f1050: Move the LR2 / beatoraja / That-Which-Must-Not-Be-Named ruleset tables out of the play-log simulator into a shared `src/ruleset/` module so the live engine and the simulator can resolve behaviour from one source of truth. The tables now take a neutral `RulesetChartFacts` record instead of reading a `PlaylogChart` directly, and each caller supplies an adapter — `rulesetChartFactsFromPlaylog` for recorded plays. `@be-music/player-engine/playlog` re-exports the ruleset surface unchanged, so this is behaviour-neutral for consumers.
 - Updated dependencies [202a28b]
   - @be-music/chart-model@0.4.0
   - @be-music/chart-audio-renderer@0.2.4
@@ -202,9 +202,9 @@
 
 ### Minor Changes
 
-- ab210cb: Add the `@be-music/player-engine/playlog` subpath: a play-history ("playlog") format that records the resolved chart, the raw key press/release stream, and the play settings as an input replay, plus LR2 / beatoraja / IIDX ruleset simulators (`simulatePlaylog`) that re-derive judgments, EX-SCORE, max combo, money score, and groove gauge from the same recorded inputs.
+- ab210cb: Add the `@be-music/player-engine/playlog` subpath: a play-history ("playlog") format that records the resolved chart, the raw key press/release stream, and the play settings as an input replay, plus LR2 / beatoraja / That-Which-Must-Not-Be-Named ruleset simulators (`simulatePlaylog`) that re-derive judgments, EX-SCORE, max combo, money score, and groove gauge from the same recorded inputs.
 
-  New `PlayerOptions.onPlaylogRecorded` / `PlayerOptions.recordPlaylog` enable engine-side recording for both `manualPlay` and `autoPlay` (including ESC-aborted runs), and `PlayerOptions.replayInputs` re-drives a recorded input stream deterministically for replay playback (live lane input is ignored while a replay is active). `PlayerOptions.judgeRuleset` switches the live judge windows between LR2 (default), beatoraja, and IIDX — recorded as `play.judgeRuleset` so replays re-apply the same windows — and the playlog stamps the source chart file's SHA-256 (`chart.sha256`) when the host supplies one. `ScoreTracker` now latches `maxCombo`, `resolveJudgeRankPercent` exposes the chart's initial judgerank percent, and the landmine gauge-damage rule moved to the shared `core/landmine.ts` helper.
+  New `PlayerOptions.onPlaylogRecorded` / `PlayerOptions.recordPlaylog` enable engine-side recording for both `manualPlay` and `autoPlay` (including ESC-aborted runs), and `PlayerOptions.replayInputs` re-drives a recorded input stream deterministically for replay playback (live lane input is ignored while a replay is active). `PlayerOptions.judgeRuleset` switches the live judge windows between LR2 (default), beatoraja, and That-Which-Must-Not-Be-Named — recorded as `play.judgeRuleset` so replays re-apply the same windows — and the playlog stamps the source chart file's SHA-256 (`chart.sha256`) when the host supplies one. `ScoreTracker` now latches `maxCombo`, `resolveJudgeRankPercent` exposes the chart's initial judgerank percent, and the landmine gauge-damage rule moved to the shared `core/landmine.ts` helper.
 
 ### Patch Changes
 
@@ -215,7 +215,7 @@
 ### Minor Changes
 
 - 7bbf052: HARD / EASY / DEATH gauges now follow the LR2 tables (beatoraja GaugeProperty HARD_LR2 / EASY_LR2 / HAZARD_LR2): HARD recovers +0.1/+0.1/+0.05 with damage scaled by the #TOTAL multiplier table and softened ×0.6 under 30%; EASY damages -3.2/-4.8/-1.6 and clears at 80%; DEATH drains -10 on an empty POOR instead of dying and recovers +0.15/+0.06. Survival gauges collapse to 0% (FAILED, no recovery) below 2%, and raw deltas such as mine damage bypass the guts/TOTAL modifiers.
-- 811cdfc: Judge windows are now the measured LR2 tables instead of IIDX-baseline linear scaling: #RANK 0/1/2/3 map to ±8/±15/±18/±21ms PGREAT (±24/±30/±40/±60 GREAT, ±40/±60/±100/±120 GOOD), #RANK 4 is treated as NORMAL, the BAD gate is fixed at ±200ms for every rank, and #DEFEXRANK / #EXRANKxx / bmson judge_rank interpolate piecewise-linearly between the rank anchors (lr2oraja JudgeWindowRule.LR2 model) without ever exceeding the BAD gate.
+- 811cdfc: Judge windows are now the measured LR2 tables instead of That-Which-Must-Not-Be-Named-baseline linear scaling: #RANK 0/1/2/3 map to ±8/±15/±18/±21ms PGREAT (±24/±30/±40/±60 GREAT, ±40/±60/±100/±120 GOOD), #RANK 4 is treated as NORMAL, the BAD gate is fixed at ±200ms for every rank, and #DEFEXRANK / #EXRANKxx / bmson judge_rank interpolate piecewise-linearly between the rank anchors (lr2oraja JudgeWindowRule.LR2 model) without ever exceeding the BAD gate.
 - d0bb321: Mines now follow the LR2 detonation model: a mine explodes while its lane's key is ON and the mine is within the GOOD window of the judge line — covering both presses with a mine in range and holding through a passing mine; a mine passing with the key up is harmless. Explosions only drain the gauge (raw base36 value as the damage percent, matching LR2 / beatoraja, instead of the nanasi value/2 rule) and play #WAV00 — no BAD verdict, no combo break, and mines no longer swallow presses aimed at nearby notes. Mine damage bypasses the HARD guts softening and #TOTAL multiplier; ZZ instantly fails survival gauges.
 
 ### Patch Changes
