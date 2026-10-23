@@ -10,10 +10,14 @@ export interface EmbedTrack {
   readonly fileName: string;
   /** `?chart=`: the chart to play on its own (`findEmbedChart`); the whole track's list without one. */
   readonly chart?: string;
+  /** `?course=`: an LR2 or beatoraja course file inside the archive. Takes precedence over `chart`. */
+  readonly course?: string;
+  /** `?courseName=`: one course in a file containing several; otherwise show their list. */
+  readonly courseName?: string;
 }
 
 /**
- * Reads `?track=` (and `?chart=`) from `href`; `undefined` without a track, or when it is not an http(s) URL the embed
+ * Reads `?track=`, `?chart=` and the course selectors from `href`; `undefined` without a track, or when it is not an http(s) URL the embed
  * can fetch.
  */
 export function parseEmbedTrack(href: string): EmbedTrack | undefined {
@@ -43,5 +47,13 @@ export function parseEmbedTrack(href: string): EmbedTrack | undefined {
   }
   if (!/\.zip$/iu.test(fileName)) fileName = `${fileName}.zip`;
   const chart = params.get('chart')?.trim();
-  return { url: url.href, fetchURL, fileName, ...(chart ? { chart } : {}) };
+  const course = params.get('course')?.trim();
+  const courseName = params.get('courseName')?.trim();
+  return {
+    url: url.href,
+    fetchURL,
+    fileName,
+    ...(chart ? { chart } : {}),
+    ...(course ? { course, ...(courseName ? { courseName } : {}) } : {}),
+  };
 }

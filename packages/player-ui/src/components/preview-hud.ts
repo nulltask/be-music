@@ -169,6 +169,14 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
         @click=${() => this.emit('pause-request', undefined)}
       ></button>
       <div class="info" part="info" style=${box} aria-label="Chart and play status">
+        ${
+          f.course === undefined
+            ? nothing
+            : html`<p class="line muted" part="course">
+                ${f.course.title} ·
+                ${f.course.stageIndex === undefined ? `${f.course.stages.length} stages` : `Stage ${f.course.stageIndex + 1} / ${f.course.stages.length}`}
+              </p>`
+        }
         <h2 title=${title}>${title}</h2>
         <p class="line muted">${f.chart?.artist ?? ''}</p>
         <p class="line muted">${[facts, bpm].filter(Boolean).join(' · ')}</p>

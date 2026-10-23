@@ -859,15 +859,34 @@ PixiJS scene wiring can remain in `player-browser` when the behavior depends on 
 
 The preview plays in AUTO; it judges no input and records no replay.
 
+### Select a chart or course
+
+Keep the charts and their audio/BGA assets together in the archive named by `track`. Use these query parameters to select what the preview plays:
+
+| Parameter    | Meaning                                                                                                          |
+| ------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `chart`      | A chart file name or path inside the archive. Without a match, the preview lists the charts.                     |
+| `course`     | An LR2 `.lr2crs` or beatoraja `.json` course file inside the archive. It takes precedence over `chart`.          |
+| `courseName` | The exact course name in the selected file. Omit it to list multiple courses, or to play the file's only course. |
+
+For example, `/embed/?track=https%3A%2F%2Fexample.com%2Fpack.zip&course=courses%2Fexpert.lr2crs&courseName=Expert` selects the course named `Expert` in `courses/expert.lr2crs`. Encode each parameter value with `encodeURIComponent`. File matching ignores case and accepts either path separator; a unique file name or path suffix also works. Specify a fuller path if several files match. A beatoraja JSON explicitly selected by `course` can sit outside a `course/` directory.
+
+Course stages resolve by their original chart-file MD5 or SHA-256 against the charts in the archive. The preview reports missing or invalid course files and unknown course names; courses with missing stages cannot start. A multi-course list shows each course's kind and stages, and disables rows with missing charts. The `courses` property of `be-music-preview-select` supplies this list; the React and Vue wrappers accept it too.
+
+EXPERT and GRADE previews play stages in order without result screens, carrying gauge and course combo through the existing course runner. Course constraints, including the long-note mode and hi-speed lock, apply. LR2 NONSTOP previews stitch their stages through the shared NONSTOP pipeline, with its BGA transitions, FIT audio and seek controls. Seeking in a staged course stays within its current stage. When a selected course finishes or is exited, Replay prepares it again from the first stage; a course selected from a list returns to that list instead.
+
+### Preview screens
+
 ```mermaid
 stateDiagram-v2
   [*] --> Loading
-  Loading --> List: several charts
-  Loading --> Ready: one chart
-  List --> Playing: pick a chart
+  Loading --> List: several charts or courses
+  Loading --> Ready: one chart or course
+  List --> Playing: pick a chart or course
   Ready --> Playing: Play
-  Playing --> List: ends, several charts
-  Playing --> Ready: ends, one chart (Replay)
+  Playing --> Playing: next course stage
+  Playing --> List: ends, list selection
+  Playing --> Ready: ends, single selection (Replay)
 ```
 
 - **List:** a track with several charts lists them (`be-music-preview-select`), each row showing the chart's `#STAGEFILE` or, without one, its `#BANNER`; picking one plays it at once.
