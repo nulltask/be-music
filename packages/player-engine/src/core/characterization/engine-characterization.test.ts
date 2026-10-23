@@ -428,11 +428,12 @@ describe('engine characterization: play scenarios', () => {
       clamped: await observePlay({ driver: 'auto', chart: basicChart(), script: [seek(300, 99), seek(400, -5)] }),
       // Without a UI runtime the no-TUI trace records it.
       noUI: await observePlay({ driver: 'auto', chart: basicChart(), script: [seek(300, 2.2)], ui: false }),
-      // A manual play cannot seek yet: the command is dropped.
+      // A manual seek starts practice: earlier notes are consumed without scoring.
       manual: await observePlay({ driver: 'manual', chart: basicChart(), script: [...BASIC_SCRIPT, seek(300, 2.2)] }),
     };
     expect(observations.coalesced.frames.generations).toHaveLength(1);
-    expect(observations.manual.frames.generations).toBeUndefined();
+    expect(observations.manual.frames.generations).toEqual([expect.stringContaining('generation=1 seconds=2.2 ')]);
+    expect(observations.manual.replay).toBeUndefined();
     await expectSnapshot('scenarios/seek', observations);
   });
 

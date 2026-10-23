@@ -1,5 +1,26 @@
 import { css, type CSSResult } from 'lit';
 export const gameplayStyles: CSSResult = css`
+  /* Resolved on .hud against the stage, then inherited as lengths. The HUD column is its own container. */
+  @property --be-music-hud-heading-block {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 0px;
+  }
+  @property --be-music-hud-heading-inline {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 0px;
+  }
+  @property --be-music-hud-extra-block {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 0px;
+  }
+  @property --be-music-hud-extra-font {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 11px;
+  }
   :host {
     display: block;
     position: absolute;
@@ -26,6 +47,12 @@ export const gameplayStyles: CSSResult = css`
     display: grid;
     grid-template-rows: auto auto auto minmax(0, 1fr);
     gap: 6px;
+    container-type: inline-size;
+    container-name: hud;
+    --be-music-hud-heading-block: 23cqh;
+    --be-music-hud-heading-inline: 14cqw;
+    --be-music-hud-extra-block: 78cqh;
+    --be-music-hud-extra-font: clamp(11px, 2.8cqw, 14px);
     pointer-events: auto;
     font-size: clamp(10px, 1.35cqw, 14px);
     font-variant-numeric: tabular-nums;
@@ -44,8 +71,8 @@ export const gameplayStyles: CSSResult = css`
   }
   .hud-heading {
     min-width: 0;
-    min-height: 23cqh;
-    padding-right: 14cqw;
+    min-height: var(--be-music-hud-heading-block);
+    padding-right: var(--be-music-hud-heading-inline);
   }
   .gameplay[data-bga='off'] .hud-heading {
     min-height: 0;
@@ -136,6 +163,14 @@ export const gameplayStyles: CSSResult = css`
     margin: 0 0 6px;
     color: var(--be-music-color-accent, #abcaff);
   }
+  @container hud (max-width: 22rem) {
+    .hud:not([data-orientation='portrait']) .actions {
+      gap: 2px;
+    }
+    .hud:not([data-orientation='portrait']) .hud-extra {
+      grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr));
+    }
+  }
   .gameplay[data-orientation='portrait'] .hud {
     --be-music-score-size: 1.3em;
     display: block;
@@ -194,7 +229,6 @@ export const gameplayStyles: CSSResult = css`
     top: calc(100% + 8px);
     left: 0;
     width: 126%;
-    max-height: 78cqh;
     padding: 6px;
     background: #10151ff5;
     border: 1px solid #38465c;
@@ -202,7 +236,8 @@ export const gameplayStyles: CSSResult = css`
     overflow: auto;
     overscroll-behavior: contain;
     grid-template-columns: repeat(auto-fit, minmax(min(145px, 100%), 1fr));
-    font-size: clamp(11px, 2.8cqw, 14px);
+    max-height: var(--be-music-hud-extra-block);
+    font-size: var(--be-music-hud-extra-font);
   }
 
   .hud-extra > * {

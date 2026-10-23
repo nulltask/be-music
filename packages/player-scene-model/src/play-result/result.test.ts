@@ -109,3 +109,15 @@ describe('resolveResultPresentation', () => {
     expect(resolveResultPresentation('stage').quickRetry).toBe(false);
   });
 });
+
+test('a practice result keeps the practice flag and drops any replay', () => {
+  const result = playResultFromPlayState(played(), {
+    chart: chartEntry,
+    score,
+    seconds: 10,
+    practice: true,
+    replay: {} as NonNullable<import('./result.ts').PlayResult['replay']>,
+  });
+  expect(result.practice).toBe(true);
+  expect(result.replay).toBeUndefined();
+});

@@ -34,6 +34,8 @@ export {
   previewContentBottom,
   resolvePreviewBGARect,
   resolvePreviewInfoBox,
+  resolvePreviewPortrait,
+  type PreviewPortraitPlacement,
   type PreviewInfoBox,
   type PreviewLayout,
 } from './preview-layout.ts';
