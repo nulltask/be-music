@@ -176,6 +176,25 @@ export class NonstopRoute {
     resolved?: ResolvedPlayChart,
   ): Promise<void> {
     this.testHook?.recordReplay(replay);
+    if (fallback?.practice) {
+      const info = resolveCourseView(nonstop.course);
+      const retry = (): void => void this.startNonstopCourse(nonstop.course);
+      const result: PlayResult = { ...fallback, run: 'nonstop', course: info };
+      if (pickActiveFamilyForScene(this.familyKits.familyDispatchState(), 'result') === 'beatoraja') {
+        const mounted = await this.showBeatorajaResult(result, {
+          run: 'nonstop',
+          course: { info },
+          nonstopRetry: retry,
+          ...(resolved !== undefined ? { playChart: resolved.chart } : {}),
+        });
+        if (mounted) {
+          this.unlockReplayOptions();
+          return;
+        }
+      }
+      await this.showResult(result, { nonstop: { info, retry } });
+      return;
+    }
     if (replay === undefined) {
       await (fallback !== undefined ? this.showResult(fallback) : this.showSelect());
       return;

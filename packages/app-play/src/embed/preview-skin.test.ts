@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { validateBeMusicSkin } from '@be-music/player-skin-sdk';
+import { resolveGameplayLayout, validateBeMusicSkin } from '@be-music/player-skin-sdk';
 import { createPreviewSkin, resolvePreviewBGARect } from './preview-skin.ts';
 
 const chrome = {
@@ -33,5 +33,16 @@ describe('createPreviewSkin', () => {
       drawsMeasureLines: true,
     });
     expect(skin.stage?.playfield?.standard?.maxRight).toBeLessThanOrEqual(427);
+  });
+
+  it('stacks the BGA above the lanes on a tall screen', () => {
+    const stage = createPreviewSkin(chrome).portraitStage!;
+    const layout = resolveGameplayLayout(
+      { laneChannels: ['16', '11', '12', '13', '14', '15', '18', '19'], playVariant: '7' },
+      stage,
+    );
+    expect(layout.orientation).toBe('portrait');
+    expect(layout.bga!.y + layout.bga!.h).toBeLessThanOrEqual(layout.playfield.top);
+    expect(layout.playfield.top).toBeLessThan(layout.playfield.judgementY);
   });
 });

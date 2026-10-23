@@ -40,7 +40,7 @@ React・Vue はそれぞれのラッパーの peer dependency です。スキン
 | `be-music-playfield`         | `frame: BeMusicGameplayFrame`                                     |
 | `be-music-playback-controls` | `data: BeMusicPlaybackData`                                       |
 | `be-music-preview-hud`       | `frame: BeMusicDOMGameplayFrame`・`volume`・`muted`・`fullscreen` |
-| `be-music-preview-select`    | `charts: readonly LibraryChart[]`・`heading`                      |
+| `be-music-preview-select`    | `charts: readonly LibraryChart[]`・`heading`・任意の `images`     |
 | `be-music-preview-start`     | `mode: 'play' \| 'replay'`・`disabled`                            |
 
 各クラスを `BeMusic…Element` として export します。ラッパーは `BeMusicGameplayHUD`・`BeMusicJudgmentTable` のように `Element` を除いた名前です。個々の部品は自身に必要な表示データだけを受け取り、独立して配置できます。画面コンポーネントはそれらを組み合わせ、既存の DOM スキンフレームを受け取ります。
@@ -53,7 +53,7 @@ React・Vue はそれぞれのラッパーの peer dependency です。スキン
 
 ## プレビュー
 
-`be-music-playback-controls` は動画プレイヤーのコントロールバーです。再生／一時停止（`pause-request`）、離したときに `{ seconds }` 付きの `seek-request` を送るシークバー、時間、ミュートと音量（`{ volume, muted }` 付きの `volume-change`）、全画面（`fullscreen-request`）があります。`be-music-preview-hud` は譜面の情報・スコア・コンボ・ゲージ・判定を BGA の範囲の下に、コントロールをステージの下端に置き、それらの要求を伝えます。`be-music-preview-select` はトラックの譜面を一覧し、`activate-request` で 1 つを要求します。`be-music-preview-start` は大きな再生／リプレイボタン（`play-request`）です。`formatPlaybackTime`・`resolveSeekTarget`・`resolveGameplayPanels` はこれらを支える純粋関数です。埋め込みページがこれらを組み合わせています（[ブラウザープレイヤー](../../docs/player-web.ja.md#埋め込みプレビュー)）。
+`be-music-playback-controls` は動画プレイヤーのコントロールバーです。再生／一時停止（`pause-request`）、ドラッグ中と離したときに `{ seconds }` 付きの `seek-request` を送るシークバー、時間、ミュートと音量（`{ volume, muted }` 付きの `volume-change`）、全画面（`fullscreen-request`）があります。`be-music-preview-hud` は譜面の情報・スコア・コンボ・ゲージ・判定を BGA の範囲の下に、コントロールをステージの下端に置き、それらの要求を伝えます。`be-music-preview-select` はトラックの譜面を一覧し、`images` にあればその絵（`#STAGEFILE`、なければ `#BANNER`）を出し、`activate-request` で 1 つを要求します。`be-music-preview-start` は大きな再生／リプレイボタン（`play-request`）です。`formatPlaybackTime`・`resolveSeekTarget`・`resolveGameplayPanels` はこれらを支える純粋関数です。埋め込みページがこれらを組み合わせています（[ブラウザープレイヤー](../../docs/player-web.ja.md#埋め込みプレビュー)）。
 
 ## HTML・TypeScript
 
@@ -123,6 +123,8 @@ Vue は detail を直接 emit するため、`@selection-change="({ index }) => 
 ## 外観と組み立て
 
 各要素は Shadow DOM を使います。`--be-music-color-text`・`--be-music-color-muted`・`--be-music-color-background`・`--be-music-color-accent`・`--be-music-panel-background`・`--be-music-control-background`・`--be-music-focus-color`・`--be-music-timing-color`・`--be-music-font`・`--be-music-radius` が継承されるテーマ用トークンです。
+
+配置は各要素自身の表示幅に従います。各要素は `be-music` という名前の inline-size コンテナで、画面は `be-music-screen` に変えます。40rem 未満ではコレクションのカラムが縦に積み、譜面リストの高さを 18rem に抑えます。それ以上の幅では、リストが譜面詳細の隣の列いっぱいになり、リストの列は詳細より広く残します。22rem 未満では、判定表が Early / Late 列を隠し、再生コントロールが音量スライダーを隠し、プレビューの譜面行はレベルとジャンルをタイトルの下に置き、横画面の Gameplay HUD は操作と詳細カードを詰めます。16rem 未満では、コンパクトなスコアの数値が単独の行になり、プレイオプションが縦に積まれます。`compact` は呼び出し側が明示する property のままです。Gameplay とプレビューのステージは `cqw` と `cqh` で大きさを決め、縦画面の配置はステージの向きに従います。
 
 Gameplay HUD は `hud`・`heading`・`primary`・`actions`・`details`・`score-summary`・`score-value`・`score-panel`・`judgment-panel`・`judgment-table`・`gauge-meter`・`gauge-panel`・`gauge-graph`・`timing-panel`・`timing-graph`・`settings-panel` を、一時停止中は `paused` も part として公開します。各部品は `panel` と、該当する `table`・`graph`・`meter`・`value` を公開します。Gameplay と譜面詳細には `actions` slot と既定 slot があり、ほかの画面には既定 slot があります。
 

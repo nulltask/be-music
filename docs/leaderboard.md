@@ -210,6 +210,8 @@ turning a play document's positions and timeline into note times that match the 
 
 ## 6. Scoring rules
 
+A manual play that seeks is practice (`PlayResult.practice`). Its first seek discards the replay recorder. The web app skips best-record writes, Leaderboard submission and replay auto-save for that result, even if a host supplies replay data alongside it. Seeking a course stage or NONSTOP run also excludes the entire course and every later stage; course results remain available without a replay.
+
 - **Three rulesets.** Every play is re-simulated under `lr2`, `beatoraja` and `iidx`, and appears in all three
   rankings. The ruleset the player actually played (`play.judgeRuleset`) is stored and shown as a mark, and a ranking
   can be filtered to "played under this ruleset" only.
