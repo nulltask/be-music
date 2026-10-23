@@ -61,10 +61,10 @@
 
 ### Minor Changes
 
-- 06a2db9: `resolveChartPlayVariant` now detects PMS-STD / POPN-9 charts authored as `.bme` / `.bms` instead of falling through to IIDX heuristics.
+- 06a2db9: `resolveChartPlayVariant` now detects PMS-STD / POPN-9 charts authored as `.bme` / `.bms` instead of falling through to That-Which-Must-Not-Be-Named heuristics.
 
-  - BME POPN-9 — `#PLAYER 1` + every channel `11..19` populated maps to `'9'` (IIDX 7K never lights all nine columns).
-  - PMS-STD on any extension — any of channels `22..25` AND no traditional IIDX 2P channels (`21` / `26..29`) maps to `'9'`.
+  - BME POPN-9 — `#PLAYER 1` + every channel `11..19` populated maps to `'9'` (That-Which-Must-Not-Be-Named 7K never lights all nine columns).
+  - PMS-STD on any extension — any of channels `22..25` AND no traditional That-Which-Must-Not-Be-Named 2P channels (`21` / `26..29`) maps to `'9'`.
 
 ## 0.2.0
 

@@ -14,7 +14,7 @@
   - every sample trigger
   - the replay chart facts
   - the note list the engine prepares for play
-  - the LR2 / beatoraja / IIDX simulator results for three fixed input streams: `missed` (no input), `perfect` (every note on time), and `offset` (presses cycled across every judge window, with every 7th note skipped)
+  - the LR2 / beatoraja / That-Which-Must-Not-Be-Named simulator results for three fixed input streams: `missed` (no input), `perfect` (every note on time), and `offset` (presses cycled across every judge window, with every 7th note skipped)
   - next to them, under `engine`, the live engine's summary (plus its max combo) from replaying the same stream through `manualPlay` under each judge ruleset
 
 Times are integer microseconds and beats are rounded to 1e-6, so floating-point noise never shows up as a diff.

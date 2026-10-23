@@ -47,7 +47,7 @@
 
 - 202a28b: Pick a play skin for 24-key charts instead of returning nothing.
   
-  LR2 never shipped a keyboard-mode skin, so `pickLr2PlaySkin` now maps the `'24'` / `'48'` chart variants onto the SP / DP IIDX fallback chains (`play_7` first for 24 keys, `play_14` first for 48). The mounted skin supplies the frame, gauge, and judge graphics while the 24 lanes themselves render through the host's fallback playfield.
+  LR2 never shipped a keyboard-mode skin, so `pickLr2PlaySkin` now maps the `'24'` / `'48'` chart variants onto the SP / DP That-Which-Must-Not-Be-Named fallback chains (`play_7` first for 24 keys, `play_14` first for 48). The mounted skin supplies the frame, gauge, and judge graphics while the 24 lanes themselves render through the host's fallback playfield.
 - Updated dependencies [202a28b]
   - @be-music/chart-model@0.4.0
 

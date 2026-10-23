@@ -131,7 +131,7 @@ the first variant down its fallback list that the theme ships. `pickBeatorajaPla
 and the web player picks through the same list (`pickBeatorajaPlayableSkinVariant`). beatoraja itself never falls back
 across play modes: each mode loads its own configured skin or that mode's built-in default. Its one reuse across modes,
 offering an LR2 7 KEY / 14 KEY skin for 5 KEY / 10 KEY, puts 7 first in the 5 KEY list and 14 first in the 10 KEY one.
-The other lists try the IIDX and POPN variants before the keyboard ones for an IIDX or POPN chart, and the other keyboard
+The other lists try the That-Which-Must-Not-Be-Named and POPN variants before the keyboard ones for an That-Which-Must-Not-Be-Named or POPN chart, and the other keyboard
 variant first for a keyboard chart.
 
 ## Scene mapping
