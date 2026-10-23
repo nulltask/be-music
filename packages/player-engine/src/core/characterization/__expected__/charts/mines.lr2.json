@@ -10,7 +10,7 @@
       "great": 0,
       "good": 0,
       "bad": 0,
-      "poor": 0,
+      "poor": 3,
       "emptyPoor": 0,
       "exScore": 4,
       "score": 200000,
@@ -26,7 +26,8 @@
         "type": "GROOVE",
         "survival": false,
         "failedMidPlay": false
-      }
+      },
+      "minePoor": 3
     },
     "replay": {
       "format": "be-music-replay",
@@ -65,7 +66,7 @@
       "results": {
         "native": {
           "ruleset": "be-music/native",
-          "judge": {"pgreat":2,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+          "judge": {"pgreat":2,"great":0,"good":0,"bad":0,"poor":3,"emptyPoor":0},
           "fast": 0,
           "slow": 0,
           "exScore": 4,
@@ -73,6 +74,7 @@
           "maxCombo": 2,
           "djLevel": "AAA",
           "gauge": {"type":"GROOVE","final":90,"cleared":true},
+          "minePoor": 3,
           "score": 200000
         }
       }
@@ -80,7 +82,7 @@
     "simulated": {
       "lr2": {
         "ruleset": "lr2/0",
-        "judge": {"pgreat":2,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+        "judge": {"pgreat":2,"great":0,"good":0,"bad":0,"poor":3,"emptyPoor":0},
         "fast": 0,
         "slow": 0,
         "exScore": 4,
@@ -88,6 +90,7 @@
         "maxCombo": 2,
         "djLevel": "AAA",
         "gauge": {"type":"GROOVE","final":90,"cleared":true},
+        "minePoor": 3,
         "score": 200000
       },
       "beatoraja": {
@@ -117,11 +120,11 @@
       "0.000 start",
       "0.000 trigger 01:01@0+0/1",
       "490.000 trigger 11:02@0+1/4",
-      "990.000 trigger D1:00@0+2/4",
+      "1006.667 trigger D1:00@0+2/4",
       "1500.000 trigger D1:00@0+3/4",
       "1500.000 trigger 11:02@0+1/4",
       "2000.000 trigger 12:02@1+0/1",
-      "2483.333 trigger D6:00@1+1/4",
+      "2516.667 trigger D6:00@1+1/4",
       "3716.667 finish",
       "3716.667 dispose"
     ],
@@ -152,11 +155,11 @@
       "count": 233,
       "judged": [
         "490.000 seconds=0.49 note 11@0.5",
-        "990.000 seconds=0.99 mine 11@1",
-        "1283.333 seconds=1.283333 mine 12@1.25",
+        "1006.667 seconds=1.006667 mine 11@1",
+        "1266.667 seconds=1.266667 mine 12@1.25",
         "1500.000 seconds=1.5 mine 11@1.5",
         "2000.000 seconds=2 note 12@2",
-        "2483.333 seconds=2.483333 mine 16@2.5"
+        "2516.667 seconds=2.516667 mine 16@2.5"
       ],
       "last": "3716.667 seconds=3.7 beat=7.4"
     },
@@ -185,7 +188,7 @@
       "GREAT  : 0",
       "GOOD   : 0",
       "BAD    : 0",
-      "POOR   : 0",
+      "POOR   : 3",
       "EMPTY  : 0",
       "FAST   : 0",
       "SLOW   : 0",
@@ -204,7 +207,7 @@
       "great": 0,
       "good": 0,
       "bad": 0,
-      "poor": 0,
+      "poor": 3,
       "emptyPoor": 0,
       "exScore": 4,
       "score": 200000,
@@ -220,7 +223,8 @@
         "type": "GROOVE",
         "survival": false,
         "failedMidPlay": false
-      }
+      },
+      "minePoor": 3
     },
     "replay": {
       "format": "be-music-replay",
@@ -236,11 +240,11 @@
       "0.000 start",
       "0.000 trigger 01:01@0+0/1",
       "500.000 trigger 11:02@0+1/4",
-      "983.333 trigger D1:00@0+2/4",
+      "1016.667 trigger D1:00@0+2/4",
       "1500.000 trigger D1:00@0+3/4",
       "1500.000 trigger 11:02@0+1/4",
       "2000.000 trigger 12:02@1+0/1",
-      "2483.333 trigger D6:00@1+1/4",
+      "2516.667 trigger D6:00@1+1/4",
       "3716.667 finish",
       "3716.667 dispose"
     ],
@@ -271,11 +275,11 @@
       "count": 225,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
-        "983.333 seconds=0.983333 mine 11@1",
-        "1283.333 seconds=1.283333 mine 12@1.25",
+        "1016.667 seconds=1.016667 mine 11@1",
+        "1266.667 seconds=1.266667 mine 12@1.25",
         "1500.000 seconds=1.5 mine 11@1.5",
         "2000.000 seconds=2 note 12@2",
-        "2483.333 seconds=2.483333 mine 16@2.5"
+        "2516.667 seconds=2.516667 mine 16@2.5"
       ],
       "last": "3716.667 seconds=3.7 beat=7.4"
     },

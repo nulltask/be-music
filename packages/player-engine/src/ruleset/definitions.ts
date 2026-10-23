@@ -72,12 +72,14 @@ export type LongNoteStyle =
 /**
  * When a mine detonates.
  *
- * - `'press-or-hold'` — LR2 (its changelog, 080114): the lane's key is held as the mine crosses the judge line, or
+ * - `'press-ahead-or-hold'` — LR2beta3: strict GREAT reach ahead of the line on key-down, or held crossing;
+ *   passed mines retire immediately and hits count as POOR without changing combo or EX-SCORE.
+ * - `'press-or-hold'` — the historical provisional IIDX model: the lane's key is held as the mine crosses the judge line, or
  *   pressed while the mine is inside the PGREAT window.
  * - `'hold'` — beatoraja (`JudgeManager` L244): the key is down at the moment the mine crosses the line; a press
  *   shortly before or after does nothing.
  */
-export type MineTrigger = 'press-or-hold' | 'hold';
+export type MineTrigger = 'press-ahead-or-hold' | 'press-or-hold' | 'hold';
 
 /**
  * How an LN (long-note mode 1) let go before its tail is judged. The LN's single judgment is otherwise the head's,
@@ -813,7 +815,7 @@ export function resolveRuleset(
       longNoteReleaseMarginUs: { note: 0, scratch: 0 },
       headBadSkipsTail: false,
       comboBreaksOnEmptyPoor: false,
-      mineTrigger: 'press-or-hold',
+      mineTrigger: 'press-ahead-or-hold',
       hcnTick: { heldJudge: 1, heldRate: 0.5, releasedJudge: 3, releasedRate: 0.5 },
       gauge: courseGauge(effectiveTotal) ?? resolveLR2Gauge(gaugeId, effectiveTotal, baseNotes),
       noteCount,

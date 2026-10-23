@@ -79,7 +79,10 @@ export interface RecordPlayResult {
   lamp?: ClearLamp;
   cleared: boolean;
   maxCombo: number;
-  score: Pick<ScoreSummary, 'total' | 'perfect' | 'great' | 'good' | 'bad' | 'poor' | 'emptyPoor' | 'exScore'>;
+  score: Pick<
+    ScoreSummary,
+    'total' | 'perfect' | 'great' | 'good' | 'bad' | 'poor' | 'emptyPoor' | 'minePoor' | 'exScore'
+  >;
   /** The POOR judgments alone, when `score.poor` also counts the empty POORs (a result under LR2 shows them so). */
   judgedPoor?: number;
 }
@@ -106,7 +109,7 @@ export function recordPlayFromResult(result: RecordPlayResult): RecordPlay {
 /** A play's final engine summary, as the facts a record reads from it. */
 export type RecordPlaySummary = Pick<
   PlayerSummary,
-  'total' | 'perfect' | 'great' | 'good' | 'bad' | 'poor' | 'emptyPoor' | 'exScore' | 'gauge' | 'fullCombo'
+  'total' | 'perfect' | 'great' | 'good' | 'bad' | 'poor' | 'emptyPoor' | 'minePoor' | 'exScore' | 'gauge' | 'fullCombo'
 >;
 
 /**
@@ -128,8 +131,10 @@ export function recordPlayFromSummary(summary: RecordPlaySummary, maxCombo: numb
 }
 
 /** The notes of a play its judgments do not cover: those a stage that failed mid-way never judged. */
-function unjudgedNotes(score: Pick<ScoreSummary, 'total' | 'perfect' | 'great' | 'good' | 'bad' | 'poor'>): number {
-  return score.total - (score.perfect + score.great + score.good + score.bad + score.poor);
+function unjudgedNotes(
+  score: Pick<ScoreSummary, 'total' | 'perfect' | 'great' | 'good' | 'bad' | 'poor' | 'minePoor'>,
+): number {
+  return score.total - (score.perfect + score.great + score.good + score.bad + score.poor) + (score.minePoor ?? 0);
 }
 
 /**

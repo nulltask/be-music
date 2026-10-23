@@ -18,7 +18,7 @@ export interface CourseStageFigures {
 /** A stage result of `simulateCourseReplay` (`ReplayCourseResult.stages`) as it is stored. */
 export function toCourseStageFigures(result: ReplayRulesetResult): CourseStageFigures {
   const { judge } = result;
-  const judged = judge.pgreat + judge.great + judge.good + judge.bad + judge.poor;
+  const judged = judge.pgreat + judge.great + judge.good + judge.bad + judge.poor - (result.minePoor ?? 0);
   return {
     exScore: result.exScore,
     noteCount: result.noteCount,

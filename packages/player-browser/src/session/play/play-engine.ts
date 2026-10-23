@@ -653,6 +653,8 @@ function applyEngineSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSumm
   ctx.score.good = summary.good;
   ctx.score.bad = summary.bad;
   ctx.score.emptyPoor = summary.emptyPoor;
+  if (summary.minePoor !== undefined) ctx.score.minePoor = summary.minePoor;
+  else delete ctx.score.minePoor;
   // `this.score` is the DISPLAY copy: under LR2 the POOR counter folds empty POORs in, matching the real thing
   // (OpenLR2 `ApplyJudgeNote` increments `playerstat.poor` for the empty-POOR branch, and LR2 exposes no
   // separate stat). Every LR2 read-out — the POOR row, BP, the per-judge rates, the skin's num 84 / 89 / 114 —
