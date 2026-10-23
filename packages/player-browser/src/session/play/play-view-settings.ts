@@ -140,10 +140,11 @@ export function startReplayView(ctx: PlayViewSettingsContext): ReplayViewState {
  * change per 100 ms, so a held key records a few); while replaying, shows the recorded view at the playhead as far as
  * {@link PlaySessionOptions.replayView} asks.
  */
-export function updateReplayView(ctx: PlayViewSettingsContext, seconds: number): void {
+export function updateReplayView(ctx: PlayViewSettingsContext, seconds: number, seek = false): void {
   if (resolveReplayScale(ctx) === undefined) return;
   if (ctx.replayViewCursor !== undefined) {
-    const recorded = ctx.replayViewCursor.next(Math.round(seconds * 1_000_000));
+    const timeUs = Math.round(seconds * 1_000_000);
+    const recorded = seek ? ctx.replayViewCursor.seek(timeUs) : ctx.replayViewCursor.next(timeUs);
     if (recorded !== undefined) applyReplayView(ctx, recorded);
     return;
   }
