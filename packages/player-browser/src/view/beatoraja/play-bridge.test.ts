@@ -16,6 +16,7 @@ import {
 } from '@be-music/player-scene-model';
 import { describe, expect, it } from 'vite-plus/test';
 import {
+  BEATORAJA_NUM,
   BEATORAJA_OP,
   bombTimerId,
   comboTimerId,
@@ -1567,4 +1568,60 @@ it('passes PMS raw gauge bounds to the skin and percentage to its number', () =>
   harness.frame({ summary: { gauge: { current: 30, max: 120, clearThreshold: 85, type: 'NORMAL' } } });
   expect(harness.bridge.resolveGaugeState()).toMatchObject({ value: 30, max: 120, border: 85 });
   expect(harness.bridge.resolveGaugePercent()).toBe(25);
+});
+
+it('switches skin gauge frame conditions when the reported gauge changes', () => {
+  const harness = createHarness();
+  for (const [type, expected] of [
+    ['NORMAL', [42]],
+    ['HARD', [43]],
+    ['EX-HARD', [43, 1046]],
+    ['EASY', [42, 1046]],
+  ] as const) {
+    harness.frame({ summary: { gauge: { type, current: 50, max: 100 } } });
+    expect([42, 43, 1046].filter((op) => harness.bridge.hasOp(op))).toEqual(expected);
+  }
+});
+
+it('forwards the engine empty-POOR count to beatoraja play numbers', () => {
+  const harness = createHarness();
+  harness.frame({ summary: { bad: 2, poor: 3, emptyPoor: 7 } });
+  expect([BEATORAJA_NUM.POOR, 420, 426, 427].map((id) => harness.bridge.resolveNumberValue(id))).toEqual([
+    3, 7, 10, 12,
+  ]);
+});
+
+describe('BeatorajaPlayBridge — GAUGE_MAX intervals', () => {
+  it.each([100, 200])('stops and restarts the effect while preserving its age at max %s', (max) => {
+    const harness = createHarness();
+    const frame = (current: number) =>
+      harness.frame({
+        summary: {
+          gauge: {
+            type: 'NORMAL',
+            current,
+            max,
+            clearThreshold: 80,
+            effectiveTotal: 160,
+          },
+        },
+      });
+    harness.advance(100);
+    frame(max - 1);
+    expect(harness.bridge.getTimerStart(44)).toBeUndefined();
+    harness.advance(100);
+    frame(max);
+    expect(harness.bridge.getTimerStart(44)).toBe(200);
+    harness.advance(100);
+    frame(max);
+    expect(harness.bridge.getTimerStart(44)).toBe(200);
+    harness.advance(100);
+    frame(max - 1);
+    expect(harness.bridge.getTimerStart(44)).toBeUndefined();
+    harness.advance(100);
+    frame(max);
+    expect(harness.bridge.getTimerStart(44)).toBe(500);
+    const fresh = createHarness();
+    expect(fresh.bridge.getTimerStart(44)).toBeUndefined();
+  });
 });

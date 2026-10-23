@@ -245,7 +245,7 @@ describe('CourseRoute: the stages and the course result', () => {
     const [data, mode] = h.deps.showResult.mock.calls[0]!;
     expect(data).toMatchObject({ run: 'course', chart: { title: 'Dan' }, cleared: true });
     expect(mode.course).toMatchObject({ title: 'Dan' });
-    expect(mode.courseLog.log).toBe(courseLog);
+    expect(mode.courseLog!.log).toBe(courseLog);
     expect(h.deps.showBeatorajaResult).not.toHaveBeenCalled();
   });
 
@@ -257,7 +257,7 @@ describe('CourseRoute: the stages and the course result', () => {
     await h.route.showCourseResult();
     const [data, mode] = h.deps.showResult.mock.calls[0]!;
     expect(data).toMatchObject({ run: 'course', cleared: false, lamp: 'FAILED' });
-    expect(mode.courseLog.native.stagesPlayed).toBe(1);
+    expect(mode.courseLog!.native.stagesPlayed).toBe(1);
     expect(h.courses.active).toBeUndefined();
   });
 
@@ -293,4 +293,24 @@ describe('CourseRoute: the stages and the course result', () => {
     expect(h.deps.unlockReplayOptions).not.toHaveBeenCalled();
     expect(h.deps.showResult.mock.calls[0]![0]).toMatchObject({ run: 'course', cleared: false });
   });
+});
+
+test('a practice course shows its summed result without recording, ranking or auto-saving', async () => {
+  const h = harness();
+  await startFirstStage(h);
+  const active = h.courses.active!;
+  active.run.recordStage(stageLog(70));
+  active.run.recordStage(undefined, {
+    gaugeHistory: [],
+    scoreHistory: [],
+    playSeconds: 10,
+    practice: true,
+    stageOutcome: stageLog(60).results!.native!,
+  });
+  await h.route.showCourseResult();
+  expect(h.deps.showResult.mock.calls[0]?.[0]).toMatchObject({ practice: true, run: 'course', cleared: true });
+  expect(h.deps.showResult.mock.calls[0]?.[1].courseLog).toBeUndefined();
+  expect(h.deps.records.recordCourseResult).not.toHaveBeenCalled();
+  expect(h.deps.replayAutoSave.saveCourse).not.toHaveBeenCalled();
+  expect(h.deps.leaderboard.maybeSubmitCourse).not.toHaveBeenCalled();
 });
