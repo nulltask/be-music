@@ -1,3 +1,4 @@
+import { resolveBeatorajaGaugeTypeOps } from './play-ops.ts';
 import type { ClearLamp } from '@be-music/player-engine/ruleset';
 import type {
   CourseView,
@@ -221,6 +222,7 @@ export function resolveBeatorajaResultOps(input: BeatorajaResultInput): number[]
   const { score } = result;
   const maxExScore = score.total * 2;
   const ops = [
+    ...resolveBeatorajaGaugeTypeOps(resultGauge(input)?.type ?? result.gaugeType),
     computeRankOp(score.exScore, maxExScore, 1),
     ...beatorajaGenericRankOps(score),
     computeResultRankOp(score.exScore, maxExScore),

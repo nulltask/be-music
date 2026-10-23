@@ -824,7 +824,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 ### ゲージ種別の op 42/43/1046（バグ）
 
 - **beatoraja:** 42 = ゲージが NORMAL 以下、43 = HARD 以上、1046 = EX 系のゲージ（[skin/property/BooleanPropertyFactory.java#L394-L416](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/property/BooleanPropertyFactory.java#L394-L416)）。
-- **be-music の現状:** 42 が常に点灯し、43 と 1046 は点灯しません（[`packages/skin-beatoraja/src/scene/play-ops.ts`](../packages/skin-beatoraja/src/scene/play-ops.ts)）。
+- **be-music の現状:** fixed in [#600](https://github.com/nulltask/be-music/issues/600)。プレイ中と結果画面は `resolveBeatorajaGaugeTypeOps` を共有し、ゲージ要素と同じ実行時の種別対応を使います。42 は種別 0–2、43 は 3–8、1046 は ASSIST-EASY と EASY を含む 0 / 1 / 4 / 5 / 7 / 8 で有効になります。ゲージ値やキーモードでは変わりません。
 - **影響:** A/C。HARD のプレイで GROOVE の枠が出ます。
 - **推奨:** プレイとリザルトの両方で、ゲージ種別から op を導く。
 
