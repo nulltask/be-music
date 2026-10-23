@@ -1,7 +1,7 @@
 /**
  * Chart preparation for a play (`PlaySession`), whichever family draws it: resolves the chart's `#RANDOM` / `#SWITCH`
  * control flow, prepares the notes the engine judges and the view draws (one shared `PreparedPlaybackChartData`),
- * applies the lane options (DP FLIP, RANDOM / MIRROR / S-RANDOM / SCATTER) or a replay's recorded arrangement, and
+ * applies the lane options (DP FLIP, RANDOM / MIRROR / S-RANDOM) or a replay's recorded arrangement, and
  * resets the play's state for the new chart.
  *
  * `prepareChart` reads and writes the play's state through {@link PlayChartContext}; the play session passes itself.
@@ -154,6 +154,9 @@ export interface PlayChartContext {
 }
 
 export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): void {
+  if (ctx.options.replay === undefined && (ctx.options.random1P === 'SCATTER' || ctx.options.random2P === 'SCATTER')) {
+    throw new RangeError('SCATTER is disabled until placement and assist policy are implemented.');
+  }
   // Resolve `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow once, first, so every play-time consumer below and the
   // engine see the same chosen branches. The draws are fresh each play (LR2 re-rolls each play); a replay resolves
   // with the draws its log recorded, so it plays the recorded branches.
@@ -248,7 +251,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
         invisible.channel = flipDPChannel(invisible.channel);
       }
     }
-    // RANDOM / MIRROR / S-RANDOM / SCATTER — shuffle the 1P / 2P keyboard lanes independently. Scratch (channels 16 /
+    // RANDOM / MIRROR / S-RANDOM — shuffle the 1P / 2P keyboard lanes independently. Scratch (channels 16 /
     // 26) and the 24 / 48 KEY wheel never move (`resolveLaneOptionChannels`). Per LR2 convention, the shuffle is drawn at chart-prepare time so a single play session has a
     // stable arrangement (F5-restart re-rolls it). Mine channels are included in the same shuffle pass so a mine on
     // lane 4 lands wherever the shuffle moved lane 4 — keeping the mine's visual relationship to the surrounding chord
@@ -509,13 +512,13 @@ export function flipDPChannel(channel: string): string {
 /**
  * Shuffles `notes` in place per the chosen arrangement mode. Only `allLanes` — one side's keyboard lanes, from
  * `resolveLaneOptionChannels` — are touched; scratches, the keyboard modes' wheel, and the other side pass through
- * untouched. MIRROR / RANDOM use the complete mode domain, even on sparse charts. The note-wise modes currently
- * keep their own occupied-lane domains.
+ * untouched. Every supported mode uses the complete mode domain, even on sparse charts.
  *
  * - `MIRROR` — deterministic reversal of the full mode key set
  * - `RANDOM` — chart-wide permutation of the full mode key set (Fisher-Yates with the supplied RNG)
  * - `S-RANDOM` — ruleset-specific pure randomizer with active-LN reservations and beatoraja jack avoidance
- * - `SCATTER` — legacy chart-wide permutation of occupied lanes
+ * - `SCATTER` — disabled; new requests fail before any arrangement or recording
+
  */
 export function applyRandomMode(
   notes: Array<{ channel: string }>,
@@ -527,6 +530,8 @@ export function applyRandomMode(
   // S-RANDOM applies the active ruleset's policy for each event kind.
   ...secondary: Array<Array<{ channel: string }>>
 ): void {
+  if (mode === 'SCATTER')
+    throw new RangeError('SCATTER is disabled until placement and assist policy are implemented.');
   if (mode === 'OFF') return;
   if (mode === 'S-RANDOM') {
     const entries = [
@@ -561,10 +566,7 @@ export function applyRandomMode(
     });
     return;
   }
-  const domainLanes =
-    mode === 'MIRROR' || mode === 'RANDOM'
-      ? allLanes
-      : allLanes.filter((lane) => notes.some((note) => note.channel === lane));
+  const domainLanes = allLanes;
   if (domainLanes.length < 2) return;
 
   const remapAll = (map: Map<string, string>): void => {
@@ -589,8 +591,9 @@ export function applyRandomMode(
     return;
   }
 
-  if (mode === 'RANDOM' || mode === 'SCATTER') {
+  if (mode === 'RANDOM') {
     const perm = shuffleArray([...domainLanes], rng);
+
     const map = new Map<string, string>();
     for (let index = 0; index < domainLanes.length; index += 1) {
       map.set(domainLanes[index]!, perm[index]!);

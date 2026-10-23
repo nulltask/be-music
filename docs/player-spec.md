@@ -344,6 +344,10 @@ player's lane layout and lane options, the CLI's lane colours, and the skin SDK'
 | `24`    | `24 KEY SP`          | `1P` / `1Q` (wheel), `11`-`19`, `1A`-`1O`                                    | `keyboard-24k`        |
 | `48`    | `48 KEY DP`          | as `24`, then `21`-`29`, `2A`-`2O`, `2P` / `2Q` (wheel)                      | `keyboard-24k-double` |
 
+### Available lane options
+
+New plays offer OFF, MIRROR, RANDOM and S-RANDOM. SCATTER is disabled until its previous-row/LN placement constraints and assist/record policy are implemented together. A direct new SCATTER request fails before chart preparation or replay recording; it never silently draws RANDOM. Legacy replay files may still contain the SCATTER name and their resolved channels continue to replay unchanged.
+
 ### S-RANDOM arrangement
 
 `randomizeSRandomNotes` (`@be-music/player-engine/lanes`) is a runtime-neutral pure helper: it takes resolved event times in milliseconds, a complete mode/side key domain, the selected judge ruleset and an injected random source, and returns channels in input order without mutating notes. The browser applies the channels to the same note objects the engine judges, preserving long-note endpoints. Scratch/wheel and other-side events stay fixed.

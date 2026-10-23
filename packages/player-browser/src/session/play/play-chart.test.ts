@@ -1,12 +1,22 @@
+import type { LibraryChart } from '@be-music/player-scene-model';
+
 import { resolveChart, type ChartPlayVariant } from '@be-music/chart-model';
 import { parseChart } from '@be-music/chart-parser';
 import { preparePlaybackChart } from '@be-music/player-engine';
 import { createReplayRecorder } from '@be-music/player-engine/replay';
 import { createEmptyScore } from '@be-music/player-engine/ruleset';
 import { applyReplayArrangement } from '../../chart/replay-arrangement.ts';
+
 import { describe, expect, test } from 'vite-plus/test';
 import { resolveLaneOptionChannels } from '@be-music/player-engine/lanes';
-import { applyRandomMode, extractChartExtension, flipDPChannel, shuffleArray } from './play-chart.ts';
+import {
+  applyRandomMode,
+  extractChartExtension,
+  flipDPChannel,
+  shuffleArray,
+  prepareChart,
+  type PlayChartContext,
+} from './play-chart.ts';
 
 /** A seeded random (mulberry32), so every draw is the same on every run. */
 function seededRandom(seed: number): () => number {
@@ -92,12 +102,18 @@ describe('applyRandomMode', () => {
     expect(expected).not.toEqual(KEYS_7);
   });
 
-  test('SCATTER draws the same chart-wide permutation as RANDOM', () => {
-    const random = notesOn(KEYS_7);
-    const scatter = notesOn(KEYS_7);
-    applyRandomMode(random, KEYS_1P, 'RANDOM', seededRandom(42));
-    applyRandomMode(scatter, KEYS_1P, 'SCATTER', seededRandom(42));
-    expect(channelsOf(scatter)).toEqual(channelsOf(random));
+  test('SCATTER is disabled before it can mutate notes or draw RANDOM', () => {
+    const notes = [{ channel: '11', beat: 0, endBeat: 2 }, ...notesOn(KEYS_7.slice(1), 1)];
+    const original = structuredClone(notes);
+    let draws = 0;
+    expect(() =>
+      applyRandomMode(notes, KEYS_1P, 'SCATTER', () => {
+        draws += 1;
+        return 0.5;
+      }),
+    ).toThrow(/SCATTER.*disabled/);
+    expect(notes).toEqual(original);
+    expect(draws).toBe(0);
   });
 
   test('S-RANDOM selects the active judge ruleset instead of the drawing family', () => {
@@ -187,6 +203,14 @@ describe('shuffleArray', () => {
     expect(shuffleArray(array, seededRandom(1))).toBe(array);
   });
 });
+
+test.each(['random1P', 'random2P'] as const)(
+  'fresh %s SCATTER is rejected before resolving or mutating a chart',
+  (side) => {
+    const context = { options: { [side]: 'SCATTER', dpFlip: true } } as unknown as PlayChartContext;
+    expect(() => prepareChart(context, {} as LibraryChart)).toThrow(/SCATTER.*disabled/);
+  },
+);
 
 test.each([
   ['5', '1P', '11', '15'],

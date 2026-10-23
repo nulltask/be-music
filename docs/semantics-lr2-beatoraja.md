@@ -76,8 +76,9 @@ Top risks, most serious first:
 
 9. **Lane options match neither engine.**
    - S-RANDOM LN reservations and per-ruleset constraints are fixed in [#592](https://github.com/nulltask/be-music/issues/592).
-   - SCATTER is plain RANDOM but is logged as `SCATTER`.
+   - New SCATTER selection/generation is disabled in [#593](https://github.com/nulltask/be-music/issues/593) until its placement and assist/record policy are complete.
    - MIRROR/RANDOM full-mode domains are fixed in [#594](https://github.com/nulltask/be-music/issues/594).
+
    - Option index meanings differ between the skin families: LR2 3 = S-RANDOM, beatoraja 3 = R-RANDOM.
 
    (B, A)
@@ -541,7 +542,7 @@ Already per ruleset: LR2 death border and guts, the LR2 DEATH table (**fixed in 
 - **LR2:** OFF, MIRROR, RANDOM, S-RANDOM, SCATTER, CONVERGE (0-5), plus `randFix` and `randSC` (`LR2files/Config/optionstr.csv`; [#L7093-L7100](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L7093-L7100)).
 - **beatoraja:** IDENTITY, MIRROR, RANDOM, ROTATE (R-RANDOM), S_RANDOM, SPIRAL, H_RANDOM, ALL_SCR, RANDOM_EX, S_RANDOM_EX. PMS adds more ([pattern/Random.java#L5-L56](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/pattern/Random.java#L5-L56)).
 - **Kind:** semantic. The same index means different things: LR2 3 = S-RANDOM, beatoraja 3 = R-RANDOM.
-- **be-music today:** `RANDOM_CYCLE` = OFF, MIRROR, RANDOM, S-RANDOM, SCATTER ([`packages/player-scene-model/src/play-options/choices.ts`](../packages/player-scene-model/src/play-options/choices.ts)). CONVERGE and the beatoraja set are missing. Logs store names.
+- **be-music today:** `RANDOM_CYCLE` = OFF, MIRROR, RANDOM, S-RANDOM (SCATTER disabled in [#593](https://github.com/nulltask/be-music/issues/593)) ([`packages/player-scene-model/src/play-options/choices.ts`](../packages/player-scene-model/src/play-options/choices.ts)). CONVERGE and the beatoraja set are missing. Logs store names.
 - **Impact:** A (a beatoraja skin's option image index); C.
 - **Recommendation:** keep options by name and map them to indices per skin family. Add CONVERGE, and add the beatoraja options as the set LR2 lacks.
 
@@ -558,13 +559,14 @@ Already per ruleset: LR2 death border and guts, the LR2 DEATH table (**fixed in 
 - **Kind:** semantic.
 - **be-music today** ([`packages/player-browser/src/session/play/play-chart.ts`](../packages/player-browser/src/session/play/play-chart.ts) `applyRandomMode`):
   - S-RANDOM is fixed in [#592](https://github.com/nulltask/be-music/issues/592). The pure engine helper reserves active LN destinations through the tail row. LR2 has no jack threshold; beatoraja uses the strict 40-integer-ms preference and oldest-free-lane fallback. The browser selects the judge ruleset, independently of skin family; provisional IIDX uses the LR2 rule. Both use full mode domains and keep recorded resolved channels unchanged.
-  - SCATTER is aliased to RANDOM but logged as `'SCATTER'`.
+  - SCATTER is fixed by disabling new selection, arrangement and recording requests in [#593](https://github.com/nulltask/be-music/issues/593). A fresh request fails before chart mutation or replay creation. Existing replay files still parse and apply their stored resolved channels, including LN tails. Real SCATTER placement and assist/record handling remain pending the policy decision; no partial RANDOM alias is exposed.
   - MIRROR and RANDOM now use the full mode key set, fixed in [#594](https://github.com/nulltask/be-music/issues/594): a sparse 7K lane 2 mirrors to lane 6. Domains come from the play-mode table for 5/7/9/10/14/24/48 keys, including both PMS encodings; PMS-STD right-bank columns belong to 1P. Scratch/wheels and the other side stay fixed. Both engines permute the full key-lane set ([#L27099-L27236](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27099-L27236), [pattern/PatternModifier.java#L132-L137](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/pattern/PatternModifier.java#L132-L137)).
 - **Impact:** B. Patterns sold under LR2 names match neither engine.
 - **Recommendation:**
   - S-RANDOM now lives in `@be-music/player-engine/lanes` as a pure helper with injected randomness, with mode/side, LN, boundary, fallback and deterministic-output tests ([#592](https://github.com/nulltask/be-music/issues/592)).
   - Keep the selected ruleset's S-RANDOM constraints; SCATTER remains tracked separately in #593.
-  - Hide SCATTER until it is real.
+  - SCATTER is hidden until placement and assist/record handling are complete ([#593](https://github.com/nulltask/be-music/issues/593)).
+
   - Logs store resolved channels, so there is no re-simulation risk.
 
 ### DP FLIP, BATTLE, option packing
