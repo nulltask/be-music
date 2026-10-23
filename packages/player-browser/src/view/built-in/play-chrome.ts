@@ -298,6 +298,7 @@ export interface BuiltInChromeContext extends PlayChromeContext, BeMusicLayoutCo
 export function renderBuiltInChrome(
   ctx: BuiltInChromeContext,
   skinlessChromeRenderer: SkinlessGameplayChromeRenderer | undefined,
+  runtime: SkinlessGameplayChromeRuntime = resolveSkinlessGameplayChromeRuntime(ctx),
 ): void {
   ctx.skinLayerPool.begin();
   ctx.overlayLayerPool.begin();
@@ -313,7 +314,7 @@ export function renderBuiltInChrome(
       overlayLayer: ctx.overlayLayer,
       layerPool: ctx.skinLayerPool,
       overlayLayerPool: ctx.overlayLayerPool,
-      runtime: resolveSkinlessGameplayChromeRuntime(ctx),
+      runtime,
     };
     if (skinlessChromeRenderer) {
       skinlessChromeRenderer(context);

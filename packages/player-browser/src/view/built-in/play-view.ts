@@ -42,6 +42,7 @@ import {
   resolveSkinlessGameplayChromeRuntime,
   type BGATargetsContext,
   type BuiltInChromeContext,
+  type SkinlessGameplayChromeRuntime,
 } from './play-chrome.ts';
 
 const log = logger('gameplay');
@@ -86,6 +87,8 @@ export class BuiltInPlayView
   private readonly touchLanes: TouchLaneInput = new TouchLaneInput(playfieldTouchLanes(this));
   private domSettings: ReturnType<typeof resolveBeMusicSkinSettings>;
   private kit: BuiltInKit;
+  /** Shared only within one draw; published snapshots from earlier frames stay untouched. */
+  private chromeRuntime: SkinlessGameplayChromeRuntime | undefined;
   private dom: SkinDOMMount<BeMusicDOMGameplayFrame, BeMusicDOMGameplayActions, BeMusicDOMGameplayScreen> | undefined;
 
   public constructor(kit: BuiltInKit, play: PlayfieldRuntime, options: BuiltInPlayViewOptions = {}) {
@@ -95,7 +98,7 @@ export class BuiltInPlayView
     this.options = { ...options, ...(kit.effects !== undefined ? { beMusicEffects: kit.effects } : {}) };
     this.playfieldSkin = createBuiltInPlayfieldSkin(this);
     // A be-music skin draws notes from data: no text of its own after the bombs, and nothing for a retired bomb.
-    this.chrome = { draw: () => renderBuiltInChrome(this, undefined) };
+    this.chrome = { draw: () => renderBuiltInChrome(this, undefined, this.resolveChromeRuntime()) };
   }
 
   /** The host's `Application`; the view draws only once attached (or built for a host ahead of its first frame). */
@@ -192,6 +195,7 @@ export class BuiltInPlayView
     this.play = frame.playfield;
     this.root.visible = frame.shown;
     if (!frame.shown) return;
+    this.chromeRuntime = undefined;
     render(this, frame.seconds, frame.playfield.audioAnalyzer !== undefined ? frame.audio : undefined);
     // A skin drawing through the player's renderer or on its DOM screen draws the frame just collected now.
     this.skinBindingInstance?.flush();
@@ -202,7 +206,7 @@ export class BuiltInPlayView
       effects: this.kit.effects ?? 'full',
       chart: frame.chart,
       state: frame.state,
-      runtime: resolveSkinlessGameplayChromeRuntime(this),
+      runtime: this.resolveChromeRuntime(),
       playOptions: frame.playOptions,
       emptyPoor: frame.playfield.score.emptyPoor,
       course: frame.course,
@@ -214,6 +218,10 @@ export class BuiltInPlayView
       replay: frame.replay,
       seekable: frame.seekable,
     });
+  }
+
+  private resolveChromeRuntime(): SkinlessGameplayChromeRuntime {
+    return (this.chromeRuntime ??= resolveSkinlessGameplayChromeRuntime(this));
   }
 
   public detach(): void {
