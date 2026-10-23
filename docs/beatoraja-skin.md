@@ -71,6 +71,8 @@ beatoraja's `timer_util` / `event_util` helper modules are built in and can be r
 
 `os.clock()` reads the host-provided scene clock in seconds, so delayed Lua draw predicates (including WMII_FHD key beams and key flashes) advance with rendering. Limited `os` and `io` compatibility shims are restored after the standard libraries are removed; filesystem and process operations remain inert.
 
+The browser wires `main_state.event_index(id)` to the same image-index resolver as `image.ref`. MODE/SORT and LNMODE are zero based; HS-FIX and CLEAR use beatoraja's index ordering. `main_state.set_timer(id, start)` writes only custom animation timers 10000–19999, with starts in microseconds. `main_state.timer_off_value` stops one. Lua and numeric destination timers observe writes in the same frame. Invalid writes return false; protected engine/scene timers are unchanged. Custom timer state belongs to one skin instance.
+
 Bitmap font pages use the shared browser image decoder, including TGA sheets that browsers cannot decode natively.
 
 The two-phase contract:

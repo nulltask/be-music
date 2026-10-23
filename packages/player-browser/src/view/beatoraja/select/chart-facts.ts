@@ -4,6 +4,7 @@
  * weak maps keyed by the library entry.
  */
 
+import { resolveChartLongNoteMode } from '@be-music/chart-model';
 import type { ChartPlayVariant } from '@be-music/chart-model';
 import type { BeatorajaChartTraits, BeatorajaSelectChartFacts } from '@be-music/skin-beatoraja/scene';
 import { resolveLR2ChartFeatures } from '@be-music/skin-lr2/state';
@@ -137,7 +138,7 @@ export function selectChartFacts(chartEntry: LibraryChart): BeatorajaSelectChart
       ...(meta.difficulty !== undefined ? { difficulty: meta.difficulty } : {}),
       ...(meta.rank !== undefined ? { judgeRank: meta.rank } : {}),
       ...(typeof meta.total === 'number' ? { total: meta.total } : {}),
-      ...(chartEntry.chart.bms?.lnMode !== undefined ? { lnMode: chartEntry.chart.bms.lnMode } : {}),
+      lnMode: resolveChartLongNoteMode(chartEntry.chart),
       get subartist(): string {
         return extractChartSubartist(chartEntry.chart);
       },

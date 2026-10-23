@@ -156,6 +156,70 @@ describe('BeatorajaPlaySkinView', () => {
     view.dispose();
   });
 
+  it('uses custom-timer writes for numeric destinations in the same frame, and isolates another view', () => {
+    const parsed = evaluateBeatorajaLuaSkin({
+      entry: enc(`local m = require('main_state'); return function()
+        if m.option(920) then return 1000000 end
+        return m.timer_off_value
+      end`),
+      modules: [],
+      skinConfig: {},
+    });
+    if (!parsed.ok || !isBeatorajaLuaFunctionValue(parsed.value)) throw new Error('Expected Lua timer function');
+    const skin = makeSkin({
+      customTimers: [{ id: 10000, timer: parsed.value }],
+      destination: [
+        {
+          id: 1,
+          timer: 10000,
+          dst: [
+            { time: 0, x: 0, y: 0, w: 1, h: 1 },
+            { time: 1000, x: 100, y: 0, w: 1, h: 1 },
+          ],
+        },
+      ],
+    });
+    const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
+    const frame = { activeOps: new Set([920]), getTimerStart: () => undefined, nowMs: 1250 };
+    view.update(frame);
+    expect(view.renderableChildren[0]?.visible).toBe(true);
+    // Pixi positions this 1px destination at its center.
+    expect(view.renderableChildren[0]?.x).toBeCloseTo(25.5);
+    view.update({ ...frame, activeOps: new Set() });
+    expect(view.renderableChildren[0]?.visible).toBe(false);
+    const other = new BeatorajaPlaySkinView({
+      skin: makeSkin({ destination: skin.destination }),
+      textures: fakeTextureCache([0]),
+    });
+    other.update(frame);
+    expect(other.renderableChildren[0]?.visible).toBe(false);
+    view.dispose();
+    other.dispose();
+  });
+
+  it('uses the image-index resolver for a Lua event_index draw predicate', () => {
+    const parsed = evaluateBeatorajaLuaSkin({
+      entry: enc(`local m = require('main_state'); return function() return m.event_index(308) == 2 end`),
+      modules: [],
+      skinConfig: {},
+    });
+    if (!parsed.ok || !isBeatorajaLuaFunctionValue(parsed.value)) throw new Error('Expected Lua predicate');
+    let index = 1;
+    const view = new BeatorajaPlaySkinView({
+      skin: makeSkin({ destination: [{ id: 1, draw: parsed.value, dst: [{ time: 0, x: 0, y: 0, w: 1, h: 1 }] }] }),
+      textures: fakeTextureCache([0]),
+      resolveRefValue: () => index,
+      resolveNumberValue: () => 2,
+    });
+    const frame = { activeOps: new Set<number>(), getTimerStart: () => 0, nowMs: 0 };
+    view.update(frame);
+    expect(view.renderableChildren[0]?.visible).toBe(false);
+    index = 2;
+    view.update(frame);
+    expect(view.renderableChildren[0]?.visible).toBe(true);
+    view.dispose();
+  });
+
   it('passes gauge percent to runtime Lua draw functions without rescaling', () => {
     const lua = evaluateBeatorajaLuaSkin({
       entry: enc('local m = require("main_state"); return function() return m.gauge() >= 80 end'),

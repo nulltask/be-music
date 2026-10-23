@@ -584,6 +584,11 @@ export function registerBeatorajaSkinSceneExportsCases(define: DefineBenchmarkCa
       sceneAPI.beatorajaMissingCourseStages(BENCH_COURSE);
     },
   });
+  define('skin-beatoraja.scene.resolveBeatorajaOptionIndex', {
+    run: () => {
+      sceneAPI.resolveBeatorajaOptionIndex(370, { lamp: 'EX_HARD' });
+    },
+  });
   define('skin-beatoraja.scene.beatorajaClearLampOp', {
     run: () => {
       sceneAPI.beatorajaClearLampOp('EX_HARD');
