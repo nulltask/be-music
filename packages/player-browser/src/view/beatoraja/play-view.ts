@@ -23,9 +23,9 @@ import {
   type BeatorajaSkinConfig,
   type BeatorajaSkinCustomOffset,
 } from '@be-music/skin-beatoraja';
-import { withBeatorajaCourseStageOps } from '@be-music/skin-beatoraja/scene';
+import { resolveBeatorajaOptionIndex, withBeatorajaCourseStageOps } from '@be-music/skin-beatoraja/scene';
 import type { BeMusicJSON } from '@be-music/chart-source';
-import type { ChartPlayVariant } from '@be-music/chart-model';
+import { resolveChartLongNoteMode, type ChartPlayVariant } from '@be-music/chart-model';
 import type { PlayerGaugeSummary, PlayerUIFrameNote, PlayerUIFramePayload } from '@be-music/player-engine/signals';
 import type { ScoreSummary } from '@be-music/player-engine/ruleset';
 import type { CourseView, HiSpeedTransition, LibraryChart, PlayState } from '@be-music/player-scene-model';
@@ -198,6 +198,7 @@ export class BeatorajaPlayView implements PlayView {
   private readonly chartImages: BeatorajaViewChartImages;
   private prepared: PreparedChart | undefined;
   private bridge: BeatorajaPlayBridge | undefined;
+  private playOptions: PlayFrame['playOptions'] | undefined;
   private stage: BeatorajaPlayStage | undefined;
   private host: PixiSceneHost | undefined;
   /** The host the play loads on, for the GPU upload of its BGA before the view is attached. */
@@ -318,7 +319,11 @@ export class BeatorajaPlayView implements PlayView {
       resolveSkinConfigOps(kit.skinConfig, this.options.course),
       prepared.layout,
       {
-        resolveRefValue: (ref) => bridge.resolveRefValue(ref),
+        resolveRefValue: (ref) =>
+          resolveBeatorajaOptionIndex(ref, {
+            lnMode: this.play.chart === undefined ? undefined : resolveChartLongNoteMode(this.play.chart.chart),
+            hsFix: this.playOptions?.hsFix,
+          }) ?? bridge.resolveRefValue(ref),
         resolveTextContent: (ref) => bridge.resolveTextContent(ref),
         resolveNumberValue: (ref) => bridge.resolveNumberValue(ref),
         resolveFontFamily: kit.fonts !== undefined ? (id) => kit.fonts!.family(id) : undefined,
@@ -402,6 +407,7 @@ export class BeatorajaPlayView implements PlayView {
     stage.fitTo(host);
     const play = this.play;
     this.state = frame.state;
+    this.playOptions = frame.playOptions;
     for (const event of frame.events) {
       if (event.kind === 'load-end') this.loaded = true;
       else if (event.kind === 'view-setting') this.showViewSetting(event.setting, frame.state);

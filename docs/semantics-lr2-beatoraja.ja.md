@@ -66,7 +66,7 @@ LR2 と beatoraja は、同じ譜面、オプション、スキンの番号を�
 6. **プレイヤーの LN モード（LN/CN/HCN）がなく、どの記録キーにも入っていない。** beatoraja はスコアを `(sha256, lnmode)` で区別します。取り込んだ CN/HCN のスコアには行き場がなく、後からオプションを足すと 3 つのモードの記録が混ざります。(A+B)
 7. **beatoraja の TIMER_PLAY がロード完了時に始まり、その後に固定の 1.5 秒の助走がある。** be-music は `skin.playstart` を無視するので、TIMER_PLAY を基準にする beatoraja の要素はどれもノートより早く動きます。(A)
 8. **beatoraja スキンの状態が配線されていないか、LR2 の形をしている。**
-   - Lua の `event_index` と `set_timer` が配線されていない。
+   - Lua の `event_index`・`set_timer`・カスタムタイマーは #596 で修正。
    - リザルトのタイマー 150-152、スコアのタイマー 348-352、HCN、PM キャラ、カスタムタイマーが設定されない。
    - GAUGE_MAX が切れない。
    - MISS（420）が POOR を表示し、空 POOR が抜け落ちる。
@@ -175,7 +175,7 @@ flowchart TD
 | 46  | TIMER_PLAY / `skin.playstart`                           | A              | ロード完了 + 1.5 秒                                | 譜面の開始時刻を刻む                                                                  |
 | 47  | GAUGE_MAX タイマーの切り替え                            | A, C           | 止まらない（バグ）                                 | 開始 / 停止                                                                           |
 | 48  | beatoraja だけのタイマー                                | A              | 駆動しない                                         | 対応表に追加                                                                          |
-| 49  | Lua の `event_index` / `set_timer`                      | A              | nil                                                | 配線する                                                                              |
+| 49  | Lua の `event_index` / `set_timer`                      | A              | #596 で修正                                        | 配線する                                                                              |
 | 50  | MISS と POOR の数値                                     | A, C           | 420 = POOR（バグ）                                 | emptyPoor を使う                                                                      |
 | 51  | ゲージの op 42/43/1046                                  | A, C           | 常に 42（バグ）                                    | ゲージ種別から導く                                                                    |
 | 52  | 曲リストのランプ画像（JSON）                            | A, C           | 描かない                                           | 0-10 の id で描く                                                                     |
@@ -799,17 +799,17 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
   - HCN の active/damage タイマー 250-289 と 1800-2110。
   - PM キャラ 900-909 と MUSIC_END 908。
   - リザルトのタイマー 150/151/152（[result/MusicResult.java#L160-L167](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/result/MusicResult.java#L160-L167)）。
-  - カスタムタイマー 10000-19999。
+  - カスタムタイマー 10000-19999（#596 で修正）。
 - **be-music の現状:** 値を作るところがありません。リザルトのタイマーは 0/1/2/40/41 だけです（[`packages/player-browser/src/view/beatoraja/scene-frame.ts`](../packages/player-browser/src/view/beatoraja/scene-frame.ts)）。
 - **影響:** A。これらのタイマーを条件にする要素は描かれません。
 - **推奨:** beatoraja の対応表にデータとして足す。どれも決定的です。
 
-### Lua の `main_state` の対応範囲
+### Lua の `main_state` の対応範囲（オプション番号とカスタムタイマーは #596 で修正）
 
-- **beatoraja:** `option`、`number`、`text`、`offset`、`timer`、`set_timer`、`event_exec`、`event_index`、`_best`/`_rival` 付きの `rate`/`exscore`、ゲージ、…（[MainStatePropertyLuaApiExporter.java#L33-L67](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/lua/MainStatePropertyLuaApiExporter.java#L33-L67)、[#L257-L267](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/lua/MainStatePropertyLuaApiExporter.java#L257-L267)）。
-- **be-music の現状:** ブリッジはすべてを宣言していますが、[`lua-context.ts`](../packages/player-browser/src/view/beatoraja/skin-view/lua-context.ts) は `eventIndex` も `setTimer` も配線しておらず、`_best`/`_rival` の関数は nil を返します。ModernChic は `event_index` を 14 回呼ぶ（LN モード、HS-FIX、リザルトの CLEAR 一覧）ので、それらの要素は隠れたままです。
-- **影響:** A。
-- **推奨:** `eventIndex` を選曲シーンがすでに計算しているボタン / ref の値に、`setTimer` をタイマーの表（10000-19999）に配線する。
+- **beatoraja:** `event_index` は画像番号のプロパティを読み、`set_timer` はカスタムタイマー 10000–19999 の開始時刻だけをマイクロ秒で書き込みます（[MainStatePropertyLuaApiExporter.java#L257-L303](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/lua/MainStatePropertyLuaApiExporter.java#L257-L303)、[SkinPropertyMapper.java#L159-L166](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/SkinPropertyMapper.java#L159-L166)）。
+- **be-music の現状:** [#596](https://github.com/nulltask/be-music/issues/596) で修正。`event_index` は画像の ref と同じ解決処理を使い、MODE/SORT・LNMODE・HS-FIX・レーン判定・リザルトと選択中の記録の CLEAR を外部仕様の画像番号で返します。HS-FIX の `AVERAGE` は main BPM（番号 3）を使い、既存の `CONSTANT` の代替動作も同じ実効基準を返します。ランプの番号は LIGHT ASSIST EASY の予約位置を含む beatoraja の 0–10 へ変換しますが、そのランプを記録には追加しません。
+- **カスタムアニメーションの状態:** スキンのインスタンスごとに専用タイマーを持ちます。Lua の `timer` と数値指定の描画先タイマーは、`customTimers` の書き込みを含め、同じ状態をその場で読みます。`set_timer` は int64 範囲内の有限の開始時刻をマイクロ秒で受け取り、小数部分を切り捨てます。`timer_off_value` で停止します。不正な値や保護された番号では false を返し、既存の状態を変えません。上流 Java は保護された番号で例外を投げますが、ブラウザの真偽値コマンド API は例外を投げずに拒否します。シーンとゲーム進行用タイマーの管理はシーン・エンジンが担当し、新しいスキンにはカスタムタイマーを引き継ぎません。
+- **残る範囲:** `_best`/`_rival` の読み出しやその他のイベントコマンドには、それぞれ対応する状態の接続が必要です。この修正では追加しません。
 
 ### MISS と POOR（バグ）
 

@@ -9,6 +9,8 @@
  * takes keys only.
  */
 
+import { resolveChartLongNoteMode } from '@be-music/chart-model';
+import { resolveBeatorajaOptionIndex } from '@be-music/skin-beatoraja/scene';
 import { buildBaseOpSet, type BeatorajaSkin } from '@be-music/skin-beatoraja';
 import {
   resolveBeatorajaDecideGraphValue,
@@ -120,6 +122,11 @@ export class BeatorajaDecideView implements DecideView {
       new BeatorajaPlaySkinView({
         skin,
         textures,
+        resolveRefValue: (ref) =>
+          resolveBeatorajaOptionIndex(ref, {
+            lnMode: this.frame?.playChart === undefined ? undefined : resolveChartLongNoteMode(this.frame.playChart),
+            hsFix: this.frame?.playOptions.hsFix,
+          }) ?? 0,
         resolveTextContent: (ref) =>
           resolveBeatorajaChartText(ref, {
             ...(this.frame !== undefined ? { chart: this.frame.chart } : {}),
