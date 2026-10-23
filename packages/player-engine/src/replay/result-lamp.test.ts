@@ -34,9 +34,9 @@ describe('resolveRulesetResultLamp', () => {
     );
   });
 
-  test('an incomplete LR2 play and an uncleared beatoraja or IIDX full combo still fail', () => {
+  test('an incomplete LR2 play and an uncleared beatoraja or That-Which-Must-Not-Be-Named full combo still fail', () => {
     expect(resolveRulesetResultLamp(result({ type: 'GROOVE', cleared: false }), 'lr2')).toBe('FAILED');
-    for (const ruleset of ['beatoraja', 'iidx'] as const) {
+    for (const ruleset of ['beatoraja', '____'] as const) {
       expect(resolveRulesetResultLamp(result({ type: 'NORMAL', cleared: false }, { bad: 0, poor: 0 }), ruleset)).toBe(
         'FAILED',
       );
@@ -45,11 +45,11 @@ describe('resolveRulesetResultLamp', () => {
 
   test.each([
     ['ASSIST-EASY', 'beatoraja', 'ASSIST_EASY'],
-    ['ASSISTED-EASY', 'iidx', 'ASSIST_EASY'],
+    ['ASSISTED-EASY', '____', 'ASSIST_EASY'],
     ['EASY', 'lr2', 'EASY'],
     ['GROOVE', 'lr2', 'NORMAL'],
     ['NORMAL', 'beatoraja', 'NORMAL'],
-    ['HARD', 'iidx', 'HARD'],
+    ['HARD', '____', 'HARD'],
     ['EX-HARD', 'beatoraja', 'EX_HARD'],
     ['DEATH', 'lr2', 'NORMAL'],
     ['DEATH', 'beatoraja', 'EX_HARD'],
@@ -64,13 +64,13 @@ describe('resolveRulesetResultLamp', () => {
     expect(resolveRulesetResultLamp(fullCombo, 'lr2')).toBe('FULL_COMBO');
   });
 
-  test('beatoraja awards PERFECT and MAX; LR2 and IIDX stop at FULL COMBO', () => {
+  test('beatoraja awards PERFECT and MAX; LR2 and That-Which-Must-Not-Be-Named stop at FULL COMBO', () => {
     const perfect = result({ type: 'NORMAL', cleared: true }, { bad: 0, poor: 0, good: 0 });
     const max = result({ type: 'NORMAL', cleared: true }, { bad: 0, poor: 0, good: 0, great: 0 });
     expect(resolveRulesetResultLamp(perfect, 'beatoraja')).toBe('PERFECT');
     expect(resolveRulesetResultLamp(max, 'beatoraja')).toBe('MAX');
     expect(resolveRulesetResultLamp(max, 'lr2')).toBe('FULL_COMBO');
-    expect(resolveRulesetResultLamp(max, 'iidx')).toBe('FULL_COMBO');
+    expect(resolveRulesetResultLamp(max, '____')).toBe('FULL_COMBO');
   });
 
   test('a chart without notes takes its gauge’s lamp', () => {

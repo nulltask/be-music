@@ -162,7 +162,10 @@ const en: HelpContent = {
               t.rules.name(RULESET_LABELS.beatoraja!),
               'beatoraja’s, with PERFECT (no GOOD) and MAX (all PGREAT) above FULL COMBO.',
             ],
-            [t.rules.name(RULESET_LABELS.iidx!), 'beatmania IIDX’s, with charge notes; FULL COMBO is the top lamp.'],
+            [
+              t.rules.name(RULESET_LABELS.____!),
+              'That-Which-Must-Not-Be-Named’s, with charge notes; FULL COMBO is the top lamp.',
+            ],
             [t.score.selected, 'On a play’s page: the ruleset the pages show.'],
             [t.score.playedWith, 'The ruleset the player played under.'],
           ]}
@@ -316,8 +319,8 @@ const ja: HelpContent = {
               'beatoraja のもの。FULL COMBO の上に PERFECT（GOOD なし）と MAX（すべて PGREAT）があります。',
             ],
             [
-              t.rules.name(RULESET_LABELS.iidx!),
-              'beatmania IIDX のもの（チャージノート付き）。最上位のランプは FULL COMBO。',
+              t.rules.name(RULESET_LABELS.____!),
+              'That-Which-Must-Not-Be-Named のもの（チャージノート付き）。最上位のランプは FULL COMBO。',
             ],
             [t.score.selected, 'プレイのページで、ページの表示に使っているルール。'],
             [t.score.playedWith, 'プレイヤーが遊んだルール。'],

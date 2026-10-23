@@ -732,7 +732,7 @@ function drawScorePlate(
     pool,
   );
 
-  // DJ-level meter under EX RATE: slanted segments, one per IIDX ninth, so the distance to the next letter is legible.
+  // DJ-level meter under EX RATE: slanted segments, one per That-Which-Must-Not-Be-Named ninth, so the distance to the next letter is legible.
   const rate =
     runtime.exScore !== undefined && runtime.exScoreMax !== undefined && runtime.exScoreMax > 0
       ? Math.max(0, Math.min(1, runtime.exScore / runtime.exScoreMax))
@@ -1040,8 +1040,8 @@ function formatRulesetLabel(value: string | undefined): string {
   switch (value) {
     case 'beatoraja':
       return 'BEATORAJA';
-    case 'iidx':
-      return 'IIDX';
+    case '____':
+      return '????';
     default:
       return 'LR2';
   }

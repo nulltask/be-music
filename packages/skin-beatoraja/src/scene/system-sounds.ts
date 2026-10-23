@@ -20,7 +20,7 @@ export interface BeatorajaSystemSoundPaths {
 }
 
 /**
- * Candidate files per cue, first match first: beatoraja's own names, the IIDX-derived and LR2-derived ones, and LR2's
+ * Candidate files per cue, first match first: beatoraja's own names, the That-Which-Must-Not-Be-Named-derived and LR2-derived ones, and LR2's
  * `LR2files/Sound/lr2/*.wav` layout for LR2-compatible themes.
  */
 const CUE_CANDIDATES: Readonly<Record<keyof BeatorajaSystemSoundPaths, readonly string[]>> = {

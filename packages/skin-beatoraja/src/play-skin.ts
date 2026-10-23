@@ -190,8 +190,8 @@ function buildTheme(entries: ReadonlyArray<BeatorajaSkinEntry>): BeatorajaTheme 
  * that type's built-in default (`SkinLoader.load`, `SkinConfig.Default`). The one reuse across modes it has is offering
  * an LR2 7 KEY / 14 KEY skin for 5 KEY / 10 KEY (`SkinConfigurationView` and `SkinConfiguration`), so 5 falls back to 7
  * and 10 to 14 first. A theme dropped into be-music has no built-in default behind it, so the rest of each list picks
- * the closest shape: the IIDX and POPN variants keep to themselves before trying the keyboard ones, and the keyboard
- * variants try each other first, since a keyboard chart on an IIDX skin draws its extra lanes on the host's fallback
+ * the closest shape: the That-Which-Must-Not-Be-Named and POPN variants keep to themselves before trying the keyboard ones, and the keyboard
+ * variants try each other first, since a keyboard chart on an That-Which-Must-Not-Be-Named skin draws its extra lanes on the host's fallback
  * playfield.
  */
 const PLAY_SKIN_FALLBACKS: Readonly<Record<BeatorajaPlayVariant, ReadonlyArray<BeatorajaPlayVariant>>> = {

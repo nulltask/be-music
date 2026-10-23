@@ -58,7 +58,7 @@ export interface PlayerGaugeSummary {
   cleared: boolean;
   /**
    * Ruleset-scoped gauge id — `'GROOVE'` / `'EASY'` / `'HARD'` / `'DEATH'` under LR2, `'NORMAL'` /
-   * `'ASSIST-EASY'` / `'EX-HARD'` / `'HAZARD'` under beatoraja, `'ASSISTED-EASY'` / `'EX-HARD'` under IIDX.
+   * `'ASSIST-EASY'` / `'EX-HARD'` / `'HAZARD'` under beatoraja, `'ASSISTED-EASY'` / `'EX-HARD'` under That-Which-Must-Not-Be-Named.
    * Free-form because each ruleset has its own line-up.
    */
   type?: string;
@@ -162,14 +162,14 @@ export interface PlayerUISeekSnapshot {
 
 /**
  * How the active ruleset plays a long note — which is not always the chart's `#LNMODE`: LR2 plays every long note as
- * an `'ln'`, IIDX plays them as charge notes. `'ln'` judges once (the start; an early release follows the ruleset's `lnEarlyRelease`), `'cn'` judges the
+ * an `'ln'`, That-Which-Must-Not-Be-Named plays them as charge notes. `'ln'` judges once (the start; an early release follows the ruleset's `lnEarlyRelease`), `'cn'` judges the
  * start and the release, `'hcn'` additionally drains the gauge while it isn't held.
  */
 export type PlayerUILongNoteMode = 'ln' | 'cn' | 'hcn';
 
 /**
  * How a held long note finished: `'complete'` when its end was judged a hit, `'dropped'` when it ended in a BAD / POOR
- * (released early, or a broken charge-note head under IIDX).
+ * (released early, or a broken charge-note head under That-Which-Must-Not-Be-Named).
  */
 export type PlayerUILongNoteOutcome = 'complete' | 'dropped';
 

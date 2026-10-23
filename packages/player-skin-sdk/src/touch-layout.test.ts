@@ -19,7 +19,7 @@ const PMS9 = ['11', '12', '13', '14', '15', '22', '23', '24', '25'];
 const widths = (lanes: ReadonlyArray<{ w: number }>) => lanes.map((lane) => Math.round(lane.w * 100) / 100);
 
 describe('supportsTouchLayout', () => {
-  it('covers the IIDX and PMS modes, not the keyboard modes', () => {
+  it('covers the That-Which-Must-Not-Be-Named and PMS modes, not the keyboard modes', () => {
     for (const variant of ['5', '7', '9', '10', '14', undefined] as const)
       expect(supportsTouchLayout(variant)).toBe(true);
     expect(supportsTouchLayout('24')).toBe(false);

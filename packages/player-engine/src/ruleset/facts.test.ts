@@ -36,15 +36,15 @@ describe('ruleset/facts', () => {
     expect(resolveRuleset(chart, 'lr2').noteCount).toBe(13);
     // beatoraja honours the chart mode → LN 1, CN 2, HCN 2.
     expect(resolveRuleset(chart, 'beatoraja').noteCount).toBe(15);
-    // IIDX plays every long as a charge note → head + tail each.
-    expect(resolveRuleset(chart, 'iidx').noteCount).toBe(16);
+    // That-Which-Must-Not-Be-Named plays every long as a charge note → head + tail each.
+    expect(resolveRuleset(chart, '____').noteCount).toBe(16);
   });
 
   test('selectedGauge maps the LR2-family pick onto each ruleset line-up', () => {
     const chart = facts();
     expect(resolveRuleset(chart, 'lr2', { selectedGauge: 'GROOVE' }).gauge.id).toBe('GROOVE');
     expect(resolveRuleset(chart, 'beatoraja', { selectedGauge: 'GROOVE' }).gauge.id).toBe('NORMAL');
-    expect(resolveRuleset(chart, 'iidx', { selectedGauge: 'GROOVE' }).gauge.id).toBe('NORMAL');
+    expect(resolveRuleset(chart, '____', { selectedGauge: 'GROOVE' }).gauge.id).toBe('NORMAL');
     expect(resolveRuleset(chart, 'beatoraja', { selectedGauge: 'DEATH' }).gauge.id).toBe('HAZARD');
     // An explicit ruleset-scoped id wins over the mapping.
     expect(resolveRuleset(chart, 'beatoraja', { selectedGauge: 'GROOVE', gauge: 'EX-HARD' }).gauge.id).toBe('EX-HARD');
@@ -123,14 +123,14 @@ describe('effective TOTAL', () => {
   // 100 base notes: LR2 default (100 / 5 + 200) × 0.8 = 176; beatoraja default max(260, 760.5 / 7.5) = 260.
   const lr2Default = resolveLR2DefaultTotal(100);
   const beatorajaDefault = resolveBeatorajaDefaultTotal(100);
-  const defaults = { lr2: lr2Default, beatoraja: beatorajaDefault, iidx: lr2Default } as const;
+  const defaults = { lr2: lr2Default, beatoraja: beatorajaDefault, ____: lr2Default } as const;
 
   test('the default formulas give the expected values for 100 notes', () => {
     expect(lr2Default).toBeCloseTo(176, 9);
     expect(beatorajaDefault).toBe(260);
   });
 
-  for (const id of ['lr2', 'beatoraja', 'iidx'] as const) {
+  for (const id of ['lr2', 'beatoraja', '____'] as const) {
     describe(id, () => {
       test('BMS #TOTAL is an absolute TOTAL', () => {
         expect(resolveRuleset(facts({ total: 300 }), id).effectiveTotal).toBe(300);
@@ -207,7 +207,7 @@ describe('ruleset chart-facts adapters agree', () => {
 
     expect(fromChart).toEqual(fromReplay);
     // …and therefore resolve identical rulesets.
-    for (const id of ['lr2', 'beatoraja', 'iidx'] as const) {
+    for (const id of ['lr2', 'beatoraja', '____'] as const) {
       expect(resolveRuleset(fromChart, id).noteCount).toBe(resolveRuleset(fromReplay, id).noteCount);
       expect(resolveRuleset(fromChart, id).effectiveTotal).toBe(resolveRuleset(fromReplay, id).effectiveTotal);
     }
@@ -236,7 +236,7 @@ describe('ruleset chart-facts adapters agree', () => {
     };
     const fromReplay = rulesetChartFactsFromReplay(replay);
     expect(fromChart).toEqual(fromReplay);
-    for (const id of ['lr2', 'beatoraja', 'iidx'] as const) {
+    for (const id of ['lr2', 'beatoraja', '____'] as const) {
       const live = resolveRuleset(fromChart, id).effectiveTotal;
       expect(resolveRuleset(fromReplay, id).effectiveTotal).toBe(live);
       // 150 % of the ruleset's default for one note, never an absolute TOTAL 150.

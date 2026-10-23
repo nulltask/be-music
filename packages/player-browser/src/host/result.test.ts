@@ -97,7 +97,7 @@ describe('BuiltInResultView', () => {
 });
 
 describe('resolveBuiltInRankLabel', () => {
-  it('ranks the EX score as IIDX does, and a chart without notes as AAA', () => {
+  it('ranks the EX score as That-Which-Must-Not-Be-Named does, and a chart without notes as AAA', () => {
     expect(resolveBuiltInRankLabel(20, 10)).toBe('AAA');
     expect(resolveBuiltInRankLabel(0, 10)).toBe('F');
     expect(resolveBuiltInRankLabel(0, 0)).toBe('AAA');

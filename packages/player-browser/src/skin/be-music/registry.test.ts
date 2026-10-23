@@ -73,7 +73,7 @@ describe('createBeMusicSkinRegistry', () => {
 });
 
 describe('resolveBeMusicLaneKind', () => {
-  it('follows the IIDX convention for 7-key charts', () => {
+  it('follows the That-Which-Must-Not-Be-Named convention for 7-key charts', () => {
     expect(resolveBeMusicLaneKind('16', 0, '7')).toBe('scratch');
     expect(resolveBeMusicLaneKind('11', 1, '7')).toBe('white');
     expect(resolveBeMusicLaneKind('12', 2, '7')).toBe('black');

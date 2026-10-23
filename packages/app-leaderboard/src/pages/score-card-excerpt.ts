@@ -32,10 +32,10 @@ export function excerptLanes(laneMode: string): Array<{ channel: string } & Exce
   }));
 }
 
-/** Whether a lane mode's lanes take Synesthesia's fixed IIDX widths (5 / 7 / 10 / 14 KEY) or share one side evenly. */
-export function excerptLaneWidths(laneMode: string): 'iidx' | 'shared' {
+/** Whether a lane mode's lanes take Synesthesia's fixed That-Which-Must-Not-Be-Named widths (5 / 7 / 10 / 14 KEY) or share one side evenly. */
+export function excerptLaneWidths(laneMode: string): '____' | 'shared' {
   const variant = layoutOfLaneMode(laneMode)?.variant;
-  return variant === '5' || variant === '7' || variant === '10' || variant === '14' ? 'iidx' : 'shared';
+  return variant === '5' || variant === '7' || variant === '10' || variant === '14' ? '____' : 'shared';
 }
 
 /**

@@ -170,7 +170,7 @@ export interface PlaySessionOptions {
   replayView?: Readonly<ReplayPlaybackOptions>;
   /**
    * Judgment-window ruleset for the shared engine (`PlayerOptions.judgeRuleset`): `'lr2'` (default) / `'beatoraja'`
-   * / `'iidx'`. Recorded into the replay; replays re-apply the log's own value instead.
+   * / `'____'`. Recorded into the replay; replays re-apply the log's own value instead.
    */
   judgeRuleset?: RulesetId;
   /**

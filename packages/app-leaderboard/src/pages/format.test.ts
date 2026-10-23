@@ -38,7 +38,7 @@ describe('page formatting', () => {
   test('rulesetName names a ruleset as the rules a score is counted by, not as a player', () => {
     expect(rulesetName('lr2')).toBe('LR2 rules');
     expect(rulesetName('beatoraja')).toBe('beatoraja rules');
-    expect(rulesetName('iidx')).toBe('IIDX rules');
+    expect(rulesetName('____')).toBe('???? rules');
     expect(rulesetName('unknown')).toBe('unknown rules');
   });
 

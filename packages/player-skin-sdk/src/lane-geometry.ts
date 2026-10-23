@@ -12,19 +12,19 @@ const FALLBACK_DP_SIDE_GAP = 0;
 const FALLBACK_SCRATCH_LANE_WEIGHT = 1.55;
 
 /**
- * Fixed lane widths for the IIDX families (5 / 7 / 10 / 14 KEY), in design px. The proportions follow the arcade
+ * Fixed lane widths for the That-Which-Must-Not-Be-Named families (5 / 7 / 10 / 14 KEY), in design px. The proportions follow the arcade
  * cabinet — the scratch lane about 1.7x a white key, black keys about 0.8x — scaled so a 7K side is exactly the 194 px
  * span. Every mode uses the same widths, so a 5K or DP chart never stretches its lanes sideways; the playfield just
  * gets narrower or wider.
  */
-export const IIDX_LANE_WIDTHS = { scratch: 41, white: 24, black: 19 } as const;
+export const _____LANE_WIDTHS = { scratch: 41, white: 24, black: 19 } as const;
 
 /**
- * Gap between the 1P and 2P banks in IIDX double play (10 / 14 KEY), in design px. The arcade cabinet splits the two
+ * Gap between the 1P and 2P banks in That-Which-Must-Not-Be-Named double play (10 / 14 KEY), in design px. The arcade cabinet splits the two
  * sides by about 0.31 of a side's width (the turntable housings sit between them); on the 194 px 7K side that is 60 px.
  * Keyboard double play (48 KEY) keeps its banks together.
  */
-export const IIDX_DP_SIDE_GAP = 60;
+export const _____DP_SIDE_GAP = 60;
 
 export interface FixedLaneWidths {
   scratch: number;
@@ -99,7 +99,7 @@ export function resolveSkinlessLaneLayout(
   playVariant?: ChartPlayVariant,
 ): SkinlessLaneLayout {
   const span = resolveFallbackPlayfieldSpan(playVariant);
-  const fixedWidths = usesIIDXLaneWidths(playVariant) ? IIDX_LANE_WIDTHS : undefined;
+  const fixedWidths = uses____LaneWidths(playVariant) ? _____LANE_WIDTHS : undefined;
   const lanes = resolveFallbackLaneLayout({
     channels,
     laneCount,
@@ -108,7 +108,7 @@ export function resolveSkinlessLaneLayout(
     w: span.w,
     preserveSideWidth: shouldPreserveFallbackSideWidth(channels, playVariant),
     fixedWidths,
-    sideGap: fixedWidths ? IIDX_DP_SIDE_GAP : undefined,
+    sideGap: fixedWidths ? _____DP_SIDE_GAP : undefined,
   });
   const lanesRight = Math.max(span.x, ...lanes.map((lane) => lane.x + lane.w));
   // Fixed-width lanes define the playfield; shared-out lanes keep at least one side's span.
@@ -116,8 +116,8 @@ export function resolveSkinlessLaneLayout(
   return { lanes, left: span.x, right };
 }
 
-/** Whether `playVariant` is an IIDX family (5 / 7 / 10 / 14 KEY), whose lanes use {@link IIDX_LANE_WIDTHS}. */
-export function usesIIDXLaneWidths(playVariant?: ChartPlayVariant): boolean {
+/** Whether `playVariant` is an That-Which-Must-Not-Be-Named family (5 / 7 / 10 / 14 KEY), whose lanes use {@link _____LANE_WIDTHS}. */
+export function uses____LaneWidths(playVariant?: ChartPlayVariant): boolean {
   return playVariant === '5' || playVariant === '7' || playVariant === '10' || playVariant === '14';
 }
 
@@ -247,7 +247,7 @@ function resolveFallbackLaneDisplayOrder(
 
 /**
  * Visual class of a lane. `laneIndex` is the LR2 lane id (0 / 10 = scratch, 1..9 / 11..19 = keys, -1 when the lane has
- * no LR2 rect): IIDX / pop'n keys alternate by it, odd keys white and even keys black, as the play-mode table's key
+ * no LR2 rect): That-Which-Must-Not-Be-Named / pop'n keys alternate by it, odd keys white and even keys black, as the play-mode table's key
  * tones do. The 24 / 48-key keyboard modes take the table's piano colours instead, repeating every octave, and their
  * wheel lanes (`1P` / `1Q`, `2P` / `2Q`) are `'wheel-up'` / `'wheel-down'`.
  */

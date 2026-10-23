@@ -34,10 +34,10 @@ export const ja: Messages = {
     notes: {
       lr2: 'LR2 の判定幅・ゲージ・ランプ',
       beatoraja: 'beatoraja のもの。PERFECT と MAX のランプあり',
-      iidx: 'beatmania IIDX のもの。チャージノートあり',
+      ____: 'That-Which-Must-Not-Be-Namedのもの。チャージノートあり',
     },
     meaning:
-      'すべてのプレイを各ルールで採点しています。LR2・beatoraja・IIDX の判定幅、ゲージ、クリアランプを、be-music のエンジンがリプレイに当てはめたものです。スコアの計算方法を表すもので、プレイしたソフトとは関係ありません。',
+      'すべてのプレイを各ルールで採点しています。LR2・beatoraja・That-Which-Must-Not-Be-Named の判定幅、ゲージ、クリアランプを、be-music のエンジンがリプレイに当てはめたものです。スコアの計算方法を表すもので、プレイしたソフトとは関係ありません。',
     playedWith: (name) => `${name}でプレイ`,
     playedWithTitle: 'プレイヤーが実際に遊んだルール',
   },
@@ -340,7 +340,7 @@ export const ja: Messages = {
     eachSet: '',
     rulesLabel: 'ルール',
     rulesHelp:
-      'すべてのプレイは LR2・beatoraja・IIDX のルールで採点されます。「選択中」はページの表示に使っているルール、「プレイ」はプレイヤーが遊んだルールです。',
+      'すべてのプレイは LR2・beatoraja・That-Which-Must-Not-Be-Named のルールで採点されます。「選択中」はページの表示に使っているルール、「プレイ」はプレイヤーが遊んだルールです。',
     selected: '選択中',
     playedWith: 'プレイ',
     combo: 'コンボ',
@@ -408,7 +408,7 @@ export const ja: Messages = {
     4: '通常のゲージ（GROOVE / NORMAL）でクリア。',
     5: 'HARD ゲージでクリア。',
     6: 'EX-HARD、DEATH、HAZARD ゲージでクリア。',
-    7: 'BAD と見逃し POOR なし（空 POOR は数えない）。LR2 と IIDX での最上位のランプ。',
+    7: 'BAD と見逃し POOR なし（空 POOR は数えない）。LR2 と That-Which-Must-Not-Be-Named での最上位のランプ。',
     8: 'GOOD なしのフルコンボ（beatoraja）。',
     9: 'すべて PGREAT（beatoraja）。',
     none: '未プレイ。',

@@ -85,8 +85,8 @@ export interface PlayerPlaySettings {
    */
   gauge?: GaugeType;
   /**
-   * The compat ruleset the play is judged under: `'lr2'` (default), `'beatoraja'` or `'iidx'`. It owns every judge
-   * rule — the windows (beatoraja's SEVENKEYS windows scaled by its judgerank, IIDX's fixed ±16.67 / ±33.33 /
+   * The compat ruleset the play is judged under: `'lr2'` (default), `'beatoraja'` or `'____'`. It owns every judge
+   * rule — the windows (beatoraja's SEVENKEYS windows scaled by its judgerank, That-Which-Must-Not-Be-Named's fixed ±16.67 / ±33.33 /
    * ±116.67 / ±250 ms), which note a press resolves against, the long-note style, the empty-POOR rule, mines, the gauge
    * line-up and its curve, and the score — and the replay simulator plays by the same tables. Dynamic `#EXRANKxx`
    * changes are an LR2 concept and only apply under `'lr2'`. Recorded into the replay (`play.judgeRuleset`) so
@@ -304,7 +304,7 @@ export interface PlayerPlayRecording {
    * chart-relative timestamps, and hands the assembled {@link BeMusicReplay} here right before `autoPlay` /
    * `manualPlay` resolves — including the ESC (aborted) exit. A play that sought (`startAtSeconds`, a `seek` command)
    * records none: it is discarded at the first seek. The replay's `results.native` caches this run's
-   * engine summary; see `@be-music/player-engine/replay` for the format and the LR2 / beatoraja / IIDX re-simulation
+   * engine summary; see `@be-music/player-engine/replay` for the format and the LR2 / beatoraja / That-Which-Must-Not-Be-Named re-simulation
    * tools.
    */
   onReplayRecorded?: (replay: BeMusicReplay) => void;
@@ -351,7 +351,7 @@ export interface PlayerTempoChange {
 
 /** The judging setup a play resolved to; see {@link PlayerOptions.onRulesetResolved}. */
 export interface PlayerRulesetInfo {
-  /** Versioned ruleset id (`'lr2/0'`, `'beatoraja/0'`, `'iidx/0'`). */
+  /** Versioned ruleset id (`'lr2/0'`, `'beatoraja/0'`, `'____/0'`). */
   id: string;
   rulesetId: RulesetId;
   /** How the ruleset plays the chart's long notes (LN / per-note / charge). */

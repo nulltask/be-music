@@ -98,8 +98,8 @@ describe('a NONSTOP run', () => {
   }
 
   test('is judged under the ruleset of its stitched play', () => {
-    const { log } = nonstopRun([], stage({ kind: 'nonstop' }, { judgeRuleset: 'iidx' }));
-    expect(resolveCoursePlayedRuleset(log)).toBe('iidx');
+    const { log } = nonstopRun([], stage({ kind: 'nonstop' }, { judgeRuleset: '____' }));
+    expect(resolveCoursePlayedRuleset(log)).toBe('____');
   });
 
   test('checks only the stitched play against the constraints, given up or not', () => {

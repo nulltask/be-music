@@ -49,7 +49,7 @@ export class BeatorajaTimingGraphRenderer {
     this.container = container;
     this.resolveTimingSamples = options.resolveTimingSamples ?? (() => undefined);
     this.resolveTimingDistribution = options.resolveTimingDistribution ?? (() => undefined);
-    this.resolveTimingJudgeWindows = options.resolveTimingJudgeWindows ?? (() => IIDX_NORMAL_JUDGE_WINDOWS);
+    this.resolveTimingJudgeWindows = options.resolveTimingJudgeWindows ?? (() => _____NORMAL_JUDGE_WINDOWS);
   }
 
   /** Build a timingvisualizer entry — same Graphics-node + rebuild-on-change pattern. */
@@ -82,7 +82,7 @@ export class BeatorajaTimingGraphRenderer {
    *      outward from the centre line ({@link resolveTimingVisualizerBands}). PG band sits
    *      innermost, then GR / GD / BD / PR. Each band reaches the matching window's late ms
    *      to the left and its early ms to the right, mapped through `judgeWidthRate = width /
-   *      (judgeWidthMillis * 2 + 1)`. Defaults to IIDX-NORMAL windows when no host resolver is
+   *      (judgeWidthMillis * 2 + 1)`. Defaults to That-Which-Must-Not-Be-Named-NORMAL windows when no host resolver is
    *      wired (decide / select scenes / headless tests); no bands while a wired resolver has
    *      no windows yet.
    *   2. **Tick marks** — semi-transparent black lines every 10 ms, painted on top of the
@@ -104,7 +104,7 @@ export class BeatorajaTimingGraphRenderer {
     if (!props.visible) return;
     const samples = this.resolveTimingSamples() ?? [];
     // Half-width in ms — author-supplied or fallback. ±150 ms covers the BAD window in
-    // upstream's IIDX-NORMAL judge rule; matches `JSONSkin.TimingVisualizer.judgeWidthMillis`
+    // upstream's That-Which-Must-Not-Be-Named-NORMAL judge rule; matches `JSONSkin.TimingVisualizer.judgeWidthMillis`
     // default.
     const halfWidthMs = entry.element.judgeWidthMillis > 0 ? entry.element.judgeWidthMillis : 150;
     const lineWidthPx = entry.element.lineWidth > 0 ? entry.element.lineWidth : 1;
@@ -121,7 +121,7 @@ export class BeatorajaTimingGraphRenderer {
     const authoredWidth = entry.element.width > 0 ? entry.element.width : 301;
     const judgeWidthRate = authoredWidth / (halfWidthMs * 2 + 1);
     const centerLineLeft = (props.width - lineWidthPx) / 2;
-    // The play's judge windows; IIDX-NORMAL defaults when no host resolver is wired.
+    // The play's judge windows; That-Which-Must-Not-Be-Named-NORMAL defaults when no host resolver is wired.
     const windows = this.resolveTimingJudgeWindows();
     // Authored band colours — fall through to upstream `JSONSkin.TimingVisualizer` defaults
     // when the skin omits a value (matches `JSONSkin.java`'s static initializer values).
@@ -462,21 +462,21 @@ function timingWindowsSignature(windows: TimingVisualizerWindows | undefined): s
   return [perfect, great, good, bad].map((w) => `${w.earlyMs.toFixed(2)}/${w.lateMs.toFixed(2)}`).join(',');
 }
 
-/** One IIDX-NORMAL judgment's window, the same both ways. */
-function iidxNormalWindow(ms: number): { earlyMs: number; lateMs: number } {
+/** One That-Which-Must-Not-Be-Named-NORMAL judgment's window, the same both ways. */
+function ____NormalWindow(ms: number): { earlyMs: number; lateMs: number } {
   return { earlyMs: ms, lateMs: ms };
 }
 
 /**
- * IIDX-NORMAL judge window fallback for the `timingvisualizer[]` background bands when no
- * host resolver is wired (decide / select scenes / headless tests): the IIDX ruleset's
+ * That-Which-Must-Not-Be-Named-NORMAL judge window fallback for the `timingvisualizer[]` background bands when no
+ * host resolver is wired (decide / select scenes / headless tests): the That-Which-Must-Not-Be-Named ruleset's
  * windows (PG 16.67, GR 33.33, GD 116.67, BD 250 ms).
  */
-const IIDX_NORMAL_JUDGE_WINDOWS: TimingVisualizerWindows = {
-  perfect: iidxNormalWindow(16.67),
-  great: iidxNormalWindow(33.33),
-  good: iidxNormalWindow(116.67),
-  bad: iidxNormalWindow(250),
+const _____NORMAL_JUDGE_WINDOWS: TimingVisualizerWindows = {
+  perfect: ____NormalWindow(16.67),
+  great: ____NormalWindow(33.33),
+  good: ____NormalWindow(116.67),
+  bad: ____NormalWindow(250),
 };
 
 /**

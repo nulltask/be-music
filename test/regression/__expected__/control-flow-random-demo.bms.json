@@ -238,8 +238,8 @@
               "cleared": false
             }
           },
-          "iidx": {
-            "ruleset": "iidx/0",
+          "____": {
+            "ruleset": "____/0",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -313,7 +313,7 @@
                 "failedMidPlay": false
               }
             },
-            "iidx": {
+            "____": {
               "total": 17,
               "perfect": 0,
               "fast": 0,
@@ -388,8 +388,8 @@
               "cleared": true
             }
           },
-          "iidx": {
-            "ruleset": "iidx/0",
+          "____": {
+            "ruleset": "____/0",
             "judge": {
               "pgreat": 17,
               "great": 0,
@@ -463,7 +463,7 @@
                 "failedMidPlay": false
               }
             },
-            "iidx": {
+            "____": {
               "total": 17,
               "perfect": 17,
               "fast": 0,
@@ -539,8 +539,8 @@
             },
             "fullCombo": false
           },
-          "iidx": {
-            "ruleset": "iidx/0",
+          "____": {
+            "ruleset": "____/0",
             "judge": {
               "pgreat": 7,
               "great": 4,
@@ -615,7 +615,7 @@
               },
               "fullCombo": false
             },
-            "iidx": {
+            "____": {
               "total": 17,
               "perfect": 7,
               "fast": 2,
@@ -738,8 +738,8 @@
               "cleared": false
             }
           },
-          "iidx": {
-            "ruleset": "iidx/0",
+          "____": {
+            "ruleset": "____/0",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -813,7 +813,7 @@
                 "failedMidPlay": false
               }
             },
-            "iidx": {
+            "____": {
               "total": 7,
               "perfect": 0,
               "fast": 0,
@@ -888,8 +888,8 @@
               "cleared": true
             }
           },
-          "iidx": {
-            "ruleset": "iidx/0",
+          "____": {
+            "ruleset": "____/0",
             "judge": {
               "pgreat": 7,
               "great": 0,
@@ -963,7 +963,7 @@
                 "failedMidPlay": false
               }
             },
-            "iidx": {
+            "____": {
               "total": 7,
               "perfect": 7,
               "fast": 0,
@@ -1038,8 +1038,8 @@
               "cleared": true
             }
           },
-          "iidx": {
-            "ruleset": "iidx/0",
+          "____": {
+            "ruleset": "____/0",
             "judge": {
               "pgreat": 3,
               "great": 2,
@@ -1113,7 +1113,7 @@
                 "failedMidPlay": false
               }
             },
-            "iidx": {
+            "____": {
               "total": 7,
               "perfect": 3,
               "fast": 1,

@@ -587,7 +587,7 @@
                             "enum": [
                               "lr2",
                               "beatoraja",
-                              "iidx"
+                              "____"
                             ],
                             "type": "string",
                             "description": "Ruleset the figures are simulated under."
@@ -686,7 +686,7 @@
                             "enum": [
                               "lr2",
                               "beatoraja",
-                              "iidx"
+                              "____"
                             ],
                             "type": "string",
                             "description": "Ruleset the figures are simulated under."
@@ -1013,7 +1013,7 @@
                       "enum": [
                         "lr2",
                         "beatoraja",
-                        "iidx"
+                        "____"
                       ],
                       "type": "string",
                       "description": "Ruleset the figures are simulated under."
@@ -1051,7 +1051,7 @@
                             "enum": [
                               "lr2",
                               "beatoraja",
-                              "iidx"
+                              "____"
                             ],
                             "type": "string",
                             "description": "Ruleset the figures are simulated under."
@@ -1751,7 +1751,7 @@
               "enum": [
                 "lr2",
                 "beatoraja",
-                "iidx"
+                "____"
               ],
               "type": "string"
             },
@@ -1977,7 +1977,7 @@
               "enum": [
                 "lr2",
                 "beatoraja",
-                "iidx"
+                "____"
               ],
               "type": "string"
             },
@@ -2104,7 +2104,7 @@
                             "enum": [
                               "lr2",
                               "beatoraja",
-                              "iidx"
+                              "____"
                             ],
                             "type": "string",
                             "description": "Ruleset the figures are simulated under."
@@ -2230,7 +2230,7 @@
                             "enum": [
                               "lr2",
                               "beatoraja",
-                              "iidx"
+                              "____"
                             ],
                             "type": "string",
                             "description": "Ruleset the figures are simulated under."
@@ -2603,7 +2603,7 @@
                             "enum": [
                               "lr2",
                               "beatoraja",
-                              "iidx"
+                              "____"
                             ],
                             "type": "string",
                             "description": "Ruleset the figures are simulated under."
@@ -2721,7 +2721,7 @@
               "enum": [
                 "lr2",
                 "beatoraja",
-                "iidx"
+                "____"
               ],
               "type": "string"
             },
@@ -2813,7 +2813,7 @@
                       "enum": [
                         "lr2",
                         "beatoraja",
-                        "iidx"
+                        "____"
                       ],
                       "type": "string",
                       "description": "Ruleset the figures are simulated under."
@@ -2854,7 +2854,7 @@
                             "enum": [
                               "lr2",
                               "beatoraja",
-                              "iidx"
+                              "____"
                             ],
                             "type": "string",
                             "description": "Ruleset the figures are simulated under."
@@ -3592,7 +3592,7 @@
               "enum": [
                 "lr2",
                 "beatoraja",
-                "iidx"
+                "____"
               ],
               "type": "string"
             },
@@ -3842,7 +3842,7 @@
               "enum": [
                 "lr2",
                 "beatoraja",
-                "iidx"
+                "____"
               ],
               "type": "string"
             },

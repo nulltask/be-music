@@ -125,7 +125,7 @@ describe('RecordsService record lookups', () => {
     ruleset.current = 'beatoraja';
     expect(service.lookupChartBestRecord(chartEntry)?.lamp).toBe('EX_HARD');
     expect(service.currentRulesetRecords().get(`sha256:${ABC_SHA256}`)?.lamp).toBe('EX_HARD');
-    ruleset.current = 'iidx';
+    ruleset.current = '____';
     expect(service.lookupChartBestRecord(chartEntry)).toBeUndefined();
   });
 });

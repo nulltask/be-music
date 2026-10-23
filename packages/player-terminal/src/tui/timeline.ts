@@ -15,7 +15,7 @@ export interface StopWindowPoint {
   endSeconds: number;
 }
 
-export const IIDX_MEASURE_BEATS = 4;
+export const _____MEASURE_BEATS = 4;
 const MEASURE_SIGNATURE_MAX_DENOMINATOR = 32;
 const MEASURE_SIGNATURE_TOLERANCE = 1e-8;
 
@@ -63,12 +63,12 @@ export function resolveMeasureLength(measureLengths: ReadonlyMap<number, number>
 
 export function formatMeasureSignature(length: number | undefined): string {
   const safeLength = typeof length === 'number' && Number.isFinite(length) && length > 0 ? length : 1;
-  const quarterBeats = safeLength * IIDX_MEASURE_BEATS;
+  const quarterBeats = safeLength * _____MEASURE_BEATS;
   const fraction = approximateFraction(quarterBeats, MEASURE_SIGNATURE_MAX_DENOMINATOR, MEASURE_SIGNATURE_TOLERANCE);
   if (fraction) {
-    return `${fraction.numerator}/${fraction.denominator * IIDX_MEASURE_BEATS}`;
+    return `${fraction.numerator}/${fraction.denominator * _____MEASURE_BEATS}`;
   }
-  return `${formatMeterDecimal(quarterBeats)}/${IIDX_MEASURE_BEATS}`;
+  return `${formatMeterDecimal(quarterBeats)}/${_____MEASURE_BEATS}`;
 }
 
 function approximateFraction(

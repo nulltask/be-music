@@ -99,7 +99,7 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
 
   const soundChannels = normalizeBmsonSoundChannels(document.sound_channels);
   json.preservation.bmson.soundChannels = soundChannels;
-  // Lane mapping honors `mode_hint` so canonical IIDX / Pop'n bmson dialects route the right keys onto the right BMS
+  // Lane mapping honors `mode_hint` so canonical That-Which-Must-Not-Be-Named / Pop'n bmson dialects route the right keys onto the right BMS
   // channels — the legacy positional fallback would mis-route `beat-7k` x=6/7 onto scratch (`16`) / FREE ZONE (`17`)
   // because those channel digits come next in numeric order.
   // The positional fallback numbers every lane in use, so the beatoraja lane extensions (hidden notes and mines) count

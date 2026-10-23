@@ -60,7 +60,7 @@ describe('player', () => {
       leadInMs: 0,
       audio: false,
       tui: false,
-      judgeRuleset: 'iidx',
+      judgeRuleset: '____',
       recordReplay: { chartSHA256: 'ABCDEF0123456789' },
       onReplayRecorded: (recorded) => {
         replay = recorded;
@@ -71,10 +71,10 @@ describe('player', () => {
     });
 
     expect(replay!.chart.sha256).toBe('abcdef0123456789');
-    expect(replay!.play.judgeRuleset).toBe('iidx');
+    expect(replay!.play.judgeRuleset).toBe('____');
     const parsed = parseReplay(serializeReplay(replay!));
     expect(parsed.chart.sha256).toBe('abcdef0123456789');
-    expect(parsed.play.judgeRuleset).toBe('iidx');
+    expect(parsed.play.judgeRuleset).toBe('____');
   });
 
   test('player: ESC-interrupted play records an aborted replay', async () => {

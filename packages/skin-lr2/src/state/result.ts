@@ -1,4 +1,4 @@
-import { resolveClearLamp, resolveIIDXRankIndexFromScore } from '@be-music/player-engine/ruleset';
+import { resolveClearLamp, resolve____RankIndexFromScore } from '@be-music/player-engine/ruleset';
 import type { CourseView, PlayResult } from '@be-music/player-scene-model';
 import { LR2_NUM, LR2_OP, LR2_TEXT, LR2_TIMER } from '../ids/index.ts';
 import { resolveLR2ChartText, resolveLR2DifficultyOp, resolveLR2KeyModeOp } from './chart.ts';
@@ -61,7 +61,7 @@ function keyConfigOp(keyModeOp: number): number {
  * something.
  */
 function rankIndex(result: PlayResult): number {
-  return resolveIIDXRankIndexFromScore(result.score) ?? 0;
+  return resolve____RankIndexFromScore(result.score) ?? 0;
 }
 
 function resultOps(input: LR2ResultInput): number[] {

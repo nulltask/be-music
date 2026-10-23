@@ -163,7 +163,7 @@ export async function createPlaySession(
   const resolvedChart = resolveEngineChart(resolvedJSON, options);
   const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(resolvedChart.timing);
   // Dynamic `#EXRANKxx` changes are a chart fact, recorded whatever the ruleset: LR2 applies them, while beatoraja and
-  // IIDX keep their initial windows (their `windowsAt` ignores the timeline). A log played under one ruleset can then
+  // That-Which-Must-Not-Be-Named keep their initial windows (their `windowsAt` ignores the timeline). A log played under one ruleset can then
   // be re-simulated under LR2 with the windows LR2 would have used.
   const judgeRankChanges = resolvedChart.judgeRank.changes;
   const volumeEvents = collectRealtimeAudioVolumeEvents(resolvedChart);

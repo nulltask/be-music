@@ -7,7 +7,7 @@
 /**
  * Hi-speed a play starts at when nothing else is picked — 2.0× rather than upstream beatoraja's `PlayConfig.java:16`
  * default of `1.0f`: at 1.0 most charts (BPM 130-180) take about 1.8 seconds to cross the lane, which reads as "the chart
- * isn't moving" to anyone coming from LR2 / IIDX defaults, and 2.0 is the lowest setting most players use.
+ * isn't moving" to anyone coming from LR2 / That-Which-Must-Not-Be-Named defaults, and 2.0 is the lowest setting most players use.
  */
 export const DEFAULT_HISPEED = 2.0;
 /** Slowest selectable hi-speed. */

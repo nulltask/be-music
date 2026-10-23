@@ -175,7 +175,7 @@ export interface DemoGUIState extends PlayTempoSettings {
    */
   submitToLeaderboard: boolean;
   /**
-   * The compat ruleset the shared engine judges under (`PlayerOptions.judgeRuleset`): LR2 (default) / beatoraja / IIDX.
+   * The compat ruleset the shared engine judges under (`PlayerOptions.judgeRuleset`): LR2 (default) / beatoraja / That-Which-Must-Not-Be-Named.
    * It owns every judge rule: the windows, note selection, empty POOR, the long-note style, the gauge and the score.
    * Latched at song start (the Play options folder is disabled during a play) and recorded into the replay.
    */

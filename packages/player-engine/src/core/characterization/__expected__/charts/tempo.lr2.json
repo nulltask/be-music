@@ -115,8 +115,8 @@
         "gauge": {"type":"NORMAL","final":100,"cleared":true},
         "fullCombo": false
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":4,"great":2,"good":2,"bad":1,"poor":0,"emptyPoor":0},
         "fast": 3,
         "slow": 1,
@@ -463,8 +463,8 @@
         "djLevel": "AAA",
         "gauge": {"type":"NORMAL","final":100,"cleared":true}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":9,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
         "fast": 0,
         "slow": 0,

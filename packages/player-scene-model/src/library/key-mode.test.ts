@@ -49,7 +49,7 @@ describe('resolveLibraryChartPlayVariant', () => {
     ).toBe('9');
   });
 
-  test('PMS / 9 KEY: `22..25` without the IIDX 2P channels, and a full `11..19` 1P keyboard', () => {
+  test('PMS / 9 KEY: `22..25` without the That-Which-Must-Not-Be-Named 2P channels, and a full `11..19` 1P keyboard', () => {
     expect(resolveLibraryChartPlayVariant(chartOn('Song/main.bms', ['11', '15', '22']))).toBe('9');
     expect(resolveLibraryChartPlayVariant(chartOn('Song/main.bms', ['11', '15', '16', '21', '22', '25', '26']))).toBe(
       '10',

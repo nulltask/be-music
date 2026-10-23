@@ -1078,10 +1078,10 @@ describe('chart-writer', () => {
       const lateEdges = (set: JudgeWindowSetUs): number[] => set.judges.map((pair) => pair[1]);
 
       test.each(['#RANK 0', '#RANK 1', '#RANK 2', '#RANK 3', '#RANK 4', '#DEFEXRANK 120', '#RANK 7'])(
-        'IIDX (rank-independent windows) matches for %s',
+        '____ (rank-independent windows) matches for %s',
         (header) => {
           const { bms, bmson } = convert(bmsChart(header));
-          expect(windowsOf(bmson, 'iidx')).toEqual(windowsOf(bms, 'iidx'));
+          expect(windowsOf(bmson, '____')).toEqual(windowsOf(bms, '____'));
         },
       );
 

@@ -27,7 +27,7 @@ import {
  * that behaviour: update it there with `vp test run -u` and say why in the pull request.
  */
 
-const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', 'iidx'];
+const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', '____'];
 
 /** Every note pressed `offsetsMs[i]` off its time (cycled), every `skipEvery`th left alone, long notes held to their end. */
 function scriptForNotes(

@@ -24,7 +24,7 @@ import { isChargeLongNoteMode, resolveEffectiveLongNoteMode } from './long-note.
  *   `GaugeProperty` LR2 variants with `death = 2` / guts `{32, 0.6}`) cross-checked against
  *   the OpenLR2 transcription (`GOMazk/OpenLR2` — `Scene04_Play.cpp`, `LR2_bmsload.cpp`,
  *   `LR2f.cpp` ProcSinglenote for the forward BAD re-judge chain).
- * - IIDX: community measurements (iidx.org compendium; dbm_capture / leisurely1 measurements). IIDX internals are
+ * - That-Which-Must-Not-Be-Named: community measurements (https://iidx.org compendium; dbm_capture / leisurely1 measurements). That-Which-Must-Not-Be-Named internals are
  *   not public — those values are the current community consensus, not vendor data.
  *
  * Window convention (borrowed from beatoraja): `dmTimeUs = noteTimeUs - inputTimeUs`, so POSITIVE deltas are
@@ -49,7 +49,7 @@ export interface RulesetWindowTables {
 }
 
 /** Every supported judge ruleset id, in canonical display order. */
-export const RULESET_IDS = ['lr2', 'beatoraja', 'iidx'] as const;
+export const RULESET_IDS = ['lr2', 'beatoraja', '____'] as const;
 
 export type RulesetId = (typeof RULESET_IDS)[number];
 
@@ -66,7 +66,7 @@ export type LongNoteStyle =
   | 'ln'
   /** beatoraja: per-note lnMode decides LN (1) vs CN (2) vs HCN (3). */
   | 'per-note'
-  /** IIDX: every long note is a CN (HCN when the chart says mode 3) — head and tail judged separately. */
+  /** That-Which-Must-Not-Be-Named: every long note is a CN (HCN when the chart says mode 3) — head and tail judged separately. */
   | 'charge';
 
 /**
@@ -74,7 +74,7 @@ export type LongNoteStyle =
  *
  * - `'press-ahead-or-hold'` — LR2beta3: strict GREAT reach ahead of the line on key-down, or held crossing;
  *   passed mines retire immediately and hits count as POOR without changing combo or EX-SCORE.
- * - `'press-or-hold'` — the historical provisional IIDX model: the lane's key is held as the mine crosses the judge line, or
+ * - `'press-or-hold'` — the historical provisional That-Which-Must-Not-Be-Named model: the lane's key is held as the mine crosses the judge line, or
  *   pressed while the mine is inside the PGREAT window.
  * - `'hold'` — beatoraja (`JudgeManager` L244): the key is down at the moment the mine crosses the line; a press
  *   shortly before or after does nothing.
@@ -99,7 +99,7 @@ export type LNEarlyReleaseRule = 'head-unless-beyond-good' | 'worse-of-head-and-
  *
  * - `'rejudge-head-or-empty-poor'` — LR2 (OpenLR2 `ProcLongnote`, `LR2f.cpp:7547-7590`): a press within the BAD window of
  *   the LN's head judges the head again; any other press is an empty POOR.
- * - `'ignore'` — beatoraja (`JudgeManager` L355-377): a re-press during the hold, judging nothing. IIDX follows it: one
+ * - `'ignore'` — beatoraja (`JudgeManager` L355-377): a re-press during the hold, judging nothing. That-Which-Must-Not-Be-Named follows it: one
  *   button per lane cannot be pressed again while held.
  */
 export type PressDuringLongNoteRule = 'rejudge-head-or-empty-poor' | 'ignore';
@@ -153,10 +153,10 @@ export interface RulesetConfig {
    * How long (µs) a long-note release that would score BAD or worse before the tail waits before it is settled, per
    * lane kind. Pressing the lane again inside it resumes the hold, as if it had never been let go; any other release
    * settles at once. beatoraja's `JudgeProperty.longnoteMargin` / `longscratchMargin` (200 ms on PMS keys, 0
-   * elsewhere); LR2 and IIDX settle every release at once.
+   * elsewhere); LR2 and That-Which-Must-Not-Be-Named settle every release at once.
    */
   longNoteReleaseMarginUs: { note: number; scratch: number };
-  /** IIDX: a BAD / POOR on a charge-note head skips the tail judgment entirely. */
+  /** That-Which-Must-Not-Be-Named: a BAD / POOR on a charge-note head skips the tail judgment entirely. */
   headBadSkipsTail: boolean;
   comboBreaksOnEmptyPoor: boolean;
   /** When a mine detonates (see {@link MineTrigger}). */
@@ -179,8 +179,8 @@ export interface RulesetConfig {
    * so a run judged under LR2 must display the sum to match the real thing. Purely a PRESENTATION rule: the
    * counts stay separate in `PlayerSummary`, and EX-SCORE and combo are never affected either way.
    *
-   * beatoraja and IIDX are left `false`: beatoraja shows an empty-POOR figure of its own, and no first-party
-   * measurement of IIDX's counter was found. Flip either one when a source turns up.
+   * beatoraja and That-Which-Must-Not-Be-Named are left `false`: beatoraja shows an empty-POOR figure of its own, and no first-party
+   * measurement of That-Which-Must-Not-Be-Named's counter was found. Flip either one when a source turns up.
    */
   emptyPoorCountsInPoorDisplay: boolean;
 }
@@ -358,21 +358,21 @@ function resolveBeatorajaWindowTables(chart: RulesetChartFacts): RulesetWindowTa
   return { note, scratch, longNoteEnd, longScratchEnd };
 }
 
-// IIDX community-consensus windows (iidx.org): PG ±1F / GR ±2F / GD ±7F / BD ±15F at 60 fps.
-const IIDX_NOTE: JudgeWindowSetUs = {
+// That-Which-Must-Not-Be-Named community-consensus windows (https://iidx.org): PG ±1F / GR ±2F / GD ±7F / BD ±15F at 60 fps.
+const _____NOTE: JudgeWindowSetUs = {
   judges: [
     [-16667, 16667],
     [-33333, 33333],
     [-116667, 116667],
     [-250000, 250000],
   ],
-  // The IIDX empty-POOR window has never been measured precisely; beatoraja's MS window (late 150 ms /
+  // The That-Which-Must-Not-Be-Named empty-POOR window has never been measured precisely; beatoraja's MS window (late 150 ms /
   // early 500 ms) is used as the stand-in.
   ms: [-150000, 500000],
 };
-// IIDX CN release windows are "significantly wider" but unmeasured — beatoraja's SEVENKEYS long-note end
+// That-Which-Must-Not-Be-Named CN release windows are "significantly wider" but unmeasured — beatoraja's SEVENKEYS long-note end
 // windows are used as the stand-in.
-const IIDX_LN_END: JudgeWindowSetUs = {
+const _____LN_END: JudgeWindowSetUs = {
   judges: [
     [-120000, 120000],
     [-160000, 160000],
@@ -381,11 +381,11 @@ const IIDX_LN_END: JudgeWindowSetUs = {
   ],
 };
 
-const IIDX_WINDOWS: RulesetWindowTables = {
-  note: IIDX_NOTE,
-  scratch: IIDX_NOTE,
-  longNoteEnd: IIDX_LN_END,
-  longScratchEnd: IIDX_LN_END,
+const _____WINDOWS: RulesetWindowTables = {
+  note: _____NOTE,
+  scratch: _____NOTE,
+  longNoteEnd: _____LN_END,
+  longScratchEnd: _____LN_END,
 };
 
 /** LR2 default TOTAL (OpenLR2 `LR2_bmsload.cpp`): piecewise-linear in the note count, ×0.8. */
@@ -409,10 +409,10 @@ export function resolveBeatorajaDefaultTotal(noteCount: number): number {
 }
 
 /**
- * IIDX gauge recovery unit ("a value", percent per PGREAT/GREAT) — iidx.org measurement: `260 / n` up to 338
+ * That-Which-Must-Not-Be-Named gauge recovery unit ("a value", percent per PGREAT/GREAT) — https://iidx.org measurement: `260 / n` up to 338
  * notes, `760.5 / (n + 650)` beyond, rounded to the nearest 0.02 %.
  */
-export function resolveIIDXGaugeUnit(noteCount: number): number {
+export function resolve____GaugeUnit(noteCount: number): number {
   const n = Math.max(1, noteCount);
   const raw = n <= 338 ? 260 / n : 760.5 / (n + 650);
   return Math.round(raw / 0.02 + 1e-9) * 0.02;
@@ -622,8 +622,8 @@ function resolveBeatorajaGauge(gaugeId: string, total: number, noteCount: number
   return { id: index >= 0 ? gaugeId : 'NORMAL', min, max, initial, border, survival: min === 0, values, guts };
 }
 
-function resolveIIDXGauge(gaugeId: string, noteCount: number): GaugeSpec {
-  const a = resolveIIDXGaugeUnit(noteCount);
+function resolve____Gauge(gaugeId: string, noteCount: number): GaugeSpec {
+  const a = resolve____GaugeUnit(noteCount);
   switch (gaugeId) {
     case 'ASSISTED-EASY':
       return {
@@ -655,7 +655,7 @@ function resolveIIDXGauge(gaugeId: string, noteCount: number): GaugeSpec {
         initial: 100,
         border: 0,
         survival: true,
-        // Low Life Adjustment: at or below 30 %, BAD / POOR damage is halved (iidx.org).
+        // Low Life Adjustment: at or below 30 %, BAD / POOR damage is halved (https://iidx.org).
         values: [0.16, 0.16, 0, -5, -9, -5],
         guts: [{ threshold: 30, multiplier: 0.5, inclusive: true }],
       };
@@ -713,7 +713,7 @@ function countRulesetNotes(chart: RulesetChartFacts, style: LongNoteStyle): numb
 
 /**
  * The TOTAL a ruleset falls back to when the chart names none: LR2's note-count curve for `lr2`, beatoraja's formula
- * for `beatoraja`. The `iidx` gauge never reads TOTAL (its recovery comes from {@link resolveIIDXGaugeUnit}), so its
+ * for `beatoraja`. The `____` gauge never reads TOTAL (its recovery comes from {@link resolve____GaugeUnit}), so its
  * reported TOTAL follows the `lr2` curve.
  */
 function resolveDefaultTotal(rulesetId: RulesetId, baseNoteCount: number, laneMode: string): number {
@@ -857,27 +857,27 @@ export function resolveRuleset(
   }
 
   const noteCount = countRulesetNotes(chart, 'charge');
-  const effectiveTotal = resolveEffectiveTotal('iidx', chart, baseNotes);
-  const iidxTables = constrain(IIDX_WINDOWS);
+  const effectiveTotal = resolveEffectiveTotal('____', chart, baseNotes);
+  const ____Tables = constrain(_____WINDOWS);
   return {
-    id: 'iidx/0',
-    rulesetId: 'iidx',
-    windows: iidxTables,
-    windowsAt: () => iidxTables,
+    id: '____/0',
+    rulesetId: '____',
+    windows: ____Tables,
+    windowsAt: () => ____Tables,
     selection: 'lowest',
     multiBad: false,
     ignoreLateBadOnLNHead: false,
     longNoteStyle: 'charge',
-    // IIDX plays no LN (every long note is a charge note), so this never applies.
+    // That-Which-Must-Not-Be-Named plays no LN (every long note is a charge note), so this never applies.
     lnEarlyRelease: 'worse-of-head-and-tail',
     pressDuringLongNote: 'ignore',
     longNoteReleaseMarginUs: { note: 0, scratch: 0 },
     headBadSkipsTail: true,
     comboBreaksOnEmptyPoor: false,
-    // IIDX has no mines; LR2's model stands in until there is evidence otherwise.
+    // That-Which-Must-Not-Be-Named has no mines; LR2's model stands in until there is evidence otherwise.
     mineTrigger: 'press-or-hold',
     hcnTick: { heldJudge: 0, heldRate: 1, releasedJudge: 5, releasedRate: 1 },
-    gauge: courseGauge(effectiveTotal) ?? resolveIIDXGauge(gaugeId, noteCount),
+    gauge: courseGauge(effectiveTotal) ?? resolve____Gauge(gaugeId, noteCount),
     noteCount,
     effectiveTotal,
     moneyScore: false,

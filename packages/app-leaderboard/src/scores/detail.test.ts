@@ -31,7 +31,7 @@ const detail = (player: ScoreDetail['player']) =>
     },
     chart: {},
     player,
-    results: [result('lr2'), result('iidx')],
+    results: [result('lr2'), result('____')],
   }) as unknown as ScoreDetail;
 
 describe('toScoreResponse', () => {
@@ -44,7 +44,7 @@ describe('toScoreResponse', () => {
     });
     expect(response.player).not.toHaveProperty('anonymous');
     expect(response.player).not.toHaveProperty('avatarKey');
-    expect(response.results.map((entry) => entry.ruleset)).toEqual(['lr2', 'iidx']);
+    expect(response.results.map((entry) => entry.ruleset)).toEqual(['lr2', '____']);
     expect(response.results[0]).not.toHaveProperty('scoreId');
   });
 
