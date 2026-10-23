@@ -5,7 +5,7 @@
  * rather than through the scene; the view's touch lanes reach it as `lane` intents.
  */
 
-import type { CourseView, LibraryChart, PlayOptions } from '@be-music/player-scene-model';
+import type { CourseView, LibraryChart, PlayOptions, SystemSoundSet } from '@be-music/player-scene-model';
 import { SILENT_AUDIO } from '@be-music/player-skin-sdk';
 import type { AudioService } from '../../runtime/audio-service.ts';
 import type { PlayDisposeOptions } from './play-options.ts';
@@ -30,7 +30,8 @@ export interface PlaySceneFacts {
   readonly course?: CourseView;
   readonly playOptions: PlayOptions;
   readonly scoreTargets?: PlayFrame['scoreTargets'];
-  readonly audio?: Pick<AudioService, 'stopOwned'>;
+  readonly audio?: Pick<AudioService, 'stopOwned' | 'playCue'>;
+  readonly sounds?: SystemSoundSet;
 }
 
 /** A play session driven by a `SessionScene`. See the module comment. */
@@ -44,6 +45,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
   private readonly facts: PlaySceneFacts;
   private pending: PlayViewEvent[] = [];
   private enteredAtMs = 0;
+  private failureSoundPlayed = false;
 
   public constructor(play: PlaySession, facts: PlaySceneFacts) {
     this.play = play;
@@ -52,6 +54,11 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
 
   /** A moment the play raised for its view (the session's theme `moment`), queued for the next frame. */
   public queueEvent(event: PlayMoment): void {
+    if (event.kind === 'exit-close' && !this.failureSoundPlayed) {
+      this.failureSoundPlayed = true;
+      const sound = this.facts.sounds?.playStop;
+      if (sound !== undefined) void this.facts.audio?.playCue(sound, { owner: this });
+    }
     const mapped = playViewEventFromMoment(event);
     if (mapped !== undefined) this.pending.push(mapped);
   }

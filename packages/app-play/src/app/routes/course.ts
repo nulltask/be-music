@@ -46,7 +46,7 @@ export interface CourseRouteDeps {
   /** The course run in progress. */
   readonly courses: CourseRunService;
   /** The library: the charts a random course draws its stages from. */
-  readonly library: Pick<LibraryService, 'collection'>;
+  readonly library: Pick<LibraryService, 'collection' | 'prepareDrawnCourse'>;
   /** The chart hashes a random course's stage filters match, and the course's best record. */
   readonly records: Pick<RecordsService, 'resolveChartHashes' | 'recordCourseResult'>;
   /** The course maker, which a NEW COURSE bar starts. */
@@ -69,7 +69,7 @@ export interface CourseRouteDeps {
   readonly showDecide: (
     chartEntry: LibraryChart,
     overrides: { autoPlay?: boolean },
-    then: { start: () => Promise<void>; cancel?: () => void },
+    then: { start: () => Promise<void>; cancel?: () => void; shown?: () => void },
   ) => Promise<void>;
   /** Plays a course stage, with the course's AUTO when it was started with one. */
   readonly playChart: (
@@ -148,8 +148,10 @@ export class CourseRoute {
       this.setStatus(describeUnplayableCourse(entry));
       return;
     }
-    this.courses.leaveSelect(this.selectNavigation());
+    const navigation = this.selectNavigation();
+    this.courses.leaveSelect(navigation);
     let course = entry;
+    let rememberDraw: (() => void) | undefined;
     if (plan.action === 'draw') {
       const candidates = await Promise.all(
         this.library.collection.charts.map(async (chartEntry) => ({
@@ -162,7 +164,9 @@ export class CourseRoute {
         this.setStatus(describeRandomCourseDrawFailure(entry.definition.name, drawn));
         return;
       }
-      course = drawn.course;
+      const prepared = this.library.prepareDrawnCourse(drawn.course, navigation);
+      course = prepared.course;
+      rememberDraw = prepared.remember;
     }
     if (planCourseStart(course).action === 'nonstop') {
       await this.startNonstopCourse(course, { decide: true });
@@ -181,6 +185,16 @@ export class CourseRoute {
       {
         start: () => this.playNextCourseStage(),
         cancel: () => this.courses.cancelRun(active),
+        ...(rememberDraw !== undefined
+          ? {
+              shown: () => {
+                if (this.courses.active !== active) return;
+                rememberDraw();
+                if (navigation !== undefined)
+                  this.courses.leaveSelect({ ...navigation, focusKey: `course:${course.id}` });
+              },
+            }
+          : {}),
       },
     );
   }

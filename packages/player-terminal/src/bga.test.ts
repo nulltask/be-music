@@ -1142,6 +1142,9 @@ describe('player bga', () => {
         renderer?.triggerPoor(0);
         const beforeFirstPoorCue = parseANSIPixels(renderer?.getANSILines(0) ?? []);
         expect(beforeFirstPoorCue[10]?.[20]).toEqual(expected);
+        renderer?.triggerPoor(2.1);
+        const explicit = parseANSIPixels(renderer?.getANSILines(2.1) ?? []);
+        expect(explicit[10]?.[20]).toEqual(poorBGA === '2' ? { r: 255, g: 0, b: 0 } : { r: 0, g: 255, b: 0 });
       } finally {
         await rm(baseDir, { recursive: true, force: true });
       }
@@ -1522,4 +1525,37 @@ describe('player bga', () => {
       opaqueMask: new Uint8Array(width * height),
     };
   }
+  test('POORBGA 1 overlays transparent POOR pixels on the normal BGA in ANSI and Kitty output', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-poor-overlay-'));
+    try {
+      await writePNG(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+      await writePNG(join(baseDir, 'poor.png'), 256, 256, (x) => ({ r: 0, g: 255, b: 0, a: x < 128 ? 0 : 255 }));
+      const json = createEmptyJSON('bms');
+      json.metadata.bpm = 120;
+      json.bms.poorBGA = '1';
+      json.resources.bmp = { '01': 'base.png', '02': 'poor.png' };
+      json.events = [
+        { measure: 0, channel: '04', position: [0, 1], value: '01' },
+        { measure: 0, channel: '06', position: [0, 1], value: '02' },
+      ];
+      const renderer = await createBgaANSIRenderer(json, { baseDir, width: 40, height: 20 });
+      expect(renderer).toBeDefined();
+      renderer?.triggerPoor(0);
+      const pixels = parseANSIPixels(renderer?.getANSILines(0) ?? []);
+      expect(pixels[10]?.[5]).toEqual({ r: 255, g: 0, b: 0 });
+      expect(pixels[10]?.[35]).toEqual({ r: 0, g: 255, b: 0 });
+      const kitty = renderer!.getKittyImage(0);
+      const rgb = (x: number) =>
+        Array.from(
+          kitty.rgb.slice(
+            (Math.floor(kitty.pixelHeight / 2) * kitty.pixelWidth + x) * 3,
+            (Math.floor(kitty.pixelHeight / 2) * kitty.pixelWidth + x) * 3 + 3,
+          ),
+        );
+      expect(rgb(5)).toEqual([255, 0, 0]);
+      expect(rgb(kitty.pixelWidth - 5)).toEqual([0, 255, 0]);
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
 });

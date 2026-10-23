@@ -341,3 +341,40 @@ describe('isMissLayerShown', () => {
     expect(isMissLayerShown(10, 10.5, 0.5)).toBe(false);
   });
 });
+
+it('carries overlay policy to skin frames', () => {
+  expect(buildSkinBGAFrame({ base: 'b', layer: 'l', poor: 'p', poorOverlays: true }, (key) => key)).toEqual({
+    base: 'b',
+    layer: 'l',
+    poor: 'p',
+    poorActive: true,
+    poorOverlays: true,
+  });
+});
+
+it('resolves POOR overlay and hidden modes for explicit cues, including per-stage NONSTOP policy', () => {
+  const timeline = { base: [{ seconds: 0, bmpKey: 'b' }], layer: [], poor: [{ seconds: 0, bmpKey: 'p' }] };
+  expect(resolveBGAStacks({ timeline, seconds: 1, inPoorWindow: true, poorBGAMode: 1 })[0]).toMatchObject({
+    poorKey: 'p',
+    poorOverlays: true,
+  });
+  expect(resolveBGAStacks({ timeline, seconds: 1, inPoorWindow: true, poorBGAMode: 2 })[0]).not.toHaveProperty(
+    'poorKey',
+  );
+  const stages = [
+    { windowStart: 0, windowEnd: 10, bmpKeys: ['b', 'p'], poorBGAMode: 1 as const },
+    { windowStart: 0, windowEnd: 10, bmpKeys: ['b', 'p'], poorBGAMode: 2 as const },
+    { windowStart: 0, windowEnd: 10, bmpKeys: ['b', 'p'] },
+  ];
+  const stacks = resolveBGAStacks({
+    timeline,
+    seconds: 1,
+    inPoorWindow: true,
+    poorBGAMode: 2,
+    nonstop: { stages, timelines: [timeline, timeline, timeline] },
+  });
+  expect(stacks[0]).toMatchObject({ poorKey: 'p', poorOverlays: true });
+  expect(stacks[1]).not.toHaveProperty('poorKey');
+  expect(stacks[2]?.poorKey).toBe('p');
+  expect(stacks[2]).not.toHaveProperty('poorOverlays');
+});

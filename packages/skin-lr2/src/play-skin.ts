@@ -108,6 +108,8 @@ export interface LR2ThemeSkins {
 }
 
 export interface LR2ThemeSystemSounds {
+  /** Stage-failure stop cue (`#STOP`, conventionally `playstop.wav`). */
+  playStop?: LR2ThemeBGM;
   /** Bar / cursor-move click (`scratch.wav` in the LR2 default theme). */
   cursorMove?: LR2ThemeBGM;
   /** Folder-enter cue (`f-open.wav`). */
@@ -185,10 +187,10 @@ export async function loadLR2ThemeSkinsFromFiles(
     (sharedFiles as Map<string, LR2SkinFileEntry>).set(path, bytes);
   }
   // Total = play variants (one per LR2_PLAY_VARIANTS entry) + select skin + result skin + decide skin + course-result
-  // skin + 7 theme BGMs (select / decide / clear / fail / result / course clear / course fail) + 6 system sounds
-  // (cursor-move + folder open/close + option open/close/change). Hard-coding it to the structural shape below keeps the count honest if anyone adds another
-  // sub-task later (compile breaks when the awaited tuple disagrees with this constant).
-  const totalSubTasks = LR2_PLAY_VARIANTS.length + 17;
+  // skin + 7 theme BGMs (select / decide / clear / fail / result / course clear / course fail) + 7 system sounds
+  // (play-stop + cursor-move + folder open/close + option open/close/change). The progress regression test
+  // checks the final task count against this total.
+  const totalSubTasks = LR2_PLAY_VARIANTS.length + 18;
   let completed = 0;
   onProgress?.({ phase: 'theme', current: 0, total: totalSubTasks });
   const track = <T>(label: string, task: Promise<T>): Promise<T> =>
@@ -244,6 +246,7 @@ export async function loadLR2ThemeSkinsFromFiles(
     resultBGM,
     courseClearBGM,
     courseFailBGM,
+    playStop,
     cursorMove,
     folderOpen,
     folderClose,
@@ -258,7 +261,7 @@ export async function loadLR2ThemeSkinsFromFiles(
     track('courseResult', Promise.resolve(initialCourseResult)),
     // Theme audio (BGM + system sounds) goes through `materializeLR2ThemeAudio` so the lazy file branch from
     // `readFilesIntoBytesMap`'s `deferAudio: true` default is unwrapped here. The rest of the pack stays lazy — only
-    // the theme's small handful of audio files (BGM + ~6 cues) is forced eager up front, since they need to be ready
+    // the theme's small handful of audio files (BGM + 7 cues) is forced eager up front, since they need to be ready
     // the moment the user lands on the select scene.
     track('bgm/select', materializeLR2ThemeAudio(pickBGM('SELECT', 'select'))),
     track('bgm/decide', materializeLR2ThemeAudio(pickBGM('DECIDE', 'decide'))),
@@ -272,6 +275,7 @@ export async function loadLR2ThemeSkinsFromFiles(
     track('sound/result', materializeLR2ThemeAudio(pickLR2SystemSoundFromMap(sharedFiles, 'result'))),
     track('sound/courseclear', materializeLR2ThemeAudio(pickSound('COURSECLEAR', ['course_clear', 'courseclear']))),
     track('sound/coursefail', materializeLR2ThemeAudio(pickSound('COURSEFAIL', ['course_fail', 'coursefail']))),
+    track('sound/playstop', materializeLR2ThemeAudio(pickSound('STOP', ['playstop']))),
     track('sound/scratch', materializeLR2ThemeAudio(pickSound('SCRATCH', ['scratch']))),
     track('sound/f-open', materializeLR2ThemeAudio(pickSound('FOLDER_OPEN', ['f-open']))),
     track('sound/f-close', materializeLR2ThemeAudio(pickSound('FOLDER_CLOSE', ['f-close']))),
@@ -319,6 +323,7 @@ export async function loadLR2ThemeSkinsFromFiles(
     courseClearBGM,
     courseFailBGM,
     systemSounds: {
+      playStop,
       cursorMove,
       folderOpen,
       folderClose,

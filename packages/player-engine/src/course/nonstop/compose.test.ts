@@ -369,3 +369,13 @@ test('mixed bmson output preserves a PMS first stage as nine keys', () => {
   expect(result.chart.bmson.info.modeHint).toBe('popn-9k');
   expect(resolveChart(result.chart).playVariant).toBe('9');
 });
+
+test('keeps each NONSTOP stage’s POOR BGA mode', () => {
+  const a = structuredClone(stageA),
+    b = structuredClone(stageB);
+  a.bms.poorBGA = '1';
+  b.bms.poorBGA = '2';
+  const result = stitchNonstopCourse([{ chart: a }, { chart: b }], { connections: ['cut'] });
+  if (!result.ok) throw new Error('stitch failed');
+  expect(result.map.stages.map((stage) => stage.poorBGAMode)).toEqual([1, 2]);
+});
