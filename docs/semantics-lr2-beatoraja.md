@@ -131,7 +131,7 @@ Most fixes below move a rule into the right box. The assist class and LR2 mine c
 | 2   | BP includes unjudged notes (single play)            | B           | Course only                                             | Fix for all rulesets + Leaderboard migration                           |
 | 3   | Failed run re-simulated under other rulesets        | B           | Ranked under all three                                  | Rank failed survival runs only under the played ruleset (or mark them) |
 | 4   | LIGHT ASSIST EASY lamp                              | A, B        | Missing; ASSIST-EASY gauge → ASSIST_EASY                | Add lamp; append-only rank or migration                                |
-| 5   | LR2 FC before gauge check                           | B           | FAILED first (beatoraja-style)                          | Per ruleset                                                            |
+| 5   | LR2 FC before gauge check                           | B           | Per-ruleset precedence (fixed in #591)                  | Per ruleset                                                            |
 | 6   | FC vs empty-POOR combo break (bea 5K/PMS)           | B           | Ignored                                                 | Per ruleset                                                            |
 | 7   | beatoraja TOTAL note count (CN/HCN tails)           | B           | Base notes                                              | Per ruleset (bug fix)                                                  |
 | 8   | beatoraja BAD scaling for judgerank > 100           | B           | Clamped to unscaled BAD                                 | Per ruleset (bug fix)                                                  |
@@ -394,9 +394,9 @@ Already per ruleset: the windows, LR2's re-judge or empty POOR on a reversal, an
 - **LR2:** `CheckClear` returns FC when `totalnotes == max_combo`, before any gauge test ([#L1834-L1840](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1834-L1840); binary 0x405da4-0x405dc9).
 - **beatoraja:** FC only when the play did not fail and the gauge qualifies ([BMSPlayer.java#L864-L868](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L864-L868)).
 - **Kind:** semantic.
-- **be-music today:** FAILED first for every ruleset ([`ruleset/clear-lamp.ts`](../packages/player-engine/src/ruleset/clear-lamp.ts) `finishClearLamp`).
+- **be-music today:** fixed in [#591](https://github.com/nulltask/be-music/issues/591). `resolveClearLamp` awards an LR2 full combo before checking the gauge; other rulesets retain their gauge requirement. The result screen uses the resolved lamp for its clear verdict.
 - **Impact:** B. Rare `lr2` lamps, for example a GROOVE full combo that ends below 80 % because of empty POORs.
-- **Recommendation:** per ruleset. The lamp is a pure function of stored results, so re-deriving is enough.
+- **Stored results:** replay simulation, local records and Leaderboard validation share this resolver. Migration `0016_lr2_full_combo_precedence.sql` re-derives stored LR2 lamps from judgment totals and rebuilds the best shown lamp references without changing EX score, BP or gauge measurements. It does not change replay revision 0. Historical local aggregate bests lack judgment totals, so they update on the next qualifying play rather than through a speculative migration.
 
 ### Full combo vs empty-POOR combo breaks (beatoraja 5K/PMS)
 
