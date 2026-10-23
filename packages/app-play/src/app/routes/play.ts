@@ -74,7 +74,11 @@ export interface PlayRouteDeps {
   /** The chart hashes the play's log records, and the record keys of the play in flight. */
   readonly records: Pick<
     RecordsService,
-    'resolveChartHashes' | 'activePlayRecordKey' | 'activeStageRecordKey' | 'recordActiveCourseStage'
+    | 'resolveChartHashes'
+    | 'lookupChartBestRecord'
+    | 'activePlayRecordKey'
+    | 'activeStageRecordKey'
+    | 'recordActiveCourseStage'
   >;
   /** The kit the play is drawn with. */
   readonly familyKits: Pick<FamilyKits, 'resolvePlayKit'>;
@@ -369,6 +373,7 @@ export class PlayRoute {
       audio: this.audio,
       host: this.sceneHost,
       playOptions,
+      scoreTargets: { bestEXScore: this.records.lookupChartBestRecord(chartEntry)?.exScore ?? 0 },
       on: {
         exit: onExit,
         finish: (result) => onChartFinished(result),

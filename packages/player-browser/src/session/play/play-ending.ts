@@ -55,6 +55,11 @@ export interface PlayEndingInput {
   currentSeconds: number;
   /** The play tempo: the lead-out is chart time, so at another tempo it takes 1 / tempo as long. */
   tempo: number;
+  /** Optional family timing: chart seconds to music end, then a wall-clock finish margin. */
+  musicEndDelayMs?: number;
+  finishMarginMs?: number;
+  /** AUTO's last chart event; manual play defaults to its last judged note/tail. */
+  chartEndSeconds?: number;
 }
 
 export interface PlayEnding {
@@ -62,12 +67,38 @@ export interface PlayEnding {
   failed: boolean;
   /** Wall-clock ms to hold the scene before the exit starts. */
   leadOutMs: number;
+  musicEndAtSeconds?: number;
+  finishMarginMs?: number;
 }
 
 export function resolvePlayEnding(input: PlayEndingInput): PlayEnding {
   const { notes, currentSeconds } = input;
   const failed = input.summary?.gauge?.failedMidPlay === true && notes.some((note) => note.seconds > currentSeconds);
   if (failed) return { failed, leadOutMs: 0 };
+  if (input.musicEndDelayMs !== undefined && Number.isFinite(input.musicEndDelayMs) && input.musicEndDelayMs >= 0) {
+    const lastNote = notes.reduce(
+      (last, note) =>
+        Math.max(
+          last,
+          note.endSeconds ??
+            (note.endBeat !== undefined ? input.timing?.beatToSeconds(note.endBeat) : undefined) ??
+            note.seconds,
+        ),
+      0,
+    );
+    const musicEndAtSeconds = (input.chartEndSeconds ?? lastNote) + input.musicEndDelayMs / 1000;
+    const finishMarginMs =
+      input.finishMarginMs !== undefined && Number.isFinite(input.finishMarginMs) && input.finishMarginMs > 0
+        ? input.finishMarginMs
+        : 0;
+    return {
+      failed,
+      musicEndAtSeconds,
+      finishMarginMs,
+      leadOutMs:
+        chartToElapsedSeconds(Math.max(0, (musicEndAtSeconds - currentSeconds) * 1000), input.tempo) + finishMarginMs,
+    };
+  }
   return {
     failed,
     leadOutMs: chartToElapsedSeconds(resolvePostChartResultDelayMs(notes, input.timing, currentSeconds), input.tempo),

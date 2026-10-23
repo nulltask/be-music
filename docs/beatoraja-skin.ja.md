@@ -66,6 +66,8 @@ beatoraja の `timer_util` / `event_util` helper module は組み込みで用意
 
 ブラウザの `main_state.event_index(id)` は `image.ref` と同じ画像番号の解決処理を使います。MODE/SORT と LNMODE はゼロ始まり、HS-FIX と CLEAR は beatoraja の番号順です。`main_state.set_timer(id, start)` はカスタムアニメーション用タイマー 10000–19999 だけを書き換え、開始時刻はマイクロ秒です。`main_state.timer_off_value` で停止します。Lua と数値指定の描画先タイマーには同じフレームで反映します。不正な書き込みは false を返し、保護されたエンジン・シーン用タイマーは変更しません。カスタムタイマーの状態は1つのスキンインスタンスだけに属します。
 
+JSON／Lua スキンのリザルト用タイマー 150–152 は画面表示時に開始します。プレイスキンにはスコアの条件 348–352、判定エンジンに従う HCN の active/damage、POMYU キャラクターのタイマーを渡します。`PlaySceneOptions.scoreTargets` で `bestEXScore` と `targetEXScore` を指定でき、省略時はゼロです。デモは譜面の記録を自己ベストとして渡します。beatoraja の通常の終了処理は最終ノート・イベントから譜面時間で5秒待ち、MUSIC_END（908）を通知した後に `finishmargin` を待ってフェードします。既存のエンジンループで判定するので、一時停止・速度変更・シークに追従します。POMYU のタイマーの対応表はモーション時間を受け取れますが、既存のキャラクターパックの描画は静止スプライトのままです。
+
 ビットマップフォントの各ページには共通のブラウザー画像デコーダーを使用し、ブラウザーが直接扱えない TGA シートも読み込みます。
 
 2-phase 契約:

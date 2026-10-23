@@ -20,6 +20,7 @@ export function playViewEventFromMoment(event: PlayMoment): PlayViewEvent | unde
     case 'input-start':
     case 'load-end':
     case 'play-start':
+    case 'music-end':
     case 'exit-fade-out':
     case 'exit-close':
       return { kind: event.kind, atMs: event.at };

@@ -1,3 +1,4 @@
+import { PlaySession } from './play-session.ts';
 import {
   createPlayerUISignalBus,
   type PlayerUICommand,
@@ -175,6 +176,54 @@ afterEach(() => {
 });
 
 describe('the play state of a built-in / LR2 play, fed from the engine', () => {
+  test('a paused seek cancels the old music-end gate and finish-margin timeout', () => {
+    const play = new PlaySession();
+    const frame = frameAt(0, { gauge: createPlaceholderGaugeState('GROOVE') });
+    const bus = createPlayerUISignalBus(frame);
+    play.sharedEngineSignals = { uiSignals: bus };
+    play.paused = true;
+    play.chartEnded = true;
+    const ended = vi.fn();
+    play.chartEndGate = (seconds) => {
+      if (seconds >= 5) ended();
+    };
+    play.chartEndTimeout = window.setTimeout(ended, 10);
+    bus.pushCommand({
+      kind: 'seek',
+      generation: 1,
+      seconds: 2,
+      snapshot: { summary: frame.summary, combo: 0, maxCombo: 0, judgments: [] },
+    });
+    drainSharedEngineSignals(play);
+    expect(play.chartEndGate).toBeUndefined();
+    expect(play.chartEndTimeout).toBeUndefined();
+    expect(play.chartEnded).toBe(false);
+    expect(play.paused).toBe(true);
+    vi.advanceTimersByTime(20);
+    expect(ended).not.toHaveBeenCalled();
+    play.dispose();
+  });
+
+  test('drives a chart-end milestone from authoritative frames and allows the gate to clear itself once', () => {
+    const h = createPlay({ total: 1 });
+    const reached = vi.fn();
+    h.ctx.chartEndGate = (seconds) => {
+      if (seconds >= 5) {
+        h.ctx.chartEndGate = undefined;
+        reached(seconds);
+      }
+    };
+    h.step(1, {});
+    h.step(4.9, {});
+    expect(reached).not.toHaveBeenCalled();
+    // A paused clock produces no progress; a faster playback simply reaches the same chart second sooner.
+    h.step(4.9, {});
+    expect(reached).not.toHaveBeenCalled();
+    h.step(5, {});
+    h.step(6, {});
+    expect(reached).toHaveBeenCalledExactlyOnceWith(5);
+  });
+
   test('frames, judgments and empty POORs reach one PlayState', () => {
     const play = createPlay({ total: 4 });
     play.step(1, { exScore: 2, gauge: 22 }, [{ judge: 'PERFECT', combo: 1, channel: '11', deltaMs: -3 }]);

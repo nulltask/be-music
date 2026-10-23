@@ -504,6 +504,7 @@ export class PlaySession extends PlaySessionState {
       window.clearTimeout(timeout);
     }
     this.sceneStageTimeouts.clear();
+    this.chartEndGate = undefined;
     if (this.chartEndTimeout !== undefined) {
       window.clearTimeout(this.chartEndTimeout);
       this.chartEndTimeout = undefined;
