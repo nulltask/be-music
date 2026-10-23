@@ -57,7 +57,7 @@ describe('LR2 play-skin helpers', () => {
     expect(pickLR2PlaySkin(skins, chartWithChannels(['28']))?.name).toBe('10K');
   });
 
-  test('pickLR2PlaySkin falls back to the SP / DP IIDX skins for 24-key keyboard charts', () => {
+  test('pickLR2PlaySkin falls back to the SP / DP That-Which-Must-Not-Be-Named skins for 24-key keyboard charts', () => {
     // LR2 never shipped a keyboard-mode skin. A 24-key chart still needs a frame / gauge / judge skin, so it
     // borrows the SP chain (`'7'` first) and its 26 lanes (24 keys + wheel) render through the host's fallback playfield; the
     // 48-key DP form borrows the DP chain (`'14'` first).

@@ -79,8 +79,8 @@ export function playResultFromCourseRun(
       ? (lastStage.replay.play.judgeRuleset ?? 'lr2')
       : result.ruleset.startsWith('beatoraja')
         ? 'beatoraja'
-        : result.ruleset.startsWith('iidx')
-          ? 'iidx'
+        : result.ruleset.startsWith('____')
+          ? '____'
           : 'lr2';
   const score =
     judgeRuleset === 'lr2'

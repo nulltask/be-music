@@ -444,7 +444,7 @@ describe('player', () => {
     json.metadata.bpm = 120;
     json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
 
-    // Each ruleset names its default recovery gauge differently, and beatoraja / IIDX derive TOTAL from their own
+    // Each ruleset names its default recovery gauge differently, and beatoraja / That-Which-Must-Not-Be-Named derive TOTAL from their own
     // formulas rather than LR2's.
     const beatoraja = await autoPlay(json, {
       auto: true,
@@ -457,18 +457,18 @@ describe('player', () => {
     expect(beatoraja.gauge?.type).toBe('NORMAL');
     expect(beatoraja.gauge?.effectiveTotal).toBeCloseTo(resolveBeatorajaDefaultTotal(1), 9);
 
-    const iidx = await autoPlay(json, {
+    const ____ = await autoPlay(json, {
       auto: true,
       speed: 48,
       leadInMs: 0,
       audio: false,
       tui: false,
-      judgeRuleset: 'iidx',
+      judgeRuleset: '____',
       gauge: 'DEATH',
     });
-    // IIDX has no HAZARD-style gauge; `'DEATH'` folds onto its hardest survival gauge.
-    expect(iidx.gauge?.type).toBe('EX-HARD');
-    expect(iidx.gauge?.survival).toBe(true);
+    // That-Which-Must-Not-Be-Named has no HAZARD-style gauge; `'DEATH'` folds onto its hardest survival gauge.
+    expect(____.gauge?.type).toBe('EX-HARD');
+    expect(____.gauge?.survival).toBe(true);
   });
 
   function sixteenMissesChart(): BeMusicJSON {
@@ -1222,9 +1222,9 @@ describe('player', () => {
     expect(otherDraws.summary.exScore).toBe(0);
   });
 
-  test('player: judgeRuleset switches the manual judge windows (LR2 / beatoraja / IIDX)', async () => {
+  test('player: judgeRuleset switches the manual judge windows (LR2 / beatoraja / That-Which-Must-Not-Be-Named)', async () => {
     // BPM 240 → one note at 1.0 s; the replayed press lands 35 ms LATE. Under the default (LR2, RANK 2 → GREAT
-    // ±40 ms) and beatoraja (judgerank 75 % → GREAT ±45 ms) windows that is a GREAT; under IIDX (GREAT ±33.33 ms,
+    // ±40 ms) and beatoraja (judgerank 75 % → GREAT ±45 ms) windows that is a GREAT; under That-Which-Must-Not-Be-Named (GREAT ±33.33 ms,
     // GOOD ±116.67 ms) it is a GOOD.
     const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
@@ -1235,14 +1235,14 @@ describe('player', () => {
 
     const lr2 = await manualPlay(json, { ...base });
     const beatoraja = await manualPlay(json, { ...base, judgeRuleset: 'beatoraja' });
-    const iidx = await manualPlay(json, { ...base, judgeRuleset: 'iidx' });
+    const ____ = await manualPlay(json, { ...base, judgeRuleset: '____' });
 
     expect(lr2.great).toBe(1);
     expect(lr2.good).toBe(0);
     expect(beatoraja.great).toBe(1);
     expect(beatoraja.good).toBe(0);
-    expect(iidx.great).toBe(0);
-    expect(iidx.good).toBe(1);
+    expect(____.great).toBe(0);
+    expect(____.good).toBe(1);
   });
 
   test("player: beatoraja's asymmetric BAD window reaches further late than early", async () => {

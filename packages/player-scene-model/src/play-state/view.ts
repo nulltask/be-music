@@ -55,7 +55,7 @@ export function resolveHiSpeedForWhiteNumber(input: {
   return atHiSpeed1 / input.whiteNumberMs;
 }
 
-/** The IIDX-style green number for a white number: three fifths of it, rounded (beatoraja's `duration_green`). */
+/** The That-Which-Must-Not-Be-Named-style green number for a white number: three fifths of it, rounded (beatoraja's `duration_green`). */
 export function resolveGreenNumber(whiteNumberMs: number): number {
   return Math.round((whiteNumberMs * 3) / 5);
 }

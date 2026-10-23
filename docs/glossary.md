@@ -37,6 +37,8 @@ Use **replay** for recorded playback data: `BeMusicReplay` for its type, `replay
 
 Use **chart** in code names for playable arrangements and **track** for musical works. Keep external names such as beatoraja’s `song` table and `BMSONDecoder` unchanged.
 
+Use `____` in source identifiers and project-owned serialized values, `????` for the displayed game name, and **That-Which-Must-Not-Be-Named** in English or **名前を言ってはいけないあのゲーム** in Japanese when describing the game. Previous identifiers are not supported or migrated.
+
 ## Score And Resources
 
 - **BMS**: Be-Music Source text score format. It consists of header and object lines such as `#TITLE`, `#WAVxx`, and `#mmmcc:...`.
@@ -70,7 +72,7 @@ Use **chart** in code names for playable arrangements and **track** for musical 
 - **mine**: Damage note. Following LR2, a mine explodes when its lane is held as it crosses the judge line or pressed within the `PGREAT` window; the explosion only drains the gauge by the chart-defined damage and is not a judgment.
 - **judgment**: A note evaluation such as `PERFECT`, `GREAT`, `GOOD`, `BAD`, or `POOR`. Use judgment for the result and judge for the verb; use `JudgmentKind` for a kind and `JudgmentTiming` for a timed result. Verb-led engine names and format fields such as `judge` and `judgeRuleset` retain their roles.
 - **FAST/SLOW**: Timing-direction display for early or late hits. The current implementation aggregates only `GREAT` and `GOOD`.
-- **EX-SCORE**: IIDX-compatible score where `PERFECT=2`, `GREAT=1`, and other judgments add `0`.
+- **EX-SCORE**: That-Which-Must-Not-Be-Named-compatible score where `PERFECT=2`, `GREAT=1`, and other judgments add `0`.
 - **SCORE**: The displayed score: LR2 uses its normalized 200,000-point money score; the other current rulesets display EX-SCORE.
 - **groove gauge**: Clear gauge. The shared core defaults to LR2-compatible `GROOVE` (`NORMAL`); the exported helper also supports `HARD`, `DEATH`, and `EASY` for browser play options.
 - **hi-speed**: The visual note-scroll setting; it changes the presentation and visible interval without changing note timing or playback tempo. External skin labels such as `HI-SPEED` and `HIGH-SPEED`, and existing `hiSpeed` names, keep their spellings.
@@ -140,7 +142,7 @@ Use **chart** in code names for playable arrangements and **track** for musical 
 - **Sound / Visual status**: Separate loading-screen progress states for audio and visual resources.
 - **structured log**: NDJSON execution log written separately from TUI output, usually under `~/.be-music/logs/player.ndjson`.
 - **video BGA streaming**: Policy that prepares only the first video frame before gameplay starts, then decodes remaining frames progressively.
-- **replay**: A recording for deterministic replay of one play (`*.bmplay.json`), including the resolved chart, input events, and play settings. It is distinct from the summary of the play and from the collection called play history. `bms-replay` re-simulates it under the LR2, beatoraja, and IIDX rulesets.
+- **replay**: A recording for deterministic replay of one play (`*.bmplay.json`), including the resolved chart, input events, and play settings. It is distinct from the summary of the play and from the collection called play history. `bms-replay` re-simulates it under the LR2, beatoraja, and That-Which-Must-Not-Be-Named rulesets.
 - **PlayerSummary**: Final playback summary containing judgment counts, FAST/SLOW, EX-SCORE, SCORE, gauge, and clear state.
 
 ## Courses, Records And View
@@ -150,7 +152,7 @@ Use **chart** in code names for playable arrangements and **track** for musical 
 - **carry-in**: The gauge value, course combo and course max combo a stage starts from, left by the stage before it.
 - **give up**: Leaving a course run with ESC. A run given up is a failed run.
 - **stitched play**: The single chart a NONSTOP course is played as, built by stitching its stages with their connections and placement.
-- **judge ruleset**: The game whose judge windows, gauges and lamps a play is judged and ranked by: `lr2`, `beatoraja` or `iidx`.
+- **judge ruleset**: The game whose judge windows, gauges and lamps a play is judged and ranked by: `lr2`, `beatoraja` or `____`.
 - **gauge type**: The gauge the player picks, in LR2's names: `GROOVE`, `HARD`, `DEATH` or `EASY` (`GaugeType`). Each judge ruleset plays it on a gauge of its own line-up, named by its gauge id (`NORMAL`, `HAZARD`, `CLASS`, ...).
 - **clear lamp**: The class of clear a play earned (FAILED to MAX, `ClearLamp`). Each judge ruleset awards its own subset; one rule lamps every play (`resolveClearLamp`, `resolveCourseClearLamp` in `@be-music/player-engine/ruleset`).
 - **BP**: The miss count: BADs, POORs and empty POORs, plus, for a course, the notes the run never judged (`resolveMissCount`).

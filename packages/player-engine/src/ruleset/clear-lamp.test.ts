@@ -42,9 +42,9 @@ describe('clear lamp ranks', () => {
     expect(betterClearLamp('NO_PLAY', 'FAILED')).toBe('FAILED');
   });
 
-  it('tops LR2 and IIDX at FULL COMBO, beatoraja and unknown rulesets at MAX', () => {
+  it('tops LR2 and That-Which-Must-Not-Be-Named at FULL COMBO, beatoraja and unknown rulesets at MAX', () => {
     expect(topClearLamp('lr2')).toBe('FULL_COMBO');
-    expect(topClearLamp('iidx')).toBe('FULL_COMBO');
+    expect(topClearLamp('____')).toBe('FULL_COMBO');
     expect(topClearLamp('beatoraja')).toBe('MAX');
     expect(topClearLamp(undefined)).toBe('MAX');
   });
@@ -109,10 +109,10 @@ describe('resolveClearLamp', () => {
 });
 
 describe('resolveClearLamp under a ruleset', () => {
-  it('LR2 and IIDX stop at FULL COMBO, beatoraja keeps PERFECT and MAX', () => {
+  it('LR2 and That-Which-Must-Not-Be-Named stop at FULL COMBO, beatoraja keeps PERFECT and MAX', () => {
     const max = score(100, 0, 0);
     expect(resolveClearLamp({ cleared: true, score: max, ruleset: 'lr2' })).toBe('FULL_COMBO');
-    expect(resolveClearLamp({ cleared: true, score: max, ruleset: 'iidx' })).toBe('FULL_COMBO');
+    expect(resolveClearLamp({ cleared: true, score: max, ruleset: '____' })).toBe('FULL_COMBO');
     expect(resolveClearLamp({ cleared: true, score: max, ruleset: 'beatoraja' })).toBe('MAX');
     expect(resolveClearLamp({ cleared: true, score: score(90, 10, 0), ruleset: 'beatoraja' })).toBe('PERFECT');
     expect(resolveClearLamp({ cleared: true, score: max })).toBe('MAX');
@@ -150,10 +150,10 @@ describe('resolveCourseClearLamp', () => {
     expect(resolveCourseClearLamp(run())).toBe('NORMAL');
   });
 
-  it('follows the class gauge under beatoraja and IIDX', () => {
+  it('follows the class gauge under beatoraja and That-Which-Must-Not-Be-Named', () => {
     expect(resolveCourseClearLamp(run({ ruleset: 'beatoraja', gauge: 'CLASS' }))).toBe('NORMAL');
     expect(resolveCourseClearLamp(run({ ruleset: 'beatoraja', gauge: 'EXCLASS' }))).toBe('HARD');
-    expect(resolveCourseClearLamp(run({ ruleset: 'iidx', gauge: 'EXHARDCLASS' }))).toBe('EX_HARD');
+    expect(resolveCourseClearLamp(run({ ruleset: '____', gauge: 'EXHARDCLASS' }))).toBe('EX_HARD');
   });
 
   it('is a full combo when the course max combo covers every note, kept to the ruleset’s lamps', () => {
@@ -194,6 +194,6 @@ it('awards LR2 FULL COMBO before a failed GROOVE gauge, while other rulesets sti
   const play = { cleared: false, gauge: 'GROOVE', score: score(80, 15, 5) };
   expect(resolveClearLamp({ ...play, ruleset: 'lr2' })).toBe('FULL_COMBO');
   expect(resolveClearLamp({ ...play, ruleset: 'beatoraja' })).toBe('FAILED');
-  expect(resolveClearLamp({ ...play, ruleset: 'iidx' })).toBe('FAILED');
+  expect(resolveClearLamp({ ...play, ruleset: '____' })).toBe('FAILED');
   expect(resolveClearLamp({ ...play, ruleset: 'lr2', score: score(80, 15, 4) })).toBe('FAILED');
 });

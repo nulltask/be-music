@@ -3,7 +3,7 @@ import { basicChart, longNoteChart } from './charts.ts';
 import { command, observePlay, tap } from './harness.ts';
 
 describe('manual practice seek', () => {
-  for (const judgeRuleset of ['lr2', 'beatoraja', 'iidx'] as const) {
+  for (const judgeRuleset of ['lr2', 'beatoraja', '____'] as const) {
     test(`${judgeRuleset}: resets score and skips earlier notes without recording a replay`, async () => {
       const play = await observePlay({
         driver: 'manual',

@@ -1,7 +1,7 @@
 *---------------------- METADATA FIELD
 
 #TITLE 5 KEY SP Lane Mode
-#SUBTITLE IIDX 5-key single play - channels 11..16, no 18 / 19
+#SUBTITLE That-Which-Must-Not-Be-Named 5-key single play - channels 11..16, no 18 / 19
 #ARTIST be-music
 #GENRE TEST
 #BPM 120
@@ -10,7 +10,7 @@
 #DIFFICULTY 1
 
 *---------------------- EXTENDED HEADER FIELD
-* Lane-mode detection falls through to the IIDX family when no POPN or keyboard
+* Lane-mode detection falls through to the That-Which-Must-Not-Be-Named family when no POPN or keyboard
 * marker matches, and then splits on two signals only: whether the chart uses
 * the 2P side, and whether it uses the 6th / 7th columns (`18` / `19` / `28` /
 * `29`). This chart is the 1P-side, no-6/7 corner of that table: five keys plus

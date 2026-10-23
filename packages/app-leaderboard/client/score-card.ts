@@ -236,7 +236,7 @@ export interface ExcerptRect extends Box {
 }
 
 /**
- * The excerpt's lanes across the panel, as the Synesthesia skin lays them out (SYNESTHESIA_PLAYFIELD): IIDX modes give
+ * The excerpt's lanes across the panel, as the Synesthesia skin lays them out (SYNESTHESIA_PLAYFIELD): That-Which-Must-Not-Be-Named modes give
  * the scratch, white and blue keys their fixed widths and part double play's banks by the side gap; 9 KEY shares one
  * side's width evenly. The design widths are scaled by one factor so a 7 KEY side fills the panel (and wider modes fit
  * it), and centred in it. Edges are rounded to whole pixels, each lane starting where the previous one ends.
@@ -254,7 +254,7 @@ export function excerptLaneBoxes(excerpt: ChartExcerpt, frame = EXCERPT_FRAME): 
           : laneWidths.white,
   );
   const gaps = excerpt.lanes.map((lane, i): number =>
-    i > 0 && excerpt.widths === 'iidx' && lane.side !== excerpt.lanes[i - 1]?.side ? sideGap : 0,
+    i > 0 && excerpt.widths === '____' && lane.side !== excerpt.lanes[i - 1]?.side ? sideGap : 0,
   );
   const total = widths.reduce((sum, width) => sum + width, 0) + gaps.reduce((sum, gap) => sum + gap, 0);
   const span = frame.right - frame.left;

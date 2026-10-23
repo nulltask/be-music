@@ -1,8 +1,8 @@
 import { and, count, countDistinct, eq, max, min, sql, type SQL } from 'drizzle-orm';
 import {
   computeScoreRate,
-  IIDX_RANK_LABELS,
-  type IIDXRankLabel,
+  _____RANK_LABELS,
+  type ____RankLabel,
   type RulesetId,
 } from '@be-music/player-engine/ruleset';
 import type { Database } from '../db/client.ts';
@@ -23,7 +23,7 @@ const LAMPS_HIGH_TO_LOW = Object.keys(LAMP_STYLES)
   .map(Number)
   .sort((a, b) => b - a);
 
-export type DjRank = IIDXRankLabel;
+export type DjRank = ____RankLabel;
 
 /** Lamp counts (`{lamp, count}` rows from a GROUP BY) as a distribution over every lamp, highest first. */
 export function lampDistribution(rows: ReadonlyArray<{ lamp: number; count: number }>): Distribution<number> {
@@ -43,7 +43,7 @@ export function djRankDistribution(bests: ReadonlyArray<{ exScore: number; noteC
     counts.set(rank, (counts.get(rank) ?? 0) + 1);
     total += 1;
   }
-  return { total, buckets: IIDX_RANK_LABELS.map((rank) => ({ key: rank, count: counts.get(rank) ?? 0 })) };
+  return { total, buckets: _____RANK_LABELS.map((rank) => ({ key: rank, count: counts.get(rank) ?? 0 })) };
 }
 
 /** Mean score rate (0–1) of best EX-Scores, or null without any. */

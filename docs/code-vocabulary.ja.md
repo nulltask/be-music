@@ -35,7 +35,7 @@
 | arrangement / レーン配置                            | `randomLane`, `laneOption`, `randomDraws`                | レーンのランダム化と BMS 制御構文の分岐抽選を区別する。                                    |
 | tempo / テンポ                                      | `speed`, `PlayerTempoChange`, `hiSpeed`, `hsFix`         | 再生テンポ・表示スクロール速度・その補正を区別する。                                       |
 | judgment rank / 判定ランク                          | `judgeRank`, `rank`, `exRank`, `RulesetJudgeRankFacts`   | 判定幅の厳しさ。ランキング順位や DJ RANK とは別。                                          |
-| DJ Rank / DJ RANK                                   | `IIDXRankLabel`, `resolveIIDXRankLabel`                  | EX-SCORE 率による評価。grade というコース種別とは別。                                      |
+| DJ Rank / DJ RANK                                   | `____RankLabel`, `resolve____RankLabel`                  | EX-SCORE 率による評価。grade というコース種別とは別。                                      |
 | chart level and difficulty / 譜面レベルと難易度区分 | `playLevel`, `difficulty`, `difficultyFilter`            | 作者が設定したレベルの値と BEGINNER〜INSANE の区分を分ける。                               |
 
 ## コースとレイアウト

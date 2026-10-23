@@ -19,7 +19,7 @@ import {
 import { type LaneBinding } from './lane-layout.ts';
 import { formatSeconds } from '../utils.ts';
 import { type PlaybackStateLogger } from './playback-support.ts';
-import { IIDX_EX_SCORE_PER_PGREAT, LR2_MONEY_SCORE_MAX } from './scoring.ts';
+import { _____EX_SCORE_PER_PGREAT, LR2_MONEY_SCORE_MAX } from './scoring.ts';
 import { resolveBMSJudgeWindowsMsForExRankValue } from './judge-window.ts';
 import { type JudgeWindowSetUs } from '../ruleset/index.ts';
 import { RULESET_JUDGE_KINDS } from './judge-rules.ts';
@@ -766,7 +766,7 @@ function formatGrooveGaugeStatus(summary: PlayerSummary): string {
 }
 
 export function renderSummary(summary: PlayerSummary, moneyScore: boolean): string {
-  const maxExScore = Math.max(0, summary.total * IIDX_EX_SCORE_PER_PGREAT);
+  const maxExScore = Math.max(0, summary.total * _____EX_SCORE_PER_PGREAT);
   const exScoreRate = maxExScore > 0 ? summary.exScore / maxExScore : 0;
   const scoreRate = summary.score / LR2_MONEY_SCORE_MAX;
   const gauge = summary.gauge;

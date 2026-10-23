@@ -47,7 +47,7 @@ export interface GameplayLaneGeometry {
 }
 
 /**
- * Whether the touch layout covers `playVariant`: the IIDX (5 / 7 / 10 / 14 KEY) and PMS (9 KEY) modes. The 24 / 48 KEY
+ * Whether the touch layout covers `playVariant`: the That-Which-Must-Not-Be-Named (5 / 7 / 10 / 14 KEY) and PMS (9 KEY) modes. The 24 / 48 KEY
  * keyboard modes are played on a keyboard or MIDI controller and keep the standard layout.
  */
 export function supportsTouchLayout(playVariant?: ChartPlayVariant): boolean {

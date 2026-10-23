@@ -74,7 +74,7 @@
         {"seq":16,"timeUs":3642000,"action":"down","channels":["13"],"tokens":["x"]},
         {"seq":17,"timeUs":3692000,"action":"up","channels":["13"],"tokens":["x"]}
       ],
-      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"iidx","endOnFailure":true},
+      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"____","endOnFailure":true},
       "results": {
         "native": {
           "ruleset": "be-music/native",
@@ -114,8 +114,8 @@
         "gauge": {"type":"NORMAL","final":100,"cleared":true},
         "fullCombo": false
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":4,"great":2,"good":2,"bad":1,"poor":0,"emptyPoor":0},
         "fast": 3,
         "slow": 1,
@@ -215,7 +215,7 @@
       "last": "4958.667 seconds=4.942 beat=15.101333"
     },
     "host": [
-      "0.000 ruleset iidx/0 charge note={\"judges\":[[-16667,16667],[-33333,33333],[-116667,116667],[-250000,250000]],\"ms\":[-150000,500000]}",
+      "0.000 ruleset ____/0 charge note={\"judges\":[[-16667,16667],[-33333,33333],[-116667,116667],[-250000,250000]],\"ms\":[-150000,500000]}",
       "0.000 input-runtime create manual",
       "0.000 load-complete",
       "0.000 ui start",
@@ -281,7 +281,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": "(same as manual)",
-      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"iidx","endOnFailure":true},
+      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"____","endOnFailure":true},
       "results": "(same as manual)"
     },
     "simulated": "(same as manual)",
@@ -374,7 +374,7 @@
       "last": "4950.000 seconds=4.933333 beat=15.066667"
     },
     "host": [
-      "0.000 ruleset iidx/0 charge note={\"judges\":[[-16667,16667],[-33333,33333],[-116667,116667],[-250000,250000]],\"ms\":[-150000,500000]}",
+      "0.000 ruleset ____/0 charge note={\"judges\":[[-16667,16667],[-33333,33333],[-116667,116667],[-250000,250000]],\"ms\":[-150000,500000]}",
       "0.000 input-runtime create manual",
       "0.000 load-complete",
       "0.000 ui start",
@@ -421,7 +421,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": [],
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"iidx","endOnFailure":true},
+      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"____","endOnFailure":true},
       "results": {
         "native": {
           "ruleset": "be-music/native",
@@ -460,8 +460,8 @@
         "djLevel": "AAA",
         "gauge": {"type":"NORMAL","final":100,"cleared":true}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":9,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
         "fast": 0,
         "slow": 0,
@@ -526,7 +526,7 @@
       "last": "4950.000 seconds=4.933333 beat=15.066667"
     },
     "host": [
-      "0.000 ruleset iidx/0 charge note={\"judges\":[[-16667,16667],[-33333,33333],[-116667,116667],[-250000,250000]],\"ms\":[-150000,500000]}",
+      "0.000 ruleset ____/0 charge note={\"judges\":[[-16667,16667],[-33333,33333],[-116667,116667],[-250000,250000]],\"ms\":[-150000,500000]}",
       "0.000 input-runtime create auto",
       "0.000 load-complete",
       "0.000 ui start",

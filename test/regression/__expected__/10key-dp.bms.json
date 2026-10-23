@@ -6,7 +6,7 @@
       "bpm": 120,
       "extras": {},
       "title": "10 KEY DP Lane Mode",
-      "subtitle": "IIDX 5-key double play - channels 11..16 and 21..26",
+      "subtitle": "That-Which-Must-Not-Be-Named 5-key double play - channels 11..16 and 21..26",
       "artist": "be-music",
       "genre": "TEST",
       "playLevel": 2,
@@ -85,7 +85,7 @@
     "roundTripPlayableNotesEqual": true,
     "lines": [
       "#TITLE 10 KEY DP Lane Mode",
-      "#SUBTITLE IIDX 5-key double play - channels 11..16 and 21..26",
+      "#SUBTITLE That-Which-Must-Not-Be-Named 5-key double play - channels 11..16 and 21..26",
       "#ARTIST be-music",
       "#GENRE TEST",
       "#BPM 120",
@@ -177,7 +177,7 @@
         "chartFingerprint": "bmfp0:c784da4ad98fc42257375c50c3bc154d2b4cd7abea959e7a0c48a19565bf6487",
         "playFingerprint": "bmfp0:c784da4ad98fc42257375c50c3bc154d2b4cd7abea959e7a0c48a19565bf6487",
         "title": "10 KEY DP Lane Mode",
-        "subtitle": "IIDX 5-key double play - channels 11..16 and 21..26",
+        "subtitle": "That-Which-Must-Not-Be-Named 5-key double play - channels 11..16 and 21..26",
         "artist": "be-music",
         "genre": "TEST",
         "playLevel": "2",
@@ -270,8 +270,8 @@
               "cleared": false
             }
           },
-          "iidx": {
-            "ruleset": "iidx/0",
+          "____": {
+            "ruleset": "____/0",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -345,7 +345,7 @@
                 "failedMidPlay": false
               }
             },
-            "iidx": {
+            "____": {
               "total": 36,
               "perfect": 0,
               "fast": 0,
@@ -420,8 +420,8 @@
               "cleared": true
             }
           },
-          "iidx": {
-            "ruleset": "iidx/0",
+          "____": {
+            "ruleset": "____/0",
             "judge": {
               "pgreat": 36,
               "great": 0,
@@ -495,7 +495,7 @@
                 "failedMidPlay": false
               }
             },
-            "iidx": {
+            "____": {
               "total": 36,
               "perfect": 36,
               "fast": 0,
@@ -571,8 +571,8 @@
             },
             "fullCombo": false
           },
-          "iidx": {
-            "ruleset": "iidx/0",
+          "____": {
+            "ruleset": "____/0",
             "judge": {
               "pgreat": 14,
               "great": 7,
@@ -647,7 +647,7 @@
               },
               "fullCombo": false
             },
-            "iidx": {
+            "____": {
               "total": 36,
               "perfect": 14,
               "fast": 6,

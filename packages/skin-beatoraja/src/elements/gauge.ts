@@ -83,7 +83,7 @@ export function gaugeExBase(mode: number): number {
 /**
  * Map the engine's ruleset-scoped gauge id to beatoraja's int constant. The id space spans all three compat
  * rulesets — LR2 names its recovery gauge `GROOVE` and its instant-death gauge `DEATH`, beatoraja calls the same
- * two `NORMAL` and `HAZARD`, and IIDX spells assisted easy with the `-ED-` suffix — so every spelling maps onto the
+ * two `NORMAL` and `HAZARD`, and That-Which-Must-Not-Be-Named spells assisted easy with the `-ED-` suffix — so every spelling maps onto the
  * one beatoraja slab that renders it. Unknown ids and `undefined` fall back to `NORMAL` (= 2), beatoraja's default.
  *
  * A course stage's gauge maps onto beatoraja's class gauges: `CLASS` / `EXCLASS` / `EXHARDCLASS` as they are, and

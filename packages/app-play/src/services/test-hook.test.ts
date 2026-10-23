@@ -213,7 +213,7 @@ describe('liveTestHookState', () => {
     // JudgmentKind windows picks the ruleset whose records the select screen shows, and the hook reports the same.
     h.ruleset.current = 'beatoraja';
     expect(liveTestHookState(h.deps).cursor?.bar).toMatchObject({ lamp: 'HARD', trophy: 'bronzemedal' });
-    h.ruleset.current = 'iidx';
+    h.ruleset.current = '____';
     const bar = liveTestHookState(h.deps).cursor?.bar;
     expect(bar?.lamp).toBeUndefined();
     expect(bar?.trophy).toBeUndefined();

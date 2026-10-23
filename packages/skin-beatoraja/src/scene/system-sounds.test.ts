@@ -30,7 +30,7 @@ describe('discoverBeatorajaSystemSoundPaths', () => {
   });
 
   it('honors filename aliases when canonicals are absent', () => {
-    // IIDX-style themes ship `scratch.wav` instead of `cursor.wav`; LR2-derived themes use
+    // That-Which-Must-Not-Be-Named-style themes ship `scratch.wav` instead of `cursor.wav`; LR2-derived themes use
     // `f-open.wav` / `f-close.wav` / `o-change.wav`. The picker walks the alias list in
     // priority order until something matches.
     const files = fakeFiles([

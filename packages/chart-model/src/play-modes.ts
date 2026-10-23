@@ -7,13 +7,13 @@ import type { ChartPlayVariant } from './index.ts';
  * this file (plus its tests) rather than to eight packages.
  */
 
-/** What a lane is: a key, the IIDX turntable, or one direction of the 24 / 48 KEY keyboard wheel. */
+/** What a lane is: a key, the That-Which-Must-Not-Be-Named turntable, or one direction of the 24 / 48 KEY keyboard wheel. */
 export type PlayLaneKind = 'key' | 'scratch' | 'wheel-up' | 'wheel-down';
 
 export type PlaySide = '1P' | '2P';
 
 /**
- * Colour class of a key. The IIDX and pop'n layouts alternate by key number (odd keys white, even keys black); the
+ * Colour class of a key. The That-Which-Must-Not-Be-Named and pop'n layouts alternate by key number (odd keys white, even keys black); the
  * keyboard modes follow the piano, repeating every octave. The scratch and the wheel have none.
  */
 export type PlayKeyTone = 'white' | 'black';
@@ -36,7 +36,7 @@ export interface PlayLane {
   readonly kind: PlayLaneKind;
   readonly side: PlaySide;
   /**
-   * The lane's place on its side: keys are numbered from 1 left to right (IIDX `18` / `19` are keys 6 / 7, PMS-STD
+   * The lane's place on its side: keys are numbered from 1 left to right (That-Which-Must-Not-Be-Named `18` / `19` are keys 6 / 7, PMS-STD
    * `22..25` keys 6..9), the scratch is 0, and the keyboard wheel up / down is 25 / 26 (beatoraja's lane offsets).
    */
   readonly slot: number;
@@ -45,7 +45,7 @@ export interface PlayLane {
   readonly channels: PlayLaneChannels;
 }
 
-/** An IIDX FREE ZONE channel. It is not a lane of its own: it is drawn on, and played with, its side's scratch. */
+/** An That-Which-Must-Not-Be-Named FREE ZONE channel. It is not a lane of its own: it is drawn on, and played with, its side's scratch. */
 export interface PlayFreeZone {
   readonly channel: string;
   readonly scratch: string;
@@ -67,7 +67,7 @@ export interface PlayModeLayout {
    * on its side's outer edge, left of the 1P keys and right of the 2P keys.
    */
   readonly lanes: readonly PlayLane[];
-  /** FREE ZONE channels the layout plays on its scratch (IIDX layouts only). */
+  /** FREE ZONE channels the layout plays on its scratch (That-Which-Must-Not-Be-Named layouts only). */
   readonly freeZones: readonly PlayFreeZone[];
   /** The bmson `mode_hint` that names this layout, when one does. */
   readonly bmsonModeHint?: BmsonModeHint;
@@ -136,24 +136,24 @@ function lane(
   return tone === undefined ? entry : { ...entry, tone };
 }
 
-/** A key whose colour alternates by key number (IIDX / pop'n): odd keys white, even keys black. */
+/** A key whose colour alternates by key number (That-Which-Must-Not-Be-Named / pop'n): odd keys white, even keys black. */
 function alternatingKey(side: PlaySide, laneCode: string, slot: number, channel?: string): PlayLane {
   return lane(side, laneCode, 'key', slot, slot % 2 === 1 ? 'white' : 'black', channel);
 }
 
-/** IIDX keys of one side: `x1..x5`, then `x8` / `x9` as keys 6 / 7 for the 7-key layouts. */
-function iidxKeys(side: PlaySide, keys: 5 | 7): PlayLane[] {
+/** That-Which-Must-Not-Be-Named keys of one side: `x1..x5`, then `x8` / `x9` as keys 6 / 7 for the 7-key layouts. */
+function ____Keys(side: PlaySide, keys: 5 | 7): PlayLane[] {
   const codes = keys === 7 ? '1234589' : '12345';
   return Array.from(codes, (code, index) => alternatingKey(side, code, index + 1));
 }
 
-/** One IIDX side, in drawing order: the scratch (`x6`) on the outer edge. */
-function iidxSide(side: PlaySide, keys: 5 | 7): PlayLane[] {
+/** One That-Which-Must-Not-Be-Named side, in drawing order: the scratch (`x6`) on the outer edge. */
+function ____Side(side: PlaySide, keys: 5 | 7): PlayLane[] {
   const scratch = lane(side, '6', 'scratch', 0);
-  return side === '1P' ? [scratch, ...iidxKeys(side, keys)] : [...iidxKeys(side, keys), scratch];
+  return side === '1P' ? [scratch, ...____Keys(side, keys)] : [...____Keys(side, keys), scratch];
 }
 
-const IIDX_FREE_ZONES: Record<PlaySide, PlayFreeZone> = {
+const _____FREE_ZONES: Record<PlaySide, PlayFreeZone> = {
   '1P': { channel: '17', scratch: '16' },
   '2P': { channel: '27', scratch: '26' },
 };
@@ -179,16 +179,16 @@ export const PLAY_MODE_LAYOUTS: Readonly<Record<PlayModeLayoutId, PlayModeLayout
     id: '5',
     variant: '5',
     label: '5 KEY SP',
-    lanes: iidxSide('1P', 5),
-    freeZones: [IIDX_FREE_ZONES['1P']],
+    lanes: ____Side('1P', 5),
+    freeZones: [_____FREE_ZONES['1P']],
     bmsonModeHint: 'beat-5k',
   },
   '7': {
     id: '7',
     variant: '7',
     label: '7 KEY SP',
-    lanes: iidxSide('1P', 7),
-    freeZones: [IIDX_FREE_ZONES['1P']],
+    lanes: ____Side('1P', 7),
+    freeZones: [_____FREE_ZONES['1P']],
     bmsonModeHint: 'beat-7k',
   },
   '9-pms': {
@@ -214,16 +214,16 @@ export const PLAY_MODE_LAYOUTS: Readonly<Record<PlayModeLayoutId, PlayModeLayout
     id: '10',
     variant: '10',
     label: '5 KEY DP',
-    lanes: [...iidxSide('1P', 5), ...iidxSide('2P', 5)],
-    freeZones: [IIDX_FREE_ZONES['1P'], IIDX_FREE_ZONES['2P']],
+    lanes: [...____Side('1P', 5), ...____Side('2P', 5)],
+    freeZones: [_____FREE_ZONES['1P'], _____FREE_ZONES['2P']],
     bmsonModeHint: 'beat-10k',
   },
   '14': {
     id: '14',
     variant: '14',
     label: '14 KEY DP',
-    lanes: [...iidxSide('1P', 7), ...iidxSide('2P', 7)],
-    freeZones: [IIDX_FREE_ZONES['1P'], IIDX_FREE_ZONES['2P']],
+    lanes: [...____Side('1P', 7), ...____Side('2P', 7)],
+    freeZones: [_____FREE_ZONES['1P'], _____FREE_ZONES['2P']],
     bmsonModeHint: 'beat-14k',
   },
   '24': {
@@ -274,7 +274,7 @@ export function findPlayModeLane(variant: ChartPlayVariant, channel: string): Pl
 
 /**
  * Builds a bmson hint's lane table from a play-mode layout. Each side spans `stride` `x` values: its keys sit at their
- * key number, the IIDX scratch at the side's last `x` (the bmson spec's `SC` column), the keyboard wheel at 25 / 26.
+ * key number, the That-Which-Must-Not-Be-Named scratch at the side's last `x` (the bmson spec's `SC` column), the keyboard wheel at 25 / 26.
  * `maxKeySlot` keeps only the first keys (`popn-5k` is the first five keys of PMS-STD).
  */
 function bmsonHintFromLayout(

@@ -1,9 +1,9 @@
 import type { ChartPlayVariant } from '@be-music/chart-model';
 import {
-  IIDX_LANE_WIDTHS,
+  _____LANE_WIDTHS,
   isScratchLaneForVariant,
   resolveFallbackLaneLayout,
-  usesIIDXLaneWidths,
+  uses____LaneWidths,
   type FallbackLaneLayoutRect,
 } from './lane-geometry.ts';
 import { wideStage } from './stage.ts';
@@ -42,7 +42,7 @@ export const PORTRAIT_PLAYFIELD = {
   maxKeyWidth: 96,
   /** A touch scratch lane is this many keys wide. */
   scratchWeight: 1.4,
-  /** Width the standard layout's 7 KEY lanes (IIDX key widths, scaled) take. */
+  /** Width the standard layout's 7 KEY lanes (That-Which-Must-Not-Be-Named key widths, scaled) take. */
   standardWidth: 374,
 } as const;
 
@@ -115,7 +115,7 @@ export interface PortraitLaneGeometry {
  * Lane rects for a portrait `stage` ({@link PORTRAIT_PLAYFIELD}, scaled from the 480x854 {@link tallStage}), centred
  * across it. `'touch'` gives every key the same width and a scratch {@link PORTRAIT_PLAYFIELD.scratchWeight} keys wide,
  * filling the stage between its margins (keys at most {@link PORTRAIT_PLAYFIELD.maxKeyWidth}); `'standard'` keeps the
- * cabinet's key widths (IIDX scratch / white / black, scaled so 7 KEY spans
+ * cabinet's key widths (That-Which-Must-Not-Be-Named scratch / white / black, scaled so 7 KEY spans
  * {@link PORTRAIT_PLAYFIELD.standardWidth}), or equal keys across that width for 9 KEY. Lane order follows the
  * standard layout.
  */
@@ -149,19 +149,19 @@ export function resolvePortraitLaneLayout(
     });
   } else {
     const span = PORTRAIT_PLAYFIELD.standardWidth * sx;
-    // 194 px: the LR2 7 KEY playfield the IIDX key widths add up to (a scratch, four white and three black keys).
-    const k = span / (IIDX_LANE_WIDTHS.scratch + 4 * IIDX_LANE_WIDTHS.white + 3 * IIDX_LANE_WIDTHS.black);
+    // 194 px: the LR2 7 KEY playfield the That-Which-Must-Not-Be-Named key widths add up to (a scratch, four white and three black keys).
+    const k = span / (_____LANE_WIDTHS.scratch + 4 * _____LANE_WIDTHS.white + 3 * _____LANE_WIDTHS.black);
     placed = resolveFallbackLaneLayout({
       channels,
       laneCount,
       playVariant,
       x: 0,
       w: span,
-      fixedWidths: usesIIDXLaneWidths(playVariant)
+      fixedWidths: uses____LaneWidths(playVariant)
         ? {
-            scratch: IIDX_LANE_WIDTHS.scratch * k,
-            white: IIDX_LANE_WIDTHS.white * k,
-            black: IIDX_LANE_WIDTHS.black * k,
+            scratch: _____LANE_WIDTHS.scratch * k,
+            white: _____LANE_WIDTHS.white * k,
+            black: _____LANE_WIDTHS.black * k,
           }
         : undefined,
     });

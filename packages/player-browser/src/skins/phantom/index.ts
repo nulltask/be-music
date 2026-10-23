@@ -13,7 +13,7 @@ import { definePixiSkin } from '../pixi-kit/index.ts';
 
 /**
  * Phantom — the built-in poster skin: ink black, blood red, and paper white, with slanted plates, starbursts,
- * halftone fields, and condensed italic type. The playfield itself stays plain and IIDX-like.
+ * halftone fields, and condensed italic type. The playfield itself stays plain and That-Which-Must-Not-Be-Named-like.
  */
 export const phantomSkin: BeMusicSkin = definePixiSkin({
   apiVersion: BE_MUSIC_SKIN_API_VERSION,

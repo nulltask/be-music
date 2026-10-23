@@ -26,11 +26,11 @@ describe('resolveCourseGaugeId', () => {
     expect(resolveCourseGaugeId('lr2', 'expert', 'HARD')).toBe('COURSE-HARD');
   });
 
-  test('beatoraja and IIDX map the pick onto the class gauges whatever the course kind', () => {
+  test('beatoraja and That-Which-Must-Not-Be-Named map the pick onto the class gauges whatever the course kind', () => {
     expect(resolveCourseGaugeId('beatoraja', 'expert', 'EASY')).toBe('CLASS');
     expect(resolveCourseGaugeId('beatoraja', 'grade', 'GROOVE')).toBe('CLASS');
     expect(resolveCourseGaugeId('beatoraja', 'grade', 'HARD')).toBe('EXCLASS');
-    expect(resolveCourseGaugeId('iidx', 'grade', 'DEATH')).toBe('EXHARDCLASS');
+    expect(resolveCourseGaugeId('____', 'grade', 'DEATH')).toBe('EXHARDCLASS');
   });
 });
 
@@ -82,7 +82,7 @@ describe('resolveCourseGauge', () => {
         guts: [{ threshold: 30, multiplier: 0.6 }],
       },
     );
-    expect(resolveCourseGauge('iidx', 'EXHARDCLASS', { kind: 'grade', gaugeSet: '5k' }, '7-key-sp', 1).values).toEqual([
+    expect(resolveCourseGauge('____', 'EXHARDCLASS', { kind: 'grade', gaugeSet: '5k' }, '7-key-sp', 1).values).toEqual([
       0.01, 0.01, 0, -2.5, -5, -2.5,
     ]);
   });

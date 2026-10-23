@@ -20,7 +20,7 @@ const STORAGE_KEY = 'be-music-demo.chart-best-records';
  */
 const STORAGE_VERSION = 3;
 
-const JUDGE_RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', 'iidx'];
+const JUDGE_RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', '____'];
 
 /** How a play was played and judged, as far as which record it keeps goes. */
 export type RecordedPlayKind = RecordPlayKind & {

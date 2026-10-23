@@ -1,7 +1,7 @@
 *---------------------- METADATA FIELD
 
 #TITLE 10 KEY DP Lane Mode
-#SUBTITLE IIDX 5-key double play - channels 11..16 and 21..26
+#SUBTITLE That-Which-Must-Not-Be-Named 5-key double play - channels 11..16 and 21..26
 #ARTIST be-music
 #GENRE TEST
 #BPM 120
@@ -10,12 +10,12 @@
 #DIFFICULTY 2
 
 *---------------------- EXTENDED HEADER FIELD
-* The 2P-side, no-6/7 corner of the IIDX lane-mode table: five keys plus scratch
+* The 2P-side, no-6/7 corner of the That-Which-Must-Not-Be-Named lane-mode table: five keys plus scratch
 * on both sides, which must resolve to 10 KEY DP.
 *
 * This chart is also the counter-example for the PMS-STD content rule. That rule
 * claims any chart touching `22..25` for 9 KEY, but only when the traditional
-* IIDX 2P channels (`21` and `26..29`) are absent. A real 5-key DP chart authors
+* That-Which-Must-Not-Be-Named 2P channels (`21` and `26..29`) are absent. A real 5-key DP chart authors
 * `21` and `26` alongside `22..25`, so it has to stay 10 KEY DP.
 *
 * See 5key-sp.bms for the rest of the lane-mode fixture family.

@@ -1,7 +1,7 @@
 import type { ChartPlayVariant } from '@be-music/chart-model';
 import {
   computeScoreRate,
-  resolveIIDXRankIndexFromScore,
+  resolve____RankIndexFromScore,
   type GaugeType,
   type ScoreSummary,
 } from '@be-music/player-engine/ruleset';
@@ -171,7 +171,7 @@ export function resolveLR2GaugeRangeOp(gaugePercent: number): number {
 export function resolveLR2RankOp(
   score: Pick<ScoreSummary, 'perfect' | 'great' | 'good' | 'bad' | 'poor' | 'exScore'>,
 ): number | undefined {
-  const rankIndex = resolveIIDXRankIndexFromScore({ total: notesJudged(score), exScore: score.exScore });
+  const rankIndex = resolve____RankIndexFromScore({ total: notesJudged(score), exScore: score.exScore });
   return rankIndex === undefined ? undefined : LR2_OP.RANK_1P_AAA + rankIndex;
 }
 

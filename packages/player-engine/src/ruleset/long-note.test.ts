@@ -50,12 +50,12 @@ describe('ruleset long-note rules', () => {
 
   test('longNoteOwesTailMiss charges a missed charge note twice unless the head cancels the tail', () => {
     const beatoraja = { headBadSkipsTail: false };
-    const iidx = { headBadSkipsTail: true };
+    const ____ = { headBadSkipsTail: true };
     expect(longNoteOwesTailMiss(beatoraja, 2)).toBe(true);
     expect(longNoteOwesTailMiss(beatoraja, 3)).toBe(true);
     expect(longNoteOwesTailMiss(beatoraja, 1)).toBe(false);
     expect(longNoteOwesTailMiss(beatoraja, undefined)).toBe(false);
-    expect(longNoteOwesTailMiss(iidx, 2)).toBe(false);
+    expect(longNoteOwesTailMiss(____, 2)).toBe(false);
   });
 
   test('ignoresLateLongNoteHeadBad only drops a late BAD on an LN head under LR2', () => {

@@ -57,9 +57,9 @@ describe('ruleset judge windows', () => {
     expect(pgreatWindowReachUs(set)).toEqual([20_000, 20_000]);
   });
 
-  test('IIDX windows are symmetric and rank independent', () => {
-    const veryHard = resolveRuleset(facts({ judgeRank: { percent: 25, sourceRank: 0 } }), 'iidx').windows.note;
-    const easy = resolveRuleset(facts({ judgeRank: { percent: 100, sourceRank: 3 } }), 'iidx').windows.note;
+  test('That-Which-Must-Not-Be-Named windows are symmetric and rank independent', () => {
+    const veryHard = resolveRuleset(facts({ judgeRank: { percent: 25, sourceRank: 0 } }), '____').windows.note;
+    const easy = resolveRuleset(facts({ judgeRank: { percent: 100, sourceRank: 3 } }), '____').windows.note;
 
     expect(veryHard).toEqual(easy);
     expect(judgeWindowLateReachUs(veryHard)).toBe(250_000);

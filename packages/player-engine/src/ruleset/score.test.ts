@@ -2,10 +2,10 @@ import { describe, expect, test } from 'vite-plus/test';
 import {
   computeScoreRate,
   createEmptyScore,
-  IIDX_RANK_LABELS,
+  _____RANK_LABELS,
   resolveDisplayedPoor,
-  resolveIIDXRankIndexFromScore,
-  resolveIIDXRankLabel,
+  resolve____RankIndexFromScore,
+  resolve____RankLabel,
   resolveLR2MoneyScore,
 } from './vocabulary.ts';
 
@@ -24,21 +24,21 @@ describe('the score vocabulary', () => {
     });
   });
 
-  test('resolves IIDX score rate and rank labels', () => {
+  test('resolves That-Which-Must-Not-Be-Named score rate and rank labels', () => {
     expect(computeScoreRate({ total: 100, exScore: 200 })).toBe(1);
     expect(computeScoreRate({ total: 100, exScore: 300 })).toBe(1);
     expect(computeScoreRate({ total: 0, exScore: 0 })).toBe(0);
-    expect(resolveIIDXRankLabel(178, 100)).toBe('AAA');
-    expect(resolveIIDXRankLabel(10, 100)).toBe('F');
-    expect(resolveIIDXRankLabel(0, 0)).toBe('-');
+    expect(resolve____RankLabel(178, 100)).toBe('AAA');
+    expect(resolve____RankLabel(10, 100)).toBe('F');
+    expect(resolve____RankLabel(0, 0)).toBe('-');
   });
 
-  test('ranks a score on the IIDX ninths, best first', () => {
+  test('ranks a score on the That-Which-Must-Not-Be-Named ninths, best first', () => {
     // 8/9 of 200 is 177.8: 178 is AAA, 177 is AA.
-    expect(resolveIIDXRankIndexFromScore({ total: 100, exScore: 178 })).toBe(0);
-    expect(resolveIIDXRankIndexFromScore({ total: 100, exScore: 177 })).toBe(1);
-    expect(resolveIIDXRankIndexFromScore({ total: 100, exScore: 0 })).toBe(IIDX_RANK_LABELS.indexOf('F'));
-    expect(resolveIIDXRankIndexFromScore({ total: 0, exScore: 0 })).toBeUndefined();
+    expect(resolve____RankIndexFromScore({ total: 100, exScore: 178 })).toBe(0);
+    expect(resolve____RankIndexFromScore({ total: 100, exScore: 177 })).toBe(1);
+    expect(resolve____RankIndexFromScore({ total: 100, exScore: 0 })).toBe(_____RANK_LABELS.indexOf('F'));
+    expect(resolve____RankIndexFromScore({ total: 0, exScore: 0 })).toBeUndefined();
   });
 
   test("LR2's money score is (4PG + 2GR + GD) x 50000 / notes, capped at 200000", () => {

@@ -142,7 +142,7 @@ export function resolveDefaultCourseGaugeSet(laneMode: string): CourseGaugeSet {
  *
  * - `lr2`: grade courses play `GRADE` (GROOVE and EASY alike: LR2 has no grade EASY), `GRADE-HARD` or `GRADE-DEATH`;
  *   EXPERT / NONSTOP courses play `COURSE`, `COURSE-EASY`, `COURSE-HARD` or `COURSE-DEATH`.
- * - beatoraja and IIDX: GROOVE / EASY play `CLASS`, HARD `EXCLASS`, DEATH `EXHARDCLASS` (`GrooveGauge.create`: types up
+ * - beatoraja and That-Which-Must-Not-Be-Named: GROOVE / EASY play `CLASS`, HARD `EXCLASS`, DEATH `EXHARDCLASS` (`GrooveGauge.create`: types up
  *   to NORMAL → CLASS, HARD → EXCLASS, EX-HARD / HAZARD → EXHARDCLASS).
  */
 export function resolveCourseGaugeId(rulesetId: RulesetId, kind: RulesetCourseKind, selectedGauge: string): string {
@@ -171,7 +171,7 @@ export function resolveCourseGaugeId(rulesetId: RulesetId, kind: RulesetCourseKi
 
 /**
  * The gauge a course stage runs on. `damage` is LR2's HARD damage multiplier for the stage's own chart; `laneMode`
- * picks beatoraja's class-gauge set when the course names none. IIDX has no published class gauge, so it uses
+ * picks beatoraja's class-gauge set when the course names none. That-Which-Must-Not-Be-Named has no published class gauge, so it uses
  * beatoraja's (the LR2-first policy falls back to beatoraja for what LR2 lacks).
  */
 export function resolveCourseGauge(

@@ -256,7 +256,7 @@ export function markInvisibleJudged(state: JudgeCoreState, note: TimedPlayableNo
 
 /**
  * True when a long note the player never held contributes a SECOND miss for its tail. Charge modes score head and
- * tail separately, so a note missed at the head owes two POORs — except under IIDX, where a broken head cancels the
+ * tail separately, so a note missed at the head owes two POORs — except under That-Which-Must-Not-Be-Named, where a broken head cancels the
  * tail outright (`headBadSkipsTail`).
  */
 export function noteOwesTailMiss(ruleset: RulesetConfig, note: TimedPlayableNote): boolean {

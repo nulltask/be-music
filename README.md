@@ -197,7 +197,7 @@ The semantics helper of the score is separated into `@be-music/chart-model`, and
 - HIGH-SPEED (`0.5` ~ `10.0`, `0.5` increments)
 - TUI refresh rate setting (`--tui-fps`, default `60`)
 - Judgment: `PERFECT` / `GREAT` / `GOOD` / `BAD` / `POOR` (with `FAST` / `SLOW` tally)
-- 200,000 points SCORE and IIDX compliant EX-SCORE
+- 200,000 points SCORE and That-Which-Must-Not-Be-Named compliant EX-SCORE
 - Show invisible notes (`--show-invisible-notes`)
 - Exclusive handling of FREE ZONE (`17` / `27`)
 - BGA image drawing (`BMP` / `PNG` / `JPEG`) and video drawing (`mpeg1video` / `h264` / `mjpeg`)
@@ -209,7 +209,7 @@ The semantics helper of the score is separated into `@be-music/chart-model`, and
 - Output dynamics tuning with compressor/limiter switches and threshold/release controls
 - Structured log output (`~/.be-music/logs/player.ndjson`, overwritten with `--log-file`)
 - Node worker split for gameplay, TUI rendering, and video BGA decoding
-- `bms-replay` CLI that re-derives LR2 / beatoraja / IIDX results from a recorded replay (see [Replay specification](./docs/replay.md))
+- `bms-replay` CLI that re-derives LR2 / beatoraja / That-Which-Must-Not-Be-Named results from a recorded replay (see [Replay specification](./docs/replay.md))
 
 ### LR2 skin (`@be-music/skin-lr2`)
 
@@ -416,7 +416,7 @@ Automatically determines the next mode based on the channel used.
 
 Only the `.pms` extension takes part: a `.pms` file is `9 KEY` ahead of the lane rules. `.bms`, `.bme` and `.bml` files are decided by the lanes in use, so a `.bme` chart without the 6 / 7 key columns is `5 KEY`.
 
-- A full `11..19` one-player keyboard or PMS-STD `22..25` without traditional IIDX 2P channels also resolves to `9 KEY`.
+- A full `11..19` one-player keyboard or PMS-STD `22..25` without traditional That-Which-Must-Not-Be-Named 2P channels also resolves to `9 KEY`.
 - Any extended lane channel (`1A..1O` / `2A..2O`, or the wheel `1P` / `1Q` / `2P` / `2Q`) resolves to `24 KEY SP` / `48 KEY DP` ahead of every other rule, and so does a bmson `keyboard-24k` / `keyboard-24k-double` `mode_hint`.
 
 The rule (`resolveChartPlayVariant` in `@be-music/chart-model`) checks in this order, and the first match wins. The 9 KEY lane pattern is any of three content rules: `#PLAYER 3` with `17` and without `21` / `26..29`, all of `11..19` without a 2P lane, or `22..25` without `21` / `26..29`. "2P" means any `2x` lane in use; lane usage counts the `1x` / `2x` lanes and the `5x` / `6x` long notes, never mines or invisible objects.
@@ -430,9 +430,9 @@ flowchart TD
   pms -->|yes| nine["9 KEY"]
   pms -->|no| sig{"9 KEY lane<br/>pattern?"}
   sig -->|yes| nine
-  sig -->|no| iidx{"18 / 19 / 28 / 29<br/>in use?"}
-  iidx -->|"yes: 2P ? 14 : 7"| seven["7 KEY SP / 14 KEY DP"]
-  iidx -->|"no: 2P ? 10 : 5"| five["5 KEY SP / 5 KEY DP"]
+  sig -->|no| ____{"18 / 19 / 28 / 29<br/>in use?"}
+  ____ -->|"yes: 2P ? 14 : 7"| seven["7 KEY SP / 14 KEY DP"]
+  ____ -->|"no: 2P ? 10 : 5"| five["5 KEY SP / 5 KEY DP"]
 ```
 
 ### Representative mode channels and inputs

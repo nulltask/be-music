@@ -9,7 +9,7 @@ function random(seed: number): () => number {
 }
 
 describe('randomizeSRandomNotes', () => {
-  test.each(['lr2', 'beatoraja', 'iidx'] as const)(
+  test.each(['lr2', 'beatoraja', '____'] as const)(
     '%s reserves long-note destinations through the tail row',
     (ruleset) => {
       const notes: SRandomNote[] = [

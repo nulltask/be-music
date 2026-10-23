@@ -282,7 +282,7 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
         playVariant: '7',
         x: 33,
         w: 194,
-        fixedWidths: skinSdkAPI.IIDX_LANE_WIDTHS,
+        fixedWidths: skinSdkAPI._____LANE_WIDTHS,
       });
     },
   });
@@ -432,9 +432,9 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       skinSdkAPI.updateMoments(skinSdkAPI.createMomentState(), BENCH_MOMENT_INPUT);
     },
   });
-  define('player-skin-sdk.usesIIDXLaneWidths', {
+  define('player-skin-sdk.uses____LaneWidths', {
     run: () => {
-      skinSdkAPI.usesIIDXLaneWidths('7');
+      skinSdkAPI.uses____LaneWidths('7');
     },
   });
   define('player-skin-sdk.validateBeMusicSkin', {

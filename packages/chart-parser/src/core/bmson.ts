@@ -136,7 +136,7 @@ const BMSON_GENERIC_KEYS_PATTERN = /^generic-(\d+)keys?$/;
  * Resolves the `x` → BMS channel mapping for a chart's playable lanes. Order of resolution:
  *
  * 1. `mode_hint` blank / undefined → spec default `beat-7k` (per bmson 1.0.0).
- * 2. Canonical IIDX / Pop'n / keyboard hint → authoritative table. Unknown hints (BmsONE's single-player
+ * 2. Canonical That-Which-Must-Not-Be-Named / Pop'n / keyboard hint → authoritative table. Unknown hints (BmsONE's single-player
  *    `keyboard-48k` among them, which is NOT the two-player `keyboard-24k-double`) take step 4.
  * 3. `generic-Nkeys` template → left-to-right positional map sized to N keys.
  * 4. Anything else is an unknown hint. When every `x` in use fits the `beat-7k` table, it is read as `beat-7k`, as

@@ -98,7 +98,7 @@ describe('resolveBeatorajaNoteLane', () => {
     expect(resolveBeatorajaNoteLane('2Q', '48')).toBe(51);
   });
 
-  it('keeps the IIDX scratch after the keys of its side', () => {
+  it('keeps the That-Which-Must-Not-Be-Named scratch after the keys of its side', () => {
     expect(resolveBeatorajaNoteLane('11', '7')).toBe(0);
     expect(resolveBeatorajaNoteLane('16', '7')).toBe(7);
     expect(resolveBeatorajaNoteLane('21', '14')).toBe(8);

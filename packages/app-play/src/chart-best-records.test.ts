@@ -31,7 +31,7 @@ describe('rulesetRecordKey / rulesetRecords', () => {
     ]);
     expect(rulesetRecords(records, 'lr2').get('sha256:abc')?.lamp).toBe('FULL_COMBO');
     expect(rulesetRecords(records, 'beatoraja').get('sha256:abc')?.lamp).toBe('MAX');
-    expect(rulesetRecords(records, 'iidx').get('sha256:abc')).toBeUndefined();
+    expect(rulesetRecords(records, '____').get('sha256:abc')).toBeUndefined();
   });
 });
 
@@ -40,7 +40,7 @@ describe('parseChartBestRecords / serializeChartBestRecords', () => {
     const records = new Map([
       ['lr2:sha256:abc', { lamp: 'FULL_COMBO' as const, exScore: 900, maxCombo: 450, missCount: 0, playCount: 2 }],
       ['beatoraja:sha256:abc', { lamp: 'MAX' as const, exScore: 910, playCount: 1 }],
-      ['iidx:path:x.bms', { lamp: 'FAILED' as const, playCount: 1 }],
+      ['____:path:x.bms', { lamp: 'FAILED' as const, playCount: 1 }],
     ]);
     expect(JSON.parse(serializeChartBestRecords(records)).version).toBe(3);
     expect(parseChartBestRecords(serializeChartBestRecords(records))).toEqual(records);
@@ -122,7 +122,7 @@ describe('playRecordKey', () => {
   it('records a played chart under its hash and the judge ruleset it ran under', () => {
     expect(playRecordKey(chartEntry, 'abc', played)).toBe('lr2:sha256:abc');
     expect(playRecordKey(chartEntry, undefined, played)).toBe('lr2:path:Songs/a/main.bms');
-    expect(playRecordKey(chartEntry, 'abc', { ...played, judgeRuleset: 'iidx' })).toBe('iidx:sha256:abc');
+    expect(playRecordKey(chartEntry, 'abc', { ...played, judgeRuleset: '____' })).toBe('____:sha256:abc');
   });
 
   it('leaves the records alone for auto play, a replay, a course stage and another tempo', () => {

@@ -145,7 +145,7 @@ describe('resolveCourseBestRecordUpdate', () => {
   });
 
   test('keeps nothing for a run whose stages were judged under different rulesets', () => {
-    const mixed = courseLog({ judgeRuleset: 'lr2' }, { judgeRuleset: 'iidx' });
+    const mixed = courseLog({ judgeRuleset: 'lr2' }, { judgeRuleset: '____' });
     expect(resolveCourseBestRecordUpdate(mixed, RESULT, 'course:k')).toBeUndefined();
   });
 

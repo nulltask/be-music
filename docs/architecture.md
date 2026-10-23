@@ -63,7 +63,7 @@ Resolved notes keep a reference to the source `event`. The engine uses it to loo
 
 ### What stays outside
 
-- **Ruleset choices** belong to `@be-music/player-engine`'s rulesets (`lr2`, `beatoraja`, `iidx`): judge windows from the judge-rank inputs, the default TOTAL and how bmson's percentage applies to it, gauge curves, and how an LN mode request plays (LN / CN / HCN). The Resolved layer gives them the chart's raw inputs.
+- **Ruleset choices** belong to `@be-music/player-engine`'s rulesets (`lr2`, `beatoraja`, `____`): judge windows from the judge-rank inputs, the default TOTAL and how bmson's percentage applies to it, gauge curves, and how an LN mode request plays (LN / CN / HCN). The Resolved layer gives them the chart's raw inputs.
 - **Judgment-rank defaults**: `judgeRank` holds only what the chart sets. The bmson `judge_rank` default (100) and the BMS `#RANK` default (NORMAL) are filled by each ruleset and, for song screens, by `resolveDisplayedJudgeRankValue` / `Label` (`@be-music/player-engine/display`), which read the same facts. A replay records the chart's own values (`sourceRank` / `sourceExRank`), and a log without them must replay to the same windows, so the rulesets need the defaults anyway; filling them here would also change the recorded facts of every bmson chart without `judge_rank`.
 - **Lane bindings and input**: key assignment, FREE ZONE aliases, scorable notes and lane options (RANDOM, MIRROR, FLIP) are play settings in `@be-music/player-engine`.
 - **Rendering and audio output**: how the hosts draw and mix what the Resolved layer lists.

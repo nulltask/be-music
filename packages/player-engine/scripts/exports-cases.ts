@@ -578,9 +578,9 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       replayAPI.resolveBeatorajaDefaultTotal(1200);
     },
   });
-  define('player-engine.replay.resolveIIDXGaugeUnit', {
+  define('player-engine.replay.resolve____GaugeUnit', {
     run: () => {
-      replayAPI.resolveIIDXGaugeUnit(1200);
+      replayAPI.resolve____GaugeUnit(1200);
     },
   });
   define('player-engine.replay.resolveLR2HardDamageMultiplier', {
@@ -813,14 +813,14 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       rulesetAPI.computeScoreRate({ total: 1000, exScore: 1650 });
     },
   });
-  define('player-engine.ruleset.resolveIIDXRankIndexFromScore', {
+  define('player-engine.ruleset.resolve____RankIndexFromScore', {
     run: () => {
-      rulesetAPI.resolveIIDXRankIndexFromScore({ total: 1000, exScore: 1650 });
+      rulesetAPI.resolve____RankIndexFromScore({ total: 1000, exScore: 1650 });
     },
   });
-  define('player-engine.ruleset.resolveIIDXRankLabel', {
+  define('player-engine.ruleset.resolve____RankLabel', {
     run: () => {
-      rulesetAPI.resolveIIDXRankLabel(1650, 1000);
+      rulesetAPI.resolve____RankLabel(1650, 1000);
     },
   });
   define('player-engine.ruleset.resolveLR2MoneyScore', {

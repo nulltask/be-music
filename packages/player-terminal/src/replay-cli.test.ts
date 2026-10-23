@@ -44,7 +44,7 @@ describe('replay-cli', () => {
   test('parseReplayCLIArgs: defaults to all rulesets and collects files', () => {
     const args = parseReplayCLIArgs(['a.bmplay.json', 'b.bmplay.json']);
     expect(args.files).toEqual(['a.bmplay.json', 'b.bmplay.json']);
-    expect(args.rulesets).toEqual(['lr2', 'beatoraja', 'iidx']);
+    expect(args.rulesets).toEqual(['lr2', 'beatoraja', '____']);
     expect(args.json).toBe(false);
     expect(args.help).toBe(false);
     expect(args.gauge).toBeUndefined();
@@ -53,13 +53,13 @@ describe('replay-cli', () => {
 
   test('parseReplayCLIArgs: parses ruleset list, gauge, algorithm, and flags', () => {
     const args = parseReplayCLIArgs([
-      '--ruleset=lr2,iidx',
+      '--ruleset=lr2,____',
       '--gauge=hard',
       '--algorithm=lowest',
       '--json',
       'file.bmplay.json',
     ]);
-    expect(args.rulesets).toEqual(['lr2', 'iidx']);
+    expect(args.rulesets).toEqual(['lr2', '____']);
     expect(args.gauge).toBe('HARD');
     expect(args.judgeAlgorithm).toBe('lowest');
     expect(args.json).toBe(true);
@@ -67,7 +67,7 @@ describe('replay-cli', () => {
   });
 
   test('parseReplayCLIArgs: --ruleset=all restores every simulator', () => {
-    expect(parseReplayCLIArgs(['--ruleset=all']).rulesets).toEqual(['lr2', 'beatoraja', 'iidx']);
+    expect(parseReplayCLIArgs(['--ruleset=all']).rulesets).toEqual(['lr2', 'beatoraja', '____']);
   });
 
   test('parseReplayCLIArgs: rejects unknown rulesets, algorithms, and options', () => {
@@ -93,9 +93,9 @@ describe('replay-cli', () => {
     const report = buildReplayReport('file.bmplay.json', makeReplay(), [
       { label: 'lr2/0', result: makeResult() },
       {
-        label: 'iidx/0',
+        label: '____/0',
         result: makeResult({
-          ruleset: 'iidx/0',
+          ruleset: '____/0',
           score: undefined,
           djLevel: 'A',
           gauge: { type: 'HARD', final: 0, cleared: false, failedMidPlay: true },
@@ -113,10 +113,10 @@ describe('replay-cli', () => {
     expect(lr2Line).toContain('85.00%');
     expect(lr2Line).toContain('170000');
     expect(lr2Line).toContain('84.0% GROOVE CLEAR');
-    const iidxLine = lines.find((line) => line.startsWith('iidx/0'));
-    expect(iidxLine).toContain('0.0% HARD FAILED(0%)');
-    // No money score for IIDX.
-    expect(iidxLine).toContain(' - ');
+    const ____Line = lines.find((line) => line.startsWith('????/0'));
+    expect(____Line).toContain('0.0% HARD FAILED(0%)');
+    // No money score for That-Which-Must-Not-Be-Named.
+    expect(____Line).toContain(' - ');
   });
 
   test('buildReplayReport: marks aborted plays and auto scratch in the header', () => {

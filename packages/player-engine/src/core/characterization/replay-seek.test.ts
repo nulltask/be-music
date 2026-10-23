@@ -16,7 +16,7 @@ const cases = [
 ];
 
 describe('a replay that seeks', () => {
-  for (const ruleset of ['lr2', 'beatoraja', 'iidx'] as const) {
+  for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
     for (const sample of cases) {
       test(`${ruleset} / ${sample.name}: agrees with uninterrupted replay at the target and end`, async () => {
         const chart = sample.chart();
@@ -136,7 +136,7 @@ describe('a replay that seeks', () => {
   );
 });
 
-for (const judgeRuleset of ['lr2', 'beatoraja', 'iidx'] as const) {
+for (const judgeRuleset of ['lr2', 'beatoraja', '____'] as const) {
   test(`${judgeRuleset}: NONSTOP replay seeks across a stage's different judge rank`, async () => {
     const { chart, map } = nonstopCourse();
     const at = map.stageRanks[0]!.seconds + 1.7;

@@ -33,7 +33,7 @@ const CASES: readonly StartCase[] = [
   { name: 'a tempo', chart: basicChart, at: 2.2, options: { speed: 1.5 } },
 ];
 
-const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', 'iidx'];
+const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', '____'];
 
 /** How the play gets to the case's second: from its start, or by a seek command forwards or backwards mid-play. */
 const WAYS = {

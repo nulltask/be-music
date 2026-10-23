@@ -250,8 +250,8 @@ bmson の `l`、FREE ZONE (`17` / `27`)、BMS の `#LNOBJ`、BMS legacy LN (`#mm
 - `lr2` ruleset — LR2beta3 本体の挙動。押下は判定線から早い側の GREAT 境界の手前までで地雷を踏みます（境界は含めない）。押したままなら通過時に爆発します。通過した地雷は最初のポーリングで消費し、遅い押下や、押したまま判定幅に入っただけでは爆発しません。
 - `beatoraja` ruleset — beatoraja のモデル（`JudgeManager` L244）。「**地雷が判定線を通過する瞬間にキーが押されている**」ときだけ爆発します。少し前に押して通過前に離した場合や、通過後の押下では何も起きません。
 - 「押されている」かどうかはレーンごとに記録した押下・離鍵の時刻から判定するため、地雷をいつ確定させてもライブプレイ・リプレイ・シミュレータの結果は一致します。2 つのキーで押さえたレーンは、どちらかが押されている間は押されたままです。通過と同じ瞬間の入力は通過より先に扱い、その µs に押したキーは押されている、その µs に離したキーは離れているものとします。離鍵を送らない入力では、判定が押下を受ける前にエンジンが離鍵を推定し、押下のたびにレーンを 120 ms（ロングノートの始点を弾いた押下では 380 ms）押されたままにします（[解放のない入力](./replay.ja.md#解放のない入力)）。
-- `iidx` ruleset — IIDX に地雷はありません。既存の暫定的な左右対称 PGREAT の押下・保持モデルを維持します。IIDX 本体の挙動を示すものではありません。
-- 爆発はゲージを減らし `#WAV00` を鳴らします。LR2 は POOR/BP も1回加算しますが、判定表示・コンボ切断・EX-SCORE 変更・通常 POOR 分の追加ゲージダメージは発生しません。`minePoor` は `poor` に含まれる地雷数を記録し、コース BP で未判定ノートの代わりに数えないようにします。beatoraja と暫定 IIDX はゲージのみの処理を保ちます。通常ノート判定は独立して行い、地雷は近接ノートの押下を消費しません。
+- `____` ruleset — 名前を言ってはいけないあのゲームに地雷はありません。既存の暫定的な左右対称 PGREAT の押下・保持モデルを維持します。名前を言ってはいけないあのゲーム 本体の挙動を示すものではありません。
+- 爆発はゲージを減らし `#WAV00` を鳴らします。LR2 は POOR/BP も1回加算しますが、判定表示・コンボ切断・EX-SCORE 変更・通常 POOR 分の追加ゲージダメージは発生しません。`minePoor` は `poor` に含まれる地雷数を記録し、コース BP で未判定ノートの代わりに数えないようにします。beatoraja と暫定 名前を言ってはいけないあのゲームはゲージのみの処理を保ちます。通常ノート判定は独立して行い、地雷は近接ノートの押下を消費しません。
 - ダメージは地雷オブジェクト値（大文字 base36）を **そのままパーセントとして解釈**します（LR2 / beatoraja 準拠。nanasi 系仕様の `value / 2` とは異なります）。bmson の `mine_channels[].notes[].damage` が付いた地雷はその値を優先します。`damage` のない bmson の地雷は既定の `4%` です（オブジェクト値はパーサーが割り当てた WAV スロットでありダメージ表現ではないため、ダメージとしては読みません）。
 - ダメージは HARD の 30% 緩和・`#TOTAL` 補正の対象外です（beatoraja の `gauge.addValue()` 直接加算と同じ）。
 - `ZZ`（= 1295%）は survival 系（HARD / DEATH）では即 FAILED、GROOVE / EASY では下限 `2%` で止まります。
@@ -269,9 +269,9 @@ bmson の `key_channels`（beatoraja の隠しノート）は不可視ノート�
 FREE ZONE (`17` / `27`) は 1 beat の終端を持つノートとして扱います。
 通常の score/gauge 対象からは除外し、keysound fallback と描画上の補助対象として扱います。
 判定上の効果はありません。FREE ZONE 中のスクラッチの押下はほかの押下と同じく判定し、空 `POOR` になりえます。LR2 と
-beatoraja はどちらも 7 鍵・14 鍵の譜面で `17` / `27` チャンネルを読み込み時に捨て、IIDX にはもともと FREE ZONE が
+beatoraja はどちらも 7 鍵・14 鍵の譜面で `17` / `27` チャンネルを読み込み時に捨て、名前を言ってはいけないあのゲームにはもともと FREE ZONE が
 ありません（FREE ZONE は beatmania 1st / 2ndMIX の仕組みです）。
-これが適用されるのは IIDX 系のみです。`9 KEY` と `24 KEY` / `48 KEY` の keyboard mode では、これらのチャンネルは通常のキーレーンなので、譜面が書いた長さのまま（単押しは単押しのまま）扱います。
+これが適用されるのは 名前を言ってはいけないあのゲーム 系のみです。`9 KEY` と `24 KEY` / `48 KEY` の keyboard mode では、これらのチャンネルは通常のキーレーンなので、譜面が書いた長さのまま（単押しは単押しのまま）扱います。
 
 ## レーンモードと入力
 
@@ -299,11 +299,11 @@ ruleset の 5 KEY / 7 KEY 判定幅を切り替えることもありません。
 既知の固定レイアウトに存在しないチャンネルは、未使用キーへ順番にフォールバック割り当てします。
 FREE ZONE は、対応する scratch レーン (`17 -> 16`, `27 -> 26`) の入力トークンも共有します。
 
-`24 KEY SP` / `48 KEY DP` は Keyboardmania 系の keyboard mode です。片側 26 レーンで、24 鍵をチャンネル `11..19` + `1A..1O`（2P 側は `21..29` + `2A..2O`）に、ホイールを `1P`（上）/ `1Q`（下）（2P 側は `2P` / `2Q`）に持ちます。scratch 列はありません。鍵はチャンネル昇順に左から右へ並べ、ホイールは IIDX 系が scratch を置く外側（1P の鍵の左、2P の鍵の右）に置きます。判定は内容ベースで、拡張レーンチャンネル（ホイールを含む）が 1 つでもあれば `.pms` 拡張子や `#PLAYER 3` + `17` の POPN-9 シグネチャよりも優先してこのモードを選び、bmson のキーボード系 `mode_hint` はそのままこのモードを選びます。
+`24 KEY SP` / `48 KEY DP` は Keyboardmania 系の keyboard mode です。片側 26 レーンで、24 鍵をチャンネル `11..19` + `1A..1O`（2P 側は `21..29` + `2A..2O`）に、ホイールを `1P`（上）/ `1Q`（下）（2P 側は `2P` / `2Q`）に持ちます。scratch 列はありません。鍵はチャンネル昇順に左から右へ並べ、ホイールは 名前を言ってはいけないあのゲーム 系が scratch を置く外側（1P の鍵の左、2P の鍵の右）に置きます。判定は内容ベースで、拡張レーンチャンネル（ホイールを含む）が 1 つでもあれば `.pms` 拡張子や `#PLAYER 3` + `17` の POPN-9 シグネチャよりも優先してこのモードを選び、bmson のキーボード系 `mode_hint` はそのままこのモードを選びます。
 
 ホイールは鍵とまったく同じに判定し（beatoraja ruleset の keyboard 判定幅で、scratch 固有の扱いはありません）、FREE ZONE にもなりません。レーンオプション（MIRROR / RANDOM / S-RANDOM）は片側の 24 鍵を入れ替え、ホイールは scratch と同じく動かしません。SP の 24 鍵は fallback キー配置を順に消費します (`a s d f g h j k l ; q w e r u i o p z x c v b n`)。ホイールはその割り当てとも、web player がハイスピード変更に使う矢印キーとも重ならない、キーボードの端のキーを使います。1P のホイール上 / 下は `Tab` / 左 `Shift`、2P は `Enter` / 右 `Shift` です（beatoraja は MIDI コントローラのピッチベンドでホイールを操作しますが、be-music には MIDI 入力がありません）。48 鍵の DP は印字キーの数を超えるため鍵の末尾がファンクションキーに落ちますが、48 鍵は AUTO PLAY と描画の検証対象であって手で押す対象ではないため、意図的な割り切りです。
 
-IIDX 系の既定キーボード配置は、1P を `Z S X D C F V`、2P を `B H N J M K ,` とします。
+名前を言ってはいけないあのゲーム 系の既定キーボード配置は、1P を `Z S X D C F V`、2P を `B H N J M K ,` とします。
 scratch は 1P が左 `Shift`、2P が右 `Shift` です。
 reverse scratch は 1P が左 `Ctrl`、2P が右 `Ctrl` を使います。macOS では `Ctrl` の代わりに左/右 `Option` を使います。
 
@@ -339,7 +339,7 @@ scratch で扱う FREE ZONE のチャンネルを持ちます。bmson の `mode_
 
 `randomizeSRandomNotes`（`@be-music/player-engine/lanes`）は実行環境に依存しない純粋なヘルパーです。確定済みイベントの時刻（ms）、モード・左右の完全な鍵盤範囲、選択した判定ルールセット、外から渡す乱数を受け取り、ノートを変更せず入力順のチャンネルを返します。ブラウザはエンジンが判定するノートと同じオブジェクトに配置を適用し、LN の終端も保持します。スクラッチ・ホイール・反対側のイベントは固定します。
 
-| 規則                   | LR2 と暫定 IIDX                                        | beatoraja                                                |
+| 規則                   | LR2 と暫定 名前を言ってはいけないあのゲーム            | beatoraja                                                |
 | ---------------------- | ------------------------------------------------------ | -------------------------------------------------------- |
 | 保持中の LN            | 終端の行まで配置先を予約                               | 終端の行まで元と先の対応を保持                           |
 | 通常ノート             | 同時刻・保持中の LN が使わない配置先から選択           | 前の得点対象ノートから整数 ms で40msを超えた配置先を優先 |
@@ -351,7 +351,7 @@ scratch で扱う FREE ZONE のチャンネルを持ちます。bmson の `mode_
 ## 互換ルールセット
 
 **このプレイヤーは独自の判定ロジックを持ちません。** すべてのプレイは 3 つの互換ルールセット
-`lr2`（デフォルト）/ `beatoraja` / `iidx` のいずれかで動作します（`PlayerOptions.judgeRuleset`）。
+`lr2`（デフォルト）/ `beatoraja` / `____` のいずれかで動作します（`PlayerOptions.judgeRuleset`）。
 判定幅、押下がどのノートを取るか、ロングノートの扱い、空 POOR の規則、ゲージの種類とカーブ、スコア計算式は
 すべてルールセットが所有します。定数と出典は
 [`packages/player-engine/src/ruleset/definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) にあり、
@@ -535,7 +535,7 @@ flowchart TD
 
 - `summary.emptyPoor` を加算し、ノート判定カウンタ (`perfect`/`great`/`good`/`bad`/`poor`) は **更新しない**。ノートを消費していないため。POOR カウンタに両者の合計を表示するかは提示側の選択で、LR2 は合算します（OpenLR2 `ApplyJudgeNote` が空POOR 分岐でも `playerstat.poor` を加算）。
 - EX-SCORE とスコアは **変化させない**。
-- combo はルールセットが指示する場合のみ切る（`comboBreaksOnEmptyPoor`）。beatoraja の 5 鍵 / PMS のみ切れ、LR2 と IIDX は切れません。
+- combo はルールセットが指示する場合のみ切る（`comboBreaksOnEmptyPoor`）。beatoraja の 5 鍵 / PMS のみ切れ、LR2 と 名前を言ってはいけないあのゲームは切れません。
 - ゲージには `EMPTY_POOR` を適用する。デルタはルールセットのゲージ表（[`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts)）にあり、`lr2` では GROOVE `-2`、HARD `-2`（TOTAL 補正対象）、EASY `-1.6`、DEATH `-10`。GROOVE / EASY ではほぼ無害だが、HARD / DEATH では実害が出る。
 - **POOR BGA を発火する** (`trigger-poor-bga`)。
 - **judge 表示を `POOR` で 0.6 秒フラッシュ** する (`publishJudgeCombo('POOR', combo)`)。 LR2 spec 上は op 246 (1P 空POOR) / 266 (2P 空POOR) と op 245 / 265 (見逃しPOOR) が分岐するが、本実装では NOWJUDGE index 0 / 1 を同じ `'poor'` skin slot に解決しているため、視覚上は同一の POOR 表示になる。
@@ -573,7 +573,7 @@ combo は `PERFECT` / `GREAT` / `GOOD` のみで増加します。
 
 ### EX-SCORE
 
-EX-SCORE は IIDX 互換です。
+EX-SCORE は 名前を言ってはいけないあのゲーム互換です。
 
 - `PERFECT`: `+2`
 - `GREAT`: `+1`
@@ -585,11 +585,11 @@ EX-SCORE は IIDX 互換です。
 
 - `lr2` は LR2 のマネースコア `floor((4 × PGREAT + 2 × GREAT + GOOD) × 50000 / notes)`（上限 `200000`）を返します。
   判定内訳だけで決まり、コンボ項はありません。
-- `beatoraja` と `iidx` は EX-SCORE を返します。これが実機の表示です（IIDX は BISTROVER でマネースコアを廃止）。
+- `beatoraja` と `____` は EX-SCORE を返します。これが実機の表示です（名前を言ってはいけないあのゲームは BISTROVER でマネースコアを廃止）。
 
 スコアの定義はルールセットのもので、`@be-music/player-engine/ruleset` が公開します。`ScoreSummary`、`JudgmentKind`、
-`createEmptyScore`、`computeScoreRate`、DJ ランク（`resolveIIDXRankIndexFromScore`、`resolveIIDXRankLabel`、
-`IIDX_RANK_LABELS`）、`resolveLR2MoneyScore`、`resolveDisplayedPoor` です。
+`createEmptyScore`、`computeScoreRate`、DJ ランク（`resolve____RankIndexFromScore`、`resolve____RankLabel`、
+`_____RANK_LABELS`）、`resolveLR2MoneyScore`、`resolveDisplayedPoor` です。
 
 ### 空 POOR
 
@@ -597,13 +597,13 @@ EX-SCORE は IIDX 互換です。
 演出を出しますが、ノートを消費しないため EX-SCORE には影響せず、`summary.poor` ではなく
 `summary.emptyPoor` に計上されます。LR2 の miss 窓は早側のみ（`{0, 1 s}`）で、ノートの 1 秒前までの押下は
 空 POOR になりますが、通過後の押下は決してなりません。beatoraja は早側 500 ms・遅側 150 ms です。
-コンボを切るかどうかもルールセット次第で、beatoraja の 5 鍵 / PMS のみ切れ、LR2 と IIDX は切れません。
+コンボを切るかどうかもルールセット次第で、beatoraja の 5 鍵 / PMS のみ切れ、LR2 と 名前を言ってはいけないあのゲームは切れません。
 
 POOR カウンタに `poor` と `emptyPoor` の合計を表示するかは提示側の選択で、ルールセットが
 `emptyPoorCountsInPoorDisplay` として持ちます。LR2 のカウンタは合算します（OpenLR2 `ApplyJudgeNote` が
 空POOR 分岐でも `playerstat.poor` を加算し、LR2 に独立した統計は無いため）。そのため Web のプレイのセッションは `lr2` では
 表示用コピーで合算し、POOR 行・BP・判定別レートがすべて追従します。beatoraja は独自の空POOR 表示を持ち、
-IIDX は未測定のため、どちらも分けたままです。`PlayerSummary` は常に分けて報告します。
+名前を言ってはいけないあのゲームは未測定のため、どちらも分けたままです。`PlayerSummary` は常に分けて報告します。
 
 ## Groove Gauge
 
@@ -611,7 +611,7 @@ IIDX は未測定のため、どちらも分けたままです。`PlayerSummary`
 
 - ゲージは `PlayerOptions.gauge` で選び、LR2 の名前（`GROOVE` / `EASY` / `HARD` / `DEATH`）で指定します。
   各ルールセットが自分のラインナップへ対応付けます（`GROOVE` は beatoraja の `NORMAL`、`DEATH` は `HAZARD`。
-  IIDX に HAZARD 相当は無いため `DEATH` は `EX-HARD` に丸められます）。
+  名前を言ってはいけないあのゲームに HAZARD 相当は無いため `DEATH` は `EX-HARD` に丸められます）。
 - カーブはルールセットが所有します: 判定ごとの増減、TOTAL スケーリング、guts 緩和、死亡ボーダー、
   クリア判定（回復系は閾値、サバイバル系は「一度も 0 にならなかったか」）。
 - 選択したゲージは実際にプレイを支配します。色だけの飾りではありません — HARD は本当に削れ、
@@ -636,7 +636,7 @@ IIDX は未測定のため、どちらも分けたままです。`PlayerSummary`
 - `#TOTAL` 未指定または 0 以下のときは LR2 のノート数式（`LR2_bmsload.cpp`）で求めます:
   400 ノート未満は `(n / 5 + 200) × 0.8`、600 未満は `((n - 400) / 2.5 + 280) × 0.8`、
   それ以上は `((n - 600) / 5 + 360) × 0.8`。beatoraja は独自の既定値（`max(260, 7.605 n / (0.01 n + 6.5))`）を使います。
-  IIDX のゲージは TOTAL を参照せず（回復量はノート数から決まる）、報告する TOTAL は LR2 の式に従います。
+  名前を言ってはいけないあのゲームのゲージは TOTAL を参照せず（回復量はノート数から決まる）、報告する TOTAL は LR2 の式に従います。
 - bmson の `info.total` は絶対 TOTAL ではなく、ルールセット既定値に対する百分率です。どのルールセットも
   自身の既定値の `total / 100 ×` として扱い、0 以下は 100 % とみなします（beatoraja `BMSPlayerRule.validate`）。
   したがって `total` のない bmson 譜面は TOTAL 100 ではなく、ルールセットの既定値で演奏されます。
@@ -686,7 +686,7 @@ FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めませ�
 
 - `lr2`（`ln`）: `#LNMODE` に関わらずすべて LN。判定は 1 回だけ遅延確定し、終点より `GOOD` 窓を超えて早く離すと `BAD`。
 - `beatoraja`（`per-note`）: 譜面に従う — `1` が LN、`2` が CN、`3` が HCN。
-- `iidx`（`charge`）: すべてチャージノート（譜面が `3` なら HCN）。始点が `BAD` / `POOR` だと終点判定は取り消されます。
+- `____`（`charge`）: すべてチャージノート（譜面が `3` なら HCN）。始点が `BAD` / `POOR` だと終点判定は取り消されます。
 
 BMS の `#LNMODE` 未指定時は `1` として扱います。
 bmson は beatoraja 拡張の `info.ln_type` と note 単位の `t`（1: LN / 2: CN / 3: HCN、`t` が `ln_type` より優先）でモードを決め、どちらも未指定の場合は LR2 準拠の既定として `1`（LN）を使います。
@@ -713,17 +713,17 @@ FREE ZONE は `#LNMODE` の対象外で、終端を持つノートとして扱�
 
 離鍵はその瞬間に確定します。例外はルールセットのロングノート離鍵マージン（`longNoteReleaseMarginUs`、beatoraja の
 `longnoteMargin` / `longscratchMargin`）で、beatoraja の PMS ルールでは、終点より前の離鍵が早い側の `BAD` 以下になる場合に
-確定を 200 ms 待ち（LN では始点の方が離鍵よりずれていれば始点のタイミングを使うため、遅い `BAD` の始点はすぐ確定します）、その間にレーンを押し直すと離さなかったものとしてホールドを続けます。LR2、IIDX、beatoraja の
+確定を 200 ms 待ち（LN では始点の方が離鍵よりずれていれば始点のタイミングを使うため、遅い `BAD` の始点はすぐ確定します）、その間にレーンを押し直すと離さなかったものとしてホールドを続けます。LR2、名前を言ってはいけないあのゲーム、beatoraja の
 ほかのモードにはマージンがありません。離鍵イベントのない入力（kitty キーボードプロトコルのない端末）では、エンジンが
 離鍵を推定します。キーの最後のリピートから 120 ms 後、リピートがなければロングノートの始点を叩いた押下から 380 ms 後です。
 
 ロングノートを押しているレーンへの押下（ターンテーブルの逆回転など、同じレーンに割り当てた 2 つ目のキー）は、そのレーンの
 ほかのノートを判定しません。そのレーンの現在のノートはロングノートだからです。代わりにどうするかはルールセット
 （`pressDuringLongNote`）が決めます。`lr2` は押下が LN の始点の `BAD` 窓内なら始点を判定し直し、それ以外は空 `POOR`
-とします（OpenLR2 `ProcLongnote`）。`beatoraja` は押し直しとして無視し（`JudgeManager` L355-377）、`iidx` も同じです。
+とします（OpenLR2 `ProcLongnote`）。`beatoraja` は押し直しとして無視し（`JudgeManager` L355-377）、`____` も同じです。
 
 一度も触れなかったロングノートは始点分の `POOR` 1 つに加え、チャージ系ではさらに終点分の `POOR` を負います。
-ただし IIDX は終点判定が取り消されるため、負いません。
+ただし 名前を言ってはいけないあのゲームは終点判定が取り消されるため、負いません。
 
 手動演奏でのロングノートの一生を、実効モードごとに示します。
 
@@ -737,7 +737,7 @@ stateDiagram-v2
   [*] --> Pending
   Pending --> Missed: 始点の窓を過ぎる
   Pending --> Held: 始点を押す
-  Pending --> Done: 始点 BAD / POOR（iidx のチャージ）
+  Pending --> Done: 始点 BAD / POOR（名前を言ってはいけないあのゲームのチャージ）
   Held --> Margin: マージンのある早い離鍵
   Margin --> Held: 押し直す
   Margin --> Done: マージンが過ぎる

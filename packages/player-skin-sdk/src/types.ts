@@ -184,7 +184,7 @@ export type BeMusicImage = CanvasImageSource;
 
 /**
  * Visual class of a lane, resolved from its channel — skins pick colours per class. `'wheel-up'` / `'wheel-down'` are
- * the 24 / 48 KEY modes' wheel lanes, on the outer edge of each side where the IIDX modes keep their scratch: draw them
+ * the 24 / 48 KEY modes' wheel lanes, on the outer edge of each side where the That-Which-Must-Not-Be-Named modes keep their scratch: draw them
  * apart from the keys (like a scratch) and show which way each one turns.
  */
 export type BeMusicLaneKind = 'white' | 'black' | 'scratch' | 'wheel-up' | 'wheel-down';
@@ -287,7 +287,7 @@ export interface BeMusicGameplayRuntime {
   progressRatio?: number;
   /** Fractional beat position in [0, 1) — drives beat-synced pulses. */
   beatPhase?: number;
-  /** Active compat ruleset id (`lr2` / `beatoraja` / `iidx`). */
+  /** Active compat ruleset id (`lr2` / `beatoraja` / `____`). */
   rulesetLabel?: string;
   /** Ruleset-scoped gauge id (`GROOVE` / `HARD` / `HAZARD` / ...) labelling the gauge. */
   gaugeLabel?: string;
@@ -339,7 +339,7 @@ export interface BeMusicGameplayRuntime {
    * still, as beatoraja shows it.
    */
   visibleMs?: number;
-  /** IIDX-style green number (`visibleMs × 0.6`): the note's on-screen time in frames at 60 Hz. */
+  /** That-Which-Must-Not-Be-Named-style green number (`visibleMs × 0.6`): the note's on-screen time in frames at 60 Hz. */
   greenNumber?: number;
   /**
    * Lowest, highest, and main BPM of the chart. The main BPM is the BPM the most notes sit at (beatoraja's), the one
@@ -728,7 +728,7 @@ export interface BeMusicResultFrame {
   designWidth: number;
   designHeight: number;
   result: BeMusicResultData;
-  /** IIDX DJ level (`AAA` … `F`). */
+  /** That-Which-Must-Not-Be-Named DJ level (`AAA` … `F`). */
   rankLabel: string;
   /** EX-score rate in percent. */
   ratePercent: number;

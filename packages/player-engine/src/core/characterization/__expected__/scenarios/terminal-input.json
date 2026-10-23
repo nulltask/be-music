@@ -103,8 +103,8 @@
         "djLevel": "D",
         "gauge": {"type":"NORMAL","final":88,"cleared":true}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":5,"great":1,"good":1,"bad":0,"poor":2,"emptyPoor":0},
         "fast": 1,
         "slow": 1,

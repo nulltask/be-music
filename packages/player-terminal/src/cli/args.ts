@@ -448,7 +448,7 @@ export function printUsage(): void {
       '',
       'Developer/debug:',
       '  --debug-active-audio      Show currently sounding key-sound filenames on play screen (default: off)',
-      '  --ruleset <name>       Compat ruleset: lr2 (default) | beatoraja | iidx',
+      '  --ruleset <name>       Compat ruleset: lr2 (default) | beatoraja | ____',
       '  --gauge <name>         Gauge: GROOVE (default) | EASY | HARD | DEATH',
       '  --debug-judge-window <ms> Override BAD window for debugging',
     ].join('\n') + '\n',

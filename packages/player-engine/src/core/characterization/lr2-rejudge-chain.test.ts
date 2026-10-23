@@ -45,7 +45,7 @@ test('LR2 chains multiple BADs, then stops after the first PGREAT', async () => 
   expect(play.simulated!.lr2!.judge).toMatchObject({ pgreat: 1, bad: 2, poor: 1 });
 });
 
-test.each(['lr2', 'beatoraja', 'iidx'] as const)('%s never chains through a long-note head', async (judgeRuleset) => {
+test.each(['lr2', 'beatoraja', '____'] as const)('%s never chains through a long-note head', async (judgeRuleset) => {
   const chart = createEmptyJSON('bms');
   chart.metadata.bpm = 240;
   chart.metadata.rank = 2;

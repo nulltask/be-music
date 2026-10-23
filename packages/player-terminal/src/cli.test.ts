@@ -111,7 +111,7 @@ describe('player cli', () => {
     expect(parseArgs(['chart.bms']).gauge).toBeUndefined();
 
     expect(parseArgs(['chart.bms', '--ruleset', 'beatoraja']).judgeRuleset).toBe('beatoraja');
-    expect(parseArgs(['chart.bms', '--ruleset', 'IIDX']).judgeRuleset).toBe('iidx');
+    expect(parseArgs(['chart.bms', '--ruleset', '____']).judgeRuleset).toBe('____');
     expect(parseArgs(['chart.bms', '--gauge', 'hard']).gauge).toBe('HARD');
 
     expect(() => parseArgs(['chart.bms', '--ruleset', 'lr2oraja'])).toThrow(/Unknown --ruleset/);
