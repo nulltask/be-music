@@ -635,6 +635,8 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       run.recordStage(benchRunStageLog, { playSeconds: 16 });
       run.nextStage();
       run.buildReplay();
+      run.recordStage(undefined, { practice: true, stageOutcome: benchStageResult });
+      run.buildPracticeResult();
     },
   });
   define('player-engine.course.resolveGivenUpPlaySeconds', {

@@ -53,6 +53,8 @@ export interface PlaySessionOptions {
   autoPlay?: boolean;
   /** Opt in to manual seeking; seeking turns the play into practice. */
   allowSeek?: 'practice';
+  /** A previous course stage sought: keep this stage out of recording and records too. */
+  practice?: boolean;
   /**
    * When true, the gameplay automatically pauses on tab visibility change (`document.hidden`) and window blur, and
    * auto-resumes on focus / `pageshow`. When false (the default), the play scene keeps running in the background —

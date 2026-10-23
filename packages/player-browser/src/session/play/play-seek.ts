@@ -17,7 +17,7 @@ export interface PlaySeekContext {
   readonly seekWaiters: Array<{ seconds: number; resolve: () => void }>;
 }
 
-/** Whether `play` can seek now: an AUTO play, replay or opted-in practice play whose engine runs (past its intro, not leaving). */
+/** Whether `play` can seek now: an AUTO play, replay or opted-in practice play whose engine is prepared and is not leaving. Intro seeks choose its starting position. */
 export function canSeekPlay(play: PlaySeekContext): boolean {
   return (
     (play.options.autoPlay === true || play.options.replay !== undefined || play.options.allowSeek === 'practice') &&
