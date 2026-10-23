@@ -45,6 +45,13 @@ describe('playResultFromPlayState', () => {
     expect(result.earlyLate?.PERFECT).toEqual({ early: 1, late: 1 });
   });
 
+  test('shows an LR2 full combo as cleared even when the physical gauge is below its border', () => {
+    const state = played(frame(7, 40), judge(4, 60));
+    expect(state.cleared).toBe(false);
+    const result = playResultFromPlayState(state, { chart: chartEntry, score, seconds: 100, judgeRuleset: 'lr2' });
+    expect(result).toMatchObject({ lamp: 'FULL_COMBO', cleared: true, gauge: 40 });
+  });
+
   test('lamps the play by the one clear-lamp rule', () => {
     const cleared = played(frame(7, 82, true));
     // Every note judged GREAT or better on a cleared gauge: LR2 tops out at FULL COMBO.
@@ -101,4 +108,16 @@ describe('resolveResultPresentation', () => {
     expect(resolveResultPresentation('single').quickRetry).toBe(true);
     expect(resolveResultPresentation('stage').quickRetry).toBe(false);
   });
+});
+
+test('a practice result keeps the practice flag and drops any replay', () => {
+  const result = playResultFromPlayState(played(), {
+    chart: chartEntry,
+    score,
+    seconds: 10,
+    practice: true,
+    replay: {} as NonNullable<import('./result.ts').PlayResult['replay']>,
+  });
+  expect(result.practice).toBe(true);
+  expect(result.replay).toBeUndefined();
 });

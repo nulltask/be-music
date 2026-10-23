@@ -87,6 +87,7 @@ const NON_ELEMENT_EXPORTS = new Set([
   'previewContentBottom',
   'resolvePreviewBGARect',
   'resolvePreviewInfoBox',
+  'resolvePreviewPortrait',
 ]);
 export const playerUIBenchmarkPackage: BenchmarkPackageDefinition = {
   module: ui,
@@ -122,6 +123,11 @@ export const playerUIBenchmarkPackage: BenchmarkPackageDefinition = {
     define('player-ui.resolvePreviewBGARect', {
       run: () => {
         ui.resolvePreviewBGARect(previewStage, 184);
+      },
+    });
+    define('player-ui.resolvePreviewPortrait', {
+      run: () => {
+        ui.resolvePreviewPortrait({ width: 480, height: 854 });
       },
     });
     const previewBGA = ui.resolvePreviewBGARect(previewStage, 184);

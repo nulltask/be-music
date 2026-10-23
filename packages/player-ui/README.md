@@ -40,7 +40,7 @@ React and Vue are peer dependencies of their respective wrappers. The skin SDK h
 | `be-music-playfield`         | `frame: BeMusicGameplayFrame`                                     |
 | `be-music-playback-controls` | `data: BeMusicPlaybackData`                                       |
 | `be-music-preview-hud`       | `frame: BeMusicDOMGameplayFrame`, `volume`, `muted`, `fullscreen` |
-| `be-music-preview-select`    | `charts: readonly LibraryChart[]`, `heading`                      |
+| `be-music-preview-select`    | `charts: readonly LibraryChart[]`, `heading`, optional `images`   |
 | `be-music-preview-start`     | `mode: 'play' \| 'replay'`, `disabled`                            |
 
 Each class is exported as `BeMusic…Element`. Wrappers export the same names without `Element`, for example `BeMusicGameplayHUD` and `BeMusicJudgmentTable`. Leaf components take only their own presentation data and can be arranged independently. Screen components compose those leaves and accept the existing DOM skin frames.
@@ -53,7 +53,7 @@ The playfield elements each draw on their own canvas, sized to the device pixels
 
 ## Preview
 
-`be-music-playback-controls` is a video player's control bar: play / pause (`pause-request`), a seek bar that requests `seek-request` with `{ seconds }` once let go, the time, mute and volume (`volume-change` with `{ volume, muted }`) and full screen (`fullscreen-request`). `be-music-preview-hud` lays the chart's facts, score, combo, gauge and judgments under the BGA rect and the controls along the bottom of the stage, and forwards their requests. `be-music-preview-select` lists a track's charts and requests one with `activate-request`; `be-music-preview-start` is the large play or replay button (`play-request`). `formatPlaybackTime`, `resolveSeekTarget` and `resolveGameplayPanels` are the pure helpers behind them. The embed page composes them ([browser player](../../docs/player-web.md#embedded-preview)).
+`be-music-playback-controls` is a video player's control bar: play / pause (`pause-request`), a seek bar that requests `seek-request` with `{ seconds }` while it is dragged and again when let go, the time, mute and volume (`volume-change` with `{ volume, muted }`) and full screen (`fullscreen-request`). `be-music-preview-hud` lays the chart's facts, score, combo, gauge and judgments under the BGA rect and the controls along the bottom of the stage, and forwards their requests. `be-music-preview-select` lists a track's charts, showing each chart's picture from `images` (a `#STAGEFILE`, or a `#BANNER` when the host supplies one), and requests one with `activate-request`; `be-music-preview-start` is the large play or replay button (`play-request`). `formatPlaybackTime`, `resolveSeekTarget` and `resolveGameplayPanels` are the pure helpers behind them. The embed page composes them ([browser player](../../docs/player-web.md#embedded-preview)).
 
 ## HTML and TypeScript
 
@@ -123,6 +123,8 @@ Vue emits the event detail directly: `@selection-change="({ index }) => select(i
 ## Styling and composition
 
 The elements use shadow roots. Theme tokens inherit across them: `--be-music-color-text`, `--be-music-color-muted`, `--be-music-color-background`, `--be-music-color-accent`, `--be-music-panel-background`, `--be-music-control-background`, `--be-music-focus-color`, `--be-music-timing-color`, `--be-music-font`, and `--be-music-radius`.
+
+Layout follows each element's own width. Every element is an inline-size container named `be-music`; a screen renames it `be-music-screen`. Below 40rem, a collection's columns stack and its chart list caps at 18rem. Above that, the list fills the column beside the chart details, and the list column stays wider than the details. Below 22rem, a judgment table hides its Early and Late columns, playback controls hide the volume slider, a preview chart row places the level and genre under the title, and a landscape gameplay HUD tightens its actions and detail cards. Below 16rem, a compact score puts its value on its own line and play options stack. The `compact` property stays explicit. Gameplay and preview stages still size themselves with `cqw` and `cqh`, and portrait play layout follows the stage orientation.
 
 The gameplay HUD exposes `hud`, `heading`, `primary`, `actions`, `details`, `score-summary`, `score-value`, `score-panel`, `judgment-panel`, `judgment-table`, `gauge-meter`, `gauge-panel`, `gauge-graph`, `timing-panel`, `timing-graph` and `settings-panel` parts, and a `paused` part while paused. Leaf panels expose their own `panel` and applicable `table` / `graph` / `meter` / `value` parts. Gameplay and chart details have an `actions` slot and a default slot. Other screens have a default slot.
 

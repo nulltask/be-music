@@ -40,6 +40,7 @@ export interface PlayMediaContext {
       | 'audioCompressor'
       | 'audioCompressorMode'
       | 'audioCompressorStages'
+      | 'peakGain'
       | 'tempoPitchMode'
       | 'tempoStretchAlgorithm'
       | 'nonstop'
@@ -131,6 +132,7 @@ export async function prepareAudio(ctx: PlayMediaContext): Promise<void> {
     tempoStretchAlgorithm: ctx.options.tempoStretchAlgorithm ?? 'signalsmith',
     ...(ctx.options.nonstop !== undefined ? { nonstop: ctx.options.nonstop } : {}),
     isCancelled: () => ctx.disposed,
+    ...(ctx.options.peakGain === true ? { peakGain: true } : {}),
   });
   // bmson slices index into the stretched samples (a bmson chart has no NONSTOP stages: one rate).
   if (stretched && ctx.bmsonSlicePlayback !== undefined) {
