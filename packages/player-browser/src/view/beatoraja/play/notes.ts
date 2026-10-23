@@ -15,6 +15,7 @@
 //      so a partial-asset theme still plays — better than silent blanks.
 
 import { Container, Graphics, Sprite, type Texture, TilingSprite } from 'pixi.js';
+import { findFirstIndexAtOrAfter } from '@be-music/shared-utils/core';
 import { resolveSideKeySlot } from '@be-music/player-engine/lanes';
 import type { PlayerUIFrameNote, PlayerUIFramePayload } from '@be-music/player-engine/signals';
 import type { ScrollDistanceMapperLike } from '@be-music/player-engine/display';
@@ -134,6 +135,7 @@ export function beatorajaDisplayScrollBeat(frame: Pick<PlayerUIFramePayload, 'cu
 export interface BeatorajaNoteClock {
   readonly notes: readonly PlayerUIFrameNote[];
   readonly landmineNotes?: readonly PlayerUIFrameNote[];
+  readonly invisibleNotes?: readonly PlayerUIFrameNote[];
   readonly currentSeconds: number;
   readonly currentBeat: number;
   readonly displayBeat?: number;
@@ -223,6 +225,8 @@ interface CroppedSprite {
 
 export class BeatorajaNoteLayer {
   readonly container: Container = new Container();
+  /** Inspection markers stay behind the skin's regular notes and long-note bodies. */
+  private readonly invisibleLayer = new Graphics({ label: 'invisible-notes', visible: false });
   /**
    * Two-tier layering so LN bodies always sit BEHIND head/tail caps and tap notes,
    * regardless of pool-reuse order across frames.
@@ -310,7 +314,8 @@ export class BeatorajaNoteLayer {
     this.timelineBeats = options.timelineBeats;
     this.autoplay = options.autoplay === true;
     this.reversal = options.reversal;
-    // bodyLayer first (= back), noteLayer second (= front). See field doc for rationale.
+    // Inspection markers behind bodies, then caps / taps in front. See field doc for rationale.
+    this.container.addChild(this.invisibleLayer);
     this.container.addChild(this.bodyLayer);
     this.container.addChild(this.noteLayer);
   }
@@ -327,7 +332,10 @@ export class BeatorajaNoteLayer {
      * resolves to the same sprite as `lnBodyUnheld`.
      */
     isLaneLNHeld?: (channel: string) => boolean,
+    showInvisibleNotes = false,
   ): void {
+    this.invisibleLayer.clear();
+    this.invisibleLayer.visible = false;
     const rects = this.resolveLaneRects(activeOps);
     if (rects.length === 0) {
       this.releaseAll();
@@ -389,6 +397,24 @@ export class BeatorajaNoteLayer {
           spriteImages: this.images.size,
         }),
       );
+    }
+
+    // Keysound objects are inspection markers, never judged notes. Keep their own layer behind the skin's notes.
+    const invisible = frame.invisibleNotes;
+    if (showInvisibleNotes && invisible !== undefined) {
+      const first = findFirstIndexAtOrAfter(invisible, drawWindow.currentBeat, (note) => note.beat);
+      for (let i = first; i < invisible.length; i += 1) {
+        const note = invisible[i]!;
+        if (isPastDrawWindow(drawWindow, note.beat)) break;
+        if (!isDrawnAtTime(drawWindow, note.seconds)) continue;
+        const lane = resolveBeatorajaNoteLane(note.channel, this.variant);
+        const rect = lane === undefined ? undefined : rects[lane];
+        if (rect === undefined) continue;
+        const y = judgementY - distance(note.beat) * pixelsPerBeat;
+        if (y < rect.y - TAP_LEAD_IN_PX || y > drawBottom) continue;
+        this.invisibleLayer.rect(rect.x + 2, y - 4, Math.max(4, rect.w - 4), 4).fill({ color: 0x33dd66, alpha: 0.7 });
+        this.invisibleLayer.visible = true;
+      }
     }
 
     const notes = this.drawingNotes(frame);

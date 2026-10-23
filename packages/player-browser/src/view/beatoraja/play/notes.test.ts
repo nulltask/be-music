@@ -161,7 +161,7 @@ describe('BeatorajaNoteLayer landmines', () => {
       currentSeconds: 0,
     };
     layer.update(frame, 1, new Set());
-    const noteLayer = layer.container.children[1]!;
+    const noteLayer = layer.container.children[2]!;
     expect(noteLayer.children.filter((child) => child.visible)).toHaveLength(1);
     expect(noteLayer.children[0]!.getBounds().minY).toBe(644);
     mine.judged = true;
@@ -198,14 +198,25 @@ describe('BeatorajaNoteLayer mine sprites', () => {
       canvasHeight: 1000,
     });
     const mine = { channel, beat: 1, seconds: 0.5, judged: false, mine: true };
-    const frame = { notes: [], landmineNotes: [mine], currentBeat: 0, currentSeconds: 0 };
+    const frame = {
+      notes: [],
+      landmineNotes: [mine],
+      invisibleNotes: [{ ...mine, mine: false, invisible: true }],
+      currentBeat: 0,
+      currentSeconds: 0,
+    };
     layer.update(frame, 1, new Set());
-    const sprite = layer.container.children[1]!.children[0] as Sprite;
+    const sprite = layer.container.children[2]!.children[0] as Sprite;
     expect(sprite).toBeInstanceOf(Sprite);
     expect(sprite.visible).toBe(true);
     expect(sprite.x).toBe(lane * 30);
     expect(sprite.y).toBe(642);
     expect(sprite.texture.frame.height).toBe(8);
+    const marker = layer.container.children[0]!;
+    expect(marker.visible).toBe(false);
+    layer.update(frame, 1, new Set(), undefined, true);
+    expect(marker.visible).toBe(true);
+    expect(marker.getBounds()).toMatchObject({ minX: lane * 30 + 2, minY: 646, maxX: lane * 30 + 28, maxY: 650 });
     layer.update(
       { ...frame, landmineNotes: [], notes: [{ channel, beat: 100, seconds: 50, judged: false }] },
       1,
@@ -214,5 +225,48 @@ describe('BeatorajaNoteLayer mine sprites', () => {
     expect(sprite.visible).toBe(false);
     layer.dispose();
     texture.destroy(true);
+  });
+});
+
+describe('BeatorajaNoteLayer invisible objects', () => {
+  it('shows green inspection markers only while enabled and removes passed objects', () => {
+    const layer = new BeatorajaNoteLayer({
+      noteSection: normalizeBeatorajaNote({ dst: [{ x: 0, y: 200, w: 50, h: 600 }] }),
+      variant: '7',
+      images: new Map(),
+      textures: { get: () => undefined, values: () => [][Symbol.iterator](), pathOf: () => undefined },
+      canvasHeight: 1000,
+    });
+    const frame = {
+      notes: [],
+      landmineNotes: [],
+      invisibleNotes: [{ channel: '11', beat: 1, seconds: 0.5, judged: true, invisible: true }],
+      currentBeat: 0,
+      currentSeconds: 0,
+    };
+    layer.update(frame, 1, new Set());
+    expect(layer.container.getBounds().width).toBe(0);
+    layer.update(frame, 1, new Set(), undefined, true);
+    const marker = layer.container.children.find((child) => child.label === 'invisible-notes');
+    expect(marker?.visible).toBe(true);
+    expect(marker!.getBounds()).toMatchObject({ minX: 2, minY: 646, maxX: 48, maxY: 650 });
+    layer.update(frame, 1, new Set(), undefined, false);
+    expect(marker!.visible).toBe(false);
+    layer.update(frame, 1, new Set(), undefined, true);
+    expect(marker!.visible).toBe(true);
+    layer.update({ ...frame, currentBeat: 2, currentSeconds: 1 }, 1, new Set(), undefined, true);
+    expect(marker!.visible).toBe(false);
+    layer.update(frame, 1, new Set(), undefined, true);
+    expect(marker!.visible).toBe(true);
+    // Invalid channels never create inspection markers.
+    layer.update(
+      { ...frame, invisibleNotes: [{ ...frame.invisibleNotes[0]!, channel: 'ZZ' }] },
+      1,
+      new Set(),
+      undefined,
+      true,
+    );
+    expect(marker!.visible).toBe(false);
+    layer.dispose();
   });
 });

@@ -209,6 +209,7 @@ function createPlayView(
   const { settings, course, source } = options;
   if (kit.family === 'beatoraja') {
     const view = new BeatorajaPlayView(kit, play, {
+      ...(settings.showInvisibleNotes !== undefined ? { showInvisibleNotes: settings.showInvisibleNotes } : {}),
       ...(settings.autoPlay !== undefined ? { autoPlay: settings.autoPlay } : {}),
       ...(settings.dpFlip !== undefined ? { dpFlip: settings.dpFlip } : {}),
       ...(course?.view !== undefined ? { course: course.view } : {}),
@@ -226,9 +227,9 @@ function createPlayView(
       replayView: () => view.replayView(),
       drawsLift: true,
       uploadTextures: (textures, isCancelled) => view.uploadTextures(textures, isCancelled),
-      // A beatoraja skin draws its own notes: neither drawing option applies.
+      // A beatoraja skin determines how judged notes draw.
       setJudgedNoteDisplay: () => {},
-      setShowInvisibleNotes: () => {},
+      setShowInvisibleNotes: (enabled) => view.setShowInvisibleNotes(enabled),
       updateKit: (next) => (next.family === 'beatoraja' ? view.updateKit(next) : ignoreKit(next, 'beatoraja')),
     };
   }
