@@ -13,3 +13,5 @@ export * from './view.ts';
 // The chart a play was played on, rebuilt without the engine's audio driver: a verifier needs it to check what a log
 // claims about its chart (a course's unreached stages, a NONSTOP run's stitched chart).
 export { resolveChartRulesetFacts, resolvePlayChart } from '../core/play-chart.ts';
+
+export * from './options.ts';

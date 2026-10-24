@@ -194,3 +194,36 @@ describe('replay #RANDOM draws on the web paths', () => {
     expect(replay.chart.chartFingerprint).toBe(replay.chart.playFingerprint);
   });
 });
+
+test('records every selected option separately from the effective chart and engine fields', () => {
+  const recordingOptionState = {
+    hsFix: 'STARTBPM',
+    displayAreaInfo: 'SUDDEN_ONLY',
+    autoScratch1P: true,
+    autoScratch2P: false,
+  };
+  const result = resolveReplayRecording({ recordingOptionState }, undefined, VIEW);
+  recordingOptionState.autoScratch1P = false;
+  expect(result.options).toEqual({
+    hsFix: 'STARTBPM',
+    displayAreaInfo: 'SUDDEN_ONLY',
+    autoScratch1P: true,
+    autoScratch2P: false,
+  });
+});
+
+test('the recorded snapshot reflects course restrictions and an AUTO start instead of stale menu picks', () => {
+  expect(
+    resolveReplayRecording(
+      {
+        recordingOptionState: { autoPlay: false, gauge1P: 'EASY', random1P: 'RANDOM', autoScratch1P: true },
+        autoPlay: true,
+        gauge: 'HARD',
+        random1P: 'OFF',
+        autoScratch1P: false,
+      },
+      undefined,
+      VIEW,
+    ).options,
+  ).toMatchObject({ autoPlay: true, gauge1P: 'HARD', random1P: 'OFF', autoScratch1P: false });
+});

@@ -26,7 +26,12 @@ import type {
   PlayerStateSignals,
 } from '@be-music/player-engine/signals';
 import type { TimedPlayableNote } from '@be-music/player-engine/display';
-import type { BeMusicReplay, ReplayRecordingOptions, ReplayViewState } from '@be-music/player-engine/replay';
+import type {
+  BeMusicReplay,
+  ReplayRecordingOptions,
+  ReplayViewState,
+  ReplayOptionState,
+} from '@be-music/player-engine/replay';
 import {
   resolveDisplayedPoor,
   type GaugeType,
@@ -384,7 +389,23 @@ function buildSharedEngineChart(ctx: PlayEngineContext): BeMusicJSON {
 export function resolveReplayRecording(
   options: Pick<
     PlaySessionOptions,
-    'gauge' | 'chartSHA256' | 'chartMD5' | 'replayRecorder' | 'random1P' | 'random2P' | 'dpFlip'
+    | 'gauge'
+    | 'chartSHA256'
+    | 'chartMD5'
+    | 'replayRecorder'
+    | 'random1P'
+    | 'random2P'
+    | 'dpFlip'
+    | 'recordingOptionState'
+    | 'autoPlay'
+    | 'initialHiSpeed'
+    | 'hsFix'
+    | 'hiddenSudden1P'
+    | 'hiddenSudden2P'
+    | 'shutter'
+    | 'laneCover'
+    | 'autoScratch1P'
+    | 'autoScratch2P'
   >,
   chartEntry: Pick<LibraryChart, 'chart' | 'chartPath'> | undefined,
   view: ReplayViewState,
@@ -392,8 +413,29 @@ export function resolveReplayRecording(
   if (options.random1P === 'SCATTER' || options.random2P === 'SCATTER') {
     throw new RangeError('SCATTER is disabled until placement and assist policy are implemented.');
   }
+  const effectiveOptions: ReplayOptionState = {};
+  for (const [key, value] of Object.entries({
+    autoPlay: options.autoPlay,
+    hiSpeed: options.initialHiSpeed,
+    hsFix: options.hsFix,
+    hiddenSudden1P: options.hiddenSudden1P,
+    hiddenSudden2P: options.hiddenSudden2P,
+    shutter: options.shutter,
+    laneCover: options.laneCover,
+    gauge1P: options.gauge,
+    random1P: options.random1P,
+    random2P: options.random2P,
+    dpFlip: options.dpFlip,
+    autoScratch1P: options.autoScratch1P,
+    autoScratch2P: options.autoScratch2P,
+  })) {
+    if (value !== undefined) effectiveOptions[key] = value;
+  }
   return {
     gauge: options.gauge,
+    ...(options.recordingOptionState !== undefined
+      ? { options: { ...options.recordingOptionState, ...effectiveOptions } }
+      : {}),
     ...(options.chartSHA256 !== undefined ? { chartSHA256: options.chartSHA256 } : {}),
     ...(options.chartMD5 !== undefined ? { chartMD5: options.chartMD5 } : {}),
     ...(options.replayRecorder !== undefined ? { recorder: options.replayRecorder } : {}),

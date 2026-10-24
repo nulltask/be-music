@@ -25,6 +25,8 @@ import type { BeMusicEffectLevel } from '../../skin/be-music/types.ts';
  * whichever family draws the play.
  */
 export interface PlaySessionOptions {
+  /** Selected source options to preserve in the replay, independently of score handling. */
+  recordingOptionState?: import('@be-music/player-engine/replay').ReplayOptionState;
   /** Showmanship level for the be-music skin (count-ins, shakes, particles). Defaults to `'full'`. */
   beMusicEffects?: BeMusicEffectLevel;
   /**

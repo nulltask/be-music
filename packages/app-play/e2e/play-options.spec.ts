@@ -10,9 +10,14 @@ test('START BPM is selectable in Debug Menu, remembered and recorded in a play',
   await player.setOption(['Play options'], 'Auto play', true);
   await player.browseTo(SONGS, 'Fixture A');
   await player.key('Enter');
+  await player.waitFor((state) => (state.play?.seconds ?? 0) > 0.2, 'the chart to start');
+  await player.key('ArrowUp');
   await player.waitForResult(0);
   const replay = await player.lastReplay();
   expect(replay?.play.view?.hsFix).toBe('STARTBPM');
+  expect(replay?.play.options?.hsFix).toBe('STARTBPM');
+  expect(replay?.play.options?.displayAreaInfo).toBe('OFF');
+  expect(replay?.play.optionChanges?.some((change) => change.values.hiSpeed === 2.1)).toBe(true);
   await player.page.reload();
   await player.waitFor((state) => state.scene.kind === 'select', 'select after reload');
   expect(await player.readOption(['Play options'], 'HS-FIX')).toBe('STARTBPM');

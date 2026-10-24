@@ -1,3 +1,9 @@
+import {
+  parseReplayOptionState,
+  parseReplayOptionChanges,
+  type ReplayOptionState,
+  type ReplayOptionChange,
+} from './options.ts';
 import type { LongNoteMode, RandomDraw } from '@be-music/chart-model';
 import { GAUGE_TYPES, isGaugeType, type GaugeType } from '../ruleset/gauge-type.ts';
 import type { CourseGaugeSet, CourseJudgeConstraint, RulesetCourseKind } from '../ruleset/course.ts';
@@ -162,6 +168,10 @@ export interface ReplayChart {
 }
 
 export interface ReplayPlay {
+  /** Selected source options at the start; typed effective play/chart fields remain authoritative for judging. */
+  options?: ReplayOptionState;
+  /** Every later selected-option change, on the same chart clock as inputs and view changes. */
+  optionChanges?: ReplayOptionChange[];
   mode: 'manual' | 'auto';
   autoScratch: boolean;
   /** Gauge the player selected for the session (declared by the host; LR2-family gauge id). */
@@ -606,6 +616,8 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     const changes = parseReplayViewChanges(play.viewChanges, 'play.viewChanges');
     if (changes.length > 0) parsed.viewChanges = changes;
   }
+  if (play.options !== undefined) parsed.options = parseReplayOptionState(play.options);
+  if (play.optionChanges !== undefined) parsed.optionChanges = parseReplayOptionChanges(play.optionChanges);
   if (play.native !== undefined) {
     const native = expectRecord(play.native, 'play.native');
     const copied: Record<string, string | number | boolean | null> = {};

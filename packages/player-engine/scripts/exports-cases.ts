@@ -922,6 +922,28 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       });
     },
   });
+  const optionState = { hiSpeed: 2, hsFix: 'STARTBPM', displayAreaInfo: 'ON' };
+  const optionChanges = [{ timeUs: 1_000_000, values: { hiSpeed: 3 } }];
+  define('player-engine.replay.parseReplayOptionState', {
+    run: () => {
+      replayAPI.parseReplayOptionState(optionState);
+    },
+  });
+  define('player-engine.replay.parseReplayOptionChanges', {
+    run: () => {
+      replayAPI.parseReplayOptionChanges(optionChanges);
+    },
+  });
+  define('player-engine.replay.resolveReplayOptionsAt', {
+    run: () => {
+      replayAPI.resolveReplayOptionsAt(optionState, optionChanges, 2_000_000);
+    },
+  });
+  define('player-engine.replay.diffReplayOptions', {
+    run: () => {
+      replayAPI.diffReplayOptions(optionState, { ...optionState, hiSpeed: 3 });
+    },
+  });
   const benchView = { hiSpeed: 2, hsFix: 'MAIN', covers: [{ side: '1P' as const, sudden: 0.2, hidden: 0, lift: 0.1 }] };
   const benchViewChanges = [
     { timeUs: 1_000_000, hiSpeed: 2.5 },

@@ -1,3 +1,9 @@
+import {
+  diffReplayOptions,
+  parseReplayOptionState,
+  type ReplayOptionState,
+  type ReplayOptionChange,
+} from './options.ts';
 import type { ReplayTempoChange, ReplayViewChange, ReplayViewState } from './view.ts';
 import {
   computeChartFingerprint,
@@ -48,6 +54,7 @@ export type ReplayRecorderChartData = Pick<
   Partial<Pick<PreparedPlaybackChartData, 'resolvedChart'>>;
 
 export interface ReplayRecorderPlaySettings {
+  options?: ReplayOptionState;
   mode: 'manual' | 'auto';
   autoScratch: boolean;
   /** The gauge the engine ran (`PlayerOptions.gauge`, else `recordReplay.gauge`); `GROOVE` when neither is set. */
@@ -82,7 +89,7 @@ export interface ReplayRecorderPlaySettings {
  */
 export type ReplayRecordingOptions = Pick<
   ReplayRecorderPlaySettings,
-  'gauge' | 'randomLane' | 'dpFlip' | 'view' | 'native'
+  'gauge' | 'randomLane' | 'dpFlip' | 'view' | 'native' | 'options'
 > & {
   chartSHA256?: string;
   chartMD5?: string;
@@ -150,6 +157,8 @@ export interface ReplayRecorder {
   recordEmptyPoor(): void;
   /** Records a view change (hi-speed, covers, lift) at a chart time. An empty change is dropped. */
   recordViewChange(timeSeconds: number, change: ReplayViewState): void;
+  /** Records selected options at the chart clock; repeated values are dropped. */
+  recordOptionChange(timeSeconds: number, values: ReplayOptionState): void;
   /** Records a tempo change at a chart time. A change to the tempo already in force is dropped. */
   recordTempoChange(timeSeconds: number, tempo: number): void;
   finalize(input: ReplayRecorderFinalizeInput): BeMusicReplay;
@@ -162,6 +171,9 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
   let seq = 0;
   let emptyPoorCount = 0;
   const viewChanges: ReplayViewChange[] = [];
+  const initialOptions = options.play.options === undefined ? undefined : parseReplayOptionState(options.play.options);
+  let currentOptions = { ...initialOptions };
+  const optionChanges: ReplayOptionChange[] = [];
   const tempoChanges: ReplayTempoChange[] = [];
   let currentTempo = options.play.tempo ?? 1;
 
@@ -170,6 +182,7 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       discarded = true;
       inputs.length = 0;
       viewChanges.length = 0;
+      optionChanges.length = 0;
       tempoChanges.length = 0;
       emptyPoorCount = 0;
     },
@@ -196,6 +209,16 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
     recordEmptyPoor: (): void => {
       if (discarded) return;
       emptyPoorCount += 1;
+    },
+    recordOptionChange: (timeSeconds, values): void => {
+      if (discarded) return;
+      const change = diffReplayOptions(currentOptions, parseReplayOptionState(values));
+      if (!change) return;
+      const timeUs = secondsToMicroseconds(timeSeconds);
+      if (!Number.isSafeInteger(timeUs) || timeUs < (optionChanges.at(-1)?.timeUs ?? 0))
+        throw new RangeError('Option changes must use nondecreasing chart times.');
+      optionChanges.push({ timeUs, values: change });
+      currentOptions = { ...currentOptions, ...change };
     },
     recordViewChange: (timeSeconds, change): void => {
       if (discarded) return;
@@ -236,6 +259,8 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       if (options.play.tempo !== undefined && options.play.tempo !== 1) play.tempo = options.play.tempo;
       if (tempoChanges.length > 0) play.tempoChanges = tempoChanges.map((change) => ({ ...change }));
       if (options.play.view !== undefined) play.view = structuredClone(options.play.view);
+      if (initialOptions !== undefined) play.options = { ...initialOptions };
+      if (optionChanges.length > 0) play.optionChanges = structuredClone(optionChanges);
       if (viewChanges.length > 0) play.viewChanges = structuredClone(viewChanges);
       if (options.play.native !== undefined) play.native = options.play.native;
 

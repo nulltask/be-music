@@ -1,3 +1,4 @@
+import type { ReplayOptionState } from '../replay/options.ts';
 import { signal } from 'alien-signals';
 import type { ReplayViewState } from '../replay/view.ts';
 import type { HighSpeedControlAction } from './high-speed-control.ts';
@@ -18,6 +19,8 @@ export type PlayerInputCommand =
    * drains the command. It changes no judgment.
    */
   | { kind: 'view'; change: ReplayViewState }
+  /** A source option changed; record it at the next engine tick, independently of score eligibility. */
+  | { kind: 'options'; values: ReplayOptionState }
   /**
    * The host changed the play tempo (`PlayerOptions.speed`) during the play: the engine re-anchors its clock at the
    * chart time it drains the command, runs at `tempo` from there on and records the change in the replay. Inputs and

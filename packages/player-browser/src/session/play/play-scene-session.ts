@@ -1,3 +1,5 @@
+import { diffReplayOptions, resolveReplayOptionsAt, type ReplayOptionState } from '@be-music/player-engine/replay';
+import { resolvePlayOptions } from '@be-music/player-scene-model';
 /**
  * The play session as a scene session (`SceneSession`, `session/session-scene.ts`): what `createPlayScene` hands its
  * `SessionScene` so the scene's ticker reads a {@link PlayFrame} off the play every frame and the view's intents reach
@@ -43,6 +45,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
   /** How the play's audio ends when the scene is disposed. */
   public disposeOptions: PlayDisposeOptions = {};
   private readonly facts: PlaySceneFacts;
+  private recordedOptions: ReplayOptionState | undefined;
   private pending: PlayViewEvent[] = [];
   private enteredAtMs = 0;
   private failureSoundPlayed = false;
@@ -128,6 +131,19 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
     // A paused play drains too: a seek moves it while it stays paused.
     if (!play.disposed) drainSharedEngineSignals(play);
     const seconds = play.currentSeconds();
+    const replay = play.options.replay;
+    let playOptions = this.facts.playOptions;
+    if (replay?.play.options !== undefined || replay?.play.optionChanges !== undefined) {
+      playOptions = resolvePlayOptions({
+        ...playOptions,
+        ...resolveReplayOptionsAt(replay.play.options, replay.play.optionChanges, Math.round(seconds * 1_000_000)),
+      });
+    } else if (replay === undefined && play.sharedEngineInputSignals !== undefined) {
+      const current: ReplayOptionState = { ...playOptions, hiSpeed: play.playState.view.hiSpeed.player };
+      const change = diffReplayOptions(this.recordedOptions ?? { ...playOptions }, current);
+      if (change) play.sharedEngineInputSignals.pushCommand({ kind: 'options', values: change });
+      this.recordedOptions = current;
+    }
     if (!play.paused && !play.disposed) updateReplayView(play, seconds);
     play.updateDisplayedScore();
     const events = this.pending;
@@ -138,7 +154,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       clock: { nowMs, enteredAtMs: this.enteredAtMs },
       chart: play.chart ?? this.facts.chart,
       ...(this.facts.course !== undefined ? { course: this.facts.course } : {}),
-      playOptions: this.facts.playOptions,
+      playOptions,
       ...(this.facts.scoreTargets !== undefined ? { scoreTargets: this.facts.scoreTargets } : {}),
       state: play.playState,
       stage,
