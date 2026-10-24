@@ -11,7 +11,7 @@ import {
   HISPEED_MIN,
   HISPEED_STEP,
   KEYS_FILTER_CYCLE,
-  RANDOM_CYCLE,
+  resolveRandomModes,
   PLAY_OPTION_CHOICES,
   SORT_CYCLE,
 } from '@be-music/player-scene-model';
@@ -46,17 +46,20 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
   trackPlayOption(
     this.judgeAlgorithmController.on('change', ({ value }) => this.setPlayOptions({ judgeAlgorithm: value })),
   );
+  for (const side of ['1P', '2P'] as const) {
+    const key = `random${side}` as const;
+    const controller = selectBinding(
+      folder,
+      this.guiState,
+      key,
+      `Random ${side}`,
+      resolveRandomModes(this.guiState.judgeRuleset),
+    );
+    if (side === '1P') this.random1PController = controller;
+    else this.random2PController = controller;
+    trackPlayOption(controller.on('change', ({ value }) => this.setPlayOptions({ [key]: value })));
+  }
   this.refreshRulesetChoices();
-  trackPlayOption(
-    selectBinding(folder, this.guiState, 'random1P', 'Random 1P', RANDOM_CYCLE).on('change', ({ value }) => {
-      this.setPlayOptions({ random1P: value });
-    }),
-  );
-  trackPlayOption(
-    selectBinding(folder, this.guiState, 'random2P', 'Random 2P', RANDOM_CYCLE).on('change', ({ value }) => {
-      this.setPlayOptions({ random2P: value });
-    }),
-  );
   trackPlayOption(
     folder.addBinding(this.guiState, 'dpFlip', { label: 'DP flip' }).on('change', ({ value }) => {
       this.setPlayOptions({ dpFlip: value });

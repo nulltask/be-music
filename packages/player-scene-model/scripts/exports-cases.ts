@@ -211,6 +211,12 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
     },
   });
 
+  define('player-scene-model.resolveRandomModes', {
+    run: () => {
+      sceneModelAPI.resolveRandomModes('beatoraja');
+    },
+  });
+
   // Play options
   define('player-scene-model.clampHiSpeed', {
     run: () => {

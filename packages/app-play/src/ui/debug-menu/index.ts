@@ -8,7 +8,7 @@ import type { TunableCompressor } from '@be-music/player-browser/audio';
 import { getBrowserWorkerCount } from '@be-music/player-browser/compute';
 import type { PixiSceneHost, PlayScene, SelectScene } from '@be-music/player-browser/host';
 import type { BeatorajaThemeBundle } from '@be-music/player-browser/skin';
-import type { PlayOptions } from '@be-music/player-scene-model';
+import { resolveRandomModes, type PlayOptions } from '@be-music/player-scene-model';
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
 // Tweakpane injects its component stylesheet; the app themes it with public CSS variables.
 import { Pane, type FolderApi, type BladeApi, type ButtonApi, type ListInputBindingApi } from 'tweakpane';
@@ -191,6 +191,8 @@ export class DebugMenu {
   public normalHiSpeedController: PaneBinding | undefined;
   public normalHiSpeedLevelController: PaneBinding | undefined;
   public classicSpeedController: PaneBinding | undefined;
+  public random1PController: ListInputBindingApi<PlayOptions['random1P']> | undefined;
+  public random2PController: ListInputBindingApi<PlayOptions['random2P']> | undefined;
   public gaugeController: ListInputBindingApi<GaugeType> | undefined;
   public judgeAlgorithmController: ListInputBindingApi<PlayOptions['judgeAlgorithm']> | undefined;
   /** The "Tempo (%)" slider — left enabled during a play whose tempo can change live (`allowsLiveTempo`). */
@@ -424,6 +426,19 @@ export class DebugMenu {
         ? paneOptions({ Combo: 'combo' as const, Duration: 'duration' as const, Lowest: 'lowest' as const })
         : paneOptions({ 'Source default': 'combo' as const });
       this.judgeAlgorithmController.refresh();
+    }
+    const randomModes = resolveRandomModes(this.guiState.judgeRuleset);
+    for (const side of ['1P', '2P'] as const) {
+      const key = `random${side}` as const;
+      if (!randomModes.includes(this.guiState[key])) {
+        this.guiState[key] = 'OFF';
+        this.setPlayOptions({ [key]: 'OFF' });
+      }
+      const controller = side === '1P' ? this.random1PController : this.random2PController;
+      if (controller) {
+        controller.options = paneOptions(randomModes);
+        controller.refresh();
+      }
     }
     const choices = resolveGaugeTypes(this.guiState.judgeRuleset);
     if (!choices.includes(this.guiState.gauge)) {

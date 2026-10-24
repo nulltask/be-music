@@ -272,3 +272,63 @@ test('recorded arrangements preserve the resolved full-mode placement and old sp
   expect(applyReplayArrangement(oldNotes, oldTarget)).toEqual({ ok: true });
   expect(oldTarget.notes[0]!.channel).toBe('12');
 });
+
+test.each([5, 7, 9])('R-RANDOM has exactly 2(N-1) distinct rotations for %s keys', (count) => {
+  const lanes = Array.from({ length: count }, (_, i) => `key${i}`);
+  const layouts = new Set<string>();
+  for (let direction = 0; direction < 2; direction += 1) {
+    for (let start = 0; start < count - 1; start += 1) {
+      const notes = notesOn([...lanes, '16', '26']);
+      const mines = notesOn(lanes);
+      const invisible = notesOn(lanes);
+      const draws = [direction / 2, start / (count - 1)];
+      applyRandomMode(notes, lanes, 'R-RANDOM', () => draws.shift()!, { ruleset: 'beatoraja' }, mines, invisible);
+      const layout = channelsOf(notes).slice(0, count);
+      expect([...layout].sort()).toEqual([...lanes].sort());
+      expect(layout).not.toEqual(lanes);
+      expect(layout).not.toEqual([...lanes].reverse());
+      expect(channelsOf(mines)).toEqual(layout);
+      expect(channelsOf(invisible)).toEqual(layout);
+      expect(channelsOf(notes).slice(count)).toEqual(['16', '26']);
+      layouts.add(layout.join(','));
+    }
+  }
+  expect(layouts.size).toBe(2 * (count - 1));
+});
+
+test('R-RANDOM rejects LR2 before drawing randomness or mutating the chart', () => {
+  const notes = notesOn(KEYS_7);
+  expect(() =>
+    applyRandomMode(notes, KEYS_7, 'R-RANDOM', () => {
+      throw new Error('draw');
+    }),
+  ).toThrow(/unavailable/);
+  expect(channelsOf(notes)).toEqual(KEYS_7);
+});
+
+test('R-RANDOM keeps LN ends, both DP sides and recorded arrangements stable', () => {
+  const json = parseChart('#BPM 120\n#PLAYER 3\n#LNOBJ AA\n#00012:0001\n#00112:00AA\n#00022:0001\n#00122:00AA', 'bms');
+  const prepare = () => preparePlaybackChart(resolveChart(json, { playVariant: '14' }));
+  const chart = prepare();
+  for (const side of ['1P', '2P'] as const)
+    applyRandomMode(
+      chart.notes,
+      resolveLaneOptionChannels(side, '14'),
+      'R-RANDOM',
+      seededRandom(side === '1P' ? 1 : 2),
+      { ruleset: 'beatoraja' },
+    );
+  const replay = createReplayRecorder({
+    json,
+    chart,
+    play: { mode: 'auto', autoScratch: false, randomLane: { p1: 'R-RANDOM', p2: 'R-RANDOM' } },
+  }).finalize({ summary: { ...createEmptyScore(2), fast: 0, slow: 0 } });
+  const target = prepare();
+  expect(applyReplayArrangement(replay.chart.notes, target)).toEqual({ ok: true });
+  expect(target.notes.map(({ channel, seconds, endSeconds }) => ({ channel, seconds, endSeconds }))).toEqual(
+    chart.notes.map(({ channel, seconds, endSeconds }) => ({ channel, seconds, endSeconds })),
+  );
+  expect(chart.notes.every((note) => note.endSeconds !== undefined)).toBe(true);
+  expect(chart.notes[0]!.channel).toMatch(/^1/);
+  expect(chart.notes[1]!.channel).toMatch(/^2/);
+});

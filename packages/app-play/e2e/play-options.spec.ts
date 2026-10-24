@@ -143,3 +143,21 @@ for (const [ruleset, label, effectiveGauge] of [
     expect(replay?.play.options?.longNoteModifier).toBe('OFF');
   });
 }
+
+for (const skin of ['plain', 'native'] as const) {
+  test(`R-RANDOM is selectable and recorded on ${skin}`, async ({ player }) => {
+    await openWithLibrary(player, { 'be-music.built-in-skin': skin });
+    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+    await player.setOption(['Play options'], 'Random 1P', 'R-RANDOM');
+    await player.setOption(['Play options'], 'Auto play', true);
+    await player.browseTo(SONGS, 'Fixture A');
+    await player.key('Enter');
+    await player.waitForResult(0);
+    const replay = await player.lastReplay();
+    expect(replay?.play.randomLane?.p1).toBe('R-RANDOM');
+    expect(replay?.play.options?.random1P).toBe('R-RANDOM');
+    await player.leaveResult();
+    await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+    expect(await player.readOption(['Play options'], 'Random 1P')).toBe('OFF');
+  });
+}

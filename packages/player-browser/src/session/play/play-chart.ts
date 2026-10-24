@@ -7,6 +7,7 @@
  * `prepareChart` reads and writes the play's state through {@link PlayChartContext}; the play session passes itself.
  */
 
+import { resolveRandomModes } from '@be-music/player-scene-model';
 import {
   resolvePoorBGAMode,
   parseBMSSwBGA,
@@ -166,6 +167,13 @@ export interface PlayChartContext {
 export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): void {
   if (ctx.options.replay === undefined && (ctx.options.random1P === 'SCATTER' || ctx.options.random2P === 'SCATTER')) {
     throw new RangeError('SCATTER is disabled until placement and assist policy are implemented.');
+  }
+  if (ctx.options.replay === undefined) {
+    const modes = resolveRandomModes(ctx.options.judgeRuleset ?? 'lr2');
+    for (const mode of [ctx.options.random1P, ctx.options.random2P]) {
+      if (mode !== undefined && !modes.includes(mode))
+        throw new RangeError(`${mode} is unavailable for ${ctx.options.judgeRuleset ?? 'lr2'}.`);
+    }
   }
   // Resolve `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow once, first, so every play-time consumer below and the
   // engine see the same chosen branches. The draws are fresh each play (LR2 re-rolls each play); a replay resolves
@@ -547,7 +555,7 @@ export function flipDPChannel(channel: string): string {
 export function applyRandomMode(
   notes: Array<{ channel: string }>,
   allLanes: readonly string[],
-  mode: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER',
+  mode: 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SCATTER',
   rng: () => number,
   options: { ruleset?: RulesetId } = {},
   // Extra channel-bearing arrays: mines first, then invisible notes. Chart permutations share the same lane map;
@@ -556,6 +564,8 @@ export function applyRandomMode(
 ): void {
   if (mode === 'SCATTER')
     throw new RangeError('SCATTER is disabled until placement and assist policy are implemented.');
+  if (mode === 'R-RANDOM' && options.ruleset !== 'beatoraja' && options.ruleset !== '____')
+    throw new RangeError('R-RANDOM is unavailable for LR2.');
   if (mode === 'OFF') return;
   if (mode === 'S-RANDOM') {
     const entries = [
@@ -610,6 +620,20 @@ export function applyRandomMode(
     const map = new Map<string, string>();
     for (let index = 0; index < domainLanes.length; index += 1) {
       map.set(domainLanes[index]!, domainLanes[domainLanes.length - 1 - index]!);
+    }
+    remapAll(map);
+    return;
+  }
+
+  if (mode === 'R-RANDOM') {
+    // beatoraja 0.8.9 LaneRotateShuffleModifier: destination -> source, excluding
+    // identity (forward start 0) and mirror (reverse start N - 1).
+    const forward = Math.floor(rng() * 2) === 1;
+    const start = Math.floor(rng() * (domainLanes.length - 1)) + (forward ? 1 : 0);
+    const map = new Map<string, string>();
+    for (let lane = 0; lane < domainLanes.length; lane += 1) {
+      const source = (start + (forward ? lane : -lane) + domainLanes.length) % domainLanes.length;
+      map.set(domainLanes[source]!, domainLanes[lane]!);
     }
     remapAll(map);
     return;
