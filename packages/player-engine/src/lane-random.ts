@@ -12,6 +12,8 @@ export interface SRandomNote {
 export interface SRandomOptions {
   ruleset: RulesetId;
   random: () => number;
+  /** beatoraja's ordinary PMS S-RANDOM uses S_RANDOM_NO_THRESHOLD. */
+  mode?: 'pms';
 }
 
 /**
@@ -25,7 +27,8 @@ export function randomizeSRandomNotes(
   lanes: readonly string[],
   options: SRandomOptions,
 ): string[] {
-  return randomizeTimeBasedNotes(notes, lanes, options);
+  const pms = options.ruleset === 'beatoraja' && options.mode === 'pms';
+  return randomizeTimeBasedNotes(notes, lanes, options, pms ? 0 : 40, pms);
 }
 
 /** beatoraja 0.8.9 PlayerConfig accepts integer H-RANDOM threshold BPMs from 1 to 1000 (default 120). */
@@ -84,6 +87,44 @@ export function randomizePMSConvergeNotes(
   );
 }
 
+const PMS_PLAYABLE_CHORDS = [
+  [0, 1, 2, 3, 4, 5],
+  [0, 1, 2, 4, 5, 6],
+  [0, 1, 2, 5, 6, 7],
+  [0, 1, 2, 6, 7, 8],
+  [1, 2, 3, 4, 5, 6],
+  [1, 2, 3, 5, 6, 7],
+  [1, 2, 3, 6, 7, 8],
+  [2, 3, 4, 5, 6, 7],
+  [2, 3, 4, 6, 7, 8],
+  [3, 4, 5, 6, 7, 8],
+] as const;
+
+/**
+ * beatoraja 0.8.9 PMS S_RANDOM_PLAYABLE prioritizes one source six-key playable
+ * combination per row, retaining holds and the configurable H-RANDOM threshold.
+ * The pinned source throws on its empty post-threshold candidate list; preserve
+ * that failure explicitly rather than inventing a different fallback policy.
+ */
+export function randomizePMSPlayableNotes(
+  notes: readonly SRandomNote[],
+  lanes: readonly string[],
+  options: { random: () => number; thresholdBPM?: number },
+): string[] {
+  if (lanes.length !== 9 || new Set(lanes).size !== 9)
+    throw new RangeError('PMS playable S-RANDOM requires nine lanes.');
+  return randomizeTimeBasedNotes(
+    notes,
+    lanes,
+    { ruleset: 'beatoraja', random: options.random },
+    Math.ceil(15000 / clampHRandomThresholdBPM(options.thresholdBPM ?? 120)),
+    true,
+    undefined,
+    false,
+    true,
+  );
+}
+
 function randomizeTimeBasedNotes(
   notes: readonly SRandomNote[],
   lanes: readonly string[],
@@ -92,6 +133,7 @@ function randomizeTimeBasedNotes(
   visitAllRows = false,
   allScratch?: { scratchLanes: readonly string[]; doublePlay?: boolean; side?: '1P' | '2P' },
   converge = false,
+  playable = false,
 ): string[] {
   lanes = [...new Set(lanes)];
   const channels = notes.map((note) => note.channel);
@@ -126,8 +168,31 @@ function randomizeTimeBasedNotes(
     const free = lanes.filter((lane) => !occupied.has(lane));
     const map = new Map([...held].map(([source, hold]) => [source, hold.target]));
     const scoring = new Set(
-      indices.filter((index) => (notes[index]!.kind ?? 'note') === 'note').map((index) => notes[index]!.channel),
+      indices
+        .filter((index) => domain.has(notes[index]!.channel) && (notes[index]!.kind ?? 'note') === 'note')
+        .map((index) => notes[index]!.channel),
     );
+    let playableCombination: readonly string[] | undefined;
+    if (playable) {
+      // getNoteExistLane includes LN tails; source noteCount additionally counts
+      // every active hold, so tails contribute twice on their exact timeline.
+      const noteCount = scoring.size + held.size + [...held.values()].filter((hold) => hold.endMs === timeMs).length;
+      if (noteCount > 2 && noteCount < 7) {
+        const combinations = PMS_PLAYABLE_CHORDS.map((chord) => chord.map((index) => lanes[index]!)).filter((chord) =>
+          [...occupied].every((lane) => chord.includes(lane)),
+        );
+        if (combinations.length > 0) {
+          const candidates = combinations
+            .map((chord) => chord.filter((lane) => Math.trunc(timeMs) - lastNoteTime.get(lane)! >= thresholdMs))
+            .filter((chord) => chord.length >= noteCount);
+          if (candidates.length === 0)
+            throw new RangeError(
+              'beatoraja 0.8.9 S_RANDOM_PLAYABLE has no post-threshold candidate (upstream nextInt(0)).',
+            );
+          playableCombination = pickRandom(candidates, options.random);
+        }
+      }
+    }
     // Upstream assigns scoring sources first, then the row's empty/mine/hidden sources.
     const sources = lanes.filter((lane) => !held.has(lane));
     if (allScratch) {
@@ -146,12 +211,14 @@ function randomizeTimeBasedNotes(
       let candidates = free;
       let useSidePriority = false;
       let useStreak = false;
+      let usePlayable = false;
       if (options.ruleset === 'beatoraja' && scoring.has(source)) {
         const eligible = free.filter((lane) => Math.trunc(timeMs) - lastNoteTime.get(lane)! > thresholdMs);
         if (eligible.length > 0) {
           candidates = eligible;
           useSidePriority = allScratch?.doublePlay === true;
           useStreak = converge;
+          usePlayable = playableCombination !== undefined;
         } else {
           const oldest = Math.min(...free.map((lane) => lastNoteTime.get(lane)!));
           candidates = free.filter((lane) => lastNoteTime.get(lane) === oldest);
@@ -161,9 +228,13 @@ function randomizeTimeBasedNotes(
         const longest = Math.max(...candidates.map((lane) => streak.get(lane)!));
         candidates = candidates.filter((lane) => streak.get(lane) === longest);
       }
+      if (usePlayable) {
+        const allowed = candidates.filter((lane) => playableCombination!.includes(lane));
+        if (allowed.length > 0) candidates = allowed;
+      }
       const target = useSidePriority
         ? candidates[allScratch?.side === '2P' ? candidates.length - 1 : 0]!
-        : pickLane(candidates, options.random);
+        : pickRandom(candidates, options.random);
       if (useStreak) streak.set(target, streak.get(target)! + 1);
       map.set(source, target);
       free.splice(free.indexOf(target), 1);
@@ -183,7 +254,7 @@ function randomizeTimeBasedNotes(
   return channels;
 }
 
-function pickLane(lanes: readonly string[], random: () => number): string {
+function pickRandom<T>(lanes: readonly T[], random: () => number): T {
   const draw = random();
   if (!Number.isFinite(draw) || draw < 0 || draw >= 1) throw new RangeError('Lane randomness must be in [0, 1).');
   return lanes[Math.floor(draw * lanes.length)]!;
@@ -208,7 +279,7 @@ function randomizeLR2Notes(
     for (const index of visible) {
       const note = notes[index]!;
       if (free.length === 0) throw new RangeError('S-RANDOM has more simultaneous events than available lanes.');
-      const target = pickLane(free, random);
+      const target = pickRandom(free, random);
       free.splice(free.indexOf(target), 1);
       channels[index] = target;
       map.set(note.channel, target);
@@ -221,7 +292,7 @@ function randomizeLR2Notes(
       let target = map.get(note.channel) ?? [...held].find(([, hold]) => hold.source === note.channel)?.[0];
       if (target === undefined) {
         const candidates = free.length > 0 ? free : lanes.filter((lane) => !held.has(lane));
-        target = candidates.length > 0 ? pickLane(candidates, random) : note.channel;
+        target = candidates.length > 0 ? pickRandom(candidates, random) : note.channel;
         const position = free.indexOf(target);
         if (position >= 0) free.splice(position, 1);
         map.set(note.channel, target);
@@ -246,7 +317,7 @@ export function randomizeSpiralNotes(
   const channels = notes.map((note) => note.channel);
   lanes = [...new Set(lanes)];
   if (lanes.length < 2) return channels;
-  const increment = lanes.indexOf(pickLane(lanes.slice(1), random));
+  const increment = lanes.indexOf(pickRandom(lanes.slice(1), random));
   const domain = new Map(lanes.map((lane, index) => [lane, index]));
   const rows = new Map<number, number[]>();
   notes.forEach((note, index) => {

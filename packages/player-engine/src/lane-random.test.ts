@@ -3,6 +3,7 @@ import {
   randomizeHRandomNotes,
   randomizeAllScratchNotes,
   randomizePMSConvergeNotes,
+  randomizePMSPlayableNotes,
   clampHRandomThresholdBPM,
   randomizeSpiralNotes,
   randomizeSRandomNotes,
@@ -401,4 +402,62 @@ describe('randomizePMSConvergeNotes', () => {
     expect(result[3]).toBe(result[4]);
     expect(notes).toEqual(original);
   });
+});
+
+describe('randomizePMSPlayableNotes', () => {
+  const lanes = Array.from({ length: 9 }, (_, index) => `key${index}`);
+  const allowed = [
+    [0, 1, 2, 3, 4, 5],
+    [0, 1, 2, 4, 5, 6],
+    [0, 1, 2, 5, 6, 7],
+    [0, 1, 2, 6, 7, 8],
+    [1, 2, 3, 4, 5, 6],
+    [1, 2, 3, 5, 6, 7],
+    [1, 2, 3, 6, 7, 8],
+    [2, 3, 4, 5, 6, 7],
+    [2, 3, 4, 6, 7, 8],
+    [3, 4, 5, 6, 7, 8],
+  ];
+  test.each([0, 0.5, 0.99])('six-key chords use one of the source playable combinations (%s)', (draw) => {
+    const notes = lanes.slice(0, 6).map((channel) => ({ channel, timeMs: 0 }));
+    const result = randomizePMSPlayableNotes(notes, lanes, { random: () => draw });
+    const placed = result.map((channel) => lanes.indexOf(channel)).sort((a, b) => a - b);
+    expect(allowed).toContainEqual(placed);
+  });
+  test('holds remain reserved through their exact tail, and mine/hidden companions share mapping', () => {
+    const notes: SRandomNote[] = [
+      { channel: lanes[0]!, timeMs: 0, endTimeMs: 300 },
+      { channel: lanes[1]!, timeMs: 150 },
+      { channel: lanes[2]!, timeMs: 150 },
+      { channel: lanes[1]!, timeMs: 300 },
+      { channel: lanes[1]!, timeMs: 301, kind: 'mine' },
+      { channel: lanes[1]!, timeMs: 301, kind: 'invisible' },
+    ];
+    const original = structuredClone(notes);
+    const result = randomizePMSPlayableNotes(notes, lanes, { random: zero });
+    expect(result[1]).not.toBe(result[0]);
+    expect(result[2]).not.toBe(result[0]);
+    expect(result[3]).not.toBe(result[0]);
+    expect(result[4]).toBe(result[5]);
+    expect(notes).toEqual(original);
+  });
+  test('reports the pinned source empty-candidate failure explicitly', () => {
+    const notes = [0, 1].flatMap((timeMs) => lanes.slice(0, 6).map((channel) => ({ channel, timeMs })));
+    expect(() => randomizePMSPlayableNotes(notes, lanes, { random: zero })).toThrow(/upstream nextInt\(0\)/);
+  });
+  test('rejects a non-nine-key domain', () => {
+    expect(() => randomizePMSPlayableNotes([], lanes.slice(0, 5), { random: zero })).toThrow(RangeError);
+  });
+});
+
+test('ordinary beatoraja PMS S-RANDOM uses the source no-threshold modifier', () => {
+  const notes = [
+    { channel: 'a', timeMs: 0 },
+    { channel: 'a', timeMs: 1 },
+  ];
+  expect(randomizeSRandomNotes(notes, ['a', 'b'], { ruleset: 'beatoraja', random: zero, mode: 'pms' })).toEqual([
+    'a',
+    'a',
+  ]);
+  expect(randomizeSRandomNotes(notes, ['a', 'b'], { ruleset: 'beatoraja', random: zero })).toEqual(['a', 'b']);
 });

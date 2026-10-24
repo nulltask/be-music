@@ -214,3 +214,10 @@ test('PMS RANDOM_PLAYABLE uses the source option name and survives validation', 
   expect(resolveRandomModes('____')).not.toContain('RANDOM_PLAYABLE');
   expect(resolvePlayOptionValue('random1P', 'RANDOM_PLAYABLE')).toBe('RANDOM_PLAYABLE');
 });
+
+test('PMS S_RANDOM_PLAYABLE preserves the source option name', () => {
+  expect(resolveRandomModes('beatoraja')).toContain('S_RANDOM_PLAYABLE');
+  expect(resolveRandomModes('lr2')).not.toContain('S_RANDOM_PLAYABLE');
+  expect(resolveRandomModes('____')).not.toContain('S_RANDOM_PLAYABLE');
+  expect(resolvePlayOptionValue('random1P', 'S_RANDOM_PLAYABLE')).toBe('S_RANDOM_PLAYABLE');
+});
