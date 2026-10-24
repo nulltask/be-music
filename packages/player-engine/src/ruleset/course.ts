@@ -25,6 +25,8 @@ export interface RulesetCourseOptions {
    * the gauge's range.
    */
   initialGauge?: number;
+  /** Independent class-gauge values carried by source gauge auto-shift. */
+  initialGauges?: Readonly<Record<string, number>>;
 }
 
 type GaugeValues = GaugeSpec['values'];

@@ -31,7 +31,7 @@ export function isGaugeType(value: unknown): value is GaugeType {
 }
 
 /** beatoraja 0.8.9 gauge auto-shift policies implemented by the player. */
-export type GaugeAutoShift = 'NONE' | 'CONTINUE' | 'SURVIVAL_TO_GROOVE';
+export type GaugeAutoShift = 'NONE' | 'CONTINUE' | 'SURVIVAL_TO_GROOVE' | 'BEST_CLEAR';
 
 /**
  * CONTINUE retains the selected dead gauge; SURVIVAL TO GROOVE uses the parallel NORMAL gauge.
@@ -45,7 +45,10 @@ export function resolveGaugeEndOnFailure(
 ): boolean {
   if (policy === undefined) return fallback;
   if (policy === 'NONE') return true;
-  if (!['CONTINUE', 'SURVIVAL_TO_GROOVE'].includes(policy) || ruleset !== 'beatoraja')
+  if (!['CONTINUE', 'SURVIVAL_TO_GROOVE', 'BEST_CLEAR'].includes(policy) || ruleset !== 'beatoraja')
     throw new RangeError('Gauge auto-shift is available only for beatoraja.');
   return false;
 }
+
+/** Source lower-bound choices, in ASSIST EASY / EASY / NORMAL order. */
+export type GaugeShiftBottom = 'ASSIST-EASY' | 'EASY' | 'GROOVE';

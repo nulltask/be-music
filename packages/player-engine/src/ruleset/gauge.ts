@@ -32,15 +32,41 @@ export class RulesetGauge {
     return this.activeSpec;
   }
   private fallback: RulesetGauge | undefined;
+  private bank: RulesetGauge[] | undefined;
+  private selectedIndex = 0;
+  private bottomIndex = 0;
 
-  constructor(spec: GaugeSpec, fallbackSpec?: GaugeSpec) {
+  /** Raw units for every parallel gauge; immutable snapshots keep course carries independent. */
+  get values(): Record<string, number> | undefined {
+    return this.bank && Object.fromEntries(this.bank.map((gauge) => [gauge.spec.id, gauge.value]));
+  }
+
+  constructor(spec: GaugeSpec, fallbackSpec?: GaugeSpec, bank?: { specs: readonly GaugeSpec[]; bottomIndex: number }) {
+    if (bank !== undefined) {
+      this.bank = bank.specs.map((value) => new RulesetGauge(value));
+      this.selectedIndex = Math.max(
+        0,
+        bank.specs.findIndex((value) => value.id === spec.id),
+      );
+      this.bottomIndex = bank.bottomIndex;
+    }
     if (fallbackSpec !== undefined && fallbackSpec.id !== spec.id) this.fallback = new RulesetGauge(fallbackSpec);
     this.activeSpec = spec;
     this.value = spec.initial;
+    if (spec.survival && spec.initial <= 0) {
+      this.dead = true;
+      this.failedMidPlay = true;
+    }
+    if (this.bank !== undefined) this.selectBest();
   }
 
   /** Applies one judgment. `rate` scales the delta (HCN hold ticks use a fraction of a GREAT / BAD). */
   applyJudge(judge: GaugeJudgeIndex, rate = 1): void {
+    if (this.bank !== undefined) {
+      for (const gauge of this.bank) gauge.applyJudge(judge, rate);
+      this.selectBest();
+      return;
+    }
     // beatoraja GrooveGauge.update updates the hidden gauge too, including on the fatal judgment.
     this.fallback?.applyJudge(judge, rate);
     if (this.dead) return;
@@ -62,6 +88,11 @@ export class RulesetGauge {
    * landmine damage is specified directly as a gauge percentage in every ruleset.
    */
   applyRawDelta(delta: number): void {
+    if (this.bank !== undefined) {
+      for (const gauge of this.bank) gauge.applyRawDelta(delta);
+      this.selectBest();
+      return;
+    }
     this.fallback?.applyRawDelta(delta);
     if (this.dead) return;
     this.set(this.value + delta);
@@ -75,6 +106,7 @@ export class RulesetGauge {
    */
   drainToZero(): void {
     this.fallback = undefined;
+    for (const gauge of this.bank ?? []) gauge.drainToZero();
     this.value = 0;
     this.dead = true;
   }
@@ -84,6 +116,21 @@ export class RulesetGauge {
       return !this.failedMidPlay && this.value > 0;
     }
     return this.value >= this.spec.border;
+  }
+
+  /** BMSPlayer 0.8.9: highest positive qualified gauge; retain the lower-bound gauge when none qualifies. */
+  private selectBest(): void {
+    const bank = this.bank!;
+    let selected = Math.min(this.selectedIndex, this.bottomIndex);
+    for (let index = selected; index < bank.length; index++) {
+      if (bank[index]!.value > 0 && bank[index]!.cleared()) selected = index;
+    }
+    this.selectedIndex = selected;
+    const gauge = bank[selected]!;
+    this.activeSpec = gauge.spec;
+    this.value = gauge.value;
+    this.dead = gauge.dead;
+    this.failedMidPlay = gauge.failedMidPlay;
   }
 
   /** Source BMSPlayer: at zero switch to NORMAL's existing value, never refill it from survival HP. */

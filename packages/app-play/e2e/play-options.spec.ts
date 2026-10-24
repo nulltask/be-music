@@ -446,3 +446,27 @@ for (const skin of ['plain', 'native'] as const) {
     expect(results[1]?.judged).toEqual(results[0]?.judged);
   });
 }
+
+for (const skin of ['plain', 'native'] as const) {
+  test(`BEST CLEAR selects and replays a parallel gauge on ${skin}`, async ({ player }) => {
+    await player.open({ 'be-music.built-in-skin': skin });
+    await player.dropText('best-clear.bms', '#TITLE Best clear\n#BPM 240\n#00111:01\n#00212:01\n');
+    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+    await player.setOption(['Play options'], 'Gauge', 'GROOVE');
+    await player.setOption(['Play options'], 'Gauge auto-shift (beatoraja)', 'BEST CLEAR');
+    await player.setOption(['Play options'], 'Lowest auto-shift gauge', 'EASY');
+    await player.cursorTo((bar) => bar.title === 'Best clear', 'best clear chart');
+    await player.key('Enter');
+    await player.waitForResult(0);
+    const replay = await player.lastReplay();
+    expect(replay?.play.gaugeAutoShift).toBe('BEST_CLEAR');
+    expect(replay?.play.bottomShiftableGauge).toBe('EASY');
+    expect(Object.keys(replay?.results?.native?.gauge.values ?? {})).toHaveLength(6);
+    expect(replay?.results?.native?.gauge.type).toBe('EX-HARD');
+    await player.leaveResult();
+    await player.dropText('best-clear.bmplay.json', JSON.stringify(replay));
+    await player.waitForResult(1);
+    const results = (await player.state()).results;
+    expect(results[1]?.judged).toEqual(results[0]?.judged);
+  });
+}

@@ -7,7 +7,13 @@ import {
   type ReplayOptionChange,
 } from './options.ts';
 import type { LongNoteMode, RandomDraw } from '@be-music/chart-model';
-import { GAUGE_TYPES, isGaugeType, type GaugeType, type GaugeAutoShift } from '../ruleset/gauge-type.ts';
+import {
+  GAUGE_TYPES,
+  isGaugeType,
+  type GaugeType,
+  type GaugeAutoShift,
+  type GaugeShiftBottom,
+} from '../ruleset/gauge-type.ts';
 import type { CourseGaugeSet, CourseJudgeConstraint, RulesetCourseKind } from '../ruleset/course.ts';
 import type { RulesetId } from '../ruleset/definitions.ts';
 import {
@@ -19,6 +25,7 @@ import {
   type ReplayViewState,
 } from './view.ts';
 import {
+  parseGaugeValues,
   expectFiniteNumber,
   expectNonNegativeInteger,
   expectRecord,
@@ -224,6 +231,7 @@ export interface ReplayPlay {
    */
   endOnFailure?: boolean;
   gaugeAutoShift?: GaugeAutoShift;
+  bottomShiftableGauge?: GaugeShiftBottom;
   /** Set when the play was one stage of a course: what the stage's rules and starting state were. */
   course?: ReplayCourseStage;
   /**
@@ -262,6 +270,8 @@ export interface ReplayCourseStage {
 
 /** The state carried from one course stage into the next. */
 export interface ReplayCourseCarry {
+  /** Independent raw CLASS / EXCLASS / EXHARDCLASS values under gauge auto-shift. */
+  gauges?: Record<string, number>;
   /** Gauge value in percent. */
   gauge: number;
   /** The course-wide combo running into the stage. */
@@ -281,6 +291,8 @@ export interface ReplayJudgmentCounts {
 }
 
 export interface ReplayGaugeResult {
+  /** Raw values for every parallel gauge; course stages carry these into the next stage. */
+  values?: Record<string, number>;
   /** Ruleset-scoped gauge id (`'GROOVE'`, `'HARD'`, `'NORMAL'`, `'EX-HARD'`, ...). */
   type: string;
   /** Final gauge value in percent. */
@@ -657,9 +669,14 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
   if (play.aborted !== undefined) parsed.aborted = play.aborted === true;
   if (play.abortedAtUs !== undefined) parsed.abortedAtUs = expectFiniteNumber(play.abortedAtUs, 'play.abortedAtUs');
   if (play.endOnFailure !== undefined) parsed.endOnFailure = play.endOnFailure === true;
+  if (play.bottomShiftableGauge !== undefined) {
+    if (!['ASSIST-EASY', 'EASY', 'GROOVE'].includes(play.bottomShiftableGauge as string))
+      throw new ReplayParseError('play.bottomShiftableGauge: expected ASSIST-EASY, EASY or GROOVE');
+    parsed.bottomShiftableGauge = play.bottomShiftableGauge as GaugeShiftBottom;
+  }
   if (play.gaugeAutoShift !== undefined) {
-    if (!['NONE', 'CONTINUE', 'SURVIVAL_TO_GROOVE'].includes(play.gaugeAutoShift as string))
-      throw new ReplayParseError('play.gaugeAutoShift: expected NONE, CONTINUE or SURVIVAL_TO_GROOVE');
+    if (!['NONE', 'CONTINUE', 'SURVIVAL_TO_GROOVE', 'BEST_CLEAR'].includes(play.gaugeAutoShift as string))
+      throw new ReplayParseError('play.gaugeAutoShift: expected NONE, CONTINUE, SURVIVAL_TO_GROOVE or BEST_CLEAR');
     parsed.gaugeAutoShift = play.gaugeAutoShift as GaugeAutoShift;
   }
   if (play.course !== undefined) parsed.course = parseCourseStage(expectRecord(play.course, 'play.course'));
@@ -758,6 +775,9 @@ function parseCourseStage(course: Record<string, unknown>): ReplayCourseStage {
   if (course.carryIn !== undefined) {
     const carry = expectRecord(course.carryIn, 'play.course.carryIn');
     parsed.carryIn = {
+      ...(carry.gauges !== undefined
+        ? { gauges: parseGaugeValues(carry.gauges, 'play.course.carryIn.gauges', true) }
+        : {}),
       gauge: expectFiniteNumber(carry.gauge, 'play.course.carryIn.gauge'),
       combo: expectNonNegativeInteger(carry.combo, 'play.course.carryIn.combo'),
       maxCombo: expectNonNegativeInteger(carry.maxCombo, 'play.course.carryIn.maxCombo'),

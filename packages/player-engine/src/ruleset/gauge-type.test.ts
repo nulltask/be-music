@@ -50,3 +50,8 @@ it('SURVIVAL TO GROOVE continues after survival failure only for beatoraja', () 
   expect(() => resolveGaugeEndOnFailure('SURVIVAL_TO_GROOVE', 'lr2')).toThrow(/beatoraja/);
   expect(() => resolveGaugeEndOnFailure('SURVIVAL_TO_GROOVE', '____')).toThrow(/beatoraja/);
 });
+
+it('BEST CLEAR keeps judging while the parallel gauges determine the effective outcome', () => {
+  expect(resolveGaugeEndOnFailure('BEST_CLEAR', 'beatoraja')).toBe(false);
+  expect(() => resolveGaugeEndOnFailure('BEST_CLEAR', 'lr2')).toThrow(/beatoraja/);
+});

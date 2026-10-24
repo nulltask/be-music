@@ -224,6 +224,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   longNoteRate: number;
   mineModifier: PlayOptions['mineModifier'];
   gaugeAutoShift: PlayOptions['gaugeAutoShift'];
+  bottomShiftableGauge: PlayOptions['bottomShiftableGauge'];
   autoScratch1P: boolean;
   /** 2P auto scratch for the next play. Two-way synced with the LR2 select panel. */
   autoScratch2P: boolean;

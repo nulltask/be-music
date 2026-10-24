@@ -49,6 +49,8 @@ export interface PlayerUIFrameClock {
  * `PlayerSummary` (`PlayerSummary.gauge`) so the two can never drift.
  */
 export interface PlayerGaugeSummary {
+  /** Raw values of parallel gauges, used to carry course class gauges independently. */
+  values?: Readonly<Record<string, number>>;
   /** Raw gauge units, relative to `max`; PMS normal gauges use a maximum of 120. */
   current: number;
   max: number;

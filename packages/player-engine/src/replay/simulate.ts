@@ -217,7 +217,7 @@ class ReplaySimulation {
     this.endOnFailure = endOnFailure;
     this.course = replay.play.course === undefined ? undefined : courseStageCarryCombo(replay.play.course);
     this.scratchChannels = resolveScratchChannels(replay.chart.laneMode);
-    this.gauge = new RulesetGauge(config.gauge, config.gaugeFallback);
+    this.gauge = new RulesetGauge(config.gauge, config.gaugeFallback, config.gaugeBank);
     this.buildLanes();
   }
 
@@ -268,6 +268,7 @@ class ReplaySimulation {
       djLevel: resolve____RankLabel(this.exScore, this.config.noteCount),
       gauge: {
         type: this.gauge.spec.id,
+        ...(this.gauge.values ? { values: this.gauge.values } : {}),
         final:
           this.gauge.spec.max === 100
             ? this.gauge.value

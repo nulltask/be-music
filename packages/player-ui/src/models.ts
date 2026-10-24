@@ -55,7 +55,7 @@ export interface BeMusicSettingsData {
   readonly view: BeMusicDOMGameplayFrame['state']['view'];
   readonly runtime: Pick<
     BeMusicGameplayRuntime,
-    'greenNumber' | 'visibleMs' | 'minBPM' | 'maxBPM' | 'mainBPM' | 'rulesetLabel'
+    'greenNumber' | 'visibleMs' | 'minBPM' | 'maxBPM' | 'mainBPM' | 'rulesetLabel' | 'gaugeLabel'
   >;
 }
 

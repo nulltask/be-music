@@ -249,6 +249,7 @@ export function getResultData(ctx: PlayEndingContext): PlayResult | undefined {
             maxCombo: ctx.playState.maxCombo,
             gauge: {
               type: gauge.type ?? 'GROOVE',
+              ...(gauge.values ? { values: { ...gauge.values } } : {}),
               final: ctx.playState.gauge,
               cleared: ctx.playState.cleared,
               ...(gauge.failedMidPlay ? { failedMidPlay: true } : {}),

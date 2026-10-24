@@ -1,4 +1,4 @@
-import type { GaugeAutoShift } from './gauge-type.ts';
+import type { GaugeAutoShift, GaugeShiftBottom } from './gauge-type.ts';
 import {
   bmsExRankValueToJudgeRankPercent,
   resolveBMSJudgeWindowsMsForPercent,
@@ -167,6 +167,8 @@ export interface RulesetConfig {
   gauge: GaugeSpec;
   /** SURVIVAL TO GROOVE tracks NORMAL from chart start, never on course class gauges. */
   gaugeFallback?: GaugeSpec;
+  /** Source-ordered parallel gauges and minimum eligible index (CLASS family starts at zero). */
+  gaugeBank?: { specs: readonly GaugeSpec[]; bottomIndex: number };
   /** EX-SCORE denominator note count (longs count 1 for LN styles, 2 for charge styles). */
   noteCount: number;
   /**
@@ -197,6 +199,7 @@ export interface ResolveRulesetOptions {
    */
   selectedGauge?: string;
   gaugeAutoShift?: GaugeAutoShift;
+  bottomShiftableGauge?: GaugeShiftBottom;
   /** Debug BAD-window override (`PlayerOptions.judgeWindowMs`) — non-standard, applies to every window table. */
   judgeWindowOverrideMs?: number;
   /** beatoraja note-selection algorithm (default `'combo'`, beatoraja's own default). */
@@ -779,7 +782,11 @@ export function resolveRuleset(
       : resolveCourseGauge(
           rulesetId,
           gaugeId,
-          course,
+          {
+            ...course,
+            initialGauge:
+              (rulesetId === 'beatoraja' ? course.initialGauges?.[gaugeId] : undefined) ?? course.initialGauge,
+          },
           chart.laneMode,
           resolveLR2HardDamageMultiplier(total, baseNotes),
         );
@@ -900,6 +907,33 @@ export function resolveRuleset(
       mineTrigger: 'hold',
       hcnTick: { heldJudge: 1, heldRate: 0.5, releasedJudge: 3, releasedRate: 0.5 },
       gauge: courseGauge(effectiveTotal) ?? resolveBeatorajaGauge(gaugeId, effectiveTotal, noteCount, chart.laneMode),
+      ...(options.gaugeAutoShift === 'BEST_CLEAR'
+        ? {
+            gaugeBank: {
+              specs:
+                course === undefined
+                  ? ['ASSIST-EASY', 'EASY', 'NORMAL', 'HARD', 'EX-HARD', 'HAZARD'].map((id) =>
+                      resolveBeatorajaGauge(id, effectiveTotal, noteCount, chart.laneMode),
+                    )
+                  : ['CLASS', 'EXCLASS', 'EXHARDCLASS'].map((id) =>
+                      resolveCourseGauge(
+                        'beatoraja',
+                        id,
+                        {
+                          ...course,
+                          initialGauge: course.initialGauges?.[id] ?? course.initialGauge,
+                        },
+                        chart.laneMode,
+                        1,
+                      ),
+                    ),
+              bottomIndex:
+                course === undefined
+                  ? ['ASSIST-EASY', 'EASY', 'GROOVE'].indexOf(options.bottomShiftableGauge ?? 'ASSIST-EASY')
+                  : 0,
+            },
+          }
+        : {}),
       ...(options.gaugeAutoShift === 'SURVIVAL_TO_GROOVE' && course === undefined
         ? { gaugeFallback: resolveBeatorajaGauge('NORMAL', effectiveTotal, noteCount, chart.laneMode) }
         : {}),

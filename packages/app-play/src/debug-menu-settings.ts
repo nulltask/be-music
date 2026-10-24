@@ -89,6 +89,7 @@ export interface DebugMenuSettings {
   longNoteRate: number;
   mineModifier: PlayerGUIState['mineModifier'];
   gaugeAutoShift: PlayerGUIState['gaugeAutoShift'];
+  bottomShiftableGauge: PlayerGUIState['bottomShiftableGauge'];
   autoScratch1P: boolean;
   autoScratch2P: boolean;
   sort: BrowseSort;
@@ -239,6 +240,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'classicHiSpeed', booleanOf(raw.classicHiSpeed));
   assign(settings, 'judgeAlgorithm', oneOf(raw.judgeAlgorithm, ['combo', 'duration', 'lowest'] as const));
   assign(settings, 'gaugeAutoShift', resolvePlayOptionValue('gaugeAutoShift', raw.gaugeAutoShift));
+  assign(settings, 'bottomShiftableGauge', resolvePlayOptionValue('bottomShiftableGauge', raw.bottomShiftableGauge));
   assign(settings, 'mineModifier', resolvePlayOptionValue('mineModifier', raw.mineModifier));
   assign(settings, 'longNoteRate', resolvePlayOptionValue('longNoteRate', raw.longNoteRate));
   assign(settings, 'longNoteModifier', resolvePlayOptionValue('longNoteModifier', raw.longNoteModifier));
@@ -458,6 +460,7 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('longNoteRate');
   assignState('mineModifier');
   assignState('gaugeAutoShift');
+  assignState('bottomShiftableGauge');
   assignState('autoScratch1P');
   assignState('autoScratch2P');
   assignState('sort');
@@ -546,6 +549,7 @@ export function captureDebugMenuSettings(
     longNoteRate: state.longNoteRate,
     mineModifier: state.mineModifier,
     gaugeAutoShift: state.gaugeAutoShift,
+    bottomShiftableGauge: state.bottomShiftableGauge,
     autoScratch1P: state.autoScratch1P,
     autoScratch2P: state.autoScratch2P,
     sort: state.sort,

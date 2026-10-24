@@ -39,7 +39,16 @@ export class BeMusicPlaySettingsElement extends DataElement<BeMusicSettingsData>
         ${stats([
           ['Ruleset', r.rulesetLabel === '____' ? '????' : (r.rulesetLabel ?? '—')],
           ['Random 1P / 2P', `${o.random1P} / ${o.random2P}`],
+          ['Effective gauge', r.gaugeLabel ?? '—'],
           ['Gauge auto-shift', o.gaugeAutoShift.replaceAll('_', ' ')],
+          [
+            'Lowest shift gauge',
+            o.gaugeAutoShift === 'BEST_CLEAR'
+              ? o.bottomShiftableGauge === 'GROOVE'
+                ? 'NORMAL'
+                : o.bottomShiftableGauge
+              : '—',
+          ],
           ['Gauge 1P / 2P', `${o.gauge1P} / ${o.gauge2P}`],
           ['Long notes', o.longNoteModifier === 'LEGACY' ? 'LEGACY NOTE' : o.longNoteModifier.replaceAll('_', ' ')],
           ['LN add rate', o.longNoteModifier.startsWith('ADD_') ? `${Math.round(o.longNoteRate * 1000) / 10}%` : '—'],

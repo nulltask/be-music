@@ -90,6 +90,7 @@ export interface PlayEngineContext
       | 'longNoteRate'
       | 'mineModifier'
       | 'gaugeAutoShift'
+      | 'bottomShiftableGauge'
       | 'autoScratch1P'
       | 'autoScratch2P'
       | 'chartMD5'
@@ -447,6 +448,7 @@ export function resolveReplayRecording(
     | 'longNoteRate'
     | 'mineModifier'
     | 'gaugeAutoShift'
+    | 'bottomShiftableGauge'
     | 'autoScratch1P'
     | 'autoScratch2P'
   >,
@@ -504,6 +506,7 @@ export function resolveReplayRecording(
     longNoteRate: options.longNoteRate,
     mineModifier: options.mineModifier,
     gaugeAutoShift: options.gaugeAutoShift,
+    bottomShiftableGauge: options.bottomShiftableGauge,
     autoScratch1P: options.autoScratch1P,
     autoScratch2P: options.autoScratch2P,
   })) {
@@ -597,6 +600,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       onTempoChange: (change) => followTempoChange(ctx, change),
       // Only the selected side's scratch lanes are assisted by the engine.
       autoScratch: ctx.options.autoScratch1P === true || ctx.options.autoScratch2P === true,
+      bottomShiftableGauge: ctx.options.replay?.play.bottomShiftableGauge ?? ctx.options.bottomShiftableGauge,
       gaugeAutoShift:
         ctx.options.replay !== undefined ? ctx.options.replay.play.gaugeAutoShift : ctx.options.gaugeAutoShift,
       judgeAlgorithm: ctx.options.replay?.play.judgeAlgorithm ?? ctx.options.judgeAlgorithm,

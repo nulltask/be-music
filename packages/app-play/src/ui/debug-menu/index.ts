@@ -203,6 +203,7 @@ export class DebugMenu {
   public random1PController: ListInputBindingApi<PlayOptions['random1P']> | undefined;
   public random2PController: ListInputBindingApi<PlayOptions['random2P']> | undefined;
   public gaugeController: ListInputBindingApi<GaugeType> | undefined;
+  public bottomShiftableGaugeController: ListInputBindingApi<PlayOptions['bottomShiftableGauge']> | undefined;
   public gaugeAutoShiftController: ListInputBindingApi<PlayOptions['gaugeAutoShift']> | undefined;
   public longNoteModifierController: ListInputBindingApi<PlayOptions['longNoteModifier']> | undefined;
   public longNoteRateController: PaneBinding | undefined;
@@ -482,6 +483,7 @@ export class DebugMenu {
       this.setPlayOptions({ gaugeAutoShift: 'NONE' });
     }
     if (this.gaugeAutoShiftController) this.gaugeAutoShiftController.hidden = !beatoraja;
+    if (this.bottomShiftableGaugeController) this.bottomShiftableGaugeController.hidden = !beatoraja;
     if (!beatoraja && this.guiState.mineModifier !== 'OFF') {
       this.guiState.mineModifier = 'OFF';
       this.setPlayOptions({ mineModifier: 'OFF' });

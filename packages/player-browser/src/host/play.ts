@@ -510,6 +510,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       mineModifier: playOptions.mineModifier,
       longNoteRate: playOptions.longNoteRate,
       gaugeAutoShift: playOptions.gaugeAutoShift,
+      bottomShiftableGauge: playOptions.bottomShiftableGauge,
       randomSeed1P: playOptions.randomSeed1P,
       randomSeed2P: playOptions.randomSeed2P,
       randomFixedLane1P: playOptions.randomFixedLane1P,

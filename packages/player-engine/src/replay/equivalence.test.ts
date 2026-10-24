@@ -2,7 +2,7 @@ import { createEmptyJSON, type BeMusicJSON } from '@be-music/chart-source';
 import { describe, expect, test } from 'vite-plus/test';
 import { resolveChart } from '@be-music/chart-model';
 import { manualPlay, preparePlaybackChart } from '../index.ts';
-import type { PlayerOptions, PlayerSummary } from '../core/engine.ts';
+import { runRecordedPlay } from '../test-support/recorded-play.ts';
 import { resolveRulesetConfig, simulateReplay } from './simulate.ts';
 import { createScheduledInputRuntime } from '../test-support/player-fixtures.ts';
 import { parseReplay, serializeReplay, type BeMusicReplay, type ReplayInputEvent } from './format.ts';
@@ -17,34 +17,6 @@ import type { RulesetId } from '../ruleset/index.ts';
  * Both sides are driven from the same recorded input stream: the engine replays it (`replayInputs`, exact
  * microsecond timestamps, no jitter) while recording a log, and the simulator then re-runs that log.
  */
-
-interface ReplayRun {
-  summary: PlayerSummary;
-  replay: BeMusicReplay;
-}
-
-async function runRecordedPlay(
-  json: BeMusicJSON,
-  inputs: readonly ReplayInputEvent[],
-  ruleset: RulesetId,
-  extra: PlayerOptions = {},
-): Promise<ReplayRun> {
-  let replay: BeMusicReplay | undefined;
-  const summary = await manualPlay(json, {
-    ...extra,
-    speed: 16,
-    leadInMs: 0,
-    audio: false,
-    tui: false,
-    judgeRuleset: ruleset,
-    replayInputs: inputs,
-    recordReplay: extra.recordReplay ?? {},
-    onReplayRecorded: (recorded) => {
-      replay = recorded;
-    },
-  });
-  return { summary, replay: replay! };
-}
 
 function down(seq: number, timeUs: number, ...channels: string[]): ReplayInputEvent {
   return { seq, timeUs, action: 'down', channels };

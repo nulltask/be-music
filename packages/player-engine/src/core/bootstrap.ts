@@ -94,21 +94,23 @@ export function createInitialPlayerSummary(
   /** Puts the summary and the gauge back to the play's start, in place (a seek rebuilds the play from there). */
   reset: () => void;
 } {
-  let gauge = new RulesetGauge(ruleset.gauge, ruleset.gaugeFallback);
+  let gauge = new RulesetGauge(ruleset.gauge, ruleset.gaugeFallback, ruleset.gaugeBank);
   const gaugeSummary: PlayerGaugeSummary = {
     current: gauge.value,
-    max: ruleset.gauge.max,
-    clearThreshold: ruleset.gauge.border,
-    initial: ruleset.gauge.initial,
+    max: gauge.spec.max,
+    clearThreshold: gauge.spec.border,
+    initial: gauge.spec.initial,
     effectiveTotal: ruleset.effectiveTotal,
     cleared: gauge.cleared(),
     // Ruleset-scoped gauge id (`GROOVE` / `NORMAL` / `HARD` / `EX-HARD` / …) so consumers can label the run's
     // clear lamp without inferring from the threshold, which collides between line-ups.
-    type: ruleset.gauge.id,
-    survival: ruleset.gauge.survival,
-    failedMidPlay: false,
+    type: gauge.spec.id,
+    survival: gauge.spec.survival,
+    failedMidPlay: gauge.failedMidPlay,
+    ...(gauge.values ? { values: gauge.values } : {}),
   };
   const syncGaugeSummary = (): void => {
+    if (gauge.values) gaugeSummary.values = gauge.values;
     gaugeSummary.type = gauge.spec.id;
     gaugeSummary.max = gauge.spec.max;
     gaugeSummary.clearThreshold = gauge.spec.border;
@@ -157,7 +159,7 @@ export function createInitialPlayerSummary(
       syncGaugeSummary();
     },
     reset: (): void => {
-      gauge = new RulesetGauge(ruleset.gauge, ruleset.gaugeFallback);
+      gauge = new RulesetGauge(ruleset.gauge, ruleset.gaugeFallback, ruleset.gaugeBank);
       syncGaugeSummary();
       delete summary.minePoor;
       for (const key of ['perfect', 'fast', 'slow', 'great', 'good', 'bad', 'poor', 'emptyPoor', 'exScore'] as const) {

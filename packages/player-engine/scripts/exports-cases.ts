@@ -579,6 +579,10 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
     run: () => {
       replayAPI.resolveRulesetConfig(BENCH_REPLAY, 'beatoraja');
       replayAPI.resolveRulesetConfig(BENCH_REPLAY, 'beatoraja', {
+        gaugeAutoShift: 'BEST_CLEAR',
+        bottomShiftableGauge: 'EASY',
+      });
+      replayAPI.resolveRulesetConfig(BENCH_REPLAY, 'beatoraja', {
         selectedGauge: 'DEATH',
         gaugeAutoShift: 'SURVIVAL_TO_GROOVE',
       });
@@ -818,6 +822,7 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
     run() {
       rulesetAPI.resolveGaugeEndOnFailure('CONTINUE', 'beatoraja');
       rulesetAPI.resolveGaugeEndOnFailure('SURVIVAL_TO_GROOVE', 'beatoraja');
+      rulesetAPI.resolveGaugeEndOnFailure('BEST_CLEAR', 'beatoraja');
     },
   });
   define('player-engine.ruleset.resolveGaugeTypes', {
