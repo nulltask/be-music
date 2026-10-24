@@ -1,3 +1,4 @@
+import { collectBPMGuideEvents } from '../../chart/bpm-guide.ts';
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
 import { resolveWhiteNumber, resolveLaneCover } from '@be-music/player-scene-model';
 /**
@@ -127,7 +128,12 @@ export interface BeatorajaPlayRuntime {
   readonly chart: LibraryChart | undefined;
   /** The chart as the play plays it (its `#RANDOM` branches drawn), before DP FLIP. */
   readonly resolvedChart: BeMusicJSON | undefined;
-  readonly resolvedPlayChart: { readonly reversal?: BeatorajaPlayChartLayout['reversal'] } | undefined;
+  readonly resolvedPlayChart:
+    | {
+        readonly timing?: import('@be-music/chart-model').TimingResolver;
+        readonly reversal?: BeatorajaPlayChartLayout['reversal'];
+      }
+    | undefined;
   readonly chartPlayVariant: ChartPlayVariant;
   readonly notes: readonly PlayerUIFrameNote[];
   readonly mineNotes: readonly PlayerUIFrameNote[];
@@ -274,6 +280,7 @@ export class BeatorajaPlayView implements PlayView {
     const scrollMapper = createBeatorajaScrollMapper(chart);
     const laneTimelines = scrollMapper !== undefined ? createBeatorajaLaneTimelines(chart) : undefined;
     const timeMarkers = normalizeBeatorajaNote(skin.note).time.length > 0;
+    const guideEvents = play.resolvedPlayChart?.timing ? collectBPMGuideEvents(play.resolvedPlayChart.timing) : [];
     this.prepared = {
       chart,
       analysis: computeBeatorajaChartNoteDistribution(chart),
@@ -282,13 +289,18 @@ export class BeatorajaPlayView implements PlayView {
         variant: play.chartPlayVariant,
         scrollMapper,
         timelineBeats: laneTimelines?.beats,
-        beatToSeconds: laneTimelines?.beatToSeconds,
+        beatToSeconds: laneTimelines?.beatToSeconds ?? play.resolvedPlayChart?.timing?.beatToSeconds,
         reversal: play.resolvedPlayChart?.reversal,
         // One-second time ticks when the skin authors `time[]` markers.
-        markers: computeBeatorajaChartMarkers(chart, {
-          timeIntervalSec: timeMarkers ? 1 : undefined,
-          totalSeconds: undefined,
-        }),
+        markers: {
+          ...computeBeatorajaChartMarkers(chart, {
+            timeIntervalSec: timeMarkers ? 1 : undefined,
+            totalSeconds: undefined,
+          }),
+          bpm: guideEvents.filter((event) => event.kind === 'bpm').map((event) => event.beat),
+          stop: guideEvents.filter((event) => event.kind === 'stop').map((event) => event.beat),
+        },
+        guideEvents,
         autoPlay: this.options.autoPlay === true,
       },
     };
@@ -468,6 +480,7 @@ export class BeatorajaPlayView implements PlayView {
       paused,
       started: !play.isIntroPlaying(),
       showInvisibleNotes: this.showInvisibleNotes,
+      bpmGuide: frame.playOptions.bpmGuide,
     });
     // A failed play's picture fades with its sound; on a normal end the skin draws its own fade-out.
     if (play.exiting && play.playMoments.failedAtMs !== undefined && play.exitFadeStartedAt !== undefined) {

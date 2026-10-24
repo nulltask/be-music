@@ -361,6 +361,15 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
     noteCount: chart.scorableNotes.length,
     notes,
   };
+  if (Number.isFinite(json.metadata.bpm)) result.headerBPM = json.metadata.bpm;
+  let minBPM = Infinity;
+  let maxBPM = -Infinity;
+  for (const { bpm } of resolved.timing.tempoPoints) {
+    if (!Number.isFinite(bpm)) continue;
+    minBPM = Math.min(minBPM, bpm);
+    maxBPM = Math.max(maxBPM, bpm);
+  }
+  if (minBPM <= maxBPM) result.bpmRange = { min: minBPM, max: maxBPM };
   if (json.bmson.info.totalUnit !== undefined) result.totalUnit = json.bmson.info.totalUnit;
   if (typeof options.reversalSeconds === 'number' && Number.isFinite(options.reversalSeconds)) {
     result.reversalTimeUs = secondsToMicroseconds(options.reversalSeconds);

@@ -65,7 +65,7 @@ export const BUILT_IN_PLAY_TIMING: PlayViewTiming = {
 /** What the built-in play view draws with besides its kit: the options of the play that change what is drawn. */
 export type BuiltInPlayViewOptions = Pick<
   PlaySessionOptions,
-  'bga' | 'autoPlay' | 'nonstop' | 'showInvisibleNotes' | 'judgedNoteDisplay' | 'layoutMode'
+  'bga' | 'bpmGuide' | 'autoPlay' | 'nonstop' | 'showInvisibleNotes' | 'judgedNoteDisplay' | 'layoutMode'
 > & {
   /** Where the chart's files are, for the skin's song images. */
   readonly source?: BrowserAssetSource;

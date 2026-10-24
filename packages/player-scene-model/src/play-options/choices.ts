@@ -71,6 +71,7 @@ export const RANDOM_CYCLE: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', '
 export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   hiSpeed: DEFAULT_HISPEED,
   classicHiSpeed: false,
+  bpmGuide: false,
   autoPlay: false,
   bga: 'ON',
   // BGA renders at LR2's `#DST_BGA,...,30` rect (NORMAL) at `'NORMAL'` — a 256×256 window squeezed in beside the lane
@@ -120,6 +121,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   judgeAlgorithm: ['combo', 'duration', 'lowest'],
   longNoteModifier: ['OFF', 'LEGACY', 'REMOVE'],
   classicHiSpeed: BOOLEAN_CYCLE,
+  bpmGuide: BOOLEAN_CYCLE,
   autoScratch1P: BOOLEAN_CYCLE,
   autoScratch2P: BOOLEAN_CYCLE,
   dpFlip: BOOLEAN_CYCLE,

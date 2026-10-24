@@ -145,6 +145,11 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       .addBinding(this.guiState, 'shutter', { label: 'Cover height', min: 0, max: 1, step: 0.01 })
       .on('change', ({ value }) => this.setPlayOptions({ shutter: value })),
   );
+  trackPlayOption(
+    folder
+      .addBinding(this.guiState, 'bpmGuide', { label: 'BPM GUIDE (beatoraja)' })
+      .on('change', ({ value }) => this.setPlayOptions({ bpmGuide: value })),
+  );
   this.classicHiSpeedController = trackPlayOption(
     folder.addBinding(this.guiState, 'classicHiSpeed', { label: 'CLASSIC HI-SPEED' }).on('change', ({ value }) => {
       this.setPlayOptions({ classicHiSpeed: value, ...(value ? { hsFix: 'OFF' } : {}) });

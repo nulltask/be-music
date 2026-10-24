@@ -1,3 +1,6 @@
+import { collectBPMGuideEvents } from '../../../chart/bpm-guide.ts';
+import { renderBPMGuide } from '../bpm-guide.ts';
+import { resolveSideLaneRuns } from './measure-line-runs.ts';
 import { drawLabel } from '../../../stage/draw-label.ts';
 /**
  * The notes of the shared playfield: walks the chart's notes, mines and invisible notes from the playhead under LR2's
@@ -72,6 +75,25 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
   const beatDistance = ctx.play.scrollMapper
     ? (toBeat: number): number => ctx.play.scrollMapper!.distanceBetween(currentBeat, toBeat)
     : (toBeat: number): number => toBeat - currentBeat;
+  if (ctx.options.bpmGuide && ctx.play.timingResolver) {
+    const timing = ctx.play.timingResolver;
+    if (ctx.bpmGuideCache?.timing !== timing) ctx.bpmGuideCache = { timing, events: collectBPMGuideEvents(timing) };
+    const first = ctx.play.laneX.values().next().value;
+    if (first)
+      renderBPMGuide({
+        enabled: true,
+        events: ctx.bpmGuideCache.events,
+        window: drawWindow,
+        distance: beatDistance,
+        pixelsPerBeat,
+        pool: ctx.noteLayerPool,
+        lanes: resolveSideLaneRuns(ctx.play.laneX).map((run) => ({
+          ...run,
+          top: first.top,
+          bottom: first.bottom,
+        })),
+      });
+  }
   // Debug visualization — paint invisible / keysound notes FIRST so playable notes + mines paint over them. Skipped
   // entirely when the option is off; keeping the array lets the option toggle during play.
   if (ctx.options.showInvisibleNotes && ctx.play.invisibleNotes.length > 0) {

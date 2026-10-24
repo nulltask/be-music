@@ -101,6 +101,7 @@ export interface PlaySessionOptions {
    */
   hsFix?: HSFix;
   classicHiSpeed?: boolean;
+  bpmGuide?: boolean;
   /**
    * HIDDEN / SUDDEN / HID+SUD effect picked from `#SRC_BUTTON,type=50/51`:
    *
