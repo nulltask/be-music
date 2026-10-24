@@ -103,6 +103,9 @@ export interface PlaySessionOptions {
   classicHiSpeed?: boolean;
   normalHiSpeedLevel?: number;
   judgeTimingMs?: number;
+  visualConstant?: boolean;
+  noteDurationMs?: number;
+  constantFadeMs?: number;
   onJudgeTimingChange?: (judgeTimingMs: number) => void;
   bpmGuide?: boolean;
   /**

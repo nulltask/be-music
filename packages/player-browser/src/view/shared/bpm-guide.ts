@@ -20,6 +20,7 @@ export function renderBPMGuide(input: {
   pool: ChildPool;
   /** A source skin may already supply the colored marker lines. */
   drawLines?: boolean;
+  alphaAt?: (eventSeconds: number) => number;
 }): void {
   if (!input.enabled) return;
   const colors = { bpm: 0x00c000, stop: 0xc0c000 };
@@ -29,6 +30,8 @@ export function renderBPMGuide(input: {
   const first = findFirstIndexAtOrAfter(input.events, threshold, (event) => event.beat);
   for (let index = first; index < input.events.length; index += 1) {
     const event = input.events[index]!;
+    const alpha = input.alphaAt?.(event.seconds) ?? 1;
+    if (alpha <= 0) continue;
     if (isPastDrawWindow(input.window, event.beat)) break;
     if (event.seconds < input.window.nowSeconds || !isDrawnAtTime(input.window, event.seconds)) continue;
     if (
@@ -45,10 +48,11 @@ export function renderBPMGuide(input: {
       if (sides.has(key)) continue;
       sides.add(key);
       if (input.drawLines !== false)
-        input.pool.acquireGraphics().rect(lane.x, Math.round(y), lane.w, 1).fill(colors[event.kind]);
+        input.pool.acquireGraphics().rect(lane.x, Math.round(y), lane.w, 1).fill({ color: colors[event.kind], alpha });
       const text = input.pool.acquireText();
       text.label = `bpm-guide:${event.kind}:${event.beat}`;
       text.text = event.text;
+      text.alpha = alpha;
       text.style.fontFamily = 'monospace';
       text.style.fontSize = Math.max(10, Math.min(20, lane.w / 14));
       text.style.fill = colors[event.kind];

@@ -1,3 +1,4 @@
+import { resolveConstantVisibility } from '@be-music/player-scene-model';
 import { diffReplayOptions, resolveReplayOptionsAt, type ReplayOptionState } from '@be-music/player-engine/replay';
 import { resolvePlayOptions } from '@be-music/player-scene-model';
 /**
@@ -100,6 +101,15 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
         if (player !== previous.view.hiSpeed.player) play.options.onHiSpeedChange?.(player);
         return;
       }
+      case 'constant-visibility': {
+        const value = resolveConstantVisibility({
+          durationMs: intent.durationMs ?? play.options.noteDurationMs,
+          fadeMs: intent.fadeMs ?? play.options.constantFadeMs,
+        });
+        play.options.noteDurationMs = value.durationMs;
+        play.options.constantFadeMs = value.fadeMs;
+        return;
+      }
       case 'cover':
         applyPlayEvent(play, intent.command);
         return;
@@ -143,6 +153,8 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
         ...playOptions,
         hiSpeed: play.playState.view.hiSpeed.player,
         judgeTimingMs: play.options.judgeTimingMs ?? playOptions.judgeTimingMs,
+        noteDurationMs: play.options.noteDurationMs ?? playOptions.noteDurationMs,
+        constantFadeMs: play.options.constantFadeMs ?? playOptions.constantFadeMs,
         ...(play.playState.view.hiSpeed.normalLevel !== undefined
           ? { normalHiSpeedLevel: play.playState.view.hiSpeed.normalLevel }
           : {}),

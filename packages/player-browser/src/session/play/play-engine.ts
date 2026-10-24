@@ -407,6 +407,9 @@ export function resolveReplayRecording(
     | 'classicHiSpeed'
     | 'normalHiSpeedLevel'
     | 'judgeTimingMs'
+    | 'visualConstant'
+    | 'noteDurationMs'
+    | 'constantFadeMs'
     | 'bpmGuide'
     | 'hiddenSudden1P'
     | 'hiddenSudden2P'
@@ -436,6 +439,9 @@ export function resolveReplayRecording(
       : {}),
     bpmGuide: options.bpmGuide,
     judgeTimingMs: options.judgeTimingMs,
+    visualConstant: options.visualConstant,
+    noteDurationMs: options.noteDurationMs,
+    constantFadeMs: options.constantFadeMs,
     hiddenSudden1P: options.hiddenSudden1P,
     hiddenSudden2P: options.hiddenSudden2P,
     shutter: options.shutter,

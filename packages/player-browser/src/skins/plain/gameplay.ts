@@ -134,7 +134,7 @@ function beamGradient(ctx: CanvasRenderingContext2D, top: number, bottom: number
  */
 function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
   for (const note of frame.longNotes) {
-    const alpha = note.state === 'dropped' ? DROPPED_LONG_NOTE_ALPHA : 1;
+    const alpha = (note.state === 'dropped' ? DROPPED_LONG_NOTE_ALPHA : 1) * (note.alpha ?? 1);
     const bodyTop = note.top - NOTE_HEIGHT;
     const bodyHeight = Math.max(1, note.bottom - note.top);
     ctx.fillStyle = NOTE_FILL[note.kind];
@@ -149,8 +149,10 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
     ctx.globalAlpha = 1;
   }
   for (const note of frame.notes) {
+    ctx.globalAlpha = note.alpha ?? 1;
     ctx.fillStyle = NOTE_FILL[note.kind];
     ctx.fillRect(note.x, note.y - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
+    ctx.globalAlpha = 1;
   }
 }
 

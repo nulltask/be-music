@@ -396,6 +396,7 @@ export type PlayIntent =
   | { readonly type: 'hi-speed'; readonly command: HiSpeedCommand }
   /** Move or switch a lane cover (beatoraja's cover buttons and wheel). */
   | { readonly type: 'cover'; readonly command: LaneCoverCommand }
+  | { readonly type: 'constant-visibility'; readonly durationMs?: number; readonly fadeMs?: number }
   | { readonly type: 'pause' }
   /** Give the play up, as holding ESC does. */
   | { readonly type: 'quit' }

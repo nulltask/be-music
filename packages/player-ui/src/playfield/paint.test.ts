@@ -38,6 +38,30 @@ function recorder(): BeMusicPlayfieldPaintContext & { calls: string[] } {
 }
 
 describe('playfield painters', () => {
+  it('multiplies timeline visibility by authored opacity without leaking it to later notes', () => {
+    const ctx = recorder();
+    paintNotes(ctx, {
+      measureLines: [{ side: '1P', x: 0, w: 50, y: 40, alpha: 0.5 }],
+      longNotes: [{ kind: 'white', x: 0, w: 10, top: 20, bottom: 60, state: 'dropped', alpha: 0.5 }],
+      notes: [
+        { kind: 'black', x: 10, w: 20, y: 60, alpha: 0.5 },
+        { kind: 'black', x: 10, w: 20, y: 70 },
+      ],
+      mines: [{ kind: 'white', x: 30, w: 20, y: 80, alpha: 0.25 }],
+    });
+    expect(ctx.calls).toEqual([
+      'fillRect 0,39,50,1 #e5efff 0.125',
+      'fillRect 0,14,10,40 #e5efff 0.075',
+      'fillRect 0,54,10,6 #e5efff 0.25',
+      'fillRect 0,14,10,6 #e5efff 0.25',
+      'fillRect 10,54,20,6 #88b9ff 0.5',
+      'fillRect 10,64,20,6 #88b9ff 1',
+      'fillRect 30,74,20,6 #ff5c6c 0.25',
+      'fillRect 32,76,16,2 #10151f 0.25',
+    ]);
+    expect(ctx.globalAlpha).toBe(1);
+  });
+
   it('lights a pressed lane with its beam and marks a held long note', () => {
     const ctx = recorder();
     paintLanes(ctx, {

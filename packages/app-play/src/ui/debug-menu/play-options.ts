@@ -151,6 +151,23 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       .addBinding(this.guiState, 'bpmGuide', { label: 'BPM GUIDE (beatoraja)' })
       .on('change', ({ value }) => this.setPlayOptions({ bpmGuide: value })),
   );
+  trackPlayOption(
+    folder
+      .addBinding(this.guiState, 'visualConstant', { label: 'Visual CONSTANT (beatoraja)' })
+      .on('change', ({ value }) => this.setPlayOptions({ visualConstant: value })),
+  );
+  folder
+    .addBinding(this.guiState, 'noteDurationMs', { label: 'Note duration (ms)', min: 1, max: 10000, step: 1 })
+    .on('change', ({ value }) => {
+      this.setPlayOptions({ noteDurationMs: value });
+      this.gameplayView?.controller.dispatch({ type: 'constant-visibility', durationMs: value });
+    });
+  folder
+    .addBinding(this.guiState, 'constantFadeMs', { label: 'CONSTANT fade (ms)', min: -1000, max: 1000, step: 1 })
+    .on('change', ({ value }) => {
+      this.setPlayOptions({ constantFadeMs: value });
+      this.gameplayView?.controller.dispatch({ type: 'constant-visibility', fadeMs: value });
+    });
   this.judgeTimingController = folder
     .addBinding(this.guiState, 'judgeTimingMs', { label: 'Judge timing (beatoraja, ms)', min: -500, max: 500, step: 1 })
     .on('change', ({ value }) => {
