@@ -142,3 +142,10 @@ test('START BPM is selectable and preserved by option validation', () => {
   expect(PLAY_OPTION_CHOICES.hsFix).toContain('STARTBPM');
   expect(resolvePlayOptions({ hsFix: 'STARTBPM' }).hsFix).toBe('STARTBPM');
 });
+
+test('offers the three confirmed beatoraja launcher algorithms only', () => {
+  for (const algorithm of ['combo', 'duration', 'lowest']) {
+    expect(resolvePlayOptionValue('judgeAlgorithm', algorithm)).toBe(algorithm);
+  }
+  expect(resolvePlayOptionValue('judgeAlgorithm', 'score')).toBeUndefined();
+});

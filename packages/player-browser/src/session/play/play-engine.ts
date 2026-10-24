@@ -82,6 +82,7 @@ export interface PlayEngineContext
       PlaySessionOptions,
       | 'autoPlay'
       | 'allowSeek'
+      | 'judgeAlgorithm'
       | 'longNoteModifier'
       | 'autoScratch1P'
       | 'autoScratch2P'
@@ -405,6 +406,7 @@ export function resolveReplayRecording(
     | 'hiddenSudden2P'
     | 'shutter'
     | 'laneCover'
+    | 'judgeAlgorithm'
     | 'longNoteModifier'
     | 'autoScratch1P'
     | 'autoScratch2P'
@@ -428,6 +430,7 @@ export function resolveReplayRecording(
     random1P: options.random1P,
     random2P: options.random2P,
     dpFlip: options.dpFlip,
+    judgeAlgorithm: options.judgeAlgorithm,
     longNoteModifier: options.longNoteModifier,
     autoScratch1P: options.autoScratch1P,
     autoScratch2P: options.autoScratch2P,
@@ -524,6 +527,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       onTempoChange: (change) => followTempoChange(ctx, change),
       // Only the selected side's scratch lanes are assisted by the engine.
       autoScratch: ctx.options.autoScratch1P === true || ctx.options.autoScratch2P === true,
+      judgeAlgorithm: ctx.options.replay?.play.judgeAlgorithm ?? ctx.options.judgeAlgorithm,
       longNoteModifier: ctx.options.replay?.play.longNoteModifier ?? ctx.options.longNoteModifier,
       autoScratch1P: ctx.options.autoScratch1P === true,
       autoScratch2P: ctx.options.autoScratch2P === true,

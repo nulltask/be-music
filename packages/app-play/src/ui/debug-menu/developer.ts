@@ -30,7 +30,7 @@ export function buildDeveloperFolder(this: DebugMenu, developer: FolderApi): voi
       beatoraja: 'beatoraja',
       '????': '____',
     }).on('change', () => {
-      this.refreshGaugeChoices();
+      this.refreshRulesetChoices();
       this.deps.refreshSelectRecords();
     }),
   );

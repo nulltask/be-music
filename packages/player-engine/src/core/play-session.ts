@@ -195,10 +195,18 @@ export async function createPlaySession(
   // The gauge the play runs on and the replay records: one value, so a re-simulation runs the same gauge. A host that
   // only declared it for the log (`recordReplay.gauge`) gets it played too.
   const selectedGauge = options.gauge ?? options.recordReplay?.gauge;
+  if (
+    options.judgeAlgorithm !== undefined &&
+    options.judgeAlgorithm !== 'combo' &&
+    options.judgeRuleset !== 'beatoraja'
+  ) {
+    throw new RangeError('Selectable judgment algorithms belong to beatoraja 0.8.9.');
+  }
   const ruleset = resolveRuleset(
     rulesetChartFactsFromChart(resolvedJSON, playbackChart, judgeRankChanges, options.stageRanks),
     options.judgeRuleset ?? 'lr2',
     {
+      ...(options.judgeAlgorithm !== undefined ? { judgeAlgorithm: options.judgeAlgorithm } : {}),
       ...(selectedGauge !== undefined ? { selectedGauge } : {}),
       ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
       ...(options.course !== undefined ? { course: courseStageRulesetOptions(options.course) } : {}),
@@ -255,6 +263,7 @@ export async function createPlaySession(
           play: {
             mode,
             autoScratch,
+            judgeAlgorithm: ruleset.rulesetId === 'beatoraja' ? (options.judgeAlgorithm ?? 'combo') : undefined,
             longNoteModifier: options.longNoteModifier,
             ...(options.autoScratch1P !== undefined || options.autoScratch2P !== undefined
               ? {

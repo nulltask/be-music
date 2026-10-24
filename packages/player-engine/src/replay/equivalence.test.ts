@@ -1239,3 +1239,21 @@ test('A-SCR & LEGACY NOTE retains both operations in the recorded effective setu
   expect(run.replay.results!.native!.judge).toMatchObject({ pgreat: 1, poor: 0 });
   expect(simulateReplay(run.replay, { ruleset: '____' }).judge).toEqual(run.replay.results!.native!.judge);
 });
+
+for (const judgeAlgorithm of ['combo', 'duration', 'lowest'] as const) {
+  test(`beatoraja ${judgeAlgorithm} selection is applied live and restored by replay simulation`, async () => {
+    const json = createEmptyJSON('bms');
+    json.metadata.bpm = 240;
+    json.metadata.rank = 2;
+    json.events = [
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 1, channel: '11', position: [4, 25], value: '01' },
+    ];
+    const run = await runRecordedPlay(json, [down(0, 1_120_000, '11')], 'beatoraja', { judgeAlgorithm });
+    expect(run.replay.play.judgeAlgorithm).toBe(judgeAlgorithm);
+    expect(run.replay.results!.native!.judge).toMatchObject(
+      judgeAlgorithm === 'lowest' ? { bad: 1, great: 0, poor: 1 } : { bad: 0, great: 1, poor: 1 },
+    );
+    expect(simulateReplay(run.replay, { ruleset: 'beatoraja' }).judge).toEqual(run.replay.results!.native!.judge);
+  });
+}

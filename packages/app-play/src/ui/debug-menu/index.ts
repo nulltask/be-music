@@ -186,6 +186,7 @@ export class DebugMenu {
   /** The "Hi-speed" slider — left enabled during a play (it applies live) and repainted by {@link refreshHiSpeed}. */
   public hiSpeedController: PaneBinding | undefined;
   public gaugeController: ListInputBindingApi<GaugeType> | undefined;
+  public judgeAlgorithmController: ListInputBindingApi<PlayOptions['judgeAlgorithm']> | undefined;
   /** The "Tempo (%)" slider — left enabled during a play whose tempo can change live (`allowsLiveTempo`). */
   public tempoController: PaneBinding | undefined;
   /** Debug Menu folder holding the active be-music skin's settings; hidden for a skin that declares none. */
@@ -384,7 +385,18 @@ export class DebugMenu {
     window.location.reload();
   }
   /** Repaints the "Play options" controllers after an external write (the LR2 select panel's edits). */
-  public refreshGaugeChoices(): void {
+  public refreshRulesetChoices(): void {
+    const beatoraja = this.guiState.judgeRuleset === 'beatoraja';
+    if (!beatoraja && this.guiState.judgeAlgorithm !== 'combo') {
+      this.guiState.judgeAlgorithm = 'combo';
+      this.setPlayOptions({ judgeAlgorithm: 'combo' });
+    }
+    if (this.judgeAlgorithmController) {
+      this.judgeAlgorithmController.options = beatoraja
+        ? paneOptions({ Combo: 'combo' as const, Duration: 'duration' as const, Lowest: 'lowest' as const })
+        : paneOptions({ 'Source default': 'combo' as const });
+      this.judgeAlgorithmController.refresh();
+    }
     const choices = resolveGaugeTypes(this.guiState.judgeRuleset);
     if (!choices.includes(this.guiState.gauge)) {
       this.guiState.gauge = 'GROOVE';

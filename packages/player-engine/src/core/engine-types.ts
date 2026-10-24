@@ -78,7 +78,8 @@ export interface CreatePlayerInputRuntimeContext {
 export interface PlayerPlaySettings {
   auto?: boolean;
   autoScratch?: boolean;
-  /** Source modifier applied before scoring and rendering. */
+  /** beatoraja's note-selection algorithm; other source rulesets retain their own fixed selection. */
+  judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
   longNoteModifier?: 'OFF' | 'LEGACY' | 'REMOVE';
   /** Independently assist the source play side; explicit values override autoScratch for that side. */
   autoScratch1P?: boolean;

@@ -35,7 +35,15 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       this.setPlayOptions({ gauge1P: value });
     }),
   );
-  this.refreshGaugeChoices();
+  this.judgeAlgorithmController = selectBinding(folder, this.guiState, 'judgeAlgorithm', 'Judge algorithm', {
+    Combo: 'combo',
+    Duration: 'duration',
+    Lowest: 'lowest',
+  });
+  trackPlayOption(
+    this.judgeAlgorithmController.on('change', ({ value }) => this.setPlayOptions({ judgeAlgorithm: value })),
+  );
+  this.refreshRulesetChoices();
   trackPlayOption(
     selectBinding(folder, this.guiState, 'random1P', 'Random 1P', RANDOM_CYCLE).on('change', ({ value }) => {
       this.setPlayOptions({ random1P: value });
