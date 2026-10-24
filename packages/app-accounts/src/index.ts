@@ -3,13 +3,13 @@ import { oauthProviderAuthServerMetadata, oauthProviderOpenIdConfigMetadata } fr
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { createAuth, provisionClients, type Env } from './auth.ts';
-import { renderAccountPage } from './page.ts';
+import { accountNotice, renderAccountPage } from './page.ts';
 import { CLIENT_JS } from './client.generated.ts';
 import { avatarURL } from './avatars.ts';
 import { profileHTTP } from './profile-http.ts';
 import { createProfile } from './profiles.ts';
 import { openDatabase } from './db/client.ts';
-import { profile, user } from './schema.ts';
+import { account, profile, user } from './schema.ts';
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -39,10 +39,18 @@ export default {
     if (['/', '/login', '/account'].includes(url.pathname) && request.method === 'GET') {
       const session = await auth.api.getSession({ headers: request.headers });
       let current;
+      let linkedDiscord = false;
+      let linkedGoogle = false;
       if (session) {
         const db = openDatabase(env.DB);
         await createProfile(db, session.user.id, session.user.isAnonymous === true);
         current = await db.query.profile.findFirst({ where: eq(profile.userId, session.user.id) });
+        const providers = await db
+          .select({ providerId: account.providerId })
+          .from(account)
+          .where(eq(account.userId, session.user.id));
+        linkedDiscord = providers.some((row) => row.providerId === 'discord');
+        linkedGoogle = providers.some((row) => row.providerId === 'google');
       }
       return new Response(
         renderAccountPage({
@@ -63,6 +71,9 @@ export default {
           login: url.pathname === '/login',
           discord: !!env.DISCORD_CLIENT_ID && !!env.DISCORD_CLIENT_SECRET,
           google: !!env.GOOGLE_CLIENT_ID && !!env.GOOGLE_CLIENT_SECRET,
+          linkedDiscord,
+          linkedGoogle,
+          notice: accountNotice(url.searchParams.get('error')),
           apps: JSON.parse(env.OIDC_CLIENTS) as Record<string, string>,
         }),
         {
