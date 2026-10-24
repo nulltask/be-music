@@ -249,3 +249,8 @@ test('mine ADD RANDOM is an independent selectable source modifier', () => {
 test('mine ADD NEAR is selectable by its source name', () => {
   expect(resolvePlayOptionValue('mineModifier', 'ADD_NEAR')).toBe('ADD_NEAR');
 });
+
+test('mine ADD ALL retains the source ADD_BLANK identifier', () => {
+  expect(resolvePlayOptionValue('mineModifier', 'ADD_BLANK')).toBe('ADD_BLANK');
+  expect(resolvePlayOptionValue('mineModifier', 'ADD_ALL')).toBeUndefined();
+});

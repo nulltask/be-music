@@ -134,7 +134,7 @@ test('mine REMOVE removes the same mines from the browser judgment and view bund
   expect(() => prepare({ judgeRuleset: 'lr2', mineModifier: 'REMOVE' }, entry)).toThrow(/only for beatoraja/);
 });
 
-test.each(['ADD_RANDOM', 'ADD_NEAR'] as const)(
+test.each(['ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'] as const)(
   '%s restores the exact generated mine population without rerolling for replay or fresh input',
   (mineModifier) => {
     const random = vi.spyOn(Math, 'random').mockReturnValue(0.99);

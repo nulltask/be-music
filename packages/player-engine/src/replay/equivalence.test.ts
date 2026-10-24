@@ -1290,7 +1290,7 @@ test('mine REMOVE also clears a host-prepared shared mine array before judging',
   expect(run.summary.minePoor ?? 0).toBe(0);
 });
 
-test.each(['ADD_RANDOM', 'ADD_NEAR'] as const)(
+test.each(['ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'] as const)(
   '%s silent mines retain their damage and judgments through serialized replay simulation',
   async (mineModifier) => {
     const json = chart([{ measure: 2, channel: '12', position: [0, 1], value: '01' }]);

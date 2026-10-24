@@ -120,6 +120,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     REMOVE: 'REMOVE',
     'ADD RANDOM': 'ADD_RANDOM',
     'ADD NEAR': 'ADD_NEAR',
+    'ADD ALL': 'ADD_BLANK',
   });
   trackPlayOption(
     this.mineModifierController.on('change', ({ value }) => this.setPlayOptions({ mineModifier: value })),
