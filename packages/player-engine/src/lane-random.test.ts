@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { randomizeSRandomNotes, type SRandomNote } from './lane-random.ts';
+import { randomizeSpiralNotes, randomizeSRandomNotes, type SRandomNote } from './lane-random.ts';
 import { resolveLaneOptionChannels } from './core/lane-layout.ts';
 
 const zero = () => 0;
@@ -170,5 +170,67 @@ describe('randomizeSRandomNotes', () => {
     expect(() =>
       randomizeSRandomNotes([{ channel: '11', timeMs: 0 }], ['11', '12'], { ruleset: 'lr2', random: () => draw }),
     ).toThrow(RangeError);
+  });
+});
+
+describe('randomizeSpiralNotes', () => {
+  test('advances once per occupied row, including scratch, other side, mines and hidden-only rows', () => {
+    const notes: SRandomNote[] = [
+      { channel: 'a', timeMs: 0 },
+      { channel: 'b', timeMs: 0 },
+      { channel: '16', timeMs: 1 },
+      { channel: '21', timeMs: 2 },
+      { channel: 'a', timeMs: 3, kind: 'mine' },
+      { channel: 'a', timeMs: 4, kind: 'invisible' },
+      { channel: 'a', timeMs: 5 },
+    ];
+    const original = structuredClone(notes);
+    expect(randomizeSpiralNotes(notes, ['a', 'b', 'c'], zero)).toEqual(['b', 'c', '16', '21', 'b', 'c', 'a']);
+    expect(notes).toEqual(original);
+  });
+
+  test('freezes until every overlapping LN ends, including exact tail-row chords', () => {
+    const notes: SRandomNote[] = [
+      { channel: 'a', timeMs: 0, endTimeMs: 20 },
+      { channel: 'b', timeMs: 5, endTimeMs: 30 },
+      { channel: 'c', timeMs: 20 },
+      { channel: 'a', timeMs: 25 },
+      { channel: 'a', timeMs: 30 },
+      { channel: 'a', timeMs: 31 },
+    ];
+    expect(randomizeSpiralNotes(notes, ['a', 'b', 'c'], zero)).toEqual(['b', 'c', 'a', 'b', 'b', 'c']);
+  });
+
+  test('visits an outside-domain LN tail even when no head occurs on that row', () => {
+    expect(
+      randomizeSpiralNotes(
+        [
+          { channel: '16', timeMs: 0, endTimeMs: 1 },
+          { channel: 'a', timeMs: 2 },
+        ],
+        ['a', 'b', 'c'],
+        zero,
+      ),
+    ).toEqual(['16', 'a']);
+  });
+
+  test('chooses each nonzero increment once and sorts rows without reordering output', () => {
+    const notes = [
+      { channel: 'a', timeMs: 2 },
+      { channel: 'a', timeMs: 0 },
+      { channel: 'a', timeMs: 1 },
+    ];
+    expect(randomizeSpiralNotes(notes, ['a', 'b', 'c', 'd'], () => 0.5)).toEqual(['c', 'c', 'a']);
+    expect(randomizeSpiralNotes(notes, ['a', 'b', 'c', 'd'], () => 0.99)).toEqual(['b', 'd', 'c']);
+  });
+
+  test('handles empty or single-lane domains without drawing, and rejects invalid randomness', () => {
+    const notes = [{ channel: 'a', timeMs: 0 }];
+    const fail = () => {
+      throw new Error('draw');
+    };
+    expect(randomizeSpiralNotes(notes, [], fail)).toEqual(['a']);
+    expect(randomizeSpiralNotes(notes, ['a'], fail)).toEqual(['a']);
+    expect(() => randomizeSpiralNotes(notes, ['a', 'b'], () => 1)).toThrow(RangeError);
   });
 });

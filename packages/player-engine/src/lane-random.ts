@@ -127,3 +127,49 @@ function randomizeLR2Notes(
   }
   return channels;
 }
+
+/**
+ * beatoraja 0.8.9 SPIRAL: choose one increment in [1, N-1], advance on every
+ * occupied timeline, and freeze through an active LN's tail timeline.
+ * Pass events from both sides, scratches, mines and hidden notes: upstream also
+ * visits timelines with no event in the modified key domain. Tail-only rows count.
+ */
+export function randomizeSpiralNotes(
+  notes: readonly SRandomNote[],
+  lanes: readonly string[],
+  random: () => number,
+): string[] {
+  const channels = notes.map((note) => note.channel);
+  lanes = [...new Set(lanes)];
+  if (lanes.length < 2) return channels;
+  const increment = lanes.indexOf(pickLane(lanes.slice(1), random));
+  const domain = new Map(lanes.map((lane, index) => [lane, index]));
+  const rows = new Map<number, number[]>();
+  notes.forEach((note, index) => {
+    const row = rows.get(note.timeMs);
+    if (row) row.push(index);
+    else rows.set(note.timeMs, [index]);
+    if (
+      (note.kind ?? 'note') === 'note' &&
+      note.endTimeMs !== undefined &&
+      note.endTimeMs > note.timeMs &&
+      !rows.has(note.endTimeMs)
+    )
+      rows.set(note.endTimeMs, []);
+  });
+  const held = new Map<string, number>();
+  let head = 0;
+  for (const [timeMs, indices] of [...rows].sort(([left], [right]) => left - right)) {
+    for (const [source, endMs] of held) if (endMs < timeMs) held.delete(source);
+    if (held.size === 0) head = (head + increment) % lanes.length;
+    for (const index of indices) {
+      const note = notes[index]!;
+      const source = domain.get(note.channel);
+      if (source === undefined) continue;
+      channels[index] = lanes[(source + head) % lanes.length]!;
+      if ((note.kind ?? 'note') === 'note' && note.endTimeMs !== undefined && note.endTimeMs > timeMs)
+        held.set(note.channel, Math.max(note.endTimeMs, held.get(note.channel) ?? note.endTimeMs));
+    }
+  }
+  return channels;
+}

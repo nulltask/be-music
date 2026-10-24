@@ -27,6 +27,7 @@ import { preparePlaybackChart, resolvePlayChart, type PreparedPlaybackChartData 
 import {
   isPlayableInputChannel,
   randomizeSRandomNotes,
+  randomizeSpiralNotes,
   resolveLaneOptionChannels,
   resolvePlayVariantLaneChannels,
 } from '@be-music/player-engine/lanes';
@@ -555,7 +556,7 @@ export function flipDPChannel(channel: string): string {
 export function applyRandomMode(
   notes: Array<{ channel: string }>,
   allLanes: readonly string[],
-  mode: 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SCATTER',
+  mode: 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SPIRAL' | 'SCATTER',
   rng: () => number,
   options: { ruleset?: RulesetId } = {},
   // Extra channel-bearing arrays: mines first, then invisible notes. Chart permutations share the same lane map;
@@ -566,35 +567,37 @@ export function applyRandomMode(
     throw new RangeError('SCATTER is disabled until placement and assist policy are implemented.');
   if (mode === 'R-RANDOM' && options.ruleset !== 'beatoraja' && options.ruleset !== '____')
     throw new RangeError('R-RANDOM is unavailable for LR2.');
+  if (mode === 'SPIRAL' && options.ruleset !== 'beatoraja')
+    throw new RangeError('SPIRAL is available only for beatoraja.');
   if (mode === 'OFF') return;
-  if (mode === 'S-RANDOM') {
+  if (mode === 'S-RANDOM' || mode === 'SPIRAL') {
     const entries = [
       ...notes.map((note) => ({ note, kind: 'note' as const })),
       ...secondary.flatMap((arr, index) =>
         arr.map((note) => ({ note, kind: index === 0 ? ('mine' as const) : ('invisible' as const) })),
       ),
     ];
-    const channels = randomizeSRandomNotes(
-      entries.map(({ note, kind }) => {
-        const timed = note as {
-          channel: string;
-          seconds?: number;
-          endSeconds?: number;
-          beat?: number;
-          endBeat?: number;
-        };
-        return {
-          channel: timed.channel,
-          timeMs: (timed.seconds ?? timed.beat ?? 0) * 1000,
-          ...(timed.endSeconds !== undefined || timed.endBeat !== undefined
-            ? { endTimeMs: (timed.endSeconds ?? timed.endBeat!) * 1000 }
-            : {}),
-          kind,
-        };
-      }),
-      allLanes,
-      { ruleset: options.ruleset ?? 'lr2', random: rng },
-    );
+    const timedNotes = entries.map(({ note, kind }) => {
+      const timed = note as {
+        channel: string;
+        seconds?: number;
+        endSeconds?: number;
+        beat?: number;
+        endBeat?: number;
+      };
+      return {
+        channel: timed.channel,
+        timeMs: (timed.seconds ?? timed.beat ?? 0) * 1000,
+        ...(timed.endSeconds !== undefined || timed.endBeat !== undefined
+          ? { endTimeMs: (timed.endSeconds ?? timed.endBeat!) * 1000 }
+          : {}),
+        kind,
+      };
+    });
+    const channels =
+      mode === 'SPIRAL'
+        ? randomizeSpiralNotes(timedNotes, allLanes, rng)
+        : randomizeSRandomNotes(timedNotes, allLanes, { ruleset: options.ruleset ?? 'lr2', random: rng });
     entries.forEach(({ note }, index) => {
       note.channel = channels[index]!;
     });

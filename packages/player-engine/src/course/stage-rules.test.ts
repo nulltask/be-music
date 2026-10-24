@@ -145,3 +145,9 @@ test('grade_random keeps R-RANDOM while grade and grade_mirror constrain it', ()
   for (const constraint of ['grade', 'grade_mirror'] as const)
     expect(resolveCourseLaneOptions([constraint], picked)).toEqual({ random1P: 'OFF', random2P: 'OFF', dpFlip: false });
 });
+
+test('grade_random permits SPIRAL at source option index 5', () => {
+  const picked = { random1P: 'SPIRAL', random2P: 'SPIRAL', dpFlip: false } as const;
+  expect(resolveCourseLaneOptions(['grade_random'], picked)).toEqual(picked);
+  expect(resolveCourseLaneOptions(['grade'], picked)).toEqual({ random1P: 'OFF', random2P: 'OFF', dpFlip: false });
+});
