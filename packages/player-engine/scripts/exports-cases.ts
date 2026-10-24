@@ -1191,6 +1191,19 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
       );
     },
   });
+  define('player-engine.lanes.randomizePMSPlayableLanes', {
+    run: () => {
+      lanesAPI.randomizePMSPlayableLanes(
+        [
+          { channel: '11', timeMs: 0 },
+          { channel: '14', timeMs: 0 },
+          { channel: '17', timeMs: 0 },
+        ],
+        ['11', '12', '13', '14', '15', '16', '17', '18', '19'],
+        () => 0.5,
+      );
+    },
+  });
   define('player-engine.lanes.randomizeSpiralNotes', {
     run: () => {
       lanesAPI.randomizeSpiralNotes(

@@ -74,7 +74,9 @@ export const RANDOM_CYCLE: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', '
 export function resolveRandomModes(ruleset: RulesetId): readonly RandomMode[] {
   if (ruleset === 'lr2') return [...RANDOM_CYCLE, 'CONVERGE'];
   const ordinary: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', 'R-RANDOM', 'S-RANDOM'];
-  return ruleset === 'beatoraja' ? [...ordinary, 'SPIRAL', 'H-RANDOM', 'ALL-SCR', 'RANDOM-EX', 'CONVERGE'] : ordinary;
+  return ruleset === 'beatoraja'
+    ? [...ordinary, 'SPIRAL', 'H-RANDOM', 'ALL-SCR', 'RANDOM-EX', 'CONVERGE', 'RANDOM_PLAYABLE']
+    : ordinary;
 }
 
 /** The play options a player starts with. */
