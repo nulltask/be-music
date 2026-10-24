@@ -507,6 +507,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
         : {}),
       hRandomThresholdBPM: playOptions.hRandomThresholdBPM,
       mineModifier: playOptions.mineModifier,
+      longNoteRate: playOptions.longNoteRate,
       gaugeAutoShift: playOptions.gaugeAutoShift,
       randomSeed1P: playOptions.randomSeed1P,
       randomSeed2P: playOptions.randomSeed2P,

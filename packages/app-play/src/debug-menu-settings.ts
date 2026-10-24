@@ -85,6 +85,7 @@ export interface DebugMenuSettings {
   bpmGuide: boolean;
   judgeAlgorithm: PlayerGUIState['judgeAlgorithm'];
   longNoteModifier: PlayerGUIState['longNoteModifier'];
+  longNoteRate: number;
   mineModifier: PlayerGUIState['mineModifier'];
   gaugeAutoShift: PlayerGUIState['gaugeAutoShift'];
   autoScratch1P: boolean;
@@ -237,7 +238,8 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'judgeAlgorithm', oneOf(raw.judgeAlgorithm, ['combo', 'duration', 'lowest'] as const));
   assign(settings, 'gaugeAutoShift', resolvePlayOptionValue('gaugeAutoShift', raw.gaugeAutoShift));
   assign(settings, 'mineModifier', resolvePlayOptionValue('mineModifier', raw.mineModifier));
-  assign(settings, 'longNoteModifier', oneOf(raw.longNoteModifier, ['OFF', 'LEGACY', 'REMOVE'] as const));
+  assign(settings, 'longNoteRate', resolvePlayOptionValue('longNoteRate', raw.longNoteRate));
+  assign(settings, 'longNoteModifier', resolvePlayOptionValue('longNoteModifier', raw.longNoteModifier));
   assign(settings, 'autoScratch1P', booleanOf(raw.autoScratch1P));
   assign(settings, 'autoScratch2P', booleanOf(raw.autoScratch2P));
   assign(settings, 'playInSilentMode', booleanOf(raw.playInSilentMode));
@@ -450,6 +452,7 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('fixedDisplayArea');
   assignState('judgeAlgorithm');
   assignState('longNoteModifier');
+  assignState('longNoteRate');
   assignState('mineModifier');
   assignState('gaugeAutoShift');
   assignState('autoScratch1P');
@@ -536,6 +539,7 @@ export function captureDebugMenuSettings(
     fixedDisplayArea: state.fixedDisplayArea,
     judgeAlgorithm: state.judgeAlgorithm,
     longNoteModifier: state.longNoteModifier,
+    longNoteRate: state.longNoteRate,
     mineModifier: state.mineModifier,
     gaugeAutoShift: state.gaugeAutoShift,
     autoScratch1P: state.autoScratch1P,

@@ -30,6 +30,7 @@ const gui: GUIPlayOptions = {
   fixedDisplayArea: false,
   judgeAlgorithm: 'duration',
   longNoteModifier: 'REMOVE',
+  longNoteRate: 1,
   mineModifier: 'OFF',
   gaugeAutoShift: 'NONE',
   autoScratch1P: true,
@@ -75,6 +76,7 @@ describe('playOptionsFromGUI', () => {
       fixedDisplayArea: false,
       judgeAlgorithm: 'duration',
       longNoteModifier: 'REMOVE',
+      longNoteRate: 1,
       mineModifier: 'OFF',
       gaugeAutoShift: 'NONE',
       autoScratch1P: true,
@@ -129,6 +131,7 @@ describe('copyPlayOptionsToGUI', () => {
       mineModifier: 'OFF',
       gaugeAutoShift: 'NONE',
       longNoteModifier: 'OFF',
+      longNoteRate: 1,
       autoScratch1P: false,
       autoScratch2P: false,
       sort: 'TITLE',
@@ -237,6 +240,17 @@ describe('previous arrangement selection', () => {
     expect(service.arrangementFor('chart')).toBeUndefined();
     service.reusePreviousArrangement();
     service.clearArrangement();
+    expect(service.arrangementFor('chart')).toBeUndefined();
+  });
+  test('restores the source addition rate and clears the pinned layout when that rate changes', () => {
+    const service = new PlayOptionsService();
+    const replay = previous();
+    replay.play.longNoteModifier = 'ADD_LN';
+    replay.play.longNoteRate = 0.375;
+    service.rememberArrangement('chart', replay);
+    expect(service.reusePreviousArrangement()).toMatchObject({ longNoteModifier: 'ADD_LN', longNoteRate: 0.375 });
+    expect(service.arrangementFor('chart')).toBeDefined();
+    service.update({ longNoteRate: 0.5 });
     expect(service.arrangementFor('chart')).toBeUndefined();
   });
 });

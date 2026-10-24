@@ -225,3 +225,45 @@ test('added-mine replay restores original mine lanes before source-aware arrange
     play.mineNotes.map((mine) => `${mine.event.channel}:${mine.channel}:${mine.beat}`).sort();
   expect(mineIdentity(fresh)).toEqual(mineIdentity(original));
 });
+
+test('generated LN replay and previous layout restore original heads and endpoints before shuffled-channel matching', () => {
+  const entry = {
+    ...chart,
+    chartPath: 'generated-ln.bms',
+    chart: parseChart('#BPM 120\n#00011:01\n#00012:02\n#00001:0001\n#00111:01', 'bms'),
+  };
+  const random = vi.spyOn(Math, 'random').mockReturnValue(0);
+  try {
+    const original = prepare(
+      { judgeRuleset: 'beatoraja', longNoteModifier: 'ADD_LN', longNoteRate: 0.5, random1P: 'MIRROR' },
+      entry,
+    );
+    const replay = parseReplay(
+      serializeReplay(
+        createReplayRecorder({
+          json: entry.chart,
+          chart: original.preparedChart!,
+          play: {
+            mode: 'manual',
+            autoScratch: false,
+            judgeRuleset: 'beatoraja',
+            longNoteModifier: 'ADD_LN',
+            longNoteRate: 0.5,
+          },
+        }).finalize({ summary: { ...createEmptyScore(original.notes.length), fast: 0, slow: 0 } }),
+      ),
+    );
+    expect(replay.chart.notes.filter((note) => note.generatedLongNote)).toHaveLength(2);
+    random.mockReturnValue(0.99);
+    for (const options of [{ replay }, { fixedArrangement: replay, autoPlay: false }]) {
+      const restored = prepare({ judgeRuleset: 'beatoraja', ...options }, entry);
+      expect(restored.notes.map((note) => [note.channel, note.endBeat, note.event.value, note.longNoteMode])).toEqual(
+        original.notes.map((note) => [note.channel, note.endBeat, note.event.value, note.longNoteMode]),
+      );
+      expect(restored.preparedChart!.longNoteModifierChangeCount).toBe(2);
+    }
+    expect(() => prepare({ judgeRuleset: 'lr2', longNoteModifier: 'ADD_LN' }, entry)).toThrow(/only for beatoraja/);
+  } finally {
+    random.mockRestore();
+  }
+});

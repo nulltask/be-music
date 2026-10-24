@@ -123,6 +123,7 @@ export interface PlayChartContext {
       | 'nonstop'
       | 'judgeRuleset'
       | 'longNoteModifier'
+      | 'longNoteRate'
       | 'mineModifier'
       | 'autoScratch1P'
       | 'autoScratch2P'
@@ -189,6 +190,8 @@ export interface PlayChartContext {
 
 export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): void {
   const arrangement = ctx.options.replay ?? ctx.options.fixedArrangement;
+  if (!arrangement && ctx.options.longNoteModifier === 'ADD_LN' && ctx.options.judgeRuleset !== 'beatoraja')
+    throw new RangeError('Long-note addition is available only for beatoraja.');
   if (ctx.options.fixedDisplayArea && (ctx.options.replay?.play.judgeRuleset ?? ctx.options.judgeRuleset) !== '____')
     throw new RangeError('Fixed display area is available only for its source ruleset.');
   if (ctx.options.floatingHiSpeed && (ctx.options.replay?.play.judgeRuleset ?? ctx.options.judgeRuleset) !== '____')
@@ -309,6 +312,19 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     {
       laneModeExtension: extractChartExtension(ctx.chart?.chartPath),
       longNoteModifier: arrangement?.play.longNoteModifier ?? ctx.options.longNoteModifier,
+      longNoteRate: arrangement?.play.longNoteRate ?? ctx.options.longNoteRate,
+      ...(arrangement?.play.longNoteModifier === 'ADD_LN'
+        ? {
+            longNoteModifierPlacements: arrangement.chart.notes
+              .filter((note) => note.generatedLongNote)
+              .map((note) => ({
+                sourceChannel: note.sourceChannel ?? note.channel,
+                timeUs: note.timeUs,
+                endTimeUs: note.endTimeUs!,
+                lnMode: note.lnMode!,
+              })),
+          }
+        : {}),
       mineModifier: arrangement?.play.mineModifier ?? ctx.options.mineModifier,
       ...(arrangement?.play.mineModifier?.startsWith('ADD_')
         ? {

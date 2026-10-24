@@ -355,3 +355,27 @@ for (const skin of ['plain', 'native'] as const) {
     await player.waitForResult(1);
   });
 }
+
+for (const skin of ['plain', 'native'] as const) {
+  test(`ADD LN generates and reopens its recorded long notes on ${skin}`, async ({ player }) => {
+    await player.open({ 'be-music.built-in-skin': skin });
+    await player.dropText('add-ln.bme', '#TITLE Add long notes\n#BPM 240\n#00111:01\n#00101:0001\n#00212:01\n');
+    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+    await player.setOption(['Play options'], 'Long notes', 'ADD LN (beatoraja)');
+    await player.setOption(['Play options'], 'Long-note add rate (beatoraja)', 1);
+    await player.setOption(['Play options'], 'Auto play', true);
+    await player.cursorTo((bar) => bar.title === 'Add long notes', 'long-note addition chart');
+    await player.key('Enter');
+    await player.waitForResult(0);
+    const replay = await player.lastReplay();
+    expect(replay?.play).toMatchObject({ longNoteModifier: 'ADD_LN', longNoteRate: 1, longNoteModifierChangeCount: 1 });
+    expect(replay?.chart.notes.filter((note) => note.generatedLongNote)).toEqual([
+      expect.objectContaining({ type: 'long', lnMode: 1, timeUs: 1_000_000, endTimeUs: 1_500_000 }),
+    ]);
+    await player.leaveResult();
+    await player.setOption(['Play options'], 'Long notes', 'OFF');
+    await player.dropText('add-ln.bmplay.json', JSON.stringify(replay));
+    await player.waitFor((state) => state.scene.kind === 'play' && state.play?.replay === true, 'generated-LN replay');
+    await player.waitForResult(1);
+  });
+}

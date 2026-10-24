@@ -1,5 +1,5 @@
 import { clampFloatingHiSpeed } from './floating-hi-speed.ts';
-import { clampHRandomThresholdBPM, parseLaneRandomSeed } from '@be-music/player-engine/lanes';
+import { clampLongNoteRate, clampHRandomThresholdBPM, parseLaneRandomSeed } from '@be-music/player-engine/lanes';
 import { resolveConstantVisibility } from './constant-visibility.ts';
 import { clampJudgeTimingMs } from './judge-timing.ts';
 import { clamp } from '@be-music/shared-utils/core';
@@ -126,6 +126,7 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   liftOn2P: false,
   judgeAlgorithm: 'combo',
   longNoteModifier: 'OFF',
+  longNoteRate: 1,
   mineModifier: 'OFF',
   gaugeAutoShift: 'NONE',
   autoScratch1P: false,
@@ -162,7 +163,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   liftOn1P: BOOLEAN_CYCLE,
   liftOn2P: BOOLEAN_CYCLE,
   judgeAlgorithm: ['combo', 'duration', 'lowest'],
-  longNoteModifier: ['OFF', 'LEGACY', 'REMOVE'],
+  longNoteModifier: ['OFF', 'LEGACY', 'REMOVE', 'ADD_LN'],
   mineModifier: ['OFF', 'REMOVE', 'ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'],
   gaugeAutoShift: ['NONE', 'CONTINUE'],
   classicHiSpeed: BOOLEAN_CYCLE,
@@ -200,6 +201,7 @@ export function clampShutter(value: number): number {
 /** Numeric play options, each with the clamp applied to a value set for it. */
 const NUMERIC_PLAY_OPTION_CLAMPS: { readonly [K in keyof PlayOptions]?: (value: number) => number } = {
   hRandomThresholdBPM: clampHRandomThresholdBPM,
+  longNoteRate: clampLongNoteRate,
   randomFixedLane1P: (value) => (Number.isFinite(value) ? Math.max(0, Math.min(9, Math.trunc(value))) : 0),
   randomFixedLane2P: (value) => (Number.isFinite(value) ? Math.max(0, Math.min(9, Math.trunc(value))) : 0),
   hiSpeed: clampHiSpeed,

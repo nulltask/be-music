@@ -260,3 +260,10 @@ test('gauge auto-shift defaults to source NONE and accepts CONTINUE', () => {
   expect(resolvePlayOptionValue('gaugeAutoShift', 'CONTINUE')).toBe('CONTINUE');
   expect(resolvePlayOptionValue('gaugeAutoShift', 'REVIVE')).toBeUndefined();
 });
+
+test('ADD LN has the source default rate and clamps the configurable source probability', () => {
+  expect(DEFAULT_PLAY_OPTIONS.longNoteRate).toBe(1);
+  expect(resolvePlayOptionValue('longNoteModifier', 'ADD_LN')).toBe('ADD_LN');
+  expect(resolvePlayOptionValue('longNoteRate', 0.375)).toBe(0.375);
+  expect(resolvePlayOptionValue('longNoteRate', 2)).toBe(1);
+});

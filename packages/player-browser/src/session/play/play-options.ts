@@ -150,7 +150,8 @@ export interface PlaySessionOptions {
   coverKeys?: boolean;
   /** beatoraja's note-selection algorithm. */
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
-  longNoteModifier?: 'OFF' | 'LEGACY' | 'REMOVE';
+  longNoteModifier?: import('@be-music/player-scene-model').PlayOptions['longNoteModifier'];
+  longNoteRate?: number;
   mineModifier?: import('@be-music/player-scene-model').PlayOptions['mineModifier'];
   gaugeAutoShift?: import('@be-music/player-scene-model').PlayOptions['gaugeAutoShift'];
   /**

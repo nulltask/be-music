@@ -220,6 +220,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   bpmGuide: boolean;
   judgeAlgorithm: PlayOptions['judgeAlgorithm'];
   longNoteModifier: PlayOptions['longNoteModifier'];
+  longNoteRate: number;
   mineModifier: PlayOptions['mineModifier'];
   gaugeAutoShift: PlayOptions['gaugeAutoShift'];
   autoScratch1P: boolean;

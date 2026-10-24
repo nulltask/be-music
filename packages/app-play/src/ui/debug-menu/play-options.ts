@@ -151,12 +151,27 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       this.setPlayOptions({ autoScratch2P: value });
     }),
   );
+  this.longNoteModifierController = selectBinding(folder, this.guiState, 'longNoteModifier', 'Long notes', {
+    OFF: 'OFF',
+    'LEGACY NOTE (AC 34)': 'LEGACY',
+    'LN REMOVE (beatoraja)': 'REMOVE',
+    'ADD LN (beatoraja)': 'ADD_LN',
+  });
   trackPlayOption(
-    selectBinding(folder, this.guiState, 'longNoteModifier', 'Long notes', {
-      OFF: 'OFF',
-      'LEGACY NOTE (AC 34)': 'LEGACY',
-      'LN REMOVE (beatoraja)': 'REMOVE',
-    }).on('change', ({ value }) => this.setPlayOptions({ longNoteModifier: value })),
+    this.longNoteModifierController.on('change', ({ value }) => {
+      this.setPlayOptions({ longNoteModifier: value });
+      this.refreshRulesetChoices();
+    }),
+  );
+  this.longNoteRateController = trackPlayOption(
+    folder
+      .addBinding(this.guiState, 'longNoteRate', {
+        label: 'Long-note add rate (beatoraja)',
+        min: 0,
+        max: 1,
+        step: 0.01,
+      })
+      .on('change', ({ value }) => this.setPlayOptions({ longNoteRate: value })),
   );
   this.trackPlayOption(
     folder.addButton({ title: 'A-SCR & LEGACY NOTE (AC 34)' }).on('click', () => {

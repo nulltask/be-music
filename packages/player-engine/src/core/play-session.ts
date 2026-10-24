@@ -188,12 +188,18 @@ export async function createPlaySession(
       {
         laneModeExtension: options.laneModeExtension,
         longNoteModifier: options.longNoteModifier,
+        longNoteRate: options.longNoteRate,
+        longNoteModifierPlacements: options.longNoteModifierPlacements,
         mineModifier: options.mineModifier,
         mineModifierPlacements: options.mineModifierPlacements,
       },
       realtimeAudioEndSeconds,
       Math.random,
     );
+  if (options.longNoteModifier === 'ADD_LN' && playbackChart.longNoteModifierApplied !== options.longNoteModifier)
+    throw new RangeError('The shared prepared chart must include the selected long-note modifier.');
+  if (options.longNoteModifier === 'ADD_LN' && (options.judgeRuleset ?? 'lr2') !== 'beatoraja')
+    throw new RangeError('Long-note addition is available only for beatoraja.');
   if (options.mineModifier?.startsWith('ADD_') && playbackChart.mineModifierApplied !== options.mineModifier)
     throw new RangeError('The shared prepared chart must include the selected mine modifier.');
   if (options.mineModifier === 'REMOVE') {
@@ -297,6 +303,12 @@ export async function createPlaySession(
               ? {
                   mineModifier: options.mineModifier,
                   mineModifierChangeCount: playbackChart.mineModifierChangeCount ?? 0,
+                }
+              : {}),
+            ...(options.longNoteModifier === 'ADD_LN'
+              ? {
+                  longNoteRate: playbackChart.longNoteModifierRate ?? 1,
+                  longNoteModifierChangeCount: playbackChart.longNoteModifierChangeCount ?? 0,
                 }
               : {}),
             gaugeAutoShift: options.gaugeAutoShift,

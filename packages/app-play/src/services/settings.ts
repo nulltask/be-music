@@ -257,6 +257,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     fixedDisplayArea: false,
     judgeAlgorithm: 'combo',
     longNoteModifier: 'OFF',
+    longNoteRate: 1,
     mineModifier: 'OFF',
     gaugeAutoShift: 'NONE',
     autoScratch1P: false,
