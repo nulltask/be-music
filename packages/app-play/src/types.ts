@@ -194,9 +194,10 @@ export interface PlayerGUIState extends PlayTempoSettings {
   /** Gauge variant for the next play. Two-way synced with the LR2 select scene's PLAY OPTION panel. */
   gauge: GaugeType;
   /** 1P lane arrangement for the next play. Two-way synced with the LR2 select panel. */
-  random1P: 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SPIRAL' | 'SCATTER';
+  hRandomThresholdBPM: number;
+  random1P: 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SPIRAL' | 'H-RANDOM' | 'SCATTER';
   /** 2P lane arrangement for the next play. Two-way synced with the LR2 select panel. */
-  random2P: 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SPIRAL' | 'SCATTER';
+  random2P: 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SPIRAL' | 'H-RANDOM' | 'SCATTER';
   /** DP FLIP for the next play. Two-way synced with the LR2 select panel. */
   dpFlip: boolean;
   /** 1P auto scratch for the next play. Two-way synced with the LR2 select panel. */

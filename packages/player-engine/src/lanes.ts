@@ -24,6 +24,13 @@ export {
   type LaneModeOptions,
 } from './core/lane-layout.ts';
 
-export { randomizeSpiralNotes, randomizeSRandomNotes, type SRandomNote, type SRandomOptions } from './lane-random.ts';
+export {
+  randomizeHRandomNotes,
+  clampHRandomThresholdBPM,
+  randomizeSpiralNotes,
+  randomizeSRandomNotes,
+  type SRandomNote,
+  type SRandomOptions,
+} from './lane-random.ts';
 
 export { resolveAutoScratchSides, resolveAutoScratchChannels, type AutoScratchOptions } from './core/auto-scratch.ts';

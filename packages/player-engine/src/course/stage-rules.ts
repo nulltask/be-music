@@ -21,7 +21,15 @@ export function resolveCourseStageSettings(definition: CourseDefinition): Omit<R
 }
 
 /** The lane options a host offers, as the select screen names them. */
-export type CourseLaneOption = 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SPIRAL' | 'SCATTER';
+export type CourseLaneOption =
+  | 'OFF'
+  | 'MIRROR'
+  | 'RANDOM'
+  | 'R-RANDOM'
+  | 'S-RANDOM'
+  | 'SPIRAL'
+  | 'H-RANDOM'
+  | 'SCATTER';
 
 /** The lane options of a play: each side's lane option and DP FLIP. */
 export interface CourseLaneOptions {

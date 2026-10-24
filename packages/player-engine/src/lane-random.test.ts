@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { randomizeSpiralNotes, randomizeSRandomNotes, type SRandomNote } from './lane-random.ts';
+import {
+  randomizeHRandomNotes,
+  clampHRandomThresholdBPM,
+  randomizeSpiralNotes,
+  randomizeSRandomNotes,
+  type SRandomNote,
+} from './lane-random.ts';
 import { resolveLaneOptionChannels } from './core/lane-layout.ts';
 
 const zero = () => 0;
@@ -233,4 +239,68 @@ describe('randomizeSpiralNotes', () => {
     expect(randomizeSpiralNotes(notes, ['a'], fail)).toEqual(['a']);
     expect(() => randomizeSpiralNotes(notes, ['a', 'b'], () => 1)).toThrow(RangeError);
   });
+});
+
+describe('randomizeHRandomNotes', () => {
+  test.each([125, 125.999, 126])('uses the strict 125-integer-ms threshold by default (%s)', (timeMs) => {
+    expect(
+      randomizeHRandomNotes(
+        [
+          { channel: 'a', timeMs: 0 },
+          { channel: 'a', timeMs },
+        ],
+        ['a', 'b'],
+        { random: zero },
+      ),
+    ).toEqual(['a', timeMs >= 126 ? 'a' : 'b']);
+  });
+  test.each([50, 50.999, 51])('the configured BPM changes the threshold (%s)', (timeMs) => {
+    expect(
+      randomizeHRandomNotes(
+        [
+          { channel: 'a', timeMs: 0 },
+          { channel: 'a', timeMs },
+        ],
+        ['a', 'b'],
+        { random: zero, thresholdBPM: 300 },
+      ),
+    ).toEqual(['a', timeMs >= 51 ? 'a' : 'b']);
+  });
+  test('falls back to the oldest free lane and reserves holds through their tail', () => {
+    const notes: SRandomNote[] = [
+      { channel: 'a', timeMs: 0, endTimeMs: 300 },
+      { channel: 'b', timeMs: 1 },
+      { channel: 'b', timeMs: 2 },
+      { channel: 'b', timeMs: 300 },
+      { channel: 'b', timeMs: 301 },
+    ];
+    const original = structuredClone(notes);
+    expect(randomizeHRandomNotes(notes, ['a', 'b', 'c'], { random: zero })).toEqual(['a', 'b', 'c', 'b', 'a']);
+    expect(notes).toEqual(original);
+  });
+  test('mine and hidden rows consume permutations without updating scoring timestamps', () => {
+    const notes: SRandomNote[] = [
+      { channel: 'a', timeMs: 0, kind: 'mine' },
+      { channel: 'a', timeMs: 1, kind: 'invisible' },
+      { channel: '16', timeMs: 2, endTimeMs: 3 },
+      { channel: 'a', timeMs: 4 },
+    ];
+    let draws = 0;
+    expect(
+      randomizeHRandomNotes(notes, ['a', 'b'], {
+        random: () => {
+          draws += 1;
+          return 0;
+        },
+      }),
+    ).toEqual(['a', 'a', '16', 'a']);
+    expect(draws).toBe(10); // five timelines, including the outside-domain tail
+  });
+});
+
+test('H-RANDOM threshold BPM follows the versioned PlayerConfig range and default', () => {
+  expect(clampHRandomThresholdBPM(Number.NaN)).toBe(120);
+  expect(clampHRandomThresholdBPM(0)).toBe(1);
+  expect(clampHRandomThresholdBPM(1001)).toBe(1000);
+  expect(clampHRandomThresholdBPM(300.9)).toBe(300);
 });

@@ -350,3 +350,17 @@ test('SPIRAL applies one row permutation to notes, mines and hidden notes, leavi
   expect(notes[0]!.endSeconds).toBe(1);
   expect(() => applyRandomMode([], [], 'SPIRAL', () => 0, { ruleset: '____' })).toThrow(/only for beatoraja/);
 });
+
+test('H-RANDOM applies its configured source threshold and rejects other rulesets', () => {
+  const prepare = () => [
+    { channel: '11', seconds: 0 },
+    { channel: '11', seconds: 0.1 },
+  ];
+  const slow = prepare(),
+    fast = prepare();
+  applyRandomMode(slow, ['11', '12'], 'H-RANDOM', () => 0, { ruleset: 'beatoraja', hRandomThresholdBPM: 120 });
+  applyRandomMode(fast, ['11', '12'], 'H-RANDOM', () => 0, { ruleset: 'beatoraja', hRandomThresholdBPM: 300 });
+  expect(channelsOf(slow)).toEqual(['11', '12']);
+  expect(channelsOf(fast)).toEqual(['11', '11']);
+  expect(() => applyRandomMode([], [], 'H-RANDOM', () => 0, { ruleset: '____' })).toThrow(/only for beatoraja/);
+});

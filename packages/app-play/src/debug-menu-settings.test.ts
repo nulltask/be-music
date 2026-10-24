@@ -122,6 +122,7 @@ describe('captureDebugMenuSettings', () => {
       judgeRuleset: 'beatoraja',
       gauge: 'HARD',
       random1P: 'SCATTER',
+      hRandomThresholdBPM: 120,
       random2P: 'MIRROR',
       dpFlip: true,
       bpmGuide: true,
@@ -207,4 +208,12 @@ test('persists both sides of R-RANDOM in Debug Menu settings', () => {
   expect(
     parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
   ).toMatchObject(settings);
+});
+
+test('persists and validates the H-RANDOM source configuration', () => {
+  expect(
+    parseDebugMenuSettingsDocument(
+      JSON.stringify({ version: 1, updatedAt: 1, settings: { random1P: 'H-RANDOM', hRandomThresholdBPM: 300 } }),
+    )?.settings,
+  ).toMatchObject({ random1P: 'H-RANDOM', hRandomThresholdBPM: 300 });
 });

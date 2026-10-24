@@ -227,3 +227,8 @@ test('the recorded snapshot reflects course restrictions and an AUTO start inste
     ).options,
   ).toMatchObject({ autoPlay: true, gauge1P: 'HARD', random1P: 'OFF', autoScratch1P: false });
 });
+
+test('records the effective H-RANDOM threshold alongside the arrangement selection', () => {
+  const recording = resolveReplayRecording({ random1P: 'H-RANDOM', hRandomThresholdBPM: 1200 }, undefined, VIEW);
+  expect(recording.options).toMatchObject({ random1P: 'H-RANDOM', hRandomThresholdBPM: 1000 });
+});

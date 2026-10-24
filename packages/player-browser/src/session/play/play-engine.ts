@@ -15,7 +15,7 @@ import {
   type PlayerSummary,
   type PreparedPlaybackChartData,
 } from '@be-music/player-engine';
-import { resolveLR2LaneIndex } from '@be-music/player-engine/lanes';
+import { resolveLR2LaneIndex, clampHRandomThresholdBPM } from '@be-music/player-engine/lanes';
 import type {
   PlayerInputSignalBus,
   PlayerGaugeSummary,
@@ -97,6 +97,7 @@ export interface PlayEngineContext
       | 'onExit'
       | 'onRestart'
       | 'replayRecorder'
+      | 'hRandomThresholdBPM'
       | 'random1P'
       | 'random2P'
       | 'replay'
@@ -397,6 +398,7 @@ export function resolveReplayRecording(
     | 'chartSHA256'
     | 'chartMD5'
     | 'replayRecorder'
+    | 'hRandomThresholdBPM'
     | 'random1P'
     | 'random2P'
     | 'dpFlip'
@@ -457,6 +459,8 @@ export function resolveReplayRecording(
     laneCover: options.laneCover,
     gauge1P: options.gauge,
     random1P: options.random1P,
+    hRandomThresholdBPM:
+      options.hRandomThresholdBPM === undefined ? undefined : clampHRandomThresholdBPM(options.hRandomThresholdBPM),
     random2P: options.random2P,
     dpFlip: options.dpFlip,
     judgeAlgorithm: options.judgeAlgorithm,

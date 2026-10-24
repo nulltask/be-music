@@ -168,3 +168,12 @@ test('SPIRAL is a beatoraja choice only', () => {
   expect(resolveRandomModes('lr2')).not.toContain('SPIRAL');
   expect(resolvePlayOptionValue('random1P', 'SPIRAL')).toBe('SPIRAL');
 });
+
+test('H-RANDOM is beatoraja-only and the source threshold is validated', () => {
+  expect(resolveRandomModes('beatoraja')).toContain('H-RANDOM');
+  expect(resolveRandomModes('lr2')).not.toContain('H-RANDOM');
+  expect(resolveRandomModes('____')).not.toContain('H-RANDOM');
+  expect(resolvePlayOptionValue('hRandomThresholdBPM', 0)).toBe(1);
+  expect(resolvePlayOptionValue('hRandomThresholdBPM', 2000)).toBe(1000);
+  expect(DEFAULT_PLAY_OPTIONS.hRandomThresholdBPM).toBe(120);
+});
