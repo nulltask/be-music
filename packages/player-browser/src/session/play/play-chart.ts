@@ -243,9 +243,9 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   if (
     ctx.options.replay === undefined &&
     hostPlayVariant === '9' &&
-    (ctx.options.random1P === 'ALL-SCR' || ctx.options.random2P === 'ALL-SCR')
+    [ctx.options.random1P, ctx.options.random2P].some((mode) => mode === 'ALL-SCR' || mode === 'RANDOM-EX')
   )
-    throw new RangeError('beatoraja PMS uses its own arrangements; ALL-SCR requires scratch lanes.');
+    throw new RangeError('beatoraja PMS uses its own arrangements; ALL-SCR and RANDOM-EX require scratch lanes.');
   const resolvedPlay = resolveChart(resolved, {
     randomDraws,
     playVariant: hostPlayVariant,
@@ -622,7 +622,10 @@ export function applyRandomMode(
     throw new RangeError('SCATTER is disabled until placement and assist policy are implemented.');
   if (mode === 'R-RANDOM' && options.ruleset !== 'beatoraja' && options.ruleset !== '____')
     throw new RangeError('R-RANDOM is unavailable for LR2.');
-  if ((mode === 'SPIRAL' || mode === 'H-RANDOM' || mode === 'ALL-SCR') && options.ruleset !== 'beatoraja')
+  if (
+    (mode === 'SPIRAL' || mode === 'H-RANDOM' || mode === 'ALL-SCR' || mode === 'RANDOM-EX') &&
+    options.ruleset !== 'beatoraja'
+  )
     throw new RangeError(`${mode} is available only for beatoraja.`);
   if (mode === 'CONVERGE' && (options.ruleset ?? 'lr2') !== 'lr2')
     throw new RangeError('CONVERGE is available only for LR2.');
@@ -676,7 +679,9 @@ export function applyRandomMode(
     });
     return;
   }
-  const domainLanes = allLanes;
+  if (mode === 'RANDOM-EX' && (options.scratchLanes?.length ?? 0) === 0)
+    throw new RangeError('RANDOM-EX requires scratch lanes.');
+  const domainLanes = mode === 'RANDOM-EX' ? [...allLanes, ...options.scratchLanes!] : allLanes;
   if (domainLanes.length < 2) return;
 
   const remapAll = (map: Map<string, string>): void => {
@@ -715,7 +720,7 @@ export function applyRandomMode(
     return;
   }
 
-  if (mode === 'RANDOM') {
+  if (mode === 'RANDOM' || mode === 'RANDOM-EX') {
     const perm = shuffleArray([...domainLanes], rng);
 
     const map = new Map<string, string>();
