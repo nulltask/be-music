@@ -651,3 +651,13 @@ describe('practice start', () => {
     expect(isJudgeCoreSettled(state)).toBe(true);
   });
 });
+
+test('input filtering leaves the unassisted scratch side playable', () => {
+  const mapped = resolveJudgeInputChannels(
+    { autoScratch: true, scratchChannels: new Set(['16', '26']), autoScratchChannels: new Set(['16']) },
+    new Map([['both', ['16', '26']]]),
+    new Set(),
+    ['both'],
+  );
+  expect([...mapped]).toEqual(['26']);
+});

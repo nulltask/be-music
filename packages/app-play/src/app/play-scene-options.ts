@@ -132,8 +132,8 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     // Replay playback restores the RECORDED play setup: the log's auto-scratch / gauge / judge ruleset govern
     // judging and the gauge readout, and the lane transforms stay off because the view re-applies the recorded
     // arrangement directly (see `PlaySceneOptions.replay`).
-    autoScratch1P: replay !== undefined ? replay.play.autoScratch : lanes.autoScratch1P,
-    autoScratch2P: replay !== undefined ? false : lanes.autoScratch2P,
+    autoScratch1P: replay !== undefined ? (replay.play.autoScratch1P ?? replay.play.autoScratch) : lanes.autoScratch1P,
+    autoScratch2P: replay !== undefined ? (replay.play.autoScratch2P ?? replay.play.autoScratch) : lanes.autoScratch2P,
     dpFlip: replay !== undefined ? false : lanes.dpFlip,
     random1P: replay !== undefined ? ('OFF' as const) : lanes.random1P,
     random2P: replay !== undefined ? ('OFF' as const) : lanes.random2P,

@@ -560,7 +560,7 @@ export function startHCNPassing(state: JudgeCoreState, note: TimedPlayableNote, 
   if (endSeconds === undefined || resolveRulesetLongNoteMode(config.ruleset.longNoteStyle, note) !== 3) {
     return;
   }
-  if (config.autoScratch && config.scratchChannels.has(note.channel)) {
+  if (config.autoScratch && (config.autoScratchChannels ?? config.scratchChannels).has(note.channel)) {
     return;
   }
   for (let passing = state.hcnPassing.get(note.channel); passing !== undefined; passing = passing.next) {

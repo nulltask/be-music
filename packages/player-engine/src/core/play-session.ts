@@ -1,3 +1,4 @@
+import { resolveAutoScratchSides } from './auto-scratch.ts';
 import {
   createBeatAtSecondsResolverFromTimingResolver,
   isPlayLaneSoundChannel,
@@ -151,7 +152,8 @@ export async function createPlaySession(
   const resolvedJSON = controlFlowResolution.resolvedJSON;
   options.onResolvedChart?.(resolvedJSON);
   const randomPatternSummary = formatRandomPatternSummary(controlFlowResolution.randomPatterns);
-  const autoScratch = mode === 'manual' && options.autoScratch === true;
+  const scratchSides = resolveAutoScratchSides(options);
+  const autoScratch = mode === 'manual' && (scratchSides.autoScratch1P || scratchSides.autoScratch2P);
   const speed = options.speed ?? 1;
   const tempoClock = createTempoClock(speed);
   const leadInMs = options.leadInMs ?? 1500;
@@ -249,6 +251,12 @@ export async function createPlaySession(
           play: {
             mode,
             autoScratch,
+            ...(options.autoScratch1P !== undefined || options.autoScratch2P !== undefined
+              ? {
+                  autoScratch1P: mode === 'manual' && scratchSides.autoScratch1P,
+                  autoScratch2P: mode === 'manual' && scratchSides.autoScratch2P,
+                }
+              : {}),
             judgeWindowOverrideMs: options.judgeWindowMs,
             judgeRuleset: options.judgeRuleset,
             ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),

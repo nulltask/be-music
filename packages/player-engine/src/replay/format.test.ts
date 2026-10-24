@@ -441,3 +441,19 @@ test('replay round-trip preserves mixed NONSTOP rank units and absolute TOTAL', 
     }),
   ).toThrow(/stageRanks/);
 });
+
+test('preserves independent AUTO SCRATCH sides and rejects non-boolean switches', () => {
+  const replay = makeReplay();
+  replay.play.autoScratch1P = false;
+  replay.play.autoScratch2P = true;
+  expect(parseReplay(serializeReplay(replay)).play).toMatchObject({
+    autoScratch: true,
+    autoScratch1P: false,
+    autoScratch2P: true,
+  });
+  for (const key of ['autoScratch1P', 'autoScratch2P']) {
+    const invalid = JSON.parse(serializeReplay(replay));
+    invalid.play[key] = 1;
+    expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
+  }
+});

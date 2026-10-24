@@ -25,3 +25,5 @@ export {
 } from './core/lane-layout.ts';
 
 export { randomizeSRandomNotes, type SRandomNote, type SRandomOptions } from './lane-random.ts';
+
+export { resolveAutoScratchSides, resolveAutoScratchChannels, type AutoScratchOptions } from './core/auto-scratch.ts';

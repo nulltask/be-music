@@ -57,6 +57,8 @@ export interface ReplayRecorderPlaySettings {
   options?: ReplayOptionState;
   mode: 'manual' | 'auto';
   autoScratch: boolean;
+  autoScratch1P?: boolean;
+  autoScratch2P?: boolean;
   /** The gauge the engine ran (`PlayerOptions.gauge`, else `recordReplay.gauge`); `GROOVE` when neither is set. */
   gauge?: GaugeType;
   randomLane?: { p1?: string; p2?: string };
@@ -259,6 +261,8 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       if (options.play.tempo !== undefined && options.play.tempo !== 1) play.tempo = options.play.tempo;
       if (tempoChanges.length > 0) play.tempoChanges = tempoChanges.map((change) => ({ ...change }));
       if (options.play.view !== undefined) play.view = structuredClone(options.play.view);
+      if (options.play.autoScratch1P !== undefined) play.autoScratch1P = options.play.autoScratch1P;
+      if (options.play.autoScratch2P !== undefined) play.autoScratch2P = options.play.autoScratch2P;
       if (initialOptions !== undefined) play.options = { ...initialOptions };
       if (optionChanges.length > 0) play.optionChanges = structuredClone(optionChanges);
       if (viewChanges.length > 0) play.viewChanges = structuredClone(viewChanges);

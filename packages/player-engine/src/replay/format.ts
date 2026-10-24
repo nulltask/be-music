@@ -174,6 +174,9 @@ export interface ReplayPlay {
   optionChanges?: ReplayOptionChange[];
   mode: 'manual' | 'auto';
   autoScratch: boolean;
+  /** Effective manual assist per side; older replays fall back to autoScratch for both. */
+  autoScratch1P?: boolean;
+  autoScratch2P?: boolean;
   /** Gauge the player selected for the session (declared by the host; LR2-family gauge id). */
   gauge: GaugeType;
   /** Lane-arrangement option per side, when the host applied one (`'OFF'` / `'MIRROR'` / `'RANDOM'` / ...). */
@@ -615,6 +618,12 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
   if (play.viewChanges !== undefined) {
     const changes = parseReplayViewChanges(play.viewChanges, 'play.viewChanges');
     if (changes.length > 0) parsed.viewChanges = changes;
+  }
+  for (const key of ['autoScratch1P', 'autoScratch2P'] as const) {
+    if (play[key] !== undefined) {
+      if (typeof play[key] !== 'boolean') throw new ReplayParseError(`play.${key}: expected a boolean`);
+      parsed[key] = play[key];
+    }
   }
   if (play.options !== undefined) parsed.options = parseReplayOptionState(play.options);
   if (play.optionChanges !== undefined) parsed.optionChanges = parseReplayOptionChanges(play.optionChanges);
