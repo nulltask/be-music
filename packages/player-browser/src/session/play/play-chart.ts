@@ -79,6 +79,7 @@ export interface PlayChartContext {
     Pick<
       PlaySessionOptions,
       | 'hsFix'
+      | 'classicHiSpeed'
       | 'preResolved'
       | 'hiSpeedLocked'
       | 'hiddenSudden1P'
@@ -410,10 +411,11 @@ function createChartPlayState(
   resolver: TimingResolver,
   referenceBPM: number | undefined,
 ): PlayState {
-  const hsFix = ctx.options.hsFix ?? 'OFF';
+  const hsFix = ctx.options.classicHiSpeed ? 'OFF' : (ctx.options.hsFix ?? 'OFF');
   const mainBPM = ctx.chartBPMRange?.mainBPM;
   const hiSpeed = createHiSpeedState({
     hiSpeed: ctx.playState.view.hiSpeed.player,
+    classic: ctx.options.classicHiSpeed,
     multiplier: resolveHSFixMultiplier(hsFix, {
       ...(referenceBPM !== undefined ? { referenceBPM } : {}),
       startBPM: ctx.resolvedChart?.metadata.bpm || ctx.chart?.bpm || resolver.tempoPoints[0]?.bpm,

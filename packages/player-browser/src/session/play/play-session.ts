@@ -124,6 +124,7 @@ export class PlaySession extends PlaySessionState {
       view: {
         hiSpeed: createHiSpeedState({
           ...(options.initialHiSpeed !== undefined ? { hiSpeed: options.initialHiSpeed } : {}),
+          classic: options.classicHiSpeed,
           locked: options.hiSpeedLocked === true,
         }),
       },

@@ -237,6 +237,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     random1P: 'OFF',
     random2P: 'OFF',
     dpFlip: false,
+    classicHiSpeed: false,
     judgeAlgorithm: 'combo',
     longNoteModifier: 'OFF',
     autoScratch1P: false,

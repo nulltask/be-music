@@ -64,6 +64,7 @@ export interface DebugMenuSettings {
   random1P: RandomMode;
   random2P: RandomMode;
   dpFlip: boolean;
+  classicHiSpeed: boolean;
   judgeAlgorithm: PlayerGUIState['judgeAlgorithm'];
   longNoteModifier: PlayerGUIState['longNoteModifier'];
   autoScratch1P: boolean;
@@ -200,6 +201,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'courseAutoAdvance', booleanOf(raw.courseAutoAdvance));
   assign(settings, 'submitToLeaderboard', booleanOf(raw.submitToLeaderboard));
   assign(settings, 'dpFlip', booleanOf(raw.dpFlip));
+  assign(settings, 'classicHiSpeed', booleanOf(raw.classicHiSpeed));
   assign(settings, 'judgeAlgorithm', oneOf(raw.judgeAlgorithm, ['combo', 'duration', 'lowest'] as const));
   assign(settings, 'longNoteModifier', oneOf(raw.longNoteModifier, ['OFF', 'LEGACY', 'REMOVE'] as const));
   assign(settings, 'autoScratch1P', booleanOf(raw.autoScratch1P));
@@ -385,6 +387,7 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('random1P');
   assignState('random2P');
   assignState('dpFlip');
+  assignState('classicHiSpeed');
   assignState('judgeAlgorithm');
   assignState('longNoteModifier');
   assignState('autoScratch1P');
@@ -450,6 +453,7 @@ export function captureDebugMenuSettings(
     random1P: state.random1P,
     random2P: state.random2P,
     dpFlip: state.dpFlip,
+    classicHiSpeed: state.classicHiSpeed,
     judgeAlgorithm: state.judgeAlgorithm,
     longNoteModifier: state.longNoteModifier,
     autoScratch1P: state.autoScratch1P,

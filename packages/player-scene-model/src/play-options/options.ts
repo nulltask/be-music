@@ -14,6 +14,8 @@ export interface PlayOptions {
    * scaling moves. Range matches gameplay's runtime adjust hotkeys (`ArrowUp` / `ArrowDown` during play).
    */
   hiSpeed: number;
+  /** AC 34 CLASSIC HI-SPEED; false retains the source default controls. */
+  classicHiSpeed: boolean;
   /**
    * When `true`, every note auto-judges as PERFECT at its scheduled time. Mirrors the LR2 AUTOPLAY skin button
    * (`#SRC_BUTTON type=16`). Starting a chart in AUTO from the select screen (its `start` with `autoPlay`, such as a
