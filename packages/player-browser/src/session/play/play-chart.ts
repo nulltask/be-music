@@ -412,6 +412,7 @@ function createChartPlayState(
     hiSpeed: ctx.playState.view.hiSpeed.player,
     multiplier: resolveHSFixMultiplier(hsFix, {
       ...(referenceBPM !== undefined ? { referenceBPM } : {}),
+      startBPM: ctx.resolvedChart?.metadata.bpm || ctx.chart?.bpm || resolver.tempoPoints[0]?.bpm,
       bpms: resolver.tempoPoints.map((point) => point.bpm),
       ...(mainBPM !== undefined ? { mainBPM } : {}),
     }),

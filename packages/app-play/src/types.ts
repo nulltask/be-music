@@ -2,7 +2,7 @@ import type { DecideScene, PlayScene, ResultScene, SelectScene } from '@be-music
 import type { SkinFamilyId } from '@be-music/player-browser/skin';
 import type { ReplayPlaybackOptions } from '@be-music/player-engine/replay';
 import type { GaugeType, RulesetId } from '@be-music/player-engine/ruleset';
-import type { BrowseSort, DifficultyFilter, KeysFilter } from '@be-music/player-scene-model';
+import type { BrowseSort, DifficultyFilter, KeysFilter, HSFix } from '@be-music/player-scene-model';
 import type { PlayTempoSettings } from './play-tempo-settings.ts';
 
 /** Every screen the player shows, each made by its `create*Scene`. */
@@ -185,6 +185,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
    * reloads.
    */
   hiSpeed: number;
+  hsFix: HSFix;
   /** Gauge variant for the next play. Two-way synced with the LR2 select scene's PLAY OPTION panel. */
   gauge: GaugeType;
   /** 1P lane arrangement for the next play. Two-way synced with the LR2 select panel. */

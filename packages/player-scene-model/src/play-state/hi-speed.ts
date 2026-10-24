@@ -22,6 +22,8 @@ export interface HSFixTempo {
   readonly bpms: readonly number[];
   /** The BPM most notes sit at (beatoraja's MAINBPM). */
   readonly mainBPM?: number;
+  /** The chart header BPM, independent of the reference (#BASEBPM) and any beat-zero tempo change. */
+  readonly startBPM?: number;
 }
 
 /**
@@ -38,7 +40,13 @@ export function resolveHSFixMultiplier(mode: HSFix, tempo: HSFixTempo): number {
   const bpms = tempo.bpms.map((bpm) => Math.abs(bpm)).filter((bpm) => Number.isFinite(bpm) && bpm > 0);
   if (bpms.length === 0) return 1;
   const target =
-    mode === 'MAXBPM' ? Math.max(...bpms) : mode === 'MINBPM' ? Math.min(...bpms) : (tempo.mainBPM ?? referenceBPM);
+    mode === 'STARTBPM'
+      ? (tempo.startBPM ?? bpms[0]!)
+      : mode === 'MAXBPM'
+        ? Math.max(...bpms)
+        : mode === 'MINBPM'
+          ? Math.min(...bpms)
+          : (tempo.mainBPM ?? referenceBPM);
   const multiplier = referenceBPM / target;
   return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1;
 }

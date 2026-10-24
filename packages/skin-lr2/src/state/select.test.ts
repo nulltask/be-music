@@ -404,3 +404,8 @@ describe('resolveLR2BarLevel', () => {
     expect(resolveLR2BarLevel(makeChart({ playLevel: '?' }))).toBeUndefined();
   });
 });
+
+it('keeps LR2 HS-FIX sprite cells in range when START is selected externally', () => {
+  const state = resolveLR2SelectState({ options: { ...DEFAULT_PLAY_OPTIONS, hsFix: 'STARTBPM' } });
+  expect(state.button(LR2_BUTTON.HS_FIX)).toBe(0);
+});

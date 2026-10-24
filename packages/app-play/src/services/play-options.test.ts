@@ -14,6 +14,7 @@ const gui: GUIPlayOptions = {
   keysFilter: 'KEYS_7',
   difficultyFilter: 'HYPER',
   hiSpeed: 3.5,
+  hsFix: 'STARTBPM',
 };
 
 describe('playOptionsFromGUI', () => {
@@ -30,6 +31,7 @@ describe('playOptionsFromGUI', () => {
       keysFilter: 'KEYS_7',
       difficultyFilter: 'HYPER',
       hiSpeed: 3.5,
+      hsFix: 'STARTBPM',
     });
   });
 });
@@ -58,6 +60,7 @@ describe('copyPlayOptionsToGUI', () => {
       keysFilter: 'ALL',
       difficultyFilter: 'ALL',
       hiSpeed: 2,
+      hsFix: 'OFF',
     });
   });
 });

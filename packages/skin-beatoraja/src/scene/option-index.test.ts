@@ -19,6 +19,7 @@ describe('beatoraja image-index properties', () => {
   test('translates the selected HS reference to beatoraja indices', () => {
     for (const [hsFix, index] of [
       ['OFF', 0],
+      ['STARTBPM', 1],
       ['MAXBPM', 2],
       ['MINBPM', 4],
       ['AVERAGE', 3],

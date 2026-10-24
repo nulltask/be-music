@@ -9,6 +9,7 @@ import {
   HISPEED_STEP,
   KEYS_FILTER_CYCLE,
   RANDOM_CYCLE,
+  PLAY_OPTION_CHOICES,
   SORT_CYCLE,
 } from '@be-music/player-scene-model';
 import { storeReplayView } from '../../replay-view-settings.ts';
@@ -83,6 +84,11 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
         this.setPlayOptions({ difficultyFilter: value });
       },
     ),
+  );
+  trackPlayOption(
+    selectBinding(folder, this.guiState, 'hsFix', 'HS-FIX', PLAY_OPTION_CHOICES.hsFix!).on('change', ({ value }) => {
+      this.setPlayOptions({ hsFix: value });
+    }),
   );
   // Hi-speed — the same range and step as the in-game `ArrowUp` / `ArrowDown` keys. Unlike the options above it is
   // visual only, so it stays enabled during a play and applies to it live.

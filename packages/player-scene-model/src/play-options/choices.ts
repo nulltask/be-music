@@ -108,7 +108,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   difficultyFilter: DIFFICULTY_FILTER_CYCLE,
   keysFilter: KEYS_FILTER_CYCLE,
   sort: SORT_CYCLE,
-  hsFix: HS_FIX_CYCLE,
+  hsFix: [...HS_FIX_CYCLE, 'STARTBPM'],
   hiddenSudden1P: HIDDEN_SUDDEN_CYCLE,
   hiddenSudden2P: HIDDEN_SUDDEN_CYCLE,
   laneCover: BOOLEAN_CYCLE,

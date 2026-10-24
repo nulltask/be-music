@@ -3,7 +3,7 @@
  * draws it. `createPlayScene` takes them as its `settings`, `course`, `replay`, `preResolved`, `audio` and `on`.
  */
 
-import type { CourseView, PlayResult } from '@be-music/player-scene-model';
+import type { CourseView, PlayResult, HSFix } from '@be-music/player-scene-model';
 import type { GameplayLayoutMode } from '@be-music/player-skin-sdk';
 import type { NonstopStitchMap } from '@be-music/player-engine/course';
 import type {
@@ -97,7 +97,7 @@ export interface PlaySessionOptions {
    * chart-prepare time so the user's chosen HS feels consistent across BPM changes. `'CONSTANT'` falls back to
    * `'AVERAGE'` for now — true per-frame BPM-aware scrolling needs a render-pipeline change that hasn't landed yet.
    */
-  hsFix?: 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT';
+  hsFix?: HSFix;
   /**
    * HIDDEN / SUDDEN / HID+SUD effect picked from `#SRC_BUTTON,type=50/51`:
    *

@@ -13,6 +13,15 @@ describe('resolveHSFixMultiplier', () => {
     expect(resolveHSFixMultiplier('CONSTANT', tempo)).toBe(1.25);
   });
 
+  test('anchors START to the header independently of BASEBPM, main BPM and a beat-zero tempo change', () => {
+    expect(
+      resolveHSFixMultiplier('STARTBPM', { referenceBPM: 150, startBPM: 180, bpms: [300, 75], mainBPM: 120 }),
+    ).toBeCloseTo(150 / 180);
+    expect(resolveHSFixMultiplier('STARTBPM', { referenceBPM: 150, bpms: [300, 75] })).toBe(0.5);
+    expect(resolveHSFixMultiplier('STARTBPM', { referenceBPM: 150, startBPM: 0, bpms: [300] })).toBe(1);
+    expect(resolveHSFixMultiplier('STARTBPM', { referenceBPM: 150, startBPM: Number.NaN, bpms: [300] })).toBe(1);
+  });
+
   test('reads a negative BPM at its magnitude and falls back to the reference without a main BPM', () => {
     expect(resolveHSFixMultiplier('MAXBPM', { referenceBPM: 150, bpms: [150, -600] })).toBe(0.25);
     expect(resolveHSFixMultiplier('AVERAGE', { referenceBPM: 150, bpms: [150] })).toBe(1);

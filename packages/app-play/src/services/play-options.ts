@@ -1,6 +1,6 @@
 // The play options the player hands to every screen and play: the full `PlayOptions`, kept here rather than read back
 // from the select screen. The Debug Menu holds some of them itself (auto play, gauge, lane options, assists, sort and
-// filters, hi-speed); the rest (HS-FIX, HIDDEN / SUDDEN, the lane cover, BGA, the score graph, the 2P gauge) are only
+// filters, hi-speed); the rest (HIDDEN / SUDDEN, the lane cover, BGA, the score graph, the 2P gauge) are only
 // changed on a select screen, and live here between screens, so a select screen made again (another skin system or
 // theme) starts from them.
 
@@ -21,6 +21,7 @@ export type GUIPlayOptions = Pick<
   | 'keysFilter'
   | 'difficultyFilter'
   | 'hiSpeed'
+  | 'hsFix'
 >;
 
 /** The Debug Menu's play options as `PlayOptions` fields. */
@@ -37,6 +38,7 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     keysFilter: state.keysFilter,
     difficultyFilter: state.difficultyFilter,
     hiSpeed: state.hiSpeed,
+    hsFix: state.hsFix,
   };
 }
 
@@ -45,6 +47,7 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
  * agree. The hi-speed is left to the caller, which also remembers it for the next visit.
  */
 export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIPlayOptions): void {
+  state.hsFix = options.hsFix;
   state.autoPlay = options.autoPlay;
   state.gauge = options.gauge1P;
   state.random1P = options.random1P;
