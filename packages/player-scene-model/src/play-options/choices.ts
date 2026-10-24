@@ -159,7 +159,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   liftOn2P: BOOLEAN_CYCLE,
   judgeAlgorithm: ['combo', 'duration', 'lowest'],
   longNoteModifier: ['OFF', 'LEGACY', 'REMOVE'],
-  mineModifier: ['OFF', 'REMOVE'],
+  mineModifier: ['OFF', 'REMOVE', 'ADD_RANDOM'],
   classicHiSpeed: BOOLEAN_CYCLE,
   bpmGuide: BOOLEAN_CYCLE,
   visualConstant: BOOLEAN_CYCLE,

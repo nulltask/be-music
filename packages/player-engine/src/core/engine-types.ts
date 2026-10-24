@@ -1,3 +1,4 @@
+import type { MineModifier, MinePlacement } from './mine-modifier.ts';
 import { type ChartPlayVariant, type RandomDraws, type ResolvedChart } from '@be-music/chart-model';
 import type { LogEntry } from '@be-music/shared-utils/log';
 import { type BeMusicEvent, type BeMusicJSON } from '@be-music/chart-source';
@@ -81,7 +82,7 @@ export interface PlayerPlaySettings {
   /** beatoraja's note-selection algorithm; other source rulesets retain their own fixed selection. */
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
   longNoteModifier?: 'OFF' | 'LEGACY' | 'REMOVE';
-  mineModifier?: 'OFF' | 'REMOVE';
+  mineModifier?: MineModifier;
   /** Independently assist the source play side; explicit values override autoScratch for that side. */
   autoScratch1P?: boolean;
   autoScratch2P?: boolean;
@@ -196,6 +197,8 @@ export interface PlayerPlayRuntime {
    * runs its own `preparePlaybackChartData` internally, just like before.
    */
   preparedChart?: PreparedPlaybackChartData;
+  /** Recorded mine population for deterministic playback of a generated mine option. */
+  mineModifierPlacements?: readonly MinePlacement[];
   createUIRuntime?: (context: CreatePlayerUIRuntimeContext) => Promise<PlayerUIRuntime | undefined>;
   createInputRuntime?: (context: CreatePlayerInputRuntimeContext) => PlayerInputRuntime | undefined;
   /** The host's audio backend. Omitted or returning undefined means playback without audio. */

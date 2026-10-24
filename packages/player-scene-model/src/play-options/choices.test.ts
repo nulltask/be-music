@@ -241,3 +241,7 @@ test('mine REMOVE is a separate source option from invisible-note or graphics se
   expect(resolvePlayOptionValue('mineModifier', 'REMOVE')).toBe('REMOVE');
   expect(resolvePlayOptionValue('mineModifier', 'HIDE')).toBeUndefined();
 });
+
+test('mine ADD RANDOM is an independent selectable source modifier', () => {
+  expect(resolvePlayOptionValue('mineModifier', 'ADD_RANDOM')).toBe('ADD_RANDOM');
+});

@@ -1,7 +1,7 @@
-import { expect, test } from 'vite-plus/test';
+import { expect, test, vi } from 'vite-plus/test';
 import { parseChart } from '@be-music/chart-parser';
 import { resolvePlayChart } from '@be-music/player-engine';
-import { createReplayRecorder } from '@be-music/player-engine/replay';
+import { createReplayRecorder, parseReplay, serializeReplay } from '@be-music/player-engine/replay';
 import { createEmptyScore } from '@be-music/player-engine/ruleset';
 import { DEFAULT_PLAY_OPTIONS, type LibraryChart } from '@be-music/player-scene-model';
 import { PlaySession } from './play-session.ts';
@@ -132,4 +132,45 @@ test('mine REMOVE removes the same mines from the browser judgment and view bund
   expect(play.mineNotes).toEqual([]);
   expect(play.preparedChart!.mineModifierChangeCount).toBe(1);
   expect(() => prepare({ judgeRuleset: 'lr2', mineModifier: 'REMOVE' }, entry)).toThrow(/only for beatoraja/);
+});
+
+test('ADD RANDOM restores the exact generated mine population without rerolling for replay or fresh input', () => {
+  const random = vi.spyOn(Math, 'random').mockReturnValue(0.99);
+  try {
+    const original = prepare({ judgeRuleset: 'beatoraja', mineModifier: 'ADD_RANDOM' });
+    const replay = parseReplay(
+      serializeReplay(
+        createReplayRecorder({
+          json: chart.chart,
+          chart: original.preparedChart!,
+          play: {
+            mode: 'manual',
+            autoScratch: false,
+            judgeRuleset: 'beatoraja',
+            mineModifier: 'ADD_RANDOM',
+            mineModifierChangeCount: original.preparedChart!.mineModifierChangeCount,
+          },
+        }).finalize({ summary: { ...createEmptyScore(original.notes.length), fast: 0, slow: 0 } }),
+      ),
+    );
+    expect(replay.chart.notes.filter((note) => note.type === 'mine').length).toBeGreaterThan(0);
+    expect(
+      replay.chart.notes.filter((note) => note.type === 'mine').every((note) => note.silent && note.damage === 10),
+    ).toBe(true);
+    random.mockReturnValue(0);
+    for (const options of [{ replay }, { fixedArrangement: replay, autoPlay: false }]) {
+      const restored = prepare({ judgeRuleset: 'beatoraja', ...options });
+      const population = (play: typeof original) =>
+        play.mineNotes.map((mine) => ({
+          channel: mine.channel,
+          timeUs: Math.round(mine.seconds * 1e6),
+          damage: mine.event.bmson?.damage,
+          silent: mine.silent,
+        }));
+      expect(population(restored)).toEqual(population(original));
+      expect(restored.preparedChart!.mineModifierChangeCount).toBe(original.preparedChart!.mineModifierChangeCount);
+    }
+  } finally {
+    random.mockRestore();
+  }
 });

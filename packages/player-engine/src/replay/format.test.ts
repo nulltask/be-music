@@ -524,3 +524,14 @@ test('mine modifiers and actual change counts round-trip with strict validation'
       ReplayParseError,
     );
 });
+
+test('generated mine modes and silent mine flags round-trip with type validation', () => {
+  const replay = makeReplay();
+  replay.play.mineModifier = 'ADD_RANDOM';
+  replay.chart.notes.push({ id: 999, channel: '16', type: 'mine', timeUs: 0, damage: 10, silent: true });
+  const parsed = parseReplay(serializeReplay(replay));
+  expect(parsed.play.mineModifier).toBe('ADD_RANDOM');
+  expect(parsed.chart.notes.at(-1)?.silent).toBe(true);
+  replay.chart.notes.at(-1)!.type = 'normal';
+  expect(() => parseReplay(serializeReplay(replay))).toThrow(ReplayParseError);
+});
