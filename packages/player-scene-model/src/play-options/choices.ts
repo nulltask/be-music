@@ -1,5 +1,5 @@
 import { clamp } from '@be-music/shared-utils/core';
-import { GAUGE_TYPES } from '@be-music/player-engine/ruleset';
+import { LR2_GAUGE_TYPES, isGaugeType } from '@be-music/player-engine/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
 import { DEFAULT_HISPEED, snapHiSpeed } from './hi-speed.ts';
 import type {
@@ -121,8 +121,8 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   dpFlip: BOOLEAN_CYCLE,
   random1P: RANDOM_CYCLE,
   random2P: RANDOM_CYCLE,
-  gauge1P: GAUGE_TYPES,
-  gauge2P: GAUGE_TYPES,
+  gauge1P: LR2_GAUGE_TYPES,
+  gauge2P: LR2_GAUGE_TYPES,
 };
 
 /**
@@ -160,6 +160,7 @@ export function resolvePlayOptionValue<K extends keyof PlayOptions>(
   value: unknown,
 ): PlayOptions[K] | undefined {
   if (!Object.hasOwn(DEFAULT_PLAY_OPTIONS, key)) return undefined;
+  if (key === 'gauge1P' || key === 'gauge2P') return isGaugeType(value) ? (value as PlayOptions[K]) : undefined;
   const choices = PLAY_OPTION_CHOICES[key] as readonly unknown[] | undefined;
   if (choices) return choices.includes(value) ? (value as PlayOptions[K]) : undefined;
   const clamp = NUMERIC_PLAY_OPTION_CLAMPS[key];

@@ -11,3 +11,5 @@ Restore each recorded AUTO SCRATCH side independently and apply older combined r
 Expose the source-specific LEGACY NOTE and LN REMOVE choices in Debug Menu and save the selected modifier.
 
 Apply AC 34's A-SCR & LEGACY NOTE preset in a single Debug Menu action while retaining both explicit settings in replay.
+
+Offer EX-HARD for beatoraja and AC rules in Debug Menu, label HAZARD separately and reset unsupported choices when switching rulesets.

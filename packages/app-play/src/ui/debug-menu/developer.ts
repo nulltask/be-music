@@ -29,7 +29,10 @@ export function buildDeveloperFolder(this: DebugMenu, developer: FolderApi): voi
       LR2: 'lr2',
       beatoraja: 'beatoraja',
       '????': '____',
-    }).on('change', () => this.deps.refreshSelectRecords()),
+    }).on('change', () => {
+      this.refreshGaugeChoices();
+      this.deps.refreshSelectRecords();
+    }),
   );
   developer.addBinding(this.guiState, 'autoPauseOnBlur', { label: 'Auto pause on blur' }).on('change', ({ value }) => {
     this.guiState.autoPauseOnBlur = value;

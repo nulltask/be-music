@@ -1,3 +1,4 @@
+import { LR2_GAUGE_TYPES } from '@be-music/player-engine/ruleset';
 /**
  * The LR2 family's select view: an LR2 select skin's `#SRC_*` / `#DST_*` frame, its bar list (`#SRC_BAR_BODY` slots
  * around `#BAR_CENTER`, drawn by `select-bars.ts`), buttons, panels, sliders, numbers, texts and mouse cursor, over the
@@ -681,6 +682,14 @@ export class LR2SelectView implements SelectView {
         emit({ type: 'play-option', key: 'hiSpeed', step: button.plusOnly === -1 ? -1 : 1 });
         return;
       case 'cycle-option':
+        if (action.option === 'gauge1P' || action.option === 'gauge2P') {
+          emit({
+            type: 'set-play-option',
+            key: action.option,
+            value: nextChoice(LR2_GAUGE_TYPES, this.frame?.playOptions[action.option] ?? 'GROOVE'),
+          });
+          return;
+        }
         if (action.option === 'hsFix') {
           emit({
             type: 'set-play-option',

@@ -7,3 +7,5 @@ Record source option snapshots and chart-timed option changes independently of s
 Preserve independent AUTO SCRATCH sides through live judgment, replay recording and deterministic simulation, including long scratch notes. Expose helpers for resolving the assisted sides and channels.
 
 Apply source-specific LEGACY NOTE and LN REMOVE before judging, retaining head timing and keysounds and recording the modifier and effective notes for replay simulation.
+
+Expose EX-HARD independently of DEATH and HAZARD, with source-specific gauge choices, course conversion and replay parsing; reject EX-HARD as a new LR2 beta3 pick.
