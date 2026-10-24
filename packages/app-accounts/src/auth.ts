@@ -40,9 +40,18 @@ function buildAuth(env: Env) {
   const clients = JSON.parse(env.OIDC_CLIENTS) as Record<string, string>;
   const socialProviders: Parameters<typeof betterAuth>[0]['socialProviders'] = {};
   if (env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET)
-    socialProviders.discord = { clientId: env.DISCORD_CLIENT_ID, clientSecret: env.DISCORD_CLIENT_SECRET };
+    socialProviders.discord = {
+      clientId: env.DISCORD_CLIENT_ID,
+      clientSecret: env.DISCORD_CLIENT_SECRET,
+      // The provider otherwise sends prompt=none, which Discord rejects until this app has been authorized.
+      prompt: 'consent',
+    };
   if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET)
-    socialProviders.google = { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET };
+    socialProviders.google = {
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+      // This provider omits prompt unless one is set, so the first grant can show consent.
+    };
   const claims = async (user: { id: string; name?: string; isAnonymous?: unknown } | null | undefined) => {
     if (user) await createProfile(db, user.id, user.isAnonymous === true);
     const publicProfile = user

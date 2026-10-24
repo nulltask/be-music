@@ -10,6 +10,8 @@
     "build:client": "node scripts/build-client.ts",
     "db:migrate:preview": "cf d1 migrations apply <D1_DATABASE_ID> --dir migrations",
     "db:migrate:production": "cf d1 migrations apply <D1_DATABASE_ID> --dir migrations",
+    "secrets:preview": "node scripts/put-secrets.ts preview",
+    "secrets:production": "node scripts/put-secrets.ts production",
     "prepare": "node scripts/build-client.ts"
   },
   "dependencies": {
