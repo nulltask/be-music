@@ -140,10 +140,22 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
     const replay = play.options.replay;
     let playOptions = this.facts.playOptions;
     if (replay?.play.options !== undefined || replay?.play.optionChanges !== undefined) {
+      const recorded = resolveReplayOptionsAt(
+        replay.play.options,
+        replay.play.optionChanges,
+        Math.round(seconds * 1_000_000),
+      );
       playOptions = resolvePlayOptions({
         ...playOptions,
-        ...resolveReplayOptionsAt(replay.play.options, replay.play.optionChanges, Math.round(seconds * 1_000_000)),
+        ...recorded,
       });
+      if (
+        recorded.judgeTimingAutoAdjust === true &&
+        typeof recorded.judgeTimingMs === 'number' &&
+        Number.isSafeInteger(recorded.judgeTimingMs)
+      ) {
+        playOptions = { ...playOptions, judgeTimingMs: recorded.judgeTimingMs };
+      }
     } else if (replay === undefined && play.sharedEngineInputSignals !== undefined) {
       const liveOptions: PlayOptions = {
         ...playOptions,
@@ -165,7 +177,10 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       playOptions = liveOptions;
       const current: ReplayOptionState = { ...liveOptions };
       const change = diffReplayOptions(this.recordedOptions ?? { ...playOptions }, current);
-      if (change) play.sharedEngineInputSignals.pushCommand({ kind: 'options', values: change });
+      // Calibration is recorded synchronously by the engine; do not echo a stale rendered value back to it.
+      if (change && play.options.judgeTimingAutoAdjust) delete change.judgeTimingMs;
+      if (change && Object.keys(change).length > 0)
+        play.sharedEngineInputSignals.pushCommand({ kind: 'options', values: change });
       this.recordedOptions = current;
     }
     if (!play.paused && !play.disposed) updateReplayView(play, seconds);

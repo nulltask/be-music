@@ -505,6 +505,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       ...(kit.family === 'built-in' && (kit.skin.id === 'plain' || kit.skin.id === 'native')
         ? { coverKeys: true }
         : {}),
+      judgeTimingAutoAdjust: playOptions.judgeTimingAutoAdjust,
       hRandomThresholdBPM: playOptions.hRandomThresholdBPM,
       mineModifier: playOptions.mineModifier,
       longNoteRate: playOptions.longNoteRate,

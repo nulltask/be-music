@@ -174,6 +174,7 @@ export type PlayerUILongNoteMode = 'ln' | 'cn' | 'hcn';
 export type PlayerUILongNoteOutcome = 'complete' | 'dropped';
 
 export type PlayerUICommand =
+  | { kind: 'judge-timing'; value: number }
   | { kind: 'flash-lane'; channel: string }
   | { kind: 'hold-lane-until-beat'; channel: string; beat: number }
   | { kind: 'press-lane'; channel: string }

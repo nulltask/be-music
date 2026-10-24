@@ -43,6 +43,7 @@ export class BeMusicPlaySettingsElement extends DataElement<BeMusicSettingsData>
           ['Long notes', o.longNoteModifier === 'LEGACY' ? 'LEGACY NOTE' : o.longNoteModifier.replaceAll('_', ' ')],
           ['LN add rate', o.longNoteModifier.startsWith('ADD_') ? `${Math.round(o.longNoteRate * 1000) / 10}%` : '—'],
           ['Auto scratch', `1P ${o.autoScratch1P ? 'ON' : 'OFF'} / 2P ${o.autoScratch2P ? 'ON' : 'OFF'}`],
+          ['Judge timing', `${o.judgeTimingMs} ms${o.judgeTimingAutoAdjust ? ' · AUTO' : ''}`],
           ['DP flip', o.dpFlip ? 'ON' : 'OFF'],
           ['BGA', o.bga],
         ])}

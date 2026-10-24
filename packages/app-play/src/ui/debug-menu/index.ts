@@ -188,6 +188,7 @@ export class DebugMenu {
   /** The "Hi-speed" slider — left enabled during a play (it applies live) and repainted by {@link refreshHiSpeed}. */
   public hiSpeedController: PaneBinding | undefined;
   public judgeTimingController: PaneBinding | undefined;
+  public judgeTimingAutoAdjustController: PaneBinding | undefined;
   public hsFixController: PaneBinding | undefined;
   public fixedDisplayAreaController: PaneBinding | undefined;
   public floatingHiSpeedController: PaneBinding | undefined;
@@ -444,6 +445,11 @@ export class DebugMenu {
     if (this.hsFixController) this.hsFixController.hidden = this.guiState.classicHiSpeed || normal || floating;
     if (this.classicSpeedController) this.classicSpeedController.hidden = !this.guiState.classicHiSpeed || floating;
     const beatoraja = this.guiState.judgeRuleset === 'beatoraja';
+    if (this.judgeTimingAutoAdjustController) this.judgeTimingAutoAdjustController.hidden = !beatoraja;
+    if (!beatoraja && this.guiState.judgeTimingAutoAdjust) {
+      this.guiState.judgeTimingAutoAdjust = false;
+      this.setPlayOptions({ judgeTimingAutoAdjust: false });
+    }
     if (!beatoraja && this.guiState.longNoteModifier.startsWith('ADD_')) {
       this.guiState.longNoteModifier = 'OFF';
       this.setPlayOptions({ longNoteModifier: 'OFF' });

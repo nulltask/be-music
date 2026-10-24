@@ -82,6 +82,9 @@ export interface PlayerPlaySettings {
   autoScratch?: boolean;
   /** beatoraja's note-selection algorithm; other source rulesets retain their own fixed selection. */
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  /** beatoraja display-only automatic calibration; no change to input/audio clocks. */
+  judgeTimingAutoAdjust?: boolean;
+  judgeTimingMs?: number;
   longNoteModifier?: LongNoteModifier;
   /** Probability for source long-note additions, default 1. */
   longNoteRate?: number;

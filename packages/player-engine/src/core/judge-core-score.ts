@@ -303,7 +303,14 @@ export function applyResolvedManualJudge(
         ['deltaMs', Math.round(deltaMs)],
       ],
     });
-    emit({ kind: 'judge-combo', judge: judge.kind, combo: state.combo, channel, signedDeltaMs: judge.signedDeltaMs });
+    emit({
+      kind: 'judge-combo',
+      seconds: atSeconds,
+      judge: judge.kind,
+      combo: state.combo,
+      channel,
+      signedDeltaMs: judge.signedDeltaMs,
+    });
     emit({ kind: 'poor-trace', action: 'clear', seconds: atSeconds });
     return;
   }

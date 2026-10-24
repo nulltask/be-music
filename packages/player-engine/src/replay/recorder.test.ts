@@ -546,3 +546,20 @@ test('records original lanes only when an arrangement moves a note, retaining so
   expect(first.event.channel).toBe('11');
   expect(second.event.channel).toBe('12');
 });
+
+test('round-trips automatic calibration separately from input timestamps and simulated judgment clocks', () => {
+  const options = makeRecorderOptions();
+  options.play.options = { judgeTimingAutoAdjust: true, judgeTimingMs: 500 };
+  const recorder = createReplayRecorder(options);
+  recorder.recordInput('down', 1.15, ['z'], ['11']);
+  recorder.recordOptionChange(1.15, { judgeTimingMs: 505 });
+  recorder.recordInput('up', 1.16, ['z'], ['11']);
+  recorder.recordOptionChange(2, { judgeTimingMs: 503 });
+  const replay = parseReplay(JSON.parse(JSON.stringify(recorder.finalize({ summary: makeSummary() }))));
+  expect(replay.play.options).toEqual({ judgeTimingAutoAdjust: true, judgeTimingMs: 500 });
+  expect(replay.play.optionChanges).toEqual([
+    { timeUs: 1150000, values: { judgeTimingMs: 505 } },
+    { timeUs: 2000000, values: { judgeTimingMs: 503 } },
+  ]);
+  expect(replay.inputs.map(({ timeUs }) => timeUs)).toEqual([1150000, 1160000]);
+});
