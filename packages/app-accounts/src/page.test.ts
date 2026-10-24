@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { renderAccountPage } from './page.ts';
+import { accountNotice, renderAccountPage } from './page.ts';
 describe('Accounts page', () => {
   const input = { signedIn: false, anonymous: false, name: '', login: true, discord: false, google: false };
   test('only offers configured providers and a guest account when signed out', () => {
@@ -40,6 +40,22 @@ describe('Accounts page', () => {
       expect(page).not.toContain('>Donate<');
     }
   });
+  test('lets a signed-in account link each configured provider once', () => {
+    const linked = renderAccountPage({
+      ...input,
+      signedIn: true,
+      login: false,
+      discord: true,
+      google: true,
+      linkedDiscord: true,
+    });
+    expect(linked).toContain('data-action="link-google"');
+    expect(linked).toContain('data-action="add-passkey"');
+    expect(linked).toContain('Discord is linked.');
+    expect(linked).not.toContain('data-action="discord"');
+    expect(linked).not.toContain('data-action="link-discord"');
+    expect(linked).not.toContain('data-action="google"');
+  });
   test('keeps continuation and account actions available in the shared shell', () => {
     const page = renderAccountPage({ ...input, signedIn: true, anonymous: true, name: 'Guest' });
     expect(page).toContain('href="#main"');
@@ -49,6 +65,12 @@ describe('Accounts page', () => {
     expect(page).toContain('aria-live="polite"');
     expect(page).not.toContain('data-action="guest"');
   });
+});
+
+test('explains a failed provider link without echoing the query', () => {
+  expect(accountNotice(null)).toBe('');
+  expect(accountNotice('account_already_linked_to_different_user')).toContain('another be-music account');
+  expect(accountNotice('<script>')).toBe('Could not link that account.');
 });
 
 test('includes stable build information in the account footer', () => {
