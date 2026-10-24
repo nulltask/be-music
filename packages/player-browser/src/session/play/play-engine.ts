@@ -526,6 +526,8 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       // auto-spun would just sit there as misses, and the legacy `autoScratchJudge` path is gated off in
       // shared-engine mode. A future engine extension could split the flag per side.
       autoScratch: ctx.options.autoScratch1P === true || ctx.options.autoScratch2P === true,
+      autoScratch1P: ctx.options.autoScratch1P === true,
+      autoScratch2P: ctx.options.autoScratch2P === true,
       // Hand the engine the same `PreparedPlaybackChartData` instance the renderer is already pointing at
       // (`this.notes` / `this.mineNotes` / `this.invisibleNotes` are references into this bundle). The
       // engine's `autoPlay` / `manualPlay` use it verbatim instead of running their own
@@ -582,6 +584,8 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
               ? { replayAbortedAtUs: ctx.options.replay.play.abortedAtUs }
               : {}),
             autoScratch: ctx.options.replay.play.autoScratch,
+            autoScratch1P: ctx.options.replay.play.autoScratch1P,
+            autoScratch2P: ctx.options.replay.play.autoScratch2P,
             judgeRuleset: ctx.options.replay.play.judgeRuleset ?? 'lr2',
             // Logs from before plays ended on failure kept judging to the end; replay them that way.
             endOnFailure: ctx.options.replay.play.endOnFailure === true,

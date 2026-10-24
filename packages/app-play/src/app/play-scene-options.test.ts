@@ -210,7 +210,7 @@ describe('resolvePlaySceneOptions: a replay', () => {
       random2P: 'OFF',
       dpFlip: false,
       autoScratch1P: true,
-      autoScratch2P: false,
+      autoScratch2P: true,
       gauge: 'HARD',
     });
     expect(settings).not.toHaveProperty('judgeRuleset');
@@ -275,4 +275,13 @@ describe('resolvePlaySceneOptions: a course', () => {
     expect(settings).not.toHaveProperty('hiSpeedLocked');
     expect(stage).toEqual({ stage: { kind: 'nonstop' }, view: resolveCourseView(nonstopCourse, 0) });
   });
+});
+
+test('replay setup retains an explicitly unassisted DP side', () => {
+  const replay = rereplay();
+  replay.play.autoScratch1P = false;
+  replay.play.autoScratch2P = true;
+  const { settings } = resolvePlaySceneOptions(input({ replay }));
+  expect(settings.autoScratch1P).toBe(false);
+  expect(settings.autoScratch2P).toBe(true);
 });

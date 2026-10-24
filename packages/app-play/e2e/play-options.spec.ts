@@ -53,3 +53,17 @@ for (const skin of ['native', 'plain', 'lr2', 'beatoraja'] as const) {
     await player.page.locator('#stage').screenshot({ path: info.outputPath(`display-area-${skin}.png`) });
   });
 }
+
+test('DP AUTO SCRATCH keeps the other side manual and records the side mask', async ({ player }) => {
+  await player.open();
+  await player.dropText('dp-scratches.bme', '#PLAYER 3\n#TITLE DP scratch sides\n#BPM 240\n#00116:01\n#00126:01\n');
+  await player.setOption(['Play options'], 'Auto scratch 1P', true);
+  await player.setOption(['Play options'], 'Auto scratch 2P', false);
+  await player.cursorTo((bar) => bar.title === 'DP scratch sides', 'DP scratch chart');
+  await player.key('Enter');
+  const result = await player.waitForResult(0);
+  expect(result.results[0]?.judged).toMatchObject({ pgreat: 1, poor: 1 });
+  const replay = await player.lastReplay();
+  expect(replay?.play).toMatchObject({ autoScratch: true, autoScratch1P: true, autoScratch2P: false });
+  expect(replay?.play.options).toMatchObject({ autoScratch1P: true, autoScratch2P: false });
+});

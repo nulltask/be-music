@@ -32,6 +32,8 @@ export interface JudgeCoreConfig {
   scratchChannels: ReadonlySet<string>;
   /** AUTO SCRATCH: the core plays the scratch lanes itself and ignores input on them. */
   autoScratch: boolean;
+  /** The assisted subset of scratchChannels; absent means the legacy combined switch. */
+  autoScratchChannels?: ReadonlySet<string>;
   /**
    * Scale of the millisecond domain (`nowMs`, release-margin deadlines, lane press / release stamps) per chart second.
    * Live play runs it on the playback clock (`1000 / speed`, wall-clock milliseconds); a replay runs it on chart time

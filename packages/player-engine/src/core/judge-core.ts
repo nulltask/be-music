@@ -70,7 +70,7 @@ export function createJudgeCoreState(config: JudgeCoreConfig, score: JudgeCoreSc
     advancedThroughSeconds: 0,
     pendingAutoScratchLongNotes: [],
     autoScratchNotes: config.autoScratch
-      ? config.scorableNotes.filter((note) => config.scratchChannels.has(note.channel))
+      ? config.scorableNotes.filter((note) => (config.autoScratchChannels ?? config.scratchChannels).has(note.channel))
       : [],
     scorableNoteSecondsByChannel,
     autoScratchCursor: 0,
@@ -150,7 +150,7 @@ export function isJudgeCoreSettled(state: JudgeCoreState): boolean {
  * cleared first — the result is only valid until the next call with the same buffer.
  */
 export function resolveJudgeInputChannels(
-  config: Pick<JudgeCoreConfig, 'autoScratch' | 'scratchChannels'>,
+  config: Pick<JudgeCoreConfig, 'autoScratch' | 'scratchChannels' | 'autoScratchChannels'>,
   inputTokenToChannels: ReadonlyMap<string, readonly string[]>,
   buffer: Set<string>,
   tokens: readonly string[],
@@ -172,7 +172,7 @@ export function resolveJudgeInputChannels(
   }
   if (config.autoScratch) {
     for (const channel of buffer) {
-      if (config.scratchChannels.has(channel)) {
+      if ((config.autoScratchChannels ?? config.scratchChannels).has(channel)) {
         buffer.delete(channel);
       }
     }
@@ -217,7 +217,7 @@ function processReplayEventsUntil(
     const channels = new Set(event.channels);
     if (config.autoScratch) {
       for (const channel of channels) {
-        if (config.scratchChannels.has(channel)) {
+        if ((config.autoScratchChannels ?? config.scratchChannels).has(channel)) {
           channels.delete(channel);
         }
       }

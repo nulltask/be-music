@@ -78,6 +78,9 @@ export interface CreatePlayerInputRuntimeContext {
 export interface PlayerPlaySettings {
   auto?: boolean;
   autoScratch?: boolean;
+  /** Independently assist the source play side; explicit values override autoScratch for that side. */
+  autoScratch1P?: boolean;
+  autoScratch2P?: boolean;
   /**
    * Gauge the player selected, as an LR2-family id (`'GROOVE'` / `'EASY'` / `'HARD'` / `'DEATH'`). Mapped onto the
    * active ruleset's own line-up — `'GROOVE'` is beatoraja's `NORMAL`, `'DEATH'` is its `HAZARD`, and so on.

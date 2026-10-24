@@ -1159,6 +1159,16 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
       lanesAPI.isPlayableInputChannel('01');
     },
   });
+  define('player-engine.lanes.resolveAutoScratchSides', {
+    run: () => {
+      lanesAPI.resolveAutoScratchSides({ autoScratch1P: true, autoScratch2P: false });
+    },
+  });
+  define('player-engine.lanes.resolveAutoScratchChannels', {
+    run: () => {
+      lanesAPI.resolveAutoScratchChannels({ autoScratch1P: true }, ['16', '26']);
+    },
+  });
   define('player-engine.lanes.resolveLaneChannels', {
     run: () => {
       lanesAPI.resolveLaneChannels(BENCH_LANE_NOTES, '7');

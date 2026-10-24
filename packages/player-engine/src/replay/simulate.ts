@@ -1,3 +1,4 @@
+import { resolveAutoScratchSides } from '../core/auto-scratch.ts';
 import { PLAY_MODE_LAYOUTS, type PlayModeLayoutId } from '@be-music/chart-model';
 import { resolve____RankLabel } from '../ruleset/score.ts';
 import type { BeMusicReplay, ReplayInputEvent, ReplayRulesetResult } from './format.ts';
@@ -299,7 +300,7 @@ class ReplaySimulation {
 
   private buildLanes(): void {
     const autoPlay = this.replay.play.mode === 'auto';
-    const autoScratch = this.replay.play.autoScratch;
+    const autoScratch = resolveAutoScratchSides(this.replay.play);
     for (const note of this.replay.chart.notes) {
       if (note.type === 'invisible' || note.type === 'freezone') {
         continue;
@@ -334,7 +335,11 @@ class ReplaySimulation {
     }
   }
 
-  private laneFor(channel: string, autoPlay: boolean, autoScratch: boolean): SimLane {
+  private laneFor(
+    channel: string,
+    autoPlay: boolean,
+    autoScratch: ReturnType<typeof resolveAutoScratchSides>,
+  ): SimLane {
     let lane = this.lanes.get(channel);
     if (!lane) {
       const scratch = this.scratchChannels.has(channel);
@@ -347,7 +352,8 @@ class ReplaySimulation {
         mineCursor: 0,
         held: false,
         downTokens: new Set(),
-        auto: autoPlay || (autoScratch && scratch),
+        auto:
+          autoPlay || (scratch && (channel.startsWith('2') ? autoScratch.autoScratch2P : autoScratch.autoScratch1P)),
         autoCursor: 0,
       };
       this.lanes.set(channel, lane);

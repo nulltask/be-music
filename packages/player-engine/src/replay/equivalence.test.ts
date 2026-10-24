@@ -1167,3 +1167,52 @@ describe('engine / simulator equivalence', () => {
     expect(simulated.exScore).toBe(0);
   });
 });
+
+for (const assistedSide of ['1P', '2P'] as const) {
+  test.each(RULESETS)(`%s: DP AUTO SCRATCH assists only ${assistedSide} in live play and replay`, async (ruleset) => {
+    const json = chart([
+      { measure: 1, channel: '16', position: [0, 1], value: '01' },
+      { measure: 1, channel: '26', position: [0, 1], value: '01' },
+    ]);
+    const settings = {
+      autoScratch1P: assistedSide === '1P',
+      autoScratch2P: assistedSide === '2P',
+      playVariant: '14' as const,
+    };
+    const { summary, replay } = await runRecordedPlay(json, [], ruleset, settings);
+    expect([summary.perfect, summary.poor]).toEqual([1, 1]);
+    expect(replay.play.autoScratch1P).toBe(settings.autoScratch1P);
+    expect(replay.play.autoScratch2P).toBe(settings.autoScratch2P);
+    const simulated = simulateReplay(replay, { ruleset });
+    expect([simulated.judge.pgreat, simulated.judge.poor]).toEqual([1, 1]);
+    const manualChannel = assistedSide === '1P' ? '26' : '16';
+    const manual = await runRecordedPlay(
+      json,
+      [down(0, 1_000_000, manualChannel), up(1, 1_020_000, manualChannel)],
+      ruleset,
+      settings,
+    );
+    expect([manual.summary.perfect, manual.summary.poor]).toEqual([2, 0]);
+    expect(simulateReplay(manual.replay, { ruleset }).judge.pgreat).toBe(2);
+  });
+}
+
+test('DP scratch HCNs on the unassisted side remain manual', async () => {
+  const json = chart([
+    { measure: 1, channel: '16', position: [0, 1], value: '01' },
+    { measure: 2, channel: '16', position: [0, 1], value: 'AA' },
+    { measure: 1, channel: '26', position: [0, 1], value: '01' },
+    { measure: 2, channel: '26', position: [0, 1], value: 'AA' },
+  ]);
+  json.bms.lnObjs = ['AA'];
+  json.bms.lnMode = 3;
+  const { summary, replay } = await runRecordedPlay(json, [], 'beatoraja', {
+    autoScratch1P: true,
+    autoScratch2P: false,
+    playVariant: '14',
+  });
+  const simulated = simulateReplay(replay, { ruleset: 'beatoraja' });
+  expect(summary.perfect).toBeGreaterThan(0);
+  expect(summary.poor).toBeGreaterThan(0);
+  expect([summary.perfect, summary.poor]).toEqual([simulated.judge.pgreat, simulated.judge.poor]);
+});
