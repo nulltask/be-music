@@ -1,3 +1,4 @@
+import type { BeMusicReplay } from '@be-music/player-engine/replay';
 // The play options the player hands to every screen and play: the full `PlayOptions`, kept here rather than read back
 // from the select screen. The Debug Menu holds some of them itself (auto play, gauge, lane options, assists, sort and
 // filters, hi-speed and covers); the rest (BGA, the score graph and the 2P gauge) are only
@@ -13,6 +14,8 @@ export type GUIPlayOptions = Pick<
   | 'autoPlay'
   | 'gauge'
   | 'hRandomThresholdBPM'
+  | 'randomSeed1P'
+  | 'randomSeed2P'
   | 'randomFixedLane1P'
   | 'randomFixedLane2P'
   | 'random1P'
@@ -52,6 +55,8 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     gauge1P: state.gauge,
     random1P: state.random1P,
     hRandomThresholdBPM: state.hRandomThresholdBPM,
+    randomSeed1P: state.randomSeed1P,
+    randomSeed2P: state.randomSeed2P,
     randomFixedLane1P: state.randomFixedLane1P,
     randomFixedLane2P: state.randomFixedLane2P,
     random2P: state.random2P,
@@ -100,6 +105,8 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.gauge = options.gauge1P;
   state.random1P = options.random1P;
   state.hRandomThresholdBPM = options.hRandomThresholdBPM;
+  state.randomSeed1P = options.randomSeed1P;
+  state.randomSeed2P = options.randomSeed2P;
   state.randomFixedLane1P = options.randomFixedLane1P;
   state.randomFixedLane2P = options.randomFixedLane2P;
   state.random2P = options.random2P;
@@ -132,6 +139,43 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
  */
 export class PlayOptionsService {
   private options: PlayOptions;
+  private previousArrangement: { chartId: string; replay: Pick<BeMusicReplay, 'chart' | 'play'> } | undefined;
+  private fixedArrangement: { chartId: string; replay: Pick<BeMusicReplay, 'chart' | 'play'> } | undefined;
+
+  /** Retain the previous beatoraja play's exact arrangement, including source control-flow draws. */
+  public rememberArrangement(chartId: string, replay: BeMusicReplay | undefined): void {
+    if (replay?.play.judgeRuleset !== 'beatoraja') return;
+    this.previousArrangement = { chartId, replay: structuredClone({ chart: replay.chart, play: replay.play }) };
+  }
+
+  /** Pin the previous layout for a fresh play on the same chart; no recorded inputs are replayed. */
+  public reusePreviousArrangement(): Partial<PlayOptions> | undefined {
+    const previous = this.previousArrangement;
+    if (!previous) return undefined;
+    const play = previous.replay.play;
+    const source = resolvePlayOptions({
+      ...play.options,
+      random1P: play.randomLane?.p1 ?? play.options?.random1P,
+      random2P: play.randomLane?.p2 ?? play.options?.random2P,
+      dpFlip: play.dpFlip ?? play.options?.dpFlip,
+      longNoteModifier: play.longNoteModifier ?? play.options?.longNoteModifier,
+    });
+    const changes: Partial<PlayOptions> = {};
+    for (const key of ARRANGEMENT_OPTIONS) Object.assign(changes, { [key]: source[key] });
+    this.update(changes);
+    this.fixedArrangement = structuredClone(previous);
+    return changes;
+  }
+
+  /** Stop pinning the previous layout; explicit seed settings still apply. */
+  public clearArrangement(): void {
+    this.fixedArrangement = undefined;
+  }
+
+  /** A chart-specific copy prevents a reused layout from leaking to another chart. */
+  public arrangementFor(chartId: string): Pick<BeMusicReplay, 'chart' | 'play'> | undefined {
+    return this.fixedArrangement?.chartId === chartId ? structuredClone(this.fixedArrangement.replay) : undefined;
+  }
 
   public constructor(initial: Readonly<Partial<PlayOptions>> = {}) {
     this.options = resolvePlayOptions(initial);
@@ -147,6 +191,20 @@ export class PlayOptionsService {
    * on the select screen.
    */
   public update(changes: Readonly<Partial<PlayOptions>>): void {
-    this.options = resolvePlayOptions({ ...this.options, ...changes });
+    const next = resolvePlayOptions({ ...this.options, ...changes });
+    if (ARRANGEMENT_OPTIONS.some((key) => next[key] !== this.options[key])) this.clearArrangement();
+    this.options = next;
   }
 }
+
+const ARRANGEMENT_OPTIONS = [
+  'random1P',
+  'random2P',
+  'randomSeed1P',
+  'randomSeed2P',
+  'randomFixedLane1P',
+  'randomFixedLane2P',
+  'dpFlip',
+  'hRandomThresholdBPM',
+  'longNoteModifier',
+] as const satisfies readonly (keyof PlayOptions)[];

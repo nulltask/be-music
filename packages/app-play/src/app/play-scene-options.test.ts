@@ -291,3 +291,10 @@ test('replay setup retains an explicitly unassisted DP side', () => {
   expect(settings.autoScratch1P).toBe(false);
   expect(settings.autoScratch2P).toBe(true);
 });
+
+test('previous arrangement is forwarded without enabling replay input or replacing the live input mode', () => {
+  const fixedArrangement = rereplay();
+  const options = resolvePlaySceneOptions(input({ fixedArrangement }));
+  expect(options.settings.fixedArrangement).toBe(fixedArrangement);
+  expect(options.autoPlay).toBe(false);
+});

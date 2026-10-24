@@ -1,4 +1,4 @@
-import { clampHRandomThresholdBPM } from '@be-music/player-engine/lanes';
+import { clampHRandomThresholdBPM, parseLaneRandomSeed } from '@be-music/player-engine/lanes';
 import { resolveConstantVisibility } from './constant-visibility.ts';
 import { clampJudgeTimingMs } from './judge-timing.ts';
 import { clamp } from '@be-music/shared-utils/core';
@@ -128,6 +128,8 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   dpFlip: false,
   random1P: 'OFF',
   hRandomThresholdBPM: 120,
+  randomSeed1P: '-1',
+  randomSeed2P: '-1',
   randomFixedLane1P: 0,
   randomFixedLane2P: 0,
   random2P: 'OFF',
@@ -212,6 +214,7 @@ export function resolvePlayOptionValue<K extends keyof PlayOptions>(
   value: unknown,
 ): PlayOptions[K] | undefined {
   if (!Object.hasOwn(DEFAULT_PLAY_OPTIONS, key)) return undefined;
+  if (key === 'randomSeed1P' || key === 'randomSeed2P') return parseLaneRandomSeed(value) as PlayOptions[K] | undefined;
   if (key === 'gauge1P' || key === 'gauge2P') return isGaugeType(value) ? (value as PlayOptions[K]) : undefined;
   const choices = PLAY_OPTION_CHOICES[key] as readonly unknown[] | undefined;
   if (choices) return choices.includes(value) ? (value as PlayOptions[K]) : undefined;

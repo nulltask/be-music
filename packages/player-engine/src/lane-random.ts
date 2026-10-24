@@ -1,3 +1,4 @@
+import { drawLaneRandomIndex } from './lane-random-source.ts';
 import type { RulesetId } from './ruleset/definitions.ts';
 
 /** One resolved event before lane randomization. A long note keeps its head and tail on this one channel. */
@@ -155,17 +156,26 @@ function randomizeTimeBasedNotes(
   });
   if (options.ruleset !== 'beatoraja') return randomizeLR2Notes(notes, lanes, rows, channels, options.random);
   let scratchIndex = 0;
+  const changeable = [...lanes];
+  const assignable = [...lanes];
   const streak = new Map(lanes.map((lane) => [lane, 0]));
   const held = new Map<string, { target: string; endMs: number }>();
   const lastNoteTime = new Map(lanes.map((lane) => [lane, visitAllRows ? -10000 : Number.NEGATIVE_INFINITY]));
   for (const [timeMs, indices] of [...rows].sort(([left], [right]) => left - right)) {
-    for (const [source, hold] of held) {
-      if (hold.endMs < timeMs) held.delete(source);
+    // Upstream restores released lanes at the end of its mutable lane lists.
+    // Their order is observable when the same Java seed is reused.
+    const released = [...held]
+      .filter(([, hold]) => hold.endMs < timeMs)
+      .sort(([left], [right]) => lanes.indexOf(left) - lanes.indexOf(right));
+    for (const [source, hold] of released) {
+      held.delete(source);
+      changeable.push(source);
+      assignable.push(hold.target);
     }
     if (converge)
       for (const lane of lanes) if (Math.trunc(timeMs) - lastNoteTime.get(lane)! > thresholdMs * 2) streak.set(lane, 0);
     const occupied = new Set([...held.values()].map((hold) => hold.target));
-    const free = lanes.filter((lane) => !occupied.has(lane));
+    const free = assignable.filter((lane) => !occupied.has(lane));
     const map = new Map([...held].map(([source, hold]) => [source, hold.target]));
     const scoring = new Set(
       indices
@@ -194,7 +204,7 @@ function randomizeTimeBasedNotes(
       }
     }
     // Upstream assigns scoring sources first, then the row's empty/mine/hidden sources.
-    const sources = lanes.filter((lane) => !held.has(lane));
+    const sources = changeable.filter((lane) => !held.has(lane));
     if (allScratch) {
       const scratch = allScratch.scratchLanes[scratchIndex]!;
       const source = sources.find((lane) => scoring.has(lane));
@@ -247,6 +257,10 @@ function randomizeTimeBasedNotes(
       channels[index] = target;
       if ((note.kind ?? 'note') === 'note' && note.endTimeMs !== undefined && note.endTimeMs > timeMs) {
         const previous = held.get(note.channel);
+        if (!previous) {
+          changeable.splice(changeable.indexOf(note.channel), 1);
+          assignable.splice(assignable.indexOf(target), 1);
+        }
         held.set(note.channel, { target, endMs: Math.max(note.endTimeMs, previous?.endMs ?? note.endTimeMs) });
       }
     }
@@ -255,9 +269,7 @@ function randomizeTimeBasedNotes(
 }
 
 function pickRandom<T>(lanes: readonly T[], random: () => number): T {
-  const draw = random();
-  if (!Number.isFinite(draw) || draw < 0 || draw >= 1) throw new RangeError('Lane randomness must be in [0, 1).');
-  return lanes[Math.floor(draw * lanes.length)]!;
+  return lanes[drawLaneRandomIndex(lanes.length, random)]!;
 }
 
 /** LR2 assigns each visible note/mine to a free destination; only the destination is locked by an LN. */

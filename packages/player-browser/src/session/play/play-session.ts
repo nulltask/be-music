@@ -579,6 +579,7 @@ export class PlaySession extends PlaySessionState {
     this.resolvedChart = undefined;
     this.resolvedPlayChart = undefined;
     this.randomDraws = undefined;
+    this.randomSeeds = {};
     this.beatAtSeconds = undefined;
     this.scrollMapper = undefined;
     this.timingResolver = undefined;

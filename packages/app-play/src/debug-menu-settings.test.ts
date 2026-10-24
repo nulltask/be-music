@@ -123,6 +123,8 @@ describe('captureDebugMenuSettings', () => {
       gauge: 'HARD',
       random1P: 'SCATTER',
       hRandomThresholdBPM: 120,
+      randomSeed1P: '-1',
+      randomSeed2P: '-1',
       randomFixedLane1P: 0,
       randomFixedLane2P: 0,
       random2P: 'MIRROR',
@@ -222,6 +224,13 @@ test('persists and validates the H-RANDOM source configuration', () => {
 
 test('persists per-side LR2 CONVERGE targets', () => {
   const settings = { random1P: 'CONVERGE', randomFixedLane1P: 3, randomFixedLane2P: 7 };
+  expect(
+    parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
+  ).toMatchObject(settings);
+});
+
+test('persists large seed values as decimal strings', () => {
+  const settings = { randomSeed1P: '9223372036854775807', randomSeed2P: '-1' };
   expect(
     parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
   ).toMatchObject(settings);

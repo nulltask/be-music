@@ -161,3 +161,37 @@ for (const skin of ['plain', 'native'] as const) {
     expect(await player.readOption(['Play options'], 'Random 1P')).toBe('OFF');
   });
 }
+
+for (const skin of ['plain', 'native'] as const) {
+  test(`source seeds and previous arrangements work for fresh input on ${skin}`, async ({ player }) => {
+    await openWithLibrary(player, { 'be-music.built-in-skin': skin });
+    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+    await player.setOption(['Play options'], 'Random 1P', 'RANDOM');
+    await player.setOption(['Play options'], 'Seed 1P (-1=random)', '9223372036854775807');
+    await player.setOption(['Play options'], 'Auto play', true);
+    await player.browseTo(SONGS, 'Fixture A');
+    await player.key('Enter');
+    await player.waitForResult(0);
+    const first = await player.lastReplay();
+    expect(first?.play.options?.randomSeed1P).toBe('9223372036854775807');
+    await player.leaveResult();
+    await player.pressOption(['Play options'], 'Reuse previous arrangement');
+    await player.setOption(['Play options'], 'Auto play', false);
+    await player.browseTo(SONGS, 'Fixture A');
+    await player.key('Enter');
+    await player.waitFor((state) => (state.play?.seconds ?? 0) > 0.1, 'fresh manual play');
+    await player.key('z');
+    await player.waitForResult(1);
+    const fresh = await player.lastReplay();
+    expect(fresh?.play.mode).toBe('manual');
+    expect(fresh?.chart.notes).toEqual(first?.chart.notes);
+    expect(fresh?.inputs.length).toBeGreaterThan(0);
+    await player.leaveResult();
+    await player.pressOption(['Play options'], 'New arrangement');
+    expect(
+      await player.page.evaluate(
+        () => JSON.parse(localStorage.getItem('be-music.debug-menu-settings')!).settings.randomSeed1P,
+      ),
+    ).toBe('-1');
+  });
+}

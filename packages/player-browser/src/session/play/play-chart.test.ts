@@ -411,8 +411,16 @@ test.each(['1P', '2P'] as const)('RANDOM-EX permutes the complete %s key/scratch
   const notes = notesOn(domain);
   const mines = notesOn(domain);
   const hidden = notesOn(domain);
-  applyRandomMode(notes, keys, 'RANDOM-EX', () => 0, { ruleset: 'beatoraja', scratchLanes: [scratch] }, mines, hidden);
-  expect(channelsOf(notes)).toEqual([...domain.slice(1), domain[0]]);
+  applyRandomMode(
+    notes,
+    keys,
+    'RANDOM-EX',
+    () => 0.99,
+    { ruleset: 'beatoraja', scratchLanes: [scratch] },
+    mines,
+    hidden,
+  );
+  expect(channelsOf(notes)).toEqual([...domain].reverse());
   expect(channelsOf(mines)).toEqual(channelsOf(notes));
   expect(channelsOf(hidden)).toEqual(channelsOf(notes));
   expect(notes.at(-1)!.channel).not.toBe(scratch);
@@ -425,20 +433,22 @@ test('RANDOM-EX includes both wheel directions and preserves LN timing', () => {
     { channel: '1P', seconds: 3 },
     { channel: '1Q', seconds: 4 },
   ];
-  applyRandomMode(notes, keys, 'RANDOM-EX', () => 0, { ruleset: 'beatoraja', scratchLanes: ['1P', '1Q'] });
-  expect(channelsOf(notes)).toEqual([keys[1], '1Q', keys[0]]);
+  applyRandomMode(notes, keys, 'RANDOM-EX', () => 0.99, { ruleset: 'beatoraja', scratchLanes: ['1P', '1Q'] });
+  expect(channelsOf(notes)).toEqual(['1Q', keys[1], keys[0]]);
   expect(notes[0]!.endSeconds).toBe(2);
-  expect(() => applyRandomMode([], keys, 'RANDOM-EX', () => 0, { ruleset: 'lr2', scratchLanes: ['16'] })).toThrow(
+  expect(() => applyRandomMode([], keys, 'RANDOM-EX', () => 0.99, { ruleset: 'lr2', scratchLanes: ['16'] })).toThrow(
     /only for beatoraja/,
   );
-  expect(() => applyRandomMode([], keys, 'RANDOM-EX', () => 0, { ruleset: 'beatoraja' })).toThrow(/requires scratch/);
+  expect(() => applyRandomMode([], keys, 'RANDOM-EX', () => 0.99, { ruleset: 'beatoraja' })).toThrow(
+    /requires scratch/,
+  );
 });
 
 test('RANDOM-EX records the effective LN placement for replay without re-rolling', () => {
   const json = parseChart('#BPM 120\n#LNOBJ AA\n#00012:0001\n#00112:00AA', 'bms');
   const prepare = () => preparePlaybackChart(resolveChart(json, { playVariant: '7' }));
   const chart = prepare();
-  applyRandomMode(chart.notes, KEYS_1P, 'RANDOM-EX', () => 0, { ruleset: 'beatoraja', scratchLanes: ['16'] });
+  applyRandomMode(chart.notes, KEYS_1P, 'RANDOM-EX', () => 0.99, { ruleset: 'beatoraja', scratchLanes: ['16'] });
   const replay = createReplayRecorder({
     json,
     chart,
@@ -519,4 +529,17 @@ test('S-RANDOM-EX includes both wheel directions and uses 40ms rather than H-RAN
   expect(() =>
     applyRandomMode([], keys, 'S-RANDOM-EX', () => 0, { ruleset: 'lr2', scratchLanes: ['1P', '1Q'] }),
   ).toThrow(/only for beatoraja/);
+});
+
+test('LR2 RANDOM fixed-key selection pins the original key-1 axis, while nine-key RANDOM ignores it', () => {
+  const notes = notesOn(KEYS_1P);
+  applyRandomMode(notes, KEYS_1P, 'RANDOM', seededRandom(1), { ruleset: 'lr2', fixedLane: 4, playVariant: '7' });
+  expect(notes[0]!.channel).toBe(KEYS_1P[3]);
+  expect(channelsOf(notes).sort()).toEqual([...KEYS_1P].sort());
+  const pms = resolveLaneOptionChannels('1P', '9');
+  const ordinary = notesOn(pms),
+    selected = notesOn(pms);
+  applyRandomMode(ordinary, pms, 'RANDOM', seededRandom(1), { ruleset: 'lr2', playVariant: '9' });
+  applyRandomMode(selected, pms, 'RANDOM', seededRandom(1), { ruleset: 'lr2', fixedLane: 4, playVariant: '9' });
+  expect(selected).toEqual(ordinary);
 });

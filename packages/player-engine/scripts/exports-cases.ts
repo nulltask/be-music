@@ -1217,6 +1217,21 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
       );
     },
   });
+  define('player-engine.lanes.createBeatorajaLaneRandom', {
+    run: () => {
+      lanesAPI.createBeatorajaLaneRandom('9223372036854775807').nextInt!(26);
+    },
+  });
+  define('player-engine.lanes.parseLaneRandomSeed', {
+    run: () => {
+      lanesAPI.parseLaneRandomSeed('9223372036854775807');
+    },
+  });
+  define('player-engine.lanes.drawLaneRandomIndex', {
+    run: () => {
+      lanesAPI.drawLaneRandomIndex(9, () => 0.5);
+    },
+  });
   define('player-engine.lanes.randomizeSpiralNotes', {
     run: () => {
       lanesAPI.randomizeSpiralNotes(

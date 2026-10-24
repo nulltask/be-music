@@ -41,3 +41,10 @@ export { resolveAutoScratchSides, resolveAutoScratchChannels, type AutoScratchOp
 export { randomizeLR2ConvergeNotes } from './lane-converge.ts';
 
 export { randomizePMSPlayableLanes } from './lane-pms-random.ts';
+
+export {
+  createBeatorajaLaneRandom,
+  parseLaneRandomSeed,
+  drawLaneRandomIndex,
+  type LaneRandomSource,
+} from './lane-random-source.ts';

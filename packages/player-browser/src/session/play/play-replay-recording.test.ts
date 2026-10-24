@@ -246,3 +246,11 @@ test('records LR2 CONVERGE with independent fixed-lane targets', () => {
     randomFixedLane2P: 0,
   });
 });
+
+test('records resolved source seeds instead of the request for a fresh draw', () => {
+  const recording = resolveReplayRecording({ randomSeed1P: '-1', randomSeed2P: '-1' }, undefined, VIEW, 2, {
+    p1: '9223372036854775807',
+    p2: '42',
+  });
+  expect(recording.options).toMatchObject({ randomSeed1P: '9223372036854775807', randomSeed2P: '42' });
+});

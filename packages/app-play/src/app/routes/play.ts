@@ -93,7 +93,8 @@ export interface PlayRouteDeps {
   /** The play's result, and the beatoraja chart its graphs plot. */
   readonly results: Pick<ResultRoute, 'lastBeatorajaChart' | 'showResult' | 'showBeatorajaPlayResult'>;
   /** The play options in force: the covers, HS-FIX, BGA and score graph the play is made with. */
-  readonly playOptions: Pick<PlayOptionsService, 'current'>;
+  readonly playOptions: Pick<PlayOptionsService, 'current'> &
+    Partial<Pick<PlayOptionsService, 'arrangementFor' | 'rememberArrangement'>>;
   /** The Debug Menu's state: the lane, gauge, tempo, audio and debug options the play is made with. */
   readonly guiState: PlaySceneGUIState & Pick<PlayerGUIState, 'courseAutoAdvance' | 'playLayout'>;
   /** The Debug Menu: the compressor's tuned parameters, and the hi-speed slider. */
@@ -237,6 +238,13 @@ export class PlayRoute {
       playOptions,
       autoPlay: overrides.autoPlay,
       replay,
+      fixedArrangement:
+        replay === undefined &&
+        courseStage === undefined &&
+        nonstop === undefined &&
+        this.guiState.judgeRuleset === 'beatoraja'
+          ? this.playOptions.arrangementFor?.(chartEntry.id)
+          : undefined,
       chartHashes: overrides.chartHashes,
       courseStage,
       activeCourse: this.activeCourse,
@@ -313,6 +321,8 @@ export class PlayRoute {
         void this.showSelect();
       },
       onChartFinished: (result: PlayResult) => {
+        if (replay === undefined && courseStage === undefined && nonstop === undefined)
+          this.playOptions.rememberArrangement?.(chartEntry.id, result.replay);
         if (nonstop !== undefined) {
           const resolved = this.gameplayView?.resolved;
           void this.nonstopRoute.showNonstopCourseResult(nonstop, result.replay, result, resolved);

@@ -57,7 +57,12 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     );
     if (side === '1P') this.random1PController = controller;
     else this.random2PController = controller;
-    trackPlayOption(controller.on('change', ({ value }) => this.setPlayOptions({ [key]: value })));
+    trackPlayOption(
+      controller.on('change', ({ value }) => {
+        this.setPlayOptions({ [key]: value });
+        this.refreshRulesetChoices();
+      }),
+    );
   }
   trackPlayOption(
     folder
@@ -74,13 +79,41 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     trackPlayOption(
       folder
         .addBinding(this.guiState, key, {
-          label: `CONVERGE target ${side} (0=default)`,
+          label: `Fixed key ${side} (LR2; 0=default)`,
           min: 0,
           max: 9,
           step: 1,
         })
         .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
     );
+  }
+  for (const side of ['1P', '2P'] as const) {
+    const key = `randomSeed${side}` as const;
+    const controller = folder
+      .addBinding(this.guiState, key, { label: `Seed ${side} (-1=random)` })
+      .on('change', ({ value }) => this.setPlayOptions({ [key]: value }));
+    this.trackPlayOption(controller);
+    if (side === '1P') this.randomSeed1PController = controller;
+    else this.randomSeed2PController = controller;
+    this.randomSeedControllers.push(controller);
+  }
+  const reuse = folder.addButton({ title: 'Reuse previous arrangement' }).on('click', () => {
+    const changes = this.deps.reusePreviousArrangement?.();
+    if (changes) {
+      this.setPlayOptions(changes);
+      this.refreshPlayOptionControllers();
+      this.setStatus('Previous arrangement selected for the same chart. Live input remains enabled.');
+    } else this.setStatus('Play a chart with beatoraja rules first to retain its arrangement.');
+  });
+  const fresh = folder.addButton({ title: 'New arrangement' }).on('click', () => {
+    this.deps.clearArrangement?.();
+    this.setPlayOptions({ randomSeed1P: '-1', randomSeed2P: '-1' });
+    this.refreshPlayOptionControllers();
+    this.setStatus('A new arrangement will be drawn for the next play.');
+  });
+  for (const controller of [reuse, fresh]) {
+    this.trackPlayOption(controller);
+    this.randomSeedControllers.push(controller);
   }
   this.refreshRulesetChoices();
   trackPlayOption(

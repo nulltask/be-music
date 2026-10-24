@@ -149,6 +149,8 @@ export interface PlayOptions {
   /** beatoraja H-RANDOM jack threshold in 16th-note BPM units (1..1000, default 120). */
   hRandomThresholdBPM: number;
   /** LR2 randFix key index: 0 uses the mode default (scratch, or key 5 for PMS). */
+  randomSeed1P: string;
+  randomSeed2P: string;
   randomFixedLane1P: number;
   randomFixedLane2P: number;
   /** 2P side note arrangement (channels 21..25 + 28 + 29). */

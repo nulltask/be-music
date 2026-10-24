@@ -1,3 +1,4 @@
+import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import { DEFAULT_PLAY_OPTIONS, type PlayOptions } from '@be-music/player-scene-model';
 import { describe, expect, test } from 'vite-plus/test';
 import { copyPlayOptionsToGUI, playOptionsFromGUI, PlayOptionsService, type GUIPlayOptions } from './play-options.ts';
@@ -7,6 +8,8 @@ const gui: GUIPlayOptions = {
   gauge: 'HARD',
   random1P: 'MIRROR',
   hRandomThresholdBPM: 120,
+  randomSeed1P: '-1',
+  randomSeed2P: '-1',
   randomFixedLane1P: 0,
   randomFixedLane2P: 0,
   random2P: 'RANDOM',
@@ -46,6 +49,8 @@ describe('playOptionsFromGUI', () => {
       gauge1P: 'HARD',
       random1P: 'MIRROR',
       hRandomThresholdBPM: 120,
+      randomSeed1P: '-1',
+      randomSeed2P: '-1',
       randomFixedLane1P: 0,
       randomFixedLane2P: 0,
       random2P: 'RANDOM',
@@ -153,6 +158,8 @@ describe('PlayOptionsService', () => {
     const service = new PlayOptionsService({
       random1P: 'MIRROR',
       hRandomThresholdBPM: 120,
+      randomSeed1P: '-1',
+      randomSeed2P: '-1',
       randomFixedLane1P: 0,
       randomFixedLane2P: 0,
       hiSpeed: 2,
@@ -167,5 +174,57 @@ describe('PlayOptionsService', () => {
     const read = service.current;
     read.autoPlay = true;
     expect(service.current.autoPlay).toBe(false);
+  });
+});
+
+describe('previous arrangement selection', () => {
+  const previous = () =>
+    ({
+      chart: { notes: [{ type: 'normal', channel: '12', timeUs: 0, wav: '01' }] },
+      play: {
+        judgeRuleset: 'beatoraja',
+        randomLane: { p1: 'RANDOM' },
+        dpFlip: true,
+        options: {
+          random1P: 'RANDOM',
+          randomSeed1P: '9223372036854775807',
+          hiSpeed: 4,
+          gauge1P: 'HARD',
+          autoPlay: true,
+        },
+      },
+      inputs: [{ kind: 'press', channel: '12', timeUs: 0 }],
+    }) as unknown as BeMusicReplay;
+  test('pins chart-specific lanes while preserving the current input, speed and gauge selections', () => {
+    const service = new PlayOptionsService({ autoPlay: false, hiSpeed: 2, gauge1P: 'EASY' });
+    expect(service.reusePreviousArrangement()).toBeUndefined();
+    const replay = previous();
+    service.rememberArrangement('chart-a', replay);
+    replay.chart.notes[0]!.channel = '19';
+    expect(service.reusePreviousArrangement()).toMatchObject({
+      random1P: 'RANDOM',
+      randomSeed1P: '9223372036854775807',
+      dpFlip: true,
+    });
+    expect(service.current).toMatchObject({ autoPlay: false, hiSpeed: 2, gauge1P: 'EASY' });
+    expect(service.arrangementFor('chart-a')?.chart.notes[0]!.channel).toBe('12');
+    expect(service.arrangementFor('chart-b')).toBeUndefined();
+    expect(service.arrangementFor('chart-a')).not.toHaveProperty('inputs');
+    const copy = service.arrangementFor('chart-a')!;
+    copy.chart.notes[0]!.channel = '11';
+    expect(service.arrangementFor('chart-a')?.chart.notes[0]!.channel).toBe('12');
+  });
+  test('keeps a pin for display/gauge edits and idempotent option synchronization, clearing it on lane edits', () => {
+    const service = new PlayOptionsService();
+    service.rememberArrangement('chart', previous());
+    const changes = service.reusePreviousArrangement()!;
+    service.update(changes);
+    service.update({ hiSpeed: 3, gauge1P: 'HARD' });
+    expect(service.arrangementFor('chart')).toBeDefined();
+    service.update({ randomSeed1P: '7' });
+    expect(service.arrangementFor('chart')).toBeUndefined();
+    service.reusePreviousArrangement();
+    service.clearArrangement();
+    expect(service.arrangementFor('chart')).toBeUndefined();
   });
 });
