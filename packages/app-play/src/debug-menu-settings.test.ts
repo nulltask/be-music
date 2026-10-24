@@ -145,6 +145,7 @@ describe('captureDebugMenuSettings', () => {
       fixedDisplayArea: false,
       judgeAlgorithm: 'duration',
       longNoteModifier: 'REMOVE',
+      longNoteRate: 1,
       mineModifier: 'OFF',
       gaugeAutoShift: 'NONE',
       autoScratch1P: true,
@@ -265,6 +266,13 @@ test('floating speed persistence keeps source precision and values above the gen
 
 test('fixed display area persists independently from floating mode', () => {
   const settings = { fixedDisplayArea: true, floatingHiSpeed: false };
+  expect(
+    parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
+  ).toMatchObject(settings);
+});
+
+test('ADD LN and its generation probability persist independently of the original modifier choices', () => {
+  const settings = { longNoteModifier: 'ADD_LN', longNoteRate: 0.375 };
   expect(
     parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
   ).toMatchObject(settings);

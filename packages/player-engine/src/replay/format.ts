@@ -1,3 +1,4 @@
+import type { LongNoteModifier } from '../core/long-note-modifier.ts';
 import type { MineModifier } from '../core/mine-modifier.ts';
 import {
   parseReplayOptionState,
@@ -69,6 +70,8 @@ export interface ReplayNote {
   channel: string;
   /** Original lane when rearranged; omitted when it is the same as channel or in older replays. */
   sourceChannel?: string;
+  /** A generated long-note head; source identity and endpoint reconstruct the modifier without rerolling. */
+  generatedLongNote?: true;
   type: ReplayNoteType;
   timeUs: number;
   /** Long-note / freezone tail. Present only when `type` is `'long'` or `'freezone'`. */
@@ -185,7 +188,9 @@ export interface ReplayPlay {
   autoScratch: boolean;
   /** Effective manual assist per side; older replays fall back to autoScratch for both. */
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
-  longNoteModifier?: 'OFF' | 'LEGACY' | 'REMOVE';
+  longNoteModifier?: LongNoteModifier;
+  longNoteRate?: number;
+  longNoteModifierChangeCount?: number;
   mineModifier?: MineModifier;
   mineModifierChangeCount?: number;
   autoScratch1P?: boolean;
@@ -557,6 +562,20 @@ function parseNote(value: unknown, index: number): ReplayNote {
   }
   const damage = optionalFiniteNumber(record.damage, `chart.notes[${index}].damage`);
   if (damage !== undefined) note.damage = damage;
+  if (record.generatedLongNote !== undefined) {
+    if (
+      record.generatedLongNote !== true ||
+      type !== 'long' ||
+      note.lnMode === undefined ||
+      !Number.isSafeInteger(note.timeUs) ||
+      !Number.isSafeInteger(note.endTimeUs) ||
+      !(note.endTimeUs! > note.timeUs)
+    )
+      throw new ReplayParseError(
+        `chart.notes[${index}].generatedLongNote: expected a timed long note with a resolved mode`,
+      );
+    note.generatedLongNote = true;
+  }
   if (record.silent !== undefined) {
     if (type !== 'mine' || typeof record.silent !== 'boolean')
       throw new ReplayParseError(`chart.notes[${index}].silent: expected a mine boolean`);
@@ -674,11 +693,21 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
       play.mineModifierChangeCount,
       'play.mineModifierChangeCount',
     );
+  if (play.longNoteRate !== undefined) {
+    const rate = expectFiniteNumber(play.longNoteRate, 'play.longNoteRate');
+    if (rate < 0 || rate > 1) throw new ReplayParseError('play.longNoteRate: expected 0..1');
+    parsed.longNoteRate = rate;
+  }
+  if (play.longNoteModifierChangeCount !== undefined)
+    parsed.longNoteModifierChangeCount = expectNonNegativeInteger(
+      play.longNoteModifierChangeCount,
+      'play.longNoteModifierChangeCount',
+    );
   if (play.longNoteModifier !== undefined) {
-    if (!['OFF', 'LEGACY', 'REMOVE'].includes(play.longNoteModifier as string)) {
-      throw new ReplayParseError('play.longNoteModifier must be OFF, LEGACY or REMOVE');
+    if (!['OFF', 'LEGACY', 'REMOVE', 'ADD_LN'].includes(play.longNoteModifier as string)) {
+      throw new ReplayParseError('play.longNoteModifier must be OFF, LEGACY, REMOVE or ADD_LN');
     }
-    parsed.longNoteModifier = play.longNoteModifier as 'OFF' | 'LEGACY' | 'REMOVE';
+    parsed.longNoteModifier = play.longNoteModifier as LongNoteModifier;
   }
   for (const key of ['autoScratch1P', 'autoScratch2P'] as const) {
     if (play[key] !== undefined) {

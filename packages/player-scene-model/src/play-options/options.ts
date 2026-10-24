@@ -1,4 +1,4 @@
-import type { MineModifier } from '@be-music/player-engine/lanes';
+import type { MineModifier, LongNoteModifier } from '@be-music/player-engine/lanes';
 import type { GaugeType, GaugeAutoShift } from '@be-music/player-engine/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
 
@@ -120,7 +120,9 @@ export interface PlayOptions {
   /** beatoraja 0.8.9's three launcher choices. */
   judgeAlgorithm: 'combo' | 'duration' | 'lowest';
   /** AC LEGACY NOTE removes CN/BSS; beatoraja REMOVE removes every long note. */
-  longNoteModifier: 'OFF' | 'LEGACY' | 'REMOVE';
+  longNoteModifier: LongNoteModifier;
+  /** beatoraja ADD probability, 0..1, default 1. */
+  longNoteRate: number;
   mineModifier: MineModifier;
   /** beatoraja: continue judging with the selected dead gauge, or stop on failure. */
   gaugeAutoShift: GaugeAutoShift;

@@ -1331,3 +1331,38 @@ test.each(['NONE', 'CONTINUE'] as const)(
     expect(simulated.gauge).toMatchObject({ type: 'HAZARD', final: 0, cleared: false, failedMidPlay: true });
   },
 );
+
+test('ADD LN records its exact generated endpoint and retains live/simulated LN judgments', async () => {
+  const json = chart([
+    { measure: 1, channel: '11', position: [0, 1], value: '01' },
+    { measure: 1, channel: '01', position: [1, 2], value: '02' },
+    { measure: 2, channel: '12', position: [0, 1], value: '01' },
+  ]);
+  json.bms.lnMode = 3; // Generated LN must override the chart default HCN mode.
+  const preparedChart = preparePlaybackChart(
+    resolveChart(json),
+    { longNoteModifier: 'ADD_LN', longNoteRate: 0.375 },
+    0,
+    () => 0,
+  );
+  const run = await runRecordedPlay(
+    json,
+    [down(0, 1_000_000, '11'), up(1, 1_500_000, '11'), down(2, 2_000_000, '12')],
+    'beatoraja',
+    { longNoteModifier: 'ADD_LN', longNoteRate: 0.375, preparedChart },
+  );
+  const replay = parseReplay(serializeReplay(run.replay));
+  expect(replay.play).toMatchObject({
+    longNoteModifier: 'ADD_LN',
+    longNoteRate: 0.375,
+    longNoteModifierChangeCount: 1,
+  });
+  expect(replay.chart.notes.find((note) => note.generatedLongNote)).toMatchObject({
+    channel: '11',
+    timeUs: 1_000_000,
+    endTimeUs: 1_500_000,
+    lnMode: 1,
+  });
+  expect(run.summary.perfect).toBe(2);
+  expect(simulateReplay(replay, { ruleset: 'beatoraja' }).judge).toEqual(replay.results!.native!.judge);
+});

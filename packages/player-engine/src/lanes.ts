@@ -50,3 +50,10 @@ export {
 } from './lane-random-source.ts';
 
 export { prepareMineModifier, type MineModifier, type MinePlacement } from './core/mine-modifier.ts';
+
+export {
+  addLongNotes,
+  clampLongNoteRate,
+  type LongNoteModifier,
+  type LongNotePlacement,
+} from './core/long-note-modifier.ts';

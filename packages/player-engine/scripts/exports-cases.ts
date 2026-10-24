@@ -1242,6 +1242,18 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
       lanesAPI.drawLaneRandomIndex(9, () => 0.5);
     },
   });
+  define('player-engine.lanes.clampLongNoteRate', {
+    run() {
+      lanesAPI.clampLongNoteRate(0.5);
+    },
+  });
+  define('player-engine.lanes.addLongNotes', {
+    run(fixtures) {
+      const resolved = resolveChart(fixtures.sampleBmsJSON);
+      const prepared = playerAPI.preparePlaybackChart(resolved);
+      lanesAPI.addLongNotes(resolved, prepared.notes, 'ADD_LN', { random: () => 0 });
+    },
+  });
   define('player-engine.lanes.prepareMineModifier', {
     run: (fixtures) => {
       lanesAPI.prepareMineModifier(resolveChart(fixtures.sampleBmsJSON), 'ADD_RANDOM', { random: () => 0.95 });

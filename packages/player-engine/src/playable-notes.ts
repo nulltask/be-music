@@ -12,6 +12,8 @@ export interface TimedPlayableNote {
   endBeat?: number;
   endSeconds?: number;
   longNoteMode?: LongNoteMode;
+  /** Added by the source long-note modifier; its effective endpoint is recorded for replay. */
+  generatedLongNote?: true;
   visibleUntilBeat?: number;
   seconds: number;
   judged: boolean;

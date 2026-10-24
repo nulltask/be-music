@@ -1,5 +1,5 @@
 import { prepareMineModifier, type MineModifier } from './mine-modifier.ts';
-import { removeLongNoteTails } from './long-note-modifier.ts';
+import { addLongNotes, clampLongNoteRate, removeLongNoteTails, type LongNoteModifier } from './long-note-modifier.ts';
 import { throwIfAborted } from '@be-music/shared-utils/core';
 import { resolveChart, type ResolvedChart } from '@be-music/chart-model';
 import { normalizeChannel, type BeMusicJSON } from '@be-music/chart-source';
@@ -51,6 +51,9 @@ export interface PreparedPlaybackChartData {
   notes: TimedPlayableNote[];
   laneSoundNotes: TimedPlayableNote[];
   landmineNotes: TimedLandmineNote[];
+  longNoteModifierApplied?: LongNoteModifier;
+  longNoteModifierRate?: number;
+  longNoteModifierChangeCount?: number;
   /** Number of mines actually changed; selection alone does not imply a source assist. */
   mineModifierChangeCount?: number;
   mineModifierApplied?: MineModifier;
@@ -179,14 +182,28 @@ export function preparePlaybackChart(
   resolved: ResolvedChart,
   options: Pick<
     PlayerOptions,
-    'laneModeExtension' | 'longNoteModifier' | 'mineModifier' | 'mineModifierPlacements'
+    | 'laneModeExtension'
+    | 'longNoteModifier'
+    | 'longNoteRate'
+    | 'longNoteModifierPlacements'
+    | 'mineModifier'
+    | 'mineModifierPlacements'
   > = {},
   auxiliaryPlaybackEndSeconds = 0,
   random?: () => number,
 ): PreparedPlaybackChartData {
   const playVariant = resolved.playVariant;
   const notes = resolved.notes.map(toTimedPlayableNote);
-  removeLongNoteTails(notes, options.longNoteModifier ?? 'OFF', resolved.lnMode);
+  const longMode = options.longNoteModifier ?? 'OFF';
+  const longChanges =
+    longMode === 'ADD_LN'
+      ? addLongNotes(resolved, notes, longMode, {
+          rate: options.longNoteRate,
+          random,
+          laneModeExtension: options.laneModeExtension,
+          placements: options.longNoteModifierPlacements,
+        })
+      : removeLongNoteTails(notes, longMode, resolved.lnMode);
   // Invisible 3x/4x objects are not score targets, but they do update the lane's current keysound in manual play.
   // They are always prepared, independently of the debug overlay option, so audio never depends on rendering settings.
   const mineResult = prepareMineModifier(resolved, options.mineModifier ?? 'OFF', {
@@ -200,6 +217,7 @@ export function preparePlaybackChart(
   const laneSoundNotes = [...notes, ...invisibleNotes].sort(compareLaneSoundNotes);
   const renderNotes = notes;
   let totalSeconds = Math.max(resolved.lastNoteSeconds, auxiliaryPlaybackEndSeconds);
+  for (const note of notes) totalSeconds = Math.max(totalSeconds, note.endSeconds ?? note.seconds);
   for (const mine of landmineNotes) totalSeconds = Math.max(totalSeconds, mine.seconds);
   const channels = collectUniqueNoteChannels(notes, landmineNotes, invisibleNotes);
   const laneModeOptions = {
@@ -216,6 +234,13 @@ export function preparePlaybackChart(
 
   return {
     notes,
+    ...(options.longNoteModifier !== undefined
+      ? {
+          longNoteModifierApplied: longMode,
+          longNoteModifierChangeCount: longChanges,
+          longNoteModifierRate: clampLongNoteRate(options.longNoteRate ?? 1),
+        }
+      : {}),
     laneSoundNotes,
     landmineNotes,
     ...(options.mineModifier !== undefined

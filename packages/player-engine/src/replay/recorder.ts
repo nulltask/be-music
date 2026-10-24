@@ -1,3 +1,4 @@
+import type { LongNoteModifier } from '../core/long-note-modifier.ts';
 import { resolveReplaySourceChannel } from './source-channel.ts';
 import type { MineModifier } from '../core/mine-modifier.ts';
 import {
@@ -60,7 +61,9 @@ export interface ReplayRecorderPlaySettings {
   mode: 'manual' | 'auto';
   autoScratch: boolean;
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
-  longNoteModifier?: 'OFF' | 'LEGACY' | 'REMOVE';
+  longNoteModifier?: LongNoteModifier;
+  longNoteRate?: number;
+  longNoteModifierChangeCount?: number;
   mineModifier?: MineModifier;
   mineModifierChangeCount?: number;
   autoScratch1P?: boolean;
@@ -273,6 +276,9 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       if (options.play.mineModifier !== undefined) play.mineModifier = options.play.mineModifier;
       if (options.play.mineModifierChangeCount !== undefined)
         play.mineModifierChangeCount = options.play.mineModifierChangeCount;
+      if (options.play.longNoteRate !== undefined) play.longNoteRate = options.play.longNoteRate;
+      if (options.play.longNoteModifierChangeCount !== undefined)
+        play.longNoteModifierChangeCount = options.play.longNoteModifierChangeCount;
       if (options.play.longNoteModifier !== undefined) play.longNoteModifier = options.play.longNoteModifier;
       if (options.play.autoScratch1P !== undefined) play.autoScratch1P = options.play.autoScratch1P;
       if (options.play.autoScratch2P !== undefined) play.autoScratch2P = options.play.autoScratch2P;
@@ -321,6 +327,7 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
       entry.endTimeUs = secondsToMicroseconds(note.endSeconds!);
       if (!isFreeZone) {
         entry.lnMode = note.longNoteMode ?? chartLNMode;
+        if (note.generatedLongNote) entry.generatedLongNote = true;
       }
     }
     notes.push(entry);
