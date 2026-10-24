@@ -1,4 +1,12 @@
-import { SERVICE_CSS, renderBuildInfo, type BuildInfo } from '@be-music/service-web-theme';
+import {
+  renderBuildInfo,
+  renderServiceHeader,
+  resolveLocale,
+  SERVICE_CSS,
+  serviceSkipLink,
+  type BuildInfo,
+  type Locale,
+} from '@be-music/service-web-theme';
 
 /** The Accounts public profile combined with the local OIDC session's anonymous status. */
 export interface DashboardAccount {
@@ -7,7 +15,7 @@ export interface DashboardAccount {
   anonymous: boolean;
 }
 
-export type Locale = 'ja' | 'en';
+export type { Locale };
 
 /** The other services of the dashboard's environment: `be-music.app` → `play.be-music.app`, and so on. */
 export function serviceLinks(hostname: string): { play: string; leaderboard: string } {
@@ -15,10 +23,9 @@ export function serviceLinks(hostname: string): { play: string; leaderboard: str
   return { play: `https://play.${site}/`, leaderboard: `https://leaderboard.${site}/` };
 }
 
-/** Japanese when the browser prefers it, English otherwise. */
+/** Japanese when the browser prefers it, English otherwise. `?lang=` and the language cookie win in `resolveLocale`. */
 export function pickLocale(acceptLanguage: string | null): Locale {
-  const first = (acceptLanguage ?? '').split(',')[0]?.trim().toLowerCase() ?? '';
-  return first.startsWith('ja') ? 'ja' : 'en';
+  return resolveLocale({ acceptLanguage: acceptLanguage ?? undefined });
 }
 
 const TEXT = {
@@ -58,6 +65,7 @@ export function renderDashboard(input: {
   locale: Locale;
   showDonateLink?: boolean;
   buildInfo?: BuildInfo;
+  requestURL?: string;
   links?: { play: string; leaderboard: string; donate: string };
 }): string {
   const t = TEXT[input.locale];
@@ -80,8 +88,16 @@ export function renderDashboard(input: {
 </style>
 </head>
 <body>
-<a class="skip-link" href="#main">${input.locale === 'ja' ? '本文へ移動' : 'Skip to content'}</a>
-<header class="site-header"><div class="header-inner"><a class="brand" href="/">be-music <span>Dashboard</span></a><nav class="header-nav" aria-label="${input.locale === 'ja' ? 'アカウント' : 'Account'}"><a href="/api/auth/manage">${input.locale === 'ja' ? 'アカウント管理' : 'Manage account'}</a></nav></div></header>
+${serviceSkipLink(input.locale)}
+${renderServiceHeader({
+  locale: input.locale,
+  product: input.locale === 'ja' ? 'ダッシュボード' : 'Dashboard',
+  homeHref: '/',
+  playHref: links.play,
+  accountHref: input.account === undefined ? '/api/auth/sign-in' : '/api/auth/manage',
+  account: input.account,
+  requestURL: input.requestURL ?? '/',
+})}
 <main class="site-main" id="main">
 <div class="page-heading"><h1>${input.locale === 'ja' ? 'ダッシュボード' : 'Dashboard'}</h1><p>${input.locale === 'ja' ? 'アカウントと、それぞれの be-music サービスへ。' : 'Your account and be-music services, in one place.'}</p></div>
 <section class="panel account-panel" aria-labelledby="account-heading"><h2 id="account-heading">${input.locale === 'ja' ? 'アカウント' : 'Account'}</h2>
