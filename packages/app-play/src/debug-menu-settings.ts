@@ -68,6 +68,9 @@ export interface DebugMenuSettings {
   classicHiSpeed: boolean;
   normalHiSpeedLevel: number;
   judgeTimingMs: number;
+  visualConstant: boolean;
+  noteDurationMs: number;
+  constantFadeMs: number;
   bpmGuide: boolean;
   judgeAlgorithm: PlayerGUIState['judgeAlgorithm'];
   longNoteModifier: PlayerGUIState['longNoteModifier'];
@@ -206,6 +209,9 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'submitToLeaderboard', booleanOf(raw.submitToLeaderboard));
   assign(settings, 'dpFlip', booleanOf(raw.dpFlip));
   assign(settings, 'bpmGuide', booleanOf(raw.bpmGuide));
+  assign(settings, 'visualConstant', booleanOf(raw.visualConstant));
+  assign(settings, 'noteDurationMs', resolvePlayOptionValue('noteDurationMs', raw.noteDurationMs));
+  assign(settings, 'constantFadeMs', resolvePlayOptionValue('constantFadeMs', raw.constantFadeMs));
   assign(settings, 'judgeTimingMs', resolvePlayOptionValue('judgeTimingMs', raw.judgeTimingMs));
   assign(settings, 'normalHiSpeedLevel', resolvePlayOptionValue('normalHiSpeedLevel', raw.normalHiSpeedLevel));
   assign(settings, 'classicHiSpeed', booleanOf(raw.classicHiSpeed));
@@ -395,6 +401,9 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('random2P');
   assignState('dpFlip');
   assignState('bpmGuide');
+  assignState('visualConstant');
+  assignState('noteDurationMs');
+  assignState('constantFadeMs');
   assignState('judgeTimingMs');
   assignState('normalHiSpeedLevel');
   assignState('classicHiSpeed');
@@ -464,6 +473,9 @@ export function captureDebugMenuSettings(
     random2P: state.random2P,
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
+    visualConstant: state.visualConstant,
+    noteDurationMs: state.noteDurationMs,
+    constantFadeMs: state.constantFadeMs,
     judgeTimingMs: state.judgeTimingMs,
     normalHiSpeedLevel: state.normalHiSpeedLevel,
     classicHiSpeed: state.classicHiSpeed,

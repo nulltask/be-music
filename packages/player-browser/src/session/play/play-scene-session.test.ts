@@ -270,20 +270,42 @@ test('records actual hi-speed edits alongside the effective replay view', () => 
   expect(commands.filter((command) => command.kind === 'options')).toHaveLength(1);
 });
 
+test('records accepted live CONSTANT duration and fade changes', () => {
+  const { play, session } = createSceneSession({ visualConstant: true, noteDurationMs: 500, constantFadeMs: 100 });
+  const bus = createPlayerInputSignalBus();
+  play.sharedEngineInputSignals = bus;
+  const push = vi.spyOn(bus, 'pushCommand');
+  session.frame(0);
+  session.dispatch({ type: 'constant-visibility', durationMs: 250, fadeMs: -200 });
+  expect(session.frame(1).playOptions).toMatchObject({ noteDurationMs: 250, constantFadeMs: -200 });
+  expect(push).toHaveBeenCalledWith({ kind: 'options', values: { noteDurationMs: 250, constantFadeMs: -200 } });
+  session.dispatch({ type: 'constant-visibility', durationMs: -1, fadeMs: 2000 });
+  expect(play.options).toMatchObject({ noteDurationMs: 1, constantFadeMs: 1000 });
+});
+
 test('replay frames restore selected options at the playhead and after a backward seek', () => {
   const replay = {
     play: {
       mode: 'manual',
-      options: { displayAreaInfo: 'ON' },
-      optionChanges: [{ timeUs: 2_000_000, values: { displayAreaInfo: 'SUDDEN_ONLY' } }],
+      options: { displayAreaInfo: 'ON', visualConstant: true, noteDurationMs: 500, constantFadeMs: 100 },
+      optionChanges: [
+        { timeUs: 2_000_000, values: { displayAreaInfo: 'SUDDEN_ONLY', noteDurationMs: 250, constantFadeMs: -200 } },
+      ],
     },
   } as unknown as import('@be-music/player-engine/replay').BeMusicReplay;
   const { play, session } = createSceneSession({ replay });
   let seconds = 0;
   play.currentSeconds = () => seconds;
   expect(session.frame(0).playOptions.displayAreaInfo).toBe('ON');
+  expect(session.frame(0).playOptions).toMatchObject({
+    visualConstant: true,
+    noteDurationMs: 500,
+    constantFadeMs: 100,
+  });
   seconds = 3;
   expect(session.frame(3).playOptions.displayAreaInfo).toBe('SUDDEN_ONLY');
+  expect(session.frame(3).playOptions).toMatchObject({ noteDurationMs: 250, constantFadeMs: -200 });
   seconds = 1;
   expect(session.frame(4).playOptions.displayAreaInfo).toBe('ON');
+  expect(session.frame(4).playOptions).toMatchObject({ noteDurationMs: 500, constantFadeMs: 100 });
 });

@@ -1,3 +1,4 @@
+import { resolveConstantVisibility } from './constant-visibility.ts';
 import { clampJudgeTimingMs } from './judge-timing.ts';
 import { clamp } from '@be-music/shared-utils/core';
 import { LR2_GAUGE_TYPES, isGaugeType } from '@be-music/player-engine/ruleset';
@@ -74,6 +75,9 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   classicHiSpeed: false,
   normalHiSpeedLevel: 0,
   judgeTimingMs: 0,
+  visualConstant: false,
+  noteDurationMs: 500,
+  constantFadeMs: 100,
   bpmGuide: false,
   autoPlay: false,
   bga: 'ON',
@@ -125,6 +129,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   longNoteModifier: ['OFF', 'LEGACY', 'REMOVE'],
   classicHiSpeed: BOOLEAN_CYCLE,
   bpmGuide: BOOLEAN_CYCLE,
+  visualConstant: BOOLEAN_CYCLE,
   autoScratch1P: BOOLEAN_CYCLE,
   autoScratch2P: BOOLEAN_CYCLE,
   dpFlip: BOOLEAN_CYCLE,
@@ -156,6 +161,8 @@ export function clampShutter(value: number): number {
 const NUMERIC_PLAY_OPTION_CLAMPS: { readonly [K in keyof PlayOptions]?: (value: number) => number } = {
   hiSpeed: clampHiSpeed,
   judgeTimingMs: clampJudgeTimingMs,
+  noteDurationMs: (value) => resolveConstantVisibility({ durationMs: value }).durationMs,
+  constantFadeMs: (value) => resolveConstantVisibility({ fadeMs: value }).fadeMs,
   normalHiSpeedLevel: (value) => Math.max(0, Math.min(20, Math.round(value))),
   shutter: clampShutter,
 };

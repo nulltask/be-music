@@ -1,3 +1,4 @@
+import { resolveConstantVisibility, resolveConstantAlpha } from '@be-music/player-scene-model';
 import { resolveNoteDisplaySeconds } from '@be-music/player-scene-model';
 import { collectBPMGuideEvents } from '../../../chart/bpm-guide.ts';
 import { renderBPMGuide } from '../bpm-guide.ts';
@@ -45,6 +46,12 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
   }
   const displaySeconds = resolveNoteDisplaySeconds(seconds, ctx.options.judgeTimingMs ?? 0);
   const currentBeat = ctx.play.currentBeat(displaySeconds);
+  const constant = resolveConstantVisibility({
+    enabled: ctx.options.visualConstant,
+    durationMs: ctx.options.noteDurationMs,
+    fadeMs: ctx.options.constantFadeMs,
+  });
+  const opacity = (eventSeconds: number) => resolveConstantAlpha(eventSeconds, displaySeconds, constant);
   // The eased scroll factor, so a hi-speed change glides instead of making the notes jump.
   const pixelsPerBeat =
     (ctx.playfieldSkin.pixelsPerBeat ?? PIXELS_PER_BEAT) * ctx.play.scrollHiSpeed.valueAt(performance.now());
@@ -89,6 +96,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
         distance: beatDistance,
         pixelsPerBeat,
         pool: ctx.noteLayerPool,
+        alphaAt: opacity,
         lanes: resolveSideLaneRuns(ctx.play.laneX).map((run) => ({
           ...run,
           top: first.top,
@@ -108,6 +116,8 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
         break;
       }
       if (!isDrawnAtTime(drawWindow, invisible.seconds)) continue;
+      const alpha = opacity(invisible.seconds);
+      if (alpha <= 0) continue;
       const lane = ctx.play.laneX.get(invisible.channel);
       if (!lane) continue;
       const y = lane.bottom - beatDistance(invisible.beat) * pixelsPerBeat;
@@ -117,6 +127,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
         const sprite = ctx.noteLayerPool.acquireSprite();
         sprite.texture = cell.texture;
         sprite.label = drawLabel(ctx, 'invisible-note', invisible.channel);
+        sprite.alpha = alpha;
         sprite.x = lane.x + (lane.w - cell.width) / 2;
         sprite.y = y - cell.height;
         sprite.width = cell.width;
@@ -125,7 +136,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
       }
       const graphic = ctx.noteLayerPool.acquireGraphics();
       graphic.label = drawLabel(ctx, 'invisible-note-fallback', invisible.channel);
-      graphic.rect(lane.x + 2, y - 4, Math.max(4, lane.w - 4), 4).fill({ color: 0x33dd66, alpha: 0.7 });
+      graphic.rect(lane.x + 2, y - 4, Math.max(4, lane.w - 4), 4).fill({ color: 0x33dd66, alpha: 0.7 * alpha });
     }
   }
   // Under LR2's rules a note stays until it is judged and its beat has passed, so the walk starts from LR2's
@@ -147,6 +158,8 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
     if (isPastDrawWindow(drawWindow, note.beat)) {
       break;
     }
+    const alpha = opacity(note.seconds);
+    if (alpha <= 0) continue;
     // LR2's rules: a note stays until it is judged and its beat (a long note's end) has passed — on the judgement line
     // once its beat has. beatoraja's rules go by time below.
     if (drawWindow.rules === 'lr2' && isGone(note)) {
@@ -179,7 +192,11 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
       if (drawWindow.rules === 'beatoraja' && yEnd >= headY) {
         continue;
       }
-      renderLongNote(ctx, laneIndex, note, lane, headY, yEnd, drawBottom);
+      if (alpha === 1) renderLongNote(ctx, laneIndex, note, lane, headY, yEnd, drawBottom);
+      else
+        ctx.noteLayerPool.withAlpha(alpha, () =>
+          renderLongNote(ctx, laneIndex, note, lane, headY, yEnd, drawBottom, alpha),
+        );
       continue;
     }
     // A tap note draws while it is above the stage's bottom edge and (beatoraja's rules) its time is still ahead; LR2's
@@ -199,7 +216,8 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
     if (note.judged && hideJudgedNotes) {
       continue;
     }
-    renderSingleNote(ctx, laneIndex, note.channel, lane, y);
+    if (alpha === 1) renderSingleNote(ctx, laneIndex, note.channel, lane, y);
+    else ctx.noteLayerPool.withAlpha(alpha, () => renderSingleNote(ctx, laneIndex, note.channel, lane, y, alpha));
   }
   // Landmine notes — same scroll math, separate sprite. Drawn after regular notes so a mine sitting at the same beat
   // as a playable note paints on top (LR2 default skin's mine sprites carry their own outline so the visual hierarchy
@@ -212,6 +230,8 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
     if (isPastDrawWindow(drawWindow, mine.beat)) {
       break;
     }
+    const alpha = opacity(mine.seconds);
+    if (alpha <= 0) continue;
     if (drawWindow.rules === 'lr2') {
       if (isGone(mine)) continue;
     } else if (mine.judged || !isDrawnAtTime(drawWindow, mine.seconds)) continue;
@@ -220,7 +240,8 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
     const y = resolveDrawY(drawWindow, lane.bottom - beatDistance(mine.beat) * pixelsPerBeat, lane.bottom);
     if (y < lane.top - overscan || y > resolveDrawBottom(drawWindow, lane.bottom)) continue;
     const laneIndex = resolveLR2LaneIndex(mine.channel, ctx.play.chartPlayVariant);
-    renderMineNote(ctx, laneIndex, mine.channel, lane, y);
+    if (alpha === 1) renderMineNote(ctx, laneIndex, mine.channel, lane, y);
+    else ctx.noteLayerPool.withAlpha(alpha, () => renderMineNote(ctx, laneIndex, mine.channel, lane, y, alpha));
   }
   ctx.noteLayerPool.end();
 }
@@ -251,6 +272,7 @@ function renderSingleNote(
   channel: string,
   lane: PlayfieldLaneRect,
   y: number,
+  alpha = 1,
 ): void {
   // `y` is where the chart timing intersects the judgement line for this note. We anchor the sprite by its **bottom
   // edge** so the just-timing moment lines up with the bottom edge of the visual note (LR2 / BMS convention) instead
@@ -269,7 +291,14 @@ function renderSingleNote(
   const kind = resolveBeMusicLaneKind(channel, laneIndex, ctx.play.chartPlayVariant);
   const binding = ctx.skinBinding;
   if (binding) {
-    binding.addNote({ kind, x: lane.x, w: lane.w, y, autoplay: ctx.play.isAutoplayedChannel(channel) });
+    binding.addNote({
+      kind,
+      x: lane.x,
+      w: lane.w,
+      y,
+      ...(alpha !== 1 ? { alpha } : {}),
+      autoplay: ctx.play.isAutoplayedChannel(channel),
+    });
     return;
   }
   const graphic = ctx.noteLayerPool.acquireGraphics();

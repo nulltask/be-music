@@ -248,6 +248,16 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.resolvePlayOptions({ hiSpeed: 3.25, random1P: 'MIRROR', gauge1P: 'BOGUS' });
     },
   });
+  define('player-scene-model.resolveConstantVisibility', {
+    run: () => {
+      sceneModelAPI.resolveConstantVisibility({ enabled: true, durationMs: 500, fadeMs: -100 });
+    },
+  });
+  define('player-scene-model.resolveConstantAlpha', {
+    run: () => {
+      sceneModelAPI.resolveConstantAlpha(2.55, 2, { enabled: true, durationMs: 500, fadeMs: 100 });
+    },
+  });
   define('player-scene-model.clampJudgeTimingMs', {
     run: () => {
       sceneModelAPI.clampJudgeTimingMs(125);

@@ -1,3 +1,4 @@
+import { resolveConstantVisibility, resolveConstantAlpha } from '@be-music/player-scene-model';
 import { drawLabel } from '../../../stage/draw-label.ts';
 /**
  * The measure lines of the shared playfield: the chart's bar lines from the playhead, drawn with the skin's lines, by the
@@ -83,6 +84,15 @@ export function renderMeasureLines(ctx: PlayfieldContext, drawWindow: NoteDrawWi
     : (toBeat: number): number => toBeat - currentBeat;
   const drawBottom = resolveDrawBottom(drawWindow, bottom);
   const lineY = (beat: number): number => resolveDrawY(drawWindow, bottom - beatDistance(beat) * pixelsPerBeat, bottom);
+  const constant = resolveConstantVisibility({
+    enabled: ctx.options?.visualConstant,
+    durationMs: ctx.options?.noteDurationMs,
+    fadeMs: ctx.options?.constantFadeMs,
+  });
+  const alphaAt = (beat: number) =>
+    constant.enabled && ctx.play.timingResolver
+      ? resolveConstantAlpha(ctx.play.timingResolver.beatToSeconds(beat), drawWindow.nowSeconds, constant)
+      : 1;
   const skinLines = ctx.playfieldSkin.measureLines();
   if (skinLines !== undefined) {
     // Each of the skin's lines (one per side under double play) at every boundary, in the skin's order.
@@ -99,6 +109,8 @@ export function renderMeasureLines(ctx: PlayfieldContext, drawWindow: NoteDrawWi
         if (y < top - 1 || y > drawBottom + 1) {
           continue;
         }
+        const alpha = alphaAt(beat);
+        if (alpha <= 0) continue;
         const sprite = ctx.noteLayerPool.acquireSprite();
         sprite.texture = texture;
         sprite.label = drawLabel(ctx, 'measure-line', lineIndex, beat);
@@ -106,6 +118,7 @@ export function renderMeasureLines(ctx: PlayfieldContext, drawWindow: NoteDrawWi
         sprite.width = line.width;
         sprite.height = line.height;
         line.applyToSprite?.(sprite);
+        sprite.alpha *= alpha;
       }
     }
     return;
@@ -124,7 +137,9 @@ export function renderMeasureLines(ctx: PlayfieldContext, drawWindow: NoteDrawWi
         continue;
       }
       for (const run of runs) {
-        binding.addMeasureLine({ side: run.side, x: run.x, w: run.w, y });
+        const alpha = alphaAt(beat);
+        if (alpha > 0)
+          binding.addMeasureLine({ side: run.side, x: run.x, w: run.w, y, ...(alpha !== 1 ? { alpha } : {}) });
       }
     }
     return;
@@ -144,7 +159,7 @@ export function renderMeasureLines(ctx: PlayfieldContext, drawWindow: NoteDrawWi
       continue;
     }
     for (const run of runs) {
-      graphic.rect(run.x, Math.round(y), run.w, 1).fill({ color: 0x9a8fd0, alpha: 0.28 });
+      graphic.rect(run.x, Math.round(y), run.w, 1).fill({ color: 0x9a8fd0, alpha: 0.28 * alphaAt(beat) });
     }
   }
 }

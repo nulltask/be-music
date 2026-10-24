@@ -20,6 +20,10 @@ export interface PlayOptions {
   normalHiSpeedLevel: number;
   /** beatoraja display timing in integer milliseconds, -500..500; positive advances note drawing. */
   judgeTimingMs: number;
+  /** beatoraja visual CONSTANT, distinct from HS-FIX CONSTANT and chart scroll modifiers. */
+  visualConstant: boolean;
+  noteDurationMs: number;
+  constantFadeMs: number;
   /** beatoraja BPM GUIDE shows BPM-change and STOP markers on the lane. */
   bpmGuide: boolean;
   /**

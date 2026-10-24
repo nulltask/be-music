@@ -242,6 +242,9 @@ function createPlayView(
     };
   }
   const drawing = {
+    ...(settings.visualConstant !== undefined ? { visualConstant: settings.visualConstant } : {}),
+    ...(settings.noteDurationMs !== undefined ? { noteDurationMs: settings.noteDurationMs } : {}),
+    ...(settings.constantFadeMs !== undefined ? { constantFadeMs: settings.constantFadeMs } : {}),
     ...(settings.judgeTimingMs !== undefined ? { judgeTimingMs: settings.judgeTimingMs } : {}),
     ...(settings.bpmGuide !== undefined ? { bpmGuide: settings.bpmGuide } : {}),
     ...(settings.bga !== undefined ? { bga: settings.bga } : {}),
@@ -479,6 +482,9 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       ...settings,
       classicHiSpeed: playOptions.classicHiSpeed,
       normalHiSpeedLevel: playOptions.normalHiSpeedLevel,
+      visualConstant: playOptions.visualConstant,
+      noteDurationMs: playOptions.noteDurationMs,
+      constantFadeMs: playOptions.constantFadeMs,
       hsFix: playOptions.hsFix,
       recordingOptionState: { ...playOptions },
       ...(options.allowSeek !== undefined ? { allowSeek: options.allowSeek } : {}),
@@ -512,7 +518,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
     audio: options.audio,
     ...(options.sounds !== undefined ? { sounds: options.sounds } : {}),
   });
-  family = createPlayView(kit, play, options, sceneSession);
+  family = createPlayView(kit, play, { ...options, settings: play.options }, sceneSession);
   return new FamilyPlayScene(
     sceneSession,
     family,

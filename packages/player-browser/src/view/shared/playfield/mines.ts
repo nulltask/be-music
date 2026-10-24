@@ -17,6 +17,7 @@ export function renderMineNote(
   channel: string,
   lane: PlayfieldLaneRect,
   y: number,
+  alpha = 1,
 ): void {
   const cell = ctx.playfieldSkin.noteCell('mine', channel);
   if (cell?.texture) {
@@ -32,6 +33,7 @@ export function renderMineNote(
   const binding = ctx.skinBinding;
   if (binding?.drawsMines) {
     binding.addMine({
+      ...(alpha !== 1 ? { alpha } : {}),
       kind: resolveBeMusicLaneKind(channel, laneIndex, ctx.play.chartPlayVariant),
       x: lane.x,
       w: lane.w,

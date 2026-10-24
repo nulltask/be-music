@@ -175,7 +175,14 @@ export interface PlayfieldContext extends LaneGeometryContext {
   readonly options: Readonly<
     Pick<
       PlaySessionOptions,
-      'beMusicEffects' | 'showInvisibleNotes' | 'judgedNoteDisplay' | 'bpmGuide' | 'judgeTimingMs'
+      | 'beMusicEffects'
+      | 'showInvisibleNotes'
+      | 'judgedNoteDisplay'
+      | 'bpmGuide'
+      | 'judgeTimingMs'
+      | 'visualConstant'
+      | 'noteDurationMs'
+      | 'constantFadeMs'
     >
   >;
   /** How the family's skin answers the playfield: the stage, the lanes, the note and bomb cells, the effect lengths. */

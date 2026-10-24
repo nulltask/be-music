@@ -434,6 +434,8 @@ export interface BeMusicLaneFrame {
  * the way beatoraja does); clip to the lane's `bottom` to keep nothing below the line.
  */
 export interface BeMusicNote {
+  /** Source visibility opacity (0..1); omitted means fully visible. Multiply by the skin's own opacity. */
+  alpha?: number;
   kind: BeMusicLaneKind;
   x: number;
   w: number;
@@ -450,6 +452,8 @@ export interface BeMusicNote {
  * {@link BeMusicGameplaySkin.drawsMines}.
  */
 export interface BeMusicMine {
+  /** Source visibility opacity (0..1); omitted means fully visible. Multiply by the skin's own opacity. */
+  alpha?: number;
   kind: BeMusicLaneKind;
   x: number;
   w: number;
@@ -461,6 +465,8 @@ export interface BeMusicMine {
  * {@link BeMusicNote}, it can reach below the judgement line when a negative `#SCROLL` puts it there.
  */
 export interface BeMusicLongNote {
+  /** Source visibility opacity (0..1); omitted means fully visible. Multiply by the skin's own opacity. */
+  alpha?: number;
   kind: BeMusicLaneKind;
   x: number;
   w: number;
@@ -504,6 +510,8 @@ export interface BeMusicBomb {
  * judgement line when a negative `#SCROLL` puts it there.
  */
 export interface BeMusicMeasureLine {
+  /** Source visibility opacity (0..1); omitted means fully visible. Multiply by the skin's own opacity. */
+  alpha?: number;
   side: BeMusicSide;
   /** Left edge and width of the lane run it crosses. */
   x: number;

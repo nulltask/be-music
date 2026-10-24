@@ -203,6 +203,9 @@ export interface PlayerGUIState extends PlayTempoSettings {
   classicHiSpeed: boolean;
   normalHiSpeedLevel: number;
   judgeTimingMs: number;
+  visualConstant: boolean;
+  noteDurationMs: number;
+  constantFadeMs: number;
   bpmGuide: boolean;
   judgeAlgorithm: PlayOptions['judgeAlgorithm'];
   longNoteModifier: PlayOptions['longNoteModifier'];

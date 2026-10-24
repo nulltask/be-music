@@ -78,6 +78,7 @@ export interface PlayChartContext {
   readonly options: Readonly<
     Pick<
       PlaySessionOptions,
+      | 'visualConstant'
       | 'hsFix'
       | 'classicHiSpeed'
       | 'normalHiSpeedLevel'
@@ -326,7 +327,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // the common case stays on the plain beat-diff path with no extra cost (and on its ruleset's drawing rules).
   const beatResolver = resolvedPlay.beatResolver;
   const scrollTimeline = resolvedPlay.scroll;
-  const speedTimeline = resolvedPlay.speed;
+  const speedTimeline = ctx.options.visualConstant ? [] : resolvedPlay.speed;
   ctx.scrollMapper = changesScrollRate(scrollTimeline, speedTimeline)
     ? createScrollDistanceMapper(scrollTimeline, speedTimeline, { invalidDistance: 0 })
     : undefined;
