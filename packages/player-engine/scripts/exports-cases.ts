@@ -1134,6 +1134,24 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
       lanesAPI.resolveWheelLaneDirection('1P', '24');
     },
   });
+  define('player-engine.lanes.clampHRandomThresholdBPM', {
+    run: () => {
+      lanesAPI.clampHRandomThresholdBPM(120);
+    },
+  });
+  define('player-engine.lanes.randomizeHRandomNotes', {
+    run: () => {
+      lanesAPI.randomizeHRandomNotes(
+        [
+          { channel: '11', timeMs: 0, endTimeMs: 1000 },
+          { channel: '12', timeMs: 125 },
+          { channel: '12', timeMs: 1100 },
+        ],
+        ['11', '12', '13', '14', '15'],
+        { random: () => 0.5 },
+      );
+    },
+  });
   define('player-engine.lanes.randomizeSpiralNotes', {
     run: () => {
       lanesAPI.randomizeSpiralNotes(

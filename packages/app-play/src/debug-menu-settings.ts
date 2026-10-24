@@ -62,6 +62,7 @@ export interface DebugMenuSettings {
   judgeRuleset: PlayerGUIState['judgeRuleset'];
   gauge: PlayerGUIState['gauge'];
   random1P: RandomMode;
+  hRandomThresholdBPM: number;
   random2P: RandomMode;
   dpFlip: boolean;
   classicHiSpeed: boolean;
@@ -234,6 +235,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'nonstopPlacement', oneOf(raw.nonstopPlacement, ['intended', 'lr2'] as const));
   assign(settings, 'judgeRuleset', isRulesetId(raw.judgeRuleset) ? raw.judgeRuleset : undefined);
   assign(settings, 'gauge', isGaugeType(raw.gauge) ? raw.gauge : undefined);
+  assign(settings, 'hRandomThresholdBPM', resolvePlayOptionValue('hRandomThresholdBPM', raw.hRandomThresholdBPM));
   assign(settings, 'random1P', oneOf(raw.random1P, RANDOM_MODES));
   assign(settings, 'random2P', oneOf(raw.random2P, RANDOM_MODES));
   assign(settings, 'sort', oneOf(raw.sort, SORT_CYCLE));
@@ -405,6 +407,7 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('judgeRuleset');
   assignState('gauge');
   assignState('random1P');
+  assignState('hRandomThresholdBPM');
   assignState('random2P');
   assignState('dpFlip');
   assignState('bpmGuide');
@@ -482,6 +485,7 @@ export function captureDebugMenuSettings(
     judgeRuleset: state.judgeRuleset,
     gauge: state.gauge,
     random1P: state.random1P,
+    hRandomThresholdBPM: state.hRandomThresholdBPM,
     random2P: state.random2P,
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,

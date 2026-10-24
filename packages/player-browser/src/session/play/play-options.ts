@@ -166,9 +166,10 @@ export interface PlaySessionOptions {
    * shuffle is consistent across the play session — pressing F5 (restart) reuses the same `random1P` value but draws a
    * fresh permutation. SCATTER is a legacy value; new requests are rejected until it is fully implemented.
    */
-  random1P?: 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SPIRAL' | 'SCATTER';
+  hRandomThresholdBPM?: number;
+  random1P?: 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SPIRAL' | 'H-RANDOM' | 'SCATTER';
   /** 2P side note arrangement (`#SRC_BUTTON,type=43`). */
-  random2P?: 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SPIRAL' | 'SCATTER';
+  random2P?: 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SPIRAL' | 'H-RANDOM' | 'SCATTER';
   /**
    * Replay playback: a recorded replay to re-drive instead of live keyboard input. The chart prepare skips the
    * usual DP-flip / lane-shuffle passes and re-applies the RECORDED arrangement (`applyReplayArrangement`), the

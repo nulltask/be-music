@@ -27,6 +27,7 @@ import { preparePlaybackChart, resolvePlayChart, type PreparedPlaybackChartData 
 import {
   isPlayableInputChannel,
   randomizeSRandomNotes,
+  randomizeHRandomNotes,
   randomizeSpiralNotes,
   resolveLaneOptionChannels,
   resolvePlayVariantLaneChannels,
@@ -97,6 +98,7 @@ export interface PlayChartContext {
       | 'coverStart'
       | 'replay'
       | 'dpFlip'
+      | 'hRandomThresholdBPM'
       | 'random1P'
       | 'random2P'
       | 'course'
@@ -283,7 +285,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       resolveLaneOptionChannels('1P', hostPlayVariant, prepared.laneBindings),
       ctx.options.random1P ?? 'OFF',
       Math.random,
-      { ruleset: ctx.options.judgeRuleset ?? 'lr2' },
+      { ruleset: ctx.options.judgeRuleset ?? 'lr2', hRandomThresholdBPM: ctx.options.hRandomThresholdBPM },
       ctx.mineNotes as Array<{ channel: string }>,
       ctx.invisibleNotes as Array<{ channel: string }>,
     );
@@ -292,7 +294,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       resolveLaneOptionChannels('2P', hostPlayVariant, prepared.laneBindings),
       ctx.options.random2P ?? 'OFF',
       Math.random,
-      { ruleset: ctx.options.judgeRuleset ?? 'lr2' },
+      { ruleset: ctx.options.judgeRuleset ?? 'lr2', hRandomThresholdBPM: ctx.options.hRandomThresholdBPM },
       ctx.mineNotes as Array<{ channel: string }>,
       ctx.invisibleNotes as Array<{ channel: string }>,
     );
@@ -556,9 +558,9 @@ export function flipDPChannel(channel: string): string {
 export function applyRandomMode(
   notes: Array<{ channel: string }>,
   allLanes: readonly string[],
-  mode: 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SPIRAL' | 'SCATTER',
+  mode: 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SPIRAL' | 'H-RANDOM' | 'SCATTER',
   rng: () => number,
-  options: { ruleset?: RulesetId } = {},
+  options: { ruleset?: RulesetId; hRandomThresholdBPM?: number } = {},
   // Extra channel-bearing arrays: mines first, then invisible notes. Chart permutations share the same lane map;
   // S-RANDOM applies the active ruleset's policy for each event kind.
   ...secondary: Array<Array<{ channel: string }>>
@@ -567,10 +569,10 @@ export function applyRandomMode(
     throw new RangeError('SCATTER is disabled until placement and assist policy are implemented.');
   if (mode === 'R-RANDOM' && options.ruleset !== 'beatoraja' && options.ruleset !== '____')
     throw new RangeError('R-RANDOM is unavailable for LR2.');
-  if (mode === 'SPIRAL' && options.ruleset !== 'beatoraja')
-    throw new RangeError('SPIRAL is available only for beatoraja.');
+  if ((mode === 'SPIRAL' || mode === 'H-RANDOM') && options.ruleset !== 'beatoraja')
+    throw new RangeError(`${mode} is available only for beatoraja.`);
   if (mode === 'OFF') return;
-  if (mode === 'S-RANDOM' || mode === 'SPIRAL') {
+  if (mode === 'S-RANDOM' || mode === 'SPIRAL' || mode === 'H-RANDOM') {
     const entries = [
       ...notes.map((note) => ({ note, kind: 'note' as const })),
       ...secondary.flatMap((arr, index) =>
@@ -597,7 +599,9 @@ export function applyRandomMode(
     const channels =
       mode === 'SPIRAL'
         ? randomizeSpiralNotes(timedNotes, allLanes, rng)
-        : randomizeSRandomNotes(timedNotes, allLanes, { ruleset: options.ruleset ?? 'lr2', random: rng });
+        : mode === 'H-RANDOM'
+          ? randomizeHRandomNotes(timedNotes, allLanes, { random: rng, thresholdBPM: options.hRandomThresholdBPM })
+          : randomizeSRandomNotes(timedNotes, allLanes, { ruleset: options.ruleset ?? 'lr2', random: rng });
     entries.forEach(({ note }, index) => {
       note.channel = channels[index]!;
     });

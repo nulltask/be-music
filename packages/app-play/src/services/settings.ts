@@ -235,6 +235,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     judgeRuleset: 'lr2',
     gauge: 'GROOVE',
     random1P: 'OFF',
+    hRandomThresholdBPM: 120,
     random2P: 'OFF',
     dpFlip: false,
     bpmGuide: false,

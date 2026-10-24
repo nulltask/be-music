@@ -1,3 +1,4 @@
+import { clampHRandomThresholdBPM } from '@be-music/player-engine/lanes';
 import { resolveConstantVisibility } from './constant-visibility.ts';
 import { clampJudgeTimingMs } from './judge-timing.ts';
 import { clamp } from '@be-music/shared-utils/core';
@@ -73,7 +74,7 @@ export const RANDOM_CYCLE: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', '
 export function resolveRandomModes(ruleset: RulesetId): readonly RandomMode[] {
   if (ruleset === 'lr2') return RANDOM_CYCLE;
   const ordinary: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', 'R-RANDOM', 'S-RANDOM'];
-  return ruleset === 'beatoraja' ? [...ordinary, 'SPIRAL'] : ordinary;
+  return ruleset === 'beatoraja' ? [...ordinary, 'SPIRAL', 'H-RANDOM'] : ordinary;
 }
 
 /** The play options a player starts with. */
@@ -114,6 +115,7 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   autoScratch2P: false,
   dpFlip: false,
   random1P: 'OFF',
+  hRandomThresholdBPM: 120,
   random2P: 'OFF',
   gauge1P: 'GROOVE',
   gauge2P: 'GROOVE',
@@ -172,6 +174,7 @@ export function clampShutter(value: number): number {
 
 /** Numeric play options, each with the clamp applied to a value set for it. */
 const NUMERIC_PLAY_OPTION_CLAMPS: { readonly [K in keyof PlayOptions]?: (value: number) => number } = {
+  hRandomThresholdBPM: clampHRandomThresholdBPM,
   hiSpeed: clampHiSpeed,
   judgeTimingMs: clampJudgeTimingMs,
   noteDurationMs: (value) => resolveConstantVisibility({ durationMs: value }).durationMs,

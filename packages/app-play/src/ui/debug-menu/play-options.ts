@@ -59,6 +59,16 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     else this.random2PController = controller;
     trackPlayOption(controller.on('change', ({ value }) => this.setPlayOptions({ [key]: value })));
   }
+  trackPlayOption(
+    folder
+      .addBinding(this.guiState, 'hRandomThresholdBPM', {
+        label: 'H-RANDOM threshold BPM (beatoraja)',
+        min: 1,
+        max: 1000,
+        step: 1,
+      })
+      .on('change', ({ value }) => this.setPlayOptions({ hRandomThresholdBPM: value })),
+  );
   this.refreshRulesetChoices();
   trackPlayOption(
     folder.addBinding(this.guiState, 'dpFlip', { label: 'DP flip' }).on('change', ({ value }) => {

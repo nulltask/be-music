@@ -139,6 +139,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     constantFadeMs: playOptions.constantFadeMs,
     judgeTimingMs: playOptions.judgeTimingMs,
     normalHiSpeedLevel: playOptions.normalHiSpeedLevel,
+    hRandomThresholdBPM: playOptions.hRandomThresholdBPM,
     judgeAlgorithm: replay?.play.judgeAlgorithm ?? playOptions.judgeAlgorithm,
     longNoteModifier: playOptions.longNoteModifier,
     hiddenSudden1P: lanes.hiddenSudden1P,

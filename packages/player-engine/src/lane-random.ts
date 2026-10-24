@@ -25,19 +25,52 @@ export function randomizeSRandomNotes(
   lanes: readonly string[],
   options: SRandomOptions,
 ): string[] {
+  return randomizeTimeBasedNotes(notes, lanes, options);
+}
+
+/** beatoraja 0.8.9 PlayerConfig accepts integer H-RANDOM threshold BPMs from 1 to 1000 (default 120). */
+export function clampHRandomThresholdBPM(value: number): number {
+  return Number.isFinite(value) ? Math.max(1, Math.min(1000, Math.trunc(value))) : 120;
+}
+
+/** beatoraja H-RANDOM uses the configured 16th-note interval with the strict integer-ms jack threshold. */
+export function randomizeHRandomNotes(
+  notes: readonly SRandomNote[],
+  lanes: readonly string[],
+  options: { random: () => number; thresholdBPM?: number },
+): string[] {
+  const thresholdMs = Math.ceil(15000 / clampHRandomThresholdBPM(options.thresholdBPM ?? 120));
+  return randomizeTimeBasedNotes(notes, lanes, { ruleset: 'beatoraja', random: options.random }, thresholdMs, true);
+}
+
+function randomizeTimeBasedNotes(
+  notes: readonly SRandomNote[],
+  lanes: readonly string[],
+  options: SRandomOptions,
+  thresholdMs = 40,
+  visitAllRows = false,
+): string[] {
   lanes = [...new Set(lanes)];
   const channels = notes.map((note) => note.channel);
   const domain = new Set(lanes);
   const rows = new Map<number, number[]>();
   notes.forEach((note, index) => {
-    if (!domain.has(note.channel)) return;
+    if (!visitAllRows && !domain.has(note.channel)) return;
     const row = rows.get(note.timeMs);
     if (row) row.push(index);
     else rows.set(note.timeMs, [index]);
+    if (
+      visitAllRows &&
+      (note.kind ?? 'note') === 'note' &&
+      note.endTimeMs !== undefined &&
+      note.endTimeMs > note.timeMs &&
+      !rows.has(note.endTimeMs)
+    )
+      rows.set(note.endTimeMs, []);
   });
   if (options.ruleset !== 'beatoraja') return randomizeLR2Notes(notes, lanes, rows, channels, options.random);
   const held = new Map<string, { target: string; endMs: number }>();
-  const lastNoteTime = new Map(lanes.map((lane) => [lane, Number.NEGATIVE_INFINITY]));
+  const lastNoteTime = new Map(lanes.map((lane) => [lane, visitAllRows ? -10000 : Number.NEGATIVE_INFINITY]));
   for (const [timeMs, indices] of [...rows].sort(([left], [right]) => left - right)) {
     for (const [source, hold] of held) {
       if (hold.endMs < timeMs) held.delete(source);
@@ -54,7 +87,7 @@ export function randomizeSRandomNotes(
     for (const source of ordered) {
       let candidates = free;
       if (options.ruleset === 'beatoraja' && scoring.has(source)) {
-        const eligible = free.filter((lane) => Math.trunc(timeMs) - lastNoteTime.get(lane)! > 40);
+        const eligible = free.filter((lane) => Math.trunc(timeMs) - lastNoteTime.get(lane)! > thresholdMs);
         if (eligible.length > 0) candidates = eligible;
         else {
           const oldest = Math.min(...free.map((lane) => lastNoteTime.get(lane)!));
@@ -68,6 +101,7 @@ export function randomizeSRandomNotes(
     }
     for (const index of indices) {
       const note = notes[index]!;
+      if (!domain.has(note.channel)) continue;
       const target = map.get(note.channel)!;
       channels[index] = target;
       if ((note.kind ?? 'note') === 'note' && note.endTimeMs !== undefined && note.endTimeMs > timeMs) {

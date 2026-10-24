@@ -12,6 +12,7 @@ export type GUIPlayOptions = Pick<
   PlayerGUIState,
   | 'autoPlay'
   | 'gauge'
+  | 'hRandomThresholdBPM'
   | 'random1P'
   | 'random2P'
   | 'dpFlip'
@@ -48,6 +49,7 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     autoPlay: state.autoPlay,
     gauge1P: state.gauge,
     random1P: state.random1P,
+    hRandomThresholdBPM: state.hRandomThresholdBPM,
     random2P: state.random2P,
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
@@ -93,6 +95,7 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.autoPlay = options.autoPlay;
   state.gauge = options.gauge1P;
   state.random1P = options.random1P;
+  state.hRandomThresholdBPM = options.hRandomThresholdBPM;
   state.random2P = options.random2P;
   state.dpFlip = options.dpFlip;
   state.bpmGuide = options.bpmGuide;

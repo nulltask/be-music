@@ -486,6 +486,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       ...(kit.family === 'built-in' && (kit.skin.id === 'plain' || kit.skin.id === 'native')
         ? { coverKeys: true }
         : {}),
+      hRandomThresholdBPM: playOptions.hRandomThresholdBPM,
       classicHiSpeed: playOptions.classicHiSpeed,
       normalHiSpeedLevel: playOptions.normalHiSpeedLevel,
       visualConstant: playOptions.visualConstant,

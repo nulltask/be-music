@@ -6,6 +6,7 @@ const gui: GUIPlayOptions = {
   autoPlay: true,
   gauge: 'HARD',
   random1P: 'MIRROR',
+  hRandomThresholdBPM: 120,
   random2P: 'RANDOM',
   dpFlip: true,
   bpmGuide: true,
@@ -42,6 +43,7 @@ describe('playOptionsFromGUI', () => {
       autoPlay: true,
       gauge1P: 'HARD',
       random1P: 'MIRROR',
+      hRandomThresholdBPM: 120,
       random2P: 'RANDOM',
       dpFlip: true,
       bpmGuide: true,
@@ -144,7 +146,7 @@ describe('PlayOptionsService', () => {
   });
 
   test('checks a change as the select screen does: a value an option does not take puts it back to its default', () => {
-    const service = new PlayOptionsService({ random1P: 'MIRROR', hiSpeed: 2 });
+    const service = new PlayOptionsService({ random1P: 'MIRROR', hRandomThresholdBPM: 120, hiSpeed: 2 });
     service.update({ random1P: 'BACKWARDS' as PlayOptions['random1P'], hiSpeed: 2.0000000001 });
     expect(service.current.random1P).toBe(DEFAULT_PLAY_OPTIONS.random1P);
     expect(service.current.hiSpeed).toBe(2);

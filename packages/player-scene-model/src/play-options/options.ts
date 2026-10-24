@@ -138,10 +138,13 @@ export interface PlayOptions {
    * - `RANDOM` — chart-wide random permutation of the lanes
    * - `R-RANDOM` — chart-wide cyclic rotation, optionally reflected, excluding regular and mirror
    * - `S-RANDOM` — per-chord random assignment (chord shapes are NOT preserved)
+   * - `H-RANDOM` — beatoraja per-row random assignment with a configurable jack threshold
    * - `SPIRAL` — beatoraja row rotations, frozen during active holds
    * - `SCATTER` — legacy value, disabled until placement and assist policy are implemented
    */
   random1P: RandomMode;
+  /** beatoraja H-RANDOM jack threshold in 16th-note BPM units (1..1000, default 120). */
+  hRandomThresholdBPM: number;
   /** 2P side note arrangement (channels 21..25 + 28 + 29). */
   random2P: RandomMode;
   /**
@@ -164,7 +167,7 @@ export type HSFix = 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT' | 'STAR
 export type HiddenSuddenMode = 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
 
 /** Lane-option names. Legacy SCATTER stays representable but is not an accepted new play choice. */
-export type RandomMode = 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SPIRAL' | 'SCATTER';
+export type RandomMode = 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SPIRAL' | 'H-RANDOM' | 'SCATTER';
 
 /** Allowed values for {@link PlayOptions.bga}. */
 export type BGAMode = 'OFF' | 'ON' | 'AUTOPLAY_ONLY';
