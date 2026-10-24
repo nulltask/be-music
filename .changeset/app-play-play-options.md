@@ -13,3 +13,5 @@ Expose the source-specific LEGACY NOTE and LN REMOVE choices in Debug Menu and s
 Apply AC 34's A-SCR & LEGACY NOTE preset in a single Debug Menu action while retaining both explicit settings in replay.
 
 Offer EX-HARD for beatoraja and AC rules in Debug Menu, label HAZARD separately and reset unsupported choices when switching rulesets.
+
+Offer ASSIST EASY for beatoraja and ASSISTED EASY for AC rules in Debug Menu.

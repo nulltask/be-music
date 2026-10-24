@@ -476,3 +476,10 @@ test('records EX-HARD independently of DEATH', () => {
     expect(parseReplay(serializeReplay(replay)).play.gauge).toBe(gauge);
   }
 });
+
+test('round-trips the ASSIST EASY gauge without an AUTO SCRATCH flag', () => {
+  const replay = makeReplay();
+  replay.play.gauge = 'ASSIST-EASY';
+  replay.play.autoScratch = false;
+  expect(parseReplay(serializeReplay(replay)).play).toMatchObject({ gauge: 'ASSIST-EASY', autoScratch: false });
+});

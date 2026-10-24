@@ -22,3 +22,10 @@ it('offers EX-HARD only for its source rulesets, separately from HAZARD', () => 
   expect(resolveGaugeTypes('____')).toContain('EX-HARD');
   expect(resolveGaugeTypes('____')).not.toContain('DEATH');
 });
+
+it('separates source ASSIST EASY from the original LR2 gauge choices', () => {
+  expect(isGaugeType('ASSIST-EASY')).toBe(true);
+  expect(resolveGaugeTypes('lr2')).not.toContain('ASSIST-EASY');
+  expect(resolveGaugeTypes('beatoraja')).toContain('ASSIST-EASY');
+  expect(resolveGaugeTypes('____')).toContain('ASSIST-EASY');
+});

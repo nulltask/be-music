@@ -224,9 +224,15 @@ export function resolveLR2OptionButton(type: number, options: PlayOptions): numb
     case LR2_BUTTON.RANDOM_2P:
       return cell(RANDOM_CYCLE, options.random2P);
     case LR2_BUTTON.GAUGE_1P:
-      return cell(LR2_GAUGE_TYPES, options.gauge1P === 'EX-HARD' ? 'HARD' : options.gauge1P);
+      return cell(
+        LR2_GAUGE_TYPES,
+        options.gauge1P === 'EX-HARD' ? 'HARD' : options.gauge1P === 'ASSIST-EASY' ? 'EASY' : options.gauge1P,
+      );
     case LR2_BUTTON.GAUGE_2P:
-      return cell(LR2_GAUGE_TYPES, options.gauge2P === 'EX-HARD' ? 'HARD' : options.gauge2P);
+      return cell(
+        LR2_GAUGE_TYPES,
+        options.gauge2P === 'EX-HARD' ? 'HARD' : options.gauge2P === 'ASSIST-EASY' ? 'EASY' : options.gauge2P,
+      );
     default: {
       const difficulty = LR2_DIFFICULTY_FILTER_BUTTONS[type];
       if (difficulty === undefined) return undefined;
