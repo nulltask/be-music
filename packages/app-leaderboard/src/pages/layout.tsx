@@ -678,8 +678,8 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
             through. Named for the cross-page view transition (app.css): it stays put while the page below it changes. */}
           <header class="bg-background/90 sticky top-0 z-40 border-b backdrop-blur [view-transition-name:site-header]">
             <div class="mx-auto flex max-w-5xl items-center gap-x-3 px-4 py-2.5 sm:gap-x-6">
-              <a href="/" class="shrink-0 font-semibold tracking-tight">
-                be-music <span class="text-muted-foreground hidden font-normal md:inline">Leaderboard</span>
+              <a href="/" class="shrink-0 font-semibold tracking-tight whitespace-nowrap">
+                Be-Music Leaderboard
               </a>
               <nav class="text-muted-foreground hidden items-center gap-4 text-sm sm:flex" aria-label={t.nav.label}>
                 <a
