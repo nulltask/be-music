@@ -29,6 +29,7 @@ import { logger } from '../logger.ts';
 import { BeatorajaPlayView } from '../view/beatoraja/play-view.ts';
 import { BuiltInPlayView } from '../view/built-in/play-view.ts';
 import { LR2PlayView } from '../view/lr2/play-view.ts';
+import { LR2TextureRetainer } from '../view/lr2/texture-retainer.ts';
 import type { PlayFrame, PlayIntent, PlayView, PlayfieldSkin } from '../view/types.ts';
 import type { BeatorajaKit, BuiltInKit, LR2PlayKit } from './family-kit.ts';
 
@@ -168,6 +169,12 @@ export interface PlayScene extends SessionScene<PlayFrame, PlayIntent> {
    * entry's skin (the demo's play-skin picker) and rebuilds its stage.
    */
   updateKit(kit: PlaySceneKit): void;
+  /**
+   * Draws the play with `kit` from the next frame. The chart, judgments and audio stay. A kit this scene already draws
+   * is handed to {@link updateKit}. Another family's view is disposed; its LR2 textures stay until the play ends, so
+   * switching back does not decode the same bytes again.
+   */
+  replaceFamily(kit: PlaySceneKit): Promise<void>;
   setAudioVolume(channel: AudioBusChannel, volume: number): void;
   setAudioCompressor(enabled: boolean): void;
   setAudioCompressorMode(mode: 'split' | 'legacy'): void;
@@ -203,11 +210,20 @@ interface FamilyPlayView {
  * The play view of `kit`'s family, drawing `play`. A beatoraja skin's Lua sounds play through the audio service as
  * `soundOwner`'s, so they stop as the scene leaves the stage.
  */
+/** True when `view` is already drawing `kit`, so {@link PlayScene.updateKit} can take it without a new view. */
+function viewDrawsKit(view: FamilyPlayView, kit: PlaySceneKit): boolean {
+  if (view.view.family !== kit.family) return false;
+  if (kit.family === 'beatoraja') return true;
+  if (kit.family === 'lr2') return view.view instanceof LR2PlayView && view.view.skin === kit.skin;
+  return view.view instanceof BuiltInPlayView && view.view.drawsSkin(kit.skin);
+}
+
 function createPlayView(
   kit: PlaySceneKit,
   play: PlaySession,
   options: Pick<PlaySceneOptions, 'settings' | 'course' | 'source' | 'audio'>,
   soundOwner: AudioOwner,
+  textures: LR2TextureRetainer,
 ): FamilyPlayView {
   const { settings, course, source } = options;
   if (kit.family === 'beatoraja') {
@@ -255,6 +271,7 @@ function createPlayView(
       courseGauge: course !== undefined,
       ...(course?.view !== undefined ? { course: course.view } : {}),
     });
+    view.useTextureRetainer(textures);
     return {
       view,
       playfieldSkin: view.playfieldSkin,
@@ -293,23 +310,45 @@ function ignoreKit(kit: PlaySceneKit, family: PlaySceneKit['family']): void {
   log.warn(`a ${family} play scene keeps its family; ignoring a ${kit.family} kit`);
 }
 
+interface FamilySlot {
+  current: FamilyPlayView;
+}
+
 class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements PlayScene {
   public readonly recording: PlaySceneRecording;
   private readonly playSession: PlaySceneSession;
-  private readonly familyView: FamilyPlayView;
+  private readonly familySlot: FamilySlot;
+  private readonly textures: LR2TextureRetainer;
+  private readonly audio: AudioService;
+  private readonly soundOwner: AudioOwner;
+  private readonly viewOptions: Pick<PlaySceneOptions, 'settings' | 'course' | 'source' | 'audio'>;
   private readonly chart: LibraryChart;
   private readonly source: BrowserAssetSource | undefined;
   private readonly prepareHost: PixiSceneHost | undefined;
+  /** Family swaps run one at a time. A newer one waits until the view being prepared is in place or discarded. */
+  private replaceChain: Promise<void> = Promise.resolve();
 
   public constructor(
     session: PlaySceneSession,
-    familyView: FamilyPlayView,
-    facts: { chart: LibraryChart; source?: BrowserAssetSource; host?: PixiSceneHost },
+    familySlot: FamilySlot,
+    facts: {
+      chart: LibraryChart;
+      source?: BrowserAssetSource;
+      host?: PixiSceneHost;
+      audio: AudioService;
+      soundOwner: AudioOwner;
+      viewOptions: Pick<PlaySceneOptions, 'settings' | 'course' | 'source' | 'audio'>;
+      textures: LR2TextureRetainer;
+    },
     options: SessionSceneOptions,
   ) {
-    super(session, familyView.view, options);
+    super(session, familySlot.current.view, options);
     this.playSession = session;
-    this.familyView = familyView;
+    this.familySlot = familySlot;
+    this.textures = facts.textures;
+    this.audio = facts.audio;
+    this.soundOwner = facts.soundOwner;
+    this.viewOptions = facts.viewOptions;
     this.chart = facts.chart;
     this.source = facts.source;
     this.prepareHost = facts.host;
@@ -334,7 +373,7 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
   public async prepare(onProgress?: (progress: number) => void): Promise<void> {
     if (this.prepareHost !== undefined) {
       this.play.host ??= this.prepareHost;
-      this.familyView.prepareOn(this.prepareHost);
+      this.familySlot.current.prepareOn(this.prepareHost);
     }
     const report = (progress: number): void => {
       this.playSession.loadProgress = progress;
@@ -395,7 +434,15 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
   }
 
   public updateKit(kit: PlaySceneKit): void {
-    this.familyView.updateKit(kit);
+    this.familySlot.current.updateKit(kit);
+  }
+
+  public replaceFamily(kit: PlaySceneKit): Promise<void> {
+    const run = this.replaceChain.then(() => this.installFamily(kit));
+    this.replaceChain = run.catch((error) => {
+      log.warn('play family replace failed', error);
+    });
+    return run;
   }
 
   public setAudioVolume(channel: AudioBusChannel, volume: number): void {
@@ -423,16 +470,64 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
   }
 
   public setJudgedNoteDisplay(mode: 'KEEP_SCROLLING' | 'HIDE'): void {
-    this.familyView.setJudgedNoteDisplay(mode);
+    this.familySlot.current.setJudgedNoteDisplay(mode);
   }
 
   public setShowInvisibleNotes(enabled: boolean): void {
-    this.familyView.setShowInvisibleNotes(enabled);
+    this.familySlot.current.setShowInvisibleNotes(enabled);
   }
 
   public override dispose(options: PlayDisposeOptions = {}): void {
     this.playSession.disposeOptions = options;
     super.dispose();
+    this.textures.destroyAll(this.prepareHost ?? this.play.host);
+  }
+
+  /** Swaps in `kit`'s view. The play session is not rebuilt. */
+  private async installFamily(kit: PlaySceneKit): Promise<void> {
+    if (this.disposed) return;
+    const current = this.familySlot.current;
+    if (viewDrawsKit(current, kit)) {
+      current.updateKit(kit);
+      this.play.options.coverKeys = kit.family === 'beatoraja';
+      return;
+    }
+    this.audio.stopOwned(this.soundOwner);
+    const next = createPlayView(kit, this.play, this.viewOptions, this.soundOwner, this.textures);
+    const host = this.prepareHost ?? this.play.host;
+    if (host !== undefined) next.prepareOn(host);
+    try {
+      await next.prepareView?.();
+    } catch (error) {
+      this.retire(next);
+      throw error;
+    }
+    if (this.disposed) {
+      this.retire(next);
+      return;
+    }
+    this.familySlot.current = next;
+    let installed = false;
+    try {
+      installed = await this.replaceView(next.view);
+    } catch (error) {
+      this.familySlot.current = current;
+      this.retire(next);
+      throw error;
+    }
+    if (!installed) {
+      this.familySlot.current = current;
+      this.retire(next);
+      return;
+    }
+    this.play.options.coverKeys = kit.family === 'beatoraja';
+    if (next.view instanceof LR2PlayView || next.view instanceof BeatorajaPlayView) next.view.joinRunningPlay();
+    this.retire(current);
+  }
+
+  /** Drops `family`'s scene graph and DOM. LR2 textures go back to {@link textures} instead of being destroyed. */
+  private retire(family: FamilyPlayView): void {
+    family.view.dispose();
   }
 }
 
@@ -445,17 +540,25 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
 export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): PlayScene {
   const { settings, course, on } = options;
   let sceneSession: PlaySceneSession | undefined;
-  let family: FamilyPlayView | undefined;
+  const familySlot: { current?: FamilyPlayView } = {};
+  const textures = new LR2TextureRetainer();
+  const viewOptions = {
+    settings,
+    ...(course !== undefined ? { course } : {}),
+    ...(options.source !== undefined ? { source: options.source } : {}),
+    audio: options.audio,
+  };
   // The view is made for the play below; the play asks its theme nothing before both exist.
   const theme: PlaySessionTheme = {
-    timing: () => family!.view.timing,
-    pixelsPerBeat: () => family?.playfieldSkin.pixelsPerBeat,
+    timing: () => familySlot.current!.view.timing,
+    pixelsPerBeat: () => familySlot.current?.playfieldSkin.pixelsPerBeat,
     moment: (moment) => sceneSession?.queueEvent(moment),
-    keyOnFadeMs: (channel) => family!.playfieldSkin.keyOnFadeMs(channel),
-    prepareView: () => family?.prepareView?.() ?? Promise.resolve(),
-    uploadTextures: (textures) => family?.uploadTextures(textures, () => play.disposed) ?? Promise.resolve(),
-    replayView: () => family?.replayView?.(),
-    drawsLift: () => family?.drawsLift === true,
+    keyOnFadeMs: (channel) => familySlot.current!.playfieldSkin.keyOnFadeMs(channel),
+    prepareView: () => familySlot.current?.prepareView?.() ?? Promise.resolve(),
+    uploadTextures: (uploaded) =>
+      familySlot.current?.uploadTextures(uploaded, () => play.disposed) ?? Promise.resolve(),
+    replayView: () => familySlot.current?.replayView?.(),
+    drawsLift: () => familySlot.current?.drawsLift === true,
   };
   const play = new PlaySession(
     {
@@ -488,14 +591,18 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
     audio: options.audio,
     ...(options.sounds !== undefined ? { sounds: options.sounds } : {}),
   });
-  family = createPlayView(kit, play, options, sceneSession);
+  familySlot.current = createPlayView(kit, play, viewOptions, sceneSession, textures);
   return new FamilyPlayScene(
     sceneSession,
-    family,
+    familySlot as FamilySlot,
     {
       chart: options.chart,
       ...(options.source !== undefined ? { source: options.source } : {}),
       ...(options.host !== undefined ? { host: options.host } : {}),
+      audio: options.audio,
+      soundOwner: sceneSession,
+      viewOptions,
+      textures,
     },
     {
       // The play listens for its own keys (`play-input.ts`), so the scene listens for none.
