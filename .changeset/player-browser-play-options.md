@@ -11,3 +11,5 @@ Record all selected play options and live hi-speed edits, restore option timelin
 Retain the independent AUTO SCRATCH switches when starting live play or replay playback.
 
 Share the head-only notes of LEGACY NOTE and LN REMOVE with the renderer and restore the recorded modifier before replay arrangement.
+
+Keep LR2 skin gauge buttons on the original four choices when extended gauges are selected from Debug Menu.

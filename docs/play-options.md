@@ -37,3 +37,11 @@ Sources: AC 34 [assist options](https://p.eagate.573.jp/game/2dx/34/howto/play/o
 Debug Menu's **A-SCR & LEGACY NOTE (AC 34)** button applies the AC 34 combined preset in one operation: AUTO SCRATCH on both play sides and LEGACY NOTE. The existing switches and Long notes selector immediately show the effective settings; use them to select an individual operation or turn it off. Only CN/BSS tails are removed, and only scratch notes are automated. Both operations are recorded explicitly, including their effective note chart, so replay does not infer an assist from a visual preset name. The button is disabled during play. Score and lamp handling remains deferred to the Leaderboard.
 
 Source: AC 34 [assist options](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html). Tracked in [#711](https://github.com/nulltask/be-music/issues/711).
+
+## EX-HARD
+
+Choose **Judgment windows → beatoraja / ????** in Debug Menu's Developer folder, then **Play options → Gauge → EX-HARD**. EX-HARD is an independent survival gauge, not AUTO SCRATCH or another input assist. The gauge starts at 100 and fails at zero, without HARD's low-life damage reduction. The existing source tables retain beatoraja's mode-specific damage and recovery and AC's separate values. beatoraja's **HAZARD** remains a different choice (the replay's existing `DEATH` key); old AC replays with that key retain their former interpretation.
+
+LR2 beta3 has no EX-HARD choice: its menu keeps GROOVE / HARD / DEATH / EASY, and requesting EX-HARD directly with LR2 rules fails explicitly. Changing to a ruleset that does not support the selected gauge restores its normal gauge. LR2 skin buttons keep their original four cells and cycle; when that skin displays a play using EX-HARD from another ruleset, its survival gauge uses the red presentation. Choose EX-HARD in Debug Menu. Replays store `play.gauge: "EX-HARD"` and the source gauge result name; course conversion uses EXHARDCLASS for beatoraja / AC.
+
+Sources: beatoraja 0.8.9 [`GaugeProperty`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/GaugeProperty.java), AC 34 [gauge options](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html). Tracked in [#726](https://github.com/nulltask/be-music/issues/726).

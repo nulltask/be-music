@@ -12,7 +12,8 @@ import type { PlayOptions } from '@be-music/player-scene-model';
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
 // Tweakpane injects its component stylesheet; the app themes it with public CSS variables.
 import { Pane, type FolderApi, type BladeApi, type ButtonApi, type ListInputBindingApi } from 'tweakpane';
-import type { PaneBinding } from '../../pane-controls.ts';
+import { paneOptions, type PaneBinding } from '../../pane-controls.ts';
+import { resolveGaugeTypes, type GaugeType } from '@be-music/player-engine/ruleset';
 import { readStoredCompressorTunings, type CompressorTuning } from '../../compressor-tuning.ts';
 import { readStoredCourseTableURLs } from '../../course-table-import.ts';
 import { captureDebugMenuSettings } from '../../debug-menu-settings.ts';
@@ -184,6 +185,7 @@ export class DebugMenu {
   public readonly playOptionControllers: { disabled: boolean; refresh?: () => void }[] = [];
   /** The "Hi-speed" slider — left enabled during a play (it applies live) and repainted by {@link refreshHiSpeed}. */
   public hiSpeedController: PaneBinding | undefined;
+  public gaugeController: ListInputBindingApi<GaugeType> | undefined;
   /** The "Tempo (%)" slider — left enabled during a play whose tempo can change live (`allowsLiveTempo`). */
   public tempoController: PaneBinding | undefined;
   /** Debug Menu folder holding the active be-music skin's settings; hidden for a skin that declares none. */
@@ -382,6 +384,25 @@ export class DebugMenu {
     window.location.reload();
   }
   /** Repaints the "Play options" controllers after an external write (the LR2 select panel's edits). */
+  public refreshGaugeChoices(): void {
+    const choices = resolveGaugeTypes(this.guiState.judgeRuleset);
+    if (!choices.includes(this.guiState.gauge)) {
+      this.guiState.gauge = 'GROOVE';
+      this.setPlayOptions({ gauge1P: 'GROOVE' });
+    }
+    if (this.gaugeController) {
+      this.gaugeController.options = paneOptions(choices).map((item) => ({
+        ...item,
+        text:
+          item.value === 'DEATH' && this.guiState.judgeRuleset === 'beatoraja'
+            ? 'HAZARD'
+            : item.value === 'GROOVE' && this.guiState.judgeRuleset !== 'lr2'
+              ? 'NORMAL'
+              : item.text,
+      }));
+      this.gaugeController.refresh();
+    }
+  }
   public refreshPlayOptionControllers(): void {
     for (const controller of this.playOptionControllers) {
       controller.refresh?.();

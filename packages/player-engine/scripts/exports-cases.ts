@@ -805,6 +805,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       rulesetAPI.resolveMissCount({ bad: 3, poor: 5, emptyPoor: 2 }, 10);
     },
   });
+  define('player-engine.ruleset.resolveGaugeTypes', {
+    run: () => {
+      rulesetAPI.resolveGaugeTypes('beatoraja');
+    },
+  });
   define('player-engine.ruleset.isGaugeType', {
     run: () => {
       rulesetAPI.isGaugeType('DEATH');

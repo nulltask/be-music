@@ -104,3 +104,22 @@ test('A-SCR & LEGACY NOTE applies and records both operations together', async (
   expect(replay?.play).toMatchObject({ longNoteModifier: 'LEGACY', autoScratch1P: true, autoScratch2P: true });
   expect(replay?.chart.notes[0]?.type).toBe('normal');
 });
+
+for (const ruleset of ['beatoraja', '????'] as const) {
+  test(`EX-HARD is an independent recorded gauge with ${ruleset} rules`, async ({ player }) => {
+    await player.open();
+    await player.dropText('ex-hard.bme', '#TITLE EX-HARD gauge\n#BPM 240\n#00111:01\n');
+    await player.setOption(['Developer'], 'Judgment windows', ruleset);
+    await player.setOption(['Play options'], 'Gauge', 'EX-HARD');
+    await player.setOption(['Play options'], 'Auto play', true);
+    await player.cursorTo((bar) => bar.title === 'EX-HARD gauge', 'EX-HARD chart');
+    await player.key('Enter');
+    await player.waitForResult(0);
+    const replay = await player.lastReplay();
+    expect(replay?.play.gauge).toBe('EX-HARD');
+    expect(replay?.results?.native?.gauge.type).toBe('EX-HARD');
+    await player.leaveResult();
+    await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+    expect(await player.readOption(['Play options'], 'Gauge')).toBe('GROOVE');
+  });
+}

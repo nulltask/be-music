@@ -468,3 +468,11 @@ test('round-trips source long-note modifiers and rejects unknown variants', () =
   invalid.play.longNoteModifier = 'CUSTOM';
   expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
 });
+
+test('records EX-HARD independently of DEATH', () => {
+  for (const gauge of ['EX-HARD', 'DEATH'] as const) {
+    const replay = makeReplay();
+    replay.play.gauge = gauge;
+    expect(parseReplay(serializeReplay(replay)).play.gauge).toBe(gauge);
+  }
+});

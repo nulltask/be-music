@@ -409,3 +409,10 @@ it('keeps LR2 HS-FIX sprite cells in range when START is selected externally', (
   const state = resolveLR2SelectState({ options: { ...DEFAULT_PLAY_OPTIONS, hsFix: 'STARTBPM' } });
   expect(state.button(LR2_BUTTON.HS_FIX)).toBe(0);
 });
+
+it('uses an existing survival cell for externally selected EX-HARD', () => {
+  const state = resolveLR2SelectState({ options: { ...DEFAULT_PLAY_OPTIONS, gauge1P: 'EX-HARD' } });
+  expect(state.button(LR2_BUTTON.GAUGE_1P)).toBe(1);
+  expect(state.text(LR2_TEXT.OPTION_GAUGE_1P)).toBe('EX-HARD');
+  expect(state.ops).toContain(LR2_OP.GAUGE_1P_RED);
+});

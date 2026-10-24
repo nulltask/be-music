@@ -215,6 +215,7 @@ describe('play ops', () => {
   it('lights the red gauge ops for HARD and DEATH, the normal ones for GROOVE and EASY', () => {
     expect(resolveLR2GaugeTypeOps('HARD')).toEqual([43, 45]);
     expect(resolveLR2GaugeTypeOps('DEATH')).toEqual([43, 45]);
+    expect(resolveLR2GaugeTypeOps('EX-HARD')).toEqual([43, 45]);
     expect(resolveLR2GaugeTypeOps('GROOVE')).toEqual([42, 44]);
     expect(resolveLR2GaugeTypeOps('EASY')).toEqual([42, 44]);
   });

@@ -1,4 +1,4 @@
-import { GAUGE_TYPES, type GaugeType } from '@be-music/player-engine/ruleset';
+import { LR2_GAUGE_TYPES, type GaugeType } from '@be-music/player-engine/ruleset';
 import {
   BGA_CYCLE,
   BGA_SIZE_CYCLE,
@@ -18,7 +18,7 @@ import { LR2_BUTTON, LR2_NUM, LR2_OP, LR2_SLIDER, LR2_TEXT } from '../ids/index.
 
 /** Whether a gauge is one of LR2's red (survival) gauges: HARD and DEATH. */
 export function isLR2RedGauge(gauge: GaugeType): boolean {
-  return gauge === 'HARD' || gauge === 'DEATH';
+  return gauge === 'HARD' || gauge === 'DEATH' || gauge === 'EX-HARD';
 }
 
 /** Whether the BGA shows: ON, or AUTOPLAY ONLY while AUTOPLAY is on. */
@@ -224,9 +224,9 @@ export function resolveLR2OptionButton(type: number, options: PlayOptions): numb
     case LR2_BUTTON.RANDOM_2P:
       return cell(RANDOM_CYCLE, options.random2P);
     case LR2_BUTTON.GAUGE_1P:
-      return cell(GAUGE_TYPES, options.gauge1P);
+      return cell(LR2_GAUGE_TYPES, options.gauge1P === 'EX-HARD' ? 'HARD' : options.gauge1P);
     case LR2_BUTTON.GAUGE_2P:
-      return cell(GAUGE_TYPES, options.gauge2P);
+      return cell(LR2_GAUGE_TYPES, options.gauge2P === 'EX-HARD' ? 'HARD' : options.gauge2P);
     default: {
       const difficulty = LR2_DIFFICULTY_FILTER_BUTTONS[type];
       if (difficulty === undefined) return undefined;

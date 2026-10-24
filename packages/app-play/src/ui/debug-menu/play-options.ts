@@ -29,14 +29,13 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       this.setPlayOptions({ autoPlay: value });
     }),
   );
+  this.gaugeController = selectBinding(folder, this.guiState, 'gauge', 'Gauge', ['GROOVE', 'EASY', 'HARD', 'DEATH']);
   trackPlayOption(
-    selectBinding(folder, this.guiState, 'gauge', 'Gauge', ['GROOVE', 'EASY', 'HARD', 'DEATH']).on(
-      'change',
-      ({ value }) => {
-        this.setPlayOptions({ gauge1P: value });
-      },
-    ),
+    this.gaugeController.on('change', ({ value }) => {
+      this.setPlayOptions({ gauge1P: value });
+    }),
   );
+  this.refreshGaugeChoices();
   trackPlayOption(
     selectBinding(folder, this.guiState, 'random1P', 'Random 1P', RANDOM_CYCLE).on('change', ({ value }) => {
       this.setPlayOptions({ random1P: value });

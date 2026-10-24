@@ -276,3 +276,19 @@ describe('beatoraja TOTAL counts charge tails', () => {
     expect(resolveRuleset(facts({ notes }), 'lr2').effectiveTotal).toBe(resolveLR2DefaultTotal(500));
   });
 });
+
+test('keeps EX-HARD source tables distinct from HAZARD and rejects a new LR2 EX-HARD pick', () => {
+  const chart = facts();
+  const beatoraja = resolveRuleset(chart, 'beatoraja', { selectedGauge: 'EX-HARD' }).gauge;
+  const ac = resolveRuleset(chart, '____', { selectedGauge: 'EX-HARD' }).gauge;
+  expect(beatoraja.id).toBe('EX-HARD');
+  expect(ac.id).toBe('EX-HARD');
+  expect(beatoraja.survival).toBe(true);
+  expect(ac.survival).toBe(true);
+  expect(beatoraja.min).toBe(0);
+  expect(beatoraja.death).toBeUndefined();
+  expect(beatoraja.values.slice(3)).toEqual([-8, -16, -8]);
+  expect(ac.values.slice(3)).toEqual([-10, -18, -10]);
+  expect(ac.death).toBeUndefined();
+  expect(() => resolveRuleset(chart, 'lr2', { selectedGauge: 'EX-HARD' })).toThrow(/no EX-HARD/);
+});
