@@ -144,6 +144,7 @@ export interface PlayerPlaySettings {
   endOnFailure?: boolean;
   /** Source-defined beatoraja policy; when present, takes precedence over endOnFailure. */
   gaugeAutoShift?: GaugeAutoShift;
+  bottomShiftableGauge?: import('../ruleset/gauge-type.ts').GaugeShiftBottom;
   /**
    * This play is one stage of a course: the stage runs on the ruleset's course gauge under the course's judge
    * constraint, starting from the state the previous stage left (`carryIn`; absent for the first stage). Recorded into

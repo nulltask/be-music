@@ -128,6 +128,7 @@ export interface PlayOptions {
   mineModifier: MineModifier;
   /** beatoraja: continue judging with the selected dead gauge, or stop on failure. */
   gaugeAutoShift: GaugeAutoShift;
+  bottomShiftableGauge: import('@be-music/player-engine/ruleset').GaugeShiftBottom;
   /**
    * 1P side auto-scratch flag picked from `#SRC_BUTTON,type=44`. When true the scratch lane (channel 16) auto-judges as
    * PERFECT at every note's scheduled time, so the player only has to play the keys.

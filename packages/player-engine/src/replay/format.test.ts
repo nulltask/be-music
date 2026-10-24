@@ -539,7 +539,7 @@ test.each(['ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'] as const)(
   },
 );
 
-test.each(['NONE', 'CONTINUE', 'SURVIVAL_TO_GROOVE'] as const)(
+test.each(['NONE', 'CONTINUE', 'SURVIVAL_TO_GROOVE', 'BEST_CLEAR'] as const)(
   'gauge policy %s round-trips and rejects unknown policies',
   (gaugeAutoShift) => {
     const replay = makeReplay();
@@ -602,4 +602,30 @@ test.each([
         JSON.stringify({ ...replay, chart: { ...replay.chart, notes: [{ ...replay.chart.notes[0], ...bad }] } }),
       ),
     ).toThrow(ReplayParseError);
+});
+
+test('BEST CLEAR round-trips independent class gauges and the configured lower bound', () => {
+  const replay = makeReplay();
+  replay.play.gaugeAutoShift = 'BEST_CLEAR';
+  replay.play.bottomShiftableGauge = 'EASY';
+  replay.play.course = {
+    kind: 'grade',
+    carryIn: { gauge: 40, combo: 2, maxCombo: 4, gauges: { CLASS: 60, EXCLASS: 40, EXHARDCLASS: 0 } },
+  };
+  expect(parseReplay(serializeReplay(replay)).play).toMatchObject(replay.play);
+  for (const gauges of [
+    { CLASS: 60 },
+    { CLASS: 60, EXCLASS: 40, EXHARDCLASS: -1 },
+    { CLASS: 60, EXCLASS: 40, EXHARDCLASS: 101 },
+    { CLASS: 60, EXCLASS: 40, EXHARDCLASS: 0, NORMAL: 80 },
+  ]) {
+    const altered = {
+      ...replay,
+      play: { ...replay.play, course: { ...replay.play.course, carryIn: { ...replay.play.course.carryIn, gauges } } },
+    };
+    expect(() => parseReplay(JSON.stringify(altered))).toThrow(ReplayParseError);
+  }
+  expect(() =>
+    parseReplay(JSON.stringify({ ...replay, play: { ...replay.play, bottomShiftableGauge: 'HARD' } })),
+  ).toThrow(ReplayParseError);
 });

@@ -149,6 +149,7 @@ describe('captureDebugMenuSettings', () => {
       longNoteRate: 1,
       mineModifier: 'OFF',
       gaugeAutoShift: 'NONE',
+      bottomShiftableGauge: 'ASSIST-EASY',
       autoScratch1P: true,
       autoScratch2P: true,
       sort: 'OFF',
@@ -295,4 +296,19 @@ test('persists the source SURVIVAL TO GROOVE policy', () => {
       JSON.stringify({ version: 1, updatedAt: 1, settings: { gaugeAutoShift: 'SURVIVAL_TO_GROOVE' } }),
     )?.settings,
   ).toMatchObject({ gaugeAutoShift: 'SURVIVAL_TO_GROOVE' });
+});
+
+test('persists BEST CLEAR and validates the three source lower-bound choices', () => {
+  for (const bottomShiftableGauge of ['ASSIST-EASY', 'EASY', 'GROOVE']) {
+    expect(
+      parseDebugMenuSettingsDocument(
+        JSON.stringify({ version: 1, updatedAt: 1, settings: { gaugeAutoShift: 'BEST_CLEAR', bottomShiftableGauge } }),
+      )?.settings,
+    ).toMatchObject({ gaugeAutoShift: 'BEST_CLEAR', bottomShiftableGauge });
+  }
+  expect(
+    parseDebugMenuSettingsDocument(
+      JSON.stringify({ version: 1, updatedAt: 1, settings: { bottomShiftableGauge: 'HARD' } }),
+    )?.settings,
+  ).not.toHaveProperty('bottomShiftableGauge');
 });

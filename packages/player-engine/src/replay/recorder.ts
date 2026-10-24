@@ -22,7 +22,7 @@ import type { PreparedPlaybackChartData } from '../core/bootstrap.ts';
 import { resolveChartJudgeRankFacts } from '../ruleset/index.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
 import { resolve____RankLabel } from '../ruleset/score.ts';
-import type { GaugeType, GaugeAutoShift } from '../ruleset/gauge-type.ts';
+import type { GaugeType, GaugeAutoShift, GaugeShiftBottom } from '../ruleset/gauge-type.ts';
 import type { RulesetId } from '../ruleset/definitions.ts';
 import packageJSON from '../../package.json' with { type: 'json' };
 import {
@@ -80,6 +80,7 @@ export interface ReplayRecorderPlaySettings {
   /** The play ended the moment its survival gauge emptied (`PlayerOptions.endOnFailure`). Recorded when true. */
   endOnFailure?: boolean;
   gaugeAutoShift?: GaugeAutoShift;
+  bottomShiftableGauge?: GaugeShiftBottom;
   /** The course stage the play was (`PlayerOptions.course`). */
   course?: ReplayCourseStage;
   /** The play tempo (`PlayerOptions.speed`). Recorded when it is not 1. */
@@ -266,6 +267,8 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
         play.aborted = true;
         if (abortedAtSeconds !== undefined) play.abortedAtUs = secondsToMicroseconds(abortedAtSeconds);
       }
+      if (options.play.bottomShiftableGauge !== undefined)
+        play.bottomShiftableGauge = options.play.bottomShiftableGauge;
       if (options.play.gaugeAutoShift !== undefined) play.gaugeAutoShift = options.play.gaugeAutoShift;
       if (options.play.endOnFailure === true) play.endOnFailure = true;
       if (options.play.course !== undefined) play.course = structuredClone(options.play.course);
@@ -504,6 +507,7 @@ function buildNativeResult(
     djLevel: resolve____RankLabel(summary.exScore, summary.total),
     gauge: {
       type: summary.gauge?.type ?? declaredGauge,
+      ...(summary.gauge?.values ? { values: { ...summary.gauge.values } } : {}),
       final:
         summary.gauge?.max === 100
           ? summary.gauge.current

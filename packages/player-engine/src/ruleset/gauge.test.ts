@@ -126,3 +126,91 @@ test('the live summary follows the effective gauge and restores the original par
   live.applyGaugeJudge('POOR');
   expect(live.summary.gauge?.type).toBe('NORMAL');
 });
+
+function bankConfig(bottom: 'ASSIST-EASY' | 'EASY' | 'GROOVE' = 'ASSIST-EASY') {
+  return resolveRuleset(
+    {
+      sourceFormat: 'bms',
+      laneMode: '7K',
+      lnMode: 1,
+      judgeRank: { percent: 75 },
+      total: 300,
+      notes: { normal: 1000, long: { 1: 0, 2: 0, 3: 0 } },
+    },
+    'beatoraja',
+    { selectedGauge: 'GROOVE', gaugeAutoShift: 'BEST_CLEAR', bottomShiftableGauge: bottom },
+  );
+}
+
+test('BEST CLEAR follows the highest qualified parallel gauge, then the chosen lower bound', () => {
+  const config = bankConfig('EASY');
+  const gauge = new RulesetGauge(config.gauge, undefined, config.gaugeBank);
+  expect(gauge.spec.id).toBe('HAZARD');
+  expect(Object.keys(gauge.values!)).toEqual(['ASSIST-EASY', 'EASY', 'NORMAL', 'HARD', 'EX-HARD', 'HAZARD']);
+  gauge.applyJudge(4);
+  expect(gauge.spec.id).toBe('EX-HARD');
+  const first = gauge.values!;
+  gauge.applyRawDelta(-1000);
+  expect(gauge.spec.id).toBe('EASY');
+  expect(gauge.cleared()).toBe(false);
+  expect(gauge.failedMidPlay).toBe(false);
+  expect(gauge.values!.HARD).toBe(0);
+  expect(first.HARD).toBeGreaterThan(0); // Prior snapshots stay immutable.
+  for (let i = 0; i < 400; i++) gauge.applyJudge(0);
+  expect(gauge.spec.id).toBe('NORMAL');
+  expect(gauge.cleared()).toBe(true);
+  expect(gauge.values!.HAZARD).toBe(0);
+});
+
+test('BEST CLEAR never raises the lower bound above an already selected lower gauge', () => {
+  const config = bankConfig('GROOVE');
+  const gauge = new RulesetGauge(config.gauge, undefined, config.gaugeBank);
+  gauge.applyRawDelta(-1000);
+  expect(gauge.spec.id).toBe('NORMAL');
+  const lower = new RulesetGauge(config.gauge, undefined, { specs: config.gaugeBank!.specs, bottomIndex: 0 });
+  lower.applyRawDelta(-1000);
+  expect(lower.spec.id).toBe('ASSIST-EASY');
+  const deadSurvival = config.gaugeBank!.specs.map((spec) => (spec.survival ? { ...spec, initial: 0 } : spec));
+  const startsBelow = new RulesetGauge(deadSurvival[0]!, undefined, { specs: deadSurvival, bottomIndex: 2 });
+  expect(startsBelow.spec.id).toBe('ASSIST-EASY');
+  startsBelow.applyJudge(5);
+  expect(startsBelow.spec.id).toBe('ASSIST-EASY');
+});
+
+test('BEST CLEAR ignores HCN tick scaling only where each source gauge specifies zero gain', () => {
+  const config = bankConfig();
+  const gauge = new RulesetGauge(config.gauge, undefined, config.gaugeBank);
+  const before = gauge.values!;
+  gauge.applyJudge(1, 0.5);
+  expect(gauge.values!.NORMAL).toBeCloseTo(before.NORMAL! + config.gaugeBank!.specs[2]!.values[1] * 0.5);
+  expect(gauge.values!.HAZARD).toBe(100);
+});
+
+test('dead class gauges do not revive while the remaining family continues across course stages', () => {
+  const config = resolveRuleset(
+    {
+      sourceFormat: 'bms',
+      laneMode: '7K',
+      lnMode: 1,
+      judgeRank: { percent: 75 },
+      notes: { normal: 100, long: { 1: 0, 2: 0, 3: 0 } },
+    },
+    'beatoraja',
+    {
+      selectedGauge: 'DEATH',
+      gaugeAutoShift: 'BEST_CLEAR',
+      bottomShiftableGauge: 'GROOVE',
+      course: { kind: 'grade', initialGauge: 40, initialGauges: { CLASS: 60, EXCLASS: 40, EXHARDCLASS: 0 } },
+    },
+  );
+  const gauge = new RulesetGauge(config.gauge, undefined, config.gaugeBank);
+  expect(gauge.spec.id).toBe('EXCLASS');
+  expect(gauge.values).toEqual({ CLASS: 60, EXCLASS: 40, EXHARDCLASS: 0 });
+  gauge.applyJudge(0);
+  expect(gauge.values!.EXHARDCLASS).toBe(0);
+  expect(gauge.values!.CLASS).toBeGreaterThan(60);
+  gauge.applyRawDelta(-1000);
+  expect(gauge.spec.id).toBe('CLASS');
+  expect(gauge.failedMidPlay).toBe(true);
+  expect(gauge.cleared()).toBe(false);
+});

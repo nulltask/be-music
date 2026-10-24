@@ -38,6 +38,7 @@ export type GUIPlayOptions = Pick<
   | 'judgeAlgorithm'
   | 'mineModifier'
   | 'gaugeAutoShift'
+  | 'bottomShiftableGauge'
   | 'longNoteModifier'
   | 'longNoteRate'
   | 'autoScratch1P'
@@ -87,6 +88,7 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     longNoteRate: state.longNoteRate,
     mineModifier: state.mineModifier,
     gaugeAutoShift: state.gaugeAutoShift,
+    bottomShiftableGauge: state.bottomShiftableGauge,
     autoScratch1P: state.autoScratch1P,
     autoScratch2P: state.autoScratch2P,
     sort: state.sort,
@@ -143,6 +145,7 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.longNoteRate = options.longNoteRate;
   state.mineModifier = options.mineModifier;
   state.gaugeAutoShift = options.gaugeAutoShift;
+  state.bottomShiftableGauge = options.bottomShiftableGauge;
   state.autoScratch1P = options.autoScratch1P;
   state.autoScratch2P = options.autoScratch2P;
   state.sort = options.sort;

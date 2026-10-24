@@ -238,6 +238,7 @@ export async function createPlaySession(
     {
       ...(options.judgeAlgorithm !== undefined ? { judgeAlgorithm: options.judgeAlgorithm } : {}),
       ...(selectedGauge !== undefined ? { selectedGauge } : {}),
+      ...(options.bottomShiftableGauge !== undefined ? { bottomShiftableGauge: options.bottomShiftableGauge } : {}),
       ...(options.gaugeAutoShift !== undefined ? { gaugeAutoShift: options.gaugeAutoShift } : {}),
       ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
       ...(options.course !== undefined ? { course: courseStageRulesetOptions(options.course) } : {}),
@@ -329,6 +330,9 @@ export async function createPlaySession(
                 }
               : {}),
             gaugeAutoShift: options.gaugeAutoShift,
+            ...(options.bottomShiftableGauge !== undefined
+              ? { bottomShiftableGauge: options.bottomShiftableGauge }
+              : {}),
             endOnFailure: endOnFailure ? true : undefined,
             gauge: selectedGauge,
             // The tempo a live play ran at (its inputs are in chart time either way). A replay's `speed` only sets how

@@ -273,3 +273,22 @@ test('an outcome supplied without a replay is always practice, even without an e
   expect(course.practice).toBe(true);
   expect(() => course.buildReplay()).toThrow('practice course');
 });
+
+test('BEST CLEAR carries all three class gauges and does not alias a caller editing the next plan', () => {
+  const course = run([]);
+  const values = { CLASS: 70, EXCLASS: 40, EXHARDCLASS: 0 };
+  const first = stageLog({ gauge: { type: 'EXCLASS', final: 40, cleared: true, values } });
+  expect(course.recordStage(first)).toBe('next');
+  const next = course.nextStage()!.course;
+  expect(next.carryIn).toMatchObject({ gauge: 40, gauges: values });
+  next.carryIn!.gauges!.CLASS = 1;
+  expect(course.nextStage()!.course.carryIn!.gauges!.CLASS).toBe(70);
+  expect(
+    course.recordStage(
+      stageLog({
+        gauge: { type: 'CLASS', final: 25, cleared: true, values: { CLASS: 25, EXCLASS: 0, EXHARDCLASS: 0 } },
+      }),
+    ),
+  ).toBe('next');
+  expect(course.nextStage()!.course.carryIn!.gauges).toEqual({ CLASS: 25, EXCLASS: 0, EXHARDCLASS: 0 });
+});

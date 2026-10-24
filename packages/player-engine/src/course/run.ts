@@ -123,6 +123,7 @@ export class CourseRun<
     if (previous !== undefined) {
       course.carryIn = {
         gauge: previous.gauge.final,
+        ...(previous.gauge.values !== undefined ? { gauges: { ...previous.gauge.values } } : {}),
         combo: previous.course?.combo ?? 0,
         maxCombo: previous.course?.maxCombo ?? previous.maxCombo,
       };

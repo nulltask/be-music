@@ -54,6 +54,9 @@ export function resolveRulesetConfig(
   const { course } = replay.play;
   return resolveRuleset(rulesetChartFactsFromReplay(replay), rulesetId, {
     selectedGauge: replay.play.gauge,
+    ...(rulesetId === 'beatoraja' && replay.play.bottomShiftableGauge !== undefined
+      ? { bottomShiftableGauge: replay.play.bottomShiftableGauge }
+      : {}),
     ...(rulesetId === 'beatoraja' && replay.play.gaugeAutoShift !== undefined
       ? { gaugeAutoShift: replay.play.gaugeAutoShift }
       : {}),
@@ -74,6 +77,7 @@ export function courseStageRulesetOptions(course: ReplayCourseStage): RulesetCou
   if (course.gaugeSet !== undefined) options.gaugeSet = course.gaugeSet;
   if (course.judge !== undefined) options.judge = course.judge;
   if (course.carryIn !== undefined) options.initialGauge = course.carryIn.gauge;
+  if (course.carryIn?.gauges !== undefined) options.initialGauges = course.carryIn.gauges;
   return options;
 }
 
