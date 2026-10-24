@@ -163,3 +163,9 @@ test('grade_random excludes RANDOM-EX', () => {
     { random1P: 'OFF', random2P: 'OFF', dpFlip: false },
   );
 });
+
+test('grade_random excludes S-RANDOM-EX', () => {
+  expect(
+    resolveCourseLaneOptions(['grade_random'], { random1P: 'S-RANDOM-EX', random2P: 'OFF', dpFlip: false }),
+  ).toEqual({ random1P: 'OFF', random2P: 'OFF', dpFlip: false });
+});

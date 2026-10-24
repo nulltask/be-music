@@ -221,3 +221,10 @@ test('PMS S_RANDOM_PLAYABLE preserves the source option name', () => {
   expect(resolveRandomModes('____')).not.toContain('S_RANDOM_PLAYABLE');
   expect(resolvePlayOptionValue('random1P', 'S_RANDOM_PLAYABLE')).toBe('S_RANDOM_PLAYABLE');
 });
+
+test('S-RANDOM-EX is a separate beatoraja option', () => {
+  expect(resolveRandomModes('beatoraja')).toContain('S-RANDOM-EX');
+  expect(resolveRandomModes('lr2')).not.toContain('S-RANDOM-EX');
+  expect(resolveRandomModes('____')).not.toContain('S-RANDOM-EX');
+  expect(resolvePlayOptionValue('random1P', 'S-RANDOM-EX')).toBe('S-RANDOM-EX');
+});

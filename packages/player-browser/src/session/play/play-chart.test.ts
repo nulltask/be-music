@@ -492,3 +492,31 @@ test('PMS playable S-RANDOM uses row-specific placement rather than a whole-char
     applyRandomMode([], KEYS_1P, 'S_RANDOM_PLAYABLE', () => 0, { ruleset: 'beatoraja', playVariant: '7' }),
   ).toThrow(/PMS arrangement/);
 });
+
+test.each(['1P', '2P'] as const)('S-RANDOM-EX includes %s scratch and holds its LN through the tail row', (side) => {
+  const keys = resolveLaneOptionChannels(side, '14').slice(0, 2);
+  const scratch = side === '1P' ? '16' : '26';
+  const notes = [
+    { channel: keys[0]!, seconds: 0, endSeconds: 1 },
+    { channel: keys[1]!, seconds: 0.5 },
+    { channel: keys[1]!, seconds: 1 },
+    { channel: keys[1]!, seconds: 1.001 },
+  ];
+  applyRandomMode(notes, keys, 'S-RANDOM-EX', () => 0.99, { ruleset: 'beatoraja', scratchLanes: [scratch] });
+  expect(channelsOf(notes)).toEqual([scratch, keys[1], keys[1], scratch]);
+  expect(notes[0]!.endSeconds).toBe(1);
+});
+
+test('S-RANDOM-EX includes both wheel directions and uses 40ms rather than H-RANDOM threshold BPM', () => {
+  const keys = resolveLaneOptionChannels('1P', '24');
+  const notes = [0, 0.001].map((seconds) => ({ channel: keys[0]!, seconds }));
+  applyRandomMode(notes, keys, 'S-RANDOM-EX', () => 0.99, {
+    ruleset: 'beatoraja',
+    scratchLanes: ['1P', '1Q'],
+    hRandomThresholdBPM: 1000,
+  });
+  expect(channelsOf(notes)).toEqual(['1Q', '1P']);
+  expect(() =>
+    applyRandomMode([], keys, 'S-RANDOM-EX', () => 0, { ruleset: 'lr2', scratchLanes: ['1P', '1Q'] }),
+  ).toThrow(/only for beatoraja/);
+});

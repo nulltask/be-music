@@ -183,6 +183,7 @@ export type RandomMode =
   | 'H-RANDOM'
   | 'ALL-SCR'
   | 'RANDOM-EX'
+  | 'S-RANDOM-EX'
   | 'RANDOM_PLAYABLE'
   | 'S_RANDOM_PLAYABLE'
   | 'CONVERGE'
