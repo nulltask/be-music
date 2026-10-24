@@ -1,7 +1,7 @@
 import { renderBuildInfo } from '@be-music/service-web-theme';
 
 /**
- * Static HTML for the demo shell — injected once into `#app` at boot via `app.innerHTML = DEMO_APP_HTML`.
+ * Static HTML for the player shell — injected once into `#app` at boot via `app.innerHTML = PLAYER_APP_HTML`.
  *
  * Extracted from `main.ts` so the bootstrap module isn't dominated by ~470 lines of inline markup. The layout is
  * intentionally a single template-literal blob (no DOM-building APIs) so authoring / diffing reads like a static
@@ -14,9 +14,9 @@ import { renderBuildInfo } from '@be-music/service-web-theme';
  *  - `#compat-panel*` — `compat-panel.ts` (`renderBrowserCompatPanel`), folded inside the drop card
  *  - `#start-leaderboard` / `#start-*` — `leaderboard-ui.ts` (`LeaderboardPanel.bindStartCard`)
  *  - `#start-silent-mode` — `silent-mode-playback.ts` (`mountStartSilentModeOption`), from `services/silent-mode.ts`
- *  - `#songs` / `#search` / `#stage` / `#loading-*` / `.shell` — looked up in `main.ts` as `PlayerWebDemoElements`
+ *  - `#songs` / `#search` / `#stage` / `#loading-*` / `.shell` — looked up in `main.ts` as `PlayerWebElements`
  */
-export const DEMO_APP_HTML = `
+export const PLAYER_APP_HTML = `
   <div class="shell empty">
     <!--
       Hidden file input — triggered by the GUI's "Open folder"
@@ -513,7 +513,7 @@ export const DEMO_APP_HTML = `
                 Or link straight to a pack: open the page with
                 <code>?music=https://…/song.zip</code> to auto-load a chart archive, and/or
                 <code>?skin=https://…/theme.zip</code> to apply a skin — the charts are listed in this select
-                screen. Cross-origin archive links are fetched through the demo proxy and must use HTTPS.
+                screen. Cross-origin archive links are fetched through the player proxy and must use HTTPS.
               </li>
             </ul>
 

@@ -10,8 +10,8 @@ import {
   writeDebugMenuSettings,
 } from './debug-menu-settings.ts';
 import { defaultCompressorTunings } from './compressor-tuning.ts';
-import { createDemoGUIState, VOLUME_STORAGE_KEY } from './services/settings.ts';
-import type { DemoGUIState } from './types.ts';
+import { createPlayerGUIState, VOLUME_STORAGE_KEY } from './services/settings.ts';
+import type { PlayerGUIState } from './types.ts';
 
 function memory(): Storage {
   const values = new Map<string, string>();
@@ -78,7 +78,7 @@ describe('writeDebugMenuSettings', () => {
 
 describe('overlayDebugMenuSettings', () => {
   test('replaces only the fields the document has', () => {
-    const state = { gauge: 'GROOVE', autoPlay: false, peakGain: false } as DemoGUIState;
+    const state = { gauge: 'GROOVE', autoPlay: false, peakGain: false } as PlayerGUIState;
     overlayDebugMenuSettings(state, { gauge: 'DEATH', peakGain: true });
     expect(state.gauge).toBe('DEATH');
     expect(state.peakGain).toBe(true);
@@ -90,7 +90,7 @@ describe('captureDebugMenuSettings', () => {
   test('round-trips every setting through the document and boot-time legacy keys', () => {
     const storage = memory();
     const create = () =>
-      createDemoGUIState({
+      createPlayerGUIState({
         storage,
         signals: {
           coarsePointer: false,
@@ -164,7 +164,7 @@ describe('captureDebugMenuSettings', () => {
     expect(readStoredDebugMenuSettings(storage)).toEqual(captured);
     const restored = create();
     for (const key of Object.keys(expected) as (keyof DebugMenuSettings)[]) {
-      if (key in restored) expect(restored[key as keyof DemoGUIState], key).toEqual(expected[key]);
+      if (key in restored) expect(restored[key as keyof PlayerGUIState], key).toEqual(expected[key]);
     }
     const legacy = debugMenuSettingsFromLegacy(storage, 43).settings;
     for (const key of ['workerCount', 'compressorTuning', 'skinSettings', 'courseTableURLs', 'folders'] as const) {

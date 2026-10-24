@@ -66,7 +66,7 @@ beatoraja の `timer_util` / `event_util` helper module は組み込みで用意
 
 ブラウザの `main_state.event_index(id)` は `image.ref` と同じ画像番号の解決処理を使います。MODE/SORT と LNMODE はゼロ始まり、HS-FIX と CLEAR は beatoraja の番号順です。`main_state.set_timer(id, start)` はカスタムアニメーション用タイマー 10000–19999 だけを書き換え、開始時刻はマイクロ秒です。`main_state.timer_off_value` で停止します。Lua と数値指定の描画先タイマーには同じフレームで反映します。不正な書き込みは false を返し、保護されたエンジン・シーン用タイマーは変更しません。カスタムタイマーの状態は1つのスキンインスタンスだけに属します。
 
-JSON／Lua スキンのリザルト用タイマー 150–152 は画面表示時に開始します。プレイスキンにはスコアの条件 348–352、判定エンジンに従う HCN の active/damage、POMYU キャラクターのタイマーを渡します。`PlaySceneOptions.scoreTargets` で `bestEXScore` と `targetEXScore` を指定でき、省略時はゼロです。デモは譜面の記録を自己ベストとして渡します。beatoraja の通常の終了処理は最終ノート・イベントから譜面時間で5秒待ち、MUSIC_END（908）を通知した後に `finishmargin` を待ってフェードします。既存のエンジンループで判定するので、一時停止・速度変更・シークに追従します。POMYU のタイマーの対応表はモーション時間を受け取れますが、既存のキャラクターパックの描画は静止スプライトのままです。
+JSON／Lua スキンのリザルト用タイマー 150–152 は画面表示時に開始します。プレイスキンにはスコアの条件 348–352、判定エンジンに従う HCN の active/damage、POMYU キャラクターのタイマーを渡します。`PlaySceneOptions.scoreTargets` で `bestEXScore` と `targetEXScore` を指定でき、省略時はゼロです。プレイヤーは譜面の記録を自己ベストとして渡します。beatoraja の通常の終了処理は最終ノート・イベントから譜面時間で5秒待ち、MUSIC_END（908）を通知した後に `finishmargin` を待ってフェードします。既存のエンジンループで判定するので、一時停止・速度変更・シークに追従します。POMYU のタイマーの対応表はモーション時間を受け取れますが、既存のキャラクターパックの描画は静止スプライトのままです。
 
 ビットマップフォントの各ページには共通のブラウザー画像デコーダーを使用し、ブラウザーが直接扱えない TGA シートも読み込みます。
 
@@ -115,7 +115,7 @@ play skin は variant ごと (`'7' / '5' / '9' / '10' / '14' / '24' / '24d'`) �
 個別 skin の error は `BeatorajaThemeDiscoveryWarning[]` に集約され、theme 全体の discovery を中断しません。
 
 `pickBeatorajaPlaySkinVariant(playSkins, desired)` は chart を再生する skin の variant を選びます。chart 自身の variant、なければ fallback の list を順にたどって theme にある最初の variant です。
-`pickBeatorajaPlaySkin` はその variant の entry を返し、web player も同じ list で選びます（`pickBeatorajaPlayableSkinVariant`）。
+`pickBeatorajaPlaySkin` はその variant の entry を返し、Web プレイヤー も同じ list で選びます（`pickBeatorajaPlayableSkinVariant`）。
 beatoraja 本体はプレイモードをまたいで fallback しません。モードごとに設定した skin か、そのモードに組み込まれた既定の skin を読みます。
 モードをまたぐ唯一の流用は、LR2 の 7 KEY / 14 KEY skin を 5 KEY / 10 KEY にも出すことで、これに合わせて 5 KEY の list は 7 から、10 KEY の list は 14 から始まります。
 ほかの list は、名前を言ってはいけないあのゲーム と POPN の chart では 名前を言ってはいけないあのゲーム と POPN の variant を鍵盤モードより先に、鍵盤モードの chart ではもう一方の鍵盤モードを先に試します。
@@ -222,7 +222,7 @@ sequenceDiagram
 
 `@be-music/player-browser` は `loadBeatorajaThemeFromFiles()` を提供し、dropped browser `File[]` を `BeatorajaThemeBundle` に wrap します。
 host はその bundle から、scene ごとのスキンのエントリを player-browser の `loadBeatorajaSceneKit()`（[player-web.ja.md](./player-web.ja.md#beatoraja-skin-と-theme-support)）で読み込みます。これはこの package の `loadBeatorajaSkin()` を 2 回（ヘッダーの読み込みと、プレイヤーのオプションでのスキンの読み込み。ホストがオプションをすでに持っていれば 1 回）、`source[]` 向けの `bundleBeatorajaSources()`、Pixi texture 向けの `loadBeatorajaTexturesFromBundle()`、CSS / bitmap font 向けの `loadBeatorajaFonts()` を呼び、エントリごとに保持します。
-state は LR2 theme state と並列に保持されるため、demo は両方の theme format を同時に保持できます。
+state は LR2 theme state と並列に保持されるため、player は両方の theme format を同時に保持できます。
 
 browser renderer は select、decide、gameplay、result skin の共有 view として `BeatorajaPlaySkinView` を使います。
 ファミリーのビューは `TEXT`、`NUM`、`OPTION`、timer、gauge、graph を [scene mapping](#scene-mapping) から読み、chart image、note layer、BGA layer、audio、result history など runtime 固有の部分を自分で提供します。

@@ -9,12 +9,12 @@ import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player-engine/
 import { resolveCourseView, type PlayOptions } from '@be-music/player-scene-model';
 import type { ActiveCourse, CourseStagePlay } from '../course-flow.ts';
 import { tempoFromPercent } from '../play-tempo-settings.ts';
-import type { DemoGUIState } from '../types.ts';
+import type { PlayerGUIState } from '../types.ts';
 import type { NonstopPlay } from './routes/nonstop.ts';
 
 /** The Debug Menu's state a play is made with: its lane, gauge, tempo, audio and debug options. */
 export type PlaySceneGUIState = Pick<
-  DemoGUIState,
+  PlayerGUIState,
   | 'autoPlay'
   | 'random1P'
   | 'random2P'

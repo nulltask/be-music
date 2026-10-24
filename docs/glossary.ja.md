@@ -86,8 +86,8 @@
 - **player core**: `@be-music/player-engine` の共有の規則と engine です。パッケージのルートは engine（`manualPlay`、`autoPlay`）で、解決済みの譜面からプレイを準備して判定し、UI / audio / input の runtime 契約を持ちます。ほかのエントリポイントは規則（`./ruleset`、`./course`、`./records`、`./replay`）と、ホストがプレイと共有するもの（`./signals`、`./lanes`、`./display`）です。timing、ノートの解決、timeline は `@be-music/chart-model` にあります。
 - **Node 音声アダプター**: `@be-music/player-node-audio` が提供する Node 用の音声実装です。ホストが `createAudioSession: createNodeAudioSession` としてエンジンに渡します。エンジンは音声契約を所有し、アダプターがデコードと出力を担当します。
 - **terminal player**: `@be-music/player-terminal` の CLI / TUI frontend です。core engine の上に Music Select、terminal gameplay、terminal BGA、loading screen、SEA build を提供します。
-- **browser player**: `@be-music/player-browser` の PixiJS/WebAudio runtime と `@be-music/app-play` の Vite host です。runtime はホスト向けの API から、どの画面もファミリービューが描くシーンセッションとして作り、ライブラリとスキンの読み込みとプレイの録画も持ちます。demo は browser drop、theme、Debug Menu、シーンルーターを扱います。
-- **skin family**: browser player の scene を描くスキンの種類です。`built-in`（be-music skin）、`lr2`、`beatoraja` があります（`SceneFamily`）。host は読み込んだ theme とプレイヤーの選択から選びます。
+- **browser player**: `@be-music/player-browser` の PixiJS/WebAudio runtime と `@be-music/app-play` の Vite host です。runtime はホスト向けの API から、どの画面もファミリービューが描くシーンセッションとして作り、ライブラリとスキンの読み込みとプレイの録画も持ちます。player は browser drop、theme、Debug Menu、シーンルーターを扱います。
+- **skin family**: browser プレイヤーの scene を描くスキンの種類です。`built-in`（be-music skin）、`lr2`、`beatoraja` があります（`SceneFamily`）。host は読み込んだ theme とプレイヤーの選択から選びます。
 - **built-in family（default skin family）**: 外部 theme がない場合、または host が明示的に選ぶ場合に使う skin family です。select、play、result（スキンが宣言していれば decide も）を be-music skin で描きます。play view は LR2 と同じく共通のプレイフィールドを描き、そのまわりの chrome はスキンが描きます。
 - **be-music skin**: `@be-music/player-skin-sdk` に沿って書くコードベースのスキンです。表示用フレームを受け取り、Canvas 描画と任意の DOM 画面を組み合わせます。DOM は選曲・決定・リザルトを置き換え、ゲームプレイでは Canvas のプレイフィールドに HUD を追加します。`gameplay.drawsOnDOM` を設定したスキンはプレイフィールドも DOM で描きます。
 - **built-in skins**: browser player に同梱する be-music skin です。既定の Synesthesia、Phantom、Plain、Native（DOM + Canvas）と、opt-in の Lattice があります。Native は `@be-music/player-ui` の再利用可能な部品を使います。
@@ -177,8 +177,8 @@
 - **インテント（intent）**: ビューへの操作が画面にとって何を意味するか。フォルダを開く、コースを始める、ゲージを切り替える、など。
 - **プレイループ / 判定ストラテジー（play loop / judge strategy）**: すべてのプレイが通る 1 つのエンジンのループと、そこに差し込む手動・AUTO・リプレイの判定。[ADR 0003](./adr/0003-one-play-loop.ja.md) を参照。
 - **シーク（seek）**: 動いているプレイを譜面の別の秒数へ動かすこと。プレイループへのコマンド（`{ kind: 'seek' }`）で、プレイを始め直すことはありません。その位置の判定の状態は先頭からのプレイがそこで持つもので、シークのたびにフレームの世代が 1 つ進みます。シークしたプレイは練習扱いで、リプレイを記録しません。[ADR 0016](./adr/0016-seek-play-loop-command.ja.md) を参照。
-- **シーンルーター（scene router）**: ホストで今の画面とすべての切り替えを受け持つ唯一の部品（Web のデモの `app/scene-router.ts`）。[ADR 0006](./adr/0006-scene-router.ja.md) を参照。
-- **音声サービス（audio service）**: Web のプレイヤーがプレイの譜面以外の音を鳴らす唯一の手段（`@be-music/player-browser/audio` の `createAudioService`）。選曲の BGM、効果音、ジングル、譜面のプレビュー、スキンの音を 1 つのシステム `AudioContext` で鳴らします。プレイはこれを通して自分のコンテキストを開きます（`openPlayGraph`）。画面は自分が鳴らす音の所有者（owner）として自分を渡し、`stopOwned` で止めます。[ADR 0007](./adr/0007-one-system-audio-context.ja.md) を参照。
+- **シーンルーター（scene router）**: ホストで今の画面とすべての切り替えを受け持つ唯一の部品（Web プレイヤーの `app/scene-router.ts`）。[ADR 0006](./adr/0006-scene-router.ja.md) を参照。
+- **音声サービス（audio service）**: Web プレイヤーがプレイの譜面以外の音を鳴らす唯一の手段（`@be-music/player-browser/audio` の `createAudioService`）。選曲の BGM、効果音、ジングル、譜面のプレビュー、スキンの音を 1 つのシステム `AudioContext` で鳴らします。プレイはこれを通して自分のコンテキストを開きます（`openPlayGraph`）。画面は自分が鳴らす音の所有者（owner）として自分を渡し、`stopOwned` で止めます。[ADR 0007](./adr/0007-one-system-audio-context.ja.md) を参照。
 
 ## 関連文書
 

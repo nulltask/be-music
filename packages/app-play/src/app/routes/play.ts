@@ -19,7 +19,7 @@ import {
   type CourseStagePlay,
 } from '../../course-flow.ts';
 import { skipsCourseStageResult } from '../../course-result.ts';
-import { sanitizeFilenameStem } from '../../demo-utils.ts';
+import { sanitizeFilenameStem } from '../../player-utils.ts';
 import { resolvePlayLayoutMode, type DeviceProfile } from '../../device-profile.ts';
 import { storeHiSpeed } from '../../hi-speed-storage.ts';
 import { allowsLiveTempo, describePlayingStatus, tempoPercentFromTempo } from '../../play-tempo-settings.ts';
@@ -31,7 +31,7 @@ import type { RecordsService } from '../../services/records.ts';
 import type { BeatorajaPlayEntry, BeatorajaThemeService } from '../../services/themes/beatoraja.ts';
 import { courseStageRecordKey, playRecordKey } from '../../chart-best-records.ts';
 import type { TestHookRecorder } from '../../test-hook.ts';
-import type { DemoGUIState, DemoScene, PlayerWebDemoElements } from '../../types.ts';
+import type { PlayerGUIState, PlayerScene, PlayerWebElements } from '../../types.ts';
 import type { DebugMenu } from '../../ui/debug-menu/index.ts';
 import type { FamilyKits, ResolvedPlayKit } from '../family-kits.ts';
 import { resolvePlaySceneOptions, type PlaySceneGUIState } from '../play-scene-options.ts';
@@ -62,13 +62,13 @@ interface PlayLatches {
 export interface PlayRouteDeps {
   /** The scene router: the select scene it keeps, the play it holds, and the navigation a play shows in. */
   readonly router: Pick<
-    SceneRouter<DemoScene, PlayScene, SelectScene>,
+    SceneRouter<PlayerScene, PlayScene, SelectScene>,
     'select' | 'play' | 'begin' | 'leave' | 'show' | 'prepare'
   >;
   /** The select route: where its screen was, for its next showing to come back to. */
   readonly selectRoute: Pick<SelectRoute, 'lastSelectNavigation'>;
   /** The page: the shell's `playing` class. */
-  readonly elements: Pick<PlayerWebDemoElements, 'shell'>;
+  readonly elements: Pick<PlayerWebElements, 'shell'>;
   /** The library: the chart's asset source. */
   readonly library: Pick<LibraryService, 'collection'>;
   /** The chart hashes the play's log records, and the record keys of the play in flight. */
@@ -95,7 +95,7 @@ export interface PlayRouteDeps {
   /** The play options in force: the covers, HS-FIX, BGA and score graph the play is made with. */
   readonly playOptions: Pick<PlayOptionsService, 'current'>;
   /** The Debug Menu's state: the lane, gauge, tempo, audio and debug options the play is made with. */
-  readonly guiState: PlaySceneGUIState & Pick<DemoGUIState, 'courseAutoAdvance' | 'playLayout'>;
+  readonly guiState: PlaySceneGUIState & Pick<PlayerGUIState, 'courseAutoAdvance' | 'playLayout'>;
   /** The Debug Menu: the compressor's tuned parameters, and the hi-speed slider. */
   readonly debugMenu: DebugMenu;
   /** The compressor architecture every play mounts with (`?compressor=`). */

@@ -298,7 +298,7 @@ the select cues (`cursor`, `decide`, `cancel`, `folderOpen`, `folderClose`, `opt
 `optionChange`), the select BGM and the decide jingle, and the result jingles (`clear`, `fail`, `result`,
 `courseClear`, `courseFail`).
 
-- An LR2 theme's sounds come by bytes from its theme load, and the host fills the slots it plays (the web demo's LR2
+- An LR2 theme's sounds come by bytes from its theme load, and the host fills the slots it plays (the web player's LR2
   theme service fills the select ones). `LR2_SOUND_SET_SLOTS` maps each command of an LR2 sound set to its slot
   (`SCRATCH` is the cursor cue, `PANEL_*` the option panel ones).
 - `systemSoundSetFromBeatoraja` reads a beatoraja theme's cue paths and select BGM path (played through the theme's

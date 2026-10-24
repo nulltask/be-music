@@ -711,11 +711,11 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 - **LR2:** コースのハッシュ文字列（コースのヘッダー + ステージの MD5）。
 - **beatoraja:** ステージの SHA-256 をつなげたものと、`mode = lnmode + option*10 + no_speed*100 + judge*1000 + gauge*10000`（[PlayDataAccessor.java#L343-L372](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayDataAccessor.java#L343-L372)）。
 - **be-music の現状:**
-  - デモはコースの記録を `stage.sha256 ?? stage.md5` で区別します（[`packages/app-play/src/course-result.ts`](../packages/app-play/src/course-result.ts) の `courseBestRecordKey`）。同じコースを `.lr2crs`（MD5 だけ）と beatoraja の JSON から読むと、**記録が 2 つ**になります。
+  - プレイヤーはコースの記録を `stage.sha256 ?? stage.md5` で区別します（[`packages/app-play/src/course-result.ts`](../packages/app-play/src/course-result.ts) の `courseBestRecordKey`）。同じコースを `.lr2crs`（MD5 だけ）と beatoraja の JSON から読むと、**記録が 2 つ**になります。
   - Leaderboard は `bmcourse0` のフィンガープリントを使います。
   - コースの制約、ゲージ、ランダムコース、持ち越し、トロフィーは [#403](https://github.com/nulltask/be-music/issues/403)〜[#410](https://github.com/nulltask/be-music/issues/410) と [#408](https://github.com/nulltask/be-music/issues/408) で扱いました。そのうちランダムコースの SQL フィルタは **[#564](https://github.com/nulltask/be-music/issues/564) で修正済み**で、コースメーカーで作ったコースはランキング対象外で始まるようになりました（**[#566](https://github.com/nulltask/be-music/issues/566) で修正済み**）。
 - **影響:** A/B。
-- **推奨:** デモのコース記録をコースのフィンガープリントで区別し、未定義の LN を持つステージの実際の LN モードを含める。
+- **推奨:** プレイヤーのコース記録をコースのフィンガープリントで区別し、未定義の LN を持つステージの実際の LN モードを含める。
 
 ## スキンの仕組み
 
@@ -798,7 +798,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | リザルト 150–152          | リザルト表示時に開始します。対応する JSON／Lua スキンでは上流の `ranktime` はゼロのままで、LR2 のリザルト操作段階とは別です。                                                                                                           |
 | スコア 348–350            | 判定後、EX スコアが譜面全体の最大値の 18/27、21/27、24/27（A・AA・AAA）に達すると開始します。                                                                                                                                           |
-| スコア 351–352            | 判定後、ホストの自己ベストまたは目標 EX スコア以上で開始します。指定がなければゼロです。デモはその譜面の自己ベストを渡します。                                                                                                          |
+| スコア 351–352            | 判定後、ホストの自己ベストまたは目標 EX スコア以上で開始します。指定がなければゼロです。プレイヤーはその譜面の自己ベストを渡します。                                                                                                    |
 | HCN 250–289 / 1810–2199   | 判定エンジンのレーン状態を使い、ゲージ増加中は active、減少中は damage、判定済みの先頭が通過する前と終端後は停止します。手動・AUTO・リプレイ・AUTO SCRATCH・シークは同じエンジンの状態に従います。                                      |
 | キャラクター 900–907      | neutral で始まり、指定された neutral モーションの区切りで最新の判定に応じた反応へ移り、反応の時間が過ぎると neutral に戻ります。2P は対戦相手として逆の反応をします。                                                                   |
 | dance 909 / music end 908 | プレイ中は dance が動きます。シーンは最終ノート（AUTO は準備済み譜面の最終イベント）から譜面時間で5秒後に music end を通知し、908 を開始してキャラクターと dance を停止します。その後、スキンの `finishmargin` を待ってフェードします。 |

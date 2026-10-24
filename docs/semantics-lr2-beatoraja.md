@@ -711,11 +711,11 @@ These are already documented in format-compat [§2.6](./format-compat.md#26-mine
 - **LR2:** a course hash string (course header + stage MD5s).
 - **beatoraja:** concatenated stage SHA-256s, plus `mode = lnmode + option*10 + no_speed*100 + judge*1000 + gauge*10000` ([PlayDataAccessor.java#L343-L372](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayDataAccessor.java#L343-L372)).
 - **be-music today:**
-  - The demo keys course records by `stage.sha256 ?? stage.md5` ([`packages/app-play/src/course-result.ts`](../packages/app-play/src/course-result.ts) `courseBestRecordKey`). The same course loaded from `.lr2crs` (MD5 only) and from beatoraja JSON gets **two records**.
+  - The player keys course records by `stage.sha256 ?? stage.md5` ([`packages/app-play/src/course-result.ts`](../packages/app-play/src/course-result.ts) `courseBestRecordKey`). The same course loaded from `.lr2crs` (MD5 only) and from beatoraja JSON gets **two records**.
   - The Leaderboard uses the `bmcourse0` fingerprint.
   - Course constraints, gauges, random courses, carry-in and trophies were covered in [#403](https://github.com/nulltask/be-music/issues/403)–[#410](https://github.com/nulltask/be-music/issues/410) and [#408](https://github.com/nulltask/be-music/issues/408). Of those, the random-course SQL filters are **fixed in [#564](https://github.com/nulltask/be-music/issues/564)**, and courses made in the course maker now start unranked (**fixed in [#566](https://github.com/nulltask/be-music/issues/566)**).
 - **Impact:** A/B.
-- **Recommendation:** key demo course records by the course fingerprint, and include the effective LN mode of stages with undefined LNs.
+- **Recommendation:** key player course records by the course fingerprint, and include the effective LN mode of stages with undefined LNs.
 
 ## Skin systems
 
@@ -798,7 +798,7 @@ Overall shape: two separate state mappings. LR2 CSV skins get LR2 vocabulary ([`
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Result 150–152            | Start at result entry. Supported JSON/Lua skins leave upstream `ranktime` at zero; LR2's result steps stay separate.                                                                                                                     |
 | Score 348–350             | After a judgment, EX score reaches 18/27, 21/27 or 24/27 of the entire chart maximum (A, AA, AAA).                                                                                                                                       |
-| Score 351–352             | After a judgment, EX score reaches the host's personal best or target, inclusively; absent targets default to zero. The demo supplies the chart's best EX score.                                                                         |
+| Score 351–352             | After a judgment, EX score reaches the host's personal best or target, inclusively; absent targets default to zero. The player supplies the chart's best EX score.                                                                       |
 | HCN 250–289 / 1810–2199   | Use authoritative judge lane state: active while gaining, damage while losing, off before a judged passing head and after its tail. Manual, AUTO, replay, AUTO SCRATCH and seeks share the same engine state.                            |
 | Character 900–907         | Begin neutral. At the authored neutral-motion boundary, choose the latest judgment's reaction; return to neutral after the reaction's duration. 2P is the opponent and reacts inversely.                                                 |
 | Dance 909 / music end 908 | Dance while playing. The session raises music end after the last note (AUTO: the prepared chart's last event) plus five chart seconds; 908 starts and character/dance timers stop. The skin's `finishmargin` then holds before fade-out. |

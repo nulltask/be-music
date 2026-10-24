@@ -3,14 +3,15 @@ import {
   setBrowserWorkerCount,
   disposeBrowserWorkers,
 } from '@be-music/player-browser/compute';
+import { migratePlayerStorage } from './debug-menu-storage.ts';
 import { readWorkerCount } from './worker-settings.ts';
 import { debugMenuSettingsSync } from './debug-menu-settings-sync.ts';
-// The demo's bootstrap: the page's markup, the browser check, the device classes and the Help modal, then the app
+// The player's bootstrap: the page's markup, the browser check, the device classes and the Help modal, then the app
 // (`app/app.ts`) once the UI fonts are ready, with the test hook installed over it before it starts.
 import { checkBrowserCompat } from '@be-music/player-browser/collection';
-import { PlayerWebDemoApp } from './app/app.ts';
+import { PlayerWebApp } from './app/app.ts';
 import { wireHelpModal } from './help-modal.ts';
-import { DEMO_APP_HTML } from './dom-template.ts';
+import { PLAYER_APP_HTML } from './dom-template.ts';
 import { renderBrowserCompatPanel } from './compat-panel.ts';
 import { readDeviceSignals, resolveDeviceProfile } from './device-profile.ts';
 import { waitForDefaultUIFonts } from './services/built-in-skins.ts';
@@ -24,6 +25,7 @@ try {
 } catch {
   /* Storage can be disabled. */
 }
+migratePlayerStorage(workerStorage);
 setBrowserWorkerCount(readWorkerCount(workerStorage, navigator.hardwareConcurrency));
 configureBrowserWorkers(() => new Worker(new URL('./compute-worker.ts', import.meta.url), { type: 'module' }));
 window.addEventListener('pagehide', (event) => {
@@ -36,10 +38,10 @@ if (!app) {
   throw new Error('missing #app');
 }
 
-app.innerHTML = DEMO_APP_HTML;
+app.innerHTML = PLAYER_APP_HTML;
 
 // Browser compatibility probe runs first so the drop card paints the readiness verdict immediately on first render. We
-// do this BEFORE constructing the demo app so that even a hard-fail (Pixi `Application.init()` throwing on a no-WebGL2
+// do this BEFORE constructing the player app so that even a hard-fail (Pixi `Application.init()` throwing on a no-WebGL2
 // browser) still leaves the user looking at the unsupported-browser message rather than a blank canvas.
 renderBrowserCompatPanel(checkBrowserCompat());
 
@@ -59,7 +61,7 @@ void waitForDefaultUIFonts()
     setBrowserWorkerCount(readWorkerCount(workerStorage, navigator.hardwareConcurrency));
     // `window.__beMusicTest` for the end-to-end suite (`?e2e=1` or a development build; `test-hook.ts`).
     const testHook = isTestHookEnabled(window.location.href, import.meta.env.DEV) ? new TestHookRecorder() : undefined;
-    const demo = new PlayerWebDemoApp({
+    const player = new PlayerWebApp({
       elements: {
         stage: document.querySelector<HTMLDivElement>('#stage')!,
         shell: document.querySelector<HTMLDivElement>('.shell')!,
@@ -76,8 +78,8 @@ void waitForDefaultUIFonts()
     });
     // Installed before the app starts, so the hook sees the first select screen come up.
     if (testHook !== undefined) {
-      const testHookDeps = demo.testHookDeps();
+      const testHookDeps = player.testHookDeps();
       testHook.install(window, () => liveTestHookState(testHookDeps));
     }
-    demo.start();
+    player.start();
   });

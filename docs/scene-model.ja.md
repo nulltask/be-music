@@ -298,7 +298,7 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 `optionChange`）、選曲の BGM と決定のジングル、結果のジングル（`clear`・`fail`・`result`・`courseClear`・`courseFail`）
 です。
 
-- LR2 テーマの音はテーマの読み込みで得たバイト列で、鳴らすスロットはホストが埋めます（Web のデモは LR2 テーマの
+- LR2 テーマの音はテーマの読み込みで得たバイト列で、鳴らすスロットはホストが埋めます（Web プレイヤーは LR2 テーマの
   サービスが選曲のスロットを埋めます）。`LR2_SOUND_SET_SLOTS` は LR2 のサウンドセットの各コマンドをスロットに
   対応させます（`SCRATCH` はカーソル、`PANEL_*` はオプションパネル）。
 - `systemSoundSetFromBeatoraja` は beatoraja テーマの効果音のパスと選曲 BGM のパス（テーマの音声で鳴らす）、

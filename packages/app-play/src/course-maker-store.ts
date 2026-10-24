@@ -13,7 +13,7 @@ import {
 
 /** Bumped when the stored shape changes; a record with another version is ignored. */
 const STORE_VERSION = 1;
-const DB_NAME = 'be-music-demo';
+const DB_NAME = 'be-music';
 const DB_VERSION = 1;
 const STORE_NAME = 'courses';
 const RECORD_KEY = 'made';
@@ -87,9 +87,62 @@ function openDatabase(): Promise<IDBDatabase> {
     request.onupgradeneeded = () => {
       if (!request.result.objectStoreNames.contains(STORE_NAME)) request.result.createObjectStore(STORE_NAME);
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      const db = request.result;
+      void migrateLegacyCourses(db).then(
+        () => resolve(db),
+        (error) => {
+          db.close();
+          reject(error);
+        },
+      );
+    };
     request.onerror = () => reject(request.error ?? new Error('indexedDB open failed'));
   });
+}
+
+/** Move the old database's course record without overwriting courses already saved under the current name. */
+async function migrateLegacyCourses(db: IDBDatabase): Promise<void> {
+  const previous = await new Promise<IDBDatabase | undefined>((resolve, reject) => {
+    const request = indexedDB.open('be-music-demo');
+    let missing = false;
+    request.onupgradeneeded = () => {
+      missing = true;
+      request.transaction?.abort();
+    };
+    request.onerror = () => (missing ? resolve(undefined) : reject(request.error));
+    request.onsuccess = () => resolve(request.result);
+  });
+  if (!previous) return;
+  try {
+    if (!previous.objectStoreNames.contains(STORE_NAME)) return;
+    const value = await new Promise<unknown>((resolve, reject) => {
+      const transaction = previous.transaction(STORE_NAME, 'readonly');
+      const request = transaction.objectStore(STORE_NAME).get(RECORD_KEY);
+      transaction.oncomplete = () => resolve(request.result);
+      transaction.onabort = () => reject(transaction.error);
+    });
+    if (value === undefined) return;
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.get(RECORD_KEY);
+      request.onsuccess = () => {
+        if (request.result === undefined) store.put(value, RECORD_KEY);
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () => reject(transaction.error);
+    });
+    // Remove the source only after the destination transaction commits, so clearing courses cannot resurrect it.
+    await new Promise<void>((resolve, reject) => {
+      const transaction = previous.transaction(STORE_NAME, 'readwrite');
+      transaction.objectStore(STORE_NAME).delete(RECORD_KEY);
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () => reject(transaction.error);
+    });
+  } finally {
+    previous.close();
+  }
 }
 
 function run<T>(mode: IDBTransactionMode, action: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {

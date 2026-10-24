@@ -34,7 +34,7 @@ import type {
 export interface BeatorajaSkinOptionsGUIOptions {
   /**
    * Parent element the panel attaches to. The pane is positioned `absolute` inside this element at
-   * `bottom: 0; left: 50% (translateX -50%);` — the host typically passes the demo's `.shell` so
+   * `bottom: 0; left: 50% (translateX -50%);` — the host typically passes the player's `.shell` so
    * the panel sits over the canvas (and not, say, over the page header).
    */
   container: HTMLElement;
@@ -57,7 +57,7 @@ export interface SetSkinOptions {
   config: BeatorajaSkinConfig;
   /**
    * Per-`filepath[].name` pre-resolved candidates. The dropdown surfaces the file paths verbatim for
-   * the user to pick; the demo passes whatever `expandBeatorajaWildcard` returned for the entry's
+   * the user to pick; the player passes whatever `expandBeatorajaWildcard` returned for the entry's
    * pattern. Empty / missing → only the default ("(auto)") is offered.
    */
   fileCandidates?: ReadonlyMap<string, ReadonlyArray<string>>;
@@ -328,7 +328,7 @@ export class BeatorajaSkinOptionsGUI {
     this.activeEntryPath = undefined;
   }
   /**
-   * Position Tweakpane's root element at the bottom-centre of the demo shell, flush against the
+   * Position Tweakpane's root element at the bottom-centre of the player shell, flush against the
    * bottom edge (no gap). Avoids Tweakpane's default fixed top-right positioning (which would
    * overlap the existing main pane) and the previous bottom-right placement (which collided
    * with the on-screen skin's BPM / TIME / SPEED readouts in the play scene's lower-right

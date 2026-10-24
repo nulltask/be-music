@@ -48,7 +48,7 @@ export interface LR2ThemeSkins {
   /**
    * Decide-screen skin (the brief "song confirmation" splash that plays between the select view and gameplay).
    * Conventionally lives at `LR2files/Theme/<name>/Decide/decide.lr2skin`. Undefined when the theme bundle has no
-   * Decide directory — the demo simply skips the splash and moves straight from select to play in that case.
+   * Decide directory — the player simply skips the splash and moves straight from select to play in that case.
    */
   decideSkin?: LR2Skin;
   /**

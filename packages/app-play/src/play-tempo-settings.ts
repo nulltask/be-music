@@ -6,7 +6,7 @@ import { clamp } from '@be-music/shared-utils/core';
  */
 
 /** `localStorage` key of the play tempo settings. */
-export const PLAY_TEMPO_STORAGE_KEY = 'be-music-demo.play-tempo';
+export const PLAY_TEMPO_STORAGE_KEY = 'be-music.play-tempo';
 
 /** The slider's range, in percent off the chart's own tempo. */
 export const TEMPO_PERCENT_MIN = -50;

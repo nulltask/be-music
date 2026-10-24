@@ -7,9 +7,9 @@
 // host-only OIDC session stays on its own origin; the upstream receives only a resource-bound access token.
 //
 // Almost everything is served straight from Workers Static Assets (`env.ASSETS`; wrangler.config.ts points at the
-// demo's `dist`). The exceptions are the ffmpeg.wasm core under `/ffmpeg-core/` and URL auto-load archives under
+// player's `dist`). The exceptions are the ffmpeg.wasm core under `/ffmpeg-core/` and URL auto-load archives under
 // `/__url-load-proxy`. The core lives in R2 because `ffmpeg-core.wasm` is ~31 MB, which blows past the 25 MiB per-file
-// limit for Static Assets. The URL proxy lets shared demo links load cross-origin archive URLs even when the host does
+// limit for Static Assets. The URL proxy lets shared player links load cross-origin archive URLs even when the host does
 // not send browser CORS headers. `assets.runWorkerFirst` (cloudflare.config.ts) routes both paths here before asset
 // matching.
 //

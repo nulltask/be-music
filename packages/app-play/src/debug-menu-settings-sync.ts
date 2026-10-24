@@ -8,10 +8,10 @@ import {
   writeDebugMenuSettings,
   type DebugMenuSettingsDocument,
 } from './debug-menu-settings.ts';
-import { clearDemoSettings, type DebugMenuStorage } from './debug-menu-storage.ts';
+import { clearPlayerSettings, type DebugMenuStorage } from './debug-menu-storage.ts';
 
 export const PLAYER_SETTINGS_PATH = '/api/player-settings';
-export const RESET_PENDING_KEY = 'be-music-demo.settings-reset-pending';
+export const RESET_PENDING_KEY = 'be-music.settings-reset-pending';
 const REQUEST_TIMEOUT_MS = 2500;
 
 function defaultStorage(): Storage | undefined {
@@ -122,7 +122,7 @@ export class DebugMenuSettingsSync {
     if (this.timer !== undefined) clearTimeout(this.timer);
     this.timer = undefined;
     this.pending = undefined;
-    clearDemoSettings(this.storage);
+    clearPlayerSettings(this.storage);
     try {
       this.storage?.setItem(RESET_PENDING_KEY, JSON.stringify(reset));
     } catch {
@@ -165,7 +165,7 @@ export class DebugMenuSettingsSync {
 
   private apply(document: DebugMenuSettingsDocument): void {
     this.clock = Math.max(this.clock, document.updatedAt);
-    if (document.deleted) clearDemoSettings(this.storage);
+    if (document.deleted) clearPlayerSettings(this.storage);
     else writeDebugMenuSettings(document, this.storage);
   }
 

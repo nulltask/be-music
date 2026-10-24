@@ -1,13 +1,13 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { test, expect, SONGS } from '../../packages/app-play/e2e/support.ts';
 const out = process.env.PERF_OUTPUT ?? 'tmp/remaining-work/performance/current';
-test('capture real-skin CPU and allocation profiles', async ({ demo }) => {
+test('capture real-skin CPU and allocation profiles', async ({ player }) => {
   await mkdir(out, { recursive: true });
   const errors: string[] = [];
-  demo.page.on('pageerror', (e) => errors.push(e.message));
-  await demo.open({ 'be-music-demo.built-in-skin': 'synesthesia', 'be-music-demo.skin-effects': 'full' });
-  await demo.drop('songs', { prefix: SONGS });
-  const cdp = await demo.page.context().newCDPSession(demo.page);
+  player.page.on('pageerror', (e) => errors.push(e.message));
+  await player.open({ 'be-music.built-in-skin': 'synesthesia', 'be-music.skin-effects': 'full' });
+  await player.drop('songs', { prefix: SONGS });
+  const cdp = await player.page.context().newCDPSession(player.page);
   await cdp.send('Performance.enable');
   await cdp.send('Profiler.enable');
   const summaries: Array<{
@@ -24,7 +24,7 @@ test('capture real-skin CPU and allocation profiles', async ({ demo }) => {
   async function capture(name: string, action: () => Promise<void>) {
     await cdp.send('HeapProfiler.collectGarbage');
     const before = await cdp.send('Performance.getMetrics');
-    await demo.page.evaluate(() => {
+    await player.page.evaluate(() => {
       const g = globalThis as typeof globalThis & { __perfTimes: number[]; __perfRun: boolean };
       g.__perfTimes = [];
       g.__perfRun = true;
@@ -49,7 +49,7 @@ test('capture real-skin CPU and allocation profiles', async ({ demo }) => {
     const cpu = await cdp.send('Profiler.stop');
     const heap = await cdp.send('HeapProfiler.stopSampling');
     const after = await cdp.send('Performance.getMetrics');
-    const frames = await demo.page.evaluate(() => {
+    const frames = await player.page.evaluate(() => {
       const g = globalThis as typeof globalThis & { __perfTimes: number[]; __perfRun: boolean };
       g.__perfRun = false;
       return g.__perfTimes as number[];
@@ -71,40 +71,40 @@ test('capture real-skin CPU and allocation profiles', async ({ demo }) => {
     await writeFile(`${out}/${name}.cpuprofile`, JSON.stringify(cpu.profile));
     await writeFile(`${out}/${name}.heapprofile`, JSON.stringify(heap.profile));
     await writeFile(`${out}/${name}.json`, JSON.stringify({ summary, frames }, null, 2));
-    await demo.page.screenshot({ path: `${out}/${name}.png` });
+    await player.page.screenshot({ path: `${out}/${name}.png` });
   }
   for (const family of process.env.PERF_FAMILIES?.split(',') ?? ['built-in', 'native', 'lr2', 'beatoraja']) {
-    if (family === 'native') await demo.setOption(['Skin & display'], 'Built-in skin', 'Native (DOM + Canvas)');
-    else if (family !== 'built-in') await demo.drop(`real/${family}`);
-    await demo.waitFor(
+    if (family === 'native') await player.setOption(['Skin & display'], 'Built-in skin', 'Native (DOM + Canvas)');
+    else if (family !== 'built-in') await player.drop(`real/${family}`);
+    await player.waitFor(
       (s) => s.scene.kind === 'select' && s.scene.family === (family === 'native' ? 'built-in' : family),
       'family select',
       300000,
     );
-    await demo.setOption(['Play options'], 'Auto play', true);
-    await demo.browseTo(SONGS, 'Performance chart');
-    await demo.key('Enter');
-    await demo.waitFor((s) => s.scene.kind === 'play' && (s.play?.seconds ?? 0) > 5, 'warm gameplay', 120000);
+    await player.setOption(['Play options'], 'Auto play', true);
+    await player.browseTo(SONGS, 'Performance chart');
+    await player.key('Enter');
+    await player.waitFor((s) => s.scene.kind === 'play' && (s.play?.seconds ?? 0) > 5, 'warm gameplay', 120000);
     for (let trial = 1; trial <= 3; trial++)
-      await capture(`${family}-play-${trial}`, () => demo.page.waitForTimeout(15000));
-    await demo.key('Escape');
-    const stopped = await demo.waitFor(
+      await capture(`${family}-play-${trial}`, () => player.page.waitForTimeout(15000));
+    await player.key('Escape');
+    const stopped = await player.waitFor(
       (s) => s.scene.kind === 'select' || s.scene.kind === 'result',
       'stopped play',
       30000,
     );
-    if (stopped.scene.kind === 'result') await demo.leaveResult();
-    await demo.waitFor((s) => s.scene.kind === 'select', 'select');
+    if (stopped.scene.kind === 'result') await player.leaveResult();
+    await player.waitFor((s) => s.scene.kind === 'select', 'select');
   }
   if (!process.env.PERF_FAMILIES) {
     await capture('bulk-drop', async () => {
-      await demo.drop('bulk', { prefix: 'Bulk' });
+      await player.drop('bulk', { prefix: 'Bulk' });
     });
-    await demo.openFolder('Bulk');
+    await player.openFolder('Bulk');
     await capture('select-scroll', async () => {
       for (let i = 0; i < 150; i++) {
-        await demo.key('ArrowDown');
-        await demo.page.waitForTimeout(50);
+        await player.key('ArrowDown');
+        await player.page.waitForTimeout(50);
       }
     });
   }

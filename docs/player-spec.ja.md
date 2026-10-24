@@ -116,14 +116,14 @@ parser が IR へ保持するだけで、player が実行時に参照しない�
 
 | command                                                                                                                                     | 現在の player 実装                                                                                                                                                                                                              |
 | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `#TEXTxx`, `#TEXT00`                                                                                                                        | parser は保持しますが、player の表示や runtime 演出には使いません。                                                                                                                                                             |
+| `#TEXTxx`, `#TEXT00`                                                                                                                        | parser は保持しますが、プレイヤーの表示や runtime 演出には使いません。                                                                                                                                                          |
 | `#OPTION`, `#CHANGEOPTIONxx`                                                                                                                | parser は保持しますが、core runtime での play option 強制変更は未対応です。                                                                                                                                                     |
 | `#WAVCMD`, `#EXWAVxx`                                                                                                                       | parser は保持します。Node audio adapter は適用しませんが、chart-audio-renderer と browser WebAudio は実装済みの volume subset (`#WAVCMD 01` と `#EXWAVxx v`) を反映します。pitch、loop、pan、frequency parameter は未対応です。 |
 | `#BACKBMP`                                                                                                                                  | core/terminal runtime には専用挙動がありません。browser LR2 special graphic はこの値を利用できます。                                                                                                                            |
 | `#MAKER`                                                                                                                                    | metadata-only / unsupported です。                                                                                                                                                                                              |
 | `#EXBMPxx`, `#BGAxx`, `#SWBGAxx`, `#ARGBxx`                                                                                                 | parser は保持します。terminal/core runtime は適用しませんが、browser player は BGA sub-region、switching、tint、alpha の実装済み subset を描画します。                                                                          |
 | `#BASEBPM`                                                                                                                                  | parser は保持しますが、player は時間解決に使いません。                                                                                                                                                                          |
-| `#VIDEOFILE`                                                                                                                                | parser は保持しますが、player の BGA 動画解決には使いません。現実装の動画再生は `#BMPxx` で参照した動画ファイルだけを扱います。                                                                                                 |
+| `#VIDEOFILE`                                                                                                                                | parser は保持しますが、プレイヤーの BGA 動画解決には使いません。現実装の動画再生は `#BMPxx` で参照した動画ファイルだけを扱います。                                                                                              |
 | `#MIDIFILE`, `#MATERIALS`, `#DIVIDEPROP`, `#CHARSET`                                                                                        | parser は保持しますが、player runtime は参照しません。                                                                                                                                                                          |
 | `#SONGxx`, `#EXBPMxx`, `#CHARFILE`, `#ExtChr`, `#CDDA`, `#VIDEOFPS`, `#VIDEODLY`, `#VIDEOCOLORS`, `#SEEK`, `#MATERIALSBMP`, `#MATERIALSWAV` | 現在の player 実装では未対応です。                                                                                                                                                                                              |
 
@@ -156,7 +156,7 @@ flowchart TD
 
 時間解決では、通常の `#STOPxx` に加えて、BMS 拡張 `#STP` も停止イベントとして扱います。
 同じ位置に `#STOPxx` のオブジェクトが複数あれば、LR2 や beatoraja と同じく最後のものが勝ちます。bmson の同じパルスの `stop_events` は、bmson 仕様のとおり加算します。
-`#STP` は `xxx[.yyy] zzzz` を `measure xxx` の `yyy / 1000` 位置にある `zzzz ms` の停止として解釈し、同位置の複数定義は加算します。`.yyy` が省略された場合は `000` として扱います。書式に合わない `bms.stp` 要素は IR には保持されますが、player の時間解決では無視します。
+`#STP` は `xxx[.yyy] zzzz` を `measure xxx` の `yyy / 1000` 位置にある `zzzz ms` の停止として解釈し、同位置の複数定義は加算します。`.yyy` が省略された場合は `000` として扱います。書式に合わない `bms.stp` 要素は IR には保持されますが、プレイヤーの時間解決では無視します。
 
 ## 制御構文の扱い
 
@@ -197,7 +197,7 @@ flowchart LR
   draws --> users
 ```
 
-どのホストも 1 回だけ引き、同じ譜面と draws をそのプレイのすべての利用者に渡します。CLI はプレビューの描画とゲームプレイ worker に、web player は決定画面、プレイ画面、エンジン、リザルト画面に渡します。
+どのホストも 1 回だけ引き、同じ譜面と draws をそのプレイのすべての利用者に渡します。CLI はプレビューの描画とゲームプレイ worker に、Web プレイヤー は決定画面、プレイ画面、エンジン、リザルト画面に渡します。
 リスタートでは引き直します。LR2 や beatoraja もプレイごとに引き直すためです。
 エンジン（`autoPlay` / `manualPlay`）は自分では引きません。解決済みの譜面はそのまま再生し、`PlayerOptions.randomDraws` は RANDOM 要約にだけ使います。
 制御構文が残った譜面を `randomDraws` と一緒に渡された場合（たとえば元の譜面とリプレイの draws）は、その draws でちょうど 1 回だけ解決します。draws なしで渡された場合は、エンジンの外の誰も知らない分岐を引く代わりに `TypeError` を投げます。
@@ -301,7 +301,7 @@ FREE ZONE は、対応する scratch レーン (`17 -> 16`, `27 -> 26`) の入�
 
 `24 KEY SP` / `48 KEY DP` は Keyboardmania 系の keyboard mode です。片側 26 レーンで、24 鍵をチャンネル `11..19` + `1A..1O`（2P 側は `21..29` + `2A..2O`）に、ホイールを `1P`（上）/ `1Q`（下）（2P 側は `2P` / `2Q`）に持ちます。scratch 列はありません。鍵はチャンネル昇順に左から右へ並べ、ホイールは 名前を言ってはいけないあのゲーム 系が scratch を置く外側（1P の鍵の左、2P の鍵の右）に置きます。判定は内容ベースで、拡張レーンチャンネル（ホイールを含む）が 1 つでもあれば `.pms` 拡張子や `#PLAYER 3` + `17` の POPN-9 シグネチャよりも優先してこのモードを選び、bmson のキーボード系 `mode_hint` はそのままこのモードを選びます。
 
-ホイールは鍵とまったく同じに判定し（beatoraja ruleset の keyboard 判定幅で、scratch 固有の扱いはありません）、FREE ZONE にもなりません。レーンオプション（MIRROR / RANDOM / S-RANDOM）は片側の 24 鍵を入れ替え、ホイールは scratch と同じく動かしません。SP の 24 鍵は fallback キー配置を順に消費します (`a s d f g h j k l ; q w e r u i o p z x c v b n`)。ホイールはその割り当てとも、web player がハイスピード変更に使う矢印キーとも重ならない、キーボードの端のキーを使います。1P のホイール上 / 下は `Tab` / 左 `Shift`、2P は `Enter` / 右 `Shift` です（beatoraja は MIDI コントローラのピッチベンドでホイールを操作しますが、be-music には MIDI 入力がありません）。48 鍵の DP は印字キーの数を超えるため鍵の末尾がファンクションキーに落ちますが、48 鍵は AUTO PLAY と描画の検証対象であって手で押す対象ではないため、意図的な割り切りです。
+ホイールは鍵とまったく同じに判定し（beatoraja ruleset の keyboard 判定幅で、scratch 固有の扱いはありません）、FREE ZONE にもなりません。レーンオプション（MIRROR / RANDOM / S-RANDOM）は片側の 24 鍵を入れ替え、ホイールは scratch と同じく動かしません。SP の 24 鍵は fallback キー配置を順に消費します (`a s d f g h j k l ; q w e r u i o p z x c v b n`)。ホイールはその割り当てとも、Web プレイヤー がハイスピード変更に使う矢印キーとも重ならない、キーボードの端のキーを使います。1P のホイール上 / 下は `Tab` / 左 `Shift`、2P は `Enter` / 右 `Shift` です（beatoraja は MIDI コントローラのピッチベンドでホイールを操作しますが、be-music には MIDI 入力がありません）。48 鍵の DP は印字キーの数を超えるため鍵の末尾がファンクションキーに落ちますが、48 鍵は AUTO PLAY と描画の検証対象であって手で押す対象ではないため、意図的な割り切りです。
 
 名前を言ってはいけないあのゲーム 系の既定キーボード配置は、1P を `Z S X D C F V`、2P を `B H N J M K ,` とします。
 scratch は 1P が左 `Shift`、2P が右 `Shift` です。
@@ -317,7 +317,7 @@ kitty 非対応端末へフォールバックした場合、reverse scratch の 
 ホイールの上 / 下）、side、slot（鍵の番号。scratch は `0`、ホイールは `25` / `26`）、色の分類、そのレーンに載る各オブジェ系統の
 BMS チャンネル（可視 `1x` / `2x`、不可視 `3x` / `4x`、`#LNTYPE` の `5x` / `6x`、地雷 `Dx` / `Ex`。拡張レーン `A`..`Q` を含む）と、
 scratch で扱う FREE ZONE のチャンネルを持ちます。bmson の `mode_hint` のレーン表（`BMSON_MODE_HINT_LAYOUTS`）も同じレイアウトから
-作ります。parser、chart-writer、`resolveChartPlayVariant`、player のレーン配置とレーンオプション、CLI のレーン色、skin SDK の
+作ります。parser、chart-writer、`resolveChartPlayVariant`、プレイヤーのレーン配置とレーンオプション、CLI のレーン色、skin SDK の
 レーン種別は、すべてこの表から導出します。
 
 | レイアウト | 表示名               | レーン（左から右）                                                             | bmson `mode_hint`     |

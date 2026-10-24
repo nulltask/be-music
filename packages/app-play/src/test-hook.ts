@@ -1,6 +1,6 @@
-// The demo's test hook: `window.__beMusicTest`, a read-only view of what the demo shows, for the end-to-end suite
+// The player's test hook: `window.__beMusicTest`, a read-only view of what the player shows, for the end-to-end suite
 // (`packages/app-play/e2e`, `docs/course-checklist.md`). It reads state the host already keeps and the facts of
-// each result screen and replay the host hands it; it never drives the demo. Files are loaded through the page's
+// each result screen and replay the host hands it; it never drives the player. Files are loaded through the page's
 // drop handler, as a person drops them.
 //
 // The shape is a contract: the scene router and host rewrite (docs/architecture.md, P5) keep every field meaning
