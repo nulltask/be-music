@@ -51,6 +51,8 @@ export interface PreparedPlaybackChartData {
   notes: TimedPlayableNote[];
   laneSoundNotes: TimedPlayableNote[];
   landmineNotes: TimedLandmineNote[];
+  /** Number of mines actually changed; selection alone does not imply a source assist. */
+  mineModifierChangeCount?: number;
   invisibleNotes: TimedPlayableNote[];
   renderNotes: TimedPlayableNote[];
   totalSeconds: number;
@@ -174,7 +176,7 @@ const GROOVE_GAUGE_JUDGE_TO_RULESET_INDEX: Record<GrooveGaugeJudgmentKind, Gauge
  */
 export function preparePlaybackChart(
   resolved: ResolvedChart,
-  options: Pick<PlayerOptions, 'laneModeExtension' | 'longNoteModifier'> = {},
+  options: Pick<PlayerOptions, 'laneModeExtension' | 'longNoteModifier' | 'mineModifier'> = {},
   auxiliaryPlaybackEndSeconds = 0,
 ): PreparedPlaybackChartData {
   const playVariant = resolved.playVariant;
@@ -182,7 +184,7 @@ export function preparePlaybackChart(
   removeLongNoteTails(notes, options.longNoteModifier ?? 'OFF', resolved.lnMode);
   // Invisible 3x/4x objects are not score targets, but they do update the lane's current keysound in manual play.
   // They are always prepared, independently of the debug overlay option, so audio never depends on rendering settings.
-  const landmineNotes = resolved.mines.map(toTimedLandmineNote);
+  const landmineNotes = options.mineModifier === 'REMOVE' ? [] : resolved.mines.map(toTimedLandmineNote);
   const invisibleNotes = resolved.invisibleNotes.map(toTimedInvisibleNote);
   const laneSoundNotes = [...notes, ...invisibleNotes].sort(compareLaneSoundNotes);
   const renderNotes = notes;
@@ -204,6 +206,9 @@ export function preparePlaybackChart(
     notes,
     laneSoundNotes,
     landmineNotes,
+    ...(options.mineModifier !== undefined
+      ? { mineModifierChangeCount: options.mineModifier === 'REMOVE' ? resolved.mines.length : 0 }
+      : {}),
     invisibleNotes,
     renderNotes,
     totalSeconds,

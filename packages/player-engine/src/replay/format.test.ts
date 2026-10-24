@@ -507,3 +507,20 @@ test('round-trips resolved BPM extrema and rejects invalid ranges', () => {
     expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
   }
 });
+
+test('mine modifiers and actual change counts round-trip with strict validation', () => {
+  const replay = makeReplay();
+  replay.play.mineModifier = 'REMOVE';
+  replay.play.mineModifierChangeCount = 0;
+  expect(parseReplay(serializeReplay(replay)).play).toMatchObject({
+    mineModifier: 'REMOVE',
+    mineModifierChangeCount: 0,
+  });
+  expect(() => parseReplay(JSON.stringify({ ...replay, play: { ...replay.play, mineModifier: 'HIDE' } }))).toThrow(
+    ReplayParseError,
+  );
+  for (const mineModifierChangeCount of [-1, 0.5, '1'])
+    expect(() => parseReplay(JSON.stringify({ ...replay, play: { ...replay.play, mineModifierChangeCount } }))).toThrow(
+      ReplayParseError,
+    );
+});

@@ -84,6 +84,7 @@ export interface PlayEngineContext
       | 'allowSeek'
       | 'judgeAlgorithm'
       | 'longNoteModifier'
+      | 'mineModifier'
       | 'autoScratch1P'
       | 'autoScratch2P'
       | 'chartMD5'
@@ -105,6 +106,7 @@ export interface PlayEngineContext
       | 'random1P'
       | 'random2P'
       | 'replay'
+      | 'fixedArrangement'
       | 'tempoPitchMode'
       | 'hsFix'
       | 'classicHiSpeed'
@@ -432,6 +434,7 @@ export function resolveReplayRecording(
     | 'laneCover'
     | 'judgeAlgorithm'
     | 'longNoteModifier'
+    | 'mineModifier'
     | 'autoScratch1P'
     | 'autoScratch2P'
   >,
@@ -479,6 +482,7 @@ export function resolveReplayRecording(
     dpFlip: options.dpFlip,
     judgeAlgorithm: options.judgeAlgorithm,
     longNoteModifier: options.longNoteModifier,
+    mineModifier: options.mineModifier,
     autoScratch1P: options.autoScratch1P,
     autoScratch2P: options.autoScratch2P,
   })) {
@@ -573,7 +577,14 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       // Only the selected side's scratch lanes are assisted by the engine.
       autoScratch: ctx.options.autoScratch1P === true || ctx.options.autoScratch2P === true,
       judgeAlgorithm: ctx.options.replay?.play.judgeAlgorithm ?? ctx.options.judgeAlgorithm,
-      longNoteModifier: ctx.options.replay?.play.longNoteModifier ?? ctx.options.longNoteModifier,
+      longNoteModifier:
+        ctx.options.replay?.play.longNoteModifier ??
+        ctx.options.fixedArrangement?.play.longNoteModifier ??
+        ctx.options.longNoteModifier,
+      mineModifier:
+        ctx.options.replay?.play.mineModifier ??
+        ctx.options.fixedArrangement?.play.mineModifier ??
+        ctx.options.mineModifier,
       autoScratch1P: ctx.options.autoScratch1P === true,
       autoScratch2P: ctx.options.autoScratch2P === true,
       // Hand the engine the same `PreparedPlaybackChartData` instance the renderer is already pointing at

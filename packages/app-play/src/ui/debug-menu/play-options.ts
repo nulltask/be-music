@@ -115,6 +115,13 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     this.trackPlayOption(controller);
     this.randomSeedControllers.push(controller);
   }
+  this.mineModifierController = selectBinding(folder, this.guiState, 'mineModifier', 'Mines (beatoraja)', {
+    OFF: 'OFF',
+    REMOVE: 'REMOVE',
+  });
+  trackPlayOption(
+    this.mineModifierController.on('change', ({ value }) => this.setPlayOptions({ mineModifier: value })),
+  );
   this.refreshRulesetChoices();
   trackPlayOption(
     folder.addBinding(this.guiState, 'dpFlip', { label: 'DP flip' }).on('change', ({ value }) => {

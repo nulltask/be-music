@@ -143,6 +143,7 @@ describe('captureDebugMenuSettings', () => {
       classicHiSpeed: true,
       judgeAlgorithm: 'duration',
       longNoteModifier: 'REMOVE',
+      mineModifier: 'OFF',
       autoScratch1P: true,
       autoScratch2P: true,
       sort: 'OFF',
@@ -234,4 +235,12 @@ test('persists large seed values as decimal strings', () => {
   expect(
     parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
   ).toMatchObject(settings);
+});
+
+test('persists mine REMOVE independently of note drawing preferences', () => {
+  expect(
+    parseDebugMenuSettingsDocument(
+      JSON.stringify({ version: 1, updatedAt: 1, settings: { mineModifier: 'REMOVE', showInvisibleNotes: true } }),
+    )?.settings,
+  ).toMatchObject({ mineModifier: 'REMOVE', showInvisibleNotes: true });
 });

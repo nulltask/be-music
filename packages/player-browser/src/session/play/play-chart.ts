@@ -121,6 +121,7 @@ export interface PlayChartContext {
       | 'nonstop'
       | 'judgeRuleset'
       | 'longNoteModifier'
+      | 'mineModifier'
       | 'autoScratch1P'
       | 'autoScratch2P'
     >
@@ -186,6 +187,13 @@ export interface PlayChartContext {
 
 export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): void {
   const arrangement = ctx.options.replay ?? ctx.options.fixedArrangement;
+  if (
+    arrangement === undefined &&
+    ctx.options.mineModifier !== undefined &&
+    ctx.options.mineModifier !== 'OFF' &&
+    ctx.options.judgeRuleset !== 'beatoraja'
+  )
+    throw new RangeError('Mine modification is available only for beatoraja.');
   if (ctx.options.fixedArrangement !== undefined && ctx.options.replay === undefined) {
     if ((ctx.options.judgeRuleset ?? 'lr2') !== 'beatoraja')
       throw new RangeError('Previous arrangement reuse requires beatoraja rules.');
@@ -295,6 +303,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     {
       laneModeExtension: extractChartExtension(ctx.chart?.chartPath),
       longNoteModifier: arrangement?.play.longNoteModifier ?? ctx.options.longNoteModifier,
+      mineModifier: arrangement?.play.mineModifier ?? ctx.options.mineModifier,
     },
     0,
   );

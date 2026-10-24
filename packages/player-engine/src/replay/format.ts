@@ -181,6 +181,8 @@ export interface ReplayPlay {
   /** Effective manual assist per side; older replays fall back to autoScratch for both. */
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
   longNoteModifier?: 'OFF' | 'LEGACY' | 'REMOVE';
+  mineModifier?: 'OFF' | 'REMOVE';
+  mineModifierChangeCount?: number;
   autoScratch1P?: boolean;
   autoScratch2P?: boolean;
   /** Gauge the player selected for the session (declared by the host; LR2-family gauge id). */
@@ -641,6 +643,16 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     }
     parsed.judgeAlgorithm = play.judgeAlgorithm as 'combo' | 'duration' | 'lowest';
   }
+  if (play.mineModifier !== undefined) {
+    if (!['OFF', 'REMOVE'].includes(play.mineModifier as string))
+      throw new ReplayParseError('play.mineModifier: expected OFF or REMOVE');
+    parsed.mineModifier = play.mineModifier as 'OFF' | 'REMOVE';
+  }
+  if (play.mineModifierChangeCount !== undefined)
+    parsed.mineModifierChangeCount = expectNonNegativeInteger(
+      play.mineModifierChangeCount,
+      'play.mineModifierChangeCount',
+    );
   if (play.longNoteModifier !== undefined) {
     if (!['OFF', 'LEGACY', 'REMOVE'].includes(play.longNoteModifier as string)) {
       throw new ReplayParseError('play.longNoteModifier must be OFF, LEGACY or REMOVE');

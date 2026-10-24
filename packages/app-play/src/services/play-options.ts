@@ -33,6 +33,7 @@ export type GUIPlayOptions = Pick<
   | 'normalHiSpeedLevel'
   | 'classicHiSpeed'
   | 'judgeAlgorithm'
+  | 'mineModifier'
   | 'longNoteModifier'
   | 'autoScratch1P'
   | 'autoScratch2P'
@@ -75,6 +76,7 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     classicHiSpeed: state.classicHiSpeed,
     judgeAlgorithm: state.judgeAlgorithm,
     longNoteModifier: state.longNoteModifier,
+    mineModifier: state.mineModifier,
     autoScratch1P: state.autoScratch1P,
     autoScratch2P: state.autoScratch2P,
     sort: state.sort,
@@ -125,6 +127,7 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.classicHiSpeed = options.classicHiSpeed;
   state.judgeAlgorithm = options.judgeAlgorithm;
   state.longNoteModifier = options.longNoteModifier;
+  state.mineModifier = options.mineModifier;
   state.autoScratch1P = options.autoScratch1P;
   state.autoScratch2P = options.autoScratch2P;
   state.sort = options.sort;
@@ -159,6 +162,7 @@ export class PlayOptionsService {
       random2P: play.randomLane?.p2 ?? play.options?.random2P,
       dpFlip: play.dpFlip ?? play.options?.dpFlip,
       longNoteModifier: play.longNoteModifier ?? play.options?.longNoteModifier,
+      mineModifier: play.mineModifier ?? play.options?.mineModifier,
     });
     const changes: Partial<PlayOptions> = {};
     for (const key of ARRANGEMENT_OPTIONS) Object.assign(changes, { [key]: source[key] });
@@ -207,4 +211,5 @@ const ARRANGEMENT_OPTIONS = [
   'dpFlip',
   'hRandomThresholdBPM',
   'longNoteModifier',
+  'mineModifier',
 ] as const satisfies readonly (keyof PlayOptions)[];

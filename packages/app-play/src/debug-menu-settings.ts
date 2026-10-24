@@ -82,6 +82,7 @@ export interface DebugMenuSettings {
   bpmGuide: boolean;
   judgeAlgorithm: PlayerGUIState['judgeAlgorithm'];
   longNoteModifier: PlayerGUIState['longNoteModifier'];
+  mineModifier: PlayerGUIState['mineModifier'];
   autoScratch1P: boolean;
   autoScratch2P: boolean;
   sort: BrowseSort;
@@ -228,6 +229,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'normalHiSpeedLevel', resolvePlayOptionValue('normalHiSpeedLevel', raw.normalHiSpeedLevel));
   assign(settings, 'classicHiSpeed', booleanOf(raw.classicHiSpeed));
   assign(settings, 'judgeAlgorithm', oneOf(raw.judgeAlgorithm, ['combo', 'duration', 'lowest'] as const));
+  assign(settings, 'mineModifier', resolvePlayOptionValue('mineModifier', raw.mineModifier));
   assign(settings, 'longNoteModifier', oneOf(raw.longNoteModifier, ['OFF', 'LEGACY', 'REMOVE'] as const));
   assign(settings, 'autoScratch1P', booleanOf(raw.autoScratch1P));
   assign(settings, 'autoScratch2P', booleanOf(raw.autoScratch2P));
@@ -434,6 +436,7 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('classicHiSpeed');
   assignState('judgeAlgorithm');
   assignState('longNoteModifier');
+  assignState('mineModifier');
   assignState('autoScratch1P');
   assignState('autoScratch2P');
   assignState('sort');
@@ -516,6 +519,7 @@ export function captureDebugMenuSettings(
     classicHiSpeed: state.classicHiSpeed,
     judgeAlgorithm: state.judgeAlgorithm,
     longNoteModifier: state.longNoteModifier,
+    mineModifier: state.mineModifier,
     autoScratch1P: state.autoScratch1P,
     autoScratch2P: state.autoScratch2P,
     sort: state.sort,

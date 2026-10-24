@@ -149,6 +149,7 @@ export interface PlaySessionOptions {
   /** beatoraja's note-selection algorithm. */
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
   longNoteModifier?: 'OFF' | 'LEGACY' | 'REMOVE';
+  mineModifier?: 'OFF' | 'REMOVE';
   /**
    * 1P side auto-scratch flag — when true, the scratch lane (channel 16) auto-judges as PERFECT at every note's
    * scheduled time even when {@link autoPlay} is off. The player only has to play the keys.

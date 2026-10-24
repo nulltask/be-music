@@ -59,6 +59,8 @@ export interface ReplayRecorderPlaySettings {
   autoScratch: boolean;
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
   longNoteModifier?: 'OFF' | 'LEGACY' | 'REMOVE';
+  mineModifier?: 'OFF' | 'REMOVE';
+  mineModifierChangeCount?: number;
   autoScratch1P?: boolean;
   autoScratch2P?: boolean;
   /** The gauge the engine ran (`PlayerOptions.gauge`, else `recordReplay.gauge`); `GROOVE` when neither is set. */
@@ -264,6 +266,9 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       if (tempoChanges.length > 0) play.tempoChanges = tempoChanges.map((change) => ({ ...change }));
       if (options.play.view !== undefined) play.view = structuredClone(options.play.view);
       if (options.play.judgeAlgorithm !== undefined) play.judgeAlgorithm = options.play.judgeAlgorithm;
+      if (options.play.mineModifier !== undefined) play.mineModifier = options.play.mineModifier;
+      if (options.play.mineModifierChangeCount !== undefined)
+        play.mineModifierChangeCount = options.play.mineModifierChangeCount;
       if (options.play.longNoteModifier !== undefined) play.longNoteModifier = options.play.longNoteModifier;
       if (options.play.autoScratch1P !== undefined) play.autoScratch1P = options.play.autoScratch1P;
       if (options.play.autoScratch2P !== undefined) play.autoScratch2P = options.play.autoScratch2P;

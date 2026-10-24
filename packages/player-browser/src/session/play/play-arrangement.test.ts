@@ -124,3 +124,12 @@ test('previous arrangement keeps recorded BMS branch draws instead of a newly pr
   expect(fresh.resolvedChart).toEqual(first.resolvedChart);
   expect(fresh.notes.map((note) => note.channel)).toEqual(first.notes.map((note) => note.channel));
 });
+
+test('mine REMOVE removes the same mines from the browser judgment and view bundle', () => {
+  const entry = { ...chart, chart: parseChart('#BPM 120\n#00011:01\n#000D1:01', 'bms') };
+  const play = prepare({ judgeRuleset: 'beatoraja', mineModifier: 'REMOVE' }, entry);
+  expect(play.mineNotes).toBe(play.preparedChart!.landmineNotes);
+  expect(play.mineNotes).toEqual([]);
+  expect(play.preparedChart!.mineModifierChangeCount).toBe(1);
+  expect(() => prepare({ judgeRuleset: 'lr2', mineModifier: 'REMOVE' }, entry)).toThrow(/only for beatoraja/);
+});
