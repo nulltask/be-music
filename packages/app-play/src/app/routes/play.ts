@@ -135,6 +135,11 @@ export class PlayRoute {
   public lastPlay: LastPlay | undefined;
   /** What each play made and not yet on the stage puts in force once it takes it ({@link latchPlay}). */
   private readonly latches = new WeakMap<PlayScene, PlayLatches>();
+  /**
+   * The chart the latest play was made for, and the course it belongs to, so a family change during that play can
+   * resolve the same chart's kit without starting the play again.
+   */
+  private liveDrawing: { chart: LibraryChart; courseStage?: CourseStagePlay; nonstop?: NonstopPlay } | undefined;
   private readonly router: PlayRouteDeps['router'];
   private readonly selectRoute: PlayRouteDeps['selectRoute'];
   private readonly elements: PlayRouteDeps['elements'];
@@ -226,6 +231,11 @@ export class PlayRoute {
       preResolved?: ResolvedPlayChart;
     },
   ): PlayScene {
+    this.liveDrawing = {
+      chart: chartEntry,
+      ...(overrides.courseStage !== undefined ? { courseStage: overrides.courseStage } : {}),
+      ...(overrides.nonstop !== undefined ? { nonstop: overrides.nonstop } : {}),
+    };
     const playOptions = this.playOptions.current;
     const replay = overrides.replay;
     const courseStage = overrides.courseStage;
@@ -401,6 +411,23 @@ export class PlayRoute {
    * keys its result is kept under, and its beatoraja play entry. A play that never takes the stage, like one loading
    * behind a decide screen that is backed out of, leaves them as they were. Once per play.
    */
+  /**
+   * Draws `view` with the family the Debug Menu just picked, for the chart it is already playing. The play is not
+   * started again. Nothing happens when `view` is not the play in flight.
+   */
+  public async switchPlayFamily(view: PlayScene): Promise<void> {
+    const drawing = this.liveDrawing;
+    if (drawing === undefined || this.router.play !== view || view.disposed) return;
+    const resolved = await this.familyKits.resolvePlayKit(drawing.chart, {
+      ...(drawing.courseStage !== undefined ? { courseStage: drawing.courseStage } : {}),
+      ...(drawing.nonstop !== undefined ? { nonstop: { course: drawing.nonstop.course } } : {}),
+    });
+    if (resolved === undefined || this.router.play !== view || view.disposed) return;
+    await view.replaceFamily(resolved.kit);
+    if (view.disposed) return;
+    this.beatoraja.activeBeatorajaPlay = resolved.beatorajaPlay;
+  }
+
   public latchPlay(view: PlayScene): void {
     const latches = this.latches.get(view);
     if (latches === undefined) return;

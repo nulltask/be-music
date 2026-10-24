@@ -193,9 +193,9 @@ export class DebugMenu {
   /** Native theme list, refreshed as drops discover new themes. */
   public lr2ThemeController: ListInputBindingApi<string> | undefined;
   /**
-   * The Debug Menu's other skin controls that make the select screen again: Built-in skin, Skin effects and the Add
-   * skin buttons. They, {@link skinFamilyController} and {@link lr2ThemeController} are disabled during a play
-   * ({@link playLock}), since going back to the select screen would end it.
+   * The Debug Menu's skin controls that make the select screen again: Built-in skin, Skin effects, the Add skin
+   * buttons and the LR2 theme picker. They are disabled during a play ({@link playLock}), since going back to the
+   * select screen would end it. Skin system stays enabled: it swaps the play's family without leaving the chart.
    */
   public readonly skinControllers: BladeApi[] = [];
   /** The locks a play puts on the options it latched and on the skin controls, and whether one runs. */
@@ -203,7 +203,7 @@ export class DebugMenu {
     replaySave: this.replaySaveController,
     playOptions: this.playOptionControllers,
     tempo: this.tempoController,
-    skin: [this.skinFamilyController, this.lr2ThemeController, ...this.skinControllers],
+    skin: [this.lr2ThemeController, ...this.skinControllers],
   }));
   /** Read-only multiline monitor, refreshed immediately when the app posts status. */
   public statusController: PaneBinding | undefined;

@@ -651,18 +651,26 @@ export class PlayerWebDemoApp {
   }
 
   /**
-   * Apply a Debug Menu skin-family change. The persistent select scene needs an explicit dispose-and-rebuild
-   * (its view is the family's — the LR2 or the built-in select view, or the beatoraja scene), then `showSelect`
-   * reconstructs whichever family the new override resolves to. The gameplay
-   * / decide / result scenes pick up the new override on their next mount — they're transient and there's
-   * nothing on screen to swap at the moment the user changes the dropdown (they'd have to be in song-select to
-   * even reach the GUI).
+   * Apply a Debug Menu skin-family change. While a play is on the stage, that play draws with the new family and keeps
+   * its chart. Otherwise the persistent select scene is made again for the family the pick gives.
    */
   private handleSkinFamilyOverrideChange(value: SkinFamilyOverride): void {
     this.guiState.skinFamilyOverride = value;
     this.debugMenu.showSkinSystem(value);
-    // The select scene is made again for the family the pick gives.
+    const play = this.gameplayView;
+    if (play !== undefined && this.router.current === play) {
+      void this.switchPlayFamily(play);
+      return;
+    }
     void this.selectRoute.dropSelect().then(() => this.showSelect());
+  }
+
+  /** Swaps the play on the stage to the family just picked, and shows that family's skin options when it has them. */
+  private async switchPlayFamily(play: PlayScene): Promise<void> {
+    await this.playRoute.switchPlayFamily(play);
+    if (play.disposed || this.router.current !== play) return;
+    if (play.identity.family === 'beatoraja') this.beatorajaSkinOptions.refreshBeatorajaPlaySkinOptions();
+    else this.beatorajaSkinOptions.clear();
   }
 
   /** Shows the select screen (`SelectRoute.showSelect`): at start-up, and on every way back to it. */

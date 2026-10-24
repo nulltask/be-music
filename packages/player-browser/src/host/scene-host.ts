@@ -293,6 +293,14 @@ export class PixiSceneHost {
     };
   }
 
+  /**
+   * Puts the canvas in the page when `placed`, or takes it out. A play calls this when it swaps a DOM family for a
+   * canvas one, or the other way, without changing scenes.
+   */
+  public syncCanvas(placed: boolean): void {
+    this.placeCanvas(placed);
+  }
+
   /** Puts the canvas in the page, or takes it out while the active scene draws only on DOM. */
   private placeCanvas(placed: boolean): void {
     // Before `mount` there is no canvas yet.
