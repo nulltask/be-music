@@ -15,7 +15,7 @@ import { pickActiveFamilyForScene, type FamilyDispatchState } from '../family-di
 import type { BeatorajaPlayEntry, BeatorajaThemeService } from '../services/themes/beatoraja.ts';
 import type { BuiltInThemeService } from '../services/themes/built-in.ts';
 import type { LR2ThemeService } from '../services/themes/lr2.ts';
-import type { DemoGUIState } from '../types.ts';
+import type { PlayerGUIState } from '../types.ts';
 
 export interface FamilyKitsOptions {
   /** The LR2 theme: its skins and its select sounds. */
@@ -31,7 +31,7 @@ export interface FamilyKitsOptions {
   /** The be-music skin the built-in family draws with. */
   readonly builtIn: Pick<BuiltInThemeService, 'beMusicSkin' | 'builtInKit'>;
   /** The Debug Menu's "Skin system" pick (`skinFamilyOverride`). */
-  readonly guiState: Pick<DemoGUIState, 'skinFamilyOverride'>;
+  readonly guiState: Pick<PlayerGUIState, 'skinFamilyOverride'>;
 }
 
 /** The kit a play is drawn with, and on a beatoraja theme the play entry it was loaded from. */
@@ -107,7 +107,7 @@ export class FamilyKits {
    *   (`loadBeatorajaPlayKit`), with the entry; `undefined` when it cannot be loaded.
    * - **LR2** with a play skin for the chart's key mode → an LR2 kit with that skin (parsed again with the course's ops
    *   for a course stage or a NONSTOP run), and the theme's 9-keys skin, whose Pop'n green wide note at index 3 is drawn
-   *   over each invisible note when {@link DemoGUIState.showInvisibleNotes} is on.
+   *   over each invisible note when {@link PlayerGUIState.showInvisibleNotes} is on.
    * - otherwise → the built-in kit with the active be-music skin.
    *
    * Nothing is put in force here: the play may load behind a decide screen that is backed out of.

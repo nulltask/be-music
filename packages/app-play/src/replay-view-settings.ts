@@ -7,7 +7,7 @@ import { DEFAULT_REPLAY_PLAYBACK_OPTIONS, type ReplayPlaybackOptions } from '@be
  */
 
 /** `localStorage` key of the replay view settings. */
-export const REPLAY_VIEW_STORAGE_KEY = 'be-music-demo.replay-view';
+export const REPLAY_VIEW_STORAGE_KEY = 'be-music.replay-view';
 
 const KEYS = ['tempo', 'hiSpeed', 'covers', 'lift'] as const satisfies readonly (keyof ReplayPlaybackOptions)[];
 

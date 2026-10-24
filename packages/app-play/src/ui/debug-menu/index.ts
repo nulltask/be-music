@@ -1,4 +1,4 @@
-// The demo's Tweakpane "Debug Menu": its folders, the controllers the app reaches after building them, and the locks a
+// The player's Tweakpane "Debug Menu": its folders, the controllers the app reaches after building them, and the locks a
 // play puts on them. Each folder is built in a module of its own (`play-options.ts`, `tempo.ts`, …) with the menu as
 // `this`; the folder titles and the remembered open states are `folders.ts`'. The menu reaches the app only through
 // `DebugMenuDeps`, which the app (`app/app.ts`) builds.
@@ -24,7 +24,7 @@ import type { LibraryService } from '../../services/library.ts';
 import type { RecordsService } from '../../services/records.ts';
 import type { SilentModeSetting } from '../../services/silent-mode.ts';
 import type { StoredSkinSettings } from '../../skin-settings.ts';
-import type { DemoGUIState, SkinFamilyOverride } from '../../types.ts';
+import type { PlayerGUIState, SkinFamilyOverride } from '../../types.ts';
 import type { ActiveBeatorajaPlay } from '../beatoraja-skin-options.ts';
 import type { SkinDropFamily } from '../skin-drop-prompt.ts';
 import { buildAudioFolder } from './audio.ts';
@@ -49,8 +49,8 @@ import { buildTempoFolder } from './tempo.ts';
  * loaded and shows, and the app's actions its controllers start. The actions keep the names of the app's methods.
  */
 export interface DebugMenuDeps {
-  /** The settings the controllers read and write (`createDemoGUIState`), read by the app as each play starts. */
-  readonly settings: DemoGUIState;
+  /** The settings the controllers read and write (`createPlayerGUIState`), read by the app as each play starts. */
+  readonly settings: PlayerGUIState;
   /** The scene host: "Render resolution" sets its resolution, and the Developer folder reads its frame rate. */
   readonly sceneHost: PixiSceneHost;
   /** "Play in silent mode": the Audio folder's checkbox and the start card's option drive it. */
@@ -69,7 +69,7 @@ export interface DebugMenuDeps {
   readonly beatorajaSkinOverridesByType: Map<number, string>;
   /** The compressor architecture every play mounts with (`?compressor=`), read once at boot. */
   readonly compressorMode: 'split' | 'legacy';
-  /** The demo shell, which "Toggle fullscreen" takes fullscreen. */
+  /** The player shell, which "Toggle fullscreen" takes fullscreen. */
   readonly shell: HTMLElement;
   /** The play: loading behind a decide screen, or on the stage. */
   gameplayView(): PlayScene | undefined;
@@ -131,7 +131,7 @@ export class DebugMenu {
   /** What the menu reaches of the app. */
   public readonly deps: DebugMenuDeps;
   /** The settings the controllers read and write ({@link DebugMenuDeps.settings}). */
-  public readonly guiState: DemoGUIState;
+  public readonly guiState: PlayerGUIState;
   public readonly sceneHost: PixiSceneHost;
   public readonly silentMode: SilentModeSetting;
   public readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromURL'>;
@@ -277,7 +277,7 @@ export class DebugMenu {
    */
   public buildGUI(): void {
     // Start the panel itself collapsed so it doesn't cover the select-screen / gameplay canvas the moment a user lands
-    // on the demo.
+    // on the player.
     const container = document.createElement('div');
     container.className = 'debug-pane-container';
     document.body.append(container);

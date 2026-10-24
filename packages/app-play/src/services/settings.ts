@@ -1,6 +1,6 @@
-// The settings the demo remembers across visits (`localStorage`, under `be-music-demo.*` keys). Every read falls back
+// The settings the player remembers across visits (`localStorage`, under `be-music.*` keys). Every read falls back
 // to the default and every write is skipped when storage is blocked (a private window), so a setting still applies
-// for the visit. The keys are part of the demo's contract with returning players and with the end-to-end suite, which
+// for the visit. The keys are part of the player's contract with returning players and with the end-to-end suite, which
 // seeds them: never rename one.
 
 import { parseCompressorMode, type CompressorMode } from '@be-music/player-browser/audio';
@@ -16,7 +16,7 @@ import {
 import { readStoredReplayView } from '../replay-view-settings.ts';
 import { overlayDebugMenuSettings, readStoredDebugMenuSettings } from '../debug-menu-settings.ts';
 import { readPlayInSilentMode } from '../silent-mode-playback.ts';
-import type { DemoGUIState } from '../types.ts';
+import type { PlayerGUIState } from '../types.ts';
 import {
   readDeviceSignals,
   resolveDefaultSkinEffects,
@@ -37,7 +37,7 @@ export function defaultSettingStorage(): SettingStorage | undefined {
   }
 }
 
-export const BUILT_IN_SKIN_STORAGE_KEY = 'be-music-demo.built-in-skin';
+export const BUILT_IN_SKIN_STORAGE_KEY = 'be-music.built-in-skin';
 
 export function readStoredBuiltInSkinId(
   storage: SettingStorage | undefined = defaultSettingStorage(),
@@ -57,7 +57,7 @@ export function storeBuiltInSkinId(id: string, storage: SettingStorage | undefin
   }
 }
 
-export const SKIN_EFFECTS_STORAGE_KEY = 'be-music-demo.skin-effects';
+export const SKIN_EFFECTS_STORAGE_KEY = 'be-music.skin-effects';
 
 /** Stored effect level, else `'reduced'` on a phone / tablet or when the OS asks for reduced motion, else `'full'`. */
 export function readStoredSkinEffects(
@@ -84,7 +84,7 @@ export function storeSkinEffects(
   }
 }
 
-export const PLAY_LAYOUT_STORAGE_KEY = 'be-music-demo.play-layout';
+export const PLAY_LAYOUT_STORAGE_KEY = 'be-music.play-layout';
 
 /** Stored Debug Menu play-layout pick, `'auto'` when none. */
 export function readStoredPlayLayout(storage: SettingStorage | undefined = defaultSettingStorage()): PlayLayoutChoice {
@@ -108,7 +108,7 @@ export function storePlayLayout(
   }
 }
 
-export const RECORDING_FORMAT_STORAGE_KEY = 'be-music-demo.recording-format';
+export const RECORDING_FORMAT_STORAGE_KEY = 'be-music.recording-format';
 
 /** The remembered "Video format" (`mp4/avc`, `webm/vp9`, …); MP4 · H.264 when none is stored or it is unknown. */
 export function readStoredRecordingFormat(storage: SettingStorage | undefined = defaultSettingStorage()): string {
@@ -128,7 +128,7 @@ export function storeRecordingFormat(key: string, storage: SettingStorage | unde
   }
 }
 
-export const VOLUME_STORAGE_KEY = 'be-music-demo.volumes';
+export const VOLUME_STORAGE_KEY = 'be-music.volumes';
 
 export interface StoredVolumes {
   masterVolume: number;
@@ -168,8 +168,8 @@ export function storeVolumes(
   }
 }
 
-/** What {@link createDemoGUIState} reads besides the stored settings: the device, and the Debug Menu's buttons. */
-export interface DemoGUIStateInputs {
+/** What {@link createPlayerGUIState} reads besides the stored settings: the device, and the Debug Menu's buttons. */
+export interface PlayerGUIStateInputs {
   /** Where the remembered settings are read from; `localStorage` when left out. */
   readonly storage?: SettingStorage;
   /** The device, for the skin effect level it starts with. */
@@ -179,15 +179,15 @@ export interface DemoGUIStateInputs {
   /** The built-in skin to start with for the remembered id (`undefined` when none is stored). */
   readonly builtInSkinId: (stored: string | undefined) => string;
   /** The Debug Menu's buttons. */
-  readonly actions: Pick<DemoGUIState, 'openFolder' | 'openFiles' | 'record' | 'screenshot'>;
+  readonly actions: Pick<PlayerGUIState, 'openFolder' | 'openFiles' | 'record' | 'screenshot'>;
 }
 
 /**
  * The state the Debug Menu's controllers read and write, as a visit starts: the remembered settings over the defaults.
  */
-export function createDemoGUIState(inputs: DemoGUIStateInputs): DemoGUIState {
+export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUIState {
   const storage = inputs.storage ?? defaultSettingStorage();
-  const state: DemoGUIState = {
+  const state: PlayerGUIState = {
     autoPlay: false,
     autoPauseOnBlur: false,
     // Compressor stack ON by default — without it, multiple simultaneous `#WAV` samples sum past full scale and
@@ -276,7 +276,7 @@ export interface CompressorStart {
  * The compressor the `?compressor=split|legacy|off` URL flag of `href` asks for. The flag goes through
  * `parseCompressorMode` (the same helper exported from `audio-bus.ts`) so the recognized values stay synced with the
  * runtime API. An unrecognized or missing flag keeps the defaults: the `'split'` architecture, compressor on (see the
- * `compressor: true` seed in {@link createDemoGUIState} for the rationale). `split` and `legacy` are an explicit opt-in
+ * `compressor: true` seed in {@link createPlayerGUIState} for the rationale). `split` and `legacy` are an explicit opt-in
  * to that architecture and keep it on; `off` turns it off for an unprocessed-signal A/B comparison.
  */
 export function resolveCompressorMode(href: string): CompressorStart {

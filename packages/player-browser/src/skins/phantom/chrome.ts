@@ -528,7 +528,7 @@ function drawStatusBar(
   status.poly(teeth).fill(PHANTOM_RED);
   status.rect(0, 37, DESIGN_WIDTH, 1).fill(PHANTOM_WHITE);
 
-  // Mode tag — paper plate with a red shadow; AUTO PLAY flips it to a red plate so a demo run is unmistakable.
+  // Mode tag — paper plate with a red shadow; AUTO PLAY flips it to a red plate so a player run is unmistakable.
   status.poly(parallelogramPoints(HUD_MARGIN + 4, 11, 96, 22, 9)).fill(autoplay ? PHANTOM_WHITE : PHANTOM_RED);
   status.poly(parallelogramPoints(HUD_MARGIN, 7, 96, 22, 9)).fill(autoplay ? PHANTOM_RED : PHANTOM_WHITE);
   addText(

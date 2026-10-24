@@ -16,7 +16,7 @@ import { describe, expect, test, vi } from 'vite-plus/test';
 import type { FamilyDispatchState } from '../../family-dispatch.ts';
 import { startArmedRecording, type RecordingDeps } from '../../recording-controller.ts';
 import { PlayOptionsService } from '../../services/play-options.ts';
-import type { DemoScene, PlayerWebDemoElements } from '../../types.ts';
+import type { PlayerScene, PlayerWebElements } from '../../types.ts';
 import { SceneRouter } from '../scene-router.ts';
 import { DecideRoute, playingFamily, type DecideRouteDeps } from './decide.ts';
 
@@ -103,9 +103,9 @@ function fakeShell(): { readonly classes: Set<string>; readonly shell: HTMLDivEl
  * screen is drawn by `decideFamily` (`undefined`: no decide screen), the play by `playFamily`.
  */
 async function harness(options: { decideFamily?: Family | null; playFamily?: Family } = {}) {
-  const stage: (DemoScene | undefined)[] = [];
+  const stage: (PlayerScene | undefined)[] = [];
   const onInterrupt = vi.fn();
-  const router = new SceneRouter<DemoScene, PlayScene, SelectScene>({
+  const router = new SceneRouter<PlayerScene, PlayScene, SelectScene>({
     host: {
       setScene: async (scene) => {
         stage.push(scene);
@@ -151,7 +151,7 @@ async function harness(options: { decideFamily?: Family | null; playFamily?: Fam
   const deps = {
     router,
     selectRoute,
-    elements: { shell } as Pick<PlayerWebDemoElements, 'shell'>,
+    elements: { shell } as Pick<PlayerWebElements, 'shell'>,
     library: { collection: { sources: [], charts: [chartEntry('a')], errors: [] } as BrowserChartCollection },
     records: { resolveChartHashes: vi.fn<DecideRouteDeps['records']['resolveChartHashes']>(async () => HASHES) },
     familyKits: {

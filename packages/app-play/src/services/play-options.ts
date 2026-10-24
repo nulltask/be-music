@@ -1,15 +1,15 @@
-// The play options the demo hands to every screen and play: the full `PlayOptions`, kept here rather than read back
+// The play options the player hands to every screen and play: the full `PlayOptions`, kept here rather than read back
 // from the select screen. The Debug Menu holds some of them itself (auto play, gauge, lane options, assists, sort and
 // filters, hi-speed); the rest (HS-FIX, HIDDEN / SUDDEN, the lane cover, BGA, the score graph, the 2P gauge) are only
 // changed on a select screen, and live here between screens, so a select screen made again (another skin system or
 // theme) starts from them.
 
 import { resolvePlayOptions, type PlayOptions } from '@be-music/player-scene-model';
-import type { DemoGUIState } from '../types.ts';
+import type { PlayerGUIState } from '../types.ts';
 
 /** The play options the Debug Menu holds itself, under its own names (`gauge` is `gauge1P`). */
 export type GUIPlayOptions = Pick<
-  DemoGUIState,
+  PlayerGUIState,
   | 'autoPlay'
   | 'gauge'
   | 'random1P'

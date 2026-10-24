@@ -1,6 +1,6 @@
 import type { FolderApi } from 'tweakpane';
 import { describe, expect, test, vi } from 'vite-plus/test';
-import type { DemoGUIState } from '../../types.ts';
+import type { PlayerGUIState } from '../../types.ts';
 import { applyNonstopPlacement, buildCourseFolder } from './course.ts';
 import type { DebugMenu } from './index.ts';
 
@@ -52,8 +52,8 @@ class FakeFolder {
   }
 }
 
-function courseSettings(): DemoGUIState {
-  return { courseAutoAdvance: false, nonstopPlacement: 'intended' } as DemoGUIState;
+function courseSettings(): PlayerGUIState {
+  return { courseAutoAdvance: false, nonstopPlacement: 'intended' } as PlayerGUIState;
 }
 
 /** Builds the Course folder into a fake folder, with the menu's members it reaches stubbed. */

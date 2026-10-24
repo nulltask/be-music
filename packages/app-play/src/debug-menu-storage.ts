@@ -1,16 +1,16 @@
 // Storage data shared by settings services and the Debug Menu; no UI dependencies.
 
-/** Prefix every `localStorage` key the demo writes starts with. */
-export const DEMO_STORAGE_PREFIX = 'be-music-demo.';
+/** Prefix every `localStorage` key the player writes starts with. */
+export const PLAYER_STORAGE_PREFIX = 'be-music.';
 
 /** Where the open / closed state of each Debug Menu folder is remembered. */
-export const DEBUG_MENU_FOLDERS_STORAGE_KEY = `${DEMO_STORAGE_PREFIX}debug-menu-folders`;
+export const DEBUG_MENU_FOLDERS_STORAGE_KEY = `${PLAYER_STORAGE_PREFIX}debug-menu-folders`;
 
 /**
  * Stored keys "Reset settings" leaves alone: the best records are play data, not settings, and have their own
  * "Clear best records" button.
  */
-export const DEMO_STORAGE_KEYS_KEPT_ON_RESET: readonly string[] = [`${DEMO_STORAGE_PREFIX}chart-best-records`];
+export const PLAYER_STORAGE_KEYS_KEPT_ON_RESET: readonly string[] = [`${PLAYER_STORAGE_PREFIX}chart-best-records`];
 
 /** Folder path → open, for the folders the user has opened or closed. */
 export type FolderOpenStates = Record<string, boolean>;
@@ -79,14 +79,14 @@ export function storeFolderOpenStates(
   }
 }
 
-/** The demo's stored keys a settings reset removes: every `be-music-demo.*` key except the kept ones. */
-export function demoSettingKeys(storage: DebugMenuStorage | undefined = defaultStorage()): string[] {
+/** The player's stored keys a settings reset removes: every `be-music.*` key except the kept ones. */
+export function playerSettingKeys(storage: DebugMenuStorage | undefined = defaultStorage()): string[] {
   const keys: string[] = [];
   try {
     if (!storage) return keys;
     for (let index = 0; index < storage.length; index++) {
       const key = storage.key(index);
-      if (key?.startsWith(DEMO_STORAGE_PREFIX) && !DEMO_STORAGE_KEYS_KEPT_ON_RESET.includes(key)) keys.push(key);
+      if (key?.startsWith(PLAYER_STORAGE_PREFIX) && !PLAYER_STORAGE_KEYS_KEPT_ON_RESET.includes(key)) keys.push(key);
     }
   } catch {
     // Blocked storage holds nothing to reset.
@@ -94,9 +94,9 @@ export function demoSettingKeys(storage: DebugMenuStorage | undefined = defaultS
   return keys;
 }
 
-/** Removes every demo setting (see {@link demoSettingKeys}); returns how many keys were removed. */
-export function clearDemoSettings(storage: DebugMenuStorage | undefined = defaultStorage()): number {
-  const keys = demoSettingKeys(storage);
+/** Removes every player setting (see {@link playerSettingKeys}); returns how many keys were removed. */
+export function clearPlayerSettings(storage: DebugMenuStorage | undefined = defaultStorage()): number {
+  const keys = playerSettingKeys(storage);
   let removed = 0;
   for (const key of keys) {
     try {
@@ -107,4 +107,26 @@ export function clearDemoSettings(storage: DebugMenuStorage | undefined = defaul
     }
   }
   return removed;
+}
+
+/** Moves the former player namespace once, keeping newer values and removing an old key only after copying it. */
+export function migratePlayerStorage(storage: DebugMenuStorage | undefined = defaultStorage()): void {
+  if (!storage) return;
+  const previousPrefix = 'be-music-demo.';
+  try {
+    const keys: string[] = [];
+    for (let index = 0; index < storage.length; index++) {
+      const key = storage.key(index);
+      if (key?.startsWith(previousPrefix)) keys.push(key);
+    }
+    for (const key of keys) {
+      const target = `${PLAYER_STORAGE_PREFIX}${key.slice(previousPrefix.length)}`;
+      const value = storage.getItem(key);
+      if (value === null) continue;
+      if (storage.getItem(target) === null) storage.setItem(target, value);
+      storage.removeItem(key);
+    }
+  } catch {
+    // Leave uncopied data in place when storage is blocked or full; retry on the next visit.
+  }
 }

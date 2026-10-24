@@ -1,4 +1,4 @@
-// The demo's replays: the app named as their recorder, and "Auto-save replays": a play's replay
+// The player's replays: the app named as their recorder, and "Auto-save replays": a play's replay
 // (`*.bmplay.json`, an input replay), or a course's (`*.bmcourse.json`), downloaded the moment its result shows.
 
 import {
@@ -10,12 +10,12 @@ import {
   type BeMusicReplay,
   type ReplayRecorderInfo,
 } from '@be-music/player-engine/replay';
-import demoPackageJSON from '../../package.json' with { type: 'json' };
+import playerPackageJSON from '../../package.json' with { type: 'json' };
 
 /** This app as the recorder of its replays (`recorder` in `*.bmplay.json`); the engine adds its own version. */
 export const REPLAY_RECORDER: Omit<ReplayRecorderInfo, 'engine'> = {
   name: 'be-music-web',
-  version: demoPackageJSON.version,
+  version: playerPackageJSON.version,
   ...(__BE_MUSIC_BUILD__.length > 0 ? { build: __BE_MUSIC_BUILD__ } : {}),
   platform: 'web',
 };

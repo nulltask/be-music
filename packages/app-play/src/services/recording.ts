@@ -61,7 +61,7 @@ export class RecordingService {
   }
 
   /**
-   * Bundle the demo's recording-related fields into the `RecordingDeps` shape that
+   * Bundle the player's recording-related fields into the `RecordingDeps` shape that
    * `recording-controller.ts` consumes. Built as a getter-based bundle (rather than a structural copy of `this`) so
    * `RecordingDeps` can stay an interface of getter / setter functions — TypeScript otherwise refuses to satisfy a
    * structural `RecordingHost` from a class whose backing fields are `private`. Cheap to allocate per call; called at

@@ -27,18 +27,18 @@ import {
   PLAY_IN_SILENT_MODE_STORAGE_KEY,
   serializePlayInSilentMode,
 } from './silent-mode-playback.ts';
-import type { DemoGUIState, SkinFamilyOverride } from './types.ts';
+import type { PlayerGUIState, SkinFamilyOverride } from './types.ts';
 import { DEBUG_MENU_FOLDERS_STORAGE_KEY, parseFolderOpenStates, type FolderOpenStates } from './debug-menu-storage.ts';
 import { WORKER_COUNT_STORAGE_KEY } from './worker-settings.ts';
 
-/** `localStorage` key of the whole Debug Menu document. Reset deletes it with the other `be-music-demo.*` settings. */
-export const DEBUG_MENU_SETTINGS_STORAGE_KEY = 'be-music-demo.debug-menu-settings';
+/** `localStorage` key of the whole Debug Menu document. Reset deletes it with the other `be-music.*` settings. */
+export const DEBUG_MENU_SETTINGS_STORAGE_KEY = 'be-music.debug-menu-settings';
 /** Bumped when the stored shape changes; another version is ignored. */
 const DOCUMENT_VERSION = 1;
 
-type RandomMode = DemoGUIState['random1P'];
-type SkinEffects = DemoGUIState['skinEffects'];
-type PlayLayout = DemoGUIState['playLayout'];
+type RandomMode = PlayerGUIState['random1P'];
+type SkinEffects = PlayerGUIState['skinEffects'];
+type PlayLayout = PlayerGUIState['playLayout'];
 
 /** Every Debug Menu value that survives a reload. Absent fields keep the visit's own default. */
 export interface DebugMenuSettings {
@@ -52,13 +52,13 @@ export interface DebugMenuSettings {
   bgaResizeMaxEdgePx: number;
   bgaUseWebCodecs: boolean;
   showInvisibleNotes: boolean;
-  judgedNoteDisplay: DemoGUIState['judgedNoteDisplay'];
+  judgedNoteDisplay: PlayerGUIState['judgedNoteDisplay'];
   autoSaveReplay: boolean;
   courseAutoAdvance: boolean;
-  nonstopPlacement: DemoGUIState['nonstopPlacement'];
+  nonstopPlacement: PlayerGUIState['nonstopPlacement'];
   submitToLeaderboard: boolean;
-  judgeRuleset: DemoGUIState['judgeRuleset'];
-  gauge: DemoGUIState['gauge'];
+  judgeRuleset: PlayerGUIState['judgeRuleset'];
+  gauge: PlayerGUIState['gauge'];
   random1P: RandomMode;
   random2P: RandomMode;
   dpFlip: boolean;
@@ -77,7 +77,7 @@ export interface DebugMenuSettings {
   tempoPercent: number;
   tempoPitchMode: PlayTempoSettings['tempoPitchMode'];
   tempoStretchAlgorithm: PlayTempoSettings['tempoStretchAlgorithm'];
-  replayView: DemoGUIState['replayView'];
+  replayView: PlayerGUIState['replayView'];
   hiSpeed: number;
   builtInSkin: string;
   skinEffects: SkinEffects;
@@ -106,13 +106,13 @@ const RANDOM_MODES: readonly RandomMode[] = [...RANDOM_CYCLE, 'SCATTER'];
 const SKIN_FAMILIES: readonly SkinFamilyOverride[] = ['auto', 'default', 'lr2', 'beatoraja'];
 const SKIN_EFFECTS: readonly SkinEffects[] = ['full', 'reduced', 'off'];
 const PLAY_LAYOUTS: readonly PlayLayout[] = ['auto', 'standard', 'touch'];
-const VOLUME_KEY = 'be-music-demo.volumes';
-const BUILT_IN_SKIN_KEY = 'be-music-demo.built-in-skin';
-const SKIN_EFFECTS_KEY = 'be-music-demo.skin-effects';
-const PLAY_LAYOUT_KEY = 'be-music-demo.play-layout';
-const RECORDING_FORMAT_KEY = 'be-music-demo.recording-format';
-const COMPRESSOR_TUNING_KEY = 'be-music-demo.compressor-tuning';
-const SKIN_SETTINGS_KEY = 'be-music-demo.skin-settings';
+const VOLUME_KEY = 'be-music.volumes';
+const BUILT_IN_SKIN_KEY = 'be-music.built-in-skin';
+const SKIN_EFFECTS_KEY = 'be-music.skin-effects';
+const PLAY_LAYOUT_KEY = 'be-music.play-layout';
+const RECORDING_FORMAT_KEY = 'be-music.recording-format';
+const COMPRESSOR_TUNING_KEY = 'be-music.compressor-tuning';
+const SKIN_SETTINGS_KEY = 'be-music.skin-settings';
 
 const LEGACY_KEYS = [
   VOLUME_KEY,
@@ -342,10 +342,10 @@ function readJSON(storage: Pick<Storage, 'getItem'> | undefined, key: string): u
 }
 
 /** Copies saved fields onto the Debug Menu state. Fields the document leaves out stay as they are. */
-export function overlayDebugMenuSettings(state: DemoGUIState, settings: Partial<DebugMenuSettings>): void {
-  const assignState = <K extends keyof DemoGUIState & keyof DebugMenuSettings>(key: K): void => {
+export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partial<DebugMenuSettings>): void {
+  const assignState = <K extends keyof PlayerGUIState & keyof DebugMenuSettings>(key: K): void => {
     const value = settings[key];
-    if (value !== undefined) state[key] = value as DemoGUIState[K];
+    if (value !== undefined) state[key] = value as PlayerGUIState[K];
   };
   assignState('autoPlay');
   assignState('autoPauseOnBlur');
@@ -393,7 +393,7 @@ export function overlayDebugMenuSettings(state: DemoGUIState, settings: Partial<
 
 /** The live Debug Menu, plus the settings kept beside it, as one document. */
 export function captureDebugMenuSettings(
-  state: DemoGUIState,
+  state: PlayerGUIState,
   extras: {
     compressorTuning: Record<TunableCompressor, CompressorTuning>;
     skinSettings: ReadonlyMap<string, Record<string, StoredSkinSettingValue>>;

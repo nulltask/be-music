@@ -80,7 +80,7 @@ describe('DebugMenuSettingsSync', () => {
     vi.useFakeTimers();
     const storage = memory(),
       first = deferred<Response>();
-    storage.setItem('be-music-demo.chart-best-records', 'keep');
+    storage.setItem('be-music.chart-best-records', 'keep');
     const doFetch = vi
       .fn<typeof fetch>()
       .mockImplementationOnce(() => first.promise)
@@ -100,7 +100,7 @@ describe('DebugMenuSettingsSync', () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(doFetch.mock.calls.map(([, init]) => init?.method)).toEqual(['PUT', 'DELETE']);
     expect(storage.getItem(DEBUG_MENU_SETTINGS_STORAGE_KEY)).toBeNull();
-    expect(storage.getItem('be-music-demo.chart-best-records')).toBe('keep');
+    expect(storage.getItem('be-music.chart-best-records')).toBe('keep');
     expect(storage.getItem(RESET_PENDING_KEY)).toBeNull();
   });
 
@@ -165,7 +165,7 @@ describe('DebugMenuSettingsSync', () => {
     vi.useFakeTimers();
     const storage = memory();
     storage.setItem(DEBUG_MENU_SETTINGS_STORAGE_KEY, JSON.stringify(doc()));
-    storage.setItem('be-music-demo.chart-best-records', 'keep');
+    storage.setItem('be-music.chart-best-records', 'keep');
     const doFetch = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(result({ version: 1, updatedAt: 500, settings: {}, deleted: true }))
@@ -173,7 +173,7 @@ describe('DebugMenuSettingsSync', () => {
     const sync = new DebugMenuSettingsSync({ storage, fetch: doFetch });
     await sync.reconcile();
     expect(storage.getItem(DEBUG_MENU_SETTINGS_STORAGE_KEY)).toBeNull();
-    expect(storage.getItem('be-music-demo.chart-best-records')).toBe('keep');
+    expect(storage.getItem('be-music.chart-best-records')).toBe('keep');
     sync.save(doc(21, 'EASY'));
     await sync.flush();
     expect(readStoredDebugMenuSettings(storage)).toMatchObject({ updatedAt: 501, settings: { gauge: 'EASY' } });

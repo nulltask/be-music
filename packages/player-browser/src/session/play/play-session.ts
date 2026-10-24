@@ -220,7 +220,7 @@ export class PlaySession extends PlaySessionState {
     const now = this.playClock();
     this.sceneStartTime = now;
     const { loadEndOffsetMs, playStartOffsetMs, inputStartOffsetMs, playStartAfterLoadEndMs } = this.theme.timing();
-    // Skinless / non-LR2 demos have no timing directives; fall back to the legacy 3-second wait so the slide-in chrome
+    // Skinless / non-LR2 players have no timing directives; fall back to the legacy 3-second wait so the slide-in chrome
     // of the built-in fallback frame still has room to land before notes begin.
     const introMs =
       playStartAfterLoadEndMs !== undefined
@@ -395,7 +395,7 @@ export class PlaySession extends PlaySessionState {
 
   /**
    * Switches the compressor architecture between `'split'` (default 3-stage) and `'legacy'` (original
-   * single-compressor) at runtime. Mostly useful for the demo's `?compressor=` URL flag and for live A/B comparison
+   * single-compressor) at runtime. Mostly useful for the player's `?compressor=` URL flag and for live A/B comparison
    * while debugging.
    *
    * Calling this while `setAudioCompressor(false)` has the bus in `'off'` mode just remembers the choice — the new

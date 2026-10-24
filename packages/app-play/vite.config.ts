@@ -163,7 +163,7 @@ function urlLoadProxyPlugin(): Plugin {
  * `Acknowledgement` per discovered package — name, installed version, license id, author, repository, and the verbatim
  * `LICENSE` text where available. Skips:
  *
- * - Workspace packages (`@be-music/*`) — these are first-party code, listed separately in the demo's about section.
+ * - Workspace packages (`@be-music/*`) — these are first-party code, listed separately in the player's about section.
  * - `devDependencies` / `peerDependencies` — anything that doesn't ship to the runtime bundle.
  * - Already-seen packages (dedup by name; version conflicts are rare in pnpm with hoisting and the user only needs to
  *   know the library was used).
@@ -200,7 +200,7 @@ async function collectAcknowledgements(roots: string[]): Promise<
     const deps = Object.keys(pkg.dependencies ?? {});
     for (const depName of deps) {
       // Workspace deps are first-party and don't belong in the third-party acknowledgement list. They're MIT under our
-      // own LICENSE which is already linked from the demo.
+      // own LICENSE which is already linked from the player.
       if (depName.startsWith('@be-music/')) continue;
       if (seen.has(depName)) continue;
 
@@ -374,7 +374,7 @@ async function tryReadLicenseFile(pkgDir: string): Promise<string | undefined> {
 }
 
 /**
- * Vite plugin that exposes the resolved acknowledgement list as a virtual module (`virtual:acknowledgements`). The demo
+ * Vite plugin that exposes the resolved acknowledgement list as a virtual module (`virtual:acknowledgements`). The player
  * imports it once and renders it inside the about modal — staying out of the runtime bundle until the user actually
  * opens the dialog requires nothing more than dynamic-importing the consumer module if bundle size matters later.
  */
@@ -405,7 +405,7 @@ export default defineConfig({
   plugins: [
     ffmpegCorePlugin(ffmpegCoreESMDir),
     urlLoadProxyPlugin(),
-    // Build-time acknowledgement collector. Walks the runtime dep tree from the demo + `player-web` package.json entry
+    // Build-time acknowledgement collector. Walks the runtime dep tree from the player + `player-web` package.json entry
     // points so every npm dependency that ships in the bundle (direct or transitive) ends up listed in the about modal
     // — no manual maintenance, just `pnpm install` and rebuild.
     acknowledgementsPlugin([
@@ -453,7 +453,7 @@ export default defineConfig({
     // (no `SharedArrayBuffer`), but we keep them so someone re-introducing the multi-threaded core (or any other
     // SAB-dependent feature) doesn't have to re-debug the policy from scratch.
     //
-    // The demo loads every chart asset / theme bundle from a user-side drag-drop (in-memory blobs, no external CDN), so
+    // The player loads every chart asset / theme bundle from a user-side drag-drop (in-memory blobs, no external CDN), so
     // `require-corp` doesn't break any runtime fetches. If a future feature pulls in a third-party CORS resource, that
     // resource's response will need a `Cross-Origin-Resource-Policy: cross-origin` header to keep working under this
     // policy.

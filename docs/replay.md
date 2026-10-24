@@ -100,7 +100,7 @@ takes out that jitter: a short tap no longer records its release before its pres
 
 Every log also carries a top-level **`recorder`** that identifies the software that recorded it:
 `{ name, version, build, engine, platform }`. The host declares the application fields through
-`recordReplay.recorder` (the browser player sends `name: 'be-music-web'`, the demo's package version, the short
+`recordReplay.recorder` (the browser player sends `name: 'be-music-web'`, the player's package version, the short
 source commit as `build`, and `platform: 'web'`), and the recorder always fills `engine` with the
 `@be-music/player-engine` version that ran the play. The values are self-reported: they help tell which build wrote a log
 when a recording bug turns up, and are never a basis for trusting a log. Logs written before the field existed omit
@@ -110,7 +110,7 @@ In the browser player:
 
 - Every play screen (`createPlayScene`) hands the recorded log to `on.finish(result, replay)`, and
   `waitForReplay()` waits for the log of a play that was left.
-- The demo auto-downloads the log as `<title>-<timestamp>.bmplay.json` when the result scene mounts, controlled by
+- The player auto-downloads the log as `<title>-<timestamp>.bmplay.json` when the result scene mounts, controlled by
   the **Auto-save play history** checkbox in the Debug Menu's **Library & records** folder (OFF by default). Replay options are latched at chart start
   and cannot change mid-play — the controls are disabled while a chart is playing, and the values in effect when
   the chart started govern that play.
@@ -210,7 +210,7 @@ tempo it is re-driven at.
 
 Browser replays can seek through `PlayScene.seek(seconds)` or ← / → (five seconds). The same engine re-drives recorded inputs from the start, restoring judgments, gauge, combo, held long notes, the recorded tempo and the view at the target. A paused replay stays paused, and a replay aborted early cannot seek past its recorded end. Replay / ghost options still decide whether recorded tempo and view settings override the viewer's. Seeking produces no new replay. A course-stage or NONSTOP seek makes the entire course practice under [ADR 0016](./adr/0016-seek-play-loop-command.md); later stages do not record replays, and the course cannot export a replay.
 
-Manual seeking requires `PlaySceneOptions.allowSeek: 'practice'`. The first seek discards the replay recorder. Notes with heads before the target, including their long-note tails, are consumed without scoring; score, combo and gauge reset to their play-start values. A paused play stays paused. The result carries `practice: true` and cannot be saved as a best record, submitted to the Leaderboard or auto-saved as a replay. The demo enables manual seeking for single charts and course stages. Course progression uses live stage outcomes independently of replay recording.
+Manual seeking requires `PlaySceneOptions.allowSeek: 'practice'`. The first seek discards the replay recorder. Notes with heads before the target, including their long-note tails, are consumed without scoring; score, combo and gauge reset to their play-start values. A paused play stays paused. The result carries `practice: true` and cannot be saved as a best record, submitted to the Leaderboard or auto-saved as a replay. The player enables manual seeking for single charts and course stages. Course progression uses live stage outcomes independently of replay recording.
 
 ## What the player saw
 

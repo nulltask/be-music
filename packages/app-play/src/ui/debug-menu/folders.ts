@@ -1,4 +1,4 @@
-// Layout and persistence helpers for the demo's Tweakpane "Debug Menu". The folder titles, their order, and which ones
+// Layout and persistence helpers for the player's Tweakpane "Debug Menu". The folder titles, their order, and which ones
 // start open live here so the structure reads in one place and stays testable; `index.ts` binds the controllers.
 
 import {

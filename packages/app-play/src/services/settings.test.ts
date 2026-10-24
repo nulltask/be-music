@@ -8,7 +8,7 @@ import { PLAY_IN_SILENT_MODE_STORAGE_KEY } from '../silent-mode-playback.ts';
 import { DEBUG_MENU_SETTINGS_STORAGE_KEY } from '../debug-menu-settings.ts';
 import {
   BUILT_IN_SKIN_STORAGE_KEY,
-  createDemoGUIState,
+  createPlayerGUIState,
   resolveCompressorMode,
   PLAY_LAYOUT_STORAGE_KEY,
   readStoredBuiltInSkinId,
@@ -67,7 +67,7 @@ const phone: DeviceSignals = {
 };
 
 describe('settings storage keys', () => {
-  test('stay the be-music-demo.* keys returning players and the end-to-end suite rely on', () => {
+  test('stay the be-music.* keys returning players and the end-to-end suite rely on', () => {
     expect([
       BUILT_IN_SKIN_STORAGE_KEY,
       SKIN_EFFECTS_STORAGE_KEY,
@@ -75,11 +75,11 @@ describe('settings storage keys', () => {
       RECORDING_FORMAT_STORAGE_KEY,
       VOLUME_STORAGE_KEY,
     ]).toEqual([
-      'be-music-demo.built-in-skin',
-      'be-music-demo.skin-effects',
-      'be-music-demo.play-layout',
-      'be-music-demo.recording-format',
-      'be-music-demo.volumes',
+      'be-music.built-in-skin',
+      'be-music.skin-effects',
+      'be-music.play-layout',
+      'be-music.recording-format',
+      'be-music.volumes',
     ]);
   });
 });
@@ -170,7 +170,7 @@ describe('volumes', () => {
   });
 });
 
-describe('createDemoGUIState', () => {
+describe('createPlayerGUIState', () => {
   const actions = {
     openFolder: vi.fn(),
     openFiles: vi.fn(),
@@ -178,7 +178,7 @@ describe('createDemoGUIState', () => {
     screenshot: vi.fn(),
   };
   const create = (storage: SettingStorage, overrides: { devicePixelRatio?: number; signals?: DeviceSignals } = {}) =>
-    createDemoGUIState({
+    createPlayerGUIState({
       storage,
       signals: overrides.signals ?? desktop,
       devicePixelRatio: overrides.devicePixelRatio ?? 2,
@@ -218,7 +218,7 @@ describe('createDemoGUIState', () => {
     expect(state.record).toBe(actions.record);
   });
 
-  test('picks up every remembered setting from its be-music-demo.* key', () => {
+  test('picks up every remembered setting from its be-music.* key', () => {
     const state = create(
       memoryStorage({
         [VOLUME_STORAGE_KEY]: JSON.stringify({ masterVolume: 70, keyVolume: 60, bgmVolume: 50 }),

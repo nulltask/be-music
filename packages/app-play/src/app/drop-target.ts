@@ -8,11 +8,11 @@ import {
   showLoadingOverlay,
   type LoadingOverlayElements,
 } from '../loading-overlay.ts';
-import type { PlayerWebDemoElements } from '../types.ts';
+import type { PlayerWebElements } from '../types.ts';
 
 export interface DropTargetOptions {
   /** The loading overlay a load shows while it reads, and the Debug Menu's hidden file inputs. */
-  readonly elements: LoadingOverlayElements & Pick<PlayerWebDemoElements, 'chartInput' | 'filesInput'>;
+  readonly elements: LoadingOverlayElements & Pick<PlayerWebElements, 'chartInput' | 'filesInput'>;
   /** Takes the select screen off the stage while files load, when it is the one showing. */
   readonly leaveSelect: () => Promise<boolean>;
   /** Loads a drop's (or the folder picker's) files (`LibraryService`). */

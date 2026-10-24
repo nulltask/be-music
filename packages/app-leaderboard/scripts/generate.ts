@@ -3,7 +3,7 @@
 // and before the tests (test/global-setup.ts); run it by hand after changing the pages, the icons or client/:
 //   pnpm --filter @be-music/app-leaderboard run generate
 //
-// `prepare` also runs in other packages' builds, such as the player demo's Workers Build, whose Node (22.16) strips
+// `prepare` also runs in other packages' builds, such as the player player's Workers Build, whose Node (22.16) strips
 // TypeScript types only with --experimental-strip-types; the flag is passed on to the generators below.
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';

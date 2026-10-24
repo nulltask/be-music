@@ -11,7 +11,7 @@ import { resolveChartSource, type ChartFileHashes } from '@be-music/player-brows
 import { createDecideScene, type PlayScene, type SelectScene } from '@be-music/player-browser/host';
 import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import { systemSoundSetFromBeatoraja, type LibraryChart } from '@be-music/player-scene-model';
-import { sanitizeFilenameStem } from '../../demo-utils.ts';
+import { sanitizeFilenameStem } from '../../player-utils.ts';
 import { pickActiveFamilyForScene } from '../../family-dispatch.ts';
 import { allowsLiveTempo, describePlayingStatus } from '../../play-tempo-settings.ts';
 import { startArmedRecording, type RecordingDeps } from '../../recording-controller.ts';
@@ -19,7 +19,7 @@ import type { LibraryService } from '../../services/library.ts';
 import type { PlayOptionsService } from '../../services/play-options.ts';
 import type { RecordsService } from '../../services/records.ts';
 import type { BeatorajaThemeService } from '../../services/themes/beatoraja.ts';
-import type { DemoGUIState, DemoScene, PlayerWebDemoElements } from '../../types.ts';
+import type { PlayerGUIState, PlayerScene, PlayerWebElements } from '../../types.ts';
 import type { BeatorajaSkinOptionsPanel } from '../../ui/beatoraja-skin-options.ts';
 import { settleDecidePreload, type DecidePreload } from '../decide-handoff.ts';
 import type { FamilyKits, ResolvedPlayKit } from '../family-kits.ts';
@@ -50,13 +50,13 @@ export function playingFamily(view: PlayScene): { family?: 'beatoraja' } {
 export interface DecideRouteDeps {
   /** The scene router: the select scene it keeps, and the navigation the screen, the play and its load share. */
   readonly router: Pick<
-    SceneRouter<DemoScene, PlayScene, SelectScene>,
+    SceneRouter<PlayerScene, PlayScene, SelectScene>,
     'select' | 'begin' | 'isCurrent' | 'leave' | 'show' | 'prepare'
   >;
   /** The select route: where its screen was, for its next showing to come back to. */
   readonly selectRoute: Pick<SelectRoute, 'lastSelectNavigation'>;
   /** The page: the shell's `playing` class. */
-  readonly elements: Pick<PlayerWebDemoElements, 'shell'>;
+  readonly elements: Pick<PlayerWebElements, 'shell'>;
   /** The library: the chart's asset source. */
   readonly library: Pick<LibraryService, 'collection'>;
   /** The chart hashes the play's log records. */
@@ -68,7 +68,7 @@ export interface DecideRouteDeps {
   /** The play options in force, which the screen shows. */
   readonly playOptions: Pick<PlayOptionsService, 'current'>;
   /** The Debug Menu's auto play, and the tempo the status line shows. */
-  readonly guiState: Pick<DemoGUIState, 'autoPlay' | 'tempoEnabled' | 'tempoPercent' | 'tempoPitchMode'>;
+  readonly guiState: Pick<PlayerGUIState, 'autoPlay' | 'tempoEnabled' | 'tempoPercent' | 'tempoPitchMode'>;
   readonly audio: AudioService;
   /** The skin-options panel of the beatoraja play showing. */
   readonly beatorajaSkinOptions: Pick<BeatorajaSkinOptionsPanel, 'refreshBeatorajaPlaySkinOptions'>;

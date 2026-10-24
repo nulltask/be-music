@@ -3,14 +3,14 @@ import { resolve } from 'node:path';
 import { defineConfig } from '@playwright/test';
 
 /**
- * The course browser checklist run end to end (`docs/course-checklist.md`): the demo is built and served on a free
+ * The course browser checklist run end to end (`docs/course-checklist.md`): the player is built and served on a free
  * port, the checklist fixtures (charts, course files, minimal LR2 / beatoraja skins) are written to a temp dir by the
- * global setup, and the specs drive the demo through synthetic drops and keys, asserting on `window.__beMusicTest`.
+ * global setup, and the specs drive the player through synthetic drops and keys, asserting on `window.__beMusicTest`.
  *
  * `pnpm run test:e2e` runs it; `E2E_PORT` pins the port and `E2E_WORKERS` the parallelism.
  */
 
-const demoDir = resolve(import.meta.dirname, '..');
+const playerDir = resolve(import.meta.dirname, '..');
 
 /** A free TCP port on the loopback interface, found once and handed to the workers through the environment. */
 function freePort(): string {
@@ -30,7 +30,7 @@ const port = Number(process.env.E2E_PORT);
 export default defineConfig({
   testDir: '.',
   testMatch: '*.spec.ts',
-  outputDir: resolve(demoDir, 'e2e-results'),
+  outputDir: resolve(playerDir, 'e2e-results'),
   globalSetup: './global-setup.ts',
   // A course runs several short charts in real time.
   timeout: 180_000,
@@ -52,7 +52,7 @@ export default defineConfig({
   },
   webServer: {
     command: `pnpm exec vp build --logLevel error && pnpm exec vp preview --port ${port} --strictPort --host 127.0.0.1 --logLevel silent`,
-    cwd: demoDir,
+    cwd: playerDir,
     url: `http://127.0.0.1:${port}/`,
     reuseExistingServer: false,
     timeout: 180_000,
