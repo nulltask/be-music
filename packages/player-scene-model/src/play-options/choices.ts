@@ -1,7 +1,11 @@
+import { clampFloatingHiSpeed } from './floating-hi-speed.ts';
+import { clampHRandomThresholdBPM, parseLaneRandomSeed } from '@be-music/player-engine/lanes';
+import { resolveConstantVisibility } from './constant-visibility.ts';
+import { clampJudgeTimingMs } from './judge-timing.ts';
 import { clamp } from '@be-music/shared-utils/core';
-import { GAUGE_TYPES } from '@be-music/player-engine/ruleset';
+import { LR2_GAUGE_TYPES, isGaugeType, type RulesetId } from '@be-music/player-engine/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
-import { DEFAULT_HISPEED, snapHiSpeed } from './hi-speed.ts';
+import { DEFAULT_HISPEED, snapHiSpeed, snapClassicHiSpeed } from './hi-speed.ts';
 import type {
   BGAMode,
   BGASize,
@@ -67,9 +71,37 @@ export const BOOLEAN_CYCLE: readonly boolean[] = [false, true];
  */
 export const RANDOM_CYCLE: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM'];
 
+/** Available lane options for the selected reference ruleset; LR2's sprite cycle stays separate. */
+export function resolveRandomModes(ruleset: RulesetId): readonly RandomMode[] {
+  if (ruleset === 'lr2') return [...RANDOM_CYCLE, 'CONVERGE'];
+  const ordinary: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', 'R-RANDOM', 'S-RANDOM'];
+  return ruleset === 'beatoraja'
+    ? [
+        ...ordinary,
+        'SPIRAL',
+        'H-RANDOM',
+        'ALL-SCR',
+        'RANDOM-EX',
+        'S-RANDOM-EX',
+        'CONVERGE',
+        'RANDOM_PLAYABLE',
+        'S_RANDOM_PLAYABLE',
+      ]
+    : ordinary;
+}
+
 /** The play options a player starts with. */
 export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   hiSpeed: DEFAULT_HISPEED,
+  classicHiSpeed: false,
+  floatingHiSpeed: false,
+  fixedDisplayArea: false,
+  normalHiSpeedLevel: 0,
+  judgeTimingMs: 0,
+  visualConstant: false,
+  noteDurationMs: 500,
+  constantFadeMs: 100,
+  bpmGuide: false,
   autoPlay: false,
   bga: 'ON',
   // BGA renders at LR2's `#DST_BGA,...,30` rect (NORMAL) at `'NORMAL'` — a 256×256 window squeezed in beside the lane
@@ -83,14 +115,28 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   keysFilter: 'ALL',
   sort: 'OFF',
   hsFix: 'OFF',
+  displayAreaInfo: 'OFF',
   hiddenSudden1P: 'OFF',
   hiddenSudden2P: 'OFF',
   shutter: SHUTTER_DEFAULT,
   laneCover: false,
+  lift1P: 0.1,
+  lift2P: 0.1,
+  liftOn1P: false,
+  liftOn2P: false,
+  judgeAlgorithm: 'combo',
+  longNoteModifier: 'OFF',
+  mineModifier: 'OFF',
+  gaugeAutoShift: 'NONE',
   autoScratch1P: false,
   autoScratch2P: false,
   dpFlip: false,
   random1P: 'OFF',
+  hRandomThresholdBPM: 120,
+  randomSeed1P: '-1',
+  randomSeed2P: '-1',
+  randomFixedLane1P: 0,
+  randomFixedLane2P: 0,
   random2P: 'OFF',
   gauge1P: 'GROOVE',
   gauge2P: 'GROOVE',
@@ -108,17 +154,29 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   difficultyFilter: DIFFICULTY_FILTER_CYCLE,
   keysFilter: KEYS_FILTER_CYCLE,
   sort: SORT_CYCLE,
-  hsFix: HS_FIX_CYCLE,
+  hsFix: [...HS_FIX_CYCLE, 'STARTBPM'],
+  displayAreaInfo: ['OFF', 'ON', 'SUDDEN_ONLY', 'HIDDEN_LIFT_ONLY'],
   hiddenSudden1P: HIDDEN_SUDDEN_CYCLE,
   hiddenSudden2P: HIDDEN_SUDDEN_CYCLE,
   laneCover: BOOLEAN_CYCLE,
+  liftOn1P: BOOLEAN_CYCLE,
+  liftOn2P: BOOLEAN_CYCLE,
+  judgeAlgorithm: ['combo', 'duration', 'lowest'],
+  longNoteModifier: ['OFF', 'LEGACY', 'REMOVE'],
+  mineModifier: ['OFF', 'REMOVE', 'ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'],
+  gaugeAutoShift: ['NONE', 'CONTINUE'],
+  classicHiSpeed: BOOLEAN_CYCLE,
+  floatingHiSpeed: BOOLEAN_CYCLE,
+  fixedDisplayArea: BOOLEAN_CYCLE,
+  bpmGuide: BOOLEAN_CYCLE,
+  visualConstant: BOOLEAN_CYCLE,
   autoScratch1P: BOOLEAN_CYCLE,
   autoScratch2P: BOOLEAN_CYCLE,
   dpFlip: BOOLEAN_CYCLE,
-  random1P: RANDOM_CYCLE,
-  random2P: RANDOM_CYCLE,
-  gauge1P: GAUGE_TYPES,
-  gauge2P: GAUGE_TYPES,
+  random1P: resolveRandomModes('beatoraja'),
+  random2P: resolveRandomModes('beatoraja'),
+  gauge1P: LR2_GAUGE_TYPES,
+  gauge2P: LR2_GAUGE_TYPES,
 };
 
 /**
@@ -141,8 +199,17 @@ export function clampShutter(value: number): number {
 
 /** Numeric play options, each with the clamp applied to a value set for it. */
 const NUMERIC_PLAY_OPTION_CLAMPS: { readonly [K in keyof PlayOptions]?: (value: number) => number } = {
+  hRandomThresholdBPM: clampHRandomThresholdBPM,
+  randomFixedLane1P: (value) => (Number.isFinite(value) ? Math.max(0, Math.min(9, Math.trunc(value))) : 0),
+  randomFixedLane2P: (value) => (Number.isFinite(value) ? Math.max(0, Math.min(9, Math.trunc(value))) : 0),
   hiSpeed: clampHiSpeed,
+  judgeTimingMs: clampJudgeTimingMs,
+  noteDurationMs: (value) => resolveConstantVisibility({ durationMs: value }).durationMs,
+  constantFadeMs: (value) => resolveConstantVisibility({ fadeMs: value }).fadeMs,
+  normalHiSpeedLevel: (value) => Math.max(0, Math.min(20, Math.round(value))),
   shutter: clampShutter,
+  lift1P: clampShutter,
+  lift2P: clampShutter,
 };
 
 /**
@@ -156,6 +223,8 @@ export function resolvePlayOptionValue<K extends keyof PlayOptions>(
   value: unknown,
 ): PlayOptions[K] | undefined {
   if (!Object.hasOwn(DEFAULT_PLAY_OPTIONS, key)) return undefined;
+  if (key === 'randomSeed1P' || key === 'randomSeed2P') return parseLaneRandomSeed(value) as PlayOptions[K] | undefined;
+  if (key === 'gauge1P' || key === 'gauge2P') return isGaugeType(value) ? (value as PlayOptions[K]) : undefined;
   const choices = PLAY_OPTION_CHOICES[key] as readonly unknown[] | undefined;
   if (choices) return choices.includes(value) ? (value as PlayOptions[K]) : undefined;
   const clamp = NUMERIC_PLAY_OPTION_CLAMPS[key];
@@ -210,6 +279,19 @@ export function resolvePlayOptions(stored: Readonly<Partial<Record<keyof PlayOpt
     if (!Object.hasOwn(stored, key)) continue;
     const value = resolvePlayOptionValue(key, stored[key]);
     if (value !== undefined) (options as Record<keyof PlayOptions, unknown>)[key] = value;
+  }
+  if (options.floatingHiSpeed) {
+    options.hsFix = 'OFF';
+    options.hiSpeed =
+      clampFloatingHiSpeed(typeof stored.hiSpeed === 'number' ? stored.hiSpeed : options.hiSpeed) ?? options.hiSpeed;
+  } else if (options.classicHiSpeed) {
+    options.normalHiSpeedLevel = 0;
+    options.hsFix = 'OFF';
+    options.hiSpeed = snapClassicHiSpeed(options.hiSpeed)!;
+  } else if (options.normalHiSpeedLevel > 0) {
+    options.hsFix = 'OFF';
+    if (typeof stored.hiSpeed === 'number' && Number.isFinite(stored.hiSpeed) && stored.hiSpeed > 0)
+      options.hiSpeed = stored.hiSpeed;
   }
   return options;
 }

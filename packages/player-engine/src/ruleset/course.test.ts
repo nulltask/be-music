@@ -172,3 +172,8 @@ describe('resolveRuleset with a course', () => {
     expect(later[2]).toEqual(later[0]);
   });
 });
+
+test('maps independent EX-HARD into the source course EXHARDCLASS', () => {
+  expect(resolveCourseGaugeId('beatoraja', 'expert', 'EX-HARD')).toBe('EXHARDCLASS');
+  expect(resolveCourseGaugeId('____', 'grade', 'EX-HARD')).toBe('EXHARDCLASS');
+});

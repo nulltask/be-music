@@ -1,3 +1,4 @@
+import { createPlayerInputSignalBus } from '@be-music/player-engine/signals';
 import type { ReplayPlaybackOptions, ReplayViewState } from '@be-music/player-engine/replay';
 import {
   createHiSpeedState,
@@ -8,11 +9,12 @@ import {
   reducePlayState,
   resolveWhiteNumber,
 } from '@be-music/player-scene-model';
-import { describe, expect, test } from 'vite-plus/test';
+import { describe, expect, test, vi } from 'vite-plus/test';
 import type { PlaySessionTheme } from './play-session-theme.ts';
 import type { PlayTempoRange } from './tempo-range.ts';
 import {
   resolveLaneCovers,
+  changePlayView,
   resolveVisibleMs,
   startReplayView,
   updateReplayView,
@@ -60,9 +62,13 @@ describe("the replay's view on the built-in and LR2 play screens", () => {
 
   test('leaves the LIFT out of the visible time, as beatoraja does', () => {
     const ctx = createView();
-    ctx.playState = reducePlayState(ctx.playState, { type: 'cover-set', covers: [{ side: '1P', lift: 0.2 }] });
+    ctx.playState = reducePlayState(ctx.playState, {
+      type: 'cover-set',
+      covers: [{ side: '1P', lift: 0.2, liftOn: true }],
+    });
     const view = startReplayView(ctx);
-    expect(view.covers).toEqual([{ side: '1P', sudden: 0.25, hidden: 0, lift: 0.2 }]);
+    expect(view.covers).toEqual([{ side: '1P', sudden: 0.2, hidden: 0, lift: 0.2 }]);
+    ctx.laneX.set('11', { ...LANE, bottom: LANE.bottom * 0.8, baseBottom: LANE.bottom, scrollScale: 0.8 });
     expect(view.visibleMs).toBe(1500);
     expect(resolveVisibleMs(ctx, resolveLaneCovers(ctx)[0], 120, 1)).toBe(1500);
   });
@@ -135,4 +141,83 @@ describe("the replay's view on the built-in and LR2 play screens", () => {
     updateReplayView(ctx, 0);
     expect(ctx.playState.view.hiSpeed.drawn).toBe(2.5);
   });
+});
+
+test('records successive rendered view edits even within the former 100 ms debounce', () => {
+  const clock = vi.spyOn(performance, 'now').mockReturnValue(0);
+  try {
+    const bus = createPlayerInputSignalBus();
+    const ctx = { ...createView(), sharedEngineInputSignals: bus };
+    startReplayView(ctx);
+    ctx.playState = reducePlayState(ctx.playState, { type: 'hi-speed-set', value: 2.1 });
+    updateReplayView(ctx, 1);
+    ctx.playState = reducePlayState(ctx.playState, { type: 'hi-speed-set', value: 2.2 });
+    updateReplayView(ctx, 1.001);
+    expect(
+      bus
+        .drainCommands()
+        .filter((command) => command.kind === 'view')
+        .map((command) => command.change.hiSpeed),
+    ).toEqual([2.1, 2.2]);
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+test('floating cover commands sample the live BPM and restore the source display time', () => {
+  const ctx = createView();
+  ctx.playState = createPlayState({
+    view: {
+      hiSpeed: createHiSpeedState({ hiSpeed: 2, floating: true, bpm: 120, visibleFraction: 1 - 181 / 723 }),
+      covers: [
+        {
+          side: '1P',
+          sudden: 181 / 723,
+          suddenOn: true,
+          hidden: 0,
+          hiddenOn: false,
+          lift: 0,
+          liftOn: false,
+          absolute: true,
+        },
+      ],
+    },
+  });
+  Object.assign(ctx, { timingResolver: { bpmAtBeat: () => 240 }, currentBeat: () => 0 });
+  changePlayView(ctx, { type: 'cover-adjust', part: 'sudden', delta: 0 });
+  expect(ctx.playState.view.hiSpeed.player).toBe(1);
+  changePlayView(ctx, { type: 'hi-speed-step', delta: 0.1 });
+  expect(ctx.playState.view.hiSpeed.player).toBe(1.5);
+  changePlayView(ctx, { type: 'cover-adjust', part: 'sudden', delta: 0 });
+  expect(ctx.playState.view.hiSpeed.player).toBe(1);
+});
+
+test('floating mode switches reach replay recording even before another render', () => {
+  const ctx = createView();
+  const commands: unknown[] = [];
+  Object.assign(ctx, { sharedEngineInputSignals: { pushCommand: (command: unknown) => commands.push(command) } });
+  changePlayView(ctx, { type: 'floating-speed-mode', enabled: true, bpm: 120, visibleFraction: 0.75 });
+  changePlayView(ctx, { type: 'floating-speed-mode', enabled: false, bpm: 120, visibleFraction: 0.75 });
+  expect(commands).toEqual([
+    expect.objectContaining({ kind: 'options', values: expect.objectContaining({ floatingHiSpeed: true }) }),
+    expect.objectContaining({ kind: 'options', values: expect.objectContaining({ floatingHiSpeed: false }) }),
+  ]);
+});
+
+test('fixed display restore takes the current BPM and preserves covers while interactive cover sets are ignored', () => {
+  const ctx = createView();
+  ctx.playState = createPlayState({
+    view: {
+      fixedDisplayArea: true,
+      hiSpeed: createHiSpeedState({ floating: true, hiSpeed: 2, bpm: 120, visibleFraction: 0.75 }),
+      covers: [{ side: '1P', sudden: 0.25, suddenOn: true, hidden: 0, hiddenOn: false, lift: 0, liftOn: false }],
+    },
+  });
+  Object.assign(ctx, { timingResolver: { bpmAtBeat: () => 240 }, currentBeat: () => 0 });
+  const covers = ctx.playState.view.covers;
+  changePlayView(ctx, { type: 'cover-set', covers: [{ lift: 0.8 }] });
+  expect(ctx.playState.view.covers).toBe(covers);
+  changePlayView(ctx, { type: 'floating-speed-restore', bpm: 120, visibleFraction: 1 });
+  expect(ctx.playState.view.hiSpeed.player).toBe(1);
+  expect(ctx.playState.view.covers).toBe(covers);
 });

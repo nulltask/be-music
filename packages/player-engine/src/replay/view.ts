@@ -27,7 +27,7 @@ export interface ReplayViewState {
    * scenes, `beatoraja`): the same hi-speed scrolls at another speed on another scale. Absent = the viewer's own.
    */
   hiSpeedScale?: string;
-  /** The hi-speed fix the scene kept the scroll with: `OFF`, `MAXBPM`, `MINBPM`, `AVERAGE` or `CONSTANT`. */
+  /** The hi-speed fix the scene kept the scroll with: `OFF`, `MAXBPM`, `MINBPM`, `AVERAGE`, `CONSTANT` or `STARTBPM`. */
   hsFix?: string;
   /**
    * How long a note stays visible below SUDDEN+, in ms (the white number; × 0.6 is the green number), at the chart's main

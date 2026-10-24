@@ -157,6 +157,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     bpm: ctx.play.displayBPM(seconds) ?? bpm,
     // The player's hi-speed, as the select panel and the host show it (HS-FIX scales only the scroll).
     hiSpeed: play.view.hiSpeed.player,
+    ...(play.view.hiSpeed.floating ? { floatingHiSpeed: true as const } : {}),
     score: ctx.play.score.score,
     exScore: ctx.play.score.exScore,
     exScoreMax: total * 2,
@@ -219,6 +220,19 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
   };
 }
 
+/** Keep the base layout/BGA fixed and publish each side's actual line for the skin's chrome. */
+function withLiftLines(ctx: BeMusicLayoutContext, layout: BeMusicGameplayLayout): BeMusicGameplayLayout {
+  if (!ctx.drawsLift) return layout;
+  const sides = { ...layout.playfield.sides };
+  for (const cover of ctx.play.resolveLaneCovers()) {
+    const bounds = sides[cover.side];
+    if (!bounds) continue;
+    const judgementY = layout.playfield.judgementY - (layout.playfield.judgementY - layout.playfield.top) * cover.lift;
+    sides[cover.side] = { ...bounds, judgementY };
+  }
+  return { ...layout, playfield: { ...layout.playfield, sides } };
+}
+
 /** What the built-in BGA rect is worked out from: a play view's members of these names. */
 export interface BGATargetsContext extends LaneGeometryContext {
   stageBGATarget: PlayfieldBGATarget | undefined;
@@ -226,6 +240,7 @@ export interface BGATargetsContext extends LaneGeometryContext {
 
 /** What the be-music chrome's layout is worked out from, and its cache: a play view's members of these names. */
 export interface BeMusicLayoutContext extends LaneGeometryContext {
+  readonly drawsLift?: boolean;
   beMusicLayout:
     | {
         channels: readonly string[];
@@ -270,14 +285,14 @@ export function resolveBeMusicLayout(ctx: BeMusicLayoutContext): BeMusicGameplay
     cached.variant === ctx.play.chartPlayVariant &&
     cached.stage === stage
   ) {
-    return cached.layout;
+    return withLiftLines(ctx, cached.layout);
   }
   const layout = resolveGameplayLayout(
     { laneChannels: ctx.play.laneChannels, playVariant: ctx.play.chartPlayVariant, layoutMode: ctx.layoutMode },
     stage,
   );
   ctx.beMusicLayout = { channels: ctx.play.laneChannels, variant: ctx.play.chartPlayVariant, stage, layout };
-  return layout;
+  return withLiftLines(ctx, layout);
 }
 
 /** What {@link renderBuiltInChrome} draws into: the chrome layers and pools, the BGA layer and the be-music binding. */

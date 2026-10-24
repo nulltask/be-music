@@ -1,10 +1,11 @@
 import { createEmptyJSON, type BeMusicJSON } from '@be-music/chart-source';
 import { describe, expect, test } from 'vite-plus/test';
-import { manualPlay } from '../index.ts';
+import { resolveChart } from '@be-music/chart-model';
+import { manualPlay, preparePlaybackChart } from '../index.ts';
 import type { PlayerOptions, PlayerSummary } from '../core/engine.ts';
 import { resolveRulesetConfig, simulateReplay } from './simulate.ts';
 import { createScheduledInputRuntime } from '../test-support/player-fixtures.ts';
-import type { BeMusicReplay, ReplayInputEvent } from './format.ts';
+import { parseReplay, serializeReplay, type BeMusicReplay, type ReplayInputEvent } from './format.ts';
 import type { RulesetId } from '../ruleset/index.ts';
 
 /**
@@ -1167,3 +1168,166 @@ describe('engine / simulator equivalence', () => {
     expect(simulated.exScore).toBe(0);
   });
 });
+
+for (const assistedSide of ['1P', '2P'] as const) {
+  test.each(RULESETS)(`%s: DP AUTO SCRATCH assists only ${assistedSide} in live play and replay`, async (ruleset) => {
+    const json = chart([
+      { measure: 1, channel: '16', position: [0, 1], value: '01' },
+      { measure: 1, channel: '26', position: [0, 1], value: '01' },
+    ]);
+    const settings = {
+      autoScratch1P: assistedSide === '1P',
+      autoScratch2P: assistedSide === '2P',
+      playVariant: '14' as const,
+    };
+    const { summary, replay } = await runRecordedPlay(json, [], ruleset, settings);
+    expect([summary.perfect, summary.poor]).toEqual([1, 1]);
+    expect(replay.play.autoScratch1P).toBe(settings.autoScratch1P);
+    expect(replay.play.autoScratch2P).toBe(settings.autoScratch2P);
+    const simulated = simulateReplay(replay, { ruleset });
+    expect([simulated.judge.pgreat, simulated.judge.poor]).toEqual([1, 1]);
+    const manualChannel = assistedSide === '1P' ? '26' : '16';
+    const manual = await runRecordedPlay(
+      json,
+      [down(0, 1_000_000, manualChannel), up(1, 1_020_000, manualChannel)],
+      ruleset,
+      settings,
+    );
+    expect([manual.summary.perfect, manual.summary.poor]).toEqual([2, 0]);
+    expect(simulateReplay(manual.replay, { ruleset }).judge.pgreat).toBe(2);
+  });
+}
+
+test('DP scratch HCNs on the unassisted side remain manual', async () => {
+  const json = chart([
+    { measure: 1, channel: '16', position: [0, 1], value: '01' },
+    { measure: 2, channel: '16', position: [0, 1], value: 'AA' },
+    { measure: 1, channel: '26', position: [0, 1], value: '01' },
+    { measure: 2, channel: '26', position: [0, 1], value: 'AA' },
+  ]);
+  json.bms.lnObjs = ['AA'];
+  json.bms.lnMode = 3;
+  const { summary, replay } = await runRecordedPlay(json, [], 'beatoraja', {
+    autoScratch1P: true,
+    autoScratch2P: false,
+    playVariant: '14',
+  });
+  const simulated = simulateReplay(replay, { ruleset: 'beatoraja' });
+  expect(summary.perfect).toBeGreaterThan(0);
+  expect(summary.poor).toBeGreaterThan(0);
+  expect([summary.perfect, summary.poor]).toEqual([simulated.judge.pgreat, simulated.judge.poor]);
+});
+
+for (const longNoteModifier of ['LEGACY', 'REMOVE'] as const) {
+  test(`${longNoteModifier} records effective head-only notes for deterministic simulation`, async () => {
+    const run = await runRecordedPlay(longNoteChart(2), [down(0, 1_000_000, '11')], 'beatoraja', { longNoteModifier });
+    expect(run.replay.play.longNoteModifier).toBe(longNoteModifier);
+    expect(run.replay.chart.notes.every((note) => note.type === 'normal' && note.endTimeUs === undefined)).toBe(true);
+    expect(simulateReplay(run.replay, { ruleset: 'beatoraja' }).judge).toEqual(run.replay.results!.native!.judge);
+  });
+}
+
+test('A-SCR & LEGACY NOTE retains both operations in the recorded effective setup', async () => {
+  const json = longNoteChart(2);
+  json.events = json.events.filter((event) => event.channel === '11').map((event) => ({ ...event, channel: '16' }));
+  const run = await runRecordedPlay(json, [], '____', {
+    longNoteModifier: 'LEGACY',
+    autoScratch1P: true,
+    autoScratch2P: true,
+  });
+  expect(run.replay.play).toMatchObject({ longNoteModifier: 'LEGACY', autoScratch1P: true, autoScratch2P: true });
+  expect(run.replay.chart.notes).toEqual([expect.objectContaining({ type: 'normal', channel: '16' })]);
+  expect(run.replay.results!.native!.judge).toMatchObject({ pgreat: 1, poor: 0 });
+  expect(simulateReplay(run.replay, { ruleset: '____' }).judge).toEqual(run.replay.results!.native!.judge);
+});
+
+for (const judgeAlgorithm of ['combo', 'duration', 'lowest'] as const) {
+  test(`beatoraja ${judgeAlgorithm} selection is applied live and restored by replay simulation`, async () => {
+    const json = createEmptyJSON('bms');
+    json.metadata.bpm = 240;
+    json.metadata.rank = 2;
+    json.events = [
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 1, channel: '11', position: [4, 25], value: '01' },
+    ];
+    const run = await runRecordedPlay(json, [down(0, 1_120_000, '11')], 'beatoraja', { judgeAlgorithm });
+    expect(run.replay.play.judgeAlgorithm).toBe(judgeAlgorithm);
+    expect(run.replay.results!.native!.judge).toMatchObject(
+      judgeAlgorithm === 'lowest' ? { bad: 1, great: 0, poor: 1 } : { bad: 0, great: 1, poor: 1 },
+    );
+    expect(simulateReplay(run.replay, { ruleset: 'beatoraja' }).judge).toEqual(run.replay.results!.native!.judge);
+  });
+}
+
+for (const containsMine of [false, true]) {
+  test(`mine REMOVE records actual changes and reproduces a mine-free judgment stream (${containsMine})`, async () => {
+    const json = chart([
+      ...(containsMine ? [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }] : []),
+      { measure: 2, channel: '12', position: [0, 1], value: '01' },
+    ]);
+    const run = await runRecordedPlay(json, [down(0, 500_000, '11')], 'beatoraja', { mineModifier: 'REMOVE' });
+    expect(run.replay.play).toMatchObject({ mineModifier: 'REMOVE', mineModifierChangeCount: containsMine ? 1 : 0 });
+    expect(run.replay.chart.notes.some((note) => note.type === 'mine')).toBe(false);
+    expect(run.summary.minePoor ?? 0).toBe(0);
+    expect(simulateReplay(run.replay, { ruleset: 'beatoraja' }).judge).toEqual(run.replay.results!.native!.judge);
+  });
+}
+
+test('mine REMOVE also clears a host-prepared shared mine array before judging', async () => {
+  const json = chart([
+    { measure: 1, channel: 'D1', position: [0, 1], value: '0A' },
+    { measure: 2, channel: '12', position: [0, 1], value: '01' },
+  ]);
+  const preparedChart = preparePlaybackChart(resolveChart(json));
+  const mines = preparedChart.landmineNotes;
+  const run = await runRecordedPlay(json, [down(0, 500_000, '11')], 'beatoraja', {
+    mineModifier: 'REMOVE',
+    preparedChart,
+  });
+  expect(preparedChart.landmineNotes).toBe(mines);
+  expect(mines).toEqual([]);
+  expect(run.replay.play.mineModifierChangeCount).toBe(1);
+  expect(run.summary.minePoor ?? 0).toBe(0);
+});
+
+test.each(['ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'] as const)(
+  '%s silent mines retain their damage and judgments through serialized replay simulation',
+  async (mineModifier) => {
+    const json = chart([{ measure: 2, channel: '12', position: [0, 1], value: '01' }]);
+    const preparedChart = preparePlaybackChart(resolveChart(json), { mineModifier }, 0, () => 0.99);
+    const run = await runRecordedPlay(json, [down(0, 500_000, '11'), up(1, 2_500_000, '11')], 'beatoraja', {
+      mineModifier,
+      preparedChart,
+    });
+    const replay = parseReplay(serializeReplay(run.replay));
+    expect(replay.play.mineModifierChangeCount).toBeGreaterThan(0);
+    expect(
+      replay.chart.notes.filter((note) => note.type === 'mine').every((note) => note.silent && note.damage === 10),
+    ).toBe(true);
+    expect(run.summary.minePoor).toBeGreaterThan(0);
+    expect(simulateReplay(replay, { ruleset: 'beatoraja' }).judge).toEqual(replay.results!.native!.judge);
+  },
+);
+
+test.each(['NONE', 'CONTINUE'] as const)(
+  'beatoraja gauge %s preserves the dead-gauge outcome with matching replay judgments',
+  async (gaugeAutoShift) => {
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 2, channel: '12', position: [0, 1], value: '01' },
+    ]);
+    const run = await runRecordedPlay(json, [down(0, 2_000_000, '12')], 'beatoraja', {
+      gauge: 'DEATH',
+      gaugeAutoShift,
+    });
+    const replay = parseReplay(serializeReplay(run.replay));
+    expect(replay.play.gaugeAutoShift).toBe(gaugeAutoShift);
+    expect(replay.play.endOnFailure === true).toBe(gaugeAutoShift === 'NONE');
+    expect(run.summary.gauge).toMatchObject({ type: 'HAZARD', current: 0, cleared: false, failedMidPlay: true });
+    expect(run.summary.poor).toBe(1);
+    expect(run.summary.perfect).toBe(gaugeAutoShift === 'CONTINUE' ? 1 : 0);
+    const simulated = simulateReplay(replay, { ruleset: 'beatoraja' });
+    expect(simulated.judge).toEqual(replay.results!.native!.judge);
+    expect(simulated.gauge).toMatchObject({ type: 'HAZARD', final: 0, cleared: false, failedMidPlay: true });
+  },
+);

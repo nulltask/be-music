@@ -7,6 +7,7 @@ import type { ResolvedPlayChart } from '@be-music/player-engine';
 import type { BeMusicReplay, ReplayCourseStage } from '@be-music/player-engine/replay';
 import {
   DEFAULT_PLAY_OPTIONS,
+  resolvePlayOptions,
   type CourseView,
   type LibraryChart,
   type PlayOptions,
@@ -51,6 +52,7 @@ export type PlaySceneSettings = Omit<
   | 'onExit'
   | 'onRestart'
   | 'onChartFinished'
+  | 'onJudgeTimingChange'
   | 'onHiSpeedChange'
   | 'onTempoChange'
   | 'replay'
@@ -79,9 +81,10 @@ export interface PlaySceneEvents {
   /** The player asked to play the chart again (F5). */
   restart(): void;
   /** The player stepped the hi-speed; on the player's own scale, to remember for the next play. */
-  hiSpeed?(hiSpeed: number): void;
+  hiSpeed?(hiSpeed: number, normalLevel?: number, floating?: boolean): void;
   /** The play's tempo changed (a live change, or a replay following its log). */
   tempo?(tempo: number): void;
+  judgeTiming?(judgeTimingMs: number): void;
 }
 
 export interface PlaySceneOptions extends SessionSceneOptions {
@@ -150,6 +153,8 @@ export interface PlayScene extends SessionScene<PlayFrame, PlayIntent> {
   getTempo(): number;
   /** Sets the player's hi-speed (HS-FIX applies on top). */
   setHiSpeed(hiSpeed: number): void;
+  /** beatoraja display-clock calibration; never shifts recorded inputs. */
+  setJudgeTimingMs(judgeTimingMs: number): void;
   getHiSpeed(): number;
   /** The play's recording. */
   readonly recording: PlaySceneRecording;
@@ -237,6 +242,11 @@ function createPlayView(
     };
   }
   const drawing = {
+    ...(settings.visualConstant !== undefined ? { visualConstant: settings.visualConstant } : {}),
+    ...(settings.noteDurationMs !== undefined ? { noteDurationMs: settings.noteDurationMs } : {}),
+    ...(settings.constantFadeMs !== undefined ? { constantFadeMs: settings.constantFadeMs } : {}),
+    ...(settings.judgeTimingMs !== undefined ? { judgeTimingMs: settings.judgeTimingMs } : {}),
+    ...(settings.bpmGuide !== undefined ? { bpmGuide: settings.bpmGuide } : {}),
     ...(settings.bga !== undefined ? { bga: settings.bga } : {}),
     ...(settings.autoPlay !== undefined ? { autoPlay: settings.autoPlay } : {}),
     ...(settings.nonstop !== undefined ? { nonstop: settings.nonstop } : {}),
@@ -277,6 +287,9 @@ function createPlayView(
   return {
     view,
     playfieldSkin: view.playfieldSkin,
+    get drawsLift() {
+      return view.drawsLift;
+    },
     prepareOn: (host) => view.prepareOn(host),
     uploadTextures: (textures, isCancelled) => view.uploadTextures(textures, isCancelled),
     setJudgedNoteDisplay: (mode) => {
@@ -373,6 +386,10 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
     return this.play.getTempo();
   }
 
+  public setJudgeTimingMs(judgeTimingMs: number): void {
+    this.play.setJudgeTimingMs(judgeTimingMs);
+  }
+
   public setHiSpeed(hiSpeed: number): void {
     this.play.setHiSpeed(hiSpeed);
   }
@@ -444,6 +461,31 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
  */
 export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): PlayScene {
   const { settings, course, on } = options;
+  const recordedSpeed =
+    options.replay !== undefined && (settings.replayView?.hiSpeed ?? true) ? options.replay.play.options : undefined;
+  const speedProfile = recordedSpeed
+    ? {
+        ...(typeof recordedSpeed.floatingHiSpeed === 'boolean'
+          ? { floatingHiSpeed: recordedSpeed.floatingHiSpeed }
+          : {}),
+        ...(typeof recordedSpeed.classicHiSpeed === 'boolean' ? { classicHiSpeed: recordedSpeed.classicHiSpeed } : {}),
+        ...(typeof recordedSpeed.normalHiSpeedLevel === 'number'
+          ? { normalHiSpeedLevel: recordedSpeed.normalHiSpeedLevel }
+          : {}),
+      }
+    : {};
+  const playOptions = resolvePlayOptions({
+    ...(options.playOptions ?? DEFAULT_PLAY_OPTIONS),
+    ...Object.fromEntries(Object.entries(settings).filter(([, value]) => value !== undefined)),
+    ...(settings.initialHiSpeed !== undefined ? { hiSpeed: settings.initialHiSpeed } : {}),
+    ...(settings.gauge !== undefined ? { gauge1P: settings.gauge } : {}),
+    ...speedProfile,
+    ...(options.replay !== undefined &&
+    ((settings.replayView?.covers ?? true) || (settings.replayView?.lift ?? true)) &&
+    typeof options.replay.play.options?.fixedDisplayArea === 'boolean'
+      ? { fixedDisplayArea: options.replay.play.options.fixedDisplayArea }
+      : {}),
+  });
   let sceneSession: PlaySceneSession | undefined;
   let family: FamilyPlayView | undefined;
   // The view is made for the play below; the play asks its theme nothing before both exist.
@@ -460,6 +502,30 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
   const play = new PlaySession(
     {
       ...settings,
+      ...(kit.family === 'built-in' && (kit.skin.id === 'plain' || kit.skin.id === 'native')
+        ? { coverKeys: true }
+        : {}),
+      hRandomThresholdBPM: playOptions.hRandomThresholdBPM,
+      mineModifier: playOptions.mineModifier,
+      gaugeAutoShift: playOptions.gaugeAutoShift,
+      randomSeed1P: playOptions.randomSeed1P,
+      randomSeed2P: playOptions.randomSeed2P,
+      randomFixedLane1P: playOptions.randomFixedLane1P,
+      randomFixedLane2P: playOptions.randomFixedLane2P,
+      classicHiSpeed: playOptions.classicHiSpeed,
+      floatingHiSpeed: playOptions.floatingHiSpeed,
+      fixedDisplayArea: playOptions.fixedDisplayArea,
+      normalHiSpeedLevel: playOptions.normalHiSpeedLevel,
+      visualConstant: playOptions.visualConstant,
+      noteDurationMs: playOptions.noteDurationMs,
+      lift1P: playOptions.lift1P,
+      lift2P: playOptions.lift2P,
+      liftOn1P: playOptions.liftOn1P,
+      liftOn2P: playOptions.liftOn2P,
+
+      constantFadeMs: playOptions.constantFadeMs,
+      hsFix: playOptions.hsFix,
+      recordingOptionState: { ...playOptions },
       ...(options.allowSeek !== undefined ? { allowSeek: options.allowSeek } : {}),
       ...(kit.family === 'beatoraja' ? BEATORAJA_PLAY_SETTINGS : {}),
       ...(course !== undefined
@@ -475,7 +541,13 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       onExit: () => on.exit(),
       onRestart: () => on.restart(),
       onChartFinished: (result) => on.finish(result, result.replay),
-      ...(on.hiSpeed !== undefined ? { onHiSpeedChange: (hiSpeed: number) => on.hiSpeed?.(hiSpeed) } : {}),
+      ...(on.judgeTiming !== undefined ? { onJudgeTimingChange: (value: number) => on.judgeTiming?.(value) } : {}),
+      ...(on.hiSpeed !== undefined
+        ? {
+            onHiSpeedChange: (hiSpeed: number, normalLevel?: number, floating?: boolean) =>
+              on.hiSpeed?.(hiSpeed, normalLevel, floating),
+          }
+        : {}),
       ...(on.tempo !== undefined ? { onTempoChange: (tempo: number) => on.tempo?.(tempo) } : {}),
     },
     theme,
@@ -483,12 +555,12 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
   sceneSession = new PlaySceneSession(play, {
     chart: options.chart,
     ...(course?.view !== undefined ? { course: course.view } : {}),
-    playOptions: options.playOptions ?? DEFAULT_PLAY_OPTIONS,
+    playOptions,
     ...(options.scoreTargets !== undefined ? { scoreTargets: options.scoreTargets } : {}),
     audio: options.audio,
     ...(options.sounds !== undefined ? { sounds: options.sounds } : {}),
   });
-  family = createPlayView(kit, play, options, sceneSession);
+  family = createPlayView(kit, play, { ...options, settings: play.options }, sceneSession);
   return new FamilyPlayScene(
     sceneSession,
     family,

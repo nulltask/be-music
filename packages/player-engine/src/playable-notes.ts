@@ -25,6 +25,8 @@ export interface TimedLandmineNote {
   seconds: number;
   judged: boolean;
   mine: true;
+  /** Generated beatoraja mines have no explosion sample (source WAV index -1). */
+  silent?: true;
 }
 
 export interface ExtractTimedNotesOptions {

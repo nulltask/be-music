@@ -1,3 +1,6 @@
+import { resolveConstantVisibility } from '@be-music/player-scene-model';
+import { diffReplayOptions, resolveReplayOptionsAt, type ReplayOptionState } from '@be-music/player-engine/replay';
+import { resolvePlayOptions } from '@be-music/player-scene-model';
 /**
  * The play session as a scene session (`SceneSession`, `session/session-scene.ts`): what `createPlayScene` hands its
  * `SessionScene` so the scene's ticker reads a {@link PlayFrame} off the play every frame and the view's intents reach
@@ -15,10 +18,9 @@ import { drainSharedEngineSignals } from './play-engine.ts';
 import { handleTouchLaneIntent } from './play-input.ts';
 import type { PlaySession } from './play-session.ts';
 import { canSeekPlay } from './play-seek.ts';
-import { applyPlayEvent } from './play-state.ts';
 import type { PlayMoment } from './play-session-theme.ts';
 import { playViewEventFromMoment } from './play-view-events.ts';
-import { updateReplayView } from './play-view-settings.ts';
+import { changePlayView, updateReplayView } from './play-view-settings.ts';
 
 /**
  * What a play's frames carry besides the play itself: the chart picked, its course stage and the play options; and the
@@ -43,6 +45,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
   /** How the play's audio ends when the scene is disposed. */
   public disposeOptions: PlayDisposeOptions = {};
   private readonly facts: PlaySceneFacts;
+  private recordedOptions: ReplayOptionState | undefined;
   private pending: PlayViewEvent[] = [];
   private enteredAtMs = 0;
   private failureSoundPlayed = false;
@@ -91,14 +94,20 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
   public dispatch(intent: PlayIntent): void {
     const play = this.play;
     switch (intent.type) {
-      case 'hi-speed': {
-        const previous = applyPlayEvent(play, intent.command);
-        const player = play.playState.view.hiSpeed.player;
-        if (player !== previous.view.hiSpeed.player) play.options.onHiSpeedChange?.(player);
+      case 'hi-speed':
+        changePlayView(play, intent.command);
+        return;
+      case 'constant-visibility': {
+        const value = resolveConstantVisibility({
+          durationMs: intent.durationMs ?? play.options.noteDurationMs,
+          fadeMs: intent.fadeMs ?? play.options.constantFadeMs,
+        });
+        play.options.noteDurationMs = value.durationMs;
+        play.options.constantFadeMs = value.fadeMs;
         return;
       }
       case 'cover':
-        applyPlayEvent(play, intent.command);
+        changePlayView(play, intent.command);
         return;
       case 'pause':
         play.requestTogglePause();
@@ -128,6 +137,37 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
     // A paused play drains too: a seek moves it while it stays paused.
     if (!play.disposed) drainSharedEngineSignals(play);
     const seconds = play.currentSeconds();
+    const replay = play.options.replay;
+    let playOptions = this.facts.playOptions;
+    if (replay?.play.options !== undefined || replay?.play.optionChanges !== undefined) {
+      playOptions = resolvePlayOptions({
+        ...playOptions,
+        ...resolveReplayOptionsAt(replay.play.options, replay.play.optionChanges, Math.round(seconds * 1_000_000)),
+      });
+    } else if (replay === undefined && play.sharedEngineInputSignals !== undefined) {
+      const liveOptions: PlayOptions = {
+        ...playOptions,
+        hiSpeed: play.playState.view.hiSpeed.player,
+        floatingHiSpeed: play.playState.view.hiSpeed.floating !== undefined,
+        judgeTimingMs: play.options.judgeTimingMs ?? playOptions.judgeTimingMs,
+        noteDurationMs: play.options.noteDurationMs ?? playOptions.noteDurationMs,
+        constantFadeMs: play.options.constantFadeMs ?? playOptions.constantFadeMs,
+        ...(play.playState.view.hiSpeed.normalLevel !== undefined
+          ? { normalHiSpeedLevel: play.playState.view.hiSpeed.normalLevel }
+          : {}),
+      };
+      for (const cover of play.playState.view.covers) {
+        const heightKey = cover.side === '1P' ? 'lift1P' : 'lift2P';
+        const onKey = cover.side === '1P' ? 'liftOn1P' : 'liftOn2P';
+        liveOptions[heightKey] = cover.lift;
+        liveOptions[onKey] = cover.liftOn ?? cover.lift > 0;
+      }
+      playOptions = liveOptions;
+      const current: ReplayOptionState = { ...liveOptions };
+      const change = diffReplayOptions(this.recordedOptions ?? { ...playOptions }, current);
+      if (change) play.sharedEngineInputSignals.pushCommand({ kind: 'options', values: change });
+      this.recordedOptions = current;
+    }
     if (!play.paused && !play.disposed) updateReplayView(play, seconds);
     play.updateDisplayedScore();
     const events = this.pending;
@@ -138,7 +178,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       clock: { nowMs, enteredAtMs: this.enteredAtMs },
       chart: play.chart ?? this.facts.chart,
       ...(this.facts.course !== undefined ? { course: this.facts.course } : {}),
-      playOptions: this.facts.playOptions,
+      playOptions,
       ...(this.facts.scoreTargets !== undefined ? { scoreTargets: this.facts.scoreTargets } : {}),
       state: play.playState,
       stage,

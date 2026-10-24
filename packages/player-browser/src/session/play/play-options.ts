@@ -3,7 +3,7 @@
  * draws it. `createPlayScene` takes them as its `settings`, `course`, `replay`, `preResolved`, `audio` and `on`.
  */
 
-import type { CourseView, PlayResult } from '@be-music/player-scene-model';
+import type { CourseView, PlayResult, HSFix, RandomMode } from '@be-music/player-scene-model';
 import type { GameplayLayoutMode } from '@be-music/player-skin-sdk';
 import type { NonstopStitchMap } from '@be-music/player-engine/course';
 import type {
@@ -25,6 +25,8 @@ import type { BeMusicEffectLevel } from '../../skin/be-music/types.ts';
  * whichever family draws the play.
  */
 export interface PlaySessionOptions {
+  /** Selected source options to preserve in the replay, independently of score handling. */
+  recordingOptionState?: import('@be-music/player-engine/replay').ReplayOptionState;
   /** Showmanship level for the be-music skin (count-ins, shakes, particles). Defaults to `'full'`. */
   beMusicEffects?: BeMusicEffectLevel;
   /**
@@ -74,7 +76,7 @@ export interface PlaySessionOptions {
    * scale as {@link initialHiSpeed} — before any HS-FIX rescaling — so a host can remember it and seed the next play
    * with it. Not fired for `PlaySession.setHiSpeed` writes, which come from the host.
    */
-  onHiSpeedChange?: (hiSpeed: number) => void;
+  onHiSpeedChange?: (hiSpeed: number, normalLevel?: number, floating?: boolean) => void;
   /**
    * BGA display mode picked from the LR2 panel-1 BGA toggle (`#SRC_BUTTON,type=72`). Defaults to `'ON'` so charts that
    * ship a BGA render it by default. With `'OFF'` the BGA layer stays empty for the entire play; with `'AUTOPLAY_ONLY'`
@@ -97,7 +99,21 @@ export interface PlaySessionOptions {
    * chart-prepare time so the user's chosen HS feels consistent across BPM changes. `'CONSTANT'` falls back to
    * `'AVERAGE'` for now — true per-frame BPM-aware scrolling needs a render-pipeline change that hasn't landed yet.
    */
-  hsFix?: 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT';
+  hsFix?: HSFix;
+  classicHiSpeed?: boolean;
+  floatingHiSpeed?: boolean;
+  fixedDisplayArea?: boolean;
+  normalHiSpeedLevel?: number;
+  judgeTimingMs?: number;
+  visualConstant?: boolean;
+  lift1P?: number;
+  lift2P?: number;
+  liftOn1P?: boolean;
+  liftOn2P?: boolean;
+  noteDurationMs?: number;
+  constantFadeMs?: number;
+  onJudgeTimingChange?: (judgeTimingMs: number) => void;
+  bpmGuide?: boolean;
   /**
    * HIDDEN / SUDDEN / HID+SUD effect picked from `#SRC_BUTTON,type=50/51`:
    *
@@ -132,6 +148,11 @@ export interface PlaySessionOptions {
    * switches HIDDEN+ and J / K move it. The beatoraja play screen's keys; off by default.
    */
   coverKeys?: boolean;
+  /** beatoraja's note-selection algorithm. */
+  judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  longNoteModifier?: 'OFF' | 'LEGACY' | 'REMOVE';
+  mineModifier?: import('@be-music/player-scene-model').PlayOptions['mineModifier'];
+  gaugeAutoShift?: import('@be-music/player-scene-model').PlayOptions['gaugeAutoShift'];
   /**
    * 1P side auto-scratch flag — when true, the scratch lane (channel 16) auto-judges as PERFECT at every note's
    * scheduled time even when {@link autoPlay} is off. The player only has to play the keys.
@@ -149,9 +170,14 @@ export interface PlaySessionOptions {
    * shuffle is consistent across the play session — pressing F5 (restart) reuses the same `random1P` value but draws a
    * fresh permutation. SCATTER is a legacy value; new requests are rejected until it is fully implemented.
    */
-  random1P?: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
+  hRandomThresholdBPM?: number;
+  randomSeed1P?: string;
+  randomSeed2P?: string;
+  randomFixedLane1P?: number;
+  randomFixedLane2P?: number;
+  random1P?: RandomMode;
   /** 2P side note arrangement (`#SRC_BUTTON,type=43`). */
-  random2P?: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
+  random2P?: RandomMode;
   /**
    * Replay playback: a recorded replay to re-drive instead of live keyboard input. The chart prepare skips the
    * usual DP-flip / lane-shuffle passes and re-applies the RECORDED arrangement (`applyReplayArrangement`), the
@@ -162,6 +188,8 @@ export interface PlaySessionOptions {
    * different chart file).
    */
   replay?: BeMusicReplay;
+  /** Reuse the resolved chart layout while playing fresh input and recording a new replay. */
+  fixedArrangement?: Pick<BeMusicReplay, 'chart' | 'play'>;
   /**
    * Which of the view a {@link replay} recorded (`play.view` / `play.viewChanges`) it shows over the viewer's own
    * settings: the hi-speed, SUDDEN+ / HIDDEN+, the lift (this scene has none to show) and the tempo. Defaults to all

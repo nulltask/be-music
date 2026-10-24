@@ -82,6 +82,7 @@ export class PlaySessionState extends PlayPresentation {
   resolvedPlayChart: ResolvedChart | undefined;
   /** The `#RANDOM` / `#SWITCH` draws {@link resolvedChart} was resolved with; handed to the engine with it. */
   randomDraws: RandomDraws | undefined;
+  randomSeeds: { p1?: string; p2?: string } = {};
   /**
    * `seconds → beat` resolver that properly accounts for `#STOP` windows. During a STOP, this returns the same beat
    * across the window's duration so the playfield freezes in place. Without it the previous hand-rolled `currentBeat`

@@ -137,6 +137,12 @@ describe('resolvePlaySceneOptions: a single play', () => {
       bgaSize: PLAY_OPTIONS.bgaSize,
       scoreGraph: PLAY_OPTIONS.scoreGraph,
       hsFix: 'AVERAGE',
+      bpmGuide: false,
+      judgeTimingMs: 0,
+      normalHiSpeedLevel: 0,
+      classicHiSpeed: false,
+      judgeAlgorithm: 'combo',
+      longNoteModifier: 'OFF',
       hiddenSudden1P: 'SUDDEN',
       hiddenSudden2P: 'OFF',
       shutter: PLAY_OPTIONS.shutter,
@@ -210,7 +216,7 @@ describe('resolvePlaySceneOptions: a replay', () => {
       random2P: 'OFF',
       dpFlip: false,
       autoScratch1P: true,
-      autoScratch2P: false,
+      autoScratch2P: true,
       gauge: 'HARD',
     });
     expect(settings).not.toHaveProperty('judgeRuleset');
@@ -275,4 +281,20 @@ describe('resolvePlaySceneOptions: a course', () => {
     expect(settings).not.toHaveProperty('hiSpeedLocked');
     expect(stage).toEqual({ stage: { kind: 'nonstop' }, view: resolveCourseView(nonstopCourse, 0) });
   });
+});
+
+test('replay setup retains an explicitly unassisted DP side', () => {
+  const replay = rereplay();
+  replay.play.autoScratch1P = false;
+  replay.play.autoScratch2P = true;
+  const { settings } = resolvePlaySceneOptions(input({ replay }));
+  expect(settings.autoScratch1P).toBe(false);
+  expect(settings.autoScratch2P).toBe(true);
+});
+
+test('previous arrangement is forwarded without enabling replay input or replacing the live input mode', () => {
+  const fixedArrangement = rereplay();
+  const options = resolvePlaySceneOptions(input({ fixedArrangement }));
+  expect(options.settings.fixedArrangement).toBe(fixedArrangement);
+  expect(options.autoPlay).toBe(false);
 });

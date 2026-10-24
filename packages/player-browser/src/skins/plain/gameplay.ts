@@ -95,7 +95,9 @@ function drawLanes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
   // One judgement line per play side, so it never crosses the gap between the double-play banks.
   ctx.fillStyle = DANGER;
   for (const run of resolveLaneRuns(frame.lanes)) {
-    ctx.fillRect(run.left, frame.layout.playfield.judgementY, run.right - run.left, 2);
+    const side = frame.layout.lanes.find((lane) => lane.x >= run.left && lane.x < run.right)?.side ?? '1P';
+    const y = frame.layout.playfield.sides[side]?.judgementY ?? frame.layout.playfield.judgementY;
+    ctx.fillRect(run.left, y, run.right - run.left, 2);
   }
 }
 
@@ -134,7 +136,7 @@ function beamGradient(ctx: CanvasRenderingContext2D, top: number, bottom: number
  */
 function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
   for (const note of frame.longNotes) {
-    const alpha = note.state === 'dropped' ? DROPPED_LONG_NOTE_ALPHA : 1;
+    const alpha = (note.state === 'dropped' ? DROPPED_LONG_NOTE_ALPHA : 1) * (note.alpha ?? 1);
     const bodyTop = note.top - NOTE_HEIGHT;
     const bodyHeight = Math.max(1, note.bottom - note.top);
     ctx.fillStyle = NOTE_FILL[note.kind];
@@ -149,8 +151,10 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
     ctx.globalAlpha = 1;
   }
   for (const note of frame.notes) {
+    ctx.globalAlpha = note.alpha ?? 1;
     ctx.fillStyle = NOTE_FILL[note.kind];
     ctx.fillRect(note.x, note.y - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
+    ctx.globalAlpha = 1;
   }
 }
 
@@ -159,9 +163,9 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
  * from it, so a held note reads as held at a glance. Drawn from the hold's age alone, like every effect here.
  */
 function drawHolds(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
-  const y = frame.layout.playfield.judgementY;
   for (const lane of frame.lanes) {
     if (lane.holding !== true || lane.holdStartedAtMs === undefined) continue;
+    const y = lane.bottom;
     const ageMs = frame.nowMs - lane.holdStartedAtMs;
     const centerX = lane.x + lane.w / 2;
     ctx.fillStyle = HOLD_GLOW;
@@ -202,12 +206,13 @@ function drawJudgement(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFram
   for (const side of runtime.judgeSides ?? []) {
     if (!side.judge) continue;
     const bounds = layout.playfield.sides[side.side];
+    const sideY = y + ((bounds?.judgementY ?? layout.playfield.judgementY) - layout.playfield.judgementY);
     const x = bounds ? (bounds.left + bounds.right) / 2 : layout.playfield.centerX;
     const color = isFlashingGreat(side.judge) ? css(flashingGreatColor(nowMs, FLASHING_GREAT)) : judgeColor(side.judge);
-    text(ctx, judgeDisplayWord(side.judge), x, y, { size: 20, weight: 800, color, align: 'center' });
+    text(ctx, judgeDisplayWord(side.judge), x, sideY, { size: 20, weight: 800, color, align: 'center' });
     const combo = side.combo ?? 0;
     const keepsCombo = side.judge === 'PERFECT' || side.judge === 'GREAT' || side.judge === 'GOOD';
-    if (keepsCombo && combo > 0) text(ctx, String(combo), x, y + 24, { size: 16, align: 'center' });
+    if (keepsCombo && combo > 0) text(ctx, String(combo), x, sideY + 24, { size: 16, align: 'center' });
   }
 }
 
@@ -222,10 +227,16 @@ function drawHUD(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, wid
   const { runtime, nowMs } = frame;
 
   text(ctx, runtime.autoplay ? 'AUTO PLAY' : 'PLAY', MARGIN, 18, { size: 12, weight: 800, color: ACCENT });
-  text(ctx, `BPM ${Math.round(runtime.bpm ?? 0)}   SPEED x${(runtime.hiSpeed ?? 0).toFixed(1)}`, 110, 18, {
-    size: 12,
-    color: MUTED,
-  });
+  text(
+    ctx,
+    `BPM ${Math.round(runtime.bpm ?? 0)}   ${runtime.floatingHiSpeed ? 'FHS' : 'SPEED'} x${(runtime.hiSpeed ?? 0).toFixed(runtime.floatingHiSpeed ? 2 : 1)}`,
+    110,
+    18,
+    {
+      size: 12,
+      color: MUTED,
+    },
+  );
 
   // Gauge: a bar under the lanes with a tick at the clear line.
   drawGauge(ctx, runtime, MARGIN, 372, 240, 9);
@@ -311,7 +322,7 @@ function drawPortraitHUD(
   text(ctx, runtime.autoplay ? 'AUTO PLAY' : 'PLAY', header.left, headerY, { size: 12, weight: 800, color: ACCENT });
   text(
     ctx,
-    `BPM ${Math.round(runtime.bpm ?? 0)}   SPEED x${(runtime.hiSpeed ?? 0).toFixed(1)}`,
+    `BPM ${Math.round(runtime.bpm ?? 0)}   ${runtime.floatingHiSpeed ? 'FHS' : 'SPEED'} x${(runtime.hiSpeed ?? 0).toFixed(runtime.floatingHiSpeed ? 2 : 1)}`,
     header.right,
     headerY,
     {

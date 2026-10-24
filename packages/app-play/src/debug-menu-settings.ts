@@ -7,9 +7,12 @@ import { isGaugeType, isRulesetId } from '@be-music/player-engine/ruleset';
 import {
   DIFFICULTY_FILTER_CYCLE,
   KEYS_FILTER_CYCLE,
-  RANDOM_CYCLE,
+  PLAY_OPTION_CHOICES,
+  resolvePlayOptionValue,
+  clampShutter,
   SORT_CYCLE,
   snapHiSpeed,
+  clampFloatingHiSpeed,
   type BrowseSort,
   type DifficultyFilter,
   type KeysFilter,
@@ -60,8 +63,30 @@ export interface DebugMenuSettings {
   judgeRuleset: PlayerGUIState['judgeRuleset'];
   gauge: PlayerGUIState['gauge'];
   random1P: RandomMode;
+  hRandomThresholdBPM: number;
+  randomSeed1P: string;
+  randomSeed2P: string;
+  randomFixedLane1P: number;
+  randomFixedLane2P: number;
   random2P: RandomMode;
   dpFlip: boolean;
+  classicHiSpeed: boolean;
+  floatingHiSpeed: boolean;
+  fixedDisplayArea: boolean;
+  normalHiSpeedLevel: number;
+  judgeTimingMs: number;
+  visualConstant: boolean;
+  lift1P: number;
+  lift2P: number;
+  liftOn1P: boolean;
+  liftOn2P: boolean;
+  noteDurationMs: number;
+  constantFadeMs: number;
+  bpmGuide: boolean;
+  judgeAlgorithm: PlayerGUIState['judgeAlgorithm'];
+  longNoteModifier: PlayerGUIState['longNoteModifier'];
+  mineModifier: PlayerGUIState['mineModifier'];
+  gaugeAutoShift: PlayerGUIState['gaugeAutoShift'];
   autoScratch1P: boolean;
   autoScratch2P: boolean;
   sort: BrowseSort;
@@ -79,6 +104,12 @@ export interface DebugMenuSettings {
   tempoStretchAlgorithm: PlayTempoSettings['tempoStretchAlgorithm'];
   replayView: PlayerGUIState['replayView'];
   hiSpeed: number;
+  hsFix: PlayerGUIState['hsFix'];
+  displayAreaInfo: PlayerGUIState['displayAreaInfo'];
+  hiddenSudden1P: PlayerGUIState['hiddenSudden1P'];
+  hiddenSudden2P: PlayerGUIState['hiddenSudden2P'];
+  laneCover: PlayerGUIState['laneCover'];
+  shutter: PlayerGUIState['shutter'];
   builtInSkin: string;
   skinEffects: SkinEffects;
   renderResolution: number;
@@ -102,7 +133,7 @@ export interface DebugMenuSettingsDocument {
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
 
-const RANDOM_MODES: readonly RandomMode[] = [...RANDOM_CYCLE, 'SCATTER'];
+const RANDOM_MODES: readonly RandomMode[] = [...PLAY_OPTION_CHOICES.random1P!, 'SCATTER'];
 const SKIN_FAMILIES: readonly SkinFamilyOverride[] = ['auto', 'default', 'lr2', 'beatoraja'];
 const SKIN_EFFECTS: readonly SkinEffects[] = ['full', 'reduced', 'off'];
 const PLAY_LAYOUTS: readonly PlayLayout[] = ['auto', 'standard', 'touch'];
@@ -190,6 +221,23 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'courseAutoAdvance', booleanOf(raw.courseAutoAdvance));
   assign(settings, 'submitToLeaderboard', booleanOf(raw.submitToLeaderboard));
   assign(settings, 'dpFlip', booleanOf(raw.dpFlip));
+  assign(settings, 'bpmGuide', booleanOf(raw.bpmGuide));
+  assign(settings, 'visualConstant', booleanOf(raw.visualConstant));
+  assign(settings, 'lift1P', resolvePlayOptionValue('lift1P', raw.lift1P));
+  assign(settings, 'lift2P', resolvePlayOptionValue('lift2P', raw.lift2P));
+  assign(settings, 'liftOn1P', resolvePlayOptionValue('liftOn1P', raw.liftOn1P));
+  assign(settings, 'liftOn2P', resolvePlayOptionValue('liftOn2P', raw.liftOn2P));
+  assign(settings, 'noteDurationMs', resolvePlayOptionValue('noteDurationMs', raw.noteDurationMs));
+  assign(settings, 'constantFadeMs', resolvePlayOptionValue('constantFadeMs', raw.constantFadeMs));
+  assign(settings, 'judgeTimingMs', resolvePlayOptionValue('judgeTimingMs', raw.judgeTimingMs));
+  assign(settings, 'normalHiSpeedLevel', resolvePlayOptionValue('normalHiSpeedLevel', raw.normalHiSpeedLevel));
+  assign(settings, 'fixedDisplayArea', resolvePlayOptionValue('fixedDisplayArea', raw.fixedDisplayArea));
+  assign(settings, 'floatingHiSpeed', resolvePlayOptionValue('floatingHiSpeed', raw.floatingHiSpeed));
+  assign(settings, 'classicHiSpeed', booleanOf(raw.classicHiSpeed));
+  assign(settings, 'judgeAlgorithm', oneOf(raw.judgeAlgorithm, ['combo', 'duration', 'lowest'] as const));
+  assign(settings, 'gaugeAutoShift', resolvePlayOptionValue('gaugeAutoShift', raw.gaugeAutoShift));
+  assign(settings, 'mineModifier', resolvePlayOptionValue('mineModifier', raw.mineModifier));
+  assign(settings, 'longNoteModifier', oneOf(raw.longNoteModifier, ['OFF', 'LEGACY', 'REMOVE'] as const));
   assign(settings, 'autoScratch1P', booleanOf(raw.autoScratch1P));
   assign(settings, 'autoScratch2P', booleanOf(raw.autoScratch2P));
   assign(settings, 'playInSilentMode', booleanOf(raw.playInSilentMode));
@@ -200,12 +248,21 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'nonstopPlacement', oneOf(raw.nonstopPlacement, ['intended', 'lr2'] as const));
   assign(settings, 'judgeRuleset', isRulesetId(raw.judgeRuleset) ? raw.judgeRuleset : undefined);
   assign(settings, 'gauge', isGaugeType(raw.gauge) ? raw.gauge : undefined);
+  assign(settings, 'hRandomThresholdBPM', resolvePlayOptionValue('hRandomThresholdBPM', raw.hRandomThresholdBPM));
+  for (const key of ['randomFixedLane1P', 'randomFixedLane2P', 'randomSeed1P', 'randomSeed2P'] as const)
+    assign(settings, key, resolvePlayOptionValue(key, raw[key]));
   assign(settings, 'random1P', oneOf(raw.random1P, RANDOM_MODES));
   assign(settings, 'random2P', oneOf(raw.random2P, RANDOM_MODES));
   assign(settings, 'sort', oneOf(raw.sort, SORT_CYCLE));
   assign(settings, 'keysFilter', oneOf(raw.keysFilter, KEYS_FILTER_CYCLE));
   assign(settings, 'difficultyFilter', oneOf(raw.difficultyFilter, DIFFICULTY_FILTER_CYCLE));
   assign(settings, 'skinFamilyOverride', oneOf(raw.skinFamilyOverride, SKIN_FAMILIES));
+  assign(settings, 'hiddenSudden1P', oneOf(raw.hiddenSudden1P, PLAY_OPTION_CHOICES.hiddenSudden1P!));
+  assign(settings, 'hiddenSudden2P', oneOf(raw.hiddenSudden2P, PLAY_OPTION_CHOICES.hiddenSudden2P!));
+  assign(settings, 'laneCover', booleanOf(raw.laneCover));
+  if (typeof raw.shutter === 'number' && Number.isFinite(raw.shutter)) settings.shutter = clampShutter(raw.shutter);
+  assign(settings, 'displayAreaInfo', oneOf(raw.displayAreaInfo, PLAY_OPTION_CHOICES.displayAreaInfo!));
+  assign(settings, 'hsFix', oneOf(raw.hsFix, PLAY_OPTION_CHOICES.hsFix!));
   assign(settings, 'skinEffects', oneOf(raw.skinEffects, SKIN_EFFECTS));
   assign(settings, 'playLayout', oneOf(raw.playLayout, PLAY_LAYOUTS));
   assign(settings, 'tempoPitchMode', oneOf(raw.tempoPitchMode, ['pitch', 'keep-pitch'] as const));
@@ -218,7 +275,12 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
       JSON.stringify({ tempoPercent: raw.tempoPercent }),
     ).tempoPercent;
   }
-  if (typeof raw.hiSpeed === 'number') assign(settings, 'hiSpeed', snapHiSpeed(raw.hiSpeed));
+  if (typeof raw.hiSpeed === 'number')
+    assign(
+      settings,
+      'hiSpeed',
+      raw.floatingHiSpeed === true ? clampFloatingHiSpeed(raw.hiSpeed) : snapHiSpeed(raw.hiSpeed),
+    );
   if (
     typeof raw.bgaResizeMaxEdgePx === 'number' &&
     raw.bgaResizeMaxEdgePx >= 0 &&
@@ -365,8 +427,31 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('judgeRuleset');
   assignState('gauge');
   assignState('random1P');
+  assignState('hRandomThresholdBPM');
+  assignState('randomSeed1P');
+  assignState('randomSeed2P');
+  assignState('randomFixedLane1P');
+  assignState('randomFixedLane2P');
   assignState('random2P');
   assignState('dpFlip');
+  assignState('bpmGuide');
+  assignState('visualConstant');
+  assignState('noteDurationMs');
+  assignState('lift1P');
+  assignState('lift2P');
+  assignState('liftOn1P');
+  assignState('liftOn2P');
+
+  assignState('constantFadeMs');
+  assignState('judgeTimingMs');
+  assignState('normalHiSpeedLevel');
+  assignState('classicHiSpeed');
+  assignState('floatingHiSpeed');
+  assignState('fixedDisplayArea');
+  assignState('judgeAlgorithm');
+  assignState('longNoteModifier');
+  assignState('mineModifier');
+  assignState('gaugeAutoShift');
   assignState('autoScratch1P');
   assignState('autoScratch2P');
   assignState('sort');
@@ -384,6 +469,12 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('tempoStretchAlgorithm');
   assignState('replayView');
   assignState('hiSpeed');
+  assignState('hsFix');
+  assignState('displayAreaInfo');
+  assignState('hiddenSudden1P');
+  assignState('hiddenSudden2P');
+  assignState('laneCover');
+  assignState('shutter');
   assignState('builtInSkin');
   assignState('skinEffects');
   assignState('renderResolution');
@@ -422,8 +513,31 @@ export function captureDebugMenuSettings(
     judgeRuleset: state.judgeRuleset,
     gauge: state.gauge,
     random1P: state.random1P,
+    hRandomThresholdBPM: state.hRandomThresholdBPM,
+    randomSeed1P: state.randomSeed1P,
+    randomSeed2P: state.randomSeed2P,
+    randomFixedLane1P: state.randomFixedLane1P,
+    randomFixedLane2P: state.randomFixedLane2P,
     random2P: state.random2P,
     dpFlip: state.dpFlip,
+    bpmGuide: state.bpmGuide,
+    visualConstant: state.visualConstant,
+    noteDurationMs: state.noteDurationMs,
+    lift1P: state.lift1P,
+    lift2P: state.lift2P,
+    liftOn1P: state.liftOn1P,
+    liftOn2P: state.liftOn2P,
+
+    constantFadeMs: state.constantFadeMs,
+    judgeTimingMs: state.judgeTimingMs,
+    normalHiSpeedLevel: state.normalHiSpeedLevel,
+    classicHiSpeed: state.classicHiSpeed,
+    floatingHiSpeed: state.floatingHiSpeed,
+    fixedDisplayArea: state.fixedDisplayArea,
+    judgeAlgorithm: state.judgeAlgorithm,
+    longNoteModifier: state.longNoteModifier,
+    mineModifier: state.mineModifier,
+    gaugeAutoShift: state.gaugeAutoShift,
     autoScratch1P: state.autoScratch1P,
     autoScratch2P: state.autoScratch2P,
     sort: state.sort,
@@ -441,6 +555,12 @@ export function captureDebugMenuSettings(
     tempoStretchAlgorithm: state.tempoStretchAlgorithm,
     replayView: { ...state.replayView },
     hiSpeed: state.hiSpeed,
+    hsFix: state.hsFix,
+    displayAreaInfo: state.displayAreaInfo,
+    hiddenSudden1P: state.hiddenSudden1P,
+    hiddenSudden2P: state.hiddenSudden2P,
+    laneCover: state.laneCover,
+    shutter: state.shutter,
     builtInSkin: state.builtInSkin,
     skinEffects: state.skinEffects,
     renderResolution: state.renderResolution,

@@ -7,7 +7,7 @@ import type { PlayerSummary } from '../core/engine.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
 import { resolveLaneDisplayMode } from '../core/lane-layout.ts';
 import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts';
-import { BE_MUSIC_REPLAY_FORMAT, BE_MUSIC_REPLAY_VERSION } from './format.ts';
+import { parseReplay, BE_MUSIC_REPLAY_FORMAT, BE_MUSIC_REPLAY_VERSION } from './format.ts';
 import {
   createReplayRecorder,
   REPLAY_NATIVE_RULESET_ID,
@@ -509,4 +509,40 @@ test('discard stops all recording and rejects finalization', () => {
   recorder.recordViewChange(2, { hiSpeed: 2 });
   recorder.recordTempoChange(2, 2);
   expect(() => recorder.finalize({ summary: makeSummary() })).toThrow('discarded practice replay');
+});
+
+test('snapshots all selected options and records changes on the chart clock independently of ranking', () => {
+  const options = makeRecorderOptions();
+  options.play.options = { hsFix: 'STARTBPM', hiSpeed: 2, autoScratch1P: true, displayAreaInfo: 'ON' };
+  const recorder = createReplayRecorder(options);
+  options.play.options.hiSpeed = 9;
+  recorder.recordOptionChange(1, { hiSpeed: 3 });
+  recorder.recordOptionChange(1, { hiSpeed: 3 });
+  recorder.recordOptionChange(1, { displayAreaInfo: 'OFF' });
+  recorder.recordOptionChange(2, { hiSpeed: 4 });
+  expect(() => recorder.recordOptionChange(0, { hiSpeed: 5 })).toThrow(/chart times/);
+  const replay = recorder.finalize({ summary: makeSummary() });
+  expect(replay.play.options).toEqual({ hsFix: 'STARTBPM', hiSpeed: 2, autoScratch1P: true, displayAreaInfo: 'ON' });
+  expect(replay.play.optionChanges).toEqual([
+    { timeUs: 1_000_000, values: { hiSpeed: 3 } },
+    { timeUs: 1_000_000, values: { displayAreaInfo: 'OFF' } },
+    { timeUs: 2_000_000, values: { hiSpeed: 4 } },
+  ]);
+  expect(parseReplay(JSON.parse(JSON.stringify(replay))).play.optionChanges).toEqual(replay.play.optionChanges);
+});
+
+test('records original lanes only when an arrangement moves a note, retaining source events', () => {
+  const options = makeRecorderOptions();
+  const first = playable('11', 1),
+    second = playable('12', 1);
+  first.channel = '12';
+  second.channel = '11';
+  options.chart.notes = [first, second];
+  const replay = createReplayRecorder(options).finalize({ summary: makeSummary() });
+  expect(replay.chart.notes.filter((note) => note.type === 'normal')).toEqual([
+    expect.objectContaining({ channel: '11', sourceChannel: '12' }),
+    expect.objectContaining({ channel: '12', sourceChannel: '11' }),
+  ]);
+  expect(first.event.channel).toBe('11');
+  expect(second.event.channel).toBe('12');
 });

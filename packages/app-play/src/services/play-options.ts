@@ -1,6 +1,7 @@
+import type { BeMusicReplay } from '@be-music/player-engine/replay';
 // The play options the player hands to every screen and play: the full `PlayOptions`, kept here rather than read back
 // from the select screen. The Debug Menu holds some of them itself (auto play, gauge, lane options, assists, sort and
-// filters, hi-speed); the rest (HS-FIX, HIDDEN / SUDDEN, the lane cover, BGA, the score graph, the 2P gauge) are only
+// filters, hi-speed and covers); the rest (BGA, the score graph and the 2P gauge) are only
 // changed on a select screen, and live here between screens, so a select screen made again (another skin system or
 // theme) starts from them.
 
@@ -12,15 +13,43 @@ export type GUIPlayOptions = Pick<
   PlayerGUIState,
   | 'autoPlay'
   | 'gauge'
+  | 'hRandomThresholdBPM'
+  | 'randomSeed1P'
+  | 'randomSeed2P'
+  | 'randomFixedLane1P'
+  | 'randomFixedLane2P'
   | 'random1P'
   | 'random2P'
   | 'dpFlip'
+  | 'bpmGuide'
+  | 'visualConstant'
+  | 'lift1P'
+  | 'lift2P'
+  | 'liftOn1P'
+  | 'liftOn2P'
+  | 'noteDurationMs'
+  | 'constantFadeMs'
+  | 'judgeTimingMs'
+  | 'normalHiSpeedLevel'
+  | 'classicHiSpeed'
+  | 'floatingHiSpeed'
+  | 'fixedDisplayArea'
+  | 'judgeAlgorithm'
+  | 'mineModifier'
+  | 'gaugeAutoShift'
+  | 'longNoteModifier'
   | 'autoScratch1P'
   | 'autoScratch2P'
   | 'sort'
   | 'keysFilter'
   | 'difficultyFilter'
   | 'hiSpeed'
+  | 'hsFix'
+  | 'displayAreaInfo'
+  | 'hiddenSudden1P'
+  | 'hiddenSudden2P'
+  | 'laneCover'
+  | 'shutter'
 >;
 
 /** The Debug Menu's play options as `PlayOptions` fields. */
@@ -29,14 +58,43 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     autoPlay: state.autoPlay,
     gauge1P: state.gauge,
     random1P: state.random1P,
+    hRandomThresholdBPM: state.hRandomThresholdBPM,
+    randomSeed1P: state.randomSeed1P,
+    randomSeed2P: state.randomSeed2P,
+    randomFixedLane1P: state.randomFixedLane1P,
+    randomFixedLane2P: state.randomFixedLane2P,
     random2P: state.random2P,
     dpFlip: state.dpFlip,
+    bpmGuide: state.bpmGuide,
+    visualConstant: state.visualConstant,
+    noteDurationMs: state.noteDurationMs,
+    lift1P: state.lift1P,
+    lift2P: state.lift2P,
+    liftOn1P: state.liftOn1P,
+    liftOn2P: state.liftOn2P,
+
+    constantFadeMs: state.constantFadeMs,
+    judgeTimingMs: state.judgeTimingMs,
+    normalHiSpeedLevel: state.normalHiSpeedLevel,
+    classicHiSpeed: state.classicHiSpeed,
+    floatingHiSpeed: state.floatingHiSpeed,
+    fixedDisplayArea: state.fixedDisplayArea,
+    judgeAlgorithm: state.judgeAlgorithm,
+    longNoteModifier: state.longNoteModifier,
+    mineModifier: state.mineModifier,
+    gaugeAutoShift: state.gaugeAutoShift,
     autoScratch1P: state.autoScratch1P,
     autoScratch2P: state.autoScratch2P,
     sort: state.sort,
     keysFilter: state.keysFilter,
     difficultyFilter: state.difficultyFilter,
     hiSpeed: state.hiSpeed,
+    hsFix: state.hsFix,
+    displayAreaInfo: state.displayAreaInfo,
+    hiddenSudden1P: state.hiddenSudden1P,
+    hiddenSudden2P: state.hiddenSudden2P,
+    laneCover: state.laneCover,
+    shutter: state.shutter,
   };
 }
 
@@ -45,11 +103,40 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
  * agree. The hi-speed is left to the caller, which also remembers it for the next visit.
  */
 export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIPlayOptions): void {
+  state.hsFix = options.hsFix;
+  state.displayAreaInfo = options.displayAreaInfo;
+  state.hiddenSudden1P = options.hiddenSudden1P;
+  state.hiddenSudden2P = options.hiddenSudden2P;
+  state.laneCover = options.laneCover;
+  state.shutter = options.shutter;
   state.autoPlay = options.autoPlay;
   state.gauge = options.gauge1P;
   state.random1P = options.random1P;
+  state.hRandomThresholdBPM = options.hRandomThresholdBPM;
+  state.randomSeed1P = options.randomSeed1P;
+  state.randomSeed2P = options.randomSeed2P;
+  state.randomFixedLane1P = options.randomFixedLane1P;
+  state.randomFixedLane2P = options.randomFixedLane2P;
   state.random2P = options.random2P;
   state.dpFlip = options.dpFlip;
+  state.bpmGuide = options.bpmGuide;
+  state.visualConstant = options.visualConstant;
+  state.noteDurationMs = options.noteDurationMs;
+  state.lift1P = options.lift1P;
+  state.lift2P = options.lift2P;
+  state.liftOn1P = options.liftOn1P;
+  state.liftOn2P = options.liftOn2P;
+
+  state.constantFadeMs = options.constantFadeMs;
+  state.judgeTimingMs = options.judgeTimingMs;
+  state.normalHiSpeedLevel = options.normalHiSpeedLevel;
+  state.classicHiSpeed = options.classicHiSpeed;
+  state.floatingHiSpeed = options.floatingHiSpeed;
+  state.fixedDisplayArea = options.fixedDisplayArea;
+  state.judgeAlgorithm = options.judgeAlgorithm;
+  state.longNoteModifier = options.longNoteModifier;
+  state.mineModifier = options.mineModifier;
+  state.gaugeAutoShift = options.gaugeAutoShift;
   state.autoScratch1P = options.autoScratch1P;
   state.autoScratch2P = options.autoScratch2P;
   state.sort = options.sort;
@@ -64,6 +151,44 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
  */
 export class PlayOptionsService {
   private options: PlayOptions;
+  private previousArrangement: { chartId: string; replay: Pick<BeMusicReplay, 'chart' | 'play'> } | undefined;
+  private fixedArrangement: { chartId: string; replay: Pick<BeMusicReplay, 'chart' | 'play'> } | undefined;
+
+  /** Retain the previous beatoraja play's exact arrangement, including source control-flow draws. */
+  public rememberArrangement(chartId: string, replay: BeMusicReplay | undefined): void {
+    if (replay?.play.judgeRuleset !== 'beatoraja') return;
+    this.previousArrangement = { chartId, replay: structuredClone({ chart: replay.chart, play: replay.play }) };
+  }
+
+  /** Pin the previous layout for a fresh play on the same chart; no recorded inputs are replayed. */
+  public reusePreviousArrangement(): Partial<PlayOptions> | undefined {
+    const previous = this.previousArrangement;
+    if (!previous) return undefined;
+    const play = previous.replay.play;
+    const source = resolvePlayOptions({
+      ...play.options,
+      random1P: play.randomLane?.p1 ?? play.options?.random1P,
+      random2P: play.randomLane?.p2 ?? play.options?.random2P,
+      dpFlip: play.dpFlip ?? play.options?.dpFlip,
+      longNoteModifier: play.longNoteModifier ?? play.options?.longNoteModifier,
+      mineModifier: play.mineModifier ?? play.options?.mineModifier,
+    });
+    const changes: Partial<PlayOptions> = {};
+    for (const key of ARRANGEMENT_OPTIONS) Object.assign(changes, { [key]: source[key] });
+    this.update(changes);
+    this.fixedArrangement = structuredClone(previous);
+    return changes;
+  }
+
+  /** Stop pinning the previous layout; explicit seed settings still apply. */
+  public clearArrangement(): void {
+    this.fixedArrangement = undefined;
+  }
+
+  /** A chart-specific copy prevents a reused layout from leaking to another chart. */
+  public arrangementFor(chartId: string): Pick<BeMusicReplay, 'chart' | 'play'> | undefined {
+    return this.fixedArrangement?.chartId === chartId ? structuredClone(this.fixedArrangement.replay) : undefined;
+  }
 
   public constructor(initial: Readonly<Partial<PlayOptions>> = {}) {
     this.options = resolvePlayOptions(initial);
@@ -79,6 +204,21 @@ export class PlayOptionsService {
    * on the select screen.
    */
   public update(changes: Readonly<Partial<PlayOptions>>): void {
-    this.options = resolvePlayOptions({ ...this.options, ...changes });
+    const next = resolvePlayOptions({ ...this.options, ...changes });
+    if (ARRANGEMENT_OPTIONS.some((key) => next[key] !== this.options[key])) this.clearArrangement();
+    this.options = next;
   }
 }
+
+const ARRANGEMENT_OPTIONS = [
+  'random1P',
+  'random2P',
+  'randomSeed1P',
+  'randomSeed2P',
+  'randomFixedLane1P',
+  'randomFixedLane2P',
+  'dpFlip',
+  'hRandomThresholdBPM',
+  'longNoteModifier',
+  'mineModifier',
+] as const satisfies readonly (keyof PlayOptions)[];

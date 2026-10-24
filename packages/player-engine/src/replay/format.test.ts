@@ -441,3 +441,124 @@ test('replay round-trip preserves mixed NONSTOP rank units and absolute TOTAL', 
     }),
   ).toThrow(/stageRanks/);
 });
+
+test('preserves independent AUTO SCRATCH sides and rejects non-boolean switches', () => {
+  const replay = makeReplay();
+  replay.play.autoScratch1P = false;
+  replay.play.autoScratch2P = true;
+  expect(parseReplay(serializeReplay(replay)).play).toMatchObject({
+    autoScratch: true,
+    autoScratch1P: false,
+    autoScratch2P: true,
+  });
+  for (const key of ['autoScratch1P', 'autoScratch2P']) {
+    const invalid = JSON.parse(serializeReplay(replay));
+    invalid.play[key] = 1;
+    expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
+  }
+});
+
+test('round-trips source long-note modifiers and rejects unknown variants', () => {
+  for (const longNoteModifier of ['OFF', 'LEGACY', 'REMOVE'] as const) {
+    const replay = makeReplay();
+    replay.play.longNoteModifier = longNoteModifier;
+    expect(parseReplay(serializeReplay(replay)).play.longNoteModifier).toBe(longNoteModifier);
+  }
+  const invalid = JSON.parse(serializeReplay(makeReplay()));
+  invalid.play.longNoteModifier = 'CUSTOM';
+  expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
+});
+
+test('records EX-HARD independently of DEATH', () => {
+  for (const gauge of ['EX-HARD', 'DEATH'] as const) {
+    const replay = makeReplay();
+    replay.play.gauge = gauge;
+    expect(parseReplay(serializeReplay(replay)).play.gauge).toBe(gauge);
+  }
+});
+
+test('round-trips the ASSIST EASY gauge without an AUTO SCRATCH flag', () => {
+  const replay = makeReplay();
+  replay.play.gauge = 'ASSIST-EASY';
+  replay.play.autoScratch = false;
+  expect(parseReplay(serializeReplay(replay)).play).toMatchObject({ gauge: 'ASSIST-EASY', autoScratch: false });
+});
+
+test('round-trips confirmed beatoraja algorithms and rejects the internal Score variant', () => {
+  for (const judgeAlgorithm of ['combo', 'duration', 'lowest'] as const) {
+    const replay = makeReplay();
+    replay.play.judgeAlgorithm = judgeAlgorithm;
+    expect(parseReplay(serializeReplay(replay)).play.judgeAlgorithm).toBe(judgeAlgorithm);
+  }
+  const invalid = JSON.parse(serializeReplay(makeReplay()));
+  invalid.play.judgeAlgorithm = 'score';
+  expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
+});
+
+test('round-trips resolved BPM extrema and rejects invalid ranges', () => {
+  const replay = makeReplay();
+  replay.chart.bpmRange = { min: 120, max: 240 };
+  replay.chart.headerBPM = 150;
+  expect(parseReplay(serializeReplay(replay)).chart.bpmRange).toEqual({ min: 120, max: 240 });
+  expect(parseReplay(serializeReplay(replay)).chart.headerBPM).toBe(150);
+  for (const bpmRange of [{ min: 240, max: 120 }, { min: null, max: 240 }, { max: 240 }]) {
+    const invalid = JSON.parse(serializeReplay(replay));
+    invalid.chart.bpmRange = bpmRange;
+    expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
+  }
+});
+
+test('mine modifiers and actual change counts round-trip with strict validation', () => {
+  const replay = makeReplay();
+  replay.play.mineModifier = 'REMOVE';
+  replay.play.mineModifierChangeCount = 0;
+  expect(parseReplay(serializeReplay(replay)).play).toMatchObject({
+    mineModifier: 'REMOVE',
+    mineModifierChangeCount: 0,
+  });
+  expect(() => parseReplay(JSON.stringify({ ...replay, play: { ...replay.play, mineModifier: 'HIDE' } }))).toThrow(
+    ReplayParseError,
+  );
+  for (const mineModifierChangeCount of [-1, 0.5, '1'])
+    expect(() => parseReplay(JSON.stringify({ ...replay, play: { ...replay.play, mineModifierChangeCount } }))).toThrow(
+      ReplayParseError,
+    );
+});
+
+test.each(['ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'] as const)(
+  '%s and silent mine flags round-trip with type validation',
+  (mode) => {
+    const replay = makeReplay();
+    replay.play.mineModifier = mode;
+    replay.chart.notes.push({ id: 999, channel: '16', type: 'mine', timeUs: 0, damage: 10, silent: true });
+    const parsed = parseReplay(serializeReplay(replay));
+    expect(parsed.play.mineModifier).toBe(mode);
+    expect(parsed.chart.notes.at(-1)?.silent).toBe(true);
+    replay.chart.notes.at(-1)!.type = 'normal';
+    expect(() => parseReplay(serializeReplay(replay))).toThrow(ReplayParseError);
+  },
+);
+
+test.each(['NONE', 'CONTINUE'] as const)(
+  'gauge policy %s round-trips and rejects unknown policies',
+  (gaugeAutoShift) => {
+    const replay = makeReplay();
+    replay.play.gaugeAutoShift = gaugeAutoShift;
+    expect(parseReplay(serializeReplay(replay)).play.gaugeAutoShift).toBe(gaugeAutoShift);
+    expect(() =>
+      parseReplay(JSON.stringify({ ...replay, play: { ...replay.play, gaugeAutoShift: 'REVIVE' } })),
+    ).toThrow(ReplayParseError);
+  },
+);
+
+test('replay original lanes round-trip and reject malformed source identifiers', () => {
+  const replay = makeReplay();
+  replay.chart.notes[0]!.sourceChannel = '11';
+  expect(parseReplay(serializeReplay(replay)).chart.notes[0]!.sourceChannel).toBe('11');
+  for (const sourceChannel of ['D1', '1a', '111', 11, null])
+    expect(() =>
+      parseReplay(
+        JSON.stringify({ ...replay, chart: { ...replay.chart, notes: [{ ...replay.chart.notes[0], sourceChannel }] } }),
+      ),
+    ).toThrow(ReplayParseError);
+});

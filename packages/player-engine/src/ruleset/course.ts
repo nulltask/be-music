@@ -162,6 +162,7 @@ export function resolveCourseGaugeId(rulesetId: RulesetId, kind: RulesetCourseKi
   switch (selectedGauge) {
     case 'HARD':
       return 'EXCLASS';
+    case 'EX-HARD':
     case 'DEATH':
       return 'EXHARDCLASS';
     default:

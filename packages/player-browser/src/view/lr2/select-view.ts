@@ -1,3 +1,4 @@
+import { LR2_GAUGE_TYPES } from '@be-music/player-engine/ruleset';
 /**
  * The LR2 family's select view: an LR2 select skin's `#SRC_*` / `#DST_*` frame, its bar list (`#SRC_BAR_BODY` slots
  * around `#BAR_CENTER`, drawn by `select-bars.ts`), buttons, panels, sliders, numbers, texts and mouse cursor, over the
@@ -33,7 +34,7 @@ import {
   type LR2SelectState,
   type LR2TimerUpdate,
 } from '@be-music/skin-lr2/state';
-import type { LibraryChart, LibraryEntry } from '@be-music/player-scene-model';
+import { HS_FIX_CYCLE, nextChoice, type LibraryChart, type LibraryEntry } from '@be-music/player-scene-model';
 import type { BrowserChartCollection } from '../../collection/types.ts';
 import { COURSE_NAME_PROMPT } from '../../collection/course-maker.ts';
 import { hasReadtextForChart } from '../../collection/readtext.ts';
@@ -681,6 +682,22 @@ export class LR2SelectView implements SelectView {
         emit({ type: 'play-option', key: 'hiSpeed', step: button.plusOnly === -1 ? -1 : 1 });
         return;
       case 'cycle-option':
+        if (action.option === 'gauge1P' || action.option === 'gauge2P') {
+          emit({
+            type: 'set-play-option',
+            key: action.option,
+            value: nextChoice(LR2_GAUGE_TYPES, this.frame?.playOptions[action.option] ?? 'GROOVE'),
+          });
+          return;
+        }
+        if (action.option === 'hsFix') {
+          emit({
+            type: 'set-play-option',
+            key: 'hsFix',
+            value: nextChoice(HS_FIX_CYCLE, this.frame?.playOptions.hsFix ?? 'OFF'),
+          });
+          return;
+        }
         emit({ type: 'play-option', key: action.option, step: 1 });
         return;
       case 'set-difficulty-filter':

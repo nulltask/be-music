@@ -211,6 +211,12 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
     },
   });
 
+  define('player-scene-model.resolveRandomModes', {
+    run: () => {
+      sceneModelAPI.resolveRandomModes('beatoraja');
+    },
+  });
+
   // Play options
   define('player-scene-model.clampHiSpeed', {
     run: () => {
@@ -246,6 +252,90 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
   define('player-scene-model.resolvePlayOptions', {
     run: () => {
       sceneModelAPI.resolvePlayOptions({ hiSpeed: 3.25, random1P: 'MIRROR', gauge1P: 'BOGUS' });
+    },
+  });
+  define('player-scene-model.resolveLiftedLane', {
+    run: () => {
+      sceneModelAPI.resolveLiftedLane({ top: 0, bottom: 480 }, 0.2);
+      sceneModelAPI.resolveLiftedLane({ top: 0, bottom: 723 }, 100 / 723, false);
+    },
+  });
+  define('player-scene-model.resolveConstantVisibility', {
+    run: () => {
+      sceneModelAPI.resolveConstantVisibility({ enabled: true, durationMs: 500, fadeMs: -100 });
+    },
+  });
+  define('player-scene-model.resolveConstantAlpha', {
+    run: () => {
+      sceneModelAPI.resolveConstantAlpha(2.55, 2, { enabled: true, durationMs: 500, fadeMs: 100 });
+    },
+  });
+  define('player-scene-model.clampJudgeTimingMs', {
+    run: () => {
+      sceneModelAPI.clampJudgeTimingMs(125);
+    },
+  });
+  define('player-scene-model.resolveNoteDisplaySeconds', {
+    run: () => {
+      sceneModelAPI.resolveNoteDisplaySeconds(2, 125);
+    },
+  });
+  define('player-scene-model.normalizeFloatingLaneCover', {
+    run() {
+      sceneModelAPI.normalizeFloatingLaneCover({
+        side: '1P',
+        sudden: 0.25,
+        suddenOn: true,
+        hidden: 0,
+        hiddenOn: false,
+        lift: 0.1,
+        liftOn: true,
+      });
+    },
+  });
+  define('player-scene-model.clampFloatingHiSpeed', {
+    run() {
+      sceneModelAPI.clampFloatingHiSpeed(2.1);
+    },
+  });
+  define('player-scene-model.captureFloatingHiSpeed', {
+    run() {
+      sceneModelAPI.captureFloatingHiSpeed(2, 120, 0.75);
+    },
+  });
+  define('player-scene-model.resolveFloatingHiSpeed', {
+    run() {
+      sceneModelAPI.resolveFloatingHiSpeed({ hiSpeed: 2, bpm: 120, visibleFraction: 0.75 }, 240, 0.5);
+    },
+  });
+  define('player-scene-model.stepFloatingHiSpeed', {
+    run() {
+      sceneModelAPI.stepFloatingHiSpeed(2, 1, true);
+    },
+  });
+  define('player-scene-model.resolveFloatingHiSpeedExit', {
+    run() {
+      sceneModelAPI.resolveFloatingHiSpeedExit(2.875, 120, true);
+    },
+  });
+  define('player-scene-model.resolveNormalHiSpeed', {
+    run: () => {
+      sceneModelAPI.resolveNormalHiSpeed(3, 120);
+    },
+  });
+  define('player-scene-model.resolveNormalHiSpeedLevel', {
+    run: () => {
+      sceneModelAPI.resolveNormalHiSpeedLevel(2, 120);
+    },
+  });
+  define('player-scene-model.snapClassicHiSpeed', {
+    run: () => {
+      sceneModelAPI.snapClassicHiSpeed(2.3);
+    },
+  });
+  define('player-scene-model.stepClassicHiSpeed', {
+    run: () => {
+      sceneModelAPI.stepClassicHiSpeed(2, 1);
     },
   });
   define('player-scene-model.snapHiSpeed', {
@@ -285,6 +375,7 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
   define('player-scene-model.resolveHSFixMultiplier', {
     run: () => {
       sceneModelAPI.resolveHSFixMultiplier('MAXBPM', BENCH_HS_FIX_TEMPO);
+      sceneModelAPI.resolveHSFixMultiplier('STARTBPM', { ...BENCH_HS_FIX_TEMPO, startBPM: 180 });
     },
   });
   define('player-scene-model.createHiSpeedState', {

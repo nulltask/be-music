@@ -20,6 +20,7 @@ const LAMP_OP_INDICES = new Map(
 );
 const HS_FIX_INDICES: Readonly<Record<PlayOptions['hsFix'], number>> = {
   OFF: 0,
+  STARTBPM: 1,
   MAXBPM: 2,
   MINBPM: 4,
   AVERAGE: 3,

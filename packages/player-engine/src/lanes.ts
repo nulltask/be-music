@@ -24,4 +24,29 @@ export {
   type LaneModeOptions,
 } from './core/lane-layout.ts';
 
-export { randomizeSRandomNotes, type SRandomNote, type SRandomOptions } from './lane-random.ts';
+export {
+  randomizeHRandomNotes,
+  randomizeAllScratchNotes,
+  randomizePMSConvergeNotes,
+  randomizePMSPlayableNotes,
+  clampHRandomThresholdBPM,
+  randomizeSpiralNotes,
+  randomizeSRandomNotes,
+  type SRandomNote,
+  type SRandomOptions,
+} from './lane-random.ts';
+
+export { resolveAutoScratchSides, resolveAutoScratchChannels, type AutoScratchOptions } from './core/auto-scratch.ts';
+
+export { randomizeLR2ConvergeNotes } from './lane-converge.ts';
+
+export { randomizePMSPlayableLanes } from './lane-pms-random.ts';
+
+export {
+  createBeatorajaLaneRandom,
+  parseLaneRandomSeed,
+  drawLaneRandomIndex,
+  type LaneRandomSource,
+} from './lane-random-source.ts';
+
+export { prepareMineModifier, type MineModifier, type MinePlacement } from './core/mine-modifier.ts';

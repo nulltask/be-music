@@ -167,6 +167,24 @@ export class ChildPool {
     return text;
   }
 
+  /** Multiply the opacity of only the objects acquired by this draw, preserving their authored alpha. */
+  public withAlpha(alpha: number, draw: () => void): void {
+    if (alpha === 1) {
+      draw();
+      return;
+    }
+    const sprites = this.spriteCursor;
+    const graphics = this.graphicsCursor;
+    const texts = this.textCursor;
+    try {
+      draw();
+    } finally {
+      for (let i = sprites; i < this.spriteCursor; i += 1) this.sprites[i]!.alpha *= alpha;
+      for (let i = graphics; i < this.graphicsCursor; i += 1) this.graphics[i]!.alpha *= alpha;
+      for (let i = texts; i < this.textCursor; i += 1) this.texts[i]!.alpha *= alpha;
+    }
+  }
+
   /**
    * Hides every pooled child the current pass didn't acquire, and idle-decay-shrinks each bucket whose high-water
    * mark hasn't been touched recently. Call once at the bottom of every render pass.

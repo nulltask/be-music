@@ -1,3 +1,6 @@
+import { collectBPMGuideEvents } from '../../chart/bpm-guide.ts';
+import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
+import { resolveWhiteNumber, resolveLaneCover } from '@be-music/player-scene-model';
 /**
  * The beatoraja family's play screen: a beatoraja play skin (`play_<variant>`) drawn by `BeatorajaPlaySkinView` with the
  * play's notes, lane markers and BGA spliced in where the skin authors them (`BeatorajaPlayStage`), its canvas fitted
@@ -25,7 +28,11 @@ import {
 } from '@be-music/skin-beatoraja';
 import { resolveBeatorajaOptionIndex, withBeatorajaCourseStageOps } from '@be-music/skin-beatoraja/scene';
 import type { BeMusicJSON } from '@be-music/chart-source';
-import { resolveChartLongNoteMode, type ChartPlayVariant } from '@be-music/chart-model';
+import {
+  createBeatAtSecondsResolverFromTimingResolver,
+  resolveChartLongNoteMode,
+  type ChartPlayVariant,
+} from '@be-music/chart-model';
 import type { PlayerGaugeSummary, PlayerUIFrameNote, PlayerUIFramePayload } from '@be-music/player-engine/signals';
 import type { ScoreSummary } from '@be-music/player-engine/ruleset';
 import type { CourseView, HiSpeedTransition, LibraryChart, PlayState } from '@be-music/player-scene-model';
@@ -125,7 +132,12 @@ export interface BeatorajaPlayRuntime {
   readonly chart: LibraryChart | undefined;
   /** The chart as the play plays it (its `#RANDOM` branches drawn), before DP FLIP. */
   readonly resolvedChart: BeMusicJSON | undefined;
-  readonly resolvedPlayChart: { readonly reversal?: BeatorajaPlayChartLayout['reversal'] } | undefined;
+  readonly resolvedPlayChart:
+    | {
+        readonly timing?: import('@be-music/chart-model').TimingResolver;
+        readonly reversal?: BeatorajaPlayChartLayout['reversal'];
+      }
+    | undefined;
   readonly chartPlayVariant: ChartPlayVariant;
   readonly notes: readonly PlayerUIFrameNote[];
   readonly mineNotes: readonly PlayerUIFrameNote[];
@@ -187,6 +199,7 @@ interface PreparedChart {
 
 /** The beatoraja play view. See the module comment. */
 export class BeatorajaPlayView implements PlayView {
+  private readonly displayInfo = new DisplayAreaInfoOverlay();
   public readonly family = 'beatoraja' as const;
   public readonly root: Container = new Container();
   public readonly timing: PlayViewTiming;
@@ -271,6 +284,7 @@ export class BeatorajaPlayView implements PlayView {
     const scrollMapper = createBeatorajaScrollMapper(chart);
     const laneTimelines = scrollMapper !== undefined ? createBeatorajaLaneTimelines(chart) : undefined;
     const timeMarkers = normalizeBeatorajaNote(skin.note).time.length > 0;
+    const guideEvents = play.resolvedPlayChart?.timing ? collectBPMGuideEvents(play.resolvedPlayChart.timing) : [];
     this.prepared = {
       chart,
       analysis: computeBeatorajaChartNoteDistribution(chart),
@@ -279,13 +293,21 @@ export class BeatorajaPlayView implements PlayView {
         variant: play.chartPlayVariant,
         scrollMapper,
         timelineBeats: laneTimelines?.beats,
-        beatToSeconds: laneTimelines?.beatToSeconds,
+        beatToSeconds: laneTimelines?.beatToSeconds ?? play.resolvedPlayChart?.timing?.beatToSeconds,
+        beatAtSeconds: play.resolvedPlayChart?.timing
+          ? createBeatAtSecondsResolverFromTimingResolver(play.resolvedPlayChart.timing)
+          : undefined,
         reversal: play.resolvedPlayChart?.reversal,
         // One-second time ticks when the skin authors `time[]` markers.
-        markers: computeBeatorajaChartMarkers(chart, {
-          timeIntervalSec: timeMarkers ? 1 : undefined,
-          totalSeconds: undefined,
-        }),
+        markers: {
+          ...computeBeatorajaChartMarkers(chart, {
+            timeIntervalSec: timeMarkers ? 1 : undefined,
+            totalSeconds: undefined,
+          }),
+          bpm: guideEvents.filter((event) => event.kind === 'bpm').map((event) => event.beat),
+          stop: guideEvents.filter((event) => event.kind === 'stop').map((event) => event.beat),
+        },
+        guideEvents,
         autoPlay: this.options.autoPlay === true,
       },
     };
@@ -406,9 +428,11 @@ export class BeatorajaPlayView implements PlayView {
     this.emit = emit;
     if (typeof window !== 'undefined') window.addEventListener('wheel', this.handleWheel, { passive: false });
     this.touchLanes.attach(host, emit);
+    if (this.stage) this.displayInfo.attachCanvas(this.stage.canvas);
   }
 
   public detach(): void {
+    this.displayInfo.detach();
     this.touchLanes.detach();
     if (typeof window !== 'undefined') window.removeEventListener('wheel', this.handleWheel);
     this.host = undefined;
@@ -420,6 +444,7 @@ export class BeatorajaPlayView implements PlayView {
     const bridge = this.bridge;
     const host = this.host;
     this.root.visible = frame.shown;
+    if (!frame.shown) this.displayInfo.hide();
     if (stage === undefined || bridge === undefined || host === undefined || !frame.shown || this.disposed) return;
     stage.fitTo(host);
     const play = this.play;
@@ -435,6 +460,7 @@ export class BeatorajaPlayView implements PlayView {
     if (this.wasPaused && !paused) stage.resumeBGA();
     this.wasPaused = paused;
     const context = bridge.update({
+      judgeTimingMs: frame.playOptions.judgeTimingMs,
       nowMs: play.playClock(),
       hostNowMs: frame.clock.nowMs,
       state: frame.state,
@@ -462,11 +488,32 @@ export class BeatorajaPlayView implements PlayView {
       paused,
       started: !play.isIntroPlaying(),
       showInvisibleNotes: this.showInvisibleNotes,
+      bpmGuide: frame.playOptions.bpmGuide,
+      judgeTimingMs: frame.playOptions.judgeTimingMs,
     });
     // A failed play's picture fades with its sound; on a normal end the skin draws its own fade-out.
     if (play.exiting && play.playMoments.failedAtMs !== undefined && play.exitFadeStartedAt !== undefined) {
       stage.canvas.alpha = playEndingFadeAlpha(play.playClock() - play.exitFadeStartedAt, play.exitFadeOutMs);
     }
+    this.displayInfo.attachCanvas(stage.canvas);
+    this.displayInfo.update(
+      resolveDisplayAreaLabels({
+        mode: frame.playOptions.displayAreaInfo,
+        lanes: stage.getDisplayAreaLanes(context.activeOps, frame.playfield.laneChannels),
+        covers: frame.state.view.covers.map(resolveLaneCover),
+        visibleMs: (cover) =>
+          resolveWhiteNumber({
+            laneBeats: 4,
+            hiSpeed: frame.state.view.hiSpeed.drawn,
+            sudden: cover.sudden,
+            bpm: frame.bpm ?? 0,
+            scrollRate: frame.playfield.scrollMapper?.rateAt?.(frame.playfield.currentBeat(frame.seconds)) ?? 1,
+          }),
+      }),
+      { width: stage.width, height: stage.height },
+      host.app.screen,
+      stage.canvas.alpha,
+    );
     this.fadeIndicator();
   }
 
@@ -530,6 +577,7 @@ export class BeatorajaPlayView implements PlayView {
   }
 
   public dispose(): void {
+    this.displayInfo.dispose();
     if (this.disposed) return;
     this.detach();
     this.disposed = true;

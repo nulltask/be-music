@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
+  resolveRandomModes,
+  RANDOM_CYCLE,
   clampHiSpeed,
   clampShutter,
   cyclePlayOptionValue,
@@ -41,7 +43,7 @@ describe('resolvePlayOptionValue', () => {
   });
 
   test("rejects a value outside the option's choices", () => {
-    expect(resolvePlayOptionValue('random1P', 'R-RANDOM')).toBeUndefined();
+    expect(resolvePlayOptionValue('random1P', 'UNKNOWN')).toBeUndefined();
     expect(resolvePlayOptionValue('random1P', 'SCATTER')).toBeUndefined();
     expect(resolvePlayOptionValue('random2P', 'SCATTER')).toBeUndefined();
     expect(resolvePlayOptions({ random1P: 'SCATTER', random2P: 'SCATTER' })).toMatchObject({
@@ -136,4 +138,125 @@ describe('resolvePlayOptions', () => {
     expect(options).toEqual(DEFAULT_PLAY_OPTIONS);
     expect(options).not.toBe(DEFAULT_PLAY_OPTIONS);
   });
+});
+
+test('START BPM is selectable and preserved by option validation', () => {
+  expect(PLAY_OPTION_CHOICES.hsFix).toContain('STARTBPM');
+  expect(resolvePlayOptions({ hsFix: 'STARTBPM' }).hsFix).toBe('STARTBPM');
+});
+
+test('offers the three confirmed beatoraja launcher algorithms only', () => {
+  for (const algorithm of ['combo', 'duration', 'lowest']) {
+    expect(resolvePlayOptionValue('judgeAlgorithm', algorithm)).toBe(algorithm);
+  }
+  expect(resolvePlayOptionValue('judgeAlgorithm', 'score')).toBeUndefined();
+});
+
+test('R-RANDOM is a source choice without changing LR2 button indices', () => {
+  expect(RANDOM_CYCLE).toEqual(['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM']);
+  expect(resolveRandomModes('lr2')).not.toContain('R-RANDOM');
+  for (const source of ['beatoraja', '____'] as const) expect(resolveRandomModes(source)).toContain('R-RANDOM');
+  expect(resolvePlayOptions({ random1P: 'R-RANDOM', random2P: 'R-RANDOM' })).toMatchObject({
+    random1P: 'R-RANDOM',
+    random2P: 'R-RANDOM',
+  });
+});
+
+test('SPIRAL is a beatoraja choice only', () => {
+  expect(resolveRandomModes('beatoraja')).toContain('SPIRAL');
+  expect(resolveRandomModes('____')).not.toContain('SPIRAL');
+  expect(resolveRandomModes('lr2')).not.toContain('SPIRAL');
+  expect(resolvePlayOptionValue('random1P', 'SPIRAL')).toBe('SPIRAL');
+});
+
+test('H-RANDOM is beatoraja-only and the source threshold is validated', () => {
+  expect(resolveRandomModes('beatoraja')).toContain('H-RANDOM');
+  expect(resolveRandomModes('lr2')).not.toContain('H-RANDOM');
+  expect(resolveRandomModes('____')).not.toContain('H-RANDOM');
+  expect(resolvePlayOptionValue('hRandomThresholdBPM', 0)).toBe(1);
+  expect(resolvePlayOptionValue('hRandomThresholdBPM', 2000)).toBe(1000);
+  expect(DEFAULT_PLAY_OPTIONS.hRandomThresholdBPM).toBe(120);
+});
+
+test('LR2 CONVERGE and fixed-lane source settings are selectable and validated', () => {
+  expect(resolveRandomModes('lr2')).toContain('CONVERGE');
+  expect(resolveRandomModes('beatoraja')).toContain('CONVERGE');
+  expect(resolveRandomModes('____')).not.toContain('CONVERGE');
+  expect(resolvePlayOptions({ random1P: 'CONVERGE', randomFixedLane1P: 4, randomFixedLane2P: 0 })).toMatchObject({
+    random1P: 'CONVERGE',
+    randomFixedLane1P: 4,
+    randomFixedLane2P: 0,
+  });
+  expect(resolvePlayOptionValue('randomFixedLane1P', 10)).toBe(9);
+  expect(resolvePlayOptionValue('randomFixedLane2P', Number.NaN)).toBe(0);
+});
+
+test('ALL-SCR is selectable only for the beatoraja reference', () => {
+  expect(resolveRandomModes('beatoraja')).toContain('ALL-SCR');
+  expect(resolveRandomModes('lr2')).not.toContain('ALL-SCR');
+  expect(resolveRandomModes('____')).not.toContain('ALL-SCR');
+  expect(resolvePlayOptions({ random1P: 'ALL-SCR', random2P: 'ALL-SCR' })).toMatchObject({
+    random1P: 'ALL-SCR',
+    random2P: 'ALL-SCR',
+  });
+});
+
+test('RANDOM-EX is a separate beatoraja option', () => {
+  expect(resolveRandomModes('beatoraja')).toContain('RANDOM-EX');
+  expect(resolveRandomModes('lr2')).not.toContain('RANDOM-EX');
+  expect(resolveRandomModes('____')).not.toContain('RANDOM-EX');
+  expect(resolvePlayOptionValue('random1P', 'RANDOM-EX')).toBe('RANDOM-EX');
+});
+
+test('PMS RANDOM_PLAYABLE uses the source option name and survives validation', () => {
+  expect(resolveRandomModes('beatoraja')).toContain('RANDOM_PLAYABLE');
+  expect(resolveRandomModes('lr2')).not.toContain('RANDOM_PLAYABLE');
+  expect(resolveRandomModes('____')).not.toContain('RANDOM_PLAYABLE');
+  expect(resolvePlayOptionValue('random1P', 'RANDOM_PLAYABLE')).toBe('RANDOM_PLAYABLE');
+});
+
+test('PMS S_RANDOM_PLAYABLE preserves the source option name', () => {
+  expect(resolveRandomModes('beatoraja')).toContain('S_RANDOM_PLAYABLE');
+  expect(resolveRandomModes('lr2')).not.toContain('S_RANDOM_PLAYABLE');
+  expect(resolveRandomModes('____')).not.toContain('S_RANDOM_PLAYABLE');
+  expect(resolvePlayOptionValue('random1P', 'S_RANDOM_PLAYABLE')).toBe('S_RANDOM_PLAYABLE');
+});
+
+test('S-RANDOM-EX is a separate beatoraja option', () => {
+  expect(resolveRandomModes('beatoraja')).toContain('S-RANDOM-EX');
+  expect(resolveRandomModes('lr2')).not.toContain('S-RANDOM-EX');
+  expect(resolveRandomModes('____')).not.toContain('S-RANDOM-EX');
+  expect(resolvePlayOptionValue('random1P', 'S-RANDOM-EX')).toBe('S-RANDOM-EX');
+});
+
+test('beatoraja seed settings retain Java-long precision and reject invalid edits', () => {
+  expect(DEFAULT_PLAY_OPTIONS.randomSeed1P).toBe('-1');
+  expect(resolvePlayOptionValue('randomSeed1P', '9223372036854775807')).toBe('9223372036854775807');
+  expect(resolvePlayOptionValue('randomSeed2P', 42)).toBe('42');
+  expect(resolvePlayOptionValue('randomSeed1P', '9223372036854775808')).toBeUndefined();
+});
+
+test('mine REMOVE is a separate source option from invisible-note or graphics settings', () => {
+  expect(DEFAULT_PLAY_OPTIONS.mineModifier).toBe('OFF');
+  expect(resolvePlayOptionValue('mineModifier', 'REMOVE')).toBe('REMOVE');
+  expect(resolvePlayOptionValue('mineModifier', 'HIDE')).toBeUndefined();
+});
+
+test('mine ADD RANDOM is an independent selectable source modifier', () => {
+  expect(resolvePlayOptionValue('mineModifier', 'ADD_RANDOM')).toBe('ADD_RANDOM');
+});
+
+test('mine ADD NEAR is selectable by its source name', () => {
+  expect(resolvePlayOptionValue('mineModifier', 'ADD_NEAR')).toBe('ADD_NEAR');
+});
+
+test('mine ADD ALL retains the source ADD_BLANK identifier', () => {
+  expect(resolvePlayOptionValue('mineModifier', 'ADD_BLANK')).toBe('ADD_BLANK');
+  expect(resolvePlayOptionValue('mineModifier', 'ADD_ALL')).toBeUndefined();
+});
+
+test('gauge auto-shift defaults to source NONE and accepts CONTINUE', () => {
+  expect(DEFAULT_PLAY_OPTIONS.gaugeAutoShift).toBe('NONE');
+  expect(resolvePlayOptionValue('gaugeAutoShift', 'CONTINUE')).toBe('CONTINUE');
+  expect(resolvePlayOptionValue('gaugeAutoShift', 'REVIVE')).toBeUndefined();
 });

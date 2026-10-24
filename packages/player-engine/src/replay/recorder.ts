@@ -1,3 +1,11 @@
+import { resolveReplaySourceChannel } from './source-channel.ts';
+import type { MineModifier } from '../core/mine-modifier.ts';
+import {
+  diffReplayOptions,
+  parseReplayOptionState,
+  type ReplayOptionState,
+  type ReplayOptionChange,
+} from './options.ts';
 import type { ReplayTempoChange, ReplayViewChange, ReplayViewState } from './view.ts';
 import {
   computeChartFingerprint,
@@ -13,7 +21,7 @@ import type { PreparedPlaybackChartData } from '../core/bootstrap.ts';
 import { resolveChartJudgeRankFacts } from '../ruleset/index.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
 import { resolve____RankLabel } from '../ruleset/score.ts';
-import type { GaugeType } from '../ruleset/gauge-type.ts';
+import type { GaugeType, GaugeAutoShift } from '../ruleset/gauge-type.ts';
 import type { RulesetId } from '../ruleset/definitions.ts';
 import packageJSON from '../../package.json' with { type: 'json' };
 import {
@@ -48,8 +56,15 @@ export type ReplayRecorderChartData = Pick<
   Partial<Pick<PreparedPlaybackChartData, 'resolvedChart'>>;
 
 export interface ReplayRecorderPlaySettings {
+  options?: ReplayOptionState;
   mode: 'manual' | 'auto';
   autoScratch: boolean;
+  judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  longNoteModifier?: 'OFF' | 'LEGACY' | 'REMOVE';
+  mineModifier?: MineModifier;
+  mineModifierChangeCount?: number;
+  autoScratch1P?: boolean;
+  autoScratch2P?: boolean;
   /** The gauge the engine ran (`PlayerOptions.gauge`, else `recordReplay.gauge`); `GROOVE` when neither is set. */
   gauge?: GaugeType;
   randomLane?: { p1?: string; p2?: string };
@@ -61,6 +76,7 @@ export interface ReplayRecorderPlaySettings {
   randomDraws?: RandomDraws;
   /** The play ended the moment its survival gauge emptied (`PlayerOptions.endOnFailure`). Recorded when true. */
   endOnFailure?: boolean;
+  gaugeAutoShift?: GaugeAutoShift;
   /** The course stage the play was (`PlayerOptions.course`). */
   course?: ReplayCourseStage;
   /** The play tempo (`PlayerOptions.speed`). Recorded when it is not 1. */
@@ -82,7 +98,7 @@ export interface ReplayRecorderPlaySettings {
  */
 export type ReplayRecordingOptions = Pick<
   ReplayRecorderPlaySettings,
-  'gauge' | 'randomLane' | 'dpFlip' | 'view' | 'native'
+  'gauge' | 'randomLane' | 'dpFlip' | 'view' | 'native' | 'options'
 > & {
   chartSHA256?: string;
   chartMD5?: string;
@@ -150,6 +166,8 @@ export interface ReplayRecorder {
   recordEmptyPoor(): void;
   /** Records a view change (hi-speed, covers, lift) at a chart time. An empty change is dropped. */
   recordViewChange(timeSeconds: number, change: ReplayViewState): void;
+  /** Records selected options at the chart clock; repeated values are dropped. */
+  recordOptionChange(timeSeconds: number, values: ReplayOptionState): void;
   /** Records a tempo change at a chart time. A change to the tempo already in force is dropped. */
   recordTempoChange(timeSeconds: number, tempo: number): void;
   finalize(input: ReplayRecorderFinalizeInput): BeMusicReplay;
@@ -162,6 +180,9 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
   let seq = 0;
   let emptyPoorCount = 0;
   const viewChanges: ReplayViewChange[] = [];
+  const initialOptions = options.play.options === undefined ? undefined : parseReplayOptionState(options.play.options);
+  let currentOptions = { ...initialOptions };
+  const optionChanges: ReplayOptionChange[] = [];
   const tempoChanges: ReplayTempoChange[] = [];
   let currentTempo = options.play.tempo ?? 1;
 
@@ -170,6 +191,7 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       discarded = true;
       inputs.length = 0;
       viewChanges.length = 0;
+      optionChanges.length = 0;
       tempoChanges.length = 0;
       emptyPoorCount = 0;
     },
@@ -196,6 +218,16 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
     recordEmptyPoor: (): void => {
       if (discarded) return;
       emptyPoorCount += 1;
+    },
+    recordOptionChange: (timeSeconds, values): void => {
+      if (discarded) return;
+      const change = diffReplayOptions(currentOptions, parseReplayOptionState(values));
+      if (!change) return;
+      const timeUs = secondsToMicroseconds(timeSeconds);
+      if (!Number.isSafeInteger(timeUs) || timeUs < (optionChanges.at(-1)?.timeUs ?? 0))
+        throw new RangeError('Option changes must use nondecreasing chart times.');
+      optionChanges.push({ timeUs, values: change });
+      currentOptions = { ...currentOptions, ...change };
     },
     recordViewChange: (timeSeconds, change): void => {
       if (discarded) return;
@@ -231,11 +263,21 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
         play.aborted = true;
         if (abortedAtSeconds !== undefined) play.abortedAtUs = secondsToMicroseconds(abortedAtSeconds);
       }
+      if (options.play.gaugeAutoShift !== undefined) play.gaugeAutoShift = options.play.gaugeAutoShift;
       if (options.play.endOnFailure === true) play.endOnFailure = true;
       if (options.play.course !== undefined) play.course = structuredClone(options.play.course);
       if (options.play.tempo !== undefined && options.play.tempo !== 1) play.tempo = options.play.tempo;
       if (tempoChanges.length > 0) play.tempoChanges = tempoChanges.map((change) => ({ ...change }));
       if (options.play.view !== undefined) play.view = structuredClone(options.play.view);
+      if (options.play.judgeAlgorithm !== undefined) play.judgeAlgorithm = options.play.judgeAlgorithm;
+      if (options.play.mineModifier !== undefined) play.mineModifier = options.play.mineModifier;
+      if (options.play.mineModifierChangeCount !== undefined)
+        play.mineModifierChangeCount = options.play.mineModifierChangeCount;
+      if (options.play.longNoteModifier !== undefined) play.longNoteModifier = options.play.longNoteModifier;
+      if (options.play.autoScratch1P !== undefined) play.autoScratch1P = options.play.autoScratch1P;
+      if (options.play.autoScratch2P !== undefined) play.autoScratch2P = options.play.autoScratch2P;
+      if (initialOptions !== undefined) play.options = { ...initialOptions };
+      if (optionChanges.length > 0) play.optionChanges = structuredClone(optionChanges);
       if (viewChanges.length > 0) play.viewChanges = structuredClone(viewChanges);
       if (options.play.native !== undefined) play.native = options.play.native;
 
@@ -271,6 +313,7 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
     const entry: ReplayNote = {
       id: 0,
       channel: note.channel,
+      ...(resolveReplaySourceChannel(note) !== note.channel ? { sourceChannel: resolveReplaySourceChannel(note) } : {}),
       type: isFreeZone ? 'freezone' : hasTail ? 'long' : 'normal',
       timeUs: secondsToMicroseconds(note.seconds),
     };
@@ -286,15 +329,20 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
     notes.push({
       id: 0,
       channel: mine.channel,
+      ...(resolveReplaySourceChannel(mine) !== mine.channel ? { sourceChannel: resolveReplaySourceChannel(mine) } : {}),
       type: 'mine',
       timeUs: secondsToMicroseconds(mine.seconds),
       damage: resolveLandmineGaugeEffect(mine.event, idBase, json.sourceFormat).damage,
+      ...(mine.silent ? { silent: true } : {}),
     });
   }
   for (const invisible of chart.invisibleNotes) {
     notes.push({
       id: 0,
       channel: invisible.channel,
+      ...(resolveReplaySourceChannel(invisible) !== invisible.channel
+        ? { sourceChannel: resolveReplaySourceChannel(invisible) }
+        : {}),
       type: 'invisible',
       timeUs: secondsToMicroseconds(invisible.seconds),
     });
@@ -328,6 +376,15 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
     noteCount: chart.scorableNotes.length,
     notes,
   };
+  if (Number.isFinite(json.metadata.bpm)) result.headerBPM = json.metadata.bpm;
+  let minBPM = Infinity;
+  let maxBPM = -Infinity;
+  for (const { bpm } of resolved.timing.tempoPoints) {
+    if (!Number.isFinite(bpm)) continue;
+    minBPM = Math.min(minBPM, bpm);
+    maxBPM = Math.max(maxBPM, bpm);
+  }
+  if (minBPM <= maxBPM) result.bpmRange = { min: minBPM, max: maxBPM };
   if (json.bmson.info.totalUnit !== undefined) result.totalUnit = json.bmson.info.totalUnit;
   if (typeof options.reversalSeconds === 'number' && Number.isFinite(options.reversalSeconds)) {
     result.reversalTimeUs = secondsToMicroseconds(options.reversalSeconds);

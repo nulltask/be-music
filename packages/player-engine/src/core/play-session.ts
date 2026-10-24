@@ -1,3 +1,4 @@
+import { resolveAutoScratchSides } from './auto-scratch.ts';
 import {
   createBeatAtSecondsResolverFromTimingResolver,
   isPlayLaneSoundChannel,
@@ -14,6 +15,7 @@ import { createScoreTracker } from './scoring.ts';
 import {
   judgeWindowLateReachUs,
   resolveRuleset,
+  resolveGaugeEndOnFailure,
   rulesetChartFactsFromChart,
   type RulesetConfig,
 } from '../ruleset/index.ts';
@@ -144,6 +146,8 @@ export async function createPlaySession(
   strategy: JudgeStrategy,
 ): Promise<PlaySession> {
   const { mode } = strategy;
+  if (options.mineModifier !== undefined && options.mineModifier !== 'OFF' && options.judgeRuleset !== 'beatoraja')
+    throw new RangeError('Mine modification is available only for beatoraja.');
   throwIfAborted(options.signal);
   const writeOutput = resolveOutputWriter(options);
   reportLoadProgress(options, 0.02, 'Resolving chart...');
@@ -151,7 +155,8 @@ export async function createPlaySession(
   const resolvedJSON = controlFlowResolution.resolvedJSON;
   options.onResolvedChart?.(resolvedJSON);
   const randomPatternSummary = formatRandomPatternSummary(controlFlowResolution.randomPatterns);
-  const autoScratch = mode === 'manual' && options.autoScratch === true;
+  const scratchSides = resolveAutoScratchSides(options);
+  const autoScratch = mode === 'manual' && (scratchSides.autoScratch1P || scratchSides.autoScratch2P);
   const speed = options.speed ?? 1;
   const tempoClock = createTempoClock(speed);
   const leadInMs = options.leadInMs ?? 1500;
@@ -178,7 +183,25 @@ export async function createPlaySession(
   // arrays drifted" bugs.
   const playbackChart =
     options.preparedChart ??
-    preparePlaybackChart(resolvedChart, { laneModeExtension: options.laneModeExtension }, realtimeAudioEndSeconds);
+    preparePlaybackChart(
+      resolvedChart,
+      {
+        laneModeExtension: options.laneModeExtension,
+        longNoteModifier: options.longNoteModifier,
+        mineModifier: options.mineModifier,
+        mineModifierPlacements: options.mineModifierPlacements,
+      },
+      realtimeAudioEndSeconds,
+      Math.random,
+    );
+  if (options.mineModifier?.startsWith('ADD_') && playbackChart.mineModifierApplied !== options.mineModifier)
+    throw new RangeError('The shared prepared chart must include the selected mine modifier.');
+  if (options.mineModifier === 'REMOVE') {
+    const removed = playbackChart.landmineNotes.length;
+    playbackChart.mineModifierChangeCount = (playbackChart.mineModifierChangeCount ?? 0) + removed;
+    // Keep the shared array identity when the host prepared the chart before choosing REMOVE.
+    playbackChart.landmineNotes.length = 0;
+  }
   // A duplicate note that lost its lane and position to another note is not judged, but its keysound still sounds, as
   // background audio at its own time.
   appendShadowedNoteTriggers(backgroundTriggers, resolvedChart, playbackChart.shadowedNotes);
@@ -189,17 +212,25 @@ export async function createPlaySession(
   // The gauge the play runs on and the replay records: one value, so a re-simulation runs the same gauge. A host that
   // only declared it for the log (`recordReplay.gauge`) gets it played too.
   const selectedGauge = options.gauge ?? options.recordReplay?.gauge;
+  if (
+    options.judgeAlgorithm !== undefined &&
+    options.judgeAlgorithm !== 'combo' &&
+    options.judgeRuleset !== 'beatoraja'
+  ) {
+    throw new RangeError('Selectable judgment algorithms belong to beatoraja 0.8.9.');
+  }
   const ruleset = resolveRuleset(
     rulesetChartFactsFromChart(resolvedJSON, playbackChart, judgeRankChanges, options.stageRanks),
     options.judgeRuleset ?? 'lr2',
     {
+      ...(options.judgeAlgorithm !== undefined ? { judgeAlgorithm: options.judgeAlgorithm } : {}),
       ...(selectedGauge !== undefined ? { selectedGauge } : {}),
       ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
       ...(options.course !== undefined ? { course: courseStageRulesetOptions(options.course) } : {}),
     },
   );
   reportResolvedRuleset(options, ruleset);
-  const endOnFailure = options.endOnFailure ?? true;
+  const endOnFailure = resolveGaugeEndOnFailure(options.gaugeAutoShift, ruleset.rulesetId, options.endOnFailure);
 
   const { reset: resetSummary, ...initialSummary } = createInitialPlayerSummary(ruleset, ruleset.noteCount);
   const courseCarry = options.course !== undefined ? courseStageCarryCombo(options.course) : undefined;
@@ -249,12 +280,27 @@ export async function createPlaySession(
           play: {
             mode,
             autoScratch,
+            judgeAlgorithm: ruleset.rulesetId === 'beatoraja' ? (options.judgeAlgorithm ?? 'combo') : undefined,
+            longNoteModifier: options.longNoteModifier,
+            ...(options.autoScratch1P !== undefined || options.autoScratch2P !== undefined
+              ? {
+                  autoScratch1P: mode === 'manual' && scratchSides.autoScratch1P,
+                  autoScratch2P: mode === 'manual' && scratchSides.autoScratch2P,
+                }
+              : {}),
             judgeWindowOverrideMs: options.judgeWindowMs,
             judgeRuleset: options.judgeRuleset,
             ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),
-            ...(endOnFailure ? { endOnFailure } : {}),
             ...(options.course !== undefined ? { course: options.course } : {}),
             ...hostPlaySettings,
+            ...(options.mineModifier !== undefined
+              ? {
+                  mineModifier: options.mineModifier,
+                  mineModifierChangeCount: playbackChart.mineModifierChangeCount ?? 0,
+                }
+              : {}),
+            gaugeAutoShift: options.gaugeAutoShift,
+            endOnFailure: endOnFailure ? true : undefined,
             gauge: selectedGauge,
             // The tempo a live play ran at (its inputs are in chart time either way). A replay's `speed` only sets how
             // fast it is re-driven, so it records none.

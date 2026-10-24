@@ -7,8 +7,10 @@
  * `prepareChart` reads and writes the play's state through {@link PlayChartContext}; the play session passes itself.
  */
 
+import { resolveRandomModes, normalizeFloatingLaneCover, type RandomMode } from '@be-music/player-scene-model';
 import {
   resolvePoorBGAMode,
+  PLAY_MODE_LAYOUTS,
   parseBMSSwBGA,
   resolveChart,
   resolveChartReferenceBPM,
@@ -26,6 +28,16 @@ import { preparePlaybackChart, resolvePlayChart, type PreparedPlaybackChartData 
 import {
   isPlayableInputChannel,
   randomizeSRandomNotes,
+  createBeatorajaLaneRandom,
+  drawLaneRandomIndex,
+  parseLaneRandomSeed,
+  randomizeLR2ConvergeNotes,
+  randomizeHRandomNotes,
+  randomizeAllScratchNotes,
+  randomizePMSConvergeNotes,
+  randomizePMSPlayableLanes,
+  randomizePMSPlayableNotes,
+  randomizeSpiralNotes,
   resolveLaneOptionChannels,
   resolvePlayVariantLaneChannels,
 } from '@be-music/player-engine/lanes';
@@ -78,21 +90,40 @@ export interface PlayChartContext {
   readonly options: Readonly<
     Pick<
       PlaySessionOptions,
+      | 'visualConstant'
       | 'hsFix'
+      | 'classicHiSpeed'
+      | 'floatingHiSpeed'
+      | 'fixedDisplayArea'
+      | 'normalHiSpeedLevel'
       | 'preResolved'
       | 'hiSpeedLocked'
       | 'hiddenSudden1P'
       | 'hiddenSudden2P'
+      | 'lift1P'
+      | 'lift2P'
+      | 'liftOn1P'
+      | 'liftOn2P'
       | 'shutter'
       | 'laneCover'
       | 'coverStart'
       | 'replay'
+      | 'fixedArrangement'
+      | 'chartSHA256'
+      | 'chartMD5'
       | 'dpFlip'
+      | 'randomSeed1P'
+      | 'randomSeed2P'
+      | 'randomFixedLane1P'
+      | 'randomFixedLane2P'
+      | 'hRandomThresholdBPM'
       | 'random1P'
       | 'random2P'
       | 'course'
       | 'nonstop'
       | 'judgeRuleset'
+      | 'longNoteModifier'
+      | 'mineModifier'
       | 'autoScratch1P'
       | 'autoScratch2P'
     >
@@ -101,6 +132,7 @@ export interface PlayChartContext {
   resolvedChart: BeMusicJSON | undefined;
   resolvedPlayChart: ResolvedChart | undefined;
   randomDraws: RandomDraws | undefined;
+  randomSeeds?: { p1?: string; p2?: string };
   beatAtSeconds: ((seconds: number) => number) | undefined;
   scrollMapper: ScrollDistanceMapperLike | undefined;
   laneTimelineBeats: Float64Array;
@@ -156,23 +188,51 @@ export interface PlayChartContext {
 }
 
 export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): void {
+  const arrangement = ctx.options.replay ?? ctx.options.fixedArrangement;
+  if (ctx.options.fixedDisplayArea && (ctx.options.replay?.play.judgeRuleset ?? ctx.options.judgeRuleset) !== '____')
+    throw new RangeError('Fixed display area is available only for its source ruleset.');
+  if (ctx.options.floatingHiSpeed && (ctx.options.replay?.play.judgeRuleset ?? ctx.options.judgeRuleset) !== '____')
+    throw new RangeError('AC measured floating HI-SPEED requires its source ruleset.');
+  if (
+    arrangement === undefined &&
+    ctx.options.mineModifier !== undefined &&
+    ctx.options.mineModifier !== 'OFF' &&
+    ctx.options.judgeRuleset !== 'beatoraja'
+  )
+    throw new RangeError('Mine modification is available only for beatoraja.');
+  if (ctx.options.fixedArrangement !== undefined && ctx.options.replay === undefined) {
+    if ((ctx.options.judgeRuleset ?? 'lr2') !== 'beatoraja')
+      throw new RangeError('Previous arrangement reuse requires beatoraja rules.');
+    const recorded = ctx.options.fixedArrangement.chart;
+    if (
+      (recorded.sha256 && ctx.options.chartSHA256 && recorded.sha256 !== ctx.options.chartSHA256) ||
+      (recorded.md5 && ctx.options.chartMD5 && recorded.md5 !== ctx.options.chartMD5)
+    )
+      throw new RangeError('The previous arrangement belongs to a different source chart.');
+  }
   if (ctx.options.replay === undefined && (ctx.options.random1P === 'SCATTER' || ctx.options.random2P === 'SCATTER')) {
     throw new RangeError('SCATTER is disabled until placement and assist policy are implemented.');
+  }
+  if (ctx.options.replay === undefined) {
+    const modes = resolveRandomModes(ctx.options.judgeRuleset ?? 'lr2');
+    for (const mode of [ctx.options.random1P, ctx.options.random2P]) {
+      if (mode !== undefined && !modes.includes(mode))
+        throw new RangeError(`${mode} is unavailable for ${ctx.options.judgeRuleset ?? 'lr2'}.`);
+    }
   }
   // Resolve `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow once, first, so every play-time consumer below and the
   // engine see the same chosen branches. The draws are fresh each play (LR2 re-rolls each play); a replay resolves
   // with the draws its log recorded, so it plays the recorded branches.
   const { chart: resolved, randomDraws } =
-    ctx.options.replay === undefined && ctx.options.preResolved !== undefined
+    arrangement === undefined && ctx.options.preResolved !== undefined
       ? ctx.options.preResolved
       : resolvePlayChart(
           chartEntry.chart,
-          ctx.options.replay?.play.randomDraws !== undefined
-            ? { randomDraws: ctx.options.replay.play.randomDraws }
-            : {},
+          arrangement?.play.randomDraws !== undefined ? { randomDraws: arrangement!.play.randomDraws } : {},
         );
   ctx.resolvedChart = resolved;
   ctx.randomDraws = randomDraws;
+  ctx.randomSeeds = {};
   // BMS spec — `#WAVCMD 01 xx vv` and `#EXWAVxx` per-slot volumes, collected once so every sample trigger is a single
   // Map lookup; slots without an entry take the unity-gain fast path.
   ctx.wavCmdVolumeMultipliers = collectChartVolumeMultipliers(resolved);
@@ -210,6 +270,31 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // re-running its own heuristic. Classify the RESOLVED chart: lanes that only a chosen `#RANDOM` / `#SWITCH`
   // branch adds are not in `song.chart.events`, and missing them would lay out (and judge) a 7 KEY play as 5 KEY.
   const hostPlayVariant = resolveLibraryChartPlayVariant(chartEntry, resolved);
+  if (
+    ctx.options.replay === undefined &&
+    (ctx.options.random1P === 'CONVERGE' || ctx.options.random2P === 'CONVERGE') &&
+    !['5', '7', '9', '10', '14'].includes(hostPlayVariant)
+  )
+    throw new RangeError('LR2 CONVERGE supports 5/7/9/10/14 KEY charts.');
+  if (
+    ctx.options.replay === undefined &&
+    hostPlayVariant === '9' &&
+    [ctx.options.random1P, ctx.options.random2P].some(
+      (mode) => mode === 'ALL-SCR' || mode === 'RANDOM-EX' || mode === 'S-RANDOM-EX',
+    )
+  )
+    throw new RangeError(
+      'beatoraja PMS uses its own arrangements; ALL-SCR and RANDOM-EX/S-RANDOM-EX require scratch lanes.',
+    );
+  if (
+    ctx.options.replay === undefined &&
+    ctx.options.judgeRuleset === 'beatoraja' &&
+    hostPlayVariant !== '9' &&
+    [ctx.options.random1P, ctx.options.random2P].some(
+      (mode) => mode === 'CONVERGE' || mode === 'RANDOM_PLAYABLE' || mode === 'S_RANDOM_PLAYABLE',
+    )
+  )
+    throw new RangeError('beatoraja CONVERGE and playable RANDOM/S-RANDOM are PMS arrangements.');
   const resolvedPlay = resolveChart(resolved, {
     randomDraws,
     playVariant: hostPlayVariant,
@@ -221,20 +306,45 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // `showInvisibleNotes`. The audio horizon is left at 0: the engine recomputes its own from realtime triggers.
   const prepared = preparePlaybackChart(
     resolvedPlay,
-    { laneModeExtension: extractChartExtension(ctx.chart?.chartPath) },
+    {
+      laneModeExtension: extractChartExtension(ctx.chart?.chartPath),
+      longNoteModifier: arrangement?.play.longNoteModifier ?? ctx.options.longNoteModifier,
+      mineModifier: arrangement?.play.mineModifier ?? ctx.options.mineModifier,
+      ...(arrangement?.play.mineModifier?.startsWith('ADD_')
+        ? {
+            mineModifierPlacements: arrangement.chart.notes
+              .filter((note) => note.type === 'mine')
+              .map((note) => ({
+                channel: note.channel,
+                sourceChannel: note.sourceChannel,
+                timeUs: note.timeUs,
+                damage: note.damage,
+                silent: note.silent,
+              })),
+          }
+        : {}),
+    },
     0,
+    Math.random,
   );
   ctx.preparedChart = prepared;
   ctx.touchTokenByChannel = undefined;
   ctx.notes = prepared.notes;
   ctx.mineNotes = prepared.landmineNotes;
   ctx.invisibleNotes = prepared.invisibleNotes;
-  if (ctx.options.replay !== undefined) {
+  if (arrangement !== undefined) {
+    for (const [side, key] of [
+      ['p1', 'randomSeed1P'],
+      ['p2', 'randomSeed2P'],
+    ] as const) {
+      const seed = parseLaneRandomSeed(arrangement.play.options?.[key]);
+      if (seed !== undefined) ctx.randomSeeds![side] = seed;
+    }
     // Replay playback — the recorded replay carries the FINAL note arrangement (post-flip, post-shuffle), so
     // instead of re-rolling the lane transforms we re-apply the recorded channels onto the freshly prepared
     // notes. A mismatch means the loaded chart is not the one the log was recorded against (different `#RANDOM`
     // roll or a different file) — surface it as a prepare failure rather than replaying garbage.
-    const arranged = applyReplayArrangement(ctx.options.replay.chart.notes, prepared);
+    const arranged = applyReplayArrangement(arrangement.chart.notes, prepared);
     if (!arranged.ok) {
       throw new Error(`replay replay chart mismatch: ${arranged.reason}`);
     }
@@ -253,6 +363,21 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
         invisible.channel = flipDPChannel(invisible.channel);
       }
     }
+    const laneRandom = (side: '1P' | '2P'): (() => number) => {
+      if (
+        ctx.options.judgeRuleset !== 'beatoraja' ||
+        resolveLaneOptionChannels(side, hostPlayVariant, prepared.laneBindings).length === 0
+      )
+        return Math.random;
+      const picked = side === '1P' ? ctx.options.randomSeed1P : ctx.options.randomSeed2P;
+      const seed = parseLaneRandomSeed(picked ?? '-1');
+      if (seed === undefined) throw new RangeError('Invalid beatoraja lane random seed.');
+      const resolvedSeed = seed === '-1' ? String(Math.floor(Math.random() * 16777216)) : seed;
+      ctx.randomSeeds![side === '1P' ? 'p1' : 'p2'] = resolvedSeed;
+      // The upstream chart-wide PMS playable randomizer ignores its modifier seed.
+      const mode = side === '1P' ? ctx.options.random1P : ctx.options.random2P;
+      return mode === 'RANDOM_PLAYABLE' ? Math.random : createBeatorajaLaneRandom(resolvedSeed);
+    };
     // RANDOM / MIRROR / S-RANDOM — shuffle the 1P / 2P keyboard lanes independently. Scratch (channels 16 /
     // 26) and the 24 / 48 KEY wheel never move (`resolveLaneOptionChannels`). Per LR2 convention, the shuffle is drawn at chart-prepare time so a single play session has a
     // stable arrangement (F5-restart re-rolls it). Mine channels are included in the same shuffle pass so a mine on
@@ -262,8 +387,23 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       ctx.notes as Array<{ channel: string }>,
       resolveLaneOptionChannels('1P', hostPlayVariant, prepared.laneBindings),
       ctx.options.random1P ?? 'OFF',
-      Math.random,
-      { ruleset: ctx.options.judgeRuleset ?? 'lr2' },
+      laneRandom('1P'),
+      {
+        ruleset: ctx.options.judgeRuleset ?? 'lr2',
+        hRandomThresholdBPM: ctx.options.hRandomThresholdBPM,
+        fixedLane: ctx.options.randomFixedLane1P,
+        scratch: hostPlayVariant === '9' ? undefined : '16',
+        scratchLanes:
+          hostPlayVariant === '9'
+            ? []
+            : PLAY_MODE_LAYOUTS[hostPlayVariant].lanes
+                .filter((lane) => lane.side === '1P' && lane.kind !== 'key')
+                .sort((a, b) => a.slot - b.slot)
+                .map((lane) => lane.channel),
+        doublePlay: hostPlayVariant === '10' || hostPlayVariant === '14' || hostPlayVariant === '48',
+        side: '1P',
+        playVariant: hostPlayVariant,
+      },
       ctx.mineNotes as Array<{ channel: string }>,
       ctx.invisibleNotes as Array<{ channel: string }>,
     );
@@ -271,8 +411,23 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       ctx.notes as Array<{ channel: string }>,
       resolveLaneOptionChannels('2P', hostPlayVariant, prepared.laneBindings),
       ctx.options.random2P ?? 'OFF',
-      Math.random,
-      { ruleset: ctx.options.judgeRuleset ?? 'lr2' },
+      laneRandom('2P'),
+      {
+        ruleset: ctx.options.judgeRuleset ?? 'lr2',
+        hRandomThresholdBPM: ctx.options.hRandomThresholdBPM,
+        fixedLane: ctx.options.randomFixedLane2P,
+        scratch: hostPlayVariant === '9' ? undefined : '26',
+        scratchLanes:
+          hostPlayVariant === '9'
+            ? []
+            : PLAY_MODE_LAYOUTS[hostPlayVariant].lanes
+                .filter((lane) => lane.side === '2P' && lane.kind !== 'key')
+                .sort((a, b) => a.slot - b.slot)
+                .map((lane) => lane.channel),
+        doublePlay: hostPlayVariant === '10' || hostPlayVariant === '14' || hostPlayVariant === '48',
+        side: '2P',
+        playVariant: hostPlayVariant,
+      },
       ctx.mineNotes as Array<{ channel: string }>,
       ctx.invisibleNotes as Array<{ channel: string }>,
     );
@@ -284,6 +439,10 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     return Math.max(max, Math.max(0, note.endBeat - note.beat));
   }, 0);
   ctx.chartLastNoteEndSeconds = ctx.notes.reduce((acc, note) => Math.max(acc, note.endSeconds ?? note.seconds), 0);
+  ctx.chartLastNoteEndSeconds = ctx.mineNotes.reduce(
+    (end, mine) => Math.max(end, mine.seconds),
+    ctx.chartLastNoteEndSeconds,
+  );
   ctx.chartDurationSeconds = ctx.chartLastNoteEndSeconds;
   ctx.chartEnded = false;
   // Drop the previous chart's active-sample tracking. Stale entries would otherwise let a `c=true` note on the new
@@ -320,7 +479,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // the common case stays on the plain beat-diff path with no extra cost (and on its ruleset's drawing rules).
   const beatResolver = resolvedPlay.beatResolver;
   const scrollTimeline = resolvedPlay.scroll;
-  const speedTimeline = resolvedPlay.speed;
+  const speedTimeline = ctx.options.visualConstant ? [] : resolvedPlay.speed;
   ctx.scrollMapper = changesScrollRate(scrollTimeline, speedTimeline)
     ? createScrollDistanceMapper(scrollTimeline, speedTimeline, { invalidDistance: 0 })
     : undefined;
@@ -406,12 +565,26 @@ function createChartPlayState(
   resolver: TimingResolver,
   referenceBPM: number | undefined,
 ): PlayState {
-  const hsFix = ctx.options.hsFix ?? 'OFF';
+  const hsFix =
+    ctx.options.floatingHiSpeed || ctx.options.classicHiSpeed || (ctx.options.normalHiSpeedLevel ?? 0) > 0
+      ? 'OFF'
+      : (ctx.options.hsFix ?? 'OFF');
   const mainBPM = ctx.chartBPMRange?.mainBPM;
+  const covers = resolveStartingCovers(ctx);
+  const firstCover = covers[0];
   const hiSpeed = createHiSpeedState({
     hiSpeed: ctx.playState.view.hiSpeed.player,
+    classic: ctx.options.classicHiSpeed,
+    floating: ctx.options.floatingHiSpeed,
+    visibleFraction: Math.max(
+      0,
+      1 - (firstCover?.suddenOn ? firstCover.sudden : 0) - (firstCover?.liftOn ? firstCover.lift : 0),
+    ),
+    normalLevel: ctx.options.classicHiSpeed ? undefined : ctx.options.normalHiSpeedLevel,
+    bpm: resolver.bpmAtBeat(0),
     multiplier: resolveHSFixMultiplier(hsFix, {
       ...(referenceBPM !== undefined ? { referenceBPM } : {}),
+      startBPM: ctx.resolvedChart?.metadata.bpm || ctx.chart?.bpm || resolver.tempoPoints[0]?.bpm,
       bpms: resolver.tempoPoints.map((point) => point.bpm),
       ...(mainBPM !== undefined ? { mainBPM } : {}),
     }),
@@ -424,7 +597,8 @@ function createChartPlayState(
     ...(course !== undefined ? { courseCarryIn: course.carryIn ?? { combo: 0, maxCombo: 0 } } : {}),
     view: {
       hiSpeed,
-      covers: resolveStartingCovers(ctx),
+      covers,
+      ...(ctx.options.fixedDisplayArea ? { fixedDisplayArea: true as const } : {}),
       hsFix,
     },
   });
@@ -441,18 +615,28 @@ function createChartPlayState(
  */
 function resolveStartingCovers(ctx: PlayChartContext): LaneCoverState[] {
   const sides = resolveLaneSides(ctx.laneChannels);
-  if (ctx.options.coverStart === 'none') {
+  if (ctx.options.coverStart === 'none' || ctx.options.hiSpeedLocked === true) {
     return sides.map((side) => ({ side, sudden: 0, suddenOn: false, hidden: 0, hiddenOn: false, lift: 0 }));
   }
-  return laneCoversFromPlayOptions(
+  const covers = laneCoversFromPlayOptions(
     {
       hiddenSudden1P: ctx.options.hiddenSudden1P ?? 'OFF',
       hiddenSudden2P: ctx.options.hiddenSudden2P ?? 'OFF',
       shutter: ctx.options.shutter ?? SHUTTER_DEFAULT,
+      lift1P: ctx.options.lift1P ?? 0.1,
+      lift2P: ctx.options.lift2P ?? 0.1,
+      liftOn1P: ctx.options.liftOn1P ?? false,
+      liftOn2P: ctx.options.liftOn2P ?? false,
+
       laneCover: ctx.options.laneCover !== false,
+      floatingHiSpeed: ctx.options.floatingHiSpeed,
     },
     sides,
   );
+  return ctx.options.judgeRuleset === '____' &&
+    (ctx.options.floatingHiSpeed || ctx.options.classicHiSpeed || (ctx.options.normalHiSpeedLevel ?? 0) > 0)
+    ? covers.map(normalizeFloatingLaneCover)
+    : covers;
 }
 
 /** The course stage the play runs (a replay's recorded one wins), with its ruleset, for the placeholder gauge. */
@@ -526,50 +710,128 @@ export function flipDPChannel(channel: string): string {
 export function applyRandomMode(
   notes: Array<{ channel: string }>,
   allLanes: readonly string[],
-  mode: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER',
+  mode: RandomMode,
   rng: () => number,
-  options: { ruleset?: RulesetId } = {},
+  options: {
+    ruleset?: RulesetId;
+    hRandomThresholdBPM?: number;
+    fixedLane?: number;
+    scratch?: string;
+    scratchLanes?: readonly string[];
+    doublePlay?: boolean;
+    side?: '1P' | '2P';
+    playVariant?: ChartPlayVariant;
+  } = {},
   // Extra channel-bearing arrays: mines first, then invisible notes. Chart permutations share the same lane map;
   // S-RANDOM applies the active ruleset's policy for each event kind.
   ...secondary: Array<Array<{ channel: string }>>
 ): void {
   if (mode === 'SCATTER')
     throw new RangeError('SCATTER is disabled until placement and assist policy are implemented.');
-  if (mode === 'OFF') return;
-  if (mode === 'S-RANDOM') {
+  if (mode === 'R-RANDOM' && options.ruleset !== 'beatoraja' && options.ruleset !== '____')
+    throw new RangeError('R-RANDOM is unavailable for LR2.');
+  if (
+    (mode === 'SPIRAL' ||
+      mode === 'H-RANDOM' ||
+      mode === 'ALL-SCR' ||
+      mode === 'RANDOM-EX' ||
+      mode === 'S-RANDOM-EX' ||
+      mode === 'RANDOM_PLAYABLE' ||
+      mode === 'S_RANDOM_PLAYABLE') &&
+    options.ruleset !== 'beatoraja'
+  )
+    throw new RangeError(`${mode} is available only for beatoraja.`);
+  if (mode === 'CONVERGE' && options.ruleset === '____')
+    throw new RangeError('CONVERGE is unavailable for this ruleset.');
+  if (mode === 'CONVERGE' && options.ruleset === 'beatoraja' && options.playVariant !== '9')
+    throw new RangeError('beatoraja CONVERGE is a PMS arrangement.');
+  if ((mode === 'RANDOM_PLAYABLE' || mode === 'S_RANDOM_PLAYABLE') && options.playVariant !== '9')
+    throw new RangeError(`${mode} is a PMS arrangement.`);
+  if (mode === 'S-RANDOM-EX' && allLanes.length > 0 && (options.scratchLanes?.length ?? 0) === 0)
+    throw new RangeError('S-RANDOM-EX requires scratch lanes.');
+  if (mode === 'OFF' || allLanes.length === 0) return;
+  if (
+    mode === 'S-RANDOM' ||
+    mode === 'S-RANDOM-EX' ||
+    mode === 'SPIRAL' ||
+    mode === 'H-RANDOM' ||
+    mode === 'CONVERGE' ||
+    mode === 'ALL-SCR' ||
+    mode === 'RANDOM_PLAYABLE' ||
+    mode === 'S_RANDOM_PLAYABLE'
+  ) {
     const entries = [
       ...notes.map((note) => ({ note, kind: 'note' as const })),
       ...secondary.flatMap((arr, index) =>
         arr.map((note) => ({ note, kind: index === 0 ? ('mine' as const) : ('invisible' as const) })),
       ),
     ];
-    const channels = randomizeSRandomNotes(
-      entries.map(({ note, kind }) => {
-        const timed = note as {
-          channel: string;
-          seconds?: number;
-          endSeconds?: number;
-          beat?: number;
-          endBeat?: number;
-        };
-        return {
-          channel: timed.channel,
-          timeMs: (timed.seconds ?? timed.beat ?? 0) * 1000,
-          ...(timed.endSeconds !== undefined || timed.endBeat !== undefined
-            ? { endTimeMs: (timed.endSeconds ?? timed.endBeat!) * 1000 }
-            : {}),
-          kind,
-        };
-      }),
-      allLanes,
-      { ruleset: options.ruleset ?? 'lr2', random: rng },
-    );
+    const timedNotes = entries.map(({ note, kind }) => {
+      const timed = note as {
+        channel: string;
+        seconds?: number;
+        endSeconds?: number;
+        beat?: number;
+        endBeat?: number;
+      };
+      return {
+        channel: timed.channel,
+        timeMs: (timed.seconds ?? timed.beat ?? 0) * 1000,
+        ...(timed.endSeconds !== undefined || timed.endBeat !== undefined
+          ? { endTimeMs: (timed.endSeconds ?? timed.endBeat!) * 1000 }
+          : {}),
+        kind,
+      };
+    });
+    const channels =
+      mode === 'S-RANDOM-EX'
+        ? randomizeSRandomNotes(timedNotes, [...allLanes, ...options.scratchLanes!], {
+            ruleset: 'beatoraja',
+            random: rng,
+          })
+        : mode === 'S_RANDOM_PLAYABLE'
+          ? randomizePMSPlayableNotes(timedNotes, allLanes, { random: rng, thresholdBPM: options.hRandomThresholdBPM })
+          : mode === 'RANDOM_PLAYABLE'
+            ? randomizePMSPlayableLanes(timedNotes, allLanes, rng)
+            : mode === 'ALL-SCR'
+              ? randomizeAllScratchNotes(timedNotes, [...allLanes, ...(options.scratchLanes ?? [])], {
+                  random: rng,
+                  scratchLanes: options.scratchLanes ?? [],
+                  thresholdBPM: options.hRandomThresholdBPM,
+                  doublePlay: options.doublePlay,
+                  side: options.side,
+                })
+              : mode === 'CONVERGE'
+                ? options.ruleset === 'beatoraja'
+                  ? randomizePMSConvergeNotes(timedNotes, allLanes, {
+                      random: rng,
+                      thresholdBPM: options.hRandomThresholdBPM,
+                    })
+                  : randomizeLR2ConvergeNotes(timedNotes, allLanes, {
+                      target: allLanes[(options.fixedLane ?? 0) - 1] ?? options.scratch ?? allLanes[4]!,
+                      scratch: options.scratch,
+                      random: rng,
+                    })
+                : mode === 'SPIRAL'
+                  ? randomizeSpiralNotes(timedNotes, allLanes, rng)
+                  : mode === 'H-RANDOM'
+                    ? randomizeHRandomNotes(timedNotes, allLanes, {
+                        random: rng,
+                        thresholdBPM: options.hRandomThresholdBPM,
+                      })
+                    : randomizeSRandomNotes(timedNotes, allLanes, {
+                        ruleset: options.ruleset ?? 'lr2',
+                        random: rng,
+                        ...(options.playVariant === '9' ? { mode: 'pms' as const } : {}),
+                      });
     entries.forEach(({ note }, index) => {
       note.channel = channels[index]!;
     });
     return;
   }
-  const domainLanes = allLanes;
+  if (mode === 'RANDOM-EX' && (options.scratchLanes?.length ?? 0) === 0)
+    throw new RangeError('RANDOM-EX requires scratch lanes.');
+  const domainLanes = mode === 'RANDOM-EX' ? [...allLanes, ...options.scratchLanes!] : allLanes;
   if (domainLanes.length < 2) return;
 
   const remapAll = (map: Map<string, string>): void => {
@@ -594,8 +856,41 @@ export function applyRandomMode(
     return;
   }
 
-  if (mode === 'RANDOM') {
+  if (mode === 'R-RANDOM') {
+    // beatoraja 0.8.9 LaneRotateShuffleModifier: destination -> source, excluding
+    // identity (forward start 0) and mirror (reverse start N - 1).
+    const forward = drawLaneRandomIndex(2, rng) === 1;
+    const start = drawLaneRandomIndex(domainLanes.length - 1, rng) + (forward ? 1 : 0);
+    const map = new Map<string, string>();
+    for (let lane = 0; lane < domainLanes.length; lane += 1) {
+      const source = (start + (forward ? lane : -lane) + domainLanes.length) % domainLanes.length;
+      map.set(domainLanes[source]!, domainLanes[lane]!);
+    }
+    remapAll(map);
+    return;
+  }
+
+  if (mode === 'RANDOM' || mode === 'RANDOM-EX') {
+    if (options.ruleset === 'beatoraja') {
+      const available = [...domainLanes];
+      const map = new Map<string, string>();
+      for (const target of domainLanes) {
+        const source = available.splice(drawLaneRandomIndex(available.length, rng), 1)[0]!;
+        map.set(source, target);
+      }
+      remapAll(map);
+      return;
+    }
     const perm = shuffleArray([...domainLanes], rng);
+    // LR2 randFix pins the original key-1 axis in five/seven-key modes;
+    // the historical nine-key RANDOM branch ignores it.
+    if (mode === 'RANDOM' && options.playVariant !== '9') {
+      const target = domainLanes[(options.fixedLane ?? 0) - 1];
+      if (target !== undefined) {
+        const index = perm.indexOf(target);
+        [perm[0], perm[index]] = [perm[index]!, perm[0]!];
+      }
+    }
 
     const map = new Map<string, string>();
     for (let index = 0; index < domainLanes.length; index += 1) {

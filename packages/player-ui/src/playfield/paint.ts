@@ -116,30 +116,35 @@ export function paintLanes(ctx: BeMusicPlayfieldPaintContext, { lanes }: BeMusic
 
 export function paintNotes(ctx: BeMusicPlayfieldPaintContext, data: BeMusicNotesData): void {
   ctx.fillStyle = '#e5efff';
-  ctx.globalAlpha = 0.25;
-  for (const line of data.measureLines) ctx.fillRect(line.x, line.y - 1, line.w, 1);
+  for (const line of data.measureLines) {
+    ctx.globalAlpha = 0.25 * (line.alpha ?? 1);
+    ctx.fillRect(line.x, line.y - 1, line.w, 1);
+  }
   ctx.globalAlpha = 1;
   for (const note of data.longNotes) {
     ctx.fillStyle = NOTE_COLORS[note.kind];
-    ctx.globalAlpha = note.state === 'dropped' ? 0.15 : 0.35;
+    ctx.globalAlpha = (note.state === 'dropped' ? 0.15 : 0.35) * (note.alpha ?? 1);
     ctx.fillRect(note.x, note.top - NOTE_HEIGHT, note.w, Math.max(1, note.bottom - note.top));
-    ctx.globalAlpha = note.state === 'dropped' ? 0.5 : 1;
+    ctx.globalAlpha = (note.state === 'dropped' ? 0.5 : 1) * (note.alpha ?? 1);
     ctx.fillRect(note.x, note.bottom - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
     if (note.mode === 'ln') ctx.globalAlpha *= 0.4;
     ctx.fillRect(note.x, note.top - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
     ctx.globalAlpha = 1;
   }
   for (const note of data.notes) {
+    ctx.globalAlpha = note.alpha ?? 1;
     ctx.fillStyle = NOTE_COLORS[note.kind];
     ctx.fillRect(note.x, note.y - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
   }
   // A mine reads as something to avoid: a red bar with a dark core, unlike any playable note.
   for (const mine of data.mines) {
+    ctx.globalAlpha = mine.alpha ?? 1;
     ctx.fillStyle = '#ff5c6c';
     ctx.fillRect(mine.x, mine.y - NOTE_HEIGHT, mine.w, NOTE_HEIGHT);
     ctx.fillStyle = '#10151f';
     ctx.fillRect(mine.x + 2, mine.y - NOTE_HEIGHT + 2, Math.max(0, mine.w - 4), NOTE_HEIGHT - 4);
   }
+  ctx.globalAlpha = 1;
 }
 
 export function paintLaneCovers(ctx: BeMusicPlayfieldPaintContext, { areas }: BeMusicLaneCoversData): void {
@@ -149,14 +154,20 @@ export function paintLaneCovers(ctx: BeMusicPlayfieldPaintContext, { areas }: Be
     const width = area.right - area.left;
     const height = area.bottom - area.top;
     if (area.sudden > 0) ctx.fillRect(area.left, area.top, width, height * area.sudden);
-    if (area.hidden > 0) ctx.fillRect(area.left, area.bottom - height * area.hidden, width, height * area.hidden);
+    if (area.hidden > 0)
+      ctx.fillRect(area.left, area.bottom - height * ((area.lift ?? 0) + area.hidden), width, height * area.hidden);
+    if ((area.lift ?? 0) > 0) {
+      ctx.globalAlpha = 1;
+      ctx.fillRect(area.left, area.bottom - height * area.lift!, width, height * area.lift!);
+      ctx.globalAlpha = 0.92;
+    }
   }
   ctx.globalAlpha = 1;
 }
 
 export function paintJudgeLine(ctx: BeMusicPlayfieldPaintContext, { runs, y }: BeMusicJudgeLineData): void {
   ctx.fillStyle = '#ffa8b3';
-  for (const run of runs) ctx.fillRect(run.left, y, run.right - run.left, 2);
+  for (const run of runs) ctx.fillRect(run.left, run.y ?? y, run.right - run.left, 2);
 }
 
 export function paintBombs(ctx: BeMusicPlayfieldPaintContext, { bombs }: BeMusicBombsData): void {
@@ -185,11 +196,11 @@ export function paintJudgmentDisplay(
   for (const word of words) {
     ctx.font = JUDGMENT_FONT;
     ctx.fillStyle = word.color;
-    ctx.fillText(word.text, word.x, y);
+    ctx.fillText(word.text, word.x, word.y ?? y);
     if (word.combo !== undefined && word.combo > 0) {
       ctx.font = COMBO_FONT;
       ctx.fillStyle = COMBO_COLOR;
-      paintTabular(ctx, String(word.combo), word.x, y + COMBO_OFFSET);
+      paintTabular(ctx, String(word.combo), word.x, (word.y ?? y) + COMBO_OFFSET);
     }
   }
 }

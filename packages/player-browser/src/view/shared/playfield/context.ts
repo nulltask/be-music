@@ -168,7 +168,24 @@ export interface PlayChrome {
 
 /** The view's members the playfield passes use (a play view's members of these names), with the running play as `play`. */
 export interface PlayfieldContext extends LaneGeometryContext {
-  readonly options: Readonly<Pick<PlaySessionOptions, 'beMusicEffects' | 'showInvisibleNotes' | 'judgedNoteDisplay'>>;
+  readonly drawsLift?: boolean;
+  bpmGuideCache?: {
+    timing: import('@be-music/chart-model').TimingResolver;
+    events: import('../../../chart/bpm-guide.ts').BPMGuideEvent[];
+  };
+  readonly options: Readonly<
+    Pick<
+      PlaySessionOptions,
+      | 'beMusicEffects'
+      | 'showInvisibleNotes'
+      | 'judgedNoteDisplay'
+      | 'bpmGuide'
+      | 'judgeTimingMs'
+      | 'visualConstant'
+      | 'noteDurationMs'
+      | 'constantFadeMs'
+    >
+  >;
   /** How the family's skin answers the playfield: the stage, the lanes, the note and bomb cells, the effect lengths. */
   readonly playfieldSkin: PlayfieldSkin;
   readonly chrome: PlayChrome;

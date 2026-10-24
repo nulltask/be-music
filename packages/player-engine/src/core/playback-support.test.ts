@@ -2,7 +2,7 @@ import { createBeatAtSecondsResolverFromTimingResolver, createTimingResolver } f
 import { createEmptyJSON } from '@be-music/chart-source';
 import { describe, expect, test } from 'vite-plus/test';
 import { createPlayerInputSignalBus } from './input-signal-bus.ts';
-import { createUIFramePublisher, recordPendingViewChanges } from './playback-support.ts';
+import { consumePlaybackInputCommands, createUIFramePublisher, recordPendingViewChanges } from './playback-support.ts';
 import type { PlayerUIFramePayload, PlayerUISignalBus } from './ui-signal-bus.ts';
 
 function createCapturingUISignals(): { uiSignals: PlayerUISignalBus; frames: PlayerUIFramePayload[] } {
@@ -177,4 +177,35 @@ describe('recordPendingViewChanges', () => {
     ]);
     expect(bus.drainCommands()).toEqual([]);
   });
+});
+
+test('drains final option edits into their own replay timeline', () => {
+  const bus = createPlayerInputSignalBus();
+  bus.pushCommand({ kind: 'options', values: { hiSpeed: 3, displayAreaInfo: 'ON' } });
+  const saved: unknown[] = [];
+  recordPendingViewChanges(
+    bus,
+    { recordViewChange() {}, recordOptionChange: (seconds, values) => saved.push({ seconds, values }) },
+    2,
+  );
+  expect(saved).toEqual([{ seconds: 2, values: { hiSpeed: 3, displayAreaInfo: 'ON' } }]);
+  expect(bus.drainCommands()).toEqual([]);
+});
+
+test('option commands reach the recorder without being interpreted as judge inputs', () => {
+  const bus = createPlayerInputSignalBus();
+  bus.pushCommand({ kind: 'options', values: { hiSpeed: 2.1 } });
+  const recorded: unknown[] = [];
+  const unhandled: unknown[] = [];
+  consumePlaybackInputCommands({
+    inputSignals: bus,
+    isInterrupted: () => false,
+    setInterruptedReason() {},
+    onTogglePause() {},
+    onHighSpeedAction() {},
+    onOptionChange: (values) => recorded.push(values),
+    onUnhandledCommand: (command) => unhandled.push(command),
+  });
+  expect(recorded).toEqual([{ hiSpeed: 2.1 }]);
+  expect(unhandled).toEqual([]);
 });

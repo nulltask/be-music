@@ -25,6 +25,7 @@ function drawLanes(
   },
   nowMs = 0,
   channels: string[] = lanesOf(playVariant),
+  covers?: { side: '1P' | '2P'; sudden: number; hidden: number; lift: number }[],
 ): BeMusicLaneFrame[] {
   let drawn: BeMusicLaneFrame[] = [];
   const ctx = {
@@ -32,6 +33,7 @@ function drawLanes(
       laneChannels: channels,
       chartPlayVariant: playVariant,
       laneX: new Map(),
+      resolveLaneCovers: () => covers ?? [],
       pressedChannels: new Set(beams.pressed ?? []),
       keyBeamStartedAt: new Map(beams.on ?? []),
       keyBeamFadeStartedAt: new Map(beams.fading ?? []),
@@ -44,6 +46,7 @@ function drawLanes(
       playState: { combo: 0 },
     },
     layoutMode: 'standard',
+    drawsLift: covers !== undefined,
     beMusicStage: undefined,
     laneGeometryCache: undefined,
     playfieldSkin: { ownsLanes: false, laneRect: () => undefined, keyOnFadeMs: () => FADE_MS },
@@ -64,6 +67,23 @@ const beamOf = (lanes: readonly BeMusicLaneFrame[], channel: string): number | u
   lanes.find((lane) => lane.channel === channel)?.beam;
 
 describe("the shared playfield's key beams", () => {
+  test("raises each side's lanes and beams with its own LIFT", () => {
+    const normal = drawLanes('14', { pressed: ['11', '21'] });
+    const lifted = drawLanes('14', { pressed: ['11', '21'] }, 0, lanesOf('14'), [
+      { side: '1P', sudden: 0, hidden: 0, lift: 0.25 },
+      { side: '2P', sudden: 0, hidden: 0, lift: 0.5 },
+    ]);
+    for (let index = 0; index < normal.length; index++) {
+      const lane = normal[index]!;
+      const scale = lane.channel.startsWith('2') ? 0.5 : 0.75;
+      expect(lifted[index]).toMatchObject({
+        top: lane.top,
+        bottom: lane.top + (lane.bottom - lane.top) * scale,
+        beam: lane.beam,
+      });
+    }
+  });
+
   test('light every 24 / 48 KEY lane held down, the keys past the seventh and the wheel included', () => {
     for (const playVariant of ['24', '48'] as const) {
       const channels = lanesOf(playVariant);

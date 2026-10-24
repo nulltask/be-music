@@ -8,11 +8,12 @@ import type { TunableCompressor } from '@be-music/player-browser/audio';
 import { getBrowserWorkerCount } from '@be-music/player-browser/compute';
 import type { PixiSceneHost, PlayScene, SelectScene } from '@be-music/player-browser/host';
 import type { BeatorajaThemeBundle } from '@be-music/player-browser/skin';
-import type { PlayOptions } from '@be-music/player-scene-model';
+import { resolveRandomModes, type PlayOptions } from '@be-music/player-scene-model';
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
 // Tweakpane injects its component stylesheet; the app themes it with public CSS variables.
 import { Pane, type FolderApi, type BladeApi, type ButtonApi, type ListInputBindingApi } from 'tweakpane';
-import type { PaneBinding } from '../../pane-controls.ts';
+import { paneOptions, type PaneBinding } from '../../pane-controls.ts';
+import { resolveGaugeTypes, type GaugeType } from '@be-music/player-engine/ruleset';
 import { readStoredCompressorTunings, type CompressorTuning } from '../../compressor-tuning.ts';
 import { readStoredCourseTableURLs } from '../../course-table-import.ts';
 import { captureDebugMenuSettings } from '../../debug-menu-settings.ts';
@@ -92,6 +93,8 @@ export interface DebugMenuDeps {
   /** Shows a status line. */
   setStatus(text: string): void;
   /** Keeps play options set from the menu for every screen and play, and hands them to the select screen. */
+  reusePreviousArrangement?(): Partial<PlayOptions> | undefined;
+  clearArrangement?(): void;
   setPlayOptions(changes: Partial<PlayOptions>): void;
   /** Remembers a hi-speed set on the menu's slider, and hands it to the running play. */
   rememberHiSpeed(value: number, source: 'menu'): void;
@@ -181,9 +184,27 @@ export class DebugMenu {
    * together while a song is playing (`lockReplayOptionsForPlay`) and refreshed when the LR2 select panel pushes
    * a change (`refreshPlayOptionControllers`).
    */
-  public readonly playOptionControllers: PaneBinding[] = [];
+  public readonly playOptionControllers: { disabled: boolean; refresh?: () => void }[] = [];
   /** The "Hi-speed" slider — left enabled during a play (it applies live) and repainted by {@link refreshHiSpeed}. */
   public hiSpeedController: PaneBinding | undefined;
+  public judgeTimingController: PaneBinding | undefined;
+  public hsFixController: PaneBinding | undefined;
+  public fixedDisplayAreaController: PaneBinding | undefined;
+  public floatingHiSpeedController: PaneBinding | undefined;
+  public floatingSpeedController: PaneBinding | undefined;
+  public classicHiSpeedController: PaneBinding | undefined;
+  public normalHiSpeedController: PaneBinding | undefined;
+  public normalHiSpeedLevelController: PaneBinding | undefined;
+  public classicSpeedController: PaneBinding | undefined;
+  public randomSeed1PController: PaneBinding | undefined;
+  public randomSeed2PController: PaneBinding | undefined;
+  public readonly randomSeedControllers: Array<{ hidden: boolean }> = [];
+  public random1PController: ListInputBindingApi<PlayOptions['random1P']> | undefined;
+  public random2PController: ListInputBindingApi<PlayOptions['random2P']> | undefined;
+  public gaugeController: ListInputBindingApi<GaugeType> | undefined;
+  public gaugeAutoShiftController: ListInputBindingApi<PlayOptions['gaugeAutoShift']> | undefined;
+  public mineModifierController: ListInputBindingApi<PlayOptions['mineModifier']> | undefined;
+  public judgeAlgorithmController: ListInputBindingApi<PlayOptions['judgeAlgorithm']> | undefined;
   /** The "Tempo (%)" slider — left enabled during a play whose tempo can change live (`allowsLiveTempo`). */
   public tempoController: PaneBinding | undefined;
   /** Debug Menu folder holding the active be-music skin's settings; hidden for a skin that declares none. */
@@ -340,7 +361,7 @@ export class DebugMenu {
    * Options read when a play starts, which are disabled while one runs (`lockReplayOptionsForPlay`); returns the
    * controller.
    */
-  public trackPlayOption(controller: PaneBinding): PaneBinding {
+  public trackPlayOption<T extends { disabled: boolean; refresh?: () => void }>(controller: T): T {
     this.playOptionControllers.push(controller);
     return controller;
   }
@@ -349,8 +370,17 @@ export class DebugMenu {
     this.statusController?.refresh();
   }
   /** Repaints the "Hi-speed" slider with a hi-speed set elsewhere (the select screen, the play's keys). */
+  public refreshJudgeTiming(): void {
+    this.judgeTimingController?.refresh();
+  }
+
   public refreshHiSpeed(): void {
     this.hiSpeedController?.refresh();
+    this.floatingSpeedController?.refresh();
+    this.floatingHiSpeedController?.refresh();
+    this.refreshRulesetChoices();
+    this.classicSpeedController?.refresh();
+    this.normalHiSpeedLevelController?.refresh();
   }
   /** Shows `value` as the skin system the scenes run on, which a pick of one with no skin loaded goes back to. */
   public showSkinSystem(value: SkinFamilyOverride): void {
@@ -382,9 +412,99 @@ export class DebugMenu {
     window.location.reload();
   }
   /** Repaints the "Play options" controllers after an external write (the LR2 select panel's edits). */
+  public refreshRulesetChoices(): void {
+    const ac = this.guiState.judgeRuleset === '____';
+    if (!ac && this.guiState.normalHiSpeedLevel > 0) {
+      this.guiState.normalHiSpeedLevel = 0;
+      this.setPlayOptions({ normalHiSpeedLevel: 0 });
+    }
+    if (!ac && this.guiState.floatingHiSpeed) {
+      this.guiState.floatingHiSpeed = false;
+      this.setPlayOptions({ floatingHiSpeed: false });
+    }
+    if (!ac && this.guiState.fixedDisplayArea) {
+      this.guiState.fixedDisplayArea = false;
+      this.setPlayOptions({ fixedDisplayArea: false });
+    }
+    if (this.fixedDisplayAreaController) this.fixedDisplayAreaController.hidden = !ac;
+    const floating = this.guiState.floatingHiSpeed;
+    if (this.floatingHiSpeedController) this.floatingHiSpeedController.hidden = !ac;
+    if (this.floatingSpeedController) this.floatingSpeedController.hidden = !floating;
+    const normal = this.guiState.normalHiSpeedLevel > 0;
+    if (this.normalHiSpeedController) this.normalHiSpeedController.hidden = !ac;
+    if (this.normalHiSpeedLevelController) this.normalHiSpeedLevelController.hidden = !normal || floating;
+    if (!ac && this.guiState.classicHiSpeed) {
+      this.guiState.classicHiSpeed = false;
+      this.setPlayOptions({ classicHiSpeed: false });
+    }
+    if (this.classicHiSpeedController) this.classicHiSpeedController.hidden = !ac;
+    if (this.hiSpeedController) this.hiSpeedController.hidden = this.guiState.classicHiSpeed || normal || floating;
+    if (this.hsFixController) this.hsFixController.hidden = this.guiState.classicHiSpeed || normal || floating;
+    if (this.classicSpeedController) this.classicSpeedController.hidden = !this.guiState.classicHiSpeed || floating;
+    const beatoraja = this.guiState.judgeRuleset === 'beatoraja';
+    for (const controller of this.randomSeedControllers) controller.hidden = !beatoraja;
+    for (const side of ['1P', '2P'] as const) {
+      const controller = side === '1P' ? this.randomSeed1PController : this.randomSeed2PController;
+      if (controller) controller.hidden = !beatoraja || this.guiState[`random${side}`] === 'RANDOM_PLAYABLE';
+    }
+    if (!beatoraja && this.guiState.gaugeAutoShift !== 'NONE') {
+      this.guiState.gaugeAutoShift = 'NONE';
+      this.setPlayOptions({ gaugeAutoShift: 'NONE' });
+    }
+    if (this.gaugeAutoShiftController) this.gaugeAutoShiftController.hidden = !beatoraja;
+    if (!beatoraja && this.guiState.mineModifier !== 'OFF') {
+      this.guiState.mineModifier = 'OFF';
+      this.setPlayOptions({ mineModifier: 'OFF' });
+    }
+    if (this.mineModifierController) this.mineModifierController.hidden = !beatoraja;
+    if (!beatoraja && this.guiState.judgeAlgorithm !== 'combo') {
+      this.guiState.judgeAlgorithm = 'combo';
+      this.setPlayOptions({ judgeAlgorithm: 'combo' });
+    }
+    if (this.judgeAlgorithmController) {
+      this.judgeAlgorithmController.options = beatoraja
+        ? paneOptions({ Combo: 'combo' as const, Duration: 'duration' as const, Lowest: 'lowest' as const })
+        : paneOptions({ 'Source default': 'combo' as const });
+      this.judgeAlgorithmController.refresh();
+    }
+    const randomModes = resolveRandomModes(this.guiState.judgeRuleset);
+    for (const side of ['1P', '2P'] as const) {
+      const key = `random${side}` as const;
+      if (!randomModes.includes(this.guiState[key])) {
+        this.guiState[key] = 'OFF';
+        this.setPlayOptions({ [key]: 'OFF' });
+      }
+      const controller = side === '1P' ? this.random1PController : this.random2PController;
+      if (controller) {
+        controller.options = paneOptions(randomModes);
+        controller.refresh();
+      }
+    }
+    const choices = resolveGaugeTypes(this.guiState.judgeRuleset);
+    if (!choices.includes(this.guiState.gauge)) {
+      this.guiState.gauge = 'GROOVE';
+      this.setPlayOptions({ gauge1P: 'GROOVE' });
+    }
+    if (this.gaugeController) {
+      this.gaugeController.options = paneOptions(choices).map((item) => ({
+        ...item,
+        text:
+          item.value === 'ASSIST-EASY'
+            ? this.guiState.judgeRuleset === '____'
+              ? 'ASSISTED EASY'
+              : 'ASSIST EASY'
+            : item.value === 'DEATH' && this.guiState.judgeRuleset === 'beatoraja'
+              ? 'HAZARD'
+              : item.value === 'GROOVE' && this.guiState.judgeRuleset !== 'lr2'
+                ? 'NORMAL'
+                : item.text,
+      }));
+      this.gaugeController.refresh();
+    }
+  }
   public refreshPlayOptionControllers(): void {
     for (const controller of this.playOptionControllers) {
-      controller.refresh();
+      controller.refresh?.();
     }
     this.scheduleSettingsSave();
   }

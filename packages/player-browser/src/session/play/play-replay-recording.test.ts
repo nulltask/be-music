@@ -194,3 +194,63 @@ describe('replay #RANDOM draws on the web paths', () => {
     expect(replay.chart.chartFingerprint).toBe(replay.chart.playFingerprint);
   });
 });
+
+test('records every selected option separately from the effective chart and engine fields', () => {
+  const recordingOptionState = {
+    hsFix: 'STARTBPM',
+    displayAreaInfo: 'SUDDEN_ONLY',
+    autoScratch1P: true,
+    autoScratch2P: false,
+  };
+  const result = resolveReplayRecording({ recordingOptionState }, undefined, VIEW);
+  recordingOptionState.autoScratch1P = false;
+  expect(result.options).toEqual({
+    hsFix: 'STARTBPM',
+    displayAreaInfo: 'SUDDEN_ONLY',
+    autoScratch1P: true,
+    autoScratch2P: false,
+  });
+});
+
+test('the recorded snapshot reflects course restrictions and an AUTO start instead of stale menu picks', () => {
+  expect(
+    resolveReplayRecording(
+      {
+        recordingOptionState: { autoPlay: false, gauge1P: 'EASY', random1P: 'RANDOM', autoScratch1P: true },
+        autoPlay: true,
+        gauge: 'HARD',
+        random1P: 'OFF',
+        autoScratch1P: false,
+      },
+      undefined,
+      VIEW,
+    ).options,
+  ).toMatchObject({ autoPlay: true, gauge1P: 'HARD', random1P: 'OFF', autoScratch1P: false });
+});
+
+test('records the effective H-RANDOM threshold alongside the arrangement selection', () => {
+  const recording = resolveReplayRecording({ random1P: 'H-RANDOM', hRandomThresholdBPM: 1200 }, undefined, VIEW);
+  expect(recording.options).toMatchObject({ random1P: 'H-RANDOM', hRandomThresholdBPM: 1000 });
+});
+
+test('records LR2 CONVERGE with independent fixed-lane targets', () => {
+  const recording = resolveReplayRecording(
+    { random1P: 'CONVERGE', random2P: 'CONVERGE', randomFixedLane1P: 4, randomFixedLane2P: 0 },
+    undefined,
+    VIEW,
+  );
+  expect(recording.options).toMatchObject({
+    random1P: 'CONVERGE',
+    random2P: 'CONVERGE',
+    randomFixedLane1P: 4,
+    randomFixedLane2P: 0,
+  });
+});
+
+test('records resolved source seeds instead of the request for a fresh draw', () => {
+  const recording = resolveReplayRecording({ randomSeed1P: '-1', randomSeed2P: '-1' }, undefined, VIEW, 2, {
+    p1: '9223372036854775807',
+    p2: '42',
+  });
+  expect(recording.options).toMatchObject({ randomSeed1P: '9223372036854775807', randomSeed2P: '42' });
+});

@@ -1,3 +1,4 @@
+import type { MineModifier, MinePlacement } from './mine-modifier.ts';
 import { type ChartPlayVariant, type RandomDraws, type ResolvedChart } from '@be-music/chart-model';
 import type { LogEntry } from '@be-music/shared-utils/log';
 import { type BeMusicEvent, type BeMusicJSON } from '@be-music/chart-source';
@@ -8,7 +9,7 @@ import { type TUINoteHeight } from './ui-options.ts';
 import { type AudioSinkClockState } from '../audio-clock.ts';
 import { type PlayerGaugeSummary, type PlayerUISignalBus } from './ui-signal-bus.ts';
 import { type PlayerInputSignalBus } from './input-signal-bus.ts';
-import type { GaugeType } from '../ruleset/gauge-type.ts';
+import type { GaugeType, GaugeAutoShift } from '../ruleset/gauge-type.ts';
 import { type LongNoteStyle, type RulesetId, type RulesetWindowTables } from '../ruleset/index.ts';
 import { type ReplayRecordingOptions } from '../replay/recorder.ts';
 import type { BeMusicReplay, ReplayCourseStage, ReplayInputEvent } from '../replay/format.ts';
@@ -78,6 +79,13 @@ export interface CreatePlayerInputRuntimeContext {
 export interface PlayerPlaySettings {
   auto?: boolean;
   autoScratch?: boolean;
+  /** beatoraja's note-selection algorithm; other source rulesets retain their own fixed selection. */
+  judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  longNoteModifier?: 'OFF' | 'LEGACY' | 'REMOVE';
+  mineModifier?: MineModifier;
+  /** Independently assist the source play side; explicit values override autoScratch for that side. */
+  autoScratch1P?: boolean;
+  autoScratch2P?: boolean;
   /**
    * Gauge the player selected, as an LR2-family id (`'GROOVE'` / `'EASY'` / `'HARD'` / `'DEATH'`). Mapped onto the
    * active ruleset's own line-up — `'GROOVE'` is beatoraja's `NORMAL`, `'DEATH'` is its `HAZARD`, and so on.
@@ -128,6 +136,8 @@ export interface PlayerPlaySettings {
    * dead (`failedMidPlay`). Recorded into the replay (`play.endOnFailure`) so re-simulations stop at the same point.
    */
   endOnFailure?: boolean;
+  /** Source-defined beatoraja policy; when present, takes precedence over endOnFailure. */
+  gaugeAutoShift?: GaugeAutoShift;
   /**
    * This play is one stage of a course: the stage runs on the ruleset's course gauge under the course's judge
    * constraint, starting from the state the previous stage left (`carryIn`; absent for the first stage). Recorded into
@@ -189,6 +199,8 @@ export interface PlayerPlayRuntime {
    * runs its own `preparePlaybackChartData` internally, just like before.
    */
   preparedChart?: PreparedPlaybackChartData;
+  /** Recorded mine population for deterministic playback of a generated mine option. */
+  mineModifierPlacements?: readonly MinePlacement[];
   createUIRuntime?: (context: CreatePlayerUIRuntimeContext) => Promise<PlayerUIRuntime | undefined>;
   createInputRuntime?: (context: CreatePlayerInputRuntimeContext) => PlayerInputRuntime | undefined;
   /** The host's audio backend. Omitted or returning undefined means playback without audio. */

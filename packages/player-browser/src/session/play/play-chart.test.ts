@@ -272,3 +272,274 @@ test('recorded arrangements preserve the resolved full-mode placement and old sp
   expect(applyReplayArrangement(oldNotes, oldTarget)).toEqual({ ok: true });
   expect(oldTarget.notes[0]!.channel).toBe('12');
 });
+
+test.each([5, 7, 9])('R-RANDOM has exactly 2(N-1) distinct rotations for %s keys', (count) => {
+  const lanes = Array.from({ length: count }, (_, i) => `key${i}`);
+  const layouts = new Set<string>();
+  for (let direction = 0; direction < 2; direction += 1) {
+    for (let start = 0; start < count - 1; start += 1) {
+      const notes = notesOn([...lanes, '16', '26']);
+      const mines = notesOn(lanes);
+      const invisible = notesOn(lanes);
+      const draws = [direction / 2, start / (count - 1)];
+      applyRandomMode(notes, lanes, 'R-RANDOM', () => draws.shift()!, { ruleset: 'beatoraja' }, mines, invisible);
+      const layout = channelsOf(notes).slice(0, count);
+      expect([...layout].sort()).toEqual([...lanes].sort());
+      expect(layout).not.toEqual(lanes);
+      expect(layout).not.toEqual([...lanes].reverse());
+      expect(channelsOf(mines)).toEqual(layout);
+      expect(channelsOf(invisible)).toEqual(layout);
+      expect(channelsOf(notes).slice(count)).toEqual(['16', '26']);
+      layouts.add(layout.join(','));
+    }
+  }
+  expect(layouts.size).toBe(2 * (count - 1));
+});
+
+test('R-RANDOM rejects LR2 before drawing randomness or mutating the chart', () => {
+  const notes = notesOn(KEYS_7);
+  expect(() =>
+    applyRandomMode(notes, KEYS_7, 'R-RANDOM', () => {
+      throw new Error('draw');
+    }),
+  ).toThrow(/unavailable/);
+  expect(channelsOf(notes)).toEqual(KEYS_7);
+});
+
+test('R-RANDOM keeps LN ends, both DP sides and recorded arrangements stable', () => {
+  const json = parseChart('#BPM 120\n#PLAYER 3\n#LNOBJ AA\n#00012:0001\n#00112:00AA\n#00022:0001\n#00122:00AA', 'bms');
+  const prepare = () => preparePlaybackChart(resolveChart(json, { playVariant: '14' }));
+  const chart = prepare();
+  for (const side of ['1P', '2P'] as const)
+    applyRandomMode(
+      chart.notes,
+      resolveLaneOptionChannels(side, '14'),
+      'R-RANDOM',
+      seededRandom(side === '1P' ? 1 : 2),
+      { ruleset: 'beatoraja' },
+    );
+  const replay = createReplayRecorder({
+    json,
+    chart,
+    play: { mode: 'auto', autoScratch: false, randomLane: { p1: 'R-RANDOM', p2: 'R-RANDOM' } },
+  }).finalize({ summary: { ...createEmptyScore(2), fast: 0, slow: 0 } });
+  const target = prepare();
+  expect(applyReplayArrangement(replay.chart.notes, target)).toEqual({ ok: true });
+  expect(target.notes.map(({ channel, seconds, endSeconds }) => ({ channel, seconds, endSeconds }))).toEqual(
+    chart.notes.map(({ channel, seconds, endSeconds }) => ({ channel, seconds, endSeconds })),
+  );
+  expect(chart.notes.every((note) => note.endSeconds !== undefined)).toBe(true);
+  expect(chart.notes[0]!.channel).toMatch(/^1/);
+  expect(chart.notes[1]!.channel).toMatch(/^2/);
+});
+
+test('SPIRAL applies one row permutation to notes, mines and hidden notes, leaving scratch fixed', () => {
+  const notes = [
+    { channel: '11', seconds: 0, endSeconds: 1 },
+    { channel: '12', seconds: 0.5 },
+    { channel: '12', seconds: 1 },
+    { channel: '12', seconds: 2 },
+    { channel: '16', seconds: 0 },
+  ];
+  const mines = [{ channel: '12', seconds: 0.5 }];
+  const hidden = [{ channel: '13', seconds: 0.5 }];
+  applyRandomMode(notes, ['11', '12', '13'], 'SPIRAL', () => 0, { ruleset: 'beatoraja' }, mines, hidden);
+  expect(channelsOf(notes)).toEqual(['12', '13', '13', '11', '16']);
+  expect(channelsOf(mines)).toEqual(['13']);
+  expect(channelsOf(hidden)).toEqual(['11']);
+  expect(notes[0]!.endSeconds).toBe(1);
+  expect(() => applyRandomMode([], [], 'SPIRAL', () => 0, { ruleset: '____' })).toThrow(/only for beatoraja/);
+});
+
+test('H-RANDOM applies its configured source threshold and rejects other rulesets', () => {
+  const prepare = () => [
+    { channel: '11', seconds: 0 },
+    { channel: '11', seconds: 0.1 },
+  ];
+  const slow = prepare(),
+    fast = prepare();
+  applyRandomMode(slow, ['11', '12'], 'H-RANDOM', () => 0, { ruleset: 'beatoraja', hRandomThresholdBPM: 120 });
+  applyRandomMode(fast, ['11', '12'], 'H-RANDOM', () => 0, { ruleset: 'beatoraja', hRandomThresholdBPM: 300 });
+  expect(channelsOf(slow)).toEqual(['11', '12']);
+  expect(channelsOf(fast)).toEqual(['11', '11']);
+  expect(() => applyRandomMode([], [], 'H-RANDOM', () => 0, { ruleset: '____' })).toThrow(/only for beatoraja/);
+});
+
+test.each(['1P', '2P'] as const)('LR2 CONVERGE selects the %s scratch or explicit key', (side) => {
+  const keys = resolveLaneOptionChannels(side, '14');
+  const scratch = side === '1P' ? '16' : '26';
+  const notes = [
+    { channel: keys[0]!, seconds: 0, endSeconds: 1 },
+    { channel: keys[1]!, seconds: 2 },
+  ];
+  applyRandomMode(notes, keys, 'CONVERGE', () => 0, { scratch, ruleset: 'lr2' });
+  expect(channelsOf(notes)).toEqual([scratch, scratch]);
+  const explicit = [{ channel: keys[0]!, seconds: 0 }];
+  applyRandomMode(explicit, keys, 'CONVERGE', () => 0, { scratch, fixedLane: 4 });
+  expect(channelsOf(explicit)).toEqual([keys[3]]);
+});
+
+test('LR2 PMS CONVERGE defaults to key 5 and a missing side is a no-op', () => {
+  const keys = resolveLaneOptionChannels('1P', '9');
+  const notes = [{ channel: keys[0]!, seconds: 0 }];
+  applyRandomMode(notes, keys, 'CONVERGE', () => 0);
+  expect(channelsOf(notes)).toEqual([keys[4]]);
+  applyRandomMode(notes, [], 'CONVERGE', () => 0);
+  expect(channelsOf(notes)).toEqual([keys[4]]);
+});
+
+test.each(['1P', '2P'] as const)('ALL-SCR includes the complete %s scratch domain', (side) => {
+  const keys = resolveLaneOptionChannels(side, '14');
+  const scratch = side === '1P' ? '16' : '26';
+  const notes = [
+    { channel: keys[0]!, seconds: 0 },
+    { channel: keys[1]!, seconds: 1 },
+  ];
+  applyRandomMode(notes, keys, 'ALL-SCR', () => 0, {
+    ruleset: 'beatoraja',
+    scratchLanes: [scratch],
+    doublePlay: true,
+    side,
+  });
+  expect(channelsOf(notes)).toEqual([scratch, scratch]);
+});
+
+test.each(['1P', '2P'] as const)('RANDOM-EX permutes the complete %s key/scratch domain consistently', (side) => {
+  const keys = resolveLaneOptionChannels(side, '14');
+  const scratch = side === '1P' ? '16' : '26';
+  const domain = [...keys, scratch];
+  const notes = notesOn(domain);
+  const mines = notesOn(domain);
+  const hidden = notesOn(domain);
+  applyRandomMode(
+    notes,
+    keys,
+    'RANDOM-EX',
+    () => 0.99,
+    { ruleset: 'beatoraja', scratchLanes: [scratch] },
+    mines,
+    hidden,
+  );
+  expect(channelsOf(notes)).toEqual([...domain].reverse());
+  expect(channelsOf(mines)).toEqual(channelsOf(notes));
+  expect(channelsOf(hidden)).toEqual(channelsOf(notes));
+  expect(notes.at(-1)!.channel).not.toBe(scratch);
+});
+
+test('RANDOM-EX includes both wheel directions and preserves LN timing', () => {
+  const keys = resolveLaneOptionChannels('1P', '24');
+  const notes = [
+    { channel: keys[0]!, seconds: 0, endSeconds: 2 },
+    { channel: '1P', seconds: 3 },
+    { channel: '1Q', seconds: 4 },
+  ];
+  applyRandomMode(notes, keys, 'RANDOM-EX', () => 0.99, { ruleset: 'beatoraja', scratchLanes: ['1P', '1Q'] });
+  expect(channelsOf(notes)).toEqual(['1Q', keys[1], keys[0]]);
+  expect(notes[0]!.endSeconds).toBe(2);
+  expect(() => applyRandomMode([], keys, 'RANDOM-EX', () => 0.99, { ruleset: 'lr2', scratchLanes: ['16'] })).toThrow(
+    /only for beatoraja/,
+  );
+  expect(() => applyRandomMode([], keys, 'RANDOM-EX', () => 0.99, { ruleset: 'beatoraja' })).toThrow(
+    /requires scratch/,
+  );
+});
+
+test('RANDOM-EX records the effective LN placement for replay without re-rolling', () => {
+  const json = parseChart('#BPM 120\n#LNOBJ AA\n#00012:0001\n#00112:00AA', 'bms');
+  const prepare = () => preparePlaybackChart(resolveChart(json, { playVariant: '7' }));
+  const chart = prepare();
+  applyRandomMode(chart.notes, KEYS_1P, 'RANDOM-EX', () => 0.99, { ruleset: 'beatoraja', scratchLanes: ['16'] });
+  const replay = createReplayRecorder({
+    json,
+    chart,
+    play: { mode: 'auto', autoScratch: false, randomLane: { p1: 'RANDOM-EX' } },
+  }).finalize({ summary: { ...createEmptyScore(1), fast: 0, slow: 0 } });
+  const target = prepare();
+  expect(applyReplayArrangement(replay.chart.notes, target)).toEqual({ ok: true });
+  expect(target.notes.map(({ channel, endSeconds }) => ({ channel, endSeconds }))).toEqual(
+    chart.notes.map(({ channel, endSeconds }) => ({ channel, endSeconds })),
+  );
+});
+
+test('CONVERGE dispatches to the distinct LR2 and beatoraja PMS algorithms', () => {
+  const keys = resolveLaneOptionChannels('1P', '9');
+  const source = () => [
+    { channel: keys[0]!, seconds: 0 },
+    { channel: keys[0]!, seconds: 0.126 },
+  ];
+  const lr2 = source(),
+    beatoraja = source();
+  applyRandomMode(lr2, keys, 'CONVERGE', () => 0, { ruleset: 'lr2', playVariant: '9' });
+  applyRandomMode(beatoraja, keys, 'CONVERGE', () => 0, { ruleset: 'beatoraja', playVariant: '9' });
+  expect(channelsOf(lr2)).toEqual([keys[4], keys[4]]);
+  expect(channelsOf(beatoraja)).toEqual([keys[0], keys[0]]);
+  expect(() => applyRandomMode([], KEYS_1P, 'CONVERGE', () => 0, { ruleset: 'beatoraja', playVariant: '7' })).toThrow(
+    /PMS arrangement/,
+  );
+});
+
+test('PMS RANDOM_PLAYABLE applies the exact permutation to visible, mine and invisible arrays', () => {
+  const keys = resolveLaneOptionChannels('1P', '9');
+  const notes = notesOn(keys);
+  const mines = notesOn(keys);
+  const hidden = notesOn(keys);
+  applyRandomMode(notes, keys, 'RANDOM_PLAYABLE', () => 0, { ruleset: 'beatoraja', playVariant: '9' }, mines, hidden);
+  // The visible nine-key chord forces the documented regular/mirror fallback.
+  expect(channelsOf(notes)).toEqual(keys);
+  expect(channelsOf(mines)).toEqual(keys);
+  expect(channelsOf(hidden)).toEqual(keys);
+  expect(() =>
+    applyRandomMode([], KEYS_1P, 'RANDOM_PLAYABLE', () => 0, { ruleset: 'beatoraja', playVariant: '7' }),
+  ).toThrow(/PMS arrangement/);
+});
+
+test('PMS playable S-RANDOM uses row-specific placement rather than a whole-chart permutation', () => {
+  const keys = resolveLaneOptionChannels('1P', '9');
+  const notes = [0, 0.001].map((seconds) => ({ channel: keys[0]!, seconds }));
+  applyRandomMode(notes, keys, 'S_RANDOM_PLAYABLE', () => 0, { ruleset: 'beatoraja', playVariant: '9' });
+  expect(channelsOf(notes)).toEqual([keys[0], keys[1]]);
+  expect(() =>
+    applyRandomMode([], KEYS_1P, 'S_RANDOM_PLAYABLE', () => 0, { ruleset: 'beatoraja', playVariant: '7' }),
+  ).toThrow(/PMS arrangement/);
+});
+
+test.each(['1P', '2P'] as const)('S-RANDOM-EX includes %s scratch and holds its LN through the tail row', (side) => {
+  const keys = resolveLaneOptionChannels(side, '14').slice(0, 2);
+  const scratch = side === '1P' ? '16' : '26';
+  const notes = [
+    { channel: keys[0]!, seconds: 0, endSeconds: 1 },
+    { channel: keys[1]!, seconds: 0.5 },
+    { channel: keys[1]!, seconds: 1 },
+    { channel: keys[1]!, seconds: 1.001 },
+  ];
+  applyRandomMode(notes, keys, 'S-RANDOM-EX', () => 0.99, { ruleset: 'beatoraja', scratchLanes: [scratch] });
+  expect(channelsOf(notes)).toEqual([scratch, keys[1], keys[1], scratch]);
+  expect(notes[0]!.endSeconds).toBe(1);
+});
+
+test('S-RANDOM-EX includes both wheel directions and uses 40ms rather than H-RANDOM threshold BPM', () => {
+  const keys = resolveLaneOptionChannels('1P', '24');
+  const notes = [0, 0.001].map((seconds) => ({ channel: keys[0]!, seconds }));
+  applyRandomMode(notes, keys, 'S-RANDOM-EX', () => 0.99, {
+    ruleset: 'beatoraja',
+    scratchLanes: ['1P', '1Q'],
+    hRandomThresholdBPM: 1000,
+  });
+  expect(channelsOf(notes)).toEqual(['1Q', '1P']);
+  expect(() =>
+    applyRandomMode([], keys, 'S-RANDOM-EX', () => 0, { ruleset: 'lr2', scratchLanes: ['1P', '1Q'] }),
+  ).toThrow(/only for beatoraja/);
+});
+
+test('LR2 RANDOM fixed-key selection pins the original key-1 axis, while nine-key RANDOM ignores it', () => {
+  const notes = notesOn(KEYS_1P);
+  applyRandomMode(notes, KEYS_1P, 'RANDOM', seededRandom(1), { ruleset: 'lr2', fixedLane: 4, playVariant: '7' });
+  expect(notes[0]!.channel).toBe(KEYS_1P[3]);
+  expect(channelsOf(notes).sort()).toEqual([...KEYS_1P].sort());
+  const pms = resolveLaneOptionChannels('1P', '9');
+  const ordinary = notesOn(pms),
+    selected = notesOn(pms);
+  applyRandomMode(ordinary, pms, 'RANDOM', seededRandom(1), { ruleset: 'lr2', playVariant: '9' });
+  applyRandomMode(selected, pms, 'RANDOM', seededRandom(1), { ruleset: 'lr2', fixedLane: 4, playVariant: '9' });
+  expect(selected).toEqual(ordinary);
+});

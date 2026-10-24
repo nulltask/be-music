@@ -15,8 +15,7 @@ import { logger } from '../../logger.ts';
 import type { PlaySessionOptions } from './play-options.ts';
 import { resolveLaneInputTokens, resolvePlayCoverKey } from './play-cover-keys.ts';
 import type { PlayEngineContext } from './play-engine.ts';
-import { applyPlayEvent } from './play-state.ts';
-import { adjustHiSpeed } from './play-view-settings.ts';
+import { adjustHiSpeed, changePlayView } from './play-view-settings.ts';
 
 const log = logger('gameplay');
 
@@ -37,6 +36,7 @@ export interface PlayInputContext extends PlayEngineContext {
   readonly autoPauseOnBlur: boolean;
   lastHidden: boolean;
   lastFocus: boolean;
+  lastStartTapMs?: number;
   visibilityPollHandle: number | undefined;
   touchTokenByChannel: Map<string, string> | undefined;
   readonly handleSharedEngineExitKey: (event: KeyboardEvent) => void;
@@ -201,9 +201,47 @@ export function handleWindowFocus(ctx: PlayInputContext): void {
 export function handleSharedEngineExitKey(ctx: PlayInputContext, event: KeyboardEvent): void {
   // Backspace first: its auto-repeat must still be `preventDefault`ed, which the repeat filter below would skip.
   if (ctx.quitHold.handleKeyDown(event)) return;
+  if (
+    ctx.playState.view.hiSpeed.floating ||
+    event.code === 'Numpad0' ||
+    (ctx.playState.view.fixedDisplayArea && event.code === 'Enter')
+  ) {
+    const target = (event.composedPath?.()[0] ?? event.target) as HTMLElement | null;
+    if (
+      event.defaultPrevented ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.isComposing ||
+      target?.isContentEditable ||
+      /^(INPUT|SELECT|TEXTAREA)$/u.test(target?.tagName ?? '')
+    )
+      return;
+  }
   // A held cover key keeps moving its cover, so the cover keys come before the repeat filter.
   if (ctx.options.coverKeys === true && handleCoverKey(ctx, event)) return;
   if (event.repeat) return;
+  if (event.code === 'Enter' && ctx.playState.view.fixedDisplayArea) {
+    event.preventDefault();
+    const previous = ctx.lastStartTapMs;
+    ctx.lastStartTapMs = event.timeStamp;
+    // Browser START gesture window; the source specifies a quick double press, not an exact duration.
+    if (previous !== undefined && event.timeStamp > previous && event.timeStamp - previous <= 500) {
+      ctx.lastStartTapMs = undefined;
+      changePlayView(ctx, { type: 'floating-speed-restore', bpm: 120, visibleFraction: 1 });
+    }
+    return;
+  }
+  if (event.code === 'Numpad0' && ctx.options.judgeRuleset === '____') {
+    event.preventDefault();
+    changePlayView(ctx, {
+      type: 'floating-speed-mode',
+      enabled: ctx.playState.view.hiSpeed.floating === undefined,
+      bpm: 120,
+      visibleFraction: 1,
+    });
+    return;
+  }
   if (event.code === 'Escape') {
     event.preventDefault();
     ctx.requestExit();
@@ -244,7 +282,7 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
   // way to push HiSpeed changes back to the renderer; we handle them directly here.
   if (event.code === 'ArrowUp' || event.code === 'ArrowDown') {
     event.preventDefault();
-    if (adjustHiSpeed(ctx, event.code === 'ArrowUp' ? HISPEED_STEP : -HISPEED_STEP)) {
+    if (adjustHiSpeed(ctx, event.code === 'ArrowUp' ? HISPEED_STEP : -HISPEED_STEP, event.shiftKey)) {
       ctx.theme.moment({ kind: 'view-setting', setting: 'hi-speed', at: ctx.playClock() });
     }
   }
@@ -260,7 +298,19 @@ function handleCoverKey(ctx: PlayInputContext, event: KeyboardEvent): boolean {
   if (key === undefined) return false;
   event.preventDefault();
   if (ctx.playState.view.hiSpeed.locked) return true;
-  applyPlayEvent(ctx, key.command);
+  const floating = ctx.playState.view.hiSpeed.floating;
+  if (floating && key.command.type === 'cover-adjust' && key.command.part === 'sudden') {
+    const cover = ctx.playState.view.covers[0];
+    if (!cover?.suddenOn && !cover?.liftOn) {
+      changePlayView(ctx, { type: 'hi-speed-fine', direction: -key.command.delta });
+      return true;
+    }
+    changePlayView(ctx, {
+      ...key.command,
+      ...(!cover?.suddenOn && cover?.liftOn ? { part: 'lift' as const } : {}),
+      delta: (Math.sign(key.command.delta) * (event.shiftKey ? 10 : 1)) / 723,
+    });
+  } else changePlayView(ctx, key.command);
   ctx.theme.moment({ kind: 'view-setting', setting: key.setting, at: ctx.playClock() });
   return true;
 }

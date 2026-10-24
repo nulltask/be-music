@@ -21,7 +21,21 @@ export function resolveCourseStageSettings(definition: CourseDefinition): Omit<R
 }
 
 /** The lane options a host offers, as the select screen names them. */
-export type CourseLaneOption = 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
+export type CourseLaneOption =
+  | 'OFF'
+  | 'MIRROR'
+  | 'RANDOM'
+  | 'R-RANDOM'
+  | 'S-RANDOM'
+  | 'SPIRAL'
+  | 'H-RANDOM'
+  | 'ALL-SCR'
+  | 'RANDOM-EX'
+  | 'S-RANDOM-EX'
+  | 'RANDOM_PLAYABLE'
+  | 'S_RANDOM_PLAYABLE'
+  | 'CONVERGE'
+  | 'SCATTER';
 
 /** The lane options of a play: each side's lane option and DP FLIP. */
 export interface CourseLaneOptions {
@@ -30,9 +44,9 @@ export interface CourseLaneOptions {
   dpFlip: boolean;
 }
 
-/** beatoraja's random options up to index 5 (`grade_random` keeps them): here all but SCATTER. */
+/** beatoraja's random options up to index 5 (`grade_random` keeps them): OFF, MIRROR, RANDOM, R-RANDOM S-RANDOM and SPIRAL here. */
 function isPlainRandomFamily(option: CourseLaneOption): boolean {
-  return option !== 'SCATTER';
+  return ['OFF', 'MIRROR', 'RANDOM', 'R-RANDOM', 'S-RANDOM', 'SPIRAL'].includes(option);
 }
 
 /**

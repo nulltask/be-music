@@ -122,8 +122,31 @@ describe('captureDebugMenuSettings', () => {
       judgeRuleset: 'beatoraja',
       gauge: 'HARD',
       random1P: 'SCATTER',
+      hRandomThresholdBPM: 120,
+      randomSeed1P: '-1',
+      randomSeed2P: '-1',
+      randomFixedLane1P: 0,
+      randomFixedLane2P: 0,
       random2P: 'MIRROR',
       dpFlip: true,
+      bpmGuide: true,
+      judgeTimingMs: 0,
+      visualConstant: false,
+      noteDurationMs: 500,
+      lift1P: 0.1,
+      lift2P: 0.1,
+      liftOn1P: false,
+      liftOn2P: false,
+
+      constantFadeMs: 100,
+      normalHiSpeedLevel: 0,
+      classicHiSpeed: true,
+      floatingHiSpeed: false,
+      fixedDisplayArea: false,
+      judgeAlgorithm: 'duration',
+      longNoteModifier: 'REMOVE',
+      mineModifier: 'OFF',
+      gaugeAutoShift: 'NONE',
       autoScratch1P: true,
       autoScratch2P: true,
       sort: 'OFF',
@@ -141,6 +164,12 @@ describe('captureDebugMenuSettings', () => {
       tempoStretchAlgorithm: 'signalsmith',
       replayView: { tempo: false, hiSpeed: false, covers: false, lift: false },
       hiSpeed: 2.5,
+      hsFix: 'STARTBPM',
+      displayAreaInfo: 'ON',
+      hiddenSudden1P: 'SUDDEN',
+      hiddenSudden2P: 'HID+SUD',
+      laneCover: true,
+      shutter: 0.4,
       builtInSkin: 'plain',
       skinEffects: 'off',
       renderResolution: 1,
@@ -180,4 +209,63 @@ describe('captureDebugMenuSettings', () => {
     ).toEqual({ version: 1, updatedAt: 42, settings: {}, deleted: true });
     expect(parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: -1, settings: {} }))).toBeUndefined();
   });
+});
+
+test('persists both sides of R-RANDOM in Debug Menu settings', () => {
+  const settings = { random1P: 'R-RANDOM', random2P: 'R-RANDOM' };
+  expect(
+    parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
+  ).toMatchObject(settings);
+});
+
+test('persists and validates the H-RANDOM source configuration', () => {
+  expect(
+    parseDebugMenuSettingsDocument(
+      JSON.stringify({ version: 1, updatedAt: 1, settings: { random1P: 'H-RANDOM', hRandomThresholdBPM: 300 } }),
+    )?.settings,
+  ).toMatchObject({ random1P: 'H-RANDOM', hRandomThresholdBPM: 300 });
+});
+
+test('persists per-side LR2 CONVERGE targets', () => {
+  const settings = { random1P: 'CONVERGE', randomFixedLane1P: 3, randomFixedLane2P: 7 };
+  expect(
+    parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
+  ).toMatchObject(settings);
+});
+
+test('persists large seed values as decimal strings', () => {
+  const settings = { randomSeed1P: '9223372036854775807', randomSeed2P: '-1' };
+  expect(
+    parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
+  ).toMatchObject(settings);
+});
+
+test('persists mine REMOVE independently of note drawing preferences', () => {
+  expect(
+    parseDebugMenuSettingsDocument(
+      JSON.stringify({ version: 1, updatedAt: 1, settings: { mineModifier: 'REMOVE', showInvisibleNotes: true } }),
+    )?.settings,
+  ).toMatchObject({ mineModifier: 'REMOVE', showInvisibleNotes: true });
+});
+
+test('gauge auto-shift CONTINUE is retained in saved settings', () => {
+  expect(
+    parseDebugMenuSettingsDocument(
+      JSON.stringify({ version: 1, updatedAt: 1, settings: { gaugeAutoShift: 'CONTINUE' } }),
+    )?.settings,
+  ).toMatchObject({ gaugeAutoShift: 'CONTINUE' });
+});
+
+test('floating speed persistence keeps source precision and values above the generic speed cap', () => {
+  const settings = { floatingHiSpeed: true, hiSpeed: 8 + 1 / 300 };
+  expect(
+    parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
+  ).toMatchObject(settings);
+});
+
+test('fixed display area persists independently from floating mode', () => {
+  const settings = { fixedDisplayArea: true, floatingHiSpeed: false };
+  expect(
+    parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
+  ).toMatchObject(settings);
 });

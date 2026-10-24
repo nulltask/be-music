@@ -138,3 +138,34 @@ describe('resolveCourseStagePlaySettings', () => {
     expect(resolveCourseStagePlaySettings(free, picks)).toEqual(picks);
   });
 });
+
+test('grade_random keeps R-RANDOM while grade and grade_mirror constrain it', () => {
+  const picked = { random1P: 'R-RANDOM', random2P: 'R-RANDOM', dpFlip: true } as const;
+  expect(resolveCourseLaneOptions(['grade_random'], picked)).toEqual(picked);
+  for (const constraint of ['grade', 'grade_mirror'] as const)
+    expect(resolveCourseLaneOptions([constraint], picked)).toEqual({ random1P: 'OFF', random2P: 'OFF', dpFlip: false });
+});
+
+test('grade_random permits SPIRAL at source option index 5', () => {
+  const picked = { random1P: 'SPIRAL', random2P: 'SPIRAL', dpFlip: false } as const;
+  expect(resolveCourseLaneOptions(['grade_random'], picked)).toEqual(picked);
+  expect(resolveCourseLaneOptions(['grade'], picked)).toEqual({ random1P: 'OFF', random2P: 'OFF', dpFlip: false });
+});
+
+test('grade_random excludes ALL-SCR and H-RANDOM at source option indices above 5', () => {
+  expect(
+    resolveCourseLaneOptions(['grade_random'], { random1P: 'ALL-SCR', random2P: 'H-RANDOM', dpFlip: true }),
+  ).toEqual({ random1P: 'OFF', random2P: 'OFF', dpFlip: true });
+});
+
+test('grade_random excludes RANDOM-EX', () => {
+  expect(resolveCourseLaneOptions(['grade_random'], { random1P: 'RANDOM-EX', random2P: 'OFF', dpFlip: false })).toEqual(
+    { random1P: 'OFF', random2P: 'OFF', dpFlip: false },
+  );
+});
+
+test('grade_random excludes S-RANDOM-EX', () => {
+  expect(
+    resolveCourseLaneOptions(['grade_random'], { random1P: 'S-RANDOM-EX', random2P: 'OFF', dpFlip: false }),
+  ).toEqual({ random1P: 'OFF', random2P: 'OFF', dpFlip: false });
+});

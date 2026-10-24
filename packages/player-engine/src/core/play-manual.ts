@@ -1,3 +1,4 @@
+import { resolveAutoScratchChannels } from './auto-scratch.ts';
 import type { PlayerHCNLaneState } from './ui-signal-bus.ts';
 import { resolveRulesetLongNoteMode } from './judge-rules.ts';
 import { formatSeconds, resolveAltModifierLabel } from '../utils.ts';
@@ -49,6 +50,10 @@ export function createPlayJudgeCore(
         playbackChart.laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel),
       ),
       autoScratch: session.autoScratch,
+      autoScratchChannels: resolveAutoScratchChannels(
+        session.options,
+        playbackChart.laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel),
+      ),
       judgeMsPerChartSecond,
       wavResources: session.wavResources,
       idBase: session.idBase,

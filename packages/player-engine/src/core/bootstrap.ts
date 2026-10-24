@@ -1,3 +1,5 @@
+import { prepareMineModifier, type MineModifier } from './mine-modifier.ts';
+import { removeLongNoteTails } from './long-note-modifier.ts';
 import { throwIfAborted } from '@be-music/shared-utils/core';
 import { resolveChart, type ResolvedChart } from '@be-music/chart-model';
 import { normalizeChannel, type BeMusicJSON } from '@be-music/chart-source';
@@ -17,7 +19,6 @@ import { type PlayerGaugeSummary, type PlayerUISignalBus } from './ui-signal-bus
 import type { CreatePlayerUIRuntimeContext, PlayerOptions, PlayerSummary, PlayerUIRuntime } from './engine-types.ts';
 import {
   toTimedInvisibleNote,
-  toTimedLandmineNote,
   toTimedPlayableNote,
   type TimedLandmineNote,
   type TimedPlayableNote,
@@ -50,6 +51,9 @@ export interface PreparedPlaybackChartData {
   notes: TimedPlayableNote[];
   laneSoundNotes: TimedPlayableNote[];
   landmineNotes: TimedLandmineNote[];
+  /** Number of mines actually changed; selection alone does not imply a source assist. */
+  mineModifierChangeCount?: number;
+  mineModifierApplied?: MineModifier;
   invisibleNotes: TimedPlayableNote[];
   renderNotes: TimedPlayableNote[];
   totalSeconds: number;
@@ -173,18 +177,30 @@ const GROOVE_GAUGE_JUDGE_TO_RULESET_INDEX: Record<GrooveGaugeJudgmentKind, Gauge
  */
 export function preparePlaybackChart(
   resolved: ResolvedChart,
-  options: Pick<PlayerOptions, 'laneModeExtension'> = {},
+  options: Pick<
+    PlayerOptions,
+    'laneModeExtension' | 'longNoteModifier' | 'mineModifier' | 'mineModifierPlacements'
+  > = {},
   auxiliaryPlaybackEndSeconds = 0,
+  random?: () => number,
 ): PreparedPlaybackChartData {
   const playVariant = resolved.playVariant;
   const notes = resolved.notes.map(toTimedPlayableNote);
+  removeLongNoteTails(notes, options.longNoteModifier ?? 'OFF', resolved.lnMode);
   // Invisible 3x/4x objects are not score targets, but they do update the lane's current keysound in manual play.
   // They are always prepared, independently of the debug overlay option, so audio never depends on rendering settings.
-  const landmineNotes = resolved.mines.map(toTimedLandmineNote);
+  const mineResult = prepareMineModifier(resolved, options.mineModifier ?? 'OFF', {
+    notes,
+    laneModeExtension: options.laneModeExtension,
+    random,
+    placements: options.mineModifierPlacements,
+  });
+  const landmineNotes = mineResult.mines;
   const invisibleNotes = resolved.invisibleNotes.map(toTimedInvisibleNote);
   const laneSoundNotes = [...notes, ...invisibleNotes].sort(compareLaneSoundNotes);
   const renderNotes = notes;
-  const totalSeconds = Math.max(resolved.lastNoteSeconds, auxiliaryPlaybackEndSeconds);
+  let totalSeconds = Math.max(resolved.lastNoteSeconds, auxiliaryPlaybackEndSeconds);
+  for (const mine of landmineNotes) totalSeconds = Math.max(totalSeconds, mine.seconds);
   const channels = collectUniqueNoteChannels(notes, landmineNotes, invisibleNotes);
   const laneModeOptions = {
     player: resolved.source.bms.player,
@@ -202,6 +218,9 @@ export function preparePlaybackChart(
     notes,
     laneSoundNotes,
     landmineNotes,
+    ...(options.mineModifier !== undefined
+      ? { mineModifierChangeCount: mineResult.changes, mineModifierApplied: options.mineModifier }
+      : {}),
     invisibleNotes,
     renderNotes,
     totalSeconds,

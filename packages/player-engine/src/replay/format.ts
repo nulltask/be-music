@@ -1,5 +1,12 @@
+import type { MineModifier } from '../core/mine-modifier.ts';
+import {
+  parseReplayOptionState,
+  parseReplayOptionChanges,
+  type ReplayOptionState,
+  type ReplayOptionChange,
+} from './options.ts';
 import type { LongNoteMode, RandomDraw } from '@be-music/chart-model';
-import { GAUGE_TYPES, isGaugeType, type GaugeType } from '../ruleset/gauge-type.ts';
+import { GAUGE_TYPES, isGaugeType, type GaugeType, type GaugeAutoShift } from '../ruleset/gauge-type.ts';
 import type { CourseGaugeSet, CourseJudgeConstraint, RulesetCourseKind } from '../ruleset/course.ts';
 import type { RulesetId } from '../ruleset/definitions.ts';
 import {
@@ -60,6 +67,8 @@ export interface ReplayNote {
   id: number;
   /** Normalized playable channel AFTER every lane transform (`11`..`19` / `21`..`29`), i.e. the lane the player saw. */
   channel: string;
+  /** Original lane when rearranged; omitted when it is the same as channel or in older replays. */
+  sourceChannel?: string;
   type: ReplayNoteType;
   timeUs: number;
   /** Long-note / freezone tail. Present only when `type` is `'long'` or `'freezone'`. */
@@ -68,6 +77,8 @@ export interface ReplayNote {
   lnMode?: LongNoteMode;
   /** Gauge damage percentage for `type: 'mine'` notes (base-36 value / bmson `damage`, already resolved). */
   damage?: number;
+  /** Generated mines carry no explosion sample. Valid only for mine notes. */
+  silent?: boolean;
 }
 
 export type ReplayInputAction = 'down' | 'up';
@@ -114,6 +125,10 @@ export interface ReplayJudgeRank {
 }
 
 export interface ReplayChart {
+  /** Original header BPM, kept separately from the effective tempo map. */
+  headerBPM?: number;
+  /** Resolved chart BPM extrema, used for source option classification. */
+  bpmRange?: { min: number; max: number };
   title?: string;
   subtitle?: string;
   artist?: string;
@@ -162,8 +177,19 @@ export interface ReplayChart {
 }
 
 export interface ReplayPlay {
+  /** Selected source options at the start; typed effective play/chart fields remain authoritative for judging. */
+  options?: ReplayOptionState;
+  /** Every later selected-option change, on the same chart clock as inputs and view changes. */
+  optionChanges?: ReplayOptionChange[];
   mode: 'manual' | 'auto';
   autoScratch: boolean;
+  /** Effective manual assist per side; older replays fall back to autoScratch for both. */
+  judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  longNoteModifier?: 'OFF' | 'LEGACY' | 'REMOVE';
+  mineModifier?: MineModifier;
+  mineModifierChangeCount?: number;
+  autoScratch1P?: boolean;
+  autoScratch2P?: boolean;
   /** Gauge the player selected for the session (declared by the host; LR2-family gauge id). */
   gauge: GaugeType;
   /** Lane-arrangement option per side, when the host applied one (`'OFF'` / `'MIRROR'` / `'RANDOM'` / ...). */
@@ -192,6 +218,7 @@ export interface ReplayPlay {
    * judgment that emptied it counts. Absent on older logs, which kept judging to the end.
    */
   endOnFailure?: boolean;
+  gaugeAutoShift?: GaugeAutoShift;
   /** Set when the play was one stage of a course: what the stage's rules and starting state were. */
   course?: ReplayCourseStage;
   /**
@@ -417,7 +444,17 @@ function parseChart(chart: Record<string, unknown>): ReplayChart {
     throw new ReplayParseError('chart.lnMode: expected 1 | 2 | 3');
   }
 
+  let bpmRange: ReplayChart['bpmRange'];
+  if (chart.bpmRange !== undefined) {
+    const range = expectRecord(chart.bpmRange, 'chart.bpmRange');
+    const min = expectFiniteNumber(range.min, 'chart.bpmRange.min');
+    const max = expectFiniteNumber(range.max, 'chart.bpmRange.max');
+    if (min > max) throw new ReplayParseError('chart.bpmRange: min must not exceed max');
+    bpmRange = { min, max };
+  }
   const parsed: ReplayChart = {
+    ...(bpmRange !== undefined ? { bpmRange } : {}),
+    ...(chart.headerBPM !== undefined ? { headerBPM: expectFiniteNumber(chart.headerBPM, 'chart.headerBPM') } : {}),
     title: optionalString(chart.title, 'chart.title'),
     subtitle: optionalString(chart.subtitle, 'chart.subtitle'),
     artist: optionalString(chart.artist, 'chart.artist'),
@@ -505,6 +542,11 @@ function parseNote(value: unknown, index: number): ReplayNote {
     type: type as ReplayNoteType,
     timeUs: expectFiniteNumber(record.timeUs, `chart.notes[${index}].timeUs`),
   };
+  if (record.sourceChannel !== undefined) {
+    if (typeof record.sourceChannel !== 'string' || !/^[12][0-9A-Z]$/.test(record.sourceChannel))
+      throw new ReplayParseError(`chart.notes[${index}].sourceChannel: expected a normalized playable lane`);
+    note.sourceChannel = record.sourceChannel;
+  }
   const endTimeUs = optionalFiniteNumber(record.endTimeUs, `chart.notes[${index}].endTimeUs`);
   if (endTimeUs !== undefined) note.endTimeUs = endTimeUs;
   if (record.lnMode !== undefined) {
@@ -515,6 +557,11 @@ function parseNote(value: unknown, index: number): ReplayNote {
   }
   const damage = optionalFiniteNumber(record.damage, `chart.notes[${index}].damage`);
   if (damage !== undefined) note.damage = damage;
+  if (record.silent !== undefined) {
+    if (type !== 'mine' || typeof record.silent !== 'boolean')
+      throw new ReplayParseError(`chart.notes[${index}].silent: expected a mine boolean`);
+    note.silent = record.silent;
+  }
   return note;
 }
 
@@ -591,6 +638,11 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
   if (play.aborted !== undefined) parsed.aborted = play.aborted === true;
   if (play.abortedAtUs !== undefined) parsed.abortedAtUs = expectFiniteNumber(play.abortedAtUs, 'play.abortedAtUs');
   if (play.endOnFailure !== undefined) parsed.endOnFailure = play.endOnFailure === true;
+  if (play.gaugeAutoShift !== undefined) {
+    if (!['NONE', 'CONTINUE'].includes(play.gaugeAutoShift as string))
+      throw new ReplayParseError('play.gaugeAutoShift: expected NONE or CONTINUE');
+    parsed.gaugeAutoShift = play.gaugeAutoShift as GaugeAutoShift;
+  }
   if (play.course !== undefined) parsed.course = parseCourseStage(expectRecord(play.course, 'play.course'));
   if (play.tempo !== undefined) {
     const tempo = expectFiniteNumber(play.tempo, 'play.tempo');
@@ -606,6 +658,36 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     const changes = parseReplayViewChanges(play.viewChanges, 'play.viewChanges');
     if (changes.length > 0) parsed.viewChanges = changes;
   }
+  if (play.judgeAlgorithm !== undefined) {
+    if (!['combo', 'duration', 'lowest'].includes(play.judgeAlgorithm as string)) {
+      throw new ReplayParseError('play.judgeAlgorithm: expected combo, duration or lowest');
+    }
+    parsed.judgeAlgorithm = play.judgeAlgorithm as 'combo' | 'duration' | 'lowest';
+  }
+  if (play.mineModifier !== undefined) {
+    if (!['OFF', 'REMOVE', 'ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'].includes(play.mineModifier as string))
+      throw new ReplayParseError('play.mineModifier: expected OFF, REMOVE, ADD_RANDOM, ADD_NEAR or ADD_BLANK');
+    parsed.mineModifier = play.mineModifier as MineModifier;
+  }
+  if (play.mineModifierChangeCount !== undefined)
+    parsed.mineModifierChangeCount = expectNonNegativeInteger(
+      play.mineModifierChangeCount,
+      'play.mineModifierChangeCount',
+    );
+  if (play.longNoteModifier !== undefined) {
+    if (!['OFF', 'LEGACY', 'REMOVE'].includes(play.longNoteModifier as string)) {
+      throw new ReplayParseError('play.longNoteModifier must be OFF, LEGACY or REMOVE');
+    }
+    parsed.longNoteModifier = play.longNoteModifier as 'OFF' | 'LEGACY' | 'REMOVE';
+  }
+  for (const key of ['autoScratch1P', 'autoScratch2P'] as const) {
+    if (play[key] !== undefined) {
+      if (typeof play[key] !== 'boolean') throw new ReplayParseError(`play.${key}: expected a boolean`);
+      parsed[key] = play[key];
+    }
+  }
+  if (play.options !== undefined) parsed.options = parseReplayOptionState(play.options);
+  if (play.optionChanges !== undefined) parsed.optionChanges = parseReplayOptionChanges(play.optionChanges);
   if (play.native !== undefined) {
     const native = expectRecord(play.native, 'play.native');
     const copied: Record<string, string | number | boolean | null> = {};
