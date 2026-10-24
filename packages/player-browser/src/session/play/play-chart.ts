@@ -94,6 +94,7 @@ export interface PlayChartContext {
       | 'hsFix'
       | 'classicHiSpeed'
       | 'floatingHiSpeed'
+      | 'fixedDisplayArea'
       | 'normalHiSpeedLevel'
       | 'preResolved'
       | 'hiSpeedLocked'
@@ -188,6 +189,8 @@ export interface PlayChartContext {
 
 export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): void {
   const arrangement = ctx.options.replay ?? ctx.options.fixedArrangement;
+  if (ctx.options.fixedDisplayArea && (ctx.options.replay?.play.judgeRuleset ?? ctx.options.judgeRuleset) !== '____')
+    throw new RangeError('Fixed display area is available only for its source ruleset.');
   if (ctx.options.floatingHiSpeed && (ctx.options.replay?.play.judgeRuleset ?? ctx.options.judgeRuleset) !== '____')
     throw new RangeError('AC measured floating HI-SPEED requires its source ruleset.');
   if (
@@ -594,6 +597,7 @@ function createChartPlayState(
     view: {
       hiSpeed,
       covers,
+      ...(ctx.options.fixedDisplayArea ? { fixedDisplayArea: true as const } : {}),
       hsFix,
     },
   });

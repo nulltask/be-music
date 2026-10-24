@@ -142,6 +142,7 @@ describe('captureDebugMenuSettings', () => {
       normalHiSpeedLevel: 0,
       classicHiSpeed: true,
       floatingHiSpeed: false,
+      fixedDisplayArea: false,
       judgeAlgorithm: 'duration',
       longNoteModifier: 'REMOVE',
       mineModifier: 'OFF',
@@ -257,6 +258,13 @@ test('gauge auto-shift CONTINUE is retained in saved settings', () => {
 
 test('floating speed persistence keeps source precision and values above the generic speed cap', () => {
   const settings = { floatingHiSpeed: true, hiSpeed: 8 + 1 / 300 };
+  expect(
+    parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
+  ).toMatchObject(settings);
+});
+
+test('fixed display area persists independently from floating mode', () => {
+  const settings = { fixedDisplayArea: true, floatingHiSpeed: false };
   expect(
     parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
   ).toMatchObject(settings);

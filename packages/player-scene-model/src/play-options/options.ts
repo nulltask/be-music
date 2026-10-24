@@ -19,6 +19,8 @@ export interface PlayOptions {
   classicHiSpeed: boolean;
   /** AC 32 measured FLOATING HI-SPEED, with source cover coupling and 0.5 keyboard steps. */
   floatingHiSpeed: boolean;
+  /** AC 34 locks cover/LIFT geometry; floating START-double restores the initial visible time. */
+  fixedDisplayArea: boolean;
   /** AC 32 measured normal level 1..20; 0 leaves the existing multiplier API active. */
   normalHiSpeedLevel: number;
   /** beatoraja display timing in integer milliseconds, -500..500; positive advances note drawing. */

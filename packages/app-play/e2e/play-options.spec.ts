@@ -316,3 +316,42 @@ for (const skin of ['plain', 'native'] as const) {
     await player.waitForResult(1);
   });
 }
+
+for (const skin of ['plain', 'native'] as const) {
+  test(`fixed display area ignores cover keys and restores floating time on ${skin}`, async ({ player }) => {
+    await player.open({ 'be-music.built-in-skin': skin });
+    await player.dropText('fixed-area.bme', '#TITLE Fixed display area\n#BPM 120\n#00103:F0\n#00411:01\n');
+    await player.setOption(['Developer'], 'Judgment windows', '????');
+    await player.setOption(['Play options'], 'FLOATING HI-SPEED (AC 32 measured)', true);
+    await player.setOption(['Play options'], 'Floating speed', 2);
+    await player.setOption(['Play options'], 'Fixed display area (AC 34)', true);
+    await player.setOption(['Play options'], 'Effect 1P', 'SUDDEN');
+    await player.setOption(['Play options'], 'Lane cover', true);
+    await player.setOption(['Play options'], 'Cover height', 0.25);
+    await player.setOption(['Play options'], 'Auto play', true);
+    await player.cursorTo((bar) => bar.title === 'Fixed display area', 'fixed area chart');
+    await player.key('Enter');
+    await player.waitFor((state) => (state.play?.seconds ?? 0) > 2.1, 'BPM change');
+    await player.key('PageDown');
+    await player.key('End');
+    await player.key('ArrowUp');
+    await player.waitFor((state) => state.play?.hiSpeed === 2.5, 'speed remains adjustable');
+    await player.key('Enter');
+    await player.key('Enter');
+    await player.waitFor((state) => state.play?.hiSpeed === 1, 'initial time restored without moving covers');
+    await player.waitForResult(0);
+    const replay = await player.lastReplay();
+    expect(replay?.play.options?.fixedDisplayArea).toBe(true);
+    const initialCovers = replay?.play.view?.covers;
+    expect(
+      replay?.play.viewChanges?.every(
+        (change) => change.covers === undefined || JSON.stringify(change.covers) === JSON.stringify(initialCovers),
+      ),
+    ).toBe(true);
+    await player.leaveResult();
+    await player.setOption(['Play options'], 'Fixed display area (AC 34)', false);
+    await player.dropText('fixed-area.bmplay.json', JSON.stringify(replay));
+    await player.waitFor((state) => state.scene.kind === 'play' && state.play?.replay === true, 'fixed-area replay');
+    await player.waitForResult(1);
+  });
+}

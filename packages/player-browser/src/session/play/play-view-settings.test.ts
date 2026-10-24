@@ -203,3 +203,21 @@ test('floating mode switches reach replay recording even before another render',
     expect.objectContaining({ kind: 'options', values: expect.objectContaining({ floatingHiSpeed: false }) }),
   ]);
 });
+
+test('fixed display restore takes the current BPM and preserves covers while interactive cover sets are ignored', () => {
+  const ctx = createView();
+  ctx.playState = createPlayState({
+    view: {
+      fixedDisplayArea: true,
+      hiSpeed: createHiSpeedState({ floating: true, hiSpeed: 2, bpm: 120, visibleFraction: 0.75 }),
+      covers: [{ side: '1P', sudden: 0.25, suddenOn: true, hidden: 0, hiddenOn: false, lift: 0, liftOn: false }],
+    },
+  });
+  Object.assign(ctx, { timingResolver: { bpmAtBeat: () => 240 }, currentBeat: () => 0 });
+  const covers = ctx.playState.view.covers;
+  changePlayView(ctx, { type: 'cover-set', covers: [{ lift: 0.8 }] });
+  expect(ctx.playState.view.covers).toBe(covers);
+  changePlayView(ctx, { type: 'floating-speed-restore', bpm: 120, visibleFraction: 1 });
+  expect(ctx.playState.view.hiSpeed.player).toBe(1);
+  expect(ctx.playState.view.covers).toBe(covers);
+});

@@ -77,7 +77,7 @@ export function changePlayView(ctx: PlayViewSettingsContext, command: HiSpeedCom
   const bpm = ctx.timingResolver?.bpmAtBeat(ctx.currentBeat?.(ctx.currentSeconds()) ?? 0);
   const rawCover = ctx.playState.view.covers[0];
   const cover =
-    rawCover && command.type === 'floating-speed-mode' && command.enabled
+    rawCover && command.type === 'floating-speed-mode' && command.enabled && !ctx.playState.view.fixedDisplayArea
       ? normalizeFloatingLaneCover(rawCover)
       : rawCover;
   const visibleFraction = Math.max(
@@ -85,7 +85,9 @@ export function changePlayView(ctx: PlayViewSettingsContext, command: HiSpeedCom
     1 - (cover?.suddenOn ? cover.sudden : 0) - ((cover?.liftOn ?? false) ? (cover?.lift ?? 0) : 0),
   );
   const event =
-    command.type === 'floating-speed-mode' || command.type === 'floating-speed-recalculate'
+    command.type === 'floating-speed-mode' ||
+    command.type === 'floating-speed-recalculate' ||
+    command.type === 'floating-speed-restore'
       ? { ...command, bpm: bpm ?? command.bpm, visibleFraction }
       : command.type === 'hi-speed-step' ||
           command.type === 'hi-speed-set' ||
@@ -247,6 +249,7 @@ function applyReplayView(ctx: PlayViewSettingsContext, recorded: ReplayViewState
   if ((replay.covers || (drawsLift && replay.lift)) && view.covers !== undefined) {
     applyPlayEvent(ctx, {
       type: 'cover-set',
+      recorded: true,
       covers: view.covers.map(({ side, sudden, hidden, lift }) => ({
         side,
         sudden: drawsLift && !ctx.playState.view.covers[0]?.absolute ? resolveCoverAboveLift(sudden, lift) : sudden,

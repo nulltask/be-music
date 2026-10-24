@@ -33,6 +33,7 @@ export type GUIPlayOptions = Pick<
   | 'normalHiSpeedLevel'
   | 'classicHiSpeed'
   | 'floatingHiSpeed'
+  | 'fixedDisplayArea'
   | 'judgeAlgorithm'
   | 'mineModifier'
   | 'gaugeAutoShift'
@@ -77,6 +78,7 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     normalHiSpeedLevel: state.normalHiSpeedLevel,
     classicHiSpeed: state.classicHiSpeed,
     floatingHiSpeed: state.floatingHiSpeed,
+    fixedDisplayArea: state.fixedDisplayArea,
     judgeAlgorithm: state.judgeAlgorithm,
     longNoteModifier: state.longNoteModifier,
     mineModifier: state.mineModifier,
@@ -130,6 +132,7 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.normalHiSpeedLevel = options.normalHiSpeedLevel;
   state.classicHiSpeed = options.classicHiSpeed;
   state.floatingHiSpeed = options.floatingHiSpeed;
+  state.fixedDisplayArea = options.fixedDisplayArea;
   state.judgeAlgorithm = options.judgeAlgorithm;
   state.longNoteModifier = options.longNoteModifier;
   state.mineModifier = options.mineModifier;

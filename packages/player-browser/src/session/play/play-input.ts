@@ -36,6 +36,7 @@ export interface PlayInputContext extends PlayEngineContext {
   readonly autoPauseOnBlur: boolean;
   lastHidden: boolean;
   lastFocus: boolean;
+  lastStartTapMs?: number;
   visibilityPollHandle: number | undefined;
   touchTokenByChannel: Map<string, string> | undefined;
   readonly handleSharedEngineExitKey: (event: KeyboardEvent) => void;
@@ -200,7 +201,11 @@ export function handleWindowFocus(ctx: PlayInputContext): void {
 export function handleSharedEngineExitKey(ctx: PlayInputContext, event: KeyboardEvent): void {
   // Backspace first: its auto-repeat must still be `preventDefault`ed, which the repeat filter below would skip.
   if (ctx.quitHold.handleKeyDown(event)) return;
-  if (ctx.playState.view.hiSpeed.floating || event.code === 'Numpad0') {
+  if (
+    ctx.playState.view.hiSpeed.floating ||
+    event.code === 'Numpad0' ||
+    (ctx.playState.view.fixedDisplayArea && event.code === 'Enter')
+  ) {
     const target = (event.composedPath?.()[0] ?? event.target) as HTMLElement | null;
     if (
       event.defaultPrevented ||
@@ -216,6 +221,17 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
   // A held cover key keeps moving its cover, so the cover keys come before the repeat filter.
   if (ctx.options.coverKeys === true && handleCoverKey(ctx, event)) return;
   if (event.repeat) return;
+  if (event.code === 'Enter' && ctx.playState.view.fixedDisplayArea) {
+    event.preventDefault();
+    const previous = ctx.lastStartTapMs;
+    ctx.lastStartTapMs = event.timeStamp;
+    // Browser START gesture window; the source specifies a quick double press, not an exact duration.
+    if (previous !== undefined && event.timeStamp > previous && event.timeStamp - previous <= 500) {
+      ctx.lastStartTapMs = undefined;
+      changePlayView(ctx, { type: 'floating-speed-restore', bpm: 120, visibleFraction: 1 });
+    }
+    return;
+  }
   if (event.code === 'Numpad0' && ctx.options.judgeRuleset === '____') {
     event.preventDefault();
     changePlayView(ctx, {

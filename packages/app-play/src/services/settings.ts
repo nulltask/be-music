@@ -254,6 +254,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     normalHiSpeedLevel: 0,
     classicHiSpeed: false,
     floatingHiSpeed: false,
+    fixedDisplayArea: false,
     judgeAlgorithm: 'combo',
     longNoteModifier: 'OFF',
     mineModifier: 'OFF',
