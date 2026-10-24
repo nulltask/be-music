@@ -38,6 +38,19 @@ function recorder(): BeMusicPlayfieldPaintContext & { calls: string[] } {
 }
 
 describe('playfield painters', () => {
+  it('paints HIDDEN above the lifted line and an opaque cover below it', () => {
+    const ctx = recorder();
+    paintLaneCovers(ctx, {
+      areas: [{ left: 10, right: 50, top: 20, bottom: 420, sudden: 0.15, hidden: 0.075, lift: 0.25 }],
+    });
+    expect(ctx.calls).toEqual([
+      'fillRect 10,20,40,60 #000000 0.92',
+      'fillRect 10,290,40,30 #000000 0.92',
+      'fillRect 10,320,40,100 #000000 1',
+    ]);
+    expect(ctx.globalAlpha).toBe(1);
+  });
+
   it('multiplies timeline visibility by authored opacity without leaking it to later notes', () => {
     const ctx = recorder();
     paintNotes(ctx, {

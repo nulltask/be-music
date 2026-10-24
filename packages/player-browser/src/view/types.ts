@@ -492,6 +492,9 @@ export interface PlayfieldStage {
 
 /** A lane's rect on the stage. `bottom` is the judgement line a note's bottom edge lands on. */
 export interface PlayfieldLaneRect {
+  /** Original judgement line before LIFT; preserves replay and white-number scale. */
+  readonly baseBottom?: number;
+  readonly scrollScale?: number;
   readonly x: number;
   readonly w: number;
   readonly top: number;

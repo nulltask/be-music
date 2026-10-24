@@ -8,6 +8,7 @@ export interface DisplayAreaLane {
   readonly w: number;
   readonly top: number;
   readonly bottom: number;
+  readonly baseBottom?: number;
 }
 export interface DisplayAreaLabel {
   readonly side: PlaySide;
@@ -33,7 +34,7 @@ export function resolveDisplayAreaLabels(input: {
     const left = Math.min(...lanes.map((lane) => lane.x));
     const right = Math.max(...lanes.map((lane) => lane.x + lane.w));
     const top = Math.min(...lanes.map((lane) => lane.top));
-    const bottom = Math.max(...lanes.map((lane) => lane.bottom));
+    const bottom = Math.max(...lanes.map((lane) => lane.baseBottom ?? lane.bottom));
     const visible = input.visibleMs(cover);
     const green = visible === undefined ? undefined : resolveGreenNumber(visible);
     const add = (edge: DisplayAreaLabel['edge'], fraction: number, y: number) => {
@@ -42,8 +43,8 @@ export function resolveDisplayAreaLabels(input: {
     };
     if (input.mode !== 'HIDDEN_LIFT_ONLY') add('sudden', cover.sudden, top + (bottom - top) * cover.sudden);
     if (input.mode !== 'SUDDEN_ONLY') {
-      if (cover.lift > 0) add('lift', cover.lift, bottom);
-      else add('hidden', cover.hidden, bottom - (bottom - top) * cover.hidden);
+      if (cover.lift > 0) add('lift', cover.lift, Math.max(...lanes.map((lane) => lane.bottom)));
+      else add('hidden', cover.hidden, bottom - (bottom - top) * (cover.lift + cover.hidden));
     }
   }
   return result;

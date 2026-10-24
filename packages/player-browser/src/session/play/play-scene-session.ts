@@ -159,6 +159,12 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
           ? { normalHiSpeedLevel: play.playState.view.hiSpeed.normalLevel }
           : {}),
       };
+      for (const cover of play.playState.view.covers) {
+        const heightKey = cover.side === '1P' ? 'lift1P' : 'lift2P';
+        const onKey = cover.side === '1P' ? 'liftOn1P' : 'liftOn2P';
+        liveOptions[heightKey] = cover.lift;
+        liveOptions[onKey] = cover.liftOn ?? cover.lift > 0;
+      }
       playOptions = liveOptions;
       const current: ReplayOptionState = { ...liveOptions };
       const change = diffReplayOptions(this.recordedOptions ?? { ...playOptions }, current);

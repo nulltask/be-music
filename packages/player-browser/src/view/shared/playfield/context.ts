@@ -168,6 +168,7 @@ export interface PlayChrome {
 
 /** The view's members the playfield passes use (a play view's members of these names), with the running play as `play`. */
 export interface PlayfieldContext extends LaneGeometryContext {
+  readonly drawsLift?: boolean;
   bpmGuideCache?: {
     timing: import('@be-music/chart-model').TimingResolver;
     events: import('../../../chart/bpm-guide.ts').BPMGuideEvent[];

@@ -151,6 +151,26 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       .addBinding(this.guiState, 'bpmGuide', { label: 'BPM GUIDE (beatoraja)' })
       .on('change', ({ value }) => this.setPlayOptions({ bpmGuide: value })),
   );
+  for (const side of ['1P', '2P'] as const) {
+    const heightKey = side === '1P' ? 'lift1P' : 'lift2P';
+    const enabledKey = side === '1P' ? 'liftOn1P' : 'liftOn2P';
+    folder.addBinding(this.guiState, enabledKey, { label: `LIFT ${side} (beatoraja)` }).on('change', ({ value }) => {
+      this.setPlayOptions({ [enabledKey]: value });
+      this.gameplayView?.controller.dispatch({
+        type: 'cover',
+        command: { type: 'cover-set', covers: [{ side, liftOn: value, lift: this.guiState[heightKey] }], side },
+      });
+    });
+    folder
+      .addBinding(this.guiState, heightKey, { label: `LIFT height ${side}`, min: 0, max: 1, step: 0.001 })
+      .on('change', ({ value }) => {
+        this.setPlayOptions({ [heightKey]: value });
+        this.gameplayView?.controller.dispatch({
+          type: 'cover',
+          command: { type: 'cover-set', covers: [{ side, lift: value }], side },
+        });
+      });
+  }
   trackPlayOption(
     folder
       .addBinding(this.guiState, 'visualConstant', { label: 'Visual CONSTANT (beatoraja)' })

@@ -408,6 +408,10 @@ export function resolveReplayRecording(
     | 'normalHiSpeedLevel'
     | 'judgeTimingMs'
     | 'visualConstant'
+    | 'lift1P'
+    | 'lift2P'
+    | 'liftOn1P'
+    | 'liftOn2P'
     | 'noteDurationMs'
     | 'constantFadeMs'
     | 'bpmGuide'
@@ -441,6 +445,11 @@ export function resolveReplayRecording(
     judgeTimingMs: options.judgeTimingMs,
     visualConstant: options.visualConstant,
     noteDurationMs: options.noteDurationMs,
+    lift1P: options.lift1P,
+    lift2P: options.lift2P,
+    liftOn1P: options.liftOn1P,
+    liftOn2P: options.liftOn2P,
+
     constantFadeMs: options.constantFadeMs,
     hiddenSudden1P: options.hiddenSudden1P,
     hiddenSudden2P: options.hiddenSudden2P,

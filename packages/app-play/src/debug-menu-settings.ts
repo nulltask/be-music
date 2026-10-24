@@ -69,6 +69,10 @@ export interface DebugMenuSettings {
   normalHiSpeedLevel: number;
   judgeTimingMs: number;
   visualConstant: boolean;
+  lift1P: number;
+  lift2P: number;
+  liftOn1P: boolean;
+  liftOn2P: boolean;
   noteDurationMs: number;
   constantFadeMs: number;
   bpmGuide: boolean;
@@ -210,6 +214,10 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'dpFlip', booleanOf(raw.dpFlip));
   assign(settings, 'bpmGuide', booleanOf(raw.bpmGuide));
   assign(settings, 'visualConstant', booleanOf(raw.visualConstant));
+  assign(settings, 'lift1P', resolvePlayOptionValue('lift1P', raw.lift1P));
+  assign(settings, 'lift2P', resolvePlayOptionValue('lift2P', raw.lift2P));
+  assign(settings, 'liftOn1P', resolvePlayOptionValue('liftOn1P', raw.liftOn1P));
+  assign(settings, 'liftOn2P', resolvePlayOptionValue('liftOn2P', raw.liftOn2P));
   assign(settings, 'noteDurationMs', resolvePlayOptionValue('noteDurationMs', raw.noteDurationMs));
   assign(settings, 'constantFadeMs', resolvePlayOptionValue('constantFadeMs', raw.constantFadeMs));
   assign(settings, 'judgeTimingMs', resolvePlayOptionValue('judgeTimingMs', raw.judgeTimingMs));
@@ -403,6 +411,11 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('bpmGuide');
   assignState('visualConstant');
   assignState('noteDurationMs');
+  assignState('lift1P');
+  assignState('lift2P');
+  assignState('liftOn1P');
+  assignState('liftOn2P');
+
   assignState('constantFadeMs');
   assignState('judgeTimingMs');
   assignState('normalHiSpeedLevel');
@@ -475,6 +488,11 @@ export function captureDebugMenuSettings(
     bpmGuide: state.bpmGuide,
     visualConstant: state.visualConstant,
     noteDurationMs: state.noteDurationMs,
+    lift1P: state.lift1P,
+    lift2P: state.lift2P,
+    liftOn1P: state.liftOn1P,
+    liftOn2P: state.liftOn2P,
+
     constantFadeMs: state.constantFadeMs,
     judgeTimingMs: state.judgeTimingMs,
     normalHiSpeedLevel: state.normalHiSpeedLevel,

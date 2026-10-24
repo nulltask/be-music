@@ -47,6 +47,16 @@ export function resolvePlayfieldParts(
     bottom = Math.max(bottom, lane.bottom);
   }
   const laneRect = lanes.length > 0 ? rect(left, top, width, bottom - top) : rect(left, playfield.top, 0, 0);
+  const lineYs = Object.values(playfield.sides).map((side) => side?.judgementY ?? playfield.judgementY);
+  const minLineY = Math.min(playfield.judgementY, ...lineYs);
+  const maxLineY = Math.max(playfield.judgementY, ...lineYs);
+  const lineRuns = runs.map((run) => {
+    const side = Object.values(playfield.sides).find(
+      (side) => side && run.left >= side.left && run.right <= side.right,
+    );
+    const y = side?.judgementY ?? playfield.judgementY;
+    return y === playfield.judgementY ? run : { ...run, y };
+  });
   const judgmentY = playfield.judgementY - JUDGMENT_OFFSET;
   const words: BeMusicJudgmentWord[] = [];
   for (const side of frame.runtime.judgeSides ?? []) {
@@ -56,6 +66,9 @@ export function resolvePlayfieldParts(
     words.push({
       x: bounds ? (bounds.left + bounds.right) / 2 : playfield.centerX,
       text: judgeDisplayWord(side.judge),
+      ...(bounds?.judgementY !== undefined && bounds.judgementY !== playfield.judgementY
+        ? { y: bounds.judgementY - JUDGMENT_OFFSET }
+        : {}),
       color: judgmentColor(side.judge, frame.nowMs),
       ...(keepsCombo(side.judge) && combo > 0 ? { combo } : {}),
     });
@@ -72,17 +85,25 @@ export function resolvePlayfieldParts(
       rect: rect(left, playfield.top, width, stage.height - playfield.top),
       data: { notes: frame.notes, longNotes: frame.longNotes, mines: frame.mines, measureLines: frame.measureLines },
     },
-    laneCovers: { rect: laneRect, data: { areas: resolveLaneCoverAreas(frame) } },
+    laneCovers: {
+      rect: rect(left, laneRect.y, width, Math.max(bottom, playfield.judgementY) - laneRect.y),
+      data: { areas: resolveLaneCoverAreas(frame) },
+    },
     judgeLine: {
-      rect: rect(left, playfield.judgementY, width, JUDGE_LINE_HEIGHT),
-      data: { runs, y: playfield.judgementY },
+      rect: rect(left, minLineY, width, maxLineY - minLineY + JUDGE_LINE_HEIGHT),
+      data: { runs: lineRuns, y: playfield.judgementY },
     },
     bombs: {
-      rect: rect(left, playfield.judgementY - BOMB_REACH, width, BOMB_REACH * 2),
+      rect: rect(left, minLineY - BOMB_REACH, width, maxLineY - minLineY + BOMB_REACH * 2),
       data: { bombs: frame.bombs },
     },
     judgmentDisplay: {
-      rect: rect(left, judgmentY - JUDGMENT_ASCENT, width, JUDGMENT_ASCENT + COMBO_OFFSET + COMBO_DESCENT),
+      rect: rect(
+        left,
+        minLineY - JUDGMENT_OFFSET - JUDGMENT_ASCENT,
+        width,
+        maxLineY - minLineY + JUDGMENT_ASCENT + COMBO_OFFSET + COMBO_DESCENT,
+      ),
       data: { words, y: judgmentY },
     },
   };
@@ -98,7 +119,7 @@ function resolveLaneCoverAreas(
   for (const lane of frame.layout.lanes) if (lane.channel) sideOf.set(lane.channel, lane.side);
   const areas: BeMusicLaneCoverArea[] = [];
   for (const cover of covers) {
-    if (!(cover.sudden > 0) && !(cover.hidden > 0)) continue;
+    if (!(cover.sudden > 0) && !(cover.hidden > 0) && !(cover.lift > 0)) continue;
     const bounds = frame.layout.playfield.sides[cover.side];
     if (!bounds) continue;
     let top = Infinity;
@@ -106,10 +127,18 @@ function resolveLaneCoverAreas(
     for (const lane of frame.lanes) {
       if (sideOf.get(lane.channel) !== cover.side) continue;
       top = Math.min(top, lane.top);
-      bottom = Math.max(bottom, lane.bottom);
+      bottom = Math.max(bottom, frame.layout.playfield.judgementY);
     }
     if (!(bottom > top)) continue;
-    areas.push({ left: bounds.left, right: bounds.right, top, bottom, sudden: cover.sudden, hidden: cover.hidden });
+    areas.push({
+      left: bounds.left,
+      right: bounds.right,
+      top,
+      bottom,
+      sudden: cover.sudden,
+      hidden: cover.hidden,
+      ...(cover.lift > 0 ? { lift: cover.lift } : {}),
+    });
   }
   return areas;
 }

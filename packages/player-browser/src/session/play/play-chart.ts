@@ -86,6 +86,10 @@ export interface PlayChartContext {
       | 'hiSpeedLocked'
       | 'hiddenSudden1P'
       | 'hiddenSudden2P'
+      | 'lift1P'
+      | 'lift2P'
+      | 'liftOn1P'
+      | 'liftOn2P'
       | 'shutter'
       | 'laneCover'
       | 'coverStart'
@@ -453,7 +457,7 @@ function createChartPlayState(
  */
 function resolveStartingCovers(ctx: PlayChartContext): LaneCoverState[] {
   const sides = resolveLaneSides(ctx.laneChannels);
-  if (ctx.options.coverStart === 'none') {
+  if (ctx.options.coverStart === 'none' || ctx.options.hiSpeedLocked === true) {
     return sides.map((side) => ({ side, sudden: 0, suddenOn: false, hidden: 0, hiddenOn: false, lift: 0 }));
   }
   return laneCoversFromPlayOptions(
@@ -461,6 +465,11 @@ function resolveStartingCovers(ctx: PlayChartContext): LaneCoverState[] {
       hiddenSudden1P: ctx.options.hiddenSudden1P ?? 'OFF',
       hiddenSudden2P: ctx.options.hiddenSudden2P ?? 'OFF',
       shutter: ctx.options.shutter ?? SHUTTER_DEFAULT,
+      lift1P: ctx.options.lift1P ?? 0.1,
+      lift2P: ctx.options.lift2P ?? 0.1,
+      liftOn1P: ctx.options.liftOn1P ?? false,
+      liftOn2P: ctx.options.liftOn2P ?? false,
+
       laneCover: ctx.options.laneCover !== false,
     },
     sides,

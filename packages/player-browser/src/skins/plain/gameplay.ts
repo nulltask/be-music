@@ -95,7 +95,9 @@ function drawLanes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
   // One judgement line per play side, so it never crosses the gap between the double-play banks.
   ctx.fillStyle = DANGER;
   for (const run of resolveLaneRuns(frame.lanes)) {
-    ctx.fillRect(run.left, frame.layout.playfield.judgementY, run.right - run.left, 2);
+    const side = frame.layout.lanes.find((lane) => lane.x >= run.left && lane.x < run.right)?.side ?? '1P';
+    const y = frame.layout.playfield.sides[side]?.judgementY ?? frame.layout.playfield.judgementY;
+    ctx.fillRect(run.left, y, run.right - run.left, 2);
   }
 }
 
@@ -161,9 +163,9 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
  * from it, so a held note reads as held at a glance. Drawn from the hold's age alone, like every effect here.
  */
 function drawHolds(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
-  const y = frame.layout.playfield.judgementY;
   for (const lane of frame.lanes) {
     if (lane.holding !== true || lane.holdStartedAtMs === undefined) continue;
+    const y = lane.bottom;
     const ageMs = frame.nowMs - lane.holdStartedAtMs;
     const centerX = lane.x + lane.w / 2;
     ctx.fillStyle = HOLD_GLOW;
@@ -204,12 +206,13 @@ function drawJudgement(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFram
   for (const side of runtime.judgeSides ?? []) {
     if (!side.judge) continue;
     const bounds = layout.playfield.sides[side.side];
+    const sideY = y + ((bounds?.judgementY ?? layout.playfield.judgementY) - layout.playfield.judgementY);
     const x = bounds ? (bounds.left + bounds.right) / 2 : layout.playfield.centerX;
     const color = isFlashingGreat(side.judge) ? css(flashingGreatColor(nowMs, FLASHING_GREAT)) : judgeColor(side.judge);
-    text(ctx, judgeDisplayWord(side.judge), x, y, { size: 20, weight: 800, color, align: 'center' });
+    text(ctx, judgeDisplayWord(side.judge), x, sideY, { size: 20, weight: 800, color, align: 'center' });
     const combo = side.combo ?? 0;
     const keepsCombo = side.judge === 'PERFECT' || side.judge === 'GREAT' || side.judge === 'GOOD';
-    if (keepsCombo && combo > 0) text(ctx, String(combo), x, y + 24, { size: 16, align: 'center' });
+    if (keepsCombo && combo > 0) text(ctx, String(combo), x, sideY + 24, { size: 16, align: 'center' });
   }
 }
 

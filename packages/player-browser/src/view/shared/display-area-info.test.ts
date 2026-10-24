@@ -13,6 +13,20 @@ const covers = [
 const input = { lanes, covers, visibleMs: (cover: (typeof covers)[number]) => (cover.side === '1P' ? 500 : 300) };
 
 describe('AC 34 display-area information', () => {
+  test('uses the base lane for SUDDEN and the actual raised line for LIFT', () => {
+    expect(
+      resolveDisplayAreaLabels({
+        mode: 'ON',
+        lanes: [{ side: '1P', x: 10, w: 40, top: 20, bottom: 320, baseBottom: 420 }],
+        covers: [{ side: '1P', sudden: 0.15, hidden: 0, lift: 0.25 }],
+        visibleMs: () => 500,
+      }),
+    ).toEqual([
+      { side: '1P', edge: 'sudden', x: 30, y: 80, length: 150, green: 300 },
+      { side: '1P', edge: 'lift', x: 30, y: 320, length: 250, green: 300 },
+    ]);
+  });
+
   test('OFF leaves authored skin information alone', () => {
     expect(resolveDisplayAreaLabels({ ...input, mode: 'OFF' })).toEqual([]);
   });

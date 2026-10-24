@@ -6,8 +6,8 @@ import type { LaneCover, PlaySide } from './types.ts';
 /**
  * One play side's lane covers as the player set them: the SUDDEN+ cover over the top of the lanes, the HIDDEN+ cover
  * above the judgement line and the LIFT that raises the line, each with its height kept while it is switched off, so
- * switching it back on needs no redial. Heights are fractions (0..1) of the lane: SUDDEN+ and LIFT of the whole lane,
- * HIDDEN+ of the part above the LIFT (beatoraja's `LaneRenderer` cover).
+ * switching it back on needs no redial. Heights are fractions (0..1) of the lane: LIFT of the whole lane,
+ * SUDDEN+ and HIDDEN+ of the part above the LIFT (beatoraja's `LaneRenderer` cover).
  */
 export interface LaneCoverState {
   readonly side: PlaySide;
@@ -16,6 +16,8 @@ export interface LaneCoverState {
   readonly hidden: number;
   readonly hiddenOn: boolean;
   readonly lift: number;
+  /** Absent on a hand-built state means its lift is already effective. */
+  readonly liftOn?: boolean;
 }
 
 function clampFraction(value: number): number {
@@ -25,10 +27,11 @@ function clampFraction(value: number): number {
 /**
  * Each side's covers as the select screen's play options set them (LR2's HIDDEN / SUDDEN buttons): the side's mode
  * picks which ends are covered, the one lane cover height (`shutter`, a quarter by default) covers both, and the LANE
- * COVER switch shows them or not. No LIFT: LR2 has none.
+ * COVER switch shows them or not. LIFT follows beatoraja, with a retained 0.1 default while off.
  */
 export function laneCoversFromPlayOptions(
-  options: Pick<PlayOptions, 'hiddenSudden1P' | 'hiddenSudden2P' | 'shutter' | 'laneCover'>,
+  options: Pick<PlayOptions, 'hiddenSudden1P' | 'hiddenSudden2P' | 'shutter' | 'laneCover'> &
+    Partial<Pick<PlayOptions, 'lift1P' | 'lift2P' | 'liftOn1P' | 'liftOn2P'>>,
   sides: readonly PlaySide[],
 ): LaneCoverState[] {
   const height = clampFraction(options.shutter ?? SHUTTER_DEFAULT);
@@ -41,20 +44,21 @@ export function laneCoversFromPlayOptions(
       suddenOn: shown && (mode === 'SUDDEN' || mode === 'HID+SUD'),
       hidden: height,
       hiddenOn: shown && (mode === 'HIDDEN' || mode === 'HID+SUD'),
-      lift: 0,
+      lift: clampFraction((side === '1P' ? options.lift1P : options.lift2P) ?? 0.1),
+      liftOn: (side === '1P' ? options.liftOn1P : options.liftOn2P) === true,
     };
   });
 }
 
 /**
- * One side's covers as drawn, as fractions of the whole lane: SUDDEN+ while it is on, HIDDEN+ while it is on scaled
+ * One side's covers as drawn, as fractions of the whole lane: SUDDEN+ and HIDDEN+ while on, both scaled
  * to the part of the lane above the LIFT, and the LIFT.
  */
 export function resolveLaneCover(cover: LaneCoverState): LaneCover {
-  const lift = clampFraction(cover.lift);
+  const lift = cover.liftOn === false ? 0 : clampFraction(cover.lift);
   return {
     side: cover.side,
-    sudden: cover.suddenOn ? clampFraction(cover.sudden) : 0,
+    sudden: cover.suddenOn ? clampFraction(cover.sudden) * (1 - lift) : 0,
     hidden: cover.hiddenOn ? clampFraction(cover.hidden) * (1 - lift) : 0,
     lift,
   };
@@ -71,10 +75,10 @@ export type LaneCoverCommand =
    */
   | { type: 'cover-adjust'; part: LaneCoverPart; delta: number; side?: PlaySide }
   /**
-   * Switch SUDDEN+ or HIDDEN+ on or off, keeping its height; one switched on without a height comes on at a quarter of
+   * Switch a cover on or off, keeping its height; SUDDEN+/HIDDEN+ without a height start at a quarter of
    * the lane.
    */
-  | { type: 'cover-toggle'; part: 'sudden' | 'hidden'; side?: PlaySide }
+  | { type: 'cover-toggle'; part: LaneCoverPart; side?: PlaySide }
   /** Set the covers outright: what a replay recorded, or a host's setting. */
   | { type: 'cover-set'; covers: readonly Partial<LaneCoverState>[]; side?: PlaySide };
 
@@ -92,14 +96,16 @@ function stepHeight(height: number, delta: number): number {
 
 function adjust(cover: LaneCoverState, part: LaneCoverPart, delta: number): LaneCoverState {
   const height = stepHeight(cover[part], delta);
-  if (part === 'lift') return height === cover.lift ? cover : { ...cover, lift: height };
+  if (part === 'lift')
+    return height === cover.lift && cover.liftOn !== false ? cover : { ...cover, lift: height, liftOn: true };
   const on = onKey(part);
   const next = height <= 0 ? false : delta > 0 ? true : cover[on];
   if (height === cover[part] && next === cover[on]) return cover;
   return { ...cover, [part]: height, [on]: next };
 }
 
-function toggle(cover: LaneCoverState, part: 'sudden' | 'hidden'): LaneCoverState {
+function toggle(cover: LaneCoverState, part: LaneCoverPart): LaneCoverState {
+  if (part === 'lift') return { ...cover, liftOn: !(cover.liftOn ?? cover.lift > 0) };
   const on = onKey(part);
   if (cover[on]) return { ...cover, [on]: false };
   return { ...cover, [on]: true, [part]: cover[part] > 0 ? cover[part] : SHUTTER_DEFAULT };

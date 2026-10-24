@@ -248,6 +248,11 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.resolvePlayOptions({ hiSpeed: 3.25, random1P: 'MIRROR', gauge1P: 'BOGUS' });
     },
   });
+  define('player-scene-model.resolveLiftedLane', {
+    run: () => {
+      sceneModelAPI.resolveLiftedLane({ top: 0, bottom: 480 }, 0.2);
+    },
+  });
   define('player-scene-model.resolveConstantVisibility', {
     run: () => {
       sceneModelAPI.resolveConstantVisibility({ enabled: true, durationMs: 500, fadeMs: -100 });

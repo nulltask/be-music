@@ -287,6 +287,9 @@ function createPlayView(
   return {
     view,
     playfieldSkin: view.playfieldSkin,
+    get drawsLift() {
+      return view.drawsLift;
+    },
     prepareOn: (host) => view.prepareOn(host),
     uploadTextures: (textures, isCancelled) => view.uploadTextures(textures, isCancelled),
     setJudgedNoteDisplay: (mode) => {
@@ -480,10 +483,18 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
   const play = new PlaySession(
     {
       ...settings,
+      ...(kit.family === 'built-in' && (kit.skin.id === 'plain' || kit.skin.id === 'native')
+        ? { coverKeys: true }
+        : {}),
       classicHiSpeed: playOptions.classicHiSpeed,
       normalHiSpeedLevel: playOptions.normalHiSpeedLevel,
       visualConstant: playOptions.visualConstant,
       noteDurationMs: playOptions.noteDurationMs,
+      lift1P: playOptions.lift1P,
+      lift2P: playOptions.lift2P,
+      liftOn1P: playOptions.liftOn1P,
+      liftOn2P: playOptions.liftOn2P,
+
       constantFadeMs: playOptions.constantFadeMs,
       hsFix: playOptions.hsFix,
       recordingOptionState: { ...playOptions },

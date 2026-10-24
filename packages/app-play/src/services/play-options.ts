@@ -17,6 +17,10 @@ export type GUIPlayOptions = Pick<
   | 'dpFlip'
   | 'bpmGuide'
   | 'visualConstant'
+  | 'lift1P'
+  | 'lift2P'
+  | 'liftOn1P'
+  | 'liftOn2P'
   | 'noteDurationMs'
   | 'constantFadeMs'
   | 'judgeTimingMs'
@@ -49,6 +53,11 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     bpmGuide: state.bpmGuide,
     visualConstant: state.visualConstant,
     noteDurationMs: state.noteDurationMs,
+    lift1P: state.lift1P,
+    lift2P: state.lift2P,
+    liftOn1P: state.liftOn1P,
+    liftOn2P: state.liftOn2P,
+
     constantFadeMs: state.constantFadeMs,
     judgeTimingMs: state.judgeTimingMs,
     normalHiSpeedLevel: state.normalHiSpeedLevel,
@@ -89,6 +98,11 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.bpmGuide = options.bpmGuide;
   state.visualConstant = options.visualConstant;
   state.noteDurationMs = options.noteDurationMs;
+  state.lift1P = options.lift1P;
+  state.lift2P = options.lift2P;
+  state.liftOn1P = options.liftOn1P;
+  state.liftOn2P = options.liftOn2P;
+
   state.constantFadeMs = options.constantFadeMs;
   state.judgeTimingMs = options.judgeTimingMs;
   state.normalHiSpeedLevel = options.normalHiSpeedLevel;
