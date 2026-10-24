@@ -95,6 +95,8 @@ export interface PlayOptions {
    * of `shutter`. When ON, the mask renders at the `shutter`-derived height.
    */
   laneCover: boolean;
+  /** beatoraja 0.8.9's three launcher choices. */
+  judgeAlgorithm: 'combo' | 'duration' | 'lowest';
   /** AC LEGACY NOTE removes CN/BSS; beatoraja REMOVE removes every long note. */
   longNoteModifier: 'OFF' | 'LEGACY' | 'REMOVE';
   /**

@@ -483,3 +483,14 @@ test('round-trips the ASSIST EASY gauge without an AUTO SCRATCH flag', () => {
   replay.play.autoScratch = false;
   expect(parseReplay(serializeReplay(replay)).play).toMatchObject({ gauge: 'ASSIST-EASY', autoScratch: false });
 });
+
+test('round-trips confirmed beatoraja algorithms and rejects the internal Score variant', () => {
+  for (const judgeAlgorithm of ['combo', 'duration', 'lowest'] as const) {
+    const replay = makeReplay();
+    replay.play.judgeAlgorithm = judgeAlgorithm;
+    expect(parseReplay(serializeReplay(replay)).play.judgeAlgorithm).toBe(judgeAlgorithm);
+  }
+  const invalid = JSON.parse(serializeReplay(makeReplay()));
+  invalid.play.judgeAlgorithm = 'score';
+  expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
+});

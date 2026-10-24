@@ -175,6 +175,7 @@ export interface ReplayPlay {
   mode: 'manual' | 'auto';
   autoScratch: boolean;
   /** Effective manual assist per side; older replays fall back to autoScratch for both. */
+  judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
   longNoteModifier?: 'OFF' | 'LEGACY' | 'REMOVE';
   autoScratch1P?: boolean;
   autoScratch2P?: boolean;
@@ -619,6 +620,12 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
   if (play.viewChanges !== undefined) {
     const changes = parseReplayViewChanges(play.viewChanges, 'play.viewChanges');
     if (changes.length > 0) parsed.viewChanges = changes;
+  }
+  if (play.judgeAlgorithm !== undefined) {
+    if (!['combo', 'duration', 'lowest'].includes(play.judgeAlgorithm as string)) {
+      throw new ReplayParseError('play.judgeAlgorithm: expected combo, duration or lowest');
+    }
+    parsed.judgeAlgorithm = play.judgeAlgorithm as 'combo' | 'duration' | 'lowest';
   }
   if (play.longNoteModifier !== undefined) {
     if (!['OFF', 'LEGACY', 'REMOVE'].includes(play.longNoteModifier as string)) {
