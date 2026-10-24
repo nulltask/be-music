@@ -4,6 +4,8 @@ import { selectBinding, type PaneBinding } from '../../pane-controls.ts';
 import type { FolderApi } from 'tweakpane';
 import {
   DIFFICULTY_FILTER_CYCLE,
+  CLASSIC_HI_SPEED_STEPS,
+  snapClassicHiSpeed,
   HISPEED_MAX,
   HISPEED_MIN,
   HISPEED_STEP,
@@ -107,7 +109,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       },
     ),
   );
-  trackPlayOption(
+  this.hsFixController = trackPlayOption(
     selectBinding(folder, this.guiState, 'hsFix', 'HS-FIX', PLAY_OPTION_CHOICES.hsFix!).on('change', ({ value }) => {
       this.setPlayOptions({ hsFix: value });
     }),
@@ -143,11 +145,30 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       .addBinding(this.guiState, 'shutter', { label: 'Cover height', min: 0, max: 1, step: 0.01 })
       .on('change', ({ value }) => this.setPlayOptions({ shutter: value })),
   );
+  this.classicHiSpeedController = trackPlayOption(
+    folder.addBinding(this.guiState, 'classicHiSpeed', { label: 'CLASSIC HI-SPEED' }).on('change', ({ value }) => {
+      this.setPlayOptions({ classicHiSpeed: value, ...(value ? { hsFix: 'OFF' } : {}) });
+      if (value) {
+        this.guiState.hsFix = 'OFF';
+        this.deps.rememberHiSpeed(snapClassicHiSpeed(this.guiState.hiSpeed)!, 'menu');
+      }
+      this.refreshRulesetChoices();
+      this.refreshPlayOptionControllers();
+    }),
+  );
+  this.classicSpeedController = selectBinding(
+    folder,
+    this.guiState,
+    'hiSpeed',
+    'Classic speed',
+    CLASSIC_HI_SPEED_STEPS,
+  ).on('change', ({ value }) => this.deps.rememberHiSpeed(value, 'menu'));
   // Hi-speed — the same range and step as the in-game `ArrowUp` / `ArrowDown` keys. Unlike the options above it is
   // visual only, so it stays enabled during a play and applies to it live.
   this.hiSpeedController = folder
     .addBinding(this.guiState, 'hiSpeed', { label: 'Hi-speed', min: HISPEED_MIN, max: HISPEED_MAX, step: HISPEED_STEP })
     .on('change', ({ value }) => this.deps.rememberHiSpeed(value, 'menu'));
+  this.refreshRulesetChoices();
 }
 /**
  * Replay / ghost: which of what a replay recorded the player seeing a replay shows (the tempo, the hi-speed,

@@ -102,6 +102,7 @@ export interface PlayEngineContext
       | 'replay'
       | 'tempoPitchMode'
       | 'hsFix'
+      | 'classicHiSpeed'
       | 'hiSpeedLocked'
       | 'onHiSpeedChange'
       | 'onTempoChange'
@@ -402,6 +403,7 @@ export function resolveReplayRecording(
     | 'autoPlay'
     | 'initialHiSpeed'
     | 'hsFix'
+    | 'classicHiSpeed'
     | 'hiddenSudden1P'
     | 'hiddenSudden2P'
     | 'shutter'
@@ -420,8 +422,9 @@ export function resolveReplayRecording(
   const effectiveOptions: ReplayOptionState = {};
   for (const [key, value] of Object.entries({
     autoPlay: options.autoPlay,
-    hiSpeed: options.initialHiSpeed,
-    hsFix: options.hsFix,
+    hiSpeed: options.classicHiSpeed ? view.hiSpeed : options.initialHiSpeed,
+    hsFix: options.classicHiSpeed ? 'OFF' : options.hsFix,
+    classicHiSpeed: options.classicHiSpeed,
     hiddenSudden1P: options.hiddenSudden1P,
     hiddenSudden2P: options.hiddenSudden2P,
     shutter: options.shutter,
@@ -439,7 +442,7 @@ export function resolveReplayRecording(
   }
   return {
     gauge: options.gauge,
-    ...(options.recordingOptionState !== undefined
+    ...(options.recordingOptionState !== undefined || options.classicHiSpeed !== undefined
       ? { options: { ...options.recordingOptionState, ...effectiveOptions } }
       : {}),
     ...(options.chartSHA256 !== undefined ? { chartSHA256: options.chartSHA256 } : {}),

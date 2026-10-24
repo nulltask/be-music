@@ -1,3 +1,4 @@
+import { stepClassicHiSpeed, snapClassicHiSpeed } from '@be-music/player-scene-model';
 /**
  * The select screen's behaviour, whatever family draws it: where the player is in the library, as the browse model of
  * `@be-music/player-scene-model` keeps it (`BrowseState`, changed by `reduceBrowse`, its list derived by `browseEntries`), the
@@ -584,7 +585,9 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   /** Steps a play option through its choices, or the hi-speed by its step. */
   private stepPlayOption(key: keyof PlayOptions, step: number): void {
     if (key === 'hiSpeed') {
-      const value = clampHiSpeed(this.playOptions.hiSpeed + (step < 0 ? -1 : 1) * HISPEED_STEP);
+      const value = this.playOptions.classicHiSpeed
+        ? stepClassicHiSpeed(this.playOptions.hiSpeed, step)
+        : clampHiSpeed(this.playOptions.hiSpeed + (step < 0 ? -1 : 1) * HISPEED_STEP);
       this.setPlayOption('hiSpeed', value);
       return;
     }
@@ -595,6 +598,10 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   private setPlayOption<K extends keyof PlayOptions>(key: K, value: PlayOptions[K] | undefined): void {
     if (value === undefined || this.playOptions[key] === value) return;
     this.playOptions = { ...this.playOptions, [key]: value };
+    if (this.playOptions.classicHiSpeed) {
+      this.playOptions.hiSpeed = snapClassicHiSpeed(this.playOptions.hiSpeed)!;
+      this.playOptions.hsFix = 'OFF';
+    }
     this.options.on.playOptions?.({ ...this.playOptions });
     this.playCue('optionChange');
     if (isListPlayOption(key)) this.syncListOptions();

@@ -38,8 +38,9 @@ export function stepPlayerHiSpeed(
   player: number,
   delta: number,
   multiplier: number,
+  classic = false,
 ): { player: number; drawn: number } | undefined {
-  const next = snapHiSpeed(player + delta);
+  const next = classic ? stepClassicHiSpeed(player, delta) : snapHiSpeed(player + delta);
   if (next === undefined) return undefined;
   const drawn = snapHiSpeed(next * multiplier);
   return drawn === undefined ? undefined : { player: next, drawn };
@@ -103,4 +104,23 @@ export class HiSpeedTransition {
     this.from = value;
     this.to = value;
   }
+}
+
+/** AC 34's official CLASSIC HI-SPEED window, bottom to top (05_classic.jpg). */
+export const CLASSIC_HI_SPEED_STEPS: readonly number[] = [1, 1.5, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4];
+
+/** Nearest classic multiplier, preferring the lower step on a tie; invalid input leaves the setting alone. */
+export function snapClassicHiSpeed(value: number): number | undefined {
+  if (!Number.isFinite(value)) return undefined;
+  return CLASSIC_HI_SPEED_STEPS.reduce((best, candidate) =>
+    Math.abs(candidate - value) < Math.abs(best - value) ? candidate : best,
+  );
+}
+
+/** Steps through the source's table without wrapping past either end. Zero delta only snaps the setting. */
+export function stepClassicHiSpeed(value: number, delta: number): number | undefined {
+  const current = snapClassicHiSpeed(value);
+  if (current === undefined || !Number.isFinite(delta)) return undefined;
+  const index = CLASSIC_HI_SPEED_STEPS.indexOf(current);
+  return CLASSIC_HI_SPEED_STEPS[Math.max(0, Math.min(CLASSIC_HI_SPEED_STEPS.length - 1, index + Math.sign(delta)))]!;
 }

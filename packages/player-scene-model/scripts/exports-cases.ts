@@ -248,6 +248,16 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.resolvePlayOptions({ hiSpeed: 3.25, random1P: 'MIRROR', gauge1P: 'BOGUS' });
     },
   });
+  define('player-scene-model.snapClassicHiSpeed', {
+    run: () => {
+      sceneModelAPI.snapClassicHiSpeed(2.3);
+    },
+  });
+  define('player-scene-model.stepClassicHiSpeed', {
+    run: () => {
+      sceneModelAPI.stepClassicHiSpeed(2, 1);
+    },
+  });
   define('player-scene-model.snapHiSpeed', {
     run: () => {
       sceneModelAPI.snapHiSpeed(1.3000000000000003);

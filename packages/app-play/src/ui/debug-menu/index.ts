@@ -185,6 +185,9 @@ export class DebugMenu {
   public readonly playOptionControllers: { disabled: boolean; refresh?: () => void }[] = [];
   /** The "Hi-speed" slider — left enabled during a play (it applies live) and repainted by {@link refreshHiSpeed}. */
   public hiSpeedController: PaneBinding | undefined;
+  public hsFixController: PaneBinding | undefined;
+  public classicHiSpeedController: PaneBinding | undefined;
+  public classicSpeedController: PaneBinding | undefined;
   public gaugeController: ListInputBindingApi<GaugeType> | undefined;
   public judgeAlgorithmController: ListInputBindingApi<PlayOptions['judgeAlgorithm']> | undefined;
   /** The "Tempo (%)" slider — left enabled during a play whose tempo can change live (`allowsLiveTempo`). */
@@ -354,6 +357,7 @@ export class DebugMenu {
   /** Repaints the "Hi-speed" slider with a hi-speed set elsewhere (the select screen, the play's keys). */
   public refreshHiSpeed(): void {
     this.hiSpeedController?.refresh();
+    this.classicSpeedController?.refresh();
   }
   /** Shows `value` as the skin system the scenes run on, which a pick of one with no skin loaded goes back to. */
   public showSkinSystem(value: SkinFamilyOverride): void {
@@ -386,6 +390,15 @@ export class DebugMenu {
   }
   /** Repaints the "Play options" controllers after an external write (the LR2 select panel's edits). */
   public refreshRulesetChoices(): void {
+    const ac = this.guiState.judgeRuleset === '____';
+    if (!ac && this.guiState.classicHiSpeed) {
+      this.guiState.classicHiSpeed = false;
+      this.setPlayOptions({ classicHiSpeed: false });
+    }
+    if (this.classicHiSpeedController) this.classicHiSpeedController.hidden = !ac;
+    if (this.hiSpeedController) this.hiSpeedController.hidden = this.guiState.classicHiSpeed;
+    if (this.hsFixController) this.hsFixController.hidden = this.guiState.classicHiSpeed;
+    if (this.classicSpeedController) this.classicSpeedController.hidden = !this.guiState.classicHiSpeed;
     const beatoraja = this.guiState.judgeRuleset === 'beatoraja';
     if (!beatoraja && this.guiState.judgeAlgorithm !== 'combo') {
       this.guiState.judgeAlgorithm = 'combo';

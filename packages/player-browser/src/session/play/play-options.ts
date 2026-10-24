@@ -100,6 +100,7 @@ export interface PlaySessionOptions {
    * `'AVERAGE'` for now — true per-frame BPM-aware scrolling needs a render-pipeline change that hasn't landed yet.
    */
   hsFix?: HSFix;
+  classicHiSpeed?: boolean;
   /**
    * HIDDEN / SUDDEN / HID+SUD effect picked from `#SRC_BUTTON,type=50/51`:
    *
