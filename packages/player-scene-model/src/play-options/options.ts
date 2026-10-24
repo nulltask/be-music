@@ -184,6 +184,7 @@ export type RandomMode =
   | 'ALL-SCR'
   | 'RANDOM-EX'
   | 'RANDOM_PLAYABLE'
+  | 'S_RANDOM_PLAYABLE'
   | 'CONVERGE'
   | 'SCATTER';
 

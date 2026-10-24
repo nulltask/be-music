@@ -482,3 +482,13 @@ test('PMS RANDOM_PLAYABLE applies the exact permutation to visible, mine and inv
     applyRandomMode([], KEYS_1P, 'RANDOM_PLAYABLE', () => 0, { ruleset: 'beatoraja', playVariant: '7' }),
   ).toThrow(/PMS arrangement/);
 });
+
+test('PMS playable S-RANDOM uses row-specific placement rather than a whole-chart permutation', () => {
+  const keys = resolveLaneOptionChannels('1P', '9');
+  const notes = [0, 0.001].map((seconds) => ({ channel: keys[0]!, seconds }));
+  applyRandomMode(notes, keys, 'S_RANDOM_PLAYABLE', () => 0, { ruleset: 'beatoraja', playVariant: '9' });
+  expect(channelsOf(notes)).toEqual([keys[0], keys[1]]);
+  expect(() =>
+    applyRandomMode([], KEYS_1P, 'S_RANDOM_PLAYABLE', () => 0, { ruleset: 'beatoraja', playVariant: '7' }),
+  ).toThrow(/PMS arrangement/);
+});

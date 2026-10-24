@@ -28,6 +28,7 @@ export {
   randomizeHRandomNotes,
   randomizeAllScratchNotes,
   randomizePMSConvergeNotes,
+  randomizePMSPlayableNotes,
   clampHRandomThresholdBPM,
   randomizeSpiralNotes,
   randomizeSRandomNotes,
