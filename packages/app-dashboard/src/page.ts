@@ -13,6 +13,7 @@ export interface DashboardAccount {
   handle: string;
   displayName: string;
   anonymous: boolean;
+  avatarURL?: string;
 }
 
 export type { Locale };
@@ -30,7 +31,7 @@ export function pickLocale(acceptLanguage: string | null): Locale {
 
 const TEXT = {
   ja: {
-    title: 'be-music',
+    title: 'Be-Music Dashboard',
     signedIn: (name: string, handle: string) => `${name}（@${handle}）でログイン中です。`,
     anonymous: (handle: string) =>
       `匿名アカウント @${handle} でログイン中です。パスキーを作ると、ほかの端末でも使えます。`,
@@ -40,7 +41,7 @@ const TEXT = {
     note: 'このページは仮のダッシュボードです。',
   },
   en: {
-    title: 'be-music',
+    title: 'Be-Music Dashboard',
     signedIn: (name: string, handle: string) => `Signed in as ${name} (@${handle}).`,
     anonymous: (handle: string) => `Signed in anonymously as @${handle}. Create a passkey to use it on other devices.`,
     signedOut: 'Not signed in.',
@@ -91,7 +92,7 @@ export function renderDashboard(input: {
 ${serviceSkipLink(input.locale)}
 ${renderServiceHeader({
   locale: input.locale,
-  product: input.locale === 'ja' ? 'ダッシュボード' : 'Dashboard',
+  title: 'Be-Music Dashboard',
   homeHref: '/',
   playHref: links.play,
   accountHref: input.account === undefined ? '/api/auth/sign-in' : '/api/auth/manage',
