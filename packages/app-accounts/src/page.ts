@@ -53,13 +53,14 @@ export function renderAccountPage(input: {
         handle: input.profile?.handle ?? '',
         displayName: input.profile?.displayName || input.name || (locale === 'ja' ? 'ゲスト' : 'Guest'),
         anonymous: input.anonymous,
+        avatarURL: input.profile?.avatarURL,
       }
     : undefined;
-  return `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>be-music Accounts</title><style>${SERVICE_CSS}
+  return `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Be-Music Accounts</title><style>${SERVICE_CSS}
 .account-main{max-width:32rem;padding-top:48px}.account-actions{margin-top:24px}.account-actions .button{width:100%}.account-services{margin-top:24px;padding-top:20px;border-top:1px solid var(--line)}.account-services nav{display:flex;gap:12px;flex-wrap:wrap;font-size:.875rem}.account-services h2{font-size:.875rem;margin-bottom:12px}#status{min-height:1.5rem;margin:16px 0 0;color:var(--danger);font-size:.875rem}.account-services input{display:block;width:100%;margin:6px 0 16px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}.account-services form{margin-bottom:24px}.account-services img{display:block;border-radius:8px;margin-bottom:16px}.session-note{font-size:.75rem;margin:24px 0 0}
 </style></head><body>${serviceSkipLink(locale)}${renderServiceHeader({
     locale,
-    product: locale === 'ja' ? 'アカウント' : 'Accounts',
+    title: 'Be-Music Accounts',
     homeHref: home,
     playHref: input.apps?.play,
     accountHref: input.signedIn ? '/account' : '/login',
