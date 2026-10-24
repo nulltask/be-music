@@ -7,7 +7,6 @@ import { isGaugeType, isRulesetId } from '@be-music/player-engine/ruleset';
 import {
   DIFFICULTY_FILTER_CYCLE,
   KEYS_FILTER_CYCLE,
-  RANDOM_CYCLE,
   PLAY_OPTION_CHOICES,
   resolvePlayOptionValue,
   clampShutter,
@@ -124,7 +123,7 @@ export interface DebugMenuSettingsDocument {
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
 
-const RANDOM_MODES: readonly RandomMode[] = [...RANDOM_CYCLE, 'SCATTER'];
+const RANDOM_MODES: readonly RandomMode[] = [...PLAY_OPTION_CHOICES.random1P!, 'SCATTER'];
 const SKIN_FAMILIES: readonly SkinFamilyOverride[] = ['auto', 'default', 'lr2', 'beatoraja'];
 const SKIN_EFFECTS: readonly SkinEffects[] = ['full', 'reduced', 'off'];
 const PLAY_LAYOUTS: readonly PlayLayout[] = ['auto', 'standard', 'touch'];

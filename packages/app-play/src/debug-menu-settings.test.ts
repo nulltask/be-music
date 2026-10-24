@@ -201,3 +201,10 @@ describe('captureDebugMenuSettings', () => {
     expect(parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: -1, settings: {} }))).toBeUndefined();
   });
 });
+
+test('persists both sides of R-RANDOM in Debug Menu settings', () => {
+  const settings = { random1P: 'R-RANDOM', random2P: 'R-RANDOM' };
+  expect(
+    parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
+  ).toMatchObject(settings);
+});

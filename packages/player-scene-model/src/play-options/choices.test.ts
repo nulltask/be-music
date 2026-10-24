@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
+  resolveRandomModes,
+  RANDOM_CYCLE,
   clampHiSpeed,
   clampShutter,
   cyclePlayOptionValue,
@@ -41,7 +43,7 @@ describe('resolvePlayOptionValue', () => {
   });
 
   test("rejects a value outside the option's choices", () => {
-    expect(resolvePlayOptionValue('random1P', 'R-RANDOM')).toBeUndefined();
+    expect(resolvePlayOptionValue('random1P', 'UNKNOWN')).toBeUndefined();
     expect(resolvePlayOptionValue('random1P', 'SCATTER')).toBeUndefined();
     expect(resolvePlayOptionValue('random2P', 'SCATTER')).toBeUndefined();
     expect(resolvePlayOptions({ random1P: 'SCATTER', random2P: 'SCATTER' })).toMatchObject({
@@ -148,4 +150,15 @@ test('offers the three confirmed beatoraja launcher algorithms only', () => {
     expect(resolvePlayOptionValue('judgeAlgorithm', algorithm)).toBe(algorithm);
   }
   expect(resolvePlayOptionValue('judgeAlgorithm', 'score')).toBeUndefined();
+});
+
+test('R-RANDOM is a source choice without changing LR2 button indices', () => {
+  expect(RANDOM_CYCLE).toEqual(['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM']);
+  expect(resolveRandomModes('lr2')).not.toContain('R-RANDOM');
+  for (const source of ['beatoraja', '____'] as const)
+    expect(resolveRandomModes(source)).toEqual(['OFF', 'MIRROR', 'RANDOM', 'R-RANDOM', 'S-RANDOM']);
+  expect(resolvePlayOptions({ random1P: 'R-RANDOM', random2P: 'R-RANDOM' })).toMatchObject({
+    random1P: 'R-RANDOM',
+    random2P: 'R-RANDOM',
+  });
 });

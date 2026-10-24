@@ -1,7 +1,7 @@
 import { resolveConstantVisibility } from './constant-visibility.ts';
 import { clampJudgeTimingMs } from './judge-timing.ts';
 import { clamp } from '@be-music/shared-utils/core';
-import { LR2_GAUGE_TYPES, isGaugeType } from '@be-music/player-engine/ruleset';
+import { LR2_GAUGE_TYPES, isGaugeType, type RulesetId } from '@be-music/player-engine/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
 import { DEFAULT_HISPEED, snapHiSpeed, snapClassicHiSpeed } from './hi-speed.ts';
 import type {
@@ -68,6 +68,11 @@ export const BOOLEAN_CYCLE: readonly boolean[] = [false, true];
  * mirror / random / s-random. SCATTER is disabled until placement and assist policy are implemented.
  */
 export const RANDOM_CYCLE: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM'];
+
+/** Available lane options for the selected reference ruleset; LR2's sprite cycle stays separate. */
+export function resolveRandomModes(ruleset: RulesetId): readonly RandomMode[] {
+  return ruleset === 'lr2' ? RANDOM_CYCLE : ['OFF', 'MIRROR', 'RANDOM', 'R-RANDOM', 'S-RANDOM'];
+}
 
 /** The play options a player starts with. */
 export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
@@ -139,8 +144,8 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   autoScratch1P: BOOLEAN_CYCLE,
   autoScratch2P: BOOLEAN_CYCLE,
   dpFlip: BOOLEAN_CYCLE,
-  random1P: RANDOM_CYCLE,
-  random2P: RANDOM_CYCLE,
+  random1P: resolveRandomModes('beatoraja'),
+  random2P: resolveRandomModes('beatoraja'),
   gauge1P: LR2_GAUGE_TYPES,
   gauge2P: LR2_GAUGE_TYPES,
 };

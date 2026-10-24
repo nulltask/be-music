@@ -136,6 +136,7 @@ export interface PlayOptions {
    * - `OFF` — original chart layout
    * - `MIRROR` — reverse the lane order (1↔7, 2↔6, 3↔5)
    * - `RANDOM` — chart-wide random permutation of the lanes
+   * - `R-RANDOM` — chart-wide cyclic rotation, optionally reflected, excluding regular and mirror
    * - `S-RANDOM` — per-chord random assignment (chord shapes are NOT preserved)
    * - `SCATTER` — legacy value, disabled until placement and assist policy are implemented
    */
@@ -162,7 +163,7 @@ export type HSFix = 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT' | 'STAR
 export type HiddenSuddenMode = 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
 
 /** Lane-option names. Legacy SCATTER stays representable but is not an accepted new play choice. */
-export type RandomMode = 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
+export type RandomMode = 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SCATTER';
 
 /** Allowed values for {@link PlayOptions.bga}. */
 export type BGAMode = 'OFF' | 'ON' | 'AUTOPLAY_ONLY';
