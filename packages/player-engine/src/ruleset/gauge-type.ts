@@ -29,3 +29,22 @@ export function resolveGaugeTypes(ruleset: 'lr2' | 'beatoraja' | '____'): readon
 export function isGaugeType(value: unknown): value is GaugeType {
   return typeof value === 'string' && (GAUGE_TYPES as readonly string[]).includes(value);
 }
+
+/** beatoraja 0.8.9 gauge auto-shift policies implemented by the player. */
+export type GaugeAutoShift = 'NONE' | 'CONTINUE';
+
+/**
+ * CONTINUE retains the selected dead gauge and keeps judging; NONE stops the play.
+ * An omitted policy preserves the older host-level endOnFailure contract.
+ */
+export function resolveGaugeEndOnFailure(
+  policy: GaugeAutoShift | undefined,
+  ruleset: 'lr2' | 'beatoraja' | '____',
+  fallback = true,
+): boolean {
+  if (policy === undefined) return fallback;
+  if (policy === 'NONE') return true;
+  if (policy !== 'CONTINUE' || ruleset !== 'beatoraja')
+    throw new RangeError('Gauge auto-shift CONTINUE is available only for beatoraja.');
+  return false;
+}

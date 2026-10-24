@@ -488,6 +488,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
         : {}),
       hRandomThresholdBPM: playOptions.hRandomThresholdBPM,
       mineModifier: playOptions.mineModifier,
+      gaugeAutoShift: playOptions.gaugeAutoShift,
       randomSeed1P: playOptions.randomSeed1P,
       randomSeed2P: playOptions.randomSeed2P,
       randomFixedLane1P: playOptions.randomFixedLane1P,

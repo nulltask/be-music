@@ -254,3 +254,9 @@ test('mine ADD ALL retains the source ADD_BLANK identifier', () => {
   expect(resolvePlayOptionValue('mineModifier', 'ADD_BLANK')).toBe('ADD_BLANK');
   expect(resolvePlayOptionValue('mineModifier', 'ADD_ALL')).toBeUndefined();
 });
+
+test('gauge auto-shift defaults to source NONE and accepts CONTINUE', () => {
+  expect(DEFAULT_PLAY_OPTIONS.gaugeAutoShift).toBe('NONE');
+  expect(resolvePlayOptionValue('gaugeAutoShift', 'CONTINUE')).toBe('CONTINUE');
+  expect(resolvePlayOptionValue('gaugeAutoShift', 'REVIVE')).toBeUndefined();
+});

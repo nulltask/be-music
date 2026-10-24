@@ -83,6 +83,7 @@ export interface DebugMenuSettings {
   judgeAlgorithm: PlayerGUIState['judgeAlgorithm'];
   longNoteModifier: PlayerGUIState['longNoteModifier'];
   mineModifier: PlayerGUIState['mineModifier'];
+  gaugeAutoShift: PlayerGUIState['gaugeAutoShift'];
   autoScratch1P: boolean;
   autoScratch2P: boolean;
   sort: BrowseSort;
@@ -229,6 +230,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'normalHiSpeedLevel', resolvePlayOptionValue('normalHiSpeedLevel', raw.normalHiSpeedLevel));
   assign(settings, 'classicHiSpeed', booleanOf(raw.classicHiSpeed));
   assign(settings, 'judgeAlgorithm', oneOf(raw.judgeAlgorithm, ['combo', 'duration', 'lowest'] as const));
+  assign(settings, 'gaugeAutoShift', resolvePlayOptionValue('gaugeAutoShift', raw.gaugeAutoShift));
   assign(settings, 'mineModifier', resolvePlayOptionValue('mineModifier', raw.mineModifier));
   assign(settings, 'longNoteModifier', oneOf(raw.longNoteModifier, ['OFF', 'LEGACY', 'REMOVE'] as const));
   assign(settings, 'autoScratch1P', booleanOf(raw.autoScratch1P));
@@ -437,6 +439,7 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('judgeAlgorithm');
   assignState('longNoteModifier');
   assignState('mineModifier');
+  assignState('gaugeAutoShift');
   assignState('autoScratch1P');
   assignState('autoScratch2P');
   assignState('sort');
@@ -520,6 +523,7 @@ export function captureDebugMenuSettings(
     judgeAlgorithm: state.judgeAlgorithm,
     longNoteModifier: state.longNoteModifier,
     mineModifier: state.mineModifier,
+    gaugeAutoShift: state.gaugeAutoShift,
     autoScratch1P: state.autoScratch1P,
     autoScratch2P: state.autoScratch2P,
     sort: state.sort,

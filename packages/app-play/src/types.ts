@@ -219,6 +219,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   judgeAlgorithm: PlayOptions['judgeAlgorithm'];
   longNoteModifier: PlayOptions['longNoteModifier'];
   mineModifier: PlayOptions['mineModifier'];
+  gaugeAutoShift: PlayOptions['gaugeAutoShift'];
   autoScratch1P: boolean;
   /** 2P auto scratch for the next play. Two-way synced with the LR2 select panel. */
   autoScratch2P: boolean;

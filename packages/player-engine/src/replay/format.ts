@@ -6,7 +6,7 @@ import {
   type ReplayOptionChange,
 } from './options.ts';
 import type { LongNoteMode, RandomDraw } from '@be-music/chart-model';
-import { GAUGE_TYPES, isGaugeType, type GaugeType } from '../ruleset/gauge-type.ts';
+import { GAUGE_TYPES, isGaugeType, type GaugeType, type GaugeAutoShift } from '../ruleset/gauge-type.ts';
 import type { CourseGaugeSet, CourseJudgeConstraint, RulesetCourseKind } from '../ruleset/course.ts';
 import type { RulesetId } from '../ruleset/definitions.ts';
 import {
@@ -216,6 +216,7 @@ export interface ReplayPlay {
    * judgment that emptied it counts. Absent on older logs, which kept judging to the end.
    */
   endOnFailure?: boolean;
+  gaugeAutoShift?: GaugeAutoShift;
   /** Set when the play was one stage of a course: what the stage's rules and starting state were. */
   course?: ReplayCourseStage;
   /**
@@ -630,6 +631,11 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
   if (play.aborted !== undefined) parsed.aborted = play.aborted === true;
   if (play.abortedAtUs !== undefined) parsed.abortedAtUs = expectFiniteNumber(play.abortedAtUs, 'play.abortedAtUs');
   if (play.endOnFailure !== undefined) parsed.endOnFailure = play.endOnFailure === true;
+  if (play.gaugeAutoShift !== undefined) {
+    if (!['NONE', 'CONTINUE'].includes(play.gaugeAutoShift as string))
+      throw new ReplayParseError('play.gaugeAutoShift: expected NONE or CONTINUE');
+    parsed.gaugeAutoShift = play.gaugeAutoShift as GaugeAutoShift;
+  }
   if (play.course !== undefined) parsed.course = parseCourseStage(expectRecord(play.course, 'play.course'));
   if (play.tempo !== undefined) {
     const tempo = expectFiniteNumber(play.tempo, 'play.tempo');

@@ -199,6 +199,7 @@ export class DebugMenu {
   public random1PController: ListInputBindingApi<PlayOptions['random1P']> | undefined;
   public random2PController: ListInputBindingApi<PlayOptions['random2P']> | undefined;
   public gaugeController: ListInputBindingApi<GaugeType> | undefined;
+  public gaugeAutoShiftController: ListInputBindingApi<PlayOptions['gaugeAutoShift']> | undefined;
   public mineModifierController: ListInputBindingApi<PlayOptions['mineModifier']> | undefined;
   public judgeAlgorithmController: ListInputBindingApi<PlayOptions['judgeAlgorithm']> | undefined;
   /** The "Tempo (%)" slider — left enabled during a play whose tempo can change live (`allowsLiveTempo`). */
@@ -428,6 +429,11 @@ export class DebugMenu {
       const controller = side === '1P' ? this.randomSeed1PController : this.randomSeed2PController;
       if (controller) controller.hidden = !beatoraja || this.guiState[`random${side}`] === 'RANDOM_PLAYABLE';
     }
+    if (!beatoraja && this.guiState.gaugeAutoShift !== 'NONE') {
+      this.guiState.gaugeAutoShift = 'NONE';
+      this.setPlayOptions({ gaugeAutoShift: 'NONE' });
+    }
+    if (this.gaugeAutoShiftController) this.gaugeAutoShiftController.hidden = !beatoraja;
     if (!beatoraja && this.guiState.mineModifier !== 'OFF') {
       this.guiState.mineModifier = 'OFF';
       this.setPlayOptions({ mineModifier: 'OFF' });

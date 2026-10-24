@@ -252,3 +252,32 @@ for (const skin of ['plain', 'native'] as const) {
     });
   }
 }
+
+for (const skin of ['plain', 'native'] as const) {
+  test(`CONTINUE keeps judging after HAZARD death and restores the policy on ${skin}`, async ({ player }) => {
+    await player.open({ 'be-music.built-in-skin': skin });
+    await player.dropText('continue.bme', '#TITLE Continue gauge\n#BPM 240\n#00111:01\n#00212:01\n');
+    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+    await player.setOption(['Play options'], 'Gauge', 'DEATH');
+    await player.setOption(['Play options'], 'Gauge auto-shift (beatoraja)', 'CONTINUE');
+    await player.cursorTo((bar) => bar.title === 'Continue gauge', 'continue chart');
+    await player.key('Enter');
+    await player.waitForResult(0);
+    const replay = await player.lastReplay();
+    expect(replay?.play.gaugeAutoShift).toBe('CONTINUE');
+    expect(replay?.play.options?.gaugeAutoShift).toBe('CONTINUE');
+    expect(replay?.play.endOnFailure).not.toBe(true);
+    expect(replay?.results?.native?.judge.poor).toBe(2);
+    expect(replay?.results?.native?.gauge).toMatchObject({
+      type: 'HAZARD',
+      final: 0,
+      cleared: false,
+      failedMidPlay: true,
+    });
+    await player.leaveResult();
+    await player.setOption(['Play options'], 'Gauge auto-shift (beatoraja)', 'NONE');
+    await player.dropText('continue.bmplay.json', JSON.stringify(replay));
+    await player.waitFor((state) => state.scene.kind === 'play' && state.play?.replay === true, 'CONTINUE replay');
+    await player.waitForResult(1);
+  });
+}

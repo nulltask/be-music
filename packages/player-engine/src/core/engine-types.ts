@@ -9,7 +9,7 @@ import { type TUINoteHeight } from './ui-options.ts';
 import { type AudioSinkClockState } from '../audio-clock.ts';
 import { type PlayerGaugeSummary, type PlayerUISignalBus } from './ui-signal-bus.ts';
 import { type PlayerInputSignalBus } from './input-signal-bus.ts';
-import type { GaugeType } from '../ruleset/gauge-type.ts';
+import type { GaugeType, GaugeAutoShift } from '../ruleset/gauge-type.ts';
 import { type LongNoteStyle, type RulesetId, type RulesetWindowTables } from '../ruleset/index.ts';
 import { type ReplayRecordingOptions } from '../replay/recorder.ts';
 import type { BeMusicReplay, ReplayCourseStage, ReplayInputEvent } from '../replay/format.ts';
@@ -136,6 +136,8 @@ export interface PlayerPlaySettings {
    * dead (`failedMidPlay`). Recorded into the replay (`play.endOnFailure`) so re-simulations stop at the same point.
    */
   endOnFailure?: boolean;
+  /** Source-defined beatoraja policy; when present, takes precedence over endOnFailure. */
+  gaugeAutoShift?: GaugeAutoShift;
   /**
    * This play is one stage of a course: the stage runs on the ruleset's course gauge under the course's judge
    * constraint, starting from the state the previous stage left (`carryIn`; absent for the first stage). Recorded into
