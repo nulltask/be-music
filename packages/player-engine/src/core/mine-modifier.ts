@@ -3,7 +3,7 @@ import { PLAY_MODE_LAYOUTS, type ResolvedChart } from '@be-music/chart-model';
 import { createLaneBindings, resolveLaneOptionChannels } from './lane-layout.ts';
 import { toTimedLandmineNote, type TimedLandmineNote, type TimedPlayableNote } from '../playable-notes.ts';
 
-export type MineModifier = 'OFF' | 'REMOVE' | 'ADD_RANDOM';
+export type MineModifier = 'OFF' | 'REMOVE' | 'ADD_RANDOM' | 'ADD_NEAR';
 
 /** Effective mine placements from a replay; random generation is bypassed when these are supplied. */
 export interface MinePlacement {
@@ -54,7 +54,8 @@ export function prepareMineModifier(
     });
     return { mines, changes: Math.max(0, mines.length - original.length) };
   }
-  if (!options.random) throw new RangeError('Mine ADD RANDOM requires supplied randomness or recorded placements.');
+  if (mode === 'ADD_RANDOM' && !options.random)
+    throw new RangeError('Mine ADD RANDOM requires supplied randomness or recorded placements.');
   const scoring = new Map<number, (typeof notes)[number][]>();
   for (const note of notes) {
     const row = scoring.get(note.beat);
@@ -76,11 +77,19 @@ export function prepareMineModifier(
       occupied.add(note.channel);
       if (note.endBeat !== undefined && note.endBeat > row.beat) held.set(note.channel, note.endBeat);
     }
-    for (const lane of lanes) {
-      if (occupied.has(lane) || held.has(lane)) continue;
-      const draw = options.random();
-      if (!Number.isFinite(draw) || draw < 0 || draw >= 1) throw new RangeError('Mine randomness must be in [0, 1).');
-      if (draw > 0.9) mines.push(makeMine(row, lane, resolved.timing.beatToSeconds(row.beat), 10, true));
+    // Snapshot before generation: newly inserted mines must not expand ADD NEAR.
+    const blank = lanes.map((lane) => !occupied.has(lane) && !held.has(lane));
+    for (const [index, lane] of lanes.entries()) {
+      if (!blank[index]) continue;
+      let add = false;
+      if (mode === 'ADD_NEAR') {
+        add = (index > 0 && !blank[index - 1]) || (index < lanes.length - 1 && !blank[index + 1]);
+      } else {
+        const draw = options.random!();
+        if (!Number.isFinite(draw) || draw < 0 || draw >= 1) throw new RangeError('Mine randomness must be in [0, 1).');
+        add = draw > 0.9;
+      }
+      if (add) mines.push(makeMine(row, lane, resolved.timing.beatToSeconds(row.beat), 10, true));
     }
   }
   mines.sort((a, b) => a.beat - b.beat || lanes.indexOf(a.channel) - lanes.indexOf(b.channel));

@@ -193,7 +193,7 @@ export async function createPlaySession(
       realtimeAudioEndSeconds,
       Math.random,
     );
-  if (options.mineModifier === 'ADD_RANDOM' && playbackChart.mineModifierApplied !== 'ADD_RANDOM')
+  if (options.mineModifier?.startsWith('ADD_') && playbackChart.mineModifierApplied !== options.mineModifier)
     throw new RangeError('The shared prepared chart must include the selected mine modifier.');
   if (options.mineModifier === 'REMOVE') {
     const removed = playbackChart.landmineNotes.length;

@@ -114,3 +114,37 @@ test('recorded placements bypass generation, preserve damage/silence, and reject
   ).toThrow(/source timeline/);
   expect(() => prepareMineModifier(resolved, 'ADD_RANDOM')).toThrow(/supplied randomness/);
 });
+
+test('ADD NEAR uses original occupied neighbors without wrapping or expanding through new mines', () => {
+  const resolved = resolveChart(parseChart('#BPM 120\n#00013:01\n#00101:01', 'bms'), { playVariant: '7' });
+  const result = prepareMineModifier(resolved, 'ADD_NEAR');
+  expect(result.mines.map((mine) => [mine.channel, mine.beat])).toEqual([
+    ['12', 0],
+    ['14', 0],
+  ]);
+  expect(result.changes).toBe(2);
+  expect(result.mines.every((mine) => mine.silent && resolveLandmineGaugeEffect(mine.event).damage === 10)).toBe(true);
+});
+
+test('ADD NEAR includes held LN lanes and exact tails but invisible notes remain blank', () => {
+  const resolved = resolveChart(
+    parseChart('#BPM 120\n#LNOBJ AA\n#00011:01\n#00001:0001\n#00111:AA\n#00231:01', 'bms'),
+    { playVariant: '7' },
+  );
+  const result = prepareMineModifier(resolved, 'ADD_NEAR');
+  expect(result.mines.map((mine) => [mine.channel, mine.beat])).toEqual([
+    ['12', 0],
+    ['12', 2],
+    ['12', 4],
+  ]);
+});
+
+test('ADD NEAR follows source key/scratch order across DP sides and retains existing mines', () => {
+  const resolved = resolveChart(parseChart('#BPM 120\n#PLAYER 3\n#000D6:03', 'bms'), { playVariant: '14' });
+  const result = prepareMineModifier(resolved, 'ADD_NEAR');
+  expect(result.mines.map((mine) => mine.channel)).toEqual(['19', '16', '21']);
+  expect(result.changes).toBe(2);
+  expect(result.mines.find((mine) => mine.channel === '16')?.silent).toBeUndefined();
+  const pms = resolveChart(parseChart('#BPM 120\n#00011:01', 'bms'), { playVariant: '9' });
+  expect(prepareMineModifier(pms, 'ADD_NEAR').mines.map((mine) => mine.channel)).toEqual(['12']);
+});
