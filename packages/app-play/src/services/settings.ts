@@ -236,6 +236,8 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     gauge: 'GROOVE',
     random1P: 'OFF',
     hRandomThresholdBPM: 120,
+    randomSeed1P: '-1',
+    randomSeed2P: '-1',
     randomFixedLane1P: 0,
     randomFixedLane2P: 0,
     random2P: 'OFF',

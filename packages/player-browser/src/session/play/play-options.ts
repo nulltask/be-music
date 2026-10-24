@@ -167,6 +167,8 @@ export interface PlaySessionOptions {
    * fresh permutation. SCATTER is a legacy value; new requests are rejected until it is fully implemented.
    */
   hRandomThresholdBPM?: number;
+  randomSeed1P?: string;
+  randomSeed2P?: string;
   randomFixedLane1P?: number;
   randomFixedLane2P?: number;
   random1P?: RandomMode;
@@ -182,6 +184,8 @@ export interface PlaySessionOptions {
    * different chart file).
    */
   replay?: BeMusicReplay;
+  /** Reuse the resolved chart layout while playing fresh input and recording a new replay. */
+  fixedArrangement?: Pick<BeMusicReplay, 'chart' | 'play'>;
   /**
    * Which of the view a {@link replay} recorded (`play.view` / `play.viewChanges`) it shows over the viewer's own
    * settings: the hi-speed, SUDDEN+ / HIDDEN+, the lift (this scene has none to show) and the tempo. Defaults to all

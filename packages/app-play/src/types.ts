@@ -195,6 +195,8 @@ export interface PlayerGUIState extends PlayTempoSettings {
   gauge: GaugeType;
   /** 1P lane arrangement for the next play. Two-way synced with the LR2 select panel. */
   hRandomThresholdBPM: number;
+  randomSeed1P: string;
+  randomSeed2P: string;
   randomFixedLane1P: number;
   randomFixedLane2P: number;
   random1P: PlayOptions['random1P'];

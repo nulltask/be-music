@@ -487,6 +487,8 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
         ? { coverKeys: true }
         : {}),
       hRandomThresholdBPM: playOptions.hRandomThresholdBPM,
+      randomSeed1P: playOptions.randomSeed1P,
+      randomSeed2P: playOptions.randomSeed2P,
       randomFixedLane1P: playOptions.randomFixedLane1P,
       randomFixedLane2P: playOptions.randomFixedLane2P,
       classicHiSpeed: playOptions.classicHiSpeed,

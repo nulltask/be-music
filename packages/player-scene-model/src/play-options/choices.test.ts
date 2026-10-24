@@ -228,3 +228,10 @@ test('S-RANDOM-EX is a separate beatoraja option', () => {
   expect(resolveRandomModes('____')).not.toContain('S-RANDOM-EX');
   expect(resolvePlayOptionValue('random1P', 'S-RANDOM-EX')).toBe('S-RANDOM-EX');
 });
+
+test('beatoraja seed settings retain Java-long precision and reject invalid edits', () => {
+  expect(DEFAULT_PLAY_OPTIONS.randomSeed1P).toBe('-1');
+  expect(resolvePlayOptionValue('randomSeed1P', '9223372036854775807')).toBe('9223372036854775807');
+  expect(resolvePlayOptionValue('randomSeed2P', 42)).toBe('42');
+  expect(resolvePlayOptionValue('randomSeed1P', '9223372036854775808')).toBeUndefined();
+});

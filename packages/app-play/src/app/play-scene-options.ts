@@ -54,6 +54,7 @@ export interface PlaySceneOptionsInput {
   readonly autoPlay?: boolean;
   /** A replay to play back instead of the player's input. */
   readonly replay?: BeMusicReplay;
+  readonly fixedArrangement?: Pick<BeMusicReplay, 'chart' | 'play'>;
   /** The chart file's hashes, which the replay records. */
   readonly chartHashes?: ChartFileHashes;
   /** The EXPERT / GRADE course stage this play is. */
@@ -115,6 +116,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
         : picked;
   const tempo = lanes.tempo;
   const sharedOptions = {
+    ...(input.fixedArrangement !== undefined ? { fixedArrangement: input.fixedArrangement } : {}),
     // The replay-relevant options (auto play / random / DP flip / auto scratch / gauge / judge) read from
     // `guiState` — the Debug Menu's "Play options" folder and the LR2 select panel two-way sync into it, and it
     // is the surface that exists on every family (default / beatoraja selects have no LR2 PLAY OPTION panel).
@@ -140,6 +142,8 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     judgeTimingMs: playOptions.judgeTimingMs,
     normalHiSpeedLevel: playOptions.normalHiSpeedLevel,
     hRandomThresholdBPM: playOptions.hRandomThresholdBPM,
+    randomSeed1P: playOptions.randomSeed1P,
+    randomSeed2P: playOptions.randomSeed2P,
     randomFixedLane1P: playOptions.randomFixedLane1P,
     randomFixedLane2P: playOptions.randomFixedLane2P,
     judgeAlgorithm: replay?.play.judgeAlgorithm ?? playOptions.judgeAlgorithm,

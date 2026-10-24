@@ -278,7 +278,7 @@ describe('randomizeHRandomNotes', () => {
       { channel: 'b', timeMs: 301 },
     ];
     const original = structuredClone(notes);
-    expect(randomizeHRandomNotes(notes, ['a', 'b', 'c'], { random: zero })).toEqual(['a', 'b', 'c', 'b', 'a']);
+    expect(randomizeHRandomNotes(notes, ['a', 'b', 'c'], { random: zero })).toEqual(['a', 'b', 'c', 'b', 'c']);
     expect(notes).toEqual(original);
   });
   test('mine and hidden rows consume permutations without updating scoring timestamps', () => {
@@ -477,4 +477,12 @@ test('beatoraja S-RANDOM visits outside-domain and LN-tail-only timelines like N
   });
   expect(result).toEqual(['16', 'a']);
   expect(draws).toBe(6);
+});
+
+test('beatoraja restores LN source and destination lanes at the end of the source lists', () => {
+  const notes = [
+    { channel: 'a', timeMs: 0, endTimeMs: 100 },
+    { channel: 'b', timeMs: 150 },
+  ];
+  expect(randomizeSRandomNotes(notes, ['a', 'b'], { ruleset: 'beatoraja', random: zero })).toEqual(['a', 'b']);
 });

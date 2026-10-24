@@ -97,6 +97,8 @@ export interface PlayEngineContext
       | 'onExit'
       | 'onRestart'
       | 'replayRecorder'
+      | 'randomSeed1P'
+      | 'randomSeed2P'
       | 'randomFixedLane1P'
       | 'randomFixedLane2P'
       | 'hRandomThresholdBPM'
@@ -120,6 +122,7 @@ export interface PlayEngineContext
   readonly chart: LibraryChart | undefined;
   readonly resolvedChart: BeMusicJSON | undefined;
   readonly randomDraws: RandomDraws | undefined;
+  readonly randomSeeds?: { p1?: string; p2?: string };
   readonly preparedChart: PreparedPlaybackChartData | undefined;
   readonly notes: TimedPlayableNote[];
   readonly timingResolver: TimingResolver | undefined;
@@ -400,6 +403,8 @@ export function resolveReplayRecording(
     | 'chartSHA256'
     | 'chartMD5'
     | 'replayRecorder'
+    | 'randomSeed1P'
+    | 'randomSeed2P'
     | 'randomFixedLane1P'
     | 'randomFixedLane2P'
     | 'hRandomThresholdBPM'
@@ -433,6 +438,7 @@ export function resolveReplayRecording(
   chartEntry: Pick<LibraryChart, 'chart' | 'chartPath'> | undefined,
   view: ReplayViewState,
   effectivePlayerHiSpeed?: number,
+  effectiveRandomSeeds?: { p1?: string; p2?: string },
 ): ReplayRecordingOptions {
   if (options.random1P === 'SCATTER' || options.random2P === 'SCATTER') {
     throw new RangeError('SCATTER is disabled until placement and assist policy are implemented.');
@@ -463,6 +469,8 @@ export function resolveReplayRecording(
     laneCover: options.laneCover,
     gauge1P: options.gauge,
     random1P: options.random1P,
+    randomSeed1P: effectiveRandomSeeds?.p1 ?? options.randomSeed1P,
+    randomSeed2P: effectiveRandomSeeds?.p2 ?? options.randomSeed2P,
     randomFixedLane1P: options.randomFixedLane1P,
     randomFixedLane2P: options.randomFixedLane2P,
     hRandomThresholdBPM:
@@ -646,6 +654,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
               ctx.chart,
               startReplayView(ctx),
               ctx.playState.view.hiSpeed.player,
+              ctx.randomSeeds,
             ),
             onReplayRecorded: ctx.practice
               ? undefined

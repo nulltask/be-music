@@ -93,6 +93,8 @@ export interface DebugMenuDeps {
   /** Shows a status line. */
   setStatus(text: string): void;
   /** Keeps play options set from the menu for every screen and play, and hands them to the select screen. */
+  reusePreviousArrangement?(): Partial<PlayOptions> | undefined;
+  clearArrangement?(): void;
   setPlayOptions(changes: Partial<PlayOptions>): void;
   /** Remembers a hi-speed set on the menu's slider, and hands it to the running play. */
   rememberHiSpeed(value: number, source: 'menu'): void;
@@ -191,6 +193,9 @@ export class DebugMenu {
   public normalHiSpeedController: PaneBinding | undefined;
   public normalHiSpeedLevelController: PaneBinding | undefined;
   public classicSpeedController: PaneBinding | undefined;
+  public randomSeed1PController: PaneBinding | undefined;
+  public randomSeed2PController: PaneBinding | undefined;
+  public readonly randomSeedControllers: Array<{ hidden: boolean }> = [];
   public random1PController: ListInputBindingApi<PlayOptions['random1P']> | undefined;
   public random2PController: ListInputBindingApi<PlayOptions['random2P']> | undefined;
   public gaugeController: ListInputBindingApi<GaugeType> | undefined;
@@ -417,6 +422,11 @@ export class DebugMenu {
     if (this.hsFixController) this.hsFixController.hidden = this.guiState.classicHiSpeed || normal;
     if (this.classicSpeedController) this.classicSpeedController.hidden = !this.guiState.classicHiSpeed;
     const beatoraja = this.guiState.judgeRuleset === 'beatoraja';
+    for (const controller of this.randomSeedControllers) controller.hidden = !beatoraja;
+    for (const side of ['1P', '2P'] as const) {
+      const controller = side === '1P' ? this.randomSeed1PController : this.randomSeed2PController;
+      if (controller) controller.hidden = !beatoraja || this.guiState[`random${side}`] === 'RANDOM_PLAYABLE';
+    }
     if (!beatoraja && this.guiState.judgeAlgorithm !== 'combo') {
       this.guiState.judgeAlgorithm = 'combo';
       this.setPlayOptions({ judgeAlgorithm: 'combo' });

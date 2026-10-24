@@ -49,6 +49,7 @@ const runtimeNeutralSources = [
   'packages/player-engine/src/judging.ts',
   'packages/player-engine/src/lanes.ts',
   'packages/player-engine/src/lane-random.ts',
+  'packages/player-engine/src/lane-random-source.ts',
   'packages/player-engine/src/lane-converge.ts',
   'packages/player-engine/src/lane-pms-random.ts',
   'packages/player-engine/src/playable-notes.ts',
@@ -69,6 +70,7 @@ const runtimeAdapterSources = ['packages/chart-parser/src/cli.ts', 'packages/cha
  */
 const deterministicJudgeSources = [
   'packages/player-engine/src/lane-random.ts',
+  'packages/player-engine/src/lane-random-source.ts',
   'packages/player-engine/src/lane-converge.ts',
   'packages/player-engine/src/lane-pms-random.ts',
   'packages/skin-beatoraja/src/scene/**/*.ts',
