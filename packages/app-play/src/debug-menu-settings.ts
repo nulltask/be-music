@@ -64,6 +64,7 @@ export interface DebugMenuSettings {
   random1P: RandomMode;
   random2P: RandomMode;
   dpFlip: boolean;
+  longNoteModifier: PlayerGUIState['longNoteModifier'];
   autoScratch1P: boolean;
   autoScratch2P: boolean;
   sort: BrowseSort;
@@ -198,6 +199,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'courseAutoAdvance', booleanOf(raw.courseAutoAdvance));
   assign(settings, 'submitToLeaderboard', booleanOf(raw.submitToLeaderboard));
   assign(settings, 'dpFlip', booleanOf(raw.dpFlip));
+  assign(settings, 'longNoteModifier', oneOf(raw.longNoteModifier, ['OFF', 'LEGACY', 'REMOVE'] as const));
   assign(settings, 'autoScratch1P', booleanOf(raw.autoScratch1P));
   assign(settings, 'autoScratch2P', booleanOf(raw.autoScratch2P));
   assign(settings, 'playInSilentMode', booleanOf(raw.playInSilentMode));
@@ -381,6 +383,7 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('random1P');
   assignState('random2P');
   assignState('dpFlip');
+  assignState('longNoteModifier');
   assignState('autoScratch1P');
   assignState('autoScratch2P');
   assignState('sort');
@@ -444,6 +447,7 @@ export function captureDebugMenuSettings(
     random1P: state.random1P,
     random2P: state.random2P,
     dpFlip: state.dpFlip,
+    longNoteModifier: state.longNoteModifier,
     autoScratch1P: state.autoScratch1P,
     autoScratch2P: state.autoScratch2P,
     sort: state.sort,

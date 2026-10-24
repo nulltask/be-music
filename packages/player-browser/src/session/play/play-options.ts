@@ -134,6 +134,8 @@ export interface PlaySessionOptions {
    * switches HIDDEN+ and J / K move it. The beatoraja play screen's keys; off by default.
    */
   coverKeys?: boolean;
+  /** Source-specific head-only long-note conversion. */
+  longNoteModifier?: 'OFF' | 'LEGACY' | 'REMOVE';
   /**
    * 1P side auto-scratch flag — when true, the scratch lane (channel 16) auto-judges as PERFECT at every note's
    * scheduled time even when {@link autoPlay} is off. The player only has to play the keys.

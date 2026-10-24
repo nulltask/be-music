@@ -180,7 +180,11 @@ export async function createPlaySession(
   // arrays drifted" bugs.
   const playbackChart =
     options.preparedChart ??
-    preparePlaybackChart(resolvedChart, { laneModeExtension: options.laneModeExtension }, realtimeAudioEndSeconds);
+    preparePlaybackChart(
+      resolvedChart,
+      { laneModeExtension: options.laneModeExtension, longNoteModifier: options.longNoteModifier },
+      realtimeAudioEndSeconds,
+    );
   // A duplicate note that lost its lane and position to another note is not judged, but its keysound still sounds, as
   // background audio at its own time.
   appendShadowedNoteTriggers(backgroundTriggers, resolvedChart, playbackChart.shadowedNotes);
@@ -251,6 +255,7 @@ export async function createPlaySession(
           play: {
             mode,
             autoScratch,
+            longNoteModifier: options.longNoteModifier,
             ...(options.autoScratch1P !== undefined || options.autoScratch2P !== undefined
               ? {
                   autoScratch1P: mode === 'manual' && scratchSides.autoScratch1P,

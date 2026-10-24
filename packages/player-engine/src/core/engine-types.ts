@@ -78,6 +78,8 @@ export interface CreatePlayerInputRuntimeContext {
 export interface PlayerPlaySettings {
   auto?: boolean;
   autoScratch?: boolean;
+  /** Source modifier applied before scoring and rendering. */
+  longNoteModifier?: 'OFF' | 'LEGACY' | 'REMOVE';
   /** Independently assist the source play side; explicit values override autoScratch for that side. */
   autoScratch1P?: boolean;
   autoScratch2P?: boolean;

@@ -57,6 +57,7 @@ export interface ReplayRecorderPlaySettings {
   options?: ReplayOptionState;
   mode: 'manual' | 'auto';
   autoScratch: boolean;
+  longNoteModifier?: 'OFF' | 'LEGACY' | 'REMOVE';
   autoScratch1P?: boolean;
   autoScratch2P?: boolean;
   /** The gauge the engine ran (`PlayerOptions.gauge`, else `recordReplay.gauge`); `GROOVE` when neither is set. */
@@ -261,6 +262,7 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       if (options.play.tempo !== undefined && options.play.tempo !== 1) play.tempo = options.play.tempo;
       if (tempoChanges.length > 0) play.tempoChanges = tempoChanges.map((change) => ({ ...change }));
       if (options.play.view !== undefined) play.view = structuredClone(options.play.view);
+      if (options.play.longNoteModifier !== undefined) play.longNoteModifier = options.play.longNoteModifier;
       if (options.play.autoScratch1P !== undefined) play.autoScratch1P = options.play.autoScratch1P;
       if (options.play.autoScratch2P !== undefined) play.autoScratch2P = options.play.autoScratch2P;
       if (initialOptions !== undefined) play.options = { ...initialOptions };

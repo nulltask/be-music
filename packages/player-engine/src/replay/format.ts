@@ -175,6 +175,7 @@ export interface ReplayPlay {
   mode: 'manual' | 'auto';
   autoScratch: boolean;
   /** Effective manual assist per side; older replays fall back to autoScratch for both. */
+  longNoteModifier?: 'OFF' | 'LEGACY' | 'REMOVE';
   autoScratch1P?: boolean;
   autoScratch2P?: boolean;
   /** Gauge the player selected for the session (declared by the host; LR2-family gauge id). */
@@ -618,6 +619,12 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
   if (play.viewChanges !== undefined) {
     const changes = parseReplayViewChanges(play.viewChanges, 'play.viewChanges');
     if (changes.length > 0) parsed.viewChanges = changes;
+  }
+  if (play.longNoteModifier !== undefined) {
+    if (!['OFF', 'LEGACY', 'REMOVE'].includes(play.longNoteModifier as string)) {
+      throw new ReplayParseError('play.longNoteModifier must be OFF, LEGACY or REMOVE');
+    }
+    parsed.longNoteModifier = play.longNoteModifier as 'OFF' | 'LEGACY' | 'REMOVE';
   }
   for (const key of ['autoScratch1P', 'autoScratch2P'] as const) {
     if (play[key] !== undefined) {

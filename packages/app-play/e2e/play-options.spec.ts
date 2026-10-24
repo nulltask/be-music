@@ -67,3 +67,25 @@ test('DP AUTO SCRATCH keeps the other side manual and records the side mask', as
   expect(replay?.play).toMatchObject({ autoScratch: true, autoScratch1P: true, autoScratch2P: false });
   expect(replay?.play.options).toMatchObject({ autoScratch1P: true, autoScratch2P: false });
 });
+
+for (const modifier of ['LEGACY NOTE (AC 34)', 'LN REMOVE (beatoraja)'] as const) {
+  test(`${modifier} records head-only notes and reopens its replay`, async ({ player }) => {
+    await player.open();
+    await player.dropText('charge-note.bme', '#TITLE Charge note modifier\n#BPM 240\n#LNMODE 2\n#00151:0101\n');
+    await player.setOption(['Play options'], 'Long notes', modifier);
+    await player.setOption(['Play options'], 'Auto play', true);
+    await player.cursorTo((bar) => bar.title === 'Charge note modifier', 'charge-note chart');
+    await player.key('Enter');
+    await player.waitForResult(0);
+    const replay = await player.lastReplay();
+    expect(replay?.play.longNoteModifier).toBe(modifier.startsWith('LEGACY') ? 'LEGACY' : 'REMOVE');
+    expect(replay?.chart.notes).toEqual([expect.objectContaining({ type: 'normal' })]);
+    expect(replay?.chart.notes[0]?.endTimeUs).toBeUndefined();
+    await player.leaveResult();
+    await player.waitFor((state) => state.scene.kind === 'select', 'select');
+    await player.setOption(['Play options'], 'Long notes', 'OFF');
+    await player.dropText('charge-note.bmplay.json', JSON.stringify(replay));
+    await player.waitFor((state) => state.scene.kind === 'play' && state.play?.replay === true, 'head-only replay');
+    await player.waitForResult(1);
+  });
+}

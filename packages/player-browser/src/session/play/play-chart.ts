@@ -93,6 +93,7 @@ export interface PlayChartContext {
       | 'course'
       | 'nonstop'
       | 'judgeRuleset'
+      | 'longNoteModifier'
       | 'autoScratch1P'
       | 'autoScratch2P'
     >
@@ -221,7 +222,10 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // `showInvisibleNotes`. The audio horizon is left at 0: the engine recomputes its own from realtime triggers.
   const prepared = preparePlaybackChart(
     resolvedPlay,
-    { laneModeExtension: extractChartExtension(ctx.chart?.chartPath) },
+    {
+      laneModeExtension: extractChartExtension(ctx.chart?.chartPath),
+      longNoteModifier: ctx.options.replay?.play.longNoteModifier ?? ctx.options.longNoteModifier,
+    },
     0,
   );
   ctx.preparedChart = prepared;

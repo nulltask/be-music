@@ -62,6 +62,13 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       this.setPlayOptions({ autoScratch2P: value });
     }),
   );
+  trackPlayOption(
+    selectBinding(folder, this.guiState, 'longNoteModifier', 'Long notes', {
+      OFF: 'OFF',
+      'LEGACY NOTE (AC 34)': 'LEGACY',
+      'LN REMOVE (beatoraja)': 'REMOVE',
+    }).on('change', ({ value }) => this.setPlayOptions({ longNoteModifier: value })),
+  );
   // The built-in and LR2 select screens' sort and filters (an LR2 skin's buttons change them too); the list keeps
   // the bar under the cursor.
   trackPlayOption(
