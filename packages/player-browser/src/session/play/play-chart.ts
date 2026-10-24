@@ -31,6 +31,7 @@ import {
   randomizeLR2ConvergeNotes,
   randomizeHRandomNotes,
   randomizeAllScratchNotes,
+  randomizePMSConvergeNotes,
   randomizeSpiralNotes,
   resolveLaneOptionChannels,
   resolvePlayVariantLaneChannels,
@@ -246,6 +247,13 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     [ctx.options.random1P, ctx.options.random2P].some((mode) => mode === 'ALL-SCR' || mode === 'RANDOM-EX')
   )
     throw new RangeError('beatoraja PMS uses its own arrangements; ALL-SCR and RANDOM-EX require scratch lanes.');
+  if (
+    ctx.options.replay === undefined &&
+    ctx.options.judgeRuleset === 'beatoraja' &&
+    hostPlayVariant !== '9' &&
+    (ctx.options.random1P === 'CONVERGE' || ctx.options.random2P === 'CONVERGE')
+  )
+    throw new RangeError('beatoraja CONVERGE is a PMS arrangement.');
   const resolvedPlay = resolveChart(resolved, {
     randomDraws,
     playVariant: hostPlayVariant,
@@ -316,6 +324,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
                 .map((lane) => lane.channel),
         doublePlay: hostPlayVariant === '10' || hostPlayVariant === '14' || hostPlayVariant === '48',
         side: '1P',
+        playVariant: hostPlayVariant,
       },
       ctx.mineNotes as Array<{ channel: string }>,
       ctx.invisibleNotes as Array<{ channel: string }>,
@@ -339,6 +348,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
                 .map((lane) => lane.channel),
         doublePlay: hostPlayVariant === '10' || hostPlayVariant === '14' || hostPlayVariant === '48',
         side: '2P',
+        playVariant: hostPlayVariant,
       },
       ctx.mineNotes as Array<{ channel: string }>,
       ctx.invisibleNotes as Array<{ channel: string }>,
@@ -613,6 +623,7 @@ export function applyRandomMode(
     scratchLanes?: readonly string[];
     doublePlay?: boolean;
     side?: '1P' | '2P';
+    playVariant?: ChartPlayVariant;
   } = {},
   // Extra channel-bearing arrays: mines first, then invisible notes. Chart permutations share the same lane map;
   // S-RANDOM applies the active ruleset's policy for each event kind.
@@ -627,8 +638,10 @@ export function applyRandomMode(
     options.ruleset !== 'beatoraja'
   )
     throw new RangeError(`${mode} is available only for beatoraja.`);
-  if (mode === 'CONVERGE' && (options.ruleset ?? 'lr2') !== 'lr2')
-    throw new RangeError('CONVERGE is available only for LR2.');
+  if (mode === 'CONVERGE' && options.ruleset === '____')
+    throw new RangeError('CONVERGE is unavailable for this ruleset.');
+  if (mode === 'CONVERGE' && options.ruleset === 'beatoraja' && options.playVariant !== '9')
+    throw new RangeError('beatoraja CONVERGE is a PMS arrangement.');
   if (mode === 'OFF' || allLanes.length === 0) return;
   if (mode === 'S-RANDOM' || mode === 'SPIRAL' || mode === 'H-RANDOM' || mode === 'CONVERGE' || mode === 'ALL-SCR') {
     const entries = [
@@ -664,11 +677,16 @@ export function applyRandomMode(
             side: options.side,
           })
         : mode === 'CONVERGE'
-          ? randomizeLR2ConvergeNotes(timedNotes, allLanes, {
-              target: allLanes[(options.fixedLane ?? 0) - 1] ?? options.scratch ?? allLanes[4]!,
-              scratch: options.scratch,
-              random: rng,
-            })
+          ? options.ruleset === 'beatoraja'
+            ? randomizePMSConvergeNotes(timedNotes, allLanes, {
+                random: rng,
+                thresholdBPM: options.hRandomThresholdBPM,
+              })
+            : randomizeLR2ConvergeNotes(timedNotes, allLanes, {
+                target: allLanes[(options.fixedLane ?? 0) - 1] ?? options.scratch ?? allLanes[4]!,
+                scratch: options.scratch,
+                random: rng,
+              })
           : mode === 'SPIRAL'
             ? randomizeSpiralNotes(timedNotes, allLanes, rng)
             : mode === 'H-RANDOM'

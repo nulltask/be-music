@@ -142,7 +142,7 @@ export interface PlayOptions {
    * - `SPIRAL` — beatoraja row rotations, frozen during active holds
    * - `RANDOM-EX` — beatoraja chart-wide permutation including scratches/wheels
    * - `ALL-SCR` — beatoraja scratch priority with time-based fallback
-   * - `CONVERGE` — LR2 concentration onto the selected lane with free-key collision fallback
+   * - `CONVERGE` — LR2 selected-lane concentration, or beatoraja PMS streak-based concentration
    * - `SCATTER` — legacy value, disabled until placement and assist policy are implemented
    */
   random1P: RandomMode;

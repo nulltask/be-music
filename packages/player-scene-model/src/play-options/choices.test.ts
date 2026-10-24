@@ -180,7 +180,7 @@ test('H-RANDOM is beatoraja-only and the source threshold is validated', () => {
 
 test('LR2 CONVERGE and fixed-lane source settings are selectable and validated', () => {
   expect(resolveRandomModes('lr2')).toContain('CONVERGE');
-  expect(resolveRandomModes('beatoraja')).not.toContain('CONVERGE');
+  expect(resolveRandomModes('beatoraja')).toContain('CONVERGE');
   expect(resolveRandomModes('____')).not.toContain('CONVERGE');
   expect(resolvePlayOptions({ random1P: 'CONVERGE', randomFixedLane1P: 4, randomFixedLane2P: 0 })).toMatchObject({
     random1P: 'CONVERGE',

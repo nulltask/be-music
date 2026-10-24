@@ -67,6 +67,23 @@ export function randomizeAllScratchNotes(
   );
 }
 
+/** beatoraja PMS CONVERGE favors the longest recent jack streak among eligible lanes. */
+export function randomizePMSConvergeNotes(
+  notes: readonly SRandomNote[],
+  lanes: readonly string[],
+  options: { random: () => number; thresholdBPM?: number },
+): string[] {
+  return randomizeTimeBasedNotes(
+    notes,
+    lanes,
+    { ruleset: 'beatoraja', random: options.random },
+    Math.ceil(15000 / clampHRandomThresholdBPM(options.thresholdBPM ?? 120)),
+    true,
+    undefined,
+    true,
+  );
+}
+
 function randomizeTimeBasedNotes(
   notes: readonly SRandomNote[],
   lanes: readonly string[],
@@ -74,6 +91,7 @@ function randomizeTimeBasedNotes(
   thresholdMs = 40,
   visitAllRows = false,
   allScratch?: { scratchLanes: readonly string[]; doublePlay?: boolean; side?: '1P' | '2P' },
+  converge = false,
 ): string[] {
   lanes = [...new Set(lanes)];
   const channels = notes.map((note) => note.channel);
@@ -95,12 +113,15 @@ function randomizeTimeBasedNotes(
   });
   if (options.ruleset !== 'beatoraja') return randomizeLR2Notes(notes, lanes, rows, channels, options.random);
   let scratchIndex = 0;
+  const streak = new Map(lanes.map((lane) => [lane, 0]));
   const held = new Map<string, { target: string; endMs: number }>();
   const lastNoteTime = new Map(lanes.map((lane) => [lane, visitAllRows ? -10000 : Number.NEGATIVE_INFINITY]));
   for (const [timeMs, indices] of [...rows].sort(([left], [right]) => left - right)) {
     for (const [source, hold] of held) {
       if (hold.endMs < timeMs) held.delete(source);
     }
+    if (converge)
+      for (const lane of lanes) if (Math.trunc(timeMs) - lastNoteTime.get(lane)! > thresholdMs * 2) streak.set(lane, 0);
     const occupied = new Set([...held.values()].map((hold) => hold.target));
     const free = lanes.filter((lane) => !occupied.has(lane));
     const map = new Map([...held].map(([source, hold]) => [source, hold.target]));
@@ -124,19 +145,26 @@ function randomizeTimeBasedNotes(
     for (const source of ordered) {
       let candidates = free;
       let useSidePriority = false;
+      let useStreak = false;
       if (options.ruleset === 'beatoraja' && scoring.has(source)) {
         const eligible = free.filter((lane) => Math.trunc(timeMs) - lastNoteTime.get(lane)! > thresholdMs);
         if (eligible.length > 0) {
           candidates = eligible;
           useSidePriority = allScratch?.doublePlay === true;
+          useStreak = converge;
         } else {
           const oldest = Math.min(...free.map((lane) => lastNoteTime.get(lane)!));
           candidates = free.filter((lane) => lastNoteTime.get(lane) === oldest);
         }
       }
+      if (useStreak) {
+        const longest = Math.max(...candidates.map((lane) => streak.get(lane)!));
+        candidates = candidates.filter((lane) => streak.get(lane) === longest);
+      }
       const target = useSidePriority
         ? candidates[allScratch?.side === '2P' ? candidates.length - 1 : 0]!
         : pickLane(candidates, options.random);
+      if (useStreak) streak.set(target, streak.get(target)! + 1);
       map.set(source, target);
       free.splice(free.indexOf(target), 1);
       if (options.ruleset === 'beatoraja' && scoring.has(source)) lastNoteTime.set(target, Math.trunc(timeMs));
