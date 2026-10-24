@@ -1418,3 +1418,43 @@ test('mixed generated types contribute their individual head/tail counts and rep
   expect(simulated.judge).toEqual(replay.results!.native!.judge);
   expect(simulated.gauge.final).toBe(run.summary.gauge?.current);
 });
+
+test('SURVIVAL TO GROOVE restores parallel NORMAL with matching live and replay results', async () => {
+  const json = chart([
+    { measure: 1, channel: '11', position: [0, 1], value: '01' },
+    { measure: 2, channel: '12', position: [0, 1], value: '01' },
+    { measure: 3, channel: '13', position: [0, 1], value: '01' },
+  ]);
+  const inputs = [down(0, 1000000, '11'), down(1, 3000000, '13')];
+  const shifted = await runRecordedPlay(json, inputs, 'beatoraja', {
+    gauge: 'DEATH',
+    gaugeAutoShift: 'SURVIVAL_TO_GROOVE',
+  });
+  const normal = await runRecordedPlay(json, inputs, 'beatoraja', { gauge: 'GROOVE' });
+  const replay = parseReplay(serializeReplay(shifted.replay));
+  expect(replay.play.gauge).toBe('DEATH'); // Preserve the pick; the result contains the effective gauge.
+  expect(replay.play.gaugeAutoShift).toBe('SURVIVAL_TO_GROOVE');
+  expect(shifted.summary.gauge).toEqual(normal.summary.gauge);
+  expect(shifted.summary.gauge?.type).toBe('NORMAL');
+  expect(shifted.summary.perfect).toBe(2);
+  expect(shifted.summary.poor).toBe(1);
+  const simulated = simulateReplay(replay, { ruleset: 'beatoraja' });
+  expect(simulated.gauge).toEqual(replay.results!.native!.gauge);
+  expect(simulated.judge).toEqual(replay.results!.native!.judge);
+});
+
+test('SURVIVAL TO GROOVE leaves a failed course class gauge selected while continuing judgments', async () => {
+  const json = chart([
+    { measure: 1, channel: '11', position: [0, 1], value: '01' },
+    { measure: 2, channel: '12', position: [0, 1], value: '01' },
+  ]);
+  const run = await runRecordedPlay(json, [down(0, 2000000, '12')], 'beatoraja', {
+    gauge: 'DEATH',
+    gaugeAutoShift: 'SURVIVAL_TO_GROOVE',
+    course: { kind: 'grade', carryIn: { gauge: 1, combo: 0, maxCombo: 0 } },
+  });
+  expect(run.summary.gauge).toMatchObject({ type: 'EXHARDCLASS', current: 0, failedMidPlay: true });
+  expect(run.summary.perfect).toBe(1);
+  const replay = parseReplay(serializeReplay(run.replay));
+  expect(simulateReplay(replay, { ruleset: 'beatoraja' }).gauge).toEqual(replay.results!.native!.gauge);
+});

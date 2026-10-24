@@ -120,7 +120,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     this.guiState,
     'gaugeAutoShift',
     'Gauge auto-shift (beatoraja)',
-    ['NONE', 'CONTINUE'],
+    { NONE: 'NONE', CONTINUE: 'CONTINUE', 'SURVIVAL TO GROOVE': 'SURVIVAL_TO_GROOVE' },
   );
   trackPlayOption(
     this.gaugeAutoShiftController.on('change', ({ value }) => this.setPlayOptions({ gaugeAutoShift: value })),

@@ -578,6 +578,10 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.replay.resolveRulesetConfig', {
     run: () => {
       replayAPI.resolveRulesetConfig(BENCH_REPLAY, 'beatoraja');
+      replayAPI.resolveRulesetConfig(BENCH_REPLAY, 'beatoraja', {
+        selectedGauge: 'DEATH',
+        gaugeAutoShift: 'SURVIVAL_TO_GROOVE',
+      });
     },
   });
   define('player-engine.replay.resolveLR2DefaultTotal', {
@@ -813,6 +817,7 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.ruleset.resolveGaugeEndOnFailure', {
     run() {
       rulesetAPI.resolveGaugeEndOnFailure('CONTINUE', 'beatoraja');
+      rulesetAPI.resolveGaugeEndOnFailure('SURVIVAL_TO_GROOVE', 'beatoraja');
     },
   });
   define('player-engine.ruleset.resolveGaugeTypes', {

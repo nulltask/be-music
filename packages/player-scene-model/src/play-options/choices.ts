@@ -166,7 +166,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   judgeAlgorithm: ['combo', 'duration', 'lowest'],
   longNoteModifier: ['OFF', 'LEGACY', 'REMOVE', 'ADD_LN', 'ADD_CN', 'ADD_HCN', 'ADD_ALL'],
   mineModifier: ['OFF', 'REMOVE', 'ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'],
-  gaugeAutoShift: ['NONE', 'CONTINUE'],
+  gaugeAutoShift: ['NONE', 'CONTINUE', 'SURVIVAL_TO_GROOVE'],
   classicHiSpeed: BOOLEAN_CYCLE,
   floatingHiSpeed: BOOLEAN_CYCLE,
   fixedDisplayArea: BOOLEAN_CYCLE,

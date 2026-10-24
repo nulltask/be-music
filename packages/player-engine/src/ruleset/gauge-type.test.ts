@@ -44,3 +44,9 @@ it('CONTINUE keeps the same dead gauge and NONE ends judging, with an explicit s
   for (const ruleset of ['lr2', '____'] as const)
     expect(() => resolveGaugeEndOnFailure('CONTINUE', ruleset)).toThrow(/only for beatoraja/);
 });
+
+it('SURVIVAL TO GROOVE continues after survival failure only for beatoraja', () => {
+  expect(resolveGaugeEndOnFailure('SURVIVAL_TO_GROOVE', 'beatoraja')).toBe(false);
+  expect(() => resolveGaugeEndOnFailure('SURVIVAL_TO_GROOVE', 'lr2')).toThrow(/beatoraja/);
+  expect(() => resolveGaugeEndOnFailure('SURVIVAL_TO_GROOVE', '____')).toThrow(/beatoraja/);
+});

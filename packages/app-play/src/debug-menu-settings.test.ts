@@ -288,3 +288,11 @@ test('persists the beatoraja automatic display-timing toggle without coercing in
   expect(read(false)).toMatchObject({ judgeTimingAutoAdjust: false });
   expect(read('true')).not.toHaveProperty('judgeTimingAutoAdjust');
 });
+
+test('persists the source SURVIVAL TO GROOVE policy', () => {
+  expect(
+    parseDebugMenuSettingsDocument(
+      JSON.stringify({ version: 1, updatedAt: 1, settings: { gaugeAutoShift: 'SURVIVAL_TO_GROOVE' } }),
+    )?.settings,
+  ).toMatchObject({ gaugeAutoShift: 'SURVIVAL_TO_GROOVE' });
+});

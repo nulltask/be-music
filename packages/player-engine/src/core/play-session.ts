@@ -238,6 +238,7 @@ export async function createPlaySession(
     {
       ...(options.judgeAlgorithm !== undefined ? { judgeAlgorithm: options.judgeAlgorithm } : {}),
       ...(selectedGauge !== undefined ? { selectedGauge } : {}),
+      ...(options.gaugeAutoShift !== undefined ? { gaugeAutoShift: options.gaugeAutoShift } : {}),
       ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
       ...(options.course !== undefined ? { course: courseStageRulesetOptions(options.course) } : {}),
     },

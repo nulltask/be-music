@@ -54,6 +54,9 @@ export function resolveRulesetConfig(
   const { course } = replay.play;
   return resolveRuleset(rulesetChartFactsFromReplay(replay), rulesetId, {
     selectedGauge: replay.play.gauge,
+    ...(rulesetId === 'beatoraja' && replay.play.gaugeAutoShift !== undefined
+      ? { gaugeAutoShift: replay.play.gaugeAutoShift }
+      : {}),
     ...(rulesetId === 'beatoraja' && replay.play.judgeAlgorithm !== undefined
       ? { judgeAlgorithm: replay.play.judgeAlgorithm }
       : {}),

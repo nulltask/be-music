@@ -539,7 +539,7 @@ test.each(['ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'] as const)(
   },
 );
 
-test.each(['NONE', 'CONTINUE'] as const)(
+test.each(['NONE', 'CONTINUE', 'SURVIVAL_TO_GROOVE'] as const)(
   'gauge policy %s round-trips and rejects unknown policies',
   (gaugeAutoShift) => {
     const replay = makeReplay();

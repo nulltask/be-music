@@ -1,3 +1,4 @@
+import type { GaugeAutoShift } from './gauge-type.ts';
 import {
   bmsExRankValueToJudgeRankPercent,
   resolveBMSJudgeWindowsMsForPercent,
@@ -164,6 +165,8 @@ export interface RulesetConfig {
   /** HCN tick deltas as `[heldJudgeIndex, heldRate, releasedJudgeIndex, releasedRate]` (beatoraja model). */
   hcnTick: { heldJudge: number; heldRate: number; releasedJudge: number; releasedRate: number };
   gauge: GaugeSpec;
+  /** SURVIVAL TO GROOVE tracks NORMAL from chart start, never on course class gauges. */
+  gaugeFallback?: GaugeSpec;
   /** EX-SCORE denominator note count (longs count 1 for LN styles, 2 for charge styles). */
   noteCount: number;
   /**
@@ -193,6 +196,7 @@ export interface ResolveRulesetOptions {
    * ruleset's own line-up by `resolveDefaultGaugeId`. Defaults to `'GROOVE'`.
    */
   selectedGauge?: string;
+  gaugeAutoShift?: GaugeAutoShift;
   /** Debug BAD-window override (`PlayerOptions.judgeWindowMs`) — non-standard, applies to every window table. */
   judgeWindowOverrideMs?: number;
   /** beatoraja note-selection algorithm (default `'combo'`, beatoraja's own default). */
@@ -896,6 +900,9 @@ export function resolveRuleset(
       mineTrigger: 'hold',
       hcnTick: { heldJudge: 1, heldRate: 0.5, releasedJudge: 3, releasedRate: 0.5 },
       gauge: courseGauge(effectiveTotal) ?? resolveBeatorajaGauge(gaugeId, effectiveTotal, noteCount, chart.laneMode),
+      ...(options.gaugeAutoShift === 'SURVIVAL_TO_GROOVE' && course === undefined
+        ? { gaugeFallback: resolveBeatorajaGauge('NORMAL', effectiveTotal, noteCount, chart.laneMode) }
+        : {}),
       noteCount,
       effectiveTotal,
       moneyScore: false,

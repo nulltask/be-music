@@ -658,8 +658,8 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
   if (play.abortedAtUs !== undefined) parsed.abortedAtUs = expectFiniteNumber(play.abortedAtUs, 'play.abortedAtUs');
   if (play.endOnFailure !== undefined) parsed.endOnFailure = play.endOnFailure === true;
   if (play.gaugeAutoShift !== undefined) {
-    if (!['NONE', 'CONTINUE'].includes(play.gaugeAutoShift as string))
-      throw new ReplayParseError('play.gaugeAutoShift: expected NONE or CONTINUE');
+    if (!['NONE', 'CONTINUE', 'SURVIVAL_TO_GROOVE'].includes(play.gaugeAutoShift as string))
+      throw new ReplayParseError('play.gaugeAutoShift: expected NONE, CONTINUE or SURVIVAL_TO_GROOVE');
     parsed.gaugeAutoShift = play.gaugeAutoShift as GaugeAutoShift;
   }
   if (play.course !== undefined) parsed.course = parseCourseStage(expectRecord(play.course, 'play.course'));
