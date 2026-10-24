@@ -1,3 +1,4 @@
+import { createPlayerInputSignalBus } from '@be-music/player-engine/signals';
 import type { ReplayPlaybackOptions, ReplayViewState } from '@be-music/player-engine/replay';
 import {
   createHiSpeedState,
@@ -8,7 +9,7 @@ import {
   reducePlayState,
   resolveWhiteNumber,
 } from '@be-music/player-scene-model';
-import { describe, expect, test } from 'vite-plus/test';
+import { describe, expect, test, vi } from 'vite-plus/test';
 import type { PlaySessionTheme } from './play-session-theme.ts';
 import type { PlayTempoRange } from './tempo-range.ts';
 import {
@@ -135,4 +136,25 @@ describe("the replay's view on the built-in and LR2 play screens", () => {
     updateReplayView(ctx, 0);
     expect(ctx.playState.view.hiSpeed.drawn).toBe(2.5);
   });
+});
+
+test('records successive rendered view edits even within the former 100 ms debounce', () => {
+  const clock = vi.spyOn(performance, 'now').mockReturnValue(0);
+  try {
+    const bus = createPlayerInputSignalBus();
+    const ctx = { ...createView(), sharedEngineInputSignals: bus };
+    startReplayView(ctx);
+    ctx.playState = reducePlayState(ctx.playState, { type: 'hi-speed-set', value: 2.1 });
+    updateReplayView(ctx, 1);
+    ctx.playState = reducePlayState(ctx.playState, { type: 'hi-speed-set', value: 2.2 });
+    updateReplayView(ctx, 1.001);
+    expect(
+      bus
+        .drainCommands()
+        .filter((command) => command.kind === 'view')
+        .map((command) => command.change.hiSpeed),
+    ).toEqual([2.1, 2.2]);
+  } finally {
+    clock.mockRestore();
+  }
 });

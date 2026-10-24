@@ -1,5 +1,5 @@
 import { createEmptyJSON } from '@be-music/chart-source';
-import type { PlayerInputCommand } from '@be-music/player-engine/signals';
+import { createPlayerInputSignalBus, type PlayerInputCommand } from '@be-music/player-engine/signals';
 import { DEFAULT_PLAY_OPTIONS, type LibraryChart } from '@be-music/player-scene-model';
 import { describe, expect, test, vi } from 'vite-plus/test';
 import { PlaySceneSession, resolvePlayStage } from './play-scene-session.ts';
@@ -250,4 +250,40 @@ describe('stage-failure sound', () => {
     expect(session.frame(0).events).toContainEqual({ kind: 'exit-close', atMs: 0 });
     session.dispose();
   });
+});
+
+test('records actual hi-speed edits alongside the effective replay view', () => {
+  const { play, session } = createSceneSession({ initialHiSpeed: 2 });
+  const commands: PlayerInputCommand[] = [];
+  const bus = createPlayerInputSignalBus();
+  play.sharedEngineInputSignals = bus;
+  const push = bus.pushCommand;
+  bus.pushCommand = (command) => {
+    commands.push(command);
+    push(command);
+  };
+  session.frame(0);
+  session.dispatch({ type: 'hi-speed', command: { type: 'hi-speed-set', value: 3 } });
+  session.frame(1);
+  expect(commands).toContainEqual({ kind: 'options', values: { hiSpeed: 3 } });
+  session.frame(2);
+  expect(commands.filter((command) => command.kind === 'options')).toHaveLength(1);
+});
+
+test('replay frames restore selected options at the playhead and after a backward seek', () => {
+  const replay = {
+    play: {
+      mode: 'manual',
+      options: { displayAreaInfo: 'ON' },
+      optionChanges: [{ timeUs: 2_000_000, values: { displayAreaInfo: 'SUDDEN_ONLY' } }],
+    },
+  } as unknown as import('@be-music/player-engine/replay').BeMusicReplay;
+  const { play, session } = createSceneSession({ replay });
+  let seconds = 0;
+  play.currentSeconds = () => seconds;
+  expect(session.frame(0).playOptions.displayAreaInfo).toBe('ON');
+  seconds = 3;
+  expect(session.frame(3).playOptions.displayAreaInfo).toBe('SUDDEN_ONLY');
+  seconds = 1;
+  expect(session.frame(4).playOptions.displayAreaInfo).toBe('ON');
 });

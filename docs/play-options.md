@@ -2,7 +2,7 @@
 
 # Play options
 
-The Debug Menu's **Play options** folder and the select screen share the same effective settings. Options that affect a new play are locked while it runs; saved preferences are restored on the next visit. Implementation follows the individual specifications and comments linked from [#755](https://github.com/nulltask/be-music/issues/755).
+The Debug Menu's **Play options** folder and the select screen share the same effective settings. Options that affect a new play are locked while it runs; saved preferences are restored on the next visit. Replays keep the selected option snapshot and timed changes, alongside effective chart, view and tempo state; score policy is handled separately by the Leaderboard. Implementation follows the individual specifications and comments linked from [#755](https://github.com/nulltask/be-music/issues/755).
 
 ## START BPM HS-FIX
 

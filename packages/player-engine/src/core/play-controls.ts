@@ -143,6 +143,7 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
               : undefined,
           });
         },
+        onOptionChange: (values) => replayRecorder?.recordOptionChange(commandSeconds(), values),
         onViewChange: (change) => replayRecorder?.recordViewChange(commandSeconds(), change),
         onTempoChange: changeTempo,
         onSeek: (seconds) => {

@@ -1,7 +1,7 @@
 /**
  * What the player sees of a play on the built-in and LR2 play screens (`PlaySession`), and how it changes: the
  * hi-speed (the hotkeys, HS-FIX), the play tempo the engine follows, the lane covers, the visible time, and the play
- * log's view, recorded as it changes or shown back from a replay.
+ * replay's view, recorded as it changes or shown back from a replay.
  *
  * The functions read and write the scene's state through {@link PlayViewSettingsContext}; the play session passes itself.
  */
@@ -131,13 +131,12 @@ function currentReplayView(ctx: PlayViewSettingsContext): ReplayViewState {
 /** The view the recorded replay starts from (`play.view`); later changes go through {@link updateReplayView}. */
 export function startReplayView(ctx: PlayViewSettingsContext): ReplayViewState {
   const view = currentReplayView(ctx);
-  ctx.replayViewCoalescer = createReplayViewCoalescer(view);
+  ctx.replayViewCoalescer = createReplayViewCoalescer(view, { minIntervalMs: 0 });
   return view;
 }
 
 /**
- * Per frame, once the lanes are laid out: while recording, sends the engine what changed in the view (at most one
- * change per 100 ms, so a held key records a few); while replaying, shows the recorded view at the playhead as far as
+ * Per frame, once the lanes are laid out: while recording, sends the engine what changed in the view on every rendered frame where it changes; while replaying, shows the recorded view at the playhead as far as
  * {@link PlaySessionOptions.replayView} asks.
  */
 export function updateReplayView(ctx: PlayViewSettingsContext, seconds: number, seek = false): void {

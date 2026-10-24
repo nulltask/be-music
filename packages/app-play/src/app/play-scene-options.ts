@@ -6,7 +6,7 @@ import type { ChartFileHashes } from '@be-music/player-browser/collection';
 import type { PlaySceneCourse, PlaySceneSettings } from '@be-music/player-browser/host';
 import { resolveCourseStagePlaySettings, resolveCourseStageSettings } from '@be-music/player-engine/course';
 import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player-engine/replay';
-import { resolveCourseView, type PlayOptions } from '@be-music/player-scene-model';
+import { resolvePlayOptions, resolveCourseView, type PlayOptions } from '@be-music/player-scene-model';
 import type { ActiveCourse, CourseStagePlay } from '../course-flow.ts';
 import { tempoFromPercent } from '../play-tempo-settings.ts';
 import type { PlayerGUIState } from '../types.ts';
@@ -83,7 +83,10 @@ export interface PlaySceneOptions {
  * what a course allows, a replay's recorded setup in place of the player's, and the tempo chosen.
  */
 export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlaySceneOptions {
-  const { guiState, playOptions, replay, courseStage, nonstop } = input;
+  const { guiState, replay, courseStage, nonstop } = input;
+  const playOptions = replay?.play.options
+    ? resolvePlayOptions({ ...input.playOptions, ...replay.play.options })
+    : input.playOptions;
   const autoPlay = input.autoPlay ?? guiState.autoPlay;
   // A course limits the lane options (both sides and DP FLIP) to what its constraint allows (`grade` none,
   // `grade_mirror` MIRROR, ...), a NONSTOP course's stitched play included, and an LR2 GRADE course also turns off
