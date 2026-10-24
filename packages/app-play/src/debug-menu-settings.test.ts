@@ -144,6 +144,7 @@ describe('captureDebugMenuSettings', () => {
       judgeAlgorithm: 'duration',
       longNoteModifier: 'REMOVE',
       mineModifier: 'OFF',
+      gaugeAutoShift: 'NONE',
       autoScratch1P: true,
       autoScratch2P: true,
       sort: 'OFF',
@@ -243,4 +244,12 @@ test('persists mine REMOVE independently of note drawing preferences', () => {
       JSON.stringify({ version: 1, updatedAt: 1, settings: { mineModifier: 'REMOVE', showInvisibleNotes: true } }),
     )?.settings,
   ).toMatchObject({ mineModifier: 'REMOVE', showInvisibleNotes: true });
+});
+
+test('gauge auto-shift CONTINUE is retained in saved settings', () => {
+  expect(
+    parseDebugMenuSettingsDocument(
+      JSON.stringify({ version: 1, updatedAt: 1, settings: { gaugeAutoShift: 'CONTINUE' } }),
+    )?.settings,
+  ).toMatchObject({ gaugeAutoShift: 'CONTINUE' });
 });

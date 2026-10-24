@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { GAUGE_TYPES, LR2_GAUGE_TYPES, isGaugeType, resolveGaugeTypes } from './gauge-type.ts';
+import {
+  GAUGE_TYPES,
+  LR2_GAUGE_TYPES,
+  isGaugeType,
+  resolveGaugeTypes,
+  resolveGaugeEndOnFailure,
+} from './gauge-type.ts';
 
 describe('gauge types', () => {
   it('lists the gauges in the order LR2’s gauge button cycles them', () => {
@@ -28,4 +34,13 @@ it('separates source ASSIST EASY from the original LR2 gauge choices', () => {
   expect(resolveGaugeTypes('lr2')).not.toContain('ASSIST-EASY');
   expect(resolveGaugeTypes('beatoraja')).toContain('ASSIST-EASY');
   expect(resolveGaugeTypes('____')).toContain('ASSIST-EASY');
+});
+
+it('CONTINUE keeps the same dead gauge and NONE ends judging, with an explicit source gate', () => {
+  expect(resolveGaugeEndOnFailure('CONTINUE', 'beatoraja', true)).toBe(false);
+  expect(resolveGaugeEndOnFailure('NONE', 'beatoraja', false)).toBe(true);
+  expect(resolveGaugeEndOnFailure(undefined, 'beatoraja', false)).toBe(false);
+  expect(resolveGaugeEndOnFailure(undefined, 'lr2')).toBe(true);
+  for (const ruleset of ['lr2', '____'] as const)
+    expect(() => resolveGaugeEndOnFailure('CONTINUE', ruleset)).toThrow(/only for beatoraja/);
 });

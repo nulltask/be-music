@@ -115,6 +115,16 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     this.trackPlayOption(controller);
     this.randomSeedControllers.push(controller);
   }
+  this.gaugeAutoShiftController = selectBinding(
+    folder,
+    this.guiState,
+    'gaugeAutoShift',
+    'Gauge auto-shift (beatoraja)',
+    ['NONE', 'CONTINUE'],
+  );
+  trackPlayOption(
+    this.gaugeAutoShiftController.on('change', ({ value }) => this.setPlayOptions({ gaugeAutoShift: value })),
+  );
   this.mineModifierController = selectBinding(folder, this.guiState, 'mineModifier', 'Mines (beatoraja)', {
     OFF: 'OFF',
     REMOVE: 'REMOVE',

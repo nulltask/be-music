@@ -256,6 +256,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     judgeAlgorithm: 'combo',
     longNoteModifier: 'OFF',
     mineModifier: 'OFF',
+    gaugeAutoShift: 'NONE',
     autoScratch1P: false,
     autoScratch2P: false,
     sort: 'OFF',

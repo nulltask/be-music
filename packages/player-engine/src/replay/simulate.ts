@@ -16,6 +16,7 @@ import {
   resolveLNEarlyRelease,
   RULESET_JUDGE_NONE,
   RulesetGauge,
+  resolveGaugeEndOnFailure,
   selectJudgeWindowSet,
   type GaugeJudgeIndex,
   type JudgeSelectionCandidate,
@@ -61,7 +62,14 @@ export const REPLAY_SIMULATOR_RULESETS: readonly ['lr2', 'beatoraja', '____'] = 
  */
 export function simulateReplay(replay: BeMusicReplay, options: SimulateReplayOptions): ReplayRulesetResult {
   const config = resolveRulesetConfig(replay, options.ruleset, options);
-  return new ReplaySimulation(replay, config, options.endOnFailure ?? replay.play.endOnFailure === true).run();
+  const endOnFailure =
+    options.endOnFailure ??
+    resolveGaugeEndOnFailure(
+      options.ruleset === 'beatoraja' ? replay.play.gaugeAutoShift : undefined,
+      options.ruleset,
+      replay.play.endOnFailure === true,
+    );
+  return new ReplaySimulation(replay, config, endOnFailure).run();
 }
 
 /** Runs {@link simulateReplay} for each requested ruleset (default: LR2, beatoraja, That-Which-Must-Not-Be-Named). */

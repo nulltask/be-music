@@ -538,3 +538,15 @@ test.each(['ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'] as const)(
     expect(() => parseReplay(serializeReplay(replay))).toThrow(ReplayParseError);
   },
 );
+
+test.each(['NONE', 'CONTINUE'] as const)(
+  'gauge policy %s round-trips and rejects unknown policies',
+  (gaugeAutoShift) => {
+    const replay = makeReplay();
+    replay.play.gaugeAutoShift = gaugeAutoShift;
+    expect(parseReplay(serializeReplay(replay)).play.gaugeAutoShift).toBe(gaugeAutoShift);
+    expect(() =>
+      parseReplay(JSON.stringify({ ...replay, play: { ...replay.play, gaugeAutoShift: 'REVIVE' } })),
+    ).toThrow(ReplayParseError);
+  },
+);

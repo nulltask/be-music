@@ -1,5 +1,5 @@
 import type { MineModifier } from '@be-music/player-engine/lanes';
-import type { GaugeType } from '@be-music/player-engine/ruleset';
+import type { GaugeType, GaugeAutoShift } from '@be-music/player-engine/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
 
 /**
@@ -118,6 +118,8 @@ export interface PlayOptions {
   /** AC LEGACY NOTE removes CN/BSS; beatoraja REMOVE removes every long note. */
   longNoteModifier: 'OFF' | 'LEGACY' | 'REMOVE';
   mineModifier: MineModifier;
+  /** beatoraja: continue judging with the selected dead gauge, or stop on failure. */
+  gaugeAutoShift: GaugeAutoShift;
   /**
    * 1P side auto-scratch flag picked from `#SRC_BUTTON,type=44`. When true the scratch lane (channel 16) auto-judges as
    * PERFECT at every note's scheduled time, so the player only has to play the keys.

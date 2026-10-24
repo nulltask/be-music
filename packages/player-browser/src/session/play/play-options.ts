@@ -150,6 +150,7 @@ export interface PlaySessionOptions {
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
   longNoteModifier?: 'OFF' | 'LEGACY' | 'REMOVE';
   mineModifier?: import('@be-music/player-scene-model').PlayOptions['mineModifier'];
+  gaugeAutoShift?: import('@be-music/player-scene-model').PlayOptions['gaugeAutoShift'];
   /**
    * 1P side auto-scratch flag — when true, the scratch lane (channel 16) auto-judges as PERFECT at every note's
    * scheduled time even when {@link autoPlay} is off. The player only has to play the keys.

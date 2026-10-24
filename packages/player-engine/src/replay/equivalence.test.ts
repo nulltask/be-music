@@ -1308,3 +1308,26 @@ test.each(['ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'] as const)(
     expect(simulateReplay(replay, { ruleset: 'beatoraja' }).judge).toEqual(replay.results!.native!.judge);
   },
 );
+
+test.each(['NONE', 'CONTINUE'] as const)(
+  'beatoraja gauge %s preserves the dead-gauge outcome with matching replay judgments',
+  async (gaugeAutoShift) => {
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 2, channel: '12', position: [0, 1], value: '01' },
+    ]);
+    const run = await runRecordedPlay(json, [down(0, 2_000_000, '12')], 'beatoraja', {
+      gauge: 'DEATH',
+      gaugeAutoShift,
+    });
+    const replay = parseReplay(serializeReplay(run.replay));
+    expect(replay.play.gaugeAutoShift).toBe(gaugeAutoShift);
+    expect(replay.play.endOnFailure === true).toBe(gaugeAutoShift === 'NONE');
+    expect(run.summary.gauge).toMatchObject({ type: 'HAZARD', current: 0, cleared: false, failedMidPlay: true });
+    expect(run.summary.poor).toBe(1);
+    expect(run.summary.perfect).toBe(gaugeAutoShift === 'CONTINUE' ? 1 : 0);
+    const simulated = simulateReplay(replay, { ruleset: 'beatoraja' });
+    expect(simulated.judge).toEqual(replay.results!.native!.judge);
+    expect(simulated.gauge).toMatchObject({ type: 'HAZARD', final: 0, cleared: false, failedMidPlay: true });
+  },
+);

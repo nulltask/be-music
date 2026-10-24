@@ -15,6 +15,7 @@ import { createScoreTracker } from './scoring.ts';
 import {
   judgeWindowLateReachUs,
   resolveRuleset,
+  resolveGaugeEndOnFailure,
   rulesetChartFactsFromChart,
   type RulesetConfig,
 } from '../ruleset/index.ts';
@@ -229,7 +230,7 @@ export async function createPlaySession(
     },
   );
   reportResolvedRuleset(options, ruleset);
-  const endOnFailure = options.endOnFailure ?? true;
+  const endOnFailure = resolveGaugeEndOnFailure(options.gaugeAutoShift, ruleset.rulesetId, options.endOnFailure);
 
   const { reset: resetSummary, ...initialSummary } = createInitialPlayerSummary(ruleset, ruleset.noteCount);
   const courseCarry = options.course !== undefined ? courseStageCarryCombo(options.course) : undefined;
@@ -290,7 +291,6 @@ export async function createPlaySession(
             judgeWindowOverrideMs: options.judgeWindowMs,
             judgeRuleset: options.judgeRuleset,
             ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),
-            ...(endOnFailure ? { endOnFailure } : {}),
             ...(options.course !== undefined ? { course: options.course } : {}),
             ...hostPlaySettings,
             ...(options.mineModifier !== undefined
@@ -299,6 +299,8 @@ export async function createPlaySession(
                   mineModifierChangeCount: playbackChart.mineModifierChangeCount ?? 0,
                 }
               : {}),
+            gaugeAutoShift: options.gaugeAutoShift,
+            endOnFailure: endOnFailure ? true : undefined,
             gauge: selectedGauge,
             // The tempo a live play ran at (its inputs are in chart time either way). A replay's `speed` only sets how
             // fast it is re-driven, so it records none.
