@@ -219,34 +219,36 @@ for (const skin of ['plain', 'native'] as const) {
 }
 
 for (const skin of ['plain', 'native'] as const) {
-  test(`mine ADD RANDOM records and restores its generated population on ${skin}`, async ({ player }) => {
-    await player.open({ 'be-music.built-in-skin': skin });
-    await player.dropText('mine-add.bme', `#TITLE Mine addition\n#BPM 240\n#00001:${'01'.repeat(32)}\n#00111:01\n`);
-    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
-    await player.setOption(['Play options'], 'Mines (beatoraja)', 'ADD RANDOM');
-    await player.setOption(['Play options'], 'Auto play', true);
-    await player.cursorTo((bar) => bar.title === 'Mine addition', 'mine addition chart');
-    await player.key('Enter');
-    await player.waitForResult(0);
-    const replay = await player.lastReplay();
-    expect(replay?.play.mineModifier).toBe('ADD_RANDOM');
-    expect(replay?.play.mineModifierChangeCount).toBeGreaterThan(0);
-    const mines = replay?.chart.notes.filter((note) => note.type === 'mine');
-    expect(mines?.length).toBe(replay?.play.mineModifierChangeCount);
-    expect(mines?.every((note) => note.silent && note.damage === 10)).toBe(true);
-    await player.leaveResult();
-    await player.pressOption(['Play options'], 'Reuse previous arrangement');
-    await player.cursorTo((bar) => bar.title === 'Mine addition', 'same mine addition chart');
-    await player.key('Enter');
-    await player.waitForResult(1);
-    expect((await player.lastReplay())?.chart.notes).toEqual(replay?.chart.notes);
-    await player.leaveResult();
-    await player.setOption(['Play options'], 'Mines (beatoraja)', 'OFF');
-    await player.dropText('mine-add.bmplay.json', JSON.stringify(replay));
-    await player.waitFor(
-      (state) => state.scene.kind === 'play' && state.play?.replay === true,
-      'generated mine replay',
-    );
-    await player.waitForResult(2);
-  });
+  for (const modifier of ['ADD RANDOM', 'ADD NEAR'] as const) {
+    test(`mine ${modifier} records and restores its generated population on ${skin}`, async ({ player }) => {
+      await player.open({ 'be-music.built-in-skin': skin });
+      await player.dropText('mine-add.bme', `#TITLE Mine addition\n#BPM 240\n#00001:${'01'.repeat(32)}\n#00111:01\n`);
+      await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+      await player.setOption(['Play options'], 'Mines (beatoraja)', modifier);
+      await player.setOption(['Play options'], 'Auto play', true);
+      await player.cursorTo((bar) => bar.title === 'Mine addition', 'mine addition chart');
+      await player.key('Enter');
+      await player.waitForResult(0);
+      const replay = await player.lastReplay();
+      expect(replay?.play.mineModifier).toBe(modifier.replace(' ', '_'));
+      expect(replay?.play.mineModifierChangeCount).toBeGreaterThan(0);
+      const mines = replay?.chart.notes.filter((note) => note.type === 'mine');
+      expect(mines?.length).toBe(replay?.play.mineModifierChangeCount);
+      expect(mines?.every((note) => note.silent && note.damage === 10)).toBe(true);
+      await player.leaveResult();
+      await player.pressOption(['Play options'], 'Reuse previous arrangement');
+      await player.cursorTo((bar) => bar.title === 'Mine addition', 'same mine addition chart');
+      await player.key('Enter');
+      await player.waitForResult(1);
+      expect((await player.lastReplay())?.chart.notes).toEqual(replay?.chart.notes);
+      await player.leaveResult();
+      await player.setOption(['Play options'], 'Mines (beatoraja)', 'OFF');
+      await player.dropText('mine-add.bmplay.json', JSON.stringify(replay));
+      await player.waitFor(
+        (state) => state.scene.kind === 'play' && state.play?.replay === true,
+        'generated mine replay',
+      );
+      await player.waitForResult(2);
+    });
+  }
 }

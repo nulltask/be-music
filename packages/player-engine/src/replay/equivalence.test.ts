@@ -1290,18 +1290,21 @@ test('mine REMOVE also clears a host-prepared shared mine array before judging',
   expect(run.summary.minePoor ?? 0).toBe(0);
 });
 
-test('generated silent mines retain their damage and judgments through serialized replay simulation', async () => {
-  const json = chart([{ measure: 2, channel: '12', position: [0, 1], value: '01' }]);
-  const preparedChart = preparePlaybackChart(resolveChart(json), { mineModifier: 'ADD_RANDOM' }, 0, () => 0.99);
-  const run = await runRecordedPlay(json, [down(0, 500_000, '11'), up(1, 1_500_000, '11')], 'beatoraja', {
-    mineModifier: 'ADD_RANDOM',
-    preparedChart,
-  });
-  const replay = parseReplay(serializeReplay(run.replay));
-  expect(replay.play.mineModifierChangeCount).toBeGreaterThan(0);
-  expect(
-    replay.chart.notes.filter((note) => note.type === 'mine').every((note) => note.silent && note.damage === 10),
-  ).toBe(true);
-  expect(run.summary.minePoor).toBeGreaterThan(0);
-  expect(simulateReplay(replay, { ruleset: 'beatoraja' }).judge).toEqual(replay.results!.native!.judge);
-});
+test.each(['ADD_RANDOM', 'ADD_NEAR'] as const)(
+  '%s silent mines retain their damage and judgments through serialized replay simulation',
+  async (mineModifier) => {
+    const json = chart([{ measure: 2, channel: '12', position: [0, 1], value: '01' }]);
+    const preparedChart = preparePlaybackChart(resolveChart(json), { mineModifier }, 0, () => 0.99);
+    const run = await runRecordedPlay(json, [down(0, 500_000, '11'), up(1, 2_500_000, '11')], 'beatoraja', {
+      mineModifier,
+      preparedChart,
+    });
+    const replay = parseReplay(serializeReplay(run.replay));
+    expect(replay.play.mineModifierChangeCount).toBeGreaterThan(0);
+    expect(
+      replay.chart.notes.filter((note) => note.type === 'mine').every((note) => note.silent && note.damage === 10),
+    ).toBe(true);
+    expect(run.summary.minePoor).toBeGreaterThan(0);
+    expect(simulateReplay(replay, { ruleset: 'beatoraja' }).judge).toEqual(replay.results!.native!.judge);
+  },
+);
