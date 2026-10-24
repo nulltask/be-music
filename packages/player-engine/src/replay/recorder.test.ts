@@ -530,3 +530,19 @@ test('snapshots all selected options and records changes on the chart clock inde
   ]);
   expect(parseReplay(JSON.parse(JSON.stringify(replay))).play.optionChanges).toEqual(replay.play.optionChanges);
 });
+
+test('records original lanes only when an arrangement moves a note, retaining source events', () => {
+  const options = makeRecorderOptions();
+  const first = playable('11', 1),
+    second = playable('12', 1);
+  first.channel = '12';
+  second.channel = '11';
+  options.chart.notes = [first, second];
+  const replay = createReplayRecorder(options).finalize({ summary: makeSummary() });
+  expect(replay.chart.notes.filter((note) => note.type === 'normal')).toEqual([
+    expect.objectContaining({ channel: '11', sourceChannel: '12' }),
+    expect.objectContaining({ channel: '12', sourceChannel: '11' }),
+  ]);
+  expect(first.event.channel).toBe('11');
+  expect(second.event.channel).toBe('12');
+});

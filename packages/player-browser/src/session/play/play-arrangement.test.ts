@@ -177,3 +177,51 @@ test.each(['ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'] as const)(
     }
   },
 );
+
+test('fresh reuse preserves simultaneous keysounds and mine damage after source-lane recording', () => {
+  const entry = {
+    ...chart,
+    chartPath: 'identity.bms',
+    chart: parseChart('#BPM 120\n#00011:01\n#00012:02\n#001D1:01\n#001D2:0A', 'bms'),
+  };
+  const original = prepare({ judgeRuleset: 'beatoraja', random1P: 'MIRROR' }, entry);
+  const replay = parseReplay(
+    serializeReplay(
+      createReplayRecorder({
+        json: entry.chart,
+        chart: original.preparedChart!,
+        play: { mode: 'manual', autoScratch: false, judgeRuleset: 'beatoraja' },
+      }).finalize({ summary: { ...createEmptyScore(original.notes.length), fast: 0, slow: 0 } }),
+    ),
+  );
+  expect(replay.chart.notes.some((note) => note.sourceChannel !== undefined)).toBe(true);
+  const fresh = prepare({ judgeRuleset: 'beatoraja', fixedArrangement: replay }, entry);
+  expect(fresh.notes.map((note) => [note.channel, note.event.value])).toEqual(
+    original.notes.map((note) => [note.channel, note.event.value]),
+  );
+  expect(fresh.mineNotes.map((mine) => [mine.channel, mine.event.value])).toEqual(
+    original.mineNotes.map((mine) => [mine.channel, mine.event.value]),
+  );
+});
+
+test('added-mine replay restores original mine lanes before source-aware arrangement matching', () => {
+  const entry = {
+    ...chart,
+    chartPath: 'generated-identity.bms',
+    chart: parseChart('#BPM 120\n#00013:01\n#00111:01', 'bms'),
+  };
+  const original = prepare({ judgeRuleset: 'beatoraja', mineModifier: 'ADD_NEAR', random1P: 'MIRROR' }, entry);
+  const replay = parseReplay(
+    serializeReplay(
+      createReplayRecorder({
+        json: entry.chart,
+        chart: original.preparedChart!,
+        play: { mode: 'manual', autoScratch: false, judgeRuleset: 'beatoraja', mineModifier: 'ADD_NEAR' },
+      }).finalize({ summary: { ...createEmptyScore(original.notes.length), fast: 0, slow: 0 } }),
+    ),
+  );
+  const fresh = prepare({ judgeRuleset: 'beatoraja', fixedArrangement: replay }, entry);
+  const mineIdentity = (play: typeof original) =>
+    play.mineNotes.map((mine) => `${mine.event.channel}:${mine.channel}:${mine.beat}`).sort();
+  expect(mineIdentity(fresh)).toEqual(mineIdentity(original));
+});

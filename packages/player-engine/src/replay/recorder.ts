@@ -1,3 +1,4 @@
+import { resolveReplaySourceChannel } from './source-channel.ts';
 import type { MineModifier } from '../core/mine-modifier.ts';
 import {
   diffReplayOptions,
@@ -312,6 +313,7 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
     const entry: ReplayNote = {
       id: 0,
       channel: note.channel,
+      ...(resolveReplaySourceChannel(note) !== note.channel ? { sourceChannel: resolveReplaySourceChannel(note) } : {}),
       type: isFreeZone ? 'freezone' : hasTail ? 'long' : 'normal',
       timeUs: secondsToMicroseconds(note.seconds),
     };
@@ -327,6 +329,7 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
     notes.push({
       id: 0,
       channel: mine.channel,
+      ...(resolveReplaySourceChannel(mine) !== mine.channel ? { sourceChannel: resolveReplaySourceChannel(mine) } : {}),
       type: 'mine',
       timeUs: secondsToMicroseconds(mine.seconds),
       damage: resolveLandmineGaugeEffect(mine.event, idBase, json.sourceFormat).damage,
@@ -337,6 +340,9 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
     notes.push({
       id: 0,
       channel: invisible.channel,
+      ...(resolveReplaySourceChannel(invisible) !== invisible.channel
+        ? { sourceChannel: resolveReplaySourceChannel(invisible) }
+        : {}),
       type: 'invisible',
       timeUs: secondsToMicroseconds(invisible.seconds),
     });

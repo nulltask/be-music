@@ -536,6 +536,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       replayAPI.checkReplayEligibility(BENCH_REPLAY);
     },
   });
+  define('player-engine.replay.resolveReplaySourceChannel', {
+    run() {
+      replayAPI.resolveReplaySourceChannel({ channel: '15', event: { channel: 'D1' } });
+    },
+  });
   define('player-engine.replay.serializeReplay', {
     run: () => {
       replayAPI.serializeReplay(BENCH_REPLAY);

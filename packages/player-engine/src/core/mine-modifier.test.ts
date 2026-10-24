@@ -185,3 +185,14 @@ test('ADD ALL reserves LN heads, held cells and exact tails but fills the lane a
   const removed = preparePlaybackChart(resolved, { longNoteModifier: 'REMOVE', mineModifier: 'ADD_BLANK' });
   expect(removed.landmineNotes.filter((mine) => mine.channel === '11').map((mine) => mine.beat)).toEqual([2, 4, 8]);
 });
+
+test('restored generated mines retain original lanes after a recorded arrangement', () => {
+  const resolved = resolveChart(parseChart('#BPM 120\n#00111:01', 'bms'), { playVariant: '7' });
+  const restored = prepareMineModifier(resolved, 'ADD_RANDOM', {
+    placements: [{ channel: '15', sourceChannel: '11', timeUs: 0, damage: 10, silent: true }],
+  });
+  expect(restored.mines[0]).toMatchObject({ channel: '15', event: { channel: 'D1' }, silent: true });
+  expect(() =>
+    prepareMineModifier(resolved, 'ADD_RANDOM', { placements: [{ channel: '15', sourceChannel: 'D1', timeUs: 0 }] }),
+  ).toThrow(/mine lane/);
+});
