@@ -196,9 +196,12 @@ export async function createPlaySession(
       realtimeAudioEndSeconds,
       Math.random,
     );
-  if (options.longNoteModifier === 'ADD_LN' && playbackChart.longNoteModifierApplied !== options.longNoteModifier)
+  if (
+    options.longNoteModifier?.startsWith('ADD_') &&
+    playbackChart.longNoteModifierApplied !== options.longNoteModifier
+  )
     throw new RangeError('The shared prepared chart must include the selected long-note modifier.');
-  if (options.longNoteModifier === 'ADD_LN' && (options.judgeRuleset ?? 'lr2') !== 'beatoraja')
+  if (options.longNoteModifier?.startsWith('ADD_') && (options.judgeRuleset ?? 'lr2') !== 'beatoraja')
     throw new RangeError('Long-note addition is available only for beatoraja.');
   if (options.mineModifier?.startsWith('ADD_') && playbackChart.mineModifierApplied !== options.mineModifier)
     throw new RangeError('The shared prepared chart must include the selected mine modifier.');
@@ -305,7 +308,7 @@ export async function createPlaySession(
                   mineModifierChangeCount: playbackChart.mineModifierChangeCount ?? 0,
                 }
               : {}),
-            ...(options.longNoteModifier === 'ADD_LN'
+            ...(options.longNoteModifier?.startsWith('ADD_')
               ? {
                   longNoteRate: playbackChart.longNoteModifierRate ?? 1,
                   longNoteModifierChangeCount: playbackChart.longNoteModifierChangeCount ?? 0,

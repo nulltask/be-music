@@ -126,3 +126,16 @@ test('normalized bmson BGM/BPM rows are also eligible generated endpoints', () =
   expect(prepared.notes[0]).toMatchObject({ endBeat: 0.5, endSeconds: 0.25, longNoteMode: 1, generatedLongNote: true });
   expect(prepared.notes[0]?.event).toBe(resolved.notes[0]?.event);
 });
+
+test('ADD CN adds an explicit charge-note type while preserving authored LN and normal head samples', () => {
+  const resolved = chart('#LNOBJ AA\n#00011:01\n#00012:01\n#00112:AA\n#00001:0001');
+  const prepared = preparePlaybackChart(resolved, { longNoteModifier: 'ADD_CN' }, 0, () => 0);
+  expect(prepared.notes.find((note) => note.channel === '11')).toMatchObject({
+    longNoteMode: 2,
+    endBeat: 2,
+    generatedLongNote: true,
+    event: { value: '01' },
+  });
+  expect(prepared.notes.find((note) => note.channel === '12')?.generatedLongNote).toBeUndefined();
+  expect(prepared.longNoteModifierChangeCount).toBe(1);
+});

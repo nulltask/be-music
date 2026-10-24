@@ -22,7 +22,7 @@ export function removeLongNoteTails(
   return changed;
 }
 
-export type LongNoteModifier = 'OFF' | 'LEGACY' | 'REMOVE' | 'ADD_LN';
+export type LongNoteModifier = 'OFF' | 'LEGACY' | 'REMOVE' | 'ADD_LN' | 'ADD_CN';
 
 /** Recorded head identity and generated endpoint, before lane transforms. */
 export interface LongNotePlacement {
@@ -53,7 +53,7 @@ export function addLongNotes(
     placements?: readonly LongNotePlacement[];
   } = {},
 ): number {
-  if (mode !== 'ADD_LN') throw new RangeError('Unsupported long-note addition mode.');
+  if (mode !== 'ADD_LN' && mode !== 'ADD_CN') throw new RangeError('Unsupported long-note addition mode.');
   const lanes = resolveModifierLanes(resolved, options.laneModeExtension);
   const timelines = collectModifierTimelines(resolved, lanes);
   const rate = clampLongNoteRate(options.rate ?? 1);
@@ -80,10 +80,10 @@ export function addLongNotes(
       !Number.isSafeInteger(placement.timeUs) ||
       !Number.isSafeInteger(placement.endTimeUs) ||
       placement.endTimeUs <= placement.timeUs ||
-      placement.lnMode !== 1 ||
+      placement.lnMode !== (mode === 'ADD_LN' ? 1 : 2) ||
       recorded.has(key)
     )
-      throw new RangeError('Invalid recorded ADD LN placement.');
+      throw new RangeError('Invalid recorded long-note addition placement.');
     recorded.set(key, placement);
   }
   const additions: Array<{ note: TimedPlayableNote; beat: number; seconds: number }> = [];
@@ -99,12 +99,12 @@ export function addLongNotes(
       if (options.placements !== undefined) {
         if (!placement) continue;
         if (placement.endTimeUs !== Math.round(resolved.timing.beatToSeconds(next.beat) * 1e6))
-          throw new RangeError('Recorded ADD LN tail is not the next source timeline.');
+          throw new RangeError('Recorded long-note addition tail is not the next source timeline.');
         recorded.delete(key);
       } else {
         const draw = options.random?.();
         if (draw === undefined || !Number.isFinite(draw) || draw < 0 || draw >= 1)
-          throw new RangeError('ADD LN requires supplied randomness in [0, 1) or recorded placements.');
+          throw new RangeError('Long-note addition requires supplied randomness in [0, 1) or recorded placements.');
         if (!(draw < rate)) continue;
       }
       additions.push({ note, beat: next.beat, seconds: resolved.timing.beatToSeconds(next.beat) });
@@ -112,11 +112,11 @@ export function addLongNotes(
     }
   }
   if (recorded.size > 0 || (options.placements !== undefined && rate === 0 && additions.length > 0))
-    throw new RangeError('Recorded ADD LN head is not an eligible source note.');
+    throw new RangeError('Recorded long-note addition head is not an eligible source note.');
   for (const { note, beat, seconds } of additions) {
     note.endBeat = beat;
     note.endSeconds = seconds;
-    note.longNoteMode = 1;
+    note.longNoteMode = mode === 'ADD_LN' ? 1 : 2;
     note.generatedLongNote = true;
   }
   return additions.length;

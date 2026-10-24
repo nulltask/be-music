@@ -444,7 +444,7 @@ export class DebugMenu {
     if (this.hsFixController) this.hsFixController.hidden = this.guiState.classicHiSpeed || normal || floating;
     if (this.classicSpeedController) this.classicSpeedController.hidden = !this.guiState.classicHiSpeed || floating;
     const beatoraja = this.guiState.judgeRuleset === 'beatoraja';
-    if (!beatoraja && this.guiState.longNoteModifier === 'ADD_LN') {
+    if (!beatoraja && this.guiState.longNoteModifier.startsWith('ADD_')) {
       this.guiState.longNoteModifier = 'OFF';
       this.setPlayOptions({ longNoteModifier: 'OFF' });
     }
@@ -453,12 +453,12 @@ export class DebugMenu {
         OFF: 'OFF' as const,
         'LEGACY NOTE (AC 34)': 'LEGACY' as const,
         'LN REMOVE (beatoraja)': 'REMOVE' as const,
-        ...(beatoraja ? { 'ADD LN (beatoraja)': 'ADD_LN' as const } : {}),
+        ...(beatoraja ? { 'ADD LN (beatoraja)': 'ADD_LN' as const, 'ADD CN (beatoraja)': 'ADD_CN' as const } : {}),
       });
       this.longNoteModifierController.refresh();
     }
     if (this.longNoteRateController)
-      this.longNoteRateController.hidden = !beatoraja || this.guiState.longNoteModifier !== 'ADD_LN';
+      this.longNoteRateController.hidden = !beatoraja || !this.guiState.longNoteModifier.startsWith('ADD_');
     for (const controller of this.randomSeedControllers) controller.hidden = !beatoraja;
     for (const side of ['1P', '2P'] as const) {
       const controller = side === '1P' ? this.randomSeed1PController : this.randomSeed2PController;

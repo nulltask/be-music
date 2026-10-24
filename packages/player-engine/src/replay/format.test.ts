@@ -563,9 +563,12 @@ test('replay original lanes round-trip and reject malformed source identifiers',
     ).toThrow(ReplayParseError);
 });
 
-test('generated LN endpoints and effective modifier rate/count survive replay serialization', () => {
+test.each([
+  ['ADD_LN', 1],
+  ['ADD_CN', 2],
+] as const)('%s endpoints and effective modifier rate/count survive serialization', (longNoteModifier, lnMode) => {
   const replay = makeReplay();
-  replay.play.longNoteModifier = 'ADD_LN';
+  replay.play.longNoteModifier = longNoteModifier;
   replay.play.longNoteRate = 0.375;
   replay.play.longNoteModifierChangeCount = 1;
   replay.chart.notes = [
@@ -576,14 +579,14 @@ test('generated LN endpoints and effective modifier rate/count survive replay se
       timeUs: 1_000_000,
       type: 'long',
       endTimeUs: 1_500_000,
-      lnMode: 1,
+      lnMode,
       generatedLongNote: true,
     },
   ];
   const parsed = parseReplay(serializeReplay(replay));
   expect(parsed.chart.notes).toEqual(replay.chart.notes);
   expect(parsed.play).toMatchObject({
-    longNoteModifier: 'ADD_LN',
+    longNoteModifier,
     longNoteRate: 0.375,
     longNoteModifierChangeCount: 1,
   });

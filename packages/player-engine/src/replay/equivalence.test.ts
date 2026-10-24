@@ -1332,28 +1332,26 @@ test.each(['NONE', 'CONTINUE'] as const)(
   },
 );
 
-test('ADD LN records its exact generated endpoint and retains live/simulated LN judgments', async () => {
+test.each([
+  ['ADD_LN', 1],
+  ['ADD_CN', 2],
+] as const)('%s records its exact endpoint and retains live/simulated judgments', async (longNoteModifier, lnMode) => {
   const json = chart([
     { measure: 1, channel: '11', position: [0, 1], value: '01' },
     { measure: 1, channel: '01', position: [1, 2], value: '02' },
     { measure: 2, channel: '12', position: [0, 1], value: '01' },
   ]);
   json.bms.lnMode = 3; // Generated LN must override the chart default HCN mode.
-  const preparedChart = preparePlaybackChart(
-    resolveChart(json),
-    { longNoteModifier: 'ADD_LN', longNoteRate: 0.375 },
-    0,
-    () => 0,
-  );
+  const preparedChart = preparePlaybackChart(resolveChart(json), { longNoteModifier, longNoteRate: 0.375 }, 0, () => 0);
   const run = await runRecordedPlay(
     json,
     [down(0, 1_000_000, '11'), up(1, 1_500_000, '11'), down(2, 2_000_000, '12')],
     'beatoraja',
-    { longNoteModifier: 'ADD_LN', longNoteRate: 0.375, preparedChart },
+    { longNoteModifier, longNoteRate: 0.375, preparedChart },
   );
   const replay = parseReplay(serializeReplay(run.replay));
   expect(replay.play).toMatchObject({
-    longNoteModifier: 'ADD_LN',
+    longNoteModifier,
     longNoteRate: 0.375,
     longNoteModifierChangeCount: 1,
   });
@@ -1361,8 +1359,10 @@ test('ADD LN records its exact generated endpoint and retains live/simulated LN 
     channel: '11',
     timeUs: 1_000_000,
     endTimeUs: 1_500_000,
-    lnMode: 1,
+    lnMode,
   });
-  expect(run.summary.perfect).toBe(2);
+  expect(run.summary.perfect).toBe(lnMode === 1 ? 2 : 3);
+  expect(run.summary.total).toBe(lnMode === 1 ? 2 : 3);
+  expect(replay.results!.native!.noteCount).toBe(lnMode === 1 ? 2 : 3);
   expect(simulateReplay(replay, { ruleset: 'beatoraja' }).judge).toEqual(replay.results!.native!.judge);
 });
