@@ -292,3 +292,16 @@ test('keeps EX-HARD source tables distinct from HAZARD and rejects a new LR2 EX-
   expect(ac.death).toBeUndefined();
   expect(() => resolveRuleset(chart, 'lr2', { selectedGauge: 'EX-HARD' })).toThrow(/no EX-HARD/);
 });
+
+test('uses each source ASSIST EASY border and damage without changing input assists', () => {
+  const beatoraja = resolveRuleset(facts(), 'beatoraja', { selectedGauge: 'ASSIST-EASY' }).gauge;
+  const ac = resolveRuleset(facts(), '____', { selectedGauge: 'ASSIST-EASY' }).gauge;
+  expect(beatoraja).toMatchObject({ id: 'ASSIST-EASY', initial: 20, border: 60, survival: false });
+  expect(beatoraja.values.slice(3)).toEqual([-1.5, -3, -0.5]);
+  expect(ac).toMatchObject({ id: 'ASSISTED-EASY', initial: 22, border: 60, survival: false });
+  expect(ac.values.slice(3)).toEqual([-1.6, -4.8, -1.6]);
+  expect(resolveRuleset(facts({ laneMode: '5keys' }), 'beatoraja', { selectedGauge: 'ASSIST-EASY' }).gauge.border).toBe(
+    50,
+  );
+  expect(() => resolveRuleset(facts(), 'lr2', { selectedGauge: 'ASSIST-EASY' })).toThrow(/no ASSIST-EASY/);
+});

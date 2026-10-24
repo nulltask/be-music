@@ -123,3 +123,23 @@ for (const ruleset of ['beatoraja', '????'] as const) {
     expect(await player.readOption(['Play options'], 'Gauge')).toBe('GROOVE');
   });
 }
+
+for (const [ruleset, label, effectiveGauge] of [
+  ['beatoraja', 'ASSIST EASY', 'ASSIST-EASY'],
+  ['????', 'ASSISTED EASY', 'ASSISTED-EASY'],
+] as const) {
+  test(`${label} records its source gauge independently of input assists`, async ({ player }) => {
+    await player.open();
+    await player.dropText('assist-easy.bme', '#TITLE Assist easy gauge\n#BPM 240\n#00111:01\n');
+    await player.setOption(['Developer'], 'Judgment windows', ruleset);
+    await player.setOption(['Play options'], 'Gauge', label);
+    await player.setOption(['Play options'], 'Auto play', true);
+    await player.cursorTo((bar) => bar.title === 'Assist easy gauge', 'ASSIST EASY chart');
+    await player.key('Enter');
+    await player.waitForResult(0);
+    const replay = await player.lastReplay();
+    expect(replay?.play).toMatchObject({ gauge: 'ASSIST-EASY', autoScratch: false });
+    expect(replay?.results?.native?.gauge.type).toBe(effectiveGauge);
+    expect(replay?.play.options?.longNoteModifier).toBe('OFF');
+  });
+}

@@ -687,6 +687,8 @@ function resolve____Gauge(gaugeId: string, noteCount: number): GaugeSpec {
 /** Maps the replay's LR2-family gauge pick onto each ruleset's own gauge id. */
 function resolveDefaultGaugeId(rulesetId: RulesetId, playGauge: string): string {
   switch (playGauge) {
+    case 'ASSIST-EASY':
+      return rulesetId === '____' ? 'ASSISTED-EASY' : 'ASSIST-EASY';
     case 'EX-HARD':
       return 'EX-HARD';
     case 'EASY':
@@ -756,7 +758,9 @@ export function resolveRuleset(
   const baseNotes = countBaseNotes(chart.notes);
   const { course } = options;
   const selectedGauge = options.selectedGauge ?? 'GROOVE';
-  if (rulesetId === 'lr2' && selectedGauge === 'EX-HARD') throw new RangeError('LR2 beta3 has no EX-HARD gauge.');
+  if (rulesetId === 'lr2' && (selectedGauge === 'EX-HARD' || selectedGauge === 'ASSIST-EASY')) {
+    throw new RangeError(`LR2 beta3 has no ${selectedGauge} gauge.`);
+  }
   const gaugeId =
     options.gauge ??
     (course === undefined

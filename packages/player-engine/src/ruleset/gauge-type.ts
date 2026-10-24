@@ -4,20 +4,21 @@
  * stage's by `resolveCourseGaugeId`):
  *
  * - `'GROOVE'` — the default recovery gauge; beatoraja and That-Which-Must-Not-Be-Named call the same one `NORMAL`.
+ * - `'ASSIST-EASY'` — beatoraja ASSIST EASY / AC ASSISTED EASY recovery gauge.
  * - `'EASY'` — gentler recovery with a lower clear threshold.
  * - `'HARD'` — starts full, drains on misses, fails at the ruleset's death border.
  * - `'EX-HARD'` — independent beatoraja / AC survival gauge, without HARD's low-life softening.
  * - `'DEATH'` — starts full and ends the run on the first break; beatoraja calls it `HAZARD`.
  */
-export type GaugeType = 'GROOVE' | 'HARD' | 'DEATH' | 'EASY' | 'EX-HARD';
+export type GaugeType = 'GROOVE' | 'HARD' | 'DEATH' | 'EASY' | 'EX-HARD' | 'ASSIST-EASY';
 
 /** Every gauge type, in the order LR2's gauge button cycles them (`#SRC_BUTTON,type=40 / 41` cells 0..3). */
 export const LR2_GAUGE_TYPES: readonly GaugeType[] = ['GROOVE', 'HARD', 'DEATH', 'EASY'];
 
 /** Every accepted gauge pick; source-specific menus use resolveGaugeTypes. */
-export const GAUGE_TYPES: readonly GaugeType[] = [...LR2_GAUGE_TYPES, 'EX-HARD'];
-const BEATORAJA_GAUGE_TYPES: readonly GaugeType[] = ['GROOVE', 'HARD', 'EX-HARD', 'DEATH', 'EASY'];
-const ____GAUGE_TYPES: readonly GaugeType[] = ['GROOVE', 'HARD', 'EX-HARD', 'EASY'];
+export const GAUGE_TYPES: readonly GaugeType[] = [...LR2_GAUGE_TYPES, 'EX-HARD', 'ASSIST-EASY'];
+const BEATORAJA_GAUGE_TYPES: readonly GaugeType[] = ['GROOVE', 'HARD', 'EX-HARD', 'DEATH', 'EASY', 'ASSIST-EASY'];
+const ____GAUGE_TYPES: readonly GaugeType[] = ['GROOVE', 'HARD', 'EX-HARD', 'EASY', 'ASSIST-EASY'];
 
 /** Source menu choices: LR2 has no EX-HARD; the AC menu has no DEATH pick. */
 export function resolveGaugeTypes(ruleset: 'lr2' | 'beatoraja' | '____'): readonly GaugeType[] {

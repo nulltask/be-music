@@ -416,3 +416,10 @@ it('uses an existing survival cell for externally selected EX-HARD', () => {
   expect(state.text(LR2_TEXT.OPTION_GAUGE_1P)).toBe('EX-HARD');
   expect(state.ops).toContain(LR2_OP.GAUGE_1P_RED);
 });
+
+it('uses the original EASY cell for an externally selected ASSIST EASY gauge', () => {
+  const state = resolveLR2SelectState({ options: { ...DEFAULT_PLAY_OPTIONS, gauge1P: 'ASSIST-EASY' } });
+  expect(state.button(LR2_BUTTON.GAUGE_1P)).toBe(3);
+  expect(state.text(LR2_TEXT.OPTION_GAUGE_1P)).toBe('ASSIST-EASY');
+  expect(state.ops).toContain(LR2_OP.GAUGE_1P_NORMAL);
+});
