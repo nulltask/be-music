@@ -69,6 +69,14 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       'LN REMOVE (beatoraja)': 'REMOVE',
     }).on('change', ({ value }) => this.setPlayOptions({ longNoteModifier: value })),
   );
+  this.trackPlayOption(
+    folder.addButton({ title: 'A-SCR & LEGACY NOTE (AC 34)' }).on('click', () => {
+      const changes = { autoScratch1P: true, autoScratch2P: true, longNoteModifier: 'LEGACY' } as const;
+      Object.assign(this.guiState, changes);
+      this.setPlayOptions(changes);
+      this.refreshPlayOptionControllers();
+    }),
+  );
   // The built-in and LR2 select screens' sort and filters (an LR2 skin's buttons change them too); the list keeps
   // the bar under the cursor.
   trackPlayOption(

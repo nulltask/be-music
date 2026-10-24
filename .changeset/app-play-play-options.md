@@ -9,3 +9,5 @@ Add the four AC 34 display-area information choices and expose the existing per-
 Restore each recorded AUTO SCRATCH side independently and apply older combined replay switches to both sides.
 
 Expose the source-specific LEGACY NOTE and LN REMOVE choices in Debug Menu and save the selected modifier.
+
+Apply AC 34's A-SCR & LEGACY NOTE preset in a single Debug Menu action while retaining both explicit settings in replay.
