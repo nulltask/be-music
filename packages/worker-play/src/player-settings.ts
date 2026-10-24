@@ -16,6 +16,7 @@ interface DebugMenuSettingsDocument {
   version: 1;
   updatedAt: number;
   settings: Record<string, unknown>;
+  deleted?: true;
 }
 
 function debugMenuSettingsDocument(value: unknown): DebugMenuSettingsDocument | undefined {
@@ -23,12 +24,17 @@ function debugMenuSettingsDocument(value: unknown): DebugMenuSettingsDocument | 
   const { version, updatedAt, settings } = value as { version?: unknown; updatedAt?: unknown; settings?: unknown };
   if (version !== 1 || typeof updatedAt !== 'number' || !Number.isFinite(updatedAt) || updatedAt < 0) return undefined;
   if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) return undefined;
+  if ((value as { deleted?: unknown }).deleted === true) return { version: 1, updatedAt, settings: {}, deleted: true };
   return { version: 1, updatedAt, settings: settings as Record<string, unknown> };
 }
 
 export interface PlayerSettingsBucket {
-  get(key: string): Promise<{ text(): Promise<string> } | null>;
-  put(key: string, value: string): Promise<unknown>;
+  get(key: string): Promise<{ etag: string; text(): Promise<string> } | null>;
+  put(
+    key: string,
+    value: string,
+    options?: { onlyIf: { etagMatches?: string; etagDoesNotMatch?: string } },
+  ): Promise<{ etag: string } | null>;
   delete(key: string): Promise<unknown>;
 }
 
@@ -40,80 +46,110 @@ export async function handlePlayerSettings(
   now = Date.now(),
 ): Promise<Response> {
   const device = deviceId(request);
-  if (request.method === 'GET') return await read(bucket, device, subject);
+  if (request.method === 'GET') {
+    const chosen = latest((await snapshots(bucket, keys(device.id, subject))).map((entry) => entry.document));
+    return json(chosen ?? null, chosen ? 200 : 204, device.id);
+  }
   if (request.method !== 'PUT' && request.method !== 'DELETE') {
     return json({ error: 'method' }, 405, device.id);
   }
   const origin = request.headers.get('origin');
   const target = new URL(request.url).origin;
   if (origin !== target) return json({ error: 'origin' }, 403, device.id);
-  if (request.method === 'DELETE') {
-    await bucket.delete(deviceKey(device.id));
-    if (subject) await bucket.delete(accountKey(subject));
-    return json({ ok: true }, 200, device.id);
-  }
   const text = await request.text();
-  if (text.length > MAX_BODY_BYTES) return json({ error: 'too-large' }, 413, device.id);
+  if (new TextEncoder().encode(text).byteLength > MAX_BODY_BYTES) return json({ error: 'too-large' }, 413, device.id);
   let body: unknown;
   try {
-    body = JSON.parse(text);
+    body =
+      text === '' && request.method === 'DELETE'
+        ? { version: 1, updatedAt: now, settings: {}, deleted: true }
+        : JSON.parse(text);
   } catch {
     return json({ error: 'json' }, 400, device.id);
   }
   const incoming = debugMenuSettingsDocument(body);
   if (!incoming) return json({ error: 'document' }, 400, device.id);
-  const current = await newer(bucket, device.id, subject);
-  if (current && current.updatedAt > incoming.updatedAt) return json(current, 200, device.id);
-  const stored = { ...incoming, updatedAt: Math.max(incoming.updatedAt, now) };
-  await writeBoth(bucket, device.id, subject, stored);
+  const deletion = request.method === 'DELETE';
+  if (!deletion && incoming.deleted) return json({ error: 'document' }, 400, device.id);
+  const stored = await storeNewer(bucket, keys(device.id, subject), incoming, deletion);
+  if (!stored) return json({ error: 'conflict' }, 409, device.id);
   return json(stored, 200, device.id);
 }
 
-async function read(bucket: PlayerSettingsBucket, device: Device, subject: string | undefined): Promise<Response> {
-  const chosen = await newer(bucket, device.id, subject);
-  if (!chosen) return json(null, 204, device.id);
-  const deviceDoc = await readDoc(bucket, deviceKey(device.id));
-  const accountDoc = subject ? await readDoc(bucket, accountKey(subject)) : undefined;
-  if (!sameDocument(deviceDoc, chosen)) await bucket.put(deviceKey(device.id), JSON.stringify(chosen));
-  if (subject && !sameDocument(accountDoc, chosen)) await bucket.put(accountKey(subject), JSON.stringify(chosen));
-  return json(chosen, 200, device.id);
+interface Snapshot {
+  key: string;
+  etag?: string;
+  document?: DebugMenuSettingsDocument;
 }
 
-async function newer(
+function keys(id: string, subject: string | undefined): string[] {
+  return [deviceKey(id), ...(subject ? [accountKey(subject)] : [])];
+}
+
+async function snapshots(bucket: PlayerSettingsBucket, paths: string[]): Promise<Snapshot[]> {
+  return Promise.all(
+    paths.map(async (key) => {
+      const object = await bucket.get(key);
+      if (!object) return { key };
+      let document: DebugMenuSettingsDocument | undefined;
+      try {
+        document = debugMenuSettingsDocument(JSON.parse(await object.text()));
+      } catch {
+        /* Replace invalid data conditionally. */
+      }
+      return { key, etag: object.etag, document };
+    }),
+  );
+}
+
+function latest(documents: Array<DebugMenuSettingsDocument | undefined>): DebugMenuSettingsDocument | undefined {
+  return documents.reduce<DebugMenuSettingsDocument | undefined>(
+    (best, item) =>
+      item && (!best || item.updatedAt > best.updatedAt || (item.updatedAt === best.updatedAt && item.deleted))
+        ? item
+        : best,
+    undefined,
+  );
+}
+
+/** Conditional writes retry against the observed version; no GET performs a repair write. */
+async function storeNewer(
   bucket: PlayerSettingsBucket,
-  id: string,
-  subject: string | undefined,
+  paths: string[],
+  incoming: DebugMenuSettingsDocument,
+  deletion: boolean,
 ): Promise<DebugMenuSettingsDocument | undefined> {
-  const deviceDoc = await readDoc(bucket, deviceKey(id));
-  const accountDoc = subject ? await readDoc(bucket, accountKey(subject)) : undefined;
-  if (!deviceDoc) return accountDoc;
-  if (!accountDoc) return deviceDoc;
-  return accountDoc.updatedAt > deviceDoc.updatedAt ? accountDoc : deviceDoc;
-}
-
-async function writeBoth(
-  bucket: PlayerSettingsBucket,
-  id: string,
-  subject: string | undefined,
-  document: DebugMenuSettingsDocument,
-): Promise<void> {
-  const body = JSON.stringify(document);
-  await bucket.put(deviceKey(id), body);
-  if (subject) await bucket.put(accountKey(subject), body);
-}
-
-async function readDoc(bucket: PlayerSettingsBucket, key: string): Promise<DebugMenuSettingsDocument | undefined> {
-  const object = await bucket.get(key);
-  if (!object) return undefined;
-  try {
-    return debugMenuSettingsDocument(JSON.parse(await object.text()));
-  } catch {
-    return undefined;
+  // A reset retains its revision only, so delayed pre-reset writes cannot recreate deleted values.
+  let candidate = incoming;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const entries = await snapshots(bucket, paths);
+    const current = latest(entries.map((entry) => entry.document));
+    if (deletion) {
+      candidate =
+        current?.deleted && current.updatedAt >= candidate.updatedAt
+          ? current
+          : {
+              version: 1,
+              updatedAt: Math.max(candidate.updatedAt, (current?.updatedAt ?? -1) + 1),
+              settings: {},
+              deleted: true,
+            };
+    } else if (current && current.updatedAt >= candidate.updatedAt) candidate = current;
+    const body = JSON.stringify(candidate);
+    let conflict = false;
+    for (const entry of entries) {
+      if (JSON.stringify(entry.document) === body) continue;
+      const written = await bucket.put(entry.key, body, {
+        onlyIf: entry.etag === undefined ? { etagDoesNotMatch: '*' } : { etagMatches: entry.etag },
+      });
+      if (!written) {
+        conflict = true;
+        break;
+      }
+    }
+    if (!conflict) return candidate;
   }
-}
-
-function sameDocument(left: DebugMenuSettingsDocument | undefined, right: DebugMenuSettingsDocument): boolean {
-  return left?.updatedAt === right.updatedAt && JSON.stringify(left?.settings) === JSON.stringify(right.settings);
+  return undefined;
 }
 
 function deviceKey(id: string): string {
