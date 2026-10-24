@@ -102,6 +102,7 @@ export interface PlaySessionOptions {
   hsFix?: HSFix;
   classicHiSpeed?: boolean;
   floatingHiSpeed?: boolean;
+  fixedDisplayArea?: boolean;
   normalHiSpeedLevel?: number;
   judgeTimingMs?: number;
   visualConstant?: boolean;

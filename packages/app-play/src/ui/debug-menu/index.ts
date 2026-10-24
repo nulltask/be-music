@@ -189,6 +189,7 @@ export class DebugMenu {
   public hiSpeedController: PaneBinding | undefined;
   public judgeTimingController: PaneBinding | undefined;
   public hsFixController: PaneBinding | undefined;
+  public fixedDisplayAreaController: PaneBinding | undefined;
   public floatingHiSpeedController: PaneBinding | undefined;
   public floatingSpeedController: PaneBinding | undefined;
   public classicHiSpeedController: PaneBinding | undefined;
@@ -421,6 +422,11 @@ export class DebugMenu {
       this.guiState.floatingHiSpeed = false;
       this.setPlayOptions({ floatingHiSpeed: false });
     }
+    if (!ac && this.guiState.fixedDisplayArea) {
+      this.guiState.fixedDisplayArea = false;
+      this.setPlayOptions({ fixedDisplayArea: false });
+    }
+    if (this.fixedDisplayAreaController) this.fixedDisplayAreaController.hidden = !ac;
     const floating = this.guiState.floatingHiSpeed;
     if (this.floatingHiSpeedController) this.floatingHiSpeedController.hidden = !ac;
     if (this.floatingSpeedController) this.floatingSpeedController.hidden = !floating;

@@ -21,6 +21,7 @@ export class BeMusicPlaySettingsElement extends DataElement<BeMusicSettingsData>
                   ? 'NORMAL'
                   : '—',
           ],
+          ['Fixed display area', view.fixedDisplayArea ? 'ON' : 'OFF'],
           ['Hi-speed', view.hiSpeed.player.toFixed(2)],
           ['Drawn speed', view.hiSpeed.drawn.toFixed(2)],
           ['HS-FIX', view.hsFix ?? o.hsFix],

@@ -719,6 +719,7 @@ export class PlaySession extends PlaySessionState {
     this.quitHold.cancel();
   };
 
+  public lastStartTapMs: number | undefined;
   readonly handleSharedEngineExitKey = (event: KeyboardEvent): void => handleSharedEngineExitKey(this, event);
 
   /**

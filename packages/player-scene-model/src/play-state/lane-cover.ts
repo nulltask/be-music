@@ -85,7 +85,7 @@ export type LaneCoverCommand =
    */
   | { type: 'cover-toggle'; part: LaneCoverPart; side?: PlaySide; bpm?: number }
   /** Set the covers outright: what a replay recorded, or a host's setting. */
-  | { type: 'cover-set'; covers: readonly Partial<LaneCoverState>[]; side?: PlaySide };
+  | { type: 'cover-set'; covers: readonly Partial<LaneCoverState>[]; side?: PlaySide; recorded?: true };
 
 function onKey(part: 'sudden' | 'hidden'): 'suddenOn' | 'hiddenOn' {
   return part === 'sudden' ? 'suddenOn' : 'hiddenOn';

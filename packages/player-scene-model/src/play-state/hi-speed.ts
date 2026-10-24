@@ -25,6 +25,7 @@ export interface HiSpeedState {
   readonly normalLevel?: number;
   readonly normalBPM?: number;
   readonly floating?: FloatingHiSpeedAnchor;
+  readonly floatingInitial?: FloatingHiSpeedAnchor;
 }
 
 /** The tempo facts HS-FIX reads off a chart. */
@@ -97,7 +98,12 @@ export function createHiSpeedState(
     ...(normal !== undefined || (init.floating && (init.normalLevel ?? 0) > 0)
       ? { normalLevel: init.normalLevel!, normalBPM: init.bpm ?? 120 }
       : {}),
-    ...(init.floating ? { floating: captureFloatingHiSpeed(player, init.bpm ?? 120, init.visibleFraction ?? 1) } : {}),
+    ...(init.floating
+      ? {
+          floating: captureFloatingHiSpeed(player, init.bpm ?? 120, init.visibleFraction ?? 1),
+          floatingInitial: captureFloatingHiSpeed(player, init.bpm ?? 120, init.visibleFraction ?? 1),
+        }
+      : {}),
   };
 }
 
@@ -109,6 +115,7 @@ export type HiSpeedCommand =
   | { type: 'hi-speed-set'; value: number; bpm?: number }
   | { type: 'hi-speed-scale'; multiplier: number }
   | { type: 'floating-speed-mode'; enabled: boolean; bpm: number; visibleFraction: number }
+  | { type: 'floating-speed-restore'; bpm: number; visibleFraction: number }
   | { type: 'floating-speed-recalculate'; bpm: number; visibleFraction: number }
   | { type: 'hi-speed-fine'; direction: number; bpm?: number; visibleFraction?: number }
   /**
@@ -132,11 +139,11 @@ export function reduceHiSpeed(state: HiSpeedState, command: HiSpeedCommand): HiS
         const player = clampFloatingHiSpeed(state.player);
         return !floating || player === undefined
           ? state
-          : { ...state, floating, player, drawn: player * state.multiplier };
+          : { ...state, floating, floatingInitial: floating, player, drawn: player * state.multiplier };
       }
       const next = resolveFloatingHiSpeedExit(state.player, command.bpm, state.classic === true);
       if (!next) return state;
-      const { floating: _floating, normalLevel: _normal, ...kept } = state;
+      const { floating: _floating, floatingInitial: _initial, normalLevel: _normal, ...kept } = state;
       return {
         ...kept,
         player: next.hiSpeed,
@@ -144,9 +151,12 @@ export function reduceHiSpeed(state: HiSpeedState, command: HiSpeedCommand): HiS
         ...(next.normalLevel !== undefined ? { normalLevel: next.normalLevel, normalBPM: command.bpm } : {}),
       };
     }
+    case 'floating-speed-restore':
     case 'floating-speed-recalculate': {
       if (state.locked || !state.floating) return state;
-      const player = resolveFloatingHiSpeed(state.floating, command.bpm, command.visibleFraction);
+      const anchor =
+        command.type === 'floating-speed-restore' ? (state.floatingInitial ?? state.floating) : state.floating;
+      const player = resolveFloatingHiSpeed(anchor, command.bpm, command.visibleFraction);
       return player === undefined || player === state.player
         ? state
         : { ...state, player, drawn: player * state.multiplier };

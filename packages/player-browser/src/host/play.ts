@@ -480,6 +480,11 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
     ...(settings.initialHiSpeed !== undefined ? { hiSpeed: settings.initialHiSpeed } : {}),
     ...(settings.gauge !== undefined ? { gauge1P: settings.gauge } : {}),
     ...speedProfile,
+    ...(options.replay !== undefined &&
+    ((settings.replayView?.covers ?? true) || (settings.replayView?.lift ?? true)) &&
+    typeof options.replay.play.options?.fixedDisplayArea === 'boolean'
+      ? { fixedDisplayArea: options.replay.play.options.fixedDisplayArea }
+      : {}),
   });
   let sceneSession: PlaySceneSession | undefined;
   let family: FamilyPlayView | undefined;
@@ -509,6 +514,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       randomFixedLane2P: playOptions.randomFixedLane2P,
       classicHiSpeed: playOptions.classicHiSpeed,
       floatingHiSpeed: playOptions.floatingHiSpeed,
+      fixedDisplayArea: playOptions.fixedDisplayArea,
       normalHiSpeedLevel: playOptions.normalHiSpeedLevel,
       visualConstant: playOptions.visualConstant,
       noteDurationMs: playOptions.noteDurationMs,

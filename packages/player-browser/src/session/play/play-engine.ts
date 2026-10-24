@@ -112,6 +112,7 @@ export interface PlayEngineContext
       | 'hsFix'
       | 'classicHiSpeed'
       | 'floatingHiSpeed'
+      | 'fixedDisplayArea'
       | 'normalHiSpeedLevel'
       | 'hiSpeedLocked'
       | 'onHiSpeedChange'
@@ -421,6 +422,7 @@ export function resolveReplayRecording(
     | 'hsFix'
     | 'classicHiSpeed'
     | 'floatingHiSpeed'
+    | 'fixedDisplayArea'
     | 'normalHiSpeedLevel'
     | 'judgeTimingMs'
     | 'visualConstant'
@@ -460,6 +462,7 @@ export function resolveReplayRecording(
         : options.hsFix,
     classicHiSpeed: options.classicHiSpeed,
     floatingHiSpeed: options.floatingHiSpeed,
+    fixedDisplayArea: options.fixedDisplayArea,
     ...(options.floatingHiSpeed ? { floatingHiSpeedProfile: 'AC32-measured' } : {}),
     normalHiSpeedLevel: options.classicHiSpeed ? 0 : options.normalHiSpeedLevel,
     ...(!options.classicHiSpeed && (options.normalHiSpeedLevel ?? 0) > 0

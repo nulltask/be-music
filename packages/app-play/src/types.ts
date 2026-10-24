@@ -207,6 +207,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   /** 1P auto scratch for the next play. Two-way synced with the LR2 select panel. */
   classicHiSpeed: boolean;
   floatingHiSpeed: boolean;
+  fixedDisplayArea: boolean;
   normalHiSpeedLevel: number;
   judgeTimingMs: number;
   visualConstant: boolean;

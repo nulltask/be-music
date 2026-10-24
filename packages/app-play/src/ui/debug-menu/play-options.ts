@@ -311,6 +311,11 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       NORMAL_HI_SPEED_GREEN_NUMBERS.map((_, index) => index + 1),
     ).on('change', ({ value }) => this.setPlayOptions({ normalHiSpeedLevel: value })),
   );
+  this.fixedDisplayAreaController = trackPlayOption(
+    folder
+      .addBinding(this.guiState, 'fixedDisplayArea', { label: 'Fixed display area (AC 34)' })
+      .on('change', ({ value }) => this.setPlayOptions({ fixedDisplayArea: value })),
+  );
   this.floatingHiSpeedController = trackPlayOption(
     folder
       .addBinding(this.guiState, 'floatingHiSpeed', { label: 'FLOATING HI-SPEED (AC 32 measured)' })

@@ -72,6 +72,7 @@ export interface DebugMenuSettings {
   dpFlip: boolean;
   classicHiSpeed: boolean;
   floatingHiSpeed: boolean;
+  fixedDisplayArea: boolean;
   normalHiSpeedLevel: number;
   judgeTimingMs: number;
   visualConstant: boolean;
@@ -230,6 +231,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'constantFadeMs', resolvePlayOptionValue('constantFadeMs', raw.constantFadeMs));
   assign(settings, 'judgeTimingMs', resolvePlayOptionValue('judgeTimingMs', raw.judgeTimingMs));
   assign(settings, 'normalHiSpeedLevel', resolvePlayOptionValue('normalHiSpeedLevel', raw.normalHiSpeedLevel));
+  assign(settings, 'fixedDisplayArea', resolvePlayOptionValue('fixedDisplayArea', raw.fixedDisplayArea));
   assign(settings, 'floatingHiSpeed', resolvePlayOptionValue('floatingHiSpeed', raw.floatingHiSpeed));
   assign(settings, 'classicHiSpeed', booleanOf(raw.classicHiSpeed));
   assign(settings, 'judgeAlgorithm', oneOf(raw.judgeAlgorithm, ['combo', 'duration', 'lowest'] as const));
@@ -445,6 +447,7 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('normalHiSpeedLevel');
   assignState('classicHiSpeed');
   assignState('floatingHiSpeed');
+  assignState('fixedDisplayArea');
   assignState('judgeAlgorithm');
   assignState('longNoteModifier');
   assignState('mineModifier');
@@ -530,6 +533,7 @@ export function captureDebugMenuSettings(
     normalHiSpeedLevel: state.normalHiSpeedLevel,
     classicHiSpeed: state.classicHiSpeed,
     floatingHiSpeed: state.floatingHiSpeed,
+    fixedDisplayArea: state.fixedDisplayArea,
     judgeAlgorithm: state.judgeAlgorithm,
     longNoteModifier: state.longNoteModifier,
     mineModifier: state.mineModifier,

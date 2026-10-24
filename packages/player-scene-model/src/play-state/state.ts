@@ -31,6 +31,7 @@ export interface PlayViewState {
   readonly hiSpeed: HiSpeedState;
   readonly covers: readonly LaneCoverState[];
   readonly hsFix?: HSFix;
+  readonly fixedDisplayArea?: true;
 }
 
 /**
@@ -96,6 +97,7 @@ export function createPlayState(init: PlayStateInit = {}): PlayState {
     view: {
       hiSpeed: init.view?.hiSpeed ?? createHiSpeedState(),
       covers: init.view?.covers ?? [],
+      ...(init.view?.fixedDisplayArea ? { fixedDisplayArea: true as const } : {}),
       ...(init.view?.hsFix !== undefined ? { hsFix: init.view.hsFix } : {}),
     },
   };
@@ -331,6 +333,7 @@ export function reducePlayState(state: PlayState, event: PlayEvent): PlayState {
     case 'seek':
       return applySeek(state, event);
     case 'floating-speed-mode':
+    case 'floating-speed-restore':
     case 'floating-speed-recalculate':
     case 'hi-speed-fine':
     case 'hi-speed-scale':
@@ -347,7 +350,7 @@ export function reducePlayState(state: PlayState, event: PlayEvent): PlayState {
             view: {
               ...state.view,
               hiSpeed,
-              ...(event.type === 'floating-speed-mode' && event.enabled
+              ...(event.type === 'floating-speed-mode' && event.enabled && !state.view.fixedDisplayArea
                 ? { covers: state.view.covers.map(normalizeFloatingLaneCover) }
                 : {}),
             },
@@ -356,6 +359,7 @@ export function reducePlayState(state: PlayState, event: PlayEvent): PlayState {
     case 'cover-adjust':
     case 'cover-toggle':
     case 'cover-set': {
+      if (state.view.fixedDisplayArea && !(event.type === 'cover-set' && event.recorded)) return state;
       const covers = reduceLaneCovers(
         state.view.covers,
         event,
