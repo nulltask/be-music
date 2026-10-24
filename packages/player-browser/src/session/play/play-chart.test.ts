@@ -467,3 +467,18 @@ test('CONVERGE dispatches to the distinct LR2 and beatoraja PMS algorithms', () 
     /PMS arrangement/,
   );
 });
+
+test('PMS RANDOM_PLAYABLE applies the exact permutation to visible, mine and invisible arrays', () => {
+  const keys = resolveLaneOptionChannels('1P', '9');
+  const notes = notesOn(keys);
+  const mines = notesOn(keys);
+  const hidden = notesOn(keys);
+  applyRandomMode(notes, keys, 'RANDOM_PLAYABLE', () => 0, { ruleset: 'beatoraja', playVariant: '9' }, mines, hidden);
+  // The visible nine-key chord forces the documented regular/mirror fallback.
+  expect(channelsOf(notes)).toEqual(keys);
+  expect(channelsOf(mines)).toEqual(keys);
+  expect(channelsOf(hidden)).toEqual(keys);
+  expect(() =>
+    applyRandomMode([], KEYS_1P, 'RANDOM_PLAYABLE', () => 0, { ruleset: 'beatoraja', playVariant: '7' }),
+  ).toThrow(/PMS arrangement/);
+});

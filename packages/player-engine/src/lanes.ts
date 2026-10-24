@@ -38,3 +38,5 @@ export {
 export { resolveAutoScratchSides, resolveAutoScratchChannels, type AutoScratchOptions } from './core/auto-scratch.ts';
 
 export { randomizeLR2ConvergeNotes } from './lane-converge.ts';
+
+export { randomizePMSPlayableLanes } from './lane-pms-random.ts';

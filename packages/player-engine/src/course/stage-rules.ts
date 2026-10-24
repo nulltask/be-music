@@ -31,6 +31,7 @@ export type CourseLaneOption =
   | 'H-RANDOM'
   | 'ALL-SCR'
   | 'RANDOM-EX'
+  | 'RANDOM_PLAYABLE'
   | 'CONVERGE'
   | 'SCATTER';
 
