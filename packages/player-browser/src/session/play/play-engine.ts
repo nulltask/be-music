@@ -404,6 +404,7 @@ export function resolveReplayRecording(
     | 'initialHiSpeed'
     | 'hsFix'
     | 'classicHiSpeed'
+    | 'bpmGuide'
     | 'hiddenSudden1P'
     | 'hiddenSudden2P'
     | 'shutter'
@@ -425,6 +426,7 @@ export function resolveReplayRecording(
     hiSpeed: options.classicHiSpeed ? view.hiSpeed : options.initialHiSpeed,
     hsFix: options.classicHiSpeed ? 'OFF' : options.hsFix,
     classicHiSpeed: options.classicHiSpeed,
+    bpmGuide: options.bpmGuide,
     hiddenSudden1P: options.hiddenSudden1P,
     hiddenSudden2P: options.hiddenSudden2P,
     shutter: options.shutter,
@@ -442,9 +444,7 @@ export function resolveReplayRecording(
   }
   return {
     gauge: options.gauge,
-    ...(options.recordingOptionState !== undefined || options.classicHiSpeed !== undefined
-      ? { options: { ...options.recordingOptionState, ...effectiveOptions } }
-      : {}),
+    options: { ...options.recordingOptionState, ...effectiveOptions },
     ...(options.chartSHA256 !== undefined ? { chartSHA256: options.chartSHA256 } : {}),
     ...(options.chartMD5 !== undefined ? { chartMD5: options.chartMD5 } : {}),
     ...(options.replayRecorder !== undefined ? { recorder: options.replayRecorder } : {}),

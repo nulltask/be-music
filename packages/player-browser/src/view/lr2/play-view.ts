@@ -88,6 +88,7 @@ export function resolveLR2PlayTiming(skin: Pick<LR2Skin, 'timing'>): PlayViewTim
 /** What the LR2 play view draws with besides its kit: the options of the play that change what is drawn. */
 export type LR2PlayViewOptions = Pick<
   PlaySessionOptions,
+  | 'bpmGuide'
   | 'bga'
   | 'bgaSize'
   | 'autoPlay'

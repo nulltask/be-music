@@ -125,6 +125,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     bgaSize: playOptions.bgaSize,
     scoreGraph: playOptions.scoreGraph,
     hsFix: playOptions.classicHiSpeed ? ('OFF' as const) : playOptions.hsFix,
+    bpmGuide: playOptions.bpmGuide,
     classicHiSpeed: playOptions.classicHiSpeed,
     judgeAlgorithm: replay?.play.judgeAlgorithm ?? playOptions.judgeAlgorithm,
     longNoteModifier: playOptions.longNoteModifier,

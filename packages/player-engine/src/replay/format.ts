@@ -120,6 +120,10 @@ export interface ReplayJudgeRank {
 }
 
 export interface ReplayChart {
+  /** Original header BPM, kept separately from the effective tempo map. */
+  headerBPM?: number;
+  /** Resolved chart BPM extrema, used for source option classification. */
+  bpmRange?: { min: number; max: number };
   title?: string;
   subtitle?: string;
   artist?: string;
@@ -432,7 +436,17 @@ function parseChart(chart: Record<string, unknown>): ReplayChart {
     throw new ReplayParseError('chart.lnMode: expected 1 | 2 | 3');
   }
 
+  let bpmRange: ReplayChart['bpmRange'];
+  if (chart.bpmRange !== undefined) {
+    const range = expectRecord(chart.bpmRange, 'chart.bpmRange');
+    const min = expectFiniteNumber(range.min, 'chart.bpmRange.min');
+    const max = expectFiniteNumber(range.max, 'chart.bpmRange.max');
+    if (min > max) throw new ReplayParseError('chart.bpmRange: min must not exceed max');
+    bpmRange = { min, max };
+  }
   const parsed: ReplayChart = {
+    ...(bpmRange !== undefined ? { bpmRange } : {}),
+    ...(chart.headerBPM !== undefined ? { headerBPM: expectFiniteNumber(chart.headerBPM, 'chart.headerBPM') } : {}),
     title: optionalString(chart.title, 'chart.title'),
     subtitle: optionalString(chart.subtitle, 'chart.subtitle'),
     artist: optionalString(chart.artist, 'chart.artist'),

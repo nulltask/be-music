@@ -13,7 +13,10 @@ import {
 } from '@be-music/skin-beatoraja';
 import type { TempoReversalPoint, ChartPlayVariant } from '@be-music/chart-model';
 import type { ScrollDistanceMapperLike } from '@be-music/player-engine/display';
-import type { Container, Texture } from 'pixi.js';
+import { Container, type Texture } from 'pixi.js';
+import { ChildPool } from '../../skins/pixi-kit/pools.ts';
+import { renderBPMGuide } from '../shared/bpm-guide.ts';
+import type { BPMGuideEvent } from '../../chart/bpm-guide.ts';
 import type { BeatorajaSceneKit } from '../../skin/beatoraja/scene-kit.ts';
 import type { BGACue, NonstopBGAStage, NonstopStageBGATimeline } from '../../chart/bga-timeline.ts';
 import { BeatorajaPlaySkinView, type BeatorajaPlaySkinViewOptions } from './skin-view.ts';
@@ -40,6 +43,7 @@ export interface BeatorajaPlayChartLayout {
   readonly beatToSeconds: ((beat: number) => number) | undefined;
   readonly reversal: TempoReversalPoint | undefined;
   readonly markers: BeatorajaMarkerBeats;
+  readonly guideEvents?: readonly BPMGuideEvent[];
   readonly autoPlay: boolean;
 }
 
@@ -69,6 +73,8 @@ export class BeatorajaPlayStage {
   private readonly stage: BeatorajaSkinStage;
   private readonly noteLayer: BeatorajaNoteLayer;
   private readonly markerLayer: BeatorajaMarkerLayer;
+  private readonly guideLayer = new Container({ label: 'bpm-guide', eventMode: 'none' });
+  private readonly guidePool = new ChildPool(this.guideLayer);
   private bgaLayer: BeatorajaBGALayer | undefined;
   private readonly kit: BeatorajaSceneKit;
   private readonly skinConfigOps: ReadonlySet<number>;
@@ -117,7 +123,8 @@ export class BeatorajaPlayStage {
     // index puts the markers first and the notes after them.
     const index = view.noteLayerInsertIndex;
     view.container.addChildAt(this.markerLayer.container, index);
-    view.container.addChildAt(this.noteLayer.container, index + 1);
+    view.container.addChildAt(this.guideLayer, index + 1);
+    view.container.addChildAt(this.noteLayer.container, index + 2);
   }
 
   getDisplayAreaLanes(activeOps: ReadonlySet<number>, channels: readonly string[]) {
@@ -190,10 +197,17 @@ export class BeatorajaPlayStage {
     clock: BeatorajaPlayLayerClock | undefined,
     hiSpeed: number,
     lanes: { isLaneLNHeld(channel: string): boolean; isPoorBGAActive(seconds: number): boolean },
-    playback: { tempo?: number; paused?: boolean; started?: boolean; showInvisibleNotes?: boolean } = {},
+    playback: {
+      tempo?: number;
+      paused?: boolean;
+      started?: boolean;
+      showInvisibleNotes?: boolean;
+      bpmGuide?: boolean;
+    } = {},
   ): void {
     const view = this.stage.view;
     view.update(context);
+    this.guideLayer.visible = clock !== undefined && playback.bpmGuide === true && playback.started !== false;
     if (clock === undefined) return;
     const activeOps = context.activeOps;
     this.noteLayer.update(
@@ -228,9 +242,40 @@ export class BeatorajaPlayStage {
       laneTopY: laneBounds.topY,
       pixelsPerBeat,
       markers: layout.markers,
+      bpmGuide: playback.bpmGuide === true,
       window: placement.window,
       secondsAt: layout.beatToSeconds,
     });
+    this.guidePool.begin();
+    if (this.guideLayer.visible) {
+      const laneRects = this.noteLayer.getDisplayAreaLanes(activeOps, [
+        ...new Set(clock.notes.map((note) => note.channel)),
+      ]);
+      const lanes = ['1P', '2P'].flatMap((side) => {
+        const group = laneRects.filter((lane) => lane.side === side);
+        if (!group.length) return [];
+        const x = Math.min(...group.map((lane) => lane.x));
+        return [
+          {
+            x,
+            w: Math.max(...group.map((lane) => lane.x + lane.w)) - x,
+            top: laneBounds.topY,
+            bottom: laneBounds.bottomY,
+          },
+        ];
+      });
+      renderBPMGuide({
+        enabled: true,
+        events: layout.guideEvents ?? [],
+        window: placement.window,
+        distance: placement.distance,
+        pixelsPerBeat,
+        lanes,
+        pool: this.guidePool,
+        drawLines: false,
+      });
+    }
+    this.guidePool.end();
     // The BGA freezes on what showed at a reversal (clamped, not mirrored), as LR2 stops its cues there.
     this.bgaLayer?.update(
       Math.min(clock.currentSeconds, clock.reversalSeconds ?? Number.POSITIVE_INFINITY),
@@ -245,6 +290,7 @@ export class BeatorajaPlayStage {
     this.bgaLayer = undefined;
     this.noteLayer.dispose();
     this.markerLayer.dispose();
+    this.guidePool.destroy();
     this.stage.dispose();
   }
 }

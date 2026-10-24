@@ -494,3 +494,16 @@ test('round-trips confirmed beatoraja algorithms and rejects the internal Score 
   invalid.play.judgeAlgorithm = 'score';
   expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
 });
+
+test('round-trips resolved BPM extrema and rejects invalid ranges', () => {
+  const replay = makeReplay();
+  replay.chart.bpmRange = { min: 120, max: 240 };
+  replay.chart.headerBPM = 150;
+  expect(parseReplay(serializeReplay(replay)).chart.bpmRange).toEqual({ min: 120, max: 240 });
+  expect(parseReplay(serializeReplay(replay)).chart.headerBPM).toBe(150);
+  for (const bpmRange of [{ min: 240, max: 120 }, { min: null, max: 240 }, { max: 240 }]) {
+    const invalid = JSON.parse(serializeReplay(replay));
+    invalid.chart.bpmRange = bpmRange;
+    expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
+  }
+});

@@ -7,6 +7,7 @@ import type { ResolvedPlayChart } from '@be-music/player-engine';
 import type { BeMusicReplay, ReplayCourseStage } from '@be-music/player-engine/replay';
 import {
   DEFAULT_PLAY_OPTIONS,
+  resolvePlayOptions,
   type CourseView,
   type LibraryChart,
   type PlayOptions,
@@ -237,6 +238,7 @@ function createPlayView(
     };
   }
   const drawing = {
+    ...(settings.bpmGuide !== undefined ? { bpmGuide: settings.bpmGuide } : {}),
     ...(settings.bga !== undefined ? { bga: settings.bga } : {}),
     ...(settings.autoPlay !== undefined ? { autoPlay: settings.autoPlay } : {}),
     ...(settings.nonstop !== undefined ? { nonstop: settings.nonstop } : {}),
@@ -444,6 +446,12 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
  */
 export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): PlayScene {
   const { settings, course, on } = options;
+  const playOptions = resolvePlayOptions({
+    ...(options.playOptions ?? DEFAULT_PLAY_OPTIONS),
+    ...Object.fromEntries(Object.entries(settings).filter(([, value]) => value !== undefined)),
+    ...(settings.initialHiSpeed !== undefined ? { hiSpeed: settings.initialHiSpeed } : {}),
+    ...(settings.gauge !== undefined ? { gauge1P: settings.gauge } : {}),
+  });
   let sceneSession: PlaySceneSession | undefined;
   let family: FamilyPlayView | undefined;
   // The view is made for the play below; the play asks its theme nothing before both exist.
@@ -460,7 +468,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
   const play = new PlaySession(
     {
       ...settings,
-      recordingOptionState: { ...(options.playOptions ?? DEFAULT_PLAY_OPTIONS) },
+      recordingOptionState: { ...playOptions },
       ...(options.allowSeek !== undefined ? { allowSeek: options.allowSeek } : {}),
       ...(kit.family === 'beatoraja' ? BEATORAJA_PLAY_SETTINGS : {}),
       ...(course !== undefined
@@ -484,7 +492,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
   sceneSession = new PlaySceneSession(play, {
     chart: options.chart,
     ...(course?.view !== undefined ? { course: course.view } : {}),
-    playOptions: options.playOptions ?? DEFAULT_PLAY_OPTIONS,
+    playOptions,
     ...(options.scoreTargets !== undefined ? { scoreTargets: options.scoreTargets } : {}),
     audio: options.audio,
     ...(options.sounds !== undefined ? { sounds: options.sounds } : {}),

@@ -15,6 +15,7 @@ export type GUIPlayOptions = Pick<
   | 'random1P'
   | 'random2P'
   | 'dpFlip'
+  | 'bpmGuide'
   | 'classicHiSpeed'
   | 'judgeAlgorithm'
   | 'longNoteModifier'
@@ -40,6 +41,7 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     random1P: state.random1P,
     random2P: state.random2P,
     dpFlip: state.dpFlip,
+    bpmGuide: state.bpmGuide,
     classicHiSpeed: state.classicHiSpeed,
     judgeAlgorithm: state.judgeAlgorithm,
     longNoteModifier: state.longNoteModifier,
@@ -74,6 +76,7 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.random1P = options.random1P;
   state.random2P = options.random2P;
   state.dpFlip = options.dpFlip;
+  state.bpmGuide = options.bpmGuide;
   state.classicHiSpeed = options.classicHiSpeed;
   state.judgeAlgorithm = options.judgeAlgorithm;
   state.longNoteModifier = options.longNoteModifier;

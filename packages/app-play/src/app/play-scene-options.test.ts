@@ -137,6 +137,7 @@ describe('resolvePlaySceneOptions: a single play', () => {
       bgaSize: PLAY_OPTIONS.bgaSize,
       scoreGraph: PLAY_OPTIONS.scoreGraph,
       hsFix: 'AVERAGE',
+      bpmGuide: false,
       classicHiSpeed: false,
       judgeAlgorithm: 'combo',
       longNoteModifier: 'OFF',
