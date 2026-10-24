@@ -55,3 +55,8 @@ it('BEST CLEAR keeps judging while the parallel gauges determine the effective o
   expect(resolveGaugeEndOnFailure('BEST_CLEAR', 'beatoraja')).toBe(false);
   expect(() => resolveGaugeEndOnFailure('BEST_CLEAR', 'lr2')).toThrow(/beatoraja/);
 });
+
+it('SELECT TO UNDER keeps judging without granting another source ruleset gauge shifting', () => {
+  expect(resolveGaugeEndOnFailure('SELECT_TO_UNDER', 'beatoraja')).toBe(false);
+  expect(() => resolveGaugeEndOnFailure('SELECT_TO_UNDER', '____')).toThrow(/beatoraja/);
+});

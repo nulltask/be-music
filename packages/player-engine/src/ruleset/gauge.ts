@@ -35,13 +35,18 @@ export class RulesetGauge {
   private bank: RulesetGauge[] | undefined;
   private selectedIndex = 0;
   private bottomIndex = 0;
+  private upperExclusive: number | undefined;
 
   /** Raw units for every parallel gauge; immutable snapshots keep course carries independent. */
   get values(): Record<string, number> | undefined {
     return this.bank && Object.fromEntries(this.bank.map((gauge) => [gauge.spec.id, gauge.value]));
   }
 
-  constructor(spec: GaugeSpec, fallbackSpec?: GaugeSpec, bank?: { specs: readonly GaugeSpec[]; bottomIndex: number }) {
+  constructor(
+    spec: GaugeSpec,
+    fallbackSpec?: GaugeSpec,
+    bank?: { specs: readonly GaugeSpec[]; bottomIndex: number; upperExclusive?: number },
+  ) {
     if (bank !== undefined) {
       this.bank = bank.specs.map((value) => new RulesetGauge(value));
       this.selectedIndex = Math.max(
@@ -49,6 +54,7 @@ export class RulesetGauge {
         bank.specs.findIndex((value) => value.id === spec.id),
       );
       this.bottomIndex = bank.bottomIndex;
+      this.upperExclusive = bank.upperExclusive;
     }
     if (fallbackSpec !== undefined && fallbackSpec.id !== spec.id) this.fallback = new RulesetGauge(fallbackSpec);
     this.activeSpec = spec;
@@ -122,7 +128,7 @@ export class RulesetGauge {
   private selectBest(): void {
     const bank = this.bank!;
     let selected = Math.min(this.selectedIndex, this.bottomIndex);
-    for (let index = selected; index < bank.length; index++) {
+    for (let index = selected; index < (this.upperExclusive ?? bank.length); index++) {
       if (bank[index]!.value > 0 && bank[index]!.cleared()) selected = index;
     }
     this.selectedIndex = selected;

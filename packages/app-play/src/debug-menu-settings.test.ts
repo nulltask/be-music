@@ -312,3 +312,15 @@ test('persists BEST CLEAR and validates the three source lower-bound choices', (
     )?.settings,
   ).not.toHaveProperty('bottomShiftableGauge');
 });
+
+test('persists SELECT TO UNDER with its independent lower bound', () => {
+  expect(
+    parseDebugMenuSettingsDocument(
+      JSON.stringify({
+        version: 1,
+        updatedAt: 1,
+        settings: { gaugeAutoShift: 'SELECT_TO_UNDER', bottomShiftableGauge: 'GROOVE' },
+      }),
+    )?.settings,
+  ).toMatchObject({ gaugeAutoShift: 'SELECT_TO_UNDER', bottomShiftableGauge: 'GROOVE' });
+});

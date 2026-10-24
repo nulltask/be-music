@@ -214,3 +214,59 @@ test('dead class gauges do not revive while the remaining family continues acros
   expect(gauge.failedMidPlay).toBe(true);
   expect(gauge.cleared()).toBe(false);
 });
+
+function underConfig(selectedGauge: string, course?: NonNullable<Parameters<typeof resolveRuleset>[2]>['course']) {
+  return resolveRuleset(
+    {
+      sourceFormat: 'bms',
+      laneMode: '7K',
+      lnMode: 1,
+      judgeRank: { percent: 75 },
+      total: 300,
+      notes: { normal: 1000, long: { 1: 0, 2: 0, 3: 0 } },
+    },
+    'beatoraja',
+    { selectedGauge, gaugeAutoShift: 'SELECT_TO_UNDER', bottomShiftableGauge: 'GROOVE', ...(course ? { course } : {}) },
+  );
+}
+
+test('SELECT TO UNDER excludes higher surviving gauges while still tracking their values', () => {
+  const config = underConfig('HARD');
+  const gauge = new RulesetGauge(config.gauge, undefined, config.gaugeBank);
+  expect(gauge.spec.id).toBe('HARD');
+  expect(gauge.values!.HAZARD).toBe(100);
+  gauge.applyJudge(0);
+  expect(gauge.spec.id).toBe('HARD');
+  gauge.applyRawDelta(-1000);
+  expect(gauge.spec.id).toBe('NORMAL');
+  expect(gauge.cleared()).toBe(false);
+  for (let i = 0; i < 400; i++) gauge.applyJudge(0);
+  expect(gauge.spec.id).toBe('NORMAL');
+  expect(gauge.cleared()).toBe(true);
+});
+
+test('SELECT TO UNDER maps the upper bound to the original selected recovery gauge', () => {
+  const config = underConfig('GROOVE');
+  const gauge = new RulesetGauge(config.gauge, undefined, config.gaugeBank);
+  expect(gauge.spec.id).toBe('NORMAL');
+  gauge.applyJudge(0);
+  expect(gauge.spec.id).toBe('NORMAL');
+  expect(gauge.values!.HAZARD).toBe(100);
+  const lowConfig = underConfig('ASSIST-EASY');
+  const lower = new RulesetGauge(lowConfig.gauge, undefined, lowConfig.gaugeBank);
+  expect(lower.spec.id).toBe('ASSIST-EASY');
+});
+
+test('SELECT TO UNDER uses source course class upper bounds and ignores the ordinary lower bound', () => {
+  const config = underConfig('HARD', {
+    kind: 'grade',
+    initialGauge: 70,
+    initialGauges: { CLASS: 70, EXCLASS: 0, EXHARDCLASS: 80 },
+  });
+  const gauge = new RulesetGauge(config.gauge, undefined, config.gaugeBank);
+  expect(gauge.spec.id).toBe('CLASS');
+  gauge.applyJudge(0);
+  expect(gauge.spec.id).toBe('CLASS');
+  expect(gauge.values!.EXCLASS).toBe(0);
+  expect(gauge.values!.EXHARDCLASS).toBeGreaterThan(80);
+});

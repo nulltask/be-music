@@ -43,7 +43,7 @@ export class BeMusicPlaySettingsElement extends DataElement<BeMusicSettingsData>
           ['Gauge auto-shift', o.gaugeAutoShift.replaceAll('_', ' ')],
           [
             'Lowest shift gauge',
-            o.gaugeAutoShift === 'BEST_CLEAR'
+            o.gaugeAutoShift === 'BEST_CLEAR' || o.gaugeAutoShift === 'SELECT_TO_UNDER'
               ? o.bottomShiftableGauge === 'GROOVE'
                 ? 'NORMAL'
                 : o.bottomShiftableGauge

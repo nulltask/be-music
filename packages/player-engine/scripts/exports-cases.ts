@@ -823,6 +823,7 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       rulesetAPI.resolveGaugeEndOnFailure('CONTINUE', 'beatoraja');
       rulesetAPI.resolveGaugeEndOnFailure('SURVIVAL_TO_GROOVE', 'beatoraja');
       rulesetAPI.resolveGaugeEndOnFailure('BEST_CLEAR', 'beatoraja');
+      rulesetAPI.resolveGaugeEndOnFailure('SELECT_TO_UNDER', 'beatoraja');
     },
   });
   define('player-engine.ruleset.resolveGaugeTypes', {
