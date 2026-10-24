@@ -31,3 +31,9 @@ Debug Menu's **Long notes** selector defaults to **OFF**. **LEGACY NOTE (AC 34)*
 The engine and renderer share the transformed notes. Replays store the source modifier and effective head-only note chart, while the original chart fingerprint continues to identify the loaded chart. Reopening a replay applies the recorded modifier before restoring its lane arrangement. The selector is locked during play because these source modifiers prepare the chart before play; this introduces no new score or lamp policy.
 
 Sources: AC 34 [assist options](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html), beatoraja 0.8.9 [`LongNoteModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/LongNoteModifier.java). Tracked in [#710](https://github.com/nulltask/be-music/issues/710).
+
+## A-SCR & LEGACY NOTE
+
+Debug Menu's **A-SCR & LEGACY NOTE (AC 34)** button applies the AC 34 combined preset in one operation: AUTO SCRATCH on both play sides and LEGACY NOTE. The existing switches and Long notes selector immediately show the effective settings; use them to select an individual operation or turn it off. Only CN/BSS tails are removed, and only scratch notes are automated. Both operations are recorded explicitly, including their effective note chart, so replay does not infer an assist from a visual preset name. The button is disabled during play. Score and lamp handling remains deferred to the Leaderboard.
+
+Source: AC 34 [assist options](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html). Tracked in [#711](https://github.com/nulltask/be-music/issues/711).

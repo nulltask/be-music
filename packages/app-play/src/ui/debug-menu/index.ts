@@ -181,7 +181,7 @@ export class DebugMenu {
    * together while a song is playing (`lockReplayOptionsForPlay`) and refreshed when the LR2 select panel pushes
    * a change (`refreshPlayOptionControllers`).
    */
-  public readonly playOptionControllers: PaneBinding[] = [];
+  public readonly playOptionControllers: { disabled: boolean; refresh?: () => void }[] = [];
   /** The "Hi-speed" slider — left enabled during a play (it applies live) and repainted by {@link refreshHiSpeed}. */
   public hiSpeedController: PaneBinding | undefined;
   /** The "Tempo (%)" slider — left enabled during a play whose tempo can change live (`allowsLiveTempo`). */
@@ -340,7 +340,7 @@ export class DebugMenu {
    * Options read when a play starts, which are disabled while one runs (`lockReplayOptionsForPlay`); returns the
    * controller.
    */
-  public trackPlayOption(controller: PaneBinding): PaneBinding {
+  public trackPlayOption<T extends { disabled: boolean; refresh?: () => void }>(controller: T): T {
     this.playOptionControllers.push(controller);
     return controller;
   }
@@ -384,7 +384,7 @@ export class DebugMenu {
   /** Repaints the "Play options" controllers after an external write (the LR2 select panel's edits). */
   public refreshPlayOptionControllers(): void {
     for (const controller of this.playOptionControllers) {
-      controller.refresh();
+      controller.refresh?.();
     }
     this.scheduleSettingsSave();
   }

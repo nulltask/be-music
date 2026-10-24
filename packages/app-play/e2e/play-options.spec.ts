@@ -89,3 +89,18 @@ for (const modifier of ['LEGACY NOTE (AC 34)', 'LN REMOVE (beatoraja)'] as const
     await player.waitForResult(1);
   });
 }
+
+test('A-SCR & LEGACY NOTE applies and records both operations together', async ({ player }) => {
+  await player.open();
+  await player.dropText('combined-assist.bme', '#TITLE Combined assist\n#BPM 240\n#LNMODE 2\n#00156:0101\n');
+  await player.pressOption(['Play options'], 'A-SCR & LEGACY NOTE (AC 34)');
+  expect(await player.readOption(['Play options'], 'Auto scratch 1P')).toBe(true);
+  expect(await player.readOption(['Play options'], 'Long notes')).toBe('LEGACY NOTE (AC 34)');
+  await player.cursorTo((bar) => bar.title === 'Combined assist', 'combined assist chart');
+  await player.key('Enter');
+  const result = await player.waitForResult(0);
+  expect(result.results[0]?.judged).toMatchObject({ pgreat: 1, poor: 0 });
+  const replay = await player.lastReplay();
+  expect(replay?.play).toMatchObject({ longNoteModifier: 'LEGACY', autoScratch1P: true, autoScratch2P: true });
+  expect(replay?.chart.notes[0]?.type).toBe('normal');
+});

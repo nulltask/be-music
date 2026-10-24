@@ -1225,3 +1225,17 @@ for (const longNoteModifier of ['LEGACY', 'REMOVE'] as const) {
     expect(simulateReplay(run.replay, { ruleset: 'beatoraja' }).judge).toEqual(run.replay.results!.native!.judge);
   });
 }
+
+test('A-SCR & LEGACY NOTE retains both operations in the recorded effective setup', async () => {
+  const json = longNoteChart(2);
+  json.events = json.events.filter((event) => event.channel === '11').map((event) => ({ ...event, channel: '16' }));
+  const run = await runRecordedPlay(json, [], '____', {
+    longNoteModifier: 'LEGACY',
+    autoScratch1P: true,
+    autoScratch2P: true,
+  });
+  expect(run.replay.play).toMatchObject({ longNoteModifier: 'LEGACY', autoScratch1P: true, autoScratch2P: true });
+  expect(run.replay.chart.notes).toEqual([expect.objectContaining({ type: 'normal', channel: '16' })]);
+  expect(run.replay.results!.native!.judge).toMatchObject({ pgreat: 1, poor: 0 });
+  expect(simulateReplay(run.replay, { ruleset: '____' }).judge).toEqual(run.replay.results!.native!.judge);
+});

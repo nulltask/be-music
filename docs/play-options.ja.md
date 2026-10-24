@@ -31,3 +31,9 @@ Debug Menu の **Long notes** は **OFF** が既定です。**LEGACY NOTE (AC 34
 エンジンと描画は変換後のノートを共有します。リプレイには変換方式と変換後の始点だけのノートを記録し、元の譜面のフィンガープリントは読み込んだ譜面を識別する値として維持します。リプレイを開く際は記録された変換を適用してからレーン配置を復元します。参照元でもプレイ前に譜面を変換する設定のため、プレイ中の選択はロックします。スコアやランプの新しい方針は追加しません。
 
 参照元：AC 34 の[アシストオプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)、beatoraja 0.8.9 の [`LongNoteModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/LongNoteModifier.java)。対応 Issue は [#710](https://github.com/nulltask/be-music/issues/710) です。
+
+## A-SCR & LEGACY NOTE
+
+Debug Menu の **A-SCR & LEGACY NOTE (AC 34)** ボタンは、AC 34 の複合設定として両側の AUTO SCRATCH と LEGACY NOTE を一度に適用します。既存のスイッチと Long notes が実効設定を直ちに表示し、各操作の選択や解除もできます。除去するのは CN・BSS の終点、自動化するのはスクラッチだけです。両操作と変換後のノートを明示的に記録するため、リプレイで見た目のプリセット名からアシストを推測する必要はありません。プレイ中はボタンを無効にします。スコアとランプの扱いは Leaderboard 側で決めます。
+
+参照元：AC 34 の[アシストオプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)。対応 Issue は [#711](https://github.com/nulltask/be-music/issues/711) です。
