@@ -145,6 +145,8 @@ export async function createPlaySession(
   strategy: JudgeStrategy,
 ): Promise<PlaySession> {
   const { mode } = strategy;
+  if (options.mineModifier !== undefined && options.mineModifier !== 'OFF' && options.judgeRuleset !== 'beatoraja')
+    throw new RangeError('Mine modification is available only for beatoraja.');
   throwIfAborted(options.signal);
   const writeOutput = resolveOutputWriter(options);
   reportLoadProgress(options, 0.02, 'Resolving chart...');
@@ -182,9 +184,19 @@ export async function createPlaySession(
     options.preparedChart ??
     preparePlaybackChart(
       resolvedChart,
-      { laneModeExtension: options.laneModeExtension, longNoteModifier: options.longNoteModifier },
+      {
+        laneModeExtension: options.laneModeExtension,
+        longNoteModifier: options.longNoteModifier,
+        mineModifier: options.mineModifier,
+      },
       realtimeAudioEndSeconds,
     );
+  if (options.mineModifier === 'REMOVE') {
+    const removed = playbackChart.landmineNotes.length;
+    playbackChart.mineModifierChangeCount = (playbackChart.mineModifierChangeCount ?? 0) + removed;
+    // Keep the shared array identity when the host prepared the chart before choosing REMOVE.
+    playbackChart.landmineNotes.length = 0;
+  }
   // A duplicate note that lost its lane and position to another note is not judged, but its keysound still sounds, as
   // background audio at its own time.
   appendShadowedNoteTriggers(backgroundTriggers, resolvedChart, playbackChart.shadowedNotes);
@@ -277,6 +289,12 @@ export async function createPlaySession(
             ...(endOnFailure ? { endOnFailure } : {}),
             ...(options.course !== undefined ? { course: options.course } : {}),
             ...hostPlaySettings,
+            ...(options.mineModifier !== undefined
+              ? {
+                  mineModifier: options.mineModifier,
+                  mineModifierChangeCount: playbackChart.mineModifierChangeCount ?? 0,
+                }
+              : {}),
             gauge: selectedGauge,
             // The tempo a live play ran at (its inputs are in chart time either way). A replay's `speed` only sets how
             // fast it is re-driven, so it records none.

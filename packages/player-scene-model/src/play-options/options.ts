@@ -116,6 +116,7 @@ export interface PlayOptions {
   judgeAlgorithm: 'combo' | 'duration' | 'lowest';
   /** AC LEGACY NOTE removes CN/BSS; beatoraja REMOVE removes every long note. */
   longNoteModifier: 'OFF' | 'LEGACY' | 'REMOVE';
+  mineModifier: 'OFF' | 'REMOVE';
   /**
    * 1P side auto-scratch flag picked from `#SRC_BUTTON,type=44`. When true the scratch lane (channel 16) auto-judges as
    * PERFECT at every note's scheduled time, so the player only has to play the keys.

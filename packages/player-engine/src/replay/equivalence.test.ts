@@ -1,6 +1,7 @@
 import { createEmptyJSON, type BeMusicJSON } from '@be-music/chart-source';
 import { describe, expect, test } from 'vite-plus/test';
-import { manualPlay } from '../index.ts';
+import { resolveChart } from '@be-music/chart-model';
+import { manualPlay, preparePlaybackChart } from '../index.ts';
 import type { PlayerOptions, PlayerSummary } from '../core/engine.ts';
 import { resolveRulesetConfig, simulateReplay } from './simulate.ts';
 import { createScheduledInputRuntime } from '../test-support/player-fixtures.ts';
@@ -1257,3 +1258,34 @@ for (const judgeAlgorithm of ['combo', 'duration', 'lowest'] as const) {
     expect(simulateReplay(run.replay, { ruleset: 'beatoraja' }).judge).toEqual(run.replay.results!.native!.judge);
   });
 }
+
+for (const containsMine of [false, true]) {
+  test(`mine REMOVE records actual changes and reproduces a mine-free judgment stream (${containsMine})`, async () => {
+    const json = chart([
+      ...(containsMine ? [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }] : []),
+      { measure: 2, channel: '12', position: [0, 1], value: '01' },
+    ]);
+    const run = await runRecordedPlay(json, [down(0, 500_000, '11')], 'beatoraja', { mineModifier: 'REMOVE' });
+    expect(run.replay.play).toMatchObject({ mineModifier: 'REMOVE', mineModifierChangeCount: containsMine ? 1 : 0 });
+    expect(run.replay.chart.notes.some((note) => note.type === 'mine')).toBe(false);
+    expect(run.summary.minePoor ?? 0).toBe(0);
+    expect(simulateReplay(run.replay, { ruleset: 'beatoraja' }).judge).toEqual(run.replay.results!.native!.judge);
+  });
+}
+
+test('mine REMOVE also clears a host-prepared shared mine array before judging', async () => {
+  const json = chart([
+    { measure: 1, channel: 'D1', position: [0, 1], value: '0A' },
+    { measure: 2, channel: '12', position: [0, 1], value: '01' },
+  ]);
+  const preparedChart = preparePlaybackChart(resolveChart(json));
+  const mines = preparedChart.landmineNotes;
+  const run = await runRecordedPlay(json, [down(0, 500_000, '11')], 'beatoraja', {
+    mineModifier: 'REMOVE',
+    preparedChart,
+  });
+  expect(preparedChart.landmineNotes).toBe(mines);
+  expect(mines).toEqual([]);
+  expect(run.replay.play.mineModifierChangeCount).toBe(1);
+  expect(run.summary.minePoor ?? 0).toBe(0);
+});

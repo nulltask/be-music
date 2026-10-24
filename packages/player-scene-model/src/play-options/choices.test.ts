@@ -235,3 +235,9 @@ test('beatoraja seed settings retain Java-long precision and reject invalid edit
   expect(resolvePlayOptionValue('randomSeed2P', 42)).toBe('42');
   expect(resolvePlayOptionValue('randomSeed1P', '9223372036854775808')).toBeUndefined();
 });
+
+test('mine REMOVE is a separate source option from invisible-note or graphics settings', () => {
+  expect(DEFAULT_PLAY_OPTIONS.mineModifier).toBe('OFF');
+  expect(resolvePlayOptionValue('mineModifier', 'REMOVE')).toBe('REMOVE');
+  expect(resolvePlayOptionValue('mineModifier', 'HIDE')).toBeUndefined();
+});

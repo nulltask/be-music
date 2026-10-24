@@ -148,6 +148,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     randomFixedLane2P: playOptions.randomFixedLane2P,
     judgeAlgorithm: replay?.play.judgeAlgorithm ?? playOptions.judgeAlgorithm,
     longNoteModifier: playOptions.longNoteModifier,
+    mineModifier: playOptions.mineModifier,
     hiddenSudden1P: lanes.hiddenSudden1P,
     hiddenSudden2P: lanes.hiddenSudden2P,
     shutter: playOptions.shutter,

@@ -195,3 +195,25 @@ for (const skin of ['plain', 'native'] as const) {
     ).toBe('-1');
   });
 }
+
+for (const skin of ['plain', 'native'] as const) {
+  for (const containsMine of [false, true]) {
+    test(`mine REMOVE records actual changes on ${skin} (${containsMine})`, async ({ player }) => {
+      await player.open({ 'be-music.built-in-skin': skin });
+      await player.dropText(
+        'mine-remove.bme',
+        `#TITLE Mine remove\n#BPM 240\n${containsMine ? '#001D1:01\n' : ''}#00211:01\n`,
+      );
+      await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+      await player.setOption(['Play options'], 'Mines (beatoraja)', 'REMOVE');
+      await player.setOption(['Play options'], 'Auto play', true);
+      await player.cursorTo((bar) => bar.title === 'Mine remove', 'mine modifier chart');
+      await player.key('Enter');
+      await player.waitForResult(0);
+      const replay = await player.lastReplay();
+      expect(replay?.play).toMatchObject({ mineModifier: 'REMOVE', mineModifierChangeCount: containsMine ? 1 : 0 });
+      expect(replay?.play.options?.mineModifier).toBe('REMOVE');
+      expect(replay?.chart.notes.some((note) => note.type === 'mine')).toBe(false);
+    });
+  }
+}
