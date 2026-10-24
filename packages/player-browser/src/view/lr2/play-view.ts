@@ -33,6 +33,7 @@ import { DESIGN_HEIGHT, PIXELS_PER_BEAT } from '../../stage/design.ts';
 import { resolveLR2LaneIndex } from '@be-music/player-engine/lanes';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { releaseTexturesOnHost } from '../../stage/pixi-utils.ts';
+import { LR2TextureRetainer } from './texture-retainer.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import { loadSkinAssetTexture, loadTextureFromBytes } from '../../skin/lr2/textures.ts';
 import { build, render, type PlayFrameContext } from '../shared/play-frame.ts';
@@ -126,6 +127,8 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
   public readonly text: LR2PlayText = new LR2PlayText();
   /** The skin's images by path, and the chart's images under LR2's special paths; destroyed with the view. */
   public readonly textures: Map<string, Texture> = new Map();
+  /** Where this view's textures go when the play switches family, so the same bytes are not decoded again. */
+  private textureRetainer: LR2TextureRetainer | undefined;
   /** The frame's LR2 state (`resolveLR2PlayState`). */
   public lr2State: LR2PlayState | undefined;
   /** What stays the same for the play: the LR2 state's setup. */
@@ -206,6 +209,31 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
   /** No be-music skin: the playfield draws nothing of its own as data. */
   get skinBinding(): undefined {
     return undefined;
+  }
+
+  /** Parks textures with `retainer` instead of destroying them when this view is replaced mid-play. */
+  public useTextureRetainer(retainer: LR2TextureRetainer): void {
+    this.textureRetainer = retainer;
+  }
+
+  /**
+   * Starts the skin's scene, ready and play timers from the clock when this view joins a play already running.
+   * Those moments were delivered to the view it replaces.
+   */
+  public joinRunningPlay(): void {
+    if (this.play.hasSceneStarted?.() !== true) return;
+    const now = this.play.playClock();
+    const startInput = this.skin.timing.startInput;
+    if (this.play.isIntroPlaying()) {
+      this.loaded = false;
+      this.timers.handle({ kind: 'scene-start', atMs: now }, startInput);
+      return;
+    }
+    const at = now - Math.max(0, this.play.currentSeconds()) * 1000;
+    this.loaded = true;
+    this.timers.handle({ kind: 'scene-start', atMs: at }, startInput);
+    this.timers.handle({ kind: 'load-end', atMs: at }, startInput);
+    this.timers.handle({ kind: 'play-start', atMs: at }, startInput);
   }
 
   /** Builds the layers on `host` ahead of the first frame (a play loading off stage), so its textures can upload. */
@@ -303,7 +331,9 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     } catch (error) {
       log.warn('root.destroy threw', error);
     }
-    // The skin's images go a few per frame, so the next screen's first frames do not stall on the sweep.
+    // A play that may show this skin again keeps the textures. Destroying them and decoding the same bytes crashes
+    // PixiJS v8. The play destroys the retainer when it ends.
+    this.handTexturesBack();
     try {
       releaseTexturesOnHost(this.host, [...this.textures.values()]);
     } catch (error) {
@@ -437,8 +467,31 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
    * The skin's bitmap fonts (in the background: a text draws in a system font until its font is in), its timer spans,
    * its images (LR2's special graphics `gr=100..111` aside), the 9-keys skin's invisible note, and the chart's images.
    */
+  /** Gives this view's textures back to the play's retainer. Destroying them is the retainer's, when the play ends. */
+  private handTexturesBack(): void {
+    const retainer = this.textureRetainer;
+    if (retainer === undefined || this.textures.size === 0) return;
+    const dropped = retainer.keep(this.skin, this.textures);
+    this.textures.clear();
+    for (const texture of dropped.values()) texture.destroy(true);
+  }
+
+  /** A texture loaded after this view was replaced stays with the retainer. Otherwise it is destroyed. */
+  private releaseUnownedTexture(path: string, texture: Texture): void {
+    const retainer = this.textureRetainer;
+    if (retainer === undefined) {
+      texture.destroy(true);
+      return;
+    }
+    for (const dropped of retainer.keep(this.skin, new Map([[path, texture]])).values()) dropped.destroy(true);
+  }
+
   private async loadSkin(): Promise<void> {
     const skin = this.skin;
+    const adopted = this.textureRetainer?.adopt(skin);
+    if (adopted !== undefined) {
+      for (const [path, texture] of adopted) this.textures.set(path, texture);
+    }
     void loadSkinBitmapFonts(skin.lr2FontPaths, skin.files).then((loaded) => {
       if (this.isGone()) return;
       this.text.setFonts(loaded);
@@ -458,11 +511,11 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     skin.sliders.forEach((slider) => imagePaths.add(slider.source.imagePath));
     await Promise.all(
       [...imagePaths].map(async (path) => {
-        if (this.isGone() || isLR2SpecialGraphic(path)) return;
+        if (this.isGone() || isLR2SpecialGraphic(path) || this.textures.has(path)) return;
         const texture = await loadSkinAssetTexture(skin, path);
         if (!texture) return;
         if (this.isGone()) {
-          texture.destroy(true);
+          this.releaseUnownedTexture(path, texture);
           return;
         }
         this.textures.set(path, texture);
@@ -480,7 +533,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     ) {
       const texture = await loadSkinAssetTexture(invisibleNoteSkin, invisibleNoteSrc.imagePath);
       if (this.isGone()) {
-        texture?.destroy(true);
+        if (texture) this.releaseUnownedTexture(invisibleNoteSrc.imagePath, texture);
         return;
       }
       if (texture) this.textures.set(invisibleNoteSrc.imagePath, texture);
@@ -511,7 +564,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
           const texture = await loadTextureFromBytes(assetPath, bytes);
           if (!texture) return;
           if (this.isGone()) {
-            texture.destroy(true);
+            this.releaseUnownedTexture(key, texture);
             return;
           }
           this.textures.set(key, texture);
