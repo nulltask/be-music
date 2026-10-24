@@ -1232,6 +1232,11 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
       lanesAPI.drawLaneRandomIndex(9, () => 0.5);
     },
   });
+  define('player-engine.lanes.prepareMineModifier', {
+    run: (fixtures) => {
+      lanesAPI.prepareMineModifier(resolveChart(fixtures.sampleBmsJSON), 'ADD_RANDOM', { random: () => 0.95 });
+    },
+  });
   define('player-engine.lanes.randomizeSpiralNotes', {
     run: () => {
       lanesAPI.randomizeSpiralNotes(

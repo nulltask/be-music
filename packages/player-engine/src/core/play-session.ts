@@ -188,9 +188,13 @@ export async function createPlaySession(
         laneModeExtension: options.laneModeExtension,
         longNoteModifier: options.longNoteModifier,
         mineModifier: options.mineModifier,
+        mineModifierPlacements: options.mineModifierPlacements,
       },
       realtimeAudioEndSeconds,
+      Math.random,
     );
+  if (options.mineModifier === 'ADD_RANDOM' && playbackChart.mineModifierApplied !== 'ADD_RANDOM')
+    throw new RangeError('The shared prepared chart must include the selected mine modifier.');
   if (options.mineModifier === 'REMOVE') {
     const removed = playbackChart.landmineNotes.length;
     playbackChart.mineModifierChangeCount = (playbackChart.mineModifierChangeCount ?? 0) + removed;

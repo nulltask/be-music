@@ -304,8 +304,21 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       laneModeExtension: extractChartExtension(ctx.chart?.chartPath),
       longNoteModifier: arrangement?.play.longNoteModifier ?? ctx.options.longNoteModifier,
       mineModifier: arrangement?.play.mineModifier ?? ctx.options.mineModifier,
+      ...(arrangement?.play.mineModifier?.startsWith('ADD_')
+        ? {
+            mineModifierPlacements: arrangement.chart.notes
+              .filter((note) => note.type === 'mine')
+              .map((note) => ({
+                channel: note.channel,
+                timeUs: note.timeUs,
+                damage: note.damage,
+                silent: note.silent,
+              })),
+          }
+        : {}),
     },
     0,
+    Math.random,
   );
   ctx.preparedChart = prepared;
   ctx.touchTokenByChannel = undefined;
@@ -419,6 +432,10 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     return Math.max(max, Math.max(0, note.endBeat - note.beat));
   }, 0);
   ctx.chartLastNoteEndSeconds = ctx.notes.reduce((acc, note) => Math.max(acc, note.endSeconds ?? note.seconds), 0);
+  ctx.chartLastNoteEndSeconds = ctx.mineNotes.reduce(
+    (end, mine) => Math.max(end, mine.seconds),
+    ctx.chartLastNoteEndSeconds,
+  );
   ctx.chartDurationSeconds = ctx.chartLastNoteEndSeconds;
   ctx.chartEnded = false;
   // Drop the previous chart's active-sample tracking. Stale entries would otherwise let a `c=true` note on the new

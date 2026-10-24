@@ -106,7 +106,9 @@ function detonateLandmine(
     return;
   }
   const landmineGaugeEffect = resolveLandmineGaugeEffect(landmine.event, config.idBase, config.sourceFormat);
-  const landmineExplosionEvent = resolveLandmineExplosionEvent(landmine.event, config.wavResources);
+  const landmineExplosionEvent = landmine.silent
+    ? undefined
+    : resolveLandmineExplosionEvent(landmine.event, config.wavResources);
   if (landmineExplosionEvent) {
     emit({
       kind: 'sound',

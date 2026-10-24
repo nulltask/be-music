@@ -1,3 +1,4 @@
+import type { MineModifier } from '../core/mine-modifier.ts';
 import {
   diffReplayOptions,
   parseReplayOptionState,
@@ -59,7 +60,7 @@ export interface ReplayRecorderPlaySettings {
   autoScratch: boolean;
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
   longNoteModifier?: 'OFF' | 'LEGACY' | 'REMOVE';
-  mineModifier?: 'OFF' | 'REMOVE';
+  mineModifier?: MineModifier;
   mineModifierChangeCount?: number;
   autoScratch1P?: boolean;
   autoScratch2P?: boolean;
@@ -327,6 +328,7 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
       type: 'mine',
       timeUs: secondsToMicroseconds(mine.seconds),
       damage: resolveLandmineGaugeEffect(mine.event, idBase, json.sourceFormat).damage,
+      ...(mine.silent ? { silent: true } : {}),
     });
   }
   for (const invisible of chart.invisibleNotes) {

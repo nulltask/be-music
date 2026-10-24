@@ -118,6 +118,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
   this.mineModifierController = selectBinding(folder, this.guiState, 'mineModifier', 'Mines (beatoraja)', {
     OFF: 'OFF',
     REMOVE: 'REMOVE',
+    'ADD RANDOM': 'ADD_RANDOM',
   });
   trackPlayOption(
     this.mineModifierController.on('change', ({ value }) => this.setPlayOptions({ mineModifier: value })),

@@ -1,3 +1,4 @@
+import type { MineModifier } from '../core/mine-modifier.ts';
 import {
   parseReplayOptionState,
   parseReplayOptionChanges,
@@ -74,6 +75,8 @@ export interface ReplayNote {
   lnMode?: LongNoteMode;
   /** Gauge damage percentage for `type: 'mine'` notes (base-36 value / bmson `damage`, already resolved). */
   damage?: number;
+  /** Generated mines carry no explosion sample. Valid only for mine notes. */
+  silent?: boolean;
 }
 
 export type ReplayInputAction = 'down' | 'up';
@@ -181,7 +184,7 @@ export interface ReplayPlay {
   /** Effective manual assist per side; older replays fall back to autoScratch for both. */
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
   longNoteModifier?: 'OFF' | 'LEGACY' | 'REMOVE';
-  mineModifier?: 'OFF' | 'REMOVE';
+  mineModifier?: MineModifier;
   mineModifierChangeCount?: number;
   autoScratch1P?: boolean;
   autoScratch2P?: boolean;
@@ -546,6 +549,11 @@ function parseNote(value: unknown, index: number): ReplayNote {
   }
   const damage = optionalFiniteNumber(record.damage, `chart.notes[${index}].damage`);
   if (damage !== undefined) note.damage = damage;
+  if (record.silent !== undefined) {
+    if (type !== 'mine' || typeof record.silent !== 'boolean')
+      throw new ReplayParseError(`chart.notes[${index}].silent: expected a mine boolean`);
+    note.silent = record.silent;
+  }
   return note;
 }
 
@@ -644,9 +652,9 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     parsed.judgeAlgorithm = play.judgeAlgorithm as 'combo' | 'duration' | 'lowest';
   }
   if (play.mineModifier !== undefined) {
-    if (!['OFF', 'REMOVE'].includes(play.mineModifier as string))
-      throw new ReplayParseError('play.mineModifier: expected OFF or REMOVE');
-    parsed.mineModifier = play.mineModifier as 'OFF' | 'REMOVE';
+    if (!['OFF', 'REMOVE', 'ADD_RANDOM'].includes(play.mineModifier as string))
+      throw new ReplayParseError('play.mineModifier: expected OFF, REMOVE or ADD_RANDOM');
+    parsed.mineModifier = play.mineModifier as MineModifier;
   }
   if (play.mineModifierChangeCount !== undefined)
     parsed.mineModifierChangeCount = expectNonNegativeInteger(

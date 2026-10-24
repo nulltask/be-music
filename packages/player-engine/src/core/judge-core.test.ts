@@ -661,3 +661,19 @@ test('input filtering leaves the unassisted scratch side playable', () => {
   );
   expect([...mapped]).toEqual(['26']);
 });
+
+test.each([false, true])(
+  'silent generated mines retain damage while suppressing their explosion sample (%s)',
+  (silent) => {
+    const json = structuredClone(LONG_AND_MINE);
+    json.resources.wav['00'] = 'explosion.wav';
+    const state = createCore(json, 'beatoraja');
+    if (silent) state.config.landmineNotes[0]!.silent = true;
+    stepJudgeCore(state, { kind: 'hold', channels: new Set(['12']) });
+    const effects = [...stepJudgeCore(state, advance(2.49)), ...stepJudgeCore(state, advance(2.6))];
+    expect(state.summary.minePoor).toBe(1);
+    expect(effects.filter((effect) => effect.kind === 'sound' && effect.source === 'mine-hit')).toHaveLength(
+      silent ? 0 : 1,
+    );
+  },
+);

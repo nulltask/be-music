@@ -48,3 +48,5 @@ export {
   drawLaneRandomIndex,
   type LaneRandomSource,
 } from './lane-random-source.ts';
+
+export { prepareMineModifier, type MineModifier, type MinePlacement } from './core/mine-modifier.ts';
