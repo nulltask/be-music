@@ -39,6 +39,10 @@ export default defineConfig(({ mode }) => {
           ),
         ),
         BETTER_AUTH_SECRET: bindings.secret(),
+        DISCORD_CLIENT_ID: bindings.secret(),
+        DISCORD_CLIENT_SECRET: bindings.secret(),
+        GOOGLE_CLIENT_ID: bindings.secret(),
+        GOOGLE_CLIENT_SECRET: bindings.secret(),
       },
     },
   };
