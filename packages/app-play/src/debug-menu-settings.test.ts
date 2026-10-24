@@ -123,6 +123,8 @@ describe('captureDebugMenuSettings', () => {
       gauge: 'HARD',
       random1P: 'SCATTER',
       hRandomThresholdBPM: 120,
+      randomFixedLane1P: 0,
+      randomFixedLane2P: 0,
       random2P: 'MIRROR',
       dpFlip: true,
       bpmGuide: true,
@@ -216,4 +218,11 @@ test('persists and validates the H-RANDOM source configuration', () => {
       JSON.stringify({ version: 1, updatedAt: 1, settings: { random1P: 'H-RANDOM', hRandomThresholdBPM: 300 } }),
     )?.settings,
   ).toMatchObject({ random1P: 'H-RANDOM', hRandomThresholdBPM: 300 });
+});
+
+test('persists per-side LR2 CONVERGE targets', () => {
+  const settings = { random1P: 'CONVERGE', randomFixedLane1P: 3, randomFixedLane2P: 7 };
+  expect(
+    parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
+  ).toMatchObject(settings);
 });

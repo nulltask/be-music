@@ -7,7 +7,7 @@
  * `prepareChart` reads and writes the play's state through {@link PlayChartContext}; the play session passes itself.
  */
 
-import { resolveRandomModes } from '@be-music/player-scene-model';
+import { resolveRandomModes, type RandomMode } from '@be-music/player-scene-model';
 import {
   resolvePoorBGAMode,
   parseBMSSwBGA,
@@ -27,6 +27,7 @@ import { preparePlaybackChart, resolvePlayChart, type PreparedPlaybackChartData 
 import {
   isPlayableInputChannel,
   randomizeSRandomNotes,
+  randomizeLR2ConvergeNotes,
   randomizeHRandomNotes,
   randomizeSpiralNotes,
   resolveLaneOptionChannels,
@@ -98,6 +99,8 @@ export interface PlayChartContext {
       | 'coverStart'
       | 'replay'
       | 'dpFlip'
+      | 'randomFixedLane1P'
+      | 'randomFixedLane2P'
       | 'hRandomThresholdBPM'
       | 'random1P'
       | 'random2P'
@@ -229,6 +232,12 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // re-running its own heuristic. Classify the RESOLVED chart: lanes that only a chosen `#RANDOM` / `#SWITCH`
   // branch adds are not in `song.chart.events`, and missing them would lay out (and judge) a 7 KEY play as 5 KEY.
   const hostPlayVariant = resolveLibraryChartPlayVariant(chartEntry, resolved);
+  if (
+    ctx.options.replay === undefined &&
+    (ctx.options.random1P === 'CONVERGE' || ctx.options.random2P === 'CONVERGE') &&
+    !['5', '7', '9', '10', '14'].includes(hostPlayVariant)
+  )
+    throw new RangeError('LR2 CONVERGE supports 5/7/9/10/14 KEY charts.');
   const resolvedPlay = resolveChart(resolved, {
     randomDraws,
     playVariant: hostPlayVariant,
@@ -285,7 +294,12 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       resolveLaneOptionChannels('1P', hostPlayVariant, prepared.laneBindings),
       ctx.options.random1P ?? 'OFF',
       Math.random,
-      { ruleset: ctx.options.judgeRuleset ?? 'lr2', hRandomThresholdBPM: ctx.options.hRandomThresholdBPM },
+      {
+        ruleset: ctx.options.judgeRuleset ?? 'lr2',
+        hRandomThresholdBPM: ctx.options.hRandomThresholdBPM,
+        fixedLane: ctx.options.randomFixedLane1P,
+        scratch: hostPlayVariant === '9' ? undefined : '16',
+      },
       ctx.mineNotes as Array<{ channel: string }>,
       ctx.invisibleNotes as Array<{ channel: string }>,
     );
@@ -294,7 +308,12 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       resolveLaneOptionChannels('2P', hostPlayVariant, prepared.laneBindings),
       ctx.options.random2P ?? 'OFF',
       Math.random,
-      { ruleset: ctx.options.judgeRuleset ?? 'lr2', hRandomThresholdBPM: ctx.options.hRandomThresholdBPM },
+      {
+        ruleset: ctx.options.judgeRuleset ?? 'lr2',
+        hRandomThresholdBPM: ctx.options.hRandomThresholdBPM,
+        fixedLane: ctx.options.randomFixedLane2P,
+        scratch: hostPlayVariant === '9' ? undefined : '26',
+      },
       ctx.mineNotes as Array<{ channel: string }>,
       ctx.invisibleNotes as Array<{ channel: string }>,
     );
@@ -558,9 +577,9 @@ export function flipDPChannel(channel: string): string {
 export function applyRandomMode(
   notes: Array<{ channel: string }>,
   allLanes: readonly string[],
-  mode: 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SPIRAL' | 'H-RANDOM' | 'SCATTER',
+  mode: RandomMode,
   rng: () => number,
-  options: { ruleset?: RulesetId; hRandomThresholdBPM?: number } = {},
+  options: { ruleset?: RulesetId; hRandomThresholdBPM?: number; fixedLane?: number; scratch?: string } = {},
   // Extra channel-bearing arrays: mines first, then invisible notes. Chart permutations share the same lane map;
   // S-RANDOM applies the active ruleset's policy for each event kind.
   ...secondary: Array<Array<{ channel: string }>>
@@ -571,8 +590,10 @@ export function applyRandomMode(
     throw new RangeError('R-RANDOM is unavailable for LR2.');
   if ((mode === 'SPIRAL' || mode === 'H-RANDOM') && options.ruleset !== 'beatoraja')
     throw new RangeError(`${mode} is available only for beatoraja.`);
-  if (mode === 'OFF') return;
-  if (mode === 'S-RANDOM' || mode === 'SPIRAL' || mode === 'H-RANDOM') {
+  if (mode === 'CONVERGE' && (options.ruleset ?? 'lr2') !== 'lr2')
+    throw new RangeError('CONVERGE is available only for LR2.');
+  if (mode === 'OFF' || allLanes.length === 0) return;
+  if (mode === 'S-RANDOM' || mode === 'SPIRAL' || mode === 'H-RANDOM' || mode === 'CONVERGE') {
     const entries = [
       ...notes.map((note) => ({ note, kind: 'note' as const })),
       ...secondary.flatMap((arr, index) =>
@@ -597,11 +618,17 @@ export function applyRandomMode(
       };
     });
     const channels =
-      mode === 'SPIRAL'
-        ? randomizeSpiralNotes(timedNotes, allLanes, rng)
-        : mode === 'H-RANDOM'
-          ? randomizeHRandomNotes(timedNotes, allLanes, { random: rng, thresholdBPM: options.hRandomThresholdBPM })
-          : randomizeSRandomNotes(timedNotes, allLanes, { ruleset: options.ruleset ?? 'lr2', random: rng });
+      mode === 'CONVERGE'
+        ? randomizeLR2ConvergeNotes(timedNotes, allLanes, {
+            target: allLanes[(options.fixedLane ?? 0) - 1] ?? options.scratch ?? allLanes[4]!,
+            scratch: options.scratch,
+            random: rng,
+          })
+        : mode === 'SPIRAL'
+          ? randomizeSpiralNotes(timedNotes, allLanes, rng)
+          : mode === 'H-RANDOM'
+            ? randomizeHRandomNotes(timedNotes, allLanes, { random: rng, thresholdBPM: options.hRandomThresholdBPM })
+            : randomizeSRandomNotes(timedNotes, allLanes, { ruleset: options.ruleset ?? 'lr2', random: rng });
     entries.forEach(({ note }, index) => {
       note.channel = channels[index]!;
     });

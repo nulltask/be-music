@@ -29,6 +29,7 @@ export type CourseLaneOption =
   | 'S-RANDOM'
   | 'SPIRAL'
   | 'H-RANDOM'
+  | 'CONVERGE'
   | 'SCATTER';
 
 /** The lane options of a play: each side's lane option and DP FLIP. */

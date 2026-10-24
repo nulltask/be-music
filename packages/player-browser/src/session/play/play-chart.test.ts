@@ -364,3 +364,26 @@ test('H-RANDOM applies its configured source threshold and rejects other ruleset
   expect(channelsOf(fast)).toEqual(['11', '11']);
   expect(() => applyRandomMode([], [], 'H-RANDOM', () => 0, { ruleset: '____' })).toThrow(/only for beatoraja/);
 });
+
+test.each(['1P', '2P'] as const)('LR2 CONVERGE selects the %s scratch or explicit key', (side) => {
+  const keys = resolveLaneOptionChannels(side, '14');
+  const scratch = side === '1P' ? '16' : '26';
+  const notes = [
+    { channel: keys[0]!, seconds: 0, endSeconds: 1 },
+    { channel: keys[1]!, seconds: 2 },
+  ];
+  applyRandomMode(notes, keys, 'CONVERGE', () => 0, { scratch, ruleset: 'lr2' });
+  expect(channelsOf(notes)).toEqual([scratch, scratch]);
+  const explicit = [{ channel: keys[0]!, seconds: 0 }];
+  applyRandomMode(explicit, keys, 'CONVERGE', () => 0, { scratch, fixedLane: 4 });
+  expect(channelsOf(explicit)).toEqual([keys[3]]);
+});
+
+test('LR2 PMS CONVERGE defaults to key 5 and a missing side is a no-op', () => {
+  const keys = resolveLaneOptionChannels('1P', '9');
+  const notes = [{ channel: keys[0]!, seconds: 0 }];
+  applyRandomMode(notes, keys, 'CONVERGE', () => 0);
+  expect(channelsOf(notes)).toEqual([keys[4]]);
+  applyRandomMode(notes, [], 'CONVERGE', () => 0);
+  expect(channelsOf(notes)).toEqual([keys[4]]);
+});
