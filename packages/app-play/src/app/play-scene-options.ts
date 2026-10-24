@@ -141,6 +141,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     constantFadeMs: playOptions.constantFadeMs,
     judgeTimingMs: playOptions.judgeTimingMs,
     normalHiSpeedLevel: playOptions.normalHiSpeedLevel,
+    floatingHiSpeed: playOptions.floatingHiSpeed,
     hRandomThresholdBPM: playOptions.hRandomThresholdBPM,
     randomSeed1P: playOptions.randomSeed1P,
     randomSeed2P: playOptions.randomSeed2P,

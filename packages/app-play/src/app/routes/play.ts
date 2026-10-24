@@ -1,3 +1,4 @@
+import { clampFloatingHiSpeed } from '@be-music/player-scene-model';
 // The play route: the play screen (`createPlayScene`), whichever family draws it. A chart plays at once (no decide
 // screen, a retry, F5, a course stage, a NONSTOP run or a replay): the select screen goes off the stage, kept, the play
 // takes it and loads there, then starts. The decide route (`decide.ts`) has the play made here and loads it behind its
@@ -281,7 +282,10 @@ export class PlayRoute {
     };
     const callbacks = {
       // In-play hi-speed changes come back to be remembered for the next play.
-      onHiSpeedChange: (hiSpeed: number, normalLevel?: number) => {
+      onHiSpeedChange: (hiSpeed: number, normalLevel?: number, floating?: boolean) => {
+        if (floating !== undefined) {
+          this.setPlayOptions({ floatingHiSpeed: floating });
+        }
         if (normalLevel !== undefined) {
           this.guiState.normalHiSpeedLevel = normalLevel;
           this.setPlayOptions({ normalHiSpeedLevel: normalLevel });
@@ -529,7 +533,13 @@ export class PlayRoute {
    * change) the running play.
    */
   public rememberHiSpeed(value: number, source: 'menu' | 'select' | 'play'): void {
-    const hiSpeed = snapHiSpeed(value);
+    const hiSpeed = this.playOptions.current.floatingHiSpeed
+      ? clampFloatingHiSpeed(value)
+      : this.playOptions.current.classicHiSpeed || this.playOptions.current.normalHiSpeedLevel > 0
+        ? Number.isFinite(value) && value > 0
+          ? value
+          : undefined
+        : snapHiSpeed(value);
     if (hiSpeed === undefined) return;
     this.guiState.hiSpeed = hiSpeed;
     storeHiSpeed(hiSpeed);

@@ -18,10 +18,9 @@ import { drainSharedEngineSignals } from './play-engine.ts';
 import { handleTouchLaneIntent } from './play-input.ts';
 import type { PlaySession } from './play-session.ts';
 import { canSeekPlay } from './play-seek.ts';
-import { applyPlayEvent } from './play-state.ts';
 import type { PlayMoment } from './play-session-theme.ts';
 import { playViewEventFromMoment } from './play-view-events.ts';
-import { updateReplayView } from './play-view-settings.ts';
+import { changePlayView, updateReplayView } from './play-view-settings.ts';
 
 /**
  * What a play's frames carry besides the play itself: the chart picked, its course stage and the play options; and the
@@ -95,12 +94,9 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
   public dispatch(intent: PlayIntent): void {
     const play = this.play;
     switch (intent.type) {
-      case 'hi-speed': {
-        const previous = applyPlayEvent(play, intent.command);
-        const player = play.playState.view.hiSpeed.player;
-        if (player !== previous.view.hiSpeed.player) play.options.onHiSpeedChange?.(player);
+      case 'hi-speed':
+        changePlayView(play, intent.command);
         return;
-      }
       case 'constant-visibility': {
         const value = resolveConstantVisibility({
           durationMs: intent.durationMs ?? play.options.noteDurationMs,
@@ -111,7 +107,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
         return;
       }
       case 'cover':
-        applyPlayEvent(play, intent.command);
+        changePlayView(play, intent.command);
         return;
       case 'pause':
         play.requestTogglePause();
@@ -152,6 +148,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       const liveOptions: PlayOptions = {
         ...playOptions,
         hiSpeed: play.playState.view.hiSpeed.player,
+        floatingHiSpeed: play.playState.view.hiSpeed.floating !== undefined,
         judgeTimingMs: play.options.judgeTimingMs ?? playOptions.judgeTimingMs,
         noteDurationMs: play.options.noteDurationMs ?? playOptions.noteDurationMs,
         constantFadeMs: play.options.constantFadeMs ?? playOptions.constantFadeMs,

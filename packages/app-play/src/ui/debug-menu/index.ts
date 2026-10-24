@@ -189,6 +189,8 @@ export class DebugMenu {
   public hiSpeedController: PaneBinding | undefined;
   public judgeTimingController: PaneBinding | undefined;
   public hsFixController: PaneBinding | undefined;
+  public floatingHiSpeedController: PaneBinding | undefined;
+  public floatingSpeedController: PaneBinding | undefined;
   public classicHiSpeedController: PaneBinding | undefined;
   public normalHiSpeedController: PaneBinding | undefined;
   public normalHiSpeedLevelController: PaneBinding | undefined;
@@ -373,6 +375,9 @@ export class DebugMenu {
 
   public refreshHiSpeed(): void {
     this.hiSpeedController?.refresh();
+    this.floatingSpeedController?.refresh();
+    this.floatingHiSpeedController?.refresh();
+    this.refreshRulesetChoices();
     this.classicSpeedController?.refresh();
     this.normalHiSpeedLevelController?.refresh();
   }
@@ -412,17 +417,24 @@ export class DebugMenu {
       this.guiState.normalHiSpeedLevel = 0;
       this.setPlayOptions({ normalHiSpeedLevel: 0 });
     }
+    if (!ac && this.guiState.floatingHiSpeed) {
+      this.guiState.floatingHiSpeed = false;
+      this.setPlayOptions({ floatingHiSpeed: false });
+    }
+    const floating = this.guiState.floatingHiSpeed;
+    if (this.floatingHiSpeedController) this.floatingHiSpeedController.hidden = !ac;
+    if (this.floatingSpeedController) this.floatingSpeedController.hidden = !floating;
     const normal = this.guiState.normalHiSpeedLevel > 0;
     if (this.normalHiSpeedController) this.normalHiSpeedController.hidden = !ac;
-    if (this.normalHiSpeedLevelController) this.normalHiSpeedLevelController.hidden = !normal;
+    if (this.normalHiSpeedLevelController) this.normalHiSpeedLevelController.hidden = !normal || floating;
     if (!ac && this.guiState.classicHiSpeed) {
       this.guiState.classicHiSpeed = false;
       this.setPlayOptions({ classicHiSpeed: false });
     }
     if (this.classicHiSpeedController) this.classicHiSpeedController.hidden = !ac;
-    if (this.hiSpeedController) this.hiSpeedController.hidden = this.guiState.classicHiSpeed || normal;
-    if (this.hsFixController) this.hsFixController.hidden = this.guiState.classicHiSpeed || normal;
-    if (this.classicSpeedController) this.classicSpeedController.hidden = !this.guiState.classicHiSpeed;
+    if (this.hiSpeedController) this.hiSpeedController.hidden = this.guiState.classicHiSpeed || normal || floating;
+    if (this.hsFixController) this.hsFixController.hidden = this.guiState.classicHiSpeed || normal || floating;
+    if (this.classicSpeedController) this.classicSpeedController.hidden = !this.guiState.classicHiSpeed || floating;
     const beatoraja = this.guiState.judgeRuleset === 'beatoraja';
     for (const controller of this.randomSeedControllers) controller.hidden = !beatoraja;
     for (const side of ['1P', '2P'] as const) {

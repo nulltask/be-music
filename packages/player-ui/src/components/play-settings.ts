@@ -11,6 +11,16 @@ export class BeMusicPlaySettingsElement extends DataElement<BeMusicSettingsData>
     return html`<section class="card" part="panel">
         <h3>Speed &amp; lanes</h3>
         ${stats([
+          [
+            'Speed mode',
+            view.hiSpeed.floating
+              ? 'FLOATING (AC 32 measured)'
+              : view.hiSpeed.classic
+                ? 'CLASSIC'
+                : view.hiSpeed.normalLevel !== undefined
+                  ? 'NORMAL'
+                  : '—',
+          ],
           ['Hi-speed', view.hiSpeed.player.toFixed(2)],
           ['Drawn speed', view.hiSpeed.drawn.toFixed(2)],
           ['HS-FIX', view.hsFix ?? o.hsFix],

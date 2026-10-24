@@ -126,6 +126,7 @@ export class PlaySession extends PlaySessionState {
         hiSpeed: createHiSpeedState({
           ...(options.initialHiSpeed !== undefined ? { hiSpeed: options.initialHiSpeed } : {}),
           classic: options.classicHiSpeed,
+          floating: options.floatingHiSpeed,
           normalLevel: options.classicHiSpeed ? undefined : options.normalHiSpeedLevel,
           locked: options.hiSpeedLocked === true,
         }),

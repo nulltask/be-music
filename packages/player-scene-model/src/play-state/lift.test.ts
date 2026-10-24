@@ -22,3 +22,12 @@ test('bounds LIFT and keeps sides independent, including a fully closed lane', (
   expect(resolveLiftedLane({ top: 10, bottom: 410 }, 0.1).bottom).toBe(370);
   expect(resolveLiftedLane({ top: 10, bottom: 410 }, 0.3).bottom).toBe(290);
 });
+
+test('AC LIFT raises the line while retaining the original scroll scale', () => {
+  expect(resolveLiftedLane({ top: 0, bottom: 723 }, 100 / 723, false)).toEqual({
+    top: 0,
+    bottom: 623,
+    baseBottom: 723,
+    scrollScale: 1,
+  });
+});

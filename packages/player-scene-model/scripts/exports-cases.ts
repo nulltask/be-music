@@ -257,6 +257,7 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
   define('player-scene-model.resolveLiftedLane', {
     run: () => {
       sceneModelAPI.resolveLiftedLane({ top: 0, bottom: 480 }, 0.2);
+      sceneModelAPI.resolveLiftedLane({ top: 0, bottom: 723 }, 100 / 723, false);
     },
   });
   define('player-scene-model.resolveConstantVisibility', {
@@ -277,6 +278,44 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
   define('player-scene-model.resolveNoteDisplaySeconds', {
     run: () => {
       sceneModelAPI.resolveNoteDisplaySeconds(2, 125);
+    },
+  });
+  define('player-scene-model.normalizeFloatingLaneCover', {
+    run() {
+      sceneModelAPI.normalizeFloatingLaneCover({
+        side: '1P',
+        sudden: 0.25,
+        suddenOn: true,
+        hidden: 0,
+        hiddenOn: false,
+        lift: 0.1,
+        liftOn: true,
+      });
+    },
+  });
+  define('player-scene-model.clampFloatingHiSpeed', {
+    run() {
+      sceneModelAPI.clampFloatingHiSpeed(2.1);
+    },
+  });
+  define('player-scene-model.captureFloatingHiSpeed', {
+    run() {
+      sceneModelAPI.captureFloatingHiSpeed(2, 120, 0.75);
+    },
+  });
+  define('player-scene-model.resolveFloatingHiSpeed', {
+    run() {
+      sceneModelAPI.resolveFloatingHiSpeed({ hiSpeed: 2, bpm: 120, visibleFraction: 0.75 }, 240, 0.5);
+    },
+  });
+  define('player-scene-model.stepFloatingHiSpeed', {
+    run() {
+      sceneModelAPI.stepFloatingHiSpeed(2, 1, true);
+    },
+  });
+  define('player-scene-model.resolveFloatingHiSpeedExit', {
+    run() {
+      sceneModelAPI.resolveFloatingHiSpeedExit(2.875, 120, true);
     },
   });
   define('player-scene-model.resolveNormalHiSpeed', {
