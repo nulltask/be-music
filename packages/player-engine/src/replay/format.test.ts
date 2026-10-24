@@ -550,3 +550,15 @@ test.each(['NONE', 'CONTINUE'] as const)(
     ).toThrow(ReplayParseError);
   },
 );
+
+test('replay original lanes round-trip and reject malformed source identifiers', () => {
+  const replay = makeReplay();
+  replay.chart.notes[0]!.sourceChannel = '11';
+  expect(parseReplay(serializeReplay(replay)).chart.notes[0]!.sourceChannel).toBe('11');
+  for (const sourceChannel of ['D1', '1a', '111', 11, null])
+    expect(() =>
+      parseReplay(
+        JSON.stringify({ ...replay, chart: { ...replay.chart, notes: [{ ...replay.chart.notes[0], sourceChannel }] } }),
+      ),
+    ).toThrow(ReplayParseError);
+});

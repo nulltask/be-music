@@ -8,6 +8,7 @@ export type MineModifier = 'OFF' | 'REMOVE' | 'ADD_RANDOM' | 'ADD_NEAR' | 'ADD_B
 /** Effective mine placements from a replay; random generation is bypassed when these are supplied. */
 export interface MinePlacement {
   channel: string;
+  sourceChannel?: string;
   timeUs: number;
   damage?: number;
   silent?: boolean;
@@ -47,10 +48,21 @@ export function prepareMineModifier(
     const mines = options.placements.map((placement) => {
       const row = rows.get(placement.timeUs);
       if (!row) throw new RangeError('Recorded mine is not on a source timeline.');
-      if (!/^[12][0-9A-Z]$/.test(placement.channel)) throw new RangeError('Invalid recorded mine lane.');
+      if (
+        !/^[12][0-9A-Z]$/.test(placement.channel) ||
+        (placement.sourceChannel !== undefined && !/^[12][0-9A-Z]$/.test(placement.sourceChannel))
+      )
+        throw new RangeError('Invalid recorded mine lane.');
       const damage = placement.damage ?? 4;
       if (!Number.isFinite(damage) || damage < 0) throw new RangeError('Invalid recorded mine damage.');
-      return makeMine(row, placement.channel, placement.timeUs / 1e6, damage, placement.silent === true);
+      return makeMine(
+        row,
+        placement.channel,
+        placement.timeUs / 1e6,
+        damage,
+        placement.silent === true,
+        placement.sourceChannel,
+      );
     });
     return { mines, changes: Math.max(0, mines.length - original.length) };
   }
@@ -165,7 +177,14 @@ function eventAtBeat(resolved: ResolvedChart, beat: number, maxMeasure: number):
   return { measure, position: [Math.round((beat - start) * resolution), Math.round(length * resolution)] };
 }
 
-function makeMine(row: Timeline, channel: string, seconds: number, damage: number, silent: boolean): TimedLandmineNote {
+function makeMine(
+  row: Timeline,
+  channel: string,
+  seconds: number,
+  damage: number,
+  silent: boolean,
+  sourceChannel = channel,
+): TimedLandmineNote {
   return {
     channel,
     beat: row.beat,
@@ -176,7 +195,7 @@ function makeMine(row: Timeline, channel: string, seconds: number, damage: numbe
     event: {
       measure: row.event.measure,
       position: [...row.event.position],
-      channel: `${channel[0] === '1' ? 'D' : 'E'}${channel[1]}`,
+      channel: `${sourceChannel[0] === '1' ? 'D' : 'E'}${sourceChannel[1]}`,
       value: '0A',
       bmson: { damage },
     },

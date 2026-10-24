@@ -15,3 +15,5 @@ export * from './view.ts';
 export { resolveChartRulesetFacts, resolvePlayChart } from '../core/play-chart.ts';
 
 export * from './options.ts';
+
+export * from './source-channel.ts';

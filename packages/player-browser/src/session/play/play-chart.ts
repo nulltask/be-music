@@ -316,6 +316,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
               .filter((note) => note.type === 'mine')
               .map((note) => ({
                 channel: note.channel,
+                sourceChannel: note.sourceChannel,
                 timeUs: note.timeUs,
                 damage: note.damage,
                 silent: note.silent,

@@ -67,6 +67,8 @@ export interface ReplayNote {
   id: number;
   /** Normalized playable channel AFTER every lane transform (`11`..`19` / `21`..`29`), i.e. the lane the player saw. */
   channel: string;
+  /** Original lane when rearranged; omitted when it is the same as channel or in older replays. */
+  sourceChannel?: string;
   type: ReplayNoteType;
   timeUs: number;
   /** Long-note / freezone tail. Present only when `type` is `'long'` or `'freezone'`. */
@@ -540,6 +542,11 @@ function parseNote(value: unknown, index: number): ReplayNote {
     type: type as ReplayNoteType,
     timeUs: expectFiniteNumber(record.timeUs, `chart.notes[${index}].timeUs`),
   };
+  if (record.sourceChannel !== undefined) {
+    if (typeof record.sourceChannel !== 'string' || !/^[12][0-9A-Z]$/.test(record.sourceChannel))
+      throw new ReplayParseError(`chart.notes[${index}].sourceChannel: expected a normalized playable lane`);
+    note.sourceChannel = record.sourceChannel;
+  }
   const endTimeUs = optionalFiniteNumber(record.endTimeUs, `chart.notes[${index}].endTimeUs`);
   if (endTimeUs !== undefined) note.endTimeUs = endTimeUs;
   if (record.lnMode !== undefined) {
