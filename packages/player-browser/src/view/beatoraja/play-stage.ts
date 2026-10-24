@@ -1,3 +1,4 @@
+import { resolveNoteDisplaySeconds } from '@be-music/player-scene-model';
 /**
  * One beatoraja play skin on the stage: the skin's elements (`BeatorajaPlaySkinView`) with the play's layers spliced in
  * where the skin authored them — the lane markers under the notes at the skin's note anchor, and the BGA at its `bga`
@@ -44,6 +45,7 @@ export interface BeatorajaPlayChartLayout {
   readonly reversal: TempoReversalPoint | undefined;
   readonly markers: BeatorajaMarkerBeats;
   readonly guideEvents?: readonly BPMGuideEvent[];
+  readonly beatAtSeconds?: ((seconds: number) => number) | undefined;
   readonly autoPlay: boolean;
 }
 
@@ -203,6 +205,7 @@ export class BeatorajaPlayStage {
       started?: boolean;
       showInvisibleNotes?: boolean;
       bpmGuide?: boolean;
+      judgeTimingMs?: number;
     } = {},
   ): void {
     const view = this.stage.view;
@@ -210,8 +213,14 @@ export class BeatorajaPlayStage {
     this.guideLayer.visible = clock !== undefined && playback.bpmGuide === true && playback.started !== false;
     if (clock === undefined) return;
     const activeOps = context.activeOps;
+    const displaySeconds = resolveNoteDisplaySeconds(clock.currentSeconds, playback.judgeTimingMs ?? 0);
+    const noteClock = {
+      ...clock,
+      currentSeconds: displaySeconds,
+      currentBeat: this.layout.beatAtSeconds?.(displaySeconds) ?? clock.currentBeat,
+    };
     this.noteLayer.update(
-      clock,
+      noteClock,
       hiSpeed,
       activeOps,
       (channel) => lanes.isLaneLNHeld(channel),
@@ -222,13 +231,13 @@ export class BeatorajaPlayStage {
     const laneBounds = this.noteLayer.getLaneBounds(activeOps) ?? { topY: 0, bottomY: view.height };
     const laneHeight = Math.max(0, laneBounds.bottomY - laneBounds.topY);
     // Past an LR2 negative-BPM reversal both layers scroll from the mirrored display beat.
-    const currentBeat = beatorajaDisplayScrollBeat(clock);
+    const currentBeat = beatorajaDisplayScrollBeat(noteClock);
     const pixelsPerBeat = beatorajaPixelsPerBeat(laneHeight, hiSpeed);
     const layout = this.layout;
     // On a chart that scrolls, bar lines follow the notes' `LaneRenderer` window as well as their distance.
     const placement = resolveBeatorajaScrollPlacement({
       currentBeat,
-      nowSeconds: clock.currentSeconds,
+      nowSeconds: noteClock.currentSeconds,
       reversal: layout.reversal,
       mapper: layout.scrollMapper,
       laneBeats: pixelsPerBeat > 0 ? laneHeight / pixelsPerBeat : 0,

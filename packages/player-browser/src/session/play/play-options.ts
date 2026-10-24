@@ -102,6 +102,8 @@ export interface PlaySessionOptions {
   hsFix?: HSFix;
   classicHiSpeed?: boolean;
   normalHiSpeedLevel?: number;
+  judgeTimingMs?: number;
+  onJudgeTimingChange?: (judgeTimingMs: number) => void;
   bpmGuide?: boolean;
   /**
    * HIDDEN / SUDDEN / HID+SUD effect picked from `#SRC_BUTTON,type=50/51`:

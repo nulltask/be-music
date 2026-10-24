@@ -173,7 +173,10 @@ export interface PlayfieldContext extends LaneGeometryContext {
     events: import('../../../chart/bpm-guide.ts').BPMGuideEvent[];
   };
   readonly options: Readonly<
-    Pick<PlaySessionOptions, 'beMusicEffects' | 'showInvisibleNotes' | 'judgedNoteDisplay' | 'bpmGuide'>
+    Pick<
+      PlaySessionOptions,
+      'beMusicEffects' | 'showInvisibleNotes' | 'judgedNoteDisplay' | 'bpmGuide' | 'judgeTimingMs'
+    >
   >;
   /** How the family's skin answers the playfield: the stage, the lanes, the note and bomb cells, the effect lengths. */
   readonly playfieldSkin: PlayfieldSkin;

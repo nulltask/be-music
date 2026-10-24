@@ -185,6 +185,7 @@ export class DebugMenu {
   public readonly playOptionControllers: { disabled: boolean; refresh?: () => void }[] = [];
   /** The "Hi-speed" slider — left enabled during a play (it applies live) and repainted by {@link refreshHiSpeed}. */
   public hiSpeedController: PaneBinding | undefined;
+  public judgeTimingController: PaneBinding | undefined;
   public hsFixController: PaneBinding | undefined;
   public classicHiSpeedController: PaneBinding | undefined;
   public normalHiSpeedController: PaneBinding | undefined;
@@ -357,6 +358,10 @@ export class DebugMenu {
     this.statusController?.refresh();
   }
   /** Repaints the "Hi-speed" slider with a hi-speed set elsewhere (the select screen, the play's keys). */
+  public refreshJudgeTiming(): void {
+    this.judgeTimingController?.refresh();
+  }
+
   public refreshHiSpeed(): void {
     this.hiSpeedController?.refresh();
     this.classicSpeedController?.refresh();

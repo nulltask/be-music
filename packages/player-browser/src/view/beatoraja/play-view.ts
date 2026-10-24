@@ -28,7 +28,11 @@ import {
 } from '@be-music/skin-beatoraja';
 import { resolveBeatorajaOptionIndex, withBeatorajaCourseStageOps } from '@be-music/skin-beatoraja/scene';
 import type { BeMusicJSON } from '@be-music/chart-source';
-import { resolveChartLongNoteMode, type ChartPlayVariant } from '@be-music/chart-model';
+import {
+  createBeatAtSecondsResolverFromTimingResolver,
+  resolveChartLongNoteMode,
+  type ChartPlayVariant,
+} from '@be-music/chart-model';
 import type { PlayerGaugeSummary, PlayerUIFrameNote, PlayerUIFramePayload } from '@be-music/player-engine/signals';
 import type { ScoreSummary } from '@be-music/player-engine/ruleset';
 import type { CourseView, HiSpeedTransition, LibraryChart, PlayState } from '@be-music/player-scene-model';
@@ -290,6 +294,9 @@ export class BeatorajaPlayView implements PlayView {
         scrollMapper,
         timelineBeats: laneTimelines?.beats,
         beatToSeconds: laneTimelines?.beatToSeconds ?? play.resolvedPlayChart?.timing?.beatToSeconds,
+        beatAtSeconds: play.resolvedPlayChart?.timing
+          ? createBeatAtSecondsResolverFromTimingResolver(play.resolvedPlayChart.timing)
+          : undefined,
         reversal: play.resolvedPlayChart?.reversal,
         // One-second time ticks when the skin authors `time[]` markers.
         markers: {
@@ -453,6 +460,7 @@ export class BeatorajaPlayView implements PlayView {
     if (this.wasPaused && !paused) stage.resumeBGA();
     this.wasPaused = paused;
     const context = bridge.update({
+      judgeTimingMs: frame.playOptions.judgeTimingMs,
       nowMs: play.playClock(),
       hostNowMs: frame.clock.nowMs,
       state: frame.state,
@@ -481,6 +489,7 @@ export class BeatorajaPlayView implements PlayView {
       started: !play.isIntroPlaying(),
       showInvisibleNotes: this.showInvisibleNotes,
       bpmGuide: frame.playOptions.bpmGuide,
+      judgeTimingMs: frame.playOptions.judgeTimingMs,
     });
     // A failed play's picture fades with its sound; on a normal end the skin draws its own fade-out.
     if (play.exiting && play.playMoments.failedAtMs !== undefined && play.exitFadeStartedAt !== undefined) {

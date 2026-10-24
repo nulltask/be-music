@@ -248,3 +248,23 @@ describe('beatorajaBPMAt', () => {
     ).toBe(150);
   });
 });
+
+it('reports the calibration value and the BPM at the adjusted display time', () => {
+  const numbers = input({
+    judgeTimingMs: 100,
+    clock: { currentSeconds: 1.95, totalSeconds: 4 },
+    chart: {
+      bpm: 120,
+      minBPM: 120,
+      maxBPM: 240,
+      bpmSegments: [
+        { timeMs: 0, bpm: 120 },
+        { timeMs: 2000, bpm: 240 },
+      ],
+    },
+  });
+  expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.JUDGETIMING, numbers)).toBe(100);
+  expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.NOWBPM, numbers)).toBe(240);
+  expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.NOWBPM, { ...numbers, judgeTimingMs: 0 })).toBe(120);
+  expect(numbers.clock?.currentSeconds).toBe(1.95);
+});

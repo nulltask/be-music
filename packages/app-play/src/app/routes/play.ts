@@ -394,6 +394,12 @@ export class PlayRoute {
         finish: (result) => onChartFinished(result),
         restart: onRestart,
         hiSpeed: onHiSpeedChange,
+        judgeTiming: (value) => {
+          this.guiState.judgeTimingMs = value;
+          this.debugMenu.refreshJudgeTiming?.();
+          this.setPlayOptions({ judgeTimingMs: value });
+          this.debugMenu.scheduleSettingsSave?.();
+        },
         tempo: onTempoChange,
       },
     });
