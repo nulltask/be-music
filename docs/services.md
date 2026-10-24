@@ -108,7 +108,7 @@ sequenceDiagram
   services are first-party clients, so there is no consent screen.
 - **Identity**: services store a user as `(issuer, sub)`. Keeping the issuer leaves room for signing in with another
   instance's accounts later.
-- **Sign-in methods** live in Accounts only: Discord, Google and passkeys, plus guest sessions. Device authorization for the terminal player remains planned.
+- **Sign-in methods** live in Accounts only: Discord, Google and passkeys, plus guest sessions. Device authorization for the terminal player remains planned. A signed-in account can later link a passkey, Discord, and Google from the account page. Linking keeps that account, including when the provider email differs.
 - **Passkeys** are bound to one relying party ID per environment: `be-music.app` in production and
   `preview.be-music.app` in preview. Passkeys are only used on the Accounts host, so this works wherever the other
   services live.
