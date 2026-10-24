@@ -71,7 +71,9 @@ export const RANDOM_CYCLE: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', '
 
 /** Available lane options for the selected reference ruleset; LR2's sprite cycle stays separate. */
 export function resolveRandomModes(ruleset: RulesetId): readonly RandomMode[] {
-  return ruleset === 'lr2' ? RANDOM_CYCLE : ['OFF', 'MIRROR', 'RANDOM', 'R-RANDOM', 'S-RANDOM'];
+  if (ruleset === 'lr2') return RANDOM_CYCLE;
+  const ordinary: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', 'R-RANDOM', 'S-RANDOM'];
+  return ruleset === 'beatoraja' ? [...ordinary, 'SPIRAL'] : ordinary;
 }
 
 /** The play options a player starts with. */

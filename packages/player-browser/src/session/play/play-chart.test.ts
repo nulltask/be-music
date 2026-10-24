@@ -332,3 +332,21 @@ test('R-RANDOM keeps LN ends, both DP sides and recorded arrangements stable', (
   expect(chart.notes[0]!.channel).toMatch(/^1/);
   expect(chart.notes[1]!.channel).toMatch(/^2/);
 });
+
+test('SPIRAL applies one row permutation to notes, mines and hidden notes, leaving scratch fixed', () => {
+  const notes = [
+    { channel: '11', seconds: 0, endSeconds: 1 },
+    { channel: '12', seconds: 0.5 },
+    { channel: '12', seconds: 1 },
+    { channel: '12', seconds: 2 },
+    { channel: '16', seconds: 0 },
+  ];
+  const mines = [{ channel: '12', seconds: 0.5 }];
+  const hidden = [{ channel: '13', seconds: 0.5 }];
+  applyRandomMode(notes, ['11', '12', '13'], 'SPIRAL', () => 0, { ruleset: 'beatoraja' }, mines, hidden);
+  expect(channelsOf(notes)).toEqual(['12', '13', '13', '11', '16']);
+  expect(channelsOf(mines)).toEqual(['13']);
+  expect(channelsOf(hidden)).toEqual(['11']);
+  expect(notes[0]!.endSeconds).toBe(1);
+  expect(() => applyRandomMode([], [], 'SPIRAL', () => 0, { ruleset: '____' })).toThrow(/only for beatoraja/);
+});

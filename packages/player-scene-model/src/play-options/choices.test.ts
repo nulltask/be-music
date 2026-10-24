@@ -155,10 +155,16 @@ test('offers the three confirmed beatoraja launcher algorithms only', () => {
 test('R-RANDOM is a source choice without changing LR2 button indices', () => {
   expect(RANDOM_CYCLE).toEqual(['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM']);
   expect(resolveRandomModes('lr2')).not.toContain('R-RANDOM');
-  for (const source of ['beatoraja', '____'] as const)
-    expect(resolveRandomModes(source)).toEqual(['OFF', 'MIRROR', 'RANDOM', 'R-RANDOM', 'S-RANDOM']);
+  for (const source of ['beatoraja', '____'] as const) expect(resolveRandomModes(source)).toContain('R-RANDOM');
   expect(resolvePlayOptions({ random1P: 'R-RANDOM', random2P: 'R-RANDOM' })).toMatchObject({
     random1P: 'R-RANDOM',
     random2P: 'R-RANDOM',
   });
+});
+
+test('SPIRAL is a beatoraja choice only', () => {
+  expect(resolveRandomModes('beatoraja')).toContain('SPIRAL');
+  expect(resolveRandomModes('____')).not.toContain('SPIRAL');
+  expect(resolveRandomModes('lr2')).not.toContain('SPIRAL');
+  expect(resolvePlayOptionValue('random1P', 'SPIRAL')).toBe('SPIRAL');
 });
