@@ -69,6 +69,19 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       })
       .on('change', ({ value }) => this.setPlayOptions({ hRandomThresholdBPM: value })),
   );
+  for (const side of ['1P', '2P'] as const) {
+    const key = `randomFixedLane${side}` as const;
+    trackPlayOption(
+      folder
+        .addBinding(this.guiState, key, {
+          label: `CONVERGE target ${side} (0=default)`,
+          min: 0,
+          max: 9,
+          step: 1,
+        })
+        .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
+    );
+  }
   this.refreshRulesetChoices();
   trackPlayOption(
     folder.addBinding(this.guiState, 'dpFlip', { label: 'DP flip' }).on('change', ({ value }) => {

@@ -3,7 +3,7 @@
  * draws it. `createPlayScene` takes them as its `settings`, `course`, `replay`, `preResolved`, `audio` and `on`.
  */
 
-import type { CourseView, PlayResult, HSFix } from '@be-music/player-scene-model';
+import type { CourseView, PlayResult, HSFix, RandomMode } from '@be-music/player-scene-model';
 import type { GameplayLayoutMode } from '@be-music/player-skin-sdk';
 import type { NonstopStitchMap } from '@be-music/player-engine/course';
 import type {
@@ -167,9 +167,11 @@ export interface PlaySessionOptions {
    * fresh permutation. SCATTER is a legacy value; new requests are rejected until it is fully implemented.
    */
   hRandomThresholdBPM?: number;
-  random1P?: 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SPIRAL' | 'H-RANDOM' | 'SCATTER';
+  randomFixedLane1P?: number;
+  randomFixedLane2P?: number;
+  random1P?: RandomMode;
   /** 2P side note arrangement (`#SRC_BUTTON,type=43`). */
-  random2P?: 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SPIRAL' | 'H-RANDOM' | 'SCATTER';
+  random2P?: RandomMode;
   /**
    * Replay playback: a recorded replay to re-drive instead of live keyboard input. The chart prepare skips the
    * usual DP-flip / lane-shuffle passes and re-applies the RECORDED arrangement (`applyReplayArrangement`), the

@@ -195,9 +195,11 @@ export interface PlayerGUIState extends PlayTempoSettings {
   gauge: GaugeType;
   /** 1P lane arrangement for the next play. Two-way synced with the LR2 select panel. */
   hRandomThresholdBPM: number;
-  random1P: 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SPIRAL' | 'H-RANDOM' | 'SCATTER';
+  randomFixedLane1P: number;
+  randomFixedLane2P: number;
+  random1P: PlayOptions['random1P'];
   /** 2P lane arrangement for the next play. Two-way synced with the LR2 select panel. */
-  random2P: 'OFF' | 'MIRROR' | 'RANDOM' | 'R-RANDOM' | 'S-RANDOM' | 'SPIRAL' | 'H-RANDOM' | 'SCATTER';
+  random2P: PlayOptions['random1P'];
   /** DP FLIP for the next play. Two-way synced with the LR2 select panel. */
   dpFlip: boolean;
   /** 1P auto scratch for the next play. Two-way synced with the LR2 select panel. */

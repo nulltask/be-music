@@ -72,7 +72,7 @@ export const RANDOM_CYCLE: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', '
 
 /** Available lane options for the selected reference ruleset; LR2's sprite cycle stays separate. */
 export function resolveRandomModes(ruleset: RulesetId): readonly RandomMode[] {
-  if (ruleset === 'lr2') return RANDOM_CYCLE;
+  if (ruleset === 'lr2') return [...RANDOM_CYCLE, 'CONVERGE'];
   const ordinary: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', 'R-RANDOM', 'S-RANDOM'];
   return ruleset === 'beatoraja' ? [...ordinary, 'SPIRAL', 'H-RANDOM'] : ordinary;
 }
@@ -116,6 +116,8 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   dpFlip: false,
   random1P: 'OFF',
   hRandomThresholdBPM: 120,
+  randomFixedLane1P: 0,
+  randomFixedLane2P: 0,
   random2P: 'OFF',
   gauge1P: 'GROOVE',
   gauge2P: 'GROOVE',
@@ -148,8 +150,8 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   autoScratch1P: BOOLEAN_CYCLE,
   autoScratch2P: BOOLEAN_CYCLE,
   dpFlip: BOOLEAN_CYCLE,
-  random1P: resolveRandomModes('beatoraja'),
-  random2P: resolveRandomModes('beatoraja'),
+  random1P: [...resolveRandomModes('beatoraja'), 'CONVERGE'],
+  random2P: [...resolveRandomModes('beatoraja'), 'CONVERGE'],
   gauge1P: LR2_GAUGE_TYPES,
   gauge2P: LR2_GAUGE_TYPES,
 };
@@ -175,6 +177,8 @@ export function clampShutter(value: number): number {
 /** Numeric play options, each with the clamp applied to a value set for it. */
 const NUMERIC_PLAY_OPTION_CLAMPS: { readonly [K in keyof PlayOptions]?: (value: number) => number } = {
   hRandomThresholdBPM: clampHRandomThresholdBPM,
+  randomFixedLane1P: (value) => (Number.isFinite(value) ? Math.max(0, Math.min(9, Math.trunc(value))) : 0),
+  randomFixedLane2P: (value) => (Number.isFinite(value) ? Math.max(0, Math.min(9, Math.trunc(value))) : 0),
   hiSpeed: clampHiSpeed,
   judgeTimingMs: clampJudgeTimingMs,
   noteDurationMs: (value) => resolveConstantVisibility({ durationMs: value }).durationMs,

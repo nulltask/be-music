@@ -232,3 +232,17 @@ test('records the effective H-RANDOM threshold alongside the arrangement selecti
   const recording = resolveReplayRecording({ random1P: 'H-RANDOM', hRandomThresholdBPM: 1200 }, undefined, VIEW);
   expect(recording.options).toMatchObject({ random1P: 'H-RANDOM', hRandomThresholdBPM: 1000 });
 });
+
+test('records LR2 CONVERGE with independent fixed-lane targets', () => {
+  const recording = resolveReplayRecording(
+    { random1P: 'CONVERGE', random2P: 'CONVERGE', randomFixedLane1P: 4, randomFixedLane2P: 0 },
+    undefined,
+    VIEW,
+  );
+  expect(recording.options).toMatchObject({
+    random1P: 'CONVERGE',
+    random2P: 'CONVERGE',
+    randomFixedLane1P: 4,
+    randomFixedLane2P: 0,
+  });
+});

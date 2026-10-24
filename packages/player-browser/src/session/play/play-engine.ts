@@ -97,6 +97,8 @@ export interface PlayEngineContext
       | 'onExit'
       | 'onRestart'
       | 'replayRecorder'
+      | 'randomFixedLane1P'
+      | 'randomFixedLane2P'
       | 'hRandomThresholdBPM'
       | 'random1P'
       | 'random2P'
@@ -398,6 +400,8 @@ export function resolveReplayRecording(
     | 'chartSHA256'
     | 'chartMD5'
     | 'replayRecorder'
+    | 'randomFixedLane1P'
+    | 'randomFixedLane2P'
     | 'hRandomThresholdBPM'
     | 'random1P'
     | 'random2P'
@@ -459,6 +463,8 @@ export function resolveReplayRecording(
     laneCover: options.laneCover,
     gauge1P: options.gauge,
     random1P: options.random1P,
+    randomFixedLane1P: options.randomFixedLane1P,
+    randomFixedLane2P: options.randomFixedLane2P,
     hRandomThresholdBPM:
       options.hRandomThresholdBPM === undefined ? undefined : clampHRandomThresholdBPM(options.hRandomThresholdBPM),
     random2P: options.random2P,
