@@ -196,7 +196,7 @@ export function preparePlaybackChart(
   const notes = resolved.notes.map(toTimedPlayableNote);
   const longMode = options.longNoteModifier ?? 'OFF';
   const longChanges =
-    longMode === 'ADD_LN' || longMode === 'ADD_CN'
+    longMode === 'ADD_LN' || longMode === 'ADD_CN' || longMode === 'ADD_HCN'
       ? addLongNotes(resolved, notes, longMode, {
           rate: options.longNoteRate,
           random,

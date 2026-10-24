@@ -139,3 +139,11 @@ test('ADD CN adds an explicit charge-note type while preserving authored LN and 
   expect(prepared.notes.find((note) => note.channel === '12')?.generatedLongNote).toBeUndefined();
   expect(prepared.longNoteModifierChangeCount).toBe(1);
 });
+
+test('ADD HCN selects hell-charge behavior independently of the chart CN default', () => {
+  const resolved = chart('#LNMODE 2\n#00011:01\n#00001:0001');
+  const prepared = preparePlaybackChart(resolved, { longNoteModifier: 'ADD_HCN' }, 0, () => 0);
+  expect(prepared.notes[0]).toMatchObject({ longNoteMode: 3, endBeat: 2, endSeconds: 1, generatedLongNote: true });
+  expect(resolved.lnMode).toBe(2);
+  expect(prepared.longNoteModifierChangeCount).toBe(1);
+});
