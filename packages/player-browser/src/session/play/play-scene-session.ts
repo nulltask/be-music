@@ -142,6 +142,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       const liveOptions: PlayOptions = {
         ...playOptions,
         hiSpeed: play.playState.view.hiSpeed.player,
+        judgeTimingMs: play.options.judgeTimingMs ?? playOptions.judgeTimingMs,
         ...(play.playState.view.hiSpeed.normalLevel !== undefined
           ? { normalHiSpeedLevel: play.playState.view.hiSpeed.normalLevel }
           : {}),

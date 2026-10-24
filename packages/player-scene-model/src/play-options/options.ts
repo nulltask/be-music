@@ -18,6 +18,8 @@ export interface PlayOptions {
   classicHiSpeed: boolean;
   /** AC 32 measured normal level 1..20; 0 leaves the existing multiplier API active. */
   normalHiSpeedLevel: number;
+  /** beatoraja display timing in integer milliseconds, -500..500; positive advances note drawing. */
+  judgeTimingMs: number;
   /** beatoraja BPM GUIDE shows BPM-change and STOP markers on the lane. */
   bpmGuide: boolean;
   /**

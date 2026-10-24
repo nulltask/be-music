@@ -63,7 +63,7 @@ const SCROLL_SNAP_THRESHOLD = 0.005;
 const FRAME_MS = 1000 / 60;
 
 /** The JUDGE TIMING button's range (ms), as beatoraja's judge-offset slider. */
-const JUDGE_TIMING_LIMIT_MS = 200;
+const JUDGE_TIMING_LIMIT_MS = 500;
 
 /** What the view's parts read and drive on it. */
 type BeatorajaSelectViewContext = BeatorajaSelectRowsContext &
@@ -432,23 +432,22 @@ export class BeatorajaSelectView implements SelectView {
   }
 
   /**
-   * Steps the skin's judge timing offset (number 12) by 1 ms within ±200 ms, and hands the options to the host to keep.
+   * Steps the skin's judge timing offset (number 12) by 1 ms within ±500 ms, and hands the options to the host to keep.
    * The view draws with them at once.
    */
+  private judgeTimingAsked: { revision: number; value: number } | undefined;
+
   private stepJudgeTiming(step: number): void {
-    const config = this.kit.kit.skinConfig;
-    if (config === undefined) return;
-    const current = typeof config.offset === 'number' && Number.isFinite(config.offset) ? config.offset : 0;
+    const frame = this.frame;
+    if (!frame) return;
+    const current =
+      this.judgeTimingAsked?.revision === frame.revision
+        ? this.judgeTimingAsked.value
+        : frame.playOptions.judgeTimingMs;
     const next = Math.max(-JUDGE_TIMING_LIMIT_MS, Math.min(JUDGE_TIMING_LIMIT_MS, current + step));
     if (next === current) return;
-    const changed: BeatorajaSkinConfig = {
-      ...config,
-      offset: next,
-      option: { ...config.option },
-      file: { ...config.file },
-    };
-    this.kit = { ...this.kit, kit: { ...this.kit.kit, skinConfig: changed } };
-    this.options.onSkinConfigChange?.(changed);
+    this.judgeTimingAsked = { revision: frame.revision, value: next };
+    this.emit?.({ type: 'set-play-option', key: 'judgeTimingMs', value: next });
   }
 
   /** Decodes a chart's own images, over the files of the library drawn. */
@@ -493,7 +492,10 @@ export class BeatorajaSelectView implements SelectView {
         return view.frame?.browse.list ?? { keysFilter: 'ALL' as const, sort: 'OFF' as const };
       },
       get playOptions() {
-        return view.frame?.playOptions;
+        const options = view.frame?.playOptions;
+        return options && view.judgeTimingAsked && view.judgeTimingAsked.revision === view.frame?.revision
+          ? { ...options, judgeTimingMs: view.judgeTimingAsked.value }
+          : options;
       },
       get lnModeOverride(): 0 | 1 | 2 | undefined {
         return view.lnModeOverride;

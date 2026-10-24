@@ -406,6 +406,7 @@ export function resolveReplayRecording(
     | 'hsFix'
     | 'classicHiSpeed'
     | 'normalHiSpeedLevel'
+    | 'judgeTimingMs'
     | 'bpmGuide'
     | 'hiddenSudden1P'
     | 'hiddenSudden2P'
@@ -434,6 +435,7 @@ export function resolveReplayRecording(
       ? { normalHiSpeedProfile: 'AC32-measured' }
       : {}),
     bpmGuide: options.bpmGuide,
+    judgeTimingMs: options.judgeTimingMs,
     hiddenSudden1P: options.hiddenSudden1P,
     hiddenSudden2P: options.hiddenSudden2P,
     shutter: options.shutter,

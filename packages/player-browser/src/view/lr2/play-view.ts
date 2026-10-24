@@ -88,6 +88,7 @@ export function resolveLR2PlayTiming(skin: Pick<LR2Skin, 'timing'>): PlayViewTim
 /** What the LR2 play view draws with besides its kit: the options of the play that change what is drawn. */
 export type LR2PlayViewOptions = Pick<
   PlaySessionOptions,
+  | 'judgeTimingMs'
   | 'bpmGuide'
   | 'bga'
   | 'bgaSize'
@@ -239,6 +240,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
 
   public draw(frame: PlayFrame): void {
     this.play = frame.playfield;
+    this.options.judgeTimingMs = frame.playOptions.judgeTimingMs;
     for (const event of frame.events) this.handleEvent(event);
     this.root.visible = frame.shown;
     if (!frame.shown) this.displayInfo.hide();

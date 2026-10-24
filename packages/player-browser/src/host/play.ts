@@ -52,6 +52,7 @@ export type PlaySceneSettings = Omit<
   | 'onExit'
   | 'onRestart'
   | 'onChartFinished'
+  | 'onJudgeTimingChange'
   | 'onHiSpeedChange'
   | 'onTempoChange'
   | 'replay'
@@ -83,6 +84,7 @@ export interface PlaySceneEvents {
   hiSpeed?(hiSpeed: number, normalLevel?: number): void;
   /** The play's tempo changed (a live change, or a replay following its log). */
   tempo?(tempo: number): void;
+  judgeTiming?(judgeTimingMs: number): void;
 }
 
 export interface PlaySceneOptions extends SessionSceneOptions {
@@ -151,6 +153,8 @@ export interface PlayScene extends SessionScene<PlayFrame, PlayIntent> {
   getTempo(): number;
   /** Sets the player's hi-speed (HS-FIX applies on top). */
   setHiSpeed(hiSpeed: number): void;
+  /** beatoraja display-clock calibration; never shifts recorded inputs. */
+  setJudgeTimingMs(judgeTimingMs: number): void;
   getHiSpeed(): number;
   /** The play's recording. */
   readonly recording: PlaySceneRecording;
@@ -238,6 +242,7 @@ function createPlayView(
     };
   }
   const drawing = {
+    ...(settings.judgeTimingMs !== undefined ? { judgeTimingMs: settings.judgeTimingMs } : {}),
     ...(settings.bpmGuide !== undefined ? { bpmGuide: settings.bpmGuide } : {}),
     ...(settings.bga !== undefined ? { bga: settings.bga } : {}),
     ...(settings.autoPlay !== undefined ? { autoPlay: settings.autoPlay } : {}),
@@ -375,6 +380,10 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
     return this.play.getTempo();
   }
 
+  public setJudgeTimingMs(judgeTimingMs: number): void {
+    this.play.setJudgeTimingMs(judgeTimingMs);
+  }
+
   public setHiSpeed(hiSpeed: number): void {
     this.play.setHiSpeed(hiSpeed);
   }
@@ -487,6 +496,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       onExit: () => on.exit(),
       onRestart: () => on.restart(),
       onChartFinished: (result) => on.finish(result, result.replay),
+      ...(on.judgeTiming !== undefined ? { onJudgeTimingChange: (value: number) => on.judgeTiming?.(value) } : {}),
       ...(on.hiSpeed !== undefined
         ? { onHiSpeedChange: (hiSpeed: number, normalLevel?: number) => on.hiSpeed?.(hiSpeed, normalLevel) }
         : {}),

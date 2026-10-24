@@ -1,3 +1,4 @@
+import { clampJudgeTimingMs } from '@be-music/player-scene-model';
 /**
  * The play session: one play's behaviour, whatever skin family draws it (ADR 0001). It composes the play's parts around
  * one `PlayState` — the chart (`play-chart.ts`), the media (`play-media.ts`, through the audio service's play graph when
@@ -723,6 +724,14 @@ export class PlaySession extends PlaySessionState {
    * {@link PlaySessionOptions.initialHiSpeed}: the chart's HS-FIX multiplier is applied on top, as at the start.
    * Snapped and clamped like the in-game hotkey; non-finite values are ignored.
    */
+  public setJudgeTimingMs(value: number): void {
+    if (!Number.isFinite(value)) return;
+    const next = clampJudgeTimingMs(value);
+    if (next === (this.options.judgeTimingMs ?? 0)) return;
+    this.options.judgeTimingMs = next;
+    this.options.onJudgeTimingChange?.(next);
+  }
+
   public setHiSpeed(value: number): void {
     applyPlayEvent(this, {
       type: 'hi-speed-set',

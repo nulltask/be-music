@@ -1,3 +1,4 @@
+import { resolveNoteDisplaySeconds } from '@be-music/player-scene-model';
 import { collectBPMGuideEvents } from '../../../chart/bpm-guide.ts';
 import { renderBPMGuide } from '../bpm-guide.ts';
 import { resolveSideLaneRuns } from './measure-line-runs.ts';
@@ -42,7 +43,8 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
     ctx.noteLayerPool.end();
     return;
   }
-  const currentBeat = ctx.play.currentBeat(seconds);
+  const displaySeconds = resolveNoteDisplaySeconds(seconds, ctx.options.judgeTimingMs ?? 0);
+  const currentBeat = ctx.play.currentBeat(displaySeconds);
   // The eased scroll factor, so a hi-speed change glides instead of making the notes jump.
   const pixelsPerBeat =
     (ctx.playfieldSkin.pixelsPerBeat ?? PIXELS_PER_BEAT) * ctx.play.scrollHiSpeed.valueAt(performance.now());
@@ -53,7 +55,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
   // Past an LR2 negative-BPM reversal the scroll runs back: object times are compared with the mirrored judge clock,
   // and what the playhead passed before the reversal stays passed.
   const reversal = ctx.play.timingResolver?.reversal;
-  const drawClock = resolveReversedDrawClock(reversal, seconds, currentBeat);
+  const drawClock = resolveReversedDrawClock(reversal, displaySeconds, currentBeat);
   const drawWindow = resolveNoteDrawWindow({
     rules: resolveNoteDrawRules(ctx.play.scrollMapper !== undefined),
     currentBeat,

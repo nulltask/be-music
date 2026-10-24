@@ -151,6 +151,12 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       .addBinding(this.guiState, 'bpmGuide', { label: 'BPM GUIDE (beatoraja)' })
       .on('change', ({ value }) => this.setPlayOptions({ bpmGuide: value })),
   );
+  this.judgeTimingController = folder
+    .addBinding(this.guiState, 'judgeTimingMs', { label: 'Judge timing (beatoraja, ms)', min: -500, max: 500, step: 1 })
+    .on('change', ({ value }) => {
+      this.setPlayOptions({ judgeTimingMs: value });
+      this.gameplayView?.setJudgeTimingMs(value);
+    });
   const state = this.guiState;
   const normal = {
     get enabled() {

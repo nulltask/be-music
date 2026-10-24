@@ -1,3 +1,4 @@
+import { clampJudgeTimingMs } from './judge-timing.ts';
 import { clamp } from '@be-music/shared-utils/core';
 import { LR2_GAUGE_TYPES, isGaugeType } from '@be-music/player-engine/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
@@ -72,6 +73,7 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   hiSpeed: DEFAULT_HISPEED,
   classicHiSpeed: false,
   normalHiSpeedLevel: 0,
+  judgeTimingMs: 0,
   bpmGuide: false,
   autoPlay: false,
   bga: 'ON',
@@ -153,6 +155,7 @@ export function clampShutter(value: number): number {
 /** Numeric play options, each with the clamp applied to a value set for it. */
 const NUMERIC_PLAY_OPTION_CLAMPS: { readonly [K in keyof PlayOptions]?: (value: number) => number } = {
   hiSpeed: clampHiSpeed,
+  judgeTimingMs: clampJudgeTimingMs,
   normalHiSpeedLevel: (value) => Math.max(0, Math.min(20, Math.round(value))),
   shutter: clampShutter,
 };

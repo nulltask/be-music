@@ -35,7 +35,7 @@ const BUTTON_PRESS_WINDOW_MS = 200;
 export interface BeatorajaSelectSkinStateContext {
   /** The skin and the player's options for it. */
   readonly options: Pick<BeatorajaSceneKit, 'skin' | 'skinConfig'>;
-  readonly playOptions?: Pick<PlayOptions, 'hsFix'>;
+  readonly playOptions?: Partial<Pick<PlayOptions, 'hsFix' | 'judgeTimingMs'>>;
   readonly entries: ReadonlyArray<LibraryEntry>;
   /** The cursor: `entries[currentIndex]` is the focused bar. */
   readonly currentIndex: number;
@@ -123,7 +123,7 @@ export class BeatorajaSelectSkinState {
   selectInput(): BeatorajaSelectInput {
     if (this.frameInput !== undefined) return this.frameInput;
     const entry = this.ctx.entries[this.ctx.currentIndex];
-    const offset = this.ctx.options.skinConfig?.offset;
+    const offset = this.ctx.playOptions?.judgeTimingMs ?? this.ctx.options.skinConfig?.offset;
     // A random course bar has no record.
     const lampOp =
       entry === undefined || (entry.kind === 'course' && entry.course.random !== undefined)

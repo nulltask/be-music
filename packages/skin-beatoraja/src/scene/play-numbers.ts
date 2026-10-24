@@ -50,6 +50,7 @@ export interface BeatorajaPlayClock {
 
 /** What a play skin's numbers read: the score, the view (hi-speed and covers), the chart, the clock. */
 export interface BeatorajaPlayNumberInput extends BeatorajaScoreNumberInput {
+  readonly judgeTimingMs?: number;
   /** The hi-speed the notes scroll at. */
   readonly hiSpeed: number;
   /** The 1P lane covers; none when absent. */
@@ -125,7 +126,11 @@ export function beatorajaBPMAt(segments: readonly BeatorajaBPMSegment[], timeMs:
 function playheadBPM(input: BeatorajaPlayNumberInput): number {
   const { clock, chart } = input;
   if (clock === undefined) return chart.bpm;
-  return beatorajaBPMAt(chart.bpmSegments ?? [], clock.currentSeconds * 1000, chart.bpm);
+  const offset =
+    typeof input.judgeTimingMs === 'number' && Number.isFinite(input.judgeTimingMs)
+      ? Math.trunc(input.judgeTimingMs)
+      : 0;
+  return beatorajaBPMAt(chart.bpmSegments ?? [], clock.currentSeconds * 1000 + offset, chart.bpm);
 }
 
 /**
@@ -217,6 +222,9 @@ export function resolveBeatorajaPlayNumber(id: number, input: BeatorajaPlayNumbe
     case BEATORAJA_NUM.LIFT1:
       return input.cover !== undefined ? beatorajaPerMille(clampUnit(input.cover.lift)) : 0;
     case BEATORAJA_NUM.JUDGETIMING:
+      return typeof input.judgeTimingMs === 'number' && Number.isFinite(input.judgeTimingMs)
+        ? Math.trunc(input.judgeTimingMs)
+        : 0;
     case BEATORAJA_NUM.HIDDEN1:
       return 0;
 
