@@ -190,3 +190,13 @@ test('LR2 CONVERGE and fixed-lane source settings are selectable and validated',
   expect(resolvePlayOptionValue('randomFixedLane1P', 10)).toBe(9);
   expect(resolvePlayOptionValue('randomFixedLane2P', Number.NaN)).toBe(0);
 });
+
+test('ALL-SCR is selectable only for the beatoraja reference', () => {
+  expect(resolveRandomModes('beatoraja')).toContain('ALL-SCR');
+  expect(resolveRandomModes('lr2')).not.toContain('ALL-SCR');
+  expect(resolveRandomModes('____')).not.toContain('ALL-SCR');
+  expect(resolvePlayOptions({ random1P: 'ALL-SCR', random2P: 'ALL-SCR' })).toMatchObject({
+    random1P: 'ALL-SCR',
+    random2P: 'ALL-SCR',
+  });
+});

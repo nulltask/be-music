@@ -387,3 +387,19 @@ test('LR2 PMS CONVERGE defaults to key 5 and a missing side is a no-op', () => {
   applyRandomMode(notes, [], 'CONVERGE', () => 0);
   expect(channelsOf(notes)).toEqual([keys[4]]);
 });
+
+test.each(['1P', '2P'] as const)('ALL-SCR includes the complete %s scratch domain', (side) => {
+  const keys = resolveLaneOptionChannels(side, '14');
+  const scratch = side === '1P' ? '16' : '26';
+  const notes = [
+    { channel: keys[0]!, seconds: 0 },
+    { channel: keys[1]!, seconds: 1 },
+  ];
+  applyRandomMode(notes, keys, 'ALL-SCR', () => 0, {
+    ruleset: 'beatoraja',
+    scratchLanes: [scratch],
+    doublePlay: true,
+    side,
+  });
+  expect(channelsOf(notes)).toEqual([scratch, scratch]);
+});

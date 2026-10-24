@@ -140,6 +140,7 @@ export interface PlayOptions {
    * - `S-RANDOM` — per-chord random assignment (chord shapes are NOT preserved)
    * - `H-RANDOM` — beatoraja per-row random assignment with a configurable jack threshold
    * - `SPIRAL` — beatoraja row rotations, frozen during active holds
+   * - `ALL-SCR` — beatoraja scratch priority with time-based fallback
    * - `CONVERGE` — LR2 concentration onto the selected lane with free-key collision fallback
    * - `SCATTER` — legacy value, disabled until placement and assist policy are implemented
    */
@@ -179,6 +180,7 @@ export type RandomMode =
   | 'S-RANDOM'
   | 'SPIRAL'
   | 'H-RANDOM'
+  | 'ALL-SCR'
   | 'CONVERGE'
   | 'SCATTER';
 

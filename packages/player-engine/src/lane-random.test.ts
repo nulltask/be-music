@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
   randomizeHRandomNotes,
+  randomizeAllScratchNotes,
   clampHRandomThresholdBPM,
   randomizeSpiralNotes,
   randomizeSRandomNotes,
@@ -303,4 +304,61 @@ test('H-RANDOM threshold BPM follows the versioned PlayerConfig range and defaul
   expect(clampHRandomThresholdBPM(0)).toBe(1);
   expect(clampHRandomThresholdBPM(1001)).toBe(1000);
   expect(clampHRandomThresholdBPM(300.9)).toBe(300);
+});
+
+describe('randomizeAllScratchNotes', () => {
+  const lanes = ['a', 'b', 's'];
+  test.each([40, 40.999, 41])('scratch priority uses a strict 40-integer-ms interval (%s)', (timeMs) => {
+    expect(
+      randomizeAllScratchNotes(
+        [
+          { channel: 'a', timeMs: 0 },
+          { channel: 'a', timeMs },
+        ],
+        lanes,
+        { scratchLanes: ['s'], random: zero },
+      ),
+    ).toEqual(['s', timeMs >= 41 ? 's' : 'a']);
+  });
+  test.each(['1P', '2P'] as const)('DP %s fallback picks the outermost eligible key', (side) => {
+    const notes = [
+      { channel: 'a', timeMs: 0 },
+      { channel: 'b', timeMs: 0 },
+    ];
+    expect(
+      randomizeAllScratchNotes(notes, lanes, { scratchLanes: ['s'], random: zero, doublePlay: true, side }),
+    ).toEqual(['s', side === '1P' ? 'a' : 'b']);
+  });
+  test('24-key alternates wheel directions and freezes each held destination through its tail', () => {
+    const notes: SRandomNote[] = [
+      { channel: 'a', timeMs: 0, endTimeMs: 10 },
+      { channel: 'b', timeMs: 1, endTimeMs: 10 },
+      { channel: 'c', timeMs: 2 },
+      { channel: 'c', timeMs: 10 },
+      { channel: 'c', timeMs: 41 },
+    ];
+    expect(
+      randomizeAllScratchNotes(notes, ['a', 'b', 'c', 'u', 'd'], { scratchLanes: ['u', 'd'], random: zero }),
+    ).toEqual(['u', 'd', 'a', 'b', 'u']);
+  });
+  test('mines and hidden notes share permutations without being chosen for scratch priority', () => {
+    const notes: SRandomNote[] = [
+      { channel: 'a', timeMs: 0, kind: 'mine' },
+      { channel: 'b', timeMs: 0 },
+      { channel: 'b', timeMs: 0, kind: 'invisible' },
+      { channel: '21', timeMs: 0 },
+    ];
+    const original = structuredClone(notes);
+    expect(randomizeAllScratchNotes(notes, lanes, { scratchLanes: ['s'], random: zero })).toEqual([
+      'a',
+      's',
+      's',
+      '21',
+    ]);
+    expect(notes).toEqual(original);
+  });
+  test('rejects a missing or foreign scratch domain', () => {
+    expect(() => randomizeAllScratchNotes([], lanes, { scratchLanes: [], random: zero })).toThrow(RangeError);
+    expect(() => randomizeAllScratchNotes([], lanes, { scratchLanes: ['x'], random: zero })).toThrow(RangeError);
+  });
 });
