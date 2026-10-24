@@ -244,6 +244,11 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     difficultyFilter: 'ALL',
     hiSpeed: readStoredHiSpeed(storage),
     hsFix: 'OFF',
+    displayAreaInfo: 'OFF',
+    hiddenSudden1P: 'OFF',
+    hiddenSudden2P: 'OFF',
+    laneCover: false,
+    shutter: 0.25,
     // Skin-family routing defaults to `'auto'`: beatoraja > LR2 > default, picked per-scene from what's loaded.
     // The Debug Menu's "Skin family" dropdown lets users force a specific family; LR2 / beatoraja entries appear
     // in the dropdown only when their theme is loaded (see `rebuildSkinFamilyPicker` in `ui/debug-menu/skin.ts`).

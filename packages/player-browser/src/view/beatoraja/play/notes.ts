@@ -548,6 +548,26 @@ export class BeatorajaNoteLayer {
     return { topY: top, bottomY: this.judgementYOverride ?? bottom };
   }
 
+  /** The active lane rectangles used by notes, for information placed on their cover edges. */
+  getDisplayAreaLanes(activeOps: ReadonlySet<number>, channels: readonly string[]) {
+    const rects = this.resolveLaneRects(activeOps);
+    return channels.flatMap((channel) => {
+      const index = resolveBeatorajaNoteLane(channel, this.variant);
+      const rect = index === undefined ? undefined : rects[index];
+      return rect
+        ? [
+            {
+              side: this.variant === '9' || !channel.startsWith('2') ? ('1P' as const) : ('2P' as const),
+              x: rect.x,
+              w: rect.w,
+              top: rect.y,
+              bottom: this.judgementYOverride ?? rect.y + rect.h,
+            },
+          ]
+        : [];
+    });
+  }
+
   // ─── Internals ────────────────────────────────────────────────────────────────────────────────
 
   private resolveLaneRects(activeOps: ReadonlySet<number>): ReadonlyArray<BeatorajaNoteRect> {

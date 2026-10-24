@@ -1,3 +1,4 @@
+import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
 /**
  * The built-in family's play screen: a be-music skin's chrome around the shared playfield (`view/shared/playfield`),
  * letterboxed into the window. It draws the play session's frames; its skin answers the shared playfield through a
@@ -75,6 +76,7 @@ export class BuiltInPlayView
   extends PlayLayers
   implements PlayView, PlayFrameContext, BuiltInChromeContext, BGATargetsContext
 {
+  private readonly displayInfo = new DisplayAreaInfoOverlay();
   public readonly family = 'built-in' as const;
   public readonly timing: PlayViewTiming = BUILT_IN_PLAY_TIMING;
   /** The play options the view draws with; the setters change them during the play. */
@@ -189,15 +191,37 @@ export class BuiltInPlayView
     const mount = this.drawsOnCanvas ? undefined : this.dom?.root;
     if (mount) mount.style.pointerEvents = 'auto';
     this.touchLanes.attach(host, emit, mount);
+    if (this.drawsOnCanvas) this.displayInfo.attachCanvas(this.designRoot);
+    else this.displayInfo.attach(host.domRoot);
   }
 
   public draw(frame: PlayFrame): void {
     this.play = frame.playfield;
     this.root.visible = frame.shown;
+    if (!frame.shown) this.displayInfo.hide();
     if (!frame.shown) return;
     this.chromeRuntime = undefined;
     render(this, frame.seconds, frame.playfield.audioAnalyzer !== undefined ? frame.audio : undefined);
     // A skin drawing through the player's renderer or on its DOM screen draws the frame just collected now.
+    this.displayInfo.update(
+      resolveDisplayAreaLabels({
+        mode: frame.playOptions.displayAreaInfo,
+        lanes: Array.from(this.play.laneX, ([channel, lane]) => ({
+          ...lane,
+          side: this.play.chartPlayVariant === '9' || !channel.startsWith('2') ? ('1P' as const) : ('2P' as const),
+        })),
+        covers: this.play.resolveLaneCovers(),
+        visibleMs: (cover) =>
+          this.play.resolveVisibleMs(
+            cover,
+            frame.bpm,
+            this.play.scrollMapper?.rateAt?.(this.play.currentBeat(frame.seconds)) ?? 1,
+          ),
+      }),
+      this.playfieldSkin.stage,
+      this.app.screen,
+      this.designRoot.alpha,
+    );
     this.skinBindingInstance?.flush();
     this.dom?.setOpacity(this.designRoot.alpha);
     this.dom?.update({
@@ -225,6 +249,7 @@ export class BuiltInPlayView
   }
 
   public detach(): void {
+    this.displayInfo.detach();
     this.touchLanes.detach();
     this.dom?.detach();
   }
@@ -243,6 +268,7 @@ export class BuiltInPlayView
   }
 
   public dispose(): void {
+    this.displayInfo.dispose();
     this.dom?.dispose();
     this.dom = undefined;
     // Drop every per-frame child pool before the scene graph so each pooled child is freed through its own `destroy()`.

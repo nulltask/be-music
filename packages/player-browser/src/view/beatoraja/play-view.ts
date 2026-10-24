@@ -1,3 +1,5 @@
+import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
+import { resolveWhiteNumber, resolveLaneCover } from '@be-music/player-scene-model';
 /**
  * The beatoraja family's play screen: a beatoraja play skin (`play_<variant>`) drawn by `BeatorajaPlaySkinView` with the
  * play's notes, lane markers and BGA spliced in where the skin authors them (`BeatorajaPlayStage`), its canvas fitted
@@ -187,6 +189,7 @@ interface PreparedChart {
 
 /** The beatoraja play view. See the module comment. */
 export class BeatorajaPlayView implements PlayView {
+  private readonly displayInfo = new DisplayAreaInfoOverlay();
   public readonly family = 'beatoraja' as const;
   public readonly root: Container = new Container();
   public readonly timing: PlayViewTiming;
@@ -406,9 +409,11 @@ export class BeatorajaPlayView implements PlayView {
     this.emit = emit;
     if (typeof window !== 'undefined') window.addEventListener('wheel', this.handleWheel, { passive: false });
     this.touchLanes.attach(host, emit);
+    if (this.stage) this.displayInfo.attachCanvas(this.stage.canvas);
   }
 
   public detach(): void {
+    this.displayInfo.detach();
     this.touchLanes.detach();
     if (typeof window !== 'undefined') window.removeEventListener('wheel', this.handleWheel);
     this.host = undefined;
@@ -420,6 +425,7 @@ export class BeatorajaPlayView implements PlayView {
     const bridge = this.bridge;
     const host = this.host;
     this.root.visible = frame.shown;
+    if (!frame.shown) this.displayInfo.hide();
     if (stage === undefined || bridge === undefined || host === undefined || !frame.shown || this.disposed) return;
     stage.fitTo(host);
     const play = this.play;
@@ -467,6 +473,25 @@ export class BeatorajaPlayView implements PlayView {
     if (play.exiting && play.playMoments.failedAtMs !== undefined && play.exitFadeStartedAt !== undefined) {
       stage.canvas.alpha = playEndingFadeAlpha(play.playClock() - play.exitFadeStartedAt, play.exitFadeOutMs);
     }
+    this.displayInfo.attachCanvas(stage.canvas);
+    this.displayInfo.update(
+      resolveDisplayAreaLabels({
+        mode: frame.playOptions.displayAreaInfo,
+        lanes: stage.getDisplayAreaLanes(context.activeOps, frame.playfield.laneChannels),
+        covers: frame.state.view.covers.map(resolveLaneCover),
+        visibleMs: (cover) =>
+          resolveWhiteNumber({
+            laneBeats: 4,
+            hiSpeed: frame.state.view.hiSpeed.drawn,
+            sudden: cover.sudden,
+            bpm: frame.bpm ?? 0,
+            scrollRate: frame.playfield.scrollMapper?.rateAt?.(frame.playfield.currentBeat(frame.seconds)) ?? 1,
+          }),
+      }),
+      { width: stage.width, height: stage.height },
+      host.app.screen,
+      stage.canvas.alpha,
+    );
     this.fadeIndicator();
   }
 
@@ -530,6 +555,7 @@ export class BeatorajaPlayView implements PlayView {
   }
 
   public dispose(): void {
+    this.displayInfo.dispose();
     if (this.disposed) return;
     this.detach();
     this.disposed = true;
