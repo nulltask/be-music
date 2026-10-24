@@ -336,3 +336,19 @@ test('replay frames restore selected options at the playhead and after a backwar
   expect(session.frame(4).playOptions.displayAreaInfo).toBe('ON');
   expect(session.frame(4).playOptions).toMatchObject({ noteDurationMs: 500, constantFadeMs: 100 });
 });
+
+test('automatic calibration restores unclamped offsets and rewinds without recalculating samples', () => {
+  const replay = {
+    play: {
+      mode: 'manual',
+      options: { judgeTimingAutoAdjust: true, judgeTimingMs: 500 },
+      optionChanges: [{ timeUs: 2000000, values: { judgeTimingMs: 505 } }],
+    },
+  } as unknown as import('@be-music/player-engine/replay').BeMusicReplay;
+  const { play, session } = createSceneSession({ replay });
+  let seconds = 3;
+  play.currentSeconds = () => seconds;
+  expect(session.frame(0).playOptions).toMatchObject({ judgeTimingAutoAdjust: true, judgeTimingMs: 505 });
+  seconds = 1;
+  expect(session.frame(1).playOptions.judgeTimingMs).toBe(500);
+});

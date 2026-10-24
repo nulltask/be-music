@@ -31,6 +31,8 @@ export interface PlayOptions {
   constantFadeMs: number;
   /** beatoraja BPM GUIDE shows BPM-change and STOP markers on the lane. */
   bpmGuide: boolean;
+  /** beatoraja 0.8.9 display-only calibration on PG/GR/GD; disabled during autoplay and replay. */
+  judgeTimingAutoAdjust: boolean;
   /**
    * When `true`, every note auto-judges as PERFECT at its scheduled time. Mirrors the LR2 AUTOPLAY skin button
    * (`#SRC_BUTTON type=16`). Starting a chart in AUTO from the select screen (its `start` with `autoPlay`, such as a

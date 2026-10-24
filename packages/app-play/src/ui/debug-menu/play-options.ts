@@ -285,6 +285,11 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       this.setPlayOptions({ constantFadeMs: value });
       this.gameplayView?.controller.dispatch({ type: 'constant-visibility', fadeMs: value });
     });
+  this.judgeTimingAutoAdjustController = trackPlayOption(
+    folder
+      .addBinding(this.guiState, 'judgeTimingAutoAdjust', { label: 'Auto judge timing (beatoraja)' })
+      .on('change', ({ value }) => this.setPlayOptions({ judgeTimingAutoAdjust: value })),
+  );
   this.judgeTimingController = folder
     .addBinding(this.guiState, 'judgeTimingMs', { label: 'Judge timing (beatoraja, ms)', min: -500, max: 500, step: 1 })
     .on('change', ({ value }) => {

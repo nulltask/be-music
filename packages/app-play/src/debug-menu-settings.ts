@@ -83,6 +83,7 @@ export interface DebugMenuSettings {
   noteDurationMs: number;
   constantFadeMs: number;
   bpmGuide: boolean;
+  judgeTimingAutoAdjust: boolean;
   judgeAlgorithm: PlayerGUIState['judgeAlgorithm'];
   longNoteModifier: PlayerGUIState['longNoteModifier'];
   longNoteRate: number;
@@ -223,6 +224,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'submitToLeaderboard', booleanOf(raw.submitToLeaderboard));
   assign(settings, 'dpFlip', booleanOf(raw.dpFlip));
   assign(settings, 'bpmGuide', booleanOf(raw.bpmGuide));
+  assign(settings, 'judgeTimingAutoAdjust', booleanOf(raw.judgeTimingAutoAdjust));
   assign(settings, 'visualConstant', booleanOf(raw.visualConstant));
   assign(settings, 'lift1P', resolvePlayOptionValue('lift1P', raw.lift1P));
   assign(settings, 'lift2P', resolvePlayOptionValue('lift2P', raw.lift2P));
@@ -437,6 +439,7 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('random2P');
   assignState('dpFlip');
   assignState('bpmGuide');
+  assignState('judgeTimingAutoAdjust');
   assignState('visualConstant');
   assignState('noteDurationMs');
   assignState('lift1P');
@@ -524,6 +527,7 @@ export function captureDebugMenuSettings(
     random2P: state.random2P,
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
+    judgeTimingAutoAdjust: state.judgeTimingAutoAdjust,
     visualConstant: state.visualConstant,
     noteDurationMs: state.noteDurationMs,
     lift1P: state.lift1P,

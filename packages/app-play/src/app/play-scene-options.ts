@@ -130,6 +130,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     scoreGraph: playOptions.scoreGraph,
     hsFix: playOptions.classicHiSpeed || playOptions.normalHiSpeedLevel > 0 ? ('OFF' as const) : playOptions.hsFix,
     bpmGuide: playOptions.bpmGuide,
+    judgeTimingAutoAdjust: playOptions.judgeTimingAutoAdjust,
     classicHiSpeed: playOptions.classicHiSpeed,
     visualConstant: playOptions.visualConstant,
     noteDurationMs: playOptions.noteDurationMs,

@@ -145,7 +145,11 @@ export async function createPlaySession(
   options: PlayerOptions,
   strategy: JudgeStrategy,
 ): Promise<PlaySession> {
+  // Effective calibration is local to this run, even when the caller reuses or freezes its settings.
+  options = { ...options };
   const { mode } = strategy;
+  if (options.judgeTimingAutoAdjust && (options.judgeRuleset ?? 'lr2') !== 'beatoraja')
+    throw new RangeError('Automatic display-timing adjustment is available only for beatoraja.');
   if (options.mineModifier !== undefined && options.mineModifier !== 'OFF' && options.judgeRuleset !== 'beatoraja')
     throw new RangeError('Mine modification is available only for beatoraja.');
   throwIfAborted(options.signal);
@@ -302,6 +306,15 @@ export async function createPlaySession(
             ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),
             ...(options.course !== undefined ? { course: options.course } : {}),
             ...hostPlaySettings,
+            ...(options.judgeTimingMs !== undefined || options.judgeTimingAutoAdjust !== undefined
+              ? {
+                  options: {
+                    ...hostPlaySettings.options,
+                    judgeTimingAutoAdjust: options.judgeTimingAutoAdjust ?? false,
+                    judgeTimingMs: options.judgeTimingMs ?? 0,
+                  },
+                }
+              : {}),
             ...(options.mineModifier !== undefined
               ? {
                   mineModifier: options.mineModifier,
@@ -445,6 +458,20 @@ export async function createPlaySession(
     },
   });
   const applyJudgeEffect = createJudgeEffectHandler({
+    judgeTiming: {
+      enabled:
+        mode === 'manual' &&
+        options.replayInputs === undefined &&
+        ruleset.rulesetId === 'beatoraja' &&
+        options.judgeTimingAutoAdjust === true,
+      currentSeconds: () => (session?.clock ? tempoClock.chartSecondsAt(session.clock.nowMs()) : 0),
+      get value() {
+        return options.judgeTimingMs ?? 0;
+      },
+      set value(value: number) {
+        options.judgeTimingMs = value;
+      },
+    },
     uiEnabled,
     writeOutput,
     wavResources,

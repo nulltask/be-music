@@ -1242,6 +1242,11 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
       lanesAPI.drawLaneRandomIndex(9, () => 0.5);
     },
   });
+  define('player-engine.display.adjustBeatorajaJudgeTiming', {
+    run() {
+      displayAPI.adjustBeatorajaJudgeTiming(0, 'GREAT', 45);
+    },
+  });
   define('player-engine.lanes.clampLongNoteRate', {
     run() {
       lanesAPI.clampLongNoteRate(0.5);

@@ -131,6 +131,7 @@ describe('captureDebugMenuSettings', () => {
       dpFlip: true,
       bpmGuide: true,
       judgeTimingMs: 0,
+      judgeTimingAutoAdjust: false,
       visualConstant: false,
       noteDurationMs: 500,
       lift1P: 0.1,
@@ -276,4 +277,14 @@ test('ADD LN and its generation probability persist independently of the origina
   expect(
     parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
   ).toMatchObject(settings);
+});
+
+test('persists the beatoraja automatic display-timing toggle without coercing invalid values', () => {
+  const read = (value: unknown) =>
+    parseDebugMenuSettingsDocument(
+      JSON.stringify({ version: 1, updatedAt: 1, settings: { judgeTimingAutoAdjust: value } }),
+    )?.settings;
+  expect(read(true)).toMatchObject({ judgeTimingAutoAdjust: true });
+  expect(read(false)).toMatchObject({ judgeTimingAutoAdjust: false });
+  expect(read('true')).not.toHaveProperty('judgeTimingAutoAdjust');
 });

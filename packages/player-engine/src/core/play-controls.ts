@@ -143,7 +143,11 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
               : undefined,
           });
         },
-        onOptionChange: (values) => replayRecorder?.recordOptionChange(commandSeconds(), values),
+        onOptionChange: (values) => {
+          if (typeof values.judgeTimingMs === 'number' && Number.isSafeInteger(values.judgeTimingMs))
+            options.judgeTimingMs = values.judgeTimingMs;
+          replayRecorder?.recordOptionChange(commandSeconds(), values);
+        },
         onViewChange: (change) => replayRecorder?.recordViewChange(commandSeconds(), change),
         onTempoChange: changeTempo,
         onSeek: (seconds) => {

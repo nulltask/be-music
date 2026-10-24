@@ -114,6 +114,7 @@ export interface PlaySessionOptions {
   constantFadeMs?: number;
   onJudgeTimingChange?: (judgeTimingMs: number) => void;
   bpmGuide?: boolean;
+  judgeTimingAutoAdjust?: boolean;
   /**
    * HIDDEN / SUDDEN / HID+SUD effect picked from `#SRC_BUTTON,type=50/51`:
    *

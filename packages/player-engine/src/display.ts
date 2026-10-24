@@ -48,3 +48,5 @@ export {
   isImageResizeAlgorithm,
   type ImageResizeAlgorithm,
 } from './image-resize-algorithm.ts';
+
+export { adjustBeatorajaJudgeTiming } from './core/judge-timing.ts';

@@ -238,7 +238,7 @@ export type JudgeCoreEffect =
   /** The no-TUI trace's POOR BGA marker at this point of the output. */
   | { kind: 'poor-trace'; action: 'trigger' | 'clear'; seconds: number }
   /** The judge readout: what the UI's judge / combo display shows. */
-  | { kind: 'judge-combo'; judge: string; combo: number; channel?: string; signedDeltaMs?: number }
+  | { kind: 'judge-combo'; seconds?: number; judge: string; combo: number; channel?: string; signedDeltaMs?: number }
   /** A no-TUI trace line. */
   | { kind: 'trace'; name: string; seconds: number; fields: readonly JudgeTraceField[] }
   /** The play state changed outside a frame tick: republish the frame (at `beat`, or the beat of `seconds`). */

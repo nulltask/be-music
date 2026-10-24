@@ -394,3 +394,30 @@ for (const skin of ['plain', 'native'] as const) {
     });
   }
 }
+
+for (const skin of ['plain', 'native'] as const) {
+  test(`beatoraja automatic display timing is recorded and replayed on ${skin}`, async ({ player }) => {
+    await player.open({ 'be-music.built-in-skin': skin });
+    await player.dropText('auto-timing.bms', '#TITLE Auto timing\n#BPM 120\n#RANK 3\n#00111:01\n#00311:01\n');
+    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+    await player.setOption(['Play options'], 'Auto judge timing (beatoraja)', true);
+    await player.setOption(['Play options'], 'Judge timing (beatoraja, ms)', 100);
+    await player.cursorTo((bar) => bar.title === 'Auto timing', 'calibration chart');
+    await player.key('Enter');
+    await player.waitFor((state) => (state.play?.seconds ?? 0) >= 2.04, 'a late manual key press');
+    await player.key('z');
+    await player.waitForResult(0);
+    const replay = await player.lastReplay();
+    expect(replay?.play.options).toMatchObject({ judgeTimingAutoAdjust: true, judgeTimingMs: 100 });
+    expect(
+      replay?.play.optionChanges?.some(
+        (change) => typeof change.values.judgeTimingMs === 'number' && change.values.judgeTimingMs > 100,
+      ),
+    ).toBe(true);
+    await player.leaveResult();
+    await player.dropText('auto-timing.bmplay.json', JSON.stringify(replay));
+    await player.waitForResult(1);
+    // Playback consumes the recorded timeline; it must not run the calibration algorithm again.
+    expect((await player.state()).results[1]?.judged).toEqual((await player.state()).results[0]?.judged);
+  });
+}

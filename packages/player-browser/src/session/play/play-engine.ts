@@ -80,6 +80,9 @@ export interface PlayEngineContext
   readonly options: Readonly<
     Pick<
       PlaySessionOptions,
+      | 'judgeTimingMs'
+      | 'judgeTimingAutoAdjust'
+      | 'onJudgeTimingChange'
       | 'autoPlay'
       | 'allowSeek'
       | 'judgeAlgorithm'
@@ -426,6 +429,7 @@ export function resolveReplayRecording(
     | 'fixedDisplayArea'
     | 'normalHiSpeedLevel'
     | 'judgeTimingMs'
+    | 'judgeTimingAutoAdjust'
     | 'visualConstant'
     | 'lift1P'
     | 'lift2P'
@@ -472,6 +476,7 @@ export function resolveReplayRecording(
       : {}),
     bpmGuide: options.bpmGuide,
     judgeTimingMs: options.judgeTimingMs,
+    judgeTimingAutoAdjust: options.judgeTimingAutoAdjust,
     visualConstant: options.visualConstant,
     noteDurationMs: options.noteDurationMs,
     lift1P: options.lift1P,
@@ -595,6 +600,8 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       gaugeAutoShift:
         ctx.options.replay !== undefined ? ctx.options.replay.play.gaugeAutoShift : ctx.options.gaugeAutoShift,
       judgeAlgorithm: ctx.options.replay?.play.judgeAlgorithm ?? ctx.options.judgeAlgorithm,
+      judgeTimingAutoAdjust: ctx.options.replay === undefined && ctx.options.judgeTimingAutoAdjust === true,
+      judgeTimingMs: ctx.options.judgeTimingMs,
       longNoteRate:
         ctx.options.replay?.play.longNoteRate ??
         ctx.options.fixedArrangement?.play.longNoteRate ??
@@ -858,6 +865,11 @@ function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUICommand): v
     return;
   }
   switch (command.kind) {
+    case 'judge-timing':
+      // The engine already recorded the accepted update at its judgment timestamp.
+      (ctx.options as PlaySessionOptions).judgeTimingMs = command.value;
+      ctx.options.onJudgeTimingChange?.(command.value);
+      return;
     case 'flash-lane':
       noteImpulse(ctx, command.channel);
       flashKeyBeam(ctx, command.channel);

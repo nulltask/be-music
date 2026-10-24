@@ -102,6 +102,7 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   noteDurationMs: 500,
   constantFadeMs: 100,
   bpmGuide: false,
+  judgeTimingAutoAdjust: false,
   autoPlay: false,
   bga: 'ON',
   // BGA renders at LR2's `#DST_BGA,...,30` rect (NORMAL) at `'NORMAL'` — a 256×256 window squeezed in beside the lane
@@ -170,6 +171,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   floatingHiSpeed: BOOLEAN_CYCLE,
   fixedDisplayArea: BOOLEAN_CYCLE,
   bpmGuide: BOOLEAN_CYCLE,
+  judgeTimingAutoAdjust: BOOLEAN_CYCLE,
   visualConstant: BOOLEAN_CYCLE,
   autoScratch1P: BOOLEAN_CYCLE,
   autoScratch2P: BOOLEAN_CYCLE,

@@ -732,6 +732,7 @@ export class PlaySession extends PlaySessionState {
     const next = clampJudgeTimingMs(value);
     if (next === (this.options.judgeTimingMs ?? 0)) return;
     this.options.judgeTimingMs = next;
+    this.sharedEngineInputSignals?.pushCommand({ kind: 'options', values: { judgeTimingMs: next } });
     this.options.onJudgeTimingChange?.(next);
   }
 
