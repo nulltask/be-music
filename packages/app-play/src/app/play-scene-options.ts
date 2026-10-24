@@ -131,6 +131,11 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     classicHiSpeed: playOptions.classicHiSpeed,
     visualConstant: playOptions.visualConstant,
     noteDurationMs: playOptions.noteDurationMs,
+    lift1P: playOptions.lift1P,
+    lift2P: playOptions.lift2P,
+    liftOn1P: playOptions.liftOn1P,
+    liftOn2P: playOptions.liftOn2P,
+
     constantFadeMs: playOptions.constantFadeMs,
     judgeTimingMs: playOptions.judgeTimingMs,
     normalHiSpeedLevel: playOptions.normalHiSpeedLevel,

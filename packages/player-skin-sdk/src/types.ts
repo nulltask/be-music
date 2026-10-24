@@ -236,7 +236,9 @@ export interface BeMusicGameplayLayout {
     top: number;
     judgementY: number;
     /** Horizontal extent of each play side present (`2P` only in double play). */
-    sides: Partial<Record<BeMusicSide, { left: number; right: number }>>;
+    sides: Partial<
+      Record<BeMusicSide, { left: number; right: number; /** Actual line after per-side LIFT. */ judgementY?: number }>
+    >;
   };
   /** The BGA rect, or `undefined` when the playfield leaves no room for one. */
   bga: BeMusicRect | undefined;

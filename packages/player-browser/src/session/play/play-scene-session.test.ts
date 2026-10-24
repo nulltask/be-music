@@ -283,6 +283,33 @@ test('records accepted live CONSTANT duration and fade changes', () => {
   expect(play.options).toMatchObject({ noteDurationMs: 1, constantFadeMs: 1000 });
 });
 
+test('records LIFT heights and enabled flags even when the effective cover is zero', () => {
+  const { play, session } = createSceneSession();
+  play.playState = {
+    ...play.playState,
+    view: {
+      ...play.playState.view,
+      covers: [
+        { side: '1P', sudden: 0, suddenOn: false, hidden: 0, hiddenOn: false, lift: 0.1, liftOn: false },
+        { side: '2P', sudden: 0, suddenOn: false, hidden: 0, hiddenOn: false, lift: 0.1, liftOn: false },
+      ],
+    },
+  };
+  const bus = createPlayerInputSignalBus();
+  play.sharedEngineInputSignals = bus;
+  const push = vi.spyOn(bus, 'pushCommand');
+  session.frame(0);
+  session.dispatch({ type: 'cover', command: { type: 'cover-set', covers: [{ side: '1P', lift: 0, liftOn: true }] } });
+  expect(session.frame(1).playOptions).toMatchObject({ lift1P: 0, liftOn1P: true, lift2P: 0.1, liftOn2P: false });
+  expect(push).toHaveBeenCalledWith({ kind: 'options', values: { lift1P: 0, liftOn1P: true } });
+  session.dispatch({
+    type: 'cover',
+    command: { type: 'cover-set', covers: [{ side: '2P', lift: 0.3, liftOn: false }] },
+  });
+  expect(session.frame(2).playOptions).toMatchObject({ lift2P: 0.3, liftOn2P: false });
+  expect(push).toHaveBeenCalledWith({ kind: 'options', values: { lift2P: 0.3 } });
+});
+
 test('replay frames restore selected options at the playhead and after a backward seek', () => {
   const replay = {
     play: {

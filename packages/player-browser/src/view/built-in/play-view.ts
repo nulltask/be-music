@@ -87,6 +87,10 @@ export class BuiltInPlayView
   implements PlayView, PlayFrameContext, BuiltInChromeContext, BGATargetsContext
 {
   private readonly displayInfo = new DisplayAreaInfoOverlay();
+  /** LIFT integration is currently enabled for Plain and Native. */
+  public get drawsLift(): boolean {
+    return this.kit.skin.id === 'plain' || this.kit.skin.id === 'native';
+  }
   public readonly family = 'built-in' as const;
   public readonly timing: PlayViewTiming = BUILT_IN_PLAY_TIMING;
   /** The play options the view draws with; the setters change them during the play. */

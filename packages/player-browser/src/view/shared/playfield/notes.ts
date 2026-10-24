@@ -57,7 +57,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
     (ctx.playfieldSkin.pixelsPerBeat ?? PIXELS_PER_BEAT) * ctx.play.scrollHiSpeed.valueAt(performance.now());
   let laneHeight = 1;
   for (const lane of ctx.play.laneX.values()) {
-    laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
+    laneHeight = Math.max(laneHeight, (lane.baseBottom ?? lane.bottom) - lane.top);
   }
   // Past an LR2 negative-BPM reversal the scroll runs back: object times are compared with the mirrored judge clock,
   // and what the playhead passed before the reversal stays passed.
@@ -97,11 +97,10 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
         pixelsPerBeat,
         pool: ctx.noteLayerPool,
         alphaAt: opacity,
-        lanes: resolveSideLaneRuns(ctx.play.laneX).map((run) => ({
-          ...run,
-          top: first.top,
-          bottom: first.bottom,
-        })),
+        lanes: resolveSideLaneRuns(ctx.play.laneX).map((run) => {
+          const lane = [...ctx.play.laneX.values()].find((lane) => lane.x === run.x) ?? first;
+          return { ...run, top: lane.top, bottom: lane.bottom, scrollScale: lane.scrollScale };
+        }),
       });
   }
   // Debug visualization — paint invisible / keysound notes FIRST so playable notes + mines paint over them. Skipped
@@ -120,7 +119,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
       if (alpha <= 0) continue;
       const lane = ctx.play.laneX.get(invisible.channel);
       if (!lane) continue;
-      const y = lane.bottom - beatDistance(invisible.beat) * pixelsPerBeat;
+      const y = lane.bottom - beatDistance(invisible.beat) * pixelsPerBeat * (lane.scrollScale ?? 1);
       if (y < lane.top - overscan || y > resolveDrawBottom(drawWindow, lane.bottom)) continue;
       const cell = ctx.playfieldSkin.noteCell('invisible', invisible.channel);
       if (cell?.texture) {
@@ -169,7 +168,11 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
     if (!lane) {
       continue;
     }
-    const y = resolveDrawY(drawWindow, lane.bottom - beatDistance(note.beat) * pixelsPerBeat, lane.bottom);
+    const y = resolveDrawY(
+      drawWindow,
+      lane.bottom - beatDistance(note.beat) * pixelsPerBeat * (lane.scrollScale ?? 1),
+      lane.bottom,
+    );
     // The LR2-spec lane index (LR2 `#SRC_NOTE,...,index`), for the lane kind a be-music skin draws and the labels.
     const laneIndex = resolveLR2LaneIndex(note.channel, ctx.play.chartPlayVariant);
     // Long-note render: draw LN_BODY between start and end beats, capped with LN_START / LN_END sprites. Falls
@@ -178,7 +181,11 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
       if (!isLongNoteDrawnAtTime(drawWindow, note.endSeconds ?? note.seconds)) {
         continue;
       }
-      const yEnd = resolveDrawY(drawWindow, lane.bottom - beatDistance(note.endBeat) * pixelsPerBeat, lane.bottom);
+      const yEnd = resolveDrawY(
+        drawWindow,
+        lane.bottom - beatDistance(note.endBeat) * pixelsPerBeat * (lane.scrollScale ?? 1),
+        lane.bottom,
+      );
       // yEnd is *above* y (smaller value, since beats grow upward visually). Under beatoraja's rules a tail below the
       // stage bottom has nothing left to draw (LR2's rules hold it on the line until the note goes). Also clip when the
       // head is still off-screen above the playfield.
@@ -237,7 +244,11 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
     } else if (mine.judged || !isDrawnAtTime(drawWindow, mine.seconds)) continue;
     const lane = ctx.play.laneX.get(mine.channel);
     if (!lane) continue;
-    const y = resolveDrawY(drawWindow, lane.bottom - beatDistance(mine.beat) * pixelsPerBeat, lane.bottom);
+    const y = resolveDrawY(
+      drawWindow,
+      lane.bottom - beatDistance(mine.beat) * pixelsPerBeat * (lane.scrollScale ?? 1),
+      lane.bottom,
+    );
     if (y < lane.top - overscan || y > resolveDrawBottom(drawWindow, lane.bottom)) continue;
     const laneIndex = resolveLR2LaneIndex(mine.channel, ctx.play.chartPlayVariant);
     if (alpha === 1) renderMineNote(ctx, laneIndex, mine.channel, lane, y);

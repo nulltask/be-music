@@ -97,6 +97,10 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   hiddenSudden2P: 'OFF',
   shutter: SHUTTER_DEFAULT,
   laneCover: false,
+  lift1P: 0.1,
+  lift2P: 0.1,
+  liftOn1P: false,
+  liftOn2P: false,
   judgeAlgorithm: 'combo',
   longNoteModifier: 'OFF',
   autoScratch1P: false,
@@ -125,6 +129,8 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   hiddenSudden1P: HIDDEN_SUDDEN_CYCLE,
   hiddenSudden2P: HIDDEN_SUDDEN_CYCLE,
   laneCover: BOOLEAN_CYCLE,
+  liftOn1P: BOOLEAN_CYCLE,
+  liftOn2P: BOOLEAN_CYCLE,
   judgeAlgorithm: ['combo', 'duration', 'lowest'],
   longNoteModifier: ['OFF', 'LEGACY', 'REMOVE'],
   classicHiSpeed: BOOLEAN_CYCLE,
@@ -165,6 +171,8 @@ const NUMERIC_PLAY_OPTION_CLAMPS: { readonly [K in keyof PlayOptions]?: (value: 
   constantFadeMs: (value) => resolveConstantVisibility({ fadeMs: value }).fadeMs,
   normalHiSpeedLevel: (value) => Math.max(0, Math.min(20, Math.round(value))),
   shutter: clampShutter,
+  lift1P: clampShutter,
+  lift2P: clampShutter,
 };
 
 /**

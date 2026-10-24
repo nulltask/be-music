@@ -104,6 +104,10 @@ export interface PlaySessionOptions {
   normalHiSpeedLevel?: number;
   judgeTimingMs?: number;
   visualConstant?: boolean;
+  lift1P?: number;
+  lift2P?: number;
+  liftOn1P?: boolean;
+  liftOn2P?: boolean;
   noteDurationMs?: number;
   constantFadeMs?: number;
   onJudgeTimingChange?: (judgeTimingMs: number) => void;

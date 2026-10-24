@@ -16,7 +16,7 @@ export function renderBPMGuide(input: {
   window: NoteDrawWindow;
   distance: (beat: number) => number;
   pixelsPerBeat: number;
-  lanes: readonly { x: number; w: number; top: number; bottom: number }[];
+  lanes: readonly { x: number; w: number; top: number; bottom: number; scrollScale?: number }[];
   pool: ChildPool;
   /** A source skin may already supply the colored marker lines. */
   drawLines?: boolean;
@@ -41,7 +41,11 @@ export function renderBPMGuide(input: {
       continue;
     const sides = new Set<string>();
     for (const lane of input.lanes) {
-      const y = resolveDrawY(input.window, lane.bottom - input.distance(event.beat) * input.pixelsPerBeat, lane.bottom);
+      const y = resolveDrawY(
+        input.window,
+        lane.bottom - input.distance(event.beat) * input.pixelsPerBeat * (lane.scrollScale ?? 1),
+        lane.bottom,
+      );
       if (y < lane.top || y > resolveDrawBottom(input.window, lane.bottom)) continue;
       // Lanes supplied here are merged per side: one marker and label across each player's lane group.
       const key = `${lane.x}:${lane.w}`;

@@ -128,6 +128,11 @@ describe('captureDebugMenuSettings', () => {
       judgeTimingMs: 0,
       visualConstant: false,
       noteDurationMs: 500,
+      lift1P: 0.1,
+      lift2P: 0.1,
+      liftOn1P: false,
+      liftOn2P: false,
+
       constantFadeMs: 100,
       normalHiSpeedLevel: 0,
       classicHiSpeed: true,

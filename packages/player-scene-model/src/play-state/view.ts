@@ -82,7 +82,7 @@ export function captureReplayView(
     replayView.visibleMs = resolveWhiteNumber({
       laneBeats,
       hiSpeed: view.hiSpeed.drawn,
-      sudden: covers[0]?.sudden ?? 0,
+      sudden: view.covers[0]?.suddenOn ? view.covers[0].sudden : 0,
       bpm: mainBPM,
     });
   }

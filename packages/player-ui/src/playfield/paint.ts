@@ -154,14 +154,20 @@ export function paintLaneCovers(ctx: BeMusicPlayfieldPaintContext, { areas }: Be
     const width = area.right - area.left;
     const height = area.bottom - area.top;
     if (area.sudden > 0) ctx.fillRect(area.left, area.top, width, height * area.sudden);
-    if (area.hidden > 0) ctx.fillRect(area.left, area.bottom - height * area.hidden, width, height * area.hidden);
+    if (area.hidden > 0)
+      ctx.fillRect(area.left, area.bottom - height * ((area.lift ?? 0) + area.hidden), width, height * area.hidden);
+    if ((area.lift ?? 0) > 0) {
+      ctx.globalAlpha = 1;
+      ctx.fillRect(area.left, area.bottom - height * area.lift!, width, height * area.lift!);
+      ctx.globalAlpha = 0.92;
+    }
   }
   ctx.globalAlpha = 1;
 }
 
 export function paintJudgeLine(ctx: BeMusicPlayfieldPaintContext, { runs, y }: BeMusicJudgeLineData): void {
   ctx.fillStyle = '#ffa8b3';
-  for (const run of runs) ctx.fillRect(run.left, y, run.right - run.left, 2);
+  for (const run of runs) ctx.fillRect(run.left, run.y ?? y, run.right - run.left, 2);
 }
 
 export function paintBombs(ctx: BeMusicPlayfieldPaintContext, { bombs }: BeMusicBombsData): void {
@@ -190,11 +196,11 @@ export function paintJudgmentDisplay(
   for (const word of words) {
     ctx.font = JUDGMENT_FONT;
     ctx.fillStyle = word.color;
-    ctx.fillText(word.text, word.x, y);
+    ctx.fillText(word.text, word.x, word.y ?? y);
     if (word.combo !== undefined && word.combo > 0) {
       ctx.font = COMBO_FONT;
       ctx.fillStyle = COMBO_COLOR;
-      paintTabular(ctx, String(word.combo), word.x, y + COMBO_OFFSET);
+      paintTabular(ctx, String(word.combo), word.x, (word.y ?? y) + COMBO_OFFSET);
     }
   }
 }

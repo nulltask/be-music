@@ -204,6 +204,10 @@ export interface PlayerGUIState extends PlayTempoSettings {
   normalHiSpeedLevel: number;
   judgeTimingMs: number;
   visualConstant: boolean;
+  lift1P: number;
+  lift2P: number;
+  liftOn1P: boolean;
+  liftOn2P: boolean;
   noteDurationMs: number;
   constantFadeMs: number;
   bpmGuide: boolean;

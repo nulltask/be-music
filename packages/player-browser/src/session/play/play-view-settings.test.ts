@@ -61,9 +61,13 @@ describe("the replay's view on the built-in and LR2 play screens", () => {
 
   test('leaves the LIFT out of the visible time, as beatoraja does', () => {
     const ctx = createView();
-    ctx.playState = reducePlayState(ctx.playState, { type: 'cover-set', covers: [{ side: '1P', lift: 0.2 }] });
+    ctx.playState = reducePlayState(ctx.playState, {
+      type: 'cover-set',
+      covers: [{ side: '1P', lift: 0.2, liftOn: true }],
+    });
     const view = startReplayView(ctx);
-    expect(view.covers).toEqual([{ side: '1P', sudden: 0.25, hidden: 0, lift: 0.2 }]);
+    expect(view.covers).toEqual([{ side: '1P', sudden: 0.2, hidden: 0, lift: 0.2 }]);
+    ctx.laneX.set('11', { ...LANE, bottom: LANE.bottom * 0.8, baseBottom: LANE.bottom, scrollScale: 0.8 });
     expect(view.visibleMs).toBe(1500);
     expect(resolveVisibleMs(ctx, resolveLaneCovers(ctx)[0], 120, 1)).toBe(1500);
   });

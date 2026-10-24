@@ -78,13 +78,14 @@ export interface BeMusicLaneCoverArea {
   readonly bottom: number;
   readonly sudden: number;
   readonly hidden: number;
+  readonly lift?: number;
 }
 export interface BeMusicLaneCoversData {
   readonly areas: readonly BeMusicLaneCoverArea[];
 }
 /** The judge line, drawn once per lane run so it never crosses the gap between double-play sides. */
 export interface BeMusicJudgeLineData {
-  readonly runs: readonly LaneRun[];
+  readonly runs: readonly (LaneRun & { readonly y?: number })[];
   readonly y: number;
 }
 export interface BeMusicBombsData {
@@ -92,6 +93,8 @@ export interface BeMusicBombsData {
 }
 /** One side's judgment word, centered on `x`. `combo` is the count under it when the judgment keeps the combo. */
 export interface BeMusicJudgmentWord {
+  /** Per-side text baseline when the sides use different LIFT heights. */
+  readonly y?: number;
   readonly x: number;
   readonly text: string;
   /** Colour this frame. A PGREAT's GREAT cycles; the other words stay put. */

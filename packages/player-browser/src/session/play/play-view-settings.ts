@@ -186,17 +186,18 @@ function applyReplayView(ctx: PlayViewSettingsContext, recorded: ReplayViewState
       type: 'cover-set',
       covers: view.covers.map(({ side, sudden, hidden, lift }) => ({
         side,
-        sudden,
+        sudden: drawsLift ? resolveCoverAboveLift(sudden, lift) : sudden,
         suddenOn: sudden > 0,
         // The log's HIDDEN+ is a fraction of the whole lane; the play state's is of the part above the LIFT.
-        hidden: drawsLift ? resolveHiddenAboveLift(hidden, lift) : hidden,
+        hidden: drawsLift ? resolveCoverAboveLift(hidden, lift) : hidden,
         hiddenOn: hidden > 0,
-        ...(drawsLift ? { lift } : {}),
+        ...(drawsLift ? { lift, liftOn: lift > 0 } : {}),
       })),
     });
   }
   if (!replay.hiSpeed) return;
-  const sudden = view.covers?.[0]?.sudden ?? 0;
+  const cover = view.covers?.[0];
+  const sudden = cover ? resolveCoverAboveLift(cover.sudden, drawsLift ? cover.lift : 0) : 0;
   const scale = resolveReplayScale(ctx);
   const mainBPM = scale?.mainBPM;
   const hiSpeed = resolveReplayHiSpeed(
@@ -218,7 +219,7 @@ function applyReplayView(ctx: PlayViewSettingsContext, recorded: ReplayViewState
 }
 
 /** A HIDDEN+ cover of `hidden` of the whole lane as a fraction of the part above `lift` (none over a full LIFT). */
-function resolveHiddenAboveLift(hidden: number, lift: number): number {
+function resolveCoverAboveLift(hidden: number, lift: number): number {
   return lift < 1 ? Math.min(1, hidden / (1 - lift)) : 0;
 }
 
@@ -238,7 +239,11 @@ export function resolveVisibleMs(
   return resolveWhiteNumber({
     laneBeats: resolveLaneBeats(ctx),
     hiSpeed: ctx.playState.view.hiSpeed.drawn,
-    sudden: cover?.sudden ?? 0,
+    sudden: cover
+      ? cover.lift < 1
+        ? resolveCoverAboveLift(cover.sudden, cover.lift)
+        : (ctx.playState.view.covers.find((state) => state.side === cover.side && state.suddenOn)?.sudden ?? 0)
+      : 0,
     bpm,
     scrollRate,
   });
@@ -251,7 +256,7 @@ export function resolveVisibleMs(
 function resolveLaneBeats(ctx: PlayViewSettingsContext): number {
   let laneHeight = 0;
   for (const lane of ctx.laneX.values()) {
-    laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
+    laneHeight = Math.max(laneHeight, (lane.baseBottom ?? lane.bottom) - lane.top);
   }
   return laneHeight / (ctx.theme.pixelsPerBeat?.() ?? PIXELS_PER_BEAT);
 }
