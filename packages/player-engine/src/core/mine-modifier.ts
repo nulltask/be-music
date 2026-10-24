@@ -3,7 +3,7 @@ import { PLAY_MODE_LAYOUTS, type ResolvedChart } from '@be-music/chart-model';
 import { createLaneBindings, resolveLaneOptionChannels } from './lane-layout.ts';
 import { toTimedLandmineNote, type TimedLandmineNote, type TimedPlayableNote } from '../playable-notes.ts';
 
-export type MineModifier = 'OFF' | 'REMOVE' | 'ADD_RANDOM' | 'ADD_NEAR';
+export type MineModifier = 'OFF' | 'REMOVE' | 'ADD_RANDOM' | 'ADD_NEAR' | 'ADD_BLANK';
 
 /** Effective mine placements from a replay; random generation is bypassed when these are supplied. */
 export interface MinePlacement {
@@ -82,7 +82,9 @@ export function prepareMineModifier(
     for (const [index, lane] of lanes.entries()) {
       if (!blank[index]) continue;
       let add = false;
-      if (mode === 'ADD_NEAR') {
+      if (mode === 'ADD_BLANK') {
+        add = true;
+      } else if (mode === 'ADD_NEAR') {
         add = (index > 0 && !blank[index - 1]) || (index < lanes.length - 1 && !blank[index + 1]);
       } else {
         const draw = options.random!();

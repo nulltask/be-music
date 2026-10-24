@@ -219,7 +219,7 @@ for (const skin of ['plain', 'native'] as const) {
 }
 
 for (const skin of ['plain', 'native'] as const) {
-  for (const modifier of ['ADD RANDOM', 'ADD NEAR'] as const) {
+  for (const modifier of ['ADD RANDOM', 'ADD NEAR', 'ADD ALL'] as const) {
     test(`mine ${modifier} records and restores its generated population on ${skin}`, async ({ player }) => {
       await player.open({ 'be-music.built-in-skin': skin });
       await player.dropText('mine-add.bme', `#TITLE Mine addition\n#BPM 240\n#00001:${'01'.repeat(32)}\n#00111:01\n`);
@@ -230,7 +230,7 @@ for (const skin of ['plain', 'native'] as const) {
       await player.key('Enter');
       await player.waitForResult(0);
       const replay = await player.lastReplay();
-      expect(replay?.play.mineModifier).toBe(modifier.replace(' ', '_'));
+      expect(replay?.play.mineModifier).toBe(modifier === 'ADD ALL' ? 'ADD_BLANK' : modifier.replace(' ', '_'));
       expect(replay?.play.mineModifierChangeCount).toBeGreaterThan(0);
       const mines = replay?.chart.notes.filter((note) => note.type === 'mine');
       expect(mines?.length).toBe(replay?.play.mineModifierChangeCount);

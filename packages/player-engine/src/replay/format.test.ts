@@ -525,13 +525,16 @@ test('mine modifiers and actual change counts round-trip with strict validation'
     );
 });
 
-test.each(['ADD_RANDOM', 'ADD_NEAR'] as const)('%s and silent mine flags round-trip with type validation', (mode) => {
-  const replay = makeReplay();
-  replay.play.mineModifier = mode;
-  replay.chart.notes.push({ id: 999, channel: '16', type: 'mine', timeUs: 0, damage: 10, silent: true });
-  const parsed = parseReplay(serializeReplay(replay));
-  expect(parsed.play.mineModifier).toBe(mode);
-  expect(parsed.chart.notes.at(-1)?.silent).toBe(true);
-  replay.chart.notes.at(-1)!.type = 'normal';
-  expect(() => parseReplay(serializeReplay(replay))).toThrow(ReplayParseError);
-});
+test.each(['ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'] as const)(
+  '%s and silent mine flags round-trip with type validation',
+  (mode) => {
+    const replay = makeReplay();
+    replay.play.mineModifier = mode;
+    replay.chart.notes.push({ id: 999, channel: '16', type: 'mine', timeUs: 0, damage: 10, silent: true });
+    const parsed = parseReplay(serializeReplay(replay));
+    expect(parsed.play.mineModifier).toBe(mode);
+    expect(parsed.chart.notes.at(-1)?.silent).toBe(true);
+    replay.chart.notes.at(-1)!.type = 'normal';
+    expect(() => parseReplay(serializeReplay(replay))).toThrow(ReplayParseError);
+  },
+);

@@ -148,3 +148,40 @@ test('ADD NEAR follows source key/scratch order across DP sides and retains exis
   const pms = resolveChart(parseChart('#BPM 120\n#00011:01', 'bms'), { playVariant: '9' });
   expect(prepareMineModifier(pms, 'ADD_NEAR').mines.map((mine) => mine.channel)).toEqual(['12']);
 });
+
+test('ADD ALL fills every blank timeline cell, including invisible-note lanes and empty rows, without randomness', () => {
+  const resolved = resolveChart(parseChart('#BPM 120\n#00013:01\n#00031:01\n#000D5:02\n#00101:01', 'bms'), {
+    playVariant: '7',
+  });
+  const result = prepareMineModifier(resolved, 'ADD_BLANK', {
+    random: () => {
+      throw new Error('unused');
+    },
+  });
+  expect(result.mines.filter((mine) => mine.beat === 0).map((mine) => mine.channel)).toEqual([
+    '11',
+    '12',
+    '14',
+    '15',
+    '18',
+    '19',
+    '16',
+  ]);
+  expect(result.mines.filter((mine) => mine.beat === 4)).toHaveLength(8);
+  expect(result.changes).toBe(14);
+  expect(resolved.invisibleNotes).toHaveLength(1);
+  expect(
+    result.mines.filter((mine) => mine.silent).every((mine) => resolveLandmineGaugeEffect(mine.event).damage === 10),
+  ).toBe(true);
+});
+
+test('ADD ALL reserves LN heads, held cells and exact tails but fills the lane after release', () => {
+  const resolved = resolveChart(
+    parseChart('#BPM 120\n#LNOBJ AA\n#00011:01\n#00001:0001\n#00111:AA\n#00212:01', 'bms'),
+    { playVariant: '7' },
+  );
+  const held = preparePlaybackChart(resolved, { mineModifier: 'ADD_BLANK' });
+  expect(held.landmineNotes.filter((mine) => mine.channel === '11').map((mine) => mine.beat)).toEqual([8]);
+  const removed = preparePlaybackChart(resolved, { longNoteModifier: 'REMOVE', mineModifier: 'ADD_BLANK' });
+  expect(removed.landmineNotes.filter((mine) => mine.channel === '11').map((mine) => mine.beat)).toEqual([2, 4, 8]);
+});
