@@ -22,7 +22,7 @@ export function removeLongNoteTails(
   return changed;
 }
 
-export type LongNoteModifier = 'OFF' | 'LEGACY' | 'REMOVE' | 'ADD_LN' | 'ADD_CN';
+export type LongNoteModifier = 'OFF' | 'LEGACY' | 'REMOVE' | 'ADD_LN' | 'ADD_CN' | 'ADD_HCN';
 
 /** Recorded head identity and generated endpoint, before lane transforms. */
 export interface LongNotePlacement {
@@ -53,7 +53,9 @@ export function addLongNotes(
     placements?: readonly LongNotePlacement[];
   } = {},
 ): number {
-  if (mode !== 'ADD_LN' && mode !== 'ADD_CN') throw new RangeError('Unsupported long-note addition mode.');
+  if (mode !== 'ADD_LN' && mode !== 'ADD_CN' && mode !== 'ADD_HCN')
+    throw new RangeError('Unsupported long-note addition mode.');
+  const addedMode: LongNoteMode = mode === 'ADD_LN' ? 1 : mode === 'ADD_CN' ? 2 : 3;
   const lanes = resolveModifierLanes(resolved, options.laneModeExtension);
   const timelines = collectModifierTimelines(resolved, lanes);
   const rate = clampLongNoteRate(options.rate ?? 1);
@@ -80,7 +82,7 @@ export function addLongNotes(
       !Number.isSafeInteger(placement.timeUs) ||
       !Number.isSafeInteger(placement.endTimeUs) ||
       placement.endTimeUs <= placement.timeUs ||
-      placement.lnMode !== (mode === 'ADD_LN' ? 1 : 2) ||
+      placement.lnMode !== addedMode ||
       recorded.has(key)
     )
       throw new RangeError('Invalid recorded long-note addition placement.');
@@ -116,7 +118,7 @@ export function addLongNotes(
   for (const { note, beat, seconds } of additions) {
     note.endBeat = beat;
     note.endSeconds = seconds;
-    note.longNoteMode = mode === 'ADD_LN' ? 1 : 2;
+    note.longNoteMode = addedMode;
     note.generatedLongNote = true;
   }
   return additions.length;

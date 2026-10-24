@@ -453,7 +453,13 @@ export class DebugMenu {
         OFF: 'OFF' as const,
         'LEGACY NOTE (AC 34)': 'LEGACY' as const,
         'LN REMOVE (beatoraja)': 'REMOVE' as const,
-        ...(beatoraja ? { 'ADD LN (beatoraja)': 'ADD_LN' as const, 'ADD CN (beatoraja)': 'ADD_CN' as const } : {}),
+        ...(beatoraja
+          ? {
+              'ADD LN (beatoraja)': 'ADD_LN' as const,
+              'ADD CN (beatoraja)': 'ADD_CN' as const,
+              'ADD HCN (beatoraja)': 'ADD_HCN' as const,
+            }
+          : {}),
       });
       this.longNoteModifierController.refresh();
     }

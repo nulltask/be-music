@@ -1335,6 +1335,7 @@ test.each(['NONE', 'CONTINUE'] as const)(
 test.each([
   ['ADD_LN', 1],
   ['ADD_CN', 2],
+  ['ADD_HCN', 3],
 ] as const)('%s records its exact endpoint and retains live/simulated judgments', async (longNoteModifier, lnMode) => {
   const json = chart([
     { measure: 1, channel: '11', position: [0, 1], value: '01' },
@@ -1365,4 +1366,28 @@ test.each([
   expect(run.summary.total).toBe(lnMode === 1 ? 2 : 3);
   expect(replay.results!.native!.noteCount).toBe(lnMode === 1 ? 2 : 3);
   expect(simulateReplay(replay, { ruleset: 'beatoraja' }).judge).toEqual(replay.results!.native!.judge);
+});
+
+test('generated HCNs gain hold ticks in addition to the same CN head/tail judgments', async () => {
+  const json = chart([
+    { measure: 1, channel: '11', position: [0, 1], value: '01' },
+    { measure: 1, channel: '01', position: [1, 2], value: '02' },
+    { measure: 2, channel: '12', position: [0, 1], value: '01' },
+  ]);
+  json.metadata.total = 20;
+  const results = [];
+  for (const longNoteModifier of ['ADD_CN', 'ADD_HCN'] as const) {
+    const preparedChart = preparePlaybackChart(resolveChart(json), { longNoteModifier }, 0, () => 0);
+    const run = await runRecordedPlay(
+      json,
+      [down(0, 1_000_000, '11'), up(1, 1_500_000, '11'), down(2, 2_000_000, '12')],
+      'beatoraja',
+      { longNoteModifier, preparedChart },
+    );
+    const simulated = simulateReplay(parseReplay(serializeReplay(run.replay)), { ruleset: 'beatoraja' });
+    expect(run.summary.perfect).toBe(3);
+    expect(simulated.gauge.final).toBe(run.summary.gauge?.current);
+    results.push(run.summary.gauge!.current);
+  }
+  expect(results[1]).toBeGreaterThan(results[0]!);
 });

@@ -226,7 +226,7 @@ test('added-mine replay restores original mine lanes before source-aware arrange
   expect(mineIdentity(fresh)).toEqual(mineIdentity(original));
 });
 
-test.each(['ADD_LN', 'ADD_CN'] as const)(
+test.each(['ADD_LN', 'ADD_CN', 'ADD_HCN'] as const)(
   '%s replay and previous layout restore original heads/endpoints before shuffled matching',
   (longNoteModifier) => {
     const entry = {

@@ -360,16 +360,13 @@ for (const skin of ['plain', 'native'] as const) {
   for (const [longNoteModifier, lnMode] of [
     ['ADD_LN', 1],
     ['ADD_CN', 2],
+    ['ADD_HCN', 3],
   ] as const) {
     test(`${longNoteModifier} generates and reopens recorded long notes on ${skin}`, async ({ player }) => {
       await player.open({ 'be-music.built-in-skin': skin });
       await player.dropText('add-ln.bme', '#TITLE Add long notes\n#BPM 240\n#00111:01\n#00101:0001\n#00212:01\n');
       await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
-      await player.setOption(
-        ['Play options'],
-        'Long notes',
-        longNoteModifier === 'ADD_LN' ? 'ADD LN (beatoraja)' : 'ADD CN (beatoraja)',
-      );
+      await player.setOption(['Play options'], 'Long notes', `${longNoteModifier.replaceAll('_', ' ')} (beatoraja)`);
       await player.setOption(['Play options'], 'Long-note add rate (beatoraja)', 1);
       await player.setOption(['Play options'], 'Auto play', true);
       await player.cursorTo((bar) => bar.title === 'Add long notes', 'long-note addition chart');
