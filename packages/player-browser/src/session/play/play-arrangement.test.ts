@@ -226,7 +226,7 @@ test('added-mine replay restores original mine lanes before source-aware arrange
   expect(mineIdentity(fresh)).toEqual(mineIdentity(original));
 });
 
-test.each(['ADD_LN', 'ADD_CN', 'ADD_HCN'] as const)(
+test.each(['ADD_LN', 'ADD_CN', 'ADD_HCN', 'ADD_ALL'] as const)(
   '%s replay and previous layout restore original heads/endpoints before shuffled matching',
   (longNoteModifier) => {
     const entry = {
@@ -270,3 +270,43 @@ test.each(['ADD_LN', 'ADD_CN', 'ADD_HCN'] as const)(
     }
   },
 );
+
+test('mixed LN/CN/HCN types stay attached to their original keysounds through a shuffled replay', () => {
+  const entry = {
+    ...chart,
+    chartPath: 'mixed-ln.bms',
+    chart: parseChart('#BPM 120\n#00011:01\n#00012:02\n#00013:03\n#00101:01', 'bms'),
+  };
+  const draws = [0, 0, 0, 1 / 3, 0, 2 / 3];
+  const random = vi.spyOn(Math, 'random').mockImplementation(() => draws.shift() ?? 0.5);
+  try {
+    const original = prepare(
+      { judgeRuleset: 'beatoraja', longNoteModifier: 'ADD_ALL', longNoteRate: 1, random1P: 'MIRROR' },
+      entry,
+    );
+    expect(original.notes.map((note) => note.longNoteMode)).toEqual([1, 2, 3]);
+    const replay = parseReplay(
+      serializeReplay(
+        createReplayRecorder({
+          json: entry.chart,
+          chart: original.preparedChart!,
+          play: {
+            mode: 'manual',
+            autoScratch: false,
+            judgeRuleset: 'beatoraja',
+            longNoteModifier: 'ADD_ALL',
+            longNoteRate: 1,
+            longNoteModifierChangeCount: 3,
+          },
+        }).finalize({ summary: { ...createEmptyScore(original.notes.length), fast: 0, slow: 0 } }),
+      ),
+    );
+    random.mockReturnValue(0.99);
+    const restored = prepare({ judgeRuleset: 'beatoraja', replay }, entry);
+    expect(restored.notes.map((note) => [note.event.value, note.channel, note.longNoteMode, note.endBeat])).toEqual(
+      original.notes.map((note) => [note.event.value, note.channel, note.longNoteMode, note.endBeat]),
+    );
+  } finally {
+    random.mockRestore();
+  }
+});

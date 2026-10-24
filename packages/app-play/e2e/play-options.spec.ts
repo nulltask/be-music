@@ -361,6 +361,7 @@ for (const skin of ['plain', 'native'] as const) {
     ['ADD_LN', 1],
     ['ADD_CN', 2],
     ['ADD_HCN', 3],
+    ['ADD_ALL', 0],
   ] as const) {
     test(`${longNoteModifier} generates and reopens recorded long notes on ${skin}`, async ({ player }) => {
       await player.open({ 'be-music.built-in-skin': skin });
@@ -375,7 +376,12 @@ for (const skin of ['plain', 'native'] as const) {
       const replay = await player.lastReplay();
       expect(replay?.play).toMatchObject({ longNoteModifier, longNoteRate: 1, longNoteModifierChangeCount: 1 });
       expect(replay?.chart.notes.filter((note) => note.generatedLongNote)).toEqual([
-        expect.objectContaining({ type: 'long', lnMode, timeUs: 1_000_000, endTimeUs: 1_500_000 }),
+        expect.objectContaining({
+          type: 'long',
+          lnMode: lnMode || expect.any(Number),
+          timeUs: 1_000_000,
+          endTimeUs: 1_500_000,
+        }),
       ]);
       await player.leaveResult();
       await player.setOption(['Play options'], 'Long notes', 'OFF');

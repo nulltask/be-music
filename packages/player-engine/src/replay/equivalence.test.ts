@@ -1336,6 +1336,7 @@ test.each([
   ['ADD_LN', 1],
   ['ADD_CN', 2],
   ['ADD_HCN', 3],
+  ['ADD_ALL', 1],
 ] as const)('%s records its exact endpoint and retains live/simulated judgments', async (longNoteModifier, lnMode) => {
   const json = chart([
     { measure: 1, channel: '11', position: [0, 1], value: '01' },
@@ -1390,4 +1391,30 @@ test('generated HCNs gain hold ticks in addition to the same CN head/tail judgme
     results.push(run.summary.gauge!.current);
   }
   expect(results[1]).toBeGreaterThan(results[0]!);
+});
+
+test('mixed generated types contribute their individual head/tail counts and reproduce the same gauge', async () => {
+  const json = chart([
+    ...['11', '12', '13'].map((channel) => ({ measure: 1, channel, position: [0, 1] as const, value: '01' })),
+    { measure: 1, channel: '01', position: [1, 2], value: '02' },
+    { measure: 2, channel: '14', position: [0, 1], value: '01' },
+  ]);
+  json.metadata.total = 20;
+  const draws = [0, 0, 0, 1 / 3, 0, 2 / 3];
+  const preparedChart = preparePlaybackChart(resolveChart(json), { longNoteModifier: 'ADD_ALL' }, 0, () =>
+    draws.shift()!,
+  );
+  const run = await runRecordedPlay(
+    json,
+    [down(0, 1_000_000, '11', '12', '13'), up(1, 1_500_000, '11', '12', '13'), down(2, 2_000_000, '14')],
+    'beatoraja',
+    { longNoteModifier: 'ADD_ALL', preparedChart },
+  );
+  const replay = parseReplay(serializeReplay(run.replay));
+  expect(replay.chart.notes.filter((note) => note.generatedLongNote).map((note) => note.lnMode)).toEqual([1, 2, 3]);
+  expect(run.summary.perfect).toBe(6);
+  expect(run.summary.total).toBe(6);
+  const simulated = simulateReplay(replay, { ruleset: 'beatoraja' });
+  expect(simulated.judge).toEqual(replay.results!.native!.judge);
+  expect(simulated.gauge.final).toBe(run.summary.gauge?.current);
 });

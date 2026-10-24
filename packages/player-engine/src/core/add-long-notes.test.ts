@@ -147,3 +147,46 @@ test('ADD HCN selects hell-charge behavior independently of the chart CN default
   expect(resolved.lnMode).toBe(2);
   expect(prepared.longNoteModifierChangeCount).toBe(1);
 });
+
+test('mixed ADD ALL consumes a second draw only after rate acceptance and selects all three source types', () => {
+  const resolved = chart('#00011:01\n#00012:02\n#00013:03\n#00101:01');
+  const draws = [0, 0, 0, 1 / 3, 0, 2 / 3];
+  const prepared = preparePlaybackChart(resolved, { longNoteModifier: 'ADD_ALL' }, 0, () => draws.shift()!);
+  expect(prepared.notes.map((note) => note.longNoteMode)).toEqual([1, 2, 3]);
+  expect(prepared.longNoteModifierChangeCount).toBe(3);
+  expect(draws).toEqual([]);
+  let calls = 0;
+  const rejected = preparePlaybackChart(resolved, { longNoteModifier: 'ADD_ALL', longNoteRate: 0.5 }, 0, () => {
+    calls++;
+    return 0.5;
+  });
+  expect(rejected.longNoteModifierChangeCount).toBe(0);
+  expect(calls).toBe(3);
+});
+
+test('recorded mixed types survive restoration without either probability or type draws', () => {
+  const resolved = chart('#00011:01\n#00012:02\n#00101:01');
+  const notes = preparePlaybackChart(resolved).notes;
+  const placements = [
+    { sourceChannel: '11', timeUs: 0, endTimeUs: 2_000_000, lnMode: 2 as const },
+    { sourceChannel: '12', timeUs: 0, endTimeUs: 2_000_000, lnMode: 3 as const },
+  ];
+  expect(
+    addLongNotes(resolved, notes, 'ADD_ALL', {
+      placements,
+      random: () => {
+        throw new Error('reroll');
+      },
+    }),
+  ).toBe(2);
+  expect(notes.map((note) => note.longNoteMode)).toEqual([2, 3]);
+});
+
+test('an invalid mixed type draw rejects before mutating the fresh source heads', () => {
+  const resolved = chart('#00011:01\n#00101:01');
+  const notes = preparePlaybackChart(resolved).notes;
+  const before = structuredClone(notes);
+  const draws = [0, 1];
+  expect(() => addLongNotes(resolved, notes, 'ADD_ALL', { random: () => draws.shift()! })).toThrow(/type randomness/);
+  expect(notes).toEqual(before);
+});

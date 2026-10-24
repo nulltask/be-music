@@ -163,7 +163,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   liftOn1P: BOOLEAN_CYCLE,
   liftOn2P: BOOLEAN_CYCLE,
   judgeAlgorithm: ['combo', 'duration', 'lowest'],
-  longNoteModifier: ['OFF', 'LEGACY', 'REMOVE', 'ADD_LN', 'ADD_CN', 'ADD_HCN'],
+  longNoteModifier: ['OFF', 'LEGACY', 'REMOVE', 'ADD_LN', 'ADD_CN', 'ADD_HCN', 'ADD_ALL'],
   mineModifier: ['OFF', 'REMOVE', 'ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'],
   gaugeAutoShift: ['NONE', 'CONTINUE'],
   classicHiSpeed: BOOLEAN_CYCLE,

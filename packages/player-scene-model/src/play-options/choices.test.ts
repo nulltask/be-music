@@ -275,3 +275,8 @@ test('ADD CN keeps a distinct source identifier', () => {
 test('ADD HCN keeps a distinct source identifier', () => {
   expect(resolvePlayOptionValue('longNoteModifier', 'ADD_HCN')).toBe('ADD_HCN');
 });
+
+test('mixed long notes use ADD_ALL rather than the mine ADD_BLANK identifier', () => {
+  expect(resolvePlayOptionValue('longNoteModifier', 'ADD_ALL')).toBe('ADD_ALL');
+  expect(resolvePlayOptionValue('longNoteModifier', 'ADD_BLANK')).toBeUndefined();
+});
