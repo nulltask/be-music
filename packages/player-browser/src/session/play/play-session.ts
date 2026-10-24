@@ -125,6 +125,7 @@ export class PlaySession extends PlaySessionState {
         hiSpeed: createHiSpeedState({
           ...(options.initialHiSpeed !== undefined ? { hiSpeed: options.initialHiSpeed } : {}),
           classic: options.classicHiSpeed,
+          normalLevel: options.classicHiSpeed ? undefined : options.normalHiSpeedLevel,
           locked: options.hiSpeedLocked === true,
         }),
       },
@@ -723,7 +724,13 @@ export class PlaySession extends PlaySessionState {
    * Snapped and clamped like the in-game hotkey; non-finite values are ignored.
    */
   public setHiSpeed(value: number): void {
-    applyPlayEvent(this, { type: 'hi-speed-set', value });
+    applyPlayEvent(this, {
+      type: 'hi-speed-set',
+      value,
+      bpm: this.timingResolver?.bpmAtBeat(this.currentBeat(this.currentSeconds())),
+    });
+    if (this.playState.view.hiSpeed.normalLevel !== undefined)
+      this.options.onHiSpeedChange?.(this.playState.view.hiSpeed.player, this.playState.view.hiSpeed.normalLevel);
   }
 
   /**

@@ -80,7 +80,7 @@ export interface PlaySceneEvents {
   /** The player asked to play the chart again (F5). */
   restart(): void;
   /** The player stepped the hi-speed; on the player's own scale, to remember for the next play. */
-  hiSpeed?(hiSpeed: number): void;
+  hiSpeed?(hiSpeed: number, normalLevel?: number): void;
   /** The play's tempo changed (a live change, or a replay following its log). */
   tempo?(tempo: number): void;
 }
@@ -468,6 +468,9 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
   const play = new PlaySession(
     {
       ...settings,
+      classicHiSpeed: playOptions.classicHiSpeed,
+      normalHiSpeedLevel: playOptions.normalHiSpeedLevel,
+      hsFix: playOptions.hsFix,
       recordingOptionState: { ...playOptions },
       ...(options.allowSeek !== undefined ? { allowSeek: options.allowSeek } : {}),
       ...(kit.family === 'beatoraja' ? BEATORAJA_PLAY_SETTINGS : {}),
@@ -484,7 +487,9 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       onExit: () => on.exit(),
       onRestart: () => on.restart(),
       onChartFinished: (result) => on.finish(result, result.replay),
-      ...(on.hiSpeed !== undefined ? { onHiSpeedChange: (hiSpeed: number) => on.hiSpeed?.(hiSpeed) } : {}),
+      ...(on.hiSpeed !== undefined
+        ? { onHiSpeedChange: (hiSpeed: number, normalLevel?: number) => on.hiSpeed?.(hiSpeed, normalLevel) }
+        : {}),
       ...(on.tempo !== undefined ? { onTempoChange: (tempo: number) => on.tempo?.(tempo) } : {}),
     },
     theme,

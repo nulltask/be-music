@@ -139,7 +139,15 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
         ...resolveReplayOptionsAt(replay.play.options, replay.play.optionChanges, Math.round(seconds * 1_000_000)),
       });
     } else if (replay === undefined && play.sharedEngineInputSignals !== undefined) {
-      const current: ReplayOptionState = { ...playOptions, hiSpeed: play.playState.view.hiSpeed.player };
+      const liveOptions: PlayOptions = {
+        ...playOptions,
+        hiSpeed: play.playState.view.hiSpeed.player,
+        ...(play.playState.view.hiSpeed.normalLevel !== undefined
+          ? { normalHiSpeedLevel: play.playState.view.hiSpeed.normalLevel }
+          : {}),
+      };
+      playOptions = liveOptions;
+      const current: ReplayOptionState = { ...liveOptions };
       const change = diffReplayOptions(this.recordedOptions ?? { ...playOptions }, current);
       if (change) play.sharedEngineInputSignals.pushCommand({ kind: 'options', values: change });
       this.recordedOptions = current;

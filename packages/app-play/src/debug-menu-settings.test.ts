@@ -125,6 +125,7 @@ describe('captureDebugMenuSettings', () => {
       random2P: 'MIRROR',
       dpFlip: true,
       bpmGuide: true,
+      normalHiSpeedLevel: 0,
       classicHiSpeed: true,
       judgeAlgorithm: 'duration',
       longNoteModifier: 'REMOVE',

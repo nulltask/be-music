@@ -25,13 +25,16 @@ export function renderBPMGuide(input: {
   const colors = { bpm: 0x00c000, stop: 0xc0c000 };
   const threshold =
     (input.window.rules === 'lr2' ? input.window.reachedBeat : input.window.currentBeat) -
-    1 / Math.max(1, input.pixelsPerBeat);
+    1 / Math.max(Number.EPSILON, input.pixelsPerBeat);
   const first = findFirstIndexAtOrAfter(input.events, threshold, (event) => event.beat);
   for (let index = first; index < input.events.length; index += 1) {
     const event = input.events[index]!;
     if (isPastDrawWindow(input.window, event.beat)) break;
     if (event.seconds < input.window.nowSeconds || !isDrawnAtTime(input.window, event.seconds)) continue;
-    if (input.window.rules === 'lr2' && event.beat < input.window.reachedBeat - 1 / Math.max(1, input.pixelsPerBeat))
+    if (
+      input.window.rules === 'lr2' &&
+      event.beat < input.window.reachedBeat - 1 / Math.max(Number.EPSILON, input.pixelsPerBeat)
+    )
       continue;
     const sides = new Set<string>();
     for (const lane of input.lanes) {

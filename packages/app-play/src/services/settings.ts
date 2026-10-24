@@ -238,6 +238,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     random2P: 'OFF',
     dpFlip: false,
     bpmGuide: false,
+    normalHiSpeedLevel: 0,
     classicHiSpeed: false,
     judgeAlgorithm: 'combo',
     longNoteModifier: 'OFF',

@@ -103,6 +103,7 @@ export interface PlayEngineContext
       | 'tempoPitchMode'
       | 'hsFix'
       | 'classicHiSpeed'
+      | 'normalHiSpeedLevel'
       | 'hiSpeedLocked'
       | 'onHiSpeedChange'
       | 'onTempoChange'
@@ -404,6 +405,7 @@ export function resolveReplayRecording(
     | 'initialHiSpeed'
     | 'hsFix'
     | 'classicHiSpeed'
+    | 'normalHiSpeedLevel'
     | 'bpmGuide'
     | 'hiddenSudden1P'
     | 'hiddenSudden2P'
@@ -416,6 +418,7 @@ export function resolveReplayRecording(
   >,
   chartEntry: Pick<LibraryChart, 'chart' | 'chartPath'> | undefined,
   view: ReplayViewState,
+  effectivePlayerHiSpeed?: number,
 ): ReplayRecordingOptions {
   if (options.random1P === 'SCATTER' || options.random2P === 'SCATTER') {
     throw new RangeError('SCATTER is disabled until placement and assist policy are implemented.');
@@ -423,9 +426,13 @@ export function resolveReplayRecording(
   const effectiveOptions: ReplayOptionState = {};
   for (const [key, value] of Object.entries({
     autoPlay: options.autoPlay,
-    hiSpeed: options.classicHiSpeed ? view.hiSpeed : options.initialHiSpeed,
-    hsFix: options.classicHiSpeed ? 'OFF' : options.hsFix,
+    hiSpeed: effectivePlayerHiSpeed ?? options.initialHiSpeed,
+    hsFix: options.classicHiSpeed || (options.normalHiSpeedLevel ?? 0) > 0 ? 'OFF' : options.hsFix,
     classicHiSpeed: options.classicHiSpeed,
+    normalHiSpeedLevel: options.classicHiSpeed ? 0 : options.normalHiSpeedLevel,
+    ...(!options.classicHiSpeed && (options.normalHiSpeedLevel ?? 0) > 0
+      ? { normalHiSpeedProfile: 'AC32-measured' }
+      : {}),
     bpmGuide: options.bpmGuide,
     hiddenSudden1P: options.hiddenSudden1P,
     hiddenSudden2P: options.hiddenSudden2P,
@@ -607,7 +614,12 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
             // back through `getResultData().replay` for the result screen's auto-save.
             // What the player sees at the start; the changes during the play go in as `view` commands. A play that
             // seeks records none: the engine discards its recorder at the first seek.
-            recordReplay: resolveReplayRecording(ctx.options, ctx.chart, startReplayView(ctx)),
+            recordReplay: resolveReplayRecording(
+              ctx.options,
+              ctx.chart,
+              startReplayView(ctx),
+              ctx.playState.view.hiSpeed.player,
+            ),
             onReplayRecorded: ctx.practice
               ? undefined
               : (replay: BeMusicReplay) => {

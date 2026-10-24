@@ -187,6 +187,8 @@ export class DebugMenu {
   public hiSpeedController: PaneBinding | undefined;
   public hsFixController: PaneBinding | undefined;
   public classicHiSpeedController: PaneBinding | undefined;
+  public normalHiSpeedController: PaneBinding | undefined;
+  public normalHiSpeedLevelController: PaneBinding | undefined;
   public classicSpeedController: PaneBinding | undefined;
   public gaugeController: ListInputBindingApi<GaugeType> | undefined;
   public judgeAlgorithmController: ListInputBindingApi<PlayOptions['judgeAlgorithm']> | undefined;
@@ -358,6 +360,7 @@ export class DebugMenu {
   public refreshHiSpeed(): void {
     this.hiSpeedController?.refresh();
     this.classicSpeedController?.refresh();
+    this.normalHiSpeedLevelController?.refresh();
   }
   /** Shows `value` as the skin system the scenes run on, which a pick of one with no skin loaded goes back to. */
   public showSkinSystem(value: SkinFamilyOverride): void {
@@ -391,13 +394,20 @@ export class DebugMenu {
   /** Repaints the "Play options" controllers after an external write (the LR2 select panel's edits). */
   public refreshRulesetChoices(): void {
     const ac = this.guiState.judgeRuleset === '____';
+    if (!ac && this.guiState.normalHiSpeedLevel > 0) {
+      this.guiState.normalHiSpeedLevel = 0;
+      this.setPlayOptions({ normalHiSpeedLevel: 0 });
+    }
+    const normal = this.guiState.normalHiSpeedLevel > 0;
+    if (this.normalHiSpeedController) this.normalHiSpeedController.hidden = !ac;
+    if (this.normalHiSpeedLevelController) this.normalHiSpeedLevelController.hidden = !normal;
     if (!ac && this.guiState.classicHiSpeed) {
       this.guiState.classicHiSpeed = false;
       this.setPlayOptions({ classicHiSpeed: false });
     }
     if (this.classicHiSpeedController) this.classicHiSpeedController.hidden = !ac;
-    if (this.hiSpeedController) this.hiSpeedController.hidden = this.guiState.classicHiSpeed;
-    if (this.hsFixController) this.hsFixController.hidden = this.guiState.classicHiSpeed;
+    if (this.hiSpeedController) this.hiSpeedController.hidden = this.guiState.classicHiSpeed || normal;
+    if (this.hsFixController) this.hsFixController.hidden = this.guiState.classicHiSpeed || normal;
     if (this.classicSpeedController) this.classicSpeedController.hidden = !this.guiState.classicHiSpeed;
     const beatoraja = this.guiState.judgeRuleset === 'beatoraja';
     if (!beatoraja && this.guiState.judgeAlgorithm !== 'combo') {

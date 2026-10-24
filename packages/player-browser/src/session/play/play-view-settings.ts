@@ -17,6 +17,7 @@ import {
   type ReplayViewState,
 } from '@be-music/player-engine/replay';
 import {
+  AC32_HI_SPEED_BASE,
   BE_MUSIC_HI_SPEED_SCALE,
   resolveHiSpeedForWhiteNumber,
   resolveLaneCover,
@@ -38,6 +39,8 @@ import type { PlayfieldLaneRect } from '../../view/types.ts';
 /** The scene's members the view settings read and write: the play session's members of these names. */
 export interface PlayViewSettingsContext extends PlayStateContext {
   readonly options: Readonly<Pick<PlaySessionOptions, 'onHiSpeedChange' | 'onTempoChange' | 'replayView'>>;
+  readonly timingResolver?: Pick<import('@be-music/chart-model').TimingResolver, 'bpmAtBeat'>;
+  currentBeat?(seconds: number): number;
   readonly disposed: boolean;
   tempo: number;
   readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string }>;
@@ -57,10 +60,15 @@ export interface PlayViewSettingsContext extends PlayStateContext {
  * it. The host hears of the player's new hi-speed, to remember it for the next play. Returns whether it changed.
  */
 export function adjustHiSpeed(ctx: PlayViewSettingsContext, delta: number): boolean {
-  const previous = applyPlayEvent(ctx, { type: 'hi-speed-step', delta });
+  const bpm = ctx.timingResolver?.bpmAtBeat(ctx.currentBeat?.(ctx.currentSeconds()) ?? 0);
+  const previous = applyPlayEvent(ctx, { type: 'hi-speed-step', delta, bpm });
   const player = ctx.playState.view.hiSpeed.player;
-  if (player === previous.view.hiSpeed.player) return false;
-  ctx.options.onHiSpeedChange?.(player);
+  if (
+    player === previous.view.hiSpeed.player &&
+    ctx.playState.view.hiSpeed.normalLevel === previous.view.hiSpeed.normalLevel
+  )
+    return false;
+  ctx.options.onHiSpeedChange?.(player, ctx.playState.view.hiSpeed.normalLevel);
   return true;
 }
 
@@ -130,6 +138,7 @@ function currentReplayView(ctx: PlayViewSettingsContext): ReplayViewState {
 
 /** The view the recorded replay starts from (`play.view`); later changes go through {@link updateReplayView}. */
 export function startReplayView(ctx: PlayViewSettingsContext): ReplayViewState {
+  syncMeasuredSourceScale(ctx);
   const view = currentReplayView(ctx);
   ctx.replayViewCoalescer = createReplayViewCoalescer(view, { minIntervalMs: 0 });
   return view;
@@ -141,6 +150,7 @@ export function startReplayView(ctx: PlayViewSettingsContext): ReplayViewState {
  */
 export function updateReplayView(ctx: PlayViewSettingsContext, seconds: number, seek = false): void {
   if (resolveReplayScale(ctx) === undefined) return;
+  syncMeasuredSourceScale(ctx);
   if (ctx.replayViewCursor !== undefined) {
     const timeUs = Math.round(seconds * 1_000_000);
     const recorded = seek ? ctx.replayViewCursor.seek(timeUs) : ctx.replayViewCursor.next(timeUs);
@@ -189,15 +199,20 @@ function applyReplayView(ctx: PlayViewSettingsContext, recorded: ReplayViewState
   const sudden = view.covers?.[0]?.sudden ?? 0;
   const scale = resolveReplayScale(ctx);
   const mainBPM = scale?.mainBPM;
-  const hiSpeed = resolveReplayHiSpeed(view, scale?.scale ?? BE_MUSIC_HI_SPEED_SCALE, (visibleMs) =>
-    mainBPM === undefined
-      ? undefined
-      : resolveHiSpeedForWhiteNumber({
-          laneBeats: scale?.laneBeats ?? 0,
-          sudden,
-          bpm: mainBPM,
-          whiteNumberMs: visibleMs,
-        }),
+  const hiSpeed = resolveReplayHiSpeed(
+    view,
+    ctx.playState.view.hiSpeed.classic || ctx.playState.view.hiSpeed.normalLevel !== undefined
+      ? 'ac32-measured'
+      : (scale?.scale ?? BE_MUSIC_HI_SPEED_SCALE),
+    (visibleMs) =>
+      mainBPM === undefined
+        ? undefined
+        : resolveHiSpeedForWhiteNumber({
+            laneBeats: scale?.laneBeats ?? 0,
+            sudden,
+            bpm: mainBPM,
+            whiteNumberMs: visibleMs,
+          }),
   );
   if (hiSpeed !== undefined) applyPlayEvent(ctx, { type: 'hi-speed-drawn', value: hiSpeed });
 }
@@ -239,4 +254,13 @@ function resolveLaneBeats(ctx: PlayViewSettingsContext): number {
     laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
   }
   return laneHeight / (ctx.theme.pixelsPerBeat?.() ?? PIXELS_PER_BEAT);
+}
+
+/** Map measured source multipliers onto the active skin's lane scale without changing the selected source value. */
+function syncMeasuredSourceScale(ctx: PlayViewSettingsContext): void {
+  const state = ctx.playState.view.hiSpeed;
+  if (!state.classic && state.normalLevel === undefined) return;
+  const scale = resolveReplayScale(ctx);
+  if (scale === undefined || !(scale.laneBeats > 0)) return;
+  applyPlayEvent(ctx, { type: 'hi-speed-scale', multiplier: (scale.laneBeats * 36000) / AC32_HI_SPEED_BASE });
 }
