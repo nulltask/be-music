@@ -675,8 +675,14 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     parsed.bottomShiftableGauge = play.bottomShiftableGauge as GaugeShiftBottom;
   }
   if (play.gaugeAutoShift !== undefined) {
-    if (!['NONE', 'CONTINUE', 'SURVIVAL_TO_GROOVE', 'BEST_CLEAR'].includes(play.gaugeAutoShift as string))
-      throw new ReplayParseError('play.gaugeAutoShift: expected NONE, CONTINUE, SURVIVAL_TO_GROOVE or BEST_CLEAR');
+    if (
+      !['NONE', 'CONTINUE', 'SURVIVAL_TO_GROOVE', 'BEST_CLEAR', 'SELECT_TO_UNDER'].includes(
+        play.gaugeAutoShift as string,
+      )
+    )
+      throw new ReplayParseError(
+        'play.gaugeAutoShift: expected NONE, CONTINUE, SURVIVAL_TO_GROOVE, BEST_CLEAR or SELECT_TO_UNDER',
+      );
     parsed.gaugeAutoShift = play.gaugeAutoShift as GaugeAutoShift;
   }
   if (play.course !== undefined) parsed.course = parseCourseStage(expectRecord(play.course, 'play.course'));

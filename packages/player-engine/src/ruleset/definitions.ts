@@ -168,7 +168,7 @@ export interface RulesetConfig {
   /** SURVIVAL TO GROOVE tracks NORMAL from chart start, never on course class gauges. */
   gaugeFallback?: GaugeSpec;
   /** Source-ordered parallel gauges and minimum eligible index (CLASS family starts at zero). */
-  gaugeBank?: { specs: readonly GaugeSpec[]; bottomIndex: number };
+  gaugeBank?: { specs: readonly GaugeSpec[]; bottomIndex: number; upperExclusive?: number };
   /** EX-SCORE denominator note count (longs count 1 for LN styles, 2 for charge styles). */
   noteCount: number;
   /**
@@ -881,6 +881,8 @@ export function resolveRuleset(
     const tables =
       stageTables.find((change) => change.timeUs === 0)?.tables ?? constrain(resolveBeatorajaWindowTables(chart));
     const mode = resolveBeatorajaMode(chart.laneMode);
+    const initialGauge =
+      courseGauge(effectiveTotal) ?? resolveBeatorajaGauge(gaugeId, effectiveTotal, noteCount, chart.laneMode);
     // FIVEKEYS / PMS break combo on an empty POOR (JudgeProperty combo[MS] = false).
     const comboBreaksOnEmptyPoor = mode === BEATORAJA_MODES.FIVEKEYS || mode === BEATORAJA_MODES.PMS;
     return {
@@ -906,8 +908,8 @@ export function resolveRuleset(
       comboBreaksOnEmptyPoor,
       mineTrigger: 'hold',
       hcnTick: { heldJudge: 1, heldRate: 0.5, releasedJudge: 3, releasedRate: 0.5 },
-      gauge: courseGauge(effectiveTotal) ?? resolveBeatorajaGauge(gaugeId, effectiveTotal, noteCount, chart.laneMode),
-      ...(options.gaugeAutoShift === 'BEST_CLEAR'
+      gauge: initialGauge,
+      ...(options.gaugeAutoShift === 'BEST_CLEAR' || options.gaugeAutoShift === 'SELECT_TO_UNDER'
         ? {
             gaugeBank: {
               specs:
@@ -927,6 +929,18 @@ export function resolveRuleset(
                         1,
                       ),
                     ),
+              ...(options.gaugeAutoShift === 'SELECT_TO_UNDER'
+                ? {
+                    upperExclusive:
+                      Math.max(
+                        0,
+                        (course === undefined
+                          ? BEATORAJA_SINGLE_GAUGE_IDS
+                          : ['CLASS', 'EXCLASS', 'EXHARDCLASS']
+                        ).indexOf(initialGauge.id),
+                      ) + 1,
+                  }
+                : {}),
               bottomIndex:
                 course === undefined
                   ? ['ASSIST-EASY', 'EASY', 'GROOVE'].indexOf(options.bottomShiftableGauge ?? 'ASSIST-EASY')
