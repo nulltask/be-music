@@ -47,7 +47,11 @@ function buildAuth(env: Env) {
       prompt: 'consent',
     };
   if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET)
-    socialProviders.google = { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET };
+    socialProviders.google = {
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+      // This provider omits prompt unless one is set, so the first grant can show consent.
+    };
   const claims = async (user: { id: string; name?: string; isAnonymous?: unknown } | null | undefined) => {
     if (user) await createProfile(db, user.id, user.isAnonymous === true);
     const publicProfile = user

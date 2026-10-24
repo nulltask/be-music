@@ -72,7 +72,9 @@ flowchart LR
 - **外部サービス**は、プレビュー用の認証情報を別に持ちます。Discord と Google の OAuth アプリはプレビュー用を作り、
   `donate-preview` は Stripe のテストモードの鍵を使います。Discord のリダイレクト URI は、本番が
   `https://accounts.be-music.app/api/auth/callback/discord`、プレビューが
-  `https://accounts.preview.be-music.app/api/auth/callback/discord` です。
+  `https://accounts.preview.be-music.app/api/auth/callback/discord` です。Google のリダイレクト URI は、本番が
+  `https://accounts.be-music.app/api/auth/callback/google`、プレビューが
+  `https://accounts.preview.be-music.app/api/auth/callback/google` です。
 - **公開範囲**: プレビューのホストは検索エンジンに載らないようにし、必要なら Cloudflare Access で保護します。
 - **証明書**: `play.preview.be-music.app` のように `be-music.app` の 2 階層下のホストは、ゾーンのユニバーサル証明書
   （`*.be-music.app`）の対象外です。Worker のカスタムドメインはホスト名ごとに証明書を発行するので、最初のプレビューの
@@ -151,8 +153,9 @@ Accounts のスキーマと Leaderboard の `0013` を適用し、認証の切�
 - Accounts は、クライアントとリダイレクト URI の一覧を設定から読みます。
 - Discord と Google は任意です。パスキーと匿名セッションだけで始められます。Discord ログインは Accounts Worker の
   `DISCORD_CLIENT_ID` と `DISCORD_CLIENT_SECRET` を読みます。公式インスタンスでは `be-music` Vault の `discord`
-  （本番）と `discord-preview`（プレビュー）に置き、`pnpm --filter @be-music/app-accounts run secrets:preview` と
-  `secrets:production` で値を表示せずに設定します。
+  （本番）と `discord-preview`（プレビュー）に置きます。Google ログインは `GOOGLE_CLIENT_ID` と
+  `GOOGLE_CLIENT_SECRET` を読み、同じ Vault の `google`（本番）と `google-preview`（プレビュー）に置きます。
+  `pnpm --filter @be-music/app-accounts run secrets:preview` と `secrets:production` で値を表示せずに設定します。
 - D1 のデータベース ID、Worker の名前、Service Binding の接続先は、ソースではなくデプロイの設定から読みます。
 - 外部サービス（BMS Search など）への問い合わせは、オフにできます。
 - 寄付、寄付サイト、be-music という名前とロゴは公式のインスタンスのものです。プレイヤーからのそれらへのリンクは設定で
