@@ -41,7 +41,11 @@ export function renderLanes(ctx: PlayfieldContext, width: number, height: number
     const side = ctx.play.chartPlayVariant !== '9' && channel.startsWith('2') ? '2P' : '1P';
     const lift = ctx.drawsLift ? (ctx.play.resolveLaneCovers().find((cover) => cover.side === side)?.lift ?? 0) : 0;
     const lane = ctx.drawsLift
-      ? resolveLiftedLane({ x, w, top, bottom: originalBottom }, lift)
+      ? resolveLiftedLane(
+          { x, w, top, bottom: originalBottom },
+          lift,
+          !ctx.play.playState.view.covers.find((cover) => cover.side === side)?.absolute,
+        )
       : { x, w, top, bottom: originalBottom };
     const bottom = lane.bottom;
     ctx.play.laneX.set(channel, lane);

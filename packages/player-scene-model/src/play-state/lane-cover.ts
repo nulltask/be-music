@@ -1,3 +1,4 @@
+import { normalizeFloatingLaneCover } from '../play-options/floating-hi-speed.ts';
 import { clamp } from '@be-music/shared-utils/core';
 import { SHUTTER_DEFAULT } from '../play-options/choices.ts';
 import type { HiddenSuddenMode, PlayOptions } from '../play-options/options.ts';
@@ -18,6 +19,8 @@ export interface LaneCoverState {
   readonly lift: number;
   /** Absent on a hand-built state means its lift is already effective. */
   readonly liftOn?: boolean;
+  /** AC measured geometry uses the full lane for SUDDEN+ and does not scale its scroll for LIFT. */
+  readonly absolute?: true;
 }
 
 function clampFraction(value: number): number {
@@ -31,15 +34,16 @@ function clampFraction(value: number): number {
  */
 export function laneCoversFromPlayOptions(
   options: Pick<PlayOptions, 'hiddenSudden1P' | 'hiddenSudden2P' | 'shutter' | 'laneCover'> &
-    Partial<Pick<PlayOptions, 'lift1P' | 'lift2P' | 'liftOn1P' | 'liftOn2P'>>,
+    Partial<Pick<PlayOptions, 'lift1P' | 'lift2P' | 'liftOn1P' | 'liftOn2P' | 'floatingHiSpeed'>>,
   sides: readonly PlaySide[],
 ): LaneCoverState[] {
   const height = clampFraction(options.shutter ?? SHUTTER_DEFAULT);
   return sides.map((side): LaneCoverState => {
     const mode: HiddenSuddenMode = (side === '1P' ? options.hiddenSudden1P : options.hiddenSudden2P) ?? 'OFF';
     const shown = options.laneCover !== false;
-    return {
+    const cover: LaneCoverState = {
       side,
+      ...(options.floatingHiSpeed ? { absolute: true as const } : {}),
       sudden: height,
       suddenOn: shown && (mode === 'SUDDEN' || mode === 'HID+SUD'),
       hidden: height,
@@ -47,6 +51,7 @@ export function laneCoversFromPlayOptions(
       lift: clampFraction((side === '1P' ? options.lift1P : options.lift2P) ?? 0.1),
       liftOn: (side === '1P' ? options.liftOn1P : options.liftOn2P) === true,
     };
+    return options.floatingHiSpeed ? normalizeFloatingLaneCover(cover) : cover;
   });
 }
 
@@ -58,7 +63,7 @@ export function resolveLaneCover(cover: LaneCoverState): LaneCover {
   const lift = cover.liftOn === false ? 0 : clampFraction(cover.lift);
   return {
     side: cover.side,
-    sudden: cover.suddenOn ? clampFraction(cover.sudden) * (1 - lift) : 0,
+    sudden: cover.suddenOn ? clampFraction(cover.sudden) * (cover.absolute ? 1 : 1 - lift) : 0,
     hidden: cover.hiddenOn ? clampFraction(cover.hidden) * (1 - lift) : 0,
     lift,
   };
@@ -73,12 +78,12 @@ export type LaneCoverCommand =
    * Raise or lower a cover by `delta` of the lane (the lane cover keys, the mouse wheel, a skin's cover button). A
    * cover switched off comes on when raised, keeping its height; one lowered to nothing goes off.
    */
-  | { type: 'cover-adjust'; part: LaneCoverPart; delta: number; side?: PlaySide }
+  | { type: 'cover-adjust'; part: LaneCoverPart; delta: number; side?: PlaySide; bpm?: number }
   /**
    * Switch a cover on or off, keeping its height; SUDDEN+/HIDDEN+ without a height start at a quarter of
    * the lane.
    */
-  | { type: 'cover-toggle'; part: LaneCoverPart; side?: PlaySide }
+  | { type: 'cover-toggle'; part: LaneCoverPart; side?: PlaySide; bpm?: number }
   /** Set the covers outright: what a replay recorded, or a host's setting. */
   | { type: 'cover-set'; covers: readonly Partial<LaneCoverState>[]; side?: PlaySide };
 
@@ -95,7 +100,18 @@ function stepHeight(height: number, delta: number): number {
 }
 
 function adjust(cover: LaneCoverState, part: LaneCoverPart, delta: number): LaneCoverState {
-  const height = stepHeight(cover[part], delta);
+  if (cover.absolute && (part === 'sudden' || part === 'lift')) {
+    const next = normalizeFloatingLaneCover({
+      ...cover,
+      [part]: cover[part] + delta,
+      ...(part === 'lift' ? { liftOn: true } : {}),
+    });
+    return next.sudden === cover.sudden && next.lift === cover.lift && next.liftOn === cover.liftOn ? cover : next;
+  }
+  const height =
+    cover.absolute && part === 'sudden'
+      ? Math.max(30 / 723, stepHeight(cover.sudden, delta))
+      : stepHeight(cover[part], delta);
   if (part === 'lift')
     return height === cover.lift && cover.liftOn !== false ? cover : { ...cover, lift: height, liftOn: true };
   const on = onKey(part);
@@ -141,6 +157,7 @@ export function reduceLaneCovers(
         break;
       }
     }
+    if (updated !== cover && updated.absolute) updated = normalizeFloatingLaneCover(updated);
     if (updated !== cover) changed = true;
     return updated;
   });

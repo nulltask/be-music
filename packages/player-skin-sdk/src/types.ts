@@ -260,6 +260,8 @@ export interface BeMusicGameplayRuntime {
   /** BPM at the playhead: follows the chart's tempo changes (and holds through stops), not just its header BPM. */
   bpm?: number;
   hiSpeed?: number;
+  /** Active measured AC floating-speed controls; omitted outside floating mode. */
+  floatingHiSpeed?: true;
   score?: number;
   exScore?: number;
   exScoreMax?: number;

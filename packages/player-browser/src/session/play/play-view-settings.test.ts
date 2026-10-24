@@ -14,6 +14,7 @@ import type { PlaySessionTheme } from './play-session-theme.ts';
 import type { PlayTempoRange } from './tempo-range.ts';
 import {
   resolveLaneCovers,
+  changePlayView,
   resolveVisibleMs,
   startReplayView,
   updateReplayView,
@@ -161,4 +162,44 @@ test('records successive rendered view edits even within the former 100 ms debou
   } finally {
     clock.mockRestore();
   }
+});
+
+test('floating cover commands sample the live BPM and restore the source display time', () => {
+  const ctx = createView();
+  ctx.playState = createPlayState({
+    view: {
+      hiSpeed: createHiSpeedState({ hiSpeed: 2, floating: true, bpm: 120, visibleFraction: 1 - 181 / 723 }),
+      covers: [
+        {
+          side: '1P',
+          sudden: 181 / 723,
+          suddenOn: true,
+          hidden: 0,
+          hiddenOn: false,
+          lift: 0,
+          liftOn: false,
+          absolute: true,
+        },
+      ],
+    },
+  });
+  Object.assign(ctx, { timingResolver: { bpmAtBeat: () => 240 }, currentBeat: () => 0 });
+  changePlayView(ctx, { type: 'cover-adjust', part: 'sudden', delta: 0 });
+  expect(ctx.playState.view.hiSpeed.player).toBe(1);
+  changePlayView(ctx, { type: 'hi-speed-step', delta: 0.1 });
+  expect(ctx.playState.view.hiSpeed.player).toBe(1.5);
+  changePlayView(ctx, { type: 'cover-adjust', part: 'sudden', delta: 0 });
+  expect(ctx.playState.view.hiSpeed.player).toBe(1);
+});
+
+test('floating mode switches reach replay recording even before another render', () => {
+  const ctx = createView();
+  const commands: unknown[] = [];
+  Object.assign(ctx, { sharedEngineInputSignals: { pushCommand: (command: unknown) => commands.push(command) } });
+  changePlayView(ctx, { type: 'floating-speed-mode', enabled: true, bpm: 120, visibleFraction: 0.75 });
+  changePlayView(ctx, { type: 'floating-speed-mode', enabled: false, bpm: 120, visibleFraction: 0.75 });
+  expect(commands).toEqual([
+    expect.objectContaining({ kind: 'options', values: expect.objectContaining({ floatingHiSpeed: true }) }),
+    expect.objectContaining({ kind: 'options', values: expect.objectContaining({ floatingHiSpeed: false }) }),
+  ]);
 });

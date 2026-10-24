@@ -281,3 +281,38 @@ for (const skin of ['plain', 'native'] as const) {
     await player.waitForResult(1);
   });
 }
+
+for (const skin of ['plain', 'native'] as const) {
+  test(`measured FLOATING HI-SPEED couples cover edits and records mode switches on ${skin}`, async ({ player }) => {
+    await player.open({ 'be-music.built-in-skin': skin });
+    await player.dropText('floating.bme', '#TITLE Floating speed\n#BPM 120\n#00103:F0\n#00411:01\n');
+    await player.setOption(['Developer'], 'Judgment windows', '????');
+    await player.setOption(['Play options'], 'FLOATING HI-SPEED (AC 32 measured)', true);
+    await player.setOption(['Play options'], 'Floating speed', 2.25);
+    await player.setOption(['Play options'], 'Effect 1P', 'SUDDEN');
+    await player.setOption(['Play options'], 'Lane cover', true);
+    await player.setOption(['Play options'], 'Cover height', 0.25);
+    await player.setOption(['Play options'], 'Auto play', true);
+    await player.cursorTo((bar) => bar.title === 'Floating speed', 'floating speed chart');
+    await player.key('Enter');
+    await player.waitFor((state) => (state.play?.seconds ?? 0) > 0.1, 'floating play');
+    await player.key('ArrowUp');
+    await player.waitFor((state) => state.play?.hiSpeed === 2.75, 'source half-step');
+    await player.key('PageDown');
+    await player.waitFor((state) => (state.play?.hiSpeed ?? 0) < 2.25, 'cover-coupled source speed');
+    await player.key('Numpad0');
+    await player.key('Numpad0');
+    await player.waitForResult(0);
+    const replay = await player.lastReplay();
+    expect(replay?.play.options?.floatingHiSpeed).toBe(true);
+    expect(replay?.play.options?.floatingHiSpeedProfile).toBe('AC32-measured');
+    expect(replay?.play.optionChanges?.some((change) => change.values.floatingHiSpeed === false)).toBe(true);
+    expect(replay?.play.optionChanges?.some((change) => change.values.floatingHiSpeed === true)).toBe(true);
+    expect(replay?.play.viewChanges?.some((change) => change.covers !== undefined)).toBe(true);
+    await player.leaveResult();
+    await player.setOption(['Play options'], 'FLOATING HI-SPEED (AC 32 measured)', false);
+    await player.dropText('floating.bmplay.json', JSON.stringify(replay));
+    await player.waitFor((state) => state.scene.kind === 'play' && state.play?.replay === true, 'floating replay');
+    await player.waitForResult(1);
+  });
+}

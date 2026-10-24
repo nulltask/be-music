@@ -12,6 +12,7 @@ import {
   clampShutter,
   SORT_CYCLE,
   snapHiSpeed,
+  clampFloatingHiSpeed,
   type BrowseSort,
   type DifficultyFilter,
   type KeysFilter,
@@ -70,6 +71,7 @@ export interface DebugMenuSettings {
   random2P: RandomMode;
   dpFlip: boolean;
   classicHiSpeed: boolean;
+  floatingHiSpeed: boolean;
   normalHiSpeedLevel: number;
   judgeTimingMs: number;
   visualConstant: boolean;
@@ -228,6 +230,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'constantFadeMs', resolvePlayOptionValue('constantFadeMs', raw.constantFadeMs));
   assign(settings, 'judgeTimingMs', resolvePlayOptionValue('judgeTimingMs', raw.judgeTimingMs));
   assign(settings, 'normalHiSpeedLevel', resolvePlayOptionValue('normalHiSpeedLevel', raw.normalHiSpeedLevel));
+  assign(settings, 'floatingHiSpeed', resolvePlayOptionValue('floatingHiSpeed', raw.floatingHiSpeed));
   assign(settings, 'classicHiSpeed', booleanOf(raw.classicHiSpeed));
   assign(settings, 'judgeAlgorithm', oneOf(raw.judgeAlgorithm, ['combo', 'duration', 'lowest'] as const));
   assign(settings, 'gaugeAutoShift', resolvePlayOptionValue('gaugeAutoShift', raw.gaugeAutoShift));
@@ -270,7 +273,12 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
       JSON.stringify({ tempoPercent: raw.tempoPercent }),
     ).tempoPercent;
   }
-  if (typeof raw.hiSpeed === 'number') assign(settings, 'hiSpeed', snapHiSpeed(raw.hiSpeed));
+  if (typeof raw.hiSpeed === 'number')
+    assign(
+      settings,
+      'hiSpeed',
+      raw.floatingHiSpeed === true ? clampFloatingHiSpeed(raw.hiSpeed) : snapHiSpeed(raw.hiSpeed),
+    );
   if (
     typeof raw.bgaResizeMaxEdgePx === 'number' &&
     raw.bgaResizeMaxEdgePx >= 0 &&
@@ -436,6 +444,7 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('judgeTimingMs');
   assignState('normalHiSpeedLevel');
   assignState('classicHiSpeed');
+  assignState('floatingHiSpeed');
   assignState('judgeAlgorithm');
   assignState('longNoteModifier');
   assignState('mineModifier');
@@ -520,6 +529,7 @@ export function captureDebugMenuSettings(
     judgeTimingMs: state.judgeTimingMs,
     normalHiSpeedLevel: state.normalHiSpeedLevel,
     classicHiSpeed: state.classicHiSpeed,
+    floatingHiSpeed: state.floatingHiSpeed,
     judgeAlgorithm: state.judgeAlgorithm,
     longNoteModifier: state.longNoteModifier,
     mineModifier: state.mineModifier,

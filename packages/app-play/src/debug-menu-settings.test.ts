@@ -141,6 +141,7 @@ describe('captureDebugMenuSettings', () => {
       constantFadeMs: 100,
       normalHiSpeedLevel: 0,
       classicHiSpeed: true,
+      floatingHiSpeed: false,
       judgeAlgorithm: 'duration',
       longNoteModifier: 'REMOVE',
       mineModifier: 'OFF',
@@ -252,4 +253,11 @@ test('gauge auto-shift CONTINUE is retained in saved settings', () => {
       JSON.stringify({ version: 1, updatedAt: 1, settings: { gaugeAutoShift: 'CONTINUE' } }),
     )?.settings,
   ).toMatchObject({ gaugeAutoShift: 'CONTINUE' });
+});
+
+test('floating speed persistence keeps source precision and values above the generic speed cap', () => {
+  const settings = { floatingHiSpeed: true, hiSpeed: 8 + 1 / 300 };
+  expect(
+    parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
+  ).toMatchObject(settings);
 });

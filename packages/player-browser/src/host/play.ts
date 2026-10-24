@@ -81,7 +81,7 @@ export interface PlaySceneEvents {
   /** The player asked to play the chart again (F5). */
   restart(): void;
   /** The player stepped the hi-speed; on the player's own scale, to remember for the next play. */
-  hiSpeed?(hiSpeed: number, normalLevel?: number): void;
+  hiSpeed?(hiSpeed: number, normalLevel?: number, floating?: boolean): void;
   /** The play's tempo changed (a live change, or a replay following its log). */
   tempo?(tempo: number): void;
   judgeTiming?(judgeTimingMs: number): void;
@@ -461,11 +461,25 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
  */
 export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): PlayScene {
   const { settings, course, on } = options;
+  const recordedSpeed =
+    options.replay !== undefined && (settings.replayView?.hiSpeed ?? true) ? options.replay.play.options : undefined;
+  const speedProfile = recordedSpeed
+    ? {
+        ...(typeof recordedSpeed.floatingHiSpeed === 'boolean'
+          ? { floatingHiSpeed: recordedSpeed.floatingHiSpeed }
+          : {}),
+        ...(typeof recordedSpeed.classicHiSpeed === 'boolean' ? { classicHiSpeed: recordedSpeed.classicHiSpeed } : {}),
+        ...(typeof recordedSpeed.normalHiSpeedLevel === 'number'
+          ? { normalHiSpeedLevel: recordedSpeed.normalHiSpeedLevel }
+          : {}),
+      }
+    : {};
   const playOptions = resolvePlayOptions({
     ...(options.playOptions ?? DEFAULT_PLAY_OPTIONS),
     ...Object.fromEntries(Object.entries(settings).filter(([, value]) => value !== undefined)),
     ...(settings.initialHiSpeed !== undefined ? { hiSpeed: settings.initialHiSpeed } : {}),
     ...(settings.gauge !== undefined ? { gauge1P: settings.gauge } : {}),
+    ...speedProfile,
   });
   let sceneSession: PlaySceneSession | undefined;
   let family: FamilyPlayView | undefined;
@@ -494,6 +508,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       randomFixedLane1P: playOptions.randomFixedLane1P,
       randomFixedLane2P: playOptions.randomFixedLane2P,
       classicHiSpeed: playOptions.classicHiSpeed,
+      floatingHiSpeed: playOptions.floatingHiSpeed,
       normalHiSpeedLevel: playOptions.normalHiSpeedLevel,
       visualConstant: playOptions.visualConstant,
       noteDurationMs: playOptions.noteDurationMs,
@@ -522,7 +537,10 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       onChartFinished: (result) => on.finish(result, result.replay),
       ...(on.judgeTiming !== undefined ? { onJudgeTimingChange: (value: number) => on.judgeTiming?.(value) } : {}),
       ...(on.hiSpeed !== undefined
-        ? { onHiSpeedChange: (hiSpeed: number, normalLevel?: number) => on.hiSpeed?.(hiSpeed, normalLevel) }
+        ? {
+            onHiSpeedChange: (hiSpeed: number, normalLevel?: number, floating?: boolean) =>
+              on.hiSpeed?.(hiSpeed, normalLevel, floating),
+          }
         : {}),
       ...(on.tempo !== undefined ? { onTempoChange: (tempo: number) => on.tempo?.(tempo) } : {}),
     },

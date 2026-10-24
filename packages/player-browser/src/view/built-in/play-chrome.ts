@@ -157,6 +157,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     bpm: ctx.play.displayBPM(seconds) ?? bpm,
     // The player's hi-speed, as the select panel and the host show it (HS-FIX scales only the scroll).
     hiSpeed: play.view.hiSpeed.player,
+    ...(play.view.hiSpeed.floating ? { floatingHiSpeed: true as const } : {}),
     score: ctx.play.score.score,
     exScore: ctx.play.score.exScore,
     exScoreMax: total * 2,

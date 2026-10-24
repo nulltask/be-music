@@ -76,7 +76,7 @@ export interface PlaySessionOptions {
    * scale as {@link initialHiSpeed} — before any HS-FIX rescaling — so a host can remember it and seed the next play
    * with it. Not fired for `PlaySession.setHiSpeed` writes, which come from the host.
    */
-  onHiSpeedChange?: (hiSpeed: number, normalLevel?: number) => void;
+  onHiSpeedChange?: (hiSpeed: number, normalLevel?: number, floating?: boolean) => void;
   /**
    * BGA display mode picked from the LR2 panel-1 BGA toggle (`#SRC_BUTTON,type=72`). Defaults to `'ON'` so charts that
    * ship a BGA render it by default. With `'OFF'` the BGA layer stays empty for the entire play; with `'AUTOPLAY_ONLY'`
@@ -101,6 +101,7 @@ export interface PlaySessionOptions {
    */
   hsFix?: HSFix;
   classicHiSpeed?: boolean;
+  floatingHiSpeed?: boolean;
   normalHiSpeedLevel?: number;
   judgeTimingMs?: number;
   visualConstant?: boolean;

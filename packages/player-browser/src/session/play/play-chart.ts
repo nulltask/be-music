@@ -7,7 +7,7 @@
  * `prepareChart` reads and writes the play's state through {@link PlayChartContext}; the play session passes itself.
  */
 
-import { resolveRandomModes, type RandomMode } from '@be-music/player-scene-model';
+import { resolveRandomModes, normalizeFloatingLaneCover, type RandomMode } from '@be-music/player-scene-model';
 import {
   resolvePoorBGAMode,
   PLAY_MODE_LAYOUTS,
@@ -93,6 +93,7 @@ export interface PlayChartContext {
       | 'visualConstant'
       | 'hsFix'
       | 'classicHiSpeed'
+      | 'floatingHiSpeed'
       | 'normalHiSpeedLevel'
       | 'preResolved'
       | 'hiSpeedLocked'
@@ -187,6 +188,8 @@ export interface PlayChartContext {
 
 export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): void {
   const arrangement = ctx.options.replay ?? ctx.options.fixedArrangement;
+  if (ctx.options.floatingHiSpeed && (ctx.options.replay?.play.judgeRuleset ?? ctx.options.judgeRuleset) !== '____')
+    throw new RangeError('AC measured floating HI-SPEED requires its source ruleset.');
   if (
     arrangement === undefined &&
     ctx.options.mineModifier !== undefined &&
@@ -559,11 +562,20 @@ function createChartPlayState(
   referenceBPM: number | undefined,
 ): PlayState {
   const hsFix =
-    ctx.options.classicHiSpeed || (ctx.options.normalHiSpeedLevel ?? 0) > 0 ? 'OFF' : (ctx.options.hsFix ?? 'OFF');
+    ctx.options.floatingHiSpeed || ctx.options.classicHiSpeed || (ctx.options.normalHiSpeedLevel ?? 0) > 0
+      ? 'OFF'
+      : (ctx.options.hsFix ?? 'OFF');
   const mainBPM = ctx.chartBPMRange?.mainBPM;
+  const covers = resolveStartingCovers(ctx);
+  const firstCover = covers[0];
   const hiSpeed = createHiSpeedState({
     hiSpeed: ctx.playState.view.hiSpeed.player,
     classic: ctx.options.classicHiSpeed,
+    floating: ctx.options.floatingHiSpeed,
+    visibleFraction: Math.max(
+      0,
+      1 - (firstCover?.suddenOn ? firstCover.sudden : 0) - (firstCover?.liftOn ? firstCover.lift : 0),
+    ),
     normalLevel: ctx.options.classicHiSpeed ? undefined : ctx.options.normalHiSpeedLevel,
     bpm: resolver.bpmAtBeat(0),
     multiplier: resolveHSFixMultiplier(hsFix, {
@@ -581,7 +593,7 @@ function createChartPlayState(
     ...(course !== undefined ? { courseCarryIn: course.carryIn ?? { combo: 0, maxCombo: 0 } } : {}),
     view: {
       hiSpeed,
-      covers: resolveStartingCovers(ctx),
+      covers,
       hsFix,
     },
   });
@@ -601,7 +613,7 @@ function resolveStartingCovers(ctx: PlayChartContext): LaneCoverState[] {
   if (ctx.options.coverStart === 'none' || ctx.options.hiSpeedLocked === true) {
     return sides.map((side) => ({ side, sudden: 0, suddenOn: false, hidden: 0, hiddenOn: false, lift: 0 }));
   }
-  return laneCoversFromPlayOptions(
+  const covers = laneCoversFromPlayOptions(
     {
       hiddenSudden1P: ctx.options.hiddenSudden1P ?? 'OFF',
       hiddenSudden2P: ctx.options.hiddenSudden2P ?? 'OFF',
@@ -612,9 +624,14 @@ function resolveStartingCovers(ctx: PlayChartContext): LaneCoverState[] {
       liftOn2P: ctx.options.liftOn2P ?? false,
 
       laneCover: ctx.options.laneCover !== false,
+      floatingHiSpeed: ctx.options.floatingHiSpeed,
     },
     sides,
   );
+  return ctx.options.judgeRuleset === '____' &&
+    (ctx.options.floatingHiSpeed || ctx.options.classicHiSpeed || (ctx.options.normalHiSpeedLevel ?? 0) > 0)
+    ? covers.map(normalizeFloatingLaneCover)
+    : covers;
 }
 
 /** The course stage the play runs (a replay's recorded one wins), with its ruleset, for the placeholder gauge. */

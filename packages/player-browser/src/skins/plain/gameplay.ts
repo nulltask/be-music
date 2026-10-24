@@ -227,10 +227,16 @@ function drawHUD(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, wid
   const { runtime, nowMs } = frame;
 
   text(ctx, runtime.autoplay ? 'AUTO PLAY' : 'PLAY', MARGIN, 18, { size: 12, weight: 800, color: ACCENT });
-  text(ctx, `BPM ${Math.round(runtime.bpm ?? 0)}   SPEED x${(runtime.hiSpeed ?? 0).toFixed(1)}`, 110, 18, {
-    size: 12,
-    color: MUTED,
-  });
+  text(
+    ctx,
+    `BPM ${Math.round(runtime.bpm ?? 0)}   ${runtime.floatingHiSpeed ? 'FHS' : 'SPEED'} x${(runtime.hiSpeed ?? 0).toFixed(runtime.floatingHiSpeed ? 2 : 1)}`,
+    110,
+    18,
+    {
+      size: 12,
+      color: MUTED,
+    },
+  );
 
   // Gauge: a bar under the lanes with a tick at the clear line.
   drawGauge(ctx, runtime, MARGIN, 372, 240, 9);
@@ -316,7 +322,7 @@ function drawPortraitHUD(
   text(ctx, runtime.autoplay ? 'AUTO PLAY' : 'PLAY', header.left, headerY, { size: 12, weight: 800, color: ACCENT });
   text(
     ctx,
-    `BPM ${Math.round(runtime.bpm ?? 0)}   SPEED x${(runtime.hiSpeed ?? 0).toFixed(1)}`,
+    `BPM ${Math.round(runtime.bpm ?? 0)}   ${runtime.floatingHiSpeed ? 'FHS' : 'SPEED'} x${(runtime.hiSpeed ?? 0).toFixed(runtime.floatingHiSpeed ? 2 : 1)}`,
     header.right,
     headerY,
     {

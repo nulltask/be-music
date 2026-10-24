@@ -311,6 +311,18 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       NORMAL_HI_SPEED_GREEN_NUMBERS.map((_, index) => index + 1),
     ).on('change', ({ value }) => this.setPlayOptions({ normalHiSpeedLevel: value })),
   );
+  this.floatingHiSpeedController = trackPlayOption(
+    folder
+      .addBinding(this.guiState, 'floatingHiSpeed', { label: 'FLOATING HI-SPEED (AC 32 measured)' })
+      .on('change', ({ value }) => {
+        this.setPlayOptions({ floatingHiSpeed: value, ...(value ? { hsFix: 'OFF' } : {}) });
+        this.refreshRulesetChoices();
+        this.refreshPlayOptionControllers();
+      }),
+  );
+  this.floatingSpeedController = folder
+    .addBinding(this.guiState, 'hiSpeed', { label: 'Floating speed', min: 0.5, max: 10, step: 0.01 })
+    .on('change', ({ value }) => this.deps.rememberHiSpeed(value, 'menu'));
   this.classicHiSpeedController = trackPlayOption(
     folder.addBinding(this.guiState, 'classicHiSpeed', { label: 'CLASSIC HI-SPEED' }).on('change', ({ value }) => {
       this.setPlayOptions({ classicHiSpeed: value, ...(value ? { hsFix: 'OFF', normalHiSpeedLevel: 0 } : {}) });

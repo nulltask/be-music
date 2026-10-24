@@ -1,3 +1,4 @@
+import { clampFloatingHiSpeed } from './floating-hi-speed.ts';
 import { clampHRandomThresholdBPM, parseLaneRandomSeed } from '@be-music/player-engine/lanes';
 import { resolveConstantVisibility } from './constant-visibility.ts';
 import { clampJudgeTimingMs } from './judge-timing.ts';
@@ -93,6 +94,7 @@ export function resolveRandomModes(ruleset: RulesetId): readonly RandomMode[] {
 export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   hiSpeed: DEFAULT_HISPEED,
   classicHiSpeed: false,
+  floatingHiSpeed: false,
   normalHiSpeedLevel: 0,
   judgeTimingMs: 0,
   visualConstant: false,
@@ -163,6 +165,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   mineModifier: ['OFF', 'REMOVE', 'ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'],
   gaugeAutoShift: ['NONE', 'CONTINUE'],
   classicHiSpeed: BOOLEAN_CYCLE,
+  floatingHiSpeed: BOOLEAN_CYCLE,
   bpmGuide: BOOLEAN_CYCLE,
   visualConstant: BOOLEAN_CYCLE,
   autoScratch1P: BOOLEAN_CYCLE,
@@ -275,7 +278,11 @@ export function resolvePlayOptions(stored: Readonly<Partial<Record<keyof PlayOpt
     const value = resolvePlayOptionValue(key, stored[key]);
     if (value !== undefined) (options as Record<keyof PlayOptions, unknown>)[key] = value;
   }
-  if (options.classicHiSpeed) {
+  if (options.floatingHiSpeed) {
+    options.hsFix = 'OFF';
+    options.hiSpeed =
+      clampFloatingHiSpeed(typeof stored.hiSpeed === 'number' ? stored.hiSpeed : options.hiSpeed) ?? options.hiSpeed;
+  } else if (options.classicHiSpeed) {
     options.normalHiSpeedLevel = 0;
     options.hsFix = 'OFF';
     options.hiSpeed = snapClassicHiSpeed(options.hiSpeed)!;

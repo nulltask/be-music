@@ -13,6 +13,7 @@ import {
   DEFAULT_REPLAY_PLAYBACK_OPTIONS,
   resolveReplayHiSpeed,
   resolveReplayView,
+  resolveReplayOptionsAt,
   type ReplayViewCoalescer,
   type ReplayViewState,
 } from '@be-music/player-engine/replay';
@@ -21,9 +22,12 @@ import {
   BE_MUSIC_HI_SPEED_SCALE,
   resolveHiSpeedForWhiteNumber,
   resolveLaneCover,
+  normalizeFloatingLaneCover,
   captureReplayView,
   resolveWhiteNumber,
   type LaneCover,
+  type HiSpeedCommand,
+  type LaneCoverCommand,
   type LaneCoverState,
   type ReplayViewCursor,
 } from '@be-music/player-scene-model';
@@ -38,7 +42,7 @@ import type { PlayfieldLaneRect } from '../../view/types.ts';
 
 /** The scene's members the view settings read and write: the play session's members of these names. */
 export interface PlayViewSettingsContext extends PlayStateContext {
-  readonly options: Readonly<Pick<PlaySessionOptions, 'onHiSpeedChange' | 'onTempoChange' | 'replayView'>>;
+  readonly options: Readonly<Pick<PlaySessionOptions, 'onHiSpeedChange' | 'onTempoChange' | 'replayView' | 'replay'>>;
   readonly timingResolver?: Pick<import('@be-music/chart-model').TimingResolver, 'bpmAtBeat'>;
   currentBeat?(seconds: number): number;
   readonly disposed: boolean;
@@ -59,17 +63,60 @@ export interface PlayViewSettingsContext extends PlayStateContext {
  * range, and ignores it while a course locks the hi-speed); HS-FIX scales the drawn one, and the note scroll glides to
  * it. The host hears of the player's new hi-speed, to remember it for the next play. Returns whether it changed.
  */
-export function adjustHiSpeed(ctx: PlayViewSettingsContext, delta: number): boolean {
+export function adjustHiSpeed(ctx: PlayViewSettingsContext, delta: number, fine = false): boolean {
+  return changePlayView(
+    ctx,
+    fine && ctx.playState.view.hiSpeed.floating
+      ? { type: 'hi-speed-fine', direction: delta }
+      : { type: 'hi-speed-step', delta },
+  );
+}
+
+/** Apply an interactive setting at the current BPM; replays apply their recorded views separately. */
+export function changePlayView(ctx: PlayViewSettingsContext, command: HiSpeedCommand | LaneCoverCommand): boolean {
   const bpm = ctx.timingResolver?.bpmAtBeat(ctx.currentBeat?.(ctx.currentSeconds()) ?? 0);
-  const previous = applyPlayEvent(ctx, { type: 'hi-speed-step', delta, bpm });
-  const player = ctx.playState.view.hiSpeed.player;
+  const rawCover = ctx.playState.view.covers[0];
+  const cover =
+    rawCover && command.type === 'floating-speed-mode' && command.enabled
+      ? normalizeFloatingLaneCover(rawCover)
+      : rawCover;
+  const visibleFraction = Math.max(
+    0,
+    1 - (cover?.suddenOn ? cover.sudden : 0) - ((cover?.liftOn ?? false) ? (cover?.lift ?? 0) : 0),
+  );
+  const event =
+    command.type === 'floating-speed-mode' || command.type === 'floating-speed-recalculate'
+      ? { ...command, bpm: bpm ?? command.bpm, visibleFraction }
+      : command.type === 'hi-speed-step' ||
+          command.type === 'hi-speed-set' ||
+          command.type === 'hi-speed-fine' ||
+          command.type === 'cover-adjust' ||
+          command.type === 'cover-toggle'
+        ? { ...command, bpm, ...(command.type === 'hi-speed-fine' ? { visibleFraction } : {}) }
+        : command;
+  const previous = applyPlayEvent(ctx, event);
+  const next = ctx.playState.view.hiSpeed;
   if (
-    player === previous.view.hiSpeed.player &&
-    ctx.playState.view.hiSpeed.normalLevel === previous.view.hiSpeed.normalLevel
-  )
-    return false;
-  ctx.options.onHiSpeedChange?.(player, ctx.playState.view.hiSpeed.normalLevel);
-  return true;
+    next.player !== previous.view.hiSpeed.player ||
+    next.normalLevel !== previous.view.hiSpeed.normalLevel ||
+    (next.floating !== undefined) !== (previous.view.hiSpeed.floating !== undefined)
+  ) {
+    if (next.floating || previous.view.hiSpeed.floating) {
+      // Preserve accepted mode switches even when several happen before the next rendered frame.
+      ctx.sharedEngineInputSignals?.pushCommand({
+        kind: 'options',
+        values: {
+          floatingHiSpeed: next.floating !== undefined,
+          hiSpeed: next.player,
+          normalHiSpeedLevel: next.normalLevel ?? 0,
+          floatingHiSpeedProfile: 'AC32-measured',
+        },
+      });
+      ctx.options.onHiSpeedChange?.(next.player, next.normalLevel, next.floating !== undefined);
+    } else if (next.normalLevel !== undefined) ctx.options.onHiSpeedChange?.(next.player, next.normalLevel);
+    else ctx.options.onHiSpeedChange?.(next.player);
+  }
+  return ctx.playState !== previous;
 }
 
 /**
@@ -153,6 +200,22 @@ export function updateReplayView(ctx: PlayViewSettingsContext, seconds: number, 
   syncMeasuredSourceScale(ctx);
   if (ctx.replayViewCursor !== undefined) {
     const timeUs = Math.round(seconds * 1_000_000);
+    const replay = ctx.options.replay;
+    if ((ctx.options.replayView?.hiSpeed ?? true) && replay) {
+      const selected = resolveReplayOptionsAt(replay.play.options, replay.play.optionChanges, timeUs);
+      if (
+        typeof selected.floatingHiSpeed === 'boolean' &&
+        selected.floatingHiSpeed !== (ctx.playState.view.hiSpeed.floating !== undefined)
+      ) {
+        const cover = ctx.playState.view.covers[0];
+        applyPlayEvent(ctx, {
+          type: 'floating-speed-mode',
+          enabled: selected.floatingHiSpeed,
+          bpm: ctx.timingResolver?.bpmAtBeat(ctx.currentBeat?.(seconds) ?? 0) ?? 120,
+          visibleFraction: Math.max(0, 1 - (cover?.suddenOn ? cover.sudden : 0) - (cover?.liftOn ? cover.lift : 0)),
+        });
+      }
+    }
     const recorded = seek ? ctx.replayViewCursor.seek(timeUs) : ctx.replayViewCursor.next(timeUs);
     if (recorded !== undefined) applyReplayView(ctx, recorded);
     return;
@@ -186,7 +249,7 @@ function applyReplayView(ctx: PlayViewSettingsContext, recorded: ReplayViewState
       type: 'cover-set',
       covers: view.covers.map(({ side, sudden, hidden, lift }) => ({
         side,
-        sudden: drawsLift ? resolveCoverAboveLift(sudden, lift) : sudden,
+        sudden: drawsLift && !ctx.playState.view.covers[0]?.absolute ? resolveCoverAboveLift(sudden, lift) : sudden,
         suddenOn: sudden > 0,
         // The log's HIDDEN+ is a fraction of the whole lane; the play state's is of the part above the LIFT.
         hidden: drawsLift ? resolveCoverAboveLift(hidden, lift) : hidden,
@@ -197,12 +260,18 @@ function applyReplayView(ctx: PlayViewSettingsContext, recorded: ReplayViewState
   }
   if (!replay.hiSpeed) return;
   const cover = view.covers?.[0];
-  const sudden = cover ? resolveCoverAboveLift(cover.sudden, drawsLift ? cover.lift : 0) : 0;
+  const sudden = ctx.playState.view.covers[0]?.absolute
+    ? (cover?.sudden ?? 0) + (drawsLift ? (cover?.lift ?? 0) : 0)
+    : cover
+      ? resolveCoverAboveLift(cover.sudden, drawsLift ? cover.lift : 0)
+      : 0;
   const scale = resolveReplayScale(ctx);
   const mainBPM = scale?.mainBPM;
   const hiSpeed = resolveReplayHiSpeed(
     view,
-    ctx.playState.view.hiSpeed.classic || ctx.playState.view.hiSpeed.normalLevel !== undefined
+    ctx.playState.view.hiSpeed.floating ||
+      ctx.playState.view.hiSpeed.classic ||
+      ctx.playState.view.hiSpeed.normalLevel !== undefined
       ? 'ac32-measured'
       : (scale?.scale ?? BE_MUSIC_HI_SPEED_SCALE),
     (visibleMs) =>
@@ -239,11 +308,13 @@ export function resolveVisibleMs(
   return resolveWhiteNumber({
     laneBeats: resolveLaneBeats(ctx),
     hiSpeed: ctx.playState.view.hiSpeed.drawn,
-    sudden: cover
-      ? cover.lift < 1
-        ? resolveCoverAboveLift(cover.sudden, cover.lift)
-        : (ctx.playState.view.covers.find((state) => state.side === cover.side && state.suddenOn)?.sudden ?? 0)
-      : 0,
+    sudden: ctx.playState.view.covers[0]?.absolute
+      ? (cover?.sudden ?? 0) + (cover?.lift ?? 0)
+      : cover
+        ? cover.lift < 1
+          ? resolveCoverAboveLift(cover.sudden, cover.lift)
+          : (ctx.playState.view.covers.find((state) => state.side === cover.side && state.suddenOn)?.sudden ?? 0)
+        : 0,
     bpm,
     scrollRate,
   });
@@ -264,7 +335,7 @@ function resolveLaneBeats(ctx: PlayViewSettingsContext): number {
 /** Map measured source multipliers onto the active skin's lane scale without changing the selected source value. */
 function syncMeasuredSourceScale(ctx: PlayViewSettingsContext): void {
   const state = ctx.playState.view.hiSpeed;
-  if (!state.classic && state.normalLevel === undefined) return;
+  if (!state.floating && !state.classic && state.normalLevel === undefined) return;
   const scale = resolveReplayScale(ctx);
   if (scale === undefined || !(scale.laneBeats > 0)) return;
   applyPlayEvent(ctx, { type: 'hi-speed-scale', multiplier: (scale.laneBeats * 36000) / AC32_HI_SPEED_BASE });

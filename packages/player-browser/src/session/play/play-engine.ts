@@ -111,6 +111,7 @@ export interface PlayEngineContext
       | 'tempoPitchMode'
       | 'hsFix'
       | 'classicHiSpeed'
+      | 'floatingHiSpeed'
       | 'normalHiSpeedLevel'
       | 'hiSpeedLocked'
       | 'onHiSpeedChange'
@@ -419,6 +420,7 @@ export function resolveReplayRecording(
     | 'initialHiSpeed'
     | 'hsFix'
     | 'classicHiSpeed'
+    | 'floatingHiSpeed'
     | 'normalHiSpeedLevel'
     | 'judgeTimingMs'
     | 'visualConstant'
@@ -452,8 +454,13 @@ export function resolveReplayRecording(
   for (const [key, value] of Object.entries({
     autoPlay: options.autoPlay,
     hiSpeed: effectivePlayerHiSpeed ?? options.initialHiSpeed,
-    hsFix: options.classicHiSpeed || (options.normalHiSpeedLevel ?? 0) > 0 ? 'OFF' : options.hsFix,
+    hsFix:
+      options.floatingHiSpeed || options.classicHiSpeed || (options.normalHiSpeedLevel ?? 0) > 0
+        ? 'OFF'
+        : options.hsFix,
     classicHiSpeed: options.classicHiSpeed,
+    floatingHiSpeed: options.floatingHiSpeed,
+    ...(options.floatingHiSpeed ? { floatingHiSpeedProfile: 'AC32-measured' } : {}),
     normalHiSpeedLevel: options.classicHiSpeed ? 0 : options.normalHiSpeedLevel,
     ...(!options.classicHiSpeed && (options.normalHiSpeedLevel ?? 0) > 0
       ? { normalHiSpeedProfile: 'AC32-measured' }
