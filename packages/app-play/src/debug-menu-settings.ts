@@ -28,11 +28,7 @@ import {
   serializePlayInSilentMode,
 } from './silent-mode-playback.ts';
 import type { DemoGUIState, SkinFamilyOverride } from './types.ts';
-import {
-  DEBUG_MENU_FOLDERS_STORAGE_KEY,
-  parseFolderOpenStates,
-  type FolderOpenStates,
-} from './ui/debug-menu/folders.ts';
+import { DEBUG_MENU_FOLDERS_STORAGE_KEY, parseFolderOpenStates, type FolderOpenStates } from './debug-menu-storage.ts';
 import { WORKER_COUNT_STORAGE_KEY } from './worker-settings.ts';
 
 /** `localStorage` key of the whole Debug Menu document. Reset deletes it with the other `be-music-demo.*` settings. */
@@ -100,6 +96,8 @@ export interface DebugMenuSettingsDocument {
   version: 1;
   updatedAt: number;
   settings: Partial<DebugMenuSettings>;
+  /** Reset barrier kept remotely without retaining any settings values. */
+  deleted?: true;
 }
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
@@ -170,8 +168,11 @@ export function parseDebugMenuSettingsDocument(raw: string | null | undefined): 
 export function debugMenuSettingsDocument(value: unknown): DebugMenuSettingsDocument | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
   const { version, updatedAt, settings } = value as { version?: unknown; updatedAt?: unknown; settings?: unknown };
-  if (version !== DOCUMENT_VERSION || typeof updatedAt !== 'number' || !Number.isFinite(updatedAt)) return undefined;
+  if (version !== DOCUMENT_VERSION || typeof updatedAt !== 'number' || !Number.isFinite(updatedAt) || updatedAt < 0)
+    return undefined;
   if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) return undefined;
+  if ((value as { deleted?: unknown }).deleted === true)
+    return { version: DOCUMENT_VERSION, updatedAt, settings: {}, deleted: true };
   return { version: DOCUMENT_VERSION, updatedAt, settings: pickSettings(settings as Record<string, unknown>) };
 }
 
