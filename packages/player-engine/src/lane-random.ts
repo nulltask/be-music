@@ -28,7 +28,7 @@ export function randomizeSRandomNotes(
   options: SRandomOptions,
 ): string[] {
   const pms = options.ruleset === 'beatoraja' && options.mode === 'pms';
-  return randomizeTimeBasedNotes(notes, lanes, options, pms ? 0 : 40, pms);
+  return randomizeTimeBasedNotes(notes, lanes, options, pms ? 0 : 40, options.ruleset === 'beatoraja');
 }
 
 /** beatoraja 0.8.9 PlayerConfig accepts integer H-RANDOM threshold BPMs from 1 to 1000 (default 120). */

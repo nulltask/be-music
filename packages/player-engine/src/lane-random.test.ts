@@ -461,3 +461,20 @@ test('ordinary beatoraja PMS S-RANDOM uses the source no-threshold modifier', ()
   ]);
   expect(randomizeSRandomNotes(notes, ['a', 'b'], { ruleset: 'beatoraja', random: zero })).toEqual(['a', 'b']);
 });
+
+test('beatoraja S-RANDOM visits outside-domain and LN-tail-only timelines like NoteShuffleModifier', () => {
+  let draws = 0;
+  const notes = [
+    { channel: '16', timeMs: 0, endTimeMs: 1 },
+    { channel: 'a', timeMs: 2 },
+  ];
+  const result = randomizeSRandomNotes(notes, ['a', 'b'], {
+    ruleset: 'beatoraja',
+    random: () => {
+      draws += 1;
+      return 0;
+    },
+  });
+  expect(result).toEqual(['16', 'a']);
+  expect(draws).toBe(6);
+});
