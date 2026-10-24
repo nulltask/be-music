@@ -31,10 +31,11 @@ export function isGaugeType(value: unknown): value is GaugeType {
 }
 
 /** beatoraja 0.8.9 gauge auto-shift policies implemented by the player. */
-export type GaugeAutoShift = 'NONE' | 'CONTINUE';
+export type GaugeAutoShift = 'NONE' | 'CONTINUE' | 'SURVIVAL_TO_GROOVE';
 
 /**
- * CONTINUE retains the selected dead gauge and keeps judging; NONE stops the play.
+ * CONTINUE retains the selected dead gauge; SURVIVAL TO GROOVE uses the parallel NORMAL gauge.
+ * Both keep judging (course class gauges remain selected); NONE stops the play.
  * An omitted policy preserves the older host-level endOnFailure contract.
  */
 export function resolveGaugeEndOnFailure(
@@ -44,7 +45,7 @@ export function resolveGaugeEndOnFailure(
 ): boolean {
   if (policy === undefined) return fallback;
   if (policy === 'NONE') return true;
-  if (policy !== 'CONTINUE' || ruleset !== 'beatoraja')
-    throw new RangeError('Gauge auto-shift CONTINUE is available only for beatoraja.');
+  if (!['CONTINUE', 'SURVIVAL_TO_GROOVE'].includes(policy) || ruleset !== 'beatoraja')
+    throw new RangeError('Gauge auto-shift is available only for beatoraja.');
   return false;
 }

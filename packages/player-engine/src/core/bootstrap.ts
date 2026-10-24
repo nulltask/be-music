@@ -94,7 +94,7 @@ export function createInitialPlayerSummary(
   /** Puts the summary and the gauge back to the play's start, in place (a seek rebuilds the play from there). */
   reset: () => void;
 } {
-  let gauge = new RulesetGauge(ruleset.gauge);
+  let gauge = new RulesetGauge(ruleset.gauge, ruleset.gaugeFallback);
   const gaugeSummary: PlayerGaugeSummary = {
     current: gauge.value,
     max: ruleset.gauge.max,
@@ -109,6 +109,11 @@ export function createInitialPlayerSummary(
     failedMidPlay: false,
   };
   const syncGaugeSummary = (): void => {
+    gaugeSummary.type = gauge.spec.id;
+    gaugeSummary.max = gauge.spec.max;
+    gaugeSummary.clearThreshold = gauge.spec.border;
+    gaugeSummary.initial = gauge.spec.initial;
+    gaugeSummary.survival = gauge.spec.survival;
     gaugeSummary.current = gauge.value;
     gaugeSummary.cleared = gauge.cleared();
     gaugeSummary.failedMidPlay = gauge.failedMidPlay;
@@ -152,7 +157,7 @@ export function createInitialPlayerSummary(
       syncGaugeSummary();
     },
     reset: (): void => {
-      gauge = new RulesetGauge(ruleset.gauge);
+      gauge = new RulesetGauge(ruleset.gauge, ruleset.gaugeFallback);
       syncGaugeSummary();
       delete summary.minePoor;
       for (const key of ['perfect', 'fast', 'slow', 'great', 'good', 'bad', 'poor', 'emptyPoor', 'exScore'] as const) {

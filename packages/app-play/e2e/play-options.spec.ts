@@ -421,3 +421,28 @@ for (const skin of ['plain', 'native'] as const) {
     expect((await player.state()).results[1]?.judged).toEqual((await player.state()).results[0]?.judged);
   });
 }
+
+for (const skin of ['plain', 'native'] as const) {
+  test(`SURVIVAL TO GROOVE switches to the parallel NORMAL gauge on ${skin}`, async ({ player }) => {
+    await player.open({ 'be-music.built-in-skin': skin });
+    await player.dropText('survival-to-groove.bms', '#TITLE Survival to groove\n#BPM 240\n#00111:01\n#00212:01\n');
+    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+    await player.setOption(['Play options'], 'Gauge', 'DEATH');
+    await player.setOption(['Play options'], 'Gauge auto-shift (beatoraja)', 'SURVIVAL TO GROOVE');
+    await player.cursorTo((bar) => bar.title === 'Survival to groove', 'survival chart');
+    await player.key('Enter');
+    await player.waitForResult(0);
+    const replay = await player.lastReplay();
+    expect(replay?.play.gauge).toBe('DEATH');
+    expect(replay?.play.gaugeAutoShift).toBe('SURVIVAL_TO_GROOVE');
+    expect(replay?.play.options?.gaugeAutoShift).toBe('SURVIVAL_TO_GROOVE');
+    expect(replay?.results?.native?.judge.poor).toBe(2);
+    expect(replay?.results?.native?.gauge).toMatchObject({ type: 'NORMAL', cleared: false });
+    expect(replay?.results?.native?.gauge.failedMidPlay).not.toBe(true);
+    await player.leaveResult();
+    await player.dropText('survival-to-groove.bmplay.json', JSON.stringify(replay));
+    await player.waitForResult(1);
+    const results = (await player.state()).results;
+    expect(results[1]?.judged).toEqual(results[0]?.judged);
+  });
+}
