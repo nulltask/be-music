@@ -2,16 +2,16 @@
 
 # Course browser checklist
 
-A check of the course features in the web demo, on each skin family, for what unit tests cannot reach: the scenes, the screen transitions and the audio. Most of it runs automatically, on minimal fixture skins ([Automated run](#automated-run)): run that after any change to the course flow, the scenes or the demo host. Run the whole list by hand on real skins at the end of each phase of the [migration](./architecture.md#migration), or when a change touches what the suite cannot see, and record the result at the end of this page. The rules themselves are in [course.md](./course.md); the scenes are in [player-web.md](./player-web.md).
+A check of the course features in the web player, on each skin family, for what unit tests cannot reach: the scenes, the screen transitions and the audio. Most of it runs automatically, on minimal fixture skins ([Automated run](#automated-run)): run that after any change to the course flow, the scenes or the player host. Run the whole list by hand on real skins at the end of each phase of the [migration](./architecture.md#migration), or when a change touches what the suite cannot see, and record the result at the end of this page. The rules themselves are in [course.md](./course.md); the scenes are in [player-web.md](./player-web.md).
 
 ## Automated run
 
-`pnpm run test:e2e` builds the demo, serves it on a free port and runs the Playwright specs in [`packages/app-play/e2e`](../packages/app-play/e2e) against it in headless Chromium, 46 tests in all. Its global setup writes the fixtures below to a temp dir; the specs drop them as a person would (the synthetic drop of [Setup](#setup)), press keys with a `code`, set the Debug Menu's controls, and assert on the [test hook](#test-hook), never on pixels. It is not part of `pnpm test`: the plays run in real time, about five minutes with three workers.
+`pnpm run test:e2e` builds the player, serves it on a free port and runs the Playwright specs in [`packages/app-play/e2e`](../packages/app-play/e2e) against it in headless Chromium, 46 tests in all. Its global setup writes the fixtures below to a temp dir; the specs drop them as a person would (the synthetic drop of [Setup](#setup)), press keys with a `code`, set the Debug Menu's controls, and assert on the [test hook](#test-hook), never on pixels. It is not part of `pnpm test`: the plays run in real time, about five minutes with three workers.
 
 ```mermaid
 flowchart LR
   fixtures["fixtures.ts<br/>charts, courses, skins"] --> tmp["temp dir"]
-  build["vp build + vp preview<br/>free port"] --> page["demo ?e2e=1"]
+  build["vp build + vp preview<br/>free port"] --> page["player ?e2e=1"]
   tmp -->|synthetic drop| page
   specs["specs"] -->|keys, Debug Menu| page
   page -->|"window.__beMusicTest"| specs
@@ -36,7 +36,7 @@ flowchart LR
 
 ## Test hook
 
-With `?e2e=1` in the URL, or in a development build, the demo's bootstrap (`main.ts`) installs `window.__beMusicTest` before the app starts. [`test-hook.ts`](../packages/app-play/src/test-hook.ts) holds the contract and records what the app hands it, and [`services/test-hook.ts`](../packages/app-play/src/services/test-hook.ts) reads the app's live state. The hook is a read-only view of what the demo shows: a read starts nothing (it hashes no chart, for one), and a bar's best lamp and trophy are the current judge ruleset's, as the select screen shows them. It reads the state the host already keeps and the facts of each result screen and replay the host hands it; it never drives the demo. Files load through the page's drop handler.
+With `?e2e=1` in the URL, or in a development build, the player's bootstrap (`main.ts`) installs `window.__beMusicTest` before the app starts. [`test-hook.ts`](../packages/app-play/src/test-hook.ts) holds the contract and records what the app hands it, and [`services/test-hook.ts`](../packages/app-play/src/services/test-hook.ts) reads the app's live state. The hook is a read-only view of what the player shows: a read starts nothing (it hashes no chart, for one), and a bar's best lamp and trophy are the current judge ruleset's, as the select screen shows them. It reads the state the host already keeps and the facts of each result screen and replay the host hands it; it never drives the player. Files load through the page's drop handler.
 
 It is a contract: the scene router and the host rewrite (P5, [ADR 0006](./adr/0006-scene-router.md)) kept every field meaning what it means here, and a change to what a field means bumps `version`.
 
@@ -57,7 +57,7 @@ It is a contract: the scene router and the host rewrite (P5, [ADR 0006](./adr/00
 
 1. **Fixtures.** `node scripts/course-checklist/fixtures.ts <dir>` writes a small BMS library to `<dir>/songs` (Fixture A–G, a dense Fixture D that empties the gauge of a no-input run, and a 5-key chart) with `songs/courses/fixture-courses.lr2crs` (FIX GRADE, FIX EXPERT, FIX NONSTOP, FIX GRADE FAIL, and FIX MISSING STAGE, whose second stage is not in the library), `<dir>/seven-stages.lr2crs` for the five-stage warning, and the fixture skins in `<dir>/skins/lr2` and `<dir>/skins/beatoraja`.
 2. **Skins.** The built-in family needs nothing. For LR2 use the stock LR2 theme and its sound set (`LR2files/Theme/LR2` and `LR2files/Sound`); for beatoraja any skin (the last run used ModernChic). The fixture skins do for a quick look at the flow. Dropping a theme applies it; the Debug Menu's Skin system switches between the families.
-3. **Dev server.** Run the demo on a port of its own (`pnpm --filter @be-music/app-play run dev --port 5199 --strictPort`), so a session already playing on the default port is left alone.
+3. **Dev server.** Run the player on a port of its own (`pnpm --filter @be-music/app-play run dev --port 5199 --strictPort`), so a session already playing on the default port is left alone.
 4. **Dropping files.** A person can drag the folders onto the page. Browser automation cannot, so serve them with `node scripts/course-checklist/serve.ts fixtures=<dir>/songs extra=<dir> lr2theme=<LR2files parent> beatoraja=<skin dir>` (port 5299) and dispatch a synthetic drop from the page console:
 
    ```js

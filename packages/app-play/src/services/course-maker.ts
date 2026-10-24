@@ -1,4 +1,4 @@
-// LR2's course maker in the demo: the player's own courses and the course being made, kept in IndexedDB
+// LR2's course maker in the player: the player's own courses and the course being made, kept in IndexedDB
 // (`course-maker-store.ts`) and shown on the course-maker card (`course-maker-panel.ts`). While a course is being made,
 // a chart decided on the select screen joins it instead of playing.
 

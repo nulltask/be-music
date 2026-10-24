@@ -28,7 +28,7 @@ import {
   submitCourseToLeaderboard,
   submitToLeaderboard,
 } from './leaderboard.ts';
-/** What the panel needs from the demo: the remembered toggle, the status line and the recorder it names as client. */
+/** What the panel needs from the player: the remembered toggle, the status line and the recorder it names as client. */
 export interface LeaderboardPanelHost {
   /** The remembered settings holding the "Submit to Leaderboard" toggle (`guiState`), read on use. */
   settings(): {
@@ -43,7 +43,7 @@ export function describeSubmittingClient(recorder: Omit<ReplayRecorderInfo, 'eng
   return `${recorder.name}/${recorder.version}${recorder.build !== undefined ? ` (build ${recorder.build})` : ''}`;
 }
 /**
- * Everything the demo shows of the Leaderboard: the start card's row (submission checkbox, account and its sign-in /
+ * Everything the player shows of the Leaderboard: the start card's row (submission checkbox, account and its sign-in /
  * sign-up buttons), the Debug Menu folder (the same toggle, account row and passkey buttons), the account chip in the
  * corner, and submitting a finished play. An account starts anonymous (the first
  * submission signs in anonymously); creating a passkey keeps it, and "Sign in with passkey" brings it to another device,

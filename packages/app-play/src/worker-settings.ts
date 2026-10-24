@@ -1,6 +1,6 @@
 import { defaultBrowserWorkerCount, normalizeBrowserWorkerCount } from '@be-music/player-browser/compute';
 
-export const WORKER_COUNT_STORAGE_KEY = 'be-music-demo.worker-count';
+export const WORKER_COUNT_STORAGE_KEY = 'be-music.worker-count';
 export interface WorkerSettingsStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;

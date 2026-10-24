@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import { expect, test } from './support.ts';
 
-test('plays a mixed BMS/bmson NONSTOP course and refuses LR2 placement', async ({ demo }) => {
-  await demo.open();
+test('plays a mixed BMS/bmson NONSTOP course and refuses LR2 placement', async ({ player }) => {
+  await player.open();
   const bms = '#PLAYER 1\n#TITLE BMS stage\n#BPM 240\n#00111:01\n#00219:01\n';
   const bmson = JSON.stringify({
     version: '1.0.0',
@@ -18,26 +18,26 @@ test('plays a mixed BMS/bmson NONSTOP course and refuses LR2 placement', async (
       },
     ],
   });
-  await demo.dropText('bms-stage.bms', bms);
-  await demo.dropText('bmson-stage.bmson', bmson);
+  await player.dropText('bms-stage.bms', bms);
+  await player.dropText('bmson-stage.bmson', bmson);
   const hashes = [bms, bmson].map((text) => createHash('md5').update(text).digest('hex')).join('');
-  await demo.dropText(
+  await player.dropText(
     'Mixed.lr2crs',
     `<courselist><course><title>Mixed NONSTOP</title><line>7</line><type>1</type><hash>${'0'.repeat(32)}${hashes}</hash></course></courselist>`,
   );
-  await demo.openFolder('Mixed');
-  await demo.setOption(['Play options'], 'Auto play', true);
-  await demo.key('Enter');
-  await demo.waitFor(
+  await player.openFolder('Mixed');
+  await player.setOption(['Play options'], 'Auto play', true);
+  await player.key('Enter');
+  await player.waitFor(
     (state) => state.scene.kind === 'play' && state.play?.title === 'Mixed NONSTOP',
     'mixed NONSTOP play',
   );
-  const result = await demo.waitForResult(0);
+  const result = await player.waitForResult(0);
   expect(result.results[0]).toMatchObject({ run: 'nonstop', title: 'Mixed NONSTOP', cleared: true });
-  await demo.leaveResult();
-  await demo.waitFor((state) => state.scene.kind === 'select', 'course selection');
-  await demo.setOption(['Course'], 'NONSTOP placement', 'lr2');
-  await demo.key('Enter');
-  const refused = await demo.waitFor((state) => state.status.includes('bmson'), 'LR2 placement refusal');
+  await player.leaveResult();
+  await player.waitFor((state) => state.scene.kind === 'select', 'course selection');
+  await player.setOption(['Course'], 'NONSTOP placement', 'lr2');
+  await player.key('Enter');
+  const refused = await player.waitFor((state) => state.status.includes('bmson'), 'LR2 placement refusal');
   expect(refused.scene.kind).toBe('select');
 });

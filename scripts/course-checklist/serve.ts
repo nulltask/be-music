@@ -3,9 +3,9 @@ import { createServer } from 'node:http';
 import { join, relative, resolve, sep } from 'node:path';
 
 /**
- * Serves local folders to the web demo for the course browser checklist (`docs/course-checklist.md`), since browser
+ * Serves local folders to the web player for the course browser checklist (`docs/course-checklist.md`), since browser
  * automation cannot drop real files: `GET /__list?root=<name>` lists a root's files, `GET /__file?root=<name>&path=<p>`
- * returns one, both with CORS open so the demo page can fetch them and dispatch a synthetic drop.
+ * returns one, both with CORS open so the player page can fetch them and dispatch a synthetic drop.
  *
  * Usage: `node scripts/course-checklist/serve.ts [--port 5299] <name>=<dir> [<name>=<dir> …]`, e.g.
  * `fixtures=/tmp/checklist/songs lr2theme=~/LR2beta3/LR2files`. Video files are left out of listings.

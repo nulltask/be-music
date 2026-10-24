@@ -35,7 +35,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] `info` 拡張項目: `mode_hint`
 - [x] `info` 拡張項目: `judge_rank`
 - [x] `info` 拡張項目: `total`
-- [x] beatoraja 拡張 `info.ln_type` と note 単位 `t`（1: LN / 2: CN / 3: HCN）を IR に保持し、player の LN モード解決と chart-writer 出力に使用
+- [x] beatoraja 拡張 `info.ln_type` と note 単位 `t`（1: LN / 2: CN / 3: HCN）を IR に保持し、プレイヤーの LN モード解決と chart-writer 出力に使用
 - [x] `info` 拡張項目: `back_image`
 - [x] `info` 拡張項目: `eyecatch_image`
 - [x] `info` 拡張項目: `banner_image`
@@ -104,8 +104,8 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 ### player / chart-audio-renderer (bmson 再生挙動)
 
 - [x] bmson 入力再生 (`parseChartFile` 経由)
-- [x] `info.banner_image` を player の選曲画面 banner に使用
-- [x] `info.preview_music` を player の選曲画面 preview に使用
+- [x] `info.banner_image` を プレイヤーの選曲画面 banner に使用
+- [x] `info.preview_music` を プレイヤーの選曲画面 preview に使用
 - [x] `lines` を使った時刻解決
 - [x] `resolution` を使った時刻解決
 - [x] `bpm_events` を使った時刻解決

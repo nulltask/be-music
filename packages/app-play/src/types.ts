@@ -5,14 +5,14 @@ import type { GaugeType, RulesetId } from '@be-music/player-engine/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '@be-music/player-scene-model';
 import type { PlayTempoSettings } from './play-tempo-settings.ts';
 
-/** Every screen the demo shows, each made by its `create*Scene`. */
-export type DemoScene = SelectScene | DecideScene | PlayScene | ResultScene;
+/** Every screen the player shows, each made by its `create*Scene`. */
+export type PlayerScene = SelectScene | DecideScene | PlayScene | ResultScene;
 
 /**
- * DOM handles passed into the `PlayerWebDemoApp` constructor. The lookups happen once at boot in `main.ts`; the app
+ * DOM handles passed into the `PlayerWebApp` constructor. The lookups happen once at boot in `main.ts`; the app
  * stores the references on `this.elements` and reads them throughout the session.
  */
-export interface PlayerWebDemoElements {
+export interface PlayerWebElements {
   stage: HTMLDivElement;
   shell: HTMLDivElement;
   /**
@@ -43,14 +43,14 @@ export interface PlayerWebDemoElements {
 
 /**
  * User-facing skin-family selection. Mirrors the package's {@link SkinFamilyId} plus an extra `'auto'` sentinel that
- * means "let the demo pick automatically based on what's loaded". The auto branch's policy is documented on
- * `PlayerWebDemoApp.pickActiveFamilyForScene`.
+ * means "let the player pick automatically based on what's loaded". The auto branch's policy is documented on
+ * `PlayerWebApp.pickActiveFamilyForScene`.
  */
 export type SkinFamilyOverride = SkinFamilyId | 'auto';
 
 /**
  * The four scene kinds the family-routing helper dispatches over. Used as the `scene` argument of
- * `PlayerWebDemoApp.availableFamiliesForScene` / `PlayerWebDemoApp.pickActiveFamilyForScene` — passing
+ * `PlayerWebApp.availableFamiliesForScene` / `PlayerWebApp.pickActiveFamilyForScene` — passing
  * the kind lets the helpers consult the right per-skin slots (`decideSkin` only for decide, `selectSkin` only for
  * select, etc.) without N copy-pasted callers each computing the predicate locally.
  */
@@ -62,7 +62,7 @@ export type SkinFamilySceneKind = 'select' | 'decide' | 'gameplay' | 'result';
  * `controller.updateDisplay()` and the GUI reflects the new value. Function members are bound to the host so `this`
  * keeps its meaning when Tweakpane invokes them.
  */
-export interface DemoGUIState extends PlayTempoSettings {
+export interface PlayerGUIState extends PlayTempoSettings {
   autoPlay: boolean;
   /** Id of the be-music skin the default (no-theme) family renders with. Persisted in `localStorage`. */
   builtInSkin: string;
@@ -96,8 +96,7 @@ export interface DemoGUIState extends PlayTempoSettings {
   playInSilentMode: boolean;
   /**
    * When true, the next play scales every decoded sample by one gain so the loudest peak sits near −3 dBFS. Off by
-   * default, and not remembered: a reload plays charts at the level they were authored at. Takes the next play, not
-   * the one already loaded.
+   * default. Remembered with the other Debug Menu settings. Takes the next play, not the one already loaded.
    */
   peakGain: boolean;
   compressor: boolean;
@@ -214,7 +213,7 @@ export interface DemoGUIState extends PlayTempoSettings {
    *
    * The dropdown rebuilds its option list whenever a theme load completes so `'lr2'` / `'beatoraja'` only show
    * up when the corresponding theme is present. When the user's pick becomes unavailable mid-session (e.g.
-   * they had LR2 selected then dropped a beatoraja-only theme that wiped the LR2 state), `PlayerWebDemoApp.rebuildSkinFamilyPicker`
+   * they had LR2 selected then dropped a beatoraja-only theme that wiped the LR2 state), `PlayerWebApp.rebuildSkinFamilyPicker`
    * silently resets to `'auto'` so the GUI never displays an unhonorable value.
    */
   skinFamilyOverride: SkinFamilyOverride;

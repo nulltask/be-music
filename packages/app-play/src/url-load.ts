@@ -9,11 +9,11 @@ import { runBrowserTask, executeBrowserTask } from '@be-music/player-browser/com
  * `services/library.ts`), so the select screen lists the archive's charts and any skin is applied — no bespoke rendering
  * path.
  *
- * Cross-origin URLs are fetched through the demo's same-origin proxy route so archive links still work when the remote
+ * Cross-origin URLs are fetched through the player's same-origin proxy route so archive links still work when the remote
  * host does not send `Access-Control-Allow-Origin`.
  */
 
-// Guard for skin archives we expand here in the demo (music archives go through the player-web loader's own guarded
+// Guard for skin archives we expand here in the player (music archives go through the player-web loader's own guarded
 // `unzipSync`). Skins are small in practice; this only exists to stop a hostile/oversized link from exhausting memory.
 const MAX_SKIN_UNZIP_BYTES = 512 * 1024 * 1024;
 export const URL_LOAD_PROXY_PATH = '/__url-load-proxy';

@@ -1,6 +1,6 @@
 /**
  * Hi-speed (note scroll multiplier) range shared by the select screens' play-option panels, the gameplay screens'
- * hi-speed keys and hosts that remember the player's pick (e.g. the demo's Debug Menu). Visual only: hi-speed changes how
+ * hi-speed keys and hosts that remember the player's pick (e.g. the player's Debug Menu). Visual only: hi-speed changes how
  * far apart notes are drawn, never when they are judged.
  */
 

@@ -1,5 +1,5 @@
 // Imports are split across `@be-music/player-browser`'s entries (`./host`, `./skin`, `./collection`, `./audio`,
-// `./recording`) so the dependency surface of this demo is explicit at the file top. The main `@be-music/player-browser`
+// `./recording`) so the dependency surface of this player is explicit at the file top. The main `@be-music/player-browser`
 // entry is reserved for symbols that don't belong to any single entry (`logger`, `Rectangle`).
 import { PixiSceneHost, type PlayScene, type SelectScene } from '@be-music/player-browser/host';
 import type { BrowseSnapshot, PlayOptions } from '@be-music/player-scene-model';
@@ -18,14 +18,14 @@ import { DecideRoute } from './routes/decide.ts';
 import { PlayRoute } from './routes/play.ts';
 import { ResultRoute } from './routes/result.ts';
 import { ReplayRoute } from './routes/replay.ts';
-import { DemoShell } from './shell.ts';
+import { PlayerShell } from './shell.ts';
 import { InlineSearch } from '../inline-search.ts';
 import { DebugMenu, type DebugMenuDeps } from '../ui/debug-menu/index.ts';
 import { confirmSkinDrop, promptSkinDrop } from '../ui/skin-drop-prompt.ts';
 import { readDeviceSignals, type DeviceProfile } from '../device-profile.ts';
 import { captureScreenshot, finalizeRecordingIfActive, toggleRecording } from '../recording-controller.ts';
-import type { DemoGUIState, DemoScene, PlayerWebDemoElements, SkinFamilyOverride } from '../types.ts';
-import { createDemoGUIState, resolveCompressorMode, storeBuiltInSkinId } from '../services/settings.ts';
+import type { PlayerGUIState, PlayerScene, PlayerWebElements, SkinFamilyOverride } from '../types.ts';
+import { createPlayerGUIState, readCompressorRequest, storeBuiltInSkinId } from '../services/settings.ts';
 import { BE_MUSIC_SKINS } from '../services/built-in-skins.ts';
 import { SilentModeSetting } from '../services/silent-mode.ts';
 import { playOptionsFromGUI, PlayOptionsService } from '../services/play-options.ts';
@@ -46,8 +46,8 @@ import { nameResultJingle, type LiveTestHookDeps } from '../services/test-hook.t
 const gamereplay = logger('gameplay');
 
 /** What the app is made with: the page's elements, the device it runs on, and the test hook's recorder when enabled. */
-export interface PlayerWebDemoAppOptions {
-  readonly elements: PlayerWebDemoElements;
+export interface PlayerWebAppOptions {
+  readonly elements: PlayerWebElements;
   /** Phone or tablet, from the device's signals (`resolveDeviceProfile`). */
   readonly deviceProfile: DeviceProfile;
   /** `window.__beMusicTest`'s recorder (`?e2e=1` or a development build; `test-hook.ts`), or none. */
@@ -55,10 +55,10 @@ export interface PlayerWebDemoAppOptions {
 }
 
 /**
- * The demo's composition root: it makes the services, the scene router and the routes, and wires them to each other,
+ * The player's composition root: it makes the services, the scene router and the routes, and wires them to each other,
  * the Debug Menu and the Leaderboard. `main.ts` makes it, installs the test hook over it and starts it.
  */
-export class PlayerWebDemoApp {
+export class PlayerWebApp {
   /** The LR2 theme: every theme the drops brought, the one mounted, and its skins, BGM and system sounds. */
   private readonly lr2: LR2ThemeService;
   /** The beatoraja theme: its bundle, BGM and system sounds, and its entries loaded as scene kits. */
@@ -80,7 +80,7 @@ export class PlayerWebDemoApp {
    * the select scene, which it keeps across a decide, play and result. Transitions run one at a time, and a scene made
    * for a navigation a newer one replaced is disposed instead of shown.
    */
-  private readonly router = new SceneRouter<DemoScene, PlayScene, SelectScene>({
+  private readonly router = new SceneRouter<PlayerScene, PlayScene, SelectScene>({
     host: {
       setScene: async (scene) => {
         await this.mountStage();
@@ -171,7 +171,7 @@ export class PlayerWebDemoApp {
   private pendingSkinSystem: 'lr2' | 'beatoraja' | undefined;
   /**
    * Compressor architecture for `audioCompressorMode` on every gameplay mount. Defaults to `'split'` (the new 3-stage
-   * bus — see `audio-bus.ts` for the design rationale); the demo accepts a `?compressor=legacy` URL flag for A/B
+   * bus — see `audio-bus.ts` for the design rationale); the player accepts a `?compressor=legacy` URL flag for A/B
    * comparison against the old single-compressor topology, and `?compressor=off` to spawn gameplay with the bypass path
    * active out of the gate (the checkbox can also reach `off` mid-session).
    */
@@ -181,7 +181,7 @@ export class PlayerWebDemoApp {
    * handlers (`toggleRecording` etc.) share a single source of truth — programmatic updates go through `state.foo = …`
    * + `controller.updateDisplay()`.
    */
-  private readonly guiState: DemoGUIState;
+  private readonly guiState: PlayerGUIState;
   /** The Leaderboard's Debug Menu folder, account chip and play submission. */
   private readonly leaderboard = new LeaderboardPanel({
     // Read on use: `guiState` is initialized after this field.
@@ -220,12 +220,12 @@ export class PlayerWebDemoApp {
   /** `window.__beMusicTest` for the end-to-end suite (`?e2e=1` or a development build; `test-hook.ts`). */
   private readonly testHook: TestHookRecorder | undefined;
   /** The page around the stage: its gameplay state, fullscreen and touch controls (`app/shell.ts`). */
-  private readonly shell: DemoShell;
-  private readonly elements: PlayerWebDemoElements;
-  public constructor({ elements, deviceProfile, testHook }: PlayerWebDemoAppOptions) {
+  private readonly shell: PlayerShell;
+  private readonly elements: PlayerWebElements;
+  public constructor({ elements, deviceProfile, testHook }: PlayerWebAppOptions) {
     this.elements = elements;
     this.testHook = testHook;
-    this.guiState = createDemoGUIState({
+    this.guiState = createPlayerGUIState({
       signals: readDeviceSignals(),
       devicePixelRatio: window.devicePixelRatio || 1,
       builtInSkinId: (stored) => BE_MUSIC_SKINS.resolve(stored).id,
@@ -255,12 +255,18 @@ export class PlayerWebDemoApp {
     // Every sound plays through the master volume; start from the remembered level and mute state.
     setMasterVolume(this.guiState.muted ? 0 : this.guiState.masterVolume / 100);
     this.playOptions = new PlayOptionsService(playOptionsFromGUI(this.guiState));
-    this.silentMode = new SilentModeSetting({ settings: this.guiState, touchFirst: deviceProfile.touchFirst });
+    this.silentMode = new SilentModeSetting({
+      settings: this.guiState,
+      touchFirst: deviceProfile.touchFirst,
+      onRemember: () => this.debugMenu.scheduleSettingsSave(),
+    });
     this.silentMode.install();
-    // The `?compressor=split|legacy|off` URL flag, read once at boot.
-    const compressor = resolveCompressorMode(window.location.href);
-    this.compressorMode = compressor.mode;
-    this.guiState.compressor = compressor.enabled;
+    // `?compressor=split|legacy|off` wins for this visit. With no flag, the remembered checkbox stays.
+    const compressor = readCompressorRequest(window.location.href);
+    if (compressor) {
+      this.compressorMode = compressor.mode;
+      this.guiState.compressor = compressor.enabled;
+    }
     this.lr2 = new LR2ThemeService({
       elements,
       setStatus: (text) => this.status.set(text),
@@ -466,7 +472,7 @@ export class PlayerWebDemoApp {
       playChart: (chartEntry, overrides) => this.playRoute.playChart(chartEntry, overrides),
       showSelect: () => this.showSelect(),
     });
-    this.shell = new DemoShell({
+    this.shell = new PlayerShell({
       sceneHost: this.sceneHost,
       elements,
       search: this.search,

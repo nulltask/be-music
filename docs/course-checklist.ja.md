@@ -2,16 +2,16 @@
 
 # コースのブラウザ確認
 
-Web デモのコース機能を、スキンの種類ごとに確かめる手順です。単体テストでは届かない、シーン、画面の切り替え、音を確かめます。大部分は最小のテスト用スキンで自動で確かめられます（[自動実行](#自動実行)）。コースの流れ、シーン、デモのホストを変えたら、これを実行します。[移行](./architecture.ja.md#移行)の各段階の終わりと、自動実行では見えないところを変えたときは、実在のスキンで全項目を手で確かめ、結果をこのページの最後に記録します。規則そのものは [course.ja.md](./course.ja.md)、シーンは [player-web.ja.md](./player-web.ja.md) にあります。
+Web プレイヤーのコース機能を、スキンの種類ごとに確かめる手順です。単体テストでは届かない、シーン、画面の切り替え、音を確かめます。大部分は最小のテスト用スキンで自動で確かめられます（[自動実行](#自動実行)）。コースの流れ、シーン、プレイヤーのホストを変えたら、これを実行します。[移行](./architecture.ja.md#移行)の各段階の終わりと、自動実行では見えないところを変えたときは、実在のスキンで全項目を手で確かめ、結果をこのページの最後に記録します。規則そのものは [course.ja.md](./course.ja.md)、シーンは [player-web.ja.md](./player-web.ja.md) にあります。
 
 ## 自動実行
 
-`pnpm run test:e2e` はデモをビルドして空いているポートで配信し、[`packages/app-play/e2e`](../packages/app-play/e2e) の Playwright のテスト（全 46 件）をヘッドレスの Chromium で実行します。グローバルセットアップが下のテスト用データを一時フォルダに書き出し、テストはそれを人と同じようにドロップし（[準備](#準備)の擬似的なドロップ）、`code` 付きのキーを押し、Debug Menu を操作して、[テスト用フック](#テスト用フック)の値を確かめます。画素は見ません。プレイは実時間で進むので（3 並列でおよそ 5 分）、`pnpm test` には含めていません。
+`pnpm run test:e2e` はプレイヤーをビルドして空いているポートで配信し、[`packages/app-play/e2e`](../packages/app-play/e2e) の Playwright のテスト（全 46 件）をヘッドレスの Chromium で実行します。グローバルセットアップが下のテスト用データを一時フォルダに書き出し、テストはそれを人と同じようにドロップし（[準備](#準備)の擬似的なドロップ）、`code` 付きのキーを押し、Debug Menu を操作して、[テスト用フック](#テスト用フック)の値を確かめます。画素は見ません。プレイは実時間で進むので（3 並列でおよそ 5 分）、`pnpm test` には含めていません。
 
 ```mermaid
 flowchart LR
   fixtures["fixtures.ts<br/>譜面・コース・スキン"] --> tmp["一時フォルダ"]
-  build["vp build + vp preview<br/>空いているポート"] --> page["デモ ?e2e=1"]
+  build["vp build + vp preview<br/>空いているポート"] --> page["プレイヤー ?e2e=1"]
   tmp -->|擬似的なドロップ| page
   specs["テスト"] -->|キー・Debug Menu| page
   page -->|"window.__beMusicTest"| specs
@@ -36,7 +36,7 @@ flowchart LR
 
 ## テスト用フック
 
-URL に `?e2e=1` を付けるか開発ビルドで動かすと、デモの起動処理（`main.ts`）が、アプリを始める前に `window.__beMusicTest` を置きます。[`test-hook.ts`](../packages/app-play/src/test-hook.ts) が契約とアプリから渡されたものの記録を持ち、[`services/test-hook.ts`](../packages/app-play/src/services/test-hook.ts) がアプリの今の状態を読みます。フックは表示しているものを読むだけのもので、読んでも何も始めません（譜面のハッシュを計算することもありません）。バーの自己ベストのランプとトロフィーは、選曲画面と同じく今の判定ルールのものです。ホストが持っている状態と、ホストが渡す結果画面とリプレイの中身を読み、デモを操作することはありません。ファイルはページのドロップの処理から読み込みます。
+URL に `?e2e=1` を付けるか開発ビルドで動かすと、プレイヤーの起動処理（`main.ts`）が、アプリを始める前に `window.__beMusicTest` を置きます。[`test-hook.ts`](../packages/app-play/src/test-hook.ts) が契約とアプリから渡されたものの記録を持ち、[`services/test-hook.ts`](../packages/app-play/src/services/test-hook.ts) がアプリの今の状態を読みます。フックは表示しているものを読むだけのもので、読んでも何も始めません（譜面のハッシュを計算することもありません）。バーの自己ベストのランプとトロフィーは、選曲画面と同じく今の判定ルールのものです。ホストが持っている状態と、ホストが渡す結果画面とリプレイの中身を読み、プレイヤーを操作することはありません。ファイルはページのドロップの処理から読み込みます。
 
 これは契約です。シーンルーターとホストの書き直し（P5、[ADR 0006](./adr/0006-scene-router.ja.md)）でも各項目の意味を保ちました。項目の意味を変えるときは `version` を上げます。
 
@@ -57,7 +57,7 @@ URL に `?e2e=1` を付けるか開発ビルドで動かすと、デモの起動
 
 1. **テスト用データ。** `node scripts/course-checklist/fixtures.ts <dir>` で、`<dir>/songs` に小さな BMS ライブラリを作ります。Fixture A〜G（無入力で遊ぶとゲージが尽きる密な Fixture D を含む）と 5 鍵の譜面、`songs/courses/fixture-courses.lr2crs`（FIX GRADE、FIX EXPERT、FIX NONSTOP、FIX GRADE FAIL と、2 曲目がライブラリにない FIX MISSING STAGE）です。5 曲の上限の警告を確かめる `<dir>/seven-stages.lr2crs` と、`<dir>/skins/lr2`・`<dir>/skins/beatoraja` にテスト用スキンも作ります。
 2. **スキン。** 標準のスキンは何も要りません。LR2 は標準のテーマと効果音（`LR2files/Theme/LR2` と `LR2files/Sound`）を、beatoraja は任意のスキン（前回は ModernChic）を使います。流れをざっと見るだけならテスト用スキンでも足ります。テーマはドロップすると適用され、Debug Menu の Skin system でスキンの種類を切り替えられます。
-3. **開発サーバー。** デモは専用のポートで動かします（`pnpm --filter @be-music/app-play run dev --port 5199 --strictPort`）。既定のポートで遊んでいるセッションに触れないためです。
+3. **開発サーバー。** プレイヤーは専用のポートで動かします（`pnpm --filter @be-music/app-play run dev --port 5199 --strictPort`）。既定のポートで遊んでいるセッションに触れないためです。
 4. **ファイルのドロップ。** 人が確かめるなら、フォルダをページにドラッグすれば済みます。ブラウザの自動操作ではドロップできないので、`node scripts/course-checklist/serve.ts fixtures=<dir>/songs extra=<dir> lr2theme=<LR2files の親> beatoraja=<スキンのフォルダ>`（ポート 5299）で配信し、ページのコンソールから擬似的にドロップします。
 
    ```js

@@ -1,6 +1,6 @@
 import { FIXTURE_CHARTS } from '../../../scripts/course-checklist/fixtures.ts';
 import type { TestHookFamily } from '../src/test-hook.ts';
-import { type Demo, expect, openWithLibrary, SONGS, test } from './support.ts';
+import { type Player, expect, openWithLibrary, SONGS, test } from './support.ts';
 
 /**
  * The lane options apply on every family (ADR 0001): an AUTO play of Fixture A with the Debug Menu's Random 1P on
@@ -38,39 +38,40 @@ function fixtureAChannels(): string[] {
 interface FamilyCase {
   name: string;
   family: TestHookFamily;
-  open(demo: Demo): Promise<void>;
-  startAuto(demo: Demo): Promise<void>;
+  open(player: Player): Promise<void>;
+  startAuto(player: Player): Promise<void>;
 }
 
-const clickAuto = (demo: Demo) => demo.clickSkin(AUTO_BUTTON.x, AUTO_BUTTON.y, SELECT_SKIN.width, SELECT_SKIN.height);
+const clickAuto = (player: Player) =>
+  player.clickSkin(AUTO_BUTTON.x, AUTO_BUTTON.y, SELECT_SKIN.width, SELECT_SKIN.height);
 
 const FAMILIES: readonly FamilyCase[] = [
   {
     name: 'built-in',
     family: 'built-in',
-    open: (demo) => openWithLibrary(demo),
-    async startAuto(demo) {
-      await demo.setOption(PLAY_OPTIONS, 'Auto play', true);
-      await demo.key('Enter');
+    open: (player) => openWithLibrary(player),
+    async startAuto(player) {
+      await player.setOption(PLAY_OPTIONS, 'Auto play', true);
+      await player.key('Enter');
     },
   },
   {
     name: 'LR2',
     family: 'lr2',
-    async open(demo) {
-      await openWithLibrary(demo);
-      await demo.drop('skins/lr2');
-      await demo.waitFor((state) => state.scene.kind === 'select' && state.scene.family === 'lr2', 'the LR2 select');
+    async open(player) {
+      await openWithLibrary(player);
+      await player.drop('skins/lr2');
+      await player.waitFor((state) => state.scene.kind === 'select' && state.scene.family === 'lr2', 'the LR2 select');
     },
     startAuto: clickAuto,
   },
   {
     name: 'beatoraja',
     family: 'beatoraja',
-    async open(demo) {
-      await openWithLibrary(demo);
-      await demo.drop('skins/beatoraja');
-      await demo.waitFor(
+    async open(player) {
+      await openWithLibrary(player);
+      await player.drop('skins/beatoraja');
+      await player.waitFor(
         (state) => state.scene.kind === 'select' && state.scene.family === 'beatoraja',
         'the beatoraja select',
       );
@@ -80,21 +81,21 @@ const FAMILIES: readonly FamilyCase[] = [
 ];
 
 for (const setup of FAMILIES) {
-  test(`MIRROR plays the keys mirrored and is recorded on the ${setup.name} family`, async ({ demo }) => {
-    await setup.open(demo);
-    await demo.setOption(PLAY_OPTIONS, 'Random 1P', 'MIRROR');
-    await demo.browseTo(SONGS, 'Fixture A');
-    await setup.startAuto(demo);
-    const playing = await demo.waitFor(
+  test(`MIRROR plays the keys mirrored and is recorded on the ${setup.name} family`, async ({ player }) => {
+    await setup.open(player);
+    await player.setOption(PLAY_OPTIONS, 'Random 1P', 'MIRROR');
+    await player.browseTo(SONGS, 'Fixture A');
+    await setup.startAuto(player);
+    const playing = await player.waitFor(
       (state) => state.scene.kind === 'play' && state.play?.title === 'Fixture A',
       'Fixture A to play',
     );
     expect(playing.scene.family).toBe(setup.family);
     expect(playing.play?.autoPlay).toBe(true);
-    const state = await demo.waitForResult(0);
+    const state = await player.waitForResult(0);
     expect(state.results[0]).toMatchObject({ run: 'single', family: setup.family, title: 'Fixture A' });
 
-    const replay = await demo.lastReplay();
+    const replay = await player.lastReplay();
     if (replay === undefined) throw new Error('the play recorded no log');
     expect(replay.play.mode).toBe('auto');
     expect(replay.play.randomLane?.p1).toBe('MIRROR');

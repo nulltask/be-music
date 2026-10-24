@@ -3,7 +3,7 @@
  * readiness badge in the drop card so a user on an old browser sees *why* the player can't start instead of getting an
  * opaque WebGL / AudioContext error mid-load.
  *
- * The detection lives in `player-web` (not the demo) so any host shell — the demo, a future hosted build, an embedded
+ * The detection lives in `player-web` (not the player) so any host shell — the player, a future hosted build, an embedded
  * iframe — gets the same readiness verdict from a single source of truth as the actual runtime feature usage.
  */
 

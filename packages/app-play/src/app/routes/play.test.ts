@@ -24,7 +24,7 @@ import { CourseRunService } from '../../services/courses.ts';
 import { PlayOptionsService } from '../../services/play-options.ts';
 import type { BeatorajaPlayEntry } from '../../services/themes/beatoraja.ts';
 import { courseStageRecordKey, playRecordKey } from '../../chart-best-records.ts';
-import type { DemoScene, PlayerWebDemoElements } from '../../types.ts';
+import type { PlayerScene, PlayerWebElements } from '../../types.ts';
 import type { DebugMenu } from '../../ui/debug-menu/index.ts';
 import type { ResolvedPlayKit } from '../family-kits.ts';
 import { SceneRouter } from '../scene-router.ts';
@@ -113,9 +113,9 @@ interface FakePlay {
 
 /** The play route on a real scene router over a fake stage, with the select screen up and fake services. */
 async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlayEntry } = {}) {
-  const stage: (DemoScene | undefined)[] = [];
+  const stage: (PlayerScene | undefined)[] = [];
   const onInterrupt = vi.fn();
-  const router = new SceneRouter<DemoScene, PlayScene, SelectScene>({
+  const router = new SceneRouter<PlayerScene, PlayScene, SelectScene>({
     host: {
       setScene: async (scene) => {
         stage.push(scene);
@@ -159,7 +159,7 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
   const deps = {
     router,
     selectRoute: { lastSelectNavigation: undefined as BrowseSnapshot | undefined },
-    elements: { shell } as Pick<PlayerWebDemoElements, 'shell'>,
+    elements: { shell } as Pick<PlayerWebElements, 'shell'>,
     library: { collection: { sources: [], charts: [chartEntry('a')], errors: [] } as BrowserChartCollection },
     records: {
       lookupChartBestRecord: vi.fn<PlayRouteDeps['records']['lookupChartBestRecord']>(() => undefined),

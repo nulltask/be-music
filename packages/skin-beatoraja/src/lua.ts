@@ -223,7 +223,7 @@ export interface EvaluateBeatorajaLuaSkinOptions {
    * `nil` when none of the DIFFICULTY ops are active. Without a host-supplied context the
    * accessors return `false` / `0`, the Lua function falls through to `nil`, and the next
    * `RGB[1]` indexing crashes the entire `main()` evaluation. The skin then fails to load
-   * silently (the demo's show-X helper just falls through to the next scene).
+   * silently (the player's show-X helper just falls through to the next scene).
    *
    * Hosts that know the chart's classification (difficulty, judge rank, BPM, etc.) should
    * pass a context whose `option` returns `true` for the matching `BEATORAJA_OP.DIFFICULTY_*`

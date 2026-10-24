@@ -6,7 +6,7 @@ import {
 import type { LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
 import { createNonstopAssets, NONSTOP_CHART_PATH, type BrowserAssetSource } from '@be-music/player-browser/collection';
 
-/** A NONSTOP course stitched for the demo to play as one chart. */
+/** A NONSTOP course stitched for the player to play as one chart. */
 export interface PreparedNonstopPlay {
   /** The stitched chart as a song entry the gameplay scenes play (title: the course name). */
   chart: LibraryChart;
@@ -22,7 +22,7 @@ export type NonstopPlayFailure = 'missing-stage' | NonstopPrepareFailure;
 /**
  * Stitches a NONSTOP course from the collection with the shared pipeline (`prepareNonstopCourse` in
  * `@be-music/player-engine/course`, which the Leaderboard rebuilds runs with): each stage's `#RANDOM` drawn with `random`, the
- * course's long-note constraint applied, and the stages stitched with the course's connections. The demo's part is the
+ * course's long-note constraint applied, and the stages stitched with the course's connections. The player's part is the
  * asset plumbing (each stage's files found in its own source, `createNonstopAssets`) and the song entry the scenes play.
  * `hashesOf` gives each stage's file hashes, which its cut-out replay records.
  */

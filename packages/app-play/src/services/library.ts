@@ -46,14 +46,14 @@ import {
   showLoadingOverlay,
   type LoadingOverlayElements,
 } from '../loading-overlay.ts';
-import type { PlayerWebDemoElements } from '../types.ts';
+import type { PlayerWebElements } from '../types.ts';
 import { fetchZipAsFile, fetchZipAsFiles, parseURLMediaParams } from '../url-load.ts';
 
 const dropLog = logger('drop');
 
 export interface LibraryServiceOptions {
   /** The loading overlay a URL load shows and every load reports its progress on, and the shell (`.playing`). */
-  readonly elements: LoadingOverlayElements & Pick<PlayerWebDemoElements, 'shell'>;
+  readonly elements: LoadingOverlayElements & Pick<PlayerWebElements, 'shell'>;
   /** A chart's file hashes, cached per chart (`RecordsService`): course stages are matched by them. */
   readonly resolveChartHashes: (chartEntry: LibraryChart) => Promise<ChartFileHashes | undefined>;
   /** The course maker, whose saved courses are listed in their own folders. */

@@ -34,7 +34,7 @@ import {
 } from '@be-music/skin-beatoraja';
 import { systemSoundSetFromBeatoraja, type LibraryChart, type SystemSoundSet } from '@be-music/player-scene-model';
 import { chartShapeFor, resolveBeatorajaSkinVariant } from '../../chart-shape.ts';
-import { playSkinTypeForVariant } from '../../demo-utils.ts';
+import { playSkinTypeForVariant } from '../../player-utils.ts';
 import { applyLoadProgress, type LoadingOverlayElements } from '../../loading-overlay.ts';
 
 const dropLog = logger('drop');

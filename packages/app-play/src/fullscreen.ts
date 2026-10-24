@@ -1,7 +1,7 @@
 /**
- * Fullscreen helpers for the demo shell. Wraps the unprefixed Fullscreen API plus Safari's
+ * Fullscreen helpers for the player shell. Wraps the unprefixed Fullscreen API plus Safari's
  * `webkit*` aliases so a double-click on the Pixi canvas can toggle the page into (and out
- * of) fullscreen without the rest of the demo having to know about vendor prefixes.
+ * of) fullscreen without the rest of the player having to know about vendor prefixes.
  */
 
 export type FullscreenDocumentLike = {
@@ -53,7 +53,7 @@ export async function toggleFullscreen(
 }
 
 /**
- * True when the demo should consume Escape so the active scene (quit play / dismiss
+ * True when the player should consume Escape so the active scene (quit play / dismiss
  * result / close a select folder) does not also fire while leaving fullscreen. With the
  * Escape key locked ({@link FullscreenEscapeLock}) a short Esc press belongs to the page
  * and the browser leaves fullscreen on a long press instead, so nothing is consumed.
@@ -67,7 +67,7 @@ export function shouldCaptureFullscreenEscape(
   return (event.key === 'Escape' || event.code === 'Escape') && getFullscreenElement(doc) !== null;
 }
 
-/** The slice of the Keyboard Lock API (`navigator.keyboard`, Chromium only) the demo uses. */
+/** The slice of the Keyboard Lock API (`navigator.keyboard`, Chromium only) the player uses. */
 export type KeyboardLockLike = {
   lock?: (keyCodes?: string[]) => Promise<void>;
   unlock?: () => void;
@@ -76,7 +76,7 @@ export type KeyboardLockLike = {
 export type KeyboardLockNavigatorLike = { keyboard?: KeyboardLockLike };
 
 /**
- * Locks the Escape key while the demo is fullscreen, where the browser supports Keyboard Lock
+ * Locks the Escape key while the player is fullscreen, where the browser supports Keyboard Lock
  * (Chrome / Edge). A short Esc press then reaches the page — quitting the play as it does
  * windowed — and the browser leaves fullscreen only on a long press, showing its own hint.
  * Safari and Firefox have no `navigator.keyboard.lock`, so this is a no-op there and Esc

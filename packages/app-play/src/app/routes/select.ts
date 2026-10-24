@@ -25,7 +25,7 @@ import type { RecordsService } from '../../services/records.ts';
 import type { BeatorajaThemeService } from '../../services/themes/beatoraja.ts';
 import type { BuiltInThemeService } from '../../services/themes/built-in.ts';
 import type { LR2ThemeService } from '../../services/themes/lr2.ts';
-import type { DemoGUIState, DemoScene, PlayerWebDemoElements } from '../../types.ts';
+import type { PlayerGUIState, PlayerScene, PlayerWebElements } from '../../types.ts';
 import type { BeatorajaSkinOptionsPanel } from '../../ui/beatoraja-skin-options.ts';
 import type { DebugMenu } from '../../ui/debug-menu/index.ts';
 import type { FamilyKits } from '../family-kits.ts';
@@ -34,9 +34,9 @@ import type { CourseRoute } from './course.ts';
 
 export interface SelectRouteDeps {
   /** The scene router: the select scene it keeps, shown again on a return, or dropped when another family draws it. */
-  readonly router: Pick<SceneRouter<DemoScene, PlayScene, SelectScene>, 'select' | 'show' | 'dropSelect'>;
+  readonly router: Pick<SceneRouter<PlayerScene, PlayScene, SelectScene>, 'select' | 'show' | 'dropSelect'>;
   /** The page: the shell's `playing` and `empty` classes. */
-  readonly elements: Pick<PlayerWebDemoElements, 'shell'>;
+  readonly elements: Pick<PlayerWebElements, 'shell'>;
   /** The library the screen lists. */
   readonly library: Pick<LibraryService, 'collection'>;
   /** The best records the screen shows on its bars. */
@@ -61,7 +61,7 @@ export interface SelectRouteDeps {
   /** The play options in force: every select screen starts from them, and its own edits go back to them. */
   readonly playOptions: Pick<PlayOptionsService, 'current' | 'update'>;
   /** The Debug Menu's state: its play options, which mirror the screen's, and the NONSTOP placement. */
-  readonly guiState: GUIPlayOptions & Pick<DemoGUIState, 'nonstopPlacement'>;
+  readonly guiState: GUIPlayOptions & Pick<PlayerGUIState, 'nonstopPlacement'>;
   readonly audio: AudioService;
   /** The search field, which a skin's search box opens. */
   readonly search: Pick<InlineSearch, 'openFromPointer'>;

@@ -2,39 +2,39 @@ import { expect, openWithLibrary, SONGS, test } from './support.ts';
 
 const TEMPO = ['Tempo'];
 
-test('defaults to WSOLA and bypasses a saved percentage until enabled', async ({ demo }) => {
-  await openWithLibrary(demo, {
-    'be-music-demo.play-tempo': JSON.stringify({ tempoPercent: 20 }),
+test('defaults to WSOLA and bypasses a saved percentage until enabled', async ({ player }) => {
+  await openWithLibrary(player, {
+    'be-music.play-tempo': JSON.stringify({ tempoPercent: 20 }),
   });
-  expect(await demo.readOption(TEMPO, 'Enabled')).toBe(false);
-  expect(await demo.readOption(TEMPO, 'Keep-pitch stretcher')).toBe('WSOLA');
-  const algorithms = await demo.page
+  expect(await player.readOption(TEMPO, 'Enabled')).toBe(false);
+  expect(await player.readOption(TEMPO, 'Keep-pitch stretcher')).toBe('WSOLA');
+  const algorithms = await player.page
     .locator('[data-pane=debug] .tp-lblv')
     .filter({ hasText: 'Keep-pitch stretcher' })
     .locator('option')
     .allTextContents();
   expect(algorithms).toEqual(['WSOLA', 'Signalsmith Stretch']);
-  await demo.setOption(TEMPO, 'Enabled', true);
-  await demo.setOption(TEMPO, 'Enabled', false);
-  expect(await demo.readOption(TEMPO, 'Tempo (%)')).toBe(20);
-  expect(await demo.page.evaluate(() => JSON.parse(localStorage.getItem('be-music-demo.play-tempo')!))).toMatchObject({
+  await player.setOption(TEMPO, 'Enabled', true);
+  await player.setOption(TEMPO, 'Enabled', false);
+  expect(await player.readOption(TEMPO, 'Tempo (%)')).toBe(20);
+  expect(await player.page.evaluate(() => JSON.parse(localStorage.getItem('be-music.play-tempo')!))).toMatchObject({
     tempoEnabled: false,
     tempoPercent: 20,
     tempoStretchAlgorithm: 'wsola',
   });
-  await demo.setOption(['Play options'], 'Auto play', true);
-  await demo.browseTo(SONGS, 'Fixture A');
-  await demo.key('Enter');
-  const state = await demo.waitFor((current) => current.scene.kind === 'play', 'play at the original tempo');
+  await player.setOption(['Play options'], 'Auto play', true);
+  await player.browseTo(SONGS, 'Fixture A');
+  await player.key('Enter');
+  const state = await player.waitFor((current) => current.scene.kind === 'play', 'play at the original tempo');
   expect(state.play?.tempo).toBe(1);
   expect(state.status).toBe('Playing: Fixture A');
-  expect(await demo.optionEnabled(TEMPO, 'Enabled')).toBe(false);
-  expect(await demo.optionEnabled(TEMPO, 'Tempo (%)')).toBe(false);
-  await demo.waitForResult(0);
-  expect(await demo.optionEnabled(TEMPO, 'Enabled')).toBe(true);
-  await demo.setOption(TEMPO, 'Enabled', true);
-  expect(await demo.readOption(TEMPO, 'Tempo (%)')).toBe(20);
-  expect(await demo.page.evaluate(() => JSON.parse(localStorage.getItem('be-music-demo.play-tempo')!))).toMatchObject({
+  expect(await player.optionEnabled(TEMPO, 'Enabled')).toBe(false);
+  expect(await player.optionEnabled(TEMPO, 'Tempo (%)')).toBe(false);
+  await player.waitForResult(0);
+  expect(await player.optionEnabled(TEMPO, 'Enabled')).toBe(true);
+  await player.setOption(TEMPO, 'Enabled', true);
+  expect(await player.readOption(TEMPO, 'Tempo (%)')).toBe(20);
+  expect(await player.page.evaluate(() => JSON.parse(localStorage.getItem('be-music.play-tempo')!))).toMatchObject({
     tempoEnabled: true,
     tempoPercent: 20,
   });

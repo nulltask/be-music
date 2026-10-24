@@ -29,7 +29,7 @@ import type { FamilyDispatchState } from '../../family-dispatch.ts';
 import { resolveResultSoundSet, type LR2ResultJingles } from '../../result-jingles.ts';
 import { CourseRunService } from '../../services/courses.ts';
 import { resultFromCourseLog, resultFromData } from '../../test-hook.ts';
-import type { DemoScene } from '../../types.ts';
+import type { PlayerScene } from '../../types.ts';
 import { SceneRouter } from '../scene-router.ts';
 import type { LastPlay } from './play.ts';
 import { ResultRoute, type ResultRouteDeps } from './result.ts';
@@ -125,9 +125,9 @@ interface FakeResult {
  * the theme loaded: LR2 (with a result skin), beatoraja (with one) or none.
  */
 async function harness(options: { family?: 'lr2' | 'beatoraja' | 'none'; lastPlay?: LastPlay } = {}) {
-  const stage: (DemoScene | undefined)[] = [];
+  const stage: (PlayerScene | undefined)[] = [];
   const onInterrupt = vi.fn();
-  const router = new SceneRouter<DemoScene, PlayScene, SelectScene>({
+  const router = new SceneRouter<PlayerScene, PlayScene, SelectScene>({
     host: {
       setScene: async (scene) => {
         stage.push(scene);

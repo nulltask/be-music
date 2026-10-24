@@ -16,7 +16,7 @@ import { courseRunKeepsRecord, courseRunRecordPlay, type RecordPlay } from '@be-
 import { rulesetRecordKey } from './chart-best-records.ts';
 
 /**
- * The decisions the demo's course flow takes, kept apart from the scenes that act on them so they can be tested: what
+ * The decisions the player's course flow takes, kept apart from the scenes that act on them so they can be tested: what
  * a course bar starts, what a stage's end leads to, and which runs keep a record.
  */
 
@@ -46,7 +46,7 @@ export interface ActiveCourse {
   run: CourseRun<LibraryChart, CourseStageHistory>;
 }
 
-/** A stage of a running course as the demo plays it: the run's plan, with the course as the skins show it there. */
+/** A stage of a running course as the player plays it: the run's plan, with the course as the skins show it there. */
 export interface CourseStagePlay extends CourseRunStagePlan<LibraryChart> {
   courseInfo: CourseView;
 }

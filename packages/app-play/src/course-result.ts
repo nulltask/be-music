@@ -3,7 +3,7 @@ import type { LibraryCourse } from '@be-music/player-scene-model';
 import type { BeMusicCourseBestRecord, BeMusicChartBestRecord } from '@be-music/player-skin-sdk';
 
 /*
- * How the demo shows a course run's results: when a stage's result is skipped, and the records kept per course. The
+ * How the player shows a course run's results: when a stage's result is skipped, and the records kept per course. The
  * run itself is `CourseRun` (`@be-music/player-engine/course`); its result payload (on every family's result screen), the
  * stage graphs and how a result is presented are the play result model of `@be-music/player-scene-model`.
  */

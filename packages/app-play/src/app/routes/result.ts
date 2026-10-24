@@ -36,7 +36,7 @@ import type { BeatorajaThemeService } from '../../services/themes/beatoraja.ts';
 import type { BuiltInThemeService } from '../../services/themes/built-in.ts';
 import type { LR2ThemeService } from '../../services/themes/lr2.ts';
 import { resultFromCourseLog, resultFromData, type TestHookRecorder } from '../../test-hook.ts';
-import type { DemoScene } from '../../types.ts';
+import type { PlayerScene } from '../../types.ts';
 import type { FamilyKits } from '../family-kits.ts';
 import type { PlayDispose, SceneRouter } from '../scene-router.ts';
 import type { CourseRoute } from './course.ts';
@@ -47,7 +47,7 @@ export const disposeKeepingAudioTail: PlayDispose<PlayScene> = (play) => play.di
 
 export interface ResultRouteDeps {
   /** The scene router: the result takes the stage from the play, and leaves it before the next stage or a retry. */
-  readonly router: Pick<SceneRouter<DemoScene, PlayScene, SelectScene>, 'show' | 'leave'>;
+  readonly router: Pick<SceneRouter<PlayerScene, PlayScene, SelectScene>, 'show' | 'leave'>;
   /** The library: the chart's asset source. */
   readonly library: Pick<LibraryService, 'collection'>;
   /** The best records the play, or the course stage, is kept in. */

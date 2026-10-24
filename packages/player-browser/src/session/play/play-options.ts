@@ -242,7 +242,7 @@ export interface PlaySessionOptions {
    * - `'split'` (default) — separate compressors on the key / BGM buses plus a master limiter; key bus tuned
    *   aggressively for transient peaks, BGM bus tuned for musical glue, master for clip protection. Prevents BGM
    *   ducking under dense input bursts (a known failure mode of the legacy single-bus compressor).
-   * - `'legacy'` — original single-compressor topology, kept for A/B comparison via the demo's `?compressor=legacy` URL
+   * - `'legacy'` — original single-compressor topology, kept for A/B comparison via the player's `?compressor=legacy` URL
    *   flag so behavior can be diff-tested directly.
    *
    * `'off'` is reachable via `audioCompressor: false` rather than being a valid value here — `audioCompressor` is the

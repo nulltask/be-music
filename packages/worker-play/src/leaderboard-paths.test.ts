@@ -16,6 +16,7 @@ describe('isLeaderboardPath', () => {
       '/leaderboard',
       '/leaderboard/players/x',
       '/ffmpeg-core/ffmpeg-core.wasm',
+      '/api/player-settings',
     ]) {
       expect(isLeaderboardPath(path)).toBe(false);
     }

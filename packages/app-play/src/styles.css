@@ -1159,7 +1159,7 @@ textarea {
   /*
    * Determinate state — the inline `width` set by JS drives the
    * fill. Default to a yellow accent so the bar matches the rest
-   * of the demo's highlight colour (toolbar :checked label, drop
+   * of the player's highlight colour (toolbar :checked label, drop
    * border).
    */
   height: 100%;
@@ -1272,7 +1272,7 @@ textarea {
 .help-button:focus-visible {
   /*
    * Keyboard-focus ring — uses the accent so it harmonises
-   * with the rest of the demo's hover affordances.
+   * with the rest of the player's hover affordances.
    */
   box-shadow:
     0 8px 22px rgb(0 0 0 / 0.35),
@@ -1357,7 +1357,7 @@ textarea {
   /*
    * Slide-in entry that reads as "the dialog rose into focus"
    * rather than "popped instantly". Matches the drop card's
-   * entry animation cadence so the demo's overlay vocabulary
+   * entry animation cadence so the player's overlay vocabulary
    * stays consistent.
    */
   transform: translateY(8px) scale(0.98);
@@ -1854,7 +1854,7 @@ textarea {
   /*
    * Custom scrollbar styling. Chromium reads
    * `::-webkit-scrollbar`; Firefox reads
-   * `scrollbar-color`. Both surfaces stay in the demo's
+   * `scrollbar-color`. Both surfaces stay in the player's
    * dark / accent palette rather than defaulting to the
    * system grey.
    */
@@ -2348,7 +2348,7 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
 
 /*
  * Leaderboard sign-in / sign-up dialogs (account-dialogs.ts): the same
- * steps as the Leaderboard's own dialogs, in the demo's palette — a
+ * steps as the Leaderboard's own dialogs, in the player's palette — a
  * dark card over a dimmed page, the accent on the main button, Google
  * and Discord shown greyed out with an "Coming soon" badge.
  */
