@@ -157,3 +157,9 @@ test('grade_random excludes ALL-SCR and H-RANDOM at source option indices above 
     resolveCourseLaneOptions(['grade_random'], { random1P: 'ALL-SCR', random2P: 'H-RANDOM', dpFlip: true }),
   ).toEqual({ random1P: 'OFF', random2P: 'OFF', dpFlip: true });
 });
+
+test('grade_random excludes RANDOM-EX', () => {
+  expect(resolveCourseLaneOptions(['grade_random'], { random1P: 'RANDOM-EX', random2P: 'OFF', dpFlip: false })).toEqual(
+    { random1P: 'OFF', random2P: 'OFF', dpFlip: false },
+  );
+});

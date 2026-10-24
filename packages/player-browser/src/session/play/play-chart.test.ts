@@ -403,3 +403,50 @@ test.each(['1P', '2P'] as const)('ALL-SCR includes the complete %s scratch domai
   });
   expect(channelsOf(notes)).toEqual([scratch, scratch]);
 });
+
+test.each(['1P', '2P'] as const)('RANDOM-EX permutes the complete %s key/scratch domain consistently', (side) => {
+  const keys = resolveLaneOptionChannels(side, '14');
+  const scratch = side === '1P' ? '16' : '26';
+  const domain = [...keys, scratch];
+  const notes = notesOn(domain);
+  const mines = notesOn(domain);
+  const hidden = notesOn(domain);
+  applyRandomMode(notes, keys, 'RANDOM-EX', () => 0, { ruleset: 'beatoraja', scratchLanes: [scratch] }, mines, hidden);
+  expect(channelsOf(notes)).toEqual([...domain.slice(1), domain[0]]);
+  expect(channelsOf(mines)).toEqual(channelsOf(notes));
+  expect(channelsOf(hidden)).toEqual(channelsOf(notes));
+  expect(notes.at(-1)!.channel).not.toBe(scratch);
+});
+
+test('RANDOM-EX includes both wheel directions and preserves LN timing', () => {
+  const keys = resolveLaneOptionChannels('1P', '24');
+  const notes = [
+    { channel: keys[0]!, seconds: 0, endSeconds: 2 },
+    { channel: '1P', seconds: 3 },
+    { channel: '1Q', seconds: 4 },
+  ];
+  applyRandomMode(notes, keys, 'RANDOM-EX', () => 0, { ruleset: 'beatoraja', scratchLanes: ['1P', '1Q'] });
+  expect(channelsOf(notes)).toEqual([keys[1], '1Q', keys[0]]);
+  expect(notes[0]!.endSeconds).toBe(2);
+  expect(() => applyRandomMode([], keys, 'RANDOM-EX', () => 0, { ruleset: 'lr2', scratchLanes: ['16'] })).toThrow(
+    /only for beatoraja/,
+  );
+  expect(() => applyRandomMode([], keys, 'RANDOM-EX', () => 0, { ruleset: 'beatoraja' })).toThrow(/requires scratch/);
+});
+
+test('RANDOM-EX records the effective LN placement for replay without re-rolling', () => {
+  const json = parseChart('#BPM 120\n#LNOBJ AA\n#00012:0001\n#00112:00AA', 'bms');
+  const prepare = () => preparePlaybackChart(resolveChart(json, { playVariant: '7' }));
+  const chart = prepare();
+  applyRandomMode(chart.notes, KEYS_1P, 'RANDOM-EX', () => 0, { ruleset: 'beatoraja', scratchLanes: ['16'] });
+  const replay = createReplayRecorder({
+    json,
+    chart,
+    play: { mode: 'auto', autoScratch: false, randomLane: { p1: 'RANDOM-EX' } },
+  }).finalize({ summary: { ...createEmptyScore(1), fast: 0, slow: 0 } });
+  const target = prepare();
+  expect(applyReplayArrangement(replay.chart.notes, target)).toEqual({ ok: true });
+  expect(target.notes.map(({ channel, endSeconds }) => ({ channel, endSeconds }))).toEqual(
+    chart.notes.map(({ channel, endSeconds }) => ({ channel, endSeconds })),
+  );
+});

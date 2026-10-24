@@ -200,3 +200,10 @@ test('ALL-SCR is selectable only for the beatoraja reference', () => {
     random2P: 'ALL-SCR',
   });
 });
+
+test('RANDOM-EX is a separate beatoraja option', () => {
+  expect(resolveRandomModes('beatoraja')).toContain('RANDOM-EX');
+  expect(resolveRandomModes('lr2')).not.toContain('RANDOM-EX');
+  expect(resolveRandomModes('____')).not.toContain('RANDOM-EX');
+  expect(resolvePlayOptionValue('random1P', 'RANDOM-EX')).toBe('RANDOM-EX');
+});
