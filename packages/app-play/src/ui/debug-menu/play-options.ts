@@ -5,6 +5,7 @@ import type { FolderApi } from 'tweakpane';
 import {
   DIFFICULTY_FILTER_CYCLE,
   CLASSIC_HI_SPEED_STEPS,
+  NORMAL_HI_SPEED_GREEN_NUMBERS,
   snapClassicHiSpeed,
   HISPEED_MAX,
   HISPEED_MIN,
@@ -150,11 +151,50 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       .addBinding(this.guiState, 'bpmGuide', { label: 'BPM GUIDE (beatoraja)' })
       .on('change', ({ value }) => this.setPlayOptions({ bpmGuide: value })),
   );
+  const state = this.guiState;
+  const normal = {
+    get enabled() {
+      return state.normalHiSpeedLevel > 0;
+    },
+    set enabled(value: boolean) {
+      state.normalHiSpeedLevel = value ? state.normalHiSpeedLevel || 3 : 0;
+    },
+    get level() {
+      return state.normalHiSpeedLevel || 3;
+    },
+    set level(value: number) {
+      if (state.normalHiSpeedLevel > 0) state.normalHiSpeedLevel = value;
+    },
+  };
+  this.normalHiSpeedController = trackPlayOption(
+    folder.addBinding(normal, 'enabled', { label: 'Normal HI-SPEED (AC 32 measured)' }).on('change', ({ value }) => {
+      if (value) {
+        state.classicHiSpeed = false;
+        state.hsFix = 'OFF';
+      }
+      this.setPlayOptions({
+        normalHiSpeedLevel: state.normalHiSpeedLevel,
+        ...(value ? { classicHiSpeed: false, hsFix: 'OFF' } : {}),
+      });
+      this.refreshRulesetChoices();
+      this.refreshPlayOptionControllers();
+    }),
+  );
+  this.normalHiSpeedLevelController = trackPlayOption(
+    selectBinding(
+      folder,
+      normal,
+      'level',
+      'Normal HS level',
+      NORMAL_HI_SPEED_GREEN_NUMBERS.map((_, index) => index + 1),
+    ).on('change', ({ value }) => this.setPlayOptions({ normalHiSpeedLevel: value })),
+  );
   this.classicHiSpeedController = trackPlayOption(
     folder.addBinding(this.guiState, 'classicHiSpeed', { label: 'CLASSIC HI-SPEED' }).on('change', ({ value }) => {
-      this.setPlayOptions({ classicHiSpeed: value, ...(value ? { hsFix: 'OFF' } : {}) });
+      this.setPlayOptions({ classicHiSpeed: value, ...(value ? { hsFix: 'OFF', normalHiSpeedLevel: 0 } : {}) });
       if (value) {
         this.guiState.hsFix = 'OFF';
+        this.guiState.normalHiSpeedLevel = 0;
         this.deps.rememberHiSpeed(snapClassicHiSpeed(this.guiState.hiSpeed)!, 'menu');
       }
       this.refreshRulesetChoices();

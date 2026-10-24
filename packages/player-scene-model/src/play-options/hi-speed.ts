@@ -42,7 +42,8 @@ export function stepPlayerHiSpeed(
 ): { player: number; drawn: number } | undefined {
   const next = classic ? stepClassicHiSpeed(player, delta) : snapHiSpeed(player + delta);
   if (next === undefined) return undefined;
-  const drawn = snapHiSpeed(next * multiplier);
+  const rawDrawn = next * multiplier;
+  const drawn = classic ? (Number.isFinite(rawDrawn) && rawDrawn > 0 ? rawDrawn : undefined) : snapHiSpeed(rawDrawn);
   return drawn === undefined ? undefined : { player: next, drawn };
 }
 

@@ -60,9 +60,9 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
     nowSeconds: drawClock.nowSeconds,
     reachedBeat: drawClock.reachedBeat,
     mapper: ctx.play.scrollMapper,
-    laneBeats: laneHeight / Math.max(1, pixelsPerBeat),
+    laneBeats: laneHeight / Math.max(Number.EPSILON, pixelsPerBeat),
     timelineBeats: ctx.play.laneTimelineBeats,
-    overscanBeats: overscan / Math.max(1, pixelsPerBeat),
+    overscanBeats: overscan / Math.max(Number.EPSILON, pixelsPerBeat),
     stageBottomY: height,
   });
   renderMeasureLines(ctx, drawWindow, pixelsPerBeat);

@@ -329,6 +329,7 @@ export function reducePlayState(state: PlayState, event: PlayEvent): PlayState {
       return applyFinish(state, event.summary);
     case 'seek':
       return applySeek(state, event);
+    case 'hi-speed-scale':
     case 'hi-speed-step':
     case 'hi-speed-set':
     case 'hi-speed-drawn': {

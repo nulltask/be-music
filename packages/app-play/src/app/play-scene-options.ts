@@ -30,6 +30,7 @@ export type PlaySceneGUIState = Pick<
   | 'judgeRuleset'
   | 'autoPauseOnBlur'
   | 'hiSpeed'
+  | 'normalHiSpeedLevel'
   | 'keyVolume'
   | 'bgmVolume'
   | 'peakGain'
@@ -124,9 +125,10 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     bga: playOptions.bga,
     bgaSize: playOptions.bgaSize,
     scoreGraph: playOptions.scoreGraph,
-    hsFix: playOptions.classicHiSpeed ? ('OFF' as const) : playOptions.hsFix,
+    hsFix: playOptions.classicHiSpeed || playOptions.normalHiSpeedLevel > 0 ? ('OFF' as const) : playOptions.hsFix,
     bpmGuide: playOptions.bpmGuide,
     classicHiSpeed: playOptions.classicHiSpeed,
+    normalHiSpeedLevel: playOptions.normalHiSpeedLevel,
     judgeAlgorithm: replay?.play.judgeAlgorithm ?? playOptions.judgeAlgorithm,
     longNoteModifier: playOptions.longNoteModifier,
     hiddenSudden1P: lanes.hiddenSudden1P,

@@ -273,7 +273,13 @@ export class PlayRoute {
     };
     const callbacks = {
       // In-play hi-speed changes come back to be remembered for the next play.
-      onHiSpeedChange: (hiSpeed: number) => this.rememberHiSpeed(hiSpeed, 'play'),
+      onHiSpeedChange: (hiSpeed: number, normalLevel?: number) => {
+        if (normalLevel !== undefined) {
+          this.guiState.normalHiSpeedLevel = normalLevel;
+          this.setPlayOptions({ normalHiSpeedLevel: normalLevel });
+        }
+        this.rememberHiSpeed(hiSpeed, 'play');
+      },
       // A tempo change during the play (the tempo slider in pitch mode, or a replay following its log).
       onTempoChange: (changed: number) => this.followLiveTempo(changed),
       onExit: () => {

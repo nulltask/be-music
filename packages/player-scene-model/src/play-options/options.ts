@@ -16,6 +16,8 @@ export interface PlayOptions {
   hiSpeed: number;
   /** AC 34 CLASSIC HI-SPEED; false retains the source default controls. */
   classicHiSpeed: boolean;
+  /** AC 32 measured normal level 1..20; 0 leaves the existing multiplier API active. */
+  normalHiSpeedLevel: number;
   /** beatoraja BPM GUIDE shows BPM-change and STOP markers on the lane. */
   bpmGuide: boolean;
   /**

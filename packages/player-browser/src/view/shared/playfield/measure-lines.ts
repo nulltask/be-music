@@ -68,13 +68,16 @@ export function renderMeasureLines(ctx: PlayfieldContext, drawWindow: NoteDrawWi
     // began on it stays on the judgement line for the STOP. A pixel of slack keeps the line just crossed for a frame,
     // as LR2 draws it once more on the line before dropping it.
     // Past an LR2 negative-BPM reversal a bar line the playhead passed before it stays gone as the scroll runs back.
-    firstBeatIndex = findFirstIndexNumberAtOrAfter(beats, drawWindow.reachedBeat - 1 / Math.max(1, pixelsPerBeat));
+    firstBeatIndex = findFirstIndexNumberAtOrAfter(
+      beats,
+      drawWindow.reachedBeat - 1 / Math.max(Number.EPSILON, pixelsPerBeat),
+    );
   }
   // beatoraja's rules end the walk where the notes' walk ends (bar lines are timelines like any other).
   const maxBeat =
     drawWindow.rules === 'beatoraja'
       ? drawWindow.lastBeat
-      : currentBeat + (bottom - top + 1) / Math.max(1, pixelsPerBeat);
+      : currentBeat + (bottom - top + 1) / Math.max(Number.EPSILON, pixelsPerBeat);
   const beatDistance = ctx.play.scrollMapper
     ? (toBeat: number): number => ctx.play.scrollMapper!.distanceBetween(currentBeat, toBeat)
     : (toBeat: number): number => toBeat - currentBeat;

@@ -9,6 +9,7 @@ import {
   KEYS_FILTER_CYCLE,
   RANDOM_CYCLE,
   PLAY_OPTION_CHOICES,
+  resolvePlayOptionValue,
   clampShutter,
   SORT_CYCLE,
   snapHiSpeed,
@@ -65,6 +66,7 @@ export interface DebugMenuSettings {
   random2P: RandomMode;
   dpFlip: boolean;
   classicHiSpeed: boolean;
+  normalHiSpeedLevel: number;
   bpmGuide: boolean;
   judgeAlgorithm: PlayerGUIState['judgeAlgorithm'];
   longNoteModifier: PlayerGUIState['longNoteModifier'];
@@ -203,6 +205,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'submitToLeaderboard', booleanOf(raw.submitToLeaderboard));
   assign(settings, 'dpFlip', booleanOf(raw.dpFlip));
   assign(settings, 'bpmGuide', booleanOf(raw.bpmGuide));
+  assign(settings, 'normalHiSpeedLevel', resolvePlayOptionValue('normalHiSpeedLevel', raw.normalHiSpeedLevel));
   assign(settings, 'classicHiSpeed', booleanOf(raw.classicHiSpeed));
   assign(settings, 'judgeAlgorithm', oneOf(raw.judgeAlgorithm, ['combo', 'duration', 'lowest'] as const));
   assign(settings, 'longNoteModifier', oneOf(raw.longNoteModifier, ['OFF', 'LEGACY', 'REMOVE'] as const));
@@ -390,6 +393,7 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('random2P');
   assignState('dpFlip');
   assignState('bpmGuide');
+  assignState('normalHiSpeedLevel');
   assignState('classicHiSpeed');
   assignState('judgeAlgorithm');
   assignState('longNoteModifier');
@@ -457,6 +461,7 @@ export function captureDebugMenuSettings(
     random2P: state.random2P,
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
+    normalHiSpeedLevel: state.normalHiSpeedLevel,
     classicHiSpeed: state.classicHiSpeed,
     judgeAlgorithm: state.judgeAlgorithm,
     longNoteModifier: state.longNoteModifier,

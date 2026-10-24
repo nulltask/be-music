@@ -1,7 +1,7 @@
 import { clamp } from '@be-music/shared-utils/core';
 import { LR2_GAUGE_TYPES, isGaugeType } from '@be-music/player-engine/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
-import { DEFAULT_HISPEED, snapHiSpeed } from './hi-speed.ts';
+import { DEFAULT_HISPEED, snapHiSpeed, snapClassicHiSpeed } from './hi-speed.ts';
 import type {
   BGAMode,
   BGASize,
@@ -71,6 +71,7 @@ export const RANDOM_CYCLE: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', '
 export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   hiSpeed: DEFAULT_HISPEED,
   classicHiSpeed: false,
+  normalHiSpeedLevel: 0,
   bpmGuide: false,
   autoPlay: false,
   bga: 'ON',
@@ -152,6 +153,7 @@ export function clampShutter(value: number): number {
 /** Numeric play options, each with the clamp applied to a value set for it. */
 const NUMERIC_PLAY_OPTION_CLAMPS: { readonly [K in keyof PlayOptions]?: (value: number) => number } = {
   hiSpeed: clampHiSpeed,
+  normalHiSpeedLevel: (value) => Math.max(0, Math.min(20, Math.round(value))),
   shutter: clampShutter,
 };
 
@@ -221,6 +223,15 @@ export function resolvePlayOptions(stored: Readonly<Partial<Record<keyof PlayOpt
     if (!Object.hasOwn(stored, key)) continue;
     const value = resolvePlayOptionValue(key, stored[key]);
     if (value !== undefined) (options as Record<keyof PlayOptions, unknown>)[key] = value;
+  }
+  if (options.classicHiSpeed) {
+    options.normalHiSpeedLevel = 0;
+    options.hsFix = 'OFF';
+    options.hiSpeed = snapClassicHiSpeed(options.hiSpeed)!;
+  } else if (options.normalHiSpeedLevel > 0) {
+    options.hsFix = 'OFF';
+    if (typeof stored.hiSpeed === 'number' && Number.isFinite(stored.hiSpeed) && stored.hiSpeed > 0)
+      options.hiSpeed = stored.hiSpeed;
   }
   return options;
 }

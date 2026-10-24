@@ -1,3 +1,4 @@
+import { resolveNormalHiSpeed, resolveNormalHiSpeedLevel } from '../play-options/normal-hi-speed.ts';
 import { DEFAULT_HISPEED, snapHiSpeed, snapClassicHiSpeed, stepPlayerHiSpeed } from '../play-options/hi-speed.ts';
 import type { HSFix } from '../play-options/options.ts';
 
@@ -13,6 +14,8 @@ export interface HiSpeedState {
   readonly multiplier: number;
   readonly locked: boolean;
   readonly classic?: true;
+  readonly normalLevel?: number;
+  readonly normalBPM?: number;
 }
 
 /** The tempo facts HS-FIX reads off a chart. */
@@ -54,25 +57,36 @@ export function resolveHSFixMultiplier(mode: HSFix, tempo: HSFixTempo): number {
 
 /** The hi-speed a play starts with: the player's (the default when none or an invalid one), drawn under HS-FIX. */
 export function createHiSpeedState(
-  init: { hiSpeed?: number; multiplier?: number; locked?: boolean; classic?: boolean } = {},
+  init: {
+    hiSpeed?: number;
+    multiplier?: number;
+    locked?: boolean;
+    classic?: boolean;
+    normalLevel?: number;
+    bpm?: number;
+  } = {},
 ): HiSpeedState {
-  const player = (init.classic ? snapClassicHiSpeed : snapHiSpeed)(init.hiSpeed ?? DEFAULT_HISPEED) ?? DEFAULT_HISPEED;
+  const normal = init.normalLevel !== undefined ? resolveNormalHiSpeed(init.normalLevel, init.bpm ?? 120) : undefined;
+  const player =
+    normal ?? (init.classic ? snapClassicHiSpeed : snapHiSpeed)(init.hiSpeed ?? DEFAULT_HISPEED) ?? DEFAULT_HISPEED;
   const multiplier = init.multiplier !== undefined && init.multiplier > 0 ? init.multiplier : 1;
   return {
     player,
-    drawn: snapHiSpeed(player * multiplier) ?? player,
+    drawn: sourceDrawn(player, multiplier, init.classic === true || normal !== undefined),
     multiplier,
     locked: init.locked === true,
     ...(init.classic ? { classic: true as const } : {}),
+    ...(normal !== undefined ? { normalLevel: init.normalLevel!, normalBPM: init.bpm ?? 120 } : {}),
   };
 }
 
 /** A change of the hi-speed during a play. */
 export type HiSpeedCommand =
   /** The player's hi-speed keys: step the player's hi-speed (ignored while locked). */
-  | { type: 'hi-speed-step'; delta: number }
+  | { type: 'hi-speed-step'; delta: number; bpm?: number }
   /** The host sets the player's hi-speed (a settings menu); HS-FIX applies on top. */
-  | { type: 'hi-speed-set'; value: number }
+  | { type: 'hi-speed-set'; value: number; bpm?: number }
+  | { type: 'hi-speed-scale'; multiplier: number }
   /**
    * A drawn hi-speed from elsewhere — a replay's recorded view — taken as it is, the player's worked back from it.
    * Taken while locked too, as the replay's recorded covers are (`cover-set`): the lock stops the player changing the
@@ -87,23 +101,57 @@ export type HiSpeedCommand =
  */
 export function reduceHiSpeed(state: HiSpeedState, command: HiSpeedCommand): HiSpeedState {
   switch (command.type) {
+    case 'hi-speed-scale': {
+      if (!(command.multiplier > 0) || !Number.isFinite(command.multiplier) || command.multiplier === state.multiplier)
+        return state;
+      return { ...state, multiplier: command.multiplier, drawn: sourceDrawn(state.player, command.multiplier, true) };
+    }
     case 'hi-speed-step': {
       if (state.locked) return state;
+      if (state.normalLevel !== undefined) {
+        if (!Number.isFinite(command.delta) || command.delta === 0) return state;
+        const level = Math.max(1, Math.min(20, state.normalLevel + Math.sign(command.delta)));
+        if (level === state.normalLevel) return state;
+        return setNormalLevel(state, level, command.bpm ?? state.normalBPM ?? 120);
+      }
       const next = stepPlayerHiSpeed(state.player, command.delta, state.multiplier, state.classic);
       return next === undefined || (next.player === state.player && next.drawn === state.drawn)
         ? state
         : { ...state, player: next.player, drawn: next.drawn };
     }
     case 'hi-speed-set': {
+      if (state.normalLevel !== undefined) {
+        const bpm = command.bpm ?? state.normalBPM ?? 120;
+        const level = resolveNormalHiSpeedLevel(command.value, bpm);
+        return level === undefined ? state : setNormalLevel(state, level, bpm);
+      }
       const next = stepPlayerHiSpeed(command.value, 0, state.multiplier, state.classic);
       return next === undefined || (next.player === state.player && next.drawn === state.drawn)
         ? state
         : { ...state, player: next.player, drawn: next.drawn };
     }
     case 'hi-speed-drawn': {
-      const drawn = snapHiSpeed(command.value);
+      const source = state.classic || state.normalLevel !== undefined;
+      const drawn = source ? validSourceSpeed(command.value) : snapHiSpeed(command.value);
       if (drawn === undefined || drawn === state.drawn) return state;
-      return { ...state, drawn, player: snapHiSpeed(drawn / state.multiplier) ?? state.player };
+      return {
+        ...state,
+        drawn,
+        player:
+          (source ? validSourceSpeed(drawn / state.multiplier) : snapHiSpeed(drawn / state.multiplier)) ?? state.player,
+      };
     }
   }
+}
+
+function validSourceSpeed(value: number): number | undefined {
+  return Number.isFinite(value) && value > 0 ? value : undefined;
+}
+function sourceDrawn(player: number, multiplier: number, source: boolean): number {
+  return (source ? validSourceSpeed(player * multiplier) : snapHiSpeed(player * multiplier)) ?? player;
+}
+function setNormalLevel(state: HiSpeedState, level: number, bpm: number): HiSpeedState {
+  const player = resolveNormalHiSpeed(level, bpm);
+  if (player === undefined) return state;
+  return { ...state, normalLevel: level, normalBPM: bpm, player, drawn: sourceDrawn(player, state.multiplier, true) };
 }

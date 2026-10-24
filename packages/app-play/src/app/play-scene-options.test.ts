@@ -138,6 +138,7 @@ describe('resolvePlaySceneOptions: a single play', () => {
       scoreGraph: PLAY_OPTIONS.scoreGraph,
       hsFix: 'AVERAGE',
       bpmGuide: false,
+      normalHiSpeedLevel: 0,
       classicHiSpeed: false,
       judgeAlgorithm: 'combo',
       longNoteModifier: 'OFF',
