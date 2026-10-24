@@ -90,6 +90,37 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       this.setPlayOptions({ hsFix: value });
     }),
   );
+  trackPlayOption(
+    selectBinding(folder, this.guiState, 'displayAreaInfo', 'Display area info', {
+      OFF: 'OFF',
+      ON: 'ON',
+      'SUDDEN+ ONLY': 'SUDDEN_ONLY',
+      'HID+/LIFT ONLY': 'HIDDEN_LIFT_ONLY',
+    }).on('change', ({ value }) => {
+      this.setPlayOptions({ displayAreaInfo: value });
+    }),
+  );
+  for (const key of ['hiddenSudden1P', 'hiddenSudden2P'] as const) {
+    trackPlayOption(
+      selectBinding(
+        folder,
+        this.guiState,
+        key,
+        key === 'hiddenSudden1P' ? 'Effect 1P' : 'Effect 2P',
+        PLAY_OPTION_CHOICES[key]!,
+      ).on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
+    );
+  }
+  trackPlayOption(
+    folder
+      .addBinding(this.guiState, 'laneCover', { label: 'Lane cover' })
+      .on('change', ({ value }) => this.setPlayOptions({ laneCover: value })),
+  );
+  trackPlayOption(
+    folder
+      .addBinding(this.guiState, 'shutter', { label: 'Cover height', min: 0, max: 1, step: 0.01 })
+      .on('change', ({ value }) => this.setPlayOptions({ shutter: value })),
+  );
   // Hi-speed — the same range and step as the in-game `ArrowUp` / `ArrowDown` keys. Unlike the options above it is
   // visual only, so it stays enabled during a play and applies to it live.
   this.hiSpeedController = folder

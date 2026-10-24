@@ -120,6 +120,10 @@ export class BeatorajaPlayStage {
     view.container.addChildAt(this.noteLayer.container, index + 1);
   }
 
+  getDisplayAreaLanes(activeOps: ReadonlySet<number>, channels: readonly string[]) {
+    return this.noteLayer.getDisplayAreaLanes(activeOps, channels);
+  }
+
   /** The stage's root: the backdrop and the skin's canvas. */
   public get root(): Container {
     return this.stage.root;

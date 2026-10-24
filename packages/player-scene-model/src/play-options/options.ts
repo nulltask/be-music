@@ -68,6 +68,8 @@ export interface PlayOptions {
    *   behavior for now (per-frame BPM-aware scroll requires a render-pipeline change that hasn't landed yet).
    */
   hsFix: HSFix;
+  /** AC 34 display-area information visibility; OFF keeps readouts controlled by the skin. */
+  displayAreaInfo: 'OFF' | 'ON' | 'SUDDEN_ONLY' | 'HIDDEN_LIFT_ONLY';
   /**
    * 1P-side HIDDEN / SUDDEN effect picked from `#SRC_BUTTON,type=50`. Cycles OFF → HIDDEN → SUDDEN → HID+SUD on each
    * click. Drives the opaque mask over the 1P keyboard / scratch lanes. SP charts only render this side; DP charts pair

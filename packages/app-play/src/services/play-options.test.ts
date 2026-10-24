@@ -15,6 +15,11 @@ const gui: GUIPlayOptions = {
   difficultyFilter: 'HYPER',
   hiSpeed: 3.5,
   hsFix: 'STARTBPM',
+  displayAreaInfo: 'ON',
+  hiddenSudden1P: 'SUDDEN',
+  hiddenSudden2P: 'HID+SUD',
+  laneCover: true,
+  shutter: 0.4,
 };
 
 describe('playOptionsFromGUI', () => {
@@ -32,6 +37,11 @@ describe('playOptionsFromGUI', () => {
       difficultyFilter: 'HYPER',
       hiSpeed: 3.5,
       hsFix: 'STARTBPM',
+      displayAreaInfo: 'ON',
+      hiddenSudden1P: 'SUDDEN',
+      hiddenSudden2P: 'HID+SUD',
+      laneCover: true,
+      shutter: 0.4,
     });
   });
 });
@@ -61,6 +71,11 @@ describe('copyPlayOptionsToGUI', () => {
       difficultyFilter: 'ALL',
       hiSpeed: 2,
       hsFix: 'OFF',
+      displayAreaInfo: 'OFF',
+      hiddenSudden1P: 'OFF',
+      hiddenSudden2P: 'OFF',
+      laneCover: false,
+      shutter: 0.25,
     });
   });
 });

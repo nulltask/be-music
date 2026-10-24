@@ -9,6 +9,7 @@ import {
   KEYS_FILTER_CYCLE,
   RANDOM_CYCLE,
   PLAY_OPTION_CHOICES,
+  clampShutter,
   SORT_CYCLE,
   snapHiSpeed,
   type BrowseSort,
@@ -81,6 +82,11 @@ export interface DebugMenuSettings {
   replayView: PlayerGUIState['replayView'];
   hiSpeed: number;
   hsFix: PlayerGUIState['hsFix'];
+  displayAreaInfo: PlayerGUIState['displayAreaInfo'];
+  hiddenSudden1P: PlayerGUIState['hiddenSudden1P'];
+  hiddenSudden2P: PlayerGUIState['hiddenSudden2P'];
+  laneCover: PlayerGUIState['laneCover'];
+  shutter: PlayerGUIState['shutter'];
   builtInSkin: string;
   skinEffects: SkinEffects;
   renderResolution: number;
@@ -208,6 +214,11 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'keysFilter', oneOf(raw.keysFilter, KEYS_FILTER_CYCLE));
   assign(settings, 'difficultyFilter', oneOf(raw.difficultyFilter, DIFFICULTY_FILTER_CYCLE));
   assign(settings, 'skinFamilyOverride', oneOf(raw.skinFamilyOverride, SKIN_FAMILIES));
+  assign(settings, 'hiddenSudden1P', oneOf(raw.hiddenSudden1P, PLAY_OPTION_CHOICES.hiddenSudden1P!));
+  assign(settings, 'hiddenSudden2P', oneOf(raw.hiddenSudden2P, PLAY_OPTION_CHOICES.hiddenSudden2P!));
+  assign(settings, 'laneCover', booleanOf(raw.laneCover));
+  if (typeof raw.shutter === 'number' && Number.isFinite(raw.shutter)) settings.shutter = clampShutter(raw.shutter);
+  assign(settings, 'displayAreaInfo', oneOf(raw.displayAreaInfo, PLAY_OPTION_CHOICES.displayAreaInfo!));
   assign(settings, 'hsFix', oneOf(raw.hsFix, PLAY_OPTION_CHOICES.hsFix!));
   assign(settings, 'skinEffects', oneOf(raw.skinEffects, SKIN_EFFECTS));
   assign(settings, 'playLayout', oneOf(raw.playLayout, PLAY_LAYOUTS));
@@ -388,6 +399,11 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('replayView');
   assignState('hiSpeed');
   assignState('hsFix');
+  assignState('displayAreaInfo');
+  assignState('hiddenSudden1P');
+  assignState('hiddenSudden2P');
+  assignState('laneCover');
+  assignState('shutter');
   assignState('builtInSkin');
   assignState('skinEffects');
   assignState('renderResolution');
@@ -446,6 +462,11 @@ export function captureDebugMenuSettings(
     replayView: { ...state.replayView },
     hiSpeed: state.hiSpeed,
     hsFix: state.hsFix,
+    displayAreaInfo: state.displayAreaInfo,
+    hiddenSudden1P: state.hiddenSudden1P,
+    hiddenSudden2P: state.hiddenSudden2P,
+    laneCover: state.laneCover,
+    shutter: state.shutter,
     builtInSkin: state.builtInSkin,
     skinEffects: state.skinEffects,
     renderResolution: state.renderResolution,
