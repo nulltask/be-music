@@ -1,6 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 import { handleAuth, readSession, type OIDCEnv } from '@be-music/service-auth-client';
-import { pickLocale, renderDashboard, type DashboardAccount } from './page.ts';
+import { isLocale, localeFromCookie, localeSetCookie, resolveLocale } from '@be-music/service-web-theme';
+import { renderDashboard, type DashboardAccount } from './page.ts';
 
 interface Env extends OIDCEnv {
   ACCOUNTS?: Pick<Fetcher, 'fetch'>;
@@ -50,7 +51,12 @@ export default {
         account,
         hostname: url.hostname,
         showDonateLink: env.SHOW_DONATE_LINK === 'true',
-        locale: pickLocale(request.headers.get('accept-language')),
+        locale: resolveLocale({
+          query: url.searchParams.get('lang') ?? undefined,
+          cookie: localeFromCookie(request.headers.get('cookie')),
+          acceptLanguage: request.headers.get('accept-language') ?? undefined,
+        }),
+        requestURL: request.url,
         links: { play: env.PLAY_ORIGIN, leaderboard: env.LEADERBOARD_ORIGIN, donate: env.DONATE_ORIGIN },
       }),
       {
@@ -58,6 +64,9 @@ export default {
           'content-type': 'text/html; charset=utf-8',
           'cache-control': 'private, no-store',
           vary: 'cookie, accept-language',
+          ...(isLocale(url.searchParams.get('lang'))
+            ? { 'set-cookie': localeSetCookie(url.searchParams.get('lang') as 'en' | 'ja', url.protocol === 'https:') }
+            : {}),
           'content-security-policy':
             "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
         },

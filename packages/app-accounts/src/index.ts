@@ -3,6 +3,7 @@ import { oauthProviderAuthServerMetadata, oauthProviderOpenIdConfigMetadata } fr
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { createAuth, provisionClients, type Env } from './auth.ts';
+import { isLocale, localeFromCookie, localeSetCookie, resolveLocale } from '@be-music/service-web-theme';
 import { accountNotice, renderAccountPage } from './page.ts';
 import { CLIENT_JS } from './client.generated.ts';
 import { avatarURL } from './avatars.ts';
@@ -52,6 +53,12 @@ export default {
         linkedDiscord = providers.some((row) => row.providerId === 'discord');
         linkedGoogle = providers.some((row) => row.providerId === 'google');
       }
+      const locale = resolveLocale({
+        query: url.searchParams.get('lang') ?? undefined,
+        cookie: localeFromCookie(request.headers.get('cookie')),
+        acceptLanguage: request.headers.get('accept-language') ?? undefined,
+      });
+      const chosen = url.searchParams.get('lang');
       return new Response(
         renderAccountPage({
           buildInfo: env.BUILD_TIMESTAMP
@@ -69,6 +76,8 @@ export default {
               }
             : undefined,
           login: url.pathname === '/login',
+          locale,
+          requestURL: request.url,
           discord: !!env.DISCORD_CLIENT_ID && !!env.DISCORD_CLIENT_SECRET,
           google: !!env.GOOGLE_CLIENT_ID && !!env.GOOGLE_CLIENT_SECRET,
           linkedDiscord,
@@ -80,6 +89,8 @@ export default {
           headers: {
             'content-type': 'text/html; charset=utf-8',
             'cache-control': 'private, no-store',
+            vary: 'cookie, accept-language',
+            ...(isLocale(chosen) ? { 'set-cookie': localeSetCookie(chosen, url.protocol === 'https:') } : {}),
             'content-security-policy':
               "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
             'referrer-policy': 'no-referrer',
