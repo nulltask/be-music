@@ -40,6 +40,8 @@ export class BeMusicPlaySettingsElement extends DataElement<BeMusicSettingsData>
           ['Ruleset', r.rulesetLabel === '____' ? '????' : (r.rulesetLabel ?? '—')],
           ['Random 1P / 2P', `${o.random1P} / ${o.random2P}`],
           ['Gauge 1P / 2P', `${o.gauge1P} / ${o.gauge2P}`],
+          ['Long notes', o.longNoteModifier === 'LEGACY' ? 'LEGACY NOTE' : o.longNoteModifier.replaceAll('_', ' ')],
+          ['LN add rate', o.longNoteModifier.startsWith('ADD_') ? `${Math.round(o.longNoteRate * 1000) / 10}%` : '—'],
           ['Auto scratch', `1P ${o.autoScratch1P ? 'ON' : 'OFF'} / 2P ${o.autoScratch2P ? 'ON' : 'OFF'}`],
           ['DP flip', o.dpFlip ? 'ON' : 'OFF'],
           ['BGA', o.bga],

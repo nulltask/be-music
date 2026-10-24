@@ -567,6 +567,7 @@ test.each([
   ['ADD_LN', 1],
   ['ADD_CN', 2],
   ['ADD_HCN', 3],
+  ['ADD_ALL', 1],
 ] as const)('%s endpoints and effective modifier rate/count survive serialization', (longNoteModifier, lnMode) => {
   const replay = makeReplay();
   replay.play.longNoteModifier = longNoteModifier;

@@ -458,6 +458,7 @@ export class DebugMenu {
               'ADD LN (beatoraja)': 'ADD_LN' as const,
               'ADD CN (beatoraja)': 'ADD_CN' as const,
               'ADD HCN (beatoraja)': 'ADD_HCN' as const,
+              'ADD ALL (beatoraja)': 'ADD_ALL' as const,
             }
           : {}),
       });

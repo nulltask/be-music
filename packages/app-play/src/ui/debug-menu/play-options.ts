@@ -158,6 +158,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     'ADD LN (beatoraja)': 'ADD_LN',
     'ADD CN (beatoraja)': 'ADD_CN',
     'ADD HCN (beatoraja)': 'ADD_HCN',
+    'ADD ALL (beatoraja)': 'ADD_ALL',
   });
   trackPlayOption(
     this.longNoteModifierController.on('change', ({ value }) => {

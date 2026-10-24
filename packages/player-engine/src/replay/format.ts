@@ -704,8 +704,12 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
       'play.longNoteModifierChangeCount',
     );
   if (play.longNoteModifier !== undefined) {
-    if (!['OFF', 'LEGACY', 'REMOVE', 'ADD_LN', 'ADD_CN', 'ADD_HCN'].includes(play.longNoteModifier as string)) {
-      throw new ReplayParseError('play.longNoteModifier must be OFF, LEGACY, REMOVE, ADD_LN, ADD_CN or ADD_HCN');
+    if (
+      !['OFF', 'LEGACY', 'REMOVE', 'ADD_LN', 'ADD_CN', 'ADD_HCN', 'ADD_ALL'].includes(play.longNoteModifier as string)
+    ) {
+      throw new ReplayParseError(
+        'play.longNoteModifier must be OFF, LEGACY, REMOVE, ADD_LN, ADD_CN, ADD_HCN or ADD_ALL',
+      );
     }
     parsed.longNoteModifier = play.longNoteModifier as LongNoteModifier;
   }
