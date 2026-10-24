@@ -457,3 +457,14 @@ test('preserves independent AUTO SCRATCH sides and rejects non-boolean switches'
     expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
   }
 });
+
+test('round-trips source long-note modifiers and rejects unknown variants', () => {
+  for (const longNoteModifier of ['OFF', 'LEGACY', 'REMOVE'] as const) {
+    const replay = makeReplay();
+    replay.play.longNoteModifier = longNoteModifier;
+    expect(parseReplay(serializeReplay(replay)).play.longNoteModifier).toBe(longNoteModifier);
+  }
+  const invalid = JSON.parse(serializeReplay(makeReplay()));
+  invalid.play.longNoteModifier = 'CUSTOM';
+  expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
+});

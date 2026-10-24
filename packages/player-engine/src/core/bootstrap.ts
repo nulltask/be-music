@@ -1,3 +1,4 @@
+import { removeLongNoteTails } from './long-note-modifier.ts';
 import { throwIfAborted } from '@be-music/shared-utils/core';
 import { resolveChart, type ResolvedChart } from '@be-music/chart-model';
 import { normalizeChannel, type BeMusicJSON } from '@be-music/chart-source';
@@ -173,11 +174,12 @@ const GROOVE_GAUGE_JUDGE_TO_RULESET_INDEX: Record<GrooveGaugeJudgmentKind, Gauge
  */
 export function preparePlaybackChart(
   resolved: ResolvedChart,
-  options: Pick<PlayerOptions, 'laneModeExtension'> = {},
+  options: Pick<PlayerOptions, 'laneModeExtension' | 'longNoteModifier'> = {},
   auxiliaryPlaybackEndSeconds = 0,
 ): PreparedPlaybackChartData {
   const playVariant = resolved.playVariant;
   const notes = resolved.notes.map(toTimedPlayableNote);
+  removeLongNoteTails(notes, options.longNoteModifier ?? 'OFF', resolved.lnMode);
   // Invisible 3x/4x objects are not score targets, but they do update the lane's current keysound in manual play.
   // They are always prepared, independently of the debug overlay option, so audio never depends on rendering settings.
   const landmineNotes = resolved.mines.map(toTimedLandmineNote);

@@ -95,6 +95,8 @@ export interface PlayOptions {
    * of `shutter`. When ON, the mask renders at the `shutter`-derived height.
    */
   laneCover: boolean;
+  /** AC LEGACY NOTE removes CN/BSS; beatoraja REMOVE removes every long note. */
+  longNoteModifier: 'OFF' | 'LEGACY' | 'REMOVE';
   /**
    * 1P side auto-scratch flag picked from `#SRC_BUTTON,type=44`. When true the scratch lane (channel 16) auto-judges as
    * PERFECT at every note's scheduled time, so the player only has to play the keys.

@@ -124,6 +124,7 @@ describe('captureDebugMenuSettings', () => {
       random1P: 'SCATTER',
       random2P: 'MIRROR',
       dpFlip: true,
+      longNoteModifier: 'REMOVE',
       autoScratch1P: true,
       autoScratch2P: true,
       sort: 'OFF',

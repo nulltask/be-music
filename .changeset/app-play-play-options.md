@@ -7,3 +7,5 @@ Expose HS-FIX including START BPM in Debug Menu, synchronize it with select scre
 Add the four AC 34 display-area information choices and expose the existing per-side cover settings in Debug Menu, with saved preferences.
 
 Restore each recorded AUTO SCRATCH side independently and apply older combined replay switches to both sides.
+
+Expose the source-specific LEGACY NOTE and LN REMOVE choices in Debug Menu and save the selected modifier.

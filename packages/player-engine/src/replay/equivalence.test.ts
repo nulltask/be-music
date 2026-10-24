@@ -1216,3 +1216,12 @@ test('DP scratch HCNs on the unassisted side remain manual', async () => {
   expect(summary.poor).toBeGreaterThan(0);
   expect([summary.perfect, summary.poor]).toEqual([simulated.judge.pgreat, simulated.judge.poor]);
 });
+
+for (const longNoteModifier of ['LEGACY', 'REMOVE'] as const) {
+  test(`${longNoteModifier} records effective head-only notes for deterministic simulation`, async () => {
+    const run = await runRecordedPlay(longNoteChart(2), [down(0, 1_000_000, '11')], 'beatoraja', { longNoteModifier });
+    expect(run.replay.play.longNoteModifier).toBe(longNoteModifier);
+    expect(run.replay.chart.notes.every((note) => note.type === 'normal' && note.endTimeUs === undefined)).toBe(true);
+    expect(simulateReplay(run.replay, { ruleset: 'beatoraja' }).judge).toEqual(run.replay.results!.native!.judge);
+  });
+}

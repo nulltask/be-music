@@ -125,6 +125,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     bgaSize: playOptions.bgaSize,
     scoreGraph: playOptions.scoreGraph,
     hsFix: playOptions.hsFix,
+    longNoteModifier: playOptions.longNoteModifier,
     hiddenSudden1P: lanes.hiddenSudden1P,
     hiddenSudden2P: lanes.hiddenSudden2P,
     shutter: playOptions.shutter,

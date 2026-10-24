@@ -82,6 +82,7 @@ export interface PlayEngineContext
       PlaySessionOptions,
       | 'autoPlay'
       | 'allowSeek'
+      | 'longNoteModifier'
       | 'autoScratch1P'
       | 'autoScratch2P'
       | 'chartMD5'
@@ -404,6 +405,7 @@ export function resolveReplayRecording(
     | 'hiddenSudden2P'
     | 'shutter'
     | 'laneCover'
+    | 'longNoteModifier'
     | 'autoScratch1P'
     | 'autoScratch2P'
   >,
@@ -426,6 +428,7 @@ export function resolveReplayRecording(
     random1P: options.random1P,
     random2P: options.random2P,
     dpFlip: options.dpFlip,
+    longNoteModifier: options.longNoteModifier,
     autoScratch1P: options.autoScratch1P,
     autoScratch2P: options.autoScratch2P,
   })) {
@@ -519,13 +522,9 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       // play comes back through `onTempoChange`, at the chart second the engine took it.
       speed: ctx.tempo,
       onTempoChange: (change) => followTempoChange(ctx, change),
-      // Forward AUTO SCRATCH: engine has a single boolean rather than per-side, so either-side AUTO SCRATCH
-      // turns scratch auto on for both 16 / 26 channels. That's a per-side fidelity loss for rare DP charts
-      // where only one player's scratch should auto-spin (the player's Tweakpane surfaces them as two separate
-      // toggles), but the alternative — leaving auto off — was worse: scratch notes the user expected to be
-      // auto-spun would just sit there as misses, and the legacy `autoScratchJudge` path is gated off in
-      // shared-engine mode. A future engine extension could split the flag per side.
+      // Only the selected side's scratch lanes are assisted by the engine.
       autoScratch: ctx.options.autoScratch1P === true || ctx.options.autoScratch2P === true,
+      longNoteModifier: ctx.options.replay?.play.longNoteModifier ?? ctx.options.longNoteModifier,
       autoScratch1P: ctx.options.autoScratch1P === true,
       autoScratch2P: ctx.options.autoScratch2P === true,
       // Hand the engine the same `PreparedPlaybackChartData` instance the renderer is already pointing at
