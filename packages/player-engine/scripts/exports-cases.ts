@@ -1165,6 +1165,19 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
       );
     },
   });
+  define('player-engine.lanes.randomizeAllScratchNotes', {
+    run: () => {
+      lanesAPI.randomizeAllScratchNotes(
+        [
+          { channel: '11', timeMs: 0, endTimeMs: 1000 },
+          { channel: '12', timeMs: 125 },
+          { channel: '12', timeMs: 1100 },
+        ],
+        ['11', '12', '13', '14', '15', '16'],
+        { scratchLanes: ['16'], random: () => 0.5 },
+      );
+    },
+  });
   define('player-engine.lanes.randomizeSpiralNotes', {
     run: () => {
       lanesAPI.randomizeSpiralNotes(

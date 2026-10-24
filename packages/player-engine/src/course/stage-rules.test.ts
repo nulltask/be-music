@@ -151,3 +151,9 @@ test('grade_random permits SPIRAL at source option index 5', () => {
   expect(resolveCourseLaneOptions(['grade_random'], picked)).toEqual(picked);
   expect(resolveCourseLaneOptions(['grade'], picked)).toEqual({ random1P: 'OFF', random2P: 'OFF', dpFlip: false });
 });
+
+test('grade_random excludes ALL-SCR and H-RANDOM at source option indices above 5', () => {
+  expect(
+    resolveCourseLaneOptions(['grade_random'], { random1P: 'ALL-SCR', random2P: 'H-RANDOM', dpFlip: true }),
+  ).toEqual({ random1P: 'OFF', random2P: 'OFF', dpFlip: true });
+});
