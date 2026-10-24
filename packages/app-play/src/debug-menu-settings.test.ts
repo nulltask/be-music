@@ -141,6 +141,7 @@ describe('captureDebugMenuSettings', () => {
       tempoStretchAlgorithm: 'signalsmith',
       replayView: { tempo: false, hiSpeed: false, covers: false, lift: false },
       hiSpeed: 2.5,
+      hsFix: 'STARTBPM',
       builtInSkin: 'plain',
       skinEffects: 'off',
       renderResolution: 1,

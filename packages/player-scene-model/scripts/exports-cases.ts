@@ -285,6 +285,7 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
   define('player-scene-model.resolveHSFixMultiplier', {
     run: () => {
       sceneModelAPI.resolveHSFixMultiplier('MAXBPM', BENCH_HS_FIX_TEMPO);
+      sceneModelAPI.resolveHSFixMultiplier('STARTBPM', { ...BENCH_HS_FIX_TEMPO, startBPM: 180 });
     },
   });
   define('player-scene-model.createHiSpeedState', {

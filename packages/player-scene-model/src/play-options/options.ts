@@ -60,6 +60,7 @@ export interface PlayOptions {
    * multiplier so the user's chosen HS feels consistent across the chart:
    *
    * - `'MAXBPM'` — pegs the user's HS to the chart's MAX BPM (slower segments scroll proportionally slower).
+   * - `'STARTBPM'` — pegs to the chart's starting BPM (the header BPM, independently of `#BASEBPM`).
    * - `'MINBPM'` — pegs to MIN BPM (faster segments scroll faster).
    * - `'AVERAGE'` — pegs to the main BPM, the BPM the most notes sit at (beatoraja's MAINBPM), which BPM × N + STOP
    *   gimmicks do not skew the way a time average is.
@@ -132,7 +133,7 @@ export interface PlayOptions {
 }
 
 /** Allowed values for {@link PlayOptions.hsFix}. */
-export type HSFix = 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT';
+export type HSFix = 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT' | 'STARTBPM';
 
 /** Allowed values for {@link PlayOptions.hiddenSudden1P} / `hiddenSudden2P`: which ends of the lanes are covered. */
 export type HiddenSuddenMode = 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';

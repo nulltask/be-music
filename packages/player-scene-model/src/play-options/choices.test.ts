@@ -137,3 +137,8 @@ describe('resolvePlayOptions', () => {
     expect(options).not.toBe(DEFAULT_PLAY_OPTIONS);
   });
 });
+
+test('START BPM is selectable and preserved by option validation', () => {
+  expect(PLAY_OPTION_CHOICES.hsFix).toContain('STARTBPM');
+  expect(resolvePlayOptions({ hsFix: 'STARTBPM' }).hsFix).toBe('STARTBPM');
+});
