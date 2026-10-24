@@ -80,6 +80,24 @@ function buildAuth(env: Env) {
       cookiePrefix: 'be-music-accounts',
     },
     database: drizzleAdapter(db, { provider: 'sqlite', schema }),
+    account: {
+      accountLinking: {
+        // A signed-in user may attach Discord or Google even when that provider's email differs from the
+        // account email, which is the usual case for guests and passkeys.
+        trustedProviders: ['discord', 'google'],
+        allowDifferentEmails: true,
+      },
+    },
+    databaseHooks: {
+      account: {
+        create: {
+          after: async (created) => {
+            if (created.providerId !== 'discord' && created.providerId !== 'google') return;
+            await db.update(schema.user).set({ isAnonymous: false }).where(eq(schema.user.id, created.userId));
+          },
+        },
+      },
+    },
     socialProviders,
     disabledPaths: ['/token', '/update-user'],
     plugins: [
