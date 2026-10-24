@@ -76,7 +76,7 @@ Chrome と Edge ではフルスクリーン中に Keyboard Lock API で `Esc` �
 
 ### Debug Menu
 
-右上の Tweakpane **Debug Menu**（起動時は折りたたみ）は、よく使う操作を先頭に置き、残りをフォルダーにまとめています。ここにある設定はすべて記憶されます（`localStorage` の `be-music-demo.debug-menu-settings`）。各フォルダーの開閉も同様です。パネル自体は常に折りたたんだ状態で始まります。同じ文書はプレイヤーのオリジンにも置かれ、サーバーが出す HttpOnly Cookie（`__Host-be-music.device`、400 日）で指します。Safari は、そのサイトを開かないまま Safari を 7 日使うと、スクリプトが書いた保存を消します。この Cookie はサーバーが書くので、次に開いたときに設定が戻ります。Reset settings は両方を消します。ベスト記録はこのブラウザーだけに残ります。
+右上の Tweakpane **Debug Menu**（起動時は折りたたみ）は、よく使う操作を先頭に置き、残りをフォルダーにまとめています。ここにある設定はすべて記憶されます（`localStorage` の `be-music-demo.debug-menu-settings`）。各フォルダーの開閉も同様です。パネル自体は常に折りたたんだ状態で始まります。同じ文書はプレイヤーのオリジンにも置かれ、サーバーが出す HttpOnly Cookie（`__Host-be-music.device`、400 日）で指します。Safari は、そのサイトを開かないまま Safari を 7 日使うと、スクリプトが書いた保存を消します。この Cookie はサーバーが書くので、次に開いたときに設定が戻ります。変更はローカルに即座に保存し、サーバーへの保存は短い待機時間でまとめ、ページを離れる際にも送信します。版番号はサーバーの時計を使わず、最後に確認した編集より進めます。条件付き書き込みにより古い要求が新しい設定を上書きすることを防ぎ、読み取りではどちらのコピーも書き換えません。Reset settings は設定値をすべて消し、遅れて届く保存を拒否するための版情報だけをサーバーに残します。削除が失敗した場合は、タブを閉じても残るローカルの再試行情報を使い、次回の設定復元前に削除を再試行します。スキン単位の Reset to defaults も保存文書に反映します。ベスト記録はこのブラウザーだけに残ります。
 
 - **トップレベル:** Status（読み取り専用）、Open folder、Open files (ZIP / replay)。Open files では譜面の ZIP アーカイブ（`?music=` と同じ読み込み）や、リプレイするリプレイ（`*.bmplay.json`）を選べます。Open folder はフォルダー選択ダイアログを使い、ドロップと同じ経路で読み込みます。
 - **Play options**（既定で開く）: Auto play、Gauge、Random 1P / 2P、DP flip、Auto scratch 1P / 2P、Sort、Key filter、Difficulty filter、Hi-speed。Hi-speed（その場で反映）以外は曲の開始時に確定し、プレイ中は無効になります。Sort と二つのフィルターは標準と LR2 の選曲画面の一覧を決め、LR2 スキンのソートとフィルターのボタンでも変わります。beatoraja の選曲画面は MODE と SORT の選択を自分で持ちます。

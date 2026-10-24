@@ -27,3 +27,42 @@ test('native monitors stay read-only and folder persistence keeps the existing k
   await developer.scrollIntoViewIfNeeded();
   await demo.page.locator('.debug-pane-container').screenshot({ path: info.outputPath('debug-pane.png') });
 });
+
+test('Debug Menu saves immediately across reloads and reset cancels pending publication', async ({ demo }) => {
+  let remote: unknown;
+  const methods: string[] = [];
+  await demo.page.route('**/api/player-settings', async (route) => {
+    const method = route.request().method();
+    methods.push(method);
+    if (method === 'GET') {
+      await route.fulfill(remote ? { json: remote } : { status: 204 });
+      return;
+    }
+    const document = route.request().postDataJSON();
+    remote = method === 'DELETE' ? { ...document, settings: {}, deleted: true } : document;
+    await route.fulfill({ json: remote });
+  });
+  await demo.page.goto('/?e2e=1');
+  await demo.waitFor((state) => state.scene.kind === 'select', 'initial select');
+  await demo.setOption(['Play options'], 'Auto play', true);
+  expect(
+    await demo.page.evaluate(
+      () => JSON.parse(localStorage.getItem('be-music-demo.debug-menu-settings')!).settings.autoPlay,
+    ),
+  ).toBe(true);
+  await demo.page.reload();
+  await demo.waitFor((state) => state.scene.kind === 'select', 'select after reload');
+  expect(await demo.readOption(['Play options'], 'Auto play')).toBe(true);
+  await demo.page.evaluate(() => localStorage.setItem('be-music-demo.chart-best-records', 'keep'));
+  await demo.setOption(['Play options'], 'Auto play', false);
+  demo.page.once('dialog', (dialog) => void dialog.accept());
+  await Promise.all([demo.page.waitForEvent('load'), demo.pressOption(['Developer'], 'Reset settings and reload')]);
+  await demo.waitFor((state) => state.scene.kind === 'select', 'select after reset');
+  await expect
+    .poll(() => demo.page.evaluate(() => localStorage.getItem('be-music-demo.debug-menu-settings')))
+    .toBeNull();
+  expect(await demo.readOption(['Play options'], 'Auto play')).toBe(false);
+  expect(await demo.page.evaluate(() => localStorage.getItem('be-music-demo.chart-best-records'))).toBe('keep');
+  expect(methods).toContain('DELETE');
+  expect(remote).toMatchObject({ deleted: true, settings: {} });
+});

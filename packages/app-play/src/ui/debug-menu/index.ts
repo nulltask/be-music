@@ -15,12 +15,8 @@ import { Pane, type FolderApi, type BladeApi, type ButtonApi, type ListInputBind
 import type { PaneBinding } from '../../pane-controls.ts';
 import { readStoredCompressorTunings, type CompressorTuning } from '../../compressor-tuning.ts';
 import { readStoredCourseTableURLs } from '../../course-table-import.ts';
-import { captureDebugMenuSettings, writeDebugMenuSettings } from '../../debug-menu-settings.ts';
-import {
-  deleteRemoteDebugMenuSettings,
-  markDebugMenuSettingsResetPending,
-  pushDebugMenuSettings,
-} from '../../debug-menu-settings-sync.ts';
+import { captureDebugMenuSettings } from '../../debug-menu-settings.ts';
+import { debugMenuSettingsSync } from '../../debug-menu-settings-sync.ts';
 import type { FamilyDispatchState } from '../../family-dispatch.ts';
 import type { LeaderboardPanel } from '../../leaderboard-ui.ts';
 import type { CourseMakerService } from '../../services/course-maker.ts';
@@ -40,13 +36,7 @@ import {
 } from './compressor.ts';
 import { buildCourseFolder } from './course.ts';
 import { buildDeveloperFolder } from './developer.ts';
-import {
-  DEBUG_MENU_FOLDERS,
-  clearDemoSettings,
-  readFolderOpenStates,
-  rememberFolderOpenStates,
-  type DebugMenuFolder,
-} from './folders.ts';
+import { DEBUG_MENU_FOLDERS, readFolderOpenStates, rememberFolderOpenStates, type DebugMenuFolder } from './folders.ts';
 import { buildLibraryFolder } from './library.ts';
 import { PlayLock } from './play-lock.ts';
 import { buildPlayOptionsFolder, buildReplayViewFolder } from './play-options.ts';
@@ -332,25 +322,19 @@ export class DebugMenu {
       this.scheduleSettingsSave();
     });
   }
-  private settingsSaveTimer: ReturnType<typeof setTimeout> | undefined;
   /**
-   * Writes every Debug Menu setting locally and publishes that document. Debounced so a slider does not save on every
-   * step. Status and the FPS graph are not settings and do not come through here.
+   * Writes every Debug Menu setting locally immediately; remote publishing is debounced for slider changes.
+   * Status and the FPS graph are not settings and do not come through here.
    */
   public scheduleSettingsSave(): void {
-    if (this.settingsSaveTimer !== undefined) clearTimeout(this.settingsSaveTimer);
-    this.settingsSaveTimer = setTimeout(() => {
-      this.settingsSaveTimer = undefined;
-      const document = captureDebugMenuSettings(this.guiState, {
-        compressorTuning: this.compressorTunings,
-        skinSettings: this.skinSettings,
-        courseTableURLs: readStoredCourseTableURLs(),
-        folders: readFolderOpenStates(),
-        workerCount: getBrowserWorkerCount(),
-      });
-      writeDebugMenuSettings(document, localStorageOrUndefined());
-      void pushDebugMenuSettings(document);
-    }, 300);
+    const document = captureDebugMenuSettings(this.guiState, {
+      compressorTuning: this.compressorTunings,
+      skinSettings: this.skinSettings,
+      courseTableURLs: readStoredCourseTableURLs(),
+      folders: readFolderOpenStates(),
+      workerCount: getBrowserWorkerCount(),
+    });
+    debugMenuSettingsSync.save(document);
   }
   /**
    * Options read when a play starts, which are disabled while one runs (`lockReplayOptionsForPlay`); returns the
@@ -394,9 +378,7 @@ export class DebugMenu {
     ) {
       return;
     }
-    const deleted = await deleteRemoteDebugMenuSettings();
-    clearDemoSettings();
-    if (!deleted) markDebugMenuSettingsResetPending();
+    await debugMenuSettingsSync.reset();
     window.location.reload();
   }
   /** Repaints the "Play options" controllers after an external write (the LR2 select panel's edits). */
@@ -405,13 +387,5 @@ export class DebugMenu {
       controller.refresh();
     }
     this.scheduleSettingsSave();
-  }
-}
-
-function localStorageOrUndefined(): Storage | undefined {
-  try {
-    return globalThis.localStorage;
-  } catch {
-    return undefined;
   }
 }

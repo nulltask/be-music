@@ -1,12 +1,16 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
   DEBUG_MENU_SETTINGS_STORAGE_KEY,
+  captureDebugMenuSettings,
+  readStoredDebugMenuSettings,
+  type DebugMenuSettings,
   debugMenuSettingsFromLegacy,
   overlayDebugMenuSettings,
   parseDebugMenuSettingsDocument,
   writeDebugMenuSettings,
 } from './debug-menu-settings.ts';
-import { VOLUME_STORAGE_KEY } from './services/settings.ts';
+import { defaultCompressorTunings } from './compressor-tuning.ts';
+import { createDemoGUIState, VOLUME_STORAGE_KEY } from './services/settings.ts';
 import type { DemoGUIState } from './types.ts';
 
 function memory(): Storage {
@@ -79,5 +83,101 @@ describe('overlayDebugMenuSettings', () => {
     expect(state.gauge).toBe('DEATH');
     expect(state.peakGain).toBe(true);
     expect(state.autoPlay).toBe(false);
+  });
+});
+
+describe('captureDebugMenuSettings', () => {
+  test('round-trips every setting through the document and boot-time legacy keys', () => {
+    const storage = memory();
+    const create = () =>
+      createDemoGUIState({
+        storage,
+        signals: {
+          coarsePointer: false,
+          anyCoarsePointer: false,
+          prefersReducedMotion: false,
+          screenWidth: 1920,
+          screenHeight: 1080,
+        },
+        devicePixelRatio: 2,
+        builtInSkinId: (stored) => stored ?? 'native',
+        actions: { openFolder() {}, openFiles() {}, record() {}, screenshot() {} },
+      });
+    const expected = {
+      autoPlay: true,
+      autoPauseOnBlur: true,
+      peakGain: true,
+      compressor: false,
+      compressorKey: false,
+      compressorBGM: false,
+      compressorMaster: false,
+      bgaResizeMaxEdgePx: 720,
+      bgaUseWebCodecs: false,
+      showInvisibleNotes: true,
+      judgedNoteDisplay: 'HIDE',
+      autoSaveReplay: true,
+      courseAutoAdvance: true,
+      nonstopPlacement: 'lr2',
+      submitToLeaderboard: true,
+      judgeRuleset: 'beatoraja',
+      gauge: 'HARD',
+      random1P: 'SCATTER',
+      random2P: 'MIRROR',
+      dpFlip: true,
+      autoScratch1P: true,
+      autoScratch2P: true,
+      sort: 'OFF',
+      keysFilter: 'ALL',
+      difficultyFilter: 'ALL',
+      skinFamilyOverride: 'lr2',
+      masterVolume: 21,
+      muted: true,
+      keyVolume: 32,
+      bgmVolume: 43,
+      playInSilentMode: false,
+      tempoEnabled: true,
+      tempoPercent: 15,
+      tempoPitchMode: 'keep-pitch',
+      tempoStretchAlgorithm: 'signalsmith',
+      replayView: { tempo: false, hiSpeed: false, covers: false, lift: false },
+      hiSpeed: 2.5,
+      builtInSkin: 'plain',
+      skinEffects: 'off',
+      renderResolution: 1,
+      playLayout: 'touch',
+      recordingFormat: 'mp4/avc',
+      workerCount: 3,
+      compressorTuning: defaultCompressorTunings(),
+      skinSettings: { test: { glow: false, offset: 5, theme: 'light' } },
+      courseTableURLs: ['https://example.com/courses.json'],
+      folders: { Audio: false, 'Skin & display': true },
+    } satisfies DebugMenuSettings;
+    expected.compressorTuning.master.thresholdDb = -12;
+    const state = Object.assign(create(), expected);
+    const captured = captureDebugMenuSettings(state, {
+      ...expected,
+      skinSettings: new Map(Object.entries(expected.skinSettings)),
+      updatedAt: 42,
+    });
+    expect(captured).toEqual({ version: 1, updatedAt: 42, settings: expected });
+    writeDebugMenuSettings(captured, storage);
+    expect(readStoredDebugMenuSettings(storage)).toEqual(captured);
+    const restored = create();
+    for (const key of Object.keys(expected) as (keyof DebugMenuSettings)[]) {
+      if (key in restored) expect(restored[key as keyof DemoGUIState], key).toEqual(expected[key]);
+    }
+    const legacy = debugMenuSettingsFromLegacy(storage, 43).settings;
+    for (const key of ['workerCount', 'compressorTuning', 'skinSettings', 'courseTableURLs', 'folders'] as const) {
+      expect(legacy[key], key).toEqual(expected[key]);
+    }
+  });
+
+  test('normalizes a reset to metadata only and rejects negative revisions', () => {
+    expect(
+      parseDebugMenuSettingsDocument(
+        JSON.stringify({ version: 1, updatedAt: 42, settings: { gauge: 'HARD' }, deleted: true }),
+      ),
+    ).toEqual({ version: 1, updatedAt: 42, settings: {}, deleted: true });
+    expect(parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: -1, settings: {} }))).toBeUndefined();
   });
 });

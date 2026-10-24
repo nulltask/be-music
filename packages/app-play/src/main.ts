@@ -4,7 +4,7 @@ import {
   disposeBrowserWorkers,
 } from '@be-music/player-browser/compute';
 import { readWorkerCount } from './worker-settings.ts';
-import { reconcileDebugMenuSettings } from './debug-menu-settings-sync.ts';
+import { debugMenuSettingsSync } from './debug-menu-settings-sync.ts';
 // The demo's bootstrap: the page's markup, the browser check, the device classes and the Help modal, then the app
 // (`app/app.ts`) once the UI fonts are ready, with the test hook installed over it before it starts.
 import { checkBrowserCompat } from '@be-music/player-browser/collection';
@@ -27,6 +27,7 @@ try {
 setBrowserWorkerCount(readWorkerCount(workerStorage, navigator.hardwareConcurrency));
 configureBrowserWorkers(() => new Worker(new URL('./compute-worker.ts', import.meta.url), { type: 'module' }));
 window.addEventListener('pagehide', (event) => {
+  void debugMenuSettingsSync.flush();
   if (!event.persisted) disposeBrowserWorkers();
 });
 
@@ -53,7 +54,7 @@ document.documentElement.classList.toggle('phone', deviceProfile.phone);
 wireHelpModal();
 
 void waitForDefaultUIFonts()
-  .then(() => reconcileDebugMenuSettings())
+  .then(() => debugMenuSettingsSync.reconcile())
   .finally(() => {
     setBrowserWorkerCount(readWorkerCount(workerStorage, navigator.hardwareConcurrency));
     // `window.__beMusicTest` for the end-to-end suite (`?e2e=1` or a development build; `test-hook.ts`).

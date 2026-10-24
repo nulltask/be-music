@@ -213,6 +213,7 @@ export function rebuildSkinSettingsFolder(this: DebugMenu): void {
   folder.addButton({ title: 'Reset to defaults' }).on('click', () => {
     this.skinSettings.delete(skin.id);
     storeSkinSettings(this.skinSettings);
+    this.scheduleSettingsSave();
     this.deps.applyBeMusicSkinSettings();
     this.rebuildSkinSettingsFolder();
   });
