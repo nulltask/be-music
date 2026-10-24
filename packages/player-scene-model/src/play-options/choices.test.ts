@@ -267,3 +267,7 @@ test('ADD LN has the source default rate and clamps the configurable source prob
   expect(resolvePlayOptionValue('longNoteRate', 0.375)).toBe(0.375);
   expect(resolvePlayOptionValue('longNoteRate', 2)).toBe(1);
 });
+
+test('ADD CN keeps a distinct source identifier', () => {
+  expect(resolvePlayOptionValue('longNoteModifier', 'ADD_CN')).toBe('ADD_CN');
+});

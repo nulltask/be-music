@@ -156,6 +156,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     'LEGACY NOTE (AC 34)': 'LEGACY',
     'LN REMOVE (beatoraja)': 'REMOVE',
     'ADD LN (beatoraja)': 'ADD_LN',
+    'ADD CN (beatoraja)': 'ADD_CN',
   });
   trackPlayOption(
     this.longNoteModifierController.on('change', ({ value }) => {
