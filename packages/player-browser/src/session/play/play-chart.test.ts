@@ -450,3 +450,20 @@ test('RANDOM-EX records the effective LN placement for replay without re-rolling
     chart.notes.map(({ channel, endSeconds }) => ({ channel, endSeconds })),
   );
 });
+
+test('CONVERGE dispatches to the distinct LR2 and beatoraja PMS algorithms', () => {
+  const keys = resolveLaneOptionChannels('1P', '9');
+  const source = () => [
+    { channel: keys[0]!, seconds: 0 },
+    { channel: keys[0]!, seconds: 0.126 },
+  ];
+  const lr2 = source(),
+    beatoraja = source();
+  applyRandomMode(lr2, keys, 'CONVERGE', () => 0, { ruleset: 'lr2', playVariant: '9' });
+  applyRandomMode(beatoraja, keys, 'CONVERGE', () => 0, { ruleset: 'beatoraja', playVariant: '9' });
+  expect(channelsOf(lr2)).toEqual([keys[4], keys[4]]);
+  expect(channelsOf(beatoraja)).toEqual([keys[0], keys[0]]);
+  expect(() => applyRandomMode([], KEYS_1P, 'CONVERGE', () => 0, { ruleset: 'beatoraja', playVariant: '7' })).toThrow(
+    /PMS arrangement/,
+  );
+});

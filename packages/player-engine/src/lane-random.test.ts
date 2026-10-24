@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vite-plus/test';
 import {
   randomizeHRandomNotes,
   randomizeAllScratchNotes,
+  randomizePMSConvergeNotes,
   clampHRandomThresholdBPM,
   randomizeSpiralNotes,
   randomizeSRandomNotes,
@@ -360,5 +361,44 @@ describe('randomizeAllScratchNotes', () => {
   test('rejects a missing or foreign scratch domain', () => {
     expect(() => randomizeAllScratchNotes([], lanes, { scratchLanes: [], random: zero })).toThrow(RangeError);
     expect(() => randomizeAllScratchNotes([], lanes, { scratchLanes: ['x'], random: zero })).toThrow(RangeError);
+  });
+});
+
+describe('randomizePMSConvergeNotes', () => {
+  test('prefers the longest recent eligible jack streak, resetting only after twice the threshold', () => {
+    const notes = [0, 126, 252, 502, 753].map((timeMs) => ({ channel: 'a', timeMs }));
+    let draws = 0;
+    expect(randomizePMSConvergeNotes(notes, ['a', 'b', 'c'], { random: () => (draws++ === 0 ? 0.5 : 0) })).toEqual([
+      'b',
+      'b',
+      'b',
+      'b',
+      'a',
+    ]);
+  });
+  test('a longer streak never overrides the strict jack threshold', () => {
+    const notes = [0, 125, 126].map((timeMs) => ({ channel: 'a', timeMs }));
+    let draws = 0;
+    expect(randomizePMSConvergeNotes(notes, ['a', 'b', 'c'], { random: () => (draws++ === 0 ? 0.5 : 0) })).toEqual([
+      'b',
+      'a',
+      'b',
+    ]);
+  });
+  test('holds reserve source and destination through their tail and non-scoring companions share placement', () => {
+    const notes: SRandomNote[] = [
+      { channel: 'a', timeMs: 0, endTimeMs: 300 },
+      { channel: 'b', timeMs: 1 },
+      { channel: 'b', timeMs: 300 },
+      { channel: 'b', timeMs: 301, kind: 'mine' },
+      { channel: 'b', timeMs: 301, kind: 'invisible' },
+    ];
+    const original = structuredClone(notes);
+    const result = randomizePMSConvergeNotes(notes, ['a', 'b', 'c'], { random: zero });
+    expect(result[0]).toBe('a');
+    expect(result[1]).not.toBe('a');
+    expect(result[2]).not.toBe('a');
+    expect(result[3]).toBe(result[4]);
+    expect(notes).toEqual(original);
   });
 });

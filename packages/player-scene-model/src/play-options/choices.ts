@@ -74,7 +74,7 @@ export const RANDOM_CYCLE: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', '
 export function resolveRandomModes(ruleset: RulesetId): readonly RandomMode[] {
   if (ruleset === 'lr2') return [...RANDOM_CYCLE, 'CONVERGE'];
   const ordinary: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', 'R-RANDOM', 'S-RANDOM'];
-  return ruleset === 'beatoraja' ? [...ordinary, 'SPIRAL', 'H-RANDOM', 'ALL-SCR', 'RANDOM-EX'] : ordinary;
+  return ruleset === 'beatoraja' ? [...ordinary, 'SPIRAL', 'H-RANDOM', 'ALL-SCR', 'RANDOM-EX', 'CONVERGE'] : ordinary;
 }
 
 /** The play options a player starts with. */
@@ -150,8 +150,8 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   autoScratch1P: BOOLEAN_CYCLE,
   autoScratch2P: BOOLEAN_CYCLE,
   dpFlip: BOOLEAN_CYCLE,
-  random1P: [...resolveRandomModes('beatoraja'), 'CONVERGE'],
-  random2P: [...resolveRandomModes('beatoraja'), 'CONVERGE'],
+  random1P: resolveRandomModes('beatoraja'),
+  random2P: resolveRandomModes('beatoraja'),
   gauge1P: LR2_GAUGE_TYPES,
   gauge2P: LR2_GAUGE_TYPES,
 };
