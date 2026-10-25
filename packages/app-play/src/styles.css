@@ -1178,6 +1178,15 @@ textarea {
   padding: 24px;
   pointer-events: none;
   opacity: 0;
+  /*
+   * The shell's `.empty` class (no charts yet) is also Basecoat's
+   * empty-state component, which centers text and balance-wraps it.
+   * Help is not a `.dialog` — those already reset alignment — so the
+   * overlay keeps the same start alignment as after a chart loads.
+   * The build line below sets its own centering.
+   */
+  text-align: start;
+  text-wrap: wrap;
   transition: opacity 200ms ease-out;
 }
 
