@@ -512,6 +512,8 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       scrollSection: playOptions.scrollSection,
       scrollRate: playOptions.scrollRate,
       longNoteRate: playOptions.longNoteRate,
+      extraNoteDepth: playOptions.extraNoteDepth,
+      extraNoteScratch: playOptions.extraNoteScratch,
       gaugeAutoShift: playOptions.gaugeAutoShift,
       bottomShiftableGauge: playOptions.bottomShiftableGauge,
       randomSeed1P: playOptions.randomSeed1P,

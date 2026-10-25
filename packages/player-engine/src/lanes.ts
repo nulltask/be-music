@@ -61,3 +61,5 @@ export {
 export { randomizeLR2ScatterNotes } from './lane-scatter.ts';
 
 export { clampScrollSection, clampScrollRate, type ScrollModifier } from './core/scroll-modifier.ts';
+
+export { clampExtraNoteDepth } from './core/extra-note-modifier.ts';

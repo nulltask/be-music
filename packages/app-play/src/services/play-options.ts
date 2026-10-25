@@ -44,6 +44,8 @@ export type GUIPlayOptions = Pick<
   | 'bottomShiftableGauge'
   | 'longNoteModifier'
   | 'longNoteRate'
+  | 'extraNoteDepth'
+  | 'extraNoteScratch'
   | 'autoScratch1P'
   | 'autoScratch2P'
   | 'sort'
@@ -89,6 +91,8 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     judgeAlgorithm: state.judgeAlgorithm,
     longNoteModifier: state.longNoteModifier,
     longNoteRate: state.longNoteRate,
+    extraNoteDepth: state.extraNoteDepth,
+    extraNoteScratch: state.extraNoteScratch,
     mineModifier: state.mineModifier,
     scrollModifier: state.scrollModifier,
     scrollSection: state.scrollSection,
@@ -149,6 +153,8 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.judgeAlgorithm = options.judgeAlgorithm;
   state.longNoteModifier = options.longNoteModifier;
   state.longNoteRate = options.longNoteRate;
+  state.extraNoteDepth = options.extraNoteDepth;
+  state.extraNoteScratch = options.extraNoteScratch;
   state.mineModifier = options.mineModifier;
   state.scrollModifier = options.scrollModifier;
   state.scrollSection = options.scrollSection;
@@ -190,6 +196,8 @@ export class PlayOptionsService {
       dpFlip: play.dpFlip ?? play.options?.dpFlip,
       longNoteModifier: play.longNoteModifier ?? play.options?.longNoteModifier,
       longNoteRate: play.longNoteRate ?? play.options?.longNoteRate,
+      extraNoteDepth: play.extraNoteDepth ?? 0,
+      extraNoteScratch: play.extraNoteScratch ?? false,
       mineModifier: play.mineModifier ?? play.options?.mineModifier,
       scrollModifier: play.scrollModifier ?? play.options?.scrollModifier,
       scrollSection: play.scrollSection ?? play.options?.scrollSection,
@@ -243,6 +251,8 @@ const ARRANGEMENT_OPTIONS = [
   'hRandomThresholdBPM',
   'longNoteModifier',
   'longNoteRate',
+  'extraNoteDepth',
+  'extraNoteScratch',
   'mineModifier',
   'scrollModifier',
   'scrollSection',

@@ -708,3 +708,29 @@ for (const skin of ['plain', 'native'] as const)
       expect(await player.readOption(['Play options'], 'Gauge')).toBe(gauge);
     });
   }
+
+for (const skin of ['plain', 'native'] as const) {
+  test(`EXTRA converts BGM, persists and records the effective population on ${skin}`, async ({ player }) => {
+    await openWithLibrary(player, { 'be-music.built-in-skin': skin });
+    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+    await player.setOption(['Play options'], 'EXTRA depth (beatoraja)', 2);
+    await player.setOption(['Play options'], 'EXTRA scratch (beatoraja)', true);
+    await player.setOption(['Play options'], 'Auto play', true);
+    await player.dropText(
+      'extra/extra.bms',
+      '#TITLE Extra fixture\n#BPM 240\n#00101:01\n#00101:01\n#00201:02\n#00212:03',
+    );
+    await player.openFolder('extra');
+    await player.cursorTo((bar) => bar.title === 'Extra fixture', 'EXTRA chart');
+    await player.key('Enter');
+    await player.waitForResult(0);
+    const replay = await player.lastReplay();
+    expect(replay?.play).toMatchObject({ extraNoteDepth: 2, extraNoteScratch: true, extraNoteChangeCount: 3 });
+    expect(replay?.chart.notes.filter((note) => note.type !== 'mine' && note.type !== 'invisible')).toHaveLength(3);
+    expect(replay?.play.options).toMatchObject({ extraNoteDepth: 2, extraNoteScratch: true });
+    await player.page.reload();
+    await player.waitFor((state) => state.scene.kind === 'select', 'select after reload');
+    expect(await player.readOption(['Play options'], 'EXTRA depth (beatoraja)')).toBe(2);
+    expect(await player.readOption(['Play options'], 'EXTRA scratch (beatoraja)')).toBe(true);
+  });
+}

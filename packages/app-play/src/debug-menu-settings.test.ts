@@ -147,6 +147,8 @@ describe('captureDebugMenuSettings', () => {
       judgeAlgorithm: 'duration',
       longNoteModifier: 'REMOVE',
       longNoteRate: 1,
+      extraNoteDepth: 0,
+      extraNoteScratch: false,
       mineModifier: 'OFF',
       scrollModifier: 'REMOVE',
       scrollSection: 8,
@@ -358,4 +360,22 @@ test('G.ATTACK keeps its canonical identifier through stored settings', () => {
     JSON.stringify({ version: 1, updatedAt: 1, settings: { judgeRuleset: 'lr2', gauge: 'G-ATTACK' } }),
   );
   expect(document?.settings).toMatchObject({ judgeRuleset: 'lr2', gauge: 'G-ATTACK' });
+});
+
+test('EXTRA depth and scratch persist with source validation', () => {
+  const document = parseDebugMenuSettingsDocument(
+    JSON.stringify({
+      version: 1,
+      updatedAt: 1,
+      settings: {
+        judgeRuleset: 'beatoraja',
+        extraNoteDepth: 101,
+        extraNoteScratch: true,
+      },
+    }),
+  );
+  expect(document?.settings).toMatchObject({ extraNoteDepth: 100, extraNoteScratch: true });
+  const state = { extraNoteDepth: 0, extraNoteScratch: false } as PlayerGUIState;
+  overlayDebugMenuSettings(state, document!.settings);
+  expect(state).toMatchObject({ extraNoteDepth: 100, extraNoteScratch: true });
 });

@@ -94,6 +94,9 @@ export interface PlayerPlaySettings {
   longNoteModifier?: LongNoteModifier;
   /** Probability for source long-note additions, default 1. */
   longNoteRate?: number;
+  /** beatoraja EXTRA: source depth 0..100 (0 disables it), with optional scratch participation. */
+  extraNoteDepth?: number;
+  extraNoteScratch?: boolean;
   mineModifier?: MineModifier;
   /** Independently assist the source play side; explicit values override autoScratch for that side. */
   autoScratch1P?: boolean;

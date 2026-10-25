@@ -32,6 +32,8 @@ const gui: GUIPlayOptions = {
   judgeAlgorithm: 'duration',
   longNoteModifier: 'REMOVE',
   longNoteRate: 1,
+  extraNoteDepth: 0,
+  extraNoteScratch: false,
   mineModifier: 'OFF',
   scrollModifier: 'OFF',
   scrollSection: 4,
@@ -83,6 +85,8 @@ describe('playOptionsFromGUI', () => {
       judgeAlgorithm: 'duration',
       longNoteModifier: 'REMOVE',
       longNoteRate: 1,
+      extraNoteDepth: 0,
+      extraNoteScratch: false,
       mineModifier: 'OFF',
       scrollModifier: 'OFF',
       scrollSection: 4,
@@ -147,6 +151,8 @@ describe('copyPlayOptionsToGUI', () => {
       bottomShiftableGauge: 'ASSIST-EASY',
       longNoteModifier: 'OFF',
       longNoteRate: 1,
+      extraNoteDepth: 0,
+      extraNoteScratch: false,
       autoScratch1P: false,
       autoScratch2P: false,
       sort: 'TITLE',
@@ -255,6 +261,20 @@ describe('previous arrangement selection', () => {
     expect(service.arrangementFor('chart')).toBeUndefined();
     service.reusePreviousArrangement();
     service.clearArrangement();
+    expect(service.arrangementFor('chart')).toBeUndefined();
+  });
+  test('restores EXTRA parameters and clears previous layout on a parameter change', () => {
+    const service = new PlayOptionsService();
+    const replay = previous();
+    replay.play.extraNoteDepth = 2;
+    replay.play.extraNoteScratch = true;
+    service.rememberArrangement('chart', replay);
+    expect(service.reusePreviousArrangement()).toMatchObject({ extraNoteDepth: 2, extraNoteScratch: true });
+    expect(service.arrangementFor('chart')).toBeDefined();
+    service.update({ extraNoteDepth: 3 });
+    expect(service.arrangementFor('chart')).toBeUndefined();
+    service.reusePreviousArrangement();
+    service.update({ extraNoteScratch: false });
     expect(service.arrangementFor('chart')).toBeUndefined();
   });
   test('restores the source addition rate and clears the pinned layout when that rate changes', () => {

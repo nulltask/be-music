@@ -1,3 +1,4 @@
+import { clampExtraNoteDepth } from './extra-note-modifier.ts';
 import { resolveAutoScratchSides } from './auto-scratch.ts';
 import {
   createBeatAtSecondsResolverFromTimingResolver,
@@ -182,7 +183,7 @@ export async function createPlaySession(
   const volumeEvents = collectRealtimeAudioVolumeEvents(resolvedChart);
   // Background audio: every sound that is not a play lane's — a play lane's keysound is the judge strategy's to play
   // (on the player's press, or AUTO play's own note keysounds).
-  const backgroundTriggers = collectRealtimeAudioTriggers(resolvedChart, (channel) => !isPlayLaneSoundChannel(channel));
+  let backgroundTriggers = collectRealtimeAudioTriggers(resolvedChart, (channel) => !isPlayLaneSoundChannel(channel));
   const realtimeAudioEndSeconds =
     options.audio === false ? 0 : Math.max(backgroundTriggers.at(-1)?.seconds ?? 0, volumeEvents.at(-1)?.seconds ?? 0);
   // Prefer the host-provided `preparedChart` over running our own extract pass. See `PlayerOptions.preparedChart`
@@ -197,6 +198,8 @@ export async function createPlaySession(
         laneModeExtension: options.laneModeExtension,
         longNoteModifier: options.longNoteModifier,
         longNoteRate: options.longNoteRate,
+        extraNoteDepth: options.extraNoteDepth,
+        extraNoteScratch: options.extraNoteScratch,
         longNoteModifierPlacements: options.longNoteModifierPlacements,
         mineModifier: options.mineModifier,
         mineModifierPlacements: options.mineModifierPlacements,
@@ -209,6 +212,13 @@ export async function createPlaySession(
       Math.random,
     );
   resolvedChart = playbackChart.resolvedChart;
+  backgroundTriggers = collectRealtimeAudioTriggers(resolvedChart, (channel) => !isPlayLaneSoundChannel(channel));
+  const extraDepth = clampExtraNoteDepth(options.extraNoteDepth ?? playbackChart.extraNoteDepth ?? 0);
+  const extraScratch = options.extraNoteScratch ?? playbackChart.extraNoteScratch ?? false;
+  if ((playbackChart.extraNoteDepth ?? 0) !== extraDepth || (playbackChart.extraNoteScratch ?? false) !== extraScratch)
+    throw new RangeError('The shared prepared chart must include the selected EXTRA note options.');
+  if (extraDepth > 0 && (options.judgeRuleset ?? 'lr2') !== 'beatoraja')
+    throw new RangeError('EXTRA note depth is available only for beatoraja.');
   const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(resolvedChart.timing);
   if ((options.scrollModifier ?? 'OFF') !== (playbackChart.scrollModifierApplied ?? 'OFF'))
     throw new RangeError('The shared prepared chart must include the selected scroll modifier.');
@@ -346,6 +356,15 @@ export async function createPlaySession(
               ? {
                   mineModifier: options.mineModifier,
                   mineModifierChangeCount: playbackChart.mineModifierChangeCount ?? 0,
+                }
+              : {}),
+            ...(options.extraNoteDepth !== undefined ||
+            options.extraNoteScratch !== undefined ||
+            playbackChart.extraNoteDepth !== undefined
+              ? {
+                  extraNoteDepth: playbackChart.extraNoteDepth ?? 0,
+                  extraNoteScratch: playbackChart.extraNoteScratch ?? false,
+                  extraNoteChangeCount: playbackChart.extraNoteChangeCount ?? 0,
                 }
               : {}),
             ...(options.longNoteModifier?.startsWith('ADD_')

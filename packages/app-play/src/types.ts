@@ -222,6 +222,8 @@ export interface PlayerGUIState extends PlayTempoSettings {
   judgeAlgorithm: PlayOptions['judgeAlgorithm'];
   longNoteModifier: PlayOptions['longNoteModifier'];
   longNoteRate: number;
+  extraNoteDepth: number;
+  extraNoteScratch: boolean;
   mineModifier: PlayOptions['mineModifier'];
   scrollModifier: PlayOptions['scrollModifier'];
   scrollSection: number;

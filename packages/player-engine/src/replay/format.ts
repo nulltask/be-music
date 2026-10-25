@@ -199,6 +199,10 @@ export interface ReplayPlay {
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
   longNoteModifier?: LongNoteModifier;
   longNoteRate?: number;
+  extraNoteDepth?: number;
+  extraNoteScratch?: boolean;
+  /** Actual source conversions, including overwritten additions; independent of record policy. */
+  extraNoteChangeCount?: number;
   longNoteModifierChangeCount?: number;
   mineModifier?: MineModifier;
   scrollModifier?: ScrollModifier;
@@ -765,6 +769,17 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
       play.mineModifierChangeCount,
       'play.mineModifierChangeCount',
     );
+  if (play.extraNoteDepth !== undefined) {
+    parsed.extraNoteDepth = expectNonNegativeInteger(play.extraNoteDepth, 'play.extraNoteDepth');
+    if (parsed.extraNoteDepth > 100) throw new ReplayParseError('play.extraNoteDepth: expected 0..100');
+  }
+  if (play.extraNoteScratch !== undefined) {
+    if (typeof play.extraNoteScratch !== 'boolean')
+      throw new ReplayParseError('play.extraNoteScratch: expected boolean');
+    parsed.extraNoteScratch = play.extraNoteScratch;
+  }
+  if (play.extraNoteChangeCount !== undefined)
+    parsed.extraNoteChangeCount = expectNonNegativeInteger(play.extraNoteChangeCount, 'play.extraNoteChangeCount');
   if (play.longNoteRate !== undefined) {
     const rate = expectFiniteNumber(play.longNoteRate, 'play.longNoteRate');
     if (rate < 0 || rate > 1) throw new ReplayParseError('play.longNoteRate: expected 0..1');

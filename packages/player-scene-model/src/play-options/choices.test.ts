@@ -335,3 +335,13 @@ test('G.ATTACK retains the source display spelling and sixth choice independentl
   expect(cyclePlayOptionValue('gauge1P', 'P-ATTACK', 1)).toBe('G-ATTACK');
   expect(cyclePlayOptionValue('gauge1P', 'G-ATTACK', 1)).toBe('GROOVE');
 });
+
+test('EXTRA uses source depth bounds and independently retained scratch selection', () => {
+  expect(DEFAULT_PLAY_OPTIONS).toMatchObject({ extraNoteDepth: 0, extraNoteScratch: false });
+  expect(resolvePlayOptionValue('extraNoteDepth', 4.9)).toBe(4);
+  expect(resolvePlayOptionValue('extraNoteDepth', 101)).toBe(100);
+  expect(resolvePlayOptionValue('extraNoteDepth', -1)).toBe(0);
+  expect(resolvePlayOptionValue('extraNoteDepth', '4')).toBeUndefined();
+  expect(resolvePlayOptionValue('extraNoteScratch', true)).toBe(true);
+  expect(resolvePlayOptionValue('extraNoteScratch', 1)).toBeUndefined();
+});

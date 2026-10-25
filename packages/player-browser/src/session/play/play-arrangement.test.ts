@@ -310,3 +310,51 @@ test('mixed LN/CN/HCN types stay attached to their original keysounds through a 
     random.mockRestore();
   }
 });
+
+test('EXTRA replays and previous layouts retain converted keysounds and source placement after MIRROR', () => {
+  const entry = {
+    ...chart,
+    chartPath: 'extra.bme',
+    chart: parseChart('#BPM 240\n#00101:01\n#00101:01\n#00201:02\n#00212:03', 'bms'),
+  };
+  const original = prepare(
+    { judgeRuleset: 'beatoraja', extraNoteDepth: 2, extraNoteScratch: true, random1P: 'MIRROR' },
+    entry,
+  );
+  const replay = parseReplay(
+    serializeReplay(
+      createReplayRecorder({
+        json: entry.chart,
+        chart: original.preparedChart!,
+        play: {
+          mode: 'manual',
+          autoScratch: false,
+          judgeRuleset: 'beatoraja',
+          extraNoteDepth: 2,
+          extraNoteScratch: true,
+          extraNoteChangeCount: 3,
+        },
+      }).finalize({ summary: { ...createEmptyScore(original.notes.length), fast: 0, slow: 0 } }),
+    ),
+  );
+  for (const options of [{ replay }, { fixedArrangement: replay, autoPlay: false }]) {
+    const restored = prepare(
+      { judgeRuleset: 'beatoraja', extraNoteDepth: 100, extraNoteScratch: false, ...options },
+      entry,
+    );
+    expect(restored.notes.map((note) => [note.channel, note.event.value, note.seconds])).toEqual(
+      original.notes.map((note) => [note.channel, note.event.value, note.seconds]),
+    );
+    expect(restored.preparedChart).toMatchObject({
+      extraNoteDepth: 2,
+      extraNoteScratch: true,
+      extraNoteChangeCount: 3,
+    });
+    expect(
+      restored.preparedChart!.resolvedChart.sampleTriggers.map((trigger) => [trigger.channel, trigger.sampleKey]),
+    ).toEqual(
+      original.preparedChart!.resolvedChart.sampleTriggers.map((trigger) => [trigger.channel, trigger.sampleKey]),
+    );
+  }
+  expect(() => prepare({ judgeRuleset: 'lr2', extraNoteDepth: 1 }, entry)).toThrow(/only for beatoraja/);
+});
