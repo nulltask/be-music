@@ -46,6 +46,8 @@
           {"id":3,"channel":"14","type":"normal","timeUs":2000000},
           {"id":4,"channel":"14","type":"normal","timeUs":2800000}
         ],
+        "headerBPM": 150,
+        "bpmRange": {"min":150,"max":150},
         "chartFingerprint": "bmfp0:7e6cddcede0041c686f4b26a50933f409257967fefe616bac02ba00a2a3e5535",
         "playFingerprint": "bmfp0:7e6cddcede0041c686f4b26a50933f409257967fefe616bac02ba00a2a3e5535",
         "title": "nonstop"

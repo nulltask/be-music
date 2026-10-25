@@ -33,7 +33,8 @@ for (const playVariant of ['5', '7'] as const) {
       battleAssist1P: false,
       battleAssist2P: false,
     });
-    expect(replay.chart.laneMode).toContain(playVariant === '5' ? '10' : '14');
+    // The 10-key mode is labelled `5 KEY DP`, the 14-key one `14 KEY DP`.
+    expect(replay.chart.laneMode).toBe(playVariant === '5' ? '5 KEY DP' : '14 KEY DP');
     expect(replay.chart.noteCount).toBe(4);
     expect(replay.chart.notes.some((note) => note.channel.startsWith('2'))).toBe(true);
     expect(played.summary.perfect).toBe(4);

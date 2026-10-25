@@ -671,7 +671,9 @@ test.each([false, true])(
     if (silent) state.config.landmineNotes[0]!.silent = true;
     stepJudgeCore(state, { kind: 'hold', channels: new Set(['12']) });
     const effects = [...stepJudgeCore(state, advance(2.49)), ...stepJudgeCore(state, advance(2.6))];
-    expect(state.summary.minePoor).toBe(1);
+    // beatoraja mines are gauge-only: the hit still deals its damage, with or without the sample.
+    const hit = effects.find((effect) => effect.kind === 'trace' && effect.name === 'mine-hit');
+    expect(hit?.kind === 'trace' ? Object.fromEntries(hit.fields).damage : undefined).toBeGreaterThan(0);
     expect(effects.filter((effect) => effect.kind === 'sound' && effect.source === 'mine-hit')).toHaveLength(
       silent ? 0 : 1,
     );

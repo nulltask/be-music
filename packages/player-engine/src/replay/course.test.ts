@@ -213,7 +213,7 @@ describe('course replays', () => {
   });
 
   test('the engine’s course result is lamped by the judge ruleset the run was played on', async () => {
-    // LR2: an EASY pick lamps a grade course EASY, though it plays on the GRADE gauge.
+    // LR2: a grade course resets an EASY pick to GROOVE, so it lamps NORMAL.
     const easyFirst = await playStage(
       presses((index) => index !== 3),
       { kind: 'grade' },
@@ -231,8 +231,8 @@ describe('course replays', () => {
         { played: true, replay: easySecond },
       ],
     });
-    expect(easy.results?.native?.lamp).toBe('EASY');
-    expect(simulateCourseReplay(easy, { ruleset: 'lr2' }).lamp).toBe('EASY');
+    expect(easy.results?.native?.lamp).toBe('NORMAL');
+    expect(simulateCourseReplay(easy, { ruleset: 'lr2' }).lamp).toBe('NORMAL');
 
     // beatoraja: every note a PGREAT is a MAX, beyond LR2's FULL COMBO.
     const maxFirst = await playStage(

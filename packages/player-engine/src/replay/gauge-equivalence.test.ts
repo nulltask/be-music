@@ -19,6 +19,8 @@ test('BEST CLEAR records the original choice and resolves the highest surviving 
   const json = chart([
     { measure: 1, channel: '11', position: [0, 1], value: '01' },
     { measure: 2, channel: '12', position: [0, 1], value: '01' },
+    // A missed key-6 note makes the chart 7KEY: 5KEY's EX-HARD scales its damage up on a sparse chart, past a POOR.
+    { measure: 3, channel: '18', position: [0, 1], value: '01' },
   ]);
   const run = await runRecordedPlay(json, [down(0, 2000000, '12')], 'beatoraja', {
     gauge: 'GROOVE',
@@ -63,6 +65,8 @@ test('SELECT TO UNDER replay retains the original upper bound independently of t
   const json = chart([
     { measure: 1, channel: '11', position: [0, 1], value: '01' },
     { measure: 2, channel: '12', position: [0, 1], value: '01' },
+    // 7KEY, as above, so EX-HARD survives the misses.
+    { measure: 3, channel: '18', position: [0, 1], value: '01' },
   ]);
   const run = await runRecordedPlay(json, [], 'beatoraja', {
     gauge: 'GROOVE',

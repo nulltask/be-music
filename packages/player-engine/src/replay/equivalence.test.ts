@@ -1221,11 +1221,14 @@ for (const judgeAlgorithm of ['combo', 'duration', 'lowest'] as const) {
     json.events = [
       { measure: 1, channel: '11', position: [0, 1], value: '01' },
       { measure: 1, channel: '11', position: [4, 25], value: '01' },
+      // A key-6 note, left alone, makes the chart 7KEY: its NORMAL windows take the second note 40 ms early as a
+      // GREAT and the first 120 ms late as a BAD (5KEY's would take the second as a GOOD and miss the first).
+      { measure: 3, channel: '18', position: [0, 1], value: '01' },
     ];
     const run = await runRecordedPlay(json, [down(0, 1_120_000, '11')], 'beatoraja', { judgeAlgorithm });
     expect(run.replay.play.judgeAlgorithm).toBe(judgeAlgorithm);
     expect(run.replay.results!.native!.judge).toMatchObject(
-      judgeAlgorithm === 'lowest' ? { bad: 1, great: 0, poor: 1 } : { bad: 0, great: 1, poor: 1 },
+      judgeAlgorithm === 'lowest' ? { bad: 1, great: 0, poor: 2 } : { bad: 0, great: 1, poor: 2 },
     );
     expect(simulateReplay(run.replay, { ruleset: 'beatoraja' }).judge).toEqual(run.replay.results!.native!.judge);
   });
@@ -1276,7 +1279,9 @@ test.each(['ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'] as const)(
     expect(
       replay.chart.notes.filter((note) => note.type === 'mine').every((note) => note.silent && note.damage === 10),
     ).toBe(true);
-    expect(run.summary.minePoor).toBeGreaterThan(0);
+    // beatoraja mines are gauge-only: the silent mines' damage shows against the same play without them.
+    const withoutMines = await runRecordedPlay(json, [down(0, 500_000, '11'), up(1, 2_500_000, '11')], 'beatoraja');
+    expect(run.summary.gauge!.current).toBeLessThan(withoutMines.summary.gauge!.current);
     expect(simulateReplay(replay, { ruleset: 'beatoraja' }).judge).toEqual(replay.results!.native!.judge);
   },
 );
@@ -1378,7 +1383,16 @@ test('mixed generated types contribute their individual head/tail counts and rep
   );
   const run = await runRecordedPlay(
     json,
-    [down(0, 1_000_000, '11', '12', '13'), up(1, 1_500_000, '11', '12', '13'), down(2, 2_000_000, '14')],
+    // Three keys, one event each: an event's channels are the lanes one key is bound to, and one press judges one note.
+    [
+      down(0, 1_000_000, '11'),
+      down(1, 1_000_000, '12'),
+      down(2, 1_000_000, '13'),
+      up(3, 1_500_000, '11'),
+      up(4, 1_500_000, '12'),
+      up(5, 1_500_000, '13'),
+      down(6, 2_000_000, '14'),
+    ],
     'beatoraja',
     { longNoteModifier: 'ADD_ALL', preparedChart },
   );
