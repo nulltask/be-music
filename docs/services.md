@@ -69,8 +69,12 @@ flowchart LR
 ```
 
 - **Branch preview URLs** are not registered OIDC clients. Authentication is supported at the fixed production and preview origins; register another exact client/callback explicitly to add a deployment.
-- **Third-party services** have separate preview credentials: their own Discord and Google OAuth applications, whose
-  redirect URIs point at `accounts.preview.be-music.app`, and Stripe test-mode keys for `donate-preview`.
+- **Third-party services** have separate preview credentials: their own Discord and Google OAuth applications, and
+  Stripe test-mode keys for `donate-preview`. Discord's redirect URI is
+  `https://accounts.be-music.app/api/auth/callback/discord` in production and
+  `https://accounts.preview.be-music.app/api/auth/callback/discord` in preview. Google's redirect URI is
+  `https://accounts.be-music.app/api/auth/callback/google` in production and
+  `https://accounts.preview.be-music.app/api/auth/callback/google` in preview.
 - **Visibility**: preview hosts are kept out of search engines, and may be put behind Cloudflare Access.
 - **Certificates**: hosts two levels below `be-music.app` (`play.preview.be-music.app`) are not covered by the zone's
   universal certificate (`*.be-music.app`). Worker custom domains issue one certificate per hostname; check this on the
@@ -104,7 +108,7 @@ sequenceDiagram
   services are first-party clients, so there is no consent screen.
 - **Identity**: services store a user as `(issuer, sub)`. Keeping the issuer leaves room for signing in with another
   instance's accounts later.
-- **Sign-in methods** live in Accounts only: Discord, Google and passkeys, plus guest sessions. Device authorization for the terminal player remains planned.
+- **Sign-in methods** live in Accounts only: Discord, Google and passkeys, plus guest sessions. Device authorization for the terminal player remains planned. A signed-in account can later link a passkey, Discord, and Google from the account page. Linking keeps that account, including when the provider email differs.
 - **Passkeys** are bound to one relying party ID per environment: `be-music.app` in production and
   `preview.be-music.app` in preview. Passkeys are only used on the Accounts host, so this works wherever the other
   services live.
@@ -150,7 +154,12 @@ configuration:
 | `USER_CONTENT_ORIGIN` | Registry only; where uploaded files are served from                    |
 
 - Accounts reads its list of clients and redirect URIs from configuration.
-- Discord and Google are optional: an instance can start with passkeys and anonymous sessions only.
+- Discord and Google are optional: an instance can start with passkeys and anonymous sessions only. Discord sign-in
+  reads `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` on the Accounts Worker. The official instance stores them in
+  the `be-music` vault (`discord` for production, `discord-preview` for preview). Google sign-in reads
+  `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from the same vault (`google` for production, `google-preview` for
+  preview). `pnpm --filter @be-music/app-accounts run secrets:preview` and `secrets:production` install them without
+  printing the values.
 - D1 database IDs, Worker names and Service Binding targets come from deploy configuration, not from source.
 - Calls to outside services (such as BMS Search) can be turned off.
 - Donations, the donation site and the be-music name and logo belong to the official instance; links to them in the

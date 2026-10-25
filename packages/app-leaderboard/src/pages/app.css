@@ -2,6 +2,7 @@
    Compiled by scripts/build-css.ts into styles.generated.ts; only the classes the pages use are kept. */
 @import 'tailwindcss' source(none);
 @source "./";
+@source "../../../service-web-theme/src/footer.ts";
 @import 'basecoat-css';
 
 /* Figures line up everywhere: scores, counts, dates and percentages take tabular digits site-wide. */

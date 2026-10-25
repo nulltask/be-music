@@ -1,13 +1,14 @@
 import { svg, html, nothing, css, type CSSResultGroup, type PropertyDeclarations, type TemplateResult } from 'lit';
 import { DataElement } from '../base.ts';
 import type { BeMusicGaugeData } from '../models.ts';
-import { baseStyles } from '../styles/base.ts';
+import { previewHost, previewTheme } from '../styles/preview-theme.ts';
 import { stats } from '../templates.ts';
 
 export class BeMusicGaugePanelElement extends DataElement<BeMusicGaugeData> {
   static override properties: PropertyDeclarations = { ...DataElement.properties, compact: { type: Boolean } };
   static override styles: CSSResultGroup = [
-    baseStyles,
+    previewTheme,
+    previewHost,
     css`
       label {
         display: flex;
@@ -46,12 +47,7 @@ export class BeMusicGaugePanelElement extends DataElement<BeMusicGaugeData> {
       ])}
       <svg part="graph" viewBox="0 0 220 44" role="img" aria-label="Gauge history">
         ${!d.survival && d.threshold !== undefined ? svg`<line x1="0" x2="220" y1=${threshold} y2=${threshold} stroke="currentColor" stroke-dasharray="3 3"></line>` : nothing}
-        <polyline
-          fill="none"
-          stroke="var(--be-music-color-accent,#abcaff)"
-          stroke-width="2"
-          points=${points}
-        ></polyline>
+        <polyline fill="none" stroke="var(--primary,#edf2fa)" stroke-width="2" points=${points}></polyline>
       </svg>
     </section>`;
   }

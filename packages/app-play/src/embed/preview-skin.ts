@@ -101,7 +101,7 @@ function drawPlayfield(
   { context, width, height }: BeMusicSurface<'2d'>,
   frame: Parameters<BeMusicSkin['gameplay']['draw']>[1],
 ): void {
-  context.fillStyle = '#10151f';
+  context.fillStyle = '#171717';
   context.fillRect(0, 0, width, height);
   paintPlayfieldParts(context as CanvasRenderingContext2D, resolvePlayfieldParts(frame));
 }

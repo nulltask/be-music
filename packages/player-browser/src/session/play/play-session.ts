@@ -628,6 +628,11 @@ export class PlaySession extends PlaySessionState {
     return this.options.autoPlay === true || this.autoScratchChannels.has(channel);
   }
 
+  /** True once {@link start} has begun the intro. A view that joins later reads this to seed its skin timers. */
+  public hasSceneStarted(): boolean {
+    return this.sceneStartTime !== 0;
+  }
+
   /** True while the wall-clock playhead is still inside the intro buffer. */
   isIntroPlaying(): boolean {
     if (this.startTime === 0) {

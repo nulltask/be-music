@@ -40,9 +40,18 @@ function buildAuth(env: Env) {
   const clients = JSON.parse(env.OIDC_CLIENTS) as Record<string, string>;
   const socialProviders: Parameters<typeof betterAuth>[0]['socialProviders'] = {};
   if (env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET)
-    socialProviders.discord = { clientId: env.DISCORD_CLIENT_ID, clientSecret: env.DISCORD_CLIENT_SECRET };
+    socialProviders.discord = {
+      clientId: env.DISCORD_CLIENT_ID,
+      clientSecret: env.DISCORD_CLIENT_SECRET,
+      // The provider otherwise sends prompt=none, which Discord rejects until this app has been authorized.
+      prompt: 'consent',
+    };
   if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET)
-    socialProviders.google = { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET };
+    socialProviders.google = {
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+      // This provider omits prompt unless one is set, so the first grant can show consent.
+    };
   const claims = async (user: { id: string; name?: string; isAnonymous?: unknown } | null | undefined) => {
     if (user) await createProfile(db, user.id, user.isAnonymous === true);
     const publicProfile = user
@@ -71,6 +80,24 @@ function buildAuth(env: Env) {
       cookiePrefix: 'be-music-accounts',
     },
     database: drizzleAdapter(db, { provider: 'sqlite', schema }),
+    account: {
+      accountLinking: {
+        // A signed-in user may attach Discord or Google even when that provider's email differs from the
+        // account email, which is the usual case for guests and passkeys.
+        trustedProviders: ['discord', 'google'],
+        allowDifferentEmails: true,
+      },
+    },
+    databaseHooks: {
+      account: {
+        create: {
+          after: async (created) => {
+            if (created.providerId !== 'discord' && created.providerId !== 'google') return;
+            await db.update(schema.user).set({ isAnonymous: false }).where(eq(schema.user.id, created.userId));
+          },
+        },
+      },
+    },
     socialProviders,
     disabledPaths: ['/token', '/update-user'],
     plugins: [

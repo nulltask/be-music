@@ -1,4 +1,15 @@
-import { renderBuildInfo } from '@be-music/service-web-theme';
+import { renderBuildInfo, renderServiceFooter } from '@be-music/service-web-theme';
+
+function playBuildInfo(): { builtAt: string; revision: string } | undefined {
+  return typeof __BE_MUSIC_BUILD_TIME__ === 'string'
+    ? { builtAt: __BE_MUSIC_BUILD_TIME__, revision: __BE_MUSIC_BUILD_REVISION__ }
+    : undefined;
+}
+
+/** Local play uses production siblings, matching `leaderboardLink`. A preview host stays on preview. */
+function playHostname(): string {
+  return typeof location === 'undefined' ? 'localhost' : location.hostname;
+}
 
 /**
  * Static HTML for the player shell — injected once into `#app` at boot via `app.innerHTML = PLAYER_APP_HTML`.
@@ -29,7 +40,7 @@ export const PLAYER_APP_HTML = `
     <input id="songs" type="file" webkitdirectory multiple class="hidden-file-input" />
     <!-- The "Open files" button's picker: ZIP archives and replays (\`*.bmplay.json\`). -->
     <input id="files" type="file" multiple accept=".zip,.json" class="hidden-file-input" />
-    <input id="search" class="search-input" type="search" placeholder="Search title / artist / genre..." />
+    <input id="search" class="input search-input" type="search" placeholder="Search title / artist / genre..." />
     <div class="stage" id="stage">
       <!--
         Drop hint. Visible whenever the shell carries the
@@ -47,7 +58,7 @@ export const PLAYER_APP_HTML = `
       -->
       <div class="drop">
         <div class="drop-frame"></div>
-        <div class="drop-card">
+        <div class="card drop-card px-8">
           <svg class="drop-icon" viewBox="0 0 48 48" aria-hidden="true">
             <!--
               Stylized download arrow. The two halves animate
@@ -93,7 +104,7 @@ export const PLAYER_APP_HTML = `
           -->
           <section class="start-leaderboard" id="start-leaderboard" aria-label="Leaderboard">
             <label class="start-check">
-              <input type="checkbox" id="start-submit" />
+              <input class="input" type="checkbox" id="start-submit" />
               <span>Submit my plays to the Leaderboard</span>
             </label>
             <!-- \`loading\` until the account has been read, so a signed-in player never sees "Not signed in". -->
@@ -113,7 +124,7 @@ export const PLAYER_APP_HTML = `
           -->
           <section class="start-audio" id="start-silent-mode" aria-label="Sound" hidden>
             <label class="start-check">
-              <input type="checkbox" id="start-silent-mode-input" checked />
+              <input class="input" type="checkbox" id="start-silent-mode-input" checked />
               <span data-silent-mode-label>Play in silent mode</span>
             </label>
             <p class="start-audio-note" data-silent-mode-note></p>
@@ -164,11 +175,6 @@ export const PLAYER_APP_HTML = `
               </section>
             </div>
           </details>
-          <footer class="service-build-footer">${renderBuildInfo(
-            typeof __BE_MUSIC_BUILD_TIME__ === 'string'
-              ? { builtAt: __BE_MUSIC_BUILD_TIME__, revision: __BE_MUSIC_BUILD_REVISION__ }
-              : undefined,
-          )}</footer>
         </div>
       </div>
     </div>
@@ -178,59 +184,62 @@ export const PLAYER_APP_HTML = `
       from the start card's account row; wired by \`wireAccountDialogs\`
       (account-dialogs.ts).
     -->
-    <dialog class="account-dialog" id="leaderboard-sign-in" aria-labelledby="leaderboard-sign-in-title">
+    <dialog class="dialog account-dialog" id="leaderboard-sign-in" aria-labelledby="leaderboard-sign-in-title">
       <div class="account-dialog-body">
         <header>
           <h2 id="leaderboard-sign-in-title">Sign in</h2>
           <p>Use the passkey of your Leaderboard account.</p>
         </header>
-        <button type="button" class="account-dialog-primary" data-account-dialog-action="sign-in">
+        <section class="grid gap-3">
+        <button type="button" class="btn w-full" data-account-dialog-action="sign-in">
           Sign in with a passkey
         </button>
-        <div class="account-dialog-or" role="separator">or</div>
+        <div class="text-muted-foreground text-center text-xs" role="separator">or</div>
         <div class="account-providers">
-          <button type="button" class="account-provider" disabled title="Sign in with Google is coming soon">
-            <span class="account-provider-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg></span>
+          <button type="button" class="btn w-full whitespace-normal" data-variant="outline" disabled title="Sign in with Google is coming soon">
+            <span class="inline-flex size-4"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg></span>
             Sign in with Google
-            <span class="account-provider-badge">Coming soon</span>
+            <span class="text-muted-foreground ms-auto text-xs">Coming soon</span>
           </button>
-          <button type="button" class="account-provider" disabled title="Sign in with Discord is coming soon">
-            <span class="account-provider-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg></span>
+          <button type="button" class="btn w-full whitespace-normal" data-variant="outline" disabled title="Sign in with Discord is coming soon">
+            <span class="inline-flex size-4"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg></span>
             Sign in with Discord
-            <span class="account-provider-badge">Coming soon</span>
+            <span class="text-muted-foreground ms-auto text-xs">Coming soon</span>
           </button>
         </div>
-        <p class="account-dialog-status" data-account-dialog-status role="status" hidden></p>
+        <p class="text-destructive text-sm" data-account-dialog-status role="status" hidden></p>
+        </section>
         <footer>
-          <button type="button" class="account-dialog-link" data-account-dialog-action="open-sign-up">
+          <button type="button" class="btn" data-variant="link" data-account-dialog-action="open-sign-up">
             No account yet? Sign up
           </button>
-          <button type="button" class="account-dialog-quiet" data-account-dialog-action="close">Cancel</button>
+          <button type="button" class="btn" data-variant="outline" data-account-dialog-action="close">Cancel</button>
         </footer>
       </div>
     </dialog>
-    <dialog class="account-dialog" id="leaderboard-sign-up" aria-labelledby="leaderboard-sign-up-title">
+    <dialog class="dialog account-dialog" id="leaderboard-sign-up" aria-labelledby="leaderboard-sign-up-title">
       <form class="account-dialog-body" method="dialog" data-account-sign-up-form>
         <header>
           <h2 id="leaderboard-sign-up-title">Create your account</h2>
           <p data-account-sign-up-lead>Pick a handle and a name. Your browser then makes a passkey for it.</p>
         </header>
         <div class="account-providers">
-          <button type="button" class="account-provider" disabled title="Sign up with Google is coming soon">
-            <span class="account-provider-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg></span>
+          <button type="button" class="btn w-full whitespace-normal" data-variant="outline" disabled title="Sign up with Google is coming soon">
+            <span class="inline-flex size-4"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg></span>
             Sign up with Google
-            <span class="account-provider-badge">Coming soon</span>
+            <span class="text-muted-foreground ms-auto text-xs">Coming soon</span>
           </button>
-          <button type="button" class="account-provider" disabled title="Sign up with Discord is coming soon">
-            <span class="account-provider-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg></span>
+          <button type="button" class="btn w-full whitespace-normal" data-variant="outline" disabled title="Sign up with Discord is coming soon">
+            <span class="inline-flex size-4"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg></span>
             Sign up with Discord
-            <span class="account-provider-badge">Coming soon</span>
+            <span class="text-muted-foreground ms-auto text-xs">Coming soon</span>
           </button>
         </div>
-        <div class="account-dialog-or" role="separator">or with a passkey</div>
-        <label class="account-field">
+        <div class="text-muted-foreground text-center text-xs" role="separator">or with a passkey</div>
+        <label class="field">
           <span>Handle</span>
           <input
+            class="input"
             name="handle"
             required
             minlength="3"
@@ -241,17 +250,17 @@ export const PLAYER_APP_HTML = `
           />
           <small>3 to 15 letters, digits or _. It names your page.</small>
         </label>
-        <label class="account-field">
+        <label class="field">
           <span>Name</span>
-          <input name="displayName" required maxlength="64" autocomplete="nickname" />
+          <input class="input" name="displayName" required maxlength="64" autocomplete="nickname" />
           <small>Up to 32 characters, in any script. The rankings show it.</small>
         </label>
-        <p class="account-dialog-status" data-account-dialog-status role="status" hidden></p>
+        <p class="text-destructive text-sm" data-account-dialog-status role="status" hidden></p>
         <footer>
           <span></span>
           <span class="account-dialog-buttons">
-            <button type="button" class="account-dialog-quiet" data-account-dialog-action="close">Cancel</button>
-            <button type="submit" class="account-dialog-primary">Create passkey</button>
+            <button type="button" class="btn" data-variant="outline" data-account-dialog-action="close">Cancel</button>
+            <button type="submit" class="btn">Create passkey</button>
           </span>
         </footer>
       </form>
@@ -262,27 +271,31 @@ export const PLAYER_APP_HTML = `
       the detected skin is confirmed before it is used. Filled by
       \`promptSkinDrop\` (ui/skin-drop-prompt.ts).
     -->
-    <dialog class="skin-drop" id="skin-drop" aria-labelledby="skin-drop-title">
-      <svg class="drop-icon" viewBox="0 0 48 48" aria-hidden="true">
+    <dialog class="dialog" id="skin-drop" aria-labelledby="skin-drop-title">
+      <div class="grid justify-items-center gap-3 text-center">
+      <svg class="drop-icon size-11" viewBox="0 0 48 48" aria-hidden="true">
         <path d="M24 6 L24 30" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
         <path d="M14 22 L24 32 L34 22" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
         <path d="M10 38 L38 38" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.55" />
       </svg>
       <h2 class="drop-title" id="skin-drop-title">Drop an LR2 skin</h2>
-      <p class="skin-drop-hint" data-skin-drop-hint></p>
-      <button type="button" class="account-dialog-quiet" data-skin-drop-cancel>Cancel</button>
+      <p class="text-muted-foreground text-sm" data-skin-drop-hint></p>
+      <footer>
+        <button type="button" class="btn" data-variant="outline" data-skin-drop-cancel>Cancel</button>
+      </footer>
+      </div>
     </dialog>
-    <dialog class="account-dialog" id="skin-switch" aria-labelledby="skin-switch-title" aria-describedby="skin-switch-hint">
+    <dialog class="dialog account-dialog" id="skin-switch" aria-labelledby="skin-switch-title" aria-describedby="skin-switch-hint">
       <form method="dialog" class="account-dialog-body">
         <header>
           <h2 id="skin-switch-title">Use the dropped skin?</h2>
           <p id="skin-switch-hint">Switch to this skin? Cancel keeps your current skin. Charts in the drop will still be imported.</p>
         </header>
         <footer>
-          <button type="submit" value="" class="account-dialog-quiet" autofocus>Cancel</button>
+          <button type="submit" value="" class="btn" data-variant="outline" autofocus>Cancel</button>
           <span class="account-dialog-buttons">
-            <button type="submit" value="lr2" class="account-dialog-primary" data-skin-family="lr2">Use LR2 skin</button>
-            <button type="submit" value="beatoraja" class="account-dialog-primary" data-skin-family="beatoraja">Use beatoraja skin</button>
+            <button type="submit" value="lr2" class="btn" data-skin-family="lr2">Use LR2 skin</button>
+            <button type="submit" value="beatoraja" class="btn" data-skin-family="beatoraja">Use beatoraja skin</button>
           </span>
         </footer>
       </form>
@@ -297,9 +310,9 @@ export const PLAYER_APP_HTML = `
       scene is currently mounted (select / gameplay / result).
     -->
     <div class="loading-overlay" id="loading-overlay" aria-hidden="true">
-      <div class="loading-card" role="status" aria-live="polite">
+      <div class="card loading-card gap-3 px-6" role="status" aria-live="polite">
         <div class="loading-label" id="loading-label">Loading…</div>
-        <div class="loading-bar"><div class="loading-bar-fill" id="loading-bar-fill"></div></div>
+        <div class="progress loading-bar"><span class="loading-bar-fill" id="loading-bar-fill"></span></div>
         <div class="loading-counter" id="loading-counter"></div>
       </div>
     </div>
@@ -311,7 +324,7 @@ export const PLAYER_APP_HTML = `
       that hosts both the usage guide and the third-party
       attribution required by the libraries we ship.
     -->
-    <button class="help-button" id="help-button" type="button" aria-haspopup="dialog" aria-controls="help-modal">
+    <button class="btn help-button" data-size="sm" data-variant="outline" id="help-button" type="button" aria-haspopup="dialog" aria-controls="help-modal">
       <svg class="help-button-icon" viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.8" />
         <path
@@ -332,7 +345,7 @@ export const PLAYER_APP_HTML = `
       out). Signed in, it opens the player's Leaderboard page; signed out,
       it opens the Debug Menu's Leaderboard folder. Wired in \`leaderboard-ui.ts\`.
     -->
-    <a class="account-chip" id="account-chip" data-state="loading" href="https://leaderboard.be-music.app/" target="_blank" rel="noopener">
+    <a class="btn account-chip no-underline" data-size="sm" data-variant="ghost" id="account-chip" data-state="loading" href="https://leaderboard.be-music.app/" target="_blank" rel="noopener">
       <span class="account-chip-dot" aria-hidden="true"></span>
       <span class="account-chip-label" id="account-chip-label"></span>
     </a>
@@ -342,17 +355,17 @@ export const PLAYER_APP_HTML = `
       it shows Resume and Quit. Hidden on desktops and outside play.
     -->
     <div class="touch-controls" id="touch-controls">
-      <button class="touch-control" id="touch-pause" type="button" aria-label="Pause">
+      <button class="btn touch-control" data-size="icon" id="touch-pause" type="button" aria-label="Pause">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" stroke="currentColor" stroke-width="3" stroke-linecap="round" /></svg>
       </button>
-      <button class="touch-control touch-control--text" id="touch-quit" type="button">Quit</button>
+      <button class="btn touch-control touch-control--text" data-size="sm" data-variant="outline" id="touch-quit" type="button">Quit</button>
     </div>
     <!--
       Shown on phones held upright: the play field is laid out for
       landscape, so ask for a turn instead of shrinking it to a strip.
     -->
     <div class="rotate-hint" aria-live="polite">
-      <div class="rotate-hint-card">
+      <div class="card rotate-hint-card gap-2 px-6 text-center">
         <svg class="rotate-hint-icon" viewBox="0 0 48 48" aria-hidden="true">
           <rect x="15" y="6" width="18" height="32" rx="3" fill="none" stroke="currentColor" stroke-width="2.4" />
           <path d="M8 34a17 17 0 0 0 17 9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
@@ -374,13 +387,13 @@ export const PLAYER_APP_HTML = `
     -->
     <div class="help-modal" id="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-modal-title" aria-hidden="true">
       <div class="help-modal-backdrop" id="help-modal-backdrop"></div>
-      <div class="help-modal-card">
+      <div class="card help-modal-card gap-4 overflow-hidden p-6">
         <header class="help-modal-header">
           <div>
             <div class="help-modal-eyebrow">Help &amp; About</div>
             <h2 class="help-modal-title" id="help-modal-title">be-music player</h2>
           </div>
-          <button class="help-modal-close" id="help-modal-close" type="button" aria-label="Close">
+          <button class="btn help-modal-close" data-size="icon-sm" data-variant="ghost" id="help-modal-close" type="button" aria-label="Close">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path
                 d="M7 7 L17 17 M17 7 L7 17"
@@ -394,7 +407,7 @@ export const PLAYER_APP_HTML = `
         </header>
         <div class="help-modal-tabs" role="tablist">
           <button
-            class="help-modal-tab is-active"
+            class="btn help-modal-tab is-active" data-size="sm" data-variant="ghost"
             id="help-tab-usage"
             type="button"
             role="tab"
@@ -405,7 +418,7 @@ export const PLAYER_APP_HTML = `
             Usage
           </button>
           <button
-            class="help-modal-tab"
+            class="btn help-modal-tab" data-size="sm" data-variant="ghost"
             id="help-tab-oss"
             type="button"
             role="tab"
@@ -432,14 +445,14 @@ export const PLAYER_APP_HTML = `
           -->
           <div class="help-lang-switch" role="group" aria-label="Language">
             <button
-              class="help-lang-toggle is-active"
+              class="btn help-lang-toggle is-active" data-size="sm" data-variant="ghost"
               type="button"
               data-lang="en"
               aria-pressed="true"
             >
               English
             </button>
-            <button class="help-lang-toggle" type="button" data-lang="ja" aria-pressed="false">
+            <button class="btn help-lang-toggle" data-size="sm" data-variant="ghost" type="button" data-lang="ja" aria-pressed="false">
               日本語
             </button>
           </div>
@@ -698,11 +711,13 @@ export const PLAYER_APP_HTML = `
           <ol class="help-oss-list" id="help-oss-list"></ol>
         </section>
       </div>
-      <footer class="service-build-footer">${renderBuildInfo(
-        typeof __BE_MUSIC_BUILD_TIME__ === 'string'
-          ? { builtAt: __BE_MUSIC_BUILD_TIME__, revision: __BE_MUSIC_BUILD_REVISION__ }
-          : undefined,
-      )}</footer>
+      <footer class="service-build-footer">${renderBuildInfo(playBuildInfo())}</footer>
     </div>
+  ${renderServiceFooter({
+    current: 'play',
+    hostname: playHostname(),
+    className: 'service-page-footer',
+    buildInfo: playBuildInfo(),
+  })}
   </div>
 `;

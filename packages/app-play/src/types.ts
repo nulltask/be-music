@@ -37,7 +37,7 @@ export interface PlayerWebElements {
    */
   loadingOverlay: HTMLDivElement;
   loadingLabel: HTMLDivElement;
-  loadingBarFill: HTMLDivElement;
+  loadingBarFill: HTMLElement;
   loadingCounter: HTMLDivElement;
 }
 

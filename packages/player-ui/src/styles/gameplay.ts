@@ -96,7 +96,7 @@ export const gameplayStyles: CSSResult = css`
     overflow-wrap: anywhere;
   }
   .hud-primary {
-    background: var(--be-music-panel-background, #18212f);
+    background: var(--card, #18181b);
     border-radius: 6px;
     padding: 6px;
   }
@@ -141,7 +141,7 @@ export const gameplayStyles: CSSResult = css`
   .hud-details > summary {
     padding: 3px 0 6px;
     cursor: pointer;
-    color: #b8c7da;
+    color: var(--muted-foreground, #b8c7da);
     font-size: 0.85em;
   }
   .hud-extra {
@@ -154,14 +154,14 @@ export const gameplayStyles: CSSResult = css`
   .hud-card {
     min-width: 0;
     padding: 6px;
-    background: var(--be-music-panel-background, #18212fee);
-    border: 1px solid #2c394c;
+    background: var(--card, #18212fee);
+    border: 1px solid var(--border, #2c394c);
     border-radius: 6px;
   }
   .hud-card h3 {
     font-size: 0.85em;
     margin: 0 0 6px;
-    color: var(--be-music-color-accent, #abcaff);
+    color: var(--primary, #abcaff);
   }
   @container hud (max-width: 22rem) {
     .hud:not([data-orientation='portrait']) .actions {
@@ -222,7 +222,7 @@ export const gameplayStyles: CSSResult = css`
     max-width: 40%;
     padding: 2px 4px;
     border-radius: 4px;
-    background: #293950;
+    background: var(--accent, #3f3f46);
   }
   .gameplay[data-orientation='portrait'] .hud-extra {
     position: absolute;
@@ -230,8 +230,8 @@ export const gameplayStyles: CSSResult = css`
     left: 0;
     width: 126%;
     padding: 6px;
-    background: #10151ff5;
-    border: 1px solid #38465c;
+    background: color-mix(in oklch, var(--background, #09090b) 96%, transparent);
+    border: 1px solid var(--border, #ffffff1a);
     border-radius: 8px;
     overflow: auto;
     overscroll-behavior: contain;

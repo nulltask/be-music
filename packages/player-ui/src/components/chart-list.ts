@@ -9,7 +9,7 @@ import {
 import { repeat } from 'lit/directives/repeat.js';
 import { browseEntryBadge, browseEntryCount, browseEntryTitle, type LibraryEntry } from '@be-music/player-skin-sdk';
 import { BeMusicElement } from '../base.ts';
-import { baseStyles } from '../styles/base.ts';
+import { previewHost, previewTheme } from '../styles/preview-theme.ts';
 
 export class BeMusicChartListElement extends BeMusicElement {
   static override properties: PropertyDeclarations = {
@@ -18,7 +18,8 @@ export class BeMusicChartListElement extends BeMusicElement {
     disabled: { type: Boolean },
   };
   static override styles: CSSResultGroup = [
-    baseStyles,
+    previewTheme,
+    previewHost,
     css`
       :host {
         display: flex;
@@ -45,15 +46,16 @@ export class BeMusicChartListElement extends BeMusicElement {
         border-color: transparent;
       }
       button[aria-current='true'] {
-        background: #293d59;
-        border-color: var(--be-music-color-accent, #abcaff);
+        background: var(--accent, #293d59);
+        color: var(--accent-foreground, inherit);
+        border-color: var(--border, transparent);
       }
       strong {
         display: block;
         overflow-wrap: anywhere;
       }
       .badge {
-        color: var(--be-music-color-accent, #abcaff);
+        color: var(--primary, #abcaff);
       }
     `,
   ];
@@ -90,6 +92,8 @@ export class BeMusicChartListElement extends BeMusicElement {
           (entry, index) => html`
             <li>
               <button
+                class="btn"
+                data-variant="ghost"
                 part="row"
                 aria-current=${String(index === this.selectedIndex)}
                 .tabIndex=${index === this.selectedIndex ? 0 : -1}

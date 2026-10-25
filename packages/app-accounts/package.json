@@ -10,6 +10,8 @@
     "build:client": "node scripts/build-client.ts",
     "db:migrate:preview": "cf d1 migrations apply 3fc82533-baf9-4e50-99dc-9fb38b80b0a7 --dir migrations",
     "db:migrate:production": "cf d1 migrations apply 4b5b02cc-a446-4026-b72d-4f973fc7a8fe --dir migrations",
+    "secrets:preview": "node scripts/put-secrets.ts preview",
+    "secrets:production": "node scripts/put-secrets.ts production",
     "prepare": "node scripts/build-client.ts"
   },
   "dependencies": {
@@ -22,7 +24,7 @@
     "drizzle-orm": "^0.45.4"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20261021.1",
+    "@cloudflare/workers-types": "^5.20261022.1",
     "cf": "1.0.0-beta.20",
     "esbuild": "0.28.2",
     "miniflare": "5.20261006.1-alpha",

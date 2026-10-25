@@ -70,11 +70,11 @@ export function toSessionKeyEvent(type: SessionKeyEvent['type'], event: Keyboard
 
 /** A `PixiScene` made of a scene session and the family view that draws it. See the module comment. */
 export class SessionScene<Frame, Intent> implements PixiScene {
-  public readonly identity: SceneIdentity;
+  private readonly sceneIdentity: { kind: SceneIdentity['kind']; family: SceneIdentity['family'] };
   /** The view's screenshot descriptor, when it has one. */
-  public readonly getStageInfo?: () => { container: Container; width: number; height: number };
+  private stageInfo: (() => { container: Container; width: number; height: number }) | undefined;
   public readonly controller: SceneController<Frame, Intent>;
-  private readonly view: FamilyView<Frame, Intent>;
+  private view: FamilyView<Frame, Intent>;
   private readonly keyTarget: SessionKeyTarget | undefined;
   private readonly now: () => number;
   private state: SceneState = 'idle';
@@ -91,10 +91,16 @@ export class SessionScene<Frame, Intent> implements PixiScene {
     this.view = view;
     this.keyTarget = options.keyTarget ?? defaultKeyTarget();
     this.now = options.now ?? defaultNow;
-    this.identity = { kind: session.kind, family: view.family };
-    if (view.getStageInfo !== undefined) {
-      this.getStageInfo = () => view.getStageInfo!();
-    }
+    this.sceneIdentity = { kind: session.kind, family: view.family };
+    this.stageInfo = view.getStageInfo !== undefined ? () => view.getStageInfo!() : undefined;
+  }
+
+  public get identity(): SceneIdentity {
+    return this.sceneIdentity;
+  }
+
+  public get getStageInfo(): (() => { container: Container; width: number; height: number }) | undefined {
+    return this.stageInfo;
   }
 
   /** The view's scene graph, which the host puts on the stage. */
@@ -159,6 +165,40 @@ export class SessionScene<Frame, Intent> implements PixiScene {
     this.controller.exit();
   }
 
+  /**
+   * Draws with `next` from here on. The session stays. While the scene is on the stage, the previous view is detached
+   * and `next` is attached in its place. The caller disposes the previous view once this resolves `true`.
+   */
+  public async replaceView(next: FamilyView<Frame, Intent>): Promise<boolean> {
+    if (this.state === 'disposed' || this.state === 'attaching') return false;
+    const previous = this.view;
+    if (previous === next) return true;
+    const host = this.host;
+    const entered = this.state === 'entered';
+    if (entered) {
+      previous.detach();
+      previous.root.parent?.removeChild(previous.root);
+    }
+    this.installView(next);
+    if (!entered || host === undefined) return true;
+    try {
+      await next.attach(host, this.emit);
+    } catch (error) {
+      next.detach();
+      this.installView(previous);
+      if (this.state === 'entered') {
+        await previous.attach(host, this.emit);
+        host.app.stage.addChild(previous.root);
+        host.syncCanvas(this.drawsOnCanvas);
+      }
+      throw error;
+    }
+    if (this.state !== 'entered' || this.view !== next) return false;
+    host.app.stage.addChild(next.root);
+    host.syncCanvas(this.drawsOnCanvas);
+    return true;
+  }
+
   /** Ends the scene: leaves the stage if on it, then disposes the view and the session. */
   public dispose(): void {
     if (this.state === 'disposed') return;
@@ -179,6 +219,12 @@ export class SessionScene<Frame, Intent> implements PixiScene {
     if ((this.state as SceneState) !== 'entered' || frame === undefined) return;
     this.view.draw(frame);
   };
+
+  private installView(view: FamilyView<Frame, Intent>): void {
+    this.view = view;
+    this.sceneIdentity.family = view.family;
+    this.stageInfo = view.getStageInfo !== undefined ? () => view.getStageInfo!() : undefined;
+  }
 
   /** The view's intents reach the session only while the scene is on the stage. */
   private readonly emit: IntentSink<Intent> = (intent) => {

@@ -3,7 +3,7 @@ import type { BeMusicDOMGameplayFrame } from '@be-music/player-skin-sdk';
 import { FrameElement } from '../base.ts';
 import { resolveGameplayPanels } from '../gameplay-data.ts';
 import { resolvePreviewInfoBox } from '../preview-layout.ts';
-import { baseStyles } from '../styles/base.ts';
+import { previewHost, previewTheme } from '../styles/preview-theme.ts';
 
 /**
  * The HUD of a preview: the chart's facts, score, combo, gauge and judgments beside or under the BGA
@@ -20,7 +20,8 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
     controlsHidden: { type: Boolean, attribute: 'controls-hidden', reflect: true },
   };
   static override styles: CSSResultGroup = [
-    baseStyles,
+    previewTheme,
+    previewHost,
     css`
       :host {
         display: block;
@@ -85,7 +86,7 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
         white-space: nowrap;
       }
       .muted {
-        color: var(--be-music-color-muted, #b8c7da);
+        color: var(--muted-foreground, #b8c7da);
       }
       .judgments {
         display: flex;
@@ -98,7 +99,7 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
         gap: 0.35em;
       }
       dt {
-        color: var(--be-music-color-muted, #b8c7da);
+        color: var(--muted-foreground, #b8c7da);
       }
       dd {
         margin: 0;
@@ -108,12 +109,6 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
         left: 50%;
         top: 50%;
         transform: translate(-50%, -50%);
-        display: grid;
-        place-items: center;
-        width: clamp(56px, 18cqh, 96px);
-        aspect-ratio: 1;
-        border-radius: 50%;
-        background: #05070bcc;
         pointer-events: auto;
       }
       .resume svg {
@@ -208,7 +203,8 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
       ${
         f.stage === 'paused'
           ? html`<button
-              class="resume"
+              class="btn resume"
+              data-size="icon-lg"
               part="resume"
               aria-label="Play"
               @click=${() => this.emit('pause-request', undefined)}
