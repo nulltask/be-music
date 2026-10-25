@@ -181,7 +181,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.browseTo(SONGS, 'Fixture A');
     await player.key('Enter');
     await player.waitFor((state) => (state.play?.seconds ?? 0) > 0.1, 'fresh manual play');
-    await player.key('z');
+    await player.key('KeyZ');
     await player.waitForResult(1);
     const fresh = await player.lastReplay();
     expect(fresh?.play.mode).toBe('manual');
@@ -259,7 +259,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText('continue.bme', '#TITLE Continue gauge\n#BPM 240\n#00111:01\n#00212:01\n');
     await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
-    await player.setOption(['Play options'], 'Gauge', 'DEATH');
+    await player.setOption(['Play options'], 'Gauge', 'HAZARD');
     await player.setOption(['Play options'], 'Gauge auto-shift (beatoraja)', 'CONTINUE');
     await player.cursorTo((bar) => bar.title === 'Continue gauge', 'continue chart');
     await player.key('Enter');
@@ -286,7 +286,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
 for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`measured FLOATING HI-SPEED couples cover edits and records mode switches on ${skin}`, async ({ player }) => {
     await player.open({ 'be-music.built-in-skin': skin });
-    await player.dropText('floating.bme', '#TITLE Floating speed\n#BPM 120\n#00103:F0\n#00411:01\n');
+    await player.dropText('floating.bme', '#TITLE Floating speed\n#BPM 120\n#00103:F0\n#00811:01\n');
     await player.setOption(['Developer'], 'Judgment windows', '????');
     await player.setOption(['Play options'], 'FLOATING HI-SPEED (AC 32 measured)', true);
     await player.setOption(['Play options'], 'Floating speed', 2.25);
@@ -321,7 +321,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
 for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`fixed display area ignores cover keys and restores floating time on ${skin}`, async ({ player }) => {
     await player.open({ 'be-music.built-in-skin': skin });
-    await player.dropText('fixed-area.bme', '#TITLE Fixed display area\n#BPM 120\n#00103:F0\n#00411:01\n');
+    await player.dropText('fixed-area.bme', '#TITLE Fixed display area\n#BPM 120\n#00103:F0\n#00811:01\n');
     await player.setOption(['Developer'], 'Judgment windows', '????');
     await player.setOption(['Play options'], 'FLOATING HI-SPEED (AC 32 measured)', true);
     await player.setOption(['Play options'], 'Floating speed', 2);
@@ -405,8 +405,9 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.setOption(['Play options'], 'Judge timing (beatoraja, ms)', 100);
     await player.cursorTo((bar) => bar.title === 'Auto timing', 'calibration chart');
     await player.key('Enter');
-    await player.waitFor((state) => (state.play?.seconds ?? 0) >= 2.04, 'a late manual key press');
-    await player.key('z');
+    // The note is at 2 s; the press lands some tens of ms after the poll sees the time, late but within GOOD.
+    await player.waitFor((state) => (state.play?.seconds ?? 0) >= 2, 'a late manual key press');
+    await player.key('KeyZ');
     await player.waitForResult(0);
     const replay = await player.lastReplay();
     expect(replay?.play.options).toMatchObject({ judgeTimingAutoAdjust: true, judgeTimingMs: 100 });
@@ -428,7 +429,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText('survival-to-groove.bms', '#TITLE Survival to groove\n#BPM 240\n#00111:01\n#00212:01\n');
     await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
-    await player.setOption(['Play options'], 'Gauge', 'DEATH');
+    await player.setOption(['Play options'], 'Gauge', 'HAZARD');
     await player.setOption(['Play options'], 'Gauge auto-shift (beatoraja)', 'SURVIVAL TO GROOVE');
     await player.cursorTo((bar) => bar.title === 'Survival to groove', 'survival chart');
     await player.key('Enter');
@@ -455,9 +456,13 @@ for (const [label, policy, effective] of [
   for (const skin of ['plain', 'native'] as const) {
     test(`${label} selects and replays a parallel gauge on ${skin}`, async ({ player }) => {
       await player.open({ 'be-music.built-in-skin': skin });
-      await player.dropText('gauge-selection.bms', '#TITLE Gauge selection\n#BPM 240\n#00111:01\n#00212:01\n');
+      // A key-6 note makes the chart 7KEY: 5KEY's EX-HARD scales its damage up on a sparse chart, past a POOR.
+      await player.dropText(
+        'gauge-selection.bms',
+        '#TITLE Gauge selection\n#BPM 240\n#00111:01\n#00212:01\n#00318:01\n',
+      );
       await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
-      await player.setOption(['Play options'], 'Gauge', 'GROOVE');
+      await player.setOption(['Play options'], 'Gauge', 'NORMAL');
       await player.setOption(['Play options'], 'Gauge auto-shift (beatoraja)', label);
       await player.setOption(['Play options'], 'Lowest auto-shift gauge', 'EASY');
       await player.cursorTo((bar) => bar.title === 'Gauge selection', 'gauge selection chart');
