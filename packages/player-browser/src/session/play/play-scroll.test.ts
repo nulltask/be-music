@@ -1,4 +1,4 @@
-import { expect, test } from 'vite-plus/test';
+import { expect, test, vi } from 'vite-plus/test';
 import { parseChart } from '@be-music/chart-parser';
 import { createReplayRecorder, parseReplay, serializeReplay } from '@be-music/player-engine/replay';
 import { createEmptyScore } from '@be-music/player-engine/ruleset';
@@ -63,4 +63,64 @@ test('scroll REMOVE shares the flattened coordinate map across notes, bar lines,
     expect(restored.preparedChart!.scrollModifierChanged).toBe(true);
   }
   expect(() => prepare({ judgeRuleset: 'lr2', scrollModifier: 'REMOVE' })).toThrow(/only for beatoraja/);
+});
+
+test('scroll ADD restores the exact generated curve and parameters without rerolling for replay or previous layout', () => {
+  const random = vi.spyOn(Math, 'random').mockReturnValue(0.25);
+  try {
+    const original = prepare({ judgeRuleset: 'beatoraja', scrollModifier: 'ADD', scrollSection: 4, scrollRate: 0.5 });
+    const timeline = original.preparedChart!.scrollModifierTimeline!;
+    expect(timeline).toEqual([
+      { beat: 0, speed: 1 },
+      { beat: 12, speed: 0.75 },
+    ]);
+    expect(original.timingResolver!.stopPoints.length).toBeGreaterThan(0);
+    expect(original.notes.map((note) => [note.beat, note.seconds, note.endBeat, note.endSeconds])).toEqual([
+      [4, 2, undefined, undefined],
+      [12, 5, 16, 6],
+    ]);
+    const replay = parseReplay(
+      serializeReplay(
+        createReplayRecorder({
+          json: entry.chart,
+          chart: original.preparedChart!,
+          play: {
+            mode: 'manual',
+            autoScratch: false,
+            judgeRuleset: 'beatoraja',
+            scrollModifier: 'ADD',
+            scrollSection: 4,
+            scrollRate: 0.5,
+            scrollModifierTimeline: timeline,
+            scrollModifierChanged: true,
+          },
+        }).finalize({ summary: { ...createEmptyScore(original.notes.length), fast: 0, slow: 0 } }),
+      ),
+    );
+    random.mockClear().mockReturnValue(0.99);
+    for (const options of [{ replay }, { fixedArrangement: replay }]) {
+      const restored = prepare({
+        judgeRuleset: 'beatoraja',
+        scrollModifier: 'OFF',
+        scrollSection: 1,
+        scrollRate: 0,
+        ...options,
+      });
+      expect(restored.preparedChart).toMatchObject({
+        scrollSection: 4,
+        scrollRate: 0.5,
+        scrollModifierTimeline: timeline,
+      });
+      expect(restored.resolvedPlayChart!.scroll).toEqual(timeline);
+      expect(restored.notes.map((note) => [note.beat, note.seconds, note.endBeat, note.endSeconds])).toEqual(
+        original.notes.map((note) => [note.beat, note.seconds, note.endBeat, note.endSeconds]),
+      );
+    }
+    expect(random).not.toHaveBeenCalled();
+    delete replay.play.scrollModifierTimeline;
+    expect(() => prepare({ judgeRuleset: 'beatoraja', replay })).toThrow(/effective timeline/);
+    expect(() => prepare({ judgeRuleset: 'lr2', scrollModifier: 'ADD' })).toThrow(/only for beatoraja/);
+  } finally {
+    random.mockRestore();
+  }
 });

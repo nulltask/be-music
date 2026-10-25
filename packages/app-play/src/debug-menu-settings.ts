@@ -89,6 +89,8 @@ export interface DebugMenuSettings {
   longNoteRate: number;
   mineModifier: PlayerGUIState['mineModifier'];
   scrollModifier: PlayerGUIState['scrollModifier'];
+  scrollSection: number;
+  scrollRate: number;
   gaugeAutoShift: PlayerGUIState['gaugeAutoShift'];
   bottomShiftableGauge: PlayerGUIState['bottomShiftableGauge'];
   autoScratch1P: boolean;
@@ -242,6 +244,8 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'judgeAlgorithm', oneOf(raw.judgeAlgorithm, ['combo', 'duration', 'lowest'] as const));
   assign(settings, 'gaugeAutoShift', resolvePlayOptionValue('gaugeAutoShift', raw.gaugeAutoShift));
   assign(settings, 'bottomShiftableGauge', resolvePlayOptionValue('bottomShiftableGauge', raw.bottomShiftableGauge));
+  assign(settings, 'scrollSection', resolvePlayOptionValue('scrollSection', raw.scrollSection));
+  assign(settings, 'scrollRate', resolvePlayOptionValue('scrollRate', raw.scrollRate));
   assign(settings, 'scrollModifier', resolvePlayOptionValue('scrollModifier', raw.scrollModifier));
   assign(settings, 'mineModifier', resolvePlayOptionValue('mineModifier', raw.mineModifier));
   assign(settings, 'longNoteRate', resolvePlayOptionValue('longNoteRate', raw.longNoteRate));
@@ -462,6 +466,8 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('longNoteRate');
   assignState('mineModifier');
   assignState('scrollModifier');
+  assignState('scrollSection');
+  assignState('scrollRate');
   assignState('gaugeAutoShift');
   assignState('bottomShiftableGauge');
   assignState('autoScratch1P');
@@ -552,6 +558,8 @@ export function captureDebugMenuSettings(
     longNoteRate: state.longNoteRate,
     mineModifier: state.mineModifier,
     scrollModifier: state.scrollModifier,
+    scrollSection: state.scrollSection,
+    scrollRate: state.scrollRate,
     gaugeAutoShift: state.gaugeAutoShift,
     bottomShiftableGauge: state.bottomShiftableGauge,
     autoScratch1P: state.autoScratch1P,

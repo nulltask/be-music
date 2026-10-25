@@ -148,6 +148,8 @@ export async function createPlaySession(
   // Effective calibration is local to this run, even when the caller reuses or freezes its settings.
   options = { ...options };
   options.scrollModifier ??= options.preparedChart?.scrollModifierApplied;
+  options.scrollSection ??= options.preparedChart?.scrollSection;
+  options.scrollRate ??= options.preparedChart?.scrollRate;
   if (options.scrollModifier !== undefined && options.scrollModifier !== 'OFF' && options.judgeRuleset !== 'beatoraja')
     throw new RangeError('Scroll modification is available only for beatoraja.');
   const { mode } = strategy;
@@ -199,6 +201,9 @@ export async function createPlaySession(
         mineModifier: options.mineModifier,
         mineModifierPlacements: options.mineModifierPlacements,
         scrollModifier: options.scrollModifier,
+        scrollSection: options.scrollSection,
+        scrollRate: options.scrollRate,
+        scrollModifierTimeline: options.scrollModifierTimeline,
       },
       realtimeAudioEndSeconds,
       Math.random,
@@ -319,6 +324,13 @@ export async function createPlaySession(
               ? {
                   scrollModifier: options.scrollModifier,
                   scrollModifierChanged: playbackChart.scrollModifierChanged ?? false,
+                  ...(options.scrollModifier === 'ADD'
+                    ? {
+                        scrollSection: playbackChart.scrollSection,
+                        scrollRate: playbackChart.scrollRate,
+                        scrollModifierTimeline: playbackChart.scrollModifierTimeline,
+                      }
+                    : {}),
                 }
               : {}),
             ...(options.judgeTimingMs !== undefined || options.judgeTimingAutoAdjust !== undefined

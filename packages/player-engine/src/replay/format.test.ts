@@ -646,3 +646,42 @@ test('scroll modifier selection and actual-change fact round trip independently'
     /scrollModifierChanged/,
   );
 });
+
+test('scroll ADD preserves its parameters and effective curve, rejecting incomplete or malformed replay data', () => {
+  const replay = makeReplay();
+  Object.assign(replay.play, {
+    scrollModifier: 'ADD',
+    scrollSection: 4,
+    scrollRate: 0.5,
+    scrollModifierTimeline: [
+      { beat: 0, speed: 1 },
+      { beat: 12, speed: 0.75 },
+    ],
+  });
+  expect(parseReplay(serializeReplay(replay)).play).toMatchObject({
+    scrollModifier: 'ADD',
+    scrollSection: 4,
+    scrollRate: 0.5,
+    scrollModifierTimeline: replay.play.scrollModifierTimeline,
+  });
+  for (const changes of [
+    { scrollSection: 0 },
+    { scrollSection: 1025 },
+    { scrollSection: 1.5 },
+    { scrollRate: -0.1 },
+    { scrollRate: 1.1 },
+    { scrollModifierTimeline: undefined },
+    { scrollModifierTimeline: [] },
+    { scrollModifierTimeline: [{ beat: 1, speed: 1 }] },
+    { scrollModifierTimeline: [{ beat: -1, speed: 1 }] },
+    { scrollModifierTimeline: [{ beat: 0, speed: 'fast' }] },
+    {
+      scrollModifierTimeline: [
+        { beat: 0, speed: 1 },
+        { beat: 12, speed: 1 },
+        { beat: 4, speed: 1 },
+      ],
+    },
+  ])
+    expect(() => parseReplay({ ...replay, play: { ...replay.play, ...changes } })).toThrow();
+});

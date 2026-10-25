@@ -36,6 +36,8 @@ export type GUIPlayOptions = Pick<
   | 'floatingHiSpeed'
   | 'fixedDisplayArea'
   | 'judgeAlgorithm'
+  | 'scrollSection'
+  | 'scrollRate'
   | 'scrollModifier'
   | 'mineModifier'
   | 'gaugeAutoShift'
@@ -89,6 +91,8 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     longNoteRate: state.longNoteRate,
     mineModifier: state.mineModifier,
     scrollModifier: state.scrollModifier,
+    scrollSection: state.scrollSection,
+    scrollRate: state.scrollRate,
     gaugeAutoShift: state.gaugeAutoShift,
     bottomShiftableGauge: state.bottomShiftableGauge,
     autoScratch1P: state.autoScratch1P,
@@ -147,6 +151,8 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.longNoteRate = options.longNoteRate;
   state.mineModifier = options.mineModifier;
   state.scrollModifier = options.scrollModifier;
+  state.scrollSection = options.scrollSection;
+  state.scrollRate = options.scrollRate;
   state.gaugeAutoShift = options.gaugeAutoShift;
   state.bottomShiftableGauge = options.bottomShiftableGauge;
   state.autoScratch1P = options.autoScratch1P;
@@ -186,6 +192,8 @@ export class PlayOptionsService {
       longNoteRate: play.longNoteRate ?? play.options?.longNoteRate,
       mineModifier: play.mineModifier ?? play.options?.mineModifier,
       scrollModifier: play.scrollModifier ?? play.options?.scrollModifier,
+      scrollSection: play.scrollSection ?? play.options?.scrollSection,
+      scrollRate: play.scrollRate ?? play.options?.scrollRate,
     });
     const changes: Partial<PlayOptions> = {};
     for (const key of ARRANGEMENT_OPTIONS) Object.assign(changes, { [key]: source[key] });
@@ -237,4 +245,6 @@ const ARRANGEMENT_OPTIONS = [
   'longNoteRate',
   'mineModifier',
   'scrollModifier',
+  'scrollSection',
+  'scrollRate',
 ] as const satisfies readonly (keyof PlayOptions)[];

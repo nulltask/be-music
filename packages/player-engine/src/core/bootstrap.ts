@@ -1,5 +1,5 @@
 import { prepareMineModifier, type MineModifier } from './mine-modifier.ts';
-import { removeScrollChanges, type ScrollModifier } from './scroll-modifier.ts';
+import { addScrollChanges, removeScrollChanges, type ScrollModifier } from './scroll-modifier.ts';
 import { addLongNotes, clampLongNoteRate, removeLongNoteTails, type LongNoteModifier } from './long-note-modifier.ts';
 import { throwIfAborted } from '@be-music/shared-utils/core';
 import { resolveChart, type ResolvedChart } from '@be-music/chart-model';
@@ -50,7 +50,10 @@ export function resolveDefaultBaseDir(): string {
 
 export interface PreparedPlaybackChartData {
   scrollModifierApplied?: ScrollModifier;
-  /** Whether REMOVE actually changed BPM, STOP or SCROLL; separate from the selected option. */
+  scrollSection?: number;
+  scrollRate?: number;
+  scrollModifierTimeline?: import('@be-music/chart-model').ScrollTimelinePoint[];
+  /** Whether the selected modifier actually changed BPM, STOP or SCROLL; separate from the selected option. */
   scrollModifierChanged?: boolean;
   notes: TimedPlayableNote[];
   laneSoundNotes: TimedPlayableNote[];
@@ -200,11 +203,24 @@ export function preparePlaybackChart(
     | 'mineModifier'
     | 'mineModifierPlacements'
     | 'scrollModifier'
+    | 'scrollSection'
+    | 'scrollRate'
+    | 'scrollModifierTimeline'
   > = {},
   auxiliaryPlaybackEndSeconds = 0,
   random?: () => number,
 ): PreparedPlaybackChartData {
-  const scrollResult = options.scrollModifier === 'REMOVE' ? removeScrollChanges(resolved) : undefined;
+  const scrollAddition =
+    options.scrollModifier === 'ADD'
+      ? addScrollChanges(resolved, {
+          section: options.scrollSection,
+          rate: options.scrollRate,
+          timeline: options.scrollModifierTimeline,
+          random,
+        })
+      : undefined;
+  const scrollResult =
+    scrollAddition ?? (options.scrollModifier === 'REMOVE' ? removeScrollChanges(resolved) : undefined);
   resolved = scrollResult?.chart ?? resolved;
   const playVariant = resolved.playVariant;
   const notes = resolved.notes.map(toTimedPlayableNote);
@@ -270,6 +286,13 @@ export function preparePlaybackChart(
     inputTokenToChannels,
     shadowedNotes: resolved.shadowedNotes.map(toTimedPlayableNote),
     resolvedChart: resolved,
+    ...(scrollAddition
+      ? {
+          scrollSection: scrollAddition.section,
+          scrollRate: scrollAddition.rate,
+          scrollModifierTimeline: scrollAddition.timeline,
+        }
+      : {}),
     ...(options.scrollModifier !== undefined
       ? { scrollModifierApplied: options.scrollModifier, scrollModifierChanged: scrollResult?.changed ?? false }
       : {}),

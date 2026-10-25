@@ -149,6 +149,8 @@ describe('captureDebugMenuSettings', () => {
       longNoteRate: 1,
       mineModifier: 'OFF',
       scrollModifier: 'REMOVE',
+      scrollSection: 8,
+      scrollRate: 0.25,
       gaugeAutoShift: 'NONE',
       bottomShiftableGauge: 'ASSIST-EASY',
       autoScratch1P: true,
@@ -335,4 +337,11 @@ test('scroll REMOVE parses and restores independently of visual CONSTANT', () =>
   overlayDebugMenuSettings(state, document!.settings);
   expect(state.scrollModifier).toBe('REMOVE');
   expect(state.visualConstant).toBe(false);
+});
+
+test('scroll ADD parameters persist with source bounds', () => {
+  const settings = parseDebugMenuSettingsDocument(
+    JSON.stringify({ version: 1, updatedAt: 1, settings: { scrollModifier: 'ADD', scrollSection: 0, scrollRate: 5 } }),
+  )!.settings;
+  expect(settings).toMatchObject({ scrollModifier: 'ADD', scrollSection: 1, scrollRate: 1 });
 });
