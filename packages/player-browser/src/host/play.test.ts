@@ -25,6 +25,7 @@ import type { SessionKeyTarget } from '../session/session-scene.ts';
 import type { BeatorajaRenderContext } from '../skin/beatoraja/render.ts';
 import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
 import { phantomSkin } from '../skins/phantom/index.ts';
+import { plainSkin } from '../skins/plain/index.ts';
 import { resolveBeatorajaPlayTiming } from '../view/beatoraja/play-view.ts';
 import { createDecideScene } from './decide.ts';
 import type { BeatorajaKit } from './family-kit.ts';
@@ -110,6 +111,7 @@ function createFakeHost() {
     createElement,
   });
   const canvas = { ...target(), style: { touchAction: 'auto' }, focus: vi.fn() };
+  const stageChildren: unknown[] = [];
   const host = {
     app: {
       ticker: {
@@ -119,9 +121,19 @@ function createFakeHost() {
       canvas,
       screen: { width: 1280, height: 720 },
       renderer: { resolution: 1 },
-      stage: { children: [] },
+      stage: {
+        children: stageChildren,
+        addChild: (child: unknown) => {
+          stageChildren.push(child);
+        },
+        removeChild: (child: unknown) => {
+          const index = stageChildren.indexOf(child);
+          if (index >= 0) stageChildren.splice(index, 1);
+        },
+      },
     },
     setStageOrientation: vi.fn(),
+    syncCanvas: vi.fn(),
     isDisposed: () => false,
     onAfterRender: () => () => undefined,
   } as unknown as PixiSceneHost;
@@ -156,6 +168,26 @@ describe('createPlayScene', () => {
     expect(scene.progress()).toBeUndefined();
     scene.setHiSpeed(3);
     expect(scene.getHiSpeed()).toBe(3);
+    scene.dispose();
+  });
+
+  it('swaps the drawing family during a play and keeps the chart', async () => {
+    const fake = createFakeHost();
+    const { scene } = create({ host: fake.host });
+    await scene.prepare();
+    await scene.enter(fake.host);
+    scene.start();
+    const title = scene.progress()?.chart.title;
+    const lr2 = lr2PlaySkin();
+    await scene.replaceFamily({ family: 'lr2', skin: lr2 });
+    expect(scene.identity).toEqual({ kind: 'play', family: 'lr2' });
+    expect(scene.progress()?.chart.title).toBe(title);
+    await scene.replaceFamily({ family: 'built-in', skin: plainSkin });
+    expect(scene.identity).toEqual({ kind: 'play', family: 'built-in' });
+    expect(scene.progress()?.chart.title).toBe(title);
+    await scene.replaceFamily({ family: 'lr2', skin: lr2 });
+    expect(scene.identity.family).toBe('lr2');
+    expect(scene.progress()?.chart.title).toBe(title);
     scene.dispose();
   });
 

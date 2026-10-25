@@ -85,10 +85,23 @@ export class BeMusicGameplayHUDElement extends FrameElement<BeMusicDOMGameplayFr
           ></progress>
         </div>
         <div class="actions" part="actions">
-          <button @click=${() => this.emit('pause-request', undefined)}>
+          <button class="btn" data-size="sm" @click=${() => this.emit('pause-request', undefined)}>
             ${f.stage === 'paused' ? 'Resume' : 'Pause'}</button
-          ><button @click=${() => this.emit('retry-request', undefined)}>Retry</button
-          ><button @click=${() => this.emit('quit-request', undefined)}>Back</button><slot name="actions"></slot>
+          ><button
+            class="btn"
+            data-size="sm"
+            data-variant="outline"
+            @click=${() => this.emit('retry-request', undefined)}
+          >
+            Retry</button
+          ><button
+            class="btn"
+            data-size="sm"
+            data-variant="outline"
+            @click=${() => this.emit('quit-request', undefined)}
+          >
+            Back</button
+          ><slot name="actions"></slot>
         </div>
         <details
           class="hud-details"

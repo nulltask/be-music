@@ -1,0 +1,34 @@
+/* Accounts and Dashboard. Tailwind CSS v4 and Basecoat, the same components as the Leaderboard.
+   scripts/build-css.ts compiles this into src/styles.generated.ts. */
+@import 'tailwindcss' source(none);
+@source './';
+@source '../../app-accounts/src';
+@source '../../app-dashboard/src';
+@import 'basecoat-css';
+
+/* Basecoat's dark variant matches `html.dark`. These pages cannot set that class, so it follows the system scheme.
+   scripts/build-css.ts repeats the `.dark` token block under the same query. */
+@custom-variant dark (@media (prefers-color-scheme: dark));
+
+@layer base {
+  html {
+    color-scheme: light;
+    font-variant-numeric: tabular-nums;
+    /* A skip to #main lands below the sticky header. */
+    scroll-padding-top: 5rem;
+  }
+}
+
+/* The last place a header menu tries (header.ts): under its button across the whole width, kept a page gutter in
+   from either edge, for when neither side of the button has room. */
+@position-try --header-menu-span {
+  position-area: block-end span-all;
+  margin: 6px 1rem;
+}
+
+/* The header's account, Play and language controls. Basecoat's `.btn:active:not([aria-haspopup])` shifts a pressed
+   button down 1px. These stay put. The focus ring (`.btn:focus-visible`) is unchanged, and other page buttons still
+   use Basecoat's press. */
+header nav :is(a, button).btn:active {
+  translate: none;
+}

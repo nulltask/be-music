@@ -164,6 +164,9 @@ export interface BeatorajaPlayRuntime {
   readonly judgeWindows: BeMusicJudgeWindows | undefined;
   readonly disposed: boolean;
   playClock(): number;
+  currentSeconds(): number;
+  /** True once the play's intro timeline has started. Absent on a stand-in that never starts. */
+  hasSceneStarted?(): boolean;
   isIntroPlaying(): boolean;
   resolveChartDurationSeconds(): number;
 }
@@ -259,6 +262,19 @@ export class BeatorajaPlayView implements PlayView {
   /** Keeps `host` for the GPU upload of what the play loads before the view is attached. */
   public prepareOn(host: PixiSceneHost): void {
     this.uploadHost = host;
+  }
+
+  /**
+   * Starts the skin's scene timers from the clock when this view joins a play already running. Those moments were
+   * delivered to the view it replaces; without them a beatoraja skin stays on its loading frame.
+   */
+  public joinRunningPlay(): void {
+    const bridge = this.bridge;
+    if (bridge === undefined || this.play.hasSceneStarted?.() !== true) return;
+    const now = this.play.playClock();
+    const chartStarted = !this.play.isIntroPlaying();
+    const at = chartStarted ? now - Math.max(0, this.play.currentSeconds()) * 1000 : now;
+    bridge.joinRunning(at, chartStarted);
   }
 
   /** Toggles the inspection overlay without restarting the play. */

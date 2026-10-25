@@ -15,9 +15,11 @@ export class BeMusicDecideScreenElement extends FrameElement<BeMusicDOMDecideFra
         <p class="muted">${f.chart.artist ?? ''}</p>
         <progress max="1" .value=${f.progress ?? 0} aria-label="Chart loading"></progress>
         <div class="actions">
-          <button class="primary" ?disabled=${!f.inputReady} @click=${() => this.emit('continue-request', undefined)}>
+          <button class="btn" ?disabled=${!f.inputReady} @click=${() => this.emit('continue-request', undefined)}>
             Start</button
-          ><button @click=${() => this.emit('cancel-request', undefined)}>Back</button>
+          ><button class="btn" data-variant="outline" @click=${() => this.emit('cancel-request', undefined)}>
+            Back
+          </button>
         </div>
         <slot></slot>
       </div>

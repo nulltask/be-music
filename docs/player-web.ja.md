@@ -155,7 +155,7 @@ flowchart TD
 
 **起動処理。** `main.ts` はページのマークアップを書き、ブラウザーの互換性チェックを最初に行い（レンダラーを起動できないブラウザーでも理由を表示するためです）、スマートフォンとタブレットを判別して印を付け、Help のモーダルをつなぎます。UI のフォントの準備ができたらアプリを作り、その上に[テスト用フック](./course-checklist.ja.md#テスト用フック)を取り付けてから始めます。
 
-**構成の根。** `app/app.ts`（`PlayerWebApp`）はサービス、シーンルーター、ルートを作り、それらどうし、Debug Menu、Leaderboard をつなぎます。プレイ中のロックもここが持ちます。プレイが始まるときに Auto-save play history の設定を確定し、プレイが確定したオプション、スキンの操作、Submit to Leaderboard を無効にします。リザルトが出るか選曲画面に戻ると解除します。`app/shell.ts` は、stage を載せたあと、stage のまわりのページをシーンに合わせます。シェルの `in-gameplay` の状態とそれで止めるピンチズーム、タッチ用の一時停止と Quit のボタン、キャンバスのダブルクリックでのフルスクリーンとその `Esc` の扱いです。
+**構成の根。** `app/app.ts`（`PlayerWebApp`）はサービス、シーンルーター、ルートを作り、それらどうし、Debug Menu、Leaderboard をつなぎます。プレイ中のロックもここが持ちます。プレイが始まるときに Auto-save play history の設定を確定し、プレイが確定したオプション、Skin system 以外のスキンの操作、Submit to Leaderboard を無効にします。リザルトが出るか選曲画面に戻ると解除します。Skin system は譜面を続けたまま描画する family を切り替えます。`app/shell.ts` は、stage を載せたあと、stage のまわりのページをシーンに合わせます。シェルの `in-gameplay` の状態とそれで止めるピンチズーム、タッチ用の一時停止と Quit のボタン、キャンバスのダブルクリックでのフルスクリーンとその `Esc` の扱いです。
 
 **レイヤー。** サービスは状態と規則を持ち、アプリから必要なものは deps として受け取ります。Tweakpane、`ui/`、`app/` のモジュールは、型でも import しません（[レイヤーの規則とサイズの上限](./architecture.ja.md#レイヤーの規則とサイズの上限)）。ルートと Debug Menu はサービスを通して働き、ルートが scene を stage に載せるのは、すべての切り替えを受け持つシーンルーターを通してだけです（[Scene lifecycle](#scene-lifecycle)、[ADR 0006](./adr/0006-scene-router.ja.md)）。
 
@@ -368,7 +368,7 @@ Web の player では、scene の所有者はシーンルーター（`app/scene-
 - **プレイは stage の外で読み込みます。** `prepare()` は stage にも listener にも触れずに譜面を parse して音声を decode するので、player は decide 画面の裏でプレイを準備します（ルーターの `prepare`）。decide 画面が終わると `setScene(play)` で decide scene を exit して、その裏で準備したプレイを enter し、`start()` で始めます。decide 画面のあいだに押した key は decide 画面にだけ届きます。decide 画面、プレイ、その読み込みは 1 回の移動を共有するので、Escape で decide 画面を離れると裏で準備したプレイも手放し、読み込みに失敗したときは decide 画面の `#RANDOM` の抽選（`preResolved`）でプレイを作り直します。decide 画面がないときは、player はプレイを作るあいだ select 画面を stage から外し、先にプレイを表示します。表示中に走る `prepare()` は読み込み中の playfield を描きます。
 - **プレイの音は画面より長く残ります。** gameplay scene の `exit()` は描画と input を止めますが音は止めないので、最後の音が鳴っているあいだに result を表示できます。ルーターはそのあとプレイを `preserveAudioTail` で dispose します。ステージごとの result を飛ばすコースのステージも同じように stage を離れ、あいだに画面を挟まずに次のステージを表示します。
 - **decide と result の scene は使い捨てです。** もう一度 enter すると timeline を最初から始めます。ルーターは別の scene が stage に載ると dispose します。次のステージやリトライへ進む result 画面は先に stage を離れるので、次のプレイの読み込み中に key を受けません。
-- **外からの移動は、進行中の流れを終わらせます。** scene が求めた移動は、その流れを続けます。プレイの result、result からの次のステージやリトライ、コースの decide 画面とステージがそうです（`continuesRun`）。それ以外の移動（ドロップ、skin やテーマの変更、ファイル・URL・リプレイの読み込み）は流れを中断します。ルーターは移動の始まりに プレイヤーの `onInterrupt` を呼び、player はコースの実行を終えます。そのため次の単曲のプレイがステージとして扱われることはなく、select 画面はコースのバーに戻ります。Debug Menu の skin の項目（Skin system、Built-in skin、Skin effects、LR2 theme、Add skin のボタン）は select 画面へ戻ってしまうので、プレイ中は無効にします。ドロップはプレイ中でもできます。
+- **外からの移動は、進行中の流れを終わらせます。** scene が求めた移動は、その流れを続けます。プレイの result、result からの次のステージやリトライ、コースの decide 画面とステージがそうです（`continuesRun`）。それ以外の移動（ドロップ、skin やテーマの変更、ファイル・URL・リプレイの読み込み）は流れを中断します。ルーターは移動の始まりにプレイヤーの `onInterrupt` を呼び、プレイヤーはコースの実行を終えます。そのため次の単曲のプレイがステージとして扱われることはなく、select 画面はコースのバーに戻ります。Debug Menu の skin の項目のうち、select 画面へ戻ってしまうもの（Built-in skin、Skin effects、LR2 theme、Add skin のボタン）はプレイ中は無効にします。Skin system は有効なままです。プレイ中に LR2 または beatoraja のスキンをドロップしても、譜面を終わらせずに描画する family を切り替えます。譜面も一緒にドロップしたときは選曲画面へ戻ります。選曲画面はプレイから戻ったときにその family になります。
 
 ```mermaid
 sequenceDiagram

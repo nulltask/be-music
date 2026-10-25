@@ -15,7 +15,10 @@ export interface PlayLockControls {
   readonly playOptions: readonly LockableControl[];
   /** "Tempo (%)": one of the play options, which a play whose tempo changes live keeps enabled. */
   readonly tempo: LockableControl | undefined;
-  /** Skin system, LR2 theme, Built-in skin, Skin effects and the Add skin buttons; one not made yet is `undefined`. */
+  /**
+   * LR2 theme, Built-in skin, Skin effects and the Add skin buttons. Skin system is not here: during a play it swaps
+   * the drawing family and keeps the chart. One not made yet is `undefined`.
+   */
   readonly skin: readonly (LockableControl | undefined)[];
 }
 
@@ -68,9 +71,10 @@ export class PlayLock {
   }
 
   /**
-   * Disables the Debug Menu's skin controls for a play, or enables them again: Skin system, Built-in skin, Skin
-   * effects, the LR2 theme picker and the Add skin buttons all make the select screen again, which would end the play.
-   * A drop during a play still can; the router then ends the course run (`CourseRunService.endRun`).
+   * Disables the Debug Menu's skin controls for a play, or enables them again: Built-in skin, Skin effects, the LR2
+   * theme picker and the Add skin buttons make the select screen again, which would end the play. Skin system is not
+   * among them. A drop that opens the select screen still can, and the router then ends the course run
+   * (`CourseRunService.endRun`). A skin dropped on its own switches the play's family instead.
    */
   private setSkinControlsLocked(controls: PlayLockControls, locked: boolean): void {
     this.skinLocked = locked;

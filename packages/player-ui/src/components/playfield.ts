@@ -15,7 +15,7 @@ export class BeMusicPlayfieldElement extends FrameElement<BeMusicGameplayFrame> 
       inset: 0;
       container-type: size;
       pointer-events: none;
-      background: var(--be-music-letterbox-background, #05070b);
+      background: var(--be-music-letterbox-background, #09090b);
     }
     .stage {
       position: absolute;
@@ -24,7 +24,7 @@ export class BeMusicPlayfieldElement extends FrameElement<BeMusicGameplayFrame> 
       transform: translate(-50%, -50%);
       width: min(100cqw, calc(100cqh * var(--stage-ratio, 1)));
       height: min(100cqh, calc(100cqw / var(--stage-ratio, 1)));
-      background: var(--be-music-color-background, #10151f);
+      background: var(--background, #09090b);
     }
     .stage > * {
       position: absolute;

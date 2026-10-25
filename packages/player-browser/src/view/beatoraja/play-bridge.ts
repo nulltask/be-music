@@ -476,6 +476,18 @@ export class BeatorajaPlayBridge {
    * Starts the scene's timers (scene start, preview: ModernChic's lane reveal) on the first frame shown, or when the
    * play's scene starts, whichever comes first.
    */
+  /**
+   * The scene, ready and play timers a view that joins mid-play starts at `atMs` (the play clock when the chart
+   * started, or now while the intro is still running). Later frames move the play timer onto the engine clock.
+   */
+  public joinRunning(atMs: number, chartStarted: boolean): void {
+    this.startScene(atMs);
+    if (!chartStarted) return;
+    this.markLoaded(atMs);
+    if (!this.timerStartedAt.has(TIMER_STARTINPUT)) this.timerStartedAt.set(TIMER_STARTINPUT, atMs);
+    if (!this.timerStartedAt.has(TIMER_PLAY)) this.timerStartedAt.set(TIMER_PLAY, atMs);
+  }
+
   public startScene(atMs: number): void {
     if (this.sceneStarted) return;
     this.sceneStarted = true;

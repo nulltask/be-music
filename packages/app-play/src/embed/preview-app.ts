@@ -318,7 +318,7 @@ export class PreviewApp {
 
   private showMessage(text: string): void {
     const message = document.createElement('p');
-    message.className = 'preview-message';
+    message.className = 'preview-message text-muted-foreground text-sm';
     message.textContent = text;
     this.showOverlay(message);
   }
@@ -457,9 +457,11 @@ class LoadingProgress {
 
   public constructor() {
     this.element = document.createElement('div');
-    this.element.className = 'preview-loading';
+    this.element.className = 'card preview-loading gap-2 p-4';
     this.label = document.createElement('p');
+    this.label.className = 'text-muted-foreground text-sm';
     this.bar = document.createElement('progress');
+    this.bar.className = 'progress';
     this.bar.setAttribute('aria-label', 'Loading track');
     this.element.append(this.label, this.bar);
     this.downloading(0, 0);

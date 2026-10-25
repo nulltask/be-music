@@ -1,3 +1,4 @@
+import tailwindcss from '@tailwindcss/vite';
 import { getBuildInfo } from '../../scripts/release/build-info.ts';
 import { createRequire } from 'node:module';
 import { readFile, realpath } from 'node:fs/promises';
@@ -403,6 +404,7 @@ function acknowledgementsPlugin(roots: string[]): Plugin {
 
 export default defineConfig({
   plugins: [
+    tailwindcss(),
     ffmpegCorePlugin(ffmpegCoreESMDir),
     urlLoadProxyPlugin(),
     // Build-time acknowledgement collector. Walks the runtime dep tree from the player + `player-web` package.json entry

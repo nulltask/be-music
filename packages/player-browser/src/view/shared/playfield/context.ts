@@ -139,6 +139,8 @@ export interface PlayfieldRuntime {
   readonly exitFadeOutMs: number;
   readonly exitFadeStartedAt: number | undefined;
   playClock(): number;
+  /** True once the play's intro timeline has started. A view attached later seeds its skin timers from the clock. */
+  hasSceneStarted?(): boolean;
   currentSeconds(): number;
   currentBeat(seconds: number): number;
   nowBPM(seconds: number): number | undefined;

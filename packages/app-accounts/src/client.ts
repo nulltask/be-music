@@ -49,6 +49,15 @@ document.addEventListener('click', (event) => {
       case 'discord':
       case 'google':
         return done(await auth.signIn.social({ provider: button.dataset.action, callbackURL: '/account' }));
+      case 'link-discord':
+      case 'link-google':
+        return done(
+          await auth.linkSocial({
+            provider: button.dataset.action === 'link-discord' ? 'discord' : 'google',
+            callbackURL: '/account',
+            errorCallbackURL: '/account',
+          }),
+        );
       case 'continue':
         return done(
           await auth.$fetch('/oauth2/continue', { method: 'POST', body: { selected: true, oauth_query: query } }),

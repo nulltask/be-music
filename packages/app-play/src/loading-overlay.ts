@@ -8,7 +8,7 @@ import { phaseLabels } from './player-utils.ts';
 export interface LoadingOverlayElements {
   loadingOverlay: HTMLDivElement;
   loadingLabel: HTMLDivElement;
-  loadingBarFill: HTMLDivElement;
+  loadingBarFill: HTMLElement;
   loadingCounter: HTMLDivElement;
 }
 

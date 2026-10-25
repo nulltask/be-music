@@ -283,6 +283,11 @@ export class BuiltInPlayView
     return uploadTextures(this.host?.app.renderer, textures, isCancelled);
   }
 
+  /** Whether this view is drawing `skin`. A different be-music skin replaces the view. */
+  public drawsSkin(skin: BuiltInKit['skin']): boolean {
+    return this.kit.skin === skin;
+  }
+
   /** Takes the player's new kit (skin settings, effects); the next frame draws with them. */
   public updateKit(kit: BuiltInKit): void {
     this.kit = kit;

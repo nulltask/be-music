@@ -1,9 +1,11 @@
-import { html, nothing, type TemplateResult } from 'lit';
+import { html, nothing, type CSSResultGroup, type TemplateResult } from 'lit';
 import { DataElement } from '../base.ts';
 import type { BeMusicSettingsData } from '../models.ts';
+import { previewHost, previewTheme } from '../styles/preview-theme.ts';
 import { stats } from '../templates.ts';
 
 export class BeMusicPlaySettingsElement extends DataElement<BeMusicSettingsData> {
+  static override styles: CSSResultGroup = [previewTheme, previewHost];
   protected override render(): TemplateResult | typeof nothing {
     const d = this.data;
     if (!d) return nothing;
