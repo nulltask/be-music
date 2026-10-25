@@ -189,24 +189,31 @@ export class Demo {
     what: string,
     timeoutMs = 90_000,
   ): Promise<TestHookState> {
-    return this.page.evaluate(
-      ({ source, arg, code, key, what, timeoutMs }) =>
-        new Promise<TestHookState>((resolve, reject) => {
-          const holds = new Function(`return (${source});`)() as (state: TestHookState, arg: unknown) => boolean;
-          const deadline = performance.now() + timeoutMs;
-          const step = (): void => {
-            const state = window.__beMusicTest?.state();
-            if (state !== undefined && holds(state, arg)) {
-              for (const type of ['keydown', 'keyup'])
-                window.dispatchEvent(new KeyboardEvent(type, { code, key, bubbles: true, cancelable: true }));
-              resolve(state);
-            } else if (performance.now() > deadline) reject(new Error(`timed out waiting for ${what}`));
-            else requestAnimationFrame(step);
-          };
-          step();
-        }),
-      { source: predicate.toString(), arg, code, key: KEY_OF_CODE[code] ?? code, what, timeoutMs },
+    // The predicate becomes a function in the page, handed to the polling loop below as an argument.
+    const holds = await this.page.evaluateHandle<(state: TestHookState, arg: A) => boolean>(
+      `(${predicate.toString()})`,
     );
+    try {
+      return await this.page.evaluate(
+        ({ holds, arg, code, key, what, timeoutMs }) =>
+          new Promise<TestHookState>((resolve, reject) => {
+            const deadline = performance.now() + timeoutMs;
+            const step = (): void => {
+              const state = window.__beMusicTest?.state();
+              if (state !== undefined && holds(state, arg as A)) {
+                for (const type of ['keydown', 'keyup'])
+                  window.dispatchEvent(new KeyboardEvent(type, { code, key, bubbles: true, cancelable: true }));
+                resolve(state);
+              } else if (performance.now() > deadline) reject(new Error(`timed out waiting for ${what}`));
+              else requestAnimationFrame(step);
+            };
+            step();
+          }),
+        { holds, arg, code, key: KEY_OF_CODE[code] ?? code, what, timeoutMs },
+      );
+    } finally {
+      await holds.dispose();
+    }
   }
 
   /**
