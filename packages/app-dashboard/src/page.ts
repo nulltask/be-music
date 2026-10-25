@@ -85,7 +85,7 @@ export function renderDashboard(input: {
 <meta name="robots" content="noindex">
 <title>${t.title}</title>
 <style>${SERVICE_CSS}
-.account-panel{margin-bottom:32px}.account-panel p{font-size:.875rem}.service-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.service-card{display:flex;flex-direction:column;gap:12px;color:var(--fg);text-decoration:none;min-width:0}.service-card p{font-size:.875rem;margin:0;color:var(--muted);flex:1}.service-card .service-open{font-size:.875rem;font-weight:500}.services-heading{margin-bottom:16px}@media(hover:hover){.service-card:hover{background:var(--soft)}}.service-card:focus-visible{outline:3px solid var(--ring);outline-offset:3px}@media(max-width:640px){.service-grid{grid-template-columns:1fr}}
+.account-panel{margin-bottom:32px}.account-panel p{font-size:.875rem}.service-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.service-card{display:flex;flex-direction:column;gap:12px;color:var(--foreground);text-decoration:none;min-width:0}.service-card p{font-size:.875rem;margin:0;color:var(--muted-foreground);flex:1}.service-card .service-open{font-size:.875rem;font-weight:500}.services-heading{margin-bottom:16px}@media(hover:hover){.service-card:hover{background:var(--accent)}}.service-card:focus-visible{outline:3px solid var(--ring);outline-offset:3px}@media(max-width:640px){.service-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
