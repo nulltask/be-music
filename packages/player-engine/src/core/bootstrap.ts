@@ -1,3 +1,4 @@
+import { addExtraNotes, clampExtraNoteDepth } from './extra-note-modifier.ts';
 import { prepareMineModifier, type MineModifier } from './mine-modifier.ts';
 import { addScrollChanges, removeScrollChanges, type ScrollModifier } from './scroll-modifier.ts';
 import { addLongNotes, clampLongNoteRate, removeLongNoteTails, type LongNoteModifier } from './long-note-modifier.ts';
@@ -58,6 +59,9 @@ export interface PreparedPlaybackChartData {
   notes: TimedPlayableNote[];
   laneSoundNotes: TimedPlayableNote[];
   landmineNotes: TimedLandmineNote[];
+  extraNoteDepth?: number;
+  extraNoteScratch?: boolean;
+  extraNoteChangeCount?: number;
   longNoteModifierApplied?: LongNoteModifier;
   longNoteModifierRate?: number;
   longNoteModifierChangeCount?: number;
@@ -198,6 +202,8 @@ export function preparePlaybackChart(
     PlayerOptions,
     | 'laneModeExtension'
     | 'longNoteModifier'
+    | 'extraNoteDepth'
+    | 'extraNoteScratch'
     | 'longNoteRate'
     | 'longNoteModifierPlacements'
     | 'mineModifier'
@@ -243,6 +249,12 @@ export function preparePlaybackChart(
     placements: options.mineModifierPlacements,
   });
   const landmineNotes = mineResult.mines;
+  const extraResult = addExtraNotes(resolved, notes, landmineNotes, {
+    depth: options.extraNoteDepth,
+    scratch: options.extraNoteScratch,
+    laneModeExtension: options.laneModeExtension,
+  });
+  resolved = extraResult.chart;
   const invisibleNotes = resolved.invisibleNotes.map(toTimedInvisibleNote);
   const laneSoundNotes = [...notes, ...invisibleNotes].sort(compareLaneSoundNotes);
   const renderNotes = notes;
@@ -263,6 +275,13 @@ export function preparePlaybackChart(
   const scorableNotes = notes.filter((note) => !isActiveFreeZoneChannel(note.channel, activeFreeZoneChannels));
 
   return {
+    ...(options.extraNoteDepth !== undefined || options.extraNoteScratch !== undefined
+      ? {
+          extraNoteDepth: clampExtraNoteDepth(options.extraNoteDepth ?? 0),
+          extraNoteScratch: options.extraNoteScratch ?? false,
+          extraNoteChangeCount: extraResult.changes,
+        }
+      : {}),
     notes,
     ...(options.longNoteModifier !== undefined
       ? {

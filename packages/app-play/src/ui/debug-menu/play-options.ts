@@ -216,6 +216,16 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       this.refreshRulesetChoices();
     }),
   );
+  this.extraNoteDepthController = trackPlayOption(
+    folder
+      .addBinding(this.guiState, 'extraNoteDepth', { label: 'EXTRA depth (beatoraja)', min: 0, max: 100, step: 1 })
+      .on('change', ({ value }) => this.setPlayOptions({ extraNoteDepth: value })),
+  );
+  this.extraNoteScratchController = trackPlayOption(
+    folder
+      .addBinding(this.guiState, 'extraNoteScratch', { label: 'EXTRA scratch (beatoraja)' })
+      .on('change', ({ value }) => this.setPlayOptions({ extraNoteScratch: value })),
+  );
   this.longNoteRateController = trackPlayOption(
     folder
       .addBinding(this.guiState, 'longNoteRate', {

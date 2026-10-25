@@ -153,6 +153,8 @@ export interface PlaySessionOptions {
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
   longNoteModifier?: import('@be-music/player-scene-model').PlayOptions['longNoteModifier'];
   longNoteRate?: number;
+  extraNoteDepth?: number;
+  extraNoteScratch?: boolean;
   mineModifier?: import('@be-music/player-scene-model').PlayOptions['mineModifier'];
   scrollModifier?: import('@be-music/player-scene-model').PlayOptions['scrollModifier'];
   scrollSection?: number;

@@ -685,3 +685,26 @@ test('scroll ADD preserves its parameters and effective curve, rejecting incompl
   ])
     expect(() => parseReplay({ ...replay, play: { ...replay.play, ...changes } })).toThrow();
 });
+
+test('EXTRA records depth, scratch and actual conversions with strict validation', () => {
+  const replay = makeReplay();
+  replay.play.extraNoteDepth = 2;
+  replay.play.extraNoteScratch = true;
+  replay.play.extraNoteChangeCount = 8;
+  expect(parseReplay(serializeReplay(replay)).play).toMatchObject({
+    extraNoteDepth: 2,
+    extraNoteScratch: true,
+    extraNoteChangeCount: 8,
+  });
+  for (const extraNoteDepth of [-1, 1.5, 101, '1'])
+    expect(() => parseReplay(JSON.stringify({ ...replay, play: { ...replay.play, extraNoteDepth } }))).toThrow(
+      ReplayParseError,
+    );
+  for (const extraNoteChangeCount of [-1, 1.5, '1'])
+    expect(() => parseReplay(JSON.stringify({ ...replay, play: { ...replay.play, extraNoteChangeCount } }))).toThrow(
+      ReplayParseError,
+    );
+  expect(() => parseReplay(JSON.stringify({ ...replay, play: { ...replay.play, extraNoteScratch: 1 } }))).toThrow(
+    ReplayParseError,
+  );
+});

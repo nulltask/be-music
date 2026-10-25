@@ -65,6 +65,10 @@ export interface ReplayRecorderPlaySettings {
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
   longNoteModifier?: LongNoteModifier;
   longNoteRate?: number;
+  extraNoteDepth?: number;
+  extraNoteScratch?: boolean;
+  /** Actual source conversions, including overwritten additions; independent of record policy. */
+  extraNoteChangeCount?: number;
   longNoteModifierChangeCount?: number;
   mineModifier?: MineModifier;
   scrollModifier?: ScrollModifier;
@@ -293,6 +297,10 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       if (options.play.mineModifier !== undefined) play.mineModifier = options.play.mineModifier;
       if (options.play.mineModifierChangeCount !== undefined)
         play.mineModifierChangeCount = options.play.mineModifierChangeCount;
+      if (options.play.extraNoteDepth !== undefined) play.extraNoteDepth = options.play.extraNoteDepth;
+      if (options.play.extraNoteScratch !== undefined) play.extraNoteScratch = options.play.extraNoteScratch;
+      if (options.play.extraNoteChangeCount !== undefined)
+        play.extraNoteChangeCount = options.play.extraNoteChangeCount;
       if (options.play.longNoteRate !== undefined) play.longNoteRate = options.play.longNoteRate;
       if (options.play.longNoteModifierChangeCount !== undefined)
         play.longNoteModifierChangeCount = options.play.longNoteModifierChangeCount;

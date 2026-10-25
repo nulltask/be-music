@@ -207,6 +207,8 @@ export class DebugMenu {
   public gaugeAutoShiftController: ListInputBindingApi<PlayOptions['gaugeAutoShift']> | undefined;
   public longNoteModifierController: ListInputBindingApi<PlayOptions['longNoteModifier']> | undefined;
   public longNoteRateController: PaneBinding | undefined;
+  public extraNoteDepthController: PaneBinding | undefined;
+  public extraNoteScratchController: PaneBinding | undefined;
   public mineModifierController: ListInputBindingApi<PlayOptions['mineModifier']> | undefined;
   public scrollModifierController: ListInputBindingApi<PlayOptions['scrollModifier']> | undefined;
   public scrollSectionController: PaneBinding | undefined;
@@ -485,6 +487,12 @@ export class DebugMenu {
       });
       this.longNoteModifierController.refresh();
     }
+    if (!beatoraja && this.guiState.extraNoteDepth > 0) {
+      this.guiState.extraNoteDepth = 0;
+      this.setPlayOptions({ extraNoteDepth: 0 });
+    }
+    if (this.extraNoteDepthController) this.extraNoteDepthController.hidden = !beatoraja;
+    if (this.extraNoteScratchController) this.extraNoteScratchController.hidden = !beatoraja;
     if (this.longNoteRateController)
       this.longNoteRateController.hidden = !beatoraja || !this.guiState.longNoteModifier.startsWith('ADD_');
     for (const controller of this.randomSeedControllers) controller.hidden = !beatoraja;

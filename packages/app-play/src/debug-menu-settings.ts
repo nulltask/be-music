@@ -87,6 +87,8 @@ export interface DebugMenuSettings {
   judgeAlgorithm: PlayerGUIState['judgeAlgorithm'];
   longNoteModifier: PlayerGUIState['longNoteModifier'];
   longNoteRate: number;
+  extraNoteDepth: number;
+  extraNoteScratch: boolean;
   mineModifier: PlayerGUIState['mineModifier'];
   scrollModifier: PlayerGUIState['scrollModifier'];
   scrollSection: number;
@@ -248,6 +250,8 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'scrollRate', resolvePlayOptionValue('scrollRate', raw.scrollRate));
   assign(settings, 'scrollModifier', resolvePlayOptionValue('scrollModifier', raw.scrollModifier));
   assign(settings, 'mineModifier', resolvePlayOptionValue('mineModifier', raw.mineModifier));
+  assign(settings, 'extraNoteDepth', resolvePlayOptionValue('extraNoteDepth', raw.extraNoteDepth));
+  assign(settings, 'extraNoteScratch', resolvePlayOptionValue('extraNoteScratch', raw.extraNoteScratch));
   assign(settings, 'longNoteRate', resolvePlayOptionValue('longNoteRate', raw.longNoteRate));
   assign(settings, 'longNoteModifier', resolvePlayOptionValue('longNoteModifier', raw.longNoteModifier));
   assign(settings, 'autoScratch1P', booleanOf(raw.autoScratch1P));
@@ -464,6 +468,8 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('judgeAlgorithm');
   assignState('longNoteModifier');
   assignState('longNoteRate');
+  assignState('extraNoteDepth');
+  assignState('extraNoteScratch');
   assignState('mineModifier');
   assignState('scrollModifier');
   assignState('scrollSection');
@@ -556,6 +562,8 @@ export function captureDebugMenuSettings(
     judgeAlgorithm: state.judgeAlgorithm,
     longNoteModifier: state.longNoteModifier,
     longNoteRate: state.longNoteRate,
+    extraNoteDepth: state.extraNoteDepth,
+    extraNoteScratch: state.extraNoteScratch,
     mineModifier: state.mineModifier,
     scrollModifier: state.scrollModifier,
     scrollSection: state.scrollSection,

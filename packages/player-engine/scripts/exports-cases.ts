@@ -1304,6 +1304,11 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
       lanesAPI.clampScrollRate(0.5);
     },
   });
+  define('player-engine.lanes.clampExtraNoteDepth', {
+    run() {
+      lanesAPI.clampExtraNoteDepth(4);
+    },
+  });
   define('player-engine.lanes.clampLongNoteRate', {
     run() {
       lanesAPI.clampLongNoteRate(0.5);

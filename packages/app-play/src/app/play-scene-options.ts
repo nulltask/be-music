@@ -156,6 +156,8 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     scrollSection: playOptions.scrollSection,
     scrollRate: playOptions.scrollRate,
     longNoteRate: playOptions.longNoteRate,
+    extraNoteDepth: playOptions.extraNoteDepth,
+    extraNoteScratch: playOptions.extraNoteScratch,
     gaugeAutoShift: playOptions.gaugeAutoShift,
     bottomShiftableGauge: playOptions.bottomShiftableGauge,
     hiddenSudden1P: lanes.hiddenSudden1P,

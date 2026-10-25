@@ -88,6 +88,8 @@ export interface PlayEngineContext
       | 'judgeAlgorithm'
       | 'longNoteModifier'
       | 'longNoteRate'
+      | 'extraNoteDepth'
+      | 'extraNoteScratch'
       | 'scrollSection'
       | 'scrollRate'
       | 'scrollModifier'
@@ -449,6 +451,8 @@ export function resolveReplayRecording(
     | 'judgeAlgorithm'
     | 'longNoteModifier'
     | 'longNoteRate'
+    | 'extraNoteDepth'
+    | 'extraNoteScratch'
     | 'scrollSection'
     | 'scrollRate'
     | 'scrollModifier'
@@ -507,6 +511,8 @@ export function resolveReplayRecording(
     judgeAlgorithm: options.judgeAlgorithm,
     longNoteModifier: options.longNoteModifier,
     longNoteRate: options.longNoteRate,
+    extraNoteDepth: options.extraNoteDepth,
+    extraNoteScratch: options.extraNoteScratch,
     mineModifier: options.mineModifier,
     scrollModifier: options.scrollModifier,
     scrollSection: options.scrollSection,
@@ -612,6 +618,16 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       judgeAlgorithm: ctx.options.replay?.play.judgeAlgorithm ?? ctx.options.judgeAlgorithm,
       judgeTimingAutoAdjust: ctx.options.replay === undefined && ctx.options.judgeTimingAutoAdjust === true,
       judgeTimingMs: ctx.options.judgeTimingMs,
+      extraNoteDepth: ctx.options.replay
+        ? (ctx.options.replay.play.extraNoteDepth ?? 0)
+        : ctx.options.fixedArrangement
+          ? (ctx.options.fixedArrangement.play.extraNoteDepth ?? 0)
+          : ctx.options.extraNoteDepth,
+      extraNoteScratch: ctx.options.replay
+        ? (ctx.options.replay.play.extraNoteScratch ?? false)
+        : ctx.options.fixedArrangement
+          ? (ctx.options.fixedArrangement.play.extraNoteScratch ?? false)
+          : ctx.options.extraNoteScratch,
       longNoteRate:
         ctx.options.replay?.play.longNoteRate ??
         ctx.options.fixedArrangement?.play.longNoteRate ??

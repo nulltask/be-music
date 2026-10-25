@@ -125,6 +125,9 @@ export interface PlayOptions {
   longNoteModifier: LongNoteModifier;
   /** beatoraja ADD probability, 0..1, default 1. */
   longNoteRate: number;
+  /** beatoraja EXTRA; source type selector is unimplemented upstream. */
+  extraNoteDepth: number;
+  extraNoteScratch: boolean;
   mineModifier: MineModifier;
   /** beatoraja timeline BPM/STOP/SCROLL removal or generated SCROLL, independent of visual CONSTANT. */
   scrollModifier: ScrollModifier;

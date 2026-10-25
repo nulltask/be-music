@@ -1,3 +1,4 @@
+import { clampExtraNoteDepth } from '@be-music/player-engine/lanes';
 import { clampScrollSection, clampScrollRate } from '@be-music/player-engine/lanes';
 import { clampFloatingHiSpeed } from './floating-hi-speed.ts';
 import { clampLongNoteRate, clampHRandomThresholdBPM, parseLaneRandomSeed } from '@be-music/player-engine/lanes';
@@ -134,6 +135,8 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   judgeAlgorithm: 'combo',
   longNoteModifier: 'OFF',
   longNoteRate: 1,
+  extraNoteDepth: 0,
+  extraNoteScratch: false,
   mineModifier: 'OFF',
   scrollModifier: 'OFF',
   scrollSection: 4,
@@ -185,6 +188,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   bpmGuide: BOOLEAN_CYCLE,
   judgeTimingAutoAdjust: BOOLEAN_CYCLE,
   visualConstant: BOOLEAN_CYCLE,
+  extraNoteScratch: BOOLEAN_CYCLE,
   autoScratch1P: BOOLEAN_CYCLE,
   autoScratch2P: BOOLEAN_CYCLE,
   dpFlip: BOOLEAN_CYCLE,
@@ -216,6 +220,7 @@ export function clampShutter(value: number): number {
 const NUMERIC_PLAY_OPTION_CLAMPS: { readonly [K in keyof PlayOptions]?: (value: number) => number } = {
   hRandomThresholdBPM: clampHRandomThresholdBPM,
   longNoteRate: clampLongNoteRate,
+  extraNoteDepth: clampExtraNoteDepth,
   scrollSection: clampScrollSection,
   scrollRate: clampScrollRate,
   randomFixedLane1P: (value) => (Number.isFinite(value) ? Math.max(0, Math.min(9, Math.trunc(value))) : 0),

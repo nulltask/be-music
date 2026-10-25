@@ -126,6 +126,8 @@ export interface PlayChartContext {
       | 'judgeRuleset'
       | 'longNoteModifier'
       | 'longNoteRate'
+      | 'extraNoteDepth'
+      | 'extraNoteScratch'
       | 'scrollSection'
       | 'scrollRate'
       | 'scrollModifier'
@@ -207,6 +209,8 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     ctx.options.judgeRuleset !== 'beatoraja'
   )
     throw new RangeError('Scroll modification is available only for beatoraja.');
+  if (!arrangement && (ctx.options.extraNoteDepth ?? 0) > 0 && ctx.options.judgeRuleset !== 'beatoraja')
+    throw new RangeError('EXTRA note depth is available only for beatoraja.');
   if (!arrangement && ctx.options.longNoteModifier?.startsWith('ADD_') && ctx.options.judgeRuleset !== 'beatoraja')
     throw new RangeError('Long-note addition is available only for beatoraja.');
   if (ctx.options.fixedDisplayArea && (ctx.options.replay?.play.judgeRuleset ?? ctx.options.judgeRuleset) !== '____')
@@ -334,6 +338,8 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       laneModeExtension: extractChartExtension(ctx.chart?.chartPath),
       longNoteModifier: arrangement?.play.longNoteModifier ?? ctx.options.longNoteModifier,
       longNoteRate: arrangement?.play.longNoteRate ?? ctx.options.longNoteRate,
+      extraNoteDepth: arrangement ? (arrangement.play.extraNoteDepth ?? 0) : ctx.options.extraNoteDepth,
+      extraNoteScratch: arrangement ? (arrangement.play.extraNoteScratch ?? false) : ctx.options.extraNoteScratch,
       ...(arrangement?.play.longNoteModifier?.startsWith('ADD_')
         ? {
             longNoteModifierPlacements: arrangement.chart.notes
