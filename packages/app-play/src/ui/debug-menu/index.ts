@@ -8,7 +8,7 @@ import type { TunableCompressor } from '@be-music/player-browser/audio';
 import { getBrowserWorkerCount } from '@be-music/player-browser/compute';
 import type { PixiSceneHost, PlayScene, SelectScene } from '@be-music/player-browser/host';
 import type { BeatorajaThemeBundle } from '@be-music/player-browser/skin';
-import { resolveRandomModes, type PlayOptions } from '@be-music/player-scene-model';
+import { formatGaugeLabel, resolveRandomModes, type PlayOptions } from '@be-music/player-scene-model';
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
 // Tweakpane injects its component stylesheet; the app themes it with public CSS variables.
 import { Pane, type FolderApi, type BladeApi, type ButtonApi, type ListInputBindingApi } from 'tweakpane';
@@ -550,17 +550,15 @@ export class DebugMenu {
       this.gaugeController.options = paneOptions(choices).map((item) => ({
         ...item,
         text:
-          item.value === 'P-ATTACK'
-            ? 'P.ATTACK'
-            : item.value === 'ASSIST-EASY'
-              ? this.guiState.judgeRuleset === '____'
-                ? 'ASSISTED EASY'
-                : 'ASSIST EASY'
-              : item.value === 'DEATH' && this.guiState.judgeRuleset === 'beatoraja'
-                ? 'HAZARD'
-                : item.value === 'GROOVE' && this.guiState.judgeRuleset !== 'lr2'
-                  ? 'NORMAL'
-                  : item.text,
+          item.value === 'ASSIST-EASY'
+            ? this.guiState.judgeRuleset === '____'
+              ? 'ASSISTED EASY'
+              : 'ASSIST EASY'
+            : item.value === 'DEATH' && this.guiState.judgeRuleset === 'beatoraja'
+              ? 'HAZARD'
+              : item.value === 'GROOVE' && this.guiState.judgeRuleset !== 'lr2'
+                ? 'NORMAL'
+                : (formatGaugeLabel(item.text) ?? item.text),
       }));
       this.gaugeController.refresh();
     }

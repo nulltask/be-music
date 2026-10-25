@@ -1,4 +1,4 @@
-import { createLR2PerfectAttackGauge } from './lr2-attack.ts';
+import { createLR2GoodAttackGauge, createLR2PerfectAttackGauge } from './lr2-attack.ts';
 import type { GaugeGutsStep, GaugeSpec, JudgeWindowSetUs, RulesetId, RulesetWindowTables } from './definitions.ts';
 
 /**
@@ -54,6 +54,8 @@ function resolveLR2CourseGauge(gaugeId: string, damage: number): GaugeSpec {
   switch (gaugeId) {
     case 'P-ATTACK':
       return createLR2PerfectAttackGauge();
+    case 'G-ATTACK':
+      return createLR2GoodAttackGauge(damage);
     case 'GRADE-HARD':
       return lr2CourseGauge(gaugeId, scaleLR2Damage([0.1, 0.1, 0.04, -6, -10, -2], damage));
     case 'GRADE-DEATH':
@@ -145,18 +147,22 @@ export function resolveDefaultCourseGaugeSet(laneMode: string): CourseGaugeSet {
 /**
  * Maps the player's LR2-family gauge pick onto a ruleset's course gauge id.
  *
- * - `lr2`: grade courses play `GRADE` (GROOVE and EASY alike: LR2 has no grade EASY), `GRADE-HARD` or `GRADE-DEATH`;
- *   EXPERT / NONSTOP courses play `COURSE`, `COURSE-EASY`, `COURSE-HARD` or `COURSE-DEATH`.
+ * - `lr2`: grade courses play `GRADE` for GROOVE, EASY and G.ATTACK (the latter two reset at course start),
+ *   `GRADE-HARD`, `GRADE-DEATH` or P.ATTACK. EXPERT / NONSTOP retain P.ATTACK / G.ATTACK and otherwise
+ *   play `COURSE`, `COURSE-EASY`, `COURSE-HARD` or `COURSE-DEATH`.
  * - beatoraja and That-Which-Must-Not-Be-Named: GROOVE / EASY play `CLASS`, HARD `EXCLASS`, DEATH `EXHARDCLASS` (`GrooveGauge.create`: types up
  *   to NORMAL → CLASS, HARD → EXCLASS, EX-HARD / HAZARD → EXHARDCLASS).
  */
 export function resolveCourseGaugeId(rulesetId: RulesetId, kind: RulesetCourseKind, selectedGauge: string): string {
-  if (rulesetId !== 'lr2' && selectedGauge === 'P-ATTACK') throw new RangeError('P.ATTACK is available only for LR2.');
+  if (rulesetId !== 'lr2' && ['P-ATTACK', 'G-ATTACK'].includes(selectedGauge))
+    throw new RangeError('Attack gauges are available only for LR2.');
   if (rulesetId === 'lr2') {
     const prefix = kind === 'grade' ? 'GRADE' : 'COURSE';
     switch (selectedGauge) {
       case 'P-ATTACK':
         return 'P-ATTACK';
+      case 'G-ATTACK':
+        return kind === 'grade' ? 'GRADE' : 'G-ATTACK';
       case 'HARD':
         return `${prefix}-HARD`;
       case 'DEATH':
@@ -190,7 +196,8 @@ export function resolveCourseGauge(
   laneMode: string,
   damage: number,
 ): GaugeSpec {
-  if (rulesetId !== 'lr2' && gaugeId === 'P-ATTACK') throw new RangeError('P.ATTACK is available only for LR2.');
+  if (rulesetId !== 'lr2' && ['P-ATTACK', 'G-ATTACK'].includes(gaugeId))
+    throw new RangeError('Attack gauges are available only for LR2.');
   const spec =
     rulesetId === 'lr2'
       ? resolveLR2CourseGauge(gaugeId, damage)

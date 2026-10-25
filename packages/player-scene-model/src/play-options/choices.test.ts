@@ -81,13 +81,13 @@ describe('cyclePlayOptionValue', () => {
 
   test('moves backwards with a negative step and wraps past the first choice', () => {
     expect(cyclePlayOptionValue('gauge1P', 'HARD', -1)).toBe('GROOVE');
-    expect(cyclePlayOptionValue('gauge1P', 'GROOVE', -1)).toBe('P-ATTACK');
+    expect(cyclePlayOptionValue('gauge1P', 'GROOVE', -1)).toBe('G-ATTACK');
     expect(cyclePlayOptionValue('random1P', 'OFF', -1)).toBe('S-RANDOM');
   });
 
   test('treats any other step as one choice in its direction', () => {
     expect(cyclePlayOptionValue('gauge1P', 'GROOVE', 3)).toBe('HARD');
-    expect(cyclePlayOptionValue('gauge1P', 'GROOVE', -5)).toBe('P-ATTACK');
+    expect(cyclePlayOptionValue('gauge1P', 'GROOVE', -5)).toBe('G-ATTACK');
   });
 
   test('lands on the first choice when the current value is not one of them', () => {
@@ -327,4 +327,11 @@ test('P.ATTACK display spelling is separate from the persisted gauge id', () => 
   expect(formatGaugeLabel('P-ATTACK')).toBe('P.ATTACK');
   expect(formatGaugeLabel('HARD')).toBe('HARD');
   expect(formatGaugeLabel(undefined)).toBeUndefined();
+});
+
+test('G.ATTACK retains the source display spelling and sixth choice independently of its stored id', () => {
+  expect(resolvePlayOptionValue('gauge1P', 'G-ATTACK')).toBe('G-ATTACK');
+  expect(formatGaugeLabel('G-ATTACK')).toBe('G.ATTACK');
+  expect(cyclePlayOptionValue('gauge1P', 'P-ATTACK', 1)).toBe('G-ATTACK');
+  expect(cyclePlayOptionValue('gauge1P', 'G-ATTACK', 1)).toBe('GROOVE');
 });

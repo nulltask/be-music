@@ -15,3 +15,18 @@ export function createLR2PerfectAttackGauge(): GaugeSpec {
     guts: [{ threshold: 32, multiplier: 0.6, judges: [3, 4, 5] }],
   };
 }
+
+/** LR2 beta3 case 5 (0x4b5ccd): only PGREAT, missed POOR and empty POOR scale by HARD's damage factor. */
+export function createLR2GoodAttackGauge(damage: number): GaugeSpec {
+  return {
+    id: 'G-ATTACK',
+    min: 0,
+    max: 100,
+    initial: 100,
+    border: 0,
+    survival: true,
+    death: 2,
+    values: [-10 * damage, -1, 0.1, -6, -10 * damage, -2 * damage],
+    guts: [{ threshold: 32, multiplier: 0.6, judges: [3, 4, 5] }],
+  };
+}

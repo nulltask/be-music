@@ -9,7 +9,7 @@ import {
 
 describe('gauge types', () => {
   it('lists the gauges in the order LR2’s gauge button cycles them', () => {
-    expect(LR2_GAUGE_TYPES).toEqual(['GROOVE', 'HARD', 'DEATH', 'EASY', 'P-ATTACK']);
+    expect(LR2_GAUGE_TYPES).toEqual(['GROOVE', 'HARD', 'DEATH', 'EASY', 'P-ATTACK', 'G-ATTACK']);
     expect(GAUGE_TYPES).toContain('EX-HARD');
   });
 
@@ -66,4 +66,11 @@ it('offers P.ATTACK only for LR2 while preserving its recorded identifier', () =
   expect(resolveGaugeTypes('lr2')).toContain('P-ATTACK');
   expect(resolveGaugeTypes('beatoraja')).not.toContain('P-ATTACK');
   expect(resolveGaugeTypes('____')).not.toContain('P-ATTACK');
+});
+
+it('G.ATTACK is the sixth LR2 gauge and absent from other reference menus', () => {
+  expect(isGaugeType('G-ATTACK')).toBe(true);
+  expect(resolveGaugeTypes('lr2')[5]).toBe('G-ATTACK');
+  expect(resolveGaugeTypes('beatoraja')).not.toContain('G-ATTACK');
+  expect(resolveGaugeTypes('____')).not.toContain('G-ATTACK');
 });

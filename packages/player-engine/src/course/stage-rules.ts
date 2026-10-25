@@ -104,7 +104,7 @@ export interface LR2GradeResetSettings {
 
 /**
  * The settings an LR2 GRADE course plays its stages with (OpenLR2 `Main.cpp` M1124-M1170, which LR2 applies when the
- * course starts): an EASY gauge pick plays on GROOVE (LR2 also moves G-ATTACK there), HIDDEN / SUDDEN, the assists (auto
+ * course starts): EASY and G.ATTACK gauge picks play on GROOVE; HIDDEN / SUDDEN, the assists (auto
  * scratch), DP FLIP and the play tempo (LR2's pitch) are turned off. A course that is not an LR2 GRADE course
  * ({@link isLR2GradeCourse}) keeps the settings. The lane options are reset by the course's `grade` constraint
  * ({@link resolveCourseLaneOptions}). LR2 writes the resets into its config; a host applies them to the course's
@@ -118,7 +118,7 @@ export function resolveLR2GradeCoursePlaySettings<T extends LR2GradeResetSetting
   if (!isLR2GradeCourse(definition)) return settings;
   return {
     ...settings,
-    gauge: settings.gauge === 'EASY' ? 'GROOVE' : settings.gauge,
+    gauge: settings.gauge === 'EASY' || settings.gauge === 'G-ATTACK' ? 'GROOVE' : settings.gauge,
     hiddenSudden1P: 'OFF',
     hiddenSudden2P: 'OFF',
     autoScratch1P: false,

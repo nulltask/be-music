@@ -222,3 +222,23 @@ it('classifies LR2 P.ATTACK as HARD with full-combo priority', () => {
     }),
   ).toBe('HARD');
 });
+
+it('classifies LR2 G.ATTACK as HARD with full-combo priority', () => {
+  expect(resolveClearLamp({ ruleset: 'lr2', cleared: true, gauge: 'G-ATTACK', score: score(0, 0, 99, 100) })).toBe(
+    'HARD',
+  );
+  expect(resolveClearLamp({ ruleset: 'lr2', cleared: true, gauge: 'G-ATTACK', score: score(0, 0, 100, 100) })).toBe(
+    'FULL_COMBO',
+  );
+  expect(
+    resolveCourseClearLamp({
+      ruleset: 'lr2',
+      cleared: true,
+      gauge: 'G-ATTACK',
+      gaugeType: 'G-ATTACK',
+      noteCount: 100,
+      maxCombo: 99,
+      judge: { great: 0, good: 99 },
+    }),
+  ).toBe('HARD');
+});

@@ -1,4 +1,4 @@
-import { createLR2PerfectAttackGauge } from './lr2-attack.ts';
+import { createLR2GoodAttackGauge, createLR2PerfectAttackGauge } from './lr2-attack.ts';
 import type { GaugeJudgeIndex } from './gauge.ts';
 import type { GaugeAutoShift, GaugeShiftBottom } from './gauge-type.ts';
 import {
@@ -473,6 +473,8 @@ function resolveLR2Gauge(gaugeId: string, total: number, noteCount: number): Gau
   switch (gaugeId) {
     case 'P-ATTACK':
       return createLR2PerfectAttackGauge();
+    case 'G-ATTACK':
+      return createLR2GoodAttackGauge(resolveLR2HardDamageMultiplier(total, noteCount));
     case 'EASY':
       return {
         id: 'EASY',
@@ -701,7 +703,8 @@ function resolve____Gauge(gaugeId: string, noteCount: number): GaugeSpec {
 function resolveDefaultGaugeId(rulesetId: RulesetId, playGauge: string): string {
   switch (playGauge) {
     case 'P-ATTACK':
-      return 'P-ATTACK';
+    case 'G-ATTACK':
+      return playGauge;
     case 'ASSIST-EASY':
       return rulesetId === '____' ? 'ASSISTED-EASY' : 'ASSIST-EASY';
     case 'EX-HARD':
@@ -773,8 +776,11 @@ export function resolveRuleset(
   const baseNotes = countBaseNotes(chart.notes);
   const { course } = options;
   const selectedGauge = options.selectedGauge ?? 'GROOVE';
-  if (rulesetId !== 'lr2' && (selectedGauge === 'P-ATTACK' || options.gauge === 'P-ATTACK'))
-    throw new RangeError('P.ATTACK is available only for LR2.');
+  if (
+    rulesetId !== 'lr2' &&
+    (['P-ATTACK', 'G-ATTACK'].includes(selectedGauge) || ['P-ATTACK', 'G-ATTACK'].includes(options.gauge ?? ''))
+  )
+    throw new RangeError('Attack gauges are available only for LR2.');
   if (rulesetId === 'lr2' && (selectedGauge === 'EX-HARD' || selectedGauge === 'ASSIST-EASY')) {
     throw new RangeError(`LR2 beta3 has no ${selectedGauge} gauge.`);
   }

@@ -584,6 +584,8 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.replay.resolveRulesetConfig', {
     run: () => {
       replayAPI.resolveRulesetConfig(BENCH_REPLAY, 'beatoraja');
+      replayAPI.resolveRulesetConfig(BENCH_REPLAY, 'lr2', { selectedGauge: 'P-ATTACK' });
+      replayAPI.resolveRulesetConfig(BENCH_REPLAY, 'lr2', { selectedGauge: 'G-ATTACK' });
       replayAPI.resolveRulesetConfig(BENCH_REPLAY, 'beatoraja', {
         gaugeAutoShift: 'BEST_CLEAR',
         bottomShiftableGauge: 'EASY',

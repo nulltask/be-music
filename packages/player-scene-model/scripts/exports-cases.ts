@@ -214,6 +214,7 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
   define('player-scene-model.formatGaugeLabel', {
     run: () => {
       sceneModelAPI.formatGaugeLabel('P-ATTACK');
+      sceneModelAPI.formatGaugeLabel('G-ATTACK');
     },
   });
   define('player-scene-model.resolveRandomModes', {

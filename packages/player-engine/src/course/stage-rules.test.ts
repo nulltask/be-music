@@ -196,3 +196,21 @@ test('LR2 grade courses retain P.ATTACK', () => {
     ),
   ).toMatchObject({ gauge: 'P-ATTACK' });
 });
+
+test('LR2 grade courses reset G.ATTACK to GROOVE and expert courses retain it', () => {
+  const definition = {
+    kind: 'grade' as const,
+    source: { format: 'lr2crs' as const, type: 2, header: '', hash: MD5_A },
+  };
+  const settings = {
+    gauge: 'G-ATTACK' as const,
+    hiddenSudden1P: 'OFF' as const,
+    hiddenSudden2P: 'OFF' as const,
+    autoScratch1P: false,
+    autoScratch2P: false,
+    dpFlip: false,
+    tempo: 1,
+  };
+  expect(resolveLR2GradeCoursePlaySettings(definition, settings).gauge).toBe('GROOVE');
+  expect(resolveLR2GradeCoursePlaySettings({ ...definition, kind: 'expert' }, settings).gauge).toBe('G-ATTACK');
+});

@@ -352,3 +352,10 @@ test('P.ATTACK survives settings parsing with its canonical recorded identifier'
   );
   expect(document?.settings).toMatchObject({ judgeRuleset: 'lr2', gauge: 'P-ATTACK' });
 });
+
+test('G.ATTACK keeps its canonical identifier through stored settings', () => {
+  const document = parseDebugMenuSettingsDocument(
+    JSON.stringify({ version: 1, updatedAt: 1, settings: { judgeRuleset: 'lr2', gauge: 'G-ATTACK' } }),
+  );
+  expect(document?.settings).toMatchObject({ judgeRuleset: 'lr2', gauge: 'G-ATTACK' });
+});
