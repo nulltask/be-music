@@ -1,3 +1,5 @@
+import type { BattleMode } from '../core/battle-mode.ts';
+import type { ChartPlayVariant } from '@be-music/chart-model';
 import type { LR2ExtraLevel } from '../core/lr2-extra-lanes.ts';
 import type { ScrollTimelinePoint } from '@be-music/chart-model';
 import type { ScrollModifier } from '../core/scroll-modifier.ts';
@@ -200,6 +202,13 @@ export interface ReplayPlay {
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
   longNoteModifier?: LongNoteModifier;
   longNoteRate?: number;
+  battleMode?: BattleMode;
+  battleSourceVariant?: ChartPlayVariant;
+  battleTempo?: number;
+  battleAssist1P?: boolean;
+  battleAssist2P?: boolean;
+  battleChangedObjectCount?: number;
+  battleDroppedObjectCount?: number;
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;
   lr2ExtraEffectiveLevel?: LR2ExtraLevel;
@@ -775,6 +784,28 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
       play.mineModifierChangeCount,
       'play.mineModifierChangeCount',
     );
+  if (play.battleMode !== undefined) {
+    if (play.battleMode !== 'OFF' && play.battleMode !== 'SP-TO-DP')
+      throw new ReplayParseError('play.battleMode: expected OFF or SP-TO-DP');
+    parsed.battleMode = play.battleMode;
+  }
+  if (play.battleSourceVariant !== undefined) {
+    if (!['5', '7', '9', '10', '14', '24', '48'].includes(play.battleSourceVariant as string))
+      throw new ReplayParseError('play.battleSourceVariant: unknown play variant');
+    parsed.battleSourceVariant = play.battleSourceVariant as ChartPlayVariant;
+  }
+  if (play.battleTempo !== undefined) {
+    const tempo = expectFiniteNumber(play.battleTempo, 'play.battleTempo');
+    if (tempo <= 0) throw new ReplayParseError('play.battleTempo: expected positive tempo');
+    parsed.battleTempo = tempo;
+  }
+  for (const field of ['battleAssist1P', 'battleAssist2P'] as const) {
+    if (play[field] === undefined) continue;
+    if (typeof play[field] !== 'boolean') throw new ReplayParseError(`play.${field}: expected boolean`);
+    parsed[field] = play[field] as boolean;
+  }
+  for (const field of ['battleChangedObjectCount', 'battleDroppedObjectCount'] as const)
+    if (play[field] !== undefined) parsed[field] = expectNonNegativeInteger(play[field], `play.${field}`);
   if (play.lr2ExtraMode !== undefined) {
     if (typeof play.lr2ExtraMode !== 'boolean') throw new ReplayParseError('play.lr2ExtraMode: expected boolean');
     parsed.lr2ExtraMode = play.lr2ExtraMode;

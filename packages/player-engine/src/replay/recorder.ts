@@ -1,3 +1,5 @@
+import type { BattleMode } from '../core/battle-mode.ts';
+import type { ChartPlayVariant } from '@be-music/chart-model';
 import type { LR2ExtraLevel } from '../core/lr2-extra-lanes.ts';
 import type { ScrollTimelinePoint } from '@be-music/chart-model';
 import type { ScrollModifier } from '../core/scroll-modifier.ts';
@@ -66,6 +68,13 @@ export interface ReplayRecorderPlaySettings {
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
   longNoteModifier?: LongNoteModifier;
   longNoteRate?: number;
+  battleMode?: BattleMode;
+  battleSourceVariant?: ChartPlayVariant;
+  battleTempo?: number;
+  battleAssist1P?: boolean;
+  battleAssist2P?: boolean;
+  battleChangedObjectCount?: number;
+  battleDroppedObjectCount?: number;
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;
   lr2ExtraEffectiveLevel?: LR2ExtraLevel;
@@ -303,6 +312,16 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       if (options.play.mineModifier !== undefined) play.mineModifier = options.play.mineModifier;
       if (options.play.mineModifierChangeCount !== undefined)
         play.mineModifierChangeCount = options.play.mineModifierChangeCount;
+      for (const field of [
+        'battleMode',
+        'battleSourceVariant',
+        'battleTempo',
+        'battleAssist1P',
+        'battleAssist2P',
+        'battleChangedObjectCount',
+        'battleDroppedObjectCount',
+      ] as const)
+        if (options.play[field] !== undefined) Object.assign(play, { [field]: options.play[field] });
       for (const field of [
         'lr2ExtraMode',
         'lr2ExtraLevel',

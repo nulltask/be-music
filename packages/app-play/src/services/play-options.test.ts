@@ -34,6 +34,7 @@ const gui: GUIPlayOptions = {
   longNoteRate: 1,
   extraNoteDepth: 0,
   extraNoteScratch: false,
+  battleMode: 'OFF',
   lr2ExtraMode: false,
   lr2ExtraLevel: 0,
   mineModifier: 'OFF',
@@ -89,6 +90,7 @@ describe('playOptionsFromGUI', () => {
       longNoteRate: 1,
       extraNoteDepth: 0,
       extraNoteScratch: false,
+      battleMode: 'OFF',
       lr2ExtraMode: false,
       lr2ExtraLevel: 0,
       mineModifier: 'OFF',
@@ -157,6 +159,7 @@ describe('copyPlayOptionsToGUI', () => {
       longNoteRate: 1,
       extraNoteDepth: 0,
       extraNoteScratch: false,
+      battleMode: 'OFF',
       lr2ExtraMode: false,
       lr2ExtraLevel: 0,
       autoScratch1P: false,
@@ -329,4 +332,11 @@ test('LR2 EXTRA transfers independently through GUI options', () => {
   const restored = { ...gui };
   copyPlayOptionsToGUI({ ...DEFAULT_PLAY_OPTIONS, lr2ExtraMode: true, lr2ExtraLevel: 1 }, restored);
   expect(restored).toMatchObject({ lr2ExtraMode: true, lr2ExtraLevel: 1 });
+});
+
+test('battle conversion transfers independently through GUI options', () => {
+  expect(playOptionsFromGUI({ ...gui, battleMode: 'SP-TO-DP' })).toMatchObject({ battleMode: 'SP-TO-DP' });
+  const restored = { ...gui };
+  copyPlayOptionsToGUI({ ...DEFAULT_PLAY_OPTIONS, battleMode: 'SP-TO-DP' }, restored);
+  expect(restored.battleMode).toBe('SP-TO-DP');
 });

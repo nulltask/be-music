@@ -742,3 +742,32 @@ test('EXTRA records depth, scratch and actual conversions with strict validation
     ReplayParseError,
   );
 });
+
+test('battle reconstruction fields retain source variant, tempo and layout assists with strict parsing', () => {
+  const replay = makeReplay();
+  const descriptor = {
+    battleMode: 'SP-TO-DP',
+    battleSourceVariant: '7',
+    battleTempo: 0.75,
+    battleAssist1P: false,
+    battleAssist2P: true,
+    battleChangedObjectCount: 4,
+    battleDroppedObjectCount: 1,
+  };
+  Object.assign(replay.play, descriptor);
+  expect(parseReplay(serializeReplay(replay)).play).toMatchObject(descriptor);
+  for (const [field, value] of [
+    ['battleMode', 'DUPLICATE'],
+    ['battleSourceVariant', '8'],
+    ['battleSourceVariant', 7],
+    ['battleTempo', 0],
+    ['battleTempo', -1],
+    ['battleAssist1P', 1],
+    ['battleAssist2P', 'true'],
+    ['battleChangedObjectCount', -1],
+    ['battleDroppedObjectCount', 1.5],
+  ])
+    expect(() => parseReplay(JSON.stringify({ ...replay, play: { ...replay.play, [String(field)]: value } }))).toThrow(
+      ReplayParseError,
+    );
+});

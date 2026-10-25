@@ -88,6 +88,7 @@ export interface PlayEngineContext
       | 'judgeAlgorithm'
       | 'longNoteModifier'
       | 'longNoteRate'
+      | 'battleMode'
       | 'lr2ExtraMode'
       | 'lr2ExtraLevel'
       | 'extraNoteDepth'
@@ -453,6 +454,7 @@ export function resolveReplayRecording(
     | 'judgeAlgorithm'
     | 'longNoteModifier'
     | 'longNoteRate'
+    | 'battleMode'
     | 'lr2ExtraMode'
     | 'lr2ExtraLevel'
     | 'extraNoteDepth'
@@ -515,6 +517,7 @@ export function resolveReplayRecording(
     judgeAlgorithm: options.judgeAlgorithm,
     longNoteModifier: options.longNoteModifier,
     longNoteRate: options.longNoteRate,
+    battleMode: options.battleMode,
     lr2ExtraMode: options.lr2ExtraMode,
     lr2ExtraLevel: options.lr2ExtraLevel,
     extraNoteDepth: options.extraNoteDepth,
@@ -624,6 +627,11 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       judgeAlgorithm: ctx.options.replay?.play.judgeAlgorithm ?? ctx.options.judgeAlgorithm,
       judgeTimingAutoAdjust: ctx.options.replay === undefined && ctx.options.judgeTimingAutoAdjust === true,
       judgeTimingMs: ctx.options.judgeTimingMs,
+      battleMode: ctx.options.replay
+        ? (ctx.options.replay.play.battleMode ?? 'OFF')
+        : ctx.options.fixedArrangement
+          ? (ctx.options.fixedArrangement.play.battleMode ?? 'OFF')
+          : ctx.options.battleMode,
       lr2ExtraMode: ctx.options.replay
         ? (ctx.options.replay.play.lr2ExtraMode ?? false)
         : ctx.options.fixedArrangement

@@ -353,3 +353,10 @@ test('LR2 EXTRA keeps source minimum levels separate from beatoraja depth', () =
   expect(resolvePlayOptionValue('lr2ExtraMode', true)).toBe(true);
   expect(resolvePlayOptionValue('lr2ExtraMode', 'ON')).toBeUndefined();
 });
+
+test('SP TO DP is a mutually exclusive battle choice with an OFF default', () => {
+  expect(DEFAULT_PLAY_OPTIONS.battleMode).toBe('OFF');
+  expect(resolvePlayOptionValue('battleMode', 'SP-TO-DP')).toBe('SP-TO-DP');
+  expect(resolvePlayOptionValue('battleMode', 'DUPLICATE')).toBeUndefined();
+  expect(resolvePlayOptionValue('battleMode', true)).toBeUndefined();
+});

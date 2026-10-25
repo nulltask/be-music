@@ -89,6 +89,7 @@ export interface DebugMenuSettings {
   longNoteRate: number;
   extraNoteDepth: number;
   extraNoteScratch: boolean;
+  battleMode: PlayerGUIState['battleMode'];
   lr2ExtraMode: boolean;
   lr2ExtraLevel: PlayerGUIState['lr2ExtraLevel'];
   mineModifier: PlayerGUIState['mineModifier'];
@@ -252,6 +253,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'scrollRate', resolvePlayOptionValue('scrollRate', raw.scrollRate));
   assign(settings, 'scrollModifier', resolvePlayOptionValue('scrollModifier', raw.scrollModifier));
   assign(settings, 'mineModifier', resolvePlayOptionValue('mineModifier', raw.mineModifier));
+  assign(settings, 'battleMode', resolvePlayOptionValue('battleMode', raw.battleMode));
   assign(settings, 'lr2ExtraMode', resolvePlayOptionValue('lr2ExtraMode', raw.lr2ExtraMode));
   assign(settings, 'lr2ExtraLevel', resolvePlayOptionValue('lr2ExtraLevel', raw.lr2ExtraLevel));
   assign(settings, 'extraNoteDepth', resolvePlayOptionValue('extraNoteDepth', raw.extraNoteDepth));
@@ -472,6 +474,7 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('judgeAlgorithm');
   assignState('longNoteModifier');
   assignState('longNoteRate');
+  assignState('battleMode');
   assignState('lr2ExtraMode');
   assignState('lr2ExtraLevel');
   assignState('extraNoteDepth');
@@ -568,6 +571,7 @@ export function captureDebugMenuSettings(
     judgeAlgorithm: state.judgeAlgorithm,
     longNoteModifier: state.longNoteModifier,
     longNoteRate: state.longNoteRate,
+    battleMode: state.battleMode,
     lr2ExtraMode: state.lr2ExtraMode,
     lr2ExtraLevel: state.lr2ExtraLevel,
     extraNoteDepth: state.extraNoteDepth,

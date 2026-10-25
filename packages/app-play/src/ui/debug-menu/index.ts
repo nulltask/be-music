@@ -207,6 +207,7 @@ export class DebugMenu {
   public gaugeAutoShiftController: ListInputBindingApi<PlayOptions['gaugeAutoShift']> | undefined;
   public longNoteModifierController: ListInputBindingApi<PlayOptions['longNoteModifier']> | undefined;
   public longNoteRateController: PaneBinding | undefined;
+  public battleModeController: ListInputBindingApi<PlayOptions['battleMode']> | undefined;
   public lr2ExtraModeController: PaneBinding | undefined;
   public lr2ExtraLevelController: ListInputBindingApi<PlayOptions['lr2ExtraLevel']> | undefined;
   public extraNoteDepthController: PaneBinding | undefined;
@@ -489,6 +490,12 @@ export class DebugMenu {
       });
       this.longNoteModifierController.refresh();
     }
+    const lr2Battle = this.guiState.judgeRuleset === 'lr2';
+    if (!lr2Battle && this.guiState.battleMode !== 'OFF') {
+      this.guiState.battleMode = 'OFF';
+      this.setPlayOptions({ battleMode: 'OFF' });
+    }
+    if (this.battleModeController) this.battleModeController.hidden = !lr2Battle;
     const lr2Extra = this.guiState.judgeRuleset === 'lr2';
     if (!lr2Extra && this.guiState.lr2ExtraMode) {
       this.guiState.lr2ExtraMode = false;

@@ -512,6 +512,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       scrollSection: playOptions.scrollSection,
       scrollRate: playOptions.scrollRate,
       longNoteRate: playOptions.longNoteRate,
+      battleMode: playOptions.battleMode,
       lr2ExtraMode: playOptions.lr2ExtraMode,
       lr2ExtraLevel: playOptions.lr2ExtraLevel,
       extraNoteDepth: playOptions.extraNoteDepth,

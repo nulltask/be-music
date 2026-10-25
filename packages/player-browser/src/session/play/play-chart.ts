@@ -126,6 +126,7 @@ export interface PlayChartContext {
       | 'judgeRuleset'
       | 'longNoteModifier'
       | 'longNoteRate'
+      | 'battleMode'
       | 'lr2ExtraMode'
       | 'lr2ExtraLevel'
       | 'tempo'
@@ -212,6 +213,13 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     ctx.options.judgeRuleset !== 'beatoraja'
   )
     throw new RangeError('Scroll modification is available only for beatoraja.');
+  if (
+    !arrangement &&
+    ctx.options.battleMode &&
+    ctx.options.battleMode !== 'OFF' &&
+    (ctx.options.judgeRuleset ?? 'lr2') !== 'lr2'
+  )
+    throw new RangeError('SP TO DP requires LR2 judgment rules.');
   if (!arrangement && ctx.options.lr2ExtraMode && (ctx.options.judgeRuleset ?? 'lr2') !== 'lr2')
     throw new RangeError('LR2 EXTRA requires LR2 judgment rules.');
   if (!arrangement && (ctx.options.extraNoteDepth ?? 0) > 0 && ctx.options.judgeRuleset !== 'beatoraja')
@@ -295,16 +303,16 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // the result here gives the engine + adapter + renderer a single source of truth without each one
   // re-running its own heuristic. Classify the RESOLVED chart: lanes that only a chosen `#RANDOM` / `#SWITCH`
   // branch adds are not in `song.chart.events`, and missing them would lay out (and judge) a 7 KEY play as 5 KEY.
-  const hostPlayVariant = resolveLibraryChartPlayVariant(chartEntry, resolved);
+  let playVariant = arrangement?.play.battleSourceVariant ?? resolveLibraryChartPlayVariant(chartEntry, resolved);
   if (
     ctx.options.replay === undefined &&
     (ctx.options.random1P === 'CONVERGE' || ctx.options.random2P === 'CONVERGE') &&
-    !['5', '7', '9', '10', '14'].includes(hostPlayVariant)
+    !['5', '7', '9', '10', '14'].includes(playVariant)
   )
     throw new RangeError('LR2 CONVERGE supports 5/7/9/10/14 KEY charts.');
   if (
     ctx.options.replay === undefined &&
-    hostPlayVariant === '9' &&
+    playVariant === '9' &&
     [ctx.options.random1P, ctx.options.random2P].some(
       (mode) => mode === 'ALL-SCR' || mode === 'RANDOM-EX' || mode === 'S-RANDOM-EX',
     )
@@ -315,7 +323,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   if (
     ctx.options.replay === undefined &&
     ctx.options.judgeRuleset === 'beatoraja' &&
-    hostPlayVariant !== '9' &&
+    playVariant !== '9' &&
     [ctx.options.random1P, ctx.options.random2P].some(
       (mode) => mode === 'CONVERGE' || mode === 'RANDOM_PLAYABLE' || mode === 'S_RANDOM_PLAYABLE',
     )
@@ -323,7 +331,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     throw new RangeError('beatoraja CONVERGE and playable RANDOM/S-RANDOM are PMS arrangements.');
   let resolvedPlay = resolveChart(resolved, {
     randomDraws,
-    playVariant: hostPlayVariant,
+    playVariant: playVariant,
     inferBmsLNTypeWhenMissing: true,
   });
 
@@ -343,9 +351,18 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       laneModeExtension: extractChartExtension(ctx.chart?.chartPath),
       longNoteModifier: arrangement?.play.longNoteModifier ?? ctx.options.longNoteModifier,
       longNoteRate: arrangement?.play.longNoteRate ?? ctx.options.longNoteRate,
+      battleMode: arrangement ? (arrangement.play.battleMode ?? 'OFF') : ctx.options.battleMode,
+      autoScratch1P: arrangement
+        ? (arrangement.play.battleAssist1P ?? arrangement.play.autoScratch1P ?? arrangement.play.autoScratch)
+        : ctx.options.autoScratch1P,
+      autoScratch2P: arrangement
+        ? (arrangement.play.battleAssist2P ?? arrangement.play.autoScratch2P ?? arrangement.play.autoScratch)
+        : ctx.options.autoScratch2P,
       lr2ExtraMode: arrangement ? (arrangement.play.lr2ExtraMode ?? false) : ctx.options.lr2ExtraMode,
       lr2ExtraLevel: arrangement ? (arrangement.play.lr2ExtraLevel ?? 0) : ctx.options.lr2ExtraLevel,
-      speed: arrangement ? (arrangement.play.lr2ExtraTempo ?? arrangement.play.tempo ?? 1) : ctx.options.tempo,
+      speed: arrangement
+        ? (arrangement.play.battleTempo ?? arrangement.play.lr2ExtraTempo ?? arrangement.play.tempo ?? 1)
+        : ctx.options.tempo,
       course: ctx.options.course,
       extraNoteDepth: arrangement ? (arrangement.play.extraNoteDepth ?? 0) : ctx.options.extraNoteDepth,
       extraNoteScratch: arrangement ? (arrangement.play.extraNoteScratch ?? false) : ctx.options.extraNoteScratch,
@@ -384,6 +401,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     Math.random,
   );
   resolvedPlay = prepared.resolvedChart;
+  playVariant = resolvedPlay.playVariant;
   ctx.resolvedPlayChart = resolvedPlay;
   ctx.preparedChart = prepared;
   ctx.touchTokenByChannel = undefined;
@@ -410,7 +428,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     // DP FLIP — swap 1P / 2P channels in place. Cheap O(n) walk because we already iterate `notes` for sorting; SP
     // charts skip every entry (no `2x` channels exist). Mine notes are flipped together so they stay anchored to the
     // same visual lane after the flip.
-    if (ctx.options.dpFlip && ['10', '14', '48'].includes(hostPlayVariant)) {
+    if (ctx.options.dpFlip && ['10', '14', '48'].includes(playVariant)) {
       for (const note of ctx.notes) {
         note.channel = flipDPChannel(note.channel);
       }
@@ -424,7 +442,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     const laneRandom = (side: '1P' | '2P'): (() => number) => {
       if (
         ctx.options.judgeRuleset !== 'beatoraja' ||
-        resolveLaneOptionChannels(side, hostPlayVariant, prepared.laneBindings).length === 0
+        resolveLaneOptionChannels(side, playVariant, prepared.laneBindings).length === 0
       )
         return Math.random;
       const picked = side === '1P' ? ctx.options.randomSeed1P : ctx.options.randomSeed2P;
@@ -443,50 +461,50 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     // intact.
     applyRandomMode(
       ctx.notes as Array<{ channel: string }>,
-      resolveLaneOptionChannels('1P', hostPlayVariant, prepared.laneBindings),
+      resolveLaneOptionChannels('1P', playVariant, prepared.laneBindings),
       ctx.options.random1P ?? 'OFF',
       laneRandom('1P'),
       {
         ruleset: ctx.options.judgeRuleset ?? 'lr2',
         hRandomThresholdBPM: ctx.options.hRandomThresholdBPM,
         fixedLane: ctx.options.randomFixedLane1P,
-        scratch: hostPlayVariant === '9' ? undefined : '16',
+        scratch: playVariant === '9' ? undefined : '16',
         scratchLanes:
-          hostPlayVariant === '9'
+          playVariant === '9'
             ? []
-            : PLAY_MODE_LAYOUTS[hostPlayVariant].lanes
+            : PLAY_MODE_LAYOUTS[playVariant].lanes
                 .filter((lane) => lane.side === '1P' && lane.kind !== 'key')
                 .sort((a, b) => a.slot - b.slot)
                 .map((lane) => lane.channel),
-        doublePlay: hostPlayVariant === '10' || hostPlayVariant === '14' || hostPlayVariant === '48',
+        doublePlay: playVariant === '10' || playVariant === '14' || playVariant === '48',
         side: '1P',
-        flipped: ctx.options.dpFlip && ['10', '14', '48'].includes(hostPlayVariant),
-        playVariant: hostPlayVariant,
+        flipped: ctx.options.dpFlip && ['10', '14', '48'].includes(playVariant),
+        playVariant: playVariant,
       },
       ctx.mineNotes as Array<{ channel: string }>,
       ctx.invisibleNotes as Array<{ channel: string }>,
     );
     applyRandomMode(
       ctx.notes as Array<{ channel: string }>,
-      resolveLaneOptionChannels('2P', hostPlayVariant, prepared.laneBindings),
+      resolveLaneOptionChannels('2P', playVariant, prepared.laneBindings),
       ctx.options.random2P ?? 'OFF',
       laneRandom('2P'),
       {
         ruleset: ctx.options.judgeRuleset ?? 'lr2',
         hRandomThresholdBPM: ctx.options.hRandomThresholdBPM,
         fixedLane: ctx.options.randomFixedLane2P,
-        scratch: hostPlayVariant === '9' ? undefined : '26',
+        scratch: playVariant === '9' ? undefined : '26',
         scratchLanes:
-          hostPlayVariant === '9'
+          playVariant === '9'
             ? []
-            : PLAY_MODE_LAYOUTS[hostPlayVariant].lanes
+            : PLAY_MODE_LAYOUTS[playVariant].lanes
                 .filter((lane) => lane.side === '2P' && lane.kind !== 'key')
                 .sort((a, b) => a.slot - b.slot)
                 .map((lane) => lane.channel),
-        doublePlay: hostPlayVariant === '10' || hostPlayVariant === '14' || hostPlayVariant === '48',
+        doublePlay: playVariant === '10' || playVariant === '14' || playVariant === '48',
         side: '2P',
-        flipped: ctx.options.dpFlip && ['10', '14', '48'].includes(hostPlayVariant),
-        playVariant: hostPlayVariant,
+        flipped: ctx.options.dpFlip && ['10', '14', '48'].includes(playVariant),
+        playVariant: playVariant,
       },
       ctx.mineNotes as Array<{ channel: string }>,
       ctx.invisibleNotes as Array<{ channel: string }>,
@@ -512,7 +530,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // Lay out the whole keyboard of the chart's play variant (5 / 7 / 9 / 10 / 14 / 24 / 48 KEY), not just the lanes
   // the chart happens to use, so a sparse chart still plays on full lanes. The variant also decides channel `17`
   // (a lane in 9 KEY, FREE ZONE in That-Which-Must-Not-Be-Named) and the 9 KEY layout the LR2 default 9-keys play skin expects.
-  ctx.chartPlayVariant = hostPlayVariant;
+  ctx.chartPlayVariant = playVariant;
   // Keep the source PMS layout even when an arrangement empties its distinguishing channels.
   // Original LR2 SCATTER may place an object outside it; that object must not create a tenth input/display lane.
   ctx.laneChannels =

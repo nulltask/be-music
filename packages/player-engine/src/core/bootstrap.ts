@@ -1,3 +1,5 @@
+import { convertLR2SPToDPChart } from './lr2-sp-to-dp-chart.ts';
+import type { BattleMode } from './battle-mode.ts';
 import { convertLR2ExtraChart } from './lr2-extra-chart.ts';
 import type { LR2ExtraLevel } from './lr2-extra-lanes.ts';
 import { addExtraNotes, clampExtraNoteDepth } from './extra-note-modifier.ts';
@@ -61,6 +63,13 @@ export interface PreparedPlaybackChartData {
   notes: TimedPlayableNote[];
   laneSoundNotes: TimedPlayableNote[];
   landmineNotes: TimedLandmineNote[];
+  battleMode?: BattleMode;
+  battleSourceVariant?: import('@be-music/chart-model').ChartPlayVariant;
+  battleTempo?: number;
+  battleAssist1P?: boolean;
+  battleAssist2P?: boolean;
+  battleChangedObjectCount?: number;
+  battleDroppedObjectCount?: number;
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;
   lr2ExtraEffectiveLevel?: LR2ExtraLevel;
@@ -209,6 +218,10 @@ export function preparePlaybackChart(
     PlayerOptions,
     | 'laneModeExtension'
     | 'longNoteModifier'
+    | 'battleMode'
+    | 'autoScratch'
+    | 'autoScratch1P'
+    | 'autoScratch2P'
     | 'lr2ExtraMode'
     | 'lr2ExtraLevel'
     | 'course'
@@ -232,6 +245,19 @@ export function preparePlaybackChart(
     ? convertLR2ExtraChart(resolved, { level: options.lr2ExtraLevel ?? 0, tempo: options.speed })
     : undefined;
   resolved = lr2Extra?.chart ?? resolved;
+  const battleSourceVariant = resolved.playVariant;
+  const battleMode = options.course === undefined ? (options.battleMode ?? 'OFF') : 'OFF';
+  const battleAssist1P = options.autoScratch1P ?? options.autoScratch ?? false;
+  const battleAssist2P = options.autoScratch2P ?? options.autoScratch ?? false;
+  const battle =
+    battleMode === 'SP-TO-DP'
+      ? convertLR2SPToDPChart(resolved, {
+          tempo: options.speed,
+          assist1P: battleAssist1P,
+          assist2P: battleAssist2P,
+        })
+      : undefined;
+  resolved = battle?.chart ?? resolved;
   const scrollAddition =
     options.scrollModifier === 'ADD'
       ? addScrollChanges(resolved, {
@@ -291,6 +317,17 @@ export function preparePlaybackChart(
   const scorableNotes = notes.filter((note) => !isActiveFreeZoneChannel(note.channel, activeFreeZoneChannels));
 
   return {
+    ...(options.battleMode !== undefined
+      ? {
+          battleMode,
+          battleSourceVariant,
+          battleTempo: options.speed ?? 1,
+          battleAssist1P,
+          battleAssist2P,
+          battleChangedObjectCount: battle?.changedObjectCount ?? 0,
+          battleDroppedObjectCount: battle?.droppedObjectCount ?? 0,
+        }
+      : {}),
     ...(options.lr2ExtraMode !== undefined
       ? {
           lr2ExtraMode,

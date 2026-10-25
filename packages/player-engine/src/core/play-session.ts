@@ -198,6 +198,10 @@ export async function createPlaySession(
         laneModeExtension: options.laneModeExtension,
         longNoteModifier: options.longNoteModifier,
         longNoteRate: options.longNoteRate,
+        battleMode: options.battleMode,
+        autoScratch: options.autoScratch,
+        autoScratch1P: options.autoScratch1P,
+        autoScratch2P: options.autoScratch2P,
         lr2ExtraMode: options.lr2ExtraMode,
         lr2ExtraLevel: options.lr2ExtraLevel,
         speed: options.speed,
@@ -217,6 +221,11 @@ export async function createPlaySession(
     );
   resolvedChart = playbackChart.resolvedChart;
   backgroundTriggers = collectRealtimeAudioTriggers(resolvedChart, (channel) => !isPlayLaneSoundChannel(channel));
+  const battleRequested = options.battleMode ?? playbackChart.battleMode ?? 'OFF';
+  if (battleRequested !== 'OFF' && (options.judgeRuleset ?? 'lr2') !== 'lr2')
+    throw new RangeError('SP TO DP requires LR2 judgment rules.');
+  if ((playbackChart.battleMode ?? 'OFF') !== (options.course === undefined ? battleRequested : 'OFF'))
+    throw new RangeError('The shared prepared chart must include the selected battle mode.');
   const lr2ExtraRequested = options.lr2ExtraMode ?? playbackChart.lr2ExtraMode ?? false;
   if (lr2ExtraRequested && (options.judgeRuleset ?? 'lr2') !== 'lr2')
     throw new RangeError('LR2 EXTRA requires LR2 judgment rules.');
@@ -367,6 +376,17 @@ export async function createPlaySession(
               ? {
                   mineModifier: options.mineModifier,
                   mineModifierChangeCount: playbackChart.mineModifierChangeCount ?? 0,
+                }
+              : {}),
+            ...(options.battleMode !== undefined || playbackChart.battleMode !== undefined
+              ? {
+                  battleMode: playbackChart.battleMode ?? 'OFF',
+                  battleSourceVariant: playbackChart.battleSourceVariant ?? playbackChart.resolvedChart.playVariant,
+                  battleTempo: playbackChart.battleTempo ?? 1,
+                  battleAssist1P: playbackChart.battleAssist1P ?? false,
+                  battleAssist2P: playbackChart.battleAssist2P ?? false,
+                  battleChangedObjectCount: playbackChart.battleChangedObjectCount ?? 0,
+                  battleDroppedObjectCount: playbackChart.battleDroppedObjectCount ?? 0,
                 }
               : {}),
             ...(options.lr2ExtraMode !== undefined || playbackChart.lr2ExtraMode !== undefined
