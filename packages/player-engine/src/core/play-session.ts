@@ -1,3 +1,4 @@
+import { applySevenToNine } from './seven-to-nine.ts';
 import { clampExtraNoteDepth } from './extra-note-modifier.ts';
 import { resolveAutoScratchSides } from './auto-scratch.ts';
 import {
@@ -153,6 +154,11 @@ export async function createPlaySession(
   options.scrollRate ??= options.preparedChart?.scrollRate;
   if (options.scrollModifier !== undefined && options.scrollModifier !== 'OFF' && options.judgeRuleset !== 'beatoraja')
     throw new RangeError('Scroll modification is available only for beatoraja.');
+  options.sevenToNinePattern ??= options.preparedChart?.sevenToNinePattern;
+  options.sevenToNineType ??= options.preparedChart?.sevenToNineType;
+  options.hRandomThresholdBPM ??= options.preparedChart?.sevenToNineThresholdBPM;
+  if ((options.sevenToNinePattern ?? 0) > 0 && options.judgeRuleset !== 'beatoraja')
+    throw new RangeError('7-to-9 conversion is available only for beatoraja.');
   const { mode } = strategy;
   if (options.judgeTimingAutoAdjust && (options.judgeRuleset ?? 'lr2') !== 'beatoraja')
     throw new RangeError('Automatic display-timing adjustment is available only for beatoraja.');
@@ -233,6 +239,18 @@ export async function createPlaySession(
     throw new RangeError('The shared prepared chart must include the selected LR2 EXTRA mode.');
   if (lr2ExtraRequested && options.lr2ExtraLevel !== undefined && playbackChart.lr2ExtraLevel !== options.lr2ExtraLevel)
     throw new RangeError('The shared prepared chart must include the selected LR2 EXTRA level.');
+  if (!options.preparedChart && (options.sevenToNinePattern !== undefined || options.sevenToNineType !== undefined))
+    applySevenToNine(playbackChart, options);
+  if (
+    options.preparedChart &&
+    ((options.sevenToNinePattern !== undefined &&
+      options.sevenToNinePattern !== (playbackChart.sevenToNinePattern ?? 0)) ||
+      (options.sevenToNineType !== undefined && options.sevenToNineType !== (playbackChart.sevenToNineType ?? 0)) ||
+      (options.hRandomThresholdBPM !== undefined &&
+        options.hRandomThresholdBPM !== (playbackChart.sevenToNineThresholdBPM ?? 120)))
+  )
+    throw new RangeError('Prepared 7-to-9 conversion does not match selected options.');
+  resolvedChart = playbackChart.resolvedChart;
   const extraDepth = clampExtraNoteDepth(options.extraNoteDepth ?? playbackChart.extraNoteDepth ?? 0);
   const extraScratch = options.extraNoteScratch ?? playbackChart.extraNoteScratch ?? false;
   if ((playbackChart.extraNoteDepth ?? 0) !== extraDepth || (playbackChart.extraNoteScratch ?? false) !== extraScratch)
@@ -376,6 +394,14 @@ export async function createPlaySession(
               ? {
                   mineModifier: options.mineModifier,
                   mineModifierChangeCount: playbackChart.mineModifierChangeCount ?? 0,
+                }
+              : {}),
+            ...(playbackChart.sevenToNinePattern !== undefined
+              ? {
+                  sevenToNinePattern: playbackChart.sevenToNinePattern,
+                  sevenToNineType: playbackChart.sevenToNineType,
+                  sevenToNineThresholdBPM: playbackChart.sevenToNineThresholdBPM,
+                  sevenToNineApplied: playbackChart.sevenToNineApplied,
                 }
               : {}),
             ...(options.battleMode !== undefined || playbackChart.battleMode !== undefined

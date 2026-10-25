@@ -360,3 +360,12 @@ test('SP TO DP is a mutually exclusive battle choice with an OFF default', () =>
   expect(resolvePlayOptionValue('battleMode', 'DUPLICATE')).toBeUndefined();
   expect(resolvePlayOptionValue('battleMode', true)).toBeUndefined();
 });
+
+test('7-to-9 accepts only the source six patterns and three scratch types', () => {
+  expect(DEFAULT_PLAY_OPTIONS).toMatchObject({ sevenToNinePattern: 0, sevenToNineType: 0 });
+  for (const value of [0, 1, 2, 3, 4, 5, 6]) expect(resolvePlayOptionValue('sevenToNinePattern', value)).toBe(value);
+  for (const value of [0, 1, 2]) expect(resolvePlayOptionValue('sevenToNineType', value)).toBe(value);
+  for (const value of [-1, 1.5, 7, '3', true])
+    expect(resolvePlayOptionValue('sevenToNinePattern', value)).toBeUndefined();
+  expect(resolvePlayOptionValue('sevenToNineType', 3)).toBeUndefined();
+});

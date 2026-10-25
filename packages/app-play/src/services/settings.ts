@@ -259,6 +259,8 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     judgeAlgorithm: 'combo',
     longNoteModifier: 'OFF',
     longNoteRate: 1,
+    sevenToNinePattern: 0,
+    sevenToNineType: 0,
     battleMode: 'OFF',
     lr2ExtraMode: false,
     lr2ExtraLevel: 0,

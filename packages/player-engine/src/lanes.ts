@@ -67,3 +67,10 @@ export { clampExtraNoteDepth } from './core/extra-note-modifier.ts';
 export type { LR2ExtraLevel } from './core/lr2-extra-lanes.ts';
 
 export type { BattleMode } from './core/battle-mode.ts';
+
+export {
+  applySevenToNine,
+  type SevenToNineOptions,
+  type SevenToNinePattern,
+  type SevenToNineType,
+} from './core/seven-to-nine.ts';

@@ -88,6 +88,8 @@ export interface PlayEngineContext
       | 'judgeAlgorithm'
       | 'longNoteModifier'
       | 'longNoteRate'
+      | 'sevenToNinePattern'
+      | 'sevenToNineType'
       | 'battleMode'
       | 'lr2ExtraMode'
       | 'lr2ExtraLevel'
@@ -454,6 +456,8 @@ export function resolveReplayRecording(
     | 'judgeAlgorithm'
     | 'longNoteModifier'
     | 'longNoteRate'
+    | 'sevenToNinePattern'
+    | 'sevenToNineType'
     | 'battleMode'
     | 'lr2ExtraMode'
     | 'lr2ExtraLevel'
@@ -517,6 +521,8 @@ export function resolveReplayRecording(
     judgeAlgorithm: options.judgeAlgorithm,
     longNoteModifier: options.longNoteModifier,
     longNoteRate: options.longNoteRate,
+    sevenToNinePattern: options.sevenToNinePattern,
+    sevenToNineType: options.sevenToNineType,
     battleMode: options.battleMode,
     lr2ExtraMode: options.lr2ExtraMode,
     lr2ExtraLevel: options.lr2ExtraLevel,
@@ -686,6 +692,9 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       // `random1P: 'OFF'` truthy-check to fix. Every "view extracted differently than engine" bug is
       // structurally impossible because there is only one extract.
       preparedChart: ctx.preparedChart,
+      sevenToNinePattern: ctx.preparedChart?.sevenToNinePattern,
+      sevenToNineType: ctx.preparedChart?.sevenToNineType,
+      hRandomThresholdBPM: ctx.preparedChart?.sevenToNineThresholdBPM,
       // The gauge is part of the judging setup, not just a skin colour: the engine resolves it against the active
       // ruleset's gauge line-up and runs its curve, so HARD really drains and DEATH really ends the run.
       // `resolveSelectedGauge` prefers the replay's recorded pick, so a played-back log runs its original gauge.

@@ -129,6 +129,8 @@ export interface PlayOptions {
   /** beatoraja EXTRA; source type selector is unimplemented upstream. */
   extraNoteDepth: number;
   extraNoteScratch: boolean;
+  sevenToNinePattern: import('@be-music/player-engine/lanes').SevenToNinePattern;
+  sevenToNineType: import('@be-music/player-engine/lanes').SevenToNineType;
   battleMode: BattleMode;
   lr2ExtraMode: boolean;
   lr2ExtraLevel: LR2ExtraLevel;

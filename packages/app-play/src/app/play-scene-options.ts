@@ -156,6 +156,8 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     scrollSection: playOptions.scrollSection,
     scrollRate: playOptions.scrollRate,
     longNoteRate: playOptions.longNoteRate,
+    sevenToNinePattern: playOptions.sevenToNinePattern,
+    sevenToNineType: playOptions.sevenToNineType,
     battleMode: playOptions.battleMode,
     lr2ExtraMode: playOptions.lr2ExtraMode,
     lr2ExtraLevel: playOptions.lr2ExtraLevel,

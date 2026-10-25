@@ -34,6 +34,8 @@ const gui: GUIPlayOptions = {
   longNoteRate: 1,
   extraNoteDepth: 0,
   extraNoteScratch: false,
+  sevenToNinePattern: 0,
+  sevenToNineType: 0,
   battleMode: 'OFF',
   lr2ExtraMode: false,
   lr2ExtraLevel: 0,
@@ -90,6 +92,8 @@ describe('playOptionsFromGUI', () => {
       longNoteRate: 1,
       extraNoteDepth: 0,
       extraNoteScratch: false,
+      sevenToNinePattern: 0,
+      sevenToNineType: 0,
       battleMode: 'OFF',
       lr2ExtraMode: false,
       lr2ExtraLevel: 0,
@@ -159,6 +163,8 @@ describe('copyPlayOptionsToGUI', () => {
       longNoteRate: 1,
       extraNoteDepth: 0,
       extraNoteScratch: false,
+      sevenToNinePattern: 0,
+      sevenToNineType: 0,
       battleMode: 'OFF',
       lr2ExtraMode: false,
       lr2ExtraLevel: 0,
@@ -339,4 +345,14 @@ test('battle conversion transfers independently through GUI options', () => {
   const restored = { ...gui };
   copyPlayOptionsToGUI({ ...DEFAULT_PLAY_OPTIONS, battleMode: 'SP-TO-DP' }, restored);
   expect(restored.battleMode).toBe('SP-TO-DP');
+});
+
+test('7-to-9 GUI selections survive both directions of play option transfer', () => {
+  expect(playOptionsFromGUI({ ...gui, sevenToNinePattern: 6, sevenToNineType: 2 })).toMatchObject({
+    sevenToNinePattern: 6,
+    sevenToNineType: 2,
+  });
+  const restored = { ...gui };
+  copyPlayOptionsToGUI({ ...DEFAULT_PLAY_OPTIONS, sevenToNinePattern: 6, sevenToNineType: 2 }, restored);
+  expect(restored).toMatchObject({ sevenToNinePattern: 6, sevenToNineType: 2 });
 });

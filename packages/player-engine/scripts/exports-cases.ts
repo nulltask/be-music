@@ -78,6 +78,12 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       replayAPI.resolvePlayChart(fixtures.controlFlowJSON, { random: () => 0.42 });
     },
   });
+  define('player-engine.lanes.applySevenToNine', {
+    run: (fixtures) => {
+      const prepared = playerAPI.preparePlaybackChart(resolveChart(fixtures.sampleBmsJSON, { playVariant: '7' }));
+      lanesAPI.applySevenToNine(prepared, { sevenToNinePattern: 3, sevenToNineType: 1 });
+    },
+  });
   define('player-engine.preparePlaybackChart', {
     run: (fixtures) => {
       playerAPI.preparePlaybackChart(

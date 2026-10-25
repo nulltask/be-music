@@ -449,3 +449,62 @@ test('SP TO DP replay restores source variant and source assists before DP FLIP 
     original.notes.map((note) => [note.channel, note.event.value, note.seconds, note.endSeconds]),
   );
 });
+
+test('7-to-9 runs after SP RANDOM and restores canonical conversion while current settings differ', () => {
+  const entry = {
+    ...chart,
+    chart: parseChart('#BPM 240\n#WAV01 a.wav\n#LNOBJ ZZ\n#00111:01\n#00116:0001\n#00218:01\n#00318:ZZ', 'bms'),
+  };
+  const original = prepare(
+    {
+      judgeRuleset: 'beatoraja',
+      sevenToNinePattern: 3,
+      sevenToNineType: 2,
+      hRandomThresholdBPM: 180,
+      random1P: 'MIRROR',
+    },
+    entry,
+  );
+  // MIRROR maps key 1 to key 7 before the conversion's key offset (+2).
+  expect(original.notes[0]!.channel).toBe('19');
+  expect(original.notes[1]!.channel).toBe('12');
+  expect(original.chartPlayVariant).toBe('9');
+  expect(original.laneChannels).toHaveLength(9);
+  const recorded = createReplayRecorder({
+    json: entry.chart,
+    chart: original.preparedChart!,
+    play: {
+      mode: 'manual',
+      autoScratch: false,
+      judgeRuleset: 'beatoraja',
+      sevenToNinePattern: 3,
+      sevenToNineType: 2,
+      sevenToNineThresholdBPM: 180,
+      sevenToNineApplied: true,
+    },
+  }).finalize({ summary: { ...createEmptyScore(original.notes.length), fast: 0, slow: 0 } });
+  const replay = parseReplay(serializeReplay(recorded));
+  const restored = prepare(
+    {
+      judgeRuleset: 'beatoraja',
+      sevenToNinePattern: 0,
+      sevenToNineType: 0,
+      hRandomThresholdBPM: 60,
+      random1P: 'OFF',
+      replay,
+    },
+    entry,
+  );
+  expect(
+    restored.notes.map(({ channel, endSeconds, event }) => ({ channel, endSeconds, source: event.channel })),
+  ).toEqual(original.notes.map(({ channel, endSeconds, event }) => ({ channel, endSeconds, source: event.channel })));
+  expect(restored.chartPlayVariant).toBe('9');
+  expect(restored.preparedChart).toMatchObject({
+    sevenToNinePattern: 3,
+    sevenToNineType: 2,
+    sevenToNineThresholdBPM: 180,
+    sevenToNineApplied: true,
+  });
+  const fresh = prepare({ judgeRuleset: 'beatoraja', fixedArrangement: replay }, entry);
+  expect(fresh.notes.map((note) => note.channel)).toEqual(original.notes.map((note) => note.channel));
+});

@@ -224,6 +224,8 @@ export interface PlayerGUIState extends PlayTempoSettings {
   longNoteRate: number;
   extraNoteDepth: number;
   extraNoteScratch: boolean;
+  sevenToNinePattern: PlayOptions['sevenToNinePattern'];
+  sevenToNineType: PlayOptions['sevenToNineType'];
   battleMode: PlayOptions['battleMode'];
   lr2ExtraMode: boolean;
   lr2ExtraLevel: PlayOptions['lr2ExtraLevel'];

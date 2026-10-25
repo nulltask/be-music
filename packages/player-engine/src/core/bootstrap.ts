@@ -63,6 +63,10 @@ export interface PreparedPlaybackChartData {
   notes: TimedPlayableNote[];
   laneSoundNotes: TimedPlayableNote[];
   landmineNotes: TimedLandmineNote[];
+  sevenToNinePattern?: import('./seven-to-nine.ts').SevenToNinePattern;
+  sevenToNineType?: import('./seven-to-nine.ts').SevenToNineType;
+  sevenToNineThresholdBPM?: number;
+  sevenToNineApplied?: boolean;
   battleMode?: BattleMode;
   battleSourceVariant?: import('@be-music/chart-model').ChartPlayVariant;
   battleTempo?: number;

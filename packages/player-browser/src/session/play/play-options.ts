@@ -154,6 +154,8 @@ export interface PlaySessionOptions {
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
   longNoteModifier?: import('@be-music/player-scene-model').PlayOptions['longNoteModifier'];
   longNoteRate?: number;
+  sevenToNinePattern?: import('@be-music/player-engine/lanes').SevenToNinePattern;
+  sevenToNineType?: import('@be-music/player-engine/lanes').SevenToNineType;
   battleMode?: BattleMode;
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;

@@ -149,6 +149,8 @@ describe('captureDebugMenuSettings', () => {
       longNoteRate: 1,
       extraNoteDepth: 0,
       extraNoteScratch: false,
+      sevenToNinePattern: 0,
+      sevenToNineType: 0,
       battleMode: 'OFF',
       lr2ExtraMode: false,
       lr2ExtraLevel: 0,
@@ -392,7 +394,13 @@ test('LR2 EXTRA selection and source minimum level survive settings round trips'
     }),
   );
   expect(parsed?.settings).toMatchObject({ lr2ExtraMode: true, lr2ExtraLevel: 2 });
-  const state = { battleMode: 'OFF', lr2ExtraMode: false, lr2ExtraLevel: 0 } as PlayerGUIState;
+  const state = {
+    sevenToNinePattern: 0,
+    sevenToNineType: 0,
+    battleMode: 'OFF',
+    lr2ExtraMode: false,
+    lr2ExtraLevel: 0,
+  } as PlayerGUIState;
   overlayDebugMenuSettings(state, parsed!.settings);
   expect(state).toMatchObject({ lr2ExtraMode: true, lr2ExtraLevel: 2 });
   expect(
@@ -410,4 +418,14 @@ test('SP TO DP persists as a source battle mode', () => {
   const state = { battleMode: 'OFF' } as PlayerGUIState;
   overlayDebugMenuSettings(state, document!.settings);
   expect(state.battleMode).toBe('SP-TO-DP');
+});
+
+test('7-to-9 pattern and scratch type persist through settings parsing and GUI restore', () => {
+  const document = parseDebugMenuSettingsDocument(
+    JSON.stringify({ version: 1, updatedAt: 1, settings: { sevenToNinePattern: 6, sevenToNineType: 2 } }),
+  );
+  expect(document?.settings).toMatchObject({ sevenToNinePattern: 6, sevenToNineType: 2 });
+  const state = { sevenToNinePattern: 0, sevenToNineType: 0 } as PlayerGUIState;
+  overlayDebugMenuSettings(state, document!.settings);
+  expect(state).toMatchObject({ sevenToNinePattern: 6, sevenToNineType: 2 });
 });
