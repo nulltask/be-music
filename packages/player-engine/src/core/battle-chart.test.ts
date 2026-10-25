@@ -115,3 +115,19 @@ test('D-BATTLE availability follows LR2', () => {
   expect(() => resolveEffectiveBattleMode('D-BATTLE', 'beatoraja', '7', false)).toThrow(RangeError);
   expect(() => resolveEffectiveBattleMode('BATTLE-AS', '____', '7', false)).toThrow(RangeError);
 });
+
+test('two-player play copies the chart for the second player, with mines under That-Which-Must-Not-Be-Named only', () => {
+  const source = resolveChart(parseBMS(SOURCE), { playVariant: '7' });
+  const lr2 = preparePlaybackChart(source, { battleMode: 'TWO-PLAYER', judgeRuleset: 'lr2' });
+  expect(lr2.battleMode).toBe('TWO-PLAYER');
+  expect(lr2.notes.map((note) => note.channel)).toEqual(['11', '12', '16', '21', '22', '26']);
+  expect(lr2.landmineNotes.map((mine) => mine.channel)).toEqual(['13']);
+  const ac = preparePlaybackChart(resolveChart(parseBMS(SOURCE), { playVariant: '7' }), {
+    battleMode: 'TWO-PLAYER',
+    judgeRuleset: '____',
+  });
+  expect(ac.landmineNotes.map((mine) => mine.channel)).toEqual(['13', '23']);
+  expect(resolveEffectiveBattleMode('TWO-PLAYER', 'lr2', '7', true)).toBe('OFF');
+  expect(resolveEffectiveBattleMode('TWO-PLAYER', '____', '9', false)).toBe('OFF');
+  expect(() => resolveEffectiveBattleMode('TWO-PLAYER', 'beatoraja', '7', false)).toThrow(RangeError);
+});

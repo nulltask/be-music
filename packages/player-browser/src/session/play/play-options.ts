@@ -233,10 +233,14 @@ export interface PlaySessionOptions {
   replayRecorder?: ReplayRecordingOptions['recorder'];
   /**
    * 1P gauge variant (`#SRC_BUTTON,type=40`). Selects the ruleset's gauge (the engine resolves the curve) and drives
-   * the gauge-on-red-branch op flags (43 / 45). 2P-side gauge isn't yet separately wired — the engine
-   * consumes the 1P value and applies it to the single shared gauge.
+   * the gauge-on-red-branch op flags (43 / 45).
    */
   gauge?: GaugeType;
+  /** The 2P player's gauge of a two-player play (`battleMode: 'TWO-PLAYER'`). */
+  gauge2P?: GaugeType;
+  /** That-Which-Must-Not-Be-Named M-RAN per player: MIRROR after a RANDOM-type arrangement in two-player play. */
+  mRan1P?: boolean;
+  mRan2P?: boolean;
   /**
    * The play is one stage of a course (`PlayerOptions.course`): it runs on the ruleset's course gauge, from the state the
    * previous stage left. Recorded into the replay, which then replays on its own.

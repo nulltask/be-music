@@ -196,6 +196,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       playOptions,
       ...(this.facts.scoreTargets !== undefined ? { scoreTargets: this.facts.scoreTargets } : {}),
       state: play.playState,
+      ...(play.secondPlayer !== undefined ? { state2P: play.secondPlayer.playState } : {}),
       stage,
       ...(stage === 'loading' && this.loadProgress !== undefined ? { progress: this.loadProgress } : {}),
       seconds,

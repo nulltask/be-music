@@ -244,6 +244,8 @@ export interface ReplayPlay {
   autoScratch2P?: boolean;
   /** Gauge the player selected for the session (declared by the host; LR2-family gauge id). */
   gauge: GaugeType;
+  /** The 2P player's gauge of a two-player play (`battleMode: 'TWO-PLAYER'`); `results.secondPlayer` is its result. */
+  gauge2P?: GaugeType;
   /** Lane-arrangement option per side, when the host applied one (`'OFF'` / `'MIRROR'` / `'RANDOM'` / ...). */
   randomLane?: { p1?: string; p2?: string };
   dpFlip?: boolean;
@@ -695,6 +697,11 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     if (p2 !== undefined) parsed.randomLane.p2 = p2;
   }
   if (play.dpFlip !== undefined) parsed.dpFlip = play.dpFlip === true;
+  if (play.gauge2P !== undefined) {
+    if (!isGaugeType(play.gauge2P))
+      throw new ReplayParseError(`play.gauge2P: expected one of ${GAUGE_TYPES.join(' | ')}`);
+    parsed.gauge2P = play.gauge2P;
+  }
   const judgeWindowOverrideMs = optionalFiniteNumber(play.judgeWindowOverrideMs, 'play.judgeWindowOverrideMs');
   if (judgeWindowOverrideMs !== undefined) parsed.judgeWindowOverrideMs = judgeWindowOverrideMs;
   if (play.judgeRuleset !== undefined) {
@@ -829,8 +836,8 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     parsed.sevenToNineApplied = play.sevenToNineApplied;
   }
   if (play.battleMode !== undefined) {
-    if (!['OFF', 'SP-TO-DP', 'D-BATTLE', 'BATTLE', 'BATTLE-AS'].includes(play.battleMode as string))
-      throw new ReplayParseError('play.battleMode: expected OFF, SP-TO-DP, D-BATTLE, BATTLE or BATTLE-AS');
+    if (!['OFF', 'SP-TO-DP', 'D-BATTLE', 'BATTLE', 'BATTLE-AS', 'TWO-PLAYER'].includes(play.battleMode as string))
+      throw new ReplayParseError('play.battleMode: expected OFF, SP-TO-DP, D-BATTLE, BATTLE, BATTLE-AS or TWO-PLAYER');
     parsed.battleMode = play.battleMode as BattleMode;
   }
   if (play.battleSourceVariant !== undefined) {

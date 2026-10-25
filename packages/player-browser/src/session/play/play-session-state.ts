@@ -8,6 +8,7 @@
 import type { Texture } from 'pixi.js';
 import type { PreparedPlaybackChartData, PlayerSummary } from '@be-music/player-engine';
 import { createEmptyScore, type LongNoteStyle, type ScoreSummary } from '@be-music/player-engine/ruleset';
+import type { SecondPlayerState } from './play-state.ts';
 import type {
   PlayerInputSignalBus,
   PlayerStateSignals,
@@ -324,6 +325,8 @@ export class PlaySessionState extends PlayPresentation {
    * the player's hi-speed changes; the result is read off it (`playResultFromPlayState`).
    */
   playState: PlayState = createPlayState();
+  /** The 2P player of a two-player play; the session's own score and play state are the 1P player's. */
+  secondPlayer: SecondPlayerState | undefined = undefined;
   /**
    * Replay assembled by the shared engine right before its play promise settles (`onReplayRecorded`). Snapshotted
    * into {@link getResultData} so the result host can offer it as a download.

@@ -134,6 +134,12 @@ export interface PlayOptions {
   battleMode: BattleMode;
   /** LR2 D-BATTLE: hold the scratch key through the decide animation to keep scratch objects playable. */
   dBattleScratch: boolean;
+  /**
+   * That-Which-Must-Not-Be-Named M-RAN per player (two-player play only): MIRROR applied after a RANDOM-type arrangement,
+   * so a player with it plays the mirror image of the other's chart.
+   */
+  mRan1P: boolean;
+  mRan2P: boolean;
   /** beatoraja CUSTOM JUDGE (`PlayerConfig.customJudge`) and its window / long-note margin rates in percent. */
   /** beatoraja LN MODE (`PlayerConfig.lnmode`): the mode of a chart whose long-note mode is undefined. */
   longNoteMode: 'LN' | 'CN' | 'HCN';

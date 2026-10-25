@@ -246,6 +246,22 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       this.refreshRulesetChoices();
     }),
   );
+  // Two-player play (LR2 BATTLE): the 2P player's gauge, and That-Which-Must-Not-Be-Named's M-RAN per player.
+  this.gauge2PController = selectBinding(
+    folder,
+    this.guiState,
+    'gauge2P',
+    'Gauge 2P',
+    resolveGaugeTypes(this.guiState.judgeRuleset),
+  );
+  trackPlayOption(this.gauge2PController.on('change', ({ value }) => this.setPlayOptions({ gauge2P: value })));
+  this.mRanControllers = (['mRan1P', 'mRan2P'] as const).map((key) =>
+    trackPlayOption(
+      folder
+        .addBinding(this.guiState, key, { label: key === 'mRan1P' ? 'M-RAN 1P' : 'M-RAN 2P' })
+        .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
+    ),
+  );
   // LR2 reads the scratch key held through the decide animation; the Debug Menu has no decide animation.
   this.dBattleScratchController = trackPlayOption(
     folder

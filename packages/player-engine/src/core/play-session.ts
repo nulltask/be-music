@@ -1,3 +1,4 @@
+import { selectPlaybackChartSide, type SecondPlayer } from './two-player.ts';
 import { resolveEffectiveBattleMode } from './battle-mode.ts';
 import { applySevenToNine } from './seven-to-nine.ts';
 import { clampExtraNoteDepth } from './extra-note-modifier.ts';
@@ -134,6 +135,8 @@ export interface PlaySession {
   seekGeneration: number;
   /** Puts the score, the gauge and the combos back to the play's start, in place (a seek rebuilds from there). */
   readonly resetScore: () => void;
+  /** The 2P player of a two-player play (`battleMode: 'TWO-PLAYER'`); the session's own score is the 1P player's. */
+  readonly secondPlayer?: SecondPlayer;
 }
 
 /** The UI runtime's label for the mode. */
@@ -304,8 +307,15 @@ export async function createPlaySession(
   ) {
     throw new RangeError('Selectable judgment algorithms belong to beatoraja 0.8.9.');
   }
+  // Two players judge one side each: each side's notes make its own judgment count and TOTAL.
+  const twoPlayer = playbackChart.battleMode === 'TWO-PLAYER';
   const ruleset = resolveRuleset(
-    rulesetChartFactsFromChart(resolvedJSON, playbackChart, judgeRankChanges, options.stageRanks),
+    rulesetChartFactsFromChart(
+      resolvedJSON,
+      twoPlayer ? selectPlaybackChartSide(playbackChart, 1) : playbackChart,
+      judgeRankChanges,
+      options.stageRanks,
+    ),
     options.judgeRuleset ?? 'lr2',
     {
       ...(options.judgeAlgorithm !== undefined ? { judgeAlgorithm: options.judgeAlgorithm } : {}),
@@ -334,34 +344,15 @@ export async function createPlaySession(
   reportResolvedRuleset(options, ruleset);
   const endOnFailure = resolveGaugeEndOnFailure(options.gaugeAutoShift, ruleset.rulesetId, options.endOnFailure);
 
-  const { reset: resetSummary, ...initialSummary } = createInitialPlayerSummary(ruleset, ruleset.noteCount);
   const courseCarry = options.course !== undefined ? courseStageCarryCombo(options.course) : undefined;
-  const score: JudgeCoreScore = {
-    ...initialSummary,
-    scoreTracker: createScoreTracker({
-      moneyScore: ruleset.moneyScore,
-      ...(courseCarry !== undefined ? { course: courseCarry } : {}),
-    }),
-  };
-  const summary: PlayerSummary = score.summary;
-  const tracker = score.scoreTracker;
-  // The summary reads the combos off the tracker the judges update, so it always shows the live ones.
-  Object.defineProperties(summary, {
-    combo: { get: () => tracker.combo, enumerable: true, configurable: true },
-    maxCombo: { get: () => tracker.maxCombo, enumerable: true, configurable: true },
-  });
-  if (tracker.course !== undefined) {
-    // The same object the tracker updates, so the summary always shows the live course combo.
-    summary.course = tracker.course;
-  }
+  const { score, summary, resetScore: resetPrimaryScore } = createPlayerScore(ruleset, courseCarry);
+  const secondPlayer = twoPlayer
+    ? createSecondPlayer(resolvedJSON, playbackChart, judgeRankChanges, options, selectedGauge)
+    : undefined;
+  if (secondPlayer !== undefined) summary.secondPlayer = secondPlayer.summary;
   const resetScore = (): void => {
-    resetSummary();
-    tracker.combo = 0;
-    tracker.maxCombo = 0;
-    if (tracker.course !== undefined && courseCarry !== undefined) {
-      tracker.course.combo = courseCarry.combo;
-      tracker.course.maxCombo = Math.max(courseCarry.maxCombo, courseCarry.combo);
-    }
+    resetPrimaryScore();
+    secondPlayer?.resetScore();
   };
   // The source saves nothing from PRACTICE.
   const replayRecorder =
@@ -564,6 +555,7 @@ export async function createPlaySession(
     landmineNotes,
     invisibleNotes,
     audioBackend: audioBackendLabel,
+    ...(secondPlayer !== undefined ? { summary2P: secondPlayer.summary } : {}),
     resolveHCNLanes: (seconds) => session?.readHCNLanes?.(seconds),
     resolveJudgedNoteCount: () =>
       Math.max(
@@ -692,8 +684,75 @@ export async function createPlaySession(
     clock: undefined,
     seekGeneration: 0,
     resetScore,
+    ...(secondPlayer !== undefined ? { secondPlayer } : {}),
   };
   return session;
+}
+
+/** A player's score and gauge on `ruleset`, and how to put them back to the play's start. */
+function createPlayerScore(
+  ruleset: RulesetConfig,
+  courseCarry: ReturnType<typeof courseStageCarryCombo> | undefined,
+): { score: JudgeCoreScore; summary: PlayerSummary; resetScore: () => void } {
+  const { reset: resetSummary, ...initialSummary } = createInitialPlayerSummary(ruleset, ruleset.noteCount);
+  const score: JudgeCoreScore = {
+    ...initialSummary,
+    scoreTracker: createScoreTracker({
+      moneyScore: ruleset.moneyScore,
+      ...(courseCarry !== undefined ? { course: courseCarry } : {}),
+    }),
+  };
+  const summary: PlayerSummary = score.summary;
+  const tracker = score.scoreTracker;
+  // The summary reads the combos off the tracker the judges update, so it always shows the live ones.
+  Object.defineProperties(summary, {
+    combo: { get: () => tracker.combo, enumerable: true, configurable: true },
+    maxCombo: { get: () => tracker.maxCombo, enumerable: true, configurable: true },
+  });
+  if (tracker.course !== undefined) {
+    // The same object the tracker updates, so the summary always shows the live course combo.
+    summary.course = tracker.course;
+  }
+  return {
+    score,
+    summary,
+    resetScore: () => {
+      resetSummary();
+      tracker.combo = 0;
+      tracker.maxCombo = 0;
+      if (tracker.course !== undefined && courseCarry !== undefined) {
+        tracker.course.combo = courseCarry.combo;
+        tracker.course.maxCombo = Math.max(courseCarry.maxCombo, courseCarry.combo);
+      }
+    },
+  };
+}
+
+/** The 2P player of a two-player play: its own gauge (`gauge2P`) on its own side's notes. */
+function createSecondPlayer(
+  resolvedJSON: BeMusicJSON,
+  playbackChart: PreparedPlaybackChartData,
+  judgeRankChanges: ResolvedChart['judgeRank']['changes'],
+  options: PlayerOptions,
+  selectedGauge: string | undefined,
+): SecondPlayer {
+  const gauge = options.gauge2P ?? selectedGauge;
+  const ruleset = resolveRuleset(
+    rulesetChartFactsFromChart(resolvedJSON, selectPlaybackChartSide(playbackChart, 2), judgeRankChanges),
+    options.judgeRuleset ?? 'lr2',
+    {
+      ...(gauge !== undefined ? { selectedGauge: gauge } : {}),
+      ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
+    },
+  );
+  const { score, summary, resetScore } = createPlayerScore(ruleset, undefined);
+  return {
+    ruleset,
+    score,
+    summary,
+    resetScore,
+    endOnFailure: resolveGaugeEndOnFailure(undefined, ruleset.rulesetId, options.endOnFailure),
+  };
 }
 
 /** PRACTICE is a beatoraja single play without chart modifiers (they apply only in PLAY / AUTOPLAY). */

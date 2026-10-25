@@ -855,3 +855,60 @@ for (const skin of ['plain', 'native'] as const) {
     expect(await player.readOption(['Play options'], '7-to-9 scratch')).toBe('Alternate');
   });
 }
+
+for (const skin of ['plain', 'native'] as const) {
+  test(`LR2 BATTLE plays two players on ${skin}, each with its own gauge, and replays both`, async ({
+    player,
+  }, info) => {
+    await player.open({ 'be-music.built-in-skin': skin });
+    const title = `Two players ${skin}`;
+    await player.dropText('two-players.bme', `#TITLE ${title}\n#BPM 240\n#00111:01010101\n#00116:0001\n#00212:01`);
+    await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+    await player.setOption(['Play options'], 'Battle', 'BATTLE');
+    await player.setOption(['Play options'], 'Gauge 2P', 'HARD');
+    await player.setOption(['Play options'], 'Auto play', true);
+    await player.cursorTo((bar) => bar.title === title, 'two-player chart');
+    await player.key('Enter');
+    await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 0.6, 'BATTLE play');
+    await player.key('Space');
+    await player.page.locator('#stage').screenshot({ path: info.outputPath(`battle-${skin}.png`) });
+    if (skin === 'native') await expect(player.page.locator('[part~="second-player"]').first()).toBeAttached();
+    await player.key('Space');
+    await player.waitForResult(0);
+    await player.page.locator('#stage').screenshot({ path: info.outputPath(`battle-result-${skin}.png`) });
+    const replay = await player.lastReplay();
+    expect(replay?.play).toMatchObject({ battleMode: 'TWO-PLAYER', gauge2P: 'HARD' });
+    expect(replay?.results?.secondPlayer).toMatchObject({ judge: { pgreat: 6 }, gauge: { type: 'HARD' } });
+    expect(replay?.results?.native).toMatchObject({ judge: { pgreat: 6 } });
+    await player.leaveResult();
+    await player.setOption(['Play options'], 'Battle', 'OFF');
+    await player.dropText('two-players.bmplay.json', JSON.stringify(replay));
+    await player.waitFor((state) => state.scene.kind === 'play' && state.play?.replay === true, 'BATTLE replay');
+    await player.waitForResult(1);
+  });
+}
+
+test('That-Which-Must-Not-Be-Named 2P PLAY with M-RAN mirrors one player of a shared RANDOM', async ({ player }) => {
+  await player.open({ 'be-music.built-in-skin': 'plain' });
+  const title = 'M-RAN';
+  await player.dropText('m-ran.bme', `#TITLE ${title}\n#BPM 240\n#00111:01\n#00112:0001\n#00113:000001`);
+  await player.setOption(['Developer'], 'Judgment windows', '????');
+  await player.setOption(['Play options'], 'Battle', '2P PLAY');
+  await player.setOption(['Play options'], 'Random 1P', 'RANDOM');
+  await player.setOption(['Play options'], 'Random 2P', 'RANDOM');
+  await player.setOption(['Play options'], 'M-RAN 2P', true);
+  await player.setOption(['Play options'], 'Auto play', true);
+  await player.cursorTo((bar) => bar.title === title, 'M-RAN chart');
+  await player.key('Enter');
+  await player.waitForResult(0);
+  const replay = await player.lastReplay();
+  expect(replay?.play.battleMode).toBe('TWO-PLAYER');
+  const lanes = (side: string): string[] =>
+    (replay?.chart.notes ?? [])
+      .filter((note) => note.channel.startsWith(side))
+      .sort((a, b) => a.timeUs - b.timeUs)
+      .map((note) => note.channel.slice(1));
+  // A 5KEY chart: MIRROR swaps keys 1↔5 and 2↔4.
+  const mirror: Record<string, string> = { '1': '5', '2': '4', '3': '3', '4': '2', '5': '1' };
+  expect(lanes('2')).toEqual(lanes('1').map((lane) => mirror[lane]));
+});

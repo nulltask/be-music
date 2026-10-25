@@ -20,6 +20,7 @@ import type { PlayfieldRuntime } from '../shared/playfield/context.ts';
 import type {
   BeMusicGameplayLayout,
   BeMusicGameplayRuntime,
+  BeMusicSecondPlayerRuntime,
   BeMusicJudgmentState,
   BeMusicStage,
 } from '../../skin/be-music/types.ts';
@@ -176,6 +177,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     lastJudge: seconds <= ctx.play.lastJudgeUntil ? ctx.play.lastJudge : undefined,
     judgeSides,
     rank: total <= 0 ? undefined : resolve____RankLabel(ctx.play.score.exScore, total),
+    ...(ctx.play.secondPlayer !== undefined ? { secondPlayer: secondPlayerRuntime(ctx.play.secondPlayer) } : {}),
     autoplay: ctx.options.autoPlay === true,
     hasBGA: ctx.play.hasBGA,
     nowMs: ctx.play.playClock(),
@@ -340,4 +342,28 @@ export function renderBuiltInChrome(
     ctx.skinLayerPool.end();
     ctx.overlayLayerPool.end();
   }
+}
+
+/** The 2P player's HUD figures in a two-player play, read off its own play state and scores. */
+function secondPlayerRuntime(second: NonNullable<PlayfieldRuntime['secondPlayer']>): BeMusicSecondPlayerRuntime {
+  const total = Math.max(0, second.score.total);
+  return {
+    score: second.score.score,
+    exScore: second.score.exScore,
+    exScoreMax: total * 2,
+    combo: second.playState.combo,
+    maxCombo: second.playState.maxCombo,
+    perfect: second.score.perfect,
+    great: second.score.great,
+    good: second.score.good,
+    bad: second.score.bad,
+    poor: second.score.poor,
+    gauge: second.playState.gauge,
+    ...(second.gauge !== undefined && second.gauge.max > 0
+      ? { clearThreshold: (second.gauge.clearThreshold / second.gauge.max) * 100 }
+      : {}),
+    gaugeLabel: formatGaugeLabel(second.gauge?.type ?? second.playState.gaugeType) ?? 'GROOVE',
+    gaugeSurvival: second.gauge?.survival === true,
+    ...(total > 0 ? { rank: resolve____RankLabel(second.score.exScore, total) } : {}),
+  };
 }

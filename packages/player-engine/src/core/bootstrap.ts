@@ -322,7 +322,11 @@ export function preparePlaybackChart(
   const dBattleScratch = battleMode === 'D-BATTLE' && options.dBattleScratch === true;
   const duplicateBattle = isDuplicatedBattleMode(battleMode)
     ? duplicateBattleChart(resolved, notes, landmineNotes, invisibleNotes, {
-        duplicateMines: battleMode !== 'D-BATTLE',
+        // LR2 copies only 1x/3x/5x cells (D-BATTLE, BATTLE); That-Which-Must-Not-Be-Named gives both players one chart.
+        duplicateMines: !(
+          battleMode === 'D-BATTLE' ||
+          (battleMode === 'TWO-PLAYER' && options.judgeRuleset !== '____')
+        ),
         backgroundScratch: battleMode === 'BATTLE-AS' || (battleMode === 'D-BATTLE' && !dBattleScratch),
         backgroundMineSample: battleMode === 'D-BATTLE',
       })

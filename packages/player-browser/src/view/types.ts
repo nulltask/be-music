@@ -348,6 +348,8 @@ export interface PlayFrame {
   readonly playOptions: PlayOptions;
   /** The running play: gauge, score, combo, judgments, hi-speed and lane covers. */
   readonly state: PlayState;
+  /** The 2P player of a two-player play (LR2 BATTLE): its gauge, score, combo and judgments. */
+  readonly state2P?: PlayState;
   /** Optional personal best and target EX scores for skin comparison animations; missing values mean zero. */
   readonly scoreTargets?: { readonly bestEXScore?: number; readonly targetEXScore?: number };
   readonly stage: PlayStage;

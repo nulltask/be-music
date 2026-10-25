@@ -120,6 +120,8 @@ export interface PlayerUIFramePayload {
   reversalSeconds?: number;
   totalSeconds: number;
   summary: PlayerUIFrameSummary;
+  /** The 2P player's summary of a two-player play (LR2 BATTLE); `summary` is the 1P player's. */
+  summary2P?: PlayerUIFrameSummary;
   notes: PlayerUIFrameNote[];
   /** Authoritative HCN animation state; absent before a judge is created. */
   hcnLanes?: readonly PlayerHCNLaneState[];
@@ -219,6 +221,7 @@ export function createPlayerUISignalBus(initialFrame: PlayerUIFramePayload): Pla
     frameState.reversalSeconds = frame.reversalSeconds;
     frameState.totalSeconds = frame.totalSeconds;
     frameState.summary = frame.summary;
+    frameState.summary2P = frame.summary2P;
     frameState.notes = frame.notes;
     frameState.hcnLanes = frame.hcnLanes;
     frameState.judgedNoteCount = frame.judgedNoteCount;

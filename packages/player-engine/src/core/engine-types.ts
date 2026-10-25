@@ -111,6 +111,8 @@ export interface PlayerPlaySettings {
   sevenToNineType?: import('./seven-to-nine.ts').SevenToNineType;
   hRandomThresholdBPM?: number;
   battleMode?: BattleMode;
+  /** The 2P player's gauge in a two-player play (`battleMode: 'TWO-PLAYER'`); absent plays the 1P gauge. */
+  gauge2P?: string;
   /** LR2 D-BATTLE: the scratch key was held through the decide animation, so scratch objects stay playable. */
   dBattleScratch?: boolean;
   lr2ExtraMode?: boolean;
@@ -448,6 +450,8 @@ export interface PlayerSummary {
   gauge?: PlayerGaugeSummary;
   /** For a course stage: the course-wide combo running now and the course-wide max combo (carried across stages). */
   course?: { combo: number; maxCombo: number };
+  /** The 2P player's summary of a two-player play (LR2 BATTLE); this summary is the 1P player's. */
+  secondPlayer?: PlayerSummary;
 }
 
 export interface PlayerLoadProgress {

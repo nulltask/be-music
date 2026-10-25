@@ -48,6 +48,9 @@ export type GUIPlayOptions = Pick<
   | 'sevenToNineType'
   | 'battleMode'
   | 'dBattleScratch'
+  | 'gauge2P'
+  | 'mRan1P'
+  | 'mRan2P'
   | 'longNoteMode'
   | 'customJudge'
   | 'practice'
@@ -118,6 +121,9 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     sevenToNineType: state.sevenToNineType,
     battleMode: state.battleMode,
     dBattleScratch: state.dBattleScratch,
+    gauge2P: state.gauge2P,
+    mRan1P: state.mRan1P,
+    mRan2P: state.mRan2P,
     longNoteMode: state.longNoteMode,
     customJudge: state.customJudge,
     practice: state.practice,
@@ -203,6 +209,9 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.sevenToNineType = options.sevenToNineType;
   state.battleMode = options.battleMode;
   state.dBattleScratch = options.dBattleScratch;
+  state.gauge2P = options.gauge2P;
+  state.mRan1P = options.mRan1P;
+  state.mRan2P = options.mRan2P;
   state.longNoteMode = options.longNoteMode;
   state.customJudge = options.customJudge;
   state.practice = options.practice;
@@ -331,6 +340,8 @@ const ARRANGEMENT_OPTIONS = [
   'sevenToNineType',
   'battleMode',
   'dBattleScratch',
+  'mRan1P',
+  'mRan2P',
   'lr2ExtraMode',
   'lr2ExtraLevel',
   'extraNoteDepth',
