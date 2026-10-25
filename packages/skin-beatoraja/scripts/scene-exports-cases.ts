@@ -615,6 +615,18 @@ export function registerBeatorajaSkinSceneExportsCases(define: DefineBenchmarkCa
       });
     },
   });
+  define('skin-beatoraja.scene.resolveBeatorajaOptionButton', {
+    run: () => {
+      sceneAPI.resolveBeatorajaOptionButton(54, { battleMode: 'OFF', dpFlip: true }, false);
+      sceneAPI.resolveBeatorajaOptionButton(308, { longNoteMode: 'HCN' }, false);
+    },
+  });
+  define('skin-beatoraja.scene.resolveBeatorajaPlayOptionIndex', {
+    run: () => {
+      sceneAPI.resolveBeatorajaPlayOptionIndex(54, { battleMode: 'BATTLE-AS' });
+      sceneAPI.resolveBeatorajaPlayOptionIndex(78, { gaugeAutoShift: 'BEST_CLEAR' });
+    },
+  });
   define('skin-beatoraja.scene.resolveBeatorajaOptionIndex', {
     run: () => {
       sceneAPI.resolveBeatorajaOptionIndex(370, { lamp: 'EX_HARD' });

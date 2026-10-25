@@ -10,7 +10,6 @@
  * with no keyboard can leave it ({@link resolveBeatorajaResultPointerIntent}).
  */
 
-import { resolveChartLongNoteMode } from '@be-music/chart-model';
 import { buildBaseOpSet, type BeatorajaSkin } from '@be-music/skin-beatoraja';
 import {
   resolveBeatorajaGaugePolyline,
@@ -19,7 +18,6 @@ import {
   resolveBeatorajaResultGraphValue,
   resolveBeatorajaResultJudgeGraph,
   resolveBeatorajaResultNumber,
-  resolveBeatorajaOptionIndex,
   resolveBeatorajaResultOps,
   resolveBeatorajaResultPolyline,
   resolveBeatorajaResultText,
@@ -34,6 +32,7 @@ import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts
 import type { BrowserAssetSource } from '../../collection/types.ts';
 import type { BeatorajaKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
+import { resolveBeatorajaOptionRef } from './option-refs.ts';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
@@ -124,10 +123,9 @@ export class BeatorajaResultView implements ResultView {
         skin,
         textures,
         resolveRefValue: (ref) =>
-          resolveBeatorajaOptionIndex(ref, {
-            lnMode:
-              this.reading?.playChart === undefined ? undefined : resolveChartLongNoteMode(this.reading.playChart),
-            lamp: this.reading?.result.lamp,
+          resolveBeatorajaOptionRef(ref, {
+            ...(this.reading?.playChart !== undefined ? { chart: this.reading.playChart } : {}),
+            ...(this.reading !== undefined ? { lamp: this.reading.result.lamp } : {}),
           }) ?? 0,
         resolveTextContent: (ref) => this.read((input) => resolveBeatorajaResultText(ref, input)),
         resolveNumberValue: (ref) => this.read((input) => resolveBeatorajaResultNumber(ref, input)),

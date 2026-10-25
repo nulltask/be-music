@@ -27,10 +27,14 @@ const HS_FIX_INDICES: Readonly<Record<PlayOptions['hsFix'], number>> = {
   CONSTANT: 3,
 };
 
+const LONG_NOTE_MODE_INDICES: Readonly<Record<PlayOptions['longNoteMode'], number>> = { LN: 0, CN: 1, HCN: 2 };
+
 /** The option and record facts shared by image refs and Lua `event_index`. */
 export interface BeatorajaOptionIndexInput {
-  /** Chart LN mode, numbered from 1; the select screen's override takes precedence there. */
+  /** The long-note mode the chart names itself (`#LNMODE`, bmson `ln_type`), numbered from 1. */
   readonly lnMode?: number;
+  /** The player's LN MODE, which the LNMODE image shows for a chart without its own mode, and on the select screen. */
+  readonly longNoteMode?: PlayOptions['longNoteMode'];
   readonly hsFix?: PlayOptions['hsFix'];
   readonly lamp?: ClearLamp;
   /** The selected record's lamp op when the host already resolved the lamp into an op. */
@@ -38,14 +42,16 @@ export interface BeatorajaOptionIndexInput {
 }
 
 /**
- * Image-index properties, distinct from ordinary number properties. Unsupported refs return `undefined` for a
+ * Image-index properties, distinct from ordinary number properties. The LNMODE image (308) is the chart's own mode on
+ * the screens that pass one (beatoraja's play and result), else the player's LN MODE. Unsupported refs return `undefined` for a
  * family's existing MODE, SORT or lane-judge resolver. The browser's AVERAGE option uses main BPM (index 3);
  * CONSTANT currently uses that same effective reference, as it does in playback.
  */
 export function resolveBeatorajaOptionIndex(ref: number, input: BeatorajaOptionIndexInput): number | undefined {
   switch (ref) {
     case BEATORAJA_BUTTON.LNMODE:
-      return input.lnMode === 2 ? 1 : input.lnMode === 3 ? 2 : 0;
+      if (input.lnMode !== undefined) return input.lnMode === 2 ? 1 : input.lnMode === 3 ? 2 : 0;
+      return LONG_NOTE_MODE_INDICES[input.longNoteMode ?? 'LN'] ?? 0;
     case BEATORAJA_BUTTON.HSFIX:
       return HS_FIX_INDICES[input.hsFix ?? 'OFF'] ?? 0;
     case BEATORAJA_NUM.CLEAR:
