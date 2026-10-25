@@ -11,15 +11,19 @@ const REPLAY_VIEW = ['Play options', 'Replay / ghost'];
 
 /**
  * Plays Fixture A with AUTO, raising the tempo to +20 % (pitch mode, the default) and the hi-speed by two steps once
- * notes are judged, and returns its replay.
+ * notes are judged, and returns its replay. The play is paused on the frame its first note is judged and the changes
+ * are made while it waits, so the log records them early in the chart however slow the runner is: a replay of it then
+ * reaches them with most of the chart still to play.
  */
 async function playWithLiveChanges(player: Player): Promise<BeMusicReplay> {
   await player.setOption(TEMPO, 'Enabled', true);
   await player.setOption(['Play options'], 'Auto play', true);
   await player.browseTo(SONGS, 'Fixture A');
   await player.key('Enter');
-  let state = await player.waitFor(
+  let state = await player.keyWhen(
     (current) => current.scene.kind === 'play' && (current.play?.judged?.pgreat ?? 0) >= 1,
+    undefined,
+    'Space',
     'Fixture A under way',
   );
   expect(state.status).toBe('Playing: Fixture A');
@@ -30,6 +34,7 @@ async function playWithLiveChanges(player: Player): Promise<BeMusicReplay> {
   await player.key('ArrowUp');
   await player.key('ArrowUp');
   await player.waitFor((current) => (current.play?.hiSpeed ?? 0) > hiSpeed, 'the hi-speed to rise');
+  await player.key('Space');
   state = await player.waitForResult(0);
   expect(state.status).toBe('Result: Fixture A');
   const replay = await player.lastReplay();
@@ -45,6 +50,8 @@ test('the status line follows a play, and its log records the live tempo and vie
   expect(replay.play.mode).toBe('auto');
   expect(replay.play.tempo ?? 1).toBe(1);
   expect(replay.play.tempoChanges).toEqual([expect.objectContaining({ tempo: 1.2 })]);
+  // Made while the play waited on its first judged note: early in the chart, well before the 5 s a replay seeks to.
+  expect(replay.play.tempoChanges![0]!.timeUs).toBeLessThan(3_000_000);
   const start = replay.play.view?.hiSpeed;
   expect(start).toBeGreaterThan(0);
   expect(replay.play.viewChanges?.length ?? 0).toBeGreaterThan(0);
