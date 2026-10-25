@@ -475,3 +475,36 @@ for (const [label, policy, effective] of [
     });
   }
 }
+
+for (const skin of ['plain', 'native'] as const) {
+  test(`LR2 CONSTANT preserves STOP and replay geometry on ${skin}`, async ({ player }, info) => {
+    await player.open({ 'be-music.built-in-skin': skin });
+    await player.dropText(
+      'lr2-constant.bme',
+      '#TITLE LR2 constant\n#BPM 120\n#BPM01 240\n#STOP01 192\n#LNOBJ AA\n#00012:0001\n#00108:01\n#00109:01\n#00212:AA\n#00311:01\n',
+    );
+    await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+    await player.setOption(['Play options'], 'HS-FIX', 'CONSTANT');
+    await player.setOption(['Play options'], 'Auto play', true);
+    await player.cursorTo((bar) => bar.title === 'LR2 constant', 'constant chart');
+    await player.key('Enter');
+    await player.waitFor((state) => (state.play?.seconds ?? 0) > 2.2, 'the STOP window');
+    await player.key('Space');
+    await player.page.locator('#stage').screenshot({ path: info.outputPath(`constant-stop-${skin}.png`) });
+    await player.key('Space');
+    await player.waitFor((state) => (state.play?.seconds ?? 0) > 3.4, 'the faster BPM after STOP');
+    await player.key('ArrowUp');
+    await player.page.locator('#stage').screenshot({ path: info.outputPath(`constant-after-stop-${skin}.png`) });
+    await player.waitForResult(0);
+    const replay = await player.lastReplay();
+    expect(replay?.play.view?.hsFix).toBe('CONSTANT');
+    expect(replay?.play.options?.hsFix).toBe('CONSTANT');
+    expect(replay?.play.optionChanges?.some((change) => change.values.hiSpeed === 2.1)).toBe(true);
+    await player.leaveResult();
+    await player.setOption(['Play options'], 'HS-FIX', 'OFF');
+    await player.dropText('lr2-constant.bmplay.json', JSON.stringify(replay));
+    await player.waitForResult(1);
+    const results = (await player.state()).results;
+    expect(results[1]?.judged).toEqual(results[0]?.judged);
+  });
+}

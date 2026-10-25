@@ -229,11 +229,8 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       },
     ),
   );
-  this.hsFixController = trackPlayOption(
-    selectBinding(folder, this.guiState, 'hsFix', 'HS-FIX', PLAY_OPTION_CHOICES.hsFix!).on('change', ({ value }) => {
-      this.setPlayOptions({ hsFix: value });
-    }),
-  );
+  this.hsFixController = selectBinding(folder, this.guiState, 'hsFix', 'HS-FIX', PLAY_OPTION_CHOICES.hsFix!);
+  trackPlayOption(this.hsFixController.on('change', ({ value }) => this.setPlayOptions({ hsFix: value })));
   trackPlayOption(
     selectBinding(folder, this.guiState, 'displayAreaInfo', 'Display area info', {
       OFF: 'OFF',

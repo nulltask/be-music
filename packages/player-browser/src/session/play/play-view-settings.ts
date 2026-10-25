@@ -166,7 +166,7 @@ function resolveReplayScale(ctx: PlayViewSettingsContext): ReplayScale | undefin
     ctx.theme.replayView?.() ??
     (ctx.laneX.size === 0 ? undefined : { scale: BE_MUSIC_HI_SPEED_SCALE, laneBeats: resolveLaneBeats(ctx) });
   if (scale === undefined) return undefined;
-  const mainBPM = ctx.chartBPMRange?.mainBPM;
+  const mainBPM = ctx.playState.view.hsFix === 'CONSTANT' ? 150 : ctx.chartBPMRange?.mainBPM;
   return mainBPM !== undefined ? { ...scale, mainBPM } : scale;
 }
 
@@ -318,8 +318,8 @@ export function resolveVisibleMs(
           ? resolveCoverAboveLift(cover.sudden, cover.lift)
           : (ctx.playState.view.covers.find((state) => state.side === cover.side && state.suddenOn)?.sudden ?? 0)
         : 0,
-    bpm,
-    scrollRate,
+    bpm: ctx.playState.view.hsFix === 'CONSTANT' ? 150 : bpm,
+    scrollRate: ctx.playState.view.hsFix === 'CONSTANT' ? 1 : scrollRate,
   });
 }
 

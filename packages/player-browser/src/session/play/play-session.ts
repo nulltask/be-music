@@ -1,4 +1,4 @@
-import { clampJudgeTimingMs } from '@be-music/player-scene-model';
+import { clampJudgeTimingMs, resolvePlayOptionValue } from '@be-music/player-scene-model';
 /**
  * The play session: one play's behaviour, whatever skin family draws it (ADR 0001). It composes the play's parts around
  * one `PlayState` — the chart (`play-chart.ts`), the media (`play-media.ts`, through the audio service's play graph when
@@ -99,6 +99,11 @@ export class PlaySession extends PlaySessionState {
 
   public constructor(options: PlaySessionOptions = {}, theme: PlaySessionTheme = NO_THEME) {
     super();
+    const recordedHSFix =
+      (options.replayView?.hiSpeed ?? true)
+        ? resolvePlayOptionValue('hsFix', options.replay?.play.options?.hsFix ?? options.replay?.play.view?.hsFix)
+        : undefined;
+    if (recordedHSFix !== undefined) options = { ...options, hsFix: recordedHSFix };
     this.options = options;
     this.practice = options.practice === true;
     this.theme = theme;
@@ -665,7 +670,18 @@ export class PlaySession extends PlaySessionState {
     // post-reversal |BPM| and pauses through post-reversal STOPs. Every display consumer — renderNotes, measure
     // lines, beatPhase — funnels through this method, so mirroring here covers them all; the forward beat underneath
     // keeps `beatAtSeconds`'s monotonic stop-window cursor intact.
-    return mirrorBeatAtTempoReversal(this.timingResolver?.reversal, seconds, this.forwardBeat(seconds));
+    const reversal = this.timingResolver?.reversal;
+    const forward = this.forwardBeat(seconds);
+    // CONSTANT mirrors LR2's converted 150-BPM position, then maps back to a beat for every view.
+    if (
+      reversal &&
+      seconds > reversal.seconds &&
+      this.playState.view.hsFix === 'CONSTANT' &&
+      this.scrollMapper?.mirrorBeatAt
+    ) {
+      return this.scrollMapper.mirrorBeatAt(reversal.beat, forward);
+    }
+    return mirrorBeatAtTempoReversal(reversal, seconds, forward);
   }
 
   private forwardBeat(seconds: number): number {
