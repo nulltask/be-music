@@ -3,7 +3,12 @@ import { resolve____RankLabel } from '../ruleset/score.ts';
 import type { RulesetChartFacts } from '../ruleset/facts.ts';
 import { resolveRuleset, type RulesetId } from '../ruleset/index.ts';
 import { CLEAR_LAMPS, resolveCourseClearLamp, resolveMissCount, type ClearLamp } from '../ruleset/clear-lamp.ts';
-import { resolveCourseGauge, resolveCourseGaugeId, type RulesetCourseKind } from '../ruleset/course.ts';
+import {
+  isCourseStageFailed,
+  resolveCourseGauge,
+  resolveCourseGaugeId,
+  type RulesetCourseKind,
+} from '../ruleset/course.ts';
 import {
   BE_MUSIC_REPLAY_VERSION,
   parseReplay,
@@ -126,9 +131,14 @@ export function resolveCourseLamp(
   result: Pick<ReplayCourseResult, 'judge' | 'noteCount' | 'maxCombo' | 'gauge' | 'fullCombo'>,
   pick: GaugeType,
 ): CourseClearLamp {
+  const id = ruleset.split('/')[0]!;
+  const fullCombo = result.fullCombo !== false && result.noteCount > 0 && result.maxCombo >= result.noteCount;
+  // CheckCourseClear: HP >= 2 may advance; at course end, HP == 2 clears only through the full-combo branch.
+  const cleared =
+    result.gauge.cleared && (id !== 'lr2' || (result.gauge.final >= 2 && (fullCombo || result.gauge.final > 2)));
   return resolveCourseClearLamp({
-    ruleset,
-    cleared: result.gauge.cleared,
+    ruleset: id,
+    cleared,
     gauge: result.gauge.type,
     gaugeType: pick,
     noteCount: result.noteCount,
@@ -223,7 +233,11 @@ export function aggregateCourseResult(
   const gauge = {
     type: last?.gauge.type ?? '',
     final: last?.gauge.final ?? 0,
-    cleared: reachedAll && last !== undefined && last.gauge.cleared,
+    cleared:
+      reachedAll &&
+      last !== undefined &&
+      last.gauge.cleared &&
+      (ruleset.split('/')[0] !== 'lr2' || judged === noteCount),
   };
   const partial = {
     judge,
@@ -257,6 +271,7 @@ export function aggregateCourseResult(
     lamp: resolveCourseLamp(ruleset.split('/')[0]!, partial, pick),
     stages: [...stageResults],
   };
+  gauge.cleared = result.lamp !== 'FAILED';
   const trophy = gauge.cleared ? resolveCourseTrophy(course.trophies, result) : undefined;
   if (trophy !== undefined) result.trophy = trophy;
   return result;
@@ -274,7 +289,7 @@ function givenUpResult(stageLog: BeMusicReplay, result: ReplayRulesetResult): Re
 
 /** The gauge a stage hands on: a stage that ended with its survival gauge empty ends the course. */
 function stageFailed(result: ReplayRulesetResult): boolean {
-  return result.gauge.failedMidPlay === true || result.gauge.final <= 0;
+  return isCourseStageFailed(result.ruleset, result.gauge);
 }
 
 /** The judgment notes one stage counts under a ruleset, from a stage log or from an unreached stage's facts. */
@@ -347,7 +362,10 @@ function nonstopCourseResult(
   const gauge = {
     type: run.gauge.type,
     final: run.gauge.final,
-    cleared: run.gauge.cleared && courseLog.nonstop?.replay.play.aborted !== true,
+    cleared:
+      run.gauge.cleared &&
+      courseLog.nonstop?.replay.play.aborted !== true &&
+      (run.ruleset.split('/')[0] !== 'lr2' || judged === noteCount),
   };
   const result: ReplayCourseResult = {
     ruleset: run.ruleset,
@@ -377,6 +395,7 @@ function nonstopCourseResult(
     ),
     stages: [...stageResults],
   };
+  gauge.cleared = result.lamp !== 'FAILED';
   const trophy = gauge.cleared ? resolveCourseTrophy(courseLog.course.trophies, result) : undefined;
   if (trophy !== undefined) result.trophy = trophy;
   return result;

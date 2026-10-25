@@ -102,6 +102,8 @@ const COURSE_GAUGE_LAMPS: Readonly<Record<string, ClearLamp>> = {
  * LR2body.exe CheckCourseClear @0x4086d0); beatoraja's follows the class gauge the run played on.
  */
 function courseGaugeClearLamp(gauge: string, ruleset: string, gaugeType: GaugeType): ClearLamp {
+  // LR2 resets EASY and G.ATTACK to GROOVE when a grade course starts.
+  if (ruleset === 'lr2' && gauge === 'GRADE' && (gaugeType === 'EASY' || gaugeType === 'G-ATTACK')) return 'NORMAL';
   if (ruleset === 'lr2')
     return gaugeType === 'EASY'
       ? 'EASY'
