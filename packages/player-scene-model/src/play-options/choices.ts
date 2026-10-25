@@ -79,7 +79,7 @@ export function formatGaugeLabel(id: string | undefined): string | undefined {
 export const RANDOM_CYCLE: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM'];
 
 /** Available lane options for the selected reference ruleset; LR2's sprite cycle stays separate. */
-export function resolveRandomModes(ruleset: RulesetId): readonly RandomMode[] {
+export function resolveRandomModes(ruleset: RulesetId, battle1P = false): readonly RandomMode[] {
   if (ruleset === 'lr2') return [...RANDOM_CYCLE, 'SCATTER', 'SCATTER-CORRECTED', 'CONVERGE'];
   const ordinary: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', 'R-RANDOM', 'S-RANDOM'];
   return ruleset === 'beatoraja'
@@ -94,7 +94,9 @@ export function resolveRandomModes(ruleset: RulesetId): readonly RandomMode[] {
         'RANDOM_PLAYABLE',
         'S_RANDOM_PLAYABLE',
       ]
-    : ordinary;
+    : battle1P && ruleset === '____'
+      ? [...ordinary, 'SYNCHRONIZE-RANDOM', 'SYMMETRY-RANDOM']
+      : ordinary;
 }
 
 /** The play options a player starts with. */
@@ -204,7 +206,9 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   autoScratch1P: BOOLEAN_CYCLE,
   autoScratch2P: BOOLEAN_CYCLE,
   dpFlip: BOOLEAN_CYCLE,
-  random1P: [...new Set([...resolveRandomModes('beatoraja'), ...resolveRandomModes('lr2')])],
+  random1P: [
+    ...new Set([...resolveRandomModes('beatoraja'), ...resolveRandomModes('lr2'), ...resolveRandomModes('____', true)]),
+  ],
   random2P: [...new Set([...resolveRandomModes('beatoraja'), ...resolveRandomModes('lr2')])],
   gauge1P: LR2_GAUGE_TYPES,
   gauge2P: LR2_GAUGE_TYPES,

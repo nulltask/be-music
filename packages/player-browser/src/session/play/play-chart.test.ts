@@ -10,6 +10,7 @@ import { applyReplayArrangement } from '../../chart/replay-arrangement.ts';
 import { describe, expect, test } from 'vite-plus/test';
 import { resolveLaneOptionChannels } from '@be-music/player-engine/lanes';
 import {
+  applyBattleRandomMode,
   applyRandomMode,
   extractChartExtension,
   flipDPChannel,
@@ -590,4 +591,33 @@ test('corrected SCATTER rejects other rulesets and modes before consuming random
     expect(notes).toEqual([{ channel: '11', seconds: 1 }]);
     expect(draws).toBe(0);
   }
+});
+
+describe('That-Which-Must-Not-Be-Named BATTLE random', () => {
+  const lanes1P = resolveLaneOptionChannels('1P', '14');
+  const lanes2P = resolveLaneOptionChannels('2P', '14');
+  const battleNotes = (): Array<{ channel: string }> => [
+    ...['11', '12', '13', '14', '15', '18', '19', '16'].map((channel) => ({ channel })),
+    ...['21', '22', '23', '24', '25', '28', '29', '26'].map((channel) => ({ channel })),
+  ];
+
+  test('SYNCHRONIZE RANDOM gives both sides one permutation', () => {
+    const notes = battleNotes();
+    applyBattleRandomMode('SYNCHRONIZE-RANDOM', lanes1P, lanes2P, seededRandom(7), notes);
+    const side1 = notes.slice(0, 7).map((note) => lanes1P.indexOf(note.channel));
+    const side2 = notes.slice(8, 15).map((note) => lanes2P.indexOf(note.channel));
+    expect(side2).toEqual(side1);
+    expect(new Set(side1).size).toBe(7);
+    expect([notes[7]!.channel, notes[15]!.channel]).toEqual(['16', '26']);
+  });
+
+  test('SYMMETRY RANDOM mirrors the 1P permutation on the 2P side', () => {
+    const notes = battleNotes();
+    const mines = [{ channel: '11' }, { channel: '21' }];
+    applyBattleRandomMode('SYMMETRY-RANDOM', lanes1P, lanes2P, seededRandom(7), notes, mines);
+    const side1 = notes.slice(0, 7).map((note) => lanes1P.indexOf(note.channel));
+    const side2 = notes.slice(8, 15).map((note) => lanes2P.indexOf(note.channel));
+    expect(side2).toEqual(side1.map((index) => 6 - index));
+    expect(lanes2P.indexOf(mines[1]!.channel)).toBe(6 - lanes1P.indexOf(mines[0]!.channel));
+  });
 });

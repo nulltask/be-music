@@ -565,8 +565,11 @@ export class DebugMenu {
         : paneOptions({ 'Source default': 'combo' as const });
       this.judgeAlgorithmController.refresh();
     }
-    const randomModes = resolveRandomModes(this.guiState.judgeRuleset);
     for (const side of ['1P', '2P'] as const) {
+      const randomModes = resolveRandomModes(
+        this.guiState.judgeRuleset,
+        side === '1P' && this.guiState.battleMode === 'BATTLE',
+      );
       const key = `random${side}` as const;
       if (!randomModes.includes(this.guiState[key])) {
         this.guiState[key] = 'OFF';
@@ -579,7 +582,9 @@ export class DebugMenu {
             ? { ...item, text: 'SCATTER (LR2 beta3)' }
             : item.value === 'SCATTER-CORRECTED'
               ? { ...item, text: 'SCATTER (9KEY corrected)' }
-              : item,
+              : item.value === 'SYNCHRONIZE-RANDOM' || item.value === 'SYMMETRY-RANDOM'
+                ? { ...item, text: item.value.replace('-', ' ') }
+                : item,
         );
         controller.refresh();
       }

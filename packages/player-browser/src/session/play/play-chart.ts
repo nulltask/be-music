@@ -263,8 +263,11 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       throw new RangeError('The previous arrangement belongs to a different source chart.');
   }
   if (ctx.options.replay === undefined) {
-    const modes = resolveRandomModes(ctx.options.judgeRuleset ?? 'lr2');
-    for (const mode of [ctx.options.random1P, ctx.options.random2P]) {
+    const ruleset = ctx.options.judgeRuleset ?? 'lr2';
+    for (const [mode, modes] of [
+      [ctx.options.random1P, resolveRandomModes(ruleset, ctx.options.battleMode === 'BATTLE')],
+      [ctx.options.random2P, resolveRandomModes(ruleset)],
+    ] as const) {
       if (mode !== undefined && !modes.includes(mode))
         throw new RangeError(`${mode} is unavailable for ${ctx.options.judgeRuleset ?? 'lr2'}.`);
     }
@@ -483,10 +486,25 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     // stable arrangement (F5-restart re-rolls it). Mine channels are included in the same shuffle pass so a mine on
     // lane 4 lands wherever the shuffle moved lane 4 — keeping the mine's visual relationship to the surrounding chord
     // intact.
+    const battleRandom =
+      ctx.options.random1P === 'SYNCHRONIZE-RANDOM' || ctx.options.random1P === 'SYMMETRY-RANDOM'
+        ? ctx.options.random1P
+        : undefined;
+    // Outside a BATTLE chart the source does not offer these; they leave the chart unchanged.
+    if (battleRandom && battleDuplicated)
+      applyBattleRandomMode(
+        battleRandom,
+        resolveLaneOptionChannels('1P', playVariant, prepared.laneBindings),
+        resolveLaneOptionChannels('2P', playVariant, prepared.laneBindings),
+        laneRandom('1P'),
+        ctx.notes,
+        ctx.mineNotes,
+        ctx.invisibleNotes,
+      );
     applyRandomMode(
       ctx.notes as Array<{ channel: string }>,
       resolveLaneOptionChannels('1P', playVariant, prepared.laneBindings),
-      ctx.options.random1P ?? 'OFF',
+      battleRandom ? 'OFF' : (ctx.options.random1P ?? 'OFF'),
       laneRandom('1P'),
       {
         ruleset: ctx.options.judgeRuleset ?? 'lr2',
@@ -511,7 +529,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     applyRandomMode(
       ctx.notes as Array<{ channel: string }>,
       resolveLaneOptionChannels('2P', playVariant, prepared.laneBindings),
-      ctx.options.random2P ?? 'OFF',
+      battleRandom ? 'OFF' : (ctx.options.random2P ?? 'OFF'),
       laneRandom('2P'),
       {
         ruleset: ctx.options.judgeRuleset ?? 'lr2',
@@ -1040,6 +1058,32 @@ export function applyRandomMode(
     remapAll(map);
     return;
   }
+}
+
+/**
+ * That-Which-Must-Not-Be-Named BATTLE arrangements: one RANDOM permutation of the 1P keys, then the 2P keys take
+ * the same lane numbers (`SYNCHRONIZE-RANDOM`) or their mirror image (`SYMMETRY-RANDOM`). Scratch never moves.
+ */
+export function applyBattleRandomMode(
+  mode: 'SYNCHRONIZE-RANDOM' | 'SYMMETRY-RANDOM',
+  lanes1P: readonly string[],
+  lanes2P: readonly string[],
+  rng: () => number,
+  ...arrays: Array<Array<{ channel: string }>>
+): void {
+  if (lanes1P.length !== lanes2P.length) throw new RangeError('BATTLE random requires matching sides.');
+  const perm = shuffleArray([...lanes1P], rng);
+  const map = new Map<string, string>();
+  lanes1P.forEach((lane, index) => {
+    const target = lanes1P.indexOf(perm[index]!);
+    map.set(lane, perm[index]!);
+    map.set(lanes2P[index]!, lanes2P[mode === 'SYNCHRONIZE-RANDOM' ? target : lanes2P.length - 1 - target]!);
+  });
+  for (const array of arrays)
+    for (const entry of array) {
+      const target = map.get(entry.channel);
+      if (target) entry.channel = target;
+    }
 }
 
 /**
