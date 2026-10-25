@@ -18,11 +18,14 @@ test(
     await demo.setOption(PLAY_OPTIONS, 'Auto play', true);
     await demo.browseTo(COURSES, 'FIX GRADE');
     await demo.key('Enter');
-    let state = await demo.waitFor(
+    // Paused once stage 1 is under way, so a slow runner does not play the course on while the skin loads.
+    let state = await demo.keyWhen(
       (current) =>
         current.scene.kind === 'play' &&
         current.play?.course?.name === 'FIX GRADE' &&
         (current.play.judged?.pgreat ?? 0) >= 1,
+      undefined,
+      'Space',
       'FIX GRADE stage 1 under way',
     );
     expect(state.play?.course).toMatchObject({ stage: 1, stageCount: 3 });

@@ -178,6 +178,38 @@ export class Demo {
   }
 
   /**
+   * Presses `code` on the first frame `predicate` holds for the test hook's state, checked in the page itself: a poll
+   * from the runner can land well past that moment on a slow machine (a CI runner draws without a GPU). `predicate`
+   * runs in the page, so it reads only its arguments; `arg` carries any value it needs. Returns the state it pressed on.
+   */
+  async keyWhen<A>(
+    predicate: (state: TestHookState, arg: A) => boolean,
+    arg: A,
+    code: string,
+    what: string,
+    timeoutMs = 90_000,
+  ): Promise<TestHookState> {
+    return this.page.evaluate(
+      ({ source, arg, code, key, what, timeoutMs }) =>
+        new Promise<TestHookState>((resolve, reject) => {
+          const holds = new Function(`return (${source});`)() as (state: TestHookState, arg: unknown) => boolean;
+          const deadline = performance.now() + timeoutMs;
+          const step = (): void => {
+            const state = window.__beMusicTest?.state();
+            if (state !== undefined && holds(state, arg)) {
+              for (const type of ['keydown', 'keyup'])
+                window.dispatchEvent(new KeyboardEvent(type, { code, key, bubbles: true, cancelable: true }));
+              resolve(state);
+            } else if (performance.now() > deadline) reject(new Error(`timed out waiting for ${what}`));
+            else requestAnimationFrame(step);
+          };
+          step();
+        }),
+      { source: predicate.toString(), arg, code, key: KEY_OF_CODE[code] ?? code, what, timeoutMs },
+    );
+  }
+
+  /**
    * Sets a Debug Menu control: `folder` is the folder titles from the top (`['Play options']`), `name` the control's
    * label. Checkboxes take a boolean, sliders a number, drop-downs the option's label.
    */
