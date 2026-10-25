@@ -55,6 +55,11 @@ const NOTE_OVERSCAN = 48;
  * A be-music skin's timing on the play screen: no load or play-start offsets of its own (the play's fallback intro
  * applies), and a 450 ms fade back to black, with the audio, before the result or select screen takes over.
  */
+/**
+ * The built-in skins that draw each side's LIFT and take the lane cover keys: the ones brought up to the per-side covers.
+ */
+export const LIFT_SKINS: ReadonlySet<string> = new Set(['plain', 'native', 'synesthesia']);
+
 export const BUILT_IN_PLAY_TIMING: PlayViewTiming = {
   loadEndOffsetMs: 0,
   playStartOffsetMs: 0,
@@ -89,7 +94,7 @@ export class BuiltInPlayView
   private readonly displayInfo = new DisplayAreaInfoOverlay();
   /** LIFT integration is currently enabled for Plain and Native. */
   public get drawsLift(): boolean {
-    return this.kit.skin.id === 'plain' || this.kit.skin.id === 'native';
+    return LIFT_SKINS.has(this.kit.skin.id);
   }
   public readonly family = 'built-in' as const;
   public readonly timing: PlayViewTiming = BUILT_IN_PLAY_TIMING;
