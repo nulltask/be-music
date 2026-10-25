@@ -227,6 +227,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   sevenToNinePattern: PlayOptions['sevenToNinePattern'];
   sevenToNineType: PlayOptions['sevenToNineType'];
   battleMode: PlayOptions['battleMode'];
+  dBattleScratch: boolean;
   lr2ExtraMode: boolean;
   lr2ExtraLevel: PlayOptions['lr2ExtraLevel'];
   mineModifier: PlayOptions['mineModifier'];

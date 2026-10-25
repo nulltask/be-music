@@ -206,6 +206,7 @@ export async function createPlaySession(
         longNoteModifier: options.longNoteModifier,
         longNoteRate: options.longNoteRate,
         battleMode: options.battleMode,
+        dBattleScratch: options.dBattleScratch,
         judgeRuleset: options.judgeRuleset,
         autoScratch: options.autoScratch,
         autoScratch1P: options.autoScratch1P,
@@ -419,6 +420,9 @@ export async function createPlaySession(
                   battleAssist2P: playbackChart.battleAssist2P ?? false,
                   battleChangedObjectCount: playbackChart.battleChangedObjectCount ?? 0,
                   battleDroppedObjectCount: playbackChart.battleDroppedObjectCount ?? 0,
+                  ...(playbackChart.dBattleScratch !== undefined
+                    ? { dBattleScratch: playbackChart.dBattleScratch }
+                    : {}),
                 }
               : {}),
             ...(options.lr2ExtraMode !== undefined || playbackChart.lr2ExtraMode !== undefined

@@ -54,3 +54,64 @@ test('a DP source keeps its chart under BATTLE', () => {
   expect(prepared.battleMode).toBe('OFF');
   expect(prepared.notes.map((note) => note.channel)).toEqual(['11', '21']);
 });
+
+test('beatoraja BATTLE AS moves both scratch copies to the background and drops scratch mines', () => {
+  const source = resolveChart(parseBMS(`${SOURCE}\n#001D6:05`), { playVariant: '7' });
+  const prepared = preparePlaybackChart(source, { battleMode: 'BATTLE-AS', judgeRuleset: 'beatoraja' });
+  expect(prepared.battleMode).toBe('BATTLE-AS');
+  expect(prepared.notes.map((note) => note.channel)).toEqual(['11', '12', '21', '22']);
+  expect(prepared.landmineNotes.map((mine) => mine.channel)).toEqual(['13', '23']);
+  expect(
+    prepared.resolvedChart.sampleTriggers
+      .filter((trigger) => trigger.channel === '01')
+      .map((trigger) => [trigger.sampleKey, trigger.samplePath, trigger.seconds]),
+  ).toEqual([
+    ['02', 'b.wav', 2],
+    ['02', 'b.wav', 2],
+  ]);
+});
+
+test('beatoraja BATTLE AS moves 24KEY wheel objects of both sides', () => {
+  const source = resolveChart(parseBMS('#BPM 120\n#WAV01 a.wav\n#0011P:01\n#00111:01'), { playVariant: '24' });
+  const prepared = preparePlaybackChart(source, { battleMode: 'BATTLE-AS', judgeRuleset: 'beatoraja' });
+  expect(prepared.resolvedChart.playVariant).toBe('48');
+  expect(prepared.notes.map((note) => note.channel)).toEqual(['11', '21']);
+});
+
+test('LR2 D-BATTLE copies notes but not mines, and plays a scratch mine as WAV00', () => {
+  const source = resolveChart(parseBMS(`#WAV00 zero.wav\n${SOURCE}\n#001D6:05`), { playVariant: '7' });
+  const prepared = preparePlaybackChart(source, { battleMode: 'D-BATTLE', judgeRuleset: 'lr2' });
+  expect(prepared).toMatchObject({ battleMode: 'D-BATTLE', dBattleScratch: false });
+  expect(prepared.resolvedChart.playVariant).toBe('14');
+  expect(prepared.notes.map((note) => note.channel)).toEqual(['11', '12', '21', '22']);
+  expect(prepared.landmineNotes.map((mine) => mine.channel)).toEqual(['13']);
+  expect(prepared.invisibleNotes.map((note) => note.channel)).toEqual(['14', '24']);
+  expect(
+    prepared.resolvedChart.sampleTriggers
+      .filter((trigger) => trigger.channel === '01')
+      .map((trigger) => [trigger.sampleKey, trigger.samplePath]),
+  ).toEqual([
+    ['02', 'b.wav'],
+    ['02', 'b.wav'],
+    ['00', 'zero.wav'],
+  ]);
+});
+
+test('a held D-BATTLE scratch keeps scratch objects on both sides', () => {
+  const source = resolveChart(parseBMS(SOURCE), { playVariant: '5' });
+  const prepared = preparePlaybackChart(source, {
+    battleMode: 'D-BATTLE',
+    dBattleScratch: true,
+    judgeRuleset: 'lr2',
+  });
+  expect(prepared).toMatchObject({ battleMode: 'D-BATTLE', dBattleScratch: true });
+  expect(prepared.notes.map((note) => note.channel)).toEqual(['11', '12', '16', '21', '22', '26']);
+});
+
+test('D-BATTLE availability follows LR2', () => {
+  expect(resolveEffectiveBattleMode('D-BATTLE', 'lr2', '7', true)).toBe('D-BATTLE');
+  expect(resolveEffectiveBattleMode('D-BATTLE', 'lr2', '9', false)).toBe('OFF');
+  expect(resolveEffectiveBattleMode('D-BATTLE', 'lr2', '14', false)).toBe('OFF');
+  expect(() => resolveEffectiveBattleMode('D-BATTLE', 'beatoraja', '7', false)).toThrow(RangeError);
+  expect(() => resolveEffectiveBattleMode('BATTLE-AS', '____', '7', false)).toThrow(RangeError);
+});

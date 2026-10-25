@@ -104,6 +104,8 @@ export interface PlayerPlaySettings {
   sevenToNineType?: import('./seven-to-nine.ts').SevenToNineType;
   hRandomThresholdBPM?: number;
   battleMode?: BattleMode;
+  /** LR2 D-BATTLE: the scratch key was held through the decide animation, so scratch objects stay playable. */
+  dBattleScratch?: boolean;
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;
   mineModifier?: MineModifier;

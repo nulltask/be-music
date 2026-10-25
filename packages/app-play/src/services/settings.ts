@@ -262,6 +262,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     sevenToNinePattern: 0,
     sevenToNineType: 0,
     battleMode: 'OFF',
+    dBattleScratch: false,
     lr2ExtraMode: false,
     lr2ExtraLevel: 0,
     extraNoteDepth: 0,

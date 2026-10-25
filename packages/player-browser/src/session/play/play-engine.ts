@@ -91,6 +91,7 @@ export interface PlayEngineContext
       | 'sevenToNinePattern'
       | 'sevenToNineType'
       | 'battleMode'
+      | 'dBattleScratch'
       | 'lr2ExtraMode'
       | 'lr2ExtraLevel'
       | 'extraNoteDepth'
@@ -459,6 +460,7 @@ export function resolveReplayRecording(
     | 'sevenToNinePattern'
     | 'sevenToNineType'
     | 'battleMode'
+    | 'dBattleScratch'
     | 'lr2ExtraMode'
     | 'lr2ExtraLevel'
     | 'extraNoteDepth'
@@ -524,6 +526,7 @@ export function resolveReplayRecording(
     sevenToNinePattern: options.sevenToNinePattern,
     sevenToNineType: options.sevenToNineType,
     battleMode: options.battleMode,
+    dBattleScratch: options.dBattleScratch,
     lr2ExtraMode: options.lr2ExtraMode,
     lr2ExtraLevel: options.lr2ExtraLevel,
     extraNoteDepth: options.extraNoteDepth,
@@ -638,6 +641,11 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
         : ctx.options.fixedArrangement
           ? (ctx.options.fixedArrangement.play.battleMode ?? 'OFF')
           : ctx.options.battleMode,
+      dBattleScratch: ctx.options.replay
+        ? (ctx.options.replay.play.dBattleScratch ?? false)
+        : ctx.options.fixedArrangement
+          ? (ctx.options.fixedArrangement.play.dBattleScratch ?? false)
+          : ctx.options.dBattleScratch,
       lr2ExtraMode: ctx.options.replay
         ? (ctx.options.replay.play.lr2ExtraMode ?? false)
         : ctx.options.fixedArrangement

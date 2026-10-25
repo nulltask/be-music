@@ -213,6 +213,8 @@ export interface ReplayPlay {
   battleAssist2P?: boolean;
   battleChangedObjectCount?: number;
   battleDroppedObjectCount?: number;
+  /** LR2 D-BATTLE: scratch objects stayed playable (scratch key held through the decide animation). */
+  dBattleScratch?: boolean;
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;
   lr2ExtraEffectiveLevel?: LR2ExtraLevel;
@@ -809,9 +811,9 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     parsed.sevenToNineApplied = play.sevenToNineApplied;
   }
   if (play.battleMode !== undefined) {
-    if (play.battleMode !== 'OFF' && play.battleMode !== 'SP-TO-DP' && play.battleMode !== 'BATTLE')
-      throw new ReplayParseError('play.battleMode: expected OFF, SP-TO-DP or BATTLE');
-    parsed.battleMode = play.battleMode;
+    if (!['OFF', 'SP-TO-DP', 'D-BATTLE', 'BATTLE', 'BATTLE-AS'].includes(play.battleMode as string))
+      throw new ReplayParseError('play.battleMode: expected OFF, SP-TO-DP, D-BATTLE, BATTLE or BATTLE-AS');
+    parsed.battleMode = play.battleMode as BattleMode;
   }
   if (play.battleSourceVariant !== undefined) {
     if (!['5', '7', '9', '10', '14', '24', '48'].includes(play.battleSourceVariant as string))
@@ -823,7 +825,7 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     if (tempo <= 0) throw new ReplayParseError('play.battleTempo: expected positive tempo');
     parsed.battleTempo = tempo;
   }
-  for (const field of ['battleAssist1P', 'battleAssist2P'] as const) {
+  for (const field of ['battleAssist1P', 'battleAssist2P', 'dBattleScratch'] as const) {
     if (play[field] === undefined) continue;
     if (typeof play[field] !== 'boolean') throw new ReplayParseError(`play.${field}: expected boolean`);
     parsed[field] = play[field] as boolean;
