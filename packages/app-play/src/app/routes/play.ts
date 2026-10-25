@@ -1,3 +1,4 @@
+import { clampFloatingHiSpeed } from '@be-music/player-scene-model';
 // The play route: the play screen (`createPlayScene`), whichever family draws it. A chart plays at once (no decide
 // screen, a retry, F5, a course stage, a NONSTOP run or a replay): the select screen goes off the stage, kept, the play
 // takes it and loads there, then starts. The decide route (`decide.ts`) has the play made here and loads it behind its
@@ -93,7 +94,8 @@ export interface PlayRouteDeps {
   /** The play's result, and the beatoraja chart its graphs plot. */
   readonly results: Pick<ResultRoute, 'lastBeatorajaChart' | 'showResult' | 'showBeatorajaPlayResult'>;
   /** The play options in force: the covers, HS-FIX, BGA and score graph the play is made with. */
-  readonly playOptions: Pick<PlayOptionsService, 'current'>;
+  readonly playOptions: Pick<PlayOptionsService, 'current'> &
+    Partial<Pick<PlayOptionsService, 'arrangementFor' | 'rememberArrangement'>>;
   /** The Debug Menu's state: the lane, gauge, tempo, audio and debug options the play is made with. */
   readonly guiState: PlaySceneGUIState & Pick<PlayerGUIState, 'courseAutoAdvance' | 'playLayout'>;
   /** The Debug Menu: the compressor's tuned parameters, and the hi-speed slider. */
@@ -237,6 +239,13 @@ export class PlayRoute {
       playOptions,
       autoPlay: overrides.autoPlay,
       replay,
+      fixedArrangement:
+        replay === undefined &&
+        courseStage === undefined &&
+        nonstop === undefined &&
+        this.guiState.judgeRuleset === 'beatoraja'
+          ? this.playOptions.arrangementFor?.(chartEntry.id)
+          : undefined,
       chartHashes: overrides.chartHashes,
       courseStage,
       activeCourse: this.activeCourse,
@@ -271,9 +280,25 @@ export class PlayRoute {
           : undefined,
       beatorajaPlay,
     };
+    // beatoraja PRACTICE plays a single chart's range over and over, saving nothing (the host's `practiceRange`).
+    const practicing =
+      this.playOptions.current.practice &&
+      judgeRuleset === 'beatoraja' &&
+      replay === undefined &&
+      courseStage === undefined &&
+      nonstop === undefined;
     const callbacks = {
       // In-play hi-speed changes come back to be remembered for the next play.
-      onHiSpeedChange: (hiSpeed: number) => this.rememberHiSpeed(hiSpeed, 'play'),
+      onHiSpeedChange: (hiSpeed: number, normalLevel?: number, floating?: boolean) => {
+        if (floating !== undefined) {
+          this.setPlayOptions({ floatingHiSpeed: floating });
+        }
+        if (normalLevel !== undefined) {
+          this.guiState.normalHiSpeedLevel = normalLevel;
+          this.setPlayOptions({ normalHiSpeedLevel: normalLevel });
+        }
+        this.rememberHiSpeed(hiSpeed, 'play');
+      },
       // A tempo change during the play (the tempo slider in pitch mode, or a replay following its log).
       onTempoChange: (changed: number) => this.followLiveTempo(changed),
       onExit: () => {
@@ -307,6 +332,13 @@ export class PlayRoute {
         void this.showSelect();
       },
       onChartFinished: (result: PlayResult) => {
+        if (practicing) {
+          // beatoraja returns a finished PRACTICE play to its practice setup, where START plays the range again.
+          void this.playChart(chartEntry, playAgainOverrides({ autoPlay, replay }));
+          return;
+        }
+        if (replay === undefined && courseStage === undefined && nonstop === undefined)
+          this.playOptions.rememberArrangement?.(chartEntry.id, result.replay);
         if (nonstop !== undefined) {
           const resolved = this.gameplayView?.resolved;
           void this.nonstopRoute.showNonstopCourseResult(nonstop, result.replay, result, resolved);
@@ -388,6 +420,12 @@ export class PlayRoute {
         finish: (result) => onChartFinished(result),
         restart: onRestart,
         hiSpeed: onHiSpeedChange,
+        judgeTiming: (value) => {
+          this.guiState.judgeTimingMs = value;
+          this.debugMenu.refreshJudgeTiming?.();
+          this.setPlayOptions({ judgeTimingMs: value });
+          this.debugMenu.scheduleSettingsSave?.();
+        },
         tempo: onTempoChange,
       },
     });
@@ -507,7 +545,13 @@ export class PlayRoute {
    * change) the running play.
    */
   public rememberHiSpeed(value: number, source: 'menu' | 'select' | 'play'): void {
-    const hiSpeed = snapHiSpeed(value);
+    const hiSpeed = this.playOptions.current.floatingHiSpeed
+      ? clampFloatingHiSpeed(value)
+      : this.playOptions.current.classicHiSpeed || this.playOptions.current.normalHiSpeedLevel > 0
+        ? Number.isFinite(value) && value > 0
+          ? value
+          : undefined
+        : snapHiSpeed(value);
     if (hiSpeed === undefined) return;
     this.guiState.hiSpeed = hiSpeed;
     storeHiSpeed(hiSpeed);

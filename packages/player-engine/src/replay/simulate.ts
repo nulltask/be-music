@@ -1,3 +1,4 @@
+import { resolveAutoScratchSides } from '../core/auto-scratch.ts';
 import { PLAY_MODE_LAYOUTS, type PlayModeLayoutId } from '@be-music/chart-model';
 import { resolve____RankLabel } from '../ruleset/score.ts';
 import type { BeMusicReplay, ReplayInputEvent, ReplayRulesetResult } from './format.ts';
@@ -15,6 +16,7 @@ import {
   resolveLNEarlyRelease,
   RULESET_JUDGE_NONE,
   RulesetGauge,
+  resolveGaugeEndOnFailure,
   selectJudgeWindowSet,
   type GaugeJudgeIndex,
   type JudgeSelectionCandidate,
@@ -60,7 +62,14 @@ export const REPLAY_SIMULATOR_RULESETS: readonly ['lr2', 'beatoraja', '____'] = 
  */
 export function simulateReplay(replay: BeMusicReplay, options: SimulateReplayOptions): ReplayRulesetResult {
   const config = resolveRulesetConfig(replay, options.ruleset, options);
-  return new ReplaySimulation(replay, config, options.endOnFailure ?? replay.play.endOnFailure === true).run();
+  const endOnFailure =
+    options.endOnFailure ??
+    resolveGaugeEndOnFailure(
+      options.ruleset === 'beatoraja' ? replay.play.gaugeAutoShift : undefined,
+      options.ruleset,
+      replay.play.endOnFailure === true,
+    );
+  return new ReplaySimulation(replay, config, endOnFailure).run();
 }
 
 /** Runs {@link simulateReplay} for each requested ruleset (default: LR2, beatoraja, That-Which-Must-Not-Be-Named). */
@@ -208,7 +217,7 @@ class ReplaySimulation {
     this.endOnFailure = endOnFailure;
     this.course = replay.play.course === undefined ? undefined : courseStageCarryCombo(replay.play.course);
     this.scratchChannels = resolveScratchChannels(replay.chart.laneMode);
-    this.gauge = new RulesetGauge(config.gauge);
+    this.gauge = new RulesetGauge(config.gauge, config.gaugeFallback, config.gaugeBank);
     this.buildLanes();
   }
 
@@ -258,12 +267,13 @@ class ReplaySimulation {
       maxCombo: this.maxCombo,
       djLevel: resolve____RankLabel(this.exScore, this.config.noteCount),
       gauge: {
-        type: this.config.gauge.id,
+        type: this.gauge.spec.id,
+        ...(this.gauge.values ? { values: this.gauge.values } : {}),
         final:
-          this.config.gauge.max === 100
+          this.gauge.spec.max === 100
             ? this.gauge.value
-            : this.config.gauge.max > 0
-              ? (this.gauge.value / this.config.gauge.max) * 100
+            : this.gauge.spec.max > 0
+              ? (this.gauge.value / this.gauge.spec.max) * 100
               : 0,
         cleared: this.gauge.cleared(),
       },
@@ -299,7 +309,7 @@ class ReplaySimulation {
 
   private buildLanes(): void {
     const autoPlay = this.replay.play.mode === 'auto';
-    const autoScratch = this.replay.play.autoScratch;
+    const autoScratch = resolveAutoScratchSides(this.replay.play);
     for (const note of this.replay.chart.notes) {
       if (note.type === 'invisible' || note.type === 'freezone') {
         continue;
@@ -334,7 +344,11 @@ class ReplaySimulation {
     }
   }
 
-  private laneFor(channel: string, autoPlay: boolean, autoScratch: boolean): SimLane {
+  private laneFor(
+    channel: string,
+    autoPlay: boolean,
+    autoScratch: ReturnType<typeof resolveAutoScratchSides>,
+  ): SimLane {
     let lane = this.lanes.get(channel);
     if (!lane) {
       const scratch = this.scratchChannels.has(channel);
@@ -347,7 +361,8 @@ class ReplaySimulation {
         mineCursor: 0,
         held: false,
         downTokens: new Set(),
-        auto: autoPlay || (autoScratch && scratch),
+        auto:
+          autoPlay || (scratch && (channel.startsWith('2') ? autoScratch.autoScratch2P : autoScratch.autoScratch1P)),
         autoCursor: 0,
       };
       this.lanes.set(channel, lane);

@@ -40,7 +40,12 @@
       "scroll": {},
       "speed": {},
       "swBGA": {},
-      "player": 1
+      "player": 1,
+      "wavNameBytePrefixes": {
+        "negative-bpm-beep1.wav": "6e65",
+        "negative-bpm-beep2.wav": "6e65",
+        "negative-bpm-bgm.wav": "6e65"
+      }
     },
     "controlFlow": [],
     "events": [
@@ -157,6 +162,11 @@
           "sourceRank": 2
         },
         "noteCount": 23,
+        "headerBPM": 130,
+        "bpmRange": {
+          "min": 130,
+          "max": 130
+        },
         "chartFingerprint": "bmfp0:1f1b14a8cdf7f03557762f98feb82f6becd54fbb6dea71e012a4b73085d324dd",
         "playFingerprint": "bmfp0:1f1b14a8cdf7f03557762f98feb82f6becd54fbb6dea71e012a4b73085d324dd",
         "title": "negative BPM test 2 (#BPMxx 0 via ch08)",

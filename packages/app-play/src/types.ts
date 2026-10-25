@@ -2,7 +2,7 @@ import type { DecideScene, PlayScene, ResultScene, SelectScene } from '@be-music
 import type { SkinFamilyId } from '@be-music/player-browser/skin';
 import type { ReplayPlaybackOptions } from '@be-music/player-engine/replay';
 import type { GaugeType, RulesetId } from '@be-music/player-engine/ruleset';
-import type { BrowseSort, DifficultyFilter, KeysFilter } from '@be-music/player-scene-model';
+import type { BrowseSort, DifficultyFilter, KeysFilter, HSFix, PlayOptions } from '@be-music/player-scene-model';
 import type { PlayTempoSettings } from './play-tempo-settings.ts';
 
 /** Every screen the player shows, each made by its `create*Scene`. */
@@ -185,15 +185,77 @@ export interface PlayerGUIState extends PlayTempoSettings {
    * reloads.
    */
   hiSpeed: number;
+  hsFix: HSFix;
+  displayAreaInfo: PlayOptions['displayAreaInfo'];
+  hiddenSudden1P: PlayOptions['hiddenSudden1P'];
+  hiddenSudden2P: PlayOptions['hiddenSudden2P'];
+  laneCover: PlayOptions['laneCover'];
+  shutter: PlayOptions['shutter'];
   /** Gauge variant for the next play. Two-way synced with the LR2 select scene's PLAY OPTION panel. */
   gauge: GaugeType;
   /** 1P lane arrangement for the next play. Two-way synced with the LR2 select panel. */
-  random1P: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
+  hRandomThresholdBPM: number;
+  randomSeed1P: string;
+  randomSeed2P: string;
+  randomFixedLane1P: number;
+  randomFixedLane2P: number;
+  random1P: PlayOptions['random1P'];
   /** 2P lane arrangement for the next play. Two-way synced with the LR2 select panel. */
-  random2P: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
+  random2P: PlayOptions['random1P'];
   /** DP FLIP for the next play. Two-way synced with the LR2 select panel. */
   dpFlip: boolean;
   /** 1P auto scratch for the next play. Two-way synced with the LR2 select panel. */
+  classicHiSpeed: boolean;
+  floatingHiSpeed: boolean;
+  fixedDisplayArea: boolean;
+  normalHiSpeedLevel: number;
+  judgeTimingMs: number;
+  visualConstant: boolean;
+  lift1P: number;
+  lift2P: number;
+  liftOn1P: boolean;
+  liftOn2P: boolean;
+  noteDurationMs: number;
+  constantFadeMs: number;
+  bpmGuide: boolean;
+  judgeTimingAutoAdjust: boolean;
+  judgeAlgorithm: PlayOptions['judgeAlgorithm'];
+  longNoteModifier: PlayOptions['longNoteModifier'];
+  longNoteRate: number;
+  extraNoteDepth: number;
+  extraNoteScratch: boolean;
+  sevenToNinePattern: PlayOptions['sevenToNinePattern'];
+  sevenToNineType: PlayOptions['sevenToNineType'];
+  battleMode: PlayOptions['battleMode'];
+  dBattleScratch: boolean;
+  gauge2P: PlayOptions['gauge2P'];
+  mRan1P: boolean;
+  mRan2P: boolean;
+  longNoteMode: PlayOptions['longNoteMode'];
+  customJudge: boolean;
+  practice: boolean;
+  practiceStartMs: number;
+  practiceEndMs: number;
+  practiceGauge: PlayOptions['practiceGauge'];
+  practiceGaugeCategory: PlayOptions['practiceGaugeCategory'];
+  practiceStartGauge: number;
+  practiceJudgeRank: number;
+  practiceTotal: number;
+  customJudgeKeyPerfectGreat: number;
+  customJudgeKeyGreat: number;
+  customJudgeKeyGood: number;
+  customJudgeScratchPerfectGreat: number;
+  customJudgeScratchGreat: number;
+  customJudgeScratchGood: number;
+  customJudgeLongNoteMargin: number;
+  lr2ExtraMode: boolean;
+  lr2ExtraLevel: PlayOptions['lr2ExtraLevel'];
+  mineModifier: PlayOptions['mineModifier'];
+  scrollModifier: PlayOptions['scrollModifier'];
+  scrollSection: number;
+  scrollRate: number;
+  gaugeAutoShift: PlayOptions['gaugeAutoShift'];
+  bottomShiftableGauge: PlayOptions['bottomShiftableGauge'];
   autoScratch1P: boolean;
   /** 2P auto scratch for the next play. Two-way synced with the LR2 select panel. */
   autoScratch2P: boolean;

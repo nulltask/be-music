@@ -1,6 +1,13 @@
-import { clamp } from '@be-music/player-skin-sdk';
 import { Graphics, type Container } from 'pixi.js';
-import { GROOVE, resolveGrooveRect, resolvePortraitHUDColumn } from './layout.ts';
+import { resolveGrooveRect, resolvePortraitHUDColumn } from './layout.ts';
+import {
+  GAUGE_FRAME,
+  SECOND_PLAYER_FIGURES_WIDTH,
+  clampPercent,
+  drawGaugeCells,
+  drawGauges,
+  drawSecondPlayerFigures,
+} from './player-hud.ts';
 import { drawSynesthesiaMoments } from './moments.ts';
 import { ChargeCloud } from './charge-cloud.ts';
 import { KICK_REST, stepKick, type KickState } from './kick.ts';
@@ -47,6 +54,8 @@ import {
   SYN_TEXT_FONT,
   SYN_VOID,
   SYN_WHITE,
+  displayStyle,
+  labelStyle,
   sceneHue,
 } from './style.ts';
 import {
@@ -87,13 +96,7 @@ type Runtime = BeMusicGameplayRuntime;
  * the song plate; the score panel fills the right column (284..624) from the gauge frame's top to the plate's bottom.
  */
 const HUD_MARGIN = 16;
-const GAUGE_FRAME = { x: HUD_MARGIN, y: GROOVE.y - 26, w: 256, h: 48 } as const;
 const SONG_PLATE = { x: HUD_MARGIN, y: 420, w: DESIGN_WIDTH - HUD_MARGIN * 2 - 340 - 12, h: 46 } as const;
-/**
- * The gauge label runs from the groove's left edge up to a gap before the percentage readout (right-aligned at the
- * frame's inner edge, up to `100%` wide), so a course gauge's long name (`COURSE-EASY GAUGE`) fits without scrolling.
- */
-const GAUGE_LABEL_MAX_WIDTH = GAUGE_FRAME.x + GAUGE_FRAME.w - 14 - 56 - (GROOVE.x - 2);
 /** The score panel sits on the right margin; the track card runs from the left margin up to a gutter before it. */
 const SCORE_PANEL = { x: DESIGN_WIDTH - HUD_MARGIN - 340, y: GAUGE_FRAME.y, w: 340, h: 466 - GAUGE_FRAME.y } as const;
 /** Score panel's column divider, from its left edge. */
@@ -335,7 +338,7 @@ export function renderSynesthesiaChrome({
     drawPortraitHUD(panels, layer, runtime, layout, accent, layerPool);
     drawPortraitHeader(front, overlayLayer, runtime, layout, accent, pulse, overlayLayerPool);
   } else {
-    drawGauge(panels, layer, runtime, accent, layerPool);
+    drawGauges(panels, layer, runtime, accent, layerPool);
     drawChartPlate(panels, layer, runtime, accent, layerPool);
     drawScorePanel(panels, layer, runtime, accent, layerPool);
     // The judge tally owns the side column on the right edge.
@@ -843,8 +846,8 @@ function drawHeader(
   // Readouts on a fixed rhythm after the mode: label, then its value 40 px on; groups 96 px apart.
   addHUDText(layer, 'BPM', 172 + inset, 14, labelStyle(), pool);
   addHUDNumber(layer, formatBPM(runtime.bpm), 212 + inset, 9, displayStyle(14, SYN_WHITE), pool);
-  addHUDText(layer, 'SPEED', 268 + inset, 14, labelStyle(), pool);
-  addHUDNumber(layer, `x${formatHiSpeed(runtime.hiSpeed)}`, 328 + inset, 9, displayStyle(14, SYN_WHITE), pool);
+  addHUDText(layer, runtime.floatingHiSpeed ? 'FHS' : 'SPEED', 268 + inset, 14, labelStyle(), pool);
+  addHUDNumber(layer, `x${formatHiSpeed(runtime)}`, 328 + inset, 9, displayStyle(14, SYN_WHITE), pool);
   addHUDText(
     layer,
     formatRuleset(runtime.rulesetLabel),
@@ -884,75 +887,12 @@ function drawModeLight(
   );
 }
 
-function drawGauge(graphics: Graphics, layer: Container, runtime: Runtime, accent: number, pool: ChildPool): void {
-  const gauge = clampPercent(runtime.gauge ?? 0);
-  const clear = clampPercent(runtime.clearThreshold ?? 80);
-  const survival = runtime.gaugeSurvival === true || clear <= 0;
-  const cleared = survival ? gauge > 0 : gauge >= clear;
-  drawFrame(graphics, GAUGE_FRAME.x, GAUGE_FRAME.y, GAUGE_FRAME.w, GAUGE_FRAME.h, accent);
-  addHUDText(
-    layer,
-    `${(runtime.gaugeLabel ?? 'GROOVE').toUpperCase()} GAUGE`,
-    GROOVE.x - 2,
-    GROOVE.y - 19,
-    { ...labelStyle(), maxWidth: GAUGE_LABEL_MAX_WIDTH },
-    pool,
-  );
-  addHUDNumber(
-    layer,
-    `${Math.round(gauge)}%`,
-    GAUGE_FRAME.x + GAUGE_FRAME.w - 14,
-    GROOVE.y - 22,
-    { ...displayStyle(12, cleared ? SYN_AMBER : SYN_WHITE), anchorX: 1 },
-    pool,
-  );
-  drawGaugeCells(graphics, runtime, GROOVE, GROOVE.h - 4);
-}
-
-/**
- * The gauge's cells along `groove` (bars `barH` tall, centred in it): electric blue below the clear line, catching fire
- * past it, the head cell flickering white, and a white notch on the clear line.
- */
-function drawGaugeCells(graphics: Graphics, runtime: Runtime, groove: BeMusicRect, barH: number): void {
-  const gauge = clampPercent(runtime.gauge ?? 0);
-  const clear = clampPercent(runtime.clearThreshold ?? 80);
-  const survival = runtime.gaugeSurvival === true || clear <= 0;
-  const cleared = survival ? gauge > 0 : gauge >= clear;
-  const cells = 50;
-  const stride = groove.w / cells;
-  const lit = Math.round((gauge / 100) * cells);
-  const clearCell = Math.round((clear / 100) * cells);
-  const flicker = runtime.nowMs !== undefined ? 0.65 + 0.35 * Math.abs(Math.sin(runtime.nowMs / 60)) : 1;
-  const barY = groove.y + (groove.h - barH) / 2;
-  if (lit > 0) {
-    graphics
-      .rect(groove.x, barY - 3, lit * stride, barH + 6)
-      .fill({ color: cleared ? SYN_EMBER : SYN_CYAN, alpha: 0.14 });
-  }
-  for (let cell = 0; cell < cells; cell += 1) {
-    const x = groove.x + cell * stride;
-    if (cell >= lit) {
-      graphics.rect(x, barY, stride - 1, barH).fill({ color: SYN_DIM, alpha: 0.18 });
-      continue;
-    }
-    const hot = survival || cell >= clearCell;
-    // Below the clear line the cells run electric blue; past it they catch fire, ember → gold.
-    const color = hot
-      ? emberColor(0.4 + (0.55 * (cell - clearCell)) / Math.max(1, cells - clearCell))
-      : hsvToHex(0.58 - (cell / cells) * 0.04, 0.72, 1);
-    graphics
-      .rect(x, barY, stride - 1, barH)
-      .fill({ color: cell === lit - 1 ? SYN_WHITE : color, alpha: cell === lit - 1 ? flicker : 0.95 });
-  }
-  if (!survival) {
-    const x = groove.x + clearCell * stride - 1;
-    graphics.rect(x, barY - 5, 1.5, barH + 10).fill({ color: SYN_WHITE, alpha: 1 });
-  }
-}
-
 function drawChartPlate(graphics: Graphics, layer: Container, runtime: Runtime, accent: number, pool: ChildPool): void {
-  const { x, y, w, h } = SONG_PLATE;
-  drawFrame(graphics, x, y, w, h, accent);
+  const { x, y, h } = SONG_PLATE;
+  drawFrame(graphics, x, y, SONG_PLATE.w, h, accent);
+  // A two-player play's 2P figures take the plate's right end.
+  drawSecondPlayerFigures(layer, runtime, SONG_PLATE, pool);
+  const w = SONG_PLATE.w - (runtime.secondPlayer !== undefined ? SECOND_PLAYER_FIGURES_WIDTH : 0);
   // Genre, title, artist — the order every built-in skin uses; the genre rides a small line above the title.
   const genre = runtime.chartGenre?.trim();
   const lift = genre ? 5 : 0;
@@ -1158,10 +1098,10 @@ function drawPortraitHeader(
   // Readouts on a fixed rhythm, as on the landscape header: label, then its value 40 px on (60 after SPEED).
   addHUDText(layer, 'BPM', 190, cy - 3, portraitLabel(), pool);
   addHUDNumber(layer, formatBPM(runtime.bpm), 230, cy - 7, displayStyle(13, SYN_WHITE), pool);
-  addHUDText(layer, 'SPEED', 300, cy - 3, portraitLabel(), pool);
+  addHUDText(layer, runtime.floatingHiSpeed ? 'FHS' : 'SPEED', 300, cy - 3, portraitLabel(), pool);
   addHUDNumber(
     layer,
-    `x${formatHiSpeed(runtime.hiSpeed)}`,
+    `x${formatHiSpeed(runtime)}`,
     360,
     cy - 7,
     { ...displayStyle(13, SYN_WHITE), maxWidth: width - TOUCH_CORNER - 360 },
@@ -1383,7 +1323,7 @@ function drawJudgements(
       layer,
       judgeDisplayWord(display.judge),
       display.x,
-      wordY,
+      wordY + display.lift,
       {
         scale: judgeScale,
         ...displayStyle(16, color),
@@ -1401,7 +1341,7 @@ function drawJudgements(
         layer,
         formatCount(combo),
         display.x,
-        wordY + 28,
+        wordY + display.lift + 28,
         {
           scale: punchScale(runtime.judgeAtMs, nowMs, 150, (combo % 100 === 0 ? 0.45 : 0.14) * amount),
           ...displayStyle(22, combo >= 200 ? SYN_AMBER : SYN_WHITE),
@@ -1419,11 +1359,14 @@ function drawJudgements(
 function resolveJudgeDisplays(
   runtime: Runtime,
   layout: BeMusicGameplayLayout,
-): Array<{ judge: string; combo: number | undefined; x: number; maxWidth: number }> {
+): Array<{ judge: string; combo: number | undefined; x: number; lift: number; maxWidth: number }> {
   const centerOf = (side: '1P' | '2P'): number | undefined => {
     const bounds = layout.playfield.sides[side];
     return bounds ? (bounds.left + bounds.right) / 2 : undefined;
   };
+  // A side's LIFT raises its judgement line, and its judgement word with it.
+  const liftOf = (side: '1P' | '2P'): number =>
+    (layout.playfield.sides[side]?.judgementY ?? layout.playfield.judgementY) - layout.playfield.judgementY;
   const doublePlay = centerOf('2P') !== undefined;
   const maxWidth = doublePlay ? 122 : 180;
   const fallbackX = layout.playfield.centerX;
@@ -1433,24 +1376,19 @@ function resolveJudgeDisplays(
       judge: state.judge!,
       combo: state.combo,
       x: centerOf(state.side) ?? fallbackX,
+      lift: liftOf(state.side),
       maxWidth,
     }));
   }
   if (!runtime.lastJudge) return [];
-  return [{ judge: runtime.lastJudge, combo: runtime.combo, x: centerOf('1P') ?? fallbackX, maxWidth }];
+  return [
+    { judge: runtime.lastJudge, combo: runtime.combo, x: centerOf('1P') ?? fallbackX, lift: liftOf('1P'), maxWidth },
+  ];
 }
 
 function resolveVisibleCombo(judge: string, combo: number | undefined): number {
   if (judge !== 'PERFECT' && judge !== 'GREAT' && judge !== 'GOOD') return 0;
   return combo !== undefined && Number.isFinite(combo) ? Math.max(0, Math.floor(combo)) : 0;
-}
-
-function labelStyle(): HUDTextOptions {
-  return { size: 9, fill: SYN_DIM, fontFamily: SYN_DISPLAY_FONT, letterSpacing: 0.8 };
-}
-
-function displayStyle(size: number, fill: number): HUDTextOptions {
-  return { size, fill, fontFamily: SYN_DISPLAY_FONT, weight: '400' };
 }
 
 function formatCount(value: number | undefined): string {
@@ -1463,9 +1401,12 @@ function formatBPM(value: number | undefined): string {
   return String(Math.round(value));
 }
 
-function formatHiSpeed(value: number | undefined): string {
-  if (value === undefined || !Number.isFinite(value)) return '0.0';
-  return value.toFixed(1);
+/** The hi-speed readout: one decimal, or two for the AC floating hi-speed (FHS), as Plain shows them. */
+function formatHiSpeed(runtime: Pick<Runtime, 'hiSpeed' | 'floatingHiSpeed'>): string {
+  const digits = runtime.floatingHiSpeed ? 2 : 1;
+  const value = runtime.hiSpeed;
+  if (value === undefined || !Number.isFinite(value)) return (0).toFixed(digits);
+  return value.toFixed(digits);
 }
 
 function formatRuleset(value: string | undefined): string {
@@ -1484,9 +1425,4 @@ function formatExRate(exScore: number | undefined, max: number | undefined): str
     return '0.0%';
   }
   return `${((exScore / max) * 100).toFixed(1)}%`;
-}
-
-function clampPercent(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return clamp(value, 0, 100);
 }

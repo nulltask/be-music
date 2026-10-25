@@ -7,9 +7,12 @@ import { isGaugeType, isRulesetId } from '@be-music/player-engine/ruleset';
 import {
   DIFFICULTY_FILTER_CYCLE,
   KEYS_FILTER_CYCLE,
-  RANDOM_CYCLE,
+  PLAY_OPTION_CHOICES,
+  resolvePlayOptionValue,
+  clampShutter,
   SORT_CYCLE,
   snapHiSpeed,
+  clampFloatingHiSpeed,
   type BrowseSort,
   type DifficultyFilter,
   type KeysFilter,
@@ -60,8 +63,64 @@ export interface DebugMenuSettings {
   judgeRuleset: PlayerGUIState['judgeRuleset'];
   gauge: PlayerGUIState['gauge'];
   random1P: RandomMode;
+  hRandomThresholdBPM: number;
+  randomSeed1P: string;
+  randomSeed2P: string;
+  randomFixedLane1P: number;
+  randomFixedLane2P: number;
   random2P: RandomMode;
   dpFlip: boolean;
+  classicHiSpeed: boolean;
+  floatingHiSpeed: boolean;
+  fixedDisplayArea: boolean;
+  normalHiSpeedLevel: number;
+  judgeTimingMs: number;
+  visualConstant: boolean;
+  lift1P: number;
+  lift2P: number;
+  liftOn1P: boolean;
+  liftOn2P: boolean;
+  noteDurationMs: number;
+  constantFadeMs: number;
+  bpmGuide: boolean;
+  judgeTimingAutoAdjust: boolean;
+  judgeAlgorithm: PlayerGUIState['judgeAlgorithm'];
+  longNoteModifier: PlayerGUIState['longNoteModifier'];
+  longNoteRate: number;
+  extraNoteDepth: number;
+  extraNoteScratch: boolean;
+  sevenToNinePattern: PlayerGUIState['sevenToNinePattern'];
+  sevenToNineType: PlayerGUIState['sevenToNineType'];
+  battleMode: PlayerGUIState['battleMode'];
+  dBattleScratch: boolean;
+  gauge2P: PlayerGUIState['gauge2P'];
+  mRan1P: boolean;
+  mRan2P: boolean;
+  longNoteMode: PlayerGUIState['longNoteMode'];
+  customJudge: boolean;
+  practice: boolean;
+  practiceStartMs: number;
+  practiceEndMs: number;
+  practiceGauge: PlayerGUIState['practiceGauge'];
+  practiceGaugeCategory: PlayerGUIState['practiceGaugeCategory'];
+  practiceStartGauge: number;
+  practiceJudgeRank: number;
+  practiceTotal: number;
+  customJudgeKeyPerfectGreat: number;
+  customJudgeKeyGreat: number;
+  customJudgeKeyGood: number;
+  customJudgeScratchPerfectGreat: number;
+  customJudgeScratchGreat: number;
+  customJudgeScratchGood: number;
+  customJudgeLongNoteMargin: number;
+  lr2ExtraMode: boolean;
+  lr2ExtraLevel: PlayerGUIState['lr2ExtraLevel'];
+  mineModifier: PlayerGUIState['mineModifier'];
+  scrollModifier: PlayerGUIState['scrollModifier'];
+  scrollSection: number;
+  scrollRate: number;
+  gaugeAutoShift: PlayerGUIState['gaugeAutoShift'];
+  bottomShiftableGauge: PlayerGUIState['bottomShiftableGauge'];
   autoScratch1P: boolean;
   autoScratch2P: boolean;
   sort: BrowseSort;
@@ -79,6 +138,12 @@ export interface DebugMenuSettings {
   tempoStretchAlgorithm: PlayTempoSettings['tempoStretchAlgorithm'];
   replayView: PlayerGUIState['replayView'];
   hiSpeed: number;
+  hsFix: PlayerGUIState['hsFix'];
+  displayAreaInfo: PlayerGUIState['displayAreaInfo'];
+  hiddenSudden1P: PlayerGUIState['hiddenSudden1P'];
+  hiddenSudden2P: PlayerGUIState['hiddenSudden2P'];
+  laneCover: PlayerGUIState['laneCover'];
+  shutter: PlayerGUIState['shutter'];
   builtInSkin: string;
   skinEffects: SkinEffects;
   renderResolution: number;
@@ -102,7 +167,7 @@ export interface DebugMenuSettingsDocument {
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
 
-const RANDOM_MODES: readonly RandomMode[] = [...RANDOM_CYCLE, 'SCATTER'];
+const RANDOM_MODES: readonly RandomMode[] = [...PLAY_OPTION_CHOICES.random1P!, 'SCATTER'];
 const SKIN_FAMILIES: readonly SkinFamilyOverride[] = ['auto', 'default', 'lr2', 'beatoraja'];
 const SKIN_EFFECTS: readonly SkinEffects[] = ['full', 'reduced', 'off'];
 const PLAY_LAYOUTS: readonly PlayLayout[] = ['auto', 'standard', 'touch'];
@@ -190,6 +255,77 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'courseAutoAdvance', booleanOf(raw.courseAutoAdvance));
   assign(settings, 'submitToLeaderboard', booleanOf(raw.submitToLeaderboard));
   assign(settings, 'dpFlip', booleanOf(raw.dpFlip));
+  assign(settings, 'bpmGuide', booleanOf(raw.bpmGuide));
+  assign(settings, 'judgeTimingAutoAdjust', booleanOf(raw.judgeTimingAutoAdjust));
+  assign(settings, 'visualConstant', booleanOf(raw.visualConstant));
+  assign(settings, 'lift1P', resolvePlayOptionValue('lift1P', raw.lift1P));
+  assign(settings, 'lift2P', resolvePlayOptionValue('lift2P', raw.lift2P));
+  assign(settings, 'liftOn1P', resolvePlayOptionValue('liftOn1P', raw.liftOn1P));
+  assign(settings, 'liftOn2P', resolvePlayOptionValue('liftOn2P', raw.liftOn2P));
+  assign(settings, 'noteDurationMs', resolvePlayOptionValue('noteDurationMs', raw.noteDurationMs));
+  assign(settings, 'constantFadeMs', resolvePlayOptionValue('constantFadeMs', raw.constantFadeMs));
+  assign(settings, 'judgeTimingMs', resolvePlayOptionValue('judgeTimingMs', raw.judgeTimingMs));
+  assign(settings, 'normalHiSpeedLevel', resolvePlayOptionValue('normalHiSpeedLevel', raw.normalHiSpeedLevel));
+  assign(settings, 'fixedDisplayArea', resolvePlayOptionValue('fixedDisplayArea', raw.fixedDisplayArea));
+  assign(settings, 'floatingHiSpeed', resolvePlayOptionValue('floatingHiSpeed', raw.floatingHiSpeed));
+  assign(settings, 'classicHiSpeed', booleanOf(raw.classicHiSpeed));
+  assign(settings, 'judgeAlgorithm', oneOf(raw.judgeAlgorithm, ['combo', 'duration', 'lowest'] as const));
+  assign(settings, 'gaugeAutoShift', resolvePlayOptionValue('gaugeAutoShift', raw.gaugeAutoShift));
+  assign(settings, 'bottomShiftableGauge', resolvePlayOptionValue('bottomShiftableGauge', raw.bottomShiftableGauge));
+  assign(settings, 'scrollSection', resolvePlayOptionValue('scrollSection', raw.scrollSection));
+  assign(settings, 'scrollRate', resolvePlayOptionValue('scrollRate', raw.scrollRate));
+  assign(settings, 'scrollModifier', resolvePlayOptionValue('scrollModifier', raw.scrollModifier));
+  assign(settings, 'mineModifier', resolvePlayOptionValue('mineModifier', raw.mineModifier));
+  assign(settings, 'sevenToNinePattern', resolvePlayOptionValue('sevenToNinePattern', raw.sevenToNinePattern));
+  assign(settings, 'sevenToNineType', resolvePlayOptionValue('sevenToNineType', raw.sevenToNineType));
+  assign(settings, 'battleMode', resolvePlayOptionValue('battleMode', raw.battleMode));
+  assign(settings, 'dBattleScratch', resolvePlayOptionValue('dBattleScratch', raw.dBattleScratch));
+  assign(settings, 'gauge2P', resolvePlayOptionValue('gauge2P', raw.gauge2P));
+  assign(settings, 'mRan1P', resolvePlayOptionValue('mRan1P', raw.mRan1P));
+  assign(settings, 'mRan2P', resolvePlayOptionValue('mRan2P', raw.mRan2P));
+  assign(settings, 'longNoteMode', resolvePlayOptionValue('longNoteMode', raw.longNoteMode));
+  assign(settings, 'customJudge', resolvePlayOptionValue('customJudge', raw.customJudge));
+  assign(settings, 'practice', resolvePlayOptionValue('practice', raw.practice));
+  assign(settings, 'practiceStartMs', resolvePlayOptionValue('practiceStartMs', raw.practiceStartMs));
+  assign(settings, 'practiceEndMs', resolvePlayOptionValue('practiceEndMs', raw.practiceEndMs));
+  assign(settings, 'practiceGauge', resolvePlayOptionValue('practiceGauge', raw.practiceGauge));
+  assign(settings, 'practiceGaugeCategory', resolvePlayOptionValue('practiceGaugeCategory', raw.practiceGaugeCategory));
+  assign(settings, 'practiceStartGauge', resolvePlayOptionValue('practiceStartGauge', raw.practiceStartGauge));
+  assign(settings, 'practiceJudgeRank', resolvePlayOptionValue('practiceJudgeRank', raw.practiceJudgeRank));
+  assign(settings, 'practiceTotal', resolvePlayOptionValue('practiceTotal', raw.practiceTotal));
+  assign(
+    settings,
+    'customJudgeKeyPerfectGreat',
+    resolvePlayOptionValue('customJudgeKeyPerfectGreat', raw.customJudgeKeyPerfectGreat),
+  );
+  assign(settings, 'customJudgeKeyGreat', resolvePlayOptionValue('customJudgeKeyGreat', raw.customJudgeKeyGreat));
+  assign(settings, 'customJudgeKeyGood', resolvePlayOptionValue('customJudgeKeyGood', raw.customJudgeKeyGood));
+  assign(
+    settings,
+    'customJudgeScratchPerfectGreat',
+    resolvePlayOptionValue('customJudgeScratchPerfectGreat', raw.customJudgeScratchPerfectGreat),
+  );
+  assign(
+    settings,
+    'customJudgeScratchGreat',
+    resolvePlayOptionValue('customJudgeScratchGreat', raw.customJudgeScratchGreat),
+  );
+  assign(
+    settings,
+    'customJudgeScratchGood',
+    resolvePlayOptionValue('customJudgeScratchGood', raw.customJudgeScratchGood),
+  );
+  assign(
+    settings,
+    'customJudgeLongNoteMargin',
+    resolvePlayOptionValue('customJudgeLongNoteMargin', raw.customJudgeLongNoteMargin),
+  );
+  assign(settings, 'lr2ExtraMode', resolvePlayOptionValue('lr2ExtraMode', raw.lr2ExtraMode));
+  assign(settings, 'lr2ExtraLevel', resolvePlayOptionValue('lr2ExtraLevel', raw.lr2ExtraLevel));
+  assign(settings, 'extraNoteDepth', resolvePlayOptionValue('extraNoteDepth', raw.extraNoteDepth));
+  assign(settings, 'extraNoteScratch', resolvePlayOptionValue('extraNoteScratch', raw.extraNoteScratch));
+  assign(settings, 'longNoteRate', resolvePlayOptionValue('longNoteRate', raw.longNoteRate));
+  assign(settings, 'longNoteModifier', resolvePlayOptionValue('longNoteModifier', raw.longNoteModifier));
   assign(settings, 'autoScratch1P', booleanOf(raw.autoScratch1P));
   assign(settings, 'autoScratch2P', booleanOf(raw.autoScratch2P));
   assign(settings, 'playInSilentMode', booleanOf(raw.playInSilentMode));
@@ -200,12 +336,21 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'nonstopPlacement', oneOf(raw.nonstopPlacement, ['intended', 'lr2'] as const));
   assign(settings, 'judgeRuleset', isRulesetId(raw.judgeRuleset) ? raw.judgeRuleset : undefined);
   assign(settings, 'gauge', isGaugeType(raw.gauge) ? raw.gauge : undefined);
+  assign(settings, 'hRandomThresholdBPM', resolvePlayOptionValue('hRandomThresholdBPM', raw.hRandomThresholdBPM));
+  for (const key of ['randomFixedLane1P', 'randomFixedLane2P', 'randomSeed1P', 'randomSeed2P'] as const)
+    assign(settings, key, resolvePlayOptionValue(key, raw[key]));
   assign(settings, 'random1P', oneOf(raw.random1P, RANDOM_MODES));
   assign(settings, 'random2P', oneOf(raw.random2P, RANDOM_MODES));
   assign(settings, 'sort', oneOf(raw.sort, SORT_CYCLE));
   assign(settings, 'keysFilter', oneOf(raw.keysFilter, KEYS_FILTER_CYCLE));
   assign(settings, 'difficultyFilter', oneOf(raw.difficultyFilter, DIFFICULTY_FILTER_CYCLE));
   assign(settings, 'skinFamilyOverride', oneOf(raw.skinFamilyOverride, SKIN_FAMILIES));
+  assign(settings, 'hiddenSudden1P', oneOf(raw.hiddenSudden1P, PLAY_OPTION_CHOICES.hiddenSudden1P!));
+  assign(settings, 'hiddenSudden2P', oneOf(raw.hiddenSudden2P, PLAY_OPTION_CHOICES.hiddenSudden2P!));
+  assign(settings, 'laneCover', booleanOf(raw.laneCover));
+  if (typeof raw.shutter === 'number' && Number.isFinite(raw.shutter)) settings.shutter = clampShutter(raw.shutter);
+  assign(settings, 'displayAreaInfo', oneOf(raw.displayAreaInfo, PLAY_OPTION_CHOICES.displayAreaInfo!));
+  assign(settings, 'hsFix', oneOf(raw.hsFix, PLAY_OPTION_CHOICES.hsFix!));
   assign(settings, 'skinEffects', oneOf(raw.skinEffects, SKIN_EFFECTS));
   assign(settings, 'playLayout', oneOf(raw.playLayout, PLAY_LAYOUTS));
   assign(settings, 'tempoPitchMode', oneOf(raw.tempoPitchMode, ['pitch', 'keep-pitch'] as const));
@@ -218,7 +363,12 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
       JSON.stringify({ tempoPercent: raw.tempoPercent }),
     ).tempoPercent;
   }
-  if (typeof raw.hiSpeed === 'number') assign(settings, 'hiSpeed', snapHiSpeed(raw.hiSpeed));
+  if (typeof raw.hiSpeed === 'number')
+    assign(
+      settings,
+      'hiSpeed',
+      raw.floatingHiSpeed === true ? clampFloatingHiSpeed(raw.hiSpeed) : snapHiSpeed(raw.hiSpeed),
+    );
   if (
     typeof raw.bgaResizeMaxEdgePx === 'number' &&
     raw.bgaResizeMaxEdgePx >= 0 &&
@@ -365,8 +515,65 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('judgeRuleset');
   assignState('gauge');
   assignState('random1P');
+  assignState('hRandomThresholdBPM');
+  assignState('randomSeed1P');
+  assignState('randomSeed2P');
+  assignState('randomFixedLane1P');
+  assignState('randomFixedLane2P');
   assignState('random2P');
   assignState('dpFlip');
+  assignState('bpmGuide');
+  assignState('judgeTimingAutoAdjust');
+  assignState('visualConstant');
+  assignState('noteDurationMs');
+  assignState('lift1P');
+  assignState('lift2P');
+  assignState('liftOn1P');
+  assignState('liftOn2P');
+
+  assignState('constantFadeMs');
+  assignState('judgeTimingMs');
+  assignState('normalHiSpeedLevel');
+  assignState('classicHiSpeed');
+  assignState('floatingHiSpeed');
+  assignState('fixedDisplayArea');
+  assignState('judgeAlgorithm');
+  assignState('longNoteModifier');
+  assignState('longNoteRate');
+  assignState('sevenToNinePattern');
+  assignState('sevenToNineType');
+  assignState('battleMode');
+  assignState('dBattleScratch');
+  assignState('gauge2P');
+  assignState('mRan1P');
+  assignState('mRan2P');
+  assignState('longNoteMode');
+  assignState('customJudge');
+  assignState('practice');
+  assignState('practiceStartMs');
+  assignState('practiceEndMs');
+  assignState('practiceGauge');
+  assignState('practiceGaugeCategory');
+  assignState('practiceStartGauge');
+  assignState('practiceJudgeRank');
+  assignState('practiceTotal');
+  assignState('customJudgeKeyPerfectGreat');
+  assignState('customJudgeKeyGreat');
+  assignState('customJudgeKeyGood');
+  assignState('customJudgeScratchPerfectGreat');
+  assignState('customJudgeScratchGreat');
+  assignState('customJudgeScratchGood');
+  assignState('customJudgeLongNoteMargin');
+  assignState('lr2ExtraMode');
+  assignState('lr2ExtraLevel');
+  assignState('extraNoteDepth');
+  assignState('extraNoteScratch');
+  assignState('mineModifier');
+  assignState('scrollModifier');
+  assignState('scrollSection');
+  assignState('scrollRate');
+  assignState('gaugeAutoShift');
+  assignState('bottomShiftableGauge');
   assignState('autoScratch1P');
   assignState('autoScratch2P');
   assignState('sort');
@@ -384,6 +591,12 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('tempoStretchAlgorithm');
   assignState('replayView');
   assignState('hiSpeed');
+  assignState('hsFix');
+  assignState('displayAreaInfo');
+  assignState('hiddenSudden1P');
+  assignState('hiddenSudden2P');
+  assignState('laneCover');
+  assignState('shutter');
   assignState('builtInSkin');
   assignState('skinEffects');
   assignState('renderResolution');
@@ -422,8 +635,65 @@ export function captureDebugMenuSettings(
     judgeRuleset: state.judgeRuleset,
     gauge: state.gauge,
     random1P: state.random1P,
+    hRandomThresholdBPM: state.hRandomThresholdBPM,
+    randomSeed1P: state.randomSeed1P,
+    randomSeed2P: state.randomSeed2P,
+    randomFixedLane1P: state.randomFixedLane1P,
+    randomFixedLane2P: state.randomFixedLane2P,
     random2P: state.random2P,
     dpFlip: state.dpFlip,
+    bpmGuide: state.bpmGuide,
+    judgeTimingAutoAdjust: state.judgeTimingAutoAdjust,
+    visualConstant: state.visualConstant,
+    noteDurationMs: state.noteDurationMs,
+    lift1P: state.lift1P,
+    lift2P: state.lift2P,
+    liftOn1P: state.liftOn1P,
+    liftOn2P: state.liftOn2P,
+
+    constantFadeMs: state.constantFadeMs,
+    judgeTimingMs: state.judgeTimingMs,
+    normalHiSpeedLevel: state.normalHiSpeedLevel,
+    classicHiSpeed: state.classicHiSpeed,
+    floatingHiSpeed: state.floatingHiSpeed,
+    fixedDisplayArea: state.fixedDisplayArea,
+    judgeAlgorithm: state.judgeAlgorithm,
+    longNoteModifier: state.longNoteModifier,
+    longNoteRate: state.longNoteRate,
+    sevenToNinePattern: state.sevenToNinePattern,
+    sevenToNineType: state.sevenToNineType,
+    battleMode: state.battleMode,
+    dBattleScratch: state.dBattleScratch,
+    gauge2P: state.gauge2P,
+    mRan1P: state.mRan1P,
+    mRan2P: state.mRan2P,
+    longNoteMode: state.longNoteMode,
+    customJudge: state.customJudge,
+    practice: state.practice,
+    practiceStartMs: state.practiceStartMs,
+    practiceEndMs: state.practiceEndMs,
+    practiceGauge: state.practiceGauge,
+    practiceGaugeCategory: state.practiceGaugeCategory,
+    practiceStartGauge: state.practiceStartGauge,
+    practiceJudgeRank: state.practiceJudgeRank,
+    practiceTotal: state.practiceTotal,
+    customJudgeKeyPerfectGreat: state.customJudgeKeyPerfectGreat,
+    customJudgeKeyGreat: state.customJudgeKeyGreat,
+    customJudgeKeyGood: state.customJudgeKeyGood,
+    customJudgeScratchPerfectGreat: state.customJudgeScratchPerfectGreat,
+    customJudgeScratchGreat: state.customJudgeScratchGreat,
+    customJudgeScratchGood: state.customJudgeScratchGood,
+    customJudgeLongNoteMargin: state.customJudgeLongNoteMargin,
+    lr2ExtraMode: state.lr2ExtraMode,
+    lr2ExtraLevel: state.lr2ExtraLevel,
+    extraNoteDepth: state.extraNoteDepth,
+    extraNoteScratch: state.extraNoteScratch,
+    mineModifier: state.mineModifier,
+    scrollModifier: state.scrollModifier,
+    scrollSection: state.scrollSection,
+    scrollRate: state.scrollRate,
+    gaugeAutoShift: state.gaugeAutoShift,
+    bottomShiftableGauge: state.bottomShiftableGauge,
     autoScratch1P: state.autoScratch1P,
     autoScratch2P: state.autoScratch2P,
     sort: state.sort,
@@ -441,6 +711,12 @@ export function captureDebugMenuSettings(
     tempoStretchAlgorithm: state.tempoStretchAlgorithm,
     replayView: { ...state.replayView },
     hiSpeed: state.hiSpeed,
+    hsFix: state.hsFix,
+    displayAreaInfo: state.displayAreaInfo,
+    hiddenSudden1P: state.hiddenSudden1P,
+    hiddenSudden2P: state.hiddenSudden2P,
+    laneCover: state.laneCover,
+    shutter: state.shutter,
     builtInSkin: state.builtInSkin,
     skinEffects: state.skinEffects,
     renderResolution: state.renderResolution,

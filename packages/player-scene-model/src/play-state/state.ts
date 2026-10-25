@@ -1,3 +1,4 @@
+import { normalizeFloatingLaneCover } from '../play-options/floating-hi-speed.ts';
 import { createCourseCombo, reduceCourseCombo, type CourseComboState } from '../course-view/course-combo.ts';
 import type { HSFix } from '../play-options/options.ts';
 import { createHiSpeedState, reduceHiSpeed, type HiSpeedCommand, type HiSpeedState } from './hi-speed.ts';
@@ -30,6 +31,7 @@ export interface PlayViewState {
   readonly hiSpeed: HiSpeedState;
   readonly covers: readonly LaneCoverState[];
   readonly hsFix?: HSFix;
+  readonly fixedDisplayArea?: true;
 }
 
 /**
@@ -95,6 +97,7 @@ export function createPlayState(init: PlayStateInit = {}): PlayState {
     view: {
       hiSpeed: init.view?.hiSpeed ?? createHiSpeedState(),
       covers: init.view?.covers ?? [],
+      ...(init.view?.fixedDisplayArea ? { fixedDisplayArea: true as const } : {}),
       ...(init.view?.hsFix !== undefined ? { hsFix: init.view.hsFix } : {}),
     },
   };
@@ -329,21 +332,61 @@ export function reducePlayState(state: PlayState, event: PlayEvent): PlayState {
       return applyFinish(state, event.summary);
     case 'seek':
       return applySeek(state, event);
+    case 'floating-speed-mode':
+    case 'floating-speed-restore':
+    case 'floating-speed-recalculate':
+    case 'hi-speed-fine':
+    case 'hi-speed-scale':
     case 'hi-speed-step':
     case 'hi-speed-set':
     case 'hi-speed-drawn': {
+      if (event.type === 'hi-speed-fine' && state.view.covers.some((cover) => cover.suddenOn || cover.liftOn))
+        return state;
       const hiSpeed = reduceHiSpeed(state.view.hiSpeed, event);
-      return hiSpeed === state.view.hiSpeed ? state : { ...state, view: { ...state.view, hiSpeed } };
+      return hiSpeed === state.view.hiSpeed
+        ? state
+        : {
+            ...state,
+            view: {
+              ...state.view,
+              hiSpeed,
+              ...(event.type === 'floating-speed-mode' && event.enabled && !state.view.fixedDisplayArea
+                ? { covers: state.view.covers.map(normalizeFloatingLaneCover) }
+                : {}),
+            },
+          };
     }
     case 'cover-adjust':
     case 'cover-toggle':
     case 'cover-set': {
+      if (state.view.fixedDisplayArea && !(event.type === 'cover-set' && event.recorded)) return state;
       const covers = reduceLaneCovers(
         state.view.covers,
         event,
         state.view.hiSpeed.locked && event.type !== 'cover-set',
       );
-      return covers === state.view.covers ? state : { ...state, view: { ...state.view, covers } };
+      let hiSpeed = state.view.hiSpeed;
+      if (hiSpeed.floating && event.type !== 'cover-set' && event.part === 'sudden') {
+        const cover = covers.find((cover) => event.side === undefined || cover.side === event.side);
+        const previous = state.view.covers.find((cover) => event.side === undefined || cover.side === event.side);
+        const liftOn = cover?.liftOn ?? false;
+        const recalculate =
+          event.type === 'cover-adjust'
+            ? cover?.suddenOn
+            : liftOn
+              ? previous?.suddenOn && !cover?.suddenOn
+              : !previous?.suddenOn && cover?.suddenOn;
+        const visible = liftOn && previous?.suddenOn && !cover?.suddenOn ? previous : cover;
+        if (recalculate && visible)
+          hiSpeed = reduceHiSpeed(hiSpeed, {
+            type: 'floating-speed-recalculate',
+            bpm: event.bpm ?? hiSpeed.floating.bpm,
+            visibleFraction: Math.max(0, 1 - visible.sudden - ((visible.liftOn ?? false) ? visible.lift : 0)),
+          });
+      }
+      return covers === state.view.covers && hiSpeed === state.view.hiSpeed
+        ? state
+        : { ...state, view: { ...state.view, covers, hiSpeed } };
     }
   }
 }

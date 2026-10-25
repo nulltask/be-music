@@ -30,7 +30,10 @@
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBGA": {}
+      "swBGA": {},
+      "wavNameBytePrefixes": {
+        "sample.wav": "7361"
+      }
     },
     "controlFlow": [],
     "events": [
@@ -71,6 +74,11 @@
           "percent": 75
         },
         "noteCount": 1,
+        "headerBPM": 120,
+        "bpmRange": {
+          "min": 120,
+          "max": 120
+        },
         "chartFingerprint": "bmfp0:3fb8afb0b5291e42ec0c143fdde64b919e0fb57bb5e20d1827800d355b641473",
         "playFingerprint": "bmfp0:3fb8afb0b5291e42ec0c143fdde64b919e0fb57bb5e20d1827800d355b641473",
         "title": "テスト曲",

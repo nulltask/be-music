@@ -28,7 +28,7 @@ export function createSeekRebuildSink(summary: Readonly<PlayerUIFrameSummary>): 
   return {
     judgments,
     emit: (effect) => {
-      if ('seconds' in effect) seconds = effect.seconds;
+      if ('seconds' in effect && effect.seconds !== undefined) seconds = effect.seconds;
       if (effect.kind !== 'judge-combo') return;
       judgments.push({
         judge: effect.judge,

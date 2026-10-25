@@ -9,13 +9,13 @@
  * The list glides to the cursor, the short way round a wrap.
  *
  * A click on a bar moves the cursor onto it, or takes it when it is the focused one. The skin's buttons come back as
- * intents: PLAY / AUTO / PRACTICE, READ TEXT, the song and chart favourites, and the MODE and SORT buttons, which step
- * the key-mode filter and the sort of the browse position (Shift steps back). The LNMODE button's choice stays in the
- * view, as nothing plays it yet (the browse model leaves it out); the JUDGE TIMING button steps the skin's timing offset
- * and hands the options to the host.
+ * intents: PLAY / AUTO / PRACTICE, READ TEXT, the song and chart favourites, the MODE and SORT buttons, which step
+ * the key-mode filter and the sort of the browse position (Shift steps back), and the option buttons (LNMODE, DP
+ * option, gauge auto shift, …), which step the play options as beatoraja's select screen does
+ * (`resolveBeatorajaOptionButton`); the JUDGE TIMING button steps the skin's timing offset and hands the options to the
+ * host.
  */
 
-import { resolveChartLongNoteMode } from '@be-music/chart-model';
 import {
   BEATORAJA_BUTTON,
   parseBeatorajaSongList,
@@ -28,11 +28,11 @@ import {
   BEATORAJA_SORTS,
   beatorajaClearLampOp,
   beatorajaKeysFilterIndex,
-  beatorajaLNModeIndex,
   beatorajaSortIndex,
+  resolveBeatorajaOptionButton,
   resolveBeatorajaSelectSliderValue,
 } from '@be-music/skin-beatoraja/scene';
-import type { BrowseListOptions, LibraryChart, LibraryEntry } from '@be-music/player-scene-model';
+import type { BrowseListOptions, LibraryChart, LibraryEntry, PlayOptions } from '@be-music/player-scene-model';
 import { Container } from 'pixi.js';
 import { resolveChartSource } from '../../collection/collection.ts';
 import type { BrowserChartCollection } from '../../collection/types.ts';
@@ -63,7 +63,7 @@ const SCROLL_SNAP_THRESHOLD = 0.005;
 const FRAME_MS = 1000 / 60;
 
 /** The JUDGE TIMING button's range (ms), as beatoraja's judge-offset slider. */
-const JUDGE_TIMING_LIMIT_MS = 200;
+const JUDGE_TIMING_LIMIT_MS = 500;
 
 /** What the view's parts read and drive on it. */
 type BeatorajaSelectViewContext = BeatorajaSelectRowsContext &
@@ -132,8 +132,6 @@ export class BeatorajaSelectView implements SelectView {
   private focusedTarget: object | undefined;
   /** The scene timers started, on the screen's own clock (ms since the entry); a timer not in it has not started. */
   private readonly timerStartedAt = new Map<number, number>();
-  /** The LNMODE button's choice over the focused chart's `#LNMODE`; nothing plays it yet. */
-  private lnModeOverride: 0 | 1 | 2 | undefined;
   /**
    * The key filter and sort the MODE and SORT buttons step from: the frame's, or what the view last asked for until the
    * next frame shows the session's, so a second press before that frame steps on rather than asking for the same again.
@@ -369,11 +367,15 @@ export class BeatorajaSelectView implements SelectView {
     if (emit === undefined || frame === undefined) return;
     const step = back ? -1 : 1;
     switch (act) {
+      // PLAY and PRACTICE pick the mode they start in, as beatoraja's do (`BMSPlayerMode.PLAY` / `PRACTICE`).
       case BEATORAJA_BUTTON.PLAY:
-      // The practice mode is not implemented: PRACTICE plays the chart.
-      case BEATORAJA_BUTTON.PRACTICE:
+      case BEATORAJA_BUTTON.PRACTICE: {
+        const practice = act === BEATORAJA_BUTTON.PRACTICE;
+        if ((frame.playOptions.practice ?? false) !== practice)
+          emit({ type: 'set-play-option', key: 'practice', value: practice });
         emit({ type: 'start', autoPlay: false });
         return;
+      }
       case BEATORAJA_BUTTON.AUTOPLAY:
         emit({ type: 'start', autoPlay: true });
         return;
@@ -403,52 +405,43 @@ export class BeatorajaSelectView implements SelectView {
         emit({ type: 'browse', command: { type: 'list', options: { sort } } });
         return;
       }
-      case BEATORAJA_BUTTON.LNMODE:
-        this.stepLNMode(step);
-        return;
       case BEATORAJA_BUTTON.JUDGE_TIMING:
         this.stepJudgeTiming(step);
         return;
       case BEATORAJA_BUTTON.OPEN_IR_WEBSITE:
         openIRWebsite();
         return;
-      default:
+      default: {
+        const changed = resolveBeatorajaOptionButton(act, frame.playOptions, back);
+        if (changed !== undefined) {
+          for (const [key, value] of Object.entries(changed))
+            emit({ type: 'set-play-option', key: key as keyof PlayOptions, value });
+          return;
+        }
         // The replay slots, key config, skin select and the community extensions (GdbG's volume, 900) do nothing yet.
         log.debug('button not implemented', { act });
         return;
+      }
     }
   }
 
   /**
-   * Steps the LNMODE button's choice (LN / CN / HCN), starting from the focused chart's own `#LNMODE` the first time,
-   * so the first press moves on from what the button showed.
-   */
-  private stepLNMode(step: number): void {
-    const focused = this.frame?.entries[this.frame.cursor];
-    const current =
-      this.lnModeOverride ??
-      beatorajaLNModeIndex(focused?.kind === 'chart' ? resolveChartLongNoteMode(focused.chart.chart) : undefined);
-    this.lnModeOverride = ((((current + step) % 3) + 3) % 3) as 0 | 1 | 2;
-  }
-
-  /**
-   * Steps the skin's judge timing offset (number 12) by 1 ms within ±200 ms, and hands the options to the host to keep.
+   * Steps the skin's judge timing offset (number 12) by 1 ms within ±500 ms, and hands the options to the host to keep.
    * The view draws with them at once.
    */
+  private judgeTimingAsked: { revision: number; value: number } | undefined;
+
   private stepJudgeTiming(step: number): void {
-    const config = this.kit.kit.skinConfig;
-    if (config === undefined) return;
-    const current = typeof config.offset === 'number' && Number.isFinite(config.offset) ? config.offset : 0;
+    const frame = this.frame;
+    if (!frame) return;
+    const current =
+      this.judgeTimingAsked?.revision === frame.revision
+        ? this.judgeTimingAsked.value
+        : frame.playOptions.judgeTimingMs;
     const next = Math.max(-JUDGE_TIMING_LIMIT_MS, Math.min(JUDGE_TIMING_LIMIT_MS, current + step));
     if (next === current) return;
-    const changed: BeatorajaSkinConfig = {
-      ...config,
-      offset: next,
-      option: { ...config.option },
-      file: { ...config.file },
-    };
-    this.kit = { ...this.kit, kit: { ...this.kit.kit, skinConfig: changed } };
-    this.options.onSkinConfigChange?.(changed);
+    this.judgeTimingAsked = { revision: frame.revision, value: next };
+    this.emit?.({ type: 'set-play-option', key: 'judgeTimingMs', value: next });
   }
 
   /** Decodes a chart's own images, over the files of the library drawn. */
@@ -493,10 +486,10 @@ export class BeatorajaSelectView implements SelectView {
         return view.frame?.browse.list ?? { keysFilter: 'ALL' as const, sort: 'OFF' as const };
       },
       get playOptions() {
-        return view.frame?.playOptions;
-      },
-      get lnModeOverride(): 0 | 1 | 2 | undefined {
-        return view.lnModeOverride;
+        const options = view.frame?.playOptions;
+        return options && view.judgeTimingAsked && view.judgeTimingAsked.revision === view.frame?.revision
+          ? { ...options, judgeTimingMs: view.judgeTimingAsked.value }
+          : options;
       },
       currentFolderLabel: () => view.frame?.browse.path.at(-1)?.label ?? '',
       lampOpOf: (entry) => {

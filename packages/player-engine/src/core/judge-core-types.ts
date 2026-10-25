@@ -32,6 +32,8 @@ export interface JudgeCoreConfig {
   scratchChannels: ReadonlySet<string>;
   /** AUTO SCRATCH: the core plays the scratch lanes itself and ignores input on them. */
   autoScratch: boolean;
+  /** The assisted subset of scratchChannels; absent means the legacy combined switch. */
+  autoScratchChannels?: ReadonlySet<string>;
   /**
    * Scale of the millisecond domain (`nowMs`, release-margin deadlines, lane press / release stamps) per chart second.
    * Live play runs it on the playback clock (`1000 / speed`, wall-clock milliseconds); a replay runs it on chart time
@@ -236,7 +238,7 @@ export type JudgeCoreEffect =
   /** The no-TUI trace's POOR BGA marker at this point of the output. */
   | { kind: 'poor-trace'; action: 'trigger' | 'clear'; seconds: number }
   /** The judge readout: what the UI's judge / combo display shows. */
-  | { kind: 'judge-combo'; judge: string; combo: number; channel?: string; signedDeltaMs?: number }
+  | { kind: 'judge-combo'; seconds?: number; judge: string; combo: number; channel?: string; signedDeltaMs?: number }
   /** A no-TUI trace line. */
   | { kind: 'trace'; name: string; seconds: number; fields: readonly JudgeTraceField[] }
   /** The play state changed outside a frame tick: republish the frame (at `beat`, or the beat of `seconds`). */

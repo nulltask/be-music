@@ -4,6 +4,7 @@ import type { LR2PlaySkinMap, LR2Skin } from '@be-music/skin-lr2';
 import type { BeatorajaKit, BuiltInKit } from '@be-music/player-browser/host';
 import type { BeatorajaThemeBundle } from '@be-music/player-browser/skin';
 import { parseBeatorajaCourseData } from '@be-music/player-engine/course';
+import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import {
   resolveCourseView,
   type LibraryChart,
@@ -13,7 +14,7 @@ import {
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
 import { describe, expect, test, vi } from 'vite-plus/test';
 import type { CourseStagePlay } from '../course-flow.ts';
-import type { SkinFamilyOverride } from '../types.ts';
+import type { PlayerGUIState, SkinFamilyOverride } from '../types.ts';
 import { FamilyKits, type FamilyKitsOptions } from './family-kits.ts';
 
 function skin(name: string): LR2Skin {
@@ -70,7 +71,7 @@ interface Fakes {
   lr2: { -readonly [K in keyof FamilyKitsOptions['lr2']]: FamilyKitsOptions['lr2'][K] };
   beatoraja: { -readonly [K in keyof FamilyKitsOptions['beatoraja']]: FamilyKitsOptions['beatoraja'][K] };
   builtIn: { beMusicSkin: BeMusicSkin; builtInKit: BuiltInKit };
-  guiState: { skinFamilyOverride: SkinFamilyOverride };
+  guiState: { skinFamilyOverride: SkinFamilyOverride; battleMode: PlayerGUIState['battleMode'] };
 }
 
 function fakes(
@@ -96,7 +97,7 @@ function fakes(
     selectSoundSet: vi.fn(() => BEATORAJA_SOUNDS),
   };
   const builtIn: Fakes['builtIn'] = { beMusicSkin: BUILT_IN_KIT.skin, builtInKit: BUILT_IN_KIT };
-  const guiState: Fakes['guiState'] = { skinFamilyOverride: 'auto' };
+  const guiState: Fakes['guiState'] = { skinFamilyOverride: 'auto', battleMode: 'OFF' };
   return { kits: new FamilyKits({ lr2, beatoraja, builtIn, guiState }), lr2, beatoraja, builtIn, guiState };
 }
 
@@ -184,6 +185,19 @@ describe('FamilyKits.resolvePlayKit', () => {
       kind: 'play',
       playVariant: '7',
     });
+  });
+
+  test('a battle mode plays on the converted chart’s LR2 skin, a replay on its recorded one', async () => {
+    const play7 = skin('play7');
+    const play14 = skin('play14');
+    const battle7 = skin('battle7');
+    const { kits, guiState } = fakes({ playSkins: { '7': play7, '14': play14, '7-battle': battle7 } });
+    guiState.battleMode = 'TWO-PLAYER';
+    expect(await kits.resolvePlayKit(chart(), {})).toEqual({ kit: { family: 'lr2', skin: battle7 } });
+    guiState.battleMode = 'D-BATTLE';
+    expect(await kits.resolvePlayKit(chart(), {})).toEqual({ kit: { family: 'lr2', skin: play14 } });
+    const replay = { play: { battleMode: 'OFF' } } as BeMusicReplay;
+    expect(await kits.resolvePlayKit(chart(), { replay })).toEqual({ kit: { family: 'lr2', skin: play7 } });
   });
 
   test('the built-in kit with no LR2 skin loaded, or with Skin system on Built-in', async () => {

@@ -282,18 +282,19 @@ export function drawLR2PlaySkin(ctx: LR2PlayElementsContext, width: number, heig
     });
   }
   for (const gauge of skin.grooveGauges) {
-    // 1P only for now: the 2P side needs battle / DP wiring.
-    if (gauge.index !== 0) continue;
+    // The 2P gauge (index 1) is a two-player BATTLE's 2P player's; without one only the 1P gauge draws.
+    const gaugeState = gauge.index === 0 ? ctx.play.gaugeState : ctx.play.secondPlayer?.gauge;
+    if (gauge.index > 1 || gaugeState === undefined) continue;
     if (!isLR2DestinationVisible(ctx, gauge.destination)) continue;
     renderGrooveGaugeElement(
       ctx.skinLayerPool,
       gauge,
-      ctx.play.gaugeState.current,
+      gaugeState.current,
       ctx.textures,
       evaluateLR2ElementDst(ctx, gauge),
       {
         // Survival gauges (HARD / DEATH) have no 80 % clear border in LR2: the whole bar draws in the red cell.
-        survivalGauge: ctx.play.gaugeState.survival === true,
+        survivalGauge: gaugeState.survival === true,
         // The 4-cell x N-frame animation (the lit tip's scan), on the SRC's timer.
         elapsedMs: ctx.timers.elapsed(gauge.source.timer),
       },

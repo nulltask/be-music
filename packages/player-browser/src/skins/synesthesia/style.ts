@@ -1,4 +1,5 @@
 import { Texture } from 'pixi.js';
+import type { HUDTextOptions } from '../pixi-kit/index.ts';
 
 /**
  * Synesthesia skin tokens, after a cosmic particle world: a true-black void, a world built from ember / gold particles,
@@ -64,3 +65,13 @@ export function synGlowTexture(): Texture {
 
 /** Radius (px) of the visible glow for a sprite of `displaySize` px — the texture fades out well before its edge. */
 export const SYN_GLOW_SIZE = 64;
+
+/** The HUD's small label type: dim, wide Michroma. */
+export function labelStyle(): HUDTextOptions {
+  return { size: 9, fill: SYN_DIM, fontFamily: SYN_DISPLAY_FONT, letterSpacing: 0.8 };
+}
+
+/** The HUD's figures: Michroma at `size` in `fill`. */
+export function displayStyle(size: number, fill: number): HUDTextOptions {
+  return { size, fill, fontFamily: SYN_DISPLAY_FONT, weight: '400' };
+}

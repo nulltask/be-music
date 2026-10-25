@@ -43,7 +43,11 @@
       "speed": {},
       "swBGA": {},
       "player": 1,
-      "lnType": 1
+      "lnType": 1,
+      "wavNameBytePrefixes": {
+        "sample.wav": "7361",
+        "branch.wav": "6272"
+      }
     },
     "controlFlow": [],
     "events": [
@@ -164,6 +168,11 @@
           "sourceRank": 2
         },
         "noteCount": 24,
+        "headerBPM": 130,
+        "bpmRange": {
+          "min": 65,
+          "max": 130
+        },
         "reversalTimeUs": 7384615,
         "chartFingerprint": "bmfp0:487ec047541d991b29d55c156204e07cc745e8fcc14d849e40aa0bbd2759c5d7",
         "playFingerprint": "bmfp0:487ec047541d991b29d55c156204e07cc745e8fcc14d849e40aa0bbd2759c5d7",

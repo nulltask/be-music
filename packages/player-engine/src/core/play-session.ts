@@ -1,3 +1,8 @@
+import { selectPlaybackChartSide, type SecondPlayer } from './two-player.ts';
+import { resolveEffectiveBattleMode } from './battle-mode.ts';
+import { applySevenToNine } from './seven-to-nine.ts';
+import { clampExtraNoteDepth } from './extra-note-modifier.ts';
+import { resolveAutoScratchSides } from './auto-scratch.ts';
 import {
   createBeatAtSecondsResolverFromTimingResolver,
   isPlayLaneSoundChannel,
@@ -14,6 +19,7 @@ import { createScoreTracker } from './scoring.ts';
 import {
   judgeWindowLateReachUs,
   resolveRuleset,
+  resolveGaugeEndOnFailure,
   rulesetChartFactsFromChart,
   type RulesetConfig,
 } from '../ruleset/index.ts';
@@ -129,6 +135,8 @@ export interface PlaySession {
   seekGeneration: number;
   /** Puts the score, the gauge and the combos back to the play's start, in place (a seek rebuilds from there). */
   readonly resetScore: () => void;
+  /** The 2P player of a two-player play (`battleMode: 'TWO-PLAYER'`); the session's own score is the 1P player's. */
+  readonly secondPlayer?: SecondPlayer;
 }
 
 /** The UI runtime's label for the mode. */
@@ -143,7 +151,24 @@ export async function createPlaySession(
   options: PlayerOptions,
   strategy: JudgeStrategy,
 ): Promise<PlaySession> {
+  // Effective calibration is local to this run, even when the caller reuses or freezes its settings.
+  options = { ...options };
+  options.scrollModifier ??= options.preparedChart?.scrollModifierApplied;
+  options.scrollSection ??= options.preparedChart?.scrollSection;
+  options.scrollRate ??= options.preparedChart?.scrollRate;
+  if (options.scrollModifier !== undefined && options.scrollModifier !== 'OFF' && options.judgeRuleset !== 'beatoraja')
+    throw new RangeError('Scroll modification is available only for beatoraja.');
+  options.sevenToNinePattern ??= options.preparedChart?.sevenToNinePattern;
+  options.sevenToNineType ??= options.preparedChart?.sevenToNineType;
+  options.hRandomThresholdBPM ??= options.preparedChart?.sevenToNineThresholdBPM;
+  if ((options.sevenToNinePattern ?? 0) > 0 && options.judgeRuleset !== 'beatoraja')
+    throw new RangeError('7-to-9 conversion is available only for beatoraja.');
   const { mode } = strategy;
+  if (options.judgeTimingAutoAdjust && (options.judgeRuleset ?? 'lr2') !== 'beatoraja')
+    throw new RangeError('Automatic display-timing adjustment is available only for beatoraja.');
+  if (options.mineModifier !== undefined && options.mineModifier !== 'OFF' && options.judgeRuleset !== 'beatoraja')
+    throw new RangeError('Mine modification is available only for beatoraja.');
+  if (options.practice !== undefined) assertPracticeOptions(options);
   throwIfAborted(options.signal);
   const writeOutput = resolveOutputWriter(options);
   reportLoadProgress(options, 0.02, 'Resolving chart...');
@@ -151,17 +176,20 @@ export async function createPlaySession(
   const resolvedJSON = controlFlowResolution.resolvedJSON;
   options.onResolvedChart?.(resolvedJSON);
   const randomPatternSummary = formatRandomPatternSummary(controlFlowResolution.randomPatterns);
-  const autoScratch = mode === 'manual' && options.autoScratch === true;
+  const scratchSides = resolveAutoScratchSides(options);
+  const autoScratch = mode === 'manual' && (scratchSides.autoScratch1P || scratchSides.autoScratch2P);
   const speed = options.speed ?? 1;
   const tempoClock = createTempoClock(speed);
   const leadInMs = options.leadInMs ?? 1500;
-  const requestedStartAtSeconds = options.startAtSeconds ?? 0;
+  // PRACTICE starts 1000 ms before its range (`starttimeoffset`).
+  const requestedStartAtSeconds =
+    options.startAtSeconds ??
+    (options.practice !== undefined ? Math.max(0, Math.trunc(options.practice.startMs) - 1000) / 1000 : 0);
   const startAtSeconds =
     Number.isFinite(requestedStartAtSeconds) && requestedStartAtSeconds > 0 ? requestedStartAtSeconds : 0;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const replay = options.replayInputs !== undefined;
-  const resolvedChart = resolveEngineChart(resolvedJSON, options);
-  const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(resolvedChart.timing);
+  let resolvedChart = options.preparedChart?.resolvedChart ?? resolveEngineChart(resolvedJSON, options);
   // Dynamic `#EXRANKxx` changes are a chart fact, recorded whatever the ruleset: LR2 applies them, while beatoraja and
   // That-Which-Must-Not-Be-Named keep their initial windows (their `windowsAt` ignores the timeline). A log played under one ruleset can then
   // be re-simulated under LR2 with the windows LR2 would have used.
@@ -169,7 +197,7 @@ export async function createPlaySession(
   const volumeEvents = collectRealtimeAudioVolumeEvents(resolvedChart);
   // Background audio: every sound that is not a play lane's — a play lane's keysound is the judge strategy's to play
   // (on the player's press, or AUTO play's own note keysounds).
-  const backgroundTriggers = collectRealtimeAudioTriggers(resolvedChart, (channel) => !isPlayLaneSoundChannel(channel));
+  let backgroundTriggers = collectRealtimeAudioTriggers(resolvedChart, (channel) => !isPlayLaneSoundChannel(channel));
   const realtimeAudioEndSeconds =
     options.audio === false ? 0 : Math.max(backgroundTriggers.at(-1)?.seconds ?? 0, volumeEvents.at(-1)?.seconds ?? 0);
   // Prefer the host-provided `preparedChart` over running our own extract pass. See `PlayerOptions.preparedChart`
@@ -178,7 +206,90 @@ export async function createPlaySession(
   // arrays drifted" bugs.
   const playbackChart =
     options.preparedChart ??
-    preparePlaybackChart(resolvedChart, { laneModeExtension: options.laneModeExtension }, realtimeAudioEndSeconds);
+    preparePlaybackChart(
+      resolvedChart,
+      {
+        laneModeExtension: options.laneModeExtension,
+        longNoteModifier: options.longNoteModifier,
+        longNoteRate: options.longNoteRate,
+        battleMode: options.battleMode,
+        dBattleScratch: options.dBattleScratch,
+        practice: options.practice,
+        judgeRuleset: options.judgeRuleset,
+        autoScratch: options.autoScratch,
+        autoScratch1P: options.autoScratch1P,
+        autoScratch2P: options.autoScratch2P,
+        lr2ExtraMode: options.lr2ExtraMode,
+        lr2ExtraLevel: options.lr2ExtraLevel,
+        speed: options.speed,
+        course: options.course,
+        extraNoteDepth: options.extraNoteDepth,
+        extraNoteScratch: options.extraNoteScratch,
+        longNoteModifierPlacements: options.longNoteModifierPlacements,
+        mineModifier: options.mineModifier,
+        mineModifierPlacements: options.mineModifierPlacements,
+        scrollModifier: options.scrollModifier,
+        scrollSection: options.scrollSection,
+        scrollRate: options.scrollRate,
+        scrollModifierTimeline: options.scrollModifierTimeline,
+      },
+      realtimeAudioEndSeconds,
+      Math.random,
+    );
+  resolvedChart = playbackChart.resolvedChart;
+  backgroundTriggers = collectRealtimeAudioTriggers(resolvedChart, (channel) => !isPlayLaneSoundChannel(channel));
+  const battleRequested = options.battleMode ?? playbackChart.battleMode ?? 'OFF';
+  const expectedBattle = resolveEffectiveBattleMode(
+    battleRequested,
+    options.judgeRuleset ?? 'lr2',
+    playbackChart.battleSourceVariant ?? resolvedChart.playVariant,
+    options.course !== undefined,
+  );
+  if ((playbackChart.battleMode ?? 'OFF') !== expectedBattle)
+    throw new RangeError('The shared prepared chart must include the selected battle mode.');
+  const lr2ExtraRequested = options.lr2ExtraMode ?? playbackChart.lr2ExtraMode ?? false;
+  if (lr2ExtraRequested && (options.judgeRuleset ?? 'lr2') !== 'lr2')
+    throw new RangeError('LR2 EXTRA requires LR2 judgment rules.');
+  if ((playbackChart.lr2ExtraMode ?? false) !== (lr2ExtraRequested && options.course === undefined))
+    throw new RangeError('The shared prepared chart must include the selected LR2 EXTRA mode.');
+  if (lr2ExtraRequested && options.lr2ExtraLevel !== undefined && playbackChart.lr2ExtraLevel !== options.lr2ExtraLevel)
+    throw new RangeError('The shared prepared chart must include the selected LR2 EXTRA level.');
+  if (!options.preparedChart && (options.sevenToNinePattern !== undefined || options.sevenToNineType !== undefined))
+    applySevenToNine(playbackChart, options);
+  if (
+    options.preparedChart &&
+    ((options.sevenToNinePattern !== undefined &&
+      options.sevenToNinePattern !== (playbackChart.sevenToNinePattern ?? 0)) ||
+      (options.sevenToNineType !== undefined && options.sevenToNineType !== (playbackChart.sevenToNineType ?? 0)) ||
+      (options.hRandomThresholdBPM !== undefined &&
+        options.hRandomThresholdBPM !== (playbackChart.sevenToNineThresholdBPM ?? 120)))
+  )
+    throw new RangeError('Prepared 7-to-9 conversion does not match selected options.');
+  resolvedChart = playbackChart.resolvedChart;
+  const extraDepth = clampExtraNoteDepth(options.extraNoteDepth ?? playbackChart.extraNoteDepth ?? 0);
+  const extraScratch = options.extraNoteScratch ?? playbackChart.extraNoteScratch ?? false;
+  if ((playbackChart.extraNoteDepth ?? 0) !== extraDepth || (playbackChart.extraNoteScratch ?? false) !== extraScratch)
+    throw new RangeError('The shared prepared chart must include the selected EXTRA note options.');
+  if (extraDepth > 0 && (options.judgeRuleset ?? 'lr2') !== 'beatoraja')
+    throw new RangeError('EXTRA note depth is available only for beatoraja.');
+  const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(resolvedChart.timing);
+  if ((options.scrollModifier ?? 'OFF') !== (playbackChart.scrollModifierApplied ?? 'OFF'))
+    throw new RangeError('The shared prepared chart must include the selected scroll modifier.');
+  if (
+    options.longNoteModifier?.startsWith('ADD_') &&
+    playbackChart.longNoteModifierApplied !== options.longNoteModifier
+  )
+    throw new RangeError('The shared prepared chart must include the selected long-note modifier.');
+  if (options.longNoteModifier?.startsWith('ADD_') && (options.judgeRuleset ?? 'lr2') !== 'beatoraja')
+    throw new RangeError('Long-note addition is available only for beatoraja.');
+  if (options.mineModifier?.startsWith('ADD_') && playbackChart.mineModifierApplied !== options.mineModifier)
+    throw new RangeError('The shared prepared chart must include the selected mine modifier.');
+  if (options.mineModifier === 'REMOVE') {
+    const removed = playbackChart.landmineNotes.length;
+    playbackChart.mineModifierChangeCount = (playbackChart.mineModifierChangeCount ?? 0) + removed;
+    // Keep the shared array identity when the host prepared the chart before choosing REMOVE.
+    playbackChart.landmineNotes.length = 0;
+  }
   // A duplicate note that lost its lane and position to another note is not judged, but its keysound still sounds, as
   // background audio at its own time.
   appendShadowedNoteTriggers(backgroundTriggers, resolvedChart, playbackChart.shadowedNotes);
@@ -189,80 +300,182 @@ export async function createPlaySession(
   // The gauge the play runs on and the replay records: one value, so a re-simulation runs the same gauge. A host that
   // only declared it for the log (`recordReplay.gauge`) gets it played too.
   const selectedGauge = options.gauge ?? options.recordReplay?.gauge;
+  if (
+    options.judgeAlgorithm !== undefined &&
+    options.judgeAlgorithm !== 'combo' &&
+    options.judgeRuleset !== 'beatoraja'
+  ) {
+    throw new RangeError('Selectable judgment algorithms belong to beatoraja 0.8.9.');
+  }
+  // Two players judge one side each: each side's notes make its own judgment count and TOTAL.
+  const twoPlayer = playbackChart.battleMode === 'TWO-PLAYER';
   const ruleset = resolveRuleset(
-    rulesetChartFactsFromChart(resolvedJSON, playbackChart, judgeRankChanges, options.stageRanks),
+    rulesetChartFactsFromChart(
+      resolvedJSON,
+      twoPlayer ? selectPlaybackChartSide(playbackChart, 1) : playbackChart,
+      judgeRankChanges,
+      options.stageRanks,
+    ),
     options.judgeRuleset ?? 'lr2',
     {
+      ...(options.judgeAlgorithm !== undefined ? { judgeAlgorithm: options.judgeAlgorithm } : {}),
+      ...(options.customJudge !== undefined ? { customJudge: options.customJudge } : {}),
+      ...(options.practice !== undefined
+        ? {
+            practice: {
+              sourceNotes: playbackChart.practiceSourceNotes ?? { normal: 0, long: { 1: 0, 2: 0, 3: 0 } },
+              gauge: options.practice.gauge,
+              startGauge: options.practice.startGauge,
+              ...(options.practice.gaugeCategory !== undefined
+                ? { gaugeCategory: options.practice.gaugeCategory }
+                : {}),
+              ...(options.practice.total !== undefined ? { total: options.practice.total } : {}),
+              ...(options.practice.judgeRank !== undefined ? { judgeRank: options.practice.judgeRank } : {}),
+            },
+          }
+        : {}),
       ...(selectedGauge !== undefined ? { selectedGauge } : {}),
+      ...(options.bottomShiftableGauge !== undefined ? { bottomShiftableGauge: options.bottomShiftableGauge } : {}),
+      ...(options.gaugeAutoShift !== undefined ? { gaugeAutoShift: options.gaugeAutoShift } : {}),
       ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
       ...(options.course !== undefined ? { course: courseStageRulesetOptions(options.course) } : {}),
     },
   );
   reportResolvedRuleset(options, ruleset);
-  const endOnFailure = options.endOnFailure ?? true;
+  const endOnFailure = resolveGaugeEndOnFailure(options.gaugeAutoShift, ruleset.rulesetId, options.endOnFailure);
 
-  const { reset: resetSummary, ...initialSummary } = createInitialPlayerSummary(ruleset, ruleset.noteCount);
   const courseCarry = options.course !== undefined ? courseStageCarryCombo(options.course) : undefined;
-  const score: JudgeCoreScore = {
-    ...initialSummary,
-    scoreTracker: createScoreTracker({
-      moneyScore: ruleset.moneyScore,
-      ...(courseCarry !== undefined ? { course: courseCarry } : {}),
-    }),
-  };
-  const summary: PlayerSummary = score.summary;
-  const tracker = score.scoreTracker;
-  // The summary reads the combos off the tracker the judges update, so it always shows the live ones.
-  Object.defineProperties(summary, {
-    combo: { get: () => tracker.combo, enumerable: true, configurable: true },
-    maxCombo: { get: () => tracker.maxCombo, enumerable: true, configurable: true },
-  });
-  if (tracker.course !== undefined) {
-    // The same object the tracker updates, so the summary always shows the live course combo.
-    summary.course = tracker.course;
-  }
-  const resetScore = (): void => {
-    resetSummary();
-    tracker.combo = 0;
-    tracker.maxCombo = 0;
-    if (tracker.course !== undefined && courseCarry !== undefined) {
-      tracker.course.combo = courseCarry.combo;
-      tracker.course.maxCombo = Math.max(courseCarry.maxCombo, courseCarry.combo);
-    }
-  };
-  const replayRecorder = options.onReplayRecorded
-    ? (() => {
-        const { chartSHA256, chartMD5, recorder, sourceChart, ...hostPlaySettings } = options.recordReplay ?? {};
-        return createReplayRecorder({
-          json: resolvedJSON,
-          moneyScore: ruleset.moneyScore,
-          chart: playbackChart,
-          chartSHA256,
-          chartMD5,
-          recorder,
-          laneModeExtension: options.laneModeExtension,
-          // The chart the engine was handed is the source when it resolved the control flow itself.
-          sourceChart: sourceChart ?? json,
-          dynamicJudgeRankChanges: judgeRankChanges,
-          ...(options.stageRanks !== undefined ? { stageRanks: options.stageRanks } : {}),
-          reversalSeconds: resolvedChart.reversal?.seconds,
-          play: {
-            mode,
-            autoScratch,
-            judgeWindowOverrideMs: options.judgeWindowMs,
-            judgeRuleset: options.judgeRuleset,
-            ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),
-            ...(endOnFailure ? { endOnFailure } : {}),
-            ...(options.course !== undefined ? { course: options.course } : {}),
-            ...hostPlaySettings,
-            gauge: selectedGauge,
-            // The tempo a live play ran at (its inputs are in chart time either way). A replay's `speed` only sets how
-            // fast it is re-driven, so it records none.
-            ...(speed !== 1 && !replay ? { tempo: speed } : {}),
-          },
-        });
-      })()
+  const { score, summary, resetScore: resetPrimaryScore } = createPlayerScore(ruleset, courseCarry);
+  const secondPlayer = twoPlayer
+    ? createSecondPlayer(resolvedJSON, playbackChart, judgeRankChanges, options, selectedGauge)
     : undefined;
+  if (secondPlayer !== undefined) summary.secondPlayer = secondPlayer.summary;
+  const resetScore = (): void => {
+    resetPrimaryScore();
+    secondPlayer?.resetScore();
+  };
+  // The source saves nothing from PRACTICE.
+  const replayRecorder =
+    options.onReplayRecorded && options.practice === undefined
+      ? (() => {
+          const { chartSHA256, chartMD5, recorder, sourceChart, ...hostPlaySettings } = options.recordReplay ?? {};
+          return createReplayRecorder({
+            json: resolvedJSON,
+            moneyScore: ruleset.moneyScore,
+            chart: playbackChart,
+            chartSHA256,
+            chartMD5,
+            recorder,
+            laneModeExtension: options.laneModeExtension,
+            // The chart the engine was handed is the source when it resolved the control flow itself.
+            sourceChart: sourceChart ?? json,
+            dynamicJudgeRankChanges: judgeRankChanges,
+            ...(options.stageRanks !== undefined ? { stageRanks: options.stageRanks } : {}),
+            reversalSeconds: resolvedChart.reversal?.seconds,
+            play: {
+              mode,
+              autoScratch,
+              judgeAlgorithm: ruleset.rulesetId === 'beatoraja' ? (options.judgeAlgorithm ?? 'combo') : undefined,
+              ...(options.customJudge !== undefined ? { customJudge: { ...options.customJudge } } : {}),
+              longNoteModifier: options.longNoteModifier,
+              ...(options.autoScratch1P !== undefined || options.autoScratch2P !== undefined
+                ? {
+                    autoScratch1P: mode === 'manual' && scratchSides.autoScratch1P,
+                    autoScratch2P: mode === 'manual' && scratchSides.autoScratch2P,
+                  }
+                : {}),
+              judgeWindowOverrideMs: options.judgeWindowMs,
+              judgeRuleset: options.judgeRuleset,
+              ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),
+              ...(options.course !== undefined ? { course: options.course } : {}),
+              ...hostPlaySettings,
+              ...(options.scrollModifier !== undefined
+                ? {
+                    scrollModifier: options.scrollModifier,
+                    scrollModifierChanged: playbackChart.scrollModifierChanged ?? false,
+                    ...(options.scrollModifier === 'ADD'
+                      ? {
+                          scrollSection: playbackChart.scrollSection,
+                          scrollRate: playbackChart.scrollRate,
+                          scrollModifierTimeline: playbackChart.scrollModifierTimeline,
+                        }
+                      : {}),
+                  }
+                : {}),
+              ...(options.judgeTimingMs !== undefined || options.judgeTimingAutoAdjust !== undefined
+                ? {
+                    options: {
+                      ...hostPlaySettings.options,
+                      judgeTimingAutoAdjust: options.judgeTimingAutoAdjust ?? false,
+                      judgeTimingMs: options.judgeTimingMs ?? 0,
+                    },
+                  }
+                : {}),
+              ...(options.mineModifier !== undefined
+                ? {
+                    mineModifier: options.mineModifier,
+                    mineModifierChangeCount: playbackChart.mineModifierChangeCount ?? 0,
+                  }
+                : {}),
+              ...(playbackChart.sevenToNinePattern !== undefined
+                ? {
+                    sevenToNinePattern: playbackChart.sevenToNinePattern,
+                    sevenToNineType: playbackChart.sevenToNineType,
+                    sevenToNineThresholdBPM: playbackChart.sevenToNineThresholdBPM,
+                    sevenToNineApplied: playbackChart.sevenToNineApplied,
+                  }
+                : {}),
+              ...(options.battleMode !== undefined || playbackChart.battleMode !== undefined
+                ? {
+                    battleMode: playbackChart.battleMode ?? 'OFF',
+                    battleSourceVariant: playbackChart.battleSourceVariant ?? playbackChart.resolvedChart.playVariant,
+                    battleTempo: playbackChart.battleTempo ?? 1,
+                    battleAssist1P: playbackChart.battleAssist1P ?? false,
+                    battleAssist2P: playbackChart.battleAssist2P ?? false,
+                    battleChangedObjectCount: playbackChart.battleChangedObjectCount ?? 0,
+                    battleDroppedObjectCount: playbackChart.battleDroppedObjectCount ?? 0,
+                    ...(playbackChart.dBattleScratch !== undefined
+                      ? { dBattleScratch: playbackChart.dBattleScratch }
+                      : {}),
+                  }
+                : {}),
+              ...(options.lr2ExtraMode !== undefined || playbackChart.lr2ExtraMode !== undefined
+                ? {
+                    lr2ExtraMode: playbackChart.lr2ExtraMode ?? false,
+                    lr2ExtraLevel: playbackChart.lr2ExtraLevel ?? 0,
+                    lr2ExtraEffectiveLevel: playbackChart.lr2ExtraEffectiveLevel ?? 0,
+                    lr2ExtraConvertedObjectCount: playbackChart.lr2ExtraConvertedObjectCount ?? 0,
+                    lr2ExtraTempo: playbackChart.lr2ExtraTempo ?? 1,
+                  }
+                : {}),
+              ...(options.extraNoteDepth !== undefined ||
+              options.extraNoteScratch !== undefined ||
+              playbackChart.extraNoteDepth !== undefined
+                ? {
+                    extraNoteDepth: playbackChart.extraNoteDepth ?? 0,
+                    extraNoteScratch: playbackChart.extraNoteScratch ?? false,
+                    extraNoteChangeCount: playbackChart.extraNoteChangeCount ?? 0,
+                  }
+                : {}),
+              ...(options.longNoteModifier?.startsWith('ADD_')
+                ? {
+                    longNoteRate: playbackChart.longNoteModifierRate ?? 1,
+                    longNoteModifierChangeCount: playbackChart.longNoteModifierChangeCount ?? 0,
+                  }
+                : {}),
+              gaugeAutoShift: options.gaugeAutoShift,
+              ...(options.bottomShiftableGauge !== undefined
+                ? { bottomShiftableGauge: options.bottomShiftableGauge }
+                : {}),
+              endOnFailure: endOnFailure ? true : undefined,
+              gauge: selectedGauge,
+              // The tempo a live play ran at (its inputs are in chart time either way). A replay's `speed` only sets how
+              // fast it is re-driven, so it records none.
+              ...(speed !== 1 && !replay ? { tempo: speed } : {}),
+            },
+          });
+        })()
+      : undefined;
 
   const highSpeed = resolveHighSpeedMultiplier(options.highSpeed);
   const stateSignals = createPlayerStateSignals(highSpeed);
@@ -342,6 +555,7 @@ export async function createPlaySession(
     landmineNotes,
     invisibleNotes,
     audioBackend: audioBackendLabel,
+    ...(secondPlayer !== undefined ? { summary2P: secondPlayer.summary } : {}),
     resolveHCNLanes: (seconds) => session?.readHCNLanes?.(seconds),
     resolveJudgedNoteCount: () =>
       Math.max(
@@ -384,6 +598,20 @@ export async function createPlaySession(
     },
   });
   const applyJudgeEffect = createJudgeEffectHandler({
+    judgeTiming: {
+      enabled:
+        mode === 'manual' &&
+        options.replayInputs === undefined &&
+        ruleset.rulesetId === 'beatoraja' &&
+        options.judgeTimingAutoAdjust === true,
+      currentSeconds: () => (session?.clock ? tempoClock.chartSecondsAt(session.clock.nowMs()) : 0),
+      get value() {
+        return options.judgeTimingMs ?? 0;
+      },
+      set value(value: number) {
+        options.judgeTimingMs = value;
+      },
+    },
     uiEnabled,
     writeOutput,
     wavResources,
@@ -456,6 +684,88 @@ export async function createPlaySession(
     clock: undefined,
     seekGeneration: 0,
     resetScore,
+    ...(secondPlayer !== undefined ? { secondPlayer } : {}),
   };
   return session;
+}
+
+/** A player's score and gauge on `ruleset`, and how to put them back to the play's start. */
+function createPlayerScore(
+  ruleset: RulesetConfig,
+  courseCarry: ReturnType<typeof courseStageCarryCombo> | undefined,
+): { score: JudgeCoreScore; summary: PlayerSummary; resetScore: () => void } {
+  const { reset: resetSummary, ...initialSummary } = createInitialPlayerSummary(ruleset, ruleset.noteCount);
+  const score: JudgeCoreScore = {
+    ...initialSummary,
+    scoreTracker: createScoreTracker({
+      moneyScore: ruleset.moneyScore,
+      ...(courseCarry !== undefined ? { course: courseCarry } : {}),
+    }),
+  };
+  const summary: PlayerSummary = score.summary;
+  const tracker = score.scoreTracker;
+  // The summary reads the combos off the tracker the judges update, so it always shows the live ones.
+  Object.defineProperties(summary, {
+    combo: { get: () => tracker.combo, enumerable: true, configurable: true },
+    maxCombo: { get: () => tracker.maxCombo, enumerable: true, configurable: true },
+  });
+  if (tracker.course !== undefined) {
+    // The same object the tracker updates, so the summary always shows the live course combo.
+    summary.course = tracker.course;
+  }
+  return {
+    score,
+    summary,
+    resetScore: () => {
+      resetSummary();
+      tracker.combo = 0;
+      tracker.maxCombo = 0;
+      if (tracker.course !== undefined && courseCarry !== undefined) {
+        tracker.course.combo = courseCarry.combo;
+        tracker.course.maxCombo = Math.max(courseCarry.maxCombo, courseCarry.combo);
+      }
+    },
+  };
+}
+
+/** The 2P player of a two-player play: its own gauge (`gauge2P`) on its own side's notes. */
+function createSecondPlayer(
+  resolvedJSON: BeMusicJSON,
+  playbackChart: PreparedPlaybackChartData,
+  judgeRankChanges: ResolvedChart['judgeRank']['changes'],
+  options: PlayerOptions,
+  selectedGauge: string | undefined,
+): SecondPlayer {
+  const gauge = options.gauge2P ?? selectedGauge;
+  const ruleset = resolveRuleset(
+    rulesetChartFactsFromChart(resolvedJSON, selectPlaybackChartSide(playbackChart, 2), judgeRankChanges),
+    options.judgeRuleset ?? 'lr2',
+    {
+      ...(gauge !== undefined ? { selectedGauge: gauge } : {}),
+      ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
+    },
+  );
+  const { score, summary, resetScore } = createPlayerScore(ruleset, undefined);
+  return {
+    ruleset,
+    score,
+    summary,
+    resetScore,
+    endOnFailure: resolveGaugeEndOnFailure(undefined, ruleset.rulesetId, options.endOnFailure),
+  };
+}
+
+/** PRACTICE is a beatoraja single play without chart modifiers (they apply only in PLAY / AUTOPLAY). */
+function assertPracticeOptions(options: Readonly<PlayerOptions>): void {
+  if (options.judgeRuleset !== 'beatoraja') throw new RangeError('PRACTICE is available only for beatoraja.');
+  if (options.course !== undefined) throw new RangeError('PRACTICE plays a single chart.');
+  if (
+    (options.battleMode ?? 'OFF') !== 'OFF' ||
+    (options.scrollModifier ?? 'OFF') !== 'OFF' ||
+    (options.longNoteModifier ?? 'OFF') !== 'OFF' ||
+    (options.mineModifier ?? 'OFF') !== 'OFF' ||
+    (options.extraNoteDepth ?? 0) > 0 ||
+    options.lr2ExtraMode === true
+  )
+    throw new RangeError('PRACTICE applies no chart modifier.');
 }

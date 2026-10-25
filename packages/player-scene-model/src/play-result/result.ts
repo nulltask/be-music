@@ -20,6 +20,8 @@ export type PlayRunKind = 'single' | 'stage' | 'course' | 'nonstop';
 export interface PlayResult {
   /** A seek made this play practice: never save a record, rank it or auto-save its replay. */
   practice?: boolean;
+  /** The 2P player's result of a two-player play (LR2 BATTLE); this result is the 1P player's. */
+  secondPlayer?: PlayResult;
   /** A live course-stage outcome for carrying practice into the next stage without a replay. */
   stageOutcome?: ReplayRulesetResult;
   /** Per-judgment counts, total notes, EX score and the displayed score (LR2's money score, else the EX score). */

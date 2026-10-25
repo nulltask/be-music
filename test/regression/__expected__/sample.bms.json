@@ -30,7 +30,10 @@
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBGA": {}
+      "swBGA": {},
+      "wavNameBytePrefixes": {
+        "sample.wav": "7361"
+      }
     },
     "controlFlow": [],
     "events": [
@@ -98,6 +101,11 @@
           "percent": 75
         },
         "noteCount": 12,
+        "headerBPM": 120,
+        "bpmRange": {
+          "min": 100,
+          "max": 120
+        },
         "chartFingerprint": "bmfp0:3622fc577ce74b6a74c72ce0114364e4a9ddd151be4c94e079724a02da3e21aa",
         "playFingerprint": "bmfp0:3622fc577ce74b6a74c72ce0114364e4a9ddd151be4c94e079724a02da3e21aa",
         "title": "Sample",

@@ -480,3 +480,14 @@ test('keeps a raw PMS maximum for the skin and normalizes the result gauge and b
   expect(play.state().gauge).toBe(25);
   expect(getResultData(play.ctx)).toMatchObject({ gauge: 25, gaugeBorder: (85 / 120) * 100 });
 });
+
+test('engine calibration updates the display setting without moving the input or play clock', () => {
+  const play = createPlay({ total: 2, judgeRuleset: 'beatoraja' });
+  const onChange = vi.fn();
+  Object.assign(play.ctx.options, { judgeTimingAutoAdjust: true, judgeTimingMs: 500, onJudgeTimingChange: onChange });
+  play.step(2, {}, [], [{ kind: 'judge-timing', value: 505 }]);
+  expect(play.ctx.options.judgeTimingMs).toBe(505);
+  expect(onChange).toHaveBeenCalledWith(505);
+  expect(play.ctx.currentSeconds()).toBe(2);
+  expect(play.ctx.playState.judgeTimings).toHaveLength(0);
+});

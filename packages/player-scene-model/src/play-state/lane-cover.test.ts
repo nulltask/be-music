@@ -13,6 +13,20 @@ const cover = (overrides: Partial<LaneCoverState> = {}): LaneCoverState => ({
 });
 
 describe('laneCoversFromPlayOptions', () => {
+  test('retains the beatoraja default while off and enables each side independently', () => {
+    const [one, two] = laneCoversFromPlayOptions({ ...DEFAULT_PLAY_OPTIONS, liftOn2P: true, lift2P: 0.3 }, [
+      '1P',
+      '2P',
+    ]);
+    expect(one).toMatchObject({ lift: 0.1, liftOn: false });
+    expect(resolveLaneCover(one!).lift).toBe(0);
+    expect(resolveLaneCover(two!).lift).toBe(0.3);
+    const off = reduceLaneCovers([two!], { type: 'cover-toggle', part: 'lift' });
+    expect(off[0]).toMatchObject({ lift: 0.3, liftOn: false });
+    expect(resolveLaneCover(off[0]!).lift).toBe(0);
+    expect(resolveLaneCover(reduceLaneCovers(off, { type: 'cover-toggle', part: 'lift' })[0]!).lift).toBe(0.3);
+  });
+
   const options = { ...DEFAULT_PLAY_OPTIONS, laneCover: true, shutter: 0.3 };
 
   test('covers the top under SUDDEN, the bottom under HIDDEN and both under HID+SUD, per side', () => {
@@ -52,6 +66,14 @@ describe('laneCoversFromPlayOptions', () => {
 });
 
 describe('resolveLaneCover', () => {
+  test('scales SUDDEN+ as well as HIDDEN+ to the remaining lane', () => {
+    expect(resolveLaneCover(cover({ suddenOn: true, sudden: 0.5, hiddenOn: true, hidden: 0.25, lift: 0.2 }))).toEqual({
+      side: '1P',
+      sudden: 0.4,
+      hidden: 0.2,
+      lift: 0.2,
+    });
+  });
   test('scales HIDDEN+ to the lane above the LIFT', () => {
     expect(resolveLaneCover(cover({ hiddenOn: true, hidden: 0.5, lift: 0.2 }))).toEqual({
       side: '1P',

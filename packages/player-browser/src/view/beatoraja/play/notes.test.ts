@@ -270,3 +270,22 @@ describe('BeatorajaNoteLayer invisible objects', () => {
     layer.dispose();
   });
 });
+
+it('uses the active authored lane block and coordinate flip for display-area information', () => {
+  const layer = new BeatorajaNoteLayer({
+    noteSection: normalizeBeatorajaNote({
+      dst: Array.from({ length: 16 }, (_, index) => ({ x: index * 30, y: 200, w: 30, h: 600 })),
+    }),
+    variant: '14',
+    images: new Map(),
+    textures: { get: () => undefined, values: () => [][Symbol.iterator](), pathOf: () => undefined },
+    canvasHeight: 1000,
+  });
+  expect(layer.getDisplayAreaLanes(new Set(), ['11', '16', '21', '26'])).toEqual([
+    { side: '1P', x: 0, w: 30, top: 200, bottom: 800 },
+    { side: '1P', x: 210, w: 30, top: 200, bottom: 800 },
+    { side: '2P', x: 240, w: 30, top: 200, bottom: 800 },
+    { side: '2P', x: 450, w: 30, top: 200, bottom: 800 },
+  ]);
+  layer.dispose();
+});

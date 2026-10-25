@@ -348,6 +348,8 @@ export interface PlayFrame {
   readonly playOptions: PlayOptions;
   /** The running play: gauge, score, combo, judgments, hi-speed and lane covers. */
   readonly state: PlayState;
+  /** The 2P player of a two-player play (LR2 BATTLE): its gauge, score, combo and judgments. */
+  readonly state2P?: PlayState;
   /** Optional personal best and target EX scores for skin comparison animations; missing values mean zero. */
   readonly scoreTargets?: { readonly bestEXScore?: number; readonly targetEXScore?: number };
   readonly stage: PlayStage;
@@ -396,6 +398,7 @@ export type PlayIntent =
   | { readonly type: 'hi-speed'; readonly command: HiSpeedCommand }
   /** Move or switch a lane cover (beatoraja's cover buttons and wheel). */
   | { readonly type: 'cover'; readonly command: LaneCoverCommand }
+  | { readonly type: 'constant-visibility'; readonly durationMs?: number; readonly fadeMs?: number }
   | { readonly type: 'pause' }
   /** Give the play up, as holding ESC does. */
   | { readonly type: 'quit' }
@@ -491,6 +494,9 @@ export interface PlayfieldStage {
 
 /** A lane's rect on the stage. `bottom` is the judgement line a note's bottom edge lands on. */
 export interface PlayfieldLaneRect {
+  /** Original judgement line before LIFT; preserves replay and white-number scale. */
+  readonly baseBottom?: number;
+  readonly scrollScale?: number;
   readonly x: number;
   readonly w: number;
   readonly top: number;

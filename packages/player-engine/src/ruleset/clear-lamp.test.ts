@@ -144,7 +144,9 @@ describe('resolveCourseClearLamp', () => {
   });
 
   it('follows the gauge pick under LR2: EASY, HARD, and NORMAL for GROOVE and DEATH', () => {
-    expect(resolveCourseClearLamp(run({ gaugeType: 'EASY' }))).toBe('EASY');
+    expect(resolveCourseClearLamp(run({ gaugeType: 'EASY', gauge: 'COURSE-EASY' }))).toBe('EASY');
+    // A grade course resets an EASY pick to GROOVE.
+    expect(resolveCourseClearLamp(run({ gaugeType: 'EASY' }))).toBe('NORMAL');
     expect(resolveCourseClearLamp(run({ gaugeType: 'HARD', gauge: 'GRADE-HARD' }))).toBe('HARD');
     expect(resolveCourseClearLamp(run({ gaugeType: 'DEATH', gauge: 'GRADE-DEATH' }))).toBe('NORMAL');
     expect(resolveCourseClearLamp(run())).toBe('NORMAL');
@@ -196,4 +198,49 @@ it('awards LR2 FULL COMBO before a failed GROOVE gauge, while other rulesets sti
   expect(resolveClearLamp({ ...play, ruleset: 'beatoraja' })).toBe('FAILED');
   expect(resolveClearLamp({ ...play, ruleset: '____' })).toBe('FAILED');
   expect(resolveClearLamp({ ...play, ruleset: 'lr2', score: score(80, 15, 4) })).toBe('FAILED');
+});
+
+it('classifies LR2 P.ATTACK as HARD with full-combo priority', () => {
+  expect(
+    resolveClearLamp({
+      ruleset: 'lr2',
+      cleared: true,
+      gauge: 'P-ATTACK',
+      score: { ...score(1, 1, 0, 2), fullCombo: false },
+    }),
+  ).toBe('HARD');
+  expect(resolveClearLamp({ ruleset: 'lr2', cleared: true, gauge: 'P-ATTACK', score: score(1, 1, 0, 2) })).toBe(
+    'FULL_COMBO',
+  );
+  expect(
+    resolveCourseClearLamp({
+      ruleset: 'lr2',
+      cleared: true,
+      gauge: 'P-ATTACK',
+      gaugeType: 'P-ATTACK',
+      noteCount: 2,
+      maxCombo: 1,
+      judge: { great: 2, good: 0 },
+    }),
+  ).toBe('HARD');
+});
+
+it('classifies LR2 G.ATTACK as HARD with full-combo priority', () => {
+  expect(resolveClearLamp({ ruleset: 'lr2', cleared: true, gauge: 'G-ATTACK', score: score(0, 0, 99, 100) })).toBe(
+    'HARD',
+  );
+  expect(resolveClearLamp({ ruleset: 'lr2', cleared: true, gauge: 'G-ATTACK', score: score(0, 0, 100, 100) })).toBe(
+    'FULL_COMBO',
+  );
+  expect(
+    resolveCourseClearLamp({
+      ruleset: 'lr2',
+      cleared: true,
+      gauge: 'G-ATTACK',
+      gaugeType: 'G-ATTACK',
+      noteCount: 100,
+      maxCombo: 99,
+      judge: { great: 0, good: 99 },
+    }),
+  ).toBe('HARD');
 });

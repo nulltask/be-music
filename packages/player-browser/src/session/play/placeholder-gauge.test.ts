@@ -25,3 +25,35 @@ describe('createPlaceholderGaugeState', () => {
     );
   });
 });
+
+test('P.ATTACK and EX-HARD show a full survival gauge before the engine starts', () => {
+  for (const type of ['P-ATTACK', 'EX-HARD'] as const) {
+    expect(createPlaceholderGaugeState(type)).toMatchObject({
+      type,
+      current: 100,
+      initial: 100,
+      survival: true,
+      clearThreshold: 0,
+    });
+  }
+  expect(
+    createPlaceholderGaugeState('P-ATTACK', {
+      ruleset: 'lr2',
+      stage: { kind: 'grade', carryIn: { gauge: 31, combo: 0, maxCombo: 0 } },
+    }),
+  ).toMatchObject({ type: 'P-ATTACK', current: 31, initial: 31, survival: true });
+});
+
+test('G.ATTACK starts full, but LR2 grade courses use the reset grade gauge', () => {
+  expect(createPlaceholderGaugeState('G-ATTACK')).toMatchObject({ type: 'G-ATTACK', current: 100, survival: true });
+  expect(createPlaceholderGaugeState('G-ATTACK', { ruleset: 'lr2', stage: { kind: 'grade' } })).toMatchObject({
+    type: 'GRADE',
+    current: 100,
+  });
+  expect(
+    createPlaceholderGaugeState('G-ATTACK', {
+      ruleset: 'lr2',
+      stage: { kind: 'expert', carryIn: { gauge: 31, combo: 0, maxCombo: 0 } },
+    }),
+  ).toMatchObject({ type: 'G-ATTACK', current: 31 });
+});

@@ -33,5 +33,6 @@ export * from './select.ts';
 export * from './course.ts';
 export * from './clear-lamp.ts';
 export * from './system-sounds.ts';
+export * from './option-buttons.ts';
 export * from './option-index.ts';
 export * from './animation-timers.ts';
