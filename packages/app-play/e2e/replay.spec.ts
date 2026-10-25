@@ -78,12 +78,14 @@ test(
     );
     expect(state.status).toBe('Replaying: Fixture A');
     expect(state.play?.tempo).toBe(1);
-    state = await demo.waitFor(
-      (current) => current.play?.tempo === 1.2 && Math.abs((current.play.hiSpeed ?? 0) - recordedHiSpeed) < 0.05,
+    // Paused the moment it follows them (the replay would otherwise run on to its result on a slow runner). Seeking a
+    // paused replay rebuilds counts and restores the view and tempo at the target.
+    state = await demo.keyWhen(
+      (current, hiSpeed) => current.play?.tempo === 1.2 && Math.abs((current.play.hiSpeed ?? 0) - hiSpeed) < 0.05,
+      recordedHiSpeed,
+      'Space',
       'the replay to follow the recorded tempo and hi-speed',
     );
-    // Seeking a paused replay rebuilds counts and restores the view and tempo at the target.
-    await demo.key('Space');
     await demo.key('ArrowLeft');
     state = await demo.waitFor((current) => current.play?.seconds === 0, 'the replay sought to its start');
     expect(state.play?.judged?.pgreat).toBe(0);
