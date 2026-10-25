@@ -1400,6 +1400,11 @@ textarea {
   margin: 0;
 }
 
+.help-menu-when {
+  font-style: normal;
+  color: #9db8ff;
+}
+
 .help-menu-items code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
