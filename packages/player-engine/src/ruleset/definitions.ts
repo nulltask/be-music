@@ -1,3 +1,4 @@
+import { applyCustomJudgeTables, type BeatorajaCustomJudge } from './custom-judge.ts';
 import { createLR2GoodAttackGauge, createLR2PerfectAttackGauge } from './lr2-attack.ts';
 import type { GaugeJudgeIndex } from './gauge.ts';
 import type { GaugeAutoShift, GaugeShiftBottom } from './gauge-type.ts';
@@ -208,6 +209,8 @@ export interface ResolveRulesetOptions {
   judgeWindowOverrideMs?: number;
   /** beatoraja note-selection algorithm (default `'combo'`, beatoraja's own default). */
   judgeAlgorithm?: BeatorajaJudgeAlgorithm;
+  /** beatoraja CUSTOM JUDGE window and long-note margin rates; absent while the option is off. */
+  customJudge?: BeatorajaCustomJudge;
   /**
    * The play is a course stage: it runs on the ruleset's course gauge (see `resolveCourseGauge`), starting from the
    * value carried in, and under the course's judge constraint.
@@ -790,6 +793,8 @@ export function resolveRuleset(
       ? resolveDefaultGaugeId(rulesetId, selectedGauge)
       : resolveCourseGaugeId(rulesetId, course.kind, selectedGauge));
   const overrideBadMs = options.judgeWindowOverrideMs;
+  if (options.customJudge !== undefined && rulesetId !== 'beatoraja')
+    throw new RangeError('CUSTOM JUDGE is available only for beatoraja.');
   const constrain = (tables: RulesetWindowTables): RulesetWindowTables =>
     applyCourseJudgeConstraint(tables, course?.judge);
   const courseGauge = (total: number): GaugeSpec | undefined =>
@@ -875,27 +880,32 @@ export function resolveRuleset(
   if (rulesetId === 'beatoraja') {
     const noteCount = countRulesetNotes(chart, 'per-note');
     const effectiveTotal = resolveEffectiveTotal('beatoraja', chart, noteCount);
+    const customize = (tables: RulesetWindowTables): RulesetWindowTables =>
+      options.customJudge === undefined ? tables : applyCustomJudgeTables(tables, options.customJudge);
     // Legacy BMS NONSTOP stage ranks apply only to LR2. Mixed bmson courses explicitly carry each stage's units.
     const stageTables =
       chart.sourceFormat === 'bmson'
         ? (chart.judgeRank.stageRanks ?? []).map((change) => ({
             timeUs: change.timeUs,
             tables: constrain(
-              resolveBeatorajaWindowTables({
-                ...chart,
-                sourceFormat: change.table === 'bmson' ? 'bmson' : 'bms',
-                judgeRank: {
-                  percent: chart.judgeRank.percent,
-                  ...(change.table === 'bmson' || change.table === 'bms-exrank'
-                    ? { sourceExRank: change.rank }
-                    : { sourceRank: change.rank }),
-                },
-              }),
+              customize(
+                resolveBeatorajaWindowTables({
+                  ...chart,
+                  sourceFormat: change.table === 'bmson' ? 'bmson' : 'bms',
+                  judgeRank: {
+                    percent: chart.judgeRank.percent,
+                    ...(change.table === 'bmson' || change.table === 'bms-exrank'
+                      ? { sourceExRank: change.rank }
+                      : { sourceRank: change.rank }),
+                  },
+                }),
+              ),
             ),
           }))
         : [];
     const tables =
-      stageTables.find((change) => change.timeUs === 0)?.tables ?? constrain(resolveBeatorajaWindowTables(chart));
+      stageTables.find((change) => change.timeUs === 0)?.tables ??
+      constrain(customize(resolveBeatorajaWindowTables(chart)));
     const mode = resolveBeatorajaMode(chart.laneMode);
     const initialGauge =
       courseGauge(effectiveTotal) ?? resolveBeatorajaGauge(gaugeId, effectiveTotal, noteCount, chart.laneMode);
@@ -919,7 +929,13 @@ export function resolveRuleset(
       longNoteStyle: 'per-note',
       lnEarlyRelease: 'worse-of-head-and-tail',
       pressDuringLongNote: 'ignore',
-      longNoteReleaseMarginUs: { note: mode === BEATORAJA_MODES.PMS ? 200_000 : 0, scratch: 0 },
+      // JudgeManager: only the key margin takes the CUSTOM JUDGE rate (`nreleasemargin`).
+      longNoteReleaseMarginUs: {
+        note: Math.trunc(
+          ((mode === BEATORAJA_MODES.PMS ? 200_000 : 0) * (options.customJudge?.longNoteMargin ?? 100)) / 100,
+        ),
+        scratch: 0,
+      },
       headBadSkipsTail: false,
       comboBreaksOnEmptyPoor,
       mineTrigger: 'hold',

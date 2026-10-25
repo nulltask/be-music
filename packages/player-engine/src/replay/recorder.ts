@@ -1,3 +1,4 @@
+import type { BeatorajaCustomJudge } from '../ruleset/custom-judge.ts';
 import type { BattleMode } from '../core/battle-mode.ts';
 import type { ChartPlayVariant } from '@be-music/chart-model';
 import type { LR2ExtraLevel } from '../core/lr2-extra-lanes.ts';
@@ -66,6 +67,7 @@ export interface ReplayRecorderPlaySettings {
   mode: 'manual' | 'auto';
   autoScratch: boolean;
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  customJudge?: BeatorajaCustomJudge;
   longNoteModifier?: LongNoteModifier;
   longNoteRate?: number;
   sevenToNinePattern?: import('../core/seven-to-nine.ts').SevenToNinePattern;
@@ -307,6 +309,7 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       if (tempoChanges.length > 0) play.tempoChanges = tempoChanges.map((change) => ({ ...change }));
       if (options.play.view !== undefined) play.view = structuredClone(options.play.view);
       if (options.play.judgeAlgorithm !== undefined) play.judgeAlgorithm = options.play.judgeAlgorithm;
+      if (options.play.customJudge !== undefined) play.customJudge = { ...options.play.customJudge };
       if (options.play.scrollModifier !== undefined) play.scrollModifier = options.play.scrollModifier;
       if (options.play.scrollSection !== undefined) play.scrollSection = options.play.scrollSection;
       if (options.play.scrollRate !== undefined) play.scrollRate = options.play.scrollRate;

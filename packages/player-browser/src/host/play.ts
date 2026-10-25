@@ -506,6 +506,19 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
         ? { coverKeys: true }
         : {}),
       judgeTimingAutoAdjust: playOptions.judgeTimingAutoAdjust,
+      ...(playOptions.customJudge && settings.judgeRuleset === 'beatoraja'
+        ? {
+            customJudge: {
+              keyPerfectGreat: playOptions.customJudgeKeyPerfectGreat,
+              keyGreat: playOptions.customJudgeKeyGreat,
+              keyGood: playOptions.customJudgeKeyGood,
+              scratchPerfectGreat: playOptions.customJudgeScratchPerfectGreat,
+              scratchGreat: playOptions.customJudgeScratchGreat,
+              scratchGood: playOptions.customJudgeScratchGood,
+              longNoteMargin: playOptions.customJudgeLongNoteMargin,
+            },
+          }
+        : {}),
       hRandomThresholdBPM: playOptions.hRandomThresholdBPM,
       mineModifier: playOptions.mineModifier,
       scrollModifier: playOptions.scrollModifier,

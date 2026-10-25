@@ -779,6 +779,16 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       recordsAPI.courseRunKeepsRecord(benchCourseLog);
     },
   });
+  define('player-engine.ruleset.clampCustomJudgeRate', {
+    run() {
+      rulesetAPI.clampCustomJudgeRate('keyPerfectGreat', 10);
+    },
+  });
+  define('player-engine.ruleset.isCustomJudgeAssist', {
+    run() {
+      rulesetAPI.isCustomJudgeAssist(rulesetAPI.DEFAULT_BEATORAJA_CUSTOM_JUDGE);
+    },
+  });
   define('player-engine.ruleset.isClearLamp', {
     run: () => {
       rulesetAPI.isClearLamp('EX_HARD');

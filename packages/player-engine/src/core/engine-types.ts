@@ -90,6 +90,8 @@ export interface PlayerPlaySettings {
   autoScratch?: boolean;
   /** beatoraja's note-selection algorithm; other source rulesets retain their own fixed selection. */
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  /** beatoraja CUSTOM JUDGE rates; absent while the option is off. Recorded into the replay. */
+  customJudge?: import('../ruleset/custom-judge.ts').BeatorajaCustomJudge;
   /** beatoraja display-only automatic calibration; no change to input/audio clocks. */
   judgeTimingAutoAdjust?: boolean;
   judgeTimingMs?: number;

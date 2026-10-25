@@ -1,3 +1,8 @@
+import {
+  clampCustomJudgeRate,
+  DEFAULT_BEATORAJA_CUSTOM_JUDGE,
+  type BeatorajaCustomJudge,
+} from '../ruleset/custom-judge.ts';
 import type { BattleMode } from '../core/battle-mode.ts';
 import type { ChartPlayVariant } from '@be-music/chart-model';
 import type { LR2ExtraLevel } from '../core/lr2-extra-lanes.ts';
@@ -200,6 +205,8 @@ export interface ReplayPlay {
   autoScratch: boolean;
   /** Effective manual assist per side; older replays fall back to autoScratch for both. */
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  /** beatoraja CUSTOM JUDGE rates in percent; absent while the option was off. */
+  customJudge?: BeatorajaCustomJudge;
   longNoteModifier?: LongNoteModifier;
   longNoteRate?: number;
   sevenToNinePattern?: import('../core/seven-to-nine.ts').SevenToNinePattern;
@@ -738,6 +745,17 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
       throw new ReplayParseError('play.judgeAlgorithm: expected combo, duration or lowest');
     }
     parsed.judgeAlgorithm = play.judgeAlgorithm as 'combo' | 'duration' | 'lowest';
+  }
+  if (play.customJudge !== undefined) {
+    const raw = expectRecord(play.customJudge, 'play.customJudge');
+    const judge = {} as BeatorajaCustomJudge;
+    for (const field of Object.keys(DEFAULT_BEATORAJA_CUSTOM_JUDGE) as Array<keyof BeatorajaCustomJudge>) {
+      const value = expectNonNegativeInteger(raw[field], `play.customJudge.${field}`);
+      if (value !== clampCustomJudgeRate(field, value))
+        throw new ReplayParseError(`play.customJudge.${field}: outside the source range`);
+      judge[field] = value;
+    }
+    parsed.customJudge = judge;
   }
   if (play.scrollModifier !== undefined) {
     if (play.scrollModifier !== 'OFF' && play.scrollModifier !== 'REMOVE' && play.scrollModifier !== 'ADD')

@@ -134,6 +134,15 @@ export interface PlayOptions {
   battleMode: BattleMode;
   /** LR2 D-BATTLE: hold the scratch key through the decide animation to keep scratch objects playable. */
   dBattleScratch: boolean;
+  /** beatoraja CUSTOM JUDGE (`PlayerConfig.customJudge`) and its window / long-note margin rates in percent. */
+  customJudge: boolean;
+  customJudgeKeyPerfectGreat: number;
+  customJudgeKeyGreat: number;
+  customJudgeKeyGood: number;
+  customJudgeScratchPerfectGreat: number;
+  customJudgeScratchGreat: number;
+  customJudgeScratchGood: number;
+  customJudgeLongNoteMargin: number;
   lr2ExtraMode: boolean;
   lr2ExtraLevel: LR2ExtraLevel;
   mineModifier: MineModifier;

@@ -152,6 +152,8 @@ export interface PlaySessionOptions {
   coverKeys?: boolean;
   /** beatoraja's note-selection algorithm. */
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  /** beatoraja CUSTOM JUDGE rates; absent while the option is off. */
+  customJudge?: import('@be-music/player-engine/ruleset').BeatorajaCustomJudge;
   longNoteModifier?: import('@be-music/player-scene-model').PlayOptions['longNoteModifier'];
   longNoteRate?: number;
   sevenToNinePattern?: import('@be-music/player-engine/lanes').SevenToNinePattern;

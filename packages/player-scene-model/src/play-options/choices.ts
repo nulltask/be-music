@@ -5,7 +5,7 @@ import { clampLongNoteRate, clampHRandomThresholdBPM, parseLaneRandomSeed } from
 import { resolveConstantVisibility } from './constant-visibility.ts';
 import { clampJudgeTimingMs } from './judge-timing.ts';
 import { clamp } from '@be-music/shared-utils/core';
-import { LR2_GAUGE_TYPES, isGaugeType, type RulesetId } from '@be-music/player-engine/ruleset';
+import { LR2_GAUGE_TYPES, clampCustomJudgeRate, isGaugeType, type RulesetId } from '@be-music/player-engine/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
 import { DEFAULT_HISPEED, snapHiSpeed, snapClassicHiSpeed } from './hi-speed.ts';
 import type {
@@ -143,6 +143,14 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   sevenToNineType: 0,
   battleMode: 'OFF',
   dBattleScratch: false,
+  customJudge: false,
+  customJudgeKeyPerfectGreat: 400,
+  customJudgeKeyGreat: 400,
+  customJudgeKeyGood: 100,
+  customJudgeScratchPerfectGreat: 400,
+  customJudgeScratchGreat: 400,
+  customJudgeScratchGood: 100,
+  customJudgeLongNoteMargin: 100,
   lr2ExtraMode: false,
   lr2ExtraLevel: 0,
   mineModifier: 'OFF',
@@ -201,6 +209,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   sevenToNineType: [0, 1, 2],
   battleMode: ['OFF', 'SP-TO-DP', 'D-BATTLE', 'BATTLE', 'BATTLE-AS'],
   dBattleScratch: BOOLEAN_CYCLE,
+  customJudge: BOOLEAN_CYCLE,
   lr2ExtraMode: BOOLEAN_CYCLE,
   lr2ExtraLevel: [0, 1, 2],
   autoScratch1P: BOOLEAN_CYCLE,
@@ -236,6 +245,13 @@ export function clampShutter(value: number): number {
 const NUMERIC_PLAY_OPTION_CLAMPS: { readonly [K in keyof PlayOptions]?: (value: number) => number } = {
   hRandomThresholdBPM: clampHRandomThresholdBPM,
   longNoteRate: clampLongNoteRate,
+  customJudgeKeyPerfectGreat: (value) => clampCustomJudgeRate('keyPerfectGreat', value),
+  customJudgeKeyGreat: (value) => clampCustomJudgeRate('keyGreat', value),
+  customJudgeKeyGood: (value) => clampCustomJudgeRate('keyGood', value),
+  customJudgeScratchPerfectGreat: (value) => clampCustomJudgeRate('scratchPerfectGreat', value),
+  customJudgeScratchGreat: (value) => clampCustomJudgeRate('scratchGreat', value),
+  customJudgeScratchGood: (value) => clampCustomJudgeRate('scratchGood', value),
+  customJudgeLongNoteMargin: (value) => clampCustomJudgeRate('longNoteMargin', value),
   extraNoteDepth: clampExtraNoteDepth,
   scrollSection: clampScrollSection,
   scrollRate: clampScrollRate,

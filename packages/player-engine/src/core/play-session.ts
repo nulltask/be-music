@@ -304,6 +304,7 @@ export async function createPlaySession(
     options.judgeRuleset ?? 'lr2',
     {
       ...(options.judgeAlgorithm !== undefined ? { judgeAlgorithm: options.judgeAlgorithm } : {}),
+      ...(options.customJudge !== undefined ? { customJudge: options.customJudge } : {}),
       ...(selectedGauge !== undefined ? { selectedGauge } : {}),
       ...(options.bottomShiftableGauge !== undefined ? { bottomShiftableGauge: options.bottomShiftableGauge } : {}),
       ...(options.gaugeAutoShift !== undefined ? { gaugeAutoShift: options.gaugeAutoShift } : {}),
@@ -363,6 +364,7 @@ export async function createPlaySession(
             mode,
             autoScratch,
             judgeAlgorithm: ruleset.rulesetId === 'beatoraja' ? (options.judgeAlgorithm ?? 'combo') : undefined,
+            ...(options.customJudge !== undefined ? { customJudge: { ...options.customJudge } } : {}),
             longNoteModifier: options.longNoteModifier,
             ...(options.autoScratch1P !== undefined || options.autoScratch2P !== undefined
               ? {
