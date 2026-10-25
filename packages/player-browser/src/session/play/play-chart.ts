@@ -501,8 +501,10 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     // Two players with the same lane option play one arrangement: LR2 copies 1P's lanes after shuffling them
     // (`battle == 1 && random[0] == random[1]`), as That-Which-Must-Not-Be-Named does for two players' equal options.
     const twoPlayer = prepared.battleMode === 'TWO-PLAYER';
+    // A DP chart's two players (LR2 COUPLE) keep their own sides.
+    const copied = prepared.battleSourceVariant === '5' || prepared.battleSourceVariant === '7';
     const twins =
-      twoPlayer && (ctx.options.random1P ?? 'OFF') === (ctx.options.random2P ?? 'OFF')
+      twoPlayer && copied && (ctx.options.random1P ?? 'OFF') === (ctx.options.random2P ?? 'OFF')
         ? pairTwoPlayerTwins([ctx.notes, ctx.mineNotes, ctx.invisibleNotes])
         : undefined;
     // Outside a BATTLE chart the source does not offer these; they leave the chart unchanged.
