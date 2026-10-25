@@ -85,8 +85,45 @@ test('course settings ignore conversion; EXTRA is applied before a non-course SP
 
 test('unsupported source modes and invalid tempos do not acquire a different conversion algorithm', () => {
   const source = parseBMS('#BPM 120\n#00111:01');
-  for (const playVariant of ['9', '10', '14', '24', '48'] as const)
-    expect(() => convertLR2SPToDPChart(resolveChart(source, { playVariant }))).toThrow(/5KEY or 7KEY/);
+  // LR2 has no keyboard modes; 9KEY and double play take their own merges (PMStoSP, DPtoSP).
+  for (const playVariant of ['24', '48'] as const)
+    expect(() => convertLR2SPToDPChart(resolveChart(source, { playVariant }))).toThrow(/5, 7, 9, 10 or 14KEY/);
   for (const tempo of [0, -1, NaN, Infinity])
     expect(() => convertLR2SPToDPChart(resolveChart(source, { playVariant: '7' }), { tempo })).toThrow(/tempo/);
+});
+
+test('SP TO DP merges a 14KEY chart onto the 1P side (DP-TO-SP)', () => {
+  // 120 BPM (minimum gap 250 ms): 21 at 2 s is alone on lane 1, 22 shares a row with 12, 26 shares a row with 16.
+  const source = resolveChart(
+    parseBMS('#BPM 120\n#WAV01 a.wav\n#WAV02 b.wav\n#00121:01\n#00212:01\n#00222:02\n#00316:01\n#00326:02\n#00411:01'),
+    { playVariant: '14' },
+  );
+  const result = convertLR2SPToDPChart(source);
+  expect(result.chart.playVariant).toBe('7');
+  expect(result.chart.notes.map((note) => [note.channel, note.seconds])).toEqual([
+    ['11', 2],
+    ['12', 4],
+    ['13', 4],
+    ['16', 6],
+    ['11', 8],
+  ]);
+  // The 2P scratch on the 1P scratch's row has no lane left: it sounds as BGM.
+  expect(result.chart.sampleTriggers.find((trigger) => trigger.channel === '01')).toMatchObject({
+    sampleKey: '02',
+    seconds: 6,
+  });
+  expect(preparePlaybackChart(source, { battleMode: 'SP-TO-DP' }).laneDisplayMode).toContain('7');
+});
+
+test('SP TO DP folds a 9KEY chart onto seven keys (9-TO-7)', () => {
+  // One measure on lanes 3..9 (right 9, left 3): every lane shifts two to the left.
+  const source = resolveChart(
+    parseBMS('#BPM 120\n#00113:01\n#00114:0001\n#00115:000001\n#00122:00000001\n#00125:0000000001'),
+    {
+      playVariant: '9',
+    },
+  );
+  const result = convertLR2SPToDPChart(source);
+  expect(result.chart.playVariant).toBe('7');
+  expect(result.chart.notes.map((note) => note.channel)).toEqual(['11', '12', '13', '14', '19']);
 });

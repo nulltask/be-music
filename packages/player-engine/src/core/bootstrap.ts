@@ -320,7 +320,7 @@ export function preparePlaybackChart(
   resolved = extraResult.chart;
   const invisibleNotes = resolved.invisibleNotes.map(toTimedInvisibleNote);
   const dBattleScratch = battleMode === 'D-BATTLE' && options.dBattleScratch === true;
-  const duplicateBattle = isDuplicatedBattleMode(battleMode)
+  const duplicateBattle = isDuplicatedBattleMode(battleMode, battleSourceVariant)
     ? duplicateBattleChart(resolved, notes, landmineNotes, invisibleNotes, {
         // LR2 copies only 1x/3x/5x cells (D-BATTLE, BATTLE); That-Which-Must-Not-Be-Named gives both players one chart.
         duplicateMines: !(

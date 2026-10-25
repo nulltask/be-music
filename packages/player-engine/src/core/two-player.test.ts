@@ -56,3 +56,14 @@ test('beatoraja has no two-player play', async () => {
   });
   expect(play.outcome).toMatch(/^error: .*two-player/);
 });
+
+test('LR2 BATTLE on a double-play chart gives each player one side (COUPLE)', async () => {
+  const play = await observePlay({
+    driver: 'auto',
+    chart: parseBMS('#PLAYER 3\n#BPM 120\n#00111:0101\n#00121:01'),
+    options: { judgeRuleset: 'lr2', battleMode: 'TWO-PLAYER' },
+  });
+  expect(play.outcome).toBe('completed');
+  expect(play.summary?.total).toBe(2);
+  expect(play.summary?.secondPlayer?.total).toBe(1);
+});

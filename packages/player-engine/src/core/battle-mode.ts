@@ -14,8 +14,9 @@ import type { RulesetId } from '../ruleset/index.ts';
 export type BattleMode = 'OFF' | 'SP-TO-DP' | 'D-BATTLE' | 'BATTLE' | 'BATTLE-AS' | 'TWO-PLAYER';
 
 /** The battle modes that copy one SP chart onto both sides. */
-export function isDuplicatedBattleMode(mode: BattleMode | undefined): boolean {
-  return mode === 'D-BATTLE' || mode === 'BATTLE' || mode === 'BATTLE-AS' || mode === 'TWO-PLAYER';
+export function isDuplicatedBattleMode(mode: BattleMode | undefined, sourceVariant?: ChartPlayVariant): boolean {
+  if (mode === 'TWO-PLAYER') return sourceVariant === undefined || sourceVariant === '5' || sourceVariant === '7';
+  return mode === 'D-BATTLE' || mode === 'BATTLE' || mode === 'BATTLE-AS';
 }
 
 /** Resolve source availability before constructing a play; a selection remains in the options snapshot. */
@@ -28,14 +29,17 @@ export function resolveEffectiveBattleMode(
   if (selected === 'OFF') return 'OFF';
   if (selected === 'SP-TO-DP' || selected === 'D-BATTLE') {
     if (ruleset !== 'lr2') throw new RangeError(`${selected} requires LR2 judgment rules.`);
-    // SP TO DP is skipped in a course (isCourse); D-BATTLE copies 1x cells at parse time for 5/7KEY sources.
-    if (selected === 'SP-TO-DP') return course ? 'OFF' : selected;
+    // SP TO DP is skipped in a course (isCourse) and LR2 has no keyboard modes; D-BATTLE copies 1x cells at parse
+    // time for 5/7KEY sources.
+    if (selected === 'SP-TO-DP') return course || sourceVariant === '24' || sourceVariant === '48' ? 'OFF' : selected;
     return sourceVariant === '5' || sourceVariant === '7' ? selected : 'OFF';
   }
   if (selected === 'TWO-PLAYER') {
     if (ruleset === 'beatoraja') throw new RangeError('beatoraja has no two-player play.');
-    // LR2 copies the 1x cells of a 5/7KEY chart for the second player at parse time; a course plays one player.
-    return !course && (sourceVariant === '5' || sourceVariant === '7') ? selected : 'OFF';
+    // LR2 copies the 1x cells of a 5/7KEY chart for the second player at parse time, and on a 10/14KEY chart each player
+    // takes one side (COUPLE); a course plays one player.
+    const variants = ruleset === 'lr2' ? ['5', '7', '10', '14'] : ['5', '7'];
+    return !course && variants.includes(sourceVariant) ? selected : 'OFF';
   }
   if (selected === 'BATTLE' || selected === 'BATTLE-AS') {
     if (ruleset === 'lr2') throw new RangeError('LR2 BATTLE is two-player play (TWO-PLAYER).');
