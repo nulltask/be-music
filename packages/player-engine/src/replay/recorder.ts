@@ -68,6 +68,10 @@ export interface ReplayRecorderPlaySettings {
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
   longNoteModifier?: LongNoteModifier;
   longNoteRate?: number;
+  sevenToNinePattern?: import('../core/seven-to-nine.ts').SevenToNinePattern;
+  sevenToNineType?: import('../core/seven-to-nine.ts').SevenToNineType;
+  sevenToNineThresholdBPM?: number;
+  sevenToNineApplied?: boolean;
   battleMode?: BattleMode;
   battleSourceVariant?: ChartPlayVariant;
   battleTempo?: number;
@@ -313,6 +317,10 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       if (options.play.mineModifierChangeCount !== undefined)
         play.mineModifierChangeCount = options.play.mineModifierChangeCount;
       for (const field of [
+        'sevenToNinePattern',
+        'sevenToNineType',
+        'sevenToNineThresholdBPM',
+        'sevenToNineApplied',
         'battleMode',
         'battleSourceVariant',
         'battleTempo',

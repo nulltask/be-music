@@ -44,6 +44,8 @@ export type GUIPlayOptions = Pick<
   | 'bottomShiftableGauge'
   | 'longNoteModifier'
   | 'longNoteRate'
+  | 'sevenToNinePattern'
+  | 'sevenToNineType'
   | 'battleMode'
   | 'lr2ExtraMode'
   | 'lr2ExtraLevel'
@@ -94,6 +96,8 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     judgeAlgorithm: state.judgeAlgorithm,
     longNoteModifier: state.longNoteModifier,
     longNoteRate: state.longNoteRate,
+    sevenToNinePattern: state.sevenToNinePattern,
+    sevenToNineType: state.sevenToNineType,
     battleMode: state.battleMode,
     lr2ExtraMode: state.lr2ExtraMode,
     lr2ExtraLevel: state.lr2ExtraLevel,
@@ -159,6 +163,8 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.judgeAlgorithm = options.judgeAlgorithm;
   state.longNoteModifier = options.longNoteModifier;
   state.longNoteRate = options.longNoteRate;
+  state.sevenToNinePattern = options.sevenToNinePattern;
+  state.sevenToNineType = options.sevenToNineType;
   state.battleMode = options.battleMode;
   state.lr2ExtraMode = options.lr2ExtraMode;
   state.lr2ExtraLevel = options.lr2ExtraLevel;
@@ -205,6 +211,9 @@ export class PlayOptionsService {
       dpFlip: play.dpFlip ?? play.options?.dpFlip,
       longNoteModifier: play.longNoteModifier ?? play.options?.longNoteModifier,
       longNoteRate: play.longNoteRate ?? play.options?.longNoteRate,
+      sevenToNinePattern: play.sevenToNinePattern ?? 0,
+      sevenToNineType: play.sevenToNineType ?? 0,
+      hRandomThresholdBPM: play.sevenToNineThresholdBPM ?? play.options?.hRandomThresholdBPM,
       battleMode: play.battleMode ?? 'OFF',
       lr2ExtraMode: play.lr2ExtraMode ?? false,
       lr2ExtraLevel: play.lr2ExtraLevel ?? 0,
@@ -263,6 +272,8 @@ const ARRANGEMENT_OPTIONS = [
   'hRandomThresholdBPM',
   'longNoteModifier',
   'longNoteRate',
+  'sevenToNinePattern',
+  'sevenToNineType',
   'battleMode',
   'lr2ExtraMode',
   'lr2ExtraLevel',

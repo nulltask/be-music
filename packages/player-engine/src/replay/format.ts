@@ -202,6 +202,10 @@ export interface ReplayPlay {
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
   longNoteModifier?: LongNoteModifier;
   longNoteRate?: number;
+  sevenToNinePattern?: import('../core/seven-to-nine.ts').SevenToNinePattern;
+  sevenToNineType?: import('../core/seven-to-nine.ts').SevenToNineType;
+  sevenToNineThresholdBPM?: number;
+  sevenToNineApplied?: boolean;
   battleMode?: BattleMode;
   battleSourceVariant?: ChartPlayVariant;
   battleTempo?: number;
@@ -784,6 +788,26 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
       play.mineModifierChangeCount,
       'play.mineModifierChangeCount',
     );
+  if (play.sevenToNinePattern !== undefined) {
+    const value = expectNonNegativeInteger(play.sevenToNinePattern, 'play.sevenToNinePattern');
+    if (value > 6) throw new ReplayParseError('play.sevenToNinePattern: expected 0..6');
+    parsed.sevenToNinePattern = value as import('../core/seven-to-nine.ts').SevenToNinePattern;
+  }
+  if (play.sevenToNineType !== undefined) {
+    const value = expectNonNegativeInteger(play.sevenToNineType, 'play.sevenToNineType');
+    if (value > 2) throw new ReplayParseError('play.sevenToNineType: expected 0..2');
+    parsed.sevenToNineType = value as import('../core/seven-to-nine.ts').SevenToNineType;
+  }
+  if (play.sevenToNineThresholdBPM !== undefined) {
+    if (typeof play.sevenToNineThresholdBPM !== 'number' || !Number.isFinite(play.sevenToNineThresholdBPM))
+      throw new ReplayParseError('play.sevenToNineThresholdBPM: expected finite number');
+    parsed.sevenToNineThresholdBPM = play.sevenToNineThresholdBPM;
+  }
+  if (play.sevenToNineApplied !== undefined) {
+    if (typeof play.sevenToNineApplied !== 'boolean')
+      throw new ReplayParseError('play.sevenToNineApplied: expected boolean');
+    parsed.sevenToNineApplied = play.sevenToNineApplied;
+  }
   if (play.battleMode !== undefined) {
     if (play.battleMode !== 'OFF' && play.battleMode !== 'SP-TO-DP')
       throw new ReplayParseError('play.battleMode: expected OFF or SP-TO-DP');

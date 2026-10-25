@@ -100,6 +100,9 @@ export interface PlayerPlaySettings {
   extraNoteDepth?: number;
   extraNoteScratch?: boolean;
   /** LR2 beta3 EXTRA, independently selected from beatoraja EXTRA depth. Courses ignore it. */
+  sevenToNinePattern?: import('./seven-to-nine.ts').SevenToNinePattern;
+  sevenToNineType?: import('./seven-to-nine.ts').SevenToNineType;
+  hRandomThresholdBPM?: number;
   battleMode?: BattleMode;
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;

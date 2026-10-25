@@ -207,6 +207,8 @@ export class DebugMenu {
   public gaugeAutoShiftController: ListInputBindingApi<PlayOptions['gaugeAutoShift']> | undefined;
   public longNoteModifierController: ListInputBindingApi<PlayOptions['longNoteModifier']> | undefined;
   public longNoteRateController: PaneBinding | undefined;
+  public sevenToNinePatternController: ListInputBindingApi<PlayOptions['sevenToNinePattern']> | undefined;
+  public sevenToNineTypeController: ListInputBindingApi<PlayOptions['sevenToNineType']> | undefined;
   public battleModeController: ListInputBindingApi<PlayOptions['battleMode']> | undefined;
   public lr2ExtraModeController: PaneBinding | undefined;
   public lr2ExtraLevelController: ListInputBindingApi<PlayOptions['lr2ExtraLevel']> | undefined;
@@ -490,6 +492,13 @@ export class DebugMenu {
       });
       this.longNoteModifierController.refresh();
     }
+    const sevenToNine = this.guiState.judgeRuleset === 'beatoraja';
+    if (!sevenToNine && this.guiState.sevenToNinePattern !== 0) {
+      this.guiState.sevenToNinePattern = 0;
+      this.setPlayOptions({ sevenToNinePattern: 0 });
+    }
+    if (this.sevenToNinePatternController) this.sevenToNinePatternController.hidden = !sevenToNine;
+    if (this.sevenToNineTypeController) this.sevenToNineTypeController.hidden = !sevenToNine;
     const lr2Battle = this.guiState.judgeRuleset === 'lr2';
     if (!lr2Battle && this.guiState.battleMode !== 'OFF') {
       this.guiState.battleMode = 'OFF';

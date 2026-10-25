@@ -771,3 +771,28 @@ test('battle reconstruction fields retain source variant, tempo and layout assis
       ReplayParseError,
     );
 });
+
+test('7-to-9 descriptors round-trip and reject invalid source settings', () => {
+  const replay = makeReplay();
+  const descriptor = {
+    sevenToNinePattern: 6,
+    sevenToNineType: 2,
+    sevenToNineThresholdBPM: 120,
+    sevenToNineApplied: true,
+  };
+  Object.assign(replay.play, descriptor);
+  expect(parseReplay(serializeReplay(replay)).play).toMatchObject(descriptor);
+  for (const [field, value] of [
+    ['sevenToNinePattern', 7],
+    ['sevenToNinePattern', -1],
+    ['sevenToNinePattern', 1.5],
+    ['sevenToNinePattern', '1'],
+    ['sevenToNineType', 3],
+    ['sevenToNineType', -1],
+    ['sevenToNineThresholdBPM', '120'],
+    ['sevenToNineApplied', 1],
+  ])
+    expect(() => parseReplay(JSON.stringify({ ...replay, play: { ...replay.play, [String(field)]: value } }))).toThrow(
+      ReplayParseError,
+    );
+});

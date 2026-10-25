@@ -104,6 +104,26 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     else this.randomSeed2PController = controller;
     this.randomSeedControllers.push(controller);
   }
+  this.sevenToNinePatternController = selectBinding(folder, this.guiState, 'sevenToNinePattern', '7-to-9 (beatoraja)', {
+    OFF: 0,
+    'SC1 KEY2–8': 1,
+    'SC1 KEY3–9': 2,
+    'SC2 KEY3–9': 3,
+    'SC8 KEY1–7': 4,
+    'SC9 KEY1–7': 5,
+    'SC9 KEY2–8': 6,
+  });
+  trackPlayOption(
+    this.sevenToNinePatternController.on('change', ({ value }) => this.setPlayOptions({ sevenToNinePattern: value })),
+  );
+  this.sevenToNineTypeController = selectBinding(folder, this.guiState, 'sevenToNineType', '7-to-9 scratch', {
+    Fixed: 0,
+    'Avoid repeated hits': 1,
+    Alternate: 2,
+  });
+  trackPlayOption(
+    this.sevenToNineTypeController.on('change', ({ value }) => this.setPlayOptions({ sevenToNineType: value })),
+  );
   const reuse = folder.addButton({ title: 'Reuse previous arrangement' }).on('click', () => {
     const changes = this.deps.reusePreviousArrangement?.();
     if (changes) {

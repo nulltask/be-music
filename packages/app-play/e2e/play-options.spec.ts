@@ -818,3 +818,40 @@ for (const skin of ['plain', 'native'] as const)
       expect(await player.readOption(['Play options'], 'Battle (LR2)')).toBe('SP TO DP');
     });
   }
+
+for (const skin of ['plain', 'native'] as const) {
+  test(`7-to-9 renders nine lanes, retains holds and restores its replay on ${skin}`, async ({ player }, info) => {
+    await player.open({ 'be-music.built-in-skin': skin });
+    await player.dropText(
+      'seven-to-nine.bme',
+      '#TITLE Seven to nine\n#BPM 240\n#LNOBJ ZZ\n#00111:01\n#00116:0001\n#00218:01\n#00318:ZZ',
+    );
+    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+    await player.setOption(['Play options'], '7-to-9 (beatoraja)', 'SC2 KEY3–9');
+    await player.setOption(['Play options'], '7-to-9 scratch', 'Alternate');
+    await player.setOption(['Play options'], 'Auto play', true);
+    await player.cursorTo((bar) => bar.title === 'Seven to nine', '7-to-9 source');
+    await player.key('Enter');
+    await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 0.2, 'nine-key play');
+    await player.key('Space');
+    await player.page.locator('#stage').screenshot({ path: info.outputPath(`seven-to-nine-${skin}.png`) });
+    await player.key('Space');
+    await player.waitForResult(0);
+    const replay = await player.lastReplay();
+    expect(replay?.play).toMatchObject({ sevenToNinePattern: 3, sevenToNineType: 2, sevenToNineApplied: true });
+    expect(replay?.chart.laneMode).toContain('9 KEY');
+    expect(replay?.chart.notes).toHaveLength(3);
+    expect(replay?.chart.notes.some((note) => note.type === 'long')).toBe(true);
+    await player.leaveResult();
+    await player.setOption(['Play options'], '7-to-9 (beatoraja)', 'OFF');
+    await player.dropText('seven-to-nine.bmplay.json', JSON.stringify(replay));
+    await player.waitFor((state) => state.scene.kind === 'play' && state.play?.replay === true, '7-to-9 replay');
+    await player.waitForResult(1);
+    await player.leaveResult();
+    await player.setOption(['Play options'], '7-to-9 (beatoraja)', 'SC2 KEY3–9');
+    await player.page.reload();
+    await player.waitFor((state) => state.scene.kind === 'select', 'select after reload');
+    expect(await player.readOption(['Play options'], '7-to-9 (beatoraja)')).toBe('SC2 KEY3–9');
+    expect(await player.readOption(['Play options'], '7-to-9 scratch')).toBe('Alternate');
+  });
+}

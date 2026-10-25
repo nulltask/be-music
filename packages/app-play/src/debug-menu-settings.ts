@@ -89,6 +89,8 @@ export interface DebugMenuSettings {
   longNoteRate: number;
   extraNoteDepth: number;
   extraNoteScratch: boolean;
+  sevenToNinePattern: PlayerGUIState['sevenToNinePattern'];
+  sevenToNineType: PlayerGUIState['sevenToNineType'];
   battleMode: PlayerGUIState['battleMode'];
   lr2ExtraMode: boolean;
   lr2ExtraLevel: PlayerGUIState['lr2ExtraLevel'];
@@ -253,6 +255,8 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'scrollRate', resolvePlayOptionValue('scrollRate', raw.scrollRate));
   assign(settings, 'scrollModifier', resolvePlayOptionValue('scrollModifier', raw.scrollModifier));
   assign(settings, 'mineModifier', resolvePlayOptionValue('mineModifier', raw.mineModifier));
+  assign(settings, 'sevenToNinePattern', resolvePlayOptionValue('sevenToNinePattern', raw.sevenToNinePattern));
+  assign(settings, 'sevenToNineType', resolvePlayOptionValue('sevenToNineType', raw.sevenToNineType));
   assign(settings, 'battleMode', resolvePlayOptionValue('battleMode', raw.battleMode));
   assign(settings, 'lr2ExtraMode', resolvePlayOptionValue('lr2ExtraMode', raw.lr2ExtraMode));
   assign(settings, 'lr2ExtraLevel', resolvePlayOptionValue('lr2ExtraLevel', raw.lr2ExtraLevel));
@@ -474,6 +478,8 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('judgeAlgorithm');
   assignState('longNoteModifier');
   assignState('longNoteRate');
+  assignState('sevenToNinePattern');
+  assignState('sevenToNineType');
   assignState('battleMode');
   assignState('lr2ExtraMode');
   assignState('lr2ExtraLevel');
@@ -571,6 +577,8 @@ export function captureDebugMenuSettings(
     judgeAlgorithm: state.judgeAlgorithm,
     longNoteModifier: state.longNoteModifier,
     longNoteRate: state.longNoteRate,
+    sevenToNinePattern: state.sevenToNinePattern,
+    sevenToNineType: state.sevenToNineType,
     battleMode: state.battleMode,
     lr2ExtraMode: state.lr2ExtraMode,
     lr2ExtraLevel: state.lr2ExtraLevel,

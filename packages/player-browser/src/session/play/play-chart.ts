@@ -7,6 +7,8 @@
  * `prepareChart` reads and writes the play's state through {@link PlayChartContext}; the play session passes itself.
  */
 
+import { applySevenToNine } from '@be-music/player-engine/lanes';
+
 import { resolveRandomModes, normalizeFloatingLaneCover, type RandomMode } from '@be-music/player-scene-model';
 import {
   resolvePoorBGAMode,
@@ -126,6 +128,8 @@ export interface PlayChartContext {
       | 'judgeRuleset'
       | 'longNoteModifier'
       | 'longNoteRate'
+      | 'sevenToNinePattern'
+      | 'sevenToNineType'
       | 'battleMode'
       | 'lr2ExtraMode'
       | 'lr2ExtraLevel'
@@ -201,6 +205,13 @@ export interface PlayChartContext {
 
 export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): void {
   const arrangement = ctx.options.replay ?? ctx.options.fixedArrangement;
+  const sevenToNine = {
+    sevenToNinePattern: arrangement ? (arrangement.play.sevenToNinePattern ?? 0) : ctx.options.sevenToNinePattern,
+    sevenToNineType: arrangement ? (arrangement.play.sevenToNineType ?? 0) : ctx.options.sevenToNineType,
+    hRandomThresholdBPM: arrangement ? arrangement.play.sevenToNineThresholdBPM : ctx.options.hRandomThresholdBPM,
+  };
+  if (!arrangement && (sevenToNine.sevenToNinePattern ?? 0) > 0 && ctx.options.judgeRuleset !== 'beatoraja')
+    throw new RangeError('7-to-9 conversion is available only for beatoraja.');
   if (
     ctx.options.hsFix === 'CONSTANT' &&
     (ctx.options.replay?.play.judgeRuleset ?? ctx.options.judgeRuleset ?? 'lr2') !== 'lr2'
@@ -420,6 +431,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     // instead of re-rolling the lane transforms we re-apply the recorded channels onto the freshly prepared
     // notes. A mismatch means the loaded chart is not the one the log was recorded against (different `#RANDOM`
     // roll or a different file) — surface it as a prepare failure rather than replaying garbage.
+    applySevenToNine(prepared, sevenToNine);
     const arranged = applyReplayArrangement(arrangement.chart.notes, prepared);
     if (!arranged.ok) {
       throw new Error(`replay replay chart mismatch: ${arranged.reason}`);
@@ -510,6 +522,10 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       ctx.invisibleNotes as Array<{ channel: string }>,
     );
   }
+  if (!arrangement) applySevenToNine(prepared, sevenToNine);
+  resolvedPlay = prepared.resolvedChart;
+  playVariant = resolvedPlay.playVariant;
+  ctx.resolvedPlayChart = resolvedPlay;
   ctx.maxLongNoteBeatSpan = ctx.notes.reduce((max, note) => {
     if (note.endBeat === undefined) {
       return max;
