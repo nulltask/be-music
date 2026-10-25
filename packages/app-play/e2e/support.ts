@@ -395,6 +395,12 @@ export const test = base.extend<{ demo: Demo }>({
 
 export { expect } from '@playwright/test';
 
+/**
+ * The tag of the smoke run each pull request gets (`--grep @smoke`): one journey per area and family, a few minutes in
+ * all. The nightly run plays every test.
+ */
+export const SMOKE = { tag: '@smoke' } as const;
+
 /** The checklist library's song folder and course folder, as the demo lists them after a drop of `songs`. */
 export const SONGS = 'fixtures';
 export const COURSES = 'fixture-courses';
