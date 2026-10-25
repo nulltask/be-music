@@ -511,3 +511,25 @@ test('7-to-9 runs after SP RANDOM and restores canonical conversion while curren
   const fresh = prepare({ judgeRuleset: 'beatoraja', fixedArrangement: replay }, entry);
   expect(fresh.notes.map((note) => note.channel)).toEqual(original.notes.map((note) => note.channel));
 });
+
+test('scroll REMOVE keeps generated mines on their notes timelines for time-based arrangements', () => {
+  // BPM changes make scroll REMOVE recompute the generated mines' seconds, a float step away from the notes'.
+  const lines = ['#BPM 150', '#PLAYER 1', '#WAV01 a.wav', '#00203:00C8', '#00403:0096'];
+  const patterns = ['01000100', '00010001', '01010000', '00000101', '01000001', '00100010'];
+  for (let measure = 0; measure < 8; measure++)
+    ['11', '12', '13', '14', '15', '16', '18', '19'].forEach((channel, index) =>
+      lines.push(`#${String(measure).padStart(3, '0')}${channel}:${patterns[(measure + index) % patterns.length]}`),
+    );
+  const entry: LibraryChart = { ...chart, id: 'remove', chart: parseChart(lines.join('\n'), 'bms') };
+  for (const random1P of ['S-RANDOM', 'H-RANDOM', 'S-RANDOM-EX'] as const) {
+    const play = prepare(
+      { judgeRuleset: 'beatoraja', random1P, randomSeed1P: '42', mineModifier: 'ADD_BLANK', scrollModifier: 'REMOVE' },
+      entry,
+    );
+    const occupied = new Set(play.notes.map((note) => `${note.channel}@${Math.round(note.seconds * 1e6)}`));
+    expect(play.mineNotes.length).toBeGreaterThan(0);
+    expect(play.mineNotes.filter((mine) => occupied.has(`${mine.channel}@${Math.round(mine.seconds * 1e6)}`))).toEqual(
+      [],
+    );
+  }
+});
