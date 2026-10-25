@@ -515,6 +515,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       sevenToNinePattern: playOptions.sevenToNinePattern,
       sevenToNineType: playOptions.sevenToNineType,
       battleMode: playOptions.battleMode,
+      dBattleScratch: playOptions.dBattleScratch,
       lr2ExtraMode: playOptions.lr2ExtraMode,
       lr2ExtraLevel: playOptions.lr2ExtraLevel,
       extraNoteDepth: playOptions.extraNoteDepth,

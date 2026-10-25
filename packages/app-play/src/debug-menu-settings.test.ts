@@ -152,6 +152,7 @@ describe('captureDebugMenuSettings', () => {
       sevenToNinePattern: 0,
       sevenToNineType: 0,
       battleMode: 'OFF',
+      dBattleScratch: false,
       lr2ExtraMode: false,
       lr2ExtraLevel: 0,
       mineModifier: 'OFF',
@@ -398,6 +399,7 @@ test('LR2 EXTRA selection and source minimum level survive settings round trips'
     sevenToNinePattern: 0,
     sevenToNineType: 0,
     battleMode: 'OFF',
+    dBattleScratch: false,
     lr2ExtraMode: false,
     lr2ExtraLevel: 0,
   } as PlayerGUIState;

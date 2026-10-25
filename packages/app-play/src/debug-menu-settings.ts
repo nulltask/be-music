@@ -92,6 +92,7 @@ export interface DebugMenuSettings {
   sevenToNinePattern: PlayerGUIState['sevenToNinePattern'];
   sevenToNineType: PlayerGUIState['sevenToNineType'];
   battleMode: PlayerGUIState['battleMode'];
+  dBattleScratch: boolean;
   lr2ExtraMode: boolean;
   lr2ExtraLevel: PlayerGUIState['lr2ExtraLevel'];
   mineModifier: PlayerGUIState['mineModifier'];
@@ -258,6 +259,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'sevenToNinePattern', resolvePlayOptionValue('sevenToNinePattern', raw.sevenToNinePattern));
   assign(settings, 'sevenToNineType', resolvePlayOptionValue('sevenToNineType', raw.sevenToNineType));
   assign(settings, 'battleMode', resolvePlayOptionValue('battleMode', raw.battleMode));
+  assign(settings, 'dBattleScratch', resolvePlayOptionValue('dBattleScratch', raw.dBattleScratch));
   assign(settings, 'lr2ExtraMode', resolvePlayOptionValue('lr2ExtraMode', raw.lr2ExtraMode));
   assign(settings, 'lr2ExtraLevel', resolvePlayOptionValue('lr2ExtraLevel', raw.lr2ExtraLevel));
   assign(settings, 'extraNoteDepth', resolvePlayOptionValue('extraNoteDepth', raw.extraNoteDepth));
@@ -481,6 +483,7 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('sevenToNinePattern');
   assignState('sevenToNineType');
   assignState('battleMode');
+  assignState('dBattleScratch');
   assignState('lr2ExtraMode');
   assignState('lr2ExtraLevel');
   assignState('extraNoteDepth');
@@ -580,6 +583,7 @@ export function captureDebugMenuSettings(
     sevenToNinePattern: state.sevenToNinePattern,
     sevenToNineType: state.sevenToNineType,
     battleMode: state.battleMode,
+    dBattleScratch: state.dBattleScratch,
     lr2ExtraMode: state.lr2ExtraMode,
     lr2ExtraLevel: state.lr2ExtraLevel,
     extraNoteDepth: state.extraNoteDepth,

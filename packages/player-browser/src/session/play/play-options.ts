@@ -157,6 +157,7 @@ export interface PlaySessionOptions {
   sevenToNinePattern?: import('@be-music/player-engine/lanes').SevenToNinePattern;
   sevenToNineType?: import('@be-music/player-engine/lanes').SevenToNineType;
   battleMode?: BattleMode;
+  dBattleScratch?: boolean;
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;
   extraNoteDepth?: number;

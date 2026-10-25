@@ -1,5 +1,5 @@
 import { duplicateBattleChart } from './battle-chart.ts';
-import { resolveEffectiveBattleMode } from './battle-mode.ts';
+import { isDuplicatedBattleMode, resolveEffectiveBattleMode } from './battle-mode.ts';
 import { convertLR2SPToDPChart } from './lr2-sp-to-dp-chart.ts';
 import type { BattleMode } from './battle-mode.ts';
 import { convertLR2ExtraChart } from './lr2-extra-chart.ts';
@@ -70,6 +70,7 @@ export interface PreparedPlaybackChartData {
   sevenToNineThresholdBPM?: number;
   sevenToNineApplied?: boolean;
   battleMode?: BattleMode;
+  dBattleScratch?: boolean;
   battleSourceVariant?: import('@be-music/chart-model').ChartPlayVariant;
   battleTempo?: number;
   battleAssist1P?: boolean;
@@ -225,6 +226,7 @@ export function preparePlaybackChart(
     | 'laneModeExtension'
     | 'longNoteModifier'
     | 'battleMode'
+    | 'dBattleScratch'
     | 'judgeRuleset'
     | 'autoScratch'
     | 'autoScratch1P'
@@ -310,8 +312,14 @@ export function preparePlaybackChart(
   });
   resolved = extraResult.chart;
   const invisibleNotes = resolved.invisibleNotes.map(toTimedInvisibleNote);
-  const duplicateBattle =
-    battleMode === 'BATTLE' ? duplicateBattleChart(resolved, notes, landmineNotes, invisibleNotes) : undefined;
+  const dBattleScratch = battleMode === 'D-BATTLE' && options.dBattleScratch === true;
+  const duplicateBattle = isDuplicatedBattleMode(battleMode)
+    ? duplicateBattleChart(resolved, notes, landmineNotes, invisibleNotes, {
+        duplicateMines: battleMode !== 'D-BATTLE',
+        backgroundScratch: battleMode === 'BATTLE-AS' || (battleMode === 'D-BATTLE' && !dBattleScratch),
+        backgroundMineSample: battleMode === 'D-BATTLE',
+      })
+    : undefined;
   resolved = duplicateBattle?.chart ?? resolved;
   playVariant = resolved.playVariant;
   const laneSoundNotes = [...notes, ...invisibleNotes].sort(compareLaneSoundNotes);
@@ -342,6 +350,7 @@ export function preparePlaybackChart(
           battleAssist2P,
           battleChangedObjectCount: duplicateBattle?.changedObjectCount ?? battle?.changedObjectCount ?? 0,
           battleDroppedObjectCount: battle?.droppedObjectCount ?? 0,
+          ...(battleMode === 'D-BATTLE' ? { dBattleScratch } : {}),
         }
       : {}),
     ...(options.lr2ExtraMode !== undefined

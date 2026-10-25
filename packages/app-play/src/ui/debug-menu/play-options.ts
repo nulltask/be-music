@@ -240,7 +240,18 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     OFF: 'OFF',
     'SP TO DP': 'SP-TO-DP',
   });
-  trackPlayOption(this.battleModeController.on('change', ({ value }) => this.setPlayOptions({ battleMode: value })));
+  trackPlayOption(
+    this.battleModeController.on('change', ({ value }) => {
+      this.setPlayOptions({ battleMode: value });
+      this.refreshRulesetChoices();
+    }),
+  );
+  // LR2 reads the scratch key held through the decide animation; the Debug Menu has no decide animation.
+  this.dBattleScratchController = trackPlayOption(
+    folder
+      .addBinding(this.guiState, 'dBattleScratch', { label: 'D-BATTLE scratch (LR2)' })
+      .on('change', ({ value }) => this.setPlayOptions({ dBattleScratch: value })),
+  );
   this.lr2ExtraModeController = trackPlayOption(
     folder.addBinding(this.guiState, 'lr2ExtraMode', { label: 'EXTRA MODE (LR2)' }).on('change', ({ value }) => {
       this.setPlayOptions({ lr2ExtraMode: value });

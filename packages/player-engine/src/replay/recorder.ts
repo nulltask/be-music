@@ -79,6 +79,7 @@ export interface ReplayRecorderPlaySettings {
   battleAssist2P?: boolean;
   battleChangedObjectCount?: number;
   battleDroppedObjectCount?: number;
+  dBattleScratch?: boolean;
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;
   lr2ExtraEffectiveLevel?: LR2ExtraLevel;
@@ -328,6 +329,7 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
         'battleAssist2P',
         'battleChangedObjectCount',
         'battleDroppedObjectCount',
+        'dBattleScratch',
       ] as const)
         if (options.play[field] !== undefined) Object.assign(play, { [field]: options.play[field] });
       for (const field of [

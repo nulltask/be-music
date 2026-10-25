@@ -132,6 +132,8 @@ export interface PlayOptions {
   sevenToNinePattern: import('@be-music/player-engine/lanes').SevenToNinePattern;
   sevenToNineType: import('@be-music/player-engine/lanes').SevenToNineType;
   battleMode: BattleMode;
+  /** LR2 D-BATTLE: hold the scratch key through the decide animation to keep scratch objects playable. */
+  dBattleScratch: boolean;
   lr2ExtraMode: boolean;
   lr2ExtraLevel: LR2ExtraLevel;
   mineModifier: MineModifier;

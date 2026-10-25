@@ -89,7 +89,11 @@ import {
 } from '@be-music/player-scene-model';
 import { resolveLaneSides } from '../../chart/lane-sides.ts';
 
+/** The battle modes that copy one SP chart onto both sides (each copy keeps a 2P source channel). */
+const DUPLICATED_BATTLE_MODES: ReadonlySet<string> = new Set(['D-BATTLE', 'BATTLE', 'BATTLE-AS']);
+
 /** The play state {@link prepareChart} resets and fills for a new chart: the play session's fields of these names. */
+
 export interface PlayChartContext {
   readonly options: Readonly<
     Pick<
@@ -131,6 +135,7 @@ export interface PlayChartContext {
       | 'sevenToNinePattern'
       | 'sevenToNineType'
       | 'battleMode'
+      | 'dBattleScratch'
       | 'lr2ExtraMode'
       | 'lr2ExtraLevel'
       | 'tempo'
@@ -226,11 +231,10 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     throw new RangeError('Scroll modification is available only for beatoraja.');
   if (
     !arrangement &&
-    ctx.options.battleMode &&
-    ctx.options.battleMode === 'SP-TO-DP' &&
+    (ctx.options.battleMode === 'SP-TO-DP' || ctx.options.battleMode === 'D-BATTLE') &&
     (ctx.options.judgeRuleset ?? 'lr2') !== 'lr2'
   )
-    throw new RangeError('SP TO DP requires LR2 judgment rules.');
+    throw new RangeError(`${ctx.options.battleMode} requires LR2 judgment rules.`);
   if (!arrangement && ctx.options.lr2ExtraMode && (ctx.options.judgeRuleset ?? 'lr2') !== 'lr2')
     throw new RangeError('LR2 EXTRA requires LR2 judgment rules.');
   if (!arrangement && (ctx.options.extraNoteDepth ?? 0) > 0 && ctx.options.judgeRuleset !== 'beatoraja')
@@ -357,7 +361,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   )
     throw new RangeError('A recorded scroll ADD requires its effective timeline.');
   const modifierNotes =
-    arrangement?.play.battleMode === 'BATTLE'
+    arrangement !== undefined && DUPLICATED_BATTLE_MODES.has(arrangement.play.battleMode ?? 'OFF')
       ? arrangement.chart.notes.filter((note) => !(note.sourceChannel ?? note.channel).startsWith('2'))
       : arrangement?.chart.notes;
   const prepared = preparePlaybackChart(
@@ -368,6 +372,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       longNoteRate: arrangement?.play.longNoteRate ?? ctx.options.longNoteRate,
       judgeRuleset: arrangement?.play.judgeRuleset ?? ctx.options.judgeRuleset,
       battleMode: arrangement ? (arrangement.play.battleMode ?? 'OFF') : ctx.options.battleMode,
+      dBattleScratch: arrangement ? (arrangement.play.dBattleScratch ?? false) : ctx.options.dBattleScratch,
       autoScratch1P: arrangement
         ? (arrangement.play.battleAssist1P ?? arrangement.play.autoScratch1P ?? arrangement.play.autoScratch)
         : ctx.options.autoScratch1P,
@@ -446,8 +451,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     // charts skip every entry (no `2x` channels exist). Mine notes are flipped together so they stay anchored to the
     // same visual lane after the flip.
     // A duplicated BATTLE chart has identical sides; its source applies no DP FLIP to it.
-    const battleDuplicated =
-      prepared.battleMode !== undefined && prepared.battleMode !== 'OFF' && prepared.battleMode !== 'SP-TO-DP';
+    const battleDuplicated = DUPLICATED_BATTLE_MODES.has(prepared.battleMode ?? 'OFF');
     if (ctx.options.dpFlip && !battleDuplicated && ['10', '14', '48'].includes(playVariant)) {
       for (const note of ctx.notes) {
         note.channel = flipDPChannel(note.channel);

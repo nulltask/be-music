@@ -210,6 +210,7 @@ export class DebugMenu {
   public sevenToNinePatternController: ListInputBindingApi<PlayOptions['sevenToNinePattern']> | undefined;
   public sevenToNineTypeController: ListInputBindingApi<PlayOptions['sevenToNineType']> | undefined;
   public battleModeController: ListInputBindingApi<PlayOptions['battleMode']> | undefined;
+  public dBattleScratchController: PaneBinding | undefined;
   public lr2ExtraModeController: PaneBinding | undefined;
   public lr2ExtraLevelController: ListInputBindingApi<PlayOptions['lr2ExtraLevel']> | undefined;
   public extraNoteDepthController: PaneBinding | undefined;
@@ -499,22 +500,21 @@ export class DebugMenu {
     }
     if (this.sevenToNinePatternController) this.sevenToNinePatternController.hidden = !sevenToNine;
     if (this.sevenToNineTypeController) this.sevenToNineTypeController.hidden = !sevenToNine;
-    const lr2Battle = this.guiState.judgeRuleset === 'lr2';
-    if (
-      (lr2Battle && this.guiState.battleMode === 'BATTLE') ||
-      (!lr2Battle && this.guiState.battleMode === 'SP-TO-DP')
-    ) {
+    const battleChoices: Record<string, PlayOptions['battleMode']> =
+      this.guiState.judgeRuleset === 'lr2'
+        ? { OFF: 'OFF', 'D-BATTLE': 'D-BATTLE', 'SP TO DP': 'SP-TO-DP' }
+        : this.guiState.judgeRuleset === 'beatoraja'
+          ? { OFF: 'OFF', BATTLE: 'BATTLE', 'BATTLE AS': 'BATTLE-AS' }
+          : { OFF: 'OFF', BATTLE: 'BATTLE' };
+    if (!Object.values(battleChoices).includes(this.guiState.battleMode)) {
       this.guiState.battleMode = 'OFF';
       this.setPlayOptions({ battleMode: 'OFF' });
     }
     if (this.battleModeController) {
-      this.battleModeController.options = paneOptions(
-        lr2Battle
-          ? { OFF: 'OFF' as const, 'SP TO DP': 'SP-TO-DP' as const }
-          : { OFF: 'OFF' as const, BATTLE: 'BATTLE' as const },
-      );
+      this.battleModeController.options = paneOptions(battleChoices);
       this.battleModeController.refresh();
     }
+    if (this.dBattleScratchController) this.dBattleScratchController.hidden = this.guiState.battleMode !== 'D-BATTLE';
     const lr2Extra = this.guiState.judgeRuleset === 'lr2';
     if (!lr2Extra && this.guiState.lr2ExtraMode) {
       this.guiState.lr2ExtraMode = false;

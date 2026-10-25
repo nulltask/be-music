@@ -47,6 +47,7 @@ export type GUIPlayOptions = Pick<
   | 'sevenToNinePattern'
   | 'sevenToNineType'
   | 'battleMode'
+  | 'dBattleScratch'
   | 'lr2ExtraMode'
   | 'lr2ExtraLevel'
   | 'extraNoteDepth'
@@ -99,6 +100,7 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     sevenToNinePattern: state.sevenToNinePattern,
     sevenToNineType: state.sevenToNineType,
     battleMode: state.battleMode,
+    dBattleScratch: state.dBattleScratch,
     lr2ExtraMode: state.lr2ExtraMode,
     lr2ExtraLevel: state.lr2ExtraLevel,
     extraNoteDepth: state.extraNoteDepth,
@@ -166,6 +168,7 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.sevenToNinePattern = options.sevenToNinePattern;
   state.sevenToNineType = options.sevenToNineType;
   state.battleMode = options.battleMode;
+  state.dBattleScratch = options.dBattleScratch;
   state.lr2ExtraMode = options.lr2ExtraMode;
   state.lr2ExtraLevel = options.lr2ExtraLevel;
   state.extraNoteDepth = options.extraNoteDepth;
@@ -215,6 +218,7 @@ export class PlayOptionsService {
       sevenToNineType: play.sevenToNineType ?? 0,
       hRandomThresholdBPM: play.sevenToNineThresholdBPM ?? play.options?.hRandomThresholdBPM,
       battleMode: play.battleMode ?? 'OFF',
+      dBattleScratch: play.dBattleScratch ?? false,
       lr2ExtraMode: play.lr2ExtraMode ?? false,
       lr2ExtraLevel: play.lr2ExtraLevel ?? 0,
       extraNoteDepth: play.extraNoteDepth ?? 0,
@@ -275,6 +279,7 @@ const ARRANGEMENT_OPTIONS = [
   'sevenToNinePattern',
   'sevenToNineType',
   'battleMode',
+  'dBattleScratch',
   'lr2ExtraMode',
   'lr2ExtraLevel',
   'extraNoteDepth',
