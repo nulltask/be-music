@@ -28,7 +28,7 @@ import type { PlayReplayViewScale, PlaySessionTheme } from '../session/play/play
 import { SessionScene, type SessionSceneOptions } from '../session/session-scene.ts';
 import { logger } from '../logger.ts';
 import { BeatorajaPlayView } from '../view/beatoraja/play-view.ts';
-import { BuiltInPlayView } from '../view/built-in/play-view.ts';
+import { BuiltInPlayView, LIFT_SKINS } from '../view/built-in/play-view.ts';
 import { LR2PlayView } from '../view/lr2/play-view.ts';
 import type { PlayFrame, PlayIntent, PlayView, PlayfieldSkin } from '../view/types.ts';
 import type { BeatorajaKit, BuiltInKit, LR2PlayKit } from './family-kit.ts';
@@ -505,9 +505,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
   const play = new PlaySession(
     {
       ...settings,
-      ...(kit.family === 'built-in' && (kit.skin.id === 'plain' || kit.skin.id === 'native')
-        ? { coverKeys: true }
-        : {}),
+      ...(kit.family === 'built-in' && LIFT_SKINS.has(kit.skin.id) ? { coverKeys: true } : {}),
       judgeTimingAutoAdjust: playOptions.judgeTimingAutoAdjust,
       ...(playOptions.customJudge && settings.judgeRuleset === 'beatoraja'
         ? {
