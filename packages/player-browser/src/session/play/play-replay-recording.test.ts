@@ -36,9 +36,14 @@ describe('resolveReplayRecording', () => {
     expect(resolveReplayRecording({}, undefined, VIEW)).toEqual({ gauge: undefined, view: VIEW });
   });
 
-  test.each(['random1P', 'random2P'] as const)('does not record a new mislabeled SCATTER play on %s', (side) => {
-    expect(() => resolveReplayRecording({ [side]: 'SCATTER' }, undefined, VIEW)).toThrow(/SCATTER.*disabled/);
-  });
+  test.each(['random1P', 'random2P'] as const)(
+    'records the selected SCATTER descriptor on %s alongside effective resolved lanes',
+    (side) => {
+      expect(resolveReplayRecording({ [side]: 'SCATTER' }, undefined, VIEW).randomLane).toEqual({
+        [side === 'random1P' ? 'p1' : 'p2']: 'SCATTER',
+      });
+    },
+  );
 
   test('records the lane options a play runs with, the beatoraja play included', () => {
     const recording = resolveReplayRecording({ random1P: 'OFF', random2P: 'OFF' }, undefined, VIEW);

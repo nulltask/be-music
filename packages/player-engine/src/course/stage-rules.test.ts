@@ -169,3 +169,13 @@ test('grade_random excludes S-RANDOM-EX', () => {
     resolveCourseLaneOptions(['grade_random'], { random1P: 'S-RANDOM-EX', random2P: 'OFF', dpFlip: false }),
   ).toEqual({ random1P: 'OFF', random2P: 'OFF', dpFlip: false });
 });
+
+test('course constraints preserve the separately selected SCATTER modes only when unconstrained', () => {
+  const picked = { random1P: 'SCATTER', random2P: 'SCATTER-CORRECTED', dpFlip: false } as const;
+  expect(resolveCourseLaneOptions([], picked)).toEqual(picked);
+  expect(resolveCourseLaneOptions(['grade_random'], picked)).toEqual({
+    random1P: 'OFF',
+    random2P: 'OFF',
+    dpFlip: false,
+  });
+});

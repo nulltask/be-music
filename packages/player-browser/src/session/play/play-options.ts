@@ -171,7 +171,7 @@ export interface PlaySessionOptions {
   /**
    * Note-arrangement mode for the 1P keyboard lanes (`#SRC_BUTTON,type=42`). Applied at chart-prepare time so the
    * shuffle is consistent across the play session — pressing F5 (restart) reuses the same `random1P` value but draws a
-   * fresh permutation. SCATTER is a legacy value; new requests are rejected until it is fully implemented.
+   * fresh permutation. LR2 SCATTER avoids preceding-row destinations while respecting active long notes.
    */
   hRandomThresholdBPM?: number;
   randomSeed1P?: string;

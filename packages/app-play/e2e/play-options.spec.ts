@@ -508,3 +508,34 @@ for (const skin of ['plain', 'native'] as const) {
     expect(results[1]?.judged).toEqual(results[0]?.judged);
   });
 }
+
+for (const skin of ['plain', 'native'] as const) {
+  for (const mode of ['SCATTER', 'SCATTER-CORRECTED'] as const) {
+    test(`${mode} is separately selectable and replayable on ${skin}`, async ({ player }) => {
+      await player.open({ 'be-music.built-in-skin': skin });
+      await player.dropText('scatter.pms', '#TITLE SCATTER PMS\n#BPM 240\n#00111:01\n#00222:01\n#00325:01\n');
+      await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+      await player.setOption(
+        ['Play options'],
+        'Random 1P',
+        mode === 'SCATTER' ? 'SCATTER (LR2 beta3)' : 'SCATTER (9KEY corrected)',
+      );
+      await player.cursorTo((bar) => bar.title === 'SCATTER PMS', 'PMS chart');
+      await player.key('Enter');
+      await player.waitForResult(0);
+      const replay = await player.lastReplay();
+      expect(replay?.play.options?.random1P).toBe(mode);
+      const channels = replay!.chart.notes.filter((note) => note.type !== 'mine').map((note) => note.channel);
+      expect(channels).toHaveLength(3);
+      if (mode === 'SCATTER-CORRECTED')
+        expect(
+          channels.every((channel) => ['11', '12', '13', '14', '15', '22', '23', '24', '25'].includes(channel)),
+        ).toBe(true);
+      await player.leaveResult();
+      await player.setOption(['Play options'], 'Random 1P', 'OFF');
+      await player.dropText('scatter.bmplay.json', JSON.stringify(replay));
+      await player.waitFor((state) => state.scene.kind === 'play' && state.play?.replay === true, 'SCATTER replay');
+      await player.waitForResult(1);
+    });
+  }
+}
