@@ -228,6 +228,9 @@ export interface PlayerGUIState extends PlayTempoSettings {
   sevenToNineType: PlayOptions['sevenToNineType'];
   battleMode: PlayOptions['battleMode'];
   dBattleScratch: boolean;
+  gauge2P: PlayOptions['gauge2P'];
+  mRan1P: boolean;
+  mRan2P: boolean;
   longNoteMode: PlayOptions['longNoteMode'];
   customJudge: boolean;
   practice: boolean;

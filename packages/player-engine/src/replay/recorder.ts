@@ -186,6 +186,8 @@ export interface ReplayRecorderFinalizeInput {
   aborted?: boolean;
   /** Chart seconds the judge had settled through when the play was aborted. */
   abortedAtSeconds?: number;
+  /** The 2P player of a two-player play: its summary, max combo and gauge (recorded as `results.secondPlayer`). */
+  secondPlayer?: { summary: PlayerSummary; maxCombo: number; gauge: GaugeType };
 }
 
 export interface ReplayRecorder {
@@ -280,13 +282,14 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       currentTempo = tempo;
       tempoChanges.push({ timeUs: secondsToMicroseconds(timeSeconds), tempo });
     },
-    finalize: ({ summary, maxCombo, aborted, abortedAtSeconds }): BeMusicReplay => {
+    finalize: ({ summary, maxCombo, aborted, abortedAtSeconds, secondPlayer }): BeMusicReplay => {
       if (discarded) throw new Error('Cannot finalize a discarded practice replay');
       const play: ReplayPlay = {
         mode: options.play.mode,
         autoScratch: options.play.autoScratch,
         gauge: options.play.gauge ?? 'GROOVE',
       };
+      if (secondPlayer !== undefined) play.gauge2P = secondPlayer.gauge;
       if (options.play.randomLane !== undefined) play.randomLane = options.play.randomLane;
       if (options.play.dpFlip !== undefined) play.dpFlip = options.play.dpFlip;
       if (options.play.judgeWindowOverrideMs !== undefined) {
@@ -369,7 +372,25 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
         inputs,
         play,
         results: {
-          native: buildNativeResult(summary, maxCombo, emptyPoorCount, play.gauge, options.moneyScore === true),
+          // Two players share the recorder: each side's empty POORs are its own summary's.
+          native: buildNativeResult(
+            summary,
+            maxCombo,
+            secondPlayer === undefined ? emptyPoorCount : summary.emptyPoor,
+            play.gauge,
+            options.moneyScore === true,
+          ),
+          ...(secondPlayer !== undefined
+            ? {
+                secondPlayer: buildNativeResult(
+                  secondPlayer.summary,
+                  secondPlayer.maxCombo,
+                  secondPlayer.summary.emptyPoor,
+                  secondPlayer.gauge,
+                  options.moneyScore === true,
+                ),
+              }
+            : {}),
         },
       };
     },

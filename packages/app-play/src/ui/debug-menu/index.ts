@@ -211,6 +211,8 @@ export class DebugMenu {
   public sevenToNineTypeController: ListInputBindingApi<PlayOptions['sevenToNineType']> | undefined;
   public battleModeController: ListInputBindingApi<PlayOptions['battleMode']> | undefined;
   public dBattleScratchController: PaneBinding | undefined;
+  public gauge2PController: ListInputBindingApi<PlayOptions['gauge2P']> | undefined;
+  public mRanControllers: PaneBinding[] = [];
   public lr2ExtraModeController: PaneBinding | undefined;
   public lr2ExtraLevelController: ListInputBindingApi<PlayOptions['lr2ExtraLevel']> | undefined;
   public extraNoteDepthController: PaneBinding | undefined;
@@ -507,10 +509,10 @@ export class DebugMenu {
     if (this.sevenToNineTypeController) this.sevenToNineTypeController.hidden = !sevenToNine;
     const battleChoices: Record<string, PlayOptions['battleMode']> =
       this.guiState.judgeRuleset === 'lr2'
-        ? { OFF: 'OFF', 'D-BATTLE': 'D-BATTLE', 'SP TO DP': 'SP-TO-DP' }
+        ? { OFF: 'OFF', BATTLE: 'TWO-PLAYER', 'D-BATTLE': 'D-BATTLE', 'SP TO DP': 'SP-TO-DP' }
         : this.guiState.judgeRuleset === 'beatoraja'
           ? { OFF: 'OFF', BATTLE: 'BATTLE', 'BATTLE AS': 'BATTLE-AS' }
-          : { OFF: 'OFF', BATTLE: 'BATTLE' };
+          : { OFF: 'OFF', BATTLE: 'BATTLE', '2P PLAY': 'TWO-PLAYER' };
     if (!Object.values(battleChoices).includes(this.guiState.battleMode)) {
       this.guiState.battleMode = 'OFF';
       this.setPlayOptions({ battleMode: 'OFF' });
@@ -520,6 +522,10 @@ export class DebugMenu {
       this.battleModeController.refresh();
     }
     if (this.dBattleScratchController) this.dBattleScratchController.hidden = this.guiState.battleMode !== 'D-BATTLE';
+    const twoPlayer = this.guiState.battleMode === 'TWO-PLAYER';
+    if (this.gauge2PController) this.gauge2PController.hidden = !twoPlayer;
+    for (const controller of this.mRanControllers)
+      controller.hidden = !twoPlayer || this.guiState.judgeRuleset !== '____';
     const lr2Extra = this.guiState.judgeRuleset === 'lr2';
     if (!lr2Extra && this.guiState.lr2ExtraMode) {
       this.guiState.lr2ExtraMode = false;
@@ -618,8 +624,13 @@ export class DebugMenu {
       this.guiState.gauge = 'GROOVE';
       this.setPlayOptions({ gauge1P: 'GROOVE' });
     }
-    if (this.gaugeController) {
-      this.gaugeController.options = paneOptions(choices).map((item) => ({
+    if (!choices.includes(this.guiState.gauge2P)) {
+      this.guiState.gauge2P = 'GROOVE';
+      this.setPlayOptions({ gauge2P: 'GROOVE' });
+    }
+    for (const controller of [this.gaugeController, this.gauge2PController]) {
+      if (!controller) continue;
+      controller.options = paneOptions(choices).map((item) => ({
         ...item,
         text:
           item.value === 'ASSIST-EASY'
@@ -632,7 +643,7 @@ export class DebugMenu {
                 ? 'NORMAL'
                 : (formatGaugeLabel(item.text) ?? item.text),
       }));
-      this.gaugeController.refresh();
+      controller.refresh();
     }
   }
   public refreshPlayOptionControllers(): void {

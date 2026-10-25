@@ -5,6 +5,19 @@
  */
 
 import { reducePlayState, type HiSpeedTransition, type PlayEvent, type PlayState } from '@be-music/player-scene-model';
+import type { ScoreSummary } from '@be-music/player-engine/ruleset';
+import type { PlayerGaugeSummary } from '@be-music/player-engine/signals';
+
+/**
+ * The 2P player of a two-player play (LR2 BATTLE, `battleMode: 'TWO-PLAYER'`): its readout scores and its own play
+ * state (gauge, EX score, combos, judgments) beside the 1P player's. The view settings stay on the 1P play state.
+ */
+export interface SecondPlayerState {
+  score: ScoreSummary;
+  playState: PlayState;
+  /** The engine's gauge for the 2P player as of its last frame: its clear border and type. */
+  gauge?: PlayerGaugeSummary;
+}
 
 /** The play's state and the scroll that follows its hi-speed: the play session's members of these names. */
 export interface PlayStateContext {

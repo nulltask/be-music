@@ -76,6 +76,14 @@ export const screenStyles: CSSResultGroup = [
     .panel dl {
       gap: 10px 18px;
     }
+    /* A two-player result shows the players side by side. */
+    .players {
+      display: grid;
+      gap: 16px;
+    }
+    .players[data-count='2'] {
+      grid-template-columns: repeat(2, minmax(0, 320px));
+    }
     .stat {
       font-size: clamp(24px, 4cqi, 44px);
       font-variant-numeric: tabular-nums;

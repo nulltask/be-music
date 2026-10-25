@@ -88,6 +88,7 @@ import {
   type PlayState,
 } from '@be-music/player-scene-model';
 import { resolveLaneSides } from '../../chart/lane-sides.ts';
+import type { SecondPlayerState } from './play-state.ts';
 import { applyUndefinedLongNoteMode } from '@be-music/player-engine/course';
 
 /** The battle modes that copy one SP chart onto both sides (each copy keeps a 2P source channel). */
@@ -138,6 +139,8 @@ export interface PlayChartContext {
       | 'battleMode'
       | 'dBattleScratch'
       | 'practiceRange'
+      | 'mRan1P'
+      | 'mRan2P'
       | 'longNoteMode'
       | 'lr2ExtraMode'
       | 'lr2ExtraLevel'
@@ -178,6 +181,7 @@ export interface PlayChartContext {
   autoSampleTriggers: TimedSampleTrigger[];
   score: ScoreSummary;
   playState: PlayState;
+  secondPlayer: SecondPlayerState | undefined;
   readonly scrollHiSpeed: HiSpeedTransition;
   readonly longNotes: LongNoteTracker;
   chartBPMRange: PlayTempoRange | undefined;
@@ -494,6 +498,13 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       ctx.options.random1P === 'SYNCHRONIZE-RANDOM' || ctx.options.random1P === 'SYMMETRY-RANDOM'
         ? ctx.options.random1P
         : undefined;
+    // Two players with the same lane option play one arrangement: LR2 copies 1P's lanes after shuffling them
+    // (`battle == 1 && random[0] == random[1]`), as That-Which-Must-Not-Be-Named does for two players' equal options.
+    const twoPlayer = prepared.battleMode === 'TWO-PLAYER';
+    const twins =
+      twoPlayer && (ctx.options.random1P ?? 'OFF') === (ctx.options.random2P ?? 'OFF')
+        ? pairTwoPlayerTwins([ctx.notes, ctx.mineNotes, ctx.invisibleNotes])
+        : undefined;
     // Outside a BATTLE chart the source does not offer these; they leave the chart unchanged.
     if (battleRandom && battleDuplicated)
       applyBattleRandomMode(
@@ -533,7 +544,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     applyRandomMode(
       ctx.notes as Array<{ channel: string }>,
       resolveLaneOptionChannels('2P', playVariant, prepared.laneBindings),
-      battleRandom ? 'OFF' : (ctx.options.random2P ?? 'OFF'),
+      battleRandom || twins ? 'OFF' : (ctx.options.random2P ?? 'OFF'),
       laneRandom('2P'),
       {
         ruleset: ctx.options.judgeRuleset ?? 'lr2',
@@ -555,6 +566,23 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       ctx.mineNotes as Array<{ channel: string }>,
       ctx.invisibleNotes as Array<{ channel: string }>,
     );
+    if (twoPlayer) {
+      for (const [second, first] of twins ?? []) second.channel = `2${first.channel.slice(1)}`;
+      if (ctx.options.judgeRuleset === '____')
+        for (const side of ['1P', '2P'] as const) {
+          const mode = side === '1P' ? ctx.options.random1P : ctx.options.random2P;
+          if ((side === '1P' ? ctx.options.mRan1P : ctx.options.mRan2P) && M_RAN_RANDOM_MODES.has(mode ?? 'OFF'))
+            applyRandomMode(
+              ctx.notes as Array<{ channel: string }>,
+              resolveLaneOptionChannels(side, playVariant, prepared.laneBindings),
+              'MIRROR',
+              Math.random,
+              {},
+              ctx.mineNotes as Array<{ channel: string }>,
+              ctx.invisibleNotes as Array<{ channel: string }>,
+            );
+        }
+    }
   }
   if (!arrangement) applySevenToNine(prepared, sevenToNine);
   resolvedPlay = prepared.resolvedChart;
@@ -662,6 +690,14 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     resolved.metadata.bpm > 0 ? resolved.metadata.bpm : ctx.chart?.bpm,
   );
   ctx.playState = createChartPlayState(ctx, resolver, resolveChartReferenceBPM(resolved, ctx.chart?.bpm));
+  // A two-player play's 2P player starts from the same clean slate; the engine's frames fill its gauge in.
+  ctx.secondPlayer =
+    prepared.battleMode === 'TWO-PLAYER'
+      ? {
+          score: createEmptyScore(prepared.scorableNotes.filter((note) => note.channel.startsWith('2')).length),
+          playState: createPlayState({ totalSeconds: ctx.chartDurationSeconds }),
+        }
+      : undefined;
   // Chart setup, before the notes are on screen — no glide.
   ctx.scrollHiSpeed.jump(ctx.playState.view.hiSpeed.drawn);
   ctx.fastCount = 0;
@@ -1080,6 +1116,36 @@ function resolvePlayerLongNoteChart(
   if (mode === 'LN') return chart;
   if (ctx.options.judgeRuleset !== 'beatoraja') throw new RangeError('LN MODE is available only for beatoraja.');
   return applyUndefinedLongNoteMode(chart, LONG_NOTE_MODE_VALUES[mode]);
+}
+
+/** The RANDOM-type lane options That-Which-Must-Not-Be-Named's M-RAN mirrors after. */
+const M_RAN_RANDOM_MODES: ReadonlySet<string> = new Set(['RANDOM', 'R-RANDOM', 'S-RANDOM']);
+
+/**
+ * Each 2P copy of a two-player chart with the 1P object it was copied from (same time, same lane number and kind), so
+ * the 2P side can take 1P's arrangement after 1P is shuffled.
+ */
+export function pairTwoPlayerTwins(
+  arrays: ReadonlyArray<ReadonlyArray<{ channel: string; seconds: number; endSeconds?: number }>>,
+): Array<[{ channel: string }, { channel: string }]> {
+  const pairs: Array<[{ channel: string }, { channel: string }]> = [];
+  for (const objects of arrays) {
+    const firsts = new Map<string, Array<{ channel: string }>>();
+    const key = (object: { channel: string; seconds: number; endSeconds?: number }): string =>
+      `${object.seconds}|${object.channel.slice(1)}|${object.endSeconds ?? ''}`;
+    for (const object of objects)
+      if (object.channel.startsWith('1')) {
+        const list = firsts.get(key(object)) ?? [];
+        list.push(object);
+        firsts.set(key(object), list);
+      }
+    for (const object of objects) {
+      if (!object.channel.startsWith('2')) continue;
+      const first = firsts.get(key(object))?.shift();
+      if (first !== undefined) pairs.push([object, first]);
+    }
+  }
+  return pairs;
 }
 
 /**

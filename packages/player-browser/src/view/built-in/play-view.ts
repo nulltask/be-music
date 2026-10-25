@@ -251,6 +251,7 @@ export class BuiltInPlayView
       runtime: this.resolveChromeRuntime(),
       playOptions: frame.playOptions,
       emptyPoor: frame.playfield.score.emptyPoor,
+      ...(frame.state2P !== undefined ? { state2P: frame.state2P } : {}),
       course: frame.course,
       seconds: frame.seconds,
       bpm: frame.bpm,

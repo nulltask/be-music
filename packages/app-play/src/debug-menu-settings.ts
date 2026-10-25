@@ -93,6 +93,9 @@ export interface DebugMenuSettings {
   sevenToNineType: PlayerGUIState['sevenToNineType'];
   battleMode: PlayerGUIState['battleMode'];
   dBattleScratch: boolean;
+  gauge2P: PlayerGUIState['gauge2P'];
+  mRan1P: boolean;
+  mRan2P: boolean;
   longNoteMode: PlayerGUIState['longNoteMode'];
   customJudge: boolean;
   practice: boolean;
@@ -277,6 +280,9 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'sevenToNineType', resolvePlayOptionValue('sevenToNineType', raw.sevenToNineType));
   assign(settings, 'battleMode', resolvePlayOptionValue('battleMode', raw.battleMode));
   assign(settings, 'dBattleScratch', resolvePlayOptionValue('dBattleScratch', raw.dBattleScratch));
+  assign(settings, 'gauge2P', resolvePlayOptionValue('gauge2P', raw.gauge2P));
+  assign(settings, 'mRan1P', resolvePlayOptionValue('mRan1P', raw.mRan1P));
+  assign(settings, 'mRan2P', resolvePlayOptionValue('mRan2P', raw.mRan2P));
   assign(settings, 'longNoteMode', resolvePlayOptionValue('longNoteMode', raw.longNoteMode));
   assign(settings, 'customJudge', resolvePlayOptionValue('customJudge', raw.customJudge));
   assign(settings, 'practice', resolvePlayOptionValue('practice', raw.practice));
@@ -538,6 +544,9 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('sevenToNineType');
   assignState('battleMode');
   assignState('dBattleScratch');
+  assignState('gauge2P');
+  assignState('mRan1P');
+  assignState('mRan2P');
   assignState('longNoteMode');
   assignState('customJudge');
   assignState('practice');
@@ -655,6 +664,9 @@ export function captureDebugMenuSettings(
     sevenToNineType: state.sevenToNineType,
     battleMode: state.battleMode,
     dBattleScratch: state.dBattleScratch,
+    gauge2P: state.gauge2P,
+    mRan1P: state.mRan1P,
+    mRan2P: state.mRan2P,
     longNoteMode: state.longNoteMode,
     customJudge: state.customJudge,
     practice: state.practice,

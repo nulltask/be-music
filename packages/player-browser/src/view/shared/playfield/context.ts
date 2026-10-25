@@ -70,6 +70,10 @@ export interface PlayfieldRuntime {
   readonly tempo: number;
   readonly playState: PlayState;
   readonly score: ScoreSummary;
+  /** The 2P player of a two-player play (LR2 BATTLE): its scores, play state and the engine's gauge for it. */
+  readonly secondPlayer:
+    | { readonly score: ScoreSummary; readonly playState: PlayState; readonly gauge?: PlayerGaugeSummary }
+    | undefined;
   /** The score readout, easing toward the score after each judgment. */
   readonly displayedScore: number;
   readonly gaugeState: PlayerGaugeSummary;

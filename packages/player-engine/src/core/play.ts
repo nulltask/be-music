@@ -8,6 +8,7 @@ import { manualStrategy } from './play-manual.ts';
 import { replayStrategy } from './play-replay.ts';
 import { createPlaySession } from './play-session.ts';
 import type { JudgeStrategy } from './play-strategy.ts';
+import { createTwoPlayerJudge } from './two-player.ts';
 
 /**
  * Plays `json` with the judge `strategy` through the one play loop: sets the session up, runs the loop and finishes
@@ -15,7 +16,10 @@ import type { JudgeStrategy } from './play-strategy.ts';
  */
 export async function play(json: BeMusicJSON, options: PlayerOptions, strategy: JudgeStrategy): Promise<PlayerSummary> {
   const session = await createPlaySession(json, options, strategy);
-  const judge = strategy.createJudge(session);
+  const judge =
+    session.secondPlayer !== undefined
+      ? createTwoPlayerJudge(strategy, session, session.secondPlayer)
+      : strategy.createJudge(session);
   const controls = createPlayControls(session, judge);
   const outcome = await runPlayLoop(session, judge, controls);
   return finishPlay(session, judge, controls, outcome);

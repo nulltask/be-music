@@ -252,6 +252,26 @@ export interface BeMusicJudgmentState {
   combo?: number;
 }
 
+/** The 2P player's live values in a two-player play (LR2 BATTLE): its own score, combo and gauge. */
+export interface BeMusicSecondPlayerRuntime {
+  score: number;
+  exScore: number;
+  exScoreMax: number;
+  combo: number;
+  maxCombo: number;
+  perfect: number;
+  great: number;
+  good: number;
+  bad: number;
+  poor: number;
+  /** The gauge in percent (0..100). */
+  gauge: number;
+  clearThreshold?: number;
+  gaugeLabel?: string;
+  gaugeSurvival?: boolean;
+  rank?: string;
+}
+
 /** Live gameplay values for the HUD. */
 export interface BeMusicGameplayRuntime {
   chartTitle?: string;
@@ -283,6 +303,8 @@ export interface BeMusicGameplayRuntime {
   judgeSides?: readonly BeMusicJudgmentState[];
   /** AAA / AA / A / B / C / D / E / F. */
   rank?: string;
+  /** The 2P player of a two-player play (LR2 BATTLE); every other figure here is the 1P player's. */
+  secondPlayer?: BeMusicSecondPlayerRuntime;
   autoplay?: boolean;
   hasBGA?: boolean;
   /** Monotonic play clock (ms) for animation. */

@@ -68,6 +68,8 @@ export function createUIFramePublisher(params: {
   uiSignals: PlayerUISignalBus;
   totalSeconds: number;
   summary: PlayerUIFramePayload['summary'];
+  /** The 2P player's summary of a two-player play. */
+  summary2P?: PlayerUIFramePayload['summary'];
   notes: PlayerUIFramePayload['notes'];
   landmineNotes?: PlayerUIFramePayload['landmineNotes'];
   invisibleNotes?: PlayerUIFramePayload['invisibleNotes'];
@@ -92,6 +94,7 @@ export function createUIFramePublisher(params: {
     uiSignals,
     totalSeconds,
     summary,
+    summary2P,
     notes,
     landmineNotes,
     invisibleNotes,
@@ -118,6 +121,7 @@ export function createUIFramePublisher(params: {
       reversalSeconds: reversal?.seconds,
       totalSeconds,
       summary,
+      ...(summary2P !== undefined ? { summary2P } : {}),
       notes,
       hcnLanes: resolveHCNLanes?.(seconds),
       judgedNoteCount: resolveJudgedNoteCount?.(),

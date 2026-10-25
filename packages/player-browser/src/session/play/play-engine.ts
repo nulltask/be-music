@@ -41,6 +41,7 @@ import {
 } from '@be-music/player-engine/ruleset';
 import {
   playEventFromUICommand,
+  reducePlayState,
   ReplayViewCursor,
   type LibraryChart,
   type PlayResult,
@@ -111,6 +112,7 @@ export interface PlayEngineContext
       | 'course'
       | 'dpFlip'
       | 'gauge'
+      | 'gauge2P'
       | 'judgeRuleset'
       | 'nonstop'
       | 'onChartFinished'
@@ -720,6 +722,13 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       // ruleset's gauge line-up and runs its curve, so HARD really drains and DEATH really ends the run.
       // `resolveSelectedGauge` prefers the replay's recorded pick, so a played-back log runs its original gauge.
       gauge: ctx.resolveSelectedGauge(),
+      ...(ctx.options.replay !== undefined
+        ? ctx.options.replay.play.gauge2P !== undefined
+          ? { gauge2P: ctx.options.replay.play.gauge2P }
+          : {}
+        : ctx.options.gauge2P !== undefined
+          ? { gauge2P: ctx.options.gauge2P }
+          : {}),
       ...(ctx.options.replay === undefined && ctx.options.course !== undefined ? { course: ctx.options.course } : {}),
       // A stitched NONSTOP chart's later stages take over the judge rank (a replay restores the recorded changes).
       ...(ctx.options.replay === undefined && ctx.options.nonstop !== undefined
@@ -869,6 +878,7 @@ function applyEngineFrame(ctx: PlayEngineContext, frame: Readonly<PlayerUIFrameP
   // session, so publishing a seek cannot move time before its score snapshot is drained.
   ctx.engineFrame = { ...frame };
   applyEngineSummary(ctx, frame.summary);
+  if (frame.summary2P !== undefined) applySecondPlayerSummary(ctx, frame.summary2P);
   ctx.chartEndGate?.(frame.currentSeconds);
 }
 
@@ -940,6 +950,34 @@ function applyEngineSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSumm
 export function applyFinalSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSummary>): void {
   applyEngineSummary(ctx, summary);
   applyPlayEvent(ctx, { type: 'finish', summary });
+  const second = ctx.secondPlayer;
+  if (second !== undefined && summary.secondPlayer !== undefined) {
+    applySecondPlayerSummary(ctx, summary.secondPlayer);
+    second.playState = reducePlayState(second.playState, { type: 'finish', summary: summary.secondPlayer });
+  }
+}
+
+/** The 2P player's scores and play state from its summary (a two-player play), as the 1P player's are kept. */
+function applySecondPlayerSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSummary>): void {
+  const second = ctx.secondPlayer;
+  if (second === undefined) return;
+  second.score = {
+    ...second.score,
+    total: summary.total,
+    perfect: summary.perfect,
+    great: summary.great,
+    good: summary.good,
+    bad: summary.bad,
+    emptyPoor: summary.emptyPoor,
+    poor: resolveDisplayedPoor(summary, ctx.resolveEmptyPoorCountsInPoorDisplay()),
+    exScore: summary.exScore,
+    score: summary.score,
+  };
+  if (summary.gauge !== undefined) second.gauge = { ...summary.gauge };
+  second.playState = reducePlayState(second.playState, {
+    type: 'frame',
+    frame: { totalSeconds: ctx.resolveChartDurationSeconds(), summary },
+  });
 }
 
 /**
@@ -1082,7 +1120,16 @@ function applyEngineJudgeCombo(ctx: PlayEngineContext, state: Readonly<PlayerJud
   const judgeKind = state.judge as JudgmentKind;
   const seconds = ctx.currentSeconds();
   // Autoplay hits, mine BADs, and missed notes carry no `deltaMs`: the play state keeps no timing for them.
-  applyPlayEvent(ctx, { type: 'judge', judge: state, seconds, atMs: ctx.playClock() });
+  const second = ctx.secondPlayer;
+  if (second !== undefined && state.channel?.startsWith('2') === true) {
+    // A two-player play's 2P judgment is the 2P player's.
+    second.playState = reducePlayState(second.playState, {
+      type: 'judge',
+      judge: state,
+      seconds,
+      atMs: ctx.playClock(),
+    });
+  } else applyPlayEvent(ctx, { type: 'judge', judge: state, seconds, atMs: ctx.playClock() });
   publishJudge(ctx, judgeKind, seconds, state);
   if ((judgeKind === 'PERFECT' || judgeKind === 'GREAT') && state.channel) {
     triggerBomb(ctx, state.channel, judgeKind);

@@ -11,6 +11,7 @@ import { describe, expect, test } from 'vite-plus/test';
 import { resolveLaneOptionChannels } from '@be-music/player-engine/lanes';
 import {
   applyBattleRandomMode,
+  pairTwoPlayerTwins,
   applyRandomMode,
   extractChartExtension,
   flipDPChannel,
@@ -620,4 +621,23 @@ describe('That-Which-Must-Not-Be-Named BATTLE random', () => {
     expect(side2).toEqual(side1.map((index) => 6 - index));
     expect(lanes2P.indexOf(mines[1]!.channel)).toBe(6 - lanes1P.indexOf(mines[0]!.channel));
   });
+});
+
+test('each 2P copy of a two-player chart pairs with the 1P object at its time and lane number', () => {
+  const notes = [
+    { channel: '11', seconds: 1 },
+    { channel: '12', seconds: 1, endSeconds: 2 },
+    { channel: '21', seconds: 1 },
+    { channel: '22', seconds: 1, endSeconds: 2 },
+    { channel: '21', seconds: 3 },
+  ];
+  const pairs = pairTwoPlayerTwins([notes]);
+  expect(pairs.map(([second, first]) => [second, first])).toEqual([
+    [notes[2], notes[0]],
+    [notes[3], notes[1]],
+  ]);
+  // After 1P is shuffled, 2P takes its lanes.
+  notes[0]!.channel = '15';
+  for (const [second, first] of pairs) second.channel = `2${first.channel.slice(1)}`;
+  expect(notes[2]!.channel).toBe('25');
 });
