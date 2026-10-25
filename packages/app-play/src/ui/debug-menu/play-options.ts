@@ -216,6 +216,11 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       this.refreshRulesetChoices();
     }),
   );
+  this.battleModeController = selectBinding(folder, this.guiState, 'battleMode', 'Battle (LR2)', {
+    OFF: 'OFF',
+    'SP TO DP': 'SP-TO-DP',
+  });
+  trackPlayOption(this.battleModeController.on('change', ({ value }) => this.setPlayOptions({ battleMode: value })));
   this.lr2ExtraModeController = trackPlayOption(
     folder.addBinding(this.guiState, 'lr2ExtraMode', { label: 'EXTRA MODE (LR2)' }).on('change', ({ value }) => {
       this.setPlayOptions({ lr2ExtraMode: value });

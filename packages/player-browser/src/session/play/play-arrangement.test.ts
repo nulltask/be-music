@@ -400,3 +400,52 @@ test('LR2 EXTRA replay reconstructs the recorded source tempo before restoring s
   );
   expect(() => prepare({ judgeRuleset: 'beatoraja', lr2ExtraMode: true }, entry)).toThrow(/requires LR2/);
 });
+
+test('SP TO DP replay restores source variant and source assists before DP FLIP and both-side MIRROR matching', () => {
+  const entry = {
+    ...chart,
+    chartPath: 'sp-to-dp.bme',
+    chart: parseChart(`#BPM 240\n#00116:01\n#00111:01\n#00113:${'00'.repeat(1)}01${'00'.repeat(8)}\n#00418:01`, 'bms'),
+  };
+  const original = prepare(
+    {
+      judgeRuleset: 'lr2',
+      battleMode: 'SP-TO-DP',
+      autoPlay: true,
+      autoScratch2P: true,
+      tempo: 1,
+      dpFlip: true,
+      random1P: 'MIRROR',
+      random2P: 'MIRROR',
+    },
+    entry,
+  );
+  expect(original.chartPlayVariant).toBe('14');
+  expect(original.notes.map((note) => note.channel)).toEqual(expect.arrayContaining(['29', '15', '16']));
+  const replay = parseReplay(
+    serializeReplay(
+      createReplayRecorder({
+        json: entry.chart,
+        chart: original.preparedChart!,
+        play: {
+          mode: 'auto',
+          autoScratch: false,
+          autoScratch1P: false,
+          autoScratch2P: false,
+          judgeRuleset: 'lr2',
+          battleMode: 'SP-TO-DP',
+          battleSourceVariant: '7',
+          battleTempo: 1,
+          battleAssist1P: false,
+          battleAssist2P: true,
+        },
+      }).finalize({ summary: { ...createEmptyScore(original.notes.length), fast: 0, slow: 0 } }),
+    ),
+  );
+  const restored = prepare({ judgeRuleset: 'lr2', replay, battleMode: 'OFF', autoScratch2P: false, tempo: 0.5 }, entry);
+  expect(restored.chartPlayVariant).toBe('14');
+  expect(restored.preparedChart).toMatchObject({ battleSourceVariant: '7', battleAssist2P: true, battleTempo: 1 });
+  expect(restored.notes.map((note) => [note.channel, note.event.value, note.seconds, note.endSeconds])).toEqual(
+    original.notes.map((note) => [note.channel, note.event.value, note.seconds, note.endSeconds]),
+  );
+});

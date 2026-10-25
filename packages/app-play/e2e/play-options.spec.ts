@@ -773,3 +773,48 @@ for (const skin of ['plain', 'native'] as const) {
     expect(await player.readOption(['Play options'], 'EXTRA minimum level (LR2)')).toBe('LEVEL 2');
   });
 }
+
+for (const skin of ['plain', 'native'] as const)
+  for (const sourceKeys of [5, 7] as const) {
+    test(`SP TO DP renders and replays ${sourceKeys === 5 ? 10 : 14}KEY with holds on ${skin}`, async ({
+      player,
+    }, info) => {
+      await player.open({ 'be-music.built-in-skin': skin });
+      const title = `SP TO DP ${sourceKeys}`;
+      await player.dropText(
+        'sp-to-dp.bme',
+        `#TITLE ${title}\n#BPM 240\n#LNOBJ ZZ\n#00111:01\n#00112:02\n#00212:ZZ\n#00311:01${sourceKeys === 7 ? '\n#00418:01' : ''}`,
+      );
+      await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+      await player.setOption(['Play options'], 'Battle (LR2)', 'SP TO DP');
+      await player.setOption(['Play options'], 'Auto play', true);
+      await player.cursorTo((bar) => bar.title === title, 'SP TO DP source chart');
+      await player.key('Enter');
+      await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 0.2, 'DP play');
+      await player.key('Space');
+      await player.page.locator('#stage').screenshot({ path: info.outputPath(`sp-to-dp-${sourceKeys}-${skin}.png`) });
+      await player.key('Space');
+      await player.waitForResult(0);
+      const replay = await player.lastReplay();
+      expect(replay?.play).toMatchObject({
+        battleMode: 'SP-TO-DP',
+        battleSourceVariant: String(sourceKeys),
+        battleTempo: 1,
+      });
+      expect(replay?.play.options?.battleMode).toBe('SP-TO-DP');
+      expect(replay?.chart.laneMode).toContain(sourceKeys === 5 ? '10' : '14');
+      expect(replay?.chart.notes).toHaveLength(sourceKeys === 5 ? 3 : 4);
+      expect(replay?.chart.notes.some((note) => note.channel.startsWith('2'))).toBe(true);
+      expect(replay?.chart.notes.some((note) => note.type === 'long')).toBe(true);
+      await player.leaveResult();
+      await player.setOption(['Play options'], 'Battle (LR2)', 'OFF');
+      await player.dropText('sp-to-dp.bmplay.json', JSON.stringify(replay));
+      await player.waitFor((state) => state.scene.kind === 'play' && state.play?.replay === true, 'SP TO DP replay');
+      await player.waitForResult(1);
+      await player.leaveResult();
+      await player.setOption(['Play options'], 'Battle (LR2)', 'SP TO DP');
+      await player.page.reload();
+      await player.waitFor((state) => state.scene.kind === 'select', 'select after reload');
+      expect(await player.readOption(['Play options'], 'Battle (LR2)')).toBe('SP TO DP');
+    });
+  }

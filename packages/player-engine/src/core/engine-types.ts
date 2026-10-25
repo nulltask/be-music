@@ -1,3 +1,4 @@
+import type { BattleMode } from './battle-mode.ts';
 import type { LR2ExtraLevel } from './lr2-extra-lanes.ts';
 import type { LongNoteModifier, LongNotePlacement } from './long-note-modifier.ts';
 import type { MineModifier, MinePlacement } from './mine-modifier.ts';
@@ -99,6 +100,7 @@ export interface PlayerPlaySettings {
   extraNoteDepth?: number;
   extraNoteScratch?: boolean;
   /** LR2 beta3 EXTRA, independently selected from beatoraja EXTRA depth. Courses ignore it. */
+  battleMode?: BattleMode;
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;
   mineModifier?: MineModifier;

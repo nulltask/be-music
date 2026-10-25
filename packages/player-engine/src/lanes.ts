@@ -65,3 +65,5 @@ export { clampScrollSection, clampScrollRate, type ScrollModifier } from './core
 export { clampExtraNoteDepth } from './core/extra-note-modifier.ts';
 
 export type { LR2ExtraLevel } from './core/lr2-extra-lanes.ts';
+
+export type { BattleMode } from './core/battle-mode.ts';
