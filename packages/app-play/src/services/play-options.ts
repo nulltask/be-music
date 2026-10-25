@@ -48,6 +48,14 @@ export type GUIPlayOptions = Pick<
   | 'sevenToNineType'
   | 'battleMode'
   | 'dBattleScratch'
+  | 'customJudge'
+  | 'customJudgeKeyPerfectGreat'
+  | 'customJudgeKeyGreat'
+  | 'customJudgeKeyGood'
+  | 'customJudgeScratchPerfectGreat'
+  | 'customJudgeScratchGreat'
+  | 'customJudgeScratchGood'
+  | 'customJudgeLongNoteMargin'
   | 'lr2ExtraMode'
   | 'lr2ExtraLevel'
   | 'extraNoteDepth'
@@ -101,6 +109,14 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     sevenToNineType: state.sevenToNineType,
     battleMode: state.battleMode,
     dBattleScratch: state.dBattleScratch,
+    customJudge: state.customJudge,
+    customJudgeKeyPerfectGreat: state.customJudgeKeyPerfectGreat,
+    customJudgeKeyGreat: state.customJudgeKeyGreat,
+    customJudgeKeyGood: state.customJudgeKeyGood,
+    customJudgeScratchPerfectGreat: state.customJudgeScratchPerfectGreat,
+    customJudgeScratchGreat: state.customJudgeScratchGreat,
+    customJudgeScratchGood: state.customJudgeScratchGood,
+    customJudgeLongNoteMargin: state.customJudgeLongNoteMargin,
     lr2ExtraMode: state.lr2ExtraMode,
     lr2ExtraLevel: state.lr2ExtraLevel,
     extraNoteDepth: state.extraNoteDepth,
@@ -169,6 +185,14 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.sevenToNineType = options.sevenToNineType;
   state.battleMode = options.battleMode;
   state.dBattleScratch = options.dBattleScratch;
+  state.customJudge = options.customJudge;
+  state.customJudgeKeyPerfectGreat = options.customJudgeKeyPerfectGreat;
+  state.customJudgeKeyGreat = options.customJudgeKeyGreat;
+  state.customJudgeKeyGood = options.customJudgeKeyGood;
+  state.customJudgeScratchPerfectGreat = options.customJudgeScratchPerfectGreat;
+  state.customJudgeScratchGreat = options.customJudgeScratchGreat;
+  state.customJudgeScratchGood = options.customJudgeScratchGood;
+  state.customJudgeLongNoteMargin = options.customJudgeLongNoteMargin;
   state.lr2ExtraMode = options.lr2ExtraMode;
   state.lr2ExtraLevel = options.lr2ExtraLevel;
   state.extraNoteDepth = options.extraNoteDepth;

@@ -7,6 +7,12 @@
 export * from './clear-lamp.ts';
 export * from './gauge-type.ts';
 export {
+  clampCustomJudgeRate,
+  DEFAULT_BEATORAJA_CUSTOM_JUDGE,
+  isCustomJudgeAssist,
+  type BeatorajaCustomJudge,
+} from './custom-judge.ts';
+export {
   isRulesetId,
   RULESET_IDS,
   type JudgeWindowSetUs,

@@ -93,6 +93,14 @@ export interface DebugMenuSettings {
   sevenToNineType: PlayerGUIState['sevenToNineType'];
   battleMode: PlayerGUIState['battleMode'];
   dBattleScratch: boolean;
+  customJudge: boolean;
+  customJudgeKeyPerfectGreat: number;
+  customJudgeKeyGreat: number;
+  customJudgeKeyGood: number;
+  customJudgeScratchPerfectGreat: number;
+  customJudgeScratchGreat: number;
+  customJudgeScratchGood: number;
+  customJudgeLongNoteMargin: number;
   lr2ExtraMode: boolean;
   lr2ExtraLevel: PlayerGUIState['lr2ExtraLevel'];
   mineModifier: PlayerGUIState['mineModifier'];
@@ -260,6 +268,34 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'sevenToNineType', resolvePlayOptionValue('sevenToNineType', raw.sevenToNineType));
   assign(settings, 'battleMode', resolvePlayOptionValue('battleMode', raw.battleMode));
   assign(settings, 'dBattleScratch', resolvePlayOptionValue('dBattleScratch', raw.dBattleScratch));
+  assign(settings, 'customJudge', resolvePlayOptionValue('customJudge', raw.customJudge));
+  assign(
+    settings,
+    'customJudgeKeyPerfectGreat',
+    resolvePlayOptionValue('customJudgeKeyPerfectGreat', raw.customJudgeKeyPerfectGreat),
+  );
+  assign(settings, 'customJudgeKeyGreat', resolvePlayOptionValue('customJudgeKeyGreat', raw.customJudgeKeyGreat));
+  assign(settings, 'customJudgeKeyGood', resolvePlayOptionValue('customJudgeKeyGood', raw.customJudgeKeyGood));
+  assign(
+    settings,
+    'customJudgeScratchPerfectGreat',
+    resolvePlayOptionValue('customJudgeScratchPerfectGreat', raw.customJudgeScratchPerfectGreat),
+  );
+  assign(
+    settings,
+    'customJudgeScratchGreat',
+    resolvePlayOptionValue('customJudgeScratchGreat', raw.customJudgeScratchGreat),
+  );
+  assign(
+    settings,
+    'customJudgeScratchGood',
+    resolvePlayOptionValue('customJudgeScratchGood', raw.customJudgeScratchGood),
+  );
+  assign(
+    settings,
+    'customJudgeLongNoteMargin',
+    resolvePlayOptionValue('customJudgeLongNoteMargin', raw.customJudgeLongNoteMargin),
+  );
   assign(settings, 'lr2ExtraMode', resolvePlayOptionValue('lr2ExtraMode', raw.lr2ExtraMode));
   assign(settings, 'lr2ExtraLevel', resolvePlayOptionValue('lr2ExtraLevel', raw.lr2ExtraLevel));
   assign(settings, 'extraNoteDepth', resolvePlayOptionValue('extraNoteDepth', raw.extraNoteDepth));
@@ -484,6 +520,14 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('sevenToNineType');
   assignState('battleMode');
   assignState('dBattleScratch');
+  assignState('customJudge');
+  assignState('customJudgeKeyPerfectGreat');
+  assignState('customJudgeKeyGreat');
+  assignState('customJudgeKeyGood');
+  assignState('customJudgeScratchPerfectGreat');
+  assignState('customJudgeScratchGreat');
+  assignState('customJudgeScratchGood');
+  assignState('customJudgeLongNoteMargin');
   assignState('lr2ExtraMode');
   assignState('lr2ExtraLevel');
   assignState('extraNoteDepth');
@@ -584,6 +628,14 @@ export function captureDebugMenuSettings(
     sevenToNineType: state.sevenToNineType,
     battleMode: state.battleMode,
     dBattleScratch: state.dBattleScratch,
+    customJudge: state.customJudge,
+    customJudgeKeyPerfectGreat: state.customJudgeKeyPerfectGreat,
+    customJudgeKeyGreat: state.customJudgeKeyGreat,
+    customJudgeKeyGood: state.customJudgeKeyGood,
+    customJudgeScratchPerfectGreat: state.customJudgeScratchPerfectGreat,
+    customJudgeScratchGreat: state.customJudgeScratchGreat,
+    customJudgeScratchGood: state.customJudgeScratchGood,
+    customJudgeLongNoteMargin: state.customJudgeLongNoteMargin,
     lr2ExtraMode: state.lr2ExtraMode,
     lr2ExtraLevel: state.lr2ExtraLevel,
     extraNoteDepth: state.extraNoteDepth,

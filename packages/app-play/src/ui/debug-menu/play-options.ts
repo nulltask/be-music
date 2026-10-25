@@ -266,6 +266,30 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
   trackPlayOption(
     this.lr2ExtraLevelController.on('change', ({ value }) => this.setPlayOptions({ lr2ExtraLevel: value })),
   );
+  this.customJudgeController = trackPlayOption(
+    folder.addBinding(this.guiState, 'customJudge', { label: 'CUSTOM JUDGE (beatoraja)' }).on('change', ({ value }) => {
+      this.setPlayOptions({ customJudge: value });
+      this.refreshRulesetChoices();
+    }),
+  );
+  // PlayerConfig.validate: PGREAT 25..400 %, every other rate 0..400 %.
+  this.customJudgeRateControllers = (
+    [
+      ['customJudgeKeyPerfectGreat', 'Key PGREAT %', 25],
+      ['customJudgeKeyGreat', 'Key GREAT %', 0],
+      ['customJudgeKeyGood', 'Key GOOD %', 0],
+      ['customJudgeScratchPerfectGreat', 'Scratch PGREAT %', 25],
+      ['customJudgeScratchGreat', 'Scratch GREAT %', 0],
+      ['customJudgeScratchGood', 'Scratch GOOD %', 0],
+      ['customJudgeLongNoteMargin', 'LN margin %', 0],
+    ] as const
+  ).map(([key, label, min]) =>
+    trackPlayOption(
+      folder
+        .addBinding(this.guiState, key, { label, min, max: 400, step: 1 })
+        .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
+    ),
+  );
   this.extraNoteDepthController = trackPlayOption(
     folder
       .addBinding(this.guiState, 'extraNoteDepth', { label: 'EXTRA depth (beatoraja)', min: 0, max: 100, step: 1 })

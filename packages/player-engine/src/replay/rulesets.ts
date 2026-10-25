@@ -63,6 +63,9 @@ export function resolveRulesetConfig(
     ...(rulesetId === 'beatoraja' && replay.play.judgeAlgorithm !== undefined
       ? { judgeAlgorithm: replay.play.judgeAlgorithm }
       : {}),
+    ...(rulesetId === 'beatoraja' && replay.play.customJudge !== undefined
+      ? { customJudge: replay.play.customJudge }
+      : {}),
     ...(replay.play.judgeWindowOverrideMs !== undefined
       ? { judgeWindowOverrideMs: replay.play.judgeWindowOverrideMs }
       : {}),

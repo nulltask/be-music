@@ -86,6 +86,7 @@ export interface PlayEngineContext
       | 'autoPlay'
       | 'allowSeek'
       | 'judgeAlgorithm'
+      | 'customJudge'
       | 'longNoteModifier'
       | 'longNoteRate'
       | 'sevenToNinePattern'
@@ -455,6 +456,7 @@ export function resolveReplayRecording(
     | 'shutter'
     | 'laneCover'
     | 'judgeAlgorithm'
+    | 'customJudge'
     | 'longNoteModifier'
     | 'longNoteRate'
     | 'sevenToNinePattern'
@@ -521,6 +523,14 @@ export function resolveReplayRecording(
     random2P: options.random2P,
     dpFlip: options.dpFlip,
     judgeAlgorithm: options.judgeAlgorithm,
+    customJudge: options.customJudge === undefined ? undefined : true,
+    customJudgeKeyPerfectGreat: options.customJudge?.keyPerfectGreat,
+    customJudgeKeyGreat: options.customJudge?.keyGreat,
+    customJudgeKeyGood: options.customJudge?.keyGood,
+    customJudgeScratchPerfectGreat: options.customJudge?.scratchPerfectGreat,
+    customJudgeScratchGreat: options.customJudge?.scratchGreat,
+    customJudgeScratchGood: options.customJudge?.scratchGood,
+    customJudgeLongNoteMargin: options.customJudge?.longNoteMargin,
     longNoteModifier: options.longNoteModifier,
     longNoteRate: options.longNoteRate,
     sevenToNinePattern: options.sevenToNinePattern,
@@ -634,6 +644,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       gaugeAutoShift:
         ctx.options.replay !== undefined ? ctx.options.replay.play.gaugeAutoShift : ctx.options.gaugeAutoShift,
       judgeAlgorithm: ctx.options.replay?.play.judgeAlgorithm ?? ctx.options.judgeAlgorithm,
+      customJudge: ctx.options.replay ? ctx.options.replay.play.customJudge : ctx.options.customJudge,
       judgeTimingAutoAdjust: ctx.options.replay === undefined && ctx.options.judgeTimingAutoAdjust === true,
       judgeTimingMs: ctx.options.judgeTimingMs,
       battleMode: ctx.options.replay
