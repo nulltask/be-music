@@ -1,1 +1,5 @@
-{ "extends": "../../tsconfig.typecheck.json", "compilerOptions": { "noEmit": true }, "include": ["src/**/*.ts"] }
+{
+  "extends": "../../tsconfig.typecheck.json",
+  "compilerOptions": { "noEmit": true, "types": ["node"] },
+  "include": ["src/**/*.ts", "scripts/**/*.ts"]
+}

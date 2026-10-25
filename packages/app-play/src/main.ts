@@ -63,7 +63,7 @@ void waitForDefaultUIFonts().finally(() => {
       searchInput: document.querySelector<HTMLInputElement>('#search')!,
       loadingOverlay: document.querySelector<HTMLDivElement>('#loading-overlay')!,
       loadingLabel: document.querySelector<HTMLDivElement>('#loading-label')!,
-      loadingBarFill: document.querySelector<HTMLDivElement>('#loading-bar-fill')!,
+      loadingBarFill: document.querySelector<HTMLElement>('#loading-bar-fill')!,
       loadingCounter: document.querySelector<HTMLDivElement>('#loading-counter')!,
     },
     deviceProfile,

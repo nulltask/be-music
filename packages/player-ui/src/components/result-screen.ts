@@ -25,9 +25,16 @@ export class BeMusicResultScreenElement extends FrameElement<BeMusicDOMResultFra
           ></be-music-gauge-panel>
         </div>
         <div class="actions">
-          <button class="primary" ?disabled=${!f.inputReady} @click=${() => this.emit('continue-request', undefined)}>
+          <button class="btn" ?disabled=${!f.inputReady} @click=${() => this.emit('continue-request', undefined)}>
             Continue</button
-          ><button ?disabled=${!f.inputReady} @click=${() => this.emit('retry-request', undefined)}>Retry</button>
+          ><button
+            class="btn"
+            data-variant="outline"
+            ?disabled=${!f.inputReady}
+            @click=${() => this.emit('retry-request', undefined)}
+          >
+            Retry
+          </button>
         </div>
         <slot></slot>
       </div>
