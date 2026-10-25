@@ -134,6 +134,9 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
   });
   const fresh = folder.addButton({ title: 'New arrangement' }).on('click', () => {
     this.deps.clearArrangement?.();
+    // The menu's seeds too, which the saved settings keep.
+    this.guiState.randomSeed1P = '-1';
+    this.guiState.randomSeed2P = '-1';
     this.setPlayOptions({ randomSeed1P: '-1', randomSeed2P: '-1' });
     this.refreshPlayOptionControllers();
     this.setStatus('A new arrangement will be drawn for the next play.');
@@ -549,9 +552,12 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
         this.refreshPlayOptionControllers();
       }),
   );
-  this.floatingSpeedController = folder
-    .addBinding(this.guiState, 'hiSpeed', { label: 'Floating speed', min: 0.5, max: 10, step: 0.01 })
-    .on('change', ({ value }) => this.deps.rememberHiSpeed(value, 'menu'));
+  const remember = (value: number): void => this.deps.rememberHiSpeed(value, 'menu');
+  this.floatingSpeedController = folder.addBinding(
+    hiSpeedControl(this.guiState, () => this.guiState.floatingHiSpeed, onGrid(0.01), remember),
+    'hiSpeed',
+    { label: 'Floating speed', min: 0.5, max: 10, step: 0.01 },
+  );
   this.classicHiSpeedController = trackPlayOption(
     folder.addBinding(this.guiState, 'classicHiSpeed', { label: 'CLASSIC HI-SPEED' }).on('change', ({ value }) => {
       this.setPlayOptions({ classicHiSpeed: value, ...(value ? { hsFix: 'OFF', normalHiSpeedLevel: 0 } : {}) });
@@ -566,16 +572,25 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
   );
   this.classicSpeedController = selectBinding(
     folder,
-    this.guiState,
+    hiSpeedControl(
+      this.guiState,
+      () => this.guiState.classicHiSpeed,
+      (value) => snapClassicHiSpeed(value) ?? CLASSIC_HI_SPEED_STEPS[0]!,
+      remember,
+    ),
     'hiSpeed',
     'Classic speed',
     CLASSIC_HI_SPEED_STEPS,
-  ).on('change', ({ value }) => this.deps.rememberHiSpeed(value, 'menu'));
+  );
   // Hi-speed — the same range and step as the in-game `ArrowUp` / `ArrowDown` keys. Unlike the options above it is
   // visual only, so it stays enabled during a play and applies to it live.
-  this.hiSpeedController = folder
-    .addBinding(this.guiState, 'hiSpeed', { label: 'Hi-speed', min: HISPEED_MIN, max: HISPEED_MAX, step: HISPEED_STEP })
-    .on('change', ({ value }) => this.deps.rememberHiSpeed(value, 'menu'));
+  const regular = (): boolean =>
+    !this.guiState.classicHiSpeed && !this.guiState.floatingHiSpeed && !(this.guiState.normalHiSpeedLevel > 0);
+  this.hiSpeedController = folder.addBinding(
+    hiSpeedControl(this.guiState, regular, onGrid(HISPEED_STEP), remember),
+    'hiSpeed',
+    { label: 'Hi-speed', min: HISPEED_MIN, max: HISPEED_MAX, step: HISPEED_STEP },
+  );
   this.refreshRulesetChoices();
 }
 /**
@@ -590,4 +605,34 @@ export function buildReplayViewFolder(this: DebugMenu, folder: FolderApi): void 
       folder.addBinding(this.guiState.replayView, key, { label: labels[key] }).on('change', remember),
     );
   }
+}
+
+/**
+ * The hi-speed as one of the menu's hi-speed controls binds it. The controls share the one hi-speed, which a play also
+ * changes (its keys, a floating hi-speed following the covers), so each shows it on its own grid (`show`) and takes only
+ * an edit made on it: `onEdit` runs, and the hi-speed changes, when the control sets a value other than the one it shows
+ * while its mode is in use (`active`). A control left to write back its own rounding would undo the play's change — a
+ * floating 2.2458 as 2.25 — or set another mode's hi-speed (a classic list's first step for a play's 2.1).
+ */
+function hiSpeedControl(
+  guiState: { hiSpeed: number },
+  active: () => boolean,
+  show: (value: number) => number,
+  onEdit: (value: number) => void,
+): { hiSpeed: number } {
+  return {
+    get hiSpeed(): number {
+      return show(guiState.hiSpeed);
+    },
+    set hiSpeed(value: number) {
+      if (!active() || value === show(guiState.hiSpeed)) return;
+      guiState.hiSpeed = value;
+      onEdit(value);
+    },
+  };
+}
+
+/** A value on the grid of `step`, as a slider of that step shows it. */
+function onGrid(step: number): (value: number) => number {
+  return (value) => Math.round(Math.round(value / step) * step * 1000) / 1000;
 }
