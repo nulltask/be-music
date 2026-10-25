@@ -624,7 +624,7 @@ export const PLAYER_APP_HTML = `
             </details>
             <details class="help-menu-folder">
               <summary>Play options</summary>
-              <p class="help-menu-note">Locked during a play unless noted. Some appear only with the rules or modes named in brackets.</p>
+              <p class="help-menu-note">Locked during a play unless noted. Many items appear only with certain rules: pick LR2, beatoraja or ???? in Developer → Judgment windows, and the items for those rules show up here. Items marked “Shown with …” say when they appear.</p>
               <dl class="help-menu-items">
                 <dt>Auto play</dt>
                 <dd>Plays the chart automatically. An AUTO play saves no record.</dd>
@@ -639,25 +639,25 @@ export const PLAYER_APP_HTML = `
                 <dt>Fixed key 1P / 2P (LR2; 0=default)</dt>
                 <dd>The lane LR2 CONVERGE gathers notes on. 0 picks the mode default.</dd>
                 <dt>Seed 1P / 2P (-1=random)</dt>
-                <dd>(beatoraja) Fixes the seed of the lane random; -1 draws a new one each play.</dd>
+                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> Fixes the seed of the lane random; -1 draws a new one each play.</dd>
                 <dt>7-to-9 (beatoraja)</dt>
-                <dd>Plays a 7KEY chart on nine lanes, in the chosen layout.</dd>
+                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> Plays a 7KEY chart on nine lanes, in the chosen layout.</dd>
                 <dt>7-to-9 scratch</dt>
-                <dd>Where 7-to-9 puts scratch notes: Fixed, Avoid repeated hits or Alternate.</dd>
+                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> Where 7-to-9 puts scratch notes: Fixed, Avoid repeated hits or Alternate.</dd>
                 <dt>Reuse previous arrangement</dt>
-                <dd>(beatoraja) Plays the same chart again with the last play's exact lanes.</dd>
+                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> Plays the same chart again with the last play's exact lanes.</dd>
                 <dt>New arrangement</dt>
-                <dd>Drops the reused arrangement and resets both seeds to -1.</dd>
+                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> Drops the reused arrangement and resets both seeds to -1.</dd>
                 <dt>Gauge auto-shift (beatoraja)</dt>
-                <dd>What happens when the gauge would fail: NONE, CONTINUE, SURVIVAL TO GROOVE, BEST CLEAR or SELECT TO UNDER.</dd>
+                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> What happens when the gauge would fail: NONE, CONTINUE, SURVIVAL TO GROOVE, BEST CLEAR or SELECT TO UNDER.</dd>
                 <dt>Lowest auto-shift gauge</dt>
-                <dd>The lowest gauge BEST CLEAR and SELECT TO UNDER may shift down to.</dd>
+                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> The lowest gauge BEST CLEAR and SELECT TO UNDER may shift down to.</dd>
                 <dt>Scroll (beatoraja)</dt>
-                <dd>REMOVE draws the chart without its BPM and scroll changes; ADD adds random scroll changes. Judgment is unchanged.</dd>
+                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> REMOVE draws the chart without its BPM and scroll changes; ADD adds random scroll changes. Judgment is unchanged.</dd>
                 <dt>Scroll section lines / Scroll rate</dt>
-                <dd>For scroll ADD: how many bar lines each change lasts, and how strong it is.</dd>
+                <dd><em class="help-menu-when">Shown with beatoraja rules and Scroll set to ADD.</em> For scroll ADD: how many bar lines each change lasts, and how strong it is.</dd>
                 <dt>Mines (beatoraja)</dt>
-                <dd>REMOVE takes the mines out; ADD RANDOM, ADD NEAR and ADD ALL add mines.</dd>
+                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> REMOVE takes the mines out; ADD RANDOM, ADD NEAR and ADD ALL add mines.</dd>
                 <dt>DP flip</dt>
                 <dd>Swaps the 1P and 2P sides of a double-play chart.</dd>
                 <dt>Auto scratch 1P / 2P</dt>
@@ -667,39 +667,39 @@ export const PLAYER_APP_HTML = `
                 <dt>Battle</dt>
                 <dd>Battle and conversion modes: BATTLE, D-BATTLE and SP TO DP (LR2), BATTLE and BATTLE AS (beatoraja), BATTLE and 2P PLAY (????).</dd>
                 <dt>Gauge 2P</dt>
-                <dd>(two-player play) The second player's gauge.</dd>
+                <dd><em class="help-menu-when">Shown with Battle set to BATTLE (LR2) or 2P PLAY (????).</em> The second player's gauge.</dd>
                 <dt>M-RAN 1P / 2P</dt>
-                <dd>(????, 2P PLAY) Mirrors that player's side after a RANDOM-type option.</dd>
+                <dd><em class="help-menu-when">Shown with ???? rules and Battle set to 2P PLAY.</em> Mirrors that player's side after a RANDOM-type option.</dd>
                 <dt>D-BATTLE scratch (LR2)</dt>
-                <dd>(D-BATTLE) Keeps scratch notes playable instead of turning them into background sound.</dd>
+                <dd><em class="help-menu-when">Shown with Battle set to D-BATTLE.</em> Keeps scratch notes playable instead of turning them into background sound.</dd>
                 <dt>EXTRA MODE (LR2)</dt>
-                <dd>Turns background keysounds into extra notes, as LR2's EXTRA MODE does.</dd>
+                <dd><em class="help-menu-when">Shown with LR2 rules.</em> Turns background keysounds into extra notes, as LR2's EXTRA MODE does.</dd>
                 <dt>EXTRA minimum level (LR2)</dt>
-                <dd>How dense EXTRA MODE may get at least: LEVEL 1 to 3.</dd>
+                <dd><em class="help-menu-when">Shown with EXTRA MODE (LR2) on.</em> How dense EXTRA MODE may get at least: LEVEL 1 to 3.</dd>
                 <dt>LN MODE (beatoraja)</dt>
-                <dd>How a chart that leaves its long-note type open plays: LN, CN or HCN.</dd>
+                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> How a chart that leaves its long-note type open plays: LN, CN or HCN.</dd>
                 <dt>CUSTOM JUDGE (beatoraja)</dt>
-                <dd>Scales the judgment windows with the rates below.</dd>
+                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> Scales the judgment windows with the rates below.</dd>
                 <dt>Key / Scratch PGREAT, GREAT, GOOD % · LN margin %</dt>
-                <dd>(CUSTOM JUDGE) The width of each window for keys and scratches, and the long-note release margin.</dd>
+                <dd><em class="help-menu-when">Shown with CUSTOM JUDGE on.</em> The width of each window for keys and scratches, and the long-note release margin.</dd>
                 <dt>PRACTICE (beatoraja)</dt>
-                <dd>Plays a range of the chart again and again until Esc. A practice play saves no replay and no record.</dd>
+                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> Plays a range of the chart again and again until Esc. A practice play saves no replay and no record.</dd>
                 <dt>START TIME ms / END TIME ms</dt>
-                <dd>(PRACTICE) The range to practise, in chart milliseconds; 0 as the end means the chart's end.</dd>
+                <dd><em class="help-menu-when">Shown with PRACTICE on.</em> The range to practise, in chart milliseconds; 0 as the end means the chart's end.</dd>
                 <dt>GAUGE TYPE / GAUGE CATEGORY / GAUGE VALUE</dt>
-                <dd>(PRACTICE) The gauge, its category and its starting value.</dd>
+                <dd><em class="help-menu-when">Shown with PRACTICE on.</em> The gauge, its category and its starting value.</dd>
                 <dt>JUDGERANK / TOTAL</dt>
-                <dd>(PRACTICE) The judge rank and TOTAL to practise with; 0 keeps the chart's.</dd>
+                <dd><em class="help-menu-when">Shown with PRACTICE on.</em> The judge rank and TOTAL to practise with; 0 keeps the chart's.</dd>
                 <dt>EXTRA depth (beatoraja) / EXTRA scratch</dt>
-                <dd>beatoraja EXTRA: how many background keysounds per row become notes (0 is off), and whether scratch lanes get them.</dd>
+                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> beatoraja EXTRA: how many background keysounds per row become notes (0 is off), and whether scratch lanes get them.</dd>
                 <dt>Long-note add rate (beatoraja)</dt>
-                <dd>(ADD LN / CN / HCN / ALL) How many of the notes become long notes, 0 to 1.</dd>
+                <dd><em class="help-menu-when">Shown with beatoraja rules and an ADD choice in Long notes.</em> How many of the notes become long notes, 0 to 1.</dd>
                 <dt>A-SCR &amp; LEGACY NOTE (AC 34)</dt>
                 <dd>One button for both Auto scratch sides and LEGACY NOTE.</dd>
                 <dt>Sort / Key filter / Difficulty filter</dt>
                 <dd>How the built-in and LR2 select screens order and filter the list.</dd>
                 <dt>HS-FIX</dt>
-                <dd>Keeps the scroll speed steady against a BPM: MAXBPM, MINBPM, AVERAGE, STARTBPM, or CONSTANT (LR2).</dd>
+                <dd><em class="help-menu-when">Hidden while CLASSIC, Normal or FLOATING HI-SPEED is on.</em> Keeps the scroll speed steady against a BPM: MAXBPM, MINBPM, AVERAGE, STARTBPM, or CONSTANT (LR2).</dd>
                 <dt>Display area info</dt>
                 <dd>Keeps showing the cover length and green number at the cover edges: OFF, ON, SUDDEN+ ONLY or HID+/LIFT ONLY.</dd>
                 <dt>Effect 1P / 2P</dt>
@@ -713,19 +713,19 @@ export const PLAYER_APP_HTML = `
                 <dt>Visual CONSTANT (beatoraja) · Note duration (ms) · CONSTANT fade (ms)</dt>
                 <dd>Shows notes only for their last N ms before the judge line, with a fade at their edge.</dd>
                 <dt>Auto judge timing (beatoraja)</dt>
-                <dd>Moves Judge timing by itself from your hits in a manual play.</dd>
+                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> Moves Judge timing by itself from your hits in a manual play.</dd>
                 <dt>Judge timing (beatoraja, ms)</dt>
                 <dd>Shifts when the notes are drawn, −500 to 500 ms. Input, audio and judgment stay as they are.</dd>
                 <dt>Normal HI-SPEED (AC 32 measured) · Normal HS level</dt>
-                <dd>(????) Picks the speed from twenty measured levels instead of the Hi-speed slider.</dd>
+                <dd><em class="help-menu-when">Shown with ???? rules; the level with Normal HI-SPEED on.</em> Picks the speed from twenty measured levels instead of the Hi-speed slider.</dd>
                 <dt>CLASSIC HI-SPEED · Classic speed</dt>
-                <dd>(????) Picks the speed from the eleven CLASSIC steps, 1.0 to 4.0.</dd>
+                <dd><em class="help-menu-when">Shown with ???? rules; the speed with CLASSIC HI-SPEED on.</em> Picks the speed from the eleven CLASSIC steps, 1.0 to 4.0.</dd>
                 <dt>FLOATING HI-SPEED (AC 32 measured) · Floating speed</dt>
-                <dd>(????) Keeps the green number while the covers move; Numpad 0 switches it during play.</dd>
+                <dd><em class="help-menu-when">Shown with ???? rules; the speed with FLOATING HI-SPEED on.</em> Keeps the green number while the covers move; Numpad 0 switches it during play.</dd>
                 <dt>Fixed display area (AC 34)</dt>
-                <dd>(????) Ignores cover and LIFT changes during play; Enter twice restores the floating green number.</dd>
+                <dd><em class="help-menu-when">Shown with ???? rules.</em> Ignores cover and LIFT changes during play; Enter twice restores the floating green number.</dd>
                 <dt>Hi-speed</dt>
-                <dd>The scroll speed. Changes live, like ↑ / ↓ during play.</dd>
+                <dd><em class="help-menu-when">Hidden while CLASSIC, Normal or FLOATING HI-SPEED is on.</em> The scroll speed. Changes live, like ↑ / ↓ during play.</dd>
               </dl>
             </details>
             <details class="help-menu-folder">
@@ -999,7 +999,7 @@ export const PLAYER_APP_HTML = `
             </details>
             <details class="help-menu-folder">
               <summary>Play options</summary>
-              <p class="help-menu-note">特に書かない限りプレイ中は変えられません。括弧内のルールやモードのときだけ出る項目があります。</p>
+              <p class="help-menu-note">特に書かない限りプレイ中は変えられません。多くの項目は特定のルールのときだけ表示されます。Developer → Judgment windows で LR2 / beatoraja / ???? を選ぶと、そのルールの項目がここに現れます。「…のときに表示」とある項目は、その条件で表示されます。</p>
               <dl class="help-menu-items">
                 <dt>Auto play</dt>
                 <dd>譜面を自動で演奏します。AUTO のプレイは記録に残りません。</dd>
@@ -1014,25 +1014,25 @@ export const PLAYER_APP_HTML = `
                 <dt>Fixed key 1P / 2P (LR2; 0=default)</dt>
                 <dd>LR2 の CONVERGE でノーツを集めるレーン。0 はモードの既定。</dd>
                 <dt>Seed 1P / 2P (-1=random)</dt>
-                <dd>(beatoraja) レーンのランダムのシード。-1 ならプレイごとに新しく決めます。</dd>
+                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> レーンのランダムのシード。-1 ならプレイごとに新しく決めます。</dd>
                 <dt>7-to-9 (beatoraja)</dt>
-                <dd>7 鍵の譜面を、選んだ配置で 9 レーンで遊びます。</dd>
+                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> 7 鍵の譜面を、選んだ配置で 9 レーンで遊びます。</dd>
                 <dt>7-to-9 scratch</dt>
-                <dd>7-to-9 でスクラッチのノーツをどこに置くか。Fixed、Avoid repeated hits、Alternate。</dd>
+                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> 7-to-9 でスクラッチのノーツをどこに置くか。Fixed、Avoid repeated hits、Alternate。</dd>
                 <dt>Reuse previous arrangement</dt>
-                <dd>(beatoraja) 前回のプレイとまったく同じ配置で同じ譜面をもう一度遊びます。</dd>
+                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> 前回のプレイとまったく同じ配置で同じ譜面をもう一度遊びます。</dd>
                 <dt>New arrangement</dt>
-                <dd>再利用している配置をやめ、シードを両方 -1 に戻します。</dd>
+                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> 再利用している配置をやめ、シードを両方 -1 に戻します。</dd>
                 <dt>Gauge auto-shift (beatoraja)</dt>
-                <dd>ゲージが尽きたときの扱い。NONE、CONTINUE、SURVIVAL TO GROOVE、BEST CLEAR、SELECT TO UNDER。</dd>
+                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> ゲージが尽きたときの扱い。NONE、CONTINUE、SURVIVAL TO GROOVE、BEST CLEAR、SELECT TO UNDER。</dd>
                 <dt>Lowest auto-shift gauge</dt>
-                <dd>BEST CLEAR と SELECT TO UNDER で下げてよい一番下のゲージ。</dd>
+                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> BEST CLEAR と SELECT TO UNDER で下げてよい一番下のゲージ。</dd>
                 <dt>Scroll (beatoraja)</dt>
-                <dd>REMOVE は BPM やスクロールの変化をなくして描き、ADD はランダムなスクロールの変化を加えます。判定は変わりません。</dd>
+                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> REMOVE は BPM やスクロールの変化をなくして描き、ADD はランダムなスクロールの変化を加えます。判定は変わりません。</dd>
                 <dt>Scroll section lines / Scroll rate</dt>
-                <dd>スクロールの ADD で、変化ごとの小節線の数と、変化の強さ。</dd>
+                <dd><em class="help-menu-when">beatoraja のルールで Scroll が ADD のときに表示。</em> スクロールの ADD で、変化ごとの小節線の数と、変化の強さ。</dd>
                 <dt>Mines (beatoraja)</dt>
-                <dd>REMOVE は地雷を取り除き、ADD RANDOM、ADD NEAR、ADD ALL は地雷を加えます。</dd>
+                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> REMOVE は地雷を取り除き、ADD RANDOM、ADD NEAR、ADD ALL は地雷を加えます。</dd>
                 <dt>DP flip</dt>
                 <dd>DP の譜面の 1P 側と 2P 側を入れ替えます。</dd>
                 <dt>Auto scratch 1P / 2P</dt>
@@ -1042,39 +1042,39 @@ export const PLAYER_APP_HTML = `
                 <dt>Battle</dt>
                 <dd>バトルと変換のモード。BATTLE、D-BATTLE、SP TO DP (LR2)、BATTLE、BATTLE AS (beatoraja)、BATTLE、2P PLAY (????)。</dd>
                 <dt>Gauge 2P</dt>
-                <dd>(2 人プレイ) 2 人目のゲージ。</dd>
+                <dd><em class="help-menu-when">Battle が BATTLE (LR2) か 2P PLAY (????) のときに表示。</em> 2 人目のゲージ。</dd>
                 <dt>M-RAN 1P / 2P</dt>
-                <dd>(????、2P PLAY) RANDOM 系のオプションのあと、そのプレイヤーの側を左右反転します。</dd>
+                <dd><em class="help-menu-when">???? のルールで Battle が 2P PLAY のときに表示。</em> RANDOM 系のオプションのあと、そのプレイヤーの側を左右反転します。</dd>
                 <dt>D-BATTLE scratch (LR2)</dt>
-                <dd>(D-BATTLE) スクラッチを BGM にせず、叩くノーツのまま残します。</dd>
+                <dd><em class="help-menu-when">Battle が D-BATTLE のときに表示。</em> スクラッチを BGM にせず、叩くノーツのまま残します。</dd>
                 <dt>EXTRA MODE (LR2)</dt>
-                <dd>LR2 の EXTRA MODE のように、BGM のキー音をノーツに変えて増やします。</dd>
+                <dd><em class="help-menu-when">LR2 のルールのときに表示。</em> LR2 の EXTRA MODE のように、BGM のキー音をノーツに変えて増やします。</dd>
                 <dt>EXTRA minimum level (LR2)</dt>
-                <dd>EXTRA MODE の最低の密度。LEVEL 1〜3。</dd>
+                <dd><em class="help-menu-when">EXTRA MODE (LR2) がオンのときに表示。</em> EXTRA MODE の最低の密度。LEVEL 1〜3。</dd>
                 <dt>LN MODE (beatoraja)</dt>
-                <dd>ロングノートの種類を決めていない譜面を LN、CN、HCN のどれで遊ぶか。</dd>
+                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> ロングノートの種類を決めていない譜面を LN、CN、HCN のどれで遊ぶか。</dd>
                 <dt>CUSTOM JUDGE (beatoraja)</dt>
-                <dd>下の倍率で判定の幅を変えます。</dd>
+                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> 下の倍率で判定の幅を変えます。</dd>
                 <dt>Key / Scratch PGREAT, GREAT, GOOD % · LN margin %</dt>
-                <dd>(CUSTOM JUDGE) 鍵盤とスクラッチの判定ごとの幅と、ロングノートを離すときの余裕。</dd>
+                <dd><em class="help-menu-when">CUSTOM JUDGE がオンのときに表示。</em> 鍵盤とスクラッチの判定ごとの幅と、ロングノートを離すときの余裕。</dd>
                 <dt>PRACTICE (beatoraja)</dt>
-                <dd>譜面の一部の範囲を Esc を押すまで繰り返します。練習のプレイはリプレイも記録も残しません。</dd>
+                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> 譜面の一部の範囲を Esc を押すまで繰り返します。練習のプレイはリプレイも記録も残しません。</dd>
                 <dt>START TIME ms / END TIME ms</dt>
-                <dd>(PRACTICE) 練習する範囲 (譜面のミリ秒)。終わりの 0 は譜面の最後。</dd>
+                <dd><em class="help-menu-when">PRACTICE がオンのときに表示。</em> 練習する範囲 (譜面のミリ秒)。終わりの 0 は譜面の最後。</dd>
                 <dt>GAUGE TYPE / GAUGE CATEGORY / GAUGE VALUE</dt>
-                <dd>(PRACTICE) ゲージの種類、カテゴリ、開始時の値。</dd>
+                <dd><em class="help-menu-when">PRACTICE がオンのときに表示。</em> ゲージの種類、カテゴリ、開始時の値。</dd>
                 <dt>JUDGERANK / TOTAL</dt>
-                <dd>(PRACTICE) 練習で使う判定ランクと TOTAL。0 なら譜面の値。</dd>
+                <dd><em class="help-menu-when">PRACTICE がオンのときに表示。</em> 練習で使う判定ランクと TOTAL。0 なら譜面の値。</dd>
                 <dt>EXTRA depth (beatoraja) / EXTRA scratch</dt>
-                <dd>beatoraja の EXTRA。1 行あたり何個の BGM のキー音をノーツにするか (0 でオフ) と、スクラッチにも置くか。</dd>
+                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> beatoraja の EXTRA。1 行あたり何個の BGM のキー音をノーツにするか (0 でオフ) と、スクラッチにも置くか。</dd>
                 <dt>Long-note add rate (beatoraja)</dt>
-                <dd>(ADD LN / CN / HCN / ALL) ロングノートにする割合 (0〜1)。</dd>
+                <dd><em class="help-menu-when">beatoraja のルールで Long notes が ADD のどれかのときに表示。</em> ロングノートにする割合 (0〜1)。</dd>
                 <dt>A-SCR &amp; LEGACY NOTE (AC 34)</dt>
                 <dd>両サイドのオートスクラッチと LEGACY NOTE をまとめてオンにするボタン。</dd>
                 <dt>Sort / Key filter / Difficulty filter</dt>
                 <dd>内蔵スキンと LR2 スキンの選曲画面の並び順と絞り込み。</dd>
                 <dt>HS-FIX</dt>
-                <dd>BPM に合わせてスクロール速度を一定に保ちます。MAXBPM、MINBPM、AVERAGE、STARTBPM、CONSTANT (LR2)。</dd>
+                <dd><em class="help-menu-when">CLASSIC / Normal / FLOATING HI-SPEED がオンの間は非表示。</em> BPM に合わせてスクロール速度を一定に保ちます。MAXBPM、MINBPM、AVERAGE、STARTBPM、CONSTANT (LR2)。</dd>
                 <dt>Display area info</dt>
                 <dd>カバーの長さと緑数字をカバーの端に表示し続けます。OFF、ON、SUDDEN+ ONLY、HID+/LIFT ONLY。</dd>
                 <dt>Effect 1P / 2P</dt>
@@ -1088,19 +1088,19 @@ export const PLAYER_APP_HTML = `
                 <dt>Visual CONSTANT (beatoraja) · Note duration (ms) · CONSTANT fade (ms)</dt>
                 <dd>ノーツを判定ラインに届く前の N ミリ秒だけ表示し、その境目をフェードさせます。</dd>
                 <dt>Auto judge timing (beatoraja)</dt>
-                <dd>手で遊んだときの叩いたタイミングから、Judge timing を自動で調整します。</dd>
+                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> 手で遊んだときの叩いたタイミングから、Judge timing を自動で調整します。</dd>
                 <dt>Judge timing (beatoraja, ms)</dt>
                 <dd>ノーツを描くタイミングをずらします (−500〜500 ミリ秒)。入力、音、判定はそのままです。</dd>
                 <dt>Normal HI-SPEED (AC 32 measured) · Normal HS level</dt>
-                <dd>(????) Hi-speed のスライダーの代わりに、実測した 20 段階から速度を選びます。</dd>
+                <dd><em class="help-menu-when">???? のルールのときに表示。レベルは Normal HI-SPEED がオンのとき。</em> Hi-speed のスライダーの代わりに、実測した 20 段階から速度を選びます。</dd>
                 <dt>CLASSIC HI-SPEED · Classic speed</dt>
-                <dd>(????) CLASSIC の 11 段階 (1.0〜4.0) から速度を選びます。</dd>
+                <dd><em class="help-menu-when">???? のルールのときに表示。速度は CLASSIC HI-SPEED がオンのとき。</em> CLASSIC の 11 段階 (1.0〜4.0) から速度を選びます。</dd>
                 <dt>FLOATING HI-SPEED (AC 32 measured) · Floating speed</dt>
-                <dd>(????) カバーを動かしても緑数字を保ちます。プレイ中はテンキーの 0 で切り替えます。</dd>
+                <dd><em class="help-menu-when">???? のルールのときに表示。速度は FLOATING HI-SPEED がオンのとき。</em> カバーを動かしても緑数字を保ちます。プレイ中はテンキーの 0 で切り替えます。</dd>
                 <dt>Fixed display area (AC 34)</dt>
-                <dd>(????) プレイ中のカバーと LIFT の変更を受け付けません。Enter 2 回でフローティングの緑数字に戻します。</dd>
+                <dd><em class="help-menu-when">???? のルールのときに表示。</em> プレイ中のカバーと LIFT の変更を受け付けません。Enter 2 回でフローティングの緑数字に戻します。</dd>
                 <dt>Hi-speed</dt>
-                <dd>スクロールの速さ。プレイ中の ↑ / ↓ と同じく、すぐ反映されます。</dd>
+                <dd><em class="help-menu-when">CLASSIC / Normal / FLOATING HI-SPEED がオンの間は非表示。</em> スクロールの速さ。プレイ中の ↑ / ↓ と同じく、すぐ反映されます。</dd>
               </dl>
             </details>
             <details class="help-menu-folder">
