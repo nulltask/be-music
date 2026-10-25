@@ -247,6 +247,15 @@ describe('LibraryService drops', () => {
     expect(order).toEqual(['load', 'apply', 'show']);
   });
 
+  test('a skin dropped during a play applies the skin and leaves the play up', async () => {
+    const { library, options, shown, showing } = harness();
+    showing.current = 'play';
+    await library.processIncomingFiles([dropped('theme/select.lr2skin', '#INFORMATION,5,Example')]);
+    expect(options.applyDroppedSkin).toHaveBeenCalledWith('lr2');
+    expect(options.loadTheme).toHaveBeenCalledOnce();
+    expect(shown).toEqual([]);
+  });
+
   test('reads a course file that lists more than five stages as the five LR2 plays, and says so', async () => {
     const { library, statuses, shown, folders } = harness();
     await library.processIncomingFiles([dropped('seven-stages.lr2crs', lr2CourseList('SEVEN', 7))]);
