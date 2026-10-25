@@ -139,6 +139,8 @@ export class PlaySessionState extends PlayPresentation {
    * 7K-flavored fallbacks keep behaving as before for skinless / pre-prepare code paths.
    */
   chartPlayVariant: ChartPlayVariant = '7';
+  /** The play variant of the chart a battle mode converted, as LR2's key-mode ops read it. */
+  battleSourceVariant: ChartPlayVariant | undefined = undefined;
   laneX: Map<string, PlayfieldLaneRect> = new Map();
   /**
    * `playClock()` value captured at `start()`. Theme animations (LR2 timer 0/40/41 — scene-start / READY / play-start)

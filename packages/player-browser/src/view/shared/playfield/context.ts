@@ -58,6 +58,8 @@ export interface PlayfieldRuntime {
   readonly resolvedPlayChart: ResolvedChart | undefined;
   readonly laneChannels: string[];
   readonly chartPlayVariant: ChartPlayVariant;
+  /** The play variant of the chart a battle mode converted (`chartPlayVariant` is the converted one's). */
+  readonly battleSourceVariant?: ChartPlayVariant;
   readonly laneX: Map<string, PlayfieldLaneRect>;
   readonly notes: RuntimeNote[];
   readonly mineNotes: RuntimeMineNote[];

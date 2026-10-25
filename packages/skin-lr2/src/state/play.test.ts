@@ -7,6 +7,7 @@ import {
   resolveLR2GaugeTypeOps,
   resolveLR2LaneTimer,
   resolveLR2PlayKeyModeOp,
+  resolveLR2PlayKeyModeOps,
   resolveLR2PlayState,
   resolveLR2PlayTimers,
   resolveLR2RankOp,
@@ -175,6 +176,71 @@ describe('resolveLR2PlayState numbers', () => {
     expect(grade.number(LR2_NUM.COURSE_STAGE1_LEVEL)).toBe(11);
     const nonstop = resolveLR2PlayState({ ...SETUP, course: { ...course, kind: 'nonstop' } }, frame({ play }));
     expect(nonstop.number(LR2_NUM.COMBO)).toBe(12);
+  });
+});
+
+describe('resolveLR2PlayState two-player BATTLE', () => {
+  const BATTLE: LR2PlaySetup = { ...SETUP, options: { ...SETUP.options, battleMode: 'TWO-PLAYER' }, gauge2P: 'HARD' };
+  const second = {
+    play: { gauge: 37, combo: 4, maxCombo: 9 },
+    score: score({ perfect: 20, great: 5, exScore: 45, score: 50000 }),
+  };
+
+  it('reads the 2P player on numbers 120-136 and the EX score gap on 108 / 128', () => {
+    const state = resolveLR2PlayState(BATTLE, frame({ score: score({ exScore: 60 }), secondPlayer: second }));
+    expect(state.number(LR2_NUM.SCORE_2P)).toBe(50000);
+    expect(state.number(LR2_NUM.EXSCORE_2P)).toBe(45);
+    expect(state.number(LR2_NUM.COMBO_2P)).toBe(4);
+    expect(state.number(LR2_NUM.MAX_COMBO_2P)).toBe(9);
+    expect(state.number(LR2_NUM.NOTES_2P)).toBe(100);
+    expect(state.number(LR2_NUM.GAUGE_2P)).toBe(37);
+    expect(state.number(LR2_NUM.PERFECT_2P)).toBe(20);
+    expect(state.number(LR2_NUM.GREAT_2P)).toBe(5);
+    // 45 of the 50 points of the 25 notes judged; 45 of 200 over every note.
+    expect(state.number(LR2_NUM.SCORE_RATE_2P)).toBe(90);
+    expect(state.number(LR2_NUM.TOTAL_RATE_2P)).toBe(22);
+    expect(state.number(LR2_NUM.TOTAL_RATE_AFTERDOT_2P)).toBe(50);
+    expect(state.number(LR2_NUM.EXSCORE_DIFF)).toBe(15);
+    expect(state.number(LR2_NUM.EXSCORE_DIFF_2P)).toBe(-15);
+    expect(resolveLR2PlayState(SETUP, frame()).number(LR2_NUM.SCORE_2P)).toBeUndefined();
+  });
+
+  it('lights the battle ops, the 2P gauge type, rank and gauge range', () => {
+    const { ops } = resolveLR2PlayState(BATTLE, frame({ secondPlayer: second }));
+    for (const op of [
+      LR2_OP.BATTLE,
+      LR2_OP.DOUBLE_OR_BATTLE,
+      LR2_OP.GHOST_BATTLE_OR_BATTLE,
+      LR2_OP.GAUGE_1P_NORMAL,
+      LR2_OP.GAUGE_2P_RED,
+      LR2_OP.RANK_2P_AAA,
+      LR2_OP.GAUGE_2P_0_9 + 3,
+    ])
+      expect(ops.has(op)).toBe(true);
+    expect(ops.has(LR2_OP.DOUBLE)).toBe(false);
+    expect(ops.has(LR2_OP.GAUGE_2P_NORMAL)).toBe(false);
+  });
+
+  it('keeps the source chart’s key-mode op: 7 KEYS in BATTLE, 7 and 14 KEYS in D-BATTLE', () => {
+    const lanes = { playVariant: '14' as const, channels: ['11', '18', '21', '28'], battleSourceVariant: '7' as const };
+    expect(resolveLR2PlayKeyModeOps(lanes, 'TWO-PLAYER')).toEqual([LR2_OP.KEYS_7]);
+    expect(resolveLR2PlayKeyModeOps(lanes, 'D-BATTLE')).toEqual([LR2_OP.KEYS_7, LR2_OP.KEYS_14]);
+    expect(resolveLR2PlayKeyModeOps({ ...lanes, battleSourceVariant: '5' }, 'SP-TO-DP')).toEqual([
+      LR2_OP.KEYS_5,
+      LR2_OP.KEYS_10,
+    ]);
+    // A DP chart's BATTLE (COUPLE) and SP TO DP keep the DP op.
+    expect(resolveLR2PlayKeyModeOps({ ...lanes, battleSourceVariant: '14' }, 'SP-TO-DP')).toEqual([LR2_OP.KEYS_14]);
+    expect(resolveLR2PlayKeyModeOps({ playVariant: '14', channels: lanes.channels }, undefined)).toEqual([
+      LR2_OP.KEYS_14,
+    ]);
+  });
+
+  it('lights op 10 and 12 for D-BATTLE and EXTRA MODE from its option', () => {
+    const setup = { ...SETUP, options: { ...SETUP.options, battleMode: 'D-BATTLE' as const, lr2ExtraMode: true } };
+    const { ops } = resolveLR2PlayState(setup, frame());
+    expect([LR2_OP.DOUBLE, LR2_OP.DOUBLE_OR_BATTLE, LR2_OP.EXTRA_MODE_ON].every((op) => ops.has(op))).toBe(true);
+    expect(ops.has(LR2_OP.BATTLE) || ops.has(LR2_OP.EXTRA_MODE_OFF)).toBe(false);
   });
 });
 

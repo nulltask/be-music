@@ -9,6 +9,7 @@ import {
   resolveLR2SelectState,
   resolveLR2SelectTimers,
 } from './select.ts';
+import { resolveLR2OptionText } from './options.ts';
 import { makeChart, makeChartWith, makeCourse } from './test-support.ts';
 
 const CLOCK = { year: 2026, month: 10, day: 16, hour: 9, minute: 5, second: 30 };
@@ -289,6 +290,19 @@ describe('resolveLR2SelectState sliders and buttons', () => {
     expect(state.button(LR2_BUTTON.DIFFICULTY_FILTER_ALL)).toBe(0);
     expect(state.button(LR2_BUTTON.FLIP)).toBe(1);
     expect(state.button(LR2_BUTTON.PLAY)).toBeUndefined();
+  });
+
+  it('cycles and names BATTLE as LR2 does for the selected chart’s key mode', () => {
+    expect(resolveLR2SelectButton(LR2_BUTTON.BATTLE)).toEqual({ kind: 'cycle-option', option: 'battleMode' });
+    const battle = (battleMode: (typeof DEFAULT_PLAY_OPTIONS)['battleMode'], keyModeOp?: number) =>
+      resolveLR2OptionText(LR2_TEXT.OPTION_BATTLE, { ...DEFAULT_PLAY_OPTIONS, battleMode }, keyModeOp);
+    expect(battle('OFF')).toBe('OFF');
+    expect(battle('TWO-PLAYER', LR2_OP.KEYS_7)).toBe('BATTLE');
+    expect(battle('TWO-PLAYER', LR2_OP.KEYS_14)).toBe('COUPLE');
+    expect(battle('D-BATTLE', LR2_OP.KEYS_9)).toBe('DISABLE');
+    expect(battle('SP-TO-DP', LR2_OP.KEYS_10)).toBe('DP-TO-SP');
+    expect(battle('SP-TO-DP', LR2_OP.KEYS_9)).toBe('9-TO-7');
+    expect(resolveLR2SelectState({ options: { ...DEFAULT_PLAY_OPTIONS, battleMode: 'SP-TO-DP' } }).button(56)).toBe(3);
   });
 
   it('draws the course maker’s connection buttons', () => {

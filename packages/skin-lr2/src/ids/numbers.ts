@@ -156,6 +156,42 @@ export const LR2_NUM = {
   TOTAL_RATE: 115,
   /** The digits after the dot of `TOTAL_RATE`. */
   TOTAL_RATE_AFTERDOT: 116,
+
+  // ─── Play: the 2P player's running score (a two-player BATTLE; OpenLR2 `SetObjectValue_Num` L700-L758) ──────────
+  /** The 2P score. Numbers 120-136 are the 2P player's 100-116. */
+  SCORE_2P: 120,
+  /** The 2P EX score. */
+  EXSCORE_2P: 121,
+  /** The 2P running score rate. */
+  SCORE_RATE_2P: 122,
+  /** The digits after the dot of `SCORE_RATE_2P`. */
+  SCORE_RATE_AFTERDOT_2P: 123,
+  /** The 2P combo. */
+  COMBO_2P: 124,
+  /** The 2P max combo. */
+  MAX_COMBO_2P: 125,
+  /** The 2P player's notes. */
+  NOTES_2P: 126,
+  /** The 2P gauge (%). */
+  GAUGE_2P: 127,
+  /** The 2P EX score less the 1P player's. */
+  EXSCORE_DIFF_2P: 128,
+  /** The 2P EX score less the border of its next DJ Rank. */
+  NEXT_RANK_DIFF_2P: 129,
+  /** 2P PERFECTs. */
+  PERFECT_2P: 130,
+  /** 2P GREATs. */
+  GREAT_2P: 131,
+  /** 2P GOODs. */
+  GOOD_2P: 132,
+  /** 2P BADs. */
+  BAD_2P: 133,
+  /** 2P POORs. */
+  POOR_2P: 134,
+  /** The 2P EX score as a percentage of the highest one for every note. */
+  TOTAL_RATE_2P: 135,
+  /** The digits after the dot of `TOTAL_RATE_2P`. */
+  TOTAL_RATE_AFTERDOT_2P: 136,
   /** The best record's EX score at this point of the play: its pacemaker (OpenLR2 `highScore.rate`). */
   HIGH_SCORE: 150,
   /** The target's EX score at this point of the play. */
