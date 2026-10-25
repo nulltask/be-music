@@ -9,7 +9,7 @@ import {
 
 describe('gauge types', () => {
   it('lists the gauges in the order LR2’s gauge button cycles them', () => {
-    expect(LR2_GAUGE_TYPES).toEqual(['GROOVE', 'HARD', 'DEATH', 'EASY']);
+    expect(LR2_GAUGE_TYPES).toEqual(['GROOVE', 'HARD', 'DEATH', 'EASY', 'P-ATTACK']);
     expect(GAUGE_TYPES).toContain('EX-HARD');
   });
 
@@ -59,4 +59,11 @@ it('BEST CLEAR keeps judging while the parallel gauges determine the effective o
 it('SELECT TO UNDER keeps judging without granting another source ruleset gauge shifting', () => {
   expect(resolveGaugeEndOnFailure('SELECT_TO_UNDER', 'beatoraja')).toBe(false);
   expect(() => resolveGaugeEndOnFailure('SELECT_TO_UNDER', '____')).toThrow(/beatoraja/);
+});
+
+it('offers P.ATTACK only for LR2 while preserving its recorded identifier', () => {
+  expect(isGaugeType('P-ATTACK')).toBe(true);
+  expect(resolveGaugeTypes('lr2')).toContain('P-ATTACK');
+  expect(resolveGaugeTypes('beatoraja')).not.toContain('P-ATTACK');
+  expect(resolveGaugeTypes('____')).not.toContain('P-ATTACK');
 });

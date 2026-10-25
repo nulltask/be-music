@@ -10,7 +10,7 @@
 import type { ChartPlayVariant } from '@be-music/chart-model';
 import { resolve____RankLabel } from '@be-music/player-engine/ruleset';
 import { resolveGameplayLaneGeometry, resolveGameplayLayout, type GameplayLayoutMode } from '@be-music/player-skin-sdk';
-import { recentJudgeTimings, resolveGreenNumber } from '@be-music/player-scene-model';
+import { formatGaugeLabel, recentJudgeTimings, resolveGreenNumber } from '@be-music/player-scene-model';
 import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
 import type { PlaySessionOptions } from '../../session/play/play-options.ts';
 import type { Container } from 'pixi.js';
@@ -183,7 +183,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     // The beat this frame already worked out for the same `seconds`.
     beatPhase: currentBeat - Math.floor(currentBeat),
     rulesetLabel: ctx.play.resolveJudgeRuleset(),
-    gaugeLabel: ctx.play.gaugeState.type ?? 'GROOVE',
+    gaugeLabel: formatGaugeLabel(ctx.play.gaugeState.type) ?? 'GROOVE',
     gaugeSurvival: ctx.play.gaugeState.survival === true,
     fast: ctx.play.fastCount,
     slow: ctx.play.slowCount,

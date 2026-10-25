@@ -25,3 +25,21 @@ describe('createPlaceholderGaugeState', () => {
     );
   });
 });
+
+test('P.ATTACK and EX-HARD show a full survival gauge before the engine starts', () => {
+  for (const type of ['P-ATTACK', 'EX-HARD'] as const) {
+    expect(createPlaceholderGaugeState(type)).toMatchObject({
+      type,
+      current: 100,
+      initial: 100,
+      survival: true,
+      clearThreshold: 0,
+    });
+  }
+  expect(
+    createPlaceholderGaugeState('P-ATTACK', {
+      ruleset: 'lr2',
+      stage: { kind: 'grade', carryIn: { gauge: 31, combo: 0, maxCombo: 0 } },
+    }),
+  ).toMatchObject({ type: 'P-ATTACK', current: 31, initial: 31, survival: true });
+});

@@ -1,3 +1,4 @@
+import { createLR2PerfectAttackGauge } from './lr2-attack.ts';
 import type { GaugeGutsStep, GaugeSpec, JudgeWindowSetUs, RulesetId, RulesetWindowTables } from './definitions.ts';
 
 /**
@@ -51,6 +52,8 @@ function scaleLR2Damage(values: GaugeValues, damage: number): GaugeValues {
  */
 function resolveLR2CourseGauge(gaugeId: string, damage: number): GaugeSpec {
   switch (gaugeId) {
+    case 'P-ATTACK':
+      return createLR2PerfectAttackGauge();
     case 'GRADE-HARD':
       return lr2CourseGauge(gaugeId, scaleLR2Damage([0.1, 0.1, 0.04, -6, -10, -2], damage));
     case 'GRADE-DEATH':
@@ -148,9 +151,12 @@ export function resolveDefaultCourseGaugeSet(laneMode: string): CourseGaugeSet {
  *   to NORMAL → CLASS, HARD → EXCLASS, EX-HARD / HAZARD → EXHARDCLASS).
  */
 export function resolveCourseGaugeId(rulesetId: RulesetId, kind: RulesetCourseKind, selectedGauge: string): string {
+  if (rulesetId !== 'lr2' && selectedGauge === 'P-ATTACK') throw new RangeError('P.ATTACK is available only for LR2.');
   if (rulesetId === 'lr2') {
     const prefix = kind === 'grade' ? 'GRADE' : 'COURSE';
     switch (selectedGauge) {
+      case 'P-ATTACK':
+        return 'P-ATTACK';
       case 'HARD':
         return `${prefix}-HARD`;
       case 'DEATH':
@@ -184,6 +190,7 @@ export function resolveCourseGauge(
   laneMode: string,
   damage: number,
 ): GaugeSpec {
+  if (rulesetId !== 'lr2' && gaugeId === 'P-ATTACK') throw new RangeError('P.ATTACK is available only for LR2.');
   const spec =
     rulesetId === 'lr2'
       ? resolveLR2CourseGauge(gaugeId, damage)

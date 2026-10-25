@@ -35,7 +35,7 @@ export function resolveGameplayPanels(frame: BeMusicDOMGameplayFrame): BeMusicGa
     },
     gauge: {
       value: s.gauge,
-      label: s.gaugeType,
+      label: r.gaugeLabel ?? s.gaugeType,
       cleared: s.cleared,
       threshold: r.clearThreshold,
       survival: r.gaugeSurvival,

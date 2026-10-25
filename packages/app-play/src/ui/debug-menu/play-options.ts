@@ -1,4 +1,5 @@
 import { selectBinding, type PaneBinding } from '../../pane-controls.ts';
+import { resolveGaugeTypes } from '@be-music/player-engine/ruleset';
 // The Debug Menu's Play options folder and the Replay / ghost folder inside it. They are built with the menu as `this`
 // (`DebugMenu`).
 import type { FolderApi } from 'tweakpane';
@@ -32,7 +33,13 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       this.setPlayOptions({ autoPlay: value });
     }),
   );
-  this.gaugeController = selectBinding(folder, this.guiState, 'gauge', 'Gauge', ['GROOVE', 'EASY', 'HARD', 'DEATH']);
+  this.gaugeController = selectBinding(
+    folder,
+    this.guiState,
+    'gauge',
+    'Gauge',
+    resolveGaugeTypes(this.guiState.judgeRuleset),
+  );
   trackPlayOption(
     this.gaugeController.on('change', ({ value }) => {
       this.setPlayOptions({ gauge1P: value });

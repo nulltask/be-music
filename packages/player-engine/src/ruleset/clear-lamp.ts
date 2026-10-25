@@ -62,6 +62,7 @@ const GAUGE_LAMPS: Readonly<Record<string, ClearLamp>> = {
   GROOVE: 'NORMAL',
   NORMAL: 'NORMAL',
   HARD: 'HARD',
+  'P-ATTACK': 'HARD',
   'EX-HARD': 'EX_HARD',
   DEATH: 'EX_HARD',
   HAZARD: 'EX_HARD',
@@ -100,7 +101,8 @@ const COURSE_GAUGE_LAMPS: Readonly<Record<string, ClearLamp>> = {
  * LR2body.exe CheckCourseClear @0x4086d0); beatoraja's follows the class gauge the run played on.
  */
 function courseGaugeClearLamp(gauge: string, ruleset: string, gaugeType: GaugeType): ClearLamp {
-  if (ruleset === 'lr2') return gaugeType === 'EASY' ? 'EASY' : gaugeType === 'HARD' ? 'HARD' : 'NORMAL';
+  if (ruleset === 'lr2')
+    return gaugeType === 'EASY' ? 'EASY' : gaugeType === 'HARD' || gaugeType === 'P-ATTACK' ? 'HARD' : 'NORMAL';
   return COURSE_GAUGE_LAMPS[gauge] ?? 'NORMAL';
 }
 

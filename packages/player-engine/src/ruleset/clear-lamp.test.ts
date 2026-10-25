@@ -197,3 +197,28 @@ it('awards LR2 FULL COMBO before a failed GROOVE gauge, while other rulesets sti
   expect(resolveClearLamp({ ...play, ruleset: '____' })).toBe('FAILED');
   expect(resolveClearLamp({ ...play, ruleset: 'lr2', score: score(80, 15, 4) })).toBe('FAILED');
 });
+
+it('classifies LR2 P.ATTACK as HARD with full-combo priority', () => {
+  expect(
+    resolveClearLamp({
+      ruleset: 'lr2',
+      cleared: true,
+      gauge: 'P-ATTACK',
+      score: { ...score(1, 1, 0, 2), fullCombo: false },
+    }),
+  ).toBe('HARD');
+  expect(resolveClearLamp({ ruleset: 'lr2', cleared: true, gauge: 'P-ATTACK', score: score(1, 1, 0, 2) })).toBe(
+    'FULL_COMBO',
+  );
+  expect(
+    resolveCourseClearLamp({
+      ruleset: 'lr2',
+      cleared: true,
+      gauge: 'P-ATTACK',
+      gaugeType: 'P-ATTACK',
+      noteCount: 2,
+      maxCombo: 1,
+      judge: { great: 2, good: 0 },
+    }),
+  ).toBe('HARD');
+});

@@ -79,6 +79,7 @@ export class RulesetGauge {
     let delta = this.spec.values[judge]! * rate;
     if (delta < 0) {
       for (const step of this.spec.guts) {
+        if (step.judges !== undefined && !step.judges.includes(judge)) continue;
         if (step.inclusive === true ? this.value <= step.threshold : this.value < step.threshold) {
           delta *= step.multiplier;
           break;

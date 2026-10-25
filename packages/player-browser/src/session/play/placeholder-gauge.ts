@@ -28,7 +28,7 @@ export function createPlaceholderGaugeState(
       failedMidPlay: false,
     };
   }
-  const survival = type === 'HARD' || type === 'DEATH';
+  const survival = type === 'HARD' || type === 'DEATH' || type === 'EX-HARD' || type === 'P-ATTACK';
   return {
     current: survival ? 100 : 20,
     max: 100,
