@@ -107,7 +107,7 @@ function constraintEditor(
     { className: 'course-maker-constraints' },
     fields.map((field) => {
       const current = constraints.find((constraint) => courseConstraintGroup(constraint) === field.group) ?? '';
-      const select = element('select', { className: 'course-maker-select' });
+      const select = element('select', { className: 'select course-maker-select' });
       for (const [value, label] of field.choices) {
         const option = element('option', { text: label });
         option.value = value;
@@ -145,15 +145,17 @@ function element<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-function button(label: string, className: string, onClick: () => void): HTMLButtonElement {
+function button(label: string, className: string, onClick: () => void, variant?: 'outline'): HTMLButtonElement {
   const node = element('button', { className, text: label });
   node.type = 'button';
+  node.dataset.size = 'sm';
+  if (variant !== undefined) node.dataset.variant = variant;
   node.addEventListener('click', onClick);
   return node;
 }
 
 function connectionSelect(value: NonstopConnection, onChange: (value: NonstopConnection) => void): HTMLSelectElement {
-  const select = element('select', { className: 'course-maker-select' });
+  const select = element('select', { className: 'select course-maker-select' });
   for (const connection of LR2_NONSTOP_CONNECTIONS) {
     const option = element('option', { text: CONNECTION_LABELS[connection] });
     option.value = connection;
@@ -201,10 +203,10 @@ export class CourseMakerPanel {
   constructor(maker: CourseMaker, options: { onStatus?: (text: string) => void } = {}) {
     this.maker = maker;
     this.onStatus = options.onStatus;
-    this.card = element('aside', { className: 'course-maker-card' });
+    this.card = element('aside', { className: 'card course-maker-card gap-3 px-4' });
     this.card.hidden = true;
     this.card.setAttribute('aria-label', 'Course maker');
-    this.dialog = element('dialog', { className: 'account-dialog course-maker-dialog' });
+    this.dialog = element('dialog', { className: 'dialog course-maker-dialog' });
     this.dialog.setAttribute('aria-label', 'My courses');
     // The modal owns the keyboard: keys must not also drive the select scene behind it (Escape still closes it).
     for (const type of ['keydown', 'keyup'] as const)
@@ -282,7 +284,7 @@ export class CourseMakerPanel {
 
   /** The card's elements, built once. */
   private buildCard(): CardParts {
-    const name = element('input', { className: 'course-maker-name' });
+    const name = element('input', { className: 'input course-maker-name' });
     name.maxLength = 64;
     name.placeholder = COURSE_NAME_PROMPT;
     name.setAttribute('aria-label', 'Course name');
@@ -295,8 +297,8 @@ export class CourseMakerPanel {
       stages: element('ol', { className: 'course-maker-stages' }),
       connection: element('div'),
       constraints: element('div'),
-      removeLast: button('Remove last', 'account-dialog-quiet', () => this.maker.removeLast()),
-      save: button('Save', 'account-dialog-primary', () => {
+      removeLast: button('Remove last', 'btn', () => this.maker.removeLast(), 'outline'),
+      save: button('Save', 'btn', () => {
         const saved = this.maker.finish();
         if (saved !== undefined) this.onStatus?.(`Saved the course "${saved.name}"`);
       }),
@@ -309,7 +311,7 @@ export class CourseMakerPanel {
       parts.constraints,
       element('div', { className: 'course-maker-buttons' }, [
         parts.removeLast,
-        button('Cancel', 'account-dialog-quiet', () => {
+        button('Cancel', 'btn', () => {
           this.maker.cancel();
           this.onStatus?.('Stopped making the course');
         }),
@@ -328,17 +330,23 @@ export class CourseMakerPanel {
         ? [element('p', { text: 'No course yet. Decide NEW COURSE in a course folder to make one.' })]
         : courses.map((course) => this.renderCourse(course)),
     );
-    const exportButton = button('Export .lr2crs', 'account-dialog-quiet', () =>
-      download('my-courses.lr2crs', serializeLR2CourseFile(this.maker.courses)),
+    const exportButton = button(
+      'Export .lr2crs',
+      'btn',
+      () => download('my-courses.lr2crs', serializeLR2CourseFile(this.maker.courses)),
+      'outline',
     );
     exportButton.disabled = courses.length === 0;
     // beatoraja's course file keeps the constraints, which `.lr2crs` cannot hold; it has no NONSTOP courses.
-    const exportBeatoraja = button('Export beatoraja .json', 'account-dialog-quiet', () =>
-      download('my-courses.json', serializeBeatorajaCourseFile(this.maker.courses), 'application/json'),
+    const exportBeatoraja = button(
+      'Export beatoraja .json',
+      'btn',
+      () => download('my-courses.json', serializeBeatorajaCourseFile(this.maker.courses), 'application/json'),
+      'outline',
     );
     exportBeatoraja.disabled = !courses.some((course) => course.kind !== 'nonstop');
     this.dialog.replaceChildren(
-      element('div', { className: 'account-dialog-body' }, [
+      element('div', {}, [
         element('header', {}, [
           element('h2', { text: 'My courses' }),
           element('p', { text: 'Courses you made, kept in this browser.' }),
@@ -347,14 +355,14 @@ export class CourseMakerPanel {
         element('div', { className: 'course-maker-buttons' }, [
           exportButton,
           exportBeatoraja,
-          button('Close', 'account-dialog-primary', () => this.dialog.close()),
+          button('Close', 'btn', () => this.dialog.close()),
         ]),
       ]),
     );
   }
 
   private renderCourse(course: CourseDefinition): HTMLElement {
-    const name = element('input', { className: 'course-maker-name' });
+    const name = element('input', { className: 'input course-maker-name' });
     name.value = course.name;
     name.maxLength = 64;
     name.setAttribute('aria-label', 'Course name');
@@ -377,11 +385,11 @@ export class CourseMakerPanel {
         return item;
       }),
     );
-    return element('section', { className: 'course-maker-course' }, [
+    return element('section', { className: 'card course-maker-course gap-2 px-3' }, [
       element('div', { className: 'course-maker-course-head' }, [
         name,
         element('span', { className: 'course-maker-kind', text: KIND_LABELS[course.kind] }),
-        button('Delete', 'account-dialog-quiet', () => this.confirmDelete(course)),
+        button('Delete', 'btn', () => this.confirmDelete(course), 'outline'),
       ]),
       stages,
       constraintEditor(course.kind, course.constraints, (constraints) =>

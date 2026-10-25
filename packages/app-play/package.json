@@ -29,7 +29,10 @@
     "tweakpane": "^4.0.5"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "@tweakpane/core": "^2.0.5",
+    "basecoat-css": "^1.0.2",
+    "tailwindcss": "^4.3.3",
     "vite": "catalog:",
     "vite-plus": "catalog:",
     "wrangler": "^4.151.3"
