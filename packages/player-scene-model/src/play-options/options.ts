@@ -156,7 +156,8 @@ export interface PlayOptions {
    * - `RANDOM-EX` — beatoraja chart-wide permutation including scratches/wheels
    * - `ALL-SCR` — beatoraja scratch priority with time-based fallback
    * - `CONVERGE` — LR2 selected-lane concentration, or beatoraja PMS streak-based concentration
-   * - `SCATTER` — legacy value, disabled until placement and assist policy are implemented
+   * - `SCATTER` — LR2 previous-row avoidance, with active-LN reservations
+   * - `SCATTER-CORRECTED` — explicitly corrected 9KEY SCATTER, excluding LR2 beta3's tenth destination
    */
   random1P: RandomMode;
   /** beatoraja H-RANDOM jack threshold in 16th-note BPM units (1..1000, default 120). */
@@ -187,7 +188,7 @@ export type HSFix = 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT' | 'STAR
 /** Allowed values for {@link PlayOptions.hiddenSudden1P} / `hiddenSudden2P`: which ends of the lanes are covered. */
 export type HiddenSuddenMode = 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
 
-/** Lane-option names. Legacy SCATTER stays representable but is not an accepted new play choice. */
+/** Lane-option names; resolveRandomModes supplies the choices for the active source ruleset. */
 export type RandomMode =
   | 'OFF'
   | 'MIRROR'
@@ -202,7 +203,8 @@ export type RandomMode =
   | 'RANDOM_PLAYABLE'
   | 'S_RANDOM_PLAYABLE'
   | 'CONVERGE'
-  | 'SCATTER';
+  | 'SCATTER'
+  | 'SCATTER-CORRECTED';
 
 /** Allowed values for {@link PlayOptions.bga}. */
 export type BGAMode = 'OFF' | 'ON' | 'AUTOPLAY_ONLY';

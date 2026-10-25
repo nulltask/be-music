@@ -57,3 +57,5 @@ export {
   type LongNoteModifier,
   type LongNotePlacement,
 } from './core/long-note-modifier.ts';
+
+export { randomizeLR2ScatterNotes } from './lane-scatter.ts';

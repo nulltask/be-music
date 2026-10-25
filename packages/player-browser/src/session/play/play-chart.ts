@@ -32,6 +32,7 @@ import {
   drawLaneRandomIndex,
   parseLaneRandomSeed,
   randomizeLR2ConvergeNotes,
+  randomizeLR2ScatterNotes,
   randomizeHRandomNotes,
   randomizeAllScratchNotes,
   randomizePMSConvergeNotes,
@@ -219,9 +220,6 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     )
       throw new RangeError('The previous arrangement belongs to a different source chart.');
   }
-  if (ctx.options.replay === undefined && (ctx.options.random1P === 'SCATTER' || ctx.options.random2P === 'SCATTER')) {
-    throw new RangeError('SCATTER is disabled until placement and assist policy are implemented.');
-  }
   if (ctx.options.replay === undefined) {
     const modes = resolveRandomModes(ctx.options.judgeRuleset ?? 'lr2');
     for (const mode of [ctx.options.random1P, ctx.options.random2P]) {
@@ -374,7 +372,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     // DP FLIP — swap 1P / 2P channels in place. Cheap O(n) walk because we already iterate `notes` for sorting; SP
     // charts skip every entry (no `2x` channels exist). Mine notes are flipped together so they stay anchored to the
     // same visual lane after the flip.
-    if (ctx.options.dpFlip) {
+    if (ctx.options.dpFlip && ['10', '14', '48'].includes(hostPlayVariant)) {
       for (const note of ctx.notes) {
         note.channel = flipDPChannel(note.channel);
       }
@@ -424,6 +422,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
                 .map((lane) => lane.channel),
         doublePlay: hostPlayVariant === '10' || hostPlayVariant === '14' || hostPlayVariant === '48',
         side: '1P',
+        flipped: ctx.options.dpFlip && ['10', '14', '48'].includes(hostPlayVariant),
         playVariant: hostPlayVariant,
       },
       ctx.mineNotes as Array<{ channel: string }>,
@@ -448,6 +447,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
                 .map((lane) => lane.channel),
         doublePlay: hostPlayVariant === '10' || hostPlayVariant === '14' || hostPlayVariant === '48',
         side: '2P',
+        flipped: ctx.options.dpFlip && ['10', '14', '48'].includes(hostPlayVariant),
         playVariant: hostPlayVariant,
       },
       ctx.mineNotes as Array<{ channel: string }>,
@@ -475,7 +475,12 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // the chart happens to use, so a sparse chart still plays on full lanes. The variant also decides channel `17`
   // (a lane in 9 KEY, FREE ZONE in That-Which-Must-Not-Be-Named) and the 9 KEY layout the LR2 default 9-keys play skin expects.
   ctx.chartPlayVariant = hostPlayVariant;
-  ctx.laneChannels = resolvePlayVariantLaneChannels(ctx.notes, ctx.chartPlayVariant);
+  // Keep the source PMS layout even when an arrangement empties its distinguishing channels.
+  // Original LR2 SCATTER may place an object outside it; that object must not create a tenth input/display lane.
+  ctx.laneChannels =
+    ctx.chartPlayVariant === '9'
+      ? prepared.laneBindings.map((binding) => binding.channel)
+      : resolvePlayVariantLaneChannels(ctx.notes, ctx.chartPlayVariant);
   // Initialize from `prepared.scorableNotes.length` so the view's initial `score.total` matches the engine's
   // authoritative `summary.total` (= same `scorableNotes` filter, with Free-Zone channels excluded). Without
   // this, charts that use a Free-Zone channel had a renderer-side total larger than the engine's by the
@@ -733,7 +738,7 @@ export function flipDPChannel(channel: string): string {
  * - `MIRROR` — deterministic reversal of the full mode key set
  * - `RANDOM` — chart-wide permutation of the full mode key set (Fisher-Yates with the supplied RNG)
  * - `S-RANDOM` — ruleset-specific pure randomizer with active-LN reservations and beatoraja jack avoidance
- * - `SCATTER` — disabled; new requests fail before any arrangement or recording
+ * - `SCATTER` — LR2 previous-row avoidance with active-LN reservations and source DP scratch masks
 
  */
 export function applyRandomMode(
@@ -748,6 +753,7 @@ export function applyRandomMode(
     scratch?: string;
     scratchLanes?: readonly string[];
     doublePlay?: boolean;
+    flipped?: boolean;
     side?: '1P' | '2P';
     playVariant?: ChartPlayVariant;
   } = {},
@@ -755,8 +761,16 @@ export function applyRandomMode(
   // S-RANDOM applies the active ruleset's policy for each event kind.
   ...secondary: Array<Array<{ channel: string }>>
 ): void {
-  if (mode === 'SCATTER')
-    throw new RangeError('SCATTER is disabled until placement and assist policy are implemented.');
+  if ((mode === 'SCATTER' || mode === 'SCATTER-CORRECTED') && (options.ruleset ?? 'lr2') !== 'lr2')
+    throw new RangeError('SCATTER is available only for LR2.');
+  if (
+    (mode === 'SCATTER' || mode === 'SCATTER-CORRECTED') &&
+    options.playVariant &&
+    !['5', '7', '9', '10', '14'].includes(options.playVariant)
+  )
+    throw new RangeError('LR2 SCATTER requires a five-, seven- or nine-key domain.');
+  if (mode === 'SCATTER-CORRECTED' && options.playVariant !== '9')
+    throw new RangeError('Corrected SCATTER is a nine-key arrangement.');
   if (mode === 'R-RANDOM' && options.ruleset !== 'beatoraja' && options.ruleset !== '____')
     throw new RangeError('R-RANDOM is unavailable for LR2.');
   if (
@@ -781,6 +795,8 @@ export function applyRandomMode(
   if (mode === 'OFF' || allLanes.length === 0) return;
   if (
     mode === 'S-RANDOM' ||
+    mode === 'SCATTER' ||
+    mode === 'SCATTER-CORRECTED' ||
     mode === 'S-RANDOM-EX' ||
     mode === 'SPIRAL' ||
     mode === 'H-RANDOM' ||
@@ -813,46 +829,58 @@ export function applyRandomMode(
       };
     });
     const channels =
-      mode === 'S-RANDOM-EX'
-        ? randomizeSRandomNotes(timedNotes, [...allLanes, ...options.scratchLanes!], {
-            ruleset: 'beatoraja',
+      mode === 'SCATTER' || mode === 'SCATTER-CORRECTED'
+        ? randomizeLR2ScatterNotes(timedNotes, allLanes, {
             random: rng,
+            side: options.side,
+            scratch: options.scratch,
+            doublePlay: options.doublePlay,
+            flipped: options.flipped,
+            correctedNineKey: mode === 'SCATTER-CORRECTED',
           })
-        : mode === 'S_RANDOM_PLAYABLE'
-          ? randomizePMSPlayableNotes(timedNotes, allLanes, { random: rng, thresholdBPM: options.hRandomThresholdBPM })
-          : mode === 'RANDOM_PLAYABLE'
-            ? randomizePMSPlayableLanes(timedNotes, allLanes, rng)
-            : mode === 'ALL-SCR'
-              ? randomizeAllScratchNotes(timedNotes, [...allLanes, ...(options.scratchLanes ?? [])], {
-                  random: rng,
-                  scratchLanes: options.scratchLanes ?? [],
-                  thresholdBPM: options.hRandomThresholdBPM,
-                  doublePlay: options.doublePlay,
-                  side: options.side,
-                })
-              : mode === 'CONVERGE'
-                ? options.ruleset === 'beatoraja'
-                  ? randomizePMSConvergeNotes(timedNotes, allLanes, {
-                      random: rng,
-                      thresholdBPM: options.hRandomThresholdBPM,
-                    })
-                  : randomizeLR2ConvergeNotes(timedNotes, allLanes, {
-                      target: allLanes[(options.fixedLane ?? 0) - 1] ?? options.scratch ?? allLanes[4]!,
-                      scratch: options.scratch,
-                      random: rng,
-                    })
-                : mode === 'SPIRAL'
-                  ? randomizeSpiralNotes(timedNotes, allLanes, rng)
-                  : mode === 'H-RANDOM'
-                    ? randomizeHRandomNotes(timedNotes, allLanes, {
+        : mode === 'S-RANDOM-EX'
+          ? randomizeSRandomNotes(timedNotes, [...allLanes, ...options.scratchLanes!], {
+              ruleset: 'beatoraja',
+              random: rng,
+            })
+          : mode === 'S_RANDOM_PLAYABLE'
+            ? randomizePMSPlayableNotes(timedNotes, allLanes, {
+                random: rng,
+                thresholdBPM: options.hRandomThresholdBPM,
+              })
+            : mode === 'RANDOM_PLAYABLE'
+              ? randomizePMSPlayableLanes(timedNotes, allLanes, rng)
+              : mode === 'ALL-SCR'
+                ? randomizeAllScratchNotes(timedNotes, [...allLanes, ...(options.scratchLanes ?? [])], {
+                    random: rng,
+                    scratchLanes: options.scratchLanes ?? [],
+                    thresholdBPM: options.hRandomThresholdBPM,
+                    doublePlay: options.doublePlay,
+                    side: options.side,
+                  })
+                : mode === 'CONVERGE'
+                  ? options.ruleset === 'beatoraja'
+                    ? randomizePMSConvergeNotes(timedNotes, allLanes, {
                         random: rng,
                         thresholdBPM: options.hRandomThresholdBPM,
                       })
-                    : randomizeSRandomNotes(timedNotes, allLanes, {
-                        ruleset: options.ruleset ?? 'lr2',
+                    : randomizeLR2ConvergeNotes(timedNotes, allLanes, {
+                        target: allLanes[(options.fixedLane ?? 0) - 1] ?? options.scratch ?? allLanes[4]!,
+                        scratch: options.scratch,
                         random: rng,
-                        ...(options.playVariant === '9' ? { mode: 'pms' as const } : {}),
-                      });
+                      })
+                  : mode === 'SPIRAL'
+                    ? randomizeSpiralNotes(timedNotes, allLanes, rng)
+                    : mode === 'H-RANDOM'
+                      ? randomizeHRandomNotes(timedNotes, allLanes, {
+                          random: rng,
+                          thresholdBPM: options.hRandomThresholdBPM,
+                        })
+                      : randomizeSRandomNotes(timedNotes, allLanes, {
+                          ruleset: options.ruleset ?? 'lr2',
+                          random: rng,
+                          ...(options.playVariant === '9' ? { mode: 'pms' as const } : {}),
+                        });
     entries.forEach(({ note }, index) => {
       note.channel = channels[index]!;
     });

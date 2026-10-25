@@ -1173,6 +1173,28 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
       );
     },
   });
+  define('player-engine.lanes.randomizeLR2ScatterNotes', {
+    run() {
+      lanesAPI.randomizeLR2ScatterNotes(
+        [
+          { channel: '11', timeMs: 100 },
+          { channel: '11', timeMs: 200 },
+        ],
+        ['11', '12', '13', '14', '15'],
+        { random: () => 0.5 },
+      );
+      for (const correctedNineKey of [false, true]) {
+        lanesAPI.randomizeLR2ScatterNotes(
+          [
+            { channel: '22', timeMs: 100 },
+            { channel: '25', timeMs: 200 },
+          ],
+          ['11', '12', '13', '14', '15', '22', '23', '24', '25'],
+          { random: () => 0.999, correctedNineKey },
+        );
+      }
+    },
+  });
   define('player-engine.lanes.randomizeLR2ConvergeNotes', {
     run: () => {
       lanesAPI.randomizeLR2ConvergeNotes(

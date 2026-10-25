@@ -457,9 +457,6 @@ export function resolveReplayRecording(
   effectivePlayerHiSpeed?: number,
   effectiveRandomSeeds?: { p1?: string; p2?: string },
 ): ReplayRecordingOptions {
-  if (options.random1P === 'SCATTER' || options.random2P === 'SCATTER') {
-    throw new RangeError('SCATTER is disabled until placement and assist policy are implemented.');
-  }
   const effectiveOptions: ReplayOptionState = {};
   for (const [key, value] of Object.entries({
     autoPlay: options.autoPlay,

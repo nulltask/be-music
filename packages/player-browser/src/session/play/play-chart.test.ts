@@ -102,16 +102,22 @@ describe('applyRandomMode', () => {
     expect(expected).not.toEqual(KEYS_7);
   });
 
-  test('SCATTER is disabled before it can mutate notes or draw RANDOM', () => {
+  test('SCATTER rejects an incompatible ruleset before mutating notes or drawing RANDOM', () => {
     const notes = [{ channel: '11', beat: 0, endBeat: 2 }, ...notesOn(KEYS_7.slice(1), 1)];
     const original = structuredClone(notes);
     let draws = 0;
     expect(() =>
-      applyRandomMode(notes, KEYS_1P, 'SCATTER', () => {
-        draws += 1;
-        return 0.5;
-      }),
-    ).toThrow(/SCATTER.*disabled/);
+      applyRandomMode(
+        notes,
+        KEYS_1P,
+        'SCATTER',
+        () => {
+          draws += 1;
+          return 0.5;
+        },
+        { ruleset: 'beatoraja' },
+      ),
+    ).toThrow(/SCATTER.*LR2/);
     expect(notes).toEqual(original);
     expect(draws).toBe(0);
   });
@@ -205,10 +211,12 @@ describe('shuffleArray', () => {
 });
 
 test.each(['random1P', 'random2P'] as const)(
-  'fresh %s SCATTER is rejected before resolving or mutating a chart',
+  'fresh %s SCATTER rejects a different ruleset before resolving or mutating a chart',
   (side) => {
-    const context = { options: { [side]: 'SCATTER', dpFlip: true } } as unknown as PlayChartContext;
-    expect(() => prepareChart(context, {} as LibraryChart)).toThrow(/SCATTER.*disabled/);
+    const context = {
+      options: { [side]: 'SCATTER', dpFlip: true, judgeRuleset: 'beatoraja' },
+    } as unknown as PlayChartContext;
+    expect(() => prepareChart(context, {} as LibraryChart)).toThrow(/SCATTER.*unavailable/);
   },
 );
 
@@ -542,4 +550,44 @@ test('LR2 RANDOM fixed-key selection pins the original key-1 axis, while nine-ke
   applyRandomMode(ordinary, pms, 'RANDOM', seededRandom(1), { ruleset: 'lr2', playVariant: '9' });
   applyRandomMode(selected, pms, 'RANDOM', seededRandom(1), { ruleset: 'lr2', fixedLane: 4, playVariant: '9' });
   expect(selected).toEqual(ordinary);
+});
+
+test('SCATTER modes distinguish original outside-PMS placement from corrected nine-key placement', () => {
+  const keys = resolveLaneOptionChannels('1P', '9', [{ channel: '22' }]);
+  for (const [mode, target] of [
+    ['SCATTER', '26'],
+    ['SCATTER-CORRECTED', '25'],
+  ] as const) {
+    const notes = [{ channel: '11', seconds: 1 }];
+    const mines = [{ channel: '22', seconds: 2 }];
+    const hidden = [{ channel: '23', seconds: 1.5 }];
+    applyRandomMode(notes, keys, mode, () => 0.999, { ruleset: 'lr2', playVariant: '9' }, mines, hidden);
+    expect(notes[0]!.channel).toBe(target);
+    expect(mines[0]!.channel).toBe(target === '26' ? '25' : '24');
+    expect(hidden[0]!.channel).toBe('23');
+  }
+});
+
+test('corrected SCATTER rejects other rulesets and modes before consuming randomness or mutating notes', () => {
+  for (const options of [
+    { ruleset: 'lr2', playVariant: '7' },
+    { ruleset: 'beatoraja', playVariant: '9' },
+  ] as const) {
+    const notes = [{ channel: '11', seconds: 1 }];
+    let draws = 0;
+    expect(() =>
+      applyRandomMode(
+        notes,
+        KEYS_7,
+        'SCATTER-CORRECTED',
+        () => {
+          draws++;
+          return 0;
+        },
+        options,
+      ),
+    ).toThrow();
+    expect(notes).toEqual([{ channel: '11', seconds: 1 }]);
+    expect(draws).toBe(0);
+  }
 });

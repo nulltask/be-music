@@ -519,7 +519,13 @@ export class DebugMenu {
       }
       const controller = side === '1P' ? this.random1PController : this.random2PController;
       if (controller) {
-        controller.options = paneOptions(randomModes);
+        controller.options = paneOptions(randomModes).map((item) =>
+          item.value === 'SCATTER'
+            ? { ...item, text: 'SCATTER (LR2 beta3)' }
+            : item.value === 'SCATTER-CORRECTED'
+              ? { ...item, text: 'SCATTER (9KEY corrected)' }
+              : item,
+        );
         controller.refresh();
       }
     }

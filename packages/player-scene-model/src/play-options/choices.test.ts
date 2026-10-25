@@ -44,11 +44,11 @@ describe('resolvePlayOptionValue', () => {
 
   test("rejects a value outside the option's choices", () => {
     expect(resolvePlayOptionValue('random1P', 'UNKNOWN')).toBeUndefined();
-    expect(resolvePlayOptionValue('random1P', 'SCATTER')).toBeUndefined();
-    expect(resolvePlayOptionValue('random2P', 'SCATTER')).toBeUndefined();
+    expect(resolvePlayOptionValue('random1P', 'SCATTER')).toBe('SCATTER');
+    expect(resolvePlayOptionValue('random2P', 'SCATTER')).toBe('SCATTER');
     expect(resolvePlayOptions({ random1P: 'SCATTER', random2P: 'SCATTER' })).toMatchObject({
-      random1P: 'OFF',
-      random2P: 'OFF',
+      random1P: 'SCATTER',
+      random2P: 'SCATTER',
     });
     expect(resolvePlayOptionValue('autoScratch1P', 1)).toBeUndefined();
     expect(resolvePlayOptionValue('gauge1P', undefined)).toBeUndefined();
@@ -279,4 +279,17 @@ test('ADD HCN keeps a distinct source identifier', () => {
 test('mixed long notes use ADD_ALL rather than the mine ADD_BLANK identifier', () => {
   expect(resolvePlayOptionValue('longNoteModifier', 'ADD_ALL')).toBe('ADD_ALL');
   expect(resolvePlayOptionValue('longNoteModifier', 'ADD_BLANK')).toBeUndefined();
+});
+
+test('SCATTER is offered only by the LR2 reference ruleset', () => {
+  expect(resolveRandomModes('lr2')).toContain('SCATTER');
+  expect(resolveRandomModes('beatoraja')).not.toContain('SCATTER');
+  expect(resolveRandomModes('____')).not.toContain('SCATTER');
+});
+
+test('the separately selected corrected SCATTER mode persists and remains LR2-only', () => {
+  expect(resolvePlayOptions({ random1P: 'SCATTER-CORRECTED' }).random1P).toBe('SCATTER-CORRECTED');
+  expect(resolveRandomModes('lr2')).toContain('SCATTER-CORRECTED');
+  expect(resolveRandomModes('beatoraja')).not.toContain('SCATTER-CORRECTED');
+  expect(resolveRandomModes('____')).not.toContain('SCATTER-CORRECTED');
 });

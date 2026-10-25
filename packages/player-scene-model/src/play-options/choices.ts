@@ -67,13 +67,13 @@ export const BOOLEAN_CYCLE: readonly boolean[] = [false, true];
 
 /**
  * Cycle order for {@link PlayOptions.random1P} / `random2P`. LR2 button cells 0..3 on `#SRC_BUTTON,type=42 / 43`: off /
- * mirror / random / s-random. SCATTER is disabled until placement and assist policy are implemented.
+ * mirror / random / s-random. Additional source choices are returned by resolveRandomModes.
  */
 export const RANDOM_CYCLE: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM'];
 
 /** Available lane options for the selected reference ruleset; LR2's sprite cycle stays separate. */
 export function resolveRandomModes(ruleset: RulesetId): readonly RandomMode[] {
-  if (ruleset === 'lr2') return [...RANDOM_CYCLE, 'CONVERGE'];
+  if (ruleset === 'lr2') return [...RANDOM_CYCLE, 'SCATTER', 'SCATTER-CORRECTED', 'CONVERGE'];
   const ordinary: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', 'R-RANDOM', 'S-RANDOM'];
   return ruleset === 'beatoraja'
     ? [
@@ -178,8 +178,8 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   autoScratch1P: BOOLEAN_CYCLE,
   autoScratch2P: BOOLEAN_CYCLE,
   dpFlip: BOOLEAN_CYCLE,
-  random1P: resolveRandomModes('beatoraja'),
-  random2P: resolveRandomModes('beatoraja'),
+  random1P: [...new Set([...resolveRandomModes('beatoraja'), ...resolveRandomModes('lr2')])],
+  random2P: [...new Set([...resolveRandomModes('beatoraja'), ...resolveRandomModes('lr2')])],
   gauge1P: LR2_GAUGE_TYPES,
   gauge2P: LR2_GAUGE_TYPES,
 };
