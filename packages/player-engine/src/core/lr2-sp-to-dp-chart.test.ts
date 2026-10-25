@@ -27,7 +27,8 @@ for (const [input, output] of [
     expect(result.chart.source).toBe(source.source);
     expect(source.notes.map((note) => note.channel)).toEqual(['11', '12']);
     const prepared = preparePlaybackChart(source, { battleMode: 'SP-TO-DP' });
-    expect(prepared.laneDisplayMode).toContain(output);
+    // The 10-key mode is labelled `5 KEY DP`, the 14-key one `14 KEY DP`.
+    expect(prepared.laneDisplayMode).toBe(output === '10' ? '5 KEY DP' : '14 KEY DP');
     expect(prepared.laneBindings.some((lane) => lane.channel === '22' && lane.side === '2P')).toBe(true);
     expect(
       prepared.inputTokenToChannels.get(prepared.laneBindings.find((lane) => lane.channel === '22')!.inputTokens[0]!),

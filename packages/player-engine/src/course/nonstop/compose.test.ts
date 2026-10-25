@@ -270,7 +270,19 @@ describe('bmson NONSTOP stitching', () => {
         expect(cue).toBeDefined();
       }
       expect(result.map.stageRanks.some((change) => change.table === 'bmson' && change.rank === 125)).toBe(true);
-      expect(chart.total.unit).toBe(bmsFirst ? 'percent' : 'absolute');
+      // The BMS stage declares no TOTAL, so the bmson stage's (a percentage) is the last one declared, as LR2 keeps
+      // it; the version 1 rules took the last stage's.
+      expect(chart.total.unit).toBe('percent');
+      const v1 = stitchNonstopCourse(
+        stages.map((chart) => ({ chart })),
+        {
+          connections: ['blank2'],
+          placement: 'intended',
+          assetPath: (stage, _kind, path) => `s${stage}/${path}`,
+          stitch: 1,
+        },
+      );
+      expect(v1.ok && resolveChart(v1.chart).total.unit).toBe(bmsFirst ? 'percent' : 'absolute');
     },
   );
 

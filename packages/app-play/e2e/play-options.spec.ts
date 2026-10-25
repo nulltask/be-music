@@ -802,7 +802,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const)
         battleTempo: 1,
       });
       expect(replay?.play.options?.battleMode).toBe('SP-TO-DP');
-      expect(replay?.chart.laneMode).toContain(sourceKeys === 5 ? '10' : '14');
+      expect(replay?.chart.laneMode).toBe(sourceKeys === 5 ? '5 KEY DP' : '14 KEY DP');
       expect(replay?.chart.notes).toHaveLength(sourceKeys === 5 ? 3 : 4);
       expect(replay?.chart.notes.some((note) => note.channel.startsWith('2'))).toBe(true);
       expect(replay?.chart.notes.some((note) => note.type === 'long')).toBe(true);

@@ -144,7 +144,9 @@ describe('resolveCourseClearLamp', () => {
   });
 
   it('follows the gauge pick under LR2: EASY, HARD, and NORMAL for GROOVE and DEATH', () => {
-    expect(resolveCourseClearLamp(run({ gaugeType: 'EASY' }))).toBe('EASY');
+    expect(resolveCourseClearLamp(run({ gaugeType: 'EASY', gauge: 'COURSE-EASY' }))).toBe('EASY');
+    // A grade course resets an EASY pick to GROOVE.
+    expect(resolveCourseClearLamp(run({ gaugeType: 'EASY' }))).toBe('NORMAL');
     expect(resolveCourseClearLamp(run({ gaugeType: 'HARD', gauge: 'GRADE-HARD' }))).toBe('HARD');
     expect(resolveCourseClearLamp(run({ gaugeType: 'DEATH', gauge: 'GRADE-DEATH' }))).toBe('NORMAL');
     expect(resolveCourseClearLamp(run())).toBe('NORMAL');
