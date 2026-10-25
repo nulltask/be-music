@@ -38,7 +38,13 @@ export default defineConfig({
   fullyParallel: true,
   workers: Number(process.env.E2E_WORKERS ?? 4),
   forbidOnly: process.env.CI === 'true',
-  reporter: [['list']],
+  // On CI a failed test runs once more: one that passes then is reported as flaky instead of failing the run, and the
+  // report keeps the failed attempt's trace.
+  retries: process.env.CI === 'true' ? 1 : 0,
+  reporter:
+    process.env.CI === 'true'
+      ? [['list'], ['github'], ['html', { open: 'never', outputFolder: resolve(playerDir, 'e2e-report') }]]
+      : [['list']],
   use: {
     baseURL: `http://127.0.0.1:${port}`,
     viewport: { width: 960, height: 540 },
