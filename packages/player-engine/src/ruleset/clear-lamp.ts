@@ -63,6 +63,7 @@ const GAUGE_LAMPS: Readonly<Record<string, ClearLamp>> = {
   NORMAL: 'NORMAL',
   HARD: 'HARD',
   'P-ATTACK': 'HARD',
+  'G-ATTACK': 'HARD',
   'EX-HARD': 'EX_HARD',
   DEATH: 'EX_HARD',
   HAZARD: 'EX_HARD',
@@ -102,7 +103,11 @@ const COURSE_GAUGE_LAMPS: Readonly<Record<string, ClearLamp>> = {
  */
 function courseGaugeClearLamp(gauge: string, ruleset: string, gaugeType: GaugeType): ClearLamp {
   if (ruleset === 'lr2')
-    return gaugeType === 'EASY' ? 'EASY' : gaugeType === 'HARD' || gaugeType === 'P-ATTACK' ? 'HARD' : 'NORMAL';
+    return gaugeType === 'EASY'
+      ? 'EASY'
+      : gaugeType === 'HARD' || gaugeType === 'P-ATTACK' || gaugeType === 'G-ATTACK'
+        ? 'HARD'
+        : 'NORMAL';
   return COURSE_GAUGE_LAMPS[gauge] ?? 'NORMAL';
 }
 
