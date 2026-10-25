@@ -47,12 +47,7 @@ export class BeMusicGaugePanelElement extends DataElement<BeMusicGaugeData> {
       ])}
       <svg part="graph" viewBox="0 0 220 44" role="img" aria-label="Gauge history">
         ${!d.survival && d.threshold !== undefined ? svg`<line x1="0" x2="220" y1=${threshold} y2=${threshold} stroke="currentColor" stroke-dasharray="3 3"></line>` : nothing}
-        <polyline
-          fill="none"
-          stroke="var(--be-music-color-accent,#abcaff)"
-          stroke-width="2"
-          points=${points}
-        ></polyline>
+        <polyline fill="none" stroke="var(--primary,#edf2fa)" stroke-width="2" points=${points}></polyline>
       </svg>
     </section>`;
   }
