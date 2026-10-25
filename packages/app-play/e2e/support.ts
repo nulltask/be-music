@@ -178,6 +178,45 @@ export class Demo {
   }
 
   /**
+   * Presses `code` on the first frame `predicate` holds for the test hook's state, checked in the page itself: a poll
+   * from the runner can land well past that moment on a slow machine (a CI runner draws without a GPU). `predicate`
+   * runs in the page, so it reads only its arguments; `arg` carries any value it needs. Returns the state it pressed on.
+   */
+  async keyWhen<A>(
+    predicate: (state: TestHookState, arg: A) => boolean,
+    arg: A,
+    code: string,
+    what: string,
+    timeoutMs = 90_000,
+  ): Promise<TestHookState> {
+    // The predicate becomes a function in the page, handed to the polling loop below as an argument.
+    const holds = await this.page.evaluateHandle<(state: TestHookState, arg: A) => boolean>(
+      `(${predicate.toString()})`,
+    );
+    try {
+      return await this.page.evaluate(
+        ({ holds, arg, code, key, what, timeoutMs }) =>
+          new Promise<TestHookState>((resolve, reject) => {
+            const deadline = performance.now() + timeoutMs;
+            const step = (): void => {
+              const state = window.__beMusicTest?.state();
+              if (state !== undefined && holds(state, arg as A)) {
+                for (const type of ['keydown', 'keyup'])
+                  window.dispatchEvent(new KeyboardEvent(type, { code, key, bubbles: true, cancelable: true }));
+                resolve(state);
+              } else if (performance.now() > deadline) reject(new Error(`timed out waiting for ${what}`));
+              else requestAnimationFrame(step);
+            };
+            step();
+          }),
+        { holds, arg, code, key: KEY_OF_CODE[code] ?? code, what, timeoutMs },
+      );
+    } finally {
+      await holds.dispose();
+    }
+  }
+
+  /**
    * Sets a Debug Menu control: `folder` is the folder titles from the top (`['Play options']`), `name` the control's
    * label. Checkboxes take a boolean, sliders a number, drop-downs the option's label.
    */
@@ -394,6 +433,12 @@ export const test = base.extend<{ demo: Demo }>({
 });
 
 export { expect } from '@playwright/test';
+
+/**
+ * The tag of the smoke run each pull request gets (`--grep @smoke`): one journey per area and family, a few minutes in
+ * all. The nightly run plays every test.
+ */
+export const SMOKE = { tag: '@smoke' } as const;
 
 /** The checklist library's song folder and course folder, as the demo lists them after a drop of `songs`. */
 export const SONGS = 'fixtures';
