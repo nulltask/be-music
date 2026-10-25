@@ -1336,6 +1336,75 @@ textarea {
   color: #d2d9e4;
 }
 
+.help-menu-folder {
+  margin: 8px 0 0;
+  border: 1px solid rgb(151 163 179 / 0.18);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #d2d9e4;
+}
+
+.help-menu-folder > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+}
+
+.help-menu-folder > summary::-webkit-details-marker {
+  display: none;
+}
+
+.help-menu-folder > summary::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 120ms ease;
+  opacity: 0.7;
+}
+
+.help-menu-folder[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.help-menu-folder[open] > summary {
+  border-bottom: 1px solid rgb(151 163 179 / 0.18);
+}
+
+.help-menu-note {
+  margin: 8px 12px 0;
+  color: rgb(151 163 179 / 0.85);
+}
+
+.help-menu-items {
+  margin: 0;
+  padding: 8px 12px 10px;
+  display: grid;
+  gap: 2px 0;
+}
+
+.help-menu-items dt {
+  margin-top: 6px;
+  font-weight: 600;
+  color: #f3f6fa;
+}
+
+.help-menu-items dd {
+  margin: 0;
+}
+
+.help-menu-items code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
 .help-list code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
