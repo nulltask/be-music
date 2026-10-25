@@ -263,6 +263,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     sevenToNineType: 0,
     battleMode: 'OFF',
     dBattleScratch: false,
+    longNoteMode: 'LN',
     customJudge: false,
     customJudgeKeyPerfectGreat: 400,
     customJudgeKeyGreat: 400,

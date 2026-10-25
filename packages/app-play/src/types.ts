@@ -228,6 +228,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   sevenToNineType: PlayOptions['sevenToNineType'];
   battleMode: PlayOptions['battleMode'];
   dBattleScratch: boolean;
+  longNoteMode: PlayOptions['longNoteMode'];
   customJudge: boolean;
   customJudgeKeyPerfectGreat: number;
   customJudgeKeyGreat: number;

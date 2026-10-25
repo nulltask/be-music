@@ -135,6 +135,8 @@ export interface PlayOptions {
   /** LR2 D-BATTLE: hold the scratch key through the decide animation to keep scratch objects playable. */
   dBattleScratch: boolean;
   /** beatoraja CUSTOM JUDGE (`PlayerConfig.customJudge`) and its window / long-note margin rates in percent. */
+  /** beatoraja LN MODE (`PlayerConfig.lnmode`): the mode of a chart whose long-note mode is undefined. */
+  longNoteMode: 'LN' | 'CN' | 'HCN';
   customJudge: boolean;
   customJudgeKeyPerfectGreat: number;
   customJudgeKeyGreat: number;

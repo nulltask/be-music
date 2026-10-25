@@ -220,6 +220,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       courseAPI.applyCourseLongNoteConstraint(benchNonstopChart, ['cn']);
     },
   });
+  define('player-engine.course.applyUndefinedLongNoteMode', {
+    run: () => {
+      courseAPI.applyUndefinedLongNoteMode(benchNonstopChart, 3);
+    },
+  });
   define('player-engine.course.resolveCourseStageSettings', {
     run: () => {
       courseAPI.resolveCourseStageSettings(benchCourse);

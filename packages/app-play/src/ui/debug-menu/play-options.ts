@@ -266,6 +266,14 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
   trackPlayOption(
     this.lr2ExtraLevelController.on('change', ({ value }) => this.setPlayOptions({ lr2ExtraLevel: value })),
   );
+  this.longNoteModeController = selectBinding(folder, this.guiState, 'longNoteMode', 'LN MODE (beatoraja)', {
+    'LONG NOTE': 'LN',
+    'CHARGE NOTE': 'CN',
+    'HELL CHARGE NOTE': 'HCN',
+  });
+  trackPlayOption(
+    this.longNoteModeController.on('change', ({ value }) => this.setPlayOptions({ longNoteMode: value })),
+  );
   this.customJudgeController = trackPlayOption(
     folder.addBinding(this.guiState, 'customJudge', { label: 'CUSTOM JUDGE (beatoraja)' }).on('change', ({ value }) => {
       this.setPlayOptions({ customJudge: value });

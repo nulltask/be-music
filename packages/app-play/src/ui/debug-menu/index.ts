@@ -215,6 +215,7 @@ export class DebugMenu {
   public lr2ExtraLevelController: ListInputBindingApi<PlayOptions['lr2ExtraLevel']> | undefined;
   public extraNoteDepthController: PaneBinding | undefined;
   public customJudgeController: PaneBinding | undefined;
+  public longNoteModeController: ListInputBindingApi<PlayOptions['longNoteMode']> | undefined;
   public customJudgeRateControllers: PaneBinding[] = [];
   public extraNoteScratchController: PaneBinding | undefined;
   public mineModifierController: ListInputBindingApi<PlayOptions['mineModifier']> | undefined;
@@ -524,6 +525,11 @@ export class DebugMenu {
     }
     if (this.lr2ExtraModeController) this.lr2ExtraModeController.hidden = !lr2Extra;
     if (this.lr2ExtraLevelController) this.lr2ExtraLevelController.hidden = !lr2Extra || !this.guiState.lr2ExtraMode;
+    if (!beatoraja && this.guiState.longNoteMode !== 'LN') {
+      this.guiState.longNoteMode = 'LN';
+      this.setPlayOptions({ longNoteMode: 'LN' });
+    }
+    if (this.longNoteModeController) this.longNoteModeController.hidden = !beatoraja;
     if (!beatoraja && this.guiState.customJudge) {
       this.guiState.customJudge = false;
       this.setPlayOptions({ customJudge: false });
