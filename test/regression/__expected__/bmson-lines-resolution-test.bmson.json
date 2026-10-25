@@ -156,6 +156,11 @@
           "percent": 75
         },
         "noteCount": 3,
+        "headerBPM": 150,
+        "bpmRange": {
+          "min": 150,
+          "max": 180
+        },
         "chartFingerprint": "bmfp0:593154f90f18ed4e7a4c6a8b857eb3c0ad224e355e406f574bd1d106959e562f",
         "playFingerprint": "bmfp0:593154f90f18ed4e7a4c6a8b857eb3c0ad224e355e406f574bd1d106959e562f",
         "title": "BMSON Lines Resolution Test",

@@ -58,6 +58,8 @@ export interface PlayfieldRuntime {
   readonly resolvedPlayChart: ResolvedChart | undefined;
   readonly laneChannels: string[];
   readonly chartPlayVariant: ChartPlayVariant;
+  /** The play variant of the chart a battle mode converted (`chartPlayVariant` is the converted one's). */
+  readonly battleSourceVariant?: ChartPlayVariant;
   readonly laneX: Map<string, PlayfieldLaneRect>;
   readonly notes: RuntimeNote[];
   readonly mineNotes: RuntimeMineNote[];
@@ -70,6 +72,10 @@ export interface PlayfieldRuntime {
   readonly tempo: number;
   readonly playState: PlayState;
   readonly score: ScoreSummary;
+  /** The 2P player of a two-player play (LR2 BATTLE): its scores, play state and the engine's gauge for it. */
+  readonly secondPlayer:
+    | { readonly score: ScoreSummary; readonly playState: PlayState; readonly gauge?: PlayerGaugeSummary }
+    | undefined;
   /** The score readout, easing toward the score after each judgment. */
   readonly displayedScore: number;
   readonly gaugeState: PlayerGaugeSummary;
@@ -168,7 +174,24 @@ export interface PlayChrome {
 
 /** The view's members the playfield passes use (a play view's members of these names), with the running play as `play`. */
 export interface PlayfieldContext extends LaneGeometryContext {
-  readonly options: Readonly<Pick<PlaySessionOptions, 'beMusicEffects' | 'showInvisibleNotes' | 'judgedNoteDisplay'>>;
+  readonly drawsLift?: boolean;
+  bpmGuideCache?: {
+    timing: import('@be-music/chart-model').TimingResolver;
+    events: import('../../../chart/bpm-guide.ts').BPMGuideEvent[];
+  };
+  readonly options: Readonly<
+    Pick<
+      PlaySessionOptions,
+      | 'beMusicEffects'
+      | 'showInvisibleNotes'
+      | 'judgedNoteDisplay'
+      | 'bpmGuide'
+      | 'judgeTimingMs'
+      | 'visualConstant'
+      | 'noteDurationMs'
+      | 'constantFadeMs'
+    >
+  >;
   /** How the family's skin answers the playfield: the stage, the lanes, the note and bomb cells, the effect lengths. */
   readonly playfieldSkin: PlayfieldSkin;
   readonly chrome: PlayChrome;

@@ -15,10 +15,14 @@ describe('beatoraja image-index properties', () => {
       expect(resolveBeatorajaOptionIndex(BEATORAJA_BUTTON.LNMODE, { lnMode })).toBe(index);
     }
     expect(resolveBeatorajaOptionIndex(BEATORAJA_BUTTON.LNMODE, {})).toBe(0);
+    // A chart without its own mode shows the player's LN MODE.
+    expect(resolveBeatorajaOptionIndex(BEATORAJA_BUTTON.LNMODE, { longNoteMode: 'HCN' })).toBe(2);
+    expect(resolveBeatorajaOptionIndex(BEATORAJA_BUTTON.LNMODE, { lnMode: 2, longNoteMode: 'HCN' })).toBe(1);
   });
   test('translates the selected HS reference to beatoraja indices', () => {
     for (const [hsFix, index] of [
       ['OFF', 0],
+      ['STARTBPM', 1],
       ['MAXBPM', 2],
       ['MINBPM', 4],
       ['AVERAGE', 3],

@@ -4,8 +4,9 @@
  * importing the package in a browser bundle never loads it.
  */
 import type { BeMusicJSON } from '@be-music/chart-source';
-import { decodeBMSText, decodeUTF8Text } from './core/bms-text-decode.ts';
-import { parseBMS, parseBmson, parseChart } from './core/parser.ts';
+import { decodeUTF8Text } from './core/bms-text-decode.ts';
+import { parseBMSBytes } from './core/bms-bytes.ts';
+import { parseBmson, parseChart } from './core/parser.ts';
 
 export interface ParseChartFileOptions {
   signal?: AbortSignal;
@@ -23,6 +24,5 @@ export async function parseChartFile(filePath: string, options: ParseChartFileOp
   if (extension === '.json') {
     return parseChart(decodeUTF8Text(buffer), 'json');
   }
-  const decoded = decodeBMSText(buffer);
-  return parseBMS(decoded.text);
+  return parseBMSBytes(buffer);
 }

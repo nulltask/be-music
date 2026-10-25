@@ -33,6 +33,8 @@ import {
   rollUpValue,
   stageProgress,
   resolveResultVerdict,
+  type BeMusicResultData,
+  type ResultTrackRow,
 } from '@be-music/player-skin-sdk';
 import { resolveResultGrid } from './result-grid.ts';
 import { addSkinText, type PixiResultFrame, type PixiResultSkin, type SkinTextOptions } from '../pixi-kit/index.ts';
@@ -336,12 +338,13 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
     maxWidth: trackTextW,
   });
   track.g.rect(trackTextX, trackTop + 88, trackTextW, 1).fill({ color: accent, alpha: 0.3 });
-  // The fact rows run down one column (landscape) or fill two side by side (portrait), 34 / 30 px apart.
+  // The fact rows run down one column (landscape) or fill two side by side (portrait), 34 / 30 px apart; a two-player
+  // play adds the 2P player's.
   const columns = grid.trackColumns;
   const columnGap = 24;
   const columnW = (trackTextW - columnGap * (columns - 1)) / columns;
   const rowPitch = columns > 1 ? 30 : 34;
-  resolveResultTrackRows(result).forEach((row, index) => {
+  [...resolveResultTrackRows(result), ...secondPlayerRows(result)].forEach((row, index) => {
     const columnX = trackTextX + (index % columns) * (columnW + columnGap);
     const rowY = trackTop + 100 + Math.floor(index / columns) * rowPitch;
     label(row.label, columnX, rowY + 4, track.root, SYN_DIM, columnW - 50);
@@ -380,6 +383,16 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
     dropShadow: { color: accent, distance: 0, blur: 10, alpha: 0.9 },
   });
   rise(total.root, 440, 10);
+}
+
+/** The 2P player's rows of a two-player play (LR2 BATTLE): its EX score and gauge. */
+function secondPlayerRows(result: BeMusicResultData): ResultTrackRow[] {
+  const second = result.secondPlayer;
+  if (second === undefined) return [];
+  return [
+    { label: '2P EX', value: `${second.score.exScore}/${second.score.total * 2}` },
+    { label: '2P GAUGE', value: `${Math.round(second.gauge)}%` },
+  ];
 }
 
 function glass(graphics: Graphics, x: number, y: number, w: number, h: number, rim: number): void {

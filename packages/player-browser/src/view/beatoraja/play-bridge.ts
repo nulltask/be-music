@@ -157,6 +157,7 @@ export interface BeatorajaPlayEngineInput {
 export interface BeatorajaPlayBridgeFrame {
   /** The play clock, in ms: the skin's timers count on it. */
   readonly nowMs: number;
+  readonly judgeTimingMs?: number;
   readonly exiting?: boolean;
   readonly scoreTargets?: PlayFrame['scoreTargets'];
   /** The host's clock, in ms, for the frame rate; the play clock without it. */
@@ -426,6 +427,7 @@ export class BeatorajaPlayBridge {
     }
     this.applyAnimationTimers(frame);
     this.applyState(frame.state);
+    this.play.judgeTimingMs = frame.judgeTimingMs ?? 0;
     this.judgeWindows = frame.judgeWindows;
     return this.renderContextAt(frame.nowMs);
   }

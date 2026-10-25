@@ -92,7 +92,8 @@ describe('resolveReplayView on the beatoraja scale', () => {
       hiSpeedScale: 'beatoraja',
       // 240000 / 150 / 2 × 0.75
       visibleMs: 600,
-      covers: [{ side: '1P', sudden: 0.25, hidden: 0.4, lift: 0.2 }],
+      // SUDDEN+ and HIDDEN+ both drawn over the part of the lane above the LIFT: 0.25 × 0.8, 0.5 × 0.8.
+      covers: [{ side: '1P', sudden: 0.2, hidden: 0.4, lift: 0.2 }],
     });
   });
 
@@ -100,8 +101,8 @@ describe('resolveReplayView on the beatoraja scale', () => {
     const view = beatorajaView({ ...input, hiddenEnabled: false, mainBPM: 0, sides: ['1P', '2P'] });
     expect(view.visibleMs).toBeUndefined();
     expect(view.covers).toEqual([
-      { side: '1P', sudden: 0.25, hidden: 0, lift: 0.2 },
-      { side: '2P', sudden: 0.25, hidden: 0, lift: 0.2 },
+      { side: '1P', sudden: 0.2, hidden: 0, lift: 0.2 },
+      { side: '2P', sudden: 0.2, hidden: 0, lift: 0.2 },
     ]);
   });
 
@@ -109,7 +110,7 @@ describe('resolveReplayView on the beatoraja scale', () => {
     // 0.5 × (1 - 0.8) is 0.09999999999999998 in floating point; 240000 / 150 / 3 × 0.9 is 479.99999999999994.
     const view = beatorajaView({ ...input, hiSpeed: 3, lanecover: 0.1, lift: 0.8 });
     expect(view.visibleMs).toBe(480);
-    expect(view.covers).toEqual([{ side: '1P', sudden: 0.1, hidden: 0.1, lift: 0.8 }]);
+    expect(view.covers).toEqual([{ side: '1P', sudden: 0.02, hidden: 0.1, lift: 0.8 }]);
   });
 });
 
@@ -166,7 +167,8 @@ describe('resolveReplayView', () => {
       hiSpeed: 3,
       hiSpeedScale: 'be-music',
       hsFix: 'MAXBPM',
-      covers: [{ side: '1P', sudden: 0.3, hidden: 0.4, lift: 0.2 }],
+      // SUDDEN+ drawn over the part of the lane above the LIFT: 0.3 × 0.8.
+      covers: [{ side: '1P', sudden: 0.24, hidden: 0.4, lift: 0.2 }],
       // 4 beats / 3 × 0.7 at 120 BPM: the LIFT does not shorten it.
       visibleMs: 467,
     });

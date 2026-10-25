@@ -176,14 +176,14 @@ export class ResultRoute {
       this.unlockReplayOptions();
       return;
     }
-    if (!data.practice) this.records.recordActivePlay(recordPlayFromResult(data));
+    // LR2 saves no score from two-player BATTLE: its replay is kept, its record and ranking are not.
+    const recorded = !data.practice && data.secondPlayer === undefined;
+    if (recorded) this.records.recordActivePlay(recordPlayFromResult(data));
     const mounted = await this.showBeatorajaResult(data, { run: 'single' });
     if (!mounted) await this.showSelect();
     // Auto-save fires even when the theme ships no result skin, so going back to select costs no replay file.
-    if (!data.practice) {
-      this.replayAutoSave.savePlay(data.replay);
-      this.leaderboard.maybeSubmit(data.replay, data.chart);
-    }
+    if (!data.practice) this.replayAutoSave.savePlay(data.replay);
+    if (recorded) this.leaderboard.maybeSubmit(data.replay, data.chart);
     this.unlockReplayOptions();
   }
 
@@ -408,11 +408,13 @@ export class ResultRoute {
         );
       }
     }
-    if (!data.practice) this.records.recordActivePlay(recordPlayFromResult(data));
+    // LR2 saves no score from two-player BATTLE: its replay is kept, its record and ranking are not.
+    const recorded = !data.practice && data.secondPlayer === undefined;
+    if (recorded) this.records.recordActivePlay(recordPlayFromResult(data));
     // A course's stages are saved and ranked as the course, not one by one (a NONSTOP run's course log already was).
     if (!data.practice && presentation.quickRetry && mode.nonstop === undefined) {
       this.replayAutoSave.savePlay(data.replay);
-      this.leaderboard.maybeSubmit(data.replay, data.chart);
+      if (recorded) this.leaderboard.maybeSubmit(data.replay, data.chart);
     }
     this.unlockReplayOptions();
   }

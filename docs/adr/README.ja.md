@@ -31,3 +31,5 @@
 - [シークはプレイループのコマンドにする](./0016-seek-play-loop-command.ja.md)
 
 - [混在する NONSTOP は bmson の IR に元の単位を保持する](./0017-bmson-nonstop.ja.md)
+
+- [0018: リプレイのオプション時系列](./0018-replay-option-timeline.ja.md)

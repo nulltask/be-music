@@ -58,6 +58,8 @@ export function parseResults(
       result.fullCombo = record.fullCombo;
     }
 
+    if (gauge.values !== undefined)
+      result.gauge.values = parseGaugeValues(gauge.values, `${prefix}.${key}.gauge.values`);
     if (gauge.failedMidPlay !== undefined) result.gauge.failedMidPlay = gauge.failedMidPlay === true;
     const score = optionalFiniteNumber(record.score, `${prefix}.${key}.score`);
     if (score !== undefined) result.score = score;
@@ -136,4 +138,22 @@ export function parseRandomDraws(value: unknown, at: string): RandomDraw[] {
     }
     return { command: command as RandomDraw['command'], range, value: drawn };
   });
+}
+
+/** Source gauge snapshots; course carries require the complete class family, including dead slots. */
+export function parseGaugeValues(raw: unknown, path: string, courseOnly = false): Record<string, number> {
+  const record = expectRecord(raw, path);
+  const courseKeys = ['CLASS', 'EXCLASS', 'EXHARDCLASS'];
+  const keys = courseOnly ? courseKeys : ['ASSIST-EASY', 'EASY', 'NORMAL', 'HARD', 'EX-HARD', 'HAZARD', ...courseKeys];
+  const values: Record<string, number> = {};
+  for (const [key, rawValue] of Object.entries(record)) {
+    if (!keys.includes(key)) throw new ReplayParseError(`${path}.${key}: unknown source gauge`);
+    const value = expectFiniteNumber(rawValue, `${path}.${key}`);
+    if (value < 0 || value > (courseOnly ? 100 : 120))
+      throw new ReplayParseError(`${path}.${key}: gauge outside source range`);
+    values[key] = value;
+  }
+  if (courseOnly && courseKeys.some((key) => values[key] === undefined))
+    throw new ReplayParseError(`${path}: expected all three class gauges`);
+  return values;
 }

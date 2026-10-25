@@ -46,6 +46,8 @@
           {"id":4,"channel":"14","type":"long","timeUs":2500000,"endTimeUs":3500000,"lnMode":1},
           {"id":5,"channel":"15","type":"normal","timeUs":3500000}
         ],
+        "headerBPM": 120,
+        "bpmRange": {"min":120,"max":120},
         "chartFingerprint": "bmfp0:a3e7e6c303de032ab41f6c22d86d5eb0053eb67c37958894a684848d366817c1",
         "playFingerprint": "bmfp0:a3e7e6c303de032ab41f6c22d86d5eb0053eb67c37958894a684848d366817c1",
         "title": "long notes LNMODE 1",
@@ -63,7 +65,14 @@
         {"seq":8,"timeUs":3480000,"action":"down","channels":["15"],"tokens":["c"]},
         {"seq":9,"timeUs":3540000,"action":"up","channels":["15"],"tokens":["c"]}
       ],
-      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"beatoraja","endOnFailure":true},
+      "play": {
+        "mode": "manual",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "judgeRuleset": "beatoraja",
+        "endOnFailure": true,
+        "judgeAlgorithm": "combo"
+      },
       "results": {
         "native": {
           "ruleset": "be-music/native",
@@ -253,7 +262,14 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": "(same as manual)",
-      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"beatoraja","endOnFailure":true},
+      "play": {
+        "mode": "manual",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "judgeRuleset": "beatoraja",
+        "endOnFailure": true,
+        "judgeAlgorithm": "combo"
+      },
       "results": "(same as manual)"
     },
     "simulated": "(same as manual)",
@@ -377,7 +393,14 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": [],
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"beatoraja","endOnFailure":true},
+      "play": {
+        "mode": "auto",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "judgeRuleset": "beatoraja",
+        "endOnFailure": true,
+        "judgeAlgorithm": "combo"
+      },
       "results": {
         "native": {
           "ruleset": "be-music/native",

@@ -11,6 +11,17 @@ export class BeMusicPlaySettingsElement extends DataElement<BeMusicSettingsData>
     return html`<section class="card" part="panel">
         <h3>Speed &amp; lanes</h3>
         ${stats([
+          [
+            'Speed mode',
+            view.hiSpeed.floating
+              ? 'FLOATING (AC 32 measured)'
+              : view.hiSpeed.classic
+                ? 'CLASSIC'
+                : view.hiSpeed.normalLevel !== undefined
+                  ? 'NORMAL'
+                  : '—',
+          ],
+          ['Fixed display area', view.fixedDisplayArea ? 'ON' : 'OFF'],
           ['Hi-speed', view.hiSpeed.player.toFixed(2)],
           ['Drawn speed', view.hiSpeed.drawn.toFixed(2)],
           ['HS-FIX', view.hsFix ?? o.hsFix],
@@ -28,8 +39,21 @@ export class BeMusicPlaySettingsElement extends DataElement<BeMusicSettingsData>
         ${stats([
           ['Ruleset', r.rulesetLabel === '____' ? '????' : (r.rulesetLabel ?? '—')],
           ['Random 1P / 2P', `${o.random1P} / ${o.random2P}`],
+          ['Effective gauge', r.gaugeLabel ?? '—'],
+          ['Gauge auto-shift', o.gaugeAutoShift.replaceAll('_', ' ')],
+          [
+            'Lowest shift gauge',
+            o.gaugeAutoShift === 'BEST_CLEAR' || o.gaugeAutoShift === 'SELECT_TO_UNDER'
+              ? o.bottomShiftableGauge === 'GROOVE'
+                ? 'NORMAL'
+                : o.bottomShiftableGauge
+              : '—',
+          ],
           ['Gauge 1P / 2P', `${o.gauge1P} / ${o.gauge2P}`],
+          ['Long notes', o.longNoteModifier === 'LEGACY' ? 'LEGACY NOTE' : o.longNoteModifier.replaceAll('_', ' ')],
+          ['LN add rate', o.longNoteModifier.startsWith('ADD_') ? `${Math.round(o.longNoteRate * 1000) / 10}%` : '—'],
           ['Auto scratch', `1P ${o.autoScratch1P ? 'ON' : 'OFF'} / 2P ${o.autoScratch2P ? 'ON' : 'OFF'}`],
+          ['Judge timing', `${o.judgeTimingMs} ms${o.judgeTimingAutoAdjust ? ' · AUTO' : ''}`],
           ['DP flip', o.dpFlip ? 'ON' : 'OFF'],
           ['BGA', o.bga],
         ])}

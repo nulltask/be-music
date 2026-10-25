@@ -106,7 +106,9 @@ function detonateLandmine(
     return;
   }
   const landmineGaugeEffect = resolveLandmineGaugeEffect(landmine.event, config.idBase, config.sourceFormat);
-  const landmineExplosionEvent = resolveLandmineExplosionEvent(landmine.event, config.wavResources);
+  const landmineExplosionEvent = landmine.silent
+    ? undefined
+    : resolveLandmineExplosionEvent(landmine.event, config.wavResources);
   if (landmineExplosionEvent) {
     emit({
       kind: 'sound',
@@ -560,7 +562,7 @@ export function startHCNPassing(state: JudgeCoreState, note: TimedPlayableNote, 
   if (endSeconds === undefined || resolveRulesetLongNoteMode(config.ruleset.longNoteStyle, note) !== 3) {
     return;
   }
-  if (config.autoScratch && config.scratchChannels.has(note.channel)) {
+  if (config.autoScratch && (config.autoScratchChannels ?? config.scratchChannels).has(note.channel)) {
     return;
   }
   for (let passing = state.hcnPassing.get(note.channel); passing !== undefined; passing = passing.next) {

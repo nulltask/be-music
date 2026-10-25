@@ -1,3 +1,4 @@
+import { adjustBeatorajaJudgeTiming } from './judge-timing.ts';
 import { type PlayerStateSignals } from '../state-signals.ts';
 import { formatSeconds } from '../utils.ts';
 import { type PlayerUISignalBus } from './ui-signal-bus.ts';
@@ -18,6 +19,7 @@ import { type AudioSession } from './engine-types.ts';
 /** What a driver hands {@link createJudgeEffectHandler}: the host side of every judge-core effect. */
 interface JudgeEffectHost {
   uiEnabled: boolean;
+  judgeTiming?: { enabled: boolean; value: number; currentSeconds?: () => number };
   writeOutput: (text: string) => void;
   wavResources: Readonly<Record<string, string>>;
   idBase: 36 | 62;
@@ -136,6 +138,16 @@ export function createJudgeEffectHandler(host: JudgeEffectHost): JudgeCoreEffect
         }
         return;
       case 'judge-combo':
+        if (host.judgeTiming?.enabled && effect.seconds !== undefined) {
+          const next = adjustBeatorajaJudgeTiming(host.judgeTiming.value, effect.judge, effect.signedDeltaMs);
+          if (next !== host.judgeTiming.value) {
+            host.judgeTiming.value = next;
+            replayRecorder?.recordOptionChange(Math.max(0, effect.seconds, host.judgeTiming.currentSeconds?.() ?? 0), {
+              judgeTimingMs: next,
+            });
+            uiSignals.pushCommand({ kind: 'judge-timing', value: next });
+          }
+        }
         activeStateSignals?.publishJudgeCombo(
           effect.judge,
           effect.combo,

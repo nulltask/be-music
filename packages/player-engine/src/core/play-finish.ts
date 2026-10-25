@@ -1,6 +1,7 @@
 import { formatSeconds } from '../utils.ts';
 import { renderSummary, writeRuntimeEventLog } from './engine-trace.ts';
 import { PlayerInterruptedError, type PlayerSummary } from './engine-types.ts';
+import type { GaugeType } from '../ruleset/gauge-type.ts';
 import type { PlayControls } from './play-controls.ts';
 import type { PlayOutcome } from './play-loop.ts';
 import type { PlaySession } from './play-session.ts';
@@ -42,6 +43,15 @@ export function finishPlay(
       replayRecorder.finalize({
         summary,
         maxCombo: session.score.scoreTracker.maxCombo,
+        ...(session.secondPlayer !== undefined
+          ? {
+              secondPlayer: {
+                summary: session.secondPlayer.summary,
+                maxCombo: session.secondPlayer.score.scoreTracker.maxCombo,
+                gauge: (session.options.gauge2P ?? session.options.gauge ?? 'GROOVE') as GaugeType,
+              },
+            }
+          : {}),
         ...(aborted
           ? {
               aborted: true,

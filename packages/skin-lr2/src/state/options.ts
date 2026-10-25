@@ -1,4 +1,4 @@
-import { GAUGE_TYPES, type GaugeType } from '@be-music/player-engine/ruleset';
+import { LR2_GAUGE_TYPES, type GaugeType } from '@be-music/player-engine/ruleset';
 import {
   BGA_CYCLE,
   BGA_SIZE_CYCLE,
@@ -16,9 +16,51 @@ import {
 } from '@be-music/player-scene-model';
 import { LR2_BUTTON, LR2_NUM, LR2_OP, LR2_SLIDER, LR2_TEXT } from '../ids/index.ts';
 
+/**
+ * LR2's BATTLE button cycle (`config.play.battle` 0-3): OFF, BATTLE (two players), D-BATTLE and SP TO DP. G-BATTLE
+ * (4), a ghost battle against a rival's score, is not offered.
+ */
+export const LR2_BATTLE_CYCLE: readonly PlayOptions['battleMode'][] = ['OFF', 'TWO-PLAYER', 'D-BATTLE', 'SP-TO-DP'];
+
+/**
+ * The BATTLE label of the option panel (text 69) as LR2's `optionstr.csv` names it for the selected chart's key mode:
+ * BATTLE on a double-play chart is COUPLE, SP TO DP is DP-TO-SP or 9-TO-7, and an option the chart cannot take is
+ * DISABLE (`SetObjectStrings_SongSelect`).
+ */
+function battleLabel(battle: PlayOptions['battleMode'], keyModeOp: number | undefined): string {
+  const double = keyModeOp === LR2_OP.KEYS_10 || keyModeOp === LR2_OP.KEYS_14;
+  const nine = keyModeOp === LR2_OP.KEYS_9;
+  switch (battle) {
+    case 'TWO-PLAYER':
+      return double ? 'COUPLE' : nine ? 'DISABLE' : 'BATTLE';
+    case 'D-BATTLE':
+      return double || nine ? 'DISABLE' : 'D-BATTLE';
+    case 'SP-TO-DP':
+      return double ? 'DP-TO-SP' : nine ? '9-TO-7' : 'SP-TO-DP';
+    default:
+      return 'OFF';
+  }
+}
+
+/**
+ * LR2's battle ops (10-13) for the key filter and BATTLE option: op 10 a double-play filter (DOUBLE, 14KEYS, 10KEYS)
+ * or D-BATTLE / SP TO DP, op 11 and 13 BATTLE, op 12 either. LR2 reads them off the select screen's settings on every
+ * screen.
+ */
+export function resolveLR2BattleOps(options: Partial<Pick<PlayOptions, 'keysFilter' | 'battleMode'>>): number[] {
+  const doubleFilter = options.keysFilter === 'KEYS_10' || options.keysFilter === 'KEYS_14';
+  const battle = options.battleMode === 'TWO-PLAYER';
+  const doubleBattle = options.battleMode === 'D-BATTLE' || options.battleMode === 'SP-TO-DP';
+  const ops: number[] = [];
+  if (doubleFilter || doubleBattle) ops.push(LR2_OP.DOUBLE);
+  if (battle) ops.push(LR2_OP.BATTLE, LR2_OP.GHOST_BATTLE_OR_BATTLE);
+  if (doubleFilter || battle || doubleBattle) ops.push(LR2_OP.DOUBLE_OR_BATTLE);
+  return ops;
+}
+
 /** Whether a gauge is one of LR2's red (survival) gauges: HARD and DEATH. */
 export function isLR2RedGauge(gauge: GaugeType): boolean {
-  return gauge === 'HARD' || gauge === 'DEATH';
+  return gauge === 'HARD' || gauge === 'DEATH' || gauge === 'EX-HARD';
 }
 
 /** Whether the BGA shows: ON, or AUTOPLAY ONLY while AUTOPLAY is on. */
@@ -33,6 +75,7 @@ export function isLR2BGAShown(bga: BGAMode, autoPlay: boolean): boolean {
  */
 export function resolveLR2PlayOptionOps(options: PlayOptions): number[] {
   return [
+    ...resolveLR2BattleOps(options),
     isLR2BGAShown(options.bga, options.autoPlay) ? LR2_OP.BGA_ON : LR2_OP.BGA_OFF,
     options.bgaSize === 'EXTEND' ? LR2_OP.BGA_EXTEND : LR2_OP.BGA_NORMAL,
     options.scoreGraph ? LR2_OP.SCORE_GRAPH_ON : LR2_OP.SCORE_GRAPH_OFF,
@@ -117,6 +160,7 @@ export function resolveLR2OptionText(
     case LR2_TEXT.OPTION_EFFECT_2P:
       return options.hiddenSudden2P;
     case LR2_TEXT.OPTION_BATTLE:
+      return battleLabel(options.battleMode, keyModeOp);
     case LR2_TEXT.OPTION_GHOST:
     case LR2_TEXT.OPTION_SCROLL_TYPE:
     case LR2_TEXT.OPTION_JUDGE_AUTO_ADJUST:
@@ -219,14 +263,22 @@ export function resolveLR2OptionButton(type: number, options: PlayOptions): numb
       return options.autoScratch2P ? 1 : 0;
     case LR2_BUTTON.FLIP:
       return options.dpFlip ? 1 : 0;
+    case LR2_BUTTON.BATTLE:
+      return Math.max(0, LR2_BATTLE_CYCLE.indexOf(options.battleMode));
     case LR2_BUTTON.RANDOM_1P:
       return cell(RANDOM_CYCLE, options.random1P);
     case LR2_BUTTON.RANDOM_2P:
       return cell(RANDOM_CYCLE, options.random2P);
     case LR2_BUTTON.GAUGE_1P:
-      return cell(GAUGE_TYPES, options.gauge1P);
+      return cell(
+        LR2_GAUGE_TYPES,
+        options.gauge1P === 'EX-HARD' ? 'HARD' : options.gauge1P === 'ASSIST-EASY' ? 'EASY' : options.gauge1P,
+      );
     case LR2_BUTTON.GAUGE_2P:
-      return cell(GAUGE_TYPES, options.gauge2P);
+      return cell(
+        LR2_GAUGE_TYPES,
+        options.gauge2P === 'EX-HARD' ? 'HARD' : options.gauge2P === 'ASSIST-EASY' ? 'EASY' : options.gauge2P,
+      );
     default: {
       const difficulty = LR2_DIFFICULTY_FILTER_BUTTONS[type];
       if (difficulty === undefined) return undefined;

@@ -204,6 +204,31 @@ describe('staggerDestroyTextures', () => {
  *    interleaved sprite/graphic blocks).
  */
 describe('ChildPool', () => {
+  test('scopes opacity to newly acquired objects and resets it on reuse', () => {
+    const pool = new ChildPool(new Container());
+    pool.begin();
+    const before = pool.acquireSprite();
+    let faded: Sprite | undefined;
+    pool.withAlpha(0.5, () => {
+      faded = pool.acquireSprite();
+      faded.alpha = 0.4;
+      pool.withAlpha(0.5, () => {
+        const nested = pool.acquireGraphics();
+        nested.alpha = 0.8;
+        expect(nested.alpha).toBeCloseTo(0.8);
+      });
+    });
+    expect(before.alpha).toBe(1);
+    expect(faded?.alpha).toBeCloseTo(0.2);
+    pool.end();
+    pool.begin();
+    expect(pool.acquireGraphics().alpha).toBe(1);
+    expect(pool.acquireSprite()).toBe(before);
+    expect(pool.acquireSprite().alpha).toBe(1);
+    pool.end();
+    pool.destroy();
+  });
+
   test('routes acquired children into the correct per-type sub-host with graphics → sprite → text z-order', () => {
     const layer = new Container();
     const pool = new ChildPool(layer);

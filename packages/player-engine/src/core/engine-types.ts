@@ -1,3 +1,7 @@
+import type { BattleMode } from './battle-mode.ts';
+import type { LR2ExtraLevel } from './lr2-extra-lanes.ts';
+import type { LongNoteModifier, LongNotePlacement } from './long-note-modifier.ts';
+import type { MineModifier, MinePlacement } from './mine-modifier.ts';
 import { type ChartPlayVariant, type RandomDraws, type ResolvedChart } from '@be-music/chart-model';
 import type { LogEntry } from '@be-music/shared-utils/log';
 import { type BeMusicEvent, type BeMusicJSON } from '@be-music/chart-source';
@@ -8,7 +12,7 @@ import { type TUINoteHeight } from './ui-options.ts';
 import { type AudioSinkClockState } from '../audio-clock.ts';
 import { type PlayerGaugeSummary, type PlayerUISignalBus } from './ui-signal-bus.ts';
 import { type PlayerInputSignalBus } from './input-signal-bus.ts';
-import type { GaugeType } from '../ruleset/gauge-type.ts';
+import type { GaugeType, GaugeAutoShift } from '../ruleset/gauge-type.ts';
 import { type LongNoteStyle, type RulesetId, type RulesetWindowTables } from '../ruleset/index.ts';
 import { type ReplayRecordingOptions } from '../replay/recorder.ts';
 import type { BeMusicReplay, ReplayCourseStage, ReplayInputEvent } from '../replay/format.ts';
@@ -76,8 +80,47 @@ export interface CreatePlayerInputRuntimeContext {
  * `autoPlay` or `manualPlay`.
  */
 export interface PlayerPlaySettings {
+  /** beatoraja scroll modifier; REMOVE changes coordinates and ADD replaces the scroll-rate timeline. Event times stay fixed. */
+  scrollModifier?: import('./scroll-modifier.ts').ScrollModifier;
+  scrollSection?: number;
+  scrollRate?: number;
+  /** Effective source ADD curve; supplying it restores the original draws. */
+  scrollModifierTimeline?: readonly import('@be-music/chart-model').ScrollTimelinePoint[];
   auto?: boolean;
   autoScratch?: boolean;
+  /** beatoraja's note-selection algorithm; other source rulesets retain their own fixed selection. */
+  judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  /** beatoraja CUSTOM JUDGE rates; absent while the option is off. Recorded into the replay. */
+  customJudge?: import('../ruleset/custom-judge.ts').BeatorajaCustomJudge;
+  /**
+   * beatoraja PRACTICE: plays only the range, with its gauge, TOTAL and judgerank, from 1000 ms before the range. The
+   * source applies no chart modifier in PRACTICE; a practice play records no replay.
+   */
+  practice?: import('./practice.ts').BeatorajaPractice;
+  /** beatoraja display-only automatic calibration; no change to input/audio clocks. */
+  judgeTimingAutoAdjust?: boolean;
+  judgeTimingMs?: number;
+  longNoteModifier?: LongNoteModifier;
+  /** Probability for source long-note additions, default 1. */
+  longNoteRate?: number;
+  /** beatoraja EXTRA: source depth 0..100 (0 disables it), with optional scratch participation. */
+  extraNoteDepth?: number;
+  extraNoteScratch?: boolean;
+  /** LR2 beta3 EXTRA, independently selected from beatoraja EXTRA depth. Courses ignore it. */
+  sevenToNinePattern?: import('./seven-to-nine.ts').SevenToNinePattern;
+  sevenToNineType?: import('./seven-to-nine.ts').SevenToNineType;
+  hRandomThresholdBPM?: number;
+  battleMode?: BattleMode;
+  /** The 2P player's gauge in a two-player play (`battleMode: 'TWO-PLAYER'`); absent plays the 1P gauge. */
+  gauge2P?: string;
+  /** LR2 D-BATTLE: the scratch key was held through the decide animation, so scratch objects stay playable. */
+  dBattleScratch?: boolean;
+  lr2ExtraMode?: boolean;
+  lr2ExtraLevel?: LR2ExtraLevel;
+  mineModifier?: MineModifier;
+  /** Independently assist the source play side; explicit values override autoScratch for that side. */
+  autoScratch1P?: boolean;
+  autoScratch2P?: boolean;
   /**
    * Gauge the player selected, as an LR2-family id (`'GROOVE'` / `'EASY'` / `'HARD'` / `'DEATH'`). Mapped onto the
    * active ruleset's own line-up — `'GROOVE'` is beatoraja's `NORMAL`, `'DEATH'` is its `HAZARD`, and so on.
@@ -128,6 +171,9 @@ export interface PlayerPlaySettings {
    * dead (`failedMidPlay`). Recorded into the replay (`play.endOnFailure`) so re-simulations stop at the same point.
    */
   endOnFailure?: boolean;
+  /** Source-defined beatoraja policy; when present, takes precedence over endOnFailure. */
+  gaugeAutoShift?: GaugeAutoShift;
+  bottomShiftableGauge?: import('../ruleset/gauge-type.ts').GaugeShiftBottom;
   /**
    * This play is one stage of a course: the stage runs on the ruleset's course gauge under the course's judge
    * constraint, starting from the state the previous stage left (`carryIn`; absent for the first stage). Recorded into
@@ -189,6 +235,9 @@ export interface PlayerPlayRuntime {
    * runs its own `preparePlaybackChartData` internally, just like before.
    */
   preparedChart?: PreparedPlaybackChartData;
+  /** Recorded mine population for deterministic playback of a generated mine option. */
+  mineModifierPlacements?: readonly MinePlacement[];
+  longNoteModifierPlacements?: readonly LongNotePlacement[];
   createUIRuntime?: (context: CreatePlayerUIRuntimeContext) => Promise<PlayerUIRuntime | undefined>;
   createInputRuntime?: (context: CreatePlayerInputRuntimeContext) => PlayerInputRuntime | undefined;
   /** The host's audio backend. Omitted or returning undefined means playback without audio. */
@@ -401,6 +450,8 @@ export interface PlayerSummary {
   gauge?: PlayerGaugeSummary;
   /** For a course stage: the course-wide combo running now and the course-wide max combo (carried across stages). */
   course?: { combo: number; maxCombo: number };
+  /** The 2P player's summary of a two-player play (LR2 BATTLE); this summary is the 1P player's. */
+  secondPlayer?: PlayerSummary;
 }
 
 export interface PlayerLoadProgress {

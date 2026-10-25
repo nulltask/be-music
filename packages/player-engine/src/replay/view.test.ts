@@ -246,3 +246,9 @@ describe('parsing', () => {
     expect(() => parseReplayTempoChanges([{ timeUs: 1, tempo: 0 }], 'play.tempoChanges')).toThrow(/tempo/);
   });
 });
+
+test('START BPM and its effective drawn hi-speed survive replay view parsing and selection', () => {
+  const view = { hiSpeed: 1.5, hsFix: 'STARTBPM' };
+  const parsed = parseReplayViewState(JSON.parse(JSON.stringify(view)), 'play.view');
+  expect(resolveReplayViewAt(parsed, [], 0)).toEqual(view);
+});

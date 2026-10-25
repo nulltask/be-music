@@ -214,6 +214,11 @@
           "percent": 75
         },
         "noteCount": 12,
+        "headerBPM": 120,
+        "bpmRange": {
+          "min": 100,
+          "max": 120
+        },
         "chartFingerprint": "bmfp0:f389d618faf2d164642d5a50c999edcf3a68907fbeab7ebe01a52a0fb5859be5",
         "playFingerprint": "bmfp0:f389d618faf2d164642d5a50c999edcf3a68907fbeab7ebe01a52a0fb5859be5",
         "title": "Sample",

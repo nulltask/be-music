@@ -29,6 +29,11 @@ export * from './browse/snapshot.ts';
 export * from './play-options/options.ts';
 export * from './play-options/choices.ts';
 export * from './play-options/hi-speed.ts';
+export * from './play-options/normal-hi-speed.ts';
+export * from './play-options/floating-hi-speed.ts';
+export * from './play-options/judge-timing.ts';
+export * from './play-options/constant-visibility.ts';
+export * from './play-state/lift.ts';
 
 export * from './play-state/types.ts';
 export * from './play-state/hi-speed.ts';

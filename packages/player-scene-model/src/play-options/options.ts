@@ -1,4 +1,6 @@
-import type { GaugeType } from '@be-music/player-engine/ruleset';
+import type { BattleMode, LR2ExtraLevel } from '@be-music/player-engine/lanes';
+import type { MineModifier, LongNoteModifier, ScrollModifier } from '@be-music/player-engine/lanes';
+import type { GaugeType, GaugeAutoShift } from '@be-music/player-engine/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
 
 /**
@@ -14,6 +16,24 @@ export interface PlayOptions {
    * scaling moves. Range matches gameplay's runtime adjust hotkeys (`ArrowUp` / `ArrowDown` during play).
    */
   hiSpeed: number;
+  /** AC 34 CLASSIC HI-SPEED; false retains the source default controls. */
+  classicHiSpeed: boolean;
+  /** AC 32 measured FLOATING HI-SPEED, with source cover coupling and 0.5 keyboard steps. */
+  floatingHiSpeed: boolean;
+  /** AC 34 locks cover/LIFT geometry; floating START-double restores the initial visible time. */
+  fixedDisplayArea: boolean;
+  /** AC 32 measured normal level 1..20; 0 leaves the existing multiplier API active. */
+  normalHiSpeedLevel: number;
+  /** beatoraja display timing in integer milliseconds, -500..500; positive advances note drawing. */
+  judgeTimingMs: number;
+  /** beatoraja visual CONSTANT, distinct from HS-FIX CONSTANT and chart scroll modifiers. */
+  visualConstant: boolean;
+  noteDurationMs: number;
+  constantFadeMs: number;
+  /** beatoraja BPM GUIDE shows BPM-change and STOP markers on the lane. */
+  bpmGuide: boolean;
+  /** beatoraja 0.8.9 display-only calibration on PG/GR/GD; disabled during autoplay and replay. */
+  judgeTimingAutoAdjust: boolean;
   /**
    * When `true`, every note auto-judges as PERFECT at its scheduled time. Mirrors the LR2 AUTOPLAY skin button
    * (`#SRC_BUTTON type=16`). Starting a chart in AUTO from the select screen (its `start` with `autoPlay`, such as a
@@ -60,13 +80,16 @@ export interface PlayOptions {
    * multiplier so the user's chosen HS feels consistent across the chart:
    *
    * - `'MAXBPM'` — pegs the user's HS to the chart's MAX BPM (slower segments scroll proportionally slower).
+   * - `'STARTBPM'` — pegs to the chart's starting BPM (the header BPM, independently of `#BASEBPM`).
    * - `'MINBPM'` — pegs to MIN BPM (faster segments scroll faster).
    * - `'AVERAGE'` — pegs to the main BPM, the BPM the most notes sit at (beatoraja's MAINBPM), which BPM × N + STOP
    *   gimmicks do not skew the way a time average is.
-   * - `'CONSTANT'` — adjusts HS at every BPM change so visual scroll is exactly constant. Falls back to `'AVERAGE'`
-   *   behavior for now (per-frame BPM-aware scroll requires a render-pipeline change that hasn't landed yet).
+   * - `'CONSTANT'` — LR2's fixed 150-BPM distance map, pausing on STOP and ignoring unsupported #SCROLL/#SPEED.
+   *   Distinct from beatoraja visual CONSTANT, which limits note visibility instead.
    */
   hsFix: HSFix;
+  /** AC 34 display-area information visibility; OFF keeps readouts controlled by the skin. */
+  displayAreaInfo: 'OFF' | 'ON' | 'SUDDEN_ONLY' | 'HIDDEN_LIFT_ONLY';
   /**
    * 1P-side HIDDEN / SUDDEN effect picked from `#SRC_BUTTON,type=50`. Cycles OFF → HIDDEN → SUDDEN → HID+SUD on each
    * click. Drives the opaque mask over the 1P keyboard / scratch lanes. SP charts only render this side; DP charts pair
@@ -92,6 +115,66 @@ export interface PlayOptions {
    * of `shutter`. When ON, the mask renders at the `shutter`-derived height.
    */
   laneCover: boolean;
+  /** beatoraja LIFT: stored fraction retained while disabled, independently per play side. */
+  lift1P: number;
+  lift2P: number;
+  liftOn1P: boolean;
+  liftOn2P: boolean;
+  /** beatoraja 0.8.9's three launcher choices. */
+  judgeAlgorithm: 'combo' | 'duration' | 'lowest';
+  /** AC LEGACY NOTE removes CN/BSS; beatoraja REMOVE removes every long note. */
+  longNoteModifier: LongNoteModifier;
+  /** beatoraja ADD probability, 0..1, default 1. */
+  longNoteRate: number;
+  /** beatoraja EXTRA; source type selector is unimplemented upstream. */
+  extraNoteDepth: number;
+  extraNoteScratch: boolean;
+  sevenToNinePattern: import('@be-music/player-engine/lanes').SevenToNinePattern;
+  sevenToNineType: import('@be-music/player-engine/lanes').SevenToNineType;
+  battleMode: BattleMode;
+  /** LR2 D-BATTLE: hold the scratch key through the decide animation to keep scratch objects playable. */
+  dBattleScratch: boolean;
+  /**
+   * That-Which-Must-Not-Be-Named M-RAN per player (two-player play only): MIRROR applied after a RANDOM-type arrangement,
+   * so a player with it plays the mirror image of the other's chart.
+   */
+  mRan1P: boolean;
+  mRan2P: boolean;
+  /** beatoraja CUSTOM JUDGE (`PlayerConfig.customJudge`) and its window / long-note margin rates in percent. */
+  /** beatoraja LN MODE (`PlayerConfig.lnmode`): the mode of a chart whose long-note mode is undefined. */
+  longNoteMode: 'LN' | 'CN' | 'HCN';
+  customJudge: boolean;
+  /**
+   * beatoraja PRACTICE (`PracticeProperty`): play only `practiceStartMs`..`practiceEndMs` (0 = the chart's end) and
+   * play the range again when it ends. A 0 judgerank or TOTAL keeps the chart's; `MODE` keeps the play mode's gauge
+   * category.
+   */
+  practice: boolean;
+  practiceStartMs: number;
+  practiceEndMs: number;
+  practiceGauge: PracticeGaugeType;
+  practiceGaugeCategory: PracticeGaugeCategory;
+  practiceStartGauge: number;
+  practiceJudgeRank: number;
+  practiceTotal: number;
+  customJudgeKeyPerfectGreat: number;
+  customJudgeKeyGreat: number;
+  customJudgeKeyGood: number;
+  customJudgeScratchPerfectGreat: number;
+  customJudgeScratchGreat: number;
+  customJudgeScratchGood: number;
+  customJudgeLongNoteMargin: number;
+  lr2ExtraMode: boolean;
+  lr2ExtraLevel: LR2ExtraLevel;
+  mineModifier: MineModifier;
+  /** beatoraja timeline BPM/STOP/SCROLL removal or generated SCROLL, independent of visual CONSTANT. */
+  scrollModifier: ScrollModifier;
+  /** beatoraja ADD: change every 1..1024 section lines (default 4), with width 0..1 (default 0.5). */
+  scrollSection: number;
+  scrollRate: number;
+  /** beatoraja: continue judging with the selected dead gauge, or stop on failure. */
+  gaugeAutoShift: GaugeAutoShift;
+  bottomShiftableGauge: import('@be-music/player-engine/ruleset').GaugeShiftBottom;
   /**
    * 1P side auto-scratch flag picked from `#SRC_BUTTON,type=44`. When true the scratch lane (channel 16) auto-judges as
    * PERFECT at every note's scheduled time, so the player only has to play the keys.
@@ -112,10 +195,26 @@ export interface PlayOptions {
    * - `OFF` — original chart layout
    * - `MIRROR` — reverse the lane order (1↔7, 2↔6, 3↔5)
    * - `RANDOM` — chart-wide random permutation of the lanes
+   * - `R-RANDOM` — chart-wide cyclic rotation, optionally reflected, excluding regular and mirror
    * - `S-RANDOM` — per-chord random assignment (chord shapes are NOT preserved)
-   * - `SCATTER` — legacy value, disabled until placement and assist policy are implemented
+   * - `H-RANDOM` — beatoraja per-row random assignment with a configurable jack threshold
+   * - `SPIRAL` — beatoraja row rotations, frozen during active holds
+   * - `RANDOM-EX` — beatoraja chart-wide permutation including scratches/wheels
+   * - `ALL-SCR` — beatoraja scratch priority with time-based fallback
+   * - `CONVERGE` — LR2 selected-lane concentration, or beatoraja PMS streak-based concentration
+   * - `SCATTER` — LR2 previous-row avoidance, with active-LN reservations
+   * - `SCATTER-CORRECTED` — explicitly corrected 9KEY SCATTER, excluding LR2 beta3's tenth destination
+   * - `SYNCHRONIZE-RANDOM` — That-Which-Must-Not-Be-Named BATTLE: one RANDOM draw, identical on both sides
+   * - `SYMMETRY-RANDOM` — That-Which-Must-Not-Be-Named BATTLE: one RANDOM draw, mirrored on the 2P side
    */
   random1P: RandomMode;
+  /** beatoraja H-RANDOM jack threshold in 16th-note BPM units (1..1000, default 120). */
+  hRandomThresholdBPM: number;
+  /** LR2 randFix key index: 0 uses the mode default (scratch, or key 5 for PMS). */
+  randomSeed1P: string;
+  randomSeed2P: string;
+  randomFixedLane1P: number;
+  randomFixedLane2P: number;
   /** 2P side note arrangement (channels 21..25 + 28 + 29). */
   random2P: RandomMode;
   /**
@@ -132,13 +231,37 @@ export interface PlayOptions {
 }
 
 /** Allowed values for {@link PlayOptions.hsFix}. */
-export type HSFix = 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT';
+export type HSFix = 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT' | 'STARTBPM';
 
 /** Allowed values for {@link PlayOptions.hiddenSudden1P} / `hiddenSudden2P`: which ends of the lanes are covered. */
 export type HiddenSuddenMode = 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
 
-/** Lane-option names. Legacy SCATTER stays representable but is not an accepted new play choice. */
-export type RandomMode = 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
+/** Lane-option names; resolveRandomModes supplies the choices for the active source ruleset. */
+export type RandomMode =
+  | 'OFF'
+  | 'MIRROR'
+  | 'RANDOM'
+  | 'R-RANDOM'
+  | 'S-RANDOM'
+  | 'SPIRAL'
+  | 'H-RANDOM'
+  | 'ALL-SCR'
+  | 'RANDOM-EX'
+  | 'S-RANDOM-EX'
+  | 'RANDOM_PLAYABLE'
+  | 'S_RANDOM_PLAYABLE'
+  | 'CONVERGE'
+  | 'SCATTER'
+  | 'SCATTER-CORRECTED'
+  | 'SYNCHRONIZE-RANDOM'
+  | 'SYMMETRY-RANDOM';
+
+/** Allowed values for {@link PlayOptions.practiceGauge}: beatoraja PRACTICE's GAUGE TYPE. */
+export type PracticeGaugeType =
+  (typeof import('@be-music/player-engine/ruleset').BEATORAJA_PRACTICE_GAUGE_TYPES)[number];
+
+/** Allowed values for {@link PlayOptions.practiceGaugeCategory}: `MODE` or a beatoraja GAUGE CATEGORY. */
+export type PracticeGaugeCategory = 'MODE' | import('@be-music/player-engine/ruleset').BeatorajaGaugeCategory;
 
 /** Allowed values for {@link PlayOptions.bga}. */
 export type BGAMode = 'OFF' | 'ON' | 'AUTOPLAY_ONLY';

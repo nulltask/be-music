@@ -72,6 +72,8 @@
           {"id":30,"channel":"13","type":"normal","timeUs":4250000},
           {"id":31,"channel":"14","type":"normal","timeUs":4375000}
         ],
+        "headerBPM": 120,
+        "bpmRange": {"min":120,"max":120},
         "chartFingerprint": "bmfp0:abab99b55de70df879641468c540a6d5ec5a9bd767e3d821c7bfa411ca9c1027",
         "playFingerprint": "bmfp0:abab99b55de70df879641468c540a6d5ec5a9bd767e3d821c7bfa411ca9c1027",
         "title": "dense",

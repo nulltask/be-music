@@ -71,7 +71,8 @@ describe('course results', () => {
       gauge: { type: 'GRADE', final: 50, cleared: true },
     };
     expect(resolveCourseLamp('lr2', base, 'GROOVE')).toBe('NORMAL');
-    expect(resolveCourseLamp('lr2', base, 'EASY')).toBe('EASY');
+    expect(resolveCourseLamp('lr2', base, 'EASY')).toBe('NORMAL');
+    expect(resolveCourseLamp('lr2', { ...base, gauge: { ...base.gauge, type: 'COURSE-EASY' } }, 'EASY')).toBe('EASY');
     expect(resolveCourseLamp('lr2', base, 'HARD')).toBe('HARD');
     // LR2 awards HARD only for its HARD-family gauges: a DEATH clear is NORMAL.
     expect(resolveCourseLamp('lr2', base, 'DEATH')).toBe('NORMAL');
@@ -212,7 +213,7 @@ describe('course replays', () => {
   });
 
   test('the engine’s course result is lamped by the judge ruleset the run was played on', async () => {
-    // LR2: an EASY pick lamps a grade course EASY, though it plays on the GRADE gauge.
+    // LR2: a grade course resets an EASY pick to GROOVE, so it lamps NORMAL.
     const easyFirst = await playStage(
       presses((index) => index !== 3),
       { kind: 'grade' },
@@ -230,8 +231,8 @@ describe('course replays', () => {
         { played: true, replay: easySecond },
       ],
     });
-    expect(easy.results?.native?.lamp).toBe('EASY');
-    expect(simulateCourseReplay(easy, { ruleset: 'lr2' }).lamp).toBe('EASY');
+    expect(easy.results?.native?.lamp).toBe('NORMAL');
+    expect(simulateCourseReplay(easy, { ruleset: 'lr2' }).lamp).toBe('NORMAL');
 
     // beatoraja: every note a PGREAT is a MAX, beyond LR2's FULL COMBO.
     const maxFirst = await playStage(
@@ -417,4 +418,74 @@ describe('resolveCourseStageStartGauge', () => {
     const over = { kind: 'expert' as const, carryIn: { ...carryIn, gauge: 140 } };
     expect(resolveCourseStageStartGauge('beatoraja', over, 'GROOVE').initial).toBe(100);
   });
+});
+
+test('LR2 course HP exactly two clears only with a full combo, and the aggregate verdict agrees with its lamp', () => {
+  const stage = stageResult({
+    judge: { pgreat: 0, great: 0, good: 9, bad: 1, poor: 0, emptyPoor: 0 },
+    maxCombo: 9,
+    course: { combo: 0, maxCombo: 9 },
+    gauge: { type: 'G-ATTACK', final: 2, cleared: true },
+  });
+  const failed = aggregateCourseResult('lr2/0', { ...COURSE, kind: 'expert' }, [stage], [10], 'G-ATTACK');
+  expect(failed).toMatchObject({ lamp: 'FAILED', gauge: { final: 2, cleared: false } });
+  const full = aggregateCourseResult(
+    'lr2/0',
+    COURSE,
+    [stageResult({ gauge: { type: 'P-ATTACK', final: 2, cleared: true } })],
+    [10],
+    'P-ATTACK',
+  );
+  expect(full).toMatchObject({ lamp: 'FULL_COMBO', gauge: { final: 2, cleared: true } });
+  const above = aggregateCourseResult(
+    'lr2/0',
+    { ...COURSE, kind: 'expert' },
+    [{ ...stage, gauge: { ...stage.gauge, final: 2.01 } }],
+    [10],
+    'G-ATTACK',
+  );
+  expect(above).toMatchObject({ lamp: 'HARD', gauge: { cleared: true } });
+  expect(
+    resolveCourseLamp(
+      'lr2/0',
+      { ...failed, gauge: { ...failed.gauge, cleared: true, final: 1.99 }, maxCombo: 10 },
+      'P-ATTACK',
+    ),
+  ).toBe('FAILED');
+  const beatoraja = aggregateCourseResult(
+    'beatoraja/0',
+    COURSE,
+    [{ ...stage, gauge: { type: 'CLASS', final: 1, cleared: true } }],
+    [10],
+    'GROOVE',
+  );
+  expect(beatoraja.gauge.cleared).toBe(true);
+});
+
+test('LR2 grade results preserve the source reset of G.ATTACK without awarding a HARD lamp', () => {
+  const result = aggregateCourseResult(
+    'lr2/0',
+    COURSE,
+    [stageResult({ maxCombo: 9, course: { combo: 0, maxCombo: 9 } })],
+    [10],
+    'G-ATTACK',
+  );
+  expect(result.lamp).toBe('NORMAL');
+});
+
+test('an LR2 course with unjudged notes does not clear merely because the last stage still has gauge', () => {
+  const result = aggregateCourseResult(
+    'lr2/0',
+    COURSE,
+    [
+      stageResult({
+        judge: { pgreat: 8, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0 },
+        maxCombo: 8,
+        course: { combo: 8, maxCombo: 8 },
+      }),
+    ],
+    [10],
+    'P-ATTACK',
+  );
+  expect(result).toMatchObject({ lamp: 'FAILED', gauge: { cleared: false }, missCount: 2 });
 });

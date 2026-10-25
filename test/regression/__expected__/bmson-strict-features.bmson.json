@@ -245,6 +245,11 @@
           "sourceExRank": 125
         },
         "noteCount": 2,
+        "headerBPM": 160,
+        "bpmRange": {
+          "min": 160,
+          "max": 180
+        },
         "chartFingerprint": "bmfp0:dd03499350662256c9e9b295c67d19eaa88258b4fbb4d0909946bd8ad45509af",
         "playFingerprint": "bmfp0:dd03499350662256c9e9b295c67d19eaa88258b4fbb4d0909946bd8ad45509af",
         "title": "BMSON Strict Test",
