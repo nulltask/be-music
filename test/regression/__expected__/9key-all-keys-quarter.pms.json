@@ -37,7 +37,10 @@
       "speed": {},
       "swBGA": {},
       "player": 1,
-      "lnType": 1
+      "lnType": 1,
+      "wavNameBytePrefixes": {
+        "sample.wav": "7361"
+      }
     },
     "controlFlow": [],
     "events": [
@@ -406,6 +409,11 @@
           "percent": 75
         },
         "noteCount": 144,
+        "headerBPM": 120,
+        "bpmRange": {
+          "min": 120,
+          "max": 120
+        },
         "chartFingerprint": "bmfp0:70e9321c6cdbbd5a2d8b8a1e4d0059b5b78e556ca65a807007cf24888c462b89",
         "playFingerprint": "bmfp0:70e9321c6cdbbd5a2d8b8a1e4d0059b5b78e556ca65a807007cf24888c462b89",
         "title": "9 KEY All-Lane Quarter Chord",

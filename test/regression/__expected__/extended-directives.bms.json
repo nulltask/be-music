@@ -75,7 +75,12 @@
       "lnType": 1,
       "volWAV": 90,
       "defExRank": 100,
-      "wavCmd": "01 01 64"
+      "wavCmd": "01 01 64",
+      "wavNameBytePrefixes": {
+        "sample.wav": "7361",
+        "branch.wav": "6272",
+        "right.wav": "7269"
+      }
     },
     "controlFlow": [],
     "events": [
@@ -201,6 +206,11 @@
           ]
         },
         "noteCount": 12,
+        "headerBPM": 120,
+        "bpmRange": {
+          "min": 120,
+          "max": 120
+        },
         "chartFingerprint": "bmfp0:0e66276d3f73a3e85568caa2eb260b99853fc56da1eb34048768f230b4cbc593",
         "playFingerprint": "bmfp0:0e66276d3f73a3e85568caa2eb260b99853fc56da1eb34048768f230b4cbc593",
         "title": "Extended Directive Payloads",

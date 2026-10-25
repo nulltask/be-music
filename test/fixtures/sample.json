@@ -149,7 +149,10 @@
     "bga": {},
     "scroll": {},
     "speed": {},
-    "swBGA": {}
+    "swBGA": {},
+    "wavNameBytePrefixes": {
+      "sample.wav": "7361"
+    }
   },
   "bmson": {
     "info": {},

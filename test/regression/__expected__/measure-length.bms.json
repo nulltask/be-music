@@ -35,7 +35,10 @@
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBGA": {}
+      "swBGA": {},
+      "wavNameBytePrefixes": {
+        "sample.wav": "7361"
+      }
     },
     "controlFlow": [],
     "events": [
@@ -83,6 +86,11 @@
           "percent": 75
         },
         "noteCount": 3,
+        "headerBPM": 120,
+        "bpmRange": {
+          "min": 120,
+          "max": 120
+        },
         "chartFingerprint": "bmfp0:ff23bb38044a1d05a29e50a72d9fe57bbee0513116fb902b9c98706d36e7add1",
         "playFingerprint": "bmfp0:ff23bb38044a1d05a29e50a72d9fe57bbee0513116fb902b9c98706d36e7add1",
         "title": "Measure Length Test",

@@ -177,6 +177,11 @@ describe('copyPlayOptionsToGUI', () => {
       autoPlay: false,
       gauge: 'EASY',
       random1P: 'S-RANDOM',
+      hRandomThresholdBPM: 120,
+      randomSeed1P: '-1',
+      randomSeed2P: '-1',
+      randomFixedLane1P: 0,
+      randomFixedLane2P: 0,
       random2P: 'OFF',
       dpFlip: false,
       bpmGuide: false,
@@ -248,13 +253,17 @@ describe('copyPlayOptionsToGUI', () => {
 });
 
 describe('PlayOptionsService', () => {
+  // The AC normal hi-speed (`classicHiSpeed`) has no HS-FIX, so these play on the regular one to keep it.
+  const regular: GUIPlayOptions = { ...gui, classicHiSpeed: false };
+
   test("starts from the Debug Menu's options over the defaults", () => {
-    const service = new PlayOptionsService(playOptionsFromGUI(gui));
-    expect(service.current).toEqual({ ...DEFAULT_PLAY_OPTIONS, ...playOptionsFromGUI(gui) });
+    const service = new PlayOptionsService(playOptionsFromGUI(regular));
+    expect(service.current).toEqual({ ...DEFAULT_PLAY_OPTIONS, ...playOptionsFromGUI(regular) });
+    expect(new PlayOptionsService(playOptionsFromGUI(gui)).current.hsFix).toBe('OFF');
   });
 
   test('keeps the options only a select screen changes, so the next select screen starts from them', () => {
-    const service = new PlayOptionsService(playOptionsFromGUI(gui));
+    const service = new PlayOptionsService(playOptionsFromGUI(regular));
     // A select screen reports its whole set (`on.playOptions`): HS-FIX, SUDDEN and the lane cover changed on it.
     service.update({ ...service.current, hsFix: 'MAXBPM', hiddenSudden1P: 'SUDDEN', laneCover: true, shutter: 0.3 });
     // A Debug Menu change of another option leaves them alone.

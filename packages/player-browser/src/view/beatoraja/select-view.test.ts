@@ -249,18 +249,15 @@ describe('BeatorajaSelectView', () => {
     expect(internals.skinState.resolveSelectionRefValue(54)).toBe(2);
   });
 
-  it("steps the skin's judge timing within ±200 ms and hands the options to the host", () => {
-    const onSkinConfigChange = vi.fn();
-    const { draw, press } = setup(makeCollection([makeChart('a', 'pack')]), {
-      kit: beatorajaSelectKit({ offset: 199, option: { 1: 2 }, file: {} }),
-      view: { onSkinConfigChange },
-    });
+  it('steps the judge timing play option by 1 ms within ±500 ms, Shift stepping back', () => {
+    const { draw, press, session } = setup(makeCollection([makeChart('a', 'pack')]));
     draw();
     press(BEATORAJA_BUTTON.JUDGE_TIMING);
     press(BEATORAJA_BUTTON.JUDGE_TIMING);
-    press(BEATORAJA_BUTTON.JUDGE_TIMING, true);
-    expect(onSkinConfigChange.mock.calls.map(([config]) => (config as BeatorajaSkinConfig).offset)).toEqual([200, 199]);
-    expect(onSkinConfigChange.mock.calls[0]![0]).toMatchObject({ option: { 1: 2 } });
+    expect(press(BEATORAJA_BUTTON.JUDGE_TIMING, true).playOptions.judgeTimingMs).toBe(1);
+    session.dispatch({ type: 'set-play-option', key: 'judgeTimingMs', value: 500 });
+    draw();
+    expect(press(BEATORAJA_BUTTON.JUDGE_TIMING).playOptions.judgeTimingMs).toBe(500);
   });
 
   it("loads the focused chart's own images over the library's files", async () => {

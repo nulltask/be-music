@@ -82,7 +82,8 @@ describe('cyclePlayOptionValue', () => {
   test('moves backwards with a negative step and wraps past the first choice', () => {
     expect(cyclePlayOptionValue('gauge1P', 'HARD', -1)).toBe('GROOVE');
     expect(cyclePlayOptionValue('gauge1P', 'GROOVE', -1)).toBe('G-ATTACK');
-    expect(cyclePlayOptionValue('random1P', 'OFF', -1)).toBe('S-RANDOM');
+    // The last choice is beatoraja BATTLE's SYMMETRY RANDOM.
+    expect(cyclePlayOptionValue('random1P', 'OFF', -1)).toBe('SYMMETRY-RANDOM');
   });
 
   test('treats any other step as one choice in its direction', () => {
@@ -189,7 +190,9 @@ test('LR2 CONVERGE and fixed-lane source settings are selectable and validated',
     randomFixedLane2P: 0,
   });
   expect(resolvePlayOptionValue('randomFixedLane1P', 10)).toBe(9);
-  expect(resolvePlayOptionValue('randomFixedLane2P', Number.NaN)).toBe(0);
+  expect(resolvePlayOptionValue('randomFixedLane2P', -3)).toBe(0);
+  // A value that is no number is ignored, as for every numeric option.
+  expect(resolvePlayOptionValue('randomFixedLane2P', Number.NaN)).toBeUndefined();
 });
 
 test('ALL-SCR is selectable only for the beatoraja reference', () => {

@@ -41,7 +41,10 @@
       "swBGA": {},
       "player": 1,
       "lnType": 1,
-      "lnMode": 2
+      "lnMode": 2,
+      "wavNameBytePrefixes": {
+        "sample.wav": "7361"
+      }
     },
     "controlFlow": [],
     "events": [
@@ -129,6 +132,11 @@
           "percent": 75
         },
         "noteCount": 12,
+        "headerBPM": 120,
+        "bpmRange": {
+          "min": 120,
+          "max": 120
+        },
         "chartFingerprint": "bmfp0:abd61247a94c4eac364ef855580cd8c032d43211c269fa29afff84246161defc",
         "playFingerprint": "bmfp0:abd61247a94c4eac364ef855580cd8c032d43211c269fa29afff84246161defc",
         "title": "LN Mode 2 Test (CN)",
