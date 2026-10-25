@@ -1,3 +1,4 @@
+import { resolveEffectiveBattleMode } from './battle-mode.ts';
 import { applySevenToNine } from './seven-to-nine.ts';
 import { clampExtraNoteDepth } from './extra-note-modifier.ts';
 import { resolveAutoScratchSides } from './auto-scratch.ts';
@@ -205,6 +206,7 @@ export async function createPlaySession(
         longNoteModifier: options.longNoteModifier,
         longNoteRate: options.longNoteRate,
         battleMode: options.battleMode,
+        judgeRuleset: options.judgeRuleset,
         autoScratch: options.autoScratch,
         autoScratch1P: options.autoScratch1P,
         autoScratch2P: options.autoScratch2P,
@@ -228,9 +230,13 @@ export async function createPlaySession(
   resolvedChart = playbackChart.resolvedChart;
   backgroundTriggers = collectRealtimeAudioTriggers(resolvedChart, (channel) => !isPlayLaneSoundChannel(channel));
   const battleRequested = options.battleMode ?? playbackChart.battleMode ?? 'OFF';
-  if (battleRequested !== 'OFF' && (options.judgeRuleset ?? 'lr2') !== 'lr2')
-    throw new RangeError('SP TO DP requires LR2 judgment rules.');
-  if ((playbackChart.battleMode ?? 'OFF') !== (options.course === undefined ? battleRequested : 'OFF'))
+  const expectedBattle = resolveEffectiveBattleMode(
+    battleRequested,
+    options.judgeRuleset ?? 'lr2',
+    playbackChart.battleSourceVariant ?? resolvedChart.playVariant,
+    options.course !== undefined,
+  );
+  if ((playbackChart.battleMode ?? 'OFF') !== expectedBattle)
     throw new RangeError('The shared prepared chart must include the selected battle mode.');
   const lr2ExtraRequested = options.lr2ExtraMode ?? playbackChart.lr2ExtraMode ?? false;
   if (lr2ExtraRequested && (options.judgeRuleset ?? 'lr2') !== 'lr2')

@@ -236,7 +236,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       this.refreshRulesetChoices();
     }),
   );
-  this.battleModeController = selectBinding(folder, this.guiState, 'battleMode', 'Battle (LR2)', {
+  this.battleModeController = selectBinding(folder, this.guiState, 'battleMode', 'Battle', {
     OFF: 'OFF',
     'SP TO DP': 'SP-TO-DP',
   });

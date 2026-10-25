@@ -809,8 +809,8 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     parsed.sevenToNineApplied = play.sevenToNineApplied;
   }
   if (play.battleMode !== undefined) {
-    if (play.battleMode !== 'OFF' && play.battleMode !== 'SP-TO-DP')
-      throw new ReplayParseError('play.battleMode: expected OFF or SP-TO-DP');
+    if (play.battleMode !== 'OFF' && play.battleMode !== 'SP-TO-DP' && play.battleMode !== 'BATTLE')
+      throw new ReplayParseError('play.battleMode: expected OFF, SP-TO-DP or BATTLE');
     parsed.battleMode = play.battleMode;
   }
   if (play.battleSourceVariant !== undefined) {
