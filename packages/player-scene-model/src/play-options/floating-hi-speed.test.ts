@@ -78,6 +78,8 @@ test('SUDDEN+ adjustment couples the covers and speed; floating selection preser
     floatingHiSpeed: true,
     hiSpeed: 8,
     hiddenSudden1P: 'SUDDEN',
+    // LANE COVER on, so SUDDEN+ shows.
+    laneCover: true,
     shutter: 0.25,
   });
   expect(options.hiSpeed).toBe(8);

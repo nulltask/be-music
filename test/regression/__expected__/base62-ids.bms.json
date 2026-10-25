@@ -46,7 +46,13 @@
       "base": 62,
       "player": 1,
       "lnType": 1,
-      "lnMode": 1
+      "lnMode": 1,
+      "wavNameBytePrefixes": {
+        "sample.wav": "7361",
+        "branch.wav": "6272",
+        "right.wav": "7269",
+        "wrong.wav": "7772"
+      }
     },
     "controlFlow": [
       "RANDOM 1",
@@ -161,6 +167,11 @@
           "percent": 75
         },
         "noteCount": 14,
+        "headerBPM": 120,
+        "bpmRange": {
+          "min": 120,
+          "max": 120
+        },
         "playFingerprint": "bmfp0:48738709a3f8362eea345e55948c588dfbf081aa1869104e892287eca1db6f9d",
         "title": "Base 62 Object IDs",
         "subtitle": "#BASE 62 keeps upper and lower case as separate slots",
@@ -678,6 +689,11 @@
           "percent": 75
         },
         "noteCount": 14,
+        "headerBPM": 120,
+        "bpmRange": {
+          "min": 120,
+          "max": 120
+        },
         "playFingerprint": "bmfp0:48738709a3f8362eea345e55948c588dfbf081aa1869104e892287eca1db6f9d",
         "title": "Base 62 Object IDs",
         "subtitle": "#BASE 62 keeps upper and lower case as separate slots",

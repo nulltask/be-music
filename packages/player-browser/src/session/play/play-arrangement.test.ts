@@ -162,13 +162,16 @@ test.each(['ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'] as const)(
       random.mockReturnValue(0);
       for (const options of [{ replay }, { fixedArrangement: replay, autoPlay: false }]) {
         const restored = prepare({ judgeRuleset: 'beatoraja', ...options });
+        // The same mines, in time and lane order: mines at one instant on different lanes come back in lane order.
         const population = (play: typeof original) =>
-          play.mineNotes.map((mine) => ({
-            channel: mine.channel,
-            timeUs: Math.round(mine.seconds * 1e6),
-            damage: mine.event.bmson?.damage,
-            silent: mine.silent,
-          }));
+          play.mineNotes
+            .map((mine) => ({
+              channel: mine.channel,
+              timeUs: Math.round(mine.seconds * 1e6),
+              damage: mine.event.bmson?.damage,
+              silent: mine.silent,
+            }))
+            .sort((a, b) => a.timeUs - b.timeUs || a.channel.localeCompare(b.channel));
         expect(population(restored)).toEqual(population(original));
         expect(restored.preparedChart!.mineModifierChangeCount).toBe(original.preparedChart!.mineModifierChangeCount);
       }

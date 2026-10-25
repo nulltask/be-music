@@ -25,6 +25,8 @@ describe('resolveReplayRecording', () => {
       chartSHA256: 'abc',
       sourceChart: chart,
       dpFlip: true,
+      // The options snapshot the replay records: what the play options set.
+      options: { dpFlip: true, gauge1P: 'HARD' },
       view: VIEW,
       native: { chartPath: 'song/chart.bms' },
     });
@@ -33,7 +35,7 @@ describe('resolveReplayRecording', () => {
   test("passes the song's chart through as the fingerprints' source", () => {
     const chart = createEmptyJSON('bms');
     expect(resolveReplayRecording({}, { chart, chartPath: 'chart.bms' }, VIEW).sourceChart).toBe(chart);
-    expect(resolveReplayRecording({}, undefined, VIEW)).toEqual({ gauge: undefined, view: VIEW });
+    expect(resolveReplayRecording({}, undefined, VIEW)).toEqual({ gauge: undefined, options: {}, view: VIEW });
   });
 
   test.each(['random1P', 'random2P'] as const)(

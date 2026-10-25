@@ -43,7 +43,8 @@ function drawLanes(
       playClock: () => nowMs,
       currentSeconds: () => 0,
       currentBeat: () => 0,
-      playState: { combo: 0 },
+      // No cover is absolute (a floating hi-speed's): the LIFT scales the lanes.
+      playState: { combo: 0, view: { covers: [] } },
     },
     layoutMode: 'standard',
     drawsLift: covers !== undefined,

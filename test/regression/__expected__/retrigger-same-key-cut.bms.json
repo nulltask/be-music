@@ -30,7 +30,10 @@
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBGA": {}
+      "swBGA": {},
+      "wavNameBytePrefixes": {
+        "retrigger_a.wav": "7265"
+      }
     },
     "controlFlow": [],
     "events": [
@@ -73,6 +76,11 @@
           "percent": 75
         },
         "noteCount": 2,
+        "headerBPM": 120,
+        "bpmRange": {
+          "min": 120,
+          "max": 120
+        },
         "chartFingerprint": "bmfp0:d9aa4c787699e7aa9bdb22ec49d42ffee9c8631c1d821e7ac916ec3262add63a",
         "playFingerprint": "bmfp0:d9aa4c787699e7aa9bdb22ec49d42ffee9c8631c1d821e7ac916ec3262add63a",
         "title": "Retrigger Same Key Cut",
