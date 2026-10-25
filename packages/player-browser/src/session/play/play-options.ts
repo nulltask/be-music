@@ -160,6 +160,8 @@ export interface PlaySessionOptions {
   sevenToNineType?: import('@be-music/player-engine/lanes').SevenToNineType;
   battleMode?: BattleMode;
   dBattleScratch?: boolean;
+  /** beatoraja LN MODE for charts whose long-note mode is undefined. */
+  longNoteMode?: 'LN' | 'CN' | 'HCN';
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;
   extraNoteDepth?: number;

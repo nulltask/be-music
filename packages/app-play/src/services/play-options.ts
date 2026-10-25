@@ -48,6 +48,7 @@ export type GUIPlayOptions = Pick<
   | 'sevenToNineType'
   | 'battleMode'
   | 'dBattleScratch'
+  | 'longNoteMode'
   | 'customJudge'
   | 'customJudgeKeyPerfectGreat'
   | 'customJudgeKeyGreat'
@@ -109,6 +110,7 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     sevenToNineType: state.sevenToNineType,
     battleMode: state.battleMode,
     dBattleScratch: state.dBattleScratch,
+    longNoteMode: state.longNoteMode,
     customJudge: state.customJudge,
     customJudgeKeyPerfectGreat: state.customJudgeKeyPerfectGreat,
     customJudgeKeyGreat: state.customJudgeKeyGreat,
@@ -185,6 +187,7 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.sevenToNineType = options.sevenToNineType;
   state.battleMode = options.battleMode;
   state.dBattleScratch = options.dBattleScratch;
+  state.longNoteMode = options.longNoteMode;
   state.customJudge = options.customJudge;
   state.customJudgeKeyPerfectGreat = options.customJudgeKeyPerfectGreat;
   state.customJudgeKeyGreat = options.customJudgeKeyGreat;

@@ -93,6 +93,7 @@ export interface DebugMenuSettings {
   sevenToNineType: PlayerGUIState['sevenToNineType'];
   battleMode: PlayerGUIState['battleMode'];
   dBattleScratch: boolean;
+  longNoteMode: PlayerGUIState['longNoteMode'];
   customJudge: boolean;
   customJudgeKeyPerfectGreat: number;
   customJudgeKeyGreat: number;
@@ -268,6 +269,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'sevenToNineType', resolvePlayOptionValue('sevenToNineType', raw.sevenToNineType));
   assign(settings, 'battleMode', resolvePlayOptionValue('battleMode', raw.battleMode));
   assign(settings, 'dBattleScratch', resolvePlayOptionValue('dBattleScratch', raw.dBattleScratch));
+  assign(settings, 'longNoteMode', resolvePlayOptionValue('longNoteMode', raw.longNoteMode));
   assign(settings, 'customJudge', resolvePlayOptionValue('customJudge', raw.customJudge));
   assign(
     settings,
@@ -520,6 +522,7 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('sevenToNineType');
   assignState('battleMode');
   assignState('dBattleScratch');
+  assignState('longNoteMode');
   assignState('customJudge');
   assignState('customJudgeKeyPerfectGreat');
   assignState('customJudgeKeyGreat');
@@ -628,6 +631,7 @@ export function captureDebugMenuSettings(
     sevenToNineType: state.sevenToNineType,
     battleMode: state.battleMode,
     dBattleScratch: state.dBattleScratch,
+    longNoteMode: state.longNoteMode,
     customJudge: state.customJudge,
     customJudgeKeyPerfectGreat: state.customJudgeKeyPerfectGreat,
     customJudgeKeyGreat: state.customJudgeKeyGreat,

@@ -529,6 +529,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       sevenToNineType: playOptions.sevenToNineType,
       battleMode: playOptions.battleMode,
       dBattleScratch: playOptions.dBattleScratch,
+      longNoteMode: playOptions.longNoteMode,
       lr2ExtraMode: playOptions.lr2ExtraMode,
       lr2ExtraLevel: playOptions.lr2ExtraLevel,
       extraNoteDepth: playOptions.extraNoteDepth,

@@ -88,6 +88,7 @@ import {
   type PlayState,
 } from '@be-music/player-scene-model';
 import { resolveLaneSides } from '../../chart/lane-sides.ts';
+import { applyUndefinedLongNoteMode } from '@be-music/player-engine/course';
 
 /** The battle modes that copy one SP chart onto both sides (each copy keeps a 2P source channel). */
 const DUPLICATED_BATTLE_MODES: ReadonlySet<string> = new Set(['D-BATTLE', 'BATTLE', 'BATTLE-AS']);
@@ -136,6 +137,7 @@ export interface PlayChartContext {
       | 'sevenToNineType'
       | 'battleMode'
       | 'dBattleScratch'
+      | 'longNoteMode'
       | 'lr2ExtraMode'
       | 'lr2ExtraLevel'
       | 'tempo'
@@ -279,7 +281,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     arrangement === undefined && ctx.options.preResolved !== undefined
       ? ctx.options.preResolved
       : resolvePlayChart(
-          chartEntry.chart,
+          resolvePlayerLongNoteChart(ctx, chartEntry.chart, arrangement?.chart.lnMode),
           arrangement?.play.randomDraws !== undefined ? { randomDraws: arrangement!.play.randomDraws } : {},
         );
   ctx.resolvedChart = resolved;
@@ -1058,6 +1060,24 @@ export function applyRandomMode(
     remapAll(map);
     return;
   }
+}
+
+const LONG_NOTE_MODE_VALUES = { LN: 1, CN: 2, HCN: 3 } as const;
+
+/**
+ * beatoraja's LN MODE (`PlayerConfig.lnmode`) for a chart whose long-note mode is undefined; a chart (or course)
+ * mode takes precedence. A replay applies the effective chart mode it recorded.
+ */
+function resolvePlayerLongNoteChart(
+  ctx: Pick<PlayChartContext, 'options'>,
+  chart: BeMusicJSON,
+  recordedMode: 1 | 2 | 3 | undefined,
+): BeMusicJSON {
+  if (recordedMode !== undefined) return recordedMode === 1 ? chart : applyUndefinedLongNoteMode(chart, recordedMode);
+  const mode = ctx.options.longNoteMode ?? 'LN';
+  if (mode === 'LN') return chart;
+  if (ctx.options.judgeRuleset !== 'beatoraja') throw new RangeError('LN MODE is available only for beatoraja.');
+  return applyUndefinedLongNoteMode(chart, LONG_NOTE_MODE_VALUES[mode]);
 }
 
 /**
