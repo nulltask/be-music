@@ -292,9 +292,10 @@ export class LibraryService {
     if (chartFiles.length > 0) {
       tasks.push(this.loadCharts(chartFiles));
     }
+    const playContinues = this.showing() === 'play';
     if (tasks.length === 0) {
-      // A canceled skin drop resumes select; unrelated files leave navigation untouched.
-      if (themeFamilies.size > 0) await this.showSelect();
+      // A canceled skin drop resumes select; unrelated files leave navigation untouched. A play on the stage stays.
+      if (themeFamilies.size > 0 && !playContinues) await this.showSelect();
       return;
     }
     await Promise.all(tasks);
@@ -325,9 +326,10 @@ export class LibraryService {
     // Open what was dropped: its folder, or the folder list when the drop carried several.
     const dropped = navigationAfterDrop(this.collection.charts, previousChartIds);
     if (dropped !== undefined) this.browseTo(dropped);
-    // Commit the confirmed family before mounting the next select scene.
+    // Commit the confirmed family before mounting the next select scene. A skin dropped onto a play swaps that play's
+    // family (`applyDroppedSkin`) and leaves the chart running; the select screen takes the family when the play returns.
     if (confirmedFamily !== undefined) await this.applyDroppedSkin(confirmedFamily);
-    await this.showSelect();
+    if (!(playContinues && chartFiles.length === 0 && confirmedFamily !== undefined)) await this.showSelect();
     if (replayFiles.length > 0) {
       await this.startReplayReplayFromFile(replayFiles[0]!);
     }
