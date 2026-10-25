@@ -299,3 +299,11 @@ test('previous arrangement is forwarded without enabling replay input or replaci
   expect(options.settings.fixedArrangement).toBe(fixedArrangement);
   expect(options.autoPlay).toBe(false);
 });
+
+test('passes scroll REMOVE into the scene separately from visual CONSTANT', () => {
+  expect(
+    resolvePlaySceneOptions(
+      input({ playOptions: { ...PLAY_OPTIONS, scrollModifier: 'REMOVE', visualConstant: false } }),
+    ).settings,
+  ).toMatchObject({ scrollModifier: 'REMOVE', visualConstant: false });
+});

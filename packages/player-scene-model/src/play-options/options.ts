@@ -1,4 +1,4 @@
-import type { MineModifier, LongNoteModifier } from '@be-music/player-engine/lanes';
+import type { MineModifier, LongNoteModifier, ScrollModifier } from '@be-music/player-engine/lanes';
 import type { GaugeType, GaugeAutoShift } from '@be-music/player-engine/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
 
@@ -126,6 +126,8 @@ export interface PlayOptions {
   /** beatoraja ADD probability, 0..1, default 1. */
   longNoteRate: number;
   mineModifier: MineModifier;
+  /** beatoraja timeline BPM/STOP/SCROLL removal, independent of visual CONSTANT. */
+  scrollModifier: ScrollModifier;
   /** beatoraja: continue judging with the selected dead gauge, or stop on failure. */
   gaugeAutoShift: GaugeAutoShift;
   bottomShiftableGauge: import('@be-music/player-engine/ruleset').GaugeShiftBottom;

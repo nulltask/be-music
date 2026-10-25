@@ -208,6 +208,7 @@ export class DebugMenu {
   public longNoteModifierController: ListInputBindingApi<PlayOptions['longNoteModifier']> | undefined;
   public longNoteRateController: PaneBinding | undefined;
   public mineModifierController: ListInputBindingApi<PlayOptions['mineModifier']> | undefined;
+  public scrollModifierController: ListInputBindingApi<PlayOptions['scrollModifier']> | undefined;
   public judgeAlgorithmController: ListInputBindingApi<PlayOptions['judgeAlgorithm']> | undefined;
   /** The "Tempo (%)" slider — left enabled during a play whose tempo can change live (`allowsLiveTempo`). */
   public tempoController: PaneBinding | undefined;
@@ -500,6 +501,11 @@ export class DebugMenu {
       this.setPlayOptions({ mineModifier: 'OFF' });
     }
     if (this.mineModifierController) this.mineModifierController.hidden = !beatoraja;
+    if (!beatoraja && this.guiState.scrollModifier !== 'OFF') {
+      this.guiState.scrollModifier = 'OFF';
+      this.setPlayOptions({ scrollModifier: 'OFF' });
+    }
+    if (this.scrollModifierController) this.scrollModifierController.hidden = !beatoraja;
     if (!beatoraja && this.guiState.judgeAlgorithm !== 'combo') {
       this.guiState.judgeAlgorithm = 'combo';
       this.setPlayOptions({ judgeAlgorithm: 'combo' });

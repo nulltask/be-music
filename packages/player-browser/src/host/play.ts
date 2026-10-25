@@ -508,6 +508,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       judgeTimingAutoAdjust: playOptions.judgeTimingAutoAdjust,
       hRandomThresholdBPM: playOptions.hRandomThresholdBPM,
       mineModifier: playOptions.mineModifier,
+      scrollModifier: playOptions.scrollModifier,
       longNoteRate: playOptions.longNoteRate,
       gaugeAutoShift: playOptions.gaugeAutoShift,
       bottomShiftableGauge: playOptions.bottomShiftableGauge,

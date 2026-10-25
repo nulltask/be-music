@@ -147,6 +147,9 @@ export async function createPlaySession(
 ): Promise<PlaySession> {
   // Effective calibration is local to this run, even when the caller reuses or freezes its settings.
   options = { ...options };
+  options.scrollModifier ??= options.preparedChart?.scrollModifierApplied;
+  if (options.scrollModifier !== undefined && options.scrollModifier !== 'OFF' && options.judgeRuleset !== 'beatoraja')
+    throw new RangeError('Scroll modification is available only for beatoraja.');
   const { mode } = strategy;
   if (options.judgeTimingAutoAdjust && (options.judgeRuleset ?? 'lr2') !== 'beatoraja')
     throw new RangeError('Automatic display-timing adjustment is available only for beatoraja.');
@@ -169,8 +172,7 @@ export async function createPlaySession(
     Number.isFinite(requestedStartAtSeconds) && requestedStartAtSeconds > 0 ? requestedStartAtSeconds : 0;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const replay = options.replayInputs !== undefined;
-  const resolvedChart = resolveEngineChart(resolvedJSON, options);
-  const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(resolvedChart.timing);
+  let resolvedChart = options.preparedChart?.resolvedChart ?? resolveEngineChart(resolvedJSON, options);
   // Dynamic `#EXRANKxx` changes are a chart fact, recorded whatever the ruleset: LR2 applies them, while beatoraja and
   // That-Which-Must-Not-Be-Named keep their initial windows (their `windowsAt` ignores the timeline). A log played under one ruleset can then
   // be re-simulated under LR2 with the windows LR2 would have used.
@@ -196,10 +198,15 @@ export async function createPlaySession(
         longNoteModifierPlacements: options.longNoteModifierPlacements,
         mineModifier: options.mineModifier,
         mineModifierPlacements: options.mineModifierPlacements,
+        scrollModifier: options.scrollModifier,
       },
       realtimeAudioEndSeconds,
       Math.random,
     );
+  resolvedChart = playbackChart.resolvedChart;
+  const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(resolvedChart.timing);
+  if ((options.scrollModifier ?? 'OFF') !== (playbackChart.scrollModifierApplied ?? 'OFF'))
+    throw new RangeError('The shared prepared chart must include the selected scroll modifier.');
   if (
     options.longNoteModifier?.startsWith('ADD_') &&
     playbackChart.longNoteModifierApplied !== options.longNoteModifier
@@ -308,6 +315,12 @@ export async function createPlaySession(
             ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),
             ...(options.course !== undefined ? { course: options.course } : {}),
             ...hostPlaySettings,
+            ...(options.scrollModifier !== undefined
+              ? {
+                  scrollModifier: options.scrollModifier,
+                  scrollModifierChanged: playbackChart.scrollModifierChanged ?? false,
+                }
+              : {}),
             ...(options.judgeTimingMs !== undefined || options.judgeTimingAutoAdjust !== undefined
               ? {
                   options: {

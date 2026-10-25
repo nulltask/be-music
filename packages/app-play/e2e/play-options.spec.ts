@@ -539,3 +539,29 @@ for (const skin of ['plain', 'native'] as const) {
     });
   }
 }
+
+for (const skin of ['plain', 'native'] as const) {
+  test(`scroll REMOVE preserves note times and records its effect on ${skin}`, async ({ player }) => {
+    await player.open({ 'be-music.built-in-skin': skin });
+    await player.dropText(
+      'scroll.bms',
+      '#TITLE Scroll REMOVE\n#BPM 240\n#BPM01 480\n#STOP01 192\n#00111:01\n#00108:01\n#00209:01\n#00312:01',
+    );
+    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+    await player.setOption(['Play options'], 'Scroll (beatoraja)', 'REMOVE');
+    await player.setOption(['Play options'], 'Auto play', true);
+    await player.cursorTo((bar) => bar.title === 'Scroll REMOVE', 'scroll chart');
+    await player.key('Enter');
+    await player.waitForResult(0);
+    const replay = await player.lastReplay();
+    expect(replay?.play.scrollModifier).toBe('REMOVE');
+    expect(replay?.play.scrollModifierChanged).toBe(true);
+    expect(replay?.play.options?.scrollModifier).toBe('REMOVE');
+    expect(replay?.chart.notes.map((note) => note.timeUs)).toEqual([1000000, 2500000]);
+    await player.leaveResult();
+    await player.setOption(['Play options'], 'Scroll (beatoraja)', 'OFF');
+    await player.dropText('scroll.bmplay.json', JSON.stringify(replay));
+    await player.waitFor((state) => state.scene.kind === 'play' && state.play?.replay === true, 'scroll REMOVE replay');
+    await player.waitForResult(1);
+  });
+}

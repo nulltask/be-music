@@ -223,6 +223,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   longNoteModifier: PlayOptions['longNoteModifier'];
   longNoteRate: number;
   mineModifier: PlayOptions['mineModifier'];
+  scrollModifier: PlayOptions['scrollModifier'];
   gaugeAutoShift: PlayOptions['gaugeAutoShift'];
   bottomShiftableGauge: PlayOptions['bottomShiftableGauge'];
   autoScratch1P: boolean;

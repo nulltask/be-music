@@ -147,6 +147,13 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       this.setPlayOptions({ bottomShiftableGauge: value }),
     ),
   );
+  this.scrollModifierController = selectBinding(folder, this.guiState, 'scrollModifier', 'Scroll (beatoraja)', {
+    OFF: 'OFF',
+    REMOVE: 'REMOVE',
+  });
+  trackPlayOption(
+    this.scrollModifierController.on('change', ({ value }) => this.setPlayOptions({ scrollModifier: value })),
+  );
   this.mineModifierController = selectBinding(folder, this.guiState, 'mineModifier', 'Mines (beatoraja)', {
     OFF: 'OFF',
     REMOVE: 'REMOVE',

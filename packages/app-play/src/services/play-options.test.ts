@@ -33,6 +33,7 @@ const gui: GUIPlayOptions = {
   longNoteModifier: 'REMOVE',
   longNoteRate: 1,
   mineModifier: 'OFF',
+  scrollModifier: 'OFF',
   gaugeAutoShift: 'NONE',
   bottomShiftableGauge: 'ASSIST-EASY',
   autoScratch1P: true,
@@ -81,6 +82,7 @@ describe('playOptionsFromGUI', () => {
       longNoteModifier: 'REMOVE',
       longNoteRate: 1,
       mineModifier: 'OFF',
+      scrollModifier: 'OFF',
       gaugeAutoShift: 'NONE',
       bottomShiftableGauge: 'ASSIST-EASY',
       autoScratch1P: true,
@@ -134,6 +136,7 @@ describe('copyPlayOptionsToGUI', () => {
       fixedDisplayArea: false,
       judgeAlgorithm: 'combo',
       mineModifier: 'OFF',
+      scrollModifier: 'OFF',
       gaugeAutoShift: 'NONE',
       bottomShiftableGauge: 'ASSIST-EASY',
       longNoteModifier: 'OFF',
@@ -259,4 +262,12 @@ describe('previous arrangement selection', () => {
     service.update({ longNoteRate: 0.5 });
     expect(service.arrangementFor('chart')).toBeUndefined();
   });
+});
+
+test('scroll REMOVE transfers between GUI and play options independently of visual CONSTANT', () => {
+  const state = { ...gui, scrollModifier: 'REMOVE' as const, visualConstant: false };
+  expect(playOptionsFromGUI(state)).toMatchObject({ scrollModifier: 'REMOVE', visualConstant: false });
+  const restored = { ...gui };
+  copyPlayOptionsToGUI({ ...DEFAULT_PLAY_OPTIONS, scrollModifier: 'REMOVE' }, restored);
+  expect(restored.scrollModifier).toBe('REMOVE');
 });

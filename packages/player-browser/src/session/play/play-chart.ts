@@ -126,6 +126,7 @@ export interface PlayChartContext {
       | 'judgeRuleset'
       | 'longNoteModifier'
       | 'longNoteRate'
+      | 'scrollModifier'
       | 'mineModifier'
       | 'autoScratch1P'
       | 'autoScratch2P'
@@ -197,6 +198,8 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     (ctx.options.replay?.play.judgeRuleset ?? ctx.options.judgeRuleset ?? 'lr2') !== 'lr2'
   )
     throw new RangeError('HS-FIX CONSTANT is an LR2 option; beatoraja visual CONSTANT is a separate setting.');
+  if (!arrangement && ctx.options.scrollModifier === 'REMOVE' && ctx.options.judgeRuleset !== 'beatoraja')
+    throw new RangeError('Scroll modification is available only for beatoraja.');
   if (!arrangement && ctx.options.longNoteModifier?.startsWith('ADD_') && ctx.options.judgeRuleset !== 'beatoraja')
     throw new RangeError('Long-note addition is available only for beatoraja.');
   if (ctx.options.fixedDisplayArea && (ctx.options.replay?.play.judgeRuleset ?? ctx.options.judgeRuleset) !== '____')
@@ -302,12 +305,12 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     )
   )
     throw new RangeError('beatoraja CONVERGE and playable RANDOM/S-RANDOM are PMS arrangements.');
-  const resolvedPlay = resolveChart(resolved, {
+  let resolvedPlay = resolveChart(resolved, {
     randomDraws,
     playVariant: hostPlayVariant,
     inferBmsLNTypeWhenMissing: true,
   });
-  ctx.resolvedPlayChart = resolvedPlay;
+
   // The invisible / keysound array is always prepared even when the overlay is off — so the Tweakpane toggle can flip
   // the visualization on mid-song without a chart restart; the per-frame render loop is gated on
   // `showInvisibleNotes`. The audio horizon is left at 0: the engine recomputes its own from realtime triggers.
@@ -330,6 +333,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
           }
         : {}),
       mineModifier: arrangement?.play.mineModifier ?? ctx.options.mineModifier,
+      scrollModifier: arrangement?.play.scrollModifier ?? ctx.options.scrollModifier,
       ...(arrangement?.play.mineModifier?.startsWith('ADD_')
         ? {
             mineModifierPlacements: arrangement.chart.notes
@@ -347,6 +351,8 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     0,
     Math.random,
   );
+  resolvedPlay = prepared.resolvedChart;
+  ctx.resolvedPlayChart = resolvedPlay;
   ctx.preparedChart = prepared;
   ctx.touchTokenByChannel = undefined;
   ctx.notes = prepared.notes;

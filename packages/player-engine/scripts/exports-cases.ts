@@ -82,7 +82,7 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
     run: (fixtures) => {
       playerAPI.preparePlaybackChart(
         resolveChart(fixtures.sampleBmsJSON, { chartPath: '.bms', inferBmsLNTypeWhenMissing: true }),
-        { laneModeExtension: '.bms', longNoteModifier: 'REMOVE' },
+        { laneModeExtension: '.bms', longNoteModifier: 'REMOVE', scrollModifier: 'REMOVE' },
       );
     },
   });

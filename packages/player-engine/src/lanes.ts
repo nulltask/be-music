@@ -59,3 +59,5 @@ export {
 } from './core/long-note-modifier.ts';
 
 export { randomizeLR2ScatterNotes } from './lane-scatter.ts';
+
+export type { ScrollModifier } from './core/scroll-modifier.ts';

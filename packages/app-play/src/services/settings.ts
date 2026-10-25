@@ -260,6 +260,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     longNoteModifier: 'OFF',
     longNoteRate: 1,
     mineModifier: 'OFF',
+    scrollModifier: 'OFF',
     gaugeAutoShift: 'NONE',
     bottomShiftableGauge: 'ASSIST-EASY',
     autoScratch1P: false,

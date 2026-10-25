@@ -36,6 +36,7 @@ export type GUIPlayOptions = Pick<
   | 'floatingHiSpeed'
   | 'fixedDisplayArea'
   | 'judgeAlgorithm'
+  | 'scrollModifier'
   | 'mineModifier'
   | 'gaugeAutoShift'
   | 'bottomShiftableGauge'
@@ -87,6 +88,7 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     longNoteModifier: state.longNoteModifier,
     longNoteRate: state.longNoteRate,
     mineModifier: state.mineModifier,
+    scrollModifier: state.scrollModifier,
     gaugeAutoShift: state.gaugeAutoShift,
     bottomShiftableGauge: state.bottomShiftableGauge,
     autoScratch1P: state.autoScratch1P,
@@ -144,6 +146,7 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.longNoteModifier = options.longNoteModifier;
   state.longNoteRate = options.longNoteRate;
   state.mineModifier = options.mineModifier;
+  state.scrollModifier = options.scrollModifier;
   state.gaugeAutoShift = options.gaugeAutoShift;
   state.bottomShiftableGauge = options.bottomShiftableGauge;
   state.autoScratch1P = options.autoScratch1P;
@@ -182,6 +185,7 @@ export class PlayOptionsService {
       longNoteModifier: play.longNoteModifier ?? play.options?.longNoteModifier,
       longNoteRate: play.longNoteRate ?? play.options?.longNoteRate,
       mineModifier: play.mineModifier ?? play.options?.mineModifier,
+      scrollModifier: play.scrollModifier ?? play.options?.scrollModifier,
     });
     const changes: Partial<PlayOptions> = {};
     for (const key of ARRANGEMENT_OPTIONS) Object.assign(changes, { [key]: source[key] });
@@ -232,4 +236,5 @@ const ARRANGEMENT_OPTIONS = [
   'longNoteModifier',
   'longNoteRate',
   'mineModifier',
+  'scrollModifier',
 ] as const satisfies readonly (keyof PlayOptions)[];
