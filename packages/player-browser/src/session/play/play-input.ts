@@ -60,8 +60,9 @@ export function attachPlayInput(ctx: PlayInputContext, host: PixiSceneHost): voi
   // affects the visual scroll speed (which the engine doesn't own). The WebInputRuntime's `shouldSkipKey`
   // filter skips this list (`PLAY_SCENE_KEY_CODES` in `play-keys.ts`) so it doesn't also push duplicate `interrupt` /
   // `toggle-pause` commands. Lane input goes through the WebInputRuntime's own `keydown` listener to the engine's
-  // input bus.
-  window.addEventListener('keydown', ctx.handleSharedEngineExitKey);
+  // input bus. The play listens in the capture phase, ahead of that runtime, which takes the default of every key with a
+  // lane token (Enter included): the play's keys then see only what a focused control did to an event.
+  window.addEventListener('keydown', ctx.handleSharedEngineExitKey, { capture: true });
   // Holding Backspace quits like Escape (`QuitHoldController`); the keyup / blur listeners end the hold.
   window.addEventListener('keyup', ctx.handleQuitHoldKeyUp);
   window.addEventListener('blur', ctx.cancelQuitHold);
@@ -111,7 +112,7 @@ export function attachPlayInput(ctx: PlayInputContext, host: PixiSceneHost): voi
 /** Unwires what {@link attachPlayInput} wired, as the play leaves the stage (`PlaySession.detachInput`). */
 export function detachPlayInput(ctx: PlayInputContext): void {
   // Detach window-level event listeners so a stray keypress doesn't hit a view that is off stage.
-  window.removeEventListener('keydown', ctx.handleSharedEngineExitKey);
+  window.removeEventListener('keydown', ctx.handleSharedEngineExitKey, { capture: true });
   window.removeEventListener('keyup', ctx.handleQuitHoldKeyUp);
   window.removeEventListener('blur', ctx.cancelQuitHold);
   ctx.quitHold.cancel();
@@ -201,23 +202,24 @@ export function handleWindowFocus(ctx: PlayInputContext): void {
 export function handleSharedEngineExitKey(ctx: PlayInputContext, event: KeyboardEvent): void {
   // Backspace first: its auto-repeat must still be `preventDefault`ed, which the repeat filter below would skip.
   if (ctx.quitHold.handleKeyDown(event)) return;
+  // The play listens in the capture phase, so a key typed into a focused field, or Enter / Space on a focused button,
+  // stays the control's. Whether the event's default was taken says nothing here: the lane input runtime takes it for
+  // every key with a lane token.
+  const target = (event.composedPath?.()[0] ?? event.target) as HTMLElement | null;
+  const tag = target?.tagName ?? '';
   if (
-    ctx.playState.view.hiSpeed.floating ||
-    event.code === 'Numpad0' ||
-    (ctx.playState.view.fixedDisplayArea && event.code === 'Enter')
-  ) {
-    const target = (event.composedPath?.()[0] ?? event.target) as HTMLElement | null;
-    if (
-      event.defaultPrevented ||
-      event.altKey ||
-      event.ctrlKey ||
-      event.metaKey ||
-      event.isComposing ||
-      target?.isContentEditable ||
-      /^(INPUT|SELECT|TEXTAREA)$/u.test(target?.tagName ?? '')
-    )
-      return;
-  }
+    target?.isContentEditable === true ||
+    /^(INPUT|SELECT|TEXTAREA)$/u.test(tag) ||
+    (/^(BUTTON|A|SUMMARY)$/u.test(tag) && (event.code === 'Enter' || event.code === 'Space'))
+  )
+    return;
+  if (
+    (ctx.playState.view.hiSpeed.floating ||
+      event.code === 'Numpad0' ||
+      (ctx.playState.view.fixedDisplayArea && event.code === 'Enter')) &&
+    (event.altKey || event.ctrlKey || event.metaKey || event.isComposing)
+  )
+    return;
   // A held cover key keeps moving its cover, so the cover keys come before the repeat filter.
   if (ctx.options.coverKeys === true && handleCoverKey(ctx, event)) return;
   if (event.repeat) return;
