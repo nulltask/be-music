@@ -22,6 +22,9 @@ play skin は variant ごとにまとめ、browser player が譜面に合う lay
 - `9`
 - `10`
 - `14`
+- `7-battle` / `5-battle`（LR2 の BATTLE 用プレイスキン。`#INFORMATION` の種類 12 / 13）
+
+バトルモードは変換後の譜面のスキンで遊びます（バトルモードを渡した `pickLR2PlaySkinVariant`）。5/7KEY 譜面の 2 人プレイ BATTLE は BATTLE 用プレイスキンで（5KEY の BATTLE は LR2 と同じく 7KEY のものを使います）、テーマにない場合は DP スキンで遊びます。D-BATTLE と SP TO DP は倍にした譜面の DP スキン、DP・9KEY 譜面の SP TO DP は統合した譜面の SP スキンです。BATTLE 用プレイスキンは宣言したテーマからだけ読み込み、ほかのキーモードの代わりには使いません。LR2 の 9KEY BATTLE スキン（種類 14）は読み込みません。LR2 に 9KEY の BATTLE はないためです。
 
 LR2 には鍵盤モード用の play skin がないため、`24` / `48` KEY の譜面は `7` / `14` の play skin を借ります（`play-skin.ts` の `PLAY_SKIN_FALLBACKS`）。frame、gauge、judge の画像は skin が、レーンはホストのフォールバック playfield が描きます。
 
@@ -32,7 +35,7 @@ consumer は scene に必要な field だけを読みます。
 
 ブラウザーの Gameplay は、ノーツ・小節線・BGA・レーンカバー・エフェクトを含むすべてのレイヤーをスキンの設計座標で描き、キャンバス全体を一度だけ画面に合わせて拡縮します。HD スキンを固定の 640×480 のプレイ領域に縮小する処理は不要になります。スクロール距離とリプレイの表示時間にも同じ座標スケールを使います。
 
-`#RESOLUTION,0` / `1` / `2` / `3` は 640×480 / 1280×720 / 1920×1080 / 3840×2160 を指定します。拡張の `#RESOLUTION,width,height` も受け付けます。末尾の高さが空でも番号指定として読み込みます。指定がない場合や無効な場合は、先行する有効な指定がなければ座標から自動判定します。指定も HD 座標もないスキンは 640×480 のままです。`#INFORMATION` のプレイ種別は 0=7KEY、1=5KEY、2=14KEY、3=10KEY、4=9KEY で、読み込み時のキーモード条件にも選択したスキンの種別を反映します。
+`#RESOLUTION,0` / `1` / `2` / `3` は 640×480 / 1280×720 / 1920×1080 / 3840×2160 を指定します。拡張の `#RESOLUTION,width,height` も受け付けます。末尾の高さが空でも番号指定として読み込みます。指定がない場合や無効な場合は、先行する有効な指定がなければ座標から自動判定します。指定も HD 座標もないスキンは 640×480 のままです。`#INFORMATION` のプレイ種別は 0=7KEY、1=5KEY、2=14KEY、3=10KEY、4=9KEY、12=7KEY BATTLE、13=5KEY BATTLE で、読み込み時のキーモード条件にも選択したスキンの種別を反映します。
 
 画像とビットマップフォントは、ディレクトリを含むパスの末尾が最も長く一致する素材を優先します。単独配布の `LITONE4/` フォルダーでも元の `LR2files/Theme/LITONE4/…` 参照を保持でき、Play と Result の同名素材を取り違えません。DXA は引き続き自動展開します。
 
@@ -166,6 +169,8 @@ LR2 のプレイビュー（`@be-music/player-browser` の `view/lr2/play-view.t
 | レーンでロングノートを押している間  | そのレーンのホールドのタイマー（70-89）。離したあと、その長さでフェードアウト |
 
 キーオンの組（100-119）はプレイのセッションのキービームを映します。セッションはどの種類のキービームもチャンネルごとに持ち（`keyBeamStartedAt`、`keyBeamFadeStartedAt`）、LR2 のビューは点いているチャンネルをそれぞれのキーオンのタイマー（`resolveLR2LaneTimer('key-on', …)`）に対応させます。レーンの番号とタイマーの番号は LR2 のビューの中にとどめ、セッションと共有のプレイフィールドはチャンネルで扱います。
+
+バトル系のオプションは、セットアップ（`options.battleMode`、`lr2ExtraMode`、`gauge2P`、レーンの `battleSourceVariant`）と、2 人プレイの BATTLE ではフレームの `secondPlayer`（2P の `PlayState` の表示とスコア）からプレイの状態に届きます。2P は数値 120-136（2P のスコアで読む 1P の 100-116。108 / 128 はそれぞれ相手との EX スコア差）、ランク 210-217、ゲージ範囲 250-260、2P のグルーヴゲージ（インデックス 1。2P がいるときだけ描画）で読みます。op 10-13 は LR2 と同じくキーフィルタとバトルモードで点き（10 は DP 系フィルタか D-BATTLE / SP TO DP、11 と 13 は BATTLE、12 はそのどちらか）、EXTRA MODE は 52 の代わりに 53 を点けます。キーモードの op 160-164 は変換後のレーンではなく元の譜面に従います。7KEY 譜面の BATTLE は 7 KEYS を、5/7KEY 譜面の D-BATTLE と SP TO DP はそれに加えて 10 / 14 KEYS を点けます（`resolveLR2PlayKeyModeOps`）。選曲画面ではボタン 56 が BATTLE を OFF・BATTLE・D-BATTLE・SP TO DP の順に切り替え（`LR2_BATTLE_CYCLE`）、テキスト 69 は LR2 の `optionstr.csv` と同じ表記を出します（DP 譜面では COUPLE、そこでの SP TO DP は DP TO SP / 9 TO 7、適用されない場合は DISABLE）。
 
 ## 解析済み directive
 

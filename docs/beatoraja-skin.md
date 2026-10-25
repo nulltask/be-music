@@ -270,8 +270,13 @@ The select, decide, play and result screens are player-browser's beatoraja famil
 draw the sessions' frames through the select, decide and result resolvers, the result view reading a `PlayResult`
 directly, and read beatoraja's scene timers off each frame. The select view reads the browse position's list options for
 the MODE and SORT image sets (`BEATORAJA_KEYS_FILTERS` and `BEATORAJA_SORTS` give their order, `beatorajaKeysFilterIndex`
-and `beatorajaSortIndex` an option's place) and keeps the LNMODE choice itself (`lnMode` of the select input, else the
-chart's `#LNMODE` through `beatorajaLNModeIndex`); its buttons come back to the select session as intents.
+and `beatorajaSortIndex` an option's place); its buttons come back to the select session as intents. The option buttons
+step the play options as beatoraja's select screen does (`resolveBeatorajaOptionButton`): LNMODE (308) the LN MODE,
+`optiondp` (54) OFF / FLIP / BATTLE / BATTLE AS, and 75, 78, 340, 341, 350-353, 360 and 361 the display-timing
+auto-adjust, gauge auto shift, judgment algorithm, bottom shiftable gauge, EXTRA NOTE depth, mine, scroll and long-note
+modes and 7 TO 9; their label images read the same options (`resolveBeatorajaPlayOptionIndex`). PLAY and PRACTICE (315)
+start in the regular and the practice mode. The LNMODE image shows the player's LN MODE on the select and decide
+screens and the played chart's long-note mode on the play and result screens, as beatoraja's does.
 The play view draws through `BeatorajaPlayBridge`: the play's state is the play session's `PlayState`, and the bridge
 applies the ops and timers the mapping resolves for each frame, judgment and lane action
 ([player-web.md](./player-web.md#the-play-screen)).

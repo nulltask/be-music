@@ -76,6 +76,10 @@ LR2 / beatoraja / 名前を言ってはいけないあのゲームのリザル�
 
 `results.*.fullCombo` は、beatoraja FIVEKEYS/PMS の空 POOR 後の終了時のフルコンボ可否を必要な場合に記録します。全ノート GOOD 以上も引き続き必要です。エンジンとシミュレータが現在のコンボから確定するため、最初のノートより前の空 POOR は、その後のフルコンボを妨げません。このフィールドのない旧キャッシュは判定数による互換動作を保つので、修正後のモード規則を適用するには再シミュレーションします。コース結果も可否を保持し、コース全体のコンボ条件と合わせて判定します。
 
+**実際に効いたプレイオプション。** 選択時のスナップショット（`play.options`、[プレイヤーが見ていたもの](#プレイヤーが見ていたもの) を参照）とは別に、`play` は判定と譜面を決める型付きフィールドを持ち、オプションが OFF の間はそれぞれ省略されます。`judgeAlgorithm` と `customJudge`（beatoraja の判定アルゴリズムと CUSTOM JUDGE の倍率）、`gaugeAutoShift` と `bottomShiftableGauge`、`autoScratch1P` / `autoScratch2P`、変更内容を伴う譜面変更オプション — `longNoteModifier`・`longNoteRate`・`longNoteModifierChangeCount`、`mineModifier`・`mineModifierChangeCount`、`scrollModifier`・`scrollSection`・`scrollRate`・`scrollModifierTimeline`・`scrollModifierChanged`、`extraNoteDepth`・`extraNoteScratch`・`extraNoteChangeCount`、LR2 EXTRA MODE の `lr2ExtraMode`・`lr2ExtraLevel`・`lr2ExtraEffectiveLevel`・`lr2ExtraConvertedObjectCount`・`lr2ExtraTempo`、7 TO 9 の `sevenToNinePattern`・`sevenToNineType`・`sevenToNineThresholdBPM`・`sevenToNineApplied` — そしてバトル・変換モードの `battleMode`、元譜面の `battleSourceVariant`、`battleTempo`、`battleAssist1P` / `battleAssist2P`、`battleChangedObjectCount`、`battleDroppedObjectCount`、LR2 D-BATTLE の `dBattleScratch` です。`chart.notes` はこれらすべてを適用した後の譜面なので、リプレイやシミュレーションが再抽選することはありません。生成された LN の始点は `generatedLongNote: true`、生成された地雷は `silent: true` と解決済みの `damage`、移動したノートは `sourceChannel` を持ちます。`chart.headerBPM` と `chart.bpmRange` は、テンポで譜面を分類するオプションが読むヘッダ BPM と BPM の最小・最大を保持します。
+
+**2 人プレイ。** 2 人プレイ（`play.battleMode: "TWO-PLAYER"`：LR2 の BATTLE、または名前を言ってはいけないあのゲームの 2 人プレイ）は、両プレイヤーの押下を 1 本の `inputs` に記録し、それぞれ自分の側のチャンネル（`1x` / `2x`）に載せます。`results.native` は 1P、`results.secondPlayer` は 2P の結果で、形は同じです。`play.gauge2P` は 2P のゲージです。ログの再シミュレーションは、ライブのプレイと同じく各サイドを個別に判定します。
+
 時刻は譜面ゼロ基準の整数マイクロ秒です（エンジンのノート時刻と同じ t = 0）。
 
 TypeScript 型・シリアライザ・防御的パーサは
