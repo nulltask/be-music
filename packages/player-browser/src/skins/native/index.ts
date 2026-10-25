@@ -58,7 +58,7 @@ export const nativeSkin: BeMusicSkin = defineBeMusicSkin({
 
 /** Older hosts can show a readable capability notice instead of an empty screen. */
 function drawDOMRequired({ context, width, height }: BeMusicSurface<'2d'>): void {
-  context.fillStyle = '#10151f';
+  context.fillStyle = '#171717';
   context.fillRect(0, 0, width, height);
   context.fillStyle = '#edf2fa';
   context.font = '20px system-ui';

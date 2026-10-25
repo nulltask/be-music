@@ -28,7 +28,7 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
         box-sizing: border-box;
         height: 100%;
         padding: 16px;
-        background: var(--background, #10151f);
+        background: var(--background, #171717);
       }
       ul {
         display: grid;
