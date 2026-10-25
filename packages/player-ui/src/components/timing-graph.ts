@@ -1,8 +1,10 @@
-import { html, nothing, type TemplateResult } from 'lit';
+import { html, nothing, type CSSResultGroup, type TemplateResult } from 'lit';
 import { DataElement } from '../base.ts';
 import type { BeMusicTimingData } from '../models.ts';
+import { previewHost, previewTheme } from '../styles/preview-theme.ts';
 
 export class BeMusicTimingGraphElement extends DataElement<BeMusicTimingData> {
+  static override styles: CSSResultGroup = [previewTheme, previewHost];
   protected override render(): TemplateResult | typeof nothing {
     if (!this.data) return nothing;
     const hits = this.data.timings.slice(-32);

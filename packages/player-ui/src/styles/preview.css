@@ -1,7 +1,5 @@
 /* Preview screens (chart list, play button, HUD controls). Compiled into the components' shadow roots. */
 @import 'tailwindcss' source(none);
-@source '../components/preview-select.ts';
-@source '../components/preview-start.ts';
-@source '../components/preview-hud.ts';
-@source '../components/playback-controls.ts';
+@source '../components';
+@source '../styles';
 @import 'basecoat-css';

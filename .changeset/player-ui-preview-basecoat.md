@@ -2,4 +2,4 @@
 '@be-music/player-ui': patch
 ---
 
-The preview chart list, play button, and video controls use Basecoat inside their shadow roots, so an embed matches the other services.
+The preview screens and the native HTML screens (select, decide, result, chart list, options, and the play HUD panels) use Basecoat inside their shadow roots. The playfield canvases stay as they are.
