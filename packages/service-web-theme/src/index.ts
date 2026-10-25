@@ -1,4 +1,17 @@
 export { renderBuildInfo, type BuildInfo } from './build-info.ts';
+export {
+  renderServiceFooter,
+  serviceOrigins,
+  serviceSite,
+  SERVICE_COPYRIGHT,
+  SERVICE_FOOTER_CLASS,
+  SERVICE_FOOTER_LINK_CLASS,
+  SERVICE_FOOTER_NAV_CLASS,
+  SERVICE_LABELS,
+  SERVICE_NAMES,
+  type ServiceFooterInput,
+  type ServiceName,
+} from './footer.ts';
 export { renderServiceHeader, serviceSkipLink, type ServiceHeaderAccount } from './header.ts';
 export {
   LOCALE_COOKIE,

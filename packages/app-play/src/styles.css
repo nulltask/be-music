@@ -2176,7 +2176,14 @@ html.touch-first .search-input.search-inline:focus {
   gap: 6px;
 }
 
-/* The start-card footer stays outside the skin's playfield. */
+/* The help overlay keeps its build line at the bottom of the overlay, under the dialog card. */
+.help-modal .service-build-footer {
+  position: absolute;
+  right: 0;
+  bottom: 16px;
+  left: 0;
+  z-index: 1;
+}
 .service-build-footer {
   color: #94a3b8;
   text-align: center;
@@ -2185,6 +2192,26 @@ html.touch-first .search-input.search-inline:focus {
 }
 .service-build-footer code {
   font: inherit;
+}
+
+/* The page footer is the start screen only, so it stays off the skin's playfield. */
+.service-page-footer {
+  position: absolute;
+  z-index: 4;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: color-mix(in oklch, var(--background) 92%, transparent);
+}
+.shell:not(.empty) .service-page-footer {
+  display: none;
+}
+.shell.empty .drop {
+  padding-bottom: 11rem;
+}
+.shell.empty .help-button,
+.shell.empty .account-chip {
+  bottom: calc(11rem + env(safe-area-inset-bottom, 0px));
 }
 
 /* A DOM skin owns a real search input; remove the Canvas overlay from focus and accessibility as well. */

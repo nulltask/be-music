@@ -1,8 +1,10 @@
 import {
-  renderBuildInfo,
+  renderServiceFooter,
   renderServiceHeader,
   resolveLocale,
   SERVICE_CSS,
+  SERVICE_FOOTER_LINK_CLASS,
+  serviceOrigins,
   serviceSkipLink,
   type BuildInfo,
   type Locale,
@@ -18,19 +20,16 @@ export interface DashboardAccount {
 
 export type { Locale };
 
-/** The other services of the dashboard's environment: `be-music.app` → `play.be-music.app`, and so on. */
+/** Play and Leaderboard next to this Dashboard host. Preview stays on preview. */
 export function serviceLinks(hostname: string): { play: string; leaderboard: string } {
-  const site = hostname.toLowerCase();
-  return { play: `https://play.${site}/`, leaderboard: `https://leaderboard.${site}/` };
+  const origins = serviceOrigins(hostname);
+  return { play: origins.play, leaderboard: origins.leaderboard };
 }
 
 /** Japanese when the browser prefers it, English otherwise. `?lang=` and the language cookie win in `resolveLocale`. */
 export function pickLocale(acceptLanguage: string | null): Locale {
   return resolveLocale({ acceptLanguage: acceptLanguage ?? undefined });
 }
-
-const FOOTER_CLASS = 'text-muted-foreground mx-auto max-w-5xl border-t px-4 py-4 text-xs';
-const LINK_CLASS = 'underline underline-offset-4 hover:text-foreground';
 
 const TEXT = {
   ja: {
@@ -74,6 +73,17 @@ export function renderDashboard(input: {
 }): string {
   const t = TEXT[input.locale];
   const links = input.links ?? { ...serviceLinks(input.hostname), donate: `https://donate.${input.hostname}/` };
+  const donate = input.showDonateLink
+    ? ` · <a class="${SERVICE_FOOTER_LINK_CLASS}" href="${escapeHTML(links.donate)}">${input.locale === 'ja' ? '寄付' : 'Donate'}</a>`
+    : '';
+  const footer = renderServiceFooter({
+    current: 'dashboard',
+    hostname: input.hostname,
+    origins: { play: links.play, leaderboard: links.leaderboard },
+    navLabel: input.locale === 'ja' ? 'サービス' : 'Services',
+    siteHTML: `be-music${donate}`,
+    buildInfo: input.buildInfo,
+  });
   const status =
     input.account === undefined
       ? t.signedOut
@@ -125,7 +135,7 @@ ${serviceCard(links.play, 'Play', input.locale === 'ja' ? 'BMS・Bmson の譜面
 ${serviceCard(links.leaderboard, 'Leaderboard', input.locale === 'ja' ? 'スコアやプレイヤーの記録をチェック。' : 'Explore scores, rankings and player records.', t.leaderboard)}
 </nav></section>
 </main>
-<footer class="${FOOTER_CLASS}">be-music${input.showDonateLink ? ` · <a class="${LINK_CLASS}" href="${escapeHTML(links.donate)}">${input.locale === 'ja' ? '寄付' : 'Donate'}</a>` : ''}${input.buildInfo ? ' · ' + renderBuildInfo(input.buildInfo) : ''}</footer>
+${footer}
 </body>
 </html>
 `;

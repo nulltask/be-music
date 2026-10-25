@@ -1,10 +1,18 @@
 /** @jsxImportSource hono/jsx */
 import type { Child } from 'hono/jsx';
 import { raw } from 'hono/html';
-import { renderBuildInfo, type BuildInfo } from '@be-music/service-web-theme';
+import { renderServiceFooter, SERVICE_FOOTER_NAV_CLASS, type BuildInfo } from '@be-music/service-web-theme';
 import type { RulesetId } from '@be-music/player-engine/replay';
 import { RULESET_LABELS } from './format.ts';
-import { LOCALE_NAMES, LOCALES, MessagesContext, messagesFor, useMessages, type Locale } from './i18n/index.ts';
+import {
+  LOCALE_NAMES,
+  LOCALES,
+  MessagesContext,
+  messagesFor,
+  useMessages,
+  type Locale,
+  type Messages,
+} from './i18n/index.ts';
 import { helpHref } from './help-topics.ts';
 import { RULESET_IDS } from '../rulesets.ts';
 import { CLIENT_SCRIPT_PATH } from './client-script.ts';
@@ -399,6 +407,24 @@ export const SOURCE_URL = 'https://github.com/nulltask/be-music';
 
 const FOOTER_LINK = 'hover:text-foreground inline-flex items-center gap-1 underline-offset-4 hover:underline';
 
+function escapeFooter(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function footerIcon(svg: string): string {
+  return `<span class="inline-flex shrink-0 [&>svg]:size-4 [&>svg]:size-3" aria-hidden="true">${svg.trim()}</span>`;
+}
+
+/** About, Help, the API and the source, then the beta notice. Copyright and the build line are the shared footer. */
+function leaderboardSiteFooter(t: Messages): string {
+  return `<nav class="${SERVICE_FOOTER_NAV_CLASS}" aria-label="${escapeFooter(t.footer.label)}"><a class="${FOOTER_LINK}" href="/about">${escapeFooter(t.footer.about)}</a><a class="${FOOTER_LINK}" href="/help">${escapeFooter(t.footer.help)}</a><a class="${FOOTER_LINK}" href="/api-reference" target="_blank" rel="noopener" title="${escapeFooter(t.footer.apiTitle)}">${escapeFooter(t.footer.api)}${footerIcon(ExternalLink)}</a><a class="${FOOTER_LINK}" href="${SOURCE_URL}" target="_blank" rel="noopener noreferrer" title="${escapeFooter(t.footer.githubTitle)}">${escapeFooter(t.footer.github)}${footerIcon(ExternalLink)}</a></nav><p>${escapeFooter(t.footer.beta)}</p>`;
+}
+
 /**
  * The scoring rules every figure on the pages is shown under, as a menu in the header next to the account: the
  * current ruleset on the button, the three to pick from in its popover. A choice is kept in a cookie
@@ -733,38 +759,16 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
             <p class="text-destructive mx-auto max-w-5xl px-4 pb-3 text-sm" data-account-status role="status" hidden />
           </header>
           <main class="mx-auto max-w-5xl space-y-6 px-4 py-8">{props.children}</main>
-          <footer class="text-muted-foreground mx-auto max-w-5xl space-y-2 border-t px-4 pt-4 pb-8 text-xs">
-            {/* What is about the site rather than in it: its story, help, the API (a tool page of its own, so it opens
-              beside the Leaderboard) and the source. */}
-            <nav class="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label={t.footer.label}>
-              <a class={FOOTER_LINK} href="/about">
-                {t.footer.about}
-              </a>
-              <a class={FOOTER_LINK} href="/help">
-                {t.footer.help}
-              </a>
-              <a class={FOOTER_LINK} href="/api-reference" target="_blank" rel="noopener" title={t.footer.apiTitle}>
-                {t.footer.api}
-                <Icon svg={ExternalLink} class="[&>svg]:size-3" />
-              </a>
-              <a
-                class={FOOTER_LINK}
-                href={SOURCE_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={t.footer.githubTitle}
-              >
-                {t.footer.github}
-                <Icon svg={ExternalLink} class="[&>svg]:size-3" />
-              </a>
-            </nav>
-            <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-              <span>{t.footer.beta}</span>
-              {/* The holder and licence of the be-music repository (LICENSE). */}
-              <span>{t.footer.copyright}</span>
-            </div>
-            {raw(renderBuildInfo(props.meta.buildInfo))}
-          </footer>
+          {raw(
+            renderServiceFooter({
+              current: 'leaderboard',
+              hostname: new URL(props.meta.url).hostname,
+              navLabel: props.meta.locale === 'ja' ? 'サービス' : 'Services',
+              siteHTML: leaderboardSiteFooter(t),
+              copyright: t.footer.copyright,
+              buildInfo: props.meta.buildInfo,
+            }),
+          )}
         </MessagesContext.Provider>
       </body>
     </html>

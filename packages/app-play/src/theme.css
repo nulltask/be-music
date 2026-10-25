@@ -2,6 +2,7 @@
    The document carries `class="dark"`: the stage is always dark, so the chrome does not follow a light system scheme. */
 @import 'tailwindcss' source(none);
 @source './';
+@source '../../service-web-theme/src/footer.ts';
 @import 'basecoat-css';
 
 @layer base {

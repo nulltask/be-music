@@ -1,7 +1,8 @@
 import {
-  renderBuildInfo,
+  renderServiceFooter,
   renderServiceHeader,
   SERVICE_CSS,
+  SERVICE_FOOTER_LINK_CLASS,
   serviceSkipLink,
   type BuildInfo,
   type Locale,
@@ -15,8 +16,16 @@ export function accountNotice(code: string | null): string {
   return '';
 }
 
-const FOOTER_CLASS = 'text-muted-foreground mx-auto max-w-5xl border-t px-4 py-4 text-xs';
-const LINK_CLASS = 'underline underline-offset-4 hover:text-foreground';
+const LINK_CLASS = SERVICE_FOOTER_LINK_CLASS;
+
+function requestHostname(requestURL: string | undefined): string {
+  if (requestURL === undefined) return 'localhost';
+  try {
+    return new URL(requestURL).hostname;
+  } catch {
+    return 'localhost';
+  }
+}
 
 export function renderAccountPage(input: {
   signedIn: boolean;
@@ -77,6 +86,13 @@ export function renderAccountPage(input: {
     input.showDonateLink && input.apps?.donate
       ? `<a class="${LINK_CLASS}" href="${new URL('/api/auth/sign-in', input.apps.donate).href.replaceAll('&', '&amp;').replaceAll('"', '&quot;')}">Donate</a>`
       : '';
+  const footer = renderServiceFooter({
+    current: 'accounts',
+    hostname: requestHostname(input.requestURL),
+    navLabel: locale === 'ja' ? 'サービス' : 'Services',
+    siteHTML: donate === '' ? undefined : donate,
+    buildInfo: input.buildInfo,
+  });
   return `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Be-Music Accounts</title><style>${SERVICE_CSS}</style></head><body class="bg-background text-foreground min-h-svh antialiased">${serviceSkipLink(locale)}${renderServiceHeader(
     {
       locale,
@@ -98,5 +114,5 @@ export function renderAccountPage(input: {
       ? button('add-passkey', 'Add a passkey to keep this account', !input.login) +
         button('sign-out', 'Sign out of Accounts')
       : ''
-  }</section>${profile}<section><p class="text-destructive min-h-6 text-sm" id="status" role="status" aria-live="polite">${escape(input.notice ?? '')}</p></section>${services}</section><p class="text-muted-foreground mt-6 text-xs">Signing out here ends the Accounts session. Existing app sessions expire within 10 minutes; each app also has its own sign-out.</p></main><footer class="${FOOTER_CLASS}">${donate}${input.buildInfo && donate ? ' · ' : ''}${renderBuildInfo(input.buildInfo)}</footer><script type="module" src="/assets/client.js"></script></body></html>`;
+  }</section>${profile}<section><p class="text-destructive min-h-6 text-sm" id="status" role="status" aria-live="polite">${escape(input.notice ?? '')}</p></section>${services}</section><p class="text-muted-foreground mt-6 text-xs">Signing out here ends the Accounts session. Existing app sessions expire within 10 minutes; each app also has its own sign-out.</p></main>${footer}<script type="module" src="/assets/client.js"></script></body></html>`;
 }
