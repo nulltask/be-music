@@ -10,4 +10,6 @@ Accounts と Dashboard 用の非公開スタイルシートです。`src/theme.c
 
 `renderServiceHeader` は Play 以外のサービスのヘッダです。ログイン中のユーザー、Play へのリンク、English / 日本語を出します。言語は `resolveLocale` が `?lang=`、`be-music-lang` クッキー、`Accept-Language` の順で決めます。
 
-サービスのフッタには `renderBuildInfo({ builtAt, revision })` を使います。ビルド時に固定した ISO 日時を UTC で、ソースの revision を 8 桁で表示し、完全な revision は title に残します。ビルド処理が実際のチェックアウトから取得し、リクエスト処理では日時を生成しません。
+`renderServiceFooter` は Dashboard、Accounts、Play、Leaderboard のフッタです。この 4 つのサービスへリンクし、今いるサービスだけはテキストにします。その後に、そのサイト独自の内容、著作権表示（`© 2026 nulltask · MIT License`）、`renderBuildInfo` が続きます。ページのホスト名を渡すと、プレビューのサイトはプレビューの姉妹サイトへリンクします。不明なホストは、プレイヤーと同じく本番を使います。
+
+そのビルド行には `renderBuildInfo({ builtAt, revision })` を使います。ビルド時に固定した ISO 日時を UTC で、ソースの revision を 8 桁で表示し、完全な revision は title に残します。ビルド処理が実際のチェックアウトから取得し、リクエスト処理では日時を生成しません。
