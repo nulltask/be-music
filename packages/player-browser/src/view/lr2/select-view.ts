@@ -27,6 +27,7 @@ import type {
 import { LR2_TEXT, LR2_TIMER } from '@be-music/skin-lr2/ids';
 import {
   resolveLR2CourseMakerAction,
+  LR2_BATTLE_CYCLE,
   resolveLR2SelectButton,
   resolveLR2SelectState,
   resolveLR2SelectTimers,
@@ -687,6 +688,14 @@ export class LR2SelectView implements SelectView {
             type: 'set-play-option',
             key: action.option,
             value: nextChoice(LR2_GAUGE_TYPES, this.frame?.playOptions[action.option] ?? 'GROOVE'),
+          });
+          return;
+        }
+        if (action.option === 'battleMode') {
+          emit({
+            type: 'set-play-option',
+            key: 'battleMode',
+            value: nextChoice(LR2_BATTLE_CYCLE, this.frame?.playOptions.battleMode ?? 'OFF', direction),
           });
           return;
         }

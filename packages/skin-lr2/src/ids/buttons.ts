@@ -69,6 +69,8 @@ export const LR2_BUTTON = {
   FLIP: 54,
   /** Cycles HS-FIX. */
   HS_FIX: 55,
+  /** Cycles BATTLE (OFF / BATTLE / D-BATTLE / SP TO DP / G-BATTLE; OpenLR2 L10555). */
+  BATTLE: 56,
   /** Steps the 1P hi-speed (`plusOnly` picks the direction). */
   HISPEED_1P: 57,
   /** Steps the 2P hi-speed. */

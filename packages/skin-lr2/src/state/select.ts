@@ -351,6 +351,7 @@ const CYCLE_BUTTONS: Readonly<Record<number, LR2CycledOption>> = {
   [LR2_BUTTON.EFFECT_1P]: 'hiddenSudden1P',
   [LR2_BUTTON.EFFECT_2P]: 'hiddenSudden2P',
   [LR2_BUTTON.FLIP]: 'dpFlip',
+  [LR2_BUTTON.BATTLE]: 'battleMode',
   [LR2_BUTTON.HS_FIX]: 'hsFix',
   [LR2_BUTTON.SCORE_GRAPH]: 'scoreGraph',
   [LR2_BUTTON.BGA]: 'bga',

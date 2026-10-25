@@ -172,6 +172,7 @@ export interface PlayChartContext {
   chartDurationSeconds: number;
   laneChannels: string[];
   chartPlayVariant: ChartPlayVariant;
+  battleSourceVariant: ChartPlayVariant | undefined;
   touchTokenByChannel: Map<string, string> | undefined;
   wavCmdVolumeMultipliers: Map<string, number>;
   switchingBGAs: Map<string, BMSSwitchingBGA>;
@@ -611,6 +612,8 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // the chart happens to use, so a sparse chart still plays on full lanes. The variant also decides channel `17`
   // (a lane in 9 KEY, FREE ZONE in That-Which-Must-Not-Be-Named) and the 9 KEY layout the LR2 default 9-keys play skin expects.
   ctx.chartPlayVariant = playVariant;
+  ctx.battleSourceVariant =
+    prepared.battleMode !== undefined && prepared.battleMode !== 'OFF' ? prepared.battleSourceVariant : undefined;
   // Keep the source PMS layout even when an arrangement empties its distinguishing channels.
   // Original LR2 SCATTER may place an object outside it; that object must not create a tenth input/display lane.
   ctx.laneChannels =

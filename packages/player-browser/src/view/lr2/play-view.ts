@@ -99,6 +99,9 @@ export type LR2PlayViewOptions = Pick<
   | 'nonstop'
   | 'showInvisibleNotes'
   | 'judgedNoteDisplay'
+  | 'battleMode'
+  | 'lr2ExtraMode'
+  | 'gauge2P'
 > & {
   /** The gauge the play runs on (a replay's recorded one); GROOVE without one. */
   readonly gauge?: GaugeType;
@@ -384,7 +387,11 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     this.nonstopStage = 0;
     this.lr2Setup = {
       ...(play.chart !== undefined ? { chart: play.chart } : {}),
-      lanes: { playVariant: play.chartPlayVariant, channels: play.laneChannels },
+      lanes: {
+        playVariant: play.chartPlayVariant,
+        channels: play.laneChannels,
+        ...(play.battleSourceVariant !== undefined ? { battleSourceVariant: play.battleSourceVariant } : {}),
+      },
       features: {
         longNote: play.notes.some((note) => note.endBeat !== undefined),
         bpmChange: (play.timingResolver?.tempoPoints.length ?? 0) > 1,
@@ -397,8 +404,11 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
         scoreGraph: options.scoreGraph === true,
         bga: options.bga ?? 'ON',
         bgaSize: options.bgaSize ?? 'NORMAL',
+        ...(options.battleMode !== undefined ? { battleMode: options.battleMode } : {}),
+        ...(options.lr2ExtraMode !== undefined ? { lr2ExtraMode: options.lr2ExtraMode } : {}),
       },
       gauge: options.gauge ?? 'GROOVE',
+      ...(play.secondPlayer !== undefined && options.gauge2P !== undefined ? { gauge2P: options.gauge2P } : {}),
       courseGauge: options.courseGauge === true,
       ...(options.course !== undefined ? { course: options.course } : {}),
       customOps: this.skin.customOptions.map((option) => option.defaultOp),
@@ -417,6 +427,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     const play = this.play;
     const seconds = play.currentSeconds();
     const bpm = play.displayBPM(seconds);
+    const second = play.secondPlayer;
     this.lr2State = resolveLR2PlayState(setup, {
       play: frame?.state ?? play.playState,
       score: play.score,
@@ -426,6 +437,9 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
       displayedScore: play.displayedScore,
       ...(bpm !== undefined ? { bpm } : {}),
       fps: this.fps,
+      ...(second !== undefined
+        ? { secondPlayer: { play: frame?.state2P ?? second.playState, score: second.score } }
+        : {}),
       judgments: {
         '1P': play.judgeSideState['1P'].judge || 'EMPTY_POOR',
         '2P': play.judgeSideState['2P'].judge || 'EMPTY_POOR',
