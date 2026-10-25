@@ -1,0 +1,11 @@
+/* The player's HTML chrome (the stage stays the skin). Tailwind CSS v4 and Basecoat, as on the other services.
+   The document carries `class="dark"`: the stage is always dark, so the chrome does not follow a light system scheme. */
+@import 'tailwindcss' source(none);
+@source './';
+@import 'basecoat-css';
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+}
