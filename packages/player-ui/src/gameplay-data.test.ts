@@ -41,3 +41,13 @@ describe('resolveGameplayPanels', () => {
     expect(resolveGameplayPanels(frame({ seconds: -2 })).seconds).toBe(0);
   });
 });
+
+it('uses the host source label for P.ATTACK while retaining the state gauge id', () => {
+  const current = frame();
+  const panels = resolveGameplayPanels({
+    ...current,
+    state: { ...current.state, gaugeType: 'P-ATTACK' },
+    runtime: { ...current.runtime, gaugeLabel: 'P.ATTACK' },
+  });
+  expect(panels.gauge.label).toBe('P.ATTACK');
+});

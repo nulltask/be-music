@@ -8,12 +8,13 @@
  * - `'EASY'` — gentler recovery with a lower clear threshold.
  * - `'HARD'` — starts full, drains on misses, fails at the ruleset's death border.
  * - `'EX-HARD'` — independent beatoraja / AC survival gauge, without HARD's low-life softening.
+ * - `'P-ATTACK'` — LR2 PERFECT ATTACK: GOOD or worse kills; GREAT drains one percent.
  * - `'DEATH'` — starts full and ends the run on the first break; beatoraja calls it `HAZARD`.
  */
-export type GaugeType = 'GROOVE' | 'HARD' | 'DEATH' | 'EASY' | 'EX-HARD' | 'ASSIST-EASY';
+export type GaugeType = 'GROOVE' | 'HARD' | 'DEATH' | 'EASY' | 'EX-HARD' | 'ASSIST-EASY' | 'P-ATTACK';
 
-/** Every gauge type, in the order LR2's gauge button cycles them (`#SRC_BUTTON,type=40 / 41` cells 0..3). */
-export const LR2_GAUGE_TYPES: readonly GaugeType[] = ['GROOVE', 'HARD', 'DEATH', 'EASY'];
+/** Every gauge type, in the order LR2's gauge button cycles them (`#SRC_BUTTON,type=40 / 41` cells 0..4). */
+export const LR2_GAUGE_TYPES: readonly GaugeType[] = ['GROOVE', 'HARD', 'DEATH', 'EASY', 'P-ATTACK'];
 
 /** Every accepted gauge pick; source-specific menus use resolveGaugeTypes. */
 export const GAUGE_TYPES: readonly GaugeType[] = [...LR2_GAUGE_TYPES, 'EX-HARD', 'ASSIST-EASY'];

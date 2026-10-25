@@ -211,6 +211,11 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
     },
   });
 
+  define('player-scene-model.formatGaugeLabel', {
+    run: () => {
+      sceneModelAPI.formatGaugeLabel('P-ATTACK');
+    },
+  });
   define('player-scene-model.resolveRandomModes', {
     run: () => {
       sceneModelAPI.resolveRandomModes('beatoraja');

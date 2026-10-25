@@ -1,3 +1,5 @@
+import { createLR2PerfectAttackGauge } from './lr2-attack.ts';
+import type { GaugeJudgeIndex } from './gauge.ts';
 import type { GaugeAutoShift, GaugeShiftBottom } from './gauge-type.ts';
 import {
   bmsExRankValueToJudgeRankPercent,
@@ -106,6 +108,8 @@ export type LNEarlyReleaseRule = 'head-unless-beyond-good' | 'worse-of-head-and-
 export type PressDuringLongNoteRule = 'rejudge-head-or-empty-poor' | 'ignore';
 
 export interface GaugeGutsStep {
+  /** Restrict softening to these judgments; omitted preserves a source table's unrestricted behavior. */
+  judges?: readonly GaugeJudgeIndex[];
   /** Gauge value below (or at, when `inclusive`) which the damage multiplier applies. */
   threshold: number;
   multiplier: number;
@@ -467,6 +471,8 @@ function scaleNegative(values: GaugeValues, multiplier: number): GaugeValues {
 
 function resolveLR2Gauge(gaugeId: string, total: number, noteCount: number): GaugeSpec {
   switch (gaugeId) {
+    case 'P-ATTACK':
+      return createLR2PerfectAttackGauge();
     case 'EASY':
       return {
         id: 'EASY',
@@ -694,6 +700,8 @@ function resolve____Gauge(gaugeId: string, noteCount: number): GaugeSpec {
 /** Maps the replay's LR2-family gauge pick onto each ruleset's own gauge id. */
 function resolveDefaultGaugeId(rulesetId: RulesetId, playGauge: string): string {
   switch (playGauge) {
+    case 'P-ATTACK':
+      return 'P-ATTACK';
     case 'ASSIST-EASY':
       return rulesetId === '____' ? 'ASSISTED-EASY' : 'ASSIST-EASY';
     case 'EX-HARD':
@@ -765,6 +773,8 @@ export function resolveRuleset(
   const baseNotes = countBaseNotes(chart.notes);
   const { course } = options;
   const selectedGauge = options.selectedGauge ?? 'GROOVE';
+  if (rulesetId !== 'lr2' && (selectedGauge === 'P-ATTACK' || options.gauge === 'P-ATTACK'))
+    throw new RangeError('P.ATTACK is available only for LR2.');
   if (rulesetId === 'lr2' && (selectedGauge === 'EX-HARD' || selectedGauge === 'ASSIST-EASY')) {
     throw new RangeError(`LR2 beta3 has no ${selectedGauge} gauge.`);
   }

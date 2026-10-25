@@ -345,3 +345,10 @@ test('scroll ADD parameters persist with source bounds', () => {
   )!.settings;
   expect(settings).toMatchObject({ scrollModifier: 'ADD', scrollSection: 1, scrollRate: 1 });
 });
+
+test('P.ATTACK survives settings parsing with its canonical recorded identifier', () => {
+  const document = parseDebugMenuSettingsDocument(
+    JSON.stringify({ version: 1, updatedAt: 1, settings: { judgeRuleset: 'lr2', gauge: 'P-ATTACK' } }),
+  );
+  expect(document?.settings).toMatchObject({ judgeRuleset: 'lr2', gauge: 'P-ATTACK' });
+});

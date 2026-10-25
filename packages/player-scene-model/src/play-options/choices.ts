@@ -66,6 +66,11 @@ export const HIDDEN_SUDDEN_CYCLE: readonly HiddenSuddenMode[] = ['OFF', 'HIDDEN'
 /** Cycle for boolean OFF/ON LR2 buttons (e.g. autoscratch). */
 export const BOOLEAN_CYCLE: readonly boolean[] = [false, true];
 
+/** Source display spelling, without changing the recorded gauge identifier. */
+export function formatGaugeLabel(id: string | undefined): string | undefined {
+  return id === 'P-ATTACK' ? 'P.ATTACK' : id;
+}
+
 /**
  * Cycle order for {@link PlayOptions.random1P} / `random2P`. LR2 button cells 0..3 on `#SRC_BUTTON,type=42 / 43`: off /
  * mirror / random / s-random. Additional source choices are returned by resolveRandomModes.

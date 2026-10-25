@@ -179,3 +179,20 @@ test('course constraints preserve the separately selected SCATTER modes only whe
     dpFlip: false,
   });
 });
+
+test('LR2 grade courses retain P.ATTACK', () => {
+  expect(
+    resolveLR2GradeCoursePlaySettings(
+      { kind: 'grade', source: { format: 'lr2crs', type: 2, header: '', hash: MD5_A } },
+      {
+        gauge: 'P-ATTACK',
+        hiddenSudden1P: 'OFF',
+        hiddenSudden2P: 'OFF',
+        autoScratch1P: false,
+        autoScratch2P: false,
+        dpFlip: false,
+        tempo: 1,
+      },
+    ),
+  ).toMatchObject({ gauge: 'P-ATTACK' });
+});

@@ -550,15 +550,17 @@ export class DebugMenu {
       this.gaugeController.options = paneOptions(choices).map((item) => ({
         ...item,
         text:
-          item.value === 'ASSIST-EASY'
-            ? this.guiState.judgeRuleset === '____'
-              ? 'ASSISTED EASY'
-              : 'ASSIST EASY'
-            : item.value === 'DEATH' && this.guiState.judgeRuleset === 'beatoraja'
-              ? 'HAZARD'
-              : item.value === 'GROOVE' && this.guiState.judgeRuleset !== 'lr2'
-                ? 'NORMAL'
-                : item.text,
+          item.value === 'P-ATTACK'
+            ? 'P.ATTACK'
+            : item.value === 'ASSIST-EASY'
+              ? this.guiState.judgeRuleset === '____'
+                ? 'ASSISTED EASY'
+                : 'ASSIST EASY'
+              : item.value === 'DEATH' && this.guiState.judgeRuleset === 'beatoraja'
+                ? 'HAZARD'
+                : item.value === 'GROOVE' && this.guiState.judgeRuleset !== 'lr2'
+                  ? 'NORMAL'
+                  : item.text,
       }));
       this.gaugeController.refresh();
     }

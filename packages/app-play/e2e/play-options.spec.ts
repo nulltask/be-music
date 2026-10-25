@@ -599,3 +599,42 @@ for (const skin of ['plain', 'native'] as const) {
     await player.waitForResult(1);
   });
 }
+
+for (const skin of ['plain', 'native'] as const) {
+  test(`LR2 P.ATTACK is selectable, remembered and replayed on ${skin}`, async ({ player }, info) => {
+    await player.open({ 'be-music.built-in-skin': skin });
+    await player.dropText('perfect-attack.bms', '#TITLE Perfect attack\n#BPM 240\n#00111:01\n#00212:01');
+    await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+    await player.setOption(['Play options'], 'Gauge', 'P.ATTACK');
+    await player.setOption(['Play options'], 'Auto play', true);
+    expect(
+      await player.page.evaluate(
+        () => JSON.parse(localStorage.getItem('be-music.debug-menu-settings')!).settings.gauge,
+      ),
+    ).toBe('P-ATTACK');
+    await player.cursorTo((bar) => bar.title === 'Perfect attack', 'P.ATTACK chart');
+    await player.key('Enter');
+    await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 0.2, 'P.ATTACK play');
+    await player.key('Space');
+    await player.page.locator('#stage').screenshot({ path: info.outputPath(`perfect-attack-${skin}.png`) });
+    await player.key('Space');
+    await player.waitForResult(0);
+    const replay = await player.lastReplay();
+    expect(replay?.play.gauge).toBe('P-ATTACK');
+    expect(replay?.results?.native?.gauge).toMatchObject({
+      type: 'P-ATTACK',
+      final: 100,
+      cleared: true,
+    });
+    await player.leaveResult();
+    await player.setOption(['Play options'], 'Gauge', 'GROOVE');
+    await player.dropText('perfect-attack.bmplay.json', JSON.stringify(replay));
+    await player.waitFor((state) => state.scene.kind === 'play' && state.play?.replay === true, 'P.ATTACK replay');
+    await player.waitForResult(1);
+    await player.leaveResult();
+    await player.setOption(['Play options'], 'Gauge', 'P.ATTACK');
+    await player.page.reload();
+    await player.waitFor((state) => state.scene.kind === 'select', 'select after reload');
+    expect(await player.readOption(['Play options'], 'Gauge')).toBe('P.ATTACK');
+  });
+}

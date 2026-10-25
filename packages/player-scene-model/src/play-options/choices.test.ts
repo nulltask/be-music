@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
   resolveRandomModes,
+  formatGaugeLabel,
   RANDOM_CYCLE,
   clampHiSpeed,
   clampShutter,
@@ -74,19 +75,19 @@ describe('resolvePlayOptionValue', () => {
 describe('cyclePlayOptionValue', () => {
   test('moves forward and wraps past the last choice', () => {
     expect(cyclePlayOptionValue('gauge1P', 'GROOVE')).toBe('HARD');
-    expect(cyclePlayOptionValue('gauge1P', 'EASY', 1)).toBe('GROOVE');
+    expect(cyclePlayOptionValue('gauge1P', 'EASY', 1)).toBe('P-ATTACK');
     expect(cyclePlayOptionValue('dpFlip', false)).toBe(true);
   });
 
   test('moves backwards with a negative step and wraps past the first choice', () => {
     expect(cyclePlayOptionValue('gauge1P', 'HARD', -1)).toBe('GROOVE');
-    expect(cyclePlayOptionValue('gauge1P', 'GROOVE', -1)).toBe('EASY');
+    expect(cyclePlayOptionValue('gauge1P', 'GROOVE', -1)).toBe('P-ATTACK');
     expect(cyclePlayOptionValue('random1P', 'OFF', -1)).toBe('S-RANDOM');
   });
 
   test('treats any other step as one choice in its direction', () => {
     expect(cyclePlayOptionValue('gauge1P', 'GROOVE', 3)).toBe('HARD');
-    expect(cyclePlayOptionValue('gauge1P', 'GROOVE', -5)).toBe('EASY');
+    expect(cyclePlayOptionValue('gauge1P', 'GROOVE', -5)).toBe('P-ATTACK');
   });
 
   test('lands on the first choice when the current value is not one of them', () => {
@@ -318,4 +319,12 @@ test('scroll ADD exposes source parameters with their defaults and bounds', () =
     scrollSection: 4,
     scrollRate: 0.5,
   });
+});
+
+test('P.ATTACK display spelling is separate from the persisted gauge id', () => {
+  expect(resolvePlayOptionValue('gauge1P', 'P-ATTACK')).toBe('P-ATTACK');
+  expect(resolvePlayOptionValue('gauge2P', 'P-ATTACK')).toBe('P-ATTACK');
+  expect(formatGaugeLabel('P-ATTACK')).toBe('P.ATTACK');
+  expect(formatGaugeLabel('HARD')).toBe('HARD');
+  expect(formatGaugeLabel(undefined)).toBeUndefined();
 });
