@@ -1,9 +1,4 @@
-import {
-  getPlayModeLayouts,
-  PLAY_MODE_LAYOUTS,
-  type ResolvedChart,
-  type TimedSampleTrigger,
-} from '@be-music/chart-model';
+import { getPlayModeLayouts, PLAY_MODE_LAYOUTS, type ResolvedChart } from '@be-music/chart-model';
 import type { BeMusicEvent } from '@be-music/chart-source';
 import type { TimedPlayableNote, TimedLandmineNote } from '../playable-notes.ts';
 import { moveNotesToBackground } from './background-notes.ts';
@@ -47,7 +42,9 @@ export function duplicateBattleChart(
   for (const objects of options.duplicateMines === false ? [notes, invisible] : [notes, mines, invisible]) {
     for (let index = objects.length - 1; index >= 0; index--)
       if (!allowed.has(objects[index]!.channel)) objects.splice(index, 1);
-    for (const original of [...objects]) {
+    // The 1P objects as they stand: the copies go into the same array.
+    const originals = objects.slice();
+    for (const original of originals) {
       const copied = {
         ...original,
         channel: `2${original.channel.slice(1)}`,
