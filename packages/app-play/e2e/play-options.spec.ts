@@ -856,7 +856,7 @@ for (const skin of ['plain', 'native'] as const) {
   });
 }
 
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`LR2 BATTLE plays two players on ${skin}, each with its own gauge, and replays both`, async ({
     player,
   }, info) => {
