@@ -2,7 +2,7 @@ import { css, html, svg, type CSSResultGroup, type TemplateResult } from 'lit';
 import { DataElement } from '../base.ts';
 import type { BeMusicPlaybackData } from '../models.ts';
 import { formatPlaybackTime, resolvePlaybackSeconds } from '../playback.ts';
-import { baseStyles } from '../styles/base.ts';
+import { previewHost, previewTheme } from '../styles/preview-theme.ts';
 
 const ICONS = {
   play: svg`<path d="M8 5v14l11-7z" />`,
@@ -24,7 +24,8 @@ function icon(name: keyof typeof ICONS): TemplateResult {
  */
 export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackData> {
   static override styles: CSSResultGroup = [
-    baseStyles,
+    previewTheme,
+    previewHost,
     css`
       :host {
         display: block;
@@ -54,12 +55,6 @@ export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackD
         width: 32px;
         height: 32px;
         padding: 0;
-        border: 0;
-        border-radius: 50%;
-        background: transparent;
-      }
-      button:hover {
-        background: #ffffff1f;
       }
       svg {
         width: 22px;
@@ -83,7 +78,7 @@ export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackD
       .seek::-webkit-slider-runnable-track {
         height: 3px;
         border-radius: 999px;
-        background: linear-gradient(to right, var(--be-music-color-accent, #abcaff) var(--seek), #ffffff3d var(--seek));
+        background: linear-gradient(to right, var(--primary, #abcaff) var(--seek), #ffffff3d var(--seek));
       }
       .bar:hover .seek::-webkit-slider-runnable-track,
       .seek:focus-visible::-webkit-slider-runnable-track {
@@ -96,7 +91,7 @@ export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackD
         margin-top: -5px;
         border: 0;
         border-radius: 50%;
-        background: var(--be-music-color-accent, #abcaff);
+        background: var(--primary, #abcaff);
         opacity: 0;
       }
       .bar:hover .seek::-webkit-slider-thumb,
@@ -116,14 +111,14 @@ export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackD
       .seek::-moz-range-progress {
         height: 3px;
         border-radius: 999px;
-        background: var(--be-music-color-accent, #abcaff);
+        background: var(--primary, #abcaff);
       }
       .seek::-moz-range-thumb {
         width: 13px;
         height: 13px;
         border: 0;
         border-radius: 50%;
-        background: var(--be-music-color-accent, #abcaff);
+        background: var(--primary, #abcaff);
         opacity: 0;
       }
       .bar:hover .seek::-moz-range-thumb,
@@ -267,6 +262,9 @@ export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackD
       />
       <div class="row">
         <button
+          class="btn"
+          data-variant="ghost"
+          data-size="icon-sm"
           part="play"
           aria-label=${playing ? 'Pause' : 'Play'}
           @click=${() => this.emit('pause-request', undefined)}
@@ -275,6 +273,9 @@ export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackD
         </button>
         <div class="sound">
           <button
+            class="btn"
+            data-variant="ghost"
+            data-size="icon-sm"
             part="mute"
             aria-label=${muted ? 'Unmute' : 'Mute'}
             @click=${() => this.emit('volume-change', { volume, muted: !muted })}
@@ -299,6 +300,9 @@ export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackD
         <span class="time" part="time">${formatPlaybackTime(current)} / ${formatPlaybackTime(duration)}</span>
         <span class="spacer"></span>
         <button
+          class="btn"
+          data-variant="ghost"
+          data-size="icon-sm"
           part="fullscreen"
           aria-label=${fullscreen ? 'Exit full screen' : 'Full screen'}
           @click=${() => this.emit('fullscreen-request', undefined)}

@@ -599,6 +599,16 @@ importers:
       lit:
         specifier: ^3.3.3
         version: 3.3.3
+    devDependencies:
+      '@tailwindcss/cli':
+        specifier: ^4.3.3
+        version: 4.3.3
+      basecoat-css:
+        specifier: ^1.0.2
+        version: 1.0.2
+      tailwindcss:
+        specifier: ^4.3.3
+        version: 4.3.3
 
   packages/player-ui-react:
     dependencies:

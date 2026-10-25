@@ -1,12 +1,13 @@
 import { css, html, svg, type CSSResultGroup, type PropertyDeclarations, type TemplateResult } from 'lit';
 import { BeMusicElement } from '../base.ts';
-import { baseStyles } from '../styles/base.ts';
+import { previewHost, previewTheme } from '../styles/preview-theme.ts';
 
 /** The large play button over a preview before it plays (`mode="play"`) or after it ended (`mode="replay"`). */
 export class BeMusicPreviewStartElement extends BeMusicElement {
   static override properties: PropertyDeclarations = { mode: {}, disabled: { type: Boolean } };
   static override styles: CSSResultGroup = [
-    baseStyles,
+    previewTheme,
+    previewHost,
     css`
       :host {
         display: grid;
@@ -19,9 +20,8 @@ export class BeMusicPreviewStartElement extends BeMusicElement {
         display: grid;
         justify-items: center;
         gap: 6px;
+        min-width: 8rem;
         padding: 18px 26px;
-        border-radius: 16px;
-        background: #05070bcc;
         font-size: 15px;
       }
       svg {
@@ -43,6 +43,8 @@ export class BeMusicPreviewStartElement extends BeMusicElement {
   protected override render(): TemplateResult {
     const replay = this.mode === 'replay';
     return html`<button
+      class="btn"
+      data-size="lg"
       part="button"
       ?disabled=${this.disabled}
       @click=${() => this.emit('play-request', { autoPlay: true })}
