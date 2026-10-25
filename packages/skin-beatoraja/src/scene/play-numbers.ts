@@ -1,10 +1,5 @@
 import { clamp } from '@be-music/shared-utils/core';
-import {
-  resolveGreenNumber,
-  resolveLaneCover,
-  resolveWhiteNumber,
-  type LaneCoverState,
-} from '@be-music/player-scene-model';
+import { resolveGreenNumber, resolveWhiteNumber, type LaneCoverState } from '@be-music/player-scene-model';
 import {
   BEATORAJA_NUM,
   SYNTHETIC_NUM_JUDGE_COMBO_1P,
@@ -138,7 +133,7 @@ function playheadBPM(input: BeatorajaPlayNumberInput): number {
  * lane cover when `withCover`. The LIFT does not shorten it. Rounded, 0 for a hi-speed or BPM that is not positive.
  */
 function whiteDuration(input: BeatorajaPlayNumberInput, bpm: number, withCover: boolean): number {
-  const sudden = withCover && input.cover !== undefined ? resolveLaneCover(input.cover).sudden : 0;
+  const sudden = withCover && input.cover?.suddenOn === true ? beatorajaLaneCover(input.cover) : 0;
   return Math.round(resolveWhiteNumber({ laneBeats: 4, hiSpeed: input.hiSpeed, sudden, bpm }));
 }
 
@@ -153,11 +148,12 @@ function clampUnit(value: number): number {
 
 /**
  * beatoraja's lane cover (`PlayConfig.lanecover`): the SUDDEN+ height as a fraction of the part of the lane above the
- * LIFT, kept while the cover is off. be-music keeps SUDDEN+ as a fraction of the whole lane, so the same drawn height
- * is `sudden / (1 - lift)`.
+ * LIFT, kept while the cover is off. be-music keeps SUDDEN+ so too, except an absolute cover (the floating hi-speed's),
+ * a fraction of the whole lane: the same drawn height is `sudden / (1 - lift)` there.
  */
 function beatorajaLaneCover(cover: LaneCoverState): number {
   const sudden = clampUnit(cover.sudden);
+  if (cover.absolute !== true) return sudden;
   const above = 1 - clampUnit(cover.lift);
   return above > 0 ? Math.min(1, sudden / above) : 0;
 }
