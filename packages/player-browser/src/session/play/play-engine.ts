@@ -88,6 +88,7 @@ export interface PlayEngineContext
       | 'judgeAlgorithm'
       | 'longNoteModifier'
       | 'longNoteRate'
+      | 'scrollModifier'
       | 'mineModifier'
       | 'gaugeAutoShift'
       | 'bottomShiftableGauge'
@@ -446,6 +447,7 @@ export function resolveReplayRecording(
     | 'judgeAlgorithm'
     | 'longNoteModifier'
     | 'longNoteRate'
+    | 'scrollModifier'
     | 'mineModifier'
     | 'gaugeAutoShift'
     | 'bottomShiftableGauge'
@@ -502,6 +504,7 @@ export function resolveReplayRecording(
     longNoteModifier: options.longNoteModifier,
     longNoteRate: options.longNoteRate,
     mineModifier: options.mineModifier,
+    scrollModifier: options.scrollModifier,
     gaugeAutoShift: options.gaugeAutoShift,
     bottomShiftableGauge: options.bottomShiftableGauge,
     autoScratch1P: options.autoScratch1P,
@@ -611,6 +614,10 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
         ctx.options.replay?.play.longNoteModifier ??
         ctx.options.fixedArrangement?.play.longNoteModifier ??
         ctx.options.longNoteModifier,
+      scrollModifier:
+        ctx.options.replay?.play.scrollModifier ??
+        ctx.options.fixedArrangement?.play.scrollModifier ??
+        ctx.options.scrollModifier,
       mineModifier:
         ctx.options.replay?.play.mineModifier ??
         ctx.options.fixedArrangement?.play.mineModifier ??

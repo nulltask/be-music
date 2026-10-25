@@ -1,3 +1,4 @@
+import type { ScrollModifier } from '../core/scroll-modifier.ts';
 import type { LongNoteModifier } from '../core/long-note-modifier.ts';
 import type { MineModifier } from '../core/mine-modifier.ts';
 import {
@@ -199,6 +200,8 @@ export interface ReplayPlay {
   longNoteRate?: number;
   longNoteModifierChangeCount?: number;
   mineModifier?: MineModifier;
+  scrollModifier?: ScrollModifier;
+  scrollModifierChanged?: boolean;
   mineModifierChangeCount?: number;
   autoScratch1P?: boolean;
   autoScratch2P?: boolean;
@@ -705,6 +708,16 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
       throw new ReplayParseError('play.judgeAlgorithm: expected combo, duration or lowest');
     }
     parsed.judgeAlgorithm = play.judgeAlgorithm as 'combo' | 'duration' | 'lowest';
+  }
+  if (play.scrollModifier !== undefined) {
+    if (play.scrollModifier !== 'OFF' && play.scrollModifier !== 'REMOVE')
+      throw new ReplayParseError('play.scrollModifier: expected OFF or REMOVE');
+    parsed.scrollModifier = play.scrollModifier;
+  }
+  if (play.scrollModifierChanged !== undefined) {
+    if (typeof play.scrollModifierChanged !== 'boolean')
+      throw new ReplayParseError('play.scrollModifierChanged: expected boolean');
+    parsed.scrollModifierChanged = play.scrollModifierChanged;
   }
   if (play.mineModifier !== undefined) {
     if (!['OFF', 'REMOVE', 'ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'].includes(play.mineModifier as string))

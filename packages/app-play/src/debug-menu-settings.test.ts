@@ -148,6 +148,7 @@ describe('captureDebugMenuSettings', () => {
       longNoteModifier: 'REMOVE',
       longNoteRate: 1,
       mineModifier: 'OFF',
+      scrollModifier: 'REMOVE',
       gaugeAutoShift: 'NONE',
       bottomShiftableGauge: 'ASSIST-EASY',
       autoScratch1P: true,
@@ -323,4 +324,15 @@ test('persists SELECT TO UNDER with its independent lower bound', () => {
       }),
     )?.settings,
   ).toMatchObject({ gaugeAutoShift: 'SELECT_TO_UNDER', bottomShiftableGauge: 'GROOVE' });
+});
+
+test('scroll REMOVE parses and restores independently of visual CONSTANT', () => {
+  const document = parseDebugMenuSettingsDocument(
+    JSON.stringify({ version: 1, updatedAt: 1, settings: { scrollModifier: 'REMOVE', visualConstant: false } }),
+  );
+  expect(document?.settings.scrollModifier).toBe('REMOVE');
+  const state = { scrollModifier: 'OFF', visualConstant: false } as PlayerGUIState;
+  overlayDebugMenuSettings(state, document!.settings);
+  expect(state.scrollModifier).toBe('REMOVE');
+  expect(state.visualConstant).toBe(false);
 });

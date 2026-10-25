@@ -1,3 +1,4 @@
+import type { ScrollModifier } from '../core/scroll-modifier.ts';
 import type { LongNoteModifier } from '../core/long-note-modifier.ts';
 import { resolveReplaySourceChannel } from './source-channel.ts';
 import type { MineModifier } from '../core/mine-modifier.ts';
@@ -65,6 +66,8 @@ export interface ReplayRecorderPlaySettings {
   longNoteRate?: number;
   longNoteModifierChangeCount?: number;
   mineModifier?: MineModifier;
+  scrollModifier?: ScrollModifier;
+  scrollModifierChanged?: boolean;
   mineModifierChangeCount?: number;
   autoScratch1P?: boolean;
   autoScratch2P?: boolean;
@@ -276,6 +279,9 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       if (tempoChanges.length > 0) play.tempoChanges = tempoChanges.map((change) => ({ ...change }));
       if (options.play.view !== undefined) play.view = structuredClone(options.play.view);
       if (options.play.judgeAlgorithm !== undefined) play.judgeAlgorithm = options.play.judgeAlgorithm;
+      if (options.play.scrollModifier !== undefined) play.scrollModifier = options.play.scrollModifier;
+      if (options.play.scrollModifierChanged !== undefined)
+        play.scrollModifierChanged = options.play.scrollModifierChanged;
       if (options.play.mineModifier !== undefined) play.mineModifier = options.play.mineModifier;
       if (options.play.mineModifierChangeCount !== undefined)
         play.mineModifierChangeCount = options.play.mineModifierChangeCount;

@@ -293,3 +293,12 @@ test('the separately selected corrected SCATTER mode persists and remains LR2-on
   expect(resolveRandomModes('beatoraja')).not.toContain('SCATTER-CORRECTED');
   expect(resolveRandomModes('____')).not.toContain('SCATTER-CORRECTED');
 });
+
+test('scroll REMOVE defaults off and remains separate from visual CONSTANT', () => {
+  expect(DEFAULT_PLAY_OPTIONS.scrollModifier).toBe('OFF');
+  expect(resolvePlayOptions({ scrollModifier: 'REMOVE', visualConstant: false })).toMatchObject({
+    scrollModifier: 'REMOVE',
+    visualConstant: false,
+  });
+  expect(resolvePlayOptionValue('scrollModifier', 'CONSTANT')).toBeUndefined();
+});

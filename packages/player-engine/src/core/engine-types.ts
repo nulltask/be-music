@@ -78,6 +78,8 @@ export interface CreatePlayerInputRuntimeContext {
  * `autoPlay` or `manualPlay`.
  */
 export interface PlayerPlaySettings {
+  /** beatoraja scroll modifier; changes chart coordinates while retaining event times. */
+  scrollModifier?: import('./scroll-modifier.ts').ScrollModifier;
   auto?: boolean;
   autoScratch?: boolean;
   /** beatoraja's note-selection algorithm; other source rulesets retain their own fixed selection. */

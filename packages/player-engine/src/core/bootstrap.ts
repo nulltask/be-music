@@ -1,4 +1,5 @@
 import { prepareMineModifier, type MineModifier } from './mine-modifier.ts';
+import { removeScrollChanges, type ScrollModifier } from './scroll-modifier.ts';
 import { addLongNotes, clampLongNoteRate, removeLongNoteTails, type LongNoteModifier } from './long-note-modifier.ts';
 import { throwIfAborted } from '@be-music/shared-utils/core';
 import { resolveChart, type ResolvedChart } from '@be-music/chart-model';
@@ -48,6 +49,9 @@ export function resolveDefaultBaseDir(): string {
 }
 
 export interface PreparedPlaybackChartData {
+  scrollModifierApplied?: ScrollModifier;
+  /** Whether REMOVE actually changed BPM, STOP or SCROLL; separate from the selected option. */
+  scrollModifierChanged?: boolean;
   notes: TimedPlayableNote[];
   laneSoundNotes: TimedPlayableNote[];
   landmineNotes: TimedLandmineNote[];
@@ -195,10 +199,13 @@ export function preparePlaybackChart(
     | 'longNoteModifierPlacements'
     | 'mineModifier'
     | 'mineModifierPlacements'
+    | 'scrollModifier'
   > = {},
   auxiliaryPlaybackEndSeconds = 0,
   random?: () => number,
 ): PreparedPlaybackChartData {
+  const scrollResult = options.scrollModifier === 'REMOVE' ? removeScrollChanges(resolved) : undefined;
+  resolved = scrollResult?.chart ?? resolved;
   const playVariant = resolved.playVariant;
   const notes = resolved.notes.map(toTimedPlayableNote);
   const longMode = options.longNoteModifier ?? 'OFF';
@@ -263,6 +270,9 @@ export function preparePlaybackChart(
     inputTokenToChannels,
     shadowedNotes: resolved.shadowedNotes.map(toTimedPlayableNote),
     resolvedChart: resolved,
+    ...(options.scrollModifier !== undefined
+      ? { scrollModifierApplied: options.scrollModifier, scrollModifierChanged: scrollResult?.changed ?? false }
+      : {}),
   };
 }
 

@@ -88,6 +88,7 @@ export interface DebugMenuSettings {
   longNoteModifier: PlayerGUIState['longNoteModifier'];
   longNoteRate: number;
   mineModifier: PlayerGUIState['mineModifier'];
+  scrollModifier: PlayerGUIState['scrollModifier'];
   gaugeAutoShift: PlayerGUIState['gaugeAutoShift'];
   bottomShiftableGauge: PlayerGUIState['bottomShiftableGauge'];
   autoScratch1P: boolean;
@@ -241,6 +242,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'judgeAlgorithm', oneOf(raw.judgeAlgorithm, ['combo', 'duration', 'lowest'] as const));
   assign(settings, 'gaugeAutoShift', resolvePlayOptionValue('gaugeAutoShift', raw.gaugeAutoShift));
   assign(settings, 'bottomShiftableGauge', resolvePlayOptionValue('bottomShiftableGauge', raw.bottomShiftableGauge));
+  assign(settings, 'scrollModifier', resolvePlayOptionValue('scrollModifier', raw.scrollModifier));
   assign(settings, 'mineModifier', resolvePlayOptionValue('mineModifier', raw.mineModifier));
   assign(settings, 'longNoteRate', resolvePlayOptionValue('longNoteRate', raw.longNoteRate));
   assign(settings, 'longNoteModifier', resolvePlayOptionValue('longNoteModifier', raw.longNoteModifier));
@@ -459,6 +461,7 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('longNoteModifier');
   assignState('longNoteRate');
   assignState('mineModifier');
+  assignState('scrollModifier');
   assignState('gaugeAutoShift');
   assignState('bottomShiftableGauge');
   assignState('autoScratch1P');
@@ -548,6 +551,7 @@ export function captureDebugMenuSettings(
     longNoteModifier: state.longNoteModifier,
     longNoteRate: state.longNoteRate,
     mineModifier: state.mineModifier,
+    scrollModifier: state.scrollModifier,
     gaugeAutoShift: state.gaugeAutoShift,
     bottomShiftableGauge: state.bottomShiftableGauge,
     autoScratch1P: state.autoScratch1P,

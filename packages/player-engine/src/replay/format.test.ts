@@ -629,3 +629,20 @@ test('BEST CLEAR round-trips independent class gauges and the configured lower b
     parseReplay(JSON.stringify({ ...replay, play: { ...replay.play, bottomShiftableGauge: 'HARD' } })),
   ).toThrow(ReplayParseError);
 });
+
+test('scroll modifier selection and actual-change fact round trip independently', () => {
+  for (const changed of [false, true]) {
+    const replay = makeReplay();
+    replay.play.scrollModifier = 'REMOVE';
+    replay.play.scrollModifierChanged = changed;
+    expect(parseReplay(serializeReplay(replay)).play).toMatchObject({
+      scrollModifier: 'REMOVE',
+      scrollModifierChanged: changed,
+    });
+  }
+  const replay = makeReplay();
+  expect(() => parseReplay({ ...replay, play: { ...replay.play, scrollModifier: 'HIDE' } })).toThrow(/scrollModifier/);
+  expect(() => parseReplay({ ...replay, play: { ...replay.play, scrollModifierChanged: 1 } })).toThrow(
+    /scrollModifierChanged/,
+  );
+});
