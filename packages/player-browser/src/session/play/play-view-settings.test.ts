@@ -221,3 +221,14 @@ test('fixed display restore takes the current BPM and preserves covers while int
   expect(ctx.playState.view.hiSpeed.player).toBe(1);
   expect(ctx.playState.view.covers).toBe(covers);
 });
+
+test('LR2 CONSTANT visible-time readouts and replay units use the fixed 150-BPM axis', () => {
+  const ctx = createView();
+  ctx.playState = { ...ctx.playState, view: { ...ctx.playState.view, hsFix: 'CONSTANT' } };
+  const cover = resolveLaneCovers(ctx)[0];
+  expect(resolveVisibleMs(ctx, cover, 120, 1.25)).toBe(1200);
+  expect(resolveVisibleMs(ctx, cover, 240, 0.625)).toBe(1200);
+  // At reversal the display BPM stays frozen while the converted playhead crosses an earlier BPM.
+  expect(resolveVisibleMs(ctx, cover, 240, 1.25)).toBe(1200);
+  expect(startReplayView(ctx)).toMatchObject({ hsFix: 'CONSTANT', visibleMs: 1200 });
+});

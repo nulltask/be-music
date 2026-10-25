@@ -96,8 +96,8 @@ export interface PlaySessionOptions {
   scoreGraph?: boolean;
   /**
    * HS-FIX mode picked from `#SRC_BUTTON,type=55`. Applied as a one-time multiplier on `initialHiSpeed` at
-   * chart-prepare time so the user's chosen HS feels consistent across BPM changes. `'CONSTANT'` falls back to
-   * `'AVERAGE'` for now — true per-frame BPM-aware scrolling needs a render-pipeline change that hasn't landed yet.
+   * chart-prepare time so the user's chosen HS feels consistent across BPM changes. LR2 `'CONSTANT'` uses a
+   * separate 150-BPM distance map and pauses on STOP, without applying the ordinary HS-FIX multiplier.
    */
   hsFix?: HSFix;
   classicHiSpeed?: boolean;

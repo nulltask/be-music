@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { createScrollDistanceMapper } from './scroll-distance.ts';
+import { createEmptyJSON } from '@be-music/chart-source';
+import { createTimingResolver, createBeatAtSecondsResolverFromTimingResolver } from '@be-music/chart-model';
+import { createScrollDistanceMapper, createLR2ConstantScrollMapper } from './scroll-distance.ts';
 
 describe('scroll distance', () => {
   test('measures from a remembered start exactly as from a fresh one', () => {
@@ -146,4 +148,78 @@ describe('scroll distance', () => {
     const mapper = createScrollDistanceMapper(undefined, undefined, { invalidDistance: 0 });
     expect(mapper.distanceBetween(Number.NaN, 2)).toBe(0);
   });
+});
+
+describe('LR2 HS-FIX CONSTANT', () => {
+  test('uses 150-BPM distance across abrupt tempo changes, independently of MAIN or header BPM', () => {
+    const mapper = createLR2ConstantScrollMapper([
+      { beat: 0, bpm: 120 },
+      { beat: 4, bpm: 240 },
+      { beat: 8, bpm: 60 },
+    ]);
+    expect(mapper.distanceBetween(0, 2)).toBeCloseTo(2.5);
+    expect(mapper.distanceBetween(4, 8)).toBeCloseTo(2.5);
+    expect(mapper.distanceBetween(8, 9)).toBeCloseTo(2.5);
+    expect(mapper.distanceBetween(0, 12)).toBeCloseTo(17.5);
+    expect(mapper.distanceBetween(12, 0)).toBeCloseTo(-17.5);
+    expect(mapper.rateAt(2)).toBeCloseTo(1.25);
+    expect(mapper.rateAt(5)).toBeCloseTo(0.625);
+    expect(mapper.hasBidirectionalScrollWithinLookahead(0)).toBe(false);
+  });
+
+  test('preserves STOPs without stretching the note, LN or bar-line distances', () => {
+    const json = createEmptyJSON('bms');
+    json.metadata.bpm = 120;
+    json.resources.bpm['01'] = 240;
+    json.resources.stop['01'] = 192;
+    json.events = [
+      { measure: 1, channel: '08', position: [0, 1], value: '01' },
+      { measure: 1, channel: '09', position: [0, 1], value: '01' },
+    ];
+    const timing = createTimingResolver(json);
+    const beatAt = createBeatAtSecondsResolverFromTimingResolver(timing);
+    const mapper = createLR2ConstantScrollMapper(timing.tempoPoints);
+    expect(beatAt(2.2)).toBe(4);
+    expect(beatAt(2.8)).toBe(4);
+    expect(mapper.distanceBetween(beatAt(2.2), 8)).toBeCloseTo(mapper.distanceBetween(beatAt(2.8), 8));
+    expect(mapper.distanceBetween(4, 8)).toBeCloseTo(2.5);
+    expect(mapper.distanceBetween(3, 6)).toBeCloseTo(2.5);
+    expect(timing.beatToSeconds(8)).toBeCloseTo(4);
+  });
+
+  test('keeps very high BPM gimmicks within the distance-based lookahead', () => {
+    const mapper = createLR2ConstantScrollMapper([{ beat: 0, bpm: 150000 }]);
+    expect(mapper.distanceBetween(0, 1000)).toBeCloseTo(1);
+    expect(mapper.firstBeatBeyondDistance(0, 3)).toBeCloseTo(3000);
+    expect(mapper.maxBeatWithinDistance(0, 3)).toBeCloseTo(3000);
+  });
+
+  test('uses the magnitude for a negative-BPM tempo and rejects incomplete or invalid maps', () => {
+    expect(createLR2ConstantScrollMapper([{ beat: 0, bpm: -300 }]).distanceBetween(0, 4)).toBe(2);
+    for (const tempo of [
+      [],
+      [{ beat: 1, bpm: 150 }],
+      [{ beat: 0, bpm: 0 }],
+      [{ beat: 0, bpm: NaN }],
+      [{ beat: 0, bpm: Infinity }],
+    ]) {
+      expect(() => createLR2ConstantScrollMapper(tempo)).toThrow(RangeError);
+    }
+  });
+});
+
+test('LR2 CONSTANT mirrors converted distance, even before chart zero', () => {
+  const mapper = createLR2ConstantScrollMapper([
+    { beat: 0, bpm: 120 },
+    { beat: 4, bpm: 240 },
+  ]);
+  expect(mapper.mirrorBeatAt(4, 8)).toBeCloseTo(2);
+  expect(mapper.mirrorBeatAt(4, 20)).toBeCloseTo(-4);
+  for (const forward of [4, 6, 8, 12, 20]) {
+    const mirrored = mapper.mirrorBeatAt(4, forward);
+    expect(mapper.distanceBetween(mirrored, 4)).toBeCloseTo(mapper.distanceBetween(4, forward));
+  }
+  expect(mapper.firstBeatBeyondDistance(-4, 2.5)).toBeCloseTo(-2);
+  expect(mapper.firstBeatBeyondDistance(-4, 7.5)).toBeCloseTo(2);
+  expect(mapper.maxBeatWithinDistance(-4, 7.5)).toBeCloseTo(2);
 });

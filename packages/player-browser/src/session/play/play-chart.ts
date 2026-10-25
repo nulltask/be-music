@@ -43,6 +43,7 @@ import {
 } from '@be-music/player-engine/lanes';
 import {
   createScrollDistanceMapper,
+  createLR2ConstantScrollMapper,
   type ScrollDistanceMapperLike,
   type TimedLandmineNote,
   type TimedPlayableNote,
@@ -190,6 +191,11 @@ export interface PlayChartContext {
 
 export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): void {
   const arrangement = ctx.options.replay ?? ctx.options.fixedArrangement;
+  if (
+    ctx.options.hsFix === 'CONSTANT' &&
+    (ctx.options.replay?.play.judgeRuleset ?? ctx.options.judgeRuleset ?? 'lr2') !== 'lr2'
+  )
+    throw new RangeError('HS-FIX CONSTANT is an LR2 option; beatoraja visual CONSTANT is a separate setting.');
   if (!arrangement && ctx.options.longNoteModifier?.startsWith('ADD_') && ctx.options.judgeRuleset !== 'beatoraja')
     throw new RangeError('Long-note addition is available only for beatoraja.');
   if (ctx.options.fixedDisplayArea && (ctx.options.replay?.play.judgeRuleset ?? ctx.options.judgeRuleset) !== '____')
@@ -496,9 +502,16 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   const beatResolver = resolvedPlay.beatResolver;
   const scrollTimeline = resolvedPlay.scroll;
   const speedTimeline = ctx.options.visualConstant ? [] : resolvedPlay.speed;
-  ctx.scrollMapper = changesScrollRate(scrollTimeline, speedTimeline)
-    ? createScrollDistanceMapper(scrollTimeline, speedTimeline, { invalidDistance: 0 })
-    : undefined;
+  const lr2Constant =
+    ctx.options.hsFix === 'CONSTANT' &&
+    !ctx.options.floatingHiSpeed &&
+    !ctx.options.classicHiSpeed &&
+    !((ctx.options.normalHiSpeedLevel ?? 0) > 0);
+  ctx.scrollMapper = lr2Constant
+    ? createLR2ConstantScrollMapper(resolver.tempoPoints)
+    : changesScrollRate(scrollTimeline, speedTimeline)
+      ? createScrollDistanceMapper(scrollTimeline, speedTimeline, { invalidDistance: 0 })
+      : undefined;
   ctx.laneTimelineBeats = collectResolvedLaneTimelineBeats(resolvedPlay);
   ctx.autoSampleTriggers = resolvedPlay.sampleTriggers
     .filter((trigger) => !isPlayableInputChannel(trigger.channel))

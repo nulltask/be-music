@@ -9,8 +9,8 @@ describe('resolveHSFixMultiplier', () => {
     expect(resolveHSFixMultiplier('MAXBPM', tempo)).toBe(0.5);
     expect(resolveHSFixMultiplier('MINBPM', tempo)).toBe(2);
     expect(resolveHSFixMultiplier('AVERAGE', tempo)).toBe(1.25);
-    // CONSTANT scrolls as AVERAGE until the scroll can follow every BPM change.
-    expect(resolveHSFixMultiplier('CONSTANT', tempo)).toBe(1.25);
+    // CONSTANT's distance mapper already normalizes to 150 BPM; do not apply MAIN again.
+    expect(resolveHSFixMultiplier('CONSTANT', tempo)).toBe(1);
   });
 
   test('anchors START to the header independently of BASEBPM, main BPM and a beat-zero tempo change', () => {

@@ -44,11 +44,11 @@ export interface HSFixTempo {
  * The multiplier HS-FIX scales the player's hi-speed by, so the scroll at another BPM of the chart feels like the
  * player's hi-speed at the reference BPM, as beatoraja's fixed hi-speed modes do (`LaneRenderer.init`): `MAXBPM` keeps
  * the maximum BPM at that speed, `MINBPM` the minimum, `AVERAGE` the main BPM (the BPM most notes sit at, which BPM × N
- * + STOP gimmicks do not skew the way a time average is), and `CONSTANT`, until the scroll can follow every BPM change,
- * the main BPM too. 1 without HS-FIX, without a reference BPM or without a positive BPM.
+ * + STOP gimmicks do not skew the way a time average is). LR2 `CONSTANT` uses its separate 150-BPM distance map
+ * with multiplier 1. Also 1 without HS-FIX, without a reference BPM or without a positive BPM.
  */
 export function resolveHSFixMultiplier(mode: HSFix, tempo: HSFixTempo): number {
-  if (mode === 'OFF') return 1;
+  if (mode === 'OFF' || mode === 'CONSTANT') return 1;
   const referenceBPM = tempo.referenceBPM !== undefined && tempo.referenceBPM > 0 ? tempo.referenceBPM : undefined;
   if (referenceBPM === undefined) return 1;
   const bpms = tempo.bpms.map((bpm) => Math.abs(bpm)).filter((bpm) => Number.isFinite(bpm) && bpm > 0);

@@ -64,7 +64,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
   const reversal = ctx.play.timingResolver?.reversal;
   const drawClock = resolveReversedDrawClock(reversal, displaySeconds, currentBeat);
   const drawWindow = resolveNoteDrawWindow({
-    rules: resolveNoteDrawRules(ctx.play.scrollMapper !== undefined),
+    rules: resolveNoteDrawRules(ctx.play.scrollMapper !== undefined && ctx.play.playState.view.hsFix !== 'CONSTANT'),
     currentBeat,
     nowSeconds: drawClock.nowSeconds,
     reachedBeat: drawClock.reachedBeat,

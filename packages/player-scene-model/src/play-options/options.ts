@@ -83,8 +83,8 @@ export interface PlayOptions {
    * - `'MINBPM'` — pegs to MIN BPM (faster segments scroll faster).
    * - `'AVERAGE'` — pegs to the main BPM, the BPM the most notes sit at (beatoraja's MAINBPM), which BPM × N + STOP
    *   gimmicks do not skew the way a time average is.
-   * - `'CONSTANT'` — adjusts HS at every BPM change so visual scroll is exactly constant. Falls back to `'AVERAGE'`
-   *   behavior for now (per-frame BPM-aware scroll requires a render-pipeline change that hasn't landed yet).
+   * - `'CONSTANT'` — LR2's fixed 150-BPM distance map, pausing on STOP and ignoring unsupported #SCROLL/#SPEED.
+   *   Distinct from beatoraja visual CONSTANT, which limits note visibility instead.
    */
   hsFix: HSFix;
   /** AC 34 display-area information visibility; OFF keeps readouts controlled by the skin. */

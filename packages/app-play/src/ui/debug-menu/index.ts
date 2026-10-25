@@ -189,7 +189,7 @@ export class DebugMenu {
   public hiSpeedController: PaneBinding | undefined;
   public judgeTimingController: PaneBinding | undefined;
   public judgeTimingAutoAdjustController: PaneBinding | undefined;
-  public hsFixController: PaneBinding | undefined;
+  public hsFixController: ListInputBindingApi<PlayOptions['hsFix']> | undefined;
   public fixedDisplayAreaController: PaneBinding | undefined;
   public floatingHiSpeedController: PaneBinding | undefined;
   public floatingSpeedController: PaneBinding | undefined;
@@ -418,6 +418,17 @@ export class DebugMenu {
   /** Repaints the "Play options" controllers after an external write (the LR2 select panel's edits). */
   public refreshRulesetChoices(): void {
     const ac = this.guiState.judgeRuleset === '____';
+    const lr2 = this.guiState.judgeRuleset === 'lr2';
+    if (!lr2 && this.guiState.hsFix === 'CONSTANT') {
+      this.guiState.hsFix = 'OFF';
+      this.setPlayOptions({ hsFix: 'OFF' });
+    }
+    if (this.hsFixController)
+      this.hsFixController.options = paneOptions(
+        lr2
+          ? (['OFF', 'MAXBPM', 'MINBPM', 'AVERAGE', 'CONSTANT', 'STARTBPM'] as const)
+          : (['OFF', 'MAXBPM', 'MINBPM', 'AVERAGE', 'STARTBPM'] as const),
+      );
     if (!ac && this.guiState.normalHiSpeedLevel > 0) {
       this.guiState.normalHiSpeedLevel = 0;
       this.setPlayOptions({ normalHiSpeedLevel: 0 });

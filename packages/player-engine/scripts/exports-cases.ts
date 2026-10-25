@@ -1410,6 +1410,17 @@ function registerDisplayCases(define: DefineBenchmarkCase): void {
       mapper.maxBeatWithinDistance(1, 6);
     },
   });
+  define('player-engine.display.createLR2ConstantScrollMapper', {
+    run() {
+      const mapper = displayAPI.createLR2ConstantScrollMapper([
+        { beat: 0, bpm: 120 },
+        { beat: 4, bpm: 240 },
+      ]);
+      mapper.distanceBetween(2, 8);
+      mapper.firstBeatBeyondDistance(0, 4);
+      mapper.mirrorBeatAt(4, 8);
+    },
+  });
   define('player-engine.display.createScrollDistanceMapper', {
     run: () => {
       const mapper = displayAPI.createScrollDistanceMapper(BENCH_SCROLL_TIMELINE, BENCH_SPEED_TIMELINE);
