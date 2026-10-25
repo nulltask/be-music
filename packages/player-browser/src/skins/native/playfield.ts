@@ -9,7 +9,7 @@ export function drawPlayfield(
   { context: ctx, width, height }: BeMusicSurface<'2d'>,
   frame: BeMusicGameplayFrame,
 ): void {
-  ctx.fillStyle = '#10151f';
+  ctx.fillStyle = '#171717';
   ctx.fillRect(0, 0, width, height);
   paintPlayfieldParts(ctx, resolvePlayfieldParts(frame));
 }

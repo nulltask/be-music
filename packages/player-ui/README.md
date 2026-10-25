@@ -49,7 +49,7 @@ Each class is exported as `BeMusic…Element`. Wrappers export the same names wi
 
 The playfield elements each draw on their own canvas, sized to the device pixels of the element's box. `rect` is the part of the stage the element covers, in stage design pixels, and `data` is drawn in the same coordinates, so an element can be placed and sized freely by its layout. `be-music-playfield` takes a whole `BeMusicGameplayFrame`, splits it with `resolvePlayfieldParts(frame)`, and places each element on its part of the letterboxed stage, under the gameplay HUD. Give it a frame on every animation frame; the elements own no clock.
 
-`paintPlayfieldParts(context, parts)` paints the same parts on one Canvas 2D context, each clipped to its rect, for a host that offers only a stage-sized surface. Subclass `BeMusicPlayfieldCanvasElement` and implement `paint(context, data)` for a part of your own. The BGA follows the BMS convention: the POOR image replaces the base and layer while a POOR shows, and a still image that fits the 256x256 BGA canvas keeps its size there. `be-music-playfield` paints the stage with `--be-music-color-background` and the letterbox around it with `--be-music-letterbox-background`. The playfield exposes `stage`, `bga`, `lanes`, `notes`, `lane-covers`, `judge-line`, `bombs` and `judgment-display` parts, and each element a `canvas` part.
+`paintPlayfieldParts(context, parts)` paints the same parts on one Canvas 2D context, each clipped to its rect, for a host that offers only a stage-sized surface. Subclass `BeMusicPlayfieldCanvasElement` and implement `paint(context, data)` for a part of your own. The BGA follows the BMS convention: the POOR image replaces the base and layer while a POOR shows, and a still image that fits the 256x256 BGA canvas keeps its size there. `be-music-playfield` paints the stage with `--background` and the letterbox around it with `--be-music-letterbox-background`. The playfield exposes `stage`, `bga`, `lanes`, `notes`, `lane-covers`, `judge-line`, `bombs` and `judgment-display` parts, and each element a `canvas` part.
 
 ## Preview
 
@@ -122,7 +122,7 @@ Vue emits the event detail directly: `@selection-change="({ index }) => select(i
 
 ## Styling and composition
 
-The elements use shadow roots. Theme tokens inherit across them: `--be-music-color-text`, `--be-music-color-muted`, `--be-music-color-background`, `--be-music-color-accent`, `--be-music-panel-background`, `--be-music-control-background`, `--be-music-focus-color`, `--be-music-timing-color`, `--be-music-font`, and `--be-music-radius`.
+The elements use shadow roots. HTML screens adopt Basecoat, so they follow the page's Basecoat tokens (`--background`, `--foreground`, `--primary`, `--muted-foreground`, `--card`, `--border`, `--radius`, and the rest of that set). `--be-music-letterbox-background` paints the band around the stage, and `--be-music-timing-color` paints the timing graph. Layout lengths such as `--be-music-list-height` and `--be-music-score-size` are not colors.
 
 Layout follows each element's own width. Every element is an inline-size container named `be-music`; a screen renames it `be-music-screen`. Below 40rem, a collection's columns stack and its chart list caps at 18rem. Above that, the list fills the column beside the chart details, and the list column stays wider than the details. Below 22rem, a judgment table hides its Early and Late columns, playback controls hide the volume slider, a preview chart row places the level and genre under the title, and a landscape gameplay HUD tightens its actions and detail cards. Below 16rem, a compact score puts its value on its own line and play options stack. The `compact` property stays explicit. Gameplay and preview stages still size themselves with `cqw` and `cqh`, and portrait play layout follows the stage orientation.
 
@@ -130,8 +130,8 @@ The gameplay HUD exposes `hud`, `heading`, `primary`, `actions`, `details`, `sco
 
 ```css
 be-music-gameplay-hud {
-  --be-music-color-accent: #a8e6ce;
-  --be-music-font: system-ui, sans-serif;
+  --primary: #a8e6ce;
+  --font-sans: system-ui, sans-serif;
 }
 be-music-gameplay-hud::part(judgment-table) {
   font-size: 12px;

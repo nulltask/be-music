@@ -49,7 +49,7 @@ React・Vue はそれぞれのラッパーの peer dependency です。スキン
 
 プレイフィールドの各要素は、要素の box のデバイスピクセルに合わせた自分専用の canvas に描画します。`rect` は要素が受け持つステージ上の範囲（ステージのデザイン座標）で、`data` も同じ座標で描くため、要素の位置と大きさはレイアウト側で自由に決められます。`be-music-playfield` は `BeMusicGameplayFrame` 全体を受け取り、`resolvePlayfieldParts(frame)` で分割して、レターボックスしたステージ上の各範囲に要素を配置します。ゲームプレイ HUD の下に重ねて使います。要素はクロックを持たないため、毎アニメーションフレーム frame を渡してください。
 
-`paintPlayfieldParts(context, parts)` は、ステージ全体の surface しか持たない host 向けに、同じ部品を一つの Canvas 2D context に各範囲で clip して描きます。独自の部品は `BeMusicPlayfieldCanvasElement` を継承して `paint(context, data)` を実装します。BGA は BMS の慣例に従い、POOR の表示中はベースとレイヤーの代わりに POOR の画像を描き、256x256 の BGA キャンバスに収まる静止画はその大きさのまま置きます。`be-music-playfield` はステージを `--be-music-color-background`、周囲のレターボックスを `--be-music-letterbox-background` で塗ります。プレイフィールドは `stage`・`bga`・`lanes`・`notes`・`lane-covers`・`judge-line`・`bombs`・`judgment-display` の parts を、各要素は `canvas` part を公開します。
+`paintPlayfieldParts(context, parts)` は、ステージ全体の surface しか持たない host 向けに、同じ部品を一つの Canvas 2D context に各範囲で clip して描きます。独自の部品は `BeMusicPlayfieldCanvasElement` を継承して `paint(context, data)` を実装します。BGA は BMS の慣例に従い、POOR の表示中はベースとレイヤーの代わりに POOR の画像を描き、256x256 の BGA キャンバスに収まる静止画はその大きさのまま置きます。`be-music-playfield` はステージを `--background`、周囲のレターボックスを `--be-music-letterbox-background` で塗ります。プレイフィールドは `stage`・`bga`・`lanes`・`notes`・`lane-covers`・`judge-line`・`bombs`・`judgment-display` の parts を、各要素は `canvas` part を公開します。
 
 ## プレビュー
 
@@ -122,7 +122,7 @@ Vue は detail を直接 emit するため、`@selection-change="({ index }) => 
 
 ## 外観と組み立て
 
-各要素は Shadow DOM を使います。`--be-music-color-text`・`--be-music-color-muted`・`--be-music-color-background`・`--be-music-color-accent`・`--be-music-panel-background`・`--be-music-control-background`・`--be-music-focus-color`・`--be-music-timing-color`・`--be-music-font`・`--be-music-radius` が継承されるテーマ用トークンです。
+各要素は Shadow DOM を使います。HTML の画面は Basecoat を採用しているので、ページの Basecoat トークン（`--background`、`--foreground`、`--primary`、`--muted-foreground`、`--card`、`--border`、`--radius` など）に従います。`--be-music-letterbox-background` はステージ周囲の帯、`--be-music-timing-color` はタイミンググラフの色です。`--be-music-list-height` や `--be-music-score-size` のような長さは色ではありません。
 
 配置は各要素自身の表示幅に従います。各要素は `be-music` という名前の inline-size コンテナで、画面は `be-music-screen` に変えます。40rem 未満ではコレクションのカラムが縦に積み、譜面リストの高さを 18rem に抑えます。それ以上の幅では、リストが譜面詳細の隣の列いっぱいになり、リストの列は詳細より広く残します。22rem 未満では、判定表が Early / Late 列を隠し、再生コントロールが音量スライダーを隠し、プレビューの譜面行はレベルとジャンルをタイトルの下に置き、横画面の Gameplay HUD は操作と詳細カードを詰めます。16rem 未満では、コンパクトなスコアの数値が単独の行になり、プレイオプションが縦に積まれます。`compact` は呼び出し側が明示する property のままです。Gameplay とプレビューのステージは `cqw` と `cqh` で大きさを決め、縦画面の配置はステージの向きに従います。
 
@@ -130,8 +130,8 @@ Gameplay HUD は `hud`・`heading`・`primary`・`actions`・`details`・`score-
 
 ```css
 be-music-gameplay-hud {
-  --be-music-color-accent: #a8e6ce;
-  --be-music-font: system-ui, sans-serif;
+  --primary: #a8e6ce;
+  --font-sans: system-ui, sans-serif;
 }
 be-music-gameplay-hud::part(judgment-table) {
   font-size: 12px;

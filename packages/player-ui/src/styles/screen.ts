@@ -18,7 +18,7 @@ export const screenStyles: CSSResultGroup = [
       min-height: 0;
       overflow: auto;
       pointer-events: auto;
-      background: var(--background, #10151f);
+      background: var(--background, #171717);
       padding: clamp(16px, 3cqi, 36px);
     }
     header {
