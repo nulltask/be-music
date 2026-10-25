@@ -13,3 +13,13 @@ Retain the independent AUTO SCRATCH switches when starting live play or replay p
 Share the head-only notes of LEGACY NOTE and LN REMOVE with the renderer and restore the recorded modifier before replay arrangement.
 
 Keep LR2 skin gauge buttons on the original four choices when extended gauges are selected from Debug Menu.
+
+Apply every new play option in the play session for every skin family: the judgment, hi-speed and view options (AC normal and floating hi-speed, fixed display area, per-side LIFT, CONSTANT, BPM GUIDE, judge display timing), the lane arrangements, the chart modifiers, the gauge options, the battle and conversion modes and PRACTICE.
+
+Draw a two-player BATTLE on the Plain, Native and Synesthesia skins with each player's gauge and figures, and on LR2 skins with the BATTLE play skins, the 2P numbers, ranks and gauge.
+
+Wire beatoraja select skins' option buttons (LNMODE, DP option, gauge auto shift, judgment algorithm, mine, scroll and long-note modes, 7 TO 9, EXTRA NOTE depth) to the play options, and start PRACTICE from its button.
+
+Fix beatoraja skins' LNMODE image showing the focused chart's mode on the select screen instead of the player's LN MODE.
+
+Bring the Synesthesia skin up to the floating hi-speed label and per-side LIFT.
