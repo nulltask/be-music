@@ -2,4 +2,4 @@
 '@be-music/app-dashboard': patch
 ---
 
-Dashboard pages read shadcn's design tokens for text and hover surfaces.
+Dashboard pages use Basecoat cards and buttons, the same components as the Leaderboard.

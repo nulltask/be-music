@@ -2,4 +2,4 @@
 '@be-music/app-accounts': patch
 ---
 
-Account pages read shadcn's design tokens for text, borders, inputs, and errors.
+Account pages use Basecoat buttons, cards, and inputs, the same components as the Leaderboard.

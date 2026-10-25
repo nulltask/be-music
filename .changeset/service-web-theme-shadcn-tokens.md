@@ -2,4 +2,4 @@
 '@be-music/service-web-theme': patch
 ---
 
-Service pages use shadcn's neutral design tokens (`--background`, `--foreground`, `--muted-foreground`, `--border`, `--destructive`, `--radius`, and the rest of that set). The values are the CSS variables only.
+Accounts and Dashboard compile Basecoat on Tailwind CSS v4, the same components as the Leaderboard, instead of a hand-written stylesheet. Dark colors follow the system color scheme.
