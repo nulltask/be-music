@@ -1,5 +1,5 @@
 import type { TestHookFamily, TestHookState } from '../src/test-hook.ts';
-import { type Demo, expect, openWithLibrary, SONGS, test } from './support.ts';
+import { expect, openWithLibrary, SMOKE, SONGS, test, type Demo } from './support.ts';
 
 /**
  * The select screen's list on the built-in, LR2 and beatoraja families (the browse model of `@be-music/player-scene-model`):
@@ -241,23 +241,27 @@ for (const setup of FAMILIES) {
       expect(state.cursor?.bar?.title).toBe('Fixture C');
     });
 
-    test('narrows the list to the search, and lists the matching charts at the root', async ({ demo }) => {
-      await setup.open(demo);
-      await demo.browseTo(SONGS, 'Fixture C');
-      let state = await search(demo, 'dense');
-      expect(state.cursor?.folderPath).toEqual([SONGS]);
-      expect(state.cursor?.bar?.title).toBe('Fixture D dense');
-      expect(await walkList(demo)).toEqual(['Fixture D dense']);
-      await search(demo, '');
-      await demo.key('Escape');
-      await demo.waitFor((current) => current.cursor?.folderPath.length === 0, 'the root of the list', 10_000);
-      // At the root, the search lists the matching charts of every folder.
-      state = await search(demo, 'Fixture G');
-      expect(state.cursor?.bar).toMatchObject({ kind: 'chart', title: 'Fixture G' });
-      // Clearing it lists the folders again, from the top.
-      state = await search(demo, '');
-      expect(state.cursor?.bar).toMatchObject({ kind: 'folder', title: SONGS });
-    });
+    test(
+      'narrows the list to the search, and lists the matching charts at the root',
+      setup.name === 'built-in' ? SMOKE : {},
+      async ({ demo }) => {
+        await setup.open(demo);
+        await demo.browseTo(SONGS, 'Fixture C');
+        let state = await search(demo, 'dense');
+        expect(state.cursor?.folderPath).toEqual([SONGS]);
+        expect(state.cursor?.bar?.title).toBe('Fixture D dense');
+        expect(await walkList(demo)).toEqual(['Fixture D dense']);
+        await search(demo, '');
+        await demo.key('Escape');
+        await demo.waitFor((current) => current.cursor?.folderPath.length === 0, 'the root of the list', 10_000);
+        // At the root, the search lists the matching charts of every folder.
+        state = await search(demo, 'Fixture G');
+        expect(state.cursor?.bar).toMatchObject({ kind: 'chart', title: 'Fixture G' });
+        // Clearing it lists the folders again, from the top.
+        state = await search(demo, '');
+        expect(state.cursor?.bar).toMatchObject({ kind: 'folder', title: SONGS });
+      },
+    );
   });
 }
 

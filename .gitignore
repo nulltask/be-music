@@ -17,6 +17,7 @@ packages/*/dist-sea/
 *.tsbuildinfo
 coverage/
 packages/app-play/e2e-results/
+packages/app-play/e2e-report/
 
 # Example datasets
 examples/*
