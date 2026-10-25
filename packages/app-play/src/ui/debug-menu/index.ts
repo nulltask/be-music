@@ -500,11 +500,21 @@ export class DebugMenu {
     if (this.sevenToNinePatternController) this.sevenToNinePatternController.hidden = !sevenToNine;
     if (this.sevenToNineTypeController) this.sevenToNineTypeController.hidden = !sevenToNine;
     const lr2Battle = this.guiState.judgeRuleset === 'lr2';
-    if (!lr2Battle && this.guiState.battleMode !== 'OFF') {
+    if (
+      (lr2Battle && this.guiState.battleMode === 'BATTLE') ||
+      (!lr2Battle && this.guiState.battleMode === 'SP-TO-DP')
+    ) {
       this.guiState.battleMode = 'OFF';
       this.setPlayOptions({ battleMode: 'OFF' });
     }
-    if (this.battleModeController) this.battleModeController.hidden = !lr2Battle;
+    if (this.battleModeController) {
+      this.battleModeController.options = paneOptions(
+        lr2Battle
+          ? { OFF: 'OFF' as const, 'SP TO DP': 'SP-TO-DP' as const }
+          : { OFF: 'OFF' as const, BATTLE: 'BATTLE' as const },
+      );
+      this.battleModeController.refresh();
+    }
     const lr2Extra = this.guiState.judgeRuleset === 'lr2';
     if (!lr2Extra && this.guiState.lr2ExtraMode) {
       this.guiState.lr2ExtraMode = false;

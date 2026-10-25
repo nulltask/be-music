@@ -196,7 +196,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   extraNoteScratch: BOOLEAN_CYCLE,
   sevenToNinePattern: [0, 1, 2, 3, 4, 5, 6],
   sevenToNineType: [0, 1, 2],
-  battleMode: ['OFF', 'SP-TO-DP'],
+  battleMode: ['OFF', 'SP-TO-DP', 'BATTLE'],
   lr2ExtraMode: BOOLEAN_CYCLE,
   lr2ExtraLevel: [0, 1, 2],
   autoScratch1P: BOOLEAN_CYCLE,

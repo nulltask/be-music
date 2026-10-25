@@ -227,7 +227,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   if (
     !arrangement &&
     ctx.options.battleMode &&
-    ctx.options.battleMode !== 'OFF' &&
+    ctx.options.battleMode === 'SP-TO-DP' &&
     (ctx.options.judgeRuleset ?? 'lr2') !== 'lr2'
   )
     throw new RangeError('SP TO DP requires LR2 judgment rules.');
@@ -356,12 +356,17 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       arrangement.play.scrollRate === undefined)
   )
     throw new RangeError('A recorded scroll ADD requires its effective timeline.');
+  const modifierNotes =
+    arrangement?.play.battleMode === 'BATTLE'
+      ? arrangement.chart.notes.filter((note) => !(note.sourceChannel ?? note.channel).startsWith('2'))
+      : arrangement?.chart.notes;
   const prepared = preparePlaybackChart(
     resolvedPlay,
     {
       laneModeExtension: extractChartExtension(ctx.chart?.chartPath),
       longNoteModifier: arrangement?.play.longNoteModifier ?? ctx.options.longNoteModifier,
       longNoteRate: arrangement?.play.longNoteRate ?? ctx.options.longNoteRate,
+      judgeRuleset: arrangement?.play.judgeRuleset ?? ctx.options.judgeRuleset,
       battleMode: arrangement ? (arrangement.play.battleMode ?? 'OFF') : ctx.options.battleMode,
       autoScratch1P: arrangement
         ? (arrangement.play.battleAssist1P ?? arrangement.play.autoScratch1P ?? arrangement.play.autoScratch)
@@ -379,7 +384,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       extraNoteScratch: arrangement ? (arrangement.play.extraNoteScratch ?? false) : ctx.options.extraNoteScratch,
       ...(arrangement?.play.longNoteModifier?.startsWith('ADD_')
         ? {
-            longNoteModifierPlacements: arrangement.chart.notes
+            longNoteModifierPlacements: modifierNotes!
               .filter((note) => note.generatedLongNote)
               .map((note) => ({
                 sourceChannel: note.sourceChannel ?? note.channel,
@@ -396,7 +401,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       scrollModifierTimeline: arrangement?.play.scrollModifierTimeline,
       ...(arrangement?.play.mineModifier?.startsWith('ADD_')
         ? {
-            mineModifierPlacements: arrangement.chart.notes
+            mineModifierPlacements: modifierNotes!
               .filter((note) => note.type === 'mine')
               .map((note) => ({
                 channel: note.channel,
@@ -440,7 +445,10 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     // DP FLIP — swap 1P / 2P channels in place. Cheap O(n) walk because we already iterate `notes` for sorting; SP
     // charts skip every entry (no `2x` channels exist). Mine notes are flipped together so they stay anchored to the
     // same visual lane after the flip.
-    if (ctx.options.dpFlip && ['10', '14', '48'].includes(playVariant)) {
+    // A duplicated BATTLE chart has identical sides; its source applies no DP FLIP to it.
+    const battleDuplicated =
+      prepared.battleMode !== undefined && prepared.battleMode !== 'OFF' && prepared.battleMode !== 'SP-TO-DP';
+    if (ctx.options.dpFlip && !battleDuplicated && ['10', '14', '48'].includes(playVariant)) {
       for (const note of ctx.notes) {
         note.channel = flipDPChannel(note.channel);
       }
@@ -490,7 +498,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
                 .map((lane) => lane.channel),
         doublePlay: playVariant === '10' || playVariant === '14' || playVariant === '48',
         side: '1P',
-        flipped: ctx.options.dpFlip && ['10', '14', '48'].includes(playVariant),
+        flipped: ctx.options.dpFlip && !battleDuplicated && ['10', '14', '48'].includes(playVariant),
         playVariant: playVariant,
       },
       ctx.mineNotes as Array<{ channel: string }>,
@@ -515,7 +523,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
                 .map((lane) => lane.channel),
         doublePlay: playVariant === '10' || playVariant === '14' || playVariant === '48',
         side: '2P',
-        flipped: ctx.options.dpFlip && ['10', '14', '48'].includes(playVariant),
+        flipped: ctx.options.dpFlip && !battleDuplicated && ['10', '14', '48'].includes(playVariant),
         playVariant: playVariant,
       },
       ctx.mineNotes as Array<{ channel: string }>,

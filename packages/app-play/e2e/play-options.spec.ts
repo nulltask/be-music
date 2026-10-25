@@ -786,7 +786,7 @@ for (const skin of ['plain', 'native'] as const)
         `#TITLE ${title}\n#BPM 240\n#LNOBJ ZZ\n#00111:01\n#00112:02\n#00212:ZZ\n#00311:01${sourceKeys === 7 ? '\n#00418:01' : ''}`,
       );
       await player.setOption(['Developer'], 'Judgment windows', 'LR2');
-      await player.setOption(['Play options'], 'Battle (LR2)', 'SP TO DP');
+      await player.setOption(['Play options'], 'Battle', 'SP TO DP');
       await player.setOption(['Play options'], 'Auto play', true);
       await player.cursorTo((bar) => bar.title === title, 'SP TO DP source chart');
       await player.key('Enter');
@@ -807,15 +807,15 @@ for (const skin of ['plain', 'native'] as const)
       expect(replay?.chart.notes.some((note) => note.channel.startsWith('2'))).toBe(true);
       expect(replay?.chart.notes.some((note) => note.type === 'long')).toBe(true);
       await player.leaveResult();
-      await player.setOption(['Play options'], 'Battle (LR2)', 'OFF');
+      await player.setOption(['Play options'], 'Battle', 'OFF');
       await player.dropText('sp-to-dp.bmplay.json', JSON.stringify(replay));
       await player.waitFor((state) => state.scene.kind === 'play' && state.play?.replay === true, 'SP TO DP replay');
       await player.waitForResult(1);
       await player.leaveResult();
-      await player.setOption(['Play options'], 'Battle (LR2)', 'SP TO DP');
+      await player.setOption(['Play options'], 'Battle', 'SP TO DP');
       await player.page.reload();
       await player.waitFor((state) => state.scene.kind === 'select', 'select after reload');
-      expect(await player.readOption(['Play options'], 'Battle (LR2)')).toBe('SP TO DP');
+      expect(await player.readOption(['Play options'], 'Battle')).toBe('SP TO DP');
     });
   }
 

@@ -1,3 +1,5 @@
+import { duplicateBattleChart } from './battle-chart.ts';
+import { resolveEffectiveBattleMode } from './battle-mode.ts';
 import { convertLR2SPToDPChart } from './lr2-sp-to-dp-chart.ts';
 import type { BattleMode } from './battle-mode.ts';
 import { convertLR2ExtraChart } from './lr2-extra-chart.ts';
@@ -223,6 +225,7 @@ export function preparePlaybackChart(
     | 'laneModeExtension'
     | 'longNoteModifier'
     | 'battleMode'
+    | 'judgeRuleset'
     | 'autoScratch'
     | 'autoScratch1P'
     | 'autoScratch2P'
@@ -250,7 +253,12 @@ export function preparePlaybackChart(
     : undefined;
   resolved = lr2Extra?.chart ?? resolved;
   const battleSourceVariant = resolved.playVariant;
-  const battleMode = options.course === undefined ? (options.battleMode ?? 'OFF') : 'OFF';
+  const battleMode = resolveEffectiveBattleMode(
+    options.battleMode ?? 'OFF',
+    options.judgeRuleset ?? 'lr2',
+    battleSourceVariant,
+    options.course !== undefined,
+  );
   const battleAssist1P = options.autoScratch1P ?? options.autoScratch ?? false;
   const battleAssist2P = options.autoScratch2P ?? options.autoScratch ?? false;
   const battle =
@@ -274,7 +282,7 @@ export function preparePlaybackChart(
   const scrollResult =
     scrollAddition ?? (options.scrollModifier === 'REMOVE' ? removeScrollChanges(resolved) : undefined);
   resolved = scrollResult?.chart ?? resolved;
-  const playVariant = resolved.playVariant;
+  let playVariant = resolved.playVariant;
   const notes = resolved.notes.map(toTimedPlayableNote);
   const longMode = options.longNoteModifier ?? 'OFF';
   const longChanges =
@@ -302,6 +310,10 @@ export function preparePlaybackChart(
   });
   resolved = extraResult.chart;
   const invisibleNotes = resolved.invisibleNotes.map(toTimedInvisibleNote);
+  const duplicateBattle =
+    battleMode === 'BATTLE' ? duplicateBattleChart(resolved, notes, landmineNotes, invisibleNotes) : undefined;
+  resolved = duplicateBattle?.chart ?? resolved;
+  playVariant = resolved.playVariant;
   const laneSoundNotes = [...notes, ...invisibleNotes].sort(compareLaneSoundNotes);
   const renderNotes = notes;
   let totalSeconds = Math.max(resolved.lastNoteSeconds, auxiliaryPlaybackEndSeconds);
@@ -328,7 +340,7 @@ export function preparePlaybackChart(
           battleTempo: options.speed ?? 1,
           battleAssist1P,
           battleAssist2P,
-          battleChangedObjectCount: battle?.changedObjectCount ?? 0,
+          battleChangedObjectCount: duplicateBattle?.changedObjectCount ?? battle?.changedObjectCount ?? 0,
           battleDroppedObjectCount: battle?.droppedObjectCount ?? 0,
         }
       : {}),
