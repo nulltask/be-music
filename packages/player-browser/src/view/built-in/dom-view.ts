@@ -77,8 +77,16 @@ abstract class DOMFamilyView<Frame, Intent, DOMFrame, Actions> implements Family
   }
   /** Native screens follow CSS viewport orientation, including while their data snapshot is unchanged. */
   protected syncOrientation(): void {
-    const screen = this.host?.app.screen;
-    if (screen) this.host?.setStageOrientation(screen.height > screen.width ? 'portrait' : 'landscape');
+    const host = this.host;
+    if (!host) return;
+    // Measure the element the screens mount in: while Native shows, the canvas is out of the page and the Pixi
+    // screen keeps whatever size it last resized to.
+    const root = host.domRoot;
+    const { width, height } =
+      root.clientWidth > 0 && root.clientHeight > 0
+        ? { width: root.clientWidth, height: root.clientHeight }
+        : host.app.screen;
+    host.setStageOrientation(height > width ? 'portrait' : 'landscape');
   }
 
   public abstract draw(frame: Frame): void;

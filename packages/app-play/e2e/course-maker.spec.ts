@@ -90,7 +90,8 @@ test('makes, saves, cancels, renames, deletes and exports courses', async ({ pla
   // The saved-course manager: exports, rename, delete.
   await player.pressOption(['Course'], 'My courses…');
   const dialog = page.locator('dialog.course-maker-dialog');
-  await expect(dialog).toBeVisible();
+  // A Basecoat dialog is an empty box; its panel, the child, is what shows.
+  await expect(dialog.locator(':scope > div')).toBeVisible();
   const [lr2crs] = await Promise.all([
     page.waitForEvent('download'),
     dialog.getByRole('button', { name: 'Export .lr2crs' }).click(),
@@ -119,6 +120,7 @@ test('makes, saves, cancels, renames, deletes and exports courses', async ({ pla
   page.once('dialog', (confirm) => void confirm.accept());
   await row('NONSTOP').getByRole('button', { name: 'Delete' }).click();
   await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect(dialog).not.toHaveAttribute('open');
   state = await player.browseTo('MY COURSES', 'E2E EXPERT');
   expect(state.cursor?.bar?.course?.kind).toBe('expert');
   await player.openFolder('MY NONSTOP');

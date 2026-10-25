@@ -1,5 +1,5 @@
 import type { TestHookState } from '../src/test-hook.ts';
-import { type Player, expect, openWithLibrary, SONGS, test } from './support.ts';
+import { expect, openWithLibrary, SMOKE, SONGS, test, type Player } from './support.ts';
 
 /**
  * F5 during a single chart's play starts it again as it was played, on the built-in family: an AUTO play stays AUTO
@@ -36,7 +36,7 @@ async function restart(player: Player): Promise<TestHookState> {
   );
 }
 
-test("F5 starts an AUTO play again with AUTO, though the Debug Menu's Auto play is off", async ({ player }) => {
+test("F5 starts an AUTO play again with AUTO, though the Debug Menu's Auto play is off", SMOKE, async ({ player }) => {
   await openWithLibrary(player, { 'be-music.built-in-skin': 'synesthesia' });
   expect(await player.readOption(PLAY_OPTIONS, 'Auto play')).toBe(false);
   await player.browseTo(SONGS, 'Fixture A');

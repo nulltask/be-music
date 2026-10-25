@@ -1,5 +1,5 @@
 import type { TestHookFamily, TestHookResult, TestHookState } from '../src/test-hook.ts';
-import { COURSES, type Player, expect, test } from './support.ts';
+import { COURSES, expect, SMOKE, test, type Player } from './support.ts';
 
 /**
  * The course flow of the checklist (`docs/course-checklist.md`, items 1-8 and 10), run the same way on each skin family:
@@ -90,49 +90,51 @@ export function courseFlowTests(setup: FamilyCase): void {
       }
     });
 
-    test('plays a GRADE course with AUTO: stage results skipped, gauge carried over, settings restored', async ({
-      player,
-    }) => {
-      await setup.open(player);
-      // An LR2 grade turns the lane option off and EASY into GROOVE for its stages only.
-      await player.setOption(PLAY_OPTIONS, 'Gauge', 'EASY');
-      await player.setOption(PLAY_OPTIONS, 'Random 1P', 'MIRROR');
-      await startCourse(player, setup, 'FIX GRADE', true);
-      let state = await playingStage(player, 'FIX GRADE', 1);
-      expect(state.scene.family).toBe(setup.family);
-      expect(state.play).toMatchObject({ autoPlay: true, course: { stageCount: 3 } });
-      await playingStage(player, 'FIX GRADE', 2);
-      state = await playingStage(player, 'FIX GRADE', 3);
-      // AUTO skips the results of the stages before the last, as LR2 does.
-      expect(state.results).toHaveLength(0);
-      state = await player.waitForResult(0);
-      expect(state.results[0]).toMatchObject({ run: 'stage', family: setup.family, title: 'Fixture C' });
-      const stageLog = await player.lastReplay();
-      expect(stageLog?.play).toMatchObject({ mode: 'auto', gauge: 'GROOVE', course: { kind: 'grade' } });
-      expect(stageLog?.play.randomLane?.p1 ?? 'OFF').toBe('OFF');
-      await player.leaveResult();
-      state = await player.waitForResult(1);
-      const result = state.results[1]!;
-      expect(result).toMatchObject({
-        run: 'course',
-        family: setup.family,
-        title: 'FIX GRADE',
-        cleared: true,
-        course: { kind: 'grade', stageCount: 3, stagesPlayed: 3, aborted: false },
-      });
-      expect(result.lamp).not.toBe('FAILED');
-      const stages = stagesOf(result);
-      expect(stages[0]!.gauge.start).toBeUndefined();
-      expect(stages[1]!.gauge.start).toBe(stages[0]!.gauge.final);
-      expect(stages[2]!.gauge.start).toBe(stages[1]!.gauge.final);
-      expect(result.exScore).toBe(stages.reduce((sum, stage) => sum + stage.exScore, 0));
-      if (setup.jingles !== undefined) expect(result.jingle).toBe(setup.jingles.courseClear);
-      if (setup.playTime) expect(result.playSeconds).toBeGreaterThan(0);
-      await expectBackOnCourseBar(player, 'FIX GRADE');
-      // The player's own settings come back after the course.
-      expect(await player.readOption(PLAY_OPTIONS, 'Gauge')).toBe('EASY');
-      expect(await player.readOption(PLAY_OPTIONS, 'Random 1P')).toBe('MIRROR');
-    });
+    test(
+      'plays a GRADE course with AUTO: stage results skipped, gauge carried over, settings restored',
+      SMOKE,
+      async ({ player }) => {
+        await setup.open(player);
+        // An LR2 grade turns the lane option off and EASY into GROOVE for its stages only.
+        await player.setOption(PLAY_OPTIONS, 'Gauge', 'EASY');
+        await player.setOption(PLAY_OPTIONS, 'Random 1P', 'MIRROR');
+        await startCourse(player, setup, 'FIX GRADE', true);
+        let state = await playingStage(player, 'FIX GRADE', 1);
+        expect(state.scene.family).toBe(setup.family);
+        expect(state.play).toMatchObject({ autoPlay: true, course: { stageCount: 3 } });
+        await playingStage(player, 'FIX GRADE', 2);
+        state = await playingStage(player, 'FIX GRADE', 3);
+        // AUTO skips the results of the stages before the last, as LR2 does.
+        expect(state.results).toHaveLength(0);
+        state = await player.waitForResult(0);
+        expect(state.results[0]).toMatchObject({ run: 'stage', family: setup.family, title: 'Fixture C' });
+        const stageLog = await player.lastReplay();
+        expect(stageLog?.play).toMatchObject({ mode: 'auto', gauge: 'GROOVE', course: { kind: 'grade' } });
+        expect(stageLog?.play.randomLane?.p1 ?? 'OFF').toBe('OFF');
+        await player.leaveResult();
+        state = await player.waitForResult(1);
+        const result = state.results[1]!;
+        expect(result).toMatchObject({
+          run: 'course',
+          family: setup.family,
+          title: 'FIX GRADE',
+          cleared: true,
+          course: { kind: 'grade', stageCount: 3, stagesPlayed: 3, aborted: false },
+        });
+        expect(result.lamp).not.toBe('FAILED');
+        const stages = stagesOf(result);
+        expect(stages[0]!.gauge.start).toBeUndefined();
+        expect(stages[1]!.gauge.start).toBe(stages[0]!.gauge.final);
+        expect(stages[2]!.gauge.start).toBe(stages[1]!.gauge.final);
+        expect(result.exScore).toBe(stages.reduce((sum, stage) => sum + stage.exScore, 0));
+        if (setup.jingles !== undefined) expect(result.jingle).toBe(setup.jingles.courseClear);
+        if (setup.playTime) expect(result.playSeconds).toBeGreaterThan(0);
+        await expectBackOnCourseBar(player, 'FIX GRADE');
+        // The player's own settings come back after the course.
+        expect(await player.readOption(PLAY_OPTIONS, 'Gauge')).toBe('EASY');
+        expect(await player.readOption(PLAY_OPTIONS, 'Random 1P')).toBe('MIRROR');
+      },
+    );
 
     test('seeking a course stage makes every later stage and the course result practice', async ({ player }) => {
       await setup.open(player);
