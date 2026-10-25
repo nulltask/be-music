@@ -25,3 +25,10 @@
   position-area: block-end span-all;
   margin: 6px 1rem;
 }
+
+/* The header's account, Play and language controls. Basecoat's `.btn:active:not([aria-haspopup])` shifts a pressed
+   button down 1px. These stay put. The focus ring (`.btn:focus-visible`) is unchanged, and other page buttons still
+   use Basecoat's press. */
+header nav :is(a, button).btn:active {
+  translate: none;
+}
