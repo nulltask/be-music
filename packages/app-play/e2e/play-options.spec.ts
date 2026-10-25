@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { expect, openWithLibrary, SONGS, test } from './support.ts';
 
 test('START BPM is selectable in Debug Menu, remembered and recorded in a play', async ({ player }) => {
@@ -673,3 +674,37 @@ for (const skin of ['plain', 'native'] as const) {
     expect(await player.readOption(['Play options'], 'Gauge')).toBe('G.ATTACK');
   });
 }
+
+for (const skin of ['plain', 'native'] as const)
+  for (const gauge of ['P.ATTACK', 'G.ATTACK'] as const) {
+    test(`${gauge} course selection and grade reset remain scoped on ${skin}`, async ({ player }) => {
+      await player.open({ 'be-music.built-in-skin': skin });
+      const texts = ['#TITLE Attack A\n#BPM 240\n#00111:01', '#TITLE Attack B\n#BPM 240\n#00112:01'];
+      for (const [index, text] of texts.entries()) await player.dropText(`attack-stage-${index}.bms`, text);
+      const hashes = texts.map((text) => createHash('md5').update(text).digest('hex')).join('');
+      const title = `${gauge} course`;
+      await player.dropText(
+        'Attack courses.lr2crs',
+        `<courselist><course><title>${title}</title><type>${gauge === 'G.ATTACK' ? 2 : 0}</type><hash>${'0'.repeat(32)}${hashes}</hash></course></courselist>`,
+      );
+      await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+      await player.setOption(['Play options'], 'Gauge', gauge);
+      await player.setOption(['Play options'], 'Auto play', true);
+      await player.openFolder('Attack courses');
+      await player.cursorTo((bar) => bar.title === title, 'attack course');
+      await player.key('Enter');
+      await player.waitForResult(0);
+      expect((await player.lastReplay())?.play.gauge).toBe(gauge === 'G.ATTACK' ? 'GROOVE' : 'P-ATTACK');
+      await player.leaveResult();
+      const state = await player.waitForResult(1);
+      expect(state.results[1]).toMatchObject({
+        run: 'course',
+        title,
+        cleared: true,
+        lamp: 'FULL_COMBO',
+        course: { stagesPlayed: 2 },
+      });
+      await player.leaveResult();
+      expect(await player.readOption(['Play options'], 'Gauge')).toBe(gauge);
+    });
+  }

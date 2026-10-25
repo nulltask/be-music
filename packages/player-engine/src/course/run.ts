@@ -9,7 +9,7 @@ import {
 } from '../replay/course.ts';
 import type { BeMusicReplay, ReplayCourseStage, ReplayRecorderInfo, ReplayRulesetResult } from '../replay/format.ts';
 import { computeStageChartFingerprint, resolveReplayCourseInfo } from './course-replay.ts';
-import { resolveRuleset } from '../ruleset/index.ts';
+import { isCourseStageFailed, resolveRuleset } from '../ruleset/index.ts';
 import type { CourseDefinition } from './definition.ts';
 import { applyCourseLongNoteConstraint } from './long-note.ts';
 import {
@@ -172,7 +172,10 @@ export class CourseRun<
     if (this.ended) return false;
     const native = replay?.results?.native ?? outcome;
     if (native === undefined) return false;
-    const failed = native.gauge.failedMidPlay === true || native.gauge.final <= 0;
+    const failed = isCourseStageFailed(
+      replay === undefined ? native.ruleset : (replay.play?.judgeRuleset ?? 'lr2'),
+      native.gauge,
+    );
     return !failed && this.played.length + 1 < this.stages.length;
   }
 
@@ -220,13 +223,16 @@ export class CourseRun<
           .noteCount,
     );
     const gauge = outcomes.at(-1)!.gauge.type;
-    const pick = gauge.endsWith('-EASY')
-      ? 'EASY'
-      : gauge.endsWith('-HARD')
-        ? 'HARD'
-        : gauge.endsWith('-DEATH')
-          ? 'DEATH'
-          : 'GROOVE';
+    const pick =
+      gauge === 'P-ATTACK' || gauge === 'G-ATTACK'
+        ? gauge
+        : gauge.endsWith('-EASY')
+          ? 'EASY'
+          : gauge.endsWith('-HARD')
+            ? 'HARD'
+            : gauge.endsWith('-DEATH')
+              ? 'DEATH'
+              : 'GROOVE';
     return aggregateCourseResult(ruleset, resolveReplayCourseInfo(this.definition), outcomes, counts, pick);
   }
 

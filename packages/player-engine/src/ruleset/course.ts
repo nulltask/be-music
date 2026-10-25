@@ -16,6 +16,11 @@ export type CourseGaugeSet = 'lr2' | '5k' | '7k' | '9k' | '24k';
 /** beatoraja's `NO_GOOD` / `NO_GREAT` course constraints. */
 export type CourseJudgeConstraint = 'no-good' | 'no-great';
 
+/** LR2 advances at HP >= 2; the class gauges of the other rulesets require a positive value. */
+export function isCourseStageFailed(ruleset: string, gauge: { final: number; failedMidPlay?: boolean }): boolean {
+  return gauge.failedMidPlay === true || (ruleset.split('/')[0] === 'lr2' ? gauge.final < 2 : gauge.final <= 0);
+}
+
 export interface RulesetCourseOptions {
   kind: RulesetCourseKind;
   /** The course's `gauge_*` constraint; without one beatoraja picks the set by play mode. LR2 ignores it. */

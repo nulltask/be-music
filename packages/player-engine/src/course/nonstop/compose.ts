@@ -31,12 +31,12 @@ export interface NonstopStageInput {
 /**
  * The version of the stitching rules {@link stitchNonstopCourse} follows. A NONSTOP replay records it
  * (`ReplayNonstopRun.stitch`), so a stitched chart is rebuilt by the rules it was played on. Raise it whenever a change
- * moves a stitched note, sound, rank or timing, and keep the earlier rules reachable through `options.stitch`.
+ * moves a stitched note, sound, rank or timing, or changes gauge inputs; keep earlier rules reachable through `options.stitch`.
  */
-export const NONSTOP_STITCH_VERSION = 1;
+export const NONSTOP_STITCH_VERSION = 2;
 
 /** The stitching rule versions {@link stitchNonstopCourse} can follow. */
-export const NONSTOP_STITCH_VERSIONS: readonly number[] = [1];
+export const NONSTOP_STITCH_VERSIONS: readonly number[] = [1, 2];
 
 export interface StitchNonstopOptions extends NonstopPlanOptions {
   /** The stitching rules to follow ({@link NONSTOP_STITCH_VERSION} by default); one it does not know is refused. */
@@ -147,8 +147,9 @@ interface StitchedStop {
  * A note of a later stage that lands before the previous stage's last note, or within 0.1 s of it on a lane that
  * note's stage also used there, becomes background sound, as LR2 does at the seam. Keysound and BGA keys are renumbered
  * into one base-62 space (`#BASE 62`); BMS output refuses more than 3843 of either (`id-space`), while bmson output uses longer keys. The chart's
- * judge rank is the first stage's (the map's `stageRanks` change it for later stages) and TOTAL the last stage's, as LR2
- * overwrites it. A stitching rule version it does not know (`options.stitch`) is refused (`stitch-version`).
+ * judge rank is the first stage's (the map's `stageRanks` change it for later stages). LR2 keeps the last TOTAL
+ * declaration across the stage loop, including when later stages omit it. Version 1 retains its former last-stage-only
+ * TOTAL rule for existing replays. A stitching rule version it does not know is refused (`stitch-version`).
  */
 export function stitchNonstopCourse(
   stages: readonly NonstopStageInput[],
@@ -182,6 +183,9 @@ export function stitchNonstopCourse(
   const bmpKeys = new NonstopKeyAllocator(asBmson);
   const stopKeys = new NonstopKeyAllocator(asBmson);
   const chart = createEmptyJSON(asBmson ? 'bmson' : 'bms');
+  let totalStage = stages.length - 1;
+  if ((options.stitch ?? NONSTOP_STITCH_VERSION) >= 2)
+    while (totalStage >= 0 && stages[totalStage]!.chart.metadata.total === undefined) totalStage--;
   if (asBmson) {
     chart.bmson.info.resolution = 2400;
     const variant = resolved[0]!.playVariant;
@@ -196,7 +200,7 @@ export function stitchNonstopCourse(
         '48': 'keyboard-24k-double',
       } as const
     )[variant];
-    chart.bmson.info.totalUnit = resolved.at(-1)!.total.unit;
+    chart.bmson.info.totalUnit = resolved[totalStage < 0 ? stages.length - 1 : totalStage]!.total.unit;
   }
   chart.bms.base = 62;
   const objects: StitchedObject[] = [];
@@ -280,11 +284,11 @@ export function stitchNonstopCourse(
   if (chart.events.length === 0 && objects.length > 0) return { ok: false, reason: 'id-space' };
 
   const first = stages[0]!.chart.metadata;
-  const last = stages.at(-1)!.chart.metadata;
   chart.metadata.bpm = STITCHED_BPM;
   if (options.title !== undefined) chart.metadata.title = options.title;
   if (first.rank !== undefined) chart.metadata.rank = first.rank;
-  if (last.total !== undefined) chart.metadata.total = last.total;
+  const total = stages[totalStage]?.chart.metadata.total;
+  if (total !== undefined) chart.metadata.total = total;
 
   const readouts = stages.map((stage, index) => ({
     ...stageNoteHeads(objects, index),

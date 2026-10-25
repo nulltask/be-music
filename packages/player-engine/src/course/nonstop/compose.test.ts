@@ -379,3 +379,49 @@ test('keeps each NONSTOP stage’s POOR BGA mode', () => {
   if (!result.ok) throw new Error('stitch failed');
   expect(result.map.stages.map((stage) => stage.poorBGAMode)).toEqual([1, 2]);
 });
+
+test('NONSTOP version 2 retains the last declared TOTAL, while version 1 preserves previous replay behavior', () => {
+  const first = bms('#BPM 240', '#TOTAL 80', '#00111:01');
+  const second = bms('#BPM 240', '#00112:01');
+  const build = (stitch: number, tail = second) => {
+    const result = stitchNonstopCourse([{ chart: first }, { chart: tail }], { connections: ['blank2'], stitch });
+    if (!result.ok) throw new Error(result.reason);
+    return result;
+  };
+  const current = build(2),
+    legacy = build(1);
+  expect(NONSTOP_STITCH_VERSION).toBe(2);
+  expect(current.chart.metadata.total).toBe(80);
+  expect(legacy.chart.metadata.total).toBeUndefined();
+  expect(resolveChart(current.chart).notes.map((note) => [note.seconds, note.endSeconds])).toEqual(
+    resolveChart(legacy.chart).notes.map((note) => [note.seconds, note.endSeconds]),
+  );
+  expect(build(2, bms('#BPM 240', '#TOTAL 300', '#00112:01')).chart.metadata.total).toBe(300);
+  expect(build(2, bms('#BPM 240', '#TOTAL 0', '#00112:01')).chart.metadata.total).toBe(0);
+});
+
+test('G.ATTACK NONSTOP damage uses all remaining joined notes and the last declared TOTAL, as HARD does', () => {
+  for (const total of [80, 300]) {
+    const first = bms('#BPM 240', `#TOTAL ${total}`, `#00111:${'01'.repeat(16)}`);
+    const second = bms('#BPM 240', `#00112:${'01'.repeat(16)}`);
+    const result = stitchNonstopCourse([{ chart: first }, { chart: second }], { connections: ['blank2'] });
+    if (!result.ok) throw new Error(result.reason);
+    const facts = resolveChartRulesetFacts(result.chart);
+    expect(facts.notes.normal).toBe(32);
+    const options = { course: { kind: 'nonstop' as const } };
+    const attack = resolveRuleset(facts, 'lr2', { ...options, selectedGauge: 'G-ATTACK' });
+    const hard = resolveRuleset(facts, 'lr2', { ...options, selectedGauge: 'HARD' });
+    expect(attack.effectiveTotal).toBe(total);
+    expect(attack.gauge.values[0]).toBeCloseTo(total === 80 ? -100 : -(7 - 2 / 15) * 10);
+    expect(attack.gauge.values[0]).toBe(hard.gauge.values[4]);
+    expect(attack.gauge.values[3]).toBe(-6);
+  }
+});
+
+test('an inherited TOTAL keeps its original unit in a mixed NONSTOP chart', () => {
+  const result = stitchNonstopCourse([{ chart: bmsonStage() }, { chart: bms('#BPM 240', '#00111:01') }], {
+    connections: ['blank2'],
+  });
+  if (!result.ok) throw new Error(result.reason);
+  expect(resolveChart(result.chart).total).toEqual({ value: 100, unit: 'percent' });
+});

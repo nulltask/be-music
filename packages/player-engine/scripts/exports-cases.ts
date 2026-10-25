@@ -808,6 +808,12 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       rulesetAPI.resolveClearLamp({ ruleset: 'beatoraja', cleared: true, gauge: 'HARD', score: benchLampScore });
     },
   });
+  define('player-engine.course.isCourseStageFailed', {
+    run: () => {
+      courseAPI.isCourseStageFailed('lr2', { final: 2 });
+      courseAPI.isCourseStageFailed('beatoraja', { final: 1 });
+    },
+  });
   define('player-engine.ruleset.resolveCourseClearLamp', {
     run: () => {
       rulesetAPI.resolveCourseClearLamp({
