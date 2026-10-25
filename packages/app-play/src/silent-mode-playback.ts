@@ -219,18 +219,21 @@ export interface SilentModeHintOptions {
 export function mountSilentModeHint(options: SilentModeHintOptions): void {
   const { strings } = options;
   const card = document.createElement('div');
-  card.className = 'silent-mode-hint';
+  card.className = 'card silent-mode-hint gap-2 px-3 py-2';
   card.setAttribute('role', 'status');
   const text = document.createElement('span');
-  text.className = 'silent-mode-hint-text';
+  text.className = 'silent-mode-hint-text text-sm';
   text.textContent = strings.hint;
   const action = document.createElement('button');
   action.type = 'button';
-  action.className = 'silent-mode-hint-action';
+  action.className = 'btn';
+  action.dataset.size = 'sm';
   action.textContent = strings.hintAction;
   const dismiss = document.createElement('button');
   dismiss.type = 'button';
-  dismiss.className = 'silent-mode-hint-dismiss';
+  dismiss.className = 'btn';
+  dismiss.dataset.variant = 'ghost';
+  dismiss.dataset.size = 'icon-sm';
   dismiss.setAttribute('aria-label', strings.hintDismiss);
   dismiss.textContent = '×';
   card.append(text, action, dismiss);

@@ -29,6 +29,7 @@ export class BeMusicSelectScreenElement extends FrameElement<BeMusicDOMSelectFra
           <h1>Collection</h1>
         </div>
         <input
+          class="input"
           type="search"
           aria-label="Search charts"
           placeholder="Search title, artist…"
@@ -56,7 +57,15 @@ export class BeMusicSelectScreenElement extends FrameElement<BeMusicDOMSelectFra
       <div class="columns">
         <section class="browse">
           <div class="actions">
-            <button ?disabled=${f.launching} @click=${() => this.emit('back-request', undefined)}>Back</button>
+            <button
+              class="btn"
+              data-size="sm"
+              data-variant="outline"
+              ?disabled=${f.launching}
+              @click=${() => this.emit('back-request', undefined)}
+            >
+              Back
+            </button>
             <p class="muted">${f.folderLabel ?? 'All folders'}</p>
           </div>
           <be-music-play-options

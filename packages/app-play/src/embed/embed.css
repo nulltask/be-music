@@ -1,12 +1,13 @@
+@import '../theme.css';
+
 html,
 body {
   height: 100%;
   margin: 0;
   overflow: hidden;
   background: #05070b;
-  color: #edf2fa;
-  color-scheme: dark;
-  font-family: system-ui, sans-serif;
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
 }
 
 .preview {
@@ -38,15 +39,11 @@ body {
   max-width: 80%;
   margin: 0;
   text-align: center;
-  color: #b8c7da;
 }
 
 .preview-loading {
-  display: grid;
   place-self: center;
-  gap: 10px;
   width: min(360px, 80%);
-  color: #b8c7da;
   text-align: center;
 }
 
@@ -57,27 +54,7 @@ body {
 
 .preview-loading progress {
   width: 100%;
-  height: 6px;
-  appearance: none;
-  border: none;
-  border-radius: 3px;
-  background: #1c2433;
-  accent-color: #abcaff;
-}
-
-.preview-loading progress::-webkit-progress-bar {
-  border-radius: 3px;
-  background: #1c2433;
-}
-
-.preview-loading progress::-webkit-progress-value {
-  border-radius: 3px;
-  background: #abcaff;
-}
-
-.preview-loading progress::-moz-progress-bar {
-  border-radius: 3px;
-  background: #abcaff;
+  accent-color: var(--primary);
 }
 
 /* The pointer hides with the video controls while a play runs untouched. */

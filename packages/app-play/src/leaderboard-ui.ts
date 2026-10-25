@@ -246,7 +246,9 @@ export class LeaderboardPanel {
         const button = document.createElement('button');
         button.type = 'button';
         // Making an account is the step the card leads to; the other actions stay quiet.
-        button.className = `start-button${action === 'sign-up' || action === 'keep' ? ' start-button--primary' : ''}`;
+        button.className = 'btn';
+        button.dataset.size = 'sm';
+        if (action !== 'sign-up' && action !== 'keep') button.dataset.variant = 'outline';
         button.textContent = START_ACCOUNT_ACTION_LABELS[action];
         button.addEventListener('click', () => {
           // Signing out needs nothing more; the rest open the dialogs the Leaderboard's own pages use.
