@@ -34,6 +34,8 @@ const gui: GUIPlayOptions = {
   longNoteRate: 1,
   mineModifier: 'OFF',
   scrollModifier: 'OFF',
+  scrollSection: 4,
+  scrollRate: 0.5,
   gaugeAutoShift: 'NONE',
   bottomShiftableGauge: 'ASSIST-EASY',
   autoScratch1P: true,
@@ -83,6 +85,8 @@ describe('playOptionsFromGUI', () => {
       longNoteRate: 1,
       mineModifier: 'OFF',
       scrollModifier: 'OFF',
+      scrollSection: 4,
+      scrollRate: 0.5,
       gaugeAutoShift: 'NONE',
       bottomShiftableGauge: 'ASSIST-EASY',
       autoScratch1P: true,
@@ -137,6 +141,8 @@ describe('copyPlayOptionsToGUI', () => {
       judgeAlgorithm: 'combo',
       mineModifier: 'OFF',
       scrollModifier: 'OFF',
+      scrollSection: 4,
+      scrollRate: 0.5,
       gaugeAutoShift: 'NONE',
       bottomShiftableGauge: 'ASSIST-EASY',
       longNoteModifier: 'OFF',
@@ -270,4 +276,23 @@ test('scroll REMOVE transfers between GUI and play options independently of visu
   const restored = { ...gui };
   copyPlayOptionsToGUI({ ...DEFAULT_PLAY_OPTIONS, scrollModifier: 'REMOVE' }, restored);
   expect(restored.scrollModifier).toBe('REMOVE');
+});
+
+test('previous arrangement restores scroll ADD parameters, and editing either parameter unpins it', () => {
+  const replay = {
+    chart: { notes: [] },
+    play: { judgeRuleset: 'beatoraja', scrollModifier: 'ADD', scrollSection: 8, scrollRate: 0.25 },
+  } as unknown as BeMusicReplay;
+  for (const change of [{ scrollSection: 4 }, { scrollRate: 0.5 }]) {
+    const service = new PlayOptionsService();
+    service.rememberArrangement('chart', replay);
+    expect(service.reusePreviousArrangement()).toMatchObject({
+      scrollModifier: 'ADD',
+      scrollSection: 8,
+      scrollRate: 0.25,
+    });
+    expect(service.arrangementFor('chart')).toBeDefined();
+    service.update(change);
+    expect(service.arrangementFor('chart')).toBeUndefined();
+  }
 });

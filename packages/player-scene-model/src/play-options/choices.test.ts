@@ -302,3 +302,20 @@ test('scroll REMOVE defaults off and remains separate from visual CONSTANT', () 
   });
   expect(resolvePlayOptionValue('scrollModifier', 'CONSTANT')).toBeUndefined();
 });
+
+test('scroll ADD exposes source parameters with their defaults and bounds', () => {
+  expect(DEFAULT_PLAY_OPTIONS).toMatchObject({ scrollModifier: 'OFF', scrollSection: 4, scrollRate: 0.5 });
+  expect(resolvePlayOptions({ scrollModifier: 'ADD', scrollSection: 0, scrollRate: 2 })).toMatchObject({
+    scrollModifier: 'ADD',
+    scrollSection: 1,
+    scrollRate: 1,
+  });
+  expect(resolvePlayOptions({ scrollSection: 2048, scrollRate: -1 })).toMatchObject({
+    scrollSection: 1024,
+    scrollRate: 0,
+  });
+  expect(resolvePlayOptions({ scrollSection: '4', scrollRate: NaN })).toMatchObject({
+    scrollSection: 4,
+    scrollRate: 0.5,
+  });
+});

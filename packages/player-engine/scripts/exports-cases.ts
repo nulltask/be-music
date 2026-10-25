@@ -84,6 +84,12 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
         resolveChart(fixtures.sampleBmsJSON, { chartPath: '.bms', inferBmsLNTypeWhenMissing: true }),
         { laneModeExtension: '.bms', longNoteModifier: 'REMOVE', scrollModifier: 'REMOVE' },
       );
+      playerAPI.preparePlaybackChart(
+        resolveChart(fixtures.sampleBmsJSON),
+        { scrollModifier: 'ADD', scrollSection: 1 },
+        0,
+        () => 0.25,
+      );
     },
   });
   define('player-engine.autoPlay', {
@@ -1278,6 +1284,16 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
   define('player-engine.display.adjustBeatorajaJudgeTiming', {
     run() {
       displayAPI.adjustBeatorajaJudgeTiming(0, 'GREAT', 45);
+    },
+  });
+  define('player-engine.lanes.clampScrollSection', {
+    run: () => {
+      lanesAPI.clampScrollSection(4);
+    },
+  });
+  define('player-engine.lanes.clampScrollRate', {
+    run: () => {
+      lanesAPI.clampScrollRate(0.5);
     },
   });
   define('player-engine.lanes.clampLongNoteRate', {

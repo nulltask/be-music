@@ -78,8 +78,12 @@ export interface CreatePlayerInputRuntimeContext {
  * `autoPlay` or `manualPlay`.
  */
 export interface PlayerPlaySettings {
-  /** beatoraja scroll modifier; changes chart coordinates while retaining event times. */
+  /** beatoraja scroll modifier; REMOVE changes coordinates and ADD replaces the scroll-rate timeline. Event times stay fixed. */
   scrollModifier?: import('./scroll-modifier.ts').ScrollModifier;
+  scrollSection?: number;
+  scrollRate?: number;
+  /** Effective source ADD curve; supplying it restores the original draws. */
+  scrollModifierTimeline?: readonly import('@be-music/chart-model').ScrollTimelinePoint[];
   auto?: boolean;
   autoScratch?: boolean;
   /** beatoraja's note-selection algorithm; other source rulesets retain their own fixed selection. */

@@ -126,8 +126,11 @@ export interface PlayOptions {
   /** beatoraja ADD probability, 0..1, default 1. */
   longNoteRate: number;
   mineModifier: MineModifier;
-  /** beatoraja timeline BPM/STOP/SCROLL removal, independent of visual CONSTANT. */
+  /** beatoraja timeline BPM/STOP/SCROLL removal or generated SCROLL, independent of visual CONSTANT. */
   scrollModifier: ScrollModifier;
+  /** beatoraja ADD: change every 1..1024 section lines (default 4), with width 0..1 (default 0.5). */
+  scrollSection: number;
+  scrollRate: number;
   /** beatoraja: continue judging with the selected dead gauge, or stop on failure. */
   gaugeAutoShift: GaugeAutoShift;
   bottomShiftableGauge: import('@be-music/player-engine/ruleset').GaugeShiftBottom;

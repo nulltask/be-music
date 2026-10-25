@@ -150,9 +150,23 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
   this.scrollModifierController = selectBinding(folder, this.guiState, 'scrollModifier', 'Scroll (beatoraja)', {
     OFF: 'OFF',
     REMOVE: 'REMOVE',
+    ADD: 'ADD',
   });
   trackPlayOption(
-    this.scrollModifierController.on('change', ({ value }) => this.setPlayOptions({ scrollModifier: value })),
+    this.scrollModifierController.on('change', ({ value }) => {
+      this.setPlayOptions({ scrollModifier: value });
+      this.refreshRulesetChoices();
+    }),
+  );
+  this.scrollSectionController = trackPlayOption(
+    folder
+      .addBinding(this.guiState, 'scrollSection', { label: 'Scroll section lines', min: 1, max: 1024, step: 1 })
+      .on('change', ({ value }) => this.setPlayOptions({ scrollSection: value })),
+  );
+  this.scrollRateController = trackPlayOption(
+    folder
+      .addBinding(this.guiState, 'scrollRate', { label: 'Scroll rate', min: 0, max: 1, step: 0.01 })
+      .on('change', ({ value }) => this.setPlayOptions({ scrollRate: value })),
   );
   this.mineModifierController = selectBinding(folder, this.guiState, 'mineModifier', 'Mines (beatoraja)', {
     OFF: 'OFF',

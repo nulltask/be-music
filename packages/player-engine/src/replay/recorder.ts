@@ -1,3 +1,4 @@
+import type { ScrollTimelinePoint } from '@be-music/chart-model';
 import type { ScrollModifier } from '../core/scroll-modifier.ts';
 import type { LongNoteModifier } from '../core/long-note-modifier.ts';
 import { resolveReplaySourceChannel } from './source-channel.ts';
@@ -67,6 +68,9 @@ export interface ReplayRecorderPlaySettings {
   longNoteModifierChangeCount?: number;
   mineModifier?: MineModifier;
   scrollModifier?: ScrollModifier;
+  scrollSection?: number;
+  scrollRate?: number;
+  scrollModifierTimeline?: ScrollTimelinePoint[];
   scrollModifierChanged?: boolean;
   mineModifierChangeCount?: number;
   autoScratch1P?: boolean;
@@ -280,6 +284,10 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       if (options.play.view !== undefined) play.view = structuredClone(options.play.view);
       if (options.play.judgeAlgorithm !== undefined) play.judgeAlgorithm = options.play.judgeAlgorithm;
       if (options.play.scrollModifier !== undefined) play.scrollModifier = options.play.scrollModifier;
+      if (options.play.scrollSection !== undefined) play.scrollSection = options.play.scrollSection;
+      if (options.play.scrollRate !== undefined) play.scrollRate = options.play.scrollRate;
+      if (options.play.scrollModifierTimeline !== undefined)
+        play.scrollModifierTimeline = options.play.scrollModifierTimeline.map((point) => ({ ...point }));
       if (options.play.scrollModifierChanged !== undefined)
         play.scrollModifierChanged = options.play.scrollModifierChanged;
       if (options.play.mineModifier !== undefined) play.mineModifier = options.play.mineModifier;

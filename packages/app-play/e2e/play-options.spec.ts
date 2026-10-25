@@ -565,3 +565,37 @@ for (const skin of ['plain', 'native'] as const) {
     await player.waitForResult(1);
   });
 }
+
+for (const skin of ['plain', 'native'] as const) {
+  test(`scroll ADD parameters and generated curve are recorded and replayed on ${skin}`, async ({ player }, info) => {
+    await player.open({ 'be-music.built-in-skin': skin });
+    await player.dropText(
+      'scroll-add.bms',
+      '#TITLE Scroll ADD\n#BPM 240\n#BPM01 480\n#STOP01 192\n#00111:01\n#00108:01\n#00209:01\n#00312:01',
+    );
+    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+    await player.setOption(['Play options'], 'Scroll (beatoraja)', 'ADD');
+    await player.setOption(['Play options'], 'Scroll section lines', 1);
+    await player.setOption(['Play options'], 'Scroll rate', 1);
+    await player.setOption(['Play options'], 'Auto play', true);
+    await player.cursorTo((bar) => bar.title === 'Scroll ADD', 'scroll ADD chart');
+    await player.key('Enter');
+    await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 0.2, 'scroll ADD play');
+    await player.key('Space');
+    await player.page.locator('#stage').screenshot({ path: info.outputPath(`scroll-add-${skin}.png`) });
+    await player.key('Space');
+    await player.waitForResult(0);
+    const replay = await player.lastReplay();
+    expect(replay?.play).toMatchObject({ scrollModifier: 'ADD', scrollSection: 1, scrollRate: 1 });
+    expect(replay?.play.options).toMatchObject({ scrollModifier: 'ADD', scrollSection: 1, scrollRate: 1 });
+    expect(replay?.play.scrollModifierTimeline).toHaveLength(5);
+    expect(replay?.play.scrollModifierTimeline?.every((point) => point.speed >= 0 && point.speed <= 2)).toBe(true);
+    expect(replay?.chart.notes.map((note) => note.timeUs)).toEqual([1000000, 2500000]);
+    await player.leaveResult();
+    await player.setOption(['Play options'], 'Scroll rate', 0);
+    await player.setOption(['Play options'], 'Scroll (beatoraja)', 'OFF');
+    await player.dropText('scroll-add.bmplay.json', JSON.stringify(replay));
+    await player.waitFor((state) => state.scene.kind === 'play' && state.play?.replay === true, 'scroll ADD replay');
+    await player.waitForResult(1);
+  });
+}

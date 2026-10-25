@@ -153,6 +153,8 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     longNoteModifier: playOptions.longNoteModifier,
     mineModifier: playOptions.mineModifier,
     scrollModifier: playOptions.scrollModifier,
+    scrollSection: playOptions.scrollSection,
+    scrollRate: playOptions.scrollRate,
     longNoteRate: playOptions.longNoteRate,
     gaugeAutoShift: playOptions.gaugeAutoShift,
     bottomShiftableGauge: playOptions.bottomShiftableGauge,

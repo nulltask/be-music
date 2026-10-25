@@ -155,6 +155,8 @@ export interface PlaySessionOptions {
   longNoteRate?: number;
   mineModifier?: import('@be-music/player-scene-model').PlayOptions['mineModifier'];
   scrollModifier?: import('@be-music/player-scene-model').PlayOptions['scrollModifier'];
+  scrollSection?: number;
+  scrollRate?: number;
   gaugeAutoShift?: import('@be-music/player-scene-model').PlayOptions['gaugeAutoShift'];
   bottomShiftableGauge?: import('@be-music/player-scene-model').PlayOptions['bottomShiftableGauge'];
   /**

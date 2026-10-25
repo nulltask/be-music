@@ -29,7 +29,7 @@ test('REMOVE reparameterizes all sections and removes BPM/STOP/SCROLL changes wh
   expect(chart.sampleTriggers.every((trigger) => trigger.beat === trigger.seconds * 2)).toBe(true);
   expect(chart.bga).toBe(source.bga);
   expect(chart.judgeRank).toBe(source.judgeRank);
-  expect(chart.total).toBe(source.total);
+  expect(chart.total).toEqual(source.total);
   for (const event of source.sortedEvents) {
     expect(chart.timing.eventToSeconds(event)).toBe(source.timing.eventToSeconds(event));
     expect(chart.beatResolver.eventToBeat(event)).toBe(source.timing.eventToSeconds(event) * 2);

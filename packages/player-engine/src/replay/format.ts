@@ -1,3 +1,4 @@
+import type { ScrollTimelinePoint } from '@be-music/chart-model';
 import type { ScrollModifier } from '../core/scroll-modifier.ts';
 import type { LongNoteModifier } from '../core/long-note-modifier.ts';
 import type { MineModifier } from '../core/mine-modifier.ts';
@@ -201,6 +202,10 @@ export interface ReplayPlay {
   longNoteModifierChangeCount?: number;
   mineModifier?: MineModifier;
   scrollModifier?: ScrollModifier;
+  scrollSection?: number;
+  scrollRate?: number;
+  scrollModifierTimeline?: ScrollTimelinePoint[];
+  /** Effective chart change, not an assist-policy decision (source ADD does not set an assist flag). */
   scrollModifierChanged?: boolean;
   mineModifierChangeCount?: number;
   autoScratch1P?: boolean;
@@ -710,10 +715,41 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     parsed.judgeAlgorithm = play.judgeAlgorithm as 'combo' | 'duration' | 'lowest';
   }
   if (play.scrollModifier !== undefined) {
-    if (play.scrollModifier !== 'OFF' && play.scrollModifier !== 'REMOVE')
-      throw new ReplayParseError('play.scrollModifier: expected OFF or REMOVE');
+    if (play.scrollModifier !== 'OFF' && play.scrollModifier !== 'REMOVE' && play.scrollModifier !== 'ADD')
+      throw new ReplayParseError('play.scrollModifier: expected OFF, REMOVE or ADD');
     parsed.scrollModifier = play.scrollModifier;
   }
+  if (play.scrollSection !== undefined) {
+    const section = expectNonNegativeInteger(play.scrollSection, 'play.scrollSection');
+    if (section < 1 || section > 1024) throw new ReplayParseError('play.scrollSection: expected 1..1024');
+    parsed.scrollSection = section;
+  }
+  if (play.scrollRate !== undefined) {
+    const rate = expectFiniteNumber(play.scrollRate, 'play.scrollRate');
+    if (rate < 0 || rate > 1) throw new ReplayParseError('play.scrollRate: expected 0..1');
+    parsed.scrollRate = rate;
+  }
+  if (play.scrollModifierTimeline !== undefined) {
+    if (!Array.isArray(play.scrollModifierTimeline))
+      throw new ReplayParseError('play.scrollModifierTimeline: expected array');
+    let previous = -Infinity;
+    parsed.scrollModifierTimeline = play.scrollModifierTimeline.map((value, index) => {
+      const point = expectRecord(value, `play.scrollModifierTimeline[${index}]`);
+      const beat = expectFiniteNumber(point.beat, 'scroll timeline beat');
+      const speed = expectFiniteNumber(point.speed, 'scroll timeline speed');
+      if (beat < 0 || beat < previous)
+        throw new ReplayParseError('play.scrollModifierTimeline: expected ordered nonnegative beats');
+      previous = beat;
+      return { beat, speed };
+    });
+  }
+  if (
+    parsed.scrollModifier === 'ADD' &&
+    (parsed.scrollSection === undefined || parsed.scrollRate === undefined || !parsed.scrollModifierTimeline?.length)
+  )
+    throw new ReplayParseError('play.scrollModifier: ADD requires section, rate and an effective timeline');
+  if (parsed.scrollModifier === 'ADD' && parsed.scrollModifierTimeline?.[0]?.beat !== 0)
+    throw new ReplayParseError('play.scrollModifierTimeline: expected initial beat zero');
   if (play.scrollModifierChanged !== undefined) {
     if (typeof play.scrollModifierChanged !== 'boolean')
       throw new ReplayParseError('play.scrollModifierChanged: expected boolean');

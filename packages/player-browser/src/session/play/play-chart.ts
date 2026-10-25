@@ -126,6 +126,8 @@ export interface PlayChartContext {
       | 'judgeRuleset'
       | 'longNoteModifier'
       | 'longNoteRate'
+      | 'scrollSection'
+      | 'scrollRate'
       | 'scrollModifier'
       | 'mineModifier'
       | 'autoScratch1P'
@@ -198,7 +200,12 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     (ctx.options.replay?.play.judgeRuleset ?? ctx.options.judgeRuleset ?? 'lr2') !== 'lr2'
   )
     throw new RangeError('HS-FIX CONSTANT is an LR2 option; beatoraja visual CONSTANT is a separate setting.');
-  if (!arrangement && ctx.options.scrollModifier === 'REMOVE' && ctx.options.judgeRuleset !== 'beatoraja')
+  if (
+    !arrangement &&
+    ctx.options.scrollModifier !== undefined &&
+    ctx.options.scrollModifier !== 'OFF' &&
+    ctx.options.judgeRuleset !== 'beatoraja'
+  )
     throw new RangeError('Scroll modification is available only for beatoraja.');
   if (!arrangement && ctx.options.longNoteModifier?.startsWith('ADD_') && ctx.options.judgeRuleset !== 'beatoraja')
     throw new RangeError('Long-note addition is available only for beatoraja.');
@@ -314,6 +321,13 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // The invisible / keysound array is always prepared even when the overlay is off — so the Tweakpane toggle can flip
   // the visualization on mid-song without a chart restart; the per-frame render loop is gated on
   // `showInvisibleNotes`. The audio horizon is left at 0: the engine recomputes its own from realtime triggers.
+  if (
+    arrangement?.play.scrollModifier === 'ADD' &&
+    (arrangement.play.scrollModifierTimeline === undefined ||
+      arrangement.play.scrollSection === undefined ||
+      arrangement.play.scrollRate === undefined)
+  )
+    throw new RangeError('A recorded scroll ADD requires its effective timeline.');
   const prepared = preparePlaybackChart(
     resolvedPlay,
     {
@@ -334,6 +348,9 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
         : {}),
       mineModifier: arrangement?.play.mineModifier ?? ctx.options.mineModifier,
       scrollModifier: arrangement?.play.scrollModifier ?? ctx.options.scrollModifier,
+      scrollSection: arrangement?.play.scrollSection ?? ctx.options.scrollSection,
+      scrollRate: arrangement?.play.scrollRate ?? ctx.options.scrollRate,
+      scrollModifierTimeline: arrangement?.play.scrollModifierTimeline,
       ...(arrangement?.play.mineModifier?.startsWith('ADD_')
         ? {
             mineModifierPlacements: arrangement.chart.notes
