@@ -405,9 +405,25 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.setOption(['Play options'], 'Judge timing (beatoraja, ms)', 100);
     await player.cursorTo((bar) => bar.title === 'Auto timing', 'calibration chart');
     await player.key('Enter');
-    // The note is at 2 s; the press lands some tens of ms after the poll sees the time, late but within GOOD.
-    await player.waitFor((state) => (state.play?.seconds ?? 0) >= 2, 'a late manual key press');
-    await player.key('KeyZ');
+    // The note is at 2 s. Watch the clock in the page and press on the first frame past 2.03 s, so the press is late
+    // but within GOOD however busy the test runner is (a poll from the runner can land well past the window).
+    await player.page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          const step = (): void => {
+            if ((window.__beMusicTest?.state().play?.seconds ?? 0) < 2.03) {
+              requestAnimationFrame(step);
+              return;
+            }
+            for (const type of ['keydown', 'keyup'])
+              window.dispatchEvent(
+                new KeyboardEvent(type, { code: 'KeyZ', key: 'z', bubbles: true, cancelable: true }),
+              );
+            resolve();
+          };
+          step();
+        }),
+    );
     await player.waitForResult(0);
     const replay = await player.lastReplay();
     expect(replay?.play.options).toMatchObject({ judgeTimingAutoAdjust: true, judgeTimingMs: 100 });
