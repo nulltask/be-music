@@ -734,3 +734,42 @@ for (const skin of ['plain', 'native'] as const) {
     expect(await player.readOption(['Play options'], 'EXTRA scratch (beatoraja)')).toBe(true);
   });
 }
+
+for (const skin of ['plain', 'native'] as const) {
+  test(`LR2 EXTRA records normalised holds and restores its source settings on ${skin}`, async ({ player }) => {
+    await player.open({ 'be-music.built-in-skin': skin });
+    await player.dropText(
+      'lr2-extra.bme',
+      '#TITLE LR2 Extra fixture\n#BPM 240\n#LNOBJ ZZ\n#00111:01\n#00211:ZZ\n#00201:02\n#00312:01',
+    );
+    await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+    await player.setOption(['Play options'], 'EXTRA MODE (LR2)', true);
+    await player.setOption(['Play options'], 'EXTRA minimum level (LR2)', 'LEVEL 2');
+    await player.setOption(['Play options'], 'Auto play', true);
+    await player.cursorTo((bar) => bar.title === 'LR2 Extra fixture', 'LR2 EXTRA chart');
+    await player.key('Enter');
+    await player.waitForResult(0);
+    const replay = await player.lastReplay();
+    expect(replay?.play).toMatchObject({
+      lr2ExtraMode: true,
+      lr2ExtraLevel: 1,
+      lr2ExtraEffectiveLevel: 1,
+      lr2ExtraConvertedObjectCount: 1,
+      lr2ExtraTempo: 1,
+    });
+    expect(replay?.play.options).toMatchObject({ lr2ExtraMode: true, lr2ExtraLevel: 1 });
+    expect(replay?.chart.notes).toHaveLength(3);
+    expect(replay?.chart.notes.every((note) => note.type === 'normal')).toBe(true);
+    await player.leaveResult();
+    await player.setOption(['Play options'], 'EXTRA MODE (LR2)', false);
+    await player.dropText('lr2-extra.bmplay.json', JSON.stringify(replay));
+    await player.waitFor((state) => state.scene.kind === 'play' && state.play?.replay === true, 'LR2 EXTRA replay');
+    await player.waitForResult(1);
+    await player.leaveResult();
+    await player.setOption(['Play options'], 'EXTRA MODE (LR2)', true);
+    await player.page.reload();
+    await player.waitFor((state) => state.scene.kind === 'select', 'select after reload');
+    expect(await player.readOption(['Play options'], 'EXTRA MODE (LR2)')).toBe(true);
+    expect(await player.readOption(['Play options'], 'EXTRA minimum level (LR2)')).toBe('LEVEL 2');
+  });
+}

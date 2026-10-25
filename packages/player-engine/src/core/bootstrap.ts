@@ -1,3 +1,5 @@
+import { convertLR2ExtraChart } from './lr2-extra-chart.ts';
+import type { LR2ExtraLevel } from './lr2-extra-lanes.ts';
 import { addExtraNotes, clampExtraNoteDepth } from './extra-note-modifier.ts';
 import { prepareMineModifier, type MineModifier } from './mine-modifier.ts';
 import { addScrollChanges, removeScrollChanges, type ScrollModifier } from './scroll-modifier.ts';
@@ -59,6 +61,11 @@ export interface PreparedPlaybackChartData {
   notes: TimedPlayableNote[];
   laneSoundNotes: TimedPlayableNote[];
   landmineNotes: TimedLandmineNote[];
+  lr2ExtraMode?: boolean;
+  lr2ExtraLevel?: LR2ExtraLevel;
+  lr2ExtraEffectiveLevel?: LR2ExtraLevel;
+  lr2ExtraConvertedObjectCount?: number;
+  lr2ExtraTempo?: number;
   extraNoteDepth?: number;
   extraNoteScratch?: boolean;
   extraNoteChangeCount?: number;
@@ -202,6 +209,10 @@ export function preparePlaybackChart(
     PlayerOptions,
     | 'laneModeExtension'
     | 'longNoteModifier'
+    | 'lr2ExtraMode'
+    | 'lr2ExtraLevel'
+    | 'course'
+    | 'speed'
     | 'extraNoteDepth'
     | 'extraNoteScratch'
     | 'longNoteRate'
@@ -216,6 +227,11 @@ export function preparePlaybackChart(
   auxiliaryPlaybackEndSeconds = 0,
   random?: () => number,
 ): PreparedPlaybackChartData {
+  const lr2ExtraMode = options.lr2ExtraMode === true && options.course === undefined;
+  const lr2Extra = lr2ExtraMode
+    ? convertLR2ExtraChart(resolved, { level: options.lr2ExtraLevel ?? 0, tempo: options.speed })
+    : undefined;
+  resolved = lr2Extra?.chart ?? resolved;
   const scrollAddition =
     options.scrollModifier === 'ADD'
       ? addScrollChanges(resolved, {
@@ -275,6 +291,15 @@ export function preparePlaybackChart(
   const scorableNotes = notes.filter((note) => !isActiveFreeZoneChannel(note.channel, activeFreeZoneChannels));
 
   return {
+    ...(options.lr2ExtraMode !== undefined
+      ? {
+          lr2ExtraMode,
+          lr2ExtraLevel: options.lr2ExtraLevel ?? 0,
+          lr2ExtraEffectiveLevel: lr2Extra?.level ?? options.lr2ExtraLevel ?? 0,
+          lr2ExtraConvertedObjectCount: lr2Extra?.changes ?? 0,
+          lr2ExtraTempo: options.speed ?? 1,
+        }
+      : {}),
     ...(options.extraNoteDepth !== undefined || options.extraNoteScratch !== undefined
       ? {
           extraNoteDepth: clampExtraNoteDepth(options.extraNoteDepth ?? 0),

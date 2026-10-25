@@ -1,3 +1,4 @@
+import type { LR2ExtraLevel } from '@be-music/player-engine/lanes';
 import type { MineModifier, LongNoteModifier, ScrollModifier } from '@be-music/player-engine/lanes';
 import type { GaugeType, GaugeAutoShift } from '@be-music/player-engine/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
@@ -128,6 +129,8 @@ export interface PlayOptions {
   /** beatoraja EXTRA; source type selector is unimplemented upstream. */
   extraNoteDepth: number;
   extraNoteScratch: boolean;
+  lr2ExtraMode: boolean;
+  lr2ExtraLevel: LR2ExtraLevel;
   mineModifier: MineModifier;
   /** beatoraja timeline BPM/STOP/SCROLL removal or generated SCROLL, independent of visual CONSTANT. */
   scrollModifier: ScrollModifier;

@@ -224,6 +224,8 @@ export interface PlayerGUIState extends PlayTempoSettings {
   longNoteRate: number;
   extraNoteDepth: number;
   extraNoteScratch: boolean;
+  lr2ExtraMode: boolean;
+  lr2ExtraLevel: PlayOptions['lr2ExtraLevel'];
   mineModifier: PlayOptions['mineModifier'];
   scrollModifier: PlayOptions['scrollModifier'];
   scrollSection: number;

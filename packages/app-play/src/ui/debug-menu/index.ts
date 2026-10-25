@@ -207,6 +207,8 @@ export class DebugMenu {
   public gaugeAutoShiftController: ListInputBindingApi<PlayOptions['gaugeAutoShift']> | undefined;
   public longNoteModifierController: ListInputBindingApi<PlayOptions['longNoteModifier']> | undefined;
   public longNoteRateController: PaneBinding | undefined;
+  public lr2ExtraModeController: PaneBinding | undefined;
+  public lr2ExtraLevelController: ListInputBindingApi<PlayOptions['lr2ExtraLevel']> | undefined;
   public extraNoteDepthController: PaneBinding | undefined;
   public extraNoteScratchController: PaneBinding | undefined;
   public mineModifierController: ListInputBindingApi<PlayOptions['mineModifier']> | undefined;
@@ -487,6 +489,13 @@ export class DebugMenu {
       });
       this.longNoteModifierController.refresh();
     }
+    const lr2Extra = this.guiState.judgeRuleset === 'lr2';
+    if (!lr2Extra && this.guiState.lr2ExtraMode) {
+      this.guiState.lr2ExtraMode = false;
+      this.setPlayOptions({ lr2ExtraMode: false });
+    }
+    if (this.lr2ExtraModeController) this.lr2ExtraModeController.hidden = !lr2Extra;
+    if (this.lr2ExtraLevelController) this.lr2ExtraLevelController.hidden = !lr2Extra || !this.guiState.lr2ExtraMode;
     if (!beatoraja && this.guiState.extraNoteDepth > 0) {
       this.guiState.extraNoteDepth = 0;
       this.setPlayOptions({ extraNoteDepth: 0 });

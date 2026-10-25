@@ -1,3 +1,4 @@
+import type { LR2ExtraLevel } from '@be-music/player-engine/lanes';
 /**
  * The options of a play session (`PlaySession`) and of its disposal: everything a host sets for a play, whichever family
  * draws it. `createPlayScene` takes them as its `settings`, `course`, `replay`, `preResolved`, `audio` and `on`.
@@ -153,6 +154,8 @@ export interface PlaySessionOptions {
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
   longNoteModifier?: import('@be-music/player-scene-model').PlayOptions['longNoteModifier'];
   longNoteRate?: number;
+  lr2ExtraMode?: boolean;
+  lr2ExtraLevel?: LR2ExtraLevel;
   extraNoteDepth?: number;
   extraNoteScratch?: boolean;
   mineModifier?: import('@be-music/player-scene-model').PlayOptions['mineModifier'];

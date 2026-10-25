@@ -1,3 +1,4 @@
+import type { LR2ExtraLevel } from '../core/lr2-extra-lanes.ts';
 import type { ScrollTimelinePoint } from '@be-music/chart-model';
 import type { ScrollModifier } from '../core/scroll-modifier.ts';
 import type { LongNoteModifier } from '../core/long-note-modifier.ts';
@@ -65,6 +66,11 @@ export interface ReplayRecorderPlaySettings {
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
   longNoteModifier?: LongNoteModifier;
   longNoteRate?: number;
+  lr2ExtraMode?: boolean;
+  lr2ExtraLevel?: LR2ExtraLevel;
+  lr2ExtraEffectiveLevel?: LR2ExtraLevel;
+  lr2ExtraConvertedObjectCount?: number;
+  lr2ExtraTempo?: number;
   extraNoteDepth?: number;
   extraNoteScratch?: boolean;
   /** Actual source conversions, including overwritten additions; independent of record policy. */
@@ -297,6 +303,14 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       if (options.play.mineModifier !== undefined) play.mineModifier = options.play.mineModifier;
       if (options.play.mineModifierChangeCount !== undefined)
         play.mineModifierChangeCount = options.play.mineModifierChangeCount;
+      for (const field of [
+        'lr2ExtraMode',
+        'lr2ExtraLevel',
+        'lr2ExtraEffectiveLevel',
+        'lr2ExtraConvertedObjectCount',
+        'lr2ExtraTempo',
+      ] as const)
+        if (options.play[field] !== undefined) Object.assign(play, { [field]: options.play[field] });
       if (options.play.extraNoteDepth !== undefined) play.extraNoteDepth = options.play.extraNoteDepth;
       if (options.play.extraNoteScratch !== undefined) play.extraNoteScratch = options.play.extraNoteScratch;
       if (options.play.extraNoteChangeCount !== undefined)

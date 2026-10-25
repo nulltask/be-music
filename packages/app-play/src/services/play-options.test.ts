@@ -34,6 +34,8 @@ const gui: GUIPlayOptions = {
   longNoteRate: 1,
   extraNoteDepth: 0,
   extraNoteScratch: false,
+  lr2ExtraMode: false,
+  lr2ExtraLevel: 0,
   mineModifier: 'OFF',
   scrollModifier: 'OFF',
   scrollSection: 4,
@@ -87,6 +89,8 @@ describe('playOptionsFromGUI', () => {
       longNoteRate: 1,
       extraNoteDepth: 0,
       extraNoteScratch: false,
+      lr2ExtraMode: false,
+      lr2ExtraLevel: 0,
       mineModifier: 'OFF',
       scrollModifier: 'OFF',
       scrollSection: 4,
@@ -153,6 +157,8 @@ describe('copyPlayOptionsToGUI', () => {
       longNoteRate: 1,
       extraNoteDepth: 0,
       extraNoteScratch: false,
+      lr2ExtraMode: false,
+      lr2ExtraLevel: 0,
       autoScratch1P: false,
       autoScratch2P: false,
       sort: 'TITLE',
@@ -315,4 +321,12 @@ test('previous arrangement restores scroll ADD parameters, and editing either pa
     service.update(change);
     expect(service.arrangementFor('chart')).toBeUndefined();
   }
+});
+
+test('LR2 EXTRA transfers independently through GUI options', () => {
+  const state = { ...gui, lr2ExtraMode: true, lr2ExtraLevel: 2 as const };
+  expect(playOptionsFromGUI(state)).toMatchObject({ lr2ExtraMode: true, lr2ExtraLevel: 2, extraNoteDepth: 0 });
+  const restored = { ...gui };
+  copyPlayOptionsToGUI({ ...DEFAULT_PLAY_OPTIONS, lr2ExtraMode: true, lr2ExtraLevel: 1 }, restored);
+  expect(restored).toMatchObject({ lr2ExtraMode: true, lr2ExtraLevel: 1 });
 });
