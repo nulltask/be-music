@@ -36,7 +36,9 @@ export type CourseLaneOption =
   | 'S_RANDOM_PLAYABLE'
   | 'CONVERGE'
   | 'SCATTER'
-  | 'SCATTER-CORRECTED';
+  | 'SCATTER-CORRECTED'
+  | 'SYNCHRONIZE-RANDOM'
+  | 'SYMMETRY-RANDOM';
 
 /** The lane options of a play: each side's lane option and DP FLIP. */
 export interface CourseLaneOptions {
