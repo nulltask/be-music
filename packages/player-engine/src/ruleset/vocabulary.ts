@@ -13,8 +13,10 @@ export {
   type BeatorajaCustomJudge,
 } from './custom-judge.ts';
 export {
+  BEATORAJA_PRACTICE_GAUGE_TYPES,
   isRulesetId,
   RULESET_IDS,
+  type BeatorajaGaugeCategory,
   type JudgeWindowSetUs,
   type LongNoteStyle,
   type RulesetId,

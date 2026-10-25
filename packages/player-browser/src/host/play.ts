@@ -565,6 +565,11 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
         : {}),
       ...(options.replay !== undefined ? { replay: options.replay } : {}),
       ...(options.preResolved !== undefined ? { preResolved: options.preResolved } : {}),
+      ...resolvePracticeSessionOptions(
+        playOptions,
+        settings.judgeRuleset,
+        course === undefined && options.replay === undefined,
+      ),
       audio: options.audio,
       onExit: () => on.exit(),
       onRestart: () => on.restart(),
@@ -614,3 +619,33 @@ const NO_KEYS = { addEventListener: (): void => {}, removeEventListener: (): voi
 const BEATORAJA_PLAY_SETTINGS: Pick<PlaySessionOptions, 'coverKeys'> = {
   coverKeys: true,
 };
+
+/**
+ * beatoraja PRACTICE for a single fresh play: the range and rules (`practiceRange`), a practice play saving nothing,
+ * and no chart modifier, as the source applies them only in PLAY / AUTOPLAY.
+ */
+function resolvePracticeSessionOptions(
+  playOptions: Readonly<PlayOptions>,
+  ruleset: string | undefined,
+  single: boolean,
+): Partial<PlaySessionOptions> {
+  if (!playOptions.practice || ruleset !== 'beatoraja' || !single) return {};
+  return {
+    practice: true,
+    practiceRange: {
+      startMs: playOptions.practiceStartMs,
+      ...(playOptions.practiceEndMs > 0 ? { endMs: playOptions.practiceEndMs } : {}),
+      gauge: playOptions.practiceGauge,
+      ...(playOptions.practiceGaugeCategory !== 'MODE' ? { gaugeCategory: playOptions.practiceGaugeCategory } : {}),
+      startGauge: playOptions.practiceStartGauge,
+      ...(playOptions.practiceJudgeRank > 0 ? { judgeRank: playOptions.practiceJudgeRank } : {}),
+      ...(playOptions.practiceTotal > 0 ? { total: playOptions.practiceTotal } : {}),
+    },
+    battleMode: 'OFF',
+    longNoteModifier: 'OFF',
+    mineModifier: 'OFF',
+    scrollModifier: 'OFF',
+    extraNoteDepth: 0,
+    lr2ExtraMode: false,
+  };
+}

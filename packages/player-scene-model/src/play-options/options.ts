@@ -138,6 +138,19 @@ export interface PlayOptions {
   /** beatoraja LN MODE (`PlayerConfig.lnmode`): the mode of a chart whose long-note mode is undefined. */
   longNoteMode: 'LN' | 'CN' | 'HCN';
   customJudge: boolean;
+  /**
+   * beatoraja PRACTICE (`PracticeProperty`): play only `practiceStartMs`..`practiceEndMs` (0 = the chart's end) and
+   * play the range again when it ends. A 0 judgerank or TOTAL keeps the chart's; `MODE` keeps the play mode's gauge
+   * category.
+   */
+  practice: boolean;
+  practiceStartMs: number;
+  practiceEndMs: number;
+  practiceGauge: PracticeGaugeType;
+  practiceGaugeCategory: PracticeGaugeCategory;
+  practiceStartGauge: number;
+  practiceJudgeRank: number;
+  practiceTotal: number;
   customJudgeKeyPerfectGreat: number;
   customJudgeKeyGreat: number;
   customJudgeKeyGood: number;
@@ -236,6 +249,13 @@ export type RandomMode =
   | 'SCATTER-CORRECTED'
   | 'SYNCHRONIZE-RANDOM'
   | 'SYMMETRY-RANDOM';
+
+/** Allowed values for {@link PlayOptions.practiceGauge}: beatoraja PRACTICE's GAUGE TYPE. */
+export type PracticeGaugeType =
+  (typeof import('@be-music/player-engine/ruleset').BEATORAJA_PRACTICE_GAUGE_TYPES)[number];
+
+/** Allowed values for {@link PlayOptions.practiceGaugeCategory}: `MODE` or a beatoraja GAUGE CATEGORY. */
+export type PracticeGaugeCategory = 'MODE' | import('@be-music/player-engine/ruleset').BeatorajaGaugeCategory;
 
 /** Allowed values for {@link PlayOptions.bga}. */
 export type BGAMode = 'OFF' | 'ON' | 'AUTOPLAY_ONLY';

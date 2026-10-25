@@ -93,6 +93,7 @@ export interface PlayEngineContext
       | 'sevenToNineType'
       | 'battleMode'
       | 'dBattleScratch'
+      | 'practiceRange'
       | 'lr2ExtraMode'
       | 'lr2ExtraLevel'
       | 'extraNoteDepth'
@@ -652,6 +653,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
         : ctx.options.fixedArrangement
           ? (ctx.options.fixedArrangement.play.battleMode ?? 'OFF')
           : ctx.options.battleMode,
+      practice: ctx.options.replay ? undefined : ctx.options.practiceRange,
       dBattleScratch: ctx.options.replay
         ? (ctx.options.replay.play.dBattleScratch ?? false)
         : ctx.options.fixedArrangement

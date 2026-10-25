@@ -298,6 +298,52 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
         .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
     ),
   );
+  // beatoraja PRACTICE (PracticeConfiguration): a 0 END TIME is the chart's end, a 0 JUDGERANK / TOTAL the chart's.
+  this.practiceControllers = [
+    trackPlayOption(
+      folder.addBinding(this.guiState, 'practice', { label: 'PRACTICE (beatoraja)' }).on('change', ({ value }) => {
+        this.setPlayOptions({ practice: value });
+        this.refreshRulesetChoices();
+      }),
+    ),
+    ...(
+      [
+        ['practiceStartMs', 'START TIME ms', 0, 3_600_000, 100],
+        ['practiceEndMs', 'END TIME ms (0 = end)', 0, 3_600_000, 100],
+        ['practiceStartGauge', 'GAUGE VALUE', 1, 120, 1],
+        ['practiceJudgeRank', 'JUDGERANK (0 = chart)', 0, 400, 1],
+        ['practiceTotal', 'TOTAL (0 = chart)', 0, 5000, 1],
+      ] as const
+    ).map(([key, label, min, max, step]) =>
+      trackPlayOption(
+        folder
+          .addBinding(this.guiState, key, { label, min, max, step })
+          .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
+      ),
+    ),
+  ];
+  const practiceGauge = selectBinding(folder, this.guiState, 'practiceGauge', 'GAUGE TYPE', {
+    'ASSIST EASY': 'ASSIST-EASY',
+    EASY: 'EASY',
+    NORMAL: 'NORMAL',
+    HARD: 'HARD',
+    'EX-HARD': 'EX-HARD',
+    HAZARD: 'HAZARD',
+    GRADE: 'CLASS',
+    'EX GRADE': 'EXCLASS',
+    'EXHARD GRADE': 'EXHARDCLASS',
+  });
+  trackPlayOption(practiceGauge.on('change', ({ value }) => this.setPlayOptions({ practiceGauge: value })));
+  const practiceCategory = selectBinding(folder, this.guiState, 'practiceGaugeCategory', 'GAUGE CATEGORY', {
+    'Play mode': 'MODE',
+    FIVEKEYS: 'FIVEKEYS',
+    SEVENKEYS: 'SEVENKEYS',
+    PMS: 'PMS',
+    KEYBOARD: 'KEYBOARD',
+    LR2: 'LR2',
+  });
+  trackPlayOption(practiceCategory.on('change', ({ value }) => this.setPlayOptions({ practiceGaugeCategory: value })));
+  this.practiceControllers.push(practiceGauge, practiceCategory);
   this.extraNoteDepthController = trackPlayOption(
     folder
       .addBinding(this.guiState, 'extraNoteDepth', { label: 'EXTRA depth (beatoraja)', min: 0, max: 100, step: 1 })

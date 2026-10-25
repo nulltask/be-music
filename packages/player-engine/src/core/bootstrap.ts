@@ -1,4 +1,5 @@
 import { duplicateBattleChart } from './battle-chart.ts';
+import { applyPracticeRange, resolvePracticeRange } from './practice.ts';
 import { isDuplicatedBattleMode, resolveEffectiveBattleMode } from './battle-mode.ts';
 import { convertLR2SPToDPChart } from './lr2-sp-to-dp-chart.ts';
 import type { BattleMode } from './battle-mode.ts';
@@ -71,6 +72,11 @@ export interface PreparedPlaybackChartData {
   sevenToNineApplied?: boolean;
   battleMode?: BattleMode;
   dBattleScratch?: boolean;
+  /** beatoraja PRACTICE: the range played and the note counts before `PracticeModifier`. */
+  practiceStartSeconds?: number;
+  practiceEndSeconds?: number;
+  practiceSourceNotes?: import('../ruleset/facts.ts').RulesetNoteCounts;
+  practiceChangedObjectCount?: number;
   battleSourceVariant?: import('@be-music/chart-model').ChartPlayVariant;
   battleTempo?: number;
   battleAssist1P?: boolean;
@@ -227,6 +233,7 @@ export function preparePlaybackChart(
     | 'longNoteModifier'
     | 'battleMode'
     | 'dBattleScratch'
+    | 'practice'
     | 'judgeRuleset'
     | 'autoScratch'
     | 'autoScratch1P'
@@ -322,11 +329,22 @@ export function preparePlaybackChart(
     : undefined;
   resolved = duplicateBattle?.chart ?? resolved;
   playVariant = resolved.playVariant;
-  const laneSoundNotes = [...notes, ...invisibleNotes].sort(compareLaneSoundNotes);
-  const renderNotes = notes;
   let totalSeconds = Math.max(resolved.lastNoteSeconds, auxiliaryPlaybackEndSeconds);
   for (const note of notes) totalSeconds = Math.max(totalSeconds, note.endSeconds ?? note.seconds);
   for (const mine of landmineNotes) totalSeconds = Math.max(totalSeconds, mine.seconds);
+  const practiceRange =
+    options.practice !== undefined
+      ? resolvePracticeRange(
+          options.practice,
+          Math.floor(Math.max(totalSeconds, resolved.sampleTriggers.at(-1)?.seconds ?? 0) * 1000),
+        )
+      : undefined;
+  const practice = practiceRange ? applyPracticeRange(resolved, notes, landmineNotes, practiceRange) : undefined;
+  resolved = practice?.chart ?? resolved;
+  // The source plays a practice range until 1000 ms past its end, as an ordinary play runs past its last note.
+  if (practiceRange) totalSeconds = (practiceRange.endMs + 1000) / 1000;
+  const laneSoundNotes = [...notes, ...invisibleNotes].sort(compareLaneSoundNotes);
+  const renderNotes = notes;
   const channels = collectUniqueNoteChannels(notes, landmineNotes, invisibleNotes);
   const laneModeOptions = {
     player: resolved.source.bms.player,
@@ -351,6 +369,14 @@ export function preparePlaybackChart(
           battleChangedObjectCount: duplicateBattle?.changedObjectCount ?? battle?.changedObjectCount ?? 0,
           battleDroppedObjectCount: battle?.droppedObjectCount ?? 0,
           ...(battleMode === 'D-BATTLE' ? { dBattleScratch } : {}),
+        }
+      : {}),
+    ...(practiceRange && practice
+      ? {
+          practiceStartSeconds: practiceRange.startMs / 1000,
+          practiceEndSeconds: practiceRange.endMs / 1000,
+          practiceSourceNotes: practice.sourceNotes,
+          practiceChangedObjectCount: practice.changedObjectCount,
         }
       : {}),
     ...(options.lr2ExtraMode !== undefined

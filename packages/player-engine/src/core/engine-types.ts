@@ -92,6 +92,11 @@ export interface PlayerPlaySettings {
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
   /** beatoraja CUSTOM JUDGE rates; absent while the option is off. Recorded into the replay. */
   customJudge?: import('../ruleset/custom-judge.ts').BeatorajaCustomJudge;
+  /**
+   * beatoraja PRACTICE: plays only the range, with its gauge, TOTAL and judgerank, from 1000 ms before the range. The
+   * source applies no chart modifier in PRACTICE; a practice play records no replay.
+   */
+  practice?: import('./practice.ts').BeatorajaPractice;
   /** beatoraja display-only automatic calibration; no change to input/audio clocks. */
   judgeTimingAutoAdjust?: boolean;
   judgeTimingMs?: number;

@@ -165,6 +165,7 @@ export async function createPlaySession(
     throw new RangeError('Automatic display-timing adjustment is available only for beatoraja.');
   if (options.mineModifier !== undefined && options.mineModifier !== 'OFF' && options.judgeRuleset !== 'beatoraja')
     throw new RangeError('Mine modification is available only for beatoraja.');
+  if (options.practice !== undefined) assertPracticeOptions(options);
   throwIfAborted(options.signal);
   const writeOutput = resolveOutputWriter(options);
   reportLoadProgress(options, 0.02, 'Resolving chart...');
@@ -177,7 +178,10 @@ export async function createPlaySession(
   const speed = options.speed ?? 1;
   const tempoClock = createTempoClock(speed);
   const leadInMs = options.leadInMs ?? 1500;
-  const requestedStartAtSeconds = options.startAtSeconds ?? 0;
+  // PRACTICE starts 1000 ms before its range (`starttimeoffset`).
+  const requestedStartAtSeconds =
+    options.startAtSeconds ??
+    (options.practice !== undefined ? Math.max(0, Math.trunc(options.practice.startMs) - 1000) / 1000 : 0);
   const startAtSeconds =
     Number.isFinite(requestedStartAtSeconds) && requestedStartAtSeconds > 0 ? requestedStartAtSeconds : 0;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
@@ -207,6 +211,7 @@ export async function createPlaySession(
         longNoteRate: options.longNoteRate,
         battleMode: options.battleMode,
         dBattleScratch: options.dBattleScratch,
+        practice: options.practice,
         judgeRuleset: options.judgeRuleset,
         autoScratch: options.autoScratch,
         autoScratch1P: options.autoScratch1P,
@@ -305,6 +310,20 @@ export async function createPlaySession(
     {
       ...(options.judgeAlgorithm !== undefined ? { judgeAlgorithm: options.judgeAlgorithm } : {}),
       ...(options.customJudge !== undefined ? { customJudge: options.customJudge } : {}),
+      ...(options.practice !== undefined
+        ? {
+            practice: {
+              sourceNotes: playbackChart.practiceSourceNotes ?? { normal: 0, long: { 1: 0, 2: 0, 3: 0 } },
+              gauge: options.practice.gauge,
+              startGauge: options.practice.startGauge,
+              ...(options.practice.gaugeCategory !== undefined
+                ? { gaugeCategory: options.practice.gaugeCategory }
+                : {}),
+              ...(options.practice.total !== undefined ? { total: options.practice.total } : {}),
+              ...(options.practice.judgeRank !== undefined ? { judgeRank: options.practice.judgeRank } : {}),
+            },
+          }
+        : {}),
       ...(selectedGauge !== undefined ? { selectedGauge } : {}),
       ...(options.bottomShiftableGauge !== undefined ? { bottomShiftableGauge: options.bottomShiftableGauge } : {}),
       ...(options.gaugeAutoShift !== undefined ? { gaugeAutoShift: options.gaugeAutoShift } : {}),
@@ -344,126 +363,128 @@ export async function createPlaySession(
       tracker.course.maxCombo = Math.max(courseCarry.maxCombo, courseCarry.combo);
     }
   };
-  const replayRecorder = options.onReplayRecorded
-    ? (() => {
-        const { chartSHA256, chartMD5, recorder, sourceChart, ...hostPlaySettings } = options.recordReplay ?? {};
-        return createReplayRecorder({
-          json: resolvedJSON,
-          moneyScore: ruleset.moneyScore,
-          chart: playbackChart,
-          chartSHA256,
-          chartMD5,
-          recorder,
-          laneModeExtension: options.laneModeExtension,
-          // The chart the engine was handed is the source when it resolved the control flow itself.
-          sourceChart: sourceChart ?? json,
-          dynamicJudgeRankChanges: judgeRankChanges,
-          ...(options.stageRanks !== undefined ? { stageRanks: options.stageRanks } : {}),
-          reversalSeconds: resolvedChart.reversal?.seconds,
-          play: {
-            mode,
-            autoScratch,
-            judgeAlgorithm: ruleset.rulesetId === 'beatoraja' ? (options.judgeAlgorithm ?? 'combo') : undefined,
-            ...(options.customJudge !== undefined ? { customJudge: { ...options.customJudge } } : {}),
-            longNoteModifier: options.longNoteModifier,
-            ...(options.autoScratch1P !== undefined || options.autoScratch2P !== undefined
-              ? {
-                  autoScratch1P: mode === 'manual' && scratchSides.autoScratch1P,
-                  autoScratch2P: mode === 'manual' && scratchSides.autoScratch2P,
-                }
-              : {}),
-            judgeWindowOverrideMs: options.judgeWindowMs,
-            judgeRuleset: options.judgeRuleset,
-            ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),
-            ...(options.course !== undefined ? { course: options.course } : {}),
-            ...hostPlaySettings,
-            ...(options.scrollModifier !== undefined
-              ? {
-                  scrollModifier: options.scrollModifier,
-                  scrollModifierChanged: playbackChart.scrollModifierChanged ?? false,
-                  ...(options.scrollModifier === 'ADD'
-                    ? {
-                        scrollSection: playbackChart.scrollSection,
-                        scrollRate: playbackChart.scrollRate,
-                        scrollModifierTimeline: playbackChart.scrollModifierTimeline,
-                      }
-                    : {}),
-                }
-              : {}),
-            ...(options.judgeTimingMs !== undefined || options.judgeTimingAutoAdjust !== undefined
-              ? {
-                  options: {
-                    ...hostPlaySettings.options,
-                    judgeTimingAutoAdjust: options.judgeTimingAutoAdjust ?? false,
-                    judgeTimingMs: options.judgeTimingMs ?? 0,
-                  },
-                }
-              : {}),
-            ...(options.mineModifier !== undefined
-              ? {
-                  mineModifier: options.mineModifier,
-                  mineModifierChangeCount: playbackChart.mineModifierChangeCount ?? 0,
-                }
-              : {}),
-            ...(playbackChart.sevenToNinePattern !== undefined
-              ? {
-                  sevenToNinePattern: playbackChart.sevenToNinePattern,
-                  sevenToNineType: playbackChart.sevenToNineType,
-                  sevenToNineThresholdBPM: playbackChart.sevenToNineThresholdBPM,
-                  sevenToNineApplied: playbackChart.sevenToNineApplied,
-                }
-              : {}),
-            ...(options.battleMode !== undefined || playbackChart.battleMode !== undefined
-              ? {
-                  battleMode: playbackChart.battleMode ?? 'OFF',
-                  battleSourceVariant: playbackChart.battleSourceVariant ?? playbackChart.resolvedChart.playVariant,
-                  battleTempo: playbackChart.battleTempo ?? 1,
-                  battleAssist1P: playbackChart.battleAssist1P ?? false,
-                  battleAssist2P: playbackChart.battleAssist2P ?? false,
-                  battleChangedObjectCount: playbackChart.battleChangedObjectCount ?? 0,
-                  battleDroppedObjectCount: playbackChart.battleDroppedObjectCount ?? 0,
-                  ...(playbackChart.dBattleScratch !== undefined
-                    ? { dBattleScratch: playbackChart.dBattleScratch }
-                    : {}),
-                }
-              : {}),
-            ...(options.lr2ExtraMode !== undefined || playbackChart.lr2ExtraMode !== undefined
-              ? {
-                  lr2ExtraMode: playbackChart.lr2ExtraMode ?? false,
-                  lr2ExtraLevel: playbackChart.lr2ExtraLevel ?? 0,
-                  lr2ExtraEffectiveLevel: playbackChart.lr2ExtraEffectiveLevel ?? 0,
-                  lr2ExtraConvertedObjectCount: playbackChart.lr2ExtraConvertedObjectCount ?? 0,
-                  lr2ExtraTempo: playbackChart.lr2ExtraTempo ?? 1,
-                }
-              : {}),
-            ...(options.extraNoteDepth !== undefined ||
-            options.extraNoteScratch !== undefined ||
-            playbackChart.extraNoteDepth !== undefined
-              ? {
-                  extraNoteDepth: playbackChart.extraNoteDepth ?? 0,
-                  extraNoteScratch: playbackChart.extraNoteScratch ?? false,
-                  extraNoteChangeCount: playbackChart.extraNoteChangeCount ?? 0,
-                }
-              : {}),
-            ...(options.longNoteModifier?.startsWith('ADD_')
-              ? {
-                  longNoteRate: playbackChart.longNoteModifierRate ?? 1,
-                  longNoteModifierChangeCount: playbackChart.longNoteModifierChangeCount ?? 0,
-                }
-              : {}),
-            gaugeAutoShift: options.gaugeAutoShift,
-            ...(options.bottomShiftableGauge !== undefined
-              ? { bottomShiftableGauge: options.bottomShiftableGauge }
-              : {}),
-            endOnFailure: endOnFailure ? true : undefined,
-            gauge: selectedGauge,
-            // The tempo a live play ran at (its inputs are in chart time either way). A replay's `speed` only sets how
-            // fast it is re-driven, so it records none.
-            ...(speed !== 1 && !replay ? { tempo: speed } : {}),
-          },
-        });
-      })()
-    : undefined;
+  // The source saves nothing from PRACTICE.
+  const replayRecorder =
+    options.onReplayRecorded && options.practice === undefined
+      ? (() => {
+          const { chartSHA256, chartMD5, recorder, sourceChart, ...hostPlaySettings } = options.recordReplay ?? {};
+          return createReplayRecorder({
+            json: resolvedJSON,
+            moneyScore: ruleset.moneyScore,
+            chart: playbackChart,
+            chartSHA256,
+            chartMD5,
+            recorder,
+            laneModeExtension: options.laneModeExtension,
+            // The chart the engine was handed is the source when it resolved the control flow itself.
+            sourceChart: sourceChart ?? json,
+            dynamicJudgeRankChanges: judgeRankChanges,
+            ...(options.stageRanks !== undefined ? { stageRanks: options.stageRanks } : {}),
+            reversalSeconds: resolvedChart.reversal?.seconds,
+            play: {
+              mode,
+              autoScratch,
+              judgeAlgorithm: ruleset.rulesetId === 'beatoraja' ? (options.judgeAlgorithm ?? 'combo') : undefined,
+              ...(options.customJudge !== undefined ? { customJudge: { ...options.customJudge } } : {}),
+              longNoteModifier: options.longNoteModifier,
+              ...(options.autoScratch1P !== undefined || options.autoScratch2P !== undefined
+                ? {
+                    autoScratch1P: mode === 'manual' && scratchSides.autoScratch1P,
+                    autoScratch2P: mode === 'manual' && scratchSides.autoScratch2P,
+                  }
+                : {}),
+              judgeWindowOverrideMs: options.judgeWindowMs,
+              judgeRuleset: options.judgeRuleset,
+              ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),
+              ...(options.course !== undefined ? { course: options.course } : {}),
+              ...hostPlaySettings,
+              ...(options.scrollModifier !== undefined
+                ? {
+                    scrollModifier: options.scrollModifier,
+                    scrollModifierChanged: playbackChart.scrollModifierChanged ?? false,
+                    ...(options.scrollModifier === 'ADD'
+                      ? {
+                          scrollSection: playbackChart.scrollSection,
+                          scrollRate: playbackChart.scrollRate,
+                          scrollModifierTimeline: playbackChart.scrollModifierTimeline,
+                        }
+                      : {}),
+                  }
+                : {}),
+              ...(options.judgeTimingMs !== undefined || options.judgeTimingAutoAdjust !== undefined
+                ? {
+                    options: {
+                      ...hostPlaySettings.options,
+                      judgeTimingAutoAdjust: options.judgeTimingAutoAdjust ?? false,
+                      judgeTimingMs: options.judgeTimingMs ?? 0,
+                    },
+                  }
+                : {}),
+              ...(options.mineModifier !== undefined
+                ? {
+                    mineModifier: options.mineModifier,
+                    mineModifierChangeCount: playbackChart.mineModifierChangeCount ?? 0,
+                  }
+                : {}),
+              ...(playbackChart.sevenToNinePattern !== undefined
+                ? {
+                    sevenToNinePattern: playbackChart.sevenToNinePattern,
+                    sevenToNineType: playbackChart.sevenToNineType,
+                    sevenToNineThresholdBPM: playbackChart.sevenToNineThresholdBPM,
+                    sevenToNineApplied: playbackChart.sevenToNineApplied,
+                  }
+                : {}),
+              ...(options.battleMode !== undefined || playbackChart.battleMode !== undefined
+                ? {
+                    battleMode: playbackChart.battleMode ?? 'OFF',
+                    battleSourceVariant: playbackChart.battleSourceVariant ?? playbackChart.resolvedChart.playVariant,
+                    battleTempo: playbackChart.battleTempo ?? 1,
+                    battleAssist1P: playbackChart.battleAssist1P ?? false,
+                    battleAssist2P: playbackChart.battleAssist2P ?? false,
+                    battleChangedObjectCount: playbackChart.battleChangedObjectCount ?? 0,
+                    battleDroppedObjectCount: playbackChart.battleDroppedObjectCount ?? 0,
+                    ...(playbackChart.dBattleScratch !== undefined
+                      ? { dBattleScratch: playbackChart.dBattleScratch }
+                      : {}),
+                  }
+                : {}),
+              ...(options.lr2ExtraMode !== undefined || playbackChart.lr2ExtraMode !== undefined
+                ? {
+                    lr2ExtraMode: playbackChart.lr2ExtraMode ?? false,
+                    lr2ExtraLevel: playbackChart.lr2ExtraLevel ?? 0,
+                    lr2ExtraEffectiveLevel: playbackChart.lr2ExtraEffectiveLevel ?? 0,
+                    lr2ExtraConvertedObjectCount: playbackChart.lr2ExtraConvertedObjectCount ?? 0,
+                    lr2ExtraTempo: playbackChart.lr2ExtraTempo ?? 1,
+                  }
+                : {}),
+              ...(options.extraNoteDepth !== undefined ||
+              options.extraNoteScratch !== undefined ||
+              playbackChart.extraNoteDepth !== undefined
+                ? {
+                    extraNoteDepth: playbackChart.extraNoteDepth ?? 0,
+                    extraNoteScratch: playbackChart.extraNoteScratch ?? false,
+                    extraNoteChangeCount: playbackChart.extraNoteChangeCount ?? 0,
+                  }
+                : {}),
+              ...(options.longNoteModifier?.startsWith('ADD_')
+                ? {
+                    longNoteRate: playbackChart.longNoteModifierRate ?? 1,
+                    longNoteModifierChangeCount: playbackChart.longNoteModifierChangeCount ?? 0,
+                  }
+                : {}),
+              gaugeAutoShift: options.gaugeAutoShift,
+              ...(options.bottomShiftableGauge !== undefined
+                ? { bottomShiftableGauge: options.bottomShiftableGauge }
+                : {}),
+              endOnFailure: endOnFailure ? true : undefined,
+              gauge: selectedGauge,
+              // The tempo a live play ran at (its inputs are in chart time either way). A replay's `speed` only sets how
+              // fast it is re-driven, so it records none.
+              ...(speed !== 1 && !replay ? { tempo: speed } : {}),
+            },
+          });
+        })()
+      : undefined;
 
   const highSpeed = resolveHighSpeedMultiplier(options.highSpeed);
   const stateSignals = createPlayerStateSignals(highSpeed);
@@ -673,4 +694,19 @@ export async function createPlaySession(
     resetScore,
   };
   return session;
+}
+
+/** PRACTICE is a beatoraja single play without chart modifiers (they apply only in PLAY / AUTOPLAY). */
+function assertPracticeOptions(options: Readonly<PlayerOptions>): void {
+  if (options.judgeRuleset !== 'beatoraja') throw new RangeError('PRACTICE is available only for beatoraja.');
+  if (options.course !== undefined) throw new RangeError('PRACTICE plays a single chart.');
+  if (
+    (options.battleMode ?? 'OFF') !== 'OFF' ||
+    (options.scrollModifier ?? 'OFF') !== 'OFF' ||
+    (options.longNoteModifier ?? 'OFF') !== 'OFF' ||
+    (options.mineModifier ?? 'OFF') !== 'OFF' ||
+    (options.extraNoteDepth ?? 0) > 0 ||
+    options.lr2ExtraMode === true
+  )
+    throw new RangeError('PRACTICE applies no chart modifier.');
 }

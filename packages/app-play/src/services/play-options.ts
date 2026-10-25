@@ -50,6 +50,14 @@ export type GUIPlayOptions = Pick<
   | 'dBattleScratch'
   | 'longNoteMode'
   | 'customJudge'
+  | 'practice'
+  | 'practiceStartMs'
+  | 'practiceEndMs'
+  | 'practiceGauge'
+  | 'practiceGaugeCategory'
+  | 'practiceStartGauge'
+  | 'practiceJudgeRank'
+  | 'practiceTotal'
   | 'customJudgeKeyPerfectGreat'
   | 'customJudgeKeyGreat'
   | 'customJudgeKeyGood'
@@ -112,6 +120,14 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     dBattleScratch: state.dBattleScratch,
     longNoteMode: state.longNoteMode,
     customJudge: state.customJudge,
+    practice: state.practice,
+    practiceStartMs: state.practiceStartMs,
+    practiceEndMs: state.practiceEndMs,
+    practiceGauge: state.practiceGauge,
+    practiceGaugeCategory: state.practiceGaugeCategory,
+    practiceStartGauge: state.practiceStartGauge,
+    practiceJudgeRank: state.practiceJudgeRank,
+    practiceTotal: state.practiceTotal,
     customJudgeKeyPerfectGreat: state.customJudgeKeyPerfectGreat,
     customJudgeKeyGreat: state.customJudgeKeyGreat,
     customJudgeKeyGood: state.customJudgeKeyGood,
@@ -189,6 +205,14 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.dBattleScratch = options.dBattleScratch;
   state.longNoteMode = options.longNoteMode;
   state.customJudge = options.customJudge;
+  state.practice = options.practice;
+  state.practiceStartMs = options.practiceStartMs;
+  state.practiceEndMs = options.practiceEndMs;
+  state.practiceGauge = options.practiceGauge;
+  state.practiceGaugeCategory = options.practiceGaugeCategory;
+  state.practiceStartGauge = options.practiceStartGauge;
+  state.practiceJudgeRank = options.practiceJudgeRank;
+  state.practiceTotal = options.practiceTotal;
   state.customJudgeKeyPerfectGreat = options.customJudgeKeyPerfectGreat;
   state.customJudgeKeyGreat = options.customJudgeKeyGreat;
   state.customJudgeKeyGood = options.customJudgeKeyGood;
