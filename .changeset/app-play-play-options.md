@@ -15,3 +15,7 @@ Apply AC 34's A-SCR & LEGACY NOTE preset in a single Debug Menu action while ret
 Offer EX-HARD for beatoraja and AC rules in Debug Menu, label HAZARD separately and reset unsupported choices when switching rulesets.
 
 Offer ASSIST EASY for beatoraja and ASSISTED EASY for AC rules in Debug Menu.
+
+Expose every new play option in Debug Menu with saved preferences, offering each ruleset only its own choices, and lock the ones a running play cannot change.
+
+Play a battle mode on the converted chart's LR2 play skin, start PRACTICE again after each run, and keep a two-player result out of the records and the Leaderboard while still saving its replay.
