@@ -1,9 +1,10 @@
 import { css, type CSSResultGroup } from 'lit';
-import { baseStyles } from './base.ts';
+import { previewHost, previewTheme } from './preview-theme.ts';
 
 /** Full-screen composition; list, detail and option styling belongs to their own elements. */
 export const screenStyles: CSSResultGroup = [
-  baseStyles,
+  previewTheme,
+  previewHost,
   css`
     :host {
       height: 100%;
@@ -17,7 +18,7 @@ export const screenStyles: CSSResultGroup = [
       min-height: 0;
       overflow: auto;
       pointer-events: auto;
-      background: var(--be-music-color-background, #10151f);
+      background: var(--background, #10151f);
       padding: clamp(16px, 3cqi, 36px);
     }
     header {
@@ -36,7 +37,7 @@ export const screenStyles: CSSResultGroup = [
       font-size: 18px;
     }
     .eyebrow {
-      color: var(--be-music-color-muted, #8da7c7);
+      color: var(--muted-foreground, #8da7c7);
       letter-spacing: 0.14em;
       font-size: 11px;
       text-transform: uppercase;
@@ -68,9 +69,10 @@ export const screenStyles: CSSResultGroup = [
       overflow: auto;
     }
     .panel {
-      background: var(--be-music-panel-background, #18212f);
-      border: 1px solid #2c394c;
-      border-radius: var(--be-music-radius, 14px);
+      background: var(--card, #18212f);
+      color: var(--card-foreground, inherit);
+      border: 1px solid var(--border, #2c394c);
+      border-radius: var(--radius, 14px);
       padding: 20px;
     }
     .panel dl {

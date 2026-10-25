@@ -141,7 +141,7 @@ export const gameplayStyles: CSSResult = css`
   .hud-details > summary {
     padding: 3px 0 6px;
     cursor: pointer;
-    color: #b8c7da;
+    color: var(--muted-foreground, #b8c7da);
     font-size: 0.85em;
   }
   .hud-extra {
@@ -154,14 +154,14 @@ export const gameplayStyles: CSSResult = css`
   .hud-card {
     min-width: 0;
     padding: 6px;
-    background: var(--be-music-panel-background, #18212fee);
-    border: 1px solid #2c394c;
+    background: var(--card, #18212fee);
+    border: 1px solid var(--border, #2c394c);
     border-radius: 6px;
   }
   .hud-card h3 {
     font-size: 0.85em;
     margin: 0 0 6px;
-    color: var(--be-music-color-accent, #abcaff);
+    color: var(--primary, #abcaff);
   }
   @container hud (max-width: 22rem) {
     .hud:not([data-orientation='portrait']) .actions {

@@ -1,7 +1,7 @@
 import { html, css, type CSSResultGroup, type PropertyDeclarations, type TemplateResult } from 'lit';
 import { browseEntryCount, browseEntryTitle, type LibraryEntry } from '@be-music/player-skin-sdk';
 import { BeMusicElement } from '../base.ts';
-import { baseStyles } from '../styles/base.ts';
+import { previewHost, previewTheme } from '../styles/preview-theme.ts';
 
 export class BeMusicChartDetailsElement extends BeMusicElement {
   static override properties: PropertyDeclarations = {
@@ -10,7 +10,8 @@ export class BeMusicChartDetailsElement extends BeMusicElement {
     readText: { attribute: false },
   };
   static override styles: CSSResultGroup = [
-    baseStyles,
+    previewTheme,
+    previewHost,
     css`
       .card {
         display: grid;
@@ -44,14 +45,21 @@ export class BeMusicChartDetailsElement extends BeMusicElement {
       </p>
       <div class="actions">
         <button
-          class="primary"
+          class="btn"
           ?disabled=${this.launching || !playable}
           @click=${() => this.emit('play-request', { autoPlay: false })}
         >
           Play</button
-        ><button ?disabled=${this.launching || !playable} @click=${() => this.emit('play-request', { autoPlay: true })}>
+        ><button
+          class="btn"
+          data-variant="outline"
+          ?disabled=${this.launching || !playable}
+          @click=${() => this.emit('play-request', { autoPlay: true })}
+        >
           Auto play</button
         ><button
+          class="btn"
+          data-variant="outline"
           ?disabled=${this.launching || entry?.kind !== 'chart'}
           @click=${() => this.emit('readme-request', undefined)}
         >

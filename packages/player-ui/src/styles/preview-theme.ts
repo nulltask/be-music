@@ -23,4 +23,31 @@ export const previewHost: CSSResult = css`
   [hidden] {
     display: none !important;
   }
+  .muted,
+  dt {
+    color: var(--muted-foreground, #9baac0);
+  }
+  .muted {
+    font-size: 0.85em;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+  dl {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 3px 8px;
+    margin: 4px 0;
+    font-size: 0.85em;
+  }
+  dd {
+    margin: 0;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
 `;
