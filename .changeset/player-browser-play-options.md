@@ -23,3 +23,7 @@ Wire beatoraja select skins' option buttons (LNMODE, DP option, gauge auto shift
 Fix beatoraja skins' LNMODE image showing the focused chart's mode on the select screen instead of the player's LN MODE.
 
 Bring the Synesthesia skin up to the floating hi-speed label and per-side LIFT.
+
+Fix the floating hi-speed and fixed display area keys (numpad 0, double Enter) being ignored on some skins, depending on whether the lane input listener had registered first; the play now reads its own keys ahead of it and leaves only focused fields and buttons their keys.
+
+Let the Synesthesia skin take the lane cover keys and draw each side's LIFT, as Plain and Native do.
