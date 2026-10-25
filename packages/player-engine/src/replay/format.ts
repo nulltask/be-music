@@ -1,3 +1,4 @@
+import type { LR2ExtraLevel } from '../core/lr2-extra-lanes.ts';
 import type { ScrollTimelinePoint } from '@be-music/chart-model';
 import type { ScrollModifier } from '../core/scroll-modifier.ts';
 import type { LongNoteModifier } from '../core/long-note-modifier.ts';
@@ -199,6 +200,11 @@ export interface ReplayPlay {
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
   longNoteModifier?: LongNoteModifier;
   longNoteRate?: number;
+  lr2ExtraMode?: boolean;
+  lr2ExtraLevel?: LR2ExtraLevel;
+  lr2ExtraEffectiveLevel?: LR2ExtraLevel;
+  lr2ExtraConvertedObjectCount?: number;
+  lr2ExtraTempo?: number;
   extraNoteDepth?: number;
   extraNoteScratch?: boolean;
   /** Actual source conversions, including overwritten additions; independent of record policy. */
@@ -769,6 +775,26 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
       play.mineModifierChangeCount,
       'play.mineModifierChangeCount',
     );
+  if (play.lr2ExtraMode !== undefined) {
+    if (typeof play.lr2ExtraMode !== 'boolean') throw new ReplayParseError('play.lr2ExtraMode: expected boolean');
+    parsed.lr2ExtraMode = play.lr2ExtraMode;
+  }
+  for (const field of ['lr2ExtraLevel', 'lr2ExtraEffectiveLevel'] as const) {
+    if (play[field] === undefined) continue;
+    const value = expectNonNegativeInteger(play[field], `play.${field}`);
+    if (value > 2) throw new ReplayParseError(`play.${field}: expected 0, 1 or 2`);
+    parsed[field] = value as LR2ExtraLevel;
+  }
+  if (play.lr2ExtraConvertedObjectCount !== undefined)
+    parsed.lr2ExtraConvertedObjectCount = expectNonNegativeInteger(
+      play.lr2ExtraConvertedObjectCount,
+      'play.lr2ExtraConvertedObjectCount',
+    );
+  if (play.lr2ExtraTempo !== undefined) {
+    const tempo = expectFiniteNumber(play.lr2ExtraTempo, 'play.lr2ExtraTempo');
+    if (tempo <= 0) throw new ReplayParseError('play.lr2ExtraTempo: expected positive tempo');
+    parsed.lr2ExtraTempo = tempo;
+  }
   if (play.extraNoteDepth !== undefined) {
     parsed.extraNoteDepth = expectNonNegativeInteger(play.extraNoteDepth, 'play.extraNoteDepth');
     if (parsed.extraNoteDepth > 100) throw new ReplayParseError('play.extraNoteDepth: expected 0..100');

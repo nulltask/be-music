@@ -216,6 +216,20 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       this.refreshRulesetChoices();
     }),
   );
+  this.lr2ExtraModeController = trackPlayOption(
+    folder.addBinding(this.guiState, 'lr2ExtraMode', { label: 'EXTRA MODE (LR2)' }).on('change', ({ value }) => {
+      this.setPlayOptions({ lr2ExtraMode: value });
+      this.refreshRulesetChoices();
+    }),
+  );
+  this.lr2ExtraLevelController = selectBinding(folder, this.guiState, 'lr2ExtraLevel', 'EXTRA minimum level (LR2)', {
+    'LEVEL 1': 0,
+    'LEVEL 2': 1,
+    'LEVEL 3': 2,
+  });
+  trackPlayOption(
+    this.lr2ExtraLevelController.on('change', ({ value }) => this.setPlayOptions({ lr2ExtraLevel: value })),
+  );
   this.extraNoteDepthController = trackPlayOption(
     folder
       .addBinding(this.guiState, 'extraNoteDepth', { label: 'EXTRA depth (beatoraja)', min: 0, max: 100, step: 1 })

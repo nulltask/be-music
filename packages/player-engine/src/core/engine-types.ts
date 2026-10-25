@@ -1,3 +1,4 @@
+import type { LR2ExtraLevel } from './lr2-extra-lanes.ts';
 import type { LongNoteModifier, LongNotePlacement } from './long-note-modifier.ts';
 import type { MineModifier, MinePlacement } from './mine-modifier.ts';
 import { type ChartPlayVariant, type RandomDraws, type ResolvedChart } from '@be-music/chart-model';
@@ -97,6 +98,9 @@ export interface PlayerPlaySettings {
   /** beatoraja EXTRA: source depth 0..100 (0 disables it), with optional scratch participation. */
   extraNoteDepth?: number;
   extraNoteScratch?: boolean;
+  /** LR2 beta3 EXTRA, independently selected from beatoraja EXTRA depth. Courses ignore it. */
+  lr2ExtraMode?: boolean;
+  lr2ExtraLevel?: LR2ExtraLevel;
   mineModifier?: MineModifier;
   /** Independently assist the source play side; explicit values override autoScratch for that side. */
   autoScratch1P?: boolean;

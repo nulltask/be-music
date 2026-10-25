@@ -126,6 +126,9 @@ export interface PlayChartContext {
       | 'judgeRuleset'
       | 'longNoteModifier'
       | 'longNoteRate'
+      | 'lr2ExtraMode'
+      | 'lr2ExtraLevel'
+      | 'tempo'
       | 'extraNoteDepth'
       | 'extraNoteScratch'
       | 'scrollSection'
@@ -209,6 +212,8 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     ctx.options.judgeRuleset !== 'beatoraja'
   )
     throw new RangeError('Scroll modification is available only for beatoraja.');
+  if (!arrangement && ctx.options.lr2ExtraMode && (ctx.options.judgeRuleset ?? 'lr2') !== 'lr2')
+    throw new RangeError('LR2 EXTRA requires LR2 judgment rules.');
   if (!arrangement && (ctx.options.extraNoteDepth ?? 0) > 0 && ctx.options.judgeRuleset !== 'beatoraja')
     throw new RangeError('EXTRA note depth is available only for beatoraja.');
   if (!arrangement && ctx.options.longNoteModifier?.startsWith('ADD_') && ctx.options.judgeRuleset !== 'beatoraja')
@@ -338,6 +343,10 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       laneModeExtension: extractChartExtension(ctx.chart?.chartPath),
       longNoteModifier: arrangement?.play.longNoteModifier ?? ctx.options.longNoteModifier,
       longNoteRate: arrangement?.play.longNoteRate ?? ctx.options.longNoteRate,
+      lr2ExtraMode: arrangement ? (arrangement.play.lr2ExtraMode ?? false) : ctx.options.lr2ExtraMode,
+      lr2ExtraLevel: arrangement ? (arrangement.play.lr2ExtraLevel ?? 0) : ctx.options.lr2ExtraLevel,
+      speed: arrangement ? (arrangement.play.lr2ExtraTempo ?? arrangement.play.tempo ?? 1) : ctx.options.tempo,
+      course: ctx.options.course,
       extraNoteDepth: arrangement ? (arrangement.play.extraNoteDepth ?? 0) : ctx.options.extraNoteDepth,
       extraNoteScratch: arrangement ? (arrangement.play.extraNoteScratch ?? false) : ctx.options.extraNoteScratch,
       ...(arrangement?.play.longNoteModifier?.startsWith('ADD_')

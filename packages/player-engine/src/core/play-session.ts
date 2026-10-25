@@ -198,6 +198,10 @@ export async function createPlaySession(
         laneModeExtension: options.laneModeExtension,
         longNoteModifier: options.longNoteModifier,
         longNoteRate: options.longNoteRate,
+        lr2ExtraMode: options.lr2ExtraMode,
+        lr2ExtraLevel: options.lr2ExtraLevel,
+        speed: options.speed,
+        course: options.course,
         extraNoteDepth: options.extraNoteDepth,
         extraNoteScratch: options.extraNoteScratch,
         longNoteModifierPlacements: options.longNoteModifierPlacements,
@@ -213,6 +217,13 @@ export async function createPlaySession(
     );
   resolvedChart = playbackChart.resolvedChart;
   backgroundTriggers = collectRealtimeAudioTriggers(resolvedChart, (channel) => !isPlayLaneSoundChannel(channel));
+  const lr2ExtraRequested = options.lr2ExtraMode ?? playbackChart.lr2ExtraMode ?? false;
+  if (lr2ExtraRequested && (options.judgeRuleset ?? 'lr2') !== 'lr2')
+    throw new RangeError('LR2 EXTRA requires LR2 judgment rules.');
+  if ((playbackChart.lr2ExtraMode ?? false) !== (lr2ExtraRequested && options.course === undefined))
+    throw new RangeError('The shared prepared chart must include the selected LR2 EXTRA mode.');
+  if (lr2ExtraRequested && options.lr2ExtraLevel !== undefined && playbackChart.lr2ExtraLevel !== options.lr2ExtraLevel)
+    throw new RangeError('The shared prepared chart must include the selected LR2 EXTRA level.');
   const extraDepth = clampExtraNoteDepth(options.extraNoteDepth ?? playbackChart.extraNoteDepth ?? 0);
   const extraScratch = options.extraNoteScratch ?? playbackChart.extraNoteScratch ?? false;
   if ((playbackChart.extraNoteDepth ?? 0) !== extraDepth || (playbackChart.extraNoteScratch ?? false) !== extraScratch)
@@ -356,6 +367,15 @@ export async function createPlaySession(
               ? {
                   mineModifier: options.mineModifier,
                   mineModifierChangeCount: playbackChart.mineModifierChangeCount ?? 0,
+                }
+              : {}),
+            ...(options.lr2ExtraMode !== undefined || playbackChart.lr2ExtraMode !== undefined
+              ? {
+                  lr2ExtraMode: playbackChart.lr2ExtraMode ?? false,
+                  lr2ExtraLevel: playbackChart.lr2ExtraLevel ?? 0,
+                  lr2ExtraEffectiveLevel: playbackChart.lr2ExtraEffectiveLevel ?? 0,
+                  lr2ExtraConvertedObjectCount: playbackChart.lr2ExtraConvertedObjectCount ?? 0,
+                  lr2ExtraTempo: playbackChart.lr2ExtraTempo ?? 1,
                 }
               : {}),
             ...(options.extraNoteDepth !== undefined ||

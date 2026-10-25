@@ -358,3 +358,45 @@ test('EXTRA replays and previous layouts retain converted keysounds and source p
   }
   expect(() => prepare({ judgeRuleset: 'lr2', extraNoteDepth: 1 }, entry)).toThrow(/only for beatoraja/);
 });
+
+test('LR2 EXTRA replay reconstructs the recorded source tempo before restoring shuffled channels', () => {
+  const cells = Array<string>(32).fill('00');
+  cells[9] = '01';
+  const entry = {
+    ...chart,
+    chartPath: 'lr2-extra.bme',
+    chart: parseChart(`#BPM 300\n#00011:01\n#00001:${cells.join('')}\n#00111:01`, 'bms'),
+  };
+  const original = prepare(
+    { judgeRuleset: 'lr2', lr2ExtraMode: true, lr2ExtraLevel: 0, tempo: 2, random1P: 'MIRROR' },
+    entry,
+  );
+  expect(original.preparedChart).toMatchObject({
+    lr2ExtraMode: true,
+    lr2ExtraTempo: 2,
+    lr2ExtraConvertedObjectCount: 1,
+  });
+  const replay = parseReplay(
+    serializeReplay(
+      createReplayRecorder({
+        json: entry.chart,
+        chart: original.preparedChart!,
+        play: {
+          mode: 'manual',
+          autoScratch: false,
+          judgeRuleset: 'lr2',
+          lr2ExtraMode: true,
+          lr2ExtraLevel: 0,
+          lr2ExtraTempo: 2,
+          tempo: 2,
+        },
+      }).finalize({ summary: { ...createEmptyScore(original.notes.length), fast: 0, slow: 0 } }),
+    ),
+  );
+  const restored = prepare({ judgeRuleset: 'lr2', replay, lr2ExtraMode: false, lr2ExtraLevel: 2, tempo: 0.5 }, entry);
+  expect(restored.preparedChart).toMatchObject({ lr2ExtraMode: true, lr2ExtraLevel: 0, lr2ExtraTempo: 2 });
+  expect(restored.notes.map((note) => [note.channel, note.seconds, note.event.value])).toEqual(
+    original.notes.map((note) => [note.channel, note.seconds, note.event.value]),
+  );
+  expect(() => prepare({ judgeRuleset: 'beatoraja', lr2ExtraMode: true }, entry)).toThrow(/requires LR2/);
+});

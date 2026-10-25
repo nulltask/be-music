@@ -13,6 +13,8 @@ test('parse/count/pack survives a structured-clone boundary and restores lazy ev
   restorePackedCollectionChart(result.chart, result.packed, result.strings);
   expect(result.chart.events).toEqual(parseBMS(TEXT).events);
   expect(result.chart.metadata.title).toBe('Worker');
+  expect(result.chart.bms.wavNameBytePrefixes).toEqual({ 'kick.wav': '6b69' });
+  expect(result.chart.preservation.bms.sourceLines).toEqual([{ kind: 'header', command: 'WAV01', value: 'kick.wav' }]);
 });
 test('ZIP limits and skin filtering are applied inside the task', () => {
   const bytes = zipSync({ 'a.bms': strToU8(TEXT), '__MACOSX/junk': strToU8('junk') });

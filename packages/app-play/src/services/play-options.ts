@@ -44,6 +44,8 @@ export type GUIPlayOptions = Pick<
   | 'bottomShiftableGauge'
   | 'longNoteModifier'
   | 'longNoteRate'
+  | 'lr2ExtraMode'
+  | 'lr2ExtraLevel'
   | 'extraNoteDepth'
   | 'extraNoteScratch'
   | 'autoScratch1P'
@@ -91,6 +93,8 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     judgeAlgorithm: state.judgeAlgorithm,
     longNoteModifier: state.longNoteModifier,
     longNoteRate: state.longNoteRate,
+    lr2ExtraMode: state.lr2ExtraMode,
+    lr2ExtraLevel: state.lr2ExtraLevel,
     extraNoteDepth: state.extraNoteDepth,
     extraNoteScratch: state.extraNoteScratch,
     mineModifier: state.mineModifier,
@@ -153,6 +157,8 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.judgeAlgorithm = options.judgeAlgorithm;
   state.longNoteModifier = options.longNoteModifier;
   state.longNoteRate = options.longNoteRate;
+  state.lr2ExtraMode = options.lr2ExtraMode;
+  state.lr2ExtraLevel = options.lr2ExtraLevel;
   state.extraNoteDepth = options.extraNoteDepth;
   state.extraNoteScratch = options.extraNoteScratch;
   state.mineModifier = options.mineModifier;
@@ -196,6 +202,8 @@ export class PlayOptionsService {
       dpFlip: play.dpFlip ?? play.options?.dpFlip,
       longNoteModifier: play.longNoteModifier ?? play.options?.longNoteModifier,
       longNoteRate: play.longNoteRate ?? play.options?.longNoteRate,
+      lr2ExtraMode: play.lr2ExtraMode ?? false,
+      lr2ExtraLevel: play.lr2ExtraLevel ?? 0,
       extraNoteDepth: play.extraNoteDepth ?? 0,
       extraNoteScratch: play.extraNoteScratch ?? false,
       mineModifier: play.mineModifier ?? play.options?.mineModifier,
@@ -251,6 +259,8 @@ const ARRANGEMENT_OPTIONS = [
   'hRandomThresholdBPM',
   'longNoteModifier',
   'longNoteRate',
+  'lr2ExtraMode',
+  'lr2ExtraLevel',
   'extraNoteDepth',
   'extraNoteScratch',
   'mineModifier',

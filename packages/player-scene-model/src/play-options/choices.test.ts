@@ -345,3 +345,11 @@ test('EXTRA uses source depth bounds and independently retained scratch selectio
   expect(resolvePlayOptionValue('extraNoteScratch', true)).toBe(true);
   expect(resolvePlayOptionValue('extraNoteScratch', 1)).toBeUndefined();
 });
+
+test('LR2 EXTRA keeps source minimum levels separate from beatoraja depth', () => {
+  expect(DEFAULT_PLAY_OPTIONS).toMatchObject({ lr2ExtraMode: false, lr2ExtraLevel: 0 });
+  for (const level of [0, 1, 2] as const) expect(resolvePlayOptionValue('lr2ExtraLevel', level)).toBe(level);
+  for (const value of [-1, 1.5, 3, '1']) expect(resolvePlayOptionValue('lr2ExtraLevel', value)).toBeUndefined();
+  expect(resolvePlayOptionValue('lr2ExtraMode', true)).toBe(true);
+  expect(resolvePlayOptionValue('lr2ExtraMode', 'ON')).toBeUndefined();
+});

@@ -686,6 +686,40 @@ test('scroll ADD preserves its parameters and effective curve, rejecting incompl
     expect(() => parseReplay({ ...replay, play: { ...replay.play, ...changes } })).toThrow();
 });
 
+test('LR2 EXTRA records source and effective levels separately from conversion count and source tempo', () => {
+  const replay = makeReplay();
+  Object.assign(replay.play, {
+    lr2ExtraMode: true,
+    lr2ExtraLevel: 0,
+    lr2ExtraEffectiveLevel: 2,
+    lr2ExtraConvertedObjectCount: 12,
+    lr2ExtraTempo: 0.75,
+  });
+  expect(parseReplay(serializeReplay(replay)).play).toMatchObject({
+    lr2ExtraMode: true,
+    lr2ExtraLevel: 0,
+    lr2ExtraEffectiveLevel: 2,
+    lr2ExtraConvertedObjectCount: 12,
+    lr2ExtraTempo: 0.75,
+  });
+  for (const field of ['lr2ExtraLevel', 'lr2ExtraEffectiveLevel'])
+    for (const value of [-1, 1.5, 3, '1'])
+      expect(() => parseReplay(JSON.stringify({ ...replay, play: { ...replay.play, [field]: value } }))).toThrow(
+        ReplayParseError,
+      );
+  for (const lr2ExtraTempo of [0, -1, '1'])
+    expect(() => parseReplay(JSON.stringify({ ...replay, play: { ...replay.play, lr2ExtraTempo } }))).toThrow(
+      ReplayParseError,
+    );
+  for (const lr2ExtraConvertedObjectCount of [-1, 1.5, '1'])
+    expect(() =>
+      parseReplay(JSON.stringify({ ...replay, play: { ...replay.play, lr2ExtraConvertedObjectCount } })),
+    ).toThrow(ReplayParseError);
+  expect(() => parseReplay(JSON.stringify({ ...replay, play: { ...replay.play, lr2ExtraMode: 1 } }))).toThrow(
+    ReplayParseError,
+  );
+});
+
 test('EXTRA records depth, scratch and actual conversions with strict validation', () => {
   const replay = makeReplay();
   replay.play.extraNoteDepth = 2;

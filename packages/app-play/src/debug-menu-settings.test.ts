@@ -149,6 +149,8 @@ describe('captureDebugMenuSettings', () => {
       longNoteRate: 1,
       extraNoteDepth: 0,
       extraNoteScratch: false,
+      lr2ExtraMode: false,
+      lr2ExtraLevel: 0,
       mineModifier: 'OFF',
       scrollModifier: 'REMOVE',
       scrollSection: 8,
@@ -378,4 +380,23 @@ test('EXTRA depth and scratch persist with source validation', () => {
   const state = { extraNoteDepth: 0, extraNoteScratch: false } as PlayerGUIState;
   overlayDebugMenuSettings(state, document!.settings);
   expect(state).toMatchObject({ extraNoteDepth: 100, extraNoteScratch: true });
+});
+
+test('LR2 EXTRA selection and source minimum level survive settings round trips', () => {
+  const parsed = parseDebugMenuSettingsDocument(
+    JSON.stringify({
+      version: 1,
+      updatedAt: 1,
+      settings: { judgeRuleset: 'lr2', lr2ExtraMode: true, lr2ExtraLevel: 2 },
+    }),
+  );
+  expect(parsed?.settings).toMatchObject({ lr2ExtraMode: true, lr2ExtraLevel: 2 });
+  const state = { lr2ExtraMode: false, lr2ExtraLevel: 0 } as PlayerGUIState;
+  overlayDebugMenuSettings(state, parsed!.settings);
+  expect(state).toMatchObject({ lr2ExtraMode: true, lr2ExtraLevel: 2 });
+  expect(
+    parseDebugMenuSettingsDocument(
+      JSON.stringify({ version: 1, updatedAt: 1, settings: { lr2ExtraMode: 'yes', lr2ExtraLevel: 3 } }),
+    )!.settings,
+  ).not.toHaveProperty('lr2ExtraLevel');
 });
