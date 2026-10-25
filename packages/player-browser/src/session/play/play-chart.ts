@@ -966,11 +966,13 @@ export function applyRandomMode(
         beat?: number;
         endBeat?: number;
       };
+      // Group by whole microseconds, as the source timelines do: a modifier that recomputes some objects' seconds
+      // (scroll REMOVE) can leave a mine one ulp off the notes it shares a timeline with.
       return {
         channel: timed.channel,
-        timeMs: (timed.seconds ?? timed.beat ?? 0) * 1000,
+        timeMs: toTimelineMs(timed.seconds ?? timed.beat ?? 0),
         ...(timed.endSeconds !== undefined || timed.endBeat !== undefined
-          ? { endTimeMs: (timed.endSeconds ?? timed.endBeat!) * 1000 }
+          ? { endTimeMs: toTimelineMs(timed.endSeconds ?? timed.endBeat!) }
           : {}),
         kind,
       };
@@ -1121,6 +1123,11 @@ function resolvePlayerLongNoteChart(
   if (mode === 'LN') return chart;
   if (ctx.options.judgeRuleset !== 'beatoraja') throw new RangeError('LN MODE is available only for beatoraja.');
   return applyUndefinedLongNoteMode(chart, LONG_NOTE_MODE_VALUES[mode]);
+}
+
+/** A time in seconds as the milliseconds of its whole-microsecond timeline. */
+function toTimelineMs(seconds: number): number {
+  return Math.round(seconds * 1_000_000) / 1000;
 }
 
 /** The RANDOM-type lane options That-Which-Must-Not-Be-Named's M-RAN mirrors after. */
