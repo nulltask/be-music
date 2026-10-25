@@ -604,11 +604,19 @@ export class PlayerWebDemoApp {
     return select !== undefined && this.router.current === select ? this.router.leave() : Promise.resolve(false);
   }
 
-  /** Applies the confirmed family before the library mounts the select scene. */
+  /**
+   * Applies a confirmed skin drop. While a play is on the stage, that play draws with the new family and keeps its
+   * chart. Otherwise the select scene is released so the next `showSelect` builds it for the new family.
+   */
   private async applyDroppedSkin(family: SkinFamilyId): Promise<void> {
     if (family !== 'lr2' && family !== 'beatoraja') return;
     this.guiState.skinFamilyOverride = family;
     this.debugMenu.showSkinSystem(family);
+    const play = this.gameplayView;
+    if (play !== undefined && this.router.current === play) {
+      await this.switchPlayFamily(play);
+      return;
+    }
     await this.selectRoute.dropSelect();
   }
 
