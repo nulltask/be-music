@@ -1,5 +1,5 @@
 import type { BeMusicReplay } from '@be-music/player-engine/replay';
-import { type Demo, expect, openWithLibrary, SONGS, test } from './support.ts';
+import { expect, openWithLibrary, SMOKE, SONGS, test, type Demo } from './support.ts';
 
 /**
  * Checklist item 12 on the built-in family: the status line around a play, the replay's live tempo and view
@@ -55,86 +55,96 @@ test('the status line follows a play, and its log records the live tempo and vie
   expect(state.status).toBe(library);
 });
 
-test("a replay follows the log's tempo and hi-speed with Replay / ghost on, and the viewer's with it off", async ({
-  demo,
-}) => {
-  await openWithLibrary(demo);
-  const replay = await playWithLiveChanges(demo);
-  const change = replay.play.tempoChanges?.[0];
-  const recordedHiSpeed = replay.play.viewChanges?.at(-1)?.hiSpeed;
-  if (change === undefined || recordedHiSpeed === undefined) throw new Error('the log recorded no live change');
-  await demo.leaveResult();
-  // The viewer's own settings, which a replay keeps only with the Replay / ghost options off.
-  await demo.setOption(TEMPO, 'Tempo (%)', -10);
-  await demo.setOption(['Play options'], 'Hi-speed', 4);
-  const text = JSON.stringify(replay);
+test(
+  "a replay follows the log's tempo and hi-speed with Replay / ghost on, and the viewer's with it off",
+  SMOKE,
+  async ({ demo }) => {
+    await openWithLibrary(demo);
+    const replay = await playWithLiveChanges(demo);
+    const change = replay.play.tempoChanges?.[0];
+    const recordedHiSpeed = replay.play.viewChanges?.at(-1)?.hiSpeed;
+    if (change === undefined || recordedHiSpeed === undefined) throw new Error('the log recorded no live change');
+    await demo.leaveResult();
+    // The viewer's own settings, which a replay keeps only with the Replay / ghost options off.
+    await demo.setOption(TEMPO, 'Tempo (%)', -10);
+    await demo.setOption(['Play options'], 'Hi-speed', 4);
+    const text = JSON.stringify(replay);
 
-  // On (the default): the replay starts at the recorded tempo and follows its change and the recorded hi-speed.
-  await demo.dropText('fixture-a.bmplay.json', text);
-  let state = await demo.waitFor(
-    (current) => current.scene.kind === 'play' && current.play?.replay === true,
-    'the replay to start',
-  );
-  expect(state.status).toBe('Replaying: Fixture A');
-  expect(state.play?.tempo).toBe(1);
-  state = await demo.waitFor(
-    (current) => current.play?.tempo === 1.2 && Math.abs((current.play.hiSpeed ?? 0) - recordedHiSpeed) < 0.05,
-    'the replay to follow the recorded tempo and hi-speed',
-  );
-  // Seeking a paused replay rebuilds counts and restores the view and tempo at the target.
-  await demo.key('Space');
-  await demo.key('ArrowLeft');
-  state = await demo.waitFor((current) => current.play?.seconds === 0, 'the replay sought to its start');
-  expect(state.play?.judged?.pgreat).toBe(0);
-  expect(state.play?.tempo).toBe(1);
-  expect(state.play?.hiSpeed).toBe(replay.play.view?.hiSpeed);
-  await demo.key('ArrowRight');
-  state = await demo.waitFor(
-    (current) => Math.abs((current.play?.seconds ?? -1) - 5) < 0.01,
-    'the replay sought forwards',
-  );
-  expect(state.play?.judged?.pgreat).toBe(9);
-  expect(state.play?.tempo).toBe(1.2);
-  expect(state.play?.hiSpeed).toBeCloseTo(recordedHiSpeed, 1);
-  await demo.key('ArrowLeft');
-  state = await demo.waitFor((current) => current.play?.seconds === 0, 'the replay sought back again');
-  expect(state.play?.judged?.pgreat).toBe(0);
-  expect(state.play?.tempo).toBe(1);
-  await demo.key('Space');
-  await demo.waitFor((current) => (current.play?.judged?.pgreat ?? 0) >= 1, 'the replay to judge again after resuming');
-  await demo.key('Escape');
-  await demo.waitFor((current) => current.scene.kind === 'select', 'the select screen');
+    // On (the default): the replay starts at the recorded tempo and follows its change and the recorded hi-speed.
+    await demo.dropText('fixture-a.bmplay.json', text);
+    let state = await demo.waitFor(
+      (current) => current.scene.kind === 'play' && current.play?.replay === true,
+      'the replay to start',
+    );
+    expect(state.status).toBe('Replaying: Fixture A');
+    expect(state.play?.tempo).toBe(1);
+    // Paused the moment it follows them (the replay would otherwise run on to its result on a slow runner). Seeking a
+    // paused replay rebuilds counts and restores the view and tempo at the target.
+    state = await demo.keyWhen(
+      (current, hiSpeed) => current.play?.tempo === 1.2 && Math.abs((current.play.hiSpeed ?? 0) - hiSpeed) < 0.05,
+      recordedHiSpeed,
+      'Space',
+      'the replay to follow the recorded tempo and hi-speed',
+    );
+    await demo.key('ArrowLeft');
+    state = await demo.waitFor((current) => current.play?.seconds === 0, 'the replay sought to its start');
+    expect(state.play?.judged?.pgreat).toBe(0);
+    expect(state.play?.tempo).toBe(1);
+    expect(state.play?.hiSpeed).toBe(replay.play.view?.hiSpeed);
+    await demo.key('ArrowRight');
+    state = await demo.waitFor(
+      (current) => Math.abs((current.play?.seconds ?? -1) - 5) < 0.01,
+      'the replay sought forwards',
+    );
+    expect(state.play?.judged?.pgreat).toBe(9);
+    expect(state.play?.tempo).toBe(1.2);
+    expect(state.play?.hiSpeed).toBeCloseTo(recordedHiSpeed, 1);
+    await demo.key('ArrowLeft');
+    state = await demo.waitFor((current) => current.play?.seconds === 0, 'the replay sought back again');
+    expect(state.play?.judged?.pgreat).toBe(0);
+    expect(state.play?.tempo).toBe(1);
+    await demo.key('Space');
+    await demo.waitFor(
+      (current) => (current.play?.judged?.pgreat ?? 0) >= 1,
+      'the replay to judge again after resuming',
+    );
+    await demo.key('Escape');
+    await demo.waitFor((current) => current.scene.kind === 'select', 'the select screen');
 
-  // Off: the viewer's tempo and hi-speed for the whole replay.
-  await demo.setOption(REPLAY_VIEW, 'Tempo', false);
-  await demo.setOption(REPLAY_VIEW, 'Hi-speed', false);
-  await demo.dropText('fixture-a.bmplay.json', text);
-  state = await demo.waitFor(
-    (current) => current.scene.kind === 'play' && current.play?.replay === true,
-    'the replay to start',
-  );
-  expect(state.status).toBe('Replaying (tempo -10%): Fixture A');
-  // Past the chart time the recorded change was made at, nothing has changed.
-  const after = change.timeUs / 1e6 + 0.5;
-  state = await demo.waitFor(
-    (current) => current.scene.kind !== 'play' || (current.play?.seconds ?? 0) > after,
-    'the replay to pass the recorded change',
-  );
-  expect(state.play?.tempo).toBe(0.9);
-  expect(state.play?.hiSpeed).toBe(4);
-  await demo.key('Space');
-  await demo.key('ArrowLeft');
-  state = await demo.waitFor((current) => current.play?.seconds === 0, 'the replay sought with recorded settings off');
-  expect(state.play?.tempo).toBe(0.9);
-  expect(state.play?.hiSpeed).toBe(4);
-  await demo.key('ArrowRight');
-  state = await demo.waitFor(
-    (current) => Math.abs((current.play?.seconds ?? -1) - 5) < 0.01,
-    'the replay sought forwards with recorded settings off',
-  );
-  expect(state.play?.tempo).toBe(0.9);
-  expect(state.play?.hiSpeed).toBe(4);
-});
+    // Off: the viewer's tempo and hi-speed for the whole replay.
+    await demo.setOption(REPLAY_VIEW, 'Tempo', false);
+    await demo.setOption(REPLAY_VIEW, 'Hi-speed', false);
+    await demo.dropText('fixture-a.bmplay.json', text);
+    state = await demo.waitFor(
+      (current) => current.scene.kind === 'play' && current.play?.replay === true,
+      'the replay to start',
+    );
+    expect(state.status).toBe('Replaying (tempo -10%): Fixture A');
+    // Past the chart time the recorded change was made at, nothing has changed.
+    const after = change.timeUs / 1e6 + 0.5;
+    state = await demo.waitFor(
+      (current) => current.scene.kind !== 'play' || (current.play?.seconds ?? 0) > after,
+      'the replay to pass the recorded change',
+    );
+    expect(state.play?.tempo).toBe(0.9);
+    expect(state.play?.hiSpeed).toBe(4);
+    await demo.key('Space');
+    await demo.key('ArrowLeft');
+    state = await demo.waitFor(
+      (current) => current.play?.seconds === 0,
+      'the replay sought with recorded settings off',
+    );
+    expect(state.play?.tempo).toBe(0.9);
+    expect(state.play?.hiSpeed).toBe(4);
+    await demo.key('ArrowRight');
+    state = await demo.waitFor(
+      (current) => Math.abs((current.play?.seconds ?? -1) - 5) < 0.01,
+      'the replay sought forwards with recorded settings off',
+    );
+    expect(state.play?.tempo).toBe(0.9);
+    expect(state.play?.hiSpeed).toBe(4);
+  },
+);
 
 test('manual seeking stays paused, resets judgments and finishes without a replay', async ({ demo }) => {
   await openWithLibrary(demo);

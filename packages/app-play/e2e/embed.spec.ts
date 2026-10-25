@@ -4,6 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { unzipSync, zipSync } from 'fflate';
 import { createHash } from 'node:crypto';
 import { lr2CourseList } from '../../../scripts/course-checklist/fixtures.ts';
+import { SMOKE } from './support.ts';
 
 /** Where the specs serve the zipped fixture folders on the embed's own origin. */
 const TRACK_ROUTE = '/__e2e/track/';
@@ -34,35 +35,37 @@ async function openEmbed(page: Page, folders: readonly string[], chart?: string)
 
 const stageCanvas = (page: Page) => page.locator('canvas[aria-label="be-music stage"]');
 
-test('a single chart waits behind a play button, plays in AUTO with seekable controls, and offers a replay', async ({
-  page,
-}, info) => {
-  await openEmbed(page, ['songs/fixA']);
-  const play = page.getByRole('button', { name: 'Play', exact: true });
-  await expect(play).toBeEnabled({ timeout: 60_000 });
-  await expect(stageCanvas(page)).toHaveCount(0);
-  const hud = page.locator('be-music-preview-hud');
-  await expect(hud.getByRole('heading', { name: 'Fixture A' })).toBeVisible();
-  await play.click();
-  const seek = hud.getByRole('slider', { name: 'Seek' });
-  await expect(seek).toBeEnabled({ timeout: 30_000 });
-  for (const part of ['be-music-bga', 'be-music-lanes', 'be-music-notes', 'be-music-judge-line']) {
-    await expect(page.locator(`be-music-playfield ${part} canvas`)).toBeAttached();
-  }
-  // Lanes on the left half, and the BGA as tall as the space above the controls, right of the lanes.
-  const lanes = (await page.locator('be-music-lanes').boundingBox())!;
-  const bga = (await page.locator('be-music-bga').boundingBox())!;
-  const viewport = page.viewportSize()!;
-  expect(lanes.x + lanes.width).toBeLessThanOrEqual(viewport.width / 2);
-  expect(bga.x).toBeGreaterThanOrEqual(lanes.x + lanes.width);
-  expect(bga.height).toBeGreaterThan(viewport.height * 0.6);
-  await page.screenshot({ path: info.outputPath('embed-play.png') });
-  await page.keyboard.press('ArrowRight');
-  await expect.poll(async () => Number(await seek.inputValue())).toBeGreaterThanOrEqual(4);
-  await expect(stageCanvas(page)).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Replay', exact: true })).toBeEnabled({ timeout: 60_000 });
-  await page.screenshot({ path: info.outputPath('embed-replay.png') });
-});
+test(
+  'a single chart waits behind a play button, plays in AUTO with seekable controls, and offers a replay',
+  SMOKE,
+  async ({ page }, info) => {
+    await openEmbed(page, ['songs/fixA']);
+    const play = page.getByRole('button', { name: 'Play', exact: true });
+    await expect(play).toBeEnabled({ timeout: 60_000 });
+    await expect(stageCanvas(page)).toHaveCount(0);
+    const hud = page.locator('be-music-preview-hud');
+    await expect(hud.getByRole('heading', { name: 'Fixture A' })).toBeVisible();
+    await play.click();
+    const seek = hud.getByRole('slider', { name: 'Seek' });
+    await expect(seek).toBeEnabled({ timeout: 30_000 });
+    for (const part of ['be-music-bga', 'be-music-lanes', 'be-music-notes', 'be-music-judge-line']) {
+      await expect(page.locator(`be-music-playfield ${part} canvas`)).toBeAttached();
+    }
+    // Lanes on the left half, and the BGA as tall as the space above the controls, right of the lanes.
+    const lanes = (await page.locator('be-music-lanes').boundingBox())!;
+    const bga = (await page.locator('be-music-bga').boundingBox())!;
+    const viewport = page.viewportSize()!;
+    expect(lanes.x + lanes.width).toBeLessThanOrEqual(viewport.width / 2);
+    expect(bga.x).toBeGreaterThanOrEqual(lanes.x + lanes.width);
+    expect(bga.height).toBeGreaterThan(viewport.height * 0.6);
+    await page.screenshot({ path: info.outputPath('embed-play.png') });
+    await page.keyboard.press('ArrowRight');
+    await expect.poll(async () => Number(await seek.inputValue())).toBeGreaterThanOrEqual(4);
+    await expect(stageCanvas(page)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Replay', exact: true })).toBeEnabled({ timeout: 60_000 });
+    await page.screenshot({ path: info.outputPath('embed-replay.png') });
+  },
+);
 
 test('seeks back and forth: the time follows the second sought, and the combo is the one reached by playing there', async ({
   page,
