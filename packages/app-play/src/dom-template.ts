@@ -1,4 +1,15 @@
-import { renderBuildInfo } from '@be-music/service-web-theme';
+import { renderBuildInfo, renderServiceFooter } from '@be-music/service-web-theme';
+
+function playBuildInfo(): { builtAt: string; revision: string } | undefined {
+  return typeof __BE_MUSIC_BUILD_TIME__ === 'string'
+    ? { builtAt: __BE_MUSIC_BUILD_TIME__, revision: __BE_MUSIC_BUILD_REVISION__ }
+    : undefined;
+}
+
+/** Local play uses production siblings, matching `leaderboardLink`. A preview host stays on preview. */
+function playHostname(): string {
+  return typeof location === 'undefined' ? 'localhost' : location.hostname;
+}
 
 /**
  * Static HTML for the demo shell — injected once into `#app` at boot via `app.innerHTML = DEMO_APP_HTML`.
@@ -164,11 +175,6 @@ export const DEMO_APP_HTML = `
               </section>
             </div>
           </details>
-          <footer class="service-build-footer">${renderBuildInfo(
-            typeof __BE_MUSIC_BUILD_TIME__ === 'string'
-              ? { builtAt: __BE_MUSIC_BUILD_TIME__, revision: __BE_MUSIC_BUILD_REVISION__ }
-              : undefined,
-          )}</footer>
         </div>
       </div>
     </div>
@@ -705,11 +711,13 @@ export const DEMO_APP_HTML = `
           <ol class="help-oss-list" id="help-oss-list"></ol>
         </section>
       </div>
-      <footer class="service-build-footer">${renderBuildInfo(
-        typeof __BE_MUSIC_BUILD_TIME__ === 'string'
-          ? { builtAt: __BE_MUSIC_BUILD_TIME__, revision: __BE_MUSIC_BUILD_REVISION__ }
-          : undefined,
-      )}</footer>
+      <footer class="service-build-footer">${renderBuildInfo(playBuildInfo())}</footer>
     </div>
+  ${renderServiceFooter({
+    current: 'play',
+    hostname: playHostname(),
+    className: 'service-page-footer',
+    buildInfo: playBuildInfo(),
+  })}
   </div>
 `;

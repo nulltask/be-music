@@ -558,4 +558,12 @@ test('renders deployment metadata in the shared page footer', async () => {
   expect(response.status).toBe(200);
   expect(html.split('</main>')[1]).toContain('2026-10-20 08:00:00 UTC');
   expect(html).toContain('>01234567</code>');
+  const footer = html.slice(html.lastIndexOf('<footer'));
+  expect(footer).toContain('aria-current="page">Leaderboard</span>');
+  expect(footer).not.toContain('>Leaderboard</a>');
+  expect(footer).toContain('href="https://be-music.app/">Dashboard</a>');
+  expect(footer).toContain('href="https://accounts.be-music.app/">Accounts</a>');
+  expect(footer).toContain('href="https://play.be-music.app/">Play</a>');
+  expect(footer).toContain('href="/about"');
+  expect(footer).toContain('© 2026 nulltask · MIT License');
 });
