@@ -630,7 +630,17 @@ importers:
         specifier: ^6.2.1
         version: 6.2.2
 
-  packages/service-web-theme: {}
+  packages/service-web-theme:
+    devDependencies:
+      '@tailwindcss/cli':
+        specifier: ^4.3.3
+        version: 4.3.3
+      basecoat-css:
+        specifier: ^1.0.2
+        version: 1.0.2
+      tailwindcss:
+        specifier: ^4.3.3
+        version: 4.3.3
 
   packages/shared-utils:
     dependencies:
@@ -694,7 +704,7 @@ importers:
         version: 1.0.0-beta.20(@types/node@26.6.5)
       vite-plus:
         specifier: 'catalog:'
-        version: 1.3.0(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5(@vitest/browser@5.0.5)(vitest@5.0.5))(@vitest/ui@5.0.5(vitest@5.0.5))(esbuild@0.28.2)(jiti@2.7.0)(playwright@1.64.1)(tsx@4.23.13)(typescript@7.0.2)(unrun@0.2.37)(yaml@2.9.0)
+        version: 1.3.0(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(@vitest/ui@5.0.5(vitest@5.0.5))(esbuild@0.28.2)(jiti@2.7.0)(playwright@1.64.1)(tsx@4.23.13)(typescript@7.0.2)(unrun@0.2.37)(yaml@2.9.0)
       wrangler:
         specifier: ^4.151.3
         version: 4.151.3(@cloudflare/workers-types@5.20261021.1)(@types/node@26.6.5)

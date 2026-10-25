@@ -2,9 +2,11 @@
 
 # サービスのテーマ
 
-Accounts と Dashboard 用の非公開 CSS 基盤です。`SERVICE_CSS` は [shadcn の neutral デザイントークン](https://ui.shadcn.com/docs/theming) を使います。使うのは CSS 変数だけで、shadcn/ui の部品ライブラリは依存に入れません。システムフォント、幅 64rem のレイアウト、これまでの操作部品の寸法はそのままです。これらのページはテーマ用の class を持たないので、暗い配色はシステムの配色に従います。キーボードのフォーカス表示、本文へのスキップリンク、レスポンシブなヘッダーを含みます。
+Accounts と Dashboard 用の非公開スタイルシートです。`src/theme.css` は Tailwind CSS v4 と [Basecoat](https://basecoatui.com)（Leaderboard と同じ部品。shadcn/ui は依存に入れません）を読みます。`pnpm --filter @be-music/service-web-theme run build:css` が `src/styles.generated.ts` を書き、`prepare` がインストール時に再生成します。ページは Basecoat の class（`btn`、`card`、`input`）と Tailwind のユーティリティを使います。
 
-Leaderboard は Basecoat 経由で同じトークン名を使います。非公開の寄付サイトは `src/service-theme.ts` にコピーを持つため、このスタイルシートを変えるときは一緒に更新します。プレイヤーはスキンによる独自の UI を持ち、このテーマを使いません。
+暗い配色はシステムの配色に従います。Leaderboard はスクリプトで `.dark` を付けますが、これらのページはコンテンツセキュリティポリシーがインラインスクリプトを拒むため、ビルドが Basecoat の暗いトークンを `prefers-color-scheme` の下に繰り返します。
+
+非公開の寄付サイトは `src/service-theme.ts` に独自のコピーを持つため、このスタイルシートを変えるときは別途更新します。プレイヤーはスキンによる独自の UI を持ち、このテーマを使いません。
 
 `renderServiceHeader` は Play 以外のサービスのヘッダです。ログイン中のユーザー、Play へのリンク、English / 日本語を出します。言語は `resolveLocale` が `?lang=`、`be-music-lang` クッキー、`Accept-Language` の順で決めます。
 

@@ -20,7 +20,8 @@ describe('renderServiceHeader', () => {
     expect(html).toContain('>Be-Music Dashboard</a>');
     expect(html).not.toContain('ダッシュボード');
     expect(html).toContain('href="https://play.be-music.app/"');
-    expect(html).toContain('class="btn-icon"');
+    expect(html).toContain('class="btn no-underline" data-size="sm"');
+    expect(html).toContain('M5 5a2 2 0 0 1 3.008-1.728');
     expect(html).toContain('>プレイ<');
     expect(html).toContain('src="https://accounts.be-music.app/profiles/alice/avatar?v=g"');
     expect(html).toContain('popovertarget="language-menu"');

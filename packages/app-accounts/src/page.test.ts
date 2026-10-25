@@ -30,7 +30,7 @@ describe('Accounts page', () => {
     });
     expect(page.split('</main>')[0]).not.toContain('https://donate.example');
     expect(page).toContain(
-      '<footer class="site-footer"><a href="https://donate.example/api/auth/sign-in">Donate</a></footer>',
+      '<footer class="text-muted-foreground mx-auto max-w-5xl border-t px-4 py-4 text-xs"><a class="underline underline-offset-4 hover:text-foreground" href="https://donate.example/api/auth/sign-in">Donate</a></footer>',
     );
   });
   test('hides Donate unless explicitly enabled', () => {

@@ -10,11 +10,15 @@ export interface ServiceHeaderAccount {
 }
 
 const PLAY_ICON =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg>';
+  '<svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg>';
 const LANGUAGES_ICON =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>';
+  '<svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>';
 const CHECK_ICON =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+  '<svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+
+/** The frame of the language menu. It sits in the header's row, so it turns wrapping back on. */
+const HEADER_MENU_CLASS =
+  'bg-popover text-popover-foreground max-w-[calc(100vw-2rem)] rounded-lg border p-1 text-sm whitespace-normal [word-break:auto-phrase] shadow-md';
 
 const TEXT = {
   en: {
@@ -48,15 +52,16 @@ function escapeHTML(value: string): string {
     .replaceAll("'", '&#39;');
 }
 
-/**
- * The header shared by every service page except Play. It follows the Leaderboard: an avatar and name, a Play button
- * with its icon, and a language menu. `title` is the fixed brand (`Be-Music Dashboard`), not translated.
- */
 /** The skip link every service page puts before the shared header. */
 export function serviceSkipLink(locale: Locale): string {
-  return `<a class="skip-link" href="#main">${locale === 'ja' ? '本文へ移動' : 'Skip to content'}</a>`;
+  return `<a class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground" href="#main">${locale === 'ja' ? '本文へ移動' : 'Skip to content'}</a>`;
 }
 
+/**
+ * The header shared by every service page except Play. It follows the Leaderboard: Basecoat buttons, an avatar and
+ * name, a Play button with its icon, and a language menu. `title` is the fixed brand (`Be-Music Dashboard`), not
+ * translated.
+ */
 export function renderServiceHeader(input: {
   locale: Locale;
   title: string;
@@ -70,19 +75,19 @@ export function renderServiceHeader(input: {
   const play =
     input.playHref === undefined
       ? ''
-      : `<a class="button" href="${escapeHTML(input.playHref)}" title="${escapeHTML(t.playTitle)}" aria-label="${escapeHTML(t.playTitle)}"><span class="btn-icon" aria-hidden="true">${PLAY_ICON}</span><span>${t.play}</span></a>`;
+      : `<a class="btn no-underline" data-size="sm" href="${escapeHTML(input.playHref)}" title="${escapeHTML(t.playTitle)}" aria-label="${escapeHTML(t.playTitle)}">${PLAY_ICON}<span>${t.play}</span></a>`;
   const avatar =
     input.account?.avatarURL === undefined
       ? ''
-      : `<img src="${escapeHTML(input.account.avatarURL)}" width="24" height="24" alt="" loading="lazy" decoding="async">`;
+      : `<img class="size-6 shrink-0 rounded-full object-cover" src="${escapeHTML(input.account.avatarURL)}" width="24" height="24" alt="" loading="lazy" decoding="async">`;
   const account =
     input.account === undefined
-      ? `<a class="button secondary" href="${escapeHTML(input.accountHref)}">${t.signIn}</a>`
-      : `<a class="account-chip" href="${escapeHTML(input.accountHref)}" title="${escapeHTML(input.account.displayName)}" aria-label="${escapeHTML(input.account.handle === '' ? input.account.displayName : t.accountOf(input.account.handle))}">${avatar}<span class="name">${escapeHTML(input.account.displayName)}</span>${input.account.handle === '' ? '' : `<span class="handle">@${escapeHTML(input.account.handle)}</span>`}${input.account.anonymous ? `<span class="guest">(${t.guest})</span>` : ''}</a>`;
+      ? `<a class="btn no-underline" data-size="sm" data-variant="outline" href="${escapeHTML(input.accountHref)}">${t.signIn}</a>`
+      : `<a class="btn no-underline max-w-64 min-w-0" data-size="sm" data-variant="ghost" href="${escapeHTML(input.accountHref)}" title="${escapeHTML(input.account.displayName)}" aria-label="${escapeHTML(input.account.handle === '' ? input.account.displayName : t.accountOf(input.account.handle))}">${avatar}<span class="min-w-0 truncate">${escapeHTML(input.account.displayName)}</span>${input.account.handle === '' ? '' : `<span class="text-muted-foreground min-w-0 truncate text-xs">@${escapeHTML(input.account.handle)}</span>`}${input.account.anonymous ? `<span class="text-muted-foreground text-xs">(${t.guest})</span>` : ''}</a>`;
   const languages = LOCALES.map((locale) => {
     const current = locale === input.locale;
-    return `<a href="${escapeHTML(withLocale(input.requestURL, locale))}" lang="${locale}" hreflang="${locale}"${current ? ' aria-current="true"' : ''}><span class="mark${current ? '' : ' is-hidden'}" aria-hidden="true">${CHECK_ICON}</span>${LOCALE_NAMES[locale]}</a>`;
+    return `<a class="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5" href="${escapeHTML(withLocale(input.requestURL, locale))}" lang="${locale}" hreflang="${locale}"${current ? ' aria-current="true"' : ''}><span class="${current ? 'inline-flex' : 'invisible inline-flex'}" aria-hidden="true">${CHECK_ICON}</span>${LOCALE_NAMES[locale]}</a>`;
   }).join('');
-  const languageMenu = `<div class="lang-menu"><button type="button" class="button ghost icon-button" popovertarget="language-menu" aria-label="${escapeHTML(t.languageAria(LOCALE_NAMES[input.locale]))}" title="${escapeHTML(t.language)}" style="anchor-name:--language-menu"><span class="btn-icon" aria-hidden="true">${LANGUAGES_ICON}</span></button><div id="language-menu" popover="auto" class="lang-popover" style="position-anchor:--language-menu;inset:auto;margin:6px 0;position-area:block-end span-inline-end">${languages}</div></div>`;
-  return `<header class="site-header"><div class="header-inner"><a class="brand" href="${escapeHTML(input.homeHref)}">${escapeHTML(input.title)}</a><nav class="header-nav" aria-label="${t.nav}">${play}${account}${languageMenu}</nav></div></header>`;
+  const languageMenu = `<div class="inline-flex"><button type="button" class="btn" data-size="sm" data-variant="ghost" popovertarget="language-menu" aria-label="${escapeHTML(t.languageAria(LOCALE_NAMES[input.locale]))}" title="${escapeHTML(t.language)}" style="anchor-name:--language-menu">${LANGUAGES_ICON}</button><div id="language-menu" popover="auto" class="${HEADER_MENU_CLASS} w-44" style="position-anchor:--language-menu;inset:auto;margin:6px 0;position-area:block-end span-inline-start;position-try-fallbacks:flip-inline,--header-menu-span">${languages}</div></div>`;
+  return `<header class="bg-background/90 sticky top-0 z-40 border-b backdrop-blur"><div class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-2.5"><a class="shrink-0 font-semibold tracking-tight whitespace-nowrap no-underline" href="${escapeHTML(input.homeHref)}">${escapeHTML(input.title)}</a><nav class="ms-auto flex flex-wrap items-center gap-2" aria-label="${t.nav}">${play}${account}${languageMenu}</nav></div></header>`;
 }

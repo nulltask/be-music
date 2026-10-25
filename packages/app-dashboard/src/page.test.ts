@@ -62,16 +62,18 @@ describe('renderDashboard', () => {
     expect(html).toContain('href="https://donate.preview.be-music.app/"');
     expect(html.split('</main>')[0]).not.toContain('https://donate.');
     expect(html).toContain(
-      '<footer class="site-footer">be-music · <a href="https://donate.preview.be-music.app/">寄付</a></footer>',
+      '<footer class="text-muted-foreground mx-auto max-w-5xl border-t px-4 py-4 text-xs">be-music · <a class="underline underline-offset-4 hover:text-foreground" href="https://donate.preview.be-music.app/">寄付</a></footer>',
     );
-    expect(html).toContain('class="button" href="/api/auth/sign-in"');
+    expect(html).toContain('class="btn no-underline" data-size="sm" href="/api/auth/sign-in"');
   });
 
   test('hides Donate unless explicitly enabled', () => {
     for (const showDonateLink of [undefined, false]) {
       const html = renderDashboard({ account: undefined, hostname: 'be-music.app', locale: 'en', showDonateLink });
       expect(html).not.toContain('https://donate.');
-      expect(html).toContain('<footer class="site-footer">be-music</footer>');
+      expect(html).toContain(
+        '<footer class="text-muted-foreground mx-auto max-w-5xl border-t px-4 py-4 text-xs">be-music</footer>',
+      );
     }
   });
 

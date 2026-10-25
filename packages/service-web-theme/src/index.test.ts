@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vite-plus/test';
 import { SERVICE_CSS } from './index.ts';
 
 describe('SERVICE_CSS', () => {
-  it('defines shadcn neutral design tokens and not the short aliases', () => {
+  it('compiles Basecoat components and keeps dark colors on the system scheme', () => {
+    expect(SERVICE_CSS).toContain('.btn{');
+    expect(SERVICE_CSS).toContain('.card{');
+    expect(SERVICE_CSS).toContain('@media (prefers-color-scheme:dark){:root{--background:');
     for (const token of [
       '--background:',
       '--foreground:',
