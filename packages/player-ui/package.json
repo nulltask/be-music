@@ -18,6 +18,8 @@
     }
   },
   "scripts": {
+    "prepare": "node --experimental-strip-types scripts/build-css.ts",
+    "build:css": "node --experimental-strip-types scripts/build-css.ts",
     "build": "vp pack",
     "clean": "rimraf dist",
     "bench": "node --conditions=source scripts/bench.ts"
@@ -25,5 +27,10 @@
   "dependencies": {
     "@be-music/player-skin-sdk": "workspace:*",
     "lit": "^3.3.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "basecoat-css": "^1.0.2",
+    "tailwindcss": "^4.3.3"
   }
 }

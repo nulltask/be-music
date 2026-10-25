@@ -2,7 +2,7 @@ import { css, html, type CSSResultGroup, type PropertyDeclarations, type Templat
 import { repeat } from 'lit/directives/repeat.js';
 import type { LibraryChart, LibraryCourse } from '@be-music/player-skin-sdk';
 import { BeMusicElement } from '../base.ts';
-import { baseStyles } from '../styles/base.ts';
+import { previewHost, previewTheme } from '../styles/preview-theme.ts';
 
 type PreviewRow = Pick<LibraryChart, 'id' | 'title' | 'subtitle' | 'artist' | 'genre' | 'playLevel'> & {
   disabled: boolean;
@@ -18,7 +18,8 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
     images: { attribute: false },
   };
   static override styles: CSSResultGroup = [
-    baseStyles,
+    previewTheme,
+    previewHost,
     css`
       :host {
         display: grid;
@@ -27,7 +28,7 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
         box-sizing: border-box;
         height: 100%;
         padding: 16px;
-        background: var(--be-music-color-background, #10151f);
+        background: var(--background, #10151f);
       }
       ul {
         display: grid;
@@ -53,7 +54,7 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
         width: 100%;
         aspect-ratio: 16 / 9;
         object-fit: contain;
-        background: #0c1018;
+        background: var(--muted, #0c1018);
         border-radius: 4px;
       }
       .title,
@@ -65,7 +66,7 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
       }
       .artist,
       .facts {
-        color: var(--be-music-color-muted, #b8c7da);
+        color: var(--muted-foreground, #b8c7da);
         font-size: 0.85em;
       }
       @container be-music (max-width: 22rem) {
@@ -111,7 +112,14 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
           (chart, index) => {
             const artwork = this.images?.get(chart.id);
             return html`<li>
-              <button part="row" ?disabled=${chart.disabled} @click=${() => this.emit('activate-request', { index })}>
+              <button
+                class="btn"
+                data-variant="outline"
+                data-size="lg"
+                part="row"
+                ?disabled=${chart.disabled}
+                @click=${() => this.emit('activate-request', { index })}
+              >
                 ${
                   artwork
                     ? html`<img class="thumb" part="artwork" alt="" src=${artwork} />`
