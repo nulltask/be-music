@@ -26,5 +26,7 @@ describe('SERVICE_CSS', () => {
       expect(SERVICE_CSS).toContain(token);
     }
     expect(SERVICE_CSS).not.toMatch(/--(?:bg|fg|soft|line|danger|primary-fg):/u);
+    expect(SERVICE_CSS).toMatch(/header nav :is\(a, ?button\)\.btn:active\{[^}]*translate:none/);
+    expect(SERVICE_CSS).toContain('.btn:focus-visible');
   });
 });
