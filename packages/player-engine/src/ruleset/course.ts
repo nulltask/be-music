@@ -126,7 +126,7 @@ const CLASS_GAUGE_IDS = ['CLASS', 'EXCLASS', 'EXHARDCLASS'] as const;
  * beatoraja's class gauges (`GaugeProperty`): min 0, max 100, start 100, border 0, no TOTAL modifier. A course plays
  * on them whatever its kind (`GrooveGauge.create`).
  */
-function resolveClassGauge(gaugeId: string, gaugeSet: CourseGaugeSet): GaugeSpec {
+export function resolveClassGauge(gaugeId: string, gaugeSet: CourseGaugeSet): GaugeSpec {
   const index = Math.max(0, CLASS_GAUGE_IDS.indexOf(gaugeId as (typeof CLASS_GAUGE_IDS)[number]));
   const row = CLASS_GAUGES[gaugeSet][index];
   return {

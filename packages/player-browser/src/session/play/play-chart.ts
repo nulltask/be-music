@@ -137,6 +137,7 @@ export interface PlayChartContext {
       | 'sevenToNineType'
       | 'battleMode'
       | 'dBattleScratch'
+      | 'practiceRange'
       | 'longNoteMode'
       | 'lr2ExtraMode'
       | 'lr2ExtraLevel'
@@ -378,6 +379,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       judgeRuleset: arrangement?.play.judgeRuleset ?? ctx.options.judgeRuleset,
       battleMode: arrangement ? (arrangement.play.battleMode ?? 'OFF') : ctx.options.battleMode,
       dBattleScratch: arrangement ? (arrangement.play.dBattleScratch ?? false) : ctx.options.dBattleScratch,
+      practice: arrangement ? undefined : ctx.options.practiceRange,
       autoScratch1P: arrangement
         ? (arrangement.play.battleAssist1P ?? arrangement.play.autoScratch1P ?? arrangement.play.autoScratch)
         : ctx.options.autoScratch1P,

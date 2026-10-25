@@ -6,6 +6,7 @@ import {
 } from '@be-music/chart-model';
 import type { BeMusicEvent } from '@be-music/chart-source';
 import type { TimedPlayableNote, TimedLandmineNote } from '../playable-notes.ts';
+import { moveNotesToBackground } from './background-notes.ts';
 import { withChartOverrides } from './resolved-chart-overrides.ts';
 
 const BATTLE_PLAY_VARIANTS = { '5': '10', '7': '14', '24': '48' } as const;
@@ -63,8 +64,14 @@ export function duplicateBattleChart(
     }
     objects.sort((a, b) => a.seconds - b.seconds || a.channel.localeCompare(b.channel));
   }
+  const scratch = new Set(
+    PLAY_MODE_LAYOUTS[playVariant].lanes.filter((lane) => lane.kind !== 'key').map((lane) => lane.channel),
+  );
   const sampleTriggers = options.backgroundScratch
-    ? moveScratchToBackground(source, playVariant, notes, mines, originOf, options.backgroundMineSample === true)
+    ? moveNotesToBackground(source, notes, mines, (object) => scratch.has(object.channel), {
+        originOf,
+        mineSample: options.backgroundMineSample === true,
+      })
     : undefined;
   return {
     chart: withChartOverrides(source, {
@@ -74,55 +81,4 @@ export function duplicateBattleChart(
     }),
     changedObjectCount,
   };
-}
-
-/**
- * Remove judged scratch objects and sound each removed note's head as BGM at its own time.
- * Invisible objects are not timeline notes in either source and stay on their lanes.
- * An LN tail carries no keysound in the resolved model, so only the head is moved.
- */
-function moveScratchToBackground(
-  source: ResolvedChart,
-  playVariant: '10' | '14' | '48',
-  notes: TimedPlayableNote[],
-  mines: TimedLandmineNote[],
-  originOf: ReadonlyMap<BeMusicEvent, BeMusicEvent>,
-  mineSample: boolean,
-): TimedSampleTrigger[] {
-  const scratch = new Set(
-    PLAY_MODE_LAYOUTS[playVariant].lanes.filter((lane) => lane.kind !== 'key').map((lane) => lane.channel),
-  );
-  const triggerByEvent = new Map(source.sampleTriggers.map((trigger) => [trigger.event, trigger]));
-  const added: TimedSampleTrigger[] = [];
-  for (let index = notes.length - 1; index >= 0; index--) {
-    const note = notes[index]!;
-    if (!scratch.has(note.channel)) continue;
-    notes.splice(index, 1);
-    // A copy's event is a clone; its keysound trigger belongs to the 1P original.
-    const original = triggerByEvent.get(originOf.get(note.event) ?? note.event);
-    if (original === undefined) continue;
-    added.push({
-      ...original,
-      event: { ...note.event, channel: '01' },
-      channel: '01',
-      beat: note.beat,
-      seconds: note.seconds,
-    });
-  }
-  for (let index = mines.length - 1; index >= 0; index--) {
-    const mine = mines[index]!;
-    if (!scratch.has(mine.channel)) continue;
-    mines.splice(index, 1);
-    if (mineSample && !mine.silent)
-      added.push({
-        event: { ...mine.event, channel: '01', value: '00' },
-        channel: '01',
-        sampleKey: '00',
-        samplePath: source.source.resources.wav['00'],
-        sampleOffsetSeconds: 0,
-        beat: mine.beat,
-        seconds: mine.seconds,
-      });
-  }
-  return [...source.sampleTriggers, ...added].sort((a, b) => a.seconds - b.seconds);
 }

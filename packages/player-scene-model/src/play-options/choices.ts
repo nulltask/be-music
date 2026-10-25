@@ -5,7 +5,13 @@ import { clampLongNoteRate, clampHRandomThresholdBPM, parseLaneRandomSeed } from
 import { resolveConstantVisibility } from './constant-visibility.ts';
 import { clampJudgeTimingMs } from './judge-timing.ts';
 import { clamp } from '@be-music/shared-utils/core';
-import { LR2_GAUGE_TYPES, clampCustomJudgeRate, isGaugeType, type RulesetId } from '@be-music/player-engine/ruleset';
+import {
+  BEATORAJA_PRACTICE_GAUGE_TYPES,
+  LR2_GAUGE_TYPES,
+  clampCustomJudgeRate,
+  isGaugeType,
+  type RulesetId,
+} from '@be-music/player-engine/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
 import { DEFAULT_HISPEED, snapHiSpeed, snapClassicHiSpeed } from './hi-speed.ts';
 import type {
@@ -145,6 +151,14 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   dBattleScratch: false,
   longNoteMode: 'LN',
   customJudge: false,
+  practice: false,
+  practiceStartMs: 0,
+  practiceEndMs: 0,
+  practiceGauge: 'NORMAL',
+  practiceGaugeCategory: 'MODE',
+  practiceStartGauge: 20,
+  practiceJudgeRank: 0,
+  practiceTotal: 0,
   customJudgeKeyPerfectGreat: 400,
   customJudgeKeyGreat: 400,
   customJudgeKeyGood: 100,
@@ -212,6 +226,9 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   dBattleScratch: BOOLEAN_CYCLE,
   longNoteMode: ['LN', 'CN', 'HCN'],
   customJudge: BOOLEAN_CYCLE,
+  practice: BOOLEAN_CYCLE,
+  practiceGauge: [...BEATORAJA_PRACTICE_GAUGE_TYPES],
+  practiceGaugeCategory: ['MODE', 'FIVEKEYS', 'SEVENKEYS', 'PMS', 'KEYBOARD', 'LR2'],
   lr2ExtraMode: BOOLEAN_CYCLE,
   lr2ExtraLevel: [0, 1, 2],
   autoScratch1P: BOOLEAN_CYCLE,
@@ -247,6 +264,11 @@ export function clampShutter(value: number): number {
 const NUMERIC_PLAY_OPTION_CLAMPS: { readonly [K in keyof PlayOptions]?: (value: number) => number } = {
   hRandomThresholdBPM: clampHRandomThresholdBPM,
   longNoteRate: clampLongNoteRate,
+  practiceStartMs: (value) => Math.max(0, Math.round(value / 100) * 100),
+  practiceEndMs: (value) => Math.max(0, Math.round(value / 100) * 100),
+  practiceStartGauge: (value) => clamp(Math.trunc(value), 1, 120),
+  practiceJudgeRank: (value) => (value <= 0 ? 0 : clamp(Math.trunc(value), 1, 400)),
+  practiceTotal: (value) => (value <= 0 ? 0 : clamp(Math.trunc(value), 10, 5000)),
   customJudgeKeyPerfectGreat: (value) => clampCustomJudgeRate('keyPerfectGreat', value),
   customJudgeKeyGreat: (value) => clampCustomJudgeRate('keyGreat', value),
   customJudgeKeyGood: (value) => clampCustomJudgeRate('keyGood', value),

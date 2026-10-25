@@ -230,6 +230,14 @@ export interface PlayerGUIState extends PlayTempoSettings {
   dBattleScratch: boolean;
   longNoteMode: PlayOptions['longNoteMode'];
   customJudge: boolean;
+  practice: boolean;
+  practiceStartMs: number;
+  practiceEndMs: number;
+  practiceGauge: PlayOptions['practiceGauge'];
+  practiceGaugeCategory: PlayOptions['practiceGaugeCategory'];
+  practiceStartGauge: number;
+  practiceJudgeRank: number;
+  practiceTotal: number;
   customJudgeKeyPerfectGreat: number;
   customJudgeKeyGreat: number;
   customJudgeKeyGood: number;

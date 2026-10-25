@@ -95,6 +95,14 @@ export interface DebugMenuSettings {
   dBattleScratch: boolean;
   longNoteMode: PlayerGUIState['longNoteMode'];
   customJudge: boolean;
+  practice: boolean;
+  practiceStartMs: number;
+  practiceEndMs: number;
+  practiceGauge: PlayerGUIState['practiceGauge'];
+  practiceGaugeCategory: PlayerGUIState['practiceGaugeCategory'];
+  practiceStartGauge: number;
+  practiceJudgeRank: number;
+  practiceTotal: number;
   customJudgeKeyPerfectGreat: number;
   customJudgeKeyGreat: number;
   customJudgeKeyGood: number;
@@ -271,6 +279,14 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'dBattleScratch', resolvePlayOptionValue('dBattleScratch', raw.dBattleScratch));
   assign(settings, 'longNoteMode', resolvePlayOptionValue('longNoteMode', raw.longNoteMode));
   assign(settings, 'customJudge', resolvePlayOptionValue('customJudge', raw.customJudge));
+  assign(settings, 'practice', resolvePlayOptionValue('practice', raw.practice));
+  assign(settings, 'practiceStartMs', resolvePlayOptionValue('practiceStartMs', raw.practiceStartMs));
+  assign(settings, 'practiceEndMs', resolvePlayOptionValue('practiceEndMs', raw.practiceEndMs));
+  assign(settings, 'practiceGauge', resolvePlayOptionValue('practiceGauge', raw.practiceGauge));
+  assign(settings, 'practiceGaugeCategory', resolvePlayOptionValue('practiceGaugeCategory', raw.practiceGaugeCategory));
+  assign(settings, 'practiceStartGauge', resolvePlayOptionValue('practiceStartGauge', raw.practiceStartGauge));
+  assign(settings, 'practiceJudgeRank', resolvePlayOptionValue('practiceJudgeRank', raw.practiceJudgeRank));
+  assign(settings, 'practiceTotal', resolvePlayOptionValue('practiceTotal', raw.practiceTotal));
   assign(
     settings,
     'customJudgeKeyPerfectGreat',
@@ -524,6 +540,14 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('dBattleScratch');
   assignState('longNoteMode');
   assignState('customJudge');
+  assignState('practice');
+  assignState('practiceStartMs');
+  assignState('practiceEndMs');
+  assignState('practiceGauge');
+  assignState('practiceGaugeCategory');
+  assignState('practiceStartGauge');
+  assignState('practiceJudgeRank');
+  assignState('practiceTotal');
   assignState('customJudgeKeyPerfectGreat');
   assignState('customJudgeKeyGreat');
   assignState('customJudgeKeyGood');
@@ -633,6 +657,14 @@ export function captureDebugMenuSettings(
     dBattleScratch: state.dBattleScratch,
     longNoteMode: state.longNoteMode,
     customJudge: state.customJudge,
+    practice: state.practice,
+    practiceStartMs: state.practiceStartMs,
+    practiceEndMs: state.practiceEndMs,
+    practiceGauge: state.practiceGauge,
+    practiceGaugeCategory: state.practiceGaugeCategory,
+    practiceStartGauge: state.practiceStartGauge,
+    practiceJudgeRank: state.practiceJudgeRank,
+    practiceTotal: state.practiceTotal,
     customJudgeKeyPerfectGreat: state.customJudgeKeyPerfectGreat,
     customJudgeKeyGreat: state.customJudgeKeyGreat,
     customJudgeKeyGood: state.customJudgeKeyGood,
