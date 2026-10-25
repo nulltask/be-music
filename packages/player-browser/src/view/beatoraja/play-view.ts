@@ -26,13 +26,9 @@ import {
   type BeatorajaSkinConfig,
   type BeatorajaSkinCustomOffset,
 } from '@be-music/skin-beatoraja';
-import { resolveBeatorajaOptionIndex, withBeatorajaCourseStageOps } from '@be-music/skin-beatoraja/scene';
+import { withBeatorajaCourseStageOps } from '@be-music/skin-beatoraja/scene';
 import type { BeMusicJSON } from '@be-music/chart-source';
-import {
-  createBeatAtSecondsResolverFromTimingResolver,
-  resolveChartLongNoteMode,
-  type ChartPlayVariant,
-} from '@be-music/chart-model';
+import { createBeatAtSecondsResolverFromTimingResolver, type ChartPlayVariant } from '@be-music/chart-model';
 import type { PlayerGaugeSummary, PlayerUIFrameNote, PlayerUIFramePayload } from '@be-music/player-engine/signals';
 import type { ScoreSummary } from '@be-music/player-engine/ruleset';
 import type { CourseView, HiSpeedTransition, LibraryChart, PlayState } from '@be-music/player-scene-model';
@@ -66,6 +62,7 @@ import type {
   PlayViewTiming,
   PlayfieldSkin,
 } from '../types.ts';
+import { resolveBeatorajaOptionRef } from './option-refs.ts';
 import { BeatorajaPlayBridge, type BeatorajaPlayEngineInput } from './play-bridge.ts';
 import { BeatorajaPlayStage, type BeatorajaPlayBGA, type BeatorajaPlayChartLayout } from './play-stage.ts';
 import { createBeatorajaLaneTimelines, createBeatorajaScrollMapper } from './play/scroll-placement.ts';
@@ -357,11 +354,16 @@ export class BeatorajaPlayView implements PlayView {
       resolveSkinConfigOps(kit.skinConfig, this.options.course),
       prepared.layout,
       {
-        resolveRefValue: (ref) =>
-          resolveBeatorajaOptionIndex(ref, {
-            lnMode: this.play.chart === undefined ? undefined : resolveChartLongNoteMode(this.play.chart.chart),
-            hsFix: this.playOptions?.hsFix,
-          }) ?? bridge.resolveRefValue(ref),
+        resolveRefValue: (ref) => {
+          // The chart as played, its undefined long notes given the player's LN MODE.
+          const playedChart = this.play.resolvedChart ?? this.play.chart?.chart;
+          return (
+            resolveBeatorajaOptionRef(ref, {
+              ...(playedChart !== undefined ? { chart: playedChart } : {}),
+              ...(this.playOptions !== undefined ? { playOptions: this.playOptions } : {}),
+            }) ?? bridge.resolveRefValue(ref)
+          );
+        },
         resolveTextContent: (ref) => bridge.resolveTextContent(ref),
         resolveNumberValue: (ref) => bridge.resolveNumberValue(ref),
         resolveFontFamily: kit.fonts !== undefined ? (id) => kit.fonts!.family(id) : undefined,

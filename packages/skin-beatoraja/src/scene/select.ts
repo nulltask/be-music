@@ -171,7 +171,7 @@ export interface BeatorajaSelectInput {
   /** The search text as typed. */
   readonly searchText: string;
   readonly list: Pick<BrowseListOptions, 'keysFilter' | 'sort'>;
-  /** The LNMODE button's choice; the focused chart's `#LNMODE` when absent. */
+  /** The player's LN MODE (0 LN, 1 CN, 2 HCN), which the LNMODE button steps; the focused chart's `#LNMODE` when absent. */
   readonly lnMode?: 0 | 1 | 2;
   readonly skin?: BeatorajaSkinTextInput;
   /** The skin config's judge timing offset (ms). */
@@ -373,7 +373,7 @@ export function resolveBeatorajaSelectNumber(id: number, input: BeatorajaSelectI
 
 /**
  * The image an image set with a `ref` picks on the select screen: the MODE button's filter (11), the SORT button's sort
- * (12), the LNMODE button's choice (308, else the focused chart's `#LNMODE`) and the best clear lamp (370, NO PLAY: no
+ * (12), the player's LN MODE (308, else the focused chart's `#LNMODE`) and the best clear lamp (370, NO PLAY: no
  * records feed it yet). 0 (the first image) for any other ref.
  */
 export function resolveBeatorajaSelectRefValue(ref: number, input: BeatorajaSelectInput): number {
