@@ -145,7 +145,7 @@ for (const [ruleset, label, effectiveGauge] of [
   });
 }
 
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`R-RANDOM is selectable and recorded on ${skin}`, async ({ player }) => {
     await openWithLibrary(player, { 'be-music.built-in-skin': skin });
     await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
@@ -163,7 +163,7 @@ for (const skin of ['plain', 'native'] as const) {
   });
 }
 
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`source seeds and previous arrangements work for fresh input on ${skin}`, async ({ player }) => {
     await openWithLibrary(player, { 'be-music.built-in-skin': skin });
     await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
@@ -197,7 +197,7 @@ for (const skin of ['plain', 'native'] as const) {
   });
 }
 
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   for (const containsMine of [false, true]) {
     test(`mine REMOVE records actual changes on ${skin} (${containsMine})`, async ({ player }) => {
       await player.open({ 'be-music.built-in-skin': skin });
@@ -219,7 +219,7 @@ for (const skin of ['plain', 'native'] as const) {
   }
 }
 
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   for (const modifier of ['ADD RANDOM', 'ADD NEAR', 'ADD ALL'] as const) {
     test(`mine ${modifier} records and restores its generated population on ${skin}`, async ({ player }) => {
       await player.open({ 'be-music.built-in-skin': skin });
@@ -254,7 +254,7 @@ for (const skin of ['plain', 'native'] as const) {
   }
 }
 
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`CONTINUE keeps judging after HAZARD death and restores the policy on ${skin}`, async ({ player }) => {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText('continue.bme', '#TITLE Continue gauge\n#BPM 240\n#00111:01\n#00212:01\n');
@@ -283,7 +283,7 @@ for (const skin of ['plain', 'native'] as const) {
   });
 }
 
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`measured FLOATING HI-SPEED couples cover edits and records mode switches on ${skin}`, async ({ player }) => {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText('floating.bme', '#TITLE Floating speed\n#BPM 120\n#00103:F0\n#00411:01\n');
@@ -318,7 +318,7 @@ for (const skin of ['plain', 'native'] as const) {
   });
 }
 
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`fixed display area ignores cover keys and restores floating time on ${skin}`, async ({ player }) => {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText('fixed-area.bme', '#TITLE Fixed display area\n#BPM 120\n#00103:F0\n#00411:01\n');
@@ -357,7 +357,7 @@ for (const skin of ['plain', 'native'] as const) {
   });
 }
 
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   for (const [longNoteModifier, lnMode] of [
     ['ADD_LN', 1],
     ['ADD_CN', 2],
@@ -396,7 +396,7 @@ for (const skin of ['plain', 'native'] as const) {
   }
 }
 
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`beatoraja automatic display timing is recorded and replayed on ${skin}`, async ({ player }) => {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText('auto-timing.bms', '#TITLE Auto timing\n#BPM 120\n#RANK 3\n#00111:01\n#00311:01\n');
@@ -423,7 +423,7 @@ for (const skin of ['plain', 'native'] as const) {
   });
 }
 
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`SURVIVAL TO GROOVE switches to the parallel NORMAL gauge on ${skin}`, async ({ player }) => {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText('survival-to-groove.bms', '#TITLE Survival to groove\n#BPM 240\n#00111:01\n#00212:01\n');
@@ -477,7 +477,7 @@ for (const [label, policy, effective] of [
   }
 }
 
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`LR2 CONSTANT preserves STOP and replay geometry on ${skin}`, async ({ player }, info) => {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText(
@@ -510,7 +510,7 @@ for (const skin of ['plain', 'native'] as const) {
   });
 }
 
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   for (const mode of ['SCATTER', 'SCATTER-CORRECTED'] as const) {
     test(`${mode} is separately selectable and replayable on ${skin}`, async ({ player }) => {
       await player.open({ 'be-music.built-in-skin': skin });
@@ -541,7 +541,7 @@ for (const skin of ['plain', 'native'] as const) {
   }
 }
 
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`scroll REMOVE preserves note times and records its effect on ${skin}`, async ({ player }) => {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText(
@@ -567,7 +567,7 @@ for (const skin of ['plain', 'native'] as const) {
   });
 }
 
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`scroll ADD parameters and generated curve are recorded and replayed on ${skin}`, async ({ player }, info) => {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText(
@@ -601,7 +601,7 @@ for (const skin of ['plain', 'native'] as const) {
   });
 }
 
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`LR2 P.ATTACK is selectable, remembered and replayed on ${skin}`, async ({ player }, info) => {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText('perfect-attack.bms', '#TITLE Perfect attack\n#BPM 240\n#00111:01\n#00212:01');
@@ -640,7 +640,7 @@ for (const skin of ['plain', 'native'] as const) {
   });
 }
 
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`LR2 G.ATTACK is selectable, remembered and replayed on ${skin}`, async ({ player }, info) => {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText('good-attack.bms', '#TITLE Good attack\n#BPM 240\n#00111:01\n#00212:01');
@@ -675,7 +675,7 @@ for (const skin of ['plain', 'native'] as const) {
   });
 }
 
-for (const skin of ['plain', 'native'] as const)
+for (const skin of ['plain', 'native', 'synesthesia'] as const)
   for (const gauge of ['P.ATTACK', 'G.ATTACK'] as const) {
     test(`${gauge} course selection and grade reset remain scoped on ${skin}`, async ({ player }) => {
       await player.open({ 'be-music.built-in-skin': skin });
@@ -709,7 +709,7 @@ for (const skin of ['plain', 'native'] as const)
     });
   }
 
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`EXTRA converts BGM, persists and records the effective population on ${skin}`, async ({ player }) => {
     await openWithLibrary(player, { 'be-music.built-in-skin': skin });
     await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
@@ -735,7 +735,7 @@ for (const skin of ['plain', 'native'] as const) {
   });
 }
 
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`LR2 EXTRA records normalised holds and restores its source settings on ${skin}`, async ({ player }) => {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText(
@@ -774,7 +774,7 @@ for (const skin of ['plain', 'native'] as const) {
   });
 }
 
-for (const skin of ['plain', 'native'] as const)
+for (const skin of ['plain', 'native', 'synesthesia'] as const)
   for (const sourceKeys of [5, 7] as const) {
     test(`SP TO DP renders and replays ${sourceKeys === 5 ? 10 : 14}KEY with holds on ${skin}`, async ({
       player,
@@ -819,7 +819,7 @@ for (const skin of ['plain', 'native'] as const)
     });
   }
 
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`7-to-9 renders nine lanes, retains holds and restores its replay on ${skin}`, async ({ player }, info) => {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText(

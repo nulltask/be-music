@@ -846,8 +846,8 @@ function drawHeader(
   // Readouts on a fixed rhythm after the mode: label, then its value 40 px on; groups 96 px apart.
   addHUDText(layer, 'BPM', 172 + inset, 14, labelStyle(), pool);
   addHUDNumber(layer, formatBPM(runtime.bpm), 212 + inset, 9, displayStyle(14, SYN_WHITE), pool);
-  addHUDText(layer, 'SPEED', 268 + inset, 14, labelStyle(), pool);
-  addHUDNumber(layer, `x${formatHiSpeed(runtime.hiSpeed)}`, 328 + inset, 9, displayStyle(14, SYN_WHITE), pool);
+  addHUDText(layer, runtime.floatingHiSpeed ? 'FHS' : 'SPEED', 268 + inset, 14, labelStyle(), pool);
+  addHUDNumber(layer, `x${formatHiSpeed(runtime)}`, 328 + inset, 9, displayStyle(14, SYN_WHITE), pool);
   addHUDText(
     layer,
     formatRuleset(runtime.rulesetLabel),
@@ -1098,10 +1098,10 @@ function drawPortraitHeader(
   // Readouts on a fixed rhythm, as on the landscape header: label, then its value 40 px on (60 after SPEED).
   addHUDText(layer, 'BPM', 190, cy - 3, portraitLabel(), pool);
   addHUDNumber(layer, formatBPM(runtime.bpm), 230, cy - 7, displayStyle(13, SYN_WHITE), pool);
-  addHUDText(layer, 'SPEED', 300, cy - 3, portraitLabel(), pool);
+  addHUDText(layer, runtime.floatingHiSpeed ? 'FHS' : 'SPEED', 300, cy - 3, portraitLabel(), pool);
   addHUDNumber(
     layer,
-    `x${formatHiSpeed(runtime.hiSpeed)}`,
+    `x${formatHiSpeed(runtime)}`,
     360,
     cy - 7,
     { ...displayStyle(13, SYN_WHITE), maxWidth: width - TOUCH_CORNER - 360 },
@@ -1323,7 +1323,7 @@ function drawJudgements(
       layer,
       judgeDisplayWord(display.judge),
       display.x,
-      wordY,
+      wordY + display.lift,
       {
         scale: judgeScale,
         ...displayStyle(16, color),
@@ -1341,7 +1341,7 @@ function drawJudgements(
         layer,
         formatCount(combo),
         display.x,
-        wordY + 28,
+        wordY + display.lift + 28,
         {
           scale: punchScale(runtime.judgeAtMs, nowMs, 150, (combo % 100 === 0 ? 0.45 : 0.14) * amount),
           ...displayStyle(22, combo >= 200 ? SYN_AMBER : SYN_WHITE),
@@ -1359,11 +1359,14 @@ function drawJudgements(
 function resolveJudgeDisplays(
   runtime: Runtime,
   layout: BeMusicGameplayLayout,
-): Array<{ judge: string; combo: number | undefined; x: number; maxWidth: number }> {
+): Array<{ judge: string; combo: number | undefined; x: number; lift: number; maxWidth: number }> {
   const centerOf = (side: '1P' | '2P'): number | undefined => {
     const bounds = layout.playfield.sides[side];
     return bounds ? (bounds.left + bounds.right) / 2 : undefined;
   };
+  // A side's LIFT raises its judgement line, and its judgement word with it.
+  const liftOf = (side: '1P' | '2P'): number =>
+    (layout.playfield.sides[side]?.judgementY ?? layout.playfield.judgementY) - layout.playfield.judgementY;
   const doublePlay = centerOf('2P') !== undefined;
   const maxWidth = doublePlay ? 122 : 180;
   const fallbackX = layout.playfield.centerX;
@@ -1373,11 +1376,14 @@ function resolveJudgeDisplays(
       judge: state.judge!,
       combo: state.combo,
       x: centerOf(state.side) ?? fallbackX,
+      lift: liftOf(state.side),
       maxWidth,
     }));
   }
   if (!runtime.lastJudge) return [];
-  return [{ judge: runtime.lastJudge, combo: runtime.combo, x: centerOf('1P') ?? fallbackX, maxWidth }];
+  return [
+    { judge: runtime.lastJudge, combo: runtime.combo, x: centerOf('1P') ?? fallbackX, lift: liftOf('1P'), maxWidth },
+  ];
 }
 
 function resolveVisibleCombo(judge: string, combo: number | undefined): number {
@@ -1395,9 +1401,12 @@ function formatBPM(value: number | undefined): string {
   return String(Math.round(value));
 }
 
-function formatHiSpeed(value: number | undefined): string {
-  if (value === undefined || !Number.isFinite(value)) return '0.0';
-  return value.toFixed(1);
+/** The hi-speed readout: one decimal, or two for the AC floating hi-speed (FHS), as Plain shows them. */
+function formatHiSpeed(runtime: Pick<Runtime, 'hiSpeed' | 'floatingHiSpeed'>): string {
+  const digits = runtime.floatingHiSpeed ? 2 : 1;
+  const value = runtime.hiSpeed;
+  if (value === undefined || !Number.isFinite(value)) return (0).toFixed(digits);
+  return value.toFixed(digits);
 }
 
 function formatRuleset(value: string | undefined): string {
