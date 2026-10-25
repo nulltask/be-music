@@ -16,6 +16,9 @@ export class BeMusicJudgmentTableElement extends DataElement<BeMusicJudgmentData
     previewTheme,
     previewHost,
     css`
+      table {
+        width: 100%;
+      }
       @container be-music (max-width: 22rem) {
         th:nth-child(n + 3),
         td:nth-child(n + 3) {

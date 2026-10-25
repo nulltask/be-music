@@ -7,8 +7,12 @@ export const screenStyles: CSSResultGroup = [
   previewHost,
   css`
     :host {
+      display: block;
+      width: 100%;
       height: 100%;
+      min-width: 0;
       min-height: 0;
+      container-type: inline-size;
       container-name: be-music-screen;
     }
     .screen {
