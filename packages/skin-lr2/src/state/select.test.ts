@@ -9,7 +9,7 @@ import {
   resolveLR2SelectState,
   resolveLR2SelectTimers,
 } from './select.ts';
-import { LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE, resolveLR2OptionText } from './options.ts';
+import { LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE, resolveLR2OptionText, stepLR2JudgeTiming } from './options.ts';
 import { makeChart, makeChartWith, makeCourse } from './test-support.ts';
 
 const CLOCK = { year: 2026, month: 10, day: 16, hour: 9, minute: 5, second: 30 };
@@ -290,6 +290,19 @@ describe('resolveLR2SelectState sliders and buttons', () => {
     expect(state.button(LR2_BUTTON.DIFFICULTY_FILTER_ALL)).toBe(0);
     expect(state.button(LR2_BUTTON.FLIP)).toBe(1);
     expect(state.button(LR2_BUTTON.PLAY)).toBeUndefined();
+  });
+
+  it('steps the judge timing (74) by 1 ms within ±99, as LR2 does', () => {
+    expect(resolveLR2SelectButton(LR2_BUTTON.JUDGE_TIMING)).toEqual({ kind: 'judge-timing' });
+    expect(stepLR2JudgeTiming(0, 1)).toBe(1);
+    expect(stepLR2JudgeTiming(0, -1)).toBe(-1);
+    expect(stepLR2JudgeTiming(98, 1)).toBe(99);
+    expect(stepLR2JudgeTiming(99, 1)).toBe(99);
+    expect(stepLR2JudgeTiming(-99, -1)).toBe(-99);
+    // A timing the automatic adjustment carried past the range only moves back toward it.
+    expect(stepLR2JudgeTiming(120, 1)).toBe(120);
+    expect(stepLR2JudgeTiming(120, -1)).toBe(119);
+    expect(stepLR2JudgeTiming(-130, 1)).toBe(-129);
   });
 
   it('cycles, names and shows the automatic judge timing as LR2 does', () => {
