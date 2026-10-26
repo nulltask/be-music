@@ -14,6 +14,25 @@ const IMPOSSIBLE_CHORDS = [
   [2, 5, 8],
 ].map((chord) => chord.reduce((mask, lane) => mask | (1 << lane), 0));
 
+/** Whether each nine-lane mask of exactly three lanes is one of {@link IMPOSSIBLE_CHORDS}. */
+const IMPOSSIBLE_TRIPLE = new Uint8Array(512);
+for (const chord of IMPOSSIBLE_CHORDS) IMPOSSIBLE_TRIPLE[chord] = 1;
+
+/**
+ * The three-lane subsets of `pattern`, as `[a, b, c]` lane triples. Every impossible chord has three lanes and a
+ * permutation is a bijection, so a chord's image contains an impossible chord exactly when one of its three-lane
+ * subsets maps onto it: checking the subsets is the source's superset test, without building each chord's image.
+ */
+export function chordTriples(pattern: number): number[][] {
+  const lanes: number[] = [];
+  for (let lane = 0; lane < 9; lane += 1) if ((pattern & (1 << lane)) !== 0) lanes.push(lane);
+  const triples: number[][] = [];
+  for (let a = 0; a < lanes.length; a += 1)
+    for (let b = a + 1; b < lanes.length; b += 1)
+      for (let c = b + 1; c < lanes.length; c += 1) triples.push([lanes[a]!, lanes[b]!, lanes[c]!]);
+  return triples;
+}
+
 /**
  * beatoraja PMS RANDOM_PLAYABLE: choose uniformly among chart-wide permutations
  * without the source's impossible chords, excluding regular and mirror. Seven-
@@ -54,52 +73,65 @@ export function randomizePMSPlayableLanes(
     }
     if (chord.size >= 3) patterns.add([...chord].reduce((mask, lane) => mask | (1 << lane), 0));
   }
-  const valid = (permutation: readonly number[]): boolean => {
-    if (permutation.every((lane, index) => lane === 8 - index)) return false;
-    for (const pattern of patterns) {
-      let chord = 0;
-      for (let lane = 0; lane < 9; lane += 1) if ((pattern & (1 << lane)) !== 0) chord |= 1 << permutation[lane]!;
-      if (IMPOSSIBLE_CHORDS.some((forbidden) => (chord & forbidden) === forbidden)) return false;
-    }
-    return true;
-  };
-  let count = 0;
-  if (!impossible)
-    visitPermutations((permutation) => {
-      if (valid(permutation)) count += 1;
-    });
+  // Each pattern as its distinct three-lane subsets, flattened to `a, b, c, a, b, c, …` (see `chordTriples`).
+  const tripleMasks = new Set<number>();
+  for (const pattern of patterns)
+    for (const [a, b, c] of chordTriples(pattern)) tripleMasks.add((1 << a!) | (1 << b!) | (1 << c!));
+  const triples = new Uint8Array(tripleMasks.size * 3);
+  let offset = 0;
+  for (const mask of tripleMasks)
+    for (let lane = 0; lane < 9; lane += 1) if ((mask & (1 << lane)) !== 0) triples[offset++] = lane;
+  // The visit ordinals of the valid permutations, in the source order; a uniform pick among them is the source's pick.
+  const validOrdinals = impossible ? new Uint32Array(0) : searchValidOrdinals(triples);
   const draw = random();
   if (!Number.isFinite(draw) || draw < 0 || draw >= 1) throw new RangeError('Lane randomness must be in [0, 1).');
-  let permutation: readonly number[];
-  if (count === 0) permutation = Array.from({ length: 9 }, (_, index) => (draw < 0.5 ? index : 8 - index));
-  else {
-    let remaining = Math.floor(draw * count);
-    let selected: number[] | undefined;
-    visitPermutations((candidate) => {
-      if (!valid(candidate)) return;
-      if (remaining-- === 0) {
-        selected = [...candidate];
-        return true;
-      }
-    });
-    permutation = selected!;
-  }
+  const permutation =
+    validOrdinals.length === 0
+      ? Array.from({ length: 9 }, (_, index) => (draw < 0.5 ? index : 8 - index))
+      : permutationAt(validOrdinals[Math.floor(draw * validOrdinals.length)]!);
   return notes.map((note) => {
     const source = indexByLane.get(note.channel);
     return source === undefined ? note.channel : lanes[permutation[source]!]!;
   });
 }
 
-/** Heap's algorithm in the source order, omitting the initial regular permutation. */
-function visitPermutations(visit: (permutation: readonly number[]) => boolean | void): void {
-  const permutation = Array.from({ length: 9 }, (_, index) => index);
-  const counters = Array.from({ length: 9 }, () => 0);
+/** The number of permutations Heap's algorithm visits after the initial regular one. */
+const VISITED_PERMUTATIONS = 362_879;
+
+/**
+ * Heap's algorithm in the source order (omitting the initial regular permutation), keeping the ordinal of each
+ * permutation that is not the mirror and maps none of `triples` (`a, b, c, …`) onto an impossible chord. Written as one
+ * loop: it runs once per visited permutation.
+ */
+function searchValidOrdinals(triples: Uint8Array): Uint32Array {
+  const ordinals = new Uint32Array(VISITED_PERMUTATIONS);
+  const permutation = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+  const counters = new Uint8Array(9);
+  let found = 0;
+  let ordinal = 0;
   let index = 0;
   while (index < 9) {
     if (counters[index]! < index) {
       const other = index % 2 === 0 ? 0 : counters[index]!;
-      [permutation[index], permutation[other]] = [permutation[other]!, permutation[index]!];
-      if (visit(permutation) === true) return;
+      const swap = permutation[index]!;
+      permutation[index] = permutation[other]!;
+      permutation[other] = swap;
+      let valid = false;
+      for (let lane = 0; lane < 9; lane += 1) {
+        if (permutation[lane] !== 8 - lane) {
+          valid = true;
+          break;
+        }
+      }
+      for (let at = 0; valid && at < triples.length; at += 3) {
+        const image =
+          (1 << permutation[triples[at]!]!) |
+          (1 << permutation[triples[at + 1]!]!) |
+          (1 << permutation[triples[at + 2]!]!);
+        if (IMPOSSIBLE_TRIPLE[image] === 1) valid = false;
+      }
+      if (valid) ordinals[found++] = ordinal;
+      ordinal += 1;
       counters[index]! += 1;
       index = 0;
     } else {
@@ -107,4 +139,28 @@ function visitPermutations(visit: (permutation: readonly number[]) => boolean | 
       index += 1;
     }
   }
+  return ordinals.subarray(0, found);
+}
+
+/** The permutation Heap's algorithm visits at `target` (0 = the first after the regular one). */
+function permutationAt(target: number): number[] {
+  const permutation = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+  const counters = new Uint8Array(9);
+  let ordinal = 0;
+  let index = 0;
+  while (index < 9) {
+    if (counters[index]! < index) {
+      const other = index % 2 === 0 ? 0 : counters[index]!;
+      const swap = permutation[index]!;
+      permutation[index] = permutation[other]!;
+      permutation[other] = swap;
+      if (ordinal++ === target) return permutation;
+      counters[index]! += 1;
+      index = 0;
+    } else {
+      counters[index] = 0;
+      index += 1;
+    }
+  }
+  throw new RangeError(`No permutation at ${target}.`);
 }
