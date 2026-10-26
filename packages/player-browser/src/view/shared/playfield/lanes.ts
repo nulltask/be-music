@@ -1,6 +1,6 @@
 /**
  * The lanes of the shared playfield: lays out each lane's rect (the skin's, else the built-in layout's) into `laneX`,
- * and draws the lane backgrounds and key beams through the be-music skin (or Phantom's) unless the skin owns them.
+ * and draws the lane backgrounds and key beams through the be-music skin (or the default playfield's) unless the skin owns them.
  */
 
 import { resolveLiftedLane } from '@be-music/player-scene-model';
@@ -9,7 +9,7 @@ import { PLAYFIELD } from '@be-music/player-skin-sdk';
 import { resolveLR2LaneIndex } from '@be-music/player-engine/lanes';
 import { resolveBeMusicLaneKind } from '../../../skin/be-music/registry.ts';
 import type { BeMusicLaneFrame } from '../../../skin/be-music/types.ts';
-import { renderPhantomLanes } from '../../../skins/phantom/playfield.ts';
+import { renderDefaultLanes } from './default-playfield.ts';
 import { resolveLaneGeometry } from '../../built-in/play-chrome.ts';
 import type { PlayfieldContext } from './context.ts';
 import { resolveKeyBeamAlpha } from './key-beam.ts';
@@ -82,7 +82,7 @@ export function renderLanes(ctx: PlayfieldContext, width: number, height: number
       binding.addLanes(skinlessLanes);
       return;
     }
-    renderPhantomLanes({
+    renderDefaultLanes({
       graphics: ctx.laneLayer,
       lanes: skinlessLanes,
       beatPhase: beat - Math.floor(beat),

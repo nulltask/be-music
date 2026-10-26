@@ -1,3 +1,7 @@
+/**
+ * The playfield the built-in family draws when a be-music skin leaves the lanes, notes, long notes or bombs to the host
+ * (`notes.ts`, `long-notes.ts`, `lanes.ts`, `bombs.ts`), and an LR2 theme falls back to where it has no cell of its own.
+ */
 import { Color, FillGradient, type Graphics } from 'pixi.js';
 import { type BeMusicLaneKind, resolveLaneRuns } from '@be-music/player-skin-sdk';
 import {
@@ -7,7 +11,7 @@ import {
   type PixiNoteContext,
   keyBeamGradient,
   wheelArrowPoints,
-} from '../pixi-kit/index.ts';
+} from '../../../skins/pixi-kit/index.ts';
 
 /** Colours for one lane class: note highlight / body / shade, and the key cap at rest / pressed. */
 interface LaneTone {
@@ -31,7 +35,7 @@ const TONES: Record<BeMusicLaneKind, LaneTone> = {
 };
 
 const NOTE_HEIGHT = 10;
-export const PHANTOM_BOMB_DURATION_MS = 150;
+export const DEFAULT_BOMB_DURATION_MS = 150;
 
 /** Laser colour per lane: a cool white, an electric blue, and the poster red. */
 const BEAM_COLORS: Record<BeMusicLaneKind, number> = {
@@ -45,7 +49,7 @@ const BEAM_COLORS: Record<BeMusicLaneKind, number> = {
 /** Bed of the white-key lanes, a step lighter than the ink well the other lanes show. */
 const WHITE_LANE_BED = 0x18181d;
 
-export function renderPhantomLanes({ graphics, lanes, beatPhase }: PixiLanesContext): void {
+export function renderDefaultLanes({ graphics, lanes, beatPhase }: PixiLanesContext): void {
   const beatDecay = 1 - beatPhase;
   let gridTop = Number.POSITIVE_INFINITY;
   let gridBottom = 0;
@@ -101,11 +105,11 @@ export function renderPhantomLanes({ graphics, lanes, beatPhase }: PixiLanesCont
   }
 }
 
-export function renderPhantomNote({ graphics, kind, x, w, y }: PixiNoteContext): void {
+export function renderDefaultNote({ graphics, kind, x, w, y }: PixiNoteContext): void {
   drawNoteBody(graphics, x, y, Math.max(4, w), TONES[kind]);
 }
 
-export function renderPhantomLongNote({ graphics, kind, x, w, top, bottom }: PixiLongNoteContext): void {
+export function renderDefaultLongNote({ graphics, kind, x, w, top, bottom }: PixiLongNoteContext): void {
   const tone = TONES[kind];
   const bodyX = x;
   const bodyW = Math.max(4, w);
@@ -120,9 +124,9 @@ export function renderPhantomLongNote({ graphics, kind, x, w, top, bottom }: Pix
 }
 
 /** Plain That-Which-Must-Not-Be-Named-style hit flash: an expanding ring over a white core. */
-export function renderPhantomBombs({ pool, bombs }: PixiBombsContext): void {
+export function renderDefaultBombs({ pool, bombs }: PixiBombsContext): void {
   for (const bomb of bombs) {
-    const progress = Math.max(0, Math.min(1, bomb.elapsedMs / PHANTOM_BOMB_DURATION_MS));
+    const progress = Math.max(0, Math.min(1, bomb.elapsedMs / DEFAULT_BOMB_DURATION_MS));
     const eased = 1 - (1 - progress) * (1 - progress);
     const centerX = bomb.x + bomb.w / 2;
     const centerY = bomb.y - Math.max(4, bomb.w * 0.16);

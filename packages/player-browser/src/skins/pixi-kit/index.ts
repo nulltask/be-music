@@ -1,5 +1,5 @@
 /**
- * Pixi kit — what the built-in Pixi skins (Phantom, Synesthesia, Lattice) share on top of the framework-free skin SDK:
+ * Pixi kit — what the built-in Pixi skin (Synesthesia) and the default playfield share on top of the framework-free skin SDK:
  * {@link definePixiSkin}, which runs Pixi renderer functions through the player's renderer (or on the canvas the player
  * hands a skin), plus pooled HUD text, skin text and hit areas, cap-height alignment, GPU point particles, key-beam
  * gradients, the wheel-lane arrow, and GPU passes that run before a frame is drawn. It belongs to the skins, not the SDK: a skin built with another

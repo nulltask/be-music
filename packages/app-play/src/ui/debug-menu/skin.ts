@@ -2,12 +2,11 @@ import { selectBinding, paneOptions } from '../../pane-controls.ts';
 // The Debug Menu's Skin & display folder, and the controls in it that follow what is loaded: the Skin system picker,
 // the LR2 theme picker and the be-music skin's settings. They are built with the menu as `this` (`DebugMenu`).
 import type { FolderApi } from 'tweakpane';
-import { latticeSkin } from '@be-music/player-browser/skin';
 import { resolveBeMusicSkinSettings } from '@be-music/player-skin-sdk';
 import { hasAnyLR2Skin } from '../../family-dispatch.ts';
 import { toggleFullscreen } from '../../fullscreen.ts';
 import { renderResolutionLabel, renderResolutionSteps, storeRenderResolution } from '../../render-resolution.ts';
-import { BE_MUSIC_SKINS, EXTRA_BUILT_IN_SKINS_ENABLED } from '../../services/built-in-skins.ts';
+import { ADD_SKIN_ENABLED, BE_MUSIC_SKINS } from '../../services/built-in-skins.ts';
 import { storePlayLayout, storeSkinEffects } from '../../services/settings.ts';
 import { describeSkinSettingControllers, setStoredSkinSetting, storeSkinSettings } from '../../skin-settings.ts';
 import type { SkinFamilyOverride } from '../../types.ts';
@@ -104,16 +103,14 @@ export function buildSkinFolder(
   this.rebuildSkinSettingsFolder();
   // LR2 theme picker — added once a drop discovers a theme (see `rebuildLR2ThemePicker`).
   this.rebuildLR2ThemePicker();
-  // Add skins: the bundled Lattice, or a skin module from a URL (its default export, built with the skin SDK).
-  if (!EXTRA_BUILT_IN_SKINS_ENABLED) return;
+  // Add skin: a skin module from a URL (its default export, built with the skin SDK).
+  if (!ADD_SKIN_ENABLED) return;
   const addSkins = addFolder(builtIn, DEBUG_MENU_FOLDERS.addSkin);
   const skinSource = {
     url: '',
-    addLattice: () => this.deps.addBeMusicSkin(latticeSkin),
     addFromURL: () => void this.deps.addBeMusicSkinFromURL(skinSource.url),
   };
-  // Adding a skin switches to it, which makes the select screen again: the buttons wait for the play to end.
-  this.skinControllers.push(addSkins.addButton({ title: 'Add Lattice' }).on('click', () => skinSource['addLattice']()));
+  // Adding a skin switches to it, which makes the select screen again: the button waits for the play to end.
   addSkins.addBinding(skinSource, 'url', { label: 'Skin module URL' });
   this.skinControllers.push(
     addSkins.addButton({ title: 'Add from URL' }).on('click', () => skinSource['addFromURL']()),

@@ -90,7 +90,7 @@
 - **skin family**: browser プレイヤーの scene を描くスキンの種類です。`built-in`（be-music skin）、`lr2`、`beatoraja` があります（`SceneFamily`）。host は読み込んだ theme とプレイヤーの選択から選びます。
 - **built-in family（default skin family）**: 外部 theme がない場合、または host が明示的に選ぶ場合に使う skin family です。select、play、result（スキンが宣言していれば decide も）を be-music skin で描きます。play view は LR2 と同じく共通のプレイフィールドを描き、そのまわりの chrome はスキンが描きます。
 - **be-music skin**: `@be-music/player-skin-sdk` に沿って書くコードベースのスキンです。表示用フレームを受け取り、Canvas 描画と任意の DOM 画面を組み合わせます。DOM は選曲・決定・リザルトを置き換え、ゲームプレイでは Canvas のプレイフィールドに HUD を追加します。`gameplay.drawsOnDOM` を設定したスキンはプレイフィールドも DOM で描きます。
-- **built-in skins**: browser player に同梱する be-music skin です。既定の Synesthesia、Phantom、Plain、Native（DOM + Canvas）と、opt-in の Lattice があります。Native は `@be-music/player-ui` の再利用可能な部品を使います。
+- **built-in skins**: browser player に同梱する be-music skin です。既定の Synesthesia、Plain、Native（DOM + Canvas）があります。Native は `@be-music/player-ui` の再利用可能な部品を使います。
 - **touch layout / portrait stage**: タッチ主体の端末向けの gameplay layout です。touch layout は等幅のレーンをステージいっぱいに並べます。`portraitStage` を持つスキンは縦向き（9:16）のステージでも表示できます。
 - **LR2 skin**: `@be-music/skin-lr2` が扱う Lunatic Rave 2 CSV skin format です。この package は PixiJS に依存せず、skin file の parse と theme asset 解決を行います。
 - **beatoraja skin**: `@be-music/skin-beatoraja` が扱う beatoraja JSON / Lua skin format です。この package は PixiJS に依存せず、header / full skin の parse、option / asset 解決、element normalization を行います。
