@@ -73,10 +73,10 @@ const MAIN_BPM_CHART = parseChart(
 const NO_KEYS: SessionKeyTarget = { addEventListener: () => undefined, removeEventListener: () => undefined };
 const AUDIO = { stopOwned: vi.fn(), playJingle: vi.fn(async () => true) } as unknown as AudioService;
 
-function create(overrides: Partial<PlaySceneOptions> = {}) {
+function create(overrides: Partial<PlaySceneOptions> = {}, skin: typeof synesthesiaSkin = synesthesiaSkin) {
   const on = { finish: vi.fn(), exit: vi.fn(), restart: vi.fn(), hiSpeed: vi.fn(), tempo: vi.fn() };
   const scene = createPlayScene(
-    { family: 'built-in', skin: synesthesiaSkin },
+    { family: 'built-in', skin },
     {
       chart: { ...CHART, chart: RANDOM_CHART } as LibraryChart,
       settings: { initialHiSpeed: 2.5 },
@@ -660,9 +660,10 @@ describe('createPlayScene with a beatoraja kit', () => {
     scene.dispose();
   });
 
-  it('leaves the cover keys to a play that takes them (not the built-in or LR2 play)', async () => {
+  it('leaves the cover keys to a play that takes them (not a built-in skin that draws no covers)', async () => {
     const fake = createFakeHost();
-    const { scene } = create({ host: fake.host });
+    // Every built-in skin takes them now; a skin added from a module URL does not.
+    const { scene } = create({ host: fake.host }, { ...synesthesiaSkin, id: 'added-skin' });
     await scene.prepare();
     await scene.enter(fake.host);
     const play = (scene as unknown as { playSession: PlaySceneSession }).playSession.play;
