@@ -723,6 +723,22 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       replayAPI.parseCourseReplay(benchCourseText);
     },
   });
+  define('player-engine.replay.listCourseReplayStageCharts', {
+    run: () => {
+      replayAPI.listCourseReplayStageCharts(benchCourseLog);
+    },
+  });
+  const benchCourseReplayStage = replayAPI.listCourseReplayStageCharts(benchCourseLog)[0]!;
+  define('player-engine.replay.matchesCourseReplayStageChart', {
+    run: () => {
+      replayAPI.matchesCourseReplayStageChart(benchCourseReplayStage, { sha256: 'a'.repeat(64), md5: 'b'.repeat(32) });
+    },
+  });
+  define('player-engine.replay.planCourseReplayPlayback', {
+    run: () => {
+      replayAPI.planCourseReplayPlayback(benchCourseLog);
+    },
+  });
   const benchLampScore = { total: 100, perfect: 90, great: 8, good: 2 };
   const benchRecordPlay = { lamp: 'HARD' as const, exScore: 1500, maxCombo: 400, missCount: 12 };
   const benchRecord = { lamp: 'EASY' as const, exScore: 1400, maxCombo: 500, missCount: 20, playCount: 3 };

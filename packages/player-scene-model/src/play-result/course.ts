@@ -70,7 +70,13 @@ export function playResultFromCourseRun(
   result: ReplayCourseResult,
   courseLog: BeMusicCourseReplay | undefined,
   history: CourseStageHistory = EMPTY_COURSE_STAGE_HISTORY,
-  options: { playSeconds?: number; stageHistories?: readonly CourseStageHistory[]; practice?: boolean } = {},
+  options: {
+    playSeconds?: number;
+    stageHistories?: readonly CourseStageHistory[];
+    practice?: boolean;
+    /** The run is a course replay played back ({@link PlayResult.fromReplay}). */
+    fromReplay?: boolean;
+  } = {},
 ): PlayResult {
   const first = course.stages[0]!.chart!;
   const lastStage = [...(courseLog?.stages ?? [])].reverse().find((entry) => entry.played);
@@ -93,6 +99,7 @@ export function playResultFromCourseRun(
       : result.exScore;
   return {
     ...(options.practice === true ? { practice: true } : {}),
+    ...(options.fromReplay === true ? { fromReplay: true } : {}),
     score: {
       total: result.noteCount,
       perfect: result.judge.pgreat,

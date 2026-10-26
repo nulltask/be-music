@@ -2144,6 +2144,14 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   flex-wrap: wrap;
 }
 
+/* The charts a dropped replay or course replay needs that are not loaded. */
+.replay-missing-list {
+  list-style: disc;
+  padding-inline-start: 1.25rem;
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+}
+
 .shell.search-in-skin .search-input:not(.search-inline) {
   opacity: 0;
   pointer-events: none;

@@ -2,10 +2,12 @@ import { createEmptyJSON } from '@be-music/chart-source';
 import { drawBrowserRandomCourse, type BrowserChartCollection } from '@be-music/player-browser/collection';
 import type { BeatorajaThemeBundle } from '@be-music/player-browser/skin';
 import { parseBeatorajaCourseData } from '@be-music/player-engine/course';
-import type { BeMusicReplay } from '@be-music/player-engine/replay';
+import type { BeMusicCourseReplay, BeMusicReplay, ReplayCourseResult } from '@be-music/player-engine/replay';
+import type { PlayResult } from '@be-music/player-scene-model';
 import type { BrowseSnapshot, LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
 import { describe, expect, test, vi } from 'vite-plus/test';
 import type { FamilyDispatchState } from '../../family-dispatch.ts';
+import { recordCourseStage } from '../../course-flow.ts';
 import { CourseRunService } from '../../services/courses.ts';
 import { CourseRoute, type CourseRouteDeps } from './course.ts';
 
@@ -352,5 +354,106 @@ describe('CourseRoute kept draws', () => {
     h.courses.endRun();
     h.deps.showDecide.mock.calls[0]![2].shown!();
     expect(prepared.remember).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A course replay of the GRADE course `grade(ids)`, its stages played with `stages` (the rest never reached), with the
+ * course result it recorded: the last stage's gauge, cleared when every stage was reached.
+ */
+function gradeReplay(stages: BeMusicReplay[], ids: string[] = ['a', 'b', 'c']): BeMusicCourseReplay {
+  const last = stages.at(-1)!.results!.native!;
+  const cleared = stages.length === ids.length && last.gauge.cleared;
+  const native = {
+    ...last,
+    noteCount: 10 * ids.length,
+    missCount: 0,
+    djLevel: 'AAA',
+    gauge: { ...last.gauge, cleared },
+    stagesPlayed: stages.length,
+    lamp: cleared ? 'NORMAL' : 'FAILED',
+    stages: stages.map((stage) => stage.results!.native!),
+  } as ReplayCourseResult;
+  return {
+    format: 'be-music-course-replay',
+    version: 1,
+    course: { name: 'Dan', kind: 'grade', constraints: ['grade'], trophies: [] },
+    stages: ids.map((_, index) =>
+      stages[index] !== undefined
+        ? { played: true, replay: stages[index]! }
+        : { played: false, md5: String(index + 1).repeat(32), facts: {} as never },
+    ),
+    results: { native },
+  };
+}
+
+/** The live result of a stage played back from its replay: a replay played back records none. */
+const PLAYED_BACK = { gaugeHistory: [], scoreHistory: [], playSeconds: 30, fromReplay: true } as unknown as PlayResult;
+
+describe('CourseRoute: a course replay', () => {
+  test('plays each recorded stage with its own replay, in order, through the decide screen', async () => {
+    const h = harness();
+    const first = stageLog(70);
+    const second = stageLog(60);
+    const log = gradeReplay([first, second], ['a', 'b']);
+    await h.route.startCourseReplay(grade(), log);
+    expect(h.courses.active?.replay?.log).toBe(log);
+    expect(h.deps.showDecide.mock.calls[0]![0]).toMatchObject({ id: 'a', title: 'Dan' });
+    await h.decided().start();
+    expect(h.deps.playChart).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 'a' }),
+      expect.objectContaining({ replay: first, autoPlay: false, courseStage: expect.objectContaining({ index: 0 }) }),
+    );
+    expect(h.deps.setStatus).toHaveBeenLastCalledWith('Dan: stage 1 / 2 (replay)');
+    recordCourseStage(h.courses.active!, PLAYED_BACK);
+    expect(h.route.continueCourse()).toBe(true);
+    await vi.waitFor(() => expect(h.deps.playChart).toHaveBeenCalledTimes(2));
+    expect(h.deps.playChart.mock.calls[1]![1]).toMatchObject({ replay: second, courseStage: { index: 1 } });
+  });
+
+  test('stops where the recorded run failed, and shows its course result without keeping anything', async () => {
+    const h = harness();
+    const log = gradeReplay([stageLog(70), stageLog(0)]);
+    await h.route.startCourseReplay(grade(['a', 'b', 'c']), log);
+    await h.decided().start();
+    recordCourseStage(h.courses.active!, PLAYED_BACK);
+    h.route.continueCourse();
+    await vi.waitFor(() => expect(h.deps.playChart).toHaveBeenCalledTimes(2));
+    recordCourseStage(h.courses.active!, PLAYED_BACK);
+    // The failed stage ends the run: the course result, not the third stage.
+    expect(h.route.continueCourse()).toBe(true);
+    await vi.waitFor(() => expect(h.deps.showResult).toHaveBeenCalled());
+    expect(h.deps.playChart).toHaveBeenCalledTimes(2);
+    const [data, mode] = h.deps.showResult.mock.calls[0]!;
+    expect(data).toMatchObject({ run: 'course', cleared: false, fromReplay: true });
+    expect(mode.courseLog?.log).toBe(log);
+    expect(mode.courseLog?.native.stagesPlayed).toBe(2);
+    // A replay keeps no course record, saves no replay and ranks nothing.
+    expect(h.deps.records.recordCourseResult).not.toHaveBeenCalled();
+    expect(h.deps.replayAutoSave.saveCourse).not.toHaveBeenCalled();
+    expect(h.deps.leaderboard.maybeSubmitCourse).not.toHaveBeenCalled();
+  });
+
+  test('a stage the recorded run gave up ends the run as given up', async () => {
+    const h = harness();
+    const log = gradeReplay([stageLog(70), stageLog(50, { aborted: true })]);
+    await h.route.startCourseReplay(grade(['a', 'b', 'c']), log);
+    await h.decided().start();
+    recordCourseStage(h.courses.active!, PLAYED_BACK);
+    h.route.continueCourse();
+    await vi.waitFor(() => expect(h.deps.playChart).toHaveBeenCalledTimes(2));
+    recordCourseStage(h.courses.active!, PLAYED_BACK);
+    expect(h.courses.active!.run.finished).toBe(true);
+    await h.route.showCourseResult();
+    expect(h.deps.showResult.mock.calls[0]![0]).toMatchObject({ cleared: false, lamp: 'FAILED', fromReplay: true });
+  });
+
+  test('a course replay with no stage played starts nothing', async () => {
+    const h = harness();
+    const log = gradeReplay([stageLog(70)]);
+    log.stages[0] = { played: false, md5: '1'.repeat(32), facts: {} as never };
+    await h.route.startCourseReplay(grade(['a', 'b', 'c']), log);
+    expect(h.deps.showDecide).not.toHaveBeenCalled();
+    expect(h.courses.active).toBeUndefined();
   });
 });

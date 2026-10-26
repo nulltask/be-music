@@ -226,7 +226,7 @@ function viewDrawsKit(view: FamilyPlayView, kit: PlaySceneKit): boolean {
 function createPlayView(
   kit: PlaySceneKit,
   play: PlaySession,
-  options: Pick<PlaySceneOptions, 'settings' | 'course' | 'source' | 'audio'>,
+  options: Pick<PlaySceneOptions, 'settings' | 'course' | 'source' | 'audio' | 'replay'>,
   soundOwner: AudioOwner,
   textures: LR2TextureRetainer,
 ): FamilyPlayView {
@@ -283,6 +283,7 @@ function createPlayView(
       gauge: play.resolveSelectedGauge(),
       courseGauge: course !== undefined,
       ...(course?.view !== undefined ? { course: course.view } : {}),
+      ...(options.replay !== undefined ? { replay: true } : {}),
     });
     view.useTextureRetainer(textures);
     return {

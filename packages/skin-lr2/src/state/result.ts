@@ -27,7 +27,7 @@ export interface LR2ResultState extends LR2SceneState {
 
 /**
  * Ops the result screen always lights: no AUTOPLAY, GHOST, score graph, live BGA, difficulty filter, internet ranking,
- * auto scratch, score saving or replay; the normal gauges.
+ * auto scratch or score saving; the normal gauges.
  */
 const RESULT_BASE_OPS: readonly number[] = [
   LR2_OP.AUTOPLAY_OFF,
@@ -43,7 +43,6 @@ const RESULT_BASE_OPS: readonly number[] = [
   LR2_OP.SCORE_SAVE_OFF,
   LR2_OP.CLEAR_SAVE_OFF,
   LR2_OP.LOADED,
-  LR2_OP.REPLAY_OFF,
 ];
 
 /**
@@ -69,6 +68,8 @@ function resultOps(input: LR2ResultInput): number[] {
   const ops = [...RESULT_BASE_OPS];
   for (const op of input.customOps ?? []) ops.push(op);
   ops.push(result.cleared ? LR2_OP.RESULT_CLEAR : LR2_OP.RESULT_FAIL);
+  // LR2 keeps its replay status through the results of a replay (a course replay's too, OpenLR2 L4740-L4741).
+  ops.push(result.fromReplay === true ? LR2_OP.REPLAY_PLAYING : LR2_OP.REPLAY_OFF);
   // The result is always on a chart.
   ops.push(LR2_OP.SONG_BAR, LR2_OP.PLAYABLE_BAR);
   // The key mode in both ranges, as skins gate on either.

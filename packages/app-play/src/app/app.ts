@@ -22,6 +22,7 @@ import { PlayerShell } from './shell.ts';
 import { InlineSearch } from '../inline-search.ts';
 import { DebugMenu, type DebugMenuDeps } from '../ui/debug-menu/index.ts';
 import { confirmSkinDrop, promptSkinDrop } from '../ui/skin-drop-prompt.ts';
+import { showMissingReplayCharts } from '../ui/replay-missing.ts';
 import { readDeviceSignals, type DeviceProfile } from '../device-profile.ts';
 import { captureScreenshot, finalizeRecordingIfActive, toggleRecording } from '../recording-controller.ts';
 import type { PlayerGUIState, PlayerScene, PlayerWebElements, SkinFamilyOverride } from '../types.ts';
@@ -474,6 +475,9 @@ export class PlayerWebApp {
       setPlayStatus: (text) => this.status.setPlay(text),
       playChart: (chartEntry, overrides) => this.playRoute.playChart(chartEntry, overrides),
       showSelect: () => this.showSelect(),
+      startCourseReplay: (course, courseLog) => this.courseRoute.startCourseReplay(course, courseLog),
+      startNonstopCourse: (course, options) => this.nonstopRoute.startNonstopCourse(course, options),
+      showMissingReplayCharts,
     });
     this.shell = new PlayerShell({
       sceneHost: this.sceneHost,
