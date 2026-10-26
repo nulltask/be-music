@@ -1,6 +1,12 @@
 import { createEmptyJSON } from '@be-music/chart-source';
 import { parseChart } from '@be-music/chart-parser';
-import { parseBeatorajaCourseData, parseBeatorajaRandomCourseData } from '@be-music/player-engine/course';
+import {
+  evaluateCourseChartFilter,
+  parseBeatorajaCourseData,
+  parseBeatorajaRandomCourseData,
+  parseCourseChartFilter,
+} from '@be-music/player-engine/course';
+import type { BestRecord } from '@be-music/player-engine/records';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   createCourseChartRecord,
@@ -149,6 +155,18 @@ describe('random courses', () => {
       // Measure 0 at 150 BPM (1.6 s), then two measures at 300 BPM (1.6 s) up to the last object.
       length: 3200,
       feature: 16 | 2,
+      // Two taps and a CN (its end counts too); no #TOTAL, so beatoraja's default for 4 notes.
+      information: {
+        n: 2,
+        ln: 2,
+        s: 0,
+        ls: 0,
+        total: 260,
+        density: 0.6,
+        peakdensity: 1,
+        enddensity: 0.75,
+        mainbpm: 300,
+      },
     });
     expect(record.chart).toBe(entry);
     // A chart with no lanes in use reads as 5 KEYS, as the play-variant rule gives it.
@@ -161,6 +179,36 @@ describe('random courses', () => {
       0,
       undefined,
     ]);
+  });
+
+  test('createCourseChartRecord counts scratch notes apart and reads #TOTAL', () => {
+    const chart = parseChart(
+      [
+        '#PLAYER 1',
+        '#BPM 120',
+        '#TOTAL 350',
+        '#LNTYPE 1',
+        '#00111:01',
+        '#00116:01010000',
+        '#00156:00000100',
+        '#00256:0100',
+      ].join('\n'),
+      'bms',
+    );
+    const record = createCourseChartRecord({ ...chartEntry('s', 'Scratch'), chart });
+    expect(record.information).toMatchObject({ n: 1, ln: 0, s: 2, ls: 1, total: 350, mainbpm: 120 });
+  });
+
+  test('createCourseChartRecord reads the score row from the best record on every read', () => {
+    let best: BestRecord | undefined;
+    const record = createCourseChartRecord(chartEntry('p', 'Played'), {}, () => best);
+    expect(record.score).toBeUndefined();
+    best = { lamp: 'EX_HARD', exScore: 150, maxCombo: 90, missCount: 3, playCount: 2 };
+    expect(record.score).toEqual({ clear: 7, exscore: 150, combo: 90, minbp: 3, playcount: 2, notes: 100 });
+    const parsed = parseCourseChartFilter('score.clear >= 7 AND information.n = 0');
+    expect(parsed.ok && evaluateCourseChartFilter(parsed.filter, record)).toBe(true);
+    // Without a reader the chart reads as never played.
+    expect(createCourseChartRecord(chartEntry('q', 'Unplayed')).score).toBeUndefined();
   });
 
   test('drawBrowserRandomCourse draws the stages from the collection into a playable fixed course', () => {
