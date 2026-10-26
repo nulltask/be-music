@@ -982,6 +982,8 @@ export const PLAYER_APP_HTML = `
                 <dd>Downloads each finished play's replay.</dd>
                 <dt>Clear best records</dt>
                 <dd>Deletes the best records kept in this browser (asks first).</dd>
+                <dt>Local data…</dt>
+                <dd>Shows what the player keeps in this browser: its localStorage keys, its IndexedDB databases (your courses, the replay slots) and how much space they use. It only reads; clear data from its own controls.</dd>
                 <dt>BGA video transcode</dt>
                 <dd>Whether BGA videos are converted with WebCodecs, and the size they are reduced to.</dd>
               </dl>
@@ -1251,6 +1253,8 @@ export const PLAYER_APP_HTML = `
                 <dd>プレイが終わるたびにリプレイをダウンロードします。</dd>
                 <dt>Clear best records</dt>
                 <dd>このブラウザのベスト記録を消します (確認があります)。</dd>
+                <dt>Local data…</dt>
+                <dd>プレイヤーがこのブラウザに保存しているもの (localStorage のキー、自作コースやリプレイスロットの IndexedDB データベース、使っている容量) を表示します。読むだけなので、データは消すための各操作から消してください。</dd>
                 <dt>BGA video transcode</dt>
                 <dd>BGA の動画を WebCodecs で変換するかと、縮小するサイズ。</dd>
               </dl>
