@@ -1,12 +1,13 @@
 import { Color, FillGradient, type Graphics } from 'pixi.js';
 import {
-  burstParticlePosition,
+  burstParticlePositionInto,
   burstParticles,
   emberColor,
   hsvToHex,
-  projectPoint,
-  rotateY,
+  projectYawedInto,
+  scratchProjected,
   type BurstParticle,
+  type Projected,
   type Vec3,
 } from './space.ts';
 import { BURST_SKIRT_FRAME_BUDGET, burstGrainCount } from './burst-budget.ts';
@@ -348,6 +349,10 @@ function renderPlainFlashes(pool: ChildPool, bombs: readonly BeMusicBomb[]): voi
   }
 }
 
+const BOMB_HEAD = scratchProjected();
+const BOMB_TAIL = scratchProjected();
+const BOMB_POSITION: Vec3 = { x: 0, y: 0, z: 0 };
+
 function renderBomb(
   pool: ChildPool,
   bomb: BeMusicBomb,
@@ -366,7 +371,12 @@ function renderBomb(
   const fade = 1 - t;
   // Slow spin around the vertical axis gives the burst parallax as it expands.
   const spin = (bomb.seed % 2 === 0 ? 1 : -1) * t * 0.9;
-  const project = (point: Vec3) => projectPoint(rotateY(point, spin), cx, cy, BURST_FOCAL);
+  // The spin's cosine and sine once per bomb; every grain projects into the scratch results below without allocating.
+  const cosSpin = Math.cos(spin);
+  const sinSpin = Math.sin(spin);
+  const head = BOMB_HEAD;
+  const tail = BOMB_TAIL;
+  const position = BOMB_POSITION;
 
   const effects = pool.acquireGraphics();
   effects.label = `synesthesia-bomb[ch=${bomb.channel}]`;
@@ -387,13 +397,19 @@ function renderBomb(
   const gravity = unit * 3.2;
   // Fountain shaping: narrow the lateral spread so neighbouring lanes don't merge into one white band, and add an
   // upward launch so sparks visibly leap off the line before gravity bends them back.
-  const fountain = (particle: BurstParticle, life: number): Vec3 => {
-    const position = burstParticlePosition(particle, life, radius, gravity);
-    return {
-      x: position.x * 0.55,
-      y: position.y * 1.1 - unit * 2.8 * particle.speed * (1 - (1 - life) ** 2),
-      z: position.z * 0.8,
-    };
+  const fountainInto = (out: Projected, particle: BurstParticle, life: number): Projected => {
+    burstParticlePositionInto(position, particle, life, radius, gravity);
+    return projectYawedInto(
+      out,
+      position.x * 0.55,
+      position.y * 1.1 - unit * 2.8 * particle.speed * (1 - (1 - life) ** 2),
+      position.z * 0.8,
+      cosSpin,
+      sinSpin,
+      cx,
+      cy,
+      BURST_FOCAL,
+    );
   };
   const batch = sharedShapeBatch;
   const glow = synGlowTexture();
@@ -401,12 +417,12 @@ function renderBomb(
     const particle = particles[index]!;
     const life = t / particle.life;
     if (life >= 1) continue;
-    const head = project(fountain(particle, life));
+    fountainInto(head, particle, life);
     if (!head.visible) continue;
     // Only the coarser grains leave a short, hairline trail; the powder itself just drifts.
     const trailAlpha = particle.size >= POWDER_TRAIL_SIZE ? (1 - life) * 0.45 : 0;
     if (trailAlpha > 0.02) {
-      const tail = project(fountain(particle, Math.max(0, life - 0.07)));
+      fountainInto(tail, particle, Math.max(0, life - 0.07));
       batch.line(
         effects,
         hsvToHex(light.hue + particle.hueShift, Math.min(0.9, 0.35 + life * 2), 1),
@@ -446,12 +462,18 @@ function renderBomb(
     const particle = skirtParticles[index]!;
     const life = t / particle.life;
     if (life >= 1) continue;
-    const position = burstParticlePosition(particle, life, radius * 0.85, gravity);
-    const head = project({
-      x: position.x * 1.1,
-      y: Math.min(unit * 0.4, position.y * 0.25 - unit * 0.7 * particle.speed * (1 - (1 - life) ** 2)),
-      z: position.z * 0.9,
-    });
+    burstParticlePositionInto(position, particle, life, radius * 0.85, gravity);
+    projectYawedInto(
+      head,
+      position.x * 1.1,
+      Math.min(unit * 0.4, position.y * 0.25 - unit * 0.7 * particle.speed * (1 - (1 - life) ** 2)),
+      position.z * 0.9,
+      cosSpin,
+      sinSpin,
+      cx,
+      cy,
+      BURST_FOCAL,
+    );
     if (!head.visible) continue;
     const tint = hsvToHex(light.hue + particle.hueShift, Math.min(0.9, 0.55 + life * 1.5), 1);
     const side = Math.max(0.6, (0.5 + 0.7 * particle.size) * head.scale * (1 - life * 0.5));

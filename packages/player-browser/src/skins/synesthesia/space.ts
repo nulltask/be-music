@@ -99,6 +99,86 @@ export function scratchProjected(): Projected {
   return { x: 0, y: 0, scale: 0, visible: false };
 }
 
+/** A point-cloud transform (scale → yaw → pitch → offset) with its sines and cosines worked out once per cloud. */
+export interface CloudBasis {
+  scale: number;
+  cosYaw: number;
+  sinYaw: number;
+  /** Whether the transform pitches at all (a zero pitch skips the turn, as `drawPointCloud` always did). */
+  pitched: boolean;
+  cosPitch: number;
+  sinPitch: number;
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** The basis of a cloud transform, written into `out` (a fresh object when omitted). */
+export function cloudBasis(
+  transform: { scale: number; x: number; y: number; z: number; yaw: number; pitch?: number },
+  out?: CloudBasis,
+): CloudBasis {
+  const basis = out ?? { scale: 1, cosYaw: 1, sinYaw: 0, pitched: false, cosPitch: 1, sinPitch: 0, x: 0, y: 0, z: 0 };
+  basis.scale = transform.scale;
+  basis.cosYaw = Math.cos(transform.yaw);
+  basis.sinYaw = Math.sin(transform.yaw);
+  basis.pitched = Boolean(transform.pitch);
+  basis.cosPitch = basis.pitched ? Math.cos(transform.pitch!) : 1;
+  basis.sinPitch = basis.pitched ? Math.sin(transform.pitch!) : 0;
+  basis.x = transform.x;
+  basis.y = transform.y;
+  basis.z = transform.z;
+  return basis;
+}
+
+/**
+ * A unit-shape point placed by `cloud` and projected, seen from `camera` when given, written into `out` without
+ * allocating: the same arithmetic, in the same order, as `projectPoint(viewPoint(placed, camera, orbit))` over
+ * `rotateX(rotateY(scaled, yaw), pitch)` plus the offset.
+ */
+export function projectCloudPointInto(
+  out: Projected,
+  x: number,
+  y: number,
+  z: number,
+  cloud: CloudBasis,
+  camera: CameraBasis | undefined,
+  cx: number,
+  cy: number,
+  focal: number,
+  orbit = 0,
+): Projected {
+  const sx = x * cloud.scale;
+  const sy = y * cloud.scale;
+  const sz = z * cloud.scale;
+  const rx = sx * cloud.cosYaw + sz * cloud.sinYaw;
+  let ry = sy;
+  let rz = -sx * cloud.sinYaw + sz * cloud.cosYaw;
+  if (cloud.pitched) {
+    const py = ry * cloud.cosPitch - rz * cloud.sinPitch;
+    rz = ry * cloud.sinPitch + rz * cloud.cosPitch;
+    ry = py;
+  }
+  const px = rx + cloud.x;
+  const py = ry + cloud.y;
+  const pz = rz + cloud.z;
+  if (camera) return projectViewInto(out, px, py, pz, camera, cx, cy, focal, orbit);
+  const depth = focal + pz;
+  if (depth <= 1e-3) {
+    out.x = cx;
+    out.y = cy;
+    out.scale = 0;
+    out.visible = false;
+    return out;
+  }
+  const scale = focal / depth;
+  out.x = cx + px * scale;
+  out.y = cy + py * scale;
+  out.scale = scale;
+  out.visible = true;
+  return out;
+}
+
 export function rotateY(point: Vec3, angle: number): Vec3 {
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
@@ -156,6 +236,55 @@ export function burstParticles(seed: number, count: number): BurstParticle[] {
  * Position of burst particle `particle` at normalized time `t` (0..1): ease-out launch with drag, plus a little
  * gravity pulling sparks back down late in their life.
  */
+/** {@link burstParticlePosition} written into `out` without allocating. */
+export function burstParticlePositionInto(
+  out: Vec3,
+  particle: BurstParticle,
+  t: number,
+  radius: number,
+  gravity: number,
+): Vec3 {
+  const clamped = Math.max(0, Math.min(1, t));
+  const travel = (1 - (1 - clamped) ** 3) * radius * particle.speed;
+  out.x = particle.direction.x * travel;
+  out.y = particle.direction.y * travel + gravity * clamped * clamped;
+  out.z = particle.direction.z * travel;
+  return out;
+}
+
+/**
+ * `projectPoint(rotateY({ x, y, z }, angle), cx, cy, focal)` without allocating, for an angle whose cosine and sine
+ * are worked out once: the same arithmetic in the same order, written into `out`.
+ */
+export function projectYawedInto(
+  out: Projected,
+  x: number,
+  y: number,
+  z: number,
+  cos: number,
+  sin: number,
+  cx: number,
+  cy: number,
+  focal: number,
+): Projected {
+  const rx = x * cos + z * sin;
+  const rz = -x * sin + z * cos;
+  const depth = focal + rz;
+  if (depth <= 1e-3) {
+    out.x = cx;
+    out.y = cy;
+    out.scale = 0;
+    out.visible = false;
+    return out;
+  }
+  const scale = focal / depth;
+  out.x = cx + rx * scale;
+  out.y = cy + y * scale;
+  out.scale = scale;
+  out.visible = true;
+  return out;
+}
+
 export function burstParticlePosition(particle: BurstParticle, t: number, radius: number, gravity: number): Vec3 {
   const clamped = Math.max(0, Math.min(1, t));
   const travel = (1 - (1 - clamped) ** 3) * radius * particle.speed;
