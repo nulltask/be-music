@@ -234,7 +234,8 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
     }
     return;
   }
-  if (event.code === 'Numpad0' && ctx.options.judgeRuleset === '____') {
+  // Numpad 0 switches FLOATING HI-SPEED, whatever the judge rules (#774).
+  if (event.code === 'Numpad0') {
     event.preventDefault();
     changePlayView(ctx, {
       type: 'floating-speed-mode',

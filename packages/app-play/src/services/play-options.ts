@@ -1,4 +1,5 @@
 import type { BeMusicReplay } from '@be-music/player-engine/replay';
+import type { RulesetId } from '@be-music/player-engine/ruleset';
 // The play options the player hands to every screen and play: the full `PlayOptions`, kept here rather than read back
 // from the select screen. The Debug Menu holds some of them itself (auto play, gauge, lane options, assists, sort and
 // filters, hi-speed and covers); the rest (BGA, the score graph and the 2P gauge) are only
@@ -256,16 +257,19 @@ export class PlayOptionsService {
   private previousArrangement: { chartId: string; replay: Pick<BeMusicReplay, 'chart' | 'play'> } | undefined;
   private fixedArrangement: { chartId: string; replay: Pick<BeMusicReplay, 'chart' | 'play'> } | undefined;
 
-  /** Retain the previous beatoraja play's exact arrangement, including source control-flow draws. */
+  /** Retain the previous play's exact arrangement, including source control-flow draws, under any judge rules. */
   public rememberArrangement(chartId: string, replay: BeMusicReplay | undefined): void {
-    if (replay?.play.judgeRuleset !== 'beatoraja') return;
+    if (replay === undefined) return;
     this.previousArrangement = { chartId, replay: structuredClone({ chart: replay.chart, play: replay.play }) };
   }
 
-  /** Pin the previous layout for a fresh play on the same chart; no recorded inputs are replayed. */
-  public reusePreviousArrangement(): Partial<PlayOptions> | undefined {
+  /**
+   * Pin the previous layout for a fresh play on the same chart; no recorded inputs are replayed. Only a play under the
+   * same judge rules (`ruleset`) is reused: its options were chosen for them.
+   */
+  public reusePreviousArrangement(ruleset: RulesetId): Partial<PlayOptions> | undefined {
     const previous = this.previousArrangement;
-    if (!previous) return undefined;
+    if (!previous || (previous.replay.play.judgeRuleset ?? 'lr2') !== ruleset) return undefined;
     const play = previous.replay.play;
     const source = resolvePlayOptions({
       ...play.options,

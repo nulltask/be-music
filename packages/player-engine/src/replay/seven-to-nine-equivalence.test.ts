@@ -62,7 +62,8 @@ test('the engine applies 7-to-9 itself when a host does not supply prepared note
   });
   expect(recorded?.chart.laneMode).toContain('9 KEY');
   expect(recorded?.play).toMatchObject({ sevenToNinePattern: 3, sevenToNineApplied: true });
+  // 7-to-9 builds a chart and judges nothing itself, so LR2 rules play it too (#774).
   await expect(
     autoPlay(chart(), { audio: false, tui: false, judgeRuleset: 'lr2', sevenToNinePattern: 3 }),
-  ).rejects.toThrow(/only for beatoraja/);
+  ).resolves.toMatchObject({ total: 3, perfect: 3 });
 });

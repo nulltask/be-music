@@ -158,8 +158,31 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     expect(replay?.play.randomLane?.p1).toBe('R-RANDOM');
     expect(replay?.play.options?.random1P).toBe('R-RANDOM');
     await player.leaveResult();
+    // R-RANDOM is offered under every ruleset (#774), so LR2 rules keep the choice.
     await player.setOption(['Developer'], 'Judgment windows', 'LR2');
-    expect(await player.readOption(['Play options'], 'Random 1P')).toBe('OFF');
+    expect(await player.readOption(['Play options'], 'Random 1P')).toBe('R-RANDOM');
+  });
+}
+
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
+  test(`source-specific options play and record under other judge rules on ${skin}`, async ({ player }) => {
+    await openWithLibrary(player, { 'be-music.built-in-skin': skin });
+    // beatoraja's SPIRAL and scroll REMOVE under LR2 rules: options that only transform the chart or the view (#774).
+    await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+    await player.setOption(['Play options'], 'Random 1P', 'SPIRAL');
+    await player.setOption(['Play options'], 'Scroll (beatoraja)', 'REMOVE');
+    await player.setOption(['Play options'], 'Auto play', true);
+    await player.browseTo(SONGS, 'Fixture A');
+    await player.key('Enter');
+    const state = await player.waitForResult(0);
+    expect(state.results[0]?.judged).toMatchObject({ great: 0, good: 0, bad: 0, poor: 0 });
+    const replay = await player.lastReplay();
+    expect(replay?.play).toMatchObject({ judgeRuleset: 'lr2', randomLane: { p1: 'SPIRAL' }, scrollModifier: 'REMOVE' });
+    await player.leaveResult();
+    // Switching rules keeps both choices.
+    await player.setOption(['Developer'], 'Judgment windows', '????');
+    expect(await player.readOption(['Play options'], 'Random 1P')).toBe('SPIRAL');
+    expect(await player.readOption(['Play options'], 'Scroll (beatoraja)')).toBe('REMOVE');
   });
 }
 

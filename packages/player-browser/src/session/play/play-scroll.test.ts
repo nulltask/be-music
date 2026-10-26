@@ -62,7 +62,8 @@ test('scroll REMOVE shares the flattened coordinate map across notes, bar lines,
     expect(restored.chartBPMRange).toEqual(original.chartBPMRange);
     expect(restored.preparedChart!.scrollModifierChanged).toBe(true);
   }
-  expect(() => prepare({ judgeRuleset: 'lr2', scrollModifier: 'REMOVE' })).toThrow(/only for beatoraja/);
+  // Scroll REMOVE only changes how the chart is drawn, so LR2 rules take it too (#774).
+  expect(prepare({ judgeRuleset: 'lr2', scrollModifier: 'REMOVE' }).preparedChart!.scrollModifierChanged).toBe(true);
 });
 
 test('scroll ADD restores the exact generated curve and parameters without rerolling for replay or previous layout', () => {
@@ -119,7 +120,7 @@ test('scroll ADD restores the exact generated curve and parameters without rerol
     expect(random).not.toHaveBeenCalled();
     delete replay.play.scrollModifierTimeline;
     expect(() => prepare({ judgeRuleset: 'beatoraja', replay })).toThrow(/effective timeline/);
-    expect(() => prepare({ judgeRuleset: 'lr2', scrollModifier: 'ADD' })).toThrow(/only for beatoraja/);
+    expect(prepare({ judgeRuleset: 'lr2', scrollModifier: 'ADD' }).preparedChart!.scrollModifierApplied).toBe('ADD');
   } finally {
     random.mockRestore();
   }

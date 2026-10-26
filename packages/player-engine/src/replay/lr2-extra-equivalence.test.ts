@@ -55,10 +55,11 @@ test('LR2 EXTRA remains selected outside a course but has no effective conversio
   expect(prepared.notes[0]!.endSeconds).toBeDefined();
 });
 
-test('the engine rejects incompatible rulesets and mismatched host-prepared EXTRA selections', async () => {
+test('LR2 EXTRA plays under every judge ruleset, and the engine rejects mismatched host-prepared selections', async () => {
   const chart = json();
   const preparedChart = preparePlaybackChart(resolveChart(chart), { lr2ExtraMode: true, lr2ExtraLevel: 1 });
-  await expect(runRecordedPlay(chart, [], 'beatoraja', { preparedChart })).rejects.toThrow(/requires LR2/);
+  const played = await runRecordedPlay(chart, [], 'beatoraja', { preparedChart });
+  expect(played.replay.play).toMatchObject({ judgeRuleset: 'beatoraja', lr2ExtraMode: true, lr2ExtraLevel: 1 });
   await expect(runRecordedPlay(chart, [], 'lr2', { preparedChart, lr2ExtraMode: false })).rejects.toThrow(
     /shared prepared chart/,
   );
