@@ -63,15 +63,12 @@ export function checkCourseReplayEligibility(courseLog: BeMusicCourseReplay): Co
     if (course === undefined || course.kind !== courseLog.course.kind) {
       return { eligible: false, reason: 'not-a-course-run', stage: index };
     }
-    // A course given up with ESC is a failed run (as LR2 records it): its last played stage may be aborted, no other.
-    const givenUp = play.aborted === true && index === lastPlayed;
-    const single = checkReplayEligibility({
-      ...entry.replay,
-      play: givenUp ? { ...play, aborted: false } : play,
-    });
+    const single = checkReplayEligibility({ ...entry.replay, play });
     if (!single.eligible) {
       return { eligible: false, reason: single.reason as CourseReplayIneligibleReason, stage: index };
     }
+    // A course given up with ESC is a failed run (as LR2 records it): its last played stage may be aborted, no other.
+    if (play.aborted === true && index !== lastPlayed) return { eligible: false, reason: 'aborted', stage: index };
     stages.push({ chartFingerprint: single.chartFingerprint, playFingerprint: single.playFingerprint });
     for (const flag of single.assistFlags) assistFlags.add(flag);
   }
@@ -109,7 +106,7 @@ function checkNonstopEligibility(courseLog: BeMusicCourseReplay): CourseReplayEl
     return { eligible: false, reason: 'not-a-course-run' };
   }
   // A NONSTOP play given up with ESC is a failed run.
-  const single = checkReplayEligibility({ ...run.replay, play: { ...play, aborted: false } });
+  const single = checkReplayEligibility({ ...run.replay, play });
   if (!single.eligible) return { eligible: false, reason: single.reason as CourseReplayIneligibleReason };
   for (const [index, entry] of courseLog.stages.entries()) {
     if (entry.played && entry.replay.chart.chartFingerprint === undefined) {
