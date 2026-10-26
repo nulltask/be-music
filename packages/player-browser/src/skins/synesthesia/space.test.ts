@@ -14,6 +14,7 @@ import {
   hsvToHex,
   mixCamera,
   particleRiverPoint,
+  particleRiverPointInto,
   perlin2,
   pointCloudPyramid,
   projectPoint,
@@ -526,5 +527,16 @@ describe('allocation-free burst projection', () => {
       scale: 0,
       visible: false,
     });
+  });
+});
+
+describe('particleRiverPointInto', () => {
+  it('writes particleRiverPoint into the given point', () => {
+    const options = { length: 1500, speed: 300, amplitude: 28, width: 16, seed: 2 };
+    const out = { x: 0, y: 0, z: 0 };
+    for (let index = 0; index < 50; index += 1) {
+      expect(particleRiverPointInto(out, index, 2.5, options, index * 40)).toBe(out);
+      expect(out).toEqual(particleRiverPoint(index, 2.5, options, index * 40));
+    }
   });
 });

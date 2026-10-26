@@ -456,10 +456,25 @@ export function pointCloudPyramid(seed: number, count: number): CloudPoint[] {
  * `length / 2` at `speed` units/s (looping), weaving on a slow sine, with a fixed per-particle offset across the
  * stream so the river has body. Deterministic for (`index`, `seconds`).
  */
-export function particleRiverPoint(
+export function particleRiverPoint(index: number, seconds: number, options: RiverOptions, distance?: number): Vec3 {
+  return particleRiverPointInto({ x: 0, y: 0, z: 0 }, index, seconds, options, distance);
+}
+
+/** The flow {@link particleRiverPoint} follows. */
+export interface RiverOptions {
+  length: number;
+  speed: number;
+  amplitude: number;
+  width: number;
+  seed?: number;
+}
+
+/** {@link particleRiverPoint} written into `out`, for the per-frame loops. */
+export function particleRiverPointInto(
+  out: Vec3,
   index: number,
   seconds: number,
-  options: { length: number; speed: number; amplitude: number; width: number; seed?: number },
+  options: RiverOptions,
   distance?: number,
 ): Vec3 {
   const base = (options.seed ?? 0) * 211 + index * 23;
@@ -467,12 +482,14 @@ export function particleRiverPoint(
   // jumping; without it the flow is `seconds × speed`.
   const travelled = distance ?? seconds * options.speed;
   const along = (hash01(base + 1) + travelled / options.length) % 1;
-  const x = (along - 0.5) * options.length;
   // Sum of two uniforms ≈ triangular spread: dense core, feathered edges.
   const across = (hash01(base + 2) + hash01(base + 3) - 1) * options.width;
   const depth = (hash01(base + 4) + hash01(base + 5) - 1) * options.width;
   const wave = Math.sin(along * Math.PI * 2 * 1.5 + seconds * 0.6 + (options.seed ?? 0)) * options.amplitude;
-  return { x, y: wave + across, z: depth };
+  out.x = (along - 0.5) * options.length;
+  out.y = wave + across;
+  out.z = depth;
+  return out;
 }
 
 function lerp3(a: Vec3, b: Vec3, t: number): Vec3 {
