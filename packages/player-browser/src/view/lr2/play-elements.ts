@@ -54,6 +54,7 @@ import {
   renderNowComboElement,
   resolveJudgeSkinKind,
 } from './play-hud.ts';
+import type { JudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { LR2PlayTimers } from './play-timers.ts';
 import type { LR2Turntable } from './play-turntable.ts';
 
@@ -63,6 +64,8 @@ export interface LR2PlayElementsContext {
   /** The 9-keys play skin whose `notes.note[3]` draws invisible notes. */
   readonly invisibleNoteSkin: LR2Skin | undefined;
   readonly play: PlayfieldRuntime;
+  /** The play's automatic judge timing: LR2's SILENT draws no NOWJUDGE / NOWCOMBO. */
+  readonly options: { readonly judgeTimingAutoAdjust?: JudgeTimingAutoAdjust };
   /** The skin's images by path, and the chart's `#STAGEFILE` / `#BACKBMP` / `#BANNER` under LR2's special paths. */
   readonly textures: ReadonlyMap<string, Texture>;
   readonly timers: LR2PlayTimers;
@@ -282,18 +285,19 @@ export function drawLR2PlaySkin(ctx: LR2PlayElementsContext, width: number, heig
     });
   }
   for (const gauge of skin.grooveGauges) {
-    // 1P only for now: the 2P side needs battle / DP wiring.
-    if (gauge.index !== 0) continue;
+    // The 2P gauge (index 1) is a two-player BATTLE's 2P player's; without one only the 1P gauge draws.
+    const gaugeState = gauge.index === 0 ? ctx.play.gaugeState : ctx.play.secondPlayer?.gauge;
+    if (gauge.index > 1 || gaugeState === undefined) continue;
     if (!isLR2DestinationVisible(ctx, gauge.destination)) continue;
     renderGrooveGaugeElement(
       ctx.skinLayerPool,
       gauge,
-      ctx.play.gaugeState.current,
+      gaugeState.current,
       ctx.textures,
       evaluateLR2ElementDst(ctx, gauge),
       {
         // Survival gauges (HARD / DEATH) have no 80 % clear border in LR2: the whole bar draws in the red cell.
-        survivalGauge: ctx.play.gaugeState.survival === true,
+        survivalGauge: gaugeState.survival === true,
         // The 4-cell x N-frame animation (the lit tip's scan), on the SRC's timer.
         elapsedMs: ctx.timers.elapsed(gauge.source.timer),
       },
@@ -311,11 +315,14 @@ export function drawLR2PlaySkin(ctx: LR2PlayElementsContext, width: number, heig
     if (!isLR2DestinationVisible(ctx, text.destination)) continue;
     drawText(ctx, text);
   }
-  drawJudgeAndCombo(ctx, '1P');
-  // A 9 KEY (PMS) chart can keep lanes in the 2x channels but is single-side: only DP shows a 2P judge and combo.
-  const usesPlayer2 =
-    ctx.play.chartPlayVariant !== '9' && ctx.play.laneChannels.some((channel) => channel.startsWith('2'));
-  if (usesPlayer2) drawJudgeAndCombo(ctx, '2P');
+  // LR2's SILENT automatic judge timing draws no judgment or combo (OpenLR2 `LR2f.cpp` 2513).
+  if (ctx.options.judgeTimingAutoAdjust !== 'LR2-SILENT') {
+    drawJudgeAndCombo(ctx, '1P');
+    // A 9 KEY (PMS) chart can keep lanes in the 2x channels but is single-side: only DP shows a 2P judge and combo.
+    const usesPlayer2 =
+      ctx.play.chartPlayVariant !== '9' && ctx.play.laneChannels.some((channel) => channel.startsWith('2'));
+    if (usesPlayer2) drawJudgeAndCombo(ctx, '2P');
+  }
   ctx.skinLayerPool.end();
   ctx.overlayLayerPool.end();
   ctx.text.endFrame(ctx.skinLayer);

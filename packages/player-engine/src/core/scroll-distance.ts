@@ -1,5 +1,5 @@
 import { clamp, findLastIndexAtOrBefore } from '@be-music/shared-utils/core';
-import type { ScrollTimelinePoint, SpeedTimelinePoint } from '@be-music/chart-model';
+import type { ScrollTimelinePoint, SpeedTimelinePoint, TempoPoint } from '@be-music/chart-model';
 
 export interface ScrollDistanceMapperOptions {
   lookaheadBeats?: number;
@@ -7,6 +7,10 @@ export interface ScrollDistanceMapperOptions {
 }
 
 export interface ScrollDistanceMapperLike {
+  /** Guaranteed positive distance for every later beat, permitting safe forward-only culling. */
+  readonly strictlyIncreasing?: true;
+  /** Mirrors a beat in converted scroll-distance space (LR2 CONSTANT negative-BPM reversal). */
+  mirrorBeatAt?: (anchorBeat: number, forwardBeat: number) => number;
   distanceBetween: (fromBeat: number, toBeat: number) => number;
   hasBidirectionalScrollWithinLookahead: (fromBeat: number) => boolean;
   maxBeatWithinDistance: (fromBeat: number, distance: number) => number;
@@ -401,4 +405,71 @@ function normalizeLookaheadBeats(value: number | undefined): number {
     return DEFAULT_SCROLL_LOOKAHEAD_BEATS;
   }
   return value;
+}
+
+/**
+ * LR2 beta3 HS-FIX CONSTANT: 150-BPM distance, excluding STOP duration. The playhead's
+ * STOP-aware beat clock freezes the mapper during stops. LR2 has no #SCROLL/#SPEED directives.
+ * OpenLR2 583a3850 LR2f.cpp L26529-L26540: converted distance += elapsedMilliseconds * 1.2.
+ * Requires the resolved chart's finite tempo map, including its beat-zero tempo.
+ */
+export function createLR2ConstantScrollMapper(
+  tempoPoints: readonly Pick<TempoPoint, 'beat' | 'bpm'>[],
+): ScrollDistanceMapper & {
+  readonly strictlyIncreasing: true;
+  mirrorBeatAt: (anchorBeat: number, forwardBeat: number) => number;
+} {
+  if (!tempoPoints.some((point) => point.beat === 0)) throw new RangeError('LR2 CONSTANT requires a beat-zero tempo.');
+  let maxTempoRatio = 1;
+  const timeline = tempoPoints.map(({ beat, bpm }) => {
+    const speed = 150 / Math.abs(bpm);
+    if (!Number.isFinite(beat) || beat < 0 || !Number.isFinite(bpm) || !Number.isFinite(speed) || speed <= 0)
+      throw new RangeError('LR2 CONSTANT requires finite beats and nonzero BPM values.');
+    maxTempoRatio = Math.max(maxTempoRatio, Math.abs(bpm) / 150);
+    return { beat, speed };
+  });
+  const initialRate = timeline.filter((point) => point.beat === 0).at(-1)!.speed;
+  return new LR2ConstantScrollMapper(timeline, initialRate, DEFAULT_SCROLL_LOOKAHEAD_BEATS * maxTempoRatio);
+}
+
+/** Source LR2f.cpp L2186-L2188 mirrors converted positions, including positions before chart zero. */
+class LR2ConstantScrollMapper extends ScrollDistanceMapper {
+  readonly strictlyIncreasing = true as const;
+  private readonly initialRate: number;
+  constructor(timeline: ScrollTimelinePoint[], initialRate: number, lookaheadBeats: number) {
+    super(timeline, undefined, { invalidDistance: 0, lookaheadBeats });
+    this.initialRate = initialRate;
+  }
+
+  override distanceBetween(fromBeat: number, toBeat: number): number {
+    if (!Number.isFinite(fromBeat) || !Number.isFinite(toBeat)) return 0;
+    return (
+      super.distanceBetween(Math.max(0, fromBeat), Math.max(0, toBeat)) +
+      (Math.min(0, toBeat) - Math.min(0, fromBeat)) * this.initialRate
+    );
+  }
+
+  override firstBeatBeyondDistance(fromBeat: number, distance: number): number {
+    if (!Number.isFinite(fromBeat) || fromBeat >= 0) return super.firstBeatBeyondDistance(fromBeat, distance);
+    const limit = Number.isFinite(distance) ? Math.max(0, distance) : 0;
+    const beforeZero = -fromBeat * this.initialRate;
+    return limit <= beforeZero
+      ? fromBeat + limit / this.initialRate
+      : super.firstBeatBeyondDistance(0, limit - beforeZero);
+  }
+
+  override maxBeatWithinDistance(fromBeat: number, distance: number): number {
+    if (!Number.isFinite(fromBeat) || fromBeat >= 0) return super.maxBeatWithinDistance(fromBeat, distance);
+    const limit = Number.isFinite(distance) ? Math.max(0, distance) : 0;
+    const beforeZero = -fromBeat * this.initialRate;
+    return limit <= beforeZero
+      ? fromBeat + limit / this.initialRate
+      : super.maxBeatWithinDistance(0, limit - beforeZero);
+  }
+
+  mirrorBeatAt(anchorBeat: number, forwardBeat: number): number {
+    if (!Number.isFinite(anchorBeat) || !Number.isFinite(forwardBeat)) return 0;
+    const target = 2 * this.distanceBetween(0, anchorBeat) - this.distanceBetween(0, forwardBeat);
+    return target < 0 ? target / this.initialRate : super.firstBeatBeyondDistance(0, target);
+  }
 }

@@ -1,9 +1,9 @@
 import { expect, openWithLibrary, SONGS, test } from './support.ts';
 
-test('uses real workers for chart loading and WSOLA; persists concurrency', async ({ demo }) => {
+test('uses real workers for chart loading and WSOLA; persists concurrency', async ({ player }) => {
   const workers: string[] = [];
-  demo.page.on('worker', (worker) => workers.push(worker.url()));
-  await demo.page.addInitScript(() => {
+  player.page.on('worker', (worker) => workers.push(worker.url()));
+  await player.page.addInitScript(() => {
     const state = { sent: [] as string[], done: [] as number[], errors: [] as string[] };
     Object.defineProperty(window, '__cpuTasks', { value: state });
     // oxlint-disable-next-line typescript/unbound-method -- Called below with the original Worker as receiver.
@@ -21,24 +21,24 @@ test('uses real workers for chart loading and WSOLA; persists concurrency', asyn
       original.call(this, message, options as StructuredSerializeOptions);
     };
   });
-  await openWithLibrary(demo, {
-    'be-music-demo.worker-count': '2',
-    'be-music-demo.play-tempo': JSON.stringify({
+  await openWithLibrary(player, {
+    'be-music.worker-count': '2',
+    'be-music.play-tempo': JSON.stringify({
       tempoEnabled: true,
       tempoPercent: 20,
       tempoPitchMode: 'keep-pitch',
       tempoStretchAlgorithm: 'wsola',
     }),
   });
-  expect(await demo.readOption(['Developer'], 'CPU workers')).toBe(2);
+  expect(await player.readOption(['Developer'], 'CPU workers')).toBe(2);
   expect(workers.filter((url) => url.includes('compute-worker')).length).toBeGreaterThan(0);
-  await demo.setOption(['Developer'], 'CPU workers', 1);
-  expect(await demo.page.evaluate(() => localStorage.getItem('be-music-demo.worker-count'))).toBe('1');
-  await demo.setOption(['Play options'], 'Auto play', true);
-  await demo.browseTo(SONGS, 'Fixture A');
-  await demo.key('Enter');
-  await demo.waitForResult(0);
-  const tasks = await demo.page.evaluate(
+  await player.setOption(['Developer'], 'CPU workers', 1);
+  expect(await player.page.evaluate(() => localStorage.getItem('be-music.worker-count'))).toBe('1');
+  await player.setOption(['Play options'], 'Auto play', true);
+  await player.browseTo(SONGS, 'Fixture A');
+  await player.key('Enter');
+  await player.waitForResult(0);
+  const tasks = await player.page.evaluate(
     () => (window as unknown as { __cpuTasks: { sent: string[]; done: number[]; errors: string[] } }).__cpuTasks,
   );
   expect(tasks.sent).toContain('parse-chart');
@@ -50,16 +50,16 @@ test('uses real workers for chart loading and WSOLA; persists concurrency', asyn
   expect(tasks.done.length).toBe(tasks.sent.length);
 });
 
-test('the bundled worker expands ZIPs and rejects discarded prototype tasks', async ({ demo }) => {
+test('the bundled worker expands ZIPs and rejects discarded prototype tasks', async ({ player }) => {
   const workers: string[] = [];
-  demo.page.on('worker', (worker) => workers.push(worker.url()));
-  await openWithLibrary(demo, { 'be-music-demo.worker-count': '1' });
+  player.page.on('worker', (worker) => workers.push(worker.url()));
+  await openWithLibrary(player, { 'be-music.worker-count': '1' });
   const url = workers.find((value) => value.includes('compute-worker'));
   if (!url) throw new Error('Compute worker did not start');
   // Exercise ZIP expansion through the deployed bundle and verify that rejected prototype jobs stay unavailable.
   const { zipSync, strToU8 } = await import('fflate');
   const zip = Array.from(zipSync({ 'a.txt': strToU8('worker zip') }));
-  const result = await demo.page.evaluate(
+  const result = await player.page.evaluate(
     async ({ url, zip }) => {
       const worker = new Worker(url, { type: 'module' });
       let id = 0;

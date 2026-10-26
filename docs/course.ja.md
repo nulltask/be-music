@@ -49,7 +49,7 @@ flowchart LR
 XML の `<courselist>` に、`title`、`line`（キーモード）、`type`、`hash` を持つ `<course>` 要素を並べたものです。LR2 はフィールド名の大文字小文字を区別して読み、be-music も同じです。
 
 - **文字コード**：BOM、XML 宣言の `encoding`、厳密な UTF-8、Shift_JIS の順に判定します（`decodeCourseText`）。
-- **`hash`**：32 文字のヘッダーに続き、ステージごとに 32 文字の譜面 MD5 が並びます。コースのバーには 10 ステージまで並びますが、LR2 は EXPERT・GRADE も含めどのコースも先頭の 5 ステージだけを遊びます（譜面の読み込み処理がプレイのたびにステージ数を 1〜5 に収める。`LR2body.exe` 0x4b0b0f）。そのためコースはその 5 ステージとして読みます。読まなかったステージの数は `countLR2UnplayedStages(course)` で数えられ、Web デモはファイルを読み込んだときに知らせます。ヘッダーの 10 文字目がコースの種類です。
+- **`hash`**：32 文字のヘッダーに続き、ステージごとに 32 文字の譜面 MD5 が並びます。コースのバーには 10 ステージまで並びますが、LR2 は EXPERT・GRADE も含めどのコースも先頭の 5 ステージだけを遊びます（譜面の読み込み処理がプレイのたびにステージ数を 1〜5 に収める。`LR2body.exe` 0x4b0b0f）。そのためコースはその 5 ステージとして読みます。読まなかったステージの数は `countLR2UnplayedStages(course)` で数えられ、Web プレイヤーはファイルを読み込んだときに知らせます。ヘッダーの 10 文字目がコースの種類です。
 - **`type`**：OpenLR2 にならい（`expert` / `nonstop` / `grade` テーブルとスキンの op 291-293）、`0` が EXPERT、`1` が NONSTOP、`2` が GRADE です。`type` 要素がなければヘッダーの 10 文字目を使います。
 - **制約**：この形式には制約の欄がありません。GRADE のコースには `grade` と `gauge_lr2` を付けます。LR2 は GRADE コースの開始時に両サイドのレーンオプションをオフにする（[Main.cpp M1124-M1170](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/Main.cpp#L1124-L1170)）ので、正規しか使えません。表の旧形式 `grade` リストは jbmstable-parser の読み方どおり `grade_mirror` のままです。
 - **LR2 のその他のリセット**：同じ処理で、EASY と G-ATTACK のゲージは GROOVE になり、HIDDEN / SUDDEN、アシスト（オートスクラッチなど）、BATTLE、DP の FLIP、プレイテンポ（ピッチ）、追加の変化オプションがオフになります。LR2 はこれを設定に書き込みますが、ホストはコースのステージにだけ適用するので、プレイヤーの設定はコースの後に戻ります（`@be-music/player-engine/course` の `isLR2GradeCourse`、`resolveLR2GradeCoursePlaySettings`）。対象は `.lr2crs` から読んだ GRADE コースとコース作成で作った GRADE コースで、表や beatoraja の段位は対象外です。
@@ -104,10 +104,36 @@ flowchart LR
   def --> play["通常のコースとして遊ぶ"]
 ```
 
-- **フィルタ。** be-music には楽曲データベースがないので、`parseCourseChartFilter` / `evaluateCourseChartFilter` が句を読み、各譜面（`CourseChartRecord`）を SQLite の比較規則で判定します。対応するのは、比較、`AND` / `OR` / `NOT`、`IN`、`LIKE`、`BETWEEN`、`IS NULL`、四則演算です。列は be-music が埋められる `song` の列に限ります：`md5`、`sha256`、`title`、`subtitle`、`artist`、`subartist`、`genre`、`tag`、`path`、`level`、`difficulty`、`mode`、`notes`、`minbpm`、`maxbpm`、`length`、`judge`、`feature`、`content`。beatoraja は `song` にプレイヤーの `score` と `scorelog`（と `information`）を結合するため、複数の表にある列は表名で修飾する必要があります。修飾しない `sha256`、`mode`、`notes`、`date`、`clear`、`combo`、`minbp`、`avgjudge` は SQLite にとって曖昧で、フィルタは拒否されます（`mode = 7` ではなく `song.mode = 7` と書きます）。末尾の `ORDER BY`（式または `RANDOM()`、`ASC` / `DESC`、`NULLS FIRST` / `LAST`）と `LIMIT n [OFFSET m]` / `LIMIT m, n` は抽選の前に候補を絞ります。beatoraja 自身の `folder/default.json` も MY BEST でこう書いています（`playcount > 0 ORDER BY playcount DESC LIMIT 10`）。これを適用するのは `selectCourseCharts` で、同順位は候補の順を保ち、`RANDOM()` は外から渡した `random` を使います。それ以外（未知の列、関数、サブクエリ）は解析エラーとし、そのステージはどの譜面も選びません。beatoraja でも失敗したクエリは何も返しません。
+- **フィルタ。** be-music には楽曲データベースがないので、`parseCourseChartFilter` / `evaluateCourseChartFilter` が句を読み、各譜面（`CourseChartRecord`）を SQLite の比較規則で判定します。対応するのは、比較、`AND` / `OR` / `NOT`、`IN`、`LIKE`、`BETWEEN`、`IS NULL`、四則演算で、使える列は[フィルタの列](#フィルタの列)にまとめています。beatoraja は `song` にプレイヤーの `score` と `scorelog`、それに `information` を結合するため、複数の表にある列は表名で修飾する必要があります。修飾しない `sha256`、`mode`、`notes`、`date`、`clear`、`combo`、`minbp`、`avgjudge` は SQLite にとって曖昧で、フィルタは拒否されます（`mode = 7` ではなく `song.mode = 7` と書きます）。1 つの表にしかない列は修飾なしで書けます（`playcount`、`density`）。末尾の `ORDER BY`（式または `RANDOM()`、`ASC` / `DESC`、`NULLS FIRST` / `LAST`）と `LIMIT n [OFFSET m]` / `LIMIT m, n` は抽選の前に候補を絞ります。beatoraja 自身の `folder/default.json` も MY BEST でこう書いています（`playcount > 0 ORDER BY playcount DESC LIMIT 10`）。これを適用するのは `selectCourseCharts` で、同順位は候補の順を保ち、`RANDOM()` は外から渡した `random` を使います。それ以外（未知の列、be-music に出どころのない列、関数、サブクエリ）は解析エラーとし、そのステージはどの譜面も選びません。beatoraja でも失敗したクエリは何も返しません。選曲画面の検索も同じフィルタを使います。`?` で始まる検索がそれです（[scene-model.ja.md](scene-model.ja.md#一覧ブラウズ)）。
 - **抽選。** `drawRandomCourse(definition, candidates, random)` は `RandomCourseData.lotterySongDatas` に従います。各ステージは、フィルタが選んだ譜面（`ORDER BY` / `LIMIT` の適用後）から一様に 1 曲引きます。フィルタのないステージは、前のステージの候補から引きます（最初のステージなら全譜面から）。`distinct` があれば、引き済みの譜面は引き直します。ただし候補がすべて引き済みなら重複を許します。結果は固定のコースで、レーンオプションの制約があれば `grade`、なければ `expert` です。`random` は外から渡すので、抽選を再現できます。
 - **失敗。** フィルタを解析できないステージ、または何も選ばないステージで抽選は止まり、その旨を返します（`RandomCourseDrawFailure`）。
 - **抽選済みコース。** 開始画面の表示に成功した後（開始画面がない場合はプレイの読み込み後）、Web ホストは固定された抽選結果を元のフォルダー末尾に追加します。名前はローカル時刻の `<name> yyyyMMdd_HHmmss`、`release` は `false` です。PLAY と AUTO のどちらでも保持します。カーソルは新しいバーに戻り、再度開始すると再抽選せず同じステージを遊べます。全フォルダー合計で最大100件を古い順に保持し、超過時は最古のものを削除します。この履歴はセッション中のみ保持します。記録とリプレイには引き続きステージから決まるコースの識別子を使います。
+
+### フィルタの列
+
+フィルタは beatoraja の 3 つの表を読みます（`SQLiteSongDatabaseAccessor.getSongDatas`、[beatoraja 83574048](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/song/SQLiteSongDatabaseAccessor.java#L344-L367)）。各列は be-music が譜面について知っていることから埋めます。出どころのない列は、値をこしらえずに未知の列として拒否します。
+
+- **`song`** は譜面そのものです：`md5`、`sha256`、`title`、`subtitle`、`artist`、`subartist`、`genre`、`tag`、`path`、`level`、`difficulty`、`mode`、`notes`、`minbpm`、`maxbpm`、`length`、`judge`、`feature`、`content`。ない文字列の列は `''`、ない数値は 0 と読みます。beatoraja の `SongData` が保存する値と同じです。
+- **`score`** は、有効な判定ルールセット（Developer → Judgment windows）での、その譜面のプレイヤーのベストレコードです。選曲画面に出る記録と同じものです（`createCourseChartScore`）。beatoraja はこれを `LEFT OUTER JOIN` で結合するので、未プレイの譜面は `score` の列がすべて NULL です。`score.clear < 5` はそれを除き、`score.clear IS NULL OR score.clear < 5` は含めます。
+- **`information`** は譜面の楽曲情報（`SongInformation`）で、フィルタが初めて読んだときに譜面から求めます。
+
+| 列                                                 | be-music での出どころ                                                                                                                                                                                                  |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `score.clear`                                      | ベストランプを beatoraja の `ClearType` で表した値（`beatorajaClearType`）：NO PLAY 0、FAILED 1、ASSIST EASY 3（beatoraja の LIGHT ASSIST EASY）、EASY 4、NORMAL 5、HARD 6、EX HARD 7、FULL COMBO 8、PERFECT 9、MAX 10 |
+| `score.exscore`                                    | ベスト EX スコア。be-music 独自の列です（beatoraja は判定数を持ちます）                                                                                                                                                |
+| `score.combo`                                      | ベストの最大コンボ                                                                                                                                                                                                     |
+| `score.minbp`                                      | 最小 BP                                                                                                                                                                                                                |
+| `score.playcount`                                  | 記録が数えたプレイ回数                                                                                                                                                                                                 |
+| `score.notes`                                      | 譜面のノーツ数                                                                                                                                                                                                         |
+| `score.sha256`                                     | 記録のある譜面の SHA-256                                                                                                                                                                                               |
+| `information.n` / `ln`                             | 鍵盤のタップ / ロングノーツ。CN と HCN は終端も数えます（`BMSModelUtils.getTotalNotes` と同じ）                                                                                                                        |
+| `information.s` / `ls`                             | 皿で同じもの                                                                                                                                                                                                           |
+| `information.total`                                | beatoraja がプレイで使う TOTAL：`#TOTAL`、bmson の `total` は既定値に対する百分率、なければノーツ数から求める beatoraja の既定値（`BMSPlayerRule.validate`）                                                           |
+| `information.density`、`peakdensity`、`enddensity` | 平均・最大・終盤の密度（`computeBeatorajaChartDensityValues`、`SongInformation` に準拠）                                                                                                                               |
+| `information.mainbpm`                              | 判定ノーツが最も多く置かれた BPM（`resolveChartMainBPM`）                                                                                                                                                              |
+| `information.sha256`                               | 譜面の SHA-256                                                                                                                                                                                                         |
+
+出どころがないため拒否する列：`song.folder`、`stagefile`、`banner`、`backbmp`、`preview`、`parent`、`date`、`favorite`、`adddate`、`charthash`。`score.mode`、判定数（`epg`、`lpg`、`egr`、`lgr`、`egd`、`lgd`、`ebd`、`lbd`、`epr`、`lpr`、`ems`、`lms`）、`avgjudge`、`clearcount`、`trophy`、`ghost`、`option`、`seed`、`random`、`date`、`state`、`scorehash`。`information.distribution`、`speedchange`、`lanenotes`。そして `scorelog` の列すべて（be-music は記録更新の履歴を持ちません）。選曲画面の検索は譜面をハッシュしないので、そこでは `md5` と `sha256` は `''` と読みます。
 
 ## NONSTOP コース
 
@@ -268,6 +294,8 @@ stateDiagram-v2
 - `recordStage` はステージのリプレイを記録し、コースが続くかどうかを返します（`goesOnAfter` で先に確かめられます）。`giveUp` は ESC で投げたステージを記録し、コースを落ちたプレイとして終えます。
 - `playSeconds` はステージのプレイ時間を合計します。投げたステージは投げたところまでです（`resolveGivenUpPlaySeconds`）。`stageExtras` は、ホストが各ステージについて残したもの（結果のグラフなど）を持ちます。
 - `buildReplay` はコースのリプレイを書きます。遊んだステージに続けて、たどり着かなかった各ステージを、譜面の情報、ファイルのハッシュ、譜面のフィンガープリントとともに並べます。
+
+コースのリプレイも同じ流れで再生します。ブラウザープレイヤーはログと見つかった譜面からコースを組み直し（`courseFromReplay`）、各ステージは記録されたリプレイを再生して、何も記録しない再生中のプレイの代わりにそのリプレイをコースに記録します。記録されたプレイが止まったところで止まり、何も残しません。[リプレイ — コースのリプレイを再生する](./replay.ja.md#コースのリプレイを再生する) を参照してください。
 
 ### コースの結果
 

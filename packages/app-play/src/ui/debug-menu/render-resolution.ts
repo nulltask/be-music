@@ -104,6 +104,7 @@ export async function detectRenderResolution(
     });
     this.guiState.renderResolution = result.chosen;
     storeRenderResolution(result.chosen);
+    this.scheduleSettingsSave();
     this.resolutionPicker?.refresh();
     resolutionLog.info('picked', {
       chosen: result.chosen,

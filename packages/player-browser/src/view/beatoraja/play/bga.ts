@@ -39,7 +39,7 @@ export interface BeatorajaBGALayerOptions {
   poorBGAMode?: 0 | 1 | 2;
   /**
    * Decoded BGA textures keyed by `#BMPxx` slot label (`'00'`..`'ZZ'`). Same map the LR2 path's BGA
-   * loader produces; the demo can build it once and share it across the gameplay views.
+   * loader produces; the player can build it once and share it across the gameplay views.
    */
   textures: ReadonlyMap<string, Texture>;
   /**

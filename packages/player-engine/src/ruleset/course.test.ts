@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
   applyCourseJudgeConstraint,
+  isCourseStageFailed,
   resolveCourseGauge,
   resolveCourseGaugeId,
   resolveDefaultCourseGaugeSet,
@@ -171,4 +172,17 @@ describe('resolveRuleset with a course', () => {
     expect(later[1]).toEqual(later[0]);
     expect(later[2]).toEqual(later[0]);
   });
+});
+
+test('maps independent EX-HARD into the source course EXHARDCLASS', () => {
+  expect(resolveCourseGaugeId('beatoraja', 'expert', 'EX-HARD')).toBe('EXHARDCLASS');
+  expect(resolveCourseGaugeId('____', 'grade', 'EX-HARD')).toBe('EXHARDCLASS');
+});
+
+test('course advancement follows the LR2 two-percent boundary and other sources zero boundary', () => {
+  expect(isCourseStageFailed('lr2/0', { final: 1.99 })).toBe(true);
+  expect(isCourseStageFailed('lr2', { final: 2 })).toBe(false);
+  expect(isCourseStageFailed('lr2', { final: 100, failedMidPlay: true })).toBe(true);
+  expect(isCourseStageFailed('beatoraja', { final: 1 })).toBe(false);
+  expect(isCourseStageFailed('beatoraja/0', { final: 0 })).toBe(true);
 });

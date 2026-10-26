@@ -6,7 +6,7 @@ export interface ReleasablePackageJSON {
 
 /**
  * Whether a package gets a GitHub Release: its version moved since the base, and it is not private. Private packages
- * (the player demo, the Leaderboard) are versioned by Changesets but never tagged (`privatePackages.tag: false` in
+ * (the web player, the Leaderboard) are versioned by Changesets but never tagged (`privatePackages.tag: false` in
  * .changeset/config.json), so they get no release either.
  */
 export function shouldReleasePackage(current: ReleasablePackageJSON, base: ReleasablePackageJSON | null): boolean {

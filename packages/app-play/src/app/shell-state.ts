@@ -1,4 +1,4 @@
-// The demo shell's state as the scenes change: which overlays step aside, whether the touch controls show, and where the
+// The player shell's state as the scenes change: which overlays step aside, whether the touch controls show, and where the
 // search field goes. Pure, so the per-frame check in `shell.ts` only reads the app and applies the result.
 
 import type { SceneKind } from '@be-music/player-browser/host';

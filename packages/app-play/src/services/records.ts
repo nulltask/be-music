@@ -1,4 +1,4 @@
-// The demo's best records and the chart hashes they are keyed by: each chart's SHA-256 and MD5, hashed once per chart,
+// The player's best records and the chart hashes they are keyed by: each chart's SHA-256 and MD5, hashed once per chart,
 // and the record keys of the play in flight, latched as it takes the stage. `chart-best-records.ts` keys and stores the
 // records; `@be-music/player-engine/records` says how a play merges into them.
 
@@ -123,11 +123,17 @@ export class RecordsService {
     return rulesetRecords(this.chartBestRecords, this.judgeRuleset());
   }
 
-  /** Records the running play's result under its chart, when the play counts ({@link playRecordKey}). */
-  public recordActivePlay(play: RecordPlay): void {
-    if (this.activePlayRecordKey === undefined) return;
-    this.recordSongResult(this.activePlayRecordKey, play);
+  /**
+   * Records the running play's result under its chart, when the play counts ({@link playRecordKey}). Returns the record
+   * as it was before the play (`previous`, absent for a first play), or `undefined` when the play did not count.
+   */
+  public recordActivePlay(play: RecordPlay): { previous: BestRecord | undefined } | undefined {
+    const key = this.activePlayRecordKey;
+    if (key === undefined) return undefined;
+    const previous = this.chartBestRecords.get(key);
+    this.recordSongResult(key, play);
     this.activePlayRecordKey = undefined;
+    return { previous };
   }
 
   /** Folds the running course stage into its chart's record ({@link mergeCourseStageRecord}), when the stage counts. */
@@ -147,11 +153,16 @@ export class RecordsService {
 
   /**
    * Keeps a course run's best lamp, EX score, course max combo and BP under the course's key, when the run keeps a
-   * record ({@link resolveCourseBestRecordUpdate}).
+   * record ({@link resolveCourseBestRecordUpdate}). Returns the record as it was before the run, or `undefined` when
+   * the run kept none.
    */
-  public recordCourseResult(update: { key: string; play: RecordPlay } | undefined): void {
-    if (update === undefined) return;
-    this.chartBestRecords.set(update.key, mergeBestRecord(this.chartBestRecords.get(update.key), update.play));
+  public recordCourseResult(
+    update: { key: string; play: RecordPlay } | undefined,
+  ): { previous: BestRecord | undefined } | undefined {
+    if (update === undefined) return undefined;
+    const previous = this.chartBestRecords.get(update.key);
+    this.chartBestRecords.set(update.key, mergeBestRecord(previous, update.play));
     storeChartBestRecords(this.chartBestRecords);
+    return { previous };
   }
 }

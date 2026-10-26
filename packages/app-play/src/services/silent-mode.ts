@@ -20,6 +20,8 @@ export interface SilentModeSettingOptions {
   readonly settings: { playInSilentMode: boolean };
   /** Whether the device is a phone or a tablet, where the hint shows. */
   readonly touchFirst: boolean;
+  /** Called after the setting is remembered, so the Debug Menu document stays with it. */
+  readonly onRemember?: () => void;
 }
 
 /** The "Play in silent mode" setting, and the places it shows. */
@@ -30,10 +32,12 @@ export class SilentModeSetting {
   public startOption: Pick<StartSilentModeOption, 'setChecked'> | undefined;
   private readonly settings: { playInSilentMode: boolean };
   private readonly touchFirst: boolean;
+  private readonly onRemember: (() => void) | undefined;
 
   public constructor(options: SilentModeSettingOptions) {
     this.settings = options.settings;
     this.touchFirst = options.touchFirst;
+    this.onRemember = options.onRemember;
   }
 
   /**
@@ -58,6 +62,7 @@ export class SilentModeSetting {
     this.startOption?.setChecked(value);
     // Once the user has found the setting, the hint has nothing left to say.
     storeSilentModeHintSeen();
+    this.onRemember?.();
   }
 
   /**

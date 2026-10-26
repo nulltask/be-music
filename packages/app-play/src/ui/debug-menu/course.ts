@@ -2,7 +2,7 @@ import { selectBinding, type PaneBinding } from '../../pane-controls.ts';
 // The Debug Menu's Course folder. It is built with the menu as `this` (`DebugMenu`).
 import type { FolderApi } from 'tweakpane';
 import { normalizeCourseTableURL } from '../../course-table-import.ts';
-import type { DemoGUIState } from '../../types.ts';
+import type { PlayerGUIState } from '../../types.ts';
 import type { DebugMenu, DebugMenuDeps } from './index.ts';
 /**
  * Courses: whether stage results show, the player's own courses, the NONSTOP placement, and importing a difficulty
@@ -29,7 +29,7 @@ export function buildCourseFolder(this: DebugMenu, folder: FolderApi): void {
         this.setStatus('Enter a difficulty-table URL first');
         return;
       }
-      void this.library.importCourseTables([url], true);
+      void this.library.importCourseTables([url], true).finally(() => this.scheduleSettingsSave());
     },
   };
   folder.addBinding(courseTable, 'url', { label: 'Table URL' });
@@ -42,7 +42,7 @@ export function buildCourseFolder(this: DebugMenu, folder: FolderApi): void {
  */
 export function applyNonstopPlacement(
   deps: Pick<DebugMenuDeps, 'settings' | 'refreshSelectRecords'>,
-  value: DemoGUIState['nonstopPlacement'],
+  value: PlayerGUIState['nonstopPlacement'],
 ): void {
   deps.settings.nonstopPlacement = value;
   deps.refreshSelectRecords();

@@ -5,7 +5,7 @@ import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import type { TestHookBar, TestHookState } from '../src/test-hook.ts';
 
 /**
- * The page helpers the specs share: opening the demo with the test hook, dropping fixture folders the way a person
+ * The page helpers the specs share: opening the player with the test hook, dropping fixture folders the way a person
  * drops them (a synthetic `drop` of `File`s with `webkitRelativePath`, as `docs/course-checklist.md` describes), keys
  * with a `code`, the Debug Menu's controls, and waits on `window.__beMusicTest` state.
  */
@@ -19,6 +19,12 @@ const KEY_OF_CODE: Readonly<Record<string, string>> = {
   KeyZ: 'z',
   KeyS: 's',
   KeyX: 'x',
+  KeyF: 'f',
+  KeyV: 'v',
+  Digit1: '1',
+  Digit2: '2',
+  Digit3: '3',
+  Digit4: '4',
   Space: ' ',
 };
 
@@ -45,7 +51,7 @@ function describeState(state: TestHookState | undefined): string {
   return JSON.stringify({ ...rest, results: results.length, lastResult: results.at(-1) });
 }
 
-export class Demo {
+export class Player {
   readonly page: Page;
 
   constructor(page: Page) {
@@ -53,8 +59,8 @@ export class Demo {
   }
 
   /**
-   * Opens the demo with the test hook on the empty select screen. `storage` seeds `localStorage` (the settings the
-   * demo remembers) before it starts; the built-in skin's effects are off unless a spec asks for them.
+   * Opens the player with the test hook on the empty select screen. `storage` seeds `localStorage` (the settings the
+   * player remembers) before it starts; the built-in skin's effects are off unless a spec asks for them.
    */
   async open(storage: Readonly<Record<string, string>> = {}): Promise<TestHookState> {
     await this.page.route(`**${FILE_ROUTE}**`, async (route) => {
@@ -65,7 +71,7 @@ export class Demo {
       (entries) => {
         for (const [key, value] of Object.entries(entries)) window.localStorage.setItem(key, value);
       },
-      { 'be-music-demo.skin-effects': 'off', ...storage },
+      { 'be-music.skin-effects': 'off', ...storage },
     );
     await this.page.goto('/?e2e=1');
     return this.waitFor((state) => state.scene.kind === 'select', 'the select screen');
@@ -103,7 +109,7 @@ export class Demo {
 
   /**
    * Drops the fixture folder `root` (a path under the fixtures dir) as a person drops it: every file, its path under
-   * `prefix` (the dropped folder's name), filtered by `only`. Resolves once the demo has loaded it.
+   * `prefix` (the dropped folder's name), filtered by `only`. Resolves once the player has loaded it.
    */
   async drop(
     root: string,
@@ -379,7 +385,7 @@ export class Demo {
   }
 
   /**
-   * Presses `code` on the result screen until the demo leaves it (a result skin ignores keys for its input delay), and
+   * Presses `code` on the result screen until the player leaves it (a result skin ignores keys for its input delay), and
    * returns the state once it has.
    */
   async leaveResult(code = 'Escape'): Promise<TestHookState> {
@@ -414,9 +420,9 @@ export class Demo {
   }
 }
 
-/** Playwright's `test` with a `demo` fixture that has the demo open, the fixture library not yet dropped. */
-export const test = base.extend<{ demo: Demo }>({
-  demo: async ({ page }, use) => {
+/** Playwright's `test` with a `player` fixture that has the player open, the fixture library not yet dropped. */
+export const test = base.extend<{ player: Player }>({
+  player: async ({ page }, use) => {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(`uncaught: ${error.message}`));
     page.on('console', (message) => {
@@ -425,8 +431,8 @@ export const test = base.extend<{ demo: Demo }>({
         errors.push(`console: ${message.text()}`);
       }
     });
-    const demo = new Demo(page);
-    await use(demo);
+    const player = new Player(page);
+    await use(player);
     // Checklist item 11: nothing in the flow throws or logs an error.
     if (errors.length > 0) throw new Error(`errors in the page:\n${errors.join('\n')}`);
   },
@@ -440,12 +446,12 @@ export { expect } from '@playwright/test';
  */
 export const SMOKE = { tag: '@smoke' } as const;
 
-/** The checklist library's song folder and course folder, as the demo lists them after a drop of `songs`. */
+/** The checklist library's song folder and course folder, as the player lists them after a drop of `songs`. */
 export const SONGS = 'fixtures';
 export const COURSES = 'fixture-courses';
 
-/** Opens the demo and drops the checklist library (charts and course file) as the folder `fixtures`. */
-export async function openWithLibrary(demo: Demo, storage: Readonly<Record<string, string>> = {}): Promise<void> {
-  await demo.open(storage);
-  await demo.drop('songs', { prefix: SONGS });
+/** Opens the player and drops the checklist library (charts and course file) as the folder `fixtures`. */
+export async function openWithLibrary(player: Player, storage: Readonly<Record<string, string>> = {}): Promise<void> {
+  await player.open(storage);
+  await player.drop('songs', { prefix: SONGS });
 }

@@ -49,6 +49,8 @@ export interface PlayerUIFrameClock {
  * `PlayerSummary` (`PlayerSummary.gauge`) so the two can never drift.
  */
 export interface PlayerGaugeSummary {
+  /** Raw values of parallel gauges, used to carry course class gauges independently. */
+  values?: Readonly<Record<string, number>>;
   /** Raw gauge units, relative to `max`; PMS normal gauges use a maximum of 120. */
   current: number;
   max: number;
@@ -118,6 +120,8 @@ export interface PlayerUIFramePayload {
   reversalSeconds?: number;
   totalSeconds: number;
   summary: PlayerUIFrameSummary;
+  /** The 2P player's summary of a two-player play (LR2 BATTLE); `summary` is the 1P player's. */
+  summary2P?: PlayerUIFrameSummary;
   notes: PlayerUIFrameNote[];
   /** Authoritative HCN animation state; absent before a judge is created. */
   hcnLanes?: readonly PlayerHCNLaneState[];
@@ -174,6 +178,7 @@ export type PlayerUILongNoteMode = 'ln' | 'cn' | 'hcn';
 export type PlayerUILongNoteOutcome = 'complete' | 'dropped';
 
 export type PlayerUICommand =
+  | { kind: 'judge-timing'; value: number }
   | { kind: 'flash-lane'; channel: string }
   | { kind: 'hold-lane-until-beat'; channel: string; beat: number }
   | { kind: 'press-lane'; channel: string }
@@ -216,6 +221,7 @@ export function createPlayerUISignalBus(initialFrame: PlayerUIFramePayload): Pla
     frameState.reversalSeconds = frame.reversalSeconds;
     frameState.totalSeconds = frame.totalSeconds;
     frameState.summary = frame.summary;
+    frameState.summary2P = frame.summary2P;
     frameState.notes = frame.notes;
     frameState.hcnLanes = frame.hcnLanes;
     frameState.judgedNoteCount = frame.judgedNoteCount;

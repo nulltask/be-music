@@ -16,7 +16,7 @@ import type {
 import { LR2_LANE_TIMER_BANK_SIZE, LR2_NUM, LR2_OP, LR2_SLIDER, LR2_TEXT, LR2_TIMER } from '../ids/index.ts';
 import { resolveLR2ChartText } from './chart.ts';
 import { lr2ShowsCourseCombo, resolveLR2CourseNumber, resolveLR2CourseOps, resolveLR2CourseText } from './course.ts';
-import { isLR2BGAShown, isLR2RedGauge, lr2HiSpeedSlider } from './options.ts';
+import { isLR2BGAShown, isLR2RedGauge, lr2HiSpeedSlider, resolveLR2BattleOps } from './options.ts';
 import { notesJudged, resolveLR2RateNumber } from './score.ts';
 import { lr2TimerUpdate, type LR2SceneState, type LR2TimerUpdate } from './scene-state.ts';
 
@@ -25,6 +25,8 @@ export interface LR2PlayLanes {
   readonly playVariant: ChartPlayVariant;
   /** The lane channels the chart plays (`11` … `19`, `21` … `29`). */
   readonly channels: readonly string[];
+  /** The play variant of the chart a battle mode converted: LR2's key-mode ops read it, not the converted lanes. */
+  readonly battleSourceVariant?: ChartPlayVariant;
 }
 
 /** What stays the same for a whole LR2 play: the chart, its lanes and features, the options, the gauge, the course. */
@@ -39,11 +41,16 @@ export interface LR2PlaySetup {
   readonly options: Pick<
     PlayOptions,
     'autoPlay' | 'autoScratch1P' | 'autoScratch2P' | 'scoreGraph' | 'bga' | 'bgaSize'
-  >;
+  > &
+    Partial<Pick<PlayOptions, 'battleMode' | 'keysFilter' | 'lr2ExtraMode'>>;
   /** The gauge the play runs on (ops 42-45). */
   readonly gauge: GaugeType;
+  /** The 2P player's gauge in a two-player BATTLE (ops 43 / 45); `gauge` when absent. */
+  readonly gauge2P?: GaugeType;
   /** Whether the play runs on a course's gauge: LR2 reports the course gauge as the red one (OpenLR2 L4613-L4628). */
   readonly courseGauge?: boolean;
+  /** Whether the play is a replay played back: REPLAY PLAYING (op 84) in place of REPLAY OFF (op 82). */
+  readonly replay?: boolean;
   /** The course the play is a stage of, or the NONSTOP course it stitches, with the stage being played. */
   readonly course?: CourseView;
   /** The skin's `#CUSTOMOPTION` choices: their ops (900-999). A skin that picks the BGA size keeps its pick. */
@@ -61,6 +68,12 @@ export interface LR2PlayView {
   readonly totalSeconds: PlayState['totalSeconds'];
   readonly courseCombo?: { readonly combo: number; readonly maxCombo: number };
   readonly view: { readonly hiSpeed: { readonly player: number } };
+}
+
+/** The 2P player of a two-player BATTLE: its running play and its score (numbers 120-136, ops 210-217 and 250-260). */
+export interface LR2SecondPlayerFrame {
+  readonly play: Pick<LR2PlayView, 'gauge' | 'combo' | 'maxCombo'>;
+  readonly score: ScoreSummary;
 }
 
 /** One frame of an LR2 play. Time comes in here: the resolvers read no clock. */
@@ -81,6 +94,10 @@ export interface LR2PlayFrame {
   readonly bpm?: number;
   /** The frame rate (number 20). */
   readonly fps?: number;
+  /** The judge timing the notes are drawn with now (number 12), moved by the automatic adjustment; 0 when absent. */
+  readonly judgeTimingMs?: number;
+  /** The 2P player of a two-player BATTLE. */
+  readonly secondPlayer?: LR2SecondPlayerFrame;
   /** Latest displayed judgment per side; retained after the judge plate fades. */
   readonly judgments?: Readonly<Partial<Record<PlaySide, JudgmentKind | 'EMPTY_POOR'>>>;
 }
@@ -91,15 +108,13 @@ export interface LR2PlayState extends LR2SceneState {
   bargraph(type: number): number;
 }
 
-/** Ops a play always lights: a playable chart, no GHOST, difficulty filter, internet ranking, EXTRA MODE or replay. */
+/** Ops a play always lights: a playable chart, no GHOST, difficulty filter or internet ranking. */
 const PLAY_BASE_OPS: readonly number[] = [
   LR2_OP.PLAYABLE_BAR,
   LR2_OP.GHOST_OFF,
   LR2_OP.DIFFICULTY_FILTER_OFF,
   LR2_OP.OFFLINE,
-  LR2_OP.EXTRA_MODE_OFF,
   LR2_OP.SCORE_SAVE_ON,
-  LR2_OP.REPLAY_OFF,
   LR2_OP.NO_TEXT,
   LR2_OP.NO_RANDOM,
   LR2_OP.JUDGE_NORMAL,
@@ -121,20 +136,50 @@ export function resolveLR2PlayKeyModeOp(lanes: LR2PlayLanes): number {
   return uses6or7 ? LR2_OP.KEYS_7 : LR2_OP.KEYS_5;
 }
 
+const SOURCE_KEY_MODE_OPS: Partial<Record<ChartPlayVariant, number>> = {
+  '5': LR2_OP.KEYS_5,
+  '7': LR2_OP.KEYS_7,
+  '9': LR2_OP.KEYS_9,
+  '10': LR2_OP.KEYS_10,
+  '14': LR2_OP.KEYS_14,
+};
+
+/**
+ * The key-mode ops of a play (OpenLR2 `GetOptionFlag_dst` L5024-L5040): LR2 reads the selected chart's key mode, so a
+ * battle mode keeps the source's op — BATTLE on a 7KEY chart lights 7 KEYS — and D-BATTLE / SP TO DP on a 5/7KEY chart
+ * light 10 / 14 KEYS beside it. Without a battle mode, the lanes' {@link resolveLR2PlayKeyModeOp}.
+ */
+export function resolveLR2PlayKeyModeOps(
+  lanes: LR2PlayLanes,
+  battleMode: PlayOptions['battleMode'] | undefined,
+): number[] {
+  const source = lanes.battleSourceVariant;
+  const sourceOp = source === undefined ? undefined : SOURCE_KEY_MODE_OPS[source];
+  if (sourceOp === undefined) return [resolveLR2PlayKeyModeOp(lanes)];
+  const doubled = battleMode === 'D-BATTLE' || battleMode === 'SP-TO-DP';
+  if (doubled && source === '7') return [sourceOp, LR2_OP.KEYS_14];
+  if (doubled && source === '5') return [sourceOp, LR2_OP.KEYS_10];
+  return [sourceOp];
+}
+
 /** The ops of a play that hold from its start to its end. */
 function setupOps(setup: LR2PlaySetup): number[] {
   const ops: number[] = [];
   for (const op of setup.customOps ?? []) ops.push(op);
   ops.push(...PLAY_BASE_OPS);
   const { options } = setup;
+  ops.push(options.lr2ExtraMode === true ? LR2_OP.EXTRA_MODE_ON : LR2_OP.EXTRA_MODE_OFF);
+  ops.push(...resolveLR2BattleOps(options));
   ops.push(options.autoScratch1P === true ? LR2_OP.AUTO_SCRATCH_1P_ON : LR2_OP.AUTO_SCRATCH_1P_OFF);
   ops.push(options.autoScratch2P === true ? LR2_OP.AUTO_SCRATCH_2P_ON : LR2_OP.AUTO_SCRATCH_2P_OFF);
   // The gauge type is fixed for the run; a course stage runs on the course gauge, which LR2 reports as the red one.
-  ops.push(...resolveLR2GaugeTypeOps(setup.courseGauge === true ? 'HARD' : setup.gauge));
+  const gaugeOps = resolveLR2GaugeTypeOps(setup.courseGauge === true ? 'HARD' : setup.gauge);
+  ops.push(gaugeOps[0], setup.gauge2P === undefined ? gaugeOps[1] : resolveLR2GaugeTypeOps(setup.gauge2P)[1]);
   ops.push(options.scoreGraph === true ? LR2_OP.SCORE_GRAPH_ON : LR2_OP.SCORE_GRAPH_OFF);
   ops.push(isLR2BGAShown(options.bga, options.autoPlay === true) ? LR2_OP.BGA_ON : LR2_OP.BGA_OFF);
   ops.push(options.autoPlay === true ? LR2_OP.AUTOPLAY_ON : LR2_OP.AUTOPLAY_OFF);
-  ops.push(resolveLR2PlayKeyModeOp(setup.lanes));
+  ops.push(setup.replay === true ? LR2_OP.REPLAY_PLAYING : LR2_OP.REPLAY_OFF);
+  ops.push(...resolveLR2PlayKeyModeOps(setup.lanes, options.battleMode));
   ops.push(setup.features.longNote ? LR2_OP.HAS_LN : LR2_OP.NO_LN);
   ops.push(setup.features.bpmChange ? LR2_OP.HAS_BPM_CHANGE : LR2_OP.NO_BPM_CHANGE);
   ops.push(setup.features.bga ? LR2_OP.HAS_BGA : LR2_OP.NO_BGA);
@@ -159,20 +204,27 @@ export function resolveLR2GaugeTypeOps(gauge: GaugeType): readonly [number, numb
     : [LR2_OP.GAUGE_1P_NORMAL, LR2_OP.GAUGE_2P_NORMAL];
 }
 
-/** LR2's 1P gauge-range op for a gauge in percent: 230 for 0-9 %, 231 for 10-19 %, …, 240 for 100 %. */
-export function resolveLR2GaugeRangeOp(gaugePercent: number): number {
-  return LR2_OP.GAUGE_1P_0_9 + Math.min(10, Math.max(0, Math.floor(gaugePercent / 10)));
+/**
+ * LR2's gauge-range op for a gauge in percent: 230 for 0-9 %, 231 for 10-19 %, …, 240 for 100 % on 1P, and 250-260 on
+ * 2P.
+ */
+export function resolveLR2GaugeRangeOp(gaugePercent: number, side: PlaySide = '1P'): number {
+  const base = side === '2P' ? LR2_OP.GAUGE_2P_0_9 : LR2_OP.GAUGE_1P_0_9;
+  return base + Math.min(10, Math.max(0, Math.floor(gaugePercent / 10)));
 }
 
 /**
- * LR2's 1P rank op (200 AAA … 207 F): the DJ Rank of the EX score over the notes judged so far, not over every note
- * (OpenLR2 `GetOptionFlag_dst` ranks `exscore × 9 / (note_current × 2)`); none before the first note is judged.
+ * LR2's rank op (200 AAA … 207 F on 1P, 210-217 on 2P): the DJ Rank of the EX score over the notes judged so far, not
+ * over every note (OpenLR2 `GetOptionFlag_dst` ranks `exscore × 9 / (note_current × 2)`); none before the first note
+ * is judged.
  */
 export function resolveLR2RankOp(
   score: Pick<ScoreSummary, 'perfect' | 'great' | 'good' | 'bad' | 'poor' | 'exScore'>,
+  side: PlaySide = '1P',
 ): number | undefined {
   const rankIndex = resolve____RankIndexFromScore({ total: notesJudged(score), exScore: score.exScore });
-  return rankIndex === undefined ? undefined : LR2_OP.RANK_1P_AAA + rankIndex;
+  if (rankIndex === undefined) return undefined;
+  return (side === '2P' ? LR2_OP.RANK_2P_AAA : LR2_OP.RANK_1P_AAA) + rankIndex;
 }
 
 /** The course a frame shows: a stitched NONSTOP play's course at the stage it shows from the second stage on. */
@@ -195,8 +247,56 @@ function nextRankDiff(score: Pick<ScoreSummary, 'total' | 'exScore'>): number {
   return score.exScore - Math.floor((max * (rank + 1)) / 9);
 }
 
+/** The offset of the 2P player's numbers (120-136) from the 1P player's (100-116). */
+const SECOND_PLAYER_NUMBER_OFFSET = LR2_NUM.SCORE_2P - LR2_NUM.SCORE;
+
+/**
+ * The 2P player's numbers of a two-player BATTLE (120-136, OpenLR2 `SetObjectValue_Num`): the 1P player's 100-116 read
+ * off the 2P score, with 128 the 2P EX score less the 1P player's. `undefined` for any other number.
+ */
+function secondPlayerNumber(num: number, frame: LR2PlayFrame): number | undefined {
+  const second = frame.secondPlayer;
+  if (second === undefined || num < LR2_NUM.SCORE_2P || num > LR2_NUM.TOTAL_RATE_AFTERDOT_2P) return undefined;
+  const { score, play } = second;
+  const own = num - SECOND_PLAYER_NUMBER_OFFSET;
+  const rateNumber = resolveLR2RateNumber(own, score);
+  if (rateNumber !== undefined) return rateNumber;
+  switch (own) {
+    case LR2_NUM.SCORE:
+      return score.score;
+    case LR2_NUM.EXSCORE:
+      return score.exScore;
+    case LR2_NUM.COMBO:
+      return play.combo;
+    case LR2_NUM.MAX_COMBO:
+      return play.maxCombo;
+    case LR2_NUM.NOTES:
+      return score.total;
+    case LR2_NUM.GAUGE:
+      return Math.round(play.gauge);
+    case LR2_NUM.EXSCORE_DIFF:
+      return score.exScore - frame.score.exScore;
+    case LR2_NUM.NEXT_RANK_DIFF:
+      return nextRankDiff(score);
+    case LR2_NUM.PERFECT:
+      return score.perfect;
+    case LR2_NUM.GREAT:
+      return score.great;
+    case LR2_NUM.GOOD:
+      return score.good;
+    case LR2_NUM.BAD:
+      return score.bad;
+    case LR2_NUM.POOR:
+      return score.poor;
+    default:
+      return undefined;
+  }
+}
+
 function playNumber(num: number, setup: LR2PlaySetup, frame: LR2PlayFrame): number | undefined {
   const { score, play } = frame;
+  const secondNumber = secondPlayerNumber(num, frame);
+  if (secondNumber !== undefined) return secondNumber;
   const course = setup.course;
   if (course !== undefined) {
     const courseNumber = resolveLR2CourseNumber(num, course);
@@ -210,6 +310,8 @@ function playNumber(num: number, setup: LR2PlaySetup, frame: LR2PlayFrame): numb
   switch (num) {
     case LR2_NUM.HISPEED_1P:
       return Math.round(play.view.hiSpeed.player * 100);
+    case LR2_NUM.JUDGE_TIMING:
+      return frame.judgeTimingMs ?? 0;
     case LR2_NUM.FPS:
       return frame.fps !== undefined ? Math.round(frame.fps) : undefined;
     case LR2_NUM.SCORE:
@@ -225,7 +327,8 @@ function playNumber(num: number, setup: LR2PlaySetup, frame: LR2PlayFrame): numb
     case LR2_NUM.GAUGE:
       return Math.round(play.gauge);
     case LR2_NUM.EXSCORE_DIFF:
-      return 0;
+      // In a two-player BATTLE the 1P EX score less the 2P player's.
+      return frame.secondPlayer === undefined ? 0 : score.exScore - frame.secondPlayer.score.exScore;
     case LR2_NUM.PERFECT:
       return score.perfect;
     case LR2_NUM.GREAT:
@@ -327,9 +430,9 @@ const SETUP_OPS = new WeakMap<LR2PlaySetup, readonly number[]>();
 
 /**
  * The LR2 play screen's state for a frame: the ops (the play's fixed ops from its setup — options, gauge type, key
- * mode, chart features, course — and the frame's: loading (80 / 81), the 1P rank so far (200-207), the gauge range (230-240)
- * and a NONSTOP play's stage), the numbers (the score, combo, gauge, judgement counts, rates, BPM, time, the course's
- * stage levels), the texts (the chart's and the course's), the sliders (hi-speed, progress) and the bar graphs. The
+ * mode, chart features, course — and the frame's: loading (80 / 81), the rank so far (200-207, 210-217 for a 2P player),
+ * the gauge range (230-240, 250-260) and a NONSTOP play's stage), the numbers (the score, combo, gauge, judgement counts,
+ * rates, BPM, time, the course's stage levels, a 2P player's 120-136), the texts (the chart's and the course's), the sliders (hi-speed, progress) and the bar graphs. The
  * setup's ops are kept per setup object, so a scene builds its setup once and passes it every frame.
  */
 export function resolveLR2PlayState(setup: LR2PlaySetup, frame: LR2PlayFrame): LR2PlayState {
@@ -343,6 +446,12 @@ export function resolveLR2PlayState(setup: LR2PlaySetup, frame: LR2PlayFrame): L
   const rank = resolveLR2RankOp(frame.score);
   if (rank !== undefined) ops.add(rank);
   ops.add(resolveLR2GaugeRangeOp(frame.play.gauge));
+  const second = frame.secondPlayer;
+  if (second !== undefined) {
+    const rank2P = resolveLR2RankOp(second.score, '2P');
+    if (rank2P !== undefined) ops.add(rank2P);
+    ops.add(resolveLR2GaugeRangeOp(second.play.gauge, '2P'));
+  }
   ops.add(JUDGMENT_OPS[frame.judgments?.['1P'] ?? 'EMPTY_POOR']);
   ops.add(JUDGMENT_OPS[frame.judgments?.['2P'] ?? 'EMPTY_POOR'] + 20);
   const course = frameCourse(setup, frame);

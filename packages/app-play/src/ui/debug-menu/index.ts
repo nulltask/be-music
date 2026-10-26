@@ -1,18 +1,28 @@
-// The demo's Tweakpane "Debug Menu": its folders, the controllers the app reaches after building them, and the locks a
+// The player's Tweakpane "Debug Menu": its folders, the controllers the app reaches after building them, and the locks a
 // play puts on them. Each folder is built in a module of its own (`play-options.ts`, `tempo.ts`, …) with the menu as
 // `this`; the folder titles and the remembered open states are `folders.ts`'. The menu reaches the app only through
 // `DebugMenuDeps`, which the app (`app/app.ts`) builds.
 import type { BeatorajaSkinConfig, BeatorajaSkinHeader } from '@be-music/skin-beatoraja';
 import type { LR2DiscoveredTheme } from '@be-music/skin-lr2';
 import type { TunableCompressor } from '@be-music/player-browser/audio';
+import { getBrowserWorkerCount } from '@be-music/player-browser/compute';
 import type { PixiSceneHost, PlayScene, SelectScene } from '@be-music/player-browser/host';
 import type { BeatorajaThemeBundle } from '@be-music/player-browser/skin';
-import type { PlayOptions } from '@be-music/player-scene-model';
+import {
+  formatGaugeLabel,
+  isDuplicatedBattleChoice,
+  resolveRandomModes,
+  type PlayOptions,
+} from '@be-music/player-scene-model';
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
 // Tweakpane injects its component stylesheet; the app themes it with public CSS variables.
 import { Pane, type FolderApi, type BladeApi, type ButtonApi, type ListInputBindingApi } from 'tweakpane';
-import type { PaneBinding } from '../../pane-controls.ts';
+import { paneOptions, type PaneBinding } from '../../pane-controls.ts';
+import { resolveGaugeTypes, type GaugeType } from '@be-music/player-engine/ruleset';
 import { readStoredCompressorTunings, type CompressorTuning } from '../../compressor-tuning.ts';
+import { readStoredCourseTableURLs } from '../../course-table-import.ts';
+import { captureDebugMenuSettings } from '../../debug-menu-settings.ts';
+import { debugMenuSettingsSync } from '../../debug-menu-settings-sync.ts';
 import type { FamilyDispatchState } from '../../family-dispatch.ts';
 import type { LeaderboardPanel } from '../../leaderboard-ui.ts';
 import type { CourseMakerService } from '../../services/course-maker.ts';
@@ -20,7 +30,7 @@ import type { LibraryService } from '../../services/library.ts';
 import type { RecordsService } from '../../services/records.ts';
 import type { SilentModeSetting } from '../../services/silent-mode.ts';
 import type { StoredSkinSettings } from '../../skin-settings.ts';
-import type { DemoGUIState, SkinFamilyOverride } from '../../types.ts';
+import type { PlayerGUIState, SkinFamilyOverride } from '../../types.ts';
 import type { ActiveBeatorajaPlay } from '../beatoraja-skin-options.ts';
 import type { SkinDropFamily } from '../skin-drop-prompt.ts';
 import { buildAudioFolder } from './audio.ts';
@@ -32,7 +42,7 @@ import {
 } from './compressor.ts';
 import { buildCourseFolder } from './course.ts';
 import { buildDeveloperFolder } from './developer.ts';
-import { DEBUG_MENU_FOLDERS, rememberFolderOpenStates, type DebugMenuFolder } from './folders.ts';
+import { DEBUG_MENU_FOLDERS, readFolderOpenStates, rememberFolderOpenStates, type DebugMenuFolder } from './folders.ts';
 import { buildLibraryFolder } from './library.ts';
 import { PlayLock } from './play-lock.ts';
 import { buildPlayOptionsFolder, buildReplayViewFolder } from './play-options.ts';
@@ -45,8 +55,8 @@ import { buildTempoFolder } from './tempo.ts';
  * loaded and shows, and the app's actions its controllers start. The actions keep the names of the app's methods.
  */
 export interface DebugMenuDeps {
-  /** The settings the controllers read and write (`createDemoGUIState`), read by the app as each play starts. */
-  readonly settings: DemoGUIState;
+  /** The settings the controllers read and write (`createPlayerGUIState`), read by the app as each play starts. */
+  readonly settings: PlayerGUIState;
   /** The scene host: "Render resolution" sets its resolution, and the Developer folder reads its frame rate. */
   readonly sceneHost: PixiSceneHost;
   /** "Play in silent mode": the Audio folder's checkbox and the start card's option drive it. */
@@ -65,7 +75,7 @@ export interface DebugMenuDeps {
   readonly beatorajaSkinOverridesByType: Map<number, string>;
   /** The compressor architecture every play mounts with (`?compressor=`), read once at boot. */
   readonly compressorMode: 'split' | 'legacy';
-  /** The demo shell, which "Toggle fullscreen" takes fullscreen. */
+  /** The player shell, which "Toggle fullscreen" takes fullscreen. */
   readonly shell: HTMLElement;
   /** The play: loading behind a decide screen, or on the stage. */
   gameplayView(): PlayScene | undefined;
@@ -88,6 +98,8 @@ export interface DebugMenuDeps {
   /** Shows a status line. */
   setStatus(text: string): void;
   /** Keeps play options set from the menu for every screen and play, and hands them to the select screen. */
+  reusePreviousArrangement?(): Partial<PlayOptions> | undefined;
+  clearArrangement?(): void;
   setPlayOptions(changes: Partial<PlayOptions>): void;
   /** Remembers a hi-speed set on the menu's slider, and hands it to the running play. */
   rememberHiSpeed(value: number, source: 'menu'): void;
@@ -127,7 +139,7 @@ export class DebugMenu {
   /** What the menu reaches of the app. */
   public readonly deps: DebugMenuDeps;
   /** The settings the controllers read and write ({@link DebugMenuDeps.settings}). */
-  public readonly guiState: DemoGUIState;
+  public readonly guiState: PlayerGUIState;
   public readonly sceneHost: PixiSceneHost;
   public readonly silentMode: SilentModeSetting;
   public readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromURL'>;
@@ -177,9 +189,49 @@ export class DebugMenu {
    * together while a song is playing (`lockReplayOptionsForPlay`) and refreshed when the LR2 select panel pushes
    * a change (`refreshPlayOptionControllers`).
    */
-  public readonly playOptionControllers: PaneBinding[] = [];
+  public readonly playOptionControllers: { disabled: boolean; refresh?: () => void }[] = [];
   /** The "Hi-speed" slider — left enabled during a play (it applies live) and repainted by {@link refreshHiSpeed}. */
   public hiSpeedController: PaneBinding | undefined;
+  public judgeTimingController: PaneBinding | undefined;
+  public judgeTimingAutoAdjustController: PaneBinding | undefined;
+  public hsFixController: ListInputBindingApi<PlayOptions['hsFix']> | undefined;
+  public fixedDisplayAreaController: PaneBinding | undefined;
+  public floatingHiSpeedController: PaneBinding | undefined;
+  public floatingSpeedController: PaneBinding | undefined;
+  public classicHiSpeedController: PaneBinding | undefined;
+  public normalHiSpeedController: PaneBinding | undefined;
+  public normalHiSpeedLevelController: PaneBinding | undefined;
+  public classicSpeedController: PaneBinding | undefined;
+  public randomSeed1PController: PaneBinding | undefined;
+  public randomSeed2PController: PaneBinding | undefined;
+  public readonly randomSeedControllers: Array<{ hidden: boolean }> = [];
+  public random1PController: ListInputBindingApi<PlayOptions['random1P']> | undefined;
+  public random2PController: ListInputBindingApi<PlayOptions['random2P']> | undefined;
+  public gaugeController: ListInputBindingApi<GaugeType> | undefined;
+  public bottomShiftableGaugeController: ListInputBindingApi<PlayOptions['bottomShiftableGauge']> | undefined;
+  public gaugeAutoShiftController: ListInputBindingApi<PlayOptions['gaugeAutoShift']> | undefined;
+  public longNoteModifierController: ListInputBindingApi<PlayOptions['longNoteModifier']> | undefined;
+  public longNoteRateController: PaneBinding | undefined;
+  public sevenToNinePatternController: ListInputBindingApi<PlayOptions['sevenToNinePattern']> | undefined;
+  public sevenToNineTypeController: ListInputBindingApi<PlayOptions['sevenToNineType']> | undefined;
+  public battleModeController: ListInputBindingApi<PlayOptions['battleMode']> | undefined;
+  public dBattleScratchController: PaneBinding | undefined;
+  public gauge2PController: ListInputBindingApi<PlayOptions['gauge2P']> | undefined;
+  public mRanControllers: PaneBinding[] = [];
+  public lr2ExtraModeController: PaneBinding | undefined;
+  public lr2ExtraLevelController: ListInputBindingApi<PlayOptions['lr2ExtraLevel']> | undefined;
+  public extraNoteDepthController: PaneBinding | undefined;
+  public customJudgeController: PaneBinding | undefined;
+  /** PRACTICE toggle first, then its settings. */
+  public practiceControllers: PaneBinding[] = [];
+  public longNoteModeController: ListInputBindingApi<PlayOptions['longNoteMode']> | undefined;
+  public customJudgeRateControllers: PaneBinding[] = [];
+  public extraNoteScratchController: PaneBinding | undefined;
+  public mineModifierController: ListInputBindingApi<PlayOptions['mineModifier']> | undefined;
+  public scrollModifierController: ListInputBindingApi<PlayOptions['scrollModifier']> | undefined;
+  public scrollSectionController: PaneBinding | undefined;
+  public scrollRateController: PaneBinding | undefined;
+  public judgeAlgorithmController: ListInputBindingApi<PlayOptions['judgeAlgorithm']> | undefined;
   /** The "Tempo (%)" slider — left enabled during a play whose tempo can change live (`allowsLiveTempo`). */
   public tempoController: PaneBinding | undefined;
   /** Debug Menu folder holding the active be-music skin's settings; hidden for a skin that declares none. */
@@ -273,7 +325,7 @@ export class DebugMenu {
    */
   public buildGUI(): void {
     // Start the panel itself collapsed so it doesn't cover the select-screen / gameplay canvas the moment a user lands
-    // on the demo.
+    // on the player.
     const container = document.createElement('div');
     container.className = 'debug-pane-container';
     document.body.append(container);
@@ -311,13 +363,32 @@ export class DebugMenu {
     });
     this.buildDeveloperFolder(addFolder(gui, DEBUG_MENU_FOLDERS.developer));
     this.refreshCompressorStageVisibility();
-    rememberFolderOpenStates(gui);
+    rememberFolderOpenStates(gui, undefined, () => this.scheduleSettingsSave());
+    gui.on('change', (event) => {
+      const key = 'key' in event.target ? event.target.key : undefined;
+      if (key === 'status' || key === 'fps') return;
+      this.scheduleSettingsSave();
+    });
+  }
+  /**
+   * Writes every Debug Menu setting locally immediately; remote publishing is debounced for slider changes.
+   * Status and the FPS graph are not settings and do not come through here.
+   */
+  public scheduleSettingsSave(): void {
+    const document = captureDebugMenuSettings(this.guiState, {
+      compressorTuning: this.compressorTunings,
+      skinSettings: this.skinSettings,
+      courseTableURLs: readStoredCourseTableURLs(),
+      folders: readFolderOpenStates(),
+      workerCount: getBrowserWorkerCount(),
+    });
+    debugMenuSettingsSync.save(document);
   }
   /**
    * Options read when a play starts, which are disabled while one runs (`lockReplayOptionsForPlay`); returns the
    * controller.
    */
-  public trackPlayOption(controller: PaneBinding): PaneBinding {
+  public trackPlayOption<T extends { disabled: boolean; refresh?: () => void }>(controller: T): T {
     this.playOptionControllers.push(controller);
     return controller;
   }
@@ -326,8 +397,17 @@ export class DebugMenu {
     this.statusController?.refresh();
   }
   /** Repaints the "Hi-speed" slider with a hi-speed set elsewhere (the select screen, the play's keys). */
+  public refreshJudgeTiming(): void {
+    this.judgeTimingController?.refresh();
+  }
+
   public refreshHiSpeed(): void {
     this.hiSpeedController?.refresh();
+    this.floatingSpeedController?.refresh();
+    this.floatingHiSpeedController?.refresh();
+    this.refreshRulesetChoices();
+    this.classicSpeedController?.refresh();
+    this.normalHiSpeedLevelController?.refresh();
   }
   /** Shows `value` as the skin system the scenes run on, which a pick of one with no skin loaded goes back to. */
   public showSkinSystem(value: SkinFamilyOverride): void {
@@ -346,10 +426,185 @@ export class DebugMenu {
   public unlockAfterPlay(): void {
     this.playLock.unlock();
   }
+  /** Clears the local document and the server copy, then reloads. Best records stay. */
+  public async resetSettings(): Promise<void> {
+    if (
+      !window.confirm(
+        'Reset every Debug Menu setting to its default and reload? This includes the copy kept for this browser. Best records are kept.',
+      )
+    ) {
+      return;
+    }
+    await debugMenuSettingsSync.reset();
+    window.location.reload();
+  }
   /** Repaints the "Play options" controllers after an external write (the LR2 select panel's edits). */
-  public refreshPlayOptionControllers(): void {
-    for (const controller of this.playOptionControllers) {
+  public refreshRulesetChoices(): void {
+    // Options that only transform the chart or the view are offered under every judge ruleset (#774): HS-FIX CONSTANT,
+    // the measured hi-speed modes, automatic display timing, scroll and mine modifiers, both EXTRAs, 7-to-9, the battle
+    // chart constructions and the source-specific lane options.
+    if (this.hsFixController)
+      this.hsFixController.options = paneOptions([
+        'OFF',
+        'MAXBPM',
+        'MINBPM',
+        'AVERAGE',
+        'CONSTANT',
+        'STARTBPM',
+      ] as const);
+    const floating = this.guiState.floatingHiSpeed;
+    if (this.floatingSpeedController) this.floatingSpeedController.hidden = !floating;
+    const normal = this.guiState.normalHiSpeedLevel > 0;
+    if (this.normalHiSpeedLevelController) this.normalHiSpeedLevelController.hidden = !normal || floating;
+    if (this.hiSpeedController) this.hiSpeedController.hidden = this.guiState.classicHiSpeed || normal || floating;
+    if (this.hsFixController) this.hsFixController.hidden = this.guiState.classicHiSpeed || normal || floating;
+    if (this.classicSpeedController) this.classicSpeedController.hidden = !this.guiState.classicHiSpeed || floating;
+    const beatoraja = this.guiState.judgeRuleset === 'beatoraja';
+    if (!beatoraja && this.guiState.longNoteModifier.startsWith('ADD_')) {
+      this.guiState.longNoteModifier = 'OFF';
+      this.setPlayOptions({ longNoteModifier: 'OFF' });
+    }
+    if (this.longNoteModifierController) {
+      this.longNoteModifierController.options = paneOptions({
+        OFF: 'OFF' as const,
+        'LEGACY NOTE (AC 34)': 'LEGACY' as const,
+        'LN REMOVE (beatoraja)': 'REMOVE' as const,
+        ...(beatoraja
+          ? {
+              'ADD LN (beatoraja)': 'ADD_LN' as const,
+              'ADD CN (beatoraja)': 'ADD_CN' as const,
+              'ADD HCN (beatoraja)': 'ADD_HCN' as const,
+              'ADD ALL (beatoraja)': 'ADD_ALL' as const,
+            }
+          : {}),
+      });
+      this.longNoteModifierController.refresh();
+    }
+    // BATTLE names LR2's two-player play and the beatoraja / ???? one-player copy, so it follows the ruleset; the other
+    // chart constructions are offered under every ruleset.
+    const battleChoices: Record<string, PlayOptions['battleMode']> = {
+      OFF: 'OFF',
+      ...(this.guiState.judgeRuleset === 'lr2'
+        ? { BATTLE: 'TWO-PLAYER' as const }
+        : this.guiState.judgeRuleset === 'beatoraja'
+          ? { BATTLE: 'BATTLE' as const }
+          : { BATTLE: 'BATTLE' as const, '2P PLAY': 'TWO-PLAYER' as const }),
+      'BATTLE AS': 'BATTLE-AS',
+      'D-BATTLE': 'D-BATTLE',
+      'SP TO DP': 'SP-TO-DP',
+    };
+    if (!Object.values(battleChoices).includes(this.guiState.battleMode)) {
+      this.guiState.battleMode = 'OFF';
+      this.setPlayOptions({ battleMode: 'OFF' });
+    }
+    if (this.battleModeController) {
+      this.battleModeController.options = paneOptions(battleChoices);
+      this.battleModeController.refresh();
+    }
+    if (this.dBattleScratchController) this.dBattleScratchController.hidden = this.guiState.battleMode !== 'D-BATTLE';
+    const twoPlayer = this.guiState.battleMode === 'TWO-PLAYER';
+    if (this.gauge2PController) this.gauge2PController.hidden = !twoPlayer;
+    for (const controller of this.mRanControllers) controller.hidden = !twoPlayer;
+    if (this.lr2ExtraLevelController) this.lr2ExtraLevelController.hidden = !this.guiState.lr2ExtraMode;
+    if (!beatoraja && this.guiState.longNoteMode !== 'LN') {
+      this.guiState.longNoteMode = 'LN';
+      this.setPlayOptions({ longNoteMode: 'LN' });
+    }
+    if (this.longNoteModeController) this.longNoteModeController.hidden = !beatoraja;
+    if (!beatoraja && this.guiState.practice) {
+      this.guiState.practice = false;
+      this.setPlayOptions({ practice: false });
+    }
+    this.practiceControllers.forEach((controller, index) => {
+      controller.hidden = !beatoraja || (index > 0 && !this.guiState.practice);
+    });
+    if (!beatoraja && this.guiState.customJudge) {
+      this.guiState.customJudge = false;
+      this.setPlayOptions({ customJudge: false });
+    }
+    if (this.customJudgeController) this.customJudgeController.hidden = !beatoraja;
+    for (const controller of this.customJudgeRateControllers)
+      controller.hidden = !beatoraja || !this.guiState.customJudge;
+    if (this.longNoteRateController)
+      this.longNoteRateController.hidden = !beatoraja || !this.guiState.longNoteModifier.startsWith('ADD_');
+    for (const controller of this.randomSeedControllers) controller.hidden = !beatoraja;
+    for (const side of ['1P', '2P'] as const) {
+      const controller = side === '1P' ? this.randomSeed1PController : this.randomSeed2PController;
+      if (controller) controller.hidden = !beatoraja || this.guiState[`random${side}`] === 'RANDOM_PLAYABLE';
+    }
+    if (!beatoraja && this.guiState.gaugeAutoShift !== 'NONE') {
+      this.guiState.gaugeAutoShift = 'NONE';
+      this.setPlayOptions({ gaugeAutoShift: 'NONE' });
+    }
+    if (this.gaugeAutoShiftController) this.gaugeAutoShiftController.hidden = !beatoraja;
+    if (this.bottomShiftableGaugeController) this.bottomShiftableGaugeController.hidden = !beatoraja;
+    if (this.scrollSectionController) this.scrollSectionController.hidden = this.guiState.scrollModifier !== 'ADD';
+    if (this.scrollRateController) this.scrollRateController.hidden = this.guiState.scrollModifier !== 'ADD';
+    if (!beatoraja && this.guiState.judgeAlgorithm !== 'combo') {
+      this.guiState.judgeAlgorithm = 'combo';
+      this.setPlayOptions({ judgeAlgorithm: 'combo' });
+    }
+    if (this.judgeAlgorithmController) {
+      this.judgeAlgorithmController.options = beatoraja
+        ? paneOptions({ Combo: 'combo' as const, Duration: 'duration' as const, Lowest: 'lowest' as const })
+        : paneOptions({ 'Source default': 'combo' as const });
+      this.judgeAlgorithmController.refresh();
+    }
+    for (const side of ['1P', '2P'] as const) {
+      const randomModes = resolveRandomModes(
+        this.guiState.judgeRuleset,
+        side === '1P' && isDuplicatedBattleChoice(this.guiState.battleMode),
+      );
+      const key = `random${side}` as const;
+      if (!randomModes.includes(this.guiState[key])) {
+        this.guiState[key] = 'OFF';
+        this.setPlayOptions({ [key]: 'OFF' });
+      }
+      const controller = side === '1P' ? this.random1PController : this.random2PController;
+      if (controller) {
+        controller.options = paneOptions(randomModes).map((item) =>
+          item.value === 'SCATTER'
+            ? { ...item, text: 'SCATTER (LR2 beta3)' }
+            : item.value === 'SCATTER-CORRECTED'
+              ? { ...item, text: 'SCATTER (9KEY corrected)' }
+              : item.value === 'SYNCHRONIZE-RANDOM' || item.value === 'SYMMETRY-RANDOM'
+                ? { ...item, text: item.value.replace('-', ' ') }
+                : item,
+        );
+        controller.refresh();
+      }
+    }
+    const choices = resolveGaugeTypes(this.guiState.judgeRuleset);
+    if (!choices.includes(this.guiState.gauge)) {
+      this.guiState.gauge = 'GROOVE';
+      this.setPlayOptions({ gauge1P: 'GROOVE' });
+    }
+    if (!choices.includes(this.guiState.gauge2P)) {
+      this.guiState.gauge2P = 'GROOVE';
+      this.setPlayOptions({ gauge2P: 'GROOVE' });
+    }
+    for (const controller of [this.gaugeController, this.gauge2PController]) {
+      if (!controller) continue;
+      controller.options = paneOptions(choices).map((item) => ({
+        ...item,
+        text:
+          item.value === 'ASSIST-EASY'
+            ? this.guiState.judgeRuleset === '____'
+              ? 'ASSISTED EASY'
+              : 'ASSIST EASY'
+            : item.value === 'DEATH' && this.guiState.judgeRuleset === 'beatoraja'
+              ? 'HAZARD'
+              : item.value === 'GROOVE' && this.guiState.judgeRuleset !== 'lr2'
+                ? 'NORMAL'
+                : (formatGaugeLabel(item.text) ?? item.text),
+      }));
       controller.refresh();
     }
+  }
+  public refreshPlayOptionControllers(): void {
+    for (const controller of this.playOptionControllers) {
+      controller.refresh?.();
+    }
+    this.scheduleSettingsSave();
   }
 }

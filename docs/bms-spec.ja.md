@@ -61,9 +61,9 @@
 - [x] メタヘッダ `#ARTIST` を解釈
 - [x] メタヘッダ `#GENRE` を解釈
 - [x] メタヘッダ `#COMMENT` を解釈
-- [x] `#SUBARTIST` を `metadata.extras.SUBARTIST` として保持し、player の選曲画面 metadata に使用
+- [x] `#SUBARTIST` を `metadata.extras.SUBARTIST` として保持し、プレイヤーの選曲画面 metadata に使用
 - [x] `#BACKBMP` を browser LR2 special graphic 向けに `metadata.backBMP` として保持
-- [x] `#BANNER` を `metadata.banner` として保持し、player の選曲画面 banner に使用
+- [x] `#BANNER` を `metadata.banner` として保持し、プレイヤーの選曲画面 banner に使用
 - [x] メタヘッダ `#STAGEFILE` を解釈
 - [x] `#STAGEFILE` を選曲後の loading screen 専用画像として表示
 - [x] メタヘッダ `#PLAYLEVEL` を解釈
@@ -180,7 +180,7 @@
 - [x] `#VOLWAV` を player / chart-audio-renderer の再生ゲインに反映
 - [x] `#xxx97` を BGM 側の動的音量変更として解釈
 - [x] `#xxx98` を playable/key 側の動的音量変更として解釈
-- [x] `#EXRANKxx` と `#xxxA0` を player の動的判定幅変更として解釈
+- [x] `#EXRANKxx` と `#xxxA0` を プレイヤーの動的判定幅変更として解釈
 - [x] `#BPMxx` による LR2 100001倍 BPM 系ギミックを時刻解決でサポート
 - [x] すべての `#WAVCMD` 行を `bms.wavCmds` に保持し、chart-audio-renderer と browser WebAudio では `01` volume parameter を反映
 - [x] `#EXWAVxx` を parse し、`v` volume parameter を chart-audio-renderer と browser WebAudio で反映
@@ -327,14 +327,14 @@ runtime と round-trip の扱い:
 
 ### 参考資料由来 TODO（SCROLL/BPM/STOP）
 
-| TODO                                                                              | 現状 | 備考                                                                                                                                                       |
-| --------------------------------------------------------------------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [x] `#SCROLL 0` 区間で同一レーンに重なったノートの前後表示優先順位を仕様化        | 対応 | 同一セルに重なった場合は先に来るノートを基準行に置き、後続ノートは判定ラインから遠ざかる方向へ積み上げる                                                   |
-| [x] `#SCROLL < 0` の逆走表示（方向・判定ライン付近・画面外）を互換仕様として固定  | 対応 | web player は beatoraja と同じく逆向きに動かし、時刻がまだ先のノートは判定ラインより下にも描く。terminal player は「接近表示優先」で描画距離を絶対値で扱う |
-| [x] `#SCROLL 0` 長区間での先読み上限と可視範囲を仕様化                            | 対応 | 先読みは `MAX_SCROLL_LOOKAHEAD_BEATS` (= 64 小節) で打ち切り、可視範囲外ノートは描画対象外とする                                                           |
-| [x] BPM×`100001` + `#STOPxx` 補正時の「表示 BPM」互換方針を明文化                 | 対応 | 時刻解決と同じ BPM 値をそのまま表示し、LR2 互換の表示置換・丸めは実施しない                                                                                |
-| [x] SCROLL/BPM/STOP 複合ギミック（部分ワープ・空打鍵・逆走）の回帰テストを追加    | 対応 | `timeline` に複合ケースを追加し、POOR 系は既存 `bga` テスト群で継続検証する                                                                                |
-| [x] beatoraja 固有の出現/消失バグ依存譜面の扱い（非対応明記 or 再現モード）を決定 | 対応 | 互換対象外として明記し、将来必要なら別オプションで再現モードを検討する                                                                                     |
+| TODO                                                                              | 現状 | 備考                                                                                                                                                           |
+| --------------------------------------------------------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [x] `#SCROLL 0` 区間で同一レーンに重なったノートの前後表示優先順位を仕様化        | 対応 | 同一セルに重なった場合は先に来るノートを基準行に置き、後続ノートは判定ラインから遠ざかる方向へ積み上げる                                                       |
+| [x] `#SCROLL < 0` の逆走表示（方向・判定ライン付近・画面外）を互換仕様として固定  | 対応 | Web プレイヤー は beatoraja と同じく逆向きに動かし、時刻がまだ先のノートは判定ラインより下にも描く。terminal player は「接近表示優先」で描画距離を絶対値で扱う |
+| [x] `#SCROLL 0` 長区間での先読み上限と可視範囲を仕様化                            | 対応 | 先読みは `MAX_SCROLL_LOOKAHEAD_BEATS` (= 64 小節) で打ち切り、可視範囲外ノートは描画対象外とする                                                               |
+| [x] BPM×`100001` + `#STOPxx` 補正時の「表示 BPM」互換方針を明文化                 | 対応 | 時刻解決と同じ BPM 値をそのまま表示し、LR2 互換の表示置換・丸めは実施しない                                                                                    |
+| [x] SCROLL/BPM/STOP 複合ギミック（部分ワープ・空打鍵・逆走）の回帰テストを追加    | 対応 | `timeline` に複合ケースを追加し、POOR 系は既存 `bga` テスト群で継続検証する                                                                                    |
+| [x] beatoraja 固有の出現/消失バグ依存譜面の扱い（非対応明記 or 再現モード）を決定 | 対応 | 互換対象外として明記し、将来必要なら別オプションで再現モードを検討する                                                                                         |
 
 ## player 固有挙動
 
@@ -375,10 +375,10 @@ runtime と round-trip の扱い:
 ### SCROLL/BPM/STOP 互換ポリシー
 
 - `SCROLL 0` で同一レーン・同一描画セルに複数ノートが重なる場合、先行ノートを基準位置に置き、後続ノートは判定ラインから遠ざかる側（上方向）へ順に積み上げる
-- web player: `SCROLL < 0` は beatoraja と同じくノートを逆向きに動かす。判定ラインより下に来た、時刻がまだ先のノートはステージの下端までその位置に描く（[ブラウザプレイヤー — ノートの表示範囲](./player-web.ja.md#ノートの表示範囲)）
+- Web プレイヤー: `SCROLL < 0` は beatoraja と同じくノートを逆向きに動かす。判定ラインより下に来た、時刻がまだ先のノートはステージの下端までその位置に描く（[ブラウザプレイヤー — ノートの表示範囲](./player-web.ja.md#ノートの表示範囲)）
 - terminal player: `SCROLL < 0` は「逆走表示の忠実再現」ではなく「ノート接近表示の維持」を優先し、描画距離は `abs(distance)` で扱う
 - `SCROLL` の可視探索は `MAX_SCROLL_LOOKAHEAD_BEATS`（`4 * 64` beat、`packages/player-terminal/src/tui/tui.ts`）で上限を設ける
-- beatoraja の `LaneRenderer` と同じく、可視探索は譜面が最初にレーン上端を越えた位置で打ち切る。後の負の `SCROLL` でレーン内に戻ってくるノートは、判定ラインの位置がそこへ進むまで描かない（web player と terminal player。[ブラウザプレイヤー — ノートの表示範囲](./player-web.ja.md#ノートの表示範囲)）
+- beatoraja の `LaneRenderer` と同じく、可視探索は譜面が最初にレーン上端を越えた位置で打ち切る。後の負の `SCROLL` でレーン内に戻ってくるノートは、判定ラインの位置がそこへ進むまで描かない（Web プレイヤー と terminal player。[ブラウザプレイヤー — ノートの表示範囲](./player-web.ja.md#ノートの表示範囲)）
 - BPM×`100001` + `STOP` 補正を含むギミックでも、BPM 表示は内部時刻計算で使用する値をそのまま採用する
 - beatoraja 固有の描画バグ依存譜面は互換対象外とし、現時点では再現モードを実装しない
 - 上記ポリシーの回帰は `packages/player-terminal/src/tui/lane-stacking.test.ts`・`packages/chart-model/src/timelines.test.ts`・`packages/player-terminal/src/bga.test.ts` で検証する

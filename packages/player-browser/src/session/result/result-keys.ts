@@ -18,3 +18,14 @@ export function isResultRetryKey(event: ResultKeyEvent): boolean {
   if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return false;
   return event.key === 'r' || event.key === 'R';
 }
+
+/**
+ * The replay slot (0-3) a key press saves into: a bare 1-4, as beatoraja's result takes its number keys
+ * (`ControlKeys.NUM1`-`NUM4`). Modified presses and auto-repeats save nothing.
+ */
+export function resultReplaySlotKey(event: ResultKeyEvent): number | undefined {
+  if (event.repeat) return undefined;
+  if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return undefined;
+  const slot = ['1', '2', '3', '4'].indexOf(event.key);
+  return slot >= 0 ? slot : undefined;
+}

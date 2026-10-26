@@ -1,4 +1,4 @@
-import { GAUGE_TYPES, type GaugeType } from '@be-music/player-engine/ruleset';
+import { LR2_GAUGE_TYPES, type GaugeType } from '@be-music/player-engine/ruleset';
 import {
   BGA_CYCLE,
   BGA_SIZE_CYCLE,
@@ -16,9 +16,79 @@ import {
 } from '@be-music/player-scene-model';
 import { LR2_BUTTON, LR2_NUM, LR2_OP, LR2_SLIDER, LR2_TEXT } from '../ids/index.ts';
 
+/**
+ * LR2's BATTLE button cycle (`config.play.battle` 0-3): OFF, BATTLE (two players), D-BATTLE and SP TO DP. G-BATTLE
+ * (4), a ghost battle against a rival's score, is not offered.
+ */
+export const LR2_BATTLE_CYCLE: readonly PlayOptions['battleMode'][] = ['OFF', 'TWO-PLAYER', 'D-BATTLE', 'SP-TO-DP'];
+
+/**
+ * LR2's automatic judge-timing button cycle (`config.play.autojudge` 0-2): OFF, ON and SILENT. beatoraja's calibration
+ * is not on it, and reads as OFF.
+ */
+export const LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE: readonly PlayOptions['judgeTimingAutoAdjust'][] = [
+  'OFF',
+  'LR2-ON',
+  'LR2-SILENT',
+];
+
+/** The range LR2's JUDGE TIMING button (74) steps the judge timing within, in milliseconds either way. */
+export const LR2_JUDGE_TIMING_LIMIT_MS = 99;
+
+/**
+ * The judge timing after a click on LR2's JUDGE TIMING button (74): 1 ms up or down (`step`'s sign), stopping at ±99
+ * (OpenLR2 `LR2f.cpp` 10617). A timing the automatic adjustment carried past the range only moves back toward it.
+ */
+export function stepLR2JudgeTiming(currentMs: number, step: number): number {
+  if (step > 0) return currentMs < LR2_JUDGE_TIMING_LIMIT_MS ? currentMs + 1 : currentMs;
+  if (step < 0) return currentMs > -LR2_JUDGE_TIMING_LIMIT_MS ? currentMs - 1 : currentMs;
+  return currentMs;
+}
+
+/** The automatic judge-timing label of the option panel (text 80): OFF, ON or SILENT. */
+function judgeAutoAdjustLabel(mode: PlayOptions['judgeTimingAutoAdjust']): string {
+  return mode === 'LR2-ON' ? 'ON' : mode === 'LR2-SILENT' ? 'SILENT' : 'OFF';
+}
+
+/**
+ * The BATTLE label of the option panel (text 69) as LR2's `optionstr.csv` names it for the selected chart's key mode:
+ * BATTLE on a double-play chart is COUPLE, SP TO DP is DP-TO-SP or 9-TO-7, and an option the chart cannot take is
+ * DISABLE (`SetObjectStrings_SongSelect`).
+ */
+function battleLabel(battle: PlayOptions['battleMode'], keyModeOp: number | undefined): string {
+  const double = keyModeOp === LR2_OP.KEYS_10 || keyModeOp === LR2_OP.KEYS_14;
+  const nine = keyModeOp === LR2_OP.KEYS_9;
+  switch (battle) {
+    case 'TWO-PLAYER':
+      return double ? 'COUPLE' : nine ? 'DISABLE' : 'BATTLE';
+    case 'D-BATTLE':
+      return double || nine ? 'DISABLE' : 'D-BATTLE';
+    case 'SP-TO-DP':
+      return double ? 'DP-TO-SP' : nine ? '9-TO-7' : 'SP-TO-DP';
+    default:
+      return 'OFF';
+  }
+}
+
+/**
+ * LR2's battle ops (10-13) for the key filter and BATTLE option: op 10 a double-play filter (DOUBLE, 14KEYS, 10KEYS)
+ * or D-BATTLE / SP TO DP, op 11 and 13 BATTLE, op 12 either. LR2 reads them off the select screen's settings on every
+ * screen.
+ */
+export function resolveLR2BattleOps(options: Partial<Pick<PlayOptions, 'keysFilter' | 'battleMode'>>): number[] {
+  const doubleFilter = options.keysFilter === 'KEYS_10' || options.keysFilter === 'KEYS_14';
+  const battle = options.battleMode === 'TWO-PLAYER';
+  const doubleBattle = options.battleMode === 'D-BATTLE' || options.battleMode === 'SP-TO-DP';
+  const ops: number[] = [];
+  if (doubleFilter || doubleBattle) ops.push(LR2_OP.DOUBLE);
+  if (battle) ops.push(LR2_OP.BATTLE, LR2_OP.GHOST_BATTLE_OR_BATTLE);
+  if (doubleFilter || battle || doubleBattle) ops.push(LR2_OP.DOUBLE_OR_BATTLE);
+  return ops;
+}
+
 /** Whether a gauge is one of LR2's red (survival) gauges: HARD and DEATH. */
 export function isLR2RedGauge(gauge: GaugeType): boolean {
-  return gauge === 'HARD' || gauge === 'DEATH';
+  return gauge === 'HARD' || gauge === 'DEATH' || gauge === 'EX-HARD';
 }
 
 /** Whether the BGA shows: ON, or AUTOPLAY ONLY while AUTOPLAY is on. */
@@ -33,6 +103,7 @@ export function isLR2BGAShown(bga: BGAMode, autoPlay: boolean): boolean {
  */
 export function resolveLR2PlayOptionOps(options: PlayOptions): number[] {
   return [
+    ...resolveLR2BattleOps(options),
     isLR2BGAShown(options.bga, options.autoPlay) ? LR2_OP.BGA_ON : LR2_OP.BGA_OFF,
     options.bgaSize === 'EXTEND' ? LR2_OP.BGA_EXTEND : LR2_OP.BGA_NORMAL,
     options.scoreGraph ? LR2_OP.SCORE_GRAPH_ON : LR2_OP.SCORE_GRAPH_OFF,
@@ -117,9 +188,11 @@ export function resolveLR2OptionText(
     case LR2_TEXT.OPTION_EFFECT_2P:
       return options.hiddenSudden2P;
     case LR2_TEXT.OPTION_BATTLE:
+      return battleLabel(options.battleMode, keyModeOp);
+    case LR2_TEXT.OPTION_JUDGE_AUTO_ADJUST:
+      return judgeAutoAdjustLabel(options.judgeTimingAutoAdjust);
     case LR2_TEXT.OPTION_GHOST:
     case LR2_TEXT.OPTION_SCROLL_TYPE:
-    case LR2_TEXT.OPTION_JUDGE_AUTO_ADJUST:
     case LR2_TEXT.OPTION_REPLAY_SAVE:
       return 'OFF';
     case LR2_TEXT.OPTION_COLOR_DEPTH:
@@ -137,15 +210,20 @@ export function resolveLR2OptionText(
 }
 
 /**
- * The option numbers (10-15): each side's hi-speed × 100 (both sides read the one hi-speed). The judge timing, the
- * target rate and the lane cover numbers read 0 until the options exist. `undefined` for any other number.
+ * The option numbers (10-15): each side's hi-speed × 100 (both sides read the one hi-speed) and the judge timing in
+ * milliseconds (12). The target rate and the lane cover numbers read 0 until the options exist. `undefined` for any
+ * other number.
  */
-export function resolveLR2OptionNumber(num: number, options: Pick<PlayOptions, 'hiSpeed'>): number | undefined {
+export function resolveLR2OptionNumber(
+  num: number,
+  options: Pick<PlayOptions, 'hiSpeed' | 'judgeTimingMs'>,
+): number | undefined {
   switch (num) {
     case LR2_NUM.HISPEED_1P:
     case LR2_NUM.HISPEED_2P:
       return Math.round(options.hiSpeed * 100);
     case LR2_NUM.JUDGE_TIMING:
+      return options.judgeTimingMs;
     case LR2_NUM.TARGET_RATE:
     case LR2_NUM.LANE_COVER_1P:
     case LR2_NUM.LANE_COVER_2P:
@@ -187,7 +265,7 @@ function cell<T>(choices: readonly T[], value: T): number {
 }
 
 /**
- * The cell an option button draws (`#SRC_BUTTON` types 10-12, 40-46, 50-55, 70-73, 91-96): the index of the option's
+ * The cell an option button draws (`#SRC_BUTTON` types 10-12, 40-46, 50-55, 70-73, 75, 91-96): the index of the option's
  * value in its LR2 cycle order (an on / off option: 0 off, 1 on; a direct difficulty button: 1 while its difficulty
  * is the filter). `undefined` for any other button; the caller clamps it to the button's cells.
  */
@@ -219,14 +297,24 @@ export function resolveLR2OptionButton(type: number, options: PlayOptions): numb
       return options.autoScratch2P ? 1 : 0;
     case LR2_BUTTON.FLIP:
       return options.dpFlip ? 1 : 0;
+    case LR2_BUTTON.BATTLE:
+      return Math.max(0, LR2_BATTLE_CYCLE.indexOf(options.battleMode));
+    case LR2_BUTTON.JUDGE_AUTO_ADJUST:
+      return cell(LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE, options.judgeTimingAutoAdjust);
     case LR2_BUTTON.RANDOM_1P:
       return cell(RANDOM_CYCLE, options.random1P);
     case LR2_BUTTON.RANDOM_2P:
       return cell(RANDOM_CYCLE, options.random2P);
     case LR2_BUTTON.GAUGE_1P:
-      return cell(GAUGE_TYPES, options.gauge1P);
+      return cell(
+        LR2_GAUGE_TYPES,
+        options.gauge1P === 'EX-HARD' ? 'HARD' : options.gauge1P === 'ASSIST-EASY' ? 'EASY' : options.gauge1P,
+      );
     case LR2_BUTTON.GAUGE_2P:
-      return cell(GAUGE_TYPES, options.gauge2P);
+      return cell(
+        LR2_GAUGE_TYPES,
+        options.gauge2P === 'EX-HARD' ? 'HARD' : options.gauge2P === 'ASSIST-EASY' ? 'EASY' : options.gauge2P,
+      );
     default: {
       const difficulty = LR2_DIFFICULTY_FILTER_BUTTONS[type];
       if (difficulty === undefined) return undefined;

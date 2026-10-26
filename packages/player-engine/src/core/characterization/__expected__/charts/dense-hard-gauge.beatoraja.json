@@ -72,6 +72,8 @@
           {"id":30,"channel":"13","type":"normal","timeUs":4250000},
           {"id":31,"channel":"14","type":"normal","timeUs":4375000}
         ],
+        "headerBPM": 120,
+        "bpmRange": {"min":120,"max":120},
         "chartFingerprint": "bmfp0:abab99b55de70df879641468c540a6d5ec5a9bd767e3d821c7bfa411ca9c1027",
         "playFingerprint": "bmfp0:abab99b55de70df879641468c540a6d5ec5a9bd767e3d821c7bfa411ca9c1027",
         "title": "dense",
@@ -88,7 +90,14 @@
         {"seq":6,"timeUs":875000,"action":"down","channels":["14"],"tokens":["d"]},
         {"seq":7,"timeUs":925000,"action":"up","channels":["14"],"tokens":["d"]}
       ],
-      "play": {"mode":"manual","autoScratch":false,"gauge":"HARD","judgeRuleset":"beatoraja","endOnFailure":true},
+      "play": {
+        "mode": "manual",
+        "autoScratch": false,
+        "gauge": "HARD",
+        "judgeRuleset": "beatoraja",
+        "endOnFailure": true,
+        "judgeAlgorithm": "combo"
+      },
       "results": {
         "native": {
           "ruleset": "be-music/native",
@@ -284,7 +293,14 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": "(same as manual)",
-      "play": {"mode":"manual","autoScratch":false,"gauge":"HARD","judgeRuleset":"beatoraja","endOnFailure":true},
+      "play": {
+        "mode": "manual",
+        "autoScratch": false,
+        "gauge": "HARD",
+        "judgeRuleset": "beatoraja",
+        "endOnFailure": true,
+        "judgeAlgorithm": "combo"
+      },
       "results": "(same as manual)"
     },
     "simulated": "(same as manual)",
@@ -414,7 +430,14 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": [],
-      "play": {"mode":"auto","autoScratch":false,"gauge":"HARD","judgeRuleset":"beatoraja","endOnFailure":true},
+      "play": {
+        "mode": "auto",
+        "autoScratch": false,
+        "gauge": "HARD",
+        "judgeRuleset": "beatoraja",
+        "endOnFailure": true,
+        "judgeAlgorithm": "combo"
+      },
       "results": {
         "native": {
           "ruleset": "be-music/native",

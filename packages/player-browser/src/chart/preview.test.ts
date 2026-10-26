@@ -360,7 +360,7 @@ describe('findFirstAudibleOffsetSeconds', () => {
 describe('exported constants', () => {
   test('LR2 focus delay defaults to 1000 ms', () => {
     // The constant ships with this default to match LR2's song-select preview wait. Lock the value so a future
-    // accidental tweak surfaces in code review rather than silently changing UX feel for every demo deploy.
+    // accidental tweak surfaces in code review rather than silently changing UX feel for every player deploy.
     expect(LR2_PREVIEW_FOCUS_DELAY_MS).toBe(1000);
   });
 

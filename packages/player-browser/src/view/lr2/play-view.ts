@@ -1,3 +1,5 @@
+import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
+import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
 /**
  * The LR2 family's play screen: an LR2 play skin (`play_<variant>.lr2skin`) drawn around the shared playfield
  * (`view/shared/playfield`) in the skin's authored coordinate space, letterboxed into the window. It draws the play session's frames:
@@ -88,6 +90,9 @@ export function resolveLR2PlayTiming(skin: Pick<LR2Skin, 'timing'>): PlayViewTim
 /** What the LR2 play view draws with besides its kit: the options of the play that change what is drawn. */
 export type LR2PlayViewOptions = Pick<
   PlaySessionOptions,
+  | 'judgeTimingMs'
+  | 'judgeTimingAutoAdjust'
+  | 'bpmGuide'
   | 'bga'
   | 'bgaSize'
   | 'autoPlay'
@@ -97,11 +102,16 @@ export type LR2PlayViewOptions = Pick<
   | 'nonstop'
   | 'showInvisibleNotes'
   | 'judgedNoteDisplay'
+  | 'battleMode'
+  | 'lr2ExtraMode'
+  | 'gauge2P'
 > & {
   /** The gauge the play runs on (a replay's recorded one); GROOVE without one. */
   readonly gauge?: GaugeType;
   /** The play is a course stage, on the course's gauge. */
   readonly courseGauge?: boolean;
+  /** The play is a replay played back (LR2 op 84). */
+  readonly replay?: boolean;
   /** The course the play is a stage of (or the NONSTOP course it stitches), with the stage being played. */
   readonly course?: CourseView;
   /** Where the chart's files are, for its `#STAGEFILE`, `#BACKBMP` and `#BANNER`. */
@@ -110,6 +120,8 @@ export type LR2PlayViewOptions = Pick<
 
 /** The LR2 play view. See the module comment. */
 export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContext, LR2PlayElementsContext {
+  private readonly displayInfo = new DisplayAreaInfoOverlay();
+  private readonly bpmChangeWarning = new BPMChangeWarningOverlay();
   public readonly family = 'lr2' as const;
   public readonly timing: PlayViewTiming;
   /** The play options the view draws with; the setters change them during the play. */
@@ -259,12 +271,18 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
   public attach(host: PixiSceneHost, emit: IntentSink<PlayIntent>): void {
     build(this, host);
     this.touchLanes.attach(host, emit);
+    this.displayInfo.attachCanvas(this.designRoot);
+    this.bpmChangeWarning.attachCanvas(this.designRoot);
   }
 
   public draw(frame: PlayFrame): void {
     this.play = frame.playfield;
+    this.options.judgeTimingMs = frame.playOptions.judgeTimingMs;
+    this.options.judgeTimingAutoAdjust = frame.playOptions.judgeTimingAutoAdjust;
     for (const event of frame.events) this.handleEvent(event);
     this.root.visible = frame.shown;
+    if (!frame.shown) this.displayInfo.hide();
+    if (!frame.shown) this.bpmChangeWarning.hide();
     if (!frame.shown || this.disposed) return;
     this.perf.beginTick();
     this.perf.time('updateFPS', () => this.updateFPS());
@@ -280,6 +298,35 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     this.perf.time('render', () =>
       render(this, frame.seconds, frame.playfield.audioAnalyzer !== undefined ? frame.audio : undefined),
     );
+    const overlayLanes = Array.from(this.play.laneX, ([channel, lane]) => ({
+      ...lane,
+      side: this.play.chartPlayVariant === '9' || !channel.startsWith('2') ? ('1P' as const) : ('2P' as const),
+    }));
+    this.displayInfo.update(
+      resolveDisplayAreaLabels({
+        mode: frame.playOptions.displayAreaInfo,
+        lanes: overlayLanes,
+        covers: this.play.resolveLaneCovers(),
+        visibleMs: (cover) =>
+          this.play.resolveVisibleMs(
+            cover,
+            frame.bpm,
+            this.play.scrollMapper?.rateAt?.(this.play.currentBeat(frame.seconds)) ?? 1,
+          ),
+      }),
+      this.playfieldSkin.stage,
+      this.app.screen,
+      this.designRoot.alpha,
+    );
+    this.bpmChangeWarning.show({
+      enabled: frame.playOptions.bpmChangeWarning,
+      timing: this.play.timingResolver,
+      seconds: frame.seconds,
+      lanes: overlayLanes,
+      stage: this.playfieldSkin.stage,
+      screen: this.app.screen,
+      opacity: this.designRoot.alpha,
+    });
     const report = this.perf.endFrame(() => ({
       stage: this.app.stage.children.length,
       skin: this.skinLayer.children.length,
@@ -294,6 +341,8 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
   }
 
   public detach(): void {
+    this.displayInfo.detach();
+    this.bpmChangeWarning.detach();
     this.touchLanes.detach();
   }
 
@@ -308,6 +357,8 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
   }
 
   public dispose(): void {
+    this.displayInfo.dispose();
+    this.bpmChangeWarning.dispose();
     if (this.disposed) return;
     this.disposed = true;
     this.timers.dispose();
@@ -386,7 +437,11 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     this.nonstopStage = 0;
     this.lr2Setup = {
       ...(play.chart !== undefined ? { chart: play.chart } : {}),
-      lanes: { playVariant: play.chartPlayVariant, channels: play.laneChannels },
+      lanes: {
+        playVariant: play.chartPlayVariant,
+        channels: play.laneChannels,
+        ...(play.battleSourceVariant !== undefined ? { battleSourceVariant: play.battleSourceVariant } : {}),
+      },
       features: {
         longNote: play.notes.some((note) => note.endBeat !== undefined),
         bpmChange: (play.timingResolver?.tempoPoints.length ?? 0) > 1,
@@ -399,9 +454,13 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
         scoreGraph: options.scoreGraph === true,
         bga: options.bga ?? 'ON',
         bgaSize: options.bgaSize ?? 'NORMAL',
+        ...(options.battleMode !== undefined ? { battleMode: options.battleMode } : {}),
+        ...(options.lr2ExtraMode !== undefined ? { lr2ExtraMode: options.lr2ExtraMode } : {}),
       },
       gauge: options.gauge ?? 'GROOVE',
+      ...(play.secondPlayer !== undefined && options.gauge2P !== undefined ? { gauge2P: options.gauge2P } : {}),
       courseGauge: options.courseGauge === true,
+      ...(options.replay === true ? { replay: true } : {}),
       ...(options.course !== undefined ? { course: options.course } : {}),
       customOps: this.skin.customOptions.map((option) => option.defaultOp),
     };
@@ -419,6 +478,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     const play = this.play;
     const seconds = play.currentSeconds();
     const bpm = play.displayBPM(seconds);
+    const second = play.secondPlayer;
     this.lr2State = resolveLR2PlayState(setup, {
       play: frame?.state ?? play.playState,
       score: play.score,
@@ -428,6 +488,10 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
       displayedScore: play.displayedScore,
       ...(bpm !== undefined ? { bpm } : {}),
       fps: this.fps,
+      ...(second !== undefined
+        ? { secondPlayer: { play: frame?.state2P ?? second.playState, score: second.score } }
+        : {}),
+      judgeTimingMs: this.options.judgeTimingMs ?? 0,
       judgments: {
         '1P': play.judgeSideState['1P'].judge || 'EMPTY_POOR',
         '2P': play.judgeSideState['2P'].judge || 'EMPTY_POOR',

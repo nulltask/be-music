@@ -9,6 +9,7 @@
 
 import type { TimedSampleTrigger } from '@be-music/chart-model';
 import type { BeMusicEvent, BeMusicJSON } from '@be-music/chart-source';
+import { resolveJudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { TimedPlayableNote } from '@be-music/player-engine/display';
 import type { Texture } from 'pixi.js';
 import { loadPlaySamples } from '../../chart/play-audio.ts';
@@ -47,6 +48,8 @@ export interface PlayMediaContext {
       | 'bgaTranscodeMaxLongEdgePx'
       | 'bgaTranscodeUseWebCodecs'
       | 'audio'
+      | 'judgeTimingAutoAdjust'
+      | 'replay'
     >
   >;
   readonly chart: LibraryChart | undefined;
@@ -78,6 +81,20 @@ export interface PlayMediaContext {
   readonly bgaSubRegionOrigins: Map<string, { x: number; y: number }>;
   /** Uploads `textures` to the GPU now (Pixi's `PrepareSystem`), so the first frame that draws them does not stall. */
   preparePixiUpload(textures: Iterable<Texture | undefined>): Promise<void>;
+}
+
+/**
+ * Whether a play runs LR2's SILENT automatic judge timing, which loads no chart keysounds, BGM or BGA (OpenLR2
+ * `LR2f.cpp` 24346-24349): the selected mode, or the mode a replay recorded.
+ */
+export function isSilentJudgeTimingPlay(
+  options: Readonly<Pick<PlaySessionOptions, 'judgeTimingAutoAdjust' | 'replay'>>,
+): boolean {
+  const mode =
+    options.replay !== undefined
+      ? resolveJudgeTimingAutoAdjust(options.replay.play.options?.judgeTimingAutoAdjust)
+      : options.judgeTimingAutoAdjust;
+  return mode === 'LR2-SILENT';
 }
 
 export async function prepareAudio(ctx: PlayMediaContext): Promise<void> {
@@ -120,20 +137,22 @@ export async function prepareAudio(ctx: PlayMediaContext): Promise<void> {
   }
   const pitchMode = ctx.options.tempoPitchMode ?? 'pitch';
   // Keep pitch: the samples are stretched to the play tempo (times a NONSTOP FIT stage's rate) once, here, and then
-  // play at their own pitch.
-  const stretched = await loadPlaySamples({
-    audioContext: ctx.audioContext,
-    chart,
-    source: ctx.source,
-    chartPath: ctx.chart.chartPath,
-    samples: ctx.decodedSamples,
-    tempo: ctx.tempo,
-    tempoPitchMode: pitchMode,
-    tempoStretchAlgorithm: ctx.options.tempoStretchAlgorithm ?? 'signalsmith',
-    ...(ctx.options.nonstop !== undefined ? { nonstop: ctx.options.nonstop } : {}),
-    isCancelled: () => ctx.disposed,
-    ...(ctx.options.peakGain === true ? { peakGain: true } : {}),
-  });
+  // play at their own pitch. LR2's SILENT loads none: the play runs without its keysounds and BGM.
+  const stretched =
+    !isSilentJudgeTimingPlay(ctx.options) &&
+    (await loadPlaySamples({
+      audioContext: ctx.audioContext,
+      chart,
+      source: ctx.source,
+      chartPath: ctx.chart.chartPath,
+      samples: ctx.decodedSamples,
+      tempo: ctx.tempo,
+      tempoPitchMode: pitchMode,
+      tempoStretchAlgorithm: ctx.options.tempoStretchAlgorithm ?? 'signalsmith',
+      ...(ctx.options.nonstop !== undefined ? { nonstop: ctx.options.nonstop } : {}),
+      isCancelled: () => ctx.disposed,
+      ...(ctx.options.peakGain === true ? { peakGain: true } : {}),
+    }));
   // bmson slices index into the stretched samples (a bmson chart has no NONSTOP stages: one rate).
   if (stretched && ctx.bmsonSlicePlayback !== undefined) {
     ctx.bmsonSlicePlayback = stretchSlicePlayback(ctx.bmsonSlicePlayback, ctx.tempo);

@@ -95,7 +95,9 @@ function drawLanes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
   // One judgement line per play side, so it never crosses the gap between the double-play banks.
   ctx.fillStyle = DANGER;
   for (const run of resolveLaneRuns(frame.lanes)) {
-    ctx.fillRect(run.left, frame.layout.playfield.judgementY, run.right - run.left, 2);
+    const side = frame.layout.lanes.find((lane) => lane.x >= run.left && lane.x < run.right)?.side ?? '1P';
+    const y = frame.layout.playfield.sides[side]?.judgementY ?? frame.layout.playfield.judgementY;
+    ctx.fillRect(run.left, y, run.right - run.left, 2);
   }
 }
 
@@ -134,7 +136,7 @@ function beamGradient(ctx: CanvasRenderingContext2D, top: number, bottom: number
  */
 function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
   for (const note of frame.longNotes) {
-    const alpha = note.state === 'dropped' ? DROPPED_LONG_NOTE_ALPHA : 1;
+    const alpha = (note.state === 'dropped' ? DROPPED_LONG_NOTE_ALPHA : 1) * (note.alpha ?? 1);
     const bodyTop = note.top - NOTE_HEIGHT;
     const bodyHeight = Math.max(1, note.bottom - note.top);
     ctx.fillStyle = NOTE_FILL[note.kind];
@@ -149,8 +151,10 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
     ctx.globalAlpha = 1;
   }
   for (const note of frame.notes) {
+    ctx.globalAlpha = note.alpha ?? 1;
     ctx.fillStyle = NOTE_FILL[note.kind];
     ctx.fillRect(note.x, note.y - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
+    ctx.globalAlpha = 1;
   }
 }
 
@@ -159,9 +163,9 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
  * from it, so a held note reads as held at a glance. Drawn from the hold's age alone, like every effect here.
  */
 function drawHolds(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
-  const y = frame.layout.playfield.judgementY;
   for (const lane of frame.lanes) {
     if (lane.holding !== true || lane.holdStartedAtMs === undefined) continue;
+    const y = lane.bottom;
     const ageMs = frame.nowMs - lane.holdStartedAtMs;
     const centerX = lane.x + lane.w / 2;
     ctx.fillStyle = HOLD_GLOW;
@@ -202,12 +206,13 @@ function drawJudgement(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFram
   for (const side of runtime.judgeSides ?? []) {
     if (!side.judge) continue;
     const bounds = layout.playfield.sides[side.side];
+    const sideY = y + ((bounds?.judgementY ?? layout.playfield.judgementY) - layout.playfield.judgementY);
     const x = bounds ? (bounds.left + bounds.right) / 2 : layout.playfield.centerX;
     const color = isFlashingGreat(side.judge) ? css(flashingGreatColor(nowMs, FLASHING_GREAT)) : judgeColor(side.judge);
-    text(ctx, judgeDisplayWord(side.judge), x, y, { size: 20, weight: 800, color, align: 'center' });
+    text(ctx, judgeDisplayWord(side.judge), x, sideY, { size: 20, weight: 800, color, align: 'center' });
     const combo = side.combo ?? 0;
     const keepsCombo = side.judge === 'PERFECT' || side.judge === 'GREAT' || side.judge === 'GOOD';
-    if (keepsCombo && combo > 0) text(ctx, String(combo), x, y + 24, { size: 16, align: 'center' });
+    if (keepsCombo && combo > 0) text(ctx, String(combo), x, sideY + 24, { size: 16, align: 'center' });
   }
 }
 
@@ -222,13 +227,25 @@ function drawHUD(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, wid
   const { runtime, nowMs } = frame;
 
   text(ctx, runtime.autoplay ? 'AUTO PLAY' : 'PLAY', MARGIN, 18, { size: 12, weight: 800, color: ACCENT });
-  text(ctx, `BPM ${Math.round(runtime.bpm ?? 0)}   SPEED x${(runtime.hiSpeed ?? 0).toFixed(1)}`, 110, 18, {
-    size: 12,
-    color: MUTED,
-  });
+  text(
+    ctx,
+    `BPM ${Math.round(runtime.bpm ?? 0)}   ${runtime.floatingHiSpeed ? 'FHS' : 'SPEED'} x${(runtime.hiSpeed ?? 0).toFixed(runtime.floatingHiSpeed ? 2 : 1)}`,
+    110,
+    18,
+    {
+      size: 12,
+      color: MUTED,
+    },
+  );
 
-  // Gauge: a bar under the lanes with a tick at the clear line.
-  drawGauge(ctx, runtime, MARGIN, 372, 240, 9);
+  // Gauge: a bar under the lanes with a tick at the clear line. A two-player play draws each player's under its lanes.
+  const second = runtime.secondPlayer;
+  const side1P = frame.layout.playfield.sides['1P'];
+  const side2P = frame.layout.playfield.sides['2P'];
+  if (second && side1P && side2P) {
+    drawGauge(ctx, runtime, side1P.left, 372, side1P.right - side1P.left, 9, '1P ');
+    drawGauge(ctx, second, side2P.left, 372, side2P.right - side2P.left, 9, '2P ');
+  } else drawGauge(ctx, runtime, MARGIN, 372, 240, 9);
 
   // Track, bottom left.
   // Genre, title, artist — the order every built-in skin uses.
@@ -238,32 +255,52 @@ function drawHUD(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, wid
   text(ctx, runtime.chartTitle ?? '', MARGIN, height - 50, { size: 16, weight: 700, maxWidth: 380, nowMs });
   text(ctx, runtime.chartArtist ?? '', MARGIN, height - 28, { size: 11, color: MUTED, maxWidth: 380, nowMs });
 
-  // Score figures, bottom right, in one row.
+  // Score figures, bottom right, in one row (the 2P player's row above the 1P player's).
   scoreFigures(runtime).forEach(([label, value], index) => {
-    stat(ctx, label, value, width - MARGIN - 400 + index * 106, height - 56, { maxWidth: 98, nowMs });
+    stat(ctx, second ? `1P ${label}` : label, value, width - MARGIN - 400 + index * 106, height - 56, {
+      maxWidth: 98,
+      nowMs,
+    });
   });
+  if (second) {
+    scoreFigures(second).forEach(([label, value], index) => {
+      stat(ctx, `2P ${label}`, value, width - MARGIN - 400 + index * 106, height - 104, { maxWidth: 98, nowMs });
+    });
+  }
 
-  // Judgement counts down the right edge, beside the BGA.
+  // Judgement counts down the right edge, beside the BGA; a two-player play adds the 2P player's counts beside them.
   const columnX = width - MARGIN - 80;
   judgeCounts(runtime).forEach(([label, count], index) => {
     const y = COLUMN_TOP + index * 22;
     text(ctx, label, columnX, y, { size: 11, color: MUTED, weight: 700 });
-    text(ctx, String(count ?? 0), columnX + 80, y, { size: 13, align: 'right' });
+    text(ctx, String(count ?? 0), columnX + (second ? 44 : 80), y, { size: 13, align: 'right' });
   });
+  if (second) {
+    text(ctx, '1P', columnX + 44, COLUMN_TOP - 22, { size: 10, color: MUTED, weight: 700, align: 'right' });
+    text(ctx, '2P', columnX + 80, COLUMN_TOP - 22, { size: 10, color: MUTED, weight: 700, align: 'right' });
+    judgeCounts(second).forEach(([, count], index) => {
+      text(ctx, String(count ?? 0), columnX + 80, COLUMN_TOP + index * 22, { size: 13, align: 'right' });
+    });
+  }
 }
 
 /** The gauge bar (`y` its top, 8 px tall) with a tick at the clear line, its label and percentage on the line above. */
 function drawGauge(
   ctx: CanvasRenderingContext2D,
-  runtime: BeMusicGameplayRuntime,
+  runtime: Pick<BeMusicGameplayRuntime, 'gauge' | 'clearThreshold' | 'gaugeLabel'>,
   x: number,
   y: number,
   w: number,
   labelSize: number,
+  prefix = '',
 ): void {
   const gauge = Math.max(0, Math.min(100, runtime.gauge ?? 0));
   const clear = runtime.clearThreshold ?? 80;
-  text(ctx, `${runtime.gaugeLabel ?? 'GROOVE'} GAUGE`, x, y - 10, { size: labelSize, color: MUTED, weight: 700 });
+  text(ctx, `${prefix}${runtime.gaugeLabel ?? 'GROOVE'} GAUGE`, x, y - 10, {
+    size: labelSize,
+    color: MUTED,
+    weight: 700,
+  });
   text(ctx, `${Math.round(gauge)}%`, x + w, y - 10, { size: 12, align: 'right' });
   ctx.fillStyle = PANEL;
   ctx.fillRect(x, y, w, 8);
@@ -274,7 +311,9 @@ function drawGauge(
 }
 
 /** SCORE, EX SCORE, COMBO, RANK — the figures both HUDs show. */
-function scoreFigures(runtime: BeMusicGameplayRuntime): Array<[string, string]> {
+function scoreFigures(
+  runtime: Pick<BeMusicGameplayRuntime, 'score' | 'exScore' | 'exScoreMax' | 'combo' | 'rank'>,
+): Array<[string, string]> {
   return [
     ['SCORE', String(runtime.score ?? 0)],
     ['EX SCORE', `${runtime.exScore ?? 0}/${runtime.exScoreMax ?? 0}`],
@@ -284,7 +323,9 @@ function scoreFigures(runtime: BeMusicGameplayRuntime): Array<[string, string]> 
 }
 
 /** The judgement counts, abbreviated. */
-function judgeCounts(runtime: BeMusicGameplayRuntime): Array<[string, number | undefined]> {
+function judgeCounts(
+  runtime: Pick<BeMusicGameplayRuntime, 'perfect' | 'great' | 'good' | 'bad' | 'poor'>,
+): Array<[string, number | undefined]> {
   return [
     ['PG', runtime.perfect],
     ['GR', runtime.great],
@@ -311,7 +352,7 @@ function drawPortraitHUD(
   text(ctx, runtime.autoplay ? 'AUTO PLAY' : 'PLAY', header.left, headerY, { size: 12, weight: 800, color: ACCENT });
   text(
     ctx,
-    `BPM ${Math.round(runtime.bpm ?? 0)}   SPEED x${(runtime.hiSpeed ?? 0).toFixed(1)}`,
+    `BPM ${Math.round(runtime.bpm ?? 0)}   ${runtime.floatingHiSpeed ? 'FHS' : 'SPEED'} x${(runtime.hiSpeed ?? 0).toFixed(runtime.floatingHiSpeed ? 2 : 1)}`,
     header.right,
     headerY,
     {
@@ -349,5 +390,11 @@ function drawPortraitHUD(
     text(ctx, String(count ?? 0), box.x, box.y + 16, { size: 13, maxWidth: box.w - 6 });
   });
 
-  drawGauge(ctx, runtime, gauge.x, gauge.y, gauge.w, 10);
+  const second = runtime.secondPlayer;
+  if (second) {
+    // Two players share the gauge band: 1P on the left half, 2P on the right.
+    const half = (gauge.w - 12) / 2;
+    drawGauge(ctx, runtime, gauge.x, gauge.y, half, 10, '1P ');
+    drawGauge(ctx, second, gauge.x + half + 12, gauge.y, half, 10, '2P ');
+  } else drawGauge(ctx, runtime, gauge.x, gauge.y, gauge.w, 10);
 }

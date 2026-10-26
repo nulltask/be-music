@@ -5,7 +5,7 @@
 
 import { DOMResultView } from '../view/built-in/dom-view.ts';
 import type { BeMusicJSON } from '@be-music/chart-source';
-import type { PlayResult, PlayRunKind, SystemSoundSet } from '@be-music/player-scene-model';
+import type { PlayResult, PlayRunKind, ReplaySlotState, SystemSoundSet } from '@be-music/player-scene-model';
 import type { BrowserAssetSource } from '../collection/types.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
 import { ResultSession, type ResultSessionEvents } from '../session/result/result-session.ts';
@@ -51,8 +51,14 @@ export interface ResultSceneOptions extends SessionSceneOptions {
    */
   readonly audio: AudioService;
   /**
+   * The replay slots of the chart (or the course), read every frame: a beatoraja skin shows them (ops 196-198 and
+   * 1196-1204). Pair it with `on.saveReplay`.
+   */
+  readonly replaySlots?: () => readonly ReplaySlotState[];
+  /**
    * Where the screen leads: `continue` when the player is done, `retry` to play the chart again (R). Without `retry`
-   * the screen offers no quick retry. Each fires once per entry.
+   * the screen offers no quick retry. Each fires once per entry. `saveReplay` saves the play into a replay slot (keys
+   * 1-4, a beatoraja skin's replay buttons).
    */
   readonly on: ResultSessionEvents;
 }
@@ -152,6 +158,7 @@ export function createResultScene(kit: ResultSceneKit, options: ResultSceneOptio
     sounds: options.sounds,
     audio: options.audio,
     timing: resultTimingOf(kit),
+    ...(options.replaySlots !== undefined ? { replaySlots: options.replaySlots } : {}),
     on: options.on,
   });
   return new FamilyResultScene(session, createResultView(kit, session, options), {

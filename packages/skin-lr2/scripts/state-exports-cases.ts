@@ -148,6 +148,11 @@ export function registerLR2SkinStateExportsCases(define: DefineBenchmarkCase): v
       lr2StateAPI.resolveLR2PlayKeyModeOp(BENCH_PLAY_SETUP.lanes);
     },
   });
+  define('skin-lr2.state.resolveLR2PlayKeyModeOps', {
+    run: () => {
+      lr2StateAPI.resolveLR2PlayKeyModeOps({ ...BENCH_PLAY_SETUP.lanes, battleSourceVariant: '7' }, 'D-BATTLE');
+    },
+  });
   define('skin-lr2.state.resolveLR2PlayState', {
     run: () => {
       const state = lr2StateAPI.resolveLR2PlayState(BENCH_PLAY_SETUP, BENCH_PLAY_FRAME);
@@ -211,6 +216,12 @@ export function registerLR2SkinStateExportsCases(define: DefineBenchmarkCase): v
     run: () => {
       lr2StateAPI.resolveLR2SelectButton(12);
       lr2StateAPI.resolveLR2SelectButton(93);
+    },
+  });
+  define('skin-lr2.state.stepLR2JudgeTiming', {
+    run: () => {
+      lr2StateAPI.stepLR2JudgeTiming(98, 1);
+      lr2StateAPI.stepLR2JudgeTiming(-99, -1);
     },
   });
   define('skin-lr2.state.resolveLR2SelectState', {

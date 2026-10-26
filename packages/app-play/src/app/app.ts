@@ -1,5 +1,5 @@
 // Imports are split across `@be-music/player-browser`'s entries (`./host`, `./skin`, `./collection`, `./audio`,
-// `./recording`) so the dependency surface of this demo is explicit at the file top. The main `@be-music/player-browser`
+// `./recording`) so the dependency surface of this player is explicit at the file top. The main `@be-music/player-browser`
 // entry is reserved for symbols that don't belong to any single entry (`logger`, `Rectangle`).
 import { PixiSceneHost, type PlayScene, type SelectScene } from '@be-music/player-browser/host';
 import type { BrowseSnapshot, PlayOptions } from '@be-music/player-scene-model';
@@ -18,18 +18,23 @@ import { DecideRoute } from './routes/decide.ts';
 import { PlayRoute } from './routes/play.ts';
 import { ResultRoute } from './routes/result.ts';
 import { ReplayRoute } from './routes/replay.ts';
-import { DemoShell } from './shell.ts';
+import { PlayerShell } from './shell.ts';
 import { InlineSearch } from '../inline-search.ts';
 import { DebugMenu, type DebugMenuDeps } from '../ui/debug-menu/index.ts';
 import { confirmSkinDrop, promptSkinDrop } from '../ui/skin-drop-prompt.ts';
+import { showMissingReplayCharts } from '../ui/replay-missing.ts';
 import { readDeviceSignals, type DeviceProfile } from '../device-profile.ts';
 import { captureScreenshot, finalizeRecordingIfActive, toggleRecording } from '../recording-controller.ts';
-import type { DemoGUIState, DemoScene, PlayerWebDemoElements, SkinFamilyOverride } from '../types.ts';
-import { createDemoGUIState, resolveCompressorMode, storeBuiltInSkinId } from '../services/settings.ts';
+import type { PlayerGUIState, PlayerScene, PlayerWebElements, SkinFamilyOverride } from '../types.ts';
+import { createPlayerGUIState, readCompressorRequest, storeBuiltInSkinId } from '../services/settings.ts';
 import { BE_MUSIC_SKINS } from '../services/built-in-skins.ts';
 import { SilentModeSetting } from '../services/silent-mode.ts';
 import { playOptionsFromGUI, PlayOptionsService } from '../services/play-options.ts';
 import { REPLAY_RECORDER, ReplayAutoSave } from '../services/replays.ts';
+import { ReplaySlotStore } from '../services/replay-slots.ts';
+import { createIndexedDBReplaySlotBackend } from '../services/replay-slot-database.ts';
+import { ReplaySlotService } from '../services/replay-slot-service.ts';
+import { ReplaySlotsPanel } from '../replay-slots-panel.ts';
 import { RecordingService } from '../services/recording.ts';
 import { StatusLine } from '../services/status.ts';
 import { CourseMakerService } from '../services/course-maker.ts';
@@ -46,8 +51,8 @@ import { nameResultJingle, type LiveTestHookDeps } from '../services/test-hook.t
 const gamereplay = logger('gameplay');
 
 /** What the app is made with: the page's elements, the device it runs on, and the test hook's recorder when enabled. */
-export interface PlayerWebDemoAppOptions {
-  readonly elements: PlayerWebDemoElements;
+export interface PlayerWebAppOptions {
+  readonly elements: PlayerWebElements;
   /** Phone or tablet, from the device's signals (`resolveDeviceProfile`). */
   readonly deviceProfile: DeviceProfile;
   /** `window.__beMusicTest`'s recorder (`?e2e=1` or a development build; `test-hook.ts`), or none. */
@@ -55,10 +60,10 @@ export interface PlayerWebDemoAppOptions {
 }
 
 /**
- * The demo's composition root: it makes the services, the scene router and the routes, and wires them to each other,
+ * The player's composition root: it makes the services, the scene router and the routes, and wires them to each other,
  * the Debug Menu and the Leaderboard. `main.ts` makes it, installs the test hook over it and starts it.
  */
-export class PlayerWebDemoApp {
+export class PlayerWebApp {
   /** The LR2 theme: every theme the drops brought, the one mounted, and its skins, BGM and system sounds. */
   private readonly lr2: LR2ThemeService;
   /** The beatoraja theme: its bundle, BGM and system sounds, and its entries loaded as scene kits. */
@@ -80,11 +85,14 @@ export class PlayerWebDemoApp {
    * the select scene, which it keeps across a decide, play and result. Transitions run one at a time, and a scene made
    * for a navigation a newer one replaced is disposed instead of shown.
    */
-  private readonly router = new SceneRouter<DemoScene, PlayScene, SelectScene>({
+  private readonly router = new SceneRouter<PlayerScene, PlayScene, SelectScene>({
     host: {
       setScene: async (scene) => {
         await this.mountStage();
         await this.sceneHost.setScene(scene);
+        // The replay slots' card belongs to the screen that shows it: the select screen shows it again for its bar, the
+        // result route for its run.
+        this.replaySlotsPanel.hide();
       },
     },
     recorder: { finalize: () => finalizeRecordingIfActive(this.recording.deps()) },
@@ -128,6 +136,7 @@ export class PlayerWebDemoApp {
    */
   private readonly search = new InlineSearch({
     input: document.querySelector<HTMLInputElement>('#search')!,
+    error: document.querySelector<HTMLElement>('#search-error') ?? undefined,
     shell: document.querySelector<HTMLElement>('.shell')!,
     canvas: () => this.sceneHost?.app.canvas,
     fieldRect: () => this.selectView?.searchFieldRect(),
@@ -140,6 +149,7 @@ export class PlayerWebDemoApp {
           }
         : undefined,
     setQuery: (query) => this.selectView?.setSearch(query),
+    searchError: () => this.selectView?.searchError(),
     setEditing: (editing) => this.selectView?.setSearchEditing(editing),
     touch: () => document.documentElement.classList.contains('touch-first'),
   });
@@ -171,7 +181,7 @@ export class PlayerWebDemoApp {
   private pendingSkinSystem: 'lr2' | 'beatoraja' | undefined;
   /**
    * Compressor architecture for `audioCompressorMode` on every gameplay mount. Defaults to `'split'` (the new 3-stage
-   * bus — see `audio-bus.ts` for the design rationale); the demo accepts a `?compressor=legacy` URL flag for A/B
+   * bus — see `audio-bus.ts` for the design rationale); the player accepts a `?compressor=legacy` URL flag for A/B
    * comparison against the old single-compressor topology, and `?compressor=off` to spawn gameplay with the bypass path
    * active out of the gate (the checkbox can also reach `off` mid-session).
    */
@@ -181,7 +191,7 @@ export class PlayerWebDemoApp {
    * handlers (`toggleRecording` etc.) share a single source of truth — programmatic updates go through `state.foo = …`
    * + `controller.updateDisplay()`.
    */
-  private readonly guiState: DemoGUIState;
+  private readonly guiState: PlayerGUIState;
   /** The Leaderboard's Debug Menu folder, account chip and play submission. */
   private readonly leaderboard = new LeaderboardPanel({
     // Read on use: `guiState` is initialized after this field.
@@ -209,6 +219,21 @@ export class PlayerWebDemoApp {
     download: downloadBlob,
     warn: (message, error) => gamereplay.warn(message, error),
   });
+  /**
+   * The replay slots: four replays per chart and per course kept in IndexedDB, saved into from a result and played from
+   * the select screen.
+   */
+  private readonly replaySlots = new ReplaySlotService({
+    store: new ReplaySlotStore({ backend: createIndexedDBReplaySlotBackend() }),
+    // Read on use: `guiState` is initialized after this field.
+    nonstopPlacement: () => this.guiState.nonstopPlacement,
+  });
+  /** The replay slots' card, on the skins without a replay-slot UI of their own (`replay-slots-panel.ts`). */
+  private readonly replaySlotsPanel = new ReplaySlotsPanel({
+    service: this.replaySlots,
+    replay: (slot) => this.selectView?.replay(slot),
+    setStatus: (text) => this.status.set(text),
+  });
   /** The Capture folder's video recording and screenshots: the record armed, the next file name, the format. */
   private readonly recording: RecordingService;
   /** "Play in silent mode": the setting, its checkboxes and its hint. */
@@ -220,12 +245,12 @@ export class PlayerWebDemoApp {
   /** `window.__beMusicTest` for the end-to-end suite (`?e2e=1` or a development build; `test-hook.ts`). */
   private readonly testHook: TestHookRecorder | undefined;
   /** The page around the stage: its gameplay state, fullscreen and touch controls (`app/shell.ts`). */
-  private readonly shell: DemoShell;
-  private readonly elements: PlayerWebDemoElements;
-  public constructor({ elements, deviceProfile, testHook }: PlayerWebDemoAppOptions) {
+  private readonly shell: PlayerShell;
+  private readonly elements: PlayerWebElements;
+  public constructor({ elements, deviceProfile, testHook }: PlayerWebAppOptions) {
     this.elements = elements;
     this.testHook = testHook;
-    this.guiState = createDemoGUIState({
+    this.guiState = createPlayerGUIState({
       signals: readDeviceSignals(),
       devicePixelRatio: window.devicePixelRatio || 1,
       builtInSkinId: (stored) => BE_MUSIC_SKINS.resolve(stored).id,
@@ -255,12 +280,18 @@ export class PlayerWebDemoApp {
     // Every sound plays through the master volume; start from the remembered level and mute state.
     setMasterVolume(this.guiState.muted ? 0 : this.guiState.masterVolume / 100);
     this.playOptions = new PlayOptionsService(playOptionsFromGUI(this.guiState));
-    this.silentMode = new SilentModeSetting({ settings: this.guiState, touchFirst: deviceProfile.touchFirst });
+    this.silentMode = new SilentModeSetting({
+      settings: this.guiState,
+      touchFirst: deviceProfile.touchFirst,
+      onRemember: () => this.debugMenu.scheduleSettingsSave(),
+    });
     this.silentMode.install();
-    // The `?compressor=split|legacy|off` URL flag, read once at boot.
-    const compressor = resolveCompressorMode(window.location.href);
-    this.compressorMode = compressor.mode;
-    this.guiState.compressor = compressor.enabled;
+    // `?compressor=split|legacy|off` wins for this visit. With no flag, the remembered checkbox stays.
+    const compressor = readCompressorRequest(window.location.href);
+    if (compressor) {
+      this.compressorMode = compressor.mode;
+      this.guiState.compressor = compressor.enabled;
+    }
     this.lr2 = new LR2ThemeService({
       elements,
       setStatus: (text) => this.status.set(text),
@@ -338,6 +369,7 @@ export class PlayerWebDemoApp {
       playChart: (chartEntry, overrides) => this.playRoute.playChart(chartEntry, overrides),
       showResult: (data, mode) => this.resultRoute.showResult(data, mode),
       showBeatorajaResult: (data, options) => this.resultRoute.showBeatorajaResult(data, options),
+      courseReplaySlots: (courseLog, native, kept) => this.resultRoute.courseReplaySlots(courseLog, native, kept),
       unlockReplayOptions: () => this.unlockReplayOptions(),
     });
     this.courseRoute = new CourseRoute({
@@ -357,6 +389,7 @@ export class PlayerWebDemoApp {
       playChart: (chartEntry, overrides) => this.playRoute.playChart(chartEntry, overrides),
       showResult: (data, mode) => this.resultRoute.showResult(data, mode),
       showBeatorajaResult: (data, options) => this.resultRoute.showBeatorajaResult(data, options),
+      courseReplaySlots: (courseLog, native, kept) => this.resultRoute.courseReplaySlots(courseLog, native, kept),
       unlockReplayOptions: () => this.unlockReplayOptions(),
     });
     this.debugMenu = new DebugMenu(this.debugMenuDeps());
@@ -384,6 +417,9 @@ export class PlayerWebDemoApp {
       unlockReplayOptions: () => this.unlockReplayOptions(),
       rememberHiSpeed: (value, source) => this.playRoute.rememberHiSpeed(value, source),
       showDecide: (chartEntry, overrides) => this.decideRoute.showDecide(chartEntry, overrides),
+      replaySlots: this.replaySlots,
+      replaySlotsPanel: this.replaySlotsPanel,
+      startReplayFromSlot: (entry, slot) => this.replayRoute.startReplayFromSlot(entry, slot),
     });
     this.decideRoute = new DecideRoute({
       router: this.router,
@@ -428,6 +464,17 @@ export class PlayerWebDemoApp {
       showSelect: () => this.showSelect(),
       playChart: (chartEntry, overrides) => this.playRoute.playChart(chartEntry, overrides),
       unlockReplayOptions: () => this.unlockReplayOptions(),
+      replaySlots: {
+        store: this.replaySlots.store,
+        rules: () => [
+          this.guiState.replaySlotAutoSave1,
+          this.guiState.replaySlotAutoSave2,
+          this.guiState.replaySlotAutoSave3,
+          this.guiState.replaySlotAutoSave4,
+        ],
+        panel: this.replaySlotsPanel,
+      },
+      setStatus: (text) => this.status.set(text),
     });
     this.playRoute = new PlayRoute({
       router: this.router,
@@ -435,6 +482,7 @@ export class PlayerWebDemoApp {
       elements,
       library: this.library,
       records: this.records,
+      leaderboard: this.leaderboard,
       familyKits: this.familyKits,
       beatoraja: this.beatoraja,
       courses: this.courses,
@@ -465,8 +513,12 @@ export class PlayerWebDemoApp {
       setPlayStatus: (text) => this.status.setPlay(text),
       playChart: (chartEntry, overrides) => this.playRoute.playChart(chartEntry, overrides),
       showSelect: () => this.showSelect(),
+      startCourseReplay: (course, courseLog) => this.courseRoute.startCourseReplay(course, courseLog),
+      startNonstopCourse: (course, options) => this.nonstopRoute.startNonstopCourse(course, options),
+      showMissingReplayCharts,
+      replaySlots: this.replaySlots,
     });
-    this.shell = new DemoShell({
+    this.shell = new PlayerShell({
       sceneHost: this.sceneHost,
       elements,
       search: this.search,
@@ -500,6 +552,8 @@ export class PlayerWebDemoApp {
       activeBeatorajaPlay: () => this.beatoraja.activeBeatorajaPlay,
       beatorajaSkinConfig: (entryPath, header) => this.beatoraja.beatorajaSkinConfig(entryPath, header),
       setStatus: (text) => this.status.set(text),
+      reusePreviousArrangement: () => this.playOptions.reusePreviousArrangement(this.guiState.judgeRuleset),
+      clearArrangement: () => this.playOptions.clearArrangement(),
       setPlayOptions: (changes) => this.setPlayOptions(changes),
       rememberHiSpeed: (value, source) => this.playRoute.rememberHiSpeed(value, source),
       refreshSelectRecords: () => this.refreshSelectRecords(),
@@ -555,6 +609,9 @@ export class PlayerWebDemoApp {
   public start(): void {
     this.debugMenu.buildGUI();
     this.courseMaker.start();
+    // The replay slots load once; the select screen draws them again whenever they change.
+    void this.replaySlots.store.load();
+    this.replaySlots.store.subscribe(() => this.selectView?.refreshRecords());
     // The first scene shown mounts the Pixi host (`mountStage`). Keep its promise so URL auto-load (below) drives its own
     // `showSelect` only once the first select screen is up.
     const initialSelectReady = this.showSelect();

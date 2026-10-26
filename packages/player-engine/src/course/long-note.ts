@@ -1,3 +1,4 @@
+import type { LongNoteMode } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import type { CourseConstraint } from './definition.ts';
 
@@ -18,7 +19,14 @@ export function applyCourseLongNoteConstraint(
       : constraints.includes('hcn')
         ? 3
         : undefined;
-  if (mode === undefined) return json;
+  return mode === undefined ? json : applyUndefinedLongNoteMode(json, mode);
+}
+
+/**
+ * Gives a chart that leaves its long-note mode undefined the mode `mode` (beatoraja `ChartInformation.lnmode`: the
+ * player's LN / CN / HCN choice, or a course constraint). A chart that names its own mode keeps it.
+ */
+export function applyUndefinedLongNoteMode(json: BeMusicJSON, mode: LongNoteMode): BeMusicJSON {
   if (json.sourceFormat === 'bms') {
     if (json.bms.lnMode !== undefined) return json;
     return { ...json, bms: { ...json.bms, lnMode: mode } };

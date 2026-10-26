@@ -1,3 +1,4 @@
+import { createMemoryReplaySlotBackend, ReplaySlotStore } from '../../services/replay-slots.ts';
 import { createEmptyJSON } from '@be-music/chart-source';
 import type { LR2Skin } from '@be-music/skin-lr2';
 import type { ResolvedPlayChart } from '@be-music/player-engine';
@@ -29,7 +30,7 @@ import type { FamilyDispatchState } from '../../family-dispatch.ts';
 import { resolveResultSoundSet, type LR2ResultJingles } from '../../result-jingles.ts';
 import { CourseRunService } from '../../services/courses.ts';
 import { resultFromCourseLog, resultFromData } from '../../test-hook.ts';
-import type { DemoScene } from '../../types.ts';
+import type { PlayerScene } from '../../types.ts';
 import { SceneRouter } from '../scene-router.ts';
 import type { LastPlay } from './play.ts';
 import { ResultRoute, type ResultRouteDeps } from './result.ts';
@@ -125,9 +126,9 @@ interface FakeResult {
  * the theme loaded: LR2 (with a result skin), beatoraja (with one) or none.
  */
 async function harness(options: { family?: 'lr2' | 'beatoraja' | 'none'; lastPlay?: LastPlay } = {}) {
-  const stage: (DemoScene | undefined)[] = [];
+  const stage: (PlayerScene | undefined)[] = [];
   const onInterrupt = vi.fn();
-  const router = new SceneRouter<DemoScene, PlayScene, SelectScene>({
+  const router = new SceneRouter<PlayerScene, PlayScene, SelectScene>({
     host: {
       setScene: async (scene) => {
         stage.push(scene);
@@ -197,6 +198,12 @@ async function harness(options: { family?: 'lr2' | 'beatoraja' | 'none'; lastPla
     showSelect: vi.fn<ResultRouteDeps['showSelect']>(async () => {}),
     playChart: vi.fn<ResultRouteDeps['playChart']>(async () => {}),
     unlockReplayOptions: vi.fn<ResultRouteDeps['unlockReplayOptions']>(),
+    replaySlots: {
+      store: new ReplaySlotStore({ backend: createMemoryReplaySlotBackend() }),
+      rules: () => ['never', 'never', 'never', 'never'] as const,
+      panel: { showResult: vi.fn() },
+    },
+    setStatus: vi.fn<ResultRouteDeps['setStatus']>(),
   };
   const route = new ResultRoute({
     ...deps,

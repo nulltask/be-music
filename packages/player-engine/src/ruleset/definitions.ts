@@ -1,3 +1,7 @@
+import { applyCustomJudgeTables, type BeatorajaCustomJudge } from './custom-judge.ts';
+import { createLR2GoodAttackGauge, createLR2PerfectAttackGauge } from './lr2-attack.ts';
+import type { GaugeJudgeIndex } from './gauge.ts';
+import type { GaugeAutoShift, GaugeShiftBottom } from './gauge-type.ts';
 import {
   bmsExRankValueToJudgeRankPercent,
   resolveBMSJudgeWindowsMsForPercent,
@@ -7,11 +11,12 @@ import {
 } from '../core/judge-window.ts';
 import {
   applyCourseJudgeConstraint,
+  resolveClassGauge,
   resolveCourseGauge,
   resolveCourseGaugeId,
   type RulesetCourseOptions,
 } from './course.ts';
-import { countBaseNotes, type RulesetChartFacts } from './facts.ts';
+import { countBaseNotes, type RulesetChartFacts, type RulesetNoteCounts } from './facts.ts';
 import { isChargeLongNoteMode, resolveEffectiveLongNoteMode } from './long-note.ts';
 
 /**
@@ -105,6 +110,8 @@ export type LNEarlyReleaseRule = 'head-unless-beyond-good' | 'worse-of-head-and-
 export type PressDuringLongNoteRule = 'rejudge-head-or-empty-poor' | 'ignore';
 
 export interface GaugeGutsStep {
+  /** Restrict softening to these judgments; omitted preserves a source table's unrestricted behavior. */
+  judges?: readonly GaugeJudgeIndex[];
   /** Gauge value below (or at, when `inclusive`) which the damage multiplier applies. */
   threshold: number;
   multiplier: number;
@@ -164,6 +171,10 @@ export interface RulesetConfig {
   /** HCN tick deltas as `[heldJudgeIndex, heldRate, releasedJudgeIndex, releasedRate]` (beatoraja model). */
   hcnTick: { heldJudge: number; heldRate: number; releasedJudge: number; releasedRate: number };
   gauge: GaugeSpec;
+  /** SURVIVAL TO GROOVE tracks NORMAL from chart start, never on course class gauges. */
+  gaugeFallback?: GaugeSpec;
+  /** Source-ordered parallel gauges and minimum eligible index (CLASS family starts at zero). */
+  gaugeBank?: { specs: readonly GaugeSpec[]; bottomIndex: number; upperExclusive?: number };
   /** EX-SCORE denominator note count (longs count 1 for LN styles, 2 for charge styles). */
   noteCount: number;
   /**
@@ -193,10 +204,16 @@ export interface ResolveRulesetOptions {
    * ruleset's own line-up by `resolveDefaultGaugeId`. Defaults to `'GROOVE'`.
    */
   selectedGauge?: string;
+  gaugeAutoShift?: GaugeAutoShift;
+  bottomShiftableGauge?: GaugeShiftBottom;
   /** Debug BAD-window override (`PlayerOptions.judgeWindowMs`) — non-standard, applies to every window table. */
   judgeWindowOverrideMs?: number;
   /** beatoraja note-selection algorithm (default `'combo'`, beatoraja's own default). */
   judgeAlgorithm?: BeatorajaJudgeAlgorithm;
+  /** beatoraja CUSTOM JUDGE window and long-note margin rates; absent while the option is off. */
+  customJudge?: BeatorajaCustomJudge;
+  /** beatoraja PRACTICE (`PracticeProperty`): replaces the gauge, TOTAL and judgerank of the play. */
+  practice?: BeatorajaPracticeRules;
   /**
    * The play is a course stage: it runs on the ruleset's course gauge (see `resolveCourseGauge`), starting from the
    * value carried in, and under the course's judge constraint.
@@ -346,9 +363,9 @@ function scaleBeatorajaWindows(
   return set;
 }
 
-function resolveBeatorajaWindowTables(chart: RulesetChartFacts): RulesetWindowTables {
+function resolveBeatorajaWindowTables(chart: RulesetChartFacts, judgeRankOverride?: number): RulesetWindowTables {
   const mode = resolveBeatorajaMode(chart.laneMode);
-  const judgeRank = resolveBeatorajaJudgeRank(chart, mode.rankTable);
+  const judgeRank = judgeRankOverride ?? resolveBeatorajaJudgeRank(chart, mode.rankTable);
   const note = scaleBeatorajaWindows(mode.note, judgeRank, mode.scaled);
   const scratch = mode.scratch ? scaleBeatorajaWindows(mode.scratch, judgeRank, mode.scaled) : note;
   const longNoteEnd = scaleBeatorajaWindows(mode.longNoteEnd, judgeRank, mode.scaled);
@@ -460,6 +477,10 @@ function scaleNegative(values: GaugeValues, multiplier: number): GaugeValues {
 
 function resolveLR2Gauge(gaugeId: string, total: number, noteCount: number): GaugeSpec {
   switch (gaugeId) {
+    case 'P-ATTACK':
+      return createLR2PerfectAttackGauge();
+    case 'G-ATTACK':
+      return createLR2GoodAttackGauge(resolveLR2HardDamageMultiplier(total, noteCount));
     case 'EASY':
       return {
         id: 'EASY',
@@ -535,6 +556,37 @@ const BEATORAJA_HARD_GUTS: readonly GaugeGutsStep[] = [
   { threshold: 50, multiplier: 0.8 },
 ];
 
+/** beatoraja `GaugeProperty`: the gauge table family; a play mode picks its own unless PRACTICE names one. */
+export type BeatorajaGaugeCategory = 'FIVEKEYS' | 'SEVENKEYS' | 'PMS' | 'KEYBOARD' | 'LR2';
+
+/** beatoraja PRACTICE `GAUGE TYPE`, in source order: the six single gauges, then the three class gauges. */
+export const BEATORAJA_PRACTICE_GAUGE_TYPES = [
+  'ASSIST-EASY',
+  'EASY',
+  'NORMAL',
+  'HARD',
+  'EX-HARD',
+  'HAZARD',
+  'CLASS',
+  'EXCLASS',
+  'EXHARDCLASS',
+] as const;
+
+/** The play rules beatoraja PRACTICE sets (`BMSPlayer` STATE_PRACTICE, `PracticeModifier`, `getGauge`). */
+export interface BeatorajaPracticeRules {
+  /** The scorable note counts before PracticeModifier moved the notes outside the range to the background. */
+  sourceNotes: RulesetNoteCounts;
+  /** `TOTAL`; absent keeps the chart's. */
+  total?: number;
+  /** `JUDGERANK` (beatoraja judgerank, `NORMAL` rule rank 2 = 75); absent keeps the chart's. */
+  judgeRank?: number;
+  gauge: (typeof BEATORAJA_PRACTICE_GAUGE_TYPES)[number];
+  /** `GAUGE CATEGORY`; absent uses the play mode's. */
+  gaugeCategory?: BeatorajaGaugeCategory;
+  /** `GAUGE VALUE`, clamped to the gauge's range. */
+  startGauge: number;
+}
+
 // GaugeProperty.java: modifier, minimum, maximum, initial value, clear border, judge deltas and guts.
 type BeatorajaGaugeProperty = readonly [
   modifier: 'total' | 'limit' | 'damage' | undefined,
@@ -545,7 +597,16 @@ type BeatorajaGaugeProperty = readonly [
   values: GaugeValues,
   guts?: readonly GaugeGutsStep[],
 ];
-const BEATORAJA_SINGLE_GAUGES: Record<keyof typeof BEATORAJA_MODES, readonly BeatorajaGaugeProperty[]> = {
+const BEATORAJA_SINGLE_GAUGES: Record<BeatorajaGaugeCategory, readonly BeatorajaGaugeProperty[]> = {
+  // Selectable only from PRACTICE's GAUGE CATEGORY in 0.8.9.
+  LR2: [
+    ['total', 2, 100, 20, 60, [1.2, 1.2, 0.6, -3.2, -4.8, -1.6]],
+    ['total', 2, 100, 20, 80, [1.2, 1.2, 0.6, -3.2, -4.8, -1.6]],
+    ['total', 2, 100, 20, 80, [1, 1, 0.5, -4, -6, -2]],
+    ['damage', 0, 100, 100, 0, [0.1, 0.1, 0.05, -6, -10, -2], [{ threshold: 30, multiplier: 0.6 }]],
+    ['damage', 0, 100, 100, 0, [0.1, 0.1, 0.05, -12, -20, -2]],
+    [undefined, 0, 100, 100, 0, [0.15, 0.06, 0, -100, -100, -10]],
+  ],
   FIVEKEYS: [
     ['total', 2, 100, 20, 50, [1, 1, 0.5, -1.5, -3, -0.5]],
     ['total', 2, 100, 20, 75, [1, 1, 0.5, -1.5, -4.5, -1]],
@@ -599,10 +660,28 @@ function beatorajaFiveKeyDamageMultiplier(total: number, noteCount: number): num
   return Math.max(multipliers[index]!, countMultiplier);
 }
 
-function resolveBeatorajaGauge(gaugeId: string, total: number, noteCount: number, laneMode: string): GaugeSpec {
+function resolveBeatorajaGaugeCategory(laneMode: string): BeatorajaGaugeCategory {
   const mode = resolveBeatorajaMode(laneMode);
-  const rows =
-    mode === BEATORAJA_MODES.FIVEKEYS
+  return mode === BEATORAJA_MODES.FIVEKEYS
+    ? 'FIVEKEYS'
+    : mode === BEATORAJA_MODES.PMS
+      ? 'PMS'
+      : mode === BEATORAJA_MODES.KEYBOARD
+        ? 'KEYBOARD'
+        : 'SEVENKEYS';
+}
+
+function resolveBeatorajaGauge(
+  gaugeId: string,
+  total: number,
+  noteCount: number,
+  laneMode: string,
+  category?: BeatorajaGaugeCategory,
+): GaugeSpec {
+  const mode = resolveBeatorajaMode(laneMode);
+  const rows = category
+    ? BEATORAJA_SINGLE_GAUGES[category]
+    : mode === BEATORAJA_MODES.FIVEKEYS
       ? BEATORAJA_SINGLE_GAUGES.FIVEKEYS
       : mode === BEATORAJA_MODES.PMS
         ? BEATORAJA_SINGLE_GAUGES.PMS
@@ -687,6 +766,13 @@ function resolve____Gauge(gaugeId: string, noteCount: number): GaugeSpec {
 /** Maps the replay's LR2-family gauge pick onto each ruleset's own gauge id. */
 function resolveDefaultGaugeId(rulesetId: RulesetId, playGauge: string): string {
   switch (playGauge) {
+    case 'P-ATTACK':
+    case 'G-ATTACK':
+      return playGauge;
+    case 'ASSIST-EASY':
+      return rulesetId === '____' ? 'ASSISTED-EASY' : 'ASSIST-EASY';
+    case 'EX-HARD':
+      return 'EX-HARD';
     case 'EASY':
       return 'EASY';
     case 'HARD':
@@ -725,6 +811,37 @@ function resolveDefaultTotal(rulesetId: RulesetId, baseNoteCount: number, laneMo
 }
 
 /**
+ * PRACTICE's TOTAL: the set `TOTAL` (else the whole chart's), scaled by the notes left in the range when the gauge is
+ * NORMAL or gentler (`PracticeModifier`: `total × totalNotes / totalNotesBefore` for `gaugetype < 3`).
+ */
+function resolvePracticeTotal(chart: RulesetChartFacts, noteCount: number, practice: BeatorajaPracticeRules): number {
+  const source = { ...chart, notes: practice.sourceNotes };
+  const sourceCount = countRulesetNotes(source, 'per-note');
+  const total = practice.total ?? resolveEffectiveTotal('beatoraja', source, sourceCount);
+  return BEATORAJA_PRACTICE_GAUGE_TYPES.indexOf(practice.gauge) < 3 && sourceCount > 0
+    ? (total * noteCount) / sourceCount
+    : total;
+}
+
+/** `PracticeConfiguration.getGauge`: the picked type of the picked category, starting at `GAUGE VALUE`. */
+function resolvePracticeGauge(
+  practice: BeatorajaPracticeRules,
+  total: number,
+  noteCount: number,
+  laneMode: string,
+): GaugeSpec {
+  const category = practice.gaugeCategory ?? resolveBeatorajaGaugeCategory(laneMode);
+  const spec =
+    BEATORAJA_PRACTICE_GAUGE_TYPES.indexOf(practice.gauge) >= 6
+      ? resolveClassGauge(
+          practice.gauge,
+          ({ FIVEKEYS: '5k', SEVENKEYS: '7k', PMS: '9k', KEYBOARD: '24k', LR2: 'lr2' } as const)[category],
+        )
+      : resolveBeatorajaGauge(practice.gauge, total, noteCount, laneMode, category);
+  return { ...spec, initial: Math.min(spec.max, Math.max(spec.min, practice.startGauge)) };
+}
+
+/**
  * The TOTAL the gauge runs on. BMS `#TOTAL` is absolute; bmson `info.total` is a percentage of the ruleset's own
  * default TOTAL (bmson 1.0.0; beatoraja `BMSPlayerRule.validate`: `total > 0 ? total / 100 × default : default`).
  * Either way a value ≤ 0 means "use the default", so bmson `total: 0` does not freeze the gauge.
@@ -754,12 +871,24 @@ export function resolveRuleset(
   const baseNotes = countBaseNotes(chart.notes);
   const { course } = options;
   const selectedGauge = options.selectedGauge ?? 'GROOVE';
+  if (
+    rulesetId !== 'lr2' &&
+    (['P-ATTACK', 'G-ATTACK'].includes(selectedGauge) || ['P-ATTACK', 'G-ATTACK'].includes(options.gauge ?? ''))
+  )
+    throw new RangeError('Attack gauges are available only for LR2.');
+  if (rulesetId === 'lr2' && (selectedGauge === 'EX-HARD' || selectedGauge === 'ASSIST-EASY')) {
+    throw new RangeError(`LR2 beta3 has no ${selectedGauge} gauge.`);
+  }
   const gaugeId =
     options.gauge ??
     (course === undefined
       ? resolveDefaultGaugeId(rulesetId, selectedGauge)
       : resolveCourseGaugeId(rulesetId, course.kind, selectedGauge));
   const overrideBadMs = options.judgeWindowOverrideMs;
+  if (options.customJudge !== undefined && rulesetId !== 'beatoraja')
+    throw new RangeError('CUSTOM JUDGE is available only for beatoraja.');
+  if (options.practice !== undefined && (rulesetId !== 'beatoraja' || course !== undefined))
+    throw new RangeError('PRACTICE is available only for a beatoraja single play.');
   const constrain = (tables: RulesetWindowTables): RulesetWindowTables =>
     applyCourseJudgeConstraint(tables, course?.judge);
   const courseGauge = (total: number): GaugeSpec | undefined =>
@@ -768,7 +897,11 @@ export function resolveRuleset(
       : resolveCourseGauge(
           rulesetId,
           gaugeId,
-          course,
+          {
+            ...course,
+            initialGauge:
+              (rulesetId === 'beatoraja' ? course.initialGauges?.[gaugeId] : undefined) ?? course.initialGauge,
+          },
           chart.laneMode,
           resolveLR2HardDamageMultiplier(total, baseNotes),
         );
@@ -840,29 +973,40 @@ export function resolveRuleset(
 
   if (rulesetId === 'beatoraja') {
     const noteCount = countRulesetNotes(chart, 'per-note');
-    const effectiveTotal = resolveEffectiveTotal('beatoraja', chart, noteCount);
+    const { practice } = options;
+    const effectiveTotal = practice
+      ? resolvePracticeTotal(chart, noteCount, practice)
+      : resolveEffectiveTotal('beatoraja', chart, noteCount);
+    const customize = (tables: RulesetWindowTables): RulesetWindowTables =>
+      options.customJudge === undefined ? tables : applyCustomJudgeTables(tables, options.customJudge);
     // Legacy BMS NONSTOP stage ranks apply only to LR2. Mixed bmson courses explicitly carry each stage's units.
     const stageTables =
       chart.sourceFormat === 'bmson'
         ? (chart.judgeRank.stageRanks ?? []).map((change) => ({
             timeUs: change.timeUs,
             tables: constrain(
-              resolveBeatorajaWindowTables({
-                ...chart,
-                sourceFormat: change.table === 'bmson' ? 'bmson' : 'bms',
-                judgeRank: {
-                  percent: chart.judgeRank.percent,
-                  ...(change.table === 'bmson' || change.table === 'bms-exrank'
-                    ? { sourceExRank: change.rank }
-                    : { sourceRank: change.rank }),
-                },
-              }),
+              customize(
+                resolveBeatorajaWindowTables({
+                  ...chart,
+                  sourceFormat: change.table === 'bmson' ? 'bmson' : 'bms',
+                  judgeRank: {
+                    percent: chart.judgeRank.percent,
+                    ...(change.table === 'bmson' || change.table === 'bms-exrank'
+                      ? { sourceExRank: change.rank }
+                      : { sourceRank: change.rank }),
+                  },
+                }),
+              ),
             ),
           }))
         : [];
     const tables =
-      stageTables.find((change) => change.timeUs === 0)?.tables ?? constrain(resolveBeatorajaWindowTables(chart));
+      stageTables.find((change) => change.timeUs === 0)?.tables ??
+      constrain(customize(resolveBeatorajaWindowTables(chart, practice?.judgeRank)));
     const mode = resolveBeatorajaMode(chart.laneMode);
+    const initialGauge = practice
+      ? resolvePracticeGauge(practice, effectiveTotal, noteCount, chart.laneMode)
+      : (courseGauge(effectiveTotal) ?? resolveBeatorajaGauge(gaugeId, effectiveTotal, noteCount, chart.laneMode));
     // FIVEKEYS / PMS break combo on an empty POOR (JudgeProperty combo[MS] = false).
     const comboBreaksOnEmptyPoor = mode === BEATORAJA_MODES.FIVEKEYS || mode === BEATORAJA_MODES.PMS;
     return {
@@ -883,12 +1027,60 @@ export function resolveRuleset(
       longNoteStyle: 'per-note',
       lnEarlyRelease: 'worse-of-head-and-tail',
       pressDuringLongNote: 'ignore',
-      longNoteReleaseMarginUs: { note: mode === BEATORAJA_MODES.PMS ? 200_000 : 0, scratch: 0 },
+      // JudgeManager: only the key margin takes the CUSTOM JUDGE rate (`nreleasemargin`).
+      longNoteReleaseMarginUs: {
+        note: Math.trunc(
+          ((mode === BEATORAJA_MODES.PMS ? 200_000 : 0) * (options.customJudge?.longNoteMargin ?? 100)) / 100,
+        ),
+        scratch: 0,
+      },
       headBadSkipsTail: false,
       comboBreaksOnEmptyPoor,
       mineTrigger: 'hold',
       hcnTick: { heldJudge: 1, heldRate: 0.5, releasedJudge: 3, releasedRate: 0.5 },
-      gauge: courseGauge(effectiveTotal) ?? resolveBeatorajaGauge(gaugeId, effectiveTotal, noteCount, chart.laneMode),
+      gauge: initialGauge,
+      ...(options.gaugeAutoShift === 'BEST_CLEAR' || options.gaugeAutoShift === 'SELECT_TO_UNDER'
+        ? {
+            gaugeBank: {
+              specs:
+                course === undefined
+                  ? ['ASSIST-EASY', 'EASY', 'NORMAL', 'HARD', 'EX-HARD', 'HAZARD'].map((id) =>
+                      resolveBeatorajaGauge(id, effectiveTotal, noteCount, chart.laneMode),
+                    )
+                  : ['CLASS', 'EXCLASS', 'EXHARDCLASS'].map((id) =>
+                      resolveCourseGauge(
+                        'beatoraja',
+                        id,
+                        {
+                          ...course,
+                          initialGauge: course.initialGauges?.[id] ?? course.initialGauge,
+                        },
+                        chart.laneMode,
+                        1,
+                      ),
+                    ),
+              ...(options.gaugeAutoShift === 'SELECT_TO_UNDER'
+                ? {
+                    upperExclusive:
+                      Math.max(
+                        0,
+                        (course === undefined
+                          ? BEATORAJA_SINGLE_GAUGE_IDS
+                          : ['CLASS', 'EXCLASS', 'EXHARDCLASS']
+                        ).indexOf(initialGauge.id),
+                      ) + 1,
+                  }
+                : {}),
+              bottomIndex:
+                course === undefined
+                  ? ['ASSIST-EASY', 'EASY', 'GROOVE'].indexOf(options.bottomShiftableGauge ?? 'ASSIST-EASY')
+                  : 0,
+            },
+          }
+        : {}),
+      ...(options.gaugeAutoShift === 'SURVIVAL_TO_GROOVE' && course === undefined
+        ? { gaugeFallback: resolveBeatorajaGauge('NORMAL', effectiveTotal, noteCount, chart.laneMode) }
+        : {}),
       noteCount,
       effectiveTotal,
       moneyScore: false,

@@ -19,7 +19,7 @@ export interface CompressorTuning {
 
 export const TUNABLE_COMPRESSORS: readonly TunableCompressor[] = ['key', 'bgm', 'master', 'legacy'];
 
-const STORAGE_KEY = 'be-music-demo.compressor-tuning';
+const STORAGE_KEY = 'be-music.compressor-tuning';
 
 /** Slider units for a bus `CompressorParams` (seconds → milliseconds). */
 export function tuningFromParams(params: CompressorParams): CompressorTuning {

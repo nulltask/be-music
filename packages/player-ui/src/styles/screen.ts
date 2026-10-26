@@ -29,6 +29,19 @@ export const screenStyles: CSSResultGroup = [
       gap: 16px;
       margin-bottom: 20px;
     }
+    .search {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    .search-error {
+      color: var(--destructive, #f87171);
+      font-size: 12px;
+    }
+    .search-error:empty {
+      display: none;
+    }
     h1 {
       font-size: clamp(22px, 3cqi, 36px);
       letter-spacing: -0.035em;
@@ -77,6 +90,14 @@ export const screenStyles: CSSResultGroup = [
     }
     .panel dl {
       gap: 10px 18px;
+    }
+    /* A two-player result shows the players side by side. */
+    .players {
+      display: grid;
+      gap: 16px;
+    }
+    .players[data-count='2'] {
+      grid-template-columns: repeat(2, minmax(0, 320px));
     }
     .stat {
       font-size: clamp(24px, 4cqi, 44px);

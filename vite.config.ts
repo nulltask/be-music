@@ -49,6 +49,10 @@ const runtimeNeutralSources = [
   'packages/player-engine/src/judging.ts',
   'packages/player-engine/src/lanes.ts',
   'packages/player-engine/src/lane-random.ts',
+  'packages/player-engine/src/lane-random-source.ts',
+  'packages/player-engine/src/lane-converge.ts',
+  'packages/player-engine/src/lane-scatter.ts',
+  'packages/player-engine/src/lane-pms-random.ts',
   'packages/player-engine/src/playable-notes.ts',
   'packages/player-engine/src/replay/**/*.ts',
   'packages/player-engine/src/records/**/*.ts',
@@ -67,6 +71,10 @@ const runtimeAdapterSources = ['packages/chart-parser/src/cli.ts', 'packages/cha
  */
 const deterministicJudgeSources = [
   'packages/player-engine/src/lane-random.ts',
+  'packages/player-engine/src/lane-random-source.ts',
+  'packages/player-engine/src/lane-converge.ts',
+  'packages/player-engine/src/lane-scatter.ts',
+  'packages/player-engine/src/lane-pms-random.ts',
   'packages/skin-beatoraja/src/scene/**/*.ts',
   'packages/skin-lr2/src/state/**/*.ts',
   'packages/player-engine/src/core/judge-*.ts',
@@ -112,7 +120,7 @@ const clockGlobals = ['Date', 'performance', 'setTimeout', 'setInterval', 'setIm
  * - A view only draws frames and returns intents, so it reaches neither the engine nor its web runtimes, and its session
  *   and the host only for types.
  * - Only a session and the engine driver run the engine; every other file imports its types only.
- * - Only the audio layer (`runtime/`) creates an audio context; the rest of the runtime and the web demo play through
+ * - Only the audio layer (`runtime/`) creates an audio context; the rest of the runtime and the web player play through
  *   the audio service.
  *
  * Oxlint does not merge the options of two overrides that set the same rule: the last one wins. So each file group
@@ -124,8 +132,8 @@ const webAudioLayerSources = ['packages/player-browser/src/runtime/**/*.ts'];
 const sceneSessionSources = ['packages/player-browser/src/session/**/*.ts'];
 const familyViewSources = ['packages/player-browser/src/view/**/*.ts'];
 const webHostSources = ['packages/player-browser/src/host/**/*.ts', 'packages/player-browser/src/index.ts'];
-const webDemoSources = ['packages/app-play/src/**/*.ts'];
-/** Import specifiers that reach the named directories of `player-web/src` (or of the web demo's `src`). */
+const webPlayerSources = ['packages/app-play/src/**/*.ts'];
+/** Import specifiers that reach the named directories of `player-web/src` (or of the web player's `src`). */
 const webLayerGroup = (...dirs: string[]): string[] => dirs.flatMap((dir) => [`**/${dir}`, `**/${dir}/**`]);
 const lowerLayerMessage =
   'A lower layer of the web runtime knows no scene: it imports no host, session or view module.';
@@ -174,20 +182,20 @@ const webAudioProperties = ['globalThis', 'window', 'self'].flatMap((object) =>
   audioContextNames.map((property) => ({ object, property, message: webAudioMessage })),
 );
 /**
- * The web demo's layers (docs/player-web.md, "How the demo is built"): `main.ts` boots the app, `app/` composes it (the
+ * The web player's layers (docs/player-web.md, "How the player is built"): `main.ts` boots the app, `app/` composes it (the
  * scene router, the routes, the shell), `ui/` is the Debug Menu and the panels, and `services/` hold the state and rules
  * the others share. A service knows neither the UI nor the wiring: it imports no Tweakpane, `ui/` or `app/` module, not
  * even a type, and reaches the app through the deps it is given.
  */
-const webDemoServiceSources = ['packages/app-play/src/services/**/*.ts'];
-const webDemoServiceMessage =
-  'A demo service imports no Tweakpane, ui/ or app/ module; it takes what it needs as deps.';
-const webDemoServiceImports = {
-  paths: [...engineTypeImports.paths, { name: 'tweakpane', message: webDemoServiceMessage }],
+const webPlayerServiceSources = ['packages/app-play/src/services/**/*.ts'];
+const webPlayerServiceMessage =
+  'A player service imports no Tweakpane, ui/ or app/ module; it takes what it needs as deps.';
+const webPlayerServiceImports = {
+  paths: [...engineTypeImports.paths, { name: 'tweakpane', message: webPlayerServiceMessage }],
   patterns: [
     {
       group: ['tweakpane', 'tweakpane/*', '@tweakpane/core', '@tweakpane/core/*', ...webLayerGroup('ui', 'app')],
-      message: webDemoServiceMessage,
+      message: webPlayerServiceMessage,
     },
   ],
 };
@@ -477,7 +485,7 @@ export default defineConfig({
         },
       },
       {
-        files: webDemoSources,
+        files: webPlayerSources,
         rules: {
           'no-restricted-imports': ['error', engineTypeImports],
           'no-restricted-globals': ['error', ...webAudioGlobals],
@@ -485,9 +493,9 @@ export default defineConfig({
         },
       },
       {
-        files: webDemoServiceSources,
+        files: webPlayerServiceSources,
         rules: {
-          'no-restricted-imports': ['error', webDemoServiceImports],
+          'no-restricted-imports': ['error', webPlayerServiceImports],
         },
       },
       {

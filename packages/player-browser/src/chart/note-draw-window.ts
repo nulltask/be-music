@@ -66,7 +66,7 @@ export interface NoteDrawWindowInput {
    * The `#SCROLL` / `#SPEED` distance integrator, when the chart has either. One without `firstBeatBeyondDistance`
    * gives the walk no early exit.
    */
-  mapper?: Pick<ScrollDistanceMapperLike, 'firstBeatBeyondDistance'>;
+  mapper?: Pick<ScrollDistanceMapperLike, 'firstBeatBeyondDistance' | 'strictlyIncreasing'>;
   /** The lane's height in beats of scroll distance (lane pixels over pixels per beat). */
   laneBeats: number;
   /**
@@ -102,7 +102,11 @@ export function resolveNoteDrawWindow(input: NoteDrawWindowInput): NoteDrawWindo
       : currentBeat + laneBeats;
     lastBeat = timelineBeats ? firstBeatAfter(timelineBeats, overrunBeat) : overrunBeat;
   } else {
-    lastBeat = mapper ? Number.POSITIVE_INFINITY : currentBeat + laneBeats + overscanBeats;
+    lastBeat = mapper
+      ? mapper.strictlyIncreasing
+        ? (mapper.firstBeatBeyondDistance?.(currentBeat, laneBeats + overscanBeats) ?? Number.POSITIVE_INFINITY)
+        : Number.POSITIVE_INFINITY
+      : currentBeat + laneBeats + overscanBeats;
   }
   return { rules, currentBeat, nowSeconds, reachedBeat, lastBeat, stageBottomY };
 }

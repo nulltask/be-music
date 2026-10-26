@@ -144,3 +144,23 @@ describe('beatoraja per-mode single gauges', () => {
     );
   });
 });
+
+test.each(['5K', '7K', '9K', '24K', '14K'])('SURVIVAL TO GROOVE uses %s NORMAL TOTAL, floor and border', (mode) => {
+  const config = resolveRuleset(facts(mode, 300), 'beatoraja', {
+    selectedGauge: 'HARD',
+    gaugeAutoShift: 'SURVIVAL_TO_GROOVE',
+  });
+  expect(config.gauge.id).toBe('HARD');
+  expect(config.gaugeFallback).toEqual(gauge(mode, 'NORMAL'));
+});
+
+test('SURVIVAL TO GROOVE excludes course class gauges and other rulesets', () => {
+  const config = resolveRuleset(facts('7K'), 'beatoraja', {
+    selectedGauge: 'HARD',
+    gaugeAutoShift: 'SURVIVAL_TO_GROOVE',
+    course: { kind: 'grade', initialGauge: 40 },
+  });
+  expect(config.gauge.id).toBe('EXCLASS');
+  expect(config.gaugeFallback).toBeUndefined();
+  expect(resolveRuleset(facts('7K'), 'lr2', { gaugeAutoShift: 'SURVIVAL_TO_GROOVE' }).gaugeFallback).toBeUndefined();
+});

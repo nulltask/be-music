@@ -7,9 +7,9 @@
 // host-only OIDC session stays on its own origin; the upstream receives only a resource-bound access token.
 //
 // Almost everything is served straight from Workers Static Assets (`env.ASSETS`; wrangler.config.ts points at the
-// demo's `dist`). The exceptions are the ffmpeg.wasm core under `/ffmpeg-core/` and URL auto-load archives under
+// player's `dist`). The exceptions are the ffmpeg.wasm core under `/ffmpeg-core/` and URL auto-load archives under
 // `/__url-load-proxy`. The core lives in R2 because `ffmpeg-core.wasm` is ~31 MB, which blows past the 25 MiB per-file
-// limit for Static Assets. The URL proxy lets shared demo links load cross-origin archive URLs even when the host does
+// limit for Static Assets. The URL proxy lets shared player links load cross-origin archive URLs even when the host does
 // not send browser CORS headers. `assets.runWorkerFirst` (cloudflare.config.ts) routes both paths here before asset
 // matching.
 //
@@ -17,6 +17,7 @@
 
 import { handleAuth, readSession, type OIDCEnv } from '@be-music/service-auth-client';
 import { isLeaderboardPath } from './leaderboard-paths.ts';
+import { handlePlayerSettings, PLAYER_SETTINGS_PATH } from './player-settings.ts';
 
 interface Env extends OIDCEnv {
   ASSETS: Fetcher;
@@ -129,6 +130,12 @@ export default {
     }
     if (pathname === URL_LOAD_PROXY_PATH) {
       return serveURLLoadProxy(request);
+    }
+    // Debug Menu settings. Handled here, not forwarded: the Leaderboard does not keep them. The device cookie and
+    // the R2 copy survive Safari deleting script-written storage.
+    if (pathname === PLAYER_SETTINGS_PATH) {
+      const session = await readSession(request, env);
+      return handlePlayerSettings(request, env.FFMPEG_CORE, session?.identity.sub);
     }
     // The browser only calls this origin. Strip browser credentials and forward the server-held API token.
     if (isLeaderboardPath(pathname)) {

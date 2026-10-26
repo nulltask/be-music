@@ -12,6 +12,8 @@ export interface TimedPlayableNote {
   endBeat?: number;
   endSeconds?: number;
   longNoteMode?: LongNoteMode;
+  /** Added by the source long-note modifier; its effective endpoint is recorded for replay. */
+  generatedLongNote?: true;
   visibleUntilBeat?: number;
   seconds: number;
   judged: boolean;
@@ -25,6 +27,8 @@ export interface TimedLandmineNote {
   seconds: number;
   judged: boolean;
   mine: true;
+  /** Generated beatoraja mines have no explosion sample (source WAV index -1). */
+  silent?: true;
 }
 
 export interface ExtractTimedNotesOptions {

@@ -1,4 +1,5 @@
-import { createEmptyJSON, type BeMusicEvent, type BeMusicJSON } from '@be-music/chart-source';
+import { type BeMusicEvent, type BeMusicJSON } from '@be-music/chart-source';
+import { compactChartPreservation } from './chart-preservation.ts';
 import { PackedEventStrings, packEvents, unpackEvents, type PackedEvents } from './packed-events.ts';
 
 export { PackedEventStrings } from './packed-events.ts';
@@ -17,8 +18,8 @@ const unpackedEvents = new Map<BeMusicJSON, BeMusicEvent[]>();
  * Trims a freshly parsed chart down to what the player keeps resident for every song in a collection. Mutates and
  * returns `chart`.
  *
- * - `preservation` (the source-line layers the stringifier uses for lossless round-trips) is reset to empty — the
- *   player never writes charts back.
+ * - `preservation` drops formatting and object lines. WAV headers and branch gates retain the source loader order
+ *   LR2 EXTRA uses to group sounds; the player never writes charts back.
  * - `events` is packed into typed-array columns (see {@link packEvents}) and becomes an accessor that rebuilds the
  *   array on demand. The most recently read charts keep their rebuilt array (see {@link UNPACKED_EVENTS_CACHE_SIZE}),
  *   so repeated reads within a frame return the same array. Assigning `events` replaces the accessor with a plain
@@ -30,7 +31,7 @@ const unpackedEvents = new Map<BeMusicJSON, BeMusicEvent[]>();
  * The chart object itself keeps its identity, so caches keyed by the chart keep working.
  */
 export function compactCollectionChart(chart: BeMusicJSON, strings: PackedEventStrings): BeMusicJSON {
-  chart.preservation = createEmptyJSON(chart.sourceFormat).preservation;
+  compactChartPreservation(chart);
   chart.metadata = structuredClone(chart.metadata);
   chart.resources = structuredClone(chart.resources);
   chart.bms = structuredClone(chart.bms);

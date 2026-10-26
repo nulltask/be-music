@@ -1,4 +1,4 @@
-import type { BeMusicDOMGameplayFrame } from '@be-music/player-skin-sdk';
+import type { BeMusicDOMGameplayFrame, BeMusicSecondPlayerRuntime } from '@be-music/player-skin-sdk';
 import type { BeMusicGaugeData, BeMusicJudgmentData, BeMusicScoreData } from './models.ts';
 
 /** The panel data and chart facts a gameplay frame shows, shared by the gameplay HUDs. */
@@ -35,7 +35,7 @@ export function resolveGameplayPanels(frame: BeMusicDOMGameplayFrame): BeMusicGa
     },
     gauge: {
       value: s.gauge,
-      label: s.gaugeType,
+      label: r.gaugeLabel ?? s.gaugeType,
       cleared: s.cleared,
       threshold: r.clearThreshold,
       survival: r.gaugeSurvival,
@@ -64,5 +64,47 @@ export function resolveGameplayPanels(frame: BeMusicDOMGameplayFrame): BeMusicGa
       .join(' · '),
     totalNotes: total,
     seconds: Math.max(0, Math.min(s.totalSeconds, frame.seconds)),
+  };
+}
+
+/** The 2P player's score, gauge and judgment panels in a two-player play (LR2 BATTLE). */
+export function resolveSecondPlayerPanels(
+  second: BeMusicSecondPlayerRuntime,
+  state: BeMusicDOMGameplayFrame['state2P'],
+): Pick<BeMusicGameplayPanels, 'score' | 'gauge' | 'judgments'> | undefined {
+  if (state === undefined) return undefined;
+  const total = second.exScoreMax / 2;
+  return {
+    score: {
+      exScore: second.exScore,
+      maximum: second.exScoreMax,
+      combo: second.combo,
+      maxCombo: second.maxCombo,
+      rank: second.rank,
+      score: second.score,
+      totalNotes: total,
+      judgedNotes: second.perfect + second.great + second.good + second.bad + second.poor,
+      missCount: second.bad + second.poor,
+    },
+    gauge: {
+      value: second.gauge,
+      label: second.gaugeLabel,
+      cleared: second.clearThreshold !== undefined && second.gauge >= second.clearThreshold,
+      threshold: second.clearThreshold,
+      survival: second.gaugeSurvival,
+      history: state.gaugeHistory,
+    },
+    judgments: {
+      perfect: second.perfect,
+      great: second.great,
+      good: second.good,
+      bad: second.bad,
+      poor: second.poor,
+      emptyPoor: 0,
+      fast: 0,
+      slow: 0,
+      earlyLate: state.earlyLate,
+      lastDeltaMs: state.lastJudgeDeltaMs,
+    },
   };
 }

@@ -299,6 +299,8 @@ export interface BMSExtensions {
   materials?: string;
   divideProp?: string;
   charset?: string;
+  /** Original first one/two filename bytes, in hex and keyed by WAV path; LR2 EXTRA groups sounds by these bytes. */
+  wavNameBytePrefixes?: Record<string, string>;
   /**
    * `#BASE` directive — the radix used for object IDs (`#WAVxx`, `#BMPxx`, `#BPMxx`, channel object tokens, …). Default
    * is base 36 (case-insensitive `0-9A-Z`). The value `62` opts into the beatoraja-style base-62 extension where
@@ -449,6 +451,9 @@ export function cloneJSON(json: BeMusicJSON): BeMusicJSON {
       argb: { ...json.bms.argb },
       stp: [...json.bms.stp],
       wavCmds: [...json.bms.wavCmds],
+      ...(json.bms.wavNameBytePrefixes !== undefined
+        ? { wavNameBytePrefixes: { ...json.bms.wavNameBytePrefixes } }
+        : {}),
       changeOption: { ...json.bms.changeOption },
       exWAV: { ...json.bms.exWAV },
       exBMP: { ...json.bms.exBMP },

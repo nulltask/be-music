@@ -1,4 +1,4 @@
-import type { ReplayNote } from '@be-music/player-engine/replay';
+import { resolveReplaySourceChannel, type ReplayNote } from '@be-music/player-engine/replay';
 
 /**
  * Re-applies a recorded replay's note arrangement onto a freshly prepared chart for replay playback.
@@ -7,7 +7,7 @@ import type { ReplayNote } from '@be-music/player-engine/replay';
  * DP-flip. A fresh chart prepare (with those options off) yields the same notes at the same times but with the
  * ORIGINAL channels, so replaying against it would judge the inputs on the wrong lanes. Lane transforms never move
  * a note in time, only across channels, so the recorded arrangement can be re-applied by matching notes on
- * `(kind, timeUs, endTimeUs)` and assigning the recorded channels back — no shuffle seed needed.
+ * `(kind, timeUs, endTimeUs, original lane)` (legacy replays omit the last key) and assigning the recorded channels back — no shuffle seed needed.
  *
  * Mutates the `channel` field of the given note objects in place (they are the same instances the prepared-chart
  * bundle and the engine share). Returns an error string when the chart does not match the replay — a different
@@ -18,20 +18,22 @@ export function applyReplayArrangement(
   replayNotes: readonly ReplayNote[],
   target: {
     /** Playable notes (freezone included) — `PreparedPlaybackChartData.notes`. */
-    notes: Array<{ channel: string; seconds: number; endSeconds?: number }>;
-    landmineNotes: Array<{ channel: string; seconds: number }>;
-    invisibleNotes: Array<{ channel: string; seconds: number }>;
+    notes: Array<{ channel: string; seconds: number; event?: { channel: string }; endSeconds?: number }>;
+    landmineNotes: Array<{ channel: string; seconds: number; event?: { channel: string } }>;
+    invisibleNotes: Array<{ channel: string; seconds: number; event?: { channel: string } }>;
     activeFreeZoneChannels: ReadonlySet<string>;
   },
 ): { ok: true } | { ok: false; reason: string } {
-  const buckets = new Map<string, string[]>();
+  const buckets = new Map<string, ReplayNote[]>();
+  const sourceAware = new Set<string>();
   for (const note of replayNotes) {
     const key = `${note.type}:${note.timeUs}:${note.endTimeUs ?? ''}`;
+    if (note.sourceChannel !== undefined) sourceAware.add(key);
     const bucket = buckets.get(key);
     if (bucket) {
-      bucket.push(note.channel);
+      bucket.push(note);
     } else {
-      buckets.set(key, [note.channel]);
+      buckets.set(key, [note]);
     }
   }
 
@@ -40,12 +42,15 @@ export function applyReplayArrangement(
     channel: string;
   }
   const assignments: Assignment[] = [];
-  const takeChannel = (key: string): string | undefined => {
+  const takeChannel = (key: string, note: { channel: string; event?: { channel: string } }): string | undefined => {
     const bucket = buckets.get(key);
     if (!bucket || bucket.length === 0) {
       return undefined;
     }
-    return bucket.shift();
+    const index = sourceAware.has(key)
+      ? bucket.findIndex((entry) => (entry.sourceChannel ?? entry.channel) === resolveReplaySourceChannel(note))
+      : 0;
+    return index < 0 ? undefined : bucket.splice(index, 1)[0]!.channel;
   };
 
   for (const note of target.notes) {
@@ -54,21 +59,21 @@ export function applyReplayArrangement(
       typeof note.endSeconds === 'number' && Number.isFinite(note.endSeconds) && note.endSeconds > note.seconds;
     const endTimeUs = hasTail ? secondsToMicroseconds(note.endSeconds!) : undefined;
     const kind = target.activeFreeZoneChannels.has(note.channel) ? 'freezone' : hasTail ? 'long' : 'normal';
-    const channel = takeChannel(`${kind}:${timeUs}:${endTimeUs ?? ''}`);
+    const channel = takeChannel(`${kind}:${timeUs}:${endTimeUs ?? ''}`, note);
     if (channel === undefined) {
       return { ok: false, reason: `no recorded ${kind} note at ${timeUs}µs` };
     }
     assignments.push({ note, channel });
   }
   for (const mine of target.landmineNotes) {
-    const channel = takeChannel(`mine:${secondsToMicroseconds(mine.seconds)}:`);
+    const channel = takeChannel(`mine:${secondsToMicroseconds(mine.seconds)}:`, mine);
     if (channel === undefined) {
       return { ok: false, reason: `no recorded mine at ${secondsToMicroseconds(mine.seconds)}µs` };
     }
     assignments.push({ note: mine, channel });
   }
   for (const invisible of target.invisibleNotes) {
-    const channel = takeChannel(`invisible:${secondsToMicroseconds(invisible.seconds)}:`);
+    const channel = takeChannel(`invisible:${secondsToMicroseconds(invisible.seconds)}:`, invisible);
     if (channel === undefined) {
       return { ok: false, reason: `no recorded invisible note at ${secondsToMicroseconds(invisible.seconds)}µs` };
     }

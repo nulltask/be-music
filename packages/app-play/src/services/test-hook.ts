@@ -9,7 +9,7 @@ import type { LibraryChart, LibraryEntry } from '@be-music/player-scene-model';
 import type { BeMusicChartBestRecord } from '@be-music/player-skin-sdk';
 import { lookupCourseBestRecord } from '../course-result.ts';
 import { describeBar, judgedOf, nameJingle, type TestHookLiveState } from '../test-hook.ts';
-import type { DemoGUIState, DemoScene, PlayerWebDemoElements } from '../types.ts';
+import type { PlayerGUIState, PlayerScene, PlayerWebElements } from '../types.ts';
 import type { CourseMakerService } from './course-maker.ts';
 import type { CourseRunService } from './courses.ts';
 import type { LibraryService } from './library.ts';
@@ -19,7 +19,7 @@ import type { LR2ThemeService } from './themes/lr2.ts';
 
 /** The scenes the router holds: the one showing, the select scene it keeps, and the play on the stage or loading. */
 export interface TestHookScenes {
-  readonly current: DemoScene | undefined;
+  readonly current: PlayerScene | undefined;
   readonly select: SelectScene | undefined;
   readonly play: PlayScene | undefined;
 }
@@ -34,9 +34,9 @@ export interface LiveTestHookDeps {
   /** The scene router. */
   readonly router: TestHookScenes;
   /** The page: the loading overlay. */
-  readonly elements: Pick<PlayerWebDemoElements, 'loadingOverlay'>;
+  readonly elements: Pick<PlayerWebElements, 'loadingOverlay'>;
   /** The Debug Menu's state: the status line, and the NONSTOP placement a course bar's record is read for. */
-  readonly guiState: Pick<DemoGUIState, 'status' | 'nonstopPlacement'>;
+  readonly guiState: Pick<PlayerGUIState, 'status' | 'nonstopPlacement'>;
   /** The library: its charts and course folders. */
   readonly library: Pick<LibraryService, 'collection'>;
   /** The best records of the current judge ruleset, which the select screen shows, read without hashing a chart. */

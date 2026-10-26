@@ -11,12 +11,12 @@ import { masterOutput } from './master-volume.ts';
  *   a final clip-protection limiter. This pattern matches the standard mastering bus layout and prevents the BGM from
  *   ducking under dense input bursts (the classic single-bus failure mode).
  *
- * - **`'legacy'`** — the original single-compressor bus, kept for A/B comparison via the demo's `?compressor=legacy`
+ * - **`'legacy'`** — the original single-compressor bus, kept for A/B comparison via the player's `?compressor=legacy`
  *   URL flag. Sample sources still connect to the same `keyMixer` / `bgmMixer` nodes so the gameplay code stays
  *   mode-agnostic; the builder just collapses both into a single compressor stage.
  *
  * - **`'off'`** — bypass every compressor, compressed-mode input trim, and makeup gain. The two bus mixers still pass
- *   through the chart-level `#VOLWAV` gain and output tap. Used by the demo checkbox to compare against an unprocessed
+ *   through the chart-level `#VOLWAV` gain and output tap. Used by the player checkbox to compare against an unprocessed
  *   signal path.
  *
  * The graph topology stays stable across mode switches: the `keyMixer` / `bgmMixer` `GainNode`s are always the
@@ -31,7 +31,7 @@ import { masterOutput } from './master-volume.ts';
 export type CompressorMode = 'split' | 'legacy' | 'off';
 
 /**
- * `DynamicsCompressorNode` parameter set (in spec units — same names as the Web Audio properties). Exported so the demo
+ * `DynamicsCompressorNode` parameter set (in spec units — same names as the Web Audio properties). Exported so the player
  * / debug tooling can introspect the active values without reading them off a live `AudioContext`.
  */
 export interface CompressorParams {
@@ -110,7 +110,7 @@ export const MASTER_BUS_COMPRESSOR_PARAMS: Readonly<CompressorParams> = {
 
 /**
  * Legacy (pre-split) single-compressor params. Preserved verbatim from the original `prepareAudio` block so the
- * `'legacy'` mode is a true byte-for-byte revert that the demo can flip to via the `?compressor=legacy` URL flag.
+ * `'legacy'` mode is a true byte-for-byte revert that the player can flip to via the `?compressor=legacy` URL flag.
  */
 export const LEGACY_COMPRESSOR_PARAMS: Readonly<CompressorParams> = {
   threshold: -8,
@@ -329,7 +329,7 @@ export interface BuildAudioBusOptions {
  * (player input keysounds) or `bgmMixer` (auto-triggered BGM) and never directly to the destination — that bypasses
  * every compressor stage and the `setMode` toggle won't reach those samples.
  *
- * `initialMode` is the starting mode. Most callers pass `'split'`; the demo's `?compressor=...` flag can pass
+ * `initialMode` is the starting mode. Most callers pass `'split'`; the player's `?compressor=...` flag can pass
  * `'legacy'` or `'off'` for A/B comparison.
  */
 export function buildAudioBus(
@@ -595,7 +595,7 @@ function applyCompressorParams(node: DynamicsCompressorNode, params: CompressorP
 
 /**
  * Parses a `?compressor=...` URL search-param value into a valid {@link CompressorMode}, or `undefined` when the value
- * is missing / unrecognized so callers can fall through to their default. The demo passes the URL's
+ * is missing / unrecognized so callers can fall through to their default. The player passes the URL's
  * `searchParams.get('compressor')` here at mount time.
  */
 export function parseCompressorMode(raw: string | null | undefined): CompressorMode | undefined {

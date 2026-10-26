@@ -9,9 +9,13 @@
  * - Escape continues at any time, or once input is open when the skin holds every key back until then (beatoraja's).
  * - R plays the chart again once input is open, when the run offers a quick retry (`ResultPresentation.quickRetry`) and
  *   the host can retry it.
+ * - Keys 1-4 (and a beatoraja skin's replay buttons) save the play into replay slot 1-4 once input is open and until the
+ *   screen starts to leave, as beatoraja's result does, when the host keeps replay slots (`on.saveReplay`).
  *
  * The jingle is the theme's clear, fail or generic result jingle (`resolveResultJingles`), the course ones for a course
- * run. It plays through the audio service as the screen enters and stops as it leaves the stage.
+ * run. It plays through the audio service as the screen enters and stops as it leaves the stage. When the theme has a
+ * close sound (beatoraja's `resultclose`, or `course_close` for a course run), the screen stops the jingle and plays it
+ * as its fade-out starts, as beatoraja's `MusicResult` / `CourseResult` do.
  */
 
 import type { BeMusicJSON } from '@be-music/chart-source';
@@ -22,6 +26,7 @@ import {
   resolveResultPresentation,
   type PlayResult,
   type PlayRunKind,
+  type ReplaySlotState,
   type ResultPresentation,
   type SystemSound,
   type SystemSoundSet,
@@ -29,7 +34,7 @@ import {
 import type { AudioService } from '../../runtime/audio-service.ts';
 import type { ResultFrame, ResultIntent, ResultViewTiming, SceneLeaving } from '../../view/types.ts';
 import type { SceneSession, SessionKeyEvent } from '../session-scene.ts';
-import { isResultRetryKey } from './result-keys.ts';
+import { isResultRetryKey, resultReplaySlotKey } from './result-keys.ts';
 
 /** How long the result's graphs take to draw once input opens (LR2's default result skin draws for about 3 s). */
 export const RESULT_GRAPH_DRAW_MS = 3000;
@@ -43,6 +48,11 @@ export interface ResultSessionEvents {
   continue(): void;
   /** The player asked to play the chart again; without it the screen offers no quick retry. Fired once per entry. */
   retry?(): void;
+  /**
+   * The player asked to save the play into replay slot `slot` (0-3). The host decides whether the play can be saved and
+   * shows the outcome through `replaySlots`. Without it the screen saves nothing.
+   */
+  saveReplay?(slot: number): void;
 }
 
 export interface ResultSessionOptions {
@@ -56,6 +66,8 @@ export interface ResultSessionOptions {
   readonly audio: ResultAudio;
   /** When the screen takes input and how it leaves, as the view's skin authors it. */
   readonly timing: ResultViewTiming;
+  /** Each replay slot's state for the frame, read every frame (the host saves asynchronously). */
+  readonly replaySlots?: () => readonly ReplaySlotState[];
   readonly on: ResultSessionEvents;
 }
 
@@ -95,6 +107,11 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
   public get jingle(): SystemSound | undefined {
     const jingles = resolveResultJingles([this.options.sounds], this.presentation.courseJingles);
     return resolveResultJingle(jingles, this.options.result.cleared);
+  }
+
+  /** The sound this result closes with, if the theme has one (`ResultJingles.close`). */
+  public get closeSound(): SystemSound | undefined {
+    return resolveResultJingles([this.options.sounds], this.presentation.courseJingles).close;
   }
 
   /** On the clock, when input opens and the graphs start drawing. */
@@ -143,6 +160,11 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
       this.step(event.timeStamp);
       return true;
     }
+    const slot = resultReplaySlotKey(event);
+    if (slot !== undefined && this.options.on.saveReplay !== undefined) {
+      this.saveReplay(slot, event.timeStamp);
+      return true;
+    }
     return false;
   }
 
@@ -150,6 +172,10 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
     if (!this.entered) return;
     if (intent.type === 'retry') {
       if (this.retryOffered) this.retry(this.nowMs);
+      return;
+    }
+    if (intent.type === 'saveReplay') {
+      this.saveReplay(intent.slot, this.nowMs);
       return;
     }
     this.step(this.nowMs);
@@ -168,6 +194,7 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
       inputOpenAtMs: this.inputOpenAtMs,
       ...(this.graphShownAtMs !== undefined ? { graphShownAtMs: this.graphShownAtMs } : {}),
       ...(this.updateShownAtMs !== undefined ? { updateShownAtMs: this.updateShownAtMs } : {}),
+      ...(this.options.replaySlots !== undefined ? { replaySlots: this.options.replaySlots() } : {}),
       ...(this.leaving !== undefined ? { leaving: this.leaving } : {}),
     };
   }
@@ -218,9 +245,23 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
     this.leave('retry', this.nowMs);
   }
 
+  /** Saves the play into replay slot `slot`, once input is open and before the screen starts to leave. */
+  private saveReplay(slot: number, atMs: number): void {
+    if (this.leaving !== undefined || !Number.isInteger(slot) || slot < 0 || slot > 3) return;
+    this.advanceTo(atMs);
+    if (this.nowMs < this.inputOpenAtMs) return;
+    this.options.on.saveReplay?.(slot);
+  }
+
   private leave(to: ResultLeavingTo, atMs: number): void {
     this.advanceTo(atMs);
     this.leaving = { to, atMs: this.nowMs };
+    const close = this.closeSound;
+    if (close !== undefined) {
+      // beatoraja stops the clear / fail jingle and plays the close sound as the fade-out starts; it stops with the screen.
+      this.options.audio.stopOwned(this);
+      void this.options.audio.playJingle(close, { owner: this });
+    }
     this.completeLeaving(this.nowMs);
   }
 

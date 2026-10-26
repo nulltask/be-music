@@ -6,6 +6,7 @@
  * session passes itself.
  */
 
+import type { SecondPlayerState } from './play-state.ts';
 import type { TimingResolver } from '@be-music/chart-model';
 import type { PlayerSummary } from '@be-music/player-engine';
 import type { BeMusicReplay } from '@be-music/player-engine/replay';
@@ -120,9 +121,12 @@ export interface PlayEndingContext {
   /** The engine's gauge as of its last frame: its clear border and the TOTAL it runs on. */
   readonly gaugeState: PlayerGaugeSummary;
   playState: PlayState;
+  secondPlayer?: SecondPlayerState;
   readonly fastCount: number;
   readonly slowCount: number;
   readonly replay: BeMusicReplay | undefined;
+  /** The replay the play plays back, when it is one. */
+  readonly options: { readonly replay?: BeMusicReplay | undefined };
   readonly practice?: boolean;
   playClock(): number;
   currentSeconds(): number;
@@ -227,9 +231,21 @@ export function getResultData(ctx: PlayEndingContext): PlayResult | undefined {
     fast: ctx.fastCount,
     slow: ctx.slowCount,
     ...(ctx.replay !== undefined ? { replay: ctx.replay } : {}),
+    ...(ctx.options.replay !== undefined ? { fromReplay: true } : {}),
   });
+  const second = ctx.secondPlayer;
   return {
     ...result,
+    ...(second !== undefined
+      ? {
+          secondPlayer: playResultFromPlayState(second.playState, {
+            chart: ctx.chart,
+            score: second.score,
+            seconds: ctx.currentSeconds(),
+            judgeRuleset: ctx.resolveJudgeRuleset(),
+          }),
+        }
+      : {}),
     ...(ctx.playState.courseCombo !== undefined
       ? {
           stageOutcome: {
@@ -249,6 +265,7 @@ export function getResultData(ctx: PlayEndingContext): PlayResult | undefined {
             maxCombo: ctx.playState.maxCombo,
             gauge: {
               type: gauge.type ?? 'GROOVE',
+              ...(gauge.values ? { values: { ...gauge.values } } : {}),
               final: ctx.playState.gauge,
               cleared: ctx.playState.cleared,
               ...(gauge.failedMidPlay ? { failedMidPlay: true } : {}),

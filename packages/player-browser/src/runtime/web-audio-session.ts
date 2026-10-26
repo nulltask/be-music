@@ -39,7 +39,7 @@ export interface WebAudioSessionSlicePlayback {
 }
 
 /**
- * Construction-time inputs for {@link createWebAudioSession}. Decoupled from `BeMusicJSON` resolution so the demo's
+ * Construction-time inputs for {@link createWebAudioSession}. Decoupled from `BeMusicJSON` resolution so the player's
  * existing prepare path can decode every `#WAVxx` to an `AudioBuffer` once and reuse the same buffer cache across
  * pause / restart / replay cycles without re-decoding.
  */

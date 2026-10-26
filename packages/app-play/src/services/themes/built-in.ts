@@ -4,12 +4,12 @@
 import type { BuiltInKit } from '@be-music/player-browser/host';
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
 import { readStoredSkinSettings, type StoredSkinSettings } from '../../skin-settings.ts';
-import type { DemoGUIState } from '../../types.ts';
+import type { PlayerGUIState } from '../../types.ts';
 import { BE_MUSIC_SKINS, loadSkinFonts } from '../built-in-skins.ts';
 
 export interface BuiltInThemeServiceOptions {
   /** The Debug Menu's state: the built-in skin picked (`builtInSkin`) and how much motion skins show (`skinEffects`). */
-  readonly guiState: Pick<DemoGUIState, 'builtInSkin' | 'skinEffects'>;
+  readonly guiState: Pick<PlayerGUIState, 'builtInSkin' | 'skinEffects'>;
   readonly setStatus: (text: string) => void;
   /** Switches to the skin `id`: it is stored, and the select screen is made again with it. */
   readonly handleBuiltInSkinChange: (id: string) => void;

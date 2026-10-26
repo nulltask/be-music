@@ -29,8 +29,8 @@ export interface GameplayRecorder {
 
 /**
  * Dependencies the recording controller's free functions read from / write to. Modelled as explicit getters /
- * setters / callbacks (rather than `this` references) so the demo class can pass them in without having to drop its
- * private modifier on every backing field. Each call site builds one of these from the demo's recording service — see
+ * setters / callbacks (rather than `this` references) so the player class can pass them in without having to drop its
+ * private modifier on every backing field. Each call site builds one of these from the player's recording service — see
  * `RecordingService.deps` in `services/recording.ts`.
  */
 export interface RecordingDeps {
@@ -40,7 +40,7 @@ export interface RecordingDeps {
   getActiveGameplay(): GameplayRecorder | undefined;
   getAutoRecordArmed(): boolean;
   setAutoRecordArmed(value: boolean): void;
-  /** Snapshot of the recording filename stem at call time; the demo updates it per chart in `playChart`. */
+  /** Snapshot of the recording filename stem at call time; the player updates it per chart in `playChart`. */
   getRecordingFilenameBase(): string;
   /** The Debug Menu's "Video format": the container and codec a new recording is written in. */
   getRecordingFormat(): RecordingFormat;
@@ -63,7 +63,7 @@ export async function captureScreenshot(deps: RecordingDeps): Promise<void> {
     const activeScene = deps.sceneHost.getCurrentScene();
     const stageInfo = activeScene?.getStageInfo?.();
     // `extract.canvas` returns Pixi's `ICanvas` (HTMLCanvasElement | OffscreenCanvas
-    // union). Demo doesn't depend directly on `pixi.js` so we type it via the runtime
+    // union). Player doesn't depend directly on `pixi.js` so we type it via the runtime
     // duck-type `{ toBlob }` we actually consume below.
     let canvas: { toBlob?: (cb: (blob: Blob | null) => void, type?: string) => void };
     let captureWidth: number;

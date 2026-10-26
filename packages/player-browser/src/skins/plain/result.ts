@@ -68,6 +68,50 @@ export function drawResult(surface: BeMusicSurface<'2d'>, frame: BeMusicResultFr
   text(ctx, lamp, x + 110, 360, { size: 18, weight: 800, align: 'center', color: lamp === 'FAILED' ? DANGER : ACCENT });
 
   text(ctx, `TOTAL SCORE  ${result.score.score}`, MARGIN, height - 24, { size: 14, weight: 700 });
+  // Between the 1P counts and the chart panel.
+  if (result.secondPlayer) drawSecondPlayer(ctx, result.secondPlayer, 240, 236, width - MARGIN - 220 - 16 - 240, nowMs);
+}
+
+/**
+ * A two-player play's 2P result (LR2 BATTLE), between the 1P counts and the chart panel: its verdict, lamp, the
+ * figures and the judgement counts.
+ */
+function drawSecondPlayer(
+  ctx: CanvasRenderingContext2D,
+  result: BeMusicResultData,
+  x: number,
+  y: number,
+  w: number,
+  nowMs: number,
+): void {
+  ctx.fillStyle = PANEL;
+  ctx.fillRect(x, y, w, 190);
+  const lamp = resolveResultLamp(result);
+  text(ctx, `2P  ${resolveResultVerdict(result)}`, x + 14, y + 20, {
+    size: 14,
+    weight: 800,
+    color: result.cleared ? ACCENT : DANGER,
+  });
+  text(ctx, lamp, x + w - 14, y + 20, {
+    size: 12,
+    weight: 800,
+    align: 'right',
+    color: lamp === 'FAILED' ? DANGER : ACCENT,
+  });
+  const column = (w - 150) / 2;
+  scoreFigures(result)
+    .slice(0, 4)
+    .forEach(([label, value], index) => {
+      stat(ctx, label, value, x + 14 + (index % 2) * column, y + 46 + Math.floor(index / 2) * 56, {
+        maxWidth: column - 10,
+        nowMs,
+      });
+    });
+  judgeCounts(result).forEach(([label, count], index) => {
+    const rowY = y + 48 + index * 26;
+    text(ctx, label, x + w - 130, rowY, { size: 12, color: MUTED, weight: 700 });
+    text(ctx, String(count), x + w - 14, rowY, { size: 14, align: 'right' });
+  });
 }
 
 function scoreFigures(result: BeMusicResultData): Array<[string, string]> {

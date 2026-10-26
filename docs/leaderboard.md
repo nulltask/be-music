@@ -154,7 +154,7 @@ sequenceDiagram
     else the same play from another account
         A-->>C: 409 play_already_submitted
     end
-    A->>A: eligibility: auto play, ESC abort, tempo or course stage → 422, assists → flags
+    A->>A: eligibility: auto play, tempo or course stage → 422, assists → flags
     A->>A: sha256(canonicalize(play document)) == playFingerprint ?
     A->>D: chart known?
     alt unknown chart
@@ -196,7 +196,7 @@ sequenceDiagram
 | Layer | Check                                                                       | Stops                               |
 | ----- | --------------------------------------------------------------------------- | ----------------------------------- |
 | L1    | The server re-simulates the inputs; the replay's `results` cache is ignored | editing the numbers                 |
-| L2    | Auto play and ESC aborts are rejected; assists are flagged                  | assisted scores in the main ranking |
+| L2    | Auto play is rejected; assists are flagged                                  | assisted scores in the main ranking |
 | L3    | Both fingerprint documents hash to the claimed fingerprints                 | a tampered document                 |
 | L4    | The play document is one outcome of the chart document                      | a play of a different chart         |
 | L5    | The replay's notes equal the play document's note times, up to lane options | an edited chart inside the replay   |
@@ -219,17 +219,18 @@ A manual play that seeks is practice (`PlayResult.practice`). Its first seek dis
   `HAZARD`, and so on).
 - **Assists** (auto scratch, a debug judge-window override, ...) are stored with flags and ranked separately from
   unassisted plays.
-- **ESC aborts are rejected, and so are course stages**: a stage starts from the state the previous one left, so it is
+- **Course stages are rejected**: a stage starts from the state the previous one left, so it is
   not a single-chart play; it is ranked as part of its course run instead (section 6.1). **Plays at another tempo**
   (`play.tempo` other than 1, the web player's tempo slider) are refused as `tempo`: they are practice, as beatoraja's
   frequency trainer does not save its scores. **Failed plays** (the gauge
-  emptied) are stored and count as plays.
+  emptied) are stored and count as plays. So are **plays given up with ESC** (`play.aborted`): a play quit mid-way is
+  ranked as a failed play under every ruleset, whatever its gauge stood at, as LR2 and beatoraja save one.
 - **Lamps and BP per ruleset** follow each game: under `lr2` a DEATH clear is a NORMAL clear (LR2body.exe `CheckClear`);
-  beatoraja and That-Which-Must-Not-Be-Named give DEATH (`HAZARD`) an EX HARD lamp. Every ruleset counts empty POORs in BP, LR2 included. Migration `0012` rewrote the `lr2` results stored before this rule.
-  The lamp and BP come from the rules every client uses (`resolveRulesetResultLamp` in `@be-music/player-engine/replay`, `resolveClearLamp` and `resolveMissCount` in `@be-music/player-engine/ruleset`): a full combo needs every note judged GOOD or better, so a chart without notes takes its gauge's lamp. Lamps are stored as their rank (`clearLampRank`): 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 NORMAL, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX.
+  beatoraja and That-Which-Must-Not-Be-Named give DEATH (`HAZARD`) an EX HARD lamp. Every ruleset counts empty POORs in BP, LR2 included. Migration `0012` rewrote the `lr2` results stored before this rule. BP also counts the notes a play never judged because it failed or was given up mid-way, as both games count them (#584); BP stored before that rule is left as it was.
+  The lamp and BP come from the rules every client uses (`resolveRulesetResultLamp` and `resolveRulesetResultMissCount` in `@be-music/player-engine/replay`, `resolveClearLamp` and `resolveMissCount` in `@be-music/player-engine/ruleset`): a full combo needs every note judged GOOD or better, so a chart without notes takes its gauge's lamp. Lamps are stored as their rank (`clearLampRank`): 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 NORMAL, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX.
 - **Personal bests, beatoraja style**: the best EX score, the best clear lamp and the fewest misses are kept separately,
   each pointing at the score that set it, so each best's replay and ghost are one click away. Misses count for every
-  play that was not aborted, cleared or not.
+  play, cleared, failed or given up.
 - **Score history**: every submission is kept, which gives progress graphs and "most improved" lists for free.
 - **Hidden plays**: a player can hide one of their plays (`PATCH /api/v0/scores/:id`) and show it again. A hidden play
   is kept but leaves the rankings, the personal bests (rebuilt from the plays still shown), the figures and every list,
@@ -258,8 +259,7 @@ with its own rankings per ruleset, and never as single-chart plays.
   or be stitched, so these stages need the chart itself; the server only reads it to verify the run and never stores
   it. The idempotency, rate limit, sign-in and size limits are those of single plays; the submission id hashes the
   course fingerprint and each played stage as a single play's id does (a NONSTOP run: its stitched play).
-- **Verification.** Every played stage passes the checks of a single play (sections 5.2 and 5.3: auto play and ESC
-  aborts refused, fingerprint documents, chart registration, outcome composition); being a course stage is what it must
+- **Verification.** Every played stage passes the checks of a single play (sections 5.2 and 5.3: auto play refused, fingerprint documents, chart registration, outcome composition); being a course stage is what it must
   be here, not a reason to refuse it. The stages must be judged under one ruleset, play under the course's constraints
   (its gauge set and judge constraint, and a lane option the course allows), and carry in exactly what the previous
   stage left once re-simulated (gauge, course combo and course max combo; the first stage carries in nothing). The run

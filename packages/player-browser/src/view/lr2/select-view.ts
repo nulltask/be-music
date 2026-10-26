@@ -1,3 +1,4 @@
+import { LR2_GAUGE_TYPES } from '@be-music/player-engine/ruleset';
 /**
  * The LR2 family's select view: an LR2 select skin's `#SRC_*` / `#DST_*` frame, its bar list (`#SRC_BAR_BODY` slots
  * around `#BAR_CENTER`, drawn by `select-bars.ts`), buttons, panels, sliders, numbers, texts and mouse cursor, over the
@@ -26,6 +27,9 @@ import type {
 import { LR2_TEXT, LR2_TIMER } from '@be-music/skin-lr2/ids';
 import {
   resolveLR2CourseMakerAction,
+  LR2_BATTLE_CYCLE,
+  LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE,
+  stepLR2JudgeTiming,
   resolveLR2SelectButton,
   resolveLR2SelectState,
   resolveLR2SelectTimers,
@@ -33,7 +37,7 @@ import {
   type LR2SelectState,
   type LR2TimerUpdate,
 } from '@be-music/skin-lr2/state';
-import type { LibraryChart, LibraryEntry } from '@be-music/player-scene-model';
+import { HS_FIX_CYCLE, nextChoice, type LibraryChart, type LibraryEntry } from '@be-music/player-scene-model';
 import type { BrowserChartCollection } from '../../collection/types.ts';
 import { COURSE_NAME_PROMPT } from '../../collection/course-maker.ts';
 import { hasReadtextForChart } from '../../collection/readtext.ts';
@@ -684,7 +688,50 @@ export class LR2SelectView implements SelectView {
         // Both sides step the one hi-speed.
         emit({ type: 'play-option', key: 'hiSpeed', step: button.plusOnly === -1 ? -1 : 1 });
         return;
+      case 'judge-timing': {
+        // `plusOnly` fixes the direction; without it the half clicked picks it.
+        const current = this.frame?.playOptions?.judgeTimingMs ?? 0;
+        const next = stepLR2JudgeTiming(current, button.plusOnly > 0 ? 1 : button.plusOnly < 0 ? -1 : direction);
+        if (next !== current) emit({ type: 'set-play-option', key: 'judgeTimingMs', value: next });
+        return;
+      }
       case 'cycle-option':
+        if (action.option === 'gauge1P' || action.option === 'gauge2P') {
+          emit({
+            type: 'set-play-option',
+            key: action.option,
+            value: nextChoice(LR2_GAUGE_TYPES, this.frame?.playOptions[action.option] ?? 'GROOVE'),
+          });
+          return;
+        }
+        if (action.option === 'battleMode') {
+          emit({
+            type: 'set-play-option',
+            key: 'battleMode',
+            value: nextChoice(LR2_BATTLE_CYCLE, this.frame?.playOptions.battleMode ?? 'OFF', direction),
+          });
+          return;
+        }
+        if (action.option === 'judgeTimingAutoAdjust') {
+          emit({
+            type: 'set-play-option',
+            key: 'judgeTimingAutoAdjust',
+            value: nextChoice(
+              LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE,
+              this.frame?.playOptions.judgeTimingAutoAdjust ?? 'OFF',
+              direction,
+            ),
+          });
+          return;
+        }
+        if (action.option === 'hsFix') {
+          emit({
+            type: 'set-play-option',
+            key: 'hsFix',
+            value: nextChoice(HS_FIX_CYCLE, this.frame?.playOptions.hsFix ?? 'OFF'),
+          });
+          return;
+        }
         emit({ type: 'play-option', key: action.option, step: 1 });
         return;
       case 'set-difficulty-filter':

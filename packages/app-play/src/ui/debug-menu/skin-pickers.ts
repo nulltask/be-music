@@ -2,7 +2,7 @@ import { selectBinding } from '../../pane-controls.ts';
 // The Debug Menu's "Beatoraja skins" pickers: one per scene type the loaded beatoraja theme ships, and the switch of
 // the screen showing to the entry picked. They run with the menu as `this` (`DebugMenu`).
 import { BEATORAJA_SKIN_TYPE, type BeatorajaSkinEntry } from '@be-music/skin-beatoraja';
-import { playSkinTypeForVariant } from '../../demo-utils.ts';
+import { playSkinTypeForVariant } from '../../player-utils.ts';
 import type { DebugMenu } from './index.ts';
 /**
  * Repopulate the "Beatoraja skins" debug-menu folder with one dropdown per scene type that the

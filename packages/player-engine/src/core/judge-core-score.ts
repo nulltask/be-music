@@ -281,6 +281,7 @@ export function applyResolvedManualJudge(
   judge: TimedManualJudge,
   atSeconds: number,
   emit: JudgeCoreEffectSink,
+  longNote = false,
 ): void {
   if (isJudgingClosed(state)) {
     return;
@@ -303,7 +304,15 @@ export function applyResolvedManualJudge(
         ['deltaMs', Math.round(deltaMs)],
       ],
     });
-    emit({ kind: 'judge-combo', judge: judge.kind, combo: state.combo, channel, signedDeltaMs: judge.signedDeltaMs });
+    emit({
+      kind: 'judge-combo',
+      seconds: atSeconds,
+      judge: judge.kind,
+      combo: state.combo,
+      channel,
+      signedDeltaMs: judge.signedDeltaMs,
+      ...(longNote ? { longNote } : {}),
+    });
     emit({ kind: 'poor-trace', action: 'clear', seconds: atSeconds });
     return;
   }
@@ -319,7 +328,15 @@ export function applyResolvedManualJudge(
         ['deltaMs', Math.round(deltaMs)],
       ],
     });
-    emit({ kind: 'judge-combo', judge: 'BAD', combo: state.combo, channel, signedDeltaMs: judge.signedDeltaMs });
+    emit({
+      kind: 'judge-combo',
+      seconds: atSeconds,
+      judge: 'BAD',
+      combo: state.combo,
+      channel,
+      signedDeltaMs: judge.signedDeltaMs,
+      ...(longNote ? { longNote } : {}),
+    });
     return;
   }
   emit({ kind: 'poor-bga', action: 'trigger', seconds: atSeconds });
@@ -335,7 +352,14 @@ export function applyResolvedManualJudge(
       ['deltaMs', Math.round(deltaMs)],
     ],
   });
-  emit({ kind: 'judge-combo', judge: 'POOR', combo: state.combo, channel, signedDeltaMs: judge.signedDeltaMs });
+  emit({
+    kind: 'judge-combo',
+    judge: 'POOR',
+    combo: state.combo,
+    channel,
+    signedDeltaMs: judge.signedDeltaMs,
+    ...(longNote ? { longNote } : {}),
+  });
 }
 
 /** Charges a POOR (gauge + tally) with no other cue — the second judgment a missed charge note owes. */

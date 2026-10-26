@@ -1,5 +1,5 @@
-// What kind of device the demo runs on, as far as the page can tell: a touch-first phone or tablet, or a desktop. The
-// demo uses it to pick lighter skin effects by default and to offer touch controls during play.
+// What kind of device the player runs on, as far as the page can tell: a touch-first phone or tablet, or a desktop. The
+// player uses it to pick lighter skin effects by default and to offer touch controls during play.
 
 export type SkinEffectsLevel = 'full' | 'reduced' | 'off';
 

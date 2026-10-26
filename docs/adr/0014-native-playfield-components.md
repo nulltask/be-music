@@ -30,6 +30,6 @@ sequenceDiagram
 
 ## Trade-offs
 
-Nothing the player draws on its canvas shows during Native gameplay, so Native also draws the BGA, mines, lane covers and measure lines, and the HUD shows the paused state. The mount fades with the play screen. Touch lanes follow the fingers on the gameplay screen's mount, which covers the area the canvas did, and ignore presses on its controls. Host features bound to the canvas element (the demo's fullscreen gestures) listen on the stage instead. Canvas screenshots and video recordings capture the player's canvas only, so they show nothing of Native's screens.
+Nothing the player draws on its canvas shows during Native gameplay, so Native also draws the BGA, mines, lane covers and measure lines, and the HUD shows the paused state. The mount fades with the play screen. Touch lanes follow the fingers on the gameplay screen's mount, which covers the area the canvas did, and ignore presses on its controls. Host features bound to the canvas element (the player's fullscreen gestures) listen on the stage instead. Canvas screenshots and video recordings capture the player's canvas only, so they show nothing of Native's screens.
 
 The playfield now updates through Lit every animation frame. Each component repaints only its own canvas, and no note becomes a DOM node, so the per-frame cost stays close to one Canvas pass. Other skins keep their stage-sized surfaces; the contract is opt-in.

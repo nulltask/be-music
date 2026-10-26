@@ -15,8 +15,7 @@ import { logger } from '../../logger.ts';
 import type { PlaySessionOptions } from './play-options.ts';
 import { resolveLaneInputTokens, resolvePlayCoverKey } from './play-cover-keys.ts';
 import type { PlayEngineContext } from './play-engine.ts';
-import { applyPlayEvent } from './play-state.ts';
-import { adjustHiSpeed } from './play-view-settings.ts';
+import { adjustHiSpeed, changePlayView } from './play-view-settings.ts';
 
 const log = logger('gameplay');
 
@@ -37,6 +36,7 @@ export interface PlayInputContext extends PlayEngineContext {
   readonly autoPauseOnBlur: boolean;
   lastHidden: boolean;
   lastFocus: boolean;
+  lastStartTapMs?: number;
   visibilityPollHandle: number | undefined;
   touchTokenByChannel: Map<string, string> | undefined;
   readonly handleSharedEngineExitKey: (event: KeyboardEvent) => void;
@@ -60,8 +60,9 @@ export function attachPlayInput(ctx: PlayInputContext, host: PixiSceneHost): voi
   // affects the visual scroll speed (which the engine doesn't own). The WebInputRuntime's `shouldSkipKey`
   // filter skips this list (`PLAY_SCENE_KEY_CODES` in `play-keys.ts`) so it doesn't also push duplicate `interrupt` /
   // `toggle-pause` commands. Lane input goes through the WebInputRuntime's own `keydown` listener to the engine's
-  // input bus.
-  window.addEventListener('keydown', ctx.handleSharedEngineExitKey);
+  // input bus. The play listens in the capture phase, ahead of that runtime, which takes the default of every key with a
+  // lane token (Enter included): the play's keys then see only what a focused control did to an event.
+  window.addEventListener('keydown', ctx.handleSharedEngineExitKey, { capture: true });
   // Holding Backspace quits like Escape (`QuitHoldController`); the keyup / blur listeners end the hold.
   window.addEventListener('keyup', ctx.handleQuitHoldKeyUp);
   window.addEventListener('blur', ctx.cancelQuitHold);
@@ -111,7 +112,7 @@ export function attachPlayInput(ctx: PlayInputContext, host: PixiSceneHost): voi
 /** Unwires what {@link attachPlayInput} wired, as the play leaves the stage (`PlaySession.detachInput`). */
 export function detachPlayInput(ctx: PlayInputContext): void {
   // Detach window-level event listeners so a stray keypress doesn't hit a view that is off stage.
-  window.removeEventListener('keydown', ctx.handleSharedEngineExitKey);
+  window.removeEventListener('keydown', ctx.handleSharedEngineExitKey, { capture: true });
   window.removeEventListener('keyup', ctx.handleQuitHoldKeyUp);
   window.removeEventListener('blur', ctx.cancelQuitHold);
   ctx.quitHold.cancel();
@@ -201,9 +202,49 @@ export function handleWindowFocus(ctx: PlayInputContext): void {
 export function handleSharedEngineExitKey(ctx: PlayInputContext, event: KeyboardEvent): void {
   // Backspace first: its auto-repeat must still be `preventDefault`ed, which the repeat filter below would skip.
   if (ctx.quitHold.handleKeyDown(event)) return;
+  // The play listens in the capture phase, so a key typed into a focused field, or Enter / Space on a focused button,
+  // stays the control's. Whether the event's default was taken says nothing here: the lane input runtime takes it for
+  // every key with a lane token.
+  const target = (event.composedPath?.()[0] ?? event.target) as HTMLElement | null;
+  const tag = target?.tagName ?? '';
+  if (
+    target?.isContentEditable === true ||
+    /^(INPUT|SELECT|TEXTAREA)$/u.test(tag) ||
+    (/^(BUTTON|A|SUMMARY)$/u.test(tag) && (event.code === 'Enter' || event.code === 'Space'))
+  )
+    return;
+  if (
+    (ctx.playState.view.hiSpeed.floating ||
+      event.code === 'Numpad0' ||
+      (ctx.playState.view.fixedDisplayArea && event.code === 'Enter')) &&
+    (event.altKey || event.ctrlKey || event.metaKey || event.isComposing)
+  )
+    return;
   // A held cover key keeps moving its cover, so the cover keys come before the repeat filter.
   if (ctx.options.coverKeys === true && handleCoverKey(ctx, event)) return;
   if (event.repeat) return;
+  if (event.code === 'Enter' && ctx.playState.view.fixedDisplayArea) {
+    event.preventDefault();
+    const previous = ctx.lastStartTapMs;
+    ctx.lastStartTapMs = event.timeStamp;
+    // Browser START gesture window; the source specifies a quick double press, not an exact duration.
+    if (previous !== undefined && event.timeStamp > previous && event.timeStamp - previous <= 500) {
+      ctx.lastStartTapMs = undefined;
+      changePlayView(ctx, { type: 'floating-speed-restore', bpm: 120, visibleFraction: 1 });
+    }
+    return;
+  }
+  // Numpad 0 switches FLOATING HI-SPEED, whatever the judge rules (#774).
+  if (event.code === 'Numpad0') {
+    event.preventDefault();
+    changePlayView(ctx, {
+      type: 'floating-speed-mode',
+      enabled: ctx.playState.view.hiSpeed.floating === undefined,
+      bpm: 120,
+      visibleFraction: 1,
+    });
+    return;
+  }
   if (event.code === 'Escape') {
     event.preventDefault();
     ctx.requestExit();
@@ -244,7 +285,7 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
   // way to push HiSpeed changes back to the renderer; we handle them directly here.
   if (event.code === 'ArrowUp' || event.code === 'ArrowDown') {
     event.preventDefault();
-    if (adjustHiSpeed(ctx, event.code === 'ArrowUp' ? HISPEED_STEP : -HISPEED_STEP)) {
+    if (adjustHiSpeed(ctx, event.code === 'ArrowUp' ? HISPEED_STEP : -HISPEED_STEP, event.shiftKey)) {
       ctx.theme.moment({ kind: 'view-setting', setting: 'hi-speed', at: ctx.playClock() });
     }
   }
@@ -260,7 +301,19 @@ function handleCoverKey(ctx: PlayInputContext, event: KeyboardEvent): boolean {
   if (key === undefined) return false;
   event.preventDefault();
   if (ctx.playState.view.hiSpeed.locked) return true;
-  applyPlayEvent(ctx, key.command);
+  const floating = ctx.playState.view.hiSpeed.floating;
+  if (floating && key.command.type === 'cover-adjust' && key.command.part === 'sudden') {
+    const cover = ctx.playState.view.covers[0];
+    if (!cover?.suddenOn && !cover?.liftOn) {
+      changePlayView(ctx, { type: 'hi-speed-fine', direction: -key.command.delta });
+      return true;
+    }
+    changePlayView(ctx, {
+      ...key.command,
+      ...(!cover?.suddenOn && cover?.liftOn ? { part: 'lift' as const } : {}),
+      delta: (Math.sign(key.command.delta) * (event.shiftKey ? 10 : 1)) / 723,
+    });
+  } else changePlayView(ctx, key.command);
   ctx.theme.moment({ kind: 'view-setting', setting: key.setting, at: ctx.playClock() });
   return true;
 }

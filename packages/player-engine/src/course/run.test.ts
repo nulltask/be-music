@@ -273,3 +273,54 @@ test('an outcome supplied without a replay is always practice, even without an e
   expect(course.practice).toBe(true);
   expect(() => course.buildReplay()).toThrow('practice course');
 });
+
+test('BEST CLEAR carries all three class gauges and does not alias a caller editing the next plan', () => {
+  const course = run([]);
+  const values = { CLASS: 70, EXCLASS: 40, EXHARDCLASS: 0 };
+  const first = stageLog({ gauge: { type: 'EXCLASS', final: 40, cleared: true, values } });
+  expect(course.recordStage(first)).toBe('next');
+  const next = course.nextStage()!.course;
+  expect(next.carryIn).toMatchObject({ gauge: 40, gauges: values });
+  next.carryIn!.gauges!.CLASS = 1;
+  expect(course.nextStage()!.course.carryIn!.gauges!.CLASS).toBe(70);
+  expect(
+    course.recordStage(
+      stageLog({
+        gauge: { type: 'CLASS', final: 25, cleared: true, values: { CLASS: 25, EXCLASS: 0, EXHARDCLASS: 0 } },
+      }),
+    ),
+  ).toBe('next');
+  expect(course.nextStage()!.course.carryIn!.gauges).toEqual({ CLASS: 25, EXCLASS: 0, EXHARDCLASS: 0 });
+});
+
+test('LR2 course stages stop below two, advance at two, and retain attack-gauge carry', () => {
+  for (const type of ['P-ATTACK', 'G-ATTACK']) {
+    const stopped = new CourseRun({ ...definition([]), kind: 'expert' }, ['a', 'b', 'c'].map(stage));
+    expect(
+      stopped.recordStage(stageLog({ gauge: { type, final: 1.99, cleared: true } }, { judgeRuleset: 'lr2' })),
+    ).toBe('finished');
+    const continuing = new CourseRun({ ...definition([]), kind: 'expert' }, ['a', 'b', 'c'].map(stage));
+    expect(
+      continuing.recordStage(stageLog({ gauge: { type, final: 2, cleared: true } }, { judgeRuleset: 'lr2' })),
+    ).toBe('next');
+    expect(continuing.nextStage()!.course.carryIn?.gauge).toBe(2);
+  }
+  expect(
+    run([]).recordStage(stageLog({ gauge: { type: 'CLASS', final: 1, cleared: true } }, { judgeRuleset: 'beatoraja' })),
+  ).toBe('next');
+});
+
+test('a practice G.ATTACK course retains HARD classification without manufacturing a replay', () => {
+  const course = new CourseRun<Stage, CourseRunStageExtras>({ ...definition([]), kind: 'expert' }, [stage('a')]);
+  const outcome = stageLog({
+    ruleset: 'lr2/0',
+    exScore: 0,
+    judge: { pgreat: 0, great: 0, good: 9, bad: 1, poor: 0, emptyPoor: 0 },
+    maxCombo: 9,
+    course: { combo: 0, maxCombo: 9 },
+    gauge: { type: 'G-ATTACK', final: 94, cleared: true },
+  }).results!.native!;
+  expect(course.recordStage(undefined, { stageOutcome: outcome, practice: true })).toBe('finished');
+  expect(course.buildPracticeResult()).toMatchObject({ lamp: 'HARD', gauge: { type: 'G-ATTACK', cleared: true } });
+  expect(() => course.buildReplay()).toThrow(/practice/);
+});

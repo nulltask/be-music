@@ -189,6 +189,7 @@ export {
   BEATORAJA_BUTTON,
   BEATORAJA_NUM,
   BEATORAJA_OP,
+  BEATORAJA_REPLAY_SLOT_OP,
   BEATORAJA_TEXT,
   hcnActiveTimerId,
   hcnDamageTimerId,

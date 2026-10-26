@@ -236,7 +236,9 @@ export interface BeMusicGameplayLayout {
     top: number;
     judgementY: number;
     /** Horizontal extent of each play side present (`2P` only in double play). */
-    sides: Partial<Record<BeMusicSide, { left: number; right: number }>>;
+    sides: Partial<
+      Record<BeMusicSide, { left: number; right: number; /** Actual line after per-side LIFT. */ judgementY?: number }>
+    >;
   };
   /** The BGA rect, or `undefined` when the playfield leaves no room for one. */
   bga: BeMusicRect | undefined;
@@ -250,6 +252,26 @@ export interface BeMusicJudgmentState {
   combo?: number;
 }
 
+/** The 2P player's live values in a two-player play (LR2 BATTLE): its own score, combo and gauge. */
+export interface BeMusicSecondPlayerRuntime {
+  score: number;
+  exScore: number;
+  exScoreMax: number;
+  combo: number;
+  maxCombo: number;
+  perfect: number;
+  great: number;
+  good: number;
+  bad: number;
+  poor: number;
+  /** The gauge in percent (0..100). */
+  gauge: number;
+  clearThreshold?: number;
+  gaugeLabel?: string;
+  gaugeSurvival?: boolean;
+  rank?: string;
+}
+
 /** Live gameplay values for the HUD. */
 export interface BeMusicGameplayRuntime {
   chartTitle?: string;
@@ -258,6 +280,8 @@ export interface BeMusicGameplayRuntime {
   /** BPM at the playhead: follows the chart's tempo changes (and holds through stops), not just its header BPM. */
   bpm?: number;
   hiSpeed?: number;
+  /** Active measured AC floating-speed controls; omitted outside floating mode. */
+  floatingHiSpeed?: true;
   score?: number;
   exScore?: number;
   exScoreMax?: number;
@@ -279,6 +303,8 @@ export interface BeMusicGameplayRuntime {
   judgeSides?: readonly BeMusicJudgmentState[];
   /** AAA / AA / A / B / C / D / E / F. */
   rank?: string;
+  /** The 2P player of a two-player play (LR2 BATTLE); every other figure here is the 1P player's. */
+  secondPlayer?: BeMusicSecondPlayerRuntime;
   autoplay?: boolean;
   hasBGA?: boolean;
   /** Monotonic play clock (ms) for animation. */
@@ -434,6 +460,8 @@ export interface BeMusicLaneFrame {
  * the way beatoraja does); clip to the lane's `bottom` to keep nothing below the line.
  */
 export interface BeMusicNote {
+  /** Source visibility opacity (0..1); omitted means fully visible. Multiply by the skin's own opacity. */
+  alpha?: number;
   kind: BeMusicLaneKind;
   x: number;
   w: number;
@@ -450,6 +478,8 @@ export interface BeMusicNote {
  * {@link BeMusicGameplaySkin.drawsMines}.
  */
 export interface BeMusicMine {
+  /** Source visibility opacity (0..1); omitted means fully visible. Multiply by the skin's own opacity. */
+  alpha?: number;
   kind: BeMusicLaneKind;
   x: number;
   w: number;
@@ -461,6 +491,8 @@ export interface BeMusicMine {
  * {@link BeMusicNote}, it can reach below the judgement line when a negative `#SCROLL` puts it there.
  */
 export interface BeMusicLongNote {
+  /** Source visibility opacity (0..1); omitted means fully visible. Multiply by the skin's own opacity. */
+  alpha?: number;
   kind: BeMusicLaneKind;
   x: number;
   w: number;
@@ -504,6 +536,8 @@ export interface BeMusicBomb {
  * judgement line when a negative `#SCROLL` puts it there.
  */
 export interface BeMusicMeasureLine {
+  /** Source visibility opacity (0..1); omitted means fully visible. Multiply by the skin's own opacity. */
+  alpha?: number;
   side: BeMusicSide;
   /** Left edge and width of the lane run it crosses. */
   x: number;

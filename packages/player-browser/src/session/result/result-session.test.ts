@@ -1,5 +1,11 @@
 import { createEmptyJSON } from '@be-music/chart-source';
-import type { LibraryChart, PlayResult, PlayRunKind, SystemSoundSet } from '@be-music/player-scene-model';
+import type {
+  LibraryChart,
+  PlayResult,
+  PlayRunKind,
+  ReplaySlotState,
+  SystemSoundSet,
+} from '@be-music/player-scene-model';
 import { describe, expect, it, vi } from 'vite-plus/test';
 import type { ResultViewTiming } from '../../view/types.ts';
 import type { SessionKeyEvent } from '../session-scene.ts';
@@ -76,10 +82,15 @@ function createSession(
     retry?: boolean;
     timing?: Partial<ResultViewTiming>;
     playChart?: ReturnType<typeof createEmptyJSON>;
+    replaySlots?: () => readonly ReplaySlotState[];
   } = {},
 ) {
   const audio = createAudio();
-  const on = { continue: vi.fn<() => void>(), retry: vi.fn<() => void>() };
+  const on = {
+    continue: vi.fn<() => void>(),
+    retry: vi.fn<() => void>(),
+    saveReplay: vi.fn<(slot: number) => void>(),
+  };
   const session = new ResultSession({
     result: options.result ?? playResult(),
     ...(options.run !== undefined ? { run: options.run } : {}),
@@ -87,6 +98,7 @@ function createSession(
     sounds: options.sounds ?? ALL_JINGLES,
     audio,
     timing: { inputDelayMs: 1500, fadeOutMs: 0, ...options.timing },
+    ...(options.replaySlots !== undefined ? { replaySlots: options.replaySlots } : {}),
     on: options.retry === false ? { continue: on.continue } : on,
   });
   return { session, audio, on };
@@ -319,5 +331,56 @@ describe('ResultSession', () => {
     expect(frame.inputOpenAtMs).toBe(11_500);
     session.handleKey(key('Escape', 10_100));
     expect(on.continue).toHaveBeenCalledTimes(2);
+  });
+
+  it('saves into replay slots 1-4 by number key or intent, once input is open and until it leaves', () => {
+    let slots: ReplaySlotState[] = ['none', 'exists', 'none', 'none'];
+    const { session, on } = createSession({ replaySlots: () => slots, timing: { fadeOutMs: 500 } });
+    session.enter(0);
+    expect(session.frame(0).replaySlots).toEqual(['none', 'exists', 'none', 'none']);
+    expect(session.handleKey(key('1', 100))).toBe(true);
+    expect(on.saveReplay).not.toHaveBeenCalled();
+    session.handleKey(key('3', 1600));
+    session.dispatch({ type: 'saveReplay', slot: 0 });
+    expect(on.saveReplay.mock.calls).toEqual([[2], [0]]);
+    slots = ['saved', 'exists', 'saved', 'none'];
+    expect(session.frame(1700).replaySlots).toEqual(slots);
+    session.handleKey(key('Escape', 1800));
+    session.handleKey(key('2', 1900));
+    expect(on.saveReplay).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves number keys alone when the host keeps no replay slots', () => {
+    const { session } = createSession({ retry: false });
+    session.enter(0);
+    expect(session.handleKey(key('1', 1600))).toBe(false);
+    expect(session.frame(1600)).not.toHaveProperty('replaySlots');
+  });
+
+  it('stops the jingle and plays the close sound as it starts to leave, the course one for a course run', () => {
+    const RESULT_CLOSE = sound(6);
+    const COURSE_CLOSE = sound(7);
+    const single = createSession({ sounds: { ...ALL_JINGLES, resultClose: RESULT_CLOSE, courseClose: COURSE_CLOSE } });
+    single.session.enter(0);
+    single.audio.stopOwned.mockClear();
+    single.session.handleKey(key('Escape', 10));
+    expect(single.audio.stopOwned).toHaveBeenCalledWith(single.session);
+    expect(single.audio.playJingle).toHaveBeenLastCalledWith(RESULT_CLOSE, { owner: single.session });
+    const course = createSession({
+      run: 'course',
+      sounds: { ...ALL_JINGLES, resultClose: RESULT_CLOSE, courseClose: COURSE_CLOSE },
+    });
+    course.session.enter(0);
+    course.session.handleKey(key('Escape', 10));
+    expect(course.audio.playJingle).toHaveBeenLastCalledWith(COURSE_CLOSE, { owner: course.session });
+  });
+
+  it('keeps the jingle playing as it leaves when the theme has no close sound', () => {
+    const { session, audio } = createSession();
+    session.enter(0);
+    audio.stopOwned.mockClear();
+    session.handleKey(key('Escape', 10));
+    expect(audio.stopOwned).not.toHaveBeenCalled();
+    expect(audio.playJingle).toHaveBeenCalledTimes(1);
   });
 });

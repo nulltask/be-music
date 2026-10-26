@@ -3,10 +3,10 @@
 // library service (`services/library.ts`) refreshes the course folders.
 import type { CourseDefinitionGroup } from '@be-music/player-browser/collection';
 import { fetchTableHeaderCourses, parseTableHeaderCourses, type TableFetchText } from '@be-music/player-engine/course';
-import { DEMO_STORAGE_PREFIX } from './ui/debug-menu/folders.ts';
+import { PLAYER_STORAGE_PREFIX } from './ui/debug-menu/folders.ts';
 
 /** `localStorage` key of the difficulty-table URLs whose courses are imported again on load. */
-export const COURSE_TABLE_URLS_STORAGE_KEY = `${DEMO_STORAGE_PREFIX}course-table-urls`;
+export const COURSE_TABLE_URLS_STORAGE_KEY = `${PLAYER_STORAGE_PREFIX}course-table-urls`;
 
 /** A difficulty table's courses, read as one course group. */
 export interface ImportedCourseTable {

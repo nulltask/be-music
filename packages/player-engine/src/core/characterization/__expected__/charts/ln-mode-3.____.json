@@ -46,6 +46,8 @@
           {"id":4,"channel":"14","type":"long","timeUs":2500000,"endTimeUs":3500000,"lnMode":3},
           {"id":5,"channel":"15","type":"normal","timeUs":3500000}
         ],
+        "headerBPM": 120,
+        "bpmRange": {"min":120,"max":120},
         "chartFingerprint": "bmfp0:7db4b2ac305aab0c644e3b50ae917cdeaeec4e1b7df8900e1caef5204521f80c",
         "playFingerprint": "bmfp0:7db4b2ac305aab0c644e3b50ae917cdeaeec4e1b7df8900e1caef5204521f80c",
         "title": "long notes LNMODE 3",

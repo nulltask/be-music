@@ -1,4 +1,4 @@
-import { resolveClearLamp, type ClearLamp } from '../ruleset/clear-lamp.ts';
+import { resolveClearLamp, resolveMissCount, type ClearLamp } from '../ruleset/clear-lamp.ts';
 import type { RulesetId } from '../ruleset/definitions.ts';
 import type { ReplayRulesetResult } from './format.ts';
 
@@ -24,4 +24,18 @@ export function resolveRulesetResultLamp(
       ...(result.fullCombo !== undefined ? { fullCombo: result.fullCombo } : {}),
     },
   });
+}
+
+/**
+ * The BP of one play's result (or one course stage's) under any ruleset (`resolveMissCount`): its BADs, POORs and empty
+ * POORs, plus the notes a play that failed or was given up mid-way never judged, as LR2 and beatoraja count them
+ * (OpenLR2 L9436-L9439, beatoraja `BMSPlayer` L915). A mine POOR (`minePoor`, which LR2 counts in its POOR) judges no
+ * note.
+ */
+export function resolveRulesetResultMissCount(
+  result: Pick<ReplayRulesetResult, 'judge' | 'noteCount' | 'minePoor'>,
+): number {
+  const { pgreat, great, good, bad, poor } = result.judge;
+  const judged = pgreat + great + good + bad + poor - (result.minePoor ?? 0);
+  return resolveMissCount(result.judge, result.noteCount - judged);
 }

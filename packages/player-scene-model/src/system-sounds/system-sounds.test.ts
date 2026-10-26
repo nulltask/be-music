@@ -58,6 +58,20 @@ describe('result jingles', () => {
     expect(resolveResultJingles([lr2], true)).toEqual(lr2);
   });
 
+  test('closes a result with its close sound, and a course result with the course one, falling back to it', () => {
+    const closing: SystemSoundSet = { clear: { bytes: bytes(1) }, resultClose: { bytes: bytes(4) } };
+    expect(resolveResultJingles([closing], false).close).toBe(closing.resultClose);
+    expect(resolveResultJingles([closing], true).close).toBe(closing.resultClose);
+    const course: SystemSoundSet = { ...closing, courseClose: { bytes: bytes(5) } };
+    expect(resolveResultJingles([course], true).close).toBe(course.courseClose);
+    expect(resolveResultJingles([course], false).close).toBe(course.resultClose);
+    expect(resolveResultJingles([lr2], true).close).toBeUndefined();
+    expect(systemSoundSetFromBeatoraja({ bgm: { resultClose: bytes(6), courseClose: bytes(7) } })).toEqual({
+      resultClose: { bytes: bytes(6) },
+      courseClose: { bytes: bytes(7) },
+    });
+  });
+
   test('picks the clear or fail jingle by the verdict, else the generic one', () => {
     expect(resolveResultJingle({ clear: lr2.clear, result: lr2.result }, true)).toBe(lr2.clear);
     expect(resolveResultJingle({ clear: lr2.clear, result: lr2.result }, false)).toBe(lr2.result);

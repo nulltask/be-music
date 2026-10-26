@@ -1,4 +1,4 @@
-// The demo's best records, handed to the select skins through `resolveChartBestRecord` / `resolveCourseBestRecord`: the keys
+// The player's best records, handed to the select skins through `resolveChartBestRecord` / `resolveCourseBestRecord`: the keys
 // they are kept under — one record per chart (or course) and judge ruleset — and their persistence across reloads. The
 // rules they are kept by — merging a play, what a play contributes, which plays count — are `@be-music/player-engine/records`.
 
@@ -11,11 +11,11 @@ import {
 import { isClearLamp, type ClearLamp, type RulesetId } from '@be-music/player-engine/ruleset';
 import type { LibraryChart } from '@be-music/player-scene-model';
 
-const STORAGE_KEY = 'be-music-demo.chart-best-records';
+const STORAGE_KEY = 'be-music.chart-best-records';
 /**
  * Bumped when the stored shape changes; a stored map with an unknown version is ignored. Version 3 keys every record by
  * its judge ruleset ({@link rulesetRecordKey}). Versions 1 and 2 kept one record per chart whatever the ruleset; they
- * are read as LR2 records, the demo's default ruleset, and version 1 lamps (kept before the LR2 ruleset's lamps followed
+ * are read as LR2 records, the player's default ruleset, and version 1 lamps (kept before the LR2 ruleset's lamps followed
  * LR2) through {@link toLR2RecordLamp}.
  */
 const STORAGE_VERSION = 3;
@@ -110,7 +110,7 @@ export function parseChartBestRecords(raw: string | null | undefined): Map<strin
   ) {
     return records;
   }
-  // Versions 1 and 2 kept one record per chart whatever the ruleset; the demo plays on LR2's ruleset by default, so they
+  // Versions 1 and 2 kept one record per chart whatever the ruleset; the player plays on LR2's ruleset by default, so they
   // are read as LR2 records. Version 1 lamps also predate LR2's lamp rules.
   const readKey = version === STORAGE_VERSION ? (key: string) => key : (key: string) => rulesetRecordKey('lr2', key);
   const readLamp = version === 1 ? toLR2RecordLamp : (lamp: ClearLamp) => lamp;
