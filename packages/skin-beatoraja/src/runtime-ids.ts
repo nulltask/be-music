@@ -687,6 +687,19 @@ export const BEATORAJA_OP = {
 } as const;
 
 /**
+ * The replay slot ops, by slot (1-4): `none` / `exists` / `saved` are `SkinProperty.OPTION_NO_REPLAYDATA` /
+ * `OPTION_REPLAYDATA` / `OPTION_REPLAYDATA_SAVED` (196-198, then 1196-1204), lit on the select screen for the bar under
+ * the cursor (`none` / `exists`) and on a result screen for the run (`saved` once this result saved into the slot);
+ * `selected` is `OPTION_SELECT_REPLAYDATA` (1205-1208), the slot the select screen's REPLAY plays.
+ */
+export const BEATORAJA_REPLAY_SLOT_OP = {
+  none: [196, 1196, 1199, 1202],
+  exists: [197, 1197, 1200, 1203],
+  saved: [198, 1198, 1201, 1204],
+  selected: [1205, 1206, 1207, 1208],
+} as const;
+
+/**
  * Button action codes (audit 2.1). Mirrors beatoraja's `SkinProperty.BUTTON_*` constants —
  * each integer is both the click-event code (forwarded through `image.act` / `imageset.act`
  * to `onButtonAction`) AND an op code that destinations gate on for "pressed state" visual

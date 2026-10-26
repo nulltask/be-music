@@ -1,3 +1,4 @@
+import { resolveBeatorajaSelectReplayOps } from './replay-slots.ts';
 import {
   resolveCourseView,
   type BrowseListOptions,
@@ -178,6 +179,10 @@ export interface BeatorajaSelectInput {
   readonly judgeTiming: number;
   /** The focused bar's best clear lamp, as its op (`beatorajaClearLampOp`); NO PLAY when absent. */
   readonly lampOp?: number;
+  /** Which of the focused chart's or course's replay slots hold a replay; none when absent. */
+  readonly replaySlots?: readonly boolean[];
+  /** The replay slot REPLAY plays (0-3), or −1 for none. */
+  readonly selectedReplaySlot?: number;
   readonly wallClock?: BeatorajaWallClock;
 }
 
@@ -185,7 +190,8 @@ export interface BeatorajaSelectInput {
  * The ops the select screen lights for the bar under the cursor, none without one. With a bar: the screen's fixed state
  * (`LOADED`, `OFFLINE`, `REPLAY_OFF`, `DISABLE_SAVE_SCORE`, `NO_SAVE_CLEAR`, `BGA_ON`), and `FOLDERBAR` on a folder bar,
  * the course bar ops on a course bar ({@link resolveBeatorajaCourseBarOps}), and on a chart bar `SONGBAR`,
- * `PLAYABLEBAR`, its key-mode, trait, difficulty and judge-rank ops and its clear lamp.
+ * `PLAYABLEBAR`, its key-mode, trait, difficulty and judge-rank ops and its clear lamp. A chart or course bar also lights
+ * its replay slot ops ({@link resolveBeatorajaSelectReplayOps}).
  */
 export function resolveBeatorajaSelectBarOps(input: BeatorajaSelectInput): number[] {
   const entry = input.focused;
@@ -204,6 +210,7 @@ export function resolveBeatorajaSelectBarOps(input: BeatorajaSelectInput): numbe
       break;
     case 'course':
       ops.push(...resolveBeatorajaCourseBarOps(entry.course, input.lampOp));
+      ops.push(...resolveBeatorajaSelectReplayOps(input.replaySlots ?? [], input.selectedReplaySlot ?? -1));
       break;
     case 'chart': {
       ops.push(BEATORAJA_OP.SONGBAR, BEATORAJA_OP.PLAYABLEBAR);
@@ -216,6 +223,7 @@ export function resolveBeatorajaSelectBarOps(input: BeatorajaSelectInput): numbe
         ops.push(beatorajaJudgeRankOp(chart.judgeRank));
       }
       ops.push(input.lampOp ?? BEATORAJA_OP.CLEAR_LAMP_NOPLAY);
+      ops.push(...resolveBeatorajaSelectReplayOps(input.replaySlots ?? [], input.selectedReplaySlot ?? -1));
       break;
     }
   }
