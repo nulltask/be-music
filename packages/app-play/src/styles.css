@@ -1832,14 +1832,33 @@ textarea {
   /* Same dim grey as the version — secondary metadata. */
 }
 
+/* The copyright notice and license text, folded by default. */
+.ack-card-license-details > summary {
+  margin-top: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  color: rgb(151 163 179 / 0.9);
+  list-style: none;
+}
+.ack-card-license-details > summary::-webkit-details-marker {
+  display: none;
+}
+.ack-card-license-details > summary::before {
+  content: '▸';
+  display: inline-block;
+  width: 1.2em;
+  font-size: 1.25em;
+  line-height: 1;
+}
+.ack-card-license-details[open] > summary::before {
+  content: '▾';
+}
 .ack-card-license-text {
   /*
-   * Flat layout (no `<details>` wrapper): the license text
-   * is a sibling of the heading / meta blocks rather than a
-   * disclosed-on-click panel. Negative horizontal margin
-   * cancels the card's `padding: 12px 16px` so the dark
-   * inner panel runs edge-to-edge of the card while keeping
-   * the heading / meta padded normally.
+   * Negative horizontal margin cancels the card's
+   * `padding: 12px 16px` so the dark inner panel runs
+   * edge-to-edge of the card while keeping the heading /
+   * meta padded normally.
    */
   margin: 8px -16px 0;
   padding: 12px 16px 14px;

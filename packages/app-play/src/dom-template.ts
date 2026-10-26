@@ -401,9 +401,11 @@ export const PLAYER_APP_HTML = `
       </div>
     </div>
     <!--
-      Help modal. Two tabs:
+      Help modal. Three tabs:
       - Usage: drag-drop instructions, keyboard shortcuts,
-        gameplay keys, options.
+        gameplay keys and the result screen.
+      - Options: the Debug Menu, every control in it, play
+        options and recording.
       - Open source: build-time-resolved acknowledgement list
         (one card per npm dependency that ships in the runtime
         bundle, with verbatim LICENSE text).
@@ -441,6 +443,17 @@ export const PLAYER_APP_HTML = `
             data-pane="usage"
           >
             Usage
+          </button>
+          <button
+            class="btn help-modal-tab" data-size="sm" data-variant="ghost"
+            id="help-tab-options"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="help-pane-options"
+            data-pane="options"
+          >
+            Options
           </button>
           <button
             class="btn help-modal-tab" data-size="sm" data-variant="ghost"
@@ -619,6 +632,141 @@ export const PLAYER_APP_HTML = `
               <li><kbd>R</kbd> plays the same chart again right away with the same options.</li>
             </ul>
 
+          </div>
+          <div class="help-lang" data-lang="ja" hidden>
+            <section class="help-about">
+              <p class="help-about-summary">
+                ブラウザ上で動作する BMS プレイヤーです。BMS / bmson が入ったフォルダをドロップするだけでそのまま再生できます。
+                内蔵スキンはシナスタジア (Synesthesia)、プレーン (Plain)、ネイティブ (Native) の 3 種類です (Debug Menu → Skin &amp; display → Built-in skin)。
+                <strong>Lunatic Rave 2</strong> のスキン (<code>.lr2skin</code>) と <strong>beatoraja</strong> のスキン (<code>.json</code> / <code>.luaskin</code>) も解釈するので、<code>LR2files</code> フォルダや beatoraja の <code>skin/</code> フォルダをページにドロップすれば既存のスキンをそのまま適用できます。
+              </p>
+              <ul class="help-about-meta">
+                <li>
+                  <span class="help-about-key">作者</span>
+                  <a href="https://nulltask.dev" target="_blank" rel="noopener noreferrer">nulltask · nulltask.dev</a>
+                </li>
+                <li>
+                  <span class="help-about-key">ソースコード</span>
+                  <a href="https://github.com/nulltask/be-music" target="_blank" rel="noopener noreferrer">
+                    github.com/nulltask/be-music
+                  </a>
+                </li>
+                <li>
+                  <span class="help-about-key">関連</span>
+                  <span>同じモノレポに TUI 版 (<code>@be-music/player-terminal</code>) も同梱されています。</span>
+                </li>
+              </ul>
+              <ul class="help-about-notes">
+                <li>
+                  ドロップしたファイルはブラウザ内でのみ処理され、譜面・音声・BGA データを
+                  <strong>サーバへ送信することは一切ありません</strong>。
+                  <strong>Submit to Leaderboard</strong> をオンにしたときだけ、プレイ終了時にリプレイ (キー入力と譜面のノーツ配置) と譜面のフィンガープリントを Leaderboard に送ります。
+                </li>
+                <li>一部の機能はまだ実装されていません。動作が不完全な箇所があります。</li>
+                <li>
+                  <strong>ベスト記録はこのブラウザに保存されます。</strong>
+                  Leaderboard (初期状態はオフ、Debug Menu → Leaderboard) はベータ版で、ランキングはリセットされることがあります。
+                </li>
+                <li>
+                  <strong>動作確認済みのスキン:</strong> Lunatic Rave 2 デフォルトスキンに加え、beatoraja デフォルトスキン (<code>skin/default</code>)、<code>ModernChic</code>、<code>GdbG Original Skin</code> の四種類です。
+                  これら以外の LR2 / beatoraja スキンも読み込み自体は可能ですが、レイアウトは未検証です。要素の重なり / 数ピクセル単位のズレ / 一部アニメーションの欠落などが残っている可能性があります。
+                </li>
+                <li>利用は自己責任でお願いします。本ソフトウェアは無保証で提供されます。</li>
+              </ul>
+            </section>
+            <h3 class="help-section-title">譜面の読み込み</h3>
+            <ul class="help-list">
+              <li>BMS フォルダをページ上にドロップすると、その中の譜面が登録されます。</li>
+              <li><code>LR2files</code> フォルダか beatoraja の <code>skin/</code> フォルダ (またはその中身) をドロップするとスキンが適用されます。</li>
+              <li>
+                右上 Debug Menu の <strong>Open folder</strong> ボタンからネイティブのフォルダ選択ダイアログも使えます。
+                ドラッグ&ドロップと同じ処理経路を通るので、LR2 / beatoraja のテーマと譜面が同居したフォルダもまとめて読み込めます。
+                ボタンを押し直せば別フォルダを追加で読み込めます。
+                <strong>Open files</strong> では ZIP アーカイブやリプレイ (<code>*.bmplay.json</code>、コースは <code>*.bmcourse.json</code>) を選べます。
+              </li>
+              <li>追加でドロップした場合、既存のライブラリに追加され、テーマも維持されます。</li>
+              <li>
+                ドロップしたフォルダに含まれるコースファイル (LR2 の <code>.lr2crs</code>、beatoraja のコースの <code>.json</code>) はコースのフォルダとして並びます。
+                MY COURSES / MY DAN / MY NONSTOP の <strong>NEW COURSE</strong> を決定すると自分でコースを作れます。作ったコースの名前の変更・削除・書き出しは Debug Menu の <strong>Course → My courses…</strong> から行えます。
+              </li>
+            </ul>
+
+            <h3 class="help-section-title">選曲画面</h3>
+            <ul class="help-list">
+              <li>
+                <kbd>↑</kbd> / <kbd>↓</kbd> でカーソル移動、<kbd>Enter</kbd> でフォルダを開くか譜面を開始、<kbd>Esc</kbd> / <kbd>Backspace</kbd> で戻ります。
+                譜面の行をクリック、または現在のスキンの <em>PLAY</em> ボタンでも開始できます。
+              </li>
+              <li>
+                <kbd>Space</kbd> で <strong>PLAY OPTION</strong> パネルを開きます (内蔵スキンと LR2 スキン)。beatoraja スキンでは <kbd>PageUp</kbd> / <kbd>PageDown</kbd>、<kbd>Home</kbd> / <kbd>End</kbd>、<kbd>R</kbd> (ランダムに譜面を選ぶ) も使えます。
+              </li>
+              <li><kbd>/</kbd> で検索入力にフォーカス。タイトル / アーティスト / ジャンルで絞り込めます。</li>
+              <li><kbd>Esc</kbd> で検索条件をクリア。</li>
+            </ul>
+
+            <h3 class="help-section-title">ゲームプレイ (デフォルトキー)</h3>
+            <div class="help-keymap">
+              <div class="help-keymap-row">
+                <span class="help-keymap-side">1P</span>
+                <span class="help-keymap-keys">
+                  <kbd>Shift</kbd>
+                  <span class="help-keymap-sep">·</span>
+                  <kbd>Z</kbd> <kbd>S</kbd> <kbd>X</kbd> <kbd>D</kbd> <kbd>C</kbd> <kbd>F</kbd> <kbd>V</kbd>
+                </span>
+              </div>
+              <div class="help-keymap-row">
+                <span class="help-keymap-side">2P</span>
+                <span class="help-keymap-keys">
+                  <kbd>Shift</kbd> <span class="help-keymap-sep">·</span>
+                  <kbd>B</kbd> <kbd>H</kbd> <kbd>N</kbd> <kbd>J</kbd> <kbd>M</kbd> <kbd>K</kbd> <kbd>,</kbd>
+                </span>
+              </div>
+              <div class="help-keymap-note">左 Shift = 1P スクラッチ · 右 Shift = 2P スクラッチ · 9 ボタン (PMS) の譜面は Z S X D C F V G B。</div>
+            </div>
+            <ul class="help-list">
+              <li><kbd>↑</kbd> / <kbd>↓</kbd> でハイスピード調整。</li>
+              <li>
+                レーンカバー (Plain / Native / Synesthesia と beatoraja スキン): <kbd>PageUp</kbd> / <kbd>PageDown</kbd> で SUDDEN+、<kbd>Home</kbd> / <kbd>End</kbd> で LIFT を動かし、<kbd>H</kbd> で HIDDEN+ を切り替え、<kbd>J</kbd> / <kbd>K</kbd> で動かします。<kbd>Shift</kbd> を押しながらだと大きく動きます。譜面のレーンに使われているキーはレーンの入力になります。
+              </li>
+              <li>AUTO プレイ、リプレイ、練習のプレイでは <kbd>←</kbd> / <kbd>→</kbd> で 5 秒戻る / 進むことができます。</li>
+              <li><kbd>Space</kbd> でポーズ / 再開。</li>
+              <li><kbd>F5</kbd> で現在の譜面をリスタート。</li>
+              <li><kbd>Esc</kbd> でリザルト画面 (または選曲画面) へ戻ります。</li>
+              <li><kbd>Backspace</kbd> を 0.5 秒長押しでも同じようにプレイを中断します (どのブラウザでもフルスクリーン中に使えます)。</li>
+              <li>プレイフィールドをダブルクリックするとフルスクリーンに入り / 解除します。<kbd>Esc</kbd> は先にフルスクリーンを解除し、もう一度押すと通常のシーン操作になります。Chrome / Edge ではフルスクリーン中も <kbd>Esc</kbd> は通常のシーン操作のままで、<kbd>Esc</kbd> 長押しでフルスクリーンを解除します。</li>
+            </ul>
+
+            <h3 class="help-section-title">リザルト</h3>
+            <ul class="help-list">
+              <li><kbd>Enter</kbd> / <kbd>Space</kbd> / <kbd>Esc</kbd> で選曲画面へ戻ります。</li>
+              <li><kbd>R</kbd> で同じオプションのまま同じ譜面をすぐにもう一度プレイします。</li>
+            </ul>
+
+          </div>
+        </section>
+        <section
+          class="help-modal-pane"
+          id="help-pane-options"
+          role="tabpanel"
+          aria-labelledby="help-tab-options"
+          tabindex="0"
+          hidden
+        >
+          <!-- The language switch follows the Usage one: every \`.help-lang-toggle\` and \`.help-lang\` share one state. -->
+          <div class="help-lang-switch" role="group" aria-label="Language">
+            <button
+              class="btn help-lang-toggle is-active" data-size="sm" data-variant="ghost"
+              type="button"
+              data-lang="en"
+              aria-pressed="true"
+            >
+              English
+            </button>
+            <button class="btn help-lang-toggle" data-size="sm" data-variant="ghost" type="button" data-lang="ja" aria-pressed="false">
+              日本語
+            </button>
+          </div>
+          <div class="help-lang is-active" data-lang="en">
             <h3 class="help-section-title">Debug Menu</h3>
             <ul class="help-list">
               <li>
@@ -892,114 +1040,6 @@ export const PLAYER_APP_HTML = `
             </ul>
           </div>
           <div class="help-lang" data-lang="ja" hidden>
-            <section class="help-about">
-              <p class="help-about-summary">
-                ブラウザ上で動作する BMS プレイヤーです。BMS / bmson が入ったフォルダをドロップするだけでそのまま再生できます。
-                内蔵スキンはシナスタジア (Synesthesia)、プレーン (Plain)、ネイティブ (Native) の 3 種類です (Debug Menu → Skin &amp; display → Built-in skin)。
-                <strong>Lunatic Rave 2</strong> のスキン (<code>.lr2skin</code>) と <strong>beatoraja</strong> のスキン (<code>.json</code> / <code>.luaskin</code>) も解釈するので、<code>LR2files</code> フォルダや beatoraja の <code>skin/</code> フォルダをページにドロップすれば既存のスキンをそのまま適用できます。
-              </p>
-              <ul class="help-about-meta">
-                <li>
-                  <span class="help-about-key">作者</span>
-                  <a href="https://nulltask.dev" target="_blank" rel="noopener noreferrer">nulltask · nulltask.dev</a>
-                </li>
-                <li>
-                  <span class="help-about-key">ソースコード</span>
-                  <a href="https://github.com/nulltask/be-music" target="_blank" rel="noopener noreferrer">
-                    github.com/nulltask/be-music
-                  </a>
-                </li>
-                <li>
-                  <span class="help-about-key">関連</span>
-                  <span>同じモノレポに TUI 版 (<code>@be-music/player-terminal</code>) も同梱されています。</span>
-                </li>
-              </ul>
-              <ul class="help-about-notes">
-                <li>
-                  ドロップしたファイルはブラウザ内でのみ処理され、譜面・音声・BGA データを
-                  <strong>サーバへ送信することは一切ありません</strong>。
-                  <strong>Submit to Leaderboard</strong> をオンにしたときだけ、プレイ終了時にリプレイ (キー入力と譜面のノーツ配置) と譜面のフィンガープリントを Leaderboard に送ります。
-                </li>
-                <li>一部の機能はまだ実装されていません。動作が不完全な箇所があります。</li>
-                <li>
-                  <strong>ベスト記録はこのブラウザに保存されます。</strong>
-                  Leaderboard (初期状態はオフ、Debug Menu → Leaderboard) はベータ版で、ランキングはリセットされることがあります。
-                </li>
-                <li>
-                  <strong>動作確認済みのスキン:</strong> Lunatic Rave 2 デフォルトスキンに加え、beatoraja デフォルトスキン (<code>skin/default</code>)、<code>ModernChic</code>、<code>GdbG Original Skin</code> の四種類です。
-                  これら以外の LR2 / beatoraja スキンも読み込み自体は可能ですが、レイアウトは未検証です。要素の重なり / 数ピクセル単位のズレ / 一部アニメーションの欠落などが残っている可能性があります。
-                </li>
-                <li>利用は自己責任でお願いします。本ソフトウェアは無保証で提供されます。</li>
-              </ul>
-            </section>
-            <h3 class="help-section-title">譜面の読み込み</h3>
-            <ul class="help-list">
-              <li>BMS フォルダをページ上にドロップすると、その中の譜面が登録されます。</li>
-              <li><code>LR2files</code> フォルダか beatoraja の <code>skin/</code> フォルダ (またはその中身) をドロップするとスキンが適用されます。</li>
-              <li>
-                右上 Debug Menu の <strong>Open folder</strong> ボタンからネイティブのフォルダ選択ダイアログも使えます。
-                ドラッグ&ドロップと同じ処理経路を通るので、LR2 / beatoraja のテーマと譜面が同居したフォルダもまとめて読み込めます。
-                ボタンを押し直せば別フォルダを追加で読み込めます。
-                <strong>Open files</strong> では ZIP アーカイブやリプレイ (<code>*.bmplay.json</code>、コースは <code>*.bmcourse.json</code>) を選べます。
-              </li>
-              <li>追加でドロップした場合、既存のライブラリに追加され、テーマも維持されます。</li>
-              <li>
-                ドロップしたフォルダに含まれるコースファイル (LR2 の <code>.lr2crs</code>、beatoraja のコースの <code>.json</code>) はコースのフォルダとして並びます。
-                MY COURSES / MY DAN / MY NONSTOP の <strong>NEW COURSE</strong> を決定すると自分でコースを作れます。作ったコースの名前の変更・削除・書き出しは Debug Menu の <strong>Course → My courses…</strong> から行えます。
-              </li>
-            </ul>
-
-            <h3 class="help-section-title">選曲画面</h3>
-            <ul class="help-list">
-              <li>
-                <kbd>↑</kbd> / <kbd>↓</kbd> でカーソル移動、<kbd>Enter</kbd> でフォルダを開くか譜面を開始、<kbd>Esc</kbd> / <kbd>Backspace</kbd> で戻ります。
-                譜面の行をクリック、または現在のスキンの <em>PLAY</em> ボタンでも開始できます。
-              </li>
-              <li>
-                <kbd>Space</kbd> で <strong>PLAY OPTION</strong> パネルを開きます (内蔵スキンと LR2 スキン)。beatoraja スキンでは <kbd>PageUp</kbd> / <kbd>PageDown</kbd>、<kbd>Home</kbd> / <kbd>End</kbd>、<kbd>R</kbd> (ランダムに譜面を選ぶ) も使えます。
-              </li>
-              <li><kbd>/</kbd> で検索入力にフォーカス。タイトル / アーティスト / ジャンルで絞り込めます。</li>
-              <li><kbd>Esc</kbd> で検索条件をクリア。</li>
-            </ul>
-
-            <h3 class="help-section-title">ゲームプレイ (デフォルトキー)</h3>
-            <div class="help-keymap">
-              <div class="help-keymap-row">
-                <span class="help-keymap-side">1P</span>
-                <span class="help-keymap-keys">
-                  <kbd>Shift</kbd>
-                  <span class="help-keymap-sep">·</span>
-                  <kbd>Z</kbd> <kbd>S</kbd> <kbd>X</kbd> <kbd>D</kbd> <kbd>C</kbd> <kbd>F</kbd> <kbd>V</kbd>
-                </span>
-              </div>
-              <div class="help-keymap-row">
-                <span class="help-keymap-side">2P</span>
-                <span class="help-keymap-keys">
-                  <kbd>Shift</kbd> <span class="help-keymap-sep">·</span>
-                  <kbd>B</kbd> <kbd>H</kbd> <kbd>N</kbd> <kbd>J</kbd> <kbd>M</kbd> <kbd>K</kbd> <kbd>,</kbd>
-                </span>
-              </div>
-              <div class="help-keymap-note">左 Shift = 1P スクラッチ · 右 Shift = 2P スクラッチ · 9 ボタン (PMS) の譜面は Z S X D C F V G B。</div>
-            </div>
-            <ul class="help-list">
-              <li><kbd>↑</kbd> / <kbd>↓</kbd> でハイスピード調整。</li>
-              <li>
-                レーンカバー (Plain / Native / Synesthesia と beatoraja スキン): <kbd>PageUp</kbd> / <kbd>PageDown</kbd> で SUDDEN+、<kbd>Home</kbd> / <kbd>End</kbd> で LIFT を動かし、<kbd>H</kbd> で HIDDEN+ を切り替え、<kbd>J</kbd> / <kbd>K</kbd> で動かします。<kbd>Shift</kbd> を押しながらだと大きく動きます。譜面のレーンに使われているキーはレーンの入力になります。
-              </li>
-              <li>AUTO プレイ、リプレイ、練習のプレイでは <kbd>←</kbd> / <kbd>→</kbd> で 5 秒戻る / 進むことができます。</li>
-              <li><kbd>Space</kbd> でポーズ / 再開。</li>
-              <li><kbd>F5</kbd> で現在の譜面をリスタート。</li>
-              <li><kbd>Esc</kbd> でリザルト画面 (または選曲画面) へ戻ります。</li>
-              <li><kbd>Backspace</kbd> を 0.5 秒長押しでも同じようにプレイを中断します (どのブラウザでもフルスクリーン中に使えます)。</li>
-              <li>プレイフィールドをダブルクリックするとフルスクリーンに入り / 解除します。<kbd>Esc</kbd> は先にフルスクリーンを解除し、もう一度押すと通常のシーン操作になります。Chrome / Edge ではフルスクリーン中も <kbd>Esc</kbd> は通常のシーン操作のままで、<kbd>Esc</kbd> 長押しでフルスクリーンを解除します。</li>
-            </ul>
-
-            <h3 class="help-section-title">リザルト</h3>
-            <ul class="help-list">
-              <li><kbd>Enter</kbd> / <kbd>Space</kbd> / <kbd>Esc</kbd> で選曲画面へ戻ります。</li>
-              <li><kbd>R</kbd> で同じオプションのまま同じ譜面をすぐにもう一度プレイします。</li>
-            </ul>
-
             <h3 class="help-section-title">Debug Menu</h3>
             <ul class="help-list">
               <li>
@@ -1274,8 +1314,8 @@ export const PLAYER_APP_HTML = `
           hidden
         >
           <p class="help-pane-intro">
-            This player is built on the open source libraries listed below. Each entry shows the
-            verbatim copyright / license text shipped with the package.
+            This player is built on the open source libraries listed below. Each entry keeps the
+            verbatim copyright / license text shipped with the package; open it to read.
           </p>
           <ol class="help-oss-list" id="help-oss-list"></ol>
         </section>
