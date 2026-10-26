@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import type { ReplayRulesetResult } from './format.ts';
-import { resolveRulesetResultLamp } from './result-lamp.ts';
+import { resolveRulesetResultLamp, resolveRulesetResultMissCount } from './result-lamp.ts';
 
 function result(
   gauge: { type: string; cleared: boolean },
@@ -76,5 +76,23 @@ describe('resolveRulesetResultLamp', () => {
   test('a chart without notes takes its gauge’s lamp', () => {
     const empty = result({ type: 'HARD', cleared: true }, { pgreat: 0, great: 0, good: 0, bad: 0, poor: 0 });
     expect(resolveRulesetResultLamp(empty, 'beatoraja')).toBe('HARD');
+  });
+});
+
+describe('resolveRulesetResultMissCount', () => {
+  test('a play that reached the end counts its BADs, POORs and empty POORs', () => {
+    expect(resolveRulesetResultMissCount(result({ type: 'NORMAL', cleared: true }))).toBe(5);
+  });
+
+  test('a play that failed or was given up mid-way also counts the notes it never judged', () => {
+    const early = { ...result({ type: 'HARD', cleared: false }), noteCount: 40 };
+    // 1 BAD + 1 POOR + 3 empty POORs, plus the 21 notes never reached.
+    expect(resolveRulesetResultMissCount(early)).toBe(26);
+  });
+
+  test('a mine POOR (counted in an LR2 POOR) judges no note', () => {
+    const mines = { ...result({ type: 'GROOVE', cleared: false }, { poor: 3 }), noteCount: 21, minePoor: 2 };
+    // 1 BAD + 3 POORs + 3 empty POORs, plus the 2 notes the mine POORs do not stand for.
+    expect(resolveRulesetResultMissCount(mines)).toBe(9);
   });
 });

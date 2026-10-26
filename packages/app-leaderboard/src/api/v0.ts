@@ -221,13 +221,12 @@ export function createV0API(options: { now: () => number; newId: () => string; c
         413: json('The body is too large.', errorResponse(['body-too-large'])),
         415: json('Not gzip-compressed JSON.', errorResponse(['expected-json', 'unsupported-encoding'])),
         422: json(
-          'The play cannot be ranked: an auto or aborted play, a play at another tempo, a course stage, a malformed ' +
+          'The play cannot be ranked: an auto play, a play at another tempo, a course stage, a malformed ' +
             'replay, or a fingerprint ' +
             'document that does not hash to the replay’s fingerprint.',
           errorResponse([
             'invalid-replay',
             'auto-play',
-            'aborted',
             'tempo',
             'course-stage',
             'missing-fingerprint',

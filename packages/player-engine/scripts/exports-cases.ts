@@ -739,6 +739,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       recordsAPI.recordPlayFromResult(benchRecordResult);
     },
   });
+  define('player-engine.records.abortedRecordPlayFromResult', {
+    run: () => {
+      recordsAPI.abortedRecordPlayFromResult(benchRecordResult);
+    },
+  });
   define('player-engine.records.recordPlayFromSummary', {
     run: () => {
       recordsAPI.recordPlayFromSummary(benchRecordSummary, 400, 'lr2');
@@ -914,6 +919,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.replay.resolveRulesetResultLamp', {
     run: () => {
       replayAPI.resolveRulesetResultLamp(benchStageResult, 'lr2');
+    },
+  });
+  define('player-engine.replay.resolveRulesetResultMissCount', {
+    run: () => {
+      replayAPI.resolveRulesetResultMissCount(benchStageResult);
     },
   });
   define('player-engine.replay.resolveCourseReplayFilename', {
