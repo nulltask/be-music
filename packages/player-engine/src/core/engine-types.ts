@@ -97,8 +97,11 @@ export interface PlayerPlaySettings {
    * source applies no chart modifier in PRACTICE; a practice play records no replay.
    */
   practice?: import('./practice.ts').BeatorajaPractice;
-  /** beatoraja display-only automatic calibration; no change to input/audio clocks. */
-  judgeTimingAutoAdjust?: boolean;
+  /**
+   * The automatic judge-timing adjustment of a manual play (default `'OFF'`): beatoraja's calibration or LR2's ON /
+   * SILENT. Display-only: it moves {@link judgeTimingMs}, never the input or audio clocks. AUTO and replays never adjust.
+   */
+  judgeTimingAutoAdjust?: import('./judge-timing.ts').JudgeTimingAutoAdjust;
   judgeTimingMs?: number;
   longNoteModifier?: LongNoteModifier;
   /** Probability for source long-note additions, default 1. */

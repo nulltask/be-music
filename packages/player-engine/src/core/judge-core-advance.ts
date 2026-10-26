@@ -542,7 +542,7 @@ function finalizeActiveLongNote(
     },
   });
   emit({ kind: 'ui', command: { kind: 'release-lane', channel } });
-  applyResolvedManualJudge(state, channel, judge, atSeconds, emit);
+  applyResolvedManualJudge(state, channel, judge, atSeconds, emit, true);
 }
 
 // ---- Hell Charge gauge ticks -----------------------------------------------------------------------------------
