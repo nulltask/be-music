@@ -97,6 +97,7 @@ function harness(options: { family?: 'built-in' | 'beatoraja'; beatorajaMounts?:
     },
     records: {
       resolveChartHashes: vi.fn<CourseRouteDeps['records']['resolveChartHashes']>(async () => undefined),
+      peekChartBestRecord: vi.fn<CourseRouteDeps['records']['peekChartBestRecord']>(() => undefined),
       recordCourseResult: vi.fn<CourseRouteDeps['records']['recordCourseResult']>(),
     },
     courseMaker: { maker: { start: vi.fn<CourseRouteDeps['courseMaker']['maker']['start']>() } },

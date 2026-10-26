@@ -262,6 +262,34 @@ for (const setup of FAMILIES) {
         expect(state.cursor?.bar).toMatchObject({ kind: 'folder', title: SONGS });
       },
     );
+
+    test(
+      'filters by a chart filter expression after `?`, and shows why an invalid one does not parse',
+      setup.name === 'built-in' ? SMOKE : {},
+      async ({ player }) => {
+        await setup.open(player);
+        await player.browseTo(SONGS, 'Fixture C');
+        await player.key('Escape');
+        await player.waitFor((current) => current.cursor?.folderPath.length === 0, 'the root of the list', 10_000);
+        // At the root, the expression lists the charts it selects from every folder, in its own order.
+        let state = await search(player, "?title LIKE 'fixture%' AND level >= 5 ORDER BY level DESC");
+        expect(state.cursor?.bar).toMatchObject({ kind: 'chart', title: 'Fixture D dense' });
+        expect(await walkList(player)).toEqual(['Fixture D dense', 'Fixture G', 'Fixture F']);
+        // Nothing has been played, so every chart's score row is NULL.
+        state = await search(player, "?score.clear IS NULL AND title = 'Fixture A'");
+        expect(state.cursor?.bar).toMatchObject({ kind: 'chart', title: 'Fixture A' });
+        // An expression that does not parse marks the field, says why, and leaves the list unfiltered.
+        state = await search(player, '?mode = 7');
+        expect(state.cursor?.bar).toMatchObject({ kind: 'folder', title: SONGS });
+        await expect(player.page.locator('#search')).toHaveAttribute('aria-invalid', 'true');
+        await expect(player.page.locator('#search-error')).toHaveText('ambiguous column name: mode');
+        // Clearing it lists the folders again, with no error.
+        state = await search(player, '');
+        expect(state.cursor?.bar).toMatchObject({ kind: 'folder', title: SONGS });
+        await expect(player.page.locator('#search')).toHaveAttribute('aria-invalid', 'false');
+        await expect(player.page.locator('#search-error')).toBeHidden();
+      },
+    );
   });
 }
 
