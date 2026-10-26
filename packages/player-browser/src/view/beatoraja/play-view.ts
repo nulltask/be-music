@@ -1,5 +1,6 @@
 import { collectBPMGuideEvents } from '../../chart/bpm-guide.ts';
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
+import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
 import { resolveWhiteNumber, resolveLaneCover } from '@be-music/player-scene-model';
 /**
  * The beatoraja family's play screen: a beatoraja play skin (`play_<variant>`) drawn by `BeatorajaPlaySkinView` with the
@@ -200,6 +201,7 @@ interface PreparedChart {
 /** The beatoraja play view. See the module comment. */
 export class BeatorajaPlayView implements PlayView {
   private readonly displayInfo = new DisplayAreaInfoOverlay();
+  private readonly bpmChangeWarning = new BPMChangeWarningOverlay();
   public readonly family = 'beatoraja' as const;
   public readonly root: Container = new Container();
   public readonly timing: PlayViewTiming;
@@ -447,10 +449,12 @@ export class BeatorajaPlayView implements PlayView {
     if (typeof window !== 'undefined') window.addEventListener('wheel', this.handleWheel, { passive: false });
     this.touchLanes.attach(host, emit);
     if (this.stage) this.displayInfo.attachCanvas(this.stage.canvas);
+    if (this.stage) this.bpmChangeWarning.attachCanvas(this.stage.canvas);
   }
 
   public detach(): void {
     this.displayInfo.detach();
+    this.bpmChangeWarning.detach();
     this.touchLanes.detach();
     if (typeof window !== 'undefined') window.removeEventListener('wheel', this.handleWheel);
     this.host = undefined;
@@ -463,6 +467,7 @@ export class BeatorajaPlayView implements PlayView {
     const host = this.host;
     this.root.visible = frame.shown;
     if (!frame.shown) this.displayInfo.hide();
+    if (!frame.shown) this.bpmChangeWarning.hide();
     if (stage === undefined || bridge === undefined || host === undefined || !frame.shown || this.disposed) return;
     stage.fitTo(host);
     const play = this.play;
@@ -513,11 +518,12 @@ export class BeatorajaPlayView implements PlayView {
     if (play.exiting && play.playMoments.failedAtMs !== undefined && play.exitFadeStartedAt !== undefined) {
       stage.canvas.alpha = playEndingFadeAlpha(play.playClock() - play.exitFadeStartedAt, play.exitFadeOutMs);
     }
+    const overlayLanes = stage.getDisplayAreaLanes(context.activeOps, frame.playfield.laneChannels);
     this.displayInfo.attachCanvas(stage.canvas);
     this.displayInfo.update(
       resolveDisplayAreaLabels({
         mode: frame.playOptions.displayAreaInfo,
-        lanes: stage.getDisplayAreaLanes(context.activeOps, frame.playfield.laneChannels),
+        lanes: overlayLanes,
         covers: frame.state.view.covers.map(resolveLaneCover),
         visibleMs: (cover) =>
           resolveWhiteNumber({
@@ -532,6 +538,16 @@ export class BeatorajaPlayView implements PlayView {
       host.app.screen,
       stage.canvas.alpha,
     );
+    this.bpmChangeWarning.attachCanvas(stage.canvas);
+    this.bpmChangeWarning.show({
+      enabled: frame.playOptions.bpmChangeWarning,
+      timing: play.resolvedPlayChart?.timing,
+      seconds: frame.seconds,
+      lanes: overlayLanes,
+      stage: { width: stage.width, height: stage.height },
+      screen: host.app.screen,
+      opacity: stage.canvas.alpha,
+    });
     this.fadeIndicator();
   }
 
@@ -596,6 +612,7 @@ export class BeatorajaPlayView implements PlayView {
 
   public dispose(): void {
     this.displayInfo.dispose();
+    this.bpmChangeWarning.dispose();
     if (this.disposed) return;
     this.detach();
     this.disposed = true;

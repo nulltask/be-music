@@ -34,6 +34,11 @@ export interface PlayOptions {
   /** beatoraja BPM GUIDE shows BPM-change and STOP markers on the lane. */
   bpmGuide: boolean;
   /**
+   * AC 34 BPM-change warning: `<current> » <next>` in a framed box on the lanes, from 2 s of chart time before each BPM
+   * change until the change (blue when the tempo rises, red when it falls).
+   */
+  bpmChangeWarning: boolean;
+  /**
    * The automatic judge-timing adjustment of a manual play: beatoraja 0.8.9's calibration on PG/GR/GD, or LR2's ON /
    * SILENT (`autojudge` 1 / 2: a 1 ms step per ten hits; SILENT also loads no keysounds, BGM or BGA and hides the judge
    * display). Display-only; AUTO and replays never adjust. Stored settings and replays from before the modes hold a

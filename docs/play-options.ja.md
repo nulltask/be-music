@@ -6,7 +6,7 @@ Debug Menu の **Play options** と選曲画面は、実際に使う設定を共
 
 ## オプションと判定ルール
 
-Debug Menu の Developer にある **Judgment windows** は判定ルール（判定幅・ゲージ・判定対象ノートの選び方・ロングノートの種類・地雷の発動・スコア）を選びます。譜面または表示を変えるだけのオプションは、どのルールでも選べます。それぞれ判定ルールに関係なく参照元のアルゴリズムで動き、ルールを切り替えても維持し、参照元の譜面の種類の制限はそのまま残ります。対象は HS-FIX CONSTANT、CLASSIC と通常の HI-SPEED、FLOATING HI-SPEED と表示エリア固定、判定タイミングの自動調整、レーンオプションの R-RANDOM・SPIRAL・H-RANDOM・ALL-SCR・RANDOM-EX・S-RANDOM-EX・RANDOM_PLAYABLE・S_RANDOM_PLAYABLE と 2 種類の SCATTER、SYNCHRONIZE RANDOM・SYMMETRY RANDOM・M-RAN、地雷とスクロールの変換、EXTRA と LR2 EXTRA MODE、SP TO DP、7 TO 9、BATTLE AS、D-BATTLE です。beatoraja ルール以外では、beatoraja のレーンオプションはブラウザの乱数で抽選します。シードは beatoraja ルールだけのままです。
+Debug Menu の Developer にある **Judgment windows** は判定ルール（判定幅・ゲージ・判定対象ノートの選び方・ロングノートの種類・地雷の発動・スコア）を選びます。譜面または表示を変えるだけのオプションは、どのルールでも選べます。それぞれ判定ルールに関係なく参照元のアルゴリズムで動き、ルールを切り替えても維持し、参照元の譜面の種類の制限はそのまま残ります。対象は HS-FIX CONSTANT、CLASSIC と通常の HI-SPEED、FLOATING HI-SPEED と表示エリア固定、BPM 変化予告、判定タイミングの自動調整、レーンオプションの R-RANDOM・SPIRAL・H-RANDOM・ALL-SCR・RANDOM-EX・S-RANDOM-EX・RANDOM_PLAYABLE・S_RANDOM_PLAYABLE と 2 種類の SCATTER、SYNCHRONIZE RANDOM・SYMMETRY RANDOM・M-RAN、地雷とスクロールの変換、EXTRA と LR2 EXTRA MODE、SP TO DP、7 TO 9、BATTLE AS、D-BATTLE です。beatoraja ルール以外では、beatoraja のレーンオプションはブラウザの乱数で抽選します。シードは beatoraja ルールだけのままです。
 
 それ以外はルールに従います。判定ルールはルールそのものです。RANDOM・S-RANDOM・CONVERGE・BATTLE は参照元ごとに別のアルゴリズムを指すため、どれを使うかはルールで決まります。ADD LN / CN / HCN / ALL、LN MODE、PRACTICE、CUSTOM JUDGE、ゲージの自動切り替え、ゲージの種類、判定アルゴリズムも当面はルールに従います。参照元が混ざったプレイを記録でどう扱うかは [#602](https://github.com/nulltask/be-music/issues/602) で決めます。[#774](https://github.com/nulltask/be-music/issues/774) で管理しています。
 
@@ -85,6 +85,21 @@ Debug Menu の **BPM GUIDE (beatoraja)** をオンにします。既定はオフ
 内蔵スキンと LR2 のプレイフィールドは、プレイサイドごとに線とラベルを 1 つ描きます。beatoraja スキンは自身の BPM・STOP のマーカー画像を描き、それをこのオプションがオンの間だけ表示して、上にラベルを加えます。リプレイには `play.options.bpmGuide` と、譜面のヘッダー BPM（`chart.headerBPM`）と解決後の BPM 範囲（`chart.bpmRange`）を記録します。これは beatoraja のライトアシストの規則が参照する情報で、その規則は BPM が変化する譜面にだけ適用されます。スコアの扱いは Leaderboard 側で決めます。
 
 参照元：beatoraja 0.8.9 の [`LaneRenderer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/LaneRenderer.java) と [`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java)。対応 Issue は [#745](https://github.com/nulltask/be-music/issues/745) です。
+
+## BPM 変化予告
+
+Debug Menu の **BPM change warning (AC)** をオンにします。既定はオフです。BPM が変わる前に、レーン上の枠付きの箱に `<今の BPM> » <次の BPM>` を表示し、変わるまで出し続けます。テンポが上がるときは青、下がるときは赤で、BPM は整数で表示します。変化の 2 秒前（譜面の時間）に現れるため、速い区間では遅い区間より多くの拍の前に出ます。
+
+```mermaid
+timeline
+  title 44.28 秒に 138 → 200 BPM
+  42.28 秒 : 「138 » 200」が出る
+  44.28 秒 : BPM が変わり、予告が消える
+```
+
+内蔵スキン（Canvas と DOM のスキン）・LR2・beatoraja のプレイ画面では、各サイドのレーンの中央、高さの半分の位置に箱を表示します。AC 34 の紹介では判定とコンボのすぐ上に出ていますが、スキンによって判定の位置はレーンの 40〜65 % ほどとまちまちなので、内蔵スキンで判定に重ならない中央にしています。同じ時刻の変化は 1 つにまとめ、同じ BPM に戻るだけの指定は変化として扱いません。前の変化から 2 秒以内に来る変化は、前の変化が終わった時点で予告します。STOP は予告しません。表示だけのオプションで、どのルールでも選べます。
+
+見た目は AC 34 の[オプション紹介ページ](https://p.eagate.573.jp/game/2dx/34/howto/new/bpm_option.html)に合わせました。タイミングはプレイ動画から測りました（測定結果は [#746](https://github.com/nulltask/be-music/issues/746)）。動画ではどの BPM 変化も約 2.0 秒前に予告が出て、変化と同時に消えていました。参照元の TYPE A〜D の違い、2 秒が実時間か譜面の時間か、STOP・近い変化・ごく小さな変化での挙動はまだ分かっていません。[#746](https://github.com/nulltask/be-music/issues/746) で管理しています。
 
 ## 判定タイミングと自動調整
 

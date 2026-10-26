@@ -1,4 +1,5 @@
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
+import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
 /**
  * The built-in family's play screen: a be-music skin's chrome around the shared playfield (`view/shared/playfield`),
  * letterboxed into the window. It draws the play session's frames; its skin answers the shared playfield through a
@@ -93,6 +94,7 @@ export class BuiltInPlayView
   implements PlayView, PlayFrameContext, BuiltInChromeContext, BGATargetsContext
 {
   private readonly displayInfo = new DisplayAreaInfoOverlay();
+  private readonly bpmChangeWarning = new BPMChangeWarningOverlay();
   /** LIFT integration is currently enabled for Plain and Native. */
   public get drawsLift(): boolean {
     return LIFT_SKINS.has(this.kit.skin.id);
@@ -213,6 +215,8 @@ export class BuiltInPlayView
     this.touchLanes.attach(host, emit, mount);
     if (this.drawsOnCanvas) this.displayInfo.attachCanvas(this.designRoot);
     else this.displayInfo.attach(host.domRoot);
+    if (this.drawsOnCanvas) this.bpmChangeWarning.attachCanvas(this.designRoot);
+    else this.bpmChangeWarning.attach(host.domRoot);
   }
 
   public draw(frame: PlayFrame): void {
@@ -224,17 +228,19 @@ export class BuiltInPlayView
     this.options.constantFadeMs = frame.playOptions.constantFadeMs;
     this.root.visible = frame.shown;
     if (!frame.shown) this.displayInfo.hide();
+    if (!frame.shown) this.bpmChangeWarning.hide();
     if (!frame.shown) return;
     this.chromeRuntime = undefined;
     render(this, frame.seconds, frame.playfield.audioAnalyzer !== undefined ? frame.audio : undefined);
     // A skin drawing through the player's renderer or on its DOM screen draws the frame just collected now.
+    const overlayLanes = Array.from(this.play.laneX, ([channel, lane]) => ({
+      ...lane,
+      side: this.play.chartPlayVariant === '9' || !channel.startsWith('2') ? ('1P' as const) : ('2P' as const),
+    }));
     this.displayInfo.update(
       resolveDisplayAreaLabels({
         mode: frame.playOptions.displayAreaInfo,
-        lanes: Array.from(this.play.laneX, ([channel, lane]) => ({
-          ...lane,
-          side: this.play.chartPlayVariant === '9' || !channel.startsWith('2') ? ('1P' as const) : ('2P' as const),
-        })),
+        lanes: overlayLanes,
         covers: this.play.resolveLaneCovers(),
         visibleMs: (cover) =>
           this.play.resolveVisibleMs(
@@ -247,6 +253,15 @@ export class BuiltInPlayView
       this.app.screen,
       this.designRoot.alpha,
     );
+    this.bpmChangeWarning.show({
+      enabled: frame.playOptions.bpmChangeWarning,
+      timing: this.play.timingResolver,
+      seconds: frame.seconds,
+      lanes: overlayLanes,
+      stage: this.playfieldSkin.stage,
+      screen: this.app.screen,
+      opacity: this.designRoot.alpha,
+    });
     this.skinBindingInstance?.flush();
     this.dom?.setOpacity(this.designRoot.alpha);
     this.dom?.update({
@@ -276,6 +291,7 @@ export class BuiltInPlayView
 
   public detach(): void {
     this.displayInfo.detach();
+    this.bpmChangeWarning.detach();
     this.touchLanes.detach();
     this.dom?.detach();
   }
@@ -300,6 +316,7 @@ export class BuiltInPlayView
 
   public dispose(): void {
     this.displayInfo.dispose();
+    this.bpmChangeWarning.dispose();
     this.dom?.dispose();
     this.dom = undefined;
     // Drop every per-frame child pool before the scene graph so each pooled child is freed through its own `destroy()`.
