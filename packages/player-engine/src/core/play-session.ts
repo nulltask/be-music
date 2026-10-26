@@ -156,18 +156,10 @@ export async function createPlaySession(
   options.scrollModifier ??= options.preparedChart?.scrollModifierApplied;
   options.scrollSection ??= options.preparedChart?.scrollSection;
   options.scrollRate ??= options.preparedChart?.scrollRate;
-  if (options.scrollModifier !== undefined && options.scrollModifier !== 'OFF' && options.judgeRuleset !== 'beatoraja')
-    throw new RangeError('Scroll modification is available only for beatoraja.');
   options.sevenToNinePattern ??= options.preparedChart?.sevenToNinePattern;
   options.sevenToNineType ??= options.preparedChart?.sevenToNineType;
   options.hRandomThresholdBPM ??= options.preparedChart?.sevenToNineThresholdBPM;
-  if ((options.sevenToNinePattern ?? 0) > 0 && options.judgeRuleset !== 'beatoraja')
-    throw new RangeError('7-to-9 conversion is available only for beatoraja.');
   const { mode } = strategy;
-  if (options.judgeTimingAutoAdjust && (options.judgeRuleset ?? 'lr2') !== 'beatoraja')
-    throw new RangeError('Automatic display-timing adjustment is available only for beatoraja.');
-  if (options.mineModifier !== undefined && options.mineModifier !== 'OFF' && options.judgeRuleset !== 'beatoraja')
-    throw new RangeError('Mine modification is available only for beatoraja.');
   if (options.practice !== undefined) assertPracticeOptions(options);
   throwIfAborted(options.signal);
   const writeOutput = resolveOutputWriter(options);
@@ -248,8 +240,6 @@ export async function createPlaySession(
   if ((playbackChart.battleMode ?? 'OFF') !== expectedBattle)
     throw new RangeError('The shared prepared chart must include the selected battle mode.');
   const lr2ExtraRequested = options.lr2ExtraMode ?? playbackChart.lr2ExtraMode ?? false;
-  if (lr2ExtraRequested && (options.judgeRuleset ?? 'lr2') !== 'lr2')
-    throw new RangeError('LR2 EXTRA requires LR2 judgment rules.');
   if ((playbackChart.lr2ExtraMode ?? false) !== (lr2ExtraRequested && options.course === undefined))
     throw new RangeError('The shared prepared chart must include the selected LR2 EXTRA mode.');
   if (lr2ExtraRequested && options.lr2ExtraLevel !== undefined && playbackChart.lr2ExtraLevel !== options.lr2ExtraLevel)
@@ -270,8 +260,6 @@ export async function createPlaySession(
   const extraScratch = options.extraNoteScratch ?? playbackChart.extraNoteScratch ?? false;
   if ((playbackChart.extraNoteDepth ?? 0) !== extraDepth || (playbackChart.extraNoteScratch ?? false) !== extraScratch)
     throw new RangeError('The shared prepared chart must include the selected EXTRA note options.');
-  if (extraDepth > 0 && (options.judgeRuleset ?? 'lr2') !== 'beatoraja')
-    throw new RangeError('EXTRA note depth is available only for beatoraja.');
   const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(resolvedChart.timing);
   if ((options.scrollModifier ?? 'OFF') !== (playbackChart.scrollModifierApplied ?? 'OFF'))
     throw new RangeError('The shared prepared chart must include the selected scroll modifier.');

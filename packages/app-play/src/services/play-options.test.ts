@@ -320,11 +320,11 @@ describe('previous arrangement selection', () => {
     }) as unknown as BeMusicReplay;
   test('pins chart-specific lanes while preserving the current input, speed and gauge selections', () => {
     const service = new PlayOptionsService({ autoPlay: false, hiSpeed: 2, gauge1P: 'EASY' });
-    expect(service.reusePreviousArrangement()).toBeUndefined();
+    expect(service.reusePreviousArrangement('beatoraja')).toBeUndefined();
     const replay = previous();
     service.rememberArrangement('chart-a', replay);
     replay.chart.notes[0]!.channel = '19';
-    expect(service.reusePreviousArrangement()).toMatchObject({
+    expect(service.reusePreviousArrangement('beatoraja')).toMatchObject({
       random1P: 'RANDOM',
       randomSeed1P: '9223372036854775807',
       dpFlip: true,
@@ -340,13 +340,13 @@ describe('previous arrangement selection', () => {
   test('keeps a pin for display/gauge edits and idempotent option synchronization, clearing it on lane edits', () => {
     const service = new PlayOptionsService();
     service.rememberArrangement('chart', previous());
-    const changes = service.reusePreviousArrangement()!;
+    const changes = service.reusePreviousArrangement('beatoraja')!;
     service.update(changes);
     service.update({ hiSpeed: 3, gauge1P: 'HARD' });
     expect(service.arrangementFor('chart')).toBeDefined();
     service.update({ randomSeed1P: '7' });
     expect(service.arrangementFor('chart')).toBeUndefined();
-    service.reusePreviousArrangement();
+    service.reusePreviousArrangement('beatoraja');
     service.clearArrangement();
     expect(service.arrangementFor('chart')).toBeUndefined();
   });
@@ -356,13 +356,24 @@ describe('previous arrangement selection', () => {
     replay.play.extraNoteDepth = 2;
     replay.play.extraNoteScratch = true;
     service.rememberArrangement('chart', replay);
-    expect(service.reusePreviousArrangement()).toMatchObject({ extraNoteDepth: 2, extraNoteScratch: true });
+    expect(service.reusePreviousArrangement('beatoraja')).toMatchObject({ extraNoteDepth: 2, extraNoteScratch: true });
     expect(service.arrangementFor('chart')).toBeDefined();
     service.update({ extraNoteDepth: 3 });
     expect(service.arrangementFor('chart')).toBeUndefined();
-    service.reusePreviousArrangement();
+    service.reusePreviousArrangement('beatoraja');
     service.update({ extraNoteScratch: false });
     expect(service.arrangementFor('chart')).toBeUndefined();
+  });
+  test('retains a play under any judge rules and reuses it only under the same rules', () => {
+    const service = new PlayOptionsService();
+    const replay = previous();
+    replay.play.judgeRuleset = 'lr2';
+    replay.play.randomLane = { p1: 'SPIRAL' };
+    service.rememberArrangement('chart', replay);
+    expect(service.reusePreviousArrangement('beatoraja')).toBeUndefined();
+    expect(service.arrangementFor('chart')).toBeUndefined();
+    expect(service.reusePreviousArrangement('lr2')).toMatchObject({ random1P: 'SPIRAL' });
+    expect(service.arrangementFor('chart')?.play.judgeRuleset).toBe('lr2');
   });
   test('restores the source addition rate and clears the pinned layout when that rate changes', () => {
     const service = new PlayOptionsService();
@@ -370,7 +381,10 @@ describe('previous arrangement selection', () => {
     replay.play.longNoteModifier = 'ADD_LN';
     replay.play.longNoteRate = 0.375;
     service.rememberArrangement('chart', replay);
-    expect(service.reusePreviousArrangement()).toMatchObject({ longNoteModifier: 'ADD_LN', longNoteRate: 0.375 });
+    expect(service.reusePreviousArrangement('beatoraja')).toMatchObject({
+      longNoteModifier: 'ADD_LN',
+      longNoteRate: 0.375,
+    });
     expect(service.arrangementFor('chart')).toBeDefined();
     service.update({ longNoteRate: 0.5 });
     expect(service.arrangementFor('chart')).toBeUndefined();
@@ -393,7 +407,7 @@ test('previous arrangement restores scroll ADD parameters, and editing either pa
   for (const change of [{ scrollSection: 4 }, { scrollRate: 0.5 }]) {
     const service = new PlayOptionsService();
     service.rememberArrangement('chart', replay);
-    expect(service.reusePreviousArrangement()).toMatchObject({
+    expect(service.reusePreviousArrangement('beatoraja')).toMatchObject({
       scrollModifier: 'ADD',
       scrollSection: 8,
       scrollRate: 0.25,
